@@ -49,7 +49,6 @@ const STATE_COMMANDS = [
 
 /** 전용 테이블만 바꾸는 명령 — 리듀서는 상태를 그대로 둔다 */
 export const DEBUG_TABLE_COMMANDS = [
-  'bounty.ticketNearExpiry',
   'bounty.expireTickets',
   'bounty.clearTickets',
   'bounty.resetToday',
@@ -386,10 +385,43 @@ function spawnBagFish(
   return { ...state, bag: [...state.bag, ...spawned] };
 }
 
+const SNAPSHOT_MAX_INSTANCES = 10_000;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const isSnapshotScalarValid = (v: unknown, min: number, max?: number): boolean =>
+  typeof v === 'number' && Number.isFinite(v) && Number.isInteger(v) && v >= min && (max === undefined || v <= max);
+
+function validateSnapshotInstances(
+  list: unknown, allowEmptySlots: boolean, seenUids: Set<string>,
+): boolean {
+  if (list === undefined) return true;
+  if (!Array.isArray(list) || list.length > SNAPSHOT_MAX_INSTANCES) return false;
+  for (const item of list) {
+    if (allowEmptySlots && (item === null || item === undefined)) continue;
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) return false;
+    const uid = (item as { uid?: unknown }).uid;
+    if (typeof uid !== 'string' || !UUID_PATTERN.test(uid)) return false;
+    const key = uid.toLowerCase();
+    if (seenUids.has(key)) return false;
+    seenUids.add(key);
+  }
+  return true;
+}
+
 /** snapshot.restore — 저장된 스냅샷으로 상태 전체를 복원한다 */
 function restoreSnapshot(args: Record<string, unknown>, newUid: () => string): GameState | null {
   const raw = args.snapshot;
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  const src = raw as Record<string, unknown>;
+  if (src.gold !== undefined && !isSnapshotScalarValid(src.gold, 0)) return null;
+  if (src.fame !== undefined && !isSnapshotScalarValid(src.fame, 0)) return null;
+  if (src.boat !== undefined && !isSnapshotScalarValid(src.boat, 0, MAX_BOAT)) return null;
+  if (src.rod !== undefined && !isSnapshotScalarValid(src.rod, 1)) return null;
+
+  const seenUids = new Set<string>();
+  if (!validateSnapshotInstances(src.bag, false, seenUids)) return null;
+  if (!validateSnapshotInstances(src.exhibit, true, seenUids)) return null;
+
   const restored = migrate(raw, newUid);
   const clearedNamed = restored.clearedNamed.filter(id => bountyById(id)?.difficulty === 'named');
   return { ...restored, clearedNamed };

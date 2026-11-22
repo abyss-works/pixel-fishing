@@ -50,11 +50,8 @@ describe('debugTriggerAllowed', () => {
 describe('debugTablePlan', () => {
   const now = Date.parse('2026-10-16T05:00:00.000Z'); // KST 14:00
 
-  it('흔적 만료·만료 직전 — 발급 시각을 전날 게임 날짜(KST 04:00 1분 전)로 옮긴다', () => {
+  it('흔적 만료 — 발급 시각을 전날 게임 날짜(KST 04:00 1분 전)로 옮긴다', () => {
     expect(debugTablePlan('bounty.expireTickets', now)).toEqual({
-      table: 'bounty_tickets', op: 'update', values: { issued_at: '2026-10-15T18:59:00.000Z' },
-    });
-    expect(debugTablePlan('bounty.ticketNearExpiry', now)).toEqual({
       table: 'bounty_tickets', op: 'update', values: { issued_at: '2026-10-15T18:59:00.000Z' },
     });
   });

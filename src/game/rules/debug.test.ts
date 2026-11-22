@@ -214,7 +214,9 @@ describe('achievement.setCounter / resetCounters / evaluate & bag.spawn & snapsh
     expect(isBigSize(fishById('vanishingpoint')!, out.state.bag[0].size!)).toBe(true);
   });
 
-  it('snapshot.restore는 스냅샷으로 상태를 복원하고 빠진 도감을 recordsRemoved로 표시한다', () => {
+  it('snapshot.restore는 스냅샷으로 상태를 복원하고 빠진 도감을 recordsRemoved로 표시하며 감사 이벤트는 요약만 남긴다', () => {
+    const uid1 = '00000000-0000-4000-8000-000000000001';
+    const uid2 = '00000000-0000-4000-8000-000000000002';
     const prev = seed({
       gold: 999,
       dex: { crucian: { normal: { count: 2, maxSize: 20, first: '2026-10-01' } } },
@@ -223,6 +225,8 @@ describe('achievement.setCounter / resetCounters / evaluate & bag.spawn & snapsh
     });
     const snap = seed({
       gold: 10,
+      bag: [{ uid: uid1, fishId: 'carp', form: 'normal', size: 20, caughtAt: null, spot: null, judgment: null, locked: false }],
+      exhibit: [{ uid: uid2, fishId: 'carp', form: 'variant', size: 22, caughtAt: null, spot: null, judgment: null, locked: true }],
       dex: { carp: { normal: { count: 1, maxSize: 30, first: '2026-10-02' } } },
       clearedNamed: ['seasia-named-leviathan'],
       achievementCounters: { 'catch.auto': 3 },
@@ -235,6 +239,48 @@ describe('achievement.setCounter / resetCounters / evaluate & bag.spawn & snapsh
     expect(out.state.clearedNamed).toEqual(['seasia-named-leviathan']);
     expect(out.state.achievementCounters).toEqual({ 'catch.auto': 3 });
     expect(out.writes.recordsRemoved).toEqual([{ fishId: 'crucian', form: 'normal' }]);
+    expect(out.events[0]).toEqual({
+      type: 'debug', payload: { command: 'snapshot.restore', bagCount: 1, exhibitCount: 1, dexCount: 1 },
+    });
+  });
+
+  it('snapshot.restore는 비-UUID uid, 중복 uid, 비정상 스칼라, 과대 배열을 bad-request로 거부한다', () => {
+    const validUid = '00000000-0000-4000-8000-000000000001';
+    const makeInst = (uid: string) => ({
+      uid, fishId: 'carp', form: 'normal' as const, size: 20, caughtAt: null, spot: null, judgment: null, locked: false,
+    });
+    // 비-UUID uid (가방 / 전시대)
+    expect(debug(seed(), 'snapshot.restore', { snapshot: { bag: [makeInst('not-a-uuid')] } }))
+      .toEqual({ ok: false, error: 'bad-request' });
+    expect(debug(seed(), 'snapshot.restore', { snapshot: { exhibit: [null, makeInst('short')] } }))
+      .toEqual({ ok: false, error: 'bad-request' });
+    // 중복 uid (가방 내 중복, 가방-전시대 간 대소문자 무시 중복)
+    expect(debug(seed(), 'snapshot.restore', { snapshot: { bag: [makeInst(validUid), makeInst(validUid)] } }))
+      .toEqual({ ok: false, error: 'bad-request' });
+    expect(debug(seed(), 'snapshot.restore', {
+      snapshot: { bag: [makeInst(validUid)], exhibit: [makeInst(validUid.toUpperCase())] },
+    })).toEqual({ ok: false, error: 'bad-request' });
+    // 비정상 스칼라
+    for (const bad of [
+      { gold: Number.NaN },
+      { gold: -1 },
+      { gold: 1.5 },
+      { fame: Number.POSITIVE_INFINITY },
+      { fame: -10 },
+      { boat: -1 },
+      { boat: 99 },
+      { rod: 0 },
+      { rod: 2.5 },
+      { gold: '100' },
+    ]) {
+      expect(debug(seed(), 'snapshot.restore', { snapshot: bad })).toEqual({ ok: false, error: 'bad-request' });
+    }
+    // 과대 배열 (10,000 초과)
+    const over = Array.from({ length: 10_001 }, () => null);
+    expect(debug(seed(), 'snapshot.restore', { snapshot: { exhibit: over } }))
+      .toEqual({ ok: false, error: 'bad-request' });
+    expect(debug(seed(), 'snapshot.restore', { snapshot: { bag: over } }))
+      .toEqual({ ok: false, error: 'bad-request' });
   });
 });
 

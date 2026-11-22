@@ -96,7 +96,6 @@ export type DebugTablePlan =
   | { table: string; op: 'update'; values: Record<string, unknown> };
 export function debugTablePlan(command: DebugTableCommand, nowMs: number): DebugTablePlan {
   switch (command) {
-    case 'bounty.ticketNearExpiry':
     case 'bounty.expireTickets':
       return { table: 'bounty_tickets', op: 'update', values: { issued_at: expiredTicketIssuedAt(nowMs) } };
     case 'bounty.clearTickets':

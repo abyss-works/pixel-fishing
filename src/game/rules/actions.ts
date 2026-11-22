@@ -775,9 +775,17 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const args = action.args ?? {};
       const next = reduceDebug(state, action.command, args, deps.today, deps.now, deps.newUid);
       if (!next) return { ok: false, error: 'bad-request' };
+      const payload = action.command === 'snapshot.restore'
+        ? {
+          command: action.command,
+          bagCount: next.bag.length,
+          exhibitCount: next.exhibit.filter(Boolean).length,
+          dexCount: Object.keys(next.dex).length,
+        }
+        : { command: action.command, args };
       return {
         ok: true, state: next, result: { type: 'none' },
-        events: [{ type: 'debug', payload: { command: action.command, args } }],
+        events: [{ type: 'debug', payload }],
       };
     }
     case 'import': {

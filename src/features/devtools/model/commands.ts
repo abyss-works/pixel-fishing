@@ -368,11 +368,7 @@ export const DEV_COMMANDS: readonly DevCommand[] = [
     ],
   },
   {
-    id: 'bounty.ticketNearExpiry', group: 'bounty', label: '흔적 만료 직전(04:00 1분 전)',
-    hint: '보유 도전권의 발급 시각을 KST 04:00 경계 1분 전으로 돌려 만료 상태로 만든다.', params: [],
-  },
-  {
-    id: 'bounty.expireTickets', group: 'bounty', label: '흔적 즉시 만료',
+    id: 'bounty.expireTickets', group: 'bounty', label: '도전권 즉시 만료',
     hint: '보유 도전권을 전날 게임 날짜로 옮겨 즉시 만료시킨다.', params: [],
   },
   { id: 'bounty.clearTickets', group: 'bounty', label: '흔적 지우기', hint: '도전권을 모두 지운다.', params: [] },

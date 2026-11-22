@@ -36,7 +36,8 @@ describe('parseAction', () => {
     expect(parseAction({ type: 'debug', command: 'bounty.clearTickets' })?.type).toBe('debug');
     expect(parseAction({ type: 'debug', command: 'dex.fill', args: { zone: 'village' } })?.type).toBe('debug');
     expect(parseAction({ type: 'debug', command: 'snapshot.restore', args: { snapshot: {} } })?.type).toBe('debug');
-    expect(parseAction({ type: 'debug', command: 'bounty.ticketNearExpiry' })?.type).toBe('debug');
+    expect(parseAction({ type: 'debug', command: 'bounty.expireTickets' })?.type).toBe('debug');
+    expect(parseAction({ type: 'debug', command: 'bounty.ticketNearExpiry' })).toBeNull();
     expect(parseAction({ type: 'debug', command: 'gold.infinite' })).toBeNull();
     expect(parseAction({ type: 'adminSet', gold: 1 })).toBeNull();
   });
