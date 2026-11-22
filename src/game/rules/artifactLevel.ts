@@ -83,11 +83,6 @@ export function commonWeightCutOf(state: ArtifactHolder, artifactBoost = 0): num
   return clean(sumArtifactEffect(state, e => e.commonWeightCut) * (1 + artifactBoost));
 }
 
-/** 가방 용량 증가율 합 — 보유 유물의 증가율 합에 유물 배율(1 + artifactBoost)을 곱한다 */
-export function bagCapBonusOf(state: ArtifactHolder, artifactBoost = 0): number {
-  return clean(sumArtifactEffect(state, e => e.bagCap) * (1 + artifactBoost));
-}
-
 /** 감소율의 합을 한 번 적용한 배수 (1 − 합). 합이 1 이상이어도 음수가 되지 않도록 0에서 멈춘다 */
 export function scaleAfterCuts(cuts: readonly number[]): number {
   return Math.max(0, 1 - cuts.reduce((sum, c) => sum + c, 0));

@@ -44,7 +44,7 @@ describe('업적 콘텐츠', () => {
     }
   });
 
-  it('진행 업적 골드 보상이 해역별 표와 일치하고 총합이 5,362,500G다', () => {
+  it('진행 업적 골드 보상이 해역별 표와 일치하고 총합이 25,862,500G다', () => {
     const expected: Record<string, number> = {
       'spot-basic-pond': 50,
       'spot-full-pond': 50,

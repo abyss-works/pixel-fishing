@@ -5,7 +5,7 @@
 import {
   addCatch, buildCatchInfo, makeInstance, migrate,
   redeemCoupon, rollCatchExtras, sellSelected, setLocked, applyAutoLock, applyCatchAutoLock, tryBuyBoat, tryUpgrade,
-  overflowUids, release, bagCapacity, instanceFish, formName, travel, applyRelief, moveExhibit,
+  overflowUids, release, instanceFish, formName, travel, applyRelief, moveExhibit,
   addItem, takeItem, nextDexRec, mutationWeightsOf, withVariantPoints,
 } from './logic.js';
 import type { GameState, Judgment, CatchInfo, CatchExtras, DrawOptions, FishInstance, FormRecord, FormId, ReliefGrant, Fish } from './logic.js';
@@ -29,7 +29,7 @@ import type { RarityId } from '../content/rarity.js';
 import { spotById } from '../content/spots.js';
 import { bountyById } from '../content/bounties.js';
 import { artifactById, artifactLevelCost, artifactOfNamed } from '../content/artifacts.js';
-import { artifactLevelOf, bagCapBonusOf, commonWeightCutOf, extraCookChance, namedRewardOf } from './artifactLevel.js';
+import { artifactLevelOf, commonWeightCutOf, extraCookChance, namedRewardOf } from './artifactLevel.js';
 import { isTutorialId } from '../content/tutorials.js';
 import type { SpotId } from '../content/spots.js';
 import type { LocationRef } from '../content/places.js';
@@ -38,7 +38,7 @@ import { hatById } from '../content/wardrobe.js';
 import { ACHIEVEMENTS, achievementById } from '../content/achievements.js';
 import { topZoneOfSpot } from '../content/zones.js';
 import { achievementBonusesOf, counterIncrementsForEvents, evaluateAchievements } from './achievements.js';
-import { NO_ACHIEVEMENT_BONUSES } from './effects.js';
+import { NO_ACHIEVEMENT_BONUSES, bagCapacityOf, createPlayerContext } from './effects.js';
 import type { AchievementBonuses } from './effects.js';
 import {
   canAcceptQuest, canDeliverBounty, canExchangeArtifact, canLevelUpArtifact, canExhibit, canResolveChallenge,
@@ -461,8 +461,8 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       // 가방이 넘치면 가장 안 특별한 개체를 놓아준다. 방금 잡은 놈이 후보일 수도 있다
       // ("가방이 꽉 차서 그 자리에서 놓아줬다") — 명성·도감은 이미 확정됐으므로 남는다.
       // 상한은 **캐치 전** 가방으로 잰다(래칫). 그래야 이미 넘겨 든 유저도 한 번에 한 마리만 나간다.
-      const totalBagBonus = guild.bag + bagCapBonusOf(state, achBonuses.artifactBoost);
-      const overflow = overflowUids(caught.bag, bagCapacity(state.boat, state.bag, totalBagBonus));
+      const ctx = createPlayerContext({ state, guild, now: deps.now, achievements: achBonuses });
+      const overflow = overflowUids(caught.bag, bagCapacityOf(ctx, state.bag.length).value);
       // 가공 플랜트선은 내보낼 개체가 기운 대상이면 놓아주지 않고 기운으로 바꾼다
       const plan = planOverflow({ ...caught, boat: state.boat, energyTargets: state.energyTargets }, overflow, deps.guest === true);
       const view = (uids: readonly string[]) => uids.map(uid => caught.bag.find(b => b.uid === uid)!);
@@ -889,8 +889,13 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
           || !(action.slot === null || typeof action.slot === 'number')) {
         return { ok: false, error: 'bad-request' };
       }
-      const totalBagBonus = (deps.guild ?? NO_GUILD_EFFECTS).bag + bagCapBonusOf(state, achievementBonusesOf(state).artifactBoost);
-      const check = canExhibit(state, action.uid, action.slot, totalBagBonus);
+      const ctx = createPlayerContext({
+        state,
+        guild: deps.guild ?? NO_GUILD_EFFECTS,
+        now: deps.now,
+        achievements: achievementBonusesOf(state),
+      });
+      const check = canExhibit(state, action.uid, action.slot, bagCapacityOf(ctx, state.bag.length).value);
       if (!check.ok) return { ok: false, error: check.reason };
       return {
         ok: true, state: moveExhibit(state, action.uid, action.slot),

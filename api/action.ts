@@ -17,7 +17,7 @@ import { afterResponse } from './_server/afterResponse.js';
 import { migrate, newState } from '../src/game/rules/logic.js';
 import type { FishInstance, FormRecord, GameState, Judgment } from '../src/game/rules/logic.js';
 import {
-  autoLockKey, buildCatchInfo, canFish, capOfBoat, decideCatchAutoLock, FISH, formName, instanceFish,
+  autoLockKey, buildCatchInfo, canFish, decideCatchAutoLock, FISH, formName, instanceFish,
   evictionPriceRows, makeInstance, nextDexRec, pickEvict, pruneAutoLockedIds, RARITY, RARITY_ORDER,
   matchBountyCatch,
 } from '../src/game/rules/logic.js';
@@ -29,7 +29,7 @@ import type { SpotId } from '../src/game/content/spots.js';
 import { applyAction, drawCatch, namedWeightBonus, pickScalars, prepareCatchDraw } from '../src/game/rules/actions.js';
 import type { ActionDeps, ApplyOutcome, GameEvent, ReleasedFish, StatePatch, StateWrites } from '../src/game/rules/actions.js';
 import { achievementBonusesOf, counterIncrementsForEvents, evaluateAchievements } from '../src/game/rules/achievements.js';
-import { bagCapBonusOf } from '../src/game/rules/artifactLevel.js';
+import { bagCapacityOf, createPlayerContext } from '../src/game/rules/effects.js';
 import { ACHIEVEMENTS } from '../src/game/content/achievements.js';
 import { encounterQuests } from '../src/game/rules/rules.js';
 import type { BountyCtx } from '../src/game/rules/rules.js';
@@ -658,9 +658,10 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
   const candidates = speciesPityCandidates(base.pity, spot, phaseOpts.phase);
   const owned = candidates.length === 0 ? new Set<string>()
     : await step('db-read', { uid, action: 'catch' }, () => ownedNormalForms(db, uid, candidates));
+  const achBonuses = achievementBonusesOf(base);
   const drawn = drawCatch(
     base, spot, judgment, rodPower(base), pz.mult, Math.random, phaseOpts,
-    id => owned.has(id), guild, cook, achievementBonusesOf(base),
+    id => owned.has(id), guild, cook, achBonuses,
   );
   const { fish, extras } = drawn;
   // 조회 실패는 신규로 간주하지 않는다 — count 1로 upsert하면 진짜 도감을 덮어쓴다
@@ -686,8 +687,8 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
   const inst = lockDecision.inst;
   const unlockedPrev = lockDecision.unlockedPrev;
   const rec = nextDexRec(prev, inst.size, today);
-  const totalBagBonus = guild.bag + bagCapBonusOf(base, achievementBonusesOf(base).artifactBoost);
-  const over = bagCount + 1 - Math.max(capOfBoat(base.boat, totalBagBonus), bagCount);
+  const ctx = createPlayerContext({ state: base, guild, now, achievements: achBonuses });
+  const over = bagCount + 1 - bagCapacityOf(ctx, bagCount).value;
   let added: { inst: FishInstance; slot: number | null }[] = [{ inst, slot: null }];
   let removed: string[] = [];
   let evictBag: FishInstance[] = [];

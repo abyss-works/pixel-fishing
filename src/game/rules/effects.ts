@@ -98,6 +98,11 @@ export function bagCapacityOf(ctx: PlayerContext, heldCount: number): Stat {
     }
   }
   const cap = base + Math.round(base * bonusSum);
+  if (mods.length > 0) {
+    // 보너스를 합산해 한 번 반올림한 상한과 항목별 반올림 delta 합이 ±1 어긋나지 않도록 마지막 항목에 차이를 맞춘다
+    const rest = mods.slice(0, -1).reduce((sum, mod) => sum + mod.delta, 0);
+    mods[mods.length - 1].delta = cap - base - rest;
+  }
   return { base, mods, value: Math.max(cap, heldCount) };
 }
 
