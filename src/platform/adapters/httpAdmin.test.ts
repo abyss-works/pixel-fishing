@@ -18,6 +18,7 @@ const CALLS: [method: string, call: () => Promise<unknown>, url: string][] = [
   ['spamFlags', () => admin.spamFlags(), '/api/admin?q=spamFlags'],
   ['recentEvents', () => admin.recentEvents(), '/api/admin?q=recentEvents'],
   ['userEvents', () => admin.userEvents('u-1', 300), '/api/admin?q=userEvents&user=u-1&limit=300'],
+  ['userState', () => admin.userState('u-1'), '/api/admin?q=userState&uid=u-1'],
   ['letters', () => admin.letters(), '/api/admin?q=letters'],
   ['changelog', () => admin.changelog(), '/api/admin?q=changelog'],
   ['chatReports', () => admin.chatReports(), '/api/admin?q=chatReports'],

@@ -93,6 +93,7 @@ class LocalAdmin implements AdminApi {
   resetLink(_userId: string): Promise<never> { return rejected(); }
   letterHandled(_letterId: number, _handled: boolean): Promise<never> { return rejected(); }
   userEvents(_userId: string, _limit?: number): Promise<never[]> { return rejected(); }
+  userState(_uid: string): Promise<never> { return rejected(); }
   balanceLive(_days?: number): Promise<never> { return rejected(); }
   deployHost(): string | null {
     return null;

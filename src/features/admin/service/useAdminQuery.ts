@@ -1,4 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
+import { useCallback, useSyncExternalStore } from 'react';
+import { useIsFetching, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { Query } from '@tanstack/react-query';
 
 // 관리자 탭 공통 조회 — 수동 useState·useEffect 조회를 RQ로 옮긴다.
 // 반환형은 수동 조회 시절과 같다: data(없으면 null) · loading · error(문구) · refresh.
@@ -27,5 +29,46 @@ export function useAdminQuery<T>(
     error: q.error ? String((q.error as { message?: unknown }).message ?? q.error) : null,
     updatedAt: q.dataUpdatedAt,
     refresh: () => { void q.refetch(); },
+  };
+}
+
+const isActiveDataQuery = (query: Query): boolean =>
+  Array.isArray(query.queryKey)
+  && query.queryKey[0] === 'admin'
+  && query.queryKey[1] !== 'access'
+  && query.queryKey[1] !== 'signInReturn'
+  && query.getObserversCount() > 0;
+
+/** 현재 열린 탭의 활성 관리자 데이터 조회를 일괄 재조회하고 마지막 조회 시각을 추적한다 */
+export function useAdminRefresh(enabled: boolean): {
+  refreshing: boolean;
+  lastUpdatedAt: number;
+  refresh: () => void;
+} {
+  const client = useQueryClient();
+  const refreshingCount = useIsFetching({ predicate: isActiveDataQuery });
+  const cache = client.getQueryCache();
+
+  const subscribe = useCallback((onStoreChange: () => void) => cache.subscribe(onStoreChange), [cache]);
+  const getSnapshot = useCallback(() => {
+    let maxUpdated = 0;
+    for (const q of cache.getAll()) {
+      if (isActiveDataQuery(q) && q.state.dataUpdatedAt > maxUpdated) {
+        maxUpdated = q.state.dataUpdatedAt;
+      }
+    }
+    return maxUpdated;
+  }, [cache]);
+
+  const lastUpdatedAt = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const refresh = useCallback(() => {
+    if (!enabled) return;
+    void client.invalidateQueries({ predicate: isActiveDataQuery, refetchType: 'active' });
+  }, [client, enabled]);
+
+  return {
+    refreshing: refreshingCount > 0,
+    lastUpdatedAt,
+    refresh,
   };
 }

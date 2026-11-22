@@ -4,7 +4,8 @@ import type { SpotId } from '../../../game/content/spots';
 import { rarityWeightsOf } from '../../../game/content/rarityWeights';
 import {
   buildFishDeltaExport, buildFishSnapshotExport, countSimulationOverrides,
-  selectFishForSpot, selectSpotAxisEvs, selectSpotBudgets, selectSpotDraws,
+  filterSpots, selectFishForSpot, selectSpotAxisEvs, selectSpotBudgets, selectSpotDraws,
+  selectSpotNightDraws, SPOT_ZONE_OPTIONS,
 } from './fishSimulation';
 import type { SimOverrides } from './fishSimulation';
 
@@ -70,5 +71,18 @@ describe('어종 시뮬레이션 데이터', () => {
     } finally {
       if (original === undefined) delete spot.rarityWeight; else spot.rarityWeight = original;
     }
+  });
+
+  it('구역·검색 필터와 밤 풀 확률을 계산한다', () => {
+    expect(SPOT_ZONE_OPTIONS.map(o => o.id)).toContain('northatlantic');
+    expect(filterSpots(SPOTS, 'northatlantic', '').map(s => s.id)).toEqual(['azores', 'bermuda']);
+    expect(filterSpots(SPOTS, 'all', '버뮤다').map(s => s.id)).toEqual(['bermuda']);
+
+    const nightSpot = SPOTS.find(row => FISH.some(fish => fish.spot === row.id && fish.night))!;
+    const nightFish = selectFishForSpot(nightSpot.id as SpotId, true)[0];
+    const nightRow = selectSpotNightDraws(nightSpot.id as SpotId, emptySimulation).get(nightFish.id);
+    expect(nightRow).toBeDefined();
+    expect(nightRow!.fishPct).toBeGreaterThan(0);
+    expect(nightRow!.gradePct).toBeGreaterThan(0);
   });
 });

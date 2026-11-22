@@ -46,7 +46,8 @@ describe('관리자 화면 파생 데이터', () => {
     ];
     const economy: AdminEconomyRow[] = [{
       day: '2026-10-13', sells: 1, sell_gold: 100, coupon_gold: 10, mail_gold: 0,
-      rod_cost: 20, boat_cost: 30, bait_cost: 5,
+      bounty_gold: 50, achievement_gold: 20,
+      rod_cost: 20, boat_cost: 30, hat_cost: 5,
     }];
     const abuse = selectAntiAbuseRows([user({ restricted: true })], flags);
     const metrics = selectEconomyMetrics([user({ gold: 80 }), user({ user_id: 'user-2', gold: '20' })], economy);
@@ -54,7 +55,7 @@ describe('관리자 화면 파생 데이터', () => {
     expect(abuse.spamUsers.map(row => row.user_id)).toEqual(['user-1']);
     expect(abuse.perfectOutliers.map(row => row.user_id)).toEqual(['user-1']);
     expect(abuse.restricted).toHaveLength(1);
-    expect(metrics).toMatchObject({ goldSum: 100, inflowTotal: 110, outflowTotal: 55 });
+    expect(metrics).toMatchObject({ goldSum: 100, inflowTotal: 180, outflowTotal: 55 });
   });
 
   it('검색과 사용자 감사 자료를 데이터 함수로 만든다', () => {

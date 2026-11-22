@@ -18,4 +18,5 @@ export const adminKeys = {
   bountyFunnel: (days: number) => ['admin', 'bountyFunnel', days] as const,
   balanceLive: (days: number) => ['admin', 'balanceLive', days] as const,
   userDetails: (uid: string) => ['admin', 'user', uid] as const,
+  userState: (uid: string) => ['admin', 'userState', uid] as const,
 };

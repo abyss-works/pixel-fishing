@@ -6,6 +6,7 @@ import type { Fish } from '../../../game/content/fish';
 import type { SpotId } from '../../../game/content/spots';
 import { idleDialsOf } from '../../../game/rules/power';
 import type { Spot } from '../../../game/content/spots';
+import { ZONE_IDS, topZoneOfSpot, zoneById } from '../../../game/content/zones';
 
 export interface SimOverrides {
   /** 수역별 희귀·영웅·전설 만분율 오버라이드 — 일반은 입력이 아니라 나머지로 계산한다 */
@@ -62,9 +63,39 @@ export function selectFishForSpot(spot: SpotId, night: boolean): Fish[] {
     .sort((a, b) => RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity));
 }
 
-/** 현재 오버라이드를 적용한 어종별 추첨 행을 반환한다. */
+/** 구역 필터 선택지 */
+export const SPOT_ZONE_OPTIONS: readonly { id: string; label: string }[] = [
+  { id: 'all', label: '전체 구역' },
+  ...ZONE_IDS.map(id => ({ id, label: zoneById(id)?.shortName ?? id })),
+];
+
+/** 구역과 검색어(해역명·어종명·변이명·id)로 수역 목록을 걸러낸다 */
+export function filterSpots(spots: readonly Spot[], zone: string, query: string): Spot[] {
+  const q = query.trim().toLowerCase();
+  return spots.filter(spot => {
+    if (zone !== 'all' && topZoneOfSpot(spot.id) !== zone) return false;
+    if (!q) return true;
+    if (spot.name.toLowerCase().includes(q) || spot.id.toLowerCase().includes(q)) return true;
+    return FISH.some(f => f.spot === spot.id
+      && (f.name.toLowerCase().includes(q) || f.id.toLowerCase().includes(q) || f.variant.name.toLowerCase().includes(q)));
+  });
+}
+
+/** 현재 오버라이드를 적용한 어종별 추첨 행을 반환한다(낮 기준). */
 export function selectSpotDraws(spot: SpotId, sim: SimOverrides): Map<string, SpotDrawRow> {
   return new Map(drawRows(spot, {
+    budgets: selectSpotBudgets(spot, sim),
+    fishWeights: sim.fishWeights[spot],
+  }).map(row => ({
+    ...row,
+    price: sim.price[row.fish.id] ?? row.fish.price,
+  })).map(row => [row.fish.id, row]));
+}
+
+/** 현재 오버라이드를 적용한 밤 시간대 풀의 추첨 행을 반환한다(밤 전용 어종 확률 계산용). */
+export function selectSpotNightDraws(spot: SpotId, sim: SimOverrides): Map<string, SpotDrawRow> {
+  return new Map(drawRows(spot, {
+    phase: 'night',
     budgets: selectSpotBudgets(spot, sim),
     fishWeights: sim.fishWeights[spot],
   }).map(row => ({

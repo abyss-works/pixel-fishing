@@ -220,7 +220,8 @@ export interface AdminSessionRow {
 }
 export interface AdminEconomyRow {
   day: string; sells: number; sell_gold: number; coupon_gold: number; mail_gold: number;
-  rod_cost: number; boat_cost: number; bait_cost: number;
+  bounty_gold: number; achievement_gold: number;
+  rod_cost: number; boat_cost: number; hat_cost: number;
 }
 /** 바운티 퍼널 일계 — 네임드 수주 → 흔적(도전권) → 결투 승·패 → 토벌 보상, 일반 수주·납품 */
 export interface AdminBountyFunnelRow {
@@ -267,16 +268,19 @@ export interface BalanceLive {
   judgment: { judgment: string; catches: number; pct: number }[];
   /** 체류 해역. 기간 안 캐치의 해역별 수와 사용자 수이고 캐치 많은 순이다. 해역이 기록되지 않은 캐치는 spot이 null이다 */
   spots: { spot: string | null; catches: number; users: number }[];
-  /** 도감 진행. 일반 폼을 하나 이상 발견한 사용자의 발견 어종 수 분포이다. 10종 구간이고 fromSpecies 90은 90종 이상이다 */
+  /** 도감 진행. 일반 폼을 하나 이상 발견한 사용자의 발견 어종 수 분포이다. 10종 구간이고 fromSpecies 120은 120종 이상이다 */
   dexBuckets: { fromSpecies: number; users: number }[];
   /** 배 단계 분포. boat 0은 배가 없는 상태이다 */
   boats: { boat: number; users: number }[];
-  /** 낚싯대 레벨 분포. 5레벨 구간이고 fromLevel 31은 31레벨 이상이다 */
+  /** 낚싯대 레벨 분포. 5레벨 구간이고 fromLevel 66은 66레벨 이상이다 */
   rodBuckets: { fromLevel: number; users: number }[];
   /** 골드 잔고의 25·50·75·90분위와 최대. 사용자가 없으면 모두 null이다 */
   gold: { p25: number | null; p50: number | null; p75: number | null; p90: number | null; max: number | null };
-  /** 골드 흐름. 기간 안 유입(판매, 쿠폰, 우편)과 유출(강화, 배, 미끼)의 합이다 */
-  goldFlow: { sellGold: number; couponGold: number; mailGold: number; rodCost: number; boatCost: number; baitCost: number };
+  /** 골드 흐름. 기간 안 유입(판매, 쿠폰, 우편, 현상금, 업적)과 유출(강화, 배, 모자)의 합이다 */
+  goldFlow: {
+    sellGold: number; couponGold: number; mailGold: number; bountyGold: number; achievementGold: number;
+    rodCost: number; boatCost: number; hatCost: number;
+  };
   /** 일일 활성. 이벤트가 있는 사용자 수이다. KST 날짜(yyyy-mm-dd) 오름차순이고 이벤트가 없는 날은 행이 없다. 기간 시작 시각이 날짜 중간이면 첫 날은 일부만 센다 */
   dau: { day: string; dau: number }[];
   /** 이탈 지점. 7일 넘게 저장이 없는 사용자의 배별 인원과 평균 명성, 평균 낚싯대 레벨이다 */
@@ -305,13 +309,65 @@ export interface AdminSentMailRow extends MailItem { userId: string }
 export interface AdminMailRequest {
   title: string; body: string;
   target: { kind: 'users'; recipients: { userId: string; gold: number }[] } | { kind: 'all'; gold: number };
+  idempotencyKey?: string;
 }
 /** 관리자 — 우편 미리보기·보내기 결과. problems가 있으면 미리보기가 없고 보내지 않는다 */
 export interface AdminMailPlan {
-  problems: ('title' | 'body' | 'gold' | 'recipients' | 'duplicate')[];
-  preview: { count: number; totalGold: number; missing: string[] } | null;
+  problems: ('title' | 'body' | 'gold' | 'recipients' | 'duplicate' | 'totalGold')[];
+  duplicates?: string[];
+  preview: {
+    count: number;
+    recipientCount: number;
+    totalGold: number;
+    capExceeded: boolean;
+    maxTotalGold: number;
+    missing: string[];
+  } | null;
   /** 보내기에서만 — 넣은 우편 수 */
   sent?: number;
+  idempotent?: boolean;
+}
+
+/** 관리자 — 대상 플레이어의 게임 상태 상세 스냅샷 */
+export interface AdminUserState {
+  hasSave: boolean;
+  dex: {
+    normal: number; normalTotal: number;
+    variant: number; variantTotal: number;
+    named: number; namedTotal: number;
+  };
+  bounty: {
+    namedClears: number;
+    namedDistinctClears: number;
+    namedTotal: number;
+  };
+  artifacts: {
+    owned: { id: string; name: string; grade: string | null; level: number | null }[];
+    total: number;
+  };
+  hats: {
+    owned: number;
+    total: number;
+  };
+  achievements: {
+    claimed: number;
+    claimable: number;
+    total: number;
+    counters: Record<string, number>;
+  };
+  cooking: {
+    energy: { common: number; rare: number; epic: number; legendary: number };
+    cooked: { id: string; name: string; kind: 'lunch' | 'bait'; count: number }[];
+    inProgress: { recipe: string; name: string; count: number; startedAt: string } | null;
+    slots: {
+      lunch: { id: string; name: string; endsAt: string } | null;
+      bait: { id: string; name: string; endsAt: string } | null;
+    };
+  };
+  instances: {
+    bag: number;
+    exhibit: number;
+  };
 }
 
 /** 관리자 — 비밀번호 재설정 링크. url은 게임의 재설정 착지 주소이고 expiresAt까지 쓸 수 있다 */
@@ -341,6 +397,7 @@ export interface AdminApi {
   spamFlags(): Promise<AdminSpamFlagRow[]>;
   recentEvents(): Promise<AdminEventRow[]>;
   userEvents(userId: string, limit?: number): Promise<AdminEventRow[]>;
+  userState(uid: string): Promise<AdminUserState>;
   letters(): Promise<AdminLetterRow[]>;
   /** 변경 기록(최신 버전부터, 철회된 항목 포함) */
   changelog(): Promise<AdminChangelogRow[]>;
