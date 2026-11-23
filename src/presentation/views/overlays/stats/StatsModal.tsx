@@ -28,7 +28,7 @@ import { SCROLL_Y } from '../../../ui/scrollArea';
 // 값은 전부 스탯 선택자에서 온다 — 여기서 규칙을 재계산하지 않는다. 넘치는 내용은 탭 본문 안에서만 굴린다.
 // 고른 해역은 탭 사이에 이어진다 — 요약의 해역 칸이 낚싯대 탭에서 고른 해역을 따른다.
 
-type StatsTab = 'summary' | 'boat' | 'rod' | 'bonus';
+export type StatsTab = 'summary' | 'boat' | 'rod' | 'bonus';
 const TABS: TabDef<StatsTab>[] = [
   { key: 'summary', label: '요약' },
   { key: 'boat', label: '배' },
@@ -45,13 +45,14 @@ interface Props {
   nickname: string | null;
   /** 길드 레벨과 서버가 적용하는 길드 보너스 효과. 길드가 없으면 null */
   guild: { level: number; effects: GuildEffects } | null;
+  initialTab?: StatsTab;
   onClose: () => void;
 }
 
-export default function StatsModal({ game, movement, region, nickname, guild, onClose }: Props) {
+export default function StatsModal({ game, movement, region, nickname, guild, initialTab = 'summary', onClose }: Props) {
   const now = useNow();
   const { spot: here, zone: currentZone } = useSpotState();
-  const [tab, setTab] = useState<StatsTab>('summary');
+  const [tab, setTab] = useState<StatsTab>(initialTab);
   // 처음 해역은 창을 연 순간에 정한다 — 창이 떠 있는 동안 어군 사거리가 바뀌어도 고른 해역을 옮기지 않는다
   const [start] = useState(() => selectInitialStatsSpotIndex(region, here, currentZone));
   const [spotIndex, setSpotIndex] = useState(start);

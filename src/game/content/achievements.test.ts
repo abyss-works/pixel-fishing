@@ -17,18 +17,18 @@ describe('업적 콘텐츠', () => {
     ]);
   });
 
-  it('수령형 업적 71종(진행 30 + 치장 41)과 누적 보너스 25종(23계열)이 중복 없는 id로 정의되어 있다', () => {
-    expect(ACHIEVEMENTS).toHaveLength(71);
-    expect(new Set(ACHIEVEMENTS.map(a => a.id)).size).toBe(71);
+  it('수령형 업적 80종(진행 30 + 치장 50)과 누적 보너스 26종(23계열)이 중복 없는 id로 정의되어 있다', () => {
+    expect(ACHIEVEMENTS).toHaveLength(80);
+    expect(new Set(ACHIEVEMENTS.map(a => a.id)).size).toBe(80);
 
     const progress = ACHIEVEMENTS.filter(a => a.tab === 'progress');
     expect(progress).toHaveLength(30);
     const cosmetic = ACHIEVEMENTS.filter(a => a.tab === 'cosmetic');
-    expect(cosmetic).toHaveLength(41);
-    expect(ACHIEVEMENTS.filter(a => a.reward.kind === 'hat')).toHaveLength(41);
+    expect(cosmetic).toHaveLength(50);
+    expect(ACHIEVEMENTS.filter(a => a.reward.kind === 'hat')).toHaveLength(50);
 
     expect(CUMULATIVE_BONUS_SERIES).toHaveLength(23);
-    expect(CUMULATIVE_BONUS_COUNT).toBe(25);
+    expect(CUMULATIVE_BONUS_COUNT).toBe(26);
     expect(new Set(CUMULATIVE_BONUS_SERIES.map(s => s.id)).size).toBe(23);
   });
 
@@ -44,36 +44,36 @@ describe('업적 콘텐츠', () => {
     }
   });
 
-  it('진행 업적 골드 보상이 해역별 표와 일치하고 총합이 25,862,500G다', () => {
+  it('진행 업적 골드 보상이 해역별 표와 일치하고 총합이 25,862,870G다', () => {
     const expected: Record<string, number> = {
-      'spot-basic-pond': 50,
-      'spot-full-pond': 50,
+      'spot-basic-pond': 35,
+      'spot-full-pond': 35,
       'spot-basic-river': 100,
       'spot-full-river': 100,
       'spot-basic-sea': 300,
       'spot-full-sea': 300,
-      'spot-basic-deep': 800,
-      'spot-full-deep': 800,
+      'spot-basic-deep': 750,
+      'spot-full-deep': 750,
       'spot-basic-dragonhole': 1_500,
       'spot-full-dragonhole': 1_500,
-      'spot-basic-coron': 4_000,
+      'spot-basic-coron': 3_500,
       'spot-full-coron': 4_000,
-      'spot-basic-barrierreef': 12_000,
-      'spot-full-barrierreef': 12_000,
+      'spot-basic-barrierreef': 10_000,
+      'spot-full-barrierreef': 15_000,
       'spot-basic-indian': 35_000,
       'spot-full-indian': 40_000,
       'spot-basic-southindian': 100_000,
       'spot-full-southindian': 100_000,
-      'spot-basic-mozstrait': 200_000,
-      'spot-full-mozstrait': 150_000,
+      'spot-basic-mozstrait': 150_000,
+      'spot-full-mozstrait': 200_000,
       'spot-basic-comorodeep': 350_000,
       'spot-full-comorodeep': 350_000,
       'spot-basic-benguela': 500_000,
       'spot-full-benguela': 500_000,
       'spot-basic-sthelena': 1_500_000,
       'spot-full-sthelena': 1_500_000,
-      'spot-basic-azores': 3_000_000,
-      'spot-full-azores': 2_500_000,
+      'spot-basic-azores': 2_500_000,
+      'spot-full-azores': 3_000_000,
       'spot-basic-bermuda': 7_500_000,
       'spot-full-bermuda': 7_500_000,
     };
@@ -84,12 +84,16 @@ describe('업적 콘텐츠', () => {
       expect(a!.reward).toEqual({ kind: 'gold', gold });
       total += gold;
     }
-    expect(total).toBe(25_862_500);
+    expect(total).toBe(25_862_870);
+    for (let i = 0; i < 30; i += 2) {
+      expect((ACHIEVEMENTS[i].reward as { gold: number }).gold)
+        .toBeLessThanOrEqual((ACHIEVEMENTS[i + 1].reward as { gold: number }).gold);
+    }
   });
 
   it('모든 업적 모자 보상과 wardrobe.ts가 1:1로 대응한다', () => {
     const achHats = HATS.filter(h => h.source === 'achievement');
-    expect(achHats).toHaveLength(41);
+    expect(achHats).toHaveLength(50);
     for (const h of achHats) {
       const a = achievementForHatId(h.id);
       expect(a, h.id).toBeDefined();

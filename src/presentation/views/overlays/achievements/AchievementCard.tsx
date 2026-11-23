@@ -4,16 +4,19 @@ import { DEFAULT_LOOK, hatById } from '../../../../game/content/wardrobe';
 import { canClaim } from '../../../../features/achievement/model/achievements';
 import type {
   AchievementRow,
+  AchievementRowStatus,
   CumulativeBonusCardModel,
   NamedGroupCardModel,
 } from '../../../../features/achievement/model/achievements';
 import { fmtGold, fmtNum } from '../../../ui/format';
 import { cx } from '../../../ui/cx';
+import { NOTCH_SM } from '../../../ui/notch';
+import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
-import Frame from '../../../ui/Frame';
+import Inset from '../../../ui/Inset';
 import PersonSprite from '../../../ui/PersonSprite';
 import PixelIcon from '../../../ui/PixelIcon';
-import Tip, { TipList } from '../../../ui/Tip';
+import Tip from '../../../ui/Tip';
 
 interface Props {
   row: AchievementRow;
@@ -25,32 +28,71 @@ interface Props {
   onClaim: () => void;
 }
 
-// 업적 카드 — 업적 창 탭 본문 격자의 한 장. 위에서 아래로 이름표, 조건 문구, 진척 게이지와 숫자,
-// 보상 칸(1px 선으로 나눈 칸), 상태와 받기 줄을 둔다. 상태 줄은 높이를 고정해 상태가 바뀌어도 카드 높이가 흔들리지 않는다.
-// 카드 본문은 포커스를 받지 않고 받기 버튼만 받는다. 이름·조건·보상 글자는 말줄임하지 않고 카드 안에서 줄을 바꾼다.
+const cardTone = (status: AchievementRowStatus) =>
+  status === 'claimed' ? 'deep' : status === 'claimable' ? 'light' : 'base';
+
+const cardFrameClass = (status: AchievementRowStatus) => cx(
+  'flex min-w-0 flex-col border',
+  status === 'claimable'
+    ? 'border-2 border-gold bg-[color-mix(in_oklab,var(--c-gold)_9%,var(--c-surface))]'
+    : 'border-line',
+);
+
+function StatusBadge({ status }: { status: AchievementRowStatus }) {
+  if (status === 'claimable') {
+    return (
+      <span className={cx('shrink-0 whitespace-nowrap text-2xs px-1.5 py-0.5 border border-gold text-gold bg-[color-mix(in_oklab,var(--c-gold)_12%,transparent)]', NOTCH_SM)}>
+        수령 가능
+      </span>
+    );
+  }
+  if (status === 'claimed') {
+    return (
+      <span className={cx('inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-2xs px-1.5 py-0.5 border border-line text-text-dim', NOTCH_SM)}>
+        <PixelIcon glyph="check" size={10} />
+        완료
+      </span>
+    );
+  }
+  return (
+    <span className={cx('shrink-0 whitespace-nowrap text-2xs px-1.5 py-0.5 border border-line text-text-dim', NOTCH_SM)}>
+      미달성
+    </span>
+  );
+}
+
+// 업적 카드 — 오목한 Inset 위계, 단일 우선순위 골드 강조, 2단 게이지(막대 위 + 비율/수치 아래),
+// 고정 높이 하단 줄(받기 / 받음 / 진행 중)로 상태가 바뀌어도 카드 높이가 흔들리지 않는다.
 export default function AchievementCard({ row, game, guest = false, busy, onClaim }: Props) {
   const { def, progress } = row;
-  const ratio = progress.target > 0 ? Math.min(progress.current, progress.target) / progress.target : 0;
+  const clamped = Math.min(progress.current, progress.target);
+  const ratio = progress.target > 0 ? clamped / progress.target : 0;
+  const pct = Math.min(100, Math.round(ratio * 100));
   return (
-    <Frame
-      className={cx(
-        'flex min-w-0 flex-col bg-surface-2',
-        row.status === 'claimable' && 'border-[color-mix(in_oklab,var(--c-accent)_60%,var(--c-line))]',
-        row.status === 'claimed' && 'opacity-50',
-      )}
-    >
-      <div className="flex flex-1 flex-col gap-1 p-2.5">
-        <b data-achievement-name className="text-sm break-keep break-words">{def.name}</b>
+    <Inset tone={cardTone(row.status)} className={cardFrameClass(row.status)}>
+      <div className="flex flex-1 flex-col gap-1.5 p-2.5">
+        <div className="flex items-start justify-between gap-2">
+          <b data-achievement-name className="text-sm text-text break-keep break-words">
+            {def.name}
+          </b>
+          <StatusBadge status={row.status} />
+        </div>
         <p data-achievement-desc className="text-2xs leading-[1.5] text-text-dim break-keep break-words">{def.desc}</p>
-        <div className="flex items-center gap-2">
+        <div className="mt-auto flex flex-col gap-1 pt-1">
           <span role="meter" aria-label={`진척, ${def.name}`} aria-valuemin={0} aria-valuemax={Math.max(progress.target, 1)}
-                aria-valuenow={Math.min(progress.current, progress.target)}
-                className="block h-2 flex-1 border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]">
+                aria-valuenow={clamped}
+                className="block h-2 w-full border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]">
             <span data-achievement-gauge-fill
-                  className="block h-full bg-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]"
+                  className={cx(
+                    'block h-full shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]',
+                    row.status === 'claimable' ? 'bg-gold' : row.status === 'claimed' ? 'bg-text-dim' : 'bg-accent',
+                  )}
                   style={{ width: `${ratio * 100}%` }} />
           </span>
-          <span className="pf-accent text-2xs whitespace-nowrap">{progress.current}/{progress.target}</span>
+          <div className="flex items-center justify-between gap-2 text-2xs">
+            <span className={cx('pf-accent', row.status === 'claimable' ? 'text-gold' : 'text-text-dim')}>{pct}%</span>
+            <span className="pf-accent text-text whitespace-nowrap">{fmtNum(progress.current)} / {fmtNum(progress.target)}</span>
+          </div>
         </div>
       </div>
       <div className="flex min-w-0 items-center gap-2 border-t border-line px-2.5 py-1.5">
@@ -64,50 +106,90 @@ export default function AchievementCard({ row, game, guest = false, busy, onClai
           <span className="text-xs text-text-dim">{row.status === 'claimed' ? '받음' : '진행 중'}</span>
         )}
       </div>
-    </Frame>
+    </Inset>
   );
 }
 
-/** 누적 보너스 다단계 카드 — 현재 단계 진척과 적용 효과를 보이고, 전체 단계 목록은 보상 툴팁으로 제공한다 */
+/** 누적 보너스 다단계 카드 — 단일 분절 게이지(중복 막대 없음) + 3상태 단계 툴팁 */
 export function CumulativeBonusCard({ card }: { card: CumulativeBonusCardModel }) {
   const target = Math.max(card.nextThreshold, 1);
-  const ratio = Math.min(card.current, target) / target;
   const doneCount = card.steps.filter(step => step.state === 'done').length;
+  const activeRatio = Math.min(100, Math.round((card.current / target) * 100));
+
+  const tipContent = (
+    <span className="flex min-w-48 flex-col gap-1">
+      <span className="flex flex-col">
+        {card.steps.map((step, idx) => {
+          const stateLabel = step.state === 'done' ? '완료' : step.state === 'now' ? '진행 중' : '예정';
+          const stateCls = step.state === 'done'
+            ? 'border-gold text-gold'
+            : step.state === 'now'
+              ? 'border-accent text-accent'
+              : 'border-line text-text-dim';
+          return (
+            <span key={step.id} className="flex items-center justify-between gap-4 py-0.5">
+              <span className="flex items-center gap-1.5">
+                <span className={cx('px-1 text-2xs border', NOTCH_SM, stateCls)}>{stateLabel}</span>
+                <span>{idx + 1}단계 ({step.label})</span>
+              </span>
+              <span className="pf-accent text-text">{step.deltaText}</span>
+            </span>
+          );
+        })}
+      </span>
+      <span className="pt-1 border-t border-line text-text-dim">{card.maxText}</span>
+    </span>
+  );
+
   return (
-    <Frame
-      className={cx(
-        'flex min-w-0 flex-col bg-surface-2',
-        card.allDone && 'border-gold',
-      )}
-    >
-      <div className="flex flex-1 flex-col gap-1 p-2.5">
-        <div className="flex items-baseline justify-between gap-2">
-          <b data-achievement-name className="text-sm break-keep break-words">{card.series.name}</b>
-          {card.series.scope === 'zone' && (
-            <span className="shrink-0 text-2xs text-text-dim">{card.scopeLabel}</span>
-          )}
+    <Inset tone={card.allDone ? 'deep' : 'base'} className="flex min-w-0 flex-col border border-line">
+      <div className="flex flex-1 flex-col gap-1.5 p-2.5">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <PixelIcon glyph={card.icon} size={14} className={cx('shrink-0', card.allDone ? 'text-gold' : 'text-accent')} />
+            <b data-achievement-name className="text-sm text-text break-keep break-words">
+              {card.series.name}
+            </b>
+            {card.series.scope === 'zone' && <Badge>{card.scopeLabel}</Badge>}
+          </div>
+          <span className={cx(
+            'shrink-0 whitespace-nowrap text-2xs px-1.5 py-0.5 border pf-accent',
+            NOTCH_SM,
+            card.allDone ? 'border-gold text-gold' : 'border-line text-text-dim',
+          )}>
+            {card.allDone ? '최대 단계' : `${doneCount} / ${card.steps.length}단계`}
+          </span>
         </div>
         <p data-achievement-desc className="text-2xs leading-[1.5] text-text-dim break-keep break-words">{card.series.desc}</p>
-        <div className="flex items-center gap-2">
-          <span role="meter" aria-label={`진척, ${card.series.name}`} aria-valuemin={0} aria-valuemax={target}
-                aria-valuenow={Math.min(card.current, target)}
-                className="block h-2 flex-1 border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]">
-            <span data-achievement-gauge-fill
-                  className={cx('block h-full shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]', card.allDone ? 'bg-gold' : 'bg-accent')}
-                  style={{ width: `${ratio * 100}%` }} />
-          </span>
-          <span className="pf-accent text-2xs whitespace-nowrap">{fmtNum(card.current)}/{fmtNum(card.nextThreshold)}</span>
+        <div className="mt-auto flex flex-col gap-1 pt-1">
+          <div
+            role="meter"
+            aria-label={`진척, ${card.series.name}`}
+            aria-valuemin={0}
+            aria-valuemax={target}
+            aria-valuenow={Math.min(card.current, target)}
+            className="grid gap-1"
+            style={{ gridTemplateColumns: `repeat(${card.steps.length}, minmax(0, 1fr))` }}
+          >
+            {card.steps.map(step => (
+              <span key={step.id} className="block h-2 overflow-hidden border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]">
+                {step.state === 'done' && <span data-achievement-gauge-fill className="block h-full w-full bg-gold" />}
+                {step.state === 'now' && (
+                  <span data-achievement-gauge-fill className="block h-full bg-accent" style={{ width: `${activeRatio}%` }} />
+                )}
+              </span>
+            ))}
+          </div>
+          <div className="flex items-center justify-between gap-2 text-2xs">
+            <span className="pf-accent text-text-dim">
+              {card.allDone ? '최대 도달' : `다음 ${doneCount + 1}단계 ${card.nextDeltaText ?? ''}`}
+            </span>
+            <span className="pf-accent text-text whitespace-nowrap">{fmtNum(card.current)} / {fmtNum(card.nextThreshold)}</span>
+          </div>
         </div>
       </div>
       <div className="flex min-w-0 items-center gap-2 border-t border-line px-2.5 py-1.5">
-        <Tip
-          text={(
-            <TipList
-              rows={card.steps.map(step => ({ label: step.label, value: step.deltaText }))}
-              note={card.maxText}
-            />
-          )}
-        >
+        <Tip text={tipContent}>
           <b
             data-achievement-reward
             className={cx(
@@ -120,15 +202,13 @@ export function CumulativeBonusCard({ card }: { card: CumulativeBonusCardModel }
         </Tip>
       </div>
       <div className="flex h-9 shrink-0 items-center justify-end px-2.5">
-        <span className={cx('text-xs', card.allDone ? 'text-gold' : doneCount > 0 ? 'text-accent' : 'text-text-dim')}>
-          {card.allDone ? '최대 단계' : `${doneCount}/${card.steps.length} 단계`}
-        </span>
+        <span className="text-xs text-text-dim">자동 적용</span>
       </div>
-    </Frame>
+    </Inset>
   );
 }
 
-/** 네임드 다회 토벌(1·5·10회) 치장 다단계 압축 카드 — 미토벌 시 스포일러 규칙에 맞춰 실명을 가리고, 전체 단계는 보상 툴팁으로 제공한다 */
+/** 네임드 다회 토벌(1·5·10회) 치장 다단계 압축 카드 — 미토벌 시 스포일러 실명·모자 실루엣·툴팁까지 100% 가린다 */
 export function NamedGroupCard({
   card, game, guest = false, busy, onClaim,
 }: {
@@ -138,39 +218,122 @@ export function NamedGroupCard({
   busy: boolean;
   onClaim: (row: AchievementRow) => void;
 }) {
-  const ratio = card.target > 0 ? Math.min(card.current, card.target) / card.target : 0;
+  const clamped = Math.min(card.current, card.target);
+  const ratio = card.target > 0 ? clamped / card.target : 0;
+  const pct = Math.min(100, Math.round(ratio * 100));
   const activeReward = card.activeRow.def.reward;
+  const doneSteps = card.steps.filter(s => s.status === 'claimed').length;
+
+  const stepBadge = card.status === 'claimable'
+    ? <StatusBadge status="claimable" />
+    : card.status === 'claimed'
+      ? <StatusBadge status="claimed" />
+      : (
+        <span className={cx('shrink-0 whitespace-nowrap text-2xs px-1.5 py-0.5 border border-line text-text-dim pf-accent', NOTCH_SM)}>
+          {doneSteps}/{card.steps.length} 단계
+        </span>
+      );
+
+  const tipContent = (
+    <span className="flex min-w-44 flex-col">
+      {card.steps.map(step => {
+        const stateLabel = step.status === 'claimed' ? '완료' : step.status === 'claimable' ? '수령 가능' : '예정';
+        const stateCls = step.status === 'claimed'
+          ? 'border-gold text-gold'
+          : step.status === 'claimable'
+            ? 'border-accent text-accent'
+            : 'border-line text-text-dim';
+        return (
+          <span key={step.id} className="flex items-center justify-between gap-4 py-0.5">
+            <span className="flex items-center gap-1.5">
+              <span className={cx('px-1 text-2xs border', NOTCH_SM, stateCls)}>{stateLabel}</span>
+              <span>{step.label}</span>
+            </span>
+            <span className="text-text">{card.discovered ? step.hatName : '???'}</span>
+          </span>
+        );
+      })}
+    </span>
+  );
+
+  const activeStepIdx = card.steps.findIndex(step => step.status === 'progress');
+
   return (
-    <Frame
-      className={cx(
-        'flex min-w-0 flex-col bg-surface-2',
-        card.status === 'claimable' && 'border-[color-mix(in_oklab,var(--c-accent)_60%,var(--c-line))]',
-        card.status === 'claimed' && 'opacity-50',
-      )}
-    >
-      <div className="flex flex-1 flex-col gap-1 p-2.5">
-        <b data-achievement-name className="text-sm break-keep break-words">{card.title}</b>
+    <Inset tone={card.status === 'claimed' ? 'deep' : card.status === 'claimable' ? 'light' : 'base'} className={cardFrameClass(card.status)}>
+      <div className="flex flex-1 flex-col gap-1.5 p-2.5">
+        <div className="flex items-start justify-between gap-2">
+          <b data-achievement-name className="text-sm text-text break-keep break-words">
+            {card.title}
+          </b>
+          {stepBadge}
+        </div>
         <p data-achievement-desc className="text-2xs leading-[1.5] text-text-dim break-keep break-words">{card.desc}</p>
-        <div className="flex items-center gap-2">
+        <div className="mt-auto flex flex-col gap-1 pt-1">
+          <div
+            aria-hidden="true"
+            className="grid gap-1"
+            style={{ gridTemplateColumns: `repeat(${card.steps.length}, minmax(0, 1fr))` }}
+          >
+            {card.steps.map((step, idx) => {
+              if (step.status === 'claimed') {
+                return (
+                  <span key={step.id} className="block h-1.5 border border-line bg-gold" />
+                );
+              }
+              if (step.status === 'claimable') {
+                return (
+                  <span key={step.id} className="block h-1.5 border border-gold bg-gold" />
+                );
+              }
+              if (idx === activeStepIdx) {
+                const segPct = step.threshold > 0 ? Math.min(100, Math.round((card.current / step.threshold) * 100)) : 0;
+                return (
+                  <span key={step.id} className="block h-1.5 overflow-hidden border border-line bg-bg">
+                    <span className="block h-full bg-accent" style={{ width: `${segPct}%` }} />
+                  </span>
+                );
+              }
+              return <span key={step.id} className="block h-1.5 border border-line bg-bg" />;
+            })}
+          </div>
           <span role="meter" aria-label={`진척, ${card.title}`} aria-valuemin={0} aria-valuemax={Math.max(card.target, 1)}
-                aria-valuenow={Math.min(card.current, card.target)}
-                className="block h-2 flex-1 border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]">
+                aria-valuenow={clamped}
+                className="block h-2 w-full border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]">
             <span data-achievement-gauge-fill
-                  className="block h-full bg-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]"
+                  className={cx(
+                    'block h-full shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]',
+                    card.status === 'claimable' ? 'bg-gold' : card.status === 'claimed' ? 'bg-text-dim' : 'bg-accent',
+                  )}
                   style={{ width: `${ratio * 100}%` }} />
           </span>
-          <span className="pf-accent text-2xs whitespace-nowrap">{card.current}/{card.target}</span>
+          <div className="flex items-center justify-between gap-2 text-2xs">
+            <span className={cx('pf-accent', card.status === 'claimable' ? 'text-gold' : 'text-text-dim')}>
+              {card.discovered ? `목표 ${card.target}회` : `${pct}%`}
+            </span>
+            <span className="pf-accent text-text whitespace-nowrap">{fmtNum(card.current)} / {fmtNum(card.target)}</span>
+          </div>
         </div>
       </div>
       <div className="flex min-w-0 items-center gap-2 border-t border-line px-2.5 py-1.5">
         {activeReward.kind === 'hat' ? (
           <>
-            <PersonSprite look={{ ...DEFAULT_LOOK, hat: activeReward.hatId }} scale={3} headOnly className="shrink-0" />
-            <Tip text={<TipList rows={card.steps.map(step => ({ label: step.label, value: step.hatName }))} />}>
-              <b data-achievement-reward className="text-2xs break-keep break-words">
-                {hatById(activeReward.hatId)?.name ?? '모자'}
-              </b>
-            </Tip>
+            <PersonSprite
+              look={card.discovered ? { ...DEFAULT_LOOK, hat: activeReward.hatId } : DEFAULT_LOOK}
+              scale={3}
+              headOnly
+              mystery={!card.discovered}
+              className="shrink-0"
+            />
+            <div className="flex min-w-0 flex-col">
+              <Tip text={tipContent}>
+                <b data-achievement-reward className="text-2xs break-keep break-words">
+                  {card.discovered ? (hatById(activeReward.hatId)?.name ?? '모자') : '미확인 모자'}
+                </b>
+              </Tip>
+              <span className="text-2xs text-text-dim">
+                {card.discovered ? `${card.target}회 토벌 보상` : '토벌하면 정체와 모자가 열려요'}
+              </span>
+            </div>
           </>
         ) : (
           <Reward reward={activeReward} />
@@ -191,7 +354,7 @@ export function NamedGroupCard({
           <span className="text-xs text-text-dim">{card.status === 'claimed' ? '받음' : '진행 중'}</span>
         )}
       </div>
-    </Frame>
+    </Inset>
   );
 }
 

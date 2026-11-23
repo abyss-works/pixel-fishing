@@ -40,7 +40,7 @@ export default function AchievementCatalogSection({
       <KpiRow>
         <KpiTile label="수령형 업적" value={fmtNum(achievements.length)} hint="진행 + 치장" />
         <KpiTile label="진행 업적" value={fmtNum(progressRows.length)} hint="해역 기초·숙련 골드 보상" />
-        <KpiTile label="치장 업적" value={fmtNum(cosmeticRows.length)} hint="모자 보상 41종" />
+        <KpiTile label="치장 업적" value={fmtNum(cosmeticRows.length)} hint={`모자 보상 ${cosmeticRows.length}종`} />
         <KpiTile label="누적 보너스" value={`${bonusSeries.length}계열`}
                  hint={`정본 합계 ${cumulativeBonusCount}종 (단계별 패시브)`} />
       </KpiRow>

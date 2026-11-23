@@ -58,6 +58,10 @@ describe('NO_ACHIEVEMENT_BONUSES 및 createPlayerContext', () => {
     expect(NO_ACHIEVEMENT_BONUSES).toEqual({
       biteWaitCut: 0,
       mutationWeight: 0,
+      rareWeight: 0,
+      epicWeight: 0,
+      legendaryWeight: 0,
+      sellBonus: 0,
       namedWeight: 0,
       moveSpeed: 0,
       artifactBoost: 0,
@@ -319,5 +323,18 @@ describe('saleProceedsOf', () => {
         source: { kind: 'guild', bonus: 'sell' },
       },
     ]);
+
+    const bigBag = Array.from({ length: 10 }, (_, i) => sampleFish(`b${i}`, 'crucian', 'variant'));
+    const bigBase = bigBag.reduce((s, i) => s + priceOfInstance(i), 0);
+    const achCtx = createPlayerContext({
+      state: makeState({ gold: 0, bag: bigBag }),
+      guild,
+      now: NOW,
+      achievements: { ...NO_ACHIEVEMENT_BONUSES, sellBonus: 0.03 },
+    });
+    const resGA = saleProceedsOf(achCtx, bigBag);
+    expect(resGA.base).toBe(bigBase);
+    expect(resGA.value).toBe(sellSelected(makeState({ gold: 0, bag: bigBag }), bigBag.map(f => f.uid), 0.09).gold);
+    expect(resGA.mods.map(m => m.id)).toEqual(['guild-sell', 'achievement-sellBonus']);
   });
 });

@@ -11,13 +11,17 @@ const UNITS = {
   head: { w: 12, h: 10, x: 6, y: 10 },
 } as const;
 
-export default function PersonSprite({ look, scale, onBoat = false, headOnly = false, ariaLabel, className }: {
+export default function PersonSprite({
+  look, scale, onBoat = false, headOnly = false, mystery = false, ariaLabel, className,
+}: {
   look: Look;
   /** 정수 배율(픽셀아트) */
   scale: number;
   onBoat?: boolean;
   /** 모자를 쓴 머리만 그린다 — onBoat와 함께 쓰지 않는다 */
   headOnly?: boolean;
+  /** 미발견 스포일러 보호용 물음표 실루엣 (headOnly와 함께 쓴다) */
+  mystery?: boolean;
   /** 없으면 장식 취급(aria-hidden) */
   ariaLabel?: string;
   className?: string;
@@ -30,10 +34,25 @@ export default function PersonSprite({ look, scale, onBoat = false, headOnly = f
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, u.w * scale, u.h * scale);
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    if (headOnly && mystery) {
+      const x = u.x;
+      const y = u.y + 10;
+      ctx.fillStyle = '#1d3252';
+      ctx.fillRect(u.x - 3, u.y - 6, 6, 6);
+      ctx.fillStyle = '#1a2d47';
+      ctx.fillRect(x - 4, y - 19, 8, 3);
+      ctx.fillStyle = '#2b4568';
+      ctx.fillRect(x - 5, y - 17, 10, 1);
+      ctx.fillStyle = '#93a8c4';
+      ctx.fillRect(x - 1, y - 19, 2, 1);
+      ctx.fillRect(x, y - 18, 1, 1);
+      ctx.fillRect(x - 1, y - 16, 1, 1);
+      return;
+    }
     if (headOnly) drawHead(ctx, u.x, u.y, look);
     else if (onBoat) drawBoat(ctx, u.x, u.y, 0, look);
     else drawPerson(ctx, u.x, u.y, look);
-  }, [look, scale, onBoat, headOnly, u]);
+  }, [look, scale, onBoat, headOnly, mystery, u]);
   return (
     <canvas ref={ref} width={u.w * scale} height={u.h * scale}
             className={cx('block [image-rendering:pixelated]', className)}

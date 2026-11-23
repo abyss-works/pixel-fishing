@@ -46,11 +46,15 @@ export function rewardAmounts(ev: number, hours: number): RewardAmount {
 
 export type SplitReward = Record<BountyTier, Reward>;
 
-/** 구역 보상(반올림한 값)을 두 업적에 나눈다. 기본 업적은 구역 크기 x basicShare를 반올림한 값이고 도감 완결 업적이 나머지를 받는다 */
+/** 구역 보상(반올림한 값)을 두 업적에 나눈다. basicShare <= 0.5이면 기초가 숙련보다 크지 않도록 보정한다 */
 export function splitReward(a: Reward, basicShare: number): SplitReward {
   checkShare(basicShare);
-  const basic = { gold: Math.min(a.gold, roundReward(a.gold * basicShare)) };
-  return { basic, named: { gold: a.gold - basic.gold } };
+  const first = Math.min(a.gold, roundReward(a.gold * basicShare));
+  const second = a.gold - first;
+  if (basicShare <= 0.5 && first > second) {
+    return { basic: { gold: second }, named: { gold: first } };
+  }
+  return { basic: { gold: first }, named: { gold: second } };
 }
 
 export interface RewardRow {

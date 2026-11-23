@@ -13,7 +13,8 @@ export type GlyphId =
   | 'letter' | 'key' | 'ticket' | 'download' | 'upload' | 'exit' | 'close'
   | 'plus' | 'minus'
   | 'compass' | 'backpack' | 'book' | 'question' | 'gear' | 'people' | 'flag'
-  | 'crown' | 'sparkle' | 'menu' | 'lunch' | 'bait';
+  | 'crown' | 'sparkle' | 'menu' | 'lunch' | 'bait'
+  | 'clock' | 'target' | 'gem';
 
 const GLYPHS: Record<GlyphId, { cells: Cell[]; holes?: Cell[] }> = {
   // 도시락 — 뚜껑과 몸통 사이 띠, 가운데 이음쇠 (도시락 슬롯)
@@ -180,6 +181,24 @@ const GLYPHS: Record<GlyphId, { cells: Cell[]; holes?: Cell[] }> = {
   // 일부만 선택 — 체크 대신 가로 막대 (전체/없음과 한눈에 구분된다)
   checkPartial: {
     cells: [[0, 0, 12, 1], [0, 11, 12, 1], [0, 1, 1, 10], [11, 1, 1, 10], [3, 5, 6, 2]],
+  },
+  // 시계 — 방치 낚시 등 시간/대기 보너스
+  clock: {
+    cells: [
+      [3, 1, 6, 1], [2, 2, 1, 1], [9, 2, 1, 1], [1, 3, 1, 6], [10, 3, 1, 6],
+      [2, 9, 1, 1], [9, 9, 1, 1], [3, 10, 6, 1], [5, 3, 2, 4], [7, 6, 2, 2],
+    ],
+  },
+  // 조준점 — PERFECT 챔질 등 정밀 보너스
+  target: {
+    cells: [
+      [3, 0, 6, 1], [3, 11, 6, 1], [0, 3, 1, 6], [11, 3, 1, 6],
+      [2, 2, 1, 1], [9, 2, 1, 1], [2, 9, 1, 1], [9, 9, 1, 1], [5, 5, 2, 2],
+    ],
+  },
+  // 보석 — 유물/최고 레벨 유물 보너스
+  gem: {
+    cells: [[3, 1, 6, 1], [2, 2, 8, 2], [1, 4, 10, 2], [2, 6, 8, 2], [4, 8, 4, 2], [5, 10, 2, 1]],
   },
 };
 

@@ -29,6 +29,14 @@ export interface AchievementBonuses {
   biteWaitCut: number;
   /** 돌연변이 가중치 증가율 합 */
   mutationWeight: number;
+  /** 희귀 이상 등급 가중치 증가율 합 */
+  rareWeight: number;
+  /** 영웅 이상 등급 가중치 증가율 합 */
+  epicWeight: number;
+  /** 전설 등급 가중치 증가율 합 */
+  legendaryWeight: number;
+  /** 판매가 보너스 증가율 합 */
+  sellBonus: number;
   /** 네임드 조우 가중치 증가율 합 */
   namedWeight: number;
   /** 이동 속도 증가율 합 */
@@ -45,6 +53,10 @@ export interface AchievementBonuses {
 export const NO_ACHIEVEMENT_BONUSES: Readonly<AchievementBonuses> = Object.freeze({
   biteWaitCut: 0,
   mutationWeight: 0,
+  rareWeight: 0,
+  epicWeight: 0,
+  legendaryWeight: 0,
+  sellBonus: 0,
   namedWeight: 0,
   moveSpeed: 0,
   artifactBoost: 0,
@@ -69,6 +81,10 @@ export function createPlayerContext(input: PlayerContext): PlayerContext {
     achievements: {
       biteWaitCut: input.achievements.biteWaitCut,
       mutationWeight: input.achievements.mutationWeight,
+      rareWeight: input.achievements.rareWeight,
+      epicWeight: input.achievements.epicWeight,
+      legendaryWeight: input.achievements.legendaryWeight,
+      sellBonus: input.achievements.sellBonus,
       namedWeight: input.achievements.namedWeight,
       moveSpeed: input.achievements.moveSpeed,
       artifactBoost: input.achievements.artifactBoost,
@@ -194,12 +210,24 @@ export function biteWaitOf(ctx: PlayerContext, spot: SpotId, mode: 'idle' | 'man
   return { min: side(st.biteMin), max: side(st.biteMax) };
 }
 
-/** 판매 수령액 — 선택한 개체의 기본가 합에 길드 판매가 보너스를 한 번 더한다 */
+/** 판매 수령액 — 선택한 개체의 기본가 합에 길드·업적 판매가 보너스를 한 번 더한다 */
 export function saleProceedsOf(ctx: PlayerContext, instances: readonly FishInstance[]): Stat {
   const base = instances.reduce((sum, inst) => sum + priceOfInstance(inst), 0);
-  const delta = saleBonusOf(base, ctx.guild.sell);
-  const mods: StatMod[] = delta > 0
-    ? [{ id: 'guild-sell', label: '길드 판매가', delta, source: { kind: 'guild', bonus: 'sell' } }]
-    : [];
-  return { base, mods, value: base + delta };
+  const guildSell = ctx.guild.sell;
+  const achSell = ctx.achievements.sellBonus;
+  const totalDelta = saleBonusOf(base, clean(guildSell + achSell));
+  const mods: StatMod[] = [];
+  if (guildSell > 0) {
+    const d = saleBonusOf(base, guildSell);
+    if (d > 0) mods.push({ id: 'guild-sell', label: '길드 판매가', delta: d, source: { kind: 'guild', bonus: 'sell' } });
+  }
+  if (achSell > 0) {
+    const d = saleBonusOf(base, achSell);
+    if (d > 0) mods.push({ id: 'achievement-sellBonus', label: '업적 누적', delta: d, source: { kind: 'achievement', id: 'sellBonus' } });
+  }
+  if (mods.length > 0) {
+    const rest = mods.slice(0, -1).reduce((sum, mod) => sum + mod.delta, 0);
+    mods[mods.length - 1].delta = totalDelta - rest;
+  }
+  return { base, mods, value: base + totalDelta };
 }

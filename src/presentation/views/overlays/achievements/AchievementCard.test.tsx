@@ -111,17 +111,17 @@ describe('업적 카드', () => {
     expect(canvas).toHaveAttribute('aria-hidden', 'true');
   });
 
-  it('진척은 현재/목표를 숫자로 쓰고 게이지 채움은 목표에 대한 비율이다', () => {
+  it('진척은 천 단위 쉼표를 넣어 현재 / 목표를 쓰고 게이지 채움은 목표에 대한 비율이다', () => {
     const game = seed();
     const { row } = show(game, 'spot-basic-sea');
-    expect(screen.getByText(`${row.progress.current}/${row.progress.target}`)).toBeInTheDocument();
+    expect(screen.getByText(`${row.progress.current} / ${row.progress.target}`)).toBeInTheDocument();
     const fill = document.querySelector('[data-achievement-gauge-fill]') as HTMLElement;
     expect(fill.style.width).toBe(`${Math.min(row.progress.current, row.progress.target) / row.progress.target * 100}%`);
 
     cleanup();
-    const half: AchievementRow = { def: row.def, status: 'progress', progress: { current: 1, target: 4 } };
+    const half: AchievementRow = { def: row.def, status: 'progress', progress: { current: 1250, target: 5000 } };
     show(game, 'spot-basic-sea', { row: half });
-    expect(screen.getByText('1/4')).toBeInTheDocument();
+    expect(screen.getByText('1,250 / 5,000')).toBeInTheDocument();
     expect((document.querySelector('[data-achievement-gauge-fill]') as HTMLElement).style.width).toBe('25%');
   });
 
@@ -130,7 +130,7 @@ describe('업적 카드', () => {
     const { row } = show(game, 'spot-basic-sea');
     cleanup();
     show(game, 'spot-basic-sea', { row: { def: row.def, status: 'progress', progress: { current: 3, target: 0 } } });
-    expect(screen.getByText('3/0')).toBeInTheDocument();
+    expect(screen.getByText('3 / 0')).toBeInTheDocument();
     expect((document.querySelector('[data-achievement-gauge-fill]') as HTMLElement).style.width).toBe('0%');
   });
 
@@ -160,7 +160,7 @@ describe('업적 카드', () => {
     const name = info.querySelector('[data-achievement-name]') as HTMLElement;
     const desc = info.querySelector('[data-achievement-desc]') as HTMLElement;
     const meter = info.querySelector('[role="meter"]') as HTMLElement;
-    expect(info.children[0]).toBe(name);
+    expect(info.children[0]).toContainElement(name);
     expect(info.children[1]).toBe(desc);
     expect(info.children[2]).toBe(meter.parentElement);
     expect(reward.querySelector('[data-achievement-reward]')).not.toBeNull();
@@ -187,32 +187,36 @@ describe('업적 카드', () => {
     expect(cardParts(container).reward).toHaveClass('border-t', 'border-line');
   });
 
-  it('받은 카드는 전체가 흐려지고 보상 칸 값은 남는다', () => {
+  it('받은 카드는 opacity-50 흐림 대신 깊은 오목(bg-bg) 스타일과 선명한 제목(text-text)을 쓰고 보상 칸 값은 남는다', () => {
     const game = seed({ achievements: { 'spot-basic-sea': 'claimed' } });
     const { container } = show(game, 'spot-basic-sea');
     const { root, reward } = cardParts(container);
-    const dim = root.className.match(/(?:^|\s)opacity-(\d+)/);
-    expect(dim).not.toBeNull();
-    expect(Number(dim?.[1])).toBeLessThan(100);
+    expect(root).not.toHaveClass('opacity-50');
+    expect(root).toHaveClass('bg-bg');
+    expect(container.querySelector('[data-achievement-name]')).toHaveClass('text-text');
+    expect(screen.getByText('완료')).not.toHaveClass('rounded-sm');
     expect(reward.querySelector('[data-achievement-reward]')).toHaveTextContent('300G');
   });
 
-  it('받을 수 있는 카드만 테두리를 강조한다', () => {
+  it('받을 수 있는 카드만 금색 테두리로 강조하고 일반 카드는 Frame을 겹치지 않는다', () => {
     const claimable = show(seed({ achievements: { 'spot-basic-sea': 'claimable' } }), 'spot-basic-sea');
     expect(emphasizedBorder(cardParts(claimable.container).root)).toBe(true);
+    expect(cardParts(claimable.container).root).not.toHaveClass('pf-frame');
     cleanup();
     const progress = show(seed(), 'spot-basic-sea');
     expect(emphasizedBorder(cardParts(progress.container).root)).toBe(false);
+    expect(cardParts(progress.container).root).not.toHaveClass('pf-frame');
   });
 });
 
 describe('누적 보너스 카드', () => {
-  it('전역 카드는 범위 문구를 숨기고, 본문에 단계 목록 대신 현재 진척과 단계 수를 보인다', () => {
+  it('전역 카드는 범위 문구를 숨기고, 단일 분절 게이지(meter 1개)와 단계 수를 보인다', () => {
     const game = seed({ achievementCounters: { 'manual.total': 100 } });
     const card = cumulativeBonusCards(game).find(c => c.series.scope === 'global' && c.current === 100)!;
     render(<CumulativeBonusCard card={card} />);
     expect(screen.queryByText('전역')).toBeNull();
-    expect(screen.getByText(`${card.steps.filter(s => s.state === 'done').length}/${card.steps.length} 단계`)).toBeInTheDocument();
+    expect(screen.getAllByRole('meter')).toHaveLength(1);
+    expect(screen.getByText(`${card.steps.filter(s => s.state === 'done').length} / ${card.steps.length}단계`)).toBeInTheDocument();
     expect(screen.queryByText(`${card.steps[0].label} (${card.steps[0].deltaText})`)).toBeNull();
 
     fireEvent.mouseEnter(screen.getByText(card.activeText));
@@ -237,14 +241,35 @@ describe('네임드 다회 토벌 카드', () => {
   const pickGroup = (game: GameState): NamedGroupCardModel =>
     cosmeticCards(game, 'named').find((item): item is NamedGroupCardModel => item.kind === 'namedGroup')!;
 
-  it('본문에 1·5·10회 알약을 늘어놓지 않고 보상 모자 툴팁으로 전체 단계를 보인다', () => {
+  it('미토벌 카드는 모자 이름·실루엣·툴팁까지 모두 스포일러를 가린다', () => {
     const game = seed();
     const card = pickGroup(game);
+    expect(card.discovered).toBe(false);
     render(<NamedGroupCard card={card} game={game} busy={false} onClaim={vi.fn()} />);
     expect(screen.queryByText('1회')).toBeNull();
     expect(screen.queryByText('5회')).toBeNull();
     expect(screen.queryByText('10회')).toBeNull();
+    expect(screen.getByText('미확인 모자')).toBeInTheDocument();
+    expect(screen.getByText('토벌하면 정체와 모자가 열려요')).toBeInTheDocument();
 
+    fireEvent.mouseEnter(screen.getByText('미확인 모자'));
+    const tooltip = screen.getByRole('tooltip');
+    for (const step of card.steps) {
+      expect(tooltip).toHaveTextContent(step.label);
+      expect(tooltip).not.toHaveTextContent(step.hatName);
+    }
+    expect(tooltip).toHaveTextContent('???');
+  });
+
+  it('토벌한 카드는 보상 모자 툴팁으로 전체 단계를 보인다', () => {
+    const base = pickGroup(seed());
+    const firstId = base.steps[0].id;
+    const game = seed({ clearedNamed: ['pacific-named-megalodon'], achievements: { [firstId]: 'claimable' } });
+    const card = cosmeticCards(game, 'named').find(
+      (item): item is NamedGroupCardModel => item.kind === 'namedGroup' && item.groupId === base.groupId,
+    )!;
+    expect(card.discovered).toBe(true);
+    render(<NamedGroupCard card={card} game={game} busy={false} onClaim={vi.fn()} />);
     fireEvent.mouseEnter(screen.getByText(card.steps[0].hatName));
     const tooltip = screen.getByRole('tooltip');
     for (const step of card.steps) {

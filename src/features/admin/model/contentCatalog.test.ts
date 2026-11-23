@@ -100,23 +100,23 @@ describe('관리자 콘텐츠 카탈로그 모델', () => {
     }
   });
 
-  it('4) 업적 71종(진행 30 + 치장 41)과 누적 보너스 23계열(25종)이 정본과 일치한다', () => {
+  it('4) 업적 80종(진행 30 + 치장 50)과 누적 보너스 23계열(26종)이 정본과 일치한다', () => {
     expect(CONTENT_CATALOG.achievements).toHaveLength(ACHIEVEMENTS.length);
-    expect(CONTENT_CATALOG.achievements).toHaveLength(71);
+    expect(CONTENT_CATALOG.achievements).toHaveLength(80);
     expect(CONTENT_CATALOG.achievements.filter(a => a.tab === 'progress')).toHaveLength(30);
-    expect(CONTENT_CATALOG.achievements.filter(a => a.tab === 'cosmetic')).toHaveLength(41);
+    expect(CONTENT_CATALOG.achievements.filter(a => a.tab === 'cosmetic')).toHaveLength(50);
 
     expect(CONTENT_CATALOG.bonusSeries).toHaveLength(CUMULATIVE_BONUS_SERIES.length);
     expect(CONTENT_CATALOG.cumulativeBonusCount).toBe(CUMULATIVE_BONUS_COUNT);
-    expect(CONTENT_CATALOG.cumulativeBonusCount).toBe(25);
+    expect(CONTENT_CATALOG.cumulativeBonusCount).toBe(26);
   });
 
-  it('5) 모자 46종(상점 5 + 업적 41)과 의상 팔레트·프리셋 6종이 정본과 일치한다', () => {
+  it('5) 모자 55종(상점 5 + 업적 50)과 의상 팔레트·프리셋 6종이 정본과 일치한다', () => {
     const w = CONTENT_CATALOG.wardrobe;
     expect(w.hats).toHaveLength(HATS.length);
-    expect(w.hats).toHaveLength(46);
+    expect(w.hats).toHaveLength(55);
     expect(w.shopHatCount).toBe(5);
-    expect(w.achievementHatCount).toBe(41);
+    expect(w.achievementHatCount).toBe(50);
     expect(w.shirtColors).toHaveLength(SHIRT_COLORS.length);
     expect(w.pantsColors).toHaveLength(PANTS_COLORS.length);
     expect(w.presets).toHaveLength(LOOK_PRESETS.length);

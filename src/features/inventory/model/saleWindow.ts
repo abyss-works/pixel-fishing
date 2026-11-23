@@ -2,6 +2,8 @@
 // 판매 창은 집의 궤짝과 항구의 어시장이 같은 구성으로 연다. 두 탭(판매, 기운 얻기)은 같은 어종 표를 쓰고, 기운 얻기 탭의 모델은 기운 얻기 기능 모델이 맡는다.
 // 판매 대상과 합계는 가방 파생 데이터(selectSalePreview)가 정하고, 이 모듈은 그 값을 창이 비교 표로 그릴 값으로 옮긴다.
 import type { BaseId } from '../../../game/content/places';
+import { achievementBonusesOf } from '../../../game/rules/achievements';
+import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { BASE_PACKS } from '../../../game/world';
 import { selectSalePreview } from './catalog';
@@ -36,8 +38,15 @@ export interface SaleTabView extends SalePreview {
   bag: BeforeAfter;
 }
 
-export function selectSaleTab(game: Pick<GameState, 'bag' | 'gold'>, excluded: ReadonlySet<string>, sellBonus: number): SaleTabView {
-  const preview = selectSalePreview(game.bag, excluded, sellBonus);
+export function selectSaleTab(
+  game: Pick<GameState, 'bag' | 'gold'> & Partial<Pick<GameState, 'achievementCounters'>>,
+  excluded: ReadonlySet<string>,
+  sellBonus: number,
+): SaleTabView {
+  const achSellBonus = game.achievementCounters
+    ? achievementBonusesOf({ ...newState(), achievementCounters: game.achievementCounters }).sellBonus
+    : 0;
+  const preview = selectSalePreview(game.bag, excluded, sellBonus, achSellBonus);
   const count = preview.soldUids.length;
   return {
     ...preview, count,

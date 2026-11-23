@@ -74,7 +74,7 @@ describe('요약 줄', () => {
         'spot-full-sea': 'claimed',
       },
     });
-    expect(achievementSummary(state)).toEqual({ claimed: 1, total: 71, gold: 300, hats: 1, canClaimAll: true });
+    expect(achievementSummary(state)).toEqual({ claimed: 1, total: 80, gold: 300, hats: 1, canClaimAll: true });
     expect(tabClaimableCount(state, 'progress')).toBe(1);
     expect(tabClaimableCount(state, 'bonus')).toBe(0);
     expect(tabClaimableCount(state, 'cosmetic')).toBe(1);
@@ -142,14 +142,14 @@ describe('누적 보너스 카드', () => {
     expect(cards).toHaveLength(23);
     const manual = cards.find(c => c.series.id === 'bonus-manual-total')!;
     expect(manual.steps.map(s => s.state)).toEqual(['done', 'done', 'done', 'now']);
-    expect(manual.activeText).toBe('입질 대기 −2%');
+    expect(manual.activeText).toBe('입질 대기 −3.5%');
   });
 });
 
 describe('치장 다단계 카드와 스포일러 가림', () => {
   it('미토벌 네임드는 실명을 가리고 출현 해역·구역 이름으로 표기한다', () => {
     const namedCards = cosmeticCards(seed(), 'named');
-    expect(namedCards).toHaveLength(6);
+    expect(namedCards).toHaveLength(8);
     const mega = namedCards.find(c => c.kind === 'namedGroup' && c.namedId === 'megalodon');
     expect(mega?.kind).toBe('namedGroup');
     if (mega?.kind === 'namedGroup') {

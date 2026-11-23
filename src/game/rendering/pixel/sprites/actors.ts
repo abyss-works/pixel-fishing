@@ -235,6 +235,62 @@ function drawAchievementHat(ctx: Ctx, x: number, y: number, hat: Hat) {
       R(ctx, x - 3, y - 20, 6, 2, a);
       R(ctx, x - 1, y - 20, 2, 1, c);
       return;
+    case 'ridge-compass-cap':
+      R(ctx, x - 4, y - 20, 8, 3, c);
+      R(ctx, x - 5, y - 17, 10, 1, c);
+      R(ctx, x - 1, y - 19, 2, 2, a);
+      R(ctx, x + 1, y - 18, 1, 1, a);
+      return;
+    case 'ridge-lantern-cap':
+      R(ctx, x - 3, y - 20, 6, 1, c);
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x + 2, y - 18, 2, 2, a);
+      R(ctx, x - 4, y - 17, 6, 1, '#314961');
+      return;
+    case 'vanishing-hood':
+      R(ctx, x - 4, y - 20, 8, 4, c);
+      R(ctx, x - 5, y - 17, 2, 3, c);
+      R(ctx, x + 3, y - 17, 2, 3, c);
+      R(ctx, x - 2, y - 18, 4, 1, a);
+      return;
+    case 'gloucester-fog-cap':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x + 2, y - 16, 4, 1, c);
+      R(ctx, x - 3, y - 20, 6, 1, '#4f6d75');
+      return;
+    case 'gloucester-vertebra-visor':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x + 1, y - 16, 5, 1, a);
+      R(ctx, x - 3, y - 19, 1, 2, a);
+      R(ctx, x, y - 19, 1, 2, a);
+      R(ctx, x + 3, y - 19, 1, 2, a);
+      return;
+    case 'gloucester-crest-hat':
+      R(ctx, x - 3, y - 20, 6, 2, c);
+      R(ctx, x - 4, y - 18, 8, 3, c);
+      R(ctx, x - 2, y - 20, 1, 2, a);
+      R(ctx, x, y - 20, 1, 2, a);
+      R(ctx, x + 2, y - 20, 1, 2, a);
+      return;
+    case 'guabancex-sargasso-hood':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x - 5, y - 17, 1, 3, c);
+      R(ctx, x + 4, y - 17, 1, 3, c);
+      R(ctx, x - 4, y - 17, 8, 1, a);
+      return;
+    case 'guabancex-eye-hat':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x - 6, y - 16, 3, 2, c);
+      R(ctx, x + 3, y - 16, 3, 1, c);
+      R(ctx, x - 1, y - 18, 2, 1, a);
+      return;
+    case 'guabancex-fin-crown':
+      R(ctx, x - 5, y - 18, 10, 2, c);
+      R(ctx, x - 4, y - 20, 8, 2, c);
+      R(ctx, x - 5, y - 20, 1, 2, a);
+      R(ctx, x + 4, y - 20, 1, 2, a);
+      R(ctx, x - 2, y - 18, 4, 1, a);
+      return;
     default:
       R(ctx, x - 4, y - 19, 8, 3, c);
       R(ctx, x + 3, y - 16, 3, 1, c);

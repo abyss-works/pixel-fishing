@@ -453,6 +453,19 @@ export function drawCatch(
   const zone = topZoneOfSpot(spot);
   const commonCut = guild.rare + commonWeightCutOf(state, achievements.artifactBoost);
   let phaseOpts = commonCut > 0 ? addGradeEffect(basePhaseOpts, 'common', -commonCut) : basePhaseOpts;
+  if (achievements.rareWeight > 0) {
+    for (const r of ['rare', 'epic', 'legendary'] as const) {
+      phaseOpts = addGradeEffect(phaseOpts, r, achievements.rareWeight);
+    }
+  }
+  if (achievements.epicWeight > 0) {
+    for (const r of ['epic', 'legendary'] as const) {
+      phaseOpts = addGradeEffect(phaseOpts, r, achievements.epicWeight);
+    }
+  }
+  if (achievements.legendaryWeight > 0) {
+    phaseOpts = addGradeEffect(phaseOpts, 'legendary', achievements.legendaryWeight);
+  }
   const zoneLeg = zone ? (achievements.zoneLegendary[zone] ?? 0) : 0;
   if (zoneLeg > 0) phaseOpts = addGradeEffect(phaseOpts, 'legendary', zoneLeg);
   const candidates = speciesPityCandidates(state.pity, spot, phaseOpts.phase);
@@ -571,7 +584,8 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
     case 'sell': {
       if (!Array.isArray(action.uids)) return { ok: false, error: 'bad-request' };
       const uids = action.uids.filter(u => typeof u === 'string');
-      const next = sellSelected(state, uids, (deps.guild ?? NO_GUILD_EFFECTS).sell);
+      const totalSellBonus = Math.round(((deps.guild ?? NO_GUILD_EFFECTS).sell + achievementBonusesOf(state).sellBonus) * 1e9) / 1e9;
+      const next = sellSelected(state, uids, totalSellBonus);
       const gold = next.gold - state.gold;
       // 실제로 사라진 개체만 = 가방 차집합 (없는 uid·잠긴 개체는 자동 제외)
       const remaining = new Set(next.bag.map(i => i.uid));

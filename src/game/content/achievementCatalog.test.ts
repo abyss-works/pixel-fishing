@@ -18,10 +18,10 @@ const fishInZone = (zone: string) => FISH.filter(f => topZoneOfSpot(f.spot) === 
 const fishInSpot = (spot: string) => FISH.filter(f => f.spot === spot);
 
 describe('업적 카탈로그', () => {
-  it('진행 30종과 치장 41종 총 71종이 규칙·카탈로그·정의로 1:1 대응한다', () => {
-    expect(ACHIEVEMENTS).toHaveLength(71);
-    expect(ACHIEVEMENT_RULES).toHaveLength(71);
-    expect(ACHIEVEMENT_CATALOG).toHaveLength(71);
+  it('진행 30종과 치장 50종 총 80종이 규칙·카탈로그·정의로 1:1 대응한다', () => {
+    expect(ACHIEVEMENTS).toHaveLength(80);
+    expect(ACHIEVEMENT_RULES).toHaveLength(80);
+    expect(ACHIEVEMENT_CATALOG).toHaveLength(80);
     expect(ACHIEVEMENTS.map(a => a.id)).toEqual(ACHIEVEMENT_RULES.map(r => r.id));
     expect(ACHIEVEMENT_CATALOG.map(e => e.rule.id)).toEqual(ACHIEVEMENT_RULES.map(r => r.id));
   });
@@ -50,14 +50,14 @@ describe('업적 카탈로그', () => {
 
   it('치장 업적 목표 수가 콘텐츠 데이터와 일치한다', () => {
     const target = (id: string) => ACHIEVEMENT_CATALOG.find(e => e.rule.id === id)!.target;
-    for (const zone of ['village', 'pacific', 'seasia', 'indian', 'madagascar', 'southatlantic'] as const) {
+    for (const zone of ['village', 'pacific', 'seasia', 'indian', 'madagascar', 'southatlantic', 'northatlantic'] as const) {
       expect(target(`variant-${zone}`)).toBe(fishInZone(zone).length);
     }
     expect(target('variant-all')).toBe(FISH.length);
     expect(target('grade-legendary')).toBe(FISH.filter(f => f.rarity === 'legendary').length);
     expect(target('night-normal')).toBe(fishInZone('pacific').filter(f => f.night === true).length);
     expect(target('night-variant')).toBe(fishInZone('pacific').filter(f => f.night === true).length);
-    for (const zone of ['seasia', 'indian', 'madagascar', 'southatlantic'] as const) {
+    for (const zone of ['seasia', 'indian', 'madagascar', 'southatlantic', 'northatlantic'] as const) {
       const count = fishInZone(zone).filter(f => f.night === true).length;
       expect(target(`night-${zone}-normal`), zone).toBe(count);
       expect(target(`night-${zone}-variant`), zone).toBe(count);
@@ -67,7 +67,10 @@ describe('업적 카탈로그', () => {
     expect(target('catch-100000')).toBe(100_000);
     expect(target('named-all')).toBe(NAMED_QUESTS.length);
     expect(target('artifact-all')).toBe(ARTIFACTS.length);
-    for (const namedId of ['megalodon', 'leviathan', 'ananta', 'elder-sixgill', 'adamastor', 'jasconius']) {
+    for (const namedId of [
+      'megalodon', 'leviathan', 'ananta', 'elder-sixgill', 'adamastor', 'jasconius',
+      'gloucester-serpent', 'guabancex',
+    ]) {
       expect(target(`named-${namedId}-1`)).toBe(1);
       expect(target(`named-${namedId}-5`)).toBe(5);
       expect(target(`named-${namedId}-10`)).toBe(10);
@@ -106,7 +109,7 @@ describe('업적 카탈로그', () => {
     }
   });
 
-  it('모든 보상이 유효하다 — 골드는 양수(30종), 모자는 옷장의 업적 모자와 1:1(41종)', () => {
+  it('모든 보상이 유효하다 — 골드는 양수(30종), 모자는 옷장의 업적 모자와 1:1(50종)', () => {
     for (const rule of ACHIEVEMENT_RULES) {
       const reward = rule.reward;
       if (reward.kind === 'gold') {
@@ -120,7 +123,7 @@ describe('업적 카탈로그', () => {
       }
     }
     expect(ACHIEVEMENT_RULES.filter(r => r.reward.kind === 'gold')).toHaveLength(30);
-    expect(ACHIEVEMENT_RULES.filter(r => r.reward.kind === 'hat')).toHaveLength(41);
+    expect(ACHIEVEMENT_RULES.filter(r => r.reward.kind === 'hat')).toHaveLength(50);
   });
 
   it('카탈로그 정의가 규칙의 표시 필드를 그대로 옮긴다', () => {

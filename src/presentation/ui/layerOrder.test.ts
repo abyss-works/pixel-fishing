@@ -23,8 +23,8 @@ const src = (path: string) => {
 const tokens = Object.fromEntries([...css.matchAll(/--z-([a-z-]+):\s*(\d+);/g)].map(m => [m[1], Number(m[2])]));
 
 describe('화면 층 - z 토큰 순서', () => {
-  it('아래부터 스테이지 HUD, 채팅과 헤더, 창, 닫을 수 없는 창, 탭 줄과 시트, 전환 덮개, 툴팁 순서다', () => {
-    const order = ['stage-hud', 'stage-card', 'chrome', 'menu-row', 'catch-fx', 'stage-modal', 'app-modal', 'blocker', 'tabs', 'veil', 'tooltip', 'devtools'];
+  it('아래부터 스테이지 HUD, 채팅과 헤더, 창, 닫을 수 없는 창, 창 위 알림, 탭 줄과 시트, 전환 덮개, 툴팁 순서다', () => {
+    const order = ['stage-hud', 'stage-card', 'chrome', 'menu-row', 'catch-fx', 'stage-modal', 'app-modal', 'blocker', 'toast', 'tabs', 'veil', 'tooltip', 'devtools'];
     const values = order.map(name => tokens[name]);
     expect(values.every(v => typeof v === 'number')).toBe(true);
     expect(values).toEqual([...values].sort((a, b) => a - b));
@@ -83,6 +83,7 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
     ['ui/Modal.tsx', '--z-stage-modal'],
     ['ui/Modal.tsx', '--z-app-modal'],
     ['ui/Modal.tsx', '--z-blocker'],
+    ['ui/FloatingToastLayer.tsx', '--z-toast'],
     ['layouts/game-stage/FerryVeil.tsx', '--z-veil'],
     ['layouts/sidebar/index.tsx', '--z-tabs'],
     ['views/overlays/update/LoadingOverlay.tsx', '--z-veil'],

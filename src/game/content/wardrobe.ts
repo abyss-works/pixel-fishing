@@ -59,8 +59,8 @@ export const HATS: readonly Hat[] = [
   { id: 'earflap-cap', name: '귀덮개 모자', color: '#1c2430', price: 0, source: 'achievement', achievementId: 'night-variant' },
   { id: 'crescent-hood', name: '초승달 뱃두건', color: '#2a445e', accentColor: '#ffd54f', price: 0, source: 'achievement', achievementId: 'night-seasia-normal' },
   { id: 'ink-hood', name: '먹빛 뱃두건', color: '#182230', accentColor: '#4fc3f7', price: 0, source: 'achievement', achievementId: 'night-seasia-variant' },
-  { id: 'polar-beret', name: '남극성 항해 베레모', color: '#2d4a62', accentColor: '#80deea', price: 0, source: 'achievement', achievementId: 'night-indian-normal' },
-  { id: 'polar-knit-cap', name: '극야 털모자', color: '#1b2938', accentColor: '#b39ddb', price: 0, source: 'achievement', achievementId: 'night-indian-variant' },
+  { id: 'polar-beret', name: '별빛 몬순 베레모', color: '#2d4a62', accentColor: '#80deea', price: 0, source: 'achievement', achievementId: 'night-indian-normal' },
+  { id: 'polar-knit-cap', name: '밤안개 향신료 두건', color: '#1b2938', accentColor: '#b39ddb', price: 0, source: 'achievement', achievementId: 'night-indian-variant' },
   { id: 'strait-night-cap', name: '해협 야간 챙모자', color: '#354856', accentColor: '#cfd8dc', price: 0, source: 'achievement', achievementId: 'night-madagascar-normal' },
   { id: 'inkglass-beanie', name: '먹물 유리 비니', color: '#1a252c', accentColor: '#80cbc4', price: 0, source: 'achievement', achievementId: 'night-madagascar-variant' },
   { id: 'lookout-storm-hat', name: '야간 망루 방풍모', color: '#34424d', accentColor: '#ffd54f', price: 0, source: 'achievement', achievementId: 'night-southatlantic-normal' },
@@ -88,6 +88,15 @@ export const HATS: readonly Hat[] = [
   { id: 'jasconius-island-cap', name: '화산섬 뱃사람 모자', color: '#4a5568', accentColor: '#ff8a65', price: 0, source: 'achievement', achievementId: 'named-jasconius-1' },
   { id: 'jasconius-ember-visor', name: '모닥불 재 챙모자', color: '#5d5450', accentColor: '#ff7043', price: 0, source: 'achievement', achievementId: 'named-jasconius-5' },
   { id: 'jasconius-rockback-hat', name: '바위등 거대어 모자', color: '#5f7078', accentColor: '#a1887f', price: 0, source: 'achievement', achievementId: 'named-jasconius-10' },
+  { id: 'ridge-compass-cap', name: '어긋난 나침반 모자', color: '#2b3d4f', accentColor: '#cfd8dc', price: 0, source: 'achievement', achievementId: 'variant-northatlantic' },
+  { id: 'ridge-lantern-cap', name: '해령 등불 선원모', color: '#1f2e3d', accentColor: '#80deea', price: 0, source: 'achievement', achievementId: 'night-northatlantic-normal' },
+  { id: 'vanishing-hood', name: '실종점 흑모자', color: '#111824', accentColor: '#ba68c8', price: 0, source: 'achievement', achievementId: 'night-northatlantic-variant' },
+  { id: 'gloucester-fog-cap', name: '안개 뱃고동 작업모', color: '#3c545c', price: 0, source: 'achievement', achievementId: 'named-gloucester-serpent-1' },
+  { id: 'gloucester-vertebra-visor', name: '소금 등마디 챙모자', color: '#4f6973', accentColor: '#dfe6ea', price: 0, source: 'achievement', achievementId: 'named-gloucester-serpent-5' },
+  { id: 'gloucester-crest-hat', name: '바다뱀 혹 비니', color: '#2f454d', accentColor: '#80cbc4', price: 0, source: 'achievement', achievementId: 'named-gloucester-serpent-10' },
+  { id: 'guabancex-sargasso-hood', name: '모자반 매듭 두건', color: '#3a4b66', accentColor: '#8fa3bf', price: 0, source: 'achievement', achievementId: 'named-guabancex-1' },
+  { id: 'guabancex-eye-hat', name: '폭풍눈 방수모', color: '#2c3a54', accentColor: '#81d4fa', price: 0, source: 'achievement', achievementId: 'named-guabancex-5' },
+  { id: 'guabancex-fin-crown', name: '소용돌이 지느러미 모자', color: '#232f47', accentColor: '#ffd54f', price: 0, source: 'achievement', achievementId: 'named-guabancex-10' },
 ];
 
 export const isAchievementHat = (hat: Hat): boolean => hat.source === 'achievement';
