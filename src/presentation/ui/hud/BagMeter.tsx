@@ -16,7 +16,7 @@ export default function BagMeter({ percent, level, gaugeClass, percentClass }: {
 }) {
   return (
     <>
-      <span data-gauge className={cx('block shrink-0 bg-bg border border-line', gaugeClass)}>
+      <span data-gauge className={cx('block shrink-0 bg-bg border border-line shadow-[inset_1px_1px_0_var(--bevel-hi)]', gaugeClass)}>
         <span className={cx('block h-full', FILL[level])} style={{ width: `${Math.min(100, percent)}%` }} />
       </span>
       <b data-percent className={cx('pf-accent font-bold leading-none whitespace-nowrap text-right', TEXT[level], percentClass)}>{percent}%</b>
