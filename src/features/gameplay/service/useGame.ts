@@ -124,10 +124,10 @@ export function useGame({ setToast }: { setToast: (m: string, tone?: 'info' | 'g
         setGame(r.state);
         settleForcedEncounter(r.result);
         // 새로 받을 수 있게 된 업적은 메시지 창에 금색 톤으로 알린다 — 게스트는 잠금 상태라 알리지 않고,
-        // boot 소급 평가에서 2건 이상이 한꺼번에 열리면 요약 1줄로 폭주를 막는다.
+        // boot·import 소급 평가에서 2건 이상이 한꺼번에 열리면 요약 1줄로 폭주를 막는다.
         if (!guestRef.current) {
           const unlocked = newlyClaimable(prev, r.state);
-          if (action.type === 'boot' && unlocked.length >= 2) {
+          if ((action.type === 'boot' || action.type === 'import') && unlocked.length >= 2) {
             setToast(`${unlocked.length}개 업적을 받을 수 있어요.`, 'gold');
           } else {
             for (const name of unlocked) {

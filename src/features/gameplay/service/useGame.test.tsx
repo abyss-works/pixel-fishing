@@ -256,6 +256,20 @@ describe('새로 받을 수 있게 된 업적 알림', () => {
     ]);
   });
 
+  it('레거시 세이브 import에서 2건 이상이 새로 claimable이 되면 N개 요약 1줄만 금색 톤으로 알린다', async () => {
+    gw.legacy = true;
+    gw.cloudEmpty = true;
+    gw.dispatchAchievements = { 'spot-basic-sea': 'claimable', 'spot-full-sea': 'claimable', 'spot-basic-deep': 'claimable' };
+    const toasts: [string, string | undefined][] = [];
+    setup((m, tone) => { toasts.push([m, tone]); });
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+    expect(gw.actions).toEqual(['import', 'clearLegacy', 'boot']);
+    expect(toasts.filter(t => t[0].includes('업적'))).toEqual([
+      ['3개 업적을 받을 수 있어요.', 'gold'],
+    ]);
+  });
+
   it('게스트 상태에서는 boot와 일반 액션 모두 새로 받을 수 있는 업적 토스트를 띄우지 않는다', async () => {
     gw.account = { status: 'guest' };
     gw.dispatchAchievements = { 'spot-basic-sea': 'claimable' };

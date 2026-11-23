@@ -596,13 +596,25 @@ describe('현상금 — 클리어 기준 한도와 만료', () => {
     expect(dump.bounty_progress).toEqual([]);
   });
 
-  it('네임드 토벌 보상은 named 클리어로 남는다', async () => {
+  it('네임드 토벌은 resolveChallenge 성공 시 1회만 named 클리어로 남고 deliverBounty는 중복 기록하지 않는다', async () => {
     const quest = bountyById('pacific-named-megalodon')!;
     const uid = await seed({ state: {} });
-    await progressRow(uid, quest.id, 1, NOW);
+    await progressRow(uid, quest.id, 0, NOW);
+    await ticketRow(uid, quest.id, NOW);
+    expect((await callAction(userToken(uid), {
+      type: 'resolveChallenge', questId: quest.id, success: true, hits: 99, misses: 0,
+    })).status).toBe(200);
+    after(2000);
     expect((await deliver(uid, quest.id)).status).toBe(200);
-    expect((await dumpUser(env.client, uid)).bounty_clears)
+    const dump = await dumpUser(env.client, uid);
+    expect(dump.bounty_clears)
       .toEqual([{ user_id: '<user>', kind: 'named', quest_id: quest.id, cleared_at: '<now>' }]);
+    expect(dump.bounty_progress).toEqual([]);
+
+    const standaloneUid = await seed({ state: {} });
+    await progressRow(standaloneUid, quest.id, 1, NOW);
+    expect((await deliver(standaloneUid, quest.id)).status).toBe(200);
+    expect((await dumpUser(env.client, standaloneUid)).bounty_clears).toEqual([]);
   });
 
   it('같은 의뢰를 동시에 납품해도 보상과 클리어는 한 번이다', async () => {
