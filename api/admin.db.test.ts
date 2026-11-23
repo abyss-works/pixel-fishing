@@ -693,6 +693,12 @@ describe('관리자 조치', () => {
     expect(await post('revokeSessions', { userId: 'nope' })).toMatchObject({ status: 400, body: { error: 'bad-user' } });
     expect(await post('revokeSessions', { userId: testUid(998) })).toMatchObject({ status: 404, body: { error: 'no-user' } });
 
+    // 앞선 resetPassword 테스트가 기존 세션을 지우므로 대상 계정의 활성 세션을 명시적으로 심는다
+    await env.client.query(
+      `insert into auth.sessions (user_id, token, expires_at) values ($1, $2, '2100-01-01T00:00:00Z')
+       on conflict (token) do nothing`,
+      [TARGET, `revoke-test-${TARGET}`],
+    );
     const before = await env.client.query('select 1 from auth.sessions where user_id = $1', [TARGET]);
     expect(before.rows.length).toBeGreaterThan(0);
 
