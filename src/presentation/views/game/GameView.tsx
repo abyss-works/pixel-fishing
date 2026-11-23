@@ -192,7 +192,7 @@ export default function GameView(props: GameViewProps) {
 
   const onGuestBlocked = createGuestBlockedNotice({ accountOpen, openAccount: () => setAccountOpen(true), setToast: props.setToast });
 
-  const resetPanels = () => { setActionPanel(null); setStatsOpen(false); setRankingOpen(false); setTracking(null); };
+  const resetPanels = () => { setActionPanel(null); setStatsOpen(false); setAchievementsOpen(false); setRankingOpen(false); setTracking(null); };
 
   const go = (nextScene: SceneRef, message: string, entryPos?: Point, returnPos?: Point) => {
     resetPanels();

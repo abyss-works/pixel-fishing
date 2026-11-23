@@ -409,6 +409,37 @@ describe('현상금', () => {
     expect(await snapshotOf(uid, res)).toMatchSnapshot();
   });
 
+  it('네임드 결투 승리와 납품 연쇄는 bounty_clears에 1행만 남기고 마미 와타의 거울 보유 시 같은 날 2번째 네임드 수주를 허용한다', async () => {
+    const uid = await seed({
+      state: {
+        boat: 6,
+        dex: zoneDex('southatlantic', 'named'),
+        location: at('walvisbay'),
+        artifacts: ['mami-wata-mirror'],
+      },
+    });
+    const first = BOUNTIES.find(q => q.id === 'southatlantic-named-adamastor')!;
+    const second = BOUNTIES.find(q => q.id === 'southatlantic-named-jasconius')!;
+    await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
+      [uid, first.zone, first.id, NOW]);
+    await env.client.query('insert into public.bounty_tickets (user_id, quest_id, issued_at) values ($1, $2, $3)',
+      [uid, first.id, NOW]);
+
+    const duel = await callAction(userToken(uid), { type: 'resolveChallenge', questId: first.id, success: true, hits: 99, misses: 0 });
+    expect(duel.status).toBe(200);
+    vi.setSystemTime(Date.parse(NOW) + 2000);
+    const deliver = await callAction(userToken(uid), { type: 'deliverBounty', questId: first.id });
+    expect(deliver.status).toBe(200);
+
+    const clears = await env.client.query<{ quest_id: string }>(
+      `select quest_id from public.bounty_clears where user_id = $1 and kind = 'named'`, [uid]);
+    expect(clears.rows.map(r => r.quest_id)).toEqual([first.id]);
+
+    vi.setSystemTime(Date.parse(NOW) + 4000);
+    const nextAccept = await callAction(userToken(uid), { type: 'acceptQuest', questId: second.id, port: 'walvisbay' });
+    expect(nextAccept.status).toBe(200);
+  });
+
   it('만료된 도전권은 거부한다', async () => {
     const { uid, named } = await namedSetup(10.5 * 3600_000); // KST 03:36 발급 — 전날 게임 날짜
     const res = await callAction(userToken(uid), { type: 'resolveChallenge', questId: named.id, success: true, hits: 99, misses: 0 });
@@ -565,13 +596,27 @@ describe('현상금 — 클리어 기준 한도와 만료', () => {
     expect(dump.bounty_progress).toEqual([]);
   });
 
-  it('네임드 토벌 보상은 named 클리어로 남는다', async () => {
+  it('네임드 토벌은 resolveChallenge 성공 시 1회만 named 클리어로 남고 deliverBounty는 중복 기록하지 않는다', async () => {
     const quest = bountyById('pacific-named-megalodon')!;
     const uid = await seed({ state: {} });
-    await progressRow(uid, quest.id, 1, NOW);
-    expect((await deliver(uid, quest.id)).status).toBe(200);
+    await progressRow(uid, quest.id, 0, NOW);
+    await ticketRow(uid, quest.id, NOW);
+    expect((await callAction(userToken(uid), {
+      type: 'resolveChallenge', questId: quest.id, success: true, hits: 99, misses: 0,
+    })).status).toBe(200);
     expect((await dumpUser(env.client, uid)).bounty_clears)
       .toEqual([{ user_id: '<user>', kind: 'named', quest_id: quest.id, cleared_at: '<now>' }]);
+    after(2000);
+    expect((await deliver(uid, quest.id)).status).toBe(200);
+    const dump = await dumpUser(env.client, uid);
+    expect(dump.bounty_clears)
+      .toEqual([{ user_id: '<user>', kind: 'named', quest_id: quest.id, cleared_at: NOW }]);
+    expect(dump.bounty_progress).toEqual([]);
+
+    const standaloneUid = await seed({ state: {} });
+    await progressRow(standaloneUid, quest.id, 1, NOW);
+    expect((await deliver(standaloneUid, quest.id)).status).toBe(200);
+    expect((await dumpUser(env.client, standaloneUid)).bounty_clears).toEqual([]);
   });
 
   it('같은 의뢰를 동시에 납품해도 보상과 클리어는 한 번이다', async () => {

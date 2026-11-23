@@ -57,7 +57,7 @@ export async function settleAction(
   }
 }
 
-export function useGame({ setToast }: { setToast: (m: string, tone?: 'warn') => void }) {
+export function useGame({ setToast }: { setToast: (m: string, tone?: 'info' | 'gold' | 'warn') => void }) {
   const [init] = useState(() => api.storage.loadLegacy());
   const gameGatewayRef = useRef<GameGateway>(null!);
   if (!gameGatewayRef.current) {
@@ -68,6 +68,8 @@ export function useGame({ setToast }: { setToast: (m: string, tone?: 'warn') => 
   // 렌더를 기다리지 않고 채택과 함께 바꿔, 연달아 온 확정과 로드 직후의 접속이 낡은 상태와 비교하지 않게 한다
   const gameRef = useRef(game);
   const setGame = (next: GameState) => { gameRef.current = next; setGameState(next); };
+  // 게스트는 업적이 잠겨 있으므로 새로 받을 수 있는 업적 알림을 띄우지 않는다
+  const guestRef = useRef(api.auth.isConfigured);
   const [nickname, setNickname] = useState<string | null>(null);
   // 서버가 내려 준 개발 도구 사용 판정 — 계정이 바뀌면 새 계정의 판정으로 바뀐다
   const [devTools, setDevTools] = useState(false);
@@ -121,10 +123,17 @@ export function useGame({ setToast }: { setToast: (m: string, tone?: 'warn') => 
         const prev = gameRef.current;
         setGame(r.state);
         settleForcedEncounter(r.result);
-        // 새로 받을 수 있게 된 업적은 메시지 창에 한 줄 남긴다 — 서버는 업적 이벤트를 결과에 싣지 않으므로
-        // 클라가 상태 비교로 알린다(첫 로드와 수령 확정에는 해당하지 않는다).
-        for (const name of newlyClaimable(prev, r.state)) {
-          setToast(`“${name}” 업적을 받을 수 있어요.`);
+        // 새로 받을 수 있게 된 업적은 메시지 창에 금색 톤으로 알린다 — 게스트는 잠금 상태라 알리지 않고,
+        // boot·import 소급 평가에서 2건 이상이 한꺼번에 열리면 요약 1줄로 폭주를 막는다.
+        if (!guestRef.current) {
+          const unlocked = newlyClaimable(prev, r.state);
+          if ((action.type === 'boot' || action.type === 'import') && unlocked.length >= 2) {
+            setToast(`${unlocked.length}개 업적을 받을 수 있어요.`, 'gold');
+          } else {
+            for (const name of unlocked) {
+              setToast(`“${name}” 업적을 받을 수 있어요.`, 'gold');
+            }
+          }
         }
         // 어군 배치 날짜 — 리듀서(서버 시계, 로컬은 클라 시계)가 정한 값으로 세션을 고정한다
         if (r.result.type === 'boot') setSchoolDay(r.result.schoolDay);
@@ -180,11 +189,13 @@ export function useGame({ setToast }: { setToast: (m: string, tone?: 'warn') => 
     (async () => {
       const uid = await fetchSession(client);
       if (!uid) throw new AppError('unauthorized', 'anonymous session failed');
-      const [cloud, profile] = await Promise.all([
+      const [cloud, profile, lookup] = await Promise.all([
         loadSave(signal),
         gameGatewayRef.current.getProfile(),
+        api.auth.currentAccount().catch(() => ({ status: 'failed' as const })),
       ]);
       if (signal.aborted) return;
+      guestRef.current = lookup.status !== 'account';
       if (cloud) {
         setGame(cloud);
         setToast('클라우드 세이브를 불러왔어요.');
@@ -236,8 +247,13 @@ export function useGame({ setToast }: { setToast: (m: string, tone?: 'warn') => 
       const signal = newRetryScope();
       setLoading(true);
       try {
-        const [cloud, profile] = await Promise.all([loadSave(signal), gameGatewayRef.current.getProfile()]);
+        const [cloud, profile, lookup] = await Promise.all([
+          loadSave(signal),
+          gameGatewayRef.current.getProfile(),
+          api.auth.currentAccount().catch(() => ({ status: 'failed' as const })),
+        ]);
         if (signal.aborted) return;
+        guestRef.current = lookup.status !== 'account';
         setGame(cloud ?? newState());
         adoptProfile(profile);
         await boot(signal);

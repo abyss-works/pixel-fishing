@@ -25,9 +25,10 @@ import { appliedSlots, applyEnergyGain, planOverflow } from '../src/game/rules/c
 import { needsLegacyFirstCatchMigration } from '../src/game/rules/firstCatch.js';
 import { drawNamedEncounter, speciesPityCandidates } from '../src/game/rules/pity.js';
 import { bountyById, isQuestOffered } from '../src/game/content/bounties.js';
+import type { BountyQuest } from '../src/game/content/bounties.js';
 import type { SpotId } from '../src/game/content/spots.js';
 import { applyAction, drawCatch, namedWeightBonus, pickScalars, prepareCatchDraw } from '../src/game/rules/actions.js';
-import type { ActionDeps, ApplyOutcome, GameEvent, ReleasedFish, StatePatch, StateWrites } from '../src/game/rules/actions.js';
+import type { ActionDeps, ApplyOutcome, GameAction, GameEvent, ReleasedFish, StatePatch, StateWrites } from '../src/game/rules/actions.js';
 import { achievementBonusesOf, counterIncrementsForEvents, evaluateAchievements } from '../src/game/rules/achievements.js';
 import { bagCapacityOf, createPlayerContext } from '../src/game/rules/effects.js';
 import { ACHIEVEMENTS } from '../src/game/content/achievements.js';
@@ -520,11 +521,9 @@ async function route(req: Req, res: Res): Promise<void> {
     const quest = bountyById(action.questId);
     if (quest) fragments.push(...acceptFragments(guard, uid, quest, action.port, nowISO, dayStart));
   }
-  // 클리어 기록 — 보상을 주는 납품·토벌과 같은 확정 문장에서 쓴다. 리듀서가 완료를 이미 검증했다.
-  if (action.type === 'deliverBounty' && typeof action.questId === 'string') {
-    const quest = bountyById(action.questId);
-    if (quest) fragments.push(clearFragment(guard, uid, quest, nowISO));
-  }
+  // 클리어 기록 — 일반 의뢰는 납품(deliverBounty), 네임드는 결투 성공(resolveChallenge)에서 단일 기록한다.
+  const clearQuest = clearQuestForAction(action);
+  if (clearQuest) fragments.push(clearFragment(guard, uid, clearQuest, nowISO));
   if (deliveryRow) fragments.push(consumeDeliveryFragment(guard, uid, deliveryRow.questId));
   // 도전권 발급 — catch의 ticket 이벤트를 행으로 확정한다.
   const ticketQuests = out.events.flatMap(e => {
@@ -536,11 +535,6 @@ async function route(req: Req, res: Res): Promise<void> {
   // 챌린지 결과 확정 — 리듀서가 티켓 유효·수주 활성·주장 정합성을 이미 검증했다.
   if (action.type === 'resolveChallenge' && typeof action.questId === 'string' && bountyById(action.questId)) {
     fragments.push(...challengeFragments(guard, uid, action.questId, action.success === true, nowISO));
-    // 네임드 토벌 성공은 클리어 행으로 남겨 clearedNamed의 정본이 된다(진행도 카운트와 같은 확정 문장)
-    const quest = bountyById(action.questId)!;
-    if (action.success === true && quest.difficulty === 'named') {
-      fragments.push(clearFragment(guard, uid, quest, nowISO));
-    }
   }
   // 개발 도구 테이블·정규화 표 명령 — 허용 판정은 위에서 끝났다. 리듀서가 검증한 명령만 여기 온다.
   if (action.type === 'debug' && isDebugTableCommand(action.command)) {
@@ -642,6 +636,19 @@ async function route(req: Req, res: Res): Promise<void> {
     scalars: pickScalars(out.state), writes: out.writes,
   };
   res.status(200).json({ patch, result: out.result });
+}
+
+/** 액션 확정 시 bounty_clears에 클리어 행을 추가할 의뢰 — 일반 의뢰는 납품(deliverBounty), 네임드는 결투 성공(resolveChallenge)이 단일 지점이다 */
+export function clearQuestForAction(action: GameAction): BountyQuest | null {
+  if (action.type === 'deliverBounty' && typeof action.questId === 'string') {
+    const quest = bountyById(action.questId);
+    return quest && quest.difficulty !== 'named' ? quest : null;
+  }
+  if (action.type === 'resolveChallenge' && action.success === true && typeof action.questId === 'string') {
+    const quest = bountyById(action.questId);
+    return quest && quest.difficulty === 'named' ? quest : null;
+  }
+  return null;
 }
 
 /** 액션 이벤트가 길드 항해일지에 남기는 줄 — 전설 등급 캐치와 네임드 토벌 납품 */

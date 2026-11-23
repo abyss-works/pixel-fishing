@@ -2,7 +2,7 @@
 // 계약 테스트는 리듀서의 수주 한도와 납품 완료 규칙을 검증한다.
 // 여기는 서버만 아는 것(행 해석·하루 경계 적용)만 다룬다.
 import { describe, it, expect } from 'vitest';
-import { catchProgressQuests, expiredQuests, toBountyCtx } from './action.js';
+import { catchProgressQuests, clearQuestForAction, expiredQuests, toBountyCtx } from './action.js';
 import { gameDayStartISO } from '../src/game/rules/time.js';
 
 // 2026-08-22 15:00 KST의 게임 날짜는 그날 04:00 KST에 시작했다 = 2026-08-21T19:00:00Z
@@ -126,5 +126,27 @@ describe('catchProgressQuests — 캐치가 진전시키는 의뢰', () => {
 
   it('네임드는 캐치로 진전하지 않는다', () => {
     expect(catchProgressQuests(caught('sea', 'megalodon'), ['pacific-named-megalodon'])).toEqual([]);
+  });
+});
+
+describe('clearQuestForAction — bounty_clears 단일 기록 지점', () => {
+  it('일반 의뢰는 deliverBounty에서만 클리어 행을 기록한다', () => {
+    expect(clearQuestForAction({ type: 'deliverBounty', questId: 'pacific-easy-common' })?.id)
+      .toBe('pacific-easy-common');
+  });
+
+  it('네임드 의뢰는 resolveChallenge 성공에서만 기록하고 deliverBounty에서는 중복 기록하지 않는다', () => {
+    expect(clearQuestForAction({
+      type: 'resolveChallenge', questId: 'pacific-named-megalodon', success: true, hits: 6, misses: 0,
+    })?.id).toBe('pacific-named-megalodon');
+    expect(clearQuestForAction({ type: 'deliverBounty', questId: 'pacific-named-megalodon' })).toBeNull();
+    expect(clearQuestForAction({
+      type: 'resolveChallenge', questId: 'pacific-named-megalodon', success: false, hits: 1, misses: 3,
+    })).toBeNull();
+  });
+
+  it('수주·기타 액션이나 알 수 없는 의뢰 id는 null이다', () => {
+    expect(clearQuestForAction({ type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' })).toBeNull();
+    expect(clearQuestForAction({ type: 'deliverBounty', questId: 'unknown-quest' })).toBeNull();
   });
 });

@@ -54,7 +54,7 @@ describe('publicProfile', () => {
       artifactLevels: { 'wreck-compass': 3, 'mami-wata-mirror': 2, 'unknown': 4 },
       hats: ['cap-red', 'straw-hat', 'no-such-hat'],
       look: { shirt: 2, pants: 1, hat: 'straw-hat' },
-      achievements: { 'variant-village': 'claimed', 'manual-10': 'claimable' },
+      achievements: { 'variant-village': 'claimed', 'zone-basic-pacific': 'claimed', 'manual-10': 'claimable' },
       location: { kind: 'base', id: 'manila' },
     })]);
     await client.query(`insert into public.records (user_id, fish_id, form, count) values
