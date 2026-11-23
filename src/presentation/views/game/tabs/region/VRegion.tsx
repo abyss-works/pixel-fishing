@@ -16,7 +16,7 @@ import { RarityText } from '../../../../ui/fish/RarityTag';
 import { RARITY, RARITY_ORDER } from '../../../../../game/content/rarity';
 import { RARITY_CARD, DIM_CARD } from '../../../../ui/fish/RarityTag';
 import DataTable from '../../../../ui/DataTable';
-import Frame from '../../../../ui/Frame';
+import Inset from '../../../../ui/Inset';
 
 // 한 화면에 보일 어종 카드 수 — 어군당 보통 5~6종이라 6장이면 대개 한 번에 들어간다.
 const FISH_PER_VIEW = 6;
@@ -48,7 +48,7 @@ function StatusText({ status, detail = false }: { status: SpotStatus; detail?: b
   if (status.kind === 'power') {
     return (
       <span className="text-orange">
-        {detail ? `파워 부족 · ${status.power}/${status.req}` : `파워 ${status.req} 필요`}
+        {detail ? `파워 부족 ${status.power}/${status.req}` : `파워 ${status.req} 필요`}
       </span>
     );
   }
@@ -64,9 +64,9 @@ const SLOT_ROW = 'flex items-center justify-between gap-2 px-2 py-1.5 text-sm';
 const SLOT_ROW_SIDE = 'flex items-center gap-1.5 text-xs whitespace-nowrap';
 const SLOT_FOOT = 'mt-auto px-2 py-1.5 text-2xs leading-[1.5] text-text-dim border-t border-line';
 
-const LEVEL_TEXT = { high: '높음', mid: '보통', low: '낮음', none: '—' } as const;
+const LEVEL_TEXT = { high: '높음', mid: '보통', low: '낮음', none: '-' } as const;
 const LEVEL_CLS = {
-  high: 'text-gold', mid: 'text-text-dim', low: 'text-accent', none: 'text-text-dim opacity-50',
+  high: 'text-gold', mid: 'text-text-dim', low: 'text-accent', none: 'text-text-dim',
 } as const;
 
 // 지역 탭 — 존 계층 모델을 표시한다.
@@ -91,7 +91,7 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
   return (
     <div className="flex flex-col gap-3">
       {/* 로어 슬롯 — 고정 높이. **존(범위) 정보만** 뜬다 — 어군 상세와 배타 교체하지 않는다 */}
-      <Frame className={cx(LORE_H, 'shrink-0 pf-vscroll pf-scroll-panel p-2 flex flex-col justify-start gap-0.5')}>
+      <Inset className={cx(LORE_H, 'shrink-0 pf-vscroll pf-scroll-panel p-2 flex flex-col justify-start gap-0.5')}>
         <h3 className="text-sm text-gold pf-accent truncate">
           {parentZone && <span className="text-text-dim">{parentZone.name} &gt; </span>}
           {zone.name}
@@ -100,7 +100,7 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
         <p className="text-2xs leading-[1.6] text-text-dim">
           {zone.lore}
         </p>
-      </Frame>
+      </Inset>
 
       {/* 수역 정보 — 고정 높이 슬롯. 캐스팅 사거리 내 어군 상세 ⇄ 가까운 어군 목록 배타 교체.
           **존 로어를 덮지 않는다** — 존 정보와 별도 슬롯에 표시한다 */}
@@ -111,7 +111,7 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
             <span className="text-2xs text-text-dim">도감 {focusedDex.caught}/{focusedDex.total}</span>
           )}
         </SectionTitle>
-        <Frame className={cx(SLOT_H, 'pf-vscroll pf-scroll-panel p-0 flex flex-col')}>
+        <Inset className={cx(SLOT_H, 'pf-vscroll pf-scroll-panel p-0 flex flex-col')}>
           {focused ? (
             /* ── 사거리 내 어군 상세 ── */
             <div className="flex flex-col flex-1">
@@ -162,15 +162,18 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
             </p>
             </div>
           )}
-        </Frame>
+        </Inset>
       </div>
 
       {/* 등급 분포 — **최상위 존 서브트리** 어군 × 등급의 흐름(높음/보통/낮음, 정성).
           해역의 등급 확률(가중치 / 해역 가중치 합)을 전역 기본 확률과 비교한 조회 뷰다(selectGradeLevel). 하위 존(해구 등) 위에서도 최상위 존 표가 유지돼 자주 바뀌지 않는다.
           서브트리마다 행 수가 다르다(마을 2 / 태평양 2 / 동남아 3 / 인도양 2 / 마다가스카르 2) — 높이 고정 */}
       <div className="shrink-0">
-        <SectionTitle>등급 분포 — {tableZone.name}</SectionTitle>
-        <Frame className={cx(TABLE_H, 'p-2 overflow-x-auto overflow-y-hidden pf-scroll-panel')}>
+        <SectionTitle className="flex items-baseline justify-between gap-2">
+          <span>등급 분포</span>
+          <span className="text-xs text-text-dim">{tableZone.name}</span>
+        </SectionTitle>
+        <Inset className={cx(TABLE_H, 'p-2 overflow-x-auto overflow-y-hidden pf-scroll-panel')}>
           <DataTable className="text-2xs">
             <thead>
               <tr className="text-text-dim">
@@ -193,7 +196,7 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
               ))}
             </tbody>
           </DataTable>
-        </Frame>
+        </Inset>
       </div>
 
       {/* 팁·조작 — 최상위 존 기준(하위 존은 부모 폴백). 항목 수가 가변(3~4개)이라 한
@@ -201,12 +204,15 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
           위 섹션을 밀어낼 일도 없다 */}
       <div className={cx(FOOT_H, 'shrink-0 pf-vscroll pf-scroll-panel flex flex-col gap-2')}>
         {nextBoat && (
-          <Frame className="p-2 flex flex-col gap-0.5 text-xs">
-            <span className="text-gold">다음 배 · {nextBoat.name}</span>
+          <Inset className="p-2 flex flex-col gap-0.5 text-xs">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-text-dim">다음 배</span>
+              <span className="text-gold">{nextBoat.name}</span>
+            </div>
             <span className="text-2xs text-text-dim">
-              명성 {fmtNum(nextBoat.fameReq)} · 골드 {fmtNum(nextBoat.price)} — 집 목공소나 항구 조선소
+              명성 {fmtNum(nextBoat.fameReq)}, 골드 {fmtNum(nextBoat.price)} (집 목공소나 항구 조선소)
             </span>
-          </Frame>
+          </Inset>
         )}
         <div>
           <SectionTitle>여기서 할 수 있는 것</SectionTitle>

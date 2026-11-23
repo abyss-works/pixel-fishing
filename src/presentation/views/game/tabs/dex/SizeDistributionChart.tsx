@@ -69,8 +69,9 @@ export default function SizeDistributionChart({ data }: { data: SizeDistribution
         <text x={W} y={H - 4} textAnchor="end" className="fill-text-dim text-[10px]">{fmtSize(data.max)}</text>
       </svg>
       {me ? (
-        <figcaption className="mt-1 text-xs text-text-dim">
-          내 최대 기록 <span className="pf-accent text-gold">{fmtSize(me.size)}</span> · 골드 영역이 나보다 큰 개체의 비율이에요.
+        <figcaption className="mt-1 flex flex-col gap-0.5 text-xs text-text-dim">
+          <span>내 최대 기록 <span className="pf-accent text-gold">{fmtSize(me.size)}</span></span>
+          <span>골드 영역이 나보다 큰 개체의 비율이에요.</span>
         </figcaption>
       ) : (
         <figcaption className="mt-1 text-xs text-text-dim">이 어종을 낚으면 내 위치가 표시돼요.</figcaption>

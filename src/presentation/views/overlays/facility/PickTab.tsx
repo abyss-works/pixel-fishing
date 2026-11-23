@@ -27,7 +27,7 @@ export default function PickTab({ empty, table, compareHeads, compareRows, summa
       detail={<CompareTable heads={compareHeads} rows={compareRows} />}
       foot={(
         <>
-          <div className={cx('flex items-center justify-between text-sm', summary.dim && 'opacity-50')}>
+          <div className={cx('flex items-center justify-between text-sm', summary.dim && 'text-text-dim')}>
             <span className="text-text-dim">{summary.label}</span>
             {summary.value}
           </div>

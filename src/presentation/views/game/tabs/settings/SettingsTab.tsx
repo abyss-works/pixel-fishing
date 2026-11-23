@@ -53,7 +53,7 @@ export default function SettingsTab({ autoLockOnCatch, dispatch, setToast, syncL
         <RowButton glyph="people" title="내 정보" pressed={open === 'myInfo'} onClick={() => setOpen('myInfo')} />
       </div>
 
-      <Divider className="my-3 opacity-60" />
+      <Divider className="my-3" />
 
       <div className="flex flex-col gap-2">
         <RowButton glyph="gear" title="설정" pressed={open === 'settings'} onClick={() => setOpen('settings')} />
@@ -82,7 +82,7 @@ export default function SettingsTab({ autoLockOnCatch, dispatch, setToast, syncL
       {/* 버전(사람이 붙이는 이름)과 배포 식별자(커밋 SHA)를 같이 건다.
           업데이트가 나갔는지 확인할 때 봐야 하는 건 **뒤쪽**이다 — 버전은 릴리즈 때만 올라가서
           dev 배포 사이에서는 안 바뀐다. 두 탭의 이 값이 다르면 한쪽이 낡은 화면이다. */}
-      <div className="flex items-center gap-1.5 text-2xs text-text-dim opacity-70 mt-auto pt-2">
+      <div className="flex items-center gap-1.5 text-2xs text-text-dim mt-auto pt-2">
         v{APP_VERSION}
         <Divider vertical />
         <Tip text="배포 식별자 (커밋 SHA)" className="pf-accent">{BUILD_LABEL}</Tip>

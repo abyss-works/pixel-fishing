@@ -23,8 +23,8 @@ export default function BagCards({ bag, game }: { bag: readonly FishInstance[]; 
         return (
           <div key={f.id} data-rarity={f.rarity}
                className={cx(RARITY_CARD, 'p-2 text-sm',
-                 // 보유 0은 흐리게 — 미발견(???)보다는 진하게 둬서 셋이 구분된다
-                 n === 0 && (known ? DIM_CARD : 'opacity-[0.55]'))}
+                 // 보유 0은 어두운 바닥으로 낮춰 미발견(???)과 함께 구분한다
+                 n === 0 && (known ? DIM_CARD : 'bg-bg border-line text-text-dim'))}
                aria-label={!known ? '미확인 어종'
                  : n === 0 ? `${f.name} 미보유`
                  : `${f.name} 일반 ${normalCount}마리 돌연변이 ${variantCount}마리 보유`}>

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { HTMLAttributes, ReactNode } from 'react';
 import { cx } from './cx';
 
 // 오목한 칸 — 패널 표면 안을 한 단 파낸 자리. 노치는 프레임과 같고 베벨만 반전(눌림)해
@@ -11,13 +11,13 @@ const TONE = {
   light: 'bg-(--inset-light)',
 } as const;
 
-export default function Inset({ tone = 'base', title, divided, borderless, className, children }: {
-  tone?: keyof typeof TONE; title?: string; divided?: boolean; borderless?: boolean; className?: string; children: ReactNode;
-}) {
+export default function Inset({ tone = 'base', title, divided, borderless, className, children, ...rest }: {
+  tone?: keyof typeof TONE; title?: string; divided?: boolean; borderless?: boolean; className?: string; children?: ReactNode;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'title'>) {
   return (
     <div className={cx('pf-notch shadow-[inset_2px_2px_0_var(--bevel-hi),inset_-1px_-1px_0_var(--bevel-lo)]',
                        !borderless && 'border border-line',
-                       TONE[tone], divided && 'divide-y divide-line', className)}>
+                       TONE[tone], divided && 'divide-y divide-line', className)} {...rest}>
       {title && <h3 className="pf-accent text-base text-gold">{title}</h3>}
       {children}
     </div>
