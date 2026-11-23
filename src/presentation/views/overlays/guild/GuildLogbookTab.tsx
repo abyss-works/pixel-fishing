@@ -20,6 +20,8 @@ const MARK: Record<LogEntry['kind'], { glyph: GlyphId; tone: string }> = {
   donate: { glyph: 'coin', tone: 'text-gold' },
   'bonus-up': { glyph: 'upload', tone: 'text-gold border-gold-dark' },
   rename: { glyph: 'book', tone: 'text-text' },
+  enhance: { glyph: 'sparkle', tone: 'text-guild border-epic bg-[color-mix(in_oklab,var(--c-epic)_22%,var(--c-surface-2))]' },
+  'enhance-reset': { glyph: 'gear', tone: 'text-danger border-[#9e4747] bg-[color-mix(in_oklab,var(--c-danger)_15%,var(--c-surface-2))]' },
 };
 
 const TONE: Record<NonNullable<LogPart['tone']>, string> = {
@@ -28,6 +30,7 @@ const TONE: Record<NonNullable<LogPart['tone']>, string> = {
   legend: 'font-bold text-legend',
   named: 'font-bold text-epic',
   skill: 'font-bold text-gold',
+  enhance: 'pf-accent text-xs text-guild',
   num: 'pf-accent text-xs',
 };
 

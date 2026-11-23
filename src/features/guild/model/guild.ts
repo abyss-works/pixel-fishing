@@ -3,8 +3,10 @@ import type {
 } from '../../../platform/api';
 import type { ServerMessage } from '../../../game/rules/live';
 import {
-  DEFAULT_GUILD_PITCH, GUILD_BONUS_IDS, GUILD_JOIN_REQUEST_TTL_MS, GUILD_PITCH_MAX, GUILD_RENAME_COST, guildDailyContributionCaps,
-  guildLinkPath, handoverOutcome, joinOutcome, joinRequestDaysLeft, removalOutcome, renameBlock,
+  DEFAULT_GUILD_PITCH, GUILD_BONUS_IDS, GUILD_BONUS_MAX_RANK, GUILD_ENHANCE_MAX_RANK, GUILD_ENHANCE_MIN_LEVEL,
+  GUILD_ENHANCE_RESET_COST, GUILD_JOIN_REQUEST_TTL_MS, GUILD_PITCH_MAX, GUILD_RENAME_COST,
+  guildDailyContributionCaps, guildLinkPath, handoverOutcome, joinOutcome, joinRequestDaysLeft,
+  maxEnhancePoints, removalOutcome, renameBlock,
 } from '../../../game/rules/guild';
 import type { GuildBonusId, GuildJoinMode, GuildJoinVia } from '../../../game/rules/guild';
 import type { ArtifactHolder } from '../../../game/rules/artifactLevel';
@@ -168,6 +170,10 @@ export const GUILD_ERROR_TEXT: Record<string, string> = {
   restricted: '이용이 제한된 계정은 기부할 수 없어요.',
   'same-name': '지금 쓰는 이름과 같아요.',
   'renamed-today': '오늘은 이미 이름을 바꿨어요.',
+  'enhance-locked': '길드 Lv.6부터 강화 포인트를 얻을 수 있어요.',
+  'no-enhance-points': '남은 강화 포인트가 없어요.',
+  'enhance-maxed': '이 스킬은 자유 강화를 모두 채웠어요.',
+  'no-enhance-used': '초기화할 자유 강화가 없어요.',
 };
 
 // ── 이름 바꾸기 ──────────────────────────────────────────────
@@ -203,7 +209,7 @@ export function growthTotalText(growth: GuildInfo['growth']): string {
 
 /** 진행 막대 도움말: 레벨이 오르는 조건과 길드 스킬의 관계. 하루 기여 상한은 오늘 기여 도움말이 맡는다 */
 export const GUILD_LEVEL_HELP = '길드원 모두가 쌓은 기여가 다음 문턱에 닿으면 길드 레벨이 올라요.\n'
-  + '레벨이 오르면 길드 스킬이 하나씩 열리고, 스킬마다 올릴 수 있는 단계 상한도 올라가요.';
+  + 'Lv.5까지는 길드 스킬이 열리고, Lv.6부터는 강화 포인트를 1개씩 얻어요.';
 
 /** 오늘 기여 도움말: 한 사람이 하루에 쌓을 수 있는 기여의 갈래별 상한. 네임드 토벌은 보유 유물의 가산을 반영한다 */
 export function dailyContributionRows(holder: ArtifactHolder): { label: string; value: string }[] {
@@ -249,25 +255,28 @@ export function bonusEffectText(id: GuildBonusId, value: number): string {
 /**
  * 스킬 트리 노드 하나(단계 1~5). done은 이른 단계, next는 지금 모으는 다음 단계(fill = 모인 비율),
  * open은 상한 안이지만 아직 먼 단계, capped는 길드 레벨 상한 위이거나 열리지 않은 보너스의 단계다.
+ * enhanced는 자유 강화(1~5)가 적용된 칸을 보라색 바깥 테두리로 표시할지 여부다.
  */
-export interface BonusNode { rank: number; state: 'done' | 'next' | 'open' | 'capped'; fill: number }
+export interface BonusNode { rank: number; state: 'done' | 'next' | 'open' | 'capped'; fill: number; enhanced: boolean }
 
 export interface BonusRow extends GuildBonusItem {
   name: string;
   /** 길드 레벨이 해금 레벨에 못 미친다 */
   locked: boolean;
-  /** 지금 효과(0단계면 null)와 다음 단계 효과(5단계면 null) */
+  /** 지금 효과(0단계면 null)와 다음 합산 단계 효과(10단계면 null) */
   now: string | null;
   after: string | null;
-  /** 다음 단계 비용 대비 모인 골드(0~1). 더 오를 수 없으면 0 */
+  /** 다음 기본 단계 비용 대비 모인 골드(0~1). 더 오를 수 없으면 0 */
   ratio: number;
-  /** 다음 단계까지 남은 골드. 기부할 수 없으면 null */
+  /** 다음 기본 단계까지 남은 골드. 기부할 수 없으면 null */
   need: number | null;
-  /** 지금 기부할 수 있는가 — 열렸고 단계가 상한(길드 레벨) 아래다 */
+  /** 지금 기부할 수 있는가 — 열렸고 기본 단계가 상한(최대 5) 아래다 */
   canDonate: boolean;
   /** 단계 1~5의 노드(위에서 아래로) */
   nodes: BonusNode[];
 }
+
+export const GUILD_ENHANCE_MAX_TOTAL_RANK = GUILD_BONUS_MAX_RANK + GUILD_ENHANCE_MAX_RANK;
 
 /** 보너스 탭의 열 — 해금 순 */
 export function bonusRows(bonuses: readonly GuildBonusItem[]): BonusRow[] {
@@ -276,17 +285,57 @@ export function bonusRows(bonuses: readonly GuildBonusItem[]): BonusRow[] {
     const ratio = canDonate && b.next !== null ? Math.min(1, b.pool / b.next) : 0;
     const nodes = GUILD_BONUS_IDS.map((_, i): BonusNode => {
       const rank = i + 1;
-      if (rank <= b.rank) return { rank, state: 'done', fill: 1 };
-      if (rank > b.cap) return { rank, state: 'capped', fill: 0 };
-      return rank === b.rank + 1 ? { rank, state: 'next', fill: ratio } : { rank, state: 'open', fill: 0 };
+      const enhanced = b.cap > 0 && rank <= b.enhanceRank;
+      if (rank <= b.rank) return { rank, state: 'done', fill: 1, enhanced };
+      if (rank > b.cap) return { rank, state: 'capped', fill: 0, enhanced };
+      return rank === b.rank + 1
+        ? { rank, state: 'next', fill: ratio, enhanced }
+        : { rank, state: 'open', fill: 0, enhanced };
     });
     return {
       ...b, name: GUILD_BONUS_NAME[b.id], locked: b.cap === 0,
-      now: b.rank > 0 ? bonusEffectValue(b.id, b.effect) : null,
+      now: b.totalRank > 0 ? bonusEffectValue(b.id, b.effect) : null,
       after: b.nextEffect === null ? null : bonusEffectValue(b.id, b.nextEffect),
       ratio, need: canDonate && b.next !== null ? b.next - b.pool : null, canDonate, nodes,
     };
   });
+}
+
+/** 자유 강화 포인트 보유·사용 현황 */
+export function enhancePoolSummary(guild: GuildInfo): { max: number; used: number; remaining: number; maxSlots: number } {
+  const max = maxEnhancePoints(guild.growth.level);
+  const used = guild.bonuses.reduce((sum, b) => sum + b.enhanceRank, 0);
+  return { max, used, remaining: Math.max(0, max - used), maxSlots: GUILD_ENHANCE_MAX_RANK };
+}
+
+/** 스킬 하나에 자유 강화 +1 투자 가능 여부와 불가 사유 */
+export function enhanceInvestState(guild: GuildInfo, row: BonusRow): { canInvest: boolean; reason: string | null } {
+  if (row.locked) return { canInvest: false, reason: `길드 Lv.${row.unlock}에 열려요.` };
+  if (guild.growth.level < GUILD_ENHANCE_MIN_LEVEL) return { canInvest: false, reason: 'Lv.6부터 강화 포인트를 얻어요.' };
+  if (row.enhanceRank >= GUILD_ENHANCE_MAX_RANK) return { canInvest: false, reason: '이 스킬은 자유 강화를 모두 채웠어요.' };
+  if (enhancePoolSummary(guild).remaining <= 0) return { canInvest: false, reason: '남은 강화 포인트가 없어요.' };
+  return { canInvest: true, reason: null };
+}
+
+/** 자유 강화 초기화 가능 여부와 불가 사유 */
+export function enhanceResetState(guild: GuildInfo, gold: number):
+  { canReset: boolean; reason: string | null; used: number; cost: number } {
+  const { used } = enhancePoolSummary(guild);
+  if (guild.growth.level < GUILD_ENHANCE_MIN_LEVEL) {
+    return { canReset: false, reason: 'Lv.6부터 강화 포인트를 얻어요.', used, cost: GUILD_ENHANCE_RESET_COST };
+  }
+  if (used <= 0) {
+    return { canReset: false, reason: '초기화할 자유 강화가 없어요.', used, cost: GUILD_ENHANCE_RESET_COST };
+  }
+  if (gold < GUILD_ENHANCE_RESET_COST) {
+    return {
+      canReset: false,
+      reason: `골드가 모자라요.\n길드원 누구나 ${num(GUILD_ENHANCE_RESET_COST)}G를 내고 초기화할 수 있어요.`,
+      used,
+      cost: GUILD_ENHANCE_RESET_COST,
+    };
+  }
+  return { canReset: true, reason: null, used, cost: GUILD_ENHANCE_RESET_COST };
 }
 
 /** 기부 입력의 빠른 금액 — 10만·50만 더하기와 다음 단계까지 남은 만큼 */
@@ -311,7 +360,7 @@ export function memberRows(guild: GuildInfo, me: string): MemberRow[] {
 }
 
 /** 항해일지 문장 조각. tone이 없으면 보통 글자다 */
-export interface LogPart { text: string; tone?: 'nick' | 'me' | 'legend' | 'named' | 'skill' | 'num' }
+export interface LogPart { text: string; tone?: 'nick' | 'me' | 'legend' | 'named' | 'skill' | 'enhance' | 'num' }
 export interface LogEntry {
   id: number; kind: GuildLogItem['kind'];
   /** 한국 시각 HH:MM */
@@ -355,6 +404,19 @@ function logParts(log: GuildLogItem, me: string): LogPart[] {
       return [{ text: '길드 스킬 ' }, { text: skill, tone: 'skill' }, { text: `${josa(skill, '이/가')} ` },
         { text: String(log.value ?? 0), tone: 'num' }, { text: '단계가 됐어요!' }];
     }
+    case 'enhance': {
+      const skill = skillName(log.detail);
+      return [
+        who,
+        { text: ' 님이 ' },
+        { text: skill, tone: 'skill' },
+        { text: ' 스킬을 ' },
+        { text: `강화 ${log.value ?? 0}단계`, tone: 'enhance' },
+        { text: '로 올렸어요.' },
+      ];
+    }
+    case 'enhance-reset':
+      return [who, { text: ' 님이 길드 스킬 강화를 초기화했어요.' }];
   }
 }
 

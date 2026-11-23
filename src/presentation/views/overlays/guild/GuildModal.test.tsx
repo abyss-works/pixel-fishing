@@ -31,11 +31,11 @@ const GUILD: GuildInfo = {
   ],
   growth: { level: 3, total: 31_000, floor: 25_000, next: 50_000 },
   bonuses: [
-    { id: 'sell', unlock: 1, rank: 2, cap: 3, pool: 125_000, next: 500_000, effect: 0.04, nextEffect: 0.06, mine: 100_000 },
-    { id: 'bag', unlock: 2, rank: 3, cap: 3, pool: 0, next: 1_500_000, effect: 0.12, nextEffect: 0.16, mine: 0 },
-    { id: 'named', unlock: 3, rank: 1, cap: 3, pool: 0, next: 150_000, effect: 0.05, nextEffect: 0.1, mine: 0 },
-    { id: 'rare', unlock: 4, rank: 0, cap: 0, pool: 0, next: null, effect: 0, nextEffect: 0.02, mine: 0 },
-    { id: 'mutation', unlock: 5, rank: 0, cap: 0, pool: 0, next: null, effect: 0, nextEffect: 0.01, mine: 0 },
+    { id: 'sell', unlock: 1, rank: 2, enhanceRank: 0, totalRank: 2, cap: 3, pool: 125_000, next: 500_000, effect: 0.04, nextEffect: 0.06, mine: 100_000 },
+    { id: 'bag', unlock: 2, rank: 3, enhanceRank: 0, totalRank: 3, cap: 3, pool: 0, next: 1_500_000, effect: 0.12, nextEffect: 0.16, mine: 0 },
+    { id: 'named', unlock: 3, rank: 1, enhanceRank: 0, totalRank: 1, cap: 3, pool: 0, next: 150_000, effect: 0.05, nextEffect: 0.1, mine: 0 },
+    { id: 'rare', unlock: 4, rank: 0, enhanceRank: 0, totalRank: 0, cap: 0, pool: 0, next: null, effect: 0, nextEffect: 0.02, mine: 0 },
+    { id: 'mutation', unlock: 5, rank: 0, enhanceRank: 0, totalRank: 0, cap: 0, pool: 0, next: null, effect: 0, nextEffect: 0.01, mine: 0 },
   ],
   effects: { sell: 0.04, bag: 0.12, named: 0.05, rare: 0, mutation: 0 },
   donors: [{ uid: 'M', nick: '나루', gold: 900_000 }, { uid: 'L', nick: '가람', gold: 100_000 }],
@@ -221,5 +221,45 @@ describe('GuildModal', () => {
     expect(day.getAllByText('09:00')).toHaveLength(2);
     expect(day.getByText('전설 황금 잉어')).toBeTruthy();
     expect(day.getByText('나루')).toBeTruthy();
+  });
+
+  it('Lv.6 이상 길드에서는 일반 길드원도 자유 강화 투자(+1)와 20,000,000G 초기화를 할 수 있다', async () => {
+    const lv8Guild: GuildInfo = {
+      ...GUILD,
+      role: 'member',
+      requests: [],
+      growth: { level: 8, total: 550_000, floor: 550_000, next: 800_000 },
+      bonuses: [
+        { id: 'sell', unlock: 1, rank: 5, enhanceRank: 0, totalRank: 5, cap: 5, pool: 0, next: null, effect: 0.1, nextEffect: 0.12, mine: 0 },
+        { id: 'bag', unlock: 2, rank: 3, enhanceRank: 0, totalRank: 3, cap: 5, pool: 0, next: 1_500_000, effect: 0.12, nextEffect: 0.16, mine: 0 },
+        { id: 'named', unlock: 3, rank: 1, enhanceRank: 0, totalRank: 1, cap: 5, pool: 0, next: 150_000, effect: 0.05, nextEffect: 0.1, mine: 0 },
+        { id: 'rare', unlock: 4, rank: 5, enhanceRank: 2, totalRank: 7, cap: 5, pool: 0, next: null, effect: 0.14, nextEffect: 0.16, mine: 0 },
+        { id: 'mutation', unlock: 5, rank: 1, enhanceRank: 0, totalRank: 1, cap: 5, pool: 0, next: 150_000, effect: 0.01, nextEffect: 0.02, mine: 0 },
+      ],
+    };
+    s.guild = lv8Guild;
+    s.you = 'M';
+    const toast = vi.fn();
+    const resync = vi.fn(async () => {});
+    render(<GuildModal gold={20_000_000} artifacts={{ artifacts: [] }} setToast={toast} onGoldChanged={resync} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: '길드 스킬' }));
+
+    expect(screen.getByText('남은 강화 포인트')).toBeTruthy();
+    expect(screen.getByText('1 / 3')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '희귀 어종 확률 고르기' }));
+    expect(screen.getByText(/기본 5 \+ 강화 2 =/)).toBeTruthy();
+    expect(screen.getByLabelText('희귀 어종 확률 2단계 이룸 자유 강화 적용')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: '가방 용량 증가 강화 1단계 올리기' }));
+    await waitFor(() => expect(s.act).toHaveBeenCalledWith({ op: 'enhance', guildId: 'g1', bonus: 'bag' }));
+    expect(toast).toHaveBeenCalledWith('가방 용량 증가 스킬을 강화 1단계로 올렸어요.');
+
+    fireEvent.click(screen.getByRole('button', { name: '초기화' }));
+    const dialog = within(screen.getAllByRole('dialog').at(-1) as HTMLElement);
+    expect(dialog.getByText('20,000,000G')).toBeTruthy();
+    expect(dialog.getByText('2포인트')).toBeTruthy();
+    fireEvent.click(dialog.getByRole('button', { name: '초기화' }));
+    await waitFor(() => expect(s.act).toHaveBeenCalledWith({ op: 'resetEnhancements', guildId: 'g1' }));
+    await waitFor(() => expect(resync).toHaveBeenCalled());
   });
 });

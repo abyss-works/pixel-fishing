@@ -13,8 +13,9 @@ import { artifactEffectsAt, artifactExtraCookChanceAt, artifactLevelOf } from '.
 import { biteWaitOf, createPlayerContext, moveSpeedOf } from '../../../game/rules/effects';
 import { FISH, boatNameOf, formDiscovered } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
-import { GUILD_BONUS_IDS, NO_GUILD_EFFECTS } from '../../../game/rules/guild';
+import { GUILD_BONUS_IDS, NO_GUILD_EFFECTS, bonusEffect } from '../../../game/rules/guild';
 import type { GuildBonusId, GuildEffects } from '../../../game/rules/guild';
+import type { GuildBonusItem } from '../../../platform/api/types';
 import {
   minLevelOfPower, powerZones, rodAxes, rodPower,
 } from '../../../game/rules/stats';
@@ -183,7 +184,10 @@ export type BonusSource =
   /** 유물 보너스 - level은 보유 레벨, scale은 업적 보유 유물 효과 배율(1 + artifactBoost)이다 */
   | { kind: 'relic'; artifact: Artifact; effect: ArtifactEffectKey; level: number; scale: number }
   /** 길드 보너스 — value는 서버가 알려 준 효과 값이다 */
-  | { kind: 'guild'; level: number; bonus: GuildBonusId; value: number }
+  | {
+    kind: 'guild'; level: number; bonus: GuildBonusId; value: number;
+    baseRank?: number; enhanceRank?: number; baseValue?: number; enhanceValue?: number;
+  }
   /** 슬롯 효과 - 효과가 든 슬롯의 요리 이름이 출처이고, 효과 줄은 부엌 창과 같은 문장이다 */
   | { kind: 'slot'; slot: SlotKey; label: string; effect: RecipeEffectLine }
   /** 업적 누적 보너스 — 단계 도달 즉시 자동 적용되는 합산 보너스 */
@@ -205,7 +209,7 @@ export interface BonusRow {
  */
 export function selectActiveBonuses(
   game: GameState,
-  guild: { level: number; effects: GuildEffects } | null = null,
+  guild: { level: number; effects: GuildEffects; bonuses?: readonly GuildBonusItem[] } | null = null,
   now: string = new Date().toISOString(),
 ): BonusRow[] {
   const out: BonusRow[] = [];
@@ -226,7 +230,18 @@ export function selectActiveBonuses(
   if (guild) {
     for (const bonus of GUILD_BONUS_IDS) {
       const value = guild.effects[bonus];
-      if (value > 0) out.push({ category: GUILD_CATEGORY[bonus], source: { kind: 'guild', level: guild.level, bonus, value }, manualOnly: false });
+      if (value > 0) {
+        const item = guild.bonuses?.find(b => b.id === bonus);
+        const detail = item && item.enhanceRank > 0
+          ? {
+            baseRank: item.rank,
+            enhanceRank: item.enhanceRank,
+            baseValue: bonusEffect(bonus, item.rank),
+            enhanceValue: bonusEffect(bonus, item.enhanceRank),
+          }
+          : {};
+        out.push({ category: GUILD_CATEGORY[bonus], source: { kind: 'guild', level: guild.level, bonus, value, ...detail }, manualOnly: false });
+      }
     }
   }
   for (const key of SLOT_ORDER) {

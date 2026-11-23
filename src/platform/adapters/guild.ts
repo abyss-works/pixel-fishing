@@ -49,6 +49,8 @@ function request(op: GuildOp): [string, RequestInit] {
     case 'remove': return [`${guild(op.guildId)}/members/${encodeURIComponent(op.uid)}`, { method: 'DELETE' }];
     case 'handover': return [`${guild(op.guildId)}/leader`, json('PUT', { uid: op.uid })];
     case 'donate': return [`${guild(op.guildId)}/bonuses/${encodeURIComponent(op.bonus)}/donations`, json('POST', { amount: op.amount })];
+    case 'enhance': return [`${guild(op.guildId)}/bonuses/${encodeURIComponent(op.bonus)}/enhancements`, { method: 'POST' }];
+    case 'resetEnhancements': return [`${guild(op.guildId)}/enhancements/reset`, { method: 'POST' }];
   }
 }
 

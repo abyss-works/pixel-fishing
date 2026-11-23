@@ -162,7 +162,7 @@ export default function GameView(props: GameViewProps) {
   const accountState = accountLockState(props.account, props.accountFailed);
   const progress = props.guestProgress;
   // 길드 보너스는 서버가 적용한다. 화면은 서버가 알려 준 레벨과 효과를 보이기만 한다(스탯 창 보너스 탭, 가방 칸)
-  const guildBonus = guild ? { level: guild.growth.level, effects: guild.effects } : null;
+  const guildBonus = guild ? { level: guild.growth.level, effects: guild.effects, bonuses: guild.bonuses } : null;
   const bagBonus = guildBonus?.effects.bag ?? 0;
   useFriendAlerts(props.account !== null, props.setToast);
   useGuildAlerts(props.account !== null, props.setToast);

@@ -300,8 +300,10 @@ async function route(req: Req, res: Res): Promise<void> {
     skipDetailType: SKIP_DETAIL.has(action.type), snapshotEvery: SNAPSHOT_EVERY,
     bountyDayStart: wantsBounty ? dayStart : null, guild: GUILD_ACTIONS.has(action.type),
   }));
-  // 길드 보너스 효과 — 서버가 소속 길드의 레벨(레벨로 열린 1단계)과 기부로 오른 단계에서 정한다. 클라이언트가 보낸 값은 받지 않는다
-  const guildEffects = loaded.guild ? guildEffectsOf(guildLevelOf(loaded.guild.total), loaded.guild.ranks) : NO_GUILD_EFFECTS;
+  // 길드 보너스 효과 — 서버가 소속 길드의 레벨(레벨로 열린 1단계), 기부로 오른 단계, 자유 강화 단계에서 정한다. 클라이언트가 보낸 값은 받지 않는다
+  const guildEffects = loaded.guild
+    ? guildEffectsOf(guildLevelOf(loaded.guild.total), loaded.guild.ranks, loaded.guild.enhanceRanks)
+    : NO_GUILD_EFFECTS;
   if (loaded.nickname === null) await ensureGuestName();
 
   // 호출자 판정 — 서버 환경과 계정만 쓴다. 요청 헤더(Origin 등)는 호출자가 정하므로 읽지 않는다.

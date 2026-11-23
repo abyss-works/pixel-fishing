@@ -98,4 +98,23 @@ describe('StatsModal(스탯창)', () => {
     expect(within(tip).getByText('+3%')).toBeTruthy();
     expect(within(tip).getByText('+10.3%')).toBeTruthy();
   });
+
+  it('보너스 탭은 기본과 자유 강화가 합산된 길드 효과를 출처 길드 Lv.N과 함께 보이고 자유 강화가 있으면 툴팁으로 내역을 보인다', () => {
+    const guild = {
+      level: 10,
+      effects: guildEffectsOf(10, { sell: 5 }, { sell: 5 }),
+      bonuses: [
+        { id: 'sell' as const, unlock: 1, rank: 5, enhanceRank: 5, totalRank: 10, cap: 5, pool: 0, next: null, effect: 0.2, nextEffect: null, mine: 0 },
+      ],
+    };
+    render(<StatsModal game={game({})} movement="sail" region="world" nickname="바다사나이" guild={guild} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: '보너스' }));
+    const row = screen.getByText('판매가 +20%').closest('tr')!;
+    expect(within(row).getByText('길드 Lv.10')).toBeTruthy();
+    fireEvent.mouseEnter(screen.getByText('판매가 +20%'));
+    const tip = screen.getByRole('tooltip');
+    expect(within(tip).getByText('기본 5단계')).toBeTruthy();
+    expect(within(tip).getByText('자유 강화 5단계')).toBeTruthy();
+    expect(within(tip).getByText('합계 10단계')).toBeTruthy();
+  });
 });

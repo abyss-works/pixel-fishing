@@ -119,7 +119,7 @@ function GuildView({ ask, gold, artifacts, onGoldChanged, ...part }: GuildPartPr
       ]} />
       <div className="flex flex-col flex-1 min-h-0">
         {tab === 'members' && <GuildMembersTab {...part} ask={ask} artifacts={artifacts} />}
-        {tab === 'skills' && <GuildSkillsTab {...part} onGoldChanged={onGoldChanged} />}
+        {tab === 'skills' && <GuildSkillsTab {...part} gold={gold} onGoldChanged={onGoldChanged} />}
         {tab === 'logbook' && <GuildLogbookTab logbook={part.guild.logbook} me={part.me} />}
         {tab === 'manage' && part.guild.role === 'leader' && <GuildManageTab {...part} gold={gold} onGoldChanged={onGoldChanged} />}
       </div>
