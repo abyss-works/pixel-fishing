@@ -44,17 +44,18 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
   const [confirm, setConfirm] = useState<GuildConfirm | null>(null);
 
   /** 요청 하나. 거부는 안내 문장으로 돌려주고, 연결 실패는 알림으로 보인다 */
-  const run = async (op: GuildOp): Promise<string | null> => {
+  const runOp = async (op: GuildOp): Promise<{ error: string | null; recovered?: number }> => {
     setBusy(true);
     try {
       const r = await act(op);
-      return r.ok ? null : GUILD_ERROR_TEXT[r.error] ?? FAILED;
+      return r.ok ? { error: null, recovered: r.recovered } : { error: GUILD_ERROR_TEXT[r.error] ?? FAILED };
     } catch {
-      return '길드 요청을 보내지 못했어요. 연결을 확인해 주세요.';
+      return { error: '길드 요청을 보내지 못했어요. 연결을 확인해 주세요.' };
     } finally {
       setBusy(false);
     }
   };
+  const run = async (op: GuildOp): Promise<string | null> => (await runOp(op)).error;
 
   /** 코드로 들어오기 — 들어갔는지 신청이 됐는지를 함께 돌려준다 */
   const join: GuildJoin = async code => {
@@ -71,7 +72,11 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
 
   const inGuild = Boolean(guild && you);
   const body = guild && you
-    ? <GuildView guild={guild} me={you} busy={busy} run={run} setToast={setToast} ask={setConfirm} gold={gold} artifacts={artifacts} onGoldChanged={onGoldChanged} />
+    ? (
+      <GuildView guild={guild} me={you} busy={busy} run={run}
+                 onResetEnhancements={() => runOp({ op: 'resetEnhancements', guildId: guild.id })}
+                 setToast={setToast} ask={setConfirm} gold={gold} artifacts={artifacts} onGoldChanged={onGoldChanged} />
+    )
     : guild === null && !loading && !failed
       ? <NoGuild busy={busy} run={run} join={join} request={request} setToast={setToast} />
       : (
@@ -106,7 +111,10 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
 type GuildTab = 'members' | 'skills' | 'logbook' | 'manage';
 
 /** 길드가 있을 때: 고정 정보 줄과 탭(길드장은 관리 탭까지 넷) */
-function GuildView({ ask, gold, artifacts, onGoldChanged, ...part }: GuildPartProps & { ask: GuildAsk; gold: number; artifacts: ArtifactHolder; onGoldChanged: () => Promise<void> | void }) {
+function GuildView({ ask, gold, artifacts, onGoldChanged, onResetEnhancements, ...part }: GuildPartProps & {
+  ask: GuildAsk; gold: number; artifacts: ArtifactHolder; onGoldChanged: () => Promise<void> | void;
+  onResetEnhancements: () => Promise<{ error: string | null; recovered?: number }>;
+}) {
   const [tab, setTab] = useState<GuildTab>('members');
   return (
     <div className="flex flex-col gap-3 flex-1 min-h-0">
@@ -119,7 +127,7 @@ function GuildView({ ask, gold, artifacts, onGoldChanged, ...part }: GuildPartPr
       ]} />
       <div className="flex flex-col flex-1 min-h-0">
         {tab === 'members' && <GuildMembersTab {...part} ask={ask} artifacts={artifacts} />}
-        {tab === 'skills' && <GuildSkillsTab {...part} onGoldChanged={onGoldChanged} />}
+        {tab === 'skills' && <GuildSkillsTab {...part} gold={gold} onResetEnhancements={onResetEnhancements} onGoldChanged={onGoldChanged} />}
         {tab === 'logbook' && <GuildLogbookTab logbook={part.guild.logbook} me={part.me} />}
         {tab === 'manage' && part.guild.role === 'leader' && <GuildManageTab {...part} gold={gold} onGoldChanged={onGoldChanged} />}
       </div>

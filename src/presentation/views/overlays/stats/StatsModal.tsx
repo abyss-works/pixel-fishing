@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { GameState } from '../../../../game/rules/logic';
 import type { GuildEffects } from '../../../../game/rules/guild';
+import type { GuildBonusItem } from '../../../../features/guild/model/guild';
 import { powerHelpText } from '../../../../game/rules/stats';
 import type { Movement } from '../../../../game/rules/stats';
 import type { RegionId } from '../../../../game/content/places';
@@ -44,7 +45,7 @@ interface Props {
   region: RegionId;
   nickname: string | null;
   /** 길드 레벨과 서버가 적용하는 길드 보너스 효과. 길드가 없으면 null */
-  guild: { level: number; effects: GuildEffects } | null;
+  guild: { level: number; effects: GuildEffects; bonuses?: readonly GuildBonusItem[] } | null;
   initialTab?: StatsTab;
   onClose: () => void;
 }

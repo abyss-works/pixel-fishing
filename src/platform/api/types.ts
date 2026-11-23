@@ -93,10 +93,11 @@ export interface GuildMemberItem {
 export interface GuildLogItem {
   id: number; kind: GuildLogKind; uid: string; nick: string | null; detail: string | null; value: number | null; at: string;
 }
-/** 길드 보너스 하나 — 해금 레벨, 지금 단계(열리면 최소 1)와 상한(길드 레벨, 열리지 않았으면 0), 다음 단계를 향해 모인 골드와
- *  비용(5단계이거나 열리지 않았으면 null), 지금·다음 단계 효과, 내가 이 보너스에 기부한 골드 */
+/** 길드 보너스 하나 — 해금 레벨, 기본 단계(열리면 최소 1), 자유 강화 단계(0~5), 합산 단계, 기본 상한(최대 5),
+ *  다음 기본 단계를 향해 모인 골드와 비용, 합산 효과·다음 합산 효과, 내가 이 보너스에 기부한 골드 */
 export interface GuildBonusItem {
-  id: GuildBonusId; unlock: number; rank: number; cap: number; pool: number; next: number | null;
+  id: GuildBonusId; unlock: number; rank: number; enhanceRank: number; totalRank: number;
+  cap: number; pool: number; next: number | null;
   effect: number; nextEffect: number | null; mine: number;
 }
 /** 기부 순위 한 줄 — 보너스를 합친 사람별 전체 기부액. 지운 계정은 uid가 null이다 */
@@ -139,9 +140,11 @@ export type GuildOp =
   | { op: 'cancelRequest' }
   | { op: 'remove'; guildId: string; uid: string }
   | { op: 'handover'; guildId: string; uid: string }
-  | { op: 'donate'; guildId: string; bonus: GuildBonusId; amount: number };
-/** 길드 요청 결과 — 들어오기는 바로 들어갔는지(joined) 신청이 됐는지(requested)를 싣는다. 실패는 서버 오류 코드 */
-export type GuildOpResult = { ok: true; result?: 'joined' | 'requested' } | { ok: false; error: string };
+  | { op: 'donate'; guildId: string; bonus: GuildBonusId; amount: number }
+  | { op: 'enhance'; guildId: string; bonus: GuildBonusId }
+  | { op: 'resetEnhancements'; guildId: string };
+/** 길드 요청 결과 — 들어오기는 바로 들어갔는지(joined) 신청이 됐는지(requested)를, 자유 강화 초기화는 되돌린 포인트(recovered)를 싣는다. 실패는 서버 오류 코드 */
+export type GuildOpResult = { ok: true; result?: 'joined' | 'requested'; recovered?: number } | { ok: false; error: string };
 
 export type RankingBoardId = 'fame' | 'dex' | 'species';
 export interface RankingRow { rank: number; nickname: string | null; value: number; me: boolean }

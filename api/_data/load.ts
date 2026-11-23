@@ -2,7 +2,7 @@
 // 행은 Postgres JSON 직렬화로 받는다. 시각은 '2030-01-01T00:00:00+00:00' 형식의 문자열, bigint는 수다.
 import { sql } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
-import { guildRanksJson, guildTotal } from './guilds.js';
+import { guildEnhanceRanksJson, guildRanksJson, guildTotal } from './guilds.js';
 import type { GuildBonusId } from '../../src/game/rules/guild.js';
 import { at, jsonParam, textArray } from './json.js';
 
@@ -30,8 +30,12 @@ export interface ActionContext {
   records: RecordRow[] | null;
   /** 수배 행 — 읽지 않았으면 null */
   bounty: BountyRows | null;
-  /** 지금 속한 길드와 그 길드의 누적 기여도, 저장된 보너스별 단계. 길드가 없거나 읽지 않았으면 null */
-  guild: { id: string; total: number; ranks: Partial<Record<GuildBonusId, number>> } | null;
+  /** 지금 속한 길드와 그 길드의 누적 기여도, 저장된 보너스별 단계·자유 강화 단계. 길드가 없거나 읽지 않았으면 null */
+  guild: {
+    id: string; total: number;
+    ranks: Partial<Record<GuildBonusId, number>>;
+    enhanceRanks: Partial<Record<GuildBonusId, number>>;
+  } | null;
   /** 업적 카운터 누적(키 → 누적값). 행이 없으면 빈 객체다 */
   counters: Record<string, number>;
   /** 토벌한 네임드 의뢰 id 목록(bounty_clears의 kind='named' 행) */
@@ -84,7 +88,8 @@ export async function loadContext(db: Executor, uid: string, opts: {
     case when ${day !== null} then (select coalesce(json_agg(t), '[]') from (select quest_id, issued_at
       from public.bounty_tickets where user_id = ${uid}) t) end as tickets,
     case when ${opts.guild === true} then (select json_build_object('id', m.guild_id::text, 'total', ${guildTotal(sql`m.guild_id`)},
-      'ranks', ${guildRanksJson(sql`m.guild_id`)})
+      'ranks', ${guildRanksJson(sql`m.guild_id`)},
+      'enhanceRanks', ${guildEnhanceRanksJson(sql`m.guild_id`)})
       from public.guild_members m where m.user_id = ${uid} and m.left_at is null) end as guild,
     ${countersJson(uid)} as counters,
     ${clearedNamedJson(uid)} as "clearedNamed"`);

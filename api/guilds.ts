@@ -20,6 +20,10 @@
 //   POST   /api/guilds/:id/bonuses/:bonus/donations { amount }
 //                                          → 201 { rank, pool, accepted, gold }  보너스 기부(길드원 누구나). 상한까지 필요한 골드만 받고
 //                                                                       accepted만큼 내 골드에서 뺀다. gold는 기부 뒤 내 골드다
+//   POST   /api/guilds/:id/bonuses/:bonus/enhancements
+//                                          → 201 { enhanceRank, remainingPoints }  자유 강화 1단계 올리기(길드원 누구나, 무료 포인트)
+//   POST   /api/guilds/:id/enhancements/reset
+//                                          → 200 { gold, recovered }  자유 강화 초기화(길드원 누구나, 개인 골드 20,000,000G, 횟수 제한 없음)
 // 가입 신청이 들어오면 길드장에게, 신청을 처리하면 신청한 사람에게 접속 중일 때 실시간 알림을 보낸다.
 //
 // 주의: 시그니처는 Node 스타일(req, res)만 쓴다. 경로 변수는 Express가 req.params로 넘긴다.
@@ -28,8 +32,8 @@ import { randomInt } from 'node:crypto';
 import { sessionOf } from './_auth/session.js';
 import { database } from './_db/client.js';
 import {
-  cancelJoinRequest, createGuild, decideJoinRequest, donateToBonus, handOver, joinByCode, myGuild, myJoinRequest, removeMember,
-  renameGuild, setJoinSettings,
+  cancelJoinRequest, createGuild, decideJoinRequest, donateToBonus, enhanceBonus, handOver, joinByCode, myGuild, myJoinRequest,
+  removeMember, renameGuild, resetEnhancements, setJoinSettings,
 } from './_data/guilds.js';
 import { notifyUser, presenceOf } from './_server/livePresence.js';
 import {
@@ -53,6 +57,7 @@ const STATUS: Record<string, number> = {
   'already-in-guild': 409, 'name-taken': 409, 'guild-full': 409, 'handover-first': 409, 'guild-closed': 409,
   'not-leader': 403, 'not-member': 404, 'bad-code': 404, 'no-request': 404, self: 400,
   'not-enough-gold': 409, 'bonus-locked': 409, 'rank-maxed': 409, restricted: 403, 'renamed-today': 409,
+  'enhance-locked': 409, 'no-enhance-points': 409, 'enhance-maxed': 409, 'no-enhance-used': 409,
 };
 const refuse = (error: string) => new ApiError(STATUS[error] ?? 400, error);
 
@@ -219,10 +224,29 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
     res.status(201).json({ rank: r.rank, pool: r.pool, accepted: r.accepted, gold: r.gold });
   });
 
+  const enhance = handle(['POST'], async (req, res, uid) => {
+    const id = uuidParam(req, 'id');
+    const bonus = req.params?.bonus ?? '';
+    if (!(GUILD_BONUS_IDS as readonly string[]).includes(bonus)) throw new ApiError(400, 'bad-bonus');
+    const r = await run('db-write', () => enhanceBonus(database().withTransaction, uid, id, bonus as GuildBonusId,
+      new Date().toISOString()));
+    if (!r.ok) throw refuse(r.error);
+    res.status(201).json({ enhanceRank: r.enhanceRank, remainingPoints: r.remainingPoints });
+  });
+
+  const resetEnhance = handle(['POST'], async (req, res, uid) => {
+    const id = uuidParam(req, 'id');
+    const r = await run('db-write', () => resetEnhancements(database().withTransaction, uid, id, new Date().toISOString()));
+    if (!r.ok) throw refuse(r.error);
+    res.status(200).json({ gold: r.gold, recovered: r.recovered });
+  });
+
   const reject = decide(false);
   return {
     '/api/guilds/me': me,
     '/api/guilds/:id/bonuses/:bonus/donations': donate,
+    '/api/guilds/:id/bonuses/:bonus/enhancements': enhance,
+    '/api/guilds/:id/enhancements/reset': resetEnhance,
     '/api/guilds': create,
     '/api/guilds/:id': settings,
     '/api/guilds/:id/requests/:uid/approval': decide(true),

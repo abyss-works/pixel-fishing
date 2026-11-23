@@ -5,9 +5,11 @@ import {
   DEFAULT_GUILD_PITCH, GUILD_JOIN_REQUEST_TTL_MS, GUILD_MAX_MEMBERS, GUILD_PITCH_MAX, checkGuildName, guildCode, guildFull,
   guildLinkPath, handoverOutcome, joinOutcome, joinRequestActive, joinRequestDaysLeft, normalizeGuildCode, normalizeGuildPitch,
   parseJoinMode, removalOutcome,
-  GUILD_DAILY_FAME_CAP, GUILD_MAX_LEVEL, contributionDayOf, contributionFor, guildLevelOf, guildProgress,
-  GUILD_BONUS_IDS, NO_GUILD_EFFECTS, applyDonation, bonusEffect, bonusRank, bonusRankCost, donationOutcome, guildBonusLevels,
-  guildEffectsOf, validDonationAmount,
+  GUILD_DAILY_FAME_CAP, GUILD_LEVEL_FLOORS, GUILD_MAX_LEVEL, contributionDayOf, contributionFor, guildLevelOf, guildProgress,
+  GUILD_BONUS_IDS, NO_GUILD_EFFECTS, applyDonation, bonusEffect, bonusRank, bonusRankCost, bonusTotalRank, donationOutcome,
+  guildBonusLevels, guildEffectsOf, validDonationAmount,
+  GUILD_ENHANCE_MAX_RANK, GUILD_ENHANCE_MIN_LEVEL, GUILD_ENHANCE_RESET_COST, enhanceOutcome, enhanceResetOutcome,
+  maxEnhancePoints, remainingEnhancePoints, usedEnhancePoints,
   GUILD_RENAME_COST, parseJoinVia, renameBlock, renameOutcome,
 } from './guild';
 
@@ -154,17 +156,18 @@ describe('길드장 위임', () => {
 
 describe('하루 기여 상한', () => {
   it('명성 기여 상한과, 의뢰 갈래마다 하루 클리어 횟수만큼의 클리어 기여', () => {
-    expect(guildDailyContributionCaps({ artifacts: [] })).toEqual({ fame: 2_000, general: 500, named: 1_000 });
+    expect(guildDailyContributionCaps({ artifacts: [] })).toEqual({ fame: 2_500, general: 1_000, named: 1_000 });
   });
 
   it('마미 와타의 거울을 가지면 네임드 토벌 기여 상한이 거울의 가산만큼 늘고 일반 의뢰는 그대로다', () => {
-    expect(guildDailyContributionCaps({ artifacts: ['mami-wata-mirror'] })).toEqual({ fame: 2_000, general: 500, named: 2_000 });
+    expect(guildDailyContributionCaps({ artifacts: ['mami-wata-mirror'] })).toEqual({ fame: 2_500, general: 1_000, named: 2_000 });
   });
 });
 
 describe('길드 성장 — 레벨', () => {
-  it('누적 기여도 10,000·25,000·50,000·100,000에서 Lv2~5가 되고 Lv5가 끝이다', () => {
-    expect(GUILD_MAX_LEVEL).toBe(5);
+  it('누적 기여도 문턱에서 Lv2~10이 되고 Lv10이 끝이다', () => {
+    expect(GUILD_MAX_LEVEL).toBe(10);
+    expect(GUILD_LEVEL_FLOORS).toEqual([0, 10_000, 25_000, 50_000, 100_000, 200_000, 350_000, 550_000, 800_000, 1_100_000]);
     expect(guildLevelOf(0)).toBe(1);
     expect(guildLevelOf(9_999)).toBe(1);
     expect(guildLevelOf(10_000)).toBe(2);
@@ -173,13 +176,21 @@ describe('길드 성장 — 레벨', () => {
     expect(guildLevelOf(50_000)).toBe(4);
     expect(guildLevelOf(99_999)).toBe(4);
     expect(guildLevelOf(100_000)).toBe(5);
-    expect(guildLevelOf(9_000_000)).toBe(5);
+    expect(guildLevelOf(199_999)).toBe(5);
+    expect(guildLevelOf(200_000)).toBe(6);
+    expect(guildLevelOf(350_000)).toBe(7);
+    expect(guildLevelOf(550_000)).toBe(8);
+    expect(guildLevelOf(800_000)).toBe(9);
+    expect(guildLevelOf(1_099_999)).toBe(9);
+    expect(guildLevelOf(1_100_000)).toBe(10);
+    expect(guildLevelOf(9_000_000)).toBe(10);
   });
 
   it('진행도는 지금 레벨의 시작 문턱과 다음 레벨 문턱을 준다. 최대 레벨은 다음 문턱이 없다', () => {
     expect(guildProgress(0)).toEqual({ level: 1, total: 0, floor: 0, next: 10_000 });
     expect(guildProgress(45_000)).toEqual({ level: 3, total: 45_000, floor: 25_000, next: 50_000 });
-    expect(guildProgress(200_000)).toEqual({ level: 5, total: 200_000, floor: 100_000, next: null });
+    expect(guildProgress(100_000)).toEqual({ level: 5, total: 100_000, floor: 100_000, next: 200_000 });
+    expect(guildProgress(1_200_000)).toEqual({ level: 10, total: 1_200_000, floor: 1_100_000, next: null });
   });
 });
 
@@ -255,10 +266,14 @@ describe('길드 보너스 — 효과(합연산)', () => {
     expect(NO_GUILD_EFFECTS).toEqual({ sell: 0, bag: 0, named: 0, rare: 0, mutation: 0 });
   });
 
-  it('길드 효과는 레벨로 열린 1단계와 기부로 오른 단계 중 높은 단계로 정한다', () => {
+  it('길드 효과는 레벨로 열린 1단계와 기부로 오른 단계 중 높은 단계에 자유 강화 단계를 더해 정한다', () => {
     expect(guildEffectsOf(3, { sell: 3, bag: 2 })).toEqual({ sell: 0.06, bag: 0.08, named: 0.05, rare: 0, mutation: 0 });
     expect(guildEffectsOf(1, {})).toEqual({ sell: 0.02, bag: 0, named: 0, rare: 0, mutation: 0 });
     expect(guildEffectsOf(5, {})).toEqual({ sell: 0.02, bag: 0.04, named: 0.05, rare: 0.02, mutation: 0.01 });
+    expect(guildEffectsOf(10, { sell: 5, bag: 5, named: 5, rare: 5, mutation: 5 }, { sell: 5, bag: 1, mutation: 2 }))
+      .toEqual({ sell: 0.2, bag: 0.24, named: 0.25, rare: 0.1, mutation: 0.07 });
+    expect(bonusTotalRank('rare', 6, 1, 3)).toBe(4);
+    expect(bonusTotalRank('sell', 10, 5, 5)).toBe(10);
   });
 });
 
@@ -266,9 +281,9 @@ describe('길드 성장 — 기여', () => {
   const general = { difficulty: 'easy' } as const;
   const named = { difficulty: 'named' } as const;
 
-  it('얻은 명성만큼 쌓고, 의뢰 클리어는 일반 500·네임드 1,000을 따로 쌓는다', () => {
+  it('얻은 명성만큼 쌓고, 의뢰 클리어는 일반 1,000·네임드 1,000을 따로 쌓는다', () => {
     expect(contributionFor(15, null)).toEqual({ fame: 15, clears: 0 });
-    expect(contributionFor(0, general)).toEqual({ fame: 0, clears: 500 });
+    expect(contributionFor(0, general)).toEqual({ fame: 0, clears: 1_000 });
     expect(contributionFor(0, named)).toEqual({ fame: 0, clears: 1_000 });
   });
 
@@ -276,14 +291,39 @@ describe('길드 성장 — 기여', () => {
     expect(contributionFor(-50, null)).toEqual({ fame: 0, clears: 0 });
   });
 
-  it('명성 기여의 하루 상한은 2,000이고 클리어 기여는 상한과 별개다', () => {
-    expect(GUILD_DAILY_FAME_CAP).toBe(2_000);
-    expect(contributionFor(5_000, named)).toEqual({ fame: 2_000, clears: 1_000 });
+  it('명성 기여의 하루 상한은 2,500이고 클리어 기여는 상한과 별개다', () => {
+    expect(GUILD_DAILY_FAME_CAP).toBe(2_500);
+    expect(contributionFor(5_000, named)).toEqual({ fame: 2_500, clears: 1_000 });
   });
 
   it('기여의 하루는 게임 날짜다(한국 시간 새벽 4시 경계)', () => {
     expect(contributionDayOf('2026-11-05T18:59:59Z')).toBe('2026-11-05'); // KST 03:59
     expect(contributionDayOf('2026-11-05T19:00:00Z')).toBe('2026-11-06'); // KST 04:00
+  });
+});
+
+describe('길드 자유 강화', () => {
+  it('Lv.6부터 레벨마다 강화 포인트 1개를 얻어 최대 5개다', () => {
+    expect(GUILD_ENHANCE_MIN_LEVEL).toBe(6);
+    expect(GUILD_ENHANCE_MAX_RANK).toBe(5);
+    expect([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(maxEnhancePoints)).toEqual([0, 0, 0, 0, 0, 1, 2, 3, 4, 5]);
+    expect(usedEnhancePoints({ sell: 2, rare: 3 })).toBe(5);
+    expect(remainingEnhancePoints(7, { sell: 1 })).toBe(1);
+  });
+
+  it('기본 단계가 5가 아니어도 열린 스킬에는 무료로 강화 포인트를 투자할 수 있다', () => {
+    expect(enhanceOutcome(5, {}, 'sell')).toEqual({ ok: false, error: 'enhance-locked' });
+    expect(enhanceOutcome(6, { sell: 1 }, 'bag')).toEqual({ ok: false, error: 'no-enhance-points' });
+    expect(enhanceOutcome(10, { sell: 5 }, 'sell')).toEqual({ ok: false, error: 'enhance-maxed' });
+    expect(enhanceOutcome(6, {}, 'rare')).toEqual({ ok: true, enhanceRank: 1 });
+    expect(enhanceOutcome(10, { rare: 4 }, 'rare')).toEqual({ ok: true, enhanceRank: 5 });
+  });
+
+  it('초기화는 투자한 포인트가 있고 20,000,000G 이상이면 횟수 제한 없이 허용한다', () => {
+    expect(GUILD_ENHANCE_RESET_COST).toBe(20_000_000);
+    expect(enhanceResetOutcome({}, 50_000_000)).toEqual({ ok: false, error: 'no-enhance-used' });
+    expect(enhanceResetOutcome({ sell: 1 }, 19_999_999)).toEqual({ ok: false, error: 'not-enough-gold' });
+    expect(enhanceResetOutcome({ sell: 1 }, 20_000_000)).toEqual({ ok: true });
   });
 });
 

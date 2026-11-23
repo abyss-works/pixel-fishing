@@ -171,13 +171,14 @@ export function renameOutcome(actor: GuildActor, v: {
 // 기여도는 길드원이 얻은 명성(하루 상한)과 의뢰 클리어(상한과 별개)로 쌓이고, 누적 기여도가 레벨을 정한다.
 // 떠난 선원의 기여도 길드에 남는다.
 
-/** 항해일지에 남는 사건 — 가입, 떠남, 내보냄, 전설 획득, 네임드 토벌, 보너스 기부, 보너스 단계 상승, 이름 바꾸기 */
-export type GuildLogKind = 'join' | 'leave' | 'kick' | 'legendary' | 'named' | 'donate' | 'bonus-up' | 'rename';
+/** 항해일지에 남는 사건 — 가입, 떠남, 내보냄, 전설 획득, 네임드 토벌, 보너스 기부, 보너스 단계 상승, 이름 바꾸기, 자유 강화, 강화 초기화 */
+export type GuildLogKind =
+  | 'join' | 'leave' | 'kick' | 'legendary' | 'named' | 'donate' | 'bonus-up' | 'rename' | 'enhance' | 'enhance-reset';
 
 /** 길드원 한 사람이 하루(게임 날짜)에 명성으로 쌓을 수 있는 기여 */
-export const GUILD_DAILY_FAME_CAP = 2_000;
+export const GUILD_DAILY_FAME_CAP = 2_500;
 /** 의뢰 클리어 한 번의 기여 — 명성 기여의 하루 상한과 별개다 */
-const CLEAR_CONTRIBUTION = { general: 500, named: 1_000 } as const;
+const CLEAR_CONTRIBUTION = { general: 1_000, named: 1_000 } as const;
 
 /** 길드원 한 사람이 하루에 쌓을 수 있는 기여의 갈래별 상한: 명성, 일반 의뢰 클리어, 네임드 토벌.
  *  네임드 토벌 횟수 상한은 보유 유물(마미 와타의 거울)의 가산을 반영한다 */
@@ -189,7 +190,9 @@ export function guildDailyContributionCaps(state: ArtifactHolder): { fame: numbe
   };
 }
 /** 레벨마다 필요한 누적 기여도 — 인덱스 0이 Lv1이다 */
-export const GUILD_LEVEL_FLOORS = [0, 10_000, 25_000, 50_000, 100_000] as const;
+export const GUILD_LEVEL_FLOORS = [
+  0, 10_000, 25_000, 50_000, 100_000, 200_000, 350_000, 550_000, 800_000, 1_100_000,
+] as const;
 export const GUILD_MAX_LEVEL = GUILD_LEVEL_FLOORS.length;
 
 /** 누적 기여도의 레벨 */
@@ -315,14 +318,79 @@ export function bonusEffect(id: GuildBonusId, rank: number): number {
   return rank * EFFECT_BP_PER_RANK[id] / 10_000;
 }
 
-/**
- * 길드 레벨과 저장된 보너스별 단계(기부로 오른 단계)에서 효과를 모은다. 열린 보너스는 기부가 없어도 1단계다.
+/** 길드 레벨과 저장된 보너스별 단계(기부로 오른 단계) + 자유 강화 단계에서 효과를 모은다. 열린 보너스는 기부가 없어도 1단계다.
  * @param donatedRanks 보너스별 저장된 단계. 없는 보너스는 0이다
+ * @param enhanceRanks 보너스별 자유 강화 단계. 없는 보너스는 0이다
  */
-export function guildEffectsOf(guildLevel: number, donatedRanks: Partial<Record<GuildBonusId, number>>): GuildEffects {
+export function guildEffectsOf(
+  guildLevel: number,
+  donatedRanks: Partial<Record<GuildBonusId, number>>,
+  enhanceRanks: Partial<Record<GuildBonusId, number>> = {},
+): GuildEffects {
   const out = { ...NO_GUILD_EFFECTS };
-  for (const id of GUILD_BONUS_IDS) out[id] = bonusEffect(id, bonusRank(id, guildLevel, donatedRanks[id] ?? 0));
+  for (const id of GUILD_BONUS_IDS) {
+    out[id] = bonusEffect(id, bonusTotalRank(id, guildLevel, donatedRanks[id] ?? 0, enhanceRanks[id] ?? 0));
+  }
   return out;
+}
+
+// ── 자유 강화 ──────────────────────────────────────────────
+// Lv.6부터 레벨이 오를 때마다 자유 강화 포인트 1개를 얻는다(최대 5개).
+// 길드원 누구나 포인트를 원하는 열린 스킬에 무료로 투자해 최대 5단계까지 추가로 올릴 수 있다(기본 5 + 강화 5 = 최대 10단계).
+// 초기화는 길드원 누구나 개인 골드 20,000,000G를 내고 횟수 제한 없이 언제든 할 수 있으며, 기본 기부 단계와 풀은 건드리지 않는다.
+
+export const GUILD_ENHANCE_MIN_LEVEL = 6;
+export const GUILD_ENHANCE_MAX_RANK = 5;
+export const GUILD_ENHANCE_RESET_COST = 20_000_000;
+
+/** 길드 레벨에서 얻을 수 있는 총 자유 강화 포인트(0~5) */
+export function maxEnhancePoints(guildLevel: number): number {
+  return Math.max(0, Math.min(guildLevel, GUILD_MAX_LEVEL) - (GUILD_ENHANCE_MIN_LEVEL - 1));
+}
+
+/** 보너스별 자유 강화 단계의 합 */
+export function usedEnhancePoints(enhanceRanks: Partial<Record<GuildBonusId, number>>): number {
+  let total = 0;
+  for (const id of GUILD_BONUS_IDS) total += Math.max(0, enhanceRanks[id] ?? 0);
+  return total;
+}
+
+/** 남은 자유 강화 포인트 */
+export function remainingEnhancePoints(guildLevel: number, enhanceRanks: Partial<Record<GuildBonusId, number>>): number {
+  return Math.max(0, maxEnhancePoints(guildLevel) - usedEnhancePoints(enhanceRanks));
+}
+
+/** 보너스의 합산 단계(기본 + 자유 강화). 열리지 않은 보너스는 0이다 */
+export function bonusTotalRank(id: GuildBonusId, guildLevel: number, donatedRank: number, enhanceRank = 0): number {
+  if (rankCap(id, guildLevel) === 0) return 0;
+  return bonusRank(id, guildLevel, donatedRank) + Math.max(0, Math.min(GUILD_ENHANCE_MAX_RANK, enhanceRank));
+}
+
+export type EnhanceError = 'enhance-locked' | 'no-enhance-points' | 'enhance-maxed';
+
+/** 자유 강화 1단계 올리기 판정 — 길드원 누구나, Lv.6 이상, 스킬당 최대 5단계, 남은 포인트가 있어야 한다 */
+export function enhanceOutcome(
+  guildLevel: number,
+  enhanceRanks: Partial<Record<GuildBonusId, number>>,
+  target: GuildBonusId,
+): { ok: true; enhanceRank: number } | { ok: false; error: EnhanceError } {
+  if (guildLevel < GUILD_ENHANCE_MIN_LEVEL) return { ok: false, error: 'enhance-locked' };
+  const current = Math.max(0, enhanceRanks[target] ?? 0);
+  if (current >= GUILD_ENHANCE_MAX_RANK) return { ok: false, error: 'enhance-maxed' };
+  if (remainingEnhancePoints(guildLevel, enhanceRanks) <= 0) return { ok: false, error: 'no-enhance-points' };
+  return { ok: true, enhanceRank: current + 1 };
+}
+
+export type EnhanceResetError = 'no-enhance-used' | 'not-enough-gold';
+
+/** 자유 강화 초기화 판정 — 길드원 누구나, 투자한 포인트가 1개 이상 있어야 하고, 개인 골드 20,000,000G를 낸다 */
+export function enhanceResetOutcome(
+  enhanceRanks: Partial<Record<GuildBonusId, number>>,
+  gold: number,
+): { ok: true } | { ok: false; error: EnhanceResetError } {
+  if (usedEnhancePoints(enhanceRanks) <= 0) return { ok: false, error: 'no-enhance-used' };
+  if (gold < GUILD_ENHANCE_RESET_COST) return { ok: false, error: 'not-enough-gold' };
+  return { ok: true };
 }
 
 /** 기여를 세는 하루 — 의뢰 클리어 한도와 같은 게임 날짜(한국 시간 새벽 4시 경계)다 */
