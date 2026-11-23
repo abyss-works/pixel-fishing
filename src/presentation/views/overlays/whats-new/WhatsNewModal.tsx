@@ -4,6 +4,7 @@ import type { WhatsNewStep } from '../../../../features/announcements/model/what
 import Modal from '../../../ui/Modal';
 import Button from '../../../ui/Button';
 import { cx } from '../../../ui/cx';
+import { NOTCH_SM } from '../../../ui/notch';
 import NewsStep from './NewsStep';
 import SettingsStep from './SettingsStep';
 
@@ -20,7 +21,7 @@ function StepTrail({ steps, index }: { steps: readonly WhatsNewStep[]; index: nu
           <span className={cx('flex items-center gap-1',
             i === index ? 'text-gold' : i < index ? 'text-text' : 'text-text-dim')}
                 aria-current={i === index ? 'step' : undefined}>
-            <span className={cx('pf-accent w-4 h-4 inline-flex items-center justify-center rounded-sm border',
+            <span className={cx('pf-accent w-4 h-4 inline-flex items-center justify-center border', NOTCH_SM,
               i === index ? 'border-gold' : 'border-line')}>{i + 1}</span>
             {STEP_TITLE[s]}
           </span>

@@ -6,11 +6,12 @@ import BoatSprite from '../../../ui/BoatSprite';
 import { cx } from '../../../ui/cx';
 import { fmtNum } from '../../../ui/format';
 import Inset from '../../../ui/Inset';
+import ProgressMeter from '../../../ui/ProgressMeter';
 import TableBox from '../../../ui/TableBox';
 import DataTable from '../../../ui/DataTable';
 import { StatValue } from './RodStatTable';
 
-const BAG_FILL = { normal: 'bg-gold', warn: 'bg-orange', danger: 'bg-danger' } as const;
+const BAG_TONE = { normal: 'gold', warn: 'orange', danger: 'danger' } as const;
 const HEAD = 'h-[30px] px-2 font-normal border-b border-line';
 
 // 배 탭: 배 그림과 이름, 이동 속도와 가방 용량, 가방 막대, 지역별로 열린 해역 수와 남은 해역을 여는 배.
@@ -30,12 +31,15 @@ export default function BoatTab({ game, summary, row, zones }: {
           <BoatStatLine label="이동 속도"><StatValue stat={row.data.speed} unit="" digits={0} /></BoatStatLine>
           <BoatStatLine label="가방 용량"><StatValue stat={bag.capStat} unit="마리" digits={0} /></BoatStatLine>
         </ul>
-        <div className="flex items-center gap-2.5 text-xs" role="meter" aria-label="가방"
-             aria-valuemin={0} aria-valuemax={bag.cap} aria-valuenow={bag.count}>
+        <div className="flex items-center gap-2.5 text-xs">
           <span className="text-text-dim shrink-0">가방</span>
-          <span className="flex-1 h-2 bg-bg border border-line shadow-[inset_1px_1px_0_var(--bevel-hi)]">
-            <span className={cx('block h-full', BAG_FILL[bag.level])} style={{ width: `${Math.min(100, bag.percent)}%` }} />
-          </span>
+          <ProgressMeter
+            current={bag.count}
+            target={bag.cap}
+            ratio={bag.percent / 100}
+            tone={BAG_TONE[bag.level]}
+            ariaLabel="가방"
+          />
           <span className="pf-accent shrink-0">{fmtNum(bag.count)} / {fmtNum(bag.cap)} <span className="text-text-dim">({bag.percent}%)</span></span>
         </div>
       </Inset>

@@ -1,5 +1,5 @@
 import type { BaitRefundNotice } from '../../../../features/inventory/model/baitRefund';
-import Frame from '../../../ui/Frame';
+import Inset from '../../../ui/Inset';
 import KeyValueRow from '../../../ui/KeyValueRow';
 import NoticeBody from '../../../ui/NoticeBody';
 import NoticeDialog from '../../../ui/NoticeDialog';
@@ -17,10 +17,10 @@ export default function BaitRefundModal({ notice, onClose }: { notice: BaitRefun
         <NoticeBody lead={lead}>
           {rest.map(line => <p key={line}>{line}</p>)}
         </NoticeBody>
-        <Frame divided aria-label="환불 내역">
+        <Inset divided aria-label="환불 내역">
           {notice.rows.map(row => <KeyValueRow key={row.id} label={row.name} value={`${row.count}개`} valueEnd />)}
           <KeyValueRow label="환불 골드" value={<span className="pf-accent text-gold">{fmtGold(notice.gold)}</span>} valueEnd />
-        </Frame>
+        </Inset>
       </div>
     } />
   );

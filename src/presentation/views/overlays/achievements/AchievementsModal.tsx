@@ -22,7 +22,6 @@ import Button from '../../../ui/Button';
 import Inset from '../../../ui/Inset';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
-import PillButton from '../../../ui/PillButton';
 import PixelIcon from '../../../ui/PixelIcon';
 import Subheading from '../../../ui/Subheading';
 import TabBar from '../../../ui/TabBar';
@@ -154,9 +153,9 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
             <div className="flex flex-wrap items-center justify-between gap-2 shrink-0">
               <span className="text-xs text-text-dim">달성한 단계는 수령 없이 즉시 적용돼요.</span>
               {onOpenStatsBonus && (
-                <PillButton type="button" onClick={onOpenStatsBonus}>
+                <Button size="sm" type="button" onClick={onOpenStatsBonus}>
                   스탯 창 보너스 탭에서 전체 합계 확인
-                </PillButton>
+                </Button>
               )}
             </div>
           )}

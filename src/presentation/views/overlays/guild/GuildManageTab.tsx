@@ -58,7 +58,7 @@ export default function GuildManageTab({ guild, busy, run, setToast, gold, onGol
     <div className="flex flex-col gap-3 flex-1 min-h-0">
       <section aria-label="가입 방식" className="flex flex-col gap-1.5 shrink-0">
         <Subheading className="mb-0 text-xs">가입 방식</Subheading>
-        <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="가입 방식">
+        <div className="grid grid-cols-3 gap-2 mobile:grid-cols-1" role="radiogroup" aria-label="가입 방식">
           {GUILD_JOIN_MODES.map(mode => (
             <ModeCell key={mode} mode={mode} on={guild.joinMode === mode} disabled={busy}
                       onSelect={() => {
@@ -72,13 +72,15 @@ export default function GuildManageTab({ guild, busy, run, setToast, gold, onGol
 
       <section aria-label="고유 코드와 링크" className="flex flex-col gap-1.5 shrink-0">
         <Subheading className="mb-0 text-xs">고유 코드와 링크</Subheading>
-        <Inset className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-3 h-11 px-3">
-          <span className="pf-accent tracking-widest text-gold">{guild.code}</span>
-          <span className="truncate text-xs text-text-dim">{url.replace(/^https?:\/\//, '')}</span>
-          <Button size="sm" onClick={() => { void copy(guild.code, '길드 코드'); }}>코드 복사</Button>
-          <Tip wraps text={'권유 문구와 링크를 함께 복사해요.\n메신저에 붙이면 길드 미리보기가 떠요.'}>
-            <Button size="sm" onClick={() => { void copy(inviteShareText(guild.pitch, url), '초대 링크'); }}>링크 복사</Button>
-          </Tip>
+        <Inset className="flex flex-wrap items-center gap-x-3 gap-y-1.5 min-h-11 px-3 py-1.5">
+          <span className="pf-accent tracking-widest text-gold shrink-0">{guild.code}</span>
+          <span className="truncate text-xs text-text-dim flex-1 min-w-0">{url.replace(/^https?:\/\//, '')}</span>
+          <div className="flex items-center gap-2 shrink-0 ml-auto">
+            <Button size="sm" onClick={() => { void copy(guild.code, '길드 코드'); }}>코드 복사</Button>
+            <Tip wraps text={'권유 문구와 링크를 함께 복사해요.\n메신저에 붙이면 길드 미리보기가 떠요.'}>
+              <Button size="sm" onClick={() => { void copy(inviteShareText(guild.pitch, url), '초대 링크'); }}>링크 복사</Button>
+            </Tip>
+          </div>
         </Inset>
         <div className="flex items-center gap-2">
           <TextInput compact className="flex-1 min-w-0" value={pitch} maxLength={GUILD_PITCH_LIMIT}
@@ -199,7 +201,7 @@ function ModeCell({ mode, on, disabled, onSelect }: { mode: GuildJoinMode; on: b
   return (
     <Frame as="button" type="button" role="radio" aria-checked={on} disabled={disabled} onClick={onSelect}
            className={cx('flex flex-col items-start gap-1 px-3 py-2 text-left cursor-pointer',
-             on ? 'outline outline-1 outline-gold bg-surface-2 shadow-[inset_2px_2px_0_var(--bevel-lo),inset_-2px_-2px_0_var(--bevel-hi)]'
+             on ? 'border-gold bg-surface-2 shadow-[inset_2px_2px_0_var(--bevel-hi),inset_-2px_-2px_0_var(--bevel-lo)]'
                : 'hover:bg-surface-2')}>
       <b className={cx('text-sm', on ? 'text-gold' : 'text-text')}>{t.name}</b>
       <span className="text-2xs text-text-dim">{t.desc}</span>

@@ -18,6 +18,7 @@ import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import PixelIcon from '../../../ui/PixelIcon';
 import type { GlyphId } from '../../../ui/PixelIcon';
+import ProgressMeter from '../../../ui/ProgressMeter';
 import TextInput from '../../../ui/TextInput';
 import Tip from '../../../ui/Tip';
 import type { GuildPartProps, GuildRun } from './guildProps';
@@ -71,7 +72,7 @@ export default function GuildSkillsTab({ guild, gold, busy, run, onResetEnhancem
                           '[clip-path:polygon(2px_0,100%_0,100%_calc(100%-2px),calc(100%-2px)_100%,0_100%,0_2px)]',
                           state === 'avail' && 'bg-guild border-epic',
                           state === 'spent' && 'bg-[#3d2154] border-[#7c449e]',
-                          state === 'locked' && 'bg-bg border-line opacity-35')} />
+                          state === 'locked' && 'bg-bg border-[#213652]')} />
                 );
               })}
             </div>
@@ -137,10 +138,13 @@ export default function GuildSkillsTab({ guild, gold, busy, run, onResetEnhancem
           <Inset className="p-2.5 flex flex-col gap-1.5">
             <ValueRow label="모인 골드"
                       value={sel.locked ? '-' : sel.next === null ? '5단계 완료' : `${fmtNum(sel.pool)} / ${fmtNum(sel.next)}`} />
-            <span className="block h-2 border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]" role="meter"
-                  aria-label={`${sel.name} 다음 단계까지`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(sel.ratio * 100)}>
-              <span className="block h-full bg-gold shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]" style={{ width: `${sel.ratio * 100}%` }} />
-            </span>
+            <ProgressMeter
+              current={Math.round(sel.ratio * 100)}
+              target={100}
+              ratio={sel.ratio}
+              tone="gold"
+              ariaLabel={`${sel.name} 다음 단계까지`}
+            />
             <div className="grid grid-cols-2 gap-2 mt-auto pt-0.5">
               {sel.canDonate ? (
                 <Button variant="primary" size="sm" full disabled={busy} onClick={() => setDonating(true)}>기부</Button>
@@ -239,7 +243,7 @@ function Branch({ row, active, busy, invest, onPick, onInvest }: {
       'flex flex-col items-center min-w-0',
       'mobile:grid mobile:grid-cols-[minmax(0,1fr)_auto] mobile:items-center mobile:gap-x-2 mobile:gap-y-1.5 mobile:p-1.5 mobile:bg-bg mobile:border mobile:border-line',
       active && 'mobile:border-gold mobile:bg-[#142642]',
-      row.locked && 'opacity-45',
+      row.locked && 'text-text-dim mobile:border-[#213652]',
     )}>
       <Tip wraps pressOpens text={row.locked ? `길드 Lv.${row.unlock}에 열려요.` : GUILD_BONUS_TIP[row.id]}
            className="block w-full mobile:col-start-1 mobile:row-start-1 mobile:min-w-0">
@@ -247,10 +251,10 @@ function Branch({ row, active, busy, invest, onPick, onInvest }: {
                aria-pressed={active} aria-label={`${row.name} 고르기`}
                className={cx('w-full h-11 px-1 flex flex-col items-center justify-center gap-0.5 text-2xs leading-tight',
                  'mobile:h-7 mobile:flex-row mobile:justify-start mobile:gap-1.5 mobile:px-2 mobile:text-left',
-                 row.locked ? 'cursor-default' : 'cursor-pointer',
-                 active
+                 row.locked ? 'cursor-default bg-bg border-[#213652] text-text-dim shadow-[inset_1px_1px_0_var(--bevel-hi)]' : 'cursor-pointer',
+                 !row.locked && active
                    ? 'border-gold text-gold bg-[color-mix(in_oklab,var(--c-surface-2)_70%,var(--c-bg))] translate-y-px shadow-[inset_2px_2px_0_var(--bevel-hi),inset_-2px_-2px_0_var(--bevel-lo)]'
-                   : 'text-text bg-surface-2 hover:border-accent')}>
+                   : !row.locked && 'text-text bg-surface-2 hover:border-accent')}>
           <PixelIcon glyph={GLYPH[row.id]} size={14} className="shrink-0" />
           <span className="text-center mobile:text-left mobile:truncate">{row.name}</span>
         </Frame>
@@ -313,7 +317,7 @@ function Node({ node, label }: { node: BonusNode; label: string }) {
             node.state === 'done' && 'border-gold-dark bg-gold text-[#08111f] shadow-[inset_1px_1px_0_rgba(255,255,255,0.5),inset_-1px_-1px_0_rgba(0,0,0,0.25)]',
             node.state === 'next' && 'border-gold bg-surface-2 text-text shadow-[inset_1px_1px_0_var(--bevel-lo),inset_-1px_-1px_0_var(--bevel-hi)]',
             node.state === 'open' && 'border-line bg-surface-2 text-text-dim shadow-[inset_1px_1px_0_var(--bevel-lo),inset_-1px_-1px_0_var(--bevel-hi)]',
-            node.state === 'capped' && 'border-line bg-transparent text-text-dim opacity-50 shadow-[inset_1px_1px_0_var(--bevel-hi)]')}>
+            node.state === 'capped' && 'border-[#213652] bg-bg text-text-dim shadow-[inset_1px_1px_0_var(--bevel-hi)]')}>
       {node.state === 'next' && (
         <span className="absolute inset-x-0 top-0 bg-gold/45" style={{ height: `${node.fill * 100}%` }} aria-hidden="true" />
       )}

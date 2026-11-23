@@ -43,7 +43,7 @@ export default function GuildLogbookTab({ logbook, me }: { logbook: readonly Gui
         {days.map((d, i) => (
           <section key={d.day} aria-label={d.day} className={cx(i > 0 && 'mt-4')}>
             <Subheading className="flex items-center gap-3 mb-2 pf-accent text-xs font-normal text-gold
-                                   after:content-[''] after:flex-1 after:h-px after:bg-linear-to-r after:from-gold-dark after:to-transparent after:opacity-60">
+                                   after:content-[''] after:flex-1 after:h-px after:bg-linear-to-r after:from-gold-dark/60 after:to-transparent">
               {d.day}
             </Subheading>
             <ul className="m-0 ml-[11px] pl-[22px] list-none border-l-2 border-line/80">

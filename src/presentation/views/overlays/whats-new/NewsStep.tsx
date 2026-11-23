@@ -1,18 +1,18 @@
 import { NOTE_TAGS } from '../../../../game/content/patchnotes';
 import type { PatchNote } from '../../../../game/content/patchnotes';
 import NoteTag from '../../../ui/NoteTag';
-import Frame from '../../../ui/Frame';
+import Inset from '../../../ui/Inset';
 import { SCROLL_Y } from '../../../ui/scrollArea';
 
 function VersionHead({ note }: { note: PatchNote }) {
   return (
-    <Frame className="px-3 py-2 flex flex-col gap-0.5">
+    <Inset className="px-3 py-2 flex flex-col gap-0.5">
       <div className="flex items-baseline justify-between gap-2">
         <span className="pf-accent text-xl text-gold">v{note.version}</span>
         <span className="pf-accent text-2xs text-text-dim">{note.date}</span>
       </div>
       <p className="text-sm">{note.summary}</p>
-    </Frame>
+    </Inset>
   );
 }
 

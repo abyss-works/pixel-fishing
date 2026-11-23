@@ -16,6 +16,8 @@ import Button from '../../../ui/Button';
 import Inset from '../../../ui/Inset';
 import PersonSprite from '../../../ui/PersonSprite';
 import PixelIcon from '../../../ui/PixelIcon';
+import ProgressMeter from '../../../ui/ProgressMeter';
+import SegmentedStepBar from '../../../ui/SegmentedStepBar';
 import Tip from '../../../ui/Tip';
 
 interface Props {
@@ -78,22 +80,17 @@ export default function AchievementCard({ row, game, guest = false, busy, onClai
           <StatusBadge status={row.status} />
         </div>
         <p data-achievement-desc className="text-2xs leading-[1.5] text-text-dim break-keep break-words">{def.desc}</p>
-        <div className="mt-auto flex flex-col gap-1 pt-1">
-          <span role="meter" aria-label={`진척, ${def.name}`} aria-valuemin={0} aria-valuemax={Math.max(progress.target, 1)}
-                aria-valuenow={clamped}
-                className="block h-2 w-full border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]">
-            <span data-achievement-gauge-fill
-                  className={cx(
-                    'block h-full shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]',
-                    row.status === 'claimable' ? 'bg-gold' : row.status === 'claimed' ? 'bg-text-dim' : 'bg-accent',
-                  )}
-                  style={{ width: `${ratio * 100}%` }} />
-          </span>
-          <div className="flex items-center justify-between gap-2 text-2xs">
-            <span className={cx('pf-accent', row.status === 'claimable' ? 'text-gold' : 'text-text-dim')}>{pct}%</span>
-            <span className="pf-accent text-text whitespace-nowrap">{fmtNum(progress.current)} / {fmtNum(progress.target)}</span>
-          </div>
-        </div>
+        <ProgressMeter
+          stacked
+          className="mt-auto pt-1"
+          current={progress.current}
+          target={progress.target}
+          tone={row.status === 'claimable' ? 'gold' : row.status === 'claimed' ? 'dim' : 'accent'}
+          ariaLabel={`진척, ${def.name}`}
+          fillTestAttr="achievement"
+          leftLabel={<span className={cx('pf-accent', row.status === 'claimable' ? 'text-gold' : 'text-text-dim')}>{pct}%</span>}
+          rightLabel={<span className="pf-accent text-text">{fmtNum(progress.current)} / {fmtNum(progress.target)}</span>}
+        />
       </div>
       <div className="flex min-w-0 items-center gap-2 border-t border-line px-2.5 py-1.5">
         <Reward reward={def.reward} />
@@ -162,24 +159,17 @@ export function CumulativeBonusCard({ card }: { card: CumulativeBonusCardModel }
         </div>
         <p data-achievement-desc className="text-2xs leading-[1.5] text-text-dim break-keep break-words">{card.series.desc}</p>
         <div className="mt-auto flex flex-col gap-1 pt-1">
-          <div
-            role="meter"
-            aria-label={`진척, ${card.series.name}`}
-            aria-valuemin={0}
-            aria-valuemax={target}
-            aria-valuenow={Math.min(card.current, target)}
-            className="grid gap-1"
-            style={{ gridTemplateColumns: `repeat(${card.steps.length}, minmax(0, 1fr))` }}
-          >
-            {card.steps.map(step => (
-              <span key={step.id} className="block h-2 overflow-hidden border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]">
-                {step.state === 'done' && <span data-achievement-gauge-fill className="block h-full w-full bg-gold" />}
-                {step.state === 'now' && (
-                  <span data-achievement-gauge-fill className="block h-full bg-accent" style={{ width: `${activeRatio}%` }} />
-                )}
-              </span>
-            ))}
-          </div>
+          <SegmentedStepBar
+            steps={card.steps.map(step => ({
+              id: step.id,
+              state: step.state === 'done' ? 'done' : step.state === 'now' ? 'now' : 'open',
+              pct: activeRatio,
+            }))}
+            ariaLabel={`진척, ${card.series.name}`}
+            valueNow={card.current}
+            valueMax={target}
+            fillTestAttr="achievement"
+          />
           <div className="flex items-center justify-between gap-2 text-2xs">
             <span className="pf-accent text-text-dim">
               {card.allDone ? '최대 도달' : `다음 ${doneCount + 1}단계 ${card.nextDeltaText ?? ''}`}
@@ -269,43 +259,23 @@ export function NamedGroupCard({
         </div>
         <p data-achievement-desc className="text-2xs leading-[1.5] text-text-dim break-keep break-words">{card.desc}</p>
         <div className="mt-auto flex flex-col gap-1 pt-1">
-          <div
-            aria-hidden="true"
-            className="grid gap-1"
-            style={{ gridTemplateColumns: `repeat(${card.steps.length}, minmax(0, 1fr))` }}
-          >
-            {card.steps.map((step, idx) => {
-              if (step.status === 'claimed') {
-                return (
-                  <span key={step.id} className="block h-1.5 border border-line bg-gold" />
-                );
-              }
-              if (step.status === 'claimable') {
-                return (
-                  <span key={step.id} className="block h-1.5 border border-gold bg-gold" />
-                );
-              }
-              if (idx === activeStepIdx) {
-                const segPct = step.threshold > 0 ? Math.min(100, Math.round((card.current / step.threshold) * 100)) : 0;
-                return (
-                  <span key={step.id} className="block h-1.5 overflow-hidden border border-line bg-bg">
-                    <span className="block h-full bg-accent" style={{ width: `${segPct}%` }} />
-                  </span>
-                );
-              }
-              return <span key={step.id} className="block h-1.5 border border-line bg-bg" />;
-            })}
-          </div>
-          <span role="meter" aria-label={`진척, ${card.title}`} aria-valuemin={0} aria-valuemax={Math.max(card.target, 1)}
-                aria-valuenow={clamped}
-                className="block h-2 w-full border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]">
-            <span data-achievement-gauge-fill
-                  className={cx(
-                    'block h-full shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]',
-                    card.status === 'claimable' ? 'bg-gold' : card.status === 'claimed' ? 'bg-text-dim' : 'bg-accent',
-                  )}
-                  style={{ width: `${ratio * 100}%` }} />
-          </span>
+          <SegmentedStepBar
+            steps={card.steps.map((step, idx) => ({
+              id: step.id,
+              state: step.status === 'claimed'
+                ? 'done'
+                : step.status === 'claimable'
+                  ? 'claimable'
+                  : idx === activeStepIdx
+                    ? 'now'
+                    : 'open',
+              pct: step.threshold > 0 ? Math.round((card.current / step.threshold) * 100) : 0,
+            }))}
+            ariaLabel={`진척, ${card.title}`}
+            valueNow={clamped}
+            valueMax={Math.max(card.target, 1)}
+            fillTestAttr="achievement"
+          />
           <div className="flex items-center justify-between gap-2 text-2xs">
             <span className={cx('pf-accent', card.status === 'claimable' ? 'text-gold' : 'text-text-dim')}>
               {card.discovered ? `목표 ${card.target}회` : `${pct}%`}

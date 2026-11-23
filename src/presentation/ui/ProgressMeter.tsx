@@ -1,16 +1,20 @@
 import type { ReactNode } from 'react';
 import { cx } from './cx';
 
-export type ProgressTone = 'accent' | 'gold' | 'dim';
+export type ProgressTone = 'accent' | 'gold' | 'dim' | 'orange' | 'danger' | 'guild';
 
 const FILL: Record<ProgressTone, string> = {
   accent: 'bg-accent',
   gold: 'bg-gold',
   dim: 'bg-text-dim',
+  orange: 'bg-orange',
+  danger: 'bg-danger',
+  guild: 'bg-guild',
 };
 
 // 공용 진행 막대 — 1줄(inline)과 2단(stacked: 윗줄 막대 + 아랫줄 수치)을 함께 지원한다.
 // 1억 단위 수치와 막대가 한 줄에서 충돌해 막대가 찌그러지지 않도록 긴 수치가 오는 자리에서는 stacked를 쓴다.
+// inline에서 rightLabel이 없으면 트랙(<span role="meter">)만 반환해 Tip 래핑 시 DOM 계층을 유지한다.
 export default function ProgressMeter({
   current,
   target,
@@ -20,6 +24,7 @@ export default function ProgressMeter({
   ariaLabel = '진행',
   leftLabel,
   rightLabel,
+  heightClass = 'h-2',
   className,
   fillTestAttr,
 }: {
@@ -31,6 +36,7 @@ export default function ProgressMeter({
   ariaLabel?: string;
   leftLabel?: ReactNode;
   rightLabel?: ReactNode;
+  heightClass?: string;
   className?: string;
   /** 테스트 등에서 채움 요소를 집을 때 쓰는 data 속성 값 */
   fillTestAttr?: 'achievement';
@@ -49,8 +55,10 @@ export default function ProgressMeter({
       aria-valuemax={safeMax}
       aria-valuenow={Math.min(Math.max(current, 0), safeMax)}
       className={cx(
-        'block h-2 border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]',
+        'block border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]',
+        heightClass,
         stacked ? 'w-full' : 'flex-1 min-w-0',
+        !stacked && rightLabel === undefined && className,
       )}
     >
       <span
@@ -75,10 +83,12 @@ export default function ProgressMeter({
     );
   }
 
+  if (rightLabel === undefined) return track;
+
   return (
     <div className={cx('flex items-center gap-2', className)}>
       {track}
-      {rightLabel !== undefined && <span className="pf-accent text-2xs whitespace-nowrap">{rightLabel}</span>}
+      <span className="pf-accent text-2xs whitespace-nowrap">{rightLabel}</span>
     </div>
   );
 }

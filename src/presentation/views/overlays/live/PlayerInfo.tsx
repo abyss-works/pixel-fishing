@@ -18,6 +18,7 @@ import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
 import Locked from '../../../ui/Locked';
 import PersonSprite from '../../../ui/PersonSprite';
+import ProgressMeter from '../../../ui/ProgressMeter';
 import Subheading from '../../../ui/Subheading';
 import Tip, { TipList } from '../../../ui/Tip';
 import { cx } from '../../../ui/cx';
@@ -146,8 +147,6 @@ const GRADE_CLASS: Record<NonNullable<ProfileView['collectibles']['artifacts']['
   legendary: 'border-legend text-legend',
 };
 
-const pct = (value: number, total: number): number => (total > 0 ? Math.min(100, (value / total) * 100) : 0);
-
 /** 요약, 업적, 수집품, 해역별 도감 비교. PC 2열(요약 왼쪽, 업적과 수집품 오른쪽, 도감 비교 하단 전폭), 모바일 1열 쌓기 */
 function ProfileCells({ name, view, actions }: {
   name: string;
@@ -202,18 +201,18 @@ function ProfileCells({ name, view, actions }: {
             수령 완료 <span className="font-pixel text-gold">{achievements.claimed} / {achievements.total}</span>
           </span>
         </div>
-        <span className="block h-2 border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]"
-              aria-label={`업적 달성 ${achievements.claimed}/${achievements.total}`}>
-          <span className="block h-full bg-gold" style={{ width: `${pct(achievements.claimed, achievements.total)}%` }} />
-        </span>
+        <ProgressMeter
+          current={achievements.claimed}
+          target={achievements.total}
+          tone="gold"
+          ariaLabel={`업적 달성 ${achievements.claimed}/${achievements.total}`}
+        />
         <div className="grid grid-cols-2 gap-x-3 gap-y-1 mobile:grid-cols-1">
           {achievements.tabs.map(t => (
             <div key={t.tab} className="grid grid-cols-[5.2em_minmax(0,1fr)_3.6em] items-center gap-1.5 text-2xs whitespace-nowrap"
                  aria-label={`${t.label} 업적 ${t.claimed}/${t.total}`}>
               <span className="text-text-dim truncate">{t.label}</span>
-              <span className="block h-1.5 border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]">
-                <span className="block h-full bg-gold" style={{ width: `${pct(t.claimed, t.total)}%` }} />
-              </span>
+              <ProgressMeter current={t.claimed} target={t.total} tone="gold" heightClass="h-1.5" ariaLabel={`${t.label} 업적`} />
               <span className="font-pixel text-gold text-right">{t.claimed}/{t.total}</span>
             </div>
           ))}
@@ -244,11 +243,13 @@ function ProfileCells({ name, view, actions }: {
             </span>
             <span className="pf-accent shrink-0">{hats.owned} / {hats.total}</span>
           </div>
-          <span className="block h-1.5 border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]"
-                aria-label={`모자 수집 ${hats.owned}/${hats.total}`}>
-            <span className={cx('block h-full', hats.owned === hats.total && hats.total > 0 ? 'bg-gold' : 'bg-accent')}
-                  style={{ width: `${pct(hats.owned, hats.total)}%` }} />
-          </span>
+          <ProgressMeter
+            current={hats.owned}
+            target={hats.total}
+            tone={hats.owned === hats.total && hats.total > 0 ? 'gold' : 'accent'}
+            heightClass="h-1.5"
+            ariaLabel={`모자 수집 ${hats.owned}/${hats.total}`}
+          />
         </div>
         <div className="flex flex-col gap-1.5 border-t border-line/60 pt-2">
           <div className="flex items-center justify-between gap-2 text-2xs text-text-dim">
@@ -264,7 +265,7 @@ function ProfileCells({ name, view, actions }: {
                 {s.name ? (
                   <>
                     <span className="truncate max-w-full">{s.name}</span>
-                    {s.level !== null && <span className="font-pixel text-2xs opacity-85">Lv.{s.level}</span>}
+                    {s.level !== null && <span className="font-pixel text-2xs text-text-dim">Lv.{s.level}</span>}
                   </>
                 ) : (
                   <span className="truncate max-w-full">{s.zone}</span>
@@ -297,18 +298,24 @@ function ProfileCells({ name, view, actions }: {
             <div className="grid grid-cols-2 gap-2.5">
               <div className="grid grid-cols-[minmax(0,1fr)_4.2em] items-center gap-1.5 h-5 whitespace-nowrap"
                    aria-label={`${z.name} 일반 도감 ${z.found}/${z.total}`}>
-                <span className="block h-1.5 border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]">
-                  <span className={cx('block h-full', z.complete ? 'bg-gold' : 'bg-accent')}
-                        style={{ width: `${pct(z.found, z.total)}%` }} />
-                </span>
+                <ProgressMeter
+                  current={z.found}
+                  target={z.total}
+                  tone={z.complete ? 'gold' : 'accent'}
+                  heightClass="h-1.5"
+                  ariaLabel={`${z.name} 일반 도감`}
+                />
                 <span className={cx('text-right', z.complete ? 'font-pixel text-gold' : 'pf-accent')}>{z.found} / {z.total}</span>
               </div>
               <div className="grid grid-cols-[minmax(0,1fr)_4.2em] items-center gap-1.5 h-5 whitespace-nowrap"
                    aria-label={`${z.name} 돌연변이 도감 ${z.variantFound}/${z.total}`}>
-                <span className="block h-1.5 border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]">
-                  <span className={cx('block h-full', z.variantComplete ? 'bg-gold' : 'bg-guild')}
-                        style={{ width: `${pct(z.variantFound, z.total)}%` }} />
-                </span>
+                <ProgressMeter
+                  current={z.variantFound}
+                  target={z.total}
+                  tone={z.variantComplete ? 'gold' : 'guild'}
+                  heightClass="h-1.5"
+                  ariaLabel={`${z.name} 돌연변이 도감`}
+                />
                 <span className={cx('font-pixel text-right', z.variantComplete ? 'text-gold' : 'text-guild')}>{z.variantFound} / {z.total}</span>
               </div>
             </div>
