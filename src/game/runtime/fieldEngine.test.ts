@@ -1,8 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { newState, rodStats } from '../rules/logic';
 import { catchTooSoon } from '../rules/pacing';
-import { HARBORS, WORLD_SPAWN } from '../world/regions/world';
+import { HARBORS, WORLD, WORLD_LEGEND, WORLD_SPAWN } from '../world/regions/world';
 import { V_PORT } from '../world/regions/village';
+import { REGION_PACKS } from '../world';
+import type { RegionPack } from '../world';
+import { compileMap, mapBounds } from '../world/mask';
+import { CLOSED_SEA_MSG } from '../content/zones';
 import { GameFieldEngine } from './fieldEngine';
 import type { FieldEvent } from './fieldEngine';
 
@@ -225,14 +229,44 @@ describe('GameFieldEngine 막힘 안내', () => {
     return s;
   }
 
+  /** N 셀(미개방 바다)을 포함한 합성 RegionPack으로 엔진을 세운다 */
+  function setupClosedSea(startPos = { x: 40, y: 50 }) {
+    const rows = [
+      ...Array(5).fill('..................................................'),
+      ...Array(5).fill('NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN'),
+    ];
+    const map = compileMap(8, 11, WORLD_LEGEND, rows);
+    const pack: RegionPack = {
+      ...WORLD,
+      bounds: mapBounds(map),
+      map,
+      buildings: [],
+      triggers: [],
+      spawn: startPos,
+    };
+    const orig = REGION_PACKS.world;
+    REGION_PACKS.world = pack;
+    try {
+      const s = setup();
+      s.engine.placePlayer(startPos);
+      return s;
+    } finally {
+      REGION_PACKS.world = orig;
+    }
+  }
+
   it('배 단계가 모자라 구역 게이트에 막혀도 키를 누르고 있는 동안 안내는 한 번이다', () => {
     const { events } = push('ArrowDown', 130, 19.25, 20); // 19N 아래는 동남아(배 3단계)
     expect(blocked(events)).toHaveLength(1);
+    const { events: atlEvents } = push('ArrowDown', -30, 0.4, 20); // 0N 아래는 남대서양(배 8단계)
+    expect(blocked(atlEvents)).toHaveLength(1);
   });
 
-  it('열지 않은 바다에 닿은 채 키를 눌러도 안내는 한 번이다', () => {
-    const { events } = push('ArrowDown', -30, 0.4, 20);
-    expect(blocked(events)).toHaveLength(1);
+  it('열지 않은 바다(N 셀)에 닿은 채 키를 눌러도 안내는 한 번이다', () => {
+    const { engine, events, frame } = setupClosedSea();
+    engine.handleKeyDown('ArrowDown', noop);
+    for (let i = 0; i < 20; i++) frame(1050 + i * 50, 1000 + i * 50);
+    expect(blocked(events)).toEqual([{ type: 'zone-blocked', message: CLOSED_SEA_MSG }]);
   });
 
   /** 프레임 간격(ms)이 고르지 않은 입력을 흉내 낸다. 경계까지 남은 거리를 달리해 여러 번 시도한다 */
@@ -254,22 +288,33 @@ describe('GameFieldEngine 막힘 안내', () => {
 
   it('프레임 간격이 고르지 않아도 구역 게이트에 막힌 채 누르는 동안 안내는 한 번이다', () => {
     expect(jitteryAnnouncements('ArrowDown', 130, 19.25, 0.01)).toEqual(Array(12).fill(1));
-  });
-
-  it('프레임 간격이 고르지 않아도 열지 않은 바다에 막힌 채 누르는 동안 안내는 한 번이다', () => {
     expect(jitteryAnnouncements('ArrowDown', -30, 0.4, 0.01)).toEqual(Array(12).fill(1));
   });
 
+  it('프레임 간격이 고르지 않아도 열지 않은 바다(N 셀)에 막힌 채 누르는 동안 안내는 한 번이다', () => {
+    const counts: number[] = [];
+    for (let k = 0; k < 12; k++) {
+      const s = setupClosedSea({ x: 40, y: 48 + k * 0.4 });
+      s.frame(1000, 950);
+      s.engine.handleKeyDown('ArrowDown', noop);
+      let t = 1000;
+      for (let i = 0; i < 40; i++) {
+        for (const dt of [16.7, 16.7, 16.7, 6]) { s.frame(t + dt, t); t += dt; }
+      }
+      counts.push(blocked(s.events).length);
+    }
+    expect(counts).toEqual(Array(12).fill(1));
+  });
+
   it('경계를 따라 비스듬히 미끄러지며 입력을 이어 가도 막힌 동안은 안내를 다시 하지 않는다', () => {
-    const s = setup();
-    s.engine.placePlayer(at(-30, 0.4));
-    s.frame(1000, 950);
-    s.engine.setMoveDirection({ x: 0.7071, y: 0.7071 });
-    const start = s.engine.getPosition();
-    for (let i = 0; i < 300; i++) s.frame(1050 + i * 50, 1000 + i * 50);
-    const end = s.engine.getPosition();
-    expect(Math.hypot(end.x - start.x, end.y - start.y)).toBeGreaterThan(100);
-    expect(blocked(s.events)).toHaveLength(1);
+    const cs = setupClosedSea({ x: 40, y: 50 });
+    cs.frame(1000, 950);
+    cs.engine.setMoveDirection({ x: 0.7071, y: 0.7071 });
+    const cStart = cs.engine.getPosition();
+    for (let i = 0; i < 60; i++) cs.frame(1050 + i * 50, 1000 + i * 50);
+    const cEnd = cs.engine.getPosition();
+    expect(Math.hypot(cEnd.x - cStart.x, cEnd.y - cStart.y)).toBeGreaterThan(100);
+    expect(blocked(cs.events)).toEqual([{ type: 'zone-blocked', message: CLOSED_SEA_MSG }]);
   });
 
   it('키를 누른 채 낚시를 던졌다가 접혀도 같은 경계의 안내를 다시 하지 않는다', () => {
@@ -280,6 +325,17 @@ describe('GameFieldEngine 막힘 안내', () => {
     engine.cancelFishing();
     for (let i = 0; i < 10; i++) frame(4000 + i * 50, 3950 + i * 50);
     expect(blocked(events)).toHaveLength(1);
+
+    const cs = setupClosedSea();
+    cs.frame(1000, 950);
+    cs.engine.handleKeyDown('ArrowDown', noop);
+    for (let i = 0; i < 10; i++) cs.frame(1050 + i * 50, 1000 + i * 50);
+    const csRaw = cs.engine as unknown as { transition(p: string): void };
+    csRaw.transition('wait');
+    for (let i = 0; i < 5; i++) cs.frame(3000 + i * 50, 2950 + i * 50);
+    cs.engine.cancelFishing();
+    for (let i = 0; i < 10; i++) cs.frame(4000 + i * 50, 3950 + i * 50);
+    expect(blocked(cs.events)).toEqual([{ type: 'zone-blocked', message: CLOSED_SEA_MSG }]);
   });
 
   it('경계에서 충분히 멀어졌다 다시 닿으면 키를 떼지 않아도 안내를 다시 한다', () => {
