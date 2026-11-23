@@ -51,7 +51,7 @@ export interface BagOverview extends BagStatus {
 export function selectBagOverview(game: GameState, sellBonus: number, bagBonus = 0): BagOverview {
   return {
     ...selectBagStatus(game, bagBonus),
-    sellable: saleProceeds(sellableValue(game), sellBonus),
+    sellable: saleProceeds(sellableValue(game), sellBonus, achievementBonusesOf(game).sellBonus),
     autoLock: autoLockPlan(game.bag),
   };
 }

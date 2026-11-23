@@ -15,6 +15,7 @@ import type {
 } from '../../../game/content/achievements';
 import { namedById } from '../../../game/content/named';
 import { hatById } from '../../../game/content/wardrobe';
+import type { ZoneId } from '../../../game/content/zones';
 import { zoneById } from '../../../game/content/zones';
 import {
   achievementProgress,
@@ -59,11 +60,16 @@ export interface CumulativeBonusStepView {
   state: 'done' | 'now' | 'todo';
 }
 
+export type CumulativeBonusIcon =
+  | 'rod' | 'star' | 'sparkle' | 'clock' | 'target' | 'bait' | 'crown' | 'coin' | 'gem';
+
 export interface CumulativeBonusCardModel {
   series: CumulativeBonusSeries;
+  icon: CumulativeBonusIcon;
   scopeLabel: string;
   current: number;
   nextThreshold: number;
+  nextDeltaText: string | null;
   allDone: boolean;
   activeText: string;
   maxText: string;
@@ -84,6 +90,7 @@ export interface NamedGroupCardModel {
   kind: 'namedGroup';
   groupId: string;
   namedId: string;
+  discovered: boolean;
   title: string;
   desc: string;
   scopeLabel: string;
@@ -112,11 +119,30 @@ const bonusEffectLabelOf = (series: CumulativeBonusSeries): string => {
   switch (series.bonusKind) {
     case 'biteWaitCut': return '입질 대기';
     case 'mutationWeight': return '돌연변이 가중치';
+    case 'rareWeight': return '희귀 이상 가중치';
+    case 'epicWeight': return '영웅 이상 가중치';
+    case 'legendaryWeight': return '전설 가중치';
+    case 'sellBonus': return '판매가 보너스';
     case 'namedWeight': return '네임드 조우 가중치';
     case 'moveSpeed': return '이동 속도';
     case 'artifactBoost': return '보유 유물 효과';
     case 'zoneLegendary': return `${zoneName} 전설 가중치`;
     case 'zoneMutation': return `${zoneName} 돌연변이 가중치`;
+  }
+};
+
+const bonusIconOf = (series: CumulativeBonusSeries): CumulativeBonusIcon => {
+  switch (series.id) {
+    case 'bonus-manual-total': return 'rod';
+    case 'bonus-manual-legendary': return 'star';
+    case 'bonus-manual-variant': return 'sparkle';
+    case 'bonus-catch-auto': return 'clock';
+    case 'bonus-catch-perfect': return 'target';
+    case 'bonus-catch-bait': return 'bait';
+    case 'bonus-named-flawless': return 'crown';
+    case 'bonus-sell-gold': return 'coin';
+    case 'bonus-max-artifact': return 'gem';
+    default: return series.bonusKind === 'zoneLegendary' ? 'star' : 'sparkle';
   }
 };
 
@@ -227,13 +253,16 @@ export function cumulativeBonusCards(game: GameState): CumulativeBonusCardModel[
     const activeText = p.activeDelta > 0
       ? `${effectLabel} ${fmtPct(p.activeDelta, sign)}`
       : `${effectLabel} 적용 전`;
-    const maxText = `최대 ${fmtPct(p.maxDelta, sign)}`;
+    const maxText = `최대 누적 ${fmtPct(p.maxDelta, sign)} (달성 즉시 자동 적용)`;
+    const nextDeltaText = p.nextStep ? fmtPct(p.nextStep.delta, sign) : null;
 
     return {
       series,
+      icon: bonusIconOf(series),
       scopeLabel,
       current: p.current,
       nextThreshold,
+      nextDeltaText,
       allDone,
       activeText,
       maxText,
@@ -285,7 +314,7 @@ export function cosmeticCards(game: GameState, filter: CosmeticFilter = 'all'): 
     const title = discovered ? `${namedName} 토벌` : `${place} 네임드 토벌`;
     const desc = discovered
       ? `${namedName} 토벌을 여러 번 마쳐 표식을 모아요.`
-      : `${place}의 네임드를 토벌해요.`;
+      : `${place}의 숨은 존재를 토벌해요.`;
 
     const claimableRow = rows.find(r => r.status === 'claimable');
     const nextProgressRow = rows.find(r => r.status === 'progress');
@@ -310,6 +339,7 @@ export function cosmeticCards(game: GameState, filter: CosmeticFilter = 'all'): 
       kind: 'namedGroup',
       groupId,
       namedId,
+      discovered,
       title,
       desc,
       scopeLabel: '네임드',
@@ -325,6 +355,61 @@ export function cosmeticCards(game: GameState, filter: CosmeticFilter = 'all'): 
     item.kind === 'single' ? item.row.status : item.status;
 
   return items.sort((a, b) => ORDER[statusOf(a)] - ORDER[statusOf(b)]);
+}
+
+export interface ProgressZoneGroup {
+  zone: ZoneId;
+  zoneName: string;
+  items: AchievementRow[];
+  claimedCount: number;
+}
+
+/** 진행 탭 해역 업적을 구역 소제목별로 묶는다. 미완료만 보기 필터가 켜지면 claimed를 제외한다 */
+export function progressZoneGroups(game: GameState, incompleteOnly = false): ProgressZoneGroup[] {
+  const rows = achievementRows(game, 'progress').filter(r => !incompleteOnly || r.status !== 'claimed');
+  const groups: ProgressZoneGroup[] = [];
+  const byZone = new Map<ZoneId, ProgressZoneGroup>();
+  for (const r of rows) {
+    const zone = (r.def.zone ?? 'village') as ZoneId;
+    let group = byZone.get(zone);
+    if (!group) {
+      group = { zone, zoneName: zoneById(zone)?.shortName ?? zone, items: [], claimedCount: 0 };
+      byZone.set(zone, group);
+      groups.push(group);
+    }
+    group.items.push(r);
+    if (r.status === 'claimed') group.claimedCount += 1;
+  }
+  return groups;
+}
+
+export interface CosmeticFilterStat {
+  achieved: number;
+  total: number;
+  claimable: number;
+}
+
+/** 치장 탭 필터별 완료 수·전체 수·수령 가능 수 집계 */
+export function cosmeticFilterStats(game: GameState): Record<CosmeticFilter, CosmeticFilterStat> {
+  const out: Record<CosmeticFilter, CosmeticFilterStat> = {
+    all: { achieved: 0, total: 0, claimable: 0 },
+    named: { achieved: 0, total: 0, claimable: 0 },
+    night: { achieved: 0, total: 0, claimable: 0 },
+    variant: { achieved: 0, total: 0, claimable: 0 },
+    big: { achieved: 0, total: 0, claimable: 0 },
+    general: { achieved: 0, total: 0, claimable: 0 },
+  };
+  for (const def of ACHIEVEMENTS) {
+    if (def.tab !== 'cosmetic') continue;
+    const st = rowStatusOf(game, def.id);
+    const keys: CosmeticFilter[] = def.cosmeticKind ? ['all', def.cosmeticKind] : ['all'];
+    for (const key of keys) {
+      out[key].total += 1;
+      if (st === 'claimed') out[key].achieved += 1;
+      if (st === 'claimable') out[key].claimable += 1;
+    }
+  }
+  return out;
 }
 
 /** 행의 받기 버튼 가능 여부 — 규칙의 수령 판정을 그대로 쓴다 */

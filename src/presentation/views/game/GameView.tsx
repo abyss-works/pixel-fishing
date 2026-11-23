@@ -11,7 +11,10 @@ import { BASE_PACKS, REGION_PACKS, boardingOf } from '../../../game/world';
 import type { FurnitureId, Point, SceneRef } from '../../../game/world';
 import type { BaseId, RegionId } from '../../../game/content/places';
 import { zoneById } from '../../../game/content/zones';
+import type { FloatingToastItem } from '../../ui/FloatingToastLayer';
+import FloatingToastLayer from '../../ui/FloatingToastLayer';
 import type { Msg } from '../../layouts/hud/useMessageLog';
+import type { StatsTab } from '../overlays/stats/StatsModal';
 import type { Notify } from '../../ui/hud/messageFeed';
 import GameStageLayout from '../../layouts/game-stage/GameStageLayout';
 import Field from '../../layouts/game-stage/Field';
@@ -90,6 +93,8 @@ interface GameViewProps {
   onPlace: (scene: SceneRef, entryPos?: Point) => void;
   onWarmup: () => void;
   log: Msg[];
+  toasts?: readonly FloatingToastItem[];
+  onDismissToast?: (id: number) => void;
   syncLabel: string | null;
   syncState: string;
   /** 이 기기의 게스트 진행 — 계정을 바꿀 때 버려지는 것이 있는지 확인 창을 띄울지 가른다 */
@@ -129,6 +134,7 @@ export default function GameView(props: GameViewProps) {
   const [statusSlot, setStatusSlot] = useState<HTMLElement | null>(null);
   const [actionPanel, setActionPanel] = useState<ActionPanel>(null);
   const [statsOpen, setStatsOpen] = useState(false);
+  const [statsInitialTab, setStatsInitialTab] = useState<StatsTab>('summary');
   const [questsOpen, setQuestsOpen] = useState(false);
   const [achievementsOpen, setAchievementsOpen] = useState(false);
   const [rankingOpen, setRankingOpen] = useState(false);
@@ -269,7 +275,10 @@ export default function GameView(props: GameViewProps) {
     props.onPlace({ kind: 'base', id: trip.from });
   };
 
-  const openStats = () => setStatsOpen(open => !open);
+  const openStats = () => {
+    setStatsInitialTab('summary');
+    setStatsOpen(open => !open);
+  };
   const openQuests = () => setQuestsOpen(open => !open);
   // 승부 결과 확정 — 서버가 도감·진행도·도전권을 바꾼다. 실패는 감사만 남아 창을 그대로 둔다
   const resolveEncounter = (r: EncounterResult) => {
@@ -340,7 +349,7 @@ export default function GameView(props: GameViewProps) {
         )}
 
         {statsOpen && (
-          <StatsModal game={game} guild={guildBonus}
+          <StatsModal game={game} guild={guildBonus} initialTab={statsInitialTab}
                       movement={scene.kind === 'region' ? REGION_PACKS[scene.id].movement : 'walk'}
                       region={region} nickname={props.nickname}
                       onClose={() => setStatsOpen(false)} />
@@ -348,7 +357,13 @@ export default function GameView(props: GameViewProps) {
         {questsOpen && <QuestInfoModal game={game} onClose={() => setQuestsOpen(false)} />}
         {achievementsOpen && (
           <AchievementsModal game={game} guest={accountState !== 'account'} dispatch={props.dispatch}
-                             setToast={props.setToast} onClose={() => setAchievementsOpen(false)} />
+                             setToast={props.setToast}
+                             onOpenStatsBonus={() => {
+                               setAchievementsOpen(false);
+                               setStatsInitialTab('bonus');
+                               setStatsOpen(true);
+                             }}
+                             onClose={() => setAchievementsOpen(false)} />
         )}
         {rankingOpen && <RankingModal onClose={() => setRankingOpen(false)} />}
         {away.report && awayOpen && (
@@ -386,6 +401,9 @@ export default function GameView(props: GameViewProps) {
                          base={scene.kind === 'base' ? scene.id : undefined} uid={props.uid}
                          sellBonus={guildBonus?.effects.sell ?? 0} accountState={accountState}
                          setToast={props.setToast} onClose={() => setActionPanel(null)} />
+        )}
+        {props.toasts && props.toasts.length > 0 && props.onDismissToast && (
+          <FloatingToastLayer toasts={props.toasts} onDismiss={props.onDismissToast} />
         )}
       </GameStageLayout>
 

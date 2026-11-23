@@ -502,6 +502,10 @@ const COSMETIC_KIND_LABELS: Record<CosmeticKind, string> = {
 const BONUS_KIND_LABELS: Record<CumulativeBonusKind, string> = {
   biteWaitCut: '입질 대기 감소',
   mutationWeight: '돌연변이 가중치',
+  rareWeight: '희귀 이상 가중치',
+  epicWeight: '영웅 이상 가중치',
+  legendaryWeight: '전설 가중치',
+  sellBonus: '판매가 보너스',
   namedWeight: '네임드 조우 가중치',
   moveSpeed: '이동 속도',
   artifactBoost: '유물 효과 배율',

@@ -25,7 +25,7 @@ function makeFakeCtx(): { ctx: Ctx; rects: RectCall[] } {
 }
 
 describe('drawPerson 모자 픽셀 경계', () => {
-  it('46종 모든 모자의 fillRect 좌표가 person(16x22, 원점 7,21) 경계 안에 들어간다', () => {
+  it('55종 모든 모자의 fillRect 좌표가 person(16x22, 원점 7,21) 경계 안에 들어간다', () => {
     const px = 7;
     const py = 21;
     // drawPerson 호출 시 머리, 몸통, 바지 외에 모자가 그리는 rect만 추출
@@ -56,7 +56,7 @@ describe('drawPerson 모자 픽셀 경계', () => {
       }
     }
 
-    expect(achSignatures.size).toBe(41);
+    expect(achSignatures.size).toBe(50);
   });
 });
 

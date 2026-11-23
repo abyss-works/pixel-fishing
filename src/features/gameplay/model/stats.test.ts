@@ -255,12 +255,11 @@ describe('받는 보너스', () => {
     });
     const bonuses = selectActiveBonuses(g);
     expect(bonuses.filter(b => b.source.kind === 'achievement').map(b => b.source)).toEqual([
-      { kind: 'achievement', label: '이동 속도', value: '+4%' },
-      { kind: 'achievement', label: '입질 대기', value: '−2%' },
+      { kind: 'achievement', label: '입질 대기', value: '−3.5%' },
       { kind: 'achievement', label: '네임드 조우 가중치', value: '+3%' },
+      { kind: 'achievement', label: '판매가 보너스', value: '+2%' },
     ]);
     const data = selectStatsModalData(g, 'sail', 0);
-    expect(data.speed.mods.some(m => m.id === 'achievement-moveSpeed' && m.label === '업적 누적')).toBe(true);
     expect(data.effectiveBite.min.mods.some(m => m.id === 'achievement-biteWaitCut' && m.label === '업적 누적')).toBe(true);
   });
 

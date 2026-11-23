@@ -129,6 +129,10 @@ export function achievementBonusContributions(state: GameState): CumulativeBonus
 export function achievementBonusesOf(state: GameState): AchievementBonuses {
   let biteWaitCut = 0;
   let mutationWeight = 0;
+  let rareWeight = 0;
+  let epicWeight = 0;
+  let legendaryWeight = 0;
+  let sellBonus = 0;
   let namedWeight = 0;
   let moveSpeed = 0;
   let artifactBoost = 0;
@@ -144,6 +148,18 @@ export function achievementBonusesOf(state: GameState): AchievementBonuses {
         break;
       case 'mutationWeight':
         mutationWeight = clean(mutationWeight + activeDelta);
+        break;
+      case 'rareWeight':
+        rareWeight = clean(rareWeight + activeDelta);
+        break;
+      case 'epicWeight':
+        epicWeight = clean(epicWeight + activeDelta);
+        break;
+      case 'legendaryWeight':
+        legendaryWeight = clean(legendaryWeight + activeDelta);
+        break;
+      case 'sellBonus':
+        sellBonus = clean(sellBonus + activeDelta);
         break;
       case 'namedWeight':
         namedWeight = clean(namedWeight + activeDelta);
@@ -170,6 +186,10 @@ export function achievementBonusesOf(state: GameState): AchievementBonuses {
   return {
     biteWaitCut,
     mutationWeight,
+    rareWeight,
+    epicWeight,
+    legendaryWeight,
+    sellBonus,
     namedWeight,
     moveSpeed,
     artifactBoost,

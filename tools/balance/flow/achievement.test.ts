@@ -31,11 +31,11 @@ describe('진행 업적 구역 보상 산식', () => {
     });
     expect(table).toEqual([
       { zone: 'pacific', zoneGold: 50_000, basic: 25_000, named: 25_000 },
-      { zone: 'seasia', zoneGold: 250_000, basic: 150_000, named: 100_000 },
-      { zone: 'indian', zoneGold: 750_000, basic: 400_000, named: 350_000 },
+      { zone: 'seasia', zoneGold: 250_000, basic: 100_000, named: 150_000 },
+      { zone: 'indian', zoneGold: 750_000, basic: 350_000, named: 400_000 },
       { zone: 'madagascar', zoneGold: 3_000_000, basic: 1_500_000, named: 1_500_000 },
       { zone: 'southatlantic', zoneGold: 10_000_000, basic: 5_000_000, named: 5_000_000 },
-      { zone: 'northatlantic', zoneGold: 55_000_000, basic: 30_000_000, named: 25_000_000 },
+      { zone: 'northatlantic', zoneGold: 55_000_000, basic: 25_000_000, named: 30_000_000 },
     ]);
   });
 
@@ -43,8 +43,8 @@ describe('진행 업적 구역 보상 산식', () => {
     const last = rewardRows({ hours: [4], split: 0.5 }).at(-1)!;
     expect(last.zone).toBe('northatlantic');
     expect(last.amounts[0].gold).toBe(55_000_000);
-    expect(rewardPlan(4, 0.5).reward('northatlantic', 'basic')).toEqual({ gold: 30_000_000 });
-    expect(rewardPlan(4, 0.5).reward('northatlantic', 'named')).toEqual({ gold: 25_000_000 });
+    expect(rewardPlan(4, 0.5).reward('northatlantic', 'basic')).toEqual({ gold: 25_000_000 });
+    expect(rewardPlan(4, 0.5).reward('northatlantic', 'named')).toEqual({ gold: 30_000_000 });
   });
 
   it('시간어치가 커지면 보상도 크거나 같다', () => {

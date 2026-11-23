@@ -35,7 +35,7 @@ function sceneOf(location: LocationRef): SceneRef {
 const DEV_ENV = devEnvOf(DEPLOY_ENV);
 
 function AppContent() {
-  const { log, setToast } = useMessageLog([
+  const { log, setToast, toasts, dismissToast } = useMessageLog([
     '집이에요. 가구를 눌러 정비하고, 문으로 나가 마을 물가에서 낚시해 보세요.',
   ]);
   const { game, dispatch, nickname, devTools, rename, sync, syncLabel, blocker, loading, guestProgress, recheckGuestProgress, adoptAccount, warmup, resync } = useGame({ setToast });
@@ -141,7 +141,7 @@ ${min}자 이상이어야 해요.`,
     <>
       <GameView
         game={game} scene={scene} entryPos={entryPos} placeSeq={placeSeq}
-        dispatch={dispatch} setToast={setToast} onScene={go} onPlace={place} onWarmup={warmup}
+        dispatch={dispatch} setToast={setToast} toasts={toasts} onDismissToast={dismissToast} onScene={go} onPlace={place} onWarmup={warmup}
         log={log} syncLabel={syncLabel} syncState={sync} guestProgress={guestProgress} recheckGuestProgress={recheckGuestProgress}
         account={account} accountChecked={accountChecked} accountFailed={accountFailed} uid={uid} nickname={nickname}
         onRename={rename} onAuthChanged={onAuthChanged} onResync={resync} blocker={blocker === 'update' ? <UpdateModal /> : blocker === 'replaced' ? <SessionReplacedModal /> : blocker === 'unsaved' ? <UnsavedModal /> : loading ? <LoadingOverlay /> : null}

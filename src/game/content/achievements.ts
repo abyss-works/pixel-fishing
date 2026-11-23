@@ -114,6 +114,10 @@ export interface AchievementCatalogEntry {
 export type CumulativeBonusKind =
   | 'biteWaitCut'
   | 'mutationWeight'
+  | 'rareWeight'
+  | 'epicWeight'
+  | 'legendaryWeight'
+  | 'sellBonus'
   | 'namedWeight'
   | 'moveSpeed'
   | 'artifactBoost'
@@ -187,23 +191,23 @@ export function selectorTargetCount(selector: AchievementSelector): number {
   return selectorIds(selector).length;
 }
 
-// ── 1. 진행 업적 30종 (15개 낚시 해역 × 기초/숙련, 총 25,862,500G) ──
+// ── 1. 진행 업적 30종 (15개 낚시 해역 × 기초/숙련, 총 25,862,870G) ──
 
 const SPOT_PROGRESS_REWARDS: Record<SpotId, { basic: number; full: number }> = {
-  pond: { basic: 50, full: 50 },
+  pond: { basic: 35, full: 35 },
   river: { basic: 100, full: 100 },
   sea: { basic: 300, full: 300 },
-  deep: { basic: 800, full: 800 },
+  deep: { basic: 750, full: 750 },
   dragonhole: { basic: 1_500, full: 1_500 },
-  coron: { basic: 4_000, full: 4_000 },
-  barrierreef: { basic: 12_000, full: 12_000 },
+  coron: { basic: 3_500, full: 4_000 },
+  barrierreef: { basic: 10_000, full: 15_000 },
   indian: { basic: 35_000, full: 40_000 },
   southindian: { basic: 100_000, full: 100_000 },
-  mozstrait: { basic: 200_000, full: 150_000 },
+  mozstrait: { basic: 150_000, full: 200_000 },
   comorodeep: { basic: 350_000, full: 350_000 },
   benguela: { basic: 500_000, full: 500_000 },
   sthelena: { basic: 1_500_000, full: 1_500_000 },
-  azores: { basic: 3_000_000, full: 2_500_000 },
+  azores: { basic: 2_500_000, full: 3_000_000 },
   bermuda: { basic: 7_500_000, full: 7_500_000 },
 };
 
@@ -314,6 +318,18 @@ const COSMETIC_LEGACY_AND_COLLECTION_RULES: AchievementRule[] = [
     reward: { kind: 'hat', hatId: 'fog-beanie' },
   },
   {
+    id: 'variant-northatlantic',
+    tab: 'cosmetic',
+    cosmeticKind: 'variant',
+    zone: 'northatlantic',
+    name: '북대서양 돌연변이 도감',
+    desc: '북대서양 어종의 돌연변이를 모두 모아요.',
+    selector: { kind: 'fish', zone: 'northatlantic' },
+    metric: { kind: 'discover', form: 'variant' },
+    threshold: 'all',
+    reward: { kind: 'hat', hatId: 'ridge-compass-cap' },
+  },
+  {
     id: 'variant-all',
     tab: 'cosmetic',
     cosmeticKind: 'variant',
@@ -340,7 +356,7 @@ const COSMETIC_LEGACY_AND_COLLECTION_RULES: AchievementRule[] = [
     tab: 'cosmetic',
     cosmeticKind: 'night',
     zone: 'pacific',
-    name: '한밤 도감',
+    name: '태평양 한밤 도감',
     desc: '태평양에서 밤에만 나타나는 어종의 일반 폼을 모두 모아요.',
     selector: { kind: 'fish', zone: 'pacific', night: true },
     metric: { kind: 'discover', form: 'normal' },
@@ -352,7 +368,7 @@ const COSMETIC_LEGACY_AND_COLLECTION_RULES: AchievementRule[] = [
     tab: 'cosmetic',
     cosmeticKind: 'night',
     zone: 'pacific',
-    name: '한밤 돌연변이 도감',
+    name: '태평양 한밤 돌연변이 도감',
     desc: '태평양에서 밤에만 나타나는 어종의 돌연변이를 모두 모아요.',
     selector: { kind: 'fish', zone: 'pacific', night: true },
     metric: { kind: 'discover', form: 'variant' },
@@ -456,6 +472,30 @@ const COSMETIC_LEGACY_AND_COLLECTION_RULES: AchievementRule[] = [
     reward: { kind: 'hat', hatId: 'pitch-lookout-cap' },
   },
   {
+    id: 'night-northatlantic-normal',
+    tab: 'cosmetic',
+    cosmeticKind: 'night',
+    zone: 'northatlantic',
+    name: '북대서양 한밤 도감',
+    desc: '북대서양에서 밤에만 나타나는 어종의 일반 폼을 모두 모아요.',
+    selector: { kind: 'fish', zone: 'northatlantic', night: true },
+    metric: { kind: 'discover', form: 'normal' },
+    threshold: 'all',
+    reward: { kind: 'hat', hatId: 'ridge-lantern-cap' },
+  },
+  {
+    id: 'night-northatlantic-variant',
+    tab: 'cosmetic',
+    cosmeticKind: 'night',
+    zone: 'northatlantic',
+    name: '북대서양 한밤 돌연변이 도감',
+    desc: '북대서양에서 밤에만 나타나는 어종의 돌연변이를 모두 모아요.',
+    selector: { kind: 'fish', zone: 'northatlantic', night: true },
+    metric: { kind: 'discover', form: 'variant' },
+    threshold: 'all',
+    reward: { kind: 'hat', hatId: 'vanishing-hood' },
+  },
+  {
     id: 'big-50',
     tab: 'cosmetic',
     cosmeticKind: 'big',
@@ -504,7 +544,7 @@ const COSMETIC_LEGACY_AND_COLLECTION_RULES: AchievementRule[] = [
     tab: 'cosmetic',
     cosmeticKind: 'general',
     name: '십만 마리 낚시꾼',
-    desc: '일반 어종을 합쳐 100,000마리 이상 낚아요.',
+    desc: '물고기를 합쳐 100,000마리 이상 낚아요.',
     selector: { kind: 'fish' },
     metric: { kind: 'catchCount' },
     threshold: 100_000,
@@ -519,6 +559,8 @@ const NAMED_HAT_TIERS: Readonly<Record<string, readonly [string, string, string]
   'elder-sixgill': ['dunkleos-trawl-hat', 'dunkleos-rivet-leather', 'dunkleos-jaw-helm'],
   adamastor: ['adamastor-pier-cap', 'adamastor-storm-hood', 'adamastor-lantern-hood'],
   jasconius: ['jasconius-island-cap', 'jasconius-ember-visor', 'jasconius-rockback-hat'],
+  'gloucester-serpent': ['gloucester-fog-cap', 'gloucester-vertebra-visor', 'gloucester-crest-hat'],
+  guabancex: ['guabancex-sargasso-hood', 'guabancex-eye-hat', 'guabancex-fin-crown'],
 };
 
 const NAMED_CLEAR_THRESHOLDS = [1, 5, 10] as const;
@@ -554,7 +596,7 @@ export function namedSpoilerPlace(namedId: string): string {
   return zoneById(named.zones[0])?.shortName ?? named.zones[0];
 }
 
-// ── 3. 누적 보너스 업적 25종 (전역 8계열 + 구역 7×2=14계열 + 최고 레벨 유물 3단계) ──
+// ── 3. 누적 보너스 업적 26종 (전역 8계열 + 구역 7×2=14계열 + 최고 레벨 유물 4단계) ──
 
 const GLOBAL_BONUS_SERIES: readonly CumulativeBonusSeries[] = [
   {
@@ -567,10 +609,10 @@ const GLOBAL_BONUS_SERIES: readonly CumulativeBonusSeries[] = [
     unit: '마리',
     tierCount: 1,
     steps: [
-      { id: 'bonus-manual-total-1', threshold: 10, delta: 0.005, label: '10마리' },
-      { id: 'bonus-manual-total-2', threshold: 100, delta: 0.005, label: '100마리' },
-      { id: 'bonus-manual-total-3', threshold: 1_000, delta: 0.01, label: '1,000마리' },
-      { id: 'bonus-manual-total-4', threshold: 10_000, delta: 0.02, label: '10,000마리' },
+      { id: 'bonus-manual-total-1', threshold: 10, delta: 0.01, label: '10마리' },
+      { id: 'bonus-manual-total-2', threshold: 100, delta: 0.01, label: '100마리' },
+      { id: 'bonus-manual-total-3', threshold: 1_000, delta: 0.015, label: '1,000마리' },
+      { id: 'bonus-manual-total-4', threshold: 10_000, delta: 0.015, label: '10,000마리' },
     ],
   },
   {
@@ -579,14 +621,14 @@ const GLOBAL_BONUS_SERIES: readonly CumulativeBonusSeries[] = [
     desc: '직접 챔질로 전설 등급 어종을 낚아요.',
     scope: 'global',
     metric: { kind: 'counter', key: 'manual.legendary.total' },
-    bonusKind: 'biteWaitCut',
+    bonusKind: 'legendaryWeight',
     unit: '마리',
     tierCount: 1,
     steps: [
-      { id: 'bonus-manual-legendary-1', threshold: 1, delta: 0.005, label: '1마리' },
-      { id: 'bonus-manual-legendary-2', threshold: 5, delta: 0.005, label: '5마리' },
-      { id: 'bonus-manual-legendary-3', threshold: 10, delta: 0.005, label: '10마리' },
-      { id: 'bonus-manual-legendary-4', threshold: 25, delta: 0.005, label: '25마리' },
+      { id: 'bonus-manual-legendary-1', threshold: 1, delta: 0.01, label: '1마리' },
+      { id: 'bonus-manual-legendary-2', threshold: 5, delta: 0.01, label: '5마리' },
+      { id: 'bonus-manual-legendary-3', threshold: 10, delta: 0.01, label: '10마리' },
+      { id: 'bonus-manual-legendary-4', threshold: 25, delta: 0.01, label: '25마리' },
     ],
   },
   {
@@ -616,7 +658,7 @@ const GLOBAL_BONUS_SERIES: readonly CumulativeBonusSeries[] = [
     tierCount: 1,
     steps: [
       { id: 'bonus-catch-auto-1', threshold: 1_000, delta: 0.01, label: '1,000마리' },
-      { id: 'bonus-catch-auto-2', threshold: 10_000, delta: 0.01, label: '10,000마리' },
+      { id: 'bonus-catch-auto-2', threshold: 10_000, delta: 0.02, label: '10,000마리' },
       { id: 'bonus-catch-auto-3', threshold: 100_000, delta: 0.02, label: '100,000마리' },
     ],
   },
@@ -626,22 +668,22 @@ const GLOBAL_BONUS_SERIES: readonly CumulativeBonusSeries[] = [
     desc: 'PERFECT 판정으로 물고기를 낚아요.',
     scope: 'global',
     metric: { kind: 'counter', key: 'catch.perfect' },
-    bonusKind: 'biteWaitCut',
+    bonusKind: 'rareWeight',
     unit: '회',
     tierCount: 1,
     steps: [
       { id: 'bonus-catch-perfect-1', threshold: 100, delta: 0.01, label: '100회' },
-      { id: 'bonus-catch-perfect-2', threshold: 1_000, delta: 0.01, label: '1,000회' },
-      { id: 'bonus-catch-perfect-3', threshold: 10_000, delta: 0.01, label: '10,000회' },
+      { id: 'bonus-catch-perfect-2', threshold: 1_000, delta: 0.015, label: '1,000회' },
+      { id: 'bonus-catch-perfect-3', threshold: 10_000, delta: 0.015, label: '10,000회' },
     ],
   },
   {
     id: 'bonus-catch-bait',
     name: '미끼 손맛',
-    desc: '미끼를 써서 물고기를 낚아요.',
+    desc: '수동 낚시에서 미끼를 써서 물고기를 낚아요.',
     scope: 'global',
     metric: { kind: 'counter', key: 'catch.bait' },
-    bonusKind: 'biteWaitCut',
+    bonusKind: 'epicWeight',
     unit: '마리',
     tierCount: 1,
     steps: [
@@ -671,13 +713,13 @@ const GLOBAL_BONUS_SERIES: readonly CumulativeBonusSeries[] = [
     desc: '물고기를 팔아 골드를 모아요.',
     scope: 'global',
     metric: { kind: 'counter', key: 'sell.gold' },
-    bonusKind: 'moveSpeed',
+    bonusKind: 'sellBonus',
     unit: 'G',
     tierCount: 1,
     steps: [
-      { id: 'bonus-sell-gold-1', threshold: 1_000_000, delta: 0.02, label: '1,000,000G' },
-      { id: 'bonus-sell-gold-2', threshold: 10_000_000, delta: 0.02, label: '10,000,000G' },
-      { id: 'bonus-sell-gold-3', threshold: 100_000_000, delta: 0.02, label: '100,000,000G' },
+      { id: 'bonus-sell-gold-1', threshold: 1_000_000, delta: 0.01, label: '1,000,000G' },
+      { id: 'bonus-sell-gold-2', threshold: 10_000_000, delta: 0.01, label: '10,000,000G' },
+      { id: 'bonus-sell-gold-3', threshold: 100_000_000, delta: 0.01, label: '100,000,000G' },
     ],
   },
 ];
@@ -728,22 +770,23 @@ const MAX_ARTIFACT_BONUS_SERIES: CumulativeBonusSeries = {
   metric: { kind: 'maxArtifact' },
   bonusKind: 'artifactBoost',
   unit: '개',
-  tierCount: 3,
+  tierCount: 4,
   steps: [
     { id: 'bonus-max-artifact-1', threshold: 1, delta: 0.03, label: '1개' },
-    { id: 'bonus-max-artifact-3', threshold: 3, delta: 0.05, label: '3개' },
-    { id: 'bonus-max-artifact-6', threshold: 6, delta: 0.07, label: '6개' },
+    { id: 'bonus-max-artifact-3', threshold: 3, delta: 0.04, label: '3개' },
+    { id: 'bonus-max-artifact-6', threshold: 6, delta: 0.04, label: '6개' },
+    { id: 'bonus-max-artifact-8', threshold: 8, delta: 0.04, label: '8개' },
   ],
 };
 
-/** 누적 보너스 업적 계열 23개(최고 레벨 유물 3단계 포함 총 25종) */
+/** 누적 보너스 업적 계열 23개(최고 레벨 유물 4단계 포함 총 26종) */
 export const CUMULATIVE_BONUS_SERIES: readonly CumulativeBonusSeries[] = [
   ...GLOBAL_BONUS_SERIES,
   ...ZONE_BONUS_SERIES,
   MAX_ARTIFACT_BONUS_SERIES,
 ];
 
-/** 누적 보너스 업적 총 수 (25) */
+/** 누적 보너스 업적 총 수 (26) */
 export const CUMULATIVE_BONUS_COUNT = CUMULATIVE_BONUS_SERIES.reduce((sum, s) => sum + s.tierCount, 0);
 
 // ── 4. 폐지된 옛 업적 id (재사용·수령·노출 금지) ──

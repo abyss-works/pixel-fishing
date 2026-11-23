@@ -201,10 +201,14 @@ describe('누적 보너스 계산 (achievementBonusesOf)', () => {
       },
     });
     const b = achievementBonusesOf(s);
-    expect(b.biteWaitCut).toBe(0.16);
+    expect(b.biteWaitCut).toBe(0.10);
     expect(b.mutationWeight).toBe(0.08);
+    expect(b.rareWeight).toBe(0.04);
+    expect(b.epicWeight).toBe(0.03);
+    expect(b.legendaryWeight).toBe(0.04);
+    expect(b.sellBonus).toBe(0.03);
     expect(b.namedWeight).toBe(0.10);
-    expect(b.moveSpeed).toBe(0.06);
+    expect(b.moveSpeed).toBe(0);
     expect(b.artifactBoost).toBe(0.15);
     expect(b.zoneLegendary.pacific).toBe(0.06);
     expect(b.zoneMutation.pacific).toBe(0.09);
@@ -218,8 +222,8 @@ describe('누적 보너스 계산 (achievementBonusesOf)', () => {
     const p = cumulativeBonusProgress(seed({ achievementCounters: { 'manual.total': 1_240 } }), manualSeries);
     expect(p.current).toBe(1_240);
     expect(p.completedSteps).toBe(3);
-    expect(p.activeDelta).toBe(0.02);
-    expect(p.maxDelta).toBe(0.04);
+    expect(p.activeDelta).toBe(0.035);
+    expect(p.maxDelta).toBe(0.05);
     expect(p.nextStep?.threshold).toBe(10_000);
   });
 
@@ -441,6 +445,6 @@ describe('업적 규칙과 액션 (rules, actions)', () => {
     expect(REJECT_TEXT['achievement-already-claimed']).toBe('이미 받은 업적이에요.');
     expect(REJECT_TEXT['achievement-not-claimable']).toBe('아직 받을 수 없는 업적이에요.');
     expect(REJECT_TEXT['no-claimable-achievements']).toBe('받을 수 있는 업적이 없어요.');
-    expect(ACHIEVEMENTS).toHaveLength(71);
+    expect(ACHIEVEMENTS).toHaveLength(80);
   });
 });

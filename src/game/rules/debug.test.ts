@@ -220,7 +220,7 @@ describe('achievement.setCounter / resetCounters / evaluate & bag.spawn & snapsh
     const set = debug(seed({ achievements: { 'spot-basic-sea': 'claimable' } }), 'achievement.setCounter', { key: 'sell.gold', value: 1_000_000_000 });
     if (!set.ok) throw new Error(set.error);
     expect(set.state.achievementCounters['sell.gold']).toBe(1_000_000_000);
-    expect(achievementBonusesOf(set.state).moveSpeed).toBeGreaterThan(0);
+    expect(achievementBonusesOf(set.state).sellBonus).toBeGreaterThan(0);
 
     const reset = debug(set.state, 'achievement.resetCounters', { resetAchievements: true });
     if (!reset.ok) throw new Error(reset.error);
