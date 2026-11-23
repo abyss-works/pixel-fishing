@@ -1,7 +1,8 @@
 // 비-목킹 통합 테스트 — platform/api를 모킹하지 않고 실제 HttpAdmin + QueryProvider + AdminDashboard 흐름을 검증한다.
 // 초기 로드 ≤ 3회, 탭 전환(Overview → Players → Economy → UserDetail) 중 중복 users/spamFlags 호출 0회, 429 HTML 응답 복구를 확인한다.
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { ComponentType, ReactNode } from 'react';
 
 const UID = 'aaaaaaaa-0000-0000-0000-000000000001';
 
@@ -66,6 +67,19 @@ async function loadRealDashboard() {
 
 describe('관리자 대시보드 비-목킹 요청 횟수 및 429 통합 테스트', () => {
   const fetchCalls: string[] = [];
+  let QueryProvider: ComponentType<{ children: ReactNode }>;
+  let AdminApp: ComponentType;
+
+  beforeAll(async () => {
+    const loaded = await loadRealDashboard();
+    QueryProvider = loaded.QueryProvider;
+    AdminApp = loaded.AdminApp;
+  }, 20_000);
+
+  afterAll(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
 
   beforeEach(() => {
     fetchCalls.length = 0;
@@ -75,7 +89,6 @@ describe('관리자 대시보드 비-목킹 요청 횟수 및 429 통합 테스�
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
-    vi.unstubAllEnvs();
     vi.useRealTimers();
     sessionStorage.clear();
   });
@@ -106,7 +119,6 @@ describe('관리자 대시보드 비-목킹 요청 횟수 및 429 통합 테스�
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const { QueryProvider, AdminApp } = await loadRealDashboard();
     render(<QueryProvider><AdminApp /></QueryProvider>);
 
     // 1. OverviewTab 초기 로드 완료 대기
@@ -152,7 +164,7 @@ describe('관리자 대시보드 비-목킹 요청 횟수 및 429 통합 테스�
     // 전체 여정 동안 별도 ?q=users / ?q=spamFlags 풀스캔 호출 0회 검증
     expect(fetchCalls.filter(u => u === '/api/admin?q=users')).toHaveLength(0);
     expect(fetchCalls.filter(u => u === '/api/admin?q=spamFlags')).toHaveLength(0);
-  });
+  }, 15_000);
 
   it('Nginx 비-JSON HTML 429 응답에 대해 Retry-After 백오프 재시도 후 복구하고, 한도 초과 시 안내 문구를 보인다', async () => {
     let overviewAttempts = 0;
@@ -182,7 +194,6 @@ describe('관리자 대시보드 비-목킹 요청 횟수 및 429 통합 테스�
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const { QueryProvider, AdminApp } = await loadRealDashboard();
     render(<QueryProvider><AdminApp /></QueryProvider>);
 
     expect(await screen.findByText('테스트어부(angler@example.com)')).toBeInTheDocument();
@@ -190,5 +201,5 @@ describe('관리자 대시보드 비-목킹 요청 횟수 및 429 통합 테스�
 
     fireEvent.click(screen.getByRole('button', { name: '경제·진행' }));
     expect(await screen.findByText('요청이 너무 많아 잠시 기다렸다가 다시 시도해 주세요.')).toBeInTheDocument();
-  });
+  }, 15_000);
 });

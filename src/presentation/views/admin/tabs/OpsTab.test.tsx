@@ -44,8 +44,10 @@ describe('운영 탭', () => {
       expect(within(row).getByText(label)).toBeInTheDocument();
     }
     expect(within(catalog).getByText(/이벤트를 남기지 않아요/)).toBeInTheDocument();
-    for (const type of ['adminRestrict', 'adminUnrestrict', 'adminResetLink']) {
+    for (const type of ['adminRestrict', 'adminUnrestrict', 'adminResetLink', 'adminRevokeSessions']) {
       expect(within(catalog).getByText(type)).toBeInTheDocument();
     }
+    const contract = screen.getByText('데이터 계약').closest('section')!;
+    expect(within(contract).getByText(/세션 강제 종료/)).toBeInTheDocument();
   });
 });
