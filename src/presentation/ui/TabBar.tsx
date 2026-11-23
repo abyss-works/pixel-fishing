@@ -47,7 +47,7 @@ function LockedTab({ tab, lines }: { tab: TabDef<string>; lines: readonly string
   const reasonId = useId();
   return (
     <LockTip lines={lines} className="flex flex-1 min-w-0">
-      <button type="button" aria-disabled="true" aria-describedby={reasonId} className="opacity-55 cursor-not-allowed">
+      <button type="button" aria-disabled="true" aria-describedby={reasonId} className="text-text-dim cursor-not-allowed">
         {tab.icon}
         <span className="inline-flex items-center gap-1">{tab.label}<LockIcon size={10} /></span>
       </button>

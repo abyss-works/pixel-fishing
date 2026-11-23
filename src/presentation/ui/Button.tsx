@@ -1,7 +1,7 @@
 import type { ButtonHTMLAttributes, Ref } from 'react';
 import { cx } from './cx';
 
-type Variant = 'default' | 'primary' | 'ghost';
+type Variant = 'default' | 'primary' | 'ghost' | 'accent' | 'danger';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
@@ -15,11 +15,11 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   ref?: Ref<HTMLButtonElement>;
 }
 
-// 픽셀 베벨 버튼 — variant로 위계 구분 (확정=primary, 보조=ghost)
+// 픽셀 베벨 버튼 — variant로 위계 구분 (확정=primary, 보조=ghost, 강조=accent, 경고=danger)
 export default function Button({ variant = 'default', size = 'md', full, pressed, className, ...props }: ButtonProps) {
   return (
     <button
-      className={cx('pf-btn', variant !== 'default' && variant, size === 'sm' && 'px-2 py-1 text-sm', full && 'full', pressed && 'pressed', className)}
+      className={cx('pf-btn', variant !== 'default' && variant, size === 'sm' && 'sm', full && 'full', pressed && 'pressed', className)}
       aria-pressed={pressed}
       {...props}
     />

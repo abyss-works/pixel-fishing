@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes } from 'react';
 import { cx } from './cx';
+import { NOTCH_SM } from './notch';
 import PixelIcon from './PixelIcon';
 
 // 이전/다음 화살표 버튼 — 넘기기 조작의 공용 버튼.
@@ -22,7 +23,8 @@ export default function ArrowButton({ dir, tone = 'plain', full, className, ...p
     <button
       type="button"
       aria-label={dir < 0 ? '이전' : '다음'}
-      className={cx('inline-flex items-center justify-center border border-line rounded-sm',
+      className={cx('inline-flex items-center justify-center border border-line pf-bevel',
+        NOTCH_SM,
         'cursor-pointer transition disabled:opacity-40 disabled:cursor-not-allowed',
         TONE[tone], full && 'w-full', className)}
       {...props}

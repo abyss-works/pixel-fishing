@@ -27,7 +27,7 @@ const screens = screenFiles.filter(f => f.path.endsWith('.tsx'));
 const PRIMITIVES: { pattern: RegExp; use: string }[] = [
   { pattern: /\bpf-frame\b/, use: 'Frame(틀) · Panel(제목 있는 박스)' },
   { pattern: /\bpf-btn\b/, use: 'Button · LinkButton(다른 페이지 링크)' },
-  { pattern: /<button\b/, use: 'Button · IconButton · PillButton · SelectList · Frame as="button"' },
+  { pattern: /<button\b/, use: 'Button · IconButton · ToggleChip · SelectList · Frame as="button"' },
   { pattern: /<input\b/, use: 'TextInput · Slider · NumberStepper' },
   { pattern: /<select\b/, use: 'Select' },
   { pattern: /<textarea\b/, use: 'TextArea' },
@@ -618,5 +618,33 @@ describe('UI 시스템 가드', () => {
     expect(OK_STATUS_COLOR.test('bg-ok/10')).toBe(true);
     expect(OK_STATUS_COLOR.test('border-ok/70')).toBe(true);
     expect(OK_STATUS_COLOR.test('text-accent border-gold')).toBe(false);
+  });
+
+  // v3 프리미티브 가드 — 공용 UI(ui/)는 둥근 모서리(예외 3곳 제외), 완료/잠금 흐림(opacity-*), 네이티브 title을 쓰지 않는다
+  const ROUNDED_RE = /\brounded-(?:sm|md|lg|full|\[[^\]]+\])\b/;
+  const UI_ROUNDED_EXCEPTIONS = new Set([
+    'ui/TooltipBubble.tsx',     // DESIGN.md 예외: 툴팁 버블
+    'ui/hud/Minimap.tsx',       // DESIGN.md 예외: 미니맵 지도 틀
+    'ui/GoogleButton.tsx',      // Google 브랜드 가이드라인 버튼
+    'ui/PillButton.tsx',        // admin/devtools 전용 잔존 유틸 (게임 화면에서 금지)
+  ]);
+  it('공용 UI(ui/)는 예외 4종 외에 둥근 모서리(rounded-*)를 쓰지 않는다', () => {
+    const uiFiles = presentationFiles.filter(f => f.path.startsWith('ui/') && !UI_ROUNDED_EXCEPTIONS.has(f.path));
+    const offenders = uiFiles.filter(f => ROUNDED_RE.test(f.src)).map(f => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  const OPACITY_WASH_RE = /(?<!disabled:)\bopacity-(?:45|50|55|70|80|85|\[0\.(?:45|50|55|70|72)\])\b/;
+  it('공용 UI(ui/)는 완료·잠금·보조 텍스트에 opacity 흐림을 쓰지 않는다', () => {
+    const uiFiles = presentationFiles.filter(f => f.path.startsWith('ui/') && f.path !== 'ui/PillButton.tsx');
+    const offenders = uiFiles.filter(f => OPACITY_WASH_RE.test(f.src)).map(f => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  const NATIVE_TITLE_RE = /<[a-z][^>]*\stitle=/;
+  it('공용 UI(ui/)는 브라우저 기본 title 속성 툴팁을 쓰지 않는다', () => {
+    const uiFiles = presentationFiles.filter(f => f.path.startsWith('ui/'));
+    const offenders = uiFiles.filter(f => NATIVE_TITLE_RE.test(f.src)).map(f => f.path);
+    expect(offenders).toEqual([]);
   });
 });

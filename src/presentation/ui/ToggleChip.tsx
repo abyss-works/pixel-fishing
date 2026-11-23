@@ -11,13 +11,15 @@ interface ToggleChipProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 
   pressed: boolean;
   /** 켜져 있을 때 완전 강조로 세운다 */
   emphasis?: boolean;
+  size?: 'md' | 'sm';
 }
 
-export default function ToggleChip({ pressed, emphasis = false, disabled, className, children, ...props }: ToggleChipProps) {
+export default function ToggleChip({ pressed, emphasis = false, size = 'md', disabled, className, children, ...props }: ToggleChipProps) {
   const tier = disabled ? 'off-disabled' : !pressed ? 'off' : emphasis ? 'emphasis' : 'on';
   return (
     <button type="button" aria-pressed={pressed} disabled={disabled} data-tier={tier}
-            className={cx('inline-flex items-center gap-1.5 h-[22px] px-2 text-2xs whitespace-nowrap border-2 transition-colors',
+            className={cx('inline-flex items-center gap-1.5 px-2 text-2xs whitespace-nowrap border-2 transition-colors',
+              size === 'sm' ? 'min-h-[24px]' : 'min-h-[26px]',
               'bg-[color-mix(in_oklab,var(--c-bg)_60%,transparent)]', NOTCH_SM,
               tier === 'emphasis' && cx('border-gold text-gold cursor-pointer', PRESSED_BEVEL),
               tier === 'on' && cx('border-line text-text cursor-pointer', PRESSED_BEVEL),

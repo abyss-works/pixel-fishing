@@ -32,7 +32,7 @@ export default function SubTabsGrid<K extends string>({ items, activeKey, onSele
           >
             <span className="whitespace-nowrap">{it.label}</span>
             {it.sub !== undefined && (
-              <span className="text-2xs whitespace-nowrap opacity-80">{it.sub}</span>
+              <span className={cx('text-2xs whitespace-nowrap', active ? 'text-gold' : 'text-text-dim')}>{it.sub}</span>
             )}
           </button>
         );

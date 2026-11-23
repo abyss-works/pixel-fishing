@@ -18,12 +18,12 @@ export function GradeName({ name, grade, emphasized = false }: { name: string; g
   );
 }
 
-// 미획득 도감 카드용 등급 점
+// 미획득 도감 카드용 등급 점 — 네모 점
 export function RarityDot({ rarity }: { rarity: RarityId }) {
   return (
     <span
       data-rarity={rarity}
-      className="inline-block size-1.5 rounded-full mr-1 align-middle bg-(--rarity-color)"
+      className="inline-block size-1.5 mr-1 align-middle bg-(--rarity-color)"
     />
   );
 }
@@ -34,10 +34,11 @@ export function RarityDot({ rarity }: { rarity: RarityId }) {
     **크기(패딩·글자)는 여기 없다** — 화면마다 카드가 커야 할 이유가 달라 쓰는 쪽이 정한다.
     쓰는 쪽이 `data-rarity`를 걸어야 --rarity-color가 잡힌다. */
 export const RARITY_CARD =
-  'bg-bg border-2 rounded-sm text-center leading-normal'
+  'pf-notch bg-(--inset-base) border-2 text-center leading-normal'
+  + ' shadow-[inset_1px_1px_0_var(--bevel-hi),inset_-1px_-1px_0_var(--bevel-lo)]'
   + ' border-[color-mix(in_srgb,var(--rarity-color)_70%,transparent)]'
   + ' transition-[translate,background-color] duration-[120ms] ease-out'
   + ' hover:-translate-y-0.5 hover:bg-surface-2';
 
-/** 미획득·미보유 카드 흐림 — 등급 카드와 짝이라 같은 모듈에 둔다. 네 화면이 같은 값을 쓴다 */
-export const DIM_CARD = 'opacity-[0.72]';
+/** 미획득·미보유 카드 어두운 바닥 — 등급 카드와 짝이라 같은 모듈에 둔다. 네 화면이 같은 값을 쓴다 */
+export const DIM_CARD = 'bg-bg border-[color-mix(in_srgb,var(--rarity-color)_45%,var(--c-line))] text-text-dim';

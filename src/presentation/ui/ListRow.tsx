@@ -12,14 +12,14 @@ export type ListRowState = 'done' | 'current' | 'selected' | 'locked' | 'open';
 // onSelect가 있으면 고르는 행(listbox의 option)이 되고, 없으면 보기만 하는 행이다. 행 높이는 내용이 한 줄에 들어가는 한 상태와 무관하게 같다.
 const ROW: Record<ListRowState, string> = {
   open: 'bg-surface-2',
-  done: 'bg-surface-2 opacity-50',
+  done: 'bg-bg text-text-dim border-[color-mix(in_oklab,var(--c-line)_75%,var(--c-bg))] shadow-[inset_2px_2px_0_var(--bevel-hi),inset_-1px_-1px_0_var(--bevel-lo)]',
   current: 'bg-surface-2 border-[color-mix(in_oklab,var(--c-accent)_60%,var(--c-line))]',
   selected: 'bg-surface-2 border-gold translate-y-px shadow-[inset_-2px_-2px_0_var(--bevel-lo),inset_2px_2px_0_var(--bevel-hi)]',
-  locked: 'bg-[color-mix(in_oklab,var(--c-bg)_45%,var(--c-surface))] text-text-dim shadow-[inset_2px_2px_0_var(--bevel-hi),inset_-1px_-1px_0_var(--bevel-lo)]',
+  locked: 'bg-(--inset-base) text-text-dim shadow-[inset_2px_2px_0_var(--bevel-hi),inset_-1px_-1px_0_var(--bevel-lo)]',
 };
 
 const NAME: Record<ListRowState, string> = {
-  open: 'font-bold', done: 'font-bold', current: 'font-bold text-accent', selected: 'font-bold text-gold', locked: 'font-normal text-text-dim',
+  open: 'font-bold', done: 'font-bold text-text-dim', current: 'font-bold text-accent', selected: 'font-bold text-gold', locked: 'font-normal text-text-dim',
 };
 
 export default function ListRow({ state, leading, name, subs = [], trailing, onSelect, ariaLabel }: {
@@ -59,5 +59,5 @@ export default function ListRow({ state, leading, name, subs = [], trailing, onS
       </Frame>
     );
   }
-  return <Frame className={className} aria-label={ariaLabel}>{body}</Frame>;
+  return <div className={cx('pf-notch border-2 border-line', className)} aria-label={ariaLabel}>{body}</div>;
 }

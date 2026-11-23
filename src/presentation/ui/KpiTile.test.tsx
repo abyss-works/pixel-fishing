@@ -1,4 +1,4 @@
-// 지표 타일 — 이름·값·보조 문구의 표시와 값 색(tone), 값 title을 확인한다.
+// 지표 타일 — 이름·값·보조 문구의 표시와 값 색(tone), 네이티브 title 미사용을 확인한다.
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import KpiTile from './KpiTile';
@@ -6,10 +6,10 @@ import KpiTile from './KpiTile';
 afterEach(cleanup);
 
 describe('KpiTile', () => {
-  it('이름·값·보조 문구를 보이고, 값에 전체 값을 title로 둔다', () => {
+  it('이름·값·보조 문구를 보이고, 네이티브 title 속성을 두지 않는다', () => {
     render(<KpiTile label="금일 DAU" value="1.2만" hint="최근 7일 WAU 3만" />);
     expect(screen.getByText('금일 DAU')).toBeInTheDocument();
-    expect(screen.getByText('1.2만')).toHaveAttribute('title', '1.2만');
+    expect(screen.getByText('1.2만')).not.toHaveAttribute('title');
     expect(screen.getByText('최근 7일 WAU 3만')).toBeInTheDocument();
   });
 

@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 import { cx } from './cx';
+import Inset from './Inset';
+import { NOTCH_SM, PRESSED_BEVEL } from './notch';
 import PixelIcon from './PixelIcon';
 
 // 선택 카드 — 미리보기 그림이 있는 단일 선택지(라디오). 여러 장을 role="radiogroup" 안에 나란히 둔다.
@@ -25,19 +27,21 @@ export default function ChoiceCard({ selected, onSelect, preview, label, sub, ba
       role="radio"
       aria-checked={selected}
       onClick={onSelect}
-      className={cx('flex flex-col gap-1.5 p-2 text-left border rounded-sm cursor-pointer transition',
-        selected ? 'border-gold bg-surface-2' : 'border-line bg-surface hover:border-gold-dark')}
+      className={cx(
+        'flex flex-col gap-1.5 p-2 text-left pf-notch border-2 cursor-pointer transition-colors',
+        selected ? cx('border-gold bg-surface-2', PRESSED_BEVEL) : 'border-line bg-surface pf-bevel hover:border-gold-dark',
+      )}
     >
-      <div className="flex items-center justify-center gap-1 h-16 rounded-sm bg-bg overflow-hidden">
+      <Inset tone="deep" className="flex items-center justify-center gap-1 h-16 w-full overflow-hidden">
         {preview}
-      </div>
+      </Inset>
       <div className="flex items-center gap-1.5">
         <PixelIcon glyph={selected ? 'checkOn' : 'checkOff'} size={11}
                    className={selected ? 'text-gold' : 'text-text-dim'} />
         <span className={cx('pf-accent text-base', selected ? 'text-gold' : 'text-text')}>{label}</span>
         {sub && <span className="text-2xs text-text-dim">{sub}</span>}
         {badge && (
-          <span className={cx('ml-auto text-2xs px-1 rounded-sm border', BADGE_CLS[badge])}>{badge}</span>
+          <span className={cx('ml-auto text-2xs px-1 border', NOTCH_SM, BADGE_CLS[badge])}>{badge}</span>
         )}
       </div>
       <p className="text-xs leading-[1.6] text-text-dim whitespace-pre-line">{description}</p>

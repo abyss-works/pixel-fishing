@@ -65,8 +65,6 @@
   --color-legend: var(--c-legend);
   --font-sans: 'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', system-ui, sans-serif;
   --font-pixel: 'Silkscreen', 'Noto Sans KR', 'Courier New', monospace;
-  --radius-sm: 6px;  /* 구 --r-sm — rounded-sm */
-  --radius-md: 10px; /* 구 --r-md — rounded-md */
   --shadow-panel: 0 6px 24px rgba(0, 0, 0, 0.45); /* 구 --shadow */
   --text-shadow-hud: 0 1px 2px rgba(0, 0, 0, 0.6); /* 캔버스 위 HUD 글자 — text-shadow-hud */
 
@@ -139,11 +137,15 @@
   --c-legend: #ffd54f;
   --c-special: #69f0ae; /* 특수 표시 등급 — 네 등급 밖의 표시용 등급색. 초록은 특수에만 쓴다 */
 
-  /* 레이아웃 · 베벨 */
+  /* 레이아웃 · 베벨 · 오목 표면 */
   --sidebar-w: 384px;
   --notch: 6px;
+  --notch-sm: 3px;
   --bevel-lo: rgba(255, 255, 255, 0.08);
   --bevel-hi: rgba(0, 0, 0, 0.45);
+  --inset-deep: #0a1526;
+  --inset-base: #101e34;
+  --inset-light: #182a46;
 
   /* z 레이어 - 화면 층 순서를 값으로 옮긴 것이다. 아래에서 위로:
      스테이지 위 HUD(stage-hud, stage-card) < 채팅과 헤더(chrome) < 헤더의 펼친 메뉴 줄(menu-row)
@@ -223,7 +225,25 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
       calc(100% - var(--notch)) 100%, 0 100%, 0 var(--notch)
     );
   }
+  .pf-notch-sm {
+    clip-path: polygon(
+      var(--notch-sm) 0, 100% 0, 100% calc(100% - var(--notch-sm)),
+      calc(100% - var(--notch-sm)) 100%, 0 100%, 0 var(--notch-sm)
+    );
+  }
   .pf-bevel { box-shadow: inset 1px 1px 0 var(--bevel-lo), inset -1px -1px 0 var(--bevel-hi); }
+
+  .pf-inset {
+    background: var(--inset-base);
+    border: 1px solid var(--c-line);
+    clip-path: polygon(
+      var(--notch) 0, 100% 0, 100% calc(100% - var(--notch)),
+      calc(100% - var(--notch)) 100%, 0 100%, 0 var(--notch)
+    );
+    box-shadow: inset 2px 2px 0 var(--bevel-hi), inset -1px -1px 0 var(--bevel-lo);
+  }
+  .pf-inset.deep { background: var(--inset-deep); }
+  .pf-inset.light { background: var(--inset-light); }
 
   /* HUD 반투명 표면 — 캔버스 위에 뜨는 자원 바·알약·흔적 카드의 공통 바탕(배경 72% + 흐림 + 글자 그림자) */
   .pf-glass {
@@ -288,6 +308,9 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
     color: var(--c-text-dim);
   }
   .pf-btn.ghost:hover:not(:disabled) { color: var(--c-text); background: var(--c-surface-2); }
+  .pf-btn.sm { min-height: 28px; padding: 4px 10px; font-size: var(--text-xs); }
+  .pf-btn.accent { border-color: var(--c-accent); color: var(--c-accent); }
+  .pf-btn.danger { border-color: var(--c-danger); color: var(--c-danger); }
 
   .pf-tabbar {
     display: flex;
