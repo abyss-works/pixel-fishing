@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { drawPerson } from './actors';
+import { drawHead, drawPerson } from './actors';
 import { HATS } from '../../../content/wardrobe';
 import type { Ctx } from '../common';
 
@@ -57,5 +57,26 @@ describe('drawPerson 모자 픽셀 경계', () => {
     }
 
     expect(achSignatures.size).toBe(41);
+  });
+});
+
+describe('drawHead 모자 픽셀 경계 (headOnly 12x10)', () => {
+  it('기본·업적 모자 전 종과 모자 없음 상태가 headOnly 12x10 캔버스 경계 [0..12, 0..10] 안에 들어간다', () => {
+    const hx = 6;
+    const hy = 10;
+    const w = 12;
+    const h = 10;
+
+    for (const hatId of [null, ...HATS.map(hat => hat.id)]) {
+      const { ctx, rects } = makeFakeCtx();
+      drawHead(ctx, hx, hy, { shirt: 0, pants: 0, hat: hatId });
+      expect(rects.length, `${hatId ?? 'none'} rects`).toBeGreaterThan(0);
+      for (const r of rects) {
+        expect(r.x, `${hatId ?? 'none'} x`).toBeGreaterThanOrEqual(0);
+        expect(r.x + r.w, `${hatId ?? 'none'} x+w`).toBeLessThanOrEqual(w);
+        expect(r.y, `${hatId ?? 'none'} y`).toBeGreaterThanOrEqual(0);
+        expect(r.y + r.h, `${hatId ?? 'none'} y+h`).toBeLessThanOrEqual(h);
+      }
+    }
   });
 });

@@ -108,7 +108,7 @@ function drawAchievementHat(ctx: Ctx, x: number, y: number, hat: Hat) {
       return;
     case 'strait-night-cap':
       R(ctx, x - 4, y - 19, 8, 3, c);
-      R(ctx, x + 2, y - 16, 5, 1, a);
+      R(ctx, x + 2, y - 16, 4, 1, a);
       R(ctx, x - 3, y - 18, 2, 1, a);
       return;
     case 'inkglass-beanie':
@@ -148,7 +148,7 @@ function drawAchievementHat(ctx: Ctx, x: number, y: number, hat: Hat) {
       return;
     case 'megalodon-silver-visor':
       R(ctx, x - 4, y - 19, 8, 3, c);
-      R(ctx, x + 2, y - 16, 5, 1, a);
+      R(ctx, x + 2, y - 16, 4, 1, a);
       R(ctx, x - 3, y - 18, 6, 1, a);
       return;
     case 'leviathan-dive-hood':
