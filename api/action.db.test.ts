@@ -409,6 +409,37 @@ describe('현상금', () => {
     expect(await snapshotOf(uid, res)).toMatchSnapshot();
   });
 
+  it('네임드 결투 승리와 납품 연쇄는 bounty_clears에 1행만 남기고 마미 와타의 거울 보유 시 같은 날 2번째 네임드 수주를 허용한다', async () => {
+    const uid = await seed({
+      state: {
+        boat: 6,
+        dex: zoneDex('southatlantic', 'named'),
+        location: at('walvisbay'),
+        artifacts: ['mami-wata-mirror'],
+      },
+    });
+    const first = BOUNTIES.find(q => q.id === 'southatlantic-named-adamastor')!;
+    const second = BOUNTIES.find(q => q.id === 'southatlantic-named-jasconius')!;
+    await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
+      [uid, first.zone, first.id, NOW]);
+    await env.client.query('insert into public.bounty_tickets (user_id, quest_id, issued_at) values ($1, $2, $3)',
+      [uid, first.id, NOW]);
+
+    const duel = await callAction(userToken(uid), { type: 'resolveChallenge', questId: first.id, success: true, hits: 99, misses: 0 });
+    expect(duel.status).toBe(200);
+    vi.setSystemTime(Date.parse(NOW) + 2000);
+    const deliver = await callAction(userToken(uid), { type: 'deliverBounty', questId: first.id });
+    expect(deliver.status).toBe(200);
+
+    const clears = await env.client.query<{ quest_id: string }>(
+      `select quest_id from public.bounty_clears where user_id = $1 and kind = 'named'`, [uid]);
+    expect(clears.rows.map(r => r.quest_id)).toEqual([first.id]);
+
+    vi.setSystemTime(Date.parse(NOW) + 4000);
+    const nextAccept = await callAction(userToken(uid), { type: 'acceptQuest', questId: second.id, port: 'walvisbay' });
+    expect(nextAccept.status).toBe(200);
+  });
+
   it('만료된 도전권은 거부한다', async () => {
     const { uid, named } = await namedSetup(10.5 * 3600_000); // KST 03:36 발급 — 전날 게임 날짜
     const res = await callAction(userToken(uid), { type: 'resolveChallenge', questId: named.id, success: true, hits: 99, misses: 0 });

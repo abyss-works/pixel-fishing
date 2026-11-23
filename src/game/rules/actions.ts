@@ -314,14 +314,16 @@ export function applyAction(state: GameState, action: GameAction, deps: ActionDe
     for (const [k, v] of incEntries) counters[k] = (counters[k] ?? 0) + v;
     nextState = { ...nextState, achievementCounters: counters };
   }
-  const evaluated = evaluateAchievements(nextState);
   let events = out.events;
-  if (evaluated.newlyClaimable.length > 0) {
-    nextState = { ...nextState, achievements: evaluated.achievements };
-    events = [
-      ...out.events,
-      ...evaluated.newlyClaimable.map(id => ({ type: 'unlockAchievement', payload: { id } })),
-    ];
+  if (!(action.type === 'debug' && action.command === 'achievement.evaluate')) {
+    const evaluated = evaluateAchievements(nextState);
+    if (evaluated.newlyClaimable.length > 0) {
+      nextState = { ...nextState, achievements: evaluated.achievements };
+      events = [
+        ...out.events,
+        ...evaluated.newlyClaimable.map(id => ({ type: 'unlockAchievement', payload: { id } })),
+      ];
+    }
   }
   return { ok: true, state: nextState, result: out.result, events, writes: diffWrites(state, nextState) };
 }

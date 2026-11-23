@@ -1,5 +1,6 @@
 // 프로필(profiles) 쓰기 소유 모듈 — 첫 액션의 게스트명 보장과 닉네임 변경.
 import { sql } from 'drizzle-orm';
+import { achievementById } from '../../src/game/content/achievements.js';
 import { ARTIFACT_MAX_LEVEL, artifactById, artifactHasLevel } from '../../src/game/content/artifacts.js';
 import { isKnownLocation } from '../../src/game/content/places.js';
 import type { LocationRef } from '../../src/game/content/places.js';
@@ -101,10 +102,10 @@ function sanitizeHats(raw: unknown): string[] {
   return out;
 }
 
-function sanitizeClaimedAchievements(raw: unknown): string[] {
+export function sanitizeClaimedAchievements(raw: unknown): string[] {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return [];
   return Object.entries(raw as Record<string, unknown>)
-    .filter(([, status]) => status === 'claimed')
+    .filter(([id, status]) => status === 'claimed' && achievementById(id) !== undefined)
     .map(([id]) => id)
     .sort();
 }

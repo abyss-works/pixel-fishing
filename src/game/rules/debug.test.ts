@@ -205,6 +205,24 @@ describe('achievement.setCounter / resetCounters / evaluate & bag.spawn & snapsh
     expect(s.state.achievements['spot-basic-sea']).toBe('claimed');
   });
 
+  it('achievement.evaluate reset은 도감 조건이 채워져 있어도 같은 턴에 다시 claimable로 덮어쓰지 않는다', () => {
+    const filled = debug(seed(), 'dex.completeZone', { zone: 'pacific' });
+    if (!filled.ok) throw new Error(filled.error);
+    expect(filled.state.achievements['spot-basic-sea']).toBe('claimable');
+    expect(filled.state.achievements['spot-full-sea']).toBe('claimable');
+
+    const resetOne = debug(filled.state, 'achievement.evaluate', { id: 'spot-basic-sea', status: 'reset' });
+    if (!resetOne.ok) throw new Error(resetOne.error);
+    expect(resetOne.state.achievements['spot-basic-sea']).toBeUndefined();
+    expect(resetOne.state.achievements['spot-full-sea']).toBe('claimable');
+    expect(resetOne.events.some(e => e.type === 'unlockAchievement')).toBe(false);
+
+    const resetAll = debug(filled.state, 'achievement.evaluate', { id: 'all', status: 'reset' });
+    if (!resetAll.ok) throw new Error(resetAll.error);
+    expect(resetAll.state.achievements).toEqual({});
+    expect(resetAll.events.some(e => e.type === 'unlockAchievement')).toBe(false);
+  });
+
   it('bag.spawn은 지정 어종·폼·대어 크기 개체를 가방에 추가한다', () => {
     let n = 0;
     const out = debug(seed(), 'bag.spawn', { fishId: 'vanishingpoint', form: 'variant', big: true, count: 2 }, { newUid: () => `sp-${++n}` });

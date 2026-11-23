@@ -21,6 +21,7 @@ const gw = vi.hoisted(() => ({
   loadAchievements: {} as Record<string, string>,
   dispatchAchievements: {} as Record<string, string>,
   devTools: false,
+  account: { status: 'account', email: 'u@example.com' } as { status: 'account'; email: string } | { status: 'guest' } | { status: 'failed' },
 }));
 
 vi.mock('../../../platform/api', async () => {
@@ -34,7 +35,7 @@ vi.mock('../../../platform/api', async () => {
   return {
     when,
     api: {
-      auth: { isConfigured: true, ensureSession: async () => 'uid-1' },
+      auth: { isConfigured: true, ensureSession: async () => 'uid-1', currentAccount: async () => gw.account },
       storage: { clearLegacySave: () => { gw.actions.push('clearLegacy'); }, loadLegacy: () => ({ game: fresh(), notice: null, legacy: gw.legacy }), saveCode: () => '' },
       createGameGateway: () => ({
         load: async () => { gw.loads++; if (gw.loadErrors.length) throw gw.loadErrors.shift(); if (gw.loadError) throw gw.loadError; return gw.cloudEmpty ? null : { ...fresh(), gold: gw.loadGold, dex: gw.loadDex as ReturnType<typeof fresh>['dex'], achievements: gw.loadAchievements }; },
@@ -55,7 +56,7 @@ vi.mock('../../../platform/observability', () => ({ reportIssue: () => {} }));
 import { useGame } from './useGame';
 import { clearFailureNotice, currentFailureNotice } from './failureNotice';
 
-function setup(setToast: (m: string, tone?: 'warn') => void = () => {}, reactStrictMode = false) {
+function setup(setToast: (m: string, tone?: 'info' | 'gold' | 'warn') => void = () => {}, reactStrictMode = false) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const wrapper = ({ children }: { children: ReactNode }) =>
     <QueryClientProvider client={client}>{children}</QueryClientProvider>;
@@ -66,6 +67,7 @@ afterEach(() => {
   cleanup(); clearFailureNotice(); gw.bootResolve = null; gw.actions = []; gw.loads = 0; gw.loadGold = 0;
   gw.legacy = false; gw.cloudEmpty = false; gw.importError = null; gw.loadError = null; gw.loadErrors = []; gw.bootErrors = []; gw.loadDex = {}; gw.devTools = false;
   gw.loadAchievements = {}; gw.dispatchAchievements = {};
+  gw.account = { status: 'account', email: 'u@example.com' };
 });
 
 describe('부트스트랩', () => {
@@ -213,12 +215,60 @@ describe('새로 받을 수 있게 된 업적 알림', () => {
     return hook;
   }
 
-  it('액션 확정으로 새로 claimable이 된 업적은 메시지 창에 한 줄 남는다', async () => {
+  it('액션 확정으로 새로 claimable이 된 업적은 메시지 창에 금색 톤으로 한 줄 남는다', async () => {
     const toasts: [string, string | undefined][] = [];
     const hook = await booted(toasts);
     gw.dispatchAchievements = { 'spot-basic-sea': 'claimable' };
     await act(async () => { await hook.result.current.dispatch({ type: 'debug', command: 'noop' }); });
-    expect(toasts).toEqual([['“태평양 연안 기초” 업적을 받을 수 있어요.', undefined]]);
+    expect(toasts).toEqual([['“태평양 연안 기초” 업적을 받을 수 있어요.', 'gold']]);
+  });
+
+  it('일반 플레이 중 여러 업적이 한 번에 달성되면 각각 금색 톤으로 알린다', async () => {
+    const toasts: [string, string | undefined][] = [];
+    const hook = await booted(toasts);
+    gw.dispatchAchievements = { 'spot-basic-sea': 'claimable', 'spot-full-sea': 'claimable' };
+    await act(async () => { await hook.result.current.dispatch({ type: 'catch', spot: 'sea', judgment: 'good' }); });
+    expect(toasts).toEqual([
+      ['“태평양 연안 기초” 업적을 받을 수 있어요.', 'gold'],
+      ['“태평양 연안 숙련” 업적을 받을 수 있어요.', 'gold'],
+    ]);
+  });
+
+  it('boot 소급 평가로 1건이 새로 claimable이 되면 업적 이름과 함께 금색 톤으로 알린다', async () => {
+    gw.dispatchAchievements = { 'spot-basic-sea': 'claimable' };
+    const toasts: [string, string | undefined][] = [];
+    setup((m, tone) => { toasts.push([m, tone]); });
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+    expect(toasts.filter(t => t[0].includes('업적'))).toEqual([
+      ['“태평양 연안 기초” 업적을 받을 수 있어요.', 'gold'],
+    ]);
+  });
+
+  it('boot 소급 평가로 2건 이상이 새로 claimable이 되면 N개 요약 1줄만 금색 톤으로 알린다', async () => {
+    gw.dispatchAchievements = { 'spot-basic-sea': 'claimable', 'spot-full-sea': 'claimable', 'spot-basic-deep': 'claimable' };
+    const toasts: [string, string | undefined][] = [];
+    setup((m, tone) => { toasts.push([m, tone]); });
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+    expect(toasts.filter(t => t[0].includes('업적'))).toEqual([
+      ['3개 업적을 받을 수 있어요.', 'gold'],
+    ]);
+  });
+
+  it('게스트 상태에서는 boot와 일반 액션 모두 새로 받을 수 있는 업적 토스트를 띄우지 않는다', async () => {
+    gw.account = { status: 'guest' };
+    gw.dispatchAchievements = { 'spot-basic-sea': 'claimable' };
+    const toasts: [string, string | undefined][] = [];
+    const hook = setup((m, tone) => { toasts.push([m, tone]); });
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+    expect(toasts.filter(t => t[0].includes('업적'))).toEqual([]);
+
+    toasts.length = 0;
+    gw.dispatchAchievements = { 'spot-basic-sea': 'claimable', 'spot-full-sea': 'claimable' };
+    await act(async () => { await hook.result.current.dispatch({ type: 'catch', spot: 'sea', judgment: 'good' }); });
+    expect(toasts).toEqual([]);
   });
 
   it('첫 로드 시 이미 claimable인 업적은 알리지 않는다', async () => {
