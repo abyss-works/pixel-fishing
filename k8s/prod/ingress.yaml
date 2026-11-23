@@ -30,7 +30,7 @@ kind: Ingress
 metadata:
   name: pixel-fishing-api
   annotations:
-    # 게임 서버 API(관리자 API 포함). import 액션이 게임 상태 전체를 싣는다. 본문 한도는 서버 본문 한도(5mb)와 맞춘다.
+    # 게임 서버 API(관리자 API는 pixel-fishing-admin-api로 분리). import 액션이 게임 상태 전체를 싣는다. 본문 한도는 서버 본문 한도(5mb)와 맞춘다.
     nginx.ingress.kubernetes.io/proxy-body-size: 5m
     nginx.ingress.kubernetes.io/limit-rps: "20"
     nginx.ingress.kubernetes.io/limit-burst-multiplier: "5"
@@ -41,6 +41,33 @@ spec:
       http:
         paths:
           - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: pixel-fishing
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - pixel-fishing.abyssworks.dev
+      secretName: pixel-fishing-tls
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pixel-fishing-admin-api
+  annotations:
+    # 관리자 API(/api/admin). 게임 API(/api)와 요청 한도 버킷을 분리해 대시보드 조회가 게임 한도에 걸리지 않게 한다.
+    nginx.ingress.kubernetes.io/proxy-body-size: 5m
+    nginx.ingress.kubernetes.io/limit-rps: "50"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "6"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: pixel-fishing.abyssworks.dev
+      http:
+        paths:
+          - path: /api/admin
             pathType: Prefix
             backend:
               service:

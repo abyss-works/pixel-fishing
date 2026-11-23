@@ -221,7 +221,7 @@ export const DEV_COMMANDS: readonly DevCommand[] = [
     hint: '기운은 화면 단위(1 = 개체 1마리분), 요리·재료는 개수 그대로 지급한다.',
     params: [
       { key: 'itemId', label: '아이템', kind: 'select', options: itemOptions, defaultValue: ENERGY_ITEM_IDS.common, required: true },
-      { key: 'count', label: '수량', kind: 'int', placeholder: '1', allowFloat: true },
+      { key: 'count', label: '수량', kind: 'int', placeholder: '1' },
     ],
   },
   {
@@ -316,7 +316,7 @@ export const DEV_COMMANDS: readonly DevCommand[] = [
   // ---- 도감·네임드 ----
   {
     id: 'dex.fill', group: 'dex', label: '도감 채우기',
-    hint: '마을 포함 구역 또는 전체 도감을 일반/돌연변이/대어 기준으로 채운다.',
+    hint: '마을 포함 구역 또는 전체 도감을 일반·돌연변이·대어·네임드 기준으로 채운다.',
     params: [
       { key: 'zone', label: '구역', kind: 'select', options: devAllZoneOptions, defaultValue: 'all', required: true },
       {
@@ -328,6 +328,7 @@ export const DEV_COMMANDS: readonly DevCommand[] = [
         ],
       },
       { key: 'big', label: '대어(월척) 기준 크기 설정', kind: 'bool', defaultValue: false },
+      { key: 'includeNamed', label: '네임드 도감·토벌 기록 포함', kind: 'bool', defaultValue: true },
     ],
   },
   {
@@ -342,12 +343,14 @@ export const DEV_COMMANDS: readonly DevCommand[] = [
     id: 'dex.completeZone', group: 'dex', label: '수배 구역 도감 채우기(호환)',
     hint: '네임드 라이선스 도감 조건이 비었다고 보는 어종을 일반 1마리로 채운다.',
     params: [{ ...zoneParam, defaultValue: 'pacific' }],
+    hiddenInForm: true,
   },
   {
     id: 'named.unlock', group: 'dex', label: '네임드 해금',
-    hint: '도감 등록(records)과 토벌 기록(bounty_clears)을 함께 연다.',
+    hint: '도감 등록(records)과 토벌 기록(bounty_clears)을 함께 연다(기본값은 오늘 일일 한도를 소모하지 않는다).',
     params: [
       { key: 'namedId', label: '네임드', kind: 'select', options: namedOptions, defaultValue: 'all', required: true },
+      { key: 'consumeDailyCap', label: '오늘 일일 한도 소모', kind: 'bool', defaultValue: false },
     ],
   },
   {
@@ -374,7 +377,17 @@ export const DEV_COMMANDS: readonly DevCommand[] = [
   { id: 'bounty.clearTickets', group: 'bounty', label: '흔적 지우기', hint: '도전권을 모두 지운다.', params: [] },
   {
     id: 'bounty.resetToday', group: 'bounty', label: '오늘 클리어 초기화',
-    hint: '오늘 클리어 기록을 지워 일일 한도를 되돌린다.', params: [],
+    hint: '오늘 클리어 기록을 지워 일일 한도를 되돌린다.',
+    params: [
+      {
+        key: 'kind', label: '대상', kind: 'select', defaultValue: 'all', required: true,
+        options: () => [
+          { value: 'all', label: '전체 (일반 + 네임드)' },
+          { value: 'general', label: '일반 의뢰만' },
+          { value: 'named', label: '네임드 토벌만' },
+        ],
+      },
+    ],
   },
   { id: 'bounty.clearProgress', group: 'bounty', label: '진행 의뢰 정리', hint: '진행 중 의뢰를 모두 지운다.', params: [] },
 

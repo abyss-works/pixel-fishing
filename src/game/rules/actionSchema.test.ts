@@ -40,6 +40,13 @@ describe('parseAction', () => {
     expect(parseAction({ type: 'debug', command: 'bounty.ticketNearExpiry' })).toBeNull();
     expect(parseAction({ type: 'debug', command: 'gold.infinite' })).toBeNull();
     expect(parseAction({ type: 'adminSet', gold: 1 })).toBeNull();
+    expect(parseAction({
+      type: 'debugBatch',
+      steps: [{ command: 'stats.set', args: { gold: 10 } }, { command: 'bounty.resetToday', args: { kind: 'named' } }],
+    })?.type).toBe('debugBatch');
+    expect(parseAction({ type: 'debugBatch', steps: [] })).toBeNull();
+    expect(parseAction({ type: 'debugBatch', steps: [{ command: 'nope' }] })).toBeNull();
+    expect(parseAction({ type: 'debugSnapshot' })).toEqual({ type: 'debugSnapshot' });
   });
 
   it('알 수 없는 type·비객체를 거부한다', () => {

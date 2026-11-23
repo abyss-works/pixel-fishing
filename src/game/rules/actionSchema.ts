@@ -19,6 +19,11 @@ const LocationRef = z.union([
   z.object({ kind: z.literal('base'), id: z.string() }),
 ]);
 
+const DebugStepSchema = z.object({
+  command: z.enum(DEBUG_COMMAND_IDS as [DebugCommandId, ...DebugCommandId[]]),
+  args: z.record(z.string(), z.unknown()).optional(),
+});
+
 const schemas = {
   catch: z.object({
     type: z.literal('catch'), spot: z.string(), judgment: Judgment,
@@ -42,6 +47,11 @@ const schemas = {
     command: z.enum(DEBUG_COMMAND_IDS as [DebugCommandId, ...DebugCommandId[]]),
     args: z.record(z.string(), z.unknown()).optional(),
   }),
+  debugBatch: z.object({
+    type: z.literal('debugBatch'),
+    steps: z.array(DebugStepSchema).min(1).max(50),
+  }),
+  debugSnapshot: z.object({ type: z.literal('debugSnapshot') }),
   dismissBaitRefund: z.object({ type: z.literal('dismissBaitRefund') }),
   extractEnergy: z.object({ type: z.literal('extractEnergy'), uids: z.array(z.string()) }),
   setEnergyTarget: z.object({ type: z.literal('setEnergyTarget'), spot: z.string(), on: z.boolean() }),
@@ -74,7 +84,7 @@ export const ACTION_SCHEMA_TYPES = Object.keys(schemas) as (keyof typeof schemas
 const ActionSchema = z.discriminatedUnion('type', [
   schemas.catch, schemas.sell, schemas.upgradeRod, schemas.buyBoat,
   schemas.setLocked, schemas.autoLock, schemas.setAutoLockOnCatch, schemas.travel, schemas.sendLetter, schemas.redeemCoupon,
-  schemas.claimRelief, schemas.claimMail, schemas.debug, schemas.dismissBaitRefund,
+  schemas.claimRelief, schemas.claimMail, schemas.debug, schemas.debugBatch, schemas.debugSnapshot, schemas.dismissBaitRefund,
   schemas.extractEnergy, schemas.setEnergyTarget, schemas.resetEnergyTargets, schemas.cook, schemas.eat,
   schemas.boot, schemas.setNickname, schemas.acceptQuest,
   schemas.deliverBounty, schemas.exchangeArtifact, schemas.levelUpArtifact, schemas.exhibit, schemas.resolveChallenge,

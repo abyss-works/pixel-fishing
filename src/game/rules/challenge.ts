@@ -2,7 +2,7 @@
 // 조우 창(UI)과 리듀서(resolveChallenge)가 같은 함수를 쓴다.
 // 상대경로 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버가 이 체인을 직접 불러온다.
 import { CHALLENGE_MISS_LIMIT } from './balance.js';
-import { GAME_DAY_RESET_TEXT, gameDayStartISO } from './time.js';
+import { GAME_DAY_RESET_TEXT, gameDayStartISO, previousGameDayISO } from './time.js';
 import { bountyById } from '../content/bounties.js';
 import { namedById } from '../content/named.js';
 import { namedWoundOf } from './pity.js';
@@ -60,7 +60,7 @@ export function ticketRemainingMs(issuedAtISO: string, nowMs: number): number {
 
 /** 지금 시각 기준으로 이미 만료된 도전권의 발급 시각 — 개발 도구가 만료 상태를 만들 때 쓴다 */
 export function expiredTicketIssuedAt(nowMs: number): string {
-  return new Date(Date.parse(gameDayStartISO(new Date(nowMs).toISOString())) - 60_000).toISOString();
+  return previousGameDayISO(new Date(nowMs).toISOString());
 }
 
 /** 도전권이 언제까지 남는지 안내하는 구 */

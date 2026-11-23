@@ -173,6 +173,33 @@ describe('HttpGameGateway의 델타 동기화와 캐시 복구', () => {
     }
   });
 
+  it('풀재동기 폴백 시 body.version이 없으면 patch.version으로 lastVersion을 복구한다', async () => {
+    me.value = serverSave({ version: 4, gold: 100 });
+    const gw = new HttpGameGateway();
+    await gw.load();
+    expect(me.calls).toBe(1);
+
+    me.value = { cur: { data: { v: 10 }, gold: 600, fame: 0, boat: 0, rod: 1 }, instances: [], records: [], counters: {}, clearedNamed: [], legacy: null };
+    const resyncPatch: StatePatch = {
+      version: 8, baseVersion: 7,
+      scalars: pickScalars({ ...newState(), gold: 650 }),
+      writes: emptyWrites,
+    };
+    vi.stubGlobal('fetch', async () => json({ patch: resyncPatch, result: { type: 'none' } }));
+    await gw.dispatch({ type: 'upgradeRod' });
+    expect(me.calls).toBe(2);
+
+    const followPatch: StatePatch = {
+      version: 9, baseVersion: 8,
+      scalars: pickScalars({ ...newState(), gold: 800 }),
+      writes: emptyWrites,
+    };
+    vi.stubGlobal('fetch', async () => json({ patch: followPatch, result: { type: 'none' } }));
+    const followRes = await gw.dispatch({ type: 'upgradeRod' });
+    expect(me.calls).toBe(2);
+    expect(followRes.status === 'ok' && followRes.state.gold).toBe(800);
+  });
+
   it('이관 폴백으로 버전이 없는 캐시 상태에서 델타를 받으면 전체 재동기화한다', async () => {
     me.value = {
       cur: null, instances: [], records: [], counters: {}, clearedNamed: [],

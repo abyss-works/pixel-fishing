@@ -35,4 +35,21 @@ describe('LocalGameGateway 바운티 헌팅', () => {
       type: 'resolveChallenge', questId: 'pacific-named-megalodon', success: true, hits: 6, misses: 0,
     })).toEqual({ status: 'rejected', error: 'no-license' });
   });
+
+  it('DB 전용 bounty.* 개발 도구는 로컬 모드에서 거부한다', () => {
+    const gateway = new LocalGameGateway(readyAtHarbor());
+    for (const cmd of ['bounty.expireTickets', 'bounty.clearTickets', 'bounty.resetToday', 'bounty.clearProgress'] as const) {
+      expect(gateway.dispatch({ type: 'debug', command: cmd })).toEqual({
+        status: 'rejected',
+        error: 'debug-db-required',
+      });
+    }
+    expect(gateway.dispatch({
+      type: 'debugBatch',
+      steps: [{ command: 'stats.set', args: { gold: 100 } }, { command: 'bounty.resetToday' }],
+    })).toEqual({
+      status: 'rejected',
+      error: 'debug-db-required',
+    });
+  });
 });

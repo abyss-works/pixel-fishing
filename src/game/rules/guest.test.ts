@@ -68,12 +68,14 @@ describe('게스트 액션 판정 (guestActionVerdict)', () => {
 
   it('개발 명령과 이사 코드는 이 판정이 다루지 않고 서버 환경과 소유자 판정에 맡긴다', () => {
     expect(guestActionVerdict({ type: 'debug', command: 'x' })).toBe('ok');
+    expect(guestActionVerdict({ type: 'debugBatch', steps: [] })).toBe('ok');
+    expect(guestActionVerdict({ type: 'debugSnapshot' })).toBe('ok');
     expect(guestActionVerdict({ type: 'import', save: {} })).toBe('ok');
   });
 
   it('모든 액션 종류가 분류돼 있고, 새 액션은 이 표에 넣어야 통과한다', () => {
     const open = [
-      'boot', 'sell', 'upgradeRod', 'buyBoat', 'seeTutorial', 'setLocked', 'autoLock', 'setAutoLockOnCatch', 'dismissBaitRefund', 'debug', 'import',
+      'boot', 'sell', 'upgradeRod', 'buyBoat', 'seeTutorial', 'setLocked', 'autoLock', 'setAutoLockOnCatch', 'dismissBaitRefund', 'debug', 'debugBatch', 'debugSnapshot', 'import',
     ];
     const villageOnly = ['travel', 'catch'];
     for (const type of ACTION_TYPES) {

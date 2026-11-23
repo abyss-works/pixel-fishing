@@ -111,7 +111,7 @@ const QA_PRESETS: readonly DevPreset[] = [
           boat: Math.max(game.boat, 9),
           rod: Math.max(game.rod, 65),
         }),
-        debugStep('dex.fill', { zone: 'northatlantic', form: 'both', big: true }),
+        debugStep('dex.fill', { zone: 'northatlantic', form: 'both', big: true, includeNamed: true }),
         debugStep('items.grant', { itemId: ENERGY_ITEM_IDS.common, count: 2000 }),
         debugStep('items.grant', { itemId: ENERGY_ITEM_IDS.rare, count: 500 }),
         debugStep('items.grant', { itemId: ENERGY_ITEM_IDS.epic, count: 200 }),
@@ -138,7 +138,7 @@ const QA_PRESETS: readonly DevPreset[] = [
           boat: Math.max(game.boat, 8),
           rod: Math.max(game.rod, 55),
         }),
-        debugStep('dex.fill', { zone: 'southatlantic', form: 'both', big: true }),
+        debugStep('dex.fill', { zone: 'southatlantic', form: 'both', big: true, includeNamed: true }),
         { kind: 'teleportBase', base: 'walvisbay' },
       ],
     }),
@@ -178,7 +178,7 @@ const QA_PRESETS: readonly DevPreset[] = [
     plan: () => ({
       ok: true,
       steps: [
-        debugStep('dex.fill', { zone: 'all', form: 'both', big: true }),
+        debugStep('dex.fill', { zone: 'all', form: 'both', big: true, includeNamed: true }),
         debugStep('named.unlock', { namedId: 'all' }),
         debugStep('artifact.set', { artifact: 'all', level: 5 }),
       ],

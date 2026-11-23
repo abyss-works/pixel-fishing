@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { GameState } from '../../../game/rules/logic';
+import type { DevBountySnapshot } from '../../../game/rules/debug';
 import {
   DEV_SNAPSHOTS_KEY,
   addSnapshotEntry,
@@ -27,19 +28,31 @@ function writeStorage(list: DevSnapshotEntry[]): void {
 export function useDevSnapshots() {
   const [snapshots, setSnapshots] = useState<DevSnapshotEntry[]>(readStorage);
 
-  const save = (state: GameState, label: string): DevSnapshotEntry => {
-    const entry = buildSnapshotEntry(state, label, new Date().toISOString(), crypto.randomUUID());
-    const next = addSnapshotEntry(snapshots, entry);
-    setSnapshots(next);
-    writeStorage(next);
+  const save = (state: GameState, label: string, bounty?: DevBountySnapshot): DevSnapshotEntry => {
+    const entry = buildSnapshotEntry(state, label, new Date().toISOString(), crypto.randomUUID(), bounty);
+    setSnapshots(prev => {
+      const next = addSnapshotEntry(prev, entry);
+      writeStorage(next);
+      return next;
+    });
     return entry;
   };
 
-  const remove = (id: string) => {
-    const next = removeSnapshotEntry(snapshots, id);
-    setSnapshots(next);
-    writeStorage(next);
+  const attachBounty = (id: string, bounty: DevBountySnapshot): void => {
+    setSnapshots(prev => {
+      const next = prev.map(e => (e.id === id ? { ...e, bounty } : e));
+      writeStorage(next);
+      return next;
+    });
   };
 
-  return { snapshots, save, remove };
+  const remove = (id: string) => {
+    setSnapshots(prev => {
+      const next = removeSnapshotEntry(prev, id);
+      writeStorage(next);
+      return next;
+    });
+  };
+
+  return { snapshots, save, attachBounty, remove };
 }

@@ -72,6 +72,7 @@ export type RejectReason =
   | 'cooking-busy' // 조리 중인 요리가 모두 완성되기 전에 새 조리를 시작하려 했다
   | 'storage-full' // 보관함 남은 칸이 넣으려는 수량보다 적다
   | 'debug-forbidden' // 개발 도구 명령 — 운영 서버이거나 소유자·로컬이 아니다
+  | 'debug-db-required' // DB 전용 개발 도구를 로컬 모드(DB 없음)에서 호출했다
   | 'bad-request'; // 형식 오류 — 정상 클라이언트에서는 나오지 않는다
 
 export type RuleCheck = { ok: true } | { ok: false; reason: RejectReason };
@@ -124,6 +125,7 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'cooking-busy': '이미 조리 중인 요리가 있어요. 모두 완성된 뒤에 시작할 수 있어요.',
   'storage-full': '보관함이 가득 찼어요. 가방 탭에서 도시락을 먹거나 미끼를 쓰면 자리가 생겨요.',
   'debug-forbidden': '이 서버에서는 개발 도구 명령을 쓸 수 없어요. 운영 서버이거나 권한이 없는 계정이에요.',
+  'debug-db-required': '로컬 모드(DB 없음)에서는 수배 DB 도구를 쓸 수 없어요.',
   'bad-request': '처리할 수 없는 요청이에요.',
 };
 
