@@ -22,15 +22,15 @@ const CONFIRMED_PRICE: Record<string, number> = {
   // 남인도양 (southindian)
   deepsilence: 60000, varuna: 30000, aurorafish: 10000, whaleshark: 5000, sbft: 4500, frostnight: 2000, blueshark: 1000, neonsquid: 900, sardineS: 19, saury: 21,
   // 모잠비크 해협 (mozstrait)
-  nightmanta: 80000, mantaray: 40000, starcuttlefish: 20000, hammerhead: 10000, kingmackerel: 1900, moonflyingfish: 3800, flyingfish: 27, skipjack: 29, cuttlefish: 30,
+  nightmanta: 110000, mantaray: 53000, starcuttlefish: 19000, hammerhead: 9400, kingmackerel: 1500, moonflyingfish: 3000, flyingfish: 20, skipjack: 21, cuttlefish: 22,
   // 코모로 심해 (comorodeep)
-  darkmegamouth: 160000, megamouth: 80000, goblinshark: 21000, frilledshark: 19000, abyssglass: 42000, upperlantern: 7200, glassoctopus: 3600, deepeel: 44, lanternfish: 41,
+  darkmegamouth: 220000, megamouth: 110000, goblinshark: 19000, frilledshark: 17000, abyssglass: 39000, upperlantern: 5400, glassoctopus: 2700, deepeel: 31, lanternfish: 29,
   // 남대서양 용승대 (benguela)
-  kalunga: 200000, kianda: 100000, nighthake: 18000, snoek: 9000, orangeroughy: 48000, kingfish: 43000, capehake: 155, capejack: 140, capeanchovy: 125,
+  kalunga: 600000, kianda: 300000, nighthake: 15000, snoek: 7500, orangeroughy: 49000, kingfish: 45000, capehake: 113, capejack: 101, capeanchovy: 90,
   // 세인트헬레나 (sthelena)
-  bigeye: 360000, galapagosshark: 180000, wahoo: 90000, eolgedom: 180000, ascensionangel: 27000, apollodamsel: 195, sthpuffer: 185, sthwrasse: 175,
+  bigeye: 1100000, galapagosshark: 560000, wahoo: 94000, eolgedom: 190000, ascensionangel: 23000, apollodamsel: 135, sthpuffer: 128, sthwrasse: 120,
   // 아조레스 해령 (azores)
-  sunkenecho: 3000000, unreturning: 1500000, oceanmola: 270000, atlanticblueshark: 250000, nightalfonsino: 86000, johndory: 43000, europeanconger: 390, atlanticbonito: 360, bluejack: 330,
+  sunkenecho: 3300000, unreturning: 1700000, oceanmola: 300000, atlanticblueshark: 280000, nightalfonsino: 95000, johndory: 47000, europeanconger: 429, atlanticbonito: 396, bluejack: 363,
   // 버뮤다 삼각지대 (bermuda)
   vanishingpoint: 7000000, unraveledknot: 3500000, nightporcupine: 1200000, atlantictarpon: 600000, spottedeagleray: 120000, cobia: 790, americaneel: 750, sargassumfish: 710,
 };

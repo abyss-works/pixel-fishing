@@ -20,7 +20,7 @@ const REWARDS: Record<string, Record<string, number>> = {
   seasia: { easy: 60000, normal: 100000, hard: 250000, named: 500000 },
   indian: { easy: 200000, normal: 350000, hard: 750000, named: 1500000 },
   madagascar: { easy: 700000, normal: 1500000, hard: 3000000, named: 5500000 },
-  southatlantic: { easy: 3000000, normal: 5500000, hard: 10000000, named: 20000000 },
+  southatlantic: { easy: 3000000, normal: 6500000, hard: 15000000, named: 25000000 },
   northatlantic: { easy: 15000000, normal: 25000000, hard: 55000000, named: 100000000 },
 };
 
@@ -86,7 +86,7 @@ describe('남대서양·북대서양 현상금', () => {
     expect(BOUNTY_PORT_ZONE.lisbon).toBe('northatlantic');
     const saNamed = BOUNTIES.filter(q => q.zone === 'southatlantic' && q.difficulty === 'named');
     expect(saNamed.map(q => q.targetFish)).toEqual(['adamastor', 'jasconius']);
-    expect(saNamed.map(q => q.reward)).toEqual([20000000, 20000000]);
+    expect(saNamed.map(q => q.reward)).toEqual([25000000, 25000000]);
     const naNamed = BOUNTIES.filter(q => q.zone === 'northatlantic' && q.difficulty === 'named');
     expect(naNamed.map(q => q.targetFish)).toEqual(['gloucester-serpent', 'guabancex']);
     expect(naNamed.map(q => q.reward)).toEqual([100000000, 100000000]);
