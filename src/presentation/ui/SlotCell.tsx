@@ -7,8 +7,8 @@ import Frame from './Frame';
 // picked는 지금 고른 칸으로, 하늘색 테두리를 더한다. 칸 크기와 안쪽 배치는 호출부가 정한다.
 const FORM = {
   raised: 'bg-surface-2',
-  sunken: 'bg-bg text-text-dim border-[#213652] shadow-[inset_2px_2px_0_var(--bevel-hi),inset_-1px_-1px_0_var(--bevel-lo)]',
-  pressed: 'bg-surface-2 border-gold translate-y-px shadow-[inset_-2px_-2px_0_var(--bevel-lo),inset_2px_2px_0_var(--bevel-hi)]',
+  sunken: 'bg-bg text-text-dim border-[#213652] shadow-[inset_1px_1px_0_var(--bevel-hi),inset_-1px_-1px_0_var(--bevel-lo)]',
+  pressed: 'bg-surface-2 border-gold translate-y-px shadow-[inset_-1px_-1px_0_var(--bevel-lo),inset_1px_1px_0_var(--bevel-hi)]',
 } as const;
 
 export default function SlotCell({ form = 'raised', picked, onSelect, ariaLabel, className, children }: {

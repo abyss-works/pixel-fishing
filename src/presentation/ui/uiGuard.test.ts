@@ -620,31 +620,64 @@ describe('UI 시스템 가드', () => {
     expect(OK_STATUS_COLOR.test('text-accent border-gold')).toBe(false);
   });
 
-  // v3 프리미티브 가드 — 공용 UI(ui/)는 둥근 모서리(예외 3곳 제외), 완료/잠금 흐림(opacity-*), 네이티브 title을 쓰지 않는다
+  // v3 가드 — 게임 화면과 공용 UI는 둥근 모서리(예외 제외), 완료/잠금 opacity 흐림, 네이티브 title, PillButton,
+  // 2px 두꺼운 테두리·베벨, 가운뎃점·대시([·—–])를 쓰지 않는다 (admin/devtools 제외)
+  const isGameUi = (p: string) =>
+    p.startsWith('ui/') || p.startsWith('layouts/') || p.startsWith('views/game/') || p.startsWith('views/overlays/');
+  const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+
   const ROUNDED_RE = /\brounded-(?:sm|md|lg|full|\[[^\]]+\])\b/;
-  const UI_ROUNDED_EXCEPTIONS = new Set([
-    'ui/TooltipBubble.tsx',     // DESIGN.md 예외: 툴팁 버블
-    'ui/hud/Minimap.tsx',       // DESIGN.md 예외: 미니맵 지도 틀
-    'ui/GoogleButton.tsx',      // Google 브랜드 가이드라인 버튼
-    'ui/PillButton.tsx',        // admin/devtools 전용 잔존 유틸 (게임 화면에서 금지)
+  const ROUNDED_EXCEPTIONS = new Set([
+    'ui/TooltipBubble.tsx',                   // DESIGN.md 예외: 툴팁 버블
+    'ui/hud/Minimap.tsx',                     // DESIGN.md 예외: 미니맵 지도 틀
+    'ui/GoogleButton.tsx',                    // Google 브랜드 가이드라인 버튼
+    'ui/PillButton.tsx',                      // admin/devtools 전용 잔존 유틸 (게임 화면에서 금지)
+    'layouts/game-stage/MovePad.tsx',         // 터치 조이스틱 원형 패드
+    'views/overlays/world-map/WorldMapModal.tsx', // 세계지도 틀
   ]);
-  it('공용 UI(ui/)는 예외 4종 외에 둥근 모서리(rounded-*)를 쓰지 않는다', () => {
-    const uiFiles = presentationFiles.filter(f => f.path.startsWith('ui/') && !UI_ROUNDED_EXCEPTIONS.has(f.path));
-    const offenders = uiFiles.filter(f => ROUNDED_RE.test(f.src)).map(f => f.path);
+  it('게임 UI는 예외 외에 둥근 모서리(rounded-*)를 쓰지 않는다', () => {
+    const targets = presentationFiles.filter(f => isGameUi(f.path) && !ROUNDED_EXCEPTIONS.has(f.path));
+    const offenders = targets.filter(f => ROUNDED_RE.test(f.src)).map(f => f.path);
     expect(offenders).toEqual([]);
   });
 
-  const OPACITY_WASH_RE = /(?<!disabled:)\bopacity-(?:45|50|55|70|80|85|\[0\.(?:45|50|55|70|72)\])\b/;
-  it('공용 UI(ui/)는 완료·잠금·보조 텍스트에 opacity 흐림을 쓰지 않는다', () => {
-    const uiFiles = presentationFiles.filter(f => f.path.startsWith('ui/') && f.path !== 'ui/PillButton.tsx');
-    const offenders = uiFiles.filter(f => OPACITY_WASH_RE.test(f.src)).map(f => f.path);
+  const OPACITY_WASH_RE = /(?<!disabled:)\bopacity-(?:40|45|50|55|60|70|80|85|\[0\.(?:45|50|55|70|72)\])\b/;
+  it('게임 UI는 완료·잠금·보조 텍스트에 비활성 외 opacity 흐림을 쓰지 않는다', () => {
+    const targets = presentationFiles.filter(f => isGameUi(f.path) && f.path !== 'ui/PillButton.tsx' && f.path !== 'ui/ToggleChip.tsx');
+    const offenders = targets.filter(f => OPACITY_WASH_RE.test(f.src)).map(f => f.path);
     expect(offenders).toEqual([]);
   });
 
   const NATIVE_TITLE_RE = /<[a-z][^>]*\stitle=/;
-  it('공용 UI(ui/)는 브라우저 기본 title 속성 툴팁을 쓰지 않는다', () => {
-    const uiFiles = presentationFiles.filter(f => f.path.startsWith('ui/'));
-    const offenders = uiFiles.filter(f => NATIVE_TITLE_RE.test(f.src)).map(f => f.path);
+  it('게임 UI는 브라우저 기본 title 속성 툴팁을 쓰지 않는다', () => {
+    const targets = presentationFiles.filter(f => isGameUi(f.path));
+    const offenders = targets.filter(f => NATIVE_TITLE_RE.test(f.src)).map(f => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  it('게임 UI는 PillButton을 쓰지 않는다(admin/devtools 전용)', () => {
+    const targets = presentationFiles.filter(f => isGameUi(f.path) && f.path !== 'ui/PillButton.tsx');
+    const offenders = targets.filter(f => /\bPillButton\b/.test(f.src)).map(f => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  const THICK_BORDER_RE = /(?:\bborder-2\b|inset_-?2px)/;
+  it('게임 UI 버튼·칩·카드·모달은 1px 얇은 테두리와 1px 베벨을 쓴다', () => {
+    const targets = presentationFiles.filter(
+      f => (f.path.startsWith('ui/') || f.path.startsWith('views/game/') || f.path.startsWith('views/overlays/'))
+        && f.path !== 'ui/PillButton.tsx',
+    );
+    const offenders = targets.filter(f => THICK_BORDER_RE.test(f.src)).map(f => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  const PUNCT_RE = /[·—–]/;
+  it('게임 UI와 기능 모델 코드 문자열은 가운뎃점·줄표를 쓰지 않는다', () => {
+    const targets = [...presentationFiles, ...featureFiles].filter(
+      f => !f.path.includes('/admin/') && !f.path.includes('/devtools/')
+        && !f.path.startsWith('views/admin/') && !f.path.startsWith('views/devtools/'),
+    );
+    const offenders = targets.filter(f => PUNCT_RE.test(stripComments(f.src))).map(f => f.path);
     expect(offenders).toEqual([]);
   });
 });

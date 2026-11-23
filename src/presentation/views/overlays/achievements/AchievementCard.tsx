@@ -36,7 +36,7 @@ const cardTone = (status: AchievementRowStatus) =>
 const cardFrameClass = (status: AchievementRowStatus) => cx(
   'flex min-w-0 flex-col border',
   status === 'claimable'
-    ? 'border-2 border-gold bg-[color-mix(in_oklab,var(--c-gold)_9%,var(--c-surface))]'
+    ? 'border-gold bg-[color-mix(in_oklab,var(--c-gold)_12%,var(--c-surface))]'
     : 'border-line',
 );
 

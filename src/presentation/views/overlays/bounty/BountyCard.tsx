@@ -23,7 +23,7 @@ export default function BountyCard({ quest, progress, accepted, canAccept, reaso
 }) {
   const done = progress >= quest.count;
   return (
-    <Inset tone={done ? 'light' : 'base'} className={done ? 'border-2 border-gold p-3 flex flex-col gap-2 h-full text-sm' : 'p-3 flex flex-col gap-2 h-full text-sm'}>
+    <Inset tone={done ? 'light' : 'base'} className={done ? 'border-gold bg-[color-mix(in_oklab,var(--c-gold)_8%,var(--inset-light))] p-3 flex flex-col gap-2 h-full text-sm' : 'p-3 flex flex-col gap-2 h-full text-sm'}>
       <b className="text-xs text-text-dim">{DIFFICULTY_NAME[quest.difficulty as keyof typeof DIFFICULTY_NAME]}</b>
       <span><b><RarityText rarity={quest.grade!} /></b> 등급 어종</span>
       <span className="pf-accent text-xs">{fmtNum(quest.count)}마리</span>

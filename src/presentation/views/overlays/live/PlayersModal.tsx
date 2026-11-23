@@ -42,7 +42,7 @@ export default function PlayersModal({ region, account, accountFailed = false, s
                       return (
                         <Frame key={p.uid} as="button" type="button" aria-pressed={on} onClick={() => setPicked(p.uid)}
                                className={cx('h-8 px-2.5 flex items-center text-xs text-left bg-surface-2 cursor-pointer min-w-0',
-                                 on && 'border-gold text-gold font-bold translate-y-px shadow-[inset_-2px_-2px_0_var(--bevel-lo),inset_2px_2px_0_var(--bevel-hi)]')}>
+                                 on && 'border-gold text-gold font-bold translate-y-px shadow-[inset_-1px_-1px_0_var(--bevel-lo),inset_1px_1px_0_var(--bevel-hi)]')}>
                           <span className="truncate">{p.nick}</span>
                         </Frame>
                       );

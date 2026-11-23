@@ -60,7 +60,7 @@ function LogLine({ item }: { item: LogEntry }) {
   const mark = MARK[item.kind];
   return (
     <li className="relative grid grid-cols-[minmax(0,1fr)_44px] items-start gap-3 py-[7px] text-sm leading-relaxed">
-      <span className={cx('absolute -left-[35px] top-1.5 size-6 flex items-center justify-center border-2 border-line bg-surface-2',
+      <span className={cx('absolute -left-[35px] top-1.5 size-6 flex items-center justify-center border border-line bg-surface-2',
         '[clip-path:polygon(3px_0,100%_0,100%_calc(100%-3px),calc(100%-3px)_100%,0_100%,0_3px)]',
         'shadow-[inset_1px_1px_0_var(--bevel-lo),inset_-1px_-1px_0_var(--bevel-hi)]', mark.tone)} aria-hidden="true">
         <PixelIcon glyph={mark.glyph} size={12} />

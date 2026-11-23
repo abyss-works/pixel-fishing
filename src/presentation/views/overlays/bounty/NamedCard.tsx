@@ -24,7 +24,7 @@ export default function NamedCard({ game, quest, canAccept, reason, busy, progre
 }) {
   const { name, poster, found, done, haunt, reward } = selectNamedBountyCardData(game, quest, progress);
   return (
-    <Inset tone={done ? 'light' : 'base'} className={done ? 'border-2 border-gold p-3 flex flex-col gap-2 flex-1 min-h-0' : 'p-3 flex flex-col gap-2 flex-1 min-h-0'}>
+    <Inset tone={done ? 'light' : 'base'} className={done ? 'border-gold bg-[color-mix(in_oklab,var(--c-gold)_8%,var(--inset-light))] p-3 flex flex-col gap-2 flex-1 min-h-0' : 'p-3 flex flex-col gap-2 flex-1 min-h-0'}>
       <NamedCardHead title={found && name ? name : '???'} titleTip={poster} traceMins={!done ? ticketMins : null} />
       <BoardRows rows={[
         { key: 'haunt', label: '나타나는 곳', value: haunt },

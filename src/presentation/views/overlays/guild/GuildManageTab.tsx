@@ -201,7 +201,7 @@ function ModeCell({ mode, on, disabled, onSelect }: { mode: GuildJoinMode; on: b
   return (
     <Frame as="button" type="button" role="radio" aria-checked={on} disabled={disabled} onClick={onSelect}
            className={cx('flex flex-col items-start gap-1 px-3 py-2 text-left cursor-pointer',
-             on ? 'border-gold bg-surface-2 shadow-[inset_2px_2px_0_var(--bevel-hi),inset_-2px_-2px_0_var(--bevel-lo)]'
+             on ? 'border-gold bg-surface-2 shadow-[inset_1px_1px_0_var(--bevel-hi),inset_-1px_-1px_0_var(--bevel-lo)]'
                : 'hover:bg-surface-2')}>
       <b className={cx('text-sm', on ? 'text-gold' : 'text-text')}>{t.name}</b>
       <span className="text-2xs text-text-dim">{t.desc}</span>

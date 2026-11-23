@@ -240,7 +240,7 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
       var(--notch) 0, 100% 0, 100% calc(100% - var(--notch)),
       calc(100% - var(--notch)) 100%, 0 100%, 0 var(--notch)
     );
-    box-shadow: inset 2px 2px 0 var(--bevel-hi), inset -1px -1px 0 var(--bevel-lo);
+    box-shadow: inset 1px 1px 0 var(--bevel-hi), inset -1px -1px 0 var(--bevel-lo);
   }
   .pf-inset.deep { background: var(--inset-deep); }
   .pf-inset.light { background: var(--inset-light); }
@@ -254,17 +254,17 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
 
   .pf-frame {
     background: var(--c-surface);
-    border: 2px solid var(--c-line);
+    border: 1px solid var(--c-line);
     clip-path: polygon(
       var(--notch) 0, 100% 0, 100% calc(100% - var(--notch)),
       calc(100% - var(--notch)) 100%, 0 100%, 0 var(--notch)
     );
-    box-shadow: inset 2px 2px 0 var(--bevel-lo), inset -2px -2px 0 var(--bevel-hi);
+    box-shadow: inset 1px 1px 0 var(--bevel-lo), inset -1px -1px 0 var(--bevel-hi);
   }
 
   .pf-btn {
     background: var(--c-surface-2);
-    border: 2px solid var(--c-line);
+    border: 1px solid var(--c-line);
     border-radius: 0;
     color: var(--c-text);
     font-family: inherit;

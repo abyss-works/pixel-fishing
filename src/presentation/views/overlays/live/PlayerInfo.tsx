@@ -259,7 +259,7 @@ function ProfileCells({ name, view, actions }: {
           <ul className="grid grid-cols-3 gap-1.5 mobile:grid-cols-2">
             {artifacts.slots.map(s => (
               <li key={s.id}
-                  className={cx('min-h-10 border-2 px-1 py-0.5 flex flex-col items-center justify-center text-center text-2xs leading-tight',
+                  className={cx('min-h-10 border px-1 py-0.5 flex flex-col items-center justify-center text-center text-2xs leading-tight',
                     s.grade ? cx('bg-bg', GRADE_CLASS[s.grade]) : 'border-dashed border-line text-text-dim')}
                   aria-label={s.name ? (s.level !== null ? `유물 ${s.name} Lv.${s.level}` : `유물 ${s.name}`) : `${s.zone} 유물 없음`}>
                 {s.name ? (

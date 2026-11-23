@@ -12,7 +12,7 @@ export default function HudChip({ size = 'md', className, children, onClick, ...
   children: ReactNode;
   onClick?: MouseEventHandler<HTMLButtonElement>;
 } & Omit<HTMLAttributes<HTMLElement>, 'onClick'>) {
-  const cls = cx('pf-glass pf-bevel pointer-events-auto inline-flex items-center gap-1.5 border-2 border-line', NOTCH_SM,
+  const cls = cx('pf-glass pf-bevel pointer-events-auto inline-flex items-center gap-1.5 border border-line', NOTCH_SM,
                  size === 'sm' ? 'h-6 px-2' : 'h-[26px] px-2 text-xs', className);
   if (onClick) {
     return (

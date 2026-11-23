@@ -15,7 +15,7 @@ export default function Inset({ tone = 'base', title, divided, borderless, class
   tone?: keyof typeof TONE; title?: string; divided?: boolean; borderless?: boolean; className?: string; children?: ReactNode;
 } & Omit<HTMLAttributes<HTMLDivElement>, 'title'>) {
   return (
-    <div className={cx('pf-notch shadow-[inset_2px_2px_0_var(--bevel-hi),inset_-1px_-1px_0_var(--bevel-lo)]',
+    <div className={cx('pf-notch shadow-[inset_1px_1px_0_var(--bevel-hi),inset_-1px_-1px_0_var(--bevel-lo)]',
                        !borderless && 'border border-line',
                        TONE[tone], divided && 'divide-y divide-line', className)} {...rest}>
       {title && <h3 className="pf-accent text-base text-gold">{title}</h3>}

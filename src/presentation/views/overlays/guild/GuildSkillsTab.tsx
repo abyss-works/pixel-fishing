@@ -94,11 +94,11 @@ export default function GuildSkillsTab({ guild, gold, busy, run, onResetEnhancem
         <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 px-2 py-1 bg-bg border border-line text-2xs text-text-dim"
              aria-label="스킬 단계 색상 안내">
           <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-            <span className="inline-block size-3 bg-gold border-2 border-gold-dark" aria-hidden="true" />
+            <span className="inline-block size-3 bg-gold border border-gold-dark" aria-hidden="true" />
             노란색 채움: 기본 단계
           </span>
           <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-            <span className="inline-flex items-center justify-center p-px bg-[#311744] border-2 border-guild" aria-hidden="true">
+            <span className="inline-flex items-center justify-center p-px bg-[#311744] border border-guild" aria-hidden="true">
               <span className="block size-2 bg-gold border border-gold-dark" />
             </span>
             보라색 테두리: 자유 강화
@@ -253,7 +253,7 @@ function Branch({ row, active, busy, invest, onPick, onInvest }: {
                  'mobile:h-7 mobile:flex-row mobile:justify-start mobile:gap-1.5 mobile:px-2 mobile:text-left',
                  row.locked ? 'cursor-default bg-bg border-[#213652] text-text-dim shadow-[inset_1px_1px_0_var(--bevel-hi)]' : 'cursor-pointer',
                  !row.locked && active
-                   ? 'border-gold text-gold bg-[color-mix(in_oklab,var(--c-surface-2)_70%,var(--c-bg))] translate-y-px shadow-[inset_2px_2px_0_var(--bevel-hi),inset_-2px_-2px_0_var(--bevel-lo)]'
+                   ? 'border-gold text-gold bg-[color-mix(in_oklab,var(--c-surface-2)_70%,var(--c-bg))] translate-y-px shadow-[inset_1px_1px_0_var(--bevel-hi),inset_-1px_-1px_0_var(--bevel-lo)]'
                    : !row.locked && 'text-text bg-surface-2 hover:border-accent')}>
           <PixelIcon glyph={GLYPH[row.id]} size={14} className="shrink-0" />
           <span className="text-center mobile:text-left mobile:truncate">{row.name}</span>
@@ -265,7 +265,7 @@ function Branch({ row, active, busy, invest, onPick, onInvest }: {
           <div key={node.rank} className="flex flex-col items-center mobile:flex-row">
             {i > 0 && <span className={cx('block w-0.5 h-0.5 mobile:hidden', node.state === 'done' ? 'bg-gold' : 'bg-line')} aria-hidden="true" />}
             <span className={cx(
-              'inline-flex items-center justify-center p-[2px] border-2 mobile:p-px',
+              'inline-flex items-center justify-center p-[2px] border mobile:p-px',
               node.enhanced
                 ? 'border-guild bg-[#311744] shadow-[0_0_0_1px_var(--c-epic),inset_0_0_0_1px_var(--c-epic)]'
                 : 'border-transparent bg-transparent',
@@ -312,7 +312,7 @@ const NODE_TEXT: Record<BonusNode['state'], string> = { done: '이룸', next: '�
 function Node({ node, label }: { node: BonusNode; label: string }) {
   return (
     <span role="img" aria-label={`${label} ${NODE_TEXT[node.state]}${node.enhanced ? ' 자유 강화 적용' : ''}`}
-          className={cx('relative w-6 h-[18px] mobile:size-4 overflow-hidden flex items-center justify-center pf-accent text-2xs border-2',
+          className={cx('relative w-6 h-[18px] mobile:size-4 overflow-hidden flex items-center justify-center pf-accent text-2xs border',
             '[clip-path:polygon(2px_0,100%_0,100%_calc(100%-2px),calc(100%-2px)_100%,0_100%,0_2px)]',
             node.state === 'done' && 'border-gold-dark bg-gold text-[#08111f] shadow-[inset_1px_1px_0_rgba(255,255,255,0.5),inset_-1px_-1px_0_rgba(0,0,0,0.25)]',
             node.state === 'next' && 'border-gold bg-surface-2 text-text shadow-[inset_1px_1px_0_var(--bevel-lo),inset_-1px_-1px_0_var(--bevel-hi)]',

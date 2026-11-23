@@ -28,7 +28,7 @@ export default function ChoiceCard({ selected, onSelect, preview, label, sub, ba
       aria-checked={selected}
       onClick={onSelect}
       className={cx(
-        'flex flex-col gap-1.5 p-2 text-left pf-notch border-2 cursor-pointer transition-colors',
+        'flex flex-col gap-1.5 p-2 text-left pf-notch border cursor-pointer transition-colors',
         selected ? cx('border-gold bg-surface-2', PRESSED_BEVEL) : 'border-line bg-surface pf-bevel hover:border-gold-dark',
       )}
     >

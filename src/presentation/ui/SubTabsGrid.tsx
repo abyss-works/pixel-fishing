@@ -24,7 +24,7 @@ export default function SubTabsGrid<K extends string>({ items, activeKey, onSele
             aria-pressed={active}
             data-tier={active ? 'emphasis' : 'on'}
             className={cx(
-              'flex flex-col items-center justify-center px-2 py-1 text-sm leading-tight border-2 cursor-pointer transition-colors',
+              'flex flex-col items-center justify-center px-2 py-1 text-sm leading-tight border cursor-pointer transition-colors',
               'bg-[color-mix(in_oklab,var(--c-bg)_60%,transparent)]', NOTCH_SM, PRESSED_BEVEL,
               active ? 'border-gold text-gold' : 'border-line text-text',
             )}

@@ -25,7 +25,7 @@ export default function SubTabs<K extends string>({ items, activeKey, onSelect }
             aria-pressed={active}
             data-tier={active ? 'emphasis' : 'on'}
             className={cx(
-              'grow shrink-0 basis-auto min-w-16 border-2 px-2 py-1 text-sm cursor-pointer transition-colors',
+              'grow shrink-0 basis-auto min-w-16 border px-2 py-1 text-sm cursor-pointer transition-colors',
               'flex flex-col items-center leading-tight',
               'bg-[color-mix(in_oklab,var(--c-bg)_60%,transparent)]', NOTCH_SM, PRESSED_BEVEL,
               active ? 'border-gold text-gold' : 'border-line text-text hover:border-accent',
