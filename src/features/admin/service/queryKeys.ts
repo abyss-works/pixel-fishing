@@ -1,15 +1,16 @@
-// 관리자 조회 캐시 키 — 기간을 받는 조회는 키에 기간을 넣어 캐시를 분리한다.
-// 같은 대상을 쓰는 탭(유저 명부 등)은 같은 키를 공유해 중복 조회를 합친다.
+// 관리자 조회 캐시 키 — 공유 엔티티(users·spamFlags 등)는 단일 정규 키를 사용해 탭을 오갈 때 중복 풀스캔을 막는다.
+// 기간이나 대상을 받는 조회는 키에 인자를 넣어 캐시를 분리한다.
 export const adminKeys = {
   access: ['admin', 'access'] as const,
   signInReturn: ['admin', 'signInReturn'] as const,
+  overview: ['admin', 'overview'] as const,
   users: ['admin', 'users'] as const,
+  spamFlags: ['admin', 'spamFlags'] as const,
+  recentEvents: ['admin', 'recentEvents'] as const,
   letters: ['admin', 'letters'] as const,
   changelog: ['admin', 'changelog'] as const,
   chatReports: ['admin', 'chatReports'] as const,
   mails: ['admin', 'mails'] as const,
-  antiAbuse: ['admin', 'antiabuse'] as const,
-  overview: ['admin', 'overview'] as const,
   live: ['admin', 'live'] as const,
   retention: ['admin', 'retention'] as const,
   dailyStats: (days: number) => ['admin', 'dailyStats', days] as const,
@@ -17,6 +18,6 @@ export const adminKeys = {
   economy: (days: number) => ['admin', 'economy', days] as const,
   bountyFunnel: (days: number) => ['admin', 'bountyFunnel', days] as const,
   balanceLive: (days: number) => ['admin', 'balanceLive', days] as const,
-  userDetails: (uid: string) => ['admin', 'user', uid] as const,
+  userEvents: (uid: string) => ['admin', 'userEvents', uid] as const,
   userState: (uid: string) => ['admin', 'userState', uid] as const,
 };

@@ -1,5 +1,6 @@
 export type {
   AdminBountyFunnelRow,
+  AdminChatReportRow,
   AdminDailyStatsRow,
   AdminEconomyRow,
   AdminEventRow,
@@ -7,7 +8,9 @@ export type {
   AdminLetterRow,
   AdminLive,
   AdminLiveConnection,
+  AdminOverview,
   AdminRetentionRow,
+  AdminSentMailRow,
   AdminSessionRow,
   AdminSpamFlagRow,
   AdminUserRow,

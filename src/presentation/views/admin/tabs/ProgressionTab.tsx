@@ -31,7 +31,7 @@ export default function ProgressionTab() {
   // 분포는 진행이 있는 계정만 센다. 휴면 게스트는 모두 출발 단계라 분포를 한쪽으로 기울인다
   const users = useMemo(() => splitDormantGuests(data ?? NO_USERS).active, [data]);
 
-  const { boatHist, rodHist, regionReach, stalled } = useMemo(
+  const { boatHist, rodHist, regionReach, zoneUnlocks, stalled } = useMemo(
     () => selectProgressionDashboard(users), [users],
   );
 
@@ -47,7 +47,7 @@ export default function ProgressionTab() {
           <Note size="2xs" className="my-0">
             {granted
               ? (boatHist.legend.filter(l => l.count > 0)
-                  .map(l => `${l.name} ${l.count}`).join(' · ') || '데이터가 없어요.')
+                  .map(l => `${l.name} ${l.count}`).join(', ') || '데이터가 없어요.')
               : '운영 DB에 연결하면 채워져요.'}
           </Note>
         </Cell>
@@ -68,23 +68,23 @@ export default function ProgressionTab() {
           )}
         </Cell>
 
-        <Cell title="지역 도달 (visited 기준)">
+        <Cell title="오픈월드 존 및 수배 해금">
           {/* 높이는 전체 유저 대비 비율(상한 100%)이다 — 가장 큰 막대에 맞춰 늘리지 않는다 */}
-          <BarsChart values={regionReach.map(r => r.sharePercent)}
-                     labels={regionReach.map(r => REGION_NAMES[r.id])}
+          <BarsChart values={zoneUnlocks.map(z => z.sharePercent)}
+                     labels={zoneUnlocks.map(z => z.name)}
                      max={100} scaleLabel="100% = 전체 유저" height={72}
-                     valueText={(_, i) => `${regionReach[i].users}/${users.length}`}
-                     ariaLabel="지역별 도달한 유저 수" />
+                     valueText={(_, i) => `${zoneUnlocks[i].users}/${users.length}`}
+                     ariaLabel="오픈월드 존별 해금 유저 수" />
           <Note size="2xs" className="my-0">
-            {regionReach.map(r => `${REGION_NAMES[r.id]} ${r.users}/${users.length}`).join(' · ')}
+            {zoneUnlocks.map(z => `${z.name} ${z.users}/${users.length}${z.hasBounty ? '(수배)' : ''}`).join(', ')}
           </Note>
           <Note size="2xs" className="my-0">
-            가본 적 있는 지역을 센 값이에요. 현재 위치가 아니라 state.visited를 기준으로 해요.
+            {`visited 기준 현행 지역 도달: ${regionReach.map(r => `${REGION_NAMES[r.id]} ${r.users}/${users.length}`).join(', ')}.`}
             {!granted && ' 운영 DB에 연결하면 채워져요.'}
           </Note>
         </Cell>
 
-        <Cell title="배 명성 게이트 — 막힌 유저" flush>
+        <Cell title="배 명성 게이트 막힌 유저" flush>
           {!granted ? (
             <Note size="2xs" className="my-0 px-3 py-2">운영 DB에 연결하면 채워져요.</Note>
           ) : stalled.length === 0 ? (

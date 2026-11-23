@@ -16,18 +16,20 @@ import { useDialogs } from '../../../ui/useDialogs';
 import { fmtDT } from '../../../../features/admin/model/metrics';
 import { MAIL_PROBLEM_TEXT, MAX_MAIL_BATCH_TOTAL_GOLD, addRecipient, parseRecipients, searchRecipients } from '../../../../features/admin/model/mailDraft';
 import { adminIdentityLookup, adminUserLabel } from '../../../../features/admin/model/adminViews';
-import { readAdminMails } from '../../../../features/admin/service/queries';
+import { readAdminMails, readAdminUsers } from '../../../../features/admin/service/queries';
 import type { writeAdminMail } from '../../../../features/admin/service/queries';
 import { useAdminMailWriter } from '../../../../features/admin/service/useAdminMail';
 import { adminKeys } from '../../../../features/admin/service/queryKeys';
 import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
+import type { AdminSentMailRow, AdminUserRow } from '../../../../features/admin/model/types';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { Cell, CellGrid, TabState } from '../layout';
 import UserIdentity from '../UserIdentity';
 
 type TargetKind = 'users' | 'all';
 type Plan = Awaited<ReturnType<typeof writeAdminMail>>;
-const EMPTY: Awaited<ReturnType<typeof readAdminMails>> = [[], []];
+const NO_MAILS: AdminSentMailRow[] = [];
+const NO_USERS: AdminUserRow[] = [];
 const newDraftKey = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 export default function MailTab({ to = null }: {
@@ -37,8 +39,16 @@ export default function MailTab({ to = null }: {
   const { access } = useAdminAuth();
   const granted = access === 'granted';
   const writeMail = useAdminMailWriter();
-  const { data, loading, error, refresh } = useAdminQuery(adminKeys.mails, readAdminMails, granted);
-  const [mails, users] = data ?? EMPTY;
+  const mailsQuery = useAdminQuery(adminKeys.mails, readAdminMails, granted);
+  const usersQuery = useAdminQuery(adminKeys.users, readAdminUsers, granted);
+  const mails = mailsQuery.data ?? NO_MAILS;
+  const users = usersQuery.data ?? NO_USERS;
+  const loading = mailsQuery.loading || usersQuery.loading;
+  const error = mailsQuery.error ?? usersQuery.error;
+  const refresh = () => {
+    mailsQuery.refresh();
+    usersQuery.refresh();
+  };
   const { confirm, dialogs } = useDialogs();
 
   const [kind, setKind] = useState<TargetKind>('users');

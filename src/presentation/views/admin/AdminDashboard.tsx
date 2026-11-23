@@ -116,7 +116,7 @@ function Dashboard() {
         {/* 로컬 모드 안내 — 클라우드 빌드에서는 그리지 않는다 */}
         <AdminGateBanner />
         {route.tab === 'overview' && <OverviewTab />}
-        {route.tab === 'live' && <LiveTab />}
+        {route.tab === 'live' && <LiveTab onCompose={compose} />}
         {route.tab === 'players' &&
           <PlayersTab section={route.section} onSection={section => go({ tab: 'players', section })}
                       onCompose={compose} />}

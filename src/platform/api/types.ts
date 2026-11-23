@@ -348,6 +348,8 @@ export interface AdminUserState {
   hats: {
     owned: number;
     total: number;
+    items: { id: string; name: string; source: 'gold' | 'achievement' }[];
+    equipped: { id: string; name: string } | null;
   };
   achievements: {
     claimed: number;
@@ -367,7 +369,36 @@ export interface AdminUserState {
   instances: {
     bag: number;
     exhibit: number;
+    recentBag: {
+      uid: string;
+      fishId: string;
+      name: string;
+      form: string;
+      grade: string | null;
+      size: number | null;
+      caughtAt: string | null;
+      spot: string | null;
+      locked: boolean;
+    }[];
   };
+  progression: {
+    visited: string[];
+    coupons: string[];
+    bountyProgress: { questId: string; zone: string; progress: number; target: number | null; startedAt: string }[];
+    bountyTickets: { questId: string; issuedAt: string }[];
+    activeSessions: number;
+  };
+}
+
+/** 관리자 — 개요 탭 통합 응답 */
+export interface AdminOverview {
+  users: AdminUserRow[];
+  recentEvents: AdminEventRow[];
+  spamFlags: AdminSpamFlagRow[];
+  dailyStats: AdminDailyStatsRow[];
+  retention: AdminRetentionRow[];
+  sessions: AdminSessionRow[];
+  live: AdminLive;
 }
 
 /** 관리자 — 비밀번호 재설정 링크. url은 게임의 재설정 착지 주소이고 expiresAt까지 쓸 수 있다 */
@@ -383,6 +414,8 @@ export interface AdminApi {
   takeSignInReturn(): { error: string | null } | null;
   /** 관리자 세션만 끝낸다. 게임 세션은 그대로다 */
   signOut(): Promise<void>;
+  /** 개요 탭 통합 조회. days를 생략하면 서버 기본 기간(30일)이다 */
+  overview(days?: number): Promise<AdminOverview>;
   users(): Promise<AdminUserRow[]>;
   /** 지금 실시간 채널에 연결된 사람 */
   live(): Promise<AdminLive>;
@@ -413,6 +446,8 @@ export interface AdminApi {
   resetLink(userId: string): Promise<AdminResetLink>;
   /** 편지 처리 표시(true) 또는 취소(false) */
   letterHandled(letterId: number, handled: boolean): Promise<{ handled: boolean }>;
+  /** 대상 계정의 활성 인증 세션을 모두 강제 종료한다 */
+  revokeSessions(userId: string): Promise<{ revoked: number }>;
   /** 밸런스 라이브 지표. days는 이벤트 지표의 기간(1~7일)이고, 생략하면 서버 기본값인 7일이다 */
   balanceLive(days?: number): Promise<BalanceLive>;
   /** 이 화면이 붙은 배포 주소의 호스트 — 운영/스테이징 착오 방지 표시값(Ops 탭). 로컬 모드는 null */

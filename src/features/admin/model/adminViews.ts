@@ -2,11 +2,14 @@ import { BOATS, boatNameOf } from '../../../game/content/boats';
 import type {
   AdminEconomyRow, AdminEventRow, AdminSpamFlagRow, AdminUserRow,
 } from './types';
-import { REGION_ORDER } from './regions';
+import { OPEN_WORLD_ZONE_UNLOCKS, REGION_ORDER } from './regions';
 
 /** DB 숫자 열은 number·string·null 어느 형태로도 올 수 있다. */
 export const adminNumber = (value: number | string | null): number =>
   value === null ? NaN : Number(value);
+
+/** 배 단계 번호를 한글 배 이름으로 바꾼다 (표현 계층 공용) */
+export const adminBoatName = (boat: number): string => boatNameOf(boat);
 
 export interface RiskSignals {
   restrictedCount: number;
@@ -31,6 +34,15 @@ export interface ProgressionDashboard {
   };
   rodHist: { values: number[]; labels: string[]; min: number };
   regionReach: Array<{ id: string; users: number; sharePercent: number }>;
+  zoneUnlocks: Array<{
+    id: string;
+    name: string;
+    fullName: string;
+    entryBoat: number;
+    hasBounty: boolean;
+    users: number;
+    sharePercent: number;
+  }>;
   stalled: Array<{ user: AdminUserRow; next: (typeof BOATS)[number]; deficit: number }>;
 }
 
@@ -69,6 +81,18 @@ export function selectProgressionDashboard(users: readonly AdminUserRow[]): Prog
       sharePercent: users.length === 0 ? 0 : visitedUsers / users.length * 100,
     };
   });
+  const zoneUnlocks = OPEN_WORLD_ZONE_UNLOCKS.map(z => {
+    const unlockedUsers = users.filter(user => (user.boat ?? 0) >= z.entryBoat).length;
+    return {
+      id: z.id,
+      name: z.name,
+      fullName: z.fullName,
+      entryBoat: z.entryBoat,
+      hasBounty: z.hasBounty,
+      users: unlockedUsers,
+      sharePercent: users.length === 0 ? 0 : unlockedUsers / users.length * 100,
+    };
+  });
   const stalled: ProgressionDashboard['stalled'] = [];
   for (const user of users) {
     const next = BOATS.find(boat => boat.tier === (user.boat ?? 0) + 1);
@@ -82,6 +106,7 @@ export function selectProgressionDashboard(users: readonly AdminUserRow[]): Prog
     boatHist,
     rodHist,
     regionReach,
+    zoneUnlocks,
     stalled: stalled.sort((a, b) => b.deficit - a.deficit),
   };
 }

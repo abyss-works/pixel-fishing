@@ -16,7 +16,7 @@ import ChatReportsSection from './ChatReportsSection';
 
 const POLL_MS = 15_000;
 
-export default function LiveTab() {
+export default function LiveTab({ onCompose }: { onCompose?: (userId: string) => void } = {}) {
   const { access } = useAdminAuth();
   const granted = access === 'granted';
   const { data, loading, error, refresh } = useAdminLive(POLL_MS);
@@ -81,7 +81,7 @@ export default function LiveTab() {
         </Cell>
       </CellGrid>
       <div className="mt-3">
-        <ChatReportsSection />
+        <ChatReportsSection onCompose={onCompose} />
       </div>
     </TabPage>
   );

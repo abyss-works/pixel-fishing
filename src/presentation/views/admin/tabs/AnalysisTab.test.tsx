@@ -14,8 +14,8 @@ vi.mock('../../../../platform/api', () => ({
       users: vi.fn(async () => [
         { user_id: 'u1', email: 'a@example.com', nickname: '갈치', is_anonymous: false, gold: 100, fame: 100, boat: 1, rod: 1,
           visited: ['village'], restricted: false, last_action_at: null },
-        { user_id: 'u2', email: 'b@example.com', gold: 300, fame: 5000, boat: 2, rod: 3,
-          visited: ['village', 'ocean'], restricted: false, last_action_at: null },
+        { user_id: 'u2', email: 'b@example.com', gold: 300, fame: 5000, boat: 3, rod: 3,
+          visited: ['village', 'world'], restricted: false, last_action_at: null },
       ]),
       economy: vi.fn(async () => [{
         day: todayKST(), sells: 2, sell_gold: 1000, coupon_gold: 200, mail_gold: 0,
@@ -62,31 +62,33 @@ describe('경제·진행 탭', () => {
     expect(screen.getAllByText('400G')).toHaveLength(2);
   });
 
-  it('기간 전환은 그 기간으로 다시 조회한다 — 머리에 하나만 있다', async () => {
+  it('경제 구역 — events 7일 보관 한도 기준으로 고정 조회하고 30일·90일 전환 스위치를 두지 않는다', async () => {
     show('economy');
     await screen.findByRole('img', { name: '골드 유입 일별 추이' });
-    expect(vi.mocked(api.admin.economy)).toHaveBeenCalledWith(30);
-    expect(screen.getAllByRole('group', { name: '기간 선택' })).toHaveLength(1);
-    fireEvent.click(screen.getByRole('button', { name: '90일' }));
-    await waitFor(() => expect(vi.mocked(api.admin.economy)).toHaveBeenCalledWith(90));
+    expect(vi.mocked(api.admin.economy)).toHaveBeenCalledWith(7);
+    expect(screen.queryByRole('group', { name: '기간 선택' })).not.toBeInTheDocument();
+    expect(screen.getAllByText(/최근 7일\(이벤트 보관 한도\)/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/daily_stats/)).toBeInTheDocument();
   });
 
-  it('진행 구역 — 분포 차트·지역 도달·막힌 유저·바운티 퍼널을 채우고 기간 전환은 없다', async () => {
+  it('진행 구역 — 분포 차트·오픈월드 존 해금(구 바다 6개 제외)·막힌 유저·바운티 퍼널을 채운다', async () => {
     show('progression');
     // 조각배(명성 100)는 다음 배 돛단배(하한 1,000)에 막혀 있다 — 명부가 들어오면 이 줄이 생긴다
     expect(await screen.findByText('돛단배(T2)')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: '배 단계별 유저 수' })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: '낚싯대 레벨별 유저 수' })).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: '지역별 도달한 유저 수' })).toBeInTheDocument();
-    expect(screen.getByText(/마을 2\/2 · 태평양 1\/2/)).toBeInTheDocument();
+    const zoneChart = screen.getByRole('img', { name: '오픈월드 존별 해금 유저 수' });
+    expect(zoneChart).toBeInTheDocument();
+    expect(screen.getByText(/마을 2\/2, 태평양 2\/2\(수배\), 동남아 1\/2\(수배\)/)).toBeInTheDocument();
+    expect(screen.getByText(/visited 기준 현행 지역 도달: 마을 2\/2, 대양 1\/2/)).toBeInTheDocument();
     expect(screen.getByText('갈치(a@example.com)')).toBeInTheDocument();
-    expect(await screen.findByText('바운티 퍼널 (최근 7일)')).toBeInTheDocument();
+    expect(await screen.findByText('바운티 퍼널 (최근 7일, 이벤트 보관 한도)')).toBeInTheDocument();
     expect(screen.getByText('결투 없이 남은 흔적')).toBeInTheDocument();
     expect(screen.getByText('결투까지 100%')).toBeInTheDocument();
     expect(screen.queryByRole('group', { name: '기간 선택' })).not.toBeInTheDocument();
   });
 
-  it('활동 구역 — 일별 집계 차트와 리텐션 코호트를 채우고, 집계되지 않은 날을 센다', async () => {
+  it('활동 구역 — 일별 집계 차트와 리텐션 코호트를 채우고, 30일·90일 기간 전환을 제공한다', async () => {
     show('activity');
     // 막대의 title은 '월-일: 값', 집계되지 않은 날은 '월-일: 미집계'다
     const bar = (name: string) => screen.getByRole('img', { name })
@@ -101,5 +103,9 @@ describe('경제·진행 탭', () => {
     const [from, to] = vi.mocked(api.admin.dailyStats).mock.calls[0];
     expect(to).toBe(todayKST());
     expect((Date.parse(to) - Date.parse(from)) / 86_400_000).toBe(29);
+
+    expect(screen.getAllByRole('group', { name: '기간 선택' })).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: '90일' }));
+    await waitFor(() => expect(vi.mocked(api.admin.dailyStats)).toHaveBeenCalledTimes(2));
   });
 });
