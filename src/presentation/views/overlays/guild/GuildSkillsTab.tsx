@@ -6,6 +6,7 @@ import {
   DONATION_STEPS, GUILD_BONUS_TIP, GUILD_ENHANCE_MAX_TOTAL_RANK, GUILD_ERROR_TEXT,
   bonusRows, donateDisabledReason, enhanceInvestState, enhancePoolSummary, enhanceResetState,
 } from '../../../../features/guild/model/guild';
+import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import type { BonusNode, BonusRow } from '../../../../features/guild/model/guild';
 import Button from '../../../ui/Button';
 import ConfirmDialog from '../../../ui/ConfirmDialog';
@@ -47,11 +48,15 @@ export default function GuildSkillsTab({ guild, gold, busy, run, onResetEnhancem
     const target = rows.find(r => r.id === bonus);
     const error = await run({ op: 'enhance', guildId: guild.id, bonus });
     if (error) {
-      setToast(error, 'warn');
+      sendNotice(setToast, { kind: 'system.modalRejected', text: error });
       return;
     }
     setPicked(bonus);
-    if (target) setToast(`${target.name} 스킬을 강화 ${target.enhanceRank + 1}단계로 올렸어요.`);
+    if (target) sendNotice(setToast, {
+      kind: 'guild.modalAction',
+      text: `${target.name} 스킬을 강화 ${target.enhanceRank + 1}단계로 올렸어요.`,
+      toastText: `${target.name} 강화 ${target.enhanceRank + 1}단계!`,
+    });
   };
 
   const selInvest = sel ? enhanceInvestState(guild, sel) : { canInvest: false, reason: null };
@@ -187,10 +192,14 @@ export default function GuildSkillsTab({ guild, gold, busy, run, onResetEnhancem
             setResetting(false);
             void onResetEnhancements().then(async ({ error, recovered }) => {
               if (error) {
-                setToast(error, 'warn');
+                sendNotice(setToast, { kind: 'system.modalRejected', text: error });
                 return;
               }
-              setToast(`길드 스킬 강화를 초기화해 ${recovered ?? fallbackUsed}포인트를 되돌렸어요.`);
+              sendNotice(setToast, {
+                kind: 'guild.modalAction',
+                text: `길드 스킬 강화를 초기화해 ${recovered ?? fallbackUsed}포인트를 되돌렸어요.`,
+                toastText: '길드 스킬 강화 초기화!',
+              });
               await onGoldChanged();
             });
           }}
@@ -336,18 +345,22 @@ function DonateDialog({ row, guildId, busy, run, setToast, onGoldChanged, onClos
     e.preventDefault();
     const value = Number(amount || row.need);
     if (!Number.isSafeInteger(value) || value <= 0) {
-      setToast(GUILD_ERROR_TEXT['bad-amount'], 'warn');
+      sendNotice(setToast, { kind: 'system.modalRejected', text: GUILD_ERROR_TEXT['bad-amount'], toastText: '기부할 골드를 입력해 주세요.' });
       return;
     }
     // 상한까지 필요한 골드만 받는다. 서버와 같은 규칙으로 실제로 받을 골드를 미리 계산해 알린다
     const accepted = applyDonation(row.pool, row.rank, row.cap, value).accepted;
     const error = await run({ op: 'donate', guildId, bonus: row.id, amount: value });
     if (error) {
-      setToast(error, 'warn');
+      sendNotice(setToast, { kind: 'system.modalRejected', text: error });
       return;
     }
     onClose();
-    setToast(`${row.name}에 ${fmtNum(accepted)}G를 기부했어요.`);
+    sendNotice(setToast, {
+      kind: 'guild.modalAction',
+      text: `${row.name}에 ${fmtNum(accepted)}G를 기부했어요.`,
+      toastText: `${row.name} ${fmtNum(accepted)}G 기부!`,
+    });
     await onGoldChanged();
   };
 

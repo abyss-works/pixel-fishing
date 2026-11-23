@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { FRIEND_ERROR_TEXT, friendPlaceText } from '../../../../features/friends/model/friends';
+import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import type { FriendGroups, FriendItem } from '../../../../features/friends/model/friends';
 import { useFriends } from '../../../../features/friends/service/useFriends';
 import { useNicknameSuggestions } from '../../../../features/friends/service/useNicknameSuggestions';
@@ -44,10 +45,10 @@ export default function FriendsModal({ setToast, onClose }: { setToast: Notify; 
     try {
       const r = await act(op);
       if (r.ok) done(r.result);
-      else setToast(FRIEND_ERROR_TEXT[r.error] ?? '요청을 처리하지 못했어요. 잠시 뒤 다시 해 주세요.', 'warn');
+      else sendNotice(setToast, { kind: 'system.modalRejected', text: FRIEND_ERROR_TEXT[r.error] ?? '요청을 처리하지 못했어요. 잠시 뒤 다시 해 주세요.' });
       return r.ok;
     } catch {
-      setToast('친구 요청을 보내지 못했어요. 연결을 확인해 주세요.', 'warn');
+      sendNotice(setToast, { kind: 'system.modalRejected', text: '친구 요청을 보내지 못했어요. 연결을 확인해 주세요.' });
       return false;
     } finally {
       setBusy(false);
@@ -84,7 +85,11 @@ export default function FriendsModal({ setToast, onClose }: { setToast: Notify; 
                        onConfirm={() => {
                          const target = removing;
                          setRemoving(null);
-                         void run({ op: 'remove', uid: target.uid }, () => setToast(`${nameOf(target)} 님과 친구를 끊었어요.`));
+                         void run({ op: 'remove', uid: target.uid }, () => sendNotice(setToast, {
+                           kind: 'social.modalAction',
+                           text: `${nameOf(target)} 님과 친구를 끊었어요.`,
+                           toastText: `${nameOf(target)} 님 친구 삭제`,
+                         }));
                        }}>
           <p className="text-sm">{nameOf(removing)} 님과 친구를 끊을까요?<br />다시 친구가 되려면 요청을 새로 보내야 해요.</p>
         </ConfirmDialog>
@@ -161,8 +166,13 @@ function FriendRequests({ groups, pending, busy, act, run, setToast }: {
     if (!r) { setError('요청을 보내지 못했어요. 연결을 확인해 주세요.'); return; }
     if (!r.ok) { setError(FRIEND_ERROR_TEXT[r.error] ?? '요청을 보내지 못했어요.'); return; }
     setNickname('');
-    setToast(r.result === 'accepted' ? `${name} 님과 친구가 됐어요.`
-      : r.result === 'already' ? `${name} 님과는 이미 친구이거나 요청 중이에요.` : `${name} 님에게 친구 요청을 보냈어요.`);
+    sendNotice(setToast, {
+      kind: 'social.modalAction',
+      text: r.result === 'accepted' ? `${name} 님과 친구가 됐어요.`
+        : r.result === 'already' ? `${name} 님과는 이미 친구이거나 요청 중이에요.` : `${name} 님에게 친구 요청을 보냈어요.`,
+      toastText: r.result === 'accepted' ? `${name} 님과 친구 성사`
+        : r.result === 'already' ? '이미 친구이거나 요청 중' : `${name} 님 친구 요청 전송`,
+    });
   };
 
   return (
@@ -189,7 +199,13 @@ function FriendRequests({ groups, pending, busy, act, run, setToast }: {
                             <>
                               <Button size="sm" disabled={busy} onClick={() => { void run({ op: 'remove', uid: f.uid }, () => {}); }}>거절</Button>
                               <Button size="sm" variant="primary" disabled={busy}
-                                      onClick={() => { void run({ op: 'accept', uid: f.uid }, () => setToast(`${nameOf(f)} 님과 친구가 됐어요.`)); }}>수락</Button>
+                                      onClick={() => {
+                                        void run({ op: 'accept', uid: f.uid }, () => sendNotice(setToast, {
+                                          kind: 'social.modalAction',
+                                          text: `${nameOf(f)} 님과 친구가 됐어요.`,
+                                          toastText: `${nameOf(f)} 님과 친구 성사`,
+                                        }));
+                                      }}>수락</Button>
                             </>
                           )} />
       <FriendRequestTable label="보낸 요청" rows={groups?.outgoing ?? null} pending={pending} empty="보낸 요청이 없어요."

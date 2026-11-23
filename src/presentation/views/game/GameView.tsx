@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { GameState } from '../../../game/rules/logic';
 import type { GameAction } from '../../../game/rules/actions';
@@ -6,6 +6,9 @@ import { REJECT_TEXT } from '../../../game/rules/logic';
 import type { RejectReason } from '../../../game/rules/rules';
 import { when } from '../../../shared/lib/when';
 import { selectEncounter } from '../../../features/bounty/model/challenge';
+import { useBountyAlerts } from '../../../features/bounty/service/useBountyAlerts';
+import { sendNotice } from '../../../features/display/model/toastPolicy';
+import { useSlotExpiryAlerts } from '../../../features/kitchen/service/useSlotExpiryAlerts';
 import type { DispatchResult, MaybePromise } from '../../../features/gameplay/service/types';
 import { BASE_PACKS, REGION_PACKS, boardingOf } from '../../../game/world';
 import type { FurnitureId, Point, SceneRef } from '../../../game/world';
@@ -13,7 +16,7 @@ import type { BaseId, RegionId } from '../../../game/content/places';
 import { zoneById } from '../../../game/content/zones';
 import type { FloatingToastItem } from '../../ui/FloatingToastLayer';
 import FloatingToastLayer from '../../ui/FloatingToastLayer';
-import type { Msg } from '../../layouts/hud/useMessageLog';
+import type { MirrorContextPatch, Msg } from '../../layouts/hud/useMessageLog';
 import type { StatsTab } from '../overlays/stats/StatsModal';
 import type { Notify } from '../../ui/hud/messageFeed';
 import GameStageLayout from '../../layouts/game-stage/GameStageLayout';
@@ -72,7 +75,7 @@ import { chatMessages } from '../overlays/live/chatFeed';
 import { mergeMessages } from '../../ui/hud/messageFeed';
 import EncounterModal from '../overlays/bounty/EncounterModal';
 import type { EncounterResult } from '../overlays/bounty/EncounterModal';
-import { josa } from '../../ui/format';
+import { fmtNum, josa } from '../../ui/format';
 import { cx } from '../../ui/cx';
 import { useCanvasCover } from '../../layouts/game-stage/canvasCover';
 import { useMobileLayout } from '../../layouts/useMobileLayout';
@@ -95,6 +98,7 @@ interface GameViewProps {
   log: Msg[];
   toasts?: readonly FloatingToastItem[];
   onDismissToast?: (id: number) => void;
+  onMirrorEnv?: (patch: MirrorContextPatch) => void;
   syncLabel: string | null;
   syncState: string;
   /** 이 기기의 게스트 진행 — 계정을 바꿀 때 버려지는 것이 있는지 확인 창을 띄울지 가른다 */
@@ -171,13 +175,20 @@ export default function GameView(props: GameViewProps) {
   const guildBonus = guild ? { level: guild.growth.level, effects: guild.effects, bonuses: guild.bonuses } : null;
   const bagBonus = guildBonus?.effects.bag ?? 0;
   useFriendAlerts(props.account !== null, props.setToast);
-  useGuildAlerts(props.account !== null, props.setToast);
+  useGuildAlerts(props.account !== null, props.setToast, guild);
+  useBountyAlerts(props.setToast);
+  useSlotExpiryAlerts(game, props.setToast);
   // 초대 링크로 열렸으면 게임 상태를 불러온 뒤 확인 창을 띄운다. 게스트가 계정 창을 여는 동안은 숨기고, 계정이 생기면 다시 띄운다
   const invite = useGuildInviteLanding();
   const [accountOpen, setAccountOpen] = useState(false);
   const inviteReady = invite.code !== null && props.syncState === 'on' && !accountOpen && props.blocker == null;
   // 방치 결과 보고 — 돌아오면 메시지 창에 한 줄, 오래 비웠으면 알림 카드. 카드의 자세히가 결과 창을 연다
-  const away = useAwayReport(s => props.setToast(awayLineText(s), 'gold'));
+  const away = useAwayReport((s, hasCard) => sendNotice(props.setToast, {
+    kind: 'away.summary',
+    text: awayLineText(s),
+    toastText: `귀환 정산 ${fmtNum(s.catches)}마리 포획`,
+    suppressIfAwayCardVisible: hasCard,
+  }));
   const [awayOpen, setAwayOpen] = useState(false);
   const closeAway = () => { setAwayOpen(false); away.dismiss(); };
   const log = chat.enabled
@@ -187,6 +198,11 @@ export default function GameView(props: GameViewProps) {
   // 메시지 창 접기 — 채팅을 쓰지 않는 환경에서는 입력 줄이 없어 펼칠 수 없으므로 접지 않는다
   const fold = useMessageFold(scene.kind === 'base', log, messageFilter.filter);
   const folded = chat.enabled && fold.folded;
+  const awayCardVisible = Boolean(away.report && !awayOpen);
+  const { onMirrorEnv } = props;
+  useEffect(() => {
+    onMirrorEnv?.({ folded, awayCardVisible });
+  }, [onMirrorEnv, folded, awayCardVisible]);
   const encounter = tracking ? selectEncounter(game, tracking, new Date().toISOString()) : null;
   const worldScene = scene.kind === 'region' && scene.id === 'world';
   const region: RegionId = scene.kind === 'region' ? scene.id : BASE_PACKS[scene.id].region;
@@ -268,10 +284,19 @@ export default function GameView(props: GameViewProps) {
     const settled = await settleAction(() => props.dispatch({ type: 'travel', to: { kind: 'region', id: b.region } }));
     if (settled.ok) {
       props.onPlace({ kind: 'region', id: b.region }, b.at);
-      props.setToast(`여객선을 타고 ${BASE_PACKS[trip.to].name} 앞바다에 도착했어요.`);
+      sendNotice(props.setToast, {
+        kind: 'travel.routineMove',
+        text: `여객선을 타고 ${BASE_PACKS[trip.to].name} 앞바다에 도착했어요.`,
+      });
       return;
     }
-    if (settled.notice) props.setToast(settled.notice, 'warn');
+    if (settled.notice) {
+      sendNotice(props.setToast, {
+        kind: 'travel.blocked',
+        text: settled.notice,
+        cooldownKey: 'travel.blocked:ferry',
+      });
+    }
     props.onPlace({ kind: 'base', id: trip.from });
   };
 
@@ -285,10 +310,18 @@ export default function GameView(props: GameViewProps) {
     if (!encounter) return;
     when(props.dispatch({ type: 'resolveChallenge', questId: encounter.quest.id,
       success: r.success, hits: r.hits, misses: r.misses }), result => {
-      if (result.status === 'rejected') { props.setToast(REJECT_TEXT[result.error], 'warn'); setTracking(null); return; }
+      if (result.status === 'rejected') {
+        sendNotice(props.setToast, { kind: 'system.modalRejected', text: REJECT_TEXT[result.error] });
+        setTracking(null);
+        return;
+      }
       if (r.success) {
         const zoneName = zoneById(encounter.quest.zone)?.shortName ?? encounter.quest.zone;
-        props.setToast(`${josa(encounter.named.name, '을/를')} 토벌했어요! ${zoneName}의 수배판에서 보상 받기를 눌러 주세요.`, 'gold');
+        sendNotice(props.setToast, {
+          kind: 'bounty.challengeResolved',
+          text: `${josa(encounter.named.name, '을/를')} 토벌했어요! ${zoneName}의 수배판에서 보상 받기를 눌러 주세요.`,
+          toastText: `${encounter.named.name} 토벌 성공! 보상 수령`,
+        });
         setTracking(null);
       }
     });
@@ -403,7 +436,7 @@ export default function GameView(props: GameViewProps) {
                          setToast={props.setToast} onClose={() => setActionPanel(null)} />
         )}
         {props.toasts && props.toasts.length > 0 && props.onDismissToast && (
-          <FloatingToastLayer toasts={props.toasts} onDismiss={props.onDismissToast} />
+          <FloatingToastLayer toasts={props.toasts} maxVisible={mobile ? 2 : 3} onDismiss={props.onDismissToast} />
         )}
       </GameStageLayout>
 

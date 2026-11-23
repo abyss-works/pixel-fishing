@@ -26,7 +26,7 @@ describe('useAwayReport', () => {
     act(() => back(2 * 60_000));
     await waitFor(() => expect(result.current.report).toBe(summary));
     expect(readAwayReport).toHaveBeenCalledWith(2 * 60_000);
-    expect(onLine).toHaveBeenCalledWith(summary);
+    expect(onLine).toHaveBeenCalledWith(summary, true);
     act(() => result.current.dismiss());
     expect(result.current.report).toBeNull();
   });
@@ -37,6 +37,7 @@ describe('useAwayReport', () => {
     const { result } = renderHook(() => useAwayReport(onLine));
     act(() => back(2 * 60_000 - 1));
     await waitFor(() => expect(onLine).toHaveBeenCalledTimes(1));
+    expect(onLine).toHaveBeenCalledWith({ catches: 2 }, false);
     expect(result.current.report).toBeNull();
   });
 

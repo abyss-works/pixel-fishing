@@ -8,6 +8,7 @@ import {
 } from '../../../../features/guild/model/guild';
 import { josa } from '../../../../shared/lib/josa';
 import { useNow } from '../../../../features/gameplay/service/useGameTime';
+import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import Button from '../../../ui/Button';
 import { cx } from '../../../ui/cx';
 import Inset from '../../../ui/Inset';
@@ -37,14 +38,15 @@ export default function GuildManageTab({ guild, busy, run, setToast, gold, onGol
 
   const send = async (op: Parameters<GuildPartProps['run']>[0], done: string) => {
     const error = await run(op);
-    setToast(error ?? done, error ? 'warn' : 'info');
+    if (error) sendNotice(setToast, { kind: 'system.modalRejected', text: error });
+    else sendNotice(setToast, { kind: 'guild.modalAction', text: done });
   };
   const copy = async (text: string, what: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      setToast(`${what}을 복사했어요.`);
+      sendNotice(setToast, { kind: 'system.modalConfirmUtility', text: `${what}을 복사했어요.` });
     } catch {
-      setToast('복사하지 못했어요. 직접 옮겨 적어 주세요.', 'warn');
+      sendNotice(setToast, { kind: 'system.modalRejected', text: '복사하지 못했어요. 직접 옮겨 적어 주세요.', toastText: '복사하지 못했어요.' });
     }
   };
   const savePitch = () => {
@@ -168,16 +170,16 @@ function RenameDialog({ guildId, current, busy, run, setToast, onGoldChanged, on
     e.preventDefault();
     const next = name.trim();
     if (!checkGuildName(next).ok) {
-      setToast(GUILD_ERROR_TEXT['bad-name'], 'warn');
+      sendNotice(setToast, { kind: 'system.modalRejected', text: GUILD_ERROR_TEXT['bad-name'], toastText: '길드 이름을 확인해 주세요.' });
       return;
     }
     const error = await run({ op: 'rename', guildId, name: next });
     if (error) {
-      setToast(error, 'warn');
+      sendNotice(setToast, { kind: 'system.modalRejected', text: error });
       return;
     }
     onClose();
-    setToast(`길드 이름을 ${next}${josa(next, '으로/로')} 바꿨어요.`);
+    sendNotice(setToast, { kind: 'guild.modalAction', text: `길드 이름을 ${next}${josa(next, '으로/로')} 바꿨어요.`, toastText: '길드 이름 변경 완료!' });
     await onGoldChanged();
   };
 

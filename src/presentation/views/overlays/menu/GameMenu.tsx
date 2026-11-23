@@ -6,6 +6,7 @@ import type { GameState } from '../../../../game/rules/logic';
 import { clearsStatus } from '../../../../features/bounty/model/panel';
 import { useBounty } from '../../../../features/bounty/service/useBounty';
 import { menuKeys, questBadges, questMenuLabel } from '../../../../features/display/model/menuEntries';
+import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import { claimableCount } from '../../../../features/achievement/model/achievements';
 import type { MenuKey } from '../../../../features/display/model/menuEntries';
 import { guestLock } from '../../../../features/display/model/menuLock';
@@ -69,7 +70,13 @@ export default function GameMenu({ game, account, accountState, onQuests, onAchi
 
   // 접속한 계정의 첫 조회에서 받지 않은 우편이 있으면 한 번 안내만 띄운다(열어 보는 것은 플레이어가 한다)
   useEffect(() => {
-    if (accountState === 'account' && takeLoginNotice()) setToast('받지 않은 우편이 있어요. 오른쪽 위 메뉴의 우편함에서 확인해 주세요.', 'gold');
+    if (accountState === 'account' && takeLoginNotice()) {
+      sendNotice(setToast, {
+        kind: 'mail.unreadOnLogin',
+        text: '받지 않은 우편이 있어요. 오른쪽 위 메뉴의 우편함에서 확인해 주세요.',
+        toastText: '받지 않은 우편이 있어요.',
+      });
+    }
   }, [mails, takeLoginNotice, setToast, accountState]);
 
   // 펼친 동안 메뉴 밖을 누르거나 Esc를 누르면 접는다

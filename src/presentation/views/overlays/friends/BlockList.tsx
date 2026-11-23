@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { GUEST_LOCK_TEXT } from '../../../../features/display/model/menuLock';
+import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import { useChatModeration } from '../../../../features/live/service/useChatModeration';
 import type { ChatActionError } from '../../../../features/live/service/useChatModeration';
 import Button from '../../../ui/Button';
@@ -24,7 +25,8 @@ export default function BlockList({ setToast }: { setToast: Notify }) {
     setBusy(true);
     try {
       const error = await unblock(uid);
-      setToast(error ? ERROR_TEXT[error] : `${name} 님의 차단을 풀었어요.`, error ? 'warn' : undefined);
+      if (error) sendNotice(setToast, { kind: 'system.modalRejected', text: ERROR_TEXT[error] });
+      else sendNotice(setToast, { kind: 'social.modalAction', text: `${name} 님의 차단을 풀었어요.`, toastText: `${name} 님 차단 해제` });
     } finally {
       setBusy(false);
     }

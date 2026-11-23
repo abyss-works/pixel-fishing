@@ -381,7 +381,7 @@ const KST_MS = 9 * 3600_000;
 const kst = (at: string) => new Date(Date.parse(at) + KST_MS);
 const two = (n: number) => String(n).padStart(2, '0');
 
-const skillName = (id: string | null): string =>
+export const skillName = (id: string | null): string =>
   (GUILD_BONUS_IDS as readonly string[]).includes(id ?? '') ? GUILD_BONUS_NAME[id as GuildBonusId] : '길드 스킬';
 
 function logParts(log: GuildLogItem, me: string): LogPart[] {

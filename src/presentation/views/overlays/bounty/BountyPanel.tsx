@@ -15,6 +15,8 @@ import { zoneById } from '../../../../game/content/zones.js';
 import type { GameAction } from '../../../../game/rules/actions.js';
 import { gameDay } from '../../../../features/bounty/service/queryKeys';
 import { questLabel, selectBountyPanelData } from '../../../../features/bounty/model/panel';
+import { sendNotice } from '../../../../features/display/model/toastPolicy';
+import type { SystemEventKind, ToastTone } from '../../../../features/display/model/toastPolicy';
 import { useBounty } from '../../../../features/bounty/service/useBounty';
 import { useEncounterAlertSetting } from '../../../../features/bounty/service/encounterAlert';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
@@ -29,7 +31,7 @@ import Inset from '../../../ui/Inset';
 import PixelIcon from '../../../ui/PixelIcon';
 import TabBar from '../../../ui/TabBar';
 import { fmtGold, josa } from '../../../ui/format';
-import type { MessageTone, Notify } from '../../../ui/hud/messageFeed';
+import type { Notify } from '../../../ui/hud/messageFeed';
 import { SCROLL_Y } from '../../../ui/scrollArea';
 
 type BoardScreen = 'quests' | 'named' | 'relic';
@@ -83,13 +85,13 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
   // 렌더 중 Date.now 호출은 금지라 비동기 콜백에서만 찍는다.
   const [nowMs, setNowMs] = useState(0);
   useEffect(() => { if (loaded) setNowMs(Date.now()); }, [loaded, snap]);
-  const run = (action: GameAction, done: string, tone: MessageTone = 'info') => {
+  const run = (action: GameAction, kind: SystemEventKind, done: string, toastText?: string, tone?: ToastTone) => {
     if (busy) return;
     setBusy(true);
     when(dispatch(action), r => {
       setBusy(false);
-      if (r.status === 'ok') { setToast(done, tone); refresh(); }
-      else if (r.status === 'rejected') setToast(REJECT_TEXT[r.error], 'warn');
+      if (r.status === 'ok') { sendNotice(setToast, { kind, text: done, toastText, tone }); refresh(); }
+      else if (r.status === 'rejected') sendNotice(setToast, { kind: 'system.modalRejected', text: REJECT_TEXT[r.error] });
     });
   };
 
@@ -112,9 +114,14 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
       <BountyCard key={q.id} quest={q} progress={prog} accepted={isAccepted(q.id)}
         canAccept={basicOpen && canTake} reason={reasonOf('general')} busy={busy}
         onAccept={() => run({ type: 'acceptQuest', questId: q.id, port },
-          `${josa(questLabel(q), '을/를')} 수주했어요. 지금부터 잡는 물고기를 세요.`)}
+          'bounty.questAccepted',
+          `${josa(questLabel(q), '을/를')} 수주했어요. 지금부터 잡는 물고기를 세요.`,
+          `${questLabel(q)} 수주`)}
         onDeliver={() => run({ type: 'deliverBounty', questId: q.id },
-          `의뢰를 완료했어요! ${fmtGold(q.reward)}를 받았어요. 잡은 물고기는 가방에 그대로 있어요.`, 'gold')} />
+          'bounty.questDelivered',
+          `의뢰를 완료했어요! ${fmtGold(q.reward)}를 받았어요. 잡은 물고기는 가방에 그대로 있어요.`,
+          '의뢰 보상 수령 완료!',
+          'gold')} />
     );
   };
 
@@ -153,10 +160,15 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
                 materialName={relic?.materialName ?? null}
                 onAccept={() => run(
                   { type: 'acceptQuest', questId: quest.id, port },
-                  `${josa(questLabel(quest), '을/를')} 수주했어요.`)}
+                  'bounty.questAccepted',
+                  `${josa(questLabel(quest), '을/를')} 수주했어요.`,
+                  `${questLabel(quest)} 수주`)}
                 onDeliver={() => run(
                   { type: 'deliverBounty', questId: quest.id },
-                  `토벌 보상으로 ${fmtGold(reward.value)}와 교환 재료를 받았어요!`, 'gold')} />
+                  'bounty.questDelivered',
+                  `토벌 보상으로 ${fmtGold(reward.value)}와 교환 재료를 받았어요!`,
+                  '토벌 보상 수령 완료!',
+                  'gold')} />
             ))}
           </div>
         </Gated>
@@ -170,7 +182,11 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
               onChange={on => {
                 if (!on) { alertSetting.disable(); return; }
                 void alertSetting.enable().then(ok => {
-                  if (!ok) setToast('브라우저가 알림을 막았어요. 주소창의 사이트 설정에서 허용할 수 있어요.', 'warn');
+                  if (!ok) sendNotice(setToast, {
+                    kind: 'system.modalRejected',
+                    text: '브라우저가 알림을 막았어요. 주소창의 사이트 설정에서 허용할 수 있어요.',
+                    toastText: '브라우저 알림이 막혀 있어요.',
+                  });
                 });
               }} />
           )}
@@ -183,7 +199,10 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
               materialCount={mats} busy={busy}
               onExchange={() => run(
                 { type: 'exchangeArtifact', artifact: artifact.id },
-                `${josa(artifact.name, '을/를')} 손에 넣었어요!`, 'gold')} />
+                'artifact.exchanged',
+                `${josa(artifact.name, '을/를')} 손에 넣었어요!`,
+                `유물 [${artifact.name}] 획득!`,
+                'gold')} />
           ))}
         </div>
       )}

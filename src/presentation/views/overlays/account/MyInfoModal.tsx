@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { accountLockState } from '../../../../features/account/service/accountActions';
 import { guestLock } from '../../../../features/display/model/menuLock';
+import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import { REJECT_TEXT } from '../../../../game/rules/logic';
 import { checkNickname } from '../../../../game/rules/nickname';
 import type { RejectReason } from '../../../../game/rules/rules';
@@ -32,12 +33,19 @@ export default function MyInfoModal({ setToast, onClose, account, accountFailed 
   const nickLock = guestLock('nickname', accountLockState(account, accountFailed));
   const submitNick = async () => {
     if (nickLock) return;
-    if (!checkNickname(draft).ok) { setToast(NICKNAME_RULE, 'warn'); return; }
+    if (!checkNickname(draft).ok) { sendNotice(setToast, { kind: 'system.modalRejected', text: NICKNAME_RULE }); return; }
     setNickBusy(true);
     try {
       const err = await onRename(draft);
-      if (err) setToast(REJECT_TEXT[err], 'warn');
-      else { setToast(`닉네임을 ${draft}(으)로 바꿨어요.`); setDraft(''); }
+      if (err) sendNotice(setToast, { kind: 'system.modalRejected', text: REJECT_TEXT[err] });
+      else {
+        sendNotice(setToast, {
+          kind: 'social.modalAction',
+          text: `닉네임을 ${draft}(으)로 바꿨어요.`,
+          toastText: '닉네임을 바꿨어요.',
+        });
+        setDraft('');
+      }
     } finally {
       setNickBusy(false);
     }
@@ -48,7 +56,11 @@ export default function MyInfoModal({ setToast, onClose, account, accountFailed 
     if (!value) return;
     try {
       await navigator.clipboard.writeText(value);
-      setToast('내 ID를 복사했어요. 문의하실 때 함께 보내 주세요.');
+      sendNotice(setToast, {
+        kind: 'system.modalConfirmUtility',
+        text: '내 ID를 복사했어요. 문의하실 때 함께 보내 주세요.',
+        toastText: '내 ID를 복사했어요.',
+      });
     } catch {
       void notice({ title: '직접 복사', body: '복사가 막혀 있어요.\n아래 값을 직접 복사해 주세요.', value });
     }

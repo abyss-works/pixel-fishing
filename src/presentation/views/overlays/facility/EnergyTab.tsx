@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { formatEnergy } from '../../../../game/content/cooking';
 import { REJECT_TEXT } from '../../../../game/rules/logic';
 import type { GameState } from '../../../../game/rules/logic';
+import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import {
   ENERGY_NAME, clearSpotPicks, energyLabel, energyResultRows, energyRowValue, energyTotal, pickEnergyUids, selectEnergyView,
 } from '../../../../features/kitchen/model/energy';
@@ -58,7 +59,13 @@ export default function EnergyTab({ game, busy, act, setToast, picks, setPicks }
   const extract = () => act({ type: 'extractEnergy', uids: view.uids }, r => {
     if (r.result.type !== 'extract') return;
     const total = formatEnergy(energyTotal(r.result.energy));
-    setToast(`${ENERGY_NAME} ${total}개를 얻었어요!`, 'gold', { target: total, rows: energyRows(r.result.energy) });
+    sendNotice(setToast, {
+      kind: 'facility.energyExtracted',
+      text: `${ENERGY_NAME} ${total}개를 얻었어요!`,
+      toastText: `${ENERGY_NAME} ${total}개 획득!`,
+      replaceKey: 'energy-extract',
+      tip: { target: total, rows: energyRows(r.result.energy) },
+    });
   });
   const setTarget = (spot: (typeof view.spots)[number]) =>
     act({ type: 'setEnergyTarget', spot: spot.id, on: !spot.on }, () => setPicks(p => clearSpotPicks(p, game.bag, spot.id)));

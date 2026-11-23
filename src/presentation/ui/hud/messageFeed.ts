@@ -1,3 +1,5 @@
+import type { NoticeSink } from '../../../features/display/model/toastPolicy';
+
 // 메시지 피드 — HUD 메시지 창이 보여 주는 기록의 형식과 보관 규칙(순수 함수).
 // 채널은 시스템 메시지, 채팅(월드), 길드 채팅이다. 채팅 글줄은 보낸 사람(author)과 원본(from)을 가진다.
 // 글줄마다 [채널] 머리표가 붙고, 창은 채널이 둘 이상일 때만 기록에 나온 채널의 토글을 그린다.
@@ -14,7 +16,7 @@ export interface MessageTip {
 /** 메시지를 남기는 쪽이 받는 함수 — 톤은 부르는 쪽이 정한다(기본 info).
  *  보상 순간은 gold, 거부·실패는 warn을 넘긴다. 문구로 톤을 추정하지 않는다.
  *  tip은 문구 한 대목에 목록 툴팁을 단다(결과를 등급별로 풀어 보일 때). */
-export type Notify = (text: string, tone?: MessageTone, tip?: MessageTip) => void;
+export type Notify = NoticeSink;
 
 export interface Msg {
   id: number;

@@ -1,11 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { resetToastEnabled } from '../../../../features/display/service/toastEnabled';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import type { GameAction } from '../../../../game/rules/actions';
 import { REJECT_TEXT } from '../../../../game/rules/rules';
 import SettingsModal from './SettingsModal';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+  resetToastEnabled();
+});
 
 function open(opts: {
   autoLockOnCatch?: boolean;
@@ -108,5 +113,24 @@ describe('SettingsModal — 가방 설정(낚을 때 자동 잠금)', () => {
     dispatch.mockImplementationOnce(() => ({ status: 'ok' as const }) as never);
     fireEvent.click(toggle);
     expect(dispatch).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('SettingsModal — 주요 알림 플로팅 토스트 설정', () => {
+  it('기본값 켜짐으로 표시되고 클릭 시 localStorage에 저장된다(브라우저 알림 권한과 무관)', () => {
+    open();
+    const toggle = screen.getByRole('button', { name: '주요 알림 플로팅 토스트' });
+    expect(toggle).toBeEnabled();
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(toggle).toHaveTextContent('켜짐');
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    expect(toggle).toHaveTextContent('꺼짐');
+    expect(localStorage.getItem('pf-toast-enabled')).toBe('0');
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(localStorage.getItem('pf-toast-enabled')).toBe('1');
   });
 });

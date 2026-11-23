@@ -4,6 +4,7 @@ import {
 } from '../../../../features/guild/model/guild';
 import type { MemberRow } from '../../../../features/guild/model/guild';
 import type { ArtifactHolder } from '../../../../game/rules/artifactLevel';
+import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
 import { cx } from '../../../ui/cx';
@@ -25,7 +26,7 @@ export default function GuildMembersTab({ guild, me, busy, setToast, ask, artifa
   const leave = () => {
     const c = leaveConfirm(guild, me);
     if (c) ask(c);
-    else setToast(GUILD_ERROR_TEXT['handover-first'], 'warn');
+    else sendNotice(setToast, { kind: 'system.modalRejected', text: GUILD_ERROR_TEXT['handover-first'], toastText: '길드장을 먼저 넘겨 주세요.' });
   };
 
   return (

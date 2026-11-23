@@ -6,6 +6,9 @@ import type { GameAction } from '../../../game/rules/actions';
 import type { RejectReason } from '../../../game/rules/rules';
 import { newState, REJECT_TEXT } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
+import { REGION_PACKS } from '../../../game/world';
+import { sendNotice } from '../../display/model/toastPolicy';
+import type { NoticeSink } from '../../display/model/toastPolicy';
 import { fail, subscribeFailure, POLICY, AppError } from '../../../core/errors';
 import type { BlockingModal } from '../../../core/errors';
 import { clearFailureNotice, showFailureNotice } from './failureNotice';
@@ -57,7 +60,7 @@ export async function settleAction(
   }
 }
 
-export function useGame({ setToast }: { setToast: (m: string, tone?: 'info' | 'gold' | 'warn') => void }) {
+export function useGame({ setToast }: { setToast: NoticeSink }) {
   const [init] = useState(() => api.storage.loadLegacy());
   const gameGatewayRef = useRef<GameGateway>(null!);
   if (!gameGatewayRef.current) {
@@ -83,7 +86,12 @@ export function useGame({ setToast }: { setToast: (m: string, tone?: 'info' | 'g
 
   // 레거시 이관 환영 안내 (R18b) — 오프라인 모드에서도 표시돼야 하므로 부트스트랩과 분리
   useEffect(() => {
-    if (init.notice) setToast(init.notice);
+    if (init.notice) {
+      sendNotice(setToast, {
+        kind: 'system.modalConfirmUtility',
+        text: init.notice,
+      });
+    }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회
   }, []);
 
@@ -93,7 +101,12 @@ export function useGame({ setToast }: { setToast: (m: string, tone?: 'info' | 'g
     const off = subscribeFailure((err: AppError) => {
       const policy = POLICY[err.kind];
       // 메시지 창에 한 줄 남기고, 접혀 있을 때는 오류 자리가 같은 문구를 보인다
-      if (policy.slot && showFailureNotice(policy.message)) setToast(policy.message, 'warn');
+      if (policy.slot && showFailureNotice(policy.message)) {
+        sendNotice(setToast, {
+          kind: 'system.criticalError',
+          text: policy.message,
+        });
+      }
       const modal = policy.modal;
       if (!modal) return;
       setBlocker(current => current ?? modal);
@@ -128,10 +141,31 @@ export function useGame({ setToast }: { setToast: (m: string, tone?: 'info' | 'g
         if (!guestRef.current) {
           const unlocked = newlyClaimable(prev, r.state);
           if ((action.type === 'boot' || action.type === 'import') && unlocked.length >= 2) {
-            setToast(`${unlocked.length}개 업적을 받을 수 있어요.`, 'gold');
+            sendNotice(setToast, {
+              kind: 'achievement.unlockable',
+              text: `${unlocked.length}개 업적을 받을 수 있어요.`,
+              toastText: `${unlocked.length}개 업적 달성 가능!`,
+            });
           } else {
             for (const name of unlocked) {
-              setToast(`“${name}” 업적을 받을 수 있어요.`, 'gold');
+              sendNotice(setToast, {
+                kind: 'achievement.unlockable',
+                text: `“${name}” 업적을 받을 수 있어요.`,
+                toastText: `업적 "${name}" 달성 가능!`,
+              });
+            }
+          }
+        }
+        // 최초 지역 진입 감지 — travel 액션으로 visited에 새 바다가 추가될 때 1회 알린다
+        if (action.type === 'travel') {
+          for (const id of r.state.visited) {
+            if (!prev.visited.includes(id)) {
+              const name = REGION_PACKS[id]?.info.shortName ?? id;
+              sendNotice(setToast, {
+                kind: 'travel.firstVisit',
+                text: `신규 해역 [${name}]에 처음 들어섰어요!`,
+                toastText: `신규 해역 [${name}] 첫 진입!`,
+              });
             }
           }
         }
@@ -198,7 +232,10 @@ export function useGame({ setToast }: { setToast: (m: string, tone?: 'info' | 'g
       guestRef.current = lookup.status !== 'account';
       if (cloud) {
         setGame(cloud);
-        setToast('클라우드 세이브를 불러왔어요.');
+        sendNotice(setToast, {
+          kind: 'boot.cloudLoaded',
+          text: '클라우드 세이브를 불러왔어요.',
+        });
       } else if (init.legacy) {
         // 구세대(localStorage) 브리지도 import 액션이므로 서버의 불러오기 허용 판정을 따른다(운영은 전면 거부).
         // 거부돼도 세션은 정상 시작한다 — 로컬 저장은 지우지 않아 수동 복구(개발자가 DB 이관)에 쓴다.

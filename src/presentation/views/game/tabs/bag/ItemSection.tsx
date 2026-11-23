@@ -5,6 +5,7 @@ import type { GameAction } from '../../../../../game/rules/actions';
 import type { DispatchResult, MaybePromise } from '../../../../../features/gameplay/service/types';
 import { useNow } from '../../../../../features/gameplay/service/useGameTime';
 import type { AccountLockState } from '../../../../../features/display/model/menuLock';
+import { sendNotice } from '../../../../../features/display/model/toastPolicy';
 import { ITEM_GROUPS, ITEM_GROUP_HINT, NO_ITEMS_TEXT, planEat, selectItemSection } from '../../../../../features/kitchen/model/bagItems';
 import type { ItemRow, SwapConfirm } from '../../../../../features/kitchen/model/bagItems';
 import { formatEnergy } from '../../../../../game/content/cooking';
@@ -24,7 +25,7 @@ import Tip from '../../../../ui/Tip';
 import type { Notify } from '../../../../ui/hud/messageFeed';
 
 /** 교체 확인을 기다리는 먹기(쓰기) - 확인 내용과 먹을 아이템 */
-interface PendingEat { item: string; confirm: SwapConfirm }
+interface PendingEat { row: ItemRow; confirm: SwapConfirm }
 
 /** 교체 확인 창 - 지금 들어 있는 것과 새로 넣을 것의 남은 시간을 나란히 보이고, 지금 효과의 남은 시간이 사라진다고 알린다 */
 function SwapDialog({ confirm, onConfirm, onCancel }: { confirm: SwapConfirm; onConfirm: () => void; onCancel: () => void }) {
@@ -88,18 +89,26 @@ export default function ItemSection({ game, accountState, dispatch, setToast }: 
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<PendingEat | null>(null);
 
-  const eat = (item: string) => {
+  const eat = (row: ItemRow) => {
     if (busy) return;
     setBusy(true);
-    when(dispatch({ type: 'eat', item }), r => {
+    when(dispatch({ type: 'eat', item: row.recipe.id }), r => {
       setBusy(false);
-      if (r.status === 'rejected') setToast(REJECT_TEXT[r.error], 'warn');
+      if (r.status === 'ok') {
+        sendNotice(setToast, {
+          kind: 'kitchen.cookAndBuff',
+          text: `${row.label} 효과를 적용했어요.`,
+          toastText: `${row.label} 효과 적용`,
+        });
+      } else if (r.status === 'rejected') {
+        sendNotice(setToast, { kind: 'system.modalRejected', text: REJECT_TEXT[r.error] });
+      }
     });
   };
   const press = (row: ItemRow) => {
     const plan = planEat(game, row.recipe.id, now);
-    if (plan.confirm) setPending({ item: row.recipe.id, confirm: plan.confirm });
-    else eat(row.recipe.id);
+    if (plan.confirm) setPending({ row, confirm: plan.confirm });
+    else eat(row);
   };
 
   if (view.state === 'locked') {
@@ -144,7 +153,7 @@ export default function ItemSection({ game, accountState, dispatch, setToast }: 
       )}
       {pending && (
         <SwapDialog confirm={pending.confirm} onCancel={() => setPending(null)}
-                    onConfirm={() => { const { item } = pending; setPending(null); eat(item); }} />
+                    onConfirm={() => { const { row } = pending; setPending(null); eat(row); }} />
       )}
     </div>
   );

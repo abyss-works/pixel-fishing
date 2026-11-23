@@ -3,6 +3,7 @@ import type { GameAction } from '../../../../game/rules/actions';
 import { REJECT_TEXT } from '../../../../game/rules/logic';
 import { when } from '../../../../shared/lib/when';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
+import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import Modal from '../../../ui/Modal';
 import Button from '../../../ui/Button';
 import Tip from '../../../ui/Tip';
@@ -56,10 +57,15 @@ export default function CodeModal({ dispatch, setToast, onClose }: {
   const redeemCoupon = (code: string, done: (ok: boolean) => void) =>
     when(dispatch({ type: 'redeemCoupon', code }), r => {
       if (r.status === 'ok' && r.result.type === 'coupon') {
-        setToast(`쿠폰을 사용했어요! ${fmtGold(r.result.gold)}를 받았어요. (${r.result.desc})`, 'gold');
+        sendNotice(setToast, {
+          kind: 'social.modalAction',
+          text: `쿠폰을 사용했어요! ${fmtGold(r.result.gold)}를 받았어요. (${r.result.desc})`,
+          toastText: `쿠폰 ${fmtGold(r.result.gold)} 수령!`,
+          tone: 'gold',
+        });
         done(true);
       } else {
-        if (r.status === 'rejected') setToast(REJECT_TEXT[r.error], 'warn');
+        if (r.status === 'rejected') sendNotice(setToast, { kind: 'system.modalRejected', text: REJECT_TEXT[r.error] });
         done(false);
       }
     });
@@ -67,8 +73,15 @@ export default function CodeModal({ dispatch, setToast, onClose }: {
   // 지원 코드 — 운영자가 발급하는 일회성 자산 패키지. 검증·소비는 서버 소관
   const claimRelief = (code: string, done: (ok: boolean) => void) =>
     when(dispatch({ type: 'claimRelief', code }), r => {
-      if (r.status === 'ok') setToast('지원 코드를 적용했어요!', 'gold');
-      else if (r.status === 'rejected') setToast(REJECT_TEXT[r.error], 'warn');
+      if (r.status === 'ok') {
+        sendNotice(setToast, {
+          kind: 'social.modalAction',
+          text: '지원 코드를 적용했어요!',
+          tone: 'gold',
+        });
+      } else if (r.status === 'rejected') {
+        sendNotice(setToast, { kind: 'system.modalRejected', text: REJECT_TEXT[r.error] });
+      }
       done(r.status === 'ok');
     });
 

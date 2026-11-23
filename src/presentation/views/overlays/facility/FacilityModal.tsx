@@ -3,6 +3,7 @@ import { REJECT_TEXT } from '../../../../game/rules/logic';
 import type { GameState } from '../../../../game/rules/logic';
 import type { AccountLockState } from '../../../../features/display/model/menuLock';
 import { selectBoatPurchaseResult } from '../../../../features/gameplay/model/facility';
+import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import type { GameAction } from '../../../../game/rules/actions';
 import { when } from '../../../../shared/lib/when';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
@@ -52,7 +53,7 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
     when(dispatch(action), r => {
       setBusy(false);
       if (r.status === 'ok') onOk?.(r);
-      else if (r.status === 'rejected') setToast(REJECT_TEXT[r.error], 'warn');
+      else if (r.status === 'rejected') sendNotice(setToast, { kind: 'system.modalRejected', text: REJECT_TEXT[r.error] });
     });
   };
 
@@ -67,13 +68,22 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
         <SaleWindow game={game} base={base} accountState={accountState} sellBonus={sellBonus} busy={busy} act={run} setToast={setToast} onClose={onClose}
           onSell={uids => run({ type: 'sell', uids }, r => {
             onClose();
-            setToast(`물고기를 팔아 ${fmtGold(r.result.type === 'sell' ? r.result.gold : 0)}를 벌었어요!`, 'gold');
+            sendNotice(setToast, {
+              kind: 'facility.fishSold',
+              text: `물고기를 팔아 ${fmtGold(r.result.type === 'sell' ? r.result.gold : 0)}를 벌었어요!`,
+              logTone: 'gold',
+            });
           })} />
       )}
       {panel === 'rod' && (
         <RodPanel game={game} onClose={onClose} busy={busy}
           onUpgrade={() => run({ type: 'upgradeRod' }, r => {
-            setToast(`낚싯대를 강화했어요! 지금 Lv.${r.state.rod}이에요. 입질이 빨라지고 파워도 올라요.`, 'gold');
+            sendNotice(setToast, {
+              kind: 'facility.rodUpgraded',
+              text: `낚싯대를 강화했어요! 지금 Lv.${r.state.rod}이에요. 입질이 빨라지고 파워도 올라요.`,
+              toastText: `낚싯대 Lv.${r.state.rod} 강화 완료!`,
+              replaceKey: 'rod-upgrade',
+            });
           })} />
       )}
       {panel === 'boat' && (
@@ -81,25 +91,37 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
           onBuy={() => run({ type: 'buyBoat' }, r => {
             const { boatName, openedSpots } = selectBoatPurchaseResult(r.state.boat);
             onClose();
-            setToast(r.state.boat === 1
-              ? `${josa(boatName, '을/를')} 구매했어요! 이제 포구에서 대양으로 나갈 수 있어요.`
-              : `${josa(boatName, '을/를')} 구매했어요! ${openedSpots.length > 0 ? `배가 더 빨라졌고 [${openedSpots.map(spot => spot.name).join(', ')}] 해역이 열렸어요.` : '배가 더 빠르고 튼튼해졌어요.'}`, 'gold');
+            sendNotice(setToast, {
+              kind: 'facility.boatBought',
+              text: r.state.boat === 1
+                ? `${josa(boatName, '을/를')} 구매했어요! 이제 포구에서 대양으로 나갈 수 있어요.`
+                : `${josa(boatName, '을/를')} 구매했어요! ${openedSpots.length > 0 ? `배가 더 빨라졌고 [${openedSpots.map(spot => spot.name).join(', ')}] 해역이 열렸어요.` : '배가 더 빠르고 튼튼해졌어요.'}`,
+              toastText: r.state.boat === 1 || openedSpots.length > 0 ? `[${boatName}] 구매! 새 해역 개방` : `[${boatName}] 건조 완료!`,
+            });
           })} />
       )}
       {panel === 'wardrobe' && (
         <WardrobePanel game={game} busy={busy} onClose={onClose}
           onChangeClothes={(shirt, pants) => run({ type: 'changeClothes', shirt, pants }, () => {
-            setToast('옷을 갈아입었어요.');
+            sendNotice(setToast, { kind: 'wardrobe.lookChanged', text: '옷을 갈아입었어요.' });
           })}
           onBuyHat={hatId => run({ type: 'buyHat', hat: hatId }, () => {
-            setToast(`${josa(hatById(hatId)?.name ?? '', '을/를')} 샀어요! 이제 쓸 수 있어요.`, 'gold');
+            const hatName = hatById(hatId)?.name ?? '모자';
+            sendNotice(setToast, {
+              kind: 'wardrobe.hatBought',
+              text: `${josa(hatName, '을/를')} 샀어요! 이제 쓸 수 있어요.`,
+              toastText: `${hatName} 구매 완료!`,
+            });
           })}
           onWearHat={hatId => run({ type: 'wearHat', hat: hatId }, () => {
-            setToast(hatId === null ? '모자를 벗었어요.' : `${josa(hatById(hatId)?.name ?? '', '을/를')} 썼어요.`);
+            sendNotice(setToast, {
+              kind: 'wardrobe.lookChanged',
+              text: hatId === null ? '모자를 벗었어요.' : `${josa(hatById(hatId)?.name ?? '', '을/를')} 썼어요.`,
+            });
           })} />
       )}
       {panel === 'kitchen' && (
-        <KitchenPanel game={game} busy={busy} act={run} onClose={onClose} />
+        <KitchenPanel game={game} busy={busy} act={run} setToast={setToast} onClose={onClose} />
       )}
       {panel === 'bounty' && base !== undefined && isBountyPort(base) && (
         <ModalCard title="수배판" onClose={onClose} fixed>

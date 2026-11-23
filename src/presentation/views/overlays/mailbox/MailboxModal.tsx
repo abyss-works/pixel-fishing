@@ -6,6 +6,7 @@ import { isClaimable, isPending } from '../../../../features/mailbox/model/mailb
 import type { MailItem } from '../../../../features/mailbox/model/mailbox';
 import { useMailbox } from '../../../../features/mailbox/service/useMailbox';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
+import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import { when } from '../../../../shared/lib/when';
 import Button from '../../../ui/Button';
 import { cx } from '../../../ui/cx';
@@ -44,8 +45,13 @@ export default function MailboxModal({ dispatch, setToast, onClose }: {
   const onClaim = (mail: MailItem) => {
     setClaiming(true);
     void Promise.resolve(when(claim(dispatch, mail.id), result => {
-      if (result.status === 'rejected') setToast(REJECT_TEXT[result.error], 'warn');
-      else setToast(`우편에서 ${fmtGold(mail.gold)}를 받았어요!`, 'gold');
+      if (result.status === 'rejected') sendNotice(setToast, { kind: 'system.modalRejected', text: REJECT_TEXT[result.error] });
+      else sendNotice(setToast, {
+        kind: 'social.modalAction',
+        text: `우편에서 ${fmtGold(mail.gold)}를 받았어요!`,
+        toastText: `우편 ${fmtGold(mail.gold)} 수령!`,
+        tone: 'gold',
+      });
     })).finally(() => setClaiming(false));
   };
   const onRowKey = (e: KeyboardEvent, mail: MailItem) => {

@@ -4,6 +4,8 @@ import type { GameAction } from '../../../../game/rules/actions';
 import { when } from '../../../../shared/lib/when';
 import { guestLock } from '../../../../features/display/model/menuLock';
 import type { AccountLockState } from '../../../../features/display/model/menuLock';
+import { sendNotice } from '../../../../features/display/model/toastPolicy';
+import type { NoticeSink } from '../../../../features/display/model/toastPolicy';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import Modal from '../../../ui/Modal';
 import Button from '../../../ui/Button';
@@ -21,7 +23,7 @@ const LETTER_HINT = '건의, 버그 제보, 하고 싶은 말 아무거나 좋�
 
 export default function LetterModal({ dispatch, setToast, accountState, onClose }: {
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
-  setToast: (m: string) => void;
+  setToast: NoticeSink;
   /** 잠금 판정에 쓰는 계정 상태. 게스트나 확인 실패 상태에서는 창은 열리고 입력만 막는다 */
   accountState: AccountLockState;
   onClose: () => void;
@@ -39,7 +41,11 @@ export default function LetterModal({ dispatch, setToast, accountState, onClose 
     when(dispatch({ type: 'sendLetter', text: body }), r => {
       setBusy(false);
       if (r.status !== 'ok') return; // 실패는 정책(에러 처리)이 안내한다
-      setToast('편지를 보냈어요. 꼼꼼히 읽고 반영할게요. 고마워요.');
+      sendNotice(setToast, {
+        kind: 'social.modalAction',
+        text: '편지를 보냈어요. 꼼꼼히 읽고 반영할게요. 고마워요.',
+        toastText: '개발자에게 편지 전송!',
+      });
       onClose();
     });
   };
