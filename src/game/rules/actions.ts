@@ -48,12 +48,18 @@ import { powerZones, rodPower } from './stats.js';
 import type { PowerZone } from './stats.js';
 import { checkNickname } from './nickname.js';
 import { reduceDebug } from './debug.js';
+import type { DevBountySnapshot } from './debug.js';
 import { addGradeEffect, rollFish } from './logic.js';
 import { JUDGMENT_MULT } from './balance.js';
 import { gameDayOf, isNight } from './time.js';
 import type { DayPhase } from './time.js';
 import { NO_GUILD_EFFECTS } from './guild.js';
 import type { GuildEffects } from './guild.js';
+
+export interface DebugStepInput {
+  command: string;
+  args?: Record<string, unknown>;
+}
 
 export type GameAction =
   | { type: 'catch'; spot: SpotId; judgment: Judgment; forceEncounter?: true; forcePhase?: DayPhase } // forceEncounter/forcePhase: 테스트용(서버가 비허용 시 떼어 낸다)
@@ -69,6 +75,8 @@ export type GameAction =
   | { type: 'claimRelief'; code: string }       // 지원 코드 — 제재 소프트 랜딩
   | { type: 'claimMail'; id: number }           // 우편 골드 받기 — 받을 금액은 서버가 우편 표에서 주입한다
   | { type: 'debug'; command: string; args?: Record<string, unknown> } // 개발 도구 명령 — 운영 서버는 거부한다
+  | { type: 'debugBatch'; steps: DebugStepInput[] }                  // 개발 도구 명령 일괄 실행 — 단일 트랜잭션으로 순서대로 적용한다
+  | { type: 'debugSnapshot' }                                        // 개발 도구 스냅샷 저장용 수배 DB 행 읽기 — 운영 서버는 거부한다
   | { type: 'dismissBaitRefund' }                            // 미끼 환불 안내를 닫는다 — 영수증을 지운다
   | { type: 'extractEnergy'; uids: string[] }                // 기운 얻기 — 판매 시설이 있는 거점(집, 항구)에서 가방 개체를 등급별 기운으로 바꾼다
   | { type: 'setEnergyTarget'; spot: SpotId; on: boolean }   // 기운 얻기 기본 선택의 해역별 덮어쓰기 — 고른 값은 기본값과 같아도 남는다
@@ -96,7 +104,7 @@ export type GameAction =
 const ACTION_TYPE_MAP: Record<GameAction['type'], true> = {
   catch: true, sell: true, upgradeRod: true, buyBoat: true,
   setLocked: true, autoLock: true, setAutoLockOnCatch: true, travel: true, sendLetter: true, redeemCoupon: true,
-  claimRelief: true, claimMail: true, debug: true, setNickname: true,
+  claimRelief: true, claimMail: true, debug: true, debugBatch: true, debugSnapshot: true, setNickname: true,
   dismissBaitRefund: true, extractEnergy: true, setEnergyTarget: true, resetEnergyTargets: true, cook: true, eat: true,
   boot: true, import: true,
   acceptQuest: true, deliverBounty: true, exchangeArtifact: true, levelUpArtifact: true, exhibit: true, resolveChallenge: true,
@@ -141,6 +149,7 @@ export type ActionResult =
   /** claimAllAchievements 확정 — 받은 골드 합계와 모자 id 목록. 클라가 이 값으로 수령 문구를 만든다
    *  (단건 claimAchievement는 로컬 업적 정의(def.reward)로 만들 수 있어 결과를 싣지 않는다) */
   | { type: 'claimAllAchievements'; gold: number; hats: string[] }
+  | { type: 'debugSnapshot'; bounty: DevBountySnapshot }
   | { type: 'none' };
 
 /** 와이어 델타 — 서버가 계산한 상태 변화의 베껴적기.
@@ -303,6 +312,28 @@ function diffWrites(prev: GameState, next: GameState): StateWrites {
   return w;
 }
 
+function shouldSkipAchievementEval(action: GameAction): boolean {
+  if (action.type === 'debug') {
+    return action.command === 'achievement.evaluate'
+      || (action.command === 'achievement.resetCounters' && action.args?.resetAchievements === true);
+  }
+  if (action.type === 'debugBatch') {
+    let suppress = false;
+    for (const step of action.steps) {
+      if (step.command === 'achievement.evaluate'
+          || (step.command === 'achievement.resetCounters' && step.args?.resetAchievements === true)) {
+        suppress = true;
+      } else if (step.command === 'dex.completeZone' || step.command === 'dex.fill'
+          || step.command === 'named.unlock' || step.command === 'artifact.set'
+          || step.command === 'achievement.setCounter' || step.command === 'snapshot.restore') {
+        suppress = false;
+      }
+    }
+    return suppress;
+  }
+  return action.type === 'debugSnapshot';
+}
+
 export function applyAction(state: GameState, action: GameAction, deps: ActionDeps): ApplyOutcome {
   const out = reduce(state, action, deps);
   if (!out.ok) return out;
@@ -315,7 +346,7 @@ export function applyAction(state: GameState, action: GameAction, deps: ActionDe
     nextState = { ...nextState, achievementCounters: counters };
   }
   let events = out.events;
-  if (!(action.type === 'debug' && action.command === 'achievement.evaluate')) {
+  if (!shouldSkipAchievementEval(action)) {
     const evaluated = evaluateAchievements(nextState);
     if (evaluated.newlyClaimable.length > 0) {
       nextState = { ...nextState, achievements: evaluated.achievements };
@@ -442,6 +473,17 @@ export function drawCatch(
     fish, extras, pity: settleSpeciesPity(accrued, fish.id, extras.form),
     firstCatch: settleFirstCatch(state.firstCatch, spot, guaranteed, rng), byCeiling: pityFixed,
   };
+}
+
+function debugEventPayload(command: string, args: Record<string, unknown>, next: GameState): Record<string, unknown> {
+  return command === 'snapshot.restore'
+    ? {
+      command,
+      bagCount: next.bag.length,
+      exhibitCount: next.exhibit.filter(Boolean).length,
+      dexCount: Object.keys(next.dex).length,
+    }
+    : { command, args };
 }
 
 function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceOutcome {
@@ -777,17 +819,33 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const args = action.args ?? {};
       const next = reduceDebug(state, action.command, args, deps.today, deps.now, deps.newUid);
       if (!next) return { ok: false, error: 'bad-request' };
-      const payload = action.command === 'snapshot.restore'
-        ? {
-          command: action.command,
-          bagCount: next.bag.length,
-          exhibitCount: next.exhibit.filter(Boolean).length,
-          dexCount: Object.keys(next.dex).length,
-        }
-        : { command: action.command, args };
       return {
         ok: true, state: next, result: { type: 'none' },
-        events: [{ type: 'debug', payload }],
+        events: [{ type: 'debug', payload: debugEventPayload(action.command, args, next) }],
+      };
+    }
+    case 'debugBatch': {
+      if (!Array.isArray(action.steps) || action.steps.length === 0 || action.steps.length > 50) {
+        return { ok: false, error: 'bad-request' };
+      }
+      let cur = state;
+      const events: GameEvent[] = [];
+      for (const step of action.steps) {
+        if (!step || typeof step.command !== 'string') return { ok: false, error: 'bad-request' };
+        const args = step.args ?? {};
+        const next = reduceDebug(cur, step.command, args, deps.today, deps.now, deps.newUid);
+        if (!next) return { ok: false, error: 'bad-request' };
+        cur = next;
+        events.push({ type: 'debug', payload: debugEventPayload(step.command, args, next) });
+      }
+      return { ok: true, state: cur, result: { type: 'none' }, events };
+    }
+    case 'debugSnapshot': {
+      return {
+        ok: true,
+        state,
+        result: { type: 'debugSnapshot', bounty: { clears: [], progress: [], tickets: [] } },
+        events: [],
       };
     }
     case 'import': {

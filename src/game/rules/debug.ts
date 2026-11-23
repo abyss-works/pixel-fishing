@@ -10,9 +10,9 @@ import {
 } from './logic.js';
 import type { Fish, FormId, GameState } from './logic.js';
 import { settleCooking } from './cooking.js';
-import { evaluateAchievements } from './achievements.js';
-import { BOUNTIES, BOUNTY_ZONES, bountyById } from '../content/bounties.js';
-import type { BountyZone } from '../content/bounties.js';
+import { achievementProgress, evaluateAchievements } from './achievements.js';
+import { BOUNTIES, BOUNTY_ZONES, bountyById, bountyKindOf, isBountyKind } from '../content/bounties.js';
+import type { BountyKind, BountyZone } from '../content/bounties.js';
 import { ARTIFACT_MAX_LEVEL, ARTIFACTS, artifactById, artifactHasLevel } from '../content/artifacts.js';
 import { FISH, fishById } from '../content/fish.js';
 import { NAMED, namedById } from '../content/named.js';
@@ -57,10 +57,49 @@ export const DEBUG_TABLE_COMMANDS = [
 
 export type DebugCommandId = typeof STATE_COMMANDS[number] | typeof DEBUG_TABLE_COMMANDS[number];
 export type DebugTableCommand = typeof DEBUG_TABLE_COMMANDS[number];
+export type BountyResetKind = 'all' | BountyKind;
 export const DEBUG_COMMAND_IDS: readonly DebugCommandId[] = [...STATE_COMMANDS, ...DEBUG_TABLE_COMMANDS];
+
+export interface BountyClearSnapshot {
+  kind: BountyKind;
+  questId: string;
+  clearedAt: string;
+}
+
+export interface BountyProgressSnapshot {
+  zone: BountyZone;
+  questId: string;
+  progress: number;
+  startedAt: string;
+}
+
+export interface BountyTicketSnapshot {
+  questId: string;
+  issuedAt: string;
+}
+
+export interface DevBountySnapshot {
+  clears: BountyClearSnapshot[];
+  progress: BountyProgressSnapshot[];
+  tickets: BountyTicketSnapshot[];
+}
 
 export const isDebugTableCommand = (command: string): command is DebugTableCommand =>
   (DEBUG_TABLE_COMMANDS as readonly string[]).includes(command);
+
+/** 역방향 초기화 뒤 현재 상태 기준으로 조건이 깨진 미수령('claimable') 업적 상태를 회수한다 */
+export function revokeUnmetClaimableAchievements(state: GameState): GameState {
+  let changed = false;
+  const next: AchievementMap = { ...state.achievements };
+  for (const [id, status] of Object.entries(next)) {
+    if (status !== 'claimable') continue;
+    if (!achievementProgress(state, id).met) {
+      delete next[id];
+      changed = true;
+    }
+  }
+  return changed ? { ...state, achievements: next } : state;
+}
 
 /** 수배 구역 목록 */
 export const DEBUG_ZONES: readonly BountyZone[] = BOUNTY_ZONES;
@@ -119,14 +158,16 @@ function completeZoneDex(state: GameState, zone: BountyZone, today: string): Gam
   return applyRelief(state, { gold: 0, fame: 0, rod: 0, boat: 0, dex });
 }
 
-/** dex.fill — 마을 포함 구역 또는 전체 도감을 지정 폼(normal/variant/both)과 대어 여부로 채운다 */
+/** dex.fill — 마을 포함 구역 또는 전체 도감을 지정 폼(normal/variant/both), 대어, 네임드 포함 여부로 채운다 */
 function fillDex(state: GameState, args: Record<string, unknown>, today: string): GameState | null {
   const zone = matchZoneArg(args.zone);
   if (!zone) return null;
   const rawForm = args.form ?? 'both';
   if (rawForm !== 'normal' && rawForm !== 'variant' && rawForm !== 'both') return null;
   if (args.big !== undefined && typeof args.big !== 'boolean') return null;
+  if (args.includeNamed !== undefined && typeof args.includeNamed !== 'boolean') return null;
   const big = args.big === true;
+  const includeNamed = args.includeNamed === true;
   const forms: FormId[] = rawForm === 'both' ? ['normal', 'variant'] : [rawForm];
   const dex: GameState['dex'] = { ...state.dex };
 
@@ -145,7 +186,24 @@ function fillDex(state: GameState, args: Record<string, unknown>, today: string)
     }
     dex[fish.id] = nextForms;
   }
-  return { ...state, dex };
+
+  let clearedNamed = state.clearedNamed;
+  if (includeNamed) {
+    const topZone = zone === 'all' ? 'all' : topZoneOf(zone as ZoneId);
+    const nextCleared = [...clearedNamed];
+    for (const named of NAMED) {
+      if (topZone === 'all' || named.zones.includes(topZone as BountyZone)) {
+        const existing = dex[named.id]?.normal;
+        if (!existing || existing.count <= 0) {
+          dex[named.id] = { ...dex[named.id], normal: nextDexRec(undefined, null, today) };
+        }
+        const qid = namedQuestIdOf(named.id);
+        if (qid && !nextCleared.includes(qid)) nextCleared.push(qid);
+      }
+    }
+    clearedNamed = nextCleared;
+  }
+  return { ...state, dex, clearedNamed };
 }
 
 /** dex.reset — 지정 구역 또는 전체 도감 초기화(선택 시 네임드 도감·토벌 기록 포함) */
@@ -175,13 +233,14 @@ function resetDex(state: GameState, args: Record<string, unknown>): GameState | 
       clearedNamed = clearedNamed.filter(id => !removedQuests.has(id));
     }
   }
-  return { ...state, dex, clearedNamed };
+  return revokeUnmetClaimableAchievements({ ...state, dex, clearedNamed });
 }
 
 /** named.unlock / named.reset — 네임드 도감과 토벌 기록을 함께 갱신·삭제한다 */
 function setNamed(state: GameState, args: Record<string, unknown>, unlock: boolean, today: string): GameState | null {
   const raw = args.namedId;
   if (typeof raw !== 'string') return null;
+  if (unlock && args.consumeDailyCap !== undefined && typeof args.consumeDailyCap !== 'boolean') return null;
   const targets = raw === 'all' ? NAMED : (() => {
     const n = namedById(raw);
     return n ? [n] : null;
@@ -204,7 +263,8 @@ function setNamed(state: GameState, args: Record<string, unknown>, unlock: boole
       if (qid) clearedNamed = clearedNamed.filter(id => id !== qid);
     }
   }
-  return { ...state, dex, clearedNamed };
+  const next = { ...state, dex, clearedNamed };
+  return unlock ? next : revokeUnmetClaimableAchievements(next);
 }
 
 /** items.grant — 기운 4종, 요리 10종, 유물 재료 8종 지급 */
@@ -258,11 +318,12 @@ function setArtifact(state: GameState, args: Record<string, unknown>): GameState
     }
   }
   const { artifactLevels: _prevLevels, ...rest } = state;
-  return {
+  const next: GameState = {
     ...rest,
     artifacts,
     ...(Object.keys(levels).length > 0 ? { artifactLevels: levels } : {}),
   };
+  return level === 0 ? revokeUnmetClaimableAchievements(next) : next;
 }
 
 /** hat.set — 모자 해금 또는 회수(착용 중이던 모자가 회수되면 벗는다) */
@@ -290,7 +351,8 @@ function setHat(state: GameState, args: Record<string, unknown>): GameState | nu
   const look = state.look.hat !== null && !hats.includes(state.look.hat)
     ? { ...state.look, hat: null }
     : state.look;
-  return { ...state, hats, look };
+  const next = { ...state, hats, look };
+  return owned ? next : revokeUnmetClaimableAchievements(next);
 }
 
 /** achievement.setCounter — 카운터 절대값 설정 */
@@ -317,7 +379,8 @@ function resetAchievementCounters(state: GameState, args: Record<string, unknown
     next = {};
   }
   const achievements = args.resetAchievements === true ? {} : state.achievements;
-  return { ...state, achievementCounters: next, achievements };
+  const result = { ...state, achievementCounters: next, achievements };
+  return args.resetAchievements === true ? result : revokeUnmetClaimableAchievements(result);
 }
 
 /** achievement.evaluate — 업적 재평가 또는 상태 지정 */
@@ -408,6 +471,54 @@ function validateSnapshotInstances(
   return true;
 }
 
+/** 스냅샷에 실린 수배 DB 행 묶음의 형태를 검증·정규화한다 */
+export function parseSnapshotBounty(raw: unknown): DevBountySnapshot | null {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  const obj = raw as Record<string, unknown>;
+  if (!Array.isArray(obj.clears) || !Array.isArray(obj.progress) || !Array.isArray(obj.tickets)) return null;
+  if (obj.clears.length > SNAPSHOT_MAX_INSTANCES || obj.progress.length > SNAPSHOT_MAX_INSTANCES || obj.tickets.length > SNAPSHOT_MAX_INSTANCES) {
+    return null;
+  }
+  const clears: BountyClearSnapshot[] = [];
+  for (const item of obj.clears) {
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) return null;
+    const c = item as Record<string, unknown>;
+    if (typeof c.kind !== 'string' || !isBountyKind(c.kind)) return null;
+    if (typeof c.questId !== 'string') return null;
+    const quest = bountyById(c.questId);
+    if (!quest || bountyKindOf(quest) !== c.kind) return null;
+    if (typeof c.clearedAt !== 'string' || !Number.isFinite(Date.parse(c.clearedAt))) return null;
+    clears.push({ kind: c.kind, questId: c.questId, clearedAt: c.clearedAt });
+  }
+  const progress: BountyProgressSnapshot[] = [];
+  const seenProgress = new Set<string>();
+  for (const item of obj.progress) {
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) return null;
+    const p = item as Record<string, unknown>;
+    if (typeof p.questId !== 'string') return null;
+    const quest = bountyById(p.questId);
+    if (!quest || seenProgress.has(p.questId)) return null;
+    seenProgress.add(p.questId);
+    if (p.zone !== undefined && p.zone !== quest.zone) return null;
+    if (typeof p.progress !== 'number' || !Number.isInteger(p.progress) || p.progress < 0) return null;
+    if (typeof p.startedAt !== 'string' || !Number.isFinite(Date.parse(p.startedAt))) return null;
+    progress.push({ zone: quest.zone, questId: p.questId, progress: p.progress, startedAt: p.startedAt });
+  }
+  const tickets: BountyTicketSnapshot[] = [];
+  const seenTickets = new Set<string>();
+  for (const item of obj.tickets) {
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) return null;
+    const t = item as Record<string, unknown>;
+    if (typeof t.questId !== 'string') return null;
+    const quest = bountyById(t.questId);
+    if (!quest || quest.difficulty !== 'named' || seenTickets.has(t.questId)) return null;
+    seenTickets.add(t.questId);
+    if (typeof t.issuedAt !== 'string' || !Number.isFinite(Date.parse(t.issuedAt))) return null;
+    tickets.push({ questId: t.questId, issuedAt: t.issuedAt });
+  }
+  return { clears, progress, tickets };
+}
+
 /** snapshot.restore — 저장된 스냅샷으로 상태 전체를 복원한다 */
 function restoreSnapshot(args: Record<string, unknown>, newUid: () => string): GameState | null {
   const raw = args.snapshot;
@@ -422,9 +533,25 @@ function restoreSnapshot(args: Record<string, unknown>, newUid: () => string): G
   if (!validateSnapshotInstances(src.bag, false, seenUids)) return null;
   if (!validateSnapshotInstances(src.exhibit, true, seenUids)) return null;
 
+  let bounty: DevBountySnapshot | null = null;
+  if (args.bounty !== undefined) {
+    bounty = parseSnapshotBounty(args.bounty);
+    if (!bounty) return null;
+  }
+
   const restored = migrate(raw, newUid);
-  const clearedNamed = restored.clearedNamed.filter(id => bountyById(id)?.difficulty === 'named');
+  const clearedNamed = bounty
+    ? bounty.clears.filter(c => c.kind === 'named' && bountyById(c.questId)?.difficulty === 'named').map(c => c.questId)
+    : restored.clearedNamed.filter(id => bountyById(id)?.difficulty === 'named');
   return { ...restored, clearedNamed };
+}
+
+/** bounty.resetToday의 kind 인자를 검증·정규화한다 */
+export function parseBountyResetKind(args: Record<string, unknown>): BountyResetKind | null {
+  const kind = args.kind;
+  if (kind === undefined || kind === 'all') return 'all';
+  if (kind === 'general' || kind === 'named') return kind;
+  return null;
 }
 
 /** 명령 하나를 적용한다. 모르는 명령·잘못된 인자는 null(= bad-request) */
@@ -436,7 +563,10 @@ export function reduceDebug(
   now: string = new Date().toISOString(),
   newUid: () => string = () => crypto.randomUUID(),
 ): GameState | null {
-  if (isDebugTableCommand(command)) return state;
+  if (isDebugTableCommand(command)) {
+    if (command === 'bounty.resetToday' && parseBountyResetKind(args) === null) return null;
+    return state;
+  }
   switch (command) {
     case 'stats.set':
       return setStats(state, args);

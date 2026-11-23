@@ -311,8 +311,13 @@ export default function DevTools({
                   <div className="flex flex-col gap-3">
                     <SnapshotPanel game={game}
                                    busy={tools.busy}
+                                   onCaptureBounty={tools.captureBounty}
                                    onSaved={entry => tools.pushLog(true, `스냅샷 저장 (${entry.label})`)}
-                                   onRestore={entry => void tools.runCommand('snapshot.restore', { snapshot: entry.state }, `스냅샷 복원 (${entry.label})`)} />
+                                   onRestore={entry => void tools.runCommand(
+                                     'snapshot.restore',
+                                     entry.bounty ? { snapshot: entry.state, bounty: entry.bounty } : { snapshot: entry.state },
+                                     `스냅샷 복원 (${entry.label})`,
+                                   )} />
                     <MigrationCode game={game} dispatch={dispatch} setToast={setToast} />
                   </div>
                 </Gated>

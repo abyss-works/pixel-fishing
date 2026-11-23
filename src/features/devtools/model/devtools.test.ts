@@ -49,7 +49,14 @@ describe('개발 도구 명령 목록', () => {
 
     const itemsGrant = DEV_COMMANDS.find(c => c.id === 'items.grant')!;
     expect(parseDevArgs(itemsGrant, { itemId: 'energy-common', count: '1.5' }))
-      .toEqual({ ok: true, args: { itemId: 'energy-common', count: 1.5 } });
+      .toEqual({ ok: true, args: { itemId: 'energy-common', count: 1 } });
+    expect(itemsGrant.params.find(p => p.key === 'count')).not.toHaveProperty('allowFloat', true);
+
+    const dexComplete = DEV_COMMANDS.find(c => c.id === 'dex.completeZone')!;
+    expect(dexComplete.hiddenInForm).toBe(true);
+
+    const resetToday = DEV_COMMANDS.find(c => c.id === 'bounty.resetToday')!;
+    expect(parseDevArgs(resetToday, { kind: 'named' })).toEqual({ ok: true, args: { kind: 'named' } });
   });
 });
 

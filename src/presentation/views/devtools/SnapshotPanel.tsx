@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { GameState } from '../../../game/rules/logic';
+import type { DevBountySnapshot } from '../../../game/rules/debug';
 import type { DevSnapshotEntry } from '../../../features/devtools/model/snapshots';
 import { useDevSnapshots } from '../../../features/devtools/service/useDevSnapshots';
 import Button from '../../ui/Button';
@@ -8,21 +9,27 @@ import Note from '../../ui/Note';
 import Panel from '../../ui/Panel';
 import TextInput from '../../ui/TextInput';
 
-// 원클릭 테스트 스냅샷 — 현재 상태(도감·가방·전시·토벌·업적 카운터)를 로컬에 백업하고,
+// 원클릭 테스트 스냅샷 — 현재 상태(도감·가방·전시·토벌·수배 진행·도전권·업적 카운터)를 로컬에 백업하고,
 // 테스트 뒤 snapshot.restore 명령으로 정규화 표까지 한 트랜잭션으로 복원한다.
-export default function SnapshotPanel({ game, busy, onRestore, onSaved }: {
+export default function SnapshotPanel({ game, busy, onRestore, onSaved, onCaptureBounty }: {
   game: GameState;
   busy: boolean;
   onRestore: (entry: DevSnapshotEntry) => void;
   onSaved: (entry: DevSnapshotEntry) => void;
+  onCaptureBounty?: () => Promise<DevBountySnapshot | undefined>;
 }) {
-  const { snapshots, save, remove } = useDevSnapshots();
+  const { snapshots, save, attachBounty, remove } = useDevSnapshots();
   const [label, setLabel] = useState('');
 
   const handleSave = () => {
     const entry = save(game, label);
     setLabel('');
     onSaved(entry);
+    if (onCaptureBounty) {
+      void onCaptureBounty().then(bounty => {
+        if (bounty) attachBounty(entry.id, bounty);
+      }).catch(() => { /* 수배 DB 조회 실패 시 상태 스냅샷만 유지 */ });
+    }
   };
 
   return (

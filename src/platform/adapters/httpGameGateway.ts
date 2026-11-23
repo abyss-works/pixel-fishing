@@ -142,7 +142,7 @@ export class HttpGameGateway implements GameGateway {
       const s = await this.load();
       if (s) {
         this.lastState = s;
-        const v = parseVersion(body.version);
+        const v = parseVersion(body.patch?.version ?? body.version);
         if (v !== null) this.lastVersion = v;
         return { status: 'ok', state: s, result: body.result as never };
       }

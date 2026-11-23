@@ -194,6 +194,29 @@ export async function deleteUserSaves(db: Executor, uid: string): Promise<void> 
   await db.execute(sql`delete from public.saves_current where user_id = ${uid}`);
 }
 
+/** 단일 트랜잭션 내부에서 조건 없이 실행하는 쓰기 조각용 가드 */
+export const ALWAYS_GUARD: SQL = sql`true`;
+
+/** debugBatch 전용 원자 트랜잭션 확정 — 낙관 락 갱신이 성공했을 때만 writes와 단계별 표 조작 조각을 순서대로 실행한다 */
+export async function commitDebugBatch(
+  withTransaction: Database['withTransaction'],
+  versionWrite: SQL,
+  writes: StateWrites,
+  stepFragments: readonly (SQL | null)[],
+  uid: string,
+  nowISO: string,
+): Promise<boolean> {
+  const batchWrites = writeFragments(ALWAYS_GUARD, uid, writes, nowISO);
+  return withTransaction(async tx => {
+    const { rows } = await tx.execute(versionWrite);
+    if (rows.length === 0) return false;
+    for (const frag of [...batchWrites, ...stepFragments]) {
+      if (frag) await tx.execute(frag);
+    }
+    return true;
+  });
+}
+
 const idArray = (ids: readonly number[]) => sql`${`{${ids.map(Number).join(',')}}`}::bigint[]`;
 
 /** 저장 상태의 제재 여부를 바꾼다. 저장 상태가 없으면 바꾸지 않고 false를 돌려준다 */

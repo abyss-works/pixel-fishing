@@ -1,6 +1,8 @@
 // 개발 도구 원클릭 스냅샷 모델 — 순수 TypeScript (브라우저 저장소 직접 접근 없음).
 import type { GameState } from '../../../game/rules/logic';
 import { dexSpeciesCount } from '../../../game/rules/logic';
+import { parseSnapshotBounty } from '../../../game/rules/debug';
+import type { DevBountySnapshot } from '../../../game/rules/debug';
 
 export const DEV_SNAPSHOTS_KEY = 'pf-devtools-snapshots';
 export const MAX_DEV_SNAPSHOTS = 5;
@@ -11,6 +13,7 @@ export interface DevSnapshotEntry {
   savedAt: string;
   summary: string;
   state: GameState;
+  bounty?: DevBountySnapshot;
 }
 
 export function formatSnapshotSummary(state: GameState): string {
@@ -23,6 +26,7 @@ export function buildSnapshotEntry(
   label: string,
   nowISO: string,
   id: string,
+  bounty?: DevBountySnapshot,
 ): DevSnapshotEntry {
   const trimmed = label.trim();
   const hhmm = nowISO.slice(11, 16);
@@ -32,6 +36,7 @@ export function buildSnapshotEntry(
     savedAt: nowISO,
     summary: formatSnapshotSummary(state),
     state,
+    ...(bounty ? { bounty } : {}),
   };
 }
 
@@ -63,7 +68,11 @@ export function parseSnapshotsJson(raw: string | null): DevSnapshotEntry[] {
         && typeof (x as DevSnapshotEntry).summary === 'string'
         && typeof (x as DevSnapshotEntry).state === 'object'
         && (x as DevSnapshotEntry).state !== null)
-      .slice(0, MAX_DEV_SNAPSHOTS);
+      .slice(0, MAX_DEV_SNAPSHOTS)
+      .map(entry => {
+        const bounty = entry.bounty !== undefined ? parseSnapshotBounty(entry.bounty) : null;
+        return bounty ? { ...entry, bounty } : { id: entry.id, label: entry.label, savedAt: entry.savedAt, summary: entry.summary, state: entry.state };
+      });
   } catch {
     return [];
   }

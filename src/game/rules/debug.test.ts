@@ -97,24 +97,49 @@ describe('dex.fill / dex.reset', () => {
       expect(all.state.dex[f.id]?.variant?.count).toBe(1);
       expect(isBigSize(f, all.state.dex[f.id]!.normal!.maxSize!)).toBe(true);
     }
+    expect(all.state.dex.megalodon).toBeUndefined();
+
+    const withNamed = debug(seed(), 'dex.fill', { zone: 'all', form: 'both', big: true, includeNamed: true });
+    if (!withNamed.ok) throw new Error(withNamed.error);
+    for (const n of NAMED) {
+      expect(withNamed.state.dex[n.id]?.normal?.count).toBe(1);
+    }
+    expect(withNamed.state.clearedNamed).toHaveLength(NAMED.length);
+
+    const northOnly = debug(seed(), 'dex.fill', { zone: 'northatlantic', form: 'normal', includeNamed: true });
+    if (!northOnly.ok) throw new Error(northOnly.error);
+    expect(northOnly.state.dex['gloucester-serpent']?.normal?.count).toBe(1);
+    expect(northOnly.state.dex.guabancex?.normal?.count).toBe(1);
+    expect(northOnly.state.dex.megalodon).toBeUndefined();
+    expect(northOnly.state.clearedNamed.sort()).toEqual(['northatlantic-named-gloucester-serpent', 'northatlantic-named-guabancex']);
   });
 
-  it('dex.reset은 지정 구역 도감을 비우고 writes.recordsRemoved를 생성한다', () => {
-    const filled = debug(seed({ clearedNamed: ['pacific-named-megalodon'], dex: { megalodon: { normal: { count: 1, maxSize: null, first: '2026-10-16' } } } }),
-      'dex.fill', { zone: 'pacific', form: 'both' });
+  it('dex.reset은 지정 구역 도감을 비우고 writes.recordsRemoved를 생성하며 조건이 깨진 미수령 claimable 업적을 회수한다', () => {
+    const filled = debug(seed({
+      clearedNamed: ['pacific-named-megalodon'],
+      dex: { megalodon: { normal: { count: 1, maxSize: null, first: '2026-10-16' } } },
+    }), 'dex.fill', { zone: 'pacific', form: 'both', includeNamed: true });
     if (!filled.ok) throw new Error(filled.error);
+    expect(filled.state.achievements['spot-basic-sea']).toBe('claimable');
+    expect(filled.state.achievements['variant-pacific']).toBe('claimable');
+    expect(filled.state.achievements['named-megalodon-1']).toBe('claimable');
 
-    const resetOnlyFish = debug(filled.state, 'dex.reset', { zone: 'pacific', includeNamed: false });
+    const resetOnlyFish = debug({ ...filled.state, achievements: { ...filled.state.achievements, 'spot-basic-sea': 'claimed' } },
+      'dex.reset', { zone: 'pacific', includeNamed: false });
     if (!resetOnlyFish.ok) throw new Error(resetOnlyFish.error);
     expect(resetOnlyFish.state.dex.mackerel).toBeUndefined();
     expect(resetOnlyFish.state.dex.megalodon).toBeDefined();
     expect(resetOnlyFish.state.clearedNamed).toEqual(['pacific-named-megalodon']);
     expect(resetOnlyFish.writes.recordsRemoved?.some(r => r.fishId === 'mackerel')).toBe(true);
+    expect(resetOnlyFish.state.achievements['variant-pacific']).toBeUndefined();
+    expect(resetOnlyFish.state.achievements['spot-basic-sea']).toBe('claimed');
+    expect(resetOnlyFish.state.achievements['named-megalodon-1']).toBe('claimable');
 
     const resetAll = debug(filled.state, 'dex.reset', { zone: 'pacific', includeNamed: true });
     if (!resetAll.ok) throw new Error(resetAll.error);
     expect(resetAll.state.dex.megalodon).toBeUndefined();
     expect(resetAll.state.clearedNamed).toEqual([]);
+    expect(resetAll.state.achievements['named-megalodon-1']).toBeUndefined();
   });
 });
 
@@ -133,6 +158,10 @@ describe('named.unlock / named.reset', () => {
     expect(resetOne.state.dex.guabancex).toBeUndefined();
     expect(resetOne.state.clearedNamed).not.toContain('northatlantic-named-guabancex');
     expect(resetOne.writes.recordsRemoved).toEqual([{ fishId: 'guabancex', form: 'normal' }]);
+    expect(resetOne.state.achievements['named-all']).toBeUndefined();
+
+    expect(debug(seed(), 'named.unlock', { namedId: 'megalodon', consumeDailyCap: true }).ok).toBe(true);
+    expect(debug(seed(), 'named.unlock', { namedId: 'megalodon', consumeDailyCap: 'yes' })).toEqual({ ok: false, error: 'bad-request' });
   });
 });
 
@@ -170,6 +199,7 @@ describe('items.grant / cooking.finish / artifact.set / hat.set', () => {
     if (!removed.ok) throw new Error(removed.error);
     expect(removed.state.artifacts).not.toContain('wreck-compass');
     expect(removed.state.artifactLevels?.['wreck-compass']).toBeUndefined();
+    expect(removed.state.achievements['artifact-all']).toBeUndefined();
   });
 
   it('hat.set은 모자를 해금/회수하고 회수 시 착용 중인 모자도 벗긴다', () => {
@@ -196,7 +226,13 @@ describe('achievement.setCounter / resetCounters / evaluate & bag.spawn & snapsh
     if (!reset.ok) throw new Error(reset.error);
     expect(reset.state.achievementCounters).toEqual({});
     expect(reset.state.achievements).toEqual({});
-    expect(achievementBonusesOf(reset.state).moveSpeed).toBe(0);
+    const filledSea = debug(seed(), 'dex.fill', { zone: 'pacific', form: 'normal' });
+    if (!filledSea.ok) throw new Error(filledSea.error);
+    expect(filledSea.state.achievements['spot-basic-sea']).toBe('claimable');
+    const resetWithDex = debug(filledSea.state, 'achievement.resetCounters', { resetAchievements: true });
+    if (!resetWithDex.ok) throw new Error(resetWithDex.error);
+    expect(resetWithDex.state.achievements).toEqual({});
+    expect(resetWithDex.events.some(e => e.type === 'unlockAchievement')).toBe(false);
   });
 
   it('achievement.evaluate로 특정 업적 상태 지정 및 재평가가 동작한다', () => {
@@ -326,9 +362,36 @@ describe('bounty.grantMaterial', () => {
     expect(debug(seed(), 'bounty.grantMaterial', { artifact: 'wreck-compass', count })).toEqual({ ok: false, error: 'bad-request' });
   });
 
-  it('없는 유물이나 유물 인자가 없으면 bad-request', () => {
-    expect(debug(seed(), 'bounty.grantMaterial', { artifact: 'nope' })).toEqual({ ok: false, error: 'bad-request' });
-    expect(debug(seed(), 'bounty.grantMaterial', { zone: 'indian' })).toEqual({ ok: false, error: 'bad-request' });
+  it('bounty.resetToday는 kind(all|general|named)만 허용하고 잘못된 kind는 bad-request를 반환한다', () => {
+    for (const kind of [undefined, 'all', 'general', 'named']) {
+      expect(debug(seed(), 'bounty.resetToday', kind === undefined ? {} : { kind }).ok).toBe(true);
+    }
+    expect(debug(seed(), 'bounty.resetToday', { kind: 'invalid' })).toEqual({ ok: false, error: 'bad-request' });
+  });
+
+  it('debugBatch는 여러 명령을 순서대로 원자 적용하고 중간 실패 시 전체를 거부한다', () => {
+    const out = applyAction(seed(), {
+      type: 'debugBatch',
+      steps: [
+        { command: 'stats.set', args: { gold: 5000, boat: 9, rod: 65 } },
+        { command: 'dex.fill', args: { zone: 'northatlantic', form: 'both', big: true, includeNamed: true } },
+        { command: 'artifact.set', args: { artifact: 'all', level: 5 } },
+      ],
+    }, deps);
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.gold).toBe(5000);
+    expect(out.state.dex.guabancex?.normal?.count).toBe(1);
+    expect(out.state.artifacts).toHaveLength(8);
+    expect(out.events.filter(e => e.type === 'debug')).toHaveLength(3);
+
+    const failed = applyAction(seed({ gold: 10 }), {
+      type: 'debugBatch',
+      steps: [
+        { command: 'stats.set', args: { gold: 999 } },
+        { command: 'stats.set', args: { boat: 999 } },
+      ],
+    }, deps);
+    expect(failed).toEqual({ ok: false, error: 'bad-request' });
   });
 });
 

@@ -25,23 +25,26 @@ import { appliedSlots, applyEnergyGain, planOverflow } from '../src/game/rules/c
 import { needsLegacyFirstCatchMigration } from '../src/game/rules/firstCatch.js';
 import { drawNamedEncounter, speciesPityCandidates } from '../src/game/rules/pity.js';
 import { bountyById, isQuestOffered } from '../src/game/content/bounties.js';
-import type { BountyQuest } from '../src/game/content/bounties.js';
+import type { BountyKind, BountyQuest } from '../src/game/content/bounties.js';
 import type { SpotId } from '../src/game/content/spots.js';
 import { applyAction, drawCatch, namedWeightBonus, pickScalars, prepareCatchDraw } from '../src/game/rules/actions.js';
 import type { ActionDeps, ApplyOutcome, GameAction, GameEvent, ReleasedFish, StatePatch, StateWrites } from '../src/game/rules/actions.js';
 import { achievementBonusesOf, counterIncrementsForEvents, evaluateAchievements } from '../src/game/rules/achievements.js';
 import { bagCapacityOf, createPlayerContext } from '../src/game/rules/effects.js';
+import type { AchievementCounters } from '../src/game/content/achievements.js';
 import { ACHIEVEMENTS } from '../src/game/content/achievements.js';
 import { encounterQuests } from '../src/game/rules/rules.js';
 import type { BountyCtx } from '../src/game/rules/rules.js';
 import { parseAction } from '../src/game/rules/actionSchema.js';
-import { isDebugTableCommand } from '../src/game/rules/debug.js';
+import {
+  isDebugTableCommand, parseBountyResetKind, parseSnapshotBounty, reduceDebug, revokeUnmetClaimableAchievements,
+} from '../src/game/rules/debug.js';
 import { guestActionVerdict } from '../src/game/rules/guest.js';
 import type { DebugTableCommand } from '../src/game/rules/debug.js';
 import { expiredTicketIssuedAt } from '../src/game/rules/challenge.js';
 import { clearsOf, splitQuestRows } from '../src/game/rules/bountyRows.js';
 import type { QuestRow } from '../src/game/rules/bountyRows.js';
-import { gameDayOf, gameDayStartISO } from '../src/game/rules/time.js';
+import { gameDayOf, gameDayStartISO, previousGameDayISO } from '../src/game/rules/time.js';
 import type { DayPhase } from '../src/game/rules/time.js';
 import { checkNickname, pickGuestName } from '../src/game/rules/nickname.js';
 import { powerZones, rodPower } from '../src/game/rules/stats.js';
@@ -53,8 +56,9 @@ import { sessionOf } from './_auth/session.js';
 import { database } from './_db/client.js';
 import type { Executor } from './_db/client.js';
 import {
-  acceptFragments, advanceProgress, challengeFragments, clearFragment, consumeDeliveryFragment, debugFragment, deliveryGate,
-  expiredCleanup, namedClearDeleteFragment, namedClearInsertFragment, namedClearReplaceFragments, ticketFragment,
+  acceptFragments, advanceProgress, bountyRestoreFragments, challengeFragments, clearFragment,
+  consumeDeliveryFragment, debugFragment, deliveryGate, expiredCleanup, namedClearDeleteFragment,
+  namedClearInsertFragment, namedClearReplaceFragments, readSnapshotBounty, ticketFragment,
 } from './_data/bounty.js';
 import { consumeRelief, findCoupon, findRelief } from './_data/codes.js';
 import { claimMailFragment, claimableGold } from './_data/mailbox.js';
@@ -66,7 +70,7 @@ import { catchLookup, evictionCandidates, latestLegacySave, loadContext, loadRec
 import type { BountyRows, InstanceRow, RecordRow, StateRow } from './_data/load.js';
 import { letterFragment } from './_data/mail.js';
 import { ensureProfile, nicknameTaken, profileExists, setNickname } from './_data/profile.js';
-import { blobInput, instRow, seedState, snapshotInsert, stateRow, versionUpdate, writeFragments } from './_data/save.js';
+import { ALWAYS_GUARD, blobInput, commitDebugBatch, instRow, seedState, snapshotInsert, stateRow, versionUpdate, writeFragments } from './_data/save.js';
 import { eventsInsert } from './_data/telemetry.js';
 import { activeDayUpsert } from './_data/activity.js';
 import { contributionUpsert, logbookInsert } from './_data/guilds.js';
@@ -93,16 +97,27 @@ type Res = ServerResponse & { status: (code: number) => Res; json: (body: unknow
 
 /** 개발 도구 테이블 명령 → 본인 행에 대한 쓰기 계획. 시각 기준은 도전권 판정·일일 한도와 같은 함수를 쓴다 */
 export type DebugTablePlan =
-  | { table: string; op: 'delete'; since?: { column: string; iso: string } }
+  | { table: string; op: 'delete'; since?: { column: string; iso: string }; kind?: BountyKind }
   | { table: string; op: 'update'; values: Record<string, unknown> };
-export function debugTablePlan(command: DebugTableCommand, nowMs: number): DebugTablePlan {
+export function debugTablePlan(
+  command: DebugTableCommand,
+  nowMs: number,
+  args: Record<string, unknown> = {},
+): DebugTablePlan {
   switch (command) {
     case 'bounty.expireTickets':
       return { table: 'bounty_tickets', op: 'update', values: { issued_at: expiredTicketIssuedAt(nowMs) } };
     case 'bounty.clearTickets':
       return { table: 'bounty_tickets', op: 'delete' };
-    case 'bounty.resetToday':
-      return { table: 'bounty_clears', op: 'delete', since: { column: 'cleared_at', iso: gameDayStartISO(new Date(nowMs).toISOString()) } };
+    case 'bounty.resetToday': {
+      const kind = parseBountyResetKind(args);
+      return {
+        table: 'bounty_clears',
+        op: 'delete',
+        since: { column: 'cleared_at', iso: gameDayStartISO(new Date(nowMs).toISOString()) },
+        ...(kind === 'general' || kind === 'named' ? { kind } : {}),
+      };
+    }
     case 'bounty.clearProgress':
       return { table: 'bounty_progress', op: 'delete' };
   }
@@ -183,6 +198,7 @@ export const SKIP_DETAIL = new Set([
   'setNickname', 'deliverBounty', 'exchangeArtifact', 'levelUpArtifact', 'claimMail', 'seeTutorial',
   'changeClothes', 'buyHat', 'wearHat',
   'cook', 'eat', 'setEnergyTarget', 'resetEnergyTargets', 'dismissBaitRefund', 'setAutoLockOnCatch',
+  'debugSnapshot',
 ]);
 
 /** 수배 진실이 필요한 액션 — 라이선스·일일 카운트·진행도·도전권은 전용 표에 있다 */
@@ -303,13 +319,17 @@ async function route(req: Req, res: Res): Promise<void> {
 
   // 개발 도구 명령 — 스테이징은 관리자 명부의 계정만, 로컬은 모두, 그 밖은 거부한다.
   // 규칙 거부(422)로 돌려 제재 안내(403 정책)와 섞이지 않게 한다.
-  if (action.type === 'debug' && !await debugAllowed()) {
+  if ((action.type === 'debug' || action.type === 'debugBatch' || action.type === 'debugSnapshot') && !await debugAllowed()) {
     throw new ApiError(422, 'debug-forbidden');
   }
 
   // 테스트용 강제 조우·낮/밤 전환 — 허용되지 않으면 표시만 떼어 내고 통상 캐치로 처리한다(거부하지 않는다).
-  if (action.type === 'catch' && (action.forceEncounter || action.forcePhase) && !await debugAllowed()) {
-    action = { type: 'catch', spot: action.spot, judgment: action.judgment };
+  let forceCatchAllowed = false;
+  if (action.type === 'catch' && (action.forceEncounter || action.forcePhase)) {
+    forceCatchAllowed = await debugAllowed();
+    if (!forceCatchAllowed) {
+      action = { type: 'catch', spot: action.spot, judgment: action.judgment };
+    }
   }
 
   let row = loaded.row;
@@ -336,7 +356,7 @@ async function route(req: Req, res: Res): Promise<void> {
   // 소급 업적 판정 — 개체·도감을 건너뛴 액션(catch 제외: fast path가 따로 판정한다)도 확정에서
   // 평가되므로, 미확정 업적이 남은 계정은 도감을 한 번 더 읽어 합친다. 이미 모두 확정이면 읽지 않는다.
   // blob의 achievements만 본다 — 런타임 주입값(카운터·토벌)은 조건에 영향이 없다.
-  if (skipDetail && action.type !== 'catch' && row) {
+  if (skipDetail && action.type !== 'catch' && action.type !== 'debugSnapshot' && row) {
     const storedAchievements = (row.data as { achievements?: GameState['achievements'] } | null)?.achievements ?? {};
     if (!achievementsDecided(storedAchievements)) {
       records = await step('db-read', { uid, action: action.type }, () => loadRecords(db, uid));
@@ -379,21 +399,43 @@ async function route(req: Req, res: Res): Promise<void> {
   // 매크로 페이싱 검사 — 직전 성공 액션과의 최소 간격(서버 시각 기준). updated_at은 성공
   // 커밋마다 이미 갱신되므로 읽기·쓰기 추가가 0이다. 거절될 요청이 쿠폰·지원코드 조회까지 가지 않도록
   // 그 조회보다 먼저 검사한다. 시딩 행(v1)과 첫 액션은 제외.
-  const lastActionMs = Date.parse(String(row.updated_at ?? ''));
-  if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
-    const gapMs = PACING_SLOW.has(action.type) ? MIN_ACTION_GAP_MS : MIN_ACTION_GAP_FAST_MS;
-    if (Date.now() - lastActionMs < gapMs) {
+  // 개발 도구 명령(debug/debugBatch/debugSnapshot)과 승인된 강제 조우·시간대 테스트 캐치는 페이싱을 면제한다.
+  const pacingExempt = action.type === 'debug'
+    || action.type === 'debugBatch'
+    || action.type === 'debugSnapshot'
+    || forceCatchAllowed;
+  if (!pacingExempt) {
+    const lastActionMs = Date.parse(String(row.updated_at ?? ''));
+    if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
+      const gapMs = PACING_SLOW.has(action.type) ? MIN_ACTION_GAP_MS : MIN_ACTION_GAP_FAST_MS;
+      if (Date.now() - lastActionMs < gapMs) {
+        throw new ApiError(429, 'too-fast');
+      }
+    }
+    // 캐치 간격 검사 — 직전 캐치로부터 낚시 한 사이클(획득 표시 + 최소 입질 대기)이 지나야 다음 캐치를 받는다.
+    if (action.type === 'catch' && catchTooSoon(
+      scalarState(row, loaded.counters, loaded.clearedNamed),
+      action.spot,
+      row.last_catch_at ?? null,
+      new Date().toISOString(),
+    )) {
       throw new ApiError(429, 'too-fast');
     }
   }
-  // 캐치 간격 검사 — 직전 캐치로부터 낚시 한 사이클(획득 표시 + 최소 입질 대기)이 지나야 다음 캐치를 받는다.
-  if (action.type === 'catch' && catchTooSoon(
-    scalarState(row, loaded.counters, loaded.clearedNamed),
-    action.spot,
-    row.last_catch_at ?? null,
-    new Date().toISOString(),
-  )) {
-    throw new ApiError(429, 'too-fast');
+
+  // 개발 도구 스냅샷 저장용 수배 DB 행 조회 — 상태를 바꾸지 않고 현재 버전과 수배 표 행만 돌려준다.
+  if (action.type === 'debugSnapshot') {
+    const snapshotBounty = await step('db-read', { uid, action: action.type }, () => readSnapshotBounty(db, uid));
+    const readVersion = Number(row.version);
+    const state = assemble(row, [], [], loaded.counters, loaded.clearedNamed);
+    const patch: StatePatch = {
+      version: readVersion,
+      baseVersion: readVersion,
+      scalars: pickScalars(state),
+      writes: { instancesAdded: [], instancesRemoved: [], instancesMoved: [], instancesLocked: [], records: [] },
+    };
+    res.status(200).json({ patch, result: { type: 'debugSnapshot', bounty: snapshotBounty } });
+    return;
   }
 
   // 동적 쿠폰(coupons 테이블) — 쿠폰 액션일 때만 서버가 직접 조회 (active=false는 신규 사용 차단)
@@ -468,7 +510,9 @@ async function route(req: Req, res: Res): Promise<void> {
 
   // 액션 시각 — 서버 시각(UTC)이다. 슬롯 효과의 활성 여부, 조리와 먹기의 시각이 모두 이 값 하나로 정해진다.
   const now = new Date().toISOString();
+  const today = todayKST();
   let out: ApplyOutcome;
+  let initialState: GameState | null = null;
   // fast path의 조립 상태 — 네임드 교체 블록이 재사용한다 (아래 out 교체 참조)
   let catchBase: GameState | null = null;
   if (action.type === 'catch' && skipDetail) {
@@ -482,8 +526,9 @@ async function route(req: Req, res: Res): Promise<void> {
     if (action.type === 'claimAchievement' || action.type === 'claimAllAchievements') {
       state = { ...state, achievements: evaluateAchievements(state).achievements };
     }
+    initialState = state;
     out = applyAction(state, action, {
-      rng: Math.random, today: todayKST(),
+      rng: Math.random, today,
       now, newUid: () => crypto.randomUUID(),
       dynamicCoupon,
       relief,
@@ -537,33 +582,78 @@ async function route(req: Req, res: Res): Promise<void> {
     fragments.push(...challengeFragments(guard, uid, action.questId, action.success === true, nowISO));
   }
   // 개발 도구 테이블·정규화 표 명령 — 허용 판정은 위에서 끝났다. 리듀서가 검증한 명령만 여기 온다.
-  if (action.type === 'debug' && isDebugTableCommand(action.command)) {
-    fragments.push(debugFragment(guard, uid, debugTablePlan(action.command, Date.now())));
-  }
+  const nowMs = Date.now();
+  const dayStartMs = Date.parse(dayStart);
+  const batchStepFragments: (SQL | null)[] = [];
   if (action.type === 'debug') {
-    if (action.command === 'snapshot.restore') {
-      fragments.push(...namedClearReplaceFragments(guard, uid, out.state.clearedNamed, nowISO));
-      fragments.push(...counterRestoreFragments(guard, uid, out.state.achievementCounters));
-    } else if (action.command === 'named.unlock' || action.command === 'named.reset' || action.command === 'dex.reset') {
-      const prevSet = new Set(loaded.clearedNamed);
-      const nextSet = new Set(out.state.clearedNamed);
-      const added = out.state.clearedNamed.filter(id => !prevSet.has(id));
-      const removed = loaded.clearedNamed.filter(id => !nextSet.has(id));
-      fragments.push(namedClearInsertFragment(guard, uid, added, nowISO));
-      fragments.push(namedClearDeleteFragment(guard, uid, removed));
-    } else if (action.command === 'achievement.setCounter' || action.command === 'achievement.resetCounters') {
-      const nextCounters = out.state.achievementCounters;
-      if (action.command === 'achievement.resetCounters' && Object.keys(nextCounters).length === 0) {
-        fragments.push(counterClearFragment(guard, uid));
-      } else {
-        const changed: Record<string, number> = {};
-        for (const [k, v] of Object.entries(nextCounters)) {
-          if (typeof v === 'number' && loaded.counters[k] !== v) changed[k] = v;
+    if (action.command === 'bounty.resetToday') {
+      const kind = parseBountyResetKind(action.args ?? {}) ?? 'all';
+      if (kind !== 'general') {
+        const snapBounty = await step('db-read', { uid, action: action.type }, () => readSnapshotBounty(db, uid));
+        const remaining = snapBounty.clears
+          .filter(c => c.kind === 'named' && Date.parse(c.clearedAt) < dayStartMs)
+          .map(c => c.questId);
+        if (remaining.length !== out.state.clearedNamed.length) {
+          out = { ...out, state: revokeUnmetClaimableAchievements({ ...out.state, clearedNamed: remaining }) };
         }
-        const removedKeys = Object.keys(loaded.counters).filter(k => nextCounters[k] === undefined);
-        fragments.push(counterSetFragment(guard, uid, changed));
-        fragments.push(counterClearFragment(guard, uid, removedKeys));
       }
+    }
+    fragments.push(...debugStepDbFragments(
+      guard, uid, action.command, action.args ?? {},
+      loaded.clearedNamed, out.state.clearedNamed,
+      loaded.counters, out.state.achievementCounters,
+      nowMs, nowISO,
+    ));
+  } else if (action.type === 'debugBatch' && initialState) {
+    const needsBountyRead = action.steps.some(
+      s => s.command === 'bounty.resetToday' && (parseBountyResetKind(s.args ?? {}) ?? 'all') !== 'general',
+    );
+    const snapBounty = needsBountyRead
+      ? await step('db-read', { uid, action: action.type }, () => readSnapshotBounty(db, uid))
+      : null;
+    let namedClears = snapBounty
+      ? snapBounty.clears.filter(c => c.kind === 'named').map(c => ({ questId: c.questId, clearedAt: c.clearedAt }))
+      : loaded.clearedNamed.map(questId => ({ questId, clearedAt: previousGameDayISO(nowISO) }));
+    let curState = initialState;
+    let resetTodayDeletedNamed = false;
+    for (const s of action.steps) {
+      const args = s.args ?? {};
+      const nextStepState = reduceDebug(curState, s.command, args, today, now, () => crypto.randomUUID());
+      if (!nextStepState) throw new ApiError(422, 'bad-request');
+      let reconciled = nextStepState;
+      if (s.command === 'bounty.resetToday' && (parseBountyResetKind(args) ?? 'all') !== 'general') {
+        const beforeLen = namedClears.length;
+        namedClears = namedClears.filter(c => Date.parse(c.clearedAt) < dayStartMs);
+        if (namedClears.length !== beforeLen) resetTodayDeletedNamed = true;
+        reconciled = { ...reconciled, clearedNamed: namedClears.map(c => c.questId) };
+      } else if (s.command === 'snapshot.restore') {
+        const b = args.bounty !== undefined ? parseSnapshotBounty(args.bounty) : null;
+        namedClears = b
+          ? b.clears.filter(c => c.kind === 'named').map(c => ({ questId: c.questId, clearedAt: c.clearedAt }))
+          : reconciled.clearedNamed.map(questId => ({ questId, clearedAt: previousGameDayISO(nowISO) }));
+      } else if (s.command === 'named.unlock' || s.command === 'dex.fill' || s.command === 'named.reset' || s.command === 'dex.reset') {
+        const prevSet = new Set(curState.clearedNamed);
+        const nextSet = new Set(reconciled.clearedNamed);
+        const addedAt = s.command === 'named.unlock' && args.consumeDailyCap === true ? nowISO : previousGameDayISO(nowISO);
+        namedClears = namedClears.filter(c => nextSet.has(c.questId));
+        for (const id of reconciled.clearedNamed) {
+          if (!prevSet.has(id)) namedClears.push({ questId: id, clearedAt: addedAt });
+        }
+      }
+      batchStepFragments.push(...debugStepDbFragments(
+        ALWAYS_GUARD, uid, s.command, args,
+        curState.clearedNamed, reconciled.clearedNamed,
+        curState.achievementCounters, reconciled.achievementCounters,
+        nowMs, nowISO,
+      ));
+      curState = reconciled;
+    }
+    const outState = out.state;
+    if (resetTodayDeletedNamed) {
+      out = { ...out, state: revokeUnmetClaimableAchievements({ ...outState, clearedNamed: curState.clearedNamed }) };
+    } else if (curState.clearedNamed.length !== outState.clearedNamed.length
+        || curState.clearedNamed.some((id, idx) => outState.clearedNamed[idx] !== id)) {
+      out = { ...out, state: { ...outState, clearedNamed: curState.clearedNamed } };
     }
   }
   fragments.push(letterFragment(guard, uid, out.events, eventNow));
@@ -590,6 +680,10 @@ async function route(req: Req, res: Res): Promise<void> {
       () => commitGated(db, versionWrite, fragments, gate));
     if (result === 'unavailable') throw new ApiError(422, 'quest-incomplete');
     if (result === 'conflict') throw new ApiError(409, 'version-conflict');
+  } else if (action.type === 'debugBatch') {
+    const committed = await step('db-write', { uid, action: action.type },
+      () => commitDebugBatch(withTransaction, versionWrite, out.writes, batchStepFragments, uid, nowISO));
+    if (!committed) throw new ApiError(409, 'version-conflict');
   } else {
     const committed = await step('db-write', { uid, action: action.type },
       () => commitAction(db, versionWrite, fragments));
@@ -636,6 +730,58 @@ async function route(req: Req, res: Res): Promise<void> {
     scalars: pickScalars(out.state), writes: out.writes,
   };
   res.status(200).json({ patch, result: out.result });
+}
+
+function debugStepDbFragments(
+  guard: SQL,
+  uid: string,
+  command: string,
+  args: Record<string, unknown>,
+  prevClearedNamed: readonly string[],
+  nextClearedNamed: readonly string[],
+  prevCounters: AchievementCounters,
+  nextCounters: AchievementCounters,
+  nowMs: number,
+  nowISO: string,
+): (SQL | null)[] {
+  const out: (SQL | null)[] = [];
+  if (isDebugTableCommand(command)) {
+    out.push(debugFragment(guard, uid, debugTablePlan(command, nowMs, args)));
+    return out;
+  }
+  if (command === 'snapshot.restore') {
+    const bounty = args.bounty !== undefined ? parseSnapshotBounty(args.bounty) : null;
+    if (bounty) out.push(...bountyRestoreFragments(guard, uid, bounty));
+    else out.push(...namedClearReplaceFragments(guard, uid, nextClearedNamed, previousGameDayISO(nowISO)));
+    out.push(...counterRestoreFragments(guard, uid, nextCounters));
+    return out;
+  }
+  if (command === 'named.unlock' || command === 'named.reset' || command === 'dex.reset' || command === 'dex.fill') {
+    const prevSet = new Set(prevClearedNamed);
+    const nextSet = new Set(nextClearedNamed);
+    const added = nextClearedNamed.filter(id => !prevSet.has(id));
+    const removed = prevClearedNamed.filter(id => !nextSet.has(id));
+    const clearedAt = command === 'named.unlock' && args.consumeDailyCap === true
+      ? nowISO
+      : previousGameDayISO(nowISO);
+    out.push(namedClearInsertFragment(guard, uid, added, clearedAt));
+    out.push(namedClearDeleteFragment(guard, uid, removed));
+    return out;
+  }
+  if (command === 'achievement.setCounter' || command === 'achievement.resetCounters') {
+    if (command === 'achievement.resetCounters' && Object.keys(nextCounters).length === 0) {
+      out.push(counterClearFragment(guard, uid));
+    } else {
+      const changed: Record<string, number> = {};
+      for (const [k, v] of Object.entries(nextCounters)) {
+        if (typeof v === 'number' && prevCounters[k] !== v) changed[k] = v;
+      }
+      const removedKeys = Object.keys(prevCounters).filter(k => nextCounters[k] === undefined);
+      out.push(counterSetFragment(guard, uid, changed));
+      out.push(counterClearFragment(guard, uid, removedKeys));
+    }
+  }
+  return out;
 }
 
 /** 액션 확정 시 bounty_clears에 클리어 행을 추가할 의뢰 — 일반 의뢰는 납품(deliverBounty), 네임드는 결투 성공(resolveChallenge)이 단일 지점이다 */

@@ -1469,13 +1469,15 @@ describe('개발 도구 패널 (?admin 게이트)', () => {
     window.history.replaceState({}, '', '/');
   });
 
-  it('네임드 직전 프리셋은 항구 밖에서도 자동 이동한 뒤 수주를 시도한다 (오프라인은 수주 단계에서 멈춤)', async () => {
+  it('네임드 직전 프리셋은 오프라인에서 DB 전용 수배 명령을 거부하고, QA 패키지 프리셋은 항구로 자동 이동한다', async () => {
     window.history.replaceState({}, '', '/?admin=1');
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: '개발 도구' }));
     fireEvent.click(screen.getByRole('button', { name: '메갈로돈 네임드 직전' }));
-    expect(await screen.findByLabelText('실행 기록')).toHaveTextContent('거점 이동 (harbor)');
-    expect(screen.getByLabelText('실행 기록')).toHaveTextContent('오프라인에서는 의뢰를 수주하거나 마칠 수 없어요');
+    expect(await screen.findByLabelText('실행 기록')).toHaveTextContent('로컬 모드(DB 없음)에서는 수배 DB 도구를 쓸 수 없어요.');
+
+    fireEvent.click(screen.getByRole('button', { name: 'v0.20.0 신콘텐츠 QA 패키지' }));
+    await waitFor(() => expect(screen.getByLabelText('실행 기록')).toHaveTextContent('거점 이동 (lisbon)'));
     expect(screen.getByLabelText('항구')).toBeInTheDocument();
     window.history.replaceState({}, '', '/');
   });
