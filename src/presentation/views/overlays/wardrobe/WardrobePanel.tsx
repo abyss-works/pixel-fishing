@@ -134,7 +134,7 @@ function HatDetailBox({ game, hatId, busy, onBuy, onWear }: {
   const state = d.worn ? '쓰고 있어요.' : d.owned ? '가지고 있어요.' : '아직 없어요.';
   if (d.action === 'achievement') {
     return (
-      <Inset className="flex items-center justify-between gap-3 h-[84px] px-3 shrink-0">
+      <Inset className="flex items-center justify-between gap-3 min-h-[84px] py-2 px-3 shrink-0">
         <div className="flex flex-col gap-1 min-w-0">
           <b className="pf-accent text-base text-gold">{d.name}</b>
           {d.unlock && (
@@ -156,10 +156,16 @@ function HatDetailBox({ game, hatId, busy, onBuy, onWear }: {
       ? <Button variant="primary" disabled={busy} onClick={() => onWear(hatId)}>쓰기</Button>
       : <Button disabled={busy} onClick={() => onWear(null)}>벗기</Button>;
   return (
-    <Inset className="flex items-center justify-between gap-3 h-[84px] px-3 shrink-0">
+    <Inset className="flex items-center justify-between gap-3 min-h-[84px] py-2 px-3 shrink-0">
       <div className="flex flex-col gap-1 min-w-0">
         <b className="pf-accent text-base text-gold">{d.name}</b>
-        <span className="text-xs text-text-dim">가격 <span className="pf-accent text-text">{fmtGold(d.price)}</span></span>
+        {d.source === 'achievement' ? (
+          <span className="text-xs text-text-dim break-keep break-words">
+            업적 보상 {d.unlock && <span className="text-text">{d.unlock.achievementName}</span>}
+          </span>
+        ) : (
+          <span className="text-xs text-text-dim">가격 <span className="pf-accent text-text">{fmtGold(d.price)}</span></span>
+        )}
         <span className="text-xs text-text-dim">{state}</span>
       </div>
       {d.buyBlock ? <Tip wraps text={d.buyBlock} className="block">{button}</Tip> : button}

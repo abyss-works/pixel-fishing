@@ -33,10 +33,11 @@ describe('옷장 창 - 업적 모자 상세 칸', () => {
     expect(classes).toContain('break-words');
   });
 
-  it('상세 칸은 두 경우 모두 높이 84px로 고정한다', () => {
+  it('상세 칸은 두 경우 모두 최소 높이 84px로 두어 줄바꿈 시 잘리지 않는다', () => {
     for (const classes of detailCellClasses()) {
-      expect(classes).toContain('h-[84px]');
-      expect(classes.filter((name) => /^(min-h-|max-h-)/.test(name))).toEqual([]);
+      expect(classes).toContain('min-h-[84px]');
+      expect(classes).not.toContain('h-[84px]');
+      expect(classes.filter((name) => /^max-h-/.test(name))).toEqual([]);
       expect(classes).toContain('shrink-0');
     }
   });
