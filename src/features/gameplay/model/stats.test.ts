@@ -263,4 +263,25 @@ describe('받는 보너스', () => {
     expect(data.speed.mods.some(m => m.id === 'achievement-moveSpeed' && m.label === '업적 누적')).toBe(true);
     expect(data.effectiveBite.min.mods.some(m => m.id === 'achievement-biteWaitCut' && m.label === '업적 누적')).toBe(true);
   });
+
+  it('보유 유물 효과 배율(artifactBoost)이 활성 유물 행 모두에 반영되고 낚시 갈래 단독 행으로 중복 분리하지 않는다', () => {
+    // 전설 유물 1개(mami-wata-mirror) → maxArtifactCount 1 → artifactBoost +3% (scale = 1.03)
+    const g = game({
+      artifacts: ['mami-wata-mirror', 'wreck-compass', 'abyss-angler', 'sargasso-net'],
+    });
+    const bonuses = selectActiveBonuses(g);
+    const relics = bonuses.filter(b => b.source.kind === 'relic');
+    expect(relics.map(b => [b.category, b.source.kind === 'relic' && b.source.artifact.id, b.source.kind === 'relic' && b.source.scale])).toEqual([
+      ['duel', 'abyss-angler', 1.03],
+      ['move', 'wreck-compass', 1.03],
+      ['fish', 'sargasso-net', 1.03],
+    ]);
+    // 낚시 갈래에만 따로 '보유 유물 효과' 행을 두지 않는다
+    expect(bonuses.some(b => b.source.kind === 'achievement' && b.source.label === '보유 유물 효과')).toBe(false);
+  });
+
+  it('전설 유물만 있어 보유 유물 효과 배율이 올라가도 적용할 유물 효과가 없으면 보너스 줄이 비어 있다', () => {
+    const g = game({ artifacts: ['mami-wata-mirror'] });
+    expect(selectActiveBonuses(g)).toEqual([]);
+  });
 });

@@ -180,8 +180,8 @@ const COOK_EFFECT_CATEGORY: Record<keyof CookEffects, BonusCategory> = {
 };
 
 export type BonusSource =
-  /** 유물 보너스 - level은 보유 레벨이고, 효과 문장은 그 레벨의 수치로 쓴다 */
-  | { kind: 'relic'; artifact: Artifact; effect: ArtifactEffectKey; level: number }
+  /** 유물 보너스 - level은 보유 레벨, scale은 업적 보유 유물 효과 배율(1 + artifactBoost)이다 */
+  | { kind: 'relic'; artifact: Artifact; effect: ArtifactEffectKey; level: number; scale: number }
   /** 길드 보너스 — value는 서버가 알려 준 효과 값이다 */
   | { kind: 'guild'; level: number; bonus: GuildBonusId; value: number }
   /** 슬롯 효과 - 효과가 든 슬롯의 요리 이름이 출처이고, 효과 줄은 부엌 창과 같은 문장이다 */
@@ -199,7 +199,7 @@ export interface BonusRow {
 }
 
 /**
- * 지금 받는 보너스 — 가진 유물의 효과(효과마다 한 줄), 길드 보너스(1단계 이상), 효과가 든 슬롯의 요리 효과(now 기준).
+ * 지금 받는 보너스 — 가진 유물의 효과(효과마다 한 줄, 보유 유물 효과 배율 반영), 길드 보너스(1단계 이상), 효과가 든 슬롯의 요리 효과(now 기준).
  * 길드 보너스는 서버가 알려 준 레벨과 효과를 보이기만 한다(적용은 서버 액션 경로가 한다).
  * 낚싯대 파워에서 오는 효과(GOOD·PERFECT·방치 배수)는 해역마다 달라 낚싯대 탭의 해역 표가 맡는다.
  */
@@ -209,16 +209,18 @@ export function selectActiveBonuses(
   now: string = new Date().toISOString(),
 ): BonusRow[] {
   const out: BonusRow[] = [];
+  const ach = achievementBonusesOf(game);
+  const relicScale = 1 + ach.artifactBoost;
   for (const artifact of ARTIFACTS) {
     const level = artifactLevelOf(game, artifact.id);
     if (level === 0) continue;
     const effects = artifactEffectsAt(artifact, level);
     for (const effect of Object.keys(effects) as (keyof ArtifactEffects)[]) {
       if (effects[effect] === undefined) continue;
-      out.push({ category: EFFECT_CATEGORY[effect], source: { kind: 'relic', artifact, effect, level }, manualOnly: false });
+      out.push({ category: EFFECT_CATEGORY[effect], source: { kind: 'relic', artifact, effect, level, scale: relicScale }, manualOnly: false });
     }
     if (artifactExtraCookChanceAt(artifact, level) > 0) {
-      out.push({ category: EFFECT_CATEGORY.extraCookChance, source: { kind: 'relic', artifact, effect: 'extraCookChance', level }, manualOnly: false });
+      out.push({ category: EFFECT_CATEGORY.extraCookChance, source: { kind: 'relic', artifact, effect: 'extraCookChance', level, scale: relicScale }, manualOnly: false });
     }
   }
   if (guild) {
@@ -241,7 +243,6 @@ export function selectActiveBonuses(
       }
     }
   }
-  const ach = achievementBonusesOf(game);
   const fmtPct = (v: number, sign: '+' | '−') => {
     const pct = Math.round(v * 1000) / 10;
     return `${sign}${Number.isInteger(pct) ? pct : pct.toFixed(1)}%`;
@@ -265,9 +266,6 @@ export function selectActiveBonuses(
     if (zLeg > 0) {
       out.push({ category: 'fish', source: { kind: 'achievement', label: `${zName} 전설 가중치`, value: fmtPct(zLeg, '+') }, manualOnly: false });
     }
-  }
-  if (ach.artifactBoost > 0) {
-    out.push({ category: 'fish', source: { kind: 'achievement', label: '보유 유물 효과', value: fmtPct(ach.artifactBoost, '+') }, manualOnly: false });
   }
   if (ach.namedWeight > 0) {
     out.push({ category: 'duel', source: { kind: 'achievement', label: '네임드 조우 가중치', value: fmtPct(ach.namedWeight, '+') }, manualOnly: false });

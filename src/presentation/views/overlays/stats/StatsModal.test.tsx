@@ -77,4 +77,25 @@ describe('StatsModal(스탯창)', () => {
     expect(first.getAttribute('aria-selected')).toBe('false');
     expect(screen.getByRole('meter', { name: '파워' })).toBeTruthy();
   });
+
+  it('보너스 탭은 유물 배율(artifactBoost)이 적용된 실제 값을 각 갈래에 보이고 툴팁으로 배율 내역을 보인다', () => {
+    // 전설 유물 + 이동/낚시/결투 유물 → artifactBoost +3% 적용
+    show(game({
+      boat: 5,
+      artifacts: ['mami-wata-mirror', 'wreck-compass', 'sargasso-net', 'abyss-angler'],
+    }));
+    fireEvent.click(screen.getByRole('button', { name: '보너스' }));
+
+    expect(screen.getByText('항해 속도 +10.3%')).toBeTruthy();
+    expect(screen.getByText('가방 용량 +10.3%')).toBeTruthy();
+    expect(screen.getByText('네임드 결투 가속 −10.3%')).toBeTruthy();
+    expect(screen.queryByText(/보유 유물 효과 \+3%/)).toBeNull();
+
+    // 툴팁에 기본 효과, 보유 유물 효과, 적용 효과가 표시된다
+    fireEvent.mouseEnter(screen.getByText('항해 속도 +10.3%'));
+    const tip = screen.getByRole('tooltip');
+    expect(within(tip).getByText('+10%')).toBeTruthy();
+    expect(within(tip).getByText('+3%')).toBeTruthy();
+    expect(within(tip).getByText('+10.3%')).toBeTruthy();
+  });
 });

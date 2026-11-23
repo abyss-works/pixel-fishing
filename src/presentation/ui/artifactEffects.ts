@@ -16,26 +16,31 @@ const EFFECT_LABEL: Record<ArtifactEffectKey, string> = {
   extraCookChance: '요리 추가 완성',
 };
 
+/** 부동소수 오차를 걷어 낸다 */
+const clean = (x: number): number => Math.round(x * 1e9) / 1e9;
+
 /** 줄어드는 효과의 값 문자열(`−N%`) */
 const fmtCutPercent = (rate: number): string => `−${fmtDecimal2(rate * 100)}%`;
 
 /** 유물 효과 한 가지의 이름 - 효과 문장의 앞부분과 비교 표의 행 이름이 함께 쓴다 */
 export const artifactEffectLabel = (effect: ArtifactEffectKey): string => EFFECT_LABEL[effect];
 
-/** 유물 효과 한 가지의 값 문자열 - 그 레벨의 수치를 소수 둘째 자리까지(끝의 0은 뺀다) 쓴다. 효과가 없으면 null이다 */
-export function artifactEffectValue(a: Artifact, effect: ArtifactEffectKey, level: number): string | null {
+/** 유물 효과 한 가지의 값 문자열 - 그 레벨의 수치를 소수 둘째 자리까지(끝의 0은 뺀다) 쓴다. scale이 주어지면 보유 유물 효과 배율을 곱한다. 효과가 없으면 null이다 */
+export function artifactEffectValue(a: Artifact, effect: ArtifactEffectKey, level: number, scale = 1): string | null {
   const e = artifactEffectsAt(a, level);
   switch (effect) {
-    case 'sail': return (e.sail ?? 0) > 0 ? `+${fmtDecimal2(e.sail! * 100)}%` : null;
-    case 'duelSpeedupCut': return (e.duelSpeedupCut ?? 0) > 0 ? fmtCutPercent(e.duelSpeedupCut!) : null;
-    case 'biteWaitCut': return (e.biteWaitCut ?? 0) > 0 ? fmtCutPercent(e.biteWaitCut!) : null;
-    case 'commonWeightCut': return (e.commonWeightCut ?? 0) > 0 ? fmtCutPercent(e.commonWeightCut!) : null;
-    case 'bagCap': return (e.bagCap ?? 0) > 0 ? `+${fmtDecimal2(e.bagCap! * 100)}%` : null;
+    case 'sail': return (e.sail ?? 0) > 0 ? `+${fmtDecimal2(clean(e.sail! * scale) * 100)}%` : null;
+    case 'duelSpeedupCut': return (e.duelSpeedupCut ?? 0) > 0 ? fmtCutPercent(clean(e.duelSpeedupCut! * scale)) : null;
+    case 'biteWaitCut': return (e.biteWaitCut ?? 0) > 0 ? fmtCutPercent(clean(e.biteWaitCut! * scale)) : null;
+    case 'commonWeightCut': return (e.commonWeightCut ?? 0) > 0 ? fmtCutPercent(clean(e.commonWeightCut! * scale)) : null;
+    case 'bagCap': return (e.bagCap ?? 0) > 0 ? `+${fmtDecimal2(clean(e.bagCap! * scale) * 100)}%` : null;
     case 'extraCookChance': {
       const chance = artifactExtraCookChanceAt(a, level);
-      return chance > 0 ? fmtPlusPoint(chance * 100) : null; // 확률에 직접 더하는 효과는 %p
+      return chance > 0 ? fmtPlusPoint(Math.min(1, clean(chance * scale)) * 100) : null; // 확률에 직접 더하는 효과는 %p
     }
-    case 'mutationWeight': return e.mutationWeight !== undefined ? `+${fmtDecimal2((e.mutationWeight.variant / MUTATION_WEIGHTS.variant - 1) * 100)}%` : null;
+    case 'mutationWeight': return e.mutationWeight !== undefined
+      ? `+${fmtDecimal2(clean((e.mutationWeight.variant / MUTATION_WEIGHTS.variant - 1) * scale) * 100)}%`
+      : null;
   }
 }
 
@@ -44,9 +49,9 @@ export function artifactEffectKeys(a: Artifact): (ArtifactEffectKey)[] {
   return EFFECT_ORDER.filter(effect => artifactEffectValue(a, effect, 1) !== null);
 }
 
-/** 유물 효과 한 가지의 문장 - 그 레벨에서의 수치로 쓴다. 효과가 없으면 null이다. 스탯 창 보너스 탭이 효과마다 한 줄로 쓴다 */
-export function artifactEffectLine(a: Artifact, effect: ArtifactEffectKey, level: number): string | null {
-  const value = artifactEffectValue(a, effect, level);
+/** 유물 효과 한 가지의 문장 - 그 레벨에서의 수치로 쓴다. scale이 주어지면 보유 유물 효과 배율을 곱한다. 효과가 없으면 null이다 */
+export function artifactEffectLine(a: Artifact, effect: ArtifactEffectKey, level: number, scale = 1): string | null {
+  const value = artifactEffectValue(a, effect, level, scale);
   if (value === null) return null;
   return `${artifactEffectLabel(effect)} ${value}`;
 }
