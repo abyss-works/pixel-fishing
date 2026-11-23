@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { GUILD_MAX_MEMBERS, joinRequestDaysLeft, normalizeGuildCode } from '../../../../game/rules/guild';
 import { inviteDialogView } from '../../../../features/guild/model/guild';
+import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import type { GuildMyRequest } from '../../../../features/guild/model/guild';
 import { useGuildInvite } from '../../../../features/guild/service/useGuildInvite';
 import { useNow } from '../../../../features/gameplay/service/useGameTime';
@@ -51,18 +52,27 @@ export default function NoGuild({ busy, run, join, request, setToast }: {
     if (!code) return;
     const r = await join(code);
     setCodeError(r.error);
-    if (!r.error) setToast(r.requested ? '가입 신청을 보냈어요. 길드장이 승인하면 들어가요.' : '길드에 들어갔어요.');
+    if (!r.error) sendNotice(setToast, {
+      kind: 'guild.modalAction',
+      text: r.requested ? '가입 신청을 보냈어요. 길드장이 승인하면 들어가요.' : '길드에 들어갔어요.',
+      toastText: r.requested ? '길드 가입 신청 전송!' : '길드에 들어갔어요!',
+    });
   };
   const onCreate = async (e: FormEvent) => {
     e.preventDefault();
     const value = name.trim();
     const error = await run({ op: 'create', name: value });
     setNameError(error);
-    if (!error) setToast(`${value} 길드를 만들었어요.`);
+    if (!error) sendNotice(setToast, {
+      kind: 'guild.modalAction',
+      text: `${value} 길드를 만들었어요.`,
+      toastText: `${value} 길드 창설!`,
+    });
   };
   const onCancel = async () => {
     const error = await run({ op: 'cancelRequest' });
-    setToast(error ?? '가입 신청을 거뒀어요.', error ? 'warn' : 'info');
+    if (error) sendNotice(setToast, { kind: 'system.modalRejected', text: error });
+    else sendNotice(setToast, { kind: 'guild.modalAction', text: '가입 신청을 거뒀어요.', tone: 'neutral' });
   };
 
   return (

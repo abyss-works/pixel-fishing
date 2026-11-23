@@ -1,3 +1,4 @@
+import { sendNotice } from '../../../features/display/model/toastPolicy';
 import { GUEST_VILLAGE_ONLY_TEXT } from '../../../features/gameplay/service/useGame';
 import { hasOpenWindows } from '../../ui/openWindows';
 import type { Notify } from '../../ui/hud/messageFeed';
@@ -13,7 +14,13 @@ export function createGuestBlockedNotice({ accountOpen, openAccount, setToast }:
 }): () => void {
   return () => {
     if (accountOpen || hasOpenWindows()) return;
-    setToast(GUEST_VILLAGE_ONLY_TEXT, 'warn');
+    sendNotice(setToast, {
+      kind: 'travel.blocked',
+      text: GUEST_VILLAGE_ONLY_TEXT,
+      toastText: '게스트는 마을 밖 출항 불가',
+      cooldownKey: 'travel.blocked:guest',
+      bypassCooldown: true,
+    });
     openAccount();
   };
 }

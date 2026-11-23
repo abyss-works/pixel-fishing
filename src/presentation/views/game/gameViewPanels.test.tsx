@@ -97,4 +97,54 @@ describe('GameView 패널 초기화', () => {
     expect(onScene).toHaveBeenCalled();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
+
+  it('FloatingToastLayer는 GameStageLayout([container-type:size]) 바깥에 놓이고 앱 모달이 열려도 닫기 버튼이 동작한다', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const onDismissToast = vi.fn();
+    render(
+      <QueryClientProvider client={client}>
+        <GameView
+          game={{ ...newState(), tutorials: [...TUTORIAL_IDS] }}
+          scene={{ kind: 'base', id: 'home' }}
+          entryPos={null}
+          placeSeq={0}
+          dispatch={() => ({ status: 'ok', state: newState(), result: { type: 'none' } })}
+          setToast={() => {}}
+          onScene={() => {}}
+          onPlace={() => {}}
+          onWarmup={() => {}}
+          log={[]}
+          toasts={[{ id: 99, text: '골드가 모자라요.', tone: 'danger' }]}
+          onDismissToast={onDismissToast}
+          syncLabel={null}
+          syncState="off"
+          guestProgress="nothing"
+          recheckGuestProgress={async () => 'nothing'}
+          account="dev@localhost"
+          accountChecked={true}
+          accountFailed={false}
+          uid="u1"
+          nickname="테스터"
+          onRename={async () => null}
+          onAuthChanged={async () => {}}
+          onResync={async () => {}}
+        />
+      </QueryClientProvider>,
+    );
+
+    // 설정 앱 모달(layer="app")을 연 상태에서도 플로팅 토스트가 스테이지([data-game-stage]) 밖에 위치한다
+    fireEvent.click(screen.getByRole('button', { name: '설정' }));
+    const settingBtn = screen.getAllByRole('button', { name: '설정' }).find(b => b.hasAttribute('aria-pressed'))!;
+    fireEvent.click(settingBtn);
+    expect(screen.getByRole('dialog', { name: '설정' })).toBeInTheDocument();
+
+    const stage = document.querySelector('[data-game-stage]')!;
+    const toastStatus = screen.getAllByRole('status').find(el => el.textContent?.includes('골드가 모자라요.'))!;
+    expect(stage.contains(toastStatus)).toBe(false);
+    expect(toastStatus.parentElement?.className).toContain('fixed');
+    expect(toastStatus.parentElement?.className).toContain('pointer-events-none');
+
+    fireEvent.click(screen.getByRole('button', { name: '알림 닫기' }));
+    expect(onDismissToast).toHaveBeenCalledWith(99);
+  });
 });

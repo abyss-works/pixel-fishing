@@ -5,6 +5,7 @@ import type { AchievementTab } from '../../../../game/content/achievements';
 import { REJECT_TEXT } from '../../../../game/rules/logic';
 import { when } from '../../../../shared/lib/when';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
+import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import {
   ACHIEVEMENT_TABS,
   COSMETIC_FILTERS,
@@ -74,7 +75,7 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
     when(dispatch(action), r => {
       setBusy(false);
       if (r.status === 'ok') onOk(r);
-      else if (r.status === 'rejected') setToast(REJECT_TEXT[r.error], 'warn');
+      else if (r.status === 'rejected') sendNotice(setToast, { kind: 'system.modalRejected', text: REJECT_TEXT[r.error] });
     });
   };
 
@@ -83,7 +84,11 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
       const reward = row.def.reward.kind === 'gold'
         ? fmtGold(row.def.reward.gold)
         : (hatById(row.def.reward.hatId)?.name ?? '모자');
-      setToast(`“${row.def.name}” 업적 보상으로 ${josa(reward, '을/를')} 받았어요!`, 'gold');
+      sendNotice(setToast, {
+        kind: 'achievement.claimed',
+        text: `“${row.def.name}” 업적 보상으로 ${josa(reward, '을/를')} 받았어요!`,
+        toastText: `업적 보상 ${reward} 수령!`,
+      });
     });
   };
 
@@ -95,7 +100,11 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
         const hatNames = r.result.hats.map(id => hatById(id)?.name ?? '모자');
         if (hatNames.length > 0) parts.push(hatNames.join(', '));
         if (parts.length > 0) {
-          setToast(`업적 보상으로 ${josa(parts.join('와 '), '을/를')} 받았어요!`, 'gold');
+          sendNotice(setToast, {
+            kind: 'achievement.claimed',
+            text: `업적 보상으로 ${josa(parts.join('와 '), '을/를')} 받았어요!`,
+            toastText: '업적 보상 모두 수령 완료!',
+          });
         }
       }
     });

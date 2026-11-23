@@ -71,7 +71,7 @@ const ALLOWED_PRESENTATION_GAME_VALUE_SYMBOLS = new Set([
 // 표현 계층의 기존 게임 값 심볼 import 목록 — 새 위반이 추가되거나 해결된 항목이 남아 있으면 실패한다.
 const INITIAL_PRESENTATION_GAME_VALUE_IMPORTS: Record<string, readonly string[]> = {
   'presentation/layouts/game-stage/Base.tsx': ['boatNameOf'],
-  'presentation/layouts/game-stage/Field.tsx': ['FISH', 'RARITY', 'SPOTS', 'boatGateText', 'formName', 'nextBoatText', 'zoneById'],
+  'presentation/layouts/game-stage/Field.tsx': ['FISH', 'SPOTS', 'boatGateText', 'nextBoatText', 'zoneById'],
   'presentation/ui/SizeBar.tsx': ['BIG_CATCH_PERCENTILE'],
   'presentation/ui/artifactEffects.ts': ['MUTATION_WEIGHTS', 'artifactEffectsAt', 'artifactExtraCookChanceAt'],
   'presentation/ui/fish/InstanceLine.tsx': ['sizePercentile'],

@@ -79,7 +79,7 @@ describe('FriendsModal(소셜 창)', () => {
     fireEvent.click(screen.getByRole('button', { name: '차단' }));
     expect(screen.getByText('무례')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '해제' }));
-    await waitFor(() => expect(setToast).toHaveBeenCalledWith('무례 님의 차단을 풀었어요.', undefined));
+    await waitFor(() => expect(setToast).toHaveBeenCalledWith('무례 님의 차단을 풀었어요.'));
     expect(moderation.unblock).toHaveBeenCalledWith('b1');
   });
 });

@@ -4,6 +4,7 @@ import type { CookKind } from '../../../../game/content/cooking';
 import { RARITY } from '../../../../game/content/rarity';
 import { REJECT_TEXT } from '../../../../game/rules/logic';
 import type { GameState } from '../../../../game/rules/logic';
+import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import { recipeEffectNote, recipeLabel, recipesOfKind, selectRecipeView } from '../../../../features/kitchen/model/recipes';
 import { ENERGY_NAME } from '../../../../features/kitchen/model/energy';
 import { GradeName } from '../../../ui/fish/RarityTag';
@@ -16,6 +17,7 @@ import SelectList from '../../../ui/SelectList';
 import Tip from '../../../ui/Tip';
 import { artifactEffectLabel } from '../../../ui/artifactEffects';
 import { fmtMinutes, fmtPlusPoint } from '../../../ui/format';
+import type { Notify } from '../../../ui/hud/messageFeed';
 import { CompareTable, ConfirmButton, FacilityTabBody } from './facilityParts';
 import type { FacilityAct } from './facilityParts';
 
@@ -27,12 +29,13 @@ const EFFECT_TITLE: Readonly<Record<CookKind, string>> = { lunch: '도시락 효
 // 효과(마지막 줄이 지속 시간), 조리에 필요한 기운과 보유(맨 아래 줄이 보유한 완성 요리), 조리 수량과 조리 시간이다.
 // 조리 시작 버튼은 오른쪽 열 맨 아래에 고정한다.
 // 조리 중이어도 다른 레시피를 골라 볼 수 있고, 시작만 막힌다. 막힌 이유는 게임 규칙의 판정 사유 문구이며 버튼의 툴팁으로 보인다.
-export default function RecipeTab({ kind, game, now, busy, act }: {
+export default function RecipeTab({ kind, game, now, busy, act, setToast }: {
   kind: CookKind;
   game: GameState;
   now: string;
   busy: boolean;
   act: FacilityAct;
+  setToast?: Notify;
 }) {
   const recipes = recipesOfKind(kind);
   const [pickedId, setPickedId] = useState(recipes[0].id);
@@ -116,7 +119,15 @@ export default function RecipeTab({ kind, game, now, busy, act }: {
     <FacilityTabBody list={list} detail={detail}
       foot={
         <ConfirmButton reason={reason} disabled={!view.check.ok || view.count === 0 || busy}
-                       onClick={() => act({ type: 'cook', recipe: view.recipe.id, count: view.count })}>
+                       onClick={() => act({ type: 'cook', recipe: view.recipe.id, count: view.count }, () => {
+                         if (!setToast) return;
+                         const name = recipeLabel(view.recipe);
+                         sendNotice(setToast, {
+                           kind: 'kitchen.cookAndBuff',
+                           text: `${name} ${view.count}개 조리를 시작했어요.`,
+                           toastText: `${name} 조리 시작`,
+                         });
+                       })}>
           조리 시작
         </ConfirmButton>
       } />

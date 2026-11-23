@@ -8,6 +8,7 @@ import ModalCard from '../../../ui/ModalCard';
 import TabBar from '../../../ui/TabBar';
 import Tip from '../../../ui/Tip';
 import { fmtMinutes } from '../../../ui/format';
+import type { Notify } from '../../../ui/hud/messageFeed';
 import RecipeTab from './RecipeTab';
 import type { FacilityAct } from './facilityParts';
 
@@ -16,10 +17,11 @@ type KitchenTab = 'lunch' | 'bait';
 // 부엌 창 — 920 폭, 높이 고정. 제목 아래 고정 정보 줄(조리 중, 다음 완성, 보관함)은 어느 탭에서나 같은 자리에 두고,
 // 그 아래 탭 둘(도시락, 미끼)을 둔다. 두 탭은 레시피를 골라 수량을 넣어 조리를 시작한다.
 // 조리 가능 여부는 게임 규칙이 정하고, 이 창은 그 판정을 그린다.
-export default function KitchenPanel({ game, busy, act, onClose }: {
+export default function KitchenPanel({ game, busy, act, setToast, onClose }: {
   game: GameState;
   busy: boolean;
   act: FacilityAct;
+  setToast?: Notify;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<KitchenTab>('lunch');
@@ -52,7 +54,7 @@ export default function KitchenPanel({ game, busy, act, onClose }: {
         activeKey={tab}
         onSelect={setTab}
       />
-      <RecipeTab key={tab} kind={tab} game={game} now={now} busy={busy} act={act} />
+      <RecipeTab key={tab} kind={tab} game={game} now={now} busy={busy} act={act} setToast={setToast} />
     </ModalCard>
   );
 }

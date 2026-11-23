@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { GUILD_ERROR_TEXT, inviteDialogView } from '../../../../features/guild/model/guild';
+import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import { useGuild } from '../../../../features/guild/service/useGuild';
 import { useGuildInvite } from '../../../../features/guild/service/useGuildInvite';
 import Button from '../../../ui/Button';
@@ -34,7 +35,11 @@ export default function GuildInviteDialog({ code, account, onAccount, onClose, s
     try {
       const r = await act({ op: 'join', code, via: 'link' });
       if (!r.ok) { setError(GUILD_ERROR_TEXT[r.error] ?? '요청을 처리하지 못했어요. 잠시 뒤 다시 해 주세요.'); return; }
-      setToast(`${invite.preview?.name ?? ''} 길드에 들어갔어요.`);
+      sendNotice(setToast, {
+        kind: 'guild.modalAction',
+        text: `${invite.preview?.name ?? ''} 길드에 들어갔어요.`,
+        toastText: '길드에 들어갔어요!',
+      });
       onClose();
     } catch {
       setError('길드 요청을 보내지 못했어요. 연결을 확인해 주세요.');

@@ -4,6 +4,8 @@ import { api, kstDay } from '../../../platform/api';
 import { identifyUser } from '../../../platform/observability';
 import type { GameState } from '../../../game/rules/logic';
 import type { AccountLookup } from '../../../platform/api';
+import { sendNotice } from '../../display/model/toastPolicy';
+import type { NoticeSink } from '../../display/model/toastPolicy';
 import { setSessionUid, useSession } from './session';
 import { ACCOUNT_CHECK_FAILED_NOTICE, ACCOUNT_NUDGE_FAME, MIN_PASSWORD_LENGTH, passwordLongEnough, shouldNudgeAccount } from '../model/accountRules';
 
@@ -15,7 +17,7 @@ import { ACCOUNT_CHECK_FAILED_NOTICE, ACCOUNT_NUDGE_FAME, MIN_PASSWORD_LENGTH, p
 export function useAccount({ game, setToast, adoptAccount, askNewPassword }: {
   game: GameState;
   /** 메시지 창에 남긴다 — 거부·실패는 tone 'warn'을 넘긴다 */
-  setToast: (message: string, tone?: 'info' | 'gold' | 'warn') => void;
+  setToast: NoticeSink;
   /** useGame의 계정 교체 — 그 계정의 서버 상태를 채택하고 이 창을 그 계정의 활성 창으로 접속시킨다 */
   adoptAccount: () => Promise<void>;
   /** 재설정 링크로 돌아왔을 때 새 비밀번호를 묻는다. 취소하면 null */
@@ -40,7 +42,13 @@ export function useAccount({ game, setToast, adoptAccount, askNewPassword }: {
     setAccount(lookup.status === 'account' ? lookup.email : null);
     setAccountChecked(lookup.status !== 'failed');
     setAccountFailed(lookup.status === 'failed');
-    if (lookup.status === 'failed') setToast(ACCOUNT_CHECK_FAILED_NOTICE, 'warn');
+    if (lookup.status === 'failed') {
+      sendNotice(setToast, {
+        kind: 'system.criticalError',
+        text: ACCOUNT_CHECK_FAILED_NOTICE,
+        toastText: '계정 확인에 실패했어요.',
+      });
+    }
   };
 
 
@@ -64,7 +72,10 @@ export function useAccount({ game, setToast, adoptAccount, askNewPassword }: {
     if (next && next !== uidRef.current) { // 로그인(계정 교체)만 서버 상태 로드
       uidRef.current = next;
       await adoptAccount();
-      setToast('계정의 클라우드 세이브를 불러왔어요.');
+      sendNotice(setToast, {
+        kind: 'boot.cloudLoaded',
+        text: '계정의 클라우드 세이브를 불러왔어요.',
+      });
     }
   };
 
@@ -74,15 +85,39 @@ export function useAccount({ game, setToast, adoptAccount, askNewPassword }: {
     const landing = api.auth.takePasswordResetLanding();
     if (!landing) return;
     if (landing === 'invalid') {
-      setToast('비밀번호를 바꾸지 못했어요. 재설정 링크가 만료됐거나 이미 쓰였어요. 재설정을 다시 요청해 주세요.', 'warn');
+      sendNotice(setToast, {
+        kind: 'account.authMilestone',
+        text: '비밀번호를 바꾸지 못했어요. 재설정 링크가 만료됐거나 이미 쓰였어요. 재설정을 다시 요청해 주세요.',
+        toastText: '재설정 링크가 만료됐어요.',
+        tone: 'danger',
+      });
       return;
     }
     void askNewPassword(MIN_PASSWORD_LENGTH).then(pw => {
       if (!pw) return;
-      if (!passwordLongEnough(pw)) { setToast(`비밀번호는 ${MIN_PASSWORD_LENGTH}자 이상이어야 해요.`, 'warn'); return; }
+      if (!passwordLongEnough(pw)) {
+        sendNotice(setToast, {
+          kind: 'account.authMilestone',
+          text: `비밀번호는 ${MIN_PASSWORD_LENGTH}자 이상이어야 해요.`,
+          tone: 'danger',
+        });
+        return;
+      }
       return api.auth.applyNewPassword(pw).then(r => {
-        if (r.ok) setToast('비밀번호를 바꿨어요. 새 비밀번호로 로그인해 주세요.');
-        else setToast(`비밀번호를 바꾸지 못했어요. ${r.msg}`, 'warn');
+        if (r.ok) {
+          sendNotice(setToast, {
+            kind: 'account.authMilestone',
+            text: '비밀번호를 바꿨어요. 새 비밀번호로 로그인해 주세요.',
+            toastText: '비밀번호 변경 완료!',
+          });
+        } else {
+          sendNotice(setToast, {
+            kind: 'account.authMilestone',
+            text: `비밀번호를 바꾸지 못했어요. ${r.msg}`,
+            toastText: '비밀번호 변경 실패',
+            tone: 'danger',
+          });
+        }
       });
     });
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회 확인, setToast는 항상 최신 클로저가 필요 없다
@@ -97,7 +132,11 @@ export function useAccount({ game, setToast, adoptAccount, askNewPassword }: {
     })) return;
     api.auth.markAccountNudged(today);
     // oxlint-disable-next-line react/set-state-in-effect -- 조건이 처음 맞는 순간(그날 첫 접속·명성 도달)에 한 번 쏘는 알림이라 이벤트 지점이 따로 없다
-    setToast(`명성이 ${ACCOUNT_NUDGE_FAME.toLocaleString()}에 이르렀어요. 진행을 지키려면 설정 탭의 계정 관리에서 계정을 만들어 보세요.`);
+    sendNotice(setToast, {
+      kind: 'account.authMilestone',
+      text: `명성이 ${ACCOUNT_NUDGE_FAME.toLocaleString()}에 이르렀어요. 진행을 지키려면 설정 탭의 계정 관리에서 계정을 만들어 보세요.`,
+      toastText: '계정 연결을 추천해요.',
+    });
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [game.fame, account, accountChecked]);
 

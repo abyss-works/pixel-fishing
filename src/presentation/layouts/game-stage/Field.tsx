@@ -1,14 +1,15 @@
 import type { PointerEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { FISH, RARITY, REJECT_TEXT, SPOTS, formName } from '../../../game/rules/logic';
+import { FISH, REJECT_TEXT, SPOTS } from '../../../game/rules/logic';
 import { boatGateText, nextBoatText } from '../../../game/content/boats';
 import type { GameState, Fish } from '../../../game/rules/logic';
 import type { GameAction } from '../../../game/rules/actions';
 import { when } from '../../../shared/lib/when';
 import { subscribeFailure } from '../../../core/errors';
 import { useKeyScope } from '../../ui/hotkeys';
-import { bagOverflowNotice } from '../../../features/gameplay/model/catchNotice';
+import { sendNotice } from '../../../features/display/model/toastPolicy';
+import { bagOverflowNoticeInput, classifyCatchNotice } from '../../../features/gameplay/model/catchNotice';
 import { useGameTime } from '../../../features/gameplay/service/useGameTime';
 import { useSchools } from '../../../features/gameplay/service/schoolDay';
 import { useFishArtStyle } from '../../../features/display/service/fishArtStyle';
@@ -59,51 +60,85 @@ interface Props {
   statusSlot?: HTMLElement | null;
 }
 
-function presentEvent(event: FieldEvent, setToast: Props['setToast'], boat: number): void {
+function presentEvent(event: FieldEvent, setToast: Props['setToast'], game: GameState, region: RegionId): void {
   switch (event.type) {
     case 'cast': {
       const spot = SPOTS.find(candidate => candidate.id === event.spot)!;
-      setToast(`${spot.name} 어군에 찌를 던졌어요.`);
+      sendNotice(setToast, {
+        kind: 'catch.cast',
+        text: `${spot.name} 어군에 찌를 던졌어요.`,
+      });
       return;
     }
     case 'cast-denied':
       if (event.reason === 'range') {
-        setToast('어군 가까이에서 찌를 던져 주세요.', 'warn');
+        sendNotice(setToast, {
+          kind: 'catch.castDenied',
+          text: '어군 가까이에서 찌를 던져 주세요.',
+          toastText: '어군 가까이서 던져 주세요.',
+          cooldownKey: 'cast-denied:range',
+        });
       } else {
         const spot = SPOTS.find(candidate => candidate.id === event.spot)!;
-        setToast(`${spot.name}에서 낚시하려면 배가 ${boatGateText(spot.boatTier)} 이상이어야 해요. ${nextBoatText(boat)}`, 'warn');
+        sendNotice(setToast, {
+          kind: 'catch.castDenied',
+          text: `${spot.name}에서 낚시하려면 배가 ${boatGateText(spot.boatTier)} 이상이어야 해요. ${nextBoatText(game.boat)}`,
+          toastText: `${spot.name} 배 단계가 부족해요.`,
+          cooldownKey: `cast-denied:boat:${spot.id}`,
+        });
       }
       return;
     case 'line-cut':
-      setToast('이 해역에서는 낚싯대 파워가 모자라요. 희귀한 물고기가 덜 걸리고 입질이 늦어져요. 작업대나 공방에서 낚싯대를 강화해 주세요.', 'warn');
+      sendNotice(setToast, {
+        kind: 'catch.lineCut',
+        text: '이 해역에서는 낚싯대 파워가 모자라요. 희귀한 물고기가 덜 걸리고 입질이 늦어져요. 작업대나 공방에서 낚싯대를 강화해 주세요.',
+        toastText: '낚싯대 파워가 모자라요.',
+        cooldownKey: `catch.lineCut:${getSpotState().zone ?? region}`,
+      });
       return;
     case 'movement-cancelled':
-      setToast('낚시를 접고 이동해요.');
+      sendNotice(setToast, {
+        kind: 'catch.movementCancelled',
+        text: '낚시를 접고 이동해요.',
+      });
       return;
     case 'catch-rejected':
-      setToast(REJECT_TEXT[event.reason], 'warn');
+      sendNotice(setToast, {
+        kind: 'catch.rejected',
+        text: REJECT_TEXT[event.reason],
+      });
       return;
     case 'catch': {
       if (event.result.ticket) {
-        setToast('흔적을 찾았어요. 화면 오른쪽 흔적 카드에서 추적을 눌러 보세요.');
+        sendNotice(setToast, {
+          kind: 'catch.encounterTicket',
+          text: '흔적을 찾았어요. 화면 오른쪽 흔적 카드에서 추적을 눌러 보세요.',
+          toastText: '네임드 흔적을 발견했어요.',
+          tone: 'epic',
+          logTone: 'info',
+        });
         alertEncounter(event.result.ticket);
       }
       const caught = FISH.find(candidate => candidate.id === event.result.fishId)!;
-      // 판정은 대괄호 꼬리표로 앞에 붙인다(화면 문구에 가운뎃점을 쓰지 않는다)
-      const prefix = event.judgment === 'perfect' ? '[PERFECT] '
-        : event.judgment === 'good' ? '[GOOD] '
-        : event.judgment === 'auto' ? '[방치] ' : '';
-      setToast(`${prefix}${RARITY[caught.rarity].name} 등급 [${formName(caught, event.result.info.form)}] 획득!`, 'gold');
-      const overflow = bagOverflowNotice(event.result);
-      if (overflow) setToast(overflow);
+      const prevDexEntry = game.dex[caught.id]?.[event.result.info.form];
+      sendNotice(setToast, classifyCatchNotice(caught, event.result.info, event.judgment, prevDexEntry));
+      const overflow = bagOverflowNoticeInput(event.result);
+      if (overflow) sendNotice(setToast, overflow);
       return;
     }
     case 'zone-blocked':
     case 'trigger-blocked':
-      setToast(event.message, 'warn');
+      sendNotice(setToast, {
+        kind: 'travel.blocked',
+        text: event.message,
+        cooldownKey: `travel.blocked:${event.type}`,
+      });
       return;
     case 'zone-entered':
-      setToast(`${zoneById(event.zone)!.name}에 들어섰어요.`);
+      sendNotice(setToast, {
+        kind: 'travel.routineMove',
+        text: `${zoneById(event.zone)!.name}에 들어섰어요.`,
+      });
       return;
   }
 }
@@ -162,14 +197,14 @@ export default function Field({
       },
       onEvent: event => {
         if (event.type === 'guest-blocked') onGuestBlocked?.();
-        else presentEvent(event, setToast, game.boat);
+        else presentEvent(event, setToast, game, region);
       },
       onScene,
       onWarmup,
       guest,
     };
     engine.updateContext(game, dayPhaseNow === 'night', callbacks);
-  }, [engine, game, dayPhaseNow, dispatch, setToast, onScene, onWarmup, guest, onGuestBlocked]);
+  }, [engine, region, game, dayPhaseNow, dispatch, setToast, onScene, onWarmup, guest, onGuestBlocked]);
 
   useEffect(() => { engine.setSchools(schools); }, [engine, schools]);
 

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { GUEST_LOCK_TEXT, guestLock } from '../../../../features/display/model/menuLock';
+import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import { accountLockState } from '../../../../features/account/service/accountActions';
 import { FRIEND_ERROR_TEXT, friendRelation } from '../../../../features/friends/model/friends';
 import { useFriends } from '../../../../features/friends/service/useFriends';
@@ -74,9 +75,9 @@ export function PlayerInfo({ target, self, account, accountFailed = false, setTo
     setBusy(true);
     try {
       const warn = await work();
-      if (warn) setToast(warn, 'warn');
+      if (warn) sendNotice(setToast, { kind: 'system.modalRejected', text: warn });
     } catch {
-      setToast('요청을 보내지 못했어요. 연결을 확인해 주세요.', 'warn');
+      sendNotice(setToast, { kind: 'system.modalRejected', text: '요청을 보내지 못했어요. 연결을 확인해 주세요.' });
     } finally {
       setBusy(false);
     }
@@ -84,21 +85,34 @@ export function PlayerInfo({ target, self, account, accountFailed = false, setTo
   const befriend = (op: 'request' | 'accept') => run(async () => {
     const r = await friends.act(op === 'request' ? { op, nickname: name } : { op, uid: target.uid });
     if (!r.ok) return FRIEND_ERROR_TEXT[r.error] ?? '요청을 처리하지 못했어요. 잠시 뒤 다시 해 주세요.';
-    setToast(r.result === 'requested' ? `${name} 님에게 친구 요청을 보냈어요.`
-      : r.result === 'already' ? `${name} 님과는 이미 친구이거나 요청 중이에요.` : `${name} 님과 친구가 됐어요.`);
+    sendNotice(setToast, {
+      kind: 'social.modalAction',
+      text: r.result === 'requested' ? `${name} 님에게 친구 요청을 보냈어요.`
+        : r.result === 'already' ? `${name} 님과는 이미 친구이거나 요청 중이에요.` : `${name} 님과 친구가 됐어요.`,
+      toastText: r.result === 'requested' ? `${name} 님 친구 요청 전송`
+        : r.result === 'already' ? '이미 친구이거나 요청 중' : `${name} 님과 친구 성사`,
+    });
     return null;
   });
   const block = (op: 'block' | 'unblock') => run(async () => {
     const error = await (op === 'block' ? moderation.block(target.uid) : moderation.unblock(target.uid));
     if (error) return BLOCK_ERROR_TEXT[error];
-    setToast(op === 'block' ? `${name} 님을 차단했어요. 이 사람의 채팅이 보이지 않아요.` : `${name} 님의 차단을 풀었어요.`);
+    sendNotice(setToast, {
+      kind: 'social.modalAction',
+      text: op === 'block' ? `${name} 님을 차단했어요. 이 사람의 채팅이 보이지 않아요.` : `${name} 님의 차단을 풀었어요.`,
+      toastText: op === 'block' ? `${name} 님 차단 완료` : `${name} 님 차단 해제`,
+    });
     return null;
   });
   const report = (chatId: number) => run(async () => {
     const error = await moderation.report(chatId);
     if (error) return BLOCK_ERROR_TEXT[error];
     setReported(true);
-    setToast('신고했어요. 운영자가 확인할게요.');
+    sendNotice(setToast, {
+      kind: 'social.modalAction',
+      text: '신고했어요. 운영자가 확인할게요.',
+      toastText: '채팅 신고를 접수했어요.',
+    });
     return null;
   });
 

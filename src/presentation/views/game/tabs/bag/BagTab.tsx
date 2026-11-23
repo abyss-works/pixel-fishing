@@ -8,6 +8,7 @@ import type { Notify } from '../../../../ui/hud/messageFeed';
 import { EXHIBIT_SLOTS } from '../../../../../game/rules/balance';
 import { selectBagOverview } from '../../../../../features/inventory/model/selectors';
 import type { AccountLockState } from '../../../../../features/display/model/menuLock';
+import { sendNotice } from '../../../../../features/display/model/toastPolicy';
 import type { FishInstance, GameState } from '../../../../../game/rules/logic';
 import type { GameAction } from '../../../../../game/rules/actions';
 import { when } from '../../../../../shared/lib/when';
@@ -171,27 +172,34 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
   const lock = (uids: string[], locked: boolean, label: string) =>
     when(dispatch({ type: 'setLocked', uids, locked }), r => {
       if (r.status !== 'ok') return;
-      setToast(locked
-        ? `${josa(label, '을/를')} 잠갔어요. 판매와 기운 얻기에서 빠져요.`
-        : `${label}의 잠금을 풀었어요. 다시 고를 수 있어요.`);
+      sendNotice(setToast, {
+        kind: 'bag.lockChanged',
+        text: locked
+          ? `${josa(label, '을/를')} 잠갔어요. 판매와 기운 얻기에서 빠져요.`
+          : `${label}의 잠금을 풀었어요. 다시 고를 수 있어요.`,
+      });
     });
 
   // 전시대 — 칸 선택은 freeExhibitSlot(가장 앞 빈 칸)이 대신한다. 다 찼으면 요청 없이 안내만.
   const exhibitTo = (inst: FishInstance, name: string) => {
     const slot = freeExhibitSlot(game.exhibit);
     if (slot === null) {
-      setToast('전시대가 가득 찼어요. 먼저 한 마리를 회수해 주세요.', 'warn');
+      sendNotice(setToast, {
+        kind: 'system.modalRejected',
+        text: '전시대가 가득 찼어요. 먼저 한 마리를 회수해 주세요.',
+        toastText: '전시대가 가득 찼어요.',
+      });
       return;
     }
     when(dispatch({ type: 'exhibit', uid: inst.uid, slot }), r => {
-      if (r.status === 'ok') setToast(`${josa(name, '을/를')} 진열했어요. 전시 중에는 팔리지 않아요.`);
-      else if (r.status === 'rejected') setToast(REJECT_TEXT[r.error], 'warn');
+      if (r.status === 'ok') sendNotice(setToast, { kind: 'bag.exhibitMoved', text: `${josa(name, '을/를')} 진열했어요. 전시 중에는 팔리지 않아요.` });
+      else if (r.status === 'rejected') sendNotice(setToast, { kind: 'system.modalRejected', text: REJECT_TEXT[r.error] });
     });
   };
   const withdraw = (inst: FishInstance, name: string) =>
     when(dispatch({ type: 'exhibit', uid: inst.uid, slot: null }), r => {
-      if (r.status === 'ok') setToast(`${josa(name, '이/가')} 가방으로 돌아왔어요.`);
-      else if (r.status === 'rejected') setToast(REJECT_TEXT[r.error], 'warn');
+      if (r.status === 'ok') sendNotice(setToast, { kind: 'bag.exhibitMoved', text: `${josa(name, '이/가')} 가방으로 돌아왔어요.` });
+      else if (r.status === 'rejected') sendNotice(setToast, { kind: 'system.modalRejected', text: REJECT_TEXT[r.error] });
     });
 
   // 자동 잠금 — 어종×폼(일반/돌연변이)마다 가장 큰 1마리만 잠긴 상태로 맞춘다(logic.autoLockPlan).
@@ -199,7 +207,10 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
   // 서버가 현재 가방으로 계획을 다시 계산한다. 변할 게 없으면 요청 없이 안내만.
   const autoLock = () => {
     if (autoLockPlan.lock.length === 0 && autoLockPlan.unlock.length === 0) {
-      setToast('정리할 잠금이 없어요. 어종마다 가장 큰 물고기만 잠겨 있어요.');
+      sendNotice(setToast, {
+        kind: 'bag.lockChanged',
+        text: '정리할 잠금이 없어요. 어종마다 가장 큰 물고기만 잠겨 있어요.',
+      });
       return;
     }
     setLockConfirm(true);
@@ -209,9 +220,12 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
     setLockConfirm(false);
     when(dispatch({ type: 'autoLock' }), r => {
       if (r.status !== 'ok') return;
-      setToast(unlock.length === 0
-        ? `가장 큰 물고기 ${lock.length}마리를 잠갔어요.`
-        : `가장 큰 물고기만 남기고 정리했어요. ${lock.length}마리를 잠그고 ${unlock.length}마리의 잠금을 풀었어요.`);
+      sendNotice(setToast, {
+        kind: 'bag.lockChanged',
+        text: unlock.length === 0
+          ? `가장 큰 물고기 ${lock.length}마리를 잠갔어요.`
+          : `가장 큰 물고기만 남기고 정리했어요. ${lock.length}마리를 잠그고 ${unlock.length}마리의 잠금을 풀었어요.`,
+      });
     });
   };
 

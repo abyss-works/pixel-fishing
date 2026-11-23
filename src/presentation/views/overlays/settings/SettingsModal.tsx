@@ -2,6 +2,8 @@ import { useRef, useState } from 'react';
 import { SETTING_PROMPTS } from '../../../../features/announcements/model/whatsNew';
 import { useAlertSettings } from '../../../../features/bounty/service/encounterAlert';
 import type { AlertToggle } from '../../../../features/bounty/service/encounterAlert';
+import { setToastEnabled, useToastEnabled } from '../../../../features/display/service/toastEnabled';
+import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import type { GameAction } from '../../../../game/rules/actions';
 import { REJECT_TEXT } from '../../../../game/rules/rules';
@@ -20,6 +22,7 @@ const AUTO_LOCK_HINT = '어종과 돌연변이별로 더 큰 물고기를 낚으
 const DENIED_REASON = '브라우저가 이 사이트의 알림을 막았어요.\n주소창 왼쪽의 사이트 설정에서 알림을 허용하면 켤 수 있어요.';
 const UNSUPPORTED_REASON = '이 브라우저는 알림을 지원하지 않아요.';
 const DENIED_TOAST = '브라우저가 알림을 막았어요. 주소창의 사이트 설정에서 허용할 수 있어요.';
+const FLOATING_TOAST_HINT = '중요한 획득, 업적, 의뢰, 길드 알림을 화면 아래 1줄 토스트로 함께 띄워요.\n꺼도 메시지 창 기록은 그대로 남아요.';
 
 function AlertRow({ label, hint, toggle, blockedReason, setToast }: {
   label: string;
@@ -33,7 +36,13 @@ function AlertRow({ label, hint, toggle, blockedReason, setToast }: {
     <ToggleChip pressed={toggle.active} disabled={blockedReason !== null} aria-label={label}
                 onClick={() => {
                   if (toggle.active) { toggle.disable(); return; }
-                  void toggle.enable().then(ok => { if (!ok) setToast(DENIED_TOAST, 'warn'); });
+                  void toggle.enable().then(ok => {
+                    if (!ok) sendNotice(setToast, {
+                      kind: 'system.modalRejected',
+                      text: DENIED_TOAST,
+                      toastText: '브라우저 알림이 막혀 있어요.',
+                    });
+                  });
                 }}>
       {toggle.active ? '켜짐' : '꺼짐'}
     </ToggleChip>
@@ -53,6 +62,7 @@ export default function SettingsModal({ autoLockOnCatch, dispatch, setToast, onC
   onClose: () => void;
 }) {
   const { permission, encounter, update } = useAlertSettings();
+  const toastEnabled = useToastEnabled();
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const blockedReason = permission === 'denied' ? DENIED_REASON : permission === 'unsupported' ? UNSUPPORTED_REASON : null;
@@ -65,7 +75,7 @@ export default function SettingsModal({ autoLockOnCatch, dispatch, setToast, onC
     const finish = () => { busyRef.current = false; setBusy(false); };
     const handle = (r: DispatchResult) => {
       finish();
-      if (r.status === 'rejected') setToast(REJECT_TEXT[r.error], 'warn');
+      if (r.status === 'rejected') sendNotice(setToast, { kind: 'system.modalRejected', text: REJECT_TEXT[r.error] });
     };
     const res = dispatch({ type: 'setAutoLockOnCatch', on: !autoLockOnCatch });
     if (res instanceof Promise) {
@@ -91,6 +101,15 @@ export default function SettingsModal({ autoLockOnCatch, dispatch, setToast, onC
       </Inset>
       <SectionTitle>알림</SectionTitle>
       <Inset divided>
+        <KeyValueRow
+          label={<Tip text={FLOATING_TOAST_HINT}>주요 알림 플로팅 토스트</Tip>}
+          value=""
+          action={(
+            <ToggleChip pressed={toastEnabled} aria-label="주요 알림 플로팅 토스트" onClick={() => setToastEnabled(!toastEnabled)}>
+              {toastEnabled ? '켜짐' : '꺼짐'}
+            </ToggleChip>
+          )}
+        />
         <AlertRow label="네임드 조우" hint={`네임드의 흔적을 만나면 알려 줘요.\n${hint}`} toggle={encounter}
                   blockedReason={blockedReason} setToast={setToast} />
         <AlertRow label="업데이트" hint={`새 버전이 나와 진행이 멈추면 알려 줘요.\n${hint}`} toggle={update}

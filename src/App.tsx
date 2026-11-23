@@ -12,6 +12,7 @@ import { settleAction, useGame } from './features/gameplay/service/useGame';
 import { useAccount } from './features/account/service/useAccount';
 import { useLastPosition } from './features/gameplay/service/useLastPosition';
 import { useMessageLog } from './presentation/layouts/hud/useMessageLog';
+import { sendNotice } from './features/display/model/toastPolicy';
 import { useDialogs } from './presentation/ui/useDialogs';
 import GameView from './presentation/views/game/GameView';
 import UpdateModal from './presentation/views/overlays/update/UpdateModal';
@@ -35,10 +36,13 @@ function sceneOf(location: LocationRef): SceneRef {
 const DEV_ENV = devEnvOf(DEPLOY_ENV);
 
 function AppContent() {
-  const { log, setToast, toasts, dismissToast } = useMessageLog([
+  const { log, setToast, toasts, dismissToast, setMirrorEnv } = useMessageLog([
     '집이에요. 가구를 눌러 정비하고, 문으로 나가 마을 물가에서 낚시해 보세요.',
   ]);
   const { game, dispatch, nickname, devTools, rename, sync, syncLabel, blocker, loading, guestProgress, recheckGuestProgress, adoptAccount, warmup, resync } = useGame({ setToast });
+  useEffect(() => {
+    setMirrorEnv({ blocked: blocker !== null, loading });
+  }, [blocker, loading, setMirrorEnv]);
   const { input, dialogs } = useDialogs();
   const { account, accountChecked, accountFailed, uid, onAuthChanged } = useAccount({
     game, setToast, adoptAccount,
@@ -76,11 +80,11 @@ ${min}자 이상이어야 해요.`,
     const from = { scene, entryPos: returnPos ?? entryPos };
     const back = () => place(from.scene, from.entryPos ?? undefined);
     place(nextScene, position);
-    setToast(message);
+    sendNotice(setToast, { kind: 'travel.routineMove', text: message });
     void settleAction(() => dispatch({ type: 'travel', to: nextScene })).then(settled => {
       if (settled.ok) return;
       back();
-      if (settled.notice) setToast(settled.notice, 'warn');
+      if (settled.notice) sendNotice(setToast, { kind: 'travel.blocked', text: settled.notice, cooldownKey: 'travel.blocked:go' });
     });
   };
 
@@ -90,11 +94,11 @@ ${min}자 이상이어야 해요.`,
     place(nextScene);
     const settled = await settleAction(() => dispatch({ type: 'travel', to: nextScene }));
     if (settled.ok) {
-      setToast(`${BASE_PACKS[base].name}으로 순간이동했어요.`);
+      sendNotice(setToast, { kind: 'travel.routineMove', text: `${BASE_PACKS[base].name}으로 순간이동했어요.` });
       return true;
     }
     place(from.scene, from.entryPos ?? undefined);
-    if (settled.notice) setToast(settled.notice, 'warn');
+    if (settled.notice) sendNotice(setToast, { kind: 'travel.blocked', text: settled.notice, cooldownKey: 'travel.blocked:tp-base' });
     return false;
   };
 
@@ -104,7 +108,12 @@ ${min}자 이상이어야 해요.`,
     const zone = topZoneOfSpot(spotId);
     const reqBoat = Math.max(spot.boatTier, (zone && zoneById(zone)?.entryBoat) ?? 0);
     if (game.boat < reqBoat) {
-      setToast(`${spot.name} 해역에는 ${boatGateText(reqBoat)}이 필요해요.`, 'warn');
+      sendNotice(setToast, {
+        kind: 'travel.blocked',
+        text: `${spot.name} 해역에는 ${boatGateText(reqBoat)}이 필요해요.`,
+        toastText: `${spot.name} 배 단계가 부족해요.`,
+        cooldownKey: `travel.blocked:tp:${spotId}`,
+      });
       return false;
     }
     const region = spotId === 'pond' || spotId === 'river' ? 'village' : 'world';
@@ -126,11 +135,11 @@ ${min}자 이상이어야 해요.`,
     if (settled.ok) {
       const reqRod = minLevelOfPower(spot.powerReq ?? 0);
       const rodHint = game.rod < reqRod ? ` (권장 낚싯대 Lv.${reqRod})` : '';
-      setToast(`${spot.name} 해역으로 순간이동했어요.${rodHint}`);
+      sendNotice(setToast, { kind: 'travel.routineMove', text: `${spot.name} 해역으로 순간이동했어요.${rodHint}` });
       return true;
     }
     place(from.scene, from.entryPos ?? undefined);
-    if (settled.notice) setToast(settled.notice, 'warn');
+    if (settled.notice) sendNotice(setToast, { kind: 'travel.blocked', text: settled.notice, cooldownKey: 'travel.blocked:tp-spot' });
     return false;
   };
 
@@ -141,7 +150,7 @@ ${min}자 이상이어야 해요.`,
     <>
       <GameView
         game={game} scene={scene} entryPos={entryPos} placeSeq={placeSeq}
-        dispatch={dispatch} setToast={setToast} toasts={toasts} onDismissToast={dismissToast} onScene={go} onPlace={place} onWarmup={warmup}
+        dispatch={dispatch} setToast={setToast} toasts={toasts} onDismissToast={dismissToast} onMirrorEnv={setMirrorEnv} onScene={go} onPlace={place} onWarmup={warmup}
         log={log} syncLabel={syncLabel} syncState={sync} guestProgress={guestProgress} recheckGuestProgress={recheckGuestProgress}
         account={account} accountChecked={accountChecked} accountFailed={accountFailed} uid={uid} nickname={nickname}
         onRename={rename} onAuthChanged={onAuthChanged} onResync={resync} blocker={blocker === 'update' ? <UpdateModal /> : blocker === 'replaced' ? <SessionReplacedModal /> : blocker === 'unsaved' ? <UnsavedModal /> : loading ? <LoadingOverlay /> : null}

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { GUILD_MAX_MEMBERS } from '../../../../game/rules/guild';
 import type { ArtifactHolder } from '../../../../game/rules/artifactLevel';
 import { GUILD_LEVEL_HELP, GUILD_ERROR_TEXT, growthBar, growthTotalText, splitMembers } from '../../../../features/guild/model/guild';
+import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import type { GuildConfirm, GuildInfo, GuildOp } from '../../../../features/guild/model/guild';
 import { useGuild } from '../../../../features/guild/service/useGuild';
 import ConfirmDialog from '../../../ui/ConfirmDialog';
@@ -99,7 +100,10 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
                        onConfirm={() => {
                          const c = confirm;
                          setConfirm(null);
-                         void run(c.op).then(error => setToast(error ?? c.done, error ? 'warn' : 'info'));
+                         void run(c.op).then(error => {
+                           if (error) sendNotice(setToast, { kind: 'system.modalRejected', text: error });
+                           else sendNotice(setToast, { kind: 'guild.modalAction', text: c.done });
+                         });
                        }}>
           <p className="text-sm whitespace-pre-line">{confirm.text}</p>
         </ConfirmDialog>

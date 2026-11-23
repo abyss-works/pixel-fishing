@@ -13,10 +13,14 @@ export type GlyphId =
   | 'letter' | 'key' | 'ticket' | 'download' | 'upload' | 'exit' | 'close'
   | 'plus' | 'minus'
   | 'compass' | 'backpack' | 'book' | 'question' | 'gear' | 'people' | 'flag'
-  | 'crown' | 'sparkle' | 'menu' | 'lunch' | 'bait'
+  | 'crown' | 'sparkle' | 'warn' | 'menu' | 'lunch' | 'bait'
   | 'clock' | 'target' | 'gem';
 
 const GLYPHS: Record<GlyphId, { cells: Cell[]; holes?: Cell[] }> = {
+  // 경고 — 느낌표 삼각 기둥 + 점
+  warn: {
+    cells: [[5, 1, 2, 7], [5, 9, 2, 2], [3, 3, 2, 5], [7, 3, 2, 5], [1, 6, 2, 3], [9, 6, 2, 3]],
+  },
   // 도시락 — 뚜껑과 몸통 사이 띠, 가운데 이음쇠 (도시락 슬롯)
   lunch: {
     cells: [[1, 3, 10, 1], [1, 4, 1, 7], [10, 4, 1, 7], [1, 10, 10, 1], [2, 1, 8, 2], [5, 5, 2, 4], [2, 7, 8, 1]],

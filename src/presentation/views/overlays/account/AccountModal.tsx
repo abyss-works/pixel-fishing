@@ -10,6 +10,7 @@ import {
 import { useLoginMethod } from '../../../../features/account/service/useLoginMethod';
 import { emailSignInFailureLines, GOOGLE_BUTTON_LABEL, googleStartFailedText, LEGAL_PATHS } from '../../../../features/account/model/googleFlow';
 import { ACCOUNT_CHECK_FAILED_COPY, MIN_PASSWORD_LENGTH, accountLabel, passwordLongEnough, type GuestProgress } from '../../../../features/account/model/accountRules';
+import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import Button from '../../../ui/Button';
 import Divider from '../../../ui/Divider';
 import ExternalLink from '../../../ui/ExternalLink';
@@ -76,13 +77,20 @@ export default function AccountModal({
   const connect = async () => {
     setBusy(true);
     const r = await connectGoogle(guest ? 'guest' : 'email');
-    if (!r.ok) { setToast(googleStartFailedText, 'warn'); setBusy(false); }
+    if (!r.ok) { sendNotice(setToast, { kind: 'system.modalRejected', text: googleStartFailedText, toastText: '구글 계정 화면 열기 실패' }); setBusy(false); }
   };
 
   // 이미 있는 이메일 계정으로 로그인 - 계정 교체라 이 기기의 게스트 진행은 사라진다. 버릴 진행이 있으면 확인을 받은 뒤에만 로그인한다.
   const emailSignIn = () => run(async () => {
     setSignInError([]);
-    if (!email.trim() || !passwordLongEnough(pw)) { setToast(`이메일과 ${MIN_PASSWORD_LENGTH}자 이상의 비밀번호를 입력해 주세요.`, 'warn'); return; }
+    if (!email.trim() || !passwordLongEnough(pw)) {
+      sendNotice(setToast, {
+        kind: 'system.modalRejected',
+        text: `이메일과 ${MIN_PASSWORD_LENGTH}자 이상의 비밀번호를 입력해 주세요.`,
+        toastText: '이메일과 비밀번호를 확인하세요.',
+      });
+      return;
+    }
     // 건너뛰기로 판정했어도 이 탭의 상태는 낡았을 수 있어, 요청 직전에 서버 저장 상태로 한 번 더 판정한다
     const saved = guestProgress === 'nothing' ? await recheckGuestProgress() : guestProgress;
     if (!mounted.current) return;
@@ -98,10 +106,28 @@ export default function AccountModal({
   });
 
   const reset = () => run(async () => {
-    if (!email.trim()) { setToast('비밀번호를 재설정할 이메일을 입력해 주세요.', 'warn'); return; }
+    if (!email.trim()) {
+      sendNotice(setToast, {
+        kind: 'system.modalRejected',
+        text: '비밀번호를 재설정할 이메일을 입력해 주세요.',
+        toastText: '이메일을 입력해 주세요.',
+      });
+      return;
+    }
     const r = await requestAccountPasswordReset(email.trim());
-    if (r.ok) setToast('재설정 메일을 보냈어요. 받은편지함을 확인해 주세요.');
-    else setToast(`메일을 보내지 못했어요. ${r.msg}`, 'warn');
+    if (r.ok) {
+      sendNotice(setToast, {
+        kind: 'social.modalAction',
+        text: '재설정 메일을 보냈어요. 받은편지함을 확인해 주세요.',
+        toastText: '재설정 메일을 보냈어요.',
+      });
+    } else {
+      sendNotice(setToast, {
+        kind: 'system.modalRejected',
+        text: `메일을 보내지 못했어요. ${r.msg}`,
+        toastText: '재설정 메일 전송 실패',
+      });
+    }
   });
 
   const signOut = async () => {
@@ -118,9 +144,23 @@ export default function AccountModal({
       label: '확인 문구', placeholder: '삭제', confirmLabel: '계정 삭제',
     });
     if (typed === null) return;
-    if (typed.trim() !== '삭제') { setToast('확인 문구가 달라 삭제하지 않았어요.', 'warn'); return; }
+    if (typed.trim() !== '삭제') {
+      sendNotice(setToast, {
+        kind: 'system.modalRejected',
+        text: '확인 문구가 달라 삭제하지 않았어요.',
+        toastText: '확인 문구가 일치하지 않아요.',
+      });
+      return;
+    }
     const r = await deleteAccount();
-    if (!r.ok) { setToast(`계정을 삭제하지 못했어요. ${r.msg}`, 'warn'); return; }
+    if (!r.ok) {
+      sendNotice(setToast, {
+        kind: 'system.modalRejected',
+        text: `계정을 삭제하지 못했어요. ${r.msg}`,
+        toastText: '계정 삭제에 실패했어요.',
+      });
+      return;
+    }
     window.location.reload(); // 재부팅 = 새 익명 세션으로 처음부터 시작
   });
 
