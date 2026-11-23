@@ -620,7 +620,7 @@ describe('UI 시스템 가드', () => {
     expect(OK_STATUS_COLOR.test('text-accent border-gold')).toBe(false);
   });
 
-  // v3 가드 — 게임 화면과 공용 UI는 둥근 모서리(예외 제외), 완료/잠금 opacity 흐림, 네이티브 title, PillButton,
+  // UI 규칙 가드 — 게임 화면과 공용 UI는 둥근 모서리(예외 제외), 완료/잠금 opacity 흐림, 네이티브 title, PillButton,
   // 2px 두꺼운 테두리·베벨, 가운뎃점·대시([·—–])를 쓰지 않는다 (admin/devtools 제외)
   const isGameUi = (p: string) =>
     p.startsWith('ui/') || p.startsWith('layouts/') || p.startsWith('views/game/') || p.startsWith('views/overlays/');
@@ -628,8 +628,8 @@ describe('UI 시스템 가드', () => {
 
   const ROUNDED_RE = /\brounded-(?:sm|md|lg|full|\[[^\]]+\])\b/;
   const ROUNDED_EXCEPTIONS = new Set([
-    'ui/TooltipBubble.tsx',                   // DESIGN.md 예외: 툴팁 버블
-    'ui/hud/Minimap.tsx',                     // DESIGN.md 예외: 미니맵 지도 틀
+    'ui/TooltipBubble.tsx',                   // 예외: 툴팁 버블
+    'ui/hud/Minimap.tsx',                     // 예외: 미니맵 지도 틀
     'ui/GoogleButton.tsx',                    // Google 브랜드 가이드라인 버튼
     'ui/PillButton.tsx',                      // admin/devtools 전용 잔존 유틸 (게임 화면에서 금지)
     'layouts/game-stage/MovePad.tsx',         // 터치 조이스틱 원형 패드
