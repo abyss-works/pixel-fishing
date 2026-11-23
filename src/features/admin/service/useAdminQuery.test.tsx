@@ -37,6 +37,25 @@ describe('useAdminRefresh', () => {
     // access 조회는 재조회 대상에서 빠진다
     expect(readAccess).toHaveBeenCalledTimes(1);
     expect(readActive).toHaveBeenCalledTimes(2);
+
+    // 짧은 쿨다운 안의 연타 새로고침은 중복 발사하지 않는다
+    act(() => result.current.refresh.refresh());
+    expect(readActive).toHaveBeenCalledTimes(2);
+  });
+
+  it('동일한 adminKeys.users를 쓰는 두 훅이 마운트돼도 staleTime 동안 중복 요청을 보내지 않는다', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const readUsers = vi.fn(async () => ['u1']);
+    const wrapper = wrapperWith(client);
+
+    const first = renderHook(() => useAdminQuery(adminKeys.users, readUsers, true), { wrapper });
+    await waitFor(() => expect(first.result.current.data).toEqual(['u1']));
+    expect(readUsers).toHaveBeenCalledTimes(1);
+    first.unmount();
+
+    const second = renderHook(() => useAdminQuery(adminKeys.users, readUsers, true), { wrapper });
+    expect(second.result.current.data).toEqual(['u1']);
+    expect(readUsers).toHaveBeenCalledTimes(1);
   });
 
   it('활성 데이터 조회가 없어도 오류 없이 새로고침을 마친다', () => {

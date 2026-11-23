@@ -1,13 +1,14 @@
 import type { BaseId } from '../../../game/content/places';
-import { zoneById } from '../../../game/content/zones';
+import { BOUNTY_ZONES } from '../../../game/content/bounties';
+import { ZONES, zoneById } from '../../../game/content/zones';
 import type { ZoneId } from '../../../game/content/zones';
 
 // 관리자 화면의 지역 표기 공용 — 실시간·진행·명부 탭이 함께 쓴다.
 // 단일 근원은 월드 진입점(BASE_PACKS·RegionPack.name)이지만, 그쪽 import는 마스크 데이터
 // 수백 KB를 번들로 끌어온다. 관리자 화면을 위해 이름 표기만 콘텐츠({places, zones})와
 // 리터럴 미러로 두고 world.mask는 참조하지 않는다.
-// 'world' = 병합 바다(오픈월드 Phase 3). 구 ocean/seasia/indian 등은 구세이브 location·visited
-// 표기와 도달 퍼널(진행 데이터)에 여전히 필요하다.
+// 'world' = 병합 바다(오픈월드). 구세이브 location 표기를 위해 구 지역명 키는 REGION_NAMES에만 유지하고
+// 진행 퍼널 순서(REGION_ORDER)에는 현행 오픈월드 지역('village', 'world')만 둔다.
 export const REGION_NAMES: Record<string, string> = {
   village: '마을',
   world: '대양',
@@ -19,10 +20,19 @@ export const REGION_NAMES: Record<string, string> = {
   northatlantic: '북대서양',
 };
 
-/** 도달 퍼널·위치 분포 순서 — 구 지역 순서 + 병합 바다. */
-export const REGION_ORDER = [
-  'village', 'ocean', 'seasia', 'indian', 'madagascar', 'southatlantic', 'northatlantic', 'world',
-] as const;
+/** 현행 오픈월드 진행 방문 순서(visited 기준) — 폐지된 구 바다 6개는 포함하지 않는다. */
+export const REGION_ORDER = ['village', 'world'] as const;
+
+const BOUNTY_ZONE_SET = new Set<string>(BOUNTY_ZONES);
+
+/** 현행 오픈월드 최상위 존과 수배 해금 기준 — 진행 구역 해금 막대의 단일 출처 */
+export const OPEN_WORLD_ZONE_UNLOCKS = ZONES.filter(z => !z.parent).map(z => ({
+  id: z.id,
+  name: z.shortName,
+  fullName: z.name,
+  entryBoat: z.entryBoat ?? (z.id === 'village' ? 0 : 1),
+  hasBounty: BOUNTY_ZONE_SET.has(z.id),
+}));
 
 /** 거점 id → 한글 표시명 */
 export const BASE_NAMES: Record<BaseId, string> = {

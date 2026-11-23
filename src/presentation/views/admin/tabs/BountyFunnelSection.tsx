@@ -33,7 +33,7 @@ export default function BountyFunnelSection({ granted }: { granted: boolean }) {
   const { totals, duelRate, winRate, unresolved } = useMemo(() => selectBountyFunnel(rows), [rows]);
 
   return (
-    <Cell title={`바운티 퍼널 (최근 ${DAYS}일)`} className="xl:col-span-2" flush divided>
+    <Cell title={`바운티 퍼널 (최근 ${DAYS}일, 이벤트 보관 한도)`} className="xl:col-span-2" flush divided>
       {((loading && granted) || error) && (
         <div className="px-3 py-2">
           <TabState loading={loading && granted} error={error} onRetry={refresh} />
@@ -41,13 +41,13 @@ export default function BountyFunnelSection({ granted }: { granted: boolean }) {
       )}
       <KeyValueRow label="네임드 수주" value={total(fmtNum(totals.named_accepts))} />
       <KeyValueRow label="흔적 발급" value={total(fmtNum(totals.tickets), `결투까지 ${pct(duelRate)}`)} />
-      <KeyValueRow label="결투 승·패"
-                   value={total(`${fmtNum(totals.duels_won)} · ${fmtNum(totals.duels_lost)}`, `승률 ${pct(winRate)}`)} />
+      <KeyValueRow label="결투 승 / 패"
+                   value={total(`${fmtNum(totals.duels_won)} / ${fmtNum(totals.duels_lost)}`, `승률 ${pct(winRate)}`)} />
       <KeyValueRow label="결투 없이 남은 흔적" value={total(fmtNum(unresolved), '진행 중이거나 만료됐어요')} />
-      <KeyValueRow label="일반 수주 · 납품"
-                   value={total(`${fmtNum(totals.general_accepts)} · ${fmtNum(totals.general_rewards)}`)} />
+      <KeyValueRow label="일반 수주 / 납품"
+                   value={total(`${fmtNum(totals.general_accepts)} / ${fmtNum(totals.general_rewards)}`)} />
       {rows.length === 0 ? (
-        <Note size="2xs" className="my-0 px-3 py-2">기간 안에 바운티 이벤트가 없어요.</Note>
+        <Note size="2xs" className="my-0 px-3 py-2">최근 7일(이벤트 보관 한도) 안에 바운티 이벤트가 없어요.</Note>
       ) : (
         <div className="overflow-x-auto px-1 py-1">
           <DataTable>
@@ -75,7 +75,7 @@ export default function BountyFunnelSection({ granted }: { granted: boolean }) {
         </div>
       )}
       <Note size="2xs" className="my-0 px-3 py-2">
-        이벤트는 7일이 지나면 콜드 아카이브로 옮겨져서 이 표에서 빠져요.
+        events 표는 7일이 지나면 콜드 아카이브로 옮겨져 최근 7일(이벤트 보관 한도)만 집계해요.
       </Note>
     </Cell>
   );

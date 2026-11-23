@@ -25,17 +25,27 @@ describe('관리자 화면 파생 데이터', () => {
     expect(metrics).toEqual({ restrictedCount: 1, spamUsers: 1, riskTotal: 2 });
   });
 
-  it('진행 대시보드에서 분포·방문·다음 배 명성 부족을 만든다', () => {
+  it('진행 대시보드에서 분포·방문·오픈월드 존 해금·다음 배 명성 부족을 만든다', () => {
     const data = selectProgressionDashboard([
       user({ boat: 0, fame: 0, visited: ['village'] }),
-      user({ user_id: 'user-2', boat: 1, fame: 100, rod: 3, visited: ['world'] }),
+      user({ user_id: 'user-2', boat: 3, fame: 100, rod: 3, visited: ['village', 'world'] }),
     ]);
 
     expect(data.boatHist.values[0]).toBe(1);
-    expect(data.boatHist.values[1]).toBe(1);
+    expect(data.boatHist.values[3]).toBe(1);
     expect(data.rodHist).toMatchObject({ values: [1, 0, 1], labels: ['1', '2', '3'], min: 1 });
-    expect(data.regionReach.find(row => row.id === 'village')?.users).toBe(1);
-    expect(data.regionReach.find(row => row.id === 'village')?.sharePercent).toBe(50);
+    expect(data.regionReach.map(r => r.id)).toEqual(['village', 'world']);
+    expect(data.regionReach.find(row => row.id === 'village')?.users).toBe(2);
+    expect(data.regionReach.find(row => row.id === 'world')?.sharePercent).toBe(50);
+    expect(data.zoneUnlocks.map(z => [z.id, z.users])).toEqual([
+      ['village', 2],
+      ['pacific', 1],
+      ['seasia', 1],
+      ['indian', 0],
+      ['madagascar', 0],
+      ['southatlantic', 0],
+      ['northatlantic', 0],
+    ]);
     expect(data.stalled[0]).toMatchObject({ user: expect.objectContaining({ user_id: 'user-2' }) });
   });
 

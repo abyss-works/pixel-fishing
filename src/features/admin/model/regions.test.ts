@@ -1,12 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import { REGION_NAMES, REGION_ORDER, formatAdminLocation } from './regions';
+import { OPEN_WORLD_ZONE_UNLOCKS, REGION_NAMES, REGION_ORDER, formatAdminLocation } from './regions';
 
 describe('관리자 지역 및 위치 포맷', () => {
-  it('남대서양과 북대서양을 지역명·순서에 포함한다', () => {
+  it('진행 지역 순서에는 현행 오픈월드 지역(마을, 대양)만 포함하고 폐지된 구 바다 6개는 제외한다', () => {
+    expect(REGION_ORDER).toEqual(['village', 'world']);
+    for (const legacy of ['ocean', 'seasia', 'indian', 'madagascar', 'southatlantic', 'northatlantic']) {
+      expect(REGION_ORDER).not.toContain(legacy);
+    }
     expect(REGION_NAMES.southatlantic).toBe('남대서양');
     expect(REGION_NAMES.northatlantic).toBe('북대서양');
-    expect(REGION_ORDER).toContain('southatlantic');
-    expect(REGION_ORDER).toContain('northatlantic');
+  });
+
+  it('오픈월드 존 및 수배 해금 목록은 현행 7개 최상위 존과 배 단계 기준을 제공한다', () => {
+    expect(OPEN_WORLD_ZONE_UNLOCKS.map(z => [z.id, z.entryBoat, z.hasBounty])).toEqual([
+      ['village', 0, false],
+      ['pacific', 1, true],
+      ['seasia', 3, true],
+      ['indian', 5, true],
+      ['madagascar', 7, true],
+      ['southatlantic', 8, true],
+      ['northatlantic', 9, true],
+    ]);
   });
 
   it('원시 위치 키를 읽기 쉬운 한글명으로 바꾸고 미등록 키와 빈 값 경계를 처리한다', () => {
