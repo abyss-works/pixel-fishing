@@ -38,7 +38,7 @@ export default function SegmentedStepBar({
         <span
           key={step.id}
           className={cx(
-            'block h-2 overflow-hidden border bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]',
+            'block h-2 overflow-hidden border bg-bg',
             step.state === 'claimable' ? 'border-gold' : 'border-line',
           )}
         >

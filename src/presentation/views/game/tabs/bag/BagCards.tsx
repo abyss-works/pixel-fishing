@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import type { FishInstance, GameState } from '../../../../../game/rules/logic';
 import { selectBagCatalog } from '../../../../../features/inventory/model/catalog';
 import { cx } from '../../../../ui/cx';
+import Divider from '../../../../ui/Divider';
 import FishSprite from '../../../../ui/fish/FishSprite';
 import { RARITY_CARD, DIM_CARD } from '../../../../ui/fish/RarityTag';
 
@@ -37,7 +38,7 @@ export default function BagCards({ bag, game }: { bag: readonly FishInstance[]; 
               /* 일반/변이를 한 행에 — 흰 글씨 일반, 보라 변이, 사이에 얇은 구분 바 */
               <span className="pf-accent inline-flex items-center justify-center gap-1.5">
                 <span className={normalCount > 0 ? 'text-text' : 'text-text-dim'}>{normalCount}</span>
-                <span className="block w-px h-2.5 bg-line" aria-hidden="true" />
+                <Divider vertical className="h-2.5 min-h-0" />
                 <span className={variantCount > 0 ? 'text-epic' : 'text-text-dim'}>{variantCount}</span>
               </span>
             )}

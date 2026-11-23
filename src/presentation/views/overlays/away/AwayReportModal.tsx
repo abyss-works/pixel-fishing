@@ -13,6 +13,7 @@ import KpiTile from '../../../ui/KpiTile';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import NoteTag from '../../../ui/NoteTag';
+import ProgressMeter from '../../../ui/ProgressMeter';
 import SectionTitle from '../../../ui/SectionTitle';
 import { awayDuration, awayPeriodText, awayTipText, bagTimelineText } from './awayText';
 
@@ -101,10 +102,14 @@ export default function AwayReportModal({ report, game, onClose, onOpenBag }: {
         {full !== null && (
           <section aria-label="가방">
             <SectionTitle>가방</SectionTitle>
-            <div className="relative h-1.5 bg-surface-2 border border-line">
-              <span className="absolute inset-y-0 left-0 bg-accent" style={{ width: `${fullPct}%` }} />
-              <span className="absolute inset-y-0 right-0 bg-orange/60" style={{ width: `${100 - fullPct}%` }} />
-            </div>
+            <ProgressMeter
+              current={fullPct}
+              target={100}
+              tone="accent"
+              heightClass="h-1.5"
+              className="bg-orange/60"
+              ariaLabel="가방 채움 시점"
+            />
             <div className="flex justify-between gap-2 mt-1 text-2xs text-text-dim">
               <span>떠남</span>
               <span className="text-orange text-center">{bagTimelineText(report)}</span>

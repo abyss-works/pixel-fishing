@@ -19,6 +19,7 @@ import type { AchievementRow, CosmeticFilter, CumulativeBonusCardModel } from '.
 import { fmtGold, fmtNum, josa } from '../../../ui/format';
 import { SCROLL_Y } from '../../../ui/scrollArea';
 import Button from '../../../ui/Button';
+import CountBadge from '../../../ui/CountBadge';
 import Inset from '../../../ui/Inset';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
@@ -175,9 +176,7 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
                   >
                     <span>{f.label}</span>
                     <span className="pf-accent text-2xs text-text-dim">({st.achieved}/{st.total})</span>
-                    {st.claimable > 0 && (
-                      <span className="pf-accent text-2xs px-1 bg-gold text-bg">{st.claimable}</span>
-                    )}
+                    {st.claimable > 0 && <CountBadge tone="gold" count={st.claimable} />}
                   </ToggleChip>
                 );
               })}

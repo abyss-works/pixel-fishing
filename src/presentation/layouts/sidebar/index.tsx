@@ -35,7 +35,7 @@ export default function Sidebar<K extends string>({ tabs, activeKey, onSelect, s
       <>
         {sheetOpen && (
           <section aria-label="탭 내용"
-                   className="fixed inset-x-0 bottom-14 z-(--z-tabs) h-[50dvh] flex flex-col bg-surface border-t-2 border-line shadow-panel">
+                   className="fixed inset-x-0 bottom-14 z-(--z-tabs) h-[50dvh] flex flex-col bg-surface border-t border-line shadow-panel">
             {/* 시트 안에서 연 창은 창 층이 아니라 시트 바로 위에 쌓인다(WindowSlot) */}
             <WindowSlot>
               {/* 시트 머리 — 아래로 끌면 닫힌다. 모달이 떠 있으면 배경이라 입력을 받지 않는다 */}

@@ -5,8 +5,8 @@ type Variant = 'default' | 'primary' | 'ghost' | 'accent' | 'danger';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
-  /** sm = 목록형 보조 버튼(설정 탭 등) — 패딩·글자만 줄인다 */
-  size?: 'md' | 'sm';
+  /** sm = 목록형 보조 버튼(설정 탭 등), xs = 24px 이하 평면 1px 소형 버튼 */
+  size?: 'md' | 'sm' | 'xs';
   /** 전폭 블록 — 좌우로 채운다 (variant와 무관) */
   full?: boolean;
   /** 이 버튼이 연 창이 떠 있는 동안의 눌린 모양 */
@@ -19,7 +19,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 export default function Button({ variant = 'default', size = 'md', full, pressed, className, ...props }: ButtonProps) {
   return (
     <button
-      className={cx('pf-btn', variant !== 'default' && variant, size === 'sm' && 'sm', full && 'full', pressed && 'pressed', className)}
+      className={cx('pf-btn', variant !== 'default' && variant, size !== 'md' && size, full && 'full', pressed && 'pressed', className)}
       aria-pressed={pressed}
       {...props}
     />

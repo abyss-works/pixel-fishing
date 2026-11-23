@@ -10,6 +10,7 @@ import { GradeName } from '../../../ui/fish/RarityTag';
 import HeroHeader from '../../../ui/HeroHeader';
 import Inset from '../../../ui/Inset';
 import ItemSprite from '../../../ui/ItemSprite';
+import KeyValueRow from '../../../ui/KeyValueRow';
 import NumberStepper from '../../../ui/NumberStepper';
 import SelectList from '../../../ui/SelectList';
 import Tip from '../../../ui/Tip';
@@ -70,13 +71,13 @@ export default function RecipeTab({ kind, game, now, busy, act }: {
       <Inset className="px-3 py-2.5 flex flex-col gap-1.5">
         <Tip text={recipeEffectNote(kind)} className="self-start text-xs text-text-dim">{EFFECT_TITLE[kind]}</Tip>
         {view.effects.map(line => (
-          <div key={line.label} className="flex items-center justify-between gap-2 text-xs">
-            <span>{line.label}</span><span className="pf-accent text-accent">{line.value}</span>
-          </div>
+          <KeyValueRow key={line.label} compact className="h-auto border-t-0"
+                       label={<span className="text-text">{line.label}</span>}
+                       value={line.value} valueClassName="pf-accent text-accent" />
         ))}
-        <div className="flex items-center justify-between gap-2 text-xs">
-          <span>지속 시간</span><span className="pf-accent">{fmtMinutes(view.slotMs / MIN_MS)}</span>
-        </div>
+        <KeyValueRow compact className="h-auto border-t-0"
+                     label={<span className="text-text">지속 시간</span>}
+                     value={fmtMinutes(view.slotMs / MIN_MS)} valueClassName="pf-accent" />
       </Inset>
       <CompareTable heads={['조리에 필요', '보유']}
                     rows={[
@@ -102,10 +103,10 @@ export default function RecipeTab({ kind, game, now, busy, act }: {
           </div>
         </div>
         {view.extraChance > 0 && (
-          <div className="flex items-center justify-between gap-2 text-xs">
-            <span className="text-text-dim">{artifactEffectLabel('extraCookChance')}</span>
-            <span className="pf-accent text-accent">{fmtPlusPoint(view.extraChance * 100)}</span>
-          </div>
+          <KeyValueRow compact className="h-auto border-t-0"
+                       label={artifactEffectLabel('extraCookChance')}
+                       value={fmtPlusPoint(view.extraChance * 100)}
+                       valueClassName="pf-accent text-accent" />
         )}
       </Inset>
     </>

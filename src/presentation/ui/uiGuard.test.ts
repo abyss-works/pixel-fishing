@@ -661,13 +661,65 @@ describe('UI 시스템 가드', () => {
     expect(offenders).toEqual([]);
   });
 
-  const THICK_BORDER_RE = /(?:\bborder-2\b|inset_-?2px)/;
-  it('게임 UI 버튼·칩·카드·모달은 1px 얇은 테두리와 1px 베벨을 쓴다', () => {
+  const THICK_BORDER_RE = /(?:\bborder-(?:[trblxy]-)?2\b|inset_-?2px)/;
+  it('게임 UI 버튼·칩·카드·모달·레이아웃은 1px 얇은 테두리와 1px 베벨을 쓴다', () => {
     const targets = presentationFiles.filter(
-      f => (f.path.startsWith('ui/') || f.path.startsWith('views/game/') || f.path.startsWith('views/overlays/'))
-        && f.path !== 'ui/PillButton.tsx',
+      f => isGameUi(f.path) && f.path !== 'ui/PillButton.tsx',
     );
     const offenders = targets.filter(f => THICK_BORDER_RE.test(f.src)).map(f => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  const TIER1_FLAT_PRIMITIVES = [
+    'ui/HelpHint.tsx',
+    'ui/ArrowButton.tsx',
+    'ui/ProgressMeter.tsx',
+    'ui/SegmentedStepBar.tsx',
+    'ui/hud/BagMeter.tsx',
+    'ui/hud/HudChip.tsx',
+    'ui/ToggleChip.tsx',
+  ];
+  const TIER1_BEVEL_RE = /(?:\bpf-bevel\b|\bPRESSED_BEVEL\b|inset_-?1px)/;
+  it('26px 이하 소형 요소와 12px 이하 트랙은 베벨 없는 평면 1px 테두리(Tier 1)를 쓴다', () => {
+    const offenders = TIER1_FLAT_PRIMITIVES.filter(path => {
+      const src = presentationFiles.find(f => f.path === path)?.src ?? '';
+      return TIER1_BEVEL_RE.test(src);
+    });
+    expect(offenders).toEqual([]);
+  });
+
+  const RAW_INSET_CLIP_RE = /(?:shadow-\[inset_|\[clip-path:)/;
+  it('게임 화면은 인라인 inset 그림자와 clip-path를 직접 쓰지 않고 공용 UI와 노치 토큰을 쓴다', () => {
+    const targets = screenFiles.filter(f => f.path.startsWith('views/game/') || f.path.startsWith('views/overlays/'));
+    const offenders = targets.filter(f => RAW_INSET_CLIP_RE.test(f.src)).map(f => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  const HARDCODED_HEX_RE = /(?:bg|border|text|from|to|via|ring|outline)-\[#/;
+  it('게임 화면은 16진 색상 클래스를 박지 않고 시맨틱 토큰을 쓴다', () => {
+    const targets = screenFiles.filter(f => f.path.startsWith('views/game/') || f.path.startsWith('views/overlays/'));
+    const offenders = targets.filter(f => HARDCODED_HEX_RE.test(f.src)).map(f => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  const RAW_DIVIDER_RE = /\b(?:w|h)-px\b[^\n]*\bbg-line\b|\bbg-line\b[^\n]*\b(?:w|h)-px\b/;
+  it('게임 화면은 1px 선을 직접 그리지 않고 Divider를 쓴다', () => {
+    const targets = screenFiles.filter(f => f.path.startsWith('views/game/') || f.path.startsWith('views/overlays/'));
+    const offenders = targets.filter(f => RAW_DIVIDER_RE.test(f.src)).map(f => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  const CLICKABLE_NONBUTTON_RE = /<(?:div|span)\b[^>]*\brole=(?:\{[^}]*['"]button['"]|['"]button['"])/;
+  const CLICKABLE_NONBUTTON_EXCEPTIONS = new Set([
+    'views/game/tabs/bag/BagTab.tsx',
+    'views/overlays/bounty/EncounterModal.tsx',
+  ]);
+  it('게임 화면의 누를 수 있는 칸은 div/span role="button" 대신 button/Frame as="button"을 쓴다', () => {
+    const targets = screenFiles.filter(
+      f => (f.path.startsWith('views/game/') || f.path.startsWith('views/overlays/'))
+        && !CLICKABLE_NONBUTTON_EXCEPTIONS.has(f.path),
+    );
+    const offenders = targets.filter(f => CLICKABLE_NONBUTTON_RE.test(f.src)).map(f => f.path);
     expect(offenders).toEqual([]);
   });
 

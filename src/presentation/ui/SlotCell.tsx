@@ -7,21 +7,33 @@ import Frame from './Frame';
 // picked는 지금 고른 칸으로, 하늘색 테두리를 더한다. 칸 크기와 안쪽 배치는 호출부가 정한다.
 const FORM = {
   raised: 'bg-surface-2',
-  sunken: 'bg-bg text-text-dim border-[#213652] shadow-[inset_1px_1px_0_var(--bevel-hi),inset_-1px_-1px_0_var(--bevel-lo)]',
+  sunken: 'bg-bg text-text-dim border-line-dim shadow-[inset_1px_1px_0_var(--bevel-hi),inset_-1px_-1px_0_var(--bevel-lo)]',
   pressed: 'bg-surface-2 border-gold translate-y-px shadow-[inset_-1px_-1px_0_var(--bevel-lo),inset_1px_1px_0_var(--bevel-hi)]',
 } as const;
 
-export default function SlotCell({ form = 'raised', picked, onSelect, ariaLabel, className, children }: {
+export default function SlotCell({
+  form = 'raised', picked, disabled, ariaDisabled, ariaPressed, role, onSelect, ariaLabel, className, children,
+}: {
   form?: keyof typeof FORM;
   picked?: boolean;
+  disabled?: boolean;
+  ariaDisabled?: boolean;
+  ariaPressed?: boolean;
+  role?: 'radio';
   onSelect: () => void;
-  ariaLabel: string;
+  ariaLabel?: string;
   className?: string;
   children: ReactNode;
 }) {
+  const checkedProps = role === 'radio'
+    ? { role: 'radio' as const, 'aria-checked': form === 'pressed' || !!picked }
+    : { 'aria-pressed': ariaPressed ?? picked ?? false };
   return (
-    <Frame as="button" type="button" aria-label={ariaLabel} aria-pressed={picked ?? false} onClick={onSelect}
-           className={cx('cursor-pointer', FORM[form], picked && 'border-accent', className)}>
+    <Frame as="button" type="button" disabled={disabled} aria-disabled={ariaDisabled || undefined}
+           aria-label={ariaLabel} {...checkedProps}
+           onClick={disabled || ariaDisabled ? undefined : onSelect}
+           className={cx(disabled || ariaDisabled ? 'cursor-default' : 'cursor-pointer',
+             FORM[form], picked && 'border-accent', className)}>
       {children}
     </Frame>
   );

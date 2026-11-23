@@ -10,7 +10,6 @@ import type {
 } from '../../../../features/achievement/model/achievements';
 import { fmtGold, fmtNum } from '../../../ui/format';
 import { cx } from '../../../ui/cx';
-import { NOTCH_SM } from '../../../ui/notch';
 import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
 import Inset from '../../../ui/Inset';
@@ -34,33 +33,23 @@ const cardTone = (status: AchievementRowStatus) =>
   status === 'claimed' ? 'deep' : status === 'claimable' ? 'light' : 'base';
 
 const cardFrameClass = (status: AchievementRowStatus) => cx(
-  'flex min-w-0 flex-col border',
-  status === 'claimable'
-    ? 'border-gold bg-[color-mix(in_oklab,var(--c-gold)_12%,var(--c-surface))]'
-    : 'border-line',
+  'flex min-w-0 flex-col',
+  status === 'claimable' && 'border-gold bg-[color-mix(in_oklab,var(--c-gold)_12%,var(--c-surface))]',
 );
 
 function StatusBadge({ status }: { status: AchievementRowStatus }) {
   if (status === 'claimable') {
-    return (
-      <span className={cx('shrink-0 whitespace-nowrap text-2xs px-1.5 py-0.5 border border-gold text-gold bg-[color-mix(in_oklab,var(--c-gold)_12%,transparent)]', NOTCH_SM)}>
-        수령 가능
-      </span>
-    );
+    return <Badge tone="gold" size="xs">수령 가능</Badge>;
   }
   if (status === 'claimed') {
     return (
-      <span className={cx('inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-2xs px-1.5 py-0.5 border border-line text-text-dim', NOTCH_SM)}>
+      <Badge tone="dim-plain" size="xs" inline>
         <PixelIcon glyph="check" size={10} />
         완료
-      </span>
+      </Badge>
     );
   }
-  return (
-    <span className={cx('shrink-0 whitespace-nowrap text-2xs px-1.5 py-0.5 border border-line text-text-dim', NOTCH_SM)}>
-      미달성
-    </span>
-  );
+  return <Badge tone="dim-plain" size="xs">미달성</Badge>;
 }
 
 // 업적 카드 — 오목한 Inset 위계, 단일 우선순위 골드 강조, 2단 게이지(막대 위 + 비율/수치 아래),
@@ -118,15 +107,11 @@ export function CumulativeBonusCard({ card }: { card: CumulativeBonusCardModel }
       <span className="flex flex-col">
         {card.steps.map((step, idx) => {
           const stateLabel = step.state === 'done' ? '완료' : step.state === 'now' ? '진행 중' : '예정';
-          const stateCls = step.state === 'done'
-            ? 'border-gold text-gold'
-            : step.state === 'now'
-              ? 'border-accent text-accent'
-              : 'border-line text-text-dim';
+          const stateTone = step.state === 'done' ? 'gold-plain' : step.state === 'now' ? 'accent' : 'dim-plain';
           return (
             <span key={step.id} className="flex items-center justify-between gap-4 py-0.5">
               <span className="flex items-center gap-1.5">
-                <span className={cx('px-1 text-2xs border', NOTCH_SM, stateCls)}>{stateLabel}</span>
+                <Badge tone={stateTone} size="2xs">{stateLabel}</Badge>
                 <span>{idx + 1}단계 ({step.label})</span>
               </span>
               <span className="pf-accent text-text">{step.deltaText}</span>
@@ -139,7 +124,7 @@ export function CumulativeBonusCard({ card }: { card: CumulativeBonusCardModel }
   );
 
   return (
-    <Inset tone={card.allDone ? 'deep' : 'base'} className="flex min-w-0 flex-col border border-line">
+    <Inset tone={card.allDone ? 'deep' : 'base'} className="flex min-w-0 flex-col">
       <div className="flex flex-1 flex-col gap-1.5 p-2.5">
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-center gap-1.5">
@@ -149,13 +134,9 @@ export function CumulativeBonusCard({ card }: { card: CumulativeBonusCardModel }
             </b>
             {card.series.scope === 'zone' && <Badge>{card.scopeLabel}</Badge>}
           </div>
-          <span className={cx(
-            'shrink-0 whitespace-nowrap text-2xs px-1.5 py-0.5 border pf-accent',
-            NOTCH_SM,
-            card.allDone ? 'border-gold text-gold' : 'border-line text-text-dim',
-          )}>
+          <Badge tone={card.allDone ? 'gold-plain' : 'dim-plain'} size="xs" pixel>
             {card.allDone ? '최대 단계' : `${doneCount} / ${card.steps.length}단계`}
-          </span>
+          </Badge>
         </div>
         <p data-achievement-desc className="text-2xs leading-[1.5] text-text-dim break-keep break-words">{card.series.desc}</p>
         <div className="mt-auto flex flex-col gap-1 pt-1">
@@ -219,24 +200,20 @@ export function NamedGroupCard({
     : card.status === 'claimed'
       ? <StatusBadge status="claimed" />
       : (
-        <span className={cx('shrink-0 whitespace-nowrap text-2xs px-1.5 py-0.5 border border-line text-text-dim pf-accent', NOTCH_SM)}>
+        <Badge tone="dim-plain" size="xs" pixel>
           {doneSteps}/{card.steps.length} 단계
-        </span>
+        </Badge>
       );
 
   const tipContent = (
     <span className="flex min-w-44 flex-col">
       {card.steps.map(step => {
         const stateLabel = step.status === 'claimed' ? '완료' : step.status === 'claimable' ? '수령 가능' : '예정';
-        const stateCls = step.status === 'claimed'
-          ? 'border-gold text-gold'
-          : step.status === 'claimable'
-            ? 'border-accent text-accent'
-            : 'border-line text-text-dim';
+        const stateTone = step.status === 'claimed' ? 'gold-plain' : step.status === 'claimable' ? 'accent' : 'dim-plain';
         return (
           <span key={step.id} className="flex items-center justify-between gap-4 py-0.5">
             <span className="flex items-center gap-1.5">
-              <span className={cx('px-1 text-2xs border', NOTCH_SM, stateCls)}>{stateLabel}</span>
+              <Badge tone={stateTone} size="2xs">{stateLabel}</Badge>
               <span>{step.label}</span>
             </span>
             <span className="text-text">{card.discovered ? step.hatName : '???'}</span>

@@ -23,7 +23,7 @@ export default function ArrowButton({ dir, tone = 'plain', full, className, ...p
     <button
       type="button"
       aria-label={dir < 0 ? '이전' : '다음'}
-      className={cx('inline-flex items-center justify-center border border-line pf-bevel',
+      className={cx('inline-flex items-center justify-center border border-line',
         NOTCH_SM,
         'cursor-pointer transition disabled:opacity-40 disabled:cursor-not-allowed',
         TONE[tone], full && 'w-full', className)}

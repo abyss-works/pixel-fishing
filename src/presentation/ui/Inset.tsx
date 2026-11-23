@@ -11,15 +11,17 @@ const TONE = {
   light: 'bg-(--inset-light)',
 } as const;
 
-export default function Inset({ tone = 'base', title, divided, borderless, className, children, ...rest }: {
-  tone?: keyof typeof TONE; title?: string; divided?: boolean; borderless?: boolean; className?: string; children?: ReactNode;
-} & Omit<HTMLAttributes<HTMLDivElement>, 'title'>) {
+type InsetTag = 'div' | 'li' | 'section';
+
+export default function Inset({ as: Tag = 'div', tone = 'base', title, divided, borderless, className, children, ...rest }: {
+  as?: InsetTag; tone?: keyof typeof TONE; title?: string; divided?: boolean; borderless?: boolean; className?: string; children?: ReactNode;
+} & Omit<HTMLAttributes<HTMLElement>, 'title'>) {
   return (
-    <div className={cx('pf-notch shadow-[inset_1px_1px_0_var(--bevel-hi),inset_-1px_-1px_0_var(--bevel-lo)]',
+    <Tag className={cx('pf-notch shadow-[inset_1px_1px_0_var(--bevel-hi),inset_-1px_-1px_0_var(--bevel-lo)]',
                        !borderless && 'border border-line',
                        TONE[tone], divided && 'divide-y divide-line', className)} {...rest}>
       {title && <h3 className="pf-accent text-base text-gold">{title}</h3>}
       {children}
-    </div>
+    </Tag>
   );
 }

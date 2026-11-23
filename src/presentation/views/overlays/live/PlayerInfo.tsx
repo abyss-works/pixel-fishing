@@ -13,6 +13,7 @@ import BoatSprite from '../../../ui/BoatSprite';
 import Button from '../../../ui/Button';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import Inset from '../../../ui/Inset';
+import KeyValueRow from '../../../ui/KeyValueRow';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
@@ -163,7 +164,7 @@ function ProfileCells({ name, view, actions }: {
       <Inset className="px-3 py-2.5 flex flex-col gap-2.5 min-w-0 row-span-2 mobile:row-span-1">
         <div className="flex items-center gap-2.5 min-w-0">
           {look ? (
-            <Inset tone="light" className="shrink-0 w-11 h-12 flex items-center justify-center">
+            <Inset tone="light" borderless className="shrink-0 w-11 h-12 flex items-center justify-center">
               <PersonSprite look={look} scale={2} />
             </Inset>
           ) : boat.tier > 0 ? (
@@ -258,10 +259,10 @@ function ProfileCells({ name, view, actions }: {
           </div>
           <ul className="grid grid-cols-3 gap-1.5 mobile:grid-cols-2">
             {artifacts.slots.map(s => (
-              <li key={s.id}
-                  className={cx('min-h-10 border px-1 py-0.5 flex flex-col items-center justify-center text-center text-2xs leading-tight',
-                    s.grade ? cx('bg-bg', GRADE_CLASS[s.grade]) : 'border-dashed border-line text-text-dim')}
-                  aria-label={s.name ? (s.level !== null ? `유물 ${s.name} Lv.${s.level}` : `유물 ${s.name}`) : `${s.zone} 유물 없음`}>
+              <Inset as="li" key={s.id} tone="deep"
+                     className={cx('min-h-10 px-1 py-0.5 flex flex-col items-center justify-center text-center text-2xs leading-tight',
+                       s.grade ? GRADE_CLASS[s.grade] : 'border-dashed text-text-dim')}
+                     aria-label={s.name ? (s.level !== null ? `유물 ${s.name} Lv.${s.level}` : `유물 ${s.name}`) : `${s.zone} 유물 없음`}>
                 {s.name ? (
                   <>
                     <span className="truncate max-w-full">{s.name}</span>
@@ -270,7 +271,7 @@ function ProfileCells({ name, view, actions }: {
                 ) : (
                   <span className="truncate max-w-full">{s.zone}</span>
                 )}
-              </li>
+              </Inset>
             ))}
           </ul>
         </div>
@@ -328,12 +329,7 @@ function ProfileCells({ name, view, actions }: {
 
 /** 요약 칸의 한 줄: 이름은 왼쪽(보조색), 값은 오른쪽 */
 function ProfileRow({ label, children }: { label: ReactNode; children: ReactNode }) {
-  return (
-    <li className="flex items-center justify-between gap-2 h-[26px] [&+&]:border-t [&+&]:border-line/60">
-      <span className="text-text-dim">{label}</span>
-      <span className="truncate">{children}</span>
-    </li>
-  );
+  return <KeyValueRow as="li" compact label={label} value={children} />;
 }
 
 /** 채팅 이름에서 여는 플레이어 정보 창 — 접속 목록과 같은 680 폭 2열 배치를 쓴다 */

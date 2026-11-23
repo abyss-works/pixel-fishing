@@ -6,6 +6,7 @@ import BoatSprite from '../../../ui/BoatSprite';
 import { cx } from '../../../ui/cx';
 import { fmtNum } from '../../../ui/format';
 import Inset from '../../../ui/Inset';
+import KeyValueRow from '../../../ui/KeyValueRow';
 import ProgressMeter from '../../../ui/ProgressMeter';
 import TableBox from '../../../ui/TableBox';
 import DataTable from '../../../ui/DataTable';
@@ -75,10 +76,5 @@ export default function BoatTab({ game, summary, row, zones }: {
 
 /** 배 수치 한 줄: 이름은 왼쪽(보조색), 값은 오른쪽 */
 function BoatStatLine({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <li className="flex items-center justify-between gap-2 h-[26px] [&+&]:border-t [&+&]:border-line/60">
-      <span className="text-text-dim">{label}</span>
-      <span className="pf-accent">{children}</span>
-    </li>
-  );
+  return <KeyValueRow as="li" compact className="text-sm" label={label} value={children} valueClassName="pf-accent" />;
 }

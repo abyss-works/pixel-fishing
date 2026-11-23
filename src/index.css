@@ -51,6 +51,7 @@
   --color-surface: var(--c-surface);
   --color-surface-2: var(--c-surface-2);
   --color-line: var(--c-line);
+  --color-line-dim: var(--c-line-dim);
   --color-text: var(--c-text);
   --color-text-dim: var(--c-text-dim);
   --color-gold: var(--c-gold);
@@ -121,6 +122,7 @@
   --c-surface: #14243d;
   --c-surface-2: #1d3252;
   --c-line: #2b4568;
+  --c-line-dim: #213652;
   --c-text: #f2f7fb;
   --c-text-dim: #93a8c4;
   --c-gold: #ffd54f;
@@ -309,6 +311,9 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
   }
   .pf-btn.ghost:hover:not(:disabled) { color: var(--c-text); background: var(--c-surface-2); }
   .pf-btn.sm { min-height: 28px; padding: 4px 10px; font-size: var(--text-xs); }
+  .pf-btn.xs { min-height: 20px; padding: 2px 6px; font-size: var(--text-2xs); box-shadow: none; }
+  .pf-btn.xs:active:not(:disabled),
+  .pf-btn.xs.pressed { border-color: var(--c-gold); color: var(--c-gold); box-shadow: none; }
   .pf-btn.accent { border-color: var(--c-accent); color: var(--c-accent); }
   .pf-btn.danger { border-color: var(--c-danger); color: var(--c-danger); }
 

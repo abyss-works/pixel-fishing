@@ -33,7 +33,7 @@ export default function HelpHint({ text }: Props) {
             onFocus={show} onBlur={hide}
             onClick={() => (open ? hide() : show())}
             className={cx('inline-flex items-center justify-center size-4 ml-1 align-middle',
-              'border border-line bg-surface-2 pf-bevel hover:border-accent hover:text-text',
+              'border border-line bg-surface-2 hover:border-accent hover:text-text',
               'text-text-dim text-2xs leading-none cursor-help select-none', NOTCH_SM)}>
         ?
       </span>

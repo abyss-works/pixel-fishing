@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { GAME_DAY_RESET_TEXT } from '../../../../game/rules/time.js';
 import Button from '../../../ui/Button';
+import KeyValueRow from '../../../ui/KeyValueRow';
 import SharedProgressMeter from '../../../ui/ProgressMeter';
 import Tip from '../../../ui/Tip';
 import { fmtMinutes, fmtRatioTight } from '../../../ui/format';
@@ -12,10 +13,7 @@ export function BoardRows({ rows }: { rows: { key: string; label: ReactNode; val
   return (
     <ul className="list-none m-0 p-0 text-xs">
       {rows.map(r => (
-        <li key={r.key} className="flex items-center justify-between gap-2 h-[26px] border-t border-line/60 first:border-t-0">
-          <span className="text-text-dim shrink-0">{r.label}</span>
-          <span className="min-w-0 truncate text-right">{r.value}</span>
-        </li>
+        <KeyValueRow as="li" compact key={r.key} label={r.label} value={r.value} />
       ))}
     </ul>
   );

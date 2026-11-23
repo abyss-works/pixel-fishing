@@ -10,8 +10,8 @@ import { josa } from '../../../../shared/lib/josa';
 import { useNow } from '../../../../features/gameplay/service/useGameTime';
 import Button from '../../../ui/Button';
 import { cx } from '../../../ui/cx';
-import Frame from '../../../ui/Frame';
 import Inset from '../../../ui/Inset';
+import SlotCell from '../../../ui/SlotCell';
 import TableBox from '../../../ui/TableBox';
 import DataTable from '../../../ui/DataTable';
 import Modal from '../../../ui/Modal';
@@ -199,12 +199,10 @@ function RenameDialog({ guildId, current, busy, run, setToast, onGoldChanged, on
 function ModeCell({ mode, on, disabled, onSelect }: { mode: GuildJoinMode; on: boolean; disabled: boolean; onSelect: () => void }) {
   const t = GUILD_JOIN_MODE_TEXT[mode];
   return (
-    <Frame as="button" type="button" role="radio" aria-checked={on} disabled={disabled} onClick={onSelect}
-           className={cx('flex flex-col items-start gap-1 px-3 py-2 text-left cursor-pointer',
-             on ? 'border-gold bg-surface-2 shadow-[inset_1px_1px_0_var(--bevel-hi),inset_-1px_-1px_0_var(--bevel-lo)]'
-               : 'hover:bg-surface-2')}>
+    <SlotCell role="radio" form={on ? 'pressed' : 'raised'} disabled={disabled} onSelect={onSelect}
+              className={cx('flex flex-col items-start gap-1 px-3 py-2 text-left', !on && 'bg-surface hover:bg-surface-2')}>
       <b className={cx('text-sm', on ? 'text-gold' : 'text-text')}>{t.name}</b>
       <span className="text-2xs text-text-dim">{t.desc}</span>
-    </Frame>
+    </SlotCell>
   );
 }

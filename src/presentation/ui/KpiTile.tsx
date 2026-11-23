@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { cx } from './cx';
 import Inset from './Inset';
 
@@ -6,16 +7,17 @@ import Inset from './Inset';
 // 값은 한 줄로 두고 넘치면 줄이며(네이티브 title 툴팁 대신 접근성 이름만 둔다), 보조 문구는 줄을 바꿔 모두 보인다.
 const TONE = { gold: 'text-gold', danger: 'text-danger', dim: 'text-text-dim' } as const;
 
-export default function KpiTile({ label, value, hint, tone = 'gold' }: {
-  label: string;
+export default function KpiTile({ label, value, hint, tone = 'gold', size = 'md' }: {
+  label: ReactNode;
   value: string;
   hint?: string;
   tone?: keyof typeof TONE;
+  size?: 'md' | 'sm';
 }) {
   return (
     <Inset className="flex min-w-0 flex-col gap-0.5 px-3 py-2">
-      <span className="text-xs text-text-dim">{label}</span>
-      <span className={cx('pf-accent text-lg truncate', TONE[tone])} aria-label={value}>{value}</span>
+      <span className={cx('text-text-dim', size === 'sm' ? 'text-2xs' : 'text-xs')}>{label}</span>
+      <span className={cx('pf-accent truncate', size === 'sm' ? 'text-base' : 'text-lg', TONE[tone])} aria-label={value}>{value}</span>
       {hint && <span className="text-2xs leading-[1.5] text-text-dim">{hint}</span>}
     </Inset>
   );

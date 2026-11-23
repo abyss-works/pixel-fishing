@@ -8,7 +8,7 @@ import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
 import { cx } from '../../../ui/cx';
 import { fmtNum } from '../../../ui/format';
-import Frame from '../../../ui/Frame';
+import { NOTCH_SM } from '../../../ui/notch';
 import TableBox from '../../../ui/TableBox';
 import DataTable from '../../../ui/DataTable';
 import Tip, { TipList } from '../../../ui/Tip';
@@ -91,11 +91,11 @@ function MemberLine({ row, first, busy, open, onToggle, onHandover, onKick }: {
         <td className={cx(line, 'px-2 text-right pf-accent text-xs')}>{fmtNum(row.gave)}</td>
         <td className={cx(line, 'text-center')}>
           {onToggle && (
-            <Frame as="button" type="button" aria-expanded={open} aria-label={`${row.name} 관리`} onClick={onToggle}
-                   className={cx('inline-flex size-6 items-center justify-center gap-0.5 flex-col cursor-pointer bg-surface-2',
-                     open && 'border-gold shadow-[inset_1px_1px_0_var(--bevel-hi),inset_-1px_-1px_0_var(--bevel-lo)]')}>
+            <Button size="xs" pressed={open} aria-pressed={undefined} aria-expanded={open}
+                    aria-label={`${row.name} 관리`} onClick={onToggle}
+                    className={cx('size-6 p-0 inline-flex items-center justify-center gap-0.5 flex-col', NOTCH_SM)}>
               <span className="size-[3px] bg-text-dim" /><span className="size-[3px] bg-text-dim" /><span className="size-[3px] bg-text-dim" />
-            </Frame>
+            </Button>
           )}
         </td>
       </tr>

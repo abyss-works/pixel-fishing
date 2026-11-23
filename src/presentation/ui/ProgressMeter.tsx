@@ -25,6 +25,7 @@ export default function ProgressMeter({
   leftLabel,
   rightLabel,
   heightClass = 'h-2',
+  markerRatio,
   className,
   fillTestAttr,
 }: {
@@ -37,6 +38,8 @@ export default function ProgressMeter({
   leftLabel?: ReactNode;
   rightLabel?: ReactNode;
   heightClass?: string;
+  /** 0~1 위치에 세로 골드 목표 눈금을 표시한다 (파워 미터 등) */
+  markerRatio?: number;
   className?: string;
   /** 테스트 등에서 채움 요소를 집을 때 쓰는 data 속성 값 */
   fillTestAttr?: 'achievement';
@@ -55,7 +58,7 @@ export default function ProgressMeter({
       aria-valuemax={safeMax}
       aria-valuenow={Math.min(Math.max(current, 0), safeMax)}
       className={cx(
-        'block border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]',
+        'relative block border border-line bg-bg',
         heightClass,
         stacked ? 'w-full' : 'flex-1 min-w-0',
         !stacked && rightLabel === undefined && className,
@@ -63,9 +66,15 @@ export default function ProgressMeter({
     >
       <span
         data-achievement-gauge-fill={fillTestAttr === 'achievement' ? '' : undefined}
-        className={cx('block h-full shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]', FILL[tone])}
+        className={cx('block h-full', FILL[tone])}
         style={{ width: `${ratio * 100}%` }}
       />
+      {markerRatio !== undefined && (
+        <span
+          className="absolute -top-[3px] -bottom-[3px] w-[2px] bg-gold"
+          style={{ left: `calc(${Math.max(0, Math.min(1, markerRatio)) * 100}% - 1px)` }}
+        />
+      )}
     </span>
   );
 
