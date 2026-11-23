@@ -255,10 +255,11 @@ describe('20개 debug 명령 전수 DB 영속화 및 재로딩 일치', () => {
     expect(reloadedBounty.tickets).toHaveLength(1);
     expect(reloadedBounty.clears.some(c => c.kind === 'general' && c.questId === 'pacific-easy-common')).toBe(true);
 
-    // 구 포맷 스냅샷(bounty 미포함) 복원 시에도 과거 네임드를 오늘 시각으로 덮어쓰지 않는다
+    // 구 포맷 스냅샷(bounty 미포함) 복원 시에도 과거 네임드를 오늘 시각으로 덮어쓰지 않으며, 기존 general 클리어는 보존된다
     expect((await call('snapshot.restore', { snapshot: savedStateSnapshot })).status).toBe(200);
     const legacyBounty = await readOwnBounty(db, uid, gameDayStartISO(NOW));
-    expect(legacyBounty.clears).toEqual([]);
+    expect(legacyBounty.clears.filter(c => c.kind === 'named')).toEqual([]);
+    expect(legacyBounty.clears).toEqual([{ kind: 'general', cleared_at: expect.any(String) }]);
     expect((await readOwnState(db, uid)).clearedNamed.sort()).toEqual(['pacific-named-megalodon', 'seasia-named-leviathan']);
 
     // 20개 전 명령 누락 없이 검증됨을 확인
