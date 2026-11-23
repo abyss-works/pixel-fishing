@@ -249,11 +249,15 @@ describe('GuildModal', () => {
     fireEvent.click(screen.getByRole('button', { name: '희귀 어종 확률 고르기' }));
     expect(screen.getByText(/기본 5 \+ 강화 2 =/)).toBeTruthy();
     expect(screen.getByLabelText('희귀 어종 확률 2단계 이룸 자유 강화 적용')).toBeTruthy();
+    // 기본 5단계를 모두 채운 스킬의 기부 버튼은 기본 단계 완료 툴팁을 보인다
+    fireEvent.mouseEnter(screen.getByRole('button', { name: '기부' }).parentElement as HTMLElement);
+    expect(screen.getByRole('tooltip').textContent).toBe('기본 단계 5단계를 모두 채웠어요.');
 
     fireEvent.click(screen.getByRole('button', { name: '가방 용량 증가 강화 1단계 올리기' }));
     await waitFor(() => expect(s.act).toHaveBeenCalledWith({ op: 'enhance', guildId: 'g1', bonus: 'bag' }));
     expect(toast).toHaveBeenCalledWith('가방 용량 증가 스킬을 강화 1단계로 올렸어요.');
 
+    s.act.mockResolvedValueOnce({ ok: true, recovered: 2 });
     fireEvent.click(screen.getByRole('button', { name: '초기화' }));
     const dialog = within(screen.getAllByRole('dialog').at(-1) as HTMLElement);
     expect(dialog.getByText('20,000,000G')).toBeTruthy();
@@ -261,5 +265,6 @@ describe('GuildModal', () => {
     fireEvent.click(dialog.getByRole('button', { name: '초기화' }));
     await waitFor(() => expect(s.act).toHaveBeenCalledWith({ op: 'resetEnhancements', guildId: 'g1' }));
     await waitFor(() => expect(resync).toHaveBeenCalled());
+    expect(toast).toHaveBeenCalledWith('길드 스킬 강화를 초기화해 2포인트를 되돌렸어요.');
   });
 });

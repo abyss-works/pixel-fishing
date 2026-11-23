@@ -143,8 +143,8 @@ export type GuildOp =
   | { op: 'donate'; guildId: string; bonus: GuildBonusId; amount: number }
   | { op: 'enhance'; guildId: string; bonus: GuildBonusId }
   | { op: 'resetEnhancements'; guildId: string };
-/** 길드 요청 결과 — 들어오기는 바로 들어갔는지(joined) 신청이 됐는지(requested)를 싣는다. 실패는 서버 오류 코드 */
-export type GuildOpResult = { ok: true; result?: 'joined' | 'requested' } | { ok: false; error: string };
+/** 길드 요청 결과 — 들어오기는 바로 들어갔는지(joined) 신청이 됐는지(requested)를, 자유 강화 초기화는 되돌린 포인트(recovered)를 싣는다. 실패는 서버 오류 코드 */
+export type GuildOpResult = { ok: true; result?: 'joined' | 'requested'; recovered?: number } | { ok: false; error: string };
 
 export type RankingBoardId = 'fame' | 'dex' | 'species';
 export interface RankingRow { rank: number; nickname: string | null; value: number; me: boolean }

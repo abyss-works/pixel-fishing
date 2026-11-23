@@ -86,7 +86,7 @@ export interface CommitMarks {
  * 액션 페이싱 기준(updated_at)은 바꾸지 않는다. 호출자는 같은 트랜잭션에서 행을 잠그고 골드를 확인한 뒤 실행한다.
  */
 export function goldDebit(uid: string, gold: number): SQL {
-  return sql`update public.saves_current set gold = gold - ${gold}, version = version + 1 where user_id = ${uid}`;
+  return sql`update public.saves_current set gold = gold - ${gold}, version = version + 1 where user_id = ${uid} and gold >= ${gold}`;
 }
 
 /** 낙관 락 갱신 — 읽은 version 그대로일 때만 바뀐다. 핵심 쓰기의 첫 조각이며 다른 조각의 guard가 된다.

@@ -3,9 +3,9 @@ import type { GuildBonusItem, GuildInfo, GuildInvitePreview, GuildMemberItem } f
 import { NO_GUILD_EFFECTS } from '../../../game/rules/guild';
 import {
   GUILD_BONUS_NAME, GUILD_JOIN_MODE_TEXT, GUILD_LEVEL_HELP, dailyContributionRows, GUILD_ERROR_TEXT, bonusEffectText, bonusEffectValue,
-  bonusRows, enhanceInvestState, enhancePoolSummary, enhanceResetState, growthBar, growthTotalText, guildAlertText, guildLinkUrl,
-  inviteDialogView, inviteShareText, leaveConfirm, leaveOutcome, logbookDays, memberActions, memberConfirm, memberName, memberRows,
-  renameButtonState, requestRows, splitMembers,
+  bonusRows, donateDisabledReason, enhanceInvestState, enhancePoolSummary, enhanceResetState, growthBar, growthTotalText,
+  guildAlertText, guildLinkUrl, inviteDialogView, inviteShareText, leaveConfirm, leaveOutcome, logbookDays, memberActions,
+  memberConfirm, memberName, memberRows, renameButtonState, requestRows, splitMembers,
 } from './guild';
 
 const member = (uid: string, role: GuildMemberItem['role'], leftAt: string | null = null): GuildMemberItem =>
@@ -282,9 +282,13 @@ describe('길드 보너스 화면 모델', () => {
       bonuses: [
         item({ id: 'sell', rank: 5, enhanceRank: 1, cap: 5 }),
         item({ id: 'bag', unlock: 2, rank: 2, enhanceRank: 0, cap: 5 }),
+        item({ id: 'rare', unlock: 4, rank: 0, enhanceRank: 0, cap: 0 }),
       ],
     };
     const rows = bonusRows(g.bonuses);
+    expect(donateDisabledReason(rows[0])).toBe('기본 단계 5단계를 모두 채웠어요.');
+    expect(donateDisabledReason(rows[2])).toBe(GUILD_ERROR_TEXT['bonus-locked']);
+    expect(donateDisabledReason(bonusRows([item({ id: 'bag', unlock: 2, rank: 3, cap: 3 })])[0])).toBe(GUILD_ERROR_TEXT['rank-maxed']);
     expect(enhancePoolSummary(g)).toEqual({ max: 2, used: 1, remaining: 1, maxSlots: 5 });
     expect(enhanceInvestState(g, rows[1])).toEqual({ canInvest: true, reason: null });
     expect(enhanceResetState(g, 19_999_999)).toMatchObject({ canReset: false, used: 1, cost: 20_000_000 });

@@ -58,11 +58,15 @@ function request(op: GuildOp): [string, RequestInit] {
 export async function guildAction(op: GuildOp): Promise<GuildOpResult> {
   const res = await fetch(...request(op));
   if (res.status >= 500) throw requestFailure(res, 'guild action failed');
-  const body = await res.json().catch(() => ({})) as { error?: string; result?: string };
+  const body = await res.json().catch(() => ({})) as { error?: string; result?: string; recovered?: number };
   // 앱 서버의 429는 오류 코드를 싣는다(아래에서 거절로 돌려준다). 코드가 없는 429는 인그레스의 요청 한도다
   if (isRateLimited(res) && typeof body.error !== 'string') throw requestFailure(res, 'guild action failed');
   if (!res.ok) return { ok: false, error: body.error ?? 'unknown' };
-  return body.result === 'joined' || body.result === 'requested' ? { ok: true, result: body.result } : { ok: true };
+  return {
+    ok: true,
+    ...(body.result === 'joined' || body.result === 'requested' ? { result: body.result } : {}),
+    ...(typeof body.recovered === 'number' ? { recovered: body.recovered } : {}),
+  };
 }
 
 /**

@@ -4,7 +4,7 @@ import { applyDonation } from '../../../../game/rules/guild';
 import type { GuildBonusId } from '../../../../game/rules/guild';
 import {
   DONATION_STEPS, GUILD_BONUS_TIP, GUILD_ENHANCE_MAX_TOTAL_RANK, GUILD_ERROR_TEXT,
-  bonusRows, enhanceInvestState, enhancePoolSummary, enhanceResetState,
+  bonusRows, donateDisabledReason, enhanceInvestState, enhancePoolSummary, enhanceResetState,
 } from '../../../../features/guild/model/guild';
 import type { BonusNode, BonusRow } from '../../../../features/guild/model/guild';
 import Button from '../../../ui/Button';
@@ -26,8 +26,9 @@ import { SCROLL_Y } from '../../../ui/scrollArea';
 // 길드 스킬 탭: 오목한 판 위의 강화 포인트 줄과 스킬 트리, 그 아래 고른 스킬의 두 칸(효과, 모인 골드와 기부·강화 버튼).
 // 스킬 다섯이 가로로 놓이고(모바일에서는 가로 5칸 행) 기본 단계 1~5가 위에서 아래로 뻗는다.
 // 자유 강화(1~5)가 적용된 칸은 기존 금색 칸 바깥에 보라색 테두리로 함께 표시한다.
-export default function GuildSkillsTab({ guild, gold, busy, run, setToast, onGoldChanged }: GuildPartProps & {
+export default function GuildSkillsTab({ guild, gold, busy, run, onResetEnhancements, setToast, onGoldChanged }: GuildPartProps & {
   gold: number;
+  onResetEnhancements: () => Promise<{ error: string | null; recovered?: number }>;
   onGoldChanged: () => Promise<void> | void;
 }) {
   const rows = bonusRows(guild.bonuses);
@@ -144,7 +145,7 @@ export default function GuildSkillsTab({ guild, gold, busy, run, setToast, onGol
               {sel.canDonate ? (
                 <Button variant="primary" size="sm" full disabled={busy} onClick={() => setDonating(true)}>기부</Button>
               ) : (
-                <Tip wraps text={GUILD_ERROR_TEXT[sel.locked ? 'bonus-locked' : 'rank-maxed']} className="block">
+                <Tip wraps text={donateDisabledReason(sel)} className="block">
                   <Button variant="primary" size="sm" full disabled className="pointer-events-none">기부</Button>
                 </Tip>
               )}
@@ -177,13 +178,14 @@ export default function GuildSkillsTab({ guild, gold, busy, run, setToast, onGol
           onCancel={() => setResetting(false)}
           onConfirm={() => {
             if (busy) return;
+            const fallbackUsed = resetState.used;
             setResetting(false);
-            void run({ op: 'resetEnhancements', guildId: guild.id }).then(async error => {
+            void onResetEnhancements().then(async ({ error, recovered }) => {
               if (error) {
                 setToast(error, 'warn');
                 return;
               }
-              setToast(`길드 스킬 강화를 초기화해 ${resetState.used}포인트를 되돌렸어요.`);
+              setToast(`길드 스킬 강화를 초기화해 ${recovered ?? fallbackUsed}포인트를 되돌렸어요.`);
               await onGoldChanged();
             });
           }}
@@ -235,15 +237,16 @@ function Branch({ row, active, busy, invest, onPick, onInvest }: {
   return (
     <div className={cx(
       'flex flex-col items-center min-w-0',
-      'mobile:grid mobile:grid-cols-[minmax(0,6.25rem)_minmax(0,1fr)_auto] mobile:items-center mobile:gap-1.5 mobile:p-1 mobile:bg-bg mobile:border mobile:border-line',
+      'mobile:grid mobile:grid-cols-[minmax(0,1fr)_auto] mobile:items-center mobile:gap-x-2 mobile:gap-y-1.5 mobile:p-1.5 mobile:bg-bg mobile:border mobile:border-line',
       active && 'mobile:border-gold mobile:bg-[#142642]',
       row.locked && 'opacity-45',
     )}>
-      <Tip wraps pressOpens text={row.locked ? `길드 Lv.${row.unlock}에 열려요.` : GUILD_BONUS_TIP[row.id]} className="block w-full">
+      <Tip wraps pressOpens text={row.locked ? `길드 Lv.${row.unlock}에 열려요.` : GUILD_BONUS_TIP[row.id]}
+           className="block w-full mobile:col-start-1 mobile:row-start-1 mobile:min-w-0">
         <Frame as="button" type="button" onClick={row.locked ? undefined : onPick} aria-disabled={row.locked || undefined}
                aria-pressed={active} aria-label={`${row.name} 고르기`}
                className={cx('w-full h-11 px-1 flex flex-col items-center justify-center gap-0.5 text-2xs leading-tight',
-                 'mobile:h-8 mobile:flex-row mobile:justify-start mobile:gap-1 mobile:px-1.5 mobile:text-left',
+                 'mobile:h-7 mobile:flex-row mobile:justify-start mobile:gap-1.5 mobile:px-2 mobile:text-left',
                  row.locked ? 'cursor-default' : 'cursor-pointer',
                  active
                    ? 'border-gold text-gold bg-[color-mix(in_oklab,var(--c-surface-2)_70%,var(--c-bg))] translate-y-px shadow-[inset_2px_2px_0_var(--bevel-hi),inset_-2px_-2px_0_var(--bevel-lo)]'
@@ -252,7 +255,7 @@ function Branch({ row, active, busy, invest, onPick, onInvest }: {
           <span className="text-center mobile:text-left mobile:truncate">{row.name}</span>
         </Frame>
       </Tip>
-      <div className="flex flex-col items-center mt-1.5 mobile:flex-row mobile:justify-center mobile:gap-0.5 mobile:mt-0"
+      <div className="flex flex-col items-center mt-1.5 mobile:col-start-1 mobile:row-start-2 mobile:justify-self-start mobile:flex-row mobile:justify-start mobile:gap-1 mobile:mt-0"
            aria-label={`${row.name} 기본 ${row.rank}단계 자유 강화 ${row.enhanceRank}단계`}>
         {row.nodes.map((node, i) => (
           <div key={node.rank} className="flex flex-col items-center mobile:flex-row">
@@ -270,22 +273,26 @@ function Branch({ row, active, busy, invest, onPick, onInvest }: {
       </div>
       <div className={cx(
         'mt-1.5 w-full px-1.5 py-0.5 flex items-center justify-between gap-1 bg-bg border border-line',
-        'mobile:mt-0 mobile:w-auto mobile:p-0 mobile:border-0 mobile:bg-transparent',
+        'mobile:contents',
         row.enhanceRank > 0 && 'border-epic bg-[#1b1229]',
       )}>
-        <span className={cx('pf-accent text-2xs whitespace-nowrap', row.enhanceRank > 0 ? 'text-guild font-bold' : 'text-text-dim')}>
+        <span className={cx(
+          'pf-accent text-2xs whitespace-nowrap',
+          'mobile:col-start-2 mobile:row-start-1 mobile:justify-self-end',
+          row.enhanceRank > 0 ? 'text-guild font-bold' : 'text-text-dim',
+        )}>
           {row.locked ? '잠김' : `${row.totalRank}단계`}
         </span>
         {invest.canInvest ? (
-          <Button size="sm" disabled={busy} onClick={onInvest}
+          <Button disabled={busy} onClick={onInvest}
                   aria-label={`${row.name} 강화 1단계 올리기`}
-                  className="h-5 min-w-7 px-1.5 py-0 pf-accent text-2xs font-bold bg-[#2b1640] border border-epic text-guild hover:bg-epic hover:text-[#08111f]">
+                  className="h-5 min-w-8 px-1.5 py-0 pf-accent text-2xs font-bold bg-[#2b1640] border-epic text-guild hover:bg-epic hover:text-[#08111f] mobile:col-start-2 mobile:row-start-2 mobile:justify-self-end">
             +1
           </Button>
         ) : (
-          <Tip wraps text={invest.reason ?? ''}>
-            <Button size="sm" disabled aria-label={`${row.name} 강화 불가`}
-                    className="h-5 min-w-7 px-1.5 py-0 pf-accent text-2xs font-bold bg-surface border border-line text-text-dim pointer-events-none">
+          <Tip wraps text={invest.reason ?? ''} className="mobile:col-start-2 mobile:row-start-2 mobile:justify-self-end">
+            <Button disabled aria-label={`${row.name} 강화 불가`}
+                    className="h-5 min-w-8 px-1.5 py-0 pf-accent text-2xs font-bold bg-surface border-line text-text-dim pointer-events-none">
               +1
             </Button>
           </Tip>

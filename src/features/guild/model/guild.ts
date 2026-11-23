@@ -301,6 +301,13 @@ export function bonusRows(bonuses: readonly GuildBonusItem[]): BonusRow[] {
   });
 }
 
+/** 기부 버튼이 잠긴 이유 */
+export function donateDisabledReason(row: BonusRow): string {
+  if (row.locked) return GUILD_ERROR_TEXT['bonus-locked'];
+  if (row.rank >= GUILD_BONUS_MAX_RANK) return '기본 단계 5단계를 모두 채웠어요.';
+  return GUILD_ERROR_TEXT['rank-maxed'];
+}
+
 /** 자유 강화 포인트 보유·사용 현황 */
 export function enhancePoolSummary(guild: GuildInfo): { max: number; used: number; remaining: number; maxSlots: number } {
   const max = maxEnhancePoints(guild.growth.level);
