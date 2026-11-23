@@ -120,9 +120,12 @@ describe('toastPolicy — 이벤트 분류 및 미러링 결정', () => {
       .toEqual({ action: 'hold', reason: 'loading' });
   });
 
-  it('AwayCard가 가려지지 않고 보이는 상태에서는 away.summary 토스트를 억제하고, 모달이 덮었으면 노출한다', () => {
+  it('AwayCard가 가려지지 않고 보이는 상태에서는 away.summary 토스트를 동기 억제하고, 모달이 덮었으면 노출한다', () => {
     const history = createMirrorHistory();
     const input = { kind: 'away.summary' as const, text: '1시간 동안 10마리', suppressIfAwayCardVisible: true };
+    // useEffect가 env.awayCardVisible을 갱신하기 전(false)에도 suppressIfAwayCardVisible=true면 동기 억제한다
+    expect(decideToastMirror(input, baseEnv({ awayCardVisible: false, hasOpenWindows: false }), 1000, history))
+      .toEqual({ action: 'skip', reason: 'away-card-visible' });
     expect(decideToastMirror(input, baseEnv({ awayCardVisible: true, hasOpenWindows: false }), 1000, history))
       .toEqual({ action: 'skip', reason: 'away-card-visible' });
     expect(decideToastMirror(input, baseEnv({ awayCardVisible: true, hasOpenWindows: true }), 1000, history).action)

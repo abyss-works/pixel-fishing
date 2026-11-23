@@ -60,7 +60,7 @@ interface Props {
   statusSlot?: HTMLElement | null;
 }
 
-function presentEvent(event: FieldEvent, setToast: Props['setToast'], game: GameState): void {
+function presentEvent(event: FieldEvent, setToast: Props['setToast'], game: GameState, region: RegionId): void {
   switch (event.type) {
     case 'cast': {
       const spot = SPOTS.find(candidate => candidate.id === event.spot)!;
@@ -93,7 +93,7 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast'], game: Game
         kind: 'catch.lineCut',
         text: '이 해역에서는 낚싯대 파워가 모자라요. 희귀한 물고기가 덜 걸리고 입질이 늦어져요. 작업대나 공방에서 낚싯대를 강화해 주세요.',
         toastText: '낚싯대 파워가 모자라요.',
-        cooldownKey: 'catch.lineCut',
+        cooldownKey: `catch.lineCut:${getSpotState().zone ?? region}`,
       });
       return;
     case 'movement-cancelled':
@@ -197,14 +197,14 @@ export default function Field({
       },
       onEvent: event => {
         if (event.type === 'guest-blocked') onGuestBlocked?.();
-        else presentEvent(event, setToast, game);
+        else presentEvent(event, setToast, game, region);
       },
       onScene,
       onWarmup,
       guest,
     };
     engine.updateContext(game, dayPhaseNow === 'night', callbacks);
-  }, [engine, game, dayPhaseNow, dispatch, setToast, onScene, onWarmup, guest, onGuestBlocked]);
+  }, [engine, region, game, dayPhaseNow, dispatch, setToast, onScene, onWarmup, guest, onGuestBlocked]);
 
   useEffect(() => { engine.setSchools(schools); }, [engine, schools]);
 

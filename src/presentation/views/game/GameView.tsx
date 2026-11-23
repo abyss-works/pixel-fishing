@@ -435,9 +435,6 @@ export default function GameView(props: GameViewProps) {
                          sellBonus={guildBonus?.effects.sell ?? 0} accountState={accountState}
                          setToast={props.setToast} onClose={() => setActionPanel(null)} />
         )}
-        {props.toasts && props.toasts.length > 0 && props.onDismissToast && (
-          <FloatingToastLayer toasts={props.toasts} maxVisible={mobile ? 2 : 3} onDismiss={props.onDismissToast} />
-        )}
       </GameStageLayout>
 
       <GameTabs
@@ -456,6 +453,9 @@ export default function GameView(props: GameViewProps) {
       <TutorialModal seen={game.tutorials} ready={saveReady} after={baitRefund.pending} dispatch={props.dispatch} />
       {props.blocker}
       {worldMapOpen && <WorldMapModal world={worldScene} onClose={() => setWorldMapOpen(false)} />}
+      {props.toasts && props.toasts.length > 0 && props.onDismissToast && (
+        <FloatingToastLayer toasts={props.toasts} maxVisible={mobile ? 2 : 3} onDismiss={props.onDismissToast} />
+      )}
     </div>
   );
 }

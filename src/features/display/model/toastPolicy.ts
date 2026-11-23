@@ -292,7 +292,7 @@ export function decideToastMirror(
   if (rule.tier === 'C') return { action: 'skip', reason: 'tier-c' };
   if (env.blocked) return { action: 'skip', reason: 'blocked' };
   if (env.loading) return { action: 'hold', reason: 'loading' };
-  if (input.suppressIfAwayCardVisible && env.awayCardVisible && !env.hasOpenWindows) {
+  if ((input.suppressIfAwayCardVisible || (input.kind === 'away.summary' && env.awayCardVisible)) && !env.hasOpenWindows) {
     return { action: 'skip', reason: 'away-card-visible' };
   }
   if (!env.toastEnabled) {

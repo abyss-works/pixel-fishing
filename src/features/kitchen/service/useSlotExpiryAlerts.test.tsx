@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, renderHook } from '@testing-library/react';
 import { newState } from '../../../game/rules/logic';
+import type { GameState } from '../../../game/rules/logic';
 
 const clock = vi.hoisted(() => ({ now: '2026-01-01T00:00:00.000Z' }));
 vi.mock('../../gameplay/service/useGameTime', () => ({
@@ -35,5 +36,29 @@ describe('useSlotExpiryAlerts', () => {
     rerender({ g: game });
     expect(notify).toHaveBeenCalledTimes(1);
     expect(notify).toHaveBeenCalledWith(expect.stringContaining('끝났어요.'));
+  });
+
+  it('계정 전환(adoptAccount)으로 만료 전 슬롯이 null로 바뀌어도 오탐 만료 알림을 내지 않는다', () => {
+    const notify = vi.fn();
+    const activeGame: GameState = {
+      ...newState(),
+      boat: 2,
+      slots: {
+        lunch: { id: 'cook-lunch-bite', endsAt: '2026-01-01T00:10:00.000Z' },
+        bait: null,
+      },
+    };
+    const { rerender } = renderHook(({ g }) => useSlotExpiryAlerts(g, notify), {
+      initialProps: { g: activeGame },
+    });
+
+    // clock.now(00:00:00) < endsAt(00:10:00) 상태에서 계정 전환으로 슬롯이 비워짐
+    const switchedAccountGame: GameState = {
+      ...newState(),
+      boat: 2,
+      slots: { lunch: null, bait: null },
+    };
+    rerender({ g: switchedAccountGame });
+    expect(notify).not.toHaveBeenCalled();
   });
 });

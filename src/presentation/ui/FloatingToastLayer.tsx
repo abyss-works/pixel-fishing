@@ -26,7 +26,7 @@ function resolveTone(tone: ToastTone | MessageTone): ToastTone {
   return tone;
 }
 
-/** 스테이지 위(--z-toast)에 띄우는 비차단 1줄 주요 알림 배너.
+/** 화면 전체 오버레이 위(--z-toast)에 띄우는 비차단 1줄 주요 알림 배너.
  *  원격 이동·바로 착용 등 부가 행동 버튼은 두지 않고 닫기(X)만 둔다. */
 export default function FloatingToastLayer({
   toasts,
@@ -42,7 +42,7 @@ export default function FloatingToastLayer({
   return (
     <div
       className={cx(
-        'pointer-events-none absolute bottom-2.5 left-1/2 -translate-x-1/2 z-(--z-toast)',
+        'pointer-events-none fixed bottom-3 mobile:bottom-16 left-1/2 -translate-x-1/2 z-(--z-toast)',
         'flex w-[min(560px,calc(100%-24px))] flex-col gap-2 mobile:[&>*:nth-child(n+3)]:hidden',
       )}
     >

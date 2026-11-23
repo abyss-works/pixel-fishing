@@ -4,6 +4,7 @@ import { sendNotice } from '../../features/display/model/toastPolicy';
 import { resetToastEnabled, setToastEnabled } from '../../features/display/service/toastEnabled';
 import { resetOpenWindows, useOpenWindow } from './openWindows';
 import FloatingToastLayer from './FloatingToastLayer';
+import Modal from './Modal';
 import { useMessageLog } from '../layouts/hud/useMessageLog';
 
 function WindowMarker() {
@@ -81,6 +82,24 @@ describe('FloatingToastLayer', () => {
 
     rerender(<FloatingToastLayer toasts={items} maxVisible={2} onDismiss={vi.fn()} />);
     expect(screen.getAllByRole('status')).toHaveLength(2);
+  });
+
+  it('앱 모달(layer="app")이 떠 있는 위에서도 닫기 버튼을 클릭할 수 있고 컨테이너는 pointer-events-none을 유지한다', () => {
+    const onDismiss = vi.fn();
+    render(
+      <>
+        <Modal title="테스트 창" onClose={vi.fn()}>내용</Modal>
+        <FloatingToastLayer
+          toasts={[{ id: 7, text: '요청이 거부됐어요.', tone: 'danger' }]}
+          onDismiss={onDismiss}
+        />
+      </>,
+    );
+    const toast = screen.getByRole('status');
+    expect(toast.parentElement?.className).toContain('pointer-events-none');
+    expect(toast.parentElement?.className).toContain('fixed');
+    fireEvent.click(screen.getByRole('button', { name: '알림 닫기' }));
+    expect(onDismiss).toHaveBeenCalledWith(7);
   });
 });
 
@@ -233,5 +252,32 @@ describe('useMessageLog — 시스템 로그 정본 +α 미러링 라우터', ()
     });
     expect(result.current.log).toHaveLength(2);
     expect(result.current.toasts.map(t => t.text)).toEqual(['골드가 모자라요.']);
+  });
+
+  it('away.summary는 hasCard=true일 때 MessageLog에는 무조건 기록하되 플로팅 토스트는 동기 억제하고, 모달이 열렸을 때만 미러링한다', () => {
+    const { result } = renderHook(() => useMessageLog([]));
+    act(() => {
+      sendNotice(result.current.setToast, {
+        kind: 'away.summary',
+        text: '5분 동안 3마리를 잡았어요.',
+        toastText: '귀환 정산 3마리 포획',
+        suppressIfAwayCardVisible: true,
+      });
+    });
+    expect(result.current.log).toHaveLength(1);
+    expect(result.current.log[0].text).toBe('5분 동안 3마리를 잡았어요.');
+    expect(result.current.toasts).toHaveLength(0);
+
+    render(<WindowMarker />);
+    act(() => {
+      sendNotice(result.current.setToast, {
+        kind: 'away.summary',
+        text: '10분 동안 6마리를 잡았어요.',
+        toastText: '귀환 정산 6마리 포획',
+        suppressIfAwayCardVisible: true,
+      });
+    });
+    expect(result.current.log).toHaveLength(2);
+    expect(result.current.toasts.map(t => t.text)).toEqual(['귀환 정산 6마리 포획']);
   });
 });
