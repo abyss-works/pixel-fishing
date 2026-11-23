@@ -604,11 +604,13 @@ describe('현상금 — 클리어 기준 한도와 만료', () => {
     expect((await callAction(userToken(uid), {
       type: 'resolveChallenge', questId: quest.id, success: true, hits: 99, misses: 0,
     })).status).toBe(200);
+    expect((await dumpUser(env.client, uid)).bounty_clears)
+      .toEqual([{ user_id: '<user>', kind: 'named', quest_id: quest.id, cleared_at: '<now>' }]);
     after(2000);
     expect((await deliver(uid, quest.id)).status).toBe(200);
     const dump = await dumpUser(env.client, uid);
     expect(dump.bounty_clears)
-      .toEqual([{ user_id: '<user>', kind: 'named', quest_id: quest.id, cleared_at: '<now>' }]);
+      .toEqual([{ user_id: '<user>', kind: 'named', quest_id: quest.id, cleared_at: NOW }]);
     expect(dump.bounty_progress).toEqual([]);
 
     const standaloneUid = await seed({ state: {} });
