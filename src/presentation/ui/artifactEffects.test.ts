@@ -51,4 +51,16 @@ describe('유물 효과 문장', () => {
     expect(artifactEffectLabel('duelSpeedupCut')).toBe('네임드 결투 가속');
     expect(artifactEffectLine(art('abyss-angler'), 'duelSpeedupCut', 1)).toBe(`${artifactEffectLabel('duelSpeedupCut')} −10%`);
   });
+
+  it('유물 배율(scale)을 넘기면 실제 적용 배율이 반영된 수치와 문장을 만든다', () => {
+    expect(artifactEffectValue(art('wreck-compass'), 'sail', 1, 1.15)).toBe('+11.5%');
+    expect(artifactEffectLine(art('wreck-compass'), 'sail', 5, 1.15)).toBe('항해 속도 +23%');
+    expect(artifactEffectLine(art('abyss-angler'), 'duelSpeedupCut', 1, 1.15)).toBe('네임드 결투 가속 −11.5%');
+    expect(artifactEffectLine(art('outer-isle-sinker'), 'biteWaitCut', 1, 1.03)).toBe('입질 대기 −10.3%');
+    expect(artifactEffectLine(art('gloucester-vertebra'), 'commonWeightCut', 5, 1.15)).toBe('일반 등급 가중치 −23%');
+    expect(artifactEffectLine(art('sargasso-net'), 'bagCap', 5, 1.15)).toBe('가방 용량 +23%');
+    expect(artifactEffectLine(art('varuna-scale'), 'extraCookChance', 5, 1.15)).toBe('요리 추가 완성 +23%p');
+    expect(artifactEffectLine(art('elder-scale'), 'mutationWeight', 1, 1.15)).toBe('돌연변이 가중치 +28.75%');
+    expect(artifactEffectValue(art('elder-scale'), 'mutationWeight', 5, 1.15)).toBe('+57.5%');
+  });
 });

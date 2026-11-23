@@ -5,8 +5,9 @@ import { cx } from '../../../ui/cx';
 import { useMobileLayout } from '../../../layouts/useMobileLayout';
 import TableBox from '../../../ui/TableBox';
 import DataTable from '../../../ui/DataTable';
-import Tip from '../../../ui/Tip';
-import { artifactEffectLine } from '../../../ui/artifactEffects';
+import Tip, { TipList } from '../../../ui/Tip';
+import { artifactEffectLine, artifactEffectValue } from '../../../ui/artifactEffects';
+import { fmtDecimal2 } from '../../../ui/format';
 import { bonusEffectText } from '../../../../features/guild/model/guild';
 import { SLOT_SCOPE } from '../../../../features/kitchen/model/recipes';
 
@@ -21,11 +22,26 @@ const HEAD = 'h-[30px] font-normal border-b border-line';
 /** 효과 문장 — 유물과 길드 보너스의 기존 문장 함수와 슬롯·업적 누적 효과 줄에서 뽑는다 */
 function effectText(row: BonusRow): string {
   switch (row.source.kind) {
-    case 'relic': return artifactEffectLine(row.source.artifact, row.source.effect, row.source.level) ?? '';
+    case 'relic': return artifactEffectLine(row.source.artifact, row.source.effect, row.source.level, row.source.scale) ?? '';
     case 'guild': return bonusEffectText(row.source.bonus, row.source.value);
     case 'slot': return `${row.source.effect.label} ${row.source.effect.value}`;
     case 'achievement': return `${row.source.label} ${row.source.value}`;
   }
+}
+
+/** 유물 배율이 적용된 행의 내역 툴팁 — 기본 효과·보유 유물 효과·적용 효과를 목록으로 보인다 */
+function relicTipRows(row: BonusRow): { label: string; value: string }[] | null {
+  if (row.source.kind !== 'relic' || row.source.scale <= 1) return null;
+  const { artifact, effect, level, scale } = row.source;
+  const base = artifactEffectValue(artifact, effect, level);
+  const applied = artifactEffectValue(artifact, effect, level, scale);
+  if (base === null || applied === null) return null;
+  const boostPct = fmtDecimal2(Math.round((scale - 1) * 1e9) / 1e7);
+  return [
+    { label: `유물 기본(Lv.${level})`, value: base },
+    { label: '보유 유물 효과', value: `+${boostPct}%` },
+    { label: '적용 효과', value: applied },
+  ];
 }
 function sourceText(row: BonusRow): string {
   switch (row.source.kind) {
@@ -64,16 +80,22 @@ export default function BonusTab({ rows }: { rows: BonusRow[] }) {
                     {CATEGORY_LABEL[category]}
                   </th>
                 </tr>
-                {list.length > 0 ? list.map(row => (
-                  <tr key={`${sourceText(row)}-${effectText(row)}`}>
-                    <td className={cx('h-[34px] border-t border-line/60', cell)}>
-                      <span className="text-accent">{effectText(row)}</span>
-                      {row.manualOnly && <span className="ml-2 text-2xs text-text-dim">{SLOT_SCOPE.bait}</span>}
-                      {row.autoOnly && <span className="ml-2 text-2xs text-text-dim">{SLOT_SCOPE.lunch}</span>}
-                    </td>
-                    <td className={cx('h-[34px] border-t border-line/60 text-right text-xs', cell)}>{sourceText(row)}</td>
-                  </tr>
-                )) : (
+                {list.length > 0 ? list.map(row => {
+                  const text = effectText(row);
+                  const tipRows = relicTipRows(row);
+                  return (
+                    <tr key={`${sourceText(row)}-${text}`}>
+                      <td className={cx('h-[34px] border-t border-line/60', cell)}>
+                        <span className="text-accent">
+                          {tipRows ? <Tip text={<TipList rows={tipRows} />}>{text}</Tip> : text}
+                        </span>
+                        {row.manualOnly && <span className="ml-2 text-2xs text-text-dim">{SLOT_SCOPE.bait}</span>}
+                        {row.autoOnly && <span className="ml-2 text-2xs text-text-dim">{SLOT_SCOPE.lunch}</span>}
+                      </td>
+                      <td className={cx('h-[34px] border-t border-line/60 text-right text-xs', cell)}>{sourceText(row)}</td>
+                    </tr>
+                  );
+                }) : (
                   <tr>
                     <td colSpan={2} className="h-[34px] border-t border-line/60 text-xs text-text-dim">받는 보너스가 없어요.</td>
                   </tr>

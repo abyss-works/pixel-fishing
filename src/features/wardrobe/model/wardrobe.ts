@@ -1,5 +1,5 @@
 import { HATS, LOOK_PRESETS, hatById, isAchievementHat } from '../../../game/content/wardrobe';
-import type { Look } from '../../../game/content/wardrobe';
+import type { Hat, HatSource, Look } from '../../../game/content/wardrobe';
 import { achievementForHatId, namedSpoilerPlace } from '../../../game/content/achievements';
 import { achievementProgress } from '../../../game/rules/achievements';
 import { REJECT_TEXT, canBuyHat } from '../../../game/rules/rules';
@@ -28,6 +28,7 @@ export type HatActionKind = 'wear' | 'unwear' | 'buy' | 'achievement';
 export interface HatDetail {
   name: string;
   price: number;
+  source: HatSource;
   owned: boolean;
   worn: boolean;
   action: HatActionKind;
@@ -37,36 +38,44 @@ export interface HatDetail {
   unlock: { achievementName: string; condition: string; current: number; target: number } | null;
 }
 
+function resolveHatUnlock(game: GameState, hat: Hat): HatDetail['unlock'] {
+  const ach = achievementForHatId(hat.id);
+  if (!ach) return null;
+  const p = achievementProgress(game, ach.id);
+  const hideNamed = Boolean(
+    ach.namedId && ach.namedQuestId && !game.clearedNamed.includes(ach.namedQuestId),
+  );
+  const place = hideNamed && ach.namedId ? namedSpoilerPlace(ach.namedId) : null;
+  return {
+    achievementName: place ? `${place} 네임드 토벌 ${p.target}회` : ach.name,
+    condition: place ? `${place}의 네임드를 ${p.target}회 토벌해요.` : ach.desc,
+    current: p.current,
+    target: p.target,
+  };
+}
+
 /** 모자 상세 칸의 이름·가격·버튼 판정 */
 export function hatDetail(game: GameState, hatId: string): HatDetail {
   const hat = hatById(hatId)!;
   const owned = game.hats.includes(hat.id);
   const worn = game.look.hat === hat.id;
+  const unlock = isAchievementHat(hat) ? resolveHatUnlock(game, hat) : null;
   if (!owned) {
     if (isAchievementHat(hat)) {
-      const ach = achievementForHatId(hat.id);
-      const p = ach ? achievementProgress(game, ach.id) : { current: 0, target: 0 };
-      let unlock: HatDetail['unlock'] = null;
-      if (ach) {
-        const hideNamed = Boolean(
-          ach.namedId && ach.namedQuestId && !game.clearedNamed.includes(ach.namedQuestId),
-        );
-        const place = hideNamed && ach.namedId ? namedSpoilerPlace(ach.namedId) : null;
-        unlock = {
-          achievementName: place ? `${place} 네임드 토벌 ${p.target}회` : ach.name,
-          condition: place ? `${place}의 네임드를 ${p.target}회 토벌해요.` : ach.desc,
-          current: p.current,
-          target: p.target,
-        };
-      }
       return {
-        name: hat.name, price: hat.price, owned, worn, action: 'achievement',
+        name: hat.name, price: hat.price, source: hat.source, owned, worn, action: 'achievement',
         buyBlock: REJECT_TEXT['achievement-hat-only'],
         unlock,
       };
     }
     const check = canBuyHat(game, hat.id);
-    return { name: hat.name, price: hat.price, owned, worn, action: 'buy', buyBlock: check.ok ? null : REJECT_TEXT[check.reason], unlock: null };
+    return {
+      name: hat.name, price: hat.price, source: hat.source, owned, worn, action: 'buy',
+      buyBlock: check.ok ? null : REJECT_TEXT[check.reason], unlock: null,
+    };
   }
-  return { name: hat.name, price: hat.price, owned, worn, action: worn ? 'unwear' : 'wear', buyBlock: null, unlock: null };
+  return {
+    name: hat.name, price: hat.price, source: hat.source, owned, worn,
+    action: worn ? 'unwear' : 'wear', buyBlock: null, unlock,
+  };
 }

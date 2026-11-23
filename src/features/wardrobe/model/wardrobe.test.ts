@@ -57,9 +57,30 @@ describe('hatDetail', () => {
     expect(d.unlock!.target).toBeGreaterThan(0);
     expect(d.unlock!.current).toBe(0);
   });
-  it('가진 업적 모자는 골드 모자처럼 쓰기 버튼이다', () => {
+  it('가진 업적 모자는 쓰기 버튼이고 해금 업적 정보와 출처를 유지한다', () => {
     const game = seed({ hats: ['straw-hat'] });
-    expect(hatDetail(game, 'straw-hat')).toMatchObject({ owned: true, action: 'wear', buyBlock: null, unlock: null });
+    const d = hatDetail(game, 'straw-hat');
+    expect(d).toMatchObject({
+      owned: true,
+      worn: false,
+      price: 0,
+      source: 'achievement',
+      action: 'wear',
+      buyBlock: null,
+    });
+    expect(d.unlock).toMatchObject({
+      achievementName: '마을 돌연변이 도감',
+      condition: expect.any(String),
+    });
+    expect(d.unlock!.target).toBeGreaterThan(0);
+
+    const worn = hatDetail(seed({ hats: ['straw-hat'], look: { shirt: 0, pants: 0, hat: 'straw-hat' } }), 'straw-hat');
+    expect(worn).toMatchObject({ owned: true, worn: true, source: 'achievement', action: 'unwear' });
+    expect(worn.unlock).toEqual(d.unlock);
+  });
+  it('골드 모자는 보유 여부와 무관하게 source가 gold이고 unlock은 null이다', () => {
+    expect(hatDetail(seed(), 'cap-red')).toMatchObject({ source: 'gold', unlock: null });
+    expect(hatDetail(seed({ hats: ['cap-red'] }), 'cap-red')).toMatchObject({ owned: true, source: 'gold', unlock: null });
   });
   it('업적 모자가 아닌 모자는 업적 잠금 상태가 아니다', () => {
     const hat = HATS.find(h => !isAchievementHat(h))!;
