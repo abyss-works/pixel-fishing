@@ -78,7 +78,7 @@ export default function Modal({ layer = 'app', title, wide, xl, md, narrow, onCl
     ? cx('fixed inset-0 bg-[rgba(4,9,18,0.7)]', closable ? 'z-(--z-app-modal)' : 'z-(--z-blocker)')
     : cx('absolute inset-0 bg-[rgba(4,9,18,0.6)]', closable ? 'z-(--z-stage-modal)' : 'z-(--z-blocker)');
   const box = layer === 'app'
-    ? cx('relative flex flex-col bg-surface border border-line rounded-md shadow-panel p-4 max-w-[90vw] max-h-[80vh]',
+    ? cx('relative flex flex-col pf-frame shadow-panel p-4 max-w-[90vw] max-h-[80vh]',
         xl ? 'w-[min(920px,calc(100%-32px))]' : wide ? 'w-[560px]' : narrow ? 'w-[min(400px,calc(100%-32px))]' : 'w-[480px]',
         'mobile:w-[calc(100%-48px)] mobile:max-w-none mobile:max-h-[calc(100dvh-48px)]')
     : cx('max-h-[calc(100%-32px)] flex flex-col',

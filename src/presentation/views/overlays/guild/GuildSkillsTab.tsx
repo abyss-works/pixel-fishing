@@ -11,13 +11,16 @@ import Button from '../../../ui/Button';
 import ConfirmDialog from '../../../ui/ConfirmDialog';
 import { cx } from '../../../ui/cx';
 import { fmtNum } from '../../../ui/format';
-import Frame from '../../../ui/Frame';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import Inset from '../../../ui/Inset';
+import KeyValueRow from '../../../ui/KeyValueRow';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
+import { NOTCH_SM } from '../../../ui/notch';
 import PixelIcon from '../../../ui/PixelIcon';
 import type { GlyphId } from '../../../ui/PixelIcon';
+import ProgressMeter from '../../../ui/ProgressMeter';
+import SlotCell from '../../../ui/SlotCell';
 import TextInput from '../../../ui/TextInput';
 import Tip from '../../../ui/Tip';
 import type { GuildPartProps, GuildRun } from './guildProps';
@@ -67,11 +70,10 @@ export default function GuildSkillsTab({ guild, gold, busy, run, onResetEnhancem
                 const state = idx >= pool.max ? 'locked' : idx < pool.remaining ? 'avail' : 'spent';
                 return (
                   <span key={idx}
-                        className={cx('size-2.5 border',
-                          '[clip-path:polygon(2px_0,100%_0,100%_calc(100%-2px),calc(100%-2px)_100%,0_100%,0_2px)]',
+                        className={cx('size-2.5 border', NOTCH_SM,
                           state === 'avail' && 'bg-guild border-epic',
-                          state === 'spent' && 'bg-[#3d2154] border-[#7c449e]',
-                          state === 'locked' && 'bg-bg border-line opacity-35')} />
+                          state === 'spent' && 'bg-[color-mix(in_oklab,var(--c-epic)_22%,var(--c-bg))] border-epic/65',
+                          state === 'locked' && 'bg-bg border-line-dim')} />
                 );
               })}
             </div>
@@ -90,19 +92,19 @@ export default function GuildSkillsTab({ guild, gold, busy, run, onResetEnhancem
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 px-2 py-1 bg-bg border border-line text-2xs text-text-dim"
-             aria-label="스킬 단계 색상 안내">
+        <Inset borderless tone="deep" className="flex flex-wrap items-center gap-x-3.5 gap-y-1 px-2 py-1 text-2xs text-text-dim"
+               aria-label="스킬 단계 색상 안내">
           <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-            <span className="inline-block size-3 bg-gold border-2 border-gold-dark" aria-hidden="true" />
+            <span className="inline-block size-3 bg-gold border border-gold-dark" aria-hidden="true" />
             노란색 채움: 기본 단계
           </span>
           <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-            <span className="inline-flex items-center justify-center p-px bg-[#311744] border-2 border-guild" aria-hidden="true">
+            <span className="inline-flex items-center justify-center p-px bg-[color-mix(in_oklab,var(--c-epic)_20%,var(--c-bg))] border border-guild" aria-hidden="true">
               <span className="block size-2 bg-gold border border-gold-dark" />
             </span>
             보라색 테두리: 자유 강화
           </span>
-        </div>
+        </Inset>
 
         <div className="grid grid-cols-5 gap-2.5 mobile:grid-cols-1 mobile:gap-1" role="group" aria-label="길드 스킬 트리">
           {rows.map(row => (
@@ -137,10 +139,13 @@ export default function GuildSkillsTab({ guild, gold, busy, run, onResetEnhancem
           <Inset className="p-2.5 flex flex-col gap-1.5">
             <ValueRow label="모인 골드"
                       value={sel.locked ? '-' : sel.next === null ? '5단계 완료' : `${fmtNum(sel.pool)} / ${fmtNum(sel.next)}`} />
-            <span className="block h-2 border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]" role="meter"
-                  aria-label={`${sel.name} 다음 단계까지`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(sel.ratio * 100)}>
-              <span className="block h-full bg-gold shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]" style={{ width: `${sel.ratio * 100}%` }} />
-            </span>
+            <ProgressMeter
+              current={Math.round(sel.ratio * 100)}
+              target={100}
+              ratio={sel.ratio}
+              tone="gold"
+              ariaLabel={`${sel.name} 다음 단계까지`}
+            />
             <div className="grid grid-cols-2 gap-2 mt-auto pt-0.5">
               {sel.canDonate ? (
                 <Button variant="primary" size="sm" full disabled={busy} onClick={() => setDonating(true)}>기부</Button>
@@ -151,7 +156,7 @@ export default function GuildSkillsTab({ guild, gold, busy, run, onResetEnhancem
               )}
               {selInvest.canInvest ? (
                 <Button size="sm" full disabled={busy}
-                        className="bg-[#2b1640] border-epic text-guild hover:bg-epic hover:text-[#08111f]"
+                        className="bg-[color-mix(in_oklab,var(--c-epic)_20%,var(--c-bg))] border-epic text-guild hover:bg-epic hover:text-bg"
                         onClick={() => { void onInvest(sel.id); }}>
                   강화 올리기
                 </Button>
@@ -197,16 +202,16 @@ export default function GuildSkillsTab({ guild, gold, busy, run, onResetEnhancem
                 <span className="pf-accent text-xs text-gold font-bold">{resetState.used}포인트</span>
               </div>
               {rows.filter(r => r.enhanceRank > 0).map(r => (
-                <div key={r.id} className="flex items-center justify-between text-xs">
-                  <span className="text-text-dim">{r.name}</span>
-                  <span className="pf-accent text-guild">강화 {r.enhanceRank}단계 회수</span>
-                </div>
+                <KeyValueRow key={r.id} compact className="h-auto border-t-0"
+                             label={r.name}
+                             value={`강화 ${r.enhanceRank}단계 회수`}
+                             valueClassName="pf-accent text-guild" />
               ))}
             </Inset>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-text-dim">필요 골드</span>
-              <span className="pf-accent text-gold">{fmtNum(resetState.cost)}G</span>
-            </div>
+            <KeyValueRow compact className="h-auto border-t-0"
+                         label="필요 골드"
+                         value={`${fmtNum(resetState.cost)}G`}
+                         valueClassName="pf-accent text-gold" />
             <p className="m-0 text-2xs text-text-dim">초기화에 쓴 골드는 돌려받지 않아요.</p>
           </div>
         </ConfirmDialog>
@@ -218,10 +223,7 @@ export default function GuildSkillsTab({ guild, gold, busy, run, onResetEnhancem
 /** 이름은 왼쪽, 값은 오른쪽인 한 줄 */
 function ValueRow({ label, value, up }: { label: string; value: string; up?: boolean }) {
   return (
-    <span className="flex items-center justify-between gap-3 h-6 border-t border-line/60 first:border-t-0">
-      <span className="text-xs text-text-dim">{label}</span>
-      <span className={cx('pf-accent text-xs', up && 'text-guild')}>{value}</span>
-    </span>
+    <KeyValueRow compact className="h-6" label={label} value={value} valueClassName={cx('pf-accent', up && 'text-guild')} />
   );
 }
 
@@ -238,22 +240,22 @@ function Branch({ row, active, busy, invest, onPick, onInvest }: {
     <div className={cx(
       'flex flex-col items-center min-w-0',
       'mobile:grid mobile:grid-cols-[minmax(0,1fr)_auto] mobile:items-center mobile:gap-x-2 mobile:gap-y-1.5 mobile:p-1.5 mobile:bg-bg mobile:border mobile:border-line',
-      active && 'mobile:border-gold mobile:bg-[#142642]',
-      row.locked && 'opacity-45',
+      active && 'mobile:border-gold mobile:bg-(--inset-light)',
+      row.locked && 'text-text-dim mobile:border-line-dim',
     )}>
       <Tip wraps pressOpens text={row.locked ? `길드 Lv.${row.unlock}에 열려요.` : GUILD_BONUS_TIP[row.id]}
            className="block w-full mobile:col-start-1 mobile:row-start-1 mobile:min-w-0">
-        <Frame as="button" type="button" onClick={row.locked ? undefined : onPick} aria-disabled={row.locked || undefined}
-               aria-pressed={active} aria-label={`${row.name} 고르기`}
-               className={cx('w-full h-11 px-1 flex flex-col items-center justify-center gap-0.5 text-2xs leading-tight',
-                 'mobile:h-7 mobile:flex-row mobile:justify-start mobile:gap-1.5 mobile:px-2 mobile:text-left',
-                 row.locked ? 'cursor-default' : 'cursor-pointer',
-                 active
-                   ? 'border-gold text-gold bg-[color-mix(in_oklab,var(--c-surface-2)_70%,var(--c-bg))] translate-y-px shadow-[inset_2px_2px_0_var(--bevel-hi),inset_-2px_-2px_0_var(--bevel-lo)]'
-                   : 'text-text bg-surface-2 hover:border-accent')}>
+        <SlotCell form={row.locked ? 'sunken' : active ? 'pressed' : 'raised'}
+                  ariaDisabled={row.locked} ariaPressed={active}
+                  ariaLabel={`${row.name} 고르기`}
+                  onSelect={onPick}
+                  className={cx('w-full h-11 px-1 flex flex-col items-center justify-center gap-0.5 text-2xs leading-tight',
+                    'mobile:h-7 mobile:flex-row mobile:justify-start mobile:gap-1.5 mobile:px-2 mobile:text-left',
+                    !row.locked && active ? 'text-gold bg-[color-mix(in_oklab,var(--c-surface-2)_70%,var(--c-bg))]'
+                      : !row.locked && 'text-text hover:border-accent')}>
           <PixelIcon glyph={GLYPH[row.id]} size={14} className="shrink-0" />
           <span className="text-center mobile:text-left mobile:truncate">{row.name}</span>
-        </Frame>
+        </SlotCell>
       </Tip>
       <div className="flex flex-col items-center mt-1.5 mobile:col-start-1 mobile:row-start-2 mobile:justify-self-start mobile:flex-row mobile:justify-start mobile:gap-1 mobile:mt-0"
            aria-label={`${row.name} 기본 ${row.rank}단계 자유 강화 ${row.enhanceRank}단계`}>
@@ -261,9 +263,9 @@ function Branch({ row, active, busy, invest, onPick, onInvest }: {
           <div key={node.rank} className="flex flex-col items-center mobile:flex-row">
             {i > 0 && <span className={cx('block w-0.5 h-0.5 mobile:hidden', node.state === 'done' ? 'bg-gold' : 'bg-line')} aria-hidden="true" />}
             <span className={cx(
-              'inline-flex items-center justify-center p-[2px] border-2 mobile:p-px',
+              'inline-flex items-center justify-center p-[2px] border mobile:p-px',
               node.enhanced
-                ? 'border-guild bg-[#311744] shadow-[0_0_0_1px_var(--c-epic),inset_0_0_0_1px_var(--c-epic)]'
+                ? 'border-guild bg-[color-mix(in_oklab,var(--c-epic)_18%,var(--c-bg))]'
                 : 'border-transparent bg-transparent',
             )}>
               <Node node={node} label={`${row.name} ${node.rank}단계`} />
@@ -272,9 +274,9 @@ function Branch({ row, active, busy, invest, onPick, onInvest }: {
         ))}
       </div>
       <div className={cx(
-        'mt-1.5 w-full px-1.5 py-0.5 flex items-center justify-between gap-1 bg-bg border border-line',
+        'mt-1.5 w-full px-1.5 py-0.5 flex items-center justify-between gap-1 bg-bg',
         'mobile:contents',
-        row.enhanceRank > 0 && 'border-epic bg-[#1b1229]',
+        row.enhanceRank > 0 && 'border border-epic bg-[color-mix(in_oklab,var(--c-epic)_12%,var(--c-bg))]',
       )}>
         <span className={cx(
           'pf-accent text-2xs whitespace-nowrap',
@@ -284,15 +286,15 @@ function Branch({ row, active, busy, invest, onPick, onInvest }: {
           {row.locked ? '잠김' : `${row.totalRank}단계`}
         </span>
         {invest.canInvest ? (
-          <Button disabled={busy} onClick={onInvest}
+          <Button size="xs" disabled={busy} onClick={onInvest}
                   aria-label={`${row.name} 강화 1단계 올리기`}
-                  className="h-5 min-w-8 px-1.5 py-0 pf-accent text-2xs font-bold bg-[#2b1640] border-epic text-guild hover:bg-epic hover:text-[#08111f] mobile:col-start-2 mobile:row-start-2 mobile:justify-self-end">
+                  className="h-5 min-w-8 px-1.5 py-0 pf-accent font-bold bg-[color-mix(in_oklab,var(--c-epic)_20%,var(--c-bg))] border-epic text-guild hover:bg-epic hover:text-bg mobile:col-start-2 mobile:row-start-2 mobile:justify-self-end">
             +1
           </Button>
         ) : (
           <Tip wraps text={invest.reason ?? ''} className="mobile:col-start-2 mobile:row-start-2 mobile:justify-self-end">
-            <Button disabled aria-label={`${row.name} 강화 불가`}
-                    className="h-5 min-w-8 px-1.5 py-0 pf-accent text-2xs font-bold bg-surface border-line text-text-dim pointer-events-none">
+            <Button size="xs" disabled aria-label={`${row.name} 강화 불가`}
+                    className="h-5 min-w-8 px-1.5 py-0 pf-accent font-bold bg-surface border-line text-text-dim pointer-events-none">
               +1
             </Button>
           </Tip>
@@ -304,16 +306,16 @@ function Branch({ row, active, busy, invest, onPick, onInvest }: {
 
 const NODE_TEXT: Record<BonusNode['state'], string> = { done: '이룸', next: '모으는 중', open: '열림', capped: '상한 위' };
 
-/** 단계 노드: 이룬 단계는 금색으로 볼록하게 차고, 다음 단계는 모인 비율만큼 위에서 아래로 찬다. 상한 위는 오목하고 흐리다 */
+/** 단계 노드: 이룬 단계는 금색으로 차고, 다음 단계는 모인 비율만큼 위에서 아래로 찬다. 상한 위는 흐린 테두리다 */
 function Node({ node, label }: { node: BonusNode; label: string }) {
   return (
     <span role="img" aria-label={`${label} ${NODE_TEXT[node.state]}${node.enhanced ? ' 자유 강화 적용' : ''}`}
-          className={cx('relative w-6 h-[18px] mobile:size-4 overflow-hidden flex items-center justify-center pf-accent text-2xs border-2',
-            '[clip-path:polygon(2px_0,100%_0,100%_calc(100%-2px),calc(100%-2px)_100%,0_100%,0_2px)]',
-            node.state === 'done' && 'border-gold-dark bg-gold text-[#08111f] shadow-[inset_1px_1px_0_rgba(255,255,255,0.5),inset_-1px_-1px_0_rgba(0,0,0,0.25)]',
-            node.state === 'next' && 'border-gold bg-surface-2 text-text shadow-[inset_1px_1px_0_var(--bevel-lo),inset_-1px_-1px_0_var(--bevel-hi)]',
-            node.state === 'open' && 'border-line bg-surface-2 text-text-dim shadow-[inset_1px_1px_0_var(--bevel-lo),inset_-1px_-1px_0_var(--bevel-hi)]',
-            node.state === 'capped' && 'border-line bg-transparent text-text-dim opacity-50 shadow-[inset_1px_1px_0_var(--bevel-hi)]')}>
+          className={cx('relative w-6 h-[18px] mobile:size-4 overflow-hidden flex items-center justify-center pf-accent text-2xs border',
+            NOTCH_SM,
+            node.state === 'done' && 'border-gold-dark bg-gold text-bg',
+            node.state === 'next' && 'border-gold bg-surface-2 text-text',
+            node.state === 'open' && 'border-line bg-surface-2 text-text-dim',
+            node.state === 'capped' && 'border-line-dim bg-bg text-text-dim')}>
       {node.state === 'next' && (
         <span className="absolute inset-x-0 top-0 bg-gold/45" style={{ height: `${node.fill * 100}%` }} aria-hidden="true" />
       )}

@@ -19,7 +19,7 @@ export default function HudPanel({ as: Tag = 'div', tone = 'line', className, ch
 } & HTMLAttributes<HTMLElement>) {
   return (
     <Tag {...(Tag === 'button' ? { type: 'button' as const } : {})}
-         className={cx('pf-glass pf-notch pf-bevel border-2', TONE[tone], className)} {...rest}>
+         className={cx('pf-glass pf-notch pf-bevel border', TONE[tone], className)} {...rest}>
       {children}
     </Tag>
   );

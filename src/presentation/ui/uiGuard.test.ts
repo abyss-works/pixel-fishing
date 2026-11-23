@@ -27,7 +27,7 @@ const screens = screenFiles.filter(f => f.path.endsWith('.tsx'));
 const PRIMITIVES: { pattern: RegExp; use: string }[] = [
   { pattern: /\bpf-frame\b/, use: 'Frame(틀) · Panel(제목 있는 박스)' },
   { pattern: /\bpf-btn\b/, use: 'Button · LinkButton(다른 페이지 링크)' },
-  { pattern: /<button\b/, use: 'Button · IconButton · PillButton · SelectList · Frame as="button"' },
+  { pattern: /<button\b/, use: 'Button · IconButton · ToggleChip · SelectList · Frame as="button"' },
   { pattern: /<input\b/, use: 'TextInput · Slider · NumberStepper' },
   { pattern: /<select\b/, use: 'Select' },
   { pattern: /<textarea\b/, use: 'TextArea' },
@@ -618,5 +618,118 @@ describe('UI 시스템 가드', () => {
     expect(OK_STATUS_COLOR.test('bg-ok/10')).toBe(true);
     expect(OK_STATUS_COLOR.test('border-ok/70')).toBe(true);
     expect(OK_STATUS_COLOR.test('text-accent border-gold')).toBe(false);
+  });
+
+  // UI 규칙 가드 — 게임 화면과 공용 UI는 둥근 모서리(예외 제외), 완료/잠금 opacity 흐림, 네이티브 title, PillButton,
+  // 2px 두꺼운 테두리·베벨, 가운뎃점·대시([·—–])를 쓰지 않는다 (admin/devtools 제외)
+  const isGameUi = (p: string) =>
+    p.startsWith('ui/') || p.startsWith('layouts/') || p.startsWith('views/game/') || p.startsWith('views/overlays/');
+  const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+
+  const ROUNDED_RE = /\brounded-(?:sm|md|lg|full|\[[^\]]+\])\b/;
+  const ROUNDED_EXCEPTIONS = new Set([
+    'ui/TooltipBubble.tsx',                   // 예외: 툴팁 버블
+    'ui/hud/Minimap.tsx',                     // 예외: 미니맵 지도 틀
+    'ui/GoogleButton.tsx',                    // Google 브랜드 가이드라인 버튼
+    'ui/PillButton.tsx',                      // admin/devtools 전용 잔존 유틸 (게임 화면에서 금지)
+    'layouts/game-stage/MovePad.tsx',         // 터치 조이스틱 원형 패드
+    'views/overlays/world-map/WorldMapModal.tsx', // 세계지도 틀
+  ]);
+  it('게임 UI는 예외 외에 둥근 모서리(rounded-*)를 쓰지 않는다', () => {
+    const targets = presentationFiles.filter(f => isGameUi(f.path) && !ROUNDED_EXCEPTIONS.has(f.path));
+    const offenders = targets.filter(f => ROUNDED_RE.test(f.src)).map(f => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  const OPACITY_WASH_RE = /(?<!disabled:)\bopacity-(?:40|45|50|55|60|70|80|85|\[0\.(?:45|50|55|70|72)\])\b/;
+  it('게임 UI는 완료·잠금·보조 텍스트에 비활성 외 opacity 흐림을 쓰지 않는다', () => {
+    const targets = presentationFiles.filter(f => isGameUi(f.path) && f.path !== 'ui/PillButton.tsx' && f.path !== 'ui/ToggleChip.tsx');
+    const offenders = targets.filter(f => OPACITY_WASH_RE.test(f.src)).map(f => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  const NATIVE_TITLE_RE = /<[a-z][^>]*\stitle=/;
+  it('게임 UI는 브라우저 기본 title 속성 툴팁을 쓰지 않는다', () => {
+    const targets = presentationFiles.filter(f => isGameUi(f.path));
+    const offenders = targets.filter(f => NATIVE_TITLE_RE.test(f.src)).map(f => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  it('게임 UI는 PillButton을 쓰지 않는다(admin/devtools 전용)', () => {
+    const targets = presentationFiles.filter(f => isGameUi(f.path) && f.path !== 'ui/PillButton.tsx');
+    const offenders = targets.filter(f => /\bPillButton\b/.test(f.src)).map(f => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  const THICK_BORDER_RE = /(?:\bborder-(?:[trblxy]-)?2\b|inset_-?2px)/;
+  it('게임 UI 버튼·칩·카드·모달·레이아웃은 1px 얇은 테두리와 1px 베벨을 쓴다', () => {
+    const targets = presentationFiles.filter(
+      f => isGameUi(f.path) && f.path !== 'ui/PillButton.tsx',
+    );
+    const offenders = targets.filter(f => THICK_BORDER_RE.test(f.src)).map(f => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  const TIER1_FLAT_PRIMITIVES = [
+    'ui/HelpHint.tsx',
+    'ui/ArrowButton.tsx',
+    'ui/ProgressMeter.tsx',
+    'ui/SegmentedStepBar.tsx',
+    'ui/hud/BagMeter.tsx',
+    'ui/hud/HudChip.tsx',
+    'ui/ToggleChip.tsx',
+  ];
+  const TIER1_BEVEL_RE = /(?:\bpf-bevel\b|\bPRESSED_BEVEL\b|inset_-?1px)/;
+  it('26px 이하 소형 요소와 12px 이하 트랙은 베벨 없는 평면 1px 테두리(Tier 1)를 쓴다', () => {
+    const offenders = TIER1_FLAT_PRIMITIVES.filter(path => {
+      const src = presentationFiles.find(f => f.path === path)?.src ?? '';
+      return TIER1_BEVEL_RE.test(src);
+    });
+    expect(offenders).toEqual([]);
+  });
+
+  const RAW_INSET_CLIP_RE = /(?:shadow-\[inset_|\[clip-path:)/;
+  it('게임 화면은 인라인 inset 그림자와 clip-path를 직접 쓰지 않고 공용 UI와 노치 토큰을 쓴다', () => {
+    const targets = screenFiles.filter(f => f.path.startsWith('views/game/') || f.path.startsWith('views/overlays/'));
+    const offenders = targets.filter(f => RAW_INSET_CLIP_RE.test(f.src)).map(f => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  const HARDCODED_HEX_RE = /(?:bg|border|text|from|to|via|ring|outline)-\[#/;
+  it('게임 화면은 16진 색상 클래스를 박지 않고 시맨틱 토큰을 쓴다', () => {
+    const targets = screenFiles.filter(f => f.path.startsWith('views/game/') || f.path.startsWith('views/overlays/'));
+    const offenders = targets.filter(f => HARDCODED_HEX_RE.test(f.src)).map(f => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  const RAW_DIVIDER_RE = /\b(?:w|h)-px\b[^\n]*\bbg-line\b|\bbg-line\b[^\n]*\b(?:w|h)-px\b/;
+  it('게임 화면은 1px 선을 직접 그리지 않고 Divider를 쓴다', () => {
+    const targets = screenFiles.filter(f => f.path.startsWith('views/game/') || f.path.startsWith('views/overlays/'));
+    const offenders = targets.filter(f => RAW_DIVIDER_RE.test(f.src)).map(f => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  const CLICKABLE_NONBUTTON_RE = /<(?:div|span)\b[^>]*\brole=(?:\{[^}]*['"]button['"]|['"]button['"])/;
+  const CLICKABLE_NONBUTTON_EXCEPTIONS = new Set([
+    'views/game/tabs/bag/BagTab.tsx',
+    'views/overlays/bounty/EncounterModal.tsx',
+  ]);
+  it('게임 화면의 누를 수 있는 칸은 div/span role="button" 대신 button/Frame as="button"을 쓴다', () => {
+    const targets = screenFiles.filter(
+      f => (f.path.startsWith('views/game/') || f.path.startsWith('views/overlays/'))
+        && !CLICKABLE_NONBUTTON_EXCEPTIONS.has(f.path),
+    );
+    const offenders = targets.filter(f => CLICKABLE_NONBUTTON_RE.test(f.src)).map(f => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  const PUNCT_RE = /[·—–]/;
+  it('게임 UI와 기능 모델 코드 문자열은 가운뎃점·줄표를 쓰지 않는다', () => {
+    const targets = [...presentationFiles, ...featureFiles].filter(
+      f => !f.path.includes('/admin/') && !f.path.includes('/devtools/')
+        && !f.path.startsWith('views/admin/') && !f.path.startsWith('views/devtools/'),
+    );
+    const offenders = targets.filter(f => PUNCT_RE.test(stripComments(f.src))).map(f => f.path);
+    expect(offenders).toEqual([]);
   });
 });

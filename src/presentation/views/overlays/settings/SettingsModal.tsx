@@ -5,7 +5,7 @@ import type { AlertToggle } from '../../../../features/bounty/service/encounterA
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import type { GameAction } from '../../../../game/rules/actions';
 import { REJECT_TEXT } from '../../../../game/rules/rules';
-import Frame from '../../../ui/Frame';
+import Inset from '../../../ui/Inset';
 import KeyValueRow from '../../../ui/KeyValueRow';
 import Modal from '../../../ui/Modal';
 import SectionTitle from '../../../ui/SectionTitle';
@@ -16,7 +16,7 @@ import { PromptChoices } from '../whats-new/SettingsStep';
 
 const FISH_ART = SETTING_PROMPTS.find(p => p.id === 'fish-art')!;
 
-const AUTO_LOCK_HINT = '어종·돌연변이별로 더 큰 물고기를 낚으면 자동으로 잠그고 기존 자동 잠금을 풀어요.\n직접 잠근 물고기는 그대로 유지돼요.';
+const AUTO_LOCK_HINT = '어종과 돌연변이별로 더 큰 물고기를 낚으면 자동으로 잠그고 기존 자동 잠금을 풀어요.\n직접 잠근 물고기는 그대로 유지돼요.';
 const DENIED_REASON = '브라우저가 이 사이트의 알림을 막았어요.\n주소창 왼쪽의 사이트 설정에서 알림을 허용하면 켤 수 있어요.';
 const UNSUPPORTED_REASON = '이 브라우저는 알림을 지원하지 않아요.';
 const DENIED_TOAST = '브라우저가 알림을 막았어요. 주소창의 사이트 설정에서 허용할 수 있어요.';
@@ -78,7 +78,7 @@ export default function SettingsModal({ autoLockOnCatch, dispatch, setToast, onC
     <Modal title="설정" narrow onClose={onClose}>
       <PromptChoices prompt={FISH_ART} describeInTip />
       <SectionTitle>가방</SectionTitle>
-      <Frame divided>
+      <Inset divided>
         <KeyValueRow
           label={<Tip text={AUTO_LOCK_HINT}>낚을 때 자동 잠금</Tip>}
           value=""
@@ -88,14 +88,14 @@ export default function SettingsModal({ autoLockOnCatch, dispatch, setToast, onC
             </ToggleChip>
           )}
         />
-      </Frame>
+      </Inset>
       <SectionTitle>알림</SectionTitle>
-      <Frame divided>
+      <Inset divided>
         <AlertRow label="네임드 조우" hint={`네임드의 흔적을 만나면 알려 줘요.\n${hint}`} toggle={encounter}
                   blockedReason={blockedReason} setToast={setToast} />
         <AlertRow label="업데이트" hint={`새 버전이 나와 진행이 멈추면 알려 줘요.\n${hint}`} toggle={update}
                   blockedReason={blockedReason} setToast={setToast} />
-      </Frame>
+      </Inset>
     </Modal>
   );
 }

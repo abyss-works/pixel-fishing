@@ -75,15 +75,15 @@ export default function StatsModal({ game, movement, region, nickname, guild, in
     <Modal layer="stage" md height={560} onClose={onClose}>
       <ModalCard title="스탯" onClose={onClose} fixed>
         <div className="flex flex-col gap-3 flex-1 min-h-0">
-          <Inset className="flex items-center gap-3 h-10 px-3 shrink-0 text-sm">
+          <Inset className="flex flex-wrap items-center gap-x-3 gap-y-1 min-h-10 px-3 py-1.5 shrink-0 text-sm">
             <b className="max-w-40 truncate text-text">{nickname ?? '불러오는 중'}</b>
-            <span className="flex items-baseline gap-2 pl-3 border-l border-line">
+            <span className="flex items-baseline gap-1.5 whitespace-nowrap">
               <span className="text-xs text-text-dim">배</span><span>{selected.data.boatName}</span>
             </span>
-            <span className="flex items-baseline gap-2 pl-3 border-l border-line">
+            <span className="flex items-baseline gap-1.5 whitespace-nowrap">
               <span className="text-xs text-text-dim">낚싯대</span><span className="pf-accent text-xs">Lv.{game.rod}</span>
             </span>
-            <span className="flex items-baseline gap-2 pl-3 border-l border-line">
+            <span className="flex items-baseline gap-1.5 whitespace-nowrap">
               <span className="text-xs text-text-dim"><Tip text={powerHelpText()}>파워</Tip></span>
               <span className="pf-accent text-xs text-gold">{selected.data.currentPower}</span>
             </span>

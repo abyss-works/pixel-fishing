@@ -15,6 +15,7 @@ import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
 import SelectList from '../../../ui/SelectList';
+import Subheading from '../../../ui/Subheading';
 import TabBar from '../../../ui/TabBar';
 import TextInput from '../../../ui/TextInput';
 import Tip from '../../../ui/Tip';
@@ -205,9 +206,9 @@ function FriendRequestTable({ label, rows, pending, empty, actions }: {
 }) {
   return (
     <section className="flex flex-col gap-1.5 flex-1 min-h-0" aria-label={label}>
-      <span className="flex justify-between text-xs text-text-dim">
+      <Subheading className="flex justify-between text-xs mb-0">
         <span>{label}</span><span className="pf-accent">{rows?.length ?? 0}</span>
-      </span>
+      </Subheading>
       <TableBox className="flex-1 min-h-[48px] px-3 py-1">
         {rows && rows.length > 0 ? (
           <DataTable cols={[null, '132px']} nameMin="8rem">

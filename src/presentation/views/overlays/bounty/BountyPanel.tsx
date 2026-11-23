@@ -44,7 +44,7 @@ function BoardStatus({ zoneName, leftAll, leftNamed, dailyCap, namedDailyCap }: 
   zoneName: string; leftAll: number | null; leftNamed: number | null; dailyCap: number; namedDailyCap: number;
 }) {
   return (
-    <Inset className="flex items-center gap-3 h-10 px-3 shrink-0 text-xs">
+    <Inset className="flex flex-wrap items-center gap-x-3 gap-y-1 min-h-10 px-3 py-1.5 shrink-0 text-xs">
       <b className="text-sm text-text">{zoneName}</b>
       <ClearsLeft leftAll={leftAll} leftNamed={leftNamed} dailyCap={dailyCap} namedDailyCap={namedDailyCap} />
     </Inset>
@@ -134,7 +134,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
       <div className={`flex flex-col gap-2 flex-1 min-h-0 ${SCROLL_Y}`}>
       {screen === 'quests' ? (
         <Gated open={basicOpen} overlay={<CondList conds={basicConds} />}>
-          <div className="grid grid-cols-3 gap-2 items-stretch flex-1 min-h-0">
+          <div className="grid grid-cols-3 gap-2 items-stretch flex-1 min-h-0 mobile:grid-cols-1">
             {gradeCard('easy')}
             {gradeCard('normal')}
             {gradeCard('hard')}

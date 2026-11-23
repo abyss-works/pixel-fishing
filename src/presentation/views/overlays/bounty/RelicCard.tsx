@@ -6,7 +6,7 @@ import { artifactHasLevel } from '../../../../game/content/artifacts.js';
 import type { Artifact } from '../../../../game/content/artifacts.js';
 import { levelText } from '../../../../features/inventory/model/artifactLevel';
 import Button from '../../../ui/Button';
-import Frame from '../../../ui/Frame';
+import Inset from '../../../ui/Inset';
 import Tip from '../../../ui/Tip';
 import { RarityText } from '../../../ui/fish/RarityTag';
 import { artifactEffectLines, artifactSystemLines } from '../../../ui/artifactEffects';
@@ -28,8 +28,10 @@ export default function RelicCard({ artifact, owned, level, materialCount, busy,
     ...(penalty ? [{ line: penalty, tone: 'text-danger' }] : []),
   ];
   const exchange = <Button variant="primary" full disabled={materialCount < 1 || busy} onClick={onExchange}>교환</Button>;
+  const canExchange = !owned && materialCount >= 1;
   return (
-    <Frame className="bg-surface-2 p-3 flex flex-col gap-2 flex-1 min-h-0">
+    <Inset tone={owned ? 'deep' : canExchange ? 'light' : 'base'}
+           className={canExchange ? 'border-gold bg-[color-mix(in_oklab,var(--c-gold)_8%,var(--inset-light))] p-3 flex flex-col gap-2 flex-1 min-h-0' : 'p-3 flex flex-col gap-2 flex-1 min-h-0'}>
       <div className="flex items-baseline gap-2 h-6">
         <b className="text-base text-gold truncate"><Tip text={artifact.lore}>{artifact.name}</Tip></b>
         {owned && artifactHasLevel(artifact) && <span className="text-xs text-text-dim shrink-0">{levelText(level)}</span>}
@@ -49,6 +51,6 @@ export default function RelicCard({ artifact, owned, level, materialCount, busy,
             ? <Tip wraps text={REJECT_TEXT['material-missing']} className="block">{exchange}</Tip>
             : exchange}
       </div>
-    </Frame>
+    </Inset>
   );
 }

@@ -16,7 +16,7 @@ export default function NoticeBody({ lead, aside, className, children }: {
     <div className={cx('flex flex-col gap-2 text-sm leading-[1.7]', className)}>
       <p className="text-base text-text">{lead}</p>
       {children && <div className="flex flex-col gap-1.5 text-text-dim">{children}</div>}
-      {aside && <p className="border-l-2 border-line pl-2 text-xs text-text-dim">{aside}</p>}
+      {aside && <p className="border-l border-line pl-2 text-xs text-text-dim">{aside}</p>}
     </div>
   );
 }

@@ -5,12 +5,12 @@ import { GUILD_LEVEL_HELP, GUILD_ERROR_TEXT, growthBar, growthTotalText, splitMe
 import type { GuildConfirm, GuildInfo, GuildOp } from '../../../../features/guild/model/guild';
 import { useGuild } from '../../../../features/guild/service/useGuild';
 import ConfirmDialog from '../../../ui/ConfirmDialog';
-import { cx } from '../../../ui/cx';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import Inset from '../../../ui/Inset';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
+import ProgressMeter from '../../../ui/ProgressMeter';
 import TabBar from '../../../ui/TabBar';
 import Tip from '../../../ui/Tip';
 import GuildLogbookTab from './GuildLogbookTab';
@@ -139,18 +139,20 @@ function GuildView({ ask, gold, artifacts, onGoldChanged, onResetEnhancements, .
 function GuildStatus({ guild }: { guild: GuildInfo }) {
   const bar = growthBar(guild.growth);
   return (
-    <Inset className="grid grid-cols-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-3 h-10 px-3 shrink-0">
-      <b className="max-w-40 truncate pr-3 border-r border-line text-text">{guild.name}</b>
+    <Inset className="grid grid-cols-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-x-3 gap-y-1 min-h-10 px-3 py-1.5 shrink-0 mobile:grid-cols-[minmax(0,1fr)_auto_auto]">
+      <b className="max-w-40 truncate text-text mobile:max-w-none">{guild.name}</b>
       <span className="pf-accent text-base text-gold">Lv.{guild.growth.level}</span>
-      <Tip plain text={GUILD_LEVEL_HELP} className="block">
-        <span className="block h-2 border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]" role="meter"
-              aria-label="다음 레벨까지 진행" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(bar.ratio * 100)}>
-          <span className={cx('block h-full shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]', bar.remaining === null ? 'bg-gold' : 'bg-accent')}
-                style={{ width: `${bar.ratio * 100}%` }} />
-        </span>
+      <Tip plain text={GUILD_LEVEL_HELP} className="block mobile:col-span-2 mobile:row-start-2">
+        <ProgressMeter
+          current={Math.round(bar.ratio * 100)}
+          target={100}
+          ratio={bar.ratio}
+          tone={bar.remaining === null ? 'gold' : 'accent'}
+          ariaLabel="다음 레벨까지 진행"
+        />
       </Tip>
-      <span className="pf-accent text-xs">{growthTotalText(guild.growth)}</span>
-      <span className="flex items-baseline gap-2 pl-3 border-l border-line">
+      <span className="pf-accent text-xs whitespace-nowrap mobile:row-start-2 mobile:justify-self-end">{growthTotalText(guild.growth)}</span>
+      <span className="flex items-baseline gap-1.5 whitespace-nowrap mobile:col-start-3 mobile:row-start-1">
         <span className="text-xs text-text-dim">인원</span>
         <span className="pf-accent text-xs">{splitMembers(guild.members).active.length}/{GUILD_MAX_MEMBERS}</span>
       </span>

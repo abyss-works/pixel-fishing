@@ -26,7 +26,7 @@ export default function FloatingToastLayer({
           key={t.id}
           role="status"
           className={cx(
-            'pointer-events-none pf-notch flex items-center justify-between gap-2 border-2 bg-surface px-3 py-2',
+            'pointer-events-none pf-notch flex items-center justify-between gap-2 border bg-surface px-3 py-2',
             'shadow-[0_8px_24px_rgba(0,0,0,0.65),inset_1px_1px_0_var(--bevel-lo),inset_-1px_-1px_0_var(--bevel-hi)]',
             t.tone === 'gold' ? 'border-gold' : t.tone === 'warn' ? 'border-danger' : 'border-accent',
           )}

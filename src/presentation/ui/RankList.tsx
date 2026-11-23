@@ -30,7 +30,10 @@ export default function RankList({ rows, me, valueLabel, format, className }: {
         </tbody>
       </DataTable>
       {me && !meInList && (
-        <p className={cx('mt-2 text-sm', ME)}>내 순위 {me.rank}위 · {format(me.value)}</p>
+        <div className={cx('mt-2 flex items-center justify-between gap-2 text-sm', ME)}>
+          <span>내 순위 {me.rank}위</span>
+          <span className="pf-accent text-xs">{format(me.value)}</span>
+        </div>
       )}
     </div>
   );

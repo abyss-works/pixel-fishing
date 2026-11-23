@@ -4,6 +4,7 @@ import { zoneById } from '../../../../../game/content/zones';
 import type { ZoneId } from '../../../../../game/content/zones';
 import { selectDexGrid } from '../../../../../features/dex/model/catalog';
 import { cx } from '../../../../ui/cx';
+import Frame from '../../../../ui/Frame';
 import SubTabs from '../../../../ui/SubTabs';
 import FishSprite from '../../../../ui/fish/FishSprite';
 import { RarityDot, RARITY_CARD, DIM_CARD } from '../../../../ui/fish/RarityTag';
@@ -47,13 +48,10 @@ export default function DexGrid({ game, view, sub, onSub }: {
             <div className="grid grid-cols-3 gap-2">
               {fishes.map(({ fish: f, discovered: ok, count, name, price }) => {
                 // 등급은 테두리(알파25%)와 등급 점으로만 — 미획득 카드도 티어는 알 수 있게
-                return (
-                  <div key={f.id} data-rarity={f.rarity}
-                       className={cx(RARITY_CARD, 'p-2 text-sm', !ok && DIM_CARD)}
-                       role={ok ? 'button' : undefined} tabIndex={ok ? 0 : undefined}
-                       onClick={ok ? () => setDetail(f) : undefined}>
-                        <FishSprite fish={f} preset="icon" form={viewForm} discovered={ok}
-                                    ariaLabel={ok ? name : '미확인 어종'}
+                const body = (
+                  <>
+                    <FishSprite fish={f} preset="icon" form={viewForm} discovered={ok}
+                                ariaLabel={ok ? name : '미확인 어종'}
                                 className="block mx-auto mb-1" />
                     {ok ? (
                       <>
@@ -69,6 +67,18 @@ export default function DexGrid({ game, view, sub, onSub }: {
                         <span className="text-text-dim text-xs"><RarityDot rarity={f.rarity} />미확인</span>
                       </>
                     )}
+                  </>
+                );
+                return ok ? (
+                  <Frame as="button" type="button" key={f.id} data-rarity={f.rarity}
+                         className={cx(RARITY_CARD, 'p-2 text-sm text-center cursor-pointer')}
+                         onClick={() => setDetail(f)}>
+                    {body}
+                  </Frame>
+                ) : (
+                  <div key={f.id} data-rarity={f.rarity}
+                       className={cx(RARITY_CARD, 'p-2 text-sm', DIM_CARD)}>
+                    {body}
                   </div>
                 );
               })}

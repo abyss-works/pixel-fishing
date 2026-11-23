@@ -39,7 +39,7 @@ export default function ResourceBar({ game, bagBonus = 0, onOpen }: { game: Game
     <Tip key="bag" wraps plain hoverOnly text={text.bag}>
       <HudStat glyph="fish" label="가방">
         <span className="flex items-center gap-1.5 h-[17px]">
-          <BagMeter percent={bag.percent} level={bag.level} gaugeClass="w-(--hdr-gauge) h-2" percentClass="text-[15px] min-w-[3.4em]" />
+          <BagMeter percent={bag.percent} level={bag.level} gaugeClass="w-(--hdr-gauge) h-2" percentClass="text-base min-w-[3.4em]" />
         </span>
       </HudStat>
     </Tip>,

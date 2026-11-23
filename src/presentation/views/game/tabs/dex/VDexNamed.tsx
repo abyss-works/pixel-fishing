@@ -5,6 +5,7 @@ import { zoneById } from '../../../../../game/content/zones';
 import type { ZoneId } from '../../../../../game/content/zones';
 import { selectNamedDex } from '../../../../../features/dex/model/catalog';
 import { cx } from '../../../../ui/cx';
+import Frame from '../../../../ui/Frame';
 import SubTabs from '../../../../ui/SubTabs';
 import FishSprite from '../../../../ui/fish/FishSprite';
 import { RARITY_CARD, DIM_CARD } from '../../../../ui/fish/RarityTag';
@@ -40,10 +41,9 @@ export default function DexNamedView({ game, sub, onSub }: {
       <div className="flex flex-col gap-2 mt-2">
         {data.quests.map(({ quest: q, found: ok, fish, displayName }) => {
           return (
-            <div key={q.id} role="button" tabIndex={0} aria-label={`${ok ? (displayName ?? q.targetFish) : '미확인 네임드'} 상세 보기`}
-                 onClick={() => setDetail(q)}
-                 onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetail(q); } }}
-                 className={cx(RARITY_CARD, 'p-4 w-full aspect-[3/2] flex flex-col items-center justify-center cursor-pointer hover:brightness-110', !ok && DIM_CARD)}>
+            <Frame as="button" type="button" key={q.id} aria-label={`${ok ? (displayName ?? q.targetFish) : '미확인 네임드'} 상세 보기`}
+                   onClick={() => setDetail(q)}
+                   className={cx(RARITY_CARD, 'p-4 w-full aspect-[3/2] flex flex-col items-center justify-center cursor-pointer hover:brightness-110', !ok && DIM_CARD)}>
               {fish && (
                 <FishSprite fish={fish} preset="portrait" discovered={ok}
                             ariaLabel={ok && displayName ? displayName : '미확인 네임드'} className="block mx-auto" />
@@ -52,7 +52,7 @@ export default function DexNamedView({ game, sub, onSub }: {
               <span className="block text-center text-text-dim text-xs">
                 {ok ? '토벌' : '미확인'}
               </span>
-            </div>
+            </Frame>
           );
         })}
         {data.quests.length === 0 && (

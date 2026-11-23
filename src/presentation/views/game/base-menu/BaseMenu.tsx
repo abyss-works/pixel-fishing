@@ -14,7 +14,7 @@ import { STACK_MENU_CLASS } from '../../../ui/hud/stackTier';
 import { useMobileLayout } from '../../../layouts/useMobileLayout';
 import NightOverlay from '../../../ui/hud/NightOverlay';
 import MenuCard from '../../../ui/MenuCard';
-import Panel from '../../../ui/Panel';
+import Inset from '../../../ui/Inset';
 import FacilityIcon from './FacilityIcon';
 import BoatSprite from '../../../ui/BoatSprite';
 import { BUILDING_SPRITES, FURNITURE_SPRITES } from '../../../../game/rendering/pixel/sprites/buildings.js';
@@ -82,7 +82,8 @@ export default function BaseMenu({ base, game, onFacility, locked, accountState 
               const items = pack.furniture.filter(f => SECTION_OF[f.id] === section);
               if (items.length === 0) return null;
               return (
-                <Panel key={section} title={section}>
+                <Inset key={section} title={section}
+                       className="p-2 flex flex-col gap-2 bg-[color-mix(in_oklab,var(--c-bg)_72%,transparent)] backdrop-blur-[4px]">
                   <div className="flex gap-2">
                     {items.map(f => {
                       const { title, sub } = f.label(info);
@@ -97,7 +98,7 @@ export default function BaseMenu({ base, game, onFacility, locked, accountState 
                       );
                     })}
                   </div>
-                </Panel>
+                </Inset>
               );
             })}
           </div>

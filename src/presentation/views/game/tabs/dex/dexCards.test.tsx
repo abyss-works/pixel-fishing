@@ -56,7 +56,7 @@ describe('도감 일반 어종 카드', () => {
     expect(i).toBeGreaterThanOrEqual(0);
     expect(p).toBeGreaterThan(i);
     expect(c).toBeGreaterThan(p);
-    const card = container.querySelector(`[data-rarity="${entry.fish.rarity}"][role="button"]`)!;
+    const card = container.querySelector(`button[data-rarity="${entry.fish.rarity}"]`)!;
     expect(card.textContent).not.toContain(RARITY[entry.fish.rarity].name);
     expect(card.textContent).not.toContain('·');
   });

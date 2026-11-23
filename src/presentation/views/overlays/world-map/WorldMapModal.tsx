@@ -4,7 +4,7 @@ import Modal from '../../../ui/Modal';
 import Note from '../../../ui/Note';
 import PageTitle from '../../../ui/PageTitle';
 import { cx } from '../../../ui/cx';
-import PillButton from '../../../ui/PillButton';
+import Button from '../../../ui/Button';
 import PixelIcon from '../../../ui/PixelIcon';
 import {
   FULL_VIEW, MAP_ZOOM_MAX, MAP_ZOOM_MIN, MAP_ZOOM_STEP, clampView, loadMapView, panBy, saveMapView, zoomAt,
@@ -147,20 +147,20 @@ export default function WorldMapModal({ world, onClose }: {
                 onPointerDown={onPointerDown} onPointerMove={onPointerMove}
                 onPointerUp={endDrag} onPointerCancel={endDrag} />
         <div className="absolute top-2 right-2 flex items-center gap-1 pf-glass p-1 rounded-sm">
-          <PillButton aria-label="축소" disabled={view.scale <= MAP_ZOOM_MIN}
-                      onClick={() => zoomBy(1 / MAP_ZOOM_STEP)}>
+          <Button size="sm" aria-label="축소" disabled={view.scale <= MAP_ZOOM_MIN}
+                  onClick={() => zoomBy(1 / MAP_ZOOM_STEP)}>
             <PixelIcon glyph="minus" size={10} />
-          </PillButton>
+          </Button>
           <span className="pf-accent text-xs text-text-dim w-10 text-center" aria-live="polite">
             {Math.round(view.scale * 100)}%
           </span>
-          <PillButton aria-label="확대" disabled={view.scale >= MAP_ZOOM_MAX}
-                      onClick={() => zoomBy(MAP_ZOOM_STEP)}>
+          <Button size="sm" aria-label="확대" disabled={view.scale >= MAP_ZOOM_MAX}
+                  onClick={() => zoomBy(MAP_ZOOM_STEP)}>
             <PixelIcon glyph="plus" size={10} />
-          </PillButton>
-          <PillButton disabled={view.scale <= MAP_ZOOM_MIN} onClick={() => setView(FULL_VIEW)}>
+          </Button>
+          <Button size="sm" disabled={view.scale <= MAP_ZOOM_MIN} onClick={() => setView(FULL_VIEW)}>
             전체
-          </PillButton>
+          </Button>
         </div>
       </div>
       <Note className="mb-0">

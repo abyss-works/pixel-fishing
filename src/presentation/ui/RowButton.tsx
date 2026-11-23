@@ -15,7 +15,7 @@ export default function RowButton({ glyph, title, pressed = false, onClick }: {
     <Frame as="button" type="button" aria-pressed={pressed} onClick={onClick}
            className={cx('flex items-center gap-2.5 h-12 px-2.5 w-full text-left cursor-pointer bg-surface-2',
              pressed
-               ? 'border-gold translate-y-px shadow-[inset_-2px_-2px_0_var(--bevel-lo),inset_2px_2px_0_var(--bevel-hi)]'
+               ? 'border-gold translate-y-px shadow-[inset_-1px_-1px_0_var(--bevel-lo),inset_1px_1px_0_var(--bevel-hi)]'
                : 'hover:border-accent')}>
       <PixelIcon glyph={glyph} size={14} className={pressed ? 'text-gold' : 'text-text-dim'} />
       <b className={cx('text-sm', pressed && 'text-gold')}>{title}</b>

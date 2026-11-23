@@ -19,10 +19,10 @@ import type { AchievementRow, CosmeticFilter, CumulativeBonusCardModel } from '.
 import { fmtGold, fmtNum, josa } from '../../../ui/format';
 import { SCROLL_Y } from '../../../ui/scrollArea';
 import Button from '../../../ui/Button';
+import CountBadge from '../../../ui/CountBadge';
 import Inset from '../../../ui/Inset';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
-import PillButton from '../../../ui/PillButton';
 import PixelIcon from '../../../ui/PixelIcon';
 import Subheading from '../../../ui/Subheading';
 import TabBar from '../../../ui/TabBar';
@@ -154,9 +154,9 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
             <div className="flex flex-wrap items-center justify-between gap-2 shrink-0">
               <span className="text-xs text-text-dim">달성한 단계는 수령 없이 즉시 적용돼요.</span>
               {onOpenStatsBonus && (
-                <PillButton type="button" onClick={onOpenStatsBonus}>
+                <Button size="sm" type="button" onClick={onOpenStatsBonus}>
                   스탯 창 보너스 탭에서 전체 합계 확인
-                </PillButton>
+                </Button>
               )}
             </div>
           )}
@@ -176,9 +176,7 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
                   >
                     <span>{f.label}</span>
                     <span className="pf-accent text-2xs text-text-dim">({st.achieved}/{st.total})</span>
-                    {st.claimable > 0 && (
-                      <span className="pf-accent text-2xs px-1 bg-gold text-bg">{st.claimable}</span>
-                    )}
+                    {st.claimable > 0 && <CountBadge tone="gold" count={st.claimable} />}
                   </ToggleChip>
                 );
               })}

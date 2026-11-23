@@ -52,11 +52,11 @@ export function CompareTable({ heads, rows }: { heads: [ReactNode] | [ReactNode,
         <thead><tr><th aria-label="항목" /><th>{heads[0]}</th>{showNext && <th>{heads[1]}</th>}</tr></thead>
         <tbody>
           {rows.map((r, i) => (
-            <tr key={i} className={r.dim ? 'opacity-50' : undefined}>
+            <tr key={i} className={r.dim ? 'text-text-dim' : undefined}>
               <td className="text-text-dim">{r.label}</td>
               <td className="pf-accent text-xs text-text-dim">{breakable(r.value, mobile)}</td>
               {showNext && (
-                <td className="pf-accent text-xs text-accent">
+                <td className={`pf-accent text-xs ${r.dim ? 'text-text-dim' : 'text-accent'}`}>
                   {breakable(r.next, mobile)}
                   {r.delta && <>{mobile && <wbr />}<span className="ml-1.5 text-2xs">{breakable(r.delta, mobile)}</span></>}
                 </td>

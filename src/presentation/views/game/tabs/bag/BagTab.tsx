@@ -17,8 +17,8 @@ import Note from '../../../../ui/Note';
 import ConfirmDialog from '../../../../ui/ConfirmDialog';
 import FishSprite from '../../../../ui/fish/FishSprite';
 import PixelIcon from '../../../../ui/PixelIcon';
+import Button from '../../../../ui/Button';
 import IconButton from '../../../../ui/IconButton';
-import PillButton from '../../../../ui/PillButton';
 import Tip from '../../../../ui/Tip';
 import SubTabs from '../../../../ui/SubTabs';
 import { RarityDot, RarityText } from '../../../../ui/fish/RarityTag';
@@ -32,7 +32,7 @@ import { levelText, selectArtifactLevel } from '../../../../../features/inventor
 import { selectOwnedArtifacts } from '../../../../../features/inventory/model/selectors';
 import { ARTIFACTS } from '../../../../../game/content/artifacts';
 import { artifactEffectLines } from '../../../../ui/artifactEffects';
-import Frame from '../../../../ui/Frame';
+import Inset from '../../../../ui/Inset';
 import PressRow from '../../../../ui/PressRow';
 import ArtifactDetail from './ArtifactDetail';
 import ItemSection from './ItemSection';
@@ -78,7 +78,7 @@ function ArtifactSection({ game, dispatch, setToast }: {
         <Note>아직 유물이 없어요.<br />네임드를 토벌하고 받은 교환 재료를 수배판의 유물 탭에서 유물로 바꿔 보세요.</Note>
       ) : (
         <>
-          <Frame divided>
+          <Inset divided>
             {owned.map(a => {
               const { level, hasLevel } = selectArtifactLevel(game, a);
               return (
@@ -97,7 +97,7 @@ function ArtifactSection({ game, dispatch, setToast }: {
                 </PressRow>
               );
             })}
-          </Frame>
+          </Inset>
           <Note>유물은 가지고만 있어도 효과가 계속돼요.<br />교환은 항구 수배판의 유물 탭에서 할 수 있어요.</Note>
         </>
       )}
@@ -121,7 +121,7 @@ function ExhibitShelf({ exhibit, onWithdraw }: {
       <Subheading>
         전시대 <span className="pf-accent">{shown}/{EXHIBIT_SLOTS}</span>
       </Subheading>
-      <Frame divided>
+      <Inset divided>
         {slots.map((inst, i) => {
           if (!inst) return <div key={i} className="px-2 py-1.5 text-xs text-text-dim">빈 칸</div>;
           const fish = instanceFish(inst);
@@ -137,14 +137,14 @@ function ExhibitShelf({ exhibit, onWithdraw }: {
                 {inst.size === null ? '미상' : fmtSize(inst.size)}
               </span>
               <Tip wraps text="가방으로 되돌려요">
-                <PillButton aria-label={`${name} 회수`} onClick={() => onWithdraw(inst, name)}>
+                <Button size="sm" aria-label={`${name} 회수`} onClick={() => onWithdraw(inst, name)}>
                   회수
-                </PillButton>
+                </Button>
               </Tip>
             </div>
           );
         })}
-      </Frame>
+      </Inset>
     </div>
   );
 }
@@ -239,11 +239,11 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
               <span className="text-text-dim">/{fmtNum(cap)}</span>마리)
             </PageTitle>
             {bagCount > 0 && (
-              <Tip wraps text="어종마다 일반·돌연변이 각각 가장 큰 물고기 한 마리만 잠그고, 나머지 잠금은 풀어요">
-                <PillButton aria-label="자동 잠금" onClick={autoLock}>
+              <Tip wraps text="어종마다 일반과 돌연변이 각각 가장 큰 물고기 한 마리만 잠그고, 나머지 잠금은 풀어요">
+                <Button size="sm" aria-label="자동 잠금" onClick={autoLock} className="inline-flex items-center gap-1">
                   <PixelIcon glyph="lockOpen" size={12} />
                   자동 잠금
-                </PillButton>
+                </Button>
               </Tip>
             )}
           </div>
@@ -251,13 +251,16 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
             <ConfirmDialog title="자동 잠금" confirmLabel="정리"
                            onConfirm={applyAutoLock} onCancel={() => setLockConfirm(false)}>
                 <p className="text-sm leading-relaxed">
-                  어종마다 일반·돌연변이 각각 <b className="text-gold">가장 큰 물고기 한 마리만</b> 잠그고,
+                  어종마다 일반과 돌연변이 각각 <b className="text-gold">가장 큰 물고기 한 마리만</b> 잠그고,
                   나머지는 잠금이 풀려요.<br />
                   직접 잠근 물고기도 가장 크지 않으면 풀려요.
                 </p>
-                <p className="text-sm">
-                  잠금 <b className="pf-accent">{autoLockPlan.lock.length}</b>마리 · 잠금 해제{' '}
-                  <b className={cx('pf-accent', autoLockPlan.unlock.length > 0 && 'text-danger')}>{autoLockPlan.unlock.length}</b>마리
+                <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                  <span>잠금 <b className="pf-accent">{autoLockPlan.lock.length}</b>마리</span>
+                  <span>
+                    잠금 해제{' '}
+                    <b className={cx('pf-accent', autoLockPlan.unlock.length > 0 && 'text-danger')}>{autoLockPlan.unlock.length}</b>마리
+                  </span>
                 </p>
             </ConfirmDialog>
           )}
@@ -268,7 +271,7 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
             <Note>가방이 비어 있어요.<br />어군을 찾아 낚시해 보세요.</Note>
           ) : (
             <>
-              <Frame divided>
+              <Inset divided>
                 {rows.map(({ key, fish, name, items, subtotal, sized, unsized, maxByForm }) => {
                   const expanded = opened.has(key);
                   const uids = items.map(i => i.uid);
@@ -322,7 +325,7 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
                     </div>
                   );
                 })}
-              </Frame>
+              </Inset>
               <Note>
                 판매 가능 금액은 <AdjustedAmount amount={sellable} />이에요.<br />
                 판매는 집 궤짝이나 항구 어시장에서 할 수 있어요.<br />

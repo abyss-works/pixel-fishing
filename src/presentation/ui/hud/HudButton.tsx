@@ -12,7 +12,7 @@ interface HudButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, '
 export default function HudButton({ active = false, className, ...props }: HudButtonProps) {
   return (
     <button type="button"
-            className={cx('inline-flex shrink-0 items-center h-7 px-2.5 text-xs bg-surface-2 border-2', NOTCH_SM,
+            className={cx('inline-flex shrink-0 items-center h-7 px-2.5 text-xs bg-surface-2 border', NOTCH_SM,
               'cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed',
               active
                 ? 'border-gold shadow-[inset_1px_1px_0_var(--bevel-hi),inset_-1px_-1px_0_var(--bevel-lo)]'

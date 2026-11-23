@@ -4,6 +4,7 @@ import { POWER_RULES, autoPenaltyHelpText } from '../../../../game/rules/stats';
 import { formatStatMods, formatStatValue } from '../../../../features/gameplay/model/statFormat';
 import type { StatsSpotRow, SpotFit } from '../../../../features/gameplay/model/stats';
 import { cx } from '../../../ui/cx';
+import KeyValueRow from '../../../ui/KeyValueRow';
 import Tip, { TipList } from '../../../ui/Tip';
 import { FIT_LABEL, FIT_TONE, goodText, idleRows, idleText } from './statsText';
 
@@ -28,12 +29,7 @@ const perfectText = (row: StatsSpotRow): string =>
 
 /** 한 줄: 이름은 왼쪽(보조색), 값은 오른쪽 */
 function RodStatLine({ label, children }: { label: ReactNode; children: ReactNode }) {
-  return (
-    <li className="flex items-center justify-between gap-2 h-[26px] text-xs [&+&]:border-t [&+&]:border-line/60">
-      <span className="text-text-dim">{label}</span>
-      <span className="pf-accent">{children}</span>
-    </li>
-  );
+  return <KeyValueRow as="li" compact label={label} value={children} valueClassName="pf-accent" />;
 }
 
 export default function RodStatTable({ row }: { row: StatsSpotRow }) {

@@ -24,10 +24,10 @@ import { GUEST_CHAT_NOTICE, guestLock } from '../../../../features/display/model
 import type { AccountLockState } from '../../../../features/display/model/menuLock';
 import { hasModifier, useKeyScope } from '../../../ui/hotkeys';
 import { cx } from '../../../ui/cx';
-import { NOTCH_SM } from '../../../ui/notch';
 import Tip from '../../../ui/Tip';
 import HudButton from '../../../ui/hud/HudButton';
 import HudInput from '../../../ui/hud/HudInput';
+import HudPanel from '../../../ui/hud/HudPanel';
 import Locked from '../../../ui/Locked';
 import PixelIcon from '../../../ui/PixelIcon';
 
@@ -102,11 +102,10 @@ export default function ChatBar({ inGuild = false, accountState = 'account', fol
   return (
     <div className="relative text-xs">
       {status && (
-        <p role="status"
-           className={cx('absolute left-0 bottom-full mb-1 m-0 max-w-full px-2 py-0.5 whitespace-pre-line break-keep leading-snug text-danger',
-             'bg-[color-mix(in_oklab,var(--c-bg)_88%,transparent)] border border-[color-mix(in_srgb,var(--c-danger)_60%,transparent)]', NOTCH_SM)}>
+        <HudPanel role="status" tone="none"
+                  className="absolute left-0 bottom-full mb-1 max-w-full px-2 py-0.5 whitespace-pre-line break-keep leading-snug text-danger bg-[color-mix(in_oklab,var(--c-bg)_88%,transparent)] border-[color-mix(in_srgb,var(--c-danger)_60%,transparent)]">
           {formatStatusNotice(status)}
-        </p>
+        </HudPanel>
       )}
       <div className="flex items-center gap-1.5">
         {unfold}
