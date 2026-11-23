@@ -187,12 +187,14 @@ describe('업적 카드', () => {
     expect(cardParts(container).reward).toHaveClass('border-t', 'border-line');
   });
 
-  it('받은 카드는 opacity-50 흐림 대신 깊은 오목(bg-bg) 스타일을 쓰고 보상 칸 값은 남는다', () => {
+  it('받은 카드는 opacity-50 흐림 대신 깊은 오목(bg-bg) 스타일과 선명한 제목(text-text)을 쓰고 보상 칸 값은 남는다', () => {
     const game = seed({ achievements: { 'spot-basic-sea': 'claimed' } });
     const { container } = show(game, 'spot-basic-sea');
     const { root, reward } = cardParts(container);
     expect(root).not.toHaveClass('opacity-50');
     expect(root).toHaveClass('bg-bg');
+    expect(container.querySelector('[data-achievement-name]')).toHaveClass('text-text');
+    expect(screen.getByText('완료')).not.toHaveClass('rounded-sm');
     expect(reward.querySelector('[data-achievement-reward]')).toHaveTextContent('300G');
   });
 

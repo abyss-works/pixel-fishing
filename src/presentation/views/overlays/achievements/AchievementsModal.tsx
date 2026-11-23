@@ -162,7 +162,7 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
           )}
 
           {tab === 'cosmetic' && filterStats && (
-            <div className="flex flex-wrap gap-1.5 shrink-0 mobile:grid mobile:grid-cols-3">
+            <div className="flex flex-wrap gap-1.5 shrink-0 mobile:grid mobile:grid-cols-2">
               {COSMETIC_FILTERS.map(f => {
                 const st = filterStats[f.key];
                 const active = cosmeticFilter === f.key;
@@ -171,7 +171,7 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
                     key={f.key}
                     pressed={active}
                     emphasis={active}
-                    className="mobile:justify-center"
+                    className="min-w-0 mobile:justify-center"
                     onClick={() => setCosmeticFilter(f.key)}
                   >
                     <span>{f.label}</span>

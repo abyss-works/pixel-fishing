@@ -95,12 +95,13 @@ describe('업적 창 카드 격자', () => {
     expect(screen.queryByText('메갈로돈 토벌')).toBeNull();
   });
 
-  it('치장 탭 필터는 노치 ToggleChip이며 모바일 3열 그리드로 배치되고 바로 착용·옷장 열기 버튼이 없다', () => {
+  it('치장 탭 필터는 노치 ToggleChip이며 모바일 2열 균형 그리드로 배치되고 바로 착용·옷장 열기 버튼이 없다', () => {
     open();
     fireEvent.click(screen.getByRole('button', { name: '치장' }));
     const namedBtn = screen.getByRole('button', { name: /네임드/ });
     expect(namedBtn).toHaveAttribute('aria-pressed', 'false');
-    expect(namedBtn.parentElement?.className).toContain('mobile:grid-cols-3');
+    expect(namedBtn.parentElement?.className).toContain('mobile:grid-cols-2');
+    expect(namedBtn.parentElement?.className).not.toContain('mobile:grid-cols-3');
     expect(screen.queryByRole('button', { name: /바로 착용|옷장 열기/ })).toBeNull();
   });
 

@@ -10,6 +10,7 @@ import type {
 } from '../../../../features/achievement/model/achievements';
 import { fmtGold, fmtNum } from '../../../ui/format';
 import { cx } from '../../../ui/cx';
+import { NOTCH_SM } from '../../../ui/notch';
 import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
 import Inset from '../../../ui/Inset';
@@ -40,21 +41,21 @@ const cardFrameClass = (status: AchievementRowStatus) => cx(
 function StatusBadge({ status }: { status: AchievementRowStatus }) {
   if (status === 'claimable') {
     return (
-      <span className="shrink-0 whitespace-nowrap text-2xs px-1.5 py-0.5 rounded-sm border border-gold text-gold bg-[color-mix(in_oklab,var(--c-gold)_12%,transparent)]">
+      <span className={cx('shrink-0 whitespace-nowrap text-2xs px-1.5 py-0.5 border border-gold text-gold bg-[color-mix(in_oklab,var(--c-gold)_12%,transparent)]', NOTCH_SM)}>
         수령 가능
       </span>
     );
   }
   if (status === 'claimed') {
     return (
-      <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-2xs px-1.5 py-0.5 rounded-sm border border-line text-text-dim">
+      <span className={cx('inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-2xs px-1.5 py-0.5 border border-line text-text-dim', NOTCH_SM)}>
         <PixelIcon glyph="check" size={10} />
         완료
       </span>
     );
   }
   return (
-    <span className="shrink-0 whitespace-nowrap text-2xs px-1.5 py-0.5 rounded-sm border border-line text-text-dim">
+    <span className={cx('shrink-0 whitespace-nowrap text-2xs px-1.5 py-0.5 border border-line text-text-dim', NOTCH_SM)}>
       미달성
     </span>
   );
@@ -71,7 +72,7 @@ export default function AchievementCard({ row, game, guest = false, busy, onClai
     <Inset tone={cardTone(row.status)} className={cardFrameClass(row.status)}>
       <div className="flex flex-1 flex-col gap-1.5 p-2.5">
         <div className="flex items-start justify-between gap-2">
-          <b data-achievement-name className={cx('text-sm break-keep break-words', row.status === 'claimed' ? 'text-text-dim' : 'text-text')}>
+          <b data-achievement-name className="text-sm text-text break-keep break-words">
             {def.name}
           </b>
           <StatusBadge status={row.status} />
@@ -128,7 +129,7 @@ export function CumulativeBonusCard({ card }: { card: CumulativeBonusCardModel }
           return (
             <span key={step.id} className="flex items-center justify-between gap-4 py-0.5">
               <span className="flex items-center gap-1.5">
-                <span className={cx('px-1 text-2xs border rounded-sm', stateCls)}>{stateLabel}</span>
+                <span className={cx('px-1 text-2xs border', NOTCH_SM, stateCls)}>{stateLabel}</span>
                 <span>{idx + 1}단계 ({step.label})</span>
               </span>
               <span className="pf-accent text-text">{step.deltaText}</span>
@@ -146,13 +147,14 @@ export function CumulativeBonusCard({ card }: { card: CumulativeBonusCardModel }
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-center gap-1.5">
             <PixelIcon glyph={card.icon} size={14} className={cx('shrink-0', card.allDone ? 'text-gold' : 'text-accent')} />
-            <b data-achievement-name className={cx('text-sm break-keep break-words', card.allDone ? 'text-text-dim' : 'text-text')}>
+            <b data-achievement-name className="text-sm text-text break-keep break-words">
               {card.series.name}
             </b>
             {card.series.scope === 'zone' && <Badge>{card.scopeLabel}</Badge>}
           </div>
           <span className={cx(
-            'shrink-0 whitespace-nowrap text-2xs px-1.5 py-0.5 rounded-sm border pf-accent',
+            'shrink-0 whitespace-nowrap text-2xs px-1.5 py-0.5 border pf-accent',
+            NOTCH_SM,
             card.allDone ? 'border-gold text-gold' : 'border-line text-text-dim',
           )}>
             {card.allDone ? '최대 단계' : `${doneCount} / ${card.steps.length}단계`}
@@ -227,7 +229,7 @@ export function NamedGroupCard({
     : card.status === 'claimed'
       ? <StatusBadge status="claimed" />
       : (
-        <span className="shrink-0 whitespace-nowrap text-2xs px-1.5 py-0.5 rounded-sm border border-line text-text-dim pf-accent">
+        <span className={cx('shrink-0 whitespace-nowrap text-2xs px-1.5 py-0.5 border border-line text-text-dim pf-accent', NOTCH_SM)}>
           {doneSteps}/{card.steps.length} 단계
         </span>
       );
@@ -244,7 +246,7 @@ export function NamedGroupCard({
         return (
           <span key={step.id} className="flex items-center justify-between gap-4 py-0.5">
             <span className="flex items-center gap-1.5">
-              <span className={cx('px-1 text-2xs border rounded-sm', stateCls)}>{stateLabel}</span>
+              <span className={cx('px-1 text-2xs border', NOTCH_SM, stateCls)}>{stateLabel}</span>
               <span>{step.label}</span>
             </span>
             <span className="text-text">{card.discovered ? step.hatName : '???'}</span>
@@ -260,7 +262,7 @@ export function NamedGroupCard({
     <Inset tone={card.status === 'claimed' ? 'deep' : card.status === 'claimable' ? 'light' : 'base'} className={cardFrameClass(card.status)}>
       <div className="flex flex-1 flex-col gap-1.5 p-2.5">
         <div className="flex items-start justify-between gap-2">
-          <b data-achievement-name className={cx('text-sm break-keep break-words', card.status === 'claimed' ? 'text-text-dim' : 'text-text')}>
+          <b data-achievement-name className="text-sm text-text break-keep break-words">
             {card.title}
           </b>
           {stepBadge}
