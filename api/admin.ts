@@ -14,7 +14,7 @@ import { adminSessionUid } from './_auth/session.js';
 import { database } from './_db/client.js';
 import type { Database, Executor } from './_db/client.js';
 import { onlineUsers } from './_server/livePresence.js';
-import { accountKind, insertPasswordResetToken } from './_data/account.js';
+import { accountKind, insertPasswordResetToken, revokeUserSessions } from './_data/account.js';
 import * as read from './_data/admin.js';
 import { balanceLive } from './_data/adminBalance.js';
 import { setLetterHandled } from './_data/mail.js';
@@ -56,6 +56,7 @@ const WRITES: Record<string, Write> = {
   restrict,
   resetLink,
   letterHandled,
+  revokeSessions,
 };
 
 /** 리소스 경로 조회. 요청의 필터를 검사해 실행할 읽기를 돌려준다. 틀리면 400이다 */
@@ -127,6 +128,12 @@ async function route(req: Req, res: Res): Promise<void> {
 /** 조회 이름과 인자를 검사해 실행할 읽기를 돌려준다. 틀리면 400이다 */
 function parse(name: string | undefined, req: Req): (db: Executor) => Promise<unknown> {
   switch (name) {
+    case 'overview': {
+      const days = optionalDaysOf(req) ?? STATS_DEFAULT_DAYS;
+      if (days < 1 || days > STATS_MAX_DAYS) throw new ApiError(400, 'bad-days');
+      const online = onlineUsers();
+      return db => read.overview(db, days, online);
+    }
     case 'users': return read.users;
     case 'spamFlags': return read.spamFlags;
     case 'recentEvents': return read.recentEvents;
@@ -221,6 +228,20 @@ async function letterHandled({ db }: Database, raw: unknown): Promise<{ handled:
   const found = await dbWrite(() => setLetterHandled(db, letterId as number, handled, new Date().toISOString()));
   if (!found) throw new ApiError(404, 'no-letter');
   return { handled };
+}
+
+/** 세션 강제 종료 — 대상 계정의 모든 인증 세션 행을 지우고 관리자 조치 이벤트를 남긴다. 계정이 없으면 404다 */
+async function revokeSessions({ withTransaction }: Database, raw: unknown, adminId: string): Promise<{ revoked: number }> {
+  const { userId } = (raw ?? {}) as { userId?: unknown };
+  if (typeof userId !== 'string' || !UUID.test(userId)) throw new ApiError(400, 'bad-user');
+  const revoked = await dbWrite(() => withTransaction(async tx => {
+    if (await accountKind(tx, userId) === 'missing') return null;
+    const count = await revokeUserSessions(tx, userId);
+    await recordAdminAction(tx, userId, 'adminRevokeSessions', adminId, { revoked: count });
+    return count;
+  }));
+  if (revoked === null) throw new ApiError(404, 'no-user');
+  return { revoked };
 }
 
 const param = (req: Req, key: string): string | undefined => {

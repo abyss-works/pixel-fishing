@@ -410,7 +410,12 @@ describe('조회 결과', () => {
         ],
         total: ARTIFACTS.length,
       },
-      hats: { owned: 1, total: HATS.length },
+      hats: {
+        owned: 1,
+        total: HATS.length,
+        items: [{ id: hat.id, name: hat.name, source: hat.source }],
+        equipped: null,
+      },
       achievements: {
         claimed: 1,
         claimable: 1,
@@ -431,7 +436,21 @@ describe('조회 결과', () => {
           bait: { id: baitRecipe.id, name: baitRecipe.name, endsAt: '2026-10-18T10:05:00.000Z' },
         },
       },
-      instances: { bag: 2, exhibit: 1 },
+      instances: {
+        bag: 2,
+        exhibit: 1,
+        recentBag: expect.arrayContaining([
+          expect.objectContaining({ fishId: normalFish.id, name: normalFish.name, form: 'normal' }),
+          expect.objectContaining({ fishId: normalFish.id, name: normalFish.name, form: 'variant' }),
+        ]),
+      },
+      progression: {
+        visited: ['village'],
+        coupons: [],
+        bountyProgress: [],
+        bountyTickets: [],
+        activeSessions: expect.any(Number),
+      },
     });
 
     const emptyRes = await callAdmin({ q: 'userState', uid: IDLE_A }, userToken(ADMIN));
@@ -441,10 +460,26 @@ describe('조회 결과', () => {
       dex: { normal: 0, variant: 0, named: 0 },
       bounty: { namedClears: 0, namedDistinctClears: 0 },
       artifacts: { owned: [] },
-      hats: { owned: 0 },
+      hats: { owned: 0, items: [], equipped: null },
       achievements: { claimed: 0, claimable: 0, counters: {} },
-      instances: { bag: 0, exhibit: 0 },
+      instances: { bag: 0, exhibit: 0, recentBag: [] },
+      progression: { visited: [], coupons: [], bountyProgress: [], bountyTickets: [] },
     });
+  });
+
+  it('overview: 개요 탭에 필요한 명부·최근 이벤트·스팸 플래그·일별 집계·리텐션·세션·실시간 접속을 한 번에 돌려준다', async () => {
+    const res = await callAdmin({ q: 'overview', days: '7' }, userToken(ADMIN));
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      users: expect.any(Array),
+      recentEvents: expect.any(Array),
+      spamFlags: expect.any(Array),
+      dailyStats: expect.any(Array),
+      retention: expect.any(Array),
+      sessions: expect.any(Array),
+      live: { count: 0, online: [] },
+    });
+    expect((res.body as { users: Row[] }).users.length).toBeGreaterThanOrEqual(5);
   });
 
   it('recentEvents: 최신 80행만 id 내림차순으로 준다', async () => {
@@ -650,5 +685,24 @@ describe('관리자 조치', () => {
 
     expect(await post('letterHandled', { letterId, handled: false })).toMatchObject({ status: 200, body: { handled: false } });
     expect(await handledAt()).toBeNull();
+  });
+
+  it('revokeSessions: 대상 계정의 auth.sessions 행을 삭제하고 adminRevokeSessions 이벤트를 남긴다', async () => {
+    expect(await post('revokeSessions', { userId: TARGET }, userToken(PLAYER))).toMatchObject({ status: 403 });
+    expect(await post('revokeSessions', { userId: TARGET }, null)).toMatchObject({ status: 401 });
+    expect(await post('revokeSessions', { userId: 'nope' })).toMatchObject({ status: 400, body: { error: 'bad-user' } });
+    expect(await post('revokeSessions', { userId: testUid(998) })).toMatchObject({ status: 404, body: { error: 'no-user' } });
+
+    const before = await env.client.query('select 1 from auth.sessions where user_id = $1', [TARGET]);
+    expect(before.rows.length).toBeGreaterThan(0);
+
+    const res = await post('revokeSessions', { userId: TARGET });
+    expect(res).toMatchObject({ status: 200, body: { revoked: before.rows.length } });
+    const after = await env.client.query('select 1 from auth.sessions where user_id = $1', [TARGET]);
+    expect(after.rows).toEqual([]);
+    expect(await adminEvents(TARGET)).toContainEqual({
+      type: 'adminRevokeSessions',
+      payload: { adminId: ADMIN, revoked: before.rows.length },
+    });
   });
 });

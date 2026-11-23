@@ -8,10 +8,16 @@ import type { SQL } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
 import { ACHIEVEMENTS } from '../../src/game/content/achievements.js';
 import { ARTIFACTS, artifactById, artifactHasLevel } from '../../src/game/content/artifacts.js';
+import { bountyById } from '../../src/game/content/bounties.js';
 import { ENERGY_ITEM_IDS, RECIPES, recipeById } from '../../src/game/content/cooking.js';
-import { FISH } from '../../src/game/content/fish.js';
+import { FISH, fishById } from '../../src/game/content/fish.js';
 import { NAMED } from '../../src/game/content/named.js';
+import { spotById } from '../../src/game/content/spots.js';
+import type { SpotId } from '../../src/game/content/spots.js';
 import { HATS, hatById } from '../../src/game/content/wardrobe.js';
+import { zoneById } from '../../src/game/content/zones.js';
+import type { ZoneId } from '../../src/game/content/zones.js';
+import type { LiveOnline } from '../_server/live.js';
 import { uuidArray } from './json.js';
 
 const FISH_IDS = new Set(FISH.map(f => f.id));
@@ -115,7 +121,7 @@ const asRecord = (v: unknown): Record<string, unknown> =>
 const asNum = (v: unknown): number =>
   typeof v === 'number' && Number.isFinite(v) ? v : 0;
 
-/** 대상 플레이어의 게임 상태 스냅샷(도감·네임드 토벌·유물·모자·업적/카운터·기운/요리/슬롯·가방/전시)을 읽는다 */
+/** 대상 플레이어의 게임 상태 스냅샷(도감·네임드 토벌·유물·모자·업적/카운터·기운/요리/슬롯·가방/전시·주요 진행 현황·활성 세션)을 읽는다 */
 export async function userState(db: Executor, uid: string): Promise<unknown> {
   const { rows } = await db.execute<{
     has_save: boolean;
@@ -123,6 +129,10 @@ export async function userState(db: Executor, uid: string): Promise<unknown> {
     records: { fish_id: string; form: string; count: number }[];
     cleared_named: string[];
     instances: { bag: number; exhibit: number } | null;
+    recent_bag: { uid: string; fish_id: string; form: string; size: number | null; caught_at: string | null; spot: string | null; locked: boolean }[];
+    bounty_progress: { quest_id: string; zone: string; progress: number; started_at: string }[];
+    bounty_tickets: { quest_id: string; issued_at: string }[];
+    active_sessions: number;
     counters: Record<string, number> | null;
   }>(sql`select
       exists(select 1 from public.saves_current where user_id = ${uid}::uuid) as has_save,
@@ -135,6 +145,25 @@ export async function userState(db: Executor, uid: string): Promise<unknown> {
          'bag', count(*) filter (where slot is null)::int,
          'exhibit', count(*) filter (where slot is not null)::int
        ) from public.fish_instances where user_id = ${uid}::uuid) as instances,
+      (select coalesce(json_agg(json_build_object(
+         'uid', rb.uid, 'fish_id', rb.fish_id, 'form', rb.form, 'size', rb.size,
+         'caught_at', rb.caught_at, 'spot', rb.spot, 'locked', rb.locked
+       )), '[]'::json) from (
+         select uid, fish_id, form, size, caught_at, spot, locked
+         from public.fish_instances
+         where user_id = ${uid}::uuid and slot is null
+         order by caught_at desc nulls last, uid desc
+         limit 30
+       ) rb) as recent_bag,
+      (select coalesce(json_agg(json_build_object(
+         'quest_id', quest_id, 'zone', zone, 'progress', progress, 'started_at', started_at
+       ) order by started_at desc), '[]'::json)
+       from public.bounty_progress where user_id = ${uid}::uuid) as bounty_progress,
+      (select coalesce(json_agg(json_build_object(
+         'quest_id', quest_id, 'issued_at', issued_at
+       ) order by issued_at desc), '[]'::json)
+       from public.bounty_tickets where user_id = ${uid}::uuid) as bounty_tickets,
+      (select count(*)::int from auth.sessions where user_id = ${uid}::uuid and expires_at > now()) as active_sessions,
       (select coalesce(json_object_agg(key, value), '{}'::json)
        from public.achievement_counters where user_id = ${uid}::uuid) as counters`);
 
@@ -168,7 +197,13 @@ export async function userState(db: Executor, uid: string): Promise<unknown> {
   });
 
   const rawHats = Array.isArray(data.hats) ? data.hats.filter((x): x is string => typeof x === 'string') : [];
-  const ownedHats = new Set(rawHats.filter(id => hatById(id) !== undefined)).size;
+  const ownedHatItems = [...new Set(rawHats)].flatMap(id => {
+    const hat = hatById(id);
+    return hat ? [{ id: hat.id, name: hat.name, source: hat.source }] : [];
+  });
+  const rawLook = asRecord(data.look);
+  const equippedHatDef = typeof rawLook.hat === 'string' ? hatById(rawLook.hat) : undefined;
+  const equippedHat = equippedHatDef ? { id: equippedHatDef.id, name: equippedHatDef.name } : null;
 
   const rawAchievements = asRecord(data.achievements);
   let claimed = 0;
@@ -206,6 +241,36 @@ export async function userState(db: Executor, uid: string): Promise<unknown> {
     return { id: s.id, name: recipeById(s.id)?.name ?? s.id, endsAt: s.endsAt };
   };
 
+  const recentBag = (Array.isArray(row.recent_bag) ? row.recent_bag : []).map(item => {
+    const fish = fishById(item.fish_id);
+    const spot = item.spot ? spotById(item.spot as SpotId)?.name ?? item.spot : null;
+    return {
+      uid: item.uid,
+      fishId: item.fish_id,
+      name: fish?.name ?? item.fish_id,
+      form: item.form,
+      grade: fish?.rarity ?? null,
+      size: typeof item.size === 'number' ? item.size : null,
+      caughtAt: item.caught_at ?? null,
+      spot,
+      locked: Boolean(item.locked),
+    };
+  });
+
+  const visited = Array.isArray(data.visited) ? data.visited.filter((x): x is string => typeof x === 'string') : [];
+  const coupons = Array.isArray(data.coupons) ? data.coupons.filter((x): x is string => typeof x === 'string') : [];
+  const bountyProgress = (Array.isArray(row.bounty_progress) ? row.bounty_progress : []).map(p => ({
+    questId: p.quest_id,
+    zone: zoneById(p.zone as ZoneId)?.name ?? p.zone,
+    progress: Number(p.progress),
+    target: bountyById(p.quest_id)?.count ?? null,
+    startedAt: p.started_at,
+  }));
+  const bountyTickets = (Array.isArray(row.bounty_tickets) ? row.bounty_tickets : []).map(t => ({
+    questId: t.quest_id,
+    issuedAt: t.issued_at,
+  }));
+
   return {
     hasSave: Boolean(row.has_save),
     dex: {
@@ -226,8 +291,10 @@ export async function userState(db: Executor, uid: string): Promise<unknown> {
       total: ARTIFACTS.length,
     },
     hats: {
-      owned: ownedHats,
+      owned: ownedHatItems.length,
       total: HATS.length,
+      items: ownedHatItems,
+      equipped: equippedHat,
     },
     achievements: {
       claimed,
@@ -247,6 +314,14 @@ export async function userState(db: Executor, uid: string): Promise<unknown> {
     instances: {
       bag: Number(row.instances?.bag ?? 0),
       exhibit: Number(row.instances?.exhibit ?? 0),
+      recentBag,
+    },
+    progression: {
+      visited,
+      coupons,
+      bountyProgress,
+      bountyTickets,
+      activeSessions: Number(row.active_sessions ?? 0),
     },
   };
 }
@@ -354,4 +429,32 @@ export function sessions(db: Executor, userId: string | null, limit: number | nu
     where ${userId}::uuid is null or s.user_id = ${userId}::uuid
     order by s.started_at desc, s.id desc
     limit least(greatest(coalesce(${limit}::int, 100), 1), 500)`, sql`t."startedAt" desc, t.id desc`);
+}
+
+/** 개요 탭 통합 조회 — 명부, 최근 이벤트, 스팸 플래그, 일별 집계, 리텐션, 최근 세션, 실시간 접속을 한 요청에 모은다 */
+export async function overview(db: Executor, days: number, online: readonly LiveOnline[]): Promise<unknown> {
+  const kstToday = Date.parse(new Date(Date.now() + 9 * 3_600_000).toISOString().slice(0, 10));
+  const to = new Date(kstToday).toISOString().slice(0, 10);
+  const from = new Date(kstToday - (days - 1) * 86_400_000).toISOString().slice(0, 10);
+  const [userRows, recentEventRows, spamFlagRows, dailyStatRows, retentionRows, sessionRows, known] = await Promise.all([
+    users(db),
+    recentEvents(db),
+    spamFlags(db),
+    dailyStats(db, from, to),
+    signupRetention(db),
+    sessions(db, null, 500),
+    online.length > 0 ? identities(db, online.map(entry => entry.uid)) : Promise.resolve(new Map()),
+  ]);
+  return {
+    users: userRows,
+    recentEvents: recentEventRows,
+    spamFlags: spamFlagRows,
+    dailyStats: dailyStatRows,
+    retention: retentionRows,
+    sessions: sessionRows,
+    live: {
+      count: online.length,
+      online: online.map(entry => ({ ...entry, nickname: null, email: null, ...known.get(entry.uid) })),
+    },
+  };
 }

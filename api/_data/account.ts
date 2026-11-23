@@ -161,3 +161,9 @@ export async function insertPasswordResetToken(db: Executor, uid: string, token:
   await db.execute(sql`insert into auth.verifications (identifier, value, expires_at)
     values (${`reset-password:${token}`}, ${uid}, ${at(expiresAtISO)})`);
 }
+
+/** 사용자의 활성·만료 인증 세션(게임 및 관리자 세션)을 모두 삭제하고 지운 행 수를 돌려준다 */
+export async function revokeUserSessions(db: Executor, uid: string): Promise<number> {
+  const result = await db.execute(sql`delete from auth.sessions where user_id = ${uid}::uuid`);
+  return result.rowCount ?? 0;
+}

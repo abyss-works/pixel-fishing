@@ -8,11 +8,23 @@ const mocks = vi.hoisted(() => ({
   adminSessionUid: vi.fn(async () => ADMIN_UID),
   isAdmin: vi.fn(async () => true),
   userState: vi.fn(async () => ({ hasSave: true })),
+  overview: vi.fn(async (): Promise<unknown> => ({
+    users: [],
+    recentEvents: [],
+    spamFlags: [],
+    dailyStats: [],
+    retention: [],
+    sessions: [],
+    live: { count: 0, online: [] },
+  })),
   economy: vi.fn(async () => []),
+  accountKind: vi.fn(async () => 'member' as const),
+  revokeUserSessions: vi.fn(async () => 2),
+  recordAdminAction: vi.fn(async () => {}),
   planMail: vi.fn(),
   deliverMail: vi.fn(),
   db: { execute: vi.fn() },
-  withTransaction: vi.fn(),
+  withTransaction: vi.fn(async (run: (tx: unknown) => Promise<unknown>) => run(mocks.db)),
 }));
 
 vi.mock('./_auth/session.js', () => ({
@@ -27,7 +39,23 @@ vi.mock('./_data/admin.js', async () => {
     ...actual,
     isAdmin: mocks.isAdmin,
     userState: mocks.userState,
+    overview: mocks.overview,
     economy: mocks.economy,
+  };
+});
+vi.mock('./_data/account.js', async () => {
+  const actual = await vi.importActual<typeof import('./_data/account.js')>('./_data/account.js');
+  return {
+    ...actual,
+    accountKind: mocks.accountKind,
+    revokeUserSessions: mocks.revokeUserSessions,
+  };
+});
+vi.mock('./_data/telemetry.js', async () => {
+  const actual = await vi.importActual<typeof import('./_data/telemetry.js')>('./_data/telemetry.js');
+  return {
+    ...actual,
+    recordAdminAction: mocks.recordAdminAction,
   };
 });
 
@@ -133,5 +161,45 @@ describe('api/admin 핸들러 단위 테스트', () => {
       request: { ...mailReq, idempotencyKey: '22222222-2222-4222-8222-222222222222' },
     });
     expect(dupWindow).toMatchObject({ status: 409, body: { error: 'duplicate-mail' } });
+  });
+
+  it('GET ?q=overview는 기본 30일 또는 지정 기간으로 통합 요약 데이터를 돌려주고 잘못된 기간은 400이다', async () => {
+    expect(await call('GET', { q: 'overview', days: '0' })).toMatchObject({ status: 400, body: { error: 'bad-days' } });
+    expect(await call('GET', { q: 'overview', days: '181' })).toMatchObject({ status: 400, body: { error: 'bad-days' } });
+    expect(await call('GET', { q: 'overview', days: 'abc' })).toMatchObject({ status: 400, body: { error: 'bad-days' } });
+
+    const payload = {
+      users: [{ user_id: TARGET_UID }],
+      recentEvents: [],
+      spamFlags: [],
+      dailyStats: [],
+      retention: [],
+      sessions: [],
+      live: { count: 1, online: [{ uid: TARGET_UID, nick: '테스터', nickname: '테스터', email: null, region: 'world', zone: 'pacific', connectedAt: '2026-11-05T00:00:00Z', guest: false }] },
+    };
+    mocks.overview.mockResolvedValueOnce(payload);
+
+    const defRes = await call('GET', { q: 'overview' });
+    expect(defRes).toMatchObject({ status: 200, body: payload });
+    expect(mocks.overview).toHaveBeenCalledWith(mocks.db, 30, expect.any(Array));
+
+    await call('GET', { q: 'overview', days: '7' });
+    expect(mocks.overview).toHaveBeenLastCalledWith(mocks.db, 7, expect.any(Array));
+  });
+
+  it('POST ?q=revokeSessions는 대상 계정의 세션을 삭제하고 감사 이벤트를 남기며 없는 계정은 404다', async () => {
+    expect(await call('POST', { q: 'revokeSessions' }, {})).toMatchObject({ status: 400, body: { error: 'bad-user' } });
+    expect(await call('POST', { q: 'revokeSessions' }, { userId: 'nope' })).toMatchObject({ status: 400, body: { error: 'bad-user' } });
+
+    mocks.accountKind.mockResolvedValueOnce('missing' as never);
+    expect(await call('POST', { q: 'revokeSessions' }, { userId: TARGET_UID })).toMatchObject({ status: 404, body: { error: 'no-user' } });
+    expect(mocks.revokeUserSessions).not.toHaveBeenCalled();
+
+    mocks.accountKind.mockResolvedValueOnce('member');
+    mocks.revokeUserSessions.mockResolvedValueOnce(3);
+    const okRes = await call('POST', { q: 'revokeSessions' }, { userId: TARGET_UID });
+    expect(okRes).toMatchObject({ status: 200, body: { revoked: 3 } });
+    expect(mocks.revokeUserSessions).toHaveBeenCalledWith(mocks.db, TARGET_UID);
+    expect(mocks.recordAdminAction).toHaveBeenCalledWith(mocks.db, TARGET_UID, 'adminRevokeSessions', ADMIN_UID, { revoked: 3 });
   });
 });

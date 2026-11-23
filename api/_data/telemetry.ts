@@ -38,8 +38,8 @@ export async function deleteUserEvents(db: Executor, uid: string): Promise<void>
   await db.execute(sql`delete from public.events where user_id = ${uid}`);
 }
 
-/** 관리자 조치의 이벤트 유형. 제재, 제재 해제, 비밀번호 재설정 링크 발급이다 */
-export type AdminActionType = 'adminRestrict' | 'adminUnrestrict' | 'adminResetLink';
+/** 관리자 조치의 이벤트 유형. 제재, 제재 해제, 비밀번호 재설정 링크 발급, 세션 강제 종료다 */
+export type AdminActionType = 'adminRestrict' | 'adminUnrestrict' | 'adminResetLink' | 'adminRevokeSessions';
 
 /** 관리자 조치를 대상 사용자의 이벤트로 남긴다. 조치한 관리자 id는 payload.adminId다 */
 export async function recordAdminAction(db: Executor, uid: string, type: AdminActionType, adminId: string,
