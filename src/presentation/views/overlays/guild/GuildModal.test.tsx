@@ -8,7 +8,7 @@ import GuildModal from './GuildModal';
 const s = vi.hoisted(() => ({
   guild: null as GuildInfo | null,
   you: 'L',
-  act: vi.fn(async (_op: unknown): Promise<{ ok: true; result?: 'joined' | 'requested' } | { ok: false; error: string }> => ({ ok: true })),
+  act: vi.fn(async (_op: unknown): Promise<{ ok: true; result?: 'joined' | 'requested'; recovered?: number } | { ok: false; error: string }> => ({ ok: true })),
   request: null as { code: string; name: string; requestedAt: string } | null,
   preview: null as unknown,
 }));
