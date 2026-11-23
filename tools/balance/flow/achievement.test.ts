@@ -34,7 +34,7 @@ describe('진행 업적 구역 보상 산식', () => {
       { zone: 'seasia', zoneGold: 250_000, basic: 100_000, named: 150_000 },
       { zone: 'indian', zoneGold: 750_000, basic: 350_000, named: 400_000 },
       { zone: 'madagascar', zoneGold: 3_000_000, basic: 1_500_000, named: 1_500_000 },
-      { zone: 'southatlantic', zoneGold: 10_000_000, basic: 5_000_000, named: 5_000_000 },
+      { zone: 'southatlantic', zoneGold: 15_000_000, basic: 7_500_000, named: 7_500_000 },
       { zone: 'northatlantic', zoneGold: 55_000_000, basic: 25_000_000, named: 30_000_000 },
     ]);
   });

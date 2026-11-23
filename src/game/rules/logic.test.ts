@@ -1191,20 +1191,20 @@ describe('해역 간 방치 기대값 사슬 (낮 풀, 방치 진입·플래토)
     const [aEntry, aPlateau] = idle('azores');
     const [mEntry, mPlateau] = idle('bermuda');
     for (const r of [bEntry / cEntry, bPlateau / cPlateau]) {
-      expect(r).toBeGreaterThanOrEqual(1.6);
-      expect(r).toBeLessThanOrEqual(1.8);
+      expect(r).toBeGreaterThanOrEqual(1.95);
+      expect(r).toBeLessThanOrEqual(2.05);
     }
     for (const r of [hEntry / bEntry, hPlateau / bPlateau]) {
-      expect(r).toBeGreaterThanOrEqual(2.2);
-      expect(r).toBeLessThanOrEqual(2.5);
+      expect(r).toBeGreaterThanOrEqual(2.15);
+      expect(r).toBeLessThanOrEqual(2.35);
     }
     for (const r of [aEntry / hEntry, aPlateau / hPlateau]) {
       expect(r).toBeGreaterThanOrEqual(1.65);
       expect(r).toBeLessThanOrEqual(2.1);
     }
     for (const r of [mEntry / aEntry, mPlateau / aPlateau]) {
-      expect(r).toBeGreaterThanOrEqual(2.4);
-      expect(r).toBeLessThanOrEqual(2.9);
+      expect(r).toBeGreaterThanOrEqual(2.2);
+      expect(r).toBeLessThanOrEqual(2.4);
     }
   });
 });
