@@ -9,14 +9,15 @@ import { BOATS, MAX_BOAT, nextBoatText } from '../content/boats';
 import { WATER_STYLE } from '../rendering/pixel/styles';
 import type { MapCellDef, RegionPack, School } from './index';
 import {
-  REGION_PACKS, BASE_PACKS, ZoneTracker, canMove, zoneOf, movePlayer, inTrigger, nearestSchoolInRange,
+  REGION_PACKS, BASE_PACKS, ZoneTracker, canMove, zoneOf, closedSeaBlock, movePlayer, inTrigger, nearestSchoolInRange,
   entryPoint, furnitureAt, inClosedSea, HOME_FURNITURE, HARBOR_FURNITURE, MANILA_FURNITURE, COLOMBO_FURNITURE,
   TOAMASINA_FURNITURE, WALVISBAY_FURNITURE,
   VILLAGE, VILLAGE_W, V_POND, V_HOUSE, V_DOOR, V_SPAWN, V_BRIDGE, V_PIER, V_PORT, V_SCHOOLS,
-  WORLD, WORLD_SPAWN, HARBORS, schoolsOf, generateWorldSchools,
+  WORLD, WORLD_MAP, WORLD_SPAWN, HARBORS, schoolsOf, generateWorldSchools,
 } from './index';
 import { CAST_RANGE } from '../rules/balance';
-import { cellDefAt } from './mask';
+import { cellDefAt, compileMap, mapBounds } from './mask';
+import { WORLD_LEGEND } from './regions/world';
 import { ANCHORS as WORLD_ANCHORS } from './regions/generated/world.mask';
 import { EARTH_MAP, worldToEarth, implementedRect } from '../../presentation/views/overlays/world-map/atlas';
 
@@ -362,17 +363,26 @@ describe('남대서양 지도', () => {
     }
   });
 
-  const CLOSED_SPOTS = [
-    [10, 38, '지중해'], [30, 34, '동지중해'], [-72, 15, '카리브해'], [-78, -15, '남미 서부 동태평양'], [-30, -15, '남미 동부 미개방 바다'],
+  const OPENED_RECT_SPOTS = [
+    [-30, -15, '서남대서양', 'southatlantic', true],
+    [-72, 15, '카리브해', 'northatlantic', true],
+    [10, 38, '서지중해', 'northatlantic', false],
+    [-78, -15, '남미 서부 해역', 'southatlantic', false],
   ] as const;
 
-  it('지중해·카리브해·남미 미개방 바다는 실제 바다지만 아직 열지 않은 바다라 들어설 수 없다', () => {
-    for (const [lon, lat, name] of CLOSED_SPOTS) {
+  it('직사각형 창 안의 서남대서양·카리브해·서지중해·남미 서부 해역은 열려 있다', () => {
+    const fromWalvis = reachabilityCheck(WORLD, walvis);
+    const fromLisbon = reachabilityCheck(WORLD, BASE_PACKS.lisbon.exitAt!);
+    for (const [lon, lat, name, expectedZone, atlanticReachable] of OPENED_RECT_SPOTS) {
       const [x, y] = worldAt(lon, lat);
-      expect(cellDefAt(WORLD.map!, x, y)?.water, `${name}은 물로 그려진다`).toBe(true);
-      expect(inClosedSea(WORLD, x, y), name).toBe(true);
-      expect(canMove(WORLD, x, y), name).toBe(false);
-      expect(zoneOf(WORLD, x, y), name).toBeUndefined();
+      expect(cellDefAt(WORLD.map!, x, y)?.water, `${name}은 물`).toBe(true);
+      expect(inClosedSea(WORLD, x, y), `${name}은 미개방 바다가 아님`).toBe(false);
+      expect(canMove(WORLD, x, y), `${name} 통행 가능`).toBe(true);
+      expect(zoneOf(WORLD, x, y), `${name} 구역`).toBe(expectedZone);
+      if (atlanticReachable) {
+        expect(fromWalvis.reachedPoint({ x, y }), `월비스베이→${name}`).toBe(true);
+        expect(fromLisbon.reachedPoint({ x, y }), `리스본→${name}`).toBe(true);
+      }
     }
   });
 
@@ -382,10 +392,9 @@ describe('남대서양 지도', () => {
       expect(cellDefAt(WORLD.map!, x, y)?.water, `${name}은 물`).toBe(true);
       expect(inClosedSea(WORLD, x, y), name).toBe(false);
     }
-    expect(inClosedSea(WORLD, ...worldAt(30, 34)), '동지중해').toBe(true);
   });
 
-  it('적도를 사이에 두고 남대서양과 북대서양이 이어지며 지중해 입구는 막힌다', () => {
+  it('적도를 사이에 두고 남대서양과 북대서양이 이어진다', () => {
     const [sx, sy] = worldAt(-8, -0.5);
     const [nx, ny] = worldAt(-8, 0.5);
     expect(zoneOf(WORLD, sx, sy)).toBe('southatlantic');
@@ -407,21 +416,39 @@ describe('남대서양 지도', () => {
     }
   });
 
-  it('열지 않은 바다는 어디에서도 닿지 않고 어군과 구역도 없다', () => {
-    const fromSpawn = reachabilityCheck(WORLD);
-    const fromWalvis = reachabilityCheck(WORLD, walvis);
-    for (const [lon, lat, name] of CLOSED_SPOTS) {
-      const p = { x: worldAt(lon, lat)[0], y: worldAt(lon, lat)[1] };
-      expect(fromSpawn.reachedPoint(p), `고향에서 ${name}`).toBe(false);
-      expect(fromWalvis.reachedPoint(p), `월비스베이에서 ${name}`).toBe(false);
+  it('WORLD_MAP과 EARTH_MAP 구현 영역 안에 closed: true 셀이 없다', () => {
+    for (const code of WORLD_MAP.codes) {
+      expect(WORLD_MAP.palette[code]?.closed ?? false).toBe(false);
+    }
+    const win = implementedRect();
+    for (let r = 0; r < EARTH_MAP.rows; r++) {
+      const cy = (r + 0.5) * EARTH_MAP.cellH;
+      if (cy < win.y || cy >= win.y + win.h) continue;
+      for (let c = 0; c < EARTH_MAP.cols; c++) {
+        const cx = (c + 0.5) * EARTH_MAP.cellW;
+        if (cx < win.x || cx >= win.x + win.w) continue;
+        const def = EARTH_MAP.palette[EARTH_MAP.codes[r * EARTH_MAP.cols + c]];
+        expect(def?.closed ?? false, `EARTH_MAP (${c},${r})`).toBe(false);
+      }
     }
   });
 
-  it('세계지도 earth 마스크에도 열지 않은 바다가 찍혀 있다', () => {
-    const [x, y] = [Math.floor((0 + 180) / 360 * EARTH_MAP.cols * EARTH_MAP.cellW), Math.floor((85 - 38) / 170 * EARTH_MAP.rows * EARTH_MAP.cellH)];
-    expect(cellDefAt(EARTH_MAP, x, y)?.closed, '지중해').toBe(true);
-    const [x2, y2] = [Math.floor((0 + 180) / 360 * EARTH_MAP.cols * EARTH_MAP.cellW), Math.floor((85 + 10) / 170 * EARTH_MAP.rows * EARTH_MAP.cellH)];
-    expect(cellDefAt(EARTH_MAP, x2, y2)?.closed ?? false, '남대서양').toBe(false);
+  it('WORLD_LEGEND N 범례와 inClosedSea·closedSeaBlock 인프라는 합성 N 셀에서 계속 동작한다', () => {
+    expect(WORLD_LEGEND.N).toEqual({ water: true, style: 'sea', closed: true });
+    const map = compileMap(8, 11, WORLD_LEGEND, ['pppp', 'pppp', 'NNNN', 'NNNN']);
+    const synth: RegionPack = {
+      ...WORLD,
+      bounds: mapBounds(map),
+      map,
+      buildings: [],
+      triggers: [],
+      spawn: { x: 16, y: 16 },
+    };
+    expect(inClosedSea(synth, 16, 16)).toBe(false);
+    expect(canMove(synth, 16, 16)).toBe(true);
+    expect(inClosedSea(synth, 16, 26)).toBe(true);
+    expect(canMove(synth, 16, 26)).toBe(false);
+    expect(closedSeaBlock(synth, { x: 16, y: 20 }, 0, 1, 0.05, 80)).toBe('아직 열리지 않은 바다라 들어설 수 없어요.');
   });
 });
 
