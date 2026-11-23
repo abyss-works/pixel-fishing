@@ -8,6 +8,7 @@ const admin = createHttpApi().admin;
 /** AdminApi 조회와 그 조회가 보내는 요청 주소 */
 const CALLS: [method: string, call: () => Promise<unknown>, url: string][] = [
   ['access', () => admin.access(), '/api/admin?q=access'],
+  ['overview', () => admin.overview(30), '/api/admin?q=overview&days=30'],
   ['users', () => admin.users(), '/api/admin?q=users'],
   ['live', () => admin.live(), '/api/admin/live'],
   ['dailyStats', () => admin.dailyStats('2026-10-07', '2026-11-05'), '/api/admin/stats/daily?from=2026-10-07&to=2026-11-05'],
@@ -47,8 +48,8 @@ describe('HttpAdmin', () => {
     }
   });
 
-  it('AdminApi의 모든 조회가 위 표에 있다. 서버 조회가 아닌 것은 deployHost, 쓰기(mail·restrict·resetLink·letterHandled), 관리자 로그인·로그아웃·로그인 복귀뿐이다', () => {
-    const writes = ['constructor', 'deployHost', 'mail', 'restrict', 'resetLink', 'letterHandled', 'signIn', 'signOut', 'takeSignInReturn'];
+  it('AdminApi의 모든 조회가 위 표에 있다. 서버 조회가 아닌 것은 deployHost, 쓰기(mail·restrict·resetLink·letterHandled·revokeSessions), 관리자 로그인·로그아웃·로그인 복귀뿐이다', () => {
+    const writes = ['constructor', 'deployHost', 'mail', 'restrict', 'resetLink', 'letterHandled', 'revokeSessions', 'signIn', 'signOut', 'takeSignInReturn'];
     const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(admin))
       .filter(m => !writes.includes(m));
     expect(methods.sort()).toEqual(CALLS.map(([method]) => method).sort());
@@ -82,6 +83,11 @@ describe('HttpAdmin', () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ handled: true }), { status: 200 }));
     await expect(admin.letterHandled(3, true)).resolves.toEqual({ handled: true });
     expect(fetchMock).toHaveBeenLastCalledWith('/api/admin?q=letterHandled', post({ letterId: 3, handled: true }));
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ revoked: 2 }), { status: 200 }));
+    await expect(admin.revokeSessions('u-1')).resolves.toEqual({ revoked: 2 });
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/admin?q=revokeSessions', post({ userId: 'u-1' }));
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: 'no-user' }), { status: 404 }));
+    await expect(admin.revokeSessions('u-1')).rejects.toThrow('세션 강제 종료 실패: 404 no-user');
   });
 
   it('sessions는 생략한 인자를 보내지 않는다', async () => {
@@ -274,5 +280,68 @@ describe('HttpAdmin', () => {
 
   it('deployHost는 이 화면이 붙은 주소의 호스트다', () => {
     expect(admin.deployHost()).toBe(window.location.hostname);
+  });
+
+  describe('429 백오프 및 비-JSON 오류 처리', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('비-JSON HTML 429 응답과 Retry-After 헤더가 오면 대기 후 제한 횟수 내 재시도해 복구한다', async () => {
+      vi.useFakeTimers();
+      fetchMock
+        .mockResolvedValueOnce(new Response('<html><body>429 Too Many Requests</body></html>', {
+          status: 429,
+          headers: { 'content-type': 'text/html', 'retry-after': '1' },
+        }))
+        .mockResolvedValueOnce(new Response(JSON.stringify([{ user_id: 'u-1' }]), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }));
+
+      const promise = admin.users();
+      await vi.advanceTimersByTimeAsync(999);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(promise).resolves.toEqual([{ user_id: 'u-1' }]);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('429 재시도 상한을 넘기면 JSON 파싱 오류 대신 명확한 안내 문구를 던진다', async () => {
+      vi.useFakeTimers();
+      fetchMock.mockImplementation(async () => new Response('<html>429 Too Many Requests</html>', {
+        status: 429,
+        headers: { 'content-type': 'text/html', 'retry-after': '0' },
+      }));
+
+      const promise = admin.users();
+      const caught = promise.catch(e => e);
+      await vi.runAllTimersAsync();
+      const err = await caught;
+      expect(err).toBeInstanceOf(Error);
+      expect((err as Error).message).toBe('요청이 너무 많아 잠시 기다렸다가 다시 시도해 주세요.');
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    });
+
+    it('401과 403은 재시도 없이 즉시 실패한다', async () => {
+      fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ error: 'forbidden' }), { status: 403 }));
+      await expect(admin.users()).rejects.toThrow('users 조회 실패: 403 forbidden');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401 }));
+      await expect(admin.users()).rejects.toThrow('users 조회 실패: 401 unauthorized');
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('POST 쓰기가 비-JSON 429 응답을 받으면 재시도하지 않고 안내 문구를 던진다', async () => {
+      fetchMock.mockResolvedValueOnce(new Response('<html>429</html>', { status: 429, headers: { 'content-type': 'text/html' } }));
+      await expect(admin.restrict('u-1', true)).rejects.toThrow('요청이 너무 많아 잠시 기다렸다가 다시 시도해 주세요.');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('200 응답이 비-JSON HTML이면 원인 오류 메시지를 던진다', async () => {
+      fetchMock.mockResolvedValueOnce(new Response('<html>fallback</html>', { status: 200, headers: { 'content-type': 'text/html' } }));
+      await expect(admin.users()).rejects.toThrow('users 응답이 올바른 JSON 형식이 아니에요.');
+    });
   });
 });
