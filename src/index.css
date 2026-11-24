@@ -269,12 +269,19 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
   }
 
   .pf-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
     background: var(--c-surface-2);
     border: 1px solid var(--c-line);
     border-radius: 0;
     color: var(--c-text);
     font-family: inherit;
     font-size: var(--text-base);
+    line-height: 1.25;
+    text-align: center;
+    overflow-wrap: break-word;
     padding: 8px 16px;
     cursor: pointer;
     box-shadow: inset 1px 1px 0 var(--bevel-lo), inset -1px -1px 0 var(--bevel-hi);
@@ -303,7 +310,7 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
 
   /* 전폭 블록 — Button full 속성. variant와 무관하게 좌우로 채운다 */
   .pf-btn.full {
-    display: block;
+    display: flex;
     width: 100%;
   }
 
