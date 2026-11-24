@@ -6,7 +6,7 @@ import { FISH } from '../src/game/content/fish.js';
 import { SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
 import { endedFirstCatch } from '../src/game/rules/firstCatch.js';
 import type { DailyFortune } from '../src/game/rules/fortune.js';
-import { WALK_BAG_CAP, autoLockKey, capOfBoat, newState } from '../src/game/rules/logic.js';
+import { WALK_BAG_CAP, autoLockKey, capOfBoat } from '../src/game/rules/logic.js';
 import type { GameState } from '../src/game/rules/logic.js';
 import type { ActionResult, StatePatch } from '../src/game/rules/actions.js';
 import { gameDayOf } from '../src/game/rules/time.js';
@@ -43,7 +43,7 @@ beforeEach(() => {
 
 async function seed(opts: SeedOptions = {}): Promise<string> {
   const uid = testUid(nextUid++);
-  const state = opts.state ? { fortune: TEST_FORTUNE, ...opts.state } : undefined;
+  const state = opts.state ? { ...opts.state, fortune: opts.state.fortune ?? TEST_FORTUNE } : undefined;
   return seedUser(env.client, { uid, email: `autolock-${nextUid}@example.test`, ...opts, ...(state ? { state } : {}) });
 }
 
@@ -274,7 +274,6 @@ describe('토글식 자동 잠금 (DB / fastCatch)', () => {
         : [prevAuto];
       const uid = await seed({
         state: {
-          ...newState(),
           autoLockOnCatch,
           bag,
           autoLockedIds: autoLockOnCatch ? { [key]: prevAuto.uid } : {},
@@ -288,6 +287,18 @@ describe('토글식 자동 잠금 (DB / fastCatch)', () => {
       expect(res.status).toBe(200);
       const count = spy.mock.calls.length;
       spy.mockRestore();
+      const body = res.body as ActionOkBody;
+      if (body.result.type !== 'catch') throw new Error('expected catch');
+      expect(body.result.fishId).toBe(target.fishId);
+      if (autoLockOnCatch) {
+        expect(body.patch.writes.instancesAdded[0].inst.locked).toBe(true);
+        if (bagFull) {
+          expect(body.patch.writes.instancesRemoved).toEqual([prevAuto.uid]);
+          expect(body.patch.writes.instancesLocked).toEqual([]);
+        } else {
+          expect(body.patch.writes.instancesLocked).toEqual([{ uid: prevAuto.uid, locked: false }]);
+        }
+      }
       return count;
     };
 
