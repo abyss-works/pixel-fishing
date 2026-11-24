@@ -7,7 +7,7 @@
 // 상대경로 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버가 이 체인을 직접 불러온다.
 import { gameDayOf } from './time.js';
 
-/** 운세 종류 — 보너스가 걸리는 대상을 정한다. id는 writer 산출물 확정 전의 작업명 */
+/** 운세 종류 — 보너스가 걸리는 대상을 정한다 */
 export type FortuneKind = 'fish' | 'gold' | 'shadow';
 
 /** 운 배율이 걸리는 판정 대상 — 운세 종류와 1:1로 짝지어진다 */
@@ -23,9 +23,9 @@ export interface DailyFortune {
 }
 
 /** 운세 종류 → 보너스 대상 */
-const TARGET_OF: Record<FortuneKind, FortuneTarget> = {
-  fish: 'rarity',   // 물고기 운 — 희귀 이상 등급 가중치
-  gold: 'sell',     // 돈 운 — 판매가
+export const FORTUNE_TARGET_OF: Record<FortuneKind, FortuneTarget> = {
+  fish: 'rarity',   // 풍어운 — 희귀 이상 등급 가중치
+  gold: 'sell',     // 재물운 — 판매가
   shadow: 'named',  // 그림자 운 — 네임드 조우 가중치
 };
 
@@ -42,7 +42,8 @@ export function rollFortune(day: string, rng: () => number = Math.random): Daily
 /**
  * 오늘의 운세 보장 — 상태에 이 게임 날짜의 운세가 없으면 굴려 고정한다.
  * 이미 그날의 운세면 같은 상태를 돌려준다(불변 — rng를 쓰지 않는다).
- * 판정(catch·sell)이 처음 도는 순간이 굴리는 시점이다.
+ * 굴리는 시점은 그날의 첫 접속(boot)이다. 판정(catch·sell)의 호출은 접속 중
+ * 날짜가 바뀐 뒤처럼 운세가 아직 없는 상태의 백스톱이다.
  */
 export function ensureFortune<T extends { fortune: DailyFortune | null }>(
   state: T, nowIso: string, rng: () => number = Math.random,
@@ -61,7 +62,7 @@ export function fortuneOf(state: { fortune: DailyFortune | null }, nowIso: strin
  * 판정에서 다른 보너스를 다 적용한 마지막 곱이다.
  */
 export function luckMultOf(fortune: DailyFortune | null, target: FortuneTarget): number {
-  return fortune !== null && TARGET_OF[fortune.kind] === target ? 1 + fortune.index / 100 : 1;
+  return fortune !== null && FORTUNE_TARGET_OF[fortune.kind] === target ? 1 + fortune.index / 100 : 1;
 }
 
 /** 세이브 위생 — 운세는 하루짜리라 필드가 없는(구) 세이브는 없는 것으로 둔다.

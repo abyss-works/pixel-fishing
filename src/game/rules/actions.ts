@@ -84,7 +84,7 @@ export type GameAction =
   | { type: 'resetEnergyTargets' }                           // 덮어쓰기를 모두 지워 기본값으로 되돌린다
   | { type: 'cook'; recipe: string; count: number }          // 조리 시작 — 집 거점, 기운 즉시 차감, 추가 완성은 서버가 추첨한다
   | { type: 'eat'; item: string; replaceSlot?: 'bait' | 'bait2' } // 먹기(쓰기) — 가방의 완성 요리 하나를 슬롯에 넣는다. 위치 제한 없음
-  | { type: 'boot'; buildId?: unknown }                      // 접속(부팅) 기록 — 상태 불변, DAU 정본
+  | { type: 'boot'; buildId?: unknown }                      // 접속(부팅) 기록 — DAU 정본. 그날 첫 접속이면 운세를 굴려 고정한다
   | { type: 'setNickname'; nickname: unknown }     // 닉네임 변경 — 형태는 리듀서, 중복은 서버(DB)가 본다
   | { type: 'seeTutorial'; id: unknown }           // 튜토리얼 창을 봤다 — 같은 트리거에서 다시 뜨지 않게 남긴다
   | { type: 'changeClothes'; shirt: unknown; pants: unknown } // 옷 바꾸기 — 웃옷·바지 팔레트 번호, 비용 없음
@@ -877,17 +877,19 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       };
     }
     case 'boot': {
-      // 접속(부팅) 기록 — sendLetter와 같은 "상태가 아닌 이벤트" 계열. 편지(events)와 마찬가지로
-      // 상태를 안 바꾸고 흔적만 남긴다. 이벤트 스트림에 접속 행이 생기는 순간 DAU·리텐션이
+      // 접속(부팅) 기록 — 이벤트 스트림에 접속 행이 생기는 순간 DAU·리텐션이
       // '행동한 유저'가 아니라 '들어온 유저'의 정본이 된다(새로고침 = 1부팅).
       // buildId를 함께 남겨 어느 배포 시점의 접속인지도 쪼갤 수 있다. 식별자 상한 64자 —
       // 깨진 클라이언트가 이벤트 payload를 무한히 부리지 않게 (LETTER_MAX와 같은 판단).
       // 결과에는 어군 배치 날짜를 싣는다 — deps.now가 서버 시계라 모든 클라이언트가 같은
       // 배치를 계산하고, 클라이언트는 이 값을 세션 동안 유지한다(04:00이 지나도 재배치 없음).
+      // 상태 유일 변경은 운세 — 그 게임 날짜의 첫 접속에서 굴려 고정해, 접속 모달과
+      // 판매 미리보기가 첫 판정 전에도 그날의 운세를 안다.
       const buildId = typeof action.buildId === 'string'
         ? action.buildId.trim().slice(0, 64) : '';
       return {
-        ok: true, state, result: { type: 'boot', schoolDay: gameDayOf(deps.now) },
+        ok: true, state: ensureFortune(state, deps.now, deps.rng),
+        result: { type: 'boot', schoolDay: gameDayOf(deps.now) },
         events: [{ type: 'boot', payload: buildId ? { buildId } : {} }],
       };
     }
