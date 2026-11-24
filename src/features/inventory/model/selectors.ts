@@ -6,6 +6,7 @@ import { autoLockPlan, sellableValue } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { achievementBonusesOf } from '../../../game/rules/achievements';
 import { bagCapacityOf, createPlayerContext } from '../../../game/rules/effects';
+import { fortuneOf, luckMultOf } from '../../../game/rules/fortune';
 import { NO_GUILD_EFFECTS } from '../../../game/rules/guild';
 import type { Stat } from '../../../game/rules/stats';
 import { saleProceeds } from './catalog';
@@ -41,17 +42,22 @@ export function selectBagStatus(game: GameState, bagBonus = 0): BagStatus {
 }
 
 export interface BagOverview extends BagStatus {
-  /** 판매로 받는 금액 - 잠기지 않은 개체의 기본가 합에 길드 판매가 보너스를 더한 내역 */
+  /** 판매로 받는 금액 - 잠기지 않은 개체의 기본가 합에 길드 판매가 보너스와 운 배율(돈 운의 날)을 적용한 내역 */
   sellable: Stat;
   /** 자동 잠금 계획 — 어종×폼별 최대만 잠그고 나머지 잠금은 푼다 */
   autoLock: { lock: string[]; unlock: string[] };
 }
 
 /** 가방 탭의 수량·상한(길드 보너스 포함)·판매 가치·자동 잠금 계획을 한 번에 제공한다. */
-export function selectBagOverview(game: GameState, sellBonus: number, bagBonus = 0): BagOverview {
+export function selectBagOverview(
+  game: GameState, sellBonus: number, bagBonus = 0, now: string = new Date().toISOString(),
+): BagOverview {
   return {
     ...selectBagStatus(game, bagBonus),
-    sellable: saleProceeds(sellableValue(game), sellBonus, achievementBonusesOf(game).sellBonus),
+    sellable: saleProceeds(
+      sellableValue(game), sellBonus, achievementBonusesOf(game).sellBonus,
+      luckMultOf(fortuneOf(game, now), 'sell'),
+    ),
     autoLock: autoLockPlan(game.bag),
   };
 }

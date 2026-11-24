@@ -15,6 +15,8 @@ import { FISH, boatNameOf, formDiscovered } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { GUILD_BONUS_IDS, NO_GUILD_EFFECTS, bonusEffect } from '../../../game/rules/guild';
 import type { GuildBonusId, GuildEffects } from '../../../game/rules/guild';
+import { fortuneOf } from '../../../game/rules/fortune';
+import type { DailyFortune } from '../../../game/rules/fortune';
 import type { GuildBonusItem } from '../../../platform/api/types';
 import {
   minLevelOfPower, powerZones, rodAxes, rodPower,
@@ -180,6 +182,11 @@ const COOK_EFFECT_CATEGORY: Record<keyof CookEffects, BonusCategory> = {
   biteWaitCut: 'fish', rarityWeight: 'fish', mutationWeight: 'fish', namedWeight: 'duel', nightUnlock: 'fish',
 };
 
+/** 운세 종류의 갈래 — 대상이 속한 갈래와 같다(희귀 가중치는 낚시, 판매가는 상점, 네임드 조우는 결투) */
+const FORTUNE_CATEGORY: Record<DailyFortune['kind'], BonusCategory> = {
+  fish: 'fish', gold: 'shop', shadow: 'duel',
+};
+
 export type BonusSource =
   /** 유물 보너스 - level은 보유 레벨, scale은 업적 보유 유물 효과 배율(1 + artifactBoost)이다 */
   | { kind: 'relic'; artifact: Artifact; effect: ArtifactEffectKey; level: number; scale: number }
@@ -191,7 +198,9 @@ export type BonusSource =
   /** 슬롯 효과 - 효과가 든 슬롯의 요리 이름이 출처이고, 효과 줄은 부엌 창과 같은 문장이다 */
   | { kind: 'slot'; slot: SlotKey; label: string; effect: RecipeEffectLine }
   /** 업적 누적 보너스 — 단계 도달 즉시 자동 적용되는 합산 보너스 */
-  | { kind: 'achievement'; label: string; value: string };
+  | { kind: 'achievement'; label: string; value: string }
+  /** 오늘의 운세 — 그 게임 날짜에 고정된 운 배율. 다른 보너스 다음의 최종 곱이다 */
+  | { kind: 'fortune'; fortune: DailyFortune };
 
 export interface BonusRow {
   category: BonusCategory;
@@ -203,7 +212,7 @@ export interface BonusRow {
 }
 
 /**
- * 지금 받는 보너스 — 가진 유물의 효과(효과마다 한 줄, 보유 유물 효과 배율 반영), 길드 보너스(1단계 이상), 효과가 든 슬롯의 요리 효과(now 기준).
+ * 지금 받는 보너스 — 가진 유물의 효과(효과마다 한 줄, 보유 유물 효과 배율 반영), 길드 보너스(1단계 이상), 효과가 든 슬롯의 요리 효과(now 기준), 오늘의 운세(now 기준).
  * 길드 보너스는 서버가 알려 준 레벨과 효과를 보이기만 한다(적용은 서버 액션 경로가 한다).
  * 낚싯대 파워에서 오는 효과(GOOD·PERFECT·방치 배수)는 해역마다 달라 낚싯대 탭의 해역 표가 맡는다.
  */
@@ -301,6 +310,11 @@ export function selectActiveBonuses(
   }
   if (ach.sellBonus > 0) {
     out.push({ category: 'shop', source: { kind: 'achievement', label: '판매가 보너스', value: fmtPct(ach.sellBonus, '+') }, manualOnly: false });
+  }
+  // 오늘의 운세 — 그 게임 날짜의 운세가 고정돼 있을 때만. 운세 종류가 가리키는 대상의 갈래에 한 줄 든다
+  const fortune = fortuneOf(game, now);
+  if (fortune) {
+    out.push({ category: FORTUNE_CATEGORY[fortune.kind], source: { kind: 'fortune', fortune }, manualOnly: false });
   }
   return out;
 }

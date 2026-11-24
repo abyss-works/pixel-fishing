@@ -348,4 +348,84 @@ describe('saleProceedsOf', () => {
     expect(resGA.value).toBe(sellSelected(makeState({ gold: 0, bag: bigBag }), bigBag.map(f => f.uid), 0.09).gold);
     expect(resGA.mods.map(m => m.id)).toEqual(['guild-sell', 'achievement-sellBonus']);
   });
+
+  it('재물운(gold) 활성 시 판매 예상 금액에 운 배율(×1.03/×1.05)을 마지막에 곱하고 오늘의 운세 mod를 남긴다', () => {
+    // NOW = 2026-11-21T05:00:00.000Z (KST 14:00) → 게임 날짜 2026-11-21
+    const bag = Array.from({ length: 10 }, (_, i) => sampleFish(`g${i}`, 'crucian', 'variant'));
+    const baseSum = bag.reduce((s, i) => s + priceOfInstance(i), 0);
+    const guild = guildEffectsOf(1, { sell: 3 }); // +6%
+
+    for (const index of [3, 5] as const) {
+      const luck = 1 + index / 100;
+      const plainCtx = makeCtx({
+        state: { bag, fortune: { day: '2026-11-21', kind: 'gold', index } },
+      });
+      const plainRes = saleProceedsOf(plainCtx, bag);
+      expect(plainRes.value).toBe(Math.round(baseSum * luck));
+      expect(plainRes.value).toBe(sellSelected(plainCtx.state, bag.map(f => f.uid), 0, luck).gold);
+      expect(plainRes.mods).toEqual([
+        {
+          id: 'fortune-sell',
+          label: '오늘의 운세',
+          delta: plainRes.value - baseSum,
+          source: { kind: 'fortune' },
+        },
+      ]);
+
+      // 길드 + 업적 보너스 합산 후 운 배율 마지막 곱 — sellSelected와 일치해야 한다
+      const stackedCtx = makeCtx({
+        state: { bag, fortune: { day: '2026-11-21', kind: 'gold', index } },
+        guild,
+        achievements: { sellBonus: 0.03 },
+      });
+      const stackedRes = saleProceedsOf(stackedCtx, bag);
+      expect(stackedRes.value).toBe(sellSelected(stackedCtx.state, bag.map(f => f.uid), 0.09, luck).gold);
+      expect(stackedRes.mods.map(m => m.id)).toEqual(['guild-sell', 'achievement-sellBonus', 'fortune-sell']);
+      expect(stackedRes.mods[2].source).toEqual({ kind: 'fortune' });
+      expect(stackedRes.mods[2].label).toBe('오늘의 운세');
+      expect(stackedRes.mods.reduce((s, m) => s + m.delta, stackedRes.base)).toBe(stackedRes.value);
+    }
+  });
+
+  it('다른 종류의 운세·날짜가 지난 재물운·빈 선택에는 운 배율 mod를 적용하지 않는다', () => {
+    const bag = Array.from({ length: 10 }, (_, i) => sampleFish(`f${i}`, 'crucian', 'variant'));
+    const baseSum = bag.reduce((s, i) => s + priceOfInstance(i), 0);
+
+    for (const kind of ['fish', 'shadow'] as const) {
+      const res = saleProceedsOf(makeCtx({
+        state: { bag, fortune: { day: '2026-11-21', kind, index: 5 } },
+      }), bag);
+      expect(res.value).toBe(baseSum);
+      expect(res.mods).toEqual([]);
+    }
+
+    // KST 04:00 경계 직전(2026-11-21 18:59:59Z = KST 2026-11-22 03:59:59)에는 2026-11-21 운세가 살아 있고,
+    // 경계 시각(19:00:00Z = KST 04:00:00) 이후에는 만료된다
+    const fortune = { day: '2026-11-21', kind: 'gold' as const, index: 5 as const };
+    const active = saleProceedsOf(makeCtx({
+      state: { bag, fortune },
+      now: '2026-11-21T18:59:59.000Z',
+    }), bag);
+    expect(active.value).toBe(Math.round(baseSum * 1.05));
+    expect(active.mods.map(m => m.id)).toEqual(['fortune-sell']);
+
+    const expired = saleProceedsOf(makeCtx({
+      state: { bag, fortune },
+      now: '2026-11-21T19:00:00.000Z',
+    }), bag);
+    expect(expired.value).toBe(baseSum);
+    expect(expired.mods).toEqual([]);
+
+    // 빈 선택이나 반올림 증가분이 0인 소액 선택에서는 fortune-sell mod를 추가하지 않는다
+    const empty = saleProceedsOf(makeCtx({
+      state: { fortune },
+    }), []);
+    expect(empty).toEqual({ base: 0, mods: [], value: 0 });
+
+    const tiny = [sampleFish('tiny', 'crucian', 'normal')];
+    const tinyPrice = priceOfInstance(tiny[0]);
+    expect(Math.round(tinyPrice * 1.05)).toBe(tinyPrice);
+    const tinyRes = saleProceedsOf(makeCtx({ state: { bag: tiny, fortune } }), tiny);
+    expect(tinyRes).toEqual({ base: tinyPrice, mods: [], value: tinyPrice });
+  });
 });

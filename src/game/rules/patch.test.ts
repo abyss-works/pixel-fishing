@@ -92,7 +92,7 @@ describe('patch 동등성 — 전 액션', () => {
       relief: { gold: 100, fame: 50, rod: 1, boat: 0, dex: { carp: { normal: { count: 2, maxSize: 30, first: '2026-08-20' } } } },
     });
   });
-  it('boot / sendLetter — 상태불변, writes 빈값', () => {
+  it('boot / sendLetter — writes 빈값, 운세 스칼라 동기화', () => {
     const s = seed({ bag: [mkInst('a')] });
     for (const action of [{ type: 'boot', buildId: 'abc' }, { type: 'sendLetter', text: 'hi' }] as const) {
       const out = applyAction(s, action, deps());
@@ -156,7 +156,7 @@ describe('patch — 전시장 합성 + 내성', () => {
     expect(next.exhibit[0]).toBeUndefined();
   });
   it('빈 델타는 같은 내용의 상태를 돌려준다', () => {
-    const s = seed({ bag: [mkInst('a')] });
+    const s = seed({ bag: [mkInst('a')], fortune: { day: '2026-08-22', kind: 'fish', index: 3 } });
     const out = applyAction(s, { type: 'boot' }, deps());
     if (!out.ok) throw new Error(out.error);
     expect(applyPatch(s, { version: 9, baseVersion: 8, scalars: pickScalars(out.state), writes: out.writes })).toEqual(s);

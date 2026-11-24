@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import type { GameState } from '../../../../game/rules/logic';
+import { useNow } from '../../../../features/gameplay/service/useGameTime';
 import { selectSaleTab } from '../../../../features/inventory/model/saleWindow';
 import { toggleSellRow, useSellView } from '../../game/tabs/bag/bagView';
 import AdjustedAmount from '../../../ui/AdjustedAmount';
@@ -26,8 +27,9 @@ export default function SellTab({ game, sellBonus, excluded, setExcluded, busy, 
   busy: boolean;
   onSell: (uids: string[]) => void;
 }) {
+  const now = useNow();
   const { collapsed } = useSellView(); // 어종 행 펼침 — 가방 탭과 별개 저장소
-  const view = useMemo(() => selectSaleTab(game, excluded, sellBonus), [game, excluded, sellBonus]);
+  const view = useMemo(() => selectSaleTab(game, excluded, sellBonus, now), [game, excluded, sellBonus, now]);
 
   const table = (
     <FishPickTable rows={view.rows} expanded={collapsed} onToggleExpand={toggleSellRow}

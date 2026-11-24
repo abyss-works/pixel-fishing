@@ -4,6 +4,7 @@ import { FISH, SPOTS } from '../../../game/rules/logic';
 import { rarityRank } from '../../../game/content/rarity';
 import type { Stat } from '../../../game/rules/stats';
 import { GUILD_BONUS_NAME } from '../../guild/model/guild';
+import { FORTUNE_SOURCE_LABEL } from '../../fortune/model/fortune';
 import type { BagRow } from './bagRows';
 import { groupInstances, sumPrice } from './bagRows';
 
@@ -82,8 +83,9 @@ export interface SalePreview {
   total: Stat;
 }
 
-/** 기본 판매액에 길드·업적 판매가 보너스를 더한 내역 — 서버 판매와 같은 증가분 규칙(saleBonusOf)을 쓴다. */
-export function saleProceeds(base: number, sellBonus: number, achSellBonus = 0): Stat {
+/** 기본 판매액에 길드·업적 판매가 보너스를 더한 내역 — 서버 판매와 같은 증가분 규칙(saleBonusOf)을 쓴다.
+ *  luck은 운 배율(돈 운) — 보너스를 다 적용한 합계에 마지막으로 곱하고, 반올림은 곱 뒤 한 번이다(sellSelected와 같은 순서). */
+export function saleProceeds(base: number, sellBonus: number, achSellBonus = 0, luck = 1): Stat {
   const totalBonus = Math.round((sellBonus + achSellBonus) * 1e9) / 1e9;
   const totalDelta = saleBonusOf(base, totalBonus);
   const mods: Stat['mods'] = [];
@@ -99,16 +101,20 @@ export function saleProceeds(base: number, sellBonus: number, achSellBonus = 0):
     const rest = mods.slice(0, -1).reduce((sum, mod) => sum + mod.delta, 0);
     mods[mods.length - 1].delta = totalDelta - rest;
   }
+  const value = Math.round((base + totalDelta) * luck);
+  const luckDelta = value - (base + totalDelta);
+  if (luckDelta !== 0) mods.push({ id: 'fortune-sell', label: FORTUNE_SOURCE_LABEL, delta: luckDelta });
   return {
     base,
     mods,
-    value: base + totalDelta,
+    value,
   };
 }
 
-/** 가방의 잠금·선택 제외 상태를 반영한 판매 대상과 합계를 만든다. sellBonus는 길드 판매가 보너스 비율이다. */
+/** 가방의 잠금·선택 제외 상태를 반영한 판매 대상과 합계를 만든다. sellBonus는 길드 판매가 보너스 비율이고,
+ *  luck은 운 배율(돈 운)이다 — 돈 운의 날에는 미리보기 합계가 실제 수령액과 같아야 하므로 넘긴다. */
 export function selectSalePreview(
-  bag: readonly FishInstance[], excluded: ReadonlySet<string>, sellBonus: number, achSellBonus = 0,
+  bag: readonly FishInstance[], excluded: ReadonlySet<string>, sellBonus: number, achSellBonus = 0, luck = 1,
 ): SalePreview {
   const rows = groupInstances(bag).map((row): SaleRow => {
     const sellable = row.items.filter(instance => !instance.locked);
@@ -137,6 +143,6 @@ export function selectSalePreview(
   return {
     rows,
     soldUids,
-    total: saleProceeds(rows.reduce((total, row) => total + row.selectedSubtotal, 0), sellBonus, achSellBonus),
+    total: saleProceeds(rows.reduce((total, row) => total + row.selectedSubtotal, 0), sellBonus, achSellBonus, luck),
   };
 }
