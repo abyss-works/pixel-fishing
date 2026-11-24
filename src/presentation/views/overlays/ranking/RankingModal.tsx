@@ -81,7 +81,7 @@ function RankingBoardView({ board, data, loading, failed, offline }: { board: Bo
       </TableBox>
       {/* 내 줄 자리: 목록 밖일 때만 채우고, 아니면 같은 높이로 비워 둔다 */}
       {mine ? (
-        <Inset tone="light" className="h-9 shrink-0 grid grid-cols-[3.5rem_minmax(0,1fr)_110px] items-center px-3 border-accent text-accent text-sm"
+        <Inset tone="light" border="accent" className="h-9 shrink-0 grid grid-cols-[3.5rem_minmax(0,1fr)_110px] items-center px-3 text-accent text-sm"
                aria-label="내 순위">
           <span className="pf-accent text-xs">{mine.rank}</span>
           {/* 표의 닉네임 칸과 같은 왼쪽 여백 */}

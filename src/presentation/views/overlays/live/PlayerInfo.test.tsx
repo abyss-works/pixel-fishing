@@ -169,4 +169,30 @@ describe('PlayerInfo', () => {
     show({ self: true });
     expect(screen.queryAllByRole('button')).toEqual([]);
   });
+
+  it('유물 카드 테두리는 등급별 border-* 클래스만 쓰고 기본 border-line과 겹치지 않으며 빈 슬롯만 border-line border-dashed를 쓴다', () => {
+    s.profile = {
+      ...s.profile,
+      artifacts: ['wreck-compass', 'abyss-angler', 'mami-wata-mirror'],
+      artifactLevels: { 'wreck-compass': 2, 'abyss-angler': 3 },
+    };
+    show();
+
+    const rareCard = screen.getByLabelText('유물 침선의 나침반 Lv.2');
+    expect(rareCard).toHaveClass('border', 'border-rare', 'text-rare');
+    expect(rareCard).not.toHaveClass('border-line');
+
+    const epicCard = screen.getByLabelText('유물 해구의 이빨 Lv.3');
+    expect(epicCard).toHaveClass('border', 'border-epic', 'text-epic');
+    expect(epicCard).not.toHaveClass('border-line');
+
+    const legendCard = screen.getByLabelText('유물 마미 와타의 거울');
+    expect(legendCard).toHaveClass('border', 'border-legend', 'text-legend');
+    expect(legendCard).not.toHaveClass('border-line');
+
+    const emptyCards = screen.getAllByLabelText(/유물 없음$/);
+    expect(emptyCards.length).toBeGreaterThan(0);
+    expect(emptyCards[0]).toHaveClass('border', 'border-line', 'border-dashed');
+    expect(emptyCards[0]).not.toHaveClass('border-epic', 'border-legend', 'border-rare');
+  });
 });

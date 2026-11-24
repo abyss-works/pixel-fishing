@@ -103,8 +103,8 @@ function ItemCards({ title, hint, rows, busy, onEat }: {
       <Subheading><Tip text={hint}>{title}</Tip></Subheading>
       <div className="grid grid-cols-2 gap-2">
         {rows.map(row => (
-          <Inset key={row.recipe.id} borderless
-                 className={cx('p-2 flex flex-col gap-1.5 min-w-0 border', row.active ? 'border-accent' : 'border-line')}>
+          <Inset key={row.recipe.id} border={row.active ? 'accent' : 'line'}
+                 className="p-2 flex flex-col gap-1.5 min-w-0">
             <div className="flex items-start gap-2 min-w-0">
               <ItemSprite kind={row.slot} id={row.recipe.id} preset="list" className="shrink-0" />
               <div className="min-w-0 flex-1 flex flex-col gap-0.5">
