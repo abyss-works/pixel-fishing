@@ -2,6 +2,33 @@
 
 이 파일은 생성된다. 직접 고치지 않는다. 형식은 Keep a Changelog를 따른다.
 
+## [0.20.1] - 2026-11-24
+
+### 수정
+
+- 콜드 아카이브 이벤트 조회(eventsBefore)가 counted 열을 함께 조회해 아카이브 JSONL에 이벤트 집계 여부(boolean)가 보존되도록 수정했다.
+  - 조회 및 타입(api/_data/telemetry.ts): EventArchiveRow 인터페이스(id, user_id, type, payload, created_at, counted)를 정의하고, eventsBefore의 SELECT 목록에 counted 열을 추가해 반환 타입을 EventArchiveRow[]로 맞췄다.
+  - 테스트 및 스냅샷(api/_data/telemetry.test.ts, api/cold-archive.test.ts, api/cron/__snapshots__/archive.db.test.ts.snap): eventsBefore의 counted 열 조회·불리언 보존 단위 테스트를 추가하고, 콜드 아카이브 JSONL 검증과 아카이브 DB 스냅샷(counted 및 bytesRaw)을 갱신했다.
+  - eventsBefore SELECT 열 및 반환 타입(api/_data/telemetry.ts): 이전 id, user_id, type, payload, created_at (Record<string, unknown>[]), 이후 id, user_id, type, payload, created_at, counted 포함 (EventArchiveRow[])
+  - 커밋: 7b1f88c6
+- 초기 로드와 읽기 전용 조회 경로에 DB 쓰기 없는 메모리 내 업적 파생 평가를 적용해, 세이브에 아직 기록되지 않았거나 boot 이전 상태여도 이미 달성한 업적이 즉시 claimable로 노출되도록 수정했다.
+  - 서버 무쓰기 파생 평가(api/_data/achievements.ts, api/_data/me.ts, api/_data/admin.ts): 도감 행(records), 저장 blob, 카운터(counters), 네임드 토벌 목록(clearedNamed)만으로 evaluateAchievements를 계산하는 deriveAchievements를 추가했다. readOwnState는 newlyClaimable이 있을 때 saves_current를 쓰지 않고 응답 객체 cur.data.achievements에만 파생 결과를 반영하며, 관리자 userState는 records JSON에 max_size와 first_caught를 함께 조회한 뒤 deriveAchievements로 claimed·claimable 수를 집계한다.
+  - 클라이언트 초기 로드(src/platform/adapters/httpGameGateway.ts): assemble과 구 saves 이관 폴백 경로 모두에서 migrate 직후 evaluateAchievements를 수행해 초기 상태부터 파생 업적을 반영한다.
+  - 테스트(api/me.db.test.ts, api/admin.db.test.ts, api/action.achievements.db.test.ts, api/action.debug.db.test.ts, src/platform/adapters/httpGameGateway.test.ts, src/features/gameplay/service/useGame.test.tsx): readOwnState 무쓰기 평가, 미접속 계정 관리자 집계, boot 없이 파생 직후 claimAchievement·claimAllAchievements 수령, resetCounters DB 영속 직접 검증, legacy 폴백 및 resync 유지 검증을 추가·갱신했다.
+  - readOwnState 업적 평가(api/_data/me.ts, achievements.ts): 이전 saves_current.data.achievements 저장값만 반환, 이후 deriveAchievements로 무쓰기 파생 평가 후 메모리 응답에만 claimable 반영
+  - 관리자 userState 업적 집계(api/_data/admin.ts): 이전 saves_current.data.achievements 원시 맵만 집계, records에 max_size·first_caught 미조회, 이후 records에 max_size·first_caught 포함 및 deriveAchievements 기반 claimed·claimable 집계
+  - 클라이언트 초기 로드(HttpGameGateway.load, assemble): 이전 migrate 결과의 achievements만 유지, 이후 assemble과 legacy 폴백 경로에서 evaluateAchievements 즉시 적용
+  - 커밋: edd89a50
+
+### 기타
+
+- 콜드 아카이브와 업적 카운터 등 이벤트 소비 시스템의 실시간 기준점(컷오프)과 소급 진행 상태를 기록하는 event_consumer_cutoffs 테이블과 Drizzle 스키마를 추가했다.
+  - 마이그레이션(supabase/migrations/0039_event_consumer_cutoffs.sql, 0039_event_consumer_cutoffs.down.sql): 복합 기본키 (consumer_key, rule_version), rule_version >= 1 및 backfill_status in ('pending', 'running', 'completed', 'superseded') 체크 제약, 기본값(backfilled_through_event_id = 0, backfill_status = 'pending', notes = '{}', updated_at = now())을 정의하고 RLS를 활성화했다(정책 미부여로 서버 전용).
+  - Drizzle 스키마 및 DB 테스트(api/_db/schema.ts, api/_db/schema.db.test.ts, api/_dbTest/migrations.db.test.ts): eventConsumerCutoffs 선언을 추가하고, 선언 테이블 목록과 기본값·제약·authenticated 역할 차단 RLS 검증 테스트를 추가했다.
+  - 이벤트 소비자 컷오프 테이블 및 스키마(0039_event_consumer_cutoffs, schema.ts): 이전 없음, 이후 public.event_consumer_cutoffs 테이블 및 eventConsumerCutoffs Drizzle 스키마 추가(복합 PK, RLS 서버 전용)
+  - 영향: 영향: 순수 가산 테이블 추가라 기존 테이블·런타임 경로에 영향이 없으며, 코드 배포 전 마이그레이션을 먼저 적용해도 안전하다. 되돌리기: supabase/migrations/0039_event_consumer_cutoffs.down.sql을 실행해 테이블을 삭제하고 schema.ts와 관련 DB 테스트 변경을 복원한다.
+  - 커밋: 7d2301ea
+
 ## [0.20.0] - 2026-11-24
 
 ### 기능
@@ -2568,6 +2595,7 @@
   - 영향: 미확인
   - 커밋: 92257ad
 
+[0.20.1]: https://github.com/abyss-works/pixel-fishing/releases/tag/v0.20.1
 [0.20.0]: https://github.com/abyss-works/pixel-fishing/releases/tag/v0.20.0
 [0.19.3]: https://github.com/abyss-works/pixel-fishing/releases/tag/v0.19.3
 [0.19.2]: https://github.com/abyss-works/pixel-fishing/releases/tag/v0.19.2
