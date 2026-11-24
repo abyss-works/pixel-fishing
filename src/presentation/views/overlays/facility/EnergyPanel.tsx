@@ -113,7 +113,7 @@ export default function EnergyPanel({ game, busy, act, setToast, onClose }: {
         ))}
       </div>
 
-      <p className="text-xs text-text-dim leading-relaxed">
+      <Note size="xs" className="my-0 leading-relaxed">
         {view.unlockedCount === 0 ? (
           view.lockedCount > 0
             ? <>바꿀 수 있는 물고기가 없어요. 잠근 물고기 <span className="pf-accent text-text">{fmtNum(view.lockedCount)}</span>마리는 빠져요.</>
@@ -128,7 +128,7 @@ export default function EnergyPanel({ game, busy, act, setToast, onClose }: {
               : '(잠근 물고기는 빠져요)'}
           </>
         )}
-      </p>
+      </Note>
     </ModalCard>
   );
 }
