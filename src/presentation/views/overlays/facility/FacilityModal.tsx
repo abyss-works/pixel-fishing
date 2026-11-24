@@ -16,6 +16,7 @@ import ModalCard from '../../../ui/ModalCard';
 import { fmtGold, josa } from '../../../ui/format';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import BoatPanel from './BoatPanel';
+import EnergyPanel from './EnergyPanel';
 import RodPanel from './RodPanel';
 import KitchenPanel from './KitchenPanel';
 import SaleWindow from './SaleWindow';
@@ -57,17 +58,18 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
     });
   };
 
-  const isSale = panel === 'sell' || panel === 'energy';
+  const isSale = panel === 'sell';
 
   return (
     // 높이: 수배판은 가장 긴 탭(일반 의뢰 카드 셋)이 스크롤 없이 들어가는 480px, 옷장은 미리보기 줄과 탭, 고정 높이의 아래 줄이 들어가는 560px,
     // 부엌과 판매 창은 (정보 줄과) 탭 아래 두 열이 들어가는 560px로 고정하고, 모바일 레이아웃에서도 탭과 상태에 상관없이 가용 높이로 고정한다.
-    // 수배판과 옷장은 모바일 레이아웃에서 내용 높이를 따른다.
-    <Modal layer="stage" xl={panel === 'rod' || panel === 'boat' || panel === 'kitchen' || isSale} md={panel === 'bounty' || panel === 'wardrobe'}
+    // 가방 하단 기운 얻기(energy)는 480px 단일 열 대화상자로 내용 높이를 따른다.
+    <Modal layer="stage" xl={panel === 'rod' || panel === 'boat' || panel === 'kitchen' || isSale}
+           md={panel === 'bounty' || panel === 'wardrobe'} sm={panel === 'energy'}
            height={panel === 'bounty' ? 480 : panel === 'wardrobe' || panel === 'kitchen' || isSale ? 560 : undefined}
            mobileFixed={panel === 'kitchen' || isSale} onClose={onClose}>
-      {((panel === 'sell' && base !== undefined) || panel === 'energy') && (
-        <SaleWindow game={game} base={base} initialTab={panel === 'energy' ? 'energy' : 'sell'} accountState={accountState} sellBonus={sellBonus} busy={busy} act={run} setToast={setToast} onClose={onClose}
+      {panel === 'sell' && base !== undefined && (
+        <SaleWindow game={game} base={base} accountState={accountState} sellBonus={sellBonus} busy={busy} act={run} setToast={setToast} onClose={onClose}
           onSell={uids => run({ type: 'sell', uids }, r => {
             onClose();
             sendNotice(setToast, {
@@ -76,6 +78,9 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
               logTone: 'gold',
             });
           })} />
+      )}
+      {panel === 'energy' && (
+        <EnergyPanel game={game} busy={busy} act={run} setToast={setToast} onClose={onClose} />
       )}
       {panel === 'rod' && (
         <RodPanel game={game} onClose={onClose} busy={busy}

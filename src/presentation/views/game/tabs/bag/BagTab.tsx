@@ -241,7 +241,7 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
   };
 
   return (
-    <div>
+    <div className={cx('flex-1 flex flex-col', section === 'fish' && '-mb-3')}>
       <SubTabs
         items={[
           { key: 'fish' as BagSection, label: '물고기' },
@@ -364,7 +364,7 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
               </Note>
             </>
           )}
-          <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-line-dim">
+          <div className="sticky bottom-0 z-1 -mx-3 px-3 pb-3 pt-2 mt-auto bg-surface border-t border-line-dim grid grid-cols-2 gap-2">
             <Tip wraps className="flex min-w-0"
                  text={bagCount === 0
                    ? '가방에 물고기가 없어요.'

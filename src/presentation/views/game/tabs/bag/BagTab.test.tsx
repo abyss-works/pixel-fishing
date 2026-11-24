@@ -136,6 +136,15 @@ describe('BagTab - 3서브탭, 보기 전환 아이콘, 하단 버튼', () => {
     expect(screen.queryByRole('button', { name: '기운 얻기' })).not.toBeInTheDocument();
   });
 
+  it('물고기 섹션 하단 액션 바는 스크롤 영역 아래에 sticky 고정되고 불투명 배경과 상단 경계선을 가진다', () => {
+    show(game({ boat: COOKING_UNLOCK_BOAT, location: { kind: 'base', id: 'home' } }));
+    const bar = screen.getByRole('button', { name: '자동 잠금' }).closest('div')!;
+    expect(bar.className).toContain('sticky');
+    expect(bar.className).toContain('bottom-0');
+    expect(bar.className).toContain('bg-surface');
+    expect(bar.className).toContain('border-t');
+  });
+
   it('우상단 보기 전환 아이콘 버튼으로 목록과 카드 보기를 전환한다', () => {
     show(game({
       bag: [inst('a')],

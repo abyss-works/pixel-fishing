@@ -12,7 +12,7 @@ describe('스테이지 모달 래퍼', () => {
   afterEach(cleanup);
   // 래퍼에 합쳐지는 클래스(높이 상수 포함)를 정규식으로 읽지 않고, 높이·폭 변형을 모두 렌더해 실제 class를 본다
   const heights: (ModalHeight | undefined)[] = [undefined, 400, 480, 520, 560];
-  const widths: Array<{ md?: boolean; xl?: boolean }> = [{}, { md: true }, { xl: true }];
+  const widths: Array<{ sm?: boolean; md?: boolean; xl?: boolean }> = [{}, { sm: true }, { md: true }, { xl: true }];
 
   it('모든 높이·폭 변형에서 스크롤 클래스를 갖지 않는다 — 스크롤은 카드 본문이 맡는다', () => {
     const classes: string[] = [];
