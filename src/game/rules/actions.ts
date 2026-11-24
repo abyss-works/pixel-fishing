@@ -51,7 +51,7 @@ import { reduceDebug } from './debug.js';
 import type { DevBountySnapshot } from './debug.js';
 import { addGradeEffect, rollFish } from './logic.js';
 import { JUDGMENT_MULT } from './balance.js';
-import { gameDayOf, isNight } from './time.js';
+import { gameDayOf, isNight, nightDepth } from './time.js';
 import type { DayPhase } from './time.js';
 import { NO_GUILD_EFFECTS } from './guild.js';
 import type { GuildEffects } from './guild.js';
@@ -388,7 +388,9 @@ export function prepareCatchDraw(
   // 개발 도구 forcePhase가 허용되면 요청 단위로 낮/밤을 전환한다. 밤 어종 출현 미끼는 낮에도 밤 풀을 쓴다.
   const nightNow = forcePhase ? forcePhase === 'night' : isNight(now);
   const phase: DayPhase = nightNow || cook.nightUnlock ? 'night' : 'day';
-  let phaseOpts: DrawOptions & { phase: DayPhase } = { phase };
+  let phaseOpts: DrawOptions & { phase: DayPhase } = phase === 'night'
+    ? { phase, nightDepth: cook.nightUnlock || forcePhase === 'night' ? 1 : nightDepth(now) }
+    : { phase };
   for (const [grade, bonus] of Object.entries(cook.rarityWeight) as [RarityId, number][]) {
     phaseOpts = addGradeEffect(phaseOpts, grade, bonus);
   }
@@ -469,7 +471,7 @@ export function drawCatch(
   }
   const zoneLeg = zone ? (achievements.zoneLegendary[zone] ?? 0) : 0;
   if (zoneLeg > 0) phaseOpts = addGradeEffect(phaseOpts, 'legendary', zoneLeg);
-  const candidates = speciesPityCandidates(state.pity, spot, phaseOpts.phase);
+  const candidates = speciesPityCandidates(state.pity, spot, phaseOpts);
   const resolved = resolveSpeciesPity(state.pity, candidates, ownsNormal);
   const target = resolved.target ? FISH.find(f => f.id === resolved.target) : undefined;
   const guaranteed = firstCatchTarget(state.firstCatch, spot, phaseOpts.phase, rng);

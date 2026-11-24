@@ -206,6 +206,8 @@ export interface DrawOptions {
   /** 시간대 — 기본 'day'(밤 전용 어종 제외). 'night'면 낮+밤 전부(합류).
    *  미지정 호출 전부가 day라 기존 낮 어종만 있는 지금은 분포 불변(night 어종 추가 후 안전망). */
   phase?: DayPhase;
+  /** 밤 깊이(0~1) — 낮 0, 밤 시작(22:00) 0 → 정점(02:00) 1 → 06:00 0. 미지정 시 1 */
+  nightDepth?: number;
   /** 등급 가중치에 걸리는 보너스 효과의 합(미끼 +, 길드 희귀 어종 보너스 −). 등급마다 (1 + 합)을 한 번 곱한다.
    *  효과는 addGradeEffect로 더하고, 다이얼(판정·방치·페널티)과는 곱한다 */
   weightEffects?: Partial<Record<RarityId, number>>;
@@ -229,13 +231,15 @@ export function fishPool(spotId: SpotId, phase: DayPhase = 'day'): Fish[] {
 // 확률 = 항목 가중치 / 가중치 합. 분모는 그 판정에 들어온 가중치의 합이라 해역마다 다를 수 있다.
 // rng 1회를 소비하고, 항목 순서대로 누적해 고른다. 합이 0이면 마지막 항목.
 export function pickWeighted<K>(entries: readonly (readonly [K, number])[], rng: () => number): K {
-  const total = entries.reduce((sum, [, w]) => sum + w, 0);
+  const active = entries.filter(([, w]) => w > 0);
+  const pool = active.length > 0 ? active : entries;
+  const total = pool.reduce((sum, [, w]) => sum + w, 0);
   let r = rng() * total;
-  for (const [key, w] of entries) {
+  for (const [key, w] of pool) {
     r -= w;
     if (r < 0) return key;
   }
-  return entries[entries.length - 1][0];
+  return pool[pool.length - 1][0];
 }
 
 /**
@@ -338,7 +342,10 @@ function drawWeights(pool: Fish[], spotId: SpotId, o: DrawOptions): number[] {
   const gradeW = new Map(rarityDrawWeights(pool, spotId, o));
   const fwSum = new Map<RarityId, number>();
   for (const f of pool) fwSum.set(f.rarity, (fwSum.get(f.rarity) ?? 0) + fishDrawWeight(f, o));
-  return pool.map(f => (gradeW.get(f.rarity) ?? 0) * (fishDrawWeight(f, o) / (fwSum.get(f.rarity) ?? 1)));
+  return pool.map(f => {
+    const sum = fwSum.get(f.rarity) ?? 0;
+    return sum > 0 ? (gradeW.get(f.rarity) ?? 0) * (fishDrawWeight(f, o) / sum) : 0;
+  });
 }
 
 /** 등급 단계의 가중치 — 풀에 있는 등급만, 등급 예산 × 일반 다이얼 × (1 + 그 등급의 효과 합).
@@ -351,9 +358,13 @@ function rarityDrawWeights(pool: Fish[], spotId: SpotId, o: DrawOptions): [Rarit
         * Math.max(0, 1 + (o.weightEffects?.[r] ?? 0)))]);
 }
 
-/** 어종 단계의 가중치 — 다이얼(fishWeights)이 없으면 어종 데이터의 개체 가중치. 기본은 1이고 밤 어종은 NIGHT_FISH_WEIGHT */
-const fishDrawWeight = (f: Fish, o: DrawOptions): number =>
-  o.fishWeights?.[f.id] ?? f.weight ?? (f.night ? NIGHT_FISH_WEIGHT : 1);
+/** 어종 단계의 가중치 — 다이얼(fishWeights)이 없으면 어종 데이터의 개체 가중치.
+ *  기본은 1이고 밤 어종은 NIGHT_FISH_WEIGHT × nightDepth(미지정 시 1, 0~1 클램프) */
+export const fishDrawWeight = (f: Fish, o: DrawOptions): number => {
+  const raw = o.nightDepth ?? 1;
+  const depth = Number.isFinite(raw) ? Math.max(0, Math.min(1, raw)) : 1;
+  return o.fishWeights?.[f.id] ?? f.weight ?? (f.night ? NIGHT_FISH_WEIGHT * depth : 1);
+};
 
 // 통상 추첨 — 등급을 가중치로 뽑고(rng 1회), 그 등급의 어종을 가중치로 뽑는다(rng 1회).
 export function rollFish(

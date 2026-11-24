@@ -14,7 +14,7 @@ export function useNow(): string {
   const [, setTick] = useState(0);
   useEffect(() => {
     if (override) return; // 고정 모드 — 갱신 불필요
-    const id = setInterval(() => setTick(t => t + 1), 10_000);
+    const id = setInterval(() => setTick(t => t + 1), 5_000);
     return () => clearInterval(id);
   }, [override]);
   return override ?? new Date().toISOString();

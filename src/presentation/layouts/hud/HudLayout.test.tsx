@@ -14,7 +14,7 @@ vi.mock('../../ui/hud/Minimap', () => ({ default: () => <div data-testid="minima
 vi.mock('./HudHeader', () => ({ default: () => null }));
 const NOW = '2026-11-12T00:00:00.000Z';
 vi.mock('../../../features/gameplay/service/useGameTime', () => ({
-  useGameTime: () => ({ clock: '12:00', dark: 0 }), useNow: () => NOW,
+  useGameTime: () => ({ clock: '12:00', phase: 'day', dark: 0 }), useNow: () => NOW,
 }));
 
 import HudLayout from './HudLayout';

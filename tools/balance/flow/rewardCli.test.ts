@@ -77,7 +77,7 @@ describe('보상 출력', () => {
     expect(r.achievements!.rows).toHaveLength(6);
     const json = JSON.parse(JSON.stringify(r)).achievements;
     expect(json.rows.map((x: { amounts: { gold: number }[] }) => x.amounts[0].gold)).toEqual([
-      50_000, 250_000, 750_000, 3_000_000, 15_000_000, 55_000_000,
+      50_000, 250_000, 700_000, 2_500_000, 10_000_000, 55_000_000,
     ]);
     expect('fame' in json.rows[0].amounts[0]).toBe(false);
   });

@@ -23,7 +23,7 @@ describe('진행 업적 구역 보상 산식', () => {
     expect(rows.map(r => ({ zone: r.zone, ev: r.ev }))).toEqual(evs);
   });
 
-  it('4시간어치, 기본 분배 0.5일 때 6개 구역 산출값이 명세 표와 일치한다', () => {
+  it('4시간어치, 기본 분배 0.5일 때 6개 구역 산출값이 현재 방치 EV 기준과 일치한다', () => {
     const rows = rewardRows({ hours: [4], split: 0.5 });
     const table = rows.map(r => {
       const a = r.amounts[0];
@@ -32,9 +32,9 @@ describe('진행 업적 구역 보상 산식', () => {
     expect(table).toEqual([
       { zone: 'pacific', zoneGold: 50_000, basic: 25_000, named: 25_000 },
       { zone: 'seasia', zoneGold: 250_000, basic: 100_000, named: 150_000 },
-      { zone: 'indian', zoneGold: 750_000, basic: 350_000, named: 400_000 },
-      { zone: 'madagascar', zoneGold: 3_000_000, basic: 1_500_000, named: 1_500_000 },
-      { zone: 'southatlantic', zoneGold: 15_000_000, basic: 7_500_000, named: 7_500_000 },
+      { zone: 'indian', zoneGold: 700_000, basic: 350_000, named: 350_000 },
+      { zone: 'madagascar', zoneGold: 2_500_000, basic: 1_000_000, named: 1_500_000 },
+      { zone: 'southatlantic', zoneGold: 10_000_000, basic: 5_000_000, named: 5_000_000 },
       { zone: 'northatlantic', zoneGold: 55_000_000, basic: 25_000_000, named: 30_000_000 },
     ]);
   });

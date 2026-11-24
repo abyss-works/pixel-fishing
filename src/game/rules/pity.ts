@@ -8,7 +8,7 @@
 //    토벌에 성공하거나 게임 날짜가 바뀌면 사라진다.
 // 리듀서 catch와 서버 fast path가 같은 함수를 쓴다.
 // 상대경로 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버가 이 체인을 직접 불러온다.
-import { fishDrawShares, fishPool, namedEncounterCandidates, rollNamedEncounter } from './logic.js';
+import { fishDrawShares, fishDrawWeight, fishPool, namedEncounterCandidates, rollNamedEncounter } from './logic.js';
 import type { DrawOptions, FormId } from './logic.js';
 import { gameDayOf } from './time.js';
 import type { DayPhase } from './time.js';
@@ -25,10 +25,13 @@ export const PITY_DONE = -1;
 /** 어종 → 누적 확률 질량(또는 PITY_DONE) */
 export type SpeciesPity = Record<string, number>;
 
-/** 이번 캐치에서 천장으로 확정할 수 있는 후보 — 지금 풀에 있고 누적이 K 이상인 미완료 어종, 누적 큰 순 */
-export function speciesPityCandidates(pity: SpeciesPity, spot: SpotId, phase: DayPhase): string[] {
-  return fishPool(spot, phase)
-    .filter(f => (pity[f.id] ?? 0) >= SPECIES_PITY_K)
+/** 이번 캐치에서 천장으로 확정할 수 있는 후보 — 지금 풀에서 가중치가 양수이고 누적이 K 이상인 미완료 어종, 누적 큰 순 */
+export function speciesPityCandidates(
+  pity: SpeciesPity, spot: SpotId, phaseOrOpts: DayPhase | DrawOptions,
+): string[] {
+  const opts: DrawOptions = typeof phaseOrOpts === 'string' ? { phase: phaseOrOpts } : phaseOrOpts;
+  return fishPool(spot, opts.phase)
+    .filter(f => fishDrawWeight(f, opts) > 0 && (pity[f.id] ?? 0) >= SPECIES_PITY_K)
     .sort((a, b) => pity[b.id] - pity[a.id])
     .map(f => f.id);
 }

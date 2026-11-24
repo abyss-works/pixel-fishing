@@ -20,6 +20,7 @@ import type { DailyFortune } from '../src/game/rules/fortune.js';
 import { LICENSE_GRADES, WALK_BAG_CAP, newState, sellSelected, zoneDexMissing } from '../src/game/rules/logic.js';
 import type { GameState } from '../src/game/rules/logic.js';
 import { NAMED_PITY_CATCHES, PITY_DONE, SPECIES_PITY_K } from '../src/game/rules/pity.js';
+import { database } from './_db/client.js';
 import {
   LOCAL_ORIGIN, callAction, captureRealClock, dumpUser, fish, normalize, seedUser, seededRandom,
   startActionEnv, testUid, userToken,
@@ -2137,5 +2138,45 @@ describe('오늘의 운세', () => {
     expect(goldDaySaved.version).toBe(3);
     expect(goldDaySaved.gold).toBe(expectedGold);
     expect(goldDaySaved.fortune).toEqual(goldFortune);
+  });
+});
+
+describe('밤 깊이 경계와 빠른 경로 천장 조회', () => {
+  it('밤 시작(22:00, nightDepth=0) 경계에서 빠른 경로 catch는 밤 어종 천장 후보를 제외해 ownedNormalForms 조회를 생략하고, 밤 정점(02:00)에서는 조회·확정한다', async () => {
+    const baseState: Partial<GameState> = { boat: 1, fortune: { day: TODAY_KST, kind: 'gold', index: 3 } };
+
+    // 1) 22:00 경계(UTC :55분) — 천장 없는 기준선 DB 왕복 수 측정
+    vi.setSystemTime(new Date('2030-03-04T05:55:00.000Z'));
+    const uidBaseline = await seed({ state: { ...baseState, pity: {} } });
+    const spy = vi.spyOn(database().db, 'execute');
+    spy.mockClear();
+    const resBaseline = await callAction(userToken(uidBaseline), { type: 'catch', spot: 'sea', judgment: 'auto' });
+    const baselineQueries = spy.mock.calls.length;
+    expect(resBaseline.status).toBe(200);
+
+    // 2) 같은 22:00 경계에서 밤 전용 어종(moonveil)만 천장 도달 — nightDepth=0이므로 후보에서 빠져 추가 조회 없음
+    const uidZero = await seed({ state: { ...baseState, pity: { moonveil: SPECIES_PITY_K } } });
+    spy.mockClear();
+    const resZero = await callAction(userToken(uidZero), { type: 'catch', spot: 'sea', judgment: 'auto' });
+    const zeroQueries = spy.mock.calls.length;
+    expect(resZero.status).toBe(200);
+    expect(zeroQueries).toBe(baselineQueries);
+    const zeroBody = resZero.body as { result: { type: string; fishId: string } };
+    expect(zeroBody.result.fishId).not.toBe('moonveil');
+
+    // 3) 밤 정점(02:00, UTC :05분)에서는 밤 어종 후보가 살아 있어 ownedNormalForms 1회 추가 조회 후 천장 확정
+    vi.setSystemTime(new Date('2030-03-04T05:05:00.000Z'));
+    const uidPeak = await seed({ state: { ...baseState, pity: { moonveil: SPECIES_PITY_K } } });
+    spy.mockClear();
+    const resPeak = await callAction(userToken(uidPeak), { type: 'catch', spot: 'sea', judgment: 'auto' });
+    const peakQueries = spy.mock.calls.length;
+    spy.mockRestore();
+    expect(resPeak.status).toBe(200);
+    expect(peakQueries).toBe(baselineQueries + 1);
+    const peakDb = await dumpUser(env.client, uidPeak);
+    const caughtPayload = (peakDb.events as { type: string; payload: Record<string, unknown> }[])
+      .find(e => e.type === 'catch')?.payload;
+    expect(caughtPayload).toMatchObject({ fishId: 'moonveil', form: 'normal', pity: true });
+    expect((peakDb.saves_current[0] as { data: GameState }).data.pity.moonveil).toBe(PITY_DONE);
   });
 });
