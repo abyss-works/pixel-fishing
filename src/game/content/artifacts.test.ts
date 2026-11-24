@@ -37,15 +37,17 @@ describe('artifacts 데이터 계약', () => {
     });
   });
 
-  it('북대서양 유물 2종은 영웅(일반 가중치 감소)과 희귀(가방 용량 증가)다', () => {
+  it('북대서양 유물 2종은 영웅(일반 가중치 감소)과 전설(다중 미끼·미끼 지속 감소)이다', () => {
     expect(artifactOfNamed('gloucester-serpent')).toMatchObject({
       id: 'gloucester-vertebra', name: '글로스터의 등마디', grade: 'epic', zone: 'northatlantic',
       materialName: '소금 절인 등마디', effects: { commonWeightCut: 0.1 },
     });
     expect(artifactOfNamed('guabancex')).toMatchObject({
-      id: 'sargasso-net', name: '사르가소의 그물망', grade: 'rare', zone: 'northatlantic',
-      materialName: '젖은 모자반 밧줄', effects: { bagCap: 0.1 },
+      id: 'sargasso-net', name: '사르가소의 그물망', grade: 'legendary', zone: 'northatlantic',
+      materialId: 'mat-wet-sargasso-rope', materialName: '젖은 모자반 밧줄',
+      effects: {}, system: { extraBaitSlots: 1, baitDurationCut: 0.5 },
     });
+    expect(artifactOfNamed('guabancex')!.lore).not.toMatch(/[·—–\d]/);
   });
 
   it('야스코니우스의 유물은 희귀 등급이고 입질 대기 10%를 줄인다', () => {

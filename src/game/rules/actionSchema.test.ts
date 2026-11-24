@@ -85,6 +85,11 @@ describe('parseAction', () => {
     expect(parseAction({ type: 'cook', recipe: 'cook-lunch-bite', count: 1.5 })).toBeNull();
     expect(parseAction({ type: 'cook', recipe: 7, count: 1 })).toBeNull();
     expect(parseAction({ type: 'eat', item: 'cook-lunch-bite' })).toEqual({ type: 'eat', item: 'cook-lunch-bite' });
+    expect(parseAction({ type: 'eat', item: 'cook-bait-rare', replaceSlot: 'bait' }))
+      .toEqual({ type: 'eat', item: 'cook-bait-rare', replaceSlot: 'bait' });
+    expect(parseAction({ type: 'eat', item: 'cook-bait-rare', replaceSlot: 'bait2' }))
+      .toEqual({ type: 'eat', item: 'cook-bait-rare', replaceSlot: 'bait2' });
+    expect(parseAction({ type: 'eat', item: 'cook-bait-rare', replaceSlot: 'lunch' })).toBeNull();
     expect(parseAction({ type: 'eat' })).toBeNull();
   });
 

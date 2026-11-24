@@ -289,7 +289,8 @@ export function counterIncrementsForEvents(events: readonly GameEvent[]): Achiev
       const judgment = ev.payload.judgment;
       if (judgment === 'perfect') add('catch.perfect', 1);
       else if (judgment === 'auto') add('catch.auto', 1);
-      if (typeof ev.payload.bait === 'string' && ev.payload.bait.length > 0) {
+      if ((typeof ev.payload.bait === 'string' && ev.payload.bait.length > 0)
+          || (typeof ev.payload.bait2 === 'string' && ev.payload.bait2.length > 0)) {
         add('catch.bait', 1);
       }
       // 수동 집계는 방치가 아닌 캐치만 센다 — 대상 어종은 이벤트의 fishId에서 데이터로 찾는다

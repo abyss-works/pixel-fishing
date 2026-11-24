@@ -233,7 +233,11 @@ function UserStateCell({ state, loading, error, onRetry }: {
           />
           <KeyValueRow
             label="활성 슬롯"
-            value={`도시락 ${state.cooking.slots.lunch ? `${state.cooking.slots.lunch.name} (${fmtDT(state.cooking.slots.lunch.endsAt)}까지)` : '비어 있음'}, 미끼 ${state.cooking.slots.bait ? `${state.cooking.slots.bait.name} (${fmtDT(state.cooking.slots.bait.endsAt)}까지)` : '비어 있음'}`}
+            value={[
+              `도시락 ${state.cooking.slots.lunch ? `${state.cooking.slots.lunch.name} (${fmtDT(state.cooking.slots.lunch.endsAt)}까지)` : '비어 있음'}`,
+              `미끼 ${state.cooking.slots.bait ? `${state.cooking.slots.bait.name} (${fmtDT(state.cooking.slots.bait.endsAt)}까지)` : '비어 있음'}`,
+              state.cooking.slots.bait2 ? `미끼2 ${state.cooking.slots.bait2.name} (${fmtDT(state.cooking.slots.bait2.endsAt)}까지)` : null,
+            ].filter(Boolean).join(', ')}
           />
           <KeyValueRow label="가방, 전시 개체" value={`가방 ${fmtNum(state.instances.bag)}마리, 전시 ${fmtNum(state.instances.exhibit)}마리`} />
           <KeyValueRow

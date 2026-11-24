@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, within } from '@testing-library/react';
 import BagTab, { EXHIBIT_UI_ENABLED } from './BagTab';
-import { resetBagView } from './bagView';
+import { resetBagView, setBagSection } from './bagView';
 import { newState, saleBonusOf, sellableValue } from '../../../../../game/rules/logic';
 import { fmtGold } from '../../../../ui/format';
 import type { FishInstance, GameState } from '../../../../../game/rules/logic';
@@ -100,5 +100,16 @@ describe('BagTab - 길드 가방 보너스', () => {
     const g = game({ boat: 4, bag });
     render(<BagTab sellBonus={0} bagBonus={0.2} game={g} dispatch={vi.fn()} setToast={vi.fn()} />);
     expect(screen.getByRole('heading', { level: 3, name: /물고기/ })).toHaveTextContent(/1,005\s*\/\s*1,200/);
+  });
+});
+
+describe('BagTab - 유물 섹션 시스템 효과', () => {
+  it('전설 유물의 시스템 보너스와 페널티를 유물 목록에 함께 보인다', () => {
+    setBagSection('artifacts');
+    show(game({ artifacts: ['sargasso-net', 'mami-wata-mirror'] }));
+    expect(screen.getByText('미끼 슬롯 +1칸')).toHaveClass('text-accent');
+    expect(screen.getByText('미끼 지속 시간 −50%')).toHaveClass('text-danger');
+    expect(screen.getByText('네임드 토벌 하루 +1번')).toHaveClass('text-accent');
+    expect(screen.getByText('네임드 토벌 골드 −30%')).toHaveClass('text-danger');
   });
 });

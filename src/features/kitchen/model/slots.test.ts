@@ -119,4 +119,27 @@ describe('슬롯 칩 표시 조건', () => {
     expect(lunch.state === 'active' && lunch.note).toContain('방치로 낚을 때만 효과가 있어요.');
     expect(bait.state === 'active' && bait.note).toContain('챔질해서 낚을 때만 효과가 있어요.');
   });
+
+  it('다중 미끼가 켜지면 두 미끼 칩을 고유한 slotKey로 내고, bait가 만료돼도 bait2 칩만 남는다', () => {
+    const dual = seed({
+      artifacts: ['sargasso-net'],
+      slots: {
+        lunch: { id: 'cook-lunch-bite', endsAt: at(HOUR) },
+        bait: { id: 'cook-bait-rare', endsAt: at(2 * MIN) },
+        bait2: { id: 'cook-bait-epic', endsAt: at(3 * MIN) },
+      },
+    });
+    const chips = selectSlotChips(dual, T0, 'account');
+    expect(chips.map(c => (c.state === 'active' ? [c.slotKey, c.key, c.recipe.id] : [c.key]))).toEqual([
+      ['lunch', 'lunch', 'cook-lunch-bite'],
+      ['bait', 'bait', 'cook-bait-rare'],
+      ['bait2', 'bait', 'cook-bait-epic'],
+    ]);
+    // bait 만료 후 bait2만 남는다
+    const afterFirst = selectSlotChips(dual, at(2 * MIN), 'account');
+    expect(afterFirst.map(c => (c.state === 'active' ? [c.slotKey, c.key, c.recipe.id] : [c.key]))).toEqual([
+      ['lunch', 'lunch', 'cook-lunch-bite'],
+      ['bait2', 'bait', 'cook-bait-epic'],
+    ]);
+  });
 });

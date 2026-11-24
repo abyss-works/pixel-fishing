@@ -367,6 +367,7 @@ export interface AdminUserState {
     slots: {
       lunch: { id: string; name: string; endsAt: string } | null;
       bait: { id: string; name: string; endsAt: string } | null;
+      bait2?: { id: string; name: string; endsAt: string } | null;
     };
   };
   instances: {

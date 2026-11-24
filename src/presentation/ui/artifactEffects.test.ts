@@ -14,14 +14,18 @@ describe('유물 효과 문장', () => {
     expect(artifactEffectLines(art('varuna-scale'), 5)).toEqual(['요리 추가 완성 +20%p']);
     expect(artifactEffectLines(art('gloucester-vertebra'), 1)).toEqual(['일반 등급 가중치 −10%']);
     expect(artifactEffectLines(art('gloucester-vertebra'), 5)).toEqual(['일반 등급 가중치 −20%']);
-    expect(artifactEffectLines(art('sargasso-net'), 1)).toEqual(['가방 용량 +10%']);
-    expect(artifactEffectLines(art('sargasso-net'), 5)).toEqual(['가방 용량 +20%']);
+    const bagRelic = { ...art('wreck-compass'), effects: { bagCap: 0.1 } };
+    expect(artifactEffectLines(bagRelic, 1)).toEqual(['가방 용량 +10%']);
+    expect(artifactEffectLines(bagRelic, 5)).toEqual(['가방 용량 +20%']);
   });
 
   it('전설 유물은 효과 줄이 없고 보너스와 페널티 줄이 따로 나온다', () => {
     const mirror = art('mami-wata-mirror');
     expect(artifactEffectLines(mirror, 1)).toEqual([]);
     expect(artifactSystemLines(mirror)).toEqual({ bonus: '네임드 토벌 하루 +1번', penalty: '네임드 토벌 골드 −30%' });
+    const net = art('sargasso-net');
+    expect(artifactEffectLines(net, 1)).toEqual([]);
+    expect(artifactSystemLines(net)).toEqual({ bonus: '미끼 슬롯 +1칸', penalty: '미끼 지속 시간 −50%' });
     expect(artifactSystemLines(art('wreck-compass'))).toEqual({ bonus: null, penalty: null });
   });
 
@@ -58,7 +62,8 @@ describe('유물 효과 문장', () => {
     expect(artifactEffectLine(art('abyss-angler'), 'duelSpeedupCut', 1, 1.15)).toBe('네임드 결투 가속 −11.5%');
     expect(artifactEffectLine(art('outer-isle-sinker'), 'biteWaitCut', 1, 1.03)).toBe('입질 대기 −10.3%');
     expect(artifactEffectLine(art('gloucester-vertebra'), 'commonWeightCut', 5, 1.15)).toBe('일반 등급 가중치 −23%');
-    expect(artifactEffectLine(art('sargasso-net'), 'bagCap', 5, 1.15)).toBe('가방 용량 +23%');
+    const bagRelic = { ...art('wreck-compass'), effects: { bagCap: 0.1 } };
+    expect(artifactEffectLine(bagRelic, 'bagCap', 5, 1.15)).toBe('가방 용량 +23%');
     expect(artifactEffectLine(art('varuna-scale'), 'extraCookChance', 5, 1.15)).toBe('요리 추가 완성 +23%p');
     expect(artifactEffectLine(art('elder-scale'), 'mutationWeight', 1, 1.15)).toBe('돌연변이 가중치 +28.75%');
     expect(artifactEffectValue(art('elder-scale'), 'mutationWeight', 5, 1.15)).toBe('+57.5%');

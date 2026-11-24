@@ -938,6 +938,22 @@ describe('세이브 v9 — 미끼 환불과 요리 상태', () => {
     for (const slots of [null, 3, 'x', [], { lunch: 'cook-lunch-rare' }]) {
       expect(mig({ ...newState(), slots }).slots, JSON.stringify(slots)).toEqual({ lunch: null, bait: null });
     }
+    // bait2 위생 — 유효한 미끼만 살리고, null·미끼 아닌 요리·깨진 시각은 생략한다
+    const dual = mig({ ...newState(), slots: {
+      lunch: null,
+      bait: { id: 'cook-bait-rare', endsAt: END },
+      bait2: { id: 'cook-bait-epic', endsAt: END },
+    } });
+    expect(dual.slots).toEqual({
+      lunch: null,
+      bait: { id: 'cook-bait-rare', endsAt: END },
+      bait2: { id: 'cook-bait-epic', endsAt: END },
+    });
+    expect(mig({ ...newState(), slots: { lunch: null, bait: null, bait2: { id: 'cook-lunch-rare', endsAt: END } } }).slots)
+      .toEqual({ lunch: null, bait: null });
+    expect(mig({ ...newState(), slots: { lunch: null, bait: null, bait2: null } }).slots)
+      .toEqual({ lunch: null, bait: null });
+    expect('bait2' in mig({ ...newState(), slots: { lunch: null, bait: null, bait2: null } }).slots).toBe(false);
   });
 
   it('energyTargets 위생 — boolean만 살리고 모르는 해역 키는 버리지 않는다', () => {

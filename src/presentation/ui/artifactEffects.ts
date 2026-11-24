@@ -62,13 +62,19 @@ export function artifactEffectLines(a: Artifact, level: number): string[] {
   return EFFECT_ORDER.map(effect => artifactEffectLine(a, effect, level)).filter((line): line is string => line !== null);
 }
 
-/** 전설 유물이 시스템에 거는 효과의 문장 - 보너스(네임드 토벌 하루 횟수)와 페널티(네임드 토벌 골드).
+/** 전설 유물이 시스템에 거는 효과의 문장 - 보너스(네임드 토벌 하루 횟수·미끼 슬롯)와 페널티(네임드 토벌 골드·미끼 지속 시간).
  *  해당하는 효과가 없으면 각각 null이다 */
 export function artifactSystemLines(a: Artifact): { bonus: string | null; penalty: string | null } {
-  const bonus = a.system?.namedCapBonus ?? 0;
-  const cut = a.system?.namedRewardCut ?? 0;
+  const sys = a.system;
+  if (!sys) return { bonus: null, penalty: null };
+  const bonuses: string[] = [];
+  if ((sys.namedCapBonus ?? 0) > 0) bonuses.push(`네임드 토벌 하루 +${sys.namedCapBonus}번`);
+  if ((sys.extraBaitSlots ?? 0) > 0) bonuses.push(`미끼 슬롯 +${sys.extraBaitSlots}칸`);
+  const penalties: string[] = [];
+  if ((sys.namedRewardCut ?? 0) > 0) penalties.push(`네임드 토벌 골드 ${fmtCutPercent(sys.namedRewardCut!)}`);
+  if ((sys.baitDurationCut ?? 0) > 0) penalties.push(`미끼 지속 시간 ${fmtCutPercent(sys.baitDurationCut!)}`);
   return {
-    bonus: bonus > 0 ? `네임드 토벌 하루 +${bonus}번` : null,
-    penalty: cut > 0 ? `네임드 토벌 골드 −${fmtDecimal2(cut * 100)}%` : null,
+    bonus: bonuses.length > 0 ? bonuses.join(', ') : null,
+    penalty: penalties.length > 0 ? penalties.join(', ') : null,
   };
 }

@@ -37,19 +37,31 @@ describe('selectBagStatus — 길드 가방 보너스', () => {
     });
   });
 
-  it('유물(사르가소의 그물망)·업적 유물 배율·길드 보너스가 모두 capStat과 cap에 반영된다', () => {
-    const s = selectBagStatus(seed({
-      boat: 0,
-      artifacts: ['sargasso-net'],
-      artifactLevels: { 'sargasso-net': 5 }, // +20%
-      achievementCounters: { 'maxArtifact': 0 },
-    }), 0.04);
-    expect(s.capStat.value).toBe(s.cap);
-    expect(s.capStat.mods.map(m => m.source)).toEqual([
-      { kind: 'guild', bonus: 'bag' },
-      { kind: 'relic', id: 'sargasso-net' },
-    ]);
-    expect(s.capStat.mods.reduce((sum, m) => sum + m.delta, s.capStat.base)).toBe(s.cap);
+  it('유물(bagCap)·업적 유물 배율·길드 보너스가 모두 capStat과 cap에 반영된다', async () => {
+    const { ARTIFACTS } = await import('../../../game/content/artifacts');
+    const target = ARTIFACTS[0] as { id: string; grade: 'common' | 'rare' | 'epic' | 'legendary'; effects: { bagCap?: number } };
+    const origGrade = target.grade;
+    const origEffects = target.effects;
+    target.grade = 'rare';
+    target.effects = { bagCap: 0.1 };
+    try {
+      const s = selectBagStatus(seed({
+        boat: 0,
+        artifacts: [target.id],
+        artifactLevels: { [target.id]: 5 }, // +20%
+        achievementCounters: { maxArtifact: 0 },
+      }), 0.04);
+      expect(s.capStat.value).toBe(s.cap);
+      expect(s.capStat.mods.map(m => m.source)).toEqual([
+        { kind: 'guild', bonus: 'bag' },
+        { kind: 'relic', id: target.id },
+      ]);
+      expect(s.capStat.mods.reduce((sum, m) => sum + m.delta, s.capStat.base)).toBe(s.cap);
+      expect(s.cap).toBe(75); // 60 + round(60 * (0.2 * 1.03 + 0.04))
+    } finally {
+      target.grade = origGrade;
+      target.effects = origEffects;
+    }
   });
 });
 

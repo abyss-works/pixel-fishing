@@ -32,7 +32,7 @@ import type { BagLayout } from './bagView';
 import { levelText, selectArtifactLevel } from '../../../../../features/inventory/model/artifactLevel';
 import { selectOwnedArtifacts } from '../../../../../features/inventory/model/selectors';
 import { ARTIFACTS } from '../../../../../game/content/artifacts';
-import { artifactEffectLines } from '../../../../ui/artifactEffects';
+import { artifactEffectLines, artifactSystemLines } from '../../../../ui/artifactEffects';
 import Inset from '../../../../ui/Inset';
 import PressRow from '../../../../ui/PressRow';
 import ArtifactDetail from './ArtifactDetail';
@@ -82,6 +82,7 @@ function ArtifactSection({ game, dispatch, setToast }: {
           <Inset divided>
             {owned.map(a => {
               const { level, hasLevel } = selectArtifactLevel(game, a);
+              const { bonus, penalty } = artifactSystemLines(a);
               return (
                 <PressRow key={a.id} onPress={() => setOpenId(a.id)} className="flex flex-col gap-0.5 px-2 py-1.5 text-sm">
                   <span className="flex items-baseline justify-between gap-2">
@@ -94,6 +95,8 @@ function ArtifactSection({ game, dispatch, setToast }: {
                   {artifactEffectLines(a, level).map(line => (
                     <span key={line} className="text-accent text-xs">{line}</span>
                   ))}
+                  {bonus && <span className="text-accent text-xs">{bonus}</span>}
+                  {penalty && <span className="text-danger text-xs">{penalty}</span>}
                   <span className="text-text-dim italic text-xs">{a.lore}</span>
                 </PressRow>
               );

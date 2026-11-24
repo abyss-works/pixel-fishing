@@ -266,14 +266,14 @@ describe('받는 보너스', () => {
   it('보유 유물 효과 배율(artifactBoost)이 활성 유물 행 모두에 반영되고 낚시 갈래 단독 행으로 중복 분리하지 않는다', () => {
     // 전설 유물 1개(mami-wata-mirror) → maxArtifactCount 1 → artifactBoost +3% (scale = 1.03)
     const g = game({
-      artifacts: ['mami-wata-mirror', 'wreck-compass', 'abyss-angler', 'sargasso-net'],
+      artifacts: ['mami-wata-mirror', 'wreck-compass', 'abyss-angler', 'outer-isle-sinker'],
     });
     const bonuses = selectActiveBonuses(g);
     const relics = bonuses.filter(b => b.source.kind === 'relic');
     expect(relics.map(b => [b.category, b.source.kind === 'relic' && b.source.artifact.id, b.source.kind === 'relic' && b.source.scale])).toEqual([
       ['duel', 'abyss-angler', 1.03],
       ['move', 'wreck-compass', 1.03],
-      ['fish', 'sargasso-net', 1.03],
+      ['fish', 'outer-isle-sinker', 1.03],
     ]);
     // 낚시 갈래에만 따로 '보유 유물 효과' 행을 두지 않는다
     expect(bonuses.some(b => b.source.kind === 'achievement' && b.source.label === '보유 유물 효과')).toBe(false);
@@ -282,5 +282,37 @@ describe('받는 보너스', () => {
   it('전설 유물만 있어 보유 유물 효과 배율이 올라가도 적용할 유물 효과가 없으면 보너스 줄이 비어 있다', () => {
     const g = game({ artifacts: ['mami-wata-mirror'] });
     expect(selectActiveBonuses(g)).toEqual([]);
+  });
+
+  it('다중 미끼가 켜지면 두 미끼 효과를 모두 내고, 같은 미끼 중복은 한 번만 낸다', () => {
+    const now = '2026-11-12T00:00:00.000Z';
+    const endsAt = '2026-11-12T00:02:30.000Z';
+    const dual = game({
+      boat: 5,
+      artifacts: ['sargasso-net'],
+      slots: {
+        lunch: null,
+        bait: { id: 'cook-bait-rare', endsAt },
+        bait2: { id: 'cook-bait-mutation', endsAt },
+      },
+    });
+    const rows = selectActiveBonuses(dual, null, now).filter(b => b.source.kind === 'slot');
+    expect(rows.map(b => b.source.kind === 'slot' ? `${b.source.label}:${b.source.effect.label}` : '')).toEqual([
+      '롱페퍼 미끼(희귀):희귀 등급 가중치',
+      '롱페퍼 미끼(희귀):영웅 등급 가중치',
+      '롱페퍼 미끼(희귀):전설 등급 가중치',
+      '사프란 미끼(특수):돌연변이 폼 가중치',
+    ]);
+
+    const dup = game({
+      boat: 5,
+      artifacts: ['sargasso-net'],
+      slots: {
+        lunch: null,
+        bait: { id: 'cook-bait-mutation', endsAt },
+        bait2: { id: 'cook-bait-mutation', endsAt },
+      },
+    });
+    expect(selectActiveBonuses(dup, null, now).filter(b => b.source.kind === 'slot')).toHaveLength(1);
   });
 });

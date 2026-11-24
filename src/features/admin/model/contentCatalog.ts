@@ -576,8 +576,10 @@ function formatArtifactEffects(art: Artifact, level: number): string[] {
   const cookChance = artifactExtraCookChanceAt(art, level);
   if (cookChance > 0) lines.push(`요리 추가 완성 +${fmtDecimal(cookChance * 100)}%p`);
   if (art.system) {
-    if (art.system.namedCapBonus > 0) lines.push(`네임드 토벌 하루 +${art.system.namedCapBonus}회`);
-    if (art.system.namedRewardCut > 0) lines.push(`네임드 토벌 골드 −${fmtDecimal(art.system.namedRewardCut * 100)}%`);
+    if ((art.system.namedCapBonus ?? 0) > 0) lines.push(`네임드 토벌 하루 +${art.system.namedCapBonus}회`);
+    if ((art.system.namedRewardCut ?? 0) > 0) lines.push(`네임드 토벌 골드 −${fmtDecimal(art.system.namedRewardCut! * 100)}%`);
+    if ((art.system.extraBaitSlots ?? 0) > 0) lines.push(`미끼 슬롯 +${art.system.extraBaitSlots}칸`);
+    if ((art.system.baitDurationCut ?? 0) > 0) lines.push(`미끼 지속 시간 −${fmtDecimal(art.system.baitDurationCut! * 100)}%`);
   }
   return lines;
 }
@@ -703,6 +705,14 @@ export function buildContentCatalog(): ContentCatalog {
         summary: effectLines.join(' · '),
       };
     });
+    const sysBonuses = [
+      (a.system?.namedCapBonus ?? 0) > 0 ? `네임드 토벌 하루 +${a.system!.namedCapBonus}회` : null,
+      (a.system?.extraBaitSlots ?? 0) > 0 ? `미끼 슬롯 +${a.system!.extraBaitSlots}칸` : null,
+    ].filter((x): x is string => x !== null);
+    const sysPenalties = [
+      (a.system?.namedRewardCut ?? 0) > 0 ? `네임드 토벌 골드 −${fmtDecimal(a.system!.namedRewardCut! * 100)}%` : null,
+      (a.system?.baitDurationCut ?? 0) > 0 ? `미끼 지속 시간 −${fmtDecimal(a.system!.baitDurationCut! * 100)}%` : null,
+    ].filter((x): x is string => x !== null);
     return {
       id: a.id,
       name: a.name,
@@ -718,8 +728,8 @@ export function buildContentCatalog(): ContentCatalog {
       lore: a.lore,
       hasLevels,
       exchangeCost: 1,
-      systemBonusLine: a.system?.namedCapBonus ? `네임드 토벌 하루 +${a.system.namedCapBonus}회` : null,
-      systemPenaltyLine: a.system?.namedRewardCut ? `네임드 토벌 골드 −${fmtDecimal(a.system.namedRewardCut * 100)}%` : null,
+      systemBonusLine: sysBonuses.length > 0 ? sysBonuses.join(', ') : null,
+      systemPenaltyLine: sysPenalties.length > 0 ? sysPenalties.join(', ') : null,
       levels,
     };
   });

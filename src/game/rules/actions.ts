@@ -20,7 +20,7 @@ import type { FirstCatch } from './firstCatch.js';
 import { relativeIdleBoost } from './power.js';
 import {
   applyEnergyGain, canCook, planOverflow, canEat, canExtractEnergy, canUseEnergy, energyGain, settleCooking,
-  appliedSlots, slotEffects, slotEndsAt, NO_COOK_EFFECTS,
+  appliedSlots, isActiveSlot, maxBaitSlots, slotEffects, slotEndsAt, NO_COOK_EFFECTS,
 } from './cooking.js';
 import type { ActiveCookEffects } from './cooking.js';
 import { ENERGY_ITEM_IDS, recipeById, recipeCostStored } from '../content/cooking.js';
@@ -82,7 +82,7 @@ export type GameAction =
   | { type: 'setEnergyTarget'; spot: SpotId; on: boolean }   // 기운 얻기 기본 선택의 해역별 덮어쓰기 — 고른 값은 기본값과 같아도 남는다
   | { type: 'resetEnergyTargets' }                           // 덮어쓰기를 모두 지워 기본값으로 되돌린다
   | { type: 'cook'; recipe: string; count: number }          // 조리 시작 — 집 거점, 기운 즉시 차감, 추가 완성은 서버가 추첨한다
-  | { type: 'eat'; item: string }                            // 먹기(쓰기) — 가방의 완성 요리 하나를 슬롯에 넣는다. 위치 제한 없음
+  | { type: 'eat'; item: string; replaceSlot?: 'bait' | 'bait2' } // 먹기(쓰기) — 가방의 완성 요리 하나를 슬롯에 넣는다. 위치 제한 없음
   | { type: 'boot'; buildId?: unknown }                      // 접속(부팅) 기록 — 상태 불변, DAU 정본
   | { type: 'setNickname'; nickname: unknown }     // 닉네임 변경 — 형태는 리듀서, 중복은 서버(DB)가 본다
   | { type: 'seeTutorial'; id: unknown }           // 튜토리얼 창을 봤다 — 같은 트리거에서 다시 뜨지 않게 남긴다
@@ -745,17 +745,72 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       };
     }
     case 'eat': {
+      if (action.replaceSlot !== undefined && action.replaceSlot !== 'bait' && action.replaceSlot !== 'bait2') {
+        return { ok: false, error: 'bad-request' };
+      }
       const check = canEat(state, action.item, deps.now);
       if (!check.ok) return { ok: false, error: check.reason };
       const recipe = recipeById(action.item)!;
       // 완성품을 먼저 정산한 뒤 하나를 꺼내 슬롯에 넣는다. 든 것이 있으면 이전 효과는 즉시 끝난다
       const settled = takeItem(settleCooking(state, deps.now), recipe.id);
-      const endsAt = slotEndsAt(recipe, deps.now);
-      const prev = settled.slots[recipe.kind];
-      const replacedId = prev && Date.parse(deps.now) < Date.parse(prev.endsAt) ? prev.id : null;
+      const endsAt = slotEndsAt(recipe, deps.now, settled);
+
+      if (recipe.kind === 'lunch') {
+        const prev = settled.slots.lunch;
+        const replacedId = isActiveSlot(prev, 'lunch', deps.now) ? prev.id : null;
+        return {
+          ok: true,
+          state: { ...settled, slots: { ...settled.slots, lunch: { id: recipe.id, endsAt } } },
+          result: { type: 'none' },
+          events: [{ type: 'eat', payload: { item: recipe.id, endsAt, replaced: replacedId } }],
+        };
+      }
+
+      if (maxBaitSlots(settled) <= 1) {
+        const prev = settled.slots.bait;
+        const replacedId = isActiveSlot(prev, 'bait', deps.now) ? prev.id : null;
+        const { bait2: _staleBait2, ...restSlots } = settled.slots;
+        return {
+          ok: true,
+          state: { ...settled, slots: { ...restSlots, bait: { id: recipe.id, endsAt } } },
+          result: { type: 'none' },
+          events: [{ type: 'eat', payload: { item: recipe.id, endsAt, replaced: replacedId } }],
+        };
+      }
+
+      const b1 = isActiveSlot(settled.slots.bait, 'bait', deps.now) ? settled.slots.bait : null;
+      const b2 = isActiveSlot(settled.slots.bait2, 'bait', deps.now) ? settled.slots.bait2 : null;
+      let targetKey: 'bait' | 'bait2';
+      let replacedId: string | null = null;
+
+      if (b1?.id === recipe.id) {
+        targetKey = 'bait';
+        replacedId = b1.id;
+      } else if (b2?.id === recipe.id) {
+        targetKey = 'bait2';
+        replacedId = b2.id;
+      } else if (!b1) {
+        targetKey = 'bait';
+      } else if (!b2) {
+        targetKey = 'bait2';
+      } else if (action.replaceSlot === 'bait' || action.replaceSlot === 'bait2') {
+        targetKey = action.replaceSlot;
+        replacedId = targetKey === 'bait' ? b1.id : b2.id;
+      } else {
+        targetKey = Date.parse(b1.endsAt) <= Date.parse(b2.endsAt) ? 'bait' : 'bait2';
+        replacedId = targetKey === 'bait' ? b1.id : b2.id;
+      }
+
+      const nextSlots: GameState['slots'] = {
+        ...settled.slots,
+        bait: b1,
+        bait2: b2,
+        [targetKey]: { id: recipe.id, endsAt },
+      };
+      if (!nextSlots.bait2) delete nextSlots.bait2;
       return {
         ok: true,
-        state: { ...settled, slots: { ...settled.slots, [recipe.kind]: { id: recipe.id, endsAt } } },
+        state: { ...settled, slots: nextSlots },
         result: { type: 'none' },
         events: [{ type: 'eat', payload: { item: recipe.id, endsAt, replaced: replacedId } }],
       };

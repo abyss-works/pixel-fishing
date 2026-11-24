@@ -5,14 +5,15 @@
 import {
   AUTO_ENERGY_BOAT, COOK_KIND_RULES, COOK_STORAGE_CAP, COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, ENERGY_PER_INDIVIDUAL, RECIPES, recipeById, recipeCostStored,
 } from '../content/cooking.js';
-import type { Recipe } from '../content/cooking.js';
+import type { CookKind, Recipe } from '../content/cooking.js';
+import { ARTIFACTS } from '../content/artifacts.js';
 import { RARITY_ORDER } from '../content/rarity.js';
 import type { RarityId } from '../content/rarity.js';
 import { SALE_BASES } from '../content/places.js';
 import { SPOTS } from '../content/spots.js';
 import type { SpotId } from '../content/spots.js';
 import { addItem, instanceFish, release } from './logic.js';
-import type { GameState, Judgment } from './logic.js';
+import type { GameState, Judgment, SlotEffect } from './logic.js';
 import type { RejectReason, RuleCheck } from './rules.js';
 
 const OK: RuleCheck = { ok: true };
@@ -233,9 +234,37 @@ export function canEat(state: GameState, item: unknown, now: string): RuleCheck 
   return (settleCooking(state, now).items[recipe.id] ?? 0) >= 1 ? OK : no('item-not-owned');
 }
 
+/** 동시에 장착할 수 있는 미끼 슬롯 수 — 기본 1칸에 보유 유물의 시스템 효과 가산을 더한다 */
+export function maxBaitSlots(state: Pick<GameState, 'artifacts'>): number {
+  const extra = ARTIFACTS.reduce((sum, a) =>
+    state.artifacts.includes(a.id) ? sum + (a.system?.extraBaitSlots ?? 0) : sum, 0);
+  return 1 + Math.max(0, extra);
+}
+
+/** 미끼 슬롯 지속 시간 배수 — 보유 유물의 감소율 합을 (1 − 합)으로 적용하고 최소 0.1배에서 멈춘다 */
+export function baitDurationScale(state: Pick<GameState, 'artifacts'>): number {
+  const cut = ARTIFACTS.reduce((sum, a) =>
+    state.artifacts.includes(a.id) ? sum + (a.system?.baitDurationCut ?? 0) : sum, 0);
+  return Math.max(0.1, clean(1 - cut));
+}
+
+/** 슬롯에 들어갈 때의 지속 시간(ms) — 미끼는 보유 유물의 지속 시간 배수를 반영한다 */
+export function slotDurationMs(recipe: Recipe, state?: Pick<GameState, 'artifacts'>): number {
+  const base = COOK_KIND_RULES[recipe.kind].slotMs;
+  return recipe.kind === 'bait' && state ? Math.round(base * baitDurationScale(state)) : base;
+}
+
 /** 슬롯이 끝나는 시각 — 먹은 시각에 그 종류의 지속을 더한다 */
-export function slotEndsAt(recipe: Recipe, now: string): string {
-  return iso(Date.parse(now) + COOK_KIND_RULES[recipe.kind].slotMs);
+export function slotEndsAt(recipe: Recipe, now: string, state?: Pick<GameState, 'artifacts'>): string {
+  return iso(Date.parse(now) + slotDurationMs(recipe, state));
+}
+
+/** 슬롯이 지금 유효한가 — 해당 종류의 콘텐츠 요리이고 끝나는 시각 전일 때만 참이다 */
+export function isActiveSlot(slot: SlotEffect | null | undefined, kind: CookKind, now: string): slot is SlotEffect {
+  if (!slot) return false;
+  const nowMs = Date.parse(now);
+  if (!Number.isFinite(nowMs) || !(nowMs < Date.parse(slot.endsAt))) return false;
+  return recipeById(slot.id)?.kind === kind;
 }
 
 // ---------- 슬롯 효과 ----------
@@ -262,17 +291,29 @@ export const NO_COOK_EFFECTS: ActiveCookEffects = {
 export interface AppliedSlots {
   lunch?: string;
   bait?: string;
+  bait2?: string;
 }
 
 /**
  * 그 캐치에 걸리는 슬롯 — 슬롯 적용 범위의 단일 정의다. 도시락 슬롯은 방치(auto) 판정에만, 미끼 슬롯은 수동 판정에만
- * 걸리고, 끝나는 시각 전이며 콘텐츠에 있는 요리일 때만 걸린다. now는 서버 시각이다 — 클라이언트가 시각을 주장할 수 없다.
+ * 걸리고, 끝나는 시각 전이며 콘텐츠에 있는 요리일 때만 걸린다. 활성 미끼는 중복을 없앤 뒤 항상 bait부터 채워 정규화한다.
+ * now는 서버 시각이다 — 클라이언트가 시각을 주장할 수 없다.
  */
 export function appliedSlots(state: Pick<GameState, 'slots'>, now: string, judgment: Judgment): AppliedSlots {
-  const kind = judgment === 'auto' ? 'lunch' : 'bait';
-  const slot = state.slots[kind];
-  if (slot === null || !(Date.parse(now) < Date.parse(slot.endsAt)) || recipeById(slot.id) === undefined) return {};
-  return { [kind]: slot.id };
+  if (judgment === 'auto') {
+    const lunch = state.slots.lunch;
+    return isActiveSlot(lunch, 'lunch', now) ? { lunch: lunch.id } : {};
+  }
+  const activeBaits: string[] = [];
+  for (const slot of [state.slots.bait, state.slots.bait2]) {
+    if (isActiveSlot(slot, 'bait', now) && !activeBaits.includes(slot.id)) {
+      activeBaits.push(slot.id);
+    }
+  }
+  if (activeBaits.length === 0) return {};
+  return activeBaits.length === 1
+    ? { bait: activeBaits[0] }
+    : { bait: activeBaits[0], bait2: activeBaits[1] };
 }
 
 /** 그 캐치에 적용하는 슬롯 효과 — 걸린 슬롯(appliedSlots)의 요리 효과를 합한다 */

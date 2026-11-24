@@ -45,7 +45,7 @@ export default function SlotChips({ game, accountState }: { game: GameState; acc
     <>
       {chips.map(chip => chip.state === 'locked'
         ? <LockedChip key={chip.key} slotKey={chip.key} lines={chip.lines} />
-        : <ActiveChip key={chip.key} slot={chip} />)}
+        : <ActiveChip key={chip.slotKey} slot={chip} />)}
     </>
   );
 }

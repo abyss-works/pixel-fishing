@@ -47,13 +47,13 @@ describe('StatsModal(스탯창)', () => {
     expect(rows.some(row => row.textContent?.includes(`${boatNameOf(3)}(3단계)`))).toBe(true);
   });
 
-  it('배 탭의 가방 용량은 길드·유물 보너스와 래칫 초과 보유 시 툴팁을 연결한다', () => {
+  it('배 탭의 가방 용량은 길드 보너스와 래칫 초과 보유 시 툴팁을 연결한다', () => {
     show(
-      game({ boat: 8, artifacts: ['sargasso-net'] }),
-      { level: 4, effects: guildEffectsOf(4, { bag: 4 }) }, // 4,000 × (1 + 0.16 + 0.1) = 5,040
+      game({ boat: 8 }),
+      { level: 4, effects: guildEffectsOf(4, { bag: 4 }) }, // 4,000 × (1 + 0.16) = 4,640
     );
     fireEvent.click(screen.getByRole('button', { name: '배' }));
-    fireEvent.mouseEnter(screen.getByText('5,040마리'));
+    fireEvent.mouseEnter(screen.getByText('4,640마리'));
     expect(screen.getByRole('tooltip')).toBeTruthy();
 
     cleanup();
@@ -61,7 +61,7 @@ describe('StatsModal(스탯창)', () => {
       uid: `u${i}`, fishId: 'crucian', form: 'normal' as const, size: 10,
       caughtAt: null, spot: null, judgment: null, locked: false,
     }));
-    show(game({ boat: 0, artifacts: ['sargasso-net'], bag: ratchetedBag }));
+    show(game({ boat: 0, bag: ratchetedBag }));
     fireEvent.click(screen.getByRole('button', { name: '배' }));
     fireEvent.mouseEnter(screen.getByText('80마리'));
     expect(screen.getByRole('tooltip')).toBeTruthy();
@@ -82,12 +82,12 @@ describe('StatsModal(스탯창)', () => {
     // 전설 유물 + 이동/낚시/결투 유물 → artifactBoost +3% 적용
     show(game({
       boat: 5,
-      artifacts: ['mami-wata-mirror', 'wreck-compass', 'sargasso-net', 'abyss-angler'],
+      artifacts: ['mami-wata-mirror', 'wreck-compass', 'outer-isle-sinker', 'abyss-angler'],
     }));
     fireEvent.click(screen.getByRole('button', { name: '보너스' }));
 
     expect(screen.getByText('항해 속도 +10.3%')).toBeTruthy();
-    expect(screen.getByText('가방 용량 +10.3%')).toBeTruthy();
+    expect(screen.getByText('입질 대기 −10.3%')).toBeTruthy();
     expect(screen.getByText('네임드 결투 가속 −10.3%')).toBeTruthy();
     expect(screen.queryByText(/보유 유물 효과 \+3%/)).toBeNull();
 

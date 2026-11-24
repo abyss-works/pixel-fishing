@@ -126,8 +126,8 @@ export interface GameState {
   items: Record<string, number>;
   /** 조리 중인 것. 조리하지 않으면 null */
   cooking: Cooking | null;
-  /** 도시락 슬롯과 미끼 슬롯 — 비어 있으면 null */
-  slots: { lunch: SlotEffect | null; bait: SlotEffect | null };
+  /** 도시락 슬롯과 미끼 슬롯 — 비어 있으면 null (bait2는 다중 미끼 유물 보유 시 사용, 없으면 생략) */
+  slots: { lunch: SlotEffect | null; bait: SlotEffect | null; bait2?: SlotEffect | null };
   /** 기운 얻기 기본 선택의 해역별 덮어쓰기 — 해역 id → 기운 대상 여부. 덮어쓴 해역만 둔다.
    *  모르는 해역 키는 버리지 않는다 */
   energyTargets: Record<string, boolean>;
@@ -941,7 +941,12 @@ function safeSlot(v: unknown, kind: 'lunch' | 'bait'): SlotEffect | null {
 
 function safeSlots(v: unknown): GameState['slots'] {
   const r = typeof v === 'object' && v !== null && !Array.isArray(v) ? v as Record<string, unknown> : {};
-  return { lunch: safeSlot(r.lunch, 'lunch'), bait: safeSlot(r.bait, 'bait') };
+  const bait2 = safeSlot(r.bait2, 'bait');
+  return {
+    lunch: safeSlot(r.lunch, 'lunch'),
+    bait: safeSlot(r.bait, 'bait'),
+    ...(bait2 ? { bait2 } : {}),
+  };
 }
 
 /** 기운 얻기 해역 덮어쓰기 위생 — boolean 값만 살린다. 모르는 해역 키는 버리지 않는다(전방 호환) */

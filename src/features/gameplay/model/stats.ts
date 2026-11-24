@@ -24,7 +24,7 @@ import { selectBagStatus } from '../../inventory/model/selectors';
 import type { BagStatus } from '../../inventory/model/selectors';
 import { recipeEffectLines } from '../../kitchen/model/recipes';
 import type { RecipeEffectLine } from '../../kitchen/model/recipes';
-import { SLOT_ORDER, activeSlot } from '../../kitchen/model/slots';
+import { ALL_SLOT_KEYS, activeSlot } from '../../kitchen/model/slots';
 import type { SlotKey } from '../../kitchen/model/slots';
 
 /** 스탯 화면의 처음 수역 인덱스. 사거리 안의 어군 수역이 있으면 그 수역이고, 없으면 현재 구역(또는 지역)에서 요구 파워가 가장 높은 곳이다. */
@@ -244,16 +244,21 @@ export function selectActiveBonuses(
       }
     }
   }
-  for (const key of SLOT_ORDER) {
-    const slot = activeSlot(game, key, now);
+  const seenBaitIds = new Set<string>();
+  for (const slotKey of ALL_SLOT_KEYS) {
+    const slot = activeSlot(game, slotKey, now);
     if (slot === null) continue;
+    if (slot.key === 'bait') {
+      if (seenBaitIds.has(slot.recipe.id)) continue;
+      seenBaitIds.add(slot.recipe.id);
+    }
     for (const effectKey of COOK_EFFECT_KEYS) {
       if (!slot.recipe.effects[effectKey]) continue;
       const lines = recipeEffectLines({ ...slot.recipe, effects: { [effectKey]: slot.recipe.effects[effectKey] } });
       for (const effect of lines) {
         out.push({
-          category: COOK_EFFECT_CATEGORY[effectKey], source: { kind: 'slot', slot: key, label: slot.label, effect },
-          manualOnly: key === 'bait', autoOnly: key === 'lunch',
+          category: COOK_EFFECT_CATEGORY[effectKey], source: { kind: 'slot', slot: slot.key, label: slot.label, effect },
+          manualOnly: slot.key === 'bait', autoOnly: slot.key === 'lunch',
         });
       }
     }

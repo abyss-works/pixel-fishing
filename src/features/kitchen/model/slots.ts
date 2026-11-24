@@ -3,7 +3,7 @@
 // 효과를 읽는 요리 값은 콘텐츠 표에서 오고 여기서 다시 적지 않는다.
 import { COOKING_UNLOCK_BOAT, recipeById } from '../../../game/content/cooking';
 import type { CookKind, Recipe } from '../../../game/content/cooking';
-import { appliedSlots, cookingUnlocked } from '../../../game/rules/cooking';
+import { cookingUnlocked, isActiveSlot } from '../../../game/rules/cooking';
 import type { GameState } from '../../../game/rules/logic';
 import { facilityGuestAllowed, facilityProgress, menuLock, progressNote } from '../../display/model/menuLock';
 import type { AccountLockState } from '../../display/model/menuLock';
@@ -15,11 +15,17 @@ const MIN_MS = 60_000;
 /** 슬롯 키 — 슬롯 종류와 그 슬롯에 넣는 요리 종류가 같은 이름이다 */
 export type SlotKey = CookKind;
 
+/** 저장 슬롯 키 — 다중 미끼 슬롯(bait2)을 포함한 실제 슬롯 키 */
+export type SlotInstanceKey = 'lunch' | 'bait' | 'bait2';
+
 /** 칩 줄과 잠금 문안이 슬롯을 부르는 이름 */
 export const SLOT_NAME: Readonly<Record<SlotKey, string>> = { lunch: '도시락 슬롯', bait: '미끼 슬롯' };
 
 /** 칩 줄의 슬롯 순서 — 도시락 칩, 미끼 칩 */
 export const SLOT_ORDER: readonly SlotKey[] = ['lunch', 'bait'];
+
+/** 활성 슬롯을 확인하는 순서 — 도시락, 첫 번째 미끼, 두 번째 미끼 */
+export const ALL_SLOT_KEYS: readonly SlotInstanceKey[] = ['lunch', 'bait', 'bait2'];
 
 /** 남은 시간을 분 단위로 올린 값. 0 이하는 0이다 */
 const minutesLeft = (remainingMs: number): number => (remainingMs > 0 ? Math.ceil(remainingMs / MIN_MS) : 0);
@@ -45,6 +51,8 @@ const LOCK_PREDICATE: Readonly<Record<SlotKey, string>> = { lunch: '도시락을
 /** 효과가 든 슬롯 하나 */
 export interface ActiveSlot {
   key: SlotKey;
+  /** 실제 저장 슬롯 키('lunch' | 'bait' | 'bait2') */
+  slotKey: SlotInstanceKey;
   recipe: Recipe;
   /** 화면에 쓰는 요리 이름 */
   label: string;
@@ -63,17 +71,16 @@ export interface ActiveSlot {
 }
 
 /** 지금 효과가 든 슬롯. 비었거나 끝났거나 콘텐츠에 없는 요리면 null이다 */
-export function activeSlot(game: Pick<GameState, 'slots'>, key: SlotKey, now: string): ActiveSlot | null {
-  // 효과가 걸리는 조건(끝나는 시각 전, 콘텐츠에 있는 요리)은 게임 규칙(appliedSlots)의 판정을 쓴다
-  const appliedId = appliedSlots(game, now, key === 'lunch' ? 'auto' : 'normal')[key];
-  const slot = game.slots[key];
-  const recipe = appliedId === undefined ? undefined : recipeById(appliedId);
-  if (slot === null || recipe === undefined) return null;
+export function activeSlot(game: Pick<GameState, 'slots'>, slotKey: SlotInstanceKey, now: string): ActiveSlot | null {
+  const key: SlotKey = slotKey === 'lunch' ? 'lunch' : 'bait';
+  const slot = game.slots[slotKey];
+  if (!isActiveSlot(slot, key, now)) return null;
+  const recipe = recipeById(slot.id)!;
   const remainingMs = Date.parse(slot.endsAt) - Date.parse(now);
   const timeLeft = fmtSlotTimeLeft(remainingMs);
   const effects = recipeEffectLines(recipe);
   return {
-    key, recipe, label: recipeLabel(recipe), remainingMs, chipTime: fmtSlotChipTime(remainingMs), timeLeft,
+    key, slotKey, recipe, label: recipeLabel(recipe), remainingMs, chipTime: fmtSlotChipTime(remainingMs), timeLeft,
     effects, rows: [...effects, { label: '남은 시간', value: timeLeft }], note: recipeEffectNote(recipe.kind),
   };
 }
@@ -97,8 +104,8 @@ export function selectSlotChips(game: GameState, now: string, account: AccountLo
       return [{ key, state: 'locked', lines }];
     });
   }
-  return SLOT_ORDER.flatMap((key): SlotChip[] => {
-    const slot = activeSlot(game, key, now);
+  return ALL_SLOT_KEYS.flatMap((slotKey): SlotChip[] => {
+    const slot = activeSlot(game, slotKey, now);
     return slot === null ? [] : [{ state: 'active', ...slot }];
   });
 }

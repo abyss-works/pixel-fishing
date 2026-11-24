@@ -41,12 +41,18 @@ export function fmtCompact3(n: number): string {
   if (fraction === '0') fraction = '';
   return `${n < 0 ? '-' : ''}${whole}${fraction ? `.${fraction}` : ''}${unit}`;
 }
-/** 남은 시간 — 분 단위를 "1시간 52분"/"52분"으로. 0 이하는 "1분 미만" */
+/** 남은 시간 — 분 단위를 "1시간 52분"/"2분 30초"/"52분"으로. 1분 미만은 "1분 미만" */
 export function fmtMinutes(min: number): string {
   if (min < 1) return '1분 미만';
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return h > 0 ? (m > 0 ? `${h}시간 ${m}분` : `${h}시간`) : `${m}분`;
+  const totalSec = Math.round(min * 60);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const parts: string[] = [];
+  if (h > 0) parts.push(`${h}시간`);
+  if (m > 0) parts.push(`${m}분`);
+  if (s > 0) parts.push(`${s}초`);
+  return parts.join(' ');
 }
 
 /** 받침에 따라 조사를 고른다 — 네임드 이름처럼 데이터에서 온 말 뒤에 붙일 때 */

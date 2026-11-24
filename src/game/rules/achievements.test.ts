@@ -365,6 +365,7 @@ describe('업적 규칙과 액션 (rules, actions)', () => {
     const events: GameEvent[] = [
       { type: 'sell', payload: { gold: 1500, count: 2, uids: ['a', 'b'] } },
       { type: 'catch', payload: { judgment: 'perfect', bait: 'cook-bait-rare' } },
+      { type: 'catch', payload: { judgment: 'good', bait2: 'cook-bait-epic' } },
       { type: 'catch', payload: { judgment: 'auto', lunch: 'cook-lunch-bite' } },
       { type: 'resolveChallenge', payload: { questId: 'pacific-named-megalodon', success: true, hits: 5, misses: 0 } },
       { type: 'resolveChallenge', payload: { questId: 'seasia-named-leviathan', success: true, hits: 5, misses: 1 } },
@@ -373,9 +374,9 @@ describe('업적 규칙과 액션 (rules, actions)', () => {
       'sell.gold': 1500,
       'catch.perfect': 1,
       'catch.auto': 1,
-      'catch.bait': 1,
+      'catch.bait': 2,
       'named.flawless': 1,
-      'manual.total': 1,
+      'manual.total': 2,
     });
   });
 

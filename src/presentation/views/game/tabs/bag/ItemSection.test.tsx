@@ -118,6 +118,53 @@ describe('먹기와 쓰기', () => {
     fireEvent.click(screen.getByRole('button', { name: '사프란 미끼(특수) 쓰기' }));
     await vi.waitFor(() => expect(setToast).toHaveBeenCalledWith('가방에 이 요리가 없어요.', 'warn'));
   });
+
+  it('다중 미끼 유물 — 사용 중 배지, 빈 두 번째 칸 무확인 적용, 중복 갱신 2분 30초, 세 번째 미끼 교체 슬롯 선택', () => {
+    const items = { 'cook-bait-rare': 1, 'cook-bait-epic': 1, 'cook-bait-legendary': 1 };
+    const oneActive = game({
+      artifacts: ['sargasso-net'],
+      items,
+      slots: { lunch: null, bait: { id: 'cook-bait-rare', endsAt: at(120_000) } },
+    });
+    const { dispatch: d1 } = show(oneActive);
+    expect(screen.getAllByText('사용 중')).toHaveLength(1);
+    // 2번째 다른 미끼는 확인 없이 바로 장착
+    fireEvent.click(screen.getByRole('button', { name: '큐베브 미끼(영웅) 쓰기' }));
+    expect(d1).toHaveBeenCalledWith({ type: 'eat', item: 'cook-bait-epic' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    // 중복 미끼는 확인 창을 띄우고 새로 2분 30초를 보인다
+    fireEvent.click(screen.getByRole('button', { name: '롱페퍼 미끼(희귀) 쓰기' }));
+    const dupDialog = screen.getByRole('dialog');
+    expect(within(dupDialog).getByText('2분 30초')).toBeInTheDocument();
+    fireEvent.click(within(dupDialog).getByRole('button', { name: '쓰기' }));
+    expect(d1).toHaveBeenCalledWith({ type: 'eat', item: 'cook-bait-rare' });
+
+    cleanup();
+    const bothActive = game({
+      artifacts: ['sargasso-net'],
+      items,
+      slots: {
+        lunch: null,
+        bait: { id: 'cook-bait-rare', endsAt: at(150_000) },
+        bait2: { id: 'cook-bait-epic', endsAt: at(60_000) },
+      },
+    });
+    const { dispatch: d2 } = show(bothActive);
+    expect(screen.getAllByText('사용 중')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: '용연향 미끼(전설) 쓰기' }));
+    const dialog = screen.getByRole('dialog');
+    const radios = within(dialog).getAllByRole('radio');
+    expect(radios).toHaveLength(2);
+    // 먼저 끝나는 bait2가 기본 선택된다
+    expect(radios[1]).toHaveAttribute('aria-checked', 'true');
+    // 첫 번째 미끼(bait)로 바꿔 선택하고 확정
+    fireEvent.click(radios[0]);
+    expect(radios[0]).toHaveAttribute('aria-checked', 'true');
+    expect(within(dialog).getByText('2분 30초')).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: '쓰기' }));
+    expect(d2).toHaveBeenCalledWith({ type: 'eat', item: 'cook-bait-legendary', replaceSlot: 'bait' });
+  });
 });
 
 describe('해금 전과 게스트', () => {
