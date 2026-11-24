@@ -1,7 +1,10 @@
-// 길드 10레벨 확장 및 스킬 자유 강화 — 실제 Postgres에서 마이그레이션 0038 제약, 길드원 누구나 강화 포인트 투자·초기화(20,000,000G, 쿨다운 없음),
-// 항해일지 기록, 그리고 액션 경로의 합산 효과(기본 + 자유 강화, 최대 10단계)를 검사한다.
+// 길드 10레벨 확장 및 개인 스킬 자유 강화 — 실제 Postgres에서 마이그레이션 0040 제약, 길드원별 독립 자유 강화·초기화(20,000,000G, 쿨다운 없음),
+// 항해일지 비기록(옛 기록 읽기 호환), 탈퇴·추방 시 개인 강화 정리, 그리고 액션 경로의 개인별 합산 효과(기본 + 개인 자유 강화, 최대 10단계)를 검사한다.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
 import { capOfBoat, mutationWeightsOf, newState, priceOfInstance, variantShare } from '../src/game/rules/logic.js';
+import { database } from './_db/client.js';
+import { loadContext } from './_data/load.js';
 import { callAction, captureRealClock, fish, seedUser, seededRandom, sessionHeaders, startActionEnv, testUid, userToken } from './_dbTest/actionHarness.js';
 import type { ActionEnv } from './_dbTest/actionHarness.js';
 import { guildRoutes } from './guilds.js';
@@ -45,19 +48,27 @@ describe('길드 10레벨 및 자유 강화', () => {
   const enhancePath = '/api/guilds/:id/bonuses/:bonus/enhancements';
   const resetPath = '/api/guilds/:id/enhancements/reset';
 
-  it('0038 스키마: guild_bonuses.enhance_rank는 0~5만 허용하고 guild_logs는 enhance·enhance-reset을 받는다', async () => {
+  it('0040 스키마 및 옛 항해일지 호환: guild_member_enhancements는 0~5만 허용하고 guild_logs의 기존 enhance·enhance-reset 읽기를 유지한다', async () => {
     const uid = await seedUser(env.client, { uid: testUid(nextUid++), email: `e${nextUid}@test.dev`, state: {} });
     const { rows: [g] } = await env.client.query<{ id: string }>(
       `insert into public.guilds (name, code) values ($1, upper(substr(md5(random()::text), 1, 8))) returning id`, [`g${nextUid}`]);
-    await expect(env.client.query(`insert into public.guild_bonuses (guild_id, bonus, enhance_rank) values ($1, 'sell', 6)`, [g.id]))
+    await env.client.query(`insert into public.guild_members (guild_id, user_id, role) values ($1, $2, 'leader')`, [g.id, uid]);
+    await expect(env.client.query(`insert into public.guild_member_enhancements (guild_id, user_id, bonus, rank) values ($1, $2, 'sell', 6)`, [g.id, uid]))
       .rejects.toMatchObject({ code: '23514' });
-    await expect(env.client.query(`insert into public.guild_bonuses (guild_id, bonus, enhance_rank) values ($1, 'sell', -1)`, [g.id]))
+    await expect(env.client.query(`insert into public.guild_member_enhancements (guild_id, user_id, bonus, rank) values ($1, $2, 'sell', -1)`, [g.id, uid]))
       .rejects.toMatchObject({ code: '23514' });
     await env.client.query(`insert into public.guild_logs (guild_id, user_id, kind, detail, value) values ($1, $2, 'enhance', 'sell', 1)`, [g.id, uid]);
     await env.client.query(`insert into public.guild_logs (guild_id, user_id, kind, value) values ($1, $2, 'enhance-reset', 1)`, [g.id, uid]);
+    const view = (await call('/api/guilds/me', 'GET', uid)).body as {
+      guild: { logbook: { kind: string; detail: string | null; value: number | null }[] };
+    };
+    expect(view.guild.logbook.map(l => [l.kind, l.detail, l.value])).toEqual([
+      ['enhance-reset', null, 1],
+      ['enhance', 'sell', 1],
+    ]);
   });
 
-  it('길드원 누구나 Lv.6부터 기본 단계가 5 미만이어도 자유 강화를 올리고, 20,000,000G로 쿨다운 없이 초기화한다', async () => {
+  it('길드원 각자가 독립 포인트로 다른 스킬에 투자하고, 본인 초기화·공용 항해일지 비기록을 지킨다', async () => {
     const leader = await seedUser(env.client, { uid: testUid(nextUid++), email: `el${nextUid}@test.dev`, nickname: '선장', state: { gold: 1_000_000 } });
     const member = await seedUser(env.client, { uid: testUid(nextUid++), email: `em${nextUid}@test.dev`, nickname: '선원', state: { gold: 45_000_000 } });
     const outsider = await seedUser(env.client, { uid: testUid(nextUid++), email: `eo${nextUid}@test.dev`, nickname: '외부', state: { gold: 50_000_000 } });
@@ -74,7 +85,7 @@ describe('길드 10레벨 및 자유 강화', () => {
     expect(await call(enhancePath, 'POST', member, { params: { id: guildId, bonus: 'sell' } }))
       .toMatchObject({ status: 409, body: { error: 'enhance-locked' } });
 
-    // Lv.10(누적 1,100,000) 도달 -> 5포인트
+    // Lv.10(누적 1,100,000) 도달 -> 각 길드원당 5포인트
     await env.client.query(`insert into public.guild_contributions (guild_id, user_id, day, fame, clears) values ($1, null, '2030-01-02', 0, 1000000)`, [guildId]);
     // 기본 단계(sell=2, pool=123456)가 5가 아니어도 자유 강화 가능
     await env.client.query(`insert into public.guild_bonuses (guild_id, bonus, rank, pool) values ($1, 'sell', 2, 123456)`, [guildId]);
@@ -86,14 +97,21 @@ describe('길드 10레벨 및 자유 강화', () => {
     expect(await call(enhancePath, 'POST', member, { params: { id: guildId, bonus: 'nope' } }))
       .toMatchObject({ status: 400, body: { error: 'bad-bonus' } });
 
+    // 선원: rare 5투자 -> 본인 상한·포인트 소진
     for (let i = 1; i <= 5; i++) {
       expect(await call(enhancePath, 'POST', member, { params: { id: guildId, bonus: 'rare' } }))
         .toMatchObject({ status: 201, body: { enhanceRank: i, remainingPoints: 5 - i } });
     }
-    expect(await call(enhancePath, 'POST', leader, { params: { id: guildId, bonus: 'rare' } }))
+    expect(await call(enhancePath, 'POST', member, { params: { id: guildId, bonus: 'rare' } }))
       .toMatchObject({ status: 409, body: { error: 'enhance-maxed' } });
-    expect(await call(enhancePath, 'POST', leader, { params: { id: guildId, bonus: 'sell' } }))
+    expect(await call(enhancePath, 'POST', member, { params: { id: guildId, bonus: 'sell' } }))
       .toMatchObject({ status: 409, body: { error: 'no-enhance-points' } });
+
+    // 선장은 독립된 5포인트를 가지므로 다른 스킬(sell)에 5투자 가능
+    for (let i = 1; i <= 5; i++) {
+      expect(await call(enhancePath, 'POST', leader, { params: { id: guildId, bonus: 'sell' } }))
+        .toMatchObject({ status: 201, body: { enhanceRank: i, remainingPoints: 5 - i } });
+    }
 
     // 20,000,000G 미만이면 초기화 거부
     expect(await call(resetPath, 'POST', leader, { params: { id: guildId } }))
@@ -101,79 +119,147 @@ describe('길드 10레벨 및 자유 강화', () => {
     expect(await call(resetPath, 'POST', outsider, { params: { id: guildId } }))
       .toMatchObject({ status: 404, body: { error: 'not-member' } });
 
-    // 일반 길드원도 20,000,000G로 즉시 초기화 (기본 기부 rank·pool은 유지)
+    // 선원이 20,000,000G로 초기화 -> 선원의 포인트만 회수되고 선장의 sell 5단계·기본 기부 rank/pool은 유지
     expect(await call(resetPath, 'POST', member, { params: { id: guildId } }))
       .toMatchObject({ status: 200, body: { gold: 25_000_000, recovered: 5 } });
     expect(await goldOf(member)).toBe(25_000_000);
     expect(await call(resetPath, 'POST', member, { params: { id: guildId } }))
       .toMatchObject({ status: 409, body: { error: 'no-enhance-used' } });
 
-    // 쿨다운 없음 — 바로 다시 투자 후 같은 시각에 두 번째 초기화 가능
-    expect(await call(enhancePath, 'POST', member, { params: { id: guildId, bonus: 'sell' } }))
+    // 쿨다운 없음 — 선원이 다시 bag에 1투자 후 즉시 두 번째 초기화
+    expect(await call(enhancePath, 'POST', member, { params: { id: guildId, bonus: 'bag' } }))
       .toMatchObject({ status: 201, body: { enhanceRank: 1, remainingPoints: 4 } });
     expect(await call(resetPath, 'POST', member, { params: { id: guildId } }))
       .toMatchObject({ status: 200, body: { gold: 5_000_000, recovered: 1 } });
 
-    // 재투자 후 조회 검증: 기본 sell(rank=2, pool=123456) 보존 + 자유 강화 sell=3 -> totalRank=5, effect=+10%
+    // 선원이 sell 2 + bag 1로 재투자한 뒤 GET /api/guilds/me는 각자의 투자 효과만 반환한다
     await call(enhancePath, 'POST', member, { params: { id: guildId, bonus: 'sell' } });
-    await call(enhancePath, 'POST', leader, { params: { id: guildId, bonus: 'sell' } });
     await call(enhancePath, 'POST', member, { params: { id: guildId, bonus: 'sell' } });
+    await call(enhancePath, 'POST', member, { params: { id: guildId, bonus: 'bag' } });
 
-    const view = (await call('/api/guilds/me', 'GET', member)).body as {
+    interface GuildMe {
       guild: {
         growth: { level: number; next: number | null };
         effects: Record<string, number>;
         bonuses: { id: string; rank: number; enhanceRank: number; totalRank: number; pool: number; effect: number }[];
         logbook: { kind: string; detail: string | null; value: number | null }[];
       };
-    };
-    expect(view.guild.growth).toMatchObject({ level: 10, next: null });
-    expect(view.guild.bonuses[0]).toMatchObject({ id: 'sell', rank: 2, enhanceRank: 3, totalRank: 5, pool: 123_456, effect: 0.1 });
-    expect(view.guild.effects.sell).toBe(0.1);
-    expect(view.guild.logbook.slice(0, 4).map(l => [l.kind, l.detail, l.value])).toEqual([
-      ['enhance', 'sell', 3],
-      ['enhance', 'sell', 2],
-      ['enhance', 'sell', 1],
-      ['enhance-reset', null, 1],
-    ]);
+    }
+    const memberView = ((await call('/api/guilds/me', 'GET', member)).body as GuildMe).guild;
+    expect(memberView.growth).toMatchObject({ level: 10, next: null });
+    expect(memberView.bonuses[0]).toMatchObject({ id: 'sell', rank: 2, enhanceRank: 2, totalRank: 4, pool: 123_456, effect: 0.08 });
+    expect(memberView.bonuses[1]).toMatchObject({ id: 'bag', rank: 1, enhanceRank: 1, totalRank: 2, effect: 0.08 });
+    expect(memberView.effects.sell).toBe(0.08);
+    expect(memberView.effects.bag).toBe(0.08);
+
+    const leaderView = ((await call('/api/guilds/me', 'GET', leader)).body as GuildMe).guild;
+    expect(leaderView.bonuses[0]).toMatchObject({ id: 'sell', rank: 2, enhanceRank: 5, totalRank: 7, pool: 123_456, effect: 0.14 });
+    expect(leaderView.bonuses[1]).toMatchObject({ id: 'bag', rank: 1, enhanceRank: 0, totalRank: 1, effect: 0.04 });
+    expect(leaderView.effects.sell).toBe(0.14);
+    expect(leaderView.effects.bag).toBe(0.04);
+
+    // 개인 자유 강화와 초기화는 공용 항해일지에 남지 않는다
+    const { rows: enhanceLogs } = await env.client.query<{ kind: string }>(
+      `select kind from public.guild_logs where guild_id = $1 and kind in ('enhance', 'enhance-reset')`,
+      [guildId],
+    );
+    expect(enhanceLogs).toEqual([]);
   });
 
-  it('액션 경로(판매·가방·돌연변이)는 기본 5 + 자유 강화 5 = 최대 10단계 합산 효과를 적용한다', async () => {
-    const bag = [fish('crucian'), fish('crucian')];
-    const baseSell = bag.reduce((a, i) => a + priceOfInstance(i), 0);
-    const uid = await seedUser(env.client, { uid: testUid(nextUid++), email: `ea${nextUid}@test.dev`, state: { gold: 0, boat: 0, bag } });
+  it('같은 길드의 두 길드원이 서로 다른 자유 강화를 두면 loadContext와 액션(판매·가방·돌연변이)에 각자의 효과만 적용된다', async () => {
+    const bagA = [fish('crucian'), fish('crucian')];
+    const bagB = [fish('crucian'), fish('crucian')];
+    const baseSell = bagA.reduce((a, i) => a + priceOfInstance(i), 0);
+    const u1 = await seedUser(env.client, { uid: testUid(nextUid++), email: `ea${nextUid}@test.dev`, state: { gold: 0, boat: 0, bag: bagA } });
+    const u2 = await seedUser(env.client, { uid: testUid(nextUid++), email: `eb${nextUid}@test.dev`, state: { gold: 0, boat: 0, bag: bagB } });
     const { rows: [g] } = await env.client.query<{ id: string }>(
       `insert into public.guilds (name, code) values ($1, upper(substr(md5(random()::text), 1, 8))) returning id`, [`act${nextUid}`]);
-    await env.client.query(`insert into public.guild_members (guild_id, user_id, role) values ($1, $2, 'member')`, [g.id, uid]);
+    await env.client.query(`insert into public.guild_members (guild_id, user_id, role) values ($1, $2, 'leader'), ($1, $3, 'member')`, [g.id, u1, u2]);
     await env.client.query(`insert into public.guild_contributions (guild_id, user_id, day, fame, clears) values ($1, null, '2030-01-01', 0, 1100000)`, [g.id]);
     await env.client.query(
-      `insert into public.guild_bonuses (guild_id, bonus, rank, enhance_rank) values ($1, 'sell', 5, 5), ($1, 'mutation', 5, 5)`,
+      `insert into public.guild_bonuses (guild_id, bonus, rank) values ($1, 'sell', 5), ($1, 'mutation', 5), ($1, 'bag', 5)`,
       [g.id],
     );
+    // u1은 sell=5, mutation=5 / u2는 bag=5
+    await env.client.query(
+      `insert into public.guild_member_enhancements (guild_id, user_id, bonus, rank)
+       values ($1, $2, 'sell', 5), ($1, $2, 'mutation', 5), ($1, $3, 'bag', 5)`,
+      [g.id, u1, u2],
+    );
 
-    // 판매가 10단계(+20%)
-    expect((await callAction(userToken(uid), { type: 'sell', uids: bag.map(i => i.uid) })).status).toBe(200);
-    expect(await goldOf(uid)).toBe(baseSell + Math.round(baseSell * 0.2));
+    const { db } = database();
+    const ctx1 = await loadContext(db, u1, { skipDetailType: false, snapshotEvery: SNAPSHOT_EVERY, bountyDayStart: null, guild: true });
+    const ctx2 = await loadContext(db, u2, { skipDetailType: false, snapshotEvery: SNAPSHOT_EVERY, bountyDayStart: null, guild: true });
+    expect(ctx1.guild?.enhanceRanks).toEqual({ sell: 5, mutation: 5 });
+    expect(ctx2.guild?.enhanceRanks).toEqual({ bag: 5 });
 
-    // 돌연변이 10단계(+10%p)
+    // u1은 판매가 10단계(+20%), u2는 기본 5단계(+10%)만 적용
+    expect((await callAction(userToken(u1), { type: 'sell', uids: bagA.map(i => i.uid) })).status).toBe(200);
+    expect(await goldOf(u1)).toBe(baseSell + Math.round(baseSell * 0.2));
+    expect((await callAction(userToken(u2), { type: 'sell', uids: bagB.map(i => i.uid) })).status).toBe(200);
+    expect(await goldOf(u2)).toBe(baseSell + Math.round(baseSell * 0.1));
+
+    // u1은 돌연변이 10단계(+10%p) 적용
     const r = variantShare(mutationWeightsOf(newState(), 'pond')) + 0.08;
     vi.spyOn(Math, 'random').mockReturnValue(r);
     vi.setSystemTime(Date.now() + 2_000);
-    const caught = await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'auto' });
+    const caught = await callAction(userToken(u1), { type: 'catch', spot: 'pond', judgment: 'auto' });
     expect(caught.status).toBe(200);
     expect((caught.body as { result: { info: { form: string } } }).result.info.form).toBe('variant');
 
-    // 가방 10단계(+40%)
+    // 가방 10단계(+40%)는 bag=5를 투자한 u2에만 적용되고, bag=0인 u3(같은 길드 다른 멤버)는 기본 5단계(+20%)만 적용된다
     const cap10 = capOfBoat(0) + Math.round(capOfBoat(0) * 0.4);
-    const nearFull = Array.from({ length: cap10 - 1 }, () => fish('crucian'));
-    const bagUser = await seedUser(env.client, { uid: testUid(nextUid++), email: `eb${nextUid}@test.dev`, state: { boat: 0, bag: nearFull } });
+    const cap5 = capOfBoat(0) + Math.round(capOfBoat(0) * 0.2);
+    expect(cap10).toBeGreaterThan(cap5);
+    const bagCapUser = await seedUser(env.client, {
+      uid: testUid(nextUid++),
+      email: `ebag${nextUid}@test.dev`,
+      state: { boat: 0, bag: Array.from({ length: cap10 - 1 }, () => fish('crucian')) },
+    });
+    const baseBagUser = await seedUser(env.client, {
+      uid: testUid(nextUid++),
+      email: `ebase${nextUid}@test.dev`,
+      state: { boat: 0, bag: Array.from({ length: cap10 - 1 }, () => fish('crucian')) },
+    });
     const { rows: [g2] } = await env.client.query<{ id: string }>(
       `insert into public.guilds (name, code) values ($1, upper(substr(md5(random()::text), 1, 8))) returning id`, [`bag${nextUid}`]);
-    await env.client.query(`insert into public.guild_members (guild_id, user_id, role) values ($1, $2, 'leader')`, [g2.id, bagUser]);
+    await env.client.query(`insert into public.guild_members (guild_id, user_id, role) values ($1, $2, 'leader'), ($1, $3, 'member')`, [g2.id, bagCapUser, baseBagUser]);
     await env.client.query(`insert into public.guild_contributions (guild_id, user_id, day, fame, clears) values ($1, null, '2030-01-01', 0, 1100000)`, [g2.id]);
-    await env.client.query(`insert into public.guild_bonuses (guild_id, bonus, rank, enhance_rank) values ($1, 'bag', 5, 5)`, [g2.id]);
+    await env.client.query(`insert into public.guild_bonuses (guild_id, bonus, rank) values ($1, 'bag', 5)`, [g2.id]);
+    await env.client.query(`insert into public.guild_member_enhancements (guild_id, user_id, bonus, rank) values ($1, $2, 'bag', 5)`, [g2.id, bagCapUser]);
 
-    const bagCatch = await callAction(userToken(bagUser), { type: 'catch', spot: 'pond', judgment: 'auto' });
+    const bagCatch = await callAction(userToken(bagCapUser), { type: 'catch', spot: 'pond', judgment: 'auto' });
     expect((bagCatch.body as { result: { released: unknown[] } }).result.released).toEqual([]);
+    const baseCatch = await callAction(userToken(baseBagUser), { type: 'catch', spot: 'pond', judgment: 'auto' });
+    expect((baseCatch.body as { result: { released: unknown[] } }).result.released).toHaveLength(1);
+  });
+
+  it('길드 탈퇴·내보내기 시 해당 길드원의 guild_member_enhancements 행만 삭제되고 다른 길드원 행은 남는다', async () => {
+    const leader = await seedUser(env.client, { uid: testUid(nextUid++), email: `rl${nextUid}@test.dev`, nickname: '정리선장', state: {} });
+    const leaver = await seedUser(env.client, { uid: testUid(nextUid++), email: `rm${nextUid}@test.dev`, nickname: '정리탈퇴', state: {} });
+    const kicked = await seedUser(env.client, { uid: testUid(nextUid++), email: `rk${nextUid}@test.dev`, nickname: '정리추방', state: {} });
+
+    const created = await call('/api/guilds', 'POST', leader, { body: { name: '정리선단' } });
+    const guildId = (created.body as { id: string }).id;
+    await call('/api/guilds/:id', 'PATCH', leader, { params: { id: guildId }, body: { joinMode: 'open' } });
+    const code = ((await call('/api/guilds/me', 'GET', leader)).body as { guild: { code: string } }).guild.code;
+    await call('/api/guild-memberships', 'POST', leaver, { body: { code } });
+    await call('/api/guild-memberships', 'POST', kicked, { body: { code } });
+    await env.client.query(`insert into public.guild_contributions (guild_id, user_id, day, fame, clears) values ($1, null, '2030-01-01', 0, 1100000)`, [guildId]);
+
+    await call(enhancePath, 'POST', leader, { params: { id: guildId, bonus: 'sell' } });
+    await call(enhancePath, 'POST', leaver, { params: { id: guildId, bonus: 'rare' } });
+    await call(enhancePath, 'POST', kicked, { params: { id: guildId, bonus: 'bag' } });
+
+    expect(await call('/api/guilds/:id/members/:uid', 'DELETE', leaver, { params: { id: guildId, uid: leaver } }))
+      .toMatchObject({ status: 200, body: { result: 'left' } });
+    expect(await call('/api/guilds/:id/members/:uid', 'DELETE', leader, { params: { id: guildId, uid: kicked } }))
+      .toMatchObject({ status: 200, body: { result: 'kicked' } });
+
+    const { rows } = await env.client.query<{ user_id: string; bonus: string; rank: number }>(
+      `select user_id::text, bonus, rank from public.guild_member_enhancements where guild_id = $1`,
+      [guildId],
+    );
+    expect(rows).toEqual([{ user_id: leader, bonus: 'sell', rank: 1 }]);
   });
 });
