@@ -315,6 +315,39 @@ describe('기운 얻기 탭', () => {
   });
 });
 
+describe('등급 칩 스트립', () => {
+  // 어종 표 위의 등급 칩은 판매 탭과 기운 얻기 탭이 같은 표를 쓰므로 두 탭에 같이 있다. 칩 하나가 그 등급의 선택을 일괄로 켜고 끈다
+  const rare = FISH.find(f => f.id === 'carp')!;
+
+  it('판매 탭의 칩은 그 등급의 개체 전부를 한 번에 끄고 켠다', () => {
+    show(seed({ bag: [inst('a', crucian.id), inst('b', rare.id)] }));
+    expect(screen.getByText('판매할 물고기').nextSibling).toHaveTextContent('2마리');
+    fireEvent.click(screen.getByRole('button', { name: '희귀 등급 판매 해제' }));
+    expect(screen.getByText('판매할 물고기').nextSibling).toHaveTextContent('1마리');
+    fireEvent.click(screen.getByRole('button', { name: '희귀 등급 판매 선택' }));
+    expect(screen.getByText('판매할 물고기').nextSibling).toHaveTextContent('2마리');
+  });
+
+  it('판매 확정은 칩으로 끈 등급을 제외한 개체의 uid를 보낸다', () => {
+    const { dispatch } = show(seed({ bag: [inst('a', crucian.id), inst('b', rare.id)] }));
+    fireEvent.click(screen.getByRole('button', { name: '희귀 등급 판매 해제' }));
+    fireEvent.click(screen.getByRole('button', { name: `판매 (+${crucian.price}G)` }));
+    expect(dispatch).toHaveBeenCalledWith({ type: 'sell', uids: ['a'] });
+  });
+
+  it('기운 얻기 탭에도 같은 스트립이 있고 칩은 기본값이 꺼진 해역의 같은 등급까지 함께 고른다', () => {
+    const { dispatch } = (() => { const out = show(seed({ bag: [inSpot('a', 'pond'), inSpot('c', 'indian')] })); fireEvent.click(tab('기운 얻기')); return out; })();
+    expect(screen.getByRole('button', { name: '기운 얻기 (1마리)' })).toBeInTheDocument(); // 인도양은 기본 꺼짐
+    fireEvent.click(screen.getByRole('button', { name: '일반 등급 기운 얻기 선택' }));
+    fireEvent.click(screen.getByRole('button', { name: '기운 얻기 (2마리)' }));
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'extractEnergy', uids: expect.arrayContaining(['a', 'c']) }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: '일반 등급 기운 얻기 해제' }));
+    expect(screen.getByRole('button', { name: '기운 얻기 (0마리)' })).toBeDisabled();
+  });
+});
+
 describe('기운 얻기 탭의 잠금', () => {
   const lines = (lock: HTMLElement) => {
     fireEvent.mouseEnter(lock.parentElement!);

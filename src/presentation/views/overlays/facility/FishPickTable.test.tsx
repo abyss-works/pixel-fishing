@@ -9,6 +9,9 @@ import FishPickTable from './FishPickTable';
 afterEach(cleanup);
 
 const fish = FISH.find(f => f.rarity === 'common')!;
+const rare = FISH.find(f => f.id === 'carp')!;   // 희귀
+const rare2 = FISH.find(f => f.id === 'seabream')!; // 희귀
+const epic = FISH.find(f => f.id === 'goldfish')!; // 영웅
 const inst = (uid: string, over: Partial<FishInstance> = {}): FishInstance =>
   ({ uid, fishId: fish.id, form: 'normal', size: 20, caughtAt: null, spot: null, judgment: null, locked: false, ...over });
 
@@ -102,5 +105,52 @@ describe('어종 선택 표', () => {
     const h = show([inst('a', { size: null }), inst('b', { size: null })], [], [fish.id]);
     fireEvent.click(screen.getByText(/크기 미상|미상/));
     expect(h.onToggleRow).toHaveBeenCalledWith(['a', 'b'], true);
+  });
+});
+
+describe('등급 칩 스트립', () => {
+  const strip = () => screen.getByRole('group', { name: '등급 일괄 선택' });
+
+  it('표 위에 있고 등급 순서로 칩이 하나씩이다', () => {
+    show([inst('a')]);
+    expect(strip().compareDocumentPosition(screen.getByRole('table')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(strip()).getAllByRole('button').map(c => c.getAttribute('aria-label'))).toEqual([
+      '일반 등급 선택 해제', '희귀 등급 선택 선택', '영웅 등급 선택 선택', '전설 등급 선택 선택',
+    ]);
+  });
+
+  it('칩을 누르면 그 등급의 잠그지 않은 개체 전부와 지금 전부 켜져 있는지를 넘긴다', () => {
+    const h = show([inst('a'), inst('b', { fishId: rare.id }), inst('c', { fishId: rare2.id, locked: true })]);
+    fireEvent.click(within(strip()).getByRole('button', { name: '희귀 등급 선택 해제' }));
+    expect(h.onToggleRow).toHaveBeenCalledWith(['b'], true);
+  });
+
+  it('칩은 여러 어종 행에 흩어진 같은 등급 개체를 함께 다룬다', () => {
+    const h = show([inst('a'), inst('b', { fishId: rare.id }), inst('c', { fishId: rare2.id })], ['b']);
+    fireEvent.click(within(strip()).getByRole('button', { name: '희귀 등급 선택 선택' }));
+    expect(h.onToggleRow).toHaveBeenCalledWith(['c', 'b'], false); // uid는 표에 보이는 행 순서다
+  });
+
+  it('그 등급이 전부 골라져 있으면 칩이 눌림이고 누르면 전부 끈다', () => {
+    const h = show([inst('a'), inst('b', { fishId: rare.id })], ['a']);
+    const chip = within(strip()).getByRole('button', { name: '희귀 등급 선택 해제' });
+    expect(chip).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(chip);
+    expect(h.onToggleRow).toHaveBeenCalledWith(['b'], true);
+  });
+
+  it('선택 가능한 개체가 없는 등급 칩은 누를 수 없다', () => {
+    show([inst('a'), inst('b', { fishId: rare.id, locked: true })]);
+    expect(within(strip()).getByRole('button', { name: '영웅 등급 선택 선택' })).toBeDisabled();
+    expect(within(strip()).getByRole('button', { name: '희귀 등급 선택 선택' })).toBeDisabled(); // 잠긴 것뿐이면 고를 수 없다
+    expect(within(strip()).getByRole('button', { name: '일반 등급 선택 해제' })).toBeEnabled();
+  });
+
+  it('켜진 칩의 등급 낱말은 등급색이고 꺼진 칩은 보조색이다', () => {
+    show([inst('a'), inst('b', { fishId: epic.id })], ['a']);
+    const on = within(strip()).getByRole('button', { name: '영웅 등급 선택 해제' });
+    expect(on.querySelector('[data-rarity="epic"]')).not.toBeNull();
+    const off = within(strip()).getByRole('button', { name: '일반 등급 선택 선택' });
+    expect(off.querySelector('[data-rarity]')).toBeNull();
   });
 });
