@@ -3,12 +3,13 @@
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { gunzipSync } from 'node:zlib';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Executor } from './_db/client.js';
 
 const dbMocks = vi.hoisted(() => ({
   countEventsBefore: vi.fn(async () => 0),
-  eventsBefore: vi.fn(async (): Promise<{ id: number }[]> => []),
+  eventsBefore: vi.fn(async (): Promise<{ id: number; counted: boolean }[]> => []),
   deleteEventsUpTo: vi.fn(async () => 0),
   savesMetaPage: vi.fn(async (): Promise<{ id: number; user_id: string; updated_at: string }[]> => []),
   savesByIds: vi.fn(async (): Promise<unknown[]> => []),
@@ -115,12 +116,18 @@ describe('runArchive 임시 파일·스트림 정리', () => {
     expect(await listFiles(tmpDir)).toEqual([]);
   });
 
-  it('성공 경로에서 events와 saves의 임시·최종 스테이징 파일을 모두 삭제한다', async () => {
+  it('성공 경로에서 events와 saves의 임시·최종 스테이징 파일을 모두 삭제하고 events JSONL에 counted를 보존한다', async () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pf-cold-ok-'));
+    const putObjects = new Map<string, Buffer>();
     mockR2Ok();
+    const r2Fetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      if (init?.method === 'PUT') putObjects.set(String(url), Buffer.from(init.body as Uint8Array));
+      return r2Fetch(url, init);
+    }) as typeof fetch;
     dbMocks.countEventsBefore.mockResolvedValue(1);
     dbMocks.eventsBefore
-      .mockResolvedValueOnce([{ id: 101 }])
+      .mockResolvedValueOnce([{ id: 101, counted: true }])
       .mockResolvedValueOnce([]);
     dbMocks.deleteEventsUpTo.mockResolvedValue(1);
     dbMocks.savesMetaPage.mockResolvedValueOnce([
@@ -133,6 +140,9 @@ describe('runArchive 임시 파일·스트림 정리', () => {
     expect(res.events.rows).toBe(1);
     expect(res.saves.rows).toBe(1);
     expect(await listFiles(tmpDir)).toEqual([]);
+    const eventGz = putObjects.get(`https://acct.r2.cloudflarestorage.com/bucket/${res.events.r2Key}`)!;
+    const lines = gunzipSync(eventGz).toString('utf8').trim().split('\n').map(l => JSON.parse(l) as Record<string, unknown>);
+    expect(lines).toEqual([{ id: 101, counted: true }]);
   });
 
   it('업로드 실패 경로에서도 스테이징 파일을 남기지 않는다', async () => {
@@ -140,7 +150,7 @@ describe('runArchive 임시 파일·스트림 정리', () => {
     globalThis.fetch = vi.fn(async () => new Response('boom', { status: 500 })) as typeof fetch;
     dbMocks.countEventsBefore.mockResolvedValue(1);
     dbMocks.eventsBefore
-      .mockResolvedValueOnce([{ id: 5 }])
+      .mockResolvedValueOnce([{ id: 5, counted: false }])
       .mockResolvedValueOnce([]);
 
     await expect(runArchive(makeEnv(tmpDir), new Date('2026-10-07T00:00:00Z'))).rejects.toThrow();
