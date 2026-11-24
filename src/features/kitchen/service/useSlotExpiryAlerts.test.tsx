@@ -61,4 +61,31 @@ describe('useSlotExpiryAlerts', () => {
     rerender({ g: switchedAccountGame });
     expect(notify).not.toHaveBeenCalled();
   });
+
+  it('bait2 슬롯이 만료되면 1회 알리고, 만료 전 계정 전환으로 bait2가 비어도 오탐 알림을 내지 않는다', () => {
+    const notify = vi.fn();
+    const dualGame: GameState = {
+      ...newState(),
+      boat: 5,
+      artifacts: ['sargasso-net'],
+      slots: {
+        lunch: null,
+        bait: { id: 'cook-bait-rare', endsAt: '2026-01-01T00:05:00.000Z' },
+        bait2: { id: 'cook-bait-epic', endsAt: '2026-01-01T00:02:30.000Z' },
+      },
+    };
+    const { rerender } = renderHook(({ g }) => useSlotExpiryAlerts(g, notify), {
+      initialProps: { g: dualGame },
+    });
+
+    clock.now = '2026-01-01T00:02:31.000Z';
+    rerender({ g: dualGame });
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(notify).toHaveBeenCalledWith('큐베브 미끼(영웅) 효과가 끝났어요.');
+
+    // 만료 전 bait(00:05:00)가 계정 전환으로 null이 돼도 오탐 알림 없음
+    const switched: GameState = { ...newState(), boat: 5, slots: { lunch: null, bait: null } };
+    rerender({ g: switched });
+    expect(notify).toHaveBeenCalledTimes(1);
+  });
 });

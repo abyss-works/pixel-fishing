@@ -183,4 +183,56 @@ describe('먹기 계획과 교체 확인', () => {
     expect(planEat(seed({ boat: COOKING_UNLOCK_BOAT - 1, items: own }), 'cook-lunch-bite', T0).check)
       .toEqual({ ok: false, reason: 'cooking-locked' });
   });
+
+  it('다중 미끼 유물이 있으면 미끼 0·1칸 사용 중일 때 다른 미끼는 확인 없이 바로 쓰고, 사용 중 여부를 표시한다', () => {
+    const items = { 'cook-bait-rare': 1, 'cook-bait-epic': 1, 'cook-bait-legendary': 1 };
+    const oneActive = seed({
+      artifacts: ['sargasso-net'],
+      items,
+      slots: { lunch: null, bait: { id: 'cook-bait-rare', endsAt: at(2 * MIN) } },
+    });
+    expect(planEat(oneActive, 'cook-bait-epic', T0).confirm).toBeNull();
+
+    // 같은 미끼를 다시 쓰면 확인 창이 뜨고 지속 시간은 절반(2.5분)
+    const dup = planEat(oneActive, 'cook-bait-rare', T0);
+    expect(dup.confirm).toEqual({
+      title: '미끼 바꾸기', confirmLabel: '쓰기',
+      current: { label: '롱페퍼 미끼(희귀)', minutes: 2 },
+      next: { label: '롱페퍼 미끼(희귀)', minutes: 2.5 },
+      warning: '지금 효과의 남은 시간은 사라져요.',
+    });
+
+    const sec = selectItemSection(oneActive, T0, 'account');
+    if (sec.state !== 'open') throw new Error('open이어야 해요');
+    expect(sec.bait.map(r => [r.recipe.id, r.active])).toEqual([
+      ['cook-bait-rare', true],
+      ['cook-bait-epic', false],
+      ['cook-bait-legendary', false],
+    ]);
+  });
+
+  it('다중 미끼 두 슬롯이 모두 찬 상태에서 세 번째 미끼를 쓰면 교체 슬롯 선택지와 먼저 끝나는 기본 선택을 낸다', () => {
+    const items = { 'cook-bait-rare': 1, 'cook-bait-epic': 1, 'cook-bait-legendary': 1 };
+    const both = seed({
+      artifacts: ['sargasso-net'],
+      items,
+      slots: {
+        lunch: null,
+        bait: { id: 'cook-bait-rare', endsAt: at(150_000) },
+        bait2: { id: 'cook-bait-epic', endsAt: at(60_000) },
+      },
+    });
+    const plan = planEat(both, 'cook-bait-legendary', T0);
+    expect(plan.confirm).toEqual({
+      title: '미끼 바꾸기', confirmLabel: '쓰기',
+      current: { label: '큐베브 미끼(영웅)', minutes: 1 },
+      next: { label: '용연향 미끼(전설)', minutes: 2.5 },
+      warning: '지금 효과의 남은 시간은 사라져요.',
+      choices: [
+        { slotKey: 'bait', label: '롱페퍼 미끼(희귀)', minutes: 3 },
+        { slotKey: 'bait2', label: '큐베브 미끼(영웅)', minutes: 1 },
+      ],
+      defaultChoice: 'bait2',
+    });
+  });
 });

@@ -491,15 +491,15 @@ describe('exhibit — 전시대 진열·회수', () => {
       .toEqual({ ok: false, error: 'bad-request' });
   });
 
-  it('회수 — 길드·유물 가방 용량 보너스까지 허용하고 그 상한이 차면 거부한다', () => {
-    const guild = { ...NO_GUILD_EFFECTS, bag: 0.04 };
-    const boosted = seed({ boat: 0, artifacts: ['sargasso-net'], bag: Array.from({ length: 67 }, (_, i) => mkInst(`f${i}`, 'carp')) });
+  it('회수 — 길드 가방 용량 보너스까지 허용하고 그 상한이 차면 거부한다', () => {
+    const guild = { ...NO_GUILD_EFFECTS, bag: 0.1 };
+    const boosted = seed({ boat: 0, bag: Array.from({ length: 65 }, (_, i) => mkInst(`f${i}`, 'carp')) });
     boosted.exhibit[0] = c;
-    // 60 + 14%(8) = 68칸 -> 67마리일 때 회수 가능
+    // 60 + 10%(6) = 66칸 -> 65마리일 때 회수 가능
     const ok = applyAction(boosted, { type: 'exhibit', uid: 'c', slot: null }, deps({ guild }));
     expect(ok.ok).toBe(true);
 
-    // 68마리가 차면 거부
+    // 66마리가 차면 거부
     if (!ok.ok) throw new Error(ok.error);
     const full = { ...ok.state, exhibit: [d] };
     expect(applyAction(full, { type: 'exhibit', uid: 'd', slot: null }, deps({ guild })))

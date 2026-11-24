@@ -128,42 +128,53 @@ describe('bagCapacityOf', () => {
     expect(ratcheted.base).toBe(4000);
   });
 
-  it('사르가소의 그물망(Lv1·Lv5) + 유물 배율 + 길드 가방 동시 적용 시 mods 합계와 cap이 일치하고 래칫 시 heldCount를 유지한다', () => {
-    // 60 * 0.04 = 2.4(2), 60 * (0.1 * 1.03) = 6.18(6), 합산 60 * 0.143 = 8.58(9) — 반올림 차이가 나는 조합
-    const guild = guildEffectsOf(2, { bag: 1 }); // +4%
-    const lv1Ctx = makeCtx({
-      state: { boat: 0, artifacts: ['sargasso-net'] },
-      guild,
-      achievements: { artifactBoost: 0.03 },
-    });
-    const lv1 = bagCapacityOf(lv1Ctx, 10);
-    expect(lv1.base).toBe(60);
-    expect(lv1.mods.map(m => m.source)).toEqual([
-      { kind: 'guild', bonus: 'bag' },
-      { kind: 'relic', id: 'sargasso-net' },
-    ]);
-    expect(lv1.mods.reduce((s, m) => s + m.delta, lv1.base)).toBe(lv1.value);
-    expect(lv1.value).toBe(69);
+  it('가방 용량 유물(bagCap) + 유물 배율 + 길드 가방 동시 적용 시 mods 합계와 cap이 일치하고 래칫 시 heldCount를 유지한다', async () => {
+    const { ARTIFACTS } = await import('../content/artifacts');
+    const target = ARTIFACTS[0] as { id: string; grade: 'common' | 'rare' | 'epic' | 'legendary'; effects: { bagCap?: number } };
+    const origGrade = target.grade;
+    const origEffects = target.effects;
+    target.grade = 'rare';
+    target.effects = { bagCap: 0.1 };
+    try {
+      // 60 * 0.04 = 2.4(2), 60 * (0.1 * 1.03) = 6.18(6), 합산 60 * 0.143 = 8.58(9) — 반올림 차이가 나는 조합
+      const guild = guildEffectsOf(2, { bag: 1 }); // +4%
+      const lv1Ctx = makeCtx({
+        state: { boat: 0, artifacts: [target.id] },
+        guild,
+        achievements: { artifactBoost: 0.03 },
+      });
+      const lv1 = bagCapacityOf(lv1Ctx, 10);
+      expect(lv1.base).toBe(60);
+      expect(lv1.mods.map(m => m.source)).toEqual([
+        { kind: 'guild', bonus: 'bag' },
+        { kind: 'relic', id: target.id },
+      ]);
+      expect(lv1.mods.reduce((s, m) => s + m.delta, lv1.base)).toBe(lv1.value);
+      expect(lv1.value).toBe(69);
 
-    // Lv5(20%) + artifactBoost(15%) + guild(20%) + 배(boat 8: base 4000)
-    const lv5Ctx = makeCtx({
-      state: { boat: 8, artifacts: ['sargasso-net'], artifactLevels: { 'sargasso-net': 5 } },
-      guild: guildEffectsOf(5, { bag: 5 }), // +20%
-      achievements: { artifactBoost: 0.15 }, // 0.2 * 1.15 = 0.23, 합산 0.43
-    });
-    const lv5 = bagCapacityOf(lv5Ctx, 100);
-    expect(lv5.base).toBe(BOATS[7].bagCap);
-    expect(lv5.mods.map(m => m.source)).toEqual([
-      { kind: 'guild', bonus: 'bag' },
-      { kind: 'relic', id: 'sargasso-net' },
-    ]);
-    expect(lv5.mods.reduce((s, m) => s + m.delta, lv5.base)).toBe(lv5.value);
-    expect(lv5.value).toBe(4000 + Math.round(4000 * 0.43));
+      // Lv5(20%) + artifactBoost(15%) + guild(20%) + 배(boat 8: base 4000)
+      const lv5Ctx = makeCtx({
+        state: { boat: 8, artifacts: [target.id], artifactLevels: { [target.id]: 5 } },
+        guild: guildEffectsOf(5, { bag: 5 }), // +20%
+        achievements: { artifactBoost: 0.15 }, // 0.2 * 1.15 = 0.23, 합산 0.43
+      });
+      const lv5 = bagCapacityOf(lv5Ctx, 100);
+      expect(lv5.base).toBe(BOATS[7].bagCap);
+      expect(lv5.mods.map(m => m.source)).toEqual([
+        { kind: 'guild', bonus: 'bag' },
+        { kind: 'relic', id: target.id },
+      ]);
+      expect(lv5.mods.reduce((s, m) => s + m.delta, lv5.base)).toBe(lv5.value);
+      expect(lv5.value).toBe(4000 + Math.round(4000 * 0.43));
 
-    // 래칫: 상한 초과 보유 시 value는 heldCount를 유지하고, mods 합계는 기본+보정 상한과 일치한다
-    const ratcheted = bagCapacityOf(lv1Ctx, 100);
-    expect(ratcheted.value).toBe(100);
-    expect(ratcheted.mods.reduce((s, m) => s + m.delta, ratcheted.base)).toBe(69);
+      // 래칫: 상한 초과 보유 시 value는 heldCount를 유지하고, mods 합계는 기본+보정 상한과 일치한다
+      const ratcheted = bagCapacityOf(lv1Ctx, 100);
+      expect(ratcheted.value).toBe(100);
+      expect(ratcheted.mods.reduce((s, m) => s + m.delta, ratcheted.base)).toBe(69);
+    } finally {
+      target.grade = origGrade;
+      target.effects = origEffects;
+    }
   });
 });
 

@@ -16,6 +16,8 @@ describe('fmtMinutes — 남은 시간', () => {
     expect(fmtMinutes(112)).toBe('1시간 52분');
     expect(fmtMinutes(120)).toBe('2시간');
     expect(fmtMinutes(52)).toBe('52분');
+    expect(fmtMinutes(2.5)).toBe('2분 30초');
+    expect(fmtMinutes(5)).toBe('5분');
     expect(fmtMinutes(0)).toBe('1분 미만');
   });
 });

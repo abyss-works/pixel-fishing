@@ -240,6 +240,7 @@ export async function userState(db: Executor, uid: string): Promise<unknown> {
     if (typeof s.id !== 'string' || typeof s.endsAt !== 'string') return null;
     return { id: s.id, name: recipeById(s.id)?.name ?? s.id, endsAt: s.endsAt };
   };
+  const bait2 = parseSlot(rawSlots.bait2);
 
   const recentBag = (Array.isArray(row.recent_bag) ? row.recent_bag : []).map(item => {
     const fish = fishById(item.fish_id);
@@ -309,6 +310,7 @@ export async function userState(db: Executor, uid: string): Promise<unknown> {
       slots: {
         lunch: parseSlot(rawSlots.lunch),
         bait: parseSlot(rawSlots.bait),
+        ...(bait2 ? { bait2 } : {}),
       },
     },
     instances: {

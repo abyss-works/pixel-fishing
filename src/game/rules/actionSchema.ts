@@ -57,7 +57,7 @@ const schemas = {
   setEnergyTarget: z.object({ type: z.literal('setEnergyTarget'), spot: z.string(), on: z.boolean() }),
   resetEnergyTargets: z.object({ type: z.literal('resetEnergyTargets') }),
   cook: z.object({ type: z.literal('cook'), recipe: z.string(), count: z.number().int() }),
-  eat: z.object({ type: z.literal('eat'), item: z.string() }),
+  eat: z.object({ type: z.literal('eat'), item: z.string(), replaceSlot: z.enum(['bait', 'bait2']).optional() }),
   seeTutorial: z.object({ type: z.literal('seeTutorial'), id: z.string() }),
   changeClothes: z.object({ type: z.literal('changeClothes'), shirt: z.unknown(), pants: z.unknown() }),
   buyHat: z.object({ type: z.literal('buyHat'), hat: z.unknown() }),

@@ -118,9 +118,11 @@ describe('필요와 보유', () => {
     expect(selectRecipeView(seed(), recipe('cook-bait-mutation'), 1, T0).title).toEqual({ name: '사프란 미끼', grade: 'special' });
   });
 
-  it('지속 시간은 그 종류의 슬롯 지속(ms)이다', () => {
+  it('지속 시간은 그 종류의 슬롯 지속(ms)이며, 사르가소의 그물망이 있으면 미끼 지속이 절반이 된다', () => {
     expect(selectRecipeView(seed(), recipe('cook-lunch-bite'), 1, T0).slotMs).toBe(9 * 60 * MIN);
     expect(selectRecipeView(seed(), recipe('cook-bait-rare'), 1, T0).slotMs).toBe(5 * MIN);
+    expect(selectRecipeView(seed({ artifacts: ['sargasso-net'] }), recipe('cook-bait-rare'), 1, T0).slotMs).toBe(2.5 * MIN);
+    expect(selectRecipeView(seed({ artifacts: ['sargasso-net'] }), recipe('cook-lunch-bite'), 1, T0).slotMs).toBe(9 * 60 * MIN);
   });
 });
 
