@@ -9,7 +9,7 @@
 //   size: 크기 증가 비율. 판매가와 도감 완성 조건이 크기를 쓰지 않으므로 이 지표들에 영향이 없다
 //   move: 이동 속도 증가 비율. 실질 낚시 시간 밖의 이동만 줄이므로 낚시 시간당 수입은 그대로이고, 판매 왕복을 넣은 수입에서만 달라진다
 //   named: 네임드 조우 가중치 증가 비율. 수입은 그대로이고 조우까지의 기대 시간만 달라진다
-//   night: 밤 어종 출현(0 또는 1). 참이면 낮에도 밤 풀 전체로 낚는 것으로 본다. 미끼 슬롯 효과라 수동 캐치에만 걸린다
+//   night: 밤 어종 출현(0 또는 1). 참이면 낮에도 최대 밤 깊이(nightDepth=1) 밤 풀로 낚는 것으로 본다. 미끼 슬롯 효과라 수동 캐치에만 걸린다
 // 가정: 수동 낚시(미끼 슬롯)는 같은 모델의 GOOD 판정 축으로 잰다. 도감 완성은 한 해역에서만 낚을 때의 시간이다.
 //   도감 완성 시간은 캐치 단위 몬테카를로이며 캐치 수를 그 조건의 캐치 속도로 시간으로 바꾼다. 시드가 같으면 결과가 같다.
 //   어종 천장, 네임드 천장 외의 장치, 가방 한도, 유물은 넣지 않는다. 분해 재료의 등급별 단위는 설계 초안 값이고 바뀔 수 있어 옵션으로 받는다.
@@ -38,7 +38,7 @@ import type { Dist } from './sample';
 
 export interface Effect {
   bite: number; rare: number; epic: number; legendary: number; variant: number; size: number; move: number; named: number;
-  /** 밤 어종 출현 — 0 또는 1. 참이면 낮에도 밤 풀 전체(낮 어종 + 밤 어종)로 낚는다 */
+  /** 밤 어종 출현 — 0 또는 1. 참이면 낮에도 최대 밤 깊이(nightDepth: 1) 밤 풀(낮 어종 + 밤 어종)로 낚는다 */
   night: number;
   /** 판매가 증가 비율(-1 초과, 예: 0.1 = +10%). 생략하면 0 */
   sell?: number;
@@ -190,8 +190,9 @@ export function effectRates(spot: SpotId, level: number, axis: Axis, e: Effect, 
   let extra: DrawOptions = {};
   const boost = gradeBoostOf(e);
   for (const g of RARITY_ORDER) if (boost[g] !== 0) extra = addGradeEffect(extra, g, boost[g]);
-  // 밤 어종 출현은 낮에도 밤 풀 전체로 낚는 것과 같다 — 밤에는 이미 밤 풀이라 변화가 없다
+  // 밤 어종 출현은 낮에 쓰든 밤에 쓰든 최대 밤 깊이(nightDepth: 1)의 밤 풀로 낚는다
   const usePool: Pool = e.night > 0 ? 'night' : pool;
+  if (e.night > 0) extra = { ...extra, nightDepth: 1 };
   const base = rates(spot, level, axis, extra, usePool);
   const cycle = {
     ...base.cycle,

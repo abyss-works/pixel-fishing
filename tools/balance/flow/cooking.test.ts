@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SPOTS } from '../../../src/game/content/spots';
 import { RARITY_ORDER } from '../../../src/game/content/rarity';
-import { entryLevel, rng } from '../model';
+import { entryLevel, rates, rng } from '../model';
 import { NO_EFFECT, dexTimes, effectRates } from './effects';
 import type { Effect } from './effects';
 import { axisOf } from './progress';
@@ -39,6 +39,16 @@ describe('미끼 효과', () => {
     const withNight = effectRates(spot, level, 'good', fx({ night: 1 }));
     expect(base.rows.some(r => r.fish.night)).toBe(false);
     expect(withNight.rows.some(r => r.fish.night)).toBe(true);
+  });
+
+  it('밤 어종 출현 미끼 활성 시 최대 밤 깊이(nightDepth: 1)가 적용돼 48스텝 평균 밤 풀보다 밤 어종 확률이 높다', () => {
+    const spot = 'indian', level = entryLevel(spot);
+    const withNight = effectRates(spot, level, 'good', fx({ night: 1 }));
+    const peakNight = rates(spot, level, 'good', { nightDepth: 1 }, 'night');
+    const avgNight = rates(spot, level, 'good', {}, 'night');
+    const nightSum = (rows: typeof withNight.rows) => rows.filter(r => r.fish.night).reduce((s, r) => s + r.prob, 0);
+    expect(nightSum(withNight.rows)).toBeCloseTo(nightSum(peakNight.rows), 12);
+    expect(nightSum(withNight.rows)).toBeGreaterThan(nightSum(avgNight.rows));
   });
 
   it('모르는 미끼 이름은 오류다', () => {

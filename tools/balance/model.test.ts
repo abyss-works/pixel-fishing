@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { SPOTS } from '../../src/game/content/spots';
 import { JUDGMENT_MULT } from '../../src/game/rules/balance';
-import { rodStats } from '../../src/game/rules/logic';
+import { drawRows, rodStats } from '../../src/game/rules/logic';
+import { NIGHT_TOTAL_STEPS, nightDepthOfStep } from '../../src/game/rules/time';
 import {
-  SPEC_MARGIN, axisAvailable, axisOptions, entryLevel, headroom, inversions, moveGap, perfectOverIdle, rates, rodSpec,
+  NIGHT_SHARE, SPEC_MARGIN, axisAvailable, axisOptions, entryLevel, headroom, inversions, mixedRows, moveGap, perfectOverIdle, rates, rodSpec,
 } from './model';
 import { simulateJourney } from './journey';
 import { GATE_FROM_SPOT, GATE_POOLS, gateRows } from './gates';
@@ -130,5 +131,46 @@ describe('파워 미달 페널티', () => {
       expect(at(d).rarity.common, `-${d}`).toBeGreaterThan(at(d - 1).rarity.common);
       expect(at(d).catchesPerHour, `-${d}`).toBeLessThan(at(d - 1).catchesPerHour);
     }
+  });
+});
+
+describe('밤 깊이 평균 혼합', () => {
+  it('nightDepth 미지정 밤 풀은 48스텝 균등 평균과 같고 nightDepth: 1 명시 시와 구분된다', () => {
+    const spot = 'indian' as const;
+    const avg = mixedRows(spot, {}, 'night');
+    const peak = mixedRows(spot, { nightDepth: 1 }, 'night');
+
+    const expected = new Map<string, number>();
+    for (let k = 0; k < NIGHT_TOTAL_STEPS; k++) {
+      const rows = drawRows(spot, { phase: 'night', nightDepth: nightDepthOfStep(k) });
+      const total = rows.reduce((s, r) => s + r.fishPct, 0);
+      for (const r of rows) expected.set(r.fish.id, (expected.get(r.fish.id) ?? 0) + r.fishPct / total / NIGHT_TOTAL_STEPS);
+    }
+    for (const r of avg) expect(r.prob).toBeCloseTo(expected.get(r.fish.id) ?? 0, 12);
+
+    const peakDraw = drawRows(spot, { phase: 'night', nightDepth: 1 });
+    const peakTotal = peakDraw.reduce((s, r) => s + r.fishPct, 0);
+    for (const r of peak) {
+      const d = peakDraw.find(x => x.fish.id === r.fish.id)!;
+      expect(r.prob).toBeCloseTo(d.fishPct / peakTotal, 12);
+    }
+
+    const nightAvg = avg.filter(r => r.fish.night).reduce((s, r) => s + r.prob, 0);
+    const nightPeak = peak.filter(r => r.fish.night).reduce((s, r) => s + r.prob, 0);
+    expect(nightAvg).toBeGreaterThan(0);
+    expect(nightAvg).toBeLessThan(nightPeak);
+  });
+
+  it('mixed 풀도 nightDepth 미지정 시 낮 풀과 48스텝 평균 밤 풀을 시간 비율로 섞는다', () => {
+    const spot = 'indian' as const;
+    const mixedDefault = mixedRows(spot, {}, 'mixed');
+    const mixedPeak = mixedRows(spot, { nightDepth: 1 }, 'mixed');
+    const dayOnly = mixedRows(spot, {}, 'day');
+    const nightAvg = mixedRows(spot, {}, 'night');
+
+    const nightProb = (rows: typeof mixedDefault) => rows.filter(r => r.fish.night).reduce((s, r) => s + r.prob, 0);
+    expect(nightProb(mixedDefault)).toBeCloseTo(NIGHT_SHARE * nightProb(nightAvg), 12);
+    expect(nightProb(mixedDefault)).toBeLessThan(nightProb(mixedPeak));
+    expect(nightProb(dayOnly)).toBe(0);
   });
 });
