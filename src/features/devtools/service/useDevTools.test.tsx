@@ -6,7 +6,7 @@ import { act, renderHook } from '@testing-library/react';
 import { parseAction } from '../../../game/rules/actionSchema';
 import { applyAction, pickScalars } from '../../../game/rules/actions';
 import type { GameAction } from '../../../game/rules/actions';
-import { MIN_ACTION_GAP_FAST_MS, MIN_ACTION_GAP_MS, PACING_SLOW_TYPES } from '../../../game/rules/balance';
+import { MIN_ACTION_GAP_MS, PACING_SLOW_TYPES } from '../../../game/rules/balance';
 import { isDebugTableCommand, parseBountyResetKind, parseSnapshotBounty } from '../../../game/rules/debug';
 import type { DevBountySnapshot } from '../../../game/rules/debug';
 import { newState } from '../../../game/rules/logic';
@@ -81,8 +81,7 @@ function installSimFetch(sim: SimServer) {
       || parsed.type === 'debugSnapshot'
       || (parsed.type === 'catch' && Boolean(parsed.forceEncounter || parsed.forcePhase));
     if (!exempt && sim.updatedAtMs > 0) {
-      const gap = slow.has(parsed.type) ? MIN_ACTION_GAP_MS : MIN_ACTION_GAP_FAST_MS;
-      if (nowMs - sim.updatedAtMs < gap) {
+      if (slow.has(parsed.type) && nowMs - sim.updatedAtMs < MIN_ACTION_GAP_MS) {
         sim.rateLimit429Count++;
         return json({ error: 'too-fast' }, 429);
       }

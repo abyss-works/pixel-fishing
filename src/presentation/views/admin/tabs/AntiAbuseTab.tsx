@@ -65,7 +65,7 @@ export default function AntiAbuseTab() {
       <CellGrid>
         <Cell title="연타 (낚시 간격 2초 미만, 최근 7일)">
           <Note size="2xs" className="my-0">
-            서버는 직전 액션과의 최소 간격(2단계 페이싱)과 낚시 한 사이클 기준(catchTooSoon)으로 과속 요청을 차단해요.
+            서버는 직전 액션과의 최소 간격(느림 창 페이싱)과 낚시 한 사이클 기준(catchTooSoon)으로 과속 요청을 차단해요.
             여기는 최근 7일 내 2초 미만 간격으로 기록된 캐치를 관측해요.
           </Note>
           <TableBox>

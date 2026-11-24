@@ -98,9 +98,13 @@ describe('요청 경계', () => {
     expect(await run({ state: {}, restricted: true }, { type: 'boot' })).toMatchSnapshot();
   });
 
-  it('직전 액션과 간격이 너무 짧으면 429다', async () => {
+  it('느림 창 대상이 아니면 짧은 간격도 받고, 느림 창 대상은 429다', async () => {
     const recent = new Date(Date.parse(NOW) - 100).toISOString();
-    expect(await run({ state: {}, version: 3, updatedAt: recent }, { type: 'upgradeRod' })).toMatchSnapshot();
+    const uid = await seed({ state: { gold: 1_000 }, version: 3, updatedAt: recent });
+    expect(await callAction(userToken(uid), { type: 'upgradeRod' })).toMatchObject({ status: 200 });
+    // 직전 성공 액션 직후의 sendLetter는 느림 창에 걸려 거부된다
+    expect(await callAction(userToken(uid), { type: 'sendLetter', text: '안녕하세요' }))
+      .toMatchObject({ status: 429, body: { error: 'too-fast' } });
   });
 });
 
@@ -593,11 +597,11 @@ describe('현상금 — 클리어 기준 한도와 만료', () => {
     const uid = await seed({ state: {} });
     await progressRow(uid, quest.id, quest.count, NOW);
     const results = await Promise.all([deliver(uid, quest.id), deliver(uid, quest.id)]);
-    // 진 쪽은 진행 행이 이미 없어 거부되거나(422) 직전 성공 액션과의 간격에서 걸린다(429).
-    // 확정 문장이 겹쳐 같은 버전을 읽은 쪽도 진행 행이 지워진 것을 다시 읽어 422를 받으므로 409는 나오지 않는다
+    // 진 쪽은 진행 행이 이미 없어 거부된다(422). 확정 문장이 겹쳐 같은 버전을 읽은 쪽도
+    // 진행 행이 지워진 것을 다시 읽어 422를 받으므로 409는 나오지 않는다
     const statuses = results.map(r => r.status).sort();
     expect(statuses[0]).toBe(200);
-    expect([422, 429]).toContain(statuses[1]);
+    expect(statuses[1]).toBe(422);
     const dump = await dumpUser(env.client, uid);
     expect(dump.bounty_clears).toHaveLength(1);
     expect(dump.saves_current[0]).toMatchObject({ gold: String(quest.reward) });
@@ -874,8 +878,8 @@ describe('우편 받기', () => {
       callAction(userToken(uid), { type: 'claimMail', id }),
     ]);
     expect(results.filter(r => r.status === 200)).toHaveLength(1);
-    // 두 요청이 겹치면 409(동시 갱신)나 422(이미 받음), 앞 요청이 먼저 확정되면 429(액션 간격)다. 어느 쪽이든 지급은 한 번이다
-    expect(results.filter(r => r.status !== 200).map(r => r.status)).toEqual([expect.toBeOneOf([409, 422, 429])]);
+    // 두 요청이 겹치면 409(동시 갱신)나 422(이미 받음)다. 어느 쪽이든 지급은 한 번이다
+    expect(results.filter(r => r.status !== 200).map(r => r.status)).toEqual([expect.toBeOneOf([409, 422])]);
     const gold = await env.client.query<{ gold: string }>('select gold from public.saves_current where user_id = $1', [uid]);
     expect(Number(gold.rows[0].gold)).toBe(800);
     const mail = await env.client.query<{ claimed_at: Date | null }>('select claimed_at from public.mails where id = $1', [id]);
@@ -1384,20 +1388,23 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
       ]);
       const statuses = results.map(r => r.status).sort();
       expect(statuses[0]).toBe(200);
-      expect([409, 429]).toContain(statuses[1]);
+      // 느림 창 대상이 아니라 간격 검사가 없다 — 진 쪽도 앞 확정을 읽었으면 빈 판매(no-op)로 200, 읽기가 겹쳤으면 409다
+      expect([200, 409]).toContain(statuses[1]);
 
       const save = await readSave(uid);
       expect(Number(save.gold)).toBe(expectedGold);
-      expect(Number(save.version)).toBe(3);
+      expect([3, 4]).toContain(Number(save.version));
       expect(await readFishUids(uid)).toEqual([kept.uid]);
       const events = await readEvents(uid);
-      expect(events).toHaveLength(1);
-      expect(events[0].type).toBe('sell');
-      expect(events[0].payload).toMatchObject({ gold: expectedGold - 100, count: 1, uids: [sold.uid] });
+      // 실제로 개체가 팔린 판매는 한 번이다 — 빈 판매 no-op은 골드 0·0건 이벤트만 남긴다
+      const soldEvents = events.filter(e => e.type === 'sell' && e.payload.count === 1);
+      expect(soldEvents).toHaveLength(1);
+      expect(soldEvents[0].payload).toMatchObject({ gold: expectedGold - 100, uids: [sold.uid] });
     });
 
     it('buyBoat 동시 요청은 1단계만 구매되고 골드·배 단계·buyBoat 이벤트가 한 번만 기록된다', async () => {
-      const uid = await seed({ state: { boat: 0, gold: 500, fame: 500 } });
+      // 골드를 첫 단계 값만 두어 진 쪽이 앞 확정을 읽어도 다음 단계를 살 수 없게 한다
+      const uid = await seed({ state: { boat: 0, gold: BOATS[0].price, fame: 500 } });
       const tier1Price = BOATS[0].price;
 
       const results = await Promise.all([
@@ -1406,11 +1413,11 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
       ]);
       const statuses = results.map(r => r.status).sort();
       expect(statuses[0]).toBe(200);
-      expect([409, 429]).toContain(statuses[1]);
+      expect([409, 422]).toContain(statuses[1]);
 
       const save = await readSave(uid);
       expect(save.boat).toBe(1);
-      expect(Number(save.gold)).toBe(500 - tier1Price);
+      expect(Number(save.gold)).toBe(0);
       expect(Number(save.version)).toBe(3);
       const events = await readEvents(uid);
       expect(events).toHaveLength(1);
@@ -1418,8 +1425,9 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
     });
 
     it('upgradeRod 동시 요청은 1회만 강화되고 골드·강화 단계·upgradeRod 이벤트가 한 번만 기록된다', async () => {
-      const uid = await seed({ state: { rod: 1, gold: 1000 } });
       const cost = upgradeCost(1);
+      // 골드를 1회 강화 값만 두어 진 쪽이 앞 확정을 읽어도 다시 강화할 수 없게 한다
+      const uid = await seed({ state: { rod: 1, gold: cost } });
 
       const results = await Promise.all([
         callAction(userToken(uid), { type: 'upgradeRod' }),
@@ -1427,11 +1435,11 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
       ]);
       const statuses = results.map(r => r.status).sort();
       expect(statuses[0]).toBe(200);
-      expect([409, 429]).toContain(statuses[1]);
+      expect([409, 422]).toContain(statuses[1]);
 
       const save = await readSave(uid);
       expect(save.rod).toBe(2);
-      expect(Number(save.gold)).toBe(1000 - cost);
+      expect(Number(save.gold)).toBe(0);
       expect(Number(save.version)).toBe(3);
       const events = await readEvents(uid);
       expect(events).toHaveLength(1);
@@ -1456,7 +1464,7 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
       ]);
       const statuses = results.map(r => r.status).sort();
       expect(statuses[0]).toBe(200);
-      expect([409, 429]).toContain(statuses[1]);
+      expect([409, 422]).toContain(statuses[1]);
 
       const save = await readSave(uid);
       expect(save.data.items).toEqual({ [ENERGY_ITEM_IDS.common]: commonCost, [ENERGY_ITEM_IDS.rare]: rareCost });
@@ -1468,8 +1476,9 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
     });
 
     it('eat 동시 요청은 요리를 1개만 소모하고 슬롯과 eat 이벤트를 한 번만 기록한다', async () => {
+      // 요리를 1개만 두어 진 쪽이 앞 확정을 읽어도 다시 먹을 수 없게 한다
       const uid = await seed({
-        state: { boat: COOKING_UNLOCK_BOAT, items: { 'cook-lunch-bite': 2 } },
+        state: { boat: COOKING_UNLOCK_BOAT, items: { 'cook-lunch-bite': 1 } },
       });
 
       const results = await Promise.all([
@@ -1478,10 +1487,10 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
       ]);
       const statuses = results.map(r => r.status).sort();
       expect(statuses[0]).toBe(200);
-      expect([409, 429]).toContain(statuses[1]);
+      expect([409, 422]).toContain(statuses[1]);
 
       const save = await readSave(uid);
-      expect(save.data.items).toEqual({ 'cook-lunch-bite': 1 });
+      expect(save.data.items).toEqual({});
       expect(save.data.slots?.lunch?.id).toBe('cook-lunch-bite');
       expect(Number(save.version)).toBe(3);
       const events = await readEvents(uid);
@@ -1502,11 +1511,12 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
       ]);
       const statuses = results.map(r => r.status).sort();
       expect(statuses[0]).toBe(200);
-      expect([409, 429]).toContain(statuses[1]);
+      // 느림 창 대상이 아니라 간격 검사가 없다 — 진 쪽도 앞 확정을 읽었으면 개체가 없어 no-op으로 200, 읽기가 겹쳤으면 409다
+      expect([200, 409]).toContain(statuses[1]);
 
       const save = await readSave(uid);
       expect(save.data.items).toEqual({ [ENERGY_ITEM_IDS.common]: ENERGY_PER_INDIVIDUAL });
-      expect(Number(save.version)).toBe(3);
+      expect([3, 4]).toContain(Number(save.version));
       expect(await readFishUids(uid)).toEqual([kept.uid]);
       const events = await readEvents(uid);
       expect(events).toHaveLength(1);
@@ -1524,12 +1534,13 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
       ]);
       const statuses = results.map(r => r.status).sort();
       expect(statuses[0]).toBe(200);
-      expect([409, 429]).toContain(statuses[1]);
+      // 느림 창 대상이 아니라 간격 검사가 없다 — 진 쪽도 앞 확정을 읽었으면 이미 가진 유물이라 멱등 200, 읽기가 겹쳤으면 409다
+      expect([200, 409]).toContain(statuses[1]);
 
       const save = await readSave(uid);
       expect(save.data.artifacts).toEqual([art.id]);
       expect(save.data.items).toEqual({ [art.materialId]: 1 });
-      expect(Number(save.version)).toBe(3);
+      expect([3, 4]).toContain(Number(save.version));
       const events = await readEvents(uid);
       expect(events).toHaveLength(1);
       expect(events[0]).toEqual({ type: 'exchangeArtifact', payload: { artifact: art.id } });
@@ -1538,9 +1549,9 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
     it('levelUpArtifact 동시 요청은 레벨을 1만 올리고 재료와 levelUpArtifact 이벤트를 한 번만 기록한다', async () => {
       const art = artifactById('wreck-compass')!;
       const costLv2 = artifactLevelCost(2);
-      const initialMat = costLv2 + artifactLevelCost(3);
+      // 재료를 1회 레벨업 값만 두어 진 쪽이 앞 확정을 읽어도 다음 레벨을 올릴 수 없게 한다
       const uid = await seed({
-        state: { artifacts: [art.id], items: { [art.materialId]: initialMat } },
+        state: { artifacts: [art.id], items: { [art.materialId]: costLv2 } },
       });
 
       const results = await Promise.all([
@@ -1549,11 +1560,11 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
       ]);
       const statuses = results.map(r => r.status).sort();
       expect(statuses[0]).toBe(200);
-      expect([409, 429]).toContain(statuses[1]);
+      expect([409, 422]).toContain(statuses[1]);
 
       const save = await readSave(uid);
       expect(save.data.artifactLevels).toEqual({ [art.id]: 2 });
-      expect(save.data.items).toEqual({ [art.materialId]: initialMat - costLv2 });
+      expect(save.data.items).toEqual({});
       expect(Number(save.version)).toBe(3);
       const events = await readEvents(uid);
       expect(events).toHaveLength(1);
@@ -1570,7 +1581,7 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
       ]);
       const statuses = results.map(r => r.status).sort();
       expect(statuses[0]).toBe(200);
-      expect([409, 429]).toContain(statuses[1]);
+      expect([409, 422]).toContain(statuses[1]);
 
       const save = await readSave(uid);
       expect(Number(save.gold)).toBe(hat.price);
@@ -1592,7 +1603,7 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
       ]);
       const statuses = results.map(r => r.status).sort();
       expect(statuses[0]).toBe(200);
-      expect([409, 422, 429]).toContain(statuses[1]);
+      expect([409, 422]).toContain(statuses[1]);
 
       const save = await readSave(uid);
       expect(Number(save.gold)).toBe(877);
@@ -1614,7 +1625,7 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
       ]);
       const statuses = results.map(r => r.status).sort();
       expect(statuses[0]).toBe(200);
-      expect([409, 422, 429]).toContain(statuses[1]);
+      expect([409, 422]).toContain(statuses[1]);
 
       const save = await readSave(uid);
       expect(Number(save.gold)).toBe(100 + rewardGold);
@@ -1639,7 +1650,7 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
       ]);
       const statuses = results.map(r => r.status).sort();
       expect(statuses[0]).toBe(200);
-      expect([409, 422, 429]).toContain(statuses[1]);
+      expect([409, 422]).toContain(statuses[1]);
 
       const save = await readSave(uid);
       expect(Number(save.gold)).toBe(100 + rewardGold);
