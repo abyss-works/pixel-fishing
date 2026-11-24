@@ -134,7 +134,7 @@ export default function GameTabs(props: GameTabsProps) {
              sheetOpen={props.sheetOpen} onSheetClose={() => props.onSheetOpenChange(false)}>
       {activeTab === 'region' && <VRegion region={props.region} game={game} />}
       {activeTab === 'bag' && <BagTab game={game} accountState={accountLockState(props.account, props.accountFailed)} sellBonus={props.sellBonus} bagBonus={props.bagBonus} dispatch={props.dispatch} setToast={props.setToast} onOpenEnergy={props.onOpenEnergy} />}
-      {activeTab === 'dex' && <DexTab game={game} view={dexView} sub={dexZone} onSub={setDexZone} />}
+      {activeTab === 'dex' && <DexTab game={game} view={dexView} onView={setDexView} sub={dexZone} onSub={setDexZone} />}
       {activeTab === 'help' && <VHelp />}
       {activeTab === 'settings' && (
         <SettingsTab autoLockOnCatch={game.autoLockOnCatch} dispatch={props.dispatch} setToast={props.setToast}

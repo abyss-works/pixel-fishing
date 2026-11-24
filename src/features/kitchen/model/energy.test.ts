@@ -6,7 +6,7 @@ import { AUTO_ENERGY_BOAT, COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS } from '../../..
 import type { SpotId } from '../../../game/content/spots';
 import { GUEST_LOCK_TEXT, UNVERIFIED_LOCK_TEXT } from '../../display/model/menuLock';
 import {
-  clearSpotPicks, energyLabel, energyResultRows, energyRowValue, energyTotal, pickEnergyUids, selectBagEnergyEntry, selectEnergyView,
+  clearSpotPicks, energyLabel, energyResultRows, energyRowValue, energyTotal, pickEnergyUids, selectBagEnergyEntry, selectEnergyView, selectQuickEnergyView,
 } from './energy';
 
 const home = { kind: 'base', id: 'home' } as const;
@@ -215,5 +215,59 @@ describe('가방 하단 기운 얻기 진입 조건', () => {
       ok: false,
       lines: ['집이나 항구 또는 가공 플랜트선에서만 할 수 있어요.'],
     });
+  });
+});
+
+describe('간소화 기운 얻기 모델 (selectQuickEnergyView)', () => {
+  it('기본 전체 등급 선택 시 미잠금 물고기만 등급별로 모으고 잠긴 개체는 제외한다', () => {
+    const bag = [
+      inst('c1', 'pond', false, 'common'),
+      inst('c2', 'indian', false, 'common'), // 해역 기본값과 무관하게 미잠금이면 모두 포함
+      inst('cLocked', 'pond', true, 'common'),
+      inst('r1', 'sea', false, 'rare'),
+      inst('e1', 'deep', true, 'epic'),
+    ];
+    const game = seed({
+      bag,
+      items: { [ENERGY_ITEM_IDS.common]: 25, [ENERGY_ITEM_IDS.rare]: 10 },
+    });
+    const view = selectQuickEnergyView(game, new Set(['common', 'rare', 'epic', 'legendary']));
+
+    expect(view.uids).toEqual(['c1', 'c2', 'r1']);
+    expect(view.count).toBe(3);
+    expect(view.unlockedCount).toBe(3);
+    expect(view.lockedCount).toBe(2);
+    expect(view.byGrade).toEqual({ common: 20, rare: 10, epic: 0, legendary: 0 });
+    expect(view.energyTotal).toBe(30);
+    expect(view.chips).toEqual([
+      { grade: 'common', name: '일반', fishCount: 2, on: true },
+      { grade: 'rare', name: '희귀', fishCount: 1, on: true },
+      { grade: 'epic', name: '영웅', fishCount: 0, on: false },
+      { grade: 'legendary', name: '전설', fishCount: 0, on: false },
+    ]);
+    expect(view.tiles).toEqual([
+      { grade: 'common', label: '생명의 기운(일반)', gain: 20, current: 25, after: 45, on: true },
+      { grade: 'rare', label: '생명의 기운(희귀)', gain: 10, current: 10, after: 20, on: true },
+      { grade: 'epic', label: '생명의 기운(영웅)', gain: 0, current: 0, after: 0, on: false },
+      { grade: 'legendary', label: '생명의 기운(전설)', gain: 0, current: 0, after: 0, on: false },
+    ]);
+  });
+
+  it('특정 등급을 끄면 그 등급 개체와 기운 획득량이 0이 되고 나머지 등급만 남는다', () => {
+    const bag = [inst('c1', 'pond', false, 'common'), inst('r1', 'sea', false, 'rare')];
+    const view = selectQuickEnergyView(seed({ bag }), new Set(['rare']));
+    expect(view.uids).toEqual(['r1']);
+    expect(view.count).toBe(1);
+    expect(view.byGrade).toEqual({ common: 0, rare: 10, epic: 0, legendary: 0 });
+    expect(view.chips.find(c => c.grade === 'common')?.on).toBe(false);
+    expect(view.tiles.find(t => t.grade === 'common')?.gain).toBe(0);
+  });
+
+  it('가방이 비거나 모두 잠겨 있으면 unlockedCount와 count가 0이다', () => {
+    const view = selectQuickEnergyView(seed({ bag: [inst('c1', 'pond', true, 'common')] }), new Set(['common', 'rare', 'epic', 'legendary']));
+    expect(view.unlockedCount).toBe(0);
+    expect(view.lockedCount).toBe(1);
+    expect(view.count).toBe(0);
+    expect(view.uids).toEqual([]);
   });
 });

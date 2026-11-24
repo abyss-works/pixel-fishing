@@ -1154,7 +1154,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     seed({});
     render(<App />);
     fireEvent.keyDown(document, { key: '3' }); // 시작 씬 = 마을
-    const zone = () => document.querySelector('button[aria-pressed="true"]')?.textContent ?? '';
+    const zone = () => [...document.querySelectorAll('aside button[aria-pressed="true"]')].at(-1)?.textContent ?? '';
     expect(zone()).toMatch(/^마을/);
     fireEvent.keyDown(document, { key: 'Tab' });
     expect(zone()).toMatch(/^태평양/);
@@ -1173,7 +1173,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     fireEvent.keyDown(document, { key: '3' });
     fireEvent.keyDown(document, { key: '3' });
     fireEvent.keyDown(document, { key: '3' }); // 일반 → 돌연변이 → 네임드
-    const zone = () => document.querySelector('button[aria-pressed="true"]')?.textContent ?? '';
+    const zone = () => [...document.querySelectorAll('aside button[aria-pressed="true"]')].at(-1)?.textContent ?? '';
     expect(zone()).toMatch(/^태평양/); // 마을은 수배가 없어 첫 수배 해역을 대신 보인다
     fireEvent.keyDown(document, { key: 'Tab' });
     expect(zone()).toMatch(/^동남아/);
@@ -1419,7 +1419,8 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     fireEvent.click(screen.getByRole('button', { name: '기운 얻기' }));
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByRole('heading', { level: 3, name: '기운 얻기' })).toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: '판매' })).toHaveAttribute('aria-disabled', 'true');
+    expect(within(dialog).queryByRole('button', { name: '판매' })).toBeNull();
+    expect(within(dialog).getByRole('group', { name: '등급 선택' })).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: '기운 얻기 (1마리)' })).toBeEnabled();
   });
 });

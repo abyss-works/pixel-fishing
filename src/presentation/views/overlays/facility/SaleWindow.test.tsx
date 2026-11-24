@@ -6,12 +6,13 @@ import { FISH, newState } from '../../../../game/rules/logic';
 import type { FishInstance, GameState } from '../../../../game/rules/logic';
 import type { BaseId } from '../../../../game/content/places';
 import type { SpotId } from '../../../../game/content/spots';
-import { AUTO_ENERGY_BOAT, COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, toStoredEnergy } from '../../../../game/content/cooking';
+import { COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, toStoredEnergy } from '../../../../game/content/cooking';
 import { resetBagView } from '../../game/tabs/bag/bagView';
 import { resetKeyScopes } from '../../../ui/hotkeys';
 import { fmtFishCount, fmtGold } from '../../../ui/format';
 import type { AccountLockState } from '../../../../features/display/model/menuLock';
 import FacilityModal from './FacilityModal';
+import SaleWindow from './SaleWindow';
 
 afterEach(() => { cleanup(); resetKeyScopes(); resetBagView(); });
 
@@ -436,30 +437,27 @@ describe('기운 얻기 탭의 잠금', () => {
     expect(tab('기운 얻기')).not.toHaveAttribute('aria-disabled');
   });
 
-  it('거점에서 기운 얻기 진입(panel="energy")으로 열면 기운 얻기 탭이 먼저 열리고 판매 탭도 쓸 수 있다', () => {
+  it('거점에서 기운 얻기 탭을 먼저 열어 주면 기운 얻기 탭이 먼저 열리고 판매 탭도 쓸 수 있다', () => {
     const sampleBag = [inSpot('a1', 'pond'), inSpot('a2', 'pond'), inSpot('b1', 'sea')];
-    show(seed({ bag: sampleBag }), { panel: 'energy', base: 'harbor' });
+    const g = seed({ bag: sampleBag });
+    render(
+      <SaleWindow
+        game={g}
+        base="harbor"
+        initialTab="energy"
+        accountState="account"
+        sellBonus={0}
+        busy={false}
+        act={vi.fn()}
+        onSell={vi.fn()}
+        setToast={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
     expect(title()).toBe('어시장');
     expect(tab('기운 얻기')).toHaveClass('active');
     expect(tab('판매')).not.toHaveAttribute('aria-disabled');
     expect(screen.getByRole('button', { name: '기운 얻기 (3마리)' })).toBeEnabled();
-  });
-
-  it('바다에서 열릴 때는 제목이 기운 얻기이고 판매 탭은 잠기며 기운 얻기 탭만 활성된다', () => {
-    const sampleBag = [inSpot('a1', 'pond'), inSpot('a2', 'pond'), inSpot('b1', 'sea')];
-    const seaGame = seed({ boat: AUTO_ENERGY_BOAT, bag: sampleBag, location: { kind: 'region', id: 'world' } });
-    const { dispatch } = show(seaGame, { panel: 'energy' });
-    expect(title()).toBe('기운 얻기');
-    const sell = tab('판매');
-    const energy = tab('기운 얻기');
-    expect(sell).toHaveAttribute('aria-disabled', 'true');
-    expect(energy).toHaveClass('active');
-    fireEvent.mouseEnter(sell.parentElement!);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('집이나 항구에서만 팔 수 있어요.');
-    fireEvent.click(sell);
-    expect(energy).toHaveClass('active');
-    fireEvent.click(screen.getByRole('button', { name: '기운 얻기 (3마리)' }));
-    expect(dispatch).toHaveBeenCalledWith({ type: 'extractEnergy', uids: ['a1', 'a2', 'b1'] });
   });
 });
 

@@ -111,6 +111,101 @@ export function energyResultRows(byGrade: Record<RarityId, number>): { grade: Ra
   return RARITY_ORDER.filter(g => byGrade[g] > 0).map(grade => ({ grade, count: byGrade[grade] }));
 }
 
+export interface QuickEnergyChip {
+  grade: RarityId;
+  name: string;
+  /** 그 등급의 미잠금 물고기 수 */
+  fishCount: number;
+  /** 칩이 켜져 있는가 */
+  on: boolean;
+}
+
+export interface QuickEnergyTile {
+  grade: RarityId;
+  label: string;
+  /** 얻을 기운(저장 단위) — 이 등급 칩이 켜져 있을 때만 양수 */
+  gain: number;
+  /** 지금 보유(저장 단위) */
+  current: number;
+  /** 획득 후(저장 단위) */
+  after: number;
+  /** 이 등급 칩이 켜져 있는가 */
+  on: boolean;
+}
+
+export interface QuickEnergyView {
+  chips: QuickEnergyChip[];
+  tiles: QuickEnergyTile[];
+  /** 바꿀 물고기 uid 목록(미잠금 + 켜진 등급만) */
+  uids: string[];
+  /** 선택된 물고기 수 */
+  count: number;
+  /** 가방 안의 미잠금 물고기 전체 수 */
+  unlockedCount: number;
+  /** 가방 안의 잠긴 물고기 수 */
+  lockedCount: number;
+  /** 등급별 획득 기운(저장 단위) */
+  byGrade: Record<RarityId, number>;
+  /** 획득 기운 합(저장 단위) */
+  energyTotal: number;
+  /** 확정 가능 여부 — 게임 규칙 판정 */
+  allowed: RuleCheck;
+}
+
+/** 가방 하단 간소화 기운 얻기 창 모델 — 등급별 미잠금 물고기만 토글해 일괄 변환한다 */
+export function selectQuickEnergyView(
+  game: Pick<GameState, 'bag' | 'items' | 'boat' | 'location'>,
+  selectedGrades: ReadonlySet<RarityId>,
+): QuickEnergyView {
+  const byRarity = Object.fromEntries(RARITY_ORDER.map(r => [r, [] as string[]])) as Record<RarityId, string[]>;
+  let lockedCount = 0;
+  for (const inst of game.bag) {
+    if (inst.locked) {
+      lockedCount++;
+      continue;
+    }
+    const fish = instanceFish(inst);
+    if (fish) byRarity[fish.rarity].push(inst.uid);
+  }
+  const unlockedCount = RARITY_ORDER.reduce((sum, r) => sum + byRarity[r].length, 0);
+  const selectedUids = RARITY_ORDER.flatMap(r => (selectedGrades.has(r) ? byRarity[r] : []));
+  const gain = energyGain(game, selectedUids);
+
+  const chips = RARITY_ORDER.map((grade): QuickEnergyChip => {
+    const fishCount = byRarity[grade].length;
+    return {
+      grade,
+      name: RARITY[grade].name,
+      fishCount,
+      on: fishCount > 0 && selectedGrades.has(grade),
+    };
+  });
+  const tiles = RARITY_ORDER.map((grade): QuickEnergyTile => {
+    const current = game.items[ENERGY_ITEM_IDS[grade]] ?? 0;
+    const add = gain.byGrade[grade];
+    return {
+      grade,
+      label: energyLabel(grade),
+      gain: add,
+      current,
+      after: current + add,
+      on: byRarity[grade].length > 0 && selectedGrades.has(grade),
+    };
+  });
+
+  return {
+    chips,
+    tiles,
+    uids: gain.uids,
+    count: gain.uids.length,
+    unlockedCount,
+    lockedCount,
+    byGrade: gain.byGrade,
+    energyTotal: energyTotal(gain.byGrade),
+    allowed: canExtractEnergy(game),
+  };
+}
+
 export type BagEnergyEntry =
   | { ok: true }
   | { ok: false; lines: string[] };

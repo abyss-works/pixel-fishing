@@ -42,6 +42,8 @@ interface ModalBase {
   xl?: boolean;
   /** app 전용 — 400 폭 창(설정 탭이 여는 창) */
   narrow?: boolean;
+  /** stage 전용 — 단일 열 중간 소형 창(480px) */
+  sm?: boolean;
   /** stage 전용 — 목록이나 탭이 있는 중간 너비 창(680px) */
   md?: boolean;
   onClose: () => void;
@@ -65,7 +67,7 @@ type ModalProps = ModalBase & (
 // 스테이지 모달의 투명 래퍼는 배치만 맡고 스크롤은 ModalCard의 본문이 맡는다.
 // bare는 앱 모달 안에 ModalCard를 직접 두는 대화상자용이다. 본문 칸을 만들지 않아 스크롤은 카드 본문 한 곳뿐이다.
 // 앱 모달에서 제목 줄이 문자열 title로 안 되면 header로, 하단 고정 영역(버튼 줄)은 footer로 넘긴다. 둘 다 스크롤 칸 밖이다.
-export default function Modal({ layer, title, wide, xl, md, narrow, worldmap, onClose, closable = true, children, className, height, mobileFixed, header, footer, fill, bare }: ModalProps) {
+export default function Modal({ layer, title, wide, xl, md, sm, narrow, worldmap, onClose, closable = true, children, className, height, mobileFixed, header, footer, fill, bare }: ModalProps) {
   // 모달이 떠 있는 동안 아래 레이어(필드 이동·사이드바 단축키)는 키를 못 받는다.
   // 예전엔 각자 `isTyping`으로 막았는데 그건 텍스트 포커스만 걸러서, 모달 버튼에 포커스가
   // 있으면 뒤에서 캐릭터가 움직이고 탭이 바뀌었다 (로그인 모달 키 탈취 사고).
@@ -83,7 +85,7 @@ export default function Modal({ layer, title, wide, xl, md, narrow, worldmap, on
         xl ? 'w-[min(920px,calc(100%-32px))]' : wide ? 'w-[560px]' : narrow ? 'w-[min(400px,calc(100%-32px))]' : 'w-[480px]',
         'mobile:w-[calc(100%-48px)] mobile:max-w-none mobile:max-h-[calc(100dvh-48px)]')
     : cx('max-h-[calc(100%-32px)] flex flex-col',
-        worldmap ? 'pf-modal-worldmap' : xl ? 'w-[min(920px,calc(100%-32px))]' : md ? 'w-[min(680px,calc(100%-32px))]' : 'w-[min(400px,calc(100%-32px))]',
+        worldmap ? 'pf-modal-worldmap' : xl ? 'w-[min(920px,calc(100%-32px))]' : md ? 'w-[min(680px,calc(100%-32px))]' : sm ? 'w-[min(480px,calc(100%-32px))]' : 'w-[min(400px,calc(100%-32px))]',
         'mobile:w-[calc(100%-48px)] mobile:max-h-[calc(100%-48px)]', height && (mobileFixed ? HEIGHT_FIXED_MOBILE[height] : HEIGHT_CLASS[height]));
   // 앱 모달은 자기를 연 층 바로 위에 쌓인다. 창을 연 층이 정한 자리(useWindowHost)에 포털하므로 창마다 층 값을 따로 정하지 않는다.
   // 기본은 게임 화면의 창 층 자리(호출한 곳이 게임 화면 바깥이어도 탭 줄 아래에 놓인다)이고, 시트처럼 창 층 위에 따로 놓인 층 안에서 연 창은 그 층의 자리에 그려진다.
