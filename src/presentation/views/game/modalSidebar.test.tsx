@@ -9,10 +9,12 @@ import { resetCanvasCover } from '../../layouts/game-stage/canvasCover';
 import { resetSpotState } from '../../../game/world/currentSpot';
 import { resetWhatsNewSession } from '../../../features/announcements/service/whatsNew';
 import { resetTutorialSession } from '../../../features/tutorial/service/tutorial';
+import { resetFortuneModalSession } from '../../../features/fortune/service/fortuneModal';
 import { markPromptsAnswered, resetAnnouncements, setLastSeenVersion } from '../../../platform/adapters/announcements';
 import { APP_VERSION } from '../../../version';
 import { TUTORIAL_IDS } from '../../../game/content/tutorials';
 import { MAX_BOAT, newState } from '../../../game/rules/logic';
+import { gameDayOf } from '../../../game/rules/time';
 import type { BaseId } from '../../../game/world';
 
 const SAVE_KEY = 'pixel-fishing-save';
@@ -39,7 +41,11 @@ function stubMotion(reduce: boolean, mobile = false) {
 
 function seedAt(base: BaseId) {
   localStorage.setItem(SAVE_KEY, JSON.stringify({
-    ...newState(), tutorials: [...TUTORIAL_IDS], boat: MAX_BOAT, location: { kind: 'base', id: base },
+    ...newState(),
+    tutorials: [...TUTORIAL_IDS],
+    fortune: { day: gameDayOf(new Date().toISOString()), kind: 'shadow', index: 3 },
+    boat: MAX_BOAT,
+    location: { kind: 'base', id: base },
   }));
 }
 
@@ -51,6 +57,7 @@ beforeEach(() => {
   resetCanvasCover();
   resetWhatsNewSession();
   resetTutorialSession();
+  resetFortuneModalSession();
   resetAnnouncements();
   setLastSeenVersion(APP_VERSION);
   markPromptsAnswered(['fish-art']);
@@ -135,7 +142,11 @@ describe('모달과 사이드 메뉴 상호 비간섭 및 계층 분리', () => 
   it('바다 미니맵에서 여는 세계지도 창도 스테이지 안에 머무르고 사이드바를 막지 않는다', async () => {
     stubMotion(false);
     localStorage.setItem(SAVE_KEY, JSON.stringify({
-      ...newState(), tutorials: [...TUTORIAL_IDS], boat: MAX_BOAT, location: { kind: 'region', id: 'village' },
+      ...newState(),
+      tutorials: [...TUTORIAL_IDS],
+      fortune: { day: gameDayOf(new Date().toISOString()), kind: 'shadow', index: 3 },
+      boat: MAX_BOAT,
+      location: { kind: 'region', id: 'village' },
     }));
     render(<App />);
     await advance(0);

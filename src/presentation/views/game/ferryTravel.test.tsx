@@ -9,10 +9,12 @@ import { resetCanvasCover } from '../../layouts/game-stage/canvasCover';
 import { resetSpotState, getSpotState } from '../../../game/world/currentSpot';
 import { resetWhatsNewSession } from '../../../features/announcements/service/whatsNew';
 import { resetTutorialSession } from '../../../features/tutorial/service/tutorial';
+import { resetFortuneModalSession } from '../../../features/fortune/service/fortuneModal';
 import { markPromptsAnswered, resetAnnouncements, setLastSeenVersion } from '../../../platform/adapters/announcements';
 import { APP_VERSION } from '../../../version';
 import { TUTORIAL_IDS } from '../../../game/content/tutorials';
 import { MAX_BOAT, newState } from '../../../game/rules/logic';
+import { gameDayOf } from '../../../game/rules/time';
 import { LocalGameGateway } from '../../../platform/adapters/localGameGateway';
 import type { GameAction } from '../../../game/rules/actions';
 import { AppError } from '../../../core/errors';
@@ -43,7 +45,11 @@ function stubMotion(reduce: boolean) {
 
 function seedAt(base: BaseId) {
   localStorage.setItem(SAVE_KEY, JSON.stringify({
-    ...newState(), tutorials: [...TUTORIAL_IDS], boat: MAX_BOAT, location: { kind: 'base', id: base },
+    ...newState(),
+    tutorials: [...TUTORIAL_IDS],
+    fortune: { day: gameDayOf(new Date().toISOString()), kind: 'shadow', index: 3 },
+    boat: MAX_BOAT,
+    location: { kind: 'base', id: base },
   }));
 }
 
@@ -55,6 +61,7 @@ beforeEach(() => {
   resetCanvasCover();
   resetWhatsNewSession();
   resetTutorialSession();
+  resetFortuneModalSession();
   resetAnnouncements();
   setLastSeenVersion(APP_VERSION);
   markPromptsAnswered(['fish-art']);
