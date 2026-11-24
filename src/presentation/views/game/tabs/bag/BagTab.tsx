@@ -265,7 +265,7 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
             )}
           </div>
           {lockConfirm && (
-            <ConfirmDialog title="자동 잠금" confirmLabel="정리"
+            <ConfirmDialog layer="app" title="자동 잠금" confirmLabel="정리"
                            onConfirm={applyAutoLock} onCancel={() => setLockConfirm(false)}>
                 <p className="text-sm leading-relaxed">
                   어종마다 일반과 돌연변이 각각 <b className="text-gold">가장 큰 물고기 한 마리만</b> 잠그고,

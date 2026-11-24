@@ -996,14 +996,14 @@ describe('R23b: 미니맵 클릭 = 세계지도 모달 (M 키 트리거는 폐�
     fireEvent.click(screen.getByLabelText('미니맵'));
     // 세계지도 모달 — 전체 지구(흑백) + 구현 영역(컬러). 지역 탭은 그대로다.
     expect(screen.getByRole('heading', { name: '세계지도' })).toBeInTheDocument();
-    expect(screen.getByLabelText('세계지도')).toBeInTheDocument();
+    expect(screen.getByLabelText('세계지도', { selector: 'canvas' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /지역/ })).not.toHaveClass('active');
 
     fireEvent.keyDown(document, { code: 'KeyM' }); // M 키는 아무 일도 하지 않는다
-    expect(screen.getByLabelText('세계지도')).toBeInTheDocument();
+    expect(screen.getByLabelText('세계지도', { selector: 'canvas' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '닫기' }));
-    expect(screen.queryByLabelText('세계지도')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('세계지도', { selector: 'canvas' })).not.toBeInTheDocument();
   });
 });
 

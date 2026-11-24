@@ -21,7 +21,7 @@ export default function NamedDetail({ quest, game, onClose }: {
   if (!d) return null;
   const zone = zoneById(d.zone)?.shortName ?? d.zone;
   return (
-    <Modal xl onClose={onClose} header={
+    <Modal layer="app" xl onClose={onClose} header={
       <header className="mb-3 flex items-baseline gap-3 border-b border-line pb-2 pr-8">
         <PageTitle>{d.name ?? '???'}</PageTitle>
         <span className="pf-accent ml-auto text-2xs text-text-dim">{zone}의 네임드</span>

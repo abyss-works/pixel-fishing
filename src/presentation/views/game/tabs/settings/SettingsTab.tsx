@@ -66,7 +66,7 @@ export default function SettingsTab({ autoLockOnCatch, dispatch, setToast, syncL
           (주소 입력이 곧 진입이고, 유저에게 노출할 이유가 없다). */}
 
       {open === 'account' && (
-        <AccountModal setToast={setToast} onAuthChanged={onAuthChanged} account={account} accountFailed={accountFailed} guestProgress={guestProgress} recheckGuestProgress={recheckGuestProgress}
+        <AccountModal layer="app" setToast={setToast} onAuthChanged={onAuthChanged} account={account} accountFailed={accountFailed} guestProgress={guestProgress} recheckGuestProgress={recheckGuestProgress}
                       syncLabel={syncLabel} syncState={syncState} onClose={close} />
       )}
       {open === 'myInfo' && (

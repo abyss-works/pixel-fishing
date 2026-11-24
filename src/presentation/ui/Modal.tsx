@@ -1,3 +1,4 @@
+import { useCallback, useId, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { cx } from './cx';
@@ -7,6 +8,7 @@ import PageTitle from './PageTitle';
 import CloseButton from './CloseButton';
 import { SCROLL_Y } from './scrollArea';
 import { useInWindowSlot, useWindowHost } from './windowLayer';
+import { ModalTitleContext } from './modalTitleContext';
 
 /** 스테이지 창의 고정 높이(px). 탭 창처럼 높이가 변하지 않는 창이 고른다. 스테이지 높이에서 위아래 16px을 뺀 값을 넘지 않는다 */
 export type ModalHeight = 400 | 480 | 520 | 560;
@@ -48,13 +50,13 @@ interface ModalBase {
   children: ReactNode;
 }
 
-// layer: app = 화면 전체(fixed) 박스형 모달(계정/도감 상세/관리자) ·
-//        stage = 게임 스테이지 안(absolute) 투명 컨테이너(정비 — 내용이 직접 Panel 프레임을 가진다)
+// layer: app = 화면 전체(fixed) 박스형 모달(사이드바 메뉴/앱 전역 차단기/관리자) ·
+//        stage = 게임 스테이지 안(absolute) 투명 컨테이너(정비·게임 영역 오버레이 — 내용이 직접 Panel 프레임을 가진다)
 // 스테이지 모달의 투명 래퍼는 배치만 맡는다. 그래서 스테이지는 className을 받지 않고(타입으로 막는다),
-// 필요한 높이만 height로 고른다. 스크롤은 ModalCard의 본문이 맡는다.
+// 필요한 높이·폭만 명시 prop으로 고른다. 스크롤은 ModalCard의 본문이 맡는다.
 type ModalProps = ModalBase & (
-  | { layer: 'stage'; height?: ModalHeight; mobileFixed?: boolean; className?: never; header?: never; footer?: never; fill?: never; bare?: never }
-  | { layer?: 'app'; className?: string; height?: never; mobileFixed?: never; header?: ReactNode; footer?: ReactNode; fill?: boolean; bare?: boolean }
+  | { layer: 'stage'; height?: ModalHeight; mobileFixed?: boolean; worldmap?: boolean; className?: never; header?: never; footer?: never; fill?: never; bare?: never }
+  | { layer: 'app'; className?: string; height?: never; mobileFixed?: never; worldmap?: never; header?: ReactNode; footer?: ReactNode; fill?: boolean; bare?: boolean }
 );
 
 // 공통 모달 — 백드롭 클릭으로 닫히고, 내용 클릭은 전파를 막는다.
@@ -63,50 +65,57 @@ type ModalProps = ModalBase & (
 // 스테이지 모달의 투명 래퍼는 배치만 맡고 스크롤은 ModalCard의 본문이 맡는다.
 // bare는 앱 모달 안에 ModalCard를 직접 두는 대화상자용이다. 본문 칸을 만들지 않아 스크롤은 카드 본문 한 곳뿐이다.
 // 앱 모달에서 제목 줄이 문자열 title로 안 되면 header로, 하단 고정 영역(버튼 줄)은 footer로 넘긴다. 둘 다 스크롤 칸 밖이다.
-export default function Modal({ layer = 'app', title, wide, xl, md, narrow, onClose, closable = true, children, className, height, mobileFixed, header, footer, fill, bare }: ModalProps) {
+export default function Modal({ layer, title, wide, xl, md, narrow, worldmap, onClose, closable = true, children, className, height, mobileFixed, header, footer, fill, bare }: ModalProps) {
   // 모달이 떠 있는 동안 아래 레이어(필드 이동·사이드바 단축키)는 키를 못 받는다.
   // 예전엔 각자 `isTyping`으로 막았는데 그건 텍스트 포커스만 걸러서, 모달 버튼에 포커스가
   // 있으면 뒤에서 캐릭터가 움직이고 탭이 바뀌었다 (로그인 모달 키 탈취 사고).
   // Esc는 닫을 수 있는 창에서만 X와 같은 출구다.
   useKeyBlocker(closable ? onClose : undefined);
-  // 모달이 떠 있는 동안 아래 층(스테이지·사이드 메뉴)은 입력을 받지 않는다. 탭 줄은 모달을 닫는 출구가 아니다
-  useOpenWindow();
-  // 창은 채팅과 헤더 위 층이고 바탕이 그 둘까지 덮는다. 탭 줄과 시트는 창 위 층이라 보이지만, 창이 떠 있으면 불활성이다.
-  // 닫을 수 없는 창(새 버전 안내, 결투의 진행 단계)도 창 층이다. 같은 층 안에서 다른 창보다 위(blocker)이며 탭 줄 아래다.
-  // 스테이지 창은 닫을 수 없는 동안에도 스테이지 안에 그린다.
+  // 모달이 떠 있는 동안 열린 창 등록부에 레이어와 함께 기록한다(사이드바는 app 모달일 때만 불활성).
+  useOpenWindow(layer);
+  // 스테이지 창은 닫을 수 없는 동안에도 스테이지 안에 머물며(--z-stage-modal), 탭 줄(--z-tabs)보다 아래다.
+  // 앱 창(--z-app-modal)과 닫을 수 없는 앱 차단기(--z-blocker)는 탭 줄과 시트 위를 덮는다.
   const backdrop = layer === 'app'
     ? cx('fixed inset-0 bg-[rgba(4,9,18,0.7)]', closable ? 'z-(--z-app-modal)' : 'z-(--z-blocker)')
-    : cx('absolute inset-0 bg-[rgba(4,9,18,0.6)]', closable ? 'z-(--z-stage-modal)' : 'z-(--z-blocker)');
+    : 'absolute inset-0 bg-[rgba(4,9,18,0.6)] z-(--z-stage-modal)';
   const box = layer === 'app'
     ? cx('relative flex flex-col pf-frame shadow-panel p-4 max-w-[90vw] max-h-[80vh]',
         xl ? 'w-[min(920px,calc(100%-32px))]' : wide ? 'w-[560px]' : narrow ? 'w-[min(400px,calc(100%-32px))]' : 'w-[480px]',
         'mobile:w-[calc(100%-48px)] mobile:max-w-none mobile:max-h-[calc(100dvh-48px)]')
     : cx('max-h-[calc(100%-32px)] flex flex-col',
-        xl ? 'w-[min(920px,calc(100%-32px))]' : md ? 'w-[min(680px,calc(100%-32px))]' : 'w-[min(400px,calc(100%-32px))]',
+        worldmap ? 'pf-modal-worldmap' : xl ? 'w-[min(920px,calc(100%-32px))]' : md ? 'w-[min(680px,calc(100%-32px))]' : 'w-[min(400px,calc(100%-32px))]',
         'mobile:w-[calc(100%-48px)] mobile:max-h-[calc(100%-48px)]', height && (mobileFixed ? HEIGHT_FIXED_MOBILE[height] : HEIGHT_CLASS[height]));
   // 앱 모달은 자기를 연 층 바로 위에 쌓인다. 창을 연 층이 정한 자리(useWindowHost)에 포털하므로 창마다 층 값을 따로 정하지 않는다.
   // 기본은 게임 화면의 창 층 자리(호출한 곳이 게임 화면 바깥이어도 탭 줄 아래에 놓인다)이고, 시트처럼 창 층 위에 따로 놓인 층 안에서 연 창은 그 층의 자리에 그려진다.
   const windowHost = useWindowHost();
   const inSlot = useInWindowSlot();
+  const panelTitleId = useId();
+  const [hasPanelTitle, setHasPanelTitle] = useState(false);
+  const registerTitle = useCallback(() => setHasPanelTitle(true), []);
+  const titleCtx = useMemo(() => (title ? null : { id: panelTitleId, register: registerTitle }), [title, panelTitleId, registerTitle]);
   const modal = (
-    <div className={cx(backdrop, 'flex items-center justify-center animate-fade-in')}
-         onClick={closable ? onClose : undefined}>
-      <div className={cx(box, className)} onClick={e => e.stopPropagation()}
-           role="dialog" aria-modal="true" aria-label={title}>
-        {/* 앱 모달의 닫기 X — 스테이지 모달은 내용(Panel)이 자기 X를 가진다 */}
-        {layer === 'app' && closable && <CloseButton onClose={onClose} className="top-3 right-3" />}
-        {title && <PageTitle className={cx(layer === 'app' ? 'pr-6' : 'mb-2', bare && 'mb-2')}>{title}</PageTitle>}
-        {layer === 'app' && header && <div className="shrink-0">{header}</div>}
-        {layer === 'app' && !bare ? (
-          <div className={cx(APP_BODY, fill && 'flex flex-col')}>
-            {/* 제목과 본문 첫 자식 사이의 간격 8px — 빈 블록의 margin이 첫 자식의 margin과 겹쳐 둘 중 큰 값이 된다(제목이 본문 안에 있던 때와 같다) */}
-            {title && <div aria-hidden className="mb-2" />}
-            {children}
-          </div>
-        ) : children}
-        {layer === 'app' && footer && <div className="shrink-0">{footer}</div>}
+    <ModalTitleContext.Provider value={titleCtx}>
+      <div className={cx(backdrop, 'flex items-center justify-center animate-fade-in')}
+           onClick={closable ? onClose : undefined}>
+        <div className={cx(box, className)} onClick={e => e.stopPropagation()}
+             role="dialog" aria-modal="true"
+             aria-label={title}
+             aria-labelledby={!title && hasPanelTitle ? panelTitleId : undefined}>
+          {/* 앱 모달의 닫기 X — 스테이지 모달은 내용(Panel)이 자기 X를 가진다 */}
+          {layer === 'app' && closable && <CloseButton onClose={onClose} className="top-3 right-3" />}
+          {title && <PageTitle className={cx(layer === 'app' ? 'pr-6' : 'mb-2', bare && 'mb-2')}>{title}</PageTitle>}
+          {layer === 'app' && header && <div className="shrink-0">{header}</div>}
+          {layer === 'app' && !bare ? (
+            <div className={cx(APP_BODY, fill && 'flex flex-col')}>
+              {/* 제목과 본문 첫 자식 사이의 간격 8px — 빈 블록의 margin이 첫 자식의 margin과 겹쳐 둘 중 큰 값이 된다(제목이 본문 안에 있던 때와 같다) */}
+              {title && <div aria-hidden className="mb-2" />}
+              {children}
+            </div>
+          ) : children}
+          {layer === 'app' && footer && <div className="shrink-0">{footer}</div>}
+        </div>
       </div>
-    </div>
+    </ModalTitleContext.Provider>
   );
   if (layer !== 'app') return modal;
   if (windowHost) return createPortal(modal, windowHost);

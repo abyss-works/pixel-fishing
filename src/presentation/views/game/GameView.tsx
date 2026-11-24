@@ -411,7 +411,7 @@ export default function GameView(props: GameViewProps) {
         )}
         <GoogleReturn setToast={props.setToast} progress={progress} reopenAccount={() => setAccountOpen(true)} />
         {accountOpen && (
-          <AccountModal setToast={props.setToast} onAuthChanged={props.onAuthChanged} account={props.account} accountFailed={props.accountFailed} guestProgress={progress} recheckGuestProgress={props.recheckGuestProgress}
+          <AccountModal layer="stage" setToast={props.setToast} onAuthChanged={props.onAuthChanged} account={props.account} accountFailed={props.accountFailed} guestProgress={progress} recheckGuestProgress={props.recheckGuestProgress}
                         syncLabel={props.syncLabel} syncState={props.syncState} onClose={() => setAccountOpen(false)} />
         )}
         {playersOpen && atSea && (
@@ -435,6 +435,11 @@ export default function GameView(props: GameViewProps) {
                          sellBonus={guildBonus?.effects.sell ?? 0} accountState={accountState}
                          setToast={props.setToast} onClose={() => setActionPanel(null)} />
         )}
+        {worldMapOpen && <WorldMapModal world={worldScene} onClose={() => setWorldMapOpen(false)} />}
+        {/* 세이브가 준비된 뒤(서버 연결 또는 로컬)에만 소식 창을 계획한다 */}
+        <WhatsNewModal game={game} ready={saveReady} />
+        {baitRefund.notice && <BaitRefundModal notice={baitRefund.notice} onClose={baitRefund.close} />}
+        <TutorialModal seen={game.tutorials} ready={saveReady} after={baitRefund.pending} dispatch={props.dispatch} />
       </GameStageLayout>
 
       <GameTabs
@@ -447,12 +452,7 @@ export default function GameView(props: GameViewProps) {
         nickname={props.nickname} onRename={props.onRename}
       />
 
-      {/* 세이브가 준비된 뒤(서버 연결 또는 로컬)에만 소식 창을 계획한다 */}
-      <WhatsNewModal game={game} ready={saveReady} />
-      {baitRefund.notice && <BaitRefundModal notice={baitRefund.notice} onClose={baitRefund.close} />}
-      <TutorialModal seen={game.tutorials} ready={saveReady} after={baitRefund.pending} dispatch={props.dispatch} />
       {props.blocker}
-      {worldMapOpen && <WorldMapModal world={worldScene} onClose={() => setWorldMapOpen(false)} />}
       {props.toasts && props.toasts.length > 0 && props.onDismissToast && (
         <FloatingToastLayer toasts={props.toasts} maxVisible={mobile ? 2 : 3} onDismiss={props.onDismissToast} />
       )}

@@ -64,14 +64,16 @@ interface HudLayoutProps {
 // 칩 줄은 포인터 이벤트를 받지 않고 칩 자신만 받는다(HudChip) - 칩 밖은 아래 화면으로 통과한다.
 // 시계는 바다와 거점이 같은 자리이고, 미니맵을 숨겨도 남는다. 표시 상태를 바꾸는 지도 버튼은 정보 항목 뒤 줄 끝에 둔다.
 // 아래 칸의 크기가 바뀌어도 위 칸이 따라 올라가 겹치지 않는다. 폭은 화면의 32.5%(156~292px)다.
-// 하단 HUD 전체(낚시 상태 띠 슬롯, 오른쪽 아래 열, 메시지 창)는 PC 레이아웃과 모바일 레이아웃 모두 단일 흐름 컨테이너 안에 둔다.
-// PC 한 행 단계에서는 낚시 상태 띠 슬롯이 첫 줄 가운데에, 메시지 창(왼쪽)과 오른쪽 아래 열(오른쪽)이 아래 줄에 나란히 놓여 어떤 폭과 높이에서도 겹치지 않는다.
+// 낚시 상태 띠 슬롯(statusSlot)은 하단 흐름 묶음과 분리된 스테이지 상단 고정 절대 좌표 슬롯(z-(--z-stage-status))에 둔다.
+// PC에서는 헤더(최대 높이 72px) 아래 top-20(80px), 모바일에서는 게임 영역(2행) 상단 환경 배지 아래 top-7(28px)에 고정되므로
+// 방치 결과 카드·흔적 카드 출현, 미니맵 표시 여부, 메시지 창 접기/펼치기와 무관하게 좌표가 변하지 않는다.
+// 하단 HUD(오른쪽 아래 열, 메시지 창)는 PC 레이아웃과 모바일 레이아웃 모두 단일 흐름 컨테이너 안에 둔다.
 // 모바일 레이아웃과 PC 쌓기 단계(464 미만, stackTier)에서는 한 줄기에 세로로 쌓는다 —
-// 아래에서부터 메시지 창(폭 전체), 그 위 오른쪽의 칩과 미니맵(156px), 알림 카드, 맨 위 낚시 상태 띠.
+// 아래에서부터 메시지 창(폭 전체), 그 위 오른쪽의 칩과 미니맵(156px), 알림 카드.
 // PC 레이아웃의 칩 줄은 열 폭에 다 들어가지 않으면 줄을 나눈다(순서는 그대로). 모바일 레이아웃은 한 줄이다.
 // 메시지 창이 줄기의 마지막 자식이라 펼치거나 입력해 높이가 늘면 칩과 미니맵이 그 바로 위로 따라 올라가고, 스테이지 크기는 그대로다.
-// 줄기의 층은 요소마다 따로 정한다 - 낚시 상태 띠, 알림, 칩, 미니맵은 스테이지 위 HUD 층(stage-hud), 메시지 창만 채팅 층(chrome)이다.
-// 헤더의 펼친 메뉴 줄이 메시지 창 위에 오는 것은 DOM 순서가 아니라 층 토큰(menu-row)이 보장하고, 탭 이동 순서는 헤더, 채팅 순이다.
+// 줄기의 층은 요소마다 따로 정한다 - 알림, 칩, 미니맵은 스테이지 위 HUD 층(stage-hud), 낚시 상태 띠는 stage-status, 메시지 창만 채팅 층(chrome)이다.
+// 헤더의 펼친 메뉴 줄이 메시지 창과 상태 띠 위에 오는 것은 DOM 순서가 아니라 층 토큰(menu-row)이 보장하고, 탭 이동 순서는 헤더, 채팅 순이다.
 // 화면 키보드가 올라오면 줄기만 키보드 위로 올라가고(--keyboard-h, 탭 줄 높이 56px는 이미 비어 있다) 스테이지 크기는 그대로다.
 // 시트가 열려도 이 줄기는 자리를 지키고 시트가 그 위를 덮는다.
 export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onOpenStats, onOpenMap, notice, chips, badge, logFooter, onPickLine, you, channels, disabledChannels, guildMates, filter, onToggleFilter, folded, onFold, onStatusSlot, menu, accountState = 'account' }: HudLayoutProps) {
@@ -82,11 +84,13 @@ export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onO
   return (
     <>
       <HudHeader game={game} bagBonus={bagBonus} onOpenStats={onOpenStats} menu={menu} />
+      <div ref={onStatusSlot}
+           className={cx('absolute inset-x-3 top-20 z-(--z-stage-status) flex justify-center pointer-events-none empty:hidden',
+                         'mobile:row-start-2 mobile:row-end-3 mobile:col-span-full mobile:inset-x-2 mobile:top-7')} />
       <div className={cx('absolute inset-x-3 bottom-3 flex flex-wrap items-end justify-between gap-y-2 gap-x-3 pointer-events-none',
                          'mobile:row-start-2 mobile:row-end-3 mobile:inset-x-2',
                          'mobile:bottom-[calc(0.5rem_+_max(0px,_var(--keyboard-h,0px)_-_3.5rem))]',
                          'mobile:flex-col mobile:flex-nowrap mobile:items-end mobile:gap-2', STACK_TRUNK_CLASS)}>
-        <div ref={onStatusSlot} className="relative z-(--z-stage-hud) w-full shrink-0 flex justify-center empty:hidden" />
         <div className={cx('relative z-(--z-stage-hud) order-1 w-[clamp(156px,32.5%,292px)]',
                            'flex flex-col items-end gap-2 pointer-events-none',
                            'mobile:order-none mobile:w-[156px]', STACK_COLUMN_CLASS)}>

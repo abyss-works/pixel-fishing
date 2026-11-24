@@ -41,6 +41,8 @@ describe('Field 낚시 상태 띠 슬롯 포털', () => {
       fireEvent.keyDown(document, { code: 'Space' });
       expect(slot.childElementCount).toBe(1);
       expect(slot.textContent).toContain('입질을 기다리는 중');
+      expect(slot.firstElementChild!.className).toContain('z-(--z-stage-status)');
+      expect(slot.firstElementChild!.className).not.toContain('z-(--z-stage-hud)');
       // 게임 프레임 내부에 상태 띠를 중복 배치하지 않는다
       expect(container.textContent).not.toContain('입질을 기다리는 중');
 

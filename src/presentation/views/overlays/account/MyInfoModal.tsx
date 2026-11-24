@@ -62,7 +62,7 @@ export default function MyInfoModal({ setToast, onClose, account, accountFailed 
         toastText: '내 ID를 복사했어요.',
       });
     } catch {
-      void notice({ title: '직접 복사', body: '복사가 막혀 있어요.\n아래 값을 직접 복사해 주세요.', value });
+      void notice({ layer: 'app', title: '직접 복사', body: '복사가 막혀 있어요.\n아래 값을 직접 복사해 주세요.', value });
     }
   };
 
@@ -80,7 +80,7 @@ export default function MyInfoModal({ setToast, onClose, account, accountFailed 
   );
 
   return (
-    <Modal title="내 정보" narrow onClose={onClose}>
+    <Modal layer="app" title="내 정보" narrow onClose={onClose}>
       <SectionTitle>닉네임</SectionTitle>
       <Inset divided className="mb-2">
         <KeyValueRow className="py-1 text-xs"

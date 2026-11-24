@@ -63,7 +63,7 @@ export default function LetterModal({ dispatch, setToast, accountState, onClose 
   );
 
   return (
-    <Modal title="개발자에게" narrow onClose={onClose}>
+    <Modal layer="app" title="개발자에게" narrow onClose={onClose}>
       {lock
         ? <Locked lines={lock} label="편지">{field}</Locked>
         : <Tip plain className="block" text={LETTER_HINT}>{field}</Tip>}

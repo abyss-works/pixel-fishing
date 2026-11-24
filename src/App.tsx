@@ -47,6 +47,7 @@ function AppContent() {
   const { account, accountChecked, accountFailed, uid, onAuthChanged } = useAccount({
     game, setToast, adoptAccount,
     askNewPassword: min => input({
+      layer: 'app',
       title: '새 비밀번호', body: `새 비밀번호를 입력해 주세요.
 ${min}자 이상이어야 해요.`,
       label: '새 비밀번호', secret: true, confirmLabel: '바꾸기',

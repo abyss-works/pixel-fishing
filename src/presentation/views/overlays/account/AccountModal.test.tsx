@@ -43,7 +43,7 @@ const open = (account: string | null, method: typeof actions.method, guestProgre
   const setToast = vi.fn();
   const onAuthChanged = vi.fn(async () => {});
   const onClose = vi.fn();
-  const view = render(<AccountModal setToast={setToast} onAuthChanged={onAuthChanged} onClose={onClose} account={account} accountFailed={accountFailed}
+  const view = render(<AccountModal layer="app" setToast={setToast} onAuthChanged={onAuthChanged} onClose={onClose} account={account} accountFailed={accountFailed}
                                     guestProgress={guestProgress} recheckGuestProgress={actions.recheck} />);
   return { setToast, onAuthChanged, onClose, unmount: view.unmount };
 };

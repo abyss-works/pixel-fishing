@@ -86,7 +86,7 @@ export default function CodeModal({ dispatch, setToast, onClose }: {
     });
 
   return (
-    <Modal title="코드 입력" narrow onClose={onClose}>
+    <Modal layer="app" title="코드 입력" narrow onClose={onClose}>
       <SectionTitle>
         <Tip text={'공지나 이벤트로 받은 쿠폰 코드를 넣으면 골드를 받아요.\n코드마다 한 번만 쓸 수 있어요.'}>쿠폰</Tip>
       </SectionTitle>

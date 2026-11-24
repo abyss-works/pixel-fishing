@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import type { TabDef } from '../../ui/TabBar';
 import TabBar from '../../ui/TabBar';
 import { useMobileLayout } from '../useMobileLayout';
-import { hasOpenWindows, useAnyOpenWindow } from '../../ui/openWindows';
+import { hasAppWindows, useAnyAppWindow } from '../../ui/openWindows';
 import WindowSlot from '../../ui/WindowSlot';
 import { isSheetDragClose } from './sheet';
 
@@ -20,15 +20,15 @@ interface SidebarProps<K extends string> {
 
 // 화면의 탭 콘텐츠를 담는 사이드 패널 레이아웃.
 // 모바일 레이아웃에서는 탭 줄(56px)이 화면 아래에 서고, 탭 내용은 그 위에서 올라오는 시트(화면 높이의 절반)에 담긴다.
-// 탭 줄과 시트는 맨 위 층(tabs)이라 창이 떠 있어도 보이지만, 창(모달)이 떠 있는 동안에는 배경이라 입력을 받지 않는다.
-// 시트는 게임 영역과 채팅 영역을 덮는다. PC 레이아웃도 탭 줄만 창 위 층이다.
+// 탭 줄과 시트는 스테이지 모달보다 위 층(tabs)이므로 스테이지 모달이 열려 있어도 자유롭게 탭을 전환하고 스크롤할 수 있다.
+// 앱 전역 모달(app)이 떠 있는 동안만 배경이 되어 입력을 받지 않는다. 시트는 게임 영역과 채팅 영역을 덮는다.
 // 화면 키보드가 올라와 있는 동안(루트의 data-keyboard) 탭 줄은 보이지 않게 가려지고 자리는 그대로라, 스테이지 크기가 바뀌지 않는다.
 export default function Sidebar<K extends string>({ tabs, activeKey, onSelect, sheetOpen = false, onSheetClose, children }: SidebarProps<K>) {
   const mobile = useMobileLayout();
-  const blocked = useAnyOpenWindow();
+  const blocked = useAnyAppWindow();
   const dragFrom = useRef<number | null>(null);
-  // 모달이 떠 있으면 탭은 입력을 받지 않는다. 모달을 닫지도, 탭을 바꾸지도 않는다
-  const press = (key: K) => { if (hasOpenWindows()) return; onSelect(key); };
+  // 앱 전역 모달이 떠 있을 때만 탭 입력을 막는다. 스테이지 모달은 상호 비간섭이다
+  const press = (key: K) => { if (hasAppWindows()) return; onSelect(key); };
 
   if (mobile) {
     return (
