@@ -115,7 +115,7 @@ describe('StatsModal(스탯창)', () => {
     fireEvent.mouseEnter(screen.getByText('판매가 +20%'));
     const tip = screen.getByRole('tooltip');
     expect(within(tip).getByText('기본 5단계')).toBeTruthy();
-    expect(within(tip).getByText('자유 강화 5단계')).toBeTruthy();
+    expect(within(tip).getByText('개인 자유 강화 5단계')).toBeTruthy();
     expect(within(tip).getByText('합계 10단계')).toBeTruthy();
   });
 

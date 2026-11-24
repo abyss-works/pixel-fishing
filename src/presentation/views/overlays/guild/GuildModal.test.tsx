@@ -2,6 +2,7 @@
 // 길드원 탭(표, 떠나기), 길드 스킬 탭(트리, 고른 스킬, 기부 창), 항해일지 탭(날짜별 기록), 길드장의 관리 탭(가입 방식, 코드와 링크, 신청)이 있다.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { registerNoticeSink } from '../../../../features/display/model/toastPolicy';
 import type { GuildInfo } from '../../../../features/guild/model/guild';
 import GuildModal from './GuildModal';
 
@@ -246,25 +247,85 @@ describe('GuildModal', () => {
 
     expect(screen.getByText('남은 강화 포인트')).toBeTruthy();
     expect(screen.getByText('1 / 3')).toBeTruthy();
+    // 상단 색상 범례 블록은 제거되고 각 노드의 툴팁으로 구분 안내를 제공한다
+    expect(screen.queryByLabelText('스킬 단계 색상 안내')).toBeNull();
+    expect(screen.queryByText(/노란색 채움/)).toBeNull();
+    expect(screen.queryByText(/보라색 테두리/)).toBeNull();
+
+    fireEvent.mouseEnter(screen.getByText('남은 강화 포인트'));
+    expect(screen.getByRole('tooltip').textContent).toBe('자유 강화 포인트와 효과는 길드원마다 따로 적용돼요.');
+    fireEvent.mouseLeave(screen.getByText('남은 강화 포인트'));
+
     fireEvent.click(screen.getByRole('button', { name: '희귀 어종 확률 고르기' }));
     expect(screen.getByText(/기본 5 \+ 강화 2 =/)).toBeTruthy();
-    expect(screen.getByLabelText('희귀 어종 확률 2단계 이룸 자유 강화 적용')).toBeTruthy();
+    const enhancedNode = screen.getByLabelText('희귀 어종 확률 2단계 이룸 개인 자유 강화 적용');
+    expect(enhancedNode).toBeTruthy();
+    fireEvent.mouseEnter(enhancedNode.closest('[tabindex="0"]') as HTMLElement);
+    const enhancedTip = screen.getByRole('tooltip').textContent ?? '';
+    expect(enhancedTip).toContain('길드 공용으로 적용되는 기본 단계예요.');
+    expect(enhancedTip).toContain('내 포인트로 올린 개인 자유 강화 단계예요.');
+    expect(enhancedTip).toContain('나에게만 추가로 적용돼요.');
+    expect(enhancedTip).not.toMatch(/[·—–]/);
+    fireEvent.mouseLeave(enhancedNode.closest('[tabindex="0"]') as HTMLElement);
+
+    const baseNode = screen.getByLabelText('희귀 어종 확률 3단계 이룸');
+    fireEvent.mouseEnter(baseNode.closest('[tabindex="0"]') as HTMLElement);
+    const baseTip = screen.getByRole('tooltip').textContent ?? '';
+    expect(baseTip).toContain('길드 공용으로 적용되는 기본 단계예요.');
+    expect(baseTip).toContain('모든 길드원이 같은 효과를 받아요.');
+    expect(baseTip).not.toContain('내 포인트로 올린 개인 자유 강화 단계예요.');
+    expect(baseTip).not.toMatch(/[·—–]/);
+    fireEvent.mouseLeave(baseNode.closest('[tabindex="0"]') as HTMLElement);
+
     // 기본 5단계를 모두 채운 스킬의 기부 버튼은 기본 단계 완료 툴팁을 보인다
     fireEvent.mouseEnter(screen.getByRole('button', { name: '기부' }).parentElement as HTMLElement);
     expect(screen.getByRole('tooltip').textContent).toBe('기본 단계 5단계를 모두 채웠어요.');
 
     fireEvent.click(screen.getByRole('button', { name: '가방 용량 증가 강화 1단계 올리기' }));
     await waitFor(() => expect(s.act).toHaveBeenCalledWith({ op: 'enhance', guildId: 'g1', bonus: 'bag' }));
-    expect(toast).toHaveBeenCalledWith('가방 용량 증가 스킬을 강화 1단계로 올렸어요.');
+    expect(toast).toHaveBeenCalledWith('가방 용량 증가 스킬의 내 자유 강화를 1단계로 올렸어요.');
 
     s.act.mockResolvedValueOnce({ ok: true, recovered: 2 });
     fireEvent.click(screen.getByRole('button', { name: '초기화' }));
     const dialog = within(screen.getAllByRole('dialog').at(-1) as HTMLElement);
+    expect(dialog.getByText(/20,000,000G를 내고 내 자유 강화만 초기화할까요\?/)).toBeTruthy();
+    expect(dialog.getByText(/다른 길드원의 자유 강화와 길드 기본 단계는 그대로 유지돼요\./)).toBeTruthy();
     expect(dialog.getByText('20,000,000G')).toBeTruthy();
     expect(dialog.getByText('2포인트')).toBeTruthy();
+    expect((screen.getAllByRole('dialog').at(-1) as HTMLElement).textContent).not.toMatch(/[·—–]/);
     fireEvent.click(dialog.getByRole('button', { name: '초기화' }));
     await waitFor(() => expect(s.act).toHaveBeenCalledWith({ op: 'resetEnhancements', guildId: 'g1' }));
     await waitFor(() => expect(resync).toHaveBeenCalled());
-    expect(toast).toHaveBeenCalledWith('길드 스킬 강화를 초기화해 2포인트를 되돌렸어요.');
+    expect(toast).toHaveBeenCalledWith('내 길드 스킬 자유 강화를 초기화해 2포인트를 되돌렸어요.');
+  });
+
+  it('개인 자유 강화 초기화 완료 시 플로팅 토스트 문구를 내 길드 스킬 자유 강화를 초기화했어요 로 보낸다', async () => {
+    s.guild = {
+      ...GUILD,
+      role: 'member',
+      requests: [],
+      growth: { level: 7, total: 350_000, floor: 350_000, next: 550_000 },
+      bonuses: [
+        { id: 'sell', unlock: 1, rank: 5, enhanceRank: 1, totalRank: 6, cap: 5, pool: 0, next: null, effect: 0.12, nextEffect: 0.14, mine: 0 },
+        { id: 'bag', unlock: 2, rank: 3, enhanceRank: 0, totalRank: 3, cap: 5, pool: 0, next: 1_500_000, effect: 0.12, nextEffect: 0.16, mine: 0 },
+        { id: 'named', unlock: 3, rank: 1, enhanceRank: 0, totalRank: 1, cap: 5, pool: 0, next: 150_000, effect: 0.05, nextEffect: 0.1, mine: 0 },
+        { id: 'rare', unlock: 4, rank: 2, enhanceRank: 0, totalRank: 2, cap: 5, pool: 0, next: 300_000, effect: 0.04, nextEffect: 0.06, mine: 0 },
+        { id: 'mutation', unlock: 5, rank: 1, enhanceRank: 0, totalRank: 1, cap: 5, pool: 0, next: 150_000, effect: 0.01, nextEffect: 0.02, mine: 0 },
+      ],
+    };
+    s.you = 'M';
+    const noticeHandler = vi.fn();
+    const sink = registerNoticeSink(vi.fn(), noticeHandler);
+    s.act.mockResolvedValueOnce({ ok: true, recovered: 1 });
+    render(<GuildModal gold={20_000_000} artifacts={{ artifacts: [] }} setToast={sink} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: '길드 스킬' }));
+    fireEvent.click(screen.getByRole('button', { name: '초기화' }));
+    const dialog = within(screen.getAllByRole('dialog').at(-1) as HTMLElement);
+    fireEvent.click(dialog.getByRole('button', { name: '초기화' }));
+    await waitFor(() => expect(noticeHandler).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'guild.modalAction',
+      toastText: '내 길드 스킬 자유 강화를 초기화했어요.',
+      text: '내 길드 스킬 자유 강화를 초기화해 1포인트를 되돌렸어요.',
+    })));
   });
 });
