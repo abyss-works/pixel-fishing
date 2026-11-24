@@ -316,7 +316,7 @@ describe('여객선 빠른 이동: 거절과 실패', () => {
 });
 
 describe('여객선 확인창', () => {
-  it('도착 항구 이름이 본문과 확인 버튼에 보인다', async () => {
+  it('항구에서 고르면 도착 항구 이름과 항구 출발 안내가 본문과 확인 버튼에 보인다', async () => {
     stubMotion(false);
     seedAt('toamasina');
     render(<App />);
@@ -325,6 +325,28 @@ describe('여객선 확인창', () => {
     fireEvent.click(screen.getByRole('button', { name: BASE_PACKS.manila.name }));
     await advance(0);
     expect(screen.getByText(new RegExp(`${BASE_PACKS.manila.name}에 갈까요`))).toBeInTheDocument();
+    expect(screen.getByText(`지금 있는 항구를 떠나 ${BASE_PACKS.manila.name}에서 정비를 이어 가요.`, { exact: false })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: `${BASE_PACKS.manila.name}에 가기` })).toBeInTheDocument();
+  });
+
+  it('집에서 고르면 집 출발 안내가 본문에 보이고 전환 시 문 앞 마을 장면을 거쳐 도착 항구 앞바다로 옮겨진다', async () => {
+    stubMotion(false);
+    seedAt('home');
+    render(<App />);
+    await advance(0);
+    fireEvent.click(document.querySelector('[data-facility="ferry"]')!);
+    fireEvent.click(screen.getByRole('button', { name: BASE_PACKS.manila.name }));
+    await advance(0);
+    expect(screen.getByText(new RegExp(`${BASE_PACKS.manila.name}에 갈까요`))).toBeInTheDocument();
+    expect(screen.getByText(`지금 집을 나서 ${BASE_PACKS.manila.name} 앞바다로 곧바로 옮겨 가요.`, { exact: false })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: `${BASE_PACKS.manila.name}에 가기` }));
+    await advance(0);
+    // 1단계(0.6초 동안): 집 문 앞(마을) 장면을 보인다
+    expect(screen.getByLabelText('마을')).toBeInTheDocument();
+    await advance(500);
+    expect(screen.getByLabelText('마을')).toBeInTheDocument();
+    // 암전을 지나 도착 항구 앞바다 좌표로 옮겨진다
+    await advance(2500);
+    expect(pos()).toEqual(boardingOf('manila').at);
   });
 });
