@@ -6,6 +6,7 @@ import { guildEffectsOf } from '../../../../game/rules/guild';
 import type { GuildEffects } from '../../../../game/rules/guild';
 import { newState } from '../../../../game/rules/logic';
 import type { GameState } from '../../../../game/rules/logic';
+import { gameDayOf } from '../../../../game/rules/time';
 import { powerOfLevel } from '../../../../game/rules/stats';
 import StatsModal from './StatsModal';
 
@@ -116,5 +117,15 @@ describe('StatsModal(스탯창)', () => {
     expect(within(tip).getByText('기본 5단계')).toBeTruthy();
     expect(within(tip).getByText('자유 강화 5단계')).toBeTruthy();
     expect(within(tip).getByText('합계 10단계')).toBeTruthy();
+  });
+
+  it('보너스 탭은 오늘의 운세를 오늘의 운세 출처로 보이고 툴팁은 수치 없이 적용 대상만 알린다', () => {
+    const today = gameDayOf(new Date().toISOString());
+    show(game({ fortune: { day: today, kind: 'fish', index: 5 } }));
+    fireEvent.click(screen.getByRole('button', { name: '보너스' }));
+    const row = screen.getByText('희귀 이상 등급 가중치 +5%p').closest('tr')!;
+    expect(within(row).getByText('오늘의 운세')).toBeTruthy();
+    fireEvent.mouseEnter(screen.getByText('희귀 이상 등급 가중치 +5%p'));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('희귀 이상 등급 가중치에 운 배율이 적용돼요.');
   });
 });

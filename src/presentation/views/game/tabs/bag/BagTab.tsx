@@ -7,6 +7,7 @@ import { fmtGold, fmtNum, fmtSize, josa } from '../../../../ui/format';
 import type { Notify } from '../../../../ui/hud/messageFeed';
 import { EXHIBIT_SLOTS } from '../../../../../game/rules/balance';
 import { selectBagOverview } from '../../../../../features/inventory/model/selectors';
+import { useNow } from '../../../../../features/gameplay/service/useGameTime';
 import type { AccountLockState } from '../../../../../features/display/model/menuLock';
 import { sendNotice } from '../../../../../features/display/model/toastPolicy';
 import type { FishInstance, GameState } from '../../../../../game/rules/logic';
@@ -164,11 +165,12 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
 }) {
+  const now = useNow();
   const rows = useMemo(() => groupInstances(game.bag), [game.bag]);
   const {
     count: bagCount, cap, full: bagFull, sellable,
     autoLock: autoLockPlan,
-  } = selectBagOverview(game, sellBonus, bagBonus);
+  } = selectBagOverview(game, sellBonus, bagBonus, now);
   const [lockConfirm, setLockConfirm] = useState(false);
   const { layout, section, opened } = useBagView();
 
