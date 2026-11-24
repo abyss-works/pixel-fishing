@@ -16,9 +16,9 @@ const catchAt = (min: number, fishId: string, over: Record<string, unknown> = {}
 const fish = (id: string) => FISH.find(f => f.id === id)!;
 
 describe('awayReportDue', () => {
-  it('2분 이상 비웠을 때만 결과 카드를 띄운다', () => {
-    expect(awayReportDue(2 * 60_000 - 1)).toBe(false);
-    expect(awayReportDue(2 * 60_000)).toBe(true);
+  it('5분 이상 비웠을 때만 결과 카드를 띄운다', () => {
+    expect(awayReportDue(5 * 60_000 - 1)).toBe(false);
+    expect(awayReportDue(5 * 60_000)).toBe(true);
   });
 });
 
