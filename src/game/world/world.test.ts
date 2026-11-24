@@ -758,14 +758,15 @@ describe('거점 시설 히트테스트 (R1~R3b)', () => {
       expect(furnitureAt('walvisbay', f.x + f.w / 2, f.y + f.h / 2)?.id).toBe(f.id);
     }
   });
-  it('여객선은 항구에만 있다', () => {
+  it('마을행(travel)은 항구에만 있고, 여객선 빠른 이동(ferry)은 집과 항구 모두에 있다', () => {
     expect(HARBOR_FURNITURE.some(f => f.id === 'travel')).toBe(true);
+    expect(HARBOR_FURNITURE.some(f => f.id === 'ferry')).toBe(true);
     expect(HOME_FURNITURE.some(f => f.id === 'travel')).toBe(false);
-    expect(HOME_FURNITURE.some(f => f.id === 'ferry')).toBe(false);
+    expect(HOME_FURNITURE.some(f => f.id === 'ferry')).toBe(true);
   });
   it('시설 순서 — 집과 항구의 메뉴 구성', () => {
     const ids = (id: keyof typeof BASE_PACKS) => BASE_PACKS[id].furniture.map(f => f.id);
-    expect(ids('home')).toEqual(['rank', 'rod', 'boat', 'sell', 'wardrobe', 'kitchen', 'exit']);
+    expect(ids('home')).toEqual(['rank', 'rod', 'boat', 'sell', 'wardrobe', 'kitchen', 'ferry', 'exit']);
     const port = ['rank', 'bounty', 'rod', 'boat', 'sell', 'travel', 'ferry', 'exit'];
     expect(ids('harbor')).toEqual(port);
     expect(ids('manila')).toEqual(port);

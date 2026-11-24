@@ -12,9 +12,9 @@ afterEach(cleanup);
 const names = () => screen.getAllByRole('button').map(b => b.getAttribute('aria-label'));
 
 describe('거점 카드 메뉴', () => {
-  it('집은 게시판·작업대·목공소·판매 궤짝·옷장·부엌·문 순서로 카드를 늘어놓는다', () => {
+  it('집은 게시판, 작업대, 목공소, 판매 궤짝, 옷장, 부엌, 여객선, 문 순서로 카드를 늘어놓는다', () => {
     render(<BaseMenu base="home" game={newState()} />);
-    expect(names()).toEqual(['게시판 랭킹', '작업대 낚싯대 Lv.1', '목공소 배 없음', '궤짝 판매', '옷장 치장', '부엌 요리/미끼', '문 마을로']);
+    expect(names()).toEqual(['게시판 랭킹', '작업대 낚싯대 Lv.1', '목공소 배 없음', '궤짝 판매', '옷장 치장', '부엌 요리/미끼', '여객선 빠른 이동', '문 마을로']);
   });
 
   it('항구는 게시판부터 출항까지 시설 순서를 따른다', () => {
@@ -95,6 +95,37 @@ describe('거점 카드 메뉴', () => {
       for (const boat of [COOKING_UNLOCK_BOAT - 1, COOKING_UNLOCK_BOAT]) {
         const { unmount } = render(<BaseMenu base="home" game={{ ...newState(), boat }} accountState="guest" />);
         expect(kitchen()).toHaveAttribute('aria-disabled', 'true');
+        expect(tooltipOf()).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
+        unmount();
+      }
+    });
+  });
+
+  describe('여객선 잠금', () => {
+    const ferry = () => document.querySelector('[data-facility="ferry"]')!;
+    const tooltipOf = () => { fireEvent.mouseEnter(ferry().parentElement!); return screen.getByRole('tooltip'); };
+
+    it('배 0단계 계정의 집 여객선은 잠금 카드라 눌러도 시설을 알리지 않고 조각배 툴팁이 열린다', () => {
+      const onFacility = vi.fn();
+      render(<BaseMenu base="home" game={newState()} onFacility={onFacility} />);
+      expect(ferry()).toHaveAttribute('aria-disabled', 'true');
+      fireEvent.click(ferry());
+      expect(onFacility).not.toHaveBeenCalled();
+      expect(tooltipOf()).toHaveTextContent('조각배(1단계)가 되면 여객선을 쓸 수 있어요.');
+    });
+
+    it('배 1단계 이상 계정의 집 여객선은 잠기지 않고 눌림을 알린다', () => {
+      const onFacility = vi.fn();
+      render(<BaseMenu base="home" game={{ ...newState(), boat: 1 }} onFacility={onFacility} />);
+      expect(ferry()).not.toHaveAttribute('aria-disabled');
+      fireEvent.click(ferry());
+      expect(onFacility).toHaveBeenCalledWith('ferry');
+    });
+
+    it('게스트의 집 여객선은 배 단계와 무관하게 게스트 잠금이다', () => {
+      for (const boat of [0, 1]) {
+        const { unmount } = render(<BaseMenu base="home" game={{ ...newState(), boat }} accountState="guest" />);
+        expect(ferry()).toHaveAttribute('aria-disabled', 'true');
         expect(tooltipOf()).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
         unmount();
       }

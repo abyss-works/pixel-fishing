@@ -24,6 +24,8 @@ export const HOME: BasePack = {
       label: () => ({ title: '옷장', sub: '치장' }), labelDy: -4 },
     { id: 'kitchen', x: 196, y: 38, w: 46, h: 40, sprite: 'kitchen',
       label: () => ({ title: '부엌', sub: '요리/미끼' }), labelDy: -4 },
+    { id: 'ferry',  x: 196, y: 132, w: 56, h: 30, sprite: 'ferry',
+      label: () => ({ title: '여객선', sub: '빠른 이동' }), labelDy: -2 },
     { id: 'exit', x: 272, y: 104, w: 34, h: 56, sprite: 'door',
       label: () => ({ title: '문', sub: '마을로' }), labelDy: -4 },
   ],

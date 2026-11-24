@@ -225,7 +225,7 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
   });
 
   it('travel — 위치를 남기고, 첫 방문만 이벤트로 기록한다', () => {
-    const first = applyAction(seed(), { type: 'travel', to: { kind: 'region', id: 'world' } }, deps());
+    const first = applyAction(seed({ boat: 1 }), { type: 'travel', to: { kind: 'region', id: 'world' } }, deps());
     if (!first.ok) throw new Error(first.error);
     expect(first.state.location).toEqual({ kind: 'region', id: 'world' });
     expect(first.state.visited).toEqual(['world']);
@@ -239,7 +239,7 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
   });
 
   it('travel — 거점은 방문 목록에 넣지 않는다 (지역 단위 업적이라)', () => {
-    const out = applyAction(seed(), { type: 'travel', to: { kind: 'base', id: 'harbor' } }, deps());
+    const out = applyAction(seed({ boat: 1 }), { type: 'travel', to: { kind: 'base', id: 'harbor' } }, deps());
     if (!out.ok) throw new Error(out.error);
     expect(out.state.location).toEqual({ kind: 'base', id: 'harbor' });
     expect(out.state.visited).toEqual([]);
@@ -253,10 +253,15 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
     expect(ok.state.location).toEqual({ kind: 'base', id: 'manila' });
   });
 
-  it('travel — 집·게이트 없는 항구·지역은 배 없이도 옮긴다', () => {
-    for (const to of [{ kind: 'base', id: 'home' }, { kind: 'base', id: 'harbor' },
-      { kind: 'region', id: 'village' }, { kind: 'region', id: 'world' }] as const) {
+  it('travel — 집·마을은 배 없이 옮기고, 부산항·바다(world)는 배 1단계부터 허용한다', () => {
+    for (const to of [{ kind: 'base', id: 'home' }, { kind: 'region', id: 'village' }] as const) {
       expect(applyAction(seed({ boat: 0 }), { type: 'travel', to }, deps()).ok, `${to.kind}:${to.id}`).toBe(true);
+    }
+    for (const to of [{ kind: 'base', id: 'harbor' }, { kind: 'region', id: 'world' }] as const) {
+      expect(applyAction(seed({ boat: 0 }), { type: 'travel', to }, deps()), `boat0 ${to.kind}:${to.id}`)
+        .toEqual({ ok: false, error: 'zone-locked' });
+      expect(applyAction(seed({ boat: 1 }), { type: 'travel', to }, deps()).ok, `boat1 ${to.kind}:${to.id}`)
+        .toBe(true);
     }
   });
 

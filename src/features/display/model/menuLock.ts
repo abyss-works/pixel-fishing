@@ -109,13 +109,14 @@ export function menuLock(input: {
 }
 
 // 거점 카드가 여는 기능을 게스트 규칙에 비춰 보는 대표 액션. 규칙 판정은 게스트 규칙 모듈이 하고 여기는 짝만 안다.
-// 짝이 없는 카드(랭킹, 수배판, 미끼 상점, 이동 구역)는 이 판정을 쓰지 않는다.
+// 짝이 없는 카드(랭킹, 수배판, 마을행, 문, 승선)는 이 판정을 쓰지 않는다.
 const GUEST_ACTION_OF: Partial<Record<FurnitureId, GameAction>> = {
   rod: { type: 'upgradeRod' },
   boat: { type: 'buyBoat' },
   sell: { type: 'sell', uids: [] },
   wardrobe: { type: 'changeClothes', shirt: 0, pants: 0 },
   kitchen: { type: 'cook', recipe: '', count: 1 },
+  ferry: { type: 'travel', to: { kind: 'region', id: 'world' } },
 };
 
 /** 게스트가 그 카드의 기능을 쓸 수 있는가. 짝이 없는 카드는 게스트 규칙으로 잠그지 않는다 */
@@ -127,6 +128,7 @@ export function facilityGuestAllowed(id: FurnitureId): boolean {
 /** 카드가 배 단계로 열리는 기능이면 그 조건. 없으면 진행 조건으로 잠그지 않는다 */
 export function facilityProgress(id: FurnitureId, boat: number): { met: boolean; boat: number } | undefined {
   if (id === 'kitchen') return { met: cookingUnlocked(boat), boat: COOKING_UNLOCK_BOAT };
+  if (id === 'ferry') return { met: boat >= 1, boat: 1 };
   return undefined;
 }
 

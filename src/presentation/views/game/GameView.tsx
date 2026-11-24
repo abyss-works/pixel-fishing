@@ -265,22 +265,24 @@ export default function GameView(props: GameViewProps) {
   // 빠른 이동 — 목적지를 고르면 창을 닫고 여객선처럼 확인을 받은 뒤 전환을 시작한다
   const pickPort = (port: BaseId) => {
     setFerryOpen(false);
-    if (trip) return;
+    if (trip || scene.kind !== 'base') return;
     const name = BASE_PACKS[port].name;
-    void confirm({ layer: 'stage', title: '여객선', body: `여객선을 타고 ${name}에 갈까요?
-지금 있는 항구를 떠나 ${name}에서 정비를 이어 가요.`,
+    const detail = scene.id === 'home'
+      ? `지금 집을 나서 ${name} 앞바다로 곧바로 옮겨 가요.`
+      : `지금 있는 항구를 떠나 ${name}에서 정비를 이어 가요.`;
+    void confirm({ layer: 'stage', title: '여객선', body: `여객선을 타고 ${name}에 갈까요?\n${detail}`,
       confirmLabel: `${name}에 가기` })
       .then(ok => { if (ok && scene.kind === 'base') setTrip(current => current ?? { from: scene.id, to: port }); });
   };
 
-  // 전환 1단계 — 지금 항구에서 접안을 풀고 앞바다에 나온 모습
+  // 전환 1단계 — 지금 거점에서 필드로 나온 모습(집은 문 앞 마을, 항구는 접안을 푼 앞바다)
   const ferrySurface = () => {
     if (!trip) return;
     const b = boardingOf(trip.from);
     resetPanels();
     props.onPlace({ kind: 'region', id: b.region }, b.at);
   };
-  // 전환 2단계 — 도착 항구의 승선 자리로 옮기고 서버에 알린다. 실패하면 떠난 항구에 남는다
+  // 전환 2단계 — 도착 항구의 승선 자리로 옮기고 서버에 알린다. 실패하면 떠난 거점에 남는다
   const ferryMove = async () => {
     if (!trip) return;
     const b = boardingOf(trip.to);

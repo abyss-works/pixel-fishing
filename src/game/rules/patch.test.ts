@@ -78,7 +78,7 @@ describe('patch 동등성 — 전 액션', () => {
     check(seed({ gold: 1e9, fame: 0 }), { type: 'buyBoat' });
   });
   it('travel — 위치+방문', () => {
-    check(seed(), { type: 'travel', to: { kind: 'base', id: 'harbor' } });
+    check(seed({ boat: 1 }), { type: 'travel', to: { kind: 'base', id: 'harbor' } });
   });
   it('dismissBaitRefund — 영수증 지우기(스칼라만)', () => {
     check(seed({ baitRefund: { gold: 200, items: { 'bait-rare': 1 } } }), { type: 'dismissBaitRefund' });

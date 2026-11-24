@@ -88,12 +88,29 @@ describe('거점 카드의 게스트 허용', () => {
   it('부엌은 요리 액션이 계정 전용이라 게스트에게 닫혀 있다', () => {
     expect(facilityGuestAllowed('kitchen')).toBe(false);
   });
+
+  it('여객선 빠른 이동은 마을 밖 이동이라 게스트에게 닫혀 있다', () => {
+    expect(facilityGuestAllowed('ferry')).toBe(false);
+  });
 });
 
 describe('거점 카드의 진행 조건', () => {
   it('부엌은 요리가 열리는 배 단계부터 열린다', () => {
     expect(facilityProgress('kitchen', COOKING_UNLOCK_BOAT - 1)).toEqual({ met: false, boat: COOKING_UNLOCK_BOAT });
     expect(facilityProgress('kitchen', COOKING_UNLOCK_BOAT)).toEqual({ met: true, boat: COOKING_UNLOCK_BOAT });
+  });
+
+  it('여객선 빠른 이동은 배 1단계부터 열린다', () => {
+    expect(facilityProgress('ferry', 0)).toEqual({ met: false, boat: 1 });
+    expect(facilityProgress('ferry', 1)).toEqual({ met: true, boat: 1 });
+    expect(menuLock({ account: 'account', guestAllowed: facilityGuestAllowed('ferry'), feature: '여객선', progress: facilityProgress('ferry', 0) })).toEqual({
+      kind: 'progress',
+      lines: ['조각배(1단계)가 되면 여객선을 쓸 수 있어요.'],
+    });
+    expect(menuLock({ account: 'guest', guestAllowed: facilityGuestAllowed('ferry'), feature: '여객선', progress: facilityProgress('ferry', 0) })).toEqual({
+      kind: 'guest',
+      lines: [GUEST_LOCK_TEXT],
+    });
   });
 
   it('진행 조건이 없는 카드는 조건을 내지 않는다', () => {
