@@ -156,3 +156,15 @@ export const achievementCounters = pgTable('achievement_counters', {
   value: bigint('value', { mode: 'number' }).notNull().default(0),
   updatedAt: at('updated_at').notNull().defaultNow(),
 }, t => [primaryKey({ columns: [t.userId, t.key] })]);
+
+export const eventConsumerCutoffs = pgTable('event_consumer_cutoffs', {
+  consumerKey: text('consumer_key').notNull(),
+  ruleVersion: integer('rule_version').notNull(),
+  liveSinceEventId: bigint('live_since_event_id', { mode: 'number' }),
+  liveSinceAt: at('live_since_at'),
+  backfilledThroughEventId: bigint('backfilled_through_event_id', { mode: 'number' }).notNull().default(0),
+  backfillTargetEventId: bigint('backfill_target_event_id', { mode: 'number' }),
+  backfillStatus: text('backfill_status').notNull().default('pending'),
+  notes: jsonb('notes').notNull().default({}),
+  updatedAt: at('updated_at').notNull().defaultNow(),
+}, t => [primaryKey({ columns: [t.consumerKey, t.ruleVersion] })]);
