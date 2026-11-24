@@ -5,6 +5,7 @@ import type { ActionDeps } from './actions';
 import { upgradeCost } from './balance';
 import { endedFirstCatch, newFirstCatch } from './firstCatch';
 import { NO_GUILD_EFFECTS } from './guild';
+import { AUTO_ENERGY_BOAT, ENERGY_ITEM_IDS } from '../content/cooking';
 import { BOATS, COUPONS, FISH, WALK_BAG_CAP, newState } from './logic';
 import type { FishInstance, FormId, GameState } from './logic';
 
@@ -817,5 +818,19 @@ describe('토글식 자동 잠금 — 액션·포획·가방 초과 연동', () 
     const out = applyAction(st, { type: 'extractEnergy', uids: [inst.uid] }, deps());
     if (!out.ok) throw new Error(out.error);
     expect(out.state.autoLockedIds).toEqual({});
+  });
+
+  it('extractEnergy — 가공 플랜트선이면 바다에서도 추출되고 비플랜트선 바다와 게스트는 거부한다', () => {
+    const commonFish = FISH.find(f => f.rarity === 'common')!;
+    const inst = { ...mkInst('ex-sea', commonFish.id), locked: false };
+    const sea = { kind: 'region', id: 'world' } as const;
+    expect(applyAction(seed({ boat: AUTO_ENERGY_BOAT - 1, location: sea, bag: [inst] }), { type: 'extractEnergy', uids: [inst.uid] }, deps()))
+      .toEqual({ ok: false, error: 'not-at-sale-base' });
+    expect(applyAction(seed({ boat: AUTO_ENERGY_BOAT, location: sea, bag: [inst] }), { type: 'extractEnergy', uids: [inst.uid] }, deps({ guest: true })))
+      .toEqual({ ok: false, error: 'account-only' });
+    const out = applyAction(seed({ boat: AUTO_ENERGY_BOAT, location: sea, bag: [inst] }), { type: 'extractEnergy', uids: [inst.uid] }, deps());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.bag).toEqual([]);
+    expect(out.state.items[ENERGY_ITEM_IDS.common]).toBe(10);
   });
 });
