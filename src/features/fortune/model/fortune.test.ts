@@ -21,7 +21,7 @@ const f = (kind: DailyFortune['kind'], index: DailyFortune['index'], day = '2026
 });
 
 describe('오늘의 운세 화면 모델', () => {
-  it('정식 명칭과 보너스 대상을 1안으로 제공한다', () => {
+  it('종류별 이름과 보너스 대상을 제공한다', () => {
     expect(FORTUNE_KIND.fish).toEqual({ name: '풍어운', target: 'rarity', bonus: '희귀 이상 등급 가중치' });
     expect(FORTUNE_KIND.gold).toEqual({ name: '재물운', target: 'sell', bonus: '판매가' });
     expect(FORTUNE_KIND.shadow).toEqual({ name: '그림자 운', target: 'named', bonus: '네임드 조우 가중치' });
@@ -29,7 +29,7 @@ describe('오늘의 운세 화면 모델', () => {
     expect(FORTUNE_PIPS).toBe(5);
   });
 
-  it('지수 3과 5의 등급 라벨과 확정 문구(1안)를 제공한다', () => {
+  it('지수 3과 5의 등급 라벨과 운세 문구를 제공한다', () => {
     expect(FORTUNE_INDEX_LABEL).toEqual({ 3: '적당한 운', 5: '좋은 운' });
     expect(FORTUNE_PHRASE.fish[3]).toBe(
       '물결이 맑아 찌 아래로 지나가는 비늘이 한결 또렷하다. 잔 고기 떼 사이로 보기 드문 고기의 입질이 간간이 섞여 든다.',

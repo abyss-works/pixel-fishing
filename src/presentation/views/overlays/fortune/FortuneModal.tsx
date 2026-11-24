@@ -14,6 +14,7 @@ import Inset from '../../../ui/Inset';
 import KeyValueRow from '../../../ui/KeyValueRow';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
+import Note from '../../../ui/Note';
 import PixelIcon from '../../../ui/PixelIcon';
 import type { GlyphId } from '../../../ui/PixelIcon';
 
@@ -69,11 +70,9 @@ export default function FortuneModal({ fortune, onClose }: { fortune: DailyFortu
               />
             ))}
           </Inset>
-          <p className="text-2xs text-text-dim text-center">
-            {fortuneEffectNote(fortune)}
-            <br />
-            {FORTUNE_RESET_NOTE}
-          </p>
+          <Note size="2xs" className="my-0 text-center whitespace-pre-line">
+            {`${fortuneEffectNote(fortune)}\n${FORTUNE_RESET_NOTE}`}
+          </Note>
         </div>
       </ModalCard>
     </Modal>

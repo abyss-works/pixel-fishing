@@ -1,5 +1,5 @@
 // 운세의 화면 표시 모델 — 접속 모달과 스탯 창 보너스 탭이 같이 쓴다.
-// 종류 명칭·지수 등급·문구는 명세와 1:1로 맞춘다.
+// 운세 표시 규칙과 문구를 제공한다.
 import { FORTUNE_TARGET_OF, luckMultOf } from '../../../game/rules/fortune';
 import type { DailyFortune, FortuneKind, FortuneTarget } from '../../../game/rules/fortune';
 import { GAME_DAY_RESET_HOUR_KST, GAME_DAY_RESET_TEXT } from '../../../game/rules/time';
@@ -24,7 +24,7 @@ export const FORTUNE_INDEX_LABEL: Record<DailyFortune['index'], string> = {
   5: '좋은 운',
 };
 
-/** 종류와 지수별 확정 문구 */
+/** 종류와 지수별 운세 문구 */
 export const FORTUNE_PHRASE: Record<FortuneKind, Record<DailyFortune['index'], string>> = {
   fish: {
     3: '물결이 맑아 찌 아래로 지나가는 비늘이 한결 또렷하다. 잔 고기 떼 사이로 보기 드문 고기의 입질이 간간이 섞여 든다.',
