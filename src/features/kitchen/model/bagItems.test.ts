@@ -62,9 +62,47 @@ describe('아이템 섹션: 열린 뒤', () => {
     const v = selectItemSection(game, T0, 'account');
     expect(v.state).toBe('open');
     if (v.state !== 'open') return;
-    expect(v.energy.map(e => [e.grade, e.label, e.stored])).toEqual([
-      ['common', '생명의 기운(일반)', 38], ['rare', '생명의 기운(희귀)', 0],
-      ['epic', '생명의 기운(영웅)', 2], ['legendary', '생명의 기운(전설)', 0],
+    expect(v.energy.map(e => [e.id, e.grade, e.label, e.stored])).toEqual([
+      [ENERGY_ITEM_IDS.common, 'common', '생명의 기운(일반)', 38],
+      [ENERGY_ITEM_IDS.rare, 'rare', '생명의 기운(희귀)', 0],
+      [ENERGY_ITEM_IDS.epic, 'epic', '생명의 기운(영웅)', 2],
+      [ENERGY_ITEM_IDS.legendary, 'legendary', '생명의 기운(전설)', 0],
+    ]);
+  });
+
+  it('도시락과 미끼 행은 총 지속 시간을 가지며 사르가소의 그물망 보유 시 미끼 지속이 절반이다', () => {
+    const base = seed({ items: { 'cook-lunch-bite': 1, 'cook-bait-rare': 1 } });
+    const v1 = selectItemSection(base, T0, 'account');
+    if (v1.state !== 'open') throw new Error('open이어야 해요');
+    expect(v1.lunch[0].durationMinutes).toBe(9 * 60);
+    expect(v1.bait[0].durationMinutes).toBe(5);
+
+    const net = seed({ artifacts: ['sargasso-net'], items: { 'cook-lunch-bite': 1, 'cook-bait-rare': 1 } });
+    const v2 = selectItemSection(net, T0, 'account');
+    if (v2.state !== 'open') throw new Error('open이어야 해요');
+    expect(v2.lunch[0].durationMinutes).toBe(9 * 60);
+    expect(v2.bait[0].durationMinutes).toBe(2.5);
+  });
+
+  it('활성 중인 도시락과 미끼 모두 active와 now 기준 남은 시간을 갖는다', () => {
+    const game = seed({
+      artifacts: ['sargasso-net'],
+      items: { 'cook-lunch-bite': 1, 'cook-lunch-rare': 1, 'cook-bait-rare': 1, 'cook-bait-epic': 1 },
+      slots: {
+        lunch: { id: 'cook-lunch-bite', endsAt: at(8 * HOUR + 42 * MIN) },
+        bait: { id: 'cook-bait-rare', endsAt: at(4 * MIN + 18_000) },
+        bait2: { id: 'cook-bait-epic', endsAt: at(-MIN) },
+      },
+    });
+    const v = selectItemSection(game, T0, 'account');
+    if (v.state !== 'open') throw new Error('open이어야 해요');
+    expect(v.lunch.map(r => [r.recipe.id, r.active, r.remainingMinutes])).toEqual([
+      ['cook-lunch-bite', true, 8 * 60 + 42],
+      ['cook-lunch-rare', false, null],
+    ]);
+    expect(v.bait.map(r => [r.recipe.id, r.active, r.remainingMinutes])).toEqual([
+      ['cook-bait-rare', true, 4.3],
+      ['cook-bait-epic', false, null],
     ]);
   });
 

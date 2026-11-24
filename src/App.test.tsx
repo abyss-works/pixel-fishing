@@ -14,6 +14,7 @@ import { resetToastEnabled } from './features/display/service/toastEnabled';
 import { resetEncounterAlert, resetUpdateAlert } from './features/bounty/service/encounterAlert';
 import { resetWhatsNewSession } from './features/announcements/service/whatsNew';
 import { resetTutorialSession } from './features/tutorial/service/tutorial';
+import { resetFortuneModalSession } from './features/fortune/service/fortuneModal';
 import { TUTORIAL_IDS } from './game/content/tutorials';
 import { markPromptsAnswered, resetAnnouncements, setLastSeenVersion } from './platform/adapters/announcements';
 import { APP_VERSION } from './version';
@@ -26,6 +27,7 @@ import { ENERGY_ITEM_IDS } from './game/content/cooking';
 import { TAB_ORDER } from './presentation/views/game/tabs/tabs';
 import { BOATS, FISH, MAX_BOAT, RARITY, COUPONS, newState } from './game/rules/logic';
 import type { FishInstance, FormId, FormRecord, GameState } from './game/rules/logic';
+import { gameDayOf } from './game/rules/time';
 import type { GameAction } from './game/rules/actions';
 import { LocalGameGateway } from './platform/adapters/localGameGateway';
 import { when } from './platform/api';
@@ -38,7 +40,13 @@ import { setSchoolDay } from './features/gameplay/service/schoolDay';
 const priceOf = (id: string) => FISH.find(f => f.id === id)!.price;
 const CARP = priceOf('carp');
 const CRUCIAN = priceOf('crucian');
-const sellLabel = (gold: number) => `판매 (+${gold}G)`;
+const sellButton = (count = 0) =>
+  screen.getAllByRole('button', { name: count > 0 ? `판매 (${count}마리)` : '판매' })
+    .find(b => !b.closest('.pf-tabbar'))!;
+const expectSellTotal = (gold: number, count: number) => {
+  expect(screen.getByText('받을 골드').nextSibling).toHaveTextContent(`${gold}G`);
+  expect(sellButton(count)).toBeInTheDocument();
+};
 
 vi.mock('./game/content/patchnotes', async importActual => {
   const actual = await importActual<typeof import('./game/content/patchnotes')>();
@@ -56,7 +64,14 @@ const SAVE_KEY = 'pixel-fishing-save';
 const SEEN_TUTORIALS = { tutorials: [...TUTORIAL_IDS] };
 
 function seed(over: Partial<GameState> = {}) {
-  localStorage.setItem(SAVE_KEY, JSON.stringify({ ...newState(), ...SEEN_TUTORIALS, ...over }));
+  localStorage.setItem(SAVE_KEY, JSON.stringify({
+    ...newState(), ...SEEN_TUTORIALS,
+    // 운세 고정 — 판매액을 정확히 재는 테스트가 하루 운세 추첨(돈 운이면 수령액 ×1.03~1.05)에
+    // 흔들리지 않게 오늘 날짜의 그림자 운세를 박는다. 그림자 운은 활성 네임드 의뢰가 없는
+    // 이 테스트들에서는 아무 판정에도 걸리지 않는다. 운세를 다루는 테스트는 seed 인자로 덮어쓴다
+    fortune: { day: gameDayOf(new Date().toISOString()), kind: 'shadow', index: 3 },
+    ...over,
+  }));
 }
 
 // 세이브 v8 픽스처 헬퍼 — 개체(가방)와 도감 기록을 짧게 쓴다
@@ -106,6 +121,7 @@ beforeEach(() => {
   // 업데이트 소식 창은 접속 시 자동으로 떠서 키를 막는다 — 소식 창 자체를 다루는 케이스 밖에서는 본 것으로 둔다
   resetWhatsNewSession();
   resetTutorialSession();
+  resetFortuneModalSession();
   resetAnnouncements();
   setLastSeenVersion(APP_VERSION);
   markPromptsAnswered(['fish-art']);
@@ -141,7 +157,8 @@ describe('R1: 판매 궤짝 → 사이드바 인라인 패널 (어종별 체크 
     clickFurniture('sell');
     expect(screen.getByText('잉어')).toBeInTheDocument();      // 내역 표시
     expect(screen.getByText('×2')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: sellLabel(CARP * 2) })); // 기본 전부 체크
+    expectSellTotal(CARP * 2, 2);
+    fireEvent.click(sellButton(2)); // 기본 전부 체크
     expect(hud()).toMatch(new RegExp(`골드 ${CARP * 2}(?![\\d.,])`));
     expect(hud()).toContain('가방 0 /');
     expect(screen.queryByText(/판매하기/)).not.toBeInTheDocument(); // 패널 닫힘
@@ -152,8 +169,8 @@ describe('R1: 판매 궤짝 → 사이드바 인라인 패널 (어종별 체크 
     render(<App />);
     clickFurniture('sell');
     fireEvent.click(screen.getByLabelText('잉어 판매 해제')); // ☑ → ☐
-    expect(screen.getByRole('button', { name: sellLabel(CRUCIAN) })).toBeInTheDocument(); // 붕어만
-    fireEvent.click(screen.getByText(/^판매 \(/));
+    expectSellTotal(CRUCIAN, 1); // 붕어만
+    fireEvent.click(sellButton(1));
     expect(hud()).toMatch(new RegExp(`골드 ${CRUCIAN}(?![\\d.,])`));
     expect(hud()).toContain('가방 1 /'); // 잉어는 남는다
   });
@@ -163,9 +180,9 @@ describe('R1: 판매 궤짝 → 사이드바 인라인 패널 (어종별 체크 
     render(<App />);
     clickFurniture('sell');
     fireEvent.click(screen.getByLabelText('잉어 판매 해제'));
-    expect(screen.getByText(/^판매 \(/)).toBeDisabled();
+    expect(sellButton(0)).toBeDisabled();
     fireEvent.click(screen.getByLabelText('잉어 판매 선택')); // 재선택 가능
-    expect(screen.getByText(/^판매 \(/)).toBeEnabled();
+    expect(sellButton(1)).toBeEnabled();
   });
 
   it('가방이 비면 안내만 (판매 버튼 없음)', () => {
@@ -225,7 +242,7 @@ describe('R1b 개체 단위 선택 — 같은 종에서 큰 놈만 남기기', (
     clickFurniture('sell');
 
     // 기본은 전부 선택 — 두 마리분
-    expect(screen.getByRole('button', { name: sellLabel(CARP * 2) })).toBeInTheDocument();
+    expectSellTotal(CARP * 2, 2);
 
     // 행이 기본 닫힘 — 펼친 뒤 개체가 보인다
     fireEvent.click(screen.getByLabelText('잉어 개체 펼치기'));
@@ -234,10 +251,10 @@ describe('R1b 개체 단위 선택 — 같은 종에서 큰 놈만 남기기', (
 
     // 42cm 개체를 판매에서 제외 → 12cm 한 마리만 팔린다
     fireEvent.click(screen.getByText('42.0cm').closest('[role="button"]')!);
-    expect(screen.getByRole('button', { name: sellLabel(CARP) })).toBeInTheDocument();
+    expectSellTotal(CARP, 1);
     expect(screen.getByText('1/2')).toBeInTheDocument(); // 부분 선택 표시
 
-    fireEvent.click(screen.getByText(/^판매 \(/));
+    fireEvent.click(sellButton(1));
     expect(hud()).toMatch(new RegExp(`골드 ${CARP}(?![\\d.,])`));
     expect(hud()).toContain('가방 1 /');
     // 남은 게 "큰 놈"인지 가방 탭에서 확인한다 — 이 화면의 존재 이유가 그것
@@ -255,7 +272,7 @@ describe('R1b 개체 단위 선택 — 같은 종에서 큰 놈만 남기기', (
     fireEvent.click(screen.getByLabelText('잉어 개체 펼치기'));
     // 개체 줄이 클릭 대상이 아니다 (role=button 없음)
     expect(screen.getByText('20.0cm').closest('[role="button"]')).toBeNull();
-    expect(screen.getByText(/^판매 \(/)).toBeDisabled();
+    expect(sellButton(0)).toBeDisabled();
   });
 });
 
@@ -996,14 +1013,14 @@ describe('R23b: 미니맵 클릭 = 세계지도 모달 (M 키 트리거는 폐�
     fireEvent.click(screen.getByLabelText('미니맵'));
     // 세계지도 모달 — 전체 지구(흑백) + 구현 영역(컬러). 지역 탭은 그대로다.
     expect(screen.getByRole('heading', { name: '세계지도' })).toBeInTheDocument();
-    expect(screen.getByLabelText('세계지도')).toBeInTheDocument();
+    expect(screen.getByLabelText('세계지도', { selector: 'canvas' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /지역/ })).not.toHaveClass('active');
 
     fireEvent.keyDown(document, { code: 'KeyM' }); // M 키는 아무 일도 하지 않는다
-    expect(screen.getByLabelText('세계지도')).toBeInTheDocument();
+    expect(screen.getByLabelText('세계지도', { selector: 'canvas' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '닫기' }));
-    expect(screen.queryByLabelText('세계지도')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('세계지도', { selector: 'canvas' })).not.toBeInTheDocument();
   });
 });
 
@@ -1032,9 +1049,9 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
 
     fireEvent.click(screen.getByLabelText('잉어 전체 잠금')); // 🔒 — 행 머리는 그 종 전부에 건다
     clickFurniture('sell');
-    expect(screen.getByRole('button', { name: sellLabel(CRUCIAN) })).toBeInTheDocument(); // 붕어만 (잠긴 잉어는 자물쇠 고정)
+    expectSellTotal(CRUCIAN, 1); // 붕어만 (잠긴 잉어는 자물쇠 고정)
     expect(screen.queryByLabelText(/잉어 판매/)).not.toBeInTheDocument(); // 체크 불가
-    fireEvent.click(screen.getByText(/^판매 \(/));
+    fireEvent.click(sellButton(1));
     expect(hud()).toMatch(new RegExp(`골드 ${CRUCIAN}(?![\\d.,])`));
     expect(hud()).toContain('가방 2 /'); // 잠긴 잉어 2마리는 가방에 남는다
   });
@@ -1088,29 +1105,28 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     expect(active()).toBe('설정');
   });
 
-  it('Tab은 가방 물고기 섹션에서 목록 ↔ 카드 서브탭을 순환한다', () => {
+  it('Tab은 가방에서 물고기 → 아이템 → 유물 서브탭을 순환한다', () => {
     seed({});
     render(<App />);
     const pressed = () => document.querySelector('button[aria-pressed="true"]')?.textContent ?? '';
     fireEvent.keyDown(document, { key: '2' });
-    expect(pressed()).toBe('목록');
+    expect(pressed()).toBe('물고기');
     fireEvent.keyDown(document, { key: 'Tab' });
-    expect(pressed()).toBe('카드');
+    expect(pressed()).toBe('아이템');
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(pressed()).toBe('유물');
     fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
-    expect(pressed()).toBe('목록');
+    expect(pressed()).toBe('아이템');
     const active = document.querySelector('.pf-tabbar button.active')?.textContent ?? '';
     expect(active).toContain('가방'); // 메뉴 탭은 안 바뀐다
   });
 
-  it('가방 아이템·유물 섹션에는 서브탭이 없어 Tab이 아무것도 하지 않는다', () => {
-    seed({ items: { 'bait-common': 1 } });
+  it('가방 물고기 섹션의 보기 전환 아이콘으로 목록 ↔ 카드를 전환한다', () => {
+    seed({});
     render(<App />);
     fireEvent.keyDown(document, { key: '2' });
-    fireEvent.keyDown(document, { key: '2' }); // 아이템
-    expect(screen.getByText('가진 아이템이 없어요.')).toBeInTheDocument();
-    fireEvent.keyDown(document, { key: 'Tab' });
-    expect(screen.getByText('가진 아이템이 없어요.')).toBeInTheDocument();
-    expect(document.querySelector('button[aria-pressed]')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '카드 보기' }));
+    expect(screen.getByRole('button', { name: '목록 보기' })).toBeInTheDocument();
   });
 
   it('가방 유물 섹션 — 보유 유물의 등급·효과를 보이고, 없으면 얻는 곳을 안내한다', () => {
@@ -1138,7 +1154,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     seed({});
     render(<App />);
     fireEvent.keyDown(document, { key: '3' }); // 시작 씬 = 마을
-    const zone = () => document.querySelector('button[aria-pressed="true"]')?.textContent ?? '';
+    const zone = () => [...document.querySelectorAll('aside button[aria-pressed="true"]')].at(-1)?.textContent ?? '';
     expect(zone()).toMatch(/^마을/);
     fireEvent.keyDown(document, { key: 'Tab' });
     expect(zone()).toMatch(/^태평양/);
@@ -1157,7 +1173,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     fireEvent.keyDown(document, { key: '3' });
     fireEvent.keyDown(document, { key: '3' });
     fireEvent.keyDown(document, { key: '3' }); // 일반 → 돌연변이 → 네임드
-    const zone = () => document.querySelector('button[aria-pressed="true"]')?.textContent ?? '';
+    const zone = () => [...document.querySelectorAll('aside button[aria-pressed="true"]')].at(-1)?.textContent ?? '';
     expect(zone()).toMatch(/^태평양/); // 마을은 수배가 없어 첫 수배 해역을 대신 보인다
     fireEvent.keyDown(document, { key: 'Tab' });
     expect(zone()).toMatch(/^동남아/);
@@ -1236,7 +1252,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     openRow('붕어');
     fireEvent.click(screen.getByLabelText('크기 미상 5마리 잠금'));
     clickFurniture('sell');
-    expect(screen.getByText(/^판매 \(/)).toBeDisabled(); // 5마리 전부 판매에서 빠진다
+    expect(sellButton(0)).toBeDisabled(); // 5마리 전부 판매에서 빠진다
   });
 
   it('행 안 정렬: 변이가 먼저, 각 무리에서 큰 개체부터', () => {
@@ -1284,9 +1300,10 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     render(<App />);
     clickFurniture('sell');
     fireEvent.click(screen.getByLabelText('잉어 개체 펼치기'));
-    expect(screen.getByRole('button', { name: sellLabel(CARP * (1 + VARIANT_PRICE_MULT)) })).toBeInTheDocument();
+    expectSellTotal(CARP * (1 + VARIANT_PRICE_MULT), 2);
     fireEvent.click(screen.getByText('20.0cm').closest('[role="button"]')!); // 일반 제외
-    fireEvent.click(screen.getByRole('button', { name: sellLabel(CARP * VARIANT_PRICE_MULT) }));  // 변이만
+    expectSellTotal(CARP * VARIANT_PRICE_MULT, 1);
+    fireEvent.click(sellButton(1));  // 변이만
     expect(hud()).toMatch(new RegExp(`골드 ${CARP * VARIANT_PRICE_MULT}(?![\\d.,])`));
   });
 
@@ -1296,7 +1313,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
            dex: { carp: { normal: rec(2), variant: rec(1) }, crucian: { normal: rec(5) } } });
     render(<App />);
     clickTab(/^가방/);
-    clickTab('카드'); // 물고기 섹션의 목록/카드 서브탭
+    fireEvent.click(screen.getByRole('button', { name: '카드 보기' })); // 물고기 섹션의 목록/카드 보기 전환 아이콘
     expect(screen.getByLabelText('잉어 일반 2마리 돌연변이 1마리 보유')).toBeInTheDocument();
     expect(screen.getAllByText('???').length).toBeGreaterThan(0); // 미발견 종
     expect(screen.queryByText('30G')).not.toBeInTheDocument();    // 카드엔 값을 안 건다
@@ -1324,7 +1341,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     });
     render(<App />);
     clickTab(/^가방/);
-    clickTab('카드');
+    fireEvent.click(screen.getByRole('button', { name: '카드 보기' }));
     const names = screen.getAllByText(/^(잉어|붕어|\?\?\?)$/).map(e => e.textContent);
     expect(names.slice(0, 3)).toEqual(['잉어', '붕어', '???']); // 보유 → 발견 → 미발견
   });
@@ -1349,7 +1366,8 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     openRow('잉어');
     fireEvent.click(screen.getByLabelText('40.0cm 잉어 잠금')); // 큰 놈만 자물쇠
     clickFurniture('sell');
-    fireEvent.click(screen.getByRole('button', { name: sellLabel(CARP) })); // 작은 놈 1마리만
+    expectSellTotal(CARP, 1);
+    fireEvent.click(sellButton(1)); // 작은 놈 1마리만
     expect(hud()).toMatch(new RegExp(`골드 ${CARP}(?![\\d.,])`));
     expect(hud()).toContain('가방 1 /');
   });
@@ -1360,7 +1378,8 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     clickTab(/^가방/);
     fireEvent.click(screen.getByLabelText('잉어 전체 잠금 해제')); // 🔓
     clickFurniture('sell');
-    fireEvent.click(screen.getByRole('button', { name: sellLabel(CARP) }));
+    expectSellTotal(CARP, 1);
+    fireEvent.click(sellButton(1));
     expect(hud()).toMatch(new RegExp(`골드 ${CARP}(?![\\d.,])`));
     expect(hud()).toContain('가방 0 /');
   });
@@ -1391,6 +1410,18 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     fireEvent.click(screen.getByLabelText('자동 잠금'));
     expect(screen.getByText(/정리할 잠금이 없어요/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '정리' })).toBeNull();
+  });
+
+  it('가공 플랜트선 보유 시 바다에서도 가방 하단 기운 얻기 버튼으로 기운 얻기 창을 연다', () => {
+    seed({ boat: MAX_BOAT, location: { kind: 'region', id: 'world' }, bag: [inst('crucian')] });
+    render(<App />);
+    clickTab(/^가방/);
+    fireEvent.click(screen.getByRole('button', { name: '기운 얻기' }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('heading', { level: 3, name: '기운 얻기' })).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: '판매' })).toBeNull();
+    expect(within(dialog).getByRole('group', { name: '등급 선택' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: '기운 얻기 (1마리)' })).toBeEnabled();
   });
 });
 

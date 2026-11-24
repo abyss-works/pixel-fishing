@@ -400,7 +400,7 @@ function SpotDashboard({ spot, rarityFilter, open, onToggle, evs, prevEvs, sim, 
                 {visibleNightList.length > 0 && (
                   <tr aria-hidden="true">
                     <td colSpan={7} className="bg-bg/80 text-2xs text-accent py-0.5 px-1 border-y border-line">
-                      밤 전용 — 낮 시간대 풀에 없음 (게임 20시~다음 4시 · 아래 확률은 밤 시간대 풀 기준)
+                      밤 전용 — 낮 시간대 풀에 없음 (게임 22시~다음 6시, 심야 02시 최대 가중치 기준 · 아래 확률은 밤 시간대 풀 기준)
                     </td>
                   </tr>
                 )}

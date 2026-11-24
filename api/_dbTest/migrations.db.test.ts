@@ -293,4 +293,109 @@ describe('테스트 데이터베이스', () => {
       }
     });
   });
+
+  describe('guild_member_enhancements (0040)', () => {
+    const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
+    const setupGuildUser = async (c: Client) => {
+      const uid = randomUUID();
+      await c.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, false)`, [uid, `${uid}@example.test`]);
+      const { rows: [g] } = await c.query<{ id: string }>(
+        `insert into public.guilds (name, code) values ($1, upper(substr(md5(random()::text), 1, 8))) returning id`,
+        [`g${uid.slice(0, 6)}`],
+      );
+      return { uid, guildId: g.id };
+    };
+
+    it('복합 PK·기본값·check 제약(5종 보너스, rank 0~5)과 cascade 삭제를 강제한다', async () => {
+      const { uid, guildId } = await setupGuildUser(client);
+      const { rows: [inserted] } = await client.query<{ rank: number; updated_at: Date }>(
+        `insert into public.guild_member_enhancements (guild_id, user_id, bonus) values ($1, $2, 'sell')
+         returning rank, updated_at`,
+        [guildId, uid],
+      );
+      expect(inserted.rank).toBe(0);
+      expect(inserted.updated_at).toBeInstanceOf(Date);
+
+      await expect(client.query(
+        `insert into public.guild_member_enhancements (guild_id, user_id, bonus, rank) values ($1, $2, 'sell', 1)`,
+        [guildId, uid],
+      )).rejects.toMatchObject({ code: '23505' });
+      await expect(client.query(
+        `insert into public.guild_member_enhancements (guild_id, user_id, bonus, rank) values ($1, $2, 'invalid', 1)`,
+        [guildId, uid],
+      )).rejects.toMatchObject({ code: '23514' });
+      await expect(client.query(
+        `insert into public.guild_member_enhancements (guild_id, user_id, bonus, rank) values ($1, $2, 'bag', -1)`,
+        [guildId, uid],
+      )).rejects.toMatchObject({ code: '23514' });
+      await expect(client.query(
+        `insert into public.guild_member_enhancements (guild_id, user_id, bonus, rank) values ($1, $2, 'bag', 6)`,
+        [guildId, uid],
+      )).rejects.toMatchObject({ code: '23514' });
+
+      // 길드 삭제 및 사용자 삭제 시 cascade
+      await client.query(`delete from public.guilds where id = $1`, [guildId]);
+      expect((await client.query(
+        `select 1 from public.guild_member_enhancements where guild_id = $1`, [guildId],
+      )).rows).toHaveLength(0);
+
+      const second = await setupGuildUser(client);
+      await client.query(
+        `insert into public.guild_member_enhancements (guild_id, user_id, bonus, rank) values ($1, $2, 'rare', 3)`,
+        [second.guildId, second.uid],
+      );
+      await client.query(`delete from auth.users where id = $1`, [second.uid]);
+      expect((await client.query(
+        `select 1 from public.guild_member_enhancements where user_id = $1`, [second.uid],
+      )).rows).toHaveLength(0);
+    });
+
+    it('인증 사용자는 본인 개인 자유 강화 행도 읽거나 쓰지 못한다 — 서버 전용', async () => {
+      const { uid, guildId } = await setupGuildUser(client);
+      await client.query(
+        `insert into public.guild_member_enhancements (guild_id, user_id, bonus, rank) values ($1, $2, 'sell', 2)`,
+        [guildId, uid],
+      );
+      await client.query('begin');
+      try {
+        await client.query('set local role authenticated');
+        await client.query(`select set_config('request.jwt.claim.sub', $1, true)`, [uid]);
+        expect((await client.query('select bonus from public.guild_member_enhancements')).rows).toEqual([]);
+        await expect(client.query(
+          `insert into public.guild_member_enhancements (guild_id, user_id, bonus, rank) values ($1, $2, 'bag', 1)`,
+          [guildId, uid],
+        )).rejects.toMatchObject({ code: '42501' });
+      } finally {
+        await client.query('rollback');
+      }
+    });
+
+    it('0040 업/다운 적용 시 기존 공용 enhance_rank를 0으로 초기화하고 기본 rank·pool은 유지한다', async () => {
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        const { guildId } = await setupGuildUser(other);
+        await other.query(migration('0040_guild_member_enhancements.down.sql'));
+        await other.query(
+          `insert into public.guild_bonuses (guild_id, bonus, rank, enhance_rank, pool) values ($1, 'sell', 4, 3, 5000)`,
+          [guildId],
+        );
+        await other.query(migration('0040_guild_member_enhancements.sql'));
+        const { rows: [bonusRow] } = await other.query<{ rank: number; enhance_rank: number; pool: string }>(
+          `select rank, enhance_rank, pool from public.guild_bonuses where guild_id = $1 and bonus = 'sell'`,
+          [guildId],
+        );
+        expect({ rank: bonusRow.rank, enhanceRank: bonusRow.enhance_rank, pool: Number(bonusRow.pool) })
+          .toEqual({ rank: 4, enhanceRank: 0, pool: 5000 });
+        const { rows: [reg] } = await other.query<{ r: string | null }>(
+          `select to_regclass('public.guild_member_enhancements')::text as r`,
+        );
+        expect(reg.r).toBe('guild_member_enhancements');
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
 });

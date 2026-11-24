@@ -33,7 +33,7 @@ import { artifactLevelOf, commonWeightCutOf, extraCookChance, namedRewardOf } fr
 import { isTutorialId } from '../content/tutorials.js';
 import type { SpotId } from '../content/spots.js';
 import type { LocationRef } from '../content/places.js';
-import { canBuyBoat, canBuyHat, canChangeClothes, canClaimAchievement, canClaimAllAchievements, canEnterBase, canFish, canUpgradeRod, canWearHat, encounterQuests } from './rules.js';
+import { canBuyBoat, canBuyHat, canChangeClothes, canClaimAchievement, canClaimAllAchievements, canFish, canTravel, canUpgradeRod, canWearHat, encounterQuests } from './rules.js';
 import { hatById } from '../content/wardrobe.js';
 import { ACHIEVEMENTS, achievementById } from '../content/achievements.js';
 import { topZoneOfSpot } from '../content/zones.js';
@@ -51,10 +51,11 @@ import { reduceDebug } from './debug.js';
 import type { DevBountySnapshot } from './debug.js';
 import { addGradeEffect, rollFish } from './logic.js';
 import { JUDGMENT_MULT } from './balance.js';
-import { gameDayOf, isNight } from './time.js';
+import { gameDayOf, isNight, nightDepth } from './time.js';
 import type { DayPhase } from './time.js';
 import { NO_GUILD_EFFECTS } from './guild.js';
 import type { GuildEffects } from './guild.js';
+import { ensureFortune, luckMultOf } from './fortune.js';
 
 export interface DebugStepInput {
   command: string;
@@ -78,12 +79,12 @@ export type GameAction =
   | { type: 'debugBatch'; steps: DebugStepInput[] }                  // 개발 도구 명령 일괄 실행 — 단일 트랜잭션으로 순서대로 적용한다
   | { type: 'debugSnapshot' }                                        // 개발 도구 스냅샷 저장용 수배 DB 행 읽기 — 운영 서버는 거부한다
   | { type: 'dismissBaitRefund' }                            // 미끼 환불 안내를 닫는다 — 영수증을 지운다
-  | { type: 'extractEnergy'; uids: string[] }                // 기운 얻기 — 판매 시설이 있는 거점(집, 항구)에서 가방 개체를 등급별 기운으로 바꾼다
+  | { type: 'extractEnergy'; uids: string[] }                // 기운 얻기 — 거점이나 가공 플랜트선에서 가방 개체를 등급별 기운으로 바꾼다
   | { type: 'setEnergyTarget'; spot: SpotId; on: boolean }   // 기운 얻기 기본 선택의 해역별 덮어쓰기 — 고른 값은 기본값과 같아도 남는다
   | { type: 'resetEnergyTargets' }                           // 덮어쓰기를 모두 지워 기본값으로 되돌린다
   | { type: 'cook'; recipe: string; count: number }          // 조리 시작 — 집 거점, 기운 즉시 차감, 추가 완성은 서버가 추첨한다
   | { type: 'eat'; item: string; replaceSlot?: 'bait' | 'bait2' } // 먹기(쓰기) — 가방의 완성 요리 하나를 슬롯에 넣는다. 위치 제한 없음
-  | { type: 'boot'; buildId?: unknown }                      // 접속(부팅) 기록 — 상태 불변, DAU 정본
+  | { type: 'boot'; buildId?: unknown }                      // 접속(부팅) 기록 — DAU 정본. 그날 첫 접속이면 운세를 굴려 고정한다
   | { type: 'setNickname'; nickname: unknown }     // 닉네임 변경 — 형태는 리듀서, 중복은 서버(DB)가 본다
   | { type: 'seeTutorial'; id: unknown }           // 튜토리얼 창을 봤다 — 같은 트리거에서 다시 뜨지 않게 남긴다
   | { type: 'changeClothes'; shirt: unknown; pants: unknown } // 옷 바꾸기 — 웃옷·바지 팔레트 번호, 비용 없음
@@ -387,7 +388,9 @@ export function prepareCatchDraw(
   // 개발 도구 forcePhase가 허용되면 요청 단위로 낮/밤을 전환한다. 밤 어종 출현 미끼는 낮에도 밤 풀을 쓴다.
   const nightNow = forcePhase ? forcePhase === 'night' : isNight(now);
   const phase: DayPhase = nightNow || cook.nightUnlock ? 'night' : 'day';
-  let phaseOpts: DrawOptions & { phase: DayPhase } = { phase };
+  let phaseOpts: DrawOptions & { phase: DayPhase } = phase === 'night'
+    ? { phase, nightDepth: cook.nightUnlock || forcePhase === 'night' ? 1 : nightDepth(now) }
+    : { phase };
   for (const [grade, bonus] of Object.entries(cook.rarityWeight) as [RarityId, number][]) {
     phaseOpts = addGradeEffect(phaseOpts, grade, bonus);
   }
@@ -468,7 +471,7 @@ export function drawCatch(
   }
   const zoneLeg = zone ? (achievements.zoneLegendary[zone] ?? 0) : 0;
   if (zoneLeg > 0) phaseOpts = addGradeEffect(phaseOpts, 'legendary', zoneLeg);
-  const candidates = speciesPityCandidates(state.pity, spot, phaseOpts.phase);
+  const candidates = speciesPityCandidates(state.pity, spot, phaseOpts);
   const resolved = resolveSpeciesPity(state.pity, candidates, ownsNormal);
   const target = resolved.target ? FISH.find(f => f.id === resolved.target) : undefined;
   const guaranteed = firstCatchTarget(state.firstCatch, spot, phaseOpts.phase, rng);
@@ -505,6 +508,9 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       // 서버가 게이트를 재검증한다 — 클라 사전 체크(UX용)와 별개 (R5b)
       const gate = canFish(state, action.spot);
       if (!gate.ok) return { ok: false, error: gate.reason };
+      // 오늘의 운세 — 하루 첫 판정에서 굴려 그 게임 날짜에 고정한다. 같은 날짜면
+      // 이미 굴린 운세를 그대로 쓴다(불변 — rng를 쓰지 않는다)
+      state = ensureFortune(state, deps.now, deps.rng);
       // 네임드 조우 — 통상 추첨과 병행한다. 명중해도 이번 캐치는 그대로 진행하고
       // 도전권 발급 이벤트만 덧붙인다 (낚시 중단 없음). 발급 행 기록은
       // 서버가 이벤트를 보고 bounty_tickets에 쓴다.
@@ -515,7 +521,8 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const pz = powerZones(state, action.spot);
       const { judgment, phaseOpts, cook } = prepareCatchDraw(state, action.judgment, deps.now, pz, action.forcePhase);
       const named = drawNamedEncounter(state.namedPity, encounterQuests(deps.bounty), action.spot, deps.now,
-        deps.rng, action.forceEncounter === true, namedWeightBonus(state, action.judgment, deps.now, guild, achBonuses));
+        deps.rng, action.forceEncounter === true, namedWeightBonus(state, action.judgment, deps.now, guild, achBonuses),
+        luckMultOf(state.fortune, 'named'));
       const namedHit = named.quest;
       const ticketEvents: GameEvent[] = namedHit
         ? [{ type: 'ticket', payload: { questId: namedHit.id, ...(named.byCeiling ? { pity: true } : {}) } }]
@@ -523,7 +530,8 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const ticketResult = namedHit ? { ticket: namedHit.id } : {};
       // 호출 순서 고정: 추첨 → 부가 롤 — 구 클라이언트(Field)와 동일한 rng 소비 순서.
       // 어종 천장의 소유 판정은 리듀서가 가진 도감으로 한다.
-      const drawn = drawCatch(state, action.spot, judgment, rodPower(state), pz.mult, deps.rng, phaseOpts,
+      const drawn = drawCatch(state, action.spot, judgment, rodPower(state), pz.mult, deps.rng,
+        { ...phaseOpts, rarityLuck: luckMultOf(state.fortune, 'rarity') },
         id => (state.dex[id]?.normal?.count ?? 0) > 0, guild, cook, achBonuses);
       const { fish, extras } = drawn;
       // NEW 판정은 폼별 — 변이는 별개 개체 (v0.3.3)
@@ -584,8 +592,10 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
     case 'sell': {
       if (!Array.isArray(action.uids)) return { ok: false, error: 'bad-request' };
       const uids = action.uids.filter(u => typeof u === 'string');
+      // 오늘의 운세 — 하루 첫 판정에서 굴려 그 게임 날짜에 고정한다 (catch와 같은 규칙)
+      state = ensureFortune(state, deps.now, deps.rng);
       const totalSellBonus = Math.round(((deps.guild ?? NO_GUILD_EFFECTS).sell + achievementBonusesOf(state).sellBonus) * 1e9) / 1e9;
-      const next = sellSelected(state, uids, totalSellBonus);
+      const next = sellSelected(state, uids, totalSellBonus, luckMultOf(state.fortune, 'sell'));
       const gold = next.gold - state.gold;
       // 실제로 사라진 개체만 = 가방 차집합 (없는 uid·잠긴 개체는 자동 제외)
       const remaining = new Set(next.bag.map(i => i.uid));
@@ -620,10 +630,8 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const to = action.to;
       if (!to || typeof to.id !== 'string'
           || !isKnownLocation(to)) return { ok: false, error: 'bad-request' };
-      if (to.kind === 'base') {
-        const check = canEnterBase(state, to.id);
-        if (!check.ok) return { ok: false, error: check.reason };
-      }
+      const check = canTravel(state, to);
+      if (!check.ok) return { ok: false, error: check.reason };
       const next = travel(state, to);
       // 첫 방문만 이벤트로 남긴다 — 오갈 때마다 남기면 스트림이 이동 로그로 뒤덮인다.
       // 업적 진행도는 state.visited가 들고 있으므로 이벤트는 "언제 처음 갔나"의 기록이다.
@@ -700,7 +708,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       // 기운 얻기 — 대상 개체와 등급은 서버가 정한다(클라가 보낸 uid만 받는다). 잠금, 전시, 가방에 없는 개체는 제외한다.
       // 도감과 명성은 잡을 때 이미 남았으므로 건드리지 않는다.
       if (!Array.isArray(action.uids) || action.uids.some(u => typeof u !== 'string')) return { ok: false, error: 'bad-request' };
-      const check = canExtractEnergy(state);
+      const check = canExtractEnergy(state, deps.guest);
       if (!check.ok) return { ok: false, error: check.reason };
       const gain = energyGain(state, action.uids);
       if (gain.uids.length === 0) return { ok: true, state, result: { type: 'extract', energy: gain.byGrade }, events: [] };
@@ -869,17 +877,19 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       };
     }
     case 'boot': {
-      // 접속(부팅) 기록 — sendLetter와 같은 "상태가 아닌 이벤트" 계열. 편지(events)와 마찬가지로
-      // 상태를 안 바꾸고 흔적만 남긴다. 이벤트 스트림에 접속 행이 생기는 순간 DAU·리텐션이
+      // 접속(부팅) 기록 — 이벤트 스트림에 접속 행이 생기는 순간 DAU·리텐션이
       // '행동한 유저'가 아니라 '들어온 유저'의 정본이 된다(새로고침 = 1부팅).
       // buildId를 함께 남겨 어느 배포 시점의 접속인지도 쪼갤 수 있다. 식별자 상한 64자 —
       // 깨진 클라이언트가 이벤트 payload를 무한히 부리지 않게 (LETTER_MAX와 같은 판단).
       // 결과에는 어군 배치 날짜를 싣는다 — deps.now가 서버 시계라 모든 클라이언트가 같은
       // 배치를 계산하고, 클라이언트는 이 값을 세션 동안 유지한다(04:00이 지나도 재배치 없음).
+      // 상태 유일 변경은 운세 — 그 게임 날짜의 첫 접속에서 굴려 고정해, 접속 모달과
+      // 판매 미리보기가 첫 판정 전에도 그날의 운세를 안다.
       const buildId = typeof action.buildId === 'string'
         ? action.buildId.trim().slice(0, 64) : '';
       return {
-        ok: true, state, result: { type: 'boot', schoolDay: gameDayOf(deps.now) },
+        ok: true, state: ensureFortune(state, deps.now, deps.rng),
+        result: { type: 'boot', schoolDay: gameDayOf(deps.now) },
         events: [{ type: 'boot', payload: buildId ? { buildId } : {} }],
       };
     }

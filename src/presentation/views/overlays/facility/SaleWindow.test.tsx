@@ -9,8 +9,10 @@ import type { SpotId } from '../../../../game/content/spots';
 import { COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, toStoredEnergy } from '../../../../game/content/cooking';
 import { resetBagView } from '../../game/tabs/bag/bagView';
 import { resetKeyScopes } from '../../../ui/hotkeys';
+import { fmtFishCount, fmtGold } from '../../../ui/format';
 import type { AccountLockState } from '../../../../features/display/model/menuLock';
 import FacilityModal from './FacilityModal';
+import SaleWindow from './SaleWindow';
 
 afterEach(() => { cleanup(); resetKeyScopes(); resetBagView(); });
 
@@ -23,15 +25,18 @@ const inst = (uid: string, fishId: string, over: Partial<FishInstance> = {}): Fi
   ({ uid, fishId, form: 'normal', size: 20, caughtAt: null, spot: null, judgment: null, locked: false, ...over });
 const inSpot = (uid: string, spot: SpotId, over: Partial<FishInstance> = {}): FishInstance => inst(uid, fishIn(spot).id, over);
 
-function show(game: GameState, opts: { base?: BaseId; accountState?: AccountLockState; result?: { type: string; [k: string]: unknown } } = {}) {
+function show(game: GameState, opts: { panel?: 'sell' | 'energy'; base?: BaseId; accountState?: AccountLockState; sellBonus?: number; result?: { type: string; [k: string]: unknown } } = {}) {
   const dispatch = vi.fn(() => ({ status: 'ok' as const, state: game, result: (opts.result ?? { type: 'none' }) as never }));
   const setToast = vi.fn();
   const onClose = vi.fn();
-  render(<FacilityModal panel="sell" base={opts.base ?? 'home'} accountState={opts.accountState} sellBonus={0} game={game}
+  const panel = opts.panel ?? 'sell';
+  render(<FacilityModal panel={panel} base={panel === 'energy' ? opts.base : (opts.base ?? 'home')} accountState={opts.accountState} sellBonus={opts.sellBonus ?? 0} game={game}
                         dispatch={dispatch} setToast={setToast} onClose={onClose} />);
   return { dispatch, setToast, onClose };
 }
 const tab = (name: string) => screen.getAllByRole('button').find(b => b.closest('.pf-tabbar') && b.textContent?.startsWith(name))!;
+const sellConfirm = (name: string | RegExp = '판매') =>
+  screen.getAllByRole('button', { name }).find(b => !b.closest('.pf-tabbar'))!;
 const heads = (table: HTMLElement) => within(table).getAllByRole('columnheader').map(h => h.textContent);
 const tables = () => screen.getAllByRole('table');
 const compareTable = () => tables().find(t => heads(t)[1] === '현재')!;
@@ -97,9 +102,10 @@ describe('판매 탭', () => {
     expect(screen.getByText('판매할 물고기').nextSibling).toHaveTextContent('2마리');
     fireEvent.click(screen.getByRole('button', { name: `${carp.name} 판매 해제` }));
     expect(screen.getByText('판매할 물고기').nextSibling).toHaveTextContent('1마리');
+    expect(screen.getByText('받을 골드').nextSibling).toHaveTextContent(fmtGold(crucian.price));
     const gold = within(compareTable()).getByText('골드').closest('tr')!;
     expect(within(gold).getByText(`${crucian.price}G`)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: `판매 (+${crucian.price}G)` })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '판매 (1마리)' })).toBeEnabled();
   });
 
   it('체크가 없어도 비교 표와 확정 영역의 줄은 그대로 있고 확정 버튼만 막힌다', () => {
@@ -107,8 +113,9 @@ describe('판매 탭', () => {
     fireEvent.click(screen.getByRole('button', { name: `${crucian.name} 판매 해제` }));
     expect(within(compareTable()).getAllByRole('row')).toHaveLength(3); // 머리와 두 줄
     expect(screen.getByText('판매할 물고기').nextSibling).toHaveTextContent('0마리');
+    expect(screen.getByText('받을 골드').nextSibling).toHaveTextContent('0G');
     expect(screen.getByText(/판매한 물고기는 되찾을 수 없어요/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^판매 \(/ })).toBeDisabled();
+    expect(sellConfirm('판매')).toBeDisabled();
   });
 
   it('안내는 두 줄이고 잠근 개체 안내 문단은 없다', () => {
@@ -130,7 +137,7 @@ describe('판매 탭', () => {
   it('해제한 어종은 빼고 판매 확정이 나머지 개체의 uid를 보낸다', () => {
     const { dispatch } = show(seed({ bag: [inst('a', crucian.id), inst('b', carp.id)] }));
     fireEvent.click(screen.getByRole('button', { name: `${carp.name} 판매 해제` }));
-    fireEvent.click(screen.getByRole('button', { name: `판매 (+${crucian.price}G)` }));
+    fireEvent.click(screen.getByRole('button', { name: '판매 (1마리)' }));
     expect(dispatch).toHaveBeenCalledWith({ type: 'sell', uids: ['a'] });
   });
 
@@ -146,7 +153,7 @@ describe('판매 탭', () => {
     fireEvent.click(screen.getByRole('button', { name: `${crucian.name} 개체 펼치기` }));
     const lines = screen.getAllByRole('button').filter(b => /cm/.test(b.textContent ?? ''));
     fireEvent.click(lines[0]); // 큰 개체가 먼저 나온다
-    fireEvent.click(screen.getByRole('button', { name: `판매 (+${crucian.price}G)` }));
+    fireEvent.click(screen.getByRole('button', { name: '판매 (1마리)' }));
     expect(dispatch).toHaveBeenCalledWith({ type: 'sell', uids: ['b'] });
   });
 
@@ -154,23 +161,53 @@ describe('판매 탭', () => {
     show(seed({ gold: 9 }));
     expect(screen.getByText(/가방이 비어 있어요/)).toBeInTheDocument();
     expect(within(compareTable()).getAllByRole('row')).toHaveLength(3);
-    expect(screen.getByRole('button', { name: /^판매 \(/ })).toBeDisabled();
+    expect(sellConfirm('판매')).toBeDisabled();
+  });
+
+  it('길드 보너스가 붙은 고액 보정 금액은 버튼 밖 확정 정보 줄(받을 골드)에 표시되고 버튼에는 마릿수만 남는다', () => {
+    const topFish = [...FISH].sort((a, b) => b.price - a.price)[0];
+    const count = Math.ceil(50_000_000 / topFish.price);
+    const bag = Array.from({ length: count }, (_, i) => inst(`hi-${i}`, topFish.id));
+    const bonusRate = 0.1;
+    const base = count * topFish.price;
+    const bonus = Math.round(base * bonusRate);
+    const total = base + bonus;
+
+    show(seed({ bag }), { sellBonus: bonusRate });
+
+    const confirm = screen.getByRole('button', { name: `판매 (${fmtFishCount(count)})` });
+    expect(confirm).toBeEnabled();
+    expect(confirm.textContent).toBe(`판매 (${fmtFishCount(count)})`);
+    expect(confirm.textContent).not.toContain('G');
+
+    const receiveLabel = screen.getByText('받을 골드');
+    const receiveValue = receiveLabel.nextSibling as HTMLElement;
+    expect(receiveLabel.compareDocumentPosition(confirm) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(receiveValue.querySelector('s')?.textContent).toBe(fmtGold(base));
+    expect(receiveValue).toHaveTextContent(fmtGold(total));
+    fireEvent.mouseEnter(within(receiveValue).getByText(fmtGold(total)));
+    const tip = screen.getByRole('tooltip');
+    expect(tip).toHaveTextContent(`기본 금액${fmtGold(base)}`);
+    expect(tip).toHaveTextContent(`판매가 보너스+${fmtGold(bonus)}`);
+    expect(tip).toHaveTextContent(`합계${fmtGold(total)}`);
   });
 });
 
-describe('확정 영역 높이', () => {
-  // 확정 버튼 줄은 내용(보정 금액의 취소선 등)과 관계없이 같은 고정 높이 칸에 든다. 두 탭이 같은 칸을 쓰므로 확정 영역의 높이가 같다
+describe('확정 영역 계약', () => {
   const slotOf = (button: HTMLElement) => button.closest('[data-confirm-row]') as HTMLElement;
 
-  it('판매 탭과 기운 얻기 탭의 확정 버튼이 같은 고정 높이 칸에 있다', () => {
+  it('판매 탭과 기운 얻기 탭의 확정 버튼이 모두 공용 확정 영역 칸(data-confirm-row) 안에 놓인다', () => {
     show(seed({ bag: [inSpot('b1', 'sea'), inSpot('c1', 'indian')] }));
-    const sell = slotOf(screen.getByRole('button', { name: /^판매 \(/ }));
-    fireEvent.click(tab('기운 얻기'));
-    const energy = slotOf(screen.getByRole('button', { name: /^기운 얻기 \(/ }));
+    const sellButton = screen.getByRole('button', { name: /^판매 \(/ });
+    const sell = slotOf(sellButton);
     expect(sell).not.toBeNull();
+    expect(sell).toContainElement(sellButton);
+    fireEvent.click(tab('기운 얻기'));
+    const energyButton = screen.getByRole('button', { name: /^기운 얻기 \(/ });
+    const energy = slotOf(energyButton);
     expect(energy).not.toBeNull();
+    expect(energy).toContainElement(energyButton);
     expect(sell.className).toBe(energy.className);
-    expect(sell.className).toMatch(/\bh-\d+\b/);
   });
 });
 
@@ -281,7 +318,7 @@ describe('기운 얻기 탭', () => {
     const button = screen.getByRole('button', { name: '기운 얻기 (3마리)' });
     expect(button).toBeDisabled();
     fireEvent.mouseEnter(button.parentElement!);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('집이나 항구에서만 할 수 있어요.');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('집이나 항구 또는 가공 플랜트선에서만 할 수 있어요.');
   });
 
   it('잠근 개체 안내 문단은 없고 잠긴 행의 자물쇠 툴팁이 알린다', () => {
@@ -312,6 +349,39 @@ describe('기운 얻기 탭', () => {
     expect(screen.getByRole('button', { name: `${fishIn('pond').name} 판매 선택` })).toBeInTheDocument();
     fireEvent.click(tab('기운 얻기'));
     expect(screen.getByRole('button', { name: '기운 얻기 (2마리)' })).toBeInTheDocument();
+  });
+});
+
+describe('등급 칩 스트립', () => {
+  // 어종 표 위의 등급 칩은 판매 탭과 기운 얻기 탭이 같은 표를 쓰므로 두 탭에 같이 있다. 칩 하나가 그 등급의 선택을 일괄로 켜고 끈다
+  const rare = FISH.find(f => f.id === 'carp')!;
+
+  it('판매 탭의 칩은 그 등급의 개체 전부를 한 번에 끄고 켠다', () => {
+    show(seed({ bag: [inst('a', crucian.id), inst('b', rare.id)] }));
+    expect(screen.getByText('판매할 물고기').nextSibling).toHaveTextContent('2마리');
+    fireEvent.click(screen.getByRole('button', { name: '희귀 등급 판매 해제' }));
+    expect(screen.getByText('판매할 물고기').nextSibling).toHaveTextContent('1마리');
+    fireEvent.click(screen.getByRole('button', { name: '희귀 등급 판매 선택' }));
+    expect(screen.getByText('판매할 물고기').nextSibling).toHaveTextContent('2마리');
+  });
+
+  it('판매 확정은 칩으로 끈 등급을 제외한 개체의 uid를 보낸다', () => {
+    const { dispatch } = show(seed({ bag: [inst('a', crucian.id), inst('b', rare.id)] }));
+    fireEvent.click(screen.getByRole('button', { name: '희귀 등급 판매 해제' }));
+    fireEvent.click(screen.getByRole('button', { name: '판매 (1마리)' }));
+    expect(dispatch).toHaveBeenCalledWith({ type: 'sell', uids: ['a'] });
+  });
+
+  it('기운 얻기 탭에도 같은 스트립이 있고 칩은 기본값이 꺼진 해역의 같은 등급까지 함께 고른다', () => {
+    const { dispatch } = (() => { const out = show(seed({ bag: [inSpot('a', 'pond'), inSpot('c', 'indian')] })); fireEvent.click(tab('기운 얻기')); return out; })();
+    expect(screen.getByRole('button', { name: '기운 얻기 (1마리)' })).toBeInTheDocument(); // 인도양은 기본 꺼짐
+    fireEvent.click(screen.getByRole('button', { name: '일반 등급 기운 얻기 선택' }));
+    fireEvent.click(screen.getByRole('button', { name: '기운 얻기 (2마리)' }));
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'extractEnergy', uids: expect.arrayContaining(['a', 'c']) }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: '일반 등급 기운 얻기 해제' }));
+    expect(screen.getByRole('button', { name: '기운 얻기 (0마리)' })).toBeDisabled();
   });
 });
 
@@ -366,6 +436,29 @@ describe('기운 얻기 탭의 잠금', () => {
     show(seed({ boat: COOKING_UNLOCK_BOAT }));
     expect(tab('기운 얻기')).not.toHaveAttribute('aria-disabled');
   });
+
+  it('거점에서 기운 얻기 탭을 먼저 열어 주면 기운 얻기 탭이 먼저 열리고 판매 탭도 쓸 수 있다', () => {
+    const sampleBag = [inSpot('a1', 'pond'), inSpot('a2', 'pond'), inSpot('b1', 'sea')];
+    const g = seed({ bag: sampleBag });
+    render(
+      <SaleWindow
+        game={g}
+        base="harbor"
+        initialTab="energy"
+        accountState="account"
+        sellBonus={0}
+        busy={false}
+        act={vi.fn()}
+        onSell={vi.fn()}
+        setToast={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(title()).toBe('어시장');
+    expect(tab('기운 얻기')).toHaveClass('active');
+    expect(tab('판매')).not.toHaveAttribute('aria-disabled');
+    expect(screen.getByRole('button', { name: '기운 얻기 (3마리)' })).toBeEnabled();
+  });
 });
 
 describe('해역별 기운 대상 팝오버', () => {
@@ -389,9 +482,14 @@ describe('해역별 기운 대상 팝오버', () => {
     expect(screen.getAllByRole('dialog')).toHaveLength(1); // 창이 하나 더 뜨지 않는다
   });
 
-  it('톱니바퀴 버튼은 확정 버튼과 같은 높이의 정사각형이다', () => {
-    open();
-    expect(gear()).toHaveClass('h-full', 'aspect-square');
+  it('톱니바퀴 버튼은 확정 버튼과 같은 확정 영역에 있고 확정 버튼이 막혀도 열어 설정할 수 있다', () => {
+    open(seed({ bag: [inSpot('c1', 'indian')] }));
+    const confirm = screen.getByRole('button', { name: '기운 얻기 (0마리)' });
+    expect(confirm).toBeDisabled();
+    expect(gear().closest('[data-confirm-row]')).toBe(confirm.closest('[data-confirm-row]'));
+    expect(gear()).toBeEnabled();
+    fireEvent.click(gear());
+    expect(pop()).toBeInTheDocument();
   });
 
   it('배로 갈 수 있는 해역마다 켜짐과 꺼짐 칩을 가장 앞선 해역부터 보인다', () => {

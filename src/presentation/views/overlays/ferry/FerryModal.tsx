@@ -9,7 +9,7 @@ import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
 
-// 여객선 빠른 이동 창 — 게임 스테이지 안에 뜬다. 지금 있는 항구를 뺀 항구를 바다 이름과 함께 늘어놓고,
+// 여객선 빠른 이동 창 — 게임 스테이지 안에 뜬다. 지금 있는 거점을 뺀 항구를 바다 이름과 함께 늘어놓고,
 // 배가 그 바다에 들어설 수 없는 항구는 필요한 배를 회색으로 보이며 잠근다. 확인과 이동은 호출부가 맡는다.
 export default function FerryModal({ game, from, onPick, onClose }: {
   game: GameState;

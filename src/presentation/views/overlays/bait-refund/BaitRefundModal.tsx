@@ -12,7 +12,7 @@ import { fmtGold } from '../../../ui/format';
 export default function BaitRefundModal({ notice, onClose }: { notice: BaitRefundNotice; onClose: () => void }) {
   const [lead, ...rest] = notice.lines;
   return (
-    <NoticeDialog title={notice.title} onClose={onClose} body={
+    <NoticeDialog layer="stage" title={notice.title} onClose={onClose} body={
       <div className="flex flex-col gap-3">
         <NoticeBody lead={lead}>
           {rest.map(line => <p key={line}>{line}</p>)}

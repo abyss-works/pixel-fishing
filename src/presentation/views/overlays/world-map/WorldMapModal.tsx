@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import Modal from '../../../ui/Modal';
+import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
-import PageTitle from '../../../ui/PageTitle';
 import { cx } from '../../../ui/cx';
 import Button from '../../../ui/Button';
 import PixelIcon from '../../../ui/PixelIcon';
@@ -136,37 +136,38 @@ export default function WorldMapModal({ world, onClose }: {
   }, [atlas]);
 
   return (
-    <Modal layer="app" onClose={onClose} className="pf-modal-worldmap"
-           header={<PageTitle className="mb-2 pr-6">세계지도</PageTitle>}>
-      <div className="relative">
-        <canvas ref={canvasRef} width={w} height={h}
-                className={cx('block w-full h-auto border border-line rounded-sm bg-bg touch-none',
-                              '[image-rendering:pixelated]',
-                              view.scale > MAP_ZOOM_MIN && (dragging ? 'cursor-grabbing' : 'cursor-grab'))}
-                aria-label="세계지도"
-                onPointerDown={onPointerDown} onPointerMove={onPointerMove}
-                onPointerUp={endDrag} onPointerCancel={endDrag} />
-        <div className="absolute top-2 right-2 flex items-center gap-1 pf-glass p-1 rounded-sm">
-          <Button size="sm" aria-label="축소" disabled={view.scale <= MAP_ZOOM_MIN}
-                  onClick={() => zoomBy(1 / MAP_ZOOM_STEP)}>
-            <PixelIcon glyph="minus" size={10} />
-          </Button>
-          <span className="pf-accent text-xs text-text-dim w-10 text-center" aria-live="polite">
-            {Math.round(view.scale * 100)}%
-          </span>
-          <Button size="sm" aria-label="확대" disabled={view.scale >= MAP_ZOOM_MAX}
-                  onClick={() => zoomBy(MAP_ZOOM_STEP)}>
-            <PixelIcon glyph="plus" size={10} />
-          </Button>
-          <Button size="sm" disabled={view.scale <= MAP_ZOOM_MIN} onClick={() => setView(FULL_VIEW)}>
-            전체
-          </Button>
+    <Modal layer="stage" worldmap onClose={onClose}>
+      <ModalCard title="세계지도" onClose={onClose}>
+        <div className="relative">
+          <canvas ref={canvasRef} width={w} height={h}
+                  className={cx('block w-full h-auto border border-line rounded-sm bg-bg touch-none',
+                                '[image-rendering:pixelated]',
+                                view.scale > MAP_ZOOM_MIN && (dragging ? 'cursor-grabbing' : 'cursor-grab'))}
+                  aria-label="세계지도"
+                  onPointerDown={onPointerDown} onPointerMove={onPointerMove}
+                  onPointerUp={endDrag} onPointerCancel={endDrag} />
+          <div className="absolute top-2 right-2 flex items-center gap-1 pf-glass p-1 rounded-sm">
+            <Button size="sm" aria-label="축소" disabled={view.scale <= MAP_ZOOM_MIN}
+                    onClick={() => zoomBy(1 / MAP_ZOOM_STEP)}>
+              <PixelIcon glyph="minus" size={10} />
+            </Button>
+            <span className="pf-accent text-xs text-text-dim w-10 text-center" aria-live="polite">
+              {Math.round(view.scale * 100)}%
+            </span>
+            <Button size="sm" aria-label="확대" disabled={view.scale >= MAP_ZOOM_MAX}
+                    onClick={() => zoomBy(MAP_ZOOM_STEP)}>
+              <PixelIcon glyph="plus" size={10} />
+            </Button>
+            <Button size="sm" disabled={view.scale <= MAP_ZOOM_MIN} onClick={() => setView(FULL_VIEW)}>
+              전체
+            </Button>
+          </div>
         </div>
-      </div>
-      <Note className="mb-0">
-        밝은 바다는 지금 배로 갈 수 있는 곳이에요.<br />회색 바다는 아직 지금 배로 갈 수 없어요.<br />
-        휠이나 버튼으로 확대하고, 끌어서 둘러볼 수 있어요.
-      </Note>
+        <Note className="mb-0">
+          밝은 바다는 지금 배로 갈 수 있는 곳이에요.<br />회색 바다는 아직 지금 배로 갈 수 없어요.<br />
+          휠이나 버튼으로 확대하고, 끌어서 둘러볼 수 있어요.
+        </Note>
+      </ModalCard>
     </Modal>
   );
 }

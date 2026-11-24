@@ -43,7 +43,7 @@ const open = (account: string | null, method: typeof actions.method, guestProgre
   const setToast = vi.fn();
   const onAuthChanged = vi.fn(async () => {});
   const onClose = vi.fn();
-  const view = render(<AccountModal setToast={setToast} onAuthChanged={onAuthChanged} onClose={onClose} account={account} accountFailed={accountFailed}
+  const view = render(<AccountModal layer="app" setToast={setToast} onAuthChanged={onAuthChanged} onClose={onClose} account={account} accountFailed={accountFailed}
                                     guestProgress={guestProgress} recheckGuestProgress={actions.recheck} />);
   return { setToast, onAuthChanged, onClose, unmount: view.unmount };
 };
@@ -384,5 +384,29 @@ describe('계정 확인 실패', () => {
     await waitFor(() => expect(button).toBeDisabled());
     release();
     await waitFor(() => expect(button).not.toBeDisabled());
+  });
+
+  it('layer="stage"에서 게스트 이메일 로그인 확인 창은 ModalCard 바깥 형제로 마운트돼 스테이지 전체를 덮는다', async () => {
+    actions.method = 'guest';
+    render(
+      <div data-testid="stage">
+        <AccountModal layer="stage" setToast={vi.fn()} onAuthChanged={vi.fn(async () => {})} onClose={vi.fn()}
+                      account={null} accountFailed={false} guestProgress="some" recheckGuestProgress={actions.recheck} />
+      </div>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: '기존 이메일 계정으로 로그인' }));
+    fireEvent.change(screen.getByLabelText('이메일'), { target: { value: 'old@example.com' } });
+    fireEvent.change(screen.getByLabelText(/^비밀번호/), { target: { value: 'secret1' } });
+    fireEvent.click(screen.getByRole('button', { name: '로그인' }));
+
+    const confirmText = await screen.findByText('지금 게스트 진행은 사라져요.');
+    const accountDialog = screen.getByRole('dialog', { name: '계정 관리' });
+    const confirmDialog = confirmText.closest('[role="dialog"]') as HTMLElement;
+    const stage = screen.getByTestId('stage');
+    expect(accountDialog).not.toBe(confirmDialog);
+    expect(accountDialog.contains(confirmDialog)).toBe(false);
+    expect(stage).toContainElement(confirmDialog);
+    expect(confirmDialog.parentElement!.className).toContain('absolute inset-0');
+    expect(confirmDialog.parentElement!.className).toContain('z-(--z-stage-modal)');
   });
 });

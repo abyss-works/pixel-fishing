@@ -63,7 +63,7 @@ describe('ModalCard', () => {
     expect(screen.getByText('조우').parentElement).toHaveClass('text-center', 'text-sm');
   });
   it('앱 모달은 제목을 고정하고 본문 한 칸만 공용 스크롤 방식으로 스크롤한다', () => {
-    render(<Modal title="설정" onClose={() => {}}><p>내용</p></Modal>);
+    render(<Modal layer="app" title="설정" onClose={() => {}}><p>내용</p></Modal>);
     const box = screen.getByRole('dialog');
     const body = screen.getByText('내용').parentElement as HTMLElement;
     expect(box.className).not.toMatch(/pf-vscroll|pf-scroll|overflow/);
@@ -72,7 +72,7 @@ describe('ModalCard', () => {
     expect(box).toContainElement(body);
   });
   it('앱 모달의 header와 footer는 스크롤 칸 밖에 고정된다', () => {
-    render(<Modal onClose={() => {}} header={<h4>제목줄</h4>} footer={<button>확인</button>}><p>내용</p></Modal>);
+    render(<Modal layer="app" onClose={() => {}} header={<h4>제목줄</h4>} footer={<button>확인</button>}><p>내용</p></Modal>);
     const body = screen.getByText('내용').parentElement as HTMLElement;
     expect(body).toHaveClass('pf-vscroll');
     expect(body).not.toContainElement(screen.getByText('제목줄'));

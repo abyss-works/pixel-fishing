@@ -1,16 +1,18 @@
 // 판매 창의 기운 얻기 탭 모델 — 체크 기본값, 해역별 켜짐과 꺼짐, 고를 개체와 얻는 기운을 정한다.
 // 체크 기본값과 확정 가능 여부는 게임 규칙(energyTargetOf, canExtractEnergy)이 정하고, 이 모듈은 그 판정을 화면용 행으로 옮긴다.
 // 개체를 직접 고른 값(EnergyPicks)은 해역 기본값 위에 얹힌다. 화면이 들고 있는 선택 상태의 형식과 갱신 규칙이 여기 있다.
-import { ENERGY_ITEM_IDS } from '../../../game/content/cooking';
+import { ENERGY_ITEM_IDS, formatEnergy } from '../../../game/content/cooking';
 import { RARITY, RARITY_ORDER } from '../../../game/content/rarity';
 import type { RarityId } from '../../../game/content/rarity';
 import { SPOTS } from '../../../game/content/spots';
 import type { SpotId } from '../../../game/content/spots';
 import { energyGain, energyTargetOf, energyTargetRows, energyYield, canExtractEnergy } from '../../../game/rules/cooking';
-import { instanceFish } from '../../../game/rules/logic';
+import { REJECT_TEXT, instanceFish } from '../../../game/rules/logic';
 import type { FishInstance, GameState } from '../../../game/rules/logic';
 import type { RuleCheck } from '../../../game/rules/rules';
 import { gradeName } from '../../../shared/lib/gradeName';
+import { energyTabLock } from '../../display/model/menuLock';
+import type { AccountLockState } from '../../display/model/menuLock';
 import { selectSalePreview } from '../../inventory/model/catalog';
 import type { SaleRow } from '../../inventory/model/catalog';
 
@@ -107,4 +109,156 @@ export const energyRowValue = (row: SaleRow): number => energyYield(row.selected
 /** 결과 한 줄 — 얻은 등급만 등급 순서로. count는 저장 단위다 */
 export function energyResultRows(byGrade: Record<RarityId, number>): { grade: RarityId; count: number }[] {
   return RARITY_ORDER.filter(g => byGrade[g] > 0).map(grade => ({ grade, count: byGrade[grade] }));
+}
+
+export type EnergyGrade = RarityId;
+export type QuickEnergyGame = Pick<GameState, 'bag' | 'items' | 'boat' | 'location'>;
+
+export const defaultQuickEnergyGrades = (): Set<EnergyGrade> => new Set(RARITY_ORDER);
+
+export interface QuickEnergyChip {
+  grade: RarityId;
+  name: string;
+  /** 그 등급의 미잠금 물고기 수 */
+  fishCount: number;
+  /** 칩이 켜져 있는가 */
+  on: boolean;
+}
+
+export interface QuickEnergyTile {
+  grade: RarityId;
+  itemId: string;
+  label: string;
+  /** 얻을 기운(저장 단위) — 이 등급 칩이 켜져 있을 때만 양수 */
+  gain: number;
+  /** 지금 보유(저장 단위) */
+  current: number;
+  /** 획득 후(저장 단위) */
+  after: number;
+  gainText: string;
+  currentText: string;
+  afterText: string;
+  /** 이 등급 칩이 켜져 있는가 */
+  on: boolean;
+}
+
+export interface QuickEnergyView {
+  chips: QuickEnergyChip[];
+  tiles: QuickEnergyTile[];
+  /** 바꿀 물고기 uid 목록(미잠금 + 켜진 등급만) */
+  uids: string[];
+  /** 선택된 물고기 수 */
+  count: number;
+  /** 가방 안의 미잠금 물고기 전체 수 */
+  unlockedCount: number;
+  /** 가방 안의 잠긴 물고기 수 */
+  lockedCount: number;
+  /** 등급별 획득 기운(저장 단위) */
+  byGrade: Record<RarityId, number>;
+  /** 획득 기운 합(저장 단위) */
+  energyTotal: number;
+  /** 확정 가능 여부 — 게임 규칙 판정 */
+  allowed: RuleCheck;
+  /** 확정 불가 사유 문구 — 가능하면 null */
+  reason: string | null;
+}
+
+/** 가방 하단 간소화 기운 얻기 창 모델 — 등급별 미잠금 물고기만 토글해 일괄 변환한다 */
+export function selectQuickEnergyView(
+  game: QuickEnergyGame,
+  selectedGrades: ReadonlySet<RarityId>,
+): QuickEnergyView {
+  const byRarity = Object.fromEntries(RARITY_ORDER.map(r => [r, [] as string[]])) as Record<RarityId, string[]>;
+  let lockedCount = 0;
+  for (const inst of game.bag) {
+    if (inst.locked) {
+      lockedCount++;
+      continue;
+    }
+    const fish = instanceFish(inst);
+    if (fish) byRarity[fish.rarity].push(inst.uid);
+  }
+  const unlockedCount = RARITY_ORDER.reduce((sum, r) => sum + byRarity[r].length, 0);
+  const selectedUids = RARITY_ORDER.flatMap(r => (selectedGrades.has(r) ? byRarity[r] : []));
+  const gain = energyGain(game, selectedUids);
+
+  const chips = RARITY_ORDER.map((grade): QuickEnergyChip => {
+    const fishCount = byRarity[grade].length;
+    return {
+      grade,
+      name: RARITY[grade].name,
+      fishCount,
+      on: fishCount > 0 && selectedGrades.has(grade),
+    };
+  });
+  const tiles = RARITY_ORDER.map((grade): QuickEnergyTile => {
+    const current = game.items[ENERGY_ITEM_IDS[grade]] ?? 0;
+    const add = gain.byGrade[grade];
+    const after = current + add;
+    return {
+      grade,
+      itemId: ENERGY_ITEM_IDS[grade],
+      label: energyLabel(grade),
+      gain: add,
+      current,
+      after,
+      gainText: `+${formatEnergy(add)}`,
+      currentText: formatEnergy(current),
+      afterText: formatEnergy(after),
+      on: byRarity[grade].length > 0 && selectedGrades.has(grade),
+    };
+  });
+  const allowed = canExtractEnergy(game);
+
+  return {
+    chips,
+    tiles,
+    uids: gain.uids,
+    count: gain.uids.length,
+    unlockedCount,
+    lockedCount,
+    byGrade: gain.byGrade,
+    energyTotal: energyTotal(gain.byGrade),
+    allowed,
+    reason: allowed.ok ? null : REJECT_TEXT[allowed.reason],
+  };
+}
+
+/** 기운 얻기 성공 알림 문안 및 등급별 툴팁 행 조립 */
+export function buildEnergyExtractNotice(energy: Record<RarityId, number>) {
+  const total = formatEnergy(energyTotal(energy));
+  return {
+    kind: 'facility.energyExtracted' as const,
+    text: `${ENERGY_NAME} ${total}개를 얻었어요!`,
+    toastText: `${ENERGY_NAME} ${total}개 획득!`,
+    replaceKey: 'energy-extract',
+    tip: {
+      target: total,
+      rows: energyResultRows(energy).map(({ grade, count }) => ({
+        label: energyLabel(grade),
+        value: `+${formatEnergy(count)}`,
+      })),
+    },
+  };
+}
+
+export type BagEnergyEntry =
+  | { ok: true }
+  | { ok: false; lines: string[] };
+
+/** 가방 하단 기운 얻기 진입 버튼 활성 조건 — 계정 상태 잠금을 먼저 보고, 위치와 배 단계는 게임 규칙 판정을 따른다 */
+export function selectBagEnergyEntry(
+  game: Pick<GameState, 'boat' | 'location'>,
+  account: AccountLockState,
+): BagEnergyEntry {
+  const lock = energyTabLock(account, game.boat);
+  if (lock.kind === 'guest' || lock.kind === 'unverified') {
+    return { ok: false, lines: lock.lines };
+  }
+  const check = canExtractEnergy(game, false);
+  if (check.ok) return { ok: true };
+  if (check.reason === 'energy-locked' && lock.kind === 'progress') {
+    return { ok: false, lines: lock.lines };
+  }
+  return { ok: false, lines: [REJECT_TEXT[check.reason]] };
 }

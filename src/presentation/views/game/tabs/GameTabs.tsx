@@ -18,7 +18,7 @@ import VRegion from './region/VRegion';
 import BagTab from './bag/BagTab';
 import DexTab from './dex/DexTab';
 import SettingsTab from './settings/SettingsTab';
-import { BAG_SECTIONS, setBagLayout, setBagSection, useBagView } from './bag/bagView';
+import { BAG_SECTIONS, setBagSection, useBagView } from './bag/bagView';
 import type { BagSection } from './bag/bagView';
 import Sidebar from '../../../layouts/sidebar';
 import { pressSheetTab } from '../../../layouts/sidebar/sheet';
@@ -50,6 +50,8 @@ interface GameTabsProps {
   /** 모바일 시트가 열려 있는가와 그 변경 — 열림은 HUD 배치도 따르므로 화면 조립이 소유한다 */
   sheetOpen: boolean;
   onSheetOpenChange: (open: boolean) => void;
+  /** 가방 하단 기운 얻기 진입 버튼 */
+  onOpenEnergy?: () => void;
 }
 
 const BAG_SECTION_LABEL: Record<BagSection, string> = { fish: '물고기', items: '아이템', artifacts: '유물' };
@@ -63,7 +65,7 @@ export default function GameTabs(props: GameTabsProps) {
   const { activeTab, setActiveTab, game } = props;
   const [dexView, setDexView] = useState<DexView>('base');
   const [dexZone, setDexZone] = useState<ZoneId>(defaultZoneOfRegion(props.region));
-  const { layout, section } = useBagView();
+  const { section } = useBagView();
   const mobile = useMobileLayout();
 
   const tabs = [
@@ -102,14 +104,19 @@ export default function GameTabs(props: GameTabsProps) {
     setDexZone(ids[(at + direction + ids.length) % ids.length]);
   };
 
+  const cycleBagSection = (direction: 1 | -1) => {
+    const at = Math.max(0, BAG_SECTIONS.indexOf(section));
+    setBagSection(BAG_SECTIONS[(at + direction + BAG_SECTIONS.length) % BAG_SECTIONS.length]);
+  };
+
   useKeyScope(event => {
     if (hasModifier(event)) return;
-    // Tab / Shift+Tab = 활성 탭의 서브탭 순환(가방 물고기: 목록↔카드 · 도감: 지역).
-    // 서브탭이 없는 화면(가방 아이템·유물 등)에서는 아무것도 하지 않는다. 메뉴 탭은 숫자키만 바꾼다.
+    // Tab / Shift+Tab = 활성 탭의 서브탭 순환(가방: 물고기↔아이템↔유물 · 도감: 지역).
+    // 서브탭이 없는 화면(지역·도움말·설정 등)에서는 아무것도 하지 않는다. 메뉴 탭은 숫자키만 바꾼다.
     if (event.key === 'Tab') {
       event.preventDefault();
       const direction = event.shiftKey ? -1 : 1;
-      if (activeTab === 'bag' && section === 'fish') setBagLayout(layout === 'list' ? 'cards' : 'list');
+      if (activeTab === 'bag') cycleBagSection(direction);
       else if (activeTab === 'dex') cycleDexZone(direction);
       return true;
     }
@@ -126,8 +133,8 @@ export default function GameTabs(props: GameTabsProps) {
     <Sidebar tabs={tabs} activeKey={activeTab} onSelect={onTab}
              sheetOpen={props.sheetOpen} onSheetClose={() => props.onSheetOpenChange(false)}>
       {activeTab === 'region' && <VRegion region={props.region} game={game} />}
-      {activeTab === 'bag' && <BagTab game={game} accountState={accountLockState(props.account, props.accountFailed)} sellBonus={props.sellBonus} bagBonus={props.bagBonus} dispatch={props.dispatch} setToast={props.setToast} />}
-      {activeTab === 'dex' && <DexTab game={game} view={dexView} sub={dexZone} onSub={setDexZone} />}
+      {activeTab === 'bag' && <BagTab game={game} accountState={accountLockState(props.account, props.accountFailed)} sellBonus={props.sellBonus} bagBonus={props.bagBonus} dispatch={props.dispatch} setToast={props.setToast} onOpenEnergy={props.onOpenEnergy} />}
+      {activeTab === 'dex' && <DexTab game={game} view={dexView} onView={setDexView} sub={dexZone} onSub={setDexZone} />}
       {activeTab === 'help' && <VHelp />}
       {activeTab === 'settings' && (
         <SettingsTab autoLockOnCatch={game.autoLockOnCatch} dispatch={props.dispatch} setToast={props.setToast}

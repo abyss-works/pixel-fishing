@@ -71,8 +71,8 @@ describe('6개 묶음과 기능 UI', () => {
     show('preview', { onTeleportBase, onTeleportSpot });
     fireEvent.click(screen.getByRole('button', { name: '이동·시간' }));
 
-    // 낮/밤 3단 스위치는 프리뷰에서도 동작한다 (분 슬라이더는 로컬 전용)
-    expect(screen.queryByLabelText('주기 내 시각 (분)')).toBeNull();
+    // 낮/밤 3단 스위치는 프리뷰에서도 동작한다 (시각 슬라이더는 로컬 전용)
+    expect(screen.queryByLabelText('주기 내 시각 (10게임분)')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '밤 고정' }));
     expect(getPhaseOverride()).toBe('night');
     fireEvent.click(screen.getByRole('button', { name: '낮 고정' }));
@@ -84,6 +84,35 @@ describe('6개 묶음과 기능 UI', () => {
     await waitFor(() => expect(onTeleportBase).toHaveBeenCalledWith('harbor'));
     fireEvent.click(screen.getByRole('button', { name: /마을 연못/ }));
     await waitFor(() => expect(onTeleportSpot).toHaveBeenCalledWith('pond'));
+  });
+
+  it('로컬 모드에서 25초 스텝 단위 슬라이더가 0~143 범위로 동작하고 낮/밤 막대 비율을 22시~06시 주기로 표시한다', () => {
+    const { container } = (() => {
+      show('local');
+      fireEvent.click(screen.getByRole('button', { name: '이동·시간' }));
+      return { container: document.body };
+    })();
+
+    const slider = screen.getByLabelText('주기 내 시각 (10게임분)') as HTMLInputElement;
+    expect(slider.min).toBe('0');
+    expect(slider.max).toBe('143');
+    expect(slider.step).toBe('1');
+
+    fireEvent.change(slider, { target: { value: '132' } }); // 55분 00초 = 게임 22:00 (밤 시작)
+    expect(screen.getByText('22:00')).toBeInTheDocument();
+    expect(screen.getByText('밤')).toBeInTheDocument();
+
+    fireEvent.change(slider, { target: { value: '36' } }); // 15분 00초 = 게임 06:00 (낮 시작)
+    expect(screen.getByText('06:00')).toBeInTheDocument();
+    expect(screen.getByText('낮')).toBeInTheDocument();
+
+    const segments = [...container.querySelectorAll('.rounded-full > span > span, .rounded-full > span')]
+      .filter(el => (el as HTMLElement).style.width);
+    expect(segments.map(el => parseFloat((el as HTMLElement).style.width))).toEqual([
+      25,
+      expect.closeTo((40 / 60) * 100, 3),
+      expect.closeTo((5 / 60) * 100, 3),
+    ]);
   });
 
   it('수배 묶음에 네임드별 출현 해역 동적 안내가 표시된다', () => {

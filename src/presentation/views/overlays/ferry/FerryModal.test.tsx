@@ -33,4 +33,19 @@ describe('여객선 빠른 이동 창', () => {
     fireEvent.click(manila);
     expect(onPick).toHaveBeenCalledWith('manila');
   });
+
+  it('집에서 열면 6개 항구를 모두 보이고 배 0단계에서는 모두 잠근다', () => {
+    const onPick = vi.fn();
+    render(<FerryModal game={newState()} from="home" onPick={onPick} onClose={() => {}} />);
+    const buttons = screen.getAllByRole('button', { name: /항$/ });
+    expect(buttons.map(b => b.getAttribute('aria-label')))
+      .toEqual(['부산항', '마닐라항', '콜롬보항', '투아마시나항', '월비스베이항', '리스본항']);
+    for (const button of buttons) {
+      expect(button).toBeDisabled();
+      expect(button).toHaveTextContent('필요');
+    }
+    expect(screen.getByRole('button', { name: '부산항' })).toHaveTextContent('조각배(1단계) 필요');
+    fireEvent.click(screen.getByRole('button', { name: '부산항' }));
+    expect(onPick).not.toHaveBeenCalled();
+  });
 });

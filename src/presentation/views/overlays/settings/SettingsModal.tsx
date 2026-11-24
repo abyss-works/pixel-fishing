@@ -85,7 +85,7 @@ export default function SettingsModal({ autoLockOnCatch, dispatch, setToast, onC
     }
   };
   return (
-    <Modal title="설정" narrow onClose={onClose}>
+    <Modal layer="app" title="설정" narrow onClose={onClose}>
       <PromptChoices prompt={FISH_ART} describeInTip />
       <SectionTitle>가방</SectionTitle>
       <Inset divided>

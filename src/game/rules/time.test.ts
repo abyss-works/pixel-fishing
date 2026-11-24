@@ -1,45 +1,79 @@
 // 낮/밤 시간대 — 순수 파생 검증
-// 모델: 하루 60분(게임 24시). 낮 = 게임 4~20시(분 10~50) · 밤 = 게임 20시~다음 4시(분 50~60 ∪ 0~10).
+// 모델: 하루 60분(게임 24시), 25초 = 10게임분(시간당 144스텝).
+// 낮 = 게임 06:00~22:00(실제 매시 15분~55분 미만, 스텝 36~131)
+// 밤 = 게임 22:00~다음 06:00(실제 매시 55분~다음 시 15분 미만, 스텝 132~143 ∪ 0~35)
 import { describe, it, expect } from 'vitest';
 import {
-  isNight, dayPhase, DAY_START_MIN, NIGHT_START_MIN, gameHour, formatGameClock, darkness,
+  DAY_CYCLE_MIN, DAY_CYCLE_SEC, CLOCK_STEP_SEC, DAY_START_MIN, NIGHT_START_MIN,
+  NIGHT_PEAK_MIN, NIGHT_HALF_STEPS, NIGHT_TOTAL_STEPS,
+  cycleStep, cycleMinute, isNight, dayPhase, gameHour, formatGameClock,
+  nightDepthOfStep, nightDepth, darkness,
   gameDayOf, gameDayStartISO,
 } from './time';
 
-const iso = (min: number): string => {
+const iso = (min: number, sec = 0): string => {
   const mm = String(min).padStart(2, '0');
-  return `2026-09-06T00:${mm}:00.000Z`;
+  const ss = String(sec).padStart(2, '0');
+  return `2026-09-06T00:${mm}:${ss}.000Z`;
 };
 
-describe('dayPhase — 낮 4~20시, 밤 20시~다음 4시 (밤이 자정을 감싼다)', () => {
-  it('밤 = [NIGHT_START_MIN,60) ∪ [0,DAY_START_MIN) — 20시~4시', () => {
-    // 자정~새벽 4시
-    for (let m = 0; m < DAY_START_MIN; m++) {
-      expect(isNight(iso(m)), `분 ${m}`).toBe(true);
-      expect(dayPhase(iso(m))).toBe('night');
+const stepIso = (step: number, offsetSec = 0): string => {
+  const totalSec = step * CLOCK_STEP_SEC + offsetSec;
+  return iso(Math.floor(totalSec / 60), totalSec % 60);
+};
+
+describe('주기 상수 및 144스텝 파생', () => {
+  it('상수는 60분/3600초, 25초 스텝, 15분~55분 낮, 05분(02:00) 정점을 갖는다', () => {
+    expect(DAY_CYCLE_MIN).toBe(60);
+    expect(DAY_CYCLE_SEC).toBe(3600);
+    expect(CLOCK_STEP_SEC).toBe(25);
+    expect(DAY_START_MIN).toBe(15);
+    expect(NIGHT_START_MIN).toBe(55);
+    expect(NIGHT_PEAK_MIN).toBe(5);
+    expect(NIGHT_HALF_STEPS).toBe(24);
+    expect(NIGHT_TOTAL_STEPS).toBe(48);
+  });
+
+  it('cycleStep과 cycleMinute는 0..143 스텝과 분 환산값을 돌려주고 손상 시각은 null이다', () => {
+    for (let step = 0; step < 144; step++) {
+      expect(cycleStep(stepIso(step, 0)), `step ${step} start`).toBe(step);
+      expect(cycleStep(stepIso(step, CLOCK_STEP_SEC - 1)), `step ${step} end`).toBe(step);
+      expect(cycleMinute(stepIso(step))).toBeCloseTo((step * CLOCK_STEP_SEC) / 60, 12);
     }
-    // 저녁 20시~자정 직전
-    for (let m = NIGHT_START_MIN; m < 60; m++) {
-      expect(isNight(iso(m)), `분 ${m}`).toBe(true);
-      expect(dayPhase(iso(m))).toBe('night');
+    expect(cycleStep('not-a-date')).toBeNull();
+    expect(cycleMinute('not-a-date')).toBeNull();
+  });
+});
+
+describe('dayPhase — 낮 06~22시(15~55분), 밤 22시~다음 06시(55분~15분)', () => {
+  it('밤 = 스텝 [132,144) ∪ [0,36) — 22:00~06:00', () => {
+    for (let step = 0; step < 36; step++) {
+      expect(isNight(stepIso(step)), `스텝 ${step}`).toBe(true);
+      expect(dayPhase(stepIso(step))).toBe('night');
+    }
+    for (let step = 132; step < 144; step++) {
+      expect(isNight(stepIso(step)), `스텝 ${step}`).toBe(true);
+      expect(dayPhase(stepIso(step))).toBe('night');
     }
   });
-  it('낮 = [DAY_START_MIN, NIGHT_START_MIN) — 4시~20시', () => {
-    for (let m = DAY_START_MIN; m < NIGHT_START_MIN; m++) {
-      expect(isNight(iso(m)), `분 ${m}`).toBe(false);
-      expect(dayPhase(iso(m))).toBe('day');
+  it('낮 = 스텝 [36, 132) — 06:00~22:00', () => {
+    for (let step = 36; step < 132; step++) {
+      expect(isNight(stepIso(step)), `스텝 ${step}`).toBe(false);
+      expect(dayPhase(stepIso(step))).toBe('day');
     }
   });
-  it('경계: 분9=밤·10=낮(해 뜸), 분49=낮·50=밤(해 짐)', () => {
-    expect(dayPhase(iso(DAY_START_MIN - 1))).toBe('night');
-    expect(dayPhase(iso(DAY_START_MIN))).toBe('day');
-    expect(dayPhase(iso(NIGHT_START_MIN - 1))).toBe('day');
-    expect(dayPhase(iso(NIGHT_START_MIN))).toBe('night');
+  it('초 단위 경계: 14:59=밤 · 15:00=낮(해 뜸), 54:59=낮 · 55:00=밤(해 짐)', () => {
+    expect(dayPhase(iso(14, 35))).toBe('night');
+    expect(dayPhase(iso(14, 59))).toBe('night');
+    expect(dayPhase(iso(15, 0))).toBe('day');
+    expect(dayPhase(iso(54, 35))).toBe('day');
+    expect(dayPhase(iso(54, 59))).toBe('day');
+    expect(dayPhase(iso(55, 0))).toBe('night');
   });
-  it('시·일·타임존 무관 — 분만 본다 (UTC=로컬 분)', () => {
-    expect(dayPhase('2026-01-01T13:05:00Z')).toBe('night');  // 분 5 < 10 = 밤(새벽)
-    expect(dayPhase('2026-12-31T23:40:00Z')).toBe('day');    // 분 40 ∈ [10,50) = 낮
-    expect(dayPhase('2026-12-31T23:55:00Z')).toBe('night');  // 분 55 ≥ 50 = 밤(저녁)
+  it('시·일·타임존 무관 — UTC 분·초만 본다', () => {
+    expect(dayPhase('2026-01-01T13:10:00Z')).toBe('night');  // 분 10 < 15 = 밤(새벽)
+    expect(dayPhase('2026-12-31T23:40:00Z')).toBe('day');    // 분 40 ∈ [15,55) = 낮
+    expect(dayPhase('2026-12-31T23:55:00Z')).toBe('night');  // 분 55 ≥ 55 = 밤(저녁)
   });
   it('손상 시각은 낮으로 — 캐치를 막지 않는다', () => {
     expect(isNight('not-a-date')).toBe(false);
@@ -47,35 +81,55 @@ describe('dayPhase — 낮 4~20시, 밤 20시~다음 4시 (밤이 자정을 감�
   });
 });
 
-describe('UI 파생 — 게임 시각·어둠 강도', () => {
-  it('1실제분 = 0.4게임시 — 분10=게임4시, 분50=게임20시', () => {
-    expect(gameHour(iso(0))).toBeCloseTo(0);   // 정각 = 자정
-    expect(gameHour(iso(DAY_START_MIN))).toBeCloseTo(4);    // 해 뜸
-    expect(gameHour(iso(NIGHT_START_MIN))).toBeCloseTo(20); // 해 짐
-    expect(gameHour(iso(59))).toBeCloseTo(23.6);
+describe('UI 파생 — 게임 시각·nightDepth·어둠 강도', () => {
+  it('gameHour — 25초당 10게임분(144스텝)', () => {
+    expect(gameHour(iso(0))).toBeCloseTo(0);                 // 정각 = 00:00
+    expect(gameHour(iso(NIGHT_PEAK_MIN))).toBeCloseTo(2);    // 분 5 = 02:00(정점)
+    expect(gameHour(iso(DAY_START_MIN))).toBeCloseTo(6);     // 분 15 = 06:00(해 뜸)
+    expect(gameHour(iso(NIGHT_START_MIN))).toBeCloseTo(22);  // 분 55 = 22:00(해 짐)
+    expect(gameHour(stepIso(143))).toBeCloseTo(143 * 10 / 60, 12);
+    expect(gameHour('bad')).toBeNull();
   });
 
-  it('formatGameClock — HH:MM', () => {
-    expect(formatGameClock(iso(0))).toBe('00:00');
-    expect(formatGameClock(iso(10))).toBe('04:00');  // 낮 시작
-    expect(formatGameClock(iso(50))).toBe('20:00');  // 밤 시작
-    expect(formatGameClock(iso(59))).toBe('23:36');
+  it('formatGameClock — 144스텝 전체에서 10분 단위 HH:MM이 부동소수점 오차 없이 맞는다', () => {
+    for (let step = 0; step < 144; step++) {
+      const totalMin = step * 10;
+      const expected = `${String(Math.floor(totalMin / 60)).padStart(2, '0')}:${String(totalMin % 60).padStart(2, '0')}`;
+      expect(formatGameClock(stepIso(step)), `step ${step}`).toBe(expected);
+      expect(formatGameClock(stepIso(step, 24)), `step ${step} +24s`).toBe(expected);
+    }
     expect(formatGameClock('bad')).toBe('--:--');
   });
 
-  it('어둠 — 낮 0, 해 질 무렵부터 서서히 어두워지고 해 뜰 무렵 밝아진다', () => {
-    // 낮(4~20시): 항상 0
-    expect(darkness(iso(20))).toBe(0);
-    expect(darkness(iso(40))).toBe(0);
-    // 저녁(20시~자정): 0 → 자정 직전 ~0.9
-    expect(darkness(iso(NIGHT_START_MIN))).toBe(0);
-    expect(darkness(iso(55))).toBe(0.5);
-    expect(darkness(iso(59))).toBeCloseTo(0.9);
-    // 자정~새벽 4시: 0.9 → 해 뜸 0 (점프 없이 연속)
-    expect(darkness(iso(0))).toBe(1);   // 자정 = 최대
-    expect(darkness(iso(5))).toBeCloseTo(0.5);
-    expect(darkness(iso(DAY_START_MIN - 1))).toBeCloseTo(1 / DAY_START_MIN);
-    expect(darkness(iso(DAY_START_MIN))).toBe(0);
+  it('nightDepthOfStep — 0..47 대칭 삼각파이고 범위 밖은 0으로 방어한다', () => {
+    expect(nightDepthOfStep(0)).toBe(0);
+    expect(nightDepthOfStep(12)).toBe(0.5);
+    expect(nightDepthOfStep(24)).toBe(1);
+    expect(nightDepthOfStep(36)).toBe(0.5);
+    expect(nightDepthOfStep(47)).toBeCloseTo(1 / 24, 12);
+    for (let k = 1; k < 24; k++) {
+      expect(nightDepthOfStep(k)).toBeCloseTo(nightDepthOfStep(48 - k), 12);
+    }
+    expect(nightDepthOfStep(-1)).toBe(0);
+    expect(nightDepthOfStep(48)).toBe(0);
+    expect(nightDepthOfStep(99)).toBe(0);
+    expect(nightDepthOfStep(Number.NaN)).toBe(0);
+  });
+
+  it('nightDepth와 darkness — 낮 0, 22:00(0) → 00:00(0.5) → 02:00(1.0) → 04:00(0.5) → 05:50(1/24)', () => {
+    expect(nightDepth(iso(15))).toBe(0);
+    expect(nightDepth(iso(35))).toBe(0);
+    expect(nightDepth(iso(54, 59))).toBe(0);
+    expect(nightDepth(iso(55, 0))).toBe(0);              // 22:00
+    expect(nightDepth(iso(0, 0))).toBe(0.5);             // 00:00
+    expect(nightDepth(iso(5, 0))).toBe(1);               // 02:00 (최대)
+    expect(nightDepth(iso(10, 0))).toBe(0.5);            // 04:00
+    expect(nightDepth(iso(14, 35))).toBeCloseTo(1 / 24, 12); // 05:50
+    expect(nightDepth('bad')).toBe(0);
+
+    for (let step = 0; step < 144; step++) {
+      expect(darkness(stepIso(step)), `step ${step}`).toBe(nightDepth(stepIso(step)));
+    }
     expect(darkness('bad')).toBe(0);
   });
 });

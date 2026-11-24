@@ -315,4 +315,24 @@ describe('받는 보너스', () => {
     });
     expect(selectActiveBonuses(dup, null, now).filter(b => b.source.kind === 'slot')).toHaveLength(1);
   });
+
+  it('오늘의 운세는 현재 게임 날짜와 일치할 때만 해당 대상 갈래에 한 줄로 든다', () => {
+    const now = '2026-11-24T05:00:00.000Z';
+    const fishRow = selectActiveBonuses(game({ fortune: { day: '2026-11-24', kind: 'fish', index: 5 } }), null, now);
+    expect(fishRow).toEqual([{
+      category: 'fish',
+      source: { kind: 'fortune', fortune: { day: '2026-11-24', kind: 'fish', index: 5 } },
+      manualOnly: false,
+    }]);
+
+    const goldRow = selectActiveBonuses(game({ fortune: { day: '2026-11-24', kind: 'gold', index: 3 } }), null, now);
+    expect(goldRow.map(b => [b.category, b.source.kind])).toEqual([['shop', 'fortune']]);
+
+    const shadowRow = selectActiveBonuses(game({ fortune: { day: '2026-11-24', kind: 'shadow', index: 5 } }), null, now);
+    expect(shadowRow.map(b => [b.category, b.source.kind])).toEqual([['duel', 'fortune']]);
+
+    // 날짜가 지난 운세는 보너스 내역에서 빠진다
+    const stale = selectActiveBonuses(game({ fortune: { day: '2026-11-23', kind: 'gold', index: 5 } }), null, now);
+    expect(stale).toEqual([]);
+  });
 });

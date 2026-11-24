@@ -6,6 +6,7 @@ import Button from '../../../ui/Button';
 import { cx } from '../../../ui/cx';
 import Divider from '../../../ui/Divider';
 import Modal from '../../../ui/Modal';
+import ModalCard from '../../../ui/ModalCard';
 import NewsStep from './NewsStep';
 import SettingsStep from './SettingsStep';
 
@@ -44,19 +45,19 @@ export default function WhatsNewModal({ game, ready }: {
   const nextStep = w.steps[w.index + 1];
 
   return (
-    <Modal title={STEP_TITLE[w.step]} fill onClose={w.close} footer={
-      <div className="border-t border-line mt-3 pt-3 flex flex-col gap-2">
+    <Modal layer="stage" md onClose={w.close}>
+      <ModalCard title={STEP_TITLE[w.step]} onClose={w.close} confirm={(
         <div className="flex gap-2">
           {w.index > 0 && <Button variant="ghost" onClick={w.back}>이전</Button>}
           <Button variant="primary" className="flex-1" onClick={w.next}>
             {last ? (w.step === 'settings' ? '완료' : '확인') : `다음: ${STEP_TITLE[nextStep]} 고르기`}
           </Button>
         </div>
-      </div>
-    }>
-      <StepTrail steps={w.steps} index={w.index} />
-      {w.step === 'news' && w.news.length > 0 && <NewsStep news={w.news} />}
-      {w.step === 'settings' && <SettingsStep prompts={w.prompts} />}
+      )}>
+        <StepTrail steps={w.steps} index={w.index} />
+        {w.step === 'news' && w.news.length > 0 && <NewsStep news={w.news} />}
+        {w.step === 'settings' && <SettingsStep prompts={w.prompts} />}
+      </ModalCard>
     </Modal>
   );
 }

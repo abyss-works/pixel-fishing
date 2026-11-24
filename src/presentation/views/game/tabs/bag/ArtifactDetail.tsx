@@ -56,7 +56,7 @@ export default function ArtifactDetail({ artifact, game, dispatch, setToast, onC
   };
 
   return (
-    <Modal onClose={onClose}
+    <Modal layer="app" onClose={onClose}
            header={
              <header className="mb-3 flex flex-wrap items-baseline gap-x-3 border-b border-line pb-2 pr-8">
                <PageTitle>{artifact.name}</PageTitle>

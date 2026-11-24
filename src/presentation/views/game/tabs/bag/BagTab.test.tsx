@@ -3,9 +3,11 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, within } from '@testing-library/react';
 import BagTab, { EXHIBIT_UI_ENABLED } from './BagTab';
 import { resetBagView, setBagSection } from './bagView';
+import { AUTO_ENERGY_BOAT, COOKING_UNLOCK_BOAT } from '../../../../../game/content/cooking';
 import { newState, saleBonusOf, sellableValue } from '../../../../../game/rules/logic';
 import { fmtGold } from '../../../../ui/format';
 import type { FishInstance, GameState } from '../../../../../game/rules/logic';
+import type { AccountLockState } from '../../../../../features/display/model/menuLock';
 
 afterEach(cleanup);
 beforeEach(resetBagView);
@@ -14,10 +16,10 @@ const inst = (uid: string): FishInstance =>
   ({ uid, fishId: 'carp', form: 'normal', size: 20, caughtAt: null, spot: null, judgment: null, locked: false });
 const game = (over: Partial<GameState> = {}): GameState => ({ ...newState(), ...over });
 
-function show(g: GameState) {
+function show(g: GameState, opts: { accountState?: AccountLockState; onOpenEnergy?: () => void } = {}) {
   const dispatch = vi.fn(() => ({ status: 'ok' as const, state: g, result: { type: 'none' as const } }));
   const setToast = vi.fn();
-  render(<BagTab sellBonus={0} game={g} dispatch={dispatch} setToast={setToast} />);
+  render(<BagTab sellBonus={0} game={g} accountState={opts.accountState} onOpenEnergy={opts.onOpenEnergy} dispatch={dispatch} setToast={setToast} />);
   return { dispatch, setToast };
 }
 
@@ -111,5 +113,86 @@ describe('BagTab - 유물 섹션 시스템 효과', () => {
     expect(screen.getByText('미끼 지속 시간 −50%')).toHaveClass('text-danger');
     expect(screen.getByText('네임드 토벌 하루 +1번')).toHaveClass('text-accent');
     expect(screen.getByText('네임드 토벌 골드 −30%')).toHaveClass('text-danger');
+  });
+});
+
+describe('BagTab - 3서브탭, 보기 전환 아이콘, 하단 버튼', () => {
+  it('상단 3서브탭(물고기, 아이템, 유물)으로 섹션을 전환하고, 자동 잠금과 기운 얻기 버튼은 물고기 섹션 하단에만 둔다', () => {
+    show(game({ boat: COOKING_UNLOCK_BOAT, location: { kind: 'base', id: 'home' }, bag: [inst('a')] }));
+    const subtabs = ['물고기', '아이템', '유물'].map(name => screen.getByRole('button', { name }));
+    expect(subtabs[0]).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: '카드 보기' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '자동 잠금' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '기운 얻기' })).toBeInTheDocument();
+
+    fireEvent.click(subtabs[1]);
+    expect(screen.getByRole('heading', { level: 3, name: '아이템' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '자동 잠금' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '기운 얻기' })).not.toBeInTheDocument();
+
+    fireEvent.click(subtabs[2]);
+    expect(screen.getByRole('heading', { level: 3, name: /유물/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '자동 잠금' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '기운 얻기' })).not.toBeInTheDocument();
+  });
+
+  it('물고기 섹션 하단 액션 바는 스크롤 영역 아래에 sticky 고정되고 불투명 배경과 상단 경계선을 가진다', () => {
+    show(game({ boat: COOKING_UNLOCK_BOAT, location: { kind: 'base', id: 'home' } }));
+    const bar = screen.getByRole('button', { name: '자동 잠금' }).closest('div')!;
+    expect(bar.className).toContain('sticky');
+    expect(bar.className).toContain('bottom-0');
+    expect(bar.className).toContain('bg-surface');
+    expect(bar.className).toContain('border-t');
+  });
+
+  it('우상단 보기 전환 아이콘 버튼으로 목록과 카드 보기를 전환한다', () => {
+    show(game({
+      bag: [inst('a')],
+      dex: { carp: { normal: { count: 1, maxSize: 20, first: null } } },
+    }));
+    const toCards = screen.getByRole('button', { name: '카드 보기' });
+    fireEvent.click(toCards);
+    expect(screen.getByRole('button', { name: '목록 보기' })).toBeInTheDocument();
+    expect(screen.getByLabelText('잉어 일반 1마리 돌연변이 0마리 보유')).toBeInTheDocument();
+  });
+
+  it('거점에서 요리 해금·계정이면 기운 얻기 버튼이 활성화되고 클릭 시 연결 콜백을 호출한다', () => {
+    const onOpenEnergy = vi.fn();
+    show(game({ boat: COOKING_UNLOCK_BOAT, location: { kind: 'base', id: 'home' } }), { onOpenEnergy });
+    const btn = screen.getByRole('button', { name: '기운 얻기' });
+    expect(btn).toBeEnabled();
+    fireEvent.click(btn);
+    expect(onOpenEnergy).toHaveBeenCalledTimes(1);
+  });
+
+  it('바다에서는 가공 플랜트선 이상이면 활성, 미만이면 비활성 + 사유 툴팁이다', () => {
+    const onOpenEnergy = vi.fn();
+    show(game({ boat: AUTO_ENERGY_BOAT, location: { kind: 'region', id: 'world' } }), { onOpenEnergy });
+    const enabled = screen.getByRole('button', { name: '기운 얻기' });
+    expect(enabled).toBeEnabled();
+    fireEvent.click(enabled);
+    expect(onOpenEnergy).toHaveBeenCalledTimes(1);
+
+    cleanup();
+    show(game({ boat: AUTO_ENERGY_BOAT - 1, location: { kind: 'region', id: 'world' } }));
+    const disabled = screen.getByRole('button', { name: '기운 얻기' });
+    expect(disabled).toBeDisabled();
+    fireEvent.mouseEnter(disabled.parentElement!);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('집이나 항구 또는 가공 플랜트선에서만 할 수 있어요.');
+  });
+
+  it('게스트와 확인 실패 상태에서는 가공 플랜트선이나 거점에서도 비활성 + 계정 잠금 툴팁이다', () => {
+    show(game({ boat: AUTO_ENERGY_BOAT, location: { kind: 'base', id: 'home' } }), { accountState: 'guest' });
+    const guestBtn = screen.getByRole('button', { name: '기운 얻기' });
+    expect(guestBtn).toBeDisabled();
+    fireEvent.mouseEnter(guestBtn.parentElement!);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
+
+    cleanup();
+    show(game({ boat: COOKING_UNLOCK_BOAT - 1, location: { kind: 'base', id: 'home' } }), { accountState: 'unverified' });
+    const unverifiedBtn = screen.getByRole('button', { name: '기운 얻기' });
+    expect(unverifiedBtn).toBeDisabled();
+    fireEvent.mouseEnter(unverifiedBtn.parentElement!);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('계정을 확인하면 쓸 수 있어요.');
   });
 });

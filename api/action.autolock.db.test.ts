@@ -5,9 +5,11 @@ import { AUTO_ENERGY_BOAT, ENERGY_ITEM_IDS, ENERGY_PER_INDIVIDUAL } from '../src
 import { FISH } from '../src/game/content/fish.js';
 import { SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
 import { endedFirstCatch } from '../src/game/rules/firstCatch.js';
-import { WALK_BAG_CAP, autoLockKey, capOfBoat, newState } from '../src/game/rules/logic.js';
+import type { DailyFortune } from '../src/game/rules/fortune.js';
+import { WALK_BAG_CAP, autoLockKey, capOfBoat } from '../src/game/rules/logic.js';
 import type { GameState } from '../src/game/rules/logic.js';
 import type { ActionResult, StatePatch } from '../src/game/rules/actions.js';
+import { gameDayOf } from '../src/game/rules/time.js';
 import { database } from './_db/client.js';
 import { catchLookup } from './_data/load.js';
 import {
@@ -17,6 +19,8 @@ import {
 import type { ActionEnv, SeedOptions } from './_dbTest/actionHarness.js';
 
 const NOW = '2030-03-04T05:06:07.000Z';
+// 오늘의 운세가 catch RNG를 소모하거나 희귀·네임드 가중치를 바꾸지 않도록 판매 보너스만 있는 고정 운세를 시딩한다
+const TEST_FORTUNE: DailyFortune = { day: gameDayOf(NOW), kind: 'gold', index: 3 };
 let env: ActionEnv;
 let nextUid = 1000;
 
@@ -39,7 +43,8 @@ beforeEach(() => {
 
 async function seed(opts: SeedOptions = {}): Promise<string> {
   const uid = testUid(nextUid++);
-  return seedUser(env.client, { uid, email: `autolock-${nextUid}@example.test`, ...opts });
+  const state = opts.state ? { ...opts.state, fortune: opts.state.fortune ?? TEST_FORTUNE } : undefined;
+  return seedUser(env.client, { uid, email: `autolock-${nextUid}@example.test`, ...opts, ...(state ? { state } : {}) });
 }
 
 interface ActionOkBody { patch: StatePatch; result: ActionResult }
@@ -145,11 +150,12 @@ describe('토글식 자동 잠금 (DB / fastCatch)', () => {
     vi.spyOn(Math, 'random').mockImplementation(seededRandom(42));
     const target = await probePondCatch();
     const key = autoLockKey(target.fishId, target.form);
+    const fillerId = target.fishId === 'carp' ? 'crucian' : 'carp';
 
-    // 1) 가방 60칸: 잠긴 carp 59마리 + 자동 잠금된 target(1cm) 1마리
+    // 1) 가방 60칸: 잠긴 다른 어종 59마리 + 자동 잠금된 target(1cm) 1마리
     //    더 큰 target 포획 -> 새 개체 잠금 보호 + 해제된 prevAuto 초과 방생 (instancesLocked 중복 없음)
     const prevAuto = fish(target.fishId, { form: target.form, size: 1, locked: true });
-    const fillers = Array.from({ length: WALK_BAG_CAP - 1 }, () => fish('carp', { size: 50, locked: true }));
+    const fillers = Array.from({ length: WALK_BAG_CAP - 1 }, () => fish(fillerId, { size: 50, locked: true }));
     const uid = await seed({
       state: { autoLockOnCatch: true, bag: [prevAuto, ...fillers], autoLockedIds: { [key]: prevAuto.uid } },
     });
@@ -170,19 +176,19 @@ describe('토글식 자동 잠금 (DB / fastCatch)', () => {
     expect(rows.some(r => r.uid === prevAuto.uid)).toBe(false);
     expect(rows.find(r => r.uid === caughtUid)?.locked).toBe(true);
 
-    // 2) 가방 60칸: 잠긴 carp 58마리 + 미잠금 carp 1마리 + 잠긴 target 없음 ->
-    //    새로 잡힌 일반 어종이 가장 안 특별해도 자동 잠금으로 보호되어 미잠금 carp이 대신 방생된다
-    const unlockedCarp = fish('carp', { size: 50, locked: false });
-    const fillers2 = Array.from({ length: WALK_BAG_CAP - 1 }, () => fish('carp', { size: 60, locked: true }));
+    // 2) 가방 60칸: 잠긴 다른 어종 59마리 + 미잠금 1마리 + 잠긴 target 없음 ->
+    //    새로 잡힌 일반 어종이 가장 안 특별해도 자동 잠금으로 보호되어 미잠금 개체가 대신 방생된다
+    const unlockedFiller = fish(fillerId, { size: 50, locked: false });
+    const fillers2 = Array.from({ length: WALK_BAG_CAP - 1 }, () => fish(fillerId, { size: 60, locked: true }));
     const uid2 = await seed({
-      state: { autoLockOnCatch: true, bag: [unlockedCarp, ...fillers2] },
+      state: { autoLockOnCatch: true, bag: [unlockedFiller, ...fillers2] },
     });
     vi.spyOn(Math, 'random').mockImplementation(seededRandom(42));
     const res2 = await callAction(userToken(uid2), { type: 'catch', spot: 'pond', judgment: 'normal' });
     expect(res2.status).toBe(200);
     const body2 = res2.body as ActionOkBody;
     if (body2.result.type !== 'catch') throw new Error('expected catch');
-    expect(body2.result.released.map(r => r.uid)).toEqual([unlockedCarp.uid]);
+    expect(body2.result.released.map(r => r.uid)).toEqual([unlockedFiller.uid]);
     expect(body2.patch.writes.instancesAdded[0].inst.locked).toBe(true);
   });
 
@@ -191,10 +197,11 @@ describe('토글식 자동 잠금 (DB / fastCatch)', () => {
     const target = await probePondCatch();
     const key = autoLockKey(target.fishId, target.form);
     const targetFish = FISH.find(f => f.id === target.fishId)!;
+    const fillerId = target.fishId === 'carp' ? 'crucian' : 'carp';
     const cap = capOfBoat(AUTO_ENERGY_BOAT);
 
     const prevAuto = fish(target.fishId, { form: target.form, size: 1, locked: true });
-    const fillers = Array.from({ length: cap - 1 }, () => fish('carp', { size: 50, locked: true }));
+    const fillers = Array.from({ length: cap - 1 }, () => fish(fillerId, { size: 50, locked: true }));
     const uid = await seed({
       state: {
         boat: AUTO_ENERGY_BOAT,
@@ -222,11 +229,12 @@ describe('토글식 자동 잠금 (DB / fastCatch)', () => {
     vi.spyOn(Math, 'random').mockImplementation(seededRandom(42));
     const target = await probePondCatch();
     const key = autoLockKey(target.fishId, target.form);
+    const fillerId = target.fishId === 'carp' ? 'crucian' : 'carp';
 
     const runAtVersion = async (version: number, idBase: number) => {
       const prevAuto = fish(target.fishId, { uid: testUid(idBase), form: target.form, size: 1, locked: true });
       const fillers = Array.from({ length: WALK_BAG_CAP - 1 }, (_, i) =>
-        fish('carp', { uid: testUid(idBase + 1 + i), size: 50, locked: true }));
+        fish(fillerId, { uid: testUid(idBase + 1 + i), size: 50, locked: true }));
       const uid = await seed({
         version,
         state: { autoLockOnCatch: true, bag: [prevAuto, ...fillers], autoLockedIds: { [key]: prevAuto.uid } },
@@ -257,15 +265,15 @@ describe('토글식 자동 잠금 (DB / fastCatch)', () => {
     vi.spyOn(Math, 'random').mockImplementation(seededRandom(42));
     const target = await probePondCatch();
     const key = autoLockKey(target.fishId, target.form);
+    const fillerId = target.fishId === 'carp' ? 'crucian' : 'carp';
 
     const measure = async (autoLockOnCatch: boolean, bagFull: boolean) => {
       const prevAuto = fish(target.fishId, { form: target.form, size: 1, locked: true });
       const bag = bagFull
-        ? [prevAuto, ...Array.from({ length: WALK_BAG_CAP - 1 }, () => fish('carp', { size: 50, locked: true }))]
+        ? [prevAuto, ...Array.from({ length: WALK_BAG_CAP - 1 }, () => fish(fillerId, { size: 50, locked: true }))]
         : [prevAuto];
       const uid = await seed({
         state: {
-          ...newState(),
           autoLockOnCatch,
           bag,
           autoLockedIds: autoLockOnCatch ? { [key]: prevAuto.uid } : {},
@@ -279,6 +287,18 @@ describe('토글식 자동 잠금 (DB / fastCatch)', () => {
       expect(res.status).toBe(200);
       const count = spy.mock.calls.length;
       spy.mockRestore();
+      const body = res.body as ActionOkBody;
+      if (body.result.type !== 'catch') throw new Error('expected catch');
+      expect(body.result.fishId).toBe(target.fishId);
+      if (autoLockOnCatch) {
+        expect(body.patch.writes.instancesAdded[0].inst.locked).toBe(true);
+        if (bagFull) {
+          expect(body.patch.writes.instancesRemoved).toEqual([prevAuto.uid]);
+          expect(body.patch.writes.instancesLocked).toEqual([]);
+        } else {
+          expect(body.patch.writes.instancesLocked).toEqual([{ uid: prevAuto.uid, locked: false }]);
+        }
+      }
       return count;
     };
 

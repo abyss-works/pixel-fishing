@@ -1,4 +1,4 @@
-// 길드(guilds·guild_members·guild_join_requests·guild_contributions·guild_logs·guild_bonuses·guild_bonus_donations) 소유 모듈 —
+// 길드(guilds·guild_members·guild_join_requests·guild_contributions·guild_logs·guild_bonuses·guild_bonus_donations·guild_member_enhancements) 소유 모듈 —
 // 만들기, 이름 바꾸기, 가입 방식 설정, 코드로 들어오기와 가입 신청, 신청 처리, 떠나기·내보내기, 길드장 위임, 기여와 항해일지 기록,
 // 보너스 기부, 조회, 미리보기, 계정 정리.
 // 인원과 역할을 보고 바꾸는 작업은 트랜잭션 안에서 길드 행을 잠가 같은 길드의 변경을 줄 세운다.
@@ -153,8 +153,10 @@ export async function myGuild(db: Executor, uid: string, nowISO: string): Promis
 /** 보너스 다섯의 상태, 효과, 기부 순위 — 기부가 없던 보너스는 저장된 단계 0, 자유 강화 0, 모인 골드 0이다 */
 async function bonusViews(db: Executor, guildId: string, uid: string, level: number):
   Promise<{ bonuses: GuildBonusView[]; effects: GuildEffects; donors: GuildDonor[] }> {
-  const { rows: ranks } = await db.execute<{ bonus: GuildBonusId; rank: number; enhance_rank: number; pool: number | string }>(sql`
-    select bonus, rank, enhance_rank, pool from public.guild_bonuses where guild_id = ${guildId}`);
+  const { rows: ranks } = await db.execute<{ bonus: GuildBonusId; rank: number; pool: number | string }>(sql`
+    select bonus, rank, pool from public.guild_bonuses where guild_id = ${guildId}`);
+  const { rows: enhancements } = await db.execute<{ bonus: GuildBonusId; rank: number }>(sql`
+    select bonus, rank from public.guild_member_enhancements where guild_id = ${guildId} and user_id = ${uid}`);
   const { rows: mine } = await db.execute<{ bonus: GuildBonusId; gold: number | string }>(sql`
     select bonus, gold from public.guild_bonus_donations where guild_id = ${guildId} and user_id = ${uid}`);
   const { rows: totals } = await db.execute<{ uid: string | null; nick: string | null; gold: number | string }>(sql`
@@ -162,7 +164,7 @@ async function bonusViews(db: Executor, guildId: string, uid: string, level: num
     from public.guild_bonus_donations d left join public.profiles p on p.user_id = d.user_id
     where d.guild_id = ${guildId} group by d.user_id, p.nickname order by sum(d.gold) desc, d.user_id`);
   const stored = Object.fromEntries(ranks.map(r => [r.bonus, r.rank])) as Partial<Record<GuildBonusId, number>>;
-  const storedEnhance = Object.fromEntries(ranks.map(r => [r.bonus, r.enhance_rank])) as Partial<Record<GuildBonusId, number>>;
+  const storedEnhance = Object.fromEntries(enhancements.map(r => [r.bonus, r.rank])) as Partial<Record<GuildBonusId, number>>;
   const maxTotalRank = GUILD_BONUS_MAX_RANK + GUILD_ENHANCE_MAX_RANK;
   const bonuses = guildBonusLevels(level).map(({ id, unlock, cap }) => {
     const rank = bonusRank(id, level, stored[id] ?? 0);
@@ -227,17 +229,18 @@ export async function donateToBonus(withTransaction: Tx, uid: string, guildId: s
 export const guildRanksJson = (guildId: SQL) =>
   sql`(select coalesce(json_object_agg(b.bonus, b.rank), '{}') from public.guild_bonuses b where b.guild_id = ${guildId})`;
 
-/** 길드의 보너스별 자유 강화 단계를 { 보너스: 단계 } JSON으로 읽는 하위 쿼리 — 액션 읽기가 효과를 계산할 때 쓴다 */
-export const guildEnhanceRanksJson = (guildId: SQL) =>
-  sql`(select coalesce(json_object_agg(b.bonus, b.enhance_rank), '{}') from public.guild_bonuses b where b.guild_id = ${guildId})`;
+/** 길드원의 개인 자유 강화 단계를 { 보너스: 단계 } JSON으로 읽는 하위 쿼리 — 액션 읽기가 개인 효과를 계산할 때 쓴다 */
+export const guildEnhanceRanksJson = (guildId: SQL, uid: string | SQL) =>
+  sql`(select coalesce(json_object_agg(e.bonus, e.rank), '{}') from public.guild_member_enhancements e
+    where e.guild_id = ${guildId} and e.user_id = ${uid})`;
 
 export type EnhanceOutcome =
   | { ok: true; enhanceRank: number; remainingPoints: number }
   | { ok: false; error: 'not-member' | EnhanceError };
 
 /**
- * 자유 강화 1단계 올리기(길드원 누구나). 무료 포인트를 원하는 스킬에 투자한다.
- * 길드 행을 잠가 같은 길드의 변경을 줄 세우고, 자유 강화 단계와 항해일지를 한 트랜잭션에 쓴다.
+ * 개인 자유 강화 1단계 올리기(길드원 누구나). 길드 레벨로 열린 본인 포인트를 원하는 스킬에 투자한다.
+ * 길드 행을 잠가 탈퇴·추방과 겹치지 않게 줄 세우고, 본인 개인 강화 행만 갱신한다. 공용 항해일지에는 남기지 않는다.
  */
 export async function enhanceBonus(
   withTransaction: Tx, uid: string, guildId: string, bonus: GuildBonusId, nowISO: string,
@@ -249,19 +252,17 @@ export async function enhanceBonus(
       sql`select ${guildTotal(sql`${guildId}::uuid`)} as total`,
     );
     const level = guildLevelOf(Number(sum.total));
-    const { rows: currentRows } = await tx.execute<{ bonus: GuildBonusId; enhance_rank: number }>(
-      sql`select bonus, enhance_rank from public.guild_bonuses where guild_id = ${guildId}`,
+    const { rows: currentRows } = await tx.execute<{ bonus: GuildBonusId; rank: number }>(
+      sql`select bonus, rank from public.guild_member_enhancements where guild_id = ${guildId} and user_id = ${uid}`,
     );
     const enhanceRanks = Object.fromEntries(
-      currentRows.map(r => [r.bonus, r.enhance_rank]),
+      currentRows.map(r => [r.bonus, r.rank]),
     ) as Partial<Record<GuildBonusId, number>>;
     const r = enhanceOutcome(level, enhanceRanks, bonus);
     if (!r.ok) return r;
-    await tx.execute(sql`insert into public.guild_bonuses (guild_id, bonus, enhance_rank)
-      values (${guildId}, ${bonus}, ${r.enhanceRank})
-      on conflict (guild_id, bonus) do update set enhance_rank = excluded.enhance_rank`);
-    await tx.execute(sql`insert into public.guild_logs (guild_id, user_id, kind, detail, value, created_at)
-      values (${guildId}, ${uid}, 'enhance', ${bonus}, ${r.enhanceRank}, ${at(nowISO)})`);
+    await tx.execute(sql`insert into public.guild_member_enhancements (guild_id, user_id, bonus, rank, updated_at)
+      values (${guildId}, ${uid}, ${bonus}, ${r.enhanceRank}, ${at(nowISO)})
+      on conflict (guild_id, user_id, bonus) do update set rank = excluded.rank, updated_at = excluded.updated_at`);
     const nextRanks = { ...enhanceRanks, [bonus]: r.enhanceRank };
     return { ok: true, enhanceRank: r.enhanceRank, remainingPoints: remainingEnhancePoints(level, nextRanks) };
   });
@@ -272,20 +273,20 @@ export type EnhanceResetOutcome =
   | { ok: false; error: 'not-member' | 'restricted' | EnhanceResetError };
 
 /**
- * 자유 강화 초기화(길드원 누구나). 실행한 길드원의 골드 20,000,000G를 빼고 모든 스킬의 자유 강화 단계를 0으로 되돌린다.
- * 기본 기부 단계와 풀은 건드리지 않는다. 횟수 제한이 없다.
+ * 개인 자유 강화 초기화(길드원 누구나). 실행한 길드원의 골드 20,000,000G를 빼고 본인의 자유 강화 행만 비운다.
+ * 기본 기부 단계와 풀, 다른 길드원의 자유 강화는 건드리지 않으며 공용 항해일지에 남기지 않는다. 횟수 제한이 없다.
  */
 export async function resetEnhancements(
-  withTransaction: Tx, uid: string, guildId: string, nowISO: string,
+  withTransaction: Tx, uid: string, guildId: string, _nowISO: string,
 ): Promise<EnhanceResetOutcome> {
   return withTransaction(async tx => {
     const members = await lockMembers(tx, guildId);
     if (!members?.some(m => m.uid === uid)) return { ok: false, error: 'not-member' };
-    const { rows: currentRows } = await tx.execute<{ bonus: GuildBonusId; enhance_rank: number }>(
-      sql`select bonus, enhance_rank from public.guild_bonuses where guild_id = ${guildId}`,
+    const { rows: currentRows } = await tx.execute<{ bonus: GuildBonusId; rank: number }>(
+      sql`select bonus, rank from public.guild_member_enhancements where guild_id = ${guildId} and user_id = ${uid}`,
     );
     const enhanceRanks = Object.fromEntries(
-      currentRows.map(r => [r.bonus, r.enhance_rank]),
+      currentRows.map(r => [r.bonus, r.rank]),
     ) as Partial<Record<GuildBonusId, number>>;
     const { rows: [save] } = await tx.execute<{ gold: number | string; restricted: boolean | null }>(
       sql`select gold, restricted from public.saves_current where user_id = ${uid} for update`,
@@ -296,9 +297,7 @@ export async function resetEnhancements(
     if (!r.ok) return r;
     const recovered = usedEnhancePoints(enhanceRanks);
     await tx.execute(goldDebit(uid, GUILD_ENHANCE_RESET_COST));
-    await tx.execute(sql`update public.guild_bonuses set enhance_rank = 0 where guild_id = ${guildId} and enhance_rank <> 0`);
-    await tx.execute(sql`insert into public.guild_logs (guild_id, user_id, kind, detail, value, created_at)
-      values (${guildId}, ${uid}, 'enhance-reset', null, ${recovered}, ${at(nowISO)})`);
+    await tx.execute(sql`delete from public.guild_member_enhancements where guild_id = ${guildId} and user_id = ${uid}`);
     return { ok: true, gold: gold - GUILD_ENHANCE_RESET_COST, recovered };
   });
 }
@@ -565,6 +564,7 @@ export async function removeMember(withTransaction: Tx, uid: string, guildId: st
     }
     await tx.execute(sql`update public.guild_members set left_at = ${at(nowISO)}
       where guild_id = ${guildId} and user_id = ${target}`);
+    await tx.execute(sql`delete from public.guild_member_enhancements where guild_id = ${guildId} and user_id = ${target}`);
     await tx.execute(logInsert(guildId, target, outcome === 'leave' ? 'leave' : 'kick', nowISO));
     return { ok: true, result: outcome === 'leave' ? 'left' : 'kicked' };
   });
@@ -595,6 +595,7 @@ export async function handOver(withTransaction: Tx, uid: string, guildId: string
  */
 export async function deleteUserGuild(db: Executor, uid: string): Promise<void> {
   await db.execute(sql`delete from public.guild_join_requests where user_id = ${uid}`);
+  await db.execute(sql`delete from public.guild_member_enhancements where user_id = ${uid}`);
   await db.execute(sql`delete from public.guild_logs where user_id = ${uid}`);
   await db.execute(sql`update public.guild_contributions set user_id = null where user_id = ${uid}`);
   await db.execute(sql`update public.guild_bonus_donations set user_id = null where user_id = ${uid}`);

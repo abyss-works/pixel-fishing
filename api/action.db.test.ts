@@ -15,9 +15,12 @@ import { FISH } from '../src/game/content/fish.js';
 import { hatById } from '../src/game/content/wardrobe.js';
 import { upgradeCost } from '../src/game/rules/balance.js';
 import { endedFirstCatch, newFirstCatch } from '../src/game/rules/firstCatch.js';
+import { luckMultOf } from '../src/game/rules/fortune.js';
+import type { DailyFortune } from '../src/game/rules/fortune.js';
 import { LICENSE_GRADES, WALK_BAG_CAP, newState, sellSelected, zoneDexMissing } from '../src/game/rules/logic.js';
 import type { GameState } from '../src/game/rules/logic.js';
 import { NAMED_PITY_CATCHES, PITY_DONE, SPECIES_PITY_K } from '../src/game/rules/pity.js';
+import { database } from './_db/client.js';
 import {
   LOCAL_ORIGIN, callAction, captureRealClock, dumpUser, fish, normalize, seedUser, seededRandom,
   startActionEnv, testUid, userToken,
@@ -98,15 +101,55 @@ describe('요청 경계', () => {
     expect(await run({ state: {}, restricted: true }, { type: 'boot' })).toMatchSnapshot();
   });
 
-  it('직전 액션과 간격이 너무 짧으면 429다', async () => {
+  it('느림 창 대상이 아니면 짧은 간격도 받고, 느림 창 대상은 429다', async () => {
     const recent = new Date(Date.parse(NOW) - 100).toISOString();
-    expect(await run({ state: {}, version: 3, updatedAt: recent }, { type: 'upgradeRod' })).toMatchSnapshot();
+    const uid = await seed({ state: { gold: 1_000 }, version: 3, updatedAt: recent });
+    expect(await callAction(userToken(uid), { type: 'upgradeRod' })).toMatchObject({ status: 200 });
+    // 직전 성공 액션 직후의 sendLetter는 느림 창에 걸려 거부된다
+    expect(await callAction(userToken(uid), { type: 'sendLetter', text: '안녕하세요' }))
+      .toMatchObject({ status: 429, body: { error: 'too-fast' } });
   });
 });
 
 describe('첫 액션', () => {
   it('프로필과 저장 상태가 없는 사용자의 boot는 둘을 만들고 버전 2로 올린다', async () => {
-    expect(await run({ nickname: null }, { type: 'boot', buildId: 'dev' })).toMatchSnapshot();
+    const out = await run({ nickname: null }, { type: 'boot', buildId: 'dev' });
+    const res = out.res as {
+      status: number;
+      body: {
+        result: unknown;
+        patch: {
+          version: number;
+          baseVersion: number;
+          scalars: { fortune: DailyFortune | null };
+          writes: Record<string, unknown[]>;
+        };
+      };
+    };
+    expect(res.status).toBe(200);
+    expect(res.body.result).toEqual({ type: 'boot', schoolDay: TODAY_KST });
+    expect(res.body.patch.version).toBe(2);
+    expect(res.body.patch.baseVersion).toBe(1);
+    expect(res.body.patch.writes).toEqual({
+      instancesAdded: [], instancesRemoved: [], instancesMoved: [], instancesLocked: [], records: [],
+    });
+    expect(out.db.profiles).toHaveLength(1);
+    expect(out.db.profiles[0]).toMatchObject({ user_id: '<user>', nickname: expect.any(String) });
+    expect(out.db.saves_current).toHaveLength(1);
+    const save = out.db.saves_current[0] as {
+      version: string; gold: string; fame: string; boat: number; rod: number; data: GameState;
+    };
+    expect(save).toMatchObject({ version: '2', gold: '0', fame: '0', boat: 0, rod: 1 });
+    expect(save.data.v).toBe(10);
+    expect(save.data.fortune).toEqual({
+      day: TODAY_KST,
+      kind: expect.toBeOneOf(['fish', 'gold', 'shadow']),
+      index: expect.toBeOneOf([3, 5]),
+    });
+    expect(res.body.patch.scalars.fortune).toEqual(save.data.fortune);
+    expect(out.db.events).toEqual([
+      { user_id: '<user>', type: 'boot', payload: { buildId: 'dev' }, created_at: '<now>' },
+    ]);
   });
 
   it('구 saves 행만 있는 사용자는 그 상태로 시딩한다', async () => {
@@ -116,7 +159,36 @@ describe('첫 액션', () => {
       exhibit: [], dex: { crucian: { normal: { count: 3, maxSize: 31, first: '2026-01-02' } } },
       coupons: [], location: at('home'), visited: [], artifacts: [], items: {}, activeBait: null,
     }, '2026-01-03T00:00:00.000Z']);
-    expect(await snapshotOf(uid, await callAction(userToken(uid), { type: 'boot' }))).toMatchSnapshot();
+    const out = await snapshotOf(uid, await callAction(userToken(uid), { type: 'boot' }));
+    const res = out.res as {
+      status: number;
+      body: { result: unknown; patch: { version: number; baseVersion: number; scalars: { fortune: DailyFortune | null } } };
+    };
+    expect(res.status).toBe(200);
+    expect(res.body.result).toEqual({ type: 'boot', schoolDay: TODAY_KST });
+    expect(res.body.patch.version).toBe(2);
+    expect(res.body.patch.baseVersion).toBe(1);
+    const save = out.db.saves_current[0] as {
+      version: string; gold: string; fame: string; boat: number; rod: number; data: GameState;
+    };
+    expect(save).toMatchObject({ version: '2', gold: '500', fame: '20', boat: 0, rod: 2 });
+    expect(save.data.v).toBe(10);
+    expect(save.data.fortune).toEqual({
+      day: TODAY_KST,
+      kind: expect.toBeOneOf(['fish', 'gold', 'shadow']),
+      index: expect.toBeOneOf([3, 5]),
+    });
+    expect(res.body.patch.scalars.fortune).toEqual(save.data.fortune);
+    expect(out.db.fish_instances).toMatchObject([
+      { fish_id: 'crucian', locked: false, slot: null },
+      { fish_id: 'minnow', locked: true, slot: null },
+    ]);
+    expect(out.db.records).toEqual([
+      { user_id: '<user>', fish_id: 'crucian', form: 'normal', count: '3', max_size: 31, first_caught: '2026-01-02T00:00:00.000Z', updated_at: '<now>' },
+    ]);
+    expect(out.db.events).toEqual([
+      { user_id: '<user>', type: 'boot', payload: {}, created_at: '<now>' },
+    ]);
   });
 });
 
@@ -231,7 +303,32 @@ describe('낚시', () => {
 describe('가방', () => {
   it('판매는 개체를 지우고 골드를 더한다', async () => {
     const sold = fish('carp', { uid: testUid(9001) });
-    expect(await run({ state: { bag: [sold, fish('crucian')] } }, { type: 'sell', uids: [sold.uid] })).toMatchSnapshot();
+    const out = await run({ state: { bag: [sold, fish('crucian')] } }, { type: 'sell', uids: [sold.uid] });
+    const res = out.res as {
+      status: number;
+      body: { result: { type: string; gold: number }; patch: { version: number; scalars: { fortune: DailyFortune | null } } };
+    };
+    expect(res.status).toBe(200);
+    const save = out.db.saves_current[0] as { version: string; gold: string; data: GameState };
+    expect(save.version).toBe('3');
+    expect(save.data.fortune).toEqual({
+      day: TODAY_KST,
+      kind: expect.toBeOneOf(['fish', 'gold', 'shadow']),
+      index: expect.toBeOneOf([3, 5]),
+    });
+    expect(res.body.patch.scalars.fortune).toEqual(save.data.fortune);
+    const expectedGold = sellSelected(
+      { ...newState(), bag: [sold], fortune: save.data.fortune },
+      [sold.uid],
+      0,
+      luckMultOf(save.data.fortune, 'sell'),
+    ).gold;
+    expect(Number(save.gold)).toBe(expectedGold);
+    expect(res.body.result).toEqual({ type: 'sell', gold: expectedGold });
+    expect(out.db.fish_instances).toMatchObject([{ fish_id: 'crucian', slot: null }]);
+    expect(out.db.events).toEqual([
+      { user_id: '<user>', type: 'sell', payload: { count: 1, gold: expectedGold, uids: ['<uuid>'] }, created_at: '<now>' },
+    ]);
   });
 
   it('잠금은 개체의 잠금 열만 바꾼다', async () => {
@@ -593,11 +690,11 @@ describe('현상금 — 클리어 기준 한도와 만료', () => {
     const uid = await seed({ state: {} });
     await progressRow(uid, quest.id, quest.count, NOW);
     const results = await Promise.all([deliver(uid, quest.id), deliver(uid, quest.id)]);
-    // 진 쪽은 진행 행이 이미 없어 거부되거나(422) 직전 성공 액션과의 간격에서 걸린다(429).
-    // 확정 문장이 겹쳐 같은 버전을 읽은 쪽도 진행 행이 지워진 것을 다시 읽어 422를 받으므로 409는 나오지 않는다
+    // 진 쪽은 진행 행이 이미 없어 거부된다(422). 확정 문장이 겹쳐 같은 버전을 읽은 쪽도
+    // 진행 행이 지워진 것을 다시 읽어 422를 받으므로 409는 나오지 않는다
     const statuses = results.map(r => r.status).sort();
     expect(statuses[0]).toBe(200);
-    expect([422, 429]).toContain(statuses[1]);
+    expect(statuses[1]).toBe(422);
     const dump = await dumpUser(env.client, uid);
     expect(dump.bounty_clears).toHaveLength(1);
     expect(dump.saves_current[0]).toMatchObject({ gold: String(quest.reward) });
@@ -874,8 +971,8 @@ describe('우편 받기', () => {
       callAction(userToken(uid), { type: 'claimMail', id }),
     ]);
     expect(results.filter(r => r.status === 200)).toHaveLength(1);
-    // 두 요청이 겹치면 409(동시 갱신)나 422(이미 받음), 앞 요청이 먼저 확정되면 429(액션 간격)다. 어느 쪽이든 지급은 한 번이다
-    expect(results.filter(r => r.status !== 200).map(r => r.status)).toEqual([expect.toBeOneOf([409, 422, 429])]);
+    // 두 요청이 겹치면 409(동시 갱신)나 422(이미 받음)다. 어느 쪽이든 지급은 한 번이다
+    expect(results.filter(r => r.status !== 200).map(r => r.status)).toEqual([expect.toBeOneOf([409, 422])]);
     const gold = await env.client.query<{ gold: string }>('select gold from public.saves_current where user_id = $1', [uid]);
     expect(Number(gold.rows[0].gold)).toBe(800);
     const mail = await env.client.query<{ claimed_at: Date | null }>('select claimed_at from public.mails where id = $1', [id]);
@@ -1375,7 +1472,7 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
     it('sell 동시 요청은 한 번만 확정되고 골드·개체 삭제·sell 이벤트가 이중 적용되지 않는다', async () => {
       const sold = fish('carp', { size: 30 });
       const kept = fish('crucian', { size: 20 });
-      const uid = await seed({ state: { gold: 100, bag: [sold, kept] } });
+      const uid = await seed({ state: { gold: 100, bag: [sold, kept], fortune: { day: TODAY_KST, kind: 'fish', index: 3 } } });
       const expectedGold = sellSelected({ ...newState(), gold: 100, bag: [sold, kept] }, [sold.uid]).gold;
 
       const results = await Promise.all([
@@ -1384,20 +1481,23 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
       ]);
       const statuses = results.map(r => r.status).sort();
       expect(statuses[0]).toBe(200);
-      expect([409, 429]).toContain(statuses[1]);
+      // 느림 창 대상이 아니라 간격 검사가 없다 — 진 쪽도 앞 확정을 읽었으면 빈 판매(no-op)로 200, 읽기가 겹쳤으면 409다
+      expect([200, 409]).toContain(statuses[1]);
 
       const save = await readSave(uid);
       expect(Number(save.gold)).toBe(expectedGold);
-      expect(Number(save.version)).toBe(3);
+      expect([3, 4]).toContain(Number(save.version));
       expect(await readFishUids(uid)).toEqual([kept.uid]);
       const events = await readEvents(uid);
-      expect(events).toHaveLength(1);
-      expect(events[0].type).toBe('sell');
-      expect(events[0].payload).toMatchObject({ gold: expectedGold - 100, count: 1, uids: [sold.uid] });
+      // 실제로 개체가 팔린 판매는 한 번이다 — 빈 판매 no-op은 골드 0·0건 이벤트만 남긴다
+      const soldEvents = events.filter(e => e.type === 'sell' && e.payload.count === 1);
+      expect(soldEvents).toHaveLength(1);
+      expect(soldEvents[0].payload).toMatchObject({ gold: expectedGold - 100, uids: [sold.uid] });
     });
 
     it('buyBoat 동시 요청은 1단계만 구매되고 골드·배 단계·buyBoat 이벤트가 한 번만 기록된다', async () => {
-      const uid = await seed({ state: { boat: 0, gold: 500, fame: 500 } });
+      // 골드를 첫 단계 값만 두어 진 쪽이 앞 확정을 읽어도 다음 단계를 살 수 없게 한다
+      const uid = await seed({ state: { boat: 0, gold: BOATS[0].price, fame: 500 } });
       const tier1Price = BOATS[0].price;
 
       const results = await Promise.all([
@@ -1406,11 +1506,11 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
       ]);
       const statuses = results.map(r => r.status).sort();
       expect(statuses[0]).toBe(200);
-      expect([409, 429]).toContain(statuses[1]);
+      expect([409, 422]).toContain(statuses[1]);
 
       const save = await readSave(uid);
       expect(save.boat).toBe(1);
-      expect(Number(save.gold)).toBe(500 - tier1Price);
+      expect(Number(save.gold)).toBe(0);
       expect(Number(save.version)).toBe(3);
       const events = await readEvents(uid);
       expect(events).toHaveLength(1);
@@ -1418,8 +1518,9 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
     });
 
     it('upgradeRod 동시 요청은 1회만 강화되고 골드·강화 단계·upgradeRod 이벤트가 한 번만 기록된다', async () => {
-      const uid = await seed({ state: { rod: 1, gold: 1000 } });
       const cost = upgradeCost(1);
+      // 골드를 1회 강화 값만 두어 진 쪽이 앞 확정을 읽어도 다시 강화할 수 없게 한다
+      const uid = await seed({ state: { rod: 1, gold: cost } });
 
       const results = await Promise.all([
         callAction(userToken(uid), { type: 'upgradeRod' }),
@@ -1427,11 +1528,11 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
       ]);
       const statuses = results.map(r => r.status).sort();
       expect(statuses[0]).toBe(200);
-      expect([409, 429]).toContain(statuses[1]);
+      expect([409, 422]).toContain(statuses[1]);
 
       const save = await readSave(uid);
       expect(save.rod).toBe(2);
-      expect(Number(save.gold)).toBe(1000 - cost);
+      expect(Number(save.gold)).toBe(0);
       expect(Number(save.version)).toBe(3);
       const events = await readEvents(uid);
       expect(events).toHaveLength(1);
@@ -1456,7 +1557,7 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
       ]);
       const statuses = results.map(r => r.status).sort();
       expect(statuses[0]).toBe(200);
-      expect([409, 429]).toContain(statuses[1]);
+      expect([409, 422]).toContain(statuses[1]);
 
       const save = await readSave(uid);
       expect(save.data.items).toEqual({ [ENERGY_ITEM_IDS.common]: commonCost, [ENERGY_ITEM_IDS.rare]: rareCost });
@@ -1468,8 +1569,9 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
     });
 
     it('eat 동시 요청은 요리를 1개만 소모하고 슬롯과 eat 이벤트를 한 번만 기록한다', async () => {
+      // 요리를 1개만 두어 진 쪽이 앞 확정을 읽어도 다시 먹을 수 없게 한다
       const uid = await seed({
-        state: { boat: COOKING_UNLOCK_BOAT, items: { 'cook-lunch-bite': 2 } },
+        state: { boat: COOKING_UNLOCK_BOAT, items: { 'cook-lunch-bite': 1 } },
       });
 
       const results = await Promise.all([
@@ -1478,10 +1580,10 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
       ]);
       const statuses = results.map(r => r.status).sort();
       expect(statuses[0]).toBe(200);
-      expect([409, 429]).toContain(statuses[1]);
+      expect([409, 422]).toContain(statuses[1]);
 
       const save = await readSave(uid);
-      expect(save.data.items).toEqual({ 'cook-lunch-bite': 1 });
+      expect(save.data.items).toEqual({});
       expect(save.data.slots?.lunch?.id).toBe('cook-lunch-bite');
       expect(Number(save.version)).toBe(3);
       const events = await readEvents(uid);
@@ -1502,11 +1604,12 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
       ]);
       const statuses = results.map(r => r.status).sort();
       expect(statuses[0]).toBe(200);
-      expect([409, 429]).toContain(statuses[1]);
+      // 느림 창 대상이 아니라 간격 검사가 없다 — 진 쪽도 앞 확정을 읽었으면 개체가 없어 no-op으로 200, 읽기가 겹쳤으면 409다
+      expect([200, 409]).toContain(statuses[1]);
 
       const save = await readSave(uid);
       expect(save.data.items).toEqual({ [ENERGY_ITEM_IDS.common]: ENERGY_PER_INDIVIDUAL });
-      expect(Number(save.version)).toBe(3);
+      expect([3, 4]).toContain(Number(save.version));
       expect(await readFishUids(uid)).toEqual([kept.uid]);
       const events = await readEvents(uid);
       expect(events).toHaveLength(1);
@@ -1524,12 +1627,13 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
       ]);
       const statuses = results.map(r => r.status).sort();
       expect(statuses[0]).toBe(200);
-      expect([409, 429]).toContain(statuses[1]);
+      // 느림 창 대상이 아니라 간격 검사가 없다 — 진 쪽도 앞 확정을 읽었으면 이미 가진 유물이라 멱등 200, 읽기가 겹쳤으면 409다
+      expect([200, 409]).toContain(statuses[1]);
 
       const save = await readSave(uid);
       expect(save.data.artifacts).toEqual([art.id]);
       expect(save.data.items).toEqual({ [art.materialId]: 1 });
-      expect(Number(save.version)).toBe(3);
+      expect([3, 4]).toContain(Number(save.version));
       const events = await readEvents(uid);
       expect(events).toHaveLength(1);
       expect(events[0]).toEqual({ type: 'exchangeArtifact', payload: { artifact: art.id } });
@@ -1538,9 +1642,9 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
     it('levelUpArtifact 동시 요청은 레벨을 1만 올리고 재료와 levelUpArtifact 이벤트를 한 번만 기록한다', async () => {
       const art = artifactById('wreck-compass')!;
       const costLv2 = artifactLevelCost(2);
-      const initialMat = costLv2 + artifactLevelCost(3);
+      // 재료를 1회 레벨업 값만 두어 진 쪽이 앞 확정을 읽어도 다음 레벨을 올릴 수 없게 한다
       const uid = await seed({
-        state: { artifacts: [art.id], items: { [art.materialId]: initialMat } },
+        state: { artifacts: [art.id], items: { [art.materialId]: costLv2 } },
       });
 
       const results = await Promise.all([
@@ -1549,11 +1653,11 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
       ]);
       const statuses = results.map(r => r.status).sort();
       expect(statuses[0]).toBe(200);
-      expect([409, 429]).toContain(statuses[1]);
+      expect([409, 422]).toContain(statuses[1]);
 
       const save = await readSave(uid);
       expect(save.data.artifactLevels).toEqual({ [art.id]: 2 });
-      expect(save.data.items).toEqual({ [art.materialId]: initialMat - costLv2 });
+      expect(save.data.items).toEqual({});
       expect(Number(save.version)).toBe(3);
       const events = await readEvents(uid);
       expect(events).toHaveLength(1);
@@ -1570,7 +1674,7 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
       ]);
       const statuses = results.map(r => r.status).sort();
       expect(statuses[0]).toBe(200);
-      expect([409, 429]).toContain(statuses[1]);
+      expect([409, 422]).toContain(statuses[1]);
 
       const save = await readSave(uid);
       expect(Number(save.gold)).toBe(hat.price);
@@ -1592,7 +1696,7 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
       ]);
       const statuses = results.map(r => r.status).sort();
       expect(statuses[0]).toBe(200);
-      expect([409, 422, 429]).toContain(statuses[1]);
+      expect([409, 422]).toContain(statuses[1]);
 
       const save = await readSave(uid);
       expect(Number(save.gold)).toBe(877);
@@ -1614,7 +1718,7 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
       ]);
       const statuses = results.map(r => r.status).sort();
       expect(statuses[0]).toBe(200);
-      expect([409, 422, 429]).toContain(statuses[1]);
+      expect([409, 422]).toContain(statuses[1]);
 
       const save = await readSave(uid);
       expect(Number(save.gold)).toBe(100 + rewardGold);
@@ -1639,7 +1743,7 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
       ]);
       const statuses = results.map(r => r.status).sort();
       expect(statuses[0]).toBe(200);
-      expect([409, 422, 429]).toContain(statuses[1]);
+      expect([409, 422]).toContain(statuses[1]);
 
       const save = await readSave(uid);
       expect(Number(save.gold)).toBe(100 + rewardGold);
@@ -1658,7 +1762,7 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
     it('sell 중 버전 충돌이 나면 개체·골드·이벤트를 쓰지 않고, 재시도 시 한 번만 판매된다', async () => {
       const sold = fish('carp', { size: 30 });
       const kept = fish('crucian', { size: 20 });
-      const uid = await seed({ state: { gold: 100, bag: [sold, kept] } });
+      const uid = await seed({ state: { gold: 100, bag: [sold, kept], fortune: { day: TODAY_KST, kind: 'fish', index: 3 } } });
       const expectedGold = sellSelected({ ...newState(), gold: 100, bag: [sold, kept] }, [sold.uid]).gold;
 
       const conflict = await conflictDuringCommit(uid, { type: 'sell', uids: [sold.uid] });
@@ -1930,5 +2034,149 @@ describe('네임드 토벌 단일 기록과 일일 상한', () => {
     vi.setSystemTime(Date.parse(NOW) + 4000);
     const nextAccept = await callAction(userToken(uid), { type: 'acceptQuest', questId: second.id, port: 'walvisbay' });
     expect(nextAccept.status).toBe(200);
+  });
+});
+
+describe('오늘의 운세', () => {
+  const storedFortune = async (uid: string) => {
+    const { rows } = await env.client.query<{ version: string; gold: string; data: GameState }>(
+      'select version, gold, data from public.saves_current where user_id = $1', [uid],
+    );
+    return { version: Number(rows[0].version), gold: Number(rows[0].gold), fortune: rows[0].data.fortune };
+  };
+
+  it('boot 첫 접속 시 오늘의 운세를 고정해 저장하고, 같은 게임 날짜 내 재접속(04:00 경계 전)에는 바뀌지 않는다', async () => {
+    const uid = await seed({ state: { fortune: null } });
+
+    const firstRes = await callAction(userToken(uid), { type: 'boot', buildId: 'dev' });
+    expect(firstRes.status).toBe(200);
+    const firstScalars = (firstRes.body as { patch: { scalars: { fortune: DailyFortune | null } } }).patch.scalars;
+    const firstSaved = await storedFortune(uid);
+    expect(firstSaved.version).toBe(3);
+    expect(firstSaved.fortune).toEqual({
+      day: TODAY_KST,
+      kind: expect.toBeOneOf(['fish', 'gold', 'shadow']),
+      index: expect.toBeOneOf([3, 5]),
+    });
+    expect(firstScalars.fortune).toEqual(firstSaved.fortune);
+
+    // 같은 게임 날짜의 마지막 시각(KST 03:59:59)에 재접속해도 운세는 그대로다
+    vi.setSystemTime(new Date('2030-03-04T18:59:59.000Z'));
+    const sameDayRes = await callAction(userToken(uid), { type: 'boot', buildId: 'dev' });
+    expect(sameDayRes.status).toBe(200);
+    const sameDayScalars = (sameDayRes.body as { patch: { scalars: { fortune: DailyFortune | null } } }).patch.scalars;
+    const sameDaySaved = await storedFortune(uid);
+    expect(sameDaySaved.version).toBe(4);
+    expect(sameDaySaved.fortune).toEqual(firstSaved.fortune);
+    expect(sameDayScalars.fortune).toEqual(firstSaved.fortune);
+  });
+
+  it('게임 날짜 경계(한국 시각 04:00) 이후 boot 시 새 게임 날짜의 운세로 갱신해 저장한다', async () => {
+    const uid = await seed({ state: { fortune: { day: TODAY_KST, kind: 'fish', index: 3 } } });
+
+    // KST 2030-03-05 04:00:00 — 새 게임 날짜 '2030-03-05' 시작
+    vi.setSystemTime(new Date('2030-03-04T19:00:00.000Z'));
+    const nextDayRes = await callAction(userToken(uid), { type: 'boot', buildId: 'dev' });
+    expect(nextDayRes.status).toBe(200);
+    const nextDayScalars = (nextDayRes.body as { patch: { scalars: { fortune: DailyFortune | null } } }).patch.scalars;
+    const nextDaySaved = await storedFortune(uid);
+    expect(nextDaySaved.version).toBe(3);
+    expect(nextDaySaved.fortune).toEqual({
+      day: '2030-03-05',
+      kind: expect.toBeOneOf(['fish', 'gold', 'shadow']),
+      index: expect.toBeOneOf([3, 5]),
+    });
+    expect(nextDayScalars.fortune).toEqual(nextDaySaved.fortune);
+  });
+
+  it('boot 없이 빠른 경로 catch를 호출해도 백스톱으로 오늘의 운세를 고정해 저장한다', async () => {
+    const uid = await seed({ state: { fortune: null }, version: 2 });
+
+    const res = await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'good' });
+    expect(res.status).toBe(200);
+    const scalars = (res.body as { patch: { scalars: { fortune: DailyFortune | null } } }).patch.scalars;
+    const saved = await storedFortune(uid);
+    expect(saved.version).toBe(3);
+    expect(saved.fortune).toEqual({
+      day: TODAY_KST,
+      kind: expect.toBeOneOf(['fish', 'gold', 'shadow']),
+      index: expect.toBeOneOf([3, 5]),
+    });
+    expect(scalars.fortune).toEqual(saved.fortune);
+  });
+
+  it('boot 없이 sell을 호출해도 백스톱으로 운세를 고정하고 재물운 배율을 판매가에 반영한다', async () => {
+    const soldNoBoot = fish('carp', { size: 30, uid: testUid(9501) });
+    const uidNoBoot = await seed({ state: { fortune: null, bag: [soldNoBoot] } });
+
+    const noBootRes = await callAction(userToken(uidNoBoot), { type: 'sell', uids: [soldNoBoot.uid] });
+    expect(noBootRes.status).toBe(200);
+    const noBootScalars = (noBootRes.body as { patch: { scalars: { fortune: DailyFortune | null } } }).patch.scalars;
+    const noBootSaved = await storedFortune(uidNoBoot);
+    expect(noBootSaved.version).toBe(3);
+    expect(noBootSaved.fortune).toEqual({
+      day: TODAY_KST,
+      kind: expect.toBeOneOf(['fish', 'gold', 'shadow']),
+      index: expect.toBeOneOf([3, 5]),
+    });
+    expect(noBootScalars.fortune).toEqual(noBootSaved.fortune);
+
+    // 재물운 지수 5(×1.05)가 고정된 날에는 판매가가 +5%p 올라 저장된다
+    const soldGoldDay = fish('carp', { size: 30, uid: testUid(9502) });
+    const goldFortune: DailyFortune = { day: TODAY_KST, kind: 'gold', index: 5 };
+    const uidGoldDay = await seed({ state: { fortune: goldFortune, bag: [soldGoldDay] } });
+    const expectedGold = sellSelected(
+      { ...newState(), bag: [soldGoldDay], fortune: goldFortune },
+      [soldGoldDay.uid],
+      0,
+      luckMultOf(goldFortune, 'sell'),
+    ).gold;
+
+    const goldDayRes = await callAction(userToken(uidGoldDay), { type: 'sell', uids: [soldGoldDay.uid] });
+    expect(goldDayRes.status).toBe(200);
+    const goldDaySaved = await storedFortune(uidGoldDay);
+    expect(goldDaySaved.version).toBe(3);
+    expect(goldDaySaved.gold).toBe(expectedGold);
+    expect(goldDaySaved.fortune).toEqual(goldFortune);
+  });
+});
+
+describe('밤 깊이 경계와 빠른 경로 천장 조회', () => {
+  it('밤 시작(22:00, nightDepth=0) 경계에서 빠른 경로 catch는 밤 어종 천장 후보를 제외해 ownedNormalForms 조회를 생략하고, 밤 정점(02:00)에서는 조회·확정한다', async () => {
+    const baseState: Partial<GameState> = { boat: 1, fortune: { day: TODAY_KST, kind: 'gold', index: 3 } };
+
+    // 1) 22:00 경계(UTC :55분) — 천장 없는 기준선 DB 왕복 수 측정
+    vi.setSystemTime(new Date('2030-03-04T05:55:00.000Z'));
+    const uidBaseline = await seed({ state: { ...baseState, pity: {} } });
+    const spy = vi.spyOn(database().db, 'execute');
+    spy.mockClear();
+    const resBaseline = await callAction(userToken(uidBaseline), { type: 'catch', spot: 'sea', judgment: 'auto' });
+    const baselineQueries = spy.mock.calls.length;
+    expect(resBaseline.status).toBe(200);
+
+    // 2) 같은 22:00 경계에서 밤 전용 어종(moonveil)만 천장 도달 — nightDepth=0이므로 후보에서 빠져 추가 조회 없음
+    const uidZero = await seed({ state: { ...baseState, pity: { moonveil: SPECIES_PITY_K } } });
+    spy.mockClear();
+    const resZero = await callAction(userToken(uidZero), { type: 'catch', spot: 'sea', judgment: 'auto' });
+    const zeroQueries = spy.mock.calls.length;
+    expect(resZero.status).toBe(200);
+    expect(zeroQueries).toBe(baselineQueries);
+    const zeroBody = resZero.body as { result: { type: string; fishId: string } };
+    expect(zeroBody.result.fishId).not.toBe('moonveil');
+
+    // 3) 밤 정점(02:00, UTC :05분)에서는 밤 어종 후보가 살아 있어 ownedNormalForms 1회 추가 조회 후 천장 확정
+    vi.setSystemTime(new Date('2030-03-04T05:05:00.000Z'));
+    const uidPeak = await seed({ state: { ...baseState, pity: { moonveil: SPECIES_PITY_K } } });
+    spy.mockClear();
+    const resPeak = await callAction(userToken(uidPeak), { type: 'catch', spot: 'sea', judgment: 'auto' });
+    const peakQueries = spy.mock.calls.length;
+    spy.mockRestore();
+    expect(resPeak.status).toBe(200);
+    expect(peakQueries).toBe(baselineQueries + 1);
+    const peakDb = await dumpUser(env.client, uidPeak);
+    const caughtPayload = (peakDb.events as { type: string; payload: Record<string, unknown> }[])
+      .find(e => e.type === 'catch')?.payload;
+    expect(caughtPayload).toMatchObject({ fishId: 'moonveil', form: 'normal', pity: true });
+    expect((peakDb.saves_current[0] as { data: GameState }).data.pity.moonveil).toBe(PITY_DONE);
   });
 });

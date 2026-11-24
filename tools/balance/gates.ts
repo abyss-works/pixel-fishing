@@ -13,9 +13,9 @@ export const GATE_POOLS: readonly Pool[] = ['day', 'mixed'];
 
 /** 받아들인 알려진 역전. 값은 해역별 이동 직후 수입 차이(새 해역 - 비교 해역)다 */
 export const KNOWN_INVERSIONS: Partial<Record<SpotId, Record<Pool, number>>> = {
-  sea: { day: -905.03, mixed: -548.08 },
-  dragonhole: { day: -2859.64, mixed: -2001.25 },
-  indian: { day: -7835.57, mixed: -7533.64 },
+  sea: { day: -905.03, mixed: -663.86 },
+  dragonhole: { day: -2859.64, mixed: -2279.67 },
+  indian: { day: -7835.57, mixed: -6691.75 },
 };
 
 /** 알려진 역전과 같다고 보는 차이 허용 오차(골드/시간). 목록 값은 소수 둘째 자리까지 적는다 */
@@ -114,9 +114,9 @@ export const REGION_ENTRY_TARGET = {
 
 /** 알려진 예외: 도착 해역별 지역 진입 전환 시간의 현재 값(시간) */
 export const KNOWN_TIME_RANGE: Partial<Record<SpotId, number>> = {
-  indian: 1.15,
-  mozstrait: 3.37,
-  benguela: 8.05,
+  indian: 1.22,
+  mozstrait: 3.58,
+  benguela: 8.88,
 };
 
 /** 알려진 예외: 도착 해역별 전환 시간이 직전 전환보다 줄어든 폭의 현재 값(시간). 현재 예외는 없다 */

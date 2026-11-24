@@ -150,20 +150,21 @@
   --inset-light: #182a46;
 
   /* z 레이어 - 화면 층 순서를 값으로 옮긴 것이다. 아래에서 위로:
-     스테이지 위 HUD(stage-hud, stage-card) < 채팅과 헤더(chrome) < 헤더의 펼친 메뉴 줄(menu-row)
-     < 창(stage-modal, app-modal < 닫을 수 없는 창 blocker) < 탭 줄과 시트(tabs) < 창 위 1줄 알림(toast) < 전환 덮개(veil) < 툴팁(tooltip) < 개발 도구(devtools).
-     닫을 수 없는 창은 창 층 안에서 다른 창보다 위이면서 탭 줄보다 아래다.
+     스테이지 위 HUD(stage-hud < stage-status < stage-card < catch-fx) < 채팅과 헤더(chrome) < 헤더의 펼친 메뉴 줄(menu-row)
+     < 스테이지 창(stage-modal) < 탭 줄과 시트(tabs) < 앱 창(app-modal < 닫을 수 없는 창 blocker)
+     < 창 위 1줄 알림(toast) < 전환 덮개(veil) < 툴팁(tooltip) < 개발 도구(devtools).
      컴포넌트는 숫자를 직접 쓰지 않고 이 토큰만 쓴다(층 순서 가드 테스트가 막는다) */
   --z-stage-hud: 5;
-  --z-stage-card: 6;
+  --z-stage-status: 6;
+  --z-stage-card: 7;
+  --z-catch-fx: 8;
   --z-chrome: 10;
   --z-menu-row: 11;
-  --z-catch-fx: 12;
   --z-stage-modal: 20;
-  --z-app-modal: 21;
-  --z-blocker: 22;
   --z-tabs: 30;
-  --z-toast: 32;
+  --z-app-modal: 31;
+  --z-blocker: 32;
+  --z-toast: 34;
   --z-veil: 35;
   --z-tooltip: 50;
   --z-devtools: 60;
@@ -198,9 +199,12 @@ p, li { text-wrap: pretty; }
 /* 키보드 포커스 — pf-btn 아닌 커스텀 소형 버튼(잠금/체크/서브탭 등)에도 공통 적용 */
 button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; }
 
-/* 세계지도 모달 폭 — Modal 박스의 w-[560px](wide)을 이 화면만 넓힌다. 레이어 밖 선언이라
+/* 세계지도 모달 폭 — 스테이지 모달 기본 폭을 이 화면만 스테이지 너비 안에서 넓힌다. 레이어 밖 선언이라
    @layer utilities보다 우선한다(캐스케이드 레이어 규칙 — 위 리셋 사고 주석과 같은 근거). */
-.pf-modal-worldmap { width: min(1280px, 96vw); }
+.pf-modal-worldmap { width: min(1280px, calc(100% - 32px)); }
+@media (width < theme(--breakpoint-pc)) {
+  .pf-modal-worldmap { width: calc(100% - 48px); }
+}
 
 /* 모션 민감군 — 연출 애니메이션 전면 축소. 게임 상태와 무관한 장식이라 정지해도
    정보 손실이 없다(catch-pop 카드 등은 즉시 최종 프레임으로 표시된다). */
@@ -265,12 +269,19 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
   }
 
   .pf-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
     background: var(--c-surface-2);
     border: 1px solid var(--c-line);
     border-radius: 0;
     color: var(--c-text);
     font-family: inherit;
     font-size: var(--text-base);
+    line-height: 1.25;
+    text-align: center;
+    overflow-wrap: break-word;
     padding: 8px 16px;
     cursor: pointer;
     box-shadow: inset 1px 1px 0 var(--bevel-lo), inset -1px -1px 0 var(--bevel-hi);
@@ -299,7 +310,7 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
 
   /* 전폭 블록 — Button full 속성. variant와 무관하게 좌우로 채운다 */
   .pf-btn.full {
-    display: block;
+    display: flex;
     width: 100%;
   }
 

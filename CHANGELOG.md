@@ -2,6 +2,104 @@
 
 이 파일은 생성된다. 직접 고치지 않는다. 형식은 Keep a Changelog를 따른다.
 
+## [0.20.4] - 2026-11-24
+
+### 기능
+
+- HOME.furniture에 여객선(ferry)을 추가하고 BaseMenu 이동 구역에 문과 함께 배치했다. pacific 존에 entryBoat가 없어 portGate가 0이던 문제를 보완해 항구·바다(world) 빠른 이동과 travel 액션에 최소 배 1단계(boat >= 1) 및 게스트 잠금(menuLock, guestActionVerdict)을 적용했다. 집 출발 시 확인 문구를 분리하고 집 문 앞(마을)을 0.6초 보여 준 뒤 암전 전환으로 목표 항구 앞바다로 이동한다.
+  - 집 거점 여객선 빠른 이동 배치 및 최소 배 게이트: 이전 항구 거점에만 여객선 배치, harbor의 portGate 0으로 배 0단계 차단 부재, 이후 집·항구 모두 여객선 배치, 항구·바다 빠른 이동 boat >= 1 및 게스트 잠금 강제, 집 문 앞 0.6초 전환
+  - 커밋: 658a4d3d, af564391
+
+### UI
+
+- BagTab 물고기 섹션의 자동 잠금·기운 얻기 버튼을 sticky bottom-0 불투명 바(PC 사이드바·모바일 시트 공통)로 고정했다. 가방 하단 기운 얻기 진입(panel === "energy") 시 2칸 SaleWindow 대신 480px 단열 Modal(sm)과 EnergyPanel(등급 토글 칩 기본 미잠금 전체 선택, 4종 기운 획득 요약, 확정 후 닫힘)을 쓰도록 분리하고, 거점 궤짝·어시장(panel === "sell")의 2칸 SaleWindow는 유지했다.
+  - 가방 하단 액션 바 sticky 고정 및 가방 기운 얻기 창 분리: 이전 스크롤 하단 이탈 버튼 바, 가방 기운 얻기 클릭 시 920px 2칸 SaleWindow 공유, 이후 물고기 섹션 하단 sticky 고정 바, 480px 단열 EnergyPanel 신설(확정 시 창 닫힘)
+  - 커밋: 0d78e297, 72417c43, ea77b426, f3c261a6
+- DexTab 상단에 1단 보기 SubTabs(일반·돌연변이·네임드)를 두고 GameTabs의 setDexView와 연결했으며, 기존 2단 구역 SubTabs와 도감 탭 재선택·숫자키 3 순환·Tab/Shift+Tab 구역 순환을 그대로 유지했다.
+  - 도감 탭 1단 보기 서브탭 추가: 이전 도감 탭 재클릭·숫자키로만 보기 전환, 본문에는 구역 서브탭 1단만 표시, 이후 상단 1단 보기 SubTabs + 하단 2단 구역 SubTabs 2단 구조 및 단축키 순환 동기화
+  - 커밋: 0d78e297, 72417c43
+- HudLayout의 statusSlot을 STACK_TRUNK_CLASS 밖 독립 고정 슬롯(absolute, z-(--z-stage-status), slotAt < trunkAt)으로 유지하면서 세로 좌표를 top-20·mobile:top-7에서 bottom-24·mobile:bottom-24로 옮겼다.
+  - statusSlot 세로 위치 하단 중앙 복귀: 이전 PC top-20 · 모바일 mobile:top-7 헤더 바로 아래 고정, 이후 PC·모바일 모두 bottom-24 하단 중앙 독립 고정(방치·흔적·메시지 창 변화와 무관)
+  - 커밋: a7a3e629
+
+### 밸런스
+
+- 0040_guild_member_enhancements 마이그레이션과 api/_data/guilds.ts·load.ts 개편으로 Lv6–10 자유 강화를 (guild_id, user_id) 개인 저장·개인 적용으로 전환했다. 개인 초기화(20,000,000G)는 본인 투자분만 초기화하고 탈퇴·추방 시 해당 길드원의 행을 삭제하며 공용 guild_logs에는 새 강화·초기화를 남기지 않는다(과거 로그 읽기 호환 유지). GuildSkillsTab에서 상단 단계 색상 범례를 제거하고 각 스킬 단계 노드에 Tip 툴팁을 붙였으며 BonusTab과 확인 창 문구를 개인 기준으로 정리했다.
+  - 길드 Lv6–10 자유 강화 적용 범위 및 저장 테이블: 이전 guild_bonuses.enhance_rank 길드 공용 저장·전원 공유, 초기화 시 공용 초기화 및 guild_logs 기록, 이후 guild_member_enhancements(0040) 개인별 저장·적용(Lv6부터 레벨당 1포인트, 최대 5), 20,000,000G 본인 초기화·탈퇴 시 삭제·항해일지 비기록, 기존 enhance_rank 0 초기화
+  - 길드 스킬 단계 색상 안내 위치: 이전 상단 고정 Inset 범례(스킬 단계 색상 안내), 이후 상단 범례 제거, 각 스킬 단계 노드 Tip 툴팁(기본 단계·개인 자유 강화)으로 이동
+  - 영향: 마이그레이션 0040으로 public.guild_member_enhancements(guild_id, user_id, bonus) 표를 추가하고 기존 공용 guild_bonuses.enhance_rank를 모두 0으로 초기화한다. 되돌리기는 0040_guild_member_enhancements.down.sql 적용.
+  - 커밋: bc84adb4, 20018a2e
+
+### 수정
+
+- 공용 Inset이 유틸리티 border-line을 기본 부착해 호출부 className의 border-epic·border-legend·border-gold·border-accent가 CSS 선언 순서상 밀리던 결함을 전용 border prop(InsetBorder) 치환으로 해결했다. PlayerInfo 등 전체 호출부 8곳을 전환하고 uiGuard.test.ts(insetBorderOverrides)와 회귀 테스트를 추가했다.
+  - 공용 Inset 테두리 색 지정 방식 및 사용처 8곳 전환: 이전 Inset 기본 border-line + className 문자열 결합으로 border-epic·border-legend 등 덮어쓰기 누락, 이후 Inset border prop으로 기본 테두리 색 치환, 사용처 8곳 일괄 전환 및 uiGuard 정적 차단 추가
+  - 커밋: 46f2b3f1
+
+## [0.20.3] - 2026-11-24
+
+### UI
+
+- 하루 3,600초 주기의 시계 단계를 실제 25초당 10게임분(시간당 144스텝)으로 세분화하고 정수 분 계산으로 부동소수점 1분 오차를 제거했다. useNow 갱신 주기를 5초로 줄이고 개발 도구 시간대 막대 폭 비율과 25초 스텝 슬라이더를 동기화했다.
+  - 게임 시계·어둠 단위 세분화 및 개발 도구 주기 막대 정비: 이전 1실제분(24게임분) 계단 전환 및 부동소수점 일부 오표기, 개발 도구 60분 비율 막대 왜곡, 이후 25초당 10게임분(144스텝) 정수 분 표시, 5초 폴링, 개발 도구 비율 막대 및 스텝 슬라이더 적용
+  - 커밋: bd2e52e2
+
+### 밸런스
+
+- 정각 00:00 기준을 유지하면서 낮/밤 전환 시각을 게임 04:00\~20:00에서 06:00\~22:00으로 옮겨, 밤이 게임 22:00\~다음 06:00(실제 매시 55분\~15분 미만)에 열리게 했다.
+  - 낮/밤 시간대 경계 이동: 이전 낮 게임 04:00\~20:00(10\~50분) · 밤 게임 20:00\~04:00(50\~10분), 이후 낮 게임 06:00\~22:00(15\~55분) · 밤 게임 22:00\~06:00(55\~15분)
+  - 영향: 밤 구간 총 길이(20분, 하루의 1/3)는 그대로 두고 실제 55분\~15분(게임 22시\~06시)으로 이동한다
+  - 커밋: bd2e52e2
+- 밤 22시(0)→심야 02시(1)→06시(0) 대칭 삼각파 nightDepth를 기준 지표로 두고 darkness와 밤 어종 기본 가중치(2×nightDepth)를 연동했다. 밤 어종 출현 미끼 활성 시와 밤 강제 상태에서는 nightDepth=1을 고정 적용하고, nightDepth=0 경계에서는 밤 어종을 추첨·천장 후보 및 빠른 경로 조회에서 제외한다.
+  - 밤 깊이(0→1→0) 기준 신설 및 밤 어종 가중치(0→2)·밸런스 모델 연동: 이전 밤 시간대 전체에서 밤 어종 개체 가중치 2 고정, 어둠 정점 자정 00:00, 이후 심야 정점 02:00 기준 0→2 대칭 스케일링(미끼 활성 시 2 고정), 밸런스 모델 48스텝 평균 반영
+  - 영향: 밤 시작(22시)에는 밤 어종 가중치 0, 심야 정점(02시)에서 2로 올라 수동 도감작 효율이 심야에 집중된다
+  - 커밋: bd2e52e2
+
+### 수정
+
+- TimeBadge가 phase 대신 dark >= 0.15(MOON_AT)로 아이콘을 판정해 밤 경계 양끝에서 해 아이콘을 보이던 불일치를 제거하고 phase === night 기준으로 일치시켰다.
+  - TimeBadge 해/달 아이콘 판정 일치: 이전 darkness < 0.15 조건 때문에 실제 밤 경계 구간에서 해 아이콘 표시, 이후 useGameTime().phase === night 판정으로 밤 전 구간 달 아이콘 표시
+  - 커밋: bd2e52e2
+
+## [0.20.2] - 2026-11-24
+
+### 기능
+
+- KST 04:00 날짜 경계 기준으로 계정별 오늘의 운세(3종 균등, 적당한 운 +3% 40% / 좋은 운 +5% 60%)를 첫 접속 또는 catch·sell 첫 판정에서 고정한다. 첫 접속 모달과 스탯 보너스 탭에서 노출하고, 판매 미리보기에도 재물운 배율을 반영한다.
+  - 일일 운세 추첨·고정 및 보너스 배율 적용: 이전 일일 운세 시스템 없음, 이후 풍어운(희귀+)·재물운(판매가)·그림자 운(네임드) +3%·+5% 운 배율 적용 및 접속 모달·보너스 탭·판매 미리보기 노출
+  - 커밋: 9bc2296d, 217a665c, 9612a78f
+- canExtractEnergy가 거점(집·항구, 요리 해금) 외에 바다에서도 가공 플랜트선 이상 보유 및 비게스트 조건이면 extractEnergy를 허용한다. 바다 가방에서 열 때는 판매 창이 기운 얻기 탭으로 바로 열리며 판매 탭은 잠금 안내와 함께 비활성화한다.
+  - 가공 플랜트선 바다 기운 얻기 진입 및 판매 탭 분리 잠금: 이전 거점(집·항구)에서만 수동 기운 얻기 가능, 이후 가공 플랜트선 이상 비게스트 계정은 바다 가방에서 기운 얻기 창 진입 가능(판매 탭 잠금)
+  - 커밋: cbe0c97f
+
+### UI
+
+- 가방 상단에 물고기/아이템/유물 3서브탭을 두고 Tab 및 탭 재선택 순환을 연결했다. 물고기 섹션 우상단에 목록/카드 전환 아이콘, 하단에 자동 잠금·기운 얻기 2열 버튼을 배치했다. 아이템 섹션은 2열 카드형으로 생명의 기운 4종 16x16 픽셀 스프라이트와 도시락·미끼 총 지속 시간(그물망 배수 반영)·활성 효과 사용 중 배지 및 남은 시간을 표시하고 도움말 안내도 동기화했다.
+  - 가방 3서브탭 개편 및 아이템 카드형·지속 시간·기운 아이콘 도입: 이전 가방 단일 화면에 항목·버튼이 섞여 있었고 요리 지속 시간과 기운 아이콘이 없었음, 이후 물고기/아이템/유물 3서브탭 분리, 아이템 카드형+총/남은 시간 표시, 생명의 기운 4종 픽셀 아이콘 적용
+  - 커밋: cbe0c97f
+- FishPickTable 상단에 보유 등급별 일괄 선택 칩 스트립을 추가해 판매 탭과 기운 얻기 탭에서 해당 등급의 미잠금 물고기를 한 번에 선택·해제할 수 있게 했다.
+  - 판매·기운 얻기 어종 표 상단 등급 일괄 선택 칩 추가: 이전 어종별 행을 펼쳐 개별 선택해야 했음, 이후 등급 칩으로 해당 등급 미잠금 물고기 일괄 선택·해제 가능
+  - 커밋: b645ebb6
+- 스테이지 상태 안내 슬롯을 하단 flex-wrap 카드 묶음에서 분리해 고정 슬롯·독립 z 계층으로 두고, 게임 영역 유래 모달은 stage 스코프로 내려 Sidebar inert 및 클릭 차단 우회 코드를 제거했다.
+  - 스테이지 상태 안내 슬롯 고정 및 사이드바·모달 계층 스코프 분리: 이전 방치 결과 카드 등 표시 변화 시 입질 안내 위치 이동 및 스테이지 모달 중 사이드바 차단, 이후 상태 안내 위치 고정 및 스테이지 모달 표시 중에도 사이드바·탭 전환 정상 동작
+  - 커밋: 0a2c9d85
+
+### 밸런스
+
+- REPORT_MIN_MS를 2분에서 5분으로 상향하고 useAwayReport에서 기준 미만 부재 시 복귀 보고 조회와 메시지 창 안내 줄 출력을 생략하도록 변경했다.
+  - 방치 알림 최소 부재 기준 상향 및 미만 부재 보고 생략: 이전 2분 이상 부재 시 방치 알림 카드·복귀 메시지 표시, 이후 5분 이상 부재 시에만 방치 알림 카드·복귀 메시지 표시, 미만 생략
+  - 영향: 5분 미만 짧은 부재 시 방치 알림 카드와 복귀 메시지가 뜨지 않는다
+  - 커밋: df6d5b08, eb82fd32
+
+### 수정
+
+- SellTab 확정 버튼에서 AdjustedAmount를 분리해 버튼 위 확정 정보 줄로 이동하고, PickTab의 h-11 고정 높이를 min-h-11로 전환했으며 uiGuard에 텍스트/수치 버튼 고정 높이 금지 가드를 추가했다.
+  - 판매 확정 버튼 보정 금액 분리 및 공용 버튼 최소 높이 전환: 이전 확정 버튼 안 긴 보정 금액이 줄바꿈되어 고정 44px 버튼 밖으로 넘침, 이후 받을 골드는 버튼 위 정보 줄에 표시하고 버튼은 선택 마릿수만 표기하며 min-h-11 적용
+  - 커밋: 48f260ae
+- 범용 150ms 액션 간격 제한을 제거하고 느림 창 대상(catch, sendLetter 1초)과 catchTooSoon 검사만 유지하도록 조정했다.
+  - 액션 간격 제한을 느림 창 대상으로 한정: 이전 도시락 1회 사용 등 빠른 조작도 직전 액션과 150ms 간격 제한에 걸려 경고 발생, 이후 느림 창(catch·sendLetter 1초)만 간격 제한 유지
+  - 커밋: af9a9559
+
 ## [0.20.1] - 2026-11-24
 
 ### 수정
@@ -10,7 +108,7 @@
   - 조회 및 타입(api/_data/telemetry.ts): EventArchiveRow 인터페이스(id, user_id, type, payload, created_at, counted)를 정의하고, eventsBefore의 SELECT 목록에 counted 열을 추가해 반환 타입을 EventArchiveRow[]로 맞췄다.
   - 테스트 및 스냅샷(api/_data/telemetry.test.ts, api/cold-archive.test.ts, api/cron/__snapshots__/archive.db.test.ts.snap): eventsBefore의 counted 열 조회·불리언 보존 단위 테스트를 추가하고, 콜드 아카이브 JSONL 검증과 아카이브 DB 스냅샷(counted 및 bytesRaw)을 갱신했다.
   - eventsBefore SELECT 열 및 반환 타입(api/_data/telemetry.ts): 이전 id, user_id, type, payload, created_at (Record<string, unknown>[]), 이후 id, user_id, type, payload, created_at, counted 포함 (EventArchiveRow[])
-  - 커밋: 7b1f88c6
+  - 커밋: 524ed482
 - 초기 로드와 읽기 전용 조회 경로에 DB 쓰기 없는 메모리 내 업적 파생 평가를 적용해, 세이브에 아직 기록되지 않았거나 boot 이전 상태여도 이미 달성한 업적이 즉시 claimable로 노출되도록 수정했다.
   - 서버 무쓰기 파생 평가(api/_data/achievements.ts, api/_data/me.ts, api/_data/admin.ts): 도감 행(records), 저장 blob, 카운터(counters), 네임드 토벌 목록(clearedNamed)만으로 evaluateAchievements를 계산하는 deriveAchievements를 추가했다. readOwnState는 newlyClaimable이 있을 때 saves_current를 쓰지 않고 응답 객체 cur.data.achievements에만 파생 결과를 반영하며, 관리자 userState는 records JSON에 max_size와 first_caught를 함께 조회한 뒤 deriveAchievements로 claimed·claimable 수를 집계한다.
   - 클라이언트 초기 로드(src/platform/adapters/httpGameGateway.ts): assemble과 구 saves 이관 폴백 경로 모두에서 migrate 직후 evaluateAchievements를 수행해 초기 상태부터 파생 업적을 반영한다.
@@ -18,7 +116,7 @@
   - readOwnState 업적 평가(api/_data/me.ts, achievements.ts): 이전 saves_current.data.achievements 저장값만 반환, 이후 deriveAchievements로 무쓰기 파생 평가 후 메모리 응답에만 claimable 반영
   - 관리자 userState 업적 집계(api/_data/admin.ts): 이전 saves_current.data.achievements 원시 맵만 집계, records에 max_size·first_caught 미조회, 이후 records에 max_size·first_caught 포함 및 deriveAchievements 기반 claimed·claimable 집계
   - 클라이언트 초기 로드(HttpGameGateway.load, assemble): 이전 migrate 결과의 achievements만 유지, 이후 assemble과 legacy 폴백 경로에서 evaluateAchievements 즉시 적용
-  - 커밋: edd89a50
+  - 커밋: 14101abc
 
 ### 기타
 
@@ -27,7 +125,7 @@
   - Drizzle 스키마 및 DB 테스트(api/_db/schema.ts, api/_db/schema.db.test.ts, api/_dbTest/migrations.db.test.ts): eventConsumerCutoffs 선언을 추가하고, 선언 테이블 목록과 기본값·제약·authenticated 역할 차단 RLS 검증 테스트를 추가했다.
   - 이벤트 소비자 컷오프 테이블 및 스키마(0039_event_consumer_cutoffs, schema.ts): 이전 없음, 이후 public.event_consumer_cutoffs 테이블 및 eventConsumerCutoffs Drizzle 스키마 추가(복합 PK, RLS 서버 전용)
   - 영향: 영향: 순수 가산 테이블 추가라 기존 테이블·런타임 경로에 영향이 없으며, 코드 배포 전 마이그레이션을 먼저 적용해도 안전하다. 되돌리기: supabase/migrations/0039_event_consumer_cutoffs.down.sql을 실행해 테이블을 삭제하고 schema.ts와 관련 DB 테스트 변경을 복원한다.
-  - 커밋: 7d2301ea
+  - 커밋: 8a2afcd7
 
 ## [0.20.0] - 2026-11-24
 
@@ -2595,6 +2693,9 @@
   - 영향: 미확인
   - 커밋: 92257ad
 
+[0.20.4]: https://github.com/abyss-works/pixel-fishing/releases/tag/v0.20.4
+[0.20.3]: https://github.com/abyss-works/pixel-fishing/releases/tag/v0.20.3
+[0.20.2]: https://github.com/abyss-works/pixel-fishing/releases/tag/v0.20.2
 [0.20.1]: https://github.com/abyss-works/pixel-fishing/releases/tag/v0.20.1
 [0.20.0]: https://github.com/abyss-works/pixel-fishing/releases/tag/v0.20.0
 [0.19.3]: https://github.com/abyss-works/pixel-fishing/releases/tag/v0.19.3

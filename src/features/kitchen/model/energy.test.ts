@@ -2,10 +2,11 @@
 import { describe, expect, it } from 'vitest';
 import { FISH, newState } from '../../../game/rules/logic';
 import type { FishInstance, GameState } from '../../../game/rules/logic';
-import { ENERGY_ITEM_IDS } from '../../../game/content/cooking';
+import { AUTO_ENERGY_BOAT, COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS } from '../../../game/content/cooking';
 import type { SpotId } from '../../../game/content/spots';
+import { GUEST_LOCK_TEXT, UNVERIFIED_LOCK_TEXT } from '../../display/model/menuLock';
 import {
-  clearSpotPicks, energyLabel, energyResultRows, energyRowValue, energyTotal, pickEnergyUids, selectEnergyView,
+  buildEnergyExtractNotice, clearSpotPicks, defaultQuickEnergyGrades, energyLabel, energyResultRows, energyRowValue, energyTotal, pickEnergyUids, selectBagEnergyEntry, selectEnergyView, selectQuickEnergyView,
 } from './energy';
 
 const home = { kind: 'base', id: 'home' } as const;
@@ -171,5 +172,121 @@ describe('기운의 화면 이름', () => {
   it('이름 뒤에 등급을 괄호로 붙인다', () => {
     expect(energyLabel('common')).toBe('생명의 기운(일반)');
     expect(energyLabel('legendary')).toBe('생명의 기운(전설)');
+  });
+});
+
+describe('가방 하단 기운 얻기 진입 조건', () => {
+  const sea = { kind: 'region', id: 'world' } as const;
+  const village = { kind: 'region', id: 'village' } as const;
+  const harbor = { kind: 'base', id: 'harbor' } as const;
+
+  it('계정 상태 잠금(게스트, 확인 실패)을 위치와 배 단계보다 먼저 확인한다', () => {
+    expect(selectBagEnergyEntry({ boat: AUTO_ENERGY_BOAT, location: home }, 'guest')).toEqual({
+      ok: false, lines: [GUEST_LOCK_TEXT],
+    });
+    expect(selectBagEnergyEntry({ boat: AUTO_ENERGY_BOAT, location: sea }, 'guest')).toEqual({
+      ok: false, lines: [GUEST_LOCK_TEXT],
+    });
+    expect(selectBagEnergyEntry({ boat: 0, location: home }, 'unverified')).toEqual({
+      ok: false, lines: [UNVERIFIED_LOCK_TEXT],
+    });
+    expect(selectBagEnergyEntry({ boat: AUTO_ENERGY_BOAT, location: sea }, 'unverified')).toEqual({
+      ok: false, lines: [UNVERIFIED_LOCK_TEXT],
+    });
+  });
+
+  it('거점이면 요리 해금 시 활성, 미해금 시 진행 조건 툴팁을 낸다', () => {
+    expect(selectBagEnergyEntry({ boat: COOKING_UNLOCK_BOAT, location: home }, 'account')).toEqual({ ok: true });
+    expect(selectBagEnergyEntry({ boat: COOKING_UNLOCK_BOAT, location: harbor }, 'account')).toEqual({ ok: true });
+    expect(selectBagEnergyEntry({ boat: COOKING_UNLOCK_BOAT - 1, location: home }, 'account')).toEqual({
+      ok: false,
+      lines: ['인도양 항로가 열리면 기운 얻기를 할 수 있어요.', '인도양 항로는 증기선(5단계)부터 열려요.'],
+    });
+  });
+
+  it('바다나 마을 필드면 가공 플랜트선 이상일 때만 활성, 미만이면 장소 거부 사유를 낸다', () => {
+    expect(selectBagEnergyEntry({ boat: AUTO_ENERGY_BOAT, location: sea }, 'account')).toEqual({ ok: true });
+    expect(selectBagEnergyEntry({ boat: AUTO_ENERGY_BOAT, location: village }, 'account')).toEqual({ ok: true });
+    expect(selectBagEnergyEntry({ boat: AUTO_ENERGY_BOAT - 1, location: sea }, 'account')).toEqual({
+      ok: false,
+      lines: ['집이나 항구 또는 가공 플랜트선에서만 할 수 있어요.'],
+    });
+    expect(selectBagEnergyEntry({ boat: COOKING_UNLOCK_BOAT, location: village }, 'account')).toEqual({
+      ok: false,
+      lines: ['집이나 항구 또는 가공 플랜트선에서만 할 수 있어요.'],
+    });
+  });
+});
+
+describe('간소화 기운 얻기 모델 (selectQuickEnergyView)', () => {
+  it('기본 전체 등급 선택 시 미잠금 물고기만 등급별로 모으고 잠긴 개체는 제외한다', () => {
+    const bag = [
+      inst('c1', 'pond', false, 'common'),
+      inst('c2', 'indian', false, 'common'), // 해역 기본값과 무관하게 미잠금이면 모두 포함
+      inst('cLocked', 'pond', true, 'common'),
+      inst('r1', 'sea', false, 'rare'),
+      inst('e1', 'deep', true, 'epic'),
+    ];
+    const game = seed({
+      bag,
+      items: { [ENERGY_ITEM_IDS.common]: 25, [ENERGY_ITEM_IDS.rare]: 10 },
+    });
+    const view = selectQuickEnergyView(game, defaultQuickEnergyGrades());
+
+    expect(view.uids).toEqual(['c1', 'c2', 'r1']);
+    expect(view.count).toBe(3);
+    expect(view.unlockedCount).toBe(3);
+    expect(view.lockedCount).toBe(2);
+    expect(view.reason).toBeNull();
+    expect(view.byGrade).toEqual({ common: 20, rare: 10, epic: 0, legendary: 0 });
+    expect(view.energyTotal).toBe(30);
+    expect(view.chips).toEqual([
+      { grade: 'common', name: '일반', fishCount: 2, on: true },
+      { grade: 'rare', name: '희귀', fishCount: 1, on: true },
+      { grade: 'epic', name: '영웅', fishCount: 0, on: false },
+      { grade: 'legendary', name: '전설', fishCount: 0, on: false },
+    ]);
+    expect(view.tiles).toEqual([
+      { grade: 'common', itemId: ENERGY_ITEM_IDS.common, label: '생명의 기운(일반)', gain: 20, current: 25, after: 45, gainText: '+2', currentText: '2.5', afterText: '4.5', on: true },
+      { grade: 'rare', itemId: ENERGY_ITEM_IDS.rare, label: '생명의 기운(희귀)', gain: 10, current: 10, after: 20, gainText: '+1', currentText: '1', afterText: '2', on: true },
+      { grade: 'epic', itemId: ENERGY_ITEM_IDS.epic, label: '생명의 기운(영웅)', gain: 0, current: 0, after: 0, gainText: '+0', currentText: '0', afterText: '0', on: false },
+      { grade: 'legendary', itemId: ENERGY_ITEM_IDS.legendary, label: '생명의 기운(전설)', gain: 0, current: 0, after: 0, gainText: '+0', currentText: '0', afterText: '0', on: false },
+    ]);
+  });
+
+  it('특정 등급을 끄면 그 등급 개체와 기운 획득량이 0이 되고 나머지 등급만 남는다', () => {
+    const bag = [inst('c1', 'pond', false, 'common'), inst('r1', 'sea', false, 'rare')];
+    const view = selectQuickEnergyView(seed({ bag }), new Set(['rare']));
+    expect(view.uids).toEqual(['r1']);
+    expect(view.count).toBe(1);
+    expect(view.byGrade).toEqual({ common: 0, rare: 10, epic: 0, legendary: 0 });
+    expect(view.chips.find(c => c.grade === 'common')?.on).toBe(false);
+    expect(view.tiles.find(t => t.grade === 'common')?.gain).toBe(0);
+  });
+
+  it('가방이 비거나 모두 잠겨 있으면 unlockedCount와 count가 0이다', () => {
+    const view = selectQuickEnergyView(seed({ bag: [inst('c1', 'pond', true, 'common')] }), new Set(['common', 'rare', 'epic', 'legendary']));
+    expect(view.unlockedCount).toBe(0);
+    expect(view.lockedCount).toBe(1);
+    expect(view.count).toBe(0);
+    expect(view.uids).toEqual([]);
+  });
+
+  it('확정 불가 상태면 거부 사유 문구를 reason으로 내보내고 결과 알림 행을 조립한다', () => {
+    const locked = selectQuickEnergyView(seed({ boat: 4 }), defaultQuickEnergyGrades());
+    expect(locked.reason).toBe('인도양 항로가 열리면 기운 얻기를 할 수 있어요.');
+    expect(buildEnergyExtractNotice({ common: 25, rare: 0, epic: 10, legendary: 0 })).toEqual({
+      kind: 'facility.energyExtracted',
+      text: '생명의 기운 3.5개를 얻었어요!',
+      toastText: '생명의 기운 3.5개 획득!',
+      replaceKey: 'energy-extract',
+      tip: {
+        target: '3.5',
+        rows: [
+          { label: '생명의 기운(일반)', value: '+2.5' },
+          { label: '생명의 기운(영웅)', value: '+1' },
+        ],
+      },
+    });
   });
 });

@@ -7,6 +7,8 @@ import { fmtGold, fmtNum, fmtSize, josa } from '../../../../ui/format';
 import type { Notify } from '../../../../ui/hud/messageFeed';
 import { EXHIBIT_SLOTS } from '../../../../../game/rules/balance';
 import { selectBagOverview } from '../../../../../features/inventory/model/selectors';
+import { selectBagEnergyEntry } from '../../../../../features/kitchen/model/energy';
+import { useNow } from '../../../../../features/gameplay/service/useGameTime';
 import type { AccountLockState } from '../../../../../features/display/model/menuLock';
 import { sendNotice } from '../../../../../features/display/model/toastPolicy';
 import type { FishInstance, GameState } from '../../../../../game/rules/logic';
@@ -20,6 +22,7 @@ import FishSprite from '../../../../ui/fish/FishSprite';
 import PixelIcon from '../../../../ui/PixelIcon';
 import Button from '../../../../ui/Button';
 import IconButton from '../../../../ui/IconButton';
+import { LockLines } from '../../../../ui/Locked';
 import Tip from '../../../../ui/Tip';
 import SubTabs from '../../../../ui/SubTabs';
 import { RarityDot, RarityText } from '../../../../ui/fish/RarityTag';
@@ -27,8 +30,8 @@ import { groupInstances } from '../../../../../features/inventory/model/bagRows'
 import HelpHint from '../../../../ui/HelpHint';
 import InstanceLine, { UnsizedLine } from '../../../../ui/fish/InstanceLine';
 import BagCards from './BagCards';
-import { setBagLayout, toggleBagRow, useBagView } from './bagView';
-import type { BagLayout } from './bagView';
+import { setBagLayout, setBagSection, toggleBagRow, useBagView } from './bagView';
+import type { BagSection } from './bagView';
 import { levelText, selectArtifactLevel } from '../../../../../features/inventory/model/artifactLevel';
 import { selectOwnedArtifacts } from '../../../../../features/inventory/model/selectors';
 import { ARTIFACTS } from '../../../../../game/content/artifacts';
@@ -41,13 +44,14 @@ import ItemSection from './ItemSection';
 /** 전시대 화면 노출 — 1차 전시대는 이번 배포에서 뺀다. 규칙·액션은 그대로다 */
 export const EXHIBIT_UI_ENABLED = false;
 
-// 가방 탭 — **섹션 3개: 물고기 / 아이템 / 유물**. 섹션은 가방 탭 재선택(클릭·같은 숫자키)으로
-// 순환하고 탭 라벨 둘째 줄이 현재 섹션을 보여 준다. 물고기 1,500마리를 아이템과 한 스크롤에서
-// 훑게 하지 않는다. 선택은 bagView 저장소에 살아서 탭을 왕래해도 유지된다.
+// 가방 탭 — **서브탭 3개: 물고기 / 아이템 / 유물**. 상단 서브탭, Tab 키, 가방 탭 재선택(클릭·같은 숫자키)으로
+// 전환하며 탭 라벨 둘째 줄이 현재 섹션을 보여 준다. 물고기 1,500마리를 아이템과 한 스크롤에서
+// 훑게 하지 않는다. 선택은 가방 보기 상태에 살아서 탭을 왕래해도 유지된다.
 //
-// 물고기 섹션 — 서브탭 목록/카드(Tab 키 순환). 카드뷰는 **물고기 목록의 렌더링만** 바꾼다.
+// 물고기 섹션 — 우상단 보기 전환 아이콘으로 목록/카드 보기를 바꾼다. 카드뷰는 **물고기 목록의 렌더링만** 바꾼다.
 //  목록: 종+폼 머리 아래 개체가 한 마리씩. 정보 집약 — 개체를 고르고 잠그는 화면.
 //  카드: 전 어종 격자에 보유 마릿수. 현황 파악 — 뭐가 비었는지가 한눈에 보인다.
+// 하단에는 자동 잠금과 기운 얻기 진입 버튼을 나란히 둔다.
 //
 // 목록은 **기본 전부 닫힘** — 1,500마리 세이브에서 펼침 기본은
 // 스크롤 지옥이다. 개체 선택 화면은 판매 패널이 담당하고(그쪽은 기본 펼침 유지), 가방은
@@ -153,9 +157,9 @@ function ExhibitShelf({ exhibit, onWithdraw }: {
   );
 }
 
-export default function BagTab({ game, accountState = 'account', sellBonus, bagBonus = 0, dispatch, setToast }: {
+export default function BagTab({ game, accountState = 'account', sellBonus, bagBonus = 0, dispatch, setToast, onOpenEnergy }: {
   game: GameState;
-  /** 잠금 판정에 쓰는 계정 상태 - 아이템 섹션의 잠금 사유를 정한다 */
+  /** 잠금 판정에 쓰는 계정 상태 - 아이템 섹션과 기운 얻기 진입의 잠금 사유를 정한다 */
   accountState?: AccountLockState;
   /** 길드 판매가 보너스 비율 - 서버가 알려 준 값. 길드가 없으면 0 */
   sellBonus: number;
@@ -163,12 +167,16 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
   bagBonus?: number;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
+  /** 물고기 섹션 하단 기운 얻기 진입 버튼 */
+  onOpenEnergy?: () => void;
 }) {
+  const now = useNow();
   const rows = useMemo(() => groupInstances(game.bag), [game.bag]);
   const {
     count: bagCount, cap, full: bagFull, sellable,
     autoLock: autoLockPlan,
-  } = selectBagOverview(game, sellBonus, bagBonus);
+  } = selectBagOverview(game, sellBonus, bagBonus, now);
+  const energyEntry = selectBagEnergyEntry(game, accountState);
   const [lockConfirm, setLockConfirm] = useState(false);
   const { layout, section, opened } = useBagView();
 
@@ -233,39 +241,41 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
   };
 
   return (
-    <div>
+    <div className={cx('flex-1 flex flex-col', section === 'fish' && '-mb-3')}>
+      <SubTabs
+        items={[
+          { key: 'fish' as BagSection, label: '물고기' },
+          { key: 'items' as BagSection, label: '아이템' },
+          { key: 'artifacts' as BagSection, label: '유물' },
+        ]}
+        activeKey={section}
+        onSelect={setBagSection}
+      />
       {section === 'items' ? (
         <ItemSection game={game} accountState={accountState} dispatch={dispatch} setToast={setToast} />
       ) : section === 'artifacts' ? (
         <ArtifactSection game={game} dispatch={dispatch} setToast={setToast} />
       ) : (
         <>
-          {/* 물고기 서브탭 — 목록 / 카드. 카드뷰는 물고기 목록의 렌더링만 바꾼다 */}
-          <SubTabs
-            items={[
-              { key: 'list' as BagLayout, label: '목록' },
-              { key: 'cards' as BagLayout, label: '카드' },
-            ]}
-            activeKey={layout}
-            onSelect={setBagLayout}
-          />
-          {/* 헤더 — 용량 표시(좌) + 자동 잠금(우측 끝) */}
+          {/* 헤더 — 용량 표시(좌) + 목록/카드 보기 전환 아이콘(우측 끝) */}
           <div className="flex items-center justify-between gap-2 mb-1">
             <PageTitle>
               물고기 (<span className={cx(bagFull && 'text-danger')}>{fmtNum(bagCount)}</span>
               <span className="text-text-dim">/{fmtNum(cap)}</span>마리)
             </PageTitle>
-            {bagCount > 0 && (
-              <Tip wraps text="어종마다 일반과 돌연변이 각각 가장 큰 물고기 한 마리만 잠그고, 나머지 잠금은 풀어요">
-                <Button size="sm" aria-label="자동 잠금" onClick={autoLock} className="inline-flex items-center gap-1">
-                  <PixelIcon glyph="lockOpen" size={12} />
-                  자동 잠금
-                </Button>
-              </Tip>
-            )}
+            <Tip wraps text={layout === 'list' ? '카드 보기' : '목록 보기'}>
+              <IconButton
+                glyph={layout === 'list' ? 'grid' : 'menu'}
+                size={14}
+                tone="dim"
+                className="p-1"
+                aria-label={layout === 'list' ? '카드 보기' : '목록 보기'}
+                onClick={() => setBagLayout(layout === 'list' ? 'cards' : 'list')}
+              />
+            </Tip>
           </div>
           {lockConfirm && (
-            <ConfirmDialog title="자동 잠금" confirmLabel="정리"
+            <ConfirmDialog layer="app" title="자동 잠금" confirmLabel="정리"
                            onConfirm={applyAutoLock} onCancel={() => setLockConfirm(false)}>
                 <p className="text-sm leading-relaxed">
                   어종마다 일반과 돌연변이 각각 <b className="text-gold">가장 큰 물고기 한 마리만</b> 잠그고,
@@ -354,6 +364,25 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
               </Note>
             </>
           )}
+          <div className="sticky bottom-0 z-1 -mx-3 px-3 pb-3 pt-2 mt-auto bg-surface border-t border-line-dim grid grid-cols-2 gap-2">
+            <Tip wraps className="flex min-w-0"
+                 text={bagCount === 0
+                   ? '가방에 물고기가 없어요.'
+                   : '어종마다 일반과 돌연변이 각각 가장 큰 물고기 한 마리만 잠그고, 나머지 잠금은 풀어요'}>
+              <Button size="sm" aria-label="자동 잠금" disabled={bagCount === 0} onClick={autoLock}
+                      className="w-full justify-center">
+                <PixelIcon glyph="lockOpen" size={12} />
+                자동 잠금
+              </Button>
+            </Tip>
+            <Tip wraps className="flex min-w-0"
+                 text={energyEntry.ok ? '가방의 물고기를 생명의 기운으로 바꿔요' : <LockLines lines={energyEntry.lines} />}>
+              <Button size="sm" disabled={!energyEntry.ok} onClick={() => onOpenEnergy?.()}
+                      className="w-full justify-center">
+                기운 얻기
+              </Button>
+            </Tip>
+          </div>
         </>
       )}
     </div>

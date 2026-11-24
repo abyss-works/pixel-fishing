@@ -24,6 +24,7 @@ import {
 import { appliedSlots, applyEnergyGain, planOverflow } from '../src/game/rules/cooking.js';
 import { needsLegacyFirstCatchMigration } from '../src/game/rules/firstCatch.js';
 import { drawNamedEncounter, speciesPityCandidates } from '../src/game/rules/pity.js';
+import { ensureFortune, luckMultOf } from '../src/game/rules/fortune.js';
 import { bountyById, isQuestOffered } from '../src/game/content/bounties.js';
 import type { BountyKind, BountyQuest } from '../src/game/content/bounties.js';
 import type { SpotId } from '../src/game/content/spots.js';
@@ -48,7 +49,7 @@ import { gameDayOf, gameDayStartISO, previousGameDayISO } from '../src/game/rule
 import type { DayPhase } from '../src/game/rules/time.js';
 import { checkNickname, pickGuestName } from '../src/game/rules/nickname.js';
 import { powerZones, rodPower } from '../src/game/rules/stats.js';
-import { MIN_ACTION_GAP_MS, MIN_ACTION_GAP_FAST_MS, PACING_SLOW_TYPES, SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
+import { MIN_ACTION_GAP_MS, PACING_SLOW_TYPES, SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
 import { catchTooSoon } from '../src/game/rules/pacing.js';
 import { APP_VERSION } from '../src/version.js';
 import { staleClient } from './_server/clientBuild.js';
@@ -184,7 +185,7 @@ export function expiredQuests(rows: BountyRows, dayStartISO: string): { id: stri
 }
 
 /** 개체·도감 스킵 — 이 액션들의 리듀서는 스칼라/blob만 건드린다(가방·도감 무접촉 검증됨):
- * boot/sendLetter/setNickname(상태불변) · upgradeRod/buyBoat/travel/redeemCoupon(스칼라만) · seeTutorial(blob만) · changeClothes/buyHat/wearHat(골드와 blob만).
+ * sendLetter/setNickname(상태불변) · boot(그날 첫 접속이면 운세 스칼라만 고정) · upgradeRod/buyBoat/travel/redeemCoupon(스칼라만) · seeTutorial(blob만) · changeClothes/buyHat/wearHat(골드와 blob만).
  * debug는 도감 명령(dex.completeZone)이 있어 스킵하지 않는다.
  * deliverBounty는 서버 주입 완료 여부만 보니 스킵 유지.
  * exchangeArtifact·levelUpArtifact는 재료(items)와 유물·레벨 맵이 모두 blob이라 스킵한다.
@@ -208,9 +209,9 @@ const BOUNTY_ACTIONS = new Set(['acceptQuest', 'deliverBounty', 'resolveChalleng
  *  의뢰 클리어). 이사 코드와 개발 도구는 플레이로 얻은 명성이 아니라 기여로 세지 않는다 */
 const GUILD_ACTIONS = new Set(['catch', 'sell', 'exhibit', 'deliverBounty', 'claimRelief']);
 
-// 액션 페이싱 게이트(2단계) — 서버 추첨으로 가치를 생성하는 catch와 쓰기 비용이 큰 letter는
-// 느린 창(1s), 상점·정비 등 UI 체인이 정상인 나머지는 빠른 창(150ms)을 쓴다. 봇 flood에는
-// 빠른 창도 완화 상한으로 남는다(~6.7 rps/uid). 밸런스 상수와 액션 목록은 각 정의를 단일 출처로 삼는다.
+// 액션 페이싱 게이트 — 서버 추첨으로 가치를 생성하는 catch와 쓰기 비용이 큰 sendLetter에만
+// 직전 성공 액션과의 최소 간격을 검사한다. 그 밖의 액션은 간격 검사를 두지 않는다.
+// 밸런스 상수와 액션 목록은 각 정의를 단일 출처로 삼는다.
 const PACING_SLOW = new Set<string>(PACING_SLOW_TYPES);
 
 /** DB 단계 실행 — 실패는 그 단계의 오류 코드로 500을 던진다 */
@@ -288,8 +289,8 @@ async function route(req: Req, res: Res): Promise<void> {
   }
 
   // 현재 상태 로드 — 프로필·저장 상태와, 필요한 액션이면 개체·도감·수배 행까지 한 번에 읽는다.
-  // boot/sendLetter는 상태 참조를 그대로 반환해 게임 상태를 바꾸지 않는다.
-  // 그래서 개체·도감 조회가 불필요하고, 응답 델타도 빈 writes다. 스냅샷 경계 버전에서는
+  // sendLetter는 상태 참조를 그대로 반환하고, boot는 그날 첫 접속에 운세 스칼라만 고정한다 —
+  // 둘 다 개체·도감을 건드리지 않아 조회가 불필요하고, 응답 델타도 빈 writes다. 스냅샷 경계 버전에서는
   // 풀 조회로 돌아간다 (saves 아카이브는 풀 스냅샷이 계약이라 빈 가방 스냅샷을 남기면 안 된다).
   const wantsBounty = BOUNTY_ACTIONS.has(action.type)
     && (action.type === 'catch' || typeof (action as { questId?: unknown }).questId === 'string');
@@ -398,9 +399,9 @@ async function route(req: Req, res: Res): Promise<void> {
     throw new ApiError(423, 'session-replaced');
   }
 
-  // 매크로 페이싱 검사 — 직전 성공 액션과의 최소 간격(서버 시각 기준). updated_at은 성공
-  // 커밋마다 이미 갱신되므로 읽기·쓰기 추가가 0이다. 거절될 요청이 쿠폰·지원코드 조회까지 가지 않도록
-  // 그 조회보다 먼저 검사한다. 시딩 행(v1)과 첫 액션은 제외.
+  // 매크로 페이싱 검사 — 느림 창 대상에만 직전 성공 액션과의 최소 간격(서버 시각 기준)을 검사한다.
+  // updated_at은 성공 커밋마다 이미 갱신되므로 읽기·쓰기 추가가 0이다. 거절될 요청이 쿠폰·지원코드
+  // 조회까지 가지 않도록 그 조회보다 먼저 검사한다. 시딩 행(v1)과 첫 액션은 제외.
   // 개발 도구 명령(debug/debugBatch/debugSnapshot)과 승인된 강제 조우·시간대 테스트 캐치는 페이싱을 면제한다.
   const pacingExempt = action.type === 'debug'
     || action.type === 'debugBatch'
@@ -408,11 +409,9 @@ async function route(req: Req, res: Res): Promise<void> {
     || forceCatchAllowed;
   if (!pacingExempt) {
     const lastActionMs = Date.parse(String(row.updated_at ?? ''));
-    if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
-      const gapMs = PACING_SLOW.has(action.type) ? MIN_ACTION_GAP_MS : MIN_ACTION_GAP_FAST_MS;
-      if (Date.now() - lastActionMs < gapMs) {
-        throw new ApiError(429, 'too-fast');
-      }
+    if (PACING_SLOW.has(action.type) && Number.isFinite(lastActionMs) && Number(row.version) > 1
+        && Date.now() - lastActionMs < MIN_ACTION_GAP_MS) {
+      throw new ApiError(429, 'too-fast');
     }
     // 캐치 간격 검사 — 직전 캐치로부터 낚시 한 사이클(획득 표시 + 최소 입질 대기)이 지나야 다음 캐치를 받는다.
     if (action.type === 'catch' && catchTooSoon(
@@ -546,9 +545,11 @@ async function route(req: Req, res: Res): Promise<void> {
   // 도전권 발급 이벤트만 덧붙이고 낚시는 그대로 진행한다 (챌린지절).
   // 네임드 조우 천장의 진척도 여기서 센다 — 리듀서 catch와 같은 drawNamedEncounter.
   if (action.type === 'catch' && catchBase && bounty && out.ok) {
+    // 운 배율은 리듀서와 같은 규칙 — fastCatch/applyAction이 이미 오늘의 운세를 out.state에 고정해 뒀다
     const named = drawNamedEncounter(catchBase.namedPity, encounterQuests(bounty), action.spot, now,
       Math.random, action.forceEncounter === true,
-      namedWeightBonus(catchBase, action.judgment, now, guildEffects, achievementBonusesOf(catchBase)));
+      namedWeightBonus(catchBase, action.judgment, now, guildEffects, achievementBonusesOf(catchBase)),
+      luckMultOf(out.state.fortune, 'named'));
     out = { ...out, state: { ...out.state, namedPity: named.pity } };
     if (named.quest) {
       out.events.push({ type: 'ticket', payload: { questId: named.quest.id, ...(named.byCeiling ? { pity: true } : {}) } });
@@ -831,21 +832,25 @@ export function catchProgressQuests(events: readonly GameEvent[], activeIds: rea
 async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId, judgmentIn: Judgment, now: string,
   guild: GuildEffects, guest: boolean, counters: Record<string, number>, clearedNamed: string[],
   forcePhase?: DayPhase): Promise<ApplyOutcome> {
-  const base = migrate({ ...blobInput(row.data), gold: Number(row.gold),
+  let base = migrate({ ...blobInput(row.data), gold: Number(row.gold),
     fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {},
     achievementCounters: counters, clearedNamed });
   const gate = canFish(base, spot);
   if (!gate.ok) return { ok: false, error: gate.reason };
+  // 오늘의 운세 — 리듀서 catch와 같은 규칙. 첫 판정에서 굴려 게임 날짜에 고정하고,
+  // 이미 그날의 운세면 그대로 쓴다(불변 — rng를 쓰지 않는다)
+  base = ensureFortune(base, now, Math.random);
   const pz = powerZones(base, spot);
   const { judgment, phaseOpts, cook } = prepareCatchDraw(base, judgmentIn, now, pz, forcePhase);
   const today = todayKST();
   // 어종 천장 — 후보가 있을 때만 그 어종들의 일반 폼 소유를 조회한다(fast path는 도감을 들고 있지 않다)
-  const candidates = speciesPityCandidates(base.pity, spot, phaseOpts.phase);
+  const candidates = speciesPityCandidates(base.pity, spot, phaseOpts);
   const owned = candidates.length === 0 ? new Set<string>()
     : await step('db-read', { uid, action: 'catch' }, () => ownedNormalForms(db, uid, candidates));
   const achBonuses = achievementBonusesOf(base);
   const drawn = drawCatch(
-    base, spot, judgment, rodPower(base), pz.mult, Math.random, phaseOpts,
+    base, spot, judgment, rodPower(base), pz.mult, Math.random,
+    { ...phaseOpts, rarityLuck: luckMultOf(base.fortune, 'rarity') },
     id => owned.has(id), guild, cook, achBonuses,
   );
   const { fish, extras } = drawn;

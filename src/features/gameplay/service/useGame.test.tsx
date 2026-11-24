@@ -20,6 +20,8 @@ const gw = vi.hoisted(() => ({
   loadDex: {} as Record<string, unknown>,
   loadAchievements: {} as Record<string, string>,
   dispatchAchievements: {} as Record<string, string>,
+  loadFortune: null as null | { day: string; kind: 'fish' | 'gold' | 'shadow'; index: 3 | 5 },
+  dispatchFortune: null as null | { day: string; kind: 'fish' | 'gold' | 'shadow'; index: 3 | 5 },
   devTools: false,
   account: { status: 'account', email: 'u@example.com' } as { status: 'account'; email: string } | { status: 'guest' } | { status: 'failed' },
 }));
@@ -29,7 +31,7 @@ vi.mock('../../../platform/api', async () => {
   const { newState: fresh } = await import('../../../game/rules/logic');
   const ok = (action: GameAction) => ({
     status: 'ok' as const,
-    state: { ...fresh(), achievements: gw.dispatchAchievements },
+    state: { ...fresh(), achievements: gw.dispatchAchievements, fortune: gw.dispatchFortune },
     result: action.type === 'boot' ? { type: 'boot', schoolDay: '2026-11-05' } : { type: action.type },
   });
   return {
@@ -38,7 +40,7 @@ vi.mock('../../../platform/api', async () => {
       auth: { isConfigured: true, ensureSession: async () => 'uid-1', currentAccount: async () => gw.account },
       storage: { clearLegacySave: () => { gw.actions.push('clearLegacy'); }, loadLegacy: () => ({ game: fresh(), notice: null, legacy: gw.legacy }), saveCode: () => '' },
       createGameGateway: () => ({
-        load: async () => { gw.loads++; if (gw.loadErrors.length) throw gw.loadErrors.shift(); if (gw.loadError) throw gw.loadError; return gw.cloudEmpty ? null : { ...fresh(), gold: gw.loadGold, dex: gw.loadDex as ReturnType<typeof fresh>['dex'], achievements: gw.loadAchievements }; },
+        load: async () => { gw.loads++; if (gw.loadErrors.length) throw gw.loadErrors.shift(); if (gw.loadError) throw gw.loadError; return gw.cloudEmpty ? null : { ...fresh(), gold: gw.loadGold, dex: gw.loadDex as ReturnType<typeof fresh>['dex'], achievements: gw.loadAchievements, fortune: gw.loadFortune }; },
         getProfile: async () => ({ nickname: 'nick', devTools: gw.devTools }),
         dispatch: (action: GameAction) => {
           gw.actions.push(action.type);
@@ -55,6 +57,7 @@ vi.mock('../../../platform/observability', () => ({ reportIssue: () => {} }));
 
 import { useGame } from './useGame';
 import { clearFailureNotice, currentFailureNotice } from './failureNotice';
+import { readFortuneModal, resetFortuneModalSession } from '../../fortune/service/fortuneModal';
 
 function setup(setToast: (m: string, tone?: 'info' | 'gold' | 'warn') => void = () => {}, reactStrictMode = false) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -64,9 +67,9 @@ function setup(setToast: (m: string, tone?: 'info' | 'gold' | 'warn') => void = 
 }
 
 afterEach(() => {
-  cleanup(); clearFailureNotice(); gw.bootResolve = null; gw.actions = []; gw.loads = 0; gw.loadGold = 0;
+  cleanup(); clearFailureNotice(); resetFortuneModalSession(); gw.bootResolve = null; gw.actions = []; gw.loads = 0; gw.loadGold = 0;
   gw.legacy = false; gw.cloudEmpty = false; gw.importError = null; gw.loadError = null; gw.loadErrors = []; gw.bootErrors = []; gw.loadDex = {}; gw.devTools = false;
-  gw.loadAchievements = {}; gw.dispatchAchievements = {};
+  gw.loadAchievements = {}; gw.dispatchAchievements = {}; gw.loadFortune = null; gw.dispatchFortune = null;
   gw.account = { status: 'account', email: 'u@example.com' };
 });
 
@@ -529,5 +532,38 @@ describe('요청 속도 초과(429) 재시도', () => {
     await act(async () => { gw.bootResolve!(); });
     expect(hook.result.current.loading).toBe(false);
     expect(hook.result.current.blocker).toBeNull();
+  });
+});
+
+describe('오늘의 운세 접속 모달 큐잉', () => {
+  it('boot 응답이 새 게임 날짜의 운세를 고정하면 접속 모달을 큐에 넣는다', async () => {
+    const today = { day: '2026-11-24', kind: 'fish' as const, index: 5 as const };
+    gw.loadFortune = { day: '2026-11-23', kind: 'gold', index: 3 };
+    gw.dispatchFortune = today;
+    setup();
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+    expect(readFortuneModal({ ready: true, suspended: false })).toEqual({ fortune: today, pending: true });
+  });
+
+  it('같은 날 재접속(load와 boot의 운세 날짜가 같음)이면 모달을 큐에 넣지 않는다', async () => {
+    const today = { day: '2026-11-24', kind: 'fish' as const, index: 5 as const };
+    gw.loadFortune = today;
+    gw.dispatchFortune = today;
+    setup();
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+    expect(readFortuneModal({ ready: true, suspended: false })).toEqual({ fortune: null, pending: false });
+  });
+
+  it('catch 등 boot가 아닌 액션에서 운세가 채워져도 접속 모달을 큐에 넣지 않는다', async () => {
+    const today = { day: '2026-11-24', kind: 'gold' as const, index: 5 as const };
+    const hook = setup();
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+
+    gw.dispatchFortune = today;
+    await act(async () => { await hook.result.current.dispatch({ type: 'sell', uids: [] }); });
+    expect(readFortuneModal({ ready: true, suspended: false })).toEqual({ fortune: null, pending: false });
   });
 });

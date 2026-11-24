@@ -263,7 +263,7 @@ export default function Field({
 
   const status = snapshot.phase === 'idle' ? null : statusParts(snapshot.phase, mobile);
   const statusBand = status && (
-    <HudPanel className="z-(--z-stage-hud) max-w-[min(480px,100%)] px-3.5 py-1.5 whitespace-pre-line text-sm text-center text-text pointer-events-none animate-overlay-in">
+    <HudPanel className="z-(--z-stage-status) max-w-[min(480px,100%)] px-3.5 py-1.5 whitespace-pre-line text-sm text-center text-text pointer-events-none animate-overlay-in">
       {status.lead}
       {/* 판정 영역 설명 줄은 입력을 받지 않는 띠의 생략 글자라 툴팁 없이 숨기기만 한다 */}
       {status.judge && <span className={cx('block', HEADER_ROWS_OMIT_CLASS)}>{status.judge}</span>}

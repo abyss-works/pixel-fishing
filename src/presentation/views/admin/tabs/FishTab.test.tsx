@@ -47,6 +47,7 @@ describe('시뮬레이션 수역 칸', () => {
     render(<FishTab />);
     fireEvent.click(screen.getByRole('button', { name: '모두 펼치기' }));
     expect(screen.getByRole('button', { name: '모두 접기' })).toBeInTheDocument();
+    expect(screen.getAllByText(/게임 22시~다음 6시, 심야 02시 최대 가중치 기준/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/밤 전용 · \d+\.\d+%$/).length).toBeGreaterThan(0);
 
     fireEvent.change(screen.getByLabelText('구역 필터'), { target: { value: 'northatlantic' } });

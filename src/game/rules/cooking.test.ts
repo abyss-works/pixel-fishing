@@ -5,7 +5,7 @@ import type { ActionDeps, GameAction } from './actions';
 import { FISH, fishDrawShares, newState } from './logic';
 import type { FishInstance, GameState } from './logic';
 import {
-  COOK_KIND_RULES, COOK_STORAGE_CAP, COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, ENERGY_PER_INDIVIDUAL, RECIPES, recipeById, toStoredEnergy,
+  AUTO_ENERGY_BOAT, COOK_KIND_RULES, COOK_STORAGE_CAP, COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, ENERGY_PER_INDIVIDUAL, RECIPES, recipeById, toStoredEnergy,
 } from '../content/cooking';
 import type { RarityId } from '../content/rarity';
 import {
@@ -171,11 +171,28 @@ describe('extractEnergy', () => {
     expect(ok(seed({ bag: bag(), location: { kind: 'base', id: 'harbor' } }), { type: 'extractEnergy', uids: ['a'] }).state.bag.map(i => i.uid))
       .toEqual(['b', 'c']);
   });
-  it('바다와 마을 필드에서는 not-at-sale-base로 거부한다', () => {
-    expect(rejected(seed({ bag: bag(), location: { kind: 'region', id: 'world' } }),
+  it('비플랜트선 바다와 마을 필드에서는 not-at-sale-base로 거부한다', () => {
+    expect(rejected(seed({ boat: AUTO_ENERGY_BOAT - 1, bag: bag(), location: { kind: 'region', id: 'world' } }),
       { type: 'extractEnergy', uids: ['a'] })).toBe('not-at-sale-base');
-    expect(rejected(seed({ bag: bag(), location: { kind: 'region', id: 'village' } }),
+    expect(rejected(seed({ boat: AUTO_ENERGY_BOAT - 1, bag: bag(), location: { kind: 'region', id: 'village' } }),
       { type: 'extractEnergy', uids: ['a'] })).toBe('not-at-sale-base');
+  });
+  it('가공 플랜트선 이상이면 바다와 마을 필드에서도 수동 기운 얻기를 허용한다', () => {
+    expect(canExtractEnergy(seed({ boat: AUTO_ENERGY_BOAT, location: { kind: 'region', id: 'world' } }))).toEqual({ ok: true });
+    expect(canExtractEnergy(seed({ boat: AUTO_ENERGY_BOAT, location: { kind: 'region', id: 'village' } }))).toEqual({ ok: true });
+    const out = ok(seed({ boat: AUTO_ENERGY_BOAT, bag: bag(), location: { kind: 'region', id: 'world' } }),
+      { type: 'extractEnergy', uids: ['a'] });
+    expect(out.state.bag.map(i => i.uid)).toEqual(['b', 'c']);
+    expect(out.state.items).toEqual({ [ENERGY_ITEM_IDS.common]: 10 });
+  });
+  it('게스트는 거점과 가공 플랜트선 바다 모두 account-only로 거부한다', () => {
+    expect(canExtractEnergy(seed({ location: { kind: 'base', id: 'home' } }), true)).toEqual({ ok: false, reason: 'account-only' });
+    expect(canExtractEnergy(seed({ boat: AUTO_ENERGY_BOAT, location: { kind: 'region', id: 'world' } }), true))
+      .toEqual({ ok: false, reason: 'account-only' });
+    expect(rejected(seed({ bag: bag(), location: { kind: 'base', id: 'home' } }),
+      { type: 'extractEnergy', uids: ['a'] }, deps({ guest: true }))).toBe('account-only');
+    expect(rejected(seed({ boat: AUTO_ENERGY_BOAT, bag: bag(), location: { kind: 'region', id: 'world' } }),
+      { type: 'extractEnergy', uids: ['a'] }, deps({ guest: true }))).toBe('account-only');
   });
   it('판매 시설이 없는 거점은 거부한다', () => {
     expect(rejected(seed({ bag: bag(), location: { kind: 'base', id: 'nowhere' as never } }),
@@ -192,7 +209,7 @@ describe('extractEnergy', () => {
     expect(rejected(seed({ bag: bag() }), { type: 'extractEnergy', uids: 'a' as never })).toBe('bad-request');
   });
   it('거부 문구는 기운 얻기용이 따로 있고 조리의 문구는 그대로다', () => {
-    expect(REJECT_TEXT['not-at-sale-base']).toBe('집이나 항구에서만 할 수 있어요.');
+    expect(REJECT_TEXT['not-at-sale-base']).toBe('집이나 항구 또는 가공 플랜트선에서만 할 수 있어요.');
     expect(REJECT_TEXT['not-at-home']).toBe('집에서만 할 수 있어요.');
     expect(REJECT_TEXT['energy-locked']).toMatch(/ 항로가 열리면 기운 얻기를 할 수 있어요\.$/);
     expect(REJECT_TEXT['cooking-locked']).toMatch(/ 항로가 열리면 부엌을 쓸 수 있어요\.$/);

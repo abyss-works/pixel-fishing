@@ -15,35 +15,38 @@ const tabs = [{ key: 'a', label: '가' }, { key: 'b', label: '나' }];
 afterEach(() => { cleanup(); layout.mobile = false; resetOpenWindows(); resetKeyScopes(); });
 
 describe.each([['PC 레이아웃', false], ['모바일 레이아웃', true]])('Sidebar 탭 줄 - %s', (_, mobile) => {
-  it('모달이 떠 있으면 탭을 눌러도 모달은 그대로 있고 탭을 바꾸지 않는다', () => {
+  it.each([true, false])('스테이지 모달(closable=%s)이 열려 있어도 사이드바에 inert가 걸리지 않고 탭 전환이 자유롭다', closable => {
     layout.mobile = mobile;
     const onSelect = vi.fn();
     const onClose = vi.fn();
-    render(<><Sidebar tabs={tabs} activeKey="a" onSelect={onSelect}><p>내용</p></Sidebar><Modal layer="stage" title="창" onClose={onClose}>본문</Modal></>);
-    fireEvent.click(screen.getByRole('button', { name: '나' }));
+    render(<><Sidebar tabs={tabs} activeKey="a" onSelect={onSelect}><p>내용</p></Sidebar><Modal layer="stage" closable={closable} title="창" onClose={onClose}>본문</Modal></>);
+    const tab = screen.getByRole('button', { name: '나' });
+    expect(tab.closest('[inert]')).toBeNull();
+    fireEvent.click(tab);
+    expect(onSelect).toHaveBeenCalledWith('b');
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('앱 모달이 떠 있으면 탭을 눌러도 모달은 그대로 있고 탭을 바꾸지 않는다', () => {
+    layout.mobile = mobile;
+    const onSelect = vi.fn();
+    const onClose = vi.fn();
+    render(<><Sidebar tabs={tabs} activeKey="a" onSelect={onSelect}><p>내용</p></Sidebar><Modal layer="app" title="앱 창" onClose={onClose}>본문</Modal></>);
+    fireEvent.click(screen.getByRole('button', { name: '가' }));
     expect(onClose).not.toHaveBeenCalled();
     expect(onSelect).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
-  it('같은 탭을 다시 눌러도 모달을 닫지 않고 탭 보기를 바꾸지 않는다', () => {
-    layout.mobile = mobile;
-    const onSelect = vi.fn();
-    const onClose = vi.fn();
-    render(<><Sidebar tabs={tabs} activeKey="a" onSelect={onSelect}><p>내용</p></Sidebar><Modal title="앱 창" onClose={onClose}>본문</Modal></>);
-    fireEvent.click(screen.getByRole('button', { name: '가' }));
-    expect(onClose).not.toHaveBeenCalled();
-    expect(onSelect).not.toHaveBeenCalled();
-  });
-
-  it.each(['stage', 'app'] as const)('닫을 수 없는 %s 모달이 떠 있어도 탭 입력을 받지 않는다', layer => {
+  it('닫을 수 없는 앱 모달(blocker)이 떠 있으면 탭 입력을 받지 않는다', () => {
     layout.mobile = mobile;
     const onSelect = vi.fn();
     const onClose = vi.fn();
     const onOther = vi.fn();
     render(<>
       <Sidebar tabs={tabs} activeKey="a" onSelect={onSelect}><p>내용</p></Sidebar>
-      <Modal layer={layer} closable={false} onClose={onClose}>본문</Modal>
+      <Modal layer="app" closable={false} onClose={onClose}>본문</Modal>
       <Modal layer="stage" onClose={onOther}>다른 창</Modal>
     </>);
     fireEvent.click(screen.getByRole('button', { name: '나' }));
@@ -61,11 +64,11 @@ describe.each([['PC 레이아웃', false], ['모바일 레이아웃', true]])('S
     expect(onSelect).toHaveBeenCalledWith('b');
   });
 
-  it('모달이 닫히고 나면 탭 입력이 다시 동작한다', () => {
+  it('앱 모달이 닫히고 나면 탭 입력이 다시 동작한다', () => {
     layout.mobile = mobile;
     const onSelect = vi.fn();
     const view = (open: boolean) => (
-      <>{<Sidebar tabs={tabs} activeKey="a" onSelect={onSelect}><p>내용</p></Sidebar>}{open && <Modal onClose={() => {}}>본문</Modal>}</>
+      <>{<Sidebar tabs={tabs} activeKey="a" onSelect={onSelect}><p>내용</p></Sidebar>}{open && <Modal layer="app" onClose={() => {}}>본문</Modal>}</>
     );
     const { rerender } = render(view(true));
     rerender(view(false));
@@ -88,7 +91,7 @@ describe('Sidebar 시트 - 시트에서 연 창', () => {
     const view = (open: boolean) => (
       <Sidebar tabs={tabs} activeKey="a" onSelect={() => {}} sheetOpen>
         <p>시트 내용</p>
-        {open && <Modal title="시트에서 연 창" onClose={() => {}}>본문</Modal>}
+        {open && <Modal layer="app" title="시트에서 연 창" onClose={() => {}}>본문</Modal>}
       </Sidebar>
     );
     const { rerender } = render(view(true));
@@ -104,7 +107,7 @@ describe('Sidebar 시트 - 시트에서 연 창', () => {
   it('PC 레이아웃의 탭 내용이 연 창은 창 층에 그려진다 - 시트가 없다', () => {
     layout.mobile = false;
     const { host, done } = withWindowLayer();
-    render(<Sidebar tabs={tabs} activeKey="a" onSelect={() => {}}><Modal title="창" onClose={() => {}}>본문</Modal></Sidebar>);
+    render(<Sidebar tabs={tabs} activeKey="a" onSelect={() => {}}><Modal layer="app" title="창" onClose={() => {}}>본문</Modal></Sidebar>);
     expect(host).toContainElement(screen.getByRole('dialog'));
     done();
   });
@@ -114,7 +117,7 @@ describe('Sidebar 시트 - 시트에서 연 창', () => {
     const { host, done } = withWindowLayer();
     render(<>
       <Sidebar tabs={tabs} activeKey="a" onSelect={() => {}} sheetOpen><p>시트 내용</p></Sidebar>
-      <Modal title="헤더에서 연 창" onClose={() => {}}>본문</Modal>
+      <Modal layer="app" title="헤더에서 연 창" onClose={() => {}}>본문</Modal>
     </>);
     expect(host).toContainElement(screen.getByRole('dialog'));
     expect(screen.getByRole('region', { name: '탭 내용' })).not.toContainElement(screen.getByRole('dialog'));

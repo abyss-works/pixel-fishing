@@ -46,10 +46,12 @@ describe('어종 천장 — 누적', () => {
     expect(auto.carp).toBeLessThan(manual.carp);
   });
 
-  it('밤 전용 어종은 낮 캐치에서 쌓이지 않는다', () => {
+  it('밤 전용 어종은 낮 캐치와 nightDepth=0 경계에서 쌓이지 않는다', () => {
     const day = accrueSpeciesPity({}, 'sea', { phase: 'day' }, 1);
+    const edge = accrueSpeciesPity({}, 'sea', { phase: 'night', nightDepth: 0 }, 1);
     const night = accrueSpeciesPity({}, 'sea', { phase: 'night' }, 1);
     expect(day.moonveil ?? 0).toBe(0);
+    expect(edge.moonveil ?? 0).toBe(0);
     expect(night.moonveil).toBeGreaterThan(0);
   });
 });
@@ -59,6 +61,8 @@ describe('어종 천장 — 확정', () => {
     const pity = { goldcarp: SPECIES_PITY_K + 1, goldfish: SPECIES_PITY_K, carp: SPECIES_PITY_K - 0.01, crucian: PITY_DONE };
     expect(speciesPityCandidates(pity, 'pond', 'day')).toEqual(['goldcarp', 'goldfish']);
     expect(speciesPityCandidates({ moonveil: 9 }, 'sea', 'day')).toEqual([]);
+    expect(speciesPityCandidates({ moonveil: 9 }, 'sea', { phase: 'night', nightDepth: 0 })).toEqual([]);
+    expect(speciesPityCandidates({ moonveil: 9 }, 'sea', { phase: 'night', nightDepth: 0.5 })).toEqual(['moonveil']);
     expect(speciesPityCandidates({ moonveil: 9 }, 'sea', 'night')).toEqual(['moonveil']);
     expect(speciesPityCandidates({ toothfish: 9, darktoothfish: 9 }, 'benguela', 'day')).toEqual([]);
     expect(speciesPityCandidates({ toothfish: 9, darktoothfish: 9 }, 'benguela', 'night')).toEqual([]);

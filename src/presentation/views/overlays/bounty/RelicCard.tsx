@@ -8,6 +8,7 @@ import { levelText } from '../../../../features/inventory/model/artifactLevel';
 import Button from '../../../ui/Button';
 import Inset from '../../../ui/Inset';
 import Tip from '../../../ui/Tip';
+import { cx } from '../../../ui/cx';
 import { RarityText } from '../../../ui/fish/RarityTag';
 import { artifactEffectLines, artifactSystemLines } from '../../../ui/artifactEffects';
 import { BoardRows } from './boardParts';
@@ -31,7 +32,8 @@ export default function RelicCard({ artifact, owned, level, materialCount, busy,
   const canExchange = !owned && materialCount >= 1;
   return (
     <Inset tone={owned ? 'deep' : canExchange ? 'light' : 'base'}
-           className={canExchange ? 'border-gold bg-[color-mix(in_oklab,var(--c-gold)_8%,var(--inset-light))] p-3 flex flex-col gap-2 flex-1 min-h-0' : 'p-3 flex flex-col gap-2 flex-1 min-h-0'}>
+           border={canExchange ? 'gold' : 'line'}
+           className={cx('p-3 flex flex-col gap-2 flex-1 min-h-0', canExchange && 'bg-[color-mix(in_oklab,var(--c-gold)_8%,var(--inset-light))]')}>
       <div className="flex items-baseline gap-2 h-6">
         <b className="text-base text-gold truncate"><Tip text={artifact.lore}>{artifact.name}</Tip></b>
         {owned && artifactHasLevel(artifact) && <span className="text-xs text-text-dim shrink-0">{levelText(level)}</span>}

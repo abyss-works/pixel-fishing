@@ -19,7 +19,7 @@ export default function GoogleReturn({ setToast, reopenAccount, progress }: {
 
   useGoogleReturn({
     setToast, reopenAccount, progress,
-    showNotice: (title, body) => notice({ title, body }),
+    showNotice: (title, body) => notice({ layer: 'stage', title, body }),
     askOverwrite: () => new Promise<boolean>(resolve => setAnswer(() => resolve)),
   });
 

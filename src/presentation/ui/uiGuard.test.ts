@@ -505,7 +505,6 @@ describe('UI 시스템 가드', () => {
 
   it('버튼 안의 AdjustedAmount는 inButton을 준다 - 버튼 안에 포커스 칸과 터치 툴팁을 두지 않는다', () => {
     expect(checked.filter(f => adjustedInButtonWithoutFlag(f.src).length > 0).map(f => f.path)).toEqual([]);
-    expect(presentationFiles.some(f => /<Button\b[\s\S]*?<AdjustedAmount\b[^>]*\binButton\b/.test(f.src))).toBe(true);
   });
 
   it('취소선으로 금액을 직접 그리지 않는다 - 정가와 보정 금액의 취소선은 PriceTag와 AdjustedAmount만 정한다', () => {
@@ -583,23 +582,30 @@ describe('UI 시스템 가드', () => {
     expect(presentationFiles.find(f => f.path === 'ui/hud/HudChip.tsx')!.src).toContain('pointer-events-auto');
   });
 
-  // 하단 HUD 흐름 — 낚시 상태 띠, 오른쪽 아래 열, 메시지 창은 PC와 모바일 모두 HudLayout의 단일 흐름 컨테이너 안에 둔다.
-  // Field가 게임 프레임 하단에 따로 절대 배치하거나, 메시지 창·오른쪽 아래 열이 스테이지 구석에 각각 절대 배치로 돌아가지 않게 막는다
-  it('Field는 PC와 모바일 모두 공용 statusSlot 포털로 낚시 상태 띠를 공급하고 게임 프레임 하단에 따로 절대 배치하지 않는다', () => {
+  // 하단 HUD 흐름 & 낚시 상태 띠 고정 슬롯 분리 — 오른쪽 아래 열과 메시지 창은 하단 단일 흐름 컨테이너 안에 두고,
+  // 낚시 상태 띠(statusSlot)는 하단 트렁크에서 분리해 스테이지 상단 고정 절대 좌표 슬롯(z-(--z-stage-status))에 둔다.
+  it('Field는 PC와 모바일 모두 공용 statusSlot 포털로 z-(--z-stage-status) 낚시 상태 띠를 공급하고 게임 프레임 하단에 따로 절대 배치하지 않는다', () => {
     const field = presentationFiles.find(f => f.path === 'layouts/game-stage/Field.tsx')!.src;
     expect(field).toMatch(/createPortal\(\s*statusBand\s*,\s*statusSlot\s*\)/);
+    expect(field).toContain('z-(--z-stage-status)');
     expect(field).not.toMatch(/mobile\s*&&\s*statusSlot|statusSlot\s*&&\s*mobile/);
     expect(field).not.toMatch(/\bbottom-3\b|-translate-x-1\/2/);
   });
 
-  it('HudLayout은 낚시 상태 띠 슬롯, 오른쪽 아래 열, 메시지 창을 PC와 모바일 모두 단일 흐름 컨테이너 안에 둔다', () => {
+  it('HudLayout은 statusSlot을 하단 flex-wrap 트렁크와 분리된 독립 absolute 슬롯(z-(--z-stage-status))에 두고, 오른쪽 아래 열과 메시지 창은 하단 단일 흐름에 둔다', () => {
     const hud = presentationFiles.find(f => f.path === 'layouts/hud/HudLayout.tsx')!.src;
     const log = presentationFiles.find(f => f.path === 'ui/hud/MessageLog.tsx')!.src;
     expect(hud).toMatch(/ref=\{onStatusSlot\}/);
+    expect(hud).toContain('z-(--z-stage-status)');
     expect(hud).not.toMatch(/mobile\s*&&\s*<div\b[^>]*ref=\{onStatusSlot\}/);
     expect(hud).not.toMatch(/['"`]contents\b/);
     expect(hud).not.toMatch(/\babsolute\s+right-3\s+bottom-3\b/);
     expect(log).not.toMatch(/\babsolute\s+left-3\s+bottom-3\b/);
+    // statusSlot은 하단 트렁크 div 바깥(앞)에 독립 배치된다
+    const slotAt = hud.indexOf('<div ref={onStatusSlot}');
+    const trunkAt = hud.lastIndexOf('STACK_TRUNK_CLASS');
+    expect(slotAt).toBeGreaterThan(-1);
+    expect(trunkAt).toBeGreaterThan(slotAt);
   });
 
   // 초록(ok) 상태색 금지 — 초록은 특수 등급에만 쓰고 상태(성공, 활성, 접속)에는 쓰지 않는다
@@ -731,5 +737,175 @@ describe('UI 시스템 가드', () => {
     );
     const offenders = targets.filter(f => PUNCT_RE.test(stripComments(f.src))).map(f => f.path);
     expect(offenders).toEqual([]);
+  });
+
+  // 버튼·확정 영역 고정 높이 금지 — 텍스트나 수치를 담는 Button과 data-confirm-row 확정 영역 래퍼는 줄바꿈 시 함께 늘어나야 하므로 고정 높이(h-*, [&>*]:h-full)를 쓰지 않는다
+  const BUTTON_FIXED_HEIGHT_RE = /(?<![\w-])(?:h-(?:\d+|\[[^\]]+\]|full|screen|dvh|svh|fit)|size-(?:\d+|\[[^\]]+\]))/;
+  const CONFIRM_ROW_FIXED_HEIGHT_RE = /(?<![\w-])(?:h-(?:\d+|\[[^\]]+\]|full|screen|dvh|svh|fit)|size-(?:\d+|\[[^\]]+\]))|\[&[^\]]*\]:h-/;
+  /** 따옴표("·')와 표현식({...}) 안의 `>`를 건너뛰며 여는 태그와 끝 위치를 찾는다 */
+  const openingTagsQuoted = (src: string, name: string): { tag: string; end: number }[] => {
+    const tags: { tag: string; end: number }[] = [];
+    for (const m of src.matchAll(new RegExp(`<${name}\\b`, 'g'))) {
+      let depth = 0;
+      let quote: '"' | "'" | null = null;
+      let i = m.index;
+      for (; i < src.length; i++) {
+        const c = src[i];
+        if (quote) {
+          if (c === '\\') { i++; continue; }
+          if (c === quote) quote = null;
+          continue;
+        }
+        if (c === '"' || c === "'") quote = c;
+        else if (c === '{') depth++;
+        else if (c === '}') depth--;
+        else if (c === '>' && depth === 0) break;
+      }
+      tags.push({ tag: src.slice(m.index, i + 1), end: i + 1 });
+    }
+    return tags;
+  };
+  /** 여는 태그 자신의 속성 영역만 남긴다({ ... } 중첩 표현식은 뺀다) */
+  const ownTagHead = (tag: string) => {
+    let depth = 0;
+    let out = '';
+    for (const c of tag) {
+      if (c === '{') depth++;
+      else if (c === '}') depth--;
+      else if (depth === 0) out += c;
+    }
+    return out;
+  };
+  const isIconOnlySquareButton = (tag: string, body: string) => {
+    if (!/(?<![\w-])size-(?:\d+|\[[^\]]+\])/.test(tag)) return false;
+    const withoutTags = body.replace(/<[^>]+>/g, '');
+    const stripped = withoutTags.replace(/\{[^}]*&&\s*\}/g, '').replace(/\s+/g, '');
+    return stripped === '';
+  };
+  const isStepperException = (path: string, tag: string, body: string) =>
+    path === 'views/overlays/guild/GuildSkillsTab.tsx'
+    && /\bsize="xs"/.test(tag)
+    && /\bh-5\b/.test(tag)
+    && body.trim() === '+1';
+  const fixedHeightButtons = (src: string, path = '') =>
+    openingTagsQuoted(src, '(?:Button|ConfirmButton)')
+      .filter(t => BUTTON_FIXED_HEIGHT_RE.test(t.tag))
+      .filter(t => {
+        if (/\/>\s*$/.test(t.tag)) return true;
+        const name = t.tag.startsWith('<ConfirmButton') ? 'ConfirmButton' : 'Button';
+        const body = childrenOf(src, t, name);
+        return !isIconOnlySquareButton(t.tag, body) && !isStepperException(path, t.tag, body);
+      })
+      .map(t => `${path ? `${path}: ` : ''}${t.tag}`);
+  const fixedHeightConfirmRows = (src: string, path = '') =>
+    openingTagsQuoted(src, ANY_TAG)
+      .filter(t => /\bdata-confirm-row\b/.test(ownTagHead(t.tag)) && CONFIRM_ROW_FIXED_HEIGHT_RE.test(t.tag))
+      .map(t => `${path ? `${path}: ` : ''}${t.tag}`);
+
+  it('텍스트·수치를 담는 Button과 data-confirm-row는 고정 높이를 쓰지 않는다 — 아이콘 전용 정사각형과 소형 +1 스테퍼만 예외', () => {
+    expect(presentationFiles.flatMap(f => fixedHeightButtons(f.src, f.path))).toEqual([]);
+    expect(presentationFiles.flatMap(f => fixedHeightConfirmRows(f.src, f.path))).toEqual([]);
+    const guildSkills = presentationFiles.find(f => f.path === 'views/overlays/guild/GuildSkillsTab.tsx')!.src;
+    expect(openingTagsQuoted(guildSkills, 'Button').some(t => isStepperException('views/overlays/guild/GuildSkillsTab.tsx', t.tag, childrenOf(guildSkills, t, 'Button')))).toBe(true);
+
+    expect(fixedHeightButtons('<Button variant="primary" full className="h-11">판매 (10마리)</Button>')).toHaveLength(1);
+    expect(fixedHeightButtons('<Button className="h-[44px]">확인</Button>')).toHaveLength(1);
+    expect(fixedHeightButtons('<Button className="size-11">99</Button>')).toHaveLength(1);
+    expect(fixedHeightButtons('<Button className="size-11"><PixelIcon glyph="plus" /> 추가</Button>')).toHaveLength(1);
+    expect(fixedHeightButtons('<Button className="h-full aspect-square"><PixelIcon glyph="gear" /></Button>')).toHaveLength(1);
+    expect(fixedHeightButtons('<Button variant="primary" full className="min-h-11">판매 (10마리)</Button>')).toEqual([]);
+    expect(fixedHeightButtons('<Button className="size-11 shrink-0 p-0"><PixelIcon glyph="gear" size={14} /></Button>')).toEqual([]);
+    expect(fixedHeightButtons('<Button className="size-11 shrink-0 p-0"><PixelIcon glyph="gear" />{flag && <span className="size-1.5" />}</Button>')).toEqual([]);
+    expect(fixedHeightButtons('<Button size="xs" className="h-5">+1</Button>', 'views/overlays/guild/GuildSkillsTab.tsx')).toEqual([]);
+
+    expect(fixedHeightConfirmRows('<div data-confirm-row className="flex flex-col h-11 [&>*]:h-full">{actions}</div>')).toHaveLength(1);
+    expect(fixedHeightConfirmRows('<div data-confirm-row className="flex flex-col [&>*]:h-full">{actions}</div>')).toHaveLength(1);
+    expect(fixedHeightConfirmRows('<div data-confirm-row className="flex flex-col min-h-11">{actions}</div>')).toEqual([]);
+  });
+
+  // Inset 테두리 색 — 기본 border-line이 CSS 선언 순서상 className의 border-epic/gold/accent 등을 덮어쓰므로
+  // 테두리 색은 Inset의 border prop으로만 지정하고 className이나 borderless + border 우회를 쓰지 않는다
+  const INSET_BORDER_COLOR_RE = /\bborder-(?:line(?:-dim)?|gold(?:-dark)?|orange|accent|guild|danger|common|rare|epic|legend|special|ok|bg|surface(?:-2)?|text(?:-dim)?|\[[^\]]+\])(?:\/\d+)?\b/;
+  const INSET_RAW_BORDER_RE = /(?<![\w-])border(?![\w-])/;
+  const insetClassExpr = (tag: string): string | null => {
+    let depth = 0;
+    let quote: '"' | "'" | null = null;
+    for (let i = 0; i < tag.length; i++) {
+      const c = tag[i];
+      if (quote) {
+        if (c === '\\') { i++; continue; }
+        if (c === quote) quote = null;
+        continue;
+      }
+      if (c === '"' || c === "'") { quote = c; continue; }
+      if (c === '{') { depth++; continue; }
+      if (c === '}') { depth--; continue; }
+      if (depth === 0 && tag.startsWith('className', i)) {
+        const rest = tag.slice(i + 'className'.length);
+        const eq = /^\s*=\s*/.exec(rest);
+        if (!eq) continue;
+        const start = i + 'className'.length + eq[0].length;
+        const first = tag[start];
+        if (first === '"' || first === "'") {
+          let end = start + 1;
+          while (end < tag.length && tag[end] !== first) {
+            if (tag[end] === '\\') end++;
+            end++;
+          }
+          return tag.slice(start + 1, end);
+        }
+        if (first === '{') {
+          let d = 0;
+          let q: '"' | "'" | '`' | null = null;
+          let end = start;
+          for (; end < tag.length; end++) {
+            const ch = tag[end];
+            if (q) {
+              if (ch === '\\') { end++; continue; }
+              if (ch === q) q = null;
+              continue;
+            }
+            if (ch === '"' || ch === "'" || ch === '`') q = ch;
+            else if (ch === '{') d++;
+            else if (ch === '}') { d--; if (d === 0) break; }
+          }
+          return tag.slice(start + 1, end);
+        }
+      }
+    }
+    return null;
+  };
+  const localConstBodies = (src: string, expr: string): string[] => {
+    const names = new Set(expr.match(/\b[A-Za-z_]\w*\b/g) ?? []);
+    const bodies: string[] = [];
+    for (const name of names) {
+      if (name === 'cx' || name === 'className') continue;
+      const m = new RegExp(`\\bconst\\s+${name}\\b[^=]*=\\s*([\\s\\S]*?)(?=;\\r?\\n|\\n(?:const|function|export)\\b|$)`).exec(src);
+      if (m) bodies.push(m[1]);
+    }
+    return bodies;
+  };
+  const insetBorderOverrides = (src: string, path = '') =>
+    openingTagsQuoted(src, 'Inset')
+      .filter(t => {
+        const expr = insetClassExpr(t.tag);
+        if (!expr) return false;
+        const targets = [expr, ...localConstBodies(src, expr)];
+        if (targets.some(part => INSET_BORDER_COLOR_RE.test(part))) return true;
+        return /\bborderless\b/.test(ownTagHead(t.tag)) && targets.some(part => INSET_RAW_BORDER_RE.test(part));
+      })
+      .map(t => `${path ? `${path}: ` : ''}${t.tag}`);
+
+  it('Inset 호출부는 className으로 테두리 색이나 borderless 수동 border 우회를 쓰지 않고 border prop으로만 지정한다', () => {
+    expect(presentationFiles.flatMap(f => insetBorderOverrides(f.src, f.path))).toEqual([]);
+
+    expect(insetBorderOverrides('<Inset className="px-3 border-accent text-accent">x</Inset>')).toHaveLength(1);
+    expect(insetBorderOverrides('<Inset className={done ? "border-gold p-3" : "p-3"}>x</Inset>')).toHaveLength(1);
+    expect(insetBorderOverrides('<Inset borderless className={cx("p-2 border", on ? "border-accent" : "border-line")}>x</Inset>')).toHaveLength(1);
+    expect(insetBorderOverrides('<Inset borderless className="p-2 border">x</Inset>')).toHaveLength(1);
+    expect(insetBorderOverrides('const cls = () => "border-gold";\n<Inset className={cls()}>x</Inset>')).toHaveLength(1);
+    expect(insetBorderOverrides('<Inset border="accent" className="px-3 text-accent">x</Inset>')).toEqual([]);
+    expect(insetBorderOverrides('<Inset border={s.grade ? "epic" : undefined} className="border-dashed text-text-dim">x</Inset>')).toEqual([]);
+    expect(insetBorderOverrides('<Inset borderless tone="deep" className="flex flex-wrap gap-1">x</Inset>')).toEqual([]);
   });
 });

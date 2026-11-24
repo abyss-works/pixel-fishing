@@ -1,7 +1,7 @@
 // 밸런스 측정 모델 — 제품 규칙(추첨·낚싯대·파워 게이트)을 그대로 불러 해역별 수입과 확률을 계산한다.
 //
 // 가정(측정치가 아닌 근사):
-//   - 낮밤 혼합 — 하루 중 밤 비율(게임 20~4시)만큼 밤 풀로 추첨한다.
+//   - 낮밤 혼합 — 하루 중 밤 비율(게임 22~6시)만큼 밤 풀로 추첨한다.
 //   - 처리량 = 입질 평균 대기(낚싯대 레벨 곡선, 파워 미달이면 추가 초) + 판정 시간(수동은 바의 절반, 방치는 끝까지) + 획득 연출.
 //   - 수동 판정은 고른 판정을 늘 성공한다고 본다. 존이 없는 판정(빨간 존이 안 열린 PERFECT)은 측정하지 않는다.
 //   - 이동·판매 왕복·가방 한도·미끼·유물은 넣지 않는다(미끼는 경제 지표에서 따로 본다). 돌연변이 기댓값은 넣는다.
@@ -18,9 +18,19 @@ import { minLevelOfPower, powerOfLevel, relativeIdleBoost } from './rodRules';
 import { virtualZoneOf } from './virtualSpots';
 import { CATCH_MS, JUDGMENT_MULT, VARIANT_PRICE_MULT } from '../../src/game/rules/balance';
 import { variantShare } from '../../src/game/rules/logic';
-import { DAY_START_MIN, NIGHT_START_MIN } from '../../src/game/rules/time';
+import { DAY_START_MIN, NIGHT_START_MIN, NIGHT_TOTAL_STEPS, nightDepthOfStep } from '../../src/game/rules/time';
 
 export const NIGHT_SHARE = 1 - (NIGHT_START_MIN - DAY_START_MIN) / 60;
+
+/** 밤 구간 전체 스텝의 nightDepth 분포 — 대칭 깊이를 묶어 균등 평균과 같은 값을 더 적은 호출로 계산한다 */
+const NIGHT_DEPTH_WEIGHTS: readonly [number, number][] = (() => {
+  const counts = new Map<number, number>();
+  for (let k = 0; k < NIGHT_TOTAL_STEPS; k++) {
+    const d = nightDepthOfStep(k);
+    counts.set(d, (counts.get(d) ?? 0) + 1);
+  }
+  return [...counts.entries()].map(([d, c]) => [d, c / NIGHT_TOTAL_STEPS]);
+})();
 export const VARIANT_EV = 1 + variantShare() * (VARIANT_PRICE_MULT - 1);
 /** 여유 스펙 — 진입 레벨에서 몇 레벨 위를 함께 재는가. 태평양 이후 해역에서 방치 배수가 하한에 닿는 레벨 차다 */
 export const SPEC_MARGIN = 4;
@@ -35,15 +45,26 @@ export interface Row { fish: Fish; prob: number }
 /** 추첨 풀 — 낮 풀만, 밤 풀만, 또는 하루 중 시간 비율로 섞은 낮밤 혼합 */
 export type Pool = 'day' | 'night' | 'mixed';
 
-/** 해역의 개체 확률 — 낮/밤 풀을 하루 중 시간 비율로 섞고 시간대마다 가중치 합으로 정규화한다 */
+/** 해역의 개체 확률 — 낮/밤 풀을 하루 중 시간 비율로 섞고 시간대마다 가중치 합으로 정규화한다.
+ *  밤 풀은 nightDepth 미지정 시 밤 전체 스텝의 균등 평균으로 집계한다 */
 export function mixedRows(spot: SpotId, o: DrawOptions = {}, pool: Pool = 'mixed'): Row[] {
   const p = new Map<string, number>();
-  const night = pool === 'day' ? 0 : pool === 'night' ? 1 : NIGHT_SHARE;
-  for (const [phase, w] of [['day', 1 - night], ['night', night]] as const) {
-    if (w === 0) continue;
-    const rows = drawRows(spot, { ...o, phase });
+  const add = (rows: ReturnType<typeof drawRows>, weight: number) => {
     const total = rows.reduce((s, r) => s + r.fishPct, 0);
-    for (const r of rows) p.set(r.fish.id, (p.get(r.fish.id) ?? 0) + w * r.fishPct / total);
+    if (total <= 0) return;
+    for (const r of rows) p.set(r.fish.id, (p.get(r.fish.id) ?? 0) + weight * r.fishPct / total);
+  };
+  const night = pool === 'day' ? 0 : pool === 'night' ? 1 : NIGHT_SHARE;
+  if (1 - night > 0) add(drawRows(spot, { ...o, phase: 'day' }), 1 - night);
+  if (night > 0) {
+    const hasNight = FISH.some(f => f.spot === spot && f.night);
+    if (o.nightDepth !== undefined || !hasNight) {
+      add(drawRows(spot, { ...o, phase: 'night' }), night);
+    } else {
+      for (const [nightDepth, share] of NIGHT_DEPTH_WEIGHTS) {
+        add(drawRows(spot, { ...o, phase: 'night', nightDepth }), night * share);
+      }
+    }
   }
   return [...p].map(([id, prob]) => ({ fish: FISH.find(f => f.id === id)!, prob }));
 }

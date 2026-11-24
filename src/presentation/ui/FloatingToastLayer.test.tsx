@@ -88,7 +88,7 @@ describe('FloatingToastLayer', () => {
     const onDismiss = vi.fn();
     render(
       <>
-        <Modal title="테스트 창" onClose={vi.fn()}>내용</Modal>
+        <Modal layer="app" title="테스트 창" onClose={vi.fn()}>내용</Modal>
         <FloatingToastLayer
           toasts={[{ id: 7, text: '요청이 거부됐어요.', tone: 'danger' }]}
           onDismiss={onDismiss}

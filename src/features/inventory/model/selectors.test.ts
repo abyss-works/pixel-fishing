@@ -117,6 +117,28 @@ describe('selectBagOverview - 판매 가능 금액', () => {
     expect(sellable.value).toBe(base + saleBonusOf(base, bonus));
     expect(sellable.mods).toEqual([{ id: 'guild-sell', label: '판매가 보너스', delta: saleBonusOf(base, bonus) }]);
   });
+
+  it('오늘의 재물운이 켜져 있으면 판매 가능 금액에 운 배율을 반영하고 날짜가 지나면 반영하지 않는다', () => {
+    const now = '2026-11-24T05:00:00.000Z';
+    const game: GameState = {
+      ...newState(),
+      bag: [
+        { uid: 'a', fishId: 'carp', form: 'normal', size: 20, caughtAt: null, spot: null, judgment: null, locked: false },
+        { uid: 'b', fishId: 'carp', form: 'normal', size: 20, caughtAt: null, spot: null, judgment: null, locked: false },
+      ],
+      fortune: { day: '2026-11-24', kind: 'gold', index: 5 },
+    };
+    const base = sellableValue(game);
+    const expected = Math.round(base * 1.05);
+    const active = selectBagOverview(game, 0, 0, now).sellable;
+    expect(active.value).toBe(expected);
+    expect(active.mods).toEqual([{ id: 'fortune-sell', label: '오늘의 운세', delta: expected - base }]);
+
+    const expired = selectBagOverview(
+      { ...game, fortune: { day: '2026-11-23', kind: 'gold', index: 5 } }, 0, 0, now,
+    ).sellable;
+    expect(expired).toEqual({ base, mods: [], value: base });
+  });
 });
 
 describe('selectBagOverview - 길드 가방 보너스', () => {

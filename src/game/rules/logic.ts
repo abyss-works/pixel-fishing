@@ -39,6 +39,8 @@ import {
   endedFirstCatch, endedFirstCatchSpot, firstCatchOfLegacy, newFirstCatch, newFirstCatchSpot,
 } from './firstCatch.js';
 import type { FirstCatch, FirstCatchSpot } from './firstCatch.js';
+import { safeFortune } from './fortune.js';
+import type { DailyFortune } from './fortune.js';
 
 export { JUDGMENT_MULT, BIG_CATCH_PERCENTILE };
 export type { AchievementCounters, AchievementMap } from '../content/achievements.js';
@@ -155,6 +157,8 @@ export interface GameState {
   autoLockOnCatch: boolean;
   /** 토글식·일괄 자동 잠금이 관리하는 `${fishId}|${form}` → 개체 uid 맵(기본 {}). 수동 잠금과 구분해 보호한다 */
   autoLockedIds: Record<string, string>;
+  /** 오늘의 운세 — 굴린 게임 날짜에 고정된다. 첫 판정(catch·sell)에서 서버가 굴리고, 그날 안에서는 불변 */
+  fortune: DailyFortune | null;
 }
 
 export interface RodStats {
@@ -202,9 +206,13 @@ export interface DrawOptions {
   /** 시간대 — 기본 'day'(밤 전용 어종 제외). 'night'면 낮+밤 전부(합류).
    *  미지정 호출 전부가 day라 기존 낮 어종만 있는 지금은 분포 불변(night 어종 추가 후 안전망). */
   phase?: DayPhase;
+  /** 밤 깊이(0~1) — 낮 0, 밤 시작(22:00) 0 → 정점(02:00) 1 → 06:00 0. 미지정 시 1 */
+  nightDepth?: number;
   /** 등급 가중치에 걸리는 보너스 효과의 합(미끼 +, 길드 희귀 어종 보너스 −). 등급마다 (1 + 합)을 한 번 곱한다.
    *  효과는 addGradeEffect로 더하고, 다이얼(판정·방치·페널티)과는 곱한다 */
   weightEffects?: Partial<Record<RarityId, number>>;
+  /** 운 배율 — 희귀 이상 등급 가중치에 곱하는 최종 배수(물고기 운). 다른 보너스를 다 적용한 마지막 곱이다 */
+  rarityLuck?: number;
 }
 
 /** 등급 가중치 효과를 더한 옵션 — 같은 등급의 효과는 합쳐진다. 효과를 거는 유일한 길이다 */
@@ -223,22 +231,26 @@ export function fishPool(spotId: SpotId, phase: DayPhase = 'day'): Fish[] {
 // 확률 = 항목 가중치 / 가중치 합. 분모는 그 판정에 들어온 가중치의 합이라 해역마다 다를 수 있다.
 // rng 1회를 소비하고, 항목 순서대로 누적해 고른다. 합이 0이면 마지막 항목.
 export function pickWeighted<K>(entries: readonly (readonly [K, number])[], rng: () => number): K {
-  const total = entries.reduce((sum, [, w]) => sum + w, 0);
+  const active = entries.filter(([, w]) => w > 0);
+  const pool = active.length > 0 ? active : entries;
+  const total = pool.reduce((sum, [, w]) => sum + w, 0);
   let r = rng() * total;
-  for (const [key, w] of entries) {
+  for (const [key, w] of pool) {
     r -= w;
     if (r < 0) return key;
   }
-  return entries[entries.length - 1][0];
+  return pool[pool.length - 1][0];
 }
 
 /**
  * 해역의 네임드 조우 가중치 — 해역 오버라이드 → 전역 기본.
  * @param bonus 네임드 가중치에 더하는 비율(길드 네임드 조우 보너스). 네임드 가중치에 (1 + bonus)를 한 번 곱한다
+ * @param luck 운 배율 — 보너스를 다 적용한 네임드 가중치에 곱하는 최종 배수(그림자 운)
  */
-export function namedWeightsOf(spot: SpotId, bonus = 0): { named: number; none: number } {
+export function namedWeightsOf(spot: SpotId, bonus = 0, luck = 1): { named: number; none: number } {
   const w = { ...NAMED_ENCOUNTER_WEIGHTS, ...spotById(spot)?.namedWeight };
-  return bonus > 0 ? { named: w.named * (1 + bonus), none: w.none } : w;
+  const mult = (1 + bonus) * luck;
+  return mult !== 1 ? { named: w.named * mult, none: w.none } : w;
 }
 
 /** 해역의 네임드 조우 확률 — 조우 가중치에서 계산한다(분석 도구용) */
@@ -263,13 +275,14 @@ export function namedEncounterCandidates(activeIds: readonly string[], spot: Spo
 // 진행하고, 호출부가 도전권 발급 이벤트만 덧붙인다.
 // rng 소비: 후보 없음 0회 · 빗나감 1회 · 명중 2회(게이트+후보 선택).
 // force는 테스트용 강제 조우다 — 확률 게이트만 건너뛰고 rng 소비 횟수는 같게 둔다.
-// bonus는 네임드 가중치에 더하는 비율이다(namedWeightsOf).
+// bonus는 네임드 가중치에 더하는 비율이고 luck은 그 뒤에 곱하는 운 배율이다(namedWeightsOf).
 export function rollNamedEncounter(
-  activeIds: readonly string[], spot: SpotId, rng: () => number = Math.random, force = false, bonus = 0,
+  activeIds: readonly string[], spot: SpotId, rng: () => number = Math.random, force = false,
+  bonus = 0, luck = 1,
 ): BountyQuest | null {
   const cands = namedEncounterCandidates(activeIds, spot);
   if (cands.length === 0) return null;
-  const w = namedWeightsOf(spot, bonus);
+  const w = namedWeightsOf(spot, bonus, luck);
   const drawn = pickWeighted([['named', w.named], ['none', w.none]] as const, rng);
   if (drawn === 'none' && !force) return null;
   return cands[Math.floor(rng() * cands.length)];
@@ -329,7 +342,10 @@ function drawWeights(pool: Fish[], spotId: SpotId, o: DrawOptions): number[] {
   const gradeW = new Map(rarityDrawWeights(pool, spotId, o));
   const fwSum = new Map<RarityId, number>();
   for (const f of pool) fwSum.set(f.rarity, (fwSum.get(f.rarity) ?? 0) + fishDrawWeight(f, o));
-  return pool.map(f => (gradeW.get(f.rarity) ?? 0) * (fishDrawWeight(f, o) / (fwSum.get(f.rarity) ?? 1)));
+  return pool.map(f => {
+    const sum = fwSum.get(f.rarity) ?? 0;
+    return sum > 0 ? (gradeW.get(f.rarity) ?? 0) * (fishDrawWeight(f, o) / sum) : 0;
+  });
 }
 
 /** 등급 단계의 가중치 — 풀에 있는 등급만, 등급 예산 × 일반 다이얼 × (1 + 그 등급의 효과 합).
@@ -338,12 +354,17 @@ function rarityDrawWeights(pool: Fish[], spotId: SpotId, o: DrawOptions): [Rarit
   const present = new Set(pool.map(f => f.rarity));
   return RARITY_ORDER.filter(r => present.has(r)).map(r => [r,
     (o.budgets?.[r] ?? rarityWeightOf(spotId, r))
-      * ((r === 'common' ? (o.commonMult ?? 1) / (o.rareMult ?? 1) : 1) * Math.max(0, 1 + (o.weightEffects?.[r] ?? 0)))]);
+      * ((r === 'common' ? (o.commonMult ?? 1) / (o.rareMult ?? 1) : (o.rarityLuck ?? 1))
+        * Math.max(0, 1 + (o.weightEffects?.[r] ?? 0)))]);
 }
 
-/** 어종 단계의 가중치 — 다이얼(fishWeights)이 없으면 어종 데이터의 개체 가중치. 기본은 1이고 밤 어종은 NIGHT_FISH_WEIGHT */
-const fishDrawWeight = (f: Fish, o: DrawOptions): number =>
-  o.fishWeights?.[f.id] ?? f.weight ?? (f.night ? NIGHT_FISH_WEIGHT : 1);
+/** 어종 단계의 가중치 — 다이얼(fishWeights)이 없으면 어종 데이터의 개체 가중치.
+ *  기본은 1이고 밤 어종은 NIGHT_FISH_WEIGHT × nightDepth(미지정 시 1, 0~1 클램프) */
+export const fishDrawWeight = (f: Fish, o: DrawOptions): number => {
+  const raw = o.nightDepth ?? 1;
+  const depth = Number.isFinite(raw) ? Math.max(0, Math.min(1, raw)) : 1;
+  return o.fishWeights?.[f.id] ?? f.weight ?? (f.night ? NIGHT_FISH_WEIGHT * depth : 1);
+};
 
 // 통상 추첨 — 등급을 가중치로 뽑고(rng 1회), 그 등급의 어종을 가중치로 뽑는다(rng 1회).
 export function rollFish(
@@ -449,6 +470,7 @@ export function newState(): GameState {
     clearedNamed: [],
     autoLockOnCatch: false,
     autoLockedIds: {},
+    fortune: null,
   };
 }
 
@@ -1096,6 +1118,7 @@ export function migrate(raw: unknown, uidGen: () => string = () => crypto.random
     clearedNamed: safeStrings(s.clearedNamed),
     autoLockOnCatch: s.autoLockOnCatch === true,
     autoLockedIds: safeAutoLockedIds(s.autoLockedIds),
+    fortune: safeFortune(s.fortune),
   };
 }
 
@@ -1330,14 +1353,15 @@ export function saleBonusOf(base: number, bonus: number): number {
 // 선택 판매 — uid로 개체를 지목한다 (판매의 원자 단위 = 개체).
 // 잠근 개체는 uid가 와도 팔리지 않는다(이중 방어)
 // bonus는 판매가에 더하는 비율(길드 판매가 보너스)이다. 판매 총액에 한 번 더하고 반올림한다.
-export function sellSelected(state: GameState, uids: readonly string[], bonus = 0): GameState {
+// luck은 보너스를 다 적용한 수령액에 곱하는 운 배율(돈 운)이다 — 반올림은 마지막 곱 뒤 한 번.
+export function sellSelected(state: GameState, uids: readonly string[], bonus = 0, luck = 1): GameState {
   const want = new Set(uids);
   const sold = state.bag.filter(i => want.has(i.uid) && !i.locked);
   const soldUids = new Set(sold.map(i => i.uid));
   const base = sold.reduce((s, i) => s + priceOfInstance(i), 0);
   return {
     ...state,
-    gold: state.gold + base + saleBonusOf(base, bonus),
+    gold: state.gold + Math.round((base + saleBonusOf(base, bonus)) * luck),
     bag: state.bag.filter(i => !soldUids.has(i.uid)),
     autoLockedIds: pruneAutoLockedIds(state.autoLockedIds, soldUids),
   };

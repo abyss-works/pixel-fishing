@@ -9,6 +9,7 @@ import { markPromptsAnswered, resetAnnouncements, setLastSeenVersion } from '../
 import { APP_VERSION } from '../../../version';
 import { resetWhatsNewSession } from '../../../features/announcements/service/whatsNew';
 import { resetTutorialSession } from '../../../features/tutorial/service/tutorial';
+import { resetFortuneModalSession } from '../../../features/fortune/service/fortuneModal';
 import { resetCanvasCover } from '../../layouts/game-stage/canvasCover';
 import { resetKeyScopes } from '../../ui/hotkeys';
 import { resetOpenWindows } from '../../ui/openWindows';
@@ -35,6 +36,7 @@ beforeEach(() => {
   resetCanvasCover();
   resetWhatsNewSession();
   resetTutorialSession();
+  resetFortuneModalSession();
   resetAnnouncements();
   setLastSeenVersion(APP_VERSION);
   markPromptsAnswered(['fish-art']);

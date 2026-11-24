@@ -5,6 +5,7 @@ import type { ActionDeps } from './actions';
 import { upgradeCost } from './balance';
 import { endedFirstCatch, newFirstCatch } from './firstCatch';
 import { NO_GUILD_EFFECTS } from './guild';
+import { AUTO_ENERGY_BOAT, ENERGY_ITEM_IDS } from '../content/cooking';
 import { BOATS, COUPONS, FISH, WALK_BAG_CAP, newState } from './logic';
 import type { FishInstance, FormId, GameState } from './logic';
 
@@ -224,7 +225,7 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
   });
 
   it('travel — 위치를 남기고, 첫 방문만 이벤트로 기록한다', () => {
-    const first = applyAction(seed(), { type: 'travel', to: { kind: 'region', id: 'world' } }, deps());
+    const first = applyAction(seed({ boat: 1 }), { type: 'travel', to: { kind: 'region', id: 'world' } }, deps());
     if (!first.ok) throw new Error(first.error);
     expect(first.state.location).toEqual({ kind: 'region', id: 'world' });
     expect(first.state.visited).toEqual(['world']);
@@ -238,7 +239,7 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
   });
 
   it('travel — 거점은 방문 목록에 넣지 않는다 (지역 단위 업적이라)', () => {
-    const out = applyAction(seed(), { type: 'travel', to: { kind: 'base', id: 'harbor' } }, deps());
+    const out = applyAction(seed({ boat: 1 }), { type: 'travel', to: { kind: 'base', id: 'harbor' } }, deps());
     if (!out.ok) throw new Error(out.error);
     expect(out.state.location).toEqual({ kind: 'base', id: 'harbor' });
     expect(out.state.visited).toEqual([]);
@@ -252,10 +253,15 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
     expect(ok.state.location).toEqual({ kind: 'base', id: 'manila' });
   });
 
-  it('travel — 집·게이트 없는 항구·지역은 배 없이도 옮긴다', () => {
-    for (const to of [{ kind: 'base', id: 'home' }, { kind: 'base', id: 'harbor' },
-      { kind: 'region', id: 'village' }, { kind: 'region', id: 'world' }] as const) {
+  it('travel — 집·마을은 배 없이 옮기고, 부산항·바다(world)는 배 1단계부터 허용한다', () => {
+    for (const to of [{ kind: 'base', id: 'home' }, { kind: 'region', id: 'village' }] as const) {
       expect(applyAction(seed({ boat: 0 }), { type: 'travel', to }, deps()).ok, `${to.kind}:${to.id}`).toBe(true);
+    }
+    for (const to of [{ kind: 'base', id: 'harbor' }, { kind: 'region', id: 'world' }] as const) {
+      expect(applyAction(seed({ boat: 0 }), { type: 'travel', to }, deps()), `boat0 ${to.kind}:${to.id}`)
+        .toEqual({ ok: false, error: 'zone-locked' });
+      expect(applyAction(seed({ boat: 1 }), { type: 'travel', to }, deps()).ok, `boat1 ${to.kind}:${to.id}`)
+        .toBe(true);
     }
   });
 
@@ -298,11 +304,11 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
     expect(out.events).toEqual([]);
   });
 
-  it('boot — 상태 무변경, 접속 흔적 한 행 (buildId는 잘라서 남긴다)', () => {
+  it('boot — 그날 첫 접속이면 서버 시각으로 오늘의 운세를 고정하고, 나머지 상태는 유지한다', () => {
     const s = seed({ gold: 42 });
-    const out = applyAction(s, { type: 'boot', buildId: 'a'.repeat(100) }, deps());
+    const out = applyAction(s, { type: 'boot', buildId: 'a'.repeat(100) }, deps({ rng: () => 0.5 }));
     if (!out.ok) throw new Error(out.error);
-    expect(out.state).toEqual(s);                                  // 게임 상태 무변경
+    expect(out.state).toEqual({ ...s, fortune: { day: '2026-08-22', kind: 'gold', index: 5 } });
     // 결과에는 어군 배치 날짜가 실린다 — deps.now(KST 12:00) 기준 당일
     expect(out.result).toEqual({ type: 'boot', schoolDay: '2026-08-22' });
     expect(out.events).toEqual([{ type: 'boot', payload: { buildId: 'a'.repeat(64) } }]);
@@ -310,6 +316,43 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
     expect(out.writes).toEqual({
       instancesAdded: [], instancesRemoved: [], instancesMoved: [], instancesLocked: [], records: [],
     });
+  });
+
+  it('boot — 같은 게임 날짜 재접속에서는 이미 고정된 운세를 유지하고 상태를 바꾸지 않는다', () => {
+    const fixed = { day: '2026-08-22', kind: 'shadow' as const, index: 3 as const };
+    const s = seed({ gold: 42, fortune: fixed });
+    const out = applyAction(s, { type: 'boot' }, deps({
+      now: '2026-08-22T18:59:59.000Z', // KST 2026-08-23 03:59:59 (아직 2026-08-22 게임 날짜)
+      rng: () => { throw new Error('같은 날 재접속 rng 호출 금지'); },
+    }));
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state).toEqual(s);
+  });
+
+  it('boot — 게임 날짜(KST 04:00 경계)가 지나면 새 운세를 굴려 고정한다', () => {
+    const prev = { day: '2026-08-21', kind: 'fish' as const, index: 3 as const };
+    const s = seed({ fortune: prev });
+    // 2026-08-22 03:59:59 KST → 전날 게임 날짜(2026-08-21)라 기존 운세 유지
+    const before = applyAction(s, { type: 'boot' }, deps({
+      now: '2026-08-21T18:59:59.000Z',
+      rng: () => { throw new Error('경계 전 rng 호출 금지'); },
+    }));
+    if (!before.ok) throw new Error(before.error);
+    expect(before.state.fortune).toEqual(prev);
+    // 2026-08-22 04:00:00 KST → 새 게임 날짜(2026-08-22)라 새 운세 고정
+    const after = applyAction(s, { type: 'boot' }, deps({
+      now: '2026-08-21T19:00:00.000Z',
+      rng: () => 0.9,
+    }));
+    if (!after.ok) throw new Error(after.error);
+    expect(after.state.fortune).toEqual({ day: '2026-08-22', kind: 'shadow', index: 5 });
+    // 같은 날 재접속에서는 방금 고정한 운세를 유지한다
+    const revisit = applyAction(after.state, { type: 'boot' }, deps({
+      now: '2026-08-22T03:00:00.000Z',
+      rng: () => { throw new Error('재접속 rng 호출 금지'); },
+    }));
+    if (!revisit.ok) throw new Error(revisit.error);
+    expect(revisit.state).toEqual(after.state);
   });
 
   it('boot — buildId 없음/형식 깨짐은 빈 payload로 수용한다 (텔레메트리가 게임을 막지 않게)', () => {
@@ -817,5 +860,19 @@ describe('토글식 자동 잠금 — 액션·포획·가방 초과 연동', () 
     const out = applyAction(st, { type: 'extractEnergy', uids: [inst.uid] }, deps());
     if (!out.ok) throw new Error(out.error);
     expect(out.state.autoLockedIds).toEqual({});
+  });
+
+  it('extractEnergy — 가공 플랜트선이면 바다에서도 추출되고 비플랜트선 바다와 게스트는 거부한다', () => {
+    const commonFish = FISH.find(f => f.rarity === 'common')!;
+    const inst = { ...mkInst('ex-sea', commonFish.id), locked: false };
+    const sea = { kind: 'region', id: 'world' } as const;
+    expect(applyAction(seed({ boat: AUTO_ENERGY_BOAT - 1, location: sea, bag: [inst] }), { type: 'extractEnergy', uids: [inst.uid] }, deps()))
+      .toEqual({ ok: false, error: 'not-at-sale-base' });
+    expect(applyAction(seed({ boat: AUTO_ENERGY_BOAT, location: sea, bag: [inst] }), { type: 'extractEnergy', uids: [inst.uid] }, deps({ guest: true })))
+      .toEqual({ ok: false, error: 'account-only' });
+    const out = applyAction(seed({ boat: AUTO_ENERGY_BOAT, location: sea, bag: [inst] }), { type: 'extractEnergy', uids: [inst.uid] }, deps());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.bag).toEqual([]);
+    expect(out.state.items[ENERGY_ITEM_IDS.common]).toBe(10);
   });
 });

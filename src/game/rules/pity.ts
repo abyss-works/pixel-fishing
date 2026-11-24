@@ -8,7 +8,7 @@
 //    토벌에 성공하거나 게임 날짜가 바뀌면 사라진다.
 // 리듀서 catch와 서버 fast path가 같은 함수를 쓴다.
 // 상대경로 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버가 이 체인을 직접 불러온다.
-import { fishDrawShares, fishPool, namedEncounterCandidates, rollNamedEncounter } from './logic.js';
+import { fishDrawShares, fishDrawWeight, fishPool, namedEncounterCandidates, rollNamedEncounter } from './logic.js';
 import type { DrawOptions, FormId } from './logic.js';
 import { gameDayOf } from './time.js';
 import type { DayPhase } from './time.js';
@@ -25,10 +25,13 @@ export const PITY_DONE = -1;
 /** 어종 → 누적 확률 질량(또는 PITY_DONE) */
 export type SpeciesPity = Record<string, number>;
 
-/** 이번 캐치에서 천장으로 확정할 수 있는 후보 — 지금 풀에 있고 누적이 K 이상인 미완료 어종, 누적 큰 순 */
-export function speciesPityCandidates(pity: SpeciesPity, spot: SpotId, phase: DayPhase): string[] {
-  return fishPool(spot, phase)
-    .filter(f => (pity[f.id] ?? 0) >= SPECIES_PITY_K)
+/** 이번 캐치에서 천장으로 확정할 수 있는 후보 — 지금 풀에서 가중치가 양수이고 누적이 K 이상인 미완료 어종, 누적 큰 순 */
+export function speciesPityCandidates(
+  pity: SpeciesPity, spot: SpotId, phaseOrOpts: DayPhase | DrawOptions,
+): string[] {
+  const opts: DrawOptions = typeof phaseOrOpts === 'string' ? { phase: phaseOrOpts } : phaseOrOpts;
+  return fishPool(spot, opts.phase)
+    .filter(f => fishDrawWeight(f, opts) > 0 && (pity[f.id] ?? 0) >= SPECIES_PITY_K)
     .sort((a, b) => pity[b.id] - pity[a.id])
     .map(f => f.id);
 }
@@ -92,15 +95,16 @@ const onDay = (p: NamedPity, nowIso: string): NamedPity => {
 /**
  * 네임드 조우 추첨 + 천장. 천장에 닿으면 조우 게이트를 강제로 통과시킨다(rng 소비 횟수는 같다).
  * @param bonus 네임드 조우 가중치에 더하는 비율(길드 네임드 조우 보너스). 천장 문턱은 바꾸지 않는다
+ * @param luck 보너스를 다 적용한 가중치에 곱하는 운 배율(그림자 운). 천장 문턱은 바꾸지 않는다
  */
 export function drawNamedEncounter(
   p: NamedPity, activeIds: readonly string[], spot: SpotId, nowIso: string,
-  rng: () => number = Math.random, force = false, bonus = 0,
+  rng: () => number = Math.random, force = false, bonus = 0, luck = 1,
 ): { quest: BountyQuest | null; pity: NamedPity; byCeiling: boolean } {
   const cur = onDay(p, nowIso);
   if (namedEncounterCandidates(activeIds, spot).length === 0) return { quest: null, pity: cur, byCeiling: false };
   const byCeiling = cur.misses + 1 >= namedPityCeiling(cur.fails);
-  const quest = rollNamedEncounter(activeIds, spot, rng, force || byCeiling, bonus);
+  const quest = rollNamedEncounter(activeIds, spot, rng, force || byCeiling, bonus, luck);
   return quest
     ? { quest, pity: { ...cur, misses: 0 }, byCeiling: byCeiling && !force }
     : { quest: null, pity: { ...cur, misses: cur.misses + 1 }, byCeiling: false };

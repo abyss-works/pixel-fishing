@@ -83,9 +83,10 @@ export function canUseEnergy(state: Pick<GameState, 'boat'>): RuleCheck {
   return cookingUnlocked(state.boat) ? OK : no('energy-locked');
 }
 
-/** 기운 얻기 판정 — 판매 시설이 있는 거점(집, 항구)에서, 해금된 뒤에만 한다 */
-export function canExtractEnergy(state: Pick<GameState, 'boat' | 'location'>): RuleCheck {
-  if (!isAtSaleBase(state)) return no('not-at-sale-base');
+/** 기운 얻기 판정 — 게스트가 아니고, 판매 시설이 있는 거점(집, 항구)에 있거나 가공 플랜트선 이상이면 해금 판정을 한다 */
+export function canExtractEnergy(state: Pick<GameState, 'boat' | 'location'>, guest = false): RuleCheck {
+  if (guest) return no('account-only');
+  if (!isAtSaleBase(state) && state.boat < AUTO_ENERGY_BOAT) return no('not-at-sale-base');
   return canUseEnergy(state);
 }
 

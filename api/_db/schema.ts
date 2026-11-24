@@ -168,3 +168,11 @@ export const eventConsumerCutoffs = pgTable('event_consumer_cutoffs', {
   notes: jsonb('notes').notNull().default({}),
   updatedAt: at('updated_at').notNull().defaultNow(),
 }, t => [primaryKey({ columns: [t.consumerKey, t.ruleVersion] })]);
+
+export const guildMemberEnhancements = pgTable('guild_member_enhancements', {
+  guildId: uuid('guild_id').notNull(),
+  userId: uuid('user_id').notNull(),
+  bonus: text('bonus').notNull(),
+  rank: integer('rank').notNull().default(0),
+  updatedAt: at('updated_at').notNull().defaultNow(),
+}, t => [primaryKey({ columns: [t.guildId, t.userId, t.bonus] })]);
