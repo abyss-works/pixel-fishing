@@ -44,11 +44,14 @@ export default function SellTab({ game, sellBonus, excluded, setExcluded, busy, 
         { label: '골드', value: fmtGold(view.gold.current), next: fmtGold(view.gold.after), dim: view.gold.current === view.gold.after },
         { label: '가방', value: fmtFishCount(view.bag.current), next: fmtFishCount(view.bag.after), dim: view.bag.current === view.bag.after },
       ]}
-      summary={{ label: '판매할 물고기', value: <span className="pf-accent">{fmtFishCount(view.count)}</span>, dim: view.count === 0 }}
+      summary={[
+        { label: '판매할 물고기', value: <span className="pf-accent">{fmtFishCount(view.count)}</span>, dim: view.count === 0 },
+        { label: '받을 골드', value: <AdjustedAmount amount={view.total} className={view.total.value > 0 ? 'text-gold' : undefined} />, dim: view.total.value === 0 },
+      ]}
       notes={['판매한 물고기는 되찾을 수 없어요.', '도감과 명성은 그대로 남아요.']}
       actions={(
         <Button variant="primary" full disabled={view.total.value === 0 || busy} onClick={() => onSell(view.soldUids)}>
-          판매 (+<AdjustedAmount amount={view.total} inButton />)
+          {view.count > 0 ? `판매 (${fmtFishCount(view.count)})` : '판매'}
         </Button>
       )} />
   );

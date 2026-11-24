@@ -39,7 +39,13 @@ import { setSchoolDay } from './features/gameplay/service/schoolDay';
 const priceOf = (id: string) => FISH.find(f => f.id === id)!.price;
 const CARP = priceOf('carp');
 const CRUCIAN = priceOf('crucian');
-const sellLabel = (gold: number) => `판매 (+${gold}G)`;
+const sellButton = (count = 0) =>
+  screen.getAllByRole('button', { name: count > 0 ? `판매 (${count}마리)` : '판매' })
+    .find(b => !b.closest('.pf-tabbar'))!;
+const expectSellTotal = (gold: number, count: number) => {
+  expect(screen.getByText('받을 골드').nextSibling).toHaveTextContent(`${gold}G`);
+  expect(sellButton(count)).toBeInTheDocument();
+};
 
 vi.mock('./game/content/patchnotes', async importActual => {
   const actual = await importActual<typeof import('./game/content/patchnotes')>();
@@ -149,7 +155,8 @@ describe('R1: 판매 궤짝 → 사이드바 인라인 패널 (어종별 체크 
     clickFurniture('sell');
     expect(screen.getByText('잉어')).toBeInTheDocument();      // 내역 표시
     expect(screen.getByText('×2')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: sellLabel(CARP * 2) })); // 기본 전부 체크
+    expectSellTotal(CARP * 2, 2);
+    fireEvent.click(sellButton(2)); // 기본 전부 체크
     expect(hud()).toMatch(new RegExp(`골드 ${CARP * 2}(?![\\d.,])`));
     expect(hud()).toContain('가방 0 /');
     expect(screen.queryByText(/판매하기/)).not.toBeInTheDocument(); // 패널 닫힘
@@ -160,8 +167,8 @@ describe('R1: 판매 궤짝 → 사이드바 인라인 패널 (어종별 체크 
     render(<App />);
     clickFurniture('sell');
     fireEvent.click(screen.getByLabelText('잉어 판매 해제')); // ☑ → ☐
-    expect(screen.getByRole('button', { name: sellLabel(CRUCIAN) })).toBeInTheDocument(); // 붕어만
-    fireEvent.click(screen.getByText(/^판매 \(/));
+    expectSellTotal(CRUCIAN, 1); // 붕어만
+    fireEvent.click(sellButton(1));
     expect(hud()).toMatch(new RegExp(`골드 ${CRUCIAN}(?![\\d.,])`));
     expect(hud()).toContain('가방 1 /'); // 잉어는 남는다
   });
@@ -171,9 +178,9 @@ describe('R1: 판매 궤짝 → 사이드바 인라인 패널 (어종별 체크 
     render(<App />);
     clickFurniture('sell');
     fireEvent.click(screen.getByLabelText('잉어 판매 해제'));
-    expect(screen.getByText(/^판매 \(/)).toBeDisabled();
+    expect(sellButton(0)).toBeDisabled();
     fireEvent.click(screen.getByLabelText('잉어 판매 선택')); // 재선택 가능
-    expect(screen.getByText(/^판매 \(/)).toBeEnabled();
+    expect(sellButton(1)).toBeEnabled();
   });
 
   it('가방이 비면 안내만 (판매 버튼 없음)', () => {
@@ -233,7 +240,7 @@ describe('R1b 개체 단위 선택 — 같은 종에서 큰 놈만 남기기', (
     clickFurniture('sell');
 
     // 기본은 전부 선택 — 두 마리분
-    expect(screen.getByRole('button', { name: sellLabel(CARP * 2) })).toBeInTheDocument();
+    expectSellTotal(CARP * 2, 2);
 
     // 행이 기본 닫힘 — 펼친 뒤 개체가 보인다
     fireEvent.click(screen.getByLabelText('잉어 개체 펼치기'));
@@ -242,10 +249,10 @@ describe('R1b 개체 단위 선택 — 같은 종에서 큰 놈만 남기기', (
 
     // 42cm 개체를 판매에서 제외 → 12cm 한 마리만 팔린다
     fireEvent.click(screen.getByText('42.0cm').closest('[role="button"]')!);
-    expect(screen.getByRole('button', { name: sellLabel(CARP) })).toBeInTheDocument();
+    expectSellTotal(CARP, 1);
     expect(screen.getByText('1/2')).toBeInTheDocument(); // 부분 선택 표시
 
-    fireEvent.click(screen.getByText(/^판매 \(/));
+    fireEvent.click(sellButton(1));
     expect(hud()).toMatch(new RegExp(`골드 ${CARP}(?![\\d.,])`));
     expect(hud()).toContain('가방 1 /');
     // 남은 게 "큰 놈"인지 가방 탭에서 확인한다 — 이 화면의 존재 이유가 그것
@@ -263,7 +270,7 @@ describe('R1b 개체 단위 선택 — 같은 종에서 큰 놈만 남기기', (
     fireEvent.click(screen.getByLabelText('잉어 개체 펼치기'));
     // 개체 줄이 클릭 대상이 아니다 (role=button 없음)
     expect(screen.getByText('20.0cm').closest('[role="button"]')).toBeNull();
-    expect(screen.getByText(/^판매 \(/)).toBeDisabled();
+    expect(sellButton(0)).toBeDisabled();
   });
 });
 
@@ -1040,9 +1047,9 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
 
     fireEvent.click(screen.getByLabelText('잉어 전체 잠금')); // 🔒 — 행 머리는 그 종 전부에 건다
     clickFurniture('sell');
-    expect(screen.getByRole('button', { name: sellLabel(CRUCIAN) })).toBeInTheDocument(); // 붕어만 (잠긴 잉어는 자물쇠 고정)
+    expectSellTotal(CRUCIAN, 1); // 붕어만 (잠긴 잉어는 자물쇠 고정)
     expect(screen.queryByLabelText(/잉어 판매/)).not.toBeInTheDocument(); // 체크 불가
-    fireEvent.click(screen.getByText(/^판매 \(/));
+    fireEvent.click(sellButton(1));
     expect(hud()).toMatch(new RegExp(`골드 ${CRUCIAN}(?![\\d.,])`));
     expect(hud()).toContain('가방 2 /'); // 잠긴 잉어 2마리는 가방에 남는다
   });
@@ -1244,7 +1251,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     openRow('붕어');
     fireEvent.click(screen.getByLabelText('크기 미상 5마리 잠금'));
     clickFurniture('sell');
-    expect(screen.getByText(/^판매 \(/)).toBeDisabled(); // 5마리 전부 판매에서 빠진다
+    expect(sellButton(0)).toBeDisabled(); // 5마리 전부 판매에서 빠진다
   });
 
   it('행 안 정렬: 변이가 먼저, 각 무리에서 큰 개체부터', () => {
@@ -1292,9 +1299,10 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     render(<App />);
     clickFurniture('sell');
     fireEvent.click(screen.getByLabelText('잉어 개체 펼치기'));
-    expect(screen.getByRole('button', { name: sellLabel(CARP * (1 + VARIANT_PRICE_MULT)) })).toBeInTheDocument();
+    expectSellTotal(CARP * (1 + VARIANT_PRICE_MULT), 2);
     fireEvent.click(screen.getByText('20.0cm').closest('[role="button"]')!); // 일반 제외
-    fireEvent.click(screen.getByRole('button', { name: sellLabel(CARP * VARIANT_PRICE_MULT) }));  // 변이만
+    expectSellTotal(CARP * VARIANT_PRICE_MULT, 1);
+    fireEvent.click(sellButton(1));  // 변이만
     expect(hud()).toMatch(new RegExp(`골드 ${CARP * VARIANT_PRICE_MULT}(?![\\d.,])`));
   });
 
@@ -1357,7 +1365,8 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     openRow('잉어');
     fireEvent.click(screen.getByLabelText('40.0cm 잉어 잠금')); // 큰 놈만 자물쇠
     clickFurniture('sell');
-    fireEvent.click(screen.getByRole('button', { name: sellLabel(CARP) })); // 작은 놈 1마리만
+    expectSellTotal(CARP, 1);
+    fireEvent.click(sellButton(1)); // 작은 놈 1마리만
     expect(hud()).toMatch(new RegExp(`골드 ${CARP}(?![\\d.,])`));
     expect(hud()).toContain('가방 1 /');
   });
@@ -1368,7 +1377,8 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     clickTab(/^가방/);
     fireEvent.click(screen.getByLabelText('잉어 전체 잠금 해제')); // 🔓
     clickFurniture('sell');
-    fireEvent.click(screen.getByRole('button', { name: sellLabel(CARP) }));
+    expectSellTotal(CARP, 1);
+    fireEvent.click(sellButton(1));
     expect(hud()).toMatch(new RegExp(`골드 ${CARP}(?![\\d.,])`));
     expect(hud()).toContain('가방 0 /');
   });

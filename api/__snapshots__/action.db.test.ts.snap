@@ -2421,100 +2421,6 @@ exports[`요청 경계 > 제재 계정은 403이다 1`] = `
 }
 `;
 
-exports[`요청 경계 > 직전 액션과 간격이 너무 짧으면 429다 1`] = `
-{
-  "db": {
-    "bounty_accepts": [],
-    "bounty_clears": [],
-    "bounty_licenses": [],
-    "bounty_progress": [],
-    "bounty_tickets": [],
-    "events": [],
-    "fish_instances": [],
-    "letters": [],
-    "profiles": [
-      {
-        "nickname": "user-00000003",
-        "updated_at": "<db-now>",
-        "user_id": "<user>",
-      },
-    ],
-    "records": [],
-    "reliefs": [],
-    "saves": [],
-    "saves_current": [
-      {
-        "active_client": null,
-        "boat": 0,
-        "data": {
-          "achievements": {},
-          "artifacts": [],
-          "autoLockOnCatch": false,
-          "autoLockedIds": {},
-          "baitRefund": null,
-          "cooking": null,
-          "coupons": [],
-          "energyTargets": {},
-          "firstCatch": {
-            "pond": {
-              "epic": true,
-              "legend": true,
-              "legendAt": 0,
-              "n": 0,
-            },
-            "river": {
-              "epic": true,
-              "legend": true,
-              "legendAt": 0,
-              "n": 0,
-            },
-          },
-          "hats": [],
-          "items": {},
-          "location": {
-            "id": "home",
-            "kind": "base",
-          },
-          "look": {
-            "hat": null,
-            "pants": 0,
-            "shirt": 0,
-          },
-          "namedPity": {
-            "day": "",
-            "fails": 0,
-            "misses": 0,
-            "wounds": {},
-          },
-          "pity": {},
-          "slots": {
-            "bait": null,
-            "lunch": null,
-          },
-          "tutorials": [],
-          "v": 10,
-          "visited": [],
-        },
-        "fame": "0",
-        "gold": "0",
-        "last_catch_at": null,
-        "restricted": false,
-        "rod": 1,
-        "updated_at": "2030-03-04T05:06:06.900Z",
-        "user_id": "<user>",
-        "version": "3",
-      },
-    ],
-  },
-  "res": {
-    "body": {
-      "error": "too-fast",
-    },
-    "status": 429,
-  },
-}
-`;
-
 exports[`요청 경계 > 형식이 틀린 액션은 400이다 1`] = `
 {
   "db": {
@@ -2909,7 +2815,6 @@ exports[`이사 코드 가져오기 > 소유자는 상태를 통째로 바꾸고
   },
 }
 `;
-
 
 exports[`첫 액션 > 구 saves 행만 있는 사용자는 그 상태로 시딩한다 1`] = `
 {

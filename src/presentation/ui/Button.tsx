@@ -5,7 +5,7 @@ type Variant = 'default' | 'primary' | 'ghost' | 'accent' | 'danger';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
-  /** sm = 목록형 보조 버튼(설정 탭 등), xs = 24px 이하 평면 1px 소형 버튼 */
+  /** md = 기본 최소 44px(줄바꿈 시 세로로 함께 확장), sm = 목록형 보조 버튼(설정 탭 등), xs = 24px 이하 평면 1px 소형 버튼 */
   size?: 'md' | 'sm' | 'xs';
   /** 전폭 블록 — 좌우로 채운다 (variant와 무관) */
   full?: boolean;

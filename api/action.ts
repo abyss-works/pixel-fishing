@@ -49,7 +49,7 @@ import { gameDayOf, gameDayStartISO, previousGameDayISO } from '../src/game/rule
 import type { DayPhase } from '../src/game/rules/time.js';
 import { checkNickname, pickGuestName } from '../src/game/rules/nickname.js';
 import { powerZones, rodPower } from '../src/game/rules/stats.js';
-import { MIN_ACTION_GAP_MS, MIN_ACTION_GAP_FAST_MS, PACING_SLOW_TYPES, SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
+import { MIN_ACTION_GAP_MS, PACING_SLOW_TYPES, SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
 import { catchTooSoon } from '../src/game/rules/pacing.js';
 import { APP_VERSION } from '../src/version.js';
 import { staleClient } from './_server/clientBuild.js';
@@ -209,9 +209,9 @@ const BOUNTY_ACTIONS = new Set(['acceptQuest', 'deliverBounty', 'resolveChalleng
  *  의뢰 클리어). 이사 코드와 개발 도구는 플레이로 얻은 명성이 아니라 기여로 세지 않는다 */
 const GUILD_ACTIONS = new Set(['catch', 'sell', 'exhibit', 'deliverBounty', 'claimRelief']);
 
-// 액션 페이싱 게이트(2단계) — 서버 추첨으로 가치를 생성하는 catch와 쓰기 비용이 큰 letter는
-// 느린 창(1s), 상점·정비 등 UI 체인이 정상인 나머지는 빠른 창(150ms)을 쓴다. 봇 flood에는
-// 빠른 창도 완화 상한으로 남는다(~6.7 rps/uid). 밸런스 상수와 액션 목록은 각 정의를 단일 출처로 삼는다.
+// 액션 페이싱 게이트 — 서버 추첨으로 가치를 생성하는 catch와 쓰기 비용이 큰 sendLetter에만
+// 직전 성공 액션과의 최소 간격을 검사한다. 그 밖의 액션은 간격 검사를 두지 않는다.
+// 밸런스 상수와 액션 목록은 각 정의를 단일 출처로 삼는다.
 const PACING_SLOW = new Set<string>(PACING_SLOW_TYPES);
 
 /** DB 단계 실행 — 실패는 그 단계의 오류 코드로 500을 던진다 */
@@ -399,9 +399,9 @@ async function route(req: Req, res: Res): Promise<void> {
     throw new ApiError(423, 'session-replaced');
   }
 
-  // 매크로 페이싱 검사 — 직전 성공 액션과의 최소 간격(서버 시각 기준). updated_at은 성공
-  // 커밋마다 이미 갱신되므로 읽기·쓰기 추가가 0이다. 거절될 요청이 쿠폰·지원코드 조회까지 가지 않도록
-  // 그 조회보다 먼저 검사한다. 시딩 행(v1)과 첫 액션은 제외.
+  // 매크로 페이싱 검사 — 느림 창 대상에만 직전 성공 액션과의 최소 간격(서버 시각 기준)을 검사한다.
+  // updated_at은 성공 커밋마다 이미 갱신되므로 읽기·쓰기 추가가 0이다. 거절될 요청이 쿠폰·지원코드
+  // 조회까지 가지 않도록 그 조회보다 먼저 검사한다. 시딩 행(v1)과 첫 액션은 제외.
   // 개발 도구 명령(debug/debugBatch/debugSnapshot)과 승인된 강제 조우·시간대 테스트 캐치는 페이싱을 면제한다.
   const pacingExempt = action.type === 'debug'
     || action.type === 'debugBatch'
@@ -409,11 +409,9 @@ async function route(req: Req, res: Res): Promise<void> {
     || forceCatchAllowed;
   if (!pacingExempt) {
     const lastActionMs = Date.parse(String(row.updated_at ?? ''));
-    if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
-      const gapMs = PACING_SLOW.has(action.type) ? MIN_ACTION_GAP_MS : MIN_ACTION_GAP_FAST_MS;
-      if (Date.now() - lastActionMs < gapMs) {
-        throw new ApiError(429, 'too-fast');
-      }
+    if (PACING_SLOW.has(action.type) && Number.isFinite(lastActionMs) && Number(row.version) > 1
+        && Date.now() - lastActionMs < MIN_ACTION_GAP_MS) {
+      throw new ApiError(429, 'too-fast');
     }
     // 캐치 간격 검사 — 직전 캐치로부터 낚시 한 사이클(획득 표시 + 최소 입질 대기)이 지나야 다음 캐치를 받는다.
     if (action.type === 'catch' && catchTooSoon(
