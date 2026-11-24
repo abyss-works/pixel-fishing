@@ -55,6 +55,7 @@ import { gameDayOf, isNight } from './time.js';
 import type { DayPhase } from './time.js';
 import { NO_GUILD_EFFECTS } from './guild.js';
 import type { GuildEffects } from './guild.js';
+import { ensureFortune, luckMultOf } from './fortune.js';
 
 export interface DebugStepInput {
   command: string;
@@ -505,6 +506,9 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       // 서버가 게이트를 재검증한다 — 클라 사전 체크(UX용)와 별개 (R5b)
       const gate = canFish(state, action.spot);
       if (!gate.ok) return { ok: false, error: gate.reason };
+      // 오늘의 운세 — 하루 첫 판정에서 굴려 그 게임 날짜에 고정한다. 같은 날짜면
+      // 이미 굴린 운세를 그대로 쓴다(불변 — rng를 쓰지 않는다)
+      state = ensureFortune(state, deps.now, deps.rng);
       // 네임드 조우 — 통상 추첨과 병행한다. 명중해도 이번 캐치는 그대로 진행하고
       // 도전권 발급 이벤트만 덧붙인다 (낚시 중단 없음). 발급 행 기록은
       // 서버가 이벤트를 보고 bounty_tickets에 쓴다.
@@ -515,7 +519,8 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const pz = powerZones(state, action.spot);
       const { judgment, phaseOpts, cook } = prepareCatchDraw(state, action.judgment, deps.now, pz, action.forcePhase);
       const named = drawNamedEncounter(state.namedPity, encounterQuests(deps.bounty), action.spot, deps.now,
-        deps.rng, action.forceEncounter === true, namedWeightBonus(state, action.judgment, deps.now, guild, achBonuses));
+        deps.rng, action.forceEncounter === true, namedWeightBonus(state, action.judgment, deps.now, guild, achBonuses),
+        luckMultOf(state.fortune, 'named'));
       const namedHit = named.quest;
       const ticketEvents: GameEvent[] = namedHit
         ? [{ type: 'ticket', payload: { questId: namedHit.id, ...(named.byCeiling ? { pity: true } : {}) } }]
@@ -523,7 +528,8 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const ticketResult = namedHit ? { ticket: namedHit.id } : {};
       // 호출 순서 고정: 추첨 → 부가 롤 — 구 클라이언트(Field)와 동일한 rng 소비 순서.
       // 어종 천장의 소유 판정은 리듀서가 가진 도감으로 한다.
-      const drawn = drawCatch(state, action.spot, judgment, rodPower(state), pz.mult, deps.rng, phaseOpts,
+      const drawn = drawCatch(state, action.spot, judgment, rodPower(state), pz.mult, deps.rng,
+        { ...phaseOpts, rarityLuck: luckMultOf(state.fortune, 'rarity') },
         id => (state.dex[id]?.normal?.count ?? 0) > 0, guild, cook, achBonuses);
       const { fish, extras } = drawn;
       // NEW 판정은 폼별 — 변이는 별개 개체 (v0.3.3)
@@ -584,8 +590,10 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
     case 'sell': {
       if (!Array.isArray(action.uids)) return { ok: false, error: 'bad-request' };
       const uids = action.uids.filter(u => typeof u === 'string');
+      // 오늘의 운세 — 하루 첫 판정에서 굴려 그 게임 날짜에 고정한다 (catch와 같은 규칙)
+      state = ensureFortune(state, deps.now, deps.rng);
       const totalSellBonus = Math.round(((deps.guild ?? NO_GUILD_EFFECTS).sell + achievementBonusesOf(state).sellBonus) * 1e9) / 1e9;
-      const next = sellSelected(state, uids, totalSellBonus);
+      const next = sellSelected(state, uids, totalSellBonus, luckMultOf(state.fortune, 'sell'));
       const gold = next.gold - state.gold;
       // 실제로 사라진 개체만 = 가방 차집합 (없는 uid·잠긴 개체는 자동 제외)
       const remaining = new Set(next.bag.map(i => i.uid));

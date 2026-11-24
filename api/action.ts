@@ -24,6 +24,7 @@ import {
 import { appliedSlots, applyEnergyGain, planOverflow } from '../src/game/rules/cooking.js';
 import { needsLegacyFirstCatchMigration } from '../src/game/rules/firstCatch.js';
 import { drawNamedEncounter, speciesPityCandidates } from '../src/game/rules/pity.js';
+import { ensureFortune, luckMultOf } from '../src/game/rules/fortune.js';
 import { bountyById, isQuestOffered } from '../src/game/content/bounties.js';
 import type { BountyKind, BountyQuest } from '../src/game/content/bounties.js';
 import type { SpotId } from '../src/game/content/spots.js';
@@ -546,9 +547,11 @@ async function route(req: Req, res: Res): Promise<void> {
   // 도전권 발급 이벤트만 덧붙이고 낚시는 그대로 진행한다 (챌린지절).
   // 네임드 조우 천장의 진척도 여기서 센다 — 리듀서 catch와 같은 drawNamedEncounter.
   if (action.type === 'catch' && catchBase && bounty && out.ok) {
+    // 운 배율은 리듀서와 같은 규칙 — fastCatch/applyAction이 이미 오늘의 운세를 out.state에 고정해 뒀다
     const named = drawNamedEncounter(catchBase.namedPity, encounterQuests(bounty), action.spot, now,
       Math.random, action.forceEncounter === true,
-      namedWeightBonus(catchBase, action.judgment, now, guildEffects, achievementBonusesOf(catchBase)));
+      namedWeightBonus(catchBase, action.judgment, now, guildEffects, achievementBonusesOf(catchBase)),
+      luckMultOf(out.state.fortune, 'named'));
     out = { ...out, state: { ...out.state, namedPity: named.pity } };
     if (named.quest) {
       out.events.push({ type: 'ticket', payload: { questId: named.quest.id, ...(named.byCeiling ? { pity: true } : {}) } });
@@ -831,11 +834,14 @@ export function catchProgressQuests(events: readonly GameEvent[], activeIds: rea
 async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId, judgmentIn: Judgment, now: string,
   guild: GuildEffects, guest: boolean, counters: Record<string, number>, clearedNamed: string[],
   forcePhase?: DayPhase): Promise<ApplyOutcome> {
-  const base = migrate({ ...blobInput(row.data), gold: Number(row.gold),
+  let base = migrate({ ...blobInput(row.data), gold: Number(row.gold),
     fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {},
     achievementCounters: counters, clearedNamed });
   const gate = canFish(base, spot);
   if (!gate.ok) return { ok: false, error: gate.reason };
+  // 오늘의 운세 — 리듀서 catch와 같은 규칙. 첫 판정에서 굴려 게임 날짜에 고정하고,
+  // 이미 그날의 운세면 그대로 쓴다(불변 — rng를 쓰지 않는다)
+  base = ensureFortune(base, now, Math.random);
   const pz = powerZones(base, spot);
   const { judgment, phaseOpts, cook } = prepareCatchDraw(base, judgmentIn, now, pz, forcePhase);
   const today = todayKST();
@@ -845,7 +851,8 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
     : await step('db-read', { uid, action: 'catch' }, () => ownedNormalForms(db, uid, candidates));
   const achBonuses = achievementBonusesOf(base);
   const drawn = drawCatch(
-    base, spot, judgment, rodPower(base), pz.mult, Math.random, phaseOpts,
+    base, spot, judgment, rodPower(base), pz.mult, Math.random,
+    { ...phaseOpts, rarityLuck: luckMultOf(base.fortune, 'rarity') },
     id => owned.has(id), guild, cook, achBonuses,
   );
   const { fish, extras } = drawn;

@@ -26,6 +26,7 @@ import { ENERGY_ITEM_IDS } from './game/content/cooking';
 import { TAB_ORDER } from './presentation/views/game/tabs/tabs';
 import { BOATS, FISH, MAX_BOAT, RARITY, COUPONS, newState } from './game/rules/logic';
 import type { FishInstance, FormId, FormRecord, GameState } from './game/rules/logic';
+import { gameDayOf } from './game/rules/time';
 import type { GameAction } from './game/rules/actions';
 import { LocalGameGateway } from './platform/adapters/localGameGateway';
 import { when } from './platform/api';
@@ -56,7 +57,14 @@ const SAVE_KEY = 'pixel-fishing-save';
 const SEEN_TUTORIALS = { tutorials: [...TUTORIAL_IDS] };
 
 function seed(over: Partial<GameState> = {}) {
-  localStorage.setItem(SAVE_KEY, JSON.stringify({ ...newState(), ...SEEN_TUTORIALS, ...over }));
+  localStorage.setItem(SAVE_KEY, JSON.stringify({
+    ...newState(), ...SEEN_TUTORIALS,
+    // 운세 고정 — 판매액을 정확히 재는 테스트가 하루 운세 추첨(돈 운이면 수령액 ×1.03~1.05)에
+    // 흔들리지 않게 오늘 날짜의 그림자 운세를 박는다. 그림자 운은 활성 네임드 의뢰가 없는
+    // 이 테스트들에서는 아무 판정에도 걸리지 않는다. 운세를 다루는 테스트는 seed 인자로 덮어쓴다
+    fortune: { day: gameDayOf(new Date().toISOString()), kind: 'shadow', index: 3 },
+    ...over,
+  }));
 }
 
 // 세이브 v8 픽스처 헬퍼 — 개체(가방)와 도감 기록을 짧게 쓴다
