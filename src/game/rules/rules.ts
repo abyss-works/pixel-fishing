@@ -16,7 +16,7 @@ import { BOUNTY_PORT_ZONE, bountyById, bountyKindOf, isBountyPort, LICENSE_TIER_
 import type { BountyKind, BountyPort, BountyZone } from '../content/bounties.js';
 import { ZONES, zoneById } from '../content/zones.js';
 import { COOKING_UNLOCK_BOAT } from '../content/cooking.js';
-import type { BaseId } from '../content/places.js';
+import type { BaseId, LocationRef } from '../content/places.js';
 import { ARTIFACT_MAX_LEVEL, artifactById, artifactHasLevel, artifactLevelCost } from '../content/artifacts.js';
 import { artifactLevelOf, dailyClearCap } from './artifactLevel.js';
 import { PANTS_COLORS, SHIRT_COLORS, hatById, isAchievementHat } from '../content/wardrobe.js';
@@ -203,16 +203,21 @@ export function canFish(state: GameState, spotId: SpotId): RuleCheck {
   return state.boat >= spot.boatTier ? OK : no('spot-locked');
 }
 
-/** 항구의 진입 배 단계 — 항구가 있는 최상위 존의 entryBoat. 게이트가 없는 바다와 항구가 아닌 거점(집)은 0 */
+/** 항구의 진입 배 단계 — 항구는 최소 배 1단계(조각배)가 필요하고 진입 게이트가 더 높은 바다는 그 단계를 따른다. 집은 0 */
 function portGate(base: string): number {
   const zone = zoneOfPort(base);
-  return zone ? zoneById(zone)?.entryBoat ?? 0 : 0;
+  return zone ? Math.max(1, zoneById(zone)?.entryBoat ?? 0) : 0;
 }
 
-/** 거점 이동 — 항구로 옮기려면 배가 그 바다의 진입 단계 이상이어야 한다.
- *  바다에서 접안할 때는 이미 경계 게이트를 지났으므로 항상 통과하고, 빠른 이동만 실제로 걸린다 */
+/** 거점 이동 — 항구로 옮기려면 배가 최소 1단계 이상이면서 그 바다의 진입 단계 이상이어야 한다. */
 export function canEnterBase(state: GameState, base: string): RuleCheck {
   return state.boat >= portGate(base) ? OK : no('zone-locked');
+}
+
+/** 이동 가능 판정 — 거점은 canEnterBase를 따르고, 바다(world) 출항은 최소 배 1단계가 필요하다 */
+export function canTravel(state: GameState, to: LocationRef): RuleCheck {
+  if (to.kind === 'base') return canEnterBase(state, to.id);
+  return to.id === 'world' && state.boat < 1 ? no('zone-locked') : OK;
 }
 
 /** 빠른 이동 목적지 — 지금 있는 항구를 뺀 항구 목록. locked는 갈 수 없을 때 보일 사유(갈 수 있으면 null) */
