@@ -200,12 +200,52 @@ describe('업적 모자 구매 제한', () => {
   });
 });
 
-describe('소급 판정', () => {
+describe('소급 판정 및 초기 파생 상태 직후 수령', () => {
   it('도입 뒤 첫 액션 확정에서 이미 채운 조건의 업적이 claimable이 된다', async () => {
     const uid = await seed({ state: { dex: zoneDex('pacific', 'basic') } });
     const res = await callAction(userToken(uid), { type: 'boot' });
     expect(res.status).toBe(200);
     const scalars = (res.body as { patch: { scalars: GameState } }).patch.scalars;
     expect(scalars.achievements).toMatchObject({ 'spot-basic-sea': 'claimable', 'spot-basic-deep': 'claimable' });
+  });
+
+  it('boot 없이 saves_current.data.achievements가 비어 있어도 claimAchievement가 도감·토벌 근거를 선행 평가해 수령·저장한다', async () => {
+    const uid = await seed({ state: { gold: 0, dex: zoneDex('pacific', 'basic'), achievements: {} } });
+    await env.client.query(
+      `insert into public.bounty_clears (user_id, kind, quest_id) values ($1, 'named', 'pacific-named-megalodon')`,
+      [uid],
+    );
+
+    const res = await callAction(userToken(uid), { type: 'claimAchievement', id: 'spot-basic-sea' });
+    expect(res.status).toBe(200);
+    const seaReward = achievementById('spot-basic-sea')!.reward;
+    const paid = seaReward.kind === 'gold' ? seaReward.gold : 0;
+    expect(await goldOf(uid)).toBe(paid);
+    expect((await stored(uid)).achievements).toMatchObject({
+      'spot-basic-sea': 'claimed',
+      'spot-basic-deep': 'claimable',
+      'named-megalodon-1': 'claimable',
+    });
+  });
+
+  it('boot 없이 saves_current.data.achievements가 비어 있어도 claimAllAchievements가 도감·토벌 근거를 선행 평가해 일괄 수령·저장한다', async () => {
+    const uid = await seed({ state: { gold: 0, dex: zoneDex('pacific', 'basic'), achievements: {} } });
+    await env.client.query(
+      `insert into public.bounty_clears (user_id, kind, quest_id) values ($1, 'named', 'pacific-named-megalodon')`,
+      [uid],
+    );
+
+    const res = await callAction(userToken(uid), { type: 'claimAllAchievements' });
+    expect(res.status).toBe(200);
+    const seaGold = achievementById('spot-basic-sea')!.reward;
+    const deepGold = achievementById('spot-basic-deep')!.reward;
+    const expectedGold = (seaGold.kind === 'gold' ? seaGold.gold : 0) + (deepGold.kind === 'gold' ? deepGold.gold : 0);
+    expect(await goldOf(uid)).toBe(expectedGold);
+    expect((await stored(uid)).achievements).toMatchObject({
+      'spot-basic-sea': 'claimed',
+      'spot-basic-deep': 'claimed',
+      'named-megalodon-1': 'claimed',
+    });
+    expect((await stored(uid)).hats).toContain('megalodon-work-cap');
   });
 });

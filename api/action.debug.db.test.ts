@@ -166,12 +166,17 @@ describe('20개 debug 명령 전수 DB 영속화 및 재로딩 일치', () => {
     expect((await call('achievement.setCounter', { key: 'sell.gold', value: 123456 })).status).toBe(200);
     expect((await readOwnState(db, uid)).counters['sell.gold']).toBe(123456);
 
-    // 12. achievement.resetCounters (도감이 채워져 있어도 resetAchievements=true 시 claimable로 되돌리지 않음)
+    // 12. achievement.resetCounters (도감이 채워져 있어도 resetAchievements=true 시 claimable로 되돌리지 않고 DB에 {}를 영속화)
     executed.add('achievement.resetCounters');
-    expect((await call('achievement.resetCounters', { resetAchievements: true })).status).toBe(200);
+    const resetRes = await call('achievement.resetCounters', { resetAchievements: true });
+    expect(resetRes.status).toBe(200);
+    expect((resetRes.body as { patch: { scalars: GameState } }).patch.scalars.achievements).toEqual({});
     stateNow = await readOwnState(db, uid);
     expect(stateNow.counters).toEqual({});
-    expect((stateNow.cur!.data as GameState).achievements).toEqual({});
+    const persistedAchievements = (await env.client.query<{ achievements: unknown }>(
+      `select data->'achievements' as achievements from public.saves_current where user_id = $1`, [uid],
+    )).rows[0].achievements;
+    expect(persistedAchievements).toEqual({});
 
     // 13. achievement.evaluate
     executed.add('achievement.evaluate');
