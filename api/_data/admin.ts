@@ -18,6 +18,7 @@ import { HATS, hatById } from '../../src/game/content/wardrobe.js';
 import { zoneById } from '../../src/game/content/zones.js';
 import type { ZoneId } from '../../src/game/content/zones.js';
 import type { LiveOnline } from '../_server/live.js';
+import { deriveAchievements } from './achievements.js';
 import { uuidArray } from './json.js';
 
 const FISH_IDS = new Set(FISH.map(f => f.id));
@@ -126,7 +127,7 @@ export async function userState(db: Executor, uid: string): Promise<unknown> {
   const { rows } = await db.execute<{
     has_save: boolean;
     data: unknown;
-    records: { fish_id: string; form: string; count: number }[];
+    records: { fish_id: string; form: string; count: number; max_size: number | null; first_caught: string | null }[];
     cleared_named: string[];
     instances: { bag: number; exhibit: number } | null;
     recent_bag: { uid: string; fish_id: string; form: string; size: number | null; caught_at: string | null; spot: string | null; locked: boolean }[];
@@ -137,7 +138,9 @@ export async function userState(db: Executor, uid: string): Promise<unknown> {
   }>(sql`select
       exists(select 1 from public.saves_current where user_id = ${uid}::uuid) as has_save,
       (select data from public.saves_current where user_id = ${uid}::uuid) as data,
-      (select coalesce(json_agg(json_build_object('fish_id', fish_id, 'form', form, 'count', count)), '[]'::json)
+      (select coalesce(json_agg(json_build_object(
+         'fish_id', fish_id, 'form', form, 'count', count, 'max_size', max_size, 'first_caught', first_caught
+       )), '[]'::json)
        from public.records where user_id = ${uid}::uuid and count > 0) as records,
       (select coalesce(json_agg(quest_id), '[]'::json)
        from public.bounty_clears where user_id = ${uid}::uuid and kind = 'named') as cleared_named,
@@ -205,10 +208,15 @@ export async function userState(db: Executor, uid: string): Promise<unknown> {
   const equippedHatDef = typeof rawLook.hat === 'string' ? hatById(rawLook.hat) : undefined;
   const equippedHat = equippedHatDef ? { id: equippedHatDef.id, name: equippedHatDef.name } : null;
 
-  const rawAchievements = asRecord(data.achievements);
+  const evaluatedAchievements = deriveAchievements({
+    data,
+    records,
+    counters,
+    clearedNamed,
+  }).achievements;
   let claimed = 0;
   let claimable = 0;
-  for (const [id, status] of Object.entries(rawAchievements)) {
+  for (const [id, status] of Object.entries(evaluatedAchievements)) {
     if (!ACHIEVEMENT_IDS.has(id)) continue;
     if (status === 'claimed') claimed++;
     else if (status === 'claimable') claimable++;

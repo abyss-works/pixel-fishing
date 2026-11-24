@@ -8,6 +8,7 @@ import { ENERGY_ITEM_IDS, RECIPES } from '../src/game/content/cooking.js';
 import { FISH } from '../src/game/content/fish.js';
 import { NAMED } from '../src/game/content/named.js';
 import { HATS } from '../src/game/content/wardrobe.js';
+import { LICENSE_GRADES, newState, zoneDexMissing } from '../src/game/rules/logic.js';
 import { adminSessionHeaders, seedUser, startActionEnv, testUid, sessionHeaders, userToken } from './_dbTest/actionHarness.js';
 import type { ActionEnv } from './_dbTest/actionHarness.js';
 import { appAuth } from './_auth/session.js';
@@ -465,6 +466,33 @@ describe('조회 결과', () => {
       instances: { bag: 0, exhibit: 0, recentBag: [] },
       progression: { visited: [], coupons: [], bountyProgress: [], bountyTickets: [] },
     });
+  });
+
+  it('userState: 미접속(achievements={}) 계정도 records·네임드 토벌 근거로 claimable을 쓰기 없이 파생 집계한다', async () => {
+    const UNBOOTED = testUid(908);
+    const dex: Record<string, { normal: { count: number; maxSize: number; first: string } }> = {};
+    for (const id of zoneDexMissing(newState(), 'pacific', LICENSE_GRADES.basic)) {
+      dex[id] = { normal: { count: 1, maxSize: 30, first: '2026-01-01' } };
+    }
+    await seedUser(env.client, { uid: UNBOOTED, email: 'unbooted@example.test', nickname: '미부팅', state: { dex, achievements: {} }, version: 4 });
+    await env.client.query(
+      `insert into public.bounty_clears (user_id, kind, quest_id) values ($1, 'named', 'pacific-named-megalodon')`,
+      [UNBOOTED],
+    );
+
+    const res = await callAdmin({ q: 'userState', uid: UNBOOTED }, userToken(ADMIN));
+    expect(res.status).toBe(200);
+    expect((res.body as { achievements: { claimed: number; claimable: number } }).achievements).toMatchObject({
+      claimed: 0,
+      claimable: 3, // spot-basic-sea, spot-basic-deep, named-megalodon-1
+    });
+
+    const dbRow = (await env.client.query<{ version: string; achievements: unknown }>(
+      `select version, data->'achievements' as achievements from public.saves_current where user_id = $1`,
+      [UNBOOTED],
+    )).rows[0];
+    expect(Number(dbRow.version)).toBe(4);
+    expect(dbRow.achievements).toEqual({});
   });
 
   it('overview: 개요 탭에 필요한 명부·최근 이벤트·스팸 플래그·일별 집계·리텐션·세션·실시간 접속을 한 번에 돌려준다', async () => {

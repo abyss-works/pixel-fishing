@@ -13,10 +13,19 @@ export function eventsInsert(uid: string, events: readonly GameEvent[], createdA
     from json_to_recordset(${jsonParam(events.map(e => ({ type: e.type, payload: e.payload })))}) as x(type text, payload jsonb)`;
 }
 
+export interface EventArchiveRow {
+  id: number;
+  user_id: string;
+  type: string;
+  payload: unknown;
+  created_at: string;
+  counted: boolean;
+}
+
 /** 콜드 아카이브 — 컷오프 이전 이벤트를 id 오름차순으로 한 묶음. 행은 Postgres JSON 직렬화 그대로다 */
-export async function eventsBefore(db: Executor, cutoffISO: string, afterId: number, limit: number): Promise<Record<string, unknown>[]> {
-  const { rows } = await db.execute<{ page: Record<string, unknown>[] }>(sql`select coalesce(json_agg(e order by e.id), '[]') as page
-    from (select id, user_id, type, payload, created_at from public.events
+export async function eventsBefore(db: Executor, cutoffISO: string, afterId: number, limit: number): Promise<EventArchiveRow[]> {
+  const { rows } = await db.execute<{ page: EventArchiveRow[] }>(sql`select coalesce(json_agg(e order by e.id), '[]') as page
+    from (select id, user_id, type, payload, created_at, counted from public.events
       where created_at < ${at(cutoffISO)} and id > ${afterId} order by id limit ${limit}) e`);
   return rows[0].page;
 }

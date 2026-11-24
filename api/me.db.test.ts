@@ -1,5 +1,6 @@
 // 본인 읽기 함수 — 세션 사용자 자신의 저장 상태·수배·프로필만 돌려준다.
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { LICENSE_GRADES, newState, zoneDexMissing } from '../src/game/rules/logic.js';
 import { fish, seedUser, sessionHeaders, startActionEnv, testUid, userToken } from './_dbTest/actionHarness.js';
 import type { ActionEnv } from './_dbTest/actionHarness.js';
 
@@ -56,6 +57,37 @@ describe('본인 읽기', () => {
 
   it('state: 저장 상태가 없으면 구 저장의 최신 본문을 준다', async () => {
     expect((await callMe('state', userToken(LEGACY))).body).toEqual({ cur: null, instances: [], records: [], counters: {}, clearedNamed: [], legacy: { v: 4, gold: 77 } });
+  });
+
+  it('state: saves_current.data.achievements가 비어 있어도 DB 쓰기 없이 records·네임드 토벌 기반 업적을 claimable로 파생 평가한다', async () => {
+    const DERIVED = testUid(7);
+    const dex: Record<string, { normal: { count: number; maxSize: number; first: string } }> = {};
+    for (const id of zoneDexMissing(newState(), 'pacific', LICENSE_GRADES.basic)) {
+      dex[id] = { normal: { count: 1, maxSize: 30, first: '2026-01-01' } };
+    }
+    await seedUser(env.client, { uid: DERIVED, nickname: '미부팅', state: { dex, achievements: {} }, version: 3 });
+    await env.client.query(
+      `insert into public.bounty_clears (user_id, kind, quest_id) values ($1, 'named', 'pacific-named-megalodon')`,
+      [DERIVED],
+    );
+
+    const { status, body } = await callMe('state', userToken(DERIVED));
+    expect(status).toBe(200);
+    const cur = (body as { cur: { version: number; data: { achievements: Record<string, string> } } }).cur;
+    expect(cur.version).toBe(3);
+    expect(cur.data.achievements).toMatchObject({
+      'spot-basic-sea': 'claimable',
+      'spot-basic-deep': 'claimable',
+      'named-megalodon-1': 'claimable',
+    });
+
+    // GET 경로는 saves_current를 UPDATE하지 않아야 한다(무쓰기·무경합 원칙)
+    const dbRow = (await env.client.query<{ version: string; achievements: unknown }>(
+      `select version, data->'achievements' as achievements from public.saves_current where user_id = $1`,
+      [DERIVED],
+    )).rows[0];
+    expect(Number(dbRow.version)).toBe(3);
+    expect(dbRow.achievements).toEqual({});
   });
 
   it('bounty: 오늘(게임 날짜)의 클리어와 도전권을 준다', async () => {

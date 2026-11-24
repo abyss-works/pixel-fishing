@@ -121,6 +121,42 @@ describe('HttpGameGateway의 기운 저장 단위 이관', () => {
   });
 });
 
+describe('HttpGameGateway의 초기 로드 업적 파생 평가', () => {
+  it('저장 blob의 achievements가 비어 있어도 records·clearedNamed 근거가 있으면 load()가 즉시 claimable을 반환한다', async () => {
+    const { LICENSE_GRADES, zoneDexMissing } = await import('../../game/rules/logic');
+    const missing = zoneDexMissing(newState(), 'pacific', LICENSE_GRADES.basic);
+    me.value = {
+      cur: { data: { v: 10, achievements: {} }, gold: 0, fame: 0, boat: 0, rod: 1, version: 3 },
+      instances: [],
+      records: missing.map(fishId => ({ fish_id: fishId, form: 'normal', count: 1, max_size: 20, first_caught: '2026-01-01' })),
+      counters: { 'sell.gold': 5000 },
+      clearedNamed: ['pacific-named-megalodon'],
+      legacy: null,
+    };
+
+    const state = await new HttpGameGateway().load();
+    expect(state?.achievements['spot-basic-sea']).toBe('claimable');
+    expect(state?.achievements['spot-basic-deep']).toBe('claimable');
+    expect(state?.achievements['named-megalodon-1']).toBe('claimable');
+    expect(state?.achievementCounters['sell.gold']).toBe(5000);
+  });
+
+  it('legacy 이관 폴백에서도 달성 조건을 채웠으면 load()가 claimable을 반환한다', async () => {
+    const { LICENSE_GRADES, zoneDexMissing } = await import('../../game/rules/logic');
+    const dex: Record<string, { normal: { count: number; maxSize: number; first: string } }> = {};
+    for (const id of zoneDexMissing(newState(), 'pacific', LICENSE_GRADES.basic)) {
+      dex[id] = { normal: { count: 1, maxSize: 20, first: '2026-01-01' } };
+    }
+    me.value = {
+      cur: null, instances: [], records: [], counters: {}, clearedNamed: [],
+      legacy: { ...newState(), dex, achievements: {} },
+    };
+
+    const state = await new HttpGameGateway().load();
+    expect(state?.achievements['spot-basic-sea']).toBe('claimable');
+  });
+});
+
 describe('HttpGameGateway의 델타 동기화와 캐시 복구', () => {
   const json = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });

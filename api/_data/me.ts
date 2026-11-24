@@ -1,6 +1,7 @@
 // 본인 읽기 — 사용자 자신의 표 행을 표시용으로 읽는다. 행 모양은 각 표의 열 이름 그대로다.
 import { sql } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
+import { deriveAchievements } from './achievements.js';
 import { at } from './json.js';
 import type { BountyRows, InstanceRow, RecordRow } from './load.js';
 import { clearedNamedJson, countersJson, instancesJson, latestLegacySave, recordsJson } from './load.js';
@@ -29,9 +30,25 @@ export async function readOwnState(db: Executor, uid: string): Promise<OwnState>
     ${countersJson(uid)} as counters,
     ${clearedNamedJson(uid)} as "clearedNamed"`);
   const r = rows[0];
-  return { cur: r.cur, instances: r.instances, records: r.records,
+  // 읽기 경로 무쓰기 파생 평가 — saves_current.data.achievements가 비어 있어도 이미 달성된 업적을 즉시 claimable로 반영한다.
+  let cur = r.cur;
+  if (cur) {
+    const evaluated = deriveAchievements({
+      data: cur.data,
+      records: r.records,
+      counters: r.counters,
+      clearedNamed: r.clearedNamed,
+    });
+    if (evaluated.newlyClaimable.length > 0) {
+      const dataObj = cur.data !== null && typeof cur.data === 'object' && !Array.isArray(cur.data)
+        ? cur.data as Record<string, unknown>
+        : {};
+      cur = { ...cur, data: { ...dataObj, achievements: evaluated.achievements } };
+    }
+  }
+  return { cur, instances: r.instances, records: r.records,
     counters: r.counters, clearedNamed: r.clearedNamed,
-    legacy: r.cur ? null : await latestLegacySave(db, uid) };
+    legacy: cur ? null : await latestLegacySave(db, uid) };
 }
 
 /** dayStart 이후의 클리어와 진행·도전권 전부. 날이 바뀌어 만료된 의뢰는 읽는 쪽이 거른다 */
