@@ -13,6 +13,7 @@ import { cx } from '../../../ui/cx';
 import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
 import Inset from '../../../ui/Inset';
+import type { InsetBorder } from '../../../ui/Inset';
 import PersonSprite from '../../../ui/PersonSprite';
 import PixelIcon from '../../../ui/PixelIcon';
 import ProgressMeter from '../../../ui/ProgressMeter';
@@ -32,9 +33,12 @@ interface Props {
 const cardTone = (status: AchievementRowStatus) =>
   status === 'claimed' ? 'deep' : status === 'claimable' ? 'light' : 'base';
 
+const cardBorder = (status: AchievementRowStatus): InsetBorder =>
+  status === 'claimable' ? 'gold' : 'line';
+
 const cardFrameClass = (status: AchievementRowStatus) => cx(
   'flex min-w-0 flex-col',
-  status === 'claimable' && 'border-gold bg-[color-mix(in_oklab,var(--c-gold)_12%,var(--c-surface))]',
+  status === 'claimable' && 'bg-[color-mix(in_oklab,var(--c-gold)_12%,var(--c-surface))]',
 );
 
 function StatusBadge({ status }: { status: AchievementRowStatus }) {
@@ -60,7 +64,7 @@ export default function AchievementCard({ row, game, guest = false, busy, onClai
   const ratio = progress.target > 0 ? clamped / progress.target : 0;
   const pct = Math.min(100, Math.round(ratio * 100));
   return (
-    <Inset tone={cardTone(row.status)} className={cardFrameClass(row.status)}>
+    <Inset tone={cardTone(row.status)} border={cardBorder(row.status)} className={cardFrameClass(row.status)}>
       <div className="flex flex-1 flex-col gap-1.5 p-2.5">
         <div className="flex items-start justify-between gap-2">
           <b data-achievement-name className="text-sm text-text break-keep break-words">
@@ -226,7 +230,9 @@ export function NamedGroupCard({
   const activeStepIdx = card.steps.findIndex(step => step.status === 'progress');
 
   return (
-    <Inset tone={card.status === 'claimed' ? 'deep' : card.status === 'claimable' ? 'light' : 'base'} className={cardFrameClass(card.status)}>
+    <Inset tone={card.status === 'claimed' ? 'deep' : card.status === 'claimable' ? 'light' : 'base'}
+           border={cardBorder(card.status)}
+           className={cardFrameClass(card.status)}>
       <div className="flex flex-1 flex-col gap-1.5 p-2.5">
         <div className="flex items-start justify-between gap-2">
           <b data-achievement-name className="text-sm text-text break-keep break-words">

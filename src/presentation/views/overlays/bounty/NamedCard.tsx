@@ -8,6 +8,7 @@ import AdjustedAmount from '../../../ui/AdjustedAmount';
 import Button from '../../../ui/Button';
 import Inset from '../../../ui/Inset';
 import Tip from '../../../ui/Tip';
+import { cx } from '../../../ui/cx';
 import { AcceptButton, BoardRows, NamedCardHead } from './boardParts';
 
 export default function NamedCard({ game, quest, canAccept, reason, busy, progress, accepted, ticketMins, materialName, onAccept, onDeliver }: {
@@ -24,7 +25,8 @@ export default function NamedCard({ game, quest, canAccept, reason, busy, progre
 }) {
   const { name, poster, found, done, haunt, reward } = selectNamedBountyCardData(game, quest, progress);
   return (
-    <Inset tone={done ? 'light' : 'base'} className={done ? 'border-gold bg-[color-mix(in_oklab,var(--c-gold)_8%,var(--inset-light))] p-3 flex flex-col gap-2 flex-1 min-h-0' : 'p-3 flex flex-col gap-2 flex-1 min-h-0'}>
+    <Inset tone={done ? 'light' : 'base'} border={done ? 'gold' : 'line'}
+           className={cx('p-3 flex flex-col gap-2 flex-1 min-h-0', done && 'bg-[color-mix(in_oklab,var(--c-gold)_8%,var(--inset-light))]')}>
       <NamedCardHead title={found && name ? name : '???'} titleTip={poster} traceMins={!done ? ticketMins : null} />
       <BoardRows rows={[
         { key: 'haunt', label: '나타나는 곳', value: haunt },

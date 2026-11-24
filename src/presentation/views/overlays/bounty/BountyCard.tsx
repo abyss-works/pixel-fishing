@@ -5,6 +5,7 @@ import type { BountyQuest } from '../../../../game/content/bounties.js';
 import { DIFFICULTY_NAME } from '../../../../features/bounty/model/panel';
 import Button from '../../../ui/Button';
 import Inset from '../../../ui/Inset';
+import { cx } from '../../../ui/cx';
 import { RarityText } from '../../../ui/fish/RarityTag';
 import { fmtGold, fmtNum } from '../../../ui/format';
 import { AcceptButton, ProgressMeter } from './boardParts';
@@ -23,7 +24,8 @@ export default function BountyCard({ quest, progress, accepted, canAccept, reaso
 }) {
   const done = progress >= quest.count;
   return (
-    <Inset tone={done ? 'light' : 'base'} className={done ? 'border-gold bg-[color-mix(in_oklab,var(--c-gold)_8%,var(--inset-light))] p-3 flex flex-col gap-2 h-full text-sm' : 'p-3 flex flex-col gap-2 h-full text-sm'}>
+    <Inset tone={done ? 'light' : 'base'} border={done ? 'gold' : 'line'}
+           className={cx('p-3 flex flex-col gap-2 h-full text-sm', done && 'bg-[color-mix(in_oklab,var(--c-gold)_8%,var(--inset-light))]')}>
       <b className="text-xs text-text-dim">{DIFFICULTY_NAME[quest.difficulty as keyof typeof DIFFICULTY_NAME]}</b>
       <span><b><RarityText rarity={quest.grade!} /></b> 등급 어종</span>
       <span className="pf-accent text-xs">{fmtNum(quest.count)}마리</span>

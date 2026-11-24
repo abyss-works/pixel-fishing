@@ -822,4 +822,90 @@ describe('UI 시스템 가드', () => {
     expect(fixedHeightConfirmRows('<div data-confirm-row className="flex flex-col [&>*]:h-full">{actions}</div>')).toHaveLength(1);
     expect(fixedHeightConfirmRows('<div data-confirm-row className="flex flex-col min-h-11">{actions}</div>')).toEqual([]);
   });
+
+  // Inset 테두리 색 — 기본 border-line이 CSS 선언 순서상 className의 border-epic/gold/accent 등을 덮어쓰므로
+  // 테두리 색은 Inset의 border prop으로만 지정하고 className이나 borderless + border 우회를 쓰지 않는다
+  const INSET_BORDER_COLOR_RE = /\bborder-(?:line(?:-dim)?|gold(?:-dark)?|orange|accent|guild|danger|common|rare|epic|legend|special|ok|bg|surface(?:-2)?|text(?:-dim)?|\[[^\]]+\])(?:\/\d+)?\b/;
+  const INSET_RAW_BORDER_RE = /(?<![\w-])border(?![\w-])/;
+  const insetClassExpr = (tag: string): string | null => {
+    let depth = 0;
+    let quote: '"' | "'" | null = null;
+    for (let i = 0; i < tag.length; i++) {
+      const c = tag[i];
+      if (quote) {
+        if (c === '\\') { i++; continue; }
+        if (c === quote) quote = null;
+        continue;
+      }
+      if (c === '"' || c === "'") { quote = c; continue; }
+      if (c === '{') { depth++; continue; }
+      if (c === '}') { depth--; continue; }
+      if (depth === 0 && tag.startsWith('className', i)) {
+        const rest = tag.slice(i + 'className'.length);
+        const eq = /^\s*=\s*/.exec(rest);
+        if (!eq) continue;
+        const start = i + 'className'.length + eq[0].length;
+        const first = tag[start];
+        if (first === '"' || first === "'") {
+          let end = start + 1;
+          while (end < tag.length && tag[end] !== first) {
+            if (tag[end] === '\\') end++;
+            end++;
+          }
+          return tag.slice(start + 1, end);
+        }
+        if (first === '{') {
+          let d = 0;
+          let q: '"' | "'" | '`' | null = null;
+          let end = start;
+          for (; end < tag.length; end++) {
+            const ch = tag[end];
+            if (q) {
+              if (ch === '\\') { end++; continue; }
+              if (ch === q) q = null;
+              continue;
+            }
+            if (ch === '"' || ch === "'" || ch === '`') q = ch;
+            else if (ch === '{') d++;
+            else if (ch === '}') { d--; if (d === 0) break; }
+          }
+          return tag.slice(start + 1, end);
+        }
+      }
+    }
+    return null;
+  };
+  const localConstBodies = (src: string, expr: string): string[] => {
+    const names = new Set(expr.match(/\b[A-Za-z_]\w*\b/g) ?? []);
+    const bodies: string[] = [];
+    for (const name of names) {
+      if (name === 'cx' || name === 'className') continue;
+      const m = new RegExp(`\\bconst\\s+${name}\\b[^=]*=\\s*([\\s\\S]*?)(?=;\\r?\\n|\\n(?:const|function|export)\\b|$)`).exec(src);
+      if (m) bodies.push(m[1]);
+    }
+    return bodies;
+  };
+  const insetBorderOverrides = (src: string, path = '') =>
+    openingTagsQuoted(src, 'Inset')
+      .filter(t => {
+        const expr = insetClassExpr(t.tag);
+        if (!expr) return false;
+        const targets = [expr, ...localConstBodies(src, expr)];
+        if (targets.some(part => INSET_BORDER_COLOR_RE.test(part))) return true;
+        return /\bborderless\b/.test(ownTagHead(t.tag)) && targets.some(part => INSET_RAW_BORDER_RE.test(part));
+      })
+      .map(t => `${path ? `${path}: ` : ''}${t.tag}`);
+
+  it('Inset 호출부는 className으로 테두리 색이나 borderless 수동 border 우회를 쓰지 않고 border prop으로만 지정한다', () => {
+    expect(presentationFiles.flatMap(f => insetBorderOverrides(f.src, f.path))).toEqual([]);
+
+    expect(insetBorderOverrides('<Inset className="px-3 border-accent text-accent">x</Inset>')).toHaveLength(1);
+    expect(insetBorderOverrides('<Inset className={done ? "border-gold p-3" : "p-3"}>x</Inset>')).toHaveLength(1);
+    expect(insetBorderOverrides('<Inset borderless className={cx("p-2 border", on ? "border-accent" : "border-line")}>x</Inset>')).toHaveLength(1);
+    expect(insetBorderOverrides('<Inset borderless className="p-2 border">x</Inset>')).toHaveLength(1);
+    expect(insetBorderOverrides('const cls = () => "border-gold";\n<Inset className={cls()}>x</Inset>')).toHaveLength(1);
+    expect(insetBorderOverrides('<Inset border="accent" className="px-3 text-accent">x</Inset>')).toEqual([]);
+    expect(insetBorderOverrides('<Inset border={s.grade ? "epic" : undefined} className="border-dashed text-text-dim">x</Inset>')).toEqual([]);
+    expect(insetBorderOverrides('<Inset borderless tone="deep" className="flex flex-wrap gap-1">x</Inset>')).toEqual([]);
+  });
 });

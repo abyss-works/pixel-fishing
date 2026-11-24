@@ -14,6 +14,7 @@ import BoatSprite from '../../../ui/BoatSprite';
 import Button from '../../../ui/Button';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import Inset from '../../../ui/Inset';
+import type { InsetBorder } from '../../../ui/Inset';
 import KeyValueRow from '../../../ui/KeyValueRow';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
@@ -155,11 +156,14 @@ export function PlayerInfo({ target, self, account, accountFailed = false, setTo
 }
 
 // 등급색 — 가진 유물 칸의 테두리와 이름
-const GRADE_CLASS: Record<NonNullable<ProfileView['collectibles']['artifacts']['slots'][number]['grade']>, string> = {
-  common: 'border-common text-common',
-  rare: 'border-rare text-rare',
-  epic: 'border-epic text-epic',
-  legendary: 'border-legend text-legend',
+const GRADE_STYLE: Record<NonNullable<ProfileView['collectibles']['artifacts']['slots'][number]['grade']>, {
+  border: InsetBorder;
+  text: string;
+}> = {
+  common: { border: 'common', text: 'text-common' },
+  rare: { border: 'rare', text: 'text-rare' },
+  epic: { border: 'epic', text: 'text-epic' },
+  legendary: { border: 'legend', text: 'text-legend' },
 };
 
 /** 요약, 업적, 수집품, 해역별 도감 비교. PC 2열(요약 왼쪽, 업적과 수집품 오른쪽, 도감 비교 하단 전폭), 모바일 1열 쌓기 */
@@ -272,21 +276,24 @@ function ProfileCells({ name, view, actions }: {
             <span className="pf-accent">{artifacts.owned} / {artifacts.total}</span>
           </div>
           <ul className="grid grid-cols-3 gap-1.5 mobile:grid-cols-2">
-            {artifacts.slots.map(s => (
-              <Inset as="li" key={s.id} tone="deep"
-                     className={cx('min-h-10 px-1 py-0.5 flex flex-col items-center justify-center text-center text-2xs leading-tight',
-                       s.grade ? GRADE_CLASS[s.grade] : 'border-dashed text-text-dim')}
-                     aria-label={s.name ? (s.level !== null ? `유물 ${s.name} Lv.${s.level}` : `유물 ${s.name}`) : `${s.zone} 유물 없음`}>
-                {s.name ? (
-                  <>
-                    <span className="truncate max-w-full">{s.name}</span>
-                    {s.level !== null && <span className="font-pixel text-2xs text-text-dim">Lv.{s.level}</span>}
-                  </>
-                ) : (
-                  <span className="truncate max-w-full">{s.zone}</span>
-                )}
-              </Inset>
-            ))}
+            {artifacts.slots.map(s => {
+              const gradeStyle = s.grade ? GRADE_STYLE[s.grade] : null;
+              return (
+                <Inset as="li" key={s.id} tone="deep" border={gradeStyle?.border}
+                       className={cx('min-h-10 px-1 py-0.5 flex flex-col items-center justify-center text-center text-2xs leading-tight',
+                         gradeStyle ? gradeStyle.text : 'border-dashed text-text-dim')}
+                       aria-label={s.name ? (s.level !== null ? `유물 ${s.name} Lv.${s.level}` : `유물 ${s.name}`) : `${s.zone} 유물 없음`}>
+                  {s.name ? (
+                    <>
+                      <span className="truncate max-w-full">{s.name}</span>
+                      {s.level !== null && <span className="font-pixel text-2xs text-text-dim">Lv.{s.level}</span>}
+                    </>
+                  ) : (
+                    <span className="truncate max-w-full">{s.zone}</span>
+                  )}
+                </Inset>
+              );
+            })}
           </ul>
         </div>
       </Inset>
