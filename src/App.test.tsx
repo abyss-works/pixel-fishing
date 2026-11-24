@@ -14,6 +14,7 @@ import { resetToastEnabled } from './features/display/service/toastEnabled';
 import { resetEncounterAlert, resetUpdateAlert } from './features/bounty/service/encounterAlert';
 import { resetWhatsNewSession } from './features/announcements/service/whatsNew';
 import { resetTutorialSession } from './features/tutorial/service/tutorial';
+import { resetFortuneModalSession } from './features/fortune/service/fortuneModal';
 import { TUTORIAL_IDS } from './game/content/tutorials';
 import { markPromptsAnswered, resetAnnouncements, setLastSeenVersion } from './platform/adapters/announcements';
 import { APP_VERSION } from './version';
@@ -120,6 +121,7 @@ beforeEach(() => {
   // 업데이트 소식 창은 접속 시 자동으로 떠서 키를 막는다 — 소식 창 자체를 다루는 케이스 밖에서는 본 것으로 둔다
   resetWhatsNewSession();
   resetTutorialSession();
+  resetFortuneModalSession();
   resetAnnouncements();
   setLastSeenVersion(APP_VERSION);
   markPromptsAnswered(['fish-art']);
