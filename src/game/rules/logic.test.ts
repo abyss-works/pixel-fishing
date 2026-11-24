@@ -5,7 +5,7 @@ import { ZONES } from '../content/zones';
 import {
   RARITY, RARITY_ORDER, SPOTS, FISH, BOATS, MAX_BOAT, JUDGMENT_MULT, COUPONS,
   rodStats, rollFish, judgeTiming, migrate, computeFame, redeemCoupon,
-  drawRows, goldEV, fishPool, fishDrawShares,
+  drawRows, goldEV, fishPool, fishDrawShares, fishDrawWeight,
   type RarityId,
   newState, addCatch, sellAll, tryUpgrade, tryBuyBoat, canFishSpot, boatSpeed, bagValue,
   sellableValue, sellSelected, setLocked, overflowUids, release, bagCapacity,
@@ -127,7 +127,7 @@ describe('밤 전용 어종 — 시간대 풀 (game/time.ts)', () => {
     }
   });
 
-  it('밤에는 같은 등급 안에서 밤 어종이 기본 어종 가중치 NIGHT_FISH_WEIGHT로 뽑힌다', () => {
+  it('밤에는 같은 등급 안에서 밤 어종이 기본 어종 가중치 NIGHT_FISH_WEIGHT × nightDepth로 뽑힌다', () => {
     // 인도양 희귀: 낮 어종(가중치 미지정 = 1)과 밤 어종이 함께 있다
     const shares = fishDrawShares('indian', { phase: 'night' });
     const rare = shares.filter(s => s.fish.rarity === 'rare' && s.fish.weight === undefined);
@@ -136,6 +136,34 @@ describe('밤 전용 어종 — 시간대 풀 (game/time.ts)', () => {
     expect(day && night).toBeTruthy();
     expect(NIGHT_FISH_WEIGHT).toBe(2);
     expect(night!.share / day!.share).toBeCloseTo(NIGHT_FISH_WEIGHT, 10);
+
+    const mid = fishDrawShares('indian', { phase: 'night', nightDepth: 0.5 })
+      .filter(s => s.fish.rarity === 'rare' && s.fish.weight === undefined);
+    expect(mid.find(s => s.fish.night)!.share / mid.find(s => !s.fish.night)!.share).toBeCloseTo(1, 10);
+
+    const edge = fishDrawShares('indian', { phase: 'night', nightDepth: 0 });
+    expect(edge.filter(s => s.fish.night).every(s => s.share === 0)).toBe(true);
+  });
+
+  it('fishDrawWeight는 nightDepth를 0..1로 클램프하고 nightDepth=0에서는 밤 어종을 뽑지 않는다', () => {
+    const nightFish = FISH.find(f => f.spot === 'indian' && f.night)!;
+    const dayFish = FISH.find(f => f.spot === 'indian' && !f.night)!;
+    expect(fishDrawWeight(nightFish, { phase: 'night', nightDepth: -0.5 })).toBe(0);
+    expect(fishDrawWeight(nightFish, { phase: 'night', nightDepth: 0 })).toBe(0);
+    expect(fishDrawWeight(nightFish, { phase: 'night', nightDepth: 0.5 })).toBeCloseTo(1, 10);
+    expect(fishDrawWeight(nightFish, { phase: 'night', nightDepth: 1.5 })).toBe(NIGHT_FISH_WEIGHT);
+    expect(fishDrawWeight(dayFish, { phase: 'night', nightDepth: 0 })).toBe(1);
+
+    for (const r of [0, 0.5, 0.999999, 1]) {
+      expect(rollFish('indian', 1, () => r, 1, { phase: 'night', nightDepth: 0 }).night).toBeFalsy();
+    }
+  });
+
+  it('등급 내 가중치 합이 0이어도 drawWeights(fishDrawShares)가 NaN을 내지 않는다', () => {
+    const zeros = Object.fromEntries(FISH.filter(f => f.spot === 'pond' && f.rarity === 'rare').map(f => [f.id, 0]));
+    const shares = fishDrawShares('pond', { fishWeights: zeros });
+    for (const s of shares) expect(Number.isFinite(s.share)).toBe(true);
+    expect(shares.filter(s => s.fish.rarity === 'rare').every(s => s.share === 0)).toBe(true);
   });
 
   it('밤 rollFish의 결과는 밤 풀에 속한다 — night 어종은 풀에 있다', () => {
@@ -1226,12 +1254,15 @@ describe('해역 간 방치 기대값 사슬 (낮 풀, 방치 진입·플래토)
 });
 
 describe('가중치 추첨', () => {
-  it('pickWeighted: 가중치 합을 분모로 순서대로 누적해 고른다', () => {
+  it('pickWeighted: 가중치 합을 분모로 순서대로 누적해 고르고 가중치 0 항목은 제외한다', () => {
     const w = [['a', 1], ['b', 3]] as const;
     expect(pickWeighted(w, () => 0)).toBe('a');
     expect(pickWeighted(w, () => 0.249)).toBe('a');
     expect(pickWeighted(w, () => 0.25)).toBe('b');
     expect(pickWeighted(w, () => 0.999)).toBe('b');
+    const withZero = [['a', 1], ['zero', 0]] as const;
+    expect(pickWeighted(withZero, () => 1)).toBe('a');
+    expect(pickWeighted([['zero1', 0], ['only', 2], ['zero2', 0]] as const, () => 1)).toBe('only');
   });
 
   it('rollFish: 등급을 먼저 뽑고(rng 1회) 그 등급 안에서 어종을 뽑는다(rng 1회)', () => {
