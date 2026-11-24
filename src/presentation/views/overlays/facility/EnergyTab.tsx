@@ -98,11 +98,11 @@ export default function EnergyTab({ game, busy, act, setToast, picks, setPicks }
       }}
       notes={['기운을 얻은 물고기는 가방에서 사라져요.', '도감과 명성은 그대로 남아요.']}
       actions={(
-        <div className="relative flex gap-2">
+        <div className="relative flex items-center gap-2">
           <Tip wraps className="flex shrink-0"
                text={view.hasOverride ? '해역별 기운 대상 고르기\n기본값과 다르게 고른 해역이 있어요.' : '해역별 기운 대상 고르기'}>
             <Button ref={gearRef} pressed={popOpen} aria-expanded={popOpen} aria-label="해역별 기운 대상 고르기"
-                    className="relative h-full aspect-square p-0 flex items-center justify-center" onClick={() => setPopOpen(o => !o)}>
+                    className="relative size-11 shrink-0 p-0 flex items-center justify-center" onClick={() => setPopOpen(o => !o)}>
               <PixelIcon glyph="gear" size={14} />
               {view.hasOverride && <span aria-hidden className="absolute top-[3px] right-[3px] size-1.5 bg-gold" />}
             </Button>

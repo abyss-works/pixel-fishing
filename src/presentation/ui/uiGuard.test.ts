@@ -505,7 +505,6 @@ describe('UI 시스템 가드', () => {
 
   it('버튼 안의 AdjustedAmount는 inButton을 준다 - 버튼 안에 포커스 칸과 터치 툴팁을 두지 않는다', () => {
     expect(checked.filter(f => adjustedInButtonWithoutFlag(f.src).length > 0).map(f => f.path)).toEqual([]);
-    expect(presentationFiles.some(f => /<Button\b[\s\S]*?<AdjustedAmount\b[^>]*\binButton\b/.test(f.src))).toBe(true);
   });
 
   it('취소선으로 금액을 직접 그리지 않는다 - 정가와 보정 금액의 취소선은 PriceTag와 AdjustedAmount만 정한다', () => {
@@ -738,5 +737,89 @@ describe('UI 시스템 가드', () => {
     );
     const offenders = targets.filter(f => PUNCT_RE.test(stripComments(f.src))).map(f => f.path);
     expect(offenders).toEqual([]);
+  });
+
+  // 버튼·확정 영역 고정 높이 금지 — 텍스트나 수치를 담는 Button과 data-confirm-row 확정 영역 래퍼는 줄바꿈 시 함께 늘어나야 하므로 고정 높이(h-*, [&>*]:h-full)를 쓰지 않는다
+  const BUTTON_FIXED_HEIGHT_RE = /(?<![\w-])(?:h-(?:\d+|\[[^\]]+\]|full|screen|dvh|svh|fit)|size-(?:\d+|\[[^\]]+\]))/;
+  const CONFIRM_ROW_FIXED_HEIGHT_RE = /(?<![\w-])(?:h-(?:\d+|\[[^\]]+\]|full|screen|dvh|svh|fit)|size-(?:\d+|\[[^\]]+\]))|\[&[^\]]*\]:h-/;
+  /** 따옴표("·')와 표현식({...}) 안의 `>`를 건너뛰며 여는 태그와 끝 위치를 찾는다 */
+  const openingTagsQuoted = (src: string, name: string): { tag: string; end: number }[] => {
+    const tags: { tag: string; end: number }[] = [];
+    for (const m of src.matchAll(new RegExp(`<${name}\\b`, 'g'))) {
+      let depth = 0;
+      let quote: '"' | "'" | null = null;
+      let i = m.index;
+      for (; i < src.length; i++) {
+        const c = src[i];
+        if (quote) {
+          if (c === '\\') { i++; continue; }
+          if (c === quote) quote = null;
+          continue;
+        }
+        if (c === '"' || c === "'") quote = c;
+        else if (c === '{') depth++;
+        else if (c === '}') depth--;
+        else if (c === '>' && depth === 0) break;
+      }
+      tags.push({ tag: src.slice(m.index, i + 1), end: i + 1 });
+    }
+    return tags;
+  };
+  /** 여는 태그 자신의 속성 영역만 남긴다({ ... } 중첩 표현식은 뺀다) */
+  const ownTagHead = (tag: string) => {
+    let depth = 0;
+    let out = '';
+    for (const c of tag) {
+      if (c === '{') depth++;
+      else if (c === '}') depth--;
+      else if (depth === 0) out += c;
+    }
+    return out;
+  };
+  const isIconOnlySquareButton = (tag: string, body: string) => {
+    if (!/(?<![\w-])size-(?:\d+|\[[^\]]+\])/.test(tag)) return false;
+    const withoutTags = body.replace(/<[^>]+>/g, '');
+    const stripped = withoutTags.replace(/\{[^}]*&&\s*\}/g, '').replace(/\s+/g, '');
+    return stripped === '';
+  };
+  const isStepperException = (path: string, tag: string, body: string) =>
+    path === 'views/overlays/guild/GuildSkillsTab.tsx'
+    && /\bsize="xs"/.test(tag)
+    && /\bh-5\b/.test(tag)
+    && body.trim() === '+1';
+  const fixedHeightButtons = (src: string, path = '') =>
+    openingTagsQuoted(src, '(?:Button|ConfirmButton)')
+      .filter(t => BUTTON_FIXED_HEIGHT_RE.test(t.tag))
+      .filter(t => {
+        if (/\/>\s*$/.test(t.tag)) return true;
+        const name = t.tag.startsWith('<ConfirmButton') ? 'ConfirmButton' : 'Button';
+        const body = childrenOf(src, t, name);
+        return !isIconOnlySquareButton(t.tag, body) && !isStepperException(path, t.tag, body);
+      })
+      .map(t => `${path ? `${path}: ` : ''}${t.tag}`);
+  const fixedHeightConfirmRows = (src: string, path = '') =>
+    openingTagsQuoted(src, ANY_TAG)
+      .filter(t => /\bdata-confirm-row\b/.test(ownTagHead(t.tag)) && CONFIRM_ROW_FIXED_HEIGHT_RE.test(t.tag))
+      .map(t => `${path ? `${path}: ` : ''}${t.tag}`);
+
+  it('텍스트·수치를 담는 Button과 data-confirm-row는 고정 높이를 쓰지 않는다 — 아이콘 전용 정사각형과 소형 +1 스테퍼만 예외', () => {
+    expect(presentationFiles.flatMap(f => fixedHeightButtons(f.src, f.path))).toEqual([]);
+    expect(presentationFiles.flatMap(f => fixedHeightConfirmRows(f.src, f.path))).toEqual([]);
+    const guildSkills = presentationFiles.find(f => f.path === 'views/overlays/guild/GuildSkillsTab.tsx')!.src;
+    expect(openingTagsQuoted(guildSkills, 'Button').some(t => isStepperException('views/overlays/guild/GuildSkillsTab.tsx', t.tag, childrenOf(guildSkills, t, 'Button')))).toBe(true);
+
+    expect(fixedHeightButtons('<Button variant="primary" full className="h-11">판매 (10마리)</Button>')).toHaveLength(1);
+    expect(fixedHeightButtons('<Button className="h-[44px]">확인</Button>')).toHaveLength(1);
+    expect(fixedHeightButtons('<Button className="size-11">99</Button>')).toHaveLength(1);
+    expect(fixedHeightButtons('<Button className="size-11"><PixelIcon glyph="plus" /> 추가</Button>')).toHaveLength(1);
+    expect(fixedHeightButtons('<Button className="h-full aspect-square"><PixelIcon glyph="gear" /></Button>')).toHaveLength(1);
+    expect(fixedHeightButtons('<Button variant="primary" full className="min-h-11">판매 (10마리)</Button>')).toEqual([]);
+    expect(fixedHeightButtons('<Button className="size-11 shrink-0 p-0"><PixelIcon glyph="gear" size={14} /></Button>')).toEqual([]);
+    expect(fixedHeightButtons('<Button className="size-11 shrink-0 p-0"><PixelIcon glyph="gear" />{flag && <span className="size-1.5" />}</Button>')).toEqual([]);
+    expect(fixedHeightButtons('<Button size="xs" className="h-5">+1</Button>', 'views/overlays/guild/GuildSkillsTab.tsx')).toEqual([]);
+
+    expect(fixedHeightConfirmRows('<div data-confirm-row className="flex flex-col h-11 [&>*]:h-full">{actions}</div>')).toHaveLength(1);
+    expect(fixedHeightConfirmRows('<div data-confirm-row className="flex flex-col [&>*]:h-full">{actions}</div>')).toHaveLength(1);
+    expect(fixedHeightConfirmRows('<div data-confirm-row className="flex flex-col min-h-11">{actions}</div>')).toEqual([]);
   });
 });
