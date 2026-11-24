@@ -7,7 +7,7 @@ export const USER_TABLES = [
   'saves_current', 'fish_instances', 'records', 'saves', 'profiles', 'events', 'letters', 'mails',
   'bounty_licenses', 'bounty_accepts', 'bounty_clears', 'bounty_progress', 'bounty_tickets', 'blocks',
   'chat_messages', 'chat_reports', 'play_sessions', 'user_active_days', 'guild_members', 'guild_contributions', 'guild_logs',
-  'guild_bonus_donations', 'last_positions', 'guild_join_requests', 'consent_records',
+  'guild_bonus_donations', 'guild_member_enhancements', 'last_positions', 'guild_join_requests', 'consent_records',
   'achievement_counters',
 ] as const;
 /** 저장 상태에 딸린 표. 저장이 없는 계정은 이 표에 행이 없다 */
@@ -92,6 +92,7 @@ export async function seedFullAccount(client: Client, spec: AccountSpec & { nick
   await client.query(`insert into public.guild_contributions (guild_id, user_id, day, fame) values ($1, $2, current_date, 10)`, [guild.id, uid]);
   await client.query(`insert into public.guild_logs (guild_id, user_id, kind) values ($1, $2, 'join')`, [guild.id, uid]);
   await client.query(`insert into public.guild_bonus_donations (guild_id, user_id, bonus, gold) values ($1, $2, 'sell', 100)`, [guild.id, uid]);
+  await client.query(`insert into public.guild_member_enhancements (guild_id, user_id, bonus, rank) values ($1, $2, 'sell', 1)`, [guild.id, uid]);
   await client.query(`insert into public.guild_join_requests (user_id, guild_id) values ($1, $2)`, [uid, guild.id]);
   await client.query(`insert into public.play_sessions (user_id, started_at, ended_at, duration_sec) values ($1, now(), now(), 0)`, [uid]);
   await client.query(`insert into public.user_active_days (user_id, day) values ($1, current_date)`, [uid]);

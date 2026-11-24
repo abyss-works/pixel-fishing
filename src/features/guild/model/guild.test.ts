@@ -291,7 +291,12 @@ describe('길드 보너스 화면 모델', () => {
     expect(donateDisabledReason(bonusRows([item({ id: 'bag', unlock: 2, rank: 3, cap: 3 })])[0])).toBe(GUILD_ERROR_TEXT['rank-maxed']);
     expect(enhancePoolSummary(g)).toEqual({ max: 2, used: 1, remaining: 1, maxSlots: 5 });
     expect(enhanceInvestState(g, rows[1])).toEqual({ canInvest: true, reason: null });
-    expect(enhanceResetState(g, 19_999_999)).toMatchObject({ canReset: false, used: 1, cost: 20_000_000 });
+    expect(enhanceResetState(g, 19_999_999)).toEqual({
+      canReset: false,
+      reason: '골드가 모자라요.\n20,000,000G를 내고 내 자유 강화만 초기화할 수 있어요.',
+      used: 1,
+      cost: 20_000_000,
+    });
     expect(enhanceResetState(g, 20_000_000)).toEqual({ canReset: true, reason: null, used: 1, cost: 20_000_000 });
   });
 

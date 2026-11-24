@@ -27,9 +27,8 @@ import Tip from '../../../ui/Tip';
 import type { GuildPartProps, GuildRun } from './guildProps';
 import { SCROLL_Y } from '../../../ui/scrollArea';
 
-// 길드 스킬 탭: 오목한 판 위의 강화 포인트 줄과 스킬 트리, 그 아래 고른 스킬의 두 칸(효과, 모인 골드와 기부·강화 버튼).
-// 스킬 다섯이 가로로 놓이고(모바일에서는 가로 5칸 행) 기본 단계 1~5가 위에서 아래로 뻗는다.
-// 자유 강화(1~5)가 적용된 칸은 기존 금색 칸 바깥에 보라색 테두리로 함께 표시한다.
+// 길드 스킬 탭: 오목한 판 위의 개인 강화 포인트 줄과 스킬 트리, 그 아래 고른 스킬의 두 칸(효과, 모인 골드와 기부·강화 버튼).
+// 기본 단계는 길드 공용이고, 개인 자유 강화(1~5)가 적용된 칸은 기존 칸 바깥에 보라색 테두리로 표시하며 각 단계 툴팁으로 구분을 안내한다.
 export default function GuildSkillsTab({ guild, gold, busy, run, onResetEnhancements, setToast, onGoldChanged }: GuildPartProps & {
   gold: number;
   onResetEnhancements: () => Promise<{ error: string | null; recovered?: number }>;
@@ -54,8 +53,8 @@ export default function GuildSkillsTab({ guild, gold, busy, run, onResetEnhancem
     setPicked(bonus);
     if (target) sendNotice(setToast, {
       kind: 'guild.modalAction',
-      text: `${target.name} 스킬을 강화 ${target.enhanceRank + 1}단계로 올렸어요.`,
-      toastText: `${target.name} 강화 ${target.enhanceRank + 1}단계!`,
+      text: `${target.name} 스킬의 내 자유 강화를 ${target.enhanceRank + 1}단계로 올렸어요.`,
+      toastText: `${target.name} 개인 강화 ${target.enhanceRank + 1}단계!`,
     });
   };
 
@@ -66,7 +65,7 @@ export default function GuildSkillsTab({ guild, gold, busy, run, onResetEnhancem
       <Inset className="shrink-0 flex flex-col gap-2 px-3 py-2.5 mobile:px-2 mobile:py-2">
         <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-line flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
-            <Tip text={'Lv.6부터 레벨이 오를 때마다 강화 포인트 1개를 얻어요.\n원하는 스킬에 무료로 자유 강화를 올릴 수 있어요.'}
+            <Tip text={'자유 강화 포인트와 효과는 길드원마다 따로 적용돼요.'}
                  className="text-xs font-bold text-text">
               남은 강화 포인트
             </Tip>
@@ -87,7 +86,7 @@ export default function GuildSkillsTab({ guild, gold, busy, run, onResetEnhancem
             </span>
           </div>
           {resetState.canReset ? (
-            <Tip wraps text={`길드원 누구나 ${fmtNum(resetState.cost)}G를 내고 투자한 강화 포인트를 모두 되돌릴 수 있어요.`}>
+            <Tip wraps text={`${fmtNum(resetState.cost)}G를 내고 내 자유 강화만 초기화할 수 있어요.`}>
               <Button size="sm" disabled={busy} onClick={() => setResetting(true)}>초기화</Button>
             </Tip>
           ) : (
@@ -96,20 +95,6 @@ export default function GuildSkillsTab({ guild, gold, busy, run, onResetEnhancem
             </Tip>
           )}
         </div>
-
-        <Inset borderless tone="deep" className="flex flex-wrap items-center gap-x-3.5 gap-y-1 px-2 py-1 text-2xs text-text-dim"
-               aria-label="스킬 단계 색상 안내">
-          <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-            <span className="inline-block size-3 bg-gold border border-gold-dark" aria-hidden="true" />
-            노란색 채움: 기본 단계
-          </span>
-          <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-            <span className="inline-flex items-center justify-center p-px bg-[color-mix(in_oklab,var(--c-epic)_20%,var(--c-bg))] border border-guild" aria-hidden="true">
-              <span className="block size-2 bg-gold border border-gold-dark" />
-            </span>
-            보라색 테두리: 자유 강화
-          </span>
-        </Inset>
 
         <div className="grid grid-cols-5 gap-2.5 mobile:grid-cols-1 mobile:gap-1" role="group" aria-label="길드 스킬 트리">
           {rows.map(row => (
@@ -183,7 +168,7 @@ export default function GuildSkillsTab({ guild, gold, busy, run, onResetEnhancem
       {resetting && (
         <ConfirmDialog
           layer="stage"
-          title="길드 스킬 강화 초기화"
+          title="내 자유 강화 초기화"
           confirmLabel="초기화"
           onCancel={() => setResetting(false)}
           onConfirm={() => {
@@ -197,14 +182,17 @@ export default function GuildSkillsTab({ guild, gold, busy, run, onResetEnhancem
               }
               sendNotice(setToast, {
                 kind: 'guild.modalAction',
-                text: `길드 스킬 강화를 초기화해 ${recovered ?? fallbackUsed}포인트를 되돌렸어요.`,
-                toastText: '길드 스킬 강화 초기화!',
+                text: `내 길드 스킬 자유 강화를 초기화해 ${recovered ?? fallbackUsed}포인트를 되돌렸어요.`,
+                toastText: '내 길드 스킬 자유 강화를 초기화했어요.',
               });
               await onGoldChanged();
             });
           }}
         >
           <div className="flex flex-col gap-2">
+            <p className="m-0 text-sm text-text whitespace-pre-line">
+              {`${fmtNum(resetState.cost)}G를 내고 내 자유 강화만 초기화할까요?\n투자한 ${resetState.used}포인트를 돌려받으며, 다른 길드원의 자유 강화와 길드 기본 단계는 그대로 유지돼요.`}
+            </p>
             <Inset className="p-2.5 flex flex-col gap-1">
               <div className="flex items-center justify-between pb-1 border-b border-line text-sm">
                 <span className="font-bold text-text">돌려받을 포인트</span>
@@ -271,14 +259,16 @@ function Branch({ row, active, busy, invest, onPick, onInvest }: {
         {row.nodes.map((node, i) => (
           <div key={node.rank} className="flex flex-col items-center mobile:flex-row">
             {i > 0 && <span className={cx('block w-0.5 h-0.5 mobile:hidden', node.state === 'done' ? 'bg-gold' : 'bg-line')} aria-hidden="true" />}
-            <span className={cx(
-              'inline-flex items-center justify-center p-[2px] border mobile:p-px',
-              node.enhanced
-                ? 'border-guild bg-[color-mix(in_oklab,var(--c-epic)_18%,var(--c-bg))]'
-                : 'border-transparent bg-transparent',
-            )}>
-              <Node node={node} label={`${row.name} ${node.rank}단계`} />
-            </span>
+            <Tip plain text={nodeTipText(row.name, node)} className="inline-flex">
+              <span className={cx(
+                'inline-flex items-center justify-center p-[2px] border mobile:p-px',
+                node.enhanced
+                  ? 'border-guild bg-[color-mix(in_oklab,var(--c-epic)_18%,var(--c-bg))]'
+                  : 'border-transparent bg-transparent',
+              )}>
+                <Node node={node} label={`${row.name} ${node.rank}단계`} />
+              </span>
+            </Tip>
           </div>
         ))}
       </div>
@@ -315,10 +305,19 @@ function Branch({ row, active, busy, invest, onPick, onInvest }: {
 
 const NODE_TEXT: Record<BonusNode['state'], string> = { done: '이룸', next: '모으는 중', open: '열림', capped: '상한 위' };
 
+function nodeTipText(skillName: string, node: BonusNode): string {
+  const head = `${skillName} ${node.rank}단계 (${NODE_TEXT[node.state]})`;
+  const baseLine = '길드 공용으로 적용되는 기본 단계예요.\n모든 길드원이 같은 효과를 받아요.';
+  const enhanceLine = '내 포인트로 올린 개인 자유 강화 단계예요.\n나에게만 추가로 적용돼요.';
+  if (!node.enhanced) return `${head}\n${baseLine}`;
+  if (node.state === 'done') return `${head}\n${baseLine}\n${enhanceLine}`;
+  return `${head}\n${enhanceLine}`;
+}
+
 /** 단계 노드: 이룬 단계는 금색으로 차고, 다음 단계는 모인 비율만큼 위에서 아래로 찬다. 상한 위는 흐린 테두리다 */
 function Node({ node, label }: { node: BonusNode; label: string }) {
   return (
-    <span role="img" aria-label={`${label} ${NODE_TEXT[node.state]}${node.enhanced ? ' 자유 강화 적용' : ''}`}
+    <span role="img" aria-label={`${label} ${NODE_TEXT[node.state]}${node.enhanced ? ' 개인 자유 강화 적용' : ''}`}
           className={cx('relative w-6 h-[18px] mobile:size-4 overflow-hidden flex items-center justify-center pf-accent text-2xs border',
             NOTCH_SM,
             node.state === 'done' && 'border-gold-dark bg-gold text-bg',

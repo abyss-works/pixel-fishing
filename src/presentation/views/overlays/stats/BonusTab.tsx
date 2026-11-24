@@ -17,7 +17,7 @@ import {
 const CATEGORY_LABEL: Record<BonusCategory, string> = { move: '이동', fish: '낚시', duel: '결투', shop: '상점' };
 const SOURCE_HELP = [
   '유물은 수배판에서 네임드 토벌 재료로 바꿀 수 있어요.',
-  '길드 보너스는 길드 창에서 기부와 자유 강화로 올려요.',
+  '길드 보너스는 길드 창에서 기부와 개인 자유 강화로 올려요.',
   '업적 누적 보너스는 업적 조건 단계에 닿으면 자동으로 적용돼요.',
   FORTUNE_SOURCE_HELP,
 ];
@@ -49,13 +49,13 @@ function relicTipRows(row: BonusRow): { label: string; value: string }[] | null 
   ];
 }
 
-/** 자유 강화가 적용된 길드 보너스의 내역 툴팁 — 기본 단계·자유 강화·합계를 목록으로 보인다 */
+/** 개인 자유 강화가 적용된 길드 보너스의 내역 툴팁 — 기본 단계·개인 자유 강화·합계를 목록으로 보인다 */
 function guildTipRows(row: BonusRow): { label: string; value: string }[] | null {
   if (row.source.kind !== 'guild' || !row.source.enhanceRank || row.source.enhanceRank <= 0) return null;
   const { bonus, baseRank = 0, enhanceRank, baseValue = 0, enhanceValue = 0, value } = row.source;
   return [
     { label: `기본 ${baseRank}단계`, value: bonusEffectValue(bonus, baseValue) },
-    { label: `자유 강화 ${enhanceRank}단계`, value: bonusEffectValue(bonus, enhanceValue) },
+    { label: `개인 자유 강화 ${enhanceRank}단계`, value: bonusEffectValue(bonus, enhanceValue) },
     { label: `합계 ${baseRank + enhanceRank}단계`, value: bonusEffectValue(bonus, value) },
   ];
 }

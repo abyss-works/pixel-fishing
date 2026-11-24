@@ -209,7 +209,7 @@ export function growthTotalText(growth: GuildInfo['growth']): string {
 
 /** 진행 막대 도움말: 레벨이 오르는 조건과 길드 스킬의 관계. 하루 기여 상한은 오늘 기여 도움말이 맡는다 */
 export const GUILD_LEVEL_HELP = '길드원 모두가 쌓은 기여가 다음 문턱에 닿으면 길드 레벨이 올라요.\n'
-  + 'Lv.5까지는 길드 스킬이 열리고, Lv.6부터는 강화 포인트를 1개씩 얻어요.';
+  + 'Lv.5까지는 길드 스킬이 열리고, Lv.6부터는 개인 강화 포인트를 1개씩 얻어요.';
 
 /** 오늘 기여 도움말: 한 사람이 하루에 쌓을 수 있는 기여의 갈래별 상한. 네임드 토벌은 보유 유물의 가산을 반영한다 */
 export function dailyContributionRows(holder: ArtifactHolder): { label: string; value: string }[] {
@@ -337,7 +337,7 @@ export function enhanceResetState(guild: GuildInfo, gold: number):
   if (gold < GUILD_ENHANCE_RESET_COST) {
     return {
       canReset: false,
-      reason: `골드가 모자라요.\n길드원 누구나 ${num(GUILD_ENHANCE_RESET_COST)}G를 내고 초기화할 수 있어요.`,
+      reason: `골드가 모자라요.\n${num(GUILD_ENHANCE_RESET_COST)}G를 내고 내 자유 강화만 초기화할 수 있어요.`,
       used,
       cost: GUILD_ENHANCE_RESET_COST,
     };

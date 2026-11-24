@@ -89,7 +89,7 @@ export async function loadContext(db: Executor, uid: string, opts: {
       from public.bounty_tickets where user_id = ${uid}) t) end as tickets,
     case when ${opts.guild === true} then (select json_build_object('id', m.guild_id::text, 'total', ${guildTotal(sql`m.guild_id`)},
       'ranks', ${guildRanksJson(sql`m.guild_id`)},
-      'enhanceRanks', ${guildEnhanceRanksJson(sql`m.guild_id`)})
+      'enhanceRanks', ${guildEnhanceRanksJson(sql`m.guild_id`, uid)})
       from public.guild_members m where m.user_id = ${uid} and m.left_at is null) end as guild,
     ${countersJson(uid)} as counters,
     ${clearedNamedJson(uid)} as "clearedNamed"`);
