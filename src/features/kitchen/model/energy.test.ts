@@ -6,7 +6,7 @@ import { AUTO_ENERGY_BOAT, COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS } from '../../..
 import type { SpotId } from '../../../game/content/spots';
 import { GUEST_LOCK_TEXT, UNVERIFIED_LOCK_TEXT } from '../../display/model/menuLock';
 import {
-  clearSpotPicks, energyLabel, energyResultRows, energyRowValue, energyTotal, pickEnergyUids, selectBagEnergyEntry, selectEnergyView, selectQuickEnergyView,
+  buildEnergyExtractNotice, clearSpotPicks, defaultQuickEnergyGrades, energyLabel, energyResultRows, energyRowValue, energyTotal, pickEnergyUids, selectBagEnergyEntry, selectEnergyView, selectQuickEnergyView,
 } from './energy';
 
 const home = { kind: 'base', id: 'home' } as const;
@@ -231,12 +231,13 @@ describe('간소화 기운 얻기 모델 (selectQuickEnergyView)', () => {
       bag,
       items: { [ENERGY_ITEM_IDS.common]: 25, [ENERGY_ITEM_IDS.rare]: 10 },
     });
-    const view = selectQuickEnergyView(game, new Set(['common', 'rare', 'epic', 'legendary']));
+    const view = selectQuickEnergyView(game, defaultQuickEnergyGrades());
 
     expect(view.uids).toEqual(['c1', 'c2', 'r1']);
     expect(view.count).toBe(3);
     expect(view.unlockedCount).toBe(3);
     expect(view.lockedCount).toBe(2);
+    expect(view.reason).toBeNull();
     expect(view.byGrade).toEqual({ common: 20, rare: 10, epic: 0, legendary: 0 });
     expect(view.energyTotal).toBe(30);
     expect(view.chips).toEqual([
@@ -246,10 +247,10 @@ describe('간소화 기운 얻기 모델 (selectQuickEnergyView)', () => {
       { grade: 'legendary', name: '전설', fishCount: 0, on: false },
     ]);
     expect(view.tiles).toEqual([
-      { grade: 'common', label: '생명의 기운(일반)', gain: 20, current: 25, after: 45, on: true },
-      { grade: 'rare', label: '생명의 기운(희귀)', gain: 10, current: 10, after: 20, on: true },
-      { grade: 'epic', label: '생명의 기운(영웅)', gain: 0, current: 0, after: 0, on: false },
-      { grade: 'legendary', label: '생명의 기운(전설)', gain: 0, current: 0, after: 0, on: false },
+      { grade: 'common', itemId: ENERGY_ITEM_IDS.common, label: '생명의 기운(일반)', gain: 20, current: 25, after: 45, gainText: '+2', currentText: '2.5', afterText: '4.5', on: true },
+      { grade: 'rare', itemId: ENERGY_ITEM_IDS.rare, label: '생명의 기운(희귀)', gain: 10, current: 10, after: 20, gainText: '+1', currentText: '1', afterText: '2', on: true },
+      { grade: 'epic', itemId: ENERGY_ITEM_IDS.epic, label: '생명의 기운(영웅)', gain: 0, current: 0, after: 0, gainText: '+0', currentText: '0', afterText: '0', on: false },
+      { grade: 'legendary', itemId: ENERGY_ITEM_IDS.legendary, label: '생명의 기운(전설)', gain: 0, current: 0, after: 0, gainText: '+0', currentText: '0', afterText: '0', on: false },
     ]);
   });
 
@@ -269,5 +270,23 @@ describe('간소화 기운 얻기 모델 (selectQuickEnergyView)', () => {
     expect(view.lockedCount).toBe(1);
     expect(view.count).toBe(0);
     expect(view.uids).toEqual([]);
+  });
+
+  it('확정 불가 상태면 거부 사유 문구를 reason으로 내보내고 결과 알림 행을 조립한다', () => {
+    const locked = selectQuickEnergyView(seed({ boat: 4 }), defaultQuickEnergyGrades());
+    expect(locked.reason).toBe('인도양 항로가 열리면 기운 얻기를 할 수 있어요.');
+    expect(buildEnergyExtractNotice({ common: 25, rare: 0, epic: 10, legendary: 0 })).toEqual({
+      kind: 'facility.energyExtracted',
+      text: '생명의 기운 3.5개를 얻었어요!',
+      toastText: '생명의 기운 3.5개 획득!',
+      replaceKey: 'energy-extract',
+      tip: {
+        target: '3.5',
+        rows: [
+          { label: '생명의 기운(일반)', value: '+2.5' },
+          { label: '생명의 기운(영웅)', value: '+1' },
+        ],
+      },
+    });
   });
 });

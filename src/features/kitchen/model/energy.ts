@@ -1,7 +1,7 @@
 // 판매 창의 기운 얻기 탭 모델 — 체크 기본값, 해역별 켜짐과 꺼짐, 고를 개체와 얻는 기운을 정한다.
 // 체크 기본값과 확정 가능 여부는 게임 규칙(energyTargetOf, canExtractEnergy)이 정하고, 이 모듈은 그 판정을 화면용 행으로 옮긴다.
 // 개체를 직접 고른 값(EnergyPicks)은 해역 기본값 위에 얹힌다. 화면이 들고 있는 선택 상태의 형식과 갱신 규칙이 여기 있다.
-import { ENERGY_ITEM_IDS } from '../../../game/content/cooking';
+import { ENERGY_ITEM_IDS, formatEnergy } from '../../../game/content/cooking';
 import { RARITY, RARITY_ORDER } from '../../../game/content/rarity';
 import type { RarityId } from '../../../game/content/rarity';
 import { SPOTS } from '../../../game/content/spots';
@@ -111,6 +111,11 @@ export function energyResultRows(byGrade: Record<RarityId, number>): { grade: Ra
   return RARITY_ORDER.filter(g => byGrade[g] > 0).map(grade => ({ grade, count: byGrade[grade] }));
 }
 
+export type EnergyGrade = RarityId;
+export type QuickEnergyGame = Pick<GameState, 'bag' | 'items' | 'boat' | 'location'>;
+
+export const defaultQuickEnergyGrades = (): Set<EnergyGrade> => new Set(RARITY_ORDER);
+
 export interface QuickEnergyChip {
   grade: RarityId;
   name: string;
@@ -122,6 +127,7 @@ export interface QuickEnergyChip {
 
 export interface QuickEnergyTile {
   grade: RarityId;
+  itemId: string;
   label: string;
   /** 얻을 기운(저장 단위) — 이 등급 칩이 켜져 있을 때만 양수 */
   gain: number;
@@ -129,6 +135,9 @@ export interface QuickEnergyTile {
   current: number;
   /** 획득 후(저장 단위) */
   after: number;
+  gainText: string;
+  currentText: string;
+  afterText: string;
   /** 이 등급 칩이 켜져 있는가 */
   on: boolean;
 }
@@ -150,11 +159,13 @@ export interface QuickEnergyView {
   energyTotal: number;
   /** 확정 가능 여부 — 게임 규칙 판정 */
   allowed: RuleCheck;
+  /** 확정 불가 사유 문구 — 가능하면 null */
+  reason: string | null;
 }
 
 /** 가방 하단 간소화 기운 얻기 창 모델 — 등급별 미잠금 물고기만 토글해 일괄 변환한다 */
 export function selectQuickEnergyView(
-  game: Pick<GameState, 'bag' | 'items' | 'boat' | 'location'>,
+  game: QuickEnergyGame,
   selectedGrades: ReadonlySet<RarityId>,
 ): QuickEnergyView {
   const byRarity = Object.fromEntries(RARITY_ORDER.map(r => [r, [] as string[]])) as Record<RarityId, string[]>;
@@ -183,15 +194,21 @@ export function selectQuickEnergyView(
   const tiles = RARITY_ORDER.map((grade): QuickEnergyTile => {
     const current = game.items[ENERGY_ITEM_IDS[grade]] ?? 0;
     const add = gain.byGrade[grade];
+    const after = current + add;
     return {
       grade,
+      itemId: ENERGY_ITEM_IDS[grade],
       label: energyLabel(grade),
       gain: add,
       current,
-      after: current + add,
+      after,
+      gainText: `+${formatEnergy(add)}`,
+      currentText: formatEnergy(current),
+      afterText: formatEnergy(after),
       on: byRarity[grade].length > 0 && selectedGrades.has(grade),
     };
   });
+  const allowed = canExtractEnergy(game);
 
   return {
     chips,
@@ -202,7 +219,26 @@ export function selectQuickEnergyView(
     lockedCount,
     byGrade: gain.byGrade,
     energyTotal: energyTotal(gain.byGrade),
-    allowed: canExtractEnergy(game),
+    allowed,
+    reason: allowed.ok ? null : REJECT_TEXT[allowed.reason],
+  };
+}
+
+/** 기운 얻기 성공 알림 문안 및 등급별 툴팁 행 조립 */
+export function buildEnergyExtractNotice(energy: Record<RarityId, number>) {
+  const total = formatEnergy(energyTotal(energy));
+  return {
+    kind: 'facility.energyExtracted' as const,
+    text: `${ENERGY_NAME} ${total}개를 얻었어요!`,
+    toastText: `${ENERGY_NAME} ${total}개 획득!`,
+    replaceKey: 'energy-extract',
+    tip: {
+      target: total,
+      rows: energyResultRows(energy).map(({ grade, count }) => ({
+        label: energyLabel(grade),
+        value: `+${formatEnergy(count)}`,
+      })),
+    },
   };
 }
 
