@@ -477,6 +477,22 @@ describe('요청 속도 초과(429) 재시도', () => {
     expect(gw.actions).toEqual(['boot']);
   });
 
+  it('boot 완료 전이나 boot 무음 실패 시에도 초기 load와 resync의 파생 claimable 업적이 유지되고 recheckGuestProgress를 왜곡하지 않는다', async () => {
+    gw.loadAchievements = { 'spot-basic-sea': 'claimable' };
+    gw.bootErrors = [new AppError('network', 'offline')];
+    const hook = setup();
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+    expect(hook.result.current.game.achievements).toEqual({ 'spot-basic-sea': 'claimable' });
+    await expect(hook.result.current.recheckGuestProgress()).resolves.toBe('nothing');
+
+    gw.loadAchievements = { 'spot-basic-sea': 'claimable', 'spot-basic-deep': 'claimable' };
+    await act(async () => { await hook.result.current.resync(); });
+    expect(hook.result.current.game.achievements).toEqual({
+      'spot-basic-sea': 'claimable',
+      'spot-basic-deep': 'claimable',
+    });
+  });
+
   it('언마운트하면 대기 중인 재시도가 남지 않는다', async () => {
     vi.useFakeTimers();
     gw.loadErrors = [limited()];

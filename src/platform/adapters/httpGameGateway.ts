@@ -6,6 +6,7 @@ import { migrate } from '../../game/rules/logic';
 import type { GameState } from '../../game/rules/logic';
 import type { GameAction, StatePatch } from '../../game/rules/actions';
 import { applyPatch } from '../../game/rules/actions';
+import { evaluateAchievements } from '../../game/rules/achievements';
 import type { GameGateway, GameProfile, DispatchResult } from '../api/types';
 import { AppError } from '../../core/errors';
 import { BUILD_ID } from '../../buildId';
@@ -40,9 +41,10 @@ function assemble(cur: Row, instances: Row[], records: Row[],
     };
   }
   const c = cur as Record<string, unknown>;
-  return migrate({ v: 8, ...(c.data as object), gold: Number(c.gold), fame: Number(c.fame),
+  const state = migrate({ v: 8, ...(c.data as object), gold: Number(c.gold), fame: Number(c.fame),
     boat: c.boat, rod: c.rod, bag, exhibit, dex,
     achievementCounters: counters, clearedNamed });
+  return { ...state, achievements: evaluateAchievements(state).achievements };
 }
 
 /** 서버 버전 필드를 유한 숫자로 파싱한다. 누락·비정상 값은 null로 돌려 재동기화를 강제한다. */
@@ -81,7 +83,8 @@ export class HttpGameGateway implements GameGateway {
     }
 
     // 이관 폴백 — 아직 첫 액션을 하지 않은 유저는 구 saves(blob)의 최신 행이 유일한 정본이다
-    const s = me.legacy ? migrate(me.legacy) : null;
+    const migrated = me.legacy ? migrate(me.legacy) : null;
+    const s = migrated ? { ...migrated, achievements: evaluateAchievements(migrated).achievements } : null;
     this.lastState = s;
     this.lastVersion = null; // 버전 모름 — 다음 델타는 풀재동기로 받는다
     return s;
