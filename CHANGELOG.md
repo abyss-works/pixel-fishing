@@ -2,6 +2,308 @@
 
 이 파일은 생성된다. 직접 고치지 않는다. 형식은 Keep a Changelog를 따른다.
 
+## [0.20.0] - 2026-11-24
+
+### 기능
+
+- 수령형 업적 80종(15개 해역 진행 업적 30종, 치장 업적 50종)과 즉시 적용 누적 보너스 업적 26종(23계열)을 두었다. 진행 업적의 보상은 골드(총 25,862,870G)이고, 치장 업적의 보상은 모자다. 업적 창은 오른쪽 위 메뉴의 업적 항목으로 열고, 탭 셋(진행, 누적 보너스, 치장)과 요약 줄(받은 업적, 받을 골드, 받을 모자, 모두 받기)로 구성했다.
+  판정 근거는 도감, 유물, 외형과 모자, 네임드 토벌 기록, 업적 카운터다. 조건은 위 근거만 읽는 게임 규칙의 순수 함수(achievementProgress, evaluateAchievements)이며 서버와 화면이 같은 함수를 쓴다. events 표는 유실을 허용하는 후속 쓰기라 실시간 판정에서 읽지 않는다. 도감으로 셀 수 있는 값은 별도 카운터 없이 도감을 읽는다.
+  조건을 처음 채운 업적은 claimable로, 수령한 업적은 claimed로 세이브의 achievements 맵에 저장한다. 모르는 업적 id와 상태도 보존해, 구 코드가 연 세이브가 돌아와도 같은 업적을 두 번 지급하지 않는다. 이미 조건을 채운 계정은 도입 뒤 첫 액션 확정에서 판정되어 claimable이 된다.
+  아직 만나지 않은 어종 이름과 네임드, 밤 어종의 실명, 등급별 미발견 명단은 보이지 않고 진척은 숫자로만 보인다.
+  - 업적: 이전 없음, 이후 수령형 80종(진행 30종 골드, 치장 50종 모자) + 즉시 적용 누적 보너스 26종(23계열)
+  - 세이브에 저장하는 업적 상태: 이전 없음, 이후 achievements 맵(claimable, claimed). 세이브 버전은 올리지 않고 기본값 {}로 이관
+  - 커밋: ce412cf2, 2d1eb62a, de7aa671, 4dee057b
+- 치장 업적 50종의 보상으로 업적 모자 50종을 더했다. 보상으로만 얻고 골드로 살 수 없다. 얻은 모자는 옷장 모자 목록에 나오고, 아직 받지 못한 모자를 고르면 상세 칸에 받는 조건과 진척(미토벌 네임드는 출현 위치로 가림)을 보이며 사기 버튼을 두지 않는다. 잠금 표시는 옷장의 기존 규칙을 따른다.
+  - 모자: 이전 5종(골드 구매), 이후 55종(기존 5종 + 업적 모자 50종, 업적 보상으로만 획득)
+  - 옷장 모자 목록: 이전 업적 모자 없음, 이후 얻은 업적 모자 표시, 잠긴 모자의 상세 칸에 조건과 진척 표시(미토벌 네임드 실명 가림)
+  - 커밋: ce412cf2, 9ae21290
+- 누적 보너스 업적 26종(23계열: 전역 8계열 + 구역 7×2=14계열 + 최고 레벨 유물 1/3/6/8개 4단계)을 도입했다. 단계 문턱에 닿는 즉시 별도 수령 절차 없이 입질 대기 단축, 희귀·영웅·전설·돌연변이·네임드·구역 가중치, 판매가 보너스(sellBonus), 보유 유물 효과 배율(artifactBoost)이 단일 효과 묶음(PlayerContext)으로 합산(1 ± 합) 적용되며 스탯 창 보너스 탭과 스탯 상세 툴팁에 '업적 누적' 출처로 표시된다. 서버의 빠른 캐치 경로와 요청 간격 검사(catchTooSoon)도 동일 보너스를 반영한다.
+  - 누적 보너스 업적: 이전 고정 골드 수령형 횟수·손맛 업적, 이후 26종(23계열) 즉시 자동 적용 누적 보너스(전역 8계열, 구역 14계열, 최고 레벨 유물 1/3/6/8개 4단계, 판매가 보너스 sellBonus 포함)
+  - 수동 집계 카운터 키: 이전 고정 5종 + 수동 총계·전설·돌연변이, 이후 manual.total.<구역> 추가 및 빠른 캐치·간격 검사 연동
+  - 커밋: 9647a18, 7e719420, 4ab9ad6e
+- 세이브 상태(GameState)에 autoLockOnCatch(기본 false)와 autoLockedIds(어종·폼별 직전 자동 잠금 개체 uid 맵)를 두고 setAutoLockOnCatch 액션(무이벤트, 게스트 허용)으로 켜고 끌 수 있게 했다. 포획 시 가방 초과(방생·자동 기운 얻기) 판정 전에 자동 잠금을 먼저 적용해 새 개체는 초과 대상에서 보호하고 방금 해제된 기존 자동 잠금 개체는 초과 후보에 포함하며, 직접 잠근 개체는 해제하지 않고 개별 잠금 변경·가방 이탈 시 추적 맵을 정리한다. 빠른 캐치 경로의 catchLookup 단일 SQL에 잠긴 개체 최대 크기(real 단정밀도 통일)와 직전 자동 잠금 개체 조회 서브쿼리를 합쳐 추가 DB 왕복 없이 처리하고, 설정 창(SettingsModal) 가방 섹션에 낚을 때 자동 잠금 토글·라벨 툴팁·중복 요청 방지 가드를 추가했다.
+  - 토글식 자동 잠금: 이전 가방 탭 1회성 일괄 자동 잠금만 지원, 이후 설정 창 가방 섹션에 낚을 때 자동 잠금 토글 추가(수동 잠금 보호, 추가 DB 왕복 0회)
+  - 커밋: e7497ff9, c1b297c3, 346d2705, 201317ec
+- 새 최상위 구역 northatlantic(북대서양, 열린 바다 문자 p 통행 전용)과 특수 해역 azores(아조레스 해령, 요구 파워 285/Lv56), bermuda(버뮤다 삼각지대, 요구 파워 315/Lv62)를 추가했다. 진입 배 게이트는 기존 9단계 가공 플랜트선(entryBoat 9)으로 두 해역을 모두 열며, 어종 17종(아조레스 해령 낮 7·밤 2, 버뮤다 삼각지대 낮 6·밤 2, 각 변이 1종)과 특수 어군 배치를 함께 추가했다.
+  - 북대서양 구역과 해역: 이전 미개방(N), 이후 northatlantic(통행 전용), azores(파워 285/Lv56), bermuda(파워 315/Lv62), 진입 배 9단계 가공 플랜트선
+  - 전체 어종 수: 이전 103종(낮 79, 밤 24), 이후 120종(낮 92, 밤 28), 북대서양 17종(아조레스 9, 버뮤다 8) 추가
+  - 커밋: f24417ea
+- 거점 lisbon(리스본항, anchors.lisbon lon -9.25, lat 39.0, facing west)을 추가하고 항구 공통 시설(게시판, 수배판, 공방, 조선소, 어시장, 마을행 여객선, 빠른 이동 여객선, 승선)을 배치했다. 북대서양 현상금 보상은 쉬움 15,000,000G, 보통 25,000,000G, 어려움 55,000,000G, 네임드 100,000,000G다.
+  - 거점 항구 수: 이전 5곳, 이후 6곳(리스본항 lisbon 추가, 북대서양 바운티 수주 창구)
+  - 북대서양 현상금 보상: 이전 없음, 이후 쉬움 15,000,000G / 보통 25,000,000G / 어려움 55,000,000G / 네임드 100,000,000G
+  - 커밋: f24417ea
+- 네임드 글로스터 바다뱀(gloucester-serpent, 아조레스 해령 한정, 체력 10, 형태 eel)과 구아반세스(guabancex, 버뮤다 삼각지대 한정, 체력 10, 형태 flowing)를 추가하고 도감 로어, 수배서, 흔적, 전승 4문단 및 수배 의뢰를 등록했다.
+  - 네임드 수: 이전 6마리, 이후 8마리(글로스터 바다뱀 체력 10, 구아반세스 체력 10 추가)
+  - 커밋: f24417ea
+- 아조레스 해령 네임드 토벌 보상 영웅 유물 글로스터의 등마디(교환 재료: 소금 절인 등마디, Lv1\~5 강화 가능)를 추가했다. 보유 시 일반 등급 가중치 감소 효과가 적용된다.
+  - 아조레스 해령 유물(글로스터의 등마디): 이전 없음, 이후 영웅 유물, Lv1\~5, 일반 등급 가중치 감소 효과
+  - 커밋: f24417ea
+- 버뮤다 삼각지대 네임드(구아반세스) 유물 사르가소의 그물망(sargasso-net)을 희귀(가방 용량 +10%)에서 전설 등급으로 개편해 동시 2칸 미끼 슬롯 조합과 미끼 지속 시간 50% 단축 페널티를 구현했다.
+  - 전설 유물 및 시스템 효과(src/game/content/artifacts.ts, artifactLevel.test.ts): ArtifactSystemEffects를 선택 필드로 정리하고 extraBaitSlots·baitDurationCut을 추가해 sargasso-net을 grade: 'legendary', system: { extraBaitSlots: 1, baitDurationCut: 0.5 }와 숫자·금지 부호([·—–]) 없는 전설 로어로 갱신했다(ArtifactEffects.bagCap 선택 필드 유지).
+  - 다중 미끼 저장·정규화·액션(logic.ts, cooking.ts, actions.ts, actionSchema.ts, achievements.ts): GameState.slots에 선택 필드 bait2(JSONB 무이관, safeSlots 위생 처리 및 비활성 시 생략)를 추가하고, maxBaitSlots·baitDurationScale·slotDurationMs·isActiveSlot을 도입했다. appliedSlots는 수동 캐치 활성 미끼의 중복을 제거한 뒤 항상 bait부터 채워 정규화하므로(v_catch_quality 호환), 1개만 활성일 때는 bait 키만 남고 2개 모두 활성일 때는 효과를 합산한다. eat 액션은 replaceSlot('bait' | 'bait2')을 지원하며, 동일 미끼 재사용 시 복사 대신 기존 슬롯 종료 시각만 갱신하고, 빈 슬롯이 있으면 확인 없이 배정하며, 두 슬롯이 모두 찬 상태에서 세 번째 미끼를 쓸 때는 교체 대상을 선택한다(생략 시 만료 임박 슬롯 교체). counterIncrementsForEvents의 catch.bait 집계도 bait2를 함께 확인한다.
+  - UI·알림·스탯·관리자(bagItems.ts, ItemSection.tsx, BagTab.tsx, SlotChips.tsx, useSlotExpiryAlerts.ts, stats.ts, contentCatalog.ts, UserDetail.tsx): 5분 -> 2분 30초 지속 시간 표기, 가방 미끼 행 '사용 중' 배지, 3번째 미끼 교체 대상 선택 확인 창, BagTab의 artifactSystemLines 보너스/페널티 표시, SlotChips의 고유 slotKey 키 분리, useSlotExpiryAlerts의 다중 미끼 슬롯 추적, 스탯 창·관리자 카탈로그·유저 상세의 bait2 및 시스템 효과 표시를 반영했다.
+  - 사르가소의 그물망(sargasso-net) 등급·효과: 이전 희귀 등급(Lv1\~5), 가방 용량 +10%(Lv1 기준), 이후 전설 등급(고정 효과), extraBaitSlots: 1(동시 2칸) · baitDurationCut: 0.5(5분 -> 2분 30초)
+  - 미끼 슬롯·액션·집계(slots, cooking.ts, actions.ts, achievements.ts): 이전 단일 bait 슬롯, 5분 고정 지속, 이후 선택적 bait2 추가, appliedSlots bait 우선 정규화, 동일 미끼 갱신·빈 슬롯 자동 채움·replaceSlot 교체·효과 합산·catch.bait2 집계
+  - 가방·HUD·알림·관리자 UI: 이전 단일 미끼 칩·만료 추적, BagTab 전설 시스템 효과 미표시, 이후 2분 30초 표기, 사용 중 배지, 교체 슬롯 선택 창, SlotChips slotKey 분리, 다중 만료 알림, BagTab·관리자 지원
+  - 커밋: 1f5bf2b4, ece1bee8
+- 버뮤다 삼각지대 네임드 토벌 보상 희귀 유물 사르가소의 그물망(교환 재료: 젖은 모자반 밧줄, Lv1\~5 강화 가능)을 추가했다. 보유 시 가방 용량 증가 효과가 적용되며 PlayerContext 효과 묶음의 bagCapacityOf를 통해 반영된다(이후 전설 등급 다중 미끼 유물로 개편됨).
+  - 버뮤다 삼각지대 유물(사르가소의 그물망): 이전 없음, 이후 희귀 유물, Lv1\~5, 가방 용량 증가 효과
+  - 커밋: f24417ea
+- 길드 최대 레벨을 Lv.10(GUILD_MAX_LEVEL = 10)으로 확장하고, 일일 기여 상한 상향과 이중 계층 스킬 자유 강화 시스템을 구현했다.
+  - 성장 및 일일 기여 상한(src/game/rules/guild.ts): 누적 기여도 기준을 [0, 10k, 25k, 50k, 100k, 200k, 350k, 550k, 800k, 1,100k](Lv.6~10 구간 간격 +100k/+150k/+200k/+250k/+300k)로 확장하고, 일일 기여 상한을 명성 2,500(GUILD_DAILY_FAME_CAP), 일반 의뢰 1,000, 네임드 토벌 1,000으로 상향했다.
+  - 이중 계층 스킬 및 자유 강화(src/game/rules/guild.ts, api/_data/guilds.ts, api/guilds.ts, api/action.ts, api/_data/load.ts, api/_data/save.ts): Lv.6부터 레벨당 무료 자유 강화 포인트 1개(최대 5개)를 지급하며, 활성 길드원(leader·member) 누구나 열린 스킬에 골드 기부 기본 단계(baseRank 1\~5)와 별개로 자유 강화(enhanceRank 0\~5)를 투자해 합산 최대 10단계까지 독립 합산할 수 있다. 또한 활성 길드원 누구나 개인 골드 20,000,000G(GUILD_ENHANCE_RESET_COST)를 내고 횟수·재사용 대기 제한 없이 모든 enhanceRank를 0으로 초기화할 수 있으며 기본 단계와 모인 골드(pool)는 유지한다. POST /api/guilds/:id/bonuses/:bonus/enhancements와 POST /api/guilds/:id/enhancements/reset, goldDebit 잔액 검증(gold >= 금액)을 추가하고 0038_guild_skill_enhance 마이그레이션(enhance_rank 열 및 guild_logs kind 제약)을 반영했다.
+  - 화면 및 항해일지(GuildSkillsTab.tsx, GuildModal.tsx, GuildLogbookTab.tsx, BonusTab.tsx, features/guild/model/guild.ts, features/gameplay/model/stats.ts): 남은 포인트 슬롯과 초기화 확인 창, 기존 5개 금색 칸 바깥에 1..enhanceRank 보라색 테두리를 감싸는 이중 표시 및 모바일 2행 배치, 항해일지 'enhance'·'enhance-reset' 자연어 문장, 스탯 창 보너스 탭 기본·자유 강화·합계 툴팁을 연결했다.
+  - 길드 최대 레벨 및 일일 기여 상한: 이전 최대 Lv.5(누적 100,000), 일일 명성 2,000·일반 의뢰 500·네임드 1,000, 이후 최대 Lv.10(누적 1,100,000), 일일 명성 2,500·일반 의뢰 1,000·네임드 1,000
+  - 길드 스킬 강화 계층 및 초기화: 이전 골드 기부 기본 단계 1\~5단계만 지원, 이후 기본 1\~5 + Lv.6\~10 포인트 자유 강화 0\~5(합산 최대 10단계), 활성 길드원 누구나 20,000,000G 무제한 초기화
+  - DB 스키마·REST API·길드 스킬 UI: 이전 guild_bonuses.rank 단일 단계, enhance API·항해일지 없음, 이후 0038_guild_skill_enhance 마이그레이션, enhance·reset API, 금색+보라 테두리·모바일 2행·보너스 툴팁
+  - 커밋: 0a4d9eca, d32a7833, 1c7dcd37
+- 구현 영역(WORLD_BOUNDS, -82..157E, -36..44N) 내부의 미개방 바다('N') 5개 블록을 모두 제거하고 남대서양 열린 바다(a)의 서단을 -15에서 -82로 확장해 직사각형 바다 전체를 개방했다.
+  - 지도 설정 및 마스크(tools/configs/world.json, world.mask.ts, earth.mask.ts): 지중해(-5.5..36E, 30..44N), 카리브해(-82..-60W, 9..30N), 남미 서부 동태평양(-82..-70W, -36..9N), 남미 동부 미개방 바다(-68..-15W, -36..0N)의 'N' 항목 5개를 제거하고 남대서양 열린 바다(a)를 lonMin -82까지 확장한 뒤 world.mask.ts와 earth.mask.ts를 재생성했다('N' 셀 0개).
+  - 범례 및 검증(world.ts, world.test.ts, fieldEngine.test.ts): 향후 해역 확장을 위해 WORLD_LEGEND의 'N'(closed: true) 정의와 엔진 통행 불가 판정 구조는 예약으로 유지하되 구현 영역 개방 검증 및 closed 엔진 단위 테스트를 현행 상태에 맞게 갱신했다.
+  - 구현 영역(WORLD_BOUNDS) 미개방 바다(openZones): 이전 지중해·카리브해·남미 서부·남미 동부 N 블록 5개(남대서양 a 서단 -15), 이후 N 블록 5개 제거 및 남대서양 a 서단 -82 확장(직사각형 전면 개방, 세계지도 미개방 음영 제거, WORLD_LEGEND N 정의 예약 유지)
+  - 커밋: 8c4dba7c, ebd58a79
+- 관리자 대시보드(/admin/)를 8개 탭으로 확장하고 노후 지표·안내와 운영 안전장치를 정비했다.
+  - 콘텐츠 탭(#/admin/content): 어종 120종(밤 전용 28종·돌연변이·크기 분포·v1/v2 그림체 전환·유영 토글), 네임드 8종(초상화·수배서·흔적·전승 4문단), 유물 8종(Lv1\~5), 업적 71종과 누적 보너스 23계열(25종), 모자 46종과 의상 프리셋 6종·팔레트 12색(PersonSprite 착용 미리보기), 요리 10종과 기운 4종, 배 9척, 구역·해역 계층 17개, 현상금 의뢰 74종 전체를 world.mask 유입 없이 로컬·오프라인 포함 열람·검수할 수 있다.
+  - 지표·원장·상세 정비: regions.ts에 남대서양·북대서양 반영 및 위치 한글화(formatAdminLocation), balanceLive 도감(0..120)과 낚싯대(1..66+) 버킷 확장, 경제 원장 deliverBounty·claimAchievement·claimAllAchievements·buyHat 반영 및 폐지 buyBait 제거, BalanceTab/FishTab 기본 접힘·구역/등급/검색 필터 및 밤 어종 확률 표시, 상단 공통 새로고침 버튼과 마지막 조회 시각 추가, userState 드릴다운(도감·네임드·유물·모자·업적·기운/요리·가방/전시) 추가, 사실 불일치 문구와 사문화 ?q= 엔드포인트 3종(dailyActive, catchQuality, retention) 정리.
+  - 일괄 우편 안전장치: 클라이언트·서버 중복 수신자 차단, 1회 최대 지급 골드 상한(500,000,000G) 미리보기·거부, UUID 멱등 키 10분 TTL 캐시(in-flight 동시성 및 본문 불일치 충돌 차단)와 최근 10분 중복 우편 창 검사(409 duplicate-mail), 존재하는 수신자 0명 발송 차단을 적용했다.
+  - 관리자 대시보드 콘텐츠 검수 및 탭 구성: 이전 7탭(밸런스 탭 해역 EV 일부만 열람), 이후 8탭(콘텐츠 탭 신설, 9개 콘텐츠 축 오프라인/로컬 전체 열람·v1/v2·유영·전승 4문단)
+  - 대시보드 지표·위치·유저 상세·새로고침: 이전 남/북대서양 누락, 도감 90·낚싯대 Lv31 버킷, buyBait 잔존, 원시 위치 키, 상세 게임 상태 부재, 이후 전 구역 및 한글 위치, 도감 120·Lv66+ 버킷, 현행 경제 원장, userState 상세, 공통 새로고침 및 등급 필터
+  - 일괄 우편 안전장치: 이전 중복 수신·재전송 멱등·총 지급 골드 상한 검사 없음, 이후 중복 수신 차단, 총액 상한(500,000,000G) 미리보기·거부, 10분 멱등 캐시 및 중복 발송 창 차단
+  - 커밋: 3b8c329f, 82ecdc5f, 2b30f31a, 4c7d4f61, 6293ee99, d1f48f1e, 5c617feb
+- F9 개발 도구를 6개 묶음(빠른 프리셋·이동/시간·도감/네임드·장비/아이템/업적·수배·계정/스냅샷)으로 전면 개편하고, 프리뷰·로컬 요청 단위 밤/낮 강제 전환(forcePhase)과 정규화 표 삭제·동기화·스냅샷 복원 경로를 구현했다.
+  - 서버·DB 소유권 확장(신규 SQL 마이그레이션 없음): _data/save.ts에 records 삭제 조각(recordsRemoved)을 추가해 dex.reset·named.reset·import·snapshot.restore의 도감 잔존을 해소하고, _data/bounty.ts의 bounty_clears 네임드 조각 및 _data/achievements.ts의 achievement_counters 절대값·초기화·복원 조각을 api/action.ts 단일 트랜잭션과 StatePatch.scalars에 동기화했다.
+  - debug 명령 20종 및 보안 불변식: dex.fill(마을 포함, 일반/돌연변이, 대어 크기), dex.reset, named.unlock/reset, items.grant, cooking.finish, artifact.set, hat.set, achievement.setCounter/resetCounters/evaluate, bag.spawn, snapshot.restore(배열 10,000 상한·UUID/중복·스칼라 범위 검증 및 경량 감사 로그), bounty.expireTickets 단일화. 모든 명령과 forcePhase는 api/devAccess.ts(DEPLOY_ENV + admins 명부)로 운영 환경에서 절대 차단된다.
+  - 프리뷰 밤/낮 전환 및 순간이동·스냅샷 UI: forcePhase를 수동·방치 캐치와 useGameTime 화면 연출에 동시 연동하고, 거점 7곳·해역 15곳 순간이동, 네임드 8종 직전 항구 자동 이동 포함 프리셋, 검색·구역 필터, localStorage 기반 5슬롯 스냅샷 백업/복원을 구현했다.
+  - F9 개발 도구 기능 및 서버 동기화: 이전 5탭·7종 명령(수배·기본 스탯·일반 도감만), records 삭제 및 카운터/네임드 토벌 동기화 부재, 오프라인 시간 전용, 이후 6묶음·20종 명령(검색/구역 필터, 거점 7·해역 15 순간이동, 프리뷰 forcePhase, 도감/네임드/요리/유물/모자/업적/가방/스냅샷 원자적 복원)
+  - 커밋: f3be7bac, f1bbddb6, 12688a86, 9c734c39
+- 관리자 API 요청 제한 완화와 캐시 공유, 운영 화면 조치 연결 및 데이터 정합성을 정비했다.
+  - 서버 API(api/admin.ts, api/_data/admin.ts, api/_data/account.ts, api/_data/telemetry.ts): GET ?q=overview 통합 조회를 추가해 명부·최근 이벤트·스팸 플래그·일별 집계·리텐션·최근 세션·실시간 접속을 한 번에 반환하고, userState를 확장해 보유 모자 목록·착용 모자·최근 가방 개체 30마리·방문 지역·쿠폰·진행 중 수배·도전권·활성 세션 수를 포함한다. POST ?q=revokeSessions를 추가해 auth.sessions 행을 모두 삭제하고 adminRevokeSessions 감사 이벤트를 남긴다.
+  - 클라이언트 캐시·오류 처리(httpApi.ts, QueryProvider.tsx, queryKeys.ts, useAdminQuery.ts, useAdminStats.ts, useAdminUserActions.ts): HttpAdmin GET 429 시 Retry-After 또는 짧은 백오프로 최대 2회 재시도하고 429·비-JSON 응답을 명확한 오류로 변환한다. useAdminOverview 성공 시 adminKeys.users·spamFlags 등 공유 정규 키를 채워 30초 staleTime과 1.5초 수동 새로고침 쿨다운으로 중복 풀스캔을 막았다.
+  - 운영 화면 정합화(EconomyTab, BountyFunnelSection, AnalysisTab, ProgressionTab, ChatReportsSection, UserDetail, OpsTab): 경제·바운티 퍼널을 events 7일 보관 한도로 고정(30·90일 기간 전환은 daily_stats 기반 활동 구역에만 유지)하고, 진행 탭은 현행 오픈월드 지역(village, world)과 7개 존·수배 해금 기준으로 맞추었다. 채팅 신고 목록에서 대상 유저 상세 열기와 원클릭 제재/해제를 연결하고, 유저 상세에 확장 게임 상태와 세션 강제 종료 조치를 추가했다.
+  - 개요 조회 및 탭 간 캐시 공유: 이전 개요 탭 다중 개별 조회, 탭 전환 시 users·spamFlags 중복 조회, 이후 GET ?q=overview 통합 조회 + RQ 단일 정규 키 공유(30초 staleTime, 1.5초 새로고침 쿨다운)
+  - 429 백오프 및 오류 처리(HttpAdmin): 이전 429 재시도 없음, 비-JSON 응답 파싱 실패 노출, 이후 GET 429 Retry-After 백오프 최대 2회 재시도, 429·비-JSON 표준 오류 변환
+  - 유저 상세·채팅 신고 조치 및 세션 강제 종료: 이전 채팅 신고 조치 연결 부재, 세션 강제 종료 없음, 모자·가방 상세 미표시, 이후 신고 행 상세 보기·원클릭 제재/해제, POST ?q=revokeSessions + adminRevokeSessions 감사 이벤트, userState 확장
+  - 경제·진행 탭 기준 정합화: 이전 경제·바운티 퍼널에 30·90일 전환 혼재, 진행 탭 구 지역명 혼합, 이후 events 7일 한도 고정(장기 추이는 daily_stats), 현행 오픈월드(village, world) 및 7개 존 기준
+  - 커밋: 4640baca, b93858c0, 8ee9f55a, d6daf812
+
+### UI
+
+- 새로 claimable이 된 업적이 생길 때마다 메뉴 줄의 업적 항목에 표시를 붙이고, 메뉴가 접혀 있으면 메뉴 버튼에도 새 알림 표시를 붙인다. 같은 시점에 메시지 창에 한 줄을 남긴다("“{이름}” 업적을 받을 수 있어요.").
+  화면은 액션 확정 전후 게임 상태를 비교하는 순수 함수(newlyClaimable)로 새로 받을 수 있게 된 업적을 가려낸다. 첫 상태 적재(클라우드 저장, 게스트 저장, 계정 연결)에서는 비교만 하고 알리지 않는다. 오래된 세이브를 열 때 지나간 알림이 한꺼번에 뜨지 않게 하기 위해서다.
+  - 받을 수 있게 된 업적의 알림: 이전 없음, 이후 메뉴 줄 업적 항목과 접힌 메뉴 버튼의 표시, 메시지 창 한 줄
+  - 커밋: 053b6576, 2d1eb62a, de7aa671
+- 낱개 받기와 모두 받기가 같은 방식으로 결과를 알린다. 토스트와 메시지 창에 받은 것을 적고, 모두 받기는 받은 골드 합계와 모자 이름을 함께 적는다. 모두 받기의 결과는 액션 결과에 골드와 모자 목록을 실어 보내 화면이 그 값을 그대로 표시한다. 낱개 받기의 메시지는 “{이름}” 업적 보상으로 {보상} 받았어요. 꼴이다.
+  - 커밋: 3d427529, fa8cc06b, 69815cdb, 0519844f
+- 업적 창 탭 본문을 한 줄 목록에서 카드 격자로 바꿨다. 카드에는 이름표, 조건 문구, 진척 게이지와 현재/목표 숫자, 보상 칸, 상태와 [받기] 줄을 위에서 아래로 둔다. 받을 수 있는 카드는 테두리를 강조하고 [받기]만 두며, 진행 중과 받음은 상태 글자만 두고 버튼 자리를 비운다. 받은 카드는 흐리게 하되 보상 칸은 그대로 보인다.
+  보상 칸은 위 정보와 1px 선으로 나눈다. 골드 보상은 동전 아이콘과 금액, 모자 보상은 모자를 쓴 머리 그림과 모자 이름을 둔다. 머리 그림은 사람 그림의 머리와 모자 그리기를 그대로 쓰고, 사람 그림 전체의 픽셀은 바뀌지 않는다.
+  열 수는 창 본문 폭으로 정한다. 카드 최소 폭을 둘 넣지 못하면 1열로 내려가고 가로 스크롤을 만들지 않는다. 요약 줄, 탭 셋(진행, 누적 보너스, 치장), 구역 묶음·필터·정렬, 수령 액션을 구성했다. 카드 본문은 포커스를 받지 않고 [받기]만 받으며, [받기]의 접근성 이름에 업적 이름을 붙이고 진척 막대의 이름도 업적마다 다르게 두었다.
+  - 업적 창 탭 본문: 이전 한 줄 목록, 이후 카드 격자(카드 최소 폭 기준 열 수, 모자라면 1열)
+  - 업적 항목의 진척 표시: 이전 텍스트의 현재 / 목표, 이후 현재/목표 숫자와 가로 게이지
+  - 업적 항목의 보상 표시: 이전 보상 이름 텍스트, 이후 골드는 동전 아이콘과 금액, 모자는 모자를 쓴 머리 그림과 이름
+  - 커밋: d982faa3, 1f133eb8, 0397d306, 204bbd38
+- 태평양 구역의 첫 해역(sea)과 인도양 구역의 첫 해역(indian) 표시 이름이 상위 구역 이름과 겹치지 않도록 각각 태평양 연안과 인도양 연안으로 바꿨다. 해역 식별자와 상위 구역 이름은 유지하고, 화면 표시명과 테스트를 함께 맞췄다.
+  - 태평양 첫 해역(sea) 표시 이름: 이전 태평양, 이후 태평양 연안
+  - 인도양 첫 해역(indian) 표시 이름: 이전 인도양, 이후 인도양 연안
+  - 커밋: a6b42055
+- 가방 탭 물고기 섹션 제목의 보유 수량과 상한에 천 단위 쉼표 포맷터(fmtNum)를 적용하고 회귀 테스트를 추가했다.
+  - 가방 탭 물고기 수량·상한 표기: 이전 쉼표 없는 숫자 표시, 이후 fmtNum 천 단위 쉼표 표시
+  - 커밋: be2ee60a
+- 플레이어 상세 정보 창(PlayerModal, PlayersModal)을 PC 680px 2열 레이아웃으로 통일하고, 공개 프로필 API(api/_data/profile.ts, api/players.ts)가 접속 중 또는 마지막 위치, 수령 완료 업적(claimed 전용), 보유 모자와 유물·유물 레벨, 전 6구역 일반·돌연변이 도감 요약을 함께 반환하도록 확장했다. 비공개 필드(claimable 업적, 원시 카운터, 골드, 가방, 순위, 천장)는 제외한다.
+  - 플레이어 상세 레이아웃: 이전 진입 경로에 따라 1열·2열 혼재, 이후 PlayerModal·PlayersModal 모두 PC 680px 2열 통일
+  - 위치·업적·수집품·도감 표시: 이전 접속 중 위치만 부분 표시, 수집·업적 요약 간소화, 이후 접속·마지막 위치 상시 표시, 업적(claimed)과 수집품(모자·유물 레벨) 분리, 전 구역 일반·돌연변이 도감 나란히 비교
+  - 커밋: 091571a1, 145b11f2
+- 게임 UI 전반의 v3 시각·계층 기준을 일괄 정비하고 공용 프리미티브와 회귀 가드를 통합했다.
+  - 디자인 토큰·공용 프리미티브(src/index.css, presentation/ui/): --radius-sm·--radius-md 제거 및 --c-line-dim·--inset-deep/base/light·--notch-sm·.pf-btn.sm/xs/accent/danger 토큰을 정립하고, 앱 모달(Modal)과 LoadingOverlay까지 노치+베벨(.pf-frame)로 통일했다. ProgressMeter(1줄/2단 stacked)·SegmentedStepBar·EmptyState를 공용화하고, PillButton은 관리자·개발 도구 전용으로 제한했으며, HelpHint(NOTCH_SM 정사각 노치)·RarityDot(네모 점)·Badge·NoteTag·ChoiceCard·ArrowButton·Gated의 둥근 모서리와 완료·잠금 카드의 opacity 흐림을 제거했다.
+  - 절대 테두리·베벨 두께 3계층: 16px 이하 점·견본·Inset 내부 중첩 구역(Inset borderless)과 단면 구분선은 0px/1px 단면선(Tier 0), 26px 이하 소형 칩·12px 이하 슬림 게이지 트랙(HelpHint, ArrowButton, ProgressMeter, SegmentedStepBar, BagMeter, PowerMeter, HudChip, ToggleChip)은 베벨 없는 1px 평면 테두리(Tier 1), 28px 이상 표준 버튼·입력·카드·모달(Button, Frame, Inset, MovePad, 모바일 시트 등)은 1px 테두리+1px 미세 베벨(Tier 2)로 통일했다.
+  - HUD·사이드바·모달·문구 정비(BaseMenu, BagTab, DexDetail, VRegion, VHelp, WardrobePanel, BountyPanel, GuildSkillsTab, StatsModal, RankingModal, PlayerInfo, FerryModal 등): BaseMenu 구역 틀을 오목 Inset으로 낮추고, 모바일 360px 1열/반응형 격자와 고정 정보 줄 줄바꿈(고아 구분선 제거)을 적용했으며, 게임 화면·기능 모델 문자열의 가운뎃점·줄표([·—–])와 원시 구현·네이티브 title 속성을 제거해 uiGuard.test.ts 가드로 고정했다.
+  - 공용 UI 프리미티브 및 테두리·베벨 두께 기준: 이전 rounded-sm/md/full·opacity 흐림·Frame-in-Frame·2px/3px 중첩 테두리 혼재, ProgressMeter/SegmentedStepBar/EmptyState 미공용, 이후 직각 노치·Inset-in-Panel·3계층(Tier 0/1/2) 1px 기준 통일, 공용 미터·빈 상태 승격 및 PillButton 게임 화면 사용 차단
+  - 모바일 반응형 및 화면 문구 금지 부호: 이전 다열 카드/고정 정보 줄 360px 깨짐·고아 구분선, 게임 문구 내 가운뎃점·줄표 잔존, 이후 360px 반응형 열 수·줄바꿈 정합화 및 게임 UI·기능 모델 [·—–]·원시 프리미티브·title 속성 0건 가드 고정
+  - 커밋: c95c09ec, 86a66aa7, 2fef7ef7, 1b133ee5, 916632e5, 3fed9f16, 73617618, a33a7688
+- 시스템 로그(MessageLog)를 완전한 정본으로 유지하면서 고신호 알림만 동시 미러링하는 단일 팬아웃 토스트 체계를 구현했다.
+  - 순수 미러링 정책(features/display/model/toastPolicy.ts): 43종(및 하위 호환 legacy.untyped) 시스템 이벤트를 Tier A(전설·첫 돌연변이 포획, 네임드 흔적, 포획 거부, 달성 가능 업적, 귀환 정산, 토벌·의뢰 완료, 유물 교환, 배 구매, 첫 해역 방문, 길드·친구 실시간 알림, 미수령 우편, 치명 오류, 계정 이정표 16종 상시 동시 노출), Tier B(모달 열림·채팅 접힘·쿨다운 조건부 17종), Tier C(일상 포획·판매·외형 등 시스템 로그 전용 10종)로 분류하고 우선순위(P0\~P3), TTL(2.8\~6초), 2초 동일 서명 중복 억제, 카테고리 쿨다운, replaceKey 갱신, 150\~300ms 마이크로 배치 병합과 enqueueToast(PC 최대 3개·모바일 최대 2개)를 정의했다.
+  - 단일 라우터·루트 오버레이·설정(useMessageLog.ts, FloatingToastLayer.tsx, GameView.tsx, src/index.css, toastEnabled.ts, SettingsModal.tsx): 모든 알림은 예외 없이 MessageLog에 먼저 기록한 뒤 정책 통과 시에만 스테이지 containment 바깥 루트 오버레이(--z-toast: 32)에 6종 톤(gold, accent, danger, guild, epic, neutral)과 360px 1줄 요약(원격 시설·이동 버튼 없이 닫기 버튼만 제공)으로 띄운다. 설정 창 알림 섹션에 기기별 로컬 설정(pf-toast-enabled, 기본 켜짐) 토글을 추가했으며 꺼진 상태에서도 모달 내 직접 조작 거부(system.modalRejected)는 예외적으로 유지한다.
+  - 시스템 알림 토스트 미러링 및 배치 계층: 이전 창 열림 시 단순 setToast만 스테이지 내부(--z-toast: 25)에 노출, 이벤트 분류·중복 억제·설정 없음, 이후 toastPolicy 단일 팬아웃(Tier A/B/C), 루트 오버레이(--z-toast: 32)·6종 톤·1줄 규격·PC 3/모바일 2 상한·pf-toast-enabled 설정 추가
+  - 커밋: c4038c62, 6d191805, a0fc054f
+- UI 캡처 점검에서 확인한 화면 배치 8건과 수배판 도감 미달 안내 표기 1건을 정리했다.
+  - TabBar: 잠기지 않은 탭의 라벨과 수 배지를 inline-flex 묶음으로 감싸 줄바꿈되지 않게 맞췄다.
+  - PriceTag: inline-flex 기준으로 바꿔 인라인 정렬이 어긋나지 않게 했다(현 시점 제품 코드 내 직접 호출처 없음).
+  - FriendsModal: 요청 탭 루트의 중첩 스크롤을 없애고 받은·보낸 요청 표가 남은 높이를 나눠 채운 뒤 각 TableBox 안에서 스크롤하게 했다.
+  - MailboxModal / RankingModal / SummaryTab / NoGuild / GuildSkillsTab: 우편함 받기 줄 높이를 버튼 높이에 맞게 키우고, 랭킹 내 순위 줄 왼쪽 여백(pl-2), 스탯 요약 첫 수치 칸 왼쪽 구분선 제거, 길드 찾기·만들기 버튼 동일 폭(w-16), 길드 스킬 트리 세로 중앙 배치를 맞췄다.
+  - 수배판 도감 미달 조건 안내: 화면 문구 기준에 맞춰 가운뎃점을 빼고 괄호 표기로 통일했다.
+  - 소셜 요청 탭 표 배치: 이전 고정 높이 표 둘과 바깥 스크롤 겹침, 이후 남은 높이를 나눠 각 표 안에서만 스크롤
+  - 탭 수 배지·우편 받기 줄·랭킹 내 순위·스탯 요약·길드 버튼·스킬 트리 배치: 이전 세로 줄바꿈, 36px 받기 줄, 여백·구분선·버튼 폭 어긋남, 이후 한 줄 배지, 50px 받기 줄, 닉네임 열·첫 칸·동일 폭·세로 중앙 맞춤
+  - 수배판 도감 미달 조건의 남은 어종 수 표기: 이전 가운뎃점 구분 표기, 이후 괄호 표기
+  - 커밋: 8d1e1192, 69a24552
+- 업적 창 UI 개편, 북대서양 치장 업적·모자 추가, 진행 보상·누적 보너스 분산 재조정 및 플로팅 알림 층을 구현했다.
+  - 업적 창·카드 위계(AchievementsModal.tsx, AchievementCard.tsx, PersonSprite.tsx, notch.ts): Inset-in-Panel 위계와 NOTCH_SM 상태·단계 배지, claimed 카드의 깊은 오목 바탕(bg-bg)과 선명한 제목(text-text) 대비를 적용했다. 진행 탭은 구역 묶음과 미완료만 보기 토글 칩을, 누적 보너스 탭은 전역·구역·유물 3묶음과 스탯 창 보너스 탭 바로가기 버튼을, 치장 탭은 6종 노치 ToggleChip(모바일 2×3 균형 그리드) 필터를 제공한다. CumulativeBonusCard는 단일 분절 게이지를 쓰며, NamedGroupCard는 미토벌 시 물음표 실루엣(mystery)과 툴팁 '???'까지 스포일러를 가린다.
+  - 플로팅 1줄 알림(FloatingToastLayer.tsx, useMessageLog.ts, GameView.tsx, src/index.css): 창이 열려 있을 때 스테이지 위(--z-toast: 25)에 최대 2개, 4.5초 자동 소멸 비차단 1줄 알림 배너(닫기 버튼만 제공, 옷장 열기·바로 착용 등 원격 이동 버튼 제외)를 띄운다.
+  - 북대서양 치장·모자 및 이름·로어 정비(achievements.ts, wardrobe.ts, actors.ts): 북대서양 돌연변이·한밤·네임드(글로스터 바다뱀, 구아반세스) 업적·모자 9종을 더해 수령형 업적 80종(진행 30 + 치장 50)·모자 55종(골드 5 + 업적 50)으로 확장했고, 태평양 한밤 업적명 접두사 통일 및 인도양 밤 모자 2종(별빛 몬순 베레모, 밤안개 향신료 두건) 이름·로어를 정비했다.
+  - 진행 보상·누적 보너스 분산(achievements.ts, actions.ts, effects.ts, catalog.ts, saleWindow.ts, stats.ts): 해역 진행 보상을 basic <= full 불변식과 함께 총 25,862,870G로 미세 조정하고, 누적 보너스를 전설 손맛(legendaryWeight +4%), PERFECT 챔질(rareWeight +4%), 미끼 손맛(epicWeight +3%), 누적 판매(sellBonus +3%, saleProceedsOf·saleProceeds 합산), 수동·방치(입질 대기 각 -5%), 최고 레벨 유물 4단계(1/3/6/8개, 최대 +15%)로 분산해 총 26종(23계열)으로 재구성했다.
+  - 업적 창 위계·게이지·필터·스포일러 실루엣: 이전 Frame 카드, opacity-50 claimed, 3열 필터, 중복 막대, 모달 내 토스트 미분리, 이후 Inset-in-Panel(bg-bg+text-text 대비), NOTCH_SM 배지, 모바일 2×3 노치 ToggleChip, 단일 분절 게이지, mystery 실루엣, FloatingToastLayer(--z-toast: 25)
+  - 치장 업적·모자 수 및 인도양·태평양 명칭: 이전 치장 41종(모자 46종), 한밤 도감 접두사 없음, 남극성/극야 명칭, 이후 북대서양 9종 추가 치장 50종(수령형 80종, 모자 55종), 태평양 한밤 접두사·인도양 밤 모자 개명
+  - 진행 보상 총액 및 누적 보너스 분포: 이전 25,862,500G, 누적 25종(유물 3단계, 입질 대기·이동 속도 편중), 이후 25,862,870G(basic <= full), 누적 26종(유물 4단계 8개, 희귀·영웅·전설 가중치·판매가 보너스 분산)
+  - 커밋: 9f43443c, 32760bac
+
+### 밸런스
+
+- 북대서양이 최신 지역 프리셋을 맡으면서 1-4 마다가스카르(모잠비크 해협·코모로 심해)를 안정화 프리셋(희귀 2000, 영웅 500, 전설 100)으로, 1-5 남대서양(남대서양 용승대·세인트헬레나)을 한 단계 이전 프리셋(희귀 2000, 영웅 400, 전설 55)으로 전환했다. 해역별 방치 EV가 현행 허용 폭(+-3.5% 이내)을 유지하고 등급 간 가격 비례가 무너지지 않도록 두 지역 어종 35종의 가격을 해역별 균등 배율로 재조정했다(예: 모잠비크 대왕 쥐가오리 70,000G -> 53,000G, 코모로 메가마우스 150,000G -> 110,000G·칠흑의 메가마우스 300,000G -> 220,000G, 용승대 키안다 400,000G -> 300,000G·칼룽가 800,000G -> 600,000G, 세인트헬레나 갈라파고스 상어 750,000G -> 560,000G·큰눈홍치 1,500,000G -> 1,100,000G 등).
+  - 마다가스카르 등급 가중치: 이전 한 단계 이전 프리셋(희귀 2000, 영웅 400, 전설 55), 이후 안정화 프리셋(희귀 2000, 영웅 500, 전설 100)
+  - 남대서양 등급 가중치: 이전 최신 지역 프리셋(희귀 2000, 영웅 300, 전설 15), 이후 한 단계 이전 프리셋(희귀 2000, 영웅 400, 전설 55)
+  - 마다가스카르·남대서양 35종 가격: 이전 기존 1-4/1-5 가격(예: 메가마우스 150,000G, 키안다 400,000G, 큰눈홍치 1,500,000G), 이후 해역별 균등 배율 보정 가격(예: 메가마우스 110,000G, 키안다 300,000G, 큰눈홍치 1,100,000G)
+  - 영향: 영향: 전 해역 기대 수익 사슬과 게이트 위반 0건 유지. 되돌리기: 등급 가중치 전환과 어종 가격을 이전 커밋 값으로 복원한다.
+  - 커밋: f24417ea, d22799bf
+- 1-5 남대서양 일반 의뢰의 골드 보상을 세인트헬레나 대표 방치 EV 기준으로 재산출해 상향했다(쉬움 3,000,000G 유지, 보통 5,500,000G -> 6,500,000G, 어려움 10,000,000G -> 15,000,000G). 네임드 토벌 보상(아다마스토르, 야스코니우스)은 v0.19.3과 같은 25,000,000G를 유지했다.
+  - 1-5 남대서양 보통 의뢰 골드 보상(bounties.ts): 이전 5,500,000G, 이후 6,500,000G
+  - 1-5 남대서양 어려움 의뢰 골드 보상(bounties.ts): 이전 10,000,000G, 이후 15,000,000G
+  - 영향: 영향: 남대서양 대표 방치 EV 대비 일반 의뢰 보상 비율 정합성 유지(쉬움 3,000,000G·네임드 25,000,000G는 v0.19.3과 동일). 되돌리기: bounties.ts의 남대서양 보통·어려움 의뢰 보상을 5,500,000G·10,000,000G로 복원한다.
+  - 커밋: f24417ea, d22799bf
+- 1-4 마다가스카르, 1-5 남대서양, 1-6 북대서양 어종 가격을 해역별 균등 절대치 배율과 완만 브리지 곡선 기준으로 재조정하고, 1-5 남대서양 현상금 보상을 대표 방치 EV 기준으로 재산출해 밸런스 흐름 스냅샷·회귀 테스트를 갱신했다.
+  - 어종 가격 재조정(src/game/content/fish.ts, fishPrice.test.ts): 프리셋 이동 보정 시 상위 등급 가격만 깎여 전설/영웅 비율이 2배대로 무너지던 왜곡을 해소하기 위해 모잠비크 해협 ×0.75(대왕 쥐가오리 53,000G·밤의 쥐가오리 110,000G), 코모로 심해 ×0.72(메가마우스 110,000G·칠흑의 메가마우스 220,000G), 남대서양 용승대 ×0.75(키안다 300,000G·칼룽가 600,000G), 세인트헬레나 ×0.75(갈라파고스 상어 560,000G·큰눈홍치 1,100,000G), 아조레스 해령 ×1.10(대서양철갑상어 1,700,000G·카웅 두 마르 3,300,000G), 버뮤다 삼각지대 ×1.00(루스카 3,500,000G·밤의 리본이악어 7,000,000G)로 조정했다.
+  - 남대서양 현상금 보상 최종 정비(src/game/content/bounties.ts, bounties.test.ts): 세인트헬레나 대표 방치 EV 상승에 맞춰 1-5 남대서양 일반 의뢰 보상을 보통 6,500,000G, 어려움 15,000,000G로 상향하고, 중간 작업에서 20,000,000G로 내렸던 네임드 보상은 v0.19.3 기준 25,000,000G로 복원해 쉬움 3,000,000G·네임드 25,000,000G를 유지했다.
+  - 1-4..1-6 어종 가격 균등화(fish.ts): 이전 상위 등급 단독 삭감 시안 가격(예: 메가마우스 80k, 키안다 100k, 갈라파고스 상어 180k, 아조레스 전설 1.5M), 이후 균등 배율·브리지 가격(모잠비크 ×0.75, 코모로 ×0.72, 용승대·세인트헬레나 ×0.75, 아조레스 ×1.10, 버뮤다 ×1.00)
+  - 1-5 남대서양 현상금 보상 및 스냅샷·회귀 테스트(bounties.ts): 이전 쉬움 3,000,000 / 보통 5,500,000 / 어려움 10,000,000 / 네임드 25,000,000G(중간 20,000,000G 시안 경유), 이후 쉬움 3,000,000 / 보통 6,500,000 / 어려움 15,000,000 / 네임드 25,000,000G 및 밸런스 흐름 스냅샷 갱신
+  - 영향: 영향: 1-4..1-6 전 해역 등급 분포(전설/영웅 약 5.6\~6.1배, 낮 전설/밤 영웅 비역전) 및 게이트 0위반 유지. 되돌리기: fish.ts·bounties.ts와 관련 테스트·밸런스 스냅샷을 이전 커밋 값으로 복원한다.
+  - 커밋: d22799bf, 0b9d5fce
+
+### 수정
+
+- selectBagOverview에 선택적 bagBonus 인자를 추가하고, GameView와 GameTabs를 거쳐 BagTab으로 길드 가방 용량 보너스를 전달하도록 수정했다. 가방 탭의 물고기 상한과 가득 참 상태 판정이 헤더 자원 바·스탯 창과 같은 selectBagStatus(game, bagBonus) 계산 결과를 쓰도록 통일했다.
+  - 가방 탭 상한 계산(selectBagOverview): 이전 selectBagStatus(game) (bagBonus 미전달, 기본 상한만 표시), 이후 selectBagStatus(game, bagBonus) (GameView → GameTabs → BagTab으로 길드 보너스 전달)
+  - 커밋: 796c5828
+- selectBoatPurchasePreview의 현재 가방 상한(currentBagCap)을 래칫 포함 보유 수량 기준에서 현재 배 기본 상한(capOfBoat) 기준으로 통일해 다음 배 기본 상한과 같은 축으로 비교하도록 수정했다. 실제 가방 상한 래칫과 길드 보너스 적용 동작은 그대로 유지했다.
+  - 조선소 구매 비교 현재 가방 상한 기준(selectBoatPurchasePreview): 이전 bagCapacity(game.boat, game.bag), 이후 capOfBoat(game.boat)
+  - 커밋: be2ee60a
+- Field가 PC 레이아웃에서 게임 프레임 하단에 따로 절대 배치하던 낚시 상태 띠를 모바일과 같은 공용 statusSlot 포털로 통합하고, HudLayout이 상태 띠 슬롯, 오른쪽 아래 열, 메시지 창을 단일 흐름 컨테이너 안에서 배치하도록 수정했다. MessageLog의 단독 절대 배치와 stackTier의 중복 위치 클래스를 정리해 한 행 단계와 쌓기 단계 모두에서 요소 간 겹침을 없앴으며, 구조 가드와 단위 테스트를 추가했다.
+  - PC 하단 HUD 낚시 상태 띠 배치: 이전 게임 프레임 하단 중앙에 따로 절대 배치(넓은 폭에서 미니맵·메시지 창과 겹침), 이후 HudLayout 단일 흐름 컨테이너의 공용 statusSlot에 배치해 한 행·쌓기 단계 모두 비겹침 보장
+  - 커밋: 6ea81fe1
+- selectInitialStatsSpotIndex에 현재 구역(currentZone)을 전달해 바다(world)에서 어군 사거리 밖일 때 마지막 해역으로 고정되지 않고 현재 바다 구역의 요구 파워 최고 해역을 선택하도록 수정했다.
+  - 스탯 창 요약 탭 초기 해역 선택(selectInitialStatsSpotIndex): 이전 바다 어군 사거리 밖에서 항상 전체 마지막 해역 선택, 이후 현재 바다 구역 범위 내 요구 파워 최고 해역 선택
+  - 커밋: ae689b1a
+- fieldEngine에 거점 진입 래치(latchedBase)를 추가해 진입 거부 후 이동 입력을 모두 떼거나 경계에서 일정 거리(24) 벗어날 때까지 같은 거점 재진입 트리거가 반복 발동하지 않도록 수정했다.
+  - 거부된 거점 재진입 판정(fieldEngine): 이전 이동 입력 유지 시 거점 진입 트리거가 반복 발동, 이후 입력 해제 또는 경계 이탈 전까지 같은 거점 재진입 차단
+  - 커밋: 7b72468b
+- 잠금 상태를 3상태(account, guest, unverified)로 분리해 세션 확인 실패 시 게스트 안내 대신 전용 문구('계정을 확인하면 쓸 수 있어요.')를 메뉴, 거점 시설, 판매 창 기운 얻기 탭, 채팅, 플레이어 정보, 내 정보, 개발자에게 창에 일관되게 적용했다.
+  - 계정 확인 실패 상태 잠금 문안(AccountLockState): 이전 게스트와 구분 없이 게스트 연결 안내 표시, 이후 unverified 상태 분리 및 계정 확인 안내 표시
+  - 커밋: c3c17b21, 49926db0
+- 접힌 ChatBar의 상태 안내 문구에서 truncate를 제거하고 문장 경계마다 줄바꿈하는 formatStatusNotice를 적용해 두 문장 이상 안내가 말줄임 없이 모두 보이도록 수정했다.
+  - 접힌 메시지 창 상태 안내(ChatBar): 이전 한 줄 말줄임(truncate)으로 뒤 문장 잘림, 이후 문장 단위 줄바꿈(formatStatusNotice, whitespace-pre-line)으로 전체 표시
+  - 커밋: c3c17b21, 49926db0
+- 익명 계정 정리 대상 선정과 단건 삭제가 공유하는 targetFrom 조건에 auth.accounts 행 부재(not exists) 검사를 추가했다. u.is_anonymous가 true로 남아 있더라도 구글 또는 이메일 로그인 수단이 연결된 계정은 선정과 삭제에서 제외되며, DB 회귀 테스트 픽스처(provider 지정)와 7일·365일 선정·단건 삭제 회귀 케이스 4종을 보강했다.
+  - 익명 정리 대상 조건(targetFrom): 이전 u.is_anonymous만 확인해 로그인 수단이 연결된 계정도 익명 표시 잔존 시 포함 가능, 이후 auth.accounts 행이 없는 u.is_anonymous 계정만 선정·삭제
+  - 영향: 영향: 로그인 수단이 연결된 계정이 익명 플래그 잔존으로 정리되는 문제를 막는다. 되돌리기: targetFrom의 auth.accounts not exists 조건을 제거한다.
+  - 커밋: 397c8112
+- 가방 용량 계산을 bagCapacityOf 단일 출처로 통일하고 반올림 ±1 오차와 스탯 창 배 탭 툴팁 및 구 수치 주석을 정비했다.
+  - bagCapacityOf(effects.ts): 길드·유물 다중 보너스 적용 시 개별 delta 합산과 최종 cap이 1 차이나지 않도록 마지막 보정 항목 delta를 cap 기준으로 정렬했다.
+  - 호출부 단일화: actions.ts(캐치·전시 회수), api/action.ts(fastCatch), selectBagStatus(selectors.ts, BagStatus.capStat 포함), rules.ts(canExhibit bagCap 인자)가 bagCapacityOf 단일 경로를 사용하도록 통일하고 미사용 bagCapBonusOf를 제거했다.
+  - 배 탭 가방 용량 툴팁(BoatTab.tsx, RodStatTable.tsx, features/gameplay/model/statFormat.ts): digits=0일 때 천 단위 쉼표와 초과 보유(래칫) 안내를 순수 포맷 모듈로 분리해 툴팁 내역을 연결했다.
+  - 주석 현행화: achievements.ts(진행 30종·15해역·25,862,500G, 누적 보너스 25종·7구역·23계열, 수령형 71종), features/achievement/model/achievements.ts(23장), world.ts(북대서양 p·9·하위 존 문자·항구 6곳) 구버전 주석을 코드와 일치시켰다.
+  - 가방 용량 계산 및 배 탭 툴팁: 이전 bagCapBonusOf + bagCapacity 중복 조합 및 BoatTab 단순 숫자 표기, 이후 bagCapacityOf 단일 경로 + StatValue/statFormat 천 단위 쉼표 툴팁(미사용 bagCapBonusOf 제거)
+  - 업적·세계 해역 주석: 이전 개편·북대서양 반영 전 26종/23종/항구 5곳 주석 잔존, 이후 현행 30종/25종/71종/항구 6곳 기준으로 정비
+  - 커밋: 9df69e73, 6ce1ba8c, 1ad5eede
+- 옷장 보유 업적 모자 출처 표시, 모자 스프라이트 픽셀 경계, 스탯 창 보너스 탭 유물 배율 및 업적·네임드 정합성 결함을 수정했다.
+  - 옷장(wardrobe.ts, WardrobePanel.tsx): HatDetail에 source 필드를 추가하고 보유한 업적 모자에도 resolveHatUnlock으로 해금 업적 정보를 유지해 가격 0G 대신 '업적 보상 <업적 이름>'(미토벌 네임드는 가림)을 표시하며, 상세 칸 높이를 min-h-[84px]로 바꿔 긴 조건 문구가 세로로 확장되도록 했다.
+  - 모자 스프라이트(actors.ts): strait-night-cap과 megalodon-silver-visor의 챙 폭을 5에서 4로 줄여 drawHead(6, 10) 기준 12x10 픽셀 경계 안에 맞추고 전체 46종 모자 경계 회귀 테스트를 추가했다.
+  - 보너스 탭(artifactEffects.ts, stats.ts, BonusTab.tsx): 유물 행 포맷(artifactEffectValue, artifactEffectLine)에 achievementBonusesOf의 artifactBoost 배율(1 + artifactBoost)을 반영하고, 낚시 갈래의 단독 '보유 유물 효과' 행을 제거하는 대신 각 유물 행에 기본 효과·보유 유물 효과·적용 효과 내역 툴팁을 연결했다.
+  - 업적·네임드 정합성(api/action.ts, api/_data/profile.ts, actions.ts, useGame.ts, GameView.tsx): clearQuestForAction으로 일반 의뢰는 deliverBounty, 네임드는 resolveChallenge 성공 시에만 bounty_clears에 기록해 이중 기록을 없애고, 공개 프로필 sanitizeClaimedAchievements가 현행 ACHIEVEMENTS에 없는 폐지 업적을 제외하도록 했다. debug achievement.evaluate 실행 시 applyAction 후처리 evaluateAchievements를 건너뛰어 reset 결과를 보존하고, 게스트 업적 토스트 차단 및 boot·import 2건 이상 소급 알림 1줄 요약(gold 톤), 거점 이동(resetPanels) 시 업적 모달 닫기를 함께 반영했다.
+  - 옷장 보유 업적 모자 상세: 이전 고정 84px 높이, 보유 업적 모자에 가격 0G 표시, 이후 최소 84px 높이(min-h-[84px]), 해금 출처(업적 보상 <업적 이름>, 미토벌 네임드 가림) 표시
+  - 모자 2종 챙 폭(strait-night-cap, megalodon-silver-visor): 이전 5px(drawHead 12x10 경계 초과), 이후 4px(12x10 경계 준수)
+  - 스탯 창 보너스 탭 유물 배율 표시: 이전 유물 기본 수치만 표시하고 낚시 갈래에 단독 보유 유물 효과 행 배치, 이후 각 유물 행에 1 + artifactBoost 배율 적용 수치 및 기본/배율/적용 툴팁 표시, 단독 행 제거
+  - 네임드 토벌 기록·공개 프로필·소급 알림: 이전 deliverBounty에서 네임드 bounty_clears 중복 기록, 폐지 claimed ID 노출, 게스트/boot·import 다건 토스트 폭주, 이후 resolveChallenge 단일 기록, 현행 ACHIEVEMENTS 필터, 게스트 차단 및 2건 이상 요약 1줄
+  - 커밋: 0d3b27c7, af6c4986, bb564a71, ae9fc21a, ad5cc3ca, 27ea60b3, 7e9c9456
+- F9 개발 도구 액션 페이싱 면제, 원자적 일괄 실행(debugBatch), 도감·수배·스냅샷 명령 정합화 및 Ingress·인증 요청 한도를 정비했다.
+  - 요청 한도·인증 분리(k8s/prod/ingress.yaml, api/_auth/auth.ts, api/_auth/session.ts): /api/admin 전용 Ingress(pixel-fishing-admin-api, 50 rps, burst ×6)를 분리하고, Better Auth에 사설 프록시 대역 trustedProxies(ipAddressHeaders: x-forwarded-for, x-real-ip)와 관리자 /sign-in/social 한도 완화(10초당 20회), 관리자 세션 조회 disableCookieCache: true를 적용했다.
+  - 개발 도구 페이싱 면제 및 일괄 실행(api/action.ts, api/_data/save.ts, actions.ts, actionSchema.ts, useDevTools.ts, httpGameGateway.ts): 개발·프리뷰 환경의 debug·debugBatch·debugSnapshot과 승인된 forceEncounter·forcePhase 캐치는 MIN_ACTION_GAP_* 및 catchTooSoon 검사를 면제한다. debugBatch(1\~50스텝)와 commitDebugBatch로 연속 debug 스텝을 단일 트랜잭션에 원자적으로 영속화하며, useDevTools 예외 시 tools.log에 오류를 기록하고 HttpGameGateway 풀재동기 시 patch.version을 함께 읽도록 수정했다.
+  - 명령·스냅샷·로컬 모드 정합화(debug.ts, api/_data/bounty.ts, commands.ts, snapshots.ts, localGameGateway.ts, DevTools.tsx): dex.fill에 includeNamed(네임드 포함, UI 기본 true)를 추가하고 구 dex.completeZone은 UI 폼에서 숨겼으며, 역방향 초기화 시 revokeUnmetClaimableAchievements로 미수령 claimable 업적을 회수하고 achievement.resetCounters(resetAchievements: true)·achievement.evaluate의 즉시 재승격을 억제했다. named.unlock은 기본으로 직전 게임 날짜(previousGameDayISO)를 써 일일 한도를 소모하지 않게 했고, bounty.resetToday kind(all/general/named) 필터 및 DB-메모리 clearedNamed 동기화, debugSnapshot·snapshot.restore v2(bounty_clears/progress/tickets 원본 시각 복원 + v1 하위 호환), 로컬 모드 bounty.* debug-db-required 거부 및 안내 문구를 반영했다.
+  - 관리자 Ingress·인증 프록시·세션 캐시: 이전 /api 단일 Ingress 버킷, trustedProxies·관리자 social 한도 규칙 미지정, 이후 /api/admin 전용 Ingress 분리(50 rps, burst ×6), trustedProxies·/sign-in/social 20회/10초·disableCookieCache: true
+  - 개발 도구 페이싱·일괄 실행: 이전 debug·테스트 캐치에도 MIN_ACTION_GAP/catchTooSoon 적용, 프리셋 단계별 개별 왕복, 이후 허용된 개발 도구·테스트 캐치 페이싱 면제, debugBatch 단일 트랜잭션 일괄 실행
+  - 도감·업적·수배·스냅샷·로컬 모드: 이전 dex.fill 네임드 미포함, 역방향 초기화 시 claimable 잔존, named.unlock 일일 한도 소모, v1 스냅샷만 지원, 로컬 bounty.* 무응답, 이후 includeNamed(기본 true), revokeUnmetClaimableAchievements, previousGameDayISO, bounty.resetToday kind 필터, v2 수배 스냅샷 복원, debug-db-required 거부
+  - 커밋: 7d825c29
+
+### 기타
+
+- 게스트도 액션 확정 때 업적 카운터 증가와 claimable 저장을 받는다. 판정이 기록만 읽으므로 마을 격리 규칙과 부딪히지 않는다. 게스트에게는 메뉴 줄의 업적 항목을 잠그고 배지를 숨기며 수령 액션을 거절한다. 계정을 연결하면 게스트 때 쌓은 업적을 업적 창에서 받을 수 있다. 순위와 공개 표시에 업적을 쓰면 게스트와 제재 계정은 넣지 않는다.
+  - 커밋: 4dee057b, 2d1eb62a
+- 업적 카운터 기본 다섯 종(sell.gold, catch.perfect, catch.auto, catch.bait, named.flawless)과 수동 집계 동적 키(manual.total, manual.total.<구역>, manual.legendary.total, manual.legendary.<어종 id>, manual.variant.total, manual.variant.<최상위 구역>)를 표로 두었다. 열은 user_id, key, value(0 이상), updated_at이고 기본 키는 (user_id, key)다. 행 단위 보안을 켜고 정책을 두지 않아 서버 역할만 접근한다.
+  카운터는 액션 확정 문장 안에서 상태 변경과 함께 오른다. 클라이언트 주장으로 올리지 않고, 확정이 거절되면 오르지 않는다. 같은 확정이 적재하는 events 행은 counted = true로 기록하고, counted = false 행은 카운터 도입 전 이벤트를 한 번만 소급하는 데 쓴다.
+  서버는 초기 상태 응답과 상태 패치에 업적 카운터 값과 토벌한 네임드 식별자 목록을 함께 싣는다. 이 값은 saves_current.data에 중복 저장하지 않고, 정본은 achievement_counters와 bounty_clears다.
+  도입 시점의 카운터 값은 모든 계정에서 0이다. 기존 이벤트의 소급 적재(events.counted가 false인 행)는 별도 작업이며 이 버전에는 없다.
+  - achievement_counters 표: 이전 없음, 이후 user_id, key(기본 5종 + 동적 manual.*), value(0 이상), updated_at. 기본 키 (user_id, key). 행 단위 보안 켜짐, 정책 없음(서버 전용)
+  - events.counted 열: 이전 없음, 이후 boolean not null 기본 false. 카운터 반영 여부 표시
+  - 초기 상태 응답과 상태 패치: 이전 없음, 이후 achievementCounters와 clearedNamed를 함께 실음
+  - 영향: 카운터 기반 업적의 진척은 도입 시점부터 쌓인다. 소급 적재 전에는 과거 판매와 캐치가 카운터 기반 업적에 반영되지 않는다. 되돌리려면 표와 열을 지우고 서버 응답 필드를 걷어내면 되지만, 그 사이 오른 카운터 값은 복구할 수 없다.
+  - 커밋: 339f2fa5, de7aa671, 4dee057b
+- 모두 받기의 액션 결과에 골드와 모자 목록을 싣는 ActionResult 변형(claimAllAchievements)을 더했다. 수령은 서버가 확정 상태를 다시 평가해 정하고, 클라이언트는 결과만 표시한다.
+  화면의 새 업적 알림 판정을 순수 함수 newlyClaimable로 모아 액션 확정 경로와 첫 상태 적재 경로가 같은 함수를 쓰게 했다. 활동 로그 적재는 확정 응답의 상태 패치를 반영한 뒤에 한다.
+  - 모두 받기 액션 결과: 이전 type과 상태만, 이후 { type: "claimAllAchievements", gold, hats }
+  - 새 업적 알림 판정: 이전 없음, 이후 newlyClaimable(이전 상태, 이후 상태)
+  - 커밋: 3d427529, 053b6576, de7aa671
+- 밸런스 흐름 도구(pnpm balance:flow)의 업적 보상 산출식을 구역 대표 방치 EV 기준으로 바꾸고 관측 지표를 개편했다. achievementBasis 모듈을 없애고 achievement, report, dist, ev를 개편했으며, 테스트와 CLI 기대값을 새 산출식에 맞췄다.
+  - balance:flow 업적 보상 산출: 이전 achievementBasis 모듈의 기준, 이후 구역 대표 방치 EV 기준(achievement 모듈)
+  - 커밋: d9db19af
+- 업적 판정을 업적 id 접두사 분기에서 선언적 규칙 카탈로그로 바꿨다. 규칙은 선택자(어종·구역·등급, id 집합), 측정 방식(discover, set, bigSpecies, catchCount, counter, counterSet), 목표(숫자 또는 'all'), 보상으로 정의하고, 목표 'all'과 구역 전설 목표 수는 게임 데이터(FISH, ZONES, BOUNTIES, ARTIFACTS)에서 계산한다. 화면과 서버는 같은 카탈로그와 순수 판정 함수(achievementProgress, evaluateAchievements)를 쓴다.
+  횟수 탭 업적 41종을 데이터 기반 규칙으로 더해 모두 65종이 됐다. 기존 24종은 앞 순서 그대로 두고 확장 41종을 뒤에 붙였다. 확장은 수동 집계 키(manual.total, manual.legendary.total, manual.legendary.<어종 id>, manual.variant.total, manual.variant.<최상위 구역>), 기존 카운터 다섯 종(catch.perfect, catch.auto, catch.bait, named.flawless, sell.gold), 월척 종수(bigSpecies)를 읽는다.
+  수동 집계 카운터는 액션 확정의 catch 이벤트에서만 오른다. 판정이 auto면 세지 않고, 전설이면 어종 id 키, 돌연변이면 최상위 구역 키를 함께 올린다. 어종과 구역은 이벤트의 fishId를 데이터에서 찾아 정하며 코드에 목록을 적지 않는다.
+  동적 키는 카운터 맵 타입과 위생 처리(isAchievementCounterKey, manual.* 접두사)에서 보존한다. 빠른 캐치 경로는 이벤트 증분을 판정 전 상태에 반영해 새 카운터로도 claimable을 계산하고, 액션 경로는 정의되지 않은 증분 값을 거른다.
+  - 업적 판정 방식: 이전 업적 id 접두사별 분기, 이후 규칙 카탈로그(선택자·측정 방식·목표·보상)를 읽는 공통 판정
+  - 업적 수: 이전 24종, 이후 65종(기존 24종 + 횟수 탭 41종)
+  - 업적 카운터 키: 이전 고정 5종(sell.gold, catch.perfect, catch.auto, catch.bait, named.flawless), 이후 고정 5종 + 동적 키(manual.total, manual.legendary.total, manual.legendary.<어종 id>, manual.variant.total, manual.variant.<최상위 구역>)
+  - 카운터 위생 처리: 이전 고정 5종 키만 보존, 이후 고정 5종과 manual.* 접두사 키의 유한 비음수 정수 보존
+  - 빠른 캐치의 claimable 판정 입력: 이전 카운터 증분을 판정 뒤에 합산, 이후 증분을 반영한 상태로 판정
+  - 커밋: 9647a18, 7e719420, 2be101c2, bed3b7a2
+- HttpGameGateway.reason의 거부 사유 코드 검사를 in 연산자에서 Object.hasOwn으로 바꿔 프로토타입 속성 키가 거부 코드로 통과하지 않게 했다. HttpGameGateway 단위 테스트에 델타 baseVersion 불일치·적용 실패 시 캐시 폐기 및 재동기화, 409 충돌 재시도, HTTP 오류 응답 처리 29건을 추가하고, DB 액션 테스트에 재화 변경 액션 9종 동시성 경합 및 7종 409 버전 충돌 미기록 검증 16건을 추가했다.
+  - HttpGameGateway.reason 코드 판정: 이전 v in REJECT_TEXT (프로토타입 키 통과), 이후 Object.hasOwn(REJECT_TEXT, v)
+  - 동기화·동시성 회귀 테스트: 이전 httpGameGateway 15건, action DB 112건, 이후 httpGameGateway 44건, action DB 128건
+  - 커밋: f078bd1c
+- Vitest 단위 테스트 설정에서 브라우저 전역 또는 React 렌더링에 의존하는 16개 파일(DOM_ONLY_TS_TESTS)과 .test.tsx만 dom(jsdom) 프로젝트에 남기고, 나머지 90개 비DOM .test.ts 파일을 node 프로젝트로 이관해 jsdom 초기화 부담을 줄였다(node 230개 / dom 121개 파일).
+  - Vitest node 프로젝트 대상: 이전 game·shared·api·tools 140개 파일만 node 실행, 나머지 .test.ts는 dom 실행, 이후 DOM_ONLY_TS_TESTS 16개 예외를 제외한 .test.ts 230개 파일을 node 실행 (dom 121개)
+  - 커밋: 7f299cfb
+- 익명 표시가 남아 있어도 이메일 로그인(credential)이 연결된 계정이 7일 유휴·1년 미접속 정리 대상 선정과 단건 삭제에서 제외되는지 검증하는 실제 DB 회귀 테스트 5건을 보강했다.
+  - 커밋: 955a6bb8
+- HttpGameGateway에 parseVersion 헬퍼를 추가해 전체 상태 응답의 버전 누락 시 lastVersion을 초기화하고 델타 재동기화 실패 전에 기존 캐시를 선폐기하도록 보강했다. 프로토타입 키(__proto__) 거부 사유 검증과 쿠폰·업적·요리·우편 액션의 동시성 및 409 버전 충돌 미기록 DB 테스트를 추가했다.
+  - HttpGameGateway 델타 캐시 초기화: 이전 전체 상태 무버전 시 이전 lastVersion 잔존, 델타 재동기화 실패 시 기존 캐시 잔존, 이후 parseVersion으로 무버전 초기화, 재동기화 호출 전 lastState·lastVersion 선폐기
+  - 커밋: 5359c8f6
+- Vitest 루트 설정의 jest-dom setupFiles를 dom 프로젝트 전용으로 분리하고, uiGuard 테스트에서 스테이지 모달 렌더링 테스트 3건을 별도 tsx 파일(stageModalWrapper.test.tsx)로 분리해 정적 가드(uiGuard.test.ts)를 node 프로젝트로 이관했다. node 프로젝트의 불필요한 setup 초기화를 제거해 실행 시간을 줄이고, 기본 입력 요소 감지 상수(RAW_INPUT) 회귀 테스트를 보강했다.
+  - Vitest setupFiles 적용 범위 및 uiGuard 실행 환경: 이전 루트 setupFiles로 node·dom 공통 실행, uiGuard.test.ts를 dom 프로젝트 실행, 이후 dom 프로젝트 전용 setupFiles, uiGuard 정적 가드 node 이관 및 스테이지 모달 렌더링 tsx 분리
+  - 커밋: 78df3d19
+- 밸런스 분석 도구(pnpm balance, pnpm balance:flow)에 해역 단위 업적 보상 모드(--reward-unit spot), 월척 종수 도달 시간 분포(selfTimes p10·중앙값 및 dist --big-marks·--bounty), 구역 한정·유물 보유·유물 배율·판매가 효과 비교(effects --zone·--artifacts·--artifact-boost·--sell), 카운터 임계점 연동 보너스 관측(--counter-bonus)을 추가했다. 옵션을 지정하지 않은 기본 출력과 게이트 판정 계약은 그대로 유지했다.
+  - balance:flow 관측 축: 이전 구역 단위 업적 보상, 단일 효과 축, 기본 전환 분포만 지원, 이후 해역 단위 보상, 월척 종수 분포, 구역·유물 배율 효과 비교, 카운터 임계점 보너스 관측 추가
+  - 커밋: a18008c6, 166975bd
+- 파생 값 단일 출처 원칙에 따라 효과 묶음 계약(PlayerContext, AchievementBonuses, NO_ACHIEVEMENT_BONUSES, createPlayerContext)과 핵심 값 규칙 함수 4종(bagCapacityOf, moveSpeedOf, biteWaitOf, saleProceedsOf), StatModSource 출처 메타데이터를 추가했다. 서버(api/_data/context.ts)·클라이언트(usePlayerContext)·밸런스 도구(tools/balance/context.ts) 3개 계층의 묶음 생성 함수를 두고, boundary.test.ts에 표현 계층의 게임 값 심볼 직접 import 차단(초기 허용 목록 및 stale 검사)과 effects.ts 공개 함수의 효과 기본값 금지 가드를 추가했다.
+  - 효과 묶음 계약 및 값 규칙 함수: 이전 효과를 선택 인자(기본값)로 전달하며 계층별 묶음 생성기 없음, 이후 필수 PlayerContext 기반 값 규칙 함수 4종 및 서버·클라이언트·도구 3계층 묶음 팩토리 추가
+  - 경계 가드 테스트(boundary.test.ts): 이전 계층 방향만 검사, 이후 표현 계층의 게임 값 심볼 직접 import 금지(초기 허용 목록·stale 검사) 및 effects.ts 효과 기본값 금지 추가
+  - 커밋: 53eb8ce0
+- 초반 첫 경험 보장(firstCatch)을 계정 단위 단일 카운터에서 마을 연못(pond: 5번째 금붕어, 10\~15번째 황금 잉어)과 마을 강(river: 5번째 무지개송어, 10\~15번째 강물고기) 해역별 독립 보장으로 개편했다. 바다 해역에는 적용하지 않으며, 진행 중인 구 단일 firstCatch 세이브가 빠른 캐치(fastCatch) 경로로 들어올 때 전체 도감 기준 이관 경로로 폴백해 강 보장 중복 지급을 막았다. action.db.test.ts의 대형 캐치 스냅샷 8건을 명시 단언으로 전환하고, 밸런스 오프닝 시뮬레이터(opening.ts)를 해역별 보장에 맞췄다.
+  - 첫 경험 보장 단위 및 대상 어종: 이전 계정 단위 단일 카운터(5번째 영웅, 10\~20번째 전설), 이후 마을 연못·마을 강 해역별 독립 보장(각 5번째 지정 영웅, 10\~15번째 지정 전설)
+  - 구 단일 firstCatch 이관 및 DB 테스트: 이전 단일 객체 이관 및 대형 스냅샷 8건, 이후 fastCatch 구 세이브 풀 경로 폴백 이관 및 명시 단언 전환
+  - 커밋: 66bf98aa, 35c5fdb3
+- 콜드 아카이브(api/cold-archive.ts)의 openStager에 파일 추적(track)과 안전한 스트림 종료·삭제(abort)를 추가하고, archiveEvents·archiveSaves를 try/finally로 감싸 0건·성공·업로드 실패 전 경로에서 gzip 스트림 종료와 임시 파일 삭제를 보장했다.
+  - 콜드 아카이브 임시 파일 및 gzip 스트림 정리: 이전 0건·예외 경로에서 임시 파일·스트림 잔존 가능, 이후 try/finally로 전 경로 스트림 종료 및 임시 파일 정리 보장
+  - 커밋: 01a4d201
+- 업적 체계를 진행 26종(13개 해역 기초·숙련, min(1시간 방치 EV, 다음 해역 전환 골드 × 30%) 기준 총 5,362,500G), 즉시 자동 적용 누적 보너스 23종(전역 8계열, 구역 12계열, 최고 레벨 유물 1/3/6개 Lv5+전설 포함), 치장 모자 업적 41종(기존 14승계 + 네임드 다회 토벌 18 + 밤 도감 8 + big-100-hat 금바늘 대어 모자 1)으로 전면 개편했다. 폐지한 구역·횟수·수동 고정 골드 id와 big-100·big-200은 ABOLISHED_ACHIEVEMENT_IDS로 분리해 재사용을 막고, 수령 액션·요약 줄·메뉴 배지·업적 창 목록 대상이 현행 카탈로그(ACHIEVEMENTS)와 항상 일치하도록 맞추었다. 신규 업적 모자 27종 절차 스프라이트(총 46종), 3탭 업적 창과 다단계 카드 툴팁 내역, 스탯 창 BonusTab·StatValue '업적 누적' 단일 요약 연동, 옷장 미토벌 네임드 스포일러 가림, 플레이어 상세 업적 탭(진행·치장) 정합성, 밸런스 도구(gates 위반 0건, PERFECT/방치 최대 9.41배 <= 10배)와 DB 테스트 명시 단언 전환을 함께 반영했다.
+  - 업적 카탈로그 및 보상 체계: 이전 구역 진행 10종 + 고정 골드 횟수·수동 41종 + 모자 14종, 이후 해역 진행 26종(5,362,500G) + 즉시 자동 누적 보너스 23종 + 치장 모자 41종(수령·배지·요약·탭 목록 단일화)
+  - 업적 모자 및 옷장 스포일러 가림: 이전 업적 모자 14종(총 19종), 이후 업적 모자 41종(총 46종), 미토벌 네임드 모자 실명 가림
+  - 업적 창·스탯 창·서버 페이싱 연동: 이전 4탭 수령형, 보너스 미적용, 이후 3탭+다단계 카드(툴팁 내역), PlayerContext·catchTooSoon·BonusTab 단일 요약 연동
+  - 커밋: 4ab9ad6e, 79a21eb6
+- 1-6 북대서양 신지역 구현(f24417ea)을 최신 dev(업적 개편 79a21eb6 포함)와 병합(e9b110fd)하고, 북대서양 신규 스프라이트 8종(5개 격자) 안전 여백(margin: 2) 위반을 수정(2cb86438)했다.
+  - 지도: tools/configs/world.json 서단을 -15에서 -82로 확장(-82..157E, -36..44N, 956x232셀, GRID_OFFSET.col=392로 기존 좌표 보존), 버뮤다 섬(-64.8, 32.3) 등록, 미개방 해역 N 차단, earth.mask.ts·world.mask.ts 재생성.
+  - 업적 연동: 진행 업적을 15개 해역 30종(azores 기초 3,000,000G·숙련 2,500,000G, bermuda 기초 7,500,000G·숙련 7,500,000G, 총 25,862,500G)으로, 누적 보너스를 7개 구역(23계열, 25종)으로 확장했으며 폐지 업적 유령 보상 차단 불변식을 유지했다.
+  - 검증: pnpm test(360파일, spriteRules.test.ts 포함), tsc -b, oxlint, pnpm balance:flow gates(64통과/0위반) 통과 확인.
+  - 세계 지도 항해 창 서단(world.json): 이전 -15E, 이후 -82E (956x232셀, GRID_OFFSET.col=392)
+  - 진행·누적 보너스 업적 수: 이전 진행 26종(13해역, 5,362,500G), 누적 보너스 23종(6구역), 이후 진행 30종(15해역, 25,862,500G), 누적 보너스 25종(7구역)
+  - 커밋: f24417ea, e9b110fd, 2cb86438
+- 전진 마이그레이션 원칙에 따라 api/_dbTest/migrations.db.test.ts에서 역방향(.down.sql) 왕복 테스트 13건(0018, 0019, 0020, 0022, 0024, 0026\~0029, 0031, 0032, 0035, 0036)과 해당 테스트 전용 빈 describe 블록·미사용 헬퍼를 제거했다. 순방향 스키마·제약·RLS 검증 15건과 .down.sql 파일 36건은 그대로 보존했다.
+  - 마이그레이션 DB 테스트(migrations.db.test.ts): 이전 순방향 15건 + 역방향 .down.sql 왕복 테스트 13건, 이후 순방향 스키마·제약·RLS 검증 15건 유지(.down.sql 테스트 0건)
+  - 커밋: 1e6e83f6
+- 밸런스 보고 진입점(tools/balance-report.ts)의 순수 지표 계산(ev, rod, income, idle, move, perfect, growth, journey, fame, monotonic, economy, dex, bounty)을 tools/balance/reportMetrics.ts로 분리하고 불변식·재현성 단위 테스트(tools/balance/reportMetrics.test.ts)를 추가했다. 또한 tools/balance/journey.ts와 tools/balance/flow/progress.ts가 공유하는 진행 스텝 상수·해금·구매·대기 판정·일반 폼 비율 헬퍼(STEP_SEC, opens, SpotProgress, buyForSpot, missingForSpot, normalFormShare)를 progress.ts에서 추출해 통합했다. 기본 pnpm balance 출력은 리팩터링 전과 바이트 단위로 동일하다.
+  - 밸런스 보고 계산과 여정 시뮬레이션 구조: 이전 balance-report.ts 내 계산·출력 혼재, journey.ts와 flow/progress.ts 구매·해금 루프 중복, 이후 reportMetrics.ts 순수 계산 분리(+단위 테스트) 및 progress.ts 공통 진행 프리미티브 공유
+  - 커밋: 1d162786
+- 북대서양 어종 5종의 추상 관형절·미확정 영문 명칭을 실존 종 및 지역 전승 생물 이름과 로어로 개정하고, 관련 야간 변종 업적 모자 이름을 맞추었다.
+  - 어종 5종 개명·로어 개정(src/game/content/fish.ts): 아조레스 해령의 블루잭(bluejack) -> 대서양 전갱이(백은 대서양 전갱이), 귀향하지 않는 것(unreturning) -> 대서양철갑상어(태고의 대서양철갑상어), 가라앉은 울림(sunkenecho) -> 카웅 두 마르(영겁의 카웅 두 마르), 버뮤다 삼각지대의 풀리지 않는 매듭(unraveledknot) -> 루스카(상고 루스카), 실종점(vanishingpoint) -> 밤의 리본이악어(극야의 리본이악어)로 어종 id를 보존한 채 이름·돌연변이명·로어를 교체했다.
+  - 업적 모자 명칭 정렬(src/game/content/wardrobe.ts): 북대서양 밤 돌연변이 업적 보상 모자(vanishing-hood) 표시 이름을 '실종점 흑모자'에서 '극야의 흑모자'로 바꿨다.
+  - 북대서양 어종 5종 이름·변이명·로어: 이전 블루잭, 귀향하지 않는 것, 가라앉은 울림, 풀리지 않는 매듭, 실종점, 이후 대서양 전갱이, 대서양철갑상어, 카웅 두 마르, 루스카, 밤의 리본이악어(변이명·로어 동반 개정)
+  - 북대서양 밤 변종 모자 이름(vanishing-hood): 이전 실종점 흑모자, 이후 극야의 흑모자
+  - 커밋: 8b2c7284, 455ba68a, 0b9d5fce
+
 ## [0.19.3] - 2026-11-17
 
 ### UI
@@ -28,7 +330,7 @@
   - 롱페퍼 미끼 등급 가중: 이전 0.2, 이후 0.4
   - 큐베브 미끼 등급 가중: 이전 0.4, 이후 0.6
   - 용연향 미끼 등급 가중: 이전 0.6, 이후 0.8
-  - 영향: 미끼 1회의 총 효과량은 5분÷30분에 효과 배율 1.33~2를 곱한 값이라 이전의 1/4.5에서 1/3이다. 메인 밸런스 지표는 요리 효과 없이 재므로 게이트에는 영향이 없다. 되돌리려면 두 값을 이전 값으로 복원한다.
+  - 영향: 미끼 1회의 총 효과량은 5분÷30분에 효과 배율 1.33\~2를 곱한 값이라 이전의 1/4.5에서 1/3이다. 메인 밸런스 지표는 요리 효과 없이 재므로 게이트에는 영향이 없다. 되돌리려면 두 값을 이전 값으로 복원한다.
   - 커밋: 13caf7db
 
 ### 기타
@@ -73,9 +375,9 @@
   - 누적 강화비(레벨 6, 11, 16, 21, 27, 31, 41, 51 도달): 이전 943 / 14,329 / 204,388 / 2,335,456 / 23,441,069 / 83,114,206 / 1,068,047,330 / 7,787,441,602, 이후 820 / 3,324 / 10,967 / 34,293 / 131,949 / 322,717 / 3,008,864 / 28,025,566
   - 영향: 높은 레벨의 강화비가 크게 내려 해역 요구 레벨 상향(0.19.2-05)과 함께 진행 속도의 기준이 바뀐다. 이미 올린 레벨은 그대로이고, 옛 누적과 새 누적의 차액은 우편으로 보낸다(0.19.2-18). 되돌리려면 ROD의 강화비 값과 식을 이전으로 돌린다. 되돌리면 그 사이 새 비용으로 올린 레벨과 지급한 차액 우편은 남는다.
   - 커밋: 26637ae7
-- 입질 대기 단축을 레벨마다 최소와 최대 둘 다 ×0.94에서 강화마다 한쪽만 ×0.94(홀수 레벨에서 강화하면 최대, 짝수 레벨에서 강화하면 최소)로 바꿨다. 레벨 1의 4~8초는 그대로이고, 레벨 L의 최소 = 4 × 0.94^내림((L−1)/2), 최대 = 8 × 0.94^올림((L−1)/2)다. 타이밍 바 시간(1.4초)은 그대로다. 강화비 변경(0.19.2-04)과 같은 커밋이며, 관리자 안내와 방치 사이클, 네임드 조우 기댓값은 0.19.2-19에 있다.
-  - 입질 대기 단축: 이전 레벨마다 최소와 최대 둘 다 ×0.94(레벨 L의 대기 = 4~8초 × 0.94^(L−1)), 이후 강화마다 한쪽만 ×0.94(최소 = 4 × 0.94^내림((L−1)/2), 최대 = 8 × 0.94^올림((L−1)/2))
-  - 레벨 12 입질 대기(최소~최대): 이전 약 2.03~4.05초, 이후 약 2.94~5.52초
+- 입질 대기 단축을 레벨마다 최소와 최대 둘 다 ×0.94에서 강화마다 한쪽만 ×0.94(홀수 레벨에서 강화하면 최대, 짝수 레벨에서 강화하면 최소)로 바꿨다. 레벨 1의 4\~8초는 그대로이고, 레벨 L의 최소 = 4 × 0.94^내림((L−1)/2), 최대 = 8 × 0.94^올림((L−1)/2)다. 타이밍 바 시간(1.4초)은 그대로다. 강화비 변경(0.19.2-04)과 같은 커밋이며, 관리자 안내와 방치 사이클, 네임드 조우 기댓값은 0.19.2-19에 있다.
+  - 입질 대기 단축: 이전 레벨마다 최소와 최대 둘 다 ×0.94(레벨 L의 대기 = 4\~8초 × 0.94^(L−1)), 이후 강화마다 한쪽만 ×0.94(최소 = 4 × 0.94^내림((L−1)/2), 최대 = 8 × 0.94^올림((L−1)/2))
+  - 레벨 12 입질 대기(최소\~최대): 이전 약 2.03\~4.05초, 이후 약 2.94\~5.52초
   - 영향: 같은 레벨의 입질 대기가 이전보다 길어 시간당 캐치 수가 줄어든다. 높은 레벨일수록 차이가 크다. 진행 전체의 영향은 0.19.2-19와 0.19.2-22에 적는다. 되돌리려면 rodStats의 감쇠 지수를 이전으로 돌린다.
   - 커밋: 26637ae7, 7d71213d
 - 해역 요구 파워를 새 진입 레벨에 맞춰 다시 정했다. 요구 파워 = 10 + (진입 레벨 − 1) × 5다. 마을 연못(요구 없음)과 마을 강(레벨 3)은 그대로다. 나머지 11개 해역은 모두 올랐다.
@@ -142,11 +444,11 @@
   - 남대서양 보상(쉬움 / 보통 / 어려움 / 네임드, 네임드는 두 항목 모두): 이전 950,000 / 2,000,000 / 4,000,000 / 7,500,000, 이후 3,000,000 / 5,500,000 / 10,000,000 / 25,000,000
   - 영향: 수주 중인 의뢰도 완료 때 새 보상을 받는다(보상은 콘텐츠 표의 값을 그대로 더한다). 되돌리려면 의뢰 표의 reward를 이전 값으로 돌린다. 그 사이 받은 보상은 남는다.
   - 커밋: fc800800
-- 0.19.2-04와 0.19.2-30의 관리자 안내다. 입질 대기는 레벨 1의 4~8초에서 강화마다 최소와 최대 중 한쪽에 ×0.94를 곱한다. 레벨 L의 최소 = 4 × 0.94^내림((L−1)/2), 최대 = 8 × 0.94^올림((L−1)/2)다. 타이밍 바 시간(1.4초)은 그대로다.
+- 0.19.2-04와 0.19.2-30의 관리자 안내다. 입질 대기는 레벨 1의 4\~8초에서 강화마다 최소와 최대 중 한쪽에 ×0.94를 곱한다. 레벨 L의 최소 = 4 × 0.94^내림((L−1)/2), 최대 = 8 × 0.94^올림((L−1)/2)다. 타이밍 바 시간(1.4초)은 그대로다.
   네임드 조우(확률 1/1000)의 기댓값은 레벨 12 방치 기준 약 1.8시간에서 약 2.1시간이 된다.
   - 강화비 식(레벨 L에서 L+1): 이전 L이 15 이하이면 round(50 × 1.7^(L−1)), 16 이상이면 round(50 × 1.7^14 × (L/15)^8), 이후 모든 레벨에서 round(100 × 1.25^(L−1))
-  - 입질 대기 단축: 이전 레벨마다 최소와 최대 둘 다 ×0.94(레벨 L의 대기 = 4~8초 × 0.94^(L−1)), 이후 강화마다 한쪽만 ×0.94(최소 = 4 × 0.94^내림((L−1)/2), 최대 = 8 × 0.94^올림((L−1)/2))
-  - 레벨 12 입질 대기(최소~최대): 이전 약 2.03~4.05초, 이후 약 2.94~5.52초
+  - 입질 대기 단축: 이전 레벨마다 최소와 최대 둘 다 ×0.94(레벨 L의 대기 = 4\~8초 × 0.94^(L−1)), 이후 강화마다 한쪽만 ×0.94(최소 = 4 × 0.94^내림((L−1)/2), 최대 = 8 × 0.94^올림((L−1)/2))
+  - 레벨 12 입질 대기(최소\~최대): 이전 약 2.03\~4.05초, 이후 약 2.94\~5.52초
   - 레벨 12 방치 사이클(구현 주석 기준): 이전 약 6.4초, 이후 약 7.6초
   - 영향: 같은 레벨의 시간당 캐치 수가 줄어든다. 높은 레벨일수록 차이가 크다. 강화비가 내려 같은 골드로 더 높은 레벨에 닿으므로 진행 전체의 영향은 해역 전환 시간으로 본다(0.19.2-22). 되돌리려면 rodStats의 감쇠 지수와 ROD의 강화비 값을 이전으로 돌린다.
   - 커밋: 26637ae7, 7d71213d
@@ -432,7 +734,7 @@
   - 부엌 미끼 목록 순서: 이전 콘텐츠 순서(사프란, 롱페퍼, 큐베브, 용연향), 이후 등급순, 특수는 뒤(롱페퍼, 큐베브, 용연향, 사프란)
   - 사프란 미끼의 이름 표기: 이전 사프란 미끼(등급 표기 없음), 이후 사프란 미끼(특수), 괄호는 특수 색 --c-special #69f0ae
   - 이름과 등급의 공용 표기: 이전 이름과 괄호 전체를 등급색, 이후 이름은 본문색, 괄호와 등급 낱말만 등급색
-  - 가방 탭의 잠금 토스트: 이전 '~을 잠갔어요. 판매에서 제외돼요.', '~의 잠금을 풀었어요. 다시 판매할 수 있어요.', 이후 '~을 잠갔어요. 판매와 기운 얻기에서 빠져요.', '~의 잠금을 풀었어요. 다시 고를 수 있어요.'
+  - 가방 탭의 잠금 토스트: 이전 '\~을 잠갔어요. 판매에서 제외돼요.', '\~의 잠금을 풀었어요. 다시 판매할 수 있어요.', 이후 '\~을 잠갔어요. 판매와 기운 얻기에서 빠져요.', '\~의 잠금을 풀었어요. 다시 고를 수 있어요.'
   - 생명의 기운 소제목 툴팁의 장소 안내: 이전 기운 얻기는 집 부엌에서 할 수 있어요., 이후 기운 얻기는 집 궤짝이나 항구 어시장에서 할 수 있어요.
   - 커밋: e03a9486, 67f8cc28, 530c0ff4, 4005f3a0, 69538c7a, cf128ab3, 29330e66
 
@@ -483,12 +785,12 @@
 
 - 밸런스 흐름 도구에 effects 명령(pnpm balance:flow effects)을 추가했다. 요리 효과를 넣었을 때 해역별 방치 수입 변화, 시드를 고정한 몬테카를로 도감 완성 시간, 분해 재료 공급을 낸다.
   효과 옵션: --bite(입질 대기 단축 %), --rare(희귀 이상 가중 %), --variant(돌연변이 가중치 %, 유물과 같은 경로), --size(크기 %), --move(이동 속도 %), --named(네임드 조우 가중치 %, 의뢰 구역과 출현 해역에서만), --units(재료 등급 단위, 기본 1,5,25,125), --axis(idle 또는 manual), --margin.
-  측정값(dev 기준, 방치, 진입 레벨, 시드 20261110, 300회): 입질 -10%는 골드와 명성 +2.7%(세인트헬레나)~+6.8%(마을 연못). 희귀 이상 +10%는 골드 +2.5%~+8.8%(후반일수록 큼), 명성 +1.1%~+2.2%. 돌연변이 가중치 +100%는 골드 전 해역 +12.0%, 명성 0, 돌연변이 도감 시간 마을 연못 8.2h에서 4.9h, 세인트헬레나 101h에서 61h, 일반 폼 도감 시간은 늘어남(마을 연못 2.4h에서 3.1h). 이동 +10%는 수입 0%, 판매 왕복 포함 +0.0~0.1%. 네임드 조우 +50%는 태평양 1.80시간에서 1.36시간. 방치 1시간 재료 점수 545(마을 연못)~1,250(그레이트 배리어 리프), 1000G당 점수 161.5(마을 연못)~1.2(세인트헬레나).
+  측정값(dev 기준, 방치, 진입 레벨, 시드 20261110, 300회): 입질 -10%는 골드와 명성 +2.7%(세인트헬레나)\~+6.8%(마을 연못). 희귀 이상 +10%는 골드 +2.5%\~+8.8%(후반일수록 큼), 명성 +1.1%\~+2.2%. 돌연변이 가중치 +100%는 골드 전 해역 +12.0%, 명성 0, 돌연변이 도감 시간 마을 연못 8.2h에서 4.9h, 세인트헬레나 101h에서 61h, 일반 폼 도감 시간은 늘어남(마을 연못 2.4h에서 3.1h). 이동 +10%는 수입 0%, 판매 왕복 포함 +0.0\~0.1%. 네임드 조우 +50%는 태평양 1.80시간에서 1.36시간. 방치 1시간 재료 점수 545(마을 연못)\~1,250(그레이트 배리어 리프), 1000G당 점수 161.5(마을 연못)\~1.2(세인트헬레나).
   첫 구현(e1307aa)은 돌연변이를 확률 배수로 계산해 제품 규칙과 달랐고(+100%에서 골드 +20%로 과대), 네임드 조우를 조우가 없는 해역에도 냈다. f3d9074에서 제품 규칙 경로로 바로잡았다.
   - balance:flow 명령: 이전 transition, days, opening, exception, ev, gates, dist, travel, 이후 여기에 effects 추가(명령 생략 시 기본 실행에서 제외)
   - 커밋: e1307aa, f3d9074
 - 밸런스 흐름 도구 effects 명령에 등급 누적 가중 옵션을 더했다. --epic N은 영웅과 전설 가중 +N%, --legendary N은 전설 가중 +N%이고 --rare와 등급마다 합산해 제품 규칙 addGradeEffect로 적용한다. 효과를 받는 등급의 캐치 비율과 영웅, 전설 도감 완성 시간(시드 고정) 열을 더했다. 기존 열의 난수 소비는 바뀌지 않는다.
-  측정(방치, 진입 레벨, 시드 20261110, 300회): 희귀 이상 +40%는 골드 +11~34%, 영웅 이상 +100%는 골드 +19~55%와 영웅 도감 약 절반, 전설 +200%는 골드 +18~71%와 전설 도감 약 3분의 1. 수동 기준 영웅 이상 +50%는 골드 +21~31%, 전설 +100%는 +15~42%(남대서양이 가장 작음, 기본 전설 비율이 낮아서).
+  측정(방치, 진입 레벨, 시드 20261110, 300회): 희귀 이상 +40%는 골드 +11\~34%, 영웅 이상 +100%는 골드 +19\~55%와 영웅 도감 약 절반, 전설 +200%는 골드 +18\~71%와 전설 도감 약 3분의 1. 수동 기준 영웅 이상 +50%는 골드 +21\~31%, 전설 +100%는 +15\~42%(남대서양이 가장 작음, 기본 전설 비율이 낮아서).
   - effects 등급 가중 옵션: 이전 --rare(희귀 이상)만, 이후 --rare, --epic(영웅 이상), --legendary(전설), 등급별 합산
   - 커밋: 19a8ef4b, f6396e98
 - 코드 주석에서 저장소 밖 맥락(사용자 결정과 날짜, 관리 문서 이름, 이슈 키)과 낡은 서버 판정 설명을 지우고 사실만 남겼다(src, api, tools 약 50곳). 포획 판정과 쿠폰 사용 판정 주석을 지금 구조(서버 리듀서, 오프라인은 클라이언트의 같은 리듀서)에 맞게 고쳤다.
@@ -498,7 +800,7 @@
   - 개발 명령 판정 테스트 범위: 이전 대표 값만, 이후 빈 값, 대소문자, 공백, Origin 목록 전체와 응답 성공
   - 커밋: db67324c, 60448d1f, ae8420c4, a51b1e55, 9ec45901
 - 밸런스 흐름 도구에 요리 지표를 더했다. window(등급 미끼 하나의 30분 수동 창: 등급별 기대 캐치, 골드 증가, 같은 시드 짝 비교로 잰 도감 단축), recipes(레시피 순손익과 자동 기운이 열린 해역의 가방 한도 기운 공급), transition/days/gates의 도시락과 의뢰 관측 옵션, effects --margin 음수(조기 진입 비교), --axis perfect를 추가했다. 도시락 효과는 방치 캐치에만, 미끼는 수동 30분 창에만 걸고 계획 명령은 미끼를 거부한다. 기준 값과 gates 종료 코드는 요리 없이 잰다.
-  측정(시드 20261110): 자동 기운은 해금 해역(인도양부터) 9시간에 일반 2,808~3,970개, 희귀 이상 0개라 자동 기운만으로는 재촉 도시락만 하루 14~20개 만든다. 상위 기운은 직접 기운 얻기나 앞 지역 낚시로 얻는다. 모둠 도시락은 전환마다 0.1~1.7시간을 줄인다(용승대에서 세인트헬레나 15.87시간에서 14.12시간). 인도양 30분 창에서 영웅 미끼는 영웅 캐치 23.85에서 32.32, 전설 미끼는 전설 캐치 4.77에서 7.57.
+  측정(시드 20261110): 자동 기운은 해금 해역(인도양부터) 9시간에 일반 2,808\~3,970개, 희귀 이상 0개라 자동 기운만으로는 재촉 도시락만 하루 14\~20개 만든다. 상위 기운은 직접 기운 얻기나 앞 지역 낚시로 얻는다. 모둠 도시락은 전환마다 0.1\~1.7시간을 줄인다(용승대에서 세인트헬레나 15.87시간에서 14.12시간). 인도양 30분 창에서 영웅 미끼는 영웅 캐치 23.85에서 32.32, 전설 미끼는 전설 캐치 4.77에서 7.57.
   첫 구현은 미끼를 방치 하루에 걸 수 있었고 자동 기운 해금 전 해역까지 공급을 냈다. 82f56c0c에서 바로잡았다.
   - balance:flow 명령: 이전 effects까지, 이후 window, recipes 추가, transition/days/gates 관측 옵션
   - 커밋: 85d67274, 33dc00b3, 3cfd7e1c, ef11ffdf, 0b0d0f63, 82f56c0c
@@ -592,7 +894,7 @@
   - 도구 주석과 테스트 이름에서 파일 경로와 외부 문서 참조를 지웠다.
   - 커밋: 0bb96460, 8cdbaae6, 28d2eb81, 0480e8a5, 176de0e3, 5b40045c, b771a102, 62fdafbc, 31ed44b4
 - 전역 스타일(src/index.css)의 외부 글꼴 스타일시트 import를 지우고, 표현 계층 UI 폴더(src/presentation/ui/fonts)의 @font-face 선언(fonts.css)을 import한다. 방문자 IP가 로그인과 관계없이 Google로 나가는 것을 없애려는 변경이다.
-  - 본문 글꼴 Noto Sans KR: woff2 124개(한글 문자 범위 조각 120개, latin, latin-ext, cyrillic, vietnamese), 선언의 굵기 범위 400 700(파일은 wght 100~900 축), font-display swap. 한글은 unicode-range 조각이라 화면에 쓰인 글자의 조각만 받는다. 파일 합계 약 3.7MB.
+  - 본문 글꼴 Noto Sans KR: woff2 124개(한글 문자 범위 조각 120개, latin, latin-ext, cyrillic, vietnamese), 선언의 굵기 범위 400 700(파일은 wght 100\~900 축), font-display swap. 한글은 unicode-range 조각이라 화면에 쓰인 글자의 조각만 받는다. 파일 합계 약 3.7MB.
   - 픽셀 글꼴 Silkscreen: 400과 700의 latin, latin-ext woff2 4개, font-display swap.
   - 두 글꼴 폴더에 SIL OFL 1.1 전문(OFL.txt)을 둔다.
   - 링크 미리보기 원본(tools/og-image/og.html)은 외부 스타일시트 대신 저장소의 Silkscreen 700 latin 파일을 상대 경로 @font-face(font-display block)로 읽는다. 다시 만드는 명령은 file:/// 주소로 열고 네트워크가 필요 없다.
@@ -2266,6 +2568,7 @@
   - 영향: 미확인
   - 커밋: 92257ad
 
+[0.20.0]: https://github.com/abyss-works/pixel-fishing/releases/tag/v0.20.0
 [0.19.3]: https://github.com/abyss-works/pixel-fishing/releases/tag/v0.19.3
 [0.19.2]: https://github.com/abyss-works/pixel-fishing/releases/tag/v0.19.2
 [0.19.1]: https://github.com/abyss-works/pixel-fishing/releases/tag/v0.19.1
