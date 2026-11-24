@@ -1,8 +1,7 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import type { DebugStepInput, GameAction } from '../../../game/rules/actions';
 import type { BaseId } from '../../../game/content/places';
 import type { SpotId } from '../../../game/content/spots';
-import { MIN_ACTION_GAP_FAST_MS } from '../../../game/rules/balance';
 import { REJECT_TEXT } from '../../../game/rules/rules';
 import type { DispatchResult, MaybePromise } from '../../gameplay/service/types';
 import { armForceEncounter } from '../../bounty/service/forceEncounter';
@@ -13,7 +12,6 @@ import type { DevPreset, PresetContext, PresetStep } from '../model/presets';
 export interface DevLogEntry { id: number; ok: boolean; text: string }
 
 const LOG_MAX = 8;
-const PRESET_ACTION_GAP_MS = MIN_ACTION_GAP_FAST_MS + 20;
 
 export interface DevTeleportHandlers {
   onTeleportBase?: (base: BaseId) => MaybePromise<boolean>;
@@ -57,17 +55,15 @@ function formatDispatchError(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-const waitMs = (ms: number): Promise<void> => new Promise(resolve => { setTimeout(resolve, ms); });
-
 /** 개발 도구 실행기 — 명령·프리셋·순간이동을 게임 dispatch로 보내고 결과를 짧은 기록으로 남긴다.
- *  프리셋은 연속 debug 명령을 debugBatch로 묶어 보내고, 한 단계라도 거부·실패하면 거기서 멈춘다 */
+ *  프리셋은 연속 debug 명령을 debugBatch로 묶어 보내고, 한 단계라도 거부·실패하면 거기서 멈춘다.
+ *  프리셋 스텝은 느림 창 대상이 아니라 따로 간격을 두지 않는다 */
 export function useDevTools(
   dispatch: (action: GameAction) => MaybePromise<DispatchResult>,
   teleports: DevTeleportHandlers = {},
 ) {
   const [log, setLog] = useState<DevLogEntry[]>([]);
   const [busy, setBusy] = useState(false);
-  const lastServerActionAtRef = useRef(0);
 
   const push = (ok: boolean, text: string) =>
     setLog(prev => [{ id: Date.now() + Math.random(), ok, text }, ...prev].slice(0, LOG_MAX));
@@ -77,7 +73,6 @@ export function useDevTools(
   const send = async (action: GameAction, label: string): Promise<boolean> => {
     try {
       const r = await Promise.resolve(dispatch(action));
-      lastServerActionAtRef.current = Date.now();
       if (r.status === 'ok') { push(true, label); return true; }
       push(false, `${label} — ${REJECT_TEXT[r.error]}`);
       return false;
@@ -87,13 +82,6 @@ export function useDevTools(
     }
   };
 
-  const paceNonDebugStep = async (): Promise<void> => {
-    const lastAt = lastServerActionAtRef.current;
-    if (lastAt <= 0) return;
-    const remaining = PRESET_ACTION_GAP_MS - (Date.now() - lastAt);
-    if (remaining > 0) await waitMs(remaining);
-  };
-
   const runStep = async (step: BatchedPresetStep, presetLabel: string): Promise<boolean> => {
     switch (step.kind) {
       case 'debug':
@@ -101,14 +89,11 @@ export function useDevTools(
       case 'debugBatch':
         return send({ type: 'debugBatch', steps: step.steps }, `${presetLabel} 일괄 적용 (${step.steps.length}건)`);
       case 'action':
-        await paceNonDebugStep();
         return send(step.action, step.action.type === 'acceptQuest' ? `수주 ${step.action.questId}` : step.action.type);
       case 'teleportBase':
-        await paceNonDebugStep();
         if (teleports.onTeleportBase) {
           try {
             const ok = await Promise.resolve(teleports.onTeleportBase(step.base));
-            lastServerActionAtRef.current = Date.now();
             push(ok, ok ? `거점 이동 (${step.base})` : `거점 이동 실패 (${step.base})`);
             return ok;
           } catch (e) {
@@ -166,7 +151,6 @@ export function useDevTools(
         }
         try {
           const ok = await Promise.resolve(teleports.onTeleportBase(base));
-          lastServerActionAtRef.current = Date.now();
           push(ok, ok ? `${label} 이동` : `${label} 이동 불가`);
         } catch (e) {
           push(false, `${label} 이동 — ${formatDispatchError(e)}`);
@@ -177,7 +161,6 @@ export function useDevTools(
         if (!teleports.onTeleportSpot) { push(false, `${label} — 이동 콜백 없음`); return; }
         try {
           const ok = await Promise.resolve(teleports.onTeleportSpot(spot));
-          lastServerActionAtRef.current = Date.now();
           push(ok, ok ? `${label} 이동` : `${label} 이동 불가`);
         } catch (e) {
           push(false, `${label} 이동 — ${formatDispatchError(e)}`);
