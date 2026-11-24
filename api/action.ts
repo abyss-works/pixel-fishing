@@ -844,7 +844,7 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
   const { judgment, phaseOpts, cook } = prepareCatchDraw(base, judgmentIn, now, pz, forcePhase);
   const today = todayKST();
   // 어종 천장 — 후보가 있을 때만 그 어종들의 일반 폼 소유를 조회한다(fast path는 도감을 들고 있지 않다)
-  const candidates = speciesPityCandidates(base.pity, spot, phaseOpts.phase);
+  const candidates = speciesPityCandidates(base.pity, spot, phaseOpts);
   const owned = candidates.length === 0 ? new Set<string>()
     : await step('db-read', { uid, action: 'catch' }, () => ownedNormalForms(db, uid, candidates));
   const achBonuses = achievementBonusesOf(base);
