@@ -93,7 +93,7 @@ describe('HudLayout 미니맵 위 칩 줄', () => {
 });
 
 describe('HudLayout 하단 HUD 묶음 및 상태 띠 고정 슬롯 분리', () => {
-  it.each([false, true])('PC와 모바일(mobile=%s) 모두 statusSlot은 하단 묶음과 분리된 스테이지 상단 absolute 고정 슬롯이고, 오른쪽 아래 열과 메시지 창만 하단 묶음에 둔다', mobile => {
+  it.each([false, true])('PC와 모바일(mobile=%s) 모두 statusSlot은 하단 묶음과 분리된 스테이지 하단 중앙 absolute 고정 슬롯이고, 오른쪽 아래 열과 메시지 창만 하단 묶음에 둔다', mobile => {
     layout.mobile = mobile;
     setMinimapVisible(true);
     let slot: HTMLDivElement | null = null;
@@ -104,8 +104,8 @@ describe('HudLayout 하단 HUD 묶음 및 상태 띠 고정 슬롯 분리', () =
     expect(bundle.contains(slot)).toBe(false);
     expect(slot!.className).toContain('absolute');
     expect(slot!.className).toContain('z-(--z-stage-status)');
-    expect(slot!.className).toContain('top-20');
-    expect(slot!.className).toContain('mobile:top-7');
+    expect(slot!.className).toContain('bottom-24');
+    expect(slot!.className).toContain('mobile:bottom-24');
     expect(slot!.className).toContain('mobile:row-start-2');
     expect(slot!.className).toContain('mobile:row-end-3');
     expect(slot!.className).toContain('pointer-events-none');
