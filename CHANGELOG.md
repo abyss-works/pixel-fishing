@@ -2,6 +2,45 @@
 
 이 파일은 생성된다. 직접 고치지 않는다. 형식은 Keep a Changelog를 따른다.
 
+## [0.20.2] - 2026-11-24
+
+### 기능
+
+- KST 04:00 날짜 경계 기준으로 계정별 오늘의 운세(3종 균등, 적당한 운 +3% 40% / 좋은 운 +5% 60%)를 첫 접속 또는 catch·sell 첫 판정에서 고정한다. 첫 접속 모달과 스탯 보너스 탭에서 노출하고, 판매 미리보기에도 재물운 배율을 반영한다.
+  - 일일 운세 추첨·고정 및 보너스 배율 적용: 이전 일일 운세 시스템 없음, 이후 풍어운(희귀+)·재물운(판매가)·그림자 운(네임드) +3%·+5% 운 배율 적용 및 접속 모달·보너스 탭·판매 미리보기 노출
+  - 커밋: 9bc2296d, 217a665c, 9612a78f
+- canExtractEnergy가 거점(집·항구, 요리 해금) 외에 바다에서도 가공 플랜트선 이상 보유 및 비게스트 조건이면 extractEnergy를 허용한다. 바다 가방에서 열 때는 판매 창이 기운 얻기 탭으로 바로 열리며 판매 탭은 잠금 안내와 함께 비활성화한다.
+  - 가공 플랜트선 바다 기운 얻기 진입 및 판매 탭 분리 잠금: 이전 거점(집·항구)에서만 수동 기운 얻기 가능, 이후 가공 플랜트선 이상 비게스트 계정은 바다 가방에서 기운 얻기 창 진입 가능(판매 탭 잠금)
+  - 커밋: cbe0c97f
+
+### UI
+
+- 가방 상단에 물고기/아이템/유물 3서브탭을 두고 Tab 및 탭 재선택 순환을 연결했다. 물고기 섹션 우상단에 목록/카드 전환 아이콘, 하단에 자동 잠금·기운 얻기 2열 버튼을 배치했다. 아이템 섹션은 2열 카드형으로 생명의 기운 4종 16x16 픽셀 스프라이트와 도시락·미끼 총 지속 시간(그물망 배수 반영)·활성 효과 사용 중 배지 및 남은 시간을 표시하고 도움말 안내도 동기화했다.
+  - 가방 3서브탭 개편 및 아이템 카드형·지속 시간·기운 아이콘 도입: 이전 가방 단일 화면에 항목·버튼이 섞여 있었고 요리 지속 시간과 기운 아이콘이 없었음, 이후 물고기/아이템/유물 3서브탭 분리, 아이템 카드형+총/남은 시간 표시, 생명의 기운 4종 픽셀 아이콘 적용
+  - 커밋: cbe0c97f
+- FishPickTable 상단에 보유 등급별 일괄 선택 칩 스트립을 추가해 판매 탭과 기운 얻기 탭에서 해당 등급의 미잠금 물고기를 한 번에 선택·해제할 수 있게 했다.
+  - 판매·기운 얻기 어종 표 상단 등급 일괄 선택 칩 추가: 이전 어종별 행을 펼쳐 개별 선택해야 했음, 이후 등급 칩으로 해당 등급 미잠금 물고기 일괄 선택·해제 가능
+  - 커밋: b645ebb6
+- 스테이지 상태 안내 슬롯을 하단 flex-wrap 카드 묶음에서 분리해 고정 슬롯·독립 z 계층으로 두고, 게임 영역 유래 모달은 stage 스코프로 내려 Sidebar inert 및 클릭 차단 우회 코드를 제거했다.
+  - 스테이지 상태 안내 슬롯 고정 및 사이드바·모달 계층 스코프 분리: 이전 방치 결과 카드 등 표시 변화 시 입질 안내 위치 이동 및 스테이지 모달 중 사이드바 차단, 이후 상태 안내 위치 고정 및 스테이지 모달 표시 중에도 사이드바·탭 전환 정상 동작
+  - 커밋: 0a2c9d85
+
+### 밸런스
+
+- REPORT_MIN_MS를 2분에서 5분으로 상향하고 useAwayReport에서 기준 미만 부재 시 복귀 보고 조회와 메시지 창 안내 줄 출력을 생략하도록 변경했다.
+  - 방치 알림 최소 부재 기준 상향 및 미만 부재 보고 생략: 이전 2분 이상 부재 시 방치 알림 카드·복귀 메시지 표시, 이후 5분 이상 부재 시에만 방치 알림 카드·복귀 메시지 표시, 미만 생략
+  - 영향: 5분 미만 짧은 부재 시 방치 알림 카드와 복귀 메시지가 뜨지 않는다
+  - 커밋: df6d5b08, eb82fd32
+
+### 수정
+
+- SellTab 확정 버튼에서 AdjustedAmount를 분리해 버튼 위 확정 정보 줄로 이동하고, PickTab의 h-11 고정 높이를 min-h-11로 전환했으며 uiGuard에 텍스트/수치 버튼 고정 높이 금지 가드를 추가했다.
+  - 판매 확정 버튼 보정 금액 분리 및 공용 버튼 최소 높이 전환: 이전 확정 버튼 안 긴 보정 금액이 줄바꿈되어 고정 44px 버튼 밖으로 넘침, 이후 받을 골드는 버튼 위 정보 줄에 표시하고 버튼은 선택 마릿수만 표기하며 min-h-11 적용
+  - 커밋: 48f260ae
+- 범용 150ms 액션 간격 제한을 제거하고 느림 창 대상(catch, sendLetter 1초)과 catchTooSoon 검사만 유지하도록 조정했다.
+  - 액션 간격 제한을 느림 창 대상으로 한정: 이전 도시락 1회 사용 등 빠른 조작도 직전 액션과 150ms 간격 제한에 걸려 경고 발생, 이후 느림 창(catch·sendLetter 1초)만 간격 제한 유지
+  - 커밋: af9a9559
+
 ## [0.20.1] - 2026-11-24
 
 ### 수정
@@ -10,7 +49,7 @@
   - 조회 및 타입(api/_data/telemetry.ts): EventArchiveRow 인터페이스(id, user_id, type, payload, created_at, counted)를 정의하고, eventsBefore의 SELECT 목록에 counted 열을 추가해 반환 타입을 EventArchiveRow[]로 맞췄다.
   - 테스트 및 스냅샷(api/_data/telemetry.test.ts, api/cold-archive.test.ts, api/cron/__snapshots__/archive.db.test.ts.snap): eventsBefore의 counted 열 조회·불리언 보존 단위 테스트를 추가하고, 콜드 아카이브 JSONL 검증과 아카이브 DB 스냅샷(counted 및 bytesRaw)을 갱신했다.
   - eventsBefore SELECT 열 및 반환 타입(api/_data/telemetry.ts): 이전 id, user_id, type, payload, created_at (Record<string, unknown>[]), 이후 id, user_id, type, payload, created_at, counted 포함 (EventArchiveRow[])
-  - 커밋: 7b1f88c6
+  - 커밋: 524ed482
 - 초기 로드와 읽기 전용 조회 경로에 DB 쓰기 없는 메모리 내 업적 파생 평가를 적용해, 세이브에 아직 기록되지 않았거나 boot 이전 상태여도 이미 달성한 업적이 즉시 claimable로 노출되도록 수정했다.
   - 서버 무쓰기 파생 평가(api/_data/achievements.ts, api/_data/me.ts, api/_data/admin.ts): 도감 행(records), 저장 blob, 카운터(counters), 네임드 토벌 목록(clearedNamed)만으로 evaluateAchievements를 계산하는 deriveAchievements를 추가했다. readOwnState는 newlyClaimable이 있을 때 saves_current를 쓰지 않고 응답 객체 cur.data.achievements에만 파생 결과를 반영하며, 관리자 userState는 records JSON에 max_size와 first_caught를 함께 조회한 뒤 deriveAchievements로 claimed·claimable 수를 집계한다.
   - 클라이언트 초기 로드(src/platform/adapters/httpGameGateway.ts): assemble과 구 saves 이관 폴백 경로 모두에서 migrate 직후 evaluateAchievements를 수행해 초기 상태부터 파생 업적을 반영한다.
@@ -18,7 +57,7 @@
   - readOwnState 업적 평가(api/_data/me.ts, achievements.ts): 이전 saves_current.data.achievements 저장값만 반환, 이후 deriveAchievements로 무쓰기 파생 평가 후 메모리 응답에만 claimable 반영
   - 관리자 userState 업적 집계(api/_data/admin.ts): 이전 saves_current.data.achievements 원시 맵만 집계, records에 max_size·first_caught 미조회, 이후 records에 max_size·first_caught 포함 및 deriveAchievements 기반 claimed·claimable 집계
   - 클라이언트 초기 로드(HttpGameGateway.load, assemble): 이전 migrate 결과의 achievements만 유지, 이후 assemble과 legacy 폴백 경로에서 evaluateAchievements 즉시 적용
-  - 커밋: edd89a50
+  - 커밋: 14101abc
 
 ### 기타
 
@@ -27,7 +66,7 @@
   - Drizzle 스키마 및 DB 테스트(api/_db/schema.ts, api/_db/schema.db.test.ts, api/_dbTest/migrations.db.test.ts): eventConsumerCutoffs 선언을 추가하고, 선언 테이블 목록과 기본값·제약·authenticated 역할 차단 RLS 검증 테스트를 추가했다.
   - 이벤트 소비자 컷오프 테이블 및 스키마(0039_event_consumer_cutoffs, schema.ts): 이전 없음, 이후 public.event_consumer_cutoffs 테이블 및 eventConsumerCutoffs Drizzle 스키마 추가(복합 PK, RLS 서버 전용)
   - 영향: 영향: 순수 가산 테이블 추가라 기존 테이블·런타임 경로에 영향이 없으며, 코드 배포 전 마이그레이션을 먼저 적용해도 안전하다. 되돌리기: supabase/migrations/0039_event_consumer_cutoffs.down.sql을 실행해 테이블을 삭제하고 schema.ts와 관련 DB 테스트 변경을 복원한다.
-  - 커밋: 7d2301ea
+  - 커밋: 8a2afcd7
 
 ## [0.20.0] - 2026-11-24
 
@@ -2595,6 +2634,7 @@
   - 영향: 미확인
   - 커밋: 92257ad
 
+[0.20.2]: https://github.com/abyss-works/pixel-fishing/releases/tag/v0.20.2
 [0.20.1]: https://github.com/abyss-works/pixel-fishing/releases/tag/v0.20.1
 [0.20.0]: https://github.com/abyss-works/pixel-fishing/releases/tag/v0.20.0
 [0.19.3]: https://github.com/abyss-works/pixel-fishing/releases/tag/v0.19.3
