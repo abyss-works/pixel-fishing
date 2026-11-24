@@ -277,15 +277,19 @@ export default function AccountModal({
           </div>
         </>
       )}
-      {dialogs}
     </>
   );
 
-  return layer === 'stage' ? (
-    <Modal layer="stage" onClose={onClose}>
-      <ModalCard title="계정 관리" onClose={onClose}>{content}</ModalCard>
-    </Modal>
-  ) : (
-    <Modal layer="app" title="계정 관리" narrow onClose={onClose}>{content}</Modal>
+  return (
+    <>
+      {layer === 'stage' ? (
+        <Modal layer="stage" onClose={onClose}>
+          <ModalCard title="계정 관리" onClose={onClose}>{content}</ModalCard>
+        </Modal>
+      ) : (
+        <Modal layer="app" title="계정 관리" narrow onClose={onClose}>{content}</Modal>
+      )}
+      {dialogs}
+    </>
   );
 }

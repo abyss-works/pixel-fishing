@@ -185,14 +185,14 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
     ]);
     const nonAdminViews = sources.filter(f => f.path.startsWith('views/') && !f.path.startsWith('views/admin/'));
     const appUsers = nonAdminViews
-      .filter(f => /layer="app"/.test(f.src))
+      .filter(f => /\blayer\s*=\s*['"]app['"]/.test(f.src))
       .map(f => f.path)
       .sort();
     expect(appUsers).toEqual([...APP_MODAL_WHITELIST].sort());
     // AccountModal은 스테이지 게스트 차단 경로에서는 반드시 layer="stage"로 호출한다
     const gameView = src('views/game/GameView.tsx');
-    expect(gameView).toMatch(/<AccountModal\b[^>]*layer="stage"/);
-    expect(gameView).not.toMatch(/<AccountModal\b[^>]*layer="app"/);
+    expect(gameView).toMatch(/<AccountModal\b[^>]*\blayer\s*=\s*['"]stage['"]/);
+    expect(gameView).not.toMatch(/<AccountModal\b[^>]*\blayer\s*=\s*['"]app['"]/);
     // 게임 영역 유래 오버레이는 모두 GameStageLayout 내부에 마운트된다
     const stageStart = gameView.indexOf('<GameStageLayout>');
     const stageEnd = gameView.indexOf('</GameStageLayout>');
@@ -217,8 +217,14 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
       'views/devtools/DevTools.tsx',
     ]);
     const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
-    const fixedCssClass = (s: string) =>
-      [...s.matchAll(/(['"`])(?:\\.|(?!\1)[^\n])*?\1/g)].some(m => /(?<![\w-])fixed(?![\w-])/.test(m[0]));
+    const fixedCssClass = (s: string) => {
+      const quoted = [...s.matchAll(/(['"])(?:\\.|(?!\1)[^\n])*?\1/g)].map(m => m[0]);
+      const templates = [...s.matchAll(/`(?:\\.|[^`\\])*`/g)].map(m => m[0].replace(/\$\{[^{}]*\}/g, ' '));
+      return [...quoted, ...templates].some(chunk => /(?<![\w-])fixed(?![\w-])/.test(chunk));
+    };
+    expect(fixedCssClass('className={`\n  pointer-events-none\n  fixed inset-0\n`}')).toBe(true);
+    expect(fixedCssClass("className={cx('min-h-0', fixed && 'flex-1')}")).toBe(false);
+    expect(fixedCssClass('className="w-full table-fixed"')).toBe(false);
     const users = sources
       .filter(f => !f.path.startsWith('views/admin/'))
       .filter(f => fixedCssClass(stripComments(f.src)))
