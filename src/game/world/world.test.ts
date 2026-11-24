@@ -3,20 +3,21 @@
 import { describe, it, expect } from 'vitest';
 import { SPOTS } from '../content/spots';
 import { SALE_BASES } from '../content/places';
-import { ZONES, topZoneOf, zoneById, zoneOfSpot, CLOSED_SEA_MSG } from '../content/zones';
+import { ZONES, topZoneOf, zoneById, zoneOfSpot } from '../content/zones';
 import { zoneOfPort } from '../content/bounties';
 import { BOATS, MAX_BOAT, nextBoatText } from '../content/boats';
 import { WATER_STYLE } from '../rendering/pixel/styles';
 import type { MapCellDef, RegionPack, School } from './index';
 import {
-  REGION_PACKS, BASE_PACKS, ZoneTracker, canMove, zoneOf, movePlayer, inTrigger, nearestSchoolInRange,
-  entryPoint, furnitureAt, inClosedSea, closedSeaBlock, HOME_FURNITURE, HARBOR_FURNITURE, MANILA_FURNITURE, COLOMBO_FURNITURE,
+  REGION_PACKS, BASE_PACKS, ZoneTracker, canMove, zoneOf, closedSeaBlock, movePlayer, inTrigger, nearestSchoolInRange,
+  entryPoint, furnitureAt, inClosedSea, HOME_FURNITURE, HARBOR_FURNITURE, MANILA_FURNITURE, COLOMBO_FURNITURE,
   TOAMASINA_FURNITURE, WALVISBAY_FURNITURE,
   VILLAGE, VILLAGE_W, V_POND, V_HOUSE, V_DOOR, V_SPAWN, V_BRIDGE, V_PIER, V_PORT, V_SCHOOLS,
-  WORLD, WORLD_SPAWN, HARBORS, schoolsOf, generateWorldSchools,
+  WORLD, WORLD_MAP, WORLD_SPAWN, HARBORS, schoolsOf, generateWorldSchools,
 } from './index';
 import { CAST_RANGE } from '../rules/balance';
-import { cellDefAt } from './mask';
+import { cellDefAt, compileMap, mapBounds } from './mask';
+import { WORLD_LEGEND } from './regions/world';
 import { ANCHORS as WORLD_ANCHORS } from './regions/generated/world.mask';
 import { EARTH_MAP, worldToEarth, implementedRect } from '../../presentation/views/overlays/world-map/atlas';
 
@@ -362,17 +363,26 @@ describe('남대서양 지도', () => {
     }
   });
 
-  const CLOSED_SPOTS = [
-    [-14, 8, '시에라리온 앞바다'], [0, 4, '기니만'], [-10, 33, '모로코 앞바다'], [10, 38, '지중해'], [-10, 43, '비스케이만'],
+  const OPENED_RECT_SPOTS = [
+    [-30, -15, '서남대서양', 'southatlantic', true],
+    [-72, 15, '카리브해', 'northatlantic', true],
+    [10, 38, '서지중해', 'northatlantic', false],
+    [-78, -15, '남미 서부 해역', 'southatlantic', false],
   ] as const;
 
-  it('적도 북쪽 대서양과 지중해는 실제 바다지만 아직 열지 않은 바다라 들어설 수 없다', () => {
-    for (const [lon, lat, name] of CLOSED_SPOTS) {
+  it('직사각형 창 안의 서남대서양·카리브해·서지중해·남미 서부 해역은 열려 있다', () => {
+    const fromWalvis = reachabilityCheck(WORLD, walvis);
+    const fromLisbon = reachabilityCheck(WORLD, BASE_PACKS.lisbon.exitAt!);
+    for (const [lon, lat, name, expectedZone, atlanticReachable] of OPENED_RECT_SPOTS) {
       const [x, y] = worldAt(lon, lat);
-      expect(cellDefAt(WORLD.map!, x, y)?.water, `${name}은 물로 그려진다`).toBe(true);
-      expect(inClosedSea(WORLD, x, y), name).toBe(true);
-      expect(canMove(WORLD, x, y), name).toBe(false);
-      expect(zoneOf(WORLD, x, y), name).toBeUndefined();
+      expect(cellDefAt(WORLD.map!, x, y)?.water, `${name}은 물`).toBe(true);
+      expect(inClosedSea(WORLD, x, y), `${name}은 미개방 바다가 아님`).toBe(false);
+      expect(canMove(WORLD, x, y), `${name} 통행 가능`).toBe(true);
+      expect(zoneOf(WORLD, x, y), `${name} 구역`).toBe(expectedZone);
+      if (atlanticReachable) {
+        expect(fromWalvis.reachedPoint({ x, y }), `월비스베이→${name}`).toBe(true);
+        expect(fromLisbon.reachedPoint({ x, y }), `리스본→${name}`).toBe(true);
+      }
     }
   });
 
@@ -382,35 +392,63 @@ describe('남대서양 지도', () => {
       expect(cellDefAt(WORLD.map!, x, y)?.water, `${name}은 물`).toBe(true);
       expect(inClosedSea(WORLD, x, y), name).toBe(false);
     }
-    expect(inClosedSea(WORLD, ...worldAt(30, 34)), '동지중해').toBe(true);
   });
 
-  it('적도를 북쪽으로 넘으려 하면 안내문과 함께 막힌다', () => {
-    // 남대서양 쪽 가장자리(적도 바로 남쪽)에서 북쪽으로 한 걸음
-    const [x, y] = worldAt(-8, -0.3);
-    expect(canMove(WORLD, x, y)).toBe(true);
-    expect(zoneOf(WORLD, x, y)).toBe('southatlantic');
-    expect(closedSeaBlock(WORLD, { x, y }, 0, -1, 0.05, 190)).toBe(CLOSED_SEA_MSG);
-    expect(closedSeaBlock(WORLD, { x, y }, 0, 1, 0.05, 190)).toBeNull();
-    const north = movePlayer(WORLD, { x, y }, 0, -1, 1, 190);
-    expect(inClosedSea(WORLD, north.x, north.y)).toBe(false);
-  });
-
-  it('열지 않은 바다는 어디에서도 닿지 않고 어군과 구역도 없다', () => {
-    const fromSpawn = reachabilityCheck(WORLD);
-    const fromWalvis = reachabilityCheck(WORLD, walvis);
-    for (const [lon, lat, name] of CLOSED_SPOTS) {
-      const p = { x: worldAt(lon, lat)[0], y: worldAt(lon, lat)[1] };
-      expect(fromSpawn.reachedPoint(p), `고향에서 ${name}`).toBe(false);
-      expect(fromWalvis.reachedPoint(p), `월비스베이에서 ${name}`).toBe(false);
+  it('적도를 사이에 두고 남대서양과 북대서양이 이어진다', () => {
+    const [sx, sy] = worldAt(-8, -0.5);
+    const [nx, ny] = worldAt(-8, 0.5);
+    expect(zoneOf(WORLD, sx, sy)).toBe('southatlantic');
+    expect(zoneOf(WORLD, nx, ny)).toBe('northatlantic');
+    expect(canMove(WORLD, nx, ny)).toBe(true);
+    // 리스본항·아조레스·버뮤다 확인
+    const lisbon = BASE_PACKS.lisbon.exitAt!;
+    expect(zoneOf(WORLD, lisbon.x, lisbon.y)).toBe('northatlantic');
+    expect(zoneOf(WORLD, ...worldAt(-28, 38.5))).toBe('azores');
+    expect(zoneOf(WORLD, ...worldAt(-64.2, 32.3))).toBe('bermuda');
+    // 리스본항에서 아조레스·버뮤다·고향 항구까지 도달 가능
+    const fromLisbon = reachabilityCheck(WORLD, lisbon);
+    expect(fromLisbon.reachedPoint(WORLD_SPAWN), '리스본→부산항').toBe(true);
+    for (const day of SCHOOL_DAYS) {
+      for (const s of generateWorldSchools(day).filter(sc => sc.spot === 'azores' || sc.spot === 'bermuda')) {
+        expect(zoneOf(WORLD, s.x, s.y), `${day} ${s.id}`).toBe(s.spot);
+        expect(fromLisbon.reachableNear(s), `${day} 리스본→${s.id}`).toBe(true);
+      }
     }
   });
 
-  it('세계지도 earth 마스크에도 열지 않은 바다가 찍혀 있다', () => {
-    const [x, y] = [Math.floor((0 + 180) / 360 * EARTH_MAP.cols * EARTH_MAP.cellW), Math.floor((85 - 38) / 170 * EARTH_MAP.rows * EARTH_MAP.cellH)];
-    expect(cellDefAt(EARTH_MAP, x, y)?.closed, '지중해').toBe(true);
-    const [x2, y2] = [Math.floor((0 + 180) / 360 * EARTH_MAP.cols * EARTH_MAP.cellW), Math.floor((85 + 10) / 170 * EARTH_MAP.rows * EARTH_MAP.cellH)];
-    expect(cellDefAt(EARTH_MAP, x2, y2)?.closed ?? false, '남대서양').toBe(false);
+  it('WORLD_MAP과 EARTH_MAP 구현 영역 안에 closed: true 셀이 없다', () => {
+    for (const code of WORLD_MAP.codes) {
+      expect(WORLD_MAP.palette[code]?.closed ?? false).toBe(false);
+    }
+    const win = implementedRect();
+    for (let r = 0; r < EARTH_MAP.rows; r++) {
+      const cy = (r + 0.5) * EARTH_MAP.cellH;
+      if (cy < win.y || cy >= win.y + win.h) continue;
+      for (let c = 0; c < EARTH_MAP.cols; c++) {
+        const cx = (c + 0.5) * EARTH_MAP.cellW;
+        if (cx < win.x || cx >= win.x + win.w) continue;
+        const def = EARTH_MAP.palette[EARTH_MAP.codes[r * EARTH_MAP.cols + c]];
+        expect(def?.closed ?? false, `EARTH_MAP (${c},${r})`).toBe(false);
+      }
+    }
+  });
+
+  it('WORLD_LEGEND N 범례와 inClosedSea·closedSeaBlock 인프라는 합성 N 셀에서 계속 동작한다', () => {
+    expect(WORLD_LEGEND.N).toEqual({ water: true, style: 'sea', closed: true });
+    const map = compileMap(8, 11, WORLD_LEGEND, ['pppp', 'pppp', 'NNNN', 'NNNN']);
+    const synth: RegionPack = {
+      ...WORLD,
+      bounds: mapBounds(map),
+      map,
+      buildings: [],
+      triggers: [],
+      spawn: { x: 16, y: 16 },
+    };
+    expect(inClosedSea(synth, 16, 16)).toBe(false);
+    expect(canMove(synth, 16, 16)).toBe(true);
+    expect(inClosedSea(synth, 16, 26)).toBe(true);
+    expect(canMove(synth, 16, 26)).toBe(false);
+    expect(closedSeaBlock(synth, { x: 16, y: 20 }, 0, 1, 0.05, 80)).toBe('아직 열리지 않은 바다라 들어설 수 없어요.');
   });
 });
 
@@ -577,25 +615,25 @@ describe('세계지도(earth) — 전지구 마스크와 좌표 변환', () => {
     expect(countZone('comorodeep'), '코모로 심해').toBeGreaterThan(0);
   });
 
-  it('구현 영역 밖은 지구의 나머지다 — 대서양은 물, 아메리카는 육지, 어디도 구역이 없다', () => {
-    const atl = earthAt2(-30, 30);       // 대서양 (미개척)
-    expect(atl?.water ?? false).toBe(true);
-    expect(atl?.zone).toBeUndefined();
+  it('구현 영역 밖은 지구의 나머지다 — 동태평양은 물, 북아메리카는 육지, 어디도 구역이 없다', () => {
+    const epac = earthAt2(-140, 20);     // 동태평양 (미개척)
+    expect(epac?.water ?? false).toBe(true);
+    expect(epac?.zone).toBeUndefined();
     expect(earthAt2(-100, 45)?.land, '북아메리카').toBe(true);
     expect(earthAt2(20, 0)?.land ?? earthAt2(20, 0)?.water, '아프리카 해안은 정의돼 있다').toBeDefined();
   });
 
-  it('구현 영역 rect는 world 마스크 크기와 스케일 일치한다 (16px/° × 172°×80°)', () => {
+  it('구현 영역 rect는 world 마스크 크기와 스케일 일치한다 (16px/° × 239°×80°)', () => {
     const win = implementedRect();
-    expect(win.w).toBeGreaterThanOrEqual(2744);
-    expect(win.w).toBeLessThanOrEqual(2760);
+    expect(win.w).toBeGreaterThanOrEqual(3816);
+    expect(win.w).toBeLessThanOrEqual(3832);
     expect(win.h).toBeGreaterThanOrEqual(1274);
     expect(win.h).toBeLessThanOrEqual(1282);
   });
 
   it('worldToEarth — 항구 앵커가 구현 영역 안에 뜬다', () => {
     const win = implementedRect();
-    for (const a of [WORLD_ANCHORS.harbor, WORLD_ANCHORS.manila, WORLD_ANCHORS.colombo, WORLD_ANCHORS.toamasina, WORLD_ANCHORS.walvisbay]) {
+    for (const a of [WORLD_ANCHORS.harbor, WORLD_ANCHORS.manila, WORLD_ANCHORS.colombo, WORLD_ANCHORS.toamasina, WORLD_ANCHORS.walvisbay, WORLD_ANCHORS.lisbon]) {
       const e = worldToEarth(a.x, a.y);
       expect(e.x, `lon anchor ${a.x}`).toBeGreaterThanOrEqual(win.x);
       expect(e.x).toBeLessThanOrEqual(win.x + win.w);

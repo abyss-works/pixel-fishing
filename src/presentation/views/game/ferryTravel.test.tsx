@@ -1,6 +1,7 @@
 // 여객선 빠른 이동 — 도착 위치 반영, 전환 중 조작 잠금, 이동 거절 되돌림을 App 통합으로 검증한다.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, act, cleanup, within } from '@testing-library/react';
+import { resetToastEnabled } from '../../../features/display/service/toastEnabled';
 import App from '../../../App';
 import Field from '../../layouts/game-stage/Field';
 import { resetKeyScopes, useKeyScope } from '../../ui/hotkeys';
@@ -59,6 +60,7 @@ beforeEach(() => {
   markPromptsAnswered(['fish-art']);
   resetKeyScopes();
   resetSpotState();
+  resetToastEnabled();
   HTMLCanvasElement.prototype.getContext = (() => fakeContext()) as unknown as typeof HTMLCanvasElement.prototype.getContext;
   vi.useFakeTimers();
 });
@@ -252,8 +254,10 @@ describe('여객선 빠른 이동: 거절과 실패', () => {
       () => ({ status: 'rejected', error: 'zone-locked' }) as never);
     await bookFerry('manila');
     await advance(3000);
+    const toastOf = () => screen.getAllByRole('status').find(el => el.querySelector('[aria-label="알림 닫기"]'));
     expect(screen.getByLabelText('항구')).toBeInTheDocument();
-    expect(screen.queryByText(REJECT_TEXT['zone-locked'])).not.toBeNull();
+    expect(within(screen.getByRole('log', { name: '메시지 기록' })).getByText(REJECT_TEXT['zone-locked'])).toBeInTheDocument();
+    expect(toastOf()).toHaveTextContent(REJECT_TEXT['zone-locked']);
   });
   it('승선 이동이 규칙 거부 값을 받으면 장소를 되돌리고 거부 문구로 알린다', async () => {
     stubMotion(false);
@@ -265,7 +269,9 @@ describe('여객선 빠른 이동: 거절과 실패', () => {
     fireEvent.click(document.querySelector('[data-facility="exit"]')!);
     await advance(100);
     expect(screen.getByLabelText('항구')).toBeInTheDocument();
-    expect(screen.queryByText(REJECT_TEXT['zone-locked'])).not.toBeNull();
+    expect(within(screen.getByRole('log', { name: '메시지 기록' })).getByText(REJECT_TEXT['zone-locked'])).toBeInTheDocument();
+    const toast = screen.getAllByRole('status').find(el => el.querySelector('[aria-label="알림 닫기"]'));
+    expect(toast).toHaveTextContent(REJECT_TEXT['zone-locked']);
   });
 
   it('이동 처리가 실패하면 떠난 항구에 남고 사유가 메시지 창에 보인다', async () => {
@@ -279,7 +285,9 @@ describe('여객선 빠른 이동: 거절과 실패', () => {
     await bookFerry('manila');
     await advance(3000);
     expect(screen.getByLabelText('항구')).toBeInTheDocument();
-    expect(screen.queryByText(/너무 빠르게/)).not.toBeNull();
+    expect(within(screen.getByRole('log', { name: '메시지 기록' })).getByText(/너무 빠르게/)).toBeInTheDocument();
+    const toast = screen.getAllByRole('status').find(el => el.querySelector('[aria-label="알림 닫기"]'));
+    expect(toast).toHaveTextContent(/너무 빠르게/);
   });
 
   it('승선 이동 처리가 거부 오류를 받으면 장소를 되돌리고 미처리 거부가 생기지 않는다', async () => {

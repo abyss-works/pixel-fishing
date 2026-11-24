@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CHAT_INPUT_INITIAL, chatInputReducer, chatRoomOf } from './chatInput';
+import { CHAT_INPUT_INITIAL, chatInputReducer, chatRoomOf, formatStatusNotice } from './chatInput';
 import type { ChatInputState } from './chatInput';
 
 const typing = (room: ChatInputState['room'] = 'world'): ChatInputState => ({ mode: 'typing', room });
@@ -41,5 +41,25 @@ describe('채팅 입력 상태머신', () => {
   it('보낼 방은 길드를 떠나면 고른 방과 무관하게 월드다', () => {
     expect(chatRoomOf(typing('guild'), true)).toBe('guild');
     expect(chatRoomOf(typing('guild'), false)).toBe('world');
+  });
+});
+
+describe('채팅 오류 안내 문장 줄바꿈', () => {
+  it('두 문장 이상이면 문장 끝마다 줄을 바꾼다', () => {
+    expect(formatStatusNotice('메시지를 너무 빨리 보내고 있어요. 잠시 뒤에 보내 주세요.'))
+      .toBe('메시지를 너무 빨리 보내고 있어요.\n잠시 뒤에 보내 주세요.');
+    expect(formatStatusNotice('연결이 끊겼어요! 잠시 뒤 다시 시도해 주세요? 네.'))
+      .toBe('연결이 끊겼어요!\n잠시 뒤 다시 시도해 주세요?\n네.');
+  });
+
+  it('한 문장이나 이미 줄바꿈된 안내는 그대로 둔다', () => {
+    expect(formatStatusNotice('이용이 제한된 계정이라 채팅을 쓸 수 없어요.'))
+      .toBe('이용이 제한된 계정이라 채팅을 쓸 수 없어요.');
+    expect(formatStatusNotice('첫째 문장이에요.\n둘째 문장이에요.'))
+      .toBe('첫째 문장이에요.\n둘째 문장이에요.');
+  });
+
+  it('소수점이나 Lv.5처럼 공백 없는 마침표에서는 줄을 바꾸지 않는다', () => {
+    expect(formatStatusNotice('Lv.5부터 쓸 수 있어요.')).toBe('Lv.5부터 쓸 수 있어요.');
   });
 });

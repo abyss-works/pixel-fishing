@@ -126,7 +126,7 @@ export async function seedUser(client: Client, opts: SeedOptions = {}): Promise<
   }
   if (opts.state) {
     const state: GameState = { ...newState(), ...opts.state };
-    const { bag, exhibit, dex, gold, fame, boat, rod, ...rest } = state;
+    const { bag, exhibit, dex, gold, fame, boat, rod, achievementCounters: _ac, clearedNamed: _cn, ...rest } = state;
     await client.query(
       `insert into public.saves_current (user_id, data, gold, fame, boat, rod, version, updated_at, restricted, last_catch_at, active_client)
        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
@@ -217,7 +217,11 @@ export async function dumpUser(client: Client, uid: string): Promise<Record<stri
   for (const [table, col] of Object.entries(USER_TABLES)) {
     const { rows } = await client.query(`select * from public.${table} where ${col} = $1`, [uid]);
     out[table] = rows
-      .map(r => { const { id: _id, ...rest } = r as Record<string, unknown>; return normalize(rest, uid); })
+      .map(r => {
+        // id는 쓰기 순서에 따라, counted는 카운터 기록 시점에 따라 달라지므로 비교에서 뺀다
+        const { id: _id, counted: _c, ...rest } = r as Record<string, unknown>;
+        return normalize(rest, uid);
+      })
       .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
   }
   return out;

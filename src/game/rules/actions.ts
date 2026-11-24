@@ -4,8 +4,8 @@
 // 상대경로 .js 확장자 필수 — Node 순수 ESM 로더가 직접 import한다.
 import {
   addCatch, buildCatchInfo, makeInstance, migrate,
-  redeemCoupon, rollCatchExtras, sellSelected, setLocked, applyAutoLock, tryBuyBoat, tryUpgrade,
-  overflowUids, release, bagCapacity, instanceFish, formName, travel, applyRelief, moveExhibit,
+  redeemCoupon, rollCatchExtras, sellSelected, setLocked, applyAutoLock, applyCatchAutoLock, tryBuyBoat, tryUpgrade,
+  overflowUids, release, instanceFish, formName, travel, applyRelief, moveExhibit,
   addItem, takeItem, nextDexRec, mutationWeightsOf, withVariantPoints,
 } from './logic.js';
 import type { GameState, Judgment, CatchInfo, CatchExtras, DrawOptions, FishInstance, FormRecord, FormId, ReliefGrant, Fish } from './logic.js';
@@ -20,7 +20,7 @@ import type { FirstCatch } from './firstCatch.js';
 import { relativeIdleBoost } from './power.js';
 import {
   applyEnergyGain, canCook, planOverflow, canEat, canExtractEnergy, canUseEnergy, energyGain, settleCooking,
-  appliedSlots, slotEffects, slotEndsAt, NO_COOK_EFFECTS,
+  appliedSlots, isActiveSlot, maxBaitSlots, slotEffects, slotEndsAt, NO_COOK_EFFECTS,
 } from './cooking.js';
 import type { ActiveCookEffects } from './cooking.js';
 import { ENERGY_ITEM_IDS, recipeById, recipeCostStored } from '../content/cooking.js';
@@ -29,12 +29,17 @@ import type { RarityId } from '../content/rarity.js';
 import { spotById } from '../content/spots.js';
 import { bountyById } from '../content/bounties.js';
 import { artifactById, artifactLevelCost, artifactOfNamed } from '../content/artifacts.js';
-import { artifactLevelOf, extraCookChance, namedRewardOf } from './artifactLevel.js';
+import { artifactLevelOf, commonWeightCutOf, extraCookChance, namedRewardOf } from './artifactLevel.js';
 import { isTutorialId } from '../content/tutorials.js';
 import type { SpotId } from '../content/spots.js';
 import type { LocationRef } from '../content/places.js';
-import { canBuyBoat, canBuyHat, canChangeClothes, canEnterBase, canFish, canUpgradeRod, canWearHat, encounterQuests } from './rules.js';
+import { canBuyBoat, canBuyHat, canChangeClothes, canClaimAchievement, canClaimAllAchievements, canEnterBase, canFish, canUpgradeRod, canWearHat, encounterQuests } from './rules.js';
 import { hatById } from '../content/wardrobe.js';
+import { ACHIEVEMENTS, achievementById } from '../content/achievements.js';
+import { topZoneOfSpot } from '../content/zones.js';
+import { achievementBonusesOf, counterIncrementsForEvents, evaluateAchievements } from './achievements.js';
+import { NO_ACHIEVEMENT_BONUSES, bagCapacityOf, createPlayerContext } from './effects.js';
+import type { AchievementBonuses } from './effects.js';
 import {
   canAcceptQuest, canDeliverBounty, canExchangeArtifact, canLevelUpArtifact, canExhibit, canResolveChallenge,
 } from './rules.js';
@@ -43,6 +48,7 @@ import { powerZones, rodPower } from './stats.js';
 import type { PowerZone } from './stats.js';
 import { checkNickname } from './nickname.js';
 import { reduceDebug } from './debug.js';
+import type { DevBountySnapshot } from './debug.js';
 import { addGradeEffect, rollFish } from './logic.js';
 import { JUDGMENT_MULT } from './balance.js';
 import { gameDayOf, isNight } from './time.js';
@@ -50,25 +56,33 @@ import type { DayPhase } from './time.js';
 import { NO_GUILD_EFFECTS } from './guild.js';
 import type { GuildEffects } from './guild.js';
 
+export interface DebugStepInput {
+  command: string;
+  args?: Record<string, unknown>;
+}
+
 export type GameAction =
-  | { type: 'catch'; spot: SpotId; judgment: Judgment; forceEncounter?: true } // forceEncounter: 테스트용 강제 조우(서버가 운영에서 떼어 낸다)
+  | { type: 'catch'; spot: SpotId; judgment: Judgment; forceEncounter?: true; forcePhase?: DayPhase } // forceEncounter/forcePhase: 테스트용(서버가 비허용 시 떼어 낸다)
   | { type: 'sell'; uids: string[] }            // 판매 원자 단위 = 개체 (세이브 v8)
   | { type: 'upgradeRod' }
   | { type: 'buyBoat' }
   | { type: 'setLocked'; uids: string[]; locked: boolean }
   | { type: 'autoLock' }                        // 자동 잠금 — 계획은 서버가 현재 가방으로 계산한다
+  | { type: 'setAutoLockOnCatch'; on: boolean } // 토글식 자동 잠금 설정 — 다음 포획부터 적용한다
   | { type: 'travel'; to: LocationRef }
   | { type: 'sendLetter'; text: string }
   | { type: 'redeemCoupon'; code: string }
   | { type: 'claimRelief'; code: string }       // 지원 코드 — 제재 소프트 랜딩
   | { type: 'claimMail'; id: number }           // 우편 골드 받기 — 받을 금액은 서버가 우편 표에서 주입한다
   | { type: 'debug'; command: string; args?: Record<string, unknown> } // 개발 도구 명령 — 운영 서버는 거부한다
+  | { type: 'debugBatch'; steps: DebugStepInput[] }                  // 개발 도구 명령 일괄 실행 — 단일 트랜잭션으로 순서대로 적용한다
+  | { type: 'debugSnapshot' }                                        // 개발 도구 스냅샷 저장용 수배 DB 행 읽기 — 운영 서버는 거부한다
   | { type: 'dismissBaitRefund' }                            // 미끼 환불 안내를 닫는다 — 영수증을 지운다
   | { type: 'extractEnergy'; uids: string[] }                // 기운 얻기 — 판매 시설이 있는 거점(집, 항구)에서 가방 개체를 등급별 기운으로 바꾼다
   | { type: 'setEnergyTarget'; spot: SpotId; on: boolean }   // 기운 얻기 기본 선택의 해역별 덮어쓰기 — 고른 값은 기본값과 같아도 남는다
   | { type: 'resetEnergyTargets' }                           // 덮어쓰기를 모두 지워 기본값으로 되돌린다
   | { type: 'cook'; recipe: string; count: number }          // 조리 시작 — 집 거점, 기운 즉시 차감, 추가 완성은 서버가 추첨한다
-  | { type: 'eat'; item: string }                            // 먹기(쓰기) — 가방의 완성 요리 하나를 슬롯에 넣는다. 위치 제한 없음
+  | { type: 'eat'; item: string; replaceSlot?: 'bait' | 'bait2' } // 먹기(쓰기) — 가방의 완성 요리 하나를 슬롯에 넣는다. 위치 제한 없음
   | { type: 'boot'; buildId?: unknown }                      // 접속(부팅) 기록 — 상태 불변, DAU 정본
   | { type: 'setNickname'; nickname: unknown }     // 닉네임 변경 — 형태는 리듀서, 중복은 서버(DB)가 본다
   | { type: 'seeTutorial'; id: unknown }           // 튜토리얼 창을 봤다 — 같은 트리거에서 다시 뜨지 않게 남긴다
@@ -81,18 +95,21 @@ export type GameAction =
   | { type: 'levelUpArtifact'; artifact: string } // 유물 레벨업 — 그 유물의 교환 재료를 레벨별 수만큼 쓰고 레벨을 하나 올린다
   | { type: 'exhibit'; uid: string; slot: number | null } // 전시대 — slot 번호면 진열, null이면 회수
   | { type: 'resolveChallenge'; questId: string; success: boolean; hits: number; misses: number }
+  | { type: 'claimAchievement'; id: string }
+  | { type: 'claimAllAchievements' }
   | { type: 'import'; save: unknown };          // 이사 코드 불러오기 — 검증 없이 수입, 흔적만 남김
 
 // 서버와 공유하는 화이트리스트 — Record가 유니온과의 완전 일치를 강제한다
 // (액션 추가 시 여기 빠뜨리면 컴파일 에러 — 수동 이중 목록 드리프트 방지)
 const ACTION_TYPE_MAP: Record<GameAction['type'], true> = {
   catch: true, sell: true, upgradeRod: true, buyBoat: true,
-  setLocked: true, autoLock: true, travel: true, sendLetter: true, redeemCoupon: true,
-  claimRelief: true, claimMail: true, debug: true, setNickname: true,
+  setLocked: true, autoLock: true, setAutoLockOnCatch: true, travel: true, sendLetter: true, redeemCoupon: true,
+  claimRelief: true, claimMail: true, debug: true, debugBatch: true, debugSnapshot: true, setNickname: true,
   dismissBaitRefund: true, extractEnergy: true, setEnergyTarget: true, resetEnergyTargets: true, cook: true, eat: true,
   boot: true, import: true,
   acceptQuest: true, deliverBounty: true, exchangeArtifact: true, levelUpArtifact: true, exhibit: true, resolveChallenge: true,
   seeTutorial: true, changeClothes: true, buyHat: true, wearHat: true,
+  claimAchievement: true, claimAllAchievements: true,
 };
 export const ACTION_TYPES = Object.keys(ACTION_TYPE_MAP) as GameAction['type'][];
 
@@ -129,6 +146,10 @@ export type ActionResult =
   | { type: 'extract'; energy: Record<RarityId, number> }
   /** schoolDay = 이 세션의 대양 어군 배치 날짜(게임 날짜, KST 04:00 경계) — 시계의 정본은 서버다 */
   | { type: 'boot'; schoolDay: string }
+  /** claimAllAchievements 확정 — 받은 골드 합계와 모자 id 목록. 클라가 이 값으로 수령 문구를 만든다
+   *  (단건 claimAchievement는 로컬 업적 정의(def.reward)로 만들 수 있어 결과를 싣지 않는다) */
+  | { type: 'claimAllAchievements'; gold: number; hats: string[] }
+  | { type: 'debugSnapshot'; bounty: DevBountySnapshot }
   | { type: 'none' };
 
 /** 와이어 델타 — 서버가 계산한 상태 변화의 베껴적기.
@@ -208,6 +229,12 @@ export function applyPatch(prev: GameState, patch: StatePatch): GameState {
     if (src) putExhibit(src, slot);
   }
   const dex: GameState['dex'] = { ...prev.dex };
+  for (const { fishId, form } of patch.writes.recordsRemoved ?? []) {
+    if (!dex[fishId]) continue;
+    const { [form]: _gone, ...rest } = dex[fishId];
+    if (Object.keys(rest).length === 0) delete dex[fishId];
+    else dex[fishId] = rest;
+  }
   for (const { fishId, form, rec } of patch.writes.records) {
     dex[fishId] = { ...dex[fishId], [form]: { ...rec } };
   }
@@ -230,6 +257,7 @@ export interface StateWrites {
   instancesMoved: { uid: string; slot: number | null }[];  // 가방 ↔ 전시
   instancesLocked: { uid: string; locked: boolean }[];      // 잠금 토글
   records: { fishId: string; form: FormId; rec: FormRecord }[];
+  recordsRemoved?: { fishId: string; form: FormId }[];
 }
 
 export type ApplyOutcome =
@@ -261,6 +289,17 @@ function diffWrites(prev: GameState, next: GameState): StateWrites {
   for (const uid of before.keys()) if (!after.has(uid)) w.instancesRemoved.push(uid);
 
   // 도감은 종×폼 단위로 바뀐 행만 — 절대값이라 실패해도 다음 캐치가 자가 치유한다
+  const recordsRemoved: { fishId: string; form: FormId }[] = [];
+  for (const [fishId, forms] of Object.entries(prev.dex)) {
+    for (const [form, old] of Object.entries(forms)) {
+      if (!old || old.count <= 0) continue;
+      const cur = next.dex[fishId]?.[form as FormId];
+      if (!cur || cur.count <= 0) {
+        recordsRemoved.push({ fishId, form: form as FormId });
+      }
+    }
+  }
+  if (recordsRemoved.length > 0) w.recordsRemoved = recordsRemoved;
   for (const [fishId, forms] of Object.entries(next.dex)) {
     for (const [form, rec] of Object.entries(forms)) {
       if (!rec) continue;
@@ -273,9 +312,51 @@ function diffWrites(prev: GameState, next: GameState): StateWrites {
   return w;
 }
 
+function shouldSkipAchievementEval(action: GameAction): boolean {
+  if (action.type === 'debug') {
+    return action.command === 'achievement.evaluate'
+      || (action.command === 'achievement.resetCounters' && action.args?.resetAchievements === true);
+  }
+  if (action.type === 'debugBatch') {
+    let suppress = false;
+    for (const step of action.steps) {
+      if (step.command === 'achievement.evaluate'
+          || (step.command === 'achievement.resetCounters' && step.args?.resetAchievements === true)) {
+        suppress = true;
+      } else if (step.command === 'dex.completeZone' || step.command === 'dex.fill'
+          || step.command === 'named.unlock' || step.command === 'artifact.set'
+          || step.command === 'achievement.setCounter' || step.command === 'snapshot.restore') {
+        suppress = false;
+      }
+    }
+    return suppress;
+  }
+  return action.type === 'debugSnapshot';
+}
+
 export function applyAction(state: GameState, action: GameAction, deps: ActionDeps): ApplyOutcome {
   const out = reduce(state, action, deps);
-  return out.ok ? { ...out, writes: diffWrites(state, out.state) } : out;
+  if (!out.ok) return out;
+  const inc = counterIncrementsForEvents(out.events);
+  let nextState = out.state;
+  const incEntries = Object.entries(inc).filter(([, v]) => v !== undefined) as [string, number][];
+  if (incEntries.length > 0) {
+    const counters = { ...nextState.achievementCounters };
+    for (const [k, v] of incEntries) counters[k] = (counters[k] ?? 0) + v;
+    nextState = { ...nextState, achievementCounters: counters };
+  }
+  let events = out.events;
+  if (!shouldSkipAchievementEval(action)) {
+    const evaluated = evaluateAchievements(nextState);
+    if (evaluated.newlyClaimable.length > 0) {
+      nextState = { ...nextState, achievements: evaluated.achievements };
+      events = [
+        ...out.events,
+        ...evaluated.newlyClaimable.map(id => ({ type: 'unlockAchievement', payload: { id } })),
+      ];
+    }
+  }
+  return { ok: true, state: nextState, result: out.result, events, writes: diffWrites(state, nextState) };
 }
 
 type ReduceOutcome =
@@ -292,15 +373,20 @@ export interface CatchDraw {
   /** 이 캐치에 적용하는 요리 슬롯 효과 — 돌연변이 가중은 drawCatch가, 네임드 조우 가중은 namedWeightBonus가 쓴다 */
   cook: ActiveCookEffects;
 }
-export function prepareCatchDraw(state: Pick<GameState, 'slots'>, claimed: Judgment, now: string, pz: PowerZone): CatchDraw {
+export function prepareCatchDraw(
+  state: Pick<GameState, 'slots'>, claimed: Judgment, now: string, pz: PowerZone,
+  forcePhase?: DayPhase,
+): CatchDraw {
   // 파워 게이트 백스톱 — 클라 주장을 존이 허용하는 최고 등급으로 내린다: PERFECT→GOOD→NORMAL.
   let judgment = claimed;
   if (judgment === 'perfect' && pz.red <= 0) judgment = pz.yellow > 0 ? 'good' : 'normal';
   else if (judgment === 'good' && pz.yellow <= 0) judgment = 'normal';
-  // 시간대 — 판정은 서버(액션 시각)라 클라가 시각을 주장할 수 없다 (게임 시계).
-  const phase: DayPhase = isNight(now) ? 'night' : 'day';
   // 요리 슬롯 효과 — 서버 시각(now)으로 적용 여부를 정한다. 방치와 수동의 구분은 주장 판정으로 하며 강등으로 바뀌지 않는다.
   const cook = slotEffects(state, now, claimed);
+  // 시간대 — 판정은 서버(액션 시각)라 클라가 시각을 주장할 수 없다 (게임 시계).
+  // 개발 도구 forcePhase가 허용되면 요청 단위로 낮/밤을 전환한다. 밤 어종 출현 미끼는 낮에도 밤 풀을 쓴다.
+  const nightNow = forcePhase ? forcePhase === 'night' : isNight(now);
+  const phase: DayPhase = nightNow || cook.nightUnlock ? 'night' : 'day';
   let phaseOpts: DrawOptions & { phase: DayPhase } = { phase };
   for (const [grade, bonus] of Object.entries(cook.rarityWeight) as [RarityId, number][]) {
     phaseOpts = addGradeEffect(phaseOpts, grade, bonus);
@@ -308,11 +394,15 @@ export function prepareCatchDraw(state: Pick<GameState, 'slots'>, claimed: Judgm
   return { judgment, phaseOpts, cook };
 }
 
-/** 네임드 조우 가중치에 더하는 비율 — 길드 보너스와 요리 슬롯(도시락)의 효과를 더한 값. 리듀서와 서버 fast path가 같이 쓴다 */
+/** 네임드 조우 가중치에 더하는 비율 — 길드 보너스, 요리 슬롯(도시락), 업적 누적 보너스의 합. 리듀서와 서버 fast path가 같이 쓴다 */
 export function namedWeightBonus(
-  state: Pick<GameState, 'slots'>, judgment: Judgment, now: string, guild: GuildEffects = NO_GUILD_EFFECTS,
+  state: Pick<GameState, 'slots'>,
+  judgment: Judgment,
+  now: string,
+  guild: GuildEffects = NO_GUILD_EFFECTS,
+  achievements: AchievementBonuses = NO_ACHIEVEMENT_BONUSES,
 ): number {
-  return guild.named + slotEffects(state, now, judgment).namedWeight;
+  return guild.named + slotEffects(state, now, judgment).namedWeight + achievements.namedWeight;
 }
 
 /** 일반 등급 가중치에 걸리는 기본 규칙 배수 — 보너스 효과는 포함하지 않는다.
@@ -358,22 +448,55 @@ export function drawCatch(
   state: Pick<GameState, 'pity' | 'artifacts' | 'artifactLevels' | 'firstCatch'>, spot: SpotId, judgment: Judgment, power: number,
   pzMult: number, rng: () => number, basePhaseOpts: DrawOptions & { phase: DayPhase },
   ownsNormal: (fishId: string) => boolean, guild: GuildEffects = NO_GUILD_EFFECTS, cook: ActiveCookEffects = NO_COOK_EFFECTS,
+  achievements: AchievementBonuses = NO_ACHIEVEMENT_BONUSES,
 ): { fish: Fish; extras: CatchExtras; pity: SpeciesPity; firstCatch: FirstCatch; byCeiling: boolean } {
-  const phaseOpts = guild.rare > 0 ? addGradeEffect(basePhaseOpts, 'common', -guild.rare) : basePhaseOpts;
+  const zone = topZoneOfSpot(spot);
+  const commonCut = guild.rare + commonWeightCutOf(state, achievements.artifactBoost);
+  let phaseOpts = commonCut > 0 ? addGradeEffect(basePhaseOpts, 'common', -commonCut) : basePhaseOpts;
+  if (achievements.rareWeight > 0) {
+    for (const r of ['rare', 'epic', 'legendary'] as const) {
+      phaseOpts = addGradeEffect(phaseOpts, r, achievements.rareWeight);
+    }
+  }
+  if (achievements.epicWeight > 0) {
+    for (const r of ['epic', 'legendary'] as const) {
+      phaseOpts = addGradeEffect(phaseOpts, r, achievements.epicWeight);
+    }
+  }
+  if (achievements.legendaryWeight > 0) {
+    phaseOpts = addGradeEffect(phaseOpts, 'legendary', achievements.legendaryWeight);
+  }
+  const zoneLeg = zone ? (achievements.zoneLegendary[zone] ?? 0) : 0;
+  if (zoneLeg > 0) phaseOpts = addGradeEffect(phaseOpts, 'legendary', zoneLeg);
   const candidates = speciesPityCandidates(state.pity, spot, phaseOpts.phase);
   const resolved = resolveSpeciesPity(state.pity, candidates, ownsNormal);
   const target = resolved.target ? FISH.find(f => f.id === resolved.target) : undefined;
   const guaranteed = firstCatchTarget(state.firstCatch, spot, phaseOpts.phase, rng);
   const fish = guaranteed ?? target ?? rollCatchFish(spot, judgment, power, pzMult, rng, phaseOpts);
   const pityFixed = !guaranteed && target !== undefined;
-  const forms = withVariantPoints(mutationWeightsOf(state, spot, cook.mutationWeight), guild.mutation);
+  const achMut = achievements.mutationWeight + (zone ? (achievements.zoneMutation[zone] ?? 0) : 0);
+  const forms = withVariantPoints(
+    mutationWeightsOf(state, spot, cook.mutationWeight, achMut, 1 + achievements.artifactBoost),
+    guild.mutation,
+  );
   const extras = rollCatchExtras(fish, rng, pityFixed ? { normal: 1, variant: 0 } : forms);
   const opts = catchDrawOptions(judgment, power, spot, pzMult, phaseOpts);
   const accrued = accrueSpeciesPity(resolved.pity, spot, opts, forms.normal / (forms.normal + forms.variant));
   return {
     fish, extras, pity: settleSpeciesPity(accrued, fish.id, extras.form),
-    firstCatch: settleFirstCatch(state.firstCatch, guaranteed, rng), byCeiling: pityFixed,
+    firstCatch: settleFirstCatch(state.firstCatch, spot, guaranteed, rng), byCeiling: pityFixed,
   };
+}
+
+function debugEventPayload(command: string, args: Record<string, unknown>, next: GameState): Record<string, unknown> {
+  return command === 'snapshot.restore'
+    ? {
+      command,
+      bagCount: next.bag.length,
+      exhibitCount: next.exhibit.filter(Boolean).length,
+      dexCount: Object.keys(next.dex).length,
+    }
+    : { command, args };
 }
 
 function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceOutcome {
@@ -387,11 +510,12 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       // 서버가 이벤트를 보고 bounty_tickets에 쓴다.
       // 네임드 조우 천장도 여기서 센다(drawNamedEncounter) — 진척은 상태에 남는다.
       const guild = deps.guild ?? NO_GUILD_EFFECTS;
+      const achBonuses = achievementBonusesOf(state);
       // 파워 게이트(서버 권위 백스톱)·요리 슬롯 효과·시간대 — prepareCatchDraw가 단일 계산한다(rng를 쓰지 않는다).
       const pz = powerZones(state, action.spot);
-      const { judgment, phaseOpts, cook } = prepareCatchDraw(state, action.judgment, deps.now, pz);
+      const { judgment, phaseOpts, cook } = prepareCatchDraw(state, action.judgment, deps.now, pz, action.forcePhase);
       const named = drawNamedEncounter(state.namedPity, encounterQuests(deps.bounty), action.spot, deps.now,
-        deps.rng, action.forceEncounter === true, namedWeightBonus(state, action.judgment, deps.now, guild));
+        deps.rng, action.forceEncounter === true, namedWeightBonus(state, action.judgment, deps.now, guild, achBonuses));
       const namedHit = named.quest;
       const ticketEvents: GameEvent[] = namedHit
         ? [{ type: 'ticket', payload: { questId: namedHit.id, ...(named.byCeiling ? { pity: true } : {}) } }]
@@ -400,19 +524,24 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       // 호출 순서 고정: 추첨 → 부가 롤 — 구 클라이언트(Field)와 동일한 rng 소비 순서.
       // 어종 천장의 소유 판정은 리듀서가 가진 도감으로 한다.
       const drawn = drawCatch(state, action.spot, judgment, rodPower(state), pz.mult, deps.rng, phaseOpts,
-        id => (state.dex[id]?.normal?.count ?? 0) > 0, guild, cook);
+        id => (state.dex[id]?.normal?.count ?? 0) > 0, guild, cook, achBonuses);
       const { fish, extras } = drawn;
       // NEW 판정은 폼별 — 변이는 별개 개체 (v0.3.3)
       const isNew = (state.dex[fish.id]?.[extras.form]?.count ?? 0) === 0;
       const info = buildCatchInfo(fish, extras, isNew);
-      const inst = makeInstance(fish, extras, {
+      const rawInst = makeInstance(fish, extras, {
         uid: deps.newUid(), now: deps.now, spot: action.spot, judgment,
       });
-      const caught = addCatch(state, inst, fish, deps.today);
+      // 토글식 자동 잠금은 가방 초과(방생·자동 기운 얻기)보다 먼저 적용한다 — 새 잠금 개체는 보호되고,
+      // 방금 잠금이 풀린 기존 자동 잠금 개체는 초과 후보에 들어간다.
+      const autoLocked = applyCatchAutoLock(state, rawInst);
+      const inst = autoLocked.inst;
+      const caught = addCatch(autoLocked.state, inst, fish, deps.today);
       // 가방이 넘치면 가장 안 특별한 개체를 놓아준다. 방금 잡은 놈이 후보일 수도 있다
       // ("가방이 꽉 차서 그 자리에서 놓아줬다") — 명성·도감은 이미 확정됐으므로 남는다.
       // 상한은 **캐치 전** 가방으로 잰다(래칫). 그래야 이미 넘겨 든 유저도 한 번에 한 마리만 나간다.
-      const overflow = overflowUids(caught.bag, bagCapacity(state.boat, state.bag, guild.bag));
+      const ctx = createPlayerContext({ state, guild, now: deps.now, achievements: achBonuses });
+      const overflow = overflowUids(caught.bag, bagCapacityOf(ctx, state.bag.length).value);
       // 가공 플랜트선은 내보낼 개체가 기운 대상이면 놓아주지 않고 기운으로 바꾼다
       const plan = planOverflow({ ...caught, boat: state.boat, energyTargets: state.energyTargets }, overflow, deps.guest === true);
       const view = (uids: readonly string[]) => uids.map(uid => caught.bag.find(b => b.uid === uid)!);
@@ -455,7 +584,8 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
     case 'sell': {
       if (!Array.isArray(action.uids)) return { ok: false, error: 'bad-request' };
       const uids = action.uids.filter(u => typeof u === 'string');
-      const next = sellSelected(state, uids, (deps.guild ?? NO_GUILD_EFFECTS).sell);
+      const totalSellBonus = Math.round(((deps.guild ?? NO_GUILD_EFFECTS).sell + achievementBonusesOf(state).sellBonus) * 1e9) / 1e9;
+      const next = sellSelected(state, uids, totalSellBonus);
       const gold = next.gold - state.gold;
       // 실제로 사라진 개체만 = 가방 차집합 (없는 uid·잠긴 개체는 자동 제외)
       const remaining = new Set(next.bag.map(i => i.uid));
@@ -525,6 +655,12 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
     }
     case 'autoLock':
       return { ok: true, state: applyAutoLock(state), result: { type: 'none' }, events: [] };
+    case 'setAutoLockOnCatch': {
+      if (typeof action.on !== 'boolean') return { ok: false, error: 'bad-request' };
+      // 설정 토글은 감사 가치가 없어 이벤트를 남기지 않는다. 켜도 기존 가방에는 즉시 적용하지 않는다
+      if (state.autoLockOnCatch === action.on) return { ok: true, state, result: { type: 'none' }, events: [] };
+      return { ok: true, state: { ...state, autoLockOnCatch: action.on }, result: { type: 'none' }, events: [] };
+    }
     case 'redeemCoupon': {
       if (typeof action.code !== 'string') return { ok: false, error: 'bad-request' };
       const code = action.code.trim();
@@ -599,7 +735,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       let next = settleCooking(state, deps.now);
       for (const r of RARITY_ORDER) next = takeItem(next, ENERGY_ITEM_IDS[r], recipeCostStored(recipe, r) * action.count);
       // 추가 완성은 시작할 때 수량마다 추첨해 저장한다 — 추가분은 기운을 차감하지 않는다
-      const chance = extraCookChance(state);
+      const chance = extraCookChance(state, achievementBonusesOf(state).artifactBoost);
       const bonus = Array.from({ length: action.count }, () => deps.rng() < chance);
       return {
         ok: true,
@@ -609,17 +745,72 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       };
     }
     case 'eat': {
+      if (action.replaceSlot !== undefined && action.replaceSlot !== 'bait' && action.replaceSlot !== 'bait2') {
+        return { ok: false, error: 'bad-request' };
+      }
       const check = canEat(state, action.item, deps.now);
       if (!check.ok) return { ok: false, error: check.reason };
       const recipe = recipeById(action.item)!;
       // 완성품을 먼저 정산한 뒤 하나를 꺼내 슬롯에 넣는다. 든 것이 있으면 이전 효과는 즉시 끝난다
       const settled = takeItem(settleCooking(state, deps.now), recipe.id);
-      const endsAt = slotEndsAt(recipe, deps.now);
-      const prev = settled.slots[recipe.kind];
-      const replacedId = prev && Date.parse(deps.now) < Date.parse(prev.endsAt) ? prev.id : null;
+      const endsAt = slotEndsAt(recipe, deps.now, settled);
+
+      if (recipe.kind === 'lunch') {
+        const prev = settled.slots.lunch;
+        const replacedId = isActiveSlot(prev, 'lunch', deps.now) ? prev.id : null;
+        return {
+          ok: true,
+          state: { ...settled, slots: { ...settled.slots, lunch: { id: recipe.id, endsAt } } },
+          result: { type: 'none' },
+          events: [{ type: 'eat', payload: { item: recipe.id, endsAt, replaced: replacedId } }],
+        };
+      }
+
+      if (maxBaitSlots(settled) <= 1) {
+        const prev = settled.slots.bait;
+        const replacedId = isActiveSlot(prev, 'bait', deps.now) ? prev.id : null;
+        const { bait2: _staleBait2, ...restSlots } = settled.slots;
+        return {
+          ok: true,
+          state: { ...settled, slots: { ...restSlots, bait: { id: recipe.id, endsAt } } },
+          result: { type: 'none' },
+          events: [{ type: 'eat', payload: { item: recipe.id, endsAt, replaced: replacedId } }],
+        };
+      }
+
+      const b1 = isActiveSlot(settled.slots.bait, 'bait', deps.now) ? settled.slots.bait : null;
+      const b2 = isActiveSlot(settled.slots.bait2, 'bait', deps.now) ? settled.slots.bait2 : null;
+      let targetKey: 'bait' | 'bait2';
+      let replacedId: string | null = null;
+
+      if (b1?.id === recipe.id) {
+        targetKey = 'bait';
+        replacedId = b1.id;
+      } else if (b2?.id === recipe.id) {
+        targetKey = 'bait2';
+        replacedId = b2.id;
+      } else if (!b1) {
+        targetKey = 'bait';
+      } else if (!b2) {
+        targetKey = 'bait2';
+      } else if (action.replaceSlot === 'bait' || action.replaceSlot === 'bait2') {
+        targetKey = action.replaceSlot;
+        replacedId = targetKey === 'bait' ? b1.id : b2.id;
+      } else {
+        targetKey = Date.parse(b1.endsAt) <= Date.parse(b2.endsAt) ? 'bait' : 'bait2';
+        replacedId = targetKey === 'bait' ? b1.id : b2.id;
+      }
+
+      const nextSlots: GameState['slots'] = {
+        ...settled.slots,
+        bait: b1,
+        bait2: b2,
+        [targetKey]: { id: recipe.id, endsAt },
+      };
+      if (!nextSlots.bait2) delete nextSlots.bait2;
       return {
         ok: true,
-        state: { ...settled, slots: { ...settled.slots, [recipe.kind]: { id: recipe.id, endsAt } } },
+        state: { ...settled, slots: nextSlots },
         result: { type: 'none' },
         events: [{ type: 'eat', payload: { item: recipe.id, endsAt, replaced: replacedId } }],
       };
@@ -695,11 +886,35 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
     case 'debug': {
       // 개발 도구 명령 — 계산은 reduceDebug(기존 규칙 함수 조합), 허용 판정은 서버가 먼저 한다
       const args = action.args ?? {};
-      const next = reduceDebug(state, action.command, args, deps.today);
+      const next = reduceDebug(state, action.command, args, deps.today, deps.now, deps.newUid);
       if (!next) return { ok: false, error: 'bad-request' };
       return {
         ok: true, state: next, result: { type: 'none' },
-        events: [{ type: 'debug', payload: { command: action.command, args } }],
+        events: [{ type: 'debug', payload: debugEventPayload(action.command, args, next) }],
+      };
+    }
+    case 'debugBatch': {
+      if (!Array.isArray(action.steps) || action.steps.length === 0 || action.steps.length > 50) {
+        return { ok: false, error: 'bad-request' };
+      }
+      let cur = state;
+      const events: GameEvent[] = [];
+      for (const step of action.steps) {
+        if (!step || typeof step.command !== 'string') return { ok: false, error: 'bad-request' };
+        const args = step.args ?? {};
+        const next = reduceDebug(cur, step.command, args, deps.today, deps.now, deps.newUid);
+        if (!next) return { ok: false, error: 'bad-request' };
+        cur = next;
+        events.push({ type: 'debug', payload: debugEventPayload(step.command, args, next) });
+      }
+      return { ok: true, state: cur, result: { type: 'none' }, events };
+    }
+    case 'debugSnapshot': {
+      return {
+        ok: true,
+        state,
+        result: { type: 'debugSnapshot', bounty: { clears: [], progress: [], tickets: [] } },
+        events: [],
       };
     }
     case 'import': {
@@ -767,12 +982,62 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const target = quest.targetFish!;
       const prev = state.dex[target]?.normal;
       const rec = nextDexRec(prev, null, deps.today);
+      const clearedNamed = [...state.clearedNamed, action.questId];
       return {
         ok: true,
         state: { ...state, dex: { ...state.dex, [target]: { ...state.dex[target], normal: rec } },
-          namedPity: clearDuelWound(state.namedPity, action.questId) },
+          namedPity: clearDuelWound(state.namedPity, action.questId),
+          clearedNamed },
         result: { type: 'none' },
         events: [{ type: 'resolveChallenge', payload }],
+      };
+    }
+    case 'claimAchievement': {
+      const check = canClaimAchievement(state, action.id, deps.guest);
+      if (!check.ok) return { ok: false, error: check.reason };
+      const def = achievementById(action.id)!;
+      const achievements = { ...state.achievements, [def.id]: 'claimed' as const };
+      if (def.reward.kind === 'gold') {
+        return {
+          ok: true,
+          state: { ...state, gold: state.gold + def.reward.gold, achievements },
+          result: { type: 'none' },
+          events: [{ type: 'claimAchievement', payload: { id: def.id, gold: def.reward.gold } }],
+        };
+      }
+      const hatId = def.reward.hatId;
+      const hats = state.hats.includes(hatId) ? state.hats : [...state.hats, hatId];
+      return {
+        ok: true,
+        state: { ...state, hats, achievements },
+        result: { type: 'none' },
+        events: [{ type: 'claimAchievement', payload: { id: def.id, hat: hatId } }],
+      };
+    }
+    case 'claimAllAchievements': {
+      const check = canClaimAllAchievements(state, deps.guest);
+      if (!check.ok) return { ok: false, error: check.reason };
+      const ids: string[] = [];
+      let gold = 0;
+      const rewardHats: string[] = [];
+      const nextHats = [...state.hats];
+      const nextAchievements = { ...state.achievements };
+      for (const a of ACHIEVEMENTS) {
+        if (nextAchievements[a.id] !== 'claimable') continue;
+        ids.push(a.id);
+        nextAchievements[a.id] = 'claimed';
+        if (a.reward.kind === 'gold') {
+          gold += a.reward.gold;
+        } else if (!nextHats.includes(a.reward.hatId)) {
+          nextHats.push(a.reward.hatId);
+          rewardHats.push(a.reward.hatId);
+        }
+      }
+      return {
+        ok: true,
+        state: { ...state, gold: state.gold + gold, hats: nextHats, achievements: nextAchievements },
+        result: { type: 'claimAllAchievements', gold, hats: rewardHats },
+        events: [{ type: 'claimAllAchievements', payload: { ids, gold, hats: rewardHats } }],
       };
     }
     case 'exhibit': {
@@ -783,7 +1048,13 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
           || !(action.slot === null || typeof action.slot === 'number')) {
         return { ok: false, error: 'bad-request' };
       }
-      const check = canExhibit(state, action.uid, action.slot, (deps.guild ?? NO_GUILD_EFFECTS).bag);
+      const ctx = createPlayerContext({
+        state,
+        guild: deps.guild ?? NO_GUILD_EFFECTS,
+        now: deps.now,
+        achievements: achievementBonusesOf(state),
+      });
+      const check = canExhibit(state, action.uid, action.slot, bagCapacityOf(ctx, state.bag.length).value);
       if (!check.ok) return { ok: false, error: check.reason };
       return {
         ok: true, state: moveExhibit(state, action.uid, action.slot),

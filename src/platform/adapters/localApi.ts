@@ -75,6 +75,7 @@ class LocalAdmin implements AdminApi {
   signIn(): Promise<never> { return rejected(); }
   takeSignInReturn(): null { return null; }
   signOut(): Promise<never> { return rejected(); }
+  overview(_days?: number): Promise<never> { return rejected(); }
   users(): Promise<never[]> { return rejected(); }
   live(): Promise<never> { return rejected(); }
   dailyStats(_from: string, _to: string): Promise<never[]> { return rejected(); }
@@ -92,7 +93,9 @@ class LocalAdmin implements AdminApi {
   restrict(_userId: string, _restricted: boolean): Promise<never> { return rejected(); }
   resetLink(_userId: string): Promise<never> { return rejected(); }
   letterHandled(_letterId: number, _handled: boolean): Promise<never> { return rejected(); }
+  revokeSessions(_userId: string): Promise<never> { return rejected(); }
   userEvents(_userId: string, _limit?: number): Promise<never[]> { return rejected(); }
+  userState(_uid: string): Promise<never> { return rejected(); }
   balanceLive(_days?: number): Promise<never> { return rejected(); }
   deployHost(): string | null {
     return null;

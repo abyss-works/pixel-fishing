@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { GUILD_MAX_MEMBERS, joinRequestDaysLeft, normalizeGuildCode } from '../../../../game/rules/guild';
 import { inviteDialogView } from '../../../../features/guild/model/guild';
+import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import type { GuildMyRequest } from '../../../../features/guild/model/guild';
 import { useGuildInvite } from '../../../../features/guild/service/useGuildInvite';
 import { useNow } from '../../../../features/gameplay/service/useGameTime';
@@ -17,6 +18,9 @@ import type { GuildRun } from './guildProps';
 
 /** 코드로 들어오기 — 바로 들어갔는지 신청이 됐는지, 거부면 안내 문장 */
 export type GuildJoin = (code: string) => Promise<{ error: string | null; requested: boolean }>;
+
+/** 찾기와 만들기 버튼의 너비를 맞춘다 */
+const ACTION_WIDTH = 'w-16 shrink-0';
 
 // 길드가 없을 때 — 400 폭 한 열. 위는 길드 고유 코드(8자리)로 찾기와 찾은 길드의 요약, 가입 방식에 따른 확정 버튼(들어가기,
 // 가입 신청, 받지 않음)이고, 아래는 길드 만들기다. 넣어 둔 가입 신청이 있으면 맨 위에 그 길드와 남은 기간, 신청 취소를 둔다.
@@ -48,18 +52,27 @@ export default function NoGuild({ busy, run, join, request, setToast }: {
     if (!code) return;
     const r = await join(code);
     setCodeError(r.error);
-    if (!r.error) setToast(r.requested ? '가입 신청을 보냈어요. 길드장이 승인하면 들어가요.' : '길드에 들어갔어요.');
+    if (!r.error) sendNotice(setToast, {
+      kind: 'guild.modalAction',
+      text: r.requested ? '가입 신청을 보냈어요. 길드장이 승인하면 들어가요.' : '길드에 들어갔어요.',
+      toastText: r.requested ? '길드 가입 신청 전송!' : '길드에 들어갔어요!',
+    });
   };
   const onCreate = async (e: FormEvent) => {
     e.preventDefault();
     const value = name.trim();
     const error = await run({ op: 'create', name: value });
     setNameError(error);
-    if (!error) setToast(`${value} 길드를 만들었어요.`);
+    if (!error) sendNotice(setToast, {
+      kind: 'guild.modalAction',
+      text: `${value} 길드를 만들었어요.`,
+      toastText: `${value} 길드 창설!`,
+    });
   };
   const onCancel = async () => {
     const error = await run({ op: 'cancelRequest' });
-    setToast(error ?? '가입 신청을 거뒀어요.', error ? 'warn' : 'info');
+    if (error) sendNotice(setToast, { kind: 'system.modalRejected', text: error });
+    else sendNotice(setToast, { kind: 'guild.modalAction', text: '가입 신청을 거뒀어요.', tone: 'neutral' });
   };
 
   return (
@@ -77,7 +90,7 @@ export default function NoGuild({ busy, run, join, request, setToast }: {
         <div className="flex gap-2">
           <TextInput compact className="flex-1 min-w-0 uppercase pf-accent tracking-widest" value={input} maxLength={16}
                      onChange={e => setInput(e.target.value)} aria-label="길드 코드" placeholder="길드 코드" />
-          <Button type="submit" size="sm" disabled={busy}>찾기</Button>
+          <Button type="submit" size="sm" disabled={busy} className={ACTION_WIDTH}>찾기</Button>
         </div>
       </form>
       <GuildInviteSummary preview={invite.preview} view={view} busy={busy} onConfirm={() => { void onJoin(); }} />
@@ -92,7 +105,7 @@ export default function NoGuild({ busy, run, join, request, setToast }: {
         <div className="flex gap-2">
           <TextInput compact className="flex-1 min-w-0" value={name} maxLength={16}
                      onChange={e => setName(e.target.value)} aria-label="길드 이름" placeholder="길드 이름" />
-          <Button type="submit" size="sm" variant="primary" disabled={busy}>만들기</Button>
+          <Button type="submit" size="sm" variant="primary" disabled={busy} className={ACTION_WIDTH}>만들기</Button>
         </div>
         {nameError && <Note tone="warn">{nameError}</Note>}
       </form>

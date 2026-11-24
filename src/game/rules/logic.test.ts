@@ -9,7 +9,7 @@ import {
   type RarityId,
   newState, addCatch, sellAll, tryUpgrade, tryBuyBoat, canFishSpot, boatSpeed, bagValue,
   sellableValue, sellSelected, setLocked, overflowUids, release, bagCapacity,
-  autoLockPlan, applyAutoLock, addItem, takeItem, rarityWeightOf,
+  autoLockPlan, applyAutoLock, autoLockKey, decideCatchAutoLock, applyCatchAutoLock, addItem, takeItem, rarityWeightOf,
   moveExhibit, freeExhibitSlot,
   WALK_BAG_CAP,
   sizeParams, rollSize, sizePercentile, rollCatchExtras, mutationWeightsOf, pickWeighted, rarityShareOf, globalRarityShare,
@@ -45,17 +45,19 @@ describe('데이터 무결성', () => {
     for (const s of SPOTS) {
       expect(FISH.some(f => f.spot === s.id), s.name).toBe(true);
     }
-    expect(SPOTS.map(s => s.boatTier)).toEqual([0, 0, 1, 2, 3, 3, 3, 5, 6, 7, 7, 8, 8]); // 마을(0)/태평양(1)/해구(2)/동남아(3)/인도양(5·6 — 1-2는 tier4 소비)/마다가스카르(7 한 척)/남대서양(8 한 척)
+    expect(SPOTS.map(s => s.boatTier)).toEqual([0, 0, 1, 2, 3, 3, 3, 5, 6, 7, 7, 8, 8, 9, 9]);
     expect(BOATS.map(b => b.tier)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
     expect(MAX_BOAT).toBe(9);
   });
 
-  it('남대서양: 용승대 낮 7종(영웅 2)·세인트헬레나 낮 6종, 전체 어종 103종(낮 79·밤 24)', () => {
-    expect(FISH).toHaveLength(103);
-    expect(FISH.filter(f => !f.night)).toHaveLength(79);
+  it('남대서양·북대서양: 각 13종(7+6), 전체 어종 120종(낮 92·밤 28)', () => {
+    expect(FISH).toHaveLength(120);
+    expect(FISH.filter(f => !f.night)).toHaveLength(92);
     const dayOf = (spot: string) => FISH.filter(f => f.spot === spot && !f.night).map(f => f.rarity).sort();
     expect(dayOf('benguela')).toEqual(['common', 'common', 'common', 'epic', 'epic', 'legendary', 'rare']);
     expect(dayOf('sthelena')).toEqual(['common', 'common', 'common', 'epic', 'legendary', 'rare']);
+    expect(dayOf('azores')).toEqual(['common', 'common', 'common', 'epic', 'epic', 'legendary', 'rare']);
+    expect(dayOf('bermuda')).toEqual(['common', 'common', 'common', 'epic', 'legendary', 'rare']);
   });
 
   it('R12: 등급 명성', () => {
@@ -75,11 +77,13 @@ describe('R11: 추첨', () => {
 });
 
 describe('밤 전용 어종 — 시간대 풀 (game/time.ts)', () => {
-  it('밤 어종 24종 (night 플래그)', () => {
+  it('밤 어종 28종 (night 플래그)', () => {
     const nights = FISH.filter(f => f.night);
-    expect(nights.length).toBe(24);
-    // 구성: 태평양2=전설1 · 동남아3=영웅/희귀+전설 · 인도양2=희귀/영웅/전설 · 마다가스카르2=희귀/영웅/전설 · 남대서양2=용승대 희귀/전설, 세인트헬레나 영웅/전설
+    expect(nights.length).toBe(28);
+    // 구성: 태평양2=전설1 · 동남아3=영웅/희귀+전설 · 인도양2=희귀/영웅/전설 · 마다가스카르2=희귀/영웅/전설 · 남대서양2=용승대 희귀/전설, 세인트헬레나 영웅/전설 · 북대서양2=아조레스 희귀/전설, 버뮤다 영웅/전설
     const bySpot = (spot: string) => nights.filter(f => f.spot === spot).map(f => f.rarity).sort();
+    expect(bySpot('azores')).toEqual(['legendary', 'rare']);
+    expect(bySpot('bermuda')).toEqual(['epic', 'legendary']);
     expect(bySpot('sea')).toEqual(['legendary']);
     expect(bySpot('deep')).toEqual(['legendary']);
     expect(bySpot('dragonhole')).toEqual(['epic', 'legendary']);
@@ -287,10 +291,10 @@ describe('R15: 강화/구매 비용', () => {
   it('대양 트롤선(8단계): 가격 1,250,000 · 명성 80,000 · 속도 200 · 가방 4,000', () => {
     expect(BOATS[7]).toMatchObject({ tier: 8, name: '대양 트롤선', price: 1250000, fameReq: 80000, speed: 200, bagCap: 4000 });
   });
-  it('가공 플랜트선(9단계): 가격 12,500,000 · 명성 230,000 · 속도 220 · 가방 5,000이고 여는 해역이 없다', () => {
+  it('가공 플랜트선(9단계): 가격 12,500,000 · 명성 230,000 · 속도 220 · 가방 5,000이고 북대서양 두 해역을 연다', () => {
     expect(BOATS[8]).toMatchObject({ tier: 9, name: '가공 플랜트선', price: 12500000, fameReq: 230000, speed: 220, bagCap: 5000 });
-    expect(SPOTS.some(s => s.boatTier === 9)).toBe(false);
-    expect(ZONES.some(z => z.entryBoat === 9)).toBe(false);
+    expect(SPOTS.filter(s => s.boatTier === 9).map(s => s.id)).toEqual(['azores', 'bermuda']);
+    expect(ZONES.filter(z => z.entryBoat === 9).map(z => z.id)).toEqual(['northatlantic']);
   });
   it('이동 속도(px/s): 배 없음 100, 조각배 110부터 가공 플랜트선 220까지', () => {
     expect(WALK_SPEED).toBe(100);
@@ -934,6 +938,22 @@ describe('세이브 v9 — 미끼 환불과 요리 상태', () => {
     for (const slots of [null, 3, 'x', [], { lunch: 'cook-lunch-rare' }]) {
       expect(mig({ ...newState(), slots }).slots, JSON.stringify(slots)).toEqual({ lunch: null, bait: null });
     }
+    // bait2 위생 — 유효한 미끼만 살리고, null·미끼 아닌 요리·깨진 시각은 생략한다
+    const dual = mig({ ...newState(), slots: {
+      lunch: null,
+      bait: { id: 'cook-bait-rare', endsAt: END },
+      bait2: { id: 'cook-bait-epic', endsAt: END },
+    } });
+    expect(dual.slots).toEqual({
+      lunch: null,
+      bait: { id: 'cook-bait-rare', endsAt: END },
+      bait2: { id: 'cook-bait-epic', endsAt: END },
+    });
+    expect(mig({ ...newState(), slots: { lunch: null, bait: null, bait2: { id: 'cook-lunch-rare', endsAt: END } } }).slots)
+      .toEqual({ lunch: null, bait: null });
+    expect(mig({ ...newState(), slots: { lunch: null, bait: null, bait2: null } }).slots)
+      .toEqual({ lunch: null, bait: null });
+    expect('bait2' in mig({ ...newState(), slots: { lunch: null, bait: null, bait2: null } }).slots).toBe(false);
   });
 
   it('energyTargets 위생 — boolean만 살리고 모르는 해역 키는 버리지 않는다', () => {
@@ -1025,11 +1045,11 @@ describe('라이선스 도감 조건 — 남은 어종 수', () => {
     const missing = zoneDexMissing(state, 'pacific', LICENSE_GRADES.basic);
     expect(missing.length).toBeGreaterThan(1);
     expect(dexLabel(state)).toEqual({
-      key: 'dex', ok: false, label: `태평양 모든 어종 수집(전설 제외, 밤 어종 포함) · 남은 ${missing.length}종`,
+      key: 'dex', ok: false, label: `태평양 모든 어종 수집(전설 제외, 밤 어종 포함) (남은 ${missing.length}종)`,
     });
     const caught = { count: 1, maxSize: 1, first: '2026-01-01' };
     const oneCaught = { ...state, dex: { [missing[0]]: { normal: caught } } };
-    expect(dexLabel(oneCaught).label).toMatch(new RegExp(` · 남은 ${missing.length - 1}종$`));
+    expect(dexLabel(oneCaught).label).toMatch(new RegExp(` \\(남은 ${missing.length - 1}종\\)$`));
   });
 
   it('다 채우면 남은 수 없이 원래 문구다', () => {
@@ -1180,18 +1200,26 @@ describe('해역 간 방치 기대값 사슬 (낮 풀, 방치 진입·플래토)
     }
   });
 
-  it('남대서양 첫 해역은 코모로 심해 대비 약 70%(1.65~1.75배), 세인트헬레나는 용승대 대비 약 2.3~2.4배 오른다', () => {
+  it('남대서양·북대서양 진입·플래토 EV가 해역 간 수익 단계를 유지한다', () => {
     const [cEntry, cPlateau] = idle('comorodeep');
     const [bEntry, bPlateau] = idle('benguela');
     const [hEntry, hPlateau] = idle('sthelena');
+    const [aEntry, aPlateau] = idle('azores');
+    const [mEntry, mPlateau] = idle('bermuda');
     for (const r of [bEntry / cEntry, bPlateau / cPlateau]) {
-      // 확정 밸런스의 실제 비율은 진입 1.72, 플래토 1.69다
-      expect(r).toBeGreaterThanOrEqual(1.65);
-      expect(r).toBeLessThanOrEqual(1.75);
+      expect(r).toBeGreaterThanOrEqual(1.95);
+      expect(r).toBeLessThanOrEqual(2.05);
     }
     for (const r of [hEntry / bEntry, hPlateau / bPlateau]) {
-      // 확정 밸런스의 실제 비율은 진입 2.33, 플래토 2.37이다
-      expect(r).toBeGreaterThanOrEqual(2.3);
+      expect(r).toBeGreaterThanOrEqual(2.15);
+      expect(r).toBeLessThanOrEqual(2.35);
+    }
+    for (const r of [aEntry / hEntry, aPlateau / hPlateau]) {
+      expect(r).toBeGreaterThanOrEqual(1.65);
+      expect(r).toBeLessThanOrEqual(2.1);
+    }
+    for (const r of [mEntry / aEntry, mPlateau / aPlateau]) {
+      expect(r).toBeGreaterThanOrEqual(2.2);
       expect(r).toBeLessThanOrEqual(2.4);
     }
   });
@@ -1217,8 +1245,9 @@ describe('가중치 추첨', () => {
   it('등급 확률은 해역 가중치 합이 분모다 — 해역마다 분모가 다르다', () => {
     expect(rarityShareOf('pond', 'legendary')).toBeCloseTo(100 / 10000, 10);
     expect(rarityShareOf('indian', 'legendary')).toBeCloseTo(100 / 10000, 10);
-    expect(rarityShareOf('mozstrait', 'legendary')).toBeCloseTo(55 / 10000, 10);
-    expect(rarityShareOf('benguela', 'legendary')).toBeCloseTo(10 / 10000, 10);
+    expect(rarityShareOf('mozstrait', 'legendary')).toBeCloseTo(100 / 10000, 10);
+    expect(rarityShareOf('benguela', 'legendary')).toBeCloseTo(55 / 10000, 10);
+    expect(rarityShareOf('azores', 'legendary')).toBeCloseTo(10 / 10000, 10);
     expect(rarityShareOf('barrierreef', 'rare')).toBeCloseTo(2300 / 10000, 10);
     expect(globalRarityShare('rare')).toBeCloseTo(2000 / 10000, 10);
   });
@@ -1307,5 +1336,176 @@ describe('세이브 v10 — 기운 수량을 10분의 1 단위로 옮기는 이�
     const before = { 'energy-common': 600, 'energy-rare': 20, 'energy-epic': 4, 'energy-legendary': 1 };
     const st = mig({ v: 9, items: before });
     for (const id of E) expect(st.items[id] / ENERGY_UNIT).toBe(before[id as keyof typeof before]);
+  });
+});
+
+describe('토글식 자동 잠금 — 스키마·위생·추적·판정', () => {
+  it('newState 기본값은 꺼짐(false)과 빈 추적 맵({})이며 v: 10을 유지한다', () => {
+    const st = newState();
+    expect(st.v).toBe(10);
+    expect(st.autoLockOnCatch).toBe(false);
+    expect(st.autoLockedIds).toEqual({});
+  });
+
+  it('migrate — 누락·깨진 autoLockOnCatch와 autoLockedIds를 위생 처리하고 유효 값은 보존한다', () => {
+    const missing = migrate({ v: 10 });
+    expect(missing.v).toBe(10);
+    expect(missing.autoLockOnCatch).toBe(false);
+    expect(missing.autoLockedIds).toEqual({});
+
+    const broken = migrate({
+      v: 10,
+      autoLockOnCatch: 'yes',
+      autoLockedIds: { 'carp|normal': 'u1', 'bad|empty': '', 'bad|num': 123, '': 'u2' },
+    });
+    expect(broken.autoLockOnCatch).toBe(false);
+    expect(broken.autoLockedIds).toEqual({ 'carp|normal': 'u1' });
+
+    // 가방이 빈 채로(fastCatch 경로) migrate해도 autoLockedIds를 보존한다
+    const valid = migrate({
+      v: 10,
+      bag: [],
+      autoLockOnCatch: true,
+      autoLockedIds: { 'carp|normal': 'u1', 'carp|variant': 'u2' },
+    });
+    expect(valid.autoLockOnCatch).toBe(true);
+    expect(valid.autoLockedIds).toEqual({ 'carp|normal': 'u1', 'carp|variant': 'u2' });
+  });
+
+  it('applyAutoLock — 어종×폼별 최대 개체를 autoLockedIds에 기록한다(기존 맵 교체, 멱등)', () => {
+    const oldTop = { ...mk('crucian', 'normal', 30), locked: true };
+    const newTop = mk('crucian', 'normal', 45);
+    const variant = mk('crucian', 'variant', 12);
+    const state = {
+      ...newState(),
+      bag: [oldTop, newTop, variant],
+      autoLockedIds: { 'stale|normal': 'ghost-uid', [autoLockKey('crucian', 'normal')]: oldTop.uid },
+    };
+    const once = applyAutoLock(state);
+    expect(once.autoLockedIds).toEqual({
+      [autoLockKey('crucian', 'normal')]: newTop.uid,
+      [autoLockKey('crucian', 'variant')]: variant.uid,
+    });
+    expect(applyAutoLock(once)).toEqual(once);
+  });
+
+  it('setLocked — 잠금 걸기(수동 승격)·풀기 모두 autoLockedIds에서 해당 uid를 제거한다', () => {
+    const a = { ...mk('carp', 'normal', 40), locked: true };
+    const b = { ...mk('crucian', 'normal', 20), locked: true };
+    const base = {
+      ...newState(),
+      bag: [a, b],
+      autoLockedIds: {
+        [autoLockKey('carp', 'normal')]: a.uid,
+        [autoLockKey('crucian', 'normal')]: b.uid,
+      },
+    };
+    const promoted = setLocked(base, [a.uid], true);
+    expect(promoted.bag.find(i => i.uid === a.uid)?.locked).toBe(true);
+    expect(promoted.autoLockedIds).toEqual({ [autoLockKey('crucian', 'normal')]: b.uid });
+
+    const unlocked = setLocked(promoted, [b.uid], false);
+    expect(unlocked.bag.find(i => i.uid === b.uid)?.locked).toBe(false);
+    expect(unlocked.autoLockedIds).toEqual({});
+  });
+
+  it('sellSelected·release·moveExhibit — 가방에서 빠진 개체는 autoLockedIds에서 정리한다', () => {
+    const a = mk('carp', 'normal', 30);
+    const b = mk('crucian', 'normal', 20);
+    const c = { ...mk('minnow', 'normal', 10), locked: true };
+    const base = {
+      ...newState(),
+      bag: [a, b, c],
+      autoLockedIds: {
+        [autoLockKey('carp', 'normal')]: a.uid,
+        [autoLockKey('crucian', 'normal')]: b.uid,
+        [autoLockKey('minnow', 'normal')]: c.uid,
+      },
+    };
+    const sold = sellSelected(base, [a.uid]);
+    expect(sold.autoLockedIds).not.toHaveProperty(autoLockKey('carp', 'normal'));
+    const released = release(sold, [b.uid]);
+    expect(released.autoLockedIds).not.toHaveProperty(autoLockKey('crucian', 'normal'));
+    const exhibited = moveExhibit(released, c.uid, 0);
+    expect(exhibited.autoLockedIds).toEqual({});
+  });
+
+  it('applyCatchAutoLock — 꺼짐이면 잠그지 않고, 켜짐이면 첫 잠금·자동 교체·수동 보호·폼 분리 규칙을 따른다', () => {
+    const incoming = mk('crucian', 'normal', 25);
+    // 꺼짐: 무변경
+    const offRes = applyCatchAutoLock(newState(), incoming);
+    expect(offRes.inst.locked).toBe(false);
+    expect(offRes.unlockedPrev).toBeNull();
+    expect(offRes.state.autoLockedIds).toEqual({});
+
+    // 켜짐, 기존 잠김 없음: 자동 잠금
+    const onEmpty = { ...newState(), autoLockOnCatch: true };
+    const first = applyCatchAutoLock(onEmpty, incoming);
+    expect(first.inst.locked).toBe(true);
+    expect(first.unlockedPrev).toBeNull();
+    expect(first.state.autoLockedIds).toEqual({ [autoLockKey('crucian', 'normal')]: incoming.uid });
+
+    // 동률·작은 개체는 교체하지 않는다
+    const withFirst = { ...first.state, bag: [first.inst] };
+    for (const sz of [20, 25]) {
+      const small = applyCatchAutoLock(withFirst, mk('crucian', 'normal', sz));
+      expect(small.inst.locked).toBe(false);
+      expect(small.unlockedPrev).toBeNull();
+      expect(small.state.bag[0].locked).toBe(true);
+    }
+
+    // 더 큰 개체: 새 개체 잠금 + 기존 자동 잠금만 해제
+    const bigger = mk('crucian', 'normal', 30);
+    const replaced = applyCatchAutoLock(withFirst, bigger);
+    expect(replaced.inst.locked).toBe(true);
+    expect(replaced.unlockedPrev?.uid).toBe(incoming.uid);
+    expect(replaced.unlockedPrev?.locked).toBe(false);
+    expect(replaced.state.bag[0].locked).toBe(false);
+    expect(replaced.state.autoLockedIds).toEqual({ [autoLockKey('crucian', 'normal')]: bigger.uid });
+
+    // 다른 폼(변이)은 독립 추적
+    const variant = mk('crucian', 'variant', 5);
+    const withBigger = { ...replaced.state, bag: [replaced.inst] };
+    const varRes = applyCatchAutoLock(withBigger, variant);
+    expect(varRes.inst.locked).toBe(true);
+    expect(varRes.unlockedPrev).toBeNull();
+    expect(varRes.state.autoLockedIds).toEqual({
+      [autoLockKey('crucian', 'normal')]: bigger.uid,
+      [autoLockKey('crucian', 'variant')]: variant.uid,
+    });
+  });
+
+  it('applyCatchAutoLock — 수동 잠금 개체는 보호하고, 수동+자동 공존 시 전체 잠김 최대 크기 기준으로 판정한다', () => {
+    const manual = { ...mk('carp', 'normal', 50), locked: true };
+    const auto = { ...mk('carp', 'normal', 30), locked: true };
+    const state = {
+      ...newState(),
+      autoLockOnCatch: true,
+      bag: [manual, auto],
+      autoLockedIds: { [autoLockKey('carp', 'normal')]: auto.uid },
+    };
+    // 40cm는 자동 잠금(30)보다 크지만 수동 잠금(50)보다 작아 잠그지 않는다
+    const mid = applyCatchAutoLock(state, mk('carp', 'normal', 40));
+    expect(mid.inst.locked).toBe(false);
+    expect(mid.unlockedPrev).toBeNull();
+    expect(mid.state.bag.map(i => i.locked)).toEqual([true, true]);
+
+    // 60cm는 전체 잠김 최대(50)보다 크므로 새로 잠그고 기존 자동 잠금(30)만 푼다 — 수동(50)은 유지
+    const huge = mk('carp', 'normal', 60);
+    const top = applyCatchAutoLock(state, huge);
+    expect(top.inst.locked).toBe(true);
+    expect(top.unlockedPrev?.uid).toBe(auto.uid);
+    expect(top.state.bag.find(i => i.uid === manual.uid)?.locked).toBe(true);
+    expect(top.state.bag.find(i => i.uid === auto.uid)?.locked).toBe(false);
+    expect(top.state.autoLockedIds).toEqual({ [autoLockKey('carp', 'normal')]: huge.uid });
+  });
+
+  it('decideCatchAutoLock — 크기 미상(null) 잠김 개체는 최소(-1)로 취급한다', () => {
+    const unsized = { ...mk('carp', 'normal', null), locked: true };
+    const incoming = mk('carp', 'normal', 10);
+    const dec = decideCatchAutoLock(true, { [autoLockKey('carp', 'normal')]: unsized.uid }, incoming, -1, unsized);
+    expect(dec.inst.locked).toBe(true);
+    expect(dec.unlockedPrev?.uid).toBe(unsized.uid);
+    expect(dec.unlockedPrev?.locked).toBe(false);
   });
 });

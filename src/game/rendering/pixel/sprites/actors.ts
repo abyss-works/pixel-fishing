@@ -1,21 +1,328 @@
 // 배우 스프라이트 — 플레이어(도보)/배(항해). 자기 좌표계만 알고 상태를 모른다 (계층: 단위 스프라이트)
 import { label, R, UI } from '../common.js';
 import type { Ctx } from '../common.js';
-import { DEFAULT_LOOK, PANTS_COLORS, SHIRT_COLORS, hatById } from '../../../content/wardrobe.js';
-import type { Look } from '../../../content/wardrobe.js';
+import { DEFAULT_LOOK, PANTS_COLORS, SHIRT_COLORS, hatById, isAchievementHat } from '../../../content/wardrobe.js';
+import type { Hat, Look } from '../../../content/wardrobe.js';
+
+function drawAchievementHat(ctx: Ctx, x: number, y: number, hat: Hat) {
+  const c = hat.color;
+  const a = hat.accentColor ?? c;
+  switch (hat.id) {
+    case 'straw-hat':
+      R(ctx, x - 2, y - 20, 4, 1, c);
+      R(ctx, x - 3, y - 19, 6, 2, c);
+      R(ctx, x - 6, y - 17, 12, 1, c);
+      return;
+    case 'sou-wester':
+      R(ctx, x - 4, y - 19, 7, 3, c);
+      R(ctx, x - 6, y - 16, 4, 2, c);
+      R(ctx, x - 5, y - 17, 2, 1, c);
+      R(ctx, x + 2, y - 16, 3, 1, c);
+      return;
+    case 'coral-bandana':
+      R(ctx, x - 3, y - 19, 6, 1, c);
+      R(ctx, x - 4, y - 18, 8, 3, c);
+      R(ctx, x - 6, y - 17, 2, 1, c);
+      R(ctx, x - 5, y - 15, 2, 1, c);
+      return;
+    case 'saffron-turban':
+      R(ctx, x - 3, y - 20, 6, 2, c);
+      R(ctx, x - 4, y - 19, 8, 4, c);
+      R(ctx, x - 5, y - 18, 1, 2, c);
+      R(ctx, x + 4, y - 18, 1, 2, c);
+      return;
+    case 'worn-tricorn':
+      R(ctx, x - 1, y - 20, 2, 1, c);
+      R(ctx, x - 3, y - 19, 6, 3, c);
+      R(ctx, x - 5, y - 18, 2, 2, c);
+      R(ctx, x + 3, y - 18, 2, 2, c);
+      R(ctx, x - 4, y - 17, 8, 1, c);
+      return;
+    case 'fog-beanie':
+      R(ctx, x - 3, y - 20, 6, 2, c);
+      R(ctx, x - 4, y - 18, 8, 3, c);
+      return;
+    case 'braid-captain-cap':
+      R(ctx, x - 4, y - 20, 8, 3, c);
+      R(ctx, x - 4, y - 17, 8, 1, a);
+      R(ctx, x + 2, y - 16, 4, 1, c);
+      return;
+    case 'anchor-beret':
+      R(ctx, x - 5, y - 19, 9, 2, c);
+      R(ctx, x - 4, y - 17, 8, 1, c);
+      R(ctx, x + 2, y - 18, 2, 1, a);
+      return;
+    case 'watch-sailor-cap':
+      R(ctx, x - 3, y - 20, 6, 1, c);
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      return;
+    case 'earflap-cap':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x + 3, y - 16, 2, 1, c);
+      R(ctx, x - 4, y - 16, 2, 2, c);
+      R(ctx, x + 2, y - 16, 2, 2, c);
+      return;
+    case 'lure-bucket-hat':
+      R(ctx, x - 3, y - 19, 6, 3, c);
+      R(ctx, x - 5, y - 17, 10, 1, c);
+      R(ctx, x + 1, y - 18, 2, 1, a);
+      return;
+    case 'harpooner-pillbox':
+      R(ctx, x - 5, y - 19, 10, 1, c);
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      return;
+    case 'shipowner-bowler':
+      R(ctx, x - 3, y - 20, 6, 3, c);
+      R(ctx, x - 3, y - 18, 6, 1, a);
+      R(ctx, x - 5, y - 17, 10, 1, c);
+      return;
+    case 'salt-fisher-cap':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x + 3, y - 16, 3, 1, c);
+      R(ctx, x - 3, y - 18, 2, 1, a);
+      R(ctx, x + 1, y - 17, 1, 1, a);
+      return;
+    case 'crescent-hood':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x - 5, y - 17, 2, 3, c);
+      R(ctx, x + 3, y - 17, 2, 3, c);
+      R(ctx, x - 1, y - 18, 2, 1, a);
+      R(ctx, x, y - 19, 1, 1, a);
+      return;
+    case 'ink-hood':
+      R(ctx, x - 4, y - 20, 8, 4, c);
+      R(ctx, x - 5, y - 17, 2, 3, c);
+      R(ctx, x + 3, y - 17, 2, 3, c);
+      R(ctx, x - 4, y - 17, 8, 1, a);
+      return;
+    case 'polar-beret':
+      R(ctx, x - 5, y - 19, 10, 2, c);
+      R(ctx, x - 4, y - 17, 8, 1, c);
+      R(ctx, x - 2, y - 18, 2, 1, a);
+      R(ctx, x - 1, y - 19, 1, 1, a);
+      return;
+    case 'polar-knit-cap':
+      R(ctx, x - 3, y - 20, 6, 2, c);
+      R(ctx, x - 4, y - 18, 8, 3, c);
+      R(ctx, x - 4, y - 16, 8, 1, a);
+      return;
+    case 'strait-night-cap':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x + 2, y - 16, 4, 1, a);
+      R(ctx, x - 3, y - 18, 2, 1, a);
+      return;
+    case 'inkglass-beanie':
+      R(ctx, x - 3, y - 20, 6, 2, c);
+      R(ctx, x - 4, y - 18, 8, 2, c);
+      R(ctx, x - 4, y - 16, 8, 1, a);
+      R(ctx, x + 1, y - 19, 2, 1, a);
+      return;
+    case 'lookout-storm-hat':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x - 6, y - 16, 3, 2, c);
+      R(ctx, x + 3, y - 16, 3, 1, c);
+      R(ctx, x - 4, y - 17, 8, 1, a);
+      return;
+    case 'pitch-lookout-cap':
+      R(ctx, x - 4, y - 20, 8, 3, c);
+      R(ctx, x - 5, y - 17, 10, 1, c);
+      R(ctx, x + 1, y - 19, 2, 1, a);
+      R(ctx, x - 2, y - 18, 1, 1, a);
+      return;
+    case 'gold-hook-hat':
+      R(ctx, x - 3, y - 20, 6, 3, c);
+      R(ctx, x - 5, y - 17, 10, 1, c);
+      R(ctx, x + 1, y - 19, 2, 1, a);
+      R(ctx, x + 2, y - 18, 1, 2, a);
+      return;
+    case 'megalodon-work-cap':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x + 2, y - 16, 4, 1, c);
+      R(ctx, x - 3, y - 20, 5, 1, c);
+      return;
+    case 'megalodon-fin-cap':
+      R(ctx, x - 4, y - 18, 8, 2, c);
+      R(ctx, x + 3, y - 16, 3, 1, c);
+      R(ctx, x - 1, y - 20, 3, 2, a);
+      R(ctx, x, y - 20, 1, 1, c);
+      return;
+    case 'megalodon-silver-visor':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x + 2, y - 16, 4, 1, a);
+      R(ctx, x - 3, y - 18, 6, 1, a);
+      return;
+    case 'leviathan-dive-hood':
+      R(ctx, x - 4, y - 20, 8, 4, c);
+      R(ctx, x - 5, y - 18, 1, 4, c);
+      R(ctx, x + 4, y - 18, 1, 4, c);
+      return;
+    case 'leviathan-bell-cap':
+      R(ctx, x - 3, y - 20, 6, 1, c);
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x - 1, y - 18, 2, 2, a);
+      return;
+    case 'leviathan-serpent-hat':
+      R(ctx, x - 4, y - 20, 8, 3, c);
+      R(ctx, x - 5, y - 17, 10, 1, c);
+      R(ctx, x - 3, y - 19, 2, 1, a);
+      R(ctx, x, y - 18, 2, 1, a);
+      R(ctx, x + 2, y - 19, 2, 1, a);
+      return;
+    case 'ananta-lantern-hood':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x - 5, y - 17, 1, 3, c);
+      R(ctx, x + 4, y - 17, 1, 3, c);
+      R(ctx, x - 1, y - 18, 2, 1, a);
+      return;
+    case 'ananta-rope-cap':
+      R(ctx, x - 3, y - 20, 6, 1, c);
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x - 4, y - 17, 8, 1, a);
+      R(ctx, x + 2, y - 16, 2, 1, a);
+      return;
+    case 'ananta-astrolabe-hat':
+      R(ctx, x - 4, y - 20, 8, 3, c);
+      R(ctx, x - 5, y - 17, 10, 1, c);
+      R(ctx, x - 1, y - 19, 2, 2, a);
+      R(ctx, x - 2, y - 18, 4, 1, a);
+      return;
+    case 'dunkleos-trawl-hat':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x - 5, y - 17, 10, 1, c);
+      R(ctx, x - 5, y - 16, 2, 1, c);
+      return;
+    case 'dunkleos-rivet-leather':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x - 3, y - 18, 1, 1, a);
+      R(ctx, x, y - 18, 1, 1, a);
+      R(ctx, x + 2, y - 18, 1, 1, a);
+      return;
+    case 'dunkleos-jaw-helm':
+      R(ctx, x - 4, y - 20, 8, 4, c);
+      R(ctx, x - 5, y - 18, 1, 3, a);
+      R(ctx, x + 4, y - 18, 1, 3, a);
+      R(ctx, x - 2, y - 19, 4, 1, a);
+      return;
+    case 'adamastor-pier-cap':
+      R(ctx, x - 4, y - 20, 8, 4, c);
+      R(ctx, x - 5, y - 17, 10, 1, c);
+      return;
+    case 'adamastor-storm-hood':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x - 5, y - 17, 2, 3, c);
+      R(ctx, x + 3, y - 17, 2, 3, c);
+      R(ctx, x - 3, y - 19, 6, 1, a);
+      return;
+    case 'adamastor-lantern-hood':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x - 5, y - 17, 2, 3, c);
+      R(ctx, x + 3, y - 17, 2, 3, c);
+      R(ctx, x + 4, y - 20, 2, 2, a);
+      return;
+    case 'jasconius-island-cap':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x - 3, y - 20, 6, 1, c);
+      R(ctx, x - 4, y - 17, 8, 1, a);
+      return;
+    case 'jasconius-ember-visor':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x + 2, y - 16, 4, 1, c);
+      R(ctx, x - 2, y - 18, 2, 1, a);
+      R(ctx, x + 2, y - 17, 2, 1, a);
+      return;
+    case 'jasconius-rockback-hat':
+      R(ctx, x - 5, y - 18, 10, 2, c);
+      R(ctx, x - 3, y - 20, 6, 2, a);
+      R(ctx, x - 1, y - 20, 2, 1, c);
+      return;
+    case 'ridge-compass-cap':
+      R(ctx, x - 4, y - 20, 8, 3, c);
+      R(ctx, x - 5, y - 17, 10, 1, c);
+      R(ctx, x - 1, y - 19, 2, 2, a);
+      R(ctx, x + 1, y - 18, 1, 1, a);
+      return;
+    case 'ridge-lantern-cap':
+      R(ctx, x - 3, y - 20, 6, 1, c);
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x + 2, y - 18, 2, 2, a);
+      R(ctx, x - 4, y - 17, 6, 1, '#314961');
+      return;
+    case 'vanishing-hood':
+      R(ctx, x - 4, y - 20, 8, 4, c);
+      R(ctx, x - 5, y - 17, 2, 3, c);
+      R(ctx, x + 3, y - 17, 2, 3, c);
+      R(ctx, x - 2, y - 18, 4, 1, a);
+      return;
+    case 'gloucester-fog-cap':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x + 2, y - 16, 4, 1, c);
+      R(ctx, x - 3, y - 20, 6, 1, '#4f6d75');
+      return;
+    case 'gloucester-vertebra-visor':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x + 1, y - 16, 5, 1, a);
+      R(ctx, x - 3, y - 19, 1, 2, a);
+      R(ctx, x, y - 19, 1, 2, a);
+      R(ctx, x + 3, y - 19, 1, 2, a);
+      return;
+    case 'gloucester-crest-hat':
+      R(ctx, x - 3, y - 20, 6, 2, c);
+      R(ctx, x - 4, y - 18, 8, 3, c);
+      R(ctx, x - 2, y - 20, 1, 2, a);
+      R(ctx, x, y - 20, 1, 2, a);
+      R(ctx, x + 2, y - 20, 1, 2, a);
+      return;
+    case 'guabancex-sargasso-hood':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x - 5, y - 17, 1, 3, c);
+      R(ctx, x + 4, y - 17, 1, 3, c);
+      R(ctx, x - 4, y - 17, 8, 1, a);
+      return;
+    case 'guabancex-eye-hat':
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x - 6, y - 16, 3, 2, c);
+      R(ctx, x + 3, y - 16, 3, 1, c);
+      R(ctx, x - 1, y - 18, 2, 1, a);
+      return;
+    case 'guabancex-fin-crown':
+      R(ctx, x - 5, y - 18, 10, 2, c);
+      R(ctx, x - 4, y - 20, 8, 2, c);
+      R(ctx, x - 5, y - 20, 1, 2, a);
+      R(ctx, x + 4, y - 20, 1, 2, a);
+      R(ctx, x - 2, y - 18, 4, 1, a);
+      return;
+    default:
+      R(ctx, x - 4, y - 19, 8, 3, c);
+      R(ctx, x + 3, y - 16, 3, 1, c);
+  }
+}
+
+/** 모자 — (x, y)는 사람의 발 아래 가운데다(모자 좌표계는 사람 그림과 같다). 업적 모자는 도형별로, 그 밖의 모자는 덮개와 챙을 한 가지 색으로 그린다 */
+export function drawHat(ctx: Ctx, x: number, y: number, hat: Hat) {
+  if (isAchievementHat(hat)) {
+    drawAchievementHat(ctx, x, y, hat);
+    return;
+  }
+  const c = hat.color;
+  R(ctx, x - 4, y - 19, 8, 3, c);
+  R(ctx, x + 3, y - 16, 3, 1, c);
+}
+
+/** 머리 — (x, y)는 머리 아래 가운데다. 모자를 함께 그리고, 모자가 없으면 머리카락을 그린다 */
+export function drawHead(ctx: Ctx, x: number, y: number, look: Look = DEFAULT_LOOK) {
+  R(ctx, x - 3, y - 6, 6, 6, '#ffcc99');
+  const hat = hatById(look.hat);
+  if (hat) {
+    drawHat(ctx, x, y + 10, hat);
+  } else {
+    R(ctx, x - 4, y - 8, 8, 3, '#8d6e63');
+    R(ctx, x - 2, y - 9, 4, 2, '#8d6e63');
+  }
+}
 
 /** 사람 — (x, y)는 발 아래 가운데다. 모자가 없으면 머리카락을 그린다 */
 export function drawPerson(ctx: Ctx, x: number, y: number, look: Look = DEFAULT_LOOK) {
-  R(ctx, x - 3, y - 16, 6, 6, '#ffcc99');
-  const hat = hatById(look.hat);
-  if (hat) {
-    // 단순한 모자 — 머리 위 덮개와 한쪽 챙, 한 가지 색
-    R(ctx, x - 4, y - 19, 8, 3, hat.color);
-    R(ctx, x + 3, y - 16, 3, 1, hat.color);
-  } else {
-    R(ctx, x - 4, y - 18, 8, 3, '#8d6e63');
-    R(ctx, x - 2, y - 19, 4, 2, '#8d6e63');
-  }
+  drawHead(ctx, x, y - 10, look);
   R(ctx, x - 3, y - 10, 6, 7, SHIRT_COLORS[look.shirt]);
   R(ctx, x - 2, y - 3, 4, 3, PANTS_COLORS[look.pants]);
 }

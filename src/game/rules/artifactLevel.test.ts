@@ -83,6 +83,16 @@ describe('레벨별 효과', () => {
   it('최고 레벨을 넘는 입력은 Lv5로 접는다', () => {
     expect(artifactEffectsAt(art('abyss-angler'), 99).duelSpeedupCut).toBe(0.2);
   });
+
+  it('북대서양 유물 2종 — 글로스터의 등마디는 레벨 계수대로 오르고, 사르가소의 그물망은 전설 고정이다', () => {
+    expect([1, 2, 3, 4, 5].map(l => artifactEffectsAt(art('gloucester-vertebra'), l).commonWeightCut))
+      .toEqual([0.1, 0.125, 0.15, 0.175, 0.2]);
+    expect(artifactHasLevel(art('sargasso-net'))).toBe(false);
+    expect(artifactEffectsAt(art('sargasso-net'), 5)).toEqual({});
+    const bagRelic = { ...art('wreck-compass'), effects: { bagCap: 0.1 } };
+    expect([1, 2, 3, 4, 5].map(l => artifactEffectsAt(bagRelic, l).bagCap))
+      .toEqual([0.1, 0.125, 0.15, 0.175, 0.2]);
+  });
 });
 
 describe('레벨이 효과 함수에 반영된다', () => {
@@ -164,6 +174,9 @@ describe('levelUpArtifact 액션', () => {
     const legend = applyAction(seed({ artifacts: ['mami-wata-mirror'], items: { 'mat-clouded-mirror': 9 } }),
       { type: 'levelUpArtifact', artifact: 'mami-wata-mirror' }, deps());
     expect(legend).toEqual({ ok: false, error: 'bad-request' });
+    const legend2 = applyAction(seed({ artifacts: ['sargasso-net'], items: { 'mat-wet-sargasso-rope': 9 } }),
+      { type: 'levelUpArtifact', artifact: 'sargasso-net' }, deps());
+    expect(legend2).toEqual({ ok: false, error: 'bad-request' });
     expect(applyAction(seed({ items: { 'mat-wreck-compass': 9 } }), act, deps())).toEqual({ ok: false, error: 'bad-request' });
     expect(applyAction(seed(), { type: 'levelUpArtifact', artifact: 3 as unknown as string }, deps())).toEqual({ ok: false, error: 'bad-request' });
   });

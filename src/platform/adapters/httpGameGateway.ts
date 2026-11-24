@@ -12,14 +12,16 @@ import { BUILD_ID } from '../../buildId';
 import { APP_VERSION } from '../../version';
 import { REJECT_TEXT } from '../../game/rules/rules';
 import type { RejectReason } from '../../game/rules/rules';
+import { getPhaseOverride } from './timeOverride';
 
 type Row = Record<string, never> | Record<string, unknown>;
 
 // 창 식별자 — 창(탭)마다 새로 만든다. 서버는 마지막으로 접속(boot)한 창의 액션만 받는다
 const CLIENT_ID = crypto.randomUUID();
 
-/** 세 소스에서 GameState를 조립한다. 서버 조립과 같은 규칙을 적용한다. */
-function assemble(cur: Row, instances: Row[], records: Row[]): GameState {
+/** 세 소스 + 런타임 업적 근거에서 GameState를 조립한다. 서버 조립과 같은 규칙을 적용한다. */
+function assemble(cur: Row, instances: Row[], records: Row[],
+  counters: Record<string, number>, clearedNamed: string[]): GameState {
   const bag: unknown[] = [];
   const exhibit: unknown[] = [];
   for (const r of instances as Record<string, unknown>[]) {
@@ -39,7 +41,16 @@ function assemble(cur: Row, instances: Row[], records: Row[]): GameState {
   }
   const c = cur as Record<string, unknown>;
   return migrate({ v: 8, ...(c.data as object), gold: Number(c.gold), fame: Number(c.fame),
-    boat: c.boat, rod: c.rod, bag, exhibit, dex });
+    boat: c.boat, rod: c.rod, bag, exhibit, dex,
+    achievementCounters: counters, clearedNamed });
+}
+
+/** 서버 버전 필드를 유한 숫자로 파싱한다. 누락·비정상 값은 null로 돌려 재동기화를 강제한다. */
+function parseVersion(raw: unknown): number | null {
+  const v = typeof raw === 'number' ? raw
+    : typeof raw === 'string' && raw.trim() !== '' ? Number(raw)
+    : NaN;
+  return Number.isFinite(v) ? v : null;
 }
 
 export class HttpGameGateway implements GameGateway {
@@ -60,12 +71,12 @@ export class HttpGameGateway implements GameGateway {
   // 서버가 세 표의 본인 행을 한 번에 돌려주고, 여기서 GameState로 조립한다.
   async load(): Promise<GameState | null> {
     if (!isCloud) return null;
-    const me = await readMe<{ cur: Row | null; instances: Row[]; records: Row[]; legacy: unknown }>('state');
+    const me = await readMe<{ cur: Row | null; instances: Row[]; records: Row[];
+      counters: Record<string, number>; clearedNamed: string[]; legacy: unknown }>('state');
     if (me.cur) {
-      const s = assemble(me.cur, me.instances, me.records);
+      const s = assemble(me.cur, me.instances, me.records, me.counters, me.clearedNamed);
       this.lastState = s;
-      const v = Number((me.cur as { version?: unknown }).version);
-      this.lastVersion = Number.isFinite(v) ? v : null;
+      this.lastVersion = parseVersion((me.cur as { version?: unknown }).version);
       return s;
     }
 
@@ -117,14 +128,23 @@ export class HttpGameGateway implements GameGateway {
       }
     }
     if (res.ok && (body?.state || body?.patch)) {
-      // 풀 응답(import 등) — 그대로 채택. 캐시 없이 델타만 온 경우도 여기서 풀재동기한다
-      // (서버는 액션을 이미 적용했으므로 load()는 적용 후 상태다 + 서버 result를 함께 쓴다).
-      const s = body?.state ? migrate(body.state) : await this.load();
+      if (body.state) {
+        // 풀 응답(import 등) — 그대로 채택하되 버전이 없으면 lastVersion을 비워 다음 델타에서 재동기화한다.
+        const s = migrate(body.state);
+        this.lastState = s;
+        this.lastVersion = parseVersion(body.version);
+        return { status: 'ok', state: s, result: body.result as never };
+      }
+      // 델타 적용 불가(캐시 없음·baseVersion 불일치·적용 실패) — 재동기화 전에 기존 캐시를 비워
+      // load()가 실패해도 오래된 상태·버전이 남지 않게 한다.
+      this.lastState = null;
+      this.lastVersion = null;
+      const s = await this.load();
       if (s) {
         this.lastState = s;
-        const v = Number(body?.version);
-        if (Number.isFinite(v)) this.lastVersion = v;
-        return { status: 'ok', state: s, result: body?.result as never };
+        const v = parseVersion(body.patch?.version ?? body.version);
+        if (v !== null) this.lastVersion = v;
+        return { status: 'ok', state: s, result: body.result as never };
       }
     }
     // 409 = 낙관 락 충돌(다른 탭과 경합) — 풀재동기로 캐시를 최신화한 뒤 1회 재시도.
@@ -152,10 +172,14 @@ export class HttpGameGateway implements GameGateway {
 
   /** 서버가 준 사유 문자열을 신뢰하지 않는다 — 아는 코드만 통과, 나머지는 일반 거부로 */
   private static reason(v: unknown): RejectReason {
-    return typeof v === 'string' && v in REJECT_TEXT ? v as RejectReason : 'bad-request';
+    return typeof v === 'string' && Object.hasOwn(REJECT_TEXT, v) ? v as RejectReason : 'bad-request';
   }
 
   private async post(action: GameAction): Promise<Response> {
+    const phase = getPhaseOverride();
+    const payload = action.type === 'catch' && phase && !action.forcePhase
+      ? { ...action, forcePhase: phase }
+      : action;
     try {
       return await fetch('/api/action', {
         method: 'POST',
@@ -167,7 +191,7 @@ export class HttpGameGateway implements GameGateway {
           'x-client-version': APP_VERSION,
           'x-client-id': CLIENT_ID,
         },
-        body: JSON.stringify(action),
+        body: JSON.stringify(payload),
         // 무한 대기 방지 — catch 페이즈가 결과 도착까지 홀드되므로(Field), 상한 없으면 영구 정지
         signal: AbortSignal.timeout(10_000),
       });

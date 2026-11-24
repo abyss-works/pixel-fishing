@@ -69,7 +69,7 @@ export default function Locked({ lines, role = 'group', label, badge = true, hov
       <span role={role} tabIndex={0} aria-label={label} aria-disabled={role === 'menuitem' ? true : undefined}
             aria-describedby={reasonId}
             className="relative block w-full min-w-0 cursor-not-allowed focus-visible:outline-1 focus-visible:outline-gold">
-        <span className="block w-full min-w-0 opacity-55 pointer-events-none">{children}</span>
+        <span className="block w-full min-w-0 text-text-dim pointer-events-none">{children}</span>
         {badge && <LockBadge outside />}
         <LockReason id={reasonId} lines={lines} />
       </span>

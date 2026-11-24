@@ -60,18 +60,18 @@ describe('기여', () => {
     expect(await env.client.query('select 1 from public.guild_contributions where user_id = $1', [solo])).toMatchObject({ rowCount: 0 });
   });
 
-  it('명성 기여는 하루 2,000에서 멈추고, 전날의 기여는 상한에 들지 않는다', async () => {
+  it('명성 기여는 하루 2,500에서 멈추고, 전날의 기여는 상한에 들지 않는다', async () => {
     const { uid, guild } = await member();
     await env.client.query(`insert into public.guild_contributions (guild_id, user_id, day, fame, clears) values
-      ($1, $2, $3, 2000, 0), ($1, $2, $4, 1998, 0)`, [guild, uid, YESTERDAY, TODAY]);
+      ($1, $2, $3, 2500, 0), ($1, $2, $4, 2498, 0)`, [guild, uid, YESTERDAY, TODAY]);
     expect((await callAction(userToken(uid), catchPond)).status).toBe(200);
     expect(await contributions(uid)).toEqual([
-      { day: YESTERDAY, fame: 2000, clears: 0 },
-      { day: TODAY, fame: 2000, clears: 0 },
+      { day: YESTERDAY, fame: 2500, clears: 0 },
+      { day: TODAY, fame: 2500, clears: 0 },
     ]);
   });
 
-  it('일반 의뢰 클리어는 500, 네임드 토벌은 1,000을 명성 상한과 따로 쌓고, 네임드 토벌은 항해일지에 남는다', async () => {
+  it('일반 의뢰 클리어는 1,000, 네임드 토벌은 1,000을 명성 상한과 따로 쌓고, 네임드 토벌은 항해일지에 남는다', async () => {
     const general = BOUNTIES.find(b => b.zone === 'pacific' && b.difficulty === 'easy')!;
     const named = BOUNTIES.find(b => b.zone === 'pacific' && b.difficulty === 'named')!;
     const { uid, guild } = await member();
@@ -84,7 +84,7 @@ describe('기여', () => {
     expect((await callAction(userToken(uid), { type: 'deliverBounty', questId: general.id })).status).toBe(200);
     vi.setSystemTime(Date.parse(NOW) + 2000);
     expect((await callAction(userToken(uid), { type: 'deliverBounty', questId: named.id })).status).toBe(200);
-    expect(await contributions(uid)).toEqual([{ day: TODAY, fame: 1000, clears: 1500 }]);
+    expect(await contributions(uid)).toEqual([{ day: TODAY, fame: 1000, clears: 2000 }]);
     expect(await logs(guild)).toEqual([{ kind: 'named', user_id: uid, detail: named.id }]);
   });
 });

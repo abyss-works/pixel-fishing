@@ -1,11 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import { LIVE_REGIONS, resumePoint } from './game/world';
+import { BASE_PACKS, HARBORS, LIVE_REGIONS, V_POND, V_SCHOOLS, resumePoint, schoolsOf } from './game/world';
 import type { Point, SceneRef } from './game/world';
-import type { LocationRef } from './game/content/places';
+import type { BaseId, LocationRef } from './game/content/places';
+import { spotById } from './game/content/spots';
+import type { SpotId } from './game/content/spots';
+import { boatGateText } from './game/content/boats';
+import { topZoneOfSpot, zoneById } from './game/content/zones';
+import { minLevelOfPower } from './game/rules/stats';
+import { getSchoolDay } from './features/gameplay/service/schoolDay';
 import { settleAction, useGame } from './features/gameplay/service/useGame';
 import { useAccount } from './features/account/service/useAccount';
 import { useLastPosition } from './features/gameplay/service/useLastPosition';
 import { useMessageLog } from './presentation/layouts/hud/useMessageLog';
+import { sendNotice } from './features/display/model/toastPolicy';
 import { useDialogs } from './presentation/ui/useDialogs';
 import GameView from './presentation/views/game/GameView';
 import UpdateModal from './presentation/views/overlays/update/UpdateModal';
@@ -29,10 +36,13 @@ function sceneOf(location: LocationRef): SceneRef {
 const DEV_ENV = devEnvOf(DEPLOY_ENV);
 
 function AppContent() {
-  const { log, setToast } = useMessageLog([
+  const { log, setToast, toasts, dismissToast, setMirrorEnv } = useMessageLog([
     '집이에요. 가구를 눌러 정비하고, 문으로 나가 마을 물가에서 낚시해 보세요.',
   ]);
   const { game, dispatch, nickname, devTools, rename, sync, syncLabel, blocker, loading, guestProgress, recheckGuestProgress, adoptAccount, warmup, resync } = useGame({ setToast });
+  useEffect(() => {
+    setMirrorEnv({ blocked: blocker !== null, loading });
+  }, [blocker, loading, setMirrorEnv]);
   const { input, dialogs } = useDialogs();
   const { account, accountChecked, accountFailed, uid, onAuthChanged } = useAccount({
     game, setToast, adoptAccount,
@@ -70,12 +80,67 @@ ${min}자 이상이어야 해요.`,
     const from = { scene, entryPos: returnPos ?? entryPos };
     const back = () => place(from.scene, from.entryPos ?? undefined);
     place(nextScene, position);
-    setToast(message);
+    sendNotice(setToast, { kind: 'travel.routineMove', text: message });
     void settleAction(() => dispatch({ type: 'travel', to: nextScene })).then(settled => {
       if (settled.ok) return;
       back();
-      if (settled.notice) setToast(settled.notice, 'warn');
+      if (settled.notice) sendNotice(setToast, { kind: 'travel.blocked', text: settled.notice, cooldownKey: 'travel.blocked:go' });
     });
+  };
+
+  const teleportBase = async (base: BaseId): Promise<boolean> => {
+    const from = { scene, entryPos };
+    const nextScene: SceneRef = { kind: 'base', id: base };
+    place(nextScene);
+    const settled = await settleAction(() => dispatch({ type: 'travel', to: nextScene }));
+    if (settled.ok) {
+      sendNotice(setToast, { kind: 'travel.routineMove', text: `${BASE_PACKS[base].name}으로 순간이동했어요.` });
+      return true;
+    }
+    place(from.scene, from.entryPos ?? undefined);
+    if (settled.notice) sendNotice(setToast, { kind: 'travel.blocked', text: settled.notice, cooldownKey: 'travel.blocked:tp-base' });
+    return false;
+  };
+
+  const teleportSpot = async (spotId: SpotId): Promise<boolean> => {
+    const spot = spotById(spotId);
+    if (!spot) return false;
+    const zone = topZoneOfSpot(spotId);
+    const reqBoat = Math.max(spot.boatTier, (zone && zoneById(zone)?.entryBoat) ?? 0);
+    if (game.boat < reqBoat) {
+      sendNotice(setToast, {
+        kind: 'travel.blocked',
+        text: `${spot.name} 해역에는 ${boatGateText(reqBoat)}이 필요해요.`,
+        toastText: `${spot.name} 배 단계가 부족해요.`,
+        cooldownKey: `travel.blocked:tp:${spotId}`,
+      });
+      return false;
+    }
+    const region = spotId === 'pond' || spotId === 'river' ? 'village' : 'world';
+    let pos: Point;
+    if (spotId === 'pond') {
+      const s = V_SCHOOLS.find(v => v.spot === 'pond');
+      pos = { x: s?.x ?? V_POND.x + 20, y: V_POND.y - 3 };
+    } else if (spotId === 'river') {
+      const s = V_SCHOOLS.find(v => v.spot === 'river');
+      pos = { x: s?.x ?? 100, y: (s?.y ?? 222) - 26 };
+    } else {
+      const school = schoolsOf('world', getSchoolDay()).find(s => s.spot === spotId);
+      pos = school ? { x: school.x, y: school.y } : HARBORS.harbor.departure;
+    }
+    const from = { scene, entryPos };
+    const nextScene: SceneRef = { kind: 'region', id: region };
+    place(nextScene, pos);
+    const settled = await settleAction(() => dispatch({ type: 'travel', to: nextScene }));
+    if (settled.ok) {
+      const reqRod = minLevelOfPower(spot.powerReq ?? 0);
+      const rodHint = game.rod < reqRod ? ` (권장 낚싯대 Lv.${reqRod})` : '';
+      sendNotice(setToast, { kind: 'travel.routineMove', text: `${spot.name} 해역으로 순간이동했어요.${rodHint}` });
+      return true;
+    }
+    place(from.scene, from.entryPos ?? undefined);
+    if (settled.notice) sendNotice(setToast, { kind: 'travel.blocked', text: settled.notice, cooldownKey: 'travel.blocked:tp-spot' });
+    return false;
   };
 
   // 게임 화면 위에 개발용 층 둘을 나란히 조합한다 — 환경 배지(운영 빌드면 없음)와
@@ -85,14 +150,15 @@ ${min}자 이상이어야 해요.`,
     <>
       <GameView
         game={game} scene={scene} entryPos={entryPos} placeSeq={placeSeq}
-        dispatch={dispatch} setToast={setToast} onScene={go} onPlace={place} onWarmup={warmup}
+        dispatch={dispatch} setToast={setToast} toasts={toasts} onDismissToast={dismissToast} onMirrorEnv={setMirrorEnv} onScene={go} onPlace={place} onWarmup={warmup}
         log={log} syncLabel={syncLabel} syncState={sync} guestProgress={guestProgress} recheckGuestProgress={recheckGuestProgress}
         account={account} accountChecked={accountChecked} accountFailed={accountFailed} uid={uid} nickname={nickname}
         onRename={rename} onAuthChanged={onAuthChanged} onResync={resync} blocker={blocker === 'update' ? <UpdateModal /> : blocker === 'replaced' ? <SessionReplacedModal /> : blocker === 'unsaved' ? <UnsavedModal /> : loading ? <LoadingOverlay /> : null}
         badge={<DevEnvContext.Provider value={DEV_ENV}><EnvBadge build={BUILD_LABEL} /></DevEnvContext.Provider>}
       />
       <DevEnvContext.Provider value={DEV_ENV}>
-        <DevTools game={game} dispatch={dispatch} setToast={setToast} granted={devTools} />
+        <DevTools game={game} dispatch={dispatch} setToast={setToast} granted={devTools}
+                  onTeleportBase={teleportBase} onTeleportSpot={teleportSpot} />
       </DevEnvContext.Provider>
       {dialogs}
     </>

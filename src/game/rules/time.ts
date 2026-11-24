@@ -81,6 +81,11 @@ export function gameDayStartISO(nowIso: string): string {
   return new Date(Math.floor(shifted / DAY_MS) * DAY_MS - GAME_DAY_SHIFT_MS).toISOString();
 }
 
+/** 직전 게임 날짜에 속하는 대표 시각(오늘 게임 날짜 시작 1분 전, UTC ISO). 오늘 일일 한도를 소모하지 않는 기록에 쓴다 */
+export function previousGameDayISO(nowIso: string): string {
+  return new Date(Date.parse(gameDayStartISO(nowIso)) - 60_000).toISOString();
+}
+
 /** 어둠 강도 0~1 — **경계에서 급격히 튀지 않고 서서히 변한다** (UI 연출용).
  *
  *  주기 60분(하루), 게임 1일 = 실제 1시간.

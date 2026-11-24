@@ -51,10 +51,10 @@ export default function MenuCard({ icon, title, sub, subRole = 'required', lock,
     <Button type="button" aria-label={sub ? `${title} ${sub}` : title} {...rest}
             onClick={lock ? undefined : onClick} aria-disabled={lock ? true : undefined}
             aria-describedby={lock ? lockReasonId : undefined}
-            className={`relative flex w-(--card) flex-col items-center gap-1 px-1 py-2 ${CARD_WIDTH} ${lock ? 'opacity-55 cursor-not-allowed' : ''} ${className ?? ''}`}>
+            className={`relative flex w-(--card) flex-col items-center gap-1 px-1 py-2 ${CARD_WIDTH} ${lock ? 'bg-bg border-line-dim text-text-dim shadow-[inset_1px_1px_0_var(--bevel-hi),inset_-1px_-1px_0_var(--bevel-lo)] cursor-not-allowed' : ''} ${className ?? ''}`}>
       {lock && <LockBadge size={14} />}
       <span className="h-[clamp(24px,calc(var(--card)*0.44),56px)] w-full">{icon}</span>
-      <span className="pf-accent text-sm text-gold">{title}</span>
+      <span className={`pf-accent text-sm ${lock ? 'text-text-dim' : 'text-gold'}`}>{title}</span>
       {sub && (omittable
         ? <span ref={subRef} data-omittable className="text-xs text-text-dim menu-compact:hidden">{sub}</span>
         : <span className="text-xs text-text-dim">{sub}</span>)}

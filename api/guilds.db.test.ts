@@ -211,7 +211,7 @@ describe('보너스 기부', () => {
       logbook: { kind: string; detail: string; value: number }[] } };
     expect(view.guild.effects).toEqual({ sell: 0.04, bag: 0.04, named: 0, rare: 0, mutation: 0 });
     expect(view.guild.bonuses.map(b => b.id)).toEqual(['sell', 'bag', 'named', 'rare', 'mutation']);
-    expect(view.guild.bonuses[0]).toEqual({ id: 'sell', unlock: 1, rank: 2, cap: 2, pool: 0, next: 500_000, effect: 0.04,
+    expect(view.guild.bonuses[0]).toEqual({ id: 'sell', unlock: 1, rank: 2, enhanceRank: 0, totalRank: 2, cap: 2, pool: 0, next: 500_000, effect: 0.04,
       nextEffect: 0.06, mine: 150_000 });
     expect(view.guild.bonuses[2]).toMatchObject({ id: 'named', unlock: 3, rank: 0, cap: 0 });
     expect(view.guild.donors).toEqual([{ uid: D, nick: '라온', gold: 150_000 }]);

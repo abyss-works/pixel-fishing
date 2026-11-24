@@ -5,7 +5,8 @@ import { COOK_EFFECT_KEYS, COOK_KIND_RULES, COOK_STORAGE_CAP, ENERGY_ITEM_IDS, R
 import type { CookKind, Recipe } from '../../../game/content/cooking';
 import { DISPLAY_GRADE, RARITY, RARITY_ORDER, displayGradeRank } from '../../../game/content/rarity';
 import type { DisplayGradeId, RarityId } from '../../../game/content/rarity';
-import { canCook, cookingProgress, cookStorageUsed, settleCooking } from '../../../game/rules/cooking';
+import { canCook, cookingProgress, cookStorageUsed, settleCooking, slotDurationMs } from '../../../game/rules/cooking';
+import { achievementBonusesOf } from '../../../game/rules/achievements';
 import { extraCookChance } from '../../../game/rules/artifactLevel';
 import type { GameState } from '../../../game/rules/logic';
 import type { RuleCheck } from '../../../game/rules/rules';
@@ -13,12 +14,12 @@ import { gradeName } from '../../../shared/lib/gradeName';
 
 const MIN_MS = 60_000;
 
-/** 미끼의 표시 등급 — 등급 가중 효과가 가중하는 가장 낮은 등급이고, 돌연변이 가중 미끼는 특수다. 도시락은 null이다 */
+/** 미끼의 표시 등급 — 등급 가중 효과가 가중하는 가장 낮은 등급이고, 등급 가중이 아닌 효과의 미끼는 특수다. 도시락은 null이다 */
 export function recipeGrade(recipe: Recipe): DisplayGradeId | null {
   if (recipe.kind !== 'bait') return null;
   const weighted = recipe.effects.rarityWeight?.grades[0];
   if (weighted !== undefined) return weighted;
-  return recipe.effects.mutationWeight !== undefined ? 'special' : null;
+  return recipe.effects.mutationWeight !== undefined || recipe.effects.nightUnlock === true ? 'special' : null;
 }
 
 /** 그 종류의 부엌 레시피 — 등급이 있으면 등급순(특수는 뒤), 같은 등급과 등급이 없는 것은 콘텐츠 순서대로 */
@@ -71,6 +72,8 @@ export function recipeEffectLines(recipe: Recipe): RecipeEffectLine[] {
         return e.mutationWeight === undefined ? [] : [{ label: '돌연변이 폼 가중치', value: `+${pct(e.mutationWeight)}%` }];
       case 'namedWeight':
         return e.namedWeight === undefined ? [] : [{ label: '네임드 조우 가중치', value: `+${pct(e.namedWeight)}%` }];
+      case 'nightUnlock':
+        return e.nightUnlock === true ? [{ label: '밤 어종 출현', value: '밤 전용 어종 합류' }] : [];
     }
   });
 }
@@ -126,8 +129,8 @@ export function selectRecipeView(game: GameState, recipe: Recipe, requested: num
     count, maxCount,
     // 수량 0(보관함 가득)도 이유는 보관함이라, 판정은 최소 1개로 묻는다
     check: canCook(game, recipe.id, Math.max(1, count), now),
-    waitMs: rules.waitMs * count, slotMs: rules.slotMs,
-    extraChance: extraCookChance(game),
+    waitMs: rules.waitMs * count, slotMs: slotDurationMs(recipe, game),
+    extraChance: extraCookChance(game, achievementBonusesOf(game).artifactBoost),
   };
 }
 

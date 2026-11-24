@@ -32,7 +32,7 @@ describe('가공 플랜트선', () => {
 });
 
 describe('planOverflow — 내보낼 개체를 놓아줄 것과 기운으로 바꿀 것으로 나눈다', () => {
-  const bag = [mk('a', 'crucian'), mk('b', 'apollodamsel'), mk('c', 'carp')];
+  const bag = [mk('a', 'crucian'), mk('b', 'sargassumfish'), mk('c', 'carp')];
   const state = (over: Partial<GameState> = {}) => seed({ boat: 9, bag, ...over });
 
   it('가공 플랜트선이 없으면 모두 놓아준다', () => {
@@ -59,7 +59,7 @@ describe('planOverflow — 내보낼 개체를 놓아줄 것과 기운으로 바
   it('덮어쓴 설정을 따른다 - 끈 해역은 놓아주고 켠 해역은 기운이 된다', () => {
     const off = planOverflow(state({ energyTargets: { pond: false } }), ['a'], false);
     expect(off.released).toEqual(['a']);
-    const on = planOverflow(state({ energyTargets: { sthelena: true } }), ['b'], false);
+    const on = planOverflow(state({ energyTargets: { bermuda: true } }), ['b'], false);
     expect(on.gain.uids).toEqual(['b']);
   });
 

@@ -16,10 +16,10 @@ export type GuestVerdict = 'ok' | 'account-only' | 'guest-village-only';
 // 조건 없이 통과하는 액션. 접속 기록(boot)은 게임에 들어오는 데 필요하고, 튜토리얼 기록과 잠금은 낚시와 판매 흐름의 일부다.
 // 미끼 환불 안내 닫기는 이관이 게스트의 골드에도 환불을 더했으므로 게스트도 영수증을 지울 수 있어야 한다
 const OPEN = new Set<GameAction['type']>([
-  'boot', 'sell', 'upgradeRod', 'buyBoat', 'seeTutorial', 'setLocked', 'autoLock', 'dismissBaitRefund',
+  'boot', 'sell', 'upgradeRod', 'buyBoat', 'seeTutorial', 'setLocked', 'autoLock', 'setAutoLockOnCatch', 'dismissBaitRefund',
 ]);
 // 개발 명령과 이사 코드는 서버의 환경과 소유자 판정이 따로 정한다
-const GATED_ELSEWHERE = new Set<GameAction['type']>(['debug', 'import']);
+const GATED_ELSEWHERE = new Set<GameAction['type']>(['debug', 'debugBatch', 'debugSnapshot', 'import']);
 
 /** 마을 안에서 닿는 곳: 마을 지역과 지역이 마을인 거점. 알 수 없는 값은 마을 밖으로 본다 */
 const inVillage = (to: unknown): boolean => {

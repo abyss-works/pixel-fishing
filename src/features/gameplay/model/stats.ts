@@ -5,37 +5,47 @@ import { ARTIFACTS } from '../../../game/content/artifacts';
 import { COOK_EFFECT_KEYS } from '../../../game/content/cooking';
 import type { CookEffects } from '../../../game/content/cooking';
 import type { Artifact, ArtifactEffects } from '../../../game/content/artifacts';
-import { ZONE_IDS, topZoneOfSpot, zoneById } from '../../../game/content/zones';
+import { ZONE_IDS, topZoneOf, topZoneOfSpot, zoneById, zoneGroup } from '../../../game/content/zones';
 import type { ZoneId } from '../../../game/content/zones';
 import { commonWeightMultiplier } from '../../../game/rules/actions';
+import { achievementBonusesOf } from '../../../game/rules/achievements';
 import { artifactEffectsAt, artifactExtraCookChanceAt, artifactLevelOf } from '../../../game/rules/artifactLevel';
-import { slotEffects } from '../../../game/rules/cooking';
+import { biteWaitOf, createPlayerContext, moveSpeedOf } from '../../../game/rules/effects';
 import { FISH, boatNameOf, formDiscovered } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
-import { GUILD_BONUS_IDS } from '../../../game/rules/guild';
+import { GUILD_BONUS_IDS, NO_GUILD_EFFECTS, bonusEffect } from '../../../game/rules/guild';
 import type { GuildBonusId, GuildEffects } from '../../../game/rules/guild';
+import type { GuildBonusItem } from '../../../platform/api/types';
 import {
-  effectiveBite, minLevelOfPower,
-  moveSpeed, powerZones, rodAxes, rodPower,
+  minLevelOfPower, powerZones, rodAxes, rodPower,
 } from '../../../game/rules/stats';
 import type { Movement } from '../../../game/rules/stats';
 import { selectBagStatus } from '../../inventory/model/selectors';
 import type { BagStatus } from '../../inventory/model/selectors';
 import { recipeEffectLines } from '../../kitchen/model/recipes';
 import type { RecipeEffectLine } from '../../kitchen/model/recipes';
-import { SLOT_ORDER, activeSlot } from '../../kitchen/model/slots';
+import { ALL_SLOT_KEYS, activeSlot } from '../../kitchen/model/slots';
 import type { SlotKey } from '../../kitchen/model/slots';
 
-/** 스탯 화면의 처음 수역 인덱스. 사거리 안의 어군 수역이 있으면 그 수역이고, 없으면 지역에서 요구 파워가 가장 높은 곳이다. */
-export function selectInitialStatsSpotIndex(region: RegionId, current: SpotId | null = null): number {
+/** 스탯 화면의 처음 수역 인덱스. 사거리 안의 어군 수역이 있으면 그 수역이고, 없으면 현재 구역(또는 지역)에서 요구 파워가 가장 높은 곳이다. */
+export function selectInitialStatsSpotIndex(
+  region: RegionId,
+  current: SpotId | null = null,
+  currentZone: ZoneId | null = null,
+): number {
   const here = current ? SPOTS.findIndex(spot => spot.id === current) : -1;
   if (here >= 0) return here;
-  let best = 0;
+  const targetTopZone = region === 'world' && currentZone && zoneById(currentZone) && zoneGroup(currentZone) === 'world'
+    ? topZoneOf(currentZone)
+    : null;
+  let best = -1;
   SPOTS.forEach((spot, index) => {
-    const inRegion = region === 'world' ? spot.region !== 'village' : spot.region === region;
-    if (inRegion && (spot.powerReq ?? 0) >= (SPOTS[best].powerReq ?? 0)) best = index;
+    const inScope = targetTopZone
+      ? topZoneOfSpot(spot.id) === targetTopZone
+      : region === 'world' ? spot.region !== 'village' : spot.region === region;
+    if (inScope && (best < 0 || (spot.powerReq ?? 0) >= (SPOTS[best].powerReq ?? 0))) best = index;
   });
-  return best;
+  return best >= 0 ? best : 0;
 }
 
 /** 선택 수역과 현재 세이브 상태에서 스탯 화면이 표시할 값을 조립한다. 입질 대기에는 now 기준으로 효과가 든 도시락의 단축을 싣는다. */
@@ -48,17 +58,20 @@ export function selectStatsModalData(
   const zones = powerZones(game, spot.id);
   // 방치 낚시 배수: 표시값(applied)은 추첨이 실제로 곱하는 값 그대로다. required는 요구 파워에서의 배수.
   const idleMult = commonWeightMultiplier('auto', currentPower, spot.id, zones.mult);
-  const lunch = activeSlot(game, 'lunch', now);
-  // 도시락은 방치 사이클의 입질 대기를 줄인다. 출처 이름은 지금 효과가 든 도시락의 이름이다
-  const cook = { ...slotEffects(game, now, 'auto'), label: lunch?.label };
+  const ctx = createPlayerContext({
+    state: game,
+    guild: NO_GUILD_EFFECTS,
+    now,
+    achievements: achievementBonusesOf(game),
+  });
   return {
-    speed: moveSpeed(game, movement),
+    speed: moveSpeedOf(ctx, movement, false),
     axes: rodAxes(game),
     boatName: boatNameOf(game.boat),
     spot,
     requirement,
     requirementLevel: minLevelOfPower(requirement),
-    effectiveBite: effectiveBite(game, spot.id, cook),
+    effectiveBite: biteWaitOf(ctx, spot.id, 'idle'),
     idle: {
       required: commonWeightMultiplier('auto', requirement, spot.id, 1).idle,
       current: idleMult.idle,
@@ -154,7 +167,7 @@ export type ArtifactEffectKey = keyof ArtifactEffects | 'extraCookChance';
 
 // 요리 추가 완성은 도시락과 미끼 요리가 낚시를 돕는 효과를 늘리므로 낚시 갈래에 둔다
 const EFFECT_CATEGORY: Record<ArtifactEffectKey, BonusCategory> = {
-  sail: 'move', mutationWeight: 'fish', duelSpeedupCut: 'duel', biteWaitCut: 'fish', extraCookChance: 'fish',
+  sail: 'move', mutationWeight: 'fish', duelSpeedupCut: 'duel', biteWaitCut: 'fish', commonWeightCut: 'fish', bagCap: 'fish', extraCookChance: 'fish',
 };
 
 /** 길드 보너스의 갈래 — 판매가는 상점, 네임드 조우는 결투, 나머지는 낚시 */
@@ -164,16 +177,21 @@ const GUILD_CATEGORY: Record<GuildBonusId, BonusCategory> = {
 
 /** 슬롯 효과의 갈래 - 네임드 조우는 결투, 나머지는 낚시 */
 const COOK_EFFECT_CATEGORY: Record<keyof CookEffects, BonusCategory> = {
-  biteWaitCut: 'fish', rarityWeight: 'fish', mutationWeight: 'fish', namedWeight: 'duel',
+  biteWaitCut: 'fish', rarityWeight: 'fish', mutationWeight: 'fish', namedWeight: 'duel', nightUnlock: 'fish',
 };
 
 export type BonusSource =
-  /** 유물 보너스 - level은 보유 레벨이고, 효과 문장은 그 레벨의 수치로 쓴다 */
-  | { kind: 'relic'; artifact: Artifact; effect: ArtifactEffectKey; level: number }
+  /** 유물 보너스 - level은 보유 레벨, scale은 업적 보유 유물 효과 배율(1 + artifactBoost)이다 */
+  | { kind: 'relic'; artifact: Artifact; effect: ArtifactEffectKey; level: number; scale: number }
   /** 길드 보너스 — value는 서버가 알려 준 효과 값이다 */
-  | { kind: 'guild'; level: number; bonus: GuildBonusId; value: number }
+  | {
+    kind: 'guild'; level: number; bonus: GuildBonusId; value: number;
+    baseRank?: number; enhanceRank?: number; baseValue?: number; enhanceValue?: number;
+  }
   /** 슬롯 효과 - 효과가 든 슬롯의 요리 이름이 출처이고, 효과 줄은 부엌 창과 같은 문장이다 */
-  | { kind: 'slot'; slot: SlotKey; label: string; effect: RecipeEffectLine };
+  | { kind: 'slot'; slot: SlotKey; label: string; effect: RecipeEffectLine }
+  /** 업적 누적 보너스 — 단계 도달 즉시 자동 적용되는 합산 보너스 */
+  | { kind: 'achievement'; label: string; value: string };
 
 export interface BonusRow {
   category: BonusCategory;
@@ -185,47 +203,104 @@ export interface BonusRow {
 }
 
 /**
- * 지금 받는 보너스 — 가진 유물의 효과(효과마다 한 줄), 길드 보너스(1단계 이상), 효과가 든 슬롯의 요리 효과(now 기준).
+ * 지금 받는 보너스 — 가진 유물의 효과(효과마다 한 줄, 보유 유물 효과 배율 반영), 길드 보너스(1단계 이상), 효과가 든 슬롯의 요리 효과(now 기준).
  * 길드 보너스는 서버가 알려 준 레벨과 효과를 보이기만 한다(적용은 서버 액션 경로가 한다).
  * 낚싯대 파워에서 오는 효과(GOOD·PERFECT·방치 배수)는 해역마다 달라 낚싯대 탭의 해역 표가 맡는다.
  */
 export function selectActiveBonuses(
   game: GameState,
-  guild: { level: number; effects: GuildEffects } | null = null,
+  guild: { level: number; effects: GuildEffects; bonuses?: readonly GuildBonusItem[] } | null = null,
   now: string = new Date().toISOString(),
 ): BonusRow[] {
   const out: BonusRow[] = [];
+  const ach = achievementBonusesOf(game);
+  const relicScale = 1 + ach.artifactBoost;
   for (const artifact of ARTIFACTS) {
     const level = artifactLevelOf(game, artifact.id);
     if (level === 0) continue;
     const effects = artifactEffectsAt(artifact, level);
     for (const effect of Object.keys(effects) as (keyof ArtifactEffects)[]) {
       if (effects[effect] === undefined) continue;
-      out.push({ category: EFFECT_CATEGORY[effect], source: { kind: 'relic', artifact, effect, level }, manualOnly: false });
+      out.push({ category: EFFECT_CATEGORY[effect], source: { kind: 'relic', artifact, effect, level, scale: relicScale }, manualOnly: false });
     }
     if (artifactExtraCookChanceAt(artifact, level) > 0) {
-      out.push({ category: EFFECT_CATEGORY.extraCookChance, source: { kind: 'relic', artifact, effect: 'extraCookChance', level }, manualOnly: false });
+      out.push({ category: EFFECT_CATEGORY.extraCookChance, source: { kind: 'relic', artifact, effect: 'extraCookChance', level, scale: relicScale }, manualOnly: false });
     }
   }
   if (guild) {
     for (const bonus of GUILD_BONUS_IDS) {
       const value = guild.effects[bonus];
-      if (value > 0) out.push({ category: GUILD_CATEGORY[bonus], source: { kind: 'guild', level: guild.level, bonus, value }, manualOnly: false });
+      if (value > 0) {
+        const item = guild.bonuses?.find(b => b.id === bonus);
+        const detail = item && item.enhanceRank > 0
+          ? {
+            baseRank: item.rank,
+            enhanceRank: item.enhanceRank,
+            baseValue: bonusEffect(bonus, item.rank),
+            enhanceValue: bonusEffect(bonus, item.enhanceRank),
+          }
+          : {};
+        out.push({ category: GUILD_CATEGORY[bonus], source: { kind: 'guild', level: guild.level, bonus, value, ...detail }, manualOnly: false });
+      }
     }
   }
-  for (const key of SLOT_ORDER) {
-    const slot = activeSlot(game, key, now);
+  const seenBaitIds = new Set<string>();
+  for (const slotKey of ALL_SLOT_KEYS) {
+    const slot = activeSlot(game, slotKey, now);
     if (slot === null) continue;
+    if (slot.key === 'bait') {
+      if (seenBaitIds.has(slot.recipe.id)) continue;
+      seenBaitIds.add(slot.recipe.id);
+    }
     for (const effectKey of COOK_EFFECT_KEYS) {
       if (!slot.recipe.effects[effectKey]) continue;
       const lines = recipeEffectLines({ ...slot.recipe, effects: { [effectKey]: slot.recipe.effects[effectKey] } });
       for (const effect of lines) {
         out.push({
-          category: COOK_EFFECT_CATEGORY[effectKey], source: { kind: 'slot', slot: key, label: slot.label, effect },
-          manualOnly: key === 'bait', autoOnly: key === 'lunch',
+          category: COOK_EFFECT_CATEGORY[effectKey], source: { kind: 'slot', slot: slot.key, label: slot.label, effect },
+          manualOnly: slot.key === 'bait', autoOnly: slot.key === 'lunch',
         });
       }
     }
+  }
+  const fmtPct = (v: number, sign: '+' | '−') => {
+    const pct = Math.round(v * 1000) / 10;
+    return `${sign}${Number.isInteger(pct) ? pct : pct.toFixed(1)}%`;
+  };
+  if (ach.moveSpeed > 0) {
+    out.push({ category: 'move', source: { kind: 'achievement', label: '이동 속도', value: fmtPct(ach.moveSpeed, '+') }, manualOnly: false });
+  }
+  if (ach.biteWaitCut > 0) {
+    out.push({ category: 'fish', source: { kind: 'achievement', label: '입질 대기', value: fmtPct(ach.biteWaitCut, '−') }, manualOnly: false });
+  }
+  if (ach.mutationWeight > 0) {
+    out.push({ category: 'fish', source: { kind: 'achievement', label: '돌연변이 가중치', value: fmtPct(ach.mutationWeight, '+') }, manualOnly: false });
+  }
+  if (ach.rareWeight > 0) {
+    out.push({ category: 'fish', source: { kind: 'achievement', label: '희귀 이상 가중치', value: fmtPct(ach.rareWeight, '+') }, manualOnly: false });
+  }
+  if (ach.epicWeight > 0) {
+    out.push({ category: 'fish', source: { kind: 'achievement', label: '영웅 이상 가중치', value: fmtPct(ach.epicWeight, '+') }, manualOnly: false });
+  }
+  if (ach.legendaryWeight > 0) {
+    out.push({ category: 'fish', source: { kind: 'achievement', label: '전설 가중치', value: fmtPct(ach.legendaryWeight, '+') }, manualOnly: false });
+  }
+  for (const zone of ZONE_IDS) {
+    const zMut = ach.zoneMutation[zone] ?? 0;
+    const zLeg = ach.zoneLegendary[zone] ?? 0;
+    const zName = zoneById(zone)?.shortName ?? zone;
+    if (zMut > 0) {
+      out.push({ category: 'fish', source: { kind: 'achievement', label: `${zName} 돌연변이 가중치`, value: fmtPct(zMut, '+') }, manualOnly: false });
+    }
+    if (zLeg > 0) {
+      out.push({ category: 'fish', source: { kind: 'achievement', label: `${zName} 전설 가중치`, value: fmtPct(zLeg, '+') }, manualOnly: false });
+    }
+  }
+  if (ach.namedWeight > 0) {
+    out.push({ category: 'duel', source: { kind: 'achievement', label: '네임드 조우 가중치', value: fmtPct(ach.namedWeight, '+') }, manualOnly: false });
+  }
+  if (ach.sellBonus > 0) {
+    out.push({ category: 'shop', source: { kind: 'achievement', label: '판매가 보너스', value: fmtPct(ach.sellBonus, '+') }, manualOnly: false });
   }
   return out;
 }

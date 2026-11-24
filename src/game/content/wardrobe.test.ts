@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  DEFAULT_LOOK, HATS, LOOK_PRESETS, PANTS_COLORS, SHIRT_COLORS, hatById, safeLook,
+  DEFAULT_LOOK, HATS, LOOK_PRESETS, PANTS_COLORS, SHIRT_COLORS, hatById, isAchievementHat, safeLook,
 } from './wardrobe';
 
 const HEX = /^#[0-9a-f]{6}$/;
@@ -29,12 +29,45 @@ describe('옷장 콘텐츠', () => {
     }
   });
 
-  it('골드 모자는 다섯 개이고 id가 겹치지 않으며 가격이 양의 정수다', () => {
-    expect(HATS.map(h => h.id)).toEqual(['cap-red', 'cap-blue', 'cap-yellow', 'cap-green', 'cap-black']);
-    expect(HATS.map(h => h.price)).toEqual([50_000, 50_000, 100_000, 200_000, 500_000]);
-    for (const h of HATS) {
+  it('모자는 골드 5종과 업적 50종으로 총 55종이고 id가 겹치지 않는다', () => {
+    expect(HATS).toHaveLength(55);
+    expect(new Set(HATS.map(h => h.id)).size).toBe(55);
+
+    const goldHats = HATS.slice(0, 5);
+    expect(goldHats.map(h => h.id)).toEqual(['cap-red', 'cap-blue', 'cap-yellow', 'cap-green', 'cap-black']);
+    expect(goldHats.map(h => h.price)).toEqual([50_000, 50_000, 100_000, 200_000, 500_000]);
+    for (const h of goldHats) {
+      expect(h.source).toBe('gold');
+      expect(isAchievementHat(h)).toBe(false);
       expect(h.color).toMatch(HEX);
       expect(Number.isInteger(h.price) && h.price > 0).toBe(true);
+    }
+
+    const achHats = HATS.slice(5);
+    expect(achHats).toHaveLength(50);
+    expect(achHats.map(h => h.id)).toEqual([
+      'straw-hat', 'sou-wester', 'coral-bandana', 'saffron-turban', 'worn-tricorn', 'fog-beanie',
+      'braid-captain-cap', 'anchor-beret', 'watch-sailor-cap', 'earflap-cap',
+      'crescent-hood', 'ink-hood', 'polar-beret', 'polar-knit-cap',
+      'strait-night-cap', 'inkglass-beanie', 'lookout-storm-hat', 'pitch-lookout-cap',
+      'lure-bucket-hat', 'gold-hook-hat', 'harpooner-pillbox', 'shipowner-bowler', 'salt-fisher-cap',
+      'megalodon-work-cap', 'megalodon-fin-cap', 'megalodon-silver-visor',
+      'leviathan-dive-hood', 'leviathan-bell-cap', 'leviathan-serpent-hat',
+      'ananta-lantern-hood', 'ananta-rope-cap', 'ananta-astrolabe-hat',
+      'dunkleos-trawl-hat', 'dunkleos-rivet-leather', 'dunkleos-jaw-helm',
+      'adamastor-pier-cap', 'adamastor-storm-hood', 'adamastor-lantern-hood',
+      'jasconius-island-cap', 'jasconius-ember-visor', 'jasconius-rockback-hat',
+      'ridge-compass-cap', 'ridge-lantern-cap', 'vanishing-hood',
+      'gloucester-fog-cap', 'gloucester-vertebra-visor', 'gloucester-crest-hat',
+      'guabancex-sargasso-hood', 'guabancex-eye-hat', 'guabancex-fin-crown',
+    ]);
+    for (const h of achHats) {
+      expect(h.source).toBe('achievement');
+      expect(isAchievementHat(h)).toBe(true);
+      expect(h.achievementId).toBeTruthy();
+      expect(h.price).toBe(0);
+      expect(h.color).toMatch(HEX);
+      if (h.accentColor !== undefined) expect(h.accentColor).toMatch(HEX);
     }
   });
 

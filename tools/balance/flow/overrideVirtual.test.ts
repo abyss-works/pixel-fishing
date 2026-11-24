@@ -53,8 +53,8 @@ describe('가상 해역과 지역 추가', () => {
   });
 
   it('기준 해역을 생략하면 증가율의 기준은 그때 마지막 해역이다', () => {
-    restore = applyOverride(parseOverride({ addSpots: [{ id: 'next', like: 'sthelena', powerReq: NEXT_REQ, growth: 0.5 }] }));
-    expect(idle('next')).toBeCloseTo(idle('sthelena') * 1.5, 4);
+    restore = applyOverride(parseOverride({ addSpots: [{ id: 'next', like: 'bermuda', powerReq: NEXT_REQ, growth: 0.5 }] }));
+    expect(idle('next')).toBeCloseTo(idle('bermuda') * 1.5, 4);
   });
 
   it('가상 해역이 여럿이면 앞에서 뒤로 더하고 뒤 해역은 앞 가상 해역을 기준으로 삼을 수 있다', () => {
@@ -76,12 +76,12 @@ describe('가상 해역과 지역 추가', () => {
       addSpots: [{ id: 'next', like: 'sthelena', powerReq: NEXT_REQ, zone: 'newregion', growth: 0.45, boat: { price: 5000000, fameReq: 400000 } }],
     }));
     const row = transitionGold().at(-1)!;
-    expect(row.from).toBe('sthelena');
+    expect(row.from).toBe('bermuda');
     expect(row.to).toBe('next');
     // 여는 해역이 없던 제품 배도 이 전환에서 함께 산다
     expect(row.boatGold).toBe(5000000 + unopened);
     let up = 0;
-    for (let lv = entryLevel('sthelena' as never); lv < entryLevel('next' as never); lv++) up += upgradeCost(lv);
+    for (let lv = entryLevel('bermuda' as never); lv < entryLevel('next' as never); lv++) up += upgradeCost(lv);
     expect(row.upgradeGold).toBe(up);
     expect(row.fameReq).toBe(400000);
     const sim = simulate({ axis: 'idle', bounty: false, maxDays: 365 });

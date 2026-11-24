@@ -30,7 +30,7 @@ describe('게스트 출항 차단 처리', () => {
   });
 
   it('다른 창이 열려 있으면 안내도 창도 띄우지 않는다', () => {
-    renderHook(() => useOpenWindow(() => {}));
+    renderHook(() => useOpenWindow());
     const p = setup();
     p.notify();
     expect(p.setToast).not.toHaveBeenCalled();

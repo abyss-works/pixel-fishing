@@ -14,11 +14,11 @@ import { adminSessionUid } from './_auth/session.js';
 import { database } from './_db/client.js';
 import type { Database, Executor } from './_db/client.js';
 import { onlineUsers } from './_server/livePresence.js';
-import { accountKind, insertPasswordResetToken } from './_data/account.js';
+import { accountKind, insertPasswordResetToken, revokeUserSessions } from './_data/account.js';
 import * as read from './_data/admin.js';
 import { balanceLive } from './_data/adminBalance.js';
 import { setLetterHandled } from './_data/mail.js';
-import { deliverMail, parseMailRequest, planMail, recentSentMails } from './_data/mailbox.js';
+import { deliverMail, DuplicateMailError, parseMailRequest, planMail, recentSentMails } from './_data/mailbox.js';
 import { setRestricted } from './_data/save.js';
 import { recordAdminAction } from './_data/telemetry.js';
 import { ApiError, toApiError } from './errors.js';
@@ -56,6 +56,7 @@ const WRITES: Record<string, Write> = {
   restrict,
   resetLink,
   letterHandled,
+  revokeSessions,
 };
 
 /** 리소스 경로 조회. 요청의 필터를 검사해 실행할 읽기를 돌려준다. 틀리면 400이다 */
@@ -127,18 +128,21 @@ async function route(req: Req, res: Res): Promise<void> {
 /** 조회 이름과 인자를 검사해 실행할 읽기를 돌려준다. 틀리면 400이다 */
 function parse(name: string | undefined, req: Req): (db: Executor) => Promise<unknown> {
   switch (name) {
+    case 'overview': {
+      const days = optionalDaysOf(req) ?? STATS_DEFAULT_DAYS;
+      if (days < 1 || days > STATS_MAX_DAYS) throw new ApiError(400, 'bad-days');
+      const online = onlineUsers();
+      return db => read.overview(db, days, online);
+    }
     case 'users': return read.users;
-    case 'retention': return read.retention;
     case 'spamFlags': return read.spamFlags;
     case 'recentEvents': return read.recentEvents;
     case 'letters': return read.letters;
     case 'changelog': return read.changelog;
     case 'chatReports': return read.chatReports;
     case 'mails': return db => recentSentMails(db);
-    case 'dailyActive': { const days = daysOf(req); return db => read.dailyActive(db, days); }
     case 'economy': { const days = daysOf(req); return db => read.economy(db, days); }
     case 'bountyFunnel': { const days = daysOf(req); return db => read.bountyFunnel(db, days); }
-    case 'catchQuality': { const days = daysOf(req); return db => read.catchQuality(db, days); }
     case 'balanceLive': { const days = optionalDaysOf(req); return db => balanceLive(db, days); }
     case 'userEvents': {
       const user = param(req, 'user');
@@ -146,19 +150,34 @@ function parse(name: string | undefined, req: Req): (db: Executor) => Promise<un
       const limit = limitOf(req);
       return db => read.userEvents(db, user, limit);
     }
+    case 'userState': {
+      const uid = param(req, 'uid');
+      if (uid === undefined || !UUID.test(uid)) throw new ApiError(400, 'bad-user');
+      return db => read.userState(db, uid);
+    }
     default: throw new ApiError(400, 'bad-query');
   }
 }
 
 /** 우편 보내기 — op가 preview면 미리보기만, send면 보낸다. 같은 데이터 모듈을 운영 스크립트도 쓴다 */
 async function mail(db: Executor, raw: unknown): Promise<unknown> {
-  const op = (raw as { op?: unknown } | null)?.op;
-  const request = parseMailRequest((raw as { request?: unknown } | null)?.request);
+  const bodyObj = raw as { op?: unknown; request?: unknown; idempotencyKey?: unknown } | null;
+  const op = bodyObj?.op;
+  const request = parseMailRequest(bodyObj?.request);
+  const topKey = bodyObj?.idempotencyKey;
+  if (topKey !== undefined && (typeof topKey !== 'string' || topKey.trim().length === 0 || topKey.length > 128)) {
+    throw new ApiError(400, 'bad-mail');
+  }
   if ((op !== 'preview' && op !== 'send') || !request) throw new ApiError(400, 'bad-mail');
-  if (op === 'preview') return dbRead(() => planMail(db, request));
+  const merged = typeof topKey === 'string' && !request.idempotencyKey
+    ? { ...request, idempotencyKey: topKey.trim() }
+    : request;
+  if (op === 'preview') return dbRead(() => planMail(db, merged));
   try {
-    return await deliverMail(db, request, new Date().toISOString());
+    return await deliverMail(db, merged, new Date().toISOString());
   } catch (e) {
+    if (e instanceof DuplicateMailError) throw new ApiError(409, 'duplicate-mail');
+    if (e instanceof ApiError) throw e;
     throw new ApiError(500, 'db-write', {}, { cause: e });
   }
 }
@@ -209,6 +228,20 @@ async function letterHandled({ db }: Database, raw: unknown): Promise<{ handled:
   const found = await dbWrite(() => setLetterHandled(db, letterId as number, handled, new Date().toISOString()));
   if (!found) throw new ApiError(404, 'no-letter');
   return { handled };
+}
+
+/** 세션 강제 종료 — 대상 계정의 모든 인증 세션 행을 지우고 관리자 조치 이벤트를 남긴다. 계정이 없으면 404다 */
+async function revokeSessions({ withTransaction }: Database, raw: unknown, adminId: string): Promise<{ revoked: number }> {
+  const { userId } = (raw ?? {}) as { userId?: unknown };
+  if (typeof userId !== 'string' || !UUID.test(userId)) throw new ApiError(400, 'bad-user');
+  const revoked = await dbWrite(() => withTransaction(async tx => {
+    if (await accountKind(tx, userId) === 'missing') return null;
+    const count = await revokeUserSessions(tx, userId);
+    await recordAdminAction(tx, userId, 'adminRevokeSessions', adminId, { revoked: count });
+    return count;
+  }));
+  if (revoked === null) throw new ApiError(404, 'no-user');
+  return { revoked };
 }
 
 const param = (req: Req, key: string): string | undefined => {

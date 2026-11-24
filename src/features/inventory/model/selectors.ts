@@ -2,8 +2,11 @@
 // useGame이 통째 game을 내려주는 동안은 호출부가 이 함수들로 파생값을 읽고,
 // 나중에 외부 스토어로 옮기면 같은 함수가 구독 셀렉터가 된다.
 // 게임 규칙 함수는 여기서 조합만 하고, 규칙 자체는 도메인 계층에서 관리한다.
-import { autoLockPlan, bagCapacity, sellableValue } from '../../../game/rules/logic';
+import { autoLockPlan, sellableValue } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
+import { achievementBonusesOf } from '../../../game/rules/achievements';
+import { bagCapacityOf, createPlayerContext } from '../../../game/rules/effects';
+import { NO_GUILD_EFFECTS } from '../../../game/rules/guild';
 import type { Stat } from '../../../game/rules/stats';
 import { saleProceeds } from './catalog';
 import { boatNameOf } from '../../../game/content/boats';
@@ -15,17 +18,26 @@ export const BAG_WARN_PERCENT = 75;
 export const BAG_DANGER_PERCENT = 95;
 
 export type BagLevel = 'normal' | 'warn' | 'danger';
-export interface BagStatus { count: number; cap: number; full: boolean; percent: number; level: BagLevel }
+export interface BagStatus { count: number; cap: number; capStat: Stat; full: boolean; percent: number; level: BagLevel }
 
-/** 가방 현황 — 수량·상한·비율(내림 정수 %)·경고 단계를 한 번에. 래칫 상한은 bagCapacity가 정한다.
+/** 가방 현황 — 수량·상한·비율(내림 정수 %)·경고 단계를 한 번에. 래칫 상한은 bagCapacityOf가 정한다.
  *  bagBonus는 서버가 알려 준 길드 가방 용량 보너스다(표시용, 판정은 서버가 한다). */
 export function selectBagStatus(game: GameState, bagBonus = 0): BagStatus {
   const count = game.bag.length;
-  const cap = bagCapacity(game.boat, game.bag, bagBonus);
+  const capStat = bagCapacityOf(
+    createPlayerContext({
+      state: game,
+      guild: { ...NO_GUILD_EFFECTS, bag: bagBonus },
+      now: '',
+      achievements: achievementBonusesOf(game),
+    }),
+    count,
+  );
+  const cap = capStat.value;
   const percent = cap > 0 ? Math.floor(count / cap * 100) : 0;
   const level: BagLevel = percent >= BAG_DANGER_PERCENT ? 'danger'
     : percent >= BAG_WARN_PERCENT ? 'warn' : 'normal';
-  return { count, cap, full: count >= cap, percent, level };
+  return { count, cap, capStat, full: count >= cap, percent, level };
 }
 
 export interface BagOverview extends BagStatus {
@@ -35,11 +47,11 @@ export interface BagOverview extends BagStatus {
   autoLock: { lock: string[]; unlock: string[] };
 }
 
-/** 가방 탭의 수량·판매 가치·자동 잠금 계획을 한 번에 제공한다. */
-export function selectBagOverview(game: GameState, sellBonus: number): BagOverview {
+/** 가방 탭의 수량·상한(길드 보너스 포함)·판매 가치·자동 잠금 계획을 한 번에 제공한다. */
+export function selectBagOverview(game: GameState, sellBonus: number, bagBonus = 0): BagOverview {
   return {
-    ...selectBagStatus(game),
-    sellable: saleProceeds(sellableValue(game), sellBonus),
+    ...selectBagStatus(game, bagBonus),
+    sellable: saleProceeds(sellableValue(game), sellBonus, achievementBonusesOf(game).sellBonus),
     autoLock: autoLockPlan(game.bag),
   };
 }

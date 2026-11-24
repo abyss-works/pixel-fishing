@@ -27,8 +27,41 @@ describe('selectBagStatus', () => {
 });
 
 describe('selectBagStatus — 길드 가방 보너스', () => {
-  it('서버가 알려 준 가방 보너스만큼 늘어난 칸으로 상한을 보인다', () => {
-    expect(selectBagStatus(seed({ boat: 0 }), 0.2).cap).toBe(72); // 60 + 12
+  it('서버가 알려 준 가방 보너스만큼 늘어난 칸으로 상한을 보이고 capStat과 cap이 일치한다', () => {
+    const s = selectBagStatus(seed({ boat: 0 }), 0.2);
+    expect(s.cap).toBe(72); // 60 + 12
+    expect(s.capStat).toEqual({
+      base: 60,
+      mods: [{ id: 'guild-bag', label: '길드 가방 용량', delta: 12, source: { kind: 'guild', bonus: 'bag' } }],
+      value: 72,
+    });
+  });
+
+  it('유물(bagCap)·업적 유물 배율·길드 보너스가 모두 capStat과 cap에 반영된다', async () => {
+    const { ARTIFACTS } = await import('../../../game/content/artifacts');
+    const target = ARTIFACTS[0] as { id: string; grade: 'common' | 'rare' | 'epic' | 'legendary'; effects: { bagCap?: number } };
+    const origGrade = target.grade;
+    const origEffects = target.effects;
+    target.grade = 'rare';
+    target.effects = { bagCap: 0.1 };
+    try {
+      const s = selectBagStatus(seed({
+        boat: 0,
+        artifacts: [target.id],
+        artifactLevels: { [target.id]: 5 }, // +20%
+        achievementCounters: { maxArtifact: 0 },
+      }), 0.04);
+      expect(s.capStat.value).toBe(s.cap);
+      expect(s.capStat.mods.map(m => m.source)).toEqual([
+        { kind: 'guild', bonus: 'bag' },
+        { kind: 'relic', id: target.id },
+      ]);
+      expect(s.capStat.mods.reduce((sum, m) => sum + m.delta, s.capStat.base)).toBe(s.cap);
+      expect(s.cap).toBe(75); // 60 + round(60 * (0.2 * 1.03 + 0.04))
+    } finally {
+      target.grade = origGrade;
+      target.effects = origEffects;
+    }
   });
 });
 
@@ -83,5 +116,17 @@ describe('selectBagOverview - 판매 가능 금액', () => {
     const sellable = selectBagOverview(game, bonus).sellable;
     expect(sellable.value).toBe(base + saleBonusOf(base, bonus));
     expect(sellable.mods).toEqual([{ id: 'guild-sell', label: '판매가 보너스', delta: saleBonusOf(base, bonus) }]);
+  });
+});
+
+describe('selectBagOverview - 길드 가방 보너스', () => {
+  it('bagBonus를 전달하면 상한과 채움 상태에 길드 보너스를 반영하고, 생략하면 0으로 본다', () => {
+    const bag = Array.from({ length: 60 }, (_, i) => ({
+      uid: `u${i}`, fishId: 'carp', form: 'normal' as const, size: 10,
+      caughtAt: null, spot: null, judgment: null, locked: false,
+    }));
+    const game = seed({ boat: 0, bag });
+    expect(selectBagOverview(game, 0)).toMatchObject({ count: 60, cap: 60, full: true, percent: 100, level: 'danger' });
+    expect(selectBagOverview(game, 0, 0.2)).toMatchObject({ count: 60, cap: 72, full: false, percent: 83, level: 'warn' });
   });
 });

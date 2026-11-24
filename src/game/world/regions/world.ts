@@ -5,10 +5,10 @@
 // 어군은 고정 앵커가 아니라 날짜 시드로 절차 배치한다(schoolsOf) — 생성 데이터의 school_* 앵커는
 // 더 이상 읽지 않는다.
 //
-// 구역 경계는 셀의 zone 문자로 인코딩된다(1=태평양 2=동남아 열린 바다 3=인도양 m=마다가스카르 a=남대서양 열린 바다 N=아직 열지 않은 바다). 경계 통과
+// 구역 경계는 셀의 zone 문자로 인코딩된다(1=태평양 2=동남아 열린 바다 3=인도양 m=마다가스카르 a=남대서양 열린 바다 p=북대서양 열린 바다 N=향후 확장용 미개방 바다). 경계 통과
 // 게이트는 Field의 구역 전이 판정(zoneOf)이 맡고, 자격 기준은 구역 데이터 entryBoat다(Q5 —
 // 클라 연출 + 서버 하한 검증은 spots.boatTier가 그대로 유지).
-// 4/5/6/7/8 = 구역 라벨 전용 문자 — 물(통행 가능)이지만 spot이 없어 낚시 불가, 눈에 보이지 않는다.
+// 4/5/6/7/8/9 = 구역 라벨 전용 문자 — 물(통행 가능)이지만 spot이 없어 낚시 불가, 눈에 보이지 않는다.
 import type { BaseId, MapCellDef, Point, RegionPack } from '../types';
 import { placeHarbor } from '../harborPlacement';
 import { isSeaFacing } from '../harborPlacement';
@@ -21,14 +21,15 @@ const A = ANCHORS;
 // 마스크 문자 해석(legend) — **셀은 존만** 안다. 스팟은 셀 범위가 아니라
 // 존 안에 배치되는 어군 오브젝트라 셀에 새기지 않는다). 캐스팅 판정은 학교(schools)가 담당.
 // 월드와 지구 마스크는 같은 문자 체계를 쓴다 — 세계지도도 이 범례로 지구 마스크를 컴파일한다.
-// 하위 존 문자(t/d/w/r/s/c)는 이제 하위 존의 범위다 — 셀 zone이 하위 존을 가리키고
-// 스팟은 그 존에 배치된 어군이다. '4'/'5'/'6'/'7'/'8' = 최상위 존 라벨 전용 문자(물이지만 통행만).
+// 하위 존 문자(t/d/w/r/s/c/b/h/e/g)는 이제 하위 존의 범위다 — 셀 zone이 하위 존을 가리키고
+// 스팟은 그 존에 배치된 어군이다. '4'/'5'/'6'/'7'/'8'/'9' = 최상위 존 라벨 전용 문자(물이지만 통행만).
 export const WORLD_LEGEND: Record<string, MapCellDef> = {
   '1': { water: true, style: 'sea', zone: 'pacific' },
   '2': { water: true, style: 'sea', zone: 'seasia' },           // 열린 바다 통행 전용 — 최상위 스팟 없음
   '3': { water: true, style: 'sea', zone: 'indian' },
   m: { water: true, style: 'sea', zone: 'madagascar' },
   a: { water: true, style: 'sea', zone: 'southatlantic' },       // 열린 바다 통행 전용 — 최상위 스팟 없음
+  p: { water: true, style: 'sea', zone: 'northatlantic' },       // 열린 바다 통행 전용 — 최상위 스팟 없음
   t: { water: true, style: 'deep', zone: 'deep', label: '마리아나 해구' },
   d: { water: true, style: 'deep', zone: 'dragonhole', label: '드래곤 홀' },
   w: { water: true, style: 'wreck', zone: 'coron', label: '코론 침선 지대' },
@@ -37,12 +38,15 @@ export const WORLD_LEGEND: Record<string, MapCellDef> = {
   c: { water: true, style: 'deep', zone: 'comorodeep', label: '코모로 심해' },
   b: { water: true, style: 'wreck', zone: 'benguela', label: '남대서양 용승대' },
   h: { water: true, style: 'coral', zone: 'sthelena', label: '세인트헬레나' },
+  e: { water: true, style: 'deep', zone: 'azores', label: '아조레스 해령' },
+  g: { water: true, style: 'wreck', zone: 'bermuda', label: '버뮤다 삼각지대' },
   '4': { water: true, style: 'sea', zone: 'pacific', label: '태평양' },
   '5': { water: true, style: 'sea', zone: 'seasia', label: '동남아&오세아니아' },
   '6': { water: true, style: 'sea', zone: 'indian', label: '인도양' },
   '7': { water: true, style: 'sea', zone: 'madagascar', label: '마다가스카르' },
   '8': { water: true, style: 'sea', zone: 'southatlantic', label: '남대서양' },
-  N: { water: true, style: 'sea', closed: true },  // 아직 열지 않은 바다(적도 북쪽 대서양·지중해) — 통행 불가
+  '9': { water: true, style: 'sea', zone: 'northatlantic', label: '북대서양' },
+  N: { water: true, style: 'sea', closed: true },  // 향후 해역 확장을 위해 유지하는 미개방 바다 범례(현재 구현 창에는 미배치) — 통행 불가
   L: { land: true },
   '.': { water: true, style: 'sea' }, // 구역 밖 잉여 물(내륙해 등) — 통행만, 낚시·구역 아님
 };
@@ -52,7 +56,7 @@ export const WORLD_MAP = compileMap(CELL_W, CELL_H, WORLD_LEGEND, MASK_ROWS,
 /** 항해 창이 차지하는 게임 좌표 영역 — 이 밖은 이동할 수 없다 */
 export const WORLD_BOUNDS = mapBounds(WORLD_MAP);
 
-// 항구 5곳 — 기준점(경위도 앵커)과 바다 방향만 설정에 있고 나머지는 placeHarbor가 계산한다.
+// 항구 6곳 — 기준점(경위도 앵커)과 바다 방향만 설정에 있고 나머지는 placeHarbor가 계산한다.
 function harborAt(name: string): HarborPlacement {
   const a = A[name];
   if (!a || !isSeaFacing(a.facing)) throw Error(`항구 앵커 ${name}: 위치 또는 바다 방향이 없다`);
@@ -65,10 +69,11 @@ export const HARBORS = {
   colombo: harborAt('colombo'),     // 콜롬보항(스리랑카 서해안)
   toamasina: harborAt('toamasina'), // 투아마시나항(마다가스카르 동해안)
   walvisbay: harborAt('walvisbay'), // 월비스베이항(나미비아 서해안)
+  lisbon: harborAt('lisbon'),       // 리스본항(이베리아 서해안)
 } satisfies Partial<Record<BaseId, HarborPlacement>>;
 type HarborId = keyof typeof HARBORS;
 const HARBOR_NAMES: Record<HarborId, string> = {
-  harbor: '부산항', manila: '마닐라항', colombo: '콜롬보항', toamasina: '투아마시나항', walvisbay: '월비스베이항',
+  harbor: '부산항', manila: '마닐라항', colombo: '콜롬보항', toamasina: '투아마시나항', walvisbay: '월비스베이항', lisbon: '리스본항',
 };
 const HARBOR_IDS = Object.keys(HARBORS) as HarborId[];
 /** 고향 항구의 출항 자리가 새 게임과 되돌림의 기본 위치다 */

@@ -93,10 +93,11 @@ export interface GuildMemberItem {
 export interface GuildLogItem {
   id: number; kind: GuildLogKind; uid: string; nick: string | null; detail: string | null; value: number | null; at: string;
 }
-/** 길드 보너스 하나 — 해금 레벨, 지금 단계(열리면 최소 1)와 상한(길드 레벨, 열리지 않았으면 0), 다음 단계를 향해 모인 골드와
- *  비용(5단계이거나 열리지 않았으면 null), 지금·다음 단계 효과, 내가 이 보너스에 기부한 골드 */
+/** 길드 보너스 하나 — 해금 레벨, 기본 단계(열리면 최소 1), 자유 강화 단계(0~5), 합산 단계, 기본 상한(최대 5),
+ *  다음 기본 단계를 향해 모인 골드와 비용, 합산 효과·다음 합산 효과, 내가 이 보너스에 기부한 골드 */
 export interface GuildBonusItem {
-  id: GuildBonusId; unlock: number; rank: number; cap: number; pool: number; next: number | null;
+  id: GuildBonusId; unlock: number; rank: number; enhanceRank: number; totalRank: number;
+  cap: number; pool: number; next: number | null;
   effect: number; nextEffect: number | null; mine: number;
 }
 /** 기부 순위 한 줄 — 보너스를 합친 사람별 전체 기부액. 지운 계정은 uid가 null이다 */
@@ -139,9 +140,11 @@ export type GuildOp =
   | { op: 'cancelRequest' }
   | { op: 'remove'; guildId: string; uid: string }
   | { op: 'handover'; guildId: string; uid: string }
-  | { op: 'donate'; guildId: string; bonus: GuildBonusId; amount: number };
-/** 길드 요청 결과 — 들어오기는 바로 들어갔는지(joined) 신청이 됐는지(requested)를 싣는다. 실패는 서버 오류 코드 */
-export type GuildOpResult = { ok: true; result?: 'joined' | 'requested' } | { ok: false; error: string };
+  | { op: 'donate'; guildId: string; bonus: GuildBonusId; amount: number }
+  | { op: 'enhance'; guildId: string; bonus: GuildBonusId }
+  | { op: 'resetEnhancements'; guildId: string };
+/** 길드 요청 결과 — 들어오기는 바로 들어갔는지(joined) 신청이 됐는지(requested)를, 자유 강화 초기화는 되돌린 포인트(recovered)를 싣는다. 실패는 서버 오류 코드 */
+export type GuildOpResult = { ok: true; result?: 'joined' | 'requested'; recovered?: number } | { ok: false; error: string };
 
 export type RankingBoardId = 'fame' | 'dex' | 'species';
 export interface RankingRow { rank: number; nickname: string | null; value: number; me: boolean }
@@ -220,7 +223,8 @@ export interface AdminSessionRow {
 }
 export interface AdminEconomyRow {
   day: string; sells: number; sell_gold: number; coupon_gold: number; mail_gold: number;
-  rod_cost: number; boat_cost: number; bait_cost: number;
+  bounty_gold: number; achievement_gold: number;
+  rod_cost: number; boat_cost: number; hat_cost: number;
 }
 /** 바운티 퍼널 일계 — 네임드 수주 → 흔적(도전권) → 결투 승·패 → 토벌 보상, 일반 수주·납품 */
 export interface AdminBountyFunnelRow {
@@ -267,16 +271,19 @@ export interface BalanceLive {
   judgment: { judgment: string; catches: number; pct: number }[];
   /** 체류 해역. 기간 안 캐치의 해역별 수와 사용자 수이고 캐치 많은 순이다. 해역이 기록되지 않은 캐치는 spot이 null이다 */
   spots: { spot: string | null; catches: number; users: number }[];
-  /** 도감 진행. 일반 폼을 하나 이상 발견한 사용자의 발견 어종 수 분포이다. 10종 구간이고 fromSpecies 90은 90종 이상이다 */
+  /** 도감 진행. 일반 폼을 하나 이상 발견한 사용자의 발견 어종 수 분포이다. 10종 구간이고 fromSpecies 120은 120종 이상이다 */
   dexBuckets: { fromSpecies: number; users: number }[];
   /** 배 단계 분포. boat 0은 배가 없는 상태이다 */
   boats: { boat: number; users: number }[];
-  /** 낚싯대 레벨 분포. 5레벨 구간이고 fromLevel 31은 31레벨 이상이다 */
+  /** 낚싯대 레벨 분포. 5레벨 구간이고 fromLevel 66은 66레벨 이상이다 */
   rodBuckets: { fromLevel: number; users: number }[];
   /** 골드 잔고의 25·50·75·90분위와 최대. 사용자가 없으면 모두 null이다 */
   gold: { p25: number | null; p50: number | null; p75: number | null; p90: number | null; max: number | null };
-  /** 골드 흐름. 기간 안 유입(판매, 쿠폰, 우편)과 유출(강화, 배, 미끼)의 합이다 */
-  goldFlow: { sellGold: number; couponGold: number; mailGold: number; rodCost: number; boatCost: number; baitCost: number };
+  /** 골드 흐름. 기간 안 유입(판매, 쿠폰, 우편, 현상금, 업적)과 유출(강화, 배, 모자)의 합이다 */
+  goldFlow: {
+    sellGold: number; couponGold: number; mailGold: number; bountyGold: number; achievementGold: number;
+    rodCost: number; boatCost: number; hatCost: number;
+  };
   /** 일일 활성. 이벤트가 있는 사용자 수이다. KST 날짜(yyyy-mm-dd) 오름차순이고 이벤트가 없는 날은 행이 없다. 기간 시작 시각이 날짜 중간이면 첫 날은 일부만 센다 */
   dau: { day: string; dau: number }[];
   /** 이탈 지점. 7일 넘게 저장이 없는 사용자의 배별 인원과 평균 명성, 평균 낚싯대 레벨이다 */
@@ -305,13 +312,97 @@ export interface AdminSentMailRow extends MailItem { userId: string }
 export interface AdminMailRequest {
   title: string; body: string;
   target: { kind: 'users'; recipients: { userId: string; gold: number }[] } | { kind: 'all'; gold: number };
+  idempotencyKey?: string;
 }
 /** 관리자 — 우편 미리보기·보내기 결과. problems가 있으면 미리보기가 없고 보내지 않는다 */
 export interface AdminMailPlan {
-  problems: ('title' | 'body' | 'gold' | 'recipients' | 'duplicate')[];
-  preview: { count: number; totalGold: number; missing: string[] } | null;
+  problems: ('title' | 'body' | 'gold' | 'recipients' | 'duplicate' | 'totalGold')[];
+  duplicates?: string[];
+  preview: {
+    count: number;
+    recipientCount: number;
+    totalGold: number;
+    capExceeded: boolean;
+    maxTotalGold: number;
+    missing: string[];
+  } | null;
   /** 보내기에서만 — 넣은 우편 수 */
   sent?: number;
+  idempotent?: boolean;
+}
+
+/** 관리자 — 대상 플레이어의 게임 상태 상세 스냅샷 */
+export interface AdminUserState {
+  hasSave: boolean;
+  dex: {
+    normal: number; normalTotal: number;
+    variant: number; variantTotal: number;
+    named: number; namedTotal: number;
+  };
+  bounty: {
+    namedClears: number;
+    namedDistinctClears: number;
+    namedTotal: number;
+  };
+  artifacts: {
+    owned: { id: string; name: string; grade: string | null; level: number | null }[];
+    total: number;
+  };
+  hats: {
+    owned: number;
+    total: number;
+    items: { id: string; name: string; source: 'gold' | 'achievement' }[];
+    equipped: { id: string; name: string } | null;
+  };
+  achievements: {
+    claimed: number;
+    claimable: number;
+    total: number;
+    counters: Record<string, number>;
+  };
+  cooking: {
+    energy: { common: number; rare: number; epic: number; legendary: number };
+    cooked: { id: string; name: string; kind: 'lunch' | 'bait'; count: number }[];
+    inProgress: { recipe: string; name: string; count: number; startedAt: string } | null;
+    slots: {
+      lunch: { id: string; name: string; endsAt: string } | null;
+      bait: { id: string; name: string; endsAt: string } | null;
+      bait2?: { id: string; name: string; endsAt: string } | null;
+    };
+  };
+  instances: {
+    bag: number;
+    exhibit: number;
+    recentBag: {
+      uid: string;
+      fishId: string;
+      name: string;
+      form: string;
+      grade: string | null;
+      size: number | null;
+      caughtAt: string | null;
+      spot: string | null;
+      locked: boolean;
+    }[];
+  };
+  progression: {
+    visited: string[];
+    coupons: string[];
+    bountyProgress: { questId: string; zone: string; progress: number; target: number | null; startedAt: string }[];
+    bountyTickets: { questId: string; issuedAt: string }[];
+    activeSessions: number;
+  };
+}
+
+/** 관리자 — 개요 탭 통합 응답 */
+export interface AdminOverview {
+  users: AdminUserRow[];
+  recentEvents: AdminEventRow[];
+  spamFlags: AdminSpamFlagRow[];
+  dailyStats: AdminDailyStatsRow[];
+  retention: AdminRetentionRow[];
+  sessions: AdminSessionRow[];
+  live: AdminLive;
 }
 
 /** 관리자 — 비밀번호 재설정 링크. url은 게임의 재설정 착지 주소이고 expiresAt까지 쓸 수 있다 */
@@ -327,6 +418,8 @@ export interface AdminApi {
   takeSignInReturn(): { error: string | null } | null;
   /** 관리자 세션만 끝낸다. 게임 세션은 그대로다 */
   signOut(): Promise<void>;
+  /** 개요 탭 통합 조회. days를 생략하면 서버 기본 기간(30일)이다 */
+  overview(days?: number): Promise<AdminOverview>;
   users(): Promise<AdminUserRow[]>;
   /** 지금 실시간 채널에 연결된 사람 */
   live(): Promise<AdminLive>;
@@ -341,6 +434,7 @@ export interface AdminApi {
   spamFlags(): Promise<AdminSpamFlagRow[]>;
   recentEvents(): Promise<AdminEventRow[]>;
   userEvents(userId: string, limit?: number): Promise<AdminEventRow[]>;
+  userState(uid: string): Promise<AdminUserState>;
   letters(): Promise<AdminLetterRow[]>;
   /** 변경 기록(최신 버전부터, 철회된 항목 포함) */
   changelog(): Promise<AdminChangelogRow[]>;
@@ -356,6 +450,8 @@ export interface AdminApi {
   resetLink(userId: string): Promise<AdminResetLink>;
   /** 편지 처리 표시(true) 또는 취소(false) */
   letterHandled(letterId: number, handled: boolean): Promise<{ handled: boolean }>;
+  /** 대상 계정의 활성 인증 세션을 모두 강제 종료한다 */
+  revokeSessions(userId: string): Promise<{ revoked: number }>;
   /** 밸런스 라이브 지표. days는 이벤트 지표의 기간(1~7일)이고, 생략하면 서버 기본값인 7일이다 */
   balanceLive(days?: number): Promise<BalanceLive>;
   /** 이 화면이 붙은 배포 주소의 호스트 — 운영/스테이징 착오 방지 표시값(Ops 탭). 로컬 모드는 null */

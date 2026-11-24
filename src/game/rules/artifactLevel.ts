@@ -38,6 +38,8 @@ export function artifactEffectsAt(art: Artifact, level: number): ArtifactEffects
   if (e.sail !== undefined) out.sail = clean(e.sail * k);
   if (e.duelSpeedupCut !== undefined) out.duelSpeedupCut = clean(e.duelSpeedupCut * k);
   if (e.biteWaitCut !== undefined) out.biteWaitCut = clean(e.biteWaitCut * k);
+  if (e.commonWeightCut !== undefined) out.commonWeightCut = clean(e.commonWeightCut * k);
+  if (e.bagCap !== undefined) out.bagCap = clean(e.bagCap * k);
   if (e.mutationWeight !== undefined) {
     const boost = e.mutationWeight.variant / MUTATION_WEIGHTS.variant - 1;
     out.mutationWeight = {
@@ -54,13 +56,13 @@ export function artifactExtraCookChanceAt(art: Artifact, level: number): number 
   return clean(art.cook.extraCookChance * (artifactHasLevel(art) ? coefOf(level) : 1));
 }
 
-/** 보유 유물의 요리 추가 완성 확률 — 보유 유물의 확률을 더한 합이고 1을 넘지 않는다 */
-export function extraCookChance(state: ArtifactHolder): number {
+/** 보유 유물의 요리 추가 완성 확률 — 보유 유물의 확률을 더한 합에 유물 배율(1 + artifactBoost)을 곱하고 1을 넘지 않는다 */
+export function extraCookChance(state: ArtifactHolder, artifactBoost = 0): number {
   const sum = ARTIFACTS.reduce((acc, a) => {
     const level = artifactLevelOf(state, a.id);
     return level === 0 ? acc : acc + artifactExtraCookChanceAt(a, level);
   }, 0);
-  return Math.min(1, clean(sum));
+  return Math.min(1, clean(sum * (1 + artifactBoost)));
 }
 
 /** 보유 유물의 효과 값을 모두 더한다 — 같은 종류의 효과는 합한 뒤 한 번 적용한다. pick은 레벨을 적용한 효과에서 값을 고른다 */
@@ -76,14 +78,19 @@ export function variantBoostOf(state: ArtifactHolder): number {
   return sumArtifactEffect(state, e => e.mutationWeight && e.mutationWeight.variant / MUTATION_WEIGHTS.variant - 1);
 }
 
+/** 일반 등급 가중치 감소율 합 — 보유 유물의 감소율 합에 유물 배율(1 + artifactBoost)을 곱한다 */
+export function commonWeightCutOf(state: ArtifactHolder, artifactBoost = 0): number {
+  return clean(sumArtifactEffect(state, e => e.commonWeightCut) * (1 + artifactBoost));
+}
+
 /** 감소율의 합을 한 번 적용한 배수 (1 − 합). 합이 1 이상이어도 음수가 되지 않도록 0에서 멈춘다 */
 export function scaleAfterCuts(cuts: readonly number[]): number {
   return Math.max(0, 1 - cuts.reduce((sum, c) => sum + c, 0));
 }
 
-/** 결투 가속 단위에 거는 유물 배수 — 보유 유물의 감소율을 더해 (1 − 합)으로 한 번 적용한다 */
-export function duelSpeedupScale(state: ArtifactHolder): number {
-  return scaleAfterCuts([sumArtifactEffect(state, e => e.duelSpeedupCut)]);
+/** 결투 가속 단위에 거는 유물 배수 — 보유 유물의 감소율 합에 유물 배율(1 + artifactBoost)을 곱해 (1 − 합)으로 한 번 적용한다 */
+export function duelSpeedupScale(state: ArtifactHolder, artifactBoost = 0): number {
+  return scaleAfterCuts([clean(sumArtifactEffect(state, e => e.duelSpeedupCut) * (1 + artifactBoost))]);
 }
 
 /** 네임드 토벌 하루 클리어 상한 — 기본 상한에 보유 전설 유물의 가산을 더한다 */

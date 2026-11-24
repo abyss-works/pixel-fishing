@@ -83,6 +83,23 @@ const verificationTable = {
   fields: { expiresAt: 'expires_at', ...timestamps },
 };
 
+const TRUSTED_PROXY_CIDRS = [
+  '127.0.0.0/8',
+  '10.0.0.0/8',
+  '172.16.0.0/12',
+  '192.168.0.0/16',
+  '100.64.0.0/10',
+  '169.254.0.0/16',
+  '::1/128',
+  'fc00::/7',
+  'fe80::/10',
+];
+
+const ipAddressConfig = {
+  ipAddressHeaders: ['x-forwarded-for', 'x-real-ip'],
+  trustedProxies: TRUSTED_PROXY_CIDRS,
+};
+
 export function createAuth(config: AuthConfig) {
   const finishLink = finishGoogleLink(config.recordLinkConsent);
   return betterAuth({
@@ -122,7 +139,7 @@ export function createAuth(config: AuthConfig) {
       },
     },
     hooks: { before: guardAuthRequests },
-    advanced: { database: { generateId: 'uuid' } },
+    advanced: { database: { generateId: 'uuid' }, ipAddress: ipAddressConfig },
     plugins: [
       anonymous({
         // 다른 계정으로 로그인해도 게스트 계정과 진행을 지우지 않는다. 운영자 이관의 근거로 남긴다.
@@ -162,7 +179,12 @@ export function createAdminAuth(config: Omit<AuthConfig, 'mail' | 'recordLinkCon
     verification: verificationTable,
     databaseHooks: { session: sessionHooks, account: dropOAuthTokens },
     hooks: { before: guardAuthRequests },
-    advanced: { database: { generateId: 'uuid' }, cookiePrefix: ADMIN_COOKIE_PREFIX },
+    rateLimit: {
+      customRules: {
+        '/sign-in/social': { window: 10, max: 20 },
+      },
+    },
+    advanced: { database: { generateId: 'uuid' }, cookiePrefix: ADMIN_COOKIE_PREFIX, ipAddress: ipAddressConfig },
   });
 }
 

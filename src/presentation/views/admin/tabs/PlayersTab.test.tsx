@@ -9,6 +9,7 @@ const UID = 'aaaaaaaa-0000-0000-0000-000000000000';
 const mocks = vi.hoisted(() => ({
   restrict: vi.fn(async (_userId: string, restricted: boolean) => ({ restricted })),
   resetLink: vi.fn(async () => ({ url: 'https://game.example/?token=abcDEF0123456789abcdEFGH', expiresAt: '2026-10-07T01:00:00Z' })),
+  revokeSessions: vi.fn(async () => ({ revoked: 2 })),
   compose: vi.fn(),
 }));
 
@@ -30,6 +31,39 @@ vi.mock('../../../../platform/api', () => ({
         id: 7, user_id: 'aaaaaaaa-0000-0000-0000-000000000000', type: 'sell',
         payload: { count: 2, gold: 300 }, created_at: '2026-10-07T00:00:00Z',
       }]),
+      userState: vi.fn(async () => ({
+        hasSave: true,
+        dex: { normal: 12, normalTotal: 120, variant: 3, variantTotal: 120, named: 1, namedTotal: 8 },
+        bounty: { namedClears: 2, namedDistinctClears: 1, namedTotal: 8 },
+        artifacts: { owned: [{ id: 'wreck-compass', name: '침선의 나침반', grade: 'rare', level: 2 }], total: 8 },
+        hats: {
+          owned: 1,
+          total: 46,
+          items: [{ id: 'cap-red', name: '빨간 모자', source: 'gold' as const }],
+          equipped: { id: 'cap-red', name: '빨간 모자' },
+        },
+        achievements: { claimed: 5, claimable: 1, total: 71, counters: { 'sell.gold': 1200 } },
+        cooking: {
+          energy: { common: 25, rare: 10, epic: 0, legendary: 0 },
+          cooked: [{ id: 'cook-lunch-bite', name: '가루디야', kind: 'lunch', count: 2 }],
+          inProgress: null,
+          slots: { lunch: null, bait: null },
+        },
+        instances: {
+          bag: 8,
+          exhibit: 3,
+          recentBag: [
+            { uid: 'fish-1', fishId: 'carp', name: '잉어', form: 'normal', grade: 'common', size: 22.5, caughtAt: '2026-10-07T00:10:00Z', spot: '마을 연못', locked: false },
+          ],
+        },
+        progression: {
+          visited: ['village'],
+          coupons: ['OPEN100'],
+          bountyProgress: [{ questId: 'pacific-easy-common', zone: '태평양', progress: 12, target: 250, startedAt: '2026-10-07T00:00:00Z' }],
+          bountyTickets: [],
+          activeSessions: 2,
+        },
+      })),
       sessions: vi.fn(async () => [
         { id: 2, userId: 'aaaaaaaa-0000-0000-0000-000000000000', nick: null,
           startedAt: '2026-10-07T00:00:00Z', endedAt: '2026-10-07T00:30:00Z', durationSec: 1800 },
@@ -38,6 +72,7 @@ vi.mock('../../../../platform/api', () => ({
       ]),
       restrict: mocks.restrict,
       resetLink: mocks.resetLink,
+      revokeSessions: mocks.revokeSessions,
     },
   },
 }));
@@ -59,16 +94,25 @@ describe('플레이어 탭', () => {
     show('roster');
     expect(await screen.findByText('바다친구(friend@example.com)')).toBeInTheDocument();
     expect(screen.getByText('1/1명')).toBeInTheDocument();
-    // 명부의 마지막 세션과 누적 플레이 열
+    // 명부의 위치 한글화와 마지막 세션·누적 플레이 열
     const row = screen.getByText('바다친구(friend@example.com)').closest('tr')!;
+    expect(within(row).getByText('태평양')).toBeInTheDocument();
     expect(within(row).getByText('10-07 09:30')).toBeInTheDocument();
     expect(within(row).getByText('1시간 23분')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('바다친구(friend@example.com)'));
-    const dialog = await screen.findByRole('dialog', { name: '유저 상세 — 바다친구(friend@example.com)' });
+    const dialog = await screen.findByRole('dialog', { name: '유저 상세: 바다친구(friend@example.com)' });
     // 오목한 칸(pf-notch)은 clip-path로 안쪽을 잘라서, 그 안에 모달을 두면 화면 전체를 덮지 못한다
     expect(dialog.closest('.pf-notch')).toBeNull();
     expect(await within(dialog).findByText('판매')).toBeInTheDocument();
+    expect(await within(dialog).findByText(/일반 12\/120, 돌연변이 3\/120, 네임드 1\/8/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/침선의 나침반/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/빨간 모자/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/착용 중/)).toBeInTheDocument();
+    expect(within(dialog).getByText('가방 8마리, 전시 3마리')).toBeInTheDocument();
+    expect(within(dialog).getByText(/잉어 22.5cm/)).toBeInTheDocument();
+    expect(within(dialog).getByText('2건')).toBeInTheDocument();
+    expect(within(dialog).getByText('OPEN100')).toBeInTheDocument();
     // 세션 기록 — 누적 플레이와 최근 세션의 시작 시각·길이
     const sessions = within(dialog).getByText('세션 기록').closest('section')!;
     expect(within(sessions).getByText('1시간 23분')).toBeInTheDocument();
@@ -91,10 +135,10 @@ describe('플레이어 탭', () => {
     expect(screen.getByText(/골드 1,200 · 명성 30 · 마지막 행동/)).toBeInTheDocument();
   });
 
-  it('사용자 상세의 관리 조치 — 우편 보내기, 확인을 거친 제재 해제, 재설정 링크 발급과 복사 칸', async () => {
+  it('사용자 상세의 관리 조치 — 우편 보내기, 확인을 거친 제재 해제, 재설정 링크 발급과 복사 칸, 세션 강제 종료', async () => {
     show('roster');
     fireEvent.click(await screen.findByText('바다친구(friend@example.com)'));
-    const dialog = await screen.findByRole('dialog', { name: '유저 상세 — 바다친구(friend@example.com)' });
+    const dialog = await screen.findByRole('dialog', { name: '유저 상세: 바다친구(friend@example.com)' });
 
     fireEvent.click(within(dialog).getByRole('button', { name: '우편 보내기' }));
     expect(mocks.compose).toHaveBeenCalledWith(UID);
@@ -115,5 +159,10 @@ describe('플레이어 탭', () => {
     expect(mocks.resetLink).toHaveBeenCalledWith(UID);
     expect(within(dialog).getByRole('button', { name: '복사' })).toBeInTheDocument();
     expect(within(dialog).getByText(/메일은 보내지 않았어요/)).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: '세션 강제 종료' }));
+    fireEvent.click(await screen.findByRole('button', { name: '종료하기' }));
+    await waitFor(() => expect(mocks.revokeSessions).toHaveBeenCalledWith(UID));
+    expect(await within(dialog).findByText('활성 세션 2건을 종료했어요.')).toBeInTheDocument();
   });
 });

@@ -3,9 +3,10 @@
 // (HttpGameGateway 생성 조건이 클라우드 빌드). 동적 쿠폰은 오프라인이라 항상 없음(정적 쿠폰만).
 import { applyAction } from '../../game/rules/actions';
 import type { GameAction } from '../../game/rules/actions';
+import { isDebugTableCommand } from '../../game/rules/debug';
 import { localDate } from '../../game/rules/logic';
 import type { GameState } from '../../game/rules/logic';
-import { getTimeOverride } from './timeOverride';
+import { getPhaseOverride, getTimeOverride } from './timeOverride';
 import { pickGuestName } from '../../game/rules/nickname';
 import type { GameGateway, GameProfile, DispatchResult } from '../api/types';
 
@@ -37,7 +38,15 @@ export class LocalGameGateway implements GameGateway {
   }
 
   dispatch(action: GameAction): DispatchResult {
-    const out = applyAction(this.current, action, {
+    if ((action.type === 'debug' && isDebugTableCommand(action.command))
+        || (action.type === 'debugBatch' && action.steps.some(s => isDebugTableCommand(s.command)))) {
+      return { status: 'rejected', error: 'debug-db-required' };
+    }
+    const phase = getPhaseOverride();
+    const effective = action.type === 'catch' && phase && !action.forcePhase
+      ? { ...action, forcePhase: phase }
+      : action;
+    const out = applyAction(this.current, effective, {
       rng: Math.random, today: localDate(),
       // 시간대 고정(기능 계층 — 관리자 콘솔)이 있으면 그 시각으로 캐치 판정.
       // 없으면 실제 벽시계. 운영(HttpGameGateway)은 이 모듈을 안 타므로 서버 판정이 유지된다.

@@ -79,6 +79,6 @@ export function adminAuth(): AdminAuth {
 
 /** 요청 쿠키의 관리자 세션 사용자 id. 게임 세션 쿠키는 인정하지 않고, 세션이 없거나 만료됐으면 null이다 */
 export async function adminSessionUid(headers: IncomingHttpHeaders): Promise<string | null> {
-  const result = await adminAuth().api.getSession({ headers: fromNodeHeaders(headers) });
+  const result = await adminAuth().api.getSession({ headers: fromNodeHeaders(headers), query: { disableCookieCache: true } });
   return result?.user.id ?? null;
 }

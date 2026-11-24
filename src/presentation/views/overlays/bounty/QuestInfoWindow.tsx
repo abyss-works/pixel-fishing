@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { QuestInfoData } from '../../../../features/bounty/model/questInfo';
 import type { QuestInfoStatus } from '../../../../features/bounty/service/useQuestInfo';
-import Frame from '../../../ui/Frame';
 import Inset from '../../../ui/Inset';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
@@ -39,11 +38,11 @@ export default function QuestInfoWindow({ info, onClose }: {
   const body = () => {
     if (info.status === 'loading') {
       return (
-        <Frame role="status" className="bg-surface-2 p-3 flex flex-col gap-2">
+        <Inset role="status" className="p-3 flex flex-col gap-2">
           <span className="sr-only">불러오는 중이에요.</span>
           <Skeleton className="h-6 w-1/2" />
           {[0, 1, 2, 3].map(i => <Skeleton key={i} className="h-[26px]" />)}
-        </Frame>
+        </Inset>
       );
     }
     if (info.status === 'offline') return <EmptyInfoCard><span className="whitespace-pre-line">{OFFLINE_TEXT}</span></EmptyInfoCard>;
@@ -64,7 +63,7 @@ export default function QuestInfoWindow({ info, onClose }: {
     <Modal layer="stage" md height={400} onClose={onClose}>
       <ModalCard title="의뢰" onClose={onClose} fixed>
         <div className="flex flex-col gap-3 flex-1 min-h-0">
-          <Inset className="flex items-center gap-3 h-10 px-3 shrink-0 text-xs">
+          <Inset className="flex flex-wrap items-center gap-x-3 gap-y-1 min-h-10 px-3 py-1.5 shrink-0 text-xs">
             <ClearsLeft first shortLabels leftAll={info.left?.general ?? null} leftNamed={info.left?.named ?? null}
                         dailyCap={info.caps.general} namedDailyCap={info.caps.named} />
           </Inset>

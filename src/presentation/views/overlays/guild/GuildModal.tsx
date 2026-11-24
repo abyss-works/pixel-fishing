@@ -2,15 +2,16 @@ import { useState } from 'react';
 import { GUILD_MAX_MEMBERS } from '../../../../game/rules/guild';
 import type { ArtifactHolder } from '../../../../game/rules/artifactLevel';
 import { GUILD_LEVEL_HELP, GUILD_ERROR_TEXT, growthBar, growthTotalText, splitMembers } from '../../../../features/guild/model/guild';
+import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import type { GuildConfirm, GuildInfo, GuildOp } from '../../../../features/guild/model/guild';
 import { useGuild } from '../../../../features/guild/service/useGuild';
 import ConfirmDialog from '../../../ui/ConfirmDialog';
-import { cx } from '../../../ui/cx';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import Inset from '../../../ui/Inset';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
+import ProgressMeter from '../../../ui/ProgressMeter';
 import TabBar from '../../../ui/TabBar';
 import Tip from '../../../ui/Tip';
 import GuildLogbookTab from './GuildLogbookTab';
@@ -44,17 +45,18 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
   const [confirm, setConfirm] = useState<GuildConfirm | null>(null);
 
   /** 요청 하나. 거부는 안내 문장으로 돌려주고, 연결 실패는 알림으로 보인다 */
-  const run = async (op: GuildOp): Promise<string | null> => {
+  const runOp = async (op: GuildOp): Promise<{ error: string | null; recovered?: number }> => {
     setBusy(true);
     try {
       const r = await act(op);
-      return r.ok ? null : GUILD_ERROR_TEXT[r.error] ?? FAILED;
+      return r.ok ? { error: null, recovered: r.recovered } : { error: GUILD_ERROR_TEXT[r.error] ?? FAILED };
     } catch {
-      return '길드 요청을 보내지 못했어요. 연결을 확인해 주세요.';
+      return { error: '길드 요청을 보내지 못했어요. 연결을 확인해 주세요.' };
     } finally {
       setBusy(false);
     }
   };
+  const run = async (op: GuildOp): Promise<string | null> => (await runOp(op)).error;
 
   /** 코드로 들어오기 — 들어갔는지 신청이 됐는지를 함께 돌려준다 */
   const join: GuildJoin = async code => {
@@ -71,7 +73,11 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
 
   const inGuild = Boolean(guild && you);
   const body = guild && you
-    ? <GuildView guild={guild} me={you} busy={busy} run={run} setToast={setToast} ask={setConfirm} gold={gold} artifacts={artifacts} onGoldChanged={onGoldChanged} />
+    ? (
+      <GuildView guild={guild} me={you} busy={busy} run={run}
+                 onResetEnhancements={() => runOp({ op: 'resetEnhancements', guildId: guild.id })}
+                 setToast={setToast} ask={setConfirm} gold={gold} artifacts={artifacts} onGoldChanged={onGoldChanged} />
+    )
     : guild === null && !loading && !failed
       ? <NoGuild busy={busy} run={run} join={join} request={request} setToast={setToast} />
       : (
@@ -94,7 +100,10 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
                        onConfirm={() => {
                          const c = confirm;
                          setConfirm(null);
-                         void run(c.op).then(error => setToast(error ?? c.done, error ? 'warn' : 'info'));
+                         void run(c.op).then(error => {
+                           if (error) sendNotice(setToast, { kind: 'system.modalRejected', text: error });
+                           else sendNotice(setToast, { kind: 'guild.modalAction', text: c.done });
+                         });
                        }}>
           <p className="text-sm whitespace-pre-line">{confirm.text}</p>
         </ConfirmDialog>
@@ -106,7 +115,10 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
 type GuildTab = 'members' | 'skills' | 'logbook' | 'manage';
 
 /** 길드가 있을 때: 고정 정보 줄과 탭(길드장은 관리 탭까지 넷) */
-function GuildView({ ask, gold, artifacts, onGoldChanged, ...part }: GuildPartProps & { ask: GuildAsk; gold: number; artifacts: ArtifactHolder; onGoldChanged: () => Promise<void> | void }) {
+function GuildView({ ask, gold, artifacts, onGoldChanged, onResetEnhancements, ...part }: GuildPartProps & {
+  ask: GuildAsk; gold: number; artifacts: ArtifactHolder; onGoldChanged: () => Promise<void> | void;
+  onResetEnhancements: () => Promise<{ error: string | null; recovered?: number }>;
+}) {
   const [tab, setTab] = useState<GuildTab>('members');
   return (
     <div className="flex flex-col gap-3 flex-1 min-h-0">
@@ -119,7 +131,7 @@ function GuildView({ ask, gold, artifacts, onGoldChanged, ...part }: GuildPartPr
       ]} />
       <div className="flex flex-col flex-1 min-h-0">
         {tab === 'members' && <GuildMembersTab {...part} ask={ask} artifacts={artifacts} />}
-        {tab === 'skills' && <GuildSkillsTab {...part} onGoldChanged={onGoldChanged} />}
+        {tab === 'skills' && <GuildSkillsTab {...part} gold={gold} onResetEnhancements={onResetEnhancements} onGoldChanged={onGoldChanged} />}
         {tab === 'logbook' && <GuildLogbookTab logbook={part.guild.logbook} me={part.me} />}
         {tab === 'manage' && part.guild.role === 'leader' && <GuildManageTab {...part} gold={gold} onGoldChanged={onGoldChanged} />}
       </div>
@@ -131,18 +143,20 @@ function GuildView({ ask, gold, artifacts, onGoldChanged, ...part }: GuildPartPr
 function GuildStatus({ guild }: { guild: GuildInfo }) {
   const bar = growthBar(guild.growth);
   return (
-    <Inset className="grid grid-cols-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-3 h-10 px-3 shrink-0">
-      <b className="max-w-40 truncate pr-3 border-r border-line text-text">{guild.name}</b>
+    <Inset className="grid grid-cols-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-x-3 gap-y-1 min-h-10 px-3 py-1.5 shrink-0 mobile:grid-cols-[minmax(0,1fr)_auto_auto]">
+      <b className="max-w-40 truncate text-text mobile:max-w-none">{guild.name}</b>
       <span className="pf-accent text-base text-gold">Lv.{guild.growth.level}</span>
-      <Tip plain text={GUILD_LEVEL_HELP} className="block">
-        <span className="block h-2 border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]" role="meter"
-              aria-label="다음 레벨까지 진행" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(bar.ratio * 100)}>
-          <span className={cx('block h-full shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]', bar.remaining === null ? 'bg-gold' : 'bg-accent')}
-                style={{ width: `${bar.ratio * 100}%` }} />
-        </span>
+      <Tip plain text={GUILD_LEVEL_HELP} className="block mobile:col-span-2 mobile:row-start-2">
+        <ProgressMeter
+          current={Math.round(bar.ratio * 100)}
+          target={100}
+          ratio={bar.ratio}
+          tone={bar.remaining === null ? 'gold' : 'accent'}
+          ariaLabel="다음 레벨까지 진행"
+        />
       </Tip>
-      <span className="pf-accent text-xs">{growthTotalText(guild.growth)}</span>
-      <span className="flex items-baseline gap-2 pl-3 border-l border-line">
+      <span className="pf-accent text-xs whitespace-nowrap mobile:row-start-2 mobile:justify-self-end">{growthTotalText(guild.growth)}</span>
+      <span className="flex items-baseline gap-1.5 whitespace-nowrap mobile:col-start-3 mobile:row-start-1">
         <span className="text-xs text-text-dim">인원</span>
         <span className="pf-accent text-xs">{splitMembers(guild.members).active.length}/{GUILD_MAX_MEMBERS}</span>
       </span>

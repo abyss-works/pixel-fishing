@@ -1,4 +1,6 @@
 import { useRef, useState } from 'react';
+import { cx } from './cx';
+import { NOTCH_SM } from './notch';
 import TooltipBubble from './TooltipBubble';
 import { anchorOf } from './tooltipPlacement';
 import type { Anchor } from './tooltipPlacement';
@@ -30,9 +32,9 @@ export default function HelpHint({ text }: Props) {
             onMouseEnter={show} onMouseLeave={hide}
             onFocus={show} onBlur={hide}
             onClick={() => (open ? hide() : show())}
-            className="inline-flex items-center justify-center w-[15px] h-[15px] ml-1 align-middle
-                       rounded-full border border-line bg-surface-2
-                       text-text-dim text-2xs leading-none cursor-help select-none">
+            className={cx('inline-flex items-center justify-center size-4 ml-1 align-middle',
+              'border border-line bg-surface-2 hover:border-accent hover:text-text',
+              'text-text-dim text-2xs leading-none cursor-help select-none', NOTCH_SM)}>
         ?
       </span>
       {open && <TooltipBubble anchor={open.anchor}>{text}</TooltipBubble>}

@@ -21,7 +21,7 @@ const overlap = (a: Rect, b: Rect) =>
 const gap = (a: Rect, b: Rect) => Math.hypot(
   Math.max(a.x - (b.x + b.w), b.x - (a.x + a.w), 0), Math.max(a.y - (b.y + b.h), b.y - (a.y + a.h), 0));
 const center = (r: Rect) => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 });
-const EXPECTED_FACING = { harbor: 'south', manila: 'west', colombo: 'west', toamasina: 'east', walvisbay: 'west' };
+const EXPECTED_FACING = { harbor: 'south', manila: 'west', colombo: 'west', toamasina: 'east', walvisbay: 'west', lisbon: 'west' };
 
 describe.each(Object.entries(HARBORS))('항구 %s 배치', (id, h) => {
   it('건물은 전부 육지이고 기준점에서 바다 반대쪽에 있다', () => {

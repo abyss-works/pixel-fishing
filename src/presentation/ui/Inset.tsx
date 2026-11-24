@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { HTMLAttributes, ReactNode } from 'react';
 import { cx } from './cx';
 
 // 오목한 칸 — 패널 표면 안을 한 단 파낸 자리. 노치는 프레임과 같고 베벨만 반전(눌림)해
@@ -7,17 +7,21 @@ import { cx } from './cx';
 // tone은 파낸 깊이(바닥 밝기)다 — deep은 바탕색, base(기본)는 바탕과 표면의 중간, light는 표면에 가깝다.
 const TONE = {
   deep: 'bg-bg',
-  base: 'bg-[color-mix(in_oklab,var(--c-bg)_45%,var(--c-surface))]',
-  light: 'bg-[color-mix(in_oklab,var(--c-surface)_60%,var(--c-surface-2))]',
+  base: 'bg-(--inset-base)',
+  light: 'bg-(--inset-light)',
 } as const;
 
-export default function Inset({ tone = 'base', divided, className, children }: {
-  tone?: keyof typeof TONE; divided?: boolean; className?: string; children: ReactNode;
-}) {
+type InsetTag = 'div' | 'li' | 'section';
+
+export default function Inset({ as: Tag = 'div', tone = 'base', title, divided, borderless, className, children, ...rest }: {
+  as?: InsetTag; tone?: keyof typeof TONE; title?: string; divided?: boolean; borderless?: boolean; className?: string; children?: ReactNode;
+} & Omit<HTMLAttributes<HTMLElement>, 'title'>) {
   return (
-    <div className={cx('pf-notch shadow-[inset_2px_2px_0_var(--bevel-hi),inset_-1px_-1px_0_var(--bevel-lo)]',
-                       TONE[tone], divided && 'divide-y divide-line', className)}>
+    <Tag className={cx('pf-notch shadow-[inset_1px_1px_0_var(--bevel-hi),inset_-1px_-1px_0_var(--bevel-lo)]',
+                       !borderless && 'border border-line',
+                       TONE[tone], divided && 'divide-y divide-line', className)} {...rest}>
+      {title && <h3 className="pf-accent text-base text-gold">{title}</h3>}
       {children}
-    </div>
+    </Tag>
   );
 }

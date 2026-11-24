@@ -17,7 +17,7 @@ const sample: BalanceLive = {
   boats: [{ boat: 0, users: 5 }, { boat: 6, users: 2 }],
   rodBuckets: [{ fromLevel: 16, users: 2 }],
   gold: { p25: 0, p50: 120, p75: 1209, p90: 980553, max: 6061422 },
-  goldFlow: { sellGold: 6165488, couponGold: 0, mailGold: 0, rodCost: 5873757, boatCost: 300300, baitCost: 0 },
+  goldFlow: { sellGold: 6165488, couponGold: 0, mailGold: 0, bountyGold: 0, achievementGold: 0, rodCost: 5873757, boatCost: 300300, hatCost: 0 },
   dau: [{ day: '2026-10-18', dau: 13 }],
   churn: [{ boat: 6, users: 1, avgFame: 202708, avgRod: 19 }],
   bountyFunnel: { namedAccepts: 2, tickets: 1, duelsWon: 1, duelsLost: 0, generalAccepts: 6, delivered: 1 },
@@ -31,7 +31,7 @@ describe('밸런스 라이브 지표 구역', () => {
   it('조회 결과를 해역·배 이름과 함께 표로 옮긴다', () => {
     state.data = sample;
     render(<BalanceLiveSection granted />);
-    expect(screen.getByText('태평양')).toBeInTheDocument();
+ expect(screen.getByText('태평양 연안')).toBeInTheDocument();
     expect(screen.getByText('기록 없음')).toBeInTheDocument();
     expect(screen.getByText('6,165,488G')).toBeInTheDocument();
     expect(screen.getByText('—', { selector: 'span' })).toBeInTheDocument(); // PERFECT 비율 빈 값

@@ -82,19 +82,33 @@ export interface SalePreview {
   total: Stat;
 }
 
-/** 기본 판매액에 길드 판매가 보너스를 더한 내역 — 서버 판매와 같은 증가분 규칙(saleBonusOf)을 쓴다. */
-export function saleProceeds(base: number, sellBonus: number): Stat {
-  const delta = saleBonusOf(base, sellBonus);
+/** 기본 판매액에 길드·업적 판매가 보너스를 더한 내역 — 서버 판매와 같은 증가분 규칙(saleBonusOf)을 쓴다. */
+export function saleProceeds(base: number, sellBonus: number, achSellBonus = 0): Stat {
+  const totalBonus = Math.round((sellBonus + achSellBonus) * 1e9) / 1e9;
+  const totalDelta = saleBonusOf(base, totalBonus);
+  const mods: Stat['mods'] = [];
+  if (sellBonus > 0) {
+    const d = saleBonusOf(base, sellBonus);
+    if (d > 0) mods.push({ id: 'guild-sell', label: GUILD_BONUS_NAME.sell, delta: d });
+  }
+  if (achSellBonus > 0) {
+    const d = saleBonusOf(base, achSellBonus);
+    if (d > 0) mods.push({ id: 'achievement-sellBonus', label: '업적 누적', delta: d });
+  }
+  if (mods.length > 0) {
+    const rest = mods.slice(0, -1).reduce((sum, mod) => sum + mod.delta, 0);
+    mods[mods.length - 1].delta = totalDelta - rest;
+  }
   return {
     base,
-    mods: delta === 0 ? [] : [{ id: 'guild-sell', label: GUILD_BONUS_NAME.sell, delta }],
-    value: base + delta,
+    mods,
+    value: base + totalDelta,
   };
 }
 
 /** 가방의 잠금·선택 제외 상태를 반영한 판매 대상과 합계를 만든다. sellBonus는 길드 판매가 보너스 비율이다. */
 export function selectSalePreview(
-  bag: readonly FishInstance[], excluded: ReadonlySet<string>, sellBonus: number,
+  bag: readonly FishInstance[], excluded: ReadonlySet<string>, sellBonus: number, achSellBonus = 0,
 ): SalePreview {
   const rows = groupInstances(bag).map((row): SaleRow => {
     const sellable = row.items.filter(instance => !instance.locked);
@@ -123,6 +137,6 @@ export function selectSalePreview(
   return {
     rows,
     soldUids,
-    total: saleProceeds(rows.reduce((total, row) => total + row.selectedSubtotal, 0), sellBonus),
+    total: saleProceeds(rows.reduce((total, row) => total + row.selectedSubtotal, 0), sellBonus, achSellBonus),
   };
 }

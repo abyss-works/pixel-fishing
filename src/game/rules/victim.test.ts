@@ -70,6 +70,24 @@ describe('피해자 선정 동등성', () => {
     expect(overflowUids([...bag, fresh], bag.length)).toEqual(['new']);
   });
 
+  it('pickEvict — 새 개체가 자동 잠금되면 보호되고, 방금 해제된 기존 개체가 초과 후보에 합류한다', () => {
+    const lockedFresh = mk('new', 'minnow', 'normal', 1, true);
+    const unlockedPrev = mk('prev', 'minnow', 'normal', 2, false);
+    const bag = [mk('a', 'carp', 'normal', 50, false), mk('b', 'shark', 'normal', 500, true)];
+    // 새 개체가 가장 안 특별해도 잠겼으므로 기존 후보 중 가장 안 특별한 unlockedPrev를 내보낸다
+    expect(pickEvict(tierTops(bag), lockedFresh, unlockedPrev)).toEqual({ evictUid: 'prev', evictNew: false });
+    expect(overflowUids([...bag, unlockedPrev, lockedFresh], bag.length + 1)).toEqual(['prev']);
+
+    // 기존 가방이 전부 잠겨 있었어도 unlockedPrev가 초과 후보가 된다
+    const allLocked = [mk('b', 'shark', 'normal', 500, true)];
+    expect(pickEvict(tierTops(allLocked), lockedFresh, unlockedPrev)).toEqual({ evictUid: 'prev', evictNew: false });
+    expect(overflowUids([...allLocked, unlockedPrev, lockedFresh], allLocked.length + 1)).toEqual(['prev']);
+
+    // 새 개체가 잠겼고 기존 해제 개체도 없으며 가방에 다른 미잠금 개체만 있으면 그 미잠금 개체를 내보낸다
+    expect(pickEvict(tierTops(bag), lockedFresh, null)).toEqual({ evictUid: 'a', evictNew: false });
+    expect(overflowUids([...bag, lockedFresh], bag.length)).toEqual(['a']);
+  });
+
   it('nextDexRec가 addCatch 도감 갱신과 같다', () => {
     expect(nextDexRec(undefined, 20, '2026-01-01'))
       .toEqual({ count: 1, maxSize: 20, first: '2026-01-01' });

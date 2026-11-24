@@ -51,6 +51,28 @@ describe('patch 동등성 — 전 액션', () => {
   it('setLocked — 일괄 지정', () => {
     check(seed({ bag: [mkInst('a'), mkInst('b')] }), { type: 'setLocked', uids: ['a', 'b'], locked: true });
   });
+  it('autoLock / setAutoLockOnCatch — 추적 맵과 토글 스칼라 동기화', () => {
+    check(seed({ bag: [mkInst('a', 'carp', 'normal', true), { ...mkInst('b', 'carp'), size: 40 }] }), { type: 'autoLock' });
+    check(seed(), { type: 'setAutoLockOnCatch', on: true });
+  });
+  it('catch — 토글식 자동 잠금 교체 및 가방 초과 시 기존 자동 잠금 방생 델타 일치', () => {
+    const probe = applyAction(seed(), { type: 'catch', spot: 'pond', judgment: 'normal' }, deps());
+    if (!probe.ok) throw new Error(probe.error);
+    const target = probe.state.bag[0];
+    const prevAuto = { ...mkInst('prev-auto', target.fishId, target.form, true), size: 1 };
+    check(seed({
+      autoLockOnCatch: true,
+      bag: [prevAuto],
+      autoLockedIds: { [`${target.fishId}|${target.form}`]: prevAuto.uid },
+    }), { type: 'catch', spot: 'pond', judgment: 'normal' });
+
+    const fillers = Array.from({ length: WALK_BAG_CAP - 1 }, (_, i) => mkInst(`f${i}`, 'carp', 'normal', true));
+    check(seed({
+      autoLockOnCatch: true,
+      bag: [prevAuto, ...fillers],
+      autoLockedIds: { [`${target.fishId}|${target.form}`]: prevAuto.uid },
+    }), { type: 'catch', spot: 'pond', judgment: 'normal' });
+  });
   it('upgradeRod / buyBoat — 스칼라만', () => {
     check(seed({ gold: 1e9 }), { type: 'upgradeRod' });
     check(seed({ gold: 1e9, fame: 0 }), { type: 'buyBoat' });
@@ -84,6 +106,23 @@ describe('patch 동등성 — 전 액션', () => {
   });
   it('debug dex.completeZone — 도감 행이 델타로 표현된다', () => {
     check(seed(), { type: 'debug', command: 'dex.completeZone', args: { zone: 'pacific' } });
+  });
+  it('debug dex.reset / named.unlock / named.reset / snapshot.restore — 도감 삭제·카운터·토벌 델타가 일치한다', () => {
+    const rich = seed({
+      dex: {
+        carp: { normal: { count: 2, maxSize: 30, first: '2026-08-01' } },
+        megalodon: { normal: { count: 1, maxSize: null, first: '2026-08-01' } },
+      },
+      clearedNamed: ['pacific-named-megalodon'],
+      achievementCounters: { 'sell.gold': 500 },
+    });
+    check(rich, { type: 'debug', command: 'dex.reset', args: { zone: 'village', includeNamed: false } });
+    check(rich, { type: 'debug', command: 'named.reset', args: { namedId: 'megalodon' } });
+    check(seed(), { type: 'debug', command: 'named.unlock', args: { namedId: 'megalodon' } });
+    check(seed(), { type: 'debug', command: 'bag.spawn', args: { fishId: 'carp', form: 'variant', count: 2 } });
+    check(rich, { type: 'debug', command: 'achievement.setCounter', args: { key: 'sell.gold', value: 1200 } });
+    check(rich, { type: 'debug', command: 'achievement.resetCounters', args: { resetAchievements: true } });
+    check(rich, { type: 'debug', command: 'snapshot.restore', args: { snapshot: seed({ gold: 42 }) } });
   });
   it('import — 통째 교체도 델타로 표현된다', () => {
     const prev = seed({ bag: [mkInst('a')], gold: 10 });

@@ -6,37 +6,45 @@ import { AdminAuthCtx } from '../../../../features/admin/service/accessContext';
 import { api } from '../../../../platform/api';
 import OverviewTab from './OverviewTab';
 
+const sampleOverview = () => ({
+  users: [
+    { user_id: 'u1', email: 'a@example.com', restricted: true, is_anonymous: false,
+      signed_up_at: '2026-11-05T01:00:00Z', last_action_at: '2026-11-05T02:00:00Z', last_session_at: null },
+    { user_id: 'u2', email: 'b@example.com', restricted: false, is_anonymous: true,
+      signed_up_at: '2026-10-01T00:00:00Z', last_action_at: '2026-11-01T00:00:00Z', last_session_at: null },
+    { user_id: 'u3', email: null, restricted: false, is_anonymous: true,
+      signed_up_at: '2026-09-01T00:00:00Z', last_action_at: '2026-10-20T00:00:00Z', last_session_at: null },
+  ],
+  recentEvents: [{
+    id: 1, user_id: 'u1-aaaaaaaa-bbbb', type: 'catch',
+    payload: { fishId: 'x', judgment: 'good', size: 12.3, spot: 's' }, created_at: '2026-11-05T02:00:00Z',
+  }],
+  spamFlags: [{
+    user_id: 'u1', catches_7d: 40, fast_gap_7d: 3, perfect_pct: 10, perfect_pct_global: 10,
+  }],
+  live: { count: 4, online: [] },
+  dailyStats: [{
+    day: '2026-11-04', dau: 6, newUsers: 1, newAccounts: 0, sessions: 9, sessionMinutes: 90,
+    medianSessionMinutes: 7, catches: 50, goldIn: 2000, goldOut: 500, actions: 120,
+  }],
+  retention: [
+    { day: '2026-11-04', size: 2, d1: null, d7: null, d30: null },
+    { day: '2026-11-03', size: 4, d1: 0.5, d7: null, d30: null },
+  ],
+  sessions: [
+    { id: 2, userId: 'u1', nick: null, startedAt: '2026-11-05T01:00:00Z', endedAt: '2026-11-05T01:20:00Z', durationSec: 1200 },
+    { id: 1, userId: 'u2', nick: null, startedAt: '2026-11-05T00:00:00Z', endedAt: '2026-11-05T00:40:00Z', durationSec: 2400 },
+  ],
+});
+
 vi.mock('../../../../platform/api', () => ({
   api: {
     admin: {
-      users: vi.fn(async () => [
-        { user_id: 'u1', email: 'a@example.com', restricted: true, is_anonymous: false,
-          signed_up_at: '2026-11-05T01:00:00Z', last_action_at: '2026-11-05T02:00:00Z', last_session_at: null },
-        { user_id: 'u2', email: 'b@example.com', restricted: false, is_anonymous: true,
-          signed_up_at: '2026-10-01T00:00:00Z', last_action_at: '2026-11-01T00:00:00Z', last_session_at: null },
-        { user_id: 'u3', email: null, restricted: false, is_anonymous: true,
-          signed_up_at: '2026-09-01T00:00:00Z', last_action_at: '2026-10-20T00:00:00Z', last_session_at: null },
-      ]),
-      recentEvents: vi.fn(async () => [{
-        id: 1, user_id: 'u1-aaaaaaaa-bbbb', type: 'catch',
-        payload: { fishId: 'x', judgment: 'good', size: 12.3, spot: 's' }, created_at: '2026-11-05T02:00:00Z',
-      }]),
-      spamFlags: vi.fn(async () => [{
-        user_id: 'u1', catches_7d: 40, fast_gap_7d: 3, perfect_pct: 10, perfect_pct_global: 10,
-      }]),
-      live: vi.fn(async () => ({ count: 4, online: [] })),
+      overview: vi.fn(async () => sampleOverview()),
       dailyStats: vi.fn(async () => [{
         day: '2026-11-04', dau: 6, newUsers: 1, newAccounts: 0, sessions: 9, sessionMinutes: 90,
         medianSessionMinutes: 7, catches: 50, goldIn: 2000, goldOut: 500, actions: 120,
       }]),
-      retention: vi.fn(async () => [
-        { day: '2026-11-04', size: 2, d1: null, d7: null, d30: null },
-        { day: '2026-11-03', size: 4, d1: 0.5, d7: null, d30: null },
-      ]),
-      sessions: vi.fn(async () => [
-        { id: 2, userId: 'u1', nick: null, startedAt: '2026-11-05T01:00:00Z', endedAt: '2026-11-05T01:20:00Z', durationSec: 1200 },
-        { id: 1, userId: 'u2', nick: null, startedAt: '2026-11-05T00:00:00Z', endedAt: '2026-11-05T00:40:00Z', durationSec: 2400 },
-      ]),
     },
   },
 }));
@@ -85,7 +93,9 @@ describe('개요 탭', () => {
     expect(screen.getByRole('img', { name: '최근 30일 일별 평균 세션 길이(분)' })
       .querySelector('[title="11-04: 10분"]')).not.toBeNull();
     expect(screen.getByText(/최근 30일 중 1일이 집계되어 있어요/)).toBeInTheDocument();
-    expect(vi.mocked(api.admin.dailyStats)).toHaveBeenCalledWith('2026-10-07', '2026-11-05');
+    expect(vi.mocked(api.admin.overview)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(api.admin.overview)).toHaveBeenCalledWith(30);
+    expect(vi.mocked(api.admin.dailyStats)).not.toHaveBeenCalled();
 
     // 위험 신호 — 제재 1건, 연타 1명. 신호가 있으면 이상탐지 안내가 붙는다
     const risk = screen.getByText('위험 신호').closest('section')!;
@@ -107,6 +117,6 @@ describe('개요 탭', () => {
     expect(within(tile('오늘 DAU')).getByText('—')).toBeInTheDocument();
     expect(within(tile('지금 접속')).getByText('—')).toBeInTheDocument();
     expect(screen.getAllByText('운영 DB에 연결하면 채워져요.').length).toBeGreaterThan(0);
-    expect(vi.mocked(api.admin.users)).not.toHaveBeenCalled();
+    expect(vi.mocked(api.admin.overview)).not.toHaveBeenCalled();
   });
 });

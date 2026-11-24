@@ -63,6 +63,7 @@ export const events = pgTable('events', {
   type: text('type').notNull(),
   payload: jsonb('payload').notNull(),
   createdAt: at('created_at').notNull().defaultNow(),
+  counted: boolean('counted').notNull().default(false),
 });
 
 export const letters = pgTable('letters', {
@@ -148,3 +149,10 @@ export const bountyClears = pgTable('bounty_clears', {
   questId: text('quest_id').notNull(),
   clearedAt: at('cleared_at').notNull().defaultNow(),
 });
+
+export const achievementCounters = pgTable('achievement_counters', {
+  userId: uuid('user_id').notNull(),
+  key: text('key').notNull(),
+  value: bigint('value', { mode: 'number' }).notNull().default(0),
+  updatedAt: at('updated_at').notNull().defaultNow(),
+}, t => [primaryKey({ columns: [t.userId, t.key] })]);

@@ -3,10 +3,12 @@ import { REJECT_TEXT, freeExhibitSlot, instanceFish, formName } from '../../../.
 import AdjustedAmount from '../../../../ui/AdjustedAmount';
 import PageTitle from '../../../../ui/PageTitle';
 import Subheading from '../../../../ui/Subheading';
-import { fmtGold, fmtSize, josa } from '../../../../ui/format';
+import { fmtGold, fmtNum, fmtSize, josa } from '../../../../ui/format';
 import type { Notify } from '../../../../ui/hud/messageFeed';
 import { EXHIBIT_SLOTS } from '../../../../../game/rules/balance';
 import { selectBagOverview } from '../../../../../features/inventory/model/selectors';
+import type { AccountLockState } from '../../../../../features/display/model/menuLock';
+import { sendNotice } from '../../../../../features/display/model/toastPolicy';
 import type { FishInstance, GameState } from '../../../../../game/rules/logic';
 import type { GameAction } from '../../../../../game/rules/actions';
 import { when } from '../../../../../shared/lib/when';
@@ -16,8 +18,8 @@ import Note from '../../../../ui/Note';
 import ConfirmDialog from '../../../../ui/ConfirmDialog';
 import FishSprite from '../../../../ui/fish/FishSprite';
 import PixelIcon from '../../../../ui/PixelIcon';
+import Button from '../../../../ui/Button';
 import IconButton from '../../../../ui/IconButton';
-import PillButton from '../../../../ui/PillButton';
 import Tip from '../../../../ui/Tip';
 import SubTabs from '../../../../ui/SubTabs';
 import { RarityDot, RarityText } from '../../../../ui/fish/RarityTag';
@@ -30,8 +32,8 @@ import type { BagLayout } from './bagView';
 import { levelText, selectArtifactLevel } from '../../../../../features/inventory/model/artifactLevel';
 import { selectOwnedArtifacts } from '../../../../../features/inventory/model/selectors';
 import { ARTIFACTS } from '../../../../../game/content/artifacts';
-import { artifactEffectLines } from '../../../../ui/artifactEffects';
-import Frame from '../../../../ui/Frame';
+import { artifactEffectLines, artifactSystemLines } from '../../../../ui/artifactEffects';
+import Inset from '../../../../ui/Inset';
 import PressRow from '../../../../ui/PressRow';
 import ArtifactDetail from './ArtifactDetail';
 import ItemSection from './ItemSection';
@@ -77,9 +79,10 @@ function ArtifactSection({ game, dispatch, setToast }: {
         <Note>아직 유물이 없어요.<br />네임드를 토벌하고 받은 교환 재료를 수배판의 유물 탭에서 유물로 바꿔 보세요.</Note>
       ) : (
         <>
-          <Frame divided>
+          <Inset divided>
             {owned.map(a => {
               const { level, hasLevel } = selectArtifactLevel(game, a);
+              const { bonus, penalty } = artifactSystemLines(a);
               return (
                 <PressRow key={a.id} onPress={() => setOpenId(a.id)} className="flex flex-col gap-0.5 px-2 py-1.5 text-sm">
                   <span className="flex items-baseline justify-between gap-2">
@@ -92,11 +95,13 @@ function ArtifactSection({ game, dispatch, setToast }: {
                   {artifactEffectLines(a, level).map(line => (
                     <span key={line} className="text-accent text-xs">{line}</span>
                   ))}
+                  {bonus && <span className="text-accent text-xs">{bonus}</span>}
+                  {penalty && <span className="text-danger text-xs">{penalty}</span>}
                   <span className="text-text-dim italic text-xs">{a.lore}</span>
                 </PressRow>
               );
             })}
-          </Frame>
+          </Inset>
           <Note>유물은 가지고만 있어도 효과가 계속돼요.<br />교환은 항구 수배판의 유물 탭에서 할 수 있어요.</Note>
         </>
       )}
@@ -120,7 +125,7 @@ function ExhibitShelf({ exhibit, onWithdraw }: {
       <Subheading>
         전시대 <span className="pf-accent">{shown}/{EXHIBIT_SLOTS}</span>
       </Subheading>
-      <Frame divided>
+      <Inset divided>
         {slots.map((inst, i) => {
           if (!inst) return <div key={i} className="px-2 py-1.5 text-xs text-text-dim">빈 칸</div>;
           const fish = instanceFish(inst);
@@ -136,24 +141,26 @@ function ExhibitShelf({ exhibit, onWithdraw }: {
                 {inst.size === null ? '미상' : fmtSize(inst.size)}
               </span>
               <Tip wraps text="가방으로 되돌려요">
-                <PillButton aria-label={`${name} 회수`} onClick={() => onWithdraw(inst, name)}>
+                <Button size="sm" aria-label={`${name} 회수`} onClick={() => onWithdraw(inst, name)}>
                   회수
-                </PillButton>
+                </Button>
               </Tip>
             </div>
           );
         })}
-      </Frame>
+      </Inset>
     </div>
   );
 }
 
-export default function BagTab({ game, guest = false, sellBonus, dispatch, setToast }: {
+export default function BagTab({ game, accountState = 'account', sellBonus, bagBonus = 0, dispatch, setToast }: {
   game: GameState;
-  /** 계정을 연결하지 않아 요리가 닫힌 게스트인가 - 아이템 섹션의 잠금 사유를 정한다 */
-  guest?: boolean;
+  /** 잠금 판정에 쓰는 계정 상태 - 아이템 섹션의 잠금 사유를 정한다 */
+  accountState?: AccountLockState;
   /** 길드 판매가 보너스 비율 - 서버가 알려 준 값. 길드가 없으면 0 */
   sellBonus: number;
+  /** 길드 가방 용량 보너스 비율 - 서버가 알려 준 값. 길드가 없으면 0 */
+  bagBonus?: number;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
 }) {
@@ -161,34 +168,41 @@ export default function BagTab({ game, guest = false, sellBonus, dispatch, setTo
   const {
     count: bagCount, cap, full: bagFull, sellable,
     autoLock: autoLockPlan,
-  } = selectBagOverview(game, sellBonus);
+  } = selectBagOverview(game, sellBonus, bagBonus);
   const [lockConfirm, setLockConfirm] = useState(false);
   const { layout, section, opened } = useBagView();
 
   const lock = (uids: string[], locked: boolean, label: string) =>
     when(dispatch({ type: 'setLocked', uids, locked }), r => {
       if (r.status !== 'ok') return;
-      setToast(locked
-        ? `${josa(label, '을/를')} 잠갔어요. 판매와 기운 얻기에서 빠져요.`
-        : `${label}의 잠금을 풀었어요. 다시 고를 수 있어요.`);
+      sendNotice(setToast, {
+        kind: 'bag.lockChanged',
+        text: locked
+          ? `${josa(label, '을/를')} 잠갔어요. 판매와 기운 얻기에서 빠져요.`
+          : `${label}의 잠금을 풀었어요. 다시 고를 수 있어요.`,
+      });
     });
 
   // 전시대 — 칸 선택은 freeExhibitSlot(가장 앞 빈 칸)이 대신한다. 다 찼으면 요청 없이 안내만.
   const exhibitTo = (inst: FishInstance, name: string) => {
     const slot = freeExhibitSlot(game.exhibit);
     if (slot === null) {
-      setToast('전시대가 가득 찼어요. 먼저 한 마리를 회수해 주세요.', 'warn');
+      sendNotice(setToast, {
+        kind: 'system.modalRejected',
+        text: '전시대가 가득 찼어요. 먼저 한 마리를 회수해 주세요.',
+        toastText: '전시대가 가득 찼어요.',
+      });
       return;
     }
     when(dispatch({ type: 'exhibit', uid: inst.uid, slot }), r => {
-      if (r.status === 'ok') setToast(`${josa(name, '을/를')} 진열했어요. 전시 중에는 팔리지 않아요.`);
-      else if (r.status === 'rejected') setToast(REJECT_TEXT[r.error], 'warn');
+      if (r.status === 'ok') sendNotice(setToast, { kind: 'bag.exhibitMoved', text: `${josa(name, '을/를')} 진열했어요. 전시 중에는 팔리지 않아요.` });
+      else if (r.status === 'rejected') sendNotice(setToast, { kind: 'system.modalRejected', text: REJECT_TEXT[r.error] });
     });
   };
   const withdraw = (inst: FishInstance, name: string) =>
     when(dispatch({ type: 'exhibit', uid: inst.uid, slot: null }), r => {
-      if (r.status === 'ok') setToast(`${josa(name, '이/가')} 가방으로 돌아왔어요.`);
-      else if (r.status === 'rejected') setToast(REJECT_TEXT[r.error], 'warn');
+      if (r.status === 'ok') sendNotice(setToast, { kind: 'bag.exhibitMoved', text: `${josa(name, '이/가')} 가방으로 돌아왔어요.` });
+      else if (r.status === 'rejected') sendNotice(setToast, { kind: 'system.modalRejected', text: REJECT_TEXT[r.error] });
     });
 
   // 자동 잠금 — 어종×폼(일반/돌연변이)마다 가장 큰 1마리만 잠긴 상태로 맞춘다(logic.autoLockPlan).
@@ -196,7 +210,10 @@ export default function BagTab({ game, guest = false, sellBonus, dispatch, setTo
   // 서버가 현재 가방으로 계획을 다시 계산한다. 변할 게 없으면 요청 없이 안내만.
   const autoLock = () => {
     if (autoLockPlan.lock.length === 0 && autoLockPlan.unlock.length === 0) {
-      setToast('정리할 잠금이 없어요. 어종마다 가장 큰 물고기만 잠겨 있어요.');
+      sendNotice(setToast, {
+        kind: 'bag.lockChanged',
+        text: '정리할 잠금이 없어요. 어종마다 가장 큰 물고기만 잠겨 있어요.',
+      });
       return;
     }
     setLockConfirm(true);
@@ -206,16 +223,19 @@ export default function BagTab({ game, guest = false, sellBonus, dispatch, setTo
     setLockConfirm(false);
     when(dispatch({ type: 'autoLock' }), r => {
       if (r.status !== 'ok') return;
-      setToast(unlock.length === 0
-        ? `가장 큰 물고기 ${lock.length}마리를 잠갔어요.`
-        : `가장 큰 물고기만 남기고 정리했어요. ${lock.length}마리를 잠그고 ${unlock.length}마리의 잠금을 풀었어요.`);
+      sendNotice(setToast, {
+        kind: 'bag.lockChanged',
+        text: unlock.length === 0
+          ? `가장 큰 물고기 ${lock.length}마리를 잠갔어요.`
+          : `가장 큰 물고기만 남기고 정리했어요. ${lock.length}마리를 잠그고 ${unlock.length}마리의 잠금을 풀었어요.`,
+      });
     });
   };
 
   return (
     <div>
       {section === 'items' ? (
-        <ItemSection game={game} guest={guest} dispatch={dispatch} setToast={setToast} />
+        <ItemSection game={game} accountState={accountState} dispatch={dispatch} setToast={setToast} />
       ) : section === 'artifacts' ? (
         <ArtifactSection game={game} dispatch={dispatch} setToast={setToast} />
       ) : (
@@ -232,15 +252,15 @@ export default function BagTab({ game, guest = false, sellBonus, dispatch, setTo
           {/* 헤더 — 용량 표시(좌) + 자동 잠금(우측 끝) */}
           <div className="flex items-center justify-between gap-2 mb-1">
             <PageTitle>
-              물고기 (<span className={cx(bagFull && 'text-danger')}>{bagCount}</span>
-              <span className="text-text-dim">/{cap}</span>마리)
+              물고기 (<span className={cx(bagFull && 'text-danger')}>{fmtNum(bagCount)}</span>
+              <span className="text-text-dim">/{fmtNum(cap)}</span>마리)
             </PageTitle>
             {bagCount > 0 && (
-              <Tip wraps text="어종마다 일반·돌연변이 각각 가장 큰 물고기 한 마리만 잠그고, 나머지 잠금은 풀어요">
-                <PillButton aria-label="자동 잠금" onClick={autoLock}>
+              <Tip wraps text="어종마다 일반과 돌연변이 각각 가장 큰 물고기 한 마리만 잠그고, 나머지 잠금은 풀어요">
+                <Button size="sm" aria-label="자동 잠금" onClick={autoLock} className="inline-flex items-center gap-1">
                   <PixelIcon glyph="lockOpen" size={12} />
                   자동 잠금
-                </PillButton>
+                </Button>
               </Tip>
             )}
           </div>
@@ -248,13 +268,16 @@ export default function BagTab({ game, guest = false, sellBonus, dispatch, setTo
             <ConfirmDialog title="자동 잠금" confirmLabel="정리"
                            onConfirm={applyAutoLock} onCancel={() => setLockConfirm(false)}>
                 <p className="text-sm leading-relaxed">
-                  어종마다 일반·돌연변이 각각 <b className="text-gold">가장 큰 물고기 한 마리만</b> 잠그고,
+                  어종마다 일반과 돌연변이 각각 <b className="text-gold">가장 큰 물고기 한 마리만</b> 잠그고,
                   나머지는 잠금이 풀려요.<br />
                   직접 잠근 물고기도 가장 크지 않으면 풀려요.
                 </p>
-                <p className="text-sm">
-                  잠금 <b className="pf-accent">{autoLockPlan.lock.length}</b>마리 · 잠금 해제{' '}
-                  <b className={cx('pf-accent', autoLockPlan.unlock.length > 0 && 'text-danger')}>{autoLockPlan.unlock.length}</b>마리
+                <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                  <span>잠금 <b className="pf-accent">{autoLockPlan.lock.length}</b>마리</span>
+                  <span>
+                    잠금 해제{' '}
+                    <b className={cx('pf-accent', autoLockPlan.unlock.length > 0 && 'text-danger')}>{autoLockPlan.unlock.length}</b>마리
+                  </span>
                 </p>
             </ConfirmDialog>
           )}
@@ -265,7 +288,7 @@ export default function BagTab({ game, guest = false, sellBonus, dispatch, setTo
             <Note>가방이 비어 있어요.<br />어군을 찾아 낚시해 보세요.</Note>
           ) : (
             <>
-              <Frame divided>
+              <Inset divided>
                 {rows.map(({ key, fish, name, items, subtotal, sized, unsized, maxByForm }) => {
                   const expanded = opened.has(key);
                   const uids = items.map(i => i.uid);
@@ -319,7 +342,7 @@ export default function BagTab({ game, guest = false, sellBonus, dispatch, setTo
                     </div>
                   );
                 })}
-              </Frame>
+              </Inset>
               <Note>
                 판매 가능 금액은 <AdjustedAmount amount={sellable} />이에요.<br />
                 판매는 집 궤짝이나 항구 어시장에서 할 수 있어요.<br />

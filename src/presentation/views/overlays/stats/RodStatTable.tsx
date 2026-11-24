@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react';
 import type { Stat } from '../../../../game/rules/stats';
 import { POWER_RULES, autoPenaltyHelpText } from '../../../../game/rules/stats';
+import { formatStatMods, formatStatValue } from '../../../../features/gameplay/model/statFormat';
 import type { StatsSpotRow, SpotFit } from '../../../../features/gameplay/model/stats';
 import { cx } from '../../../ui/cx';
+import KeyValueRow from '../../../ui/KeyValueRow';
 import Tip, { TipList } from '../../../ui/Tip';
 import { FIT_LABEL, FIT_TONE, goodText, idleRows, idleText } from './statsText';
 
@@ -10,18 +12,10 @@ import { FIT_LABEL, FIT_TONE, goodText, idleRows, idleText } from './statsText';
 // 보정이 있으면 값의 툴팁으로 내역을 본다. 바 시간(sweep)만 레벨과 파워에 무관한 절대치다.
 // 값은 스탯 선택자에서 오고 여기서 규칙을 재계산하지 않는다.
 
-/** 보정 내역 문장. 보정이 없으면 null */
-const modsText = (stat: Stat, unit: string, prefix = ''): string | null =>
-  stat.mods.length > 0
-    ? `기본 ${prefix}${stat.base.toFixed(1)}${unit}` +
-      stat.mods.map(m => ` ${m.delta >= 0 ? '+' : ''}${m.delta.toFixed(1)}${unit} (${m.label})`).join('') +
-      ` = ${prefix}${stat.value.toFixed(1)}${unit}`
-    : null;
-
-/** 값. 보정이 있으면 툴팁으로 보정 내역을 보인다 */
+/** 값. 보정이나 초과 유지가 있으면 툴팁으로 내역을 보인다 */
 export function StatValue({ stat, unit, digits = 1, prefix = '' }: { stat: Stat; unit: string; digits?: number; prefix?: string }) {
-  const value = `${prefix}${digits === 0 ? Math.round(stat.value) : stat.value.toFixed(digits)}${unit}`;
-  const detail = modsText(stat, unit, prefix);
+  const value = formatStatValue(stat.value, unit, digits, prefix);
+  const detail = formatStatMods(stat, unit, digits, prefix);
   return detail ? <Tip text={detail}>{value}</Tip> : <span>{value}</span>;
 }
 
@@ -35,12 +29,7 @@ const perfectText = (row: StatsSpotRow): string =>
 
 /** 한 줄: 이름은 왼쪽(보조색), 값은 오른쪽 */
 function RodStatLine({ label, children }: { label: ReactNode; children: ReactNode }) {
-  return (
-    <li className="flex items-center justify-between gap-2 h-[26px] text-xs [&+&]:border-t [&+&]:border-line/60">
-      <span className="text-text-dim">{label}</span>
-      <span className="pf-accent">{children}</span>
-    </li>
-  );
+  return <KeyValueRow as="li" compact label={label} value={children} valueClassName="pf-accent" />;
 }
 
 export default function RodStatTable({ row }: { row: StatsSpotRow }) {

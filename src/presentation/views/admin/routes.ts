@@ -1,7 +1,7 @@
-// 관리자 화면의 해시 경로 — 탭 일곱 개와 세 탭 안의 구역을 `#/admin/<탭>[/<구역>]`으로 주소화한다.
+// 관리자 화면의 해시 경로 — 탭 여덟 개와 세 탭 안의 구역을 `#/admin/<탭>[/<구역>]`으로 주소화한다.
 // 순수 함수만 두고, 주소를 바꾸는 일은 화면 셸이 맡는다.
 
-export type AdminTab = 'overview' | 'live' | 'players' | 'comms' | 'analysis' | 'balance' | 'ops';
+export type AdminTab = 'overview' | 'live' | 'players' | 'comms' | 'analysis' | 'balance' | 'content' | 'ops';
 
 /** 내비게이션 순서 = 확인 우선순위 */
 export const ADMIN_TABS: readonly { key: AdminTab; label: string }[] = [
@@ -11,6 +11,7 @@ export const ADMIN_TABS: readonly { key: AdminTab; label: string }[] = [
   { key: 'comms', label: '소통' },
   { key: 'analysis', label: '경제·진행' },
   { key: 'balance', label: '밸런스' },
+  { key: 'content', label: '콘텐츠' },
   { key: 'ops', label: '운영' },
 ];
 
@@ -37,7 +38,7 @@ export type AnalysisSection = (typeof ADMIN_SECTIONS.analysis)[number]['key'];
 
 /** 현재 화면 — 구역이 있는 탭은 구역까지 정해져 있다 */
 export type AdminRoute =
-  | { tab: 'overview' | 'live' | 'balance' | 'ops' }
+  | { tab: 'overview' | 'live' | 'balance' | 'content' | 'ops' }
   | { tab: 'players'; section: PlayersSection }
   | { tab: 'comms'; section: CommsSection }
   | { tab: 'analysis'; section: AnalysisSection };
@@ -52,7 +53,7 @@ export function parseAdminHash(hash: string): AdminRoute {
   const [, root, tab = '', section = ''] = hash.split('/');
   if (root !== 'admin') return DEFAULT_ROUTE;
   switch (tab) {
-    case 'overview': case 'live': case 'balance': case 'ops':
+    case 'overview': case 'live': case 'balance': case 'content': case 'ops':
       return { tab };
     case 'players':
       return { tab, section: pickSection(ADMIN_SECTIONS.players, section) };

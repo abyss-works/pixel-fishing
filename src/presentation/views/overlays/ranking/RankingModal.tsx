@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { pinnedMyRank } from '../../../../features/ranking/model/ranking';
 import { useRankingBoard } from '../../../../features/ranking/service/useRanking';
 import { cx } from '../../../ui/cx';
-import Frame from '../../../ui/Frame';
 import { fmtNum } from '../../../ui/format';
+import Inset from '../../../ui/Inset';
 import TableBox from '../../../ui/TableBox';
 import DataTable from '../../../ui/DataTable';
 import Modal from '../../../ui/Modal';
@@ -81,12 +81,13 @@ function RankingBoardView({ board, data, loading, failed, offline }: { board: Bo
       </TableBox>
       {/* 내 줄 자리: 목록 밖일 때만 채우고, 아니면 같은 높이로 비워 둔다 */}
       {mine ? (
-        <Frame className="h-9 shrink-0 grid grid-cols-[3.5rem_minmax(0,1fr)_110px] items-center px-3 bg-surface-2 text-accent text-sm"
+        <Inset tone="light" className="h-9 shrink-0 grid grid-cols-[3.5rem_minmax(0,1fr)_110px] items-center px-3 border-accent text-accent text-sm"
                aria-label="내 순위">
           <span className="pf-accent text-xs">{mine.rank}</span>
-          <b>나</b>
+          {/* 표의 닉네임 칸과 같은 왼쪽 여백 */}
+          <b className="pl-2">나</b>
           <span className="pf-accent text-xs text-right">{format(mine.value)}</span>
-        </Frame>
+        </Inset>
       ) : <div className="h-9 shrink-0" aria-hidden="true" />}
     </div>
   );

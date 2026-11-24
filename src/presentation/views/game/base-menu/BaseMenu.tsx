@@ -8,12 +8,13 @@ import { BASE_CANVAS_W, BASE_CANVAS_H } from '../../../../game/rendering/pixel/c
 import { useCanvasCover } from '../../../layouts/game-stage/canvasCover';
 import GameFrame from '../../../layouts/game-stage/GameFrame';
 import { facilityGuestAllowed, facilityProgress, menuLock } from '../../../../features/display/model/menuLock';
+import type { AccountLockState } from '../../../../features/display/model/menuLock';
 import { cx } from '../../../ui/cx';
 import { STACK_MENU_CLASS } from '../../../ui/hud/stackTier';
 import { useMobileLayout } from '../../../layouts/useMobileLayout';
 import NightOverlay from '../../../ui/hud/NightOverlay';
 import MenuCard from '../../../ui/MenuCard';
-import Panel from '../../../ui/Panel';
+import Inset from '../../../ui/Inset';
 import FacilityIcon from './FacilityIcon';
 import BoatSprite from '../../../ui/BoatSprite';
 import { BUILDING_SPRITES, FURNITURE_SPRITES } from '../../../../game/rendering/pixel/sprites/buildings.js';
@@ -26,8 +27,8 @@ interface Props {
   onFacility?: (id: FurnitureId) => void;
   /** 켜면 이동 구역의 카드(마을행, 빠른 이동, 승선)를 비활성으로 둔다. 정보와 상점 카드는 그대로 눌린다 */
   locked?: boolean;
-  /** 계정을 연결하지 않은 게스트. 게스트에게 닫힌 카드는 잠금 카드로 보인다 */
-  guest?: boolean;
+  /** 잠금 판정에 쓰는 계정 상태. 계정 전용 카드는 게스트나 확인 실패 상태에서 잠금 카드로 보인다 */
+  accountState?: AccountLockState;
 }
 
 // 집 아이콘(마을로 돌아가는 여객선 카드) — 마을 필드의 집 건물 스프라이트를 쓴다
@@ -56,7 +57,7 @@ const SECTION_OF: Record<FurnitureId, (typeof SECTIONS)[number]> = {
 // 메뉴 영역은 PC 레이아웃 한 행 단계에서 16:9 프레임 전체, 모바일 레이아웃에서 헤더 아래부터 탭 줄 위까지(게임 영역)다.
 // PC 레이아웃은 모든 폭 단계에서 영역 위쪽을 헤더 높이만큼 비워(STACK_MENU_CLASS) 모바일처럼 헤더 아래 위쪽부터 카드가 놓인다.
 // 거점 Canvas 화면과 같은 속성을 받으며, 거점 데이터와 가구 스프라이트를 읽기만 한다.
-export default function BaseMenu({ base, game, onFacility, locked, guest = false }: Props) {
+export default function BaseMenu({ base, game, onFacility, locked, accountState = 'account' }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const covered = useCanvasCover();
   const mobile = useMobileLayout();
@@ -81,11 +82,12 @@ export default function BaseMenu({ base, game, onFacility, locked, guest = false
               const items = pack.furniture.filter(f => SECTION_OF[f.id] === section);
               if (items.length === 0) return null;
               return (
-                <Panel key={section} title={section}>
+                <Inset key={section} title={section}
+                       className="p-2 flex flex-col gap-2 bg-[color-mix(in_oklab,var(--c-bg)_72%,transparent)] backdrop-blur-[4px]">
                   <div className="flex gap-2">
                     {items.map(f => {
                       const { title, sub } = f.label(info);
-                      const lock = menuLock({ guest, guestAllowed: facilityGuestAllowed(f.id), feature: title,
+                      const lock = menuLock({ account: accountState, guestAllowed: facilityGuestAllowed(f.id), feature: title,
                                            progress: facilityProgress(f.id, game.boat) });
                       return (
                         <MenuCard key={f.id} data-facility={f.id} onClick={() => onFacility?.(f.id)}
@@ -96,7 +98,7 @@ export default function BaseMenu({ base, game, onFacility, locked, guest = false
                       );
                     })}
                   </div>
-                </Panel>
+                </Inset>
               );
             })}
           </div>

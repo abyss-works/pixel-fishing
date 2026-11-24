@@ -2,11 +2,11 @@ import { Fragment, useMemo, useState } from 'react';
 import { FISH, RARITY, SPOTS } from '../../../../game/rules/logic';
 import {
   buildFishDeltaExport, buildFishSnapshotExport, countSimulationOverrides,
-  hasSpotSimulationOverride, resetSpotPriceOverrides, selectBaseRarityWeight, selectSpotBudgets,
-  selectDeltaValues, selectFishForSpot, selectSpotAxisEvs, selectSpotDraws,
-  SIM_AXES, stepPercent,
+  filterSpots, hasSpotSimulationOverride, resetSpotPriceOverrides, selectBaseRarityWeight, selectSpotBudgets,
+  selectDeltaValues, selectFishForSpot, selectSpotAxisEvs, selectSpotDraws, selectSpotNightDraws,
+  SIM_AXES, SPOT_RARITY_OPTIONS, SPOT_ZONE_OPTIONS, stepPercent,
 } from '../../../../features/admin/model/fishSimulation';
-import type { AxisEvs, SimOverrides } from '../../../../features/admin/model/fishSimulation';
+import type { AxisEvs, SimOverrides, SpotRarityFilter } from '../../../../features/admin/model/fishSimulation';
 import DataTable from '../../../ui/DataTable';
 import Inset from '../../../ui/Inset';
 import Note from '../../../ui/Note';
@@ -14,7 +14,9 @@ import { useDialogs } from '../../../ui/useDialogs';
 import PixelIcon from '../../../ui/PixelIcon';
 import IconButton from '../../../ui/IconButton';
 import PillButton from '../../../ui/PillButton';
+import Select from '../../../ui/Select';
 import Subheading from '../../../ui/Subheading';
+import TableBox from '../../../ui/TableBox';
 import TextInput from '../../../ui/TextInput';
 import TitledCell from '../../../ui/TitledCell';
 import { FishSpriteThumb } from './FishSpriteThumb';
@@ -22,13 +24,13 @@ import { cx } from '../../../ui/cx';
 
 // 시뮬레이션 구역 — **수역 단위 통합 대시보드**. 한 칸 안에 편집과 통계가 같이 산다. 어종별 데이터와 통계치를 나누지 않아 수치를 조절하면 그 자리에서 즉시 읽힌다.
 //
-//   [칸 제목] 해역명 · 요구 파워 · 배 단계 + 접기 토글, 오버라이드가 있을 때 수역 초기화 버튼
+//   [칸 제목] 해역명 · 요구 파워 · 배 단계 + 접기 토글(기본 접힘), 오버라이드가 있을 때 수역 초기화 버튼
 //   [왼쪽]   축별 EV 요약 띠(5축 + 지역 내 Δ + Δ직전) — 좁은 화면에서는 위에 놓인다
 //   [오른쪽] 어종 행 — 등급/예산·가격·개체가중치는 인라인 편집(오버라이드), 확률은 실시간
 //
 // 오버라이드는 저장 안 됨(새로고침 초기화). 확정 변경은 어종 데이터·수역 데이터 수정이 정본이다.
 
-const SPOT_KEY = 'admin-spots-open';
+const SPOT_KEY = 'admin-spots-expanded';
 
 /** Δ 셀 — **비율(%)이 본체**다(절대치는 꼭 필요한 곳만). prev=null은 '—' */
 function Delta({ prev, cur }: { prev: number | null; cur: number }) {
@@ -48,6 +50,15 @@ export default function FishTab() {
   const [sbBudgets, setSbBudgets] = useState<SimOverrides['budgets']>({});
   const [sbFish, setSbFish] = useState<Record<string, Record<string, number>>>({});
   const [sbPrice, setSbPrice] = useState<Record<string, number>>({});
+  const [zoneFilter, setZoneFilter] = useState('all');
+  const [rarityFilter, setRarityFilter] = useState<SpotRarityFilter>('all');
+  const [query, setQuery] = useState('');
+  const [openSpots, setOpenSpots] = useState<Set<string>>(() => {
+    try {
+      const raw = sessionStorage.getItem(SPOT_KEY);
+      return raw ? new Set(JSON.parse(raw) as string[]) : new Set<string>();
+    } catch { return new Set<string>(); }
+  });
   const sim = useMemo<SimOverrides>(
     () => ({ budgets: sbBudgets, fishWeights: sbFish, price: sbPrice }),
     [sbBudgets, sbFish, sbPrice],
@@ -57,6 +68,33 @@ export default function FishTab() {
   const evsBySpot = useMemo(() => new Map<string, AxisEvs>(
     SPOTS.map(spot => [spot.id, selectSpotAxisEvs(spot.id, sim)])),
   [sim]);
+  const spotIndex = useMemo(() => new Map(SPOTS.map((spot, i) => [spot.id, i])), []);
+  const filteredSpots = useMemo(() => filterSpots(SPOTS, zoneFilter, query, rarityFilter), [zoneFilter, query, rarityFilter]);
+
+  const persistOpen = (next: Set<string>) => {
+    try { sessionStorage.setItem(SPOT_KEY, JSON.stringify([...next])); } catch { /* 무해 */ }
+  };
+  const toggleSpot = (id: string) => {
+    setOpenSpots(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      persistOpen(next);
+      return next;
+    });
+  };
+  const allFilteredOpen = filteredSpots.length > 0 && filteredSpots.every(s => openSpots.has(s.id));
+  const toggleAll = () => {
+    setOpenSpots(prev => {
+      const next = new Set(prev);
+      if (allFilteredOpen) {
+        for (const s of filteredSpots) next.delete(s.id);
+      } else {
+        for (const s of filteredSpots) next.add(s.id);
+      }
+      persistOpen(next);
+      return next;
+    });
+  };
 
   const { notice, dialogs } = useDialogs();
   const tell = (body: string) => void notice({ title: 'JSON 추출', body });
@@ -94,7 +132,23 @@ export default function FishTab() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <Subheading>해역 시뮬레이션 (어종 {FISH.length}종 · 해역 {SPOTS.length}개)</Subheading>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Select compact value={zoneFilter} onChange={e => setZoneFilter(e.target.value)} aria-label="구역 필터">
+            {SPOT_ZONE_OPTIONS.map(opt => (
+              <option key={opt.id} value={opt.id}>{opt.label}</option>
+            ))}
+          </Select>
+          <Select compact value={rarityFilter} onChange={e => setRarityFilter(e.target.value as SpotRarityFilter)} aria-label="등급 필터">
+            {SPOT_RARITY_OPTIONS.map(opt => (
+              <option key={opt.id} value={opt.id}>{opt.label}</option>
+            ))}
+          </Select>
+          <TextInput compact value={query} onChange={e => setQuery(e.target.value)}
+                     placeholder="해역 또는 어종 검색" className="w-[180px]" aria-label="어종·해역 검색" />
+          <span className="text-2xs text-text-dim">{filteredSpots.length}/{SPOTS.length}개 해역</span>
+          <PillButton type="button" onClick={toggleAll} disabled={filteredSpots.length === 0}>
+            {allFilteredOpen ? '모두 접기' : '모두 펼치기'}
+          </PillButton>
           <PillButton type="button" aria-label="변화량 Δ JSON 추출"
                   onClick={exportDeltaJson}
                   disabled={deltaCount === 0}>
@@ -112,20 +166,32 @@ export default function FishTab() {
       </Note>
 
       {/* 수역별 통합 대시보드 — 한 칸에 통계 띠와 편집 가능한 어종 행 */}
-      {SPOTS.map((spot, i) => (
-        <SpotDashboard key={spot.id} spot={spot}
-                       evs={evsBySpot.get(spot.id)!} prevEvs={i > 0 ? evsBySpot.get(SPOTS[i - 1].id)! : null}
-                       sim={sim}
-                       setBudgets={setSbBudgets} setWeights={setSbFish} setPrice={setSbPrice} />
-      ))}
+      {filteredSpots.map(spot => {
+        const idx = spotIndex.get(spot.id) ?? 0;
+        return (
+          <SpotDashboard key={spot.id} spot={spot}
+                         rarityFilter={rarityFilter}
+                         open={openSpots.has(spot.id)}
+                         onToggle={() => toggleSpot(spot.id)}
+                         evs={evsBySpot.get(spot.id)!} prevEvs={idx > 0 ? evsBySpot.get(SPOTS[idx - 1].id)! : null}
+                         sim={sim}
+                         setBudgets={setSbBudgets} setWeights={setSbFish} setPrice={setSbPrice} />
+        );
+      })}
+      {filteredSpots.length === 0 && (
+        <Note size="xs" className="my-0">조건에 맞는 해역이 없어요.</Note>
+      )}
       {dialogs}
     </div>
   );
 }
 
 /** 한 수역의 통합 대시보드 — [통계 띠]와 [편집 표]가 한 칸 안의 오목한 칸에 같이 산다 */
-function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPrice }: {
+function SpotDashboard({ spot, rarityFilter, open, onToggle, evs, prevEvs, sim, setBudgets, setWeights, setPrice }: {
   spot: (typeof SPOTS)[number];
+  rarityFilter: SpotRarityFilter;
+  open: boolean;
+  onToggle: () => void;
   evs: AxisEvs;
   prevEvs: AxisEvs | null;
   sim: SimOverrides;
@@ -138,37 +204,28 @@ function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPri
   // night를 안 담아 확률·등급 합계가 낮 시간대 기준으로 정직하게 나온다.
   const list = useMemo(() => selectFishForSpot(spot.id, false), [spot.id]);
   const nightList = useMemo(() => selectFishForSpot(spot.id, true), [spot.id]);
+  const visibleList = useMemo(
+    () => (rarityFilter === 'all' ? list : list.filter(f => f.rarity === rarityFilter)),
+    [list, rarityFilter],
+  );
+  const visibleNightList = useMemo(
+    () => (rarityFilter === 'all' ? nightList : nightList.filter(f => f.rarity === rarityFilter)),
+    [nightList, rarityFilter],
+  );
+  const allSpotFish = useMemo(() => [...list, ...nightList], [list, nightList]);
   const draws = useMemo(
     () => selectSpotDraws(spot.id, sim),
     [spot.id, sim],
   );
-
-  // 접기 — 기본 펼침, 세션이 접은 것을 기억
-  const [open, setOpen] = useState(() => {
-    try {
-      const raw = sessionStorage.getItem(SPOT_KEY);
-      const closed = raw ? new Set(JSON.parse(raw) as string[]) : new Set<string>();
-      return !closed.has(bid);
-    } catch { return true; }
-  });
-  const toggleOpen = () => {
-    setOpen(o => {
-      const nextClosed = (() => {
-        try {
-          const raw = sessionStorage.getItem(SPOT_KEY);
-          return new Set(raw ? JSON.parse(raw) as string[] : []);
-        } catch { return new Set<string>(); }
-      })();
-      if (o) nextClosed.add(bid); else nextClosed.delete(bid);
-      try { sessionStorage.setItem(SPOT_KEY, JSON.stringify([...nextClosed])); } catch { /* 무해 */ }
-      return !o;
-    });
-  };
+  const nightDraws = useMemo(
+    () => (nightList.length > 0 ? selectSpotNightDraws(spot.id, sim) : new Map()),
+    [spot.id, nightList.length, sim],
+  );
 
   const dropKey = <K extends string>(obj: Record<string, unknown>, key: K) => {
     const { [key]: _drop, ...rest } = obj; return rest;
   };
-  const hasOverride = hasSpotSimulationOverride(bid, sim, list);
+  const hasOverride = hasSpotSimulationOverride(bid, sim, allSpotFish);
 
   return (
     <TitledCell aria-labelledby={`h-${bid}`}
@@ -178,7 +235,7 @@ function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPri
           <IconButton glyph={open ? 'caretDown' : 'caretRight'} size={10}
                   aria-expanded={open}
                   aria-label={`${spot.name} ${open ? '접기' : '펼치기'}`}
-                  onClick={toggleOpen}
+                  onClick={onToggle}
                   className="gap-1">
             <span id={`h-${bid}`}>{spot.name}</span>
             <span className="text-xs text-text-dim pf-accent ml-1">
@@ -191,7 +248,7 @@ function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPri
                     onClick={() => {
                       setBudgets(p => ({ ...p, [bid]: {} }));
                       setWeights(p => ({ ...p, [bid]: {} }));
-                      setPrice(p => resetSpotPriceOverrides(p, list));
+                      setPrice(p => resetSpotPriceOverrides(p, allSpotFish));
                     }}>
               이 해역 초기화
             </PillButton>
@@ -204,7 +261,7 @@ function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPri
           {/* ── 기대값 띠 — 행=축(수동 3 + 방치 2, 그룹 구분선 분리), 열=[축명|EV|직전|지역내] ──
               지역내Δ: 수동 사다리는 직전 판정 대비 %를 연쇄한다. 방치는 사다리가 아니라
               폭 하나 — 마지막 방치 행(진입)에 한 번만 표기하고 플래토에는 붙이지 않는다. */}
-          <div className="overflow-x-auto">
+          <TableBox>
             <DataTable>
               <thead>
                 <tr>
@@ -255,10 +312,10 @@ function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPri
                 })}
               </tbody>
             </DataTable>
-          </div>
+          </TableBox>
 
           {/* ── 어종 행 — 편집 + 실시간 확률 ── */}
-          <div className="overflow-x-auto">
+          <TableBox>
             <DataTable>
               <thead>
                 <tr>
@@ -272,9 +329,9 @@ function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPri
                 </tr>
               </thead>
               <tbody>
-                {list.map((f, i) => {
+                {visibleList.map((f, i) => {
                   const d = draws.get(f.id)!;
-                  const firstOfGrade = i === 0 || list[i - 1].rarity !== f.rarity;
+                  const firstOfGrade = i === 0 || visibleList[i - 1].rarity !== f.rarity;
                   return (
                     <tr key={f.id}>
                       <td>
@@ -340,39 +397,58 @@ function SpotDashboard({ spot, evs, prevEvs, sim, setBudgets, setWeights, setPri
                     </tr>
                   );
                 })}
-                {nightList.length > 0 && (
+                {visibleNightList.length > 0 && (
                   <tr aria-hidden="true">
                     <td colSpan={7} className="bg-bg/80 text-2xs text-accent py-0.5 px-1 border-y border-line">
-                      밤 전용 — 낮 시간대 풀에 없음 (게임 20시~다음 4시)
+                      밤 전용 — 낮 시간대 풀에 없음 (게임 20시~다음 4시 · 아래 확률은 밤 시간대 풀 기준)
                     </td>
                   </tr>
                 )}
-                {nightList.map(f => (
-                  <tr key={f.id} className="opacity-80">
-                    <td><span className="text-2xs text-accent">밤</span></td>
-                    <td><FishSpriteThumb fish={f} /></td>
-                    <td className="whitespace-nowrap">{f.name}
-                      <span className="text-2xs text-text-dim ml-1">({RARITY[f.rarity].name})</span></td>
-                    <td className="whitespace-nowrap">
-                      <TextInput compact type="number" min={0} placeholder={String(f.price)}
-                             value={sim.price[f.id] ?? ''}
-                             aria-label={`${f.name} 가격`}
-                             onChange={e => setPrice(p => {
-                               if (e.target.value === '') return dropKey(p, f.id);
-                               const n = Number(e.target.value);
-                               if (!Number.isFinite(n) || n < 0) return p;
-                               return { ...p, [f.id]: n };
-                             })}
-                             className="w-16" />G
-                    </td>
-                    <td className="text-2xs text-text-dim">—</td>
-                    <td className="text-2xs text-text-dim">—</td>
-                    <td className="text-2xs text-text-dim whitespace-nowrap">밤 전용</td>
-                  </tr>
-                ))}
+                {visibleNightList.map(f => {
+                  const nd = nightDraws.get(f.id);
+                  return (
+                    <tr key={f.id}>
+                      <td><span className="text-2xs text-accent">밤</span></td>
+                      <td><FishSpriteThumb fish={f} /></td>
+                      <td className="whitespace-nowrap">{f.name}
+                        <span className="text-2xs text-text-dim ml-1">({RARITY[f.rarity].name})</span></td>
+                      <td className="whitespace-nowrap">
+                        <TextInput compact type="number" min={0} placeholder={String(f.price)}
+                               value={sim.price[f.id] ?? ''}
+                               aria-label={`${f.name} 가격`}
+                               onChange={e => setPrice(p => {
+                                 if (e.target.value === '') return dropKey(p, f.id);
+                                 const n = Number(e.target.value);
+                                 if (!Number.isFinite(n) || n < 0) return p;
+                                 return { ...p, [f.id]: n };
+                               })}
+                               className="w-16" />G
+                      </td>
+                      <td>
+                        <TextInput compact type="number" min={0} step="0.5" placeholder={String(nd?.individualWeight ?? 1)}
+                               value={sim.fishWeights[bid]?.[f.id] ?? ''}
+                               aria-label={`${f.name} 개체 가중치`}
+                               onChange={e => setWeights(p => {
+                                 const cur = p[bid] ?? {};
+                                 if (e.target.value === '') return { ...p, [bid]: dropKey(cur, f.id) };
+                                 const n = Number(e.target.value);
+                                 if (!Number.isFinite(n) || n < 0) return p;
+                                 return { ...p, [bid]: { ...cur, [f.id]: n } };
+                               })}
+                               className="w-14" />
+                      </td>
+                      <td className="pf-accent whitespace-nowrap" title="밤 시간대 풀 기준">
+                        {nd ? `${nd.fishPct.toFixed(3)}%` : '—'}
+                      </td>
+                      <td className="text-2xs text-accent whitespace-nowrap" title="밤 시간대 풀 기준 등급 합계">
+                        밤 전용 · {nd ? `${nd.gradePct.toFixed(2)}%` : '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </DataTable>
-          </div>
+          </TableBox>
         </Inset>
       )}
     </TitledCell>

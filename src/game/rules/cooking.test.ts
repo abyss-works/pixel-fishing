@@ -2,14 +2,14 @@
 import { describe, it, expect } from 'vitest';
 import { applyAction, drawCatch, namedWeightBonus, prepareCatchDraw } from './actions';
 import type { ActionDeps, GameAction } from './actions';
-import { FISH, newState } from './logic';
+import { FISH, fishDrawShares, newState } from './logic';
 import type { FishInstance, GameState } from './logic';
 import {
   COOK_KIND_RULES, COOK_STORAGE_CAP, COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, ENERGY_PER_INDIVIDUAL, RECIPES, recipeById, toStoredEnergy,
 } from '../content/cooking';
 import type { RarityId } from '../content/rarity';
 import {
-  canExtractEnergy, cookingProgress, cookingUnlocked, energyDefaultExcluded, energyTargetRows, energyGain, energyYield, energyTargetOf, settleCooking, slotEffects, appliedSlots,
+  baitDurationScale, canExtractEnergy, cookingProgress, cookingUnlocked, energyDefaultExcluded, energyTargetRows, energyGain, energyYield, energyTargetOf, maxBaitSlots, settleCooking, slotDurationMs, slotEffects, slotEndsAt, appliedSlots,
 } from './cooking';
 import { effectiveBite } from './stats';
 import { BASE_REGION } from '../content/places';
@@ -383,7 +383,7 @@ describe('slotEffects', () => {
 
   it('슬롯이 비어 있으면 효과가 없다', () => {
     expect(slotEffects(seed(), T0, 'auto')).toEqual({
-      biteWaitCut: 0, rarityWeight: {}, mutationWeight: 0, namedWeight: 0,
+      biteWaitCut: 0, rarityWeight: {}, mutationWeight: 0, namedWeight: 0, nightUnlock: false,
     });
   });
   it('도시락은 방치(auto) 판정에만, 미끼 슬롯은 수동 판정에만 적용한다', () => {
@@ -419,6 +419,12 @@ describe('slotEffects', () => {
     expect(slotEffects(seed({ slots: slots('cook-lunch-named', null) }), T0, 'auto').namedWeight).toBe(0.5);
     expect(slotEffects(seed({ slots: slots('cook-lunch-mutation', null) }), T0, 'auto').mutationWeight).toBe(0.5);
   });
+  it('밤 어종 출현 미끼는 미끼 슬롯이 켜진 수동 판정에만 참이다', () => {
+    const s = seed({ slots: slots(null, 'cook-bait-night') });
+    for (const j of ['perfect', 'good', 'normal'] as const) expect(slotEffects(s, T0, j).nightUnlock).toBe(true);
+    expect(slotEffects(s, T0, 'auto').nightUnlock).toBe(false);
+    expect(slotEffects(seed({ slots: slots(null, 'cook-bait-night') }), 'garbage', 'normal').nightUnlock).toBe(false);
+  });
   it('모든 레시피 효과 키를 낸다', () => {
     for (const r of RECIPES) {
       const slot = r.kind === 'lunch' ? slots(r.id, null) : slots(null, r.id);
@@ -426,6 +432,7 @@ describe('slotEffects', () => {
       expect(e.biteWaitCut, r.id).toBe(r.effects.biteWaitCut ?? 0);
       expect(e.mutationWeight, r.id).toBe(r.effects.mutationWeight ?? 0);
       expect(e.namedWeight, r.id).toBe(r.effects.namedWeight ?? 0);
+      expect(e.nightUnlock, r.id).toBe(r.effects.nightUnlock === true);
     }
   });
 });
@@ -469,6 +476,18 @@ describe('캐치에 적용', () => {
     const s = withSlots(null, 'cook-bait-epic');
     expect(prepareCatchDraw(s, 'good', LATER, PZ).phaseOpts.weightEffects).toEqual({ epic: 0.6, legendary: 0.6 });
     expect(prepareCatchDraw(s, 'auto', LATER, PZ).phaseOpts.weightEffects).toBeUndefined();
+  });
+  it('밤 어종 출현 미끼는 낮 수동 캐치를 밤 풀로 돌리고 방치와 밤에는 그대로 둔다', () => {
+    const s = withSlots(null, 'cook-bait-night');
+    const withBait = prepareCatchDraw(s, 'normal', LATER, PZ);
+    const plain = prepareCatchDraw(seed(), 'normal', LATER, PZ);
+    expect(plain.phaseOpts.phase).toBe('day');
+    expect(withBait.phaseOpts.phase).toBe('night');
+    expect(fishDrawShares('indian', plain.phaseOpts).some(x => x.fish.night)).toBe(false);
+    expect(fishDrawShares('indian', withBait.phaseOpts).some(x => x.fish.night)).toBe(true);
+    // 미끼 슬롯 효과는 방치 캐치에 걸리지 않고, 밤에는 이미 밤 풀이다
+    expect(prepareCatchDraw(s, 'auto', LATER, PZ).phaseOpts.phase).toBe('day');
+    expect(prepareCatchDraw(s, 'normal', T0, PZ).phaseOpts.phase).toBe('night');
   });
   it('슬롯이 끝난 뒤에는 적용하지 않는다. 판정 시각은 서버 시각(now) 인자만 본다', () => {
     const s = withSlots(null, 'cook-bait-epic', at(T0, 30 * MIN));
@@ -556,6 +575,204 @@ describe('appliedSlots', () => {
       const eff = slotEffects(s, T0, j);
       expect(Object.keys(appliedSlots(s, T0, j)).length > 0).toBe(eff.biteWaitCut > 0 || eff.mutationWeight > 0);
     }
+  });
+});
+
+describe('사르가소의 그물망 — 다중 미끼와 지속 시간 절반', () => {
+  const rareBait = 'cook-bait-rare';
+  const epicBait = 'cook-bait-epic';
+  const legBait = 'cook-bait-legendary';
+  const mutBait = 'cook-bait-mutation';
+  const nightBait = 'cook-bait-night';
+
+  it('그물망이 없으면 미끼 1칸·지속 1배(300초), 그물망이 있으면 미끼 2칸·지속 0.5배(150초)다', () => {
+    expect(maxBaitSlots(seed())).toBe(1);
+    expect(baitDurationScale(seed())).toBe(1);
+    expect(slotDurationMs(recipeById(rareBait)!, seed())).toBe(300_000);
+    expect(slotEndsAt(recipeById(rareBait)!, T0, seed())).toBe(at(T0, 300_000));
+
+    const net = seed({ artifacts: ['sargasso-net'] });
+    expect(maxBaitSlots(net)).toBe(2);
+    expect(baitDurationScale(net)).toBe(0.5);
+    expect(slotDurationMs(recipeById(rareBait)!, net)).toBe(150_000);
+    expect(slotEndsAt(recipeById(rareBait)!, T0, net)).toBe(at(T0, 150_000));
+    expect(slotDurationMs(recipeById('cook-lunch-bite')!, net)).toBe(9 * 60 * MIN);
+  });
+
+  it('eat — 그물망 보유 시 빈 2번째 칸을 자동으로 채우고, 같은 미끼는 중복 없이 그 칸만 갱신한다', () => {
+    const start = seed({
+      artifacts: ['sargasso-net'],
+      items: { [rareBait]: 2, [epicBait]: 2 },
+    });
+    const first = ok(start, { type: 'eat', item: rareBait });
+    expect(first.state.slots).toEqual({
+      lunch: null,
+      bait: { id: rareBait, endsAt: at(T0, 150_000) },
+    });
+    expect(first.events[0]).toMatchObject({ payload: { item: rareBait, replaced: null } });
+
+    const second = ok(first.state, { type: 'eat', item: epicBait }, deps({ now: at(T0, 10_000) }));
+    expect(second.state.slots).toEqual({
+      lunch: null,
+      bait: { id: rareBait, endsAt: at(T0, 150_000) },
+      bait2: { id: epicBait, endsAt: at(T0, 160_000) },
+    });
+    expect(second.events[0]).toMatchObject({ payload: { item: epicBait, replaced: null } });
+
+    // 같은 미끼(bait2) 재사용 -> bait2만 갱신, 절대 중복 장착되지 않는다
+    const refresh2 = ok(second.state, { type: 'eat', item: epicBait }, deps({ now: at(T0, 20_000) }));
+    expect(refresh2.state.slots).toEqual({
+      lunch: null,
+      bait: { id: rareBait, endsAt: at(T0, 150_000) },
+      bait2: { id: epicBait, endsAt: at(T0, 170_000) },
+    });
+    expect(refresh2.events[0]).toMatchObject({ payload: { item: epicBait, replaced: epicBait } });
+
+    // 같은 미끼(bait) 재사용 -> bait만 갱신
+    const refresh1 = ok(refresh2.state, { type: 'eat', item: rareBait }, deps({ now: at(T0, 30_000) }));
+    expect(refresh1.state.slots).toEqual({
+      lunch: null,
+      bait: { id: rareBait, endsAt: at(T0, 180_000) },
+      bait2: { id: epicBait, endsAt: at(T0, 170_000) },
+    });
+    expect(refresh1.events[0]).toMatchObject({ payload: { item: rareBait, replaced: rareBait } });
+  });
+
+  it('eat — 두 칸이 모두 찼을 때 3번째 다른 미끼는 replaceSlot을 따르고, 생략 시 먼저 끝나는 칸(동률은 bait)을 바꾼다', () => {
+    const base = seed({
+      artifacts: ['sargasso-net'],
+      items: { [legBait]: 2 },
+      slots: {
+        lunch: null,
+        bait: { id: rareBait, endsAt: at(T0, 120_000) },
+        bait2: { id: epicBait, endsAt: at(T0, 60_000) },
+      },
+    });
+    // replaceSlot 생략 -> 먼저 끝나는 bait2 교체
+    const autoPick = ok(base, { type: 'eat', item: legBait });
+    expect(autoPick.state.slots).toEqual({
+      lunch: null,
+      bait: { id: rareBait, endsAt: at(T0, 120_000) },
+      bait2: { id: legBait, endsAt: at(T0, 150_000) },
+    });
+    expect(autoPick.events[0]).toMatchObject({ payload: { item: legBait, replaced: epicBait } });
+
+    // replaceSlot: 'bait' 명시 -> bait 교체
+    const explicit = ok(base, { type: 'eat', item: legBait, replaceSlot: 'bait' });
+    expect(explicit.state.slots).toEqual({
+      lunch: null,
+      bait: { id: legBait, endsAt: at(T0, 150_000) },
+      bait2: { id: epicBait, endsAt: at(T0, 60_000) },
+    });
+    expect(explicit.events[0]).toMatchObject({ payload: { item: legBait, replaced: rareBait } });
+
+    // 동률이면 bait 교체
+    const tied = seed({
+      artifacts: ['sargasso-net'],
+      items: { [legBait]: 1 },
+      slots: {
+        lunch: null,
+        bait: { id: rareBait, endsAt: at(T0, 100_000) },
+        bait2: { id: epicBait, endsAt: at(T0, 100_000) },
+      },
+    });
+    expect(ok(tied, { type: 'eat', item: legBait }).state.slots.bait?.id).toBe(legBait);
+    expect(ok(tied, { type: 'eat', item: legBait }).state.slots.bait2?.id).toBe(epicBait);
+
+    // 잘못된 replaceSlot은 bad-request
+    expect(rejected(base, { type: 'eat', item: legBait, replaceSlot: 'lunch' as never })).toBe('bad-request');
+  });
+
+  it('eat — bait 만료 + bait2 활성일 때 새 미끼는 빈 bait 칸을 채우고, 그물망 미보유 시 낡은 bait2를 지운다', () => {
+    const expiredFirst = seed({
+      artifacts: ['sargasso-net'],
+      items: { [legBait]: 1 },
+      slots: {
+        lunch: null,
+        bait: { id: rareBait, endsAt: at(T0, -1000) },
+        bait2: { id: epicBait, endsAt: at(T0, 100_000) },
+      },
+    });
+    const filled = ok(expiredFirst, { type: 'eat', item: legBait });
+    expect(filled.state.slots).toEqual({
+      lunch: null,
+      bait: { id: legBait, endsAt: at(T0, 150_000) },
+      bait2: { id: epicBait, endsAt: at(T0, 100_000) },
+    });
+    expect(filled.events[0]).toMatchObject({ payload: { replaced: null } });
+
+    // 그물망 없으면 낡은 bait2 정리
+    const singleSlotWithStale = seed({
+      items: { [legBait]: 1 },
+      slots: {
+        lunch: null,
+        bait: null,
+        bait2: { id: epicBait, endsAt: at(T0, 100_000) },
+      },
+    });
+    const cleaned = ok(singleSlotWithStale, { type: 'eat', item: legBait });
+    expect(cleaned.state.slots).toEqual({
+      lunch: null,
+      bait: { id: legBait, endsAt: at(T0, 300_000) },
+    });
+    expect('bait2' in cleaned.state.slots).toBe(false);
+  });
+
+  it('appliedSlots·slotEffects·catch — 두 미끼 효과를 합산하고, bait 만료+bait2 활성은 { bait }로 정규화한다', () => {
+    const dual = seed({
+      artifacts: ['sargasso-net'],
+      slots: {
+        lunch: null,
+        bait: { id: rareBait, endsAt: at(T0, 150_000) },
+        bait2: { id: mutBait, endsAt: at(T0, 150_000) },
+      },
+    });
+    expect(appliedSlots(dual, T0, 'normal')).toEqual({ bait: rareBait, bait2: mutBait });
+    expect(appliedSlots(dual, T0, 'auto')).toEqual({});
+    expect(slotEffects(dual, T0, 'normal')).toMatchObject({
+      rarityWeight: { rare: 0.4, epic: 0.4, legendary: 0.4 },
+      mutationWeight: 1.5,
+    });
+
+    // 두 등급 미끼 중첩 합산 + 밤 미끼 조합
+    const stacked = seed({
+      artifacts: ['sargasso-net'],
+      slots: {
+        lunch: null,
+        bait: { id: rareBait, endsAt: at(T0, 150_000) },
+        bait2: { id: nightBait, endsAt: at(T0, 150_000) },
+      },
+    });
+    expect(slotEffects(stacked, T0, 'good')).toMatchObject({
+      rarityWeight: { rare: 0.4, epic: 0.4, legendary: 0.4 },
+      nightUnlock: true,
+    });
+
+    // catch 이벤트 payload에 bait, bait2 모두 기록
+    const caught = ok(dual, { type: 'catch', spot: 'pond', judgment: 'good' });
+    expect(caught.events[0].payload).toMatchObject({ bait: rareBait, bait2: mutBait });
+
+    // bait 만료 + bait2 활성 -> appliedSlots는 { bait: bait2.id }로 정규화
+    const onlySecond = seed({
+      slots: {
+        lunch: null,
+        bait: { id: rareBait, endsAt: at(T0, -1000) },
+        bait2: { id: mutBait, endsAt: at(T0, 100_000) },
+      },
+    });
+    expect(appliedSlots(onlySecond, T0, 'perfect')).toEqual({ bait: mutBait });
+    expect(appliedSlots(onlySecond, T0, 'perfect')).not.toHaveProperty('bait2');
+
+    // 중복 미끼가 들어온 손상 세이브라도 한 번만 적용한다
+    const dupSave = seed({
+      slots: {
+        lunch: null,
+        bait: { id: mutBait, endsAt: at(T0, 100_000) },
+        bait2: { id: mutBait, endsAt: at(T0, 150_000) },
+      },
+    });
+    expect(appliedSlots(dupSave, T0, 'normal')).toEqual({ bait: mutBait });
+    expect(slotEffects(dupSave, T0, 'normal').mutationWeight).toBe(1.5);
   });
 });
 

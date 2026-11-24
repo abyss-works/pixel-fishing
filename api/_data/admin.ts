@@ -1,13 +1,28 @@
 // 관리자 읽기. 관리자 대시보드가 보는 조회이며 읽기만 한다.
-// 관리자 뷰(v_admin_users·v_daily_active·v_retention_cohorts·v_economy_daily·v_catch_quality·v_spam_flags·
-// v_events_recent·v_admin_letters·v_bounty_funnel_daily)와 사용자 이벤트 함수(fn_user_events)의 본문을
-// 따른다. 뷰 본문의 관리자 판정(is_admin)은 호출하는 쪽이 isAdmin으로 먼저 한다.
+// 관리자 뷰(v_admin_users·v_economy_daily·v_spam_flags·v_events_recent·v_admin_letters·v_bounty_funnel_daily)와
+// 사용자 이벤트 함수(fn_user_events)의 본문을 따른다. 뷰 본문의 관리자 판정(is_admin)은 호출하는 쪽이 isAdmin으로 먼저 한다.
 // 행은 Postgres JSON 직렬화 그대로다. 시각은 '2030-01-01T00:00:00+00:00' 형식의 문자열, 날짜는 'yyyy-mm-dd', 수는 수다.
 // 뷰가 순서를 정하지 않는 조회에는 같은 요청이 같은 순서를 받도록 정렬을 둔다.
 import { sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
+import { ACHIEVEMENTS } from '../../src/game/content/achievements.js';
+import { ARTIFACTS, artifactById, artifactHasLevel } from '../../src/game/content/artifacts.js';
+import { bountyById } from '../../src/game/content/bounties.js';
+import { ENERGY_ITEM_IDS, RECIPES, recipeById } from '../../src/game/content/cooking.js';
+import { FISH, fishById } from '../../src/game/content/fish.js';
+import { NAMED } from '../../src/game/content/named.js';
+import { spotById } from '../../src/game/content/spots.js';
+import type { SpotId } from '../../src/game/content/spots.js';
+import { HATS, hatById } from '../../src/game/content/wardrobe.js';
+import { zoneById } from '../../src/game/content/zones.js';
+import type { ZoneId } from '../../src/game/content/zones.js';
+import type { LiveOnline } from '../_server/live.js';
 import { uuidArray } from './json.js';
+
+const FISH_IDS = new Set(FISH.map(f => f.id));
+const NAMED_IDS = new Set(NAMED.map(n => n.id));
+const ACHIEVEMENT_IDS = new Set(ACHIEVEMENTS.map(a => a.id));
 
 /** 사용자가 관리자 명부(admins)에 있는가. is_admin()과 같은 명부를 세션의 uid로 직접 조회한다 */
 export async function isAdmin(db: Executor, uid: string): Promise<boolean> {
@@ -68,73 +83,20 @@ export async function identities(db: Executor, uids: readonly string[]): Promise
   return new Map(rows.map(({ user_id, ...identity }) => [user_id, identity]));
 }
 
-/** 일별 활성. boot를 포함한 전 이벤트 기준 DAU와 직전 7일 WAU이며, 날짜는 KST 하루 축이고 최대 90일 창이다 */
-export function dailyActive(db: Executor, days: number): Promise<unknown[]> {
-  return lastDays(db, days, sql`with today as (
-      select (now() at time zone 'Asia/Seoul')::date as d
-    ),
-    act as (
-      select distinct user_id, (created_at at time zone 'Asia/Seoul')::date as day
-      from public.events
-    ),
-    daily as (select day, count(*)::int as dau from act group by day),
-    weekly as (
-      select a.day, count(distinct a.user_id)::int as wau7
-      from act a
-      where exists (select 1 from act b
-                    where b.user_id = a.user_id and b.day between a.day - 6 and a.day)
-      group by a.day
-    )
-    select t.d::date - g as day,
-           coalesce(dd.dau, 0) as dau,
-           coalesce(ww.wau7, 0) as wau7
-    from today t cross join generate_series(0, 89) g
-    left join daily dd on dd.day = t.d::date - g
-    left join weekly ww on ww.day = t.d::date - g`);
-}
-
-/** 리텐션 코호트. 첫 행동일 코호트별 D1·D3·D7·D14·D30 재방문률(%) */
-export function retention(db: Executor): Promise<unknown[]> {
-  return jsonRows(db, sql`with act as (
-      select distinct user_id, (created_at at time zone 'Asia/Seoul')::date as day
-      from public.events
-    ),
-    first_day as (
-      select user_id, min(day) as cohort from act group by user_id
-    )
-    select f.cohort,
-           count(*)::int as users,
-           round(100.0 * count(*) filter (where exists (
-             select 1 from act a where a.user_id = f.user_id and a.day = f.cohort + 1))
-             / count(*), 1)::numeric as d1,
-           round(100.0 * count(*) filter (where exists (
-             select 1 from act a where a.user_id = f.user_id and a.day = f.cohort + 3))
-             / count(*), 1)::numeric as d3,
-           round(100.0 * count(*) filter (where exists (
-             select 1 from act a where a.user_id = f.user_id and a.day = f.cohort + 7))
-             / count(*), 1)::numeric as d7,
-           round(100.0 * count(*) filter (where exists (
-             select 1 from act a where a.user_id = f.user_id and a.day = f.cohort + 14))
-             / count(*), 1)::numeric as d14,
-           round(100.0 * count(*) filter (where exists (
-             select 1 from act a where a.user_id = f.user_id and a.day = f.cohort + 30))
-             / count(*), 1)::numeric as d30
-    from first_day f
-    group by f.cohort`, sql`t.cohort desc`);
-}
-
-/** 경제 일계. 골드 유입(sell·coupon·claimMail)과 유출(upgradeRod·buyBoat·buyBait) 원장. buyBait는 액션이 없어진 뒤로 새 이벤트가 없고 과거 이력만 센다 */
+/** 경제 일계. 골드 유입(sell·coupon·claimMail·deliverBounty·claimAchievement·claimAllAchievements)과 유출(upgradeRod·buyBoat·buyHat) 원장 */
 export function economy(db: Executor, days: number): Promise<unknown[]> {
   return lastDays(db, days, sql`select (created_at at time zone 'Asia/Seoul')::date as day,
            count(*) filter (where type = 'sell')::int as sells,
            coalesce(sum((payload->>'gold')::numeric) filter (where type = 'sell'), 0) as sell_gold,
            coalesce(sum((payload->>'gold')::numeric) filter (where type = 'coupon'), 0) as coupon_gold,
            coalesce(sum((payload->>'gold')::numeric) filter (where type = 'claimMail'), 0) as mail_gold,
+           coalesce(sum((payload->>'reward')::numeric) filter (where type = 'deliverBounty'), 0) as bounty_gold,
+           coalesce(sum((payload->>'gold')::numeric) filter (where type in ('claimAchievement', 'claimAllAchievements')), 0) as achievement_gold,
            coalesce(sum((payload->>'cost')::numeric) filter (where type = 'upgradeRod'), 0) as rod_cost,
            coalesce(sum((payload->>'cost')::numeric) filter (where type = 'buyBoat'), 0) as boat_cost,
-           coalesce(sum((payload->>'cost')::numeric) filter (where type = 'buyBait'), 0) as bait_cost
+           coalesce(sum((payload->>'cost')::numeric) filter (where type = 'buyHat'), 0) as hat_cost
     from public.events
-    where type in ('sell', 'coupon', 'claimMail', 'upgradeRod', 'buyBoat', 'buyBait')
+    where type in ('sell', 'coupon', 'claimMail', 'deliverBounty', 'claimAchievement', 'claimAllAchievements', 'upgradeRod', 'buyBoat', 'buyHat')
     group by day`);
 }
 
@@ -153,16 +115,217 @@ export function bountyFunnel(db: Executor, days: number): Promise<unknown[]> {
     group by day`);
 }
 
-/** 캐치 품질 일계. 캐치 수, PERFECT 수, 이벤트 payload에 미끼 슬롯 또는 도시락 슬롯 요리 id가 실린 캐치 수, 평균 크기 */
-export function catchQuality(db: Executor, days: number): Promise<unknown[]> {
-  return lastDays(db, days, sql`select (created_at at time zone 'Asia/Seoul')::date as day,
-           count(*)::int as catches,
-           count(*) filter (where payload->>'judgment' = 'perfect')::int as perfect,
-           count(*) filter (where payload ? 'bait' or payload ? 'lunch')::int as with_bait,
-           round(avg((payload->>'size')::numeric), 1) as avg_size
-    from public.events
-    where type = 'catch'
-    group by day`);
+const asRecord = (v: unknown): Record<string, unknown> =>
+  v !== null && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {};
+
+const asNum = (v: unknown): number =>
+  typeof v === 'number' && Number.isFinite(v) ? v : 0;
+
+/** 대상 플레이어의 게임 상태 스냅샷(도감·네임드 토벌·유물·모자·업적/카운터·기운/요리/슬롯·가방/전시·주요 진행 현황·활성 세션)을 읽는다 */
+export async function userState(db: Executor, uid: string): Promise<unknown> {
+  const { rows } = await db.execute<{
+    has_save: boolean;
+    data: unknown;
+    records: { fish_id: string; form: string; count: number }[];
+    cleared_named: string[];
+    instances: { bag: number; exhibit: number } | null;
+    recent_bag: { uid: string; fish_id: string; form: string; size: number | null; caught_at: string | null; spot: string | null; locked: boolean }[];
+    bounty_progress: { quest_id: string; zone: string; progress: number; started_at: string }[];
+    bounty_tickets: { quest_id: string; issued_at: string }[];
+    active_sessions: number;
+    counters: Record<string, number> | null;
+  }>(sql`select
+      exists(select 1 from public.saves_current where user_id = ${uid}::uuid) as has_save,
+      (select data from public.saves_current where user_id = ${uid}::uuid) as data,
+      (select coalesce(json_agg(json_build_object('fish_id', fish_id, 'form', form, 'count', count)), '[]'::json)
+       from public.records where user_id = ${uid}::uuid and count > 0) as records,
+      (select coalesce(json_agg(quest_id), '[]'::json)
+       from public.bounty_clears where user_id = ${uid}::uuid and kind = 'named') as cleared_named,
+      (select json_build_object(
+         'bag', count(*) filter (where slot is null)::int,
+         'exhibit', count(*) filter (where slot is not null)::int
+       ) from public.fish_instances where user_id = ${uid}::uuid) as instances,
+      (select coalesce(json_agg(json_build_object(
+         'uid', rb.uid, 'fish_id', rb.fish_id, 'form', rb.form, 'size', rb.size,
+         'caught_at', rb.caught_at, 'spot', rb.spot, 'locked', rb.locked
+       )), '[]'::json) from (
+         select uid, fish_id, form, size, caught_at, spot, locked
+         from public.fish_instances
+         where user_id = ${uid}::uuid and slot is null
+         order by caught_at desc nulls last, uid desc
+         limit 30
+       ) rb) as recent_bag,
+      (select coalesce(json_agg(json_build_object(
+         'quest_id', quest_id, 'zone', zone, 'progress', progress, 'started_at', started_at
+       ) order by started_at desc), '[]'::json)
+       from public.bounty_progress where user_id = ${uid}::uuid) as bounty_progress,
+      (select coalesce(json_agg(json_build_object(
+         'quest_id', quest_id, 'issued_at', issued_at
+       ) order by issued_at desc), '[]'::json)
+       from public.bounty_tickets where user_id = ${uid}::uuid) as bounty_tickets,
+      (select count(*)::int from auth.sessions where user_id = ${uid}::uuid and expires_at > now()) as active_sessions,
+      (select coalesce(json_object_agg(key, value), '{}'::json)
+       from public.achievement_counters where user_id = ${uid}::uuid) as counters`);
+
+  const row = rows[0];
+  const data = asRecord(row.data);
+  const records = Array.isArray(row.records) ? row.records : [];
+  const clearedNamed = Array.isArray(row.cleared_named) ? row.cleared_named : [];
+  const rawCounters = asRecord(row.counters);
+  const counters: Record<string, number> = {};
+  for (const [k, v] of Object.entries(rawCounters)) {
+    const n = Number(v);
+    if (Number.isFinite(n)) counters[k] = n;
+  }
+
+  let normal = 0;
+  let variant = 0;
+  let named = 0;
+  for (const r of records) {
+    if (r.form === 'normal' && FISH_IDS.has(r.fish_id)) normal++;
+    else if (r.form === 'variant' && FISH_IDS.has(r.fish_id)) variant++;
+    else if (r.form === 'normal' && NAMED_IDS.has(r.fish_id)) named++;
+  }
+
+  const rawArtifacts = Array.isArray(data.artifacts) ? data.artifacts.filter((x): x is string => typeof x === 'string') : [];
+  const rawLevels = asRecord(data.artifactLevels);
+  const artifacts = [...new Set(rawArtifacts)].map(id => {
+    const def = artifactById(id);
+    const rawLevel = asNum(rawLevels[id]);
+    const level = def && !artifactHasLevel(def) ? null : (rawLevel >= 1 ? Math.floor(rawLevel) : 1);
+    return { id, name: def?.name ?? id, grade: def?.grade ?? null, level };
+  });
+
+  const rawHats = Array.isArray(data.hats) ? data.hats.filter((x): x is string => typeof x === 'string') : [];
+  const ownedHatItems = [...new Set(rawHats)].flatMap(id => {
+    const hat = hatById(id);
+    return hat ? [{ id: hat.id, name: hat.name, source: hat.source }] : [];
+  });
+  const rawLook = asRecord(data.look);
+  const equippedHatDef = typeof rawLook.hat === 'string' ? hatById(rawLook.hat) : undefined;
+  const equippedHat = equippedHatDef ? { id: equippedHatDef.id, name: equippedHatDef.name } : null;
+
+  const rawAchievements = asRecord(data.achievements);
+  let claimed = 0;
+  let claimable = 0;
+  for (const [id, status] of Object.entries(rawAchievements)) {
+    if (!ACHIEVEMENT_IDS.has(id)) continue;
+    if (status === 'claimed') claimed++;
+    else if (status === 'claimable') claimable++;
+  }
+
+  const items = asRecord(data.items);
+  const energy = {
+    common: asNum(items[ENERGY_ITEM_IDS.common]),
+    rare: asNum(items[ENERGY_ITEM_IDS.rare]),
+    epic: asNum(items[ENERGY_ITEM_IDS.epic]),
+    legendary: asNum(items[ENERGY_ITEM_IDS.legendary]),
+  };
+  const cooked = RECIPES.flatMap(r => {
+    const count = asNum(items[r.id]);
+    return count > 0 ? [{ id: r.id, name: r.name, kind: r.kind, count }] : [];
+  });
+  const rawCooking = asRecord(data.cooking);
+  const inProgress = typeof rawCooking.recipe === 'string'
+    ? {
+        recipe: rawCooking.recipe,
+        name: recipeById(rawCooking.recipe)?.name ?? rawCooking.recipe,
+        count: asNum(rawCooking.count),
+        startedAt: typeof rawCooking.startedAt === 'string' ? rawCooking.startedAt : '',
+      }
+    : null;
+  const rawSlots = asRecord(data.slots);
+  const parseSlot = (slot: unknown): { id: string; name: string; endsAt: string } | null => {
+    const s = asRecord(slot);
+    if (typeof s.id !== 'string' || typeof s.endsAt !== 'string') return null;
+    return { id: s.id, name: recipeById(s.id)?.name ?? s.id, endsAt: s.endsAt };
+  };
+  const bait2 = parseSlot(rawSlots.bait2);
+
+  const recentBag = (Array.isArray(row.recent_bag) ? row.recent_bag : []).map(item => {
+    const fish = fishById(item.fish_id);
+    const spot = item.spot ? spotById(item.spot as SpotId)?.name ?? item.spot : null;
+    return {
+      uid: item.uid,
+      fishId: item.fish_id,
+      name: fish?.name ?? item.fish_id,
+      form: item.form,
+      grade: fish?.rarity ?? null,
+      size: typeof item.size === 'number' ? item.size : null,
+      caughtAt: item.caught_at ?? null,
+      spot,
+      locked: Boolean(item.locked),
+    };
+  });
+
+  const visited = Array.isArray(data.visited) ? data.visited.filter((x): x is string => typeof x === 'string') : [];
+  const coupons = Array.isArray(data.coupons) ? data.coupons.filter((x): x is string => typeof x === 'string') : [];
+  const bountyProgress = (Array.isArray(row.bounty_progress) ? row.bounty_progress : []).map(p => ({
+    questId: p.quest_id,
+    zone: zoneById(p.zone as ZoneId)?.name ?? p.zone,
+    progress: Number(p.progress),
+    target: bountyById(p.quest_id)?.count ?? null,
+    startedAt: p.started_at,
+  }));
+  const bountyTickets = (Array.isArray(row.bounty_tickets) ? row.bounty_tickets : []).map(t => ({
+    questId: t.quest_id,
+    issuedAt: t.issued_at,
+  }));
+
+  return {
+    hasSave: Boolean(row.has_save),
+    dex: {
+      normal,
+      normalTotal: FISH.length,
+      variant,
+      variantTotal: FISH.length,
+      named,
+      namedTotal: NAMED.length,
+    },
+    bounty: {
+      namedClears: clearedNamed.length,
+      namedDistinctClears: new Set(clearedNamed).size,
+      namedTotal: NAMED.length,
+    },
+    artifacts: {
+      owned: artifacts,
+      total: ARTIFACTS.length,
+    },
+    hats: {
+      owned: ownedHatItems.length,
+      total: HATS.length,
+      items: ownedHatItems,
+      equipped: equippedHat,
+    },
+    achievements: {
+      claimed,
+      claimable,
+      total: ACHIEVEMENTS.length,
+      counters,
+    },
+    cooking: {
+      energy,
+      cooked,
+      inProgress,
+      slots: {
+        lunch: parseSlot(rawSlots.lunch),
+        bait: parseSlot(rawSlots.bait),
+        ...(bait2 ? { bait2 } : {}),
+      },
+    },
+    instances: {
+      bag: Number(row.instances?.bag ?? 0),
+      exhibit: Number(row.instances?.exhibit ?? 0),
+      recentBag,
+    },
+    progression: {
+      visited,
+      coupons,
+      bountyProgress,
+      bountyTickets,
+      activeSessions: Number(row.active_sessions ?? 0),
+    },
+  };
 }
 
 /** 연타·판정 플래그. 최근 7일 사용자별 캐치 수, 간격 2초 미만 캐치 수, PERFECT 비율과 30일 전체 평균 */
@@ -268,4 +431,32 @@ export function sessions(db: Executor, userId: string | null, limit: number | nu
     where ${userId}::uuid is null or s.user_id = ${userId}::uuid
     order by s.started_at desc, s.id desc
     limit least(greatest(coalesce(${limit}::int, 100), 1), 500)`, sql`t."startedAt" desc, t.id desc`);
+}
+
+/** 개요 탭 통합 조회 — 명부, 최근 이벤트, 스팸 플래그, 일별 집계, 리텐션, 최근 세션, 실시간 접속을 한 요청에 모은다 */
+export async function overview(db: Executor, days: number, online: readonly LiveOnline[]): Promise<unknown> {
+  const kstToday = Date.parse(new Date(Date.now() + 9 * 3_600_000).toISOString().slice(0, 10));
+  const to = new Date(kstToday).toISOString().slice(0, 10);
+  const from = new Date(kstToday - (days - 1) * 86_400_000).toISOString().slice(0, 10);
+  const [userRows, recentEventRows, spamFlagRows, dailyStatRows, retentionRows, sessionRows, known] = await Promise.all([
+    users(db),
+    recentEvents(db),
+    spamFlags(db),
+    dailyStats(db, from, to),
+    signupRetention(db),
+    sessions(db, null, 500),
+    online.length > 0 ? identities(db, online.map(entry => entry.uid)) : Promise.resolve(new Map()),
+  ]);
+  return {
+    users: userRows,
+    recentEvents: recentEventRows,
+    spamFlags: spamFlagRows,
+    dailyStats: dailyStatRows,
+    retention: retentionRows,
+    sessions: sessionRows,
+    live: {
+      count: online.length,
+      online: online.map(entry => ({ ...entry, nickname: null, email: null, ...known.get(entry.uid) })),
+    },
+  };
 }

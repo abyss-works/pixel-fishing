@@ -4,6 +4,7 @@ import type { GameAction } from '../../../../../game/rules/actions';
 import type { GameState } from '../../../../../game/rules/logic';
 import type { DispatchResult, MaybePromise } from '../../../../../features/gameplay/service/types';
 import { LEVEL_UP_TEXT, levelText, selectArtifactLevel } from '../../../../../features/inventory/model/artifactLevel';
+import { sendNotice } from '../../../../../features/display/model/toastPolicy';
 import type { ArtifactLevelView } from '../../../../../features/inventory/model/artifactLevel';
 import { levelUpArtifact } from '../../../../../features/inventory/service/levelUpArtifact';
 import Button from '../../../../ui/Button';
@@ -43,8 +44,15 @@ export default function ArtifactDetail({ artifact, game, dispatch, setToast, onC
     setBusy(true);
     const outcome = await levelUpArtifact(dispatch, game, artifact.id);
     setBusy(false);
-    if (outcome.ok) setToast(outcome.toast, 'gold');
-    else if (outcome.notice) setToast(outcome.notice, 'warn');
+    if (outcome.ok) {
+      sendNotice(setToast, {
+        kind: 'artifact.levelUp',
+        text: outcome.toast,
+        toastText: `${artifact.name} Lv.${next?.level ?? ''} 달성!`,
+      });
+    } else if (outcome.notice) {
+      sendNotice(setToast, { kind: 'system.modalRejected', text: outcome.notice });
+    }
   };
 
   return (

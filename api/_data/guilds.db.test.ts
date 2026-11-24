@@ -375,11 +375,11 @@ describe('길드 보너스 기부', () => {
     expect(view?.growth).toMatchObject({ level: 3, total: 25_000 });
     expect(view?.effects).toEqual({ sell: 0.04, bag: 0.04, named: 0.05, rare: 0, mutation: 0 });
     const [sell, bag, named, rare] = view!.bonuses;
-    expect(sell).toEqual({ id: 'sell', unlock: 1, rank: 2, cap: 3, pool: 250_000, next: 500_000, effect: 0.04,
+    expect(sell).toEqual({ id: 'sell', unlock: 1, rank: 2, enhanceRank: 0, totalRank: 2, cap: 3, pool: 250_000, next: 500_000, effect: 0.04,
       nextEffect: 0.06, mine: 100_000 });
-    expect(bag).toEqual({ id: 'bag', unlock: 2, rank: 1, cap: 3, pool: 0, next: 150_000, effect: 0.04, nextEffect: 0.08, mine: 0 });
-    expect(named).toMatchObject({ id: 'named', rank: 1, pool: 50_000, mine: 0 });
-    expect(rare).toEqual({ id: 'rare', unlock: 4, rank: 0, cap: 0, pool: 0, next: null, effect: 0, nextEffect: 0.02, mine: 0 });
+    expect(bag).toEqual({ id: 'bag', unlock: 2, rank: 1, enhanceRank: 0, totalRank: 1, cap: 3, pool: 0, next: 150_000, effect: 0.04, nextEffect: 0.08, mine: 0 });
+    expect(named).toMatchObject({ id: 'named', rank: 1, enhanceRank: 0, totalRank: 1, pool: 50_000, mine: 0 });
+    expect(rare).toEqual({ id: 'rare', unlock: 4, rank: 0, enhanceRank: 0, totalRank: 0, cap: 0, pool: 0, next: null, effect: 0, nextEffect: 0.02, mine: 0 });
     expect(view!.donors.map(d => [d.uid, d.gold])).toEqual([[m1, 350_000], [g.leader, 100_000]]);
     expect(view!.logbook[0]).toMatchObject({ kind: 'donate', detail: 'named', value: 50_000 });
   });

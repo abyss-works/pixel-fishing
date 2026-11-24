@@ -5,16 +5,16 @@
 import type { ReactNode } from 'react';
 import type { QuestInfoGeneral, QuestInfoNamed } from '../../../../features/bounty/model/questInfo';
 import AdjustedAmount from '../../../ui/AdjustedAmount';
-import Frame from '../../../ui/Frame';
+import Inset from '../../../ui/Inset';
 import { RarityText } from '../../../ui/fish/RarityTag';
 import { fmtGold, fmtNum } from '../../../ui/format';
 import { BoardRows, NamedCardHead, ProgressMeter } from './boardParts';
 
-const CARD = 'bg-surface-2 p-3 flex flex-col gap-2 text-sm';
+const CARD = 'p-3 flex flex-col gap-2 text-sm';
 
 export function GeneralInfoCard({ info }: { info: QuestInfoGeneral }) {
   return (
-    <Frame className={CARD}>
+    <Inset className={CARD}>
       <b className="text-base">{info.title}</b>
       <BoardRows rows={[
         { key: 'target', label: '목표', value: <><b><RarityText rarity={info.grade} /></b> 등급 어종 <span className="pf-accent">{fmtNum(info.count)}</span>마리</> },
@@ -22,13 +22,13 @@ export function GeneralInfoCard({ info }: { info: QuestInfoGeneral }) {
         { key: 'reward', label: '보상', value: <span className="pf-accent text-gold">{fmtGold(info.reward)}</span> },
         { key: 'finish', label: '마치는 곳', value: info.finishAt },
       ]} />
-    </Frame>
+    </Inset>
   );
 }
 
 export function NamedInfoCard({ info }: { info: QuestInfoNamed }) {
   return (
-    <Frame className={CARD}>
+    <Inset className={CARD}>
       <NamedCardHead title={info.title} traceMins={info.traceMins} />
       <BoardRows rows={[
         { key: 'haunt', label: '나타나는 곳', value: info.haunt },
@@ -37,15 +37,15 @@ export function NamedInfoCard({ info }: { info: QuestInfoNamed }) {
         ...(info.materialName ? [{ key: 'material', label: '교환 재료', value: info.materialName }] : []),
         { key: 'finish', label: '마치는 곳', value: info.finishAt },
       ]} />
-    </Frame>
+    </Inset>
   );
 }
 
 /** 빈 카드 - 수주한 의뢰가 없을 때, 또는 아직 읽지 못했을 때 */
 export function EmptyInfoCard({ children }: { children: ReactNode }) {
   return (
-    <Frame className={`${CARD} items-center text-center text-text-dim leading-relaxed py-6`}>
+    <Inset tone="deep" className={`${CARD} items-center text-center text-text-dim leading-relaxed py-6`}>
       {children}
-    </Frame>
+    </Inset>
   );
 }

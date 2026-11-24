@@ -4,13 +4,14 @@
 import { sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { Database, Executor } from '../_db/client.js';
-import type { FishInstance, GameState } from '../../src/game/rules/logic.js';
+import type { FishInstance, FormId, GameState } from '../../src/game/rules/logic.js';
 import type { StateWrites } from '../../src/game/rules/actions.js';
 import { at, jsonParam, uuidArray } from './json.js';
 
 /** GameState → saves_current 한 행. 스칼라는 열, 나머지만 blob */
 export function stateRow(state: GameState) {
-  const { bag: _b, exhibit: _e, dex: _d, gold, fame, boat, rod, ...rest } = state;
+  const { bag: _b, exhibit: _e, dex: _d, gold, fame, boat, rod,
+    achievementCounters: _ac, clearedNamed: _cn, ...rest } = state;
   return { gold, fame, boat, rod, data: rest };
 }
 
@@ -51,6 +52,17 @@ function replaceInstances(guard: SQL, uid: string, rows: ReturnType<typeof instR
     where f.user_id = ${uid} and f.uid = x.uid and ${guard}`;
 }
 
+/** 도감 삭제 조각 — dex.reset·named.reset·import·snapshot.restore에서 사라진 도감 행을 지운다 */
+export function deleteRecordsFragment(
+  guard: SQL, uid: string, records: readonly { fishId: string; form: FormId }[],
+): SQL | null {
+  if (records.length === 0) return null;
+  const rows = records.map(r => ({ fish_id: r.fishId, form: r.form }));
+  return sql`delete from public.records r
+    using json_to_recordset(${jsonParam(rows)}) as x(fish_id text, form text)
+    where r.user_id = ${uid} and r.fish_id = x.fish_id and r.form = x.form and ${guard}`;
+}
+
 function upsertRecords(guard: SQL, uid: string, records: StateWrites['records'], nowISO: string): SQL {
   const rows = records.map(r => ({
     fish_id: r.fishId, form: r.form, count: r.rec.count, max_size: r.rec.maxSize, first_caught: r.rec.first,
@@ -74,7 +86,7 @@ export interface CommitMarks {
  * 액션 페이싱 기준(updated_at)은 바꾸지 않는다. 호출자는 같은 트랜잭션에서 행을 잠그고 골드를 확인한 뒤 실행한다.
  */
 export function goldDebit(uid: string, gold: number): SQL {
-  return sql`update public.saves_current set gold = gold - ${gold}, version = version + 1 where user_id = ${uid}`;
+  return sql`update public.saves_current set gold = gold - ${gold}, version = version + 1 where user_id = ${uid} and gold >= ${gold}`;
 }
 
 /** 낙관 락 갱신 — 읽은 version 그대로일 때만 바뀐다. 핵심 쓰기의 첫 조각이며 다른 조각의 guard가 된다.
@@ -118,6 +130,10 @@ export function writeFragments(guard: SQL, uid: string, w: StateWrites, nowISO: 
         where user_id = ${uid} and uid = any(${uuidArray(uids)}) and ${guard}`);
     }
   }
+  if (w.recordsRemoved && w.recordsRemoved.length > 0) {
+    const del = deleteRecordsFragment(guard, uid, w.recordsRemoved);
+    if (del) out.push(del);
+  }
   if (w.records.length > 0) out.push(upsertRecords(guard, uid, w.records, nowISO));
   return out;
 }
@@ -145,9 +161,10 @@ export async function seedState(withTransaction: Database['withTransaction'], ui
   });
 }
 
-/** 주기 스냅샷 — 응답 뒤 후속 쓰기다 */
+/** 주기 스냅샷 — 응답 뒤 후속 쓰기다. 런타임 주입 필드는 저장하지 않는다(stateRow와 같은 정본) */
 export function snapshotInsert(uid: string, state: GameState, nowISO: string): SQL {
-  return sql`insert into public.saves (user_id, data, updated_at) values (${uid}, ${JSON.stringify(state)}::jsonb, ${at(nowISO)})`;
+  const { achievementCounters: _ac, clearedNamed: _cn, ...rest } = state;
+  return sql`insert into public.saves (user_id, data, updated_at) values (${uid}, ${JSON.stringify(rest)}::jsonb, ${at(nowISO)})`;
 }
 
 /** 콜드 아카이브 — saves 메타 한 묶음. (user_id 오름차순, updated_at 내림차순) 순서 계약이다 */
@@ -175,6 +192,29 @@ export async function deleteUserSaves(db: Executor, uid: string): Promise<void> 
   await db.execute(sql`delete from public.records where user_id = ${uid}`);
   await db.execute(sql`delete from public.saves where user_id = ${uid}`);
   await db.execute(sql`delete from public.saves_current where user_id = ${uid}`);
+}
+
+/** 단일 트랜잭션 내부에서 조건 없이 실행하는 쓰기 조각용 가드 */
+export const ALWAYS_GUARD: SQL = sql`true`;
+
+/** debugBatch 전용 원자 트랜잭션 확정 — 낙관 락 갱신이 성공했을 때만 writes와 단계별 표 조작 조각을 순서대로 실행한다 */
+export async function commitDebugBatch(
+  withTransaction: Database['withTransaction'],
+  versionWrite: SQL,
+  writes: StateWrites,
+  stepFragments: readonly (SQL | null)[],
+  uid: string,
+  nowISO: string,
+): Promise<boolean> {
+  const batchWrites = writeFragments(ALWAYS_GUARD, uid, writes, nowISO);
+  return withTransaction(async tx => {
+    const { rows } = await tx.execute(versionWrite);
+    if (rows.length === 0) return false;
+    for (const frag of [...batchWrites, ...stepFragments]) {
+      if (frag) await tx.execute(frag);
+    }
+    return true;
+  });
 }
 
 const idArray = (ids: readonly number[]) => sql`${`{${ids.map(Number).join(',')}}`}::bigint[]`;

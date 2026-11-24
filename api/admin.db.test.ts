@@ -2,6 +2,12 @@
 // 조회 결과는 관리자 뷰·함수의 결과와 같아야 한다. 같은 데이터를 authenticated 역할과 세션 클레임으로 읽은
 // 뷰·함수 결과(PostgREST의 읽기 방식)를 기댓값으로 쓴다.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { ARTIFACTS, artifactHasLevel } from '../src/game/content/artifacts.js';
+import { ACHIEVEMENTS } from '../src/game/content/achievements.js';
+import { ENERGY_ITEM_IDS, RECIPES } from '../src/game/content/cooking.js';
+import { FISH } from '../src/game/content/fish.js';
+import { NAMED } from '../src/game/content/named.js';
+import { HATS } from '../src/game/content/wardrobe.js';
 import { adminSessionHeaders, seedUser, startActionEnv, testUid, sessionHeaders, userToken } from './_dbTest/actionHarness.js';
 import type { ActionEnv } from './_dbTest/actionHarness.js';
 import { appAuth } from './_auth/session.js';
@@ -71,12 +77,6 @@ async function asBrowser(uid: string, select: string): Promise<Row[]> {
   }
 }
 
-/** DB 시계 기준 KST 오늘 날짜 */
-async function kstToday(): Promise<string> {
-  const { rows } = await env.client.query(`select ((now() at time zone 'Asia/Seoul')::date)::text as d`);
-  return rows[0].d as string;
-}
-
 const sinceDay = (days: number) => `where day >= (now() at time zone 'Asia/Seoul')::date - ${days - 1}`;
 const byKey = (rows: Row[], key: (r: Row) => string): Row[] => [...rows].sort((a, b) => key(a).localeCompare(key(b)));
 
@@ -98,19 +98,13 @@ interface Case {
 /** 기간(days)을 받는 일 단위 조회. 뷰는 day 열로 거른다 */
 const dayCase = (name: string, view: string, days: number): Case => ({
   name, params: { days: String(days) }, view: `select * from public.${view} ${sinceDay(days)}`,
-  filled: days > 1 || name === 'dailyActive',
-  // 우편 유입(mail_gold)은 v_economy_daily가 만들어진 뒤 더한 열이다. 나머지 열은 뷰와 같아야 한다
-  ...(name === 'economy' ? { only: ({ mail_gold: _mail, ...rest }: Row) => rest } : {}),
+  filled: days > 1,
 });
 const CASES: Case[] = [
   // 닉네임(nickname)과 세션 열(last_session_at·total_session_sec)은 v_admin_users가 만들어진 뒤 더한 열이다. 나머지 열은 뷰와 같아야 한다
   { name: 'users', view: 'select * from public.v_admin_users', key: r => String(r.user_id), filled: true,
     only: ({ nickname: _nickname, last_session_at: _lastSession, total_session_sec: _totalSession, ...rest }: Row) => rest },
-  dayCase('dailyActive', 'v_daily_active', 30),
-  { name: 'retention', view: 'select * from public.v_retention_cohorts', filled: true },
-  dayCase('economy', 'v_economy_daily', 30),
   dayCase('bountyFunnel', 'v_bounty_funnel_daily', 7),
-  dayCase('catchQuality', 'v_catch_quality', 90),
   { name: 'spamFlags', view: 'select * from public.v_spam_flags', key: r => String(r.user_id), filled: true },
   { name: 'recentEvents', view: 'select * from public.v_events_recent', filled: true },
   { name: 'userEvents', params: { user: PLAYER, limit: '300' }, view: `select * from public.fn_user_events('${PLAYER}', 300)`,
@@ -120,10 +114,7 @@ const CASES: Case[] = [
     only: ({ handled_at: _handled, ...rest }: Row) => rest },
 ];
 /** 기간 하한의 경계: 하루, 일주일, 대시보드의 최대 기간 */
-const DAY_CASES: Case[] = [1, 7, 90].flatMap(days => [
-  dayCase('dailyActive', 'v_daily_active', days), dayCase('economy', 'v_economy_daily', days),
-  dayCase('bountyFunnel', 'v_bounty_funnel_daily', days), dayCase('catchQuality', 'v_catch_quality', days),
-]);
+const DAY_CASES: Case[] = [1, 7, 90].map(days => dayCase('bountyFunnel', 'v_bounty_funnel_daily', days));
 
 async function expectSameAsView(c: Case): Promise<Row[]> {
   const res = await callAdmin({ q: c.name, ...c.params }, userToken(ADMIN));
@@ -197,9 +188,11 @@ describe('요청 검증과 관리자 판정', () => {
     const token = userToken(ADMIN);
     const wrong: Record<string, string>[] = [
       {}, { q: 'nope' }, { q: 'constructor' }, { q: '__proto__' },
-      { q: 'dailyActive' }, { q: 'dailyActive', days: '0' }, { q: 'dailyActive', days: '91' },
-      { q: 'dailyActive', days: '1.5' }, { q: 'economy', days: 'abc' }, { q: 'catchQuality', days: '-1' },
+      { q: 'dailyActive', days: '7' }, { q: 'catchQuality', days: '7' }, { q: 'retention' },
+      { q: 'economy' }, { q: 'economy', days: '0' }, { q: 'economy', days: '91' },
+      { q: 'economy', days: '1.5' }, { q: 'economy', days: 'abc' }, { q: 'bountyFunnel', days: '-1' },
       { q: 'userEvents' }, { q: 'userEvents', user: 'not-a-uuid' }, { q: 'userEvents', user: PLAYER, limit: 'x' },
+      { q: 'userState' }, { q: 'userState', uid: 'not-a-uuid' },
     ];
     for (const query of wrong) {
       const res = await callAdmin(query, token);
@@ -249,19 +242,7 @@ describe('데이터가 없는 상태', () => {
   it.each([...CASES, ...DAY_CASES].map(c => [`${c.name} ${c.params?.days ?? ''}`.trim(), c] as const))('%s: 뷰·함수와 같은 빈 결과를 준다', async (_label, c) => {
     const actual = await expectSameAsView(c);
     if (c.name === 'users') expect(actual).toHaveLength(5);
-    else if (c.name === 'dailyActive') expect(actual.every(r => r.dau === 0 && r.wau7 === 0)).toBe(true);
     else expect(actual).toEqual([]);
-  });
-
-  it('dailyActive: 오늘부터 days일의 날짜를 모두 채워 최신순으로 준다', async () => {
-    const today = await kstToday();
-    const one = (await callAdmin({ q: 'dailyActive', days: '1' }, userToken(ADMIN))).body as Row[];
-    expect(one.map(r => r.day)).toEqual([today]);
-    const week = (await callAdmin({ q: 'dailyActive', days: '7' }, userToken(ADMIN))).body as Row[];
-    expect(week).toHaveLength(7);
-    expect(week[0].day).toBe(today);
-    expect(week.map(r => r.day)).toEqual([...week.map(r => r.day)].sort().reverse());
-    expect(((await callAdmin({ q: 'dailyActive', days: '90' }, userToken(ADMIN))).body as Row[])).toHaveLength(90);
   });
 });
 
@@ -285,8 +266,8 @@ describe('조회 결과', () => {
     await event(ADMIN, 'ticket', { questId: 'pacific-named-1' }, '4 hours');
     await event(ADMIN, 'resolveChallenge', { success: true }, '3 hours');
     await event(ADMIN, 'resolveChallenge', { success: false }, '3 hours');
-    await event(ADMIN, 'deliverBounty', { questId: 'pacific-named-1' }, '2 hours');
-    await event(ADMIN, 'deliverBounty', { questId: 'harbor-general-3' }, '2 hours');
+    await event(ADMIN, 'deliverBounty', { questId: 'pacific-named-1', reward: 100000 }, '2 hours');
+    await event(ADMIN, 'deliverBounty', { questId: 'harbor-general-3', reward: 15000 }, '2 hours');
     // 제재된 익명 사용자: 기간 경계의 캐치(30일 밖, 7일 경계 안팎. 이벤트 id 순서가 시간 순서가 되게 오래된 것부터),
     // 골드 원장 이벤트
     await event(GUEST, 'catch', { fishId: 'tuna', form: 'normal', judgment: 'perfect', size: 80 }, '40 days');
@@ -297,9 +278,11 @@ describe('조회 결과', () => {
     await event(GUEST, 'sell', { gold: 250 }, '2 hours');
     await event(GUEST, 'coupon', { gold: 500 }, '1 day');
     await event(GUEST, 'claimMail', { mailId: 1, gold: 250 }, '1 day');
+    await event(GUEST, 'claimAchievement', { id: 'catch-10', gold: 1000 }, '1 day');
+    await event(GUEST, 'claimAllAchievements', { ids: ['a'], gold: 2000, hats: [] }, '1 day');
     await event(GUEST, 'upgradeRod', { cost: 80 }, '1 day');
     await event(GUEST, 'buyBoat', { cost: 1000 }, '2 days');
-    await event(GUEST, 'buyBait', { cost: 30 }, '30 minutes');
+    await event(GUEST, 'buyHat', { hat: 'cap-red', cost: 50000 }, '30 minutes');
     // 리텐션: 열흘 전 코호트(저장 없는 두 사용자 중 하나만 다음 날과 사흘 뒤에 돌아왔다)
     await event(IDLE_A, 'boot', {}, '10 days');
     await event(IDLE_B, 'boot', {}, '10 days');
@@ -333,13 +316,12 @@ describe('조회 결과', () => {
     expect(rows[3]).toMatchObject({ user_id: IDLE_A, gold: null, location_kind: null, visited: null, restricted: null, last_action_at: null });
   });
 
-  it('economy·catchQuality·bountyFunnel: 날짜 하한 밖의 날은 빠진다', async () => {
+  it('economy·bountyFunnel: 날짜 하한 밖의 날은 빠진다', async () => {
     const all = (await callAdmin({ q: 'economy', days: '90' }, userToken(ADMIN))).body as Row[];
     const today = (await callAdmin({ q: 'economy', days: '1' }, userToken(ADMIN))).body as Row[];
     expect(all.length).toBeGreaterThan(1);
     expect(today.length).toBeLessThan(all.length);
     expect(today.every(r => r.day === all[0].day)).toBe(true);
-    expect(((await callAdmin({ q: 'catchQuality', days: '1' }, userToken(ADMIN))).body as Row[]).length).toBeLessThanOrEqual(1);
     expect(((await callAdmin({ q: 'bountyFunnel', days: '1' }, userToken(ADMIN))).body as Row[]).length).toBeLessThanOrEqual(1);
   });
 
@@ -347,8 +329,10 @@ describe('조회 결과', () => {
     const rows = (await callAdmin({ q: 'economy', days: '90' }, userToken(ADMIN))).body as Row[];
     const total = (key: string) => rows.reduce((sum, r) => sum + Number(r[key]), 0);
     expect({ sells: total('sells'), sell_gold: total('sell_gold'), coupon_gold: total('coupon_gold'), mail_gold: total('mail_gold'),
-      rod_cost: total('rod_cost'), boat_cost: total('boat_cost'), bait_cost: total('bait_cost') })
-      .toEqual({ sells: 2, sell_gold: 350, coupon_gold: 500, mail_gold: 250, rod_cost: 80, boat_cost: 1000, bait_cost: 30 });
+      bounty_gold: total('bounty_gold'), achievement_gold: total('achievement_gold'),
+      rod_cost: total('rod_cost'), boat_cost: total('boat_cost'), hat_cost: total('hat_cost') })
+      .toEqual({ sells: 2, sell_gold: 350, coupon_gold: 500, mail_gold: 250, bounty_gold: 115000, achievement_gold: 3000,
+        rod_cost: 80, boat_cost: 1000, hat_cost: 50000 });
   });
 
   it('bountyFunnel: 네임드와 일반 의뢰, 도전권, 결투 승패, 보상을 나누어 센다', async () => {
@@ -370,22 +354,132 @@ describe('조회 결과', () => {
     expect(rows.map(r => r.perfect_pct_global)).toEqual([50, 50, 50]);
   });
 
-  it('catchQuality: 기간 하한은 KST 오늘부터 days일이다. 하한 날짜는 들어오고 하루 앞은 빠진다', async () => {
-    const dayAgo = async (n: number) =>
-      (await env.client.query(`select (((now() at time zone 'Asia/Seoul')::date) - $1::int)::text as d`, [n])).rows[0].d as string;
-    const daysOf = async (n: number) =>
-      ((await callAdmin({ q: 'catchQuality', days: String(n) }, userToken(ADMIN))).body as Row[]).map(r => r.day);
-    expect(await daysOf(7)).toContain(await dayAgo(6));
-    expect(await daysOf(7)).not.toContain(await dayAgo(7));
-    expect(await daysOf(8)).toContain(await dayAgo(7));
-    expect(await daysOf(30)).not.toContain(await dayAgo(40));
-    expect(await daysOf(90)).toContain(await dayAgo(40));
+  it('userState: 대상 플레이어의 도감·토벌·유물·모자·업적·기운/요리·개체 수를 돌려준다', async () => {
+    const leveledArt = ARTIFACTS.find(a => artifactHasLevel(a))!;
+    const fixedArt = ARTIFACTS.find(a => !artifactHasLevel(a))!;
+    const hat = HATS[0];
+    const [achClaimed, achClaimable] = ACHIEVEMENTS;
+    const lunchRecipe = RECIPES.find(r => r.kind === 'lunch')!;
+    const baitRecipe = RECIPES.find(r => r.kind === 'bait')!;
+    const normalFish = FISH[0];
+    const variantFish = FISH[1];
+    const namedFish = NAMED[0];
+
+    await env.client.query(`insert into public.records (user_id, fish_id, form, count) values
+      ($1, $2, 'normal', 2), ($1, $3, 'variant', 1), ($1, $4, 'normal', 1)`,
+    [PLAYER, normalFish.id, variantFish.id, namedFish.id]);
+    await env.client.query(`insert into public.bounty_clears (user_id, kind, quest_id) values
+      ($1, 'named', 'pacific-named-1'), ($1, 'named', 'pacific-named-1'), ($1, 'named', 'seasia-named-1')`,
+    [PLAYER]);
+    await env.client.query(`insert into public.fish_instances (uid, user_id, fish_id, form, slot) values
+      ($2, $1, $4, 'normal', null), ($3, $1, $4, 'variant', null), ($5, $1, $4, 'normal', 0)`,
+    [PLAYER, testUid(9901), testUid(9902), normalFish.id, testUid(9903)]);
+    await env.client.query(`insert into public.achievement_counters (user_id, key, value) values
+      ($1, 'catches', 12)`,
+    [PLAYER]);
+    await env.client.query(`update public.saves_current set data = data || $2::jsonb where user_id = $1`, [PLAYER, JSON.stringify({
+      artifacts: [leveledArt.id, fixedArt.id],
+      artifactLevels: { [leveledArt.id]: 3 },
+      hats: [hat.id],
+      achievements: { [achClaimed.id]: 'claimed', [achClaimable.id]: 'claimable' },
+      items: { [ENERGY_ITEM_IDS.common]: 20, [ENERGY_ITEM_IDS.rare]: 5, [lunchRecipe.id]: 2 },
+      cooking: { recipe: baitRecipe.id, count: 1, startedAt: '2026-10-18T09:50:00.000Z' },
+      slots: {
+        lunch: { id: lunchRecipe.id, endsAt: '2026-10-18T11:00:00.000Z' },
+        bait: { id: baitRecipe.id, endsAt: '2026-10-18T10:05:00.000Z' },
+      },
+    })]);
+
+    const res = await callAdmin({ q: 'userState', uid: PLAYER }, userToken(ADMIN));
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      hasSave: true,
+      dex: {
+        normal: 1,
+        normalTotal: FISH.length,
+        variant: 1,
+        variantTotal: FISH.length,
+        named: 1,
+        namedTotal: NAMED.length,
+      },
+      bounty: { namedClears: 3, namedDistinctClears: 2, namedTotal: NAMED.length },
+      artifacts: {
+        owned: [
+          { id: leveledArt.id, name: leveledArt.name, grade: leveledArt.grade, level: 3 },
+          { id: fixedArt.id, name: fixedArt.name, grade: fixedArt.grade, level: null },
+        ],
+        total: ARTIFACTS.length,
+      },
+      hats: {
+        owned: 1,
+        total: HATS.length,
+        items: [{ id: hat.id, name: hat.name, source: hat.source }],
+        equipped: null,
+      },
+      achievements: {
+        claimed: 1,
+        claimable: 1,
+        total: ACHIEVEMENTS.length,
+        counters: { catches: 12 },
+      },
+      cooking: {
+        energy: { common: 20, rare: 5, epic: 0, legendary: 0 },
+        cooked: [{ id: lunchRecipe.id, name: lunchRecipe.name, kind: lunchRecipe.kind, count: 2 }],
+        inProgress: {
+          recipe: baitRecipe.id,
+          name: baitRecipe.name,
+          count: 1,
+          startedAt: '2026-10-18T09:50:00.000Z',
+        },
+        slots: {
+          lunch: { id: lunchRecipe.id, name: lunchRecipe.name, endsAt: '2026-10-18T11:00:00.000Z' },
+          bait: { id: baitRecipe.id, name: baitRecipe.name, endsAt: '2026-10-18T10:05:00.000Z' },
+        },
+      },
+      instances: {
+        bag: 2,
+        exhibit: 1,
+        recentBag: expect.arrayContaining([
+          expect.objectContaining({ fishId: normalFish.id, name: normalFish.name, form: 'normal' }),
+          expect.objectContaining({ fishId: normalFish.id, name: normalFish.name, form: 'variant' }),
+        ]),
+      },
+      progression: {
+        visited: ['village'],
+        coupons: [],
+        bountyProgress: [],
+        bountyTickets: [],
+        activeSessions: expect.any(Number),
+      },
+    });
+
+    const emptyRes = await callAdmin({ q: 'userState', uid: IDLE_A }, userToken(ADMIN));
+    expect(emptyRes.status).toBe(200);
+    expect(emptyRes.body).toMatchObject({
+      hasSave: false,
+      dex: { normal: 0, variant: 0, named: 0 },
+      bounty: { namedClears: 0, namedDistinctClears: 0 },
+      artifacts: { owned: [] },
+      hats: { owned: 0, items: [], equipped: null },
+      achievements: { claimed: 0, claimable: 0, counters: {} },
+      instances: { bag: 0, exhibit: 0, recentBag: [] },
+      progression: { visited: [], coupons: [], bountyProgress: [], bountyTickets: [] },
+    });
   });
 
-  it('retention: 첫 행동일 코호트별 재방문률을 준다', async () => {
-    const rows = (await callAdmin({ q: 'retention' }, userToken(ADMIN))).body as Row[];
-    const cohort = rows.find(r => r.users === 2);
-    expect(cohort).toMatchObject({ d1: 50, d3: 50, d7: 0, d14: 0, d30: 0 });
+  it('overview: 개요 탭에 필요한 명부·최근 이벤트·스팸 플래그·일별 집계·리텐션·세션·실시간 접속을 한 번에 돌려준다', async () => {
+    const res = await callAdmin({ q: 'overview', days: '7' }, userToken(ADMIN));
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      users: expect.any(Array),
+      recentEvents: expect.any(Array),
+      spamFlags: expect.any(Array),
+      dailyStats: expect.any(Array),
+      retention: expect.any(Array),
+      sessions: expect.any(Array),
+      live: { count: 0, online: [] },
+    });
+    expect((res.body as { users: Row[] }).users.length).toBeGreaterThanOrEqual(5);
   });
 
   it('recentEvents: 최신 80행만 id 내림차순으로 준다', async () => {
@@ -591,5 +685,30 @@ describe('관리자 조치', () => {
 
     expect(await post('letterHandled', { letterId, handled: false })).toMatchObject({ status: 200, body: { handled: false } });
     expect(await handledAt()).toBeNull();
+  });
+
+  it('revokeSessions: 대상 계정의 auth.sessions 행을 삭제하고 adminRevokeSessions 이벤트를 남긴다', async () => {
+    expect(await post('revokeSessions', { userId: TARGET }, userToken(PLAYER))).toMatchObject({ status: 403 });
+    expect(await post('revokeSessions', { userId: TARGET }, null)).toMatchObject({ status: 401 });
+    expect(await post('revokeSessions', { userId: 'nope' })).toMatchObject({ status: 400, body: { error: 'bad-user' } });
+    expect(await post('revokeSessions', { userId: testUid(998) })).toMatchObject({ status: 404, body: { error: 'no-user' } });
+
+    // 앞선 resetPassword 테스트가 기존 세션을 지우므로 대상 계정의 활성 세션을 명시적으로 심는다
+    await env.client.query(
+      `insert into auth.sessions (user_id, token, expires_at) values ($1, $2, '2100-01-01T00:00:00Z')
+       on conflict (token) do nothing`,
+      [TARGET, `revoke-test-${TARGET}`],
+    );
+    const before = await env.client.query('select 1 from auth.sessions where user_id = $1', [TARGET]);
+    expect(before.rows.length).toBeGreaterThan(0);
+
+    const res = await post('revokeSessions', { userId: TARGET });
+    expect(res).toMatchObject({ status: 200, body: { revoked: before.rows.length } });
+    const after = await env.client.query('select 1 from auth.sessions where user_id = $1', [TARGET]);
+    expect(after.rows).toEqual([]);
+    expect(await adminEvents(TARGET)).toContainEqual({
+      type: 'adminRevokeSessions',
+      payload: { adminId: ADMIN, revoked: before.rows.length },
+    });
   });
 });

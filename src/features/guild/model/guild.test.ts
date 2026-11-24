@@ -3,8 +3,9 @@ import type { GuildBonusItem, GuildInfo, GuildInvitePreview, GuildMemberItem } f
 import { NO_GUILD_EFFECTS } from '../../../game/rules/guild';
 import {
   GUILD_BONUS_NAME, GUILD_JOIN_MODE_TEXT, GUILD_LEVEL_HELP, dailyContributionRows, GUILD_ERROR_TEXT, bonusEffectText, bonusEffectValue,
-  bonusRows, growthBar, growthTotalText, guildAlertText, guildLinkUrl, inviteDialogView, inviteShareText, leaveConfirm, leaveOutcome,
-  logbookDays, memberActions, memberConfirm, memberName, memberRows, renameButtonState, requestRows, splitMembers,
+  bonusRows, donateDisabledReason, enhanceInvestState, enhancePoolSummary, enhanceResetState, growthBar, growthTotalText,
+  guildAlertText, guildLinkUrl, inviteDialogView, inviteShareText, leaveConfirm, leaveOutcome, logbookDays, memberActions,
+  memberConfirm, memberName, memberRows, renameButtonState, requestRows, splitMembers,
 } from './guild';
 
 const member = (uid: string, role: GuildMemberItem['role'], leftAt: string | null = null): GuildMemberItem =>
@@ -91,7 +92,8 @@ describe('길드 화면 모델', () => {
 
   it('서버 거부 코드마다 안내 문장이 있다', () => {
     for (const code of ['bad-name', 'name-taken', 'already-in-guild', 'bad-code', 'guild-full', 'not-leader', 'handover-first', 'account-only',
-      'not-enough-gold', 'bonus-locked', 'rank-maxed', 'bad-amount', 'restricted', 'same-name', 'renamed-today']) {
+      'not-enough-gold', 'bonus-locked', 'rank-maxed', 'bad-amount', 'restricted', 'same-name', 'renamed-today',
+      'enhance-locked', 'no-enhance-points', 'enhance-maxed', 'no-enhance-used']) {
       expect(GUILD_ERROR_TEXT[code]).toBeTruthy();
     }
   });
@@ -106,12 +108,12 @@ describe('길드 성장 화면 모델', () => {
 
   it('진행 막대는 지금 레벨 안에서 채운 비율과 다음 레벨까지 남은 기여다. 최고 레벨은 가득 차고 남은 기여가 없다', () => {
     expect(growthBar(growth(2, 17_500, 10_000, 25_000))).toEqual({ ratio: 0.5, remaining: 7_500 });
-    expect(growthBar(growth(5, 150_000, 100_000, null))).toEqual({ ratio: 1, remaining: null });
+    expect(growthBar(growth(10, 1_200_000, 1_100_000, null))).toEqual({ ratio: 1, remaining: null });
   });
 
   it('누적 기여와 다음 레벨 문턱을 숫자로 보인다. 최고 레벨은 누적만 보인다', () => {
     expect(growthTotalText(growth(3, 31_000, 25_000, 50_000))).toBe('31,000 / 50,000');
-    expect(growthTotalText(growth(5, 150_000, 100_000, null))).toBe('150,000');
+    expect(growthTotalText(growth(10, 1_200_000, 1_100_000, null))).toBe('1,200,000');
   });
 
   it('기여 안내는 명성 하루 상한을 담는다', () => {
@@ -126,8 +128,8 @@ describe('길드 성장 화면 모델', () => {
 describe('오늘 기여 도움말', () => {
   it('하루 기여 상한을 갈래별 이름과 값의 목록으로 보인다', () => {
     expect(dailyContributionRows({ artifacts: [] })).toEqual([
-      { label: '명성', value: '2,000' },
-      { label: '일반 의뢰', value: '500' },
+      { label: '명성', value: '2,500' },
+      { label: '일반 의뢰', value: '1,000' },
       { label: '네임드 토벌', value: '1,000' },
     ]);
   });
@@ -215,8 +217,14 @@ describe('길드 이름 바꾸기 항해일지', () => {
 });
 
 describe('길드 보너스 화면 모델', () => {
-  const item = (over: Partial<GuildBonusItem>): GuildBonusItem => ({ id: 'sell', unlock: 1, rank: 0, cap: 0, pool: 0,
-    next: null, effect: 0, nextEffect: 0.02, mine: 0, ...over });
+  const item = (over: Partial<GuildBonusItem>): GuildBonusItem => {
+    const rank = over.rank ?? 0;
+    const enhanceRank = over.enhanceRank ?? 0;
+    return {
+      id: 'sell', unlock: 1, rank, enhanceRank, totalRank: over.totalRank ?? rank + enhanceRank,
+      cap: 0, pool: 0, next: null, effect: 0, nextEffect: 0.02, mine: 0, ...over,
+    };
+  };
 
   it('길드 스킬 이름', () => {
     expect(Object.values(GUILD_BONUS_NAME)).toEqual(['판매가 보너스', '가방 용량 증가', '네임드 조우 확률', '희귀 어종 확률', '돌연변이 확률']);
@@ -248,18 +256,54 @@ describe('길드 보너스 화면 모델', () => {
     expect(named).toMatchObject({ name: '네임드 조우 확률', locked: true, now: null, canDonate: false });
   });
 
-  it('스킬 트리 노드 — 이룬 단계, 모으는 다음 단계(채운 비율), 상한 안의 먼 단계, 상한 위 단계', () => {
-    const [sell, named] = bonusRows([
+  it('스킬 트리 노드 — 이룬 단계, 모으는 다음 단계(채운 비율), 상한 안의 먼 단계, 상한 위 단계와 자유 강화 테두리', () => {
+    const [sell, named, rare] = bonusRows([
       item({ id: 'sell', rank: 2, cap: 4, pool: 125_000, next: 500_000 }),
       item({ id: 'named', unlock: 4, cap: 0 }),
+      item({ id: 'rare', unlock: 4, rank: 2, enhanceRank: 3, totalRank: 5, cap: 5 }),
     ]);
     expect(sell.nodes).toEqual([
-      { rank: 1, state: 'done', fill: 1 }, { rank: 2, state: 'done', fill: 1 }, { rank: 3, state: 'next', fill: 0.25 },
-      { rank: 4, state: 'open', fill: 0 }, { rank: 5, state: 'capped', fill: 0 },
+      { rank: 1, state: 'done', fill: 1, enhanced: false },
+      { rank: 2, state: 'done', fill: 1, enhanced: false },
+      { rank: 3, state: 'next', fill: 0.25, enhanced: false },
+      { rank: 4, state: 'open', fill: 0, enhanced: false },
+      { rank: 5, state: 'capped', fill: 0, enhanced: false },
     ]);
-    expect(named.nodes.every(n => n.state === 'capped')).toBe(true);
+    expect(named.nodes.every(n => n.state === 'capped' && !n.enhanced)).toBe(true);
+    expect(rare.nodes.map(n => [n.rank, n.state, n.enhanced])).toEqual([
+      [1, 'done', true], [2, 'done', true], [3, 'next', true], [4, 'open', false], [5, 'open', false],
+    ]);
   });
 
+  it('자유 강화 포인트와 투자·초기화 상태는 일반 길드원에게도 열리고 20,000,000G가 필요하다', () => {
+    const g: GuildInfo = {
+      ...guild('member', [member('M', 'member')]),
+      growth: { level: 7, total: 350_000, floor: 350_000, next: 550_000 },
+      bonuses: [
+        item({ id: 'sell', rank: 5, enhanceRank: 1, cap: 5 }),
+        item({ id: 'bag', unlock: 2, rank: 2, enhanceRank: 0, cap: 5 }),
+        item({ id: 'rare', unlock: 4, rank: 0, enhanceRank: 0, cap: 0 }),
+      ],
+    };
+    const rows = bonusRows(g.bonuses);
+    expect(donateDisabledReason(rows[0])).toBe('기본 단계 5단계를 모두 채웠어요.');
+    expect(donateDisabledReason(rows[2])).toBe(GUILD_ERROR_TEXT['bonus-locked']);
+    expect(donateDisabledReason(bonusRows([item({ id: 'bag', unlock: 2, rank: 3, cap: 3 })])[0])).toBe(GUILD_ERROR_TEXT['rank-maxed']);
+    expect(enhancePoolSummary(g)).toEqual({ max: 2, used: 1, remaining: 1, maxSlots: 5 });
+    expect(enhanceInvestState(g, rows[1])).toEqual({ canInvest: true, reason: null });
+    expect(enhanceResetState(g, 19_999_999)).toMatchObject({ canReset: false, used: 1, cost: 20_000_000 });
+    expect(enhanceResetState(g, 20_000_000)).toEqual({ canReset: true, reason: null, used: 1, cost: 20_000_000 });
+  });
+
+  it('자유 강화·초기화 항해일지 문장', () => {
+    const at = '2026-11-05T00:00:00.000Z';
+    const [day] = logbookDays([
+      { id: 2, kind: 'enhance-reset', uid: 'u', nick: '가람', detail: null, value: 2, at },
+      { id: 1, kind: 'enhance', uid: 'me', nick: '나', detail: 'rare', value: 3, at },
+    ], 'me');
+    expect(day.items[0].parts.map(p => p.text).join('')).toBe('가람 님이 길드 스킬 강화를 초기화했어요.');
+    expect(day.items[1].parts.map(p => p.text).join('')).toBe('나 님이 희귀 어종 확률 스킬을 강화 3단계로 올렸어요.');
+  });
 });
 
 describe('초대 확인 창', () => {

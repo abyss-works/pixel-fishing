@@ -1,30 +1,33 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { GUEST_LOCK_TEXT, guestLock } from '../../../../features/display/model/menuLock';
-import { isGuest } from '../../../../features/account/service/accountActions';
+import { sendNotice } from '../../../../features/display/model/toastPolicy';
+import { accountLockState } from '../../../../features/account/service/accountActions';
 import { FRIEND_ERROR_TEXT, friendRelation } from '../../../../features/friends/model/friends';
 import { useFriends } from '../../../../features/friends/service/useFriends';
 import { useChatModeration } from '../../../../features/live/service/useChatModeration';
 import type { ChatActionError } from '../../../../features/live/service/useChatModeration';
 import { usePlayerProfile } from '../../../../features/live/service/usePlayerProfile';
-import { useOnline } from '../../../../features/live/service/useLive';
 import { selectProfileView } from '../../../../features/live/model/profile';
 import type { ProfileView } from '../../../../features/live/model/profile';
 import BoatSprite from '../../../ui/BoatSprite';
 import Button from '../../../ui/Button';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import Inset from '../../../ui/Inset';
+import KeyValueRow from '../../../ui/KeyValueRow';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
 import Locked from '../../../ui/Locked';
-import Tip from '../../../ui/Tip';
+import PersonSprite from '../../../ui/PersonSprite';
+import ProgressMeter from '../../../ui/ProgressMeter';
+import Subheading from '../../../ui/Subheading';
+import Tip, { TipList } from '../../../ui/Tip';
 import { cx } from '../../../ui/cx';
 import { fmtNum } from '../../../ui/format';
 
-// 플레이어 정보. 칸 셋으로 보인다. 요약 칸(배 그림과 닉네임, 명성, 도감, 배, 낚싯대, 파워, 맨 아래 동작 버튼),
-// 해역별 도감 칸, 유물 칸이다. 접속 목록(680 폭)에서는 요약 칸이 왼쪽 위아래를 쓰고 오른쪽에 도감과 유물이 위아래로 놓이며,
-// 채팅 이름에서 여는 400 폭 창에서는 같은 칸을 위아래로 쌓는다.
+// 플레이어 정보 — PC 680 폭 2열 배치(모바일 1열 쌓기)로 요약, 업적, 수집품, 해역별 도감 비교를 보인다.
+// 채팅 이름 클릭 창과 접속 목록 모두 같은 배치를 공유한다.
 // 동작(친구 요청, 차단, 채팅 글줄 신고)은 계정 유저만 쓴다. 게스트에게는 버튼을 흐리게 두고 이유를 툴팁으로 보인다. 내 정보에는 동작이 없다.
 // 채팅 글줄에서 열었을 때만 그 글줄을 신고할 수 있다.
 
@@ -41,20 +44,19 @@ const BLOCK_ERROR_TEXT: Record<ChatActionError, string> = {
   missing: '대상을 찾을 수 없어요. 오래된 메시지는 신고할 수 없어요.',
   failed: '요청을 처리하지 못했어요. 잠시 뒤에 다시 시도해 주세요.',
 };
-const DEX_HELP = '일반 폼으로 한 번이라도 낚은 어종';
+const DEX_HELP = '일반 폼과 돌연변이 폼으로 한 번이라도 낚은 어종';
 
-export function PlayerInfo({ target, self, account, setToast, layout = 'stack' }: {
+export function PlayerInfo({ target, self, account, accountFailed = false, setToast }: {
   target: PlayerTarget;
   /** 내 정보인가 — 동작을 보이지 않는다 */
   self: boolean;
   /** 내 계정 이메일. 게스트면 null */
   account: string | null;
+  /** 세션 확인에 실패했는가 */
+  accountFailed?: boolean;
   setToast: Notify;
-  /** grid = 접속 목록의 세 칸 배치, stack = 400 폭 창의 위아래 쌓기 */
-  layout?: 'grid' | 'stack';
 }) {
   const { profile, loading, failed } = usePlayerProfile(target.uid);
-  const online = useOnline(target.uid);
   const member = account !== null && !self;
   const friends = useFriends(member);
   const moderation = useChatModeration(member);
@@ -73,9 +75,9 @@ export function PlayerInfo({ target, self, account, setToast, layout = 'stack' }
     setBusy(true);
     try {
       const warn = await work();
-      if (warn) setToast(warn, 'warn');
+      if (warn) sendNotice(setToast, { kind: 'system.modalRejected', text: warn });
     } catch {
-      setToast('요청을 보내지 못했어요. 연결을 확인해 주세요.', 'warn');
+      sendNotice(setToast, { kind: 'system.modalRejected', text: '요청을 보내지 못했어요. 연결을 확인해 주세요.' });
     } finally {
       setBusy(false);
     }
@@ -83,21 +85,34 @@ export function PlayerInfo({ target, self, account, setToast, layout = 'stack' }
   const befriend = (op: 'request' | 'accept') => run(async () => {
     const r = await friends.act(op === 'request' ? { op, nickname: name } : { op, uid: target.uid });
     if (!r.ok) return FRIEND_ERROR_TEXT[r.error] ?? '요청을 처리하지 못했어요. 잠시 뒤 다시 해 주세요.';
-    setToast(r.result === 'requested' ? `${name} 님에게 친구 요청을 보냈어요.`
-      : r.result === 'already' ? `${name} 님과는 이미 친구이거나 요청 중이에요.` : `${name} 님과 친구가 됐어요.`);
+    sendNotice(setToast, {
+      kind: 'social.modalAction',
+      text: r.result === 'requested' ? `${name} 님에게 친구 요청을 보냈어요.`
+        : r.result === 'already' ? `${name} 님과는 이미 친구이거나 요청 중이에요.` : `${name} 님과 친구가 됐어요.`,
+      toastText: r.result === 'requested' ? `${name} 님 친구 요청 전송`
+        : r.result === 'already' ? '이미 친구이거나 요청 중' : `${name} 님과 친구 성사`,
+    });
     return null;
   });
   const block = (op: 'block' | 'unblock') => run(async () => {
     const error = await (op === 'block' ? moderation.block(target.uid) : moderation.unblock(target.uid));
     if (error) return BLOCK_ERROR_TEXT[error];
-    setToast(op === 'block' ? `${name} 님을 차단했어요. 이 사람의 채팅이 보이지 않아요.` : `${name} 님의 차단을 풀었어요.`);
+    sendNotice(setToast, {
+      kind: 'social.modalAction',
+      text: op === 'block' ? `${name} 님을 차단했어요. 이 사람의 채팅이 보이지 않아요.` : `${name} 님의 차단을 풀었어요.`,
+      toastText: op === 'block' ? `${name} 님 차단 완료` : `${name} 님 차단 해제`,
+    });
     return null;
   });
   const report = (chatId: number) => run(async () => {
     const error = await moderation.report(chatId);
     if (error) return BLOCK_ERROR_TEXT[error];
     setReported(true);
-    setToast('신고했어요. 운영자가 확인할게요.');
+    sendNotice(setToast, {
+      kind: 'social.modalAction',
+      text: '신고했어요. 운영자가 확인할게요.',
+      toastText: '채팅 신고를 접수했어요.',
+    });
     return null;
   });
 
@@ -108,7 +123,7 @@ export function PlayerInfo({ target, self, account, setToast, layout = 'stack' }
     : relation === 'incoming' ? <Button variant="primary" className="flex-1" disabled={busy} onClick={() => void befriend('accept')}>친구 수락</Button>
     : friends.groups && <Button variant="primary" className="flex-1" disabled={busy} onClick={() => void befriend('request')}>친구 요청</Button>
   );
-  const lock = guestLock('player', isGuest(account));
+  const lock = guestLock('player', accountLockState(account, accountFailed));
   const actions = self ? null : lock ? (
     <div className="flex items-center gap-2">
       <Locked lines={lock} label="친구 요청" className="flex-1 block">
@@ -135,76 +150,192 @@ export function PlayerInfo({ target, self, account, setToast, layout = 'stack' }
   );
 
   return (
-    <ProfileCells name={name} online={layout === 'stack' && online && !self} view={selectProfileView(profile)}
-                  layout={layout} actions={actions} />
+    <ProfileCells name={name} view={selectProfileView(profile)} actions={actions} />
   );
 }
 
 // 등급색 — 가진 유물 칸의 테두리와 이름
-const GRADE_CLASS: Record<NonNullable<ProfileView['artifacts']['slots'][number]['grade']>, string> = {
+const GRADE_CLASS: Record<NonNullable<ProfileView['collectibles']['artifacts']['slots'][number]['grade']>, string> = {
   common: 'border-common text-common',
   rare: 'border-rare text-rare',
   epic: 'border-epic text-epic',
   legendary: 'border-legend text-legend',
 };
 
-/** 요약, 해역별 도감, 유물 세 칸. grid면 요약 칸이 왼쪽 두 줄을 잇는다 */
-function ProfileCells({ name, online, view, layout, actions }: {
+/** 요약, 업적, 수집품, 해역별 도감 비교. PC 2열(요약 왼쪽, 업적과 수집품 오른쪽, 도감 비교 하단 전폭), 모바일 1열 쌓기 */
+function ProfileCells({ name, view, actions }: {
   name: string;
-  /** 이름 앞에 접속 점을 붙인다(채팅에서 연 창). 접속 목록은 모두 접속 중이라 붙이지 않는다 */
-  online: boolean;
   view: ProfileView;
-  layout: 'grid' | 'stack';
   actions: ReactNode;
 }) {
-  const { dex, boat, rod, artifacts } = view;
+  const { online, placeLabel, look, boat, rod, dex, achievements, collectibles } = view;
+  const { hats, artifacts } = collectibles;
+  const placeText = placeLabel ?? '위치 미상';
+
   return (
-    <div className={layout === 'grid' ? 'grid grid-cols-2 grid-rows-[auto_auto] gap-3 mobile:grid-cols-1' : 'flex flex-col gap-3'}>
-      <Inset className={cx('px-3 py-2.5 flex flex-col gap-2 min-w-0', layout === 'grid' && 'row-span-2 mobile:row-span-1')}>
-        <div className="flex items-center gap-2.5 min-h-8">
-          {boat.tier > 0 && <BoatSprite tier={boat.tier} preset="row" />}
-          {online && <span className="size-2 shrink-0 bg-accent" role="img" aria-label="접속 중" />}
-          <b className="text-sm truncate">{name}</b>
+    <div className="grid grid-cols-[224px_minmax(0,1fr)] gap-3 mobile:grid-cols-1">
+      {/* 왼쪽 열: 헤더(외형·배, 접속 상태, 닉네임, 위치) + 요약 + 동작 */}
+      <Inset className="px-3 py-2.5 flex flex-col gap-2.5 min-w-0 row-span-2 mobile:row-span-1">
+        <div className="flex items-center gap-2.5 min-w-0">
+          {look ? (
+            <Inset tone="light" borderless className="shrink-0 w-11 h-12 flex items-center justify-center">
+              <PersonSprite look={look} scale={2} />
+            </Inset>
+          ) : boat.tier > 0 ? (
+            <BoatSprite tier={boat.tier} preset="row" />
+          ) : null}
+          <div className="flex flex-col gap-1 min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 min-w-0">
+              {online && <span className="size-2 shrink-0 bg-accent" role="img" aria-label="접속 중" />}
+              <b className="text-sm truncate">{name}</b>
+            </div>
+            <span
+              className={cx('text-xs truncate', online ? 'text-accent' : 'text-text-dim')}
+              aria-label={online ? `현재 위치 ${placeText}` : `마지막 위치 ${placeText}`}
+            >
+              {placeText}
+            </span>
+          </div>
         </div>
         <ul className="flex flex-col text-xs">
           <ProfileRow label="명성"><span className="pf-accent">{fmtNum(view.fame)}</span></ProfileRow>
-          <ProfileRow label={<Tip text={DEX_HELP}>도감</Tip>}><span className="pf-accent">{dex.found} / {dex.total}</span></ProfileRow>
           <ProfileRow label="배">
             {boat.tier > 0 ? <>{boat.name} <span className="text-text-dim">({boat.tier}단계)</span></> : '없음'}
           </ProfileRow>
           <ProfileRow label="낚싯대"><span className="pf-accent">Lv.{rod.level}</span></ProfileRow>
-          <ProfileRow label="파워"><span className="pf-accent">{rod.power}</span></ProfileRow>
+          <ProfileRow label="파워"><span className="pf-accent">{fmtNum(rod.power)}</span></ProfileRow>
         </ul>
         {actions && <div className="mt-auto pt-1">{actions}</div>}
       </Inset>
-      <Inset className="px-3 py-2.5 flex flex-col gap-1.5 min-w-0">
-        <span className="text-2xs text-text-dim">해역별 도감</span>
-        {dex.zones.map(z => (
-          <div key={z.zone} className="grid grid-cols-[8.5em_minmax(0,1fr)_4.6em] items-center gap-2 h-5 text-2xs whitespace-nowrap"
-               aria-label={`${z.name} 도감 ${z.found}/${z.total}`}>
-            <span className="truncate">{z.name}</span>
-            <span className="block h-1.5 border border-line bg-bg shadow-[inset_1px_1px_0_var(--bevel-hi)]">
-              <span className={cx('block h-full', z.complete ? 'bg-gold' : 'bg-accent')}
-                    style={{ width: `${z.total ? (z.found / z.total) * 100 : 0}%` }} />
+
+      {/* 오른쪽 상단: 범주 1 업적 */}
+      <Inset className="px-3 py-2.5 flex flex-col gap-2 min-w-0">
+        <div className="flex items-center justify-between gap-2 text-2xs">
+          <Subheading className="mb-0">업적</Subheading>
+          <span className="text-text-dim">
+            수령 완료 <span className="font-pixel text-gold">{achievements.claimed} / {achievements.total}</span>
+          </span>
+        </div>
+        <ProgressMeter
+          current={achievements.claimed}
+          target={achievements.total}
+          tone="gold"
+          ariaLabel={`업적 달성 ${achievements.claimed}/${achievements.total}`}
+        />
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1 mobile:grid-cols-1">
+          {achievements.tabs.map(t => (
+            <div key={t.tab} className="grid grid-cols-[5.2em_minmax(0,1fr)_3.6em] items-center gap-1.5 text-2xs whitespace-nowrap"
+                 aria-label={`${t.label} 업적 ${t.claimed}/${t.total}`}>
+              <span className="text-text-dim truncate">{t.label}</span>
+              <ProgressMeter current={t.claimed} target={t.total} tone="gold" heightClass="h-1.5" ariaLabel={`${t.label} 업적`} />
+              <span className="font-pixel text-gold text-right">{t.claimed}/{t.total}</span>
+            </div>
+          ))}
+        </div>
+      </Inset>
+
+      {/* 오른쪽 하단: 범주 2 수집품 (모자 + 유물) */}
+      <Inset className="px-3 py-2.5 flex flex-col gap-2 min-w-0">
+        <div className="flex items-center justify-between gap-2 text-2xs">
+          <Subheading className="mb-0">수집품</Subheading>
+          <span className="pf-accent">{hats.owned + artifacts.owned} / {hats.total + artifacts.total}</span>
+        </div>
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center justify-between gap-2 text-2xs">
+            <span className="text-text-dim">
+              <Tip
+                text={(
+                  <TipList
+                    rows={[
+                      { label: '구매', value: `${hats.goldOwned} / ${hats.goldTotal}` },
+                      { label: '업적', value: `${hats.achievementOwned} / ${hats.achievementTotal}` },
+                    ]}
+                  />
+                )}
+              >
+                모자
+              </Tip>
             </span>
-            <span className="pf-accent text-right">{z.found} / {z.total}</span>
+            <span className="pf-accent shrink-0">{hats.owned} / {hats.total}</span>
+          </div>
+          <ProgressMeter
+            current={hats.owned}
+            target={hats.total}
+            tone={hats.owned === hats.total && hats.total > 0 ? 'gold' : 'accent'}
+            heightClass="h-1.5"
+            ariaLabel={`모자 수집 ${hats.owned}/${hats.total}`}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5 border-t border-line/60 pt-2">
+          <div className="flex items-center justify-between gap-2 text-2xs text-text-dim">
+            <span>유물</span>
+            <span className="pf-accent">{artifacts.owned} / {artifacts.total}</span>
+          </div>
+          <ul className="grid grid-cols-3 gap-1.5 mobile:grid-cols-2">
+            {artifacts.slots.map(s => (
+              <Inset as="li" key={s.id} tone="deep"
+                     className={cx('min-h-10 px-1 py-0.5 flex flex-col items-center justify-center text-center text-2xs leading-tight',
+                       s.grade ? GRADE_CLASS[s.grade] : 'border-dashed text-text-dim')}
+                     aria-label={s.name ? (s.level !== null ? `유물 ${s.name} Lv.${s.level}` : `유물 ${s.name}`) : `${s.zone} 유물 없음`}>
+                {s.name ? (
+                  <>
+                    <span className="truncate max-w-full">{s.name}</span>
+                    {s.level !== null && <span className="font-pixel text-2xs text-text-dim">Lv.{s.level}</span>}
+                  </>
+                ) : (
+                  <span className="truncate max-w-full">{s.zone}</span>
+                )}
+              </Inset>
+            ))}
+          </ul>
+        </div>
+      </Inset>
+
+      {/* 하단 전폭: 해역별 도감 (일반 + 돌연변이 나란히 비교) */}
+      <Inset className="px-3 py-2.5 flex flex-col gap-1.5 min-w-0 col-span-2 mobile:col-span-1">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-2xs">
+          <Subheading className="mb-0"><Tip text={DEX_HELP}>해역별 도감</Tip></Subheading>
+          <div className="flex items-center gap-3">
+            <span className="text-text-dim">일반 <span className="pf-accent">{dex.found} / {dex.total}</span></span>
+            <span className="text-text-dim">돌연변이 <span className="font-pixel text-guild">{dex.variantFound} / {dex.total}</span></span>
+          </div>
+        </div>
+        <div className="grid grid-cols-[7.5em_minmax(0,1fr)] gap-2.5 text-2xs text-text-dim border-b border-line/60 pb-1 mobile:hidden">
+          <span>구역</span>
+          <div className="grid grid-cols-2 gap-2.5">
+            <span>일반 도감</span>
+            <span>돌연변이 수집</span>
+          </div>
+        </div>
+        {dex.zones.map(z => (
+          <div key={z.zone} className="grid grid-cols-[7.5em_minmax(0,1fr)] items-center gap-2.5 text-2xs mobile:grid-cols-1 mobile:gap-1">
+            <span className="truncate">{z.name}</span>
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="grid grid-cols-[minmax(0,1fr)_4.2em] items-center gap-1.5 h-5 whitespace-nowrap"
+                   aria-label={`${z.name} 일반 도감 ${z.found}/${z.total}`}>
+                <ProgressMeter
+                  current={z.found}
+                  target={z.total}
+                  tone={z.complete ? 'gold' : 'accent'}
+                  heightClass="h-1.5"
+                  ariaLabel={`${z.name} 일반 도감`}
+                />
+                <span className={cx('text-right', z.complete ? 'font-pixel text-gold' : 'pf-accent')}>{z.found} / {z.total}</span>
+              </div>
+              <div className="grid grid-cols-[minmax(0,1fr)_4.2em] items-center gap-1.5 h-5 whitespace-nowrap"
+                   aria-label={`${z.name} 돌연변이 도감 ${z.variantFound}/${z.total}`}>
+                <ProgressMeter
+                  current={z.variantFound}
+                  target={z.total}
+                  tone={z.variantComplete ? 'gold' : 'guild'}
+                  heightClass="h-1.5"
+                  ariaLabel={`${z.name} 돌연변이 도감`}
+                />
+                <span className={cx('font-pixel text-right', z.variantComplete ? 'text-gold' : 'text-guild')}>{z.variantFound} / {z.total}</span>
+              </div>
+            </div>
           </div>
         ))}
-      </Inset>
-      <Inset className="px-3 py-2.5 flex flex-col gap-1.5 min-w-0">
-        <span className="flex justify-between text-2xs text-text-dim">
-          <span>유물</span><span className="pf-accent">{artifacts.owned} / {artifacts.slots.length}</span>
-        </span>
-        <ul className="grid grid-cols-4 gap-1.5">
-          {artifacts.slots.map(s => (
-            <li key={s.id}
-                className={cx('h-9 border-2 p-0.5 flex items-center justify-center text-center text-2xs leading-tight',
-                  s.grade ? cx('bg-bg', GRADE_CLASS[s.grade]) : 'border-dashed border-line text-text-dim')}
-                aria-label={s.name ? `유물 ${s.name}` : `${s.zone} 유물 없음`}>
-              {s.name ?? s.zone}
-            </li>
-          ))}
-        </ul>
       </Inset>
     </div>
   );
@@ -212,20 +343,15 @@ function ProfileCells({ name, online, view, layout, actions }: {
 
 /** 요약 칸의 한 줄: 이름은 왼쪽(보조색), 값은 오른쪽 */
 function ProfileRow({ label, children }: { label: ReactNode; children: ReactNode }) {
-  return (
-    <li className="flex items-center justify-between gap-2 h-[26px] [&+&]:border-t [&+&]:border-line/60">
-      <span className="text-text-dim">{label}</span>
-      <span className="truncate">{children}</span>
-    </li>
-  );
+  return <KeyValueRow as="li" compact label={label} value={children} />;
 }
 
-/** 채팅 이름에서 여는 플레이어 정보 창 */
+/** 채팅 이름에서 여는 플레이어 정보 창 — 접속 목록과 같은 680 폭 2열 배치를 쓴다 */
 export default function PlayerModal({ onClose, ...props }: Parameters<typeof PlayerInfo>[0] & { onClose: () => void }) {
   return (
-    <Modal layer="stage" onClose={onClose}>
+    <Modal layer="stage" md onClose={onClose}>
       <ModalCard title={props.self ? '내 정보' : '플레이어 정보'} onClose={onClose}>
-        <PlayerInfo {...props} layout="stack" />
+        <PlayerInfo {...props} />
       </ModalCard>
     </Modal>
   );

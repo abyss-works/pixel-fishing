@@ -3,6 +3,7 @@ import type { GuildLogItem, LogEntry, LogPart } from '../../../../features/guild
 import { cx } from '../../../ui/cx';
 import Inset from '../../../ui/Inset';
 import Note from '../../../ui/Note';
+import { NOTCH_SM } from '../../../ui/notch';
 import PixelIcon from '../../../ui/PixelIcon';
 import Subheading from '../../../ui/Subheading';
 import type { GlyphId } from '../../../ui/PixelIcon';
@@ -16,10 +17,12 @@ const MARK: Record<LogEntry['kind'], { glyph: GlyphId; tone: string }> = {
   leave: { glyph: 'exit', tone: 'text-text-dim' },
   kick: { glyph: 'exit', tone: 'text-danger' },
   legendary: { glyph: 'star', tone: 'text-legend border-gold-dark bg-[color-mix(in_oklab,var(--c-legend)_22%,var(--c-surface-2))]' },
-  named: { glyph: 'flag', tone: 'text-epic border-[#9a4d8f] bg-[color-mix(in_oklab,var(--c-epic)_22%,var(--c-surface-2))]' },
+  named: { glyph: 'flag', tone: 'text-epic border-epic bg-[color-mix(in_oklab,var(--c-epic)_22%,var(--c-surface-2))]' },
   donate: { glyph: 'coin', tone: 'text-gold' },
   'bonus-up': { glyph: 'upload', tone: 'text-gold border-gold-dark' },
   rename: { glyph: 'book', tone: 'text-text' },
+  enhance: { glyph: 'sparkle', tone: 'text-guild border-epic bg-[color-mix(in_oklab,var(--c-epic)_22%,var(--c-surface-2))]' },
+  'enhance-reset': { glyph: 'gear', tone: 'text-danger border-danger bg-[color-mix(in_oklab,var(--c-danger)_15%,var(--c-surface-2))]' },
 };
 
 const TONE: Record<NonNullable<LogPart['tone']>, string> = {
@@ -28,6 +31,7 @@ const TONE: Record<NonNullable<LogPart['tone']>, string> = {
   legend: 'font-bold text-legend',
   named: 'font-bold text-epic',
   skill: 'font-bold text-gold',
+  enhance: 'pf-accent text-xs text-guild',
   num: 'pf-accent text-xs',
 };
 
@@ -40,10 +44,10 @@ export default function GuildLogbookTab({ logbook, me }: { logbook: readonly Gui
         {days.map((d, i) => (
           <section key={d.day} aria-label={d.day} className={cx(i > 0 && 'mt-4')}>
             <Subheading className="flex items-center gap-3 mb-2 pf-accent text-xs font-normal text-gold
-                                   after:content-[''] after:flex-1 after:h-px after:bg-linear-to-r after:from-gold-dark after:to-transparent after:opacity-60">
+                                   after:content-[''] after:flex-1 after:h-px after:bg-linear-to-r after:from-gold-dark/60 after:to-transparent">
               {d.day}
             </Subheading>
-            <ul className="m-0 ml-[11px] pl-[22px] list-none border-l-2 border-line/80">
+            <ul className="m-0 ml-[11px] pl-[22px] list-none border-l border-line/80">
               {d.items.map(item => <LogLine key={item.id} item={item} />)}
             </ul>
           </section>
@@ -57,9 +61,8 @@ function LogLine({ item }: { item: LogEntry }) {
   const mark = MARK[item.kind];
   return (
     <li className="relative grid grid-cols-[minmax(0,1fr)_44px] items-start gap-3 py-[7px] text-sm leading-relaxed">
-      <span className={cx('absolute -left-[35px] top-1.5 size-6 flex items-center justify-center border-2 border-line bg-surface-2',
-        '[clip-path:polygon(3px_0,100%_0,100%_calc(100%-3px),calc(100%-3px)_100%,0_100%,0_3px)]',
-        'shadow-[inset_1px_1px_0_var(--bevel-lo),inset_-1px_-1px_0_var(--bevel-hi)]', mark.tone)} aria-hidden="true">
+      <span className={cx('absolute -left-[35px] top-1.5 size-6 flex items-center justify-center border border-line bg-surface-2',
+        NOTCH_SM, mark.tone)} aria-hidden="true">
         <PixelIcon glyph={mark.glyph} size={12} />
       </span>
       <span className={cx(item.quiet && 'text-text-dim')}>

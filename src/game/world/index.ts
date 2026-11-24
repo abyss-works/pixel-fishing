@@ -17,6 +17,7 @@ import { MANILA_BASE } from './bases/manila';
 import { COLOMBO_BASE } from './bases/colombo';
 import { TOAMASINA_BASE } from './bases/toamasina';
 import { WALVISBAY_BASE } from './bases/walvisbay';
+import { LISBON_BASE } from './bases/lisbon';
 
 export * from './types';
 export {
@@ -46,6 +47,7 @@ export const BASE_PACKS: Record<BaseId, BasePack> = {
   colombo: COLOMBO_BASE,
   toamasina: TOAMASINA_BASE,
   walvisbay: WALVISBAY_BASE,
+  lisbon: LISBON_BASE,
 };
 
 // 기존 경로 호환 (app.test 등)
@@ -55,6 +57,7 @@ export const MANILA_FURNITURE = MANILA_BASE.furniture;
 export const COLOMBO_FURNITURE = COLOMBO_BASE.furniture;
 export const TOAMASINA_FURNITURE = TOAMASINA_BASE.furniture;
 export const WALVISBAY_FURNITURE = WALVISBAY_BASE.furniture;
+export const LISBON_FURNITURE = LISBON_BASE.furniture;
 
 /** 승선 — 거점에서 필드로 나갈 때 나타나는 지역·자리·안내. 승선 시설과 여객선 빠른 이동이 같은 자리를 쓴다 */
 export function boardingOf(base: BaseId): { region: RegionId; at: Point | undefined; msg: string } {

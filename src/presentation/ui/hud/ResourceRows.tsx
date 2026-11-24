@@ -42,7 +42,7 @@ export default function ResourceRows({ game, text, bag }: { game: GameState; tex
         <span className="flex items-center gap-1">
           <PixelIcon glyph="fish" className="size-3 shrink-0 text-text-dim" />
           <span className="sr-only">가방 </span>
-          <BagMeter percent={bag.percent} level={bag.level} gaugeClass="flex-1 min-w-6 h-1.5" percentClass="text-[12px] @min-[380px]:text-[13px]" />
+          <BagMeter percent={bag.percent} level={bag.level} gaugeClass="flex-1 min-w-6 h-1.5" percentClass="text-xs @min-[380px]:text-sm" />
         </span>
       ), 'block w-full')}
     </>

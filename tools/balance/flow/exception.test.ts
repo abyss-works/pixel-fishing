@@ -91,7 +91,7 @@ describe('네임드 토벌 비용', () => {
   const rows = huntCost('idle');
 
   it('보상과 조우 시간, 줄어드는 수입을 구역마다 낸다', () => {
-    expect(rows.map(r => r.zone)).toEqual(['pacific', 'seasia', 'indian', 'madagascar', 'southatlantic']);
+    expect(rows.map(r => r.zone)).toEqual(['pacific', 'seasia', 'indian', 'madagascar', 'southatlantic', 'northatlantic']);
     const pacific = rows[0];
     expect(pacific.reward).toBe(BOUNTIES.find(q => q.zone === 'pacific' && q.difficulty === 'named')!.reward);
     expect(pacific.hours).toBeGreaterThan(0);
@@ -100,7 +100,7 @@ describe('네임드 토벌 비용', () => {
   });
 
   it('마지막 해역과 같은 구역에서는 줄어드는 수입이 보상에 비해 작다', () => {
-    const own = rows.find(r => r.zone === 'southatlantic')!;
+    const own = rows.find(r => r.zone === 'northatlantic')!;
     expect(own.lossOverReward).toBeLessThan(0.05);
   });
 });

@@ -8,6 +8,7 @@ import type { GameState } from '../../../../../game/rules/logic';
 const NOW = '2026-11-12T00:00:00.000Z';
 vi.mock('../../../../../features/gameplay/service/useGameTime', () => ({ useNow: () => NOW }));
 
+import type { AccountLockState } from '../../../../../features/display/model/menuLock';
 import ItemSection from './ItemSection';
 
 afterEach(cleanup);
@@ -16,10 +17,10 @@ const HOUR = 3_600_000;
 const at = (ms: number): string => new Date(Date.parse(NOW) + ms).toISOString();
 const game = (over: Partial<GameState> = {}): GameState => ({ ...newState(), boat: COOKING_UNLOCK_BOAT, ...over });
 
-function show(g: GameState, guest = false, result: unknown = { status: 'ok', state: g, result: { type: 'none' } }) {
+function show(g: GameState, accountState: AccountLockState = 'account', result: unknown = { status: 'ok', state: g, result: { type: 'none' } }) {
   const dispatch = vi.fn(() => result as never);
   const setToast = vi.fn();
-  render(<ItemSection game={g} guest={guest} dispatch={dispatch} setToast={setToast} />);
+  render(<ItemSection game={g} accountState={accountState} dispatch={dispatch} setToast={setToast} />);
   return { dispatch, setToast };
 }
 
@@ -59,10 +60,10 @@ describe('묶음 순서', () => {
 
   it('해금 전 잠금 자리와 해금 뒤 섹션은 도시락, 미끼, 생명의 기운 순서로 같다', () => {
     const own = { 'cook-lunch-bite': 1, 'cook-bait-rare': 1, [ENERGY_ITEM_IDS.common]: 1 };
-    const opened = render(<ItemSection game={game({ items: own })} guest={false} dispatch={vi.fn()} setToast={vi.fn()} />);
+    const opened = render(<ItemSection game={game({ items: own })} accountState="account" dispatch={vi.fn()} setToast={vi.fn()} />);
     const openedOrder = order(opened.container);
     cleanup();
-    const locked = render(<ItemSection game={game({ boat: COOKING_UNLOCK_BOAT - 1 })} guest={false} dispatch={vi.fn()} setToast={vi.fn()} />);
+    const locked = render(<ItemSection game={game({ boat: COOKING_UNLOCK_BOAT - 1 })} accountState="account" dispatch={vi.fn()} setToast={vi.fn()} />);
     // 잠금 상태의 빈 안내 문장에 도시락, 미끼 말이 앞서 나오므로 잠금 자리(그룹) 안에서만 센다
     const group = within(locked.container).getByRole('group', { name: '도시락, 미끼, 생명의 기운' });
     expect(order(group)).toEqual(['도시락', '미끼', '생명의 기운']);
@@ -113,9 +114,56 @@ describe('먹기와 쓰기', () => {
   });
 
   it('서버가 거부하면 거부 문구를 경고로 알린다', async () => {
-    const { setToast } = show(game({ items: own }), false, { status: 'rejected', error: 'item-not-owned' });
+    const { setToast } = show(game({ items: own }), 'account', { status: 'rejected', error: 'item-not-owned' });
     fireEvent.click(screen.getByRole('button', { name: '사프란 미끼(특수) 쓰기' }));
     await vi.waitFor(() => expect(setToast).toHaveBeenCalledWith('가방에 이 요리가 없어요.', 'warn'));
+  });
+
+  it('다중 미끼 유물 — 사용 중 배지, 빈 두 번째 칸 무확인 적용, 중복 갱신 2분 30초, 세 번째 미끼 교체 슬롯 선택', () => {
+    const items = { 'cook-bait-rare': 1, 'cook-bait-epic': 1, 'cook-bait-legendary': 1 };
+    const oneActive = game({
+      artifacts: ['sargasso-net'],
+      items,
+      slots: { lunch: null, bait: { id: 'cook-bait-rare', endsAt: at(120_000) } },
+    });
+    const { dispatch: d1 } = show(oneActive);
+    expect(screen.getAllByText('사용 중')).toHaveLength(1);
+    // 2번째 다른 미끼는 확인 없이 바로 장착
+    fireEvent.click(screen.getByRole('button', { name: '큐베브 미끼(영웅) 쓰기' }));
+    expect(d1).toHaveBeenCalledWith({ type: 'eat', item: 'cook-bait-epic' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    // 중복 미끼는 확인 창을 띄우고 새로 2분 30초를 보인다
+    fireEvent.click(screen.getByRole('button', { name: '롱페퍼 미끼(희귀) 쓰기' }));
+    const dupDialog = screen.getByRole('dialog');
+    expect(within(dupDialog).getByText('2분 30초')).toBeInTheDocument();
+    fireEvent.click(within(dupDialog).getByRole('button', { name: '쓰기' }));
+    expect(d1).toHaveBeenCalledWith({ type: 'eat', item: 'cook-bait-rare' });
+
+    cleanup();
+    const bothActive = game({
+      artifacts: ['sargasso-net'],
+      items,
+      slots: {
+        lunch: null,
+        bait: { id: 'cook-bait-rare', endsAt: at(150_000) },
+        bait2: { id: 'cook-bait-epic', endsAt: at(60_000) },
+      },
+    });
+    const { dispatch: d2 } = show(bothActive);
+    expect(screen.getAllByText('사용 중')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: '용연향 미끼(전설) 쓰기' }));
+    const dialog = screen.getByRole('dialog');
+    const radios = within(dialog).getAllByRole('radio');
+    expect(radios).toHaveLength(2);
+    // 먼저 끝나는 bait2가 기본 선택된다
+    expect(radios[1]).toHaveAttribute('aria-checked', 'true');
+    // 첫 번째 미끼(bait)로 바꿔 선택하고 확정
+    fireEvent.click(radios[0]);
+    expect(radios[0]).toHaveAttribute('aria-checked', 'true');
+    expect(within(dialog).getByText('2분 30초')).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: '쓰기' }));
+    expect(d2).toHaveBeenCalledWith({ type: 'eat', item: 'cook-bait-legendary', replaceSlot: 'bait' });
   });
 });
 
@@ -133,7 +181,7 @@ describe('해금 전과 게스트', () => {
   });
 
   it('게스트는 한 줄 빈 상태이고 잠금 줄이 게스트 잠금이다', () => {
-    show(game(), true);
+    show(game(), 'guest');
     expect(screen.getByText('가진 아이템이 없어요.').parentElement!.children).toHaveLength(1);
     expect(screen.getByRole('group', { name: '도시락, 미끼, 생명의 기운' })).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
   });

@@ -8,9 +8,9 @@ import { createLocalApi } from '../adapters/localApi';
 describe('admin 계층 규약', () => {
   it('싱글톤과 두 팩토리 모두 AdminApi 전면을 노출한다', () => {
     const local = createLocalApi().admin;
-    for (const m of ['access', 'users', 'live', 'dailyStats', 'retention', 'sessions', 'economy', 'bountyFunnel',
+    for (const m of ['access', 'overview', 'users', 'live', 'dailyStats', 'retention', 'sessions', 'economy', 'bountyFunnel',
       'spamFlags',
-      'recentEvents', 'userEvents', 'letters', 'changelog', 'chatReports', 'balanceLive', 'restrict', 'resetLink', 'letterHandled', 'deployHost', 'signIn', 'takeSignInReturn', 'signOut'] as const) {
+      'recentEvents', 'userEvents', 'userState', 'letters', 'changelog', 'chatReports', 'balanceLive', 'restrict', 'resetLink', 'letterHandled', 'revokeSessions', 'deployHost', 'signIn', 'takeSignInReturn', 'signOut'] as const) {
       expect(typeof api.admin[m]).toBe('function');
       expect(typeof local[m]).toBe('function');
     }

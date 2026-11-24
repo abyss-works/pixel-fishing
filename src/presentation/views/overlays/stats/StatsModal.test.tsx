@@ -2,6 +2,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { boatNameOf } from '../../../../game/content/boats';
+import { guildEffectsOf } from '../../../../game/rules/guild';
+import type { GuildEffects } from '../../../../game/rules/guild';
 import { newState } from '../../../../game/rules/logic';
 import type { GameState } from '../../../../game/rules/logic';
 import { powerOfLevel } from '../../../../game/rules/stats';
@@ -10,8 +12,8 @@ import StatsModal from './StatsModal';
 vi.mock('../../../../features/travel/service/useSpotState', () => ({ useSpotState: () => ({ spot: null }) }));
 
 const game = (over: Partial<GameState>): GameState => ({ ...newState(), ...over });
-const show = (g: GameState) =>
-  render(<StatsModal game={g} movement="sail" region="world" nickname="바다사나이" guild={null} onClose={vi.fn()} />);
+const show = (g: GameState, guild: { level: number; effects: GuildEffects } | null = null) =>
+  render(<StatsModal game={g} movement="sail" region="world" nickname="바다사나이" guild={guild} onClose={vi.fn()} />);
 
 describe('StatsModal(스탯창)', () => {
   afterEach(cleanup);
@@ -45,8 +47,28 @@ describe('StatsModal(스탯창)', () => {
     expect(rows.some(row => row.textContent?.includes(`${boatNameOf(3)}(3단계)`))).toBe(true);
   });
 
+  it('배 탭의 가방 용량은 길드 보너스와 래칫 초과 보유 시 툴팁을 연결한다', () => {
+    show(
+      game({ boat: 8 }),
+      { level: 4, effects: guildEffectsOf(4, { bag: 4 }) }, // 4,000 × (1 + 0.16) = 4,640
+    );
+    fireEvent.click(screen.getByRole('button', { name: '배' }));
+    fireEvent.mouseEnter(screen.getByText('4,640마리'));
+    expect(screen.getByRole('tooltip')).toBeTruthy();
+
+    cleanup();
+    const ratchetedBag = Array.from({ length: 80 }, (_, i) => ({
+      uid: `u${i}`, fishId: 'crucian', form: 'normal' as const, size: 10,
+      caughtAt: null, spot: null, judgment: null, locked: false,
+    }));
+    show(game({ boat: 0, bag: ratchetedBag }));
+    fireEvent.click(screen.getByRole('button', { name: '배' }));
+    fireEvent.mouseEnter(screen.getByText('80마리'));
+    expect(screen.getByRole('tooltip')).toBeTruthy();
+  });
+
   it('낚싯대 탭에서 해역 행을 고르면 그 해역 기준의 수치를 보인다', () => {
-    show(game({ boat: 8, rod: 7 }));
+    show(game({ boat: 9, rod: 7 }));
     fireEvent.click(screen.getByRole('button', { name: '낚싯대' }));
     const table = screen.getByRole('table', { name: '해역' });
     const [first, second] = within(table).getAllByRole('row').slice(1);
@@ -54,5 +76,45 @@ describe('StatsModal(스탯창)', () => {
     expect(second.getAttribute('aria-selected')).toBe('true');
     expect(first.getAttribute('aria-selected')).toBe('false');
     expect(screen.getByRole('meter', { name: '파워' })).toBeTruthy();
+  });
+
+  it('보너스 탭은 유물 배율(artifactBoost)이 적용된 실제 값을 각 갈래에 보이고 툴팁으로 배율 내역을 보인다', () => {
+    // 전설 유물 + 이동/낚시/결투 유물 → artifactBoost +3% 적용
+    show(game({
+      boat: 5,
+      artifacts: ['mami-wata-mirror', 'wreck-compass', 'outer-isle-sinker', 'abyss-angler'],
+    }));
+    fireEvent.click(screen.getByRole('button', { name: '보너스' }));
+
+    expect(screen.getByText('항해 속도 +10.3%')).toBeTruthy();
+    expect(screen.getByText('입질 대기 −10.3%')).toBeTruthy();
+    expect(screen.getByText('네임드 결투 가속 −10.3%')).toBeTruthy();
+    expect(screen.queryByText(/보유 유물 효과 \+3%/)).toBeNull();
+
+    // 툴팁에 기본 효과, 보유 유물 효과, 적용 효과가 표시된다
+    fireEvent.mouseEnter(screen.getByText('항해 속도 +10.3%'));
+    const tip = screen.getByRole('tooltip');
+    expect(within(tip).getByText('+10%')).toBeTruthy();
+    expect(within(tip).getByText('+3%')).toBeTruthy();
+    expect(within(tip).getByText('+10.3%')).toBeTruthy();
+  });
+
+  it('보너스 탭은 기본과 자유 강화가 합산된 길드 효과를 출처 길드 Lv.N과 함께 보이고 자유 강화가 있으면 툴팁으로 내역을 보인다', () => {
+    const guild = {
+      level: 10,
+      effects: guildEffectsOf(10, { sell: 5 }, { sell: 5 }),
+      bonuses: [
+        { id: 'sell' as const, unlock: 1, rank: 5, enhanceRank: 5, totalRank: 10, cap: 5, pool: 0, next: null, effect: 0.2, nextEffect: null, mine: 0 },
+      ],
+    };
+    render(<StatsModal game={game({})} movement="sail" region="world" nickname="바다사나이" guild={guild} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: '보너스' }));
+    const row = screen.getByText('판매가 +20%').closest('tr')!;
+    expect(within(row).getByText('길드 Lv.10')).toBeTruthy();
+    fireEvent.mouseEnter(screen.getByText('판매가 +20%'));
+    const tip = screen.getByRole('tooltip');
+    expect(within(tip).getByText('기본 5단계')).toBeTruthy();
+    expect(within(tip).getByText('자유 강화 5단계')).toBeTruthy();
+    expect(within(tip).getByText('합계 10단계')).toBeTruthy();
   });
 });

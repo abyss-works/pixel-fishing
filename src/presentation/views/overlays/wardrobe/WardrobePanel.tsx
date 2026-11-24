@@ -60,7 +60,7 @@ export default function WardrobePanel({ game, busy, onChangeClothes, onBuyHat, o
           <div className={`flex flex-col gap-3 flex-1 min-h-0 ${SCROLL_Y}`}>
             <div>
               <Subheading>프리셋</Subheading>
-              <div className="grid grid-cols-6 gap-2">
+              <div className="grid grid-cols-6 gap-2 mobile:grid-cols-3">
                 {LOOK_PRESETS.map(p => (
                   <SlotCell key={p.name} ariaLabel={`${p.name} 옷 고르기`}
                             picked={pick.shirt === p.shirt && pick.pants === p.pants}
@@ -84,7 +84,7 @@ export default function WardrobePanel({ game, busy, onChangeClothes, onBuyHat, o
         </div>
       ) : (
         <div className="flex flex-col gap-2 flex-1 min-h-0">
-          <div className={`grid grid-cols-5 gap-2 flex-1 min-h-0 content-start ${SCROLL_Y}`}>
+          <div className={`grid grid-cols-5 gap-2 flex-1 min-h-0 content-start mobile:grid-cols-3 ${SCROLL_Y}`}>
             {HATS.map(h => {
               const owned = game.hats.includes(h.id);
               const worn = game.look.hat === h.id;
@@ -113,7 +113,7 @@ function ColorRow({ title, colors, picked, onPick }: {
   return (
     <div>
       <Subheading>{title}</Subheading>
-      <div className="grid grid-cols-12 gap-1.5">
+      <div className="grid grid-cols-12 gap-1.5 mobile:grid-cols-6">
         {colors.map((c, i) => (
           <SlotCell key={c} ariaLabel={`${title} ${i + 1}번 색`} picked={picked === i} onSelect={() => onPick(i)}
                     className="flex items-center justify-center p-1.5">
@@ -132,19 +132,45 @@ function HatDetailBox({ game, hatId, busy, onBuy, onWear }: {
 }) {
   const d = hatDetail(game, hatId);
   const state = d.worn ? '쓰고 있어요.' : d.owned ? '가지고 있어요.' : '아직 없어요.';
+  if (d.action === 'achievement') {
+    return (
+      <Inset className="flex items-center justify-between gap-3 min-h-[84px] py-2 px-3 shrink-0 mobile:flex-col mobile:items-stretch">
+        <div className="flex flex-col gap-1 min-w-0">
+          <b className="pf-accent text-base text-gold">{d.name}</b>
+          {d.unlock && (
+            <span className="text-xs text-text-dim break-keep break-words">해금 조건 {d.unlock.condition}</span>
+          )}
+          {d.unlock && (
+            <span className="text-xs text-text-dim">진척 <span className="pf-accent text-text">{d.unlock.current}/{d.unlock.target}</span></span>
+          )}
+        </div>
+        <Tip wraps text={d.buyBlock ?? ''} className="block mobile:self-end">
+          <Button disabled>업적 모자</Button>
+        </Tip>
+      </Inset>
+    );
+  }
   const button = d.action === 'buy'
     ? <Button variant="primary" disabled={busy || d.buyBlock !== null} onClick={() => onBuy(hatId)}>사기 {fmtGold(d.price)}</Button>
     : d.action === 'wear'
       ? <Button variant="primary" disabled={busy} onClick={() => onWear(hatId)}>쓰기</Button>
       : <Button disabled={busy} onClick={() => onWear(null)}>벗기</Button>;
   return (
-    <Inset className="flex items-center justify-between gap-3 h-[84px] px-3 shrink-0">
+    <Inset className="flex items-center justify-between gap-3 min-h-[84px] py-2 px-3 shrink-0 mobile:flex-col mobile:items-stretch">
       <div className="flex flex-col gap-1 min-w-0">
         <b className="pf-accent text-base text-gold">{d.name}</b>
-        <span className="text-xs text-text-dim">가격 <span className="pf-accent text-text">{fmtGold(d.price)}</span></span>
+        {d.source === 'achievement' ? (
+          <span className="text-xs text-text-dim break-keep break-words">
+            업적 보상 {d.unlock && <span className="text-text">{d.unlock.achievementName}</span>}
+          </span>
+        ) : (
+          <span className="text-xs text-text-dim">가격 <span className="pf-accent text-text">{fmtGold(d.price)}</span></span>
+        )}
         <span className="text-xs text-text-dim">{state}</span>
       </div>
-      {d.buyBlock ? <Tip wraps text={d.buyBlock} className="block">{button}</Tip> : button}
+      <div className="shrink-0 mobile:self-end">
+        {d.buyBlock ? <Tip wraps text={d.buyBlock} className="block">{button}</Tip> : button}
+      </div>
     </Inset>
   );
 }

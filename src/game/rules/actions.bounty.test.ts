@@ -117,8 +117,14 @@ describe('acceptQuest', () => {
     const out = applyAction(seed({ ...harbor, dex: pacificFullDex }), named,
       deps({ bounty: ctx({ clearsToday: cleared(1, 0) }) }));
     if (!out.ok) throw new Error(out.error);
-    expect(out.events).toEqual([{ type: 'acceptQuest',
-      payload: { questId: 'pacific-named-megalodon', port: 'harbor' } }]);
+    expect(out.events).toEqual([
+      { type: 'acceptQuest', payload: { questId: 'pacific-named-megalodon', port: 'harbor' } },
+      { type: 'unlockAchievement', payload: { id: 'spot-basic-sea' } },
+      { type: 'unlockAchievement', payload: { id: 'spot-full-sea' } },
+      { type: 'unlockAchievement', payload: { id: 'spot-basic-deep' } },
+      { type: 'unlockAchievement', payload: { id: 'spot-full-deep' } },
+      { type: 'unlockAchievement', payload: { id: 'night-normal' } },
+    ]);
     // 반대로 네임드를 클리어해도 일반 의뢰는 그대로 열려 있다
     const general = applyAction(seed({ ...ready }),
       { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
@@ -200,19 +206,31 @@ describe('acceptQuest', () => {
     const out = applyAction(seed({ ...harbor, dex: pacificFullDex }), act,
       deps({ bounty: ctx() }));
     if (!out.ok) throw new Error(out.error);
-    expect(out.events).toEqual([{ type: 'acceptQuest',
-      payload: { questId: 'pacific-named-megalodon', port: 'harbor' } }]);
+    expect(out.events).toEqual([
+      { type: 'acceptQuest', payload: { questId: 'pacific-named-megalodon', port: 'harbor' } },
+      { type: 'unlockAchievement', payload: { id: 'spot-basic-sea' } },
+      { type: 'unlockAchievement', payload: { id: 'spot-full-sea' } },
+      { type: 'unlockAchievement', payload: { id: 'spot-basic-deep' } },
+      { type: 'unlockAchievement', payload: { id: 'spot-full-deep' } },
+      { type: 'unlockAchievement', payload: { id: 'night-normal' } },
+    ]);
   });
 
-  it('통과하면 상태 불변 + 감사 이벤트만 남긴다', () => {
+  it('통과하면 감사 이벤트와 새로 달성한 업적 이벤트만 남긴다', () => {
     const st = seed({ ...ready });
     const out = applyAction(st,
       { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
       deps({ bounty: ctx() }));
     if (!out.ok) throw new Error(out.error);
-    expect(out.state).toEqual(st);
-    expect(out.events).toEqual([{ type: 'acceptQuest',
-      payload: { questId: 'pacific-easy-common', port: 'harbor' } }]);
+    expect(out.state).toEqual({
+      ...st,
+      achievements: { 'spot-basic-sea': 'claimable', 'spot-basic-deep': 'claimable' },
+    });
+    expect(out.events).toEqual([
+      { type: 'acceptQuest', payload: { questId: 'pacific-easy-common', port: 'harbor' } },
+      { type: 'unlockAchievement', payload: { id: 'spot-basic-sea' } },
+      { type: 'unlockAchievement', payload: { id: 'spot-basic-deep' } },
+    ]);
   });
 });
 
@@ -486,8 +504,11 @@ describe('resolveChallenge', () => {
     const out = applyAction(ready(), act(), full());
     if (!out.ok) throw new Error(out.error);
     expect(out.state.dex.megalodon?.normal?.count).toBe(1);
-    expect(out.events).toEqual([{ type: 'resolveChallenge',
-      payload: { questId: 'pacific-named-megalodon', success: true, hits: 6, misses: 0 } }]);
+    expect(out.events).toEqual([
+      { type: 'resolveChallenge',
+        payload: { questId: 'pacific-named-megalodon', success: true, hits: 6, misses: 0 } },
+      { type: 'unlockAchievement', payload: { id: 'named-megalodon-1' } },
+    ]);
   });
 
   it('실패는 감사 이벤트와 그날의 결투 실패 수·상처만 남긴다 — 티켓 소모는 서버 행 처리다', () => {

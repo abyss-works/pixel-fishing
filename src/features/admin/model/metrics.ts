@@ -2,6 +2,8 @@
 // 한 번 거치는 결정론적 단계라 단위 테스트로 검증한다.
 // 서버의 todayKST와 같은 KST 하루 기준을 쓴다 — 전원 한국 친구 그룹.
 import { formatEnergy } from '../../../game/content/cooking';
+import { RARITY } from '../../../game/content/rarity';
+import type { RarityId } from '../../../game/content/rarity';
 
 /** 오늘(KST) YYYY-MM-DD — 서버의 todayKST와 같은 공식 */
 export const todayKST = (): string =>
@@ -42,6 +44,19 @@ export const fmtDT = (iso: string | null): string => {
   const kst = new Date(d.getTime() + 9 * 3600_000);
   return kst.toISOString().slice(5, 16).replace('T', ' ');
 };
+
+/** 시각(ms) → KST 'HH:mm:ss'. 도착 전(0 이하)이면 '—' */
+export const fmtTimeKST = (ms: number): string => {
+  if (!Number.isFinite(ms) || ms <= 0) return '—';
+  return new Date(ms + 9 * 3600_000).toISOString().slice(11, 19);
+};
+
+/** 저장 단위 기운 → 화면 표기 */
+export const formatAdminEnergy = (stored: number): string => formatEnergy(stored);
+
+/** 등급 id → 한글 등급명 */
+export const adminGradeName = (grade: string | null): string =>
+  grade && Object.hasOwn(RARITY, grade) ? RARITY[grade as RarityId].name : (grade ?? '');
 
 // ---------- 시계열 정렬 ----------
 
@@ -105,6 +120,7 @@ export const EVENT_LABELS: Record<string, string> = {
   adminRestrict: '관리자 제재',
   adminUnrestrict: '관리자 제재 해제',
   adminResetLink: '재설정 링크 발급',
+  adminRevokeSessions: '세션 강제 종료',
 };
 
 const s = (v: unknown): string => (typeof v === 'string' ? v : '');
@@ -159,6 +175,7 @@ export function eventSummary(type: string, p: Record<string, unknown> | null | u
     case 'import': return `골드 ${fmtNum(Number(pay.gold ?? 0))} · 명성 ${fmtNum(Number(pay.fame ?? 0))}`;
     case 'adminRestrict': case 'adminUnrestrict': return `관리자 ${s(pay.adminId).slice(0, 8)}`;
     case 'adminResetLink': return `관리자 ${s(pay.adminId).slice(0, 8)} · ${fmtDT(s(pay.expiresAt))}까지`;
+    case 'adminRevokeSessions': return `관리자 ${s(pay.adminId).slice(0, 8)} (${Number(pay.revoked ?? 0)}건)`;
     case 'autoRelease': {
       const uids = Array.isArray(pay.uids) ? pay.uids.length : 0;
       return `${uids}마리 놓아줌 (${s(pay.reason)})`;

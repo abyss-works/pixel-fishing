@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { COOKING_UNLOCK_BOAT, COOK_KIND_RULES, ENERGY_ITEM_IDS } from '../../../game/content/cooking';
 import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
-import { GUEST_LOCK_TEXT } from '../../display/model/menuLock';
+import { GUEST_LOCK_TEXT, UNVERIFIED_LOCK_TEXT } from '../../display/model/menuLock';
 import { ITEM_GROUP_HINT, planEat, selectItemSection } from './bagItems';
 import { recipesOfKind } from './recipes';
 
@@ -16,7 +16,7 @@ const seed = (over: Partial<GameState> = {}): GameState => ({ ...newState(), boa
 
 describe('아이템 섹션: 해금 전과 게스트', () => {
   it('해금 전 계정 사용자는 빈 상태 세 줄과 진행 조건 잠금 줄을 받는다', () => {
-    const v = selectItemSection(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), T0, false);
+    const v = selectItemSection(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), T0, 'account');
     expect(v.state).toBe('locked');
     if (v.state !== 'locked') return;
     expect(v.empty).toEqual([
@@ -29,11 +29,20 @@ describe('아이템 섹션: 해금 전과 게스트', () => {
 
   it('게스트는 해금 전후 모두 한 줄 빈 상태와 게스트 잠금 줄이다', () => {
     for (const boat of [COOKING_UNLOCK_BOAT - 1, COOKING_UNLOCK_BOAT]) {
-      const v = selectItemSection(seed({ boat }), T0, true);
+      const v = selectItemSection(seed({ boat }), T0, 'guest');
       expect(v.state).toBe('locked');
       if (v.state !== 'locked') continue;
       expect(v.empty).toEqual(['가진 아이템이 없어요.']);
       expect(v.lines).toEqual([GUEST_LOCK_TEXT]);
+    }
+  });
+
+  it('확인 실패 상태는 해금 전후 모두 확인 실패 잠금 줄이다', () => {
+    for (const boat of [COOKING_UNLOCK_BOAT - 1, COOKING_UNLOCK_BOAT]) {
+      const v = selectItemSection(seed({ boat }), T0, 'unverified');
+      expect(v.state).toBe('locked');
+      if (v.state !== 'locked') continue;
+      expect(v.lines).toEqual([UNVERIFIED_LOCK_TEXT]);
     }
   });
 });
@@ -50,7 +59,7 @@ describe('묶음 소제목 툴팁', () => {
 describe('아이템 섹션: 열린 뒤', () => {
   it('기운은 등급 순서로 네 칸이고 이름 뒤 괄호에 등급이 붙는다', () => {
     const game = seed({ items: { [ENERGY_ITEM_IDS.common]: 38, [ENERGY_ITEM_IDS.epic]: 2 } });
-    const v = selectItemSection(game, T0, false);
+    const v = selectItemSection(game, T0, 'account');
     expect(v.state).toBe('open');
     if (v.state !== 'open') return;
     expect(v.energy.map(e => [e.grade, e.label, e.stored])).toEqual([
@@ -61,7 +70,7 @@ describe('아이템 섹션: 열린 뒤', () => {
 
   it('도시락과 미끼 행은 가진 것만 부엌 목록 순서로, 동작 이름과 슬롯을 갖는다', () => {
     const game = seed({ items: { 'cook-lunch-rare': 1, 'cook-lunch-bite': 2, 'cook-bait-epic': 3, 'cook-bait-rare': 4 } });
-    const v = selectItemSection(game, T0, false);
+    const v = selectItemSection(game, T0, 'account');
     if (v.state !== 'open') throw new Error('open이어야 해요');
     expect(v.lunch.map(r => [r.label, r.count, r.verb, r.slot])).toEqual([
       ['가루디야', 2, '먹기', 'lunch'], ['민 몰리', 1, '먹기', 'lunch'],
@@ -72,15 +81,15 @@ describe('아이템 섹션: 열린 뒤', () => {
   });
 
   it('미끼 행은 부엌 미끼 탭과 같은 순서다. 등급순이고 특수는 뒤다', () => {
-    const game = seed({ items: { 'cook-bait-mutation': 1, 'cook-bait-legendary': 1, 'cook-bait-epic': 1, 'cook-bait-rare': 1 } });
-    const v = selectItemSection(game, T0, false);
+    const game = seed({ items: { 'cook-bait-night': 1, 'cook-bait-mutation': 1, 'cook-bait-legendary': 1, 'cook-bait-epic': 1, 'cook-bait-rare': 1 } });
+    const v = selectItemSection(game, T0, 'account');
     if (v.state !== 'open') throw new Error('open이어야 해요');
     expect(v.bait.map(r => r.recipe.id)).toEqual(recipesOfKind('bait').map(r => r.id));
   });
 
   it('행은 이름과 표시 등급을 나눠 갖는다. 괄호만 등급색으로 칠하는 화면이 쓴다', () => {
     const game = seed({ items: { 'cook-lunch-bite': 1, 'cook-bait-epic': 1, 'cook-bait-mutation': 1 } });
-    const v = selectItemSection(game, T0, false);
+    const v = selectItemSection(game, T0, 'account');
     if (v.state !== 'open') throw new Error('open이어야 해요');
     expect(v.lunch[0].title).toEqual({ name: '가루디야', grade: null });
     expect(v.bait.map(r => r.title)).toEqual([
@@ -89,7 +98,7 @@ describe('아이템 섹션: 열린 뒤', () => {
   });
 
   it('행은 이름의 툴팁에 쓸 효과 줄과 적용 낚시 안내를 갖는다', () => {
-    const v = selectItemSection(seed({ items: { 'cook-lunch-bite': 1 } }), T0, false);
+    const v = selectItemSection(seed({ items: { 'cook-lunch-bite': 1 } }), T0, 'account');
     if (v.state !== 'open') throw new Error('open이어야 해요');
     expect(v.lunch[0].effects).toEqual([{ label: '입질 대기', value: '−10%' }]);
     expect(v.lunch[0].note).toContain('방치로 낚을 때만 효과가 있어요.');
@@ -101,22 +110,22 @@ describe('아이템 섹션: 열린 뒤', () => {
       cooking: { recipe: 'cook-lunch-bite', count: 3, bonus: [false, false, false], startedAt: T0 },
     });
     // 대기의 2.5배가 지나면 2개가 완성되고 1개는 조리 중이다
-    const v = selectItemSection(game, at(2.5 * LUNCH_WAIT), false);
+    const v = selectItemSection(game, at(2.5 * LUNCH_WAIT), 'account');
     if (v.state !== 'open') throw new Error('open이어야 해요');
     expect(v.lunch.map(r => [r.recipe.id, r.count])).toEqual([['cook-lunch-bite', 3]]);
   });
 
   it('조리 중이고 아직 완성되지 않은 분은 행에 세지 않는다', () => {
     const game = seed({ cooking: { recipe: 'cook-lunch-bite', count: 2, bonus: [false, false], startedAt: T0 } });
-    const v = selectItemSection(game, at(LUNCH_WAIT / 2), false);
+    const v = selectItemSection(game, at(LUNCH_WAIT / 2), 'account');
     if (v.state !== 'open') throw new Error('open이어야 해요');
     expect(v.lunch).toEqual([]);
   });
 
   it('가진 것이 하나도 없으면 비어 있다고 알린다', () => {
-    const v = selectItemSection(seed(), T0, false);
+    const v = selectItemSection(seed(), T0, 'account');
     expect(v.state === 'open' && v.empty).toBe(true);
-    const some = selectItemSection(seed({ items: { [ENERGY_ITEM_IDS.rare]: 1 } }), T0, false);
+    const some = selectItemSection(seed({ items: { [ENERGY_ITEM_IDS.rare]: 1 } }), T0, 'account');
     expect(some.state === 'open' && some.empty).toBe(false);
   });
 });
@@ -173,5 +182,57 @@ describe('먹기 계획과 교체 확인', () => {
     expect(planEat(seed(), 'cook-lunch-bite', T0).check).toEqual({ ok: false, reason: 'item-not-owned' });
     expect(planEat(seed({ boat: COOKING_UNLOCK_BOAT - 1, items: own }), 'cook-lunch-bite', T0).check)
       .toEqual({ ok: false, reason: 'cooking-locked' });
+  });
+
+  it('다중 미끼 유물이 있으면 미끼 0·1칸 사용 중일 때 다른 미끼는 확인 없이 바로 쓰고, 사용 중 여부를 표시한다', () => {
+    const items = { 'cook-bait-rare': 1, 'cook-bait-epic': 1, 'cook-bait-legendary': 1 };
+    const oneActive = seed({
+      artifacts: ['sargasso-net'],
+      items,
+      slots: { lunch: null, bait: { id: 'cook-bait-rare', endsAt: at(2 * MIN) } },
+    });
+    expect(planEat(oneActive, 'cook-bait-epic', T0).confirm).toBeNull();
+
+    // 같은 미끼를 다시 쓰면 확인 창이 뜨고 지속 시간은 절반(2.5분)
+    const dup = planEat(oneActive, 'cook-bait-rare', T0);
+    expect(dup.confirm).toEqual({
+      title: '미끼 바꾸기', confirmLabel: '쓰기',
+      current: { label: '롱페퍼 미끼(희귀)', minutes: 2 },
+      next: { label: '롱페퍼 미끼(희귀)', minutes: 2.5 },
+      warning: '지금 효과의 남은 시간은 사라져요.',
+    });
+
+    const sec = selectItemSection(oneActive, T0, 'account');
+    if (sec.state !== 'open') throw new Error('open이어야 해요');
+    expect(sec.bait.map(r => [r.recipe.id, r.active])).toEqual([
+      ['cook-bait-rare', true],
+      ['cook-bait-epic', false],
+      ['cook-bait-legendary', false],
+    ]);
+  });
+
+  it('다중 미끼 두 슬롯이 모두 찬 상태에서 세 번째 미끼를 쓰면 교체 슬롯 선택지와 먼저 끝나는 기본 선택을 낸다', () => {
+    const items = { 'cook-bait-rare': 1, 'cook-bait-epic': 1, 'cook-bait-legendary': 1 };
+    const both = seed({
+      artifacts: ['sargasso-net'],
+      items,
+      slots: {
+        lunch: null,
+        bait: { id: 'cook-bait-rare', endsAt: at(150_000) },
+        bait2: { id: 'cook-bait-epic', endsAt: at(60_000) },
+      },
+    });
+    const plan = planEat(both, 'cook-bait-legendary', T0);
+    expect(plan.confirm).toEqual({
+      title: '미끼 바꾸기', confirmLabel: '쓰기',
+      current: { label: '큐베브 미끼(영웅)', minutes: 1 },
+      next: { label: '용연향 미끼(전설)', minutes: 2.5 },
+      warning: '지금 효과의 남은 시간은 사라져요.',
+      choices: [
+        { slotKey: 'bait', label: '롱페퍼 미끼(희귀)', minutes: 3 },
+        { slotKey: 'bait2', label: '큐베브 미끼(영웅)', minutes: 1 },
+      ],
+      defaultChoice: 'bait2',
+    });
   });
 });

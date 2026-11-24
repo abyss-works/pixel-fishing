@@ -19,16 +19,23 @@ const LocationRef = z.union([
   z.object({ kind: z.literal('base'), id: z.string() }),
 ]);
 
+const DebugStepSchema = z.object({
+  command: z.enum(DEBUG_COMMAND_IDS as [DebugCommandId, ...DebugCommandId[]]),
+  args: z.record(z.string(), z.unknown()).optional(),
+});
+
 const schemas = {
   catch: z.object({
     type: z.literal('catch'), spot: z.string(), judgment: Judgment,
     forceEncounter: z.literal(true).optional(),
+    forcePhase: z.enum(['day', 'night']).optional(),
   }),
   sell: z.object({ type: z.literal('sell'), uids: z.array(z.unknown()) }),
   upgradeRod: z.object({ type: z.literal('upgradeRod') }),
   buyBoat: z.object({ type: z.literal('buyBoat') }),
   setLocked: z.object({ type: z.literal('setLocked'), uids: z.array(z.unknown()), locked: z.boolean() }),
   autoLock: z.object({ type: z.literal('autoLock') }),
+  setAutoLockOnCatch: z.object({ type: z.literal('setAutoLockOnCatch'), on: z.boolean() }),
   travel: z.object({ type: z.literal('travel'), to: LocationRef }),
   sendLetter: z.object({ type: z.literal('sendLetter'), text: z.string() }),
   redeemCoupon: z.object({ type: z.literal('redeemCoupon'), code: z.string() }),
@@ -40,12 +47,17 @@ const schemas = {
     command: z.enum(DEBUG_COMMAND_IDS as [DebugCommandId, ...DebugCommandId[]]),
     args: z.record(z.string(), z.unknown()).optional(),
   }),
+  debugBatch: z.object({
+    type: z.literal('debugBatch'),
+    steps: z.array(DebugStepSchema).min(1).max(50),
+  }),
+  debugSnapshot: z.object({ type: z.literal('debugSnapshot') }),
   dismissBaitRefund: z.object({ type: z.literal('dismissBaitRefund') }),
   extractEnergy: z.object({ type: z.literal('extractEnergy'), uids: z.array(z.string()) }),
   setEnergyTarget: z.object({ type: z.literal('setEnergyTarget'), spot: z.string(), on: z.boolean() }),
   resetEnergyTargets: z.object({ type: z.literal('resetEnergyTargets') }),
   cook: z.object({ type: z.literal('cook'), recipe: z.string(), count: z.number().int() }),
-  eat: z.object({ type: z.literal('eat'), item: z.string() }),
+  eat: z.object({ type: z.literal('eat'), item: z.string(), replaceSlot: z.enum(['bait', 'bait2']).optional() }),
   seeTutorial: z.object({ type: z.literal('seeTutorial'), id: z.string() }),
   changeClothes: z.object({ type: z.literal('changeClothes'), shirt: z.unknown(), pants: z.unknown() }),
   buyHat: z.object({ type: z.literal('buyHat'), hat: z.unknown() }),
@@ -61,6 +73,8 @@ const schemas = {
     type: z.literal('resolveChallenge'),
     questId: z.string(), success: z.boolean(), hits: z.number(), misses: z.number(),
   }),
+  claimAchievement: z.object({ type: z.literal('claimAchievement'), id: z.string() }),
+  claimAllAchievements: z.object({ type: z.literal('claimAllAchievements') }),
   import: z.object({ type: z.literal('import'), save: z.unknown() }),
 };
 
@@ -69,11 +83,12 @@ export const ACTION_SCHEMA_TYPES = Object.keys(schemas) as (keyof typeof schemas
 
 const ActionSchema = z.discriminatedUnion('type', [
   schemas.catch, schemas.sell, schemas.upgradeRod, schemas.buyBoat,
-  schemas.setLocked, schemas.autoLock, schemas.travel, schemas.sendLetter, schemas.redeemCoupon,
-  schemas.claimRelief, schemas.claimMail, schemas.debug, schemas.dismissBaitRefund,
+  schemas.setLocked, schemas.autoLock, schemas.setAutoLockOnCatch, schemas.travel, schemas.sendLetter, schemas.redeemCoupon,
+  schemas.claimRelief, schemas.claimMail, schemas.debug, schemas.debugBatch, schemas.debugSnapshot, schemas.dismissBaitRefund,
   schemas.extractEnergy, schemas.setEnergyTarget, schemas.resetEnergyTargets, schemas.cook, schemas.eat,
   schemas.boot, schemas.setNickname, schemas.acceptQuest,
   schemas.deliverBounty, schemas.exchangeArtifact, schemas.levelUpArtifact, schemas.exhibit, schemas.resolveChallenge,
+  schemas.claimAchievement, schemas.claimAllAchievements,
   schemas.import, schemas.seeTutorial, schemas.changeClothes, schemas.buyHat, schemas.wearHat,
 ]);
 

@@ -3,7 +3,9 @@ import { describe, it, expect } from 'vitest';
 import { applyAction, LETTER_MAX } from './actions';
 import type { ActionDeps } from './actions';
 import { upgradeCost } from './balance';
-import { BOATS, COUPONS, FISH, newState } from './logic';
+import { endedFirstCatch, newFirstCatch } from './firstCatch';
+import { NO_GUILD_EFFECTS } from './guild';
+import { BOATS, COUPONS, FISH, WALK_BAG_CAP, newState } from './logic';
 import type { FishInstance, FormId, GameState } from './logic';
 
 // newUid는 결정적 목 — 개체 uid가 매 실행 달라지면 재현성 검증이 불가능하다
@@ -22,20 +24,24 @@ const mkInst = (uid: string, fishId: string, form: FormId = 'normal', locked = f
 
 describe('catch — 첫 경험 보장', () => {
   it('5번째 캐치는 그 수역의 영웅 어종이고 도감·명성은 일반 캐치와 같다', () => {
-    const out = applyAction(seed({ firstCatch: { n: 4, legendAt: 12, epic: true, legend: true } }),
-      { type: 'catch', spot: 'pond', judgment: 'normal' }, deps({ rng: () => 0.5 }));
+    const out = applyAction(
+      seed({ firstCatch: { ...newFirstCatch(), pond: { n: 4, legendAt: 12, epic: true, legend: true } } }),
+      { type: 'catch', spot: 'pond', judgment: 'normal' }, deps({ rng: () => 0.5 }),
+    );
     if (!out.ok) throw new Error('catch failed');
     const caught = FISH.find(f => f.id === (out.result as { fishId: string }).fishId)!;
     expect(caught).toMatchObject({ rarity: 'epic', spot: 'pond' });
     expect(out.state.fame).toBe(40);
-    expect(out.state.firstCatch).toMatchObject({ n: 5, epic: false, legend: true });
+    expect(out.state.firstCatch.pond).toMatchObject({ n: 5, epic: false, legend: true });
+    expect(out.state.firstCatch.river).toEqual(newFirstCatch().river);
   });
 
   it('첫 캐치에서 전설 번호를 정하고, 보장이 끝난 계정은 상태가 변하지 않는다', () => {
     const first = applyAction(seed(), { type: 'catch', spot: 'pond', judgment: 'normal' }, deps({ rng: () => 0.5 }));
     if (!first.ok) throw new Error('catch failed');
-    expect(first.state.firstCatch).toMatchObject({ n: 1, legendAt: 15 });
-    const ended = { n: 0, legendAt: 0, epic: false, legend: false };
+    expect(first.state.firstCatch.pond).toMatchObject({ n: 1, legendAt: 13 });
+    expect(first.state.firstCatch.river).toEqual(newFirstCatch().river);
+    const ended = endedFirstCatch();
     const out = applyAction(seed({ firstCatch: ended }), { type: 'catch', spot: 'pond', judgment: 'normal' }, deps());
     if (!out.ok) throw new Error('catch failed');
     expect(out.state.firstCatch).toEqual(ended);
@@ -484,6 +490,21 @@ describe('exhibit — 전시대 진열·회수', () => {
     expect(applyAction(seed({ bag: [d] }), { type: 'exhibit', uid: 'd', slot: null }, deps()))
       .toEqual({ ok: false, error: 'bad-request' });
   });
+
+  it('회수 — 길드 가방 용량 보너스까지 허용하고 그 상한이 차면 거부한다', () => {
+    const guild = { ...NO_GUILD_EFFECTS, bag: 0.1 };
+    const boosted = seed({ boat: 0, bag: Array.from({ length: 65 }, (_, i) => mkInst(`f${i}`, 'carp')) });
+    boosted.exhibit[0] = c;
+    // 60 + 10%(6) = 66칸 -> 65마리일 때 회수 가능
+    const ok = applyAction(boosted, { type: 'exhibit', uid: 'c', slot: null }, deps({ guild }));
+    expect(ok.ok).toBe(true);
+
+    // 66마리가 차면 거부
+    if (!ok.ok) throw new Error(ok.error);
+    const full = { ...ok.state, exhibit: [d] };
+    expect(applyAction(full, { type: 'exhibit', uid: 'd', slot: null }, deps({ guild })))
+      .toEqual({ ok: false, error: 'bag-full' });
+  });
 });
 
 describe('claimMail — 우편 골드 받기', () => {
@@ -702,5 +723,99 @@ describe('catch — 슬롯 효과 기록', () => {
       expect(out.events[0].payload).not.toHaveProperty('lunch');
       expect(out.events[0].payload).not.toHaveProperty('bait');
     }
+  });
+});
+
+describe('토글식 자동 잠금 — 액션·포획·가방 초과 연동', () => {
+  it('setAutoLockOnCatch — 토글만 바꾸고 이벤트 없음, 기존 가방에는 즉시 적용하지 않는다', () => {
+    const bag = [mkInst('a', 'carp')];
+    const on = applyAction(seed({ bag }), { type: 'setAutoLockOnCatch', on: true }, deps());
+    if (!on.ok) throw new Error(on.error);
+    expect(on.state.autoLockOnCatch).toBe(true);
+    expect(on.state.bag[0].locked).toBe(false);
+    expect(on.state.autoLockedIds).toEqual({});
+    expect(on.events).toEqual([]);
+    expect(on.writes.instancesLocked).toEqual([]);
+
+    const off = applyAction(on.state, { type: 'setAutoLockOnCatch', on: false }, deps());
+    if (!off.ok) throw new Error(off.error);
+    expect(off.state.autoLockOnCatch).toBe(false);
+    expect(off.events).toEqual([]);
+
+    expect(applyAction(seed(), { type: 'setAutoLockOnCatch', on: 'yes' } as never, deps()))
+      .toEqual({ ok: false, error: 'bad-request' });
+  });
+
+  it('catch — autoLockOnCatch 켜짐이면 더 큰 개체 포획 시 자동 잠금 교체, 수동 잠금은 보호한다', () => {
+    const d = deps();
+    // 첫 캐치: rng()=0 으로 결정적 추첨
+    const first = applyAction(seed({ autoLockOnCatch: true }), { type: 'catch', spot: 'pond', judgment: 'normal' }, d);
+    if (!first.ok) throw new Error(first.error);
+    const firstFish = first.state.bag[0];
+    expect(firstFish.locked).toBe(true);
+    expect(first.writes.instancesAdded[0].inst.locked).toBe(true);
+    expect(first.state.autoLockedIds[`${firstFish.fishId}|${firstFish.form}`]).toBe(firstFish.uid);
+
+    // 기존 자동 잠금 개체를 아주 작게(1cm) 두고 다시 같은 어종·폼을 잡으면 교체된다
+    const tiny = { ...firstFish, size: 1 };
+    const withTiny = { ...first.state, bag: [tiny] };
+    const second = applyAction(withTiny, { type: 'catch', spot: 'pond', judgment: 'normal' }, d);
+    if (!second.ok) throw new Error(second.error);
+    const newInst = second.state.bag.find(i => i.uid !== tiny.uid)!;
+    expect(newInst.locked).toBe(true);
+    expect(second.state.bag.find(i => i.uid === tiny.uid)?.locked).toBe(false);
+    expect(second.writes.instancesLocked).toEqual([{ uid: tiny.uid, locked: false }]);
+    expect(second.state.autoLockedIds[`${newInst.fishId}|${newInst.form}`]).toBe(newInst.uid);
+
+    // 수동 승격(setLocked true) 후에는 더 큰 개체가 와도 기존 수동 잠금이 유지된다
+    const promoted = applyAction(withTiny, { type: 'setLocked', uids: [tiny.uid], locked: true }, d);
+    if (!promoted.ok) throw new Error(promoted.error);
+    expect(promoted.state.autoLockedIds).toEqual({});
+    const third = applyAction(promoted.state, { type: 'catch', spot: 'pond', judgment: 'normal' }, d);
+    if (!third.ok) throw new Error(third.error);
+    expect(third.state.bag.find(i => i.uid === tiny.uid)?.locked).toBe(true);
+    expect(third.state.bag.find(i => i.uid !== tiny.uid)?.locked).toBe(true);
+    expect(third.writes.instancesLocked).toEqual([]);
+  });
+
+  it('catch — 가방 초과 시 토글식 자동 잠금이 먼저 적용되어 새 개체는 보호되고 해제된 기존 자동 잠금 개체가 초과 후보가 된다', () => {
+    // 첫 캐치가 잡을 어종/폼을 미리 확인
+    const probe = applyAction(seed(), { type: 'catch', spot: 'pond', judgment: 'normal' }, deps());
+    if (!probe.ok) throw new Error(probe.error);
+    const target = probe.state.bag[0];
+
+    // 가방 60칸을 모두 잠긴 고등급(carp) 59마리 + 자동 잠금된 target(크기 1cm) 1마리로 채운다
+    const prevAuto = { ...mkInst('prev-auto', target.fishId, target.form), size: 1, locked: true };
+    const fillers = Array.from({ length: WALK_BAG_CAP - 1 }, (_, i) => ({ ...mkInst(`f${i}`, 'carp'), size: 50, locked: true }));
+    const full = seed({
+      autoLockOnCatch: true,
+      bag: [prevAuto, ...fillers],
+      autoLockedIds: { [`${target.fishId}|${target.form}`]: prevAuto.uid },
+    });
+
+    const out = applyAction(full, { type: 'catch', spot: 'pond', judgment: 'normal' }, deps());
+    if (!out.ok) throw new Error(out.error);
+    // 새 개체는 자동 잠금으로 가방에 남고, 방금 해제된 prevAuto가 초과 방생된다
+    const added = out.state.bag.find(i => i.uid === (out.result.type === 'catch' ? out.result.uid : ''))!;
+    expect(added).toBeDefined();
+    expect(added.locked).toBe(true);
+    expect(out.state.bag.some(i => i.uid === prevAuto.uid)).toBe(false);
+    expect(out.writes.instancesRemoved).toEqual([prevAuto.uid]);
+    // 초과 제거된 개체는 instancesLocked에 중복 포함되지 않는다
+    expect(out.writes.instancesLocked).toEqual([]);
+    expect(out.result.type === 'catch' && out.result.released.map(r => r.uid)).toEqual([prevAuto.uid]);
+  });
+
+  it('extractEnergy — 기운 추출로 가방에서 빠진 개체는 autoLockedIds에서 정리된다', () => {
+    const inst = { ...mkInst('ex-1', 'carp'), locked: false };
+    const st = seed({
+      boat: 5,
+      location: { kind: 'base', id: 'home' },
+      bag: [inst],
+      autoLockedIds: { 'carp|normal': inst.uid },
+    });
+    const out = applyAction(st, { type: 'extractEnergy', uids: [inst.uid] }, deps());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.autoLockedIds).toEqual({});
   });
 });

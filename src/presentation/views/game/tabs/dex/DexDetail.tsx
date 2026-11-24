@@ -96,9 +96,10 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
                     </div>
                   </div>
                   {meOutside && (
-                    <p className="mt-auto border-t border-line px-2 py-1.5 text-sm text-accent">
-                      내 순위 {meOutside.rank}위 · {fmtSize(meOutside.value)}
-                    </p>
+                    <div className="mt-auto flex items-center justify-between gap-2 border-t border-line px-2 py-1.5 text-sm text-accent">
+                      <span>내 순위 {meOutside.rank}위</span>
+                      <span className="pf-accent text-xs">{fmtSize(meOutside.value)}</span>
+                    </div>
                   )}
                 </>
               ) : (

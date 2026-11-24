@@ -17,26 +17,35 @@ import { afterResponse } from './_server/afterResponse.js';
 import { migrate, newState } from '../src/game/rules/logic.js';
 import type { FishInstance, FormRecord, GameState, Judgment } from '../src/game/rules/logic.js';
 import {
-  buildCatchInfo, canFish, capOfBoat, FISH, formName, instanceFish,
-  evictionPriceRows, makeInstance, nextDexRec, pickEvict, RARITY, RARITY_ORDER,
+  autoLockKey, buildCatchInfo, canFish, decideCatchAutoLock, FISH, formName, instanceFish,
+  evictionPriceRows, makeInstance, nextDexRec, pickEvict, pruneAutoLockedIds, RARITY, RARITY_ORDER,
   matchBountyCatch,
 } from '../src/game/rules/logic.js';
 import { appliedSlots, applyEnergyGain, planOverflow } from '../src/game/rules/cooking.js';
+import { needsLegacyFirstCatchMigration } from '../src/game/rules/firstCatch.js';
 import { drawNamedEncounter, speciesPityCandidates } from '../src/game/rules/pity.js';
 import { bountyById, isQuestOffered } from '../src/game/content/bounties.js';
+import type { BountyKind, BountyQuest } from '../src/game/content/bounties.js';
 import type { SpotId } from '../src/game/content/spots.js';
 import { applyAction, drawCatch, namedWeightBonus, pickScalars, prepareCatchDraw } from '../src/game/rules/actions.js';
-import type { ActionDeps, ApplyOutcome, GameEvent, ReleasedFish, StatePatch } from '../src/game/rules/actions.js';
+import type { ActionDeps, ApplyOutcome, GameAction, GameEvent, ReleasedFish, StatePatch, StateWrites } from '../src/game/rules/actions.js';
+import { achievementBonusesOf, counterIncrementsForEvents, evaluateAchievements } from '../src/game/rules/achievements.js';
+import { bagCapacityOf, createPlayerContext } from '../src/game/rules/effects.js';
+import type { AchievementCounters } from '../src/game/content/achievements.js';
+import { ACHIEVEMENTS } from '../src/game/content/achievements.js';
 import { encounterQuests } from '../src/game/rules/rules.js';
 import type { BountyCtx } from '../src/game/rules/rules.js';
 import { parseAction } from '../src/game/rules/actionSchema.js';
-import { isDebugTableCommand } from '../src/game/rules/debug.js';
+import {
+  isDebugTableCommand, parseBountyResetKind, parseSnapshotBounty, reduceDebug, revokeUnmetClaimableAchievements,
+} from '../src/game/rules/debug.js';
 import { guestActionVerdict } from '../src/game/rules/guest.js';
 import type { DebugTableCommand } from '../src/game/rules/debug.js';
 import { expiredTicketIssuedAt } from '../src/game/rules/challenge.js';
 import { clearsOf, splitQuestRows } from '../src/game/rules/bountyRows.js';
 import type { QuestRow } from '../src/game/rules/bountyRows.js';
-import { gameDayOf, gameDayStartISO } from '../src/game/rules/time.js';
+import { gameDayOf, gameDayStartISO, previousGameDayISO } from '../src/game/rules/time.js';
+import type { DayPhase } from '../src/game/rules/time.js';
 import { checkNickname, pickGuestName } from '../src/game/rules/nickname.js';
 import { powerZones, rodPower } from '../src/game/rules/stats.js';
 import { MIN_ACTION_GAP_MS, MIN_ACTION_GAP_FAST_MS, PACING_SLOW_TYPES, SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
@@ -47,17 +56,21 @@ import { sessionOf } from './_auth/session.js';
 import { database } from './_db/client.js';
 import type { Executor } from './_db/client.js';
 import {
-  acceptFragments, advanceProgress, challengeFragments, clearFragment, consumeDeliveryFragment, debugFragment, deliveryGate,
-  expiredCleanup, ticketFragment,
+  acceptFragments, advanceProgress, bountyRestoreFragments, challengeFragments, clearFragment,
+  consumeDeliveryFragment, debugFragment, deliveryGate, expiredCleanup, namedClearDeleteFragment,
+  namedClearInsertFragment, namedClearReplaceFragments, readSnapshotBounty, ticketFragment,
 } from './_data/bounty.js';
 import { consumeRelief, findCoupon, findRelief } from './_data/codes.js';
 import { claimMailFragment, claimableGold } from './_data/mailbox.js';
 import { COMMIT_GUARD, commitAction, commitConsumingCode, commitGated, runFollowUps } from './_data/commit.js';
-import { catchLookup, evictionCandidates, latestLegacySave, loadContext, ownedNormalForms } from './_data/load.js';
+import {
+  counterClearFragment, counterRestoreFragments, counterSetFragment, counterUpsertFragment,
+} from './_data/achievements.js';
+import { catchLookup, evictionCandidates, latestLegacySave, loadContext, loadRecords, ownedNormalForms } from './_data/load.js';
 import type { BountyRows, InstanceRow, RecordRow, StateRow } from './_data/load.js';
 import { letterFragment } from './_data/mail.js';
 import { ensureProfile, nicknameTaken, profileExists, setNickname } from './_data/profile.js';
-import { blobInput, instRow, seedState, snapshotInsert, stateRow, versionUpdate, writeFragments } from './_data/save.js';
+import { ALWAYS_GUARD, blobInput, commitDebugBatch, instRow, seedState, snapshotInsert, stateRow, versionUpdate, writeFragments } from './_data/save.js';
 import { eventsInsert } from './_data/telemetry.js';
 import { activeDayUpsert } from './_data/activity.js';
 import { contributionUpsert, logbookInsert } from './_data/guilds.js';
@@ -70,9 +83,10 @@ export type { BountyRows } from './_data/load.js';
 const CLIENT_ID_PATTERN = /^[0-9a-f-]{36}$/;
 
 /** 저장 행의 스칼라와 blob만으로 조립한 상태 — 개체·도감은 비어 있다. 낚싯대·유물 판정에만 쓴다 */
-function scalarState(row: StateRow): GameState {
+function scalarState(row: StateRow, counters: Record<string, number> = {}, clearedNamed: string[] = []): GameState {
   return migrate({ ...blobInput(row.data), gold: Number(row.gold),
-    fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {} });
+    fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {},
+    achievementCounters: counters, clearedNamed });
 }
 import { reportServerIssue } from './observability.js';
 import { ApiError, toApiError } from './errors.js';
@@ -83,16 +97,27 @@ type Res = ServerResponse & { status: (code: number) => Res; json: (body: unknow
 
 /** 개발 도구 테이블 명령 → 본인 행에 대한 쓰기 계획. 시각 기준은 도전권 판정·일일 한도와 같은 함수를 쓴다 */
 export type DebugTablePlan =
-  | { table: string; op: 'delete'; since?: { column: string; iso: string } }
+  | { table: string; op: 'delete'; since?: { column: string; iso: string }; kind?: BountyKind }
   | { table: string; op: 'update'; values: Record<string, unknown> };
-export function debugTablePlan(command: DebugTableCommand, nowMs: number): DebugTablePlan {
+export function debugTablePlan(
+  command: DebugTableCommand,
+  nowMs: number,
+  args: Record<string, unknown> = {},
+): DebugTablePlan {
   switch (command) {
     case 'bounty.expireTickets':
       return { table: 'bounty_tickets', op: 'update', values: { issued_at: expiredTicketIssuedAt(nowMs) } };
     case 'bounty.clearTickets':
       return { table: 'bounty_tickets', op: 'delete' };
-    case 'bounty.resetToday':
-      return { table: 'bounty_clears', op: 'delete', since: { column: 'cleared_at', iso: gameDayStartISO(new Date(nowMs).toISOString()) } };
+    case 'bounty.resetToday': {
+      const kind = parseBountyResetKind(args);
+      return {
+        table: 'bounty_clears',
+        op: 'delete',
+        since: { column: 'cleared_at', iso: gameDayStartISO(new Date(nowMs).toISOString()) },
+        ...(kind === 'general' || kind === 'named' ? { kind } : {}),
+      };
+    }
     case 'bounty.clearProgress':
       return { table: 'bounty_progress', op: 'delete' };
   }
@@ -102,8 +127,9 @@ export function debugTablePlan(command: DebugTableCommand, nowMs: number): Debug
 // 달력 날짜다. 바운티 헌팅의 하루(의뢰 배정·만료·클리어 한도)는 04:00 경계의 게임 날짜를 쓴다(gameDayOf).
 const todayKST = (): string => new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
 
-/** 3소스 → GameState 조립 */
-function assemble(row: StateRow, instances: InstanceRow[], records: RecordRow[]): GameState {
+/** 3소스 + 런타임 업적 근거 → GameState 조립. 카운터·토벌 기록은 표에 있고 저장 blob에는 넣지 않는다 */
+function assemble(row: StateRow, instances: InstanceRow[], records: RecordRow[],
+  counters: Record<string, number>, clearedNamed: string[]): GameState {
   const bag: FishInstance[] = [];
   const exhibit: FishInstance[] = [];
   for (const r of instances) {
@@ -121,10 +147,16 @@ function assemble(row: StateRow, instances: InstanceRow[], records: RecordRow[])
     (dex[r.fish_id] ??= {})[r.form as keyof GameState['dex'][string]] =
       { count: Number(r.count), maxSize: r.max_size, first: r.first_caught?.slice(0, 10) ?? null };
   }
-  // blob에 남은 나머지(coupons·locked 등)를 얹고 migrate로 위생 처리
+  // blob에 남은 나머지(coupons·locked 등)를 얹고 migrate로 위생 처리.
+  // 카운터·토벌 기록은 표에서 읽은 런타임 값으로 덮어 저장 blob과 무관하게 판정한다
   return migrate({ ...blobInput(row.data), gold: Number(row.gold), fame: Number(row.fame),
-    boat: row.boat, rod: row.rod, bag, exhibit, dex });
+    boat: row.boat, rod: row.rod, bag, exhibit, dex,
+    achievementCounters: counters, clearedNamed });
 }
+
+/** 알려진 업적이 모두 확정(claimable·claimed)인가 — 미확정이 남아 있으면 도감을 읽어 재평가해야 한다 */
+const achievementsDecided = (map: GameState['achievements']): boolean =>
+  ACHIEVEMENTS.every(a => map[a.id] === 'claimable' || map[a.id] === 'claimed');
 
 /** 진행 행(DB 표기) → 판정 함수의 입력 */
 const questRows = (rows: BountyRows): QuestRow[] =>
@@ -165,7 +197,8 @@ export const SKIP_DETAIL = new Set([
   'boot', 'sendLetter', 'upgradeRod', 'buyBoat', 'travel', 'redeemCoupon', 'catch',
   'setNickname', 'deliverBounty', 'exchangeArtifact', 'levelUpArtifact', 'claimMail', 'seeTutorial',
   'changeClothes', 'buyHat', 'wearHat',
-  'cook', 'eat', 'setEnergyTarget', 'resetEnergyTargets', 'dismissBaitRefund',
+  'cook', 'eat', 'setEnergyTarget', 'resetEnergyTargets', 'dismissBaitRefund', 'setAutoLockOnCatch',
+  'debugSnapshot',
 ]);
 
 /** 수배 진실이 필요한 액션 — 라이선스·일일 카운트·진행도·도전권은 전용 표에 있다 */
@@ -267,8 +300,10 @@ async function route(req: Req, res: Res): Promise<void> {
     skipDetailType: SKIP_DETAIL.has(action.type), snapshotEvery: SNAPSHOT_EVERY,
     bountyDayStart: wantsBounty ? dayStart : null, guild: GUILD_ACTIONS.has(action.type),
   }));
-  // 길드 보너스 효과 — 서버가 소속 길드의 레벨(레벨로 열린 1단계)과 기부로 오른 단계에서 정한다. 클라이언트가 보낸 값은 받지 않는다
-  const guildEffects = loaded.guild ? guildEffectsOf(guildLevelOf(loaded.guild.total), loaded.guild.ranks) : NO_GUILD_EFFECTS;
+  // 길드 보너스 효과 — 서버가 소속 길드의 레벨(레벨로 열린 1단계), 기부로 오른 단계, 자유 강화 단계에서 정한다. 클라이언트가 보낸 값은 받지 않는다
+  const guildEffects = loaded.guild
+    ? guildEffectsOf(guildLevelOf(loaded.guild.total), loaded.guild.ranks, loaded.guild.enhanceRanks)
+    : NO_GUILD_EFFECTS;
   if (loaded.nickname === null) await ensureGuestName();
 
   // 호출자 판정 — 서버 환경과 계정만 쓴다. 요청 헤더(Origin 등)는 호출자가 정하므로 읽지 않는다.
@@ -286,13 +321,17 @@ async function route(req: Req, res: Res): Promise<void> {
 
   // 개발 도구 명령 — 스테이징은 관리자 명부의 계정만, 로컬은 모두, 그 밖은 거부한다.
   // 규칙 거부(422)로 돌려 제재 안내(403 정책)와 섞이지 않게 한다.
-  if (action.type === 'debug' && !await debugAllowed()) {
+  if ((action.type === 'debug' || action.type === 'debugBatch' || action.type === 'debugSnapshot') && !await debugAllowed()) {
     throw new ApiError(422, 'debug-forbidden');
   }
 
-  // 테스트용 강제 조우 — 허용되지 않으면 표시만 떼어 내고 통상 캐치로 처리한다(거부하지 않는다).
-  if (action.type === 'catch' && action.forceEncounter && !await debugAllowed()) {
-    action = { type: 'catch', spot: action.spot, judgment: action.judgment };
+  // 테스트용 강제 조우·낮/밤 전환 — 허용되지 않으면 표시만 떼어 내고 통상 캐치로 처리한다(거부하지 않는다).
+  let forceCatchAllowed = false;
+  if (action.type === 'catch' && (action.forceEncounter || action.forcePhase)) {
+    forceCatchAllowed = await debugAllowed();
+    if (!forceCatchAllowed) {
+      action = { type: 'catch', spot: action.spot, judgment: action.judgment };
+    }
   }
 
   let row = loaded.row;
@@ -301,9 +340,30 @@ async function route(req: Req, res: Res): Promise<void> {
   // COUNT+피해자1행+도감1행만 읽는다. sell/setLocked/claimRelief/import는 가방·도감을
   // 직접 다루어 풀 유지. 스냅샷 경계 버전은 전부 풀 조회로 복귀
   // (saves 아카이브는 풀 스냅샷이 계약).
-  const skipDetail = row !== null && !snapshotDue && SKIP_DETAIL.has(action.type);
+  let skipDetail = row !== null && !snapshotDue && SKIP_DETAIL.has(action.type);
   let instances: InstanceRow[] = loaded.instances ?? [];
   let records: RecordRow[] = loaded.records ?? [];
+
+  // 구 단일 firstCatch가 진행 중인 계정은 마을 강 도감 유무로 이관해야 하므로 fastCatch를 쓰지 않고 풀 경로로 폴백한다.
+  if (skipDetail && action.type === 'catch' && row
+      && needsLegacyFirstCatchMigration((row.data as { firstCatch?: unknown } | null)?.firstCatch)) {
+    const full = await step('db-read', { uid, action: action.type }, () => loadContext(db, uid, {
+      skipDetailType: false, snapshotEvery: SNAPSHOT_EVERY, bountyDayStart: null,
+    }));
+    instances = full.instances ?? [];
+    records = full.records ?? [];
+    skipDetail = false;
+  }
+
+  // 소급 업적 판정 — 개체·도감을 건너뛴 액션(catch 제외: fast path가 따로 판정한다)도 확정에서
+  // 평가되므로, 미확정 업적이 남은 계정은 도감을 한 번 더 읽어 합친다. 이미 모두 확정이면 읽지 않는다.
+  // blob의 achievements만 본다 — 런타임 주입값(카운터·토벌)은 조건에 영향이 없다.
+  if (skipDetail && action.type !== 'catch' && action.type !== 'debugSnapshot' && row) {
+    const storedAchievements = (row.data as { achievements?: GameState['achievements'] } | null)?.achievements ?? {};
+    if (!achievementsDecided(storedAchievements)) {
+      records = await step('db-read', { uid, action: action.type }, () => loadRecords(db, uid));
+    }
+  }
 
   // 행이 없으면 구 saves(아카이브) 최신 blob에서 1회 시딩 = 정규화 이관 지점.
   if (!row) {
@@ -341,16 +401,43 @@ async function route(req: Req, res: Res): Promise<void> {
   // 매크로 페이싱 검사 — 직전 성공 액션과의 최소 간격(서버 시각 기준). updated_at은 성공
   // 커밋마다 이미 갱신되므로 읽기·쓰기 추가가 0이다. 거절될 요청이 쿠폰·지원코드 조회까지 가지 않도록
   // 그 조회보다 먼저 검사한다. 시딩 행(v1)과 첫 액션은 제외.
-  const lastActionMs = Date.parse(String(row.updated_at ?? ''));
-  if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
-    const gapMs = PACING_SLOW.has(action.type) ? MIN_ACTION_GAP_MS : MIN_ACTION_GAP_FAST_MS;
-    if (Date.now() - lastActionMs < gapMs) {
+  // 개발 도구 명령(debug/debugBatch/debugSnapshot)과 승인된 강제 조우·시간대 테스트 캐치는 페이싱을 면제한다.
+  const pacingExempt = action.type === 'debug'
+    || action.type === 'debugBatch'
+    || action.type === 'debugSnapshot'
+    || forceCatchAllowed;
+  if (!pacingExempt) {
+    const lastActionMs = Date.parse(String(row.updated_at ?? ''));
+    if (Number.isFinite(lastActionMs) && Number(row.version) > 1) {
+      const gapMs = PACING_SLOW.has(action.type) ? MIN_ACTION_GAP_MS : MIN_ACTION_GAP_FAST_MS;
+      if (Date.now() - lastActionMs < gapMs) {
+        throw new ApiError(429, 'too-fast');
+      }
+    }
+    // 캐치 간격 검사 — 직전 캐치로부터 낚시 한 사이클(획득 표시 + 최소 입질 대기)이 지나야 다음 캐치를 받는다.
+    if (action.type === 'catch' && catchTooSoon(
+      scalarState(row, loaded.counters, loaded.clearedNamed),
+      action.spot,
+      row.last_catch_at ?? null,
+      new Date().toISOString(),
+    )) {
       throw new ApiError(429, 'too-fast');
     }
   }
-  // 캐치 간격 검사 — 직전 캐치로부터 낚시 한 사이클(획득 표시 + 최소 입질 대기)이 지나야 다음 캐치를 받는다.
-  if (action.type === 'catch' && catchTooSoon(scalarState(row), action.spot, row.last_catch_at ?? null, new Date().toISOString())) {
-    throw new ApiError(429, 'too-fast');
+
+  // 개발 도구 스냅샷 저장용 수배 DB 행 조회 — 상태를 바꾸지 않고 현재 버전과 수배 표 행만 돌려준다.
+  if (action.type === 'debugSnapshot') {
+    const snapshotBounty = await step('db-read', { uid, action: action.type }, () => readSnapshotBounty(db, uid));
+    const readVersion = Number(row.version);
+    const state = assemble(row, [], [], loaded.counters, loaded.clearedNamed);
+    const patch: StatePatch = {
+      version: readVersion,
+      baseVersion: readVersion,
+      scalars: pickScalars(state),
+      writes: { instancesAdded: [], instancesRemoved: [], instancesMoved: [], instancesLocked: [], records: [] },
+    };
+    res.status(200).json({ patch, result: { type: 'debugSnapshot', bounty: snapshotBounty } });
+    return;
   }
 
   // 동적 쿠폰(coupons 테이블) — 쿠폰 액션일 때만 서버가 직접 조회 (active=false는 신규 사용 차단)
@@ -425,16 +512,25 @@ async function route(req: Req, res: Res): Promise<void> {
 
   // 액션 시각 — 서버 시각(UTC)이다. 슬롯 효과의 활성 여부, 조리와 먹기의 시각이 모두 이 값 하나로 정해진다.
   const now = new Date().toISOString();
+  const today = todayKST();
   let out: ApplyOutcome;
+  let initialState: GameState | null = null;
   // fast path의 조립 상태 — 네임드 교체 블록이 재사용한다 (아래 out 교체 참조)
   let catchBase: GameState | null = null;
   if (action.type === 'catch' && skipDetail) {
-    out = await fastCatch(db, uid, row, action.spot, action.judgment, now, guildEffects, user.email === null);
-    if (out.ok) catchBase = scalarState(row);
+    out = await fastCatch(db, uid, row, action.spot, action.judgment, now, guildEffects, user.email === null,
+      loaded.counters, loaded.clearedNamed, action.forcePhase);
+    if (out.ok) catchBase = scalarState(row, loaded.counters, loaded.clearedNamed);
   } else {
-    const state = assemble(row, instances, records);
+    let state = assemble(row, instances, records, loaded.counters, loaded.clearedNamed);
+    // 수령 액션은 저장된 achievements가 아니라 표 기준으로 서버가 다시 판정한다.
+    // 이미 채운 조건은 이 자리에서 claimable로 전이돼 claimable→claimed 멱등이 성립한다.
+    if (action.type === 'claimAchievement' || action.type === 'claimAllAchievements') {
+      state = { ...state, achievements: evaluateAchievements(state).achievements };
+    }
+    initialState = state;
     out = applyAction(state, action, {
-      rng: Math.random, today: todayKST(),
+      rng: Math.random, today,
       now, newUid: () => crypto.randomUUID(),
       dynamicCoupon,
       relief,
@@ -451,7 +547,8 @@ async function route(req: Req, res: Res): Promise<void> {
   // 네임드 조우 천장의 진척도 여기서 센다 — 리듀서 catch와 같은 drawNamedEncounter.
   if (action.type === 'catch' && catchBase && bounty && out.ok) {
     const named = drawNamedEncounter(catchBase.namedPity, encounterQuests(bounty), action.spot, now,
-      Math.random, action.forceEncounter === true, namedWeightBonus(catchBase, action.judgment, now, guildEffects));
+      Math.random, action.forceEncounter === true,
+      namedWeightBonus(catchBase, action.judgment, now, guildEffects, achievementBonusesOf(catchBase)));
     out = { ...out, state: { ...out.state, namedPity: named.pity } };
     if (named.quest) {
       out.events.push({ type: 'ticket', payload: { questId: named.quest.id, ...(named.byCeiling ? { pity: true } : {}) } });
@@ -471,11 +568,9 @@ async function route(req: Req, res: Res): Promise<void> {
     const quest = bountyById(action.questId);
     if (quest) fragments.push(...acceptFragments(guard, uid, quest, action.port, nowISO, dayStart));
   }
-  // 클리어 기록 — 보상을 주는 납품·토벌과 같은 확정 문장에서 쓴다. 리듀서가 완료를 이미 검증했다.
-  if (action.type === 'deliverBounty' && typeof action.questId === 'string') {
-    const quest = bountyById(action.questId);
-    if (quest) fragments.push(clearFragment(guard, uid, quest, nowISO));
-  }
+  // 클리어 기록 — 일반 의뢰는 납품(deliverBounty), 네임드는 결투 성공(resolveChallenge)에서 단일 기록한다.
+  const clearQuest = clearQuestForAction(action);
+  if (clearQuest) fragments.push(clearFragment(guard, uid, clearQuest, nowISO));
   if (deliveryRow) fragments.push(consumeDeliveryFragment(guard, uid, deliveryRow.questId));
   // 도전권 발급 — catch의 ticket 이벤트를 행으로 확정한다.
   const ticketQuests = out.events.flatMap(e => {
@@ -488,12 +583,85 @@ async function route(req: Req, res: Res): Promise<void> {
   if (action.type === 'resolveChallenge' && typeof action.questId === 'string' && bountyById(action.questId)) {
     fragments.push(...challengeFragments(guard, uid, action.questId, action.success === true, nowISO));
   }
-  // 개발 도구 테이블 명령 — 허용 판정은 위에서 끝났다. 리듀서가 검증한 명령만 여기 온다.
-  if (action.type === 'debug' && isDebugTableCommand(action.command)) {
-    fragments.push(debugFragment(guard, uid, debugTablePlan(action.command, Date.now())));
+  // 개발 도구 테이블·정규화 표 명령 — 허용 판정은 위에서 끝났다. 리듀서가 검증한 명령만 여기 온다.
+  const nowMs = Date.now();
+  const dayStartMs = Date.parse(dayStart);
+  const batchStepFragments: (SQL | null)[] = [];
+  if (action.type === 'debug') {
+    if (action.command === 'bounty.resetToday') {
+      const kind = parseBountyResetKind(action.args ?? {}) ?? 'all';
+      if (kind !== 'general') {
+        const snapBounty = await step('db-read', { uid, action: action.type }, () => readSnapshotBounty(db, uid));
+        const remaining = snapBounty.clears
+          .filter(c => c.kind === 'named' && Date.parse(c.clearedAt) < dayStartMs)
+          .map(c => c.questId);
+        if (remaining.length !== out.state.clearedNamed.length) {
+          out = { ...out, state: revokeUnmetClaimableAchievements({ ...out.state, clearedNamed: remaining }) };
+        }
+      }
+    }
+    fragments.push(...debugStepDbFragments(
+      guard, uid, action.command, action.args ?? {},
+      loaded.clearedNamed, out.state.clearedNamed,
+      loaded.counters, out.state.achievementCounters,
+      nowMs, nowISO,
+    ));
+  } else if (action.type === 'debugBatch' && initialState) {
+    const needsBountyRead = action.steps.some(
+      s => s.command === 'bounty.resetToday' && (parseBountyResetKind(s.args ?? {}) ?? 'all') !== 'general',
+    );
+    const snapBounty = needsBountyRead
+      ? await step('db-read', { uid, action: action.type }, () => readSnapshotBounty(db, uid))
+      : null;
+    let namedClears = snapBounty
+      ? snapBounty.clears.filter(c => c.kind === 'named').map(c => ({ questId: c.questId, clearedAt: c.clearedAt }))
+      : loaded.clearedNamed.map(questId => ({ questId, clearedAt: previousGameDayISO(nowISO) }));
+    let curState = initialState;
+    let resetTodayDeletedNamed = false;
+    for (const s of action.steps) {
+      const args = s.args ?? {};
+      const nextStepState = reduceDebug(curState, s.command, args, today, now, () => crypto.randomUUID());
+      if (!nextStepState) throw new ApiError(422, 'bad-request');
+      let reconciled = nextStepState;
+      if (s.command === 'bounty.resetToday' && (parseBountyResetKind(args) ?? 'all') !== 'general') {
+        const beforeLen = namedClears.length;
+        namedClears = namedClears.filter(c => Date.parse(c.clearedAt) < dayStartMs);
+        if (namedClears.length !== beforeLen) resetTodayDeletedNamed = true;
+        reconciled = { ...reconciled, clearedNamed: namedClears.map(c => c.questId) };
+      } else if (s.command === 'snapshot.restore') {
+        const b = args.bounty !== undefined ? parseSnapshotBounty(args.bounty) : null;
+        namedClears = b
+          ? b.clears.filter(c => c.kind === 'named').map(c => ({ questId: c.questId, clearedAt: c.clearedAt }))
+          : reconciled.clearedNamed.map(questId => ({ questId, clearedAt: previousGameDayISO(nowISO) }));
+      } else if (s.command === 'named.unlock' || s.command === 'dex.fill' || s.command === 'named.reset' || s.command === 'dex.reset') {
+        const prevSet = new Set(curState.clearedNamed);
+        const nextSet = new Set(reconciled.clearedNamed);
+        const addedAt = s.command === 'named.unlock' && args.consumeDailyCap === true ? nowISO : previousGameDayISO(nowISO);
+        namedClears = namedClears.filter(c => nextSet.has(c.questId));
+        for (const id of reconciled.clearedNamed) {
+          if (!prevSet.has(id)) namedClears.push({ questId: id, clearedAt: addedAt });
+        }
+      }
+      batchStepFragments.push(...debugStepDbFragments(
+        ALWAYS_GUARD, uid, s.command, args,
+        curState.clearedNamed, reconciled.clearedNamed,
+        curState.achievementCounters, reconciled.achievementCounters,
+        nowMs, nowISO,
+      ));
+      curState = reconciled;
+    }
+    const outState = out.state;
+    if (resetTodayDeletedNamed) {
+      out = { ...out, state: revokeUnmetClaimableAchievements({ ...outState, clearedNamed: curState.clearedNamed }) };
+    } else if (curState.clearedNamed.length !== outState.clearedNamed.length
+        || curState.clearedNamed.some((id, idx) => outState.clearedNamed[idx] !== id)) {
+      out = { ...out, state: { ...outState, clearedNamed: curState.clearedNamed } };
+    }
   }
   fragments.push(letterFragment(guard, uid, out.events, eventNow));
   if (action.type === 'claimMail' && mail) fragments.push(claimMailFragment(guard, uid, mail.id, nowISO));
+  // 업적 카운터 — 확정 문장 안에서 상태 변경과 같은 원자 단위로 오른다. 클라이언트 주장으로 올리지 않는다.
+  fragments.push(counterUpsertFragment(guard, uid, counterIncrementsForEvents(out.events)));
 
   const readVersion = Number(row.version);
   const nextVersion = readVersion + 1;
@@ -514,6 +682,10 @@ async function route(req: Req, res: Res): Promise<void> {
       () => commitGated(db, versionWrite, fragments, gate));
     if (result === 'unavailable') throw new ApiError(422, 'quest-incomplete');
     if (result === 'conflict') throw new ApiError(409, 'version-conflict');
+  } else if (action.type === 'debugBatch') {
+    const committed = await step('db-write', { uid, action: action.type },
+      () => commitDebugBatch(withTransaction, versionWrite, out.writes, batchStepFragments, uid, nowISO));
+    if (!committed) throw new ApiError(409, 'version-conflict');
   } else {
     const committed = await step('db-write', { uid, action: action.type },
       () => commitAction(db, versionWrite, fragments));
@@ -525,7 +697,10 @@ async function route(req: Req, res: Res): Promise<void> {
   // 의뢰 진행은 증분이라 자가 치유가 없다 — 유실분은 사용자가 다시 잡아야 메운다.
   // 만료 정리는 읽을 때 이미 판정이 끝나 있어 늦거나 유실돼도 판정은 같다. 다음 수배 액션이 다시 정리한다.
   // 활동일은 DAU·리텐션의 장기 정본이다. 이 쓰기가 유실되면 예약 작업이 남아 있는 events로 다시 채운다
-  const followUps: (SQL | null)[] = [eventsInsert(uid, out.events, eventNow), activeDayUpsert(uid, eventNow)];
+  const followUps: (SQL | null)[] = [
+    eventsInsert(uid, out.events, eventNow, Object.keys(counterIncrementsForEvents(out.events)).length > 0),
+    activeDayUpsert(uid, eventNow),
+  ];
   if (nextVersion % SNAPSHOT_EVERY === 0) followUps.push(snapshotInsert(uid, out.state, nowISO));
   if (action.type === 'catch' && bounty) {
     followUps.push(advanceProgress(uid, catchProgressQuests(out.events, bounty.active), nowISO));
@@ -559,6 +734,71 @@ async function route(req: Req, res: Res): Promise<void> {
   res.status(200).json({ patch, result: out.result });
 }
 
+function debugStepDbFragments(
+  guard: SQL,
+  uid: string,
+  command: string,
+  args: Record<string, unknown>,
+  prevClearedNamed: readonly string[],
+  nextClearedNamed: readonly string[],
+  prevCounters: AchievementCounters,
+  nextCounters: AchievementCounters,
+  nowMs: number,
+  nowISO: string,
+): (SQL | null)[] {
+  const out: (SQL | null)[] = [];
+  if (isDebugTableCommand(command)) {
+    out.push(debugFragment(guard, uid, debugTablePlan(command, nowMs, args)));
+    return out;
+  }
+  if (command === 'snapshot.restore') {
+    const bounty = args.bounty !== undefined ? parseSnapshotBounty(args.bounty) : null;
+    if (bounty) out.push(...bountyRestoreFragments(guard, uid, bounty));
+    else out.push(...namedClearReplaceFragments(guard, uid, nextClearedNamed, previousGameDayISO(nowISO)));
+    out.push(...counterRestoreFragments(guard, uid, nextCounters));
+    return out;
+  }
+  if (command === 'named.unlock' || command === 'named.reset' || command === 'dex.reset' || command === 'dex.fill') {
+    const prevSet = new Set(prevClearedNamed);
+    const nextSet = new Set(nextClearedNamed);
+    const added = nextClearedNamed.filter(id => !prevSet.has(id));
+    const removed = prevClearedNamed.filter(id => !nextSet.has(id));
+    const clearedAt = command === 'named.unlock' && args.consumeDailyCap === true
+      ? nowISO
+      : previousGameDayISO(nowISO);
+    out.push(namedClearInsertFragment(guard, uid, added, clearedAt));
+    out.push(namedClearDeleteFragment(guard, uid, removed));
+    return out;
+  }
+  if (command === 'achievement.setCounter' || command === 'achievement.resetCounters') {
+    if (command === 'achievement.resetCounters' && Object.keys(nextCounters).length === 0) {
+      out.push(counterClearFragment(guard, uid));
+    } else {
+      const changed: Record<string, number> = {};
+      for (const [k, v] of Object.entries(nextCounters)) {
+        if (typeof v === 'number' && prevCounters[k] !== v) changed[k] = v;
+      }
+      const removedKeys = Object.keys(prevCounters).filter(k => nextCounters[k] === undefined);
+      out.push(counterSetFragment(guard, uid, changed));
+      out.push(counterClearFragment(guard, uid, removedKeys));
+    }
+  }
+  return out;
+}
+
+/** 액션 확정 시 bounty_clears에 클리어 행을 추가할 의뢰 — 일반 의뢰는 납품(deliverBounty), 네임드는 결투 성공(resolveChallenge)이 단일 지점이다 */
+export function clearQuestForAction(action: GameAction): BountyQuest | null {
+  if (action.type === 'deliverBounty' && typeof action.questId === 'string') {
+    const quest = bountyById(action.questId);
+    return quest && quest.difficulty !== 'named' ? quest : null;
+  }
+  if (action.type === 'resolveChallenge' && action.success === true && typeof action.questId === 'string') {
+    const quest = bountyById(action.questId);
+    return quest && quest.difficulty === 'named' ? quest : null;
+  }
+  return null;
+}
+
 /** 액션 이벤트가 길드 항해일지에 남기는 줄 — 전설 등급 캐치와 네임드 토벌 납품 */
 export function guildLogsOf(events: readonly GameEvent[]): { kind: GuildLogKind; detail: string }[] {
   return events.flatMap((e): { kind: GuildLogKind; detail: string }[] => {
@@ -589,30 +829,51 @@ export function catchProgressQuests(events: readonly GameEvent[], activeIds: rea
  * 스냅샷 경계 버전은 풀 경로(아카이브용 풀 상태).
  */
 async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId, judgmentIn: Judgment, now: string,
-  guild: GuildEffects, guest: boolean): Promise<ApplyOutcome> {
+  guild: GuildEffects, guest: boolean, counters: Record<string, number>, clearedNamed: string[],
+  forcePhase?: DayPhase): Promise<ApplyOutcome> {
   const base = migrate({ ...blobInput(row.data), gold: Number(row.gold),
-    fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {} });
+    fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {},
+    achievementCounters: counters, clearedNamed });
   const gate = canFish(base, spot);
   if (!gate.ok) return { ok: false, error: gate.reason };
   const pz = powerZones(base, spot);
-  const { judgment, phaseOpts, cook } = prepareCatchDraw(base, judgmentIn, now, pz);
+  const { judgment, phaseOpts, cook } = prepareCatchDraw(base, judgmentIn, now, pz, forcePhase);
   const today = todayKST();
   // 어종 천장 — 후보가 있을 때만 그 어종들의 일반 폼 소유를 조회한다(fast path는 도감을 들고 있지 않다)
   const candidates = speciesPityCandidates(base.pity, spot, phaseOpts.phase);
   const owned = candidates.length === 0 ? new Set<string>()
     : await step('db-read', { uid, action: 'catch' }, () => ownedNormalForms(db, uid, candidates));
-  const drawn = drawCatch(base, spot, judgment, rodPower(base), pz.mult, Math.random, phaseOpts, id => owned.has(id), guild, cook);
+  const achBonuses = achievementBonusesOf(base);
+  const drawn = drawCatch(
+    base, spot, judgment, rodPower(base), pz.mult, Math.random, phaseOpts,
+    id => owned.has(id), guild, cook, achBonuses,
+  );
   const { fish, extras } = drawn;
   // 조회 실패는 신규로 간주하지 않는다 — count 1로 upsert하면 진짜 도감을 덮어쓴다
-  const { dex: d, bagCount } = await step('db-read', { uid, action: 'catch' }, () => catchLookup(db, uid, fish.id, extras.form));
+  // 토글식 자동 잠금이 켜져 있으면 같은 왕복에서 잠금 최대 크기와 직전 자동 잠금 개체도 함께 읽는다(추가 DB 왕복 0회)
+  const lockKey = autoLockKey(fish.id, extras.form);
+  const prevAutoUid = Object.hasOwn(base.autoLockedIds, lockKey) ? base.autoLockedIds[lockKey] : null;
+  const { dex: d, bagCount, maxLockedSize, prevAuto } = await step('db-read', { uid, action: 'catch' }, () =>
+    catchLookup(db, uid, fish.id, extras.form, base.autoLockOnCatch ? { prevUid: prevAutoUid } : undefined));
   const prev: FormRecord | undefined = d
     ? { count: Number(d.count), maxSize: d.max_size, first: d.first_caught?.slice(0, 10) ?? null }
     : undefined;
   const isNew = (prev?.count ?? 0) === 0;
   const info = buildCatchInfo(fish, extras, isNew);
-  const inst = makeInstance(fish, extras, { uid: crypto.randomUUID(), now, spot, judgment });
+  const rawInst = makeInstance(fish, extras, { uid: crypto.randomUUID(), now, spot, judgment });
+  const prevAutoInst: FishInstance | null = prevAuto
+    ? {
+      uid: prevAuto.uid, fishId: prevAuto.fish_id, form: prevAuto.form as FishInstance['form'],
+      size: prevAuto.size, caughtAt: null, spot: null, judgment: null, locked: prevAuto.locked === true,
+    }
+    : null;
+  // 토글식 자동 잠금은 가방 초과(방생·자동 기운 얻기) 판정보다 먼저 적용한다 — 리듀서(applyAction)와 동일한 결정 함수
+  const lockDecision = decideCatchAutoLock(base.autoLockOnCatch, base.autoLockedIds, rawInst, maxLockedSize, prevAutoInst);
+  const inst = lockDecision.inst;
+  const unlockedPrev = lockDecision.unlockedPrev;
   const rec = nextDexRec(prev, inst.size, today);
-  const over = bagCount + 1 - Math.max(capOfBoat(base.boat, guild.bag), bagCount);
+  const ctx = createPlayerContext({ state: base, guild, now, achievements: achBonuses });
+  const over = bagCount + 1 - bagCapacityOf(ctx, bagCount).value;
   let added: { inst: FishInstance; slot: number | null }[] = [{ inst, slot: null }];
   let removed: string[] = [];
   let evictBag: FishInstance[] = [];
@@ -627,15 +888,24 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
       uid: t.uid, fishId: t.fish_id, form: t.form as FishInstance['form'],
       size: t.size, caughtAt: null, spot: null, judgment: null, locked: false,
     } : null);
-    const pick = pickEvict(tops, inst);
+    // 방금 해제된 기존 자동 잠금 개체는 DB에 아직 locked=true이므로 메모리에서 초과 후보에 합류시킨다(재조회 0회)
+    const pick = pickEvict(tops, inst, unlockedPrev);
     if (pick.evictUid) {
       removed = [pick.evictUid];
     } else if (pick.evictNew) {
       added = []; // 새 놈이 가장 안 특별 — 그 자리에서 내보낸다
     }
     // 둘 다 아니면 전부 잠김 — 상한 초과 유지 (리듀서와 동일)
-    evictBag = [inst, ...tops.filter((t): t is FishInstance => t !== null)];
+    evictBag = [inst, ...(unlockedPrev ? [unlockedPrev] : []), ...tops.filter((t): t is FishInstance => t !== null)];
   }
+  // 해제된 기존 개체가 초과로 제거(instancesRemoved)되면 instancesLocked에서 빼서 동일 행 중복 갱신을 막는다
+  const instancesLocked: StateWrites['instancesLocked'] =
+    unlockedPrev && !removed.includes(unlockedPrev.uid)
+      ? [{ uid: unlockedPrev.uid, locked: false }]
+      : [];
+  const nextAutoLockedIds = removed.length > 0
+    ? pruneAutoLockedIds(lockDecision.autoLockedIds, new Set(removed))
+    : lockDecision.autoLockedIds;
   const overflow = removed.length > 0 ? removed : (added.length === 0 ? [inst.uid] : []);
   // 내보낼 개체를 놓아줄 것과 기운으로 바꿀 것으로 나누는 판정은 게임 규칙이 한다
   const plan = planOverflow({ boat: base.boat, energyTargets: base.energyTargets, bag: evictBag }, overflow, guest);
@@ -662,15 +932,41 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
     events.push({ type: 'autoExtractEnergy', payload: { uids: plan.gain.uids, reason: 'bag-full', energy: plan.gain.byGrade,
       fish: takenFish.map(i => ({ uid: i.uid, fishId: i.fishId, form: i.form })) } });
   }
+  // 업적 판정 — 매 확정마다 이루어진다(명세 §6, 빠른 경로 포함). 도감이 없으니 판정 전에 읽어서,
+  // 방금 잡은 폼의 새 도감까지 합친 상태로 판정한다. 알려진 업적이 모두 확정(claimable·claimed)이면 읽지 않는다.
+  const allDecided = achievementsDecided(base.achievements);
+  const dex = allDecided ? {} : await step('db-read', { uid, action: 'catch' }, async () => {
+    const rows = await loadRecords(db, uid);
+    const d: GameState['dex'] = {};
+    for (const r of rows) {
+      (d[r.fish_id] ??= {})[r.form as keyof GameState['dex'][string]] =
+        { count: Number(r.count), maxSize: r.max_size, first: r.first_caught?.slice(0, 10) ?? null };
+    }
+    return d;
+  });
+  const inc = counterIncrementsForEvents(events);
+  const counters2: Record<string, number> = {};
+  for (const [k, v] of Object.entries(base.achievementCounters)) if (typeof v === 'number') counters2[k] = v;
+  for (const [k, v] of Object.entries(inc)) if (v !== undefined) counters2[k] = (counters2[k] ?? 0) + v;
+  const evalDex = allDecided ? undefined : { ...dex, [fish.id]: { ...dex[fish.id], [inst.form]: rec } };
+  let evalState: GameState = { ...base, achievementCounters: counters2 };
+  if (evalDex) evalState = { ...evalState, dex: evalDex };
+  const evaluated = allDecided ? { achievements: base.achievements, newlyClaimable: [] as string[] }
+    : evaluateAchievements(evalState);
+  const claimableEvents = evaluated.newlyClaimable.map(id => ({ type: 'unlockAchievement', payload: { id } }));
   return {
     ok: true,
-    state: { ...applyEnergyGain({ ...base, fame: base.fame + RARITY[fish.rarity].fame, pity: drawn.pity, firstCatch: drawn.firstCatch }, plan.gain) },
+    state: { ...applyEnergyGain({ ...evalState,
+      achievements: evaluated.achievements,
+      achievementCounters: counters2,
+      autoLockedIds: nextAutoLockedIds,
+      fame: base.fame + RARITY[fish.rarity].fame, pity: drawn.pity, firstCatch: drawn.firstCatch }, plan.gain) },
     result: { type: 'catch', fishId: fish.id, uid: inst.uid, info, released,
       ...(takenFish.length > 0 ? { extracted, energy: plan.gain.byGrade } : {}) },
-    events,
+    events: [...events, ...claimableEvents],
     writes: {
       instancesAdded: added, instancesRemoved: removed,
-      instancesMoved: [], instancesLocked: [],
+      instancesMoved: [], instancesLocked,
       records: [{ fishId: fish.id, form: inst.form, rec }],
     },
   };

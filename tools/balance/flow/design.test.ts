@@ -155,8 +155,8 @@ describe('design 계산', () => {
   }, 60_000);
 
   describe('표 행 단위 출력', () => {
-    const GAPS = ['pond=2', 'river=3', 'sea=4', 'deep=3', 'dragonhole=3', 'coron=3', 'barrierreef=5', 'indian=5', 'southindian=5', 'mozstrait=5', 'comorodeep=6', 'benguela=6'];
-    const PAYBACKS = ['pond=0.016667', 'river=0.016667', 'sea=0.05', 'deep=0.1', 'dragonhole=0.166667', 'coron=0.233333', 'barrierreef=0.3', 'indian=0.5', 'southindian=0.7', 'mozstrait=1.25', 'comorodeep=1.666667', 'benguela=2.5'];
+    const GAPS = ['pond=2', 'river=3', 'sea=4', 'deep=3', 'dragonhole=3', 'coron=3', 'barrierreef=5', 'indian=5', 'southindian=5', 'mozstrait=5', 'comorodeep=6', 'benguela=6', 'sthelena=5', 'azores=6'];
+    const PAYBACKS = ['pond=0.016667', 'river=0.016667', 'sea=0.05', 'deep=0.1', 'dragonhole=0.166667', 'coron=0.233333', 'barrierreef=0.3', 'indian=0.5', 'southindian=0.7', 'mozstrait=1.25', 'comorodeep=1.666667', 'benguela=2.5', 'sthelena=3.5', 'azores=5'];
     const args = ['design', '--start', '100', '--growth', '0.25', '--max-days', '2', ...GAPS.flatMap(g => ['--gap', g]), ...PAYBACKS.flatMap(g => ['--payback', g])];
     const run = (tol: number) => {
       const a = tol > 0 ? [...args, '--reversal-tolerance', String(tol)] : args;
@@ -246,7 +246,7 @@ describe('design 계산', () => {
 
     it('연못 h를 생략하면 기준점 EV를 맞추도록 풀고 기준점 오차가 0이다', () => {
       const probe = designReport(hbase());
-      const anchor = { spot: 'sthelena' as const, ev: probe.rows[LAST].requiredEv * 1.7 };
+      const anchor = { spot: 'bermuda' as const, ev: probe.rows[LAST].requiredEv * 1.7 };
       const r = designReport(hbase({ hFormula: { ...f, start: null }, anchors: [anchor] }));
       expect(r.rows[LAST].requiredEv).toBeCloseTo(anchor.ev, 6);
       expect(r.anchors[0].error).toBeCloseTo(0, 9);
@@ -277,9 +277,9 @@ describe('design 계산', () => {
       expect(() => designReport(hbase({ hFormula: { ...f, scale: 0 } }))).toThrow(/h-scale/);
       expect(() => designReport(hbase({ payback: { base: 0.5, growth: 0, by: {} } }))).toThrow(/함께/);
       expect(() => designReport(hbase({ payback: { base: null, growth: 0.1, by: {} } }))).toThrow(/payback-growth/);
-      const anchor = { spot: 'sthelena' as const, ev: 1_000_000 };
-      expect(() => designReport(hbase({ hFormula: { ...f, start: null }, anchors: [anchor], payback: { base: null, growth: 0, by: { sthelena: 5 } } }))).toThrow(/기준점/);
-      expect(designReport(hbase({ anchors: [anchor], payback: { base: null, growth: 0, by: { sthelena: 5 } } })).rows[LAST].payback).toBe(5);
+      const anchor = { spot: 'bermuda' as const, ev: 1_000_000 };
+      expect(() => designReport(hbase({ hFormula: { ...f, start: null }, anchors: [anchor], payback: { base: null, growth: 0, by: { bermuda: 5 } } }))).toThrow(/기준점/);
+      expect(designReport(hbase({ anchors: [anchor], payback: { base: null, growth: 0, by: { bermuda: 5 } } })).rows[LAST].payback).toBe(5);
       expect(() => designReport(hbase({ hFormula: { ...f, factors: { normalEntry: 1.5 } } }))).toThrow(/--h-factor normal-in/);
       expect(() => designReport(hbase({ hFormula: { ...f, factors: { ...f.factors, specialIn: 0 }, special: ['seasia'] } }))).toThrow(/special-in/);
     });
@@ -290,7 +290,7 @@ describe('design 계산', () => {
         '--special-region', 'seasia', '--h-scale', '1.25'];
       const out = runCli(a);
       expect(out.exitCode).toBe(0);
-      const sea = out.stdout.slice(out.stdout.indexOf('표 1 —')).split('\n').find(l => l.startsWith('| 태평양 |'))!;
+      const sea = out.stdout.slice(out.stdout.indexOf('표 1 —')).split('\n').find(l => l.startsWith('| 태평양 연안 |'))!;
       expect(sea).toContain('2.188배');
       expect(out.stdout).toContain('h 배수(앞 해역 대비)');
       expect(out.stdout).not.toContain('## 비용 기준 역산 — 기준점 오차');
@@ -364,8 +364,8 @@ describe('design 등급 가격 비율', () => {
 
   it('현재 가격의 등급 계수 예가 마지막 해역 비율을 재현한다', () => {
     const rare = plain.example.find(x => x.grade === 'rare')!;
-    const commonMax = Math.max(...FISH.filter(f => f.spot === 'sthelena' && f.rarity === 'common').map(f => f.price));
-    const top = (rarity: string, night: boolean) => Math.max(...FISH.filter(f => f.spot === 'sthelena' && f.rarity === rarity && !!f.night === night).map(f => f.price));
+    const commonMax = Math.max(...FISH.filter(f => f.spot === 'bermuda' && f.rarity === 'common').map(f => f.price));
+    const top = (rarity: string, night: boolean) => Math.max(...FISH.filter(f => f.spot === 'bermuda' && f.rarity === rarity && !!f.night === night).map(f => f.price));
     expect(rare.base * rare.step ** LAST).toBeCloseTo(top('rare', false) / commonMax, 9);
     expect(plain.example.find(x => x.grade === 'epic')!.night).toBeCloseTo(top('epic', true) / top('epic', false), 9);
     expect(plain.example.find(x => x.grade === 'legendary')!.night).toBeCloseTo(top('legendary', true) / top('legendary', false), 9);
@@ -460,14 +460,14 @@ describe('design 기준점 풀이(회수 시간 방식)', () => {
 
 describe('design 시간 목표 방식의 마지막 해역', () => {
   it('기준점이 있으면 마지막 해역의 필요 EV는 기준점 EV이고 기준점 오차 표에는 넣지 않는다', () => {
-    const r = designReport(base({ boatShare: 0.2, anchors: [{ spot: 'sthelena', ev: 942379 }] }));
+    const r = designReport(base({ boatShare: 0.2, anchors: [{ spot: 'bermuda', ev: 942379 }] }));
     expect(r.rows[LAST].requiredEv).toBe(942379);
     expect(r.anchors).toEqual([]);
   }, 60_000);
 
   it('구간이 없는 마지막 해역의 간격과 시간은 받지 않는다', () => {
-    expect(() => designReport(base({ hours: { all: 3, by: { sthelena: 2 } } }))).toThrow(/마지막 해역/);
-    expect(() => designReport(base({ gap: { all: 5, by: { sthelena: 2 } } }))).toThrow(/마지막 해역/);
+    expect(() => designReport(base({ hours: { all: 3, by: { bermuda: 2 } } }))).toThrow(/마지막 해역/);
+    expect(() => designReport(base({ gap: { all: 5, by: { bermuda: 2 } } }))).toThrow(/마지막 해역/);
   });
 });
 
@@ -535,14 +535,14 @@ describe('design 출력 문구', () => {
   }, 60_000);
 
   it('목표값으로 주어진 마지막 해역은 앞 해역 대비 열에 목표값 기준이라고 적는다', () => {
-    const rows = runCli(args).stdout.split('\n').filter(l => l.startsWith('| 세인트헬레나 | 61'));
+    const rows = runCli(args).stdout.split('\n').filter(l => l.startsWith('| 버뮤다 삼각지대 | 71'));
     expect(rows[0]).toContain('(목표값 기준)');
-    const pbRows = runCli(['design', '--start', '25', '--growth', '0.15', '--gap', '5', '--payback', '0.5']).stdout.split('\n').filter(l => l.startsWith('| 세인트헬레나 | 61'));
+    const pbRows = runCli(['design', '--start', '25', '--growth', '0.15', '--gap', '5', '--payback', '0.5']).stdout.split('\n').filter(l => l.startsWith('| 버뮤다 삼각지대 | 71'));
     expect(pbRows[0]).not.toContain('(목표값 기준)');
   }, 60_000);
 
   it('전체 기본 회수 시간을 생략하면 기준점에서 풀고 해역별 값은 덮어쓴다', () => {
-    const gaps = ['pond=2', 'river=4', 'sea=4', 'deep=5', 'dragonhole=4', 'coron=4', 'barrierreef=5', 'indian=4', 'southindian=5', 'mozstrait=4', 'comorodeep=5', 'benguela=4']
+    const gaps = ['pond=2', 'river=4', 'sea=4', 'deep=5', 'dragonhole=4', 'coron=4', 'barrierreef=5', 'indian=4', 'southindian=5', 'mozstrait=4', 'comorodeep=5', 'benguela=4', 'sthelena=5', 'azores=6']
       .flatMap(g => ['--gap', g]);
     const out = runCli(['design', '--start', '100', '--growth', '0.25', ...gaps, '--payback-growth', '0.06', '--payback', 'sea=1', '--json']);
     expect(out.stderr).toBe('');
@@ -571,13 +571,13 @@ describe('design 명령줄', () => {
     expect(d.anchors).toEqual([]);
   }, 60_000);
 
-  it('기준점을 생략하면 세인트헬레나의 현재 진입 EV를 쓰고 다른 명령에서는 design 옵션을 받지 않는다', () => {
+  it('기준점을 생략하면 버뮤다 삼각지대의 현재 진입 EV를 쓰고 다른 명령에서는 design 옵션을 받지 않는다', () => {
     const out = runCli(['design', '--start', '25', '--growth', '0.15', '--gap', '5', '--payback', '0.5', '--json']);
     const d = (JSON.parse(out.stdout) as { design: DesignReport }).design;
-    expect(d.anchors.map(a => a.spot)).toEqual(['sthelena']);
+    expect(d.anchors.map(a => a.spot)).toEqual(['bermuda']);
     const hoursRun = JSON.parse(runCli(['design', '--start', '25', '--growth', '0.15', '--gap', '5', '--hours', '3', '--json']).stdout) as { design: DesignReport };
     expect(hoursRun.design.rows.at(-1)!.requiredEv).toBeCloseTo(d.anchors[0].anchorEv, 6);
-    expect(d.anchors[0].anchorEv).toBeCloseTo(rates('sthelena', entryLevel('sthelena'), 'idle').goldPerHour, 6);
+    expect(d.anchors[0].anchorEv).toBeCloseTo(rates('bermuda', entryLevel('bermuda'), 'idle').goldPerHour, 6);
     expect(runCli(['transition', '--start', '25']).stderr).toMatch(/design/);
     expect(runCli(['ev', '--growth']).exitCode).toBe(0);
     expect(runCli(['ev', '--growth', '0.15']).stderr).toMatch(/ev/);

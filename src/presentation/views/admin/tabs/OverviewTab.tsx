@@ -13,12 +13,7 @@ import {
   fmtDuration, latestRetention, selectActiveUsers, selectDailySeries, selectNewToday, selectTodaySessions,
 } from '../../../../features/admin/model/dashboard';
 import type { RetentionPoint } from '../../../../features/admin/model/dashboard';
-import { readAdminOverview } from '../../../../features/admin/service/queries';
-import { adminKeys } from '../../../../features/admin/service/queryKeys';
-import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
-import {
-  useAdminDailyStats, useAdminLive, useAdminRetention, useAdminSessions,
-} from '../../../../features/admin/service/useAdminStats';
+import { useAdminDailyStats, useAdminOverview } from '../../../../features/admin/service/useAdminStats';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { BarsChart } from '../charts';
 import { Cell, CellGrid, KpiRow, TabPage, TabState } from '../layout';
@@ -27,12 +22,7 @@ import MetricSwitch from '../widgets/MetricSwitch';
 import { OVERVIEW_RANGE_OPTIONS } from './dayRange';
 import type { DayRange } from './dayRange';
 
-// 오늘 평균 세션 길이를 셀 세션 기록 건수
-// ponytail: 최근 500건만 본다. 하루 세션이 500건을 넘으면 오늘 평균은 늦은 세션만으로 계산된다 — 그때는 서버가 오늘 값을 내게 한다
-const SESSION_WINDOW = 500;
-
-// 조회 전 골격 — 게이트는 내용을 교체하지 않으므로 빈 값으로도 지표 '—'와 빈 표를 그린다
-const EMPTY: Awaited<ReturnType<typeof readAdminOverview>> = [[], [], []];
+const DEFAULT_RANGE_DAYS = 30;
 
 export default function OverviewTab() {
   const { access } = useAdminAuth();
@@ -40,23 +30,28 @@ export default function OverviewTab() {
   const [range, setRange] = useState<DayRange>('30');
   const days = Number(range);
 
-  const overview = useAdminQuery(adminKeys.overview, readAdminOverview, granted);
-  const live = useAdminLive();
-  const stats = useAdminDailyStats(days);
-  const retention = useAdminRetention();
-  const sessions = useAdminSessions(null, SESSION_WINDOW);
-  const queries = [overview, live, stats, retention, sessions];
+  // 초기 로드 시 통합 조회 1건으로 모든 개요 데이터를 받고, 다른 기간(7일, 90일)으로 전환할 때만 일별 집계를 추가 조회한다.
+  const overview = useAdminOverview(DEFAULT_RANGE_DAYS);
+  const extraStats = useAdminDailyStats(days, days !== DEFAULT_RANGE_DAYS);
+  const queries = days === DEFAULT_RANGE_DAYS ? [overview] : [overview, extraStats];
 
-  const [users, recent, flags] = overview.data ?? EMPTY;
+  const users = overview.data?.users ?? [];
+  const recent = overview.data?.recentEvents ?? [];
+  const flags = overview.data?.spamFlags ?? [];
+  const liveData = overview.data?.live ?? null;
+  const retentionRows = overview.data?.retention ?? null;
+  const sessionRows = overview.data?.sessions ?? null;
+  const statsRows = days === DEFAULT_RANGE_DAYS ? (overview.data?.dailyStats ?? []) : (extraStats.data ?? []);
+
   const risk = selectRiskSignals(users, flags);
   const identityOf = adminIdentityLookup(users);
   // 오늘·7일·30일 경계는 조회가 도착한 시각 기준이다 — 다시 읽으면 함께 다시 센다
   const active = overview.data && selectActiveUsers(users, overview.updatedAt);
   const fresh = overview.data && selectNewToday(users, overview.updatedAt);
-  const today = sessions.data && selectTodaySessions(sessions.data, sessions.updatedAt);
-  const d1 = retention.data && latestRetention(retention.data, 'd1');
-  const d7 = retention.data && latestRetention(retention.data, 'd7');
-  const series = selectDailySeries(stats.data ?? [], lastNDays(days));
+  const today = sessionRows && selectTodaySessions(sessionRows, overview.updatedAt);
+  const d1 = retentionRows && latestRetention(retentionRows, 'd1');
+  const d7 = retentionRows && latestRetention(retentionRows, 'd7');
+  const series = selectDailySeries(statsRows, lastNDays(days));
 
   const count = (v: number | null | undefined) => (v === null || v === undefined ? '—' : fmtNum(v));
   const charts: { title: string; values: number[]; aria: string; text?: (v: number) => string }[] = [
@@ -74,18 +69,18 @@ export default function OverviewTab() {
              aside={<MetricSwitch value={range} options={OVERVIEW_RANGE_OPTIONS} onChange={setRange}
                                   ariaLabel="기간 선택" />}>
       <KpiRow>
-        <KpiTile label="지금 접속" value={count(live.data?.count)} hint="실시간 채널에 연결된 사람" />
+        <KpiTile label="지금 접속" value={count(liveData?.count)} hint="실시간 채널에 연결된 사람" />
         <KpiTile label="오늘 DAU" value={count(active?.today)} hint="오늘(KST) 활동한 사람" />
         <KpiTile label="WAU" value={count(active?.week)} hint="최근 7일 안에 활동한 사람" />
         <KpiTile label="MAU" value={count(active?.month)}
-                 hint={`최근 30일 안에 활동한 사람 · 등록 ${overview.data ? fmtNum(users.length) : '—'}명`} />
+                 hint={overview.data ? `최근 30일 안에 활동한 사람, 등록 ${fmtNum(users.length)}명` : '최근 30일 안에 활동한 사람'} />
       </KpiRow>
       <KpiRow>
         <KpiTile label="오늘 신규" value={count(fresh?.users)} hint={`그중 가입 계정 ${count(fresh?.accounts)}`} />
         <KpiTile label="오늘 평균 세션" value={today ? fmtDuration(today.avgSec) : '—'}
                  hint={`오늘 시작해 끝난 세션 ${count(today?.count)}개`} />
-        <RetentionTile label="D1 리텐션" point={d1} loaded={retention.data !== null} />
-        <RetentionTile label="D7 리텐션" point={d7} loaded={retention.data !== null} />
+        <RetentionTile label="D1 리텐션" point={d1} loaded={retentionRows !== null} />
+        <RetentionTile label="D7 리텐션" point={d7} loaded={retentionRows !== null} />
       </KpiRow>
 
       <TabState loading={granted && queries.some(q => q.loading)} />

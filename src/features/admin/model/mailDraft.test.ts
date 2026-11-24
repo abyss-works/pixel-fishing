@@ -6,10 +6,16 @@ const A = '30e63c95-12de-4ba6-b397-e8b69ce0311c';
 const B = 'e747e6c9-f0c2-4192-a462-9cd26e8a812a';
 
 describe('받는 사람 입력', () => {
-  it('공백·쉼표 구분과 골드 생략(0)을 읽고 빈 줄은 건너뛴다', () => {
+  it('공백·쉼표 구분과 골드 생략(0)을 읽고 빈 줄과 중복 계정을 기록한다', () => {
+    expect(parseRecipients(`${A} 6309483\n\n${B},100`)).toEqual({
+      recipients: [{ userId: A, gold: 6309483 }, { userId: B, gold: 100 }],
+      badLines: [],
+      duplicates: [],
+    });
     expect(parseRecipients(`${A} 6309483\n\n${B},100\n${A.toUpperCase()}`)).toEqual({
       recipients: [{ userId: A, gold: 6309483 }, { userId: B, gold: 100 }, { userId: A.toUpperCase(), gold: 0 }],
       badLines: [],
+      duplicates: [A],
     });
   });
 

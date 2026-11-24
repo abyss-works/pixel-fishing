@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react';
 import type { GameState } from '../../../../game/rules/logic';
 import type { StatsSpotRow, StatsSummary } from '../../../../features/gameplay/model/stats';
-import { cx } from '../../../ui/cx';
 import { fmtGold, fmtNum, fmtRatio } from '../../../ui/format';
 import Inset from '../../../ui/Inset';
+import KpiTile from '../../../ui/KpiTile';
 import Tip from '../../../ui/Tip';
 import PowerMeter from './PowerMeter';
 import { FitText } from './RodStatTable';
@@ -21,10 +21,10 @@ export default function SummaryTab({ game, summary, row, here }: {
   return (
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-4 gap-2 mobile:grid-cols-2">
-        <StatsKpi label="명성" value={fmtNum(game.fame)} />
-        <StatsKpi label="골드" value={fmtGold(game.gold)} />
-        <StatsKpi label={<Tip text="일반 폼으로 한 번이라도 낚은 어종">도감</Tip>} value={fmtRatio(summary.dexFound, summary.dexTotal)} />
-        <StatsKpi label="가방" value={fmtRatio(bag.count, bag.cap)} danger={bag.level === 'danger'} />
+        <KpiTile size="sm" label="명성" value={fmtNum(game.fame)} />
+        <KpiTile size="sm" label="골드" value={fmtGold(game.gold)} />
+        <KpiTile size="sm" label={<Tip text="일반 폼으로 한 번이라도 낚은 어종">도감</Tip>} value={fmtRatio(summary.dexFound, summary.dexTotal)} />
+        <KpiTile size="sm" label="가방" value={fmtRatio(bag.count, bag.cap)} tone={bag.level === 'danger' ? 'danger' : 'gold'} />
       </div>
       <Inset className="px-3 py-2.5 flex flex-col gap-2.5">
         <span className="text-2xs text-text-dim">{here ? '지금 있는 해역' : '이 지역 해역'}</span>
@@ -43,20 +43,10 @@ export default function SummaryTab({ game, summary, row, here }: {
   );
 }
 
-/** 요약 칸 하나: 이름(보조색) 아래 값(픽셀 글꼴, 골드). 가방이 거의 찼으면 위험색이다 */
-function StatsKpi({ label, value, danger }: { label: ReactNode; value: string; danger?: boolean }) {
-  return (
-    <Inset className="flex min-w-0 flex-col gap-0.5 px-3 py-2">
-      <span className="text-2xs text-text-dim">{label}</span>
-      <span className={cx('pf-accent text-base truncate', danger ? 'text-danger' : 'text-gold')}>{value}</span>
-    </Inset>
-  );
-}
-
-/** 해역 칸의 핵심 수치 하나: 왼쪽 구분선과 이름, 값 */
+/** 해역 칸의 핵심 수치 하나: 둘째 칸부터 왼쪽에 구분선을 긋는다 */
 function SummaryFigure({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-0.5 pl-3 border-l border-line">
+    <div className="flex flex-col gap-0.5 pl-3 border-l border-line first:pl-0 first:border-l-0">
       <span className="text-2xs text-text-dim">{label}</span>
       <span className="pf-accent text-xs">{children}</span>
     </div>

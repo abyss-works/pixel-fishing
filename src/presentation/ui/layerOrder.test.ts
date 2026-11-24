@@ -23,12 +23,19 @@ const src = (path: string) => {
 const tokens = Object.fromEntries([...css.matchAll(/--z-([a-z-]+):\s*(\d+);/g)].map(m => [m[1], Number(m[2])]));
 
 describe('화면 층 - z 토큰 순서', () => {
-  it('아래부터 스테이지 HUD, 채팅과 헤더, 창, 닫을 수 없는 창, 탭 줄과 시트, 전환 덮개, 툴팁 순서다', () => {
-    const order = ['stage-hud', 'stage-card', 'chrome', 'menu-row', 'catch-fx', 'stage-modal', 'app-modal', 'blocker', 'tabs', 'veil', 'tooltip', 'devtools'];
+  it('아래부터 스테이지 HUD, 채팅과 헤더, 창, 닫을 수 없는 창, 탭 줄과 시트, 창 위 알림, 전환 덮개, 툴팁 순서다', () => {
+    const order = ['stage-hud', 'stage-card', 'chrome', 'menu-row', 'catch-fx', 'stage-modal', 'app-modal', 'blocker', 'tabs', 'toast', 'veil', 'tooltip', 'devtools'];
     const values = order.map(name => tokens[name]);
     expect(values.every(v => typeof v === 'number')).toBe(true);
     expect(values).toEqual([...values].sort((a, b) => a - b));
     expect(new Set(values).size).toBe(values.length);
+  });
+
+  it('창 위 1줄 알림(toast)은 앱 모달과 탭 줄·시트보다 위이고 전환 덮개와 툴팁보다 아래다', () => {
+    expect(tokens['toast']).toBeGreaterThan(tokens['app-modal']);
+    expect(tokens['toast']).toBeGreaterThan(tokens['tabs']);
+    expect(tokens['toast']).toBeLessThan(tokens['veil']);
+    expect(tokens['toast']).toBeLessThan(tokens['tooltip']);
   });
 
   it('창의 바탕은 채팅과 헤더보다 위이고 탭 줄과 시트는 창보다 위다', () => {
@@ -83,6 +90,7 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
     ['ui/Modal.tsx', '--z-stage-modal'],
     ['ui/Modal.tsx', '--z-app-modal'],
     ['ui/Modal.tsx', '--z-blocker'],
+    ['ui/FloatingToastLayer.tsx', '--z-toast'],
     ['layouts/game-stage/FerryVeil.tsx', '--z-veil'],
     ['layouts/sidebar/index.tsx', '--z-tabs'],
     ['views/overlays/update/LoadingOverlay.tsx', '--z-veil'],

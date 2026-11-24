@@ -2,6 +2,10 @@
 import { describe, it, expect } from 'vitest';
 import { debugTablePlan } from './action.js';
 import { debugTriggerAllowed, importVerdict } from './devAccess.js';
+import { deleteRecordsFragment, writeFragments } from './_data/save.js';
+import { namedClearDeleteFragment, namedClearInsertFragment, namedClearReplaceFragments } from './_data/bounty.js';
+import { counterClearFragment, counterRestoreFragments, counterSetFragment } from './_data/achievements.js';
+import { COMMIT_GUARD } from './_data/commit.js';
 import { gameDayStartISO } from '../src/game/rules/time.js';
 
 describe('debugTriggerAllowed', () => {
@@ -85,5 +89,43 @@ describe('importVerdict', () => {
       expect(importVerdict({ deployEnv, admin: true })).toBe('import-disabled');
       expect(importVerdict({ deployEnv, admin: false })).toBe('import-disabled');
     }
+  });
+});
+
+describe('정규화 표 쓰기 조각 계약', () => {
+  const uid = '00000000-0000-0000-0000-000000000001';
+  const nowISO = '2026-10-16T05:00:00.000Z';
+
+  it('save.ts — recordsRemoved 조각을 생성하고 빈 입력에는 null을 반환한다', () => {
+    expect(deleteRecordsFragment(COMMIT_GUARD, uid, [])).toBeNull();
+    expect(deleteRecordsFragment(COMMIT_GUARD, uid, [{ fishId: 'carp', form: 'normal' }])).not.toBeNull();
+    const frags = writeFragments(COMMIT_GUARD, uid, {
+      instancesAdded: [],
+      instancesRemoved: [],
+      instancesMoved: [],
+      instancesLocked: [],
+      records: [],
+      recordsRemoved: [{ fishId: 'carp', form: 'normal' }],
+    }, nowISO);
+    expect(frags).toHaveLength(1);
+  });
+
+  it('bounty.ts — 네임드 토벌 추가·삭제·복원 조각을 생성한다', () => {
+    expect(namedClearInsertFragment(COMMIT_GUARD, uid, [], nowISO)).toBeNull();
+    expect(namedClearDeleteFragment(COMMIT_GUARD, uid, [])).toBeNull();
+    expect(namedClearInsertFragment(COMMIT_GUARD, uid, ['pacific-named-megalodon'], nowISO)).not.toBeNull();
+    expect(namedClearDeleteFragment(COMMIT_GUARD, uid, ['pacific-named-megalodon'])).not.toBeNull();
+    expect(namedClearReplaceFragments(COMMIT_GUARD, uid, [], nowISO)).toHaveLength(1);
+    expect(namedClearReplaceFragments(COMMIT_GUARD, uid, ['pacific-named-megalodon'], nowISO)).toHaveLength(2);
+  });
+
+  it('achievements.ts — 카운터 절대값·초기화·복원 조각을 생성한다', () => {
+    expect(counterSetFragment(COMMIT_GUARD, uid, {})).toBeNull();
+    expect(counterSetFragment(COMMIT_GUARD, uid, { 'sell.gold': 500 })).not.toBeNull();
+    expect(counterClearFragment(COMMIT_GUARD, uid, [])).toBeNull();
+    expect(counterClearFragment(COMMIT_GUARD, uid, ['sell.gold'])).not.toBeNull();
+    expect(counterClearFragment(COMMIT_GUARD, uid)).not.toBeNull();
+    expect(counterRestoreFragments(COMMIT_GUARD, uid, {})).toHaveLength(1);
+    expect(counterRestoreFragments(COMMIT_GUARD, uid, { 'sell.gold': 100 })).toHaveLength(2);
   });
 });

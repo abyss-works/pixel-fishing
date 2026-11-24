@@ -1,9 +1,11 @@
 import type { GameState } from '../../../../game/rules/logic';
 import { useWhatsNew } from '../../../../features/announcements/service/whatsNew';
 import type { WhatsNewStep } from '../../../../features/announcements/model/whatsNew';
-import Modal from '../../../ui/Modal';
+import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
 import { cx } from '../../../ui/cx';
+import Divider from '../../../ui/Divider';
+import Modal from '../../../ui/Modal';
 import NewsStep from './NewsStep';
 import SettingsStep from './SettingsStep';
 
@@ -16,12 +18,11 @@ function StepTrail({ steps, index }: { steps: readonly WhatsNewStep[]; index: nu
     <ol className="flex items-center gap-1.5 mb-3 text-2xs" aria-label="단계">
       {steps.map((s, i) => (
         <li key={s} className="flex items-center gap-1.5">
-          {i > 0 && <span aria-hidden className="w-4 h-px bg-line" />}
+          {i > 0 && <Divider className="w-4 my-0" />}
           <span className={cx('flex items-center gap-1',
             i === index ? 'text-gold' : i < index ? 'text-text' : 'text-text-dim')}
                 aria-current={i === index ? 'step' : undefined}>
-            <span className={cx('pf-accent w-4 h-4 inline-flex items-center justify-center rounded-sm border',
-              i === index ? 'border-gold' : 'border-line')}>{i + 1}</span>
+            <Badge size="square" pixel inline tone={i === index ? 'gold-plain' : 'dim-plain'}>{i + 1}</Badge>
             {STEP_TITLE[s]}
           </span>
         </li>

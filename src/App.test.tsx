@@ -10,6 +10,7 @@ import { resetBagView } from './presentation/views/game/tabs/bag/bagView';
 import { resetCanvasCover } from './presentation/layouts/game-stage/canvasCover';
 import { resetTimeOverride } from './features/gameplay/service/timeOverride';
 import { resetFishArtStyle } from './features/display/service/fishArtStyle';
+import { resetToastEnabled } from './features/display/service/toastEnabled';
 import { resetEncounterAlert, resetUpdateAlert } from './features/bounty/service/encounterAlert';
 import { resetWhatsNewSession } from './features/announcements/service/whatsNew';
 import { resetTutorialSession } from './features/tutorial/service/tutorial';
@@ -99,6 +100,7 @@ beforeEach(() => {
   resetCanvasCover(); // 캔버스 덮개도 모듈 전역
   resetTimeOverride(); // 시간대 고정도 모듈 전역 (남으면 밤/낮 캐치가 오염된다)
   resetFishArtStyle(); // 물고기 그래픽 선택도 모듈 전역
+  resetToastEnabled(); // 플로팅 토스트 표시 설정도 모듈 전역
   resetEncounterAlert(); // 조우 알림 선호도 모듈 전역
   resetUpdateAlert();
   // 업데이트 소식 창은 접속 시 자동으로 떠서 키를 막는다 — 소식 창 자체를 다루는 케이스 밖에서는 본 것으로 둔다
@@ -366,6 +368,7 @@ describe('시설 재클릭 시 패널 토글', () => {
 describe('쿠폰 입력 (설정 탭)', () => {
   // 정적 COUPONS에 없는 코드는 DB(coupons 테이블) 조회를 거치므로 비동기 — findBy로 대기.
   it('유효 코드 입력 시 골드 지급, 재사용 불가', async () => {
+    seed();
     render(<App />);
     clickTab('설정');
     fireEvent.click(screen.getByRole('button', { name: '코드 입력' }));
@@ -375,18 +378,19 @@ describe('쿠폰 입력 (설정 탭)', () => {
     await waitFor(() => expect(hud()).toMatch(new RegExp(`골드 ${COUPONS['출항준비'].gold}(?![\\d.,])`)));
     fireEvent.change(screen.getByLabelText('쿠폰 코드'), { target: { value: '출항준비' } });
     fireEvent.click(screen.getByRole('button', { name: '쿠폰 코드 사용' }));
-    expect(await screen.findByText(/이미 사용한 쿠폰/)).toBeInTheDocument();
+    expect((await screen.findAllByText(/이미 사용한 쿠폰/)).length).toBeGreaterThanOrEqual(1);
     expect(hud()).toMatch(new RegExp(`골드 ${COUPONS['출항준비'].gold}(?![\\d.,])`)); // 중복 지급 없음
   });
 
   it('없는 코드는 안내만', async () => {
+    seed();
     render(<App />);
     clickTab('설정');
     fireEvent.click(screen.getByRole('button', { name: '코드 입력' }));
     expect(screen.getByRole('button', { name: '쿠폰 코드 사용' })).toBeDisabled(); // 빈 코드는 못 보낸다
     fireEvent.change(screen.getByLabelText('쿠폰 코드'), { target: { value: '없는코드' } });
     fireEvent.click(screen.getByRole('button', { name: '쿠폰 코드 사용' }));
-    expect(await screen.findByText(/없는 쿠폰 코드/)).toBeInTheDocument();
+    expect((await screen.findAllByText(/없는 쿠폰 코드/)).length).toBeGreaterThanOrEqual(1);
   });
 });
 
@@ -732,23 +736,29 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
   });
 
   it('설정 탭은 창을 여는 줄 버튼 넷을 설정, 코드 입력, 개발자에게, 패치노트 순서로 둔다', () => {
+    seed();
     render(<App />);
     clickTab('설정');
     expect(openerButton('코드 입력').parentElement).toHaveTextContent(/^설정코드 입력개발자에게패치노트$/);
   });
 
   it('연 창이 떠 있는 동안 그 버튼은 눌린 모양이고, 닫으면 돌아온다', () => {
+    seed();
     render(<App />);
     clickTab('설정');
-    expect(openerButton('설정')).toHaveAttribute('aria-pressed', 'false');
-    fireEvent.click(openerButton('설정'));
-    expect(openerButton('설정')).toHaveAttribute('aria-pressed', 'true');
-    expect(openerButton('코드 입력')).toHaveAttribute('aria-pressed', 'false');
+    // 창이 떠 있는 동안 사이드바는 불활성이라 접근성 조회에서 빠진다 — 눈에 보이는 상태는 DOM에서 읽는다
+    const pressed = (name: string) =>
+      screen.getAllByRole('button', { name, hidden: true }).find(b => b.hasAttribute('aria-pressed'))!;
+    expect(pressed('설정')).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(pressed('설정'));
+    expect(pressed('설정')).toHaveAttribute('aria-pressed', 'true');
+    expect(pressed('코드 입력')).toHaveAttribute('aria-pressed', 'false');
     fireEvent.keyDown(document, { key: 'Escape' });
-    expect(openerButton('설정')).toHaveAttribute('aria-pressed', 'false');
+    expect(pressed('설정')).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('알림을 지원하지 않는 브라우저에서는 두 알림 토글이 흐려져 켤 수 없다', () => {
+    seed();
     render(<App />);
     clickTab('설정');
     fireEvent.click(openerButton('설정'));
@@ -759,6 +769,7 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
   it('알림 켜기는 브라우저 권한을 묻고, 허용되면 그 알림만 켜짐으로 바뀐다', async () => {
     const requestPermission = vi.fn(async () => 'granted' as NotificationPermission);
     vi.stubGlobal('Notification', { permission: 'default', requestPermission });
+    seed();
     try {
       render(<App />);
       clickTab('설정');
@@ -776,6 +787,7 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
   });
 
   it('설정 창에서 물고기 그래픽을 미리보기로 고른다 — 기본 v1, 선택은 기기에 남는다', () => {
+    seed();
     render(<App />);
     clickTab('설정');
     fireEvent.click(openerButton('설정'));
@@ -785,19 +797,20 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
     expect(localStorage.getItem('pf-fish-art')).toBe('v2');
   });
 
-  it('이사 코드는 설정 탭에 없다 — 개발 도구 패널의 운영 묶음(관리자 명부 계정 전용)에 있다', () => {
+  it('이사 코드는 설정 탭에 없다 — 개발 도구 패널의 계정·스냅샷 묶음(관리자 명부 계정 전용)에 있다', () => {
     window.history.replaceState({}, '', '/?admin=1');
     render(<App />);
     clickTab('설정');
     expect(screen.queryByRole('button', { name: /이사 코드/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '개발 도구' }));
-    fireEvent.click(screen.getByRole('button', { name: '운영' }));
+    fireEvent.click(screen.getByRole('button', { name: '계정·스냅샷' }));
     expect(screen.getByRole('button', { name: '이사 코드 내보내기' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '이사 코드 불러오기' })).toBeInTheDocument();
     window.history.replaceState({}, '', '/');
   });
 
   it('클라우드 미설정(개발 모드)이면 계정 관리 모달에 경고 표시 — 상태는 메모리에만 있음', () => {
+    seed();
     render(<App />);
     clickTab('설정');
     expect(screen.queryByText(/클라우드가 설정되지 않았어요/)).not.toBeInTheDocument(); // 설정 화면에는 없다
@@ -822,6 +835,7 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
 
 describe('R22: 도움말 탭', () => {
   it('일반 시스템 도움말만 — 어종명(도감 스포일러)·지역 한정 정보는 없다', () => {
+    seed();
     render(<App />);
     clickTab('도움말');
     expect(screen.getByText('낚시와 타이밍')).toBeInTheDocument();
@@ -832,6 +846,7 @@ describe('R22: 도움말 탭', () => {
   });
 
   it('첫 화면은 짧다 — 세부는 전부 접혀 있고 필요할 때 편다', () => {
+    seed();
     render(<App />);
     clickTab('도움말');
     const topics = [...document.querySelectorAll('details')];
@@ -843,6 +858,7 @@ describe('R22: 도움말 탭', () => {
   });
 
   it('수치는 balance에서 읽어 자동으로 맞는다 — 손으로 적으면 밸런스 바꿀 때 갈라진다', () => {
+    seed();
     render(<App />);
     clickTab('도움말');
     const help = document.body.textContent ?? '';
@@ -853,6 +869,7 @@ describe('R22: 도움말 탭', () => {
   });
 
   it('갱신된 기능이 도움말에 있다 — 단축키·개체 잠금·두 보기·계정', () => {
+    seed();
     render(<App />);
     clickTab('도움말');
     const help = document.body.textContent ?? '';
@@ -862,6 +879,7 @@ describe('R22: 도움말 탭', () => {
   });
 
   it('v0.6.7 이후 콘텐츠가 도움말에 있다 — 바다·낮밤·바운티 헌팅·설정, 마지막 갱신 표기', () => {
+    seed();
     render(<App />);
     clickTab('도움말');
     const help = document.body.textContent ?? '';
@@ -1378,6 +1396,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
 
 describe('패치노트 (설정 탭)', () => {
   it('설정 탭에 버전별 아코디언 패치노트 — 범주 뱃지 포함', () => {
+    seed();
     render(<App />);
     clickTab('설정');
     fireEvent.click(openerButton('패치노트'));
@@ -1413,16 +1432,16 @@ describe('개발 도구 패널 (?admin 게이트)', () => {
     fireEvent.keyDown(document, { key: 'F9' });
     expect(screen.queryByText('메갈로돈 네임드 직전')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '개발 도구' }));
-    fireEvent.click(screen.getByRole('button', { name: '운영' }));
+    fireEvent.click(screen.getByRole('button', { name: '계정·스냅샷' }));
     expect(screen.getByLabelText('대시보드 열기').getAttribute('href')).toBe('/admin/#/admin/overview');
     window.history.replaceState({}, '', '/');
   });
 
-  it('상태 묶음의 스탯 설정은 debug 명령으로 상태를 바꾼다 (로컬 게이트웨이)', async () => {
+  it('장비·아이템·업적 묶음의 스탯 설정은 debug 명령으로 상태를 바꾼다 (로컬 게이트웨이)', async () => {
     window.history.replaceState({}, '', '/?admin=1');
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: '개발 도구' }));
-    fireEvent.click(screen.getByRole('button', { name: '상태' }));
+    fireEvent.click(screen.getByRole('button', { name: '장비·아이템·업적' }));
     fireEvent.change(screen.getByLabelText('스탯 설정 골드'), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: '스탯 설정' }));
     expect(await screen.findByLabelText('실행 기록')).toHaveTextContent('스탯 설정');
@@ -1445,19 +1464,23 @@ describe('개발 도구 패널 (?admin 게이트)', () => {
     fireEvent.pointerUp(handle, { clientX: 400, clientY: 130, pointerId: 1 });
     expect(parseFloat(box().top)).toBe(parseFloat(before.top) + 100);
     expect(JSON.parse(localStorage.getItem('pf-devtools-pos')!)).toMatchObject({ y: parseFloat(before.top) + 100 });
-    for (const name of ['상태', '수배', '시간·화면', '운영']) {
+    for (const name of ['이동·시간', '도감·네임드', '장비·아이템·업적', '수배', '계정·스냅샷']) {
       fireEvent.click(screen.getByRole('button', { name }));
       expect([box().w, box().h]).toEqual([before.w, before.h]);
     }
     window.history.replaceState({}, '', '/');
   });
 
-  it('네임드 직전 프리셋은 그 구역 항구 밖이면 멈추고 이유를 기록한다', async () => {
+  it('네임드 직전 프리셋은 오프라인에서 DB 전용 수배 명령을 거부하고, QA 패키지 프리셋은 항구로 자동 이동한다', async () => {
     window.history.replaceState({}, '', '/?admin=1');
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: '개발 도구' }));
     fireEvent.click(screen.getByRole('button', { name: '메갈로돈 네임드 직전' }));
-    expect(await screen.findByLabelText('실행 기록')).toHaveTextContent('태평양 항구 안에서 실행해야 한다');
+    expect(await screen.findByLabelText('실행 기록')).toHaveTextContent('로컬 모드(DB 없음)에서는 수배 DB 도구를 쓸 수 없어요.');
+
+    fireEvent.click(screen.getByRole('button', { name: 'v0.20.0 신콘텐츠 QA 패키지' }));
+    await waitFor(() => expect(screen.getByLabelText('실행 기록')).toHaveTextContent('거점 이동 (lisbon)'));
+    expect(screen.getByLabelText('항구')).toBeInTheDocument();
     window.history.replaceState({}, '', '/');
   });
 });

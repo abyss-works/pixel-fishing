@@ -4,10 +4,15 @@
 import { filterAdminUsers } from './adminViews';
 import type { AdminUserRow } from './types';
 
+/** 한 번의 우편 보내기로 지급할 수 있는 총 골드 상한 */
+export const MAX_MAIL_BATCH_TOTAL_GOLD = 500_000_000;
+
 export interface RecipientParse {
   recipients: { userId: string; gold: number }[];
   /** 형태가 틀린 줄 번호(1부터) */
   badLines: number[];
+  /** 중복 입력된 계정 id 목록(소문자 정규화) */
+  duplicates: string[];
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -15,6 +20,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function parseRecipients(text: string): RecipientParse {
   const recipients: RecipientParse['recipients'] = [];
   const badLines: number[] = [];
+  const seen = new Set<string>();
+  const duplicates: string[] = [];
+  const dupSet = new Set<string>();
   text.split(/\r?\n/).forEach((raw, i) => {
     const line = raw.trim();
     if (!line) return;
@@ -24,9 +32,18 @@ export function parseRecipients(text: string): RecipientParse {
       badLines.push(i + 1);
       return;
     }
+    const norm = userId.toLowerCase();
+    if (seen.has(norm)) {
+      if (!dupSet.has(norm)) {
+        dupSet.add(norm);
+        duplicates.push(norm);
+      }
+    } else {
+      seen.add(norm);
+    }
     recipients.push({ userId, gold });
   });
-  return { recipients, badLines };
+  return { recipients, badLines, duplicates };
 }
 
 /** 받는 사람 입력에 계정 하나를 골드 0인 줄로 더한다. 이미 있는 계정이면 입력을 그대로 둔다 */
@@ -53,5 +70,6 @@ export const MAIL_PROBLEM_TEXT: Record<string, string> = {
   body: '본문은 1~2,000자여야 해요.',
   gold: '골드는 0 이상 10억 이하의 정수여야 해요.',
   recipients: '받는 사람이 없거나 계정 id 형식이 틀렸어요.',
-  duplicate: '같은 계정이 두 번 들어 있어요.',
+  duplicate: '같은 계정이 두 번 이상 들어 있어요.',
+  totalGold: '총 지급 골드가 일괄 발송 상한(5억 G)을 초과했어요.',
 };

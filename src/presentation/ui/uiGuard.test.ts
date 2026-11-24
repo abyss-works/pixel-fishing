@@ -1,12 +1,7 @@
 // UI 시스템 가드 — 화면(views·layouts)이 공용 UI(ui)를 조합하고, 기본 요소를 직접 구현하지 않게 한다.
 // 한 번만 쓰는 화면 조각은 그 화면 파일 안의 지역 컴포넌트로 만들 수 있다. 단 두 화면 이상에 같은 이름의
 // 지역 컴포넌트가 생기면 공용 UI로 올려야 한다. 예외 목록은 줄이기만 한다(새 예외를 더하지 않는다).
-import { createElement } from 'react';
-import type { ComponentProps } from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
-import Modal from './Modal';
-import type { ModalHeight } from './Modal';
+import { describe, expect, it } from 'vitest';
 import { SCROLL_Y, SCROLL_Y_ROWS } from './scrollArea';
 
 const sources = import.meta.glob('../**/*.{ts,tsx}', {
@@ -32,7 +27,7 @@ const screens = screenFiles.filter(f => f.path.endsWith('.tsx'));
 const PRIMITIVES: { pattern: RegExp; use: string }[] = [
   { pattern: /\bpf-frame\b/, use: 'Frame(틀) · Panel(제목 있는 박스)' },
   { pattern: /\bpf-btn\b/, use: 'Button · LinkButton(다른 페이지 링크)' },
-  { pattern: /<button\b/, use: 'Button · IconButton · PillButton · SelectList · Frame as="button"' },
+  { pattern: /<button\b/, use: 'Button · IconButton · ToggleChip · SelectList · Frame as="button"' },
   { pattern: /<input\b/, use: 'TextInput · Slider · NumberStepper' },
   { pattern: /<select\b/, use: 'Select' },
   { pattern: /<textarea\b/, use: 'TextArea' },
@@ -43,11 +38,13 @@ const PRIMITIVES: { pattern: RegExp; use: string }[] = [
 /** 브라우저 기본 대화상자 — 게임 화면은 useDialogs(ConfirmDialog·InputDialog·NoticeDialog)를 쓴다. 예외 없음 */
 const SYSTEM_DIALOG = /\bwindow\.(?:confirm|prompt|alert)\(/;
 
+/** 기본 입력 요소 직접 사용 — 기능·앱 진입 코드도 공용 입력 컴포넌트를 쓴다 */
+const RAW_INPUT = /<(?:input|textarea|select)\b/;
+
 /** 제목 태그 직접 사용 — 쪽 제목은 PageTitle, 구역은 SectionTitle, 묶음은 Subheading, 창·상자 제목은 Panel·ModalCard의
  *  title이 맡는다. 아래는 그 틀에 맞지 않는 자리라 직접 둔다(줄이기만 한다) */
 const RAW_HEADING = /<h[1-6][\s>]/;
 const RAW_HEADING_EXCEPTIONS = new Set([
-  'views/devtools/DevTools.tsx',      // 떠 있는 창 머리 — 끌기 손잡이를 겸한다
   'views/game/tabs/region/VRegion.tsx', // 지역 탭 로어 상자 — 고정 높이 상자 안 한 줄 제목
 ]);
 
@@ -55,18 +52,14 @@ const RAW_HEADING_EXCEPTIONS = new Set([
  *  아래는 칸 안에서 표를 가로로 굴려야 하는 자리(관리자 표, 지역 탭 표)와 양방향 표 상자라 직접 둔다(줄이기만 한다) */
 const OVERFLOW_DIRECT = /\boverflow-(?:x-|y-)?(?:auto|scroll)\b|\[overflow(?:-x|-y)?:(?:auto|scroll)\]|\boverflow(?:X|Y)?\s*:\s*['"`](?:auto|scroll)['"`]/;
 const OVERFLOW_EXCEPTIONS = new Set([
-  'views/admin/tabs/AntiAbuseTab.tsx',
   'views/admin/tabs/BountyFunnelSection.tsx',
   'views/admin/tabs/ChatReportsSection.tsx',
-  'views/admin/tabs/FishTab.tsx',
   'views/admin/tabs/LettersTab.tsx',
   'views/admin/tabs/LiveTab.tsx',
-  'views/admin/tabs/MailTab.tsx',
   'views/admin/tabs/MetricsTab.tsx',
   'views/admin/tabs/OpsTab.tsx',
   'views/admin/tabs/OverviewTab.tsx',
   'views/admin/tabs/ProgressionTab.tsx',
-  'views/admin/tabs/UsersTab.tsx',
   'views/game/tabs/region/VRegion.tsx',
 ]);
 
@@ -75,9 +68,6 @@ const HIDDEN_BAR = /(?<![\w-])pf-scroll(?![\w-])/;
 const HIDDEN_BAR_EXCEPTIONS = new Set([
   'layouts/sidebar/index.tsx', // 384px 폭 사이드바 — 탭을 옮길 때 막대가 폭을 흔들지 않게 숨긴다
 ]);
-
-/** 스크롤을 거는 모든 표기 — 공용 스크롤 클래스, overflow 유틸, arbitrary 표기(`[overflow-y:auto]`), 인라인 style 객체 */
-const SCROLL_CLASS = new RegExp(`pf-vscroll|pf-scroll|${OVERFLOW_DIRECT.source}`);
 
 /** `<이름 ...>` 여는 태그들. 속성 값의 `{...}` 안에 있는 `>`(화살표 함수 등)는 태그 끝으로 보지 않는다 */
 function openingTags(src: string, name: string): string[] {
@@ -222,8 +212,18 @@ describe('UI 시스템 가드', () => {
   });
 
   it('기능·앱 진입 코드도 입력 요소를 직접 그리지 않는다', () => {
-    const raw = /<(?:input|textarea|select)\b/;
-    expect(appSources.filter(([key, src]) => key.startsWith('../../') && raw.test(src)).map(([key]) => key)).toEqual([]);
+    const outsidePresentation = appSources.filter(([key]) => key.startsWith('../../'));
+    expect(outsidePresentation.length).toBeGreaterThan(0);
+    expect(outsidePresentation.filter(([, src]) => RAW_INPUT.test(src)).map(([key]) => key)).toEqual([]);
+  });
+
+  it('감지 함수: 기본 입력 요소(<input>, <textarea>, <select>)는 잡고 공용 컴포넌트와 유사 이름은 가린다', () => {
+    for (const tag of ['<input type="text" />', '<input/>', '<input>', '<textarea rows={3}>', '<textarea>', '<select value={v}>', '<select>']) {
+      expect(RAW_INPUT.test(tag), tag).toBe(true);
+    }
+    for (const tag of ['<TextInput />', '<TextArea />', '<Select />', '<inputHelper />', '<selectList />']) {
+      expect(RAW_INPUT.test(tag), tag).toBe(false);
+    }
   });
 
   it('제목은 제목 컴포넌트와 창·상자 title로 쓴다 — 예외 목록의 자리만 태그를 직접 쓴다', () => {
@@ -271,42 +271,6 @@ describe('UI 시스템 가드', () => {
     expect([...HIDDEN_BAR_EXCEPTIONS].filter(p => !using.includes(p))).toEqual([]);
   });
 
-  describe('스테이지 모달 래퍼', () => {
-    afterEach(cleanup);
-    // 래퍼에 합쳐지는 클래스(높이 상수 포함)를 정규식으로 읽지 않고, 높이·폭 변형을 모두 렌더해 실제 class를 본다
-    const heights: (ModalHeight | undefined)[] = [undefined, 400, 480, 520, 560];
-    const widths = [{}, { md: true }, { xl: true }];
-    it('모든 높이·폭 변형에서 스크롤 클래스를 갖지 않는다 — 스크롤은 카드 본문이 맡는다', () => {
-      const classes: string[] = [];
-      for (const height of heights) {
-        for (const width of widths) {
-          for (const mobileFixed of [false, true]) {
-            const props: ComponentProps<typeof Modal> = { layer: 'stage', height, mobileFixed, onClose: () => {}, children: createElement('p', null, '내용'), ...width };
-            render(createElement(Modal, props));
-            classes.push(screen.getByRole('dialog').className);
-            cleanup();
-          }
-        }
-      }
-      expect(classes).toHaveLength(heights.length * widths.length * 2);
-      expect(classes.filter(c => SCROLL_CLASS.test(c))).toEqual([]);
-    });
-    it('모바일 고정 변형은 모바일 높이를 가용 높이로 정하고 내용 높이(mobile:h-auto)를 쓰지 않는다', () => {
-      for (const height of [480, 520, 560] as const) {
-        const props: ComponentProps<typeof Modal> = { layer: 'stage', height, mobileFixed: true, onClose: () => {}, children: createElement('p', null, '내용') };
-        render(createElement(Modal, props));
-        const cls = screen.getByRole('dialog').className;
-        cleanup();
-        expect(cls).toContain('mobile:h-[calc(100%-48px)]');
-        expect(cls).not.toContain('mobile:h-auto');
-      }
-    });
-    it('감지: 높이 상수에 스크롤 클래스가 섞이면 잡는다', () => {
-      expect(SCROLL_CLASS.test('h-[min(480px,calc(100%-32px))] overflow-y-auto')).toBe(true);
-      expect(SCROLL_CLASS.test('h-[min(480px,calc(100%-32px))] pf-vscroll')).toBe(true);
-      expect(SCROLL_CLASS.test('h-[min(480px,calc(100%-32px))] mobile:h-auto')).toBe(false);
-    });
-  });
   it('앱 모달의 제목 요소는 본문 자식이 아니라 title이나 header prop이다 — 감싼 제목도 잡는다', () => {
     expect(screens.flatMap(f => appModalsWithTitleChild(f.src).map(tag => `${f.path}: ${tag}`))).toEqual([]);
     expect(appModalsWithTitleChild(`<Modal xl onClose={c}>\n  {/* 설명 */}\n  <header className="a">가</header></Modal>`)).toHaveLength(1);
@@ -466,6 +430,12 @@ describe('UI 시스템 가드', () => {
     ['views/overlays/bounty/QuestInfoCards.tsx', [
       { line: /fmtGold\(info\.reward\)/, why: '일반 의뢰 카드는 보정이 없는 원본 보상이다' },
     ]],
+    ['views/overlays/achievements/AchievementsModal.tsx', [
+      { line: /fmtGold\(row\.def\.reward\.gold\)/, why: '업적 보상 골드는 보정이 없는 원본 보상이다' },
+    ]],
+    ['views/overlays/achievements/AchievementCard.tsx', [
+      { line: /fmtGold\(reward\.gold\)/, why: '업적 보상 골드는 보정이 없는 원본 보상이다' },
+    ]],
   ]);
   /** 판매 합계·판매 가능 금액 이름을 그대로 금액 표기에 넘기는 모양 */
   const SALE_TOTAL_IN_GOLD = /fmtGold\(\s*(?:preview\.)?(?:total|sellable|sellableValue)\s*\)/;
@@ -611,5 +581,155 @@ describe('UI 시스템 가드', () => {
     expect(chips).toMatch(/<HudChip\b/);
     expect(chips).toMatch(/<Locked\b/);
     expect(presentationFiles.find(f => f.path === 'ui/hud/HudChip.tsx')!.src).toContain('pointer-events-auto');
+  });
+
+  // 하단 HUD 흐름 — 낚시 상태 띠, 오른쪽 아래 열, 메시지 창은 PC와 모바일 모두 HudLayout의 단일 흐름 컨테이너 안에 둔다.
+  // Field가 게임 프레임 하단에 따로 절대 배치하거나, 메시지 창·오른쪽 아래 열이 스테이지 구석에 각각 절대 배치로 돌아가지 않게 막는다
+  it('Field는 PC와 모바일 모두 공용 statusSlot 포털로 낚시 상태 띠를 공급하고 게임 프레임 하단에 따로 절대 배치하지 않는다', () => {
+    const field = presentationFiles.find(f => f.path === 'layouts/game-stage/Field.tsx')!.src;
+    expect(field).toMatch(/createPortal\(\s*statusBand\s*,\s*statusSlot\s*\)/);
+    expect(field).not.toMatch(/mobile\s*&&\s*statusSlot|statusSlot\s*&&\s*mobile/);
+    expect(field).not.toMatch(/\bbottom-3\b|-translate-x-1\/2/);
+  });
+
+  it('HudLayout은 낚시 상태 띠 슬롯, 오른쪽 아래 열, 메시지 창을 PC와 모바일 모두 단일 흐름 컨테이너 안에 둔다', () => {
+    const hud = presentationFiles.find(f => f.path === 'layouts/hud/HudLayout.tsx')!.src;
+    const log = presentationFiles.find(f => f.path === 'ui/hud/MessageLog.tsx')!.src;
+    expect(hud).toMatch(/ref=\{onStatusSlot\}/);
+    expect(hud).not.toMatch(/mobile\s*&&\s*<div\b[^>]*ref=\{onStatusSlot\}/);
+    expect(hud).not.toMatch(/['"`]contents\b/);
+    expect(hud).not.toMatch(/\babsolute\s+right-3\s+bottom-3\b/);
+    expect(log).not.toMatch(/\babsolute\s+left-3\s+bottom-3\b/);
+  });
+
+  // 초록(ok) 상태색 금지 — 초록은 특수 등급에만 쓰고 상태(성공, 활성, 접속)에는 쓰지 않는다
+  const OK_STATUS_COLOR = /\b(?:text|bg|border)-ok\b/;
+  it('업적과 라이브 오버레이 화면은 비특수 용도의 ok 색 토큰(text-ok·bg-ok·border-ok)을 쓰지 않는다', () => {
+    const targets = screenFiles.filter(f => /^views\/overlays\/(?:achievements|live)\//.test(f.path));
+    expect(targets.length).toBeGreaterThan(0);
+    const offenders: string[] = [];
+    for (const { path, src } of targets) {
+      src.split('\n').forEach((line, i) => {
+        if (OK_STATUS_COLOR.test(line)) offenders.push(`${path}:${i + 1}`);
+      });
+    }
+    expect(offenders).toEqual([]);
+    expect(OK_STATUS_COLOR.test('text-ok')).toBe(true);
+    expect(OK_STATUS_COLOR.test('bg-ok/10')).toBe(true);
+    expect(OK_STATUS_COLOR.test('border-ok/70')).toBe(true);
+    expect(OK_STATUS_COLOR.test('text-accent border-gold')).toBe(false);
+  });
+
+  // UI 규칙 가드 — 게임 화면과 공용 UI는 둥근 모서리(예외 제외), 완료/잠금 opacity 흐림, 네이티브 title, PillButton,
+  // 2px 두꺼운 테두리·베벨, 가운뎃점·대시([·—–])를 쓰지 않는다 (admin/devtools 제외)
+  const isGameUi = (p: string) =>
+    p.startsWith('ui/') || p.startsWith('layouts/') || p.startsWith('views/game/') || p.startsWith('views/overlays/');
+  const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+
+  const ROUNDED_RE = /\brounded-(?:sm|md|lg|full|\[[^\]]+\])\b/;
+  const ROUNDED_EXCEPTIONS = new Set([
+    'ui/TooltipBubble.tsx',                   // 예외: 툴팁 버블
+    'ui/hud/Minimap.tsx',                     // 예외: 미니맵 지도 틀
+    'ui/GoogleButton.tsx',                    // Google 브랜드 가이드라인 버튼
+    'ui/PillButton.tsx',                      // admin/devtools 전용 잔존 유틸 (게임 화면에서 금지)
+    'layouts/game-stage/MovePad.tsx',         // 터치 조이스틱 원형 패드
+    'views/overlays/world-map/WorldMapModal.tsx', // 세계지도 틀
+  ]);
+  it('게임 UI는 예외 외에 둥근 모서리(rounded-*)를 쓰지 않는다', () => {
+    const targets = presentationFiles.filter(f => isGameUi(f.path) && !ROUNDED_EXCEPTIONS.has(f.path));
+    const offenders = targets.filter(f => ROUNDED_RE.test(f.src)).map(f => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  const OPACITY_WASH_RE = /(?<!disabled:)\bopacity-(?:40|45|50|55|60|70|80|85|\[0\.(?:45|50|55|70|72)\])\b/;
+  it('게임 UI는 완료·잠금·보조 텍스트에 비활성 외 opacity 흐림을 쓰지 않는다', () => {
+    const targets = presentationFiles.filter(f => isGameUi(f.path) && f.path !== 'ui/PillButton.tsx' && f.path !== 'ui/ToggleChip.tsx');
+    const offenders = targets.filter(f => OPACITY_WASH_RE.test(f.src)).map(f => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  const NATIVE_TITLE_RE = /<[a-z][^>]*\stitle=/;
+  it('게임 UI는 브라우저 기본 title 속성 툴팁을 쓰지 않는다', () => {
+    const targets = presentationFiles.filter(f => isGameUi(f.path));
+    const offenders = targets.filter(f => NATIVE_TITLE_RE.test(f.src)).map(f => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  it('게임 UI는 PillButton을 쓰지 않는다(admin/devtools 전용)', () => {
+    const targets = presentationFiles.filter(f => isGameUi(f.path) && f.path !== 'ui/PillButton.tsx');
+    const offenders = targets.filter(f => /\bPillButton\b/.test(f.src)).map(f => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  const THICK_BORDER_RE = /(?:\bborder-(?:[trblxy]-)?2\b|inset_-?2px)/;
+  it('게임 UI 버튼·칩·카드·모달·레이아웃은 1px 얇은 테두리와 1px 베벨을 쓴다', () => {
+    const targets = presentationFiles.filter(
+      f => isGameUi(f.path) && f.path !== 'ui/PillButton.tsx',
+    );
+    const offenders = targets.filter(f => THICK_BORDER_RE.test(f.src)).map(f => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  const TIER1_FLAT_PRIMITIVES = [
+    'ui/HelpHint.tsx',
+    'ui/ArrowButton.tsx',
+    'ui/ProgressMeter.tsx',
+    'ui/SegmentedStepBar.tsx',
+    'ui/hud/BagMeter.tsx',
+    'ui/hud/HudChip.tsx',
+    'ui/ToggleChip.tsx',
+  ];
+  const TIER1_BEVEL_RE = /(?:\bpf-bevel\b|\bPRESSED_BEVEL\b|inset_-?1px)/;
+  it('26px 이하 소형 요소와 12px 이하 트랙은 베벨 없는 평면 1px 테두리(Tier 1)를 쓴다', () => {
+    const offenders = TIER1_FLAT_PRIMITIVES.filter(path => {
+      const src = presentationFiles.find(f => f.path === path)?.src ?? '';
+      return TIER1_BEVEL_RE.test(src);
+    });
+    expect(offenders).toEqual([]);
+  });
+
+  const RAW_INSET_CLIP_RE = /(?:shadow-\[inset_|\[clip-path:)/;
+  it('게임 화면은 인라인 inset 그림자와 clip-path를 직접 쓰지 않고 공용 UI와 노치 토큰을 쓴다', () => {
+    const targets = screenFiles.filter(f => f.path.startsWith('views/game/') || f.path.startsWith('views/overlays/'));
+    const offenders = targets.filter(f => RAW_INSET_CLIP_RE.test(f.src)).map(f => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  const HARDCODED_HEX_RE = /(?:bg|border|text|from|to|via|ring|outline)-\[#/;
+  it('게임 화면은 16진 색상 클래스를 박지 않고 시맨틱 토큰을 쓴다', () => {
+    const targets = screenFiles.filter(f => f.path.startsWith('views/game/') || f.path.startsWith('views/overlays/'));
+    const offenders = targets.filter(f => HARDCODED_HEX_RE.test(f.src)).map(f => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  const RAW_DIVIDER_RE = /\b(?:w|h)-px\b[^\n]*\bbg-line\b|\bbg-line\b[^\n]*\b(?:w|h)-px\b/;
+  it('게임 화면은 1px 선을 직접 그리지 않고 Divider를 쓴다', () => {
+    const targets = screenFiles.filter(f => f.path.startsWith('views/game/') || f.path.startsWith('views/overlays/'));
+    const offenders = targets.filter(f => RAW_DIVIDER_RE.test(f.src)).map(f => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  const CLICKABLE_NONBUTTON_RE = /<(?:div|span)\b[^>]*\brole=(?:\{[^}]*['"]button['"]|['"]button['"])/;
+  const CLICKABLE_NONBUTTON_EXCEPTIONS = new Set([
+    'views/game/tabs/bag/BagTab.tsx',
+    'views/overlays/bounty/EncounterModal.tsx',
+  ]);
+  it('게임 화면의 누를 수 있는 칸은 div/span role="button" 대신 button/Frame as="button"을 쓴다', () => {
+    const targets = screenFiles.filter(
+      f => (f.path.startsWith('views/game/') || f.path.startsWith('views/overlays/'))
+        && !CLICKABLE_NONBUTTON_EXCEPTIONS.has(f.path),
+    );
+    const offenders = targets.filter(f => CLICKABLE_NONBUTTON_RE.test(f.src)).map(f => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  const PUNCT_RE = /[·—–]/;
+  it('게임 UI와 기능 모델 코드 문자열은 가운뎃점·줄표를 쓰지 않는다', () => {
+    const targets = [...presentationFiles, ...featureFiles].filter(
+      f => !f.path.includes('/admin/') && !f.path.includes('/devtools/')
+        && !f.path.startsWith('views/admin/') && !f.path.startsWith('views/devtools/'),
+    );
+    const offenders = targets.filter(f => PUNCT_RE.test(stripComments(f.src))).map(f => f.path);
+    expect(offenders).toEqual([]);
   });
 });

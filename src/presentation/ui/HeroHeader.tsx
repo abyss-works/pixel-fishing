@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import Badge from './Badge';
-import Frame from './Frame';
+import Inset from './Inset';
 import LoreParagraph from './LoreParagraph';
 
 // 상세 머리 — 무엇이 되나/무엇을 사나. 큰 그림 + 이름 + 꼬리표(단계·해금·보유 등) 또는 설명. 그림이 없는 항목은 그림 없이 이름과 꼬리표만 둔다.
@@ -11,7 +11,7 @@ export default function HeroHeader({ sprite, title, tags, description }: {
   sprite?: ReactNode; title: ReactNode; tags?: ReactNode[]; description?: string;
 }) {
   return (
-    <Frame className="bg-surface-2 flex items-center gap-4 px-3 py-3">
+    <Inset tone="light" className="flex items-center gap-4 px-3 py-3">
       {sprite !== undefined && <span className="shrink-0 flex items-center justify-center">{sprite}</span>}
       <div className="min-w-0 flex flex-col gap-1.5">
         <div className="text-gold pf-accent text-xl truncate">{title}</div>
@@ -24,6 +24,6 @@ export default function HeroHeader({ sprite, title, tags, description }: {
           </div>
         )}
       </div>
-    </Frame>
+    </Inset>
   );
 }

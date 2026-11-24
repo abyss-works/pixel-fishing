@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { BOUNTY_ZONES } from '../../../src/game/content/bounties';
 import { FISH } from '../../../src/game/content/fish';
+import { SPOTS } from '../../../src/game/content/spots';
 import { rng } from '../model';
 import { simulate } from './progress';
-import { rewardPlan } from './achievement';
+import { rewardPlan, spotRewardPlan } from './achievement';
 import type { Reward } from './achievement';
 import { daysReport } from './days';
 import { transitionReport } from './transitions';
@@ -12,7 +13,7 @@ import type { Sampler } from './sample';
 
 const run = (o: Partial<Parameters<typeof simulate>[0]> = {}) => simulate({ axis: 'idle', bounty: false, maxDays: 365, ...o });
 const none = () => null;
-const big = (zone: string): Reward | null => (zone === 'indian' ? { gold: 1_000_000, fame: 0 } : null);
+const big = (zone: string): Reward | null => (zone === 'indian' ? { gold: 1_000_000 } : null);
 
 describe('업적 달성 기록', () => {
   it('옵션이 없으면 달성 기록이 비어 있다', () => {
@@ -49,7 +50,7 @@ describe('업적 보상 지급', () => {
     const r = run({ achievements: { reward: big } });
     const target = r.achieved.filter(a => a.zone === 'indian');
     expect(target.length).toBeGreaterThan(0);
-    for (const a of target) expect(a.granted).toEqual({ gold: 1_000_000, fame: 0 });
+    for (const a of target) expect(a.granted).toEqual({ gold: 1_000_000 });
     // 보상 시각 이후의 도착만 빨라질 수 있다
     const at = Math.min(...target.map(a => a.hours));
     for (let i = 0; i < r.arrivals.length; i++) {
@@ -65,13 +66,6 @@ describe('업적 보상 지급', () => {
     expect(first).toBeDefined();
     const same = base.achieved.find(a => a.zone === first!.zone && a.tier === first!.tier)!;
     expect(first!.hours).toBe(same.hours);
-  });
-
-  it('명성 보상은 배 명성 대기를 줄인다', () => {
-    const base = run();
-    const r = run({ achievements: { reward: zone => (zone === 'indian' ? { gold: 0, fame: 1_000_000 } : null) } });
-    const fameWait = (xs: typeof base.arrivals) => xs.reduce((sum, a) => sum + a.waitFame + a.waitBoth, 0);
-    expect(fameWait(r.arrivals)).toBeLessThanOrEqual(fameWait(base.arrivals));
   });
 });
 
@@ -117,7 +111,7 @@ describe('표본 경로의 업적 달성', () => {
 });
 
 describe('보상을 넣은 전환과 도달 보고서', () => {
-  const reward = rewardPlan(0.25, 0.5);
+  const reward = rewardPlan(4, 0.5);
 
   it('전환 보고서는 보상을 주면 보상 없는 값을 base로, 지급 내역을 achieved로 담는다', () => {
     const plain = transitionReport({ axis: 'idle', maxDays: 365 });
@@ -136,5 +130,47 @@ describe('보상을 넣은 전환과 도달 보고서', () => {
     expect(plain.arrival.every(a => a.achieved === undefined)).toBe(true);
     expect(r.base!.arrival).toEqual(plain.arrival);
     expect(r.arrival.every(a => a.achieved !== undefined)).toBe(true);
+  });
+});
+
+describe('해역 단위(spot) 업적 시뮬레이션', () => {
+  it('표본 경로에서는 일반 폼을 모두 모으면 13개 해역 × 2 = 26종 업적을 모두 달성한다', () => {
+    const allFish: Sampler = {
+      rng: () => 0.5,
+      cycleSec: () => 1,
+      catchOf: () => { throw new Error('사용하지 않는다'); },
+      valueOf: () => { throw new Error('사용하지 않는다'); },
+      accrue: (_r, _sec, onCatch) => {
+        for (const fish of FISH) onCatch?.({ fish, gold: 0, fame: 0, variant: false });
+        return { gold: 0, fame: 0, catches: FISH.length };
+      },
+    };
+    const r = run({
+      sampler: allFish,
+      achievements: { unit: 'spot', reward: () => null, spotReward: () => null },
+      maxDays: 1,
+    });
+    expect(r.achieved).toHaveLength(SPOTS.length * 2);
+    expect(r.achieved.map(a => `${a.targetSpot}:${a.tier}`).sort()).toEqual(
+      SPOTS.flatMap(s => [`${s.id}:basic`, `${s.id}:named`]).sort(),
+    );
+  });
+
+  it('기댓값 경로에서 해역 단위 보상을 지급하면 보상 없는 진행보다 마지막 해역 도착이 빨라지거나 같다', () => {
+    const plain = run();
+    const paid = run({ achievements: spotRewardPlan(4, 0.5) });
+    expect(paid.achieved.length).toBeGreaterThan(0);
+    expect(paid.achieved.every(a => a.targetSpot !== undefined)).toBe(true);
+    expect(paid.arrivals.at(-1)!.hours).toBeLessThanOrEqual(plain.arrivals.at(-1)!.hours);
+  });
+
+  it('몬테카를로에서도 해역 단위 보상 지급 시 기초·숙련 순서가 유지되고 보상이 지급된다', () => {
+    const r = run({ sampler: createSampler(rng(17)), achievements: spotRewardPlan(4, 0.5) });
+    for (const s of new Set(r.achieved.map(a => a.targetSpot!))) {
+      const basic = r.achieved.find(a => a.targetSpot === s && a.tier === 'basic');
+      const named = r.achieved.find(a => a.targetSpot === s && a.tier === 'named');
+      if (basic && named) expect(basic.hours).toBeLessThanOrEqual(named.hours);
+    }
+    expect(r.achieved.some(a => a.granted !== null && a.granted.gold > 0)).toBe(true);
   });
 });

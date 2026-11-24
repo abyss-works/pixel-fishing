@@ -1,11 +1,21 @@
 // 액션 엔드포인트 특성 테스트 — 같은 입력에 같은 응답과 같은 DB 상태가 나오는지 실제 Postgres로 고정한다.
 // 스냅샷은 데이터 계층 전환 전 구현으로 기록했다. 전환 뒤 구현도 이 스냅샷을 그대로 통과해야 한다.
 // 난수는 고정 시드, 시각은 고정된 가짜 시계, uid는 테스트 번호로 고정한다.
+import { Client } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { achievementById } from '../src/game/content/achievements.js';
+import { artifactById, artifactLevelCost } from '../src/game/content/artifacts.js';
+import { BOATS } from '../src/game/content/boats.js';
 import { BOUNTIES, bountyById, dailyQuestFor, offeredQuestsFor } from '../src/game/content/bounties.js';
 import type { BountyZone } from '../src/game/content/bounties.js';
+import {
+  COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, ENERGY_PER_INDIVIDUAL, recipeById, recipeCostStored,
+} from '../src/game/content/cooking.js';
 import { FISH } from '../src/game/content/fish.js';
-import { LICENSE_GRADES, WALK_BAG_CAP, newState, zoneDexMissing } from '../src/game/rules/logic.js';
+import { hatById } from '../src/game/content/wardrobe.js';
+import { upgradeCost } from '../src/game/rules/balance.js';
+import { endedFirstCatch, newFirstCatch } from '../src/game/rules/firstCatch.js';
+import { LICENSE_GRADES, WALK_BAG_CAP, newState, sellSelected, zoneDexMissing } from '../src/game/rules/logic.js';
 import type { GameState } from '../src/game/rules/logic.js';
 import { NAMED_PITY_CATCHES, PITY_DONE, SPECIES_PITY_K } from '../src/game/rules/pity.js';
 import {
@@ -112,7 +122,18 @@ describe('첫 액션', () => {
 
 describe('낚시', () => {
   it('통상 캐치는 개체와 도감을 쓰고 명성을 올린다', async () => {
-    expect(await run({ state: {} }, { type: 'catch', spot: 'pond', judgment: 'good' })).toMatchSnapshot();
+    const out = await run({ state: {} }, { type: 'catch', spot: 'pond', judgment: 'good' });
+    expect((out.res as { status: number }).status).toBe(200);
+    expect(out.db.fish_instances).toHaveLength(1);
+    expect(out.db.records).toHaveLength(1);
+    const save = out.db.saves_current[0] as { version: string; fame: string; data: GameState };
+    expect(Number(save.version)).toBe(3);
+    expect(Number(save.fame)).toBeGreaterThan(0);
+    expect(save.data.firstCatch.pond.n).toBe(1);
+    expect(save.data.firstCatch.river).toEqual(newFirstCatch().river);
+    const catchEvent = (out.db.events as { type: string; payload: { spot: string; fishId: string } }[])
+      .find(e => e.type === 'catch');
+    expect(catchEvent?.payload).toMatchObject({ spot: 'pond', fishId: expect.any(String) });
   });
 
   it('도감 기록이 있는 어종은 횟수를 이어 센다', async () => {
@@ -123,31 +144,43 @@ describe('낚시', () => {
       dex[id] = { normal: rec, variant: rec };
     }
     const out = await run({ state: { dex } }, { type: 'catch', spot: 'pond', judgment: 'perfect' });
-    const caught = (out.db.events[0] as { payload: { fishId: string; form: string; isNew: boolean } }).payload;
+    expect((out.res as { status: number }).status).toBe(200);
+    const caught = (out.db.events as { type: string; payload: { fishId: string; form: string; isNew: boolean } }[])
+      .find(e => e.type === 'catch')!.payload;
     const records = out.db.records as { fish_id: string; form: string; count: string }[];
     expect(caught.isNew).toBe(false);
     expect(records.find(r => r.fish_id === caught.fishId && r.form === caught.form)?.count).toBe('6');
-    expect(out).toMatchSnapshot();
+    expect(Number((out.db.saves_current[0] as { version: string }).version)).toBe(3);
   });
 
   it('가방이 가득 차면 가장 덜 특별한 개체를 방생한다', async () => {
     const bag = Array.from({ length: WALK_BAG_CAP }, (_, i) => fish(i % 2 ? 'minnow' : 'crucian', { size: 10 + i }));
     const out = await run({ state: { bag } }, { type: 'catch', spot: 'pond', judgment: 'normal' });
+    expect((out.res as { status: number }).status).toBe(200);
     // 자동 방생 이벤트는 놓아준 개체의 어종과 폼을 함께 남긴다
     const release = (out.db.events as { type: string; payload: { uids: string[]; fish: unknown[] } }[])
       .find(e => e.type === 'autoRelease')!;
     expect(release.payload.fish).toEqual([{ uid: release.payload.uids[0], fishId: expect.any(String), form: expect.any(String) }]);
-    expect(out).toMatchSnapshot();
+    expect(out.db.fish_instances).toHaveLength(WALK_BAG_CAP);
+    expect(Number((out.db.saves_current[0] as { version: string }).version)).toBe(3);
   });
 
   it('가방이 가득 차고 모두 잠겨 있으면 상한을 넘겨 보관한다', async () => {
     const bag = Array.from({ length: WALK_BAG_CAP }, (_, i) => fish('crucian', { size: 10 + i, locked: true }));
-    expect(await run({ state: { bag } }, { type: 'catch', spot: 'pond', judgment: 'normal' })).toMatchSnapshot();
+    const out = await run({ state: { bag } }, { type: 'catch', spot: 'pond', judgment: 'normal' });
+    expect((out.res as { status: number }).status).toBe(200);
+    expect(out.db.fish_instances).toHaveLength(WALK_BAG_CAP + 1);
+    expect((out.db.events as { type: string }[]).some(e => e.type === 'autoRelease')).toBe(false);
+    expect(Number((out.db.saves_current[0] as { version: string }).version)).toBe(3);
   });
 
   it('스냅샷 경계 버전은 전체 경로로 처리하고 saves에 아카이브를 남긴다', async () => {
-    expect(await run({ state: { bag: [fish('crucian')] }, version: 49 }, { type: 'catch', spot: 'pond', judgment: 'good' }))
-      .toMatchSnapshot();
+    const out = await run({ state: { bag: [fish('crucian')] }, version: 49 }, { type: 'catch', spot: 'pond', judgment: 'good' });
+    expect((out.res as { status: number }).status).toBe(200);
+    expect(Number((out.db.saves_current[0] as { version: string }).version)).toBe(50);
+    expect(out.db.saves).toHaveLength(1);
+    expect(out.db.fish_instances).toHaveLength(2);
+    expect((out.db.events as { type: string }[]).some(e => e.type === 'catch')).toBe(true);
   });
 
   it('잠긴 수역은 거부한다', async () => {
@@ -160,8 +193,11 @@ describe('낚시', () => {
       await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
         [uid, q.zone, q.id, NOW]);
     }
-    expect(await snapshotOf(uid, await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good' })))
-      .toMatchSnapshot();
+    const out = await snapshotOf(uid, await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good' }));
+    expect((out.res as { status: number }).status).toBe(200);
+    const progressed = (out.db.bounty_progress as { progress: number }[]).filter(r => r.progress > 0);
+    expect(progressed.length).toBeGreaterThanOrEqual(1);
+    expect((out.db.saves_current[0] as { data: GameState }).data.firstCatch).toEqual(newFirstCatch());
   });
 
   it('강제 조우를 허용받은 캐치는 진행 중인 네임드의 도전권을 발급한다', async () => {
@@ -170,7 +206,11 @@ describe('낚시', () => {
     await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
       [uid, named.zone, named.id, NOW]);
     const res = await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good', forceEncounter: true });
-    expect(await snapshotOf(uid, res)).toMatchSnapshot();
+    const out = await snapshotOf(uid, res);
+    expect((out.res as { status: number }).status).toBe(200);
+    expect(out.db.bounty_tickets).toHaveLength(1);
+    expect((out.db.events as { type: string }[]).some(e => e.type === 'ticket')).toBe(true);
+    expect((out.db.saves_current[0] as { data: GameState }).data.firstCatch).toEqual(newFirstCatch());
   });
 
   it('강제 조우가 허용되지 않으면 통상 캐치로 처리한다', async () => {
@@ -180,7 +220,11 @@ describe('낚시', () => {
       [uid, named.zone, named.id, NOW]);
     process.env.DEPLOY_ENV = 'preview';
     const res = await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good', forceEncounter: true });
-    expect(await snapshotOf(uid, res)).toMatchSnapshot();
+    const out = await snapshotOf(uid, res);
+    expect((out.res as { status: number }).status).toBe(200);
+    expect(out.db.bounty_tickets).toHaveLength(0);
+    expect((out.db.events as { type: string }[]).some(e => e.type === 'ticket')).toBe(false);
+    expect((out.db.saves_current[0] as { data: GameState }).data.firstCatch).toEqual(newFirstCatch());
   });
 });
 
@@ -274,7 +318,21 @@ describe('현상금', () => {
     const uid = await seed({ state: pacificState() });
     const quest = dailyQuestFor('pacific', 'easy', uid, TODAY_KST)!;
     const res = await callAction(userToken(uid), { type: 'acceptQuest', questId: quest.id, port: 'harbor' });
-    expect(await snapshotOf(uid, res)).toMatchSnapshot();
+    expect(res.status).toBe(200);
+    const snap = await snapshotOf(uid, res);
+    expect(snap.db.bounty_accepts).toEqual([
+      { user_id: '<user>', zone: 'pacific', port: 'harbor', quest_id: quest.id, accepted_at: '<now>' },
+    ]);
+    expect(snap.db.bounty_progress).toEqual([
+      { user_id: '<user>', zone: 'pacific', quest_id: quest.id, progress: 0, started_at: '<now>', updated_at: '<now>' },
+    ]);
+    expect(snap.db.events).toEqual([
+      { user_id: '<user>', type: 'acceptQuest', payload: { questId: quest.id, port: 'harbor' }, created_at: '<now>' },
+      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'spot-basic-deep' }, created_at: '<now>' },
+      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'spot-basic-sea' }, created_at: '<now>' },
+    ]);
+    const save = snap.db.saves_current[0] as { data: { achievements: Record<string, string> } };
+    expect(save.data.achievements).toEqual({ 'spot-basic-sea': 'claimable', 'spot-basic-deep': 'claimable' });
   });
 
   it('배정되지 않은 의뢰 수주는 거부한다', async () => {
@@ -325,7 +383,24 @@ describe('현상금', () => {
   it('결투 승리는 진행도를 올리고 도전권을 지운다', async () => {
     const { uid, named } = await namedSetup(60_000);
     const res = await callAction(userToken(uid), { type: 'resolveChallenge', questId: named.id, success: true, hits: 99, misses: 0 });
-    expect(await snapshotOf(uid, res)).toMatchSnapshot();
+    expect(res.status).toBe(200);
+    const snap = await snapshotOf(uid, res);
+    expect(snap.db.bounty_tickets).toEqual([]);
+    expect(snap.db.bounty_progress).toEqual([
+      { user_id: '<user>', zone: 'pacific', quest_id: named.id, progress: 1, started_at: '<now>', updated_at: '<now>' },
+    ]);
+    expect(snap.db.bounty_clears).toEqual([
+      { user_id: '<user>', kind: 'named', quest_id: named.id, cleared_at: '<now>' },
+    ]);
+    expect(snap.db.records).toEqual([
+      { user_id: '<user>', fish_id: named.targetFish, form: 'normal', count: '1', max_size: null, first_caught: '2030-03-04T00:00:00.000Z', updated_at: '<now>' },
+    ]);
+    expect(snap.db.events).toEqual([
+      { user_id: '<user>', type: 'resolveChallenge', payload: { questId: named.id, success: true, hits: 99, misses: 0 }, created_at: '<now>' },
+      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'named-megalodon-1' }, created_at: '<now>' },
+    ]);
+    const save = snap.db.saves_current[0] as { data: { achievements: Record<string, string> } };
+    expect(save.data.achievements).toEqual({ 'named-megalodon-1': 'claimable' });
   });
 
   it('결투 패배는 도전권만 지운다', async () => {
@@ -379,8 +454,29 @@ describe('개발 명령', () => {
   });
 
   it('도감 채우기 명령은 도감 행을 쓴다', async () => {
-    expect(await run({ state: {} }, { type: 'debug', command: 'dex.completeZone', args: { zone: 'pacific' } }))
-      .toMatchSnapshot();
+    const snap = await run({ state: {} }, { type: 'debug', command: 'dex.completeZone', args: { zone: 'pacific' } });
+    expect((snap.res as { status: number }).status).toBe(200);
+    const expectedIds = zoneDexMissing(newState(), 'pacific', LICENSE_GRADES.named).sort();
+    const recordFishIds = (snap.db.records as { fish_id: string; form: string; count: string }[])
+      .map(r => r.fish_id)
+      .sort();
+    expect(recordFishIds).toEqual(expectedIds);
+    expect(snap.db.events).toEqual([
+      { user_id: '<user>', type: 'debug', payload: { command: 'dex.completeZone', args: { zone: 'pacific' } }, created_at: '<now>' },
+      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'night-normal' }, created_at: '<now>' },
+      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'spot-basic-deep' }, created_at: '<now>' },
+      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'spot-basic-sea' }, created_at: '<now>' },
+      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'spot-full-deep' }, created_at: '<now>' },
+      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'spot-full-sea' }, created_at: '<now>' },
+    ]);
+    const save = snap.db.saves_current[0] as { data: { achievements: Record<string, string> } };
+    expect(save.data.achievements).toEqual({
+      'spot-basic-sea': 'claimable',
+      'spot-full-sea': 'claimable',
+      'spot-basic-deep': 'claimable',
+      'spot-full-deep': 'claimable',
+      'night-normal': 'claimable',
+    });
   });
 
   it('표 명령은 본인 행만 바꾼다', async () => {
@@ -469,13 +565,27 @@ describe('현상금 — 클리어 기준 한도와 만료', () => {
     expect(dump.bounty_progress).toEqual([]);
   });
 
-  it('네임드 토벌 보상은 named 클리어로 남는다', async () => {
+  it('네임드 토벌은 resolveChallenge 성공 시 1회만 named 클리어로 남고 deliverBounty는 중복 기록하지 않는다', async () => {
     const quest = bountyById('pacific-named-megalodon')!;
     const uid = await seed({ state: {} });
-    await progressRow(uid, quest.id, 1, NOW);
-    expect((await deliver(uid, quest.id)).status).toBe(200);
+    await progressRow(uid, quest.id, 0, NOW);
+    await ticketRow(uid, quest.id, NOW);
+    expect((await callAction(userToken(uid), {
+      type: 'resolveChallenge', questId: quest.id, success: true, hits: 99, misses: 0,
+    })).status).toBe(200);
     expect((await dumpUser(env.client, uid)).bounty_clears)
       .toEqual([{ user_id: '<user>', kind: 'named', quest_id: quest.id, cleared_at: '<now>' }]);
+    after(2000);
+    expect((await deliver(uid, quest.id)).status).toBe(200);
+    const dump = await dumpUser(env.client, uid);
+    expect(dump.bounty_clears)
+      .toEqual([{ user_id: '<user>', kind: 'named', quest_id: quest.id, cleared_at: NOW }]);
+    expect(dump.bounty_progress).toEqual([]);
+
+    const standaloneUid = await seed({ state: {} });
+    await progressRow(standaloneUid, quest.id, 1, NOW);
+    expect((await deliver(standaloneUid, quest.id)).status).toBe(200);
+    expect((await dumpUser(env.client, standaloneUid)).bounty_clears).toEqual([]);
   });
 
   it('같은 의뢰를 동시에 납품해도 보상과 클리어는 한 번이다', async () => {
@@ -647,28 +757,49 @@ describe('현상금 — 클리어 기준 한도와 만료', () => {
 describe('첫 경험 보장', () => {
   const stateOf = (out: Awaited<ReturnType<typeof run>>) => (out.db.saves_current[0] as { data: GameState }).data;
 
-  it('5번째 캐치는 그 수역의 영웅 어종이고 보장 진척이 저장된다', async () => {
-    const out = await run({ state: { firstCatch: { n: 4, legendAt: 12, epic: true, legend: true } } },
-      { type: 'catch', spot: 'pond', judgment: 'auto' });
+  it('마을 연못 5번째 캐치는 금붕어이고 연못 진척만 저장된다', async () => {
+    const out = await run({
+      state: { firstCatch: { ...newFirstCatch(), pond: { n: 4, legendAt: 12, epic: true, legend: true } } },
+    }, { type: 'catch', spot: 'pond', judgment: 'auto' });
     const caught = (out.db.events[0] as { payload: { fishId: string } }).payload;
-    expect(FISH.find(f => f.id === caught.fishId)).toMatchObject({ rarity: 'epic', spot: 'pond' });
-    expect(stateOf(out).firstCatch).toMatchObject({ n: 5, legendAt: 12, epic: false, legend: true });
+    expect(FISH.find(f => f.id === caught.fishId)).toMatchObject({ id: 'goldfish', rarity: 'epic', spot: 'pond' });
+    expect(stateOf(out).firstCatch.pond).toEqual({ n: 5, legendAt: 12, epic: false, legend: true });
+    expect(stateOf(out).firstCatch.river).toEqual(newFirstCatch().river);
   });
 
-  it('첫 캐치에서 서버가 전설 번호를 10~20 사이로 정해 저장한다', async () => {
+  it('첫 캐치에서 서버가 해당 마을 해역의 전설 번호를 10~15 사이로 정해 저장한다', async () => {
     const out = await run({ state: {} }, { type: 'catch', spot: 'pond', judgment: 'auto' });
     const fc = stateOf(out).firstCatch;
-    expect(fc.n).toBe(1);
-    expect(fc.legendAt).toBeGreaterThanOrEqual(10);
-    expect(fc.legendAt).toBeLessThanOrEqual(20);
+    expect(fc.pond.n).toBe(1);
+    expect(fc.pond.legendAt).toBeGreaterThanOrEqual(10);
+    expect(fc.pond.legendAt).toBeLessThanOrEqual(15);
+    expect(fc.river).toEqual(newFirstCatch().river);
   });
 
-  it('정해진 번호의 캐치는 그 수역의 전설 어종이고 보장이 끝난다', async () => {
-    const out = await run({ state: { firstCatch: { n: 11, legendAt: 12, epic: false, legend: true } } },
-      { type: 'catch', spot: 'river', judgment: 'auto' });
+  it('마을 강 정해진 번호의 캐치는 강의 주인이고 강 보장만 끝난다', async () => {
+    const out = await run({
+      state: { firstCatch: { ...newFirstCatch(), river: { n: 11, legendAt: 12, epic: false, legend: true } } },
+    }, { type: 'catch', spot: 'river', judgment: 'auto' });
     const caught = (out.db.events[0] as { payload: { fishId: string } }).payload;
-    expect(FISH.find(f => f.id === caught.fishId)).toMatchObject({ rarity: 'legendary', spot: 'river' });
-    expect(stateOf(out).firstCatch).toEqual({ n: 0, legendAt: 0, epic: false, legend: false });
+    expect(FISH.find(f => f.id === caught.fishId)).toMatchObject({ id: 'riverlord', rarity: 'legendary', spot: 'river' });
+    expect(stateOf(out).firstCatch.river).toEqual(endedFirstCatch().river);
+    expect(stateOf(out).firstCatch.pond).toEqual(newFirstCatch().pond);
+  });
+
+  it('구 단일 firstCatch가 진행 중이고 강 도감이 있으면 catch가 풀 경로로 폴백해 강 보장을 중복 지급하지 않는다', async () => {
+    const dex: GameState['dex'] = { sweetfish: { normal: { count: 1, maxSize: 20, first: '2026-01-01' } } };
+    const uid = await seed({ state: { dex } });
+    // 구 단일 객체 형식을 saves_current.data.firstCatch에 직접 심는다
+    await env.client.query(
+      `update public.saves_current set data = jsonb_set(data, '{firstCatch}', $2::jsonb) where user_id = $1`,
+      [uid, JSON.stringify({ n: 6, legendAt: 18, epic: false, legend: true })],
+    );
+    const out = await snapshotOf(uid, await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'auto' }));
+    expect((out.res as { status: number }).status).toBe(200);
+    expect(stateOf(out).firstCatch).toEqual({
+      pond: { n: 7, legendAt: 15, epic: false, legend: true },
+      river: endedFirstCatch().river,
+    });
   });
 });
 
@@ -851,7 +982,16 @@ describe('자동 잠금', () => {
     const uid = await seed({ state: { bag: [small, big] } });
     const out = await callAction(userToken(uid), { type: 'autoLock' });
     expect(out.status).toBe(200);
-    expect(await snapshotOf(uid, out)).toMatchSnapshot();
+    const snap = await snapshotOf(uid, out);
+    const instances = snap.db.fish_instances as Array<{ size: number; locked: boolean }>;
+    expect(instances.map((r) => ({ size: r.size, locked: r.locked }))).toEqual([
+      { size: 10, locked: false },
+      { size: 30, locked: true },
+    ]);
+    const current = snap.db.saves_current[0] as { data: { autoLockedIds?: Record<string, string> } };
+    expect(current.data.autoLockedIds).toEqual({
+      'carp|normal': '<uuid>',
+    });
   });
 });
 
@@ -1159,5 +1299,636 @@ describe('없는 이동 목적지', () => {
     expect(await callAction(userToken(uid), { type: 'travel', to: { kind: 'base', id: 'nowhere' } }))
       .toMatchObject({ status: 422, body: { error: 'bad-request' } });
     expect(await locationOf(uid)).toEqual(before);
+  });
+});
+
+// 파일 끝에 둔다 — 위 스냅샷 테스트의 testUid 시드 순번을 밀지 않는다. 신규 스냅샷 없이 저장 행·버전·이벤트를 명시 단언한다.
+describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
+  interface SavedRow {
+    gold: string;
+    fame: string;
+    boat: number;
+    rod: number;
+    version: string;
+    data: {
+      items?: Record<string, number>;
+      cooking?: { recipe: string; count: number; bonus: boolean[]; startedAt: string } | null;
+      slots?: { lunch: { id: string; endsAt: string } | null; bait: { id: string; endsAt: string } | null };
+      artifacts?: string[];
+      artifactLevels?: Record<string, number>;
+      hats?: string[];
+      coupons?: string[];
+      achievements?: Record<string, 'claimable' | 'claimed'>;
+    };
+  }
+
+  const readSave = async (uid: string): Promise<SavedRow> =>
+    (await env.client.query<SavedRow>(
+      'select gold, fame, boat, rod, version, data from public.saves_current where user_id = $1', [uid],
+    )).rows[0];
+
+  const readEvents = async (uid: string): Promise<{ type: string; payload: Record<string, unknown> }[]> =>
+    (await env.client.query<{ type: string; payload: Record<string, unknown> }>(
+      'select type, payload from public.events where user_id = $1 order by id', [uid],
+    )).rows;
+
+  const readFishUids = async (uid: string): Promise<string[]> =>
+    (await env.client.query<{ uid: string }>(
+      'select uid from public.fish_instances where user_id = $1 order by uid', [uid],
+    )).rows.map(r => r.uid);
+
+  const rewind = (uid: string) =>
+    env.client.query(`update public.saves_current set updated_at = '2026-01-01T00:00:00Z' where user_id = $1`, [uid]);
+
+  /** 다른 커넥션이 saves_current 행 잠금을 쥔 채 버전을 올려, 확정 문장 실행 직후 409 version-conflict가 나게 만든다 */
+  async function conflictDuringCommit(uid: string, action: unknown) {
+    const blocker = new Client({ connectionString: env.db.url });
+    await blocker.connect();
+    let committed = false;
+    let settled = false;
+    try {
+      await blocker.query('begin');
+      await blocker.query('update public.saves_current set version = version + 1 where user_id = $1', [uid]);
+      const actionPromise = callAction(userToken(uid), action);
+      void actionPromise.then(() => { settled = true; }, () => { settled = true; });
+      const releaseBlocker = (async () => {
+        for (let i = 0; i < 300; i++) {
+          if (settled) break;
+          const waiting = await env.client.query(
+            `select 1 from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock' and query like '%saves_current%'`,
+          );
+          if (waiting.rowCount) break;
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        await blocker.query('commit');
+        committed = true;
+      })();
+      const [res] = await Promise.all([actionPromise, releaseBlocker]);
+      return res;
+    } finally {
+      if (!committed) await blocker.query('rollback').catch(() => undefined);
+      await blocker.end().catch(() => undefined);
+    }
+  }
+
+  describe('동일 사용자 동시 요청 경합', () => {
+    it('sell 동시 요청은 한 번만 확정되고 골드·개체 삭제·sell 이벤트가 이중 적용되지 않는다', async () => {
+      const sold = fish('carp', { size: 30 });
+      const kept = fish('crucian', { size: 20 });
+      const uid = await seed({ state: { gold: 100, bag: [sold, kept] } });
+      const expectedGold = sellSelected({ ...newState(), gold: 100, bag: [sold, kept] }, [sold.uid]).gold;
+
+      const results = await Promise.all([
+        callAction(userToken(uid), { type: 'sell', uids: [sold.uid] }),
+        callAction(userToken(uid), { type: 'sell', uids: [sold.uid] }),
+      ]);
+      const statuses = results.map(r => r.status).sort();
+      expect(statuses[0]).toBe(200);
+      expect([409, 429]).toContain(statuses[1]);
+
+      const save = await readSave(uid);
+      expect(Number(save.gold)).toBe(expectedGold);
+      expect(Number(save.version)).toBe(3);
+      expect(await readFishUids(uid)).toEqual([kept.uid]);
+      const events = await readEvents(uid);
+      expect(events).toHaveLength(1);
+      expect(events[0].type).toBe('sell');
+      expect(events[0].payload).toMatchObject({ gold: expectedGold - 100, count: 1, uids: [sold.uid] });
+    });
+
+    it('buyBoat 동시 요청은 1단계만 구매되고 골드·배 단계·buyBoat 이벤트가 한 번만 기록된다', async () => {
+      const uid = await seed({ state: { boat: 0, gold: 500, fame: 500 } });
+      const tier1Price = BOATS[0].price;
+
+      const results = await Promise.all([
+        callAction(userToken(uid), { type: 'buyBoat' }),
+        callAction(userToken(uid), { type: 'buyBoat' }),
+      ]);
+      const statuses = results.map(r => r.status).sort();
+      expect(statuses[0]).toBe(200);
+      expect([409, 429]).toContain(statuses[1]);
+
+      const save = await readSave(uid);
+      expect(save.boat).toBe(1);
+      expect(Number(save.gold)).toBe(500 - tier1Price);
+      expect(Number(save.version)).toBe(3);
+      const events = await readEvents(uid);
+      expect(events).toHaveLength(1);
+      expect(events[0]).toEqual({ type: 'buyBoat', payload: { tier: 1, cost: tier1Price } });
+    });
+
+    it('upgradeRod 동시 요청은 1회만 강화되고 골드·강화 단계·upgradeRod 이벤트가 한 번만 기록된다', async () => {
+      const uid = await seed({ state: { rod: 1, gold: 1000 } });
+      const cost = upgradeCost(1);
+
+      const results = await Promise.all([
+        callAction(userToken(uid), { type: 'upgradeRod' }),
+        callAction(userToken(uid), { type: 'upgradeRod' }),
+      ]);
+      const statuses = results.map(r => r.status).sort();
+      expect(statuses[0]).toBe(200);
+      expect([409, 429]).toContain(statuses[1]);
+
+      const save = await readSave(uid);
+      expect(save.rod).toBe(2);
+      expect(Number(save.gold)).toBe(1000 - cost);
+      expect(Number(save.version)).toBe(3);
+      const events = await readEvents(uid);
+      expect(events).toHaveLength(1);
+      expect(events[0]).toEqual({ type: 'upgradeRod', payload: { toLevel: 2, cost } });
+    });
+
+    it('cook 동시 요청은 기운을 한 번만 차감하고 조리 상태와 cook 이벤트를 한 번만 남긴다', async () => {
+      const recipe = recipeById('cook-bait-rare')!;
+      const commonCost = recipeCostStored(recipe, 'common');
+      const rareCost = recipeCostStored(recipe, 'rare');
+      const uid = await seed({
+        state: {
+          boat: COOKING_UNLOCK_BOAT,
+          location: at('home'),
+          items: { [ENERGY_ITEM_IDS.common]: commonCost * 2, [ENERGY_ITEM_IDS.rare]: rareCost * 2 },
+        },
+      });
+
+      const results = await Promise.all([
+        callAction(userToken(uid), { type: 'cook', recipe: recipe.id, count: 1 }),
+        callAction(userToken(uid), { type: 'cook', recipe: recipe.id, count: 1 }),
+      ]);
+      const statuses = results.map(r => r.status).sort();
+      expect(statuses[0]).toBe(200);
+      expect([409, 429]).toContain(statuses[1]);
+
+      const save = await readSave(uid);
+      expect(save.data.items).toEqual({ [ENERGY_ITEM_IDS.common]: commonCost, [ENERGY_ITEM_IDS.rare]: rareCost });
+      expect(save.data.cooking).toMatchObject({ recipe: recipe.id, count: 1, startedAt: NOW });
+      expect(Number(save.version)).toBe(3);
+      const events = await readEvents(uid);
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({ type: 'cook', payload: { recipe: recipe.id, count: 1 } });
+    });
+
+    it('eat 동시 요청은 요리를 1개만 소모하고 슬롯과 eat 이벤트를 한 번만 기록한다', async () => {
+      const uid = await seed({
+        state: { boat: COOKING_UNLOCK_BOAT, items: { 'cook-lunch-bite': 2 } },
+      });
+
+      const results = await Promise.all([
+        callAction(userToken(uid), { type: 'eat', item: 'cook-lunch-bite' }),
+        callAction(userToken(uid), { type: 'eat', item: 'cook-lunch-bite' }),
+      ]);
+      const statuses = results.map(r => r.status).sort();
+      expect(statuses[0]).toBe(200);
+      expect([409, 429]).toContain(statuses[1]);
+
+      const save = await readSave(uid);
+      expect(save.data.items).toEqual({ 'cook-lunch-bite': 1 });
+      expect(save.data.slots?.lunch?.id).toBe('cook-lunch-bite');
+      expect(Number(save.version)).toBe(3);
+      const events = await readEvents(uid);
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({ type: 'eat', payload: { item: 'cook-lunch-bite' } });
+    });
+
+    it('extractEnergy 동시 요청은 개체를 한 번만 소비하고 기운·extractEnergy 이벤트를 한 번만 남긴다', async () => {
+      const target = fish('crucian');
+      const kept = fish('carp');
+      const uid = await seed({
+        state: { boat: COOKING_UNLOCK_BOAT, location: at('home'), bag: [target, kept] },
+      });
+
+      const results = await Promise.all([
+        callAction(userToken(uid), { type: 'extractEnergy', uids: [target.uid] }),
+        callAction(userToken(uid), { type: 'extractEnergy', uids: [target.uid] }),
+      ]);
+      const statuses = results.map(r => r.status).sort();
+      expect(statuses[0]).toBe(200);
+      expect([409, 429]).toContain(statuses[1]);
+
+      const save = await readSave(uid);
+      expect(save.data.items).toEqual({ [ENERGY_ITEM_IDS.common]: ENERGY_PER_INDIVIDUAL });
+      expect(Number(save.version)).toBe(3);
+      expect(await readFishUids(uid)).toEqual([kept.uid]);
+      const events = await readEvents(uid);
+      expect(events).toHaveLength(1);
+      expect(events[0].type).toBe('extractEnergy');
+      expect(events[0].payload).toMatchObject({ uids: [target.uid] });
+    });
+
+    it('exchangeArtifact 동시 요청은 재료를 1개만 소모하고 유물과 exchangeArtifact 이벤트를 한 번만 기록한다', async () => {
+      const art = artifactById('abyss-angler')!;
+      const uid = await seed({ state: { items: { [art.materialId]: 2 } } });
+
+      const results = await Promise.all([
+        callAction(userToken(uid), { type: 'exchangeArtifact', artifact: art.id }),
+        callAction(userToken(uid), { type: 'exchangeArtifact', artifact: art.id }),
+      ]);
+      const statuses = results.map(r => r.status).sort();
+      expect(statuses[0]).toBe(200);
+      expect([409, 429]).toContain(statuses[1]);
+
+      const save = await readSave(uid);
+      expect(save.data.artifacts).toEqual([art.id]);
+      expect(save.data.items).toEqual({ [art.materialId]: 1 });
+      expect(Number(save.version)).toBe(3);
+      const events = await readEvents(uid);
+      expect(events).toHaveLength(1);
+      expect(events[0]).toEqual({ type: 'exchangeArtifact', payload: { artifact: art.id } });
+    });
+
+    it('levelUpArtifact 동시 요청은 레벨을 1만 올리고 재료와 levelUpArtifact 이벤트를 한 번만 기록한다', async () => {
+      const art = artifactById('wreck-compass')!;
+      const costLv2 = artifactLevelCost(2);
+      const initialMat = costLv2 + artifactLevelCost(3);
+      const uid = await seed({
+        state: { artifacts: [art.id], items: { [art.materialId]: initialMat } },
+      });
+
+      const results = await Promise.all([
+        callAction(userToken(uid), { type: 'levelUpArtifact', artifact: art.id }),
+        callAction(userToken(uid), { type: 'levelUpArtifact', artifact: art.id }),
+      ]);
+      const statuses = results.map(r => r.status).sort();
+      expect(statuses[0]).toBe(200);
+      expect([409, 429]).toContain(statuses[1]);
+
+      const save = await readSave(uid);
+      expect(save.data.artifactLevels).toEqual({ [art.id]: 2 });
+      expect(save.data.items).toEqual({ [art.materialId]: initialMat - costLv2 });
+      expect(Number(save.version)).toBe(3);
+      const events = await readEvents(uid);
+      expect(events).toHaveLength(1);
+      expect(events[0]).toEqual({ type: 'levelUpArtifact', payload: { artifact: art.id, level: 2 } });
+    });
+
+    it('buyHat 동시 요청은 골드를 한 번만 차감하고 모자와 buyHat 이벤트를 한 번만 기록한다', async () => {
+      const hat = hatById('cap-red')!;
+      const uid = await seed({ state: { gold: hat.price * 2 } });
+
+      const results = await Promise.all([
+        callAction(userToken(uid), { type: 'buyHat', hat: hat.id }),
+        callAction(userToken(uid), { type: 'buyHat', hat: hat.id }),
+      ]);
+      const statuses = results.map(r => r.status).sort();
+      expect(statuses[0]).toBe(200);
+      expect([409, 429]).toContain(statuses[1]);
+
+      const save = await readSave(uid);
+      expect(Number(save.gold)).toBe(hat.price);
+      expect(save.data.hats).toEqual([hat.id]);
+      expect(Number(save.version)).toBe(3);
+      const events = await readEvents(uid);
+      expect(events).toHaveLength(1);
+      expect(events[0]).toEqual({ type: 'buyHat', payload: { hat: hat.id, cost: hat.price } });
+    });
+
+    it('redeemCoupon 동시 요청은 한 번만 적용되고 골드·사용 쿠폰·coupon 이벤트가 한 번만 기록된다', async () => {
+      await env.client.query(`insert into public.coupons (code, gold, description, active)
+        values ('DYN-CONC-1', 777, '동시 테스트', true)`);
+      const uid = await seed({ state: { gold: 100 } });
+
+      const results = await Promise.all([
+        callAction(userToken(uid), { type: 'redeemCoupon', code: 'DYN-CONC-1' }),
+        callAction(userToken(uid), { type: 'redeemCoupon', code: 'DYN-CONC-1' }),
+      ]);
+      const statuses = results.map(r => r.status).sort();
+      expect(statuses[0]).toBe(200);
+      expect([409, 422, 429]).toContain(statuses[1]);
+
+      const save = await readSave(uid);
+      expect(Number(save.gold)).toBe(877);
+      expect(save.data.coupons).toEqual(['DYN-CONC-1']);
+      expect(Number(save.version)).toBe(3);
+      const events = await readEvents(uid);
+      expect(events).toEqual([{ type: 'coupon', payload: { code: 'DYN-CONC-1', gold: 777 } }]);
+    });
+
+    it('claimAchievement 동시 요청은 보상을 한 번만 지급하고 업적 상태와 claimAchievement 이벤트를 한 번만 기록한다', async () => {
+      const def = achievementById('spot-basic-sea')!;
+      expect(def.reward.kind).toBe('gold');
+      const rewardGold = def.reward.kind === 'gold' ? def.reward.gold : 0;
+      const uid = await seed({ state: { gold: 100, achievements: { [def.id]: 'claimable' } } });
+
+      const results = await Promise.all([
+        callAction(userToken(uid), { type: 'claimAchievement', id: def.id }),
+        callAction(userToken(uid), { type: 'claimAchievement', id: def.id }),
+      ]);
+      const statuses = results.map(r => r.status).sort();
+      expect(statuses[0]).toBe(200);
+      expect([409, 422, 429]).toContain(statuses[1]);
+
+      const save = await readSave(uid);
+      expect(Number(save.gold)).toBe(100 + rewardGold);
+      expect(save.data.achievements).toEqual({ [def.id]: 'claimed' });
+      expect(Number(save.version)).toBe(3);
+      const events = await readEvents(uid);
+      expect(events).toEqual([{ type: 'claimAchievement', payload: { id: def.id, gold: rewardGold } }]);
+    });
+
+    it('claimAllAchievements 동시 요청은 보상을 한 번만 일괄 지급하고 claimAllAchievements 이벤트를 한 번만 기록한다', async () => {
+      const goldDef = achievementById('spot-basic-sea')!;
+      const hatDef = achievementById('variant-village')!;
+      const rewardGold = goldDef.reward.kind === 'gold' ? goldDef.reward.gold : 0;
+      const rewardHat = hatDef.reward.kind === 'hat' ? hatDef.reward.hatId : '';
+      const uid = await seed({
+        state: { gold: 100, achievements: { [goldDef.id]: 'claimable', [hatDef.id]: 'claimable' } },
+      });
+
+      const results = await Promise.all([
+        callAction(userToken(uid), { type: 'claimAllAchievements' }),
+        callAction(userToken(uid), { type: 'claimAllAchievements' }),
+      ]);
+      const statuses = results.map(r => r.status).sort();
+      expect(statuses[0]).toBe(200);
+      expect([409, 422, 429]).toContain(statuses[1]);
+
+      const save = await readSave(uid);
+      expect(Number(save.gold)).toBe(100 + rewardGold);
+      expect(save.data.hats).toEqual([rewardHat]);
+      expect(save.data.achievements).toEqual({ [goldDef.id]: 'claimed', [hatDef.id]: 'claimed' });
+      expect(Number(save.version)).toBe(3);
+      const events = await readEvents(uid);
+      expect(events).toEqual([{
+        type: 'claimAllAchievements',
+        payload: { ids: [goldDef.id, hatDef.id], gold: rewardGold, hats: [rewardHat] },
+      }]);
+    });
+  });
+
+  describe('409 version-conflict 시 DB 미기록·이중 적용 없음', () => {
+    it('sell 중 버전 충돌이 나면 개체·골드·이벤트를 쓰지 않고, 재시도 시 한 번만 판매된다', async () => {
+      const sold = fish('carp', { size: 30 });
+      const kept = fish('crucian', { size: 20 });
+      const uid = await seed({ state: { gold: 100, bag: [sold, kept] } });
+      const expectedGold = sellSelected({ ...newState(), gold: 100, bag: [sold, kept] }, [sold.uid]).gold;
+
+      const conflict = await conflictDuringCommit(uid, { type: 'sell', uids: [sold.uid] });
+      expect(conflict).toMatchObject({ status: 409, body: { error: 'version-conflict' } });
+      expect(Number((await readSave(uid)).gold)).toBe(100);
+      expect(Number((await readSave(uid)).version)).toBe(3);
+      expect(await readFishUids(uid)).toEqual([sold.uid, kept.uid].sort());
+      expect(await readEvents(uid)).toEqual([]);
+
+      await rewind(uid);
+      const retry = await callAction(userToken(uid), { type: 'sell', uids: [sold.uid] });
+      expect(retry.status).toBe(200);
+      expect(Number((await readSave(uid)).gold)).toBe(expectedGold);
+      expect(Number((await readSave(uid)).version)).toBe(4);
+      expect(await readFishUids(uid)).toEqual([kept.uid]);
+      expect(await readEvents(uid)).toHaveLength(1);
+      expect((await readEvents(uid))[0].type).toBe('sell');
+    });
+
+    it('buyBoat 중 버전 충돌이 나면 409를 반환하고 골드·배 단계·이벤트를 기록하지 않는다', async () => {
+      const uid = await seed({ state: { boat: 0, gold: 500, fame: 500 } });
+
+      const conflict = await conflictDuringCommit(uid, { type: 'buyBoat' });
+      expect(conflict).toMatchObject({ status: 409, body: { error: 'version-conflict' } });
+      const save = await readSave(uid);
+      expect(save.boat).toBe(0);
+      expect(Number(save.gold)).toBe(500);
+      expect(Number(save.version)).toBe(3);
+      expect(await readEvents(uid)).toEqual([]);
+    });
+
+    it('cook 중 버전 충돌이 나면 409를 반환하고 기운 차감·조리 상태·이벤트를 기록하지 않는다', async () => {
+      const recipe = recipeById('cook-bait-rare')!;
+      const commonCost = recipeCostStored(recipe, 'common');
+      const rareCost = recipeCostStored(recipe, 'rare');
+      const uid = await seed({
+        state: {
+          boat: COOKING_UNLOCK_BOAT,
+          location: at('home'),
+          items: { [ENERGY_ITEM_IDS.common]: commonCost, [ENERGY_ITEM_IDS.rare]: rareCost },
+        },
+      });
+
+      const conflict = await conflictDuringCommit(uid, { type: 'cook', recipe: recipe.id, count: 1 });
+      expect(conflict).toMatchObject({ status: 409, body: { error: 'version-conflict' } });
+      const save = await readSave(uid);
+      expect(save.data.items).toEqual({ [ENERGY_ITEM_IDS.common]: commonCost, [ENERGY_ITEM_IDS.rare]: rareCost });
+      expect(save.data.cooking).toBeNull();
+      expect(Number(save.version)).toBe(3);
+      expect(await readEvents(uid)).toEqual([]);
+    });
+
+    it('extractEnergy 중 버전 충돌이 나면 409를 반환하고 개체 삭제·기운 적립·이벤트를 기록하지 않는다', async () => {
+      const target = fish('crucian');
+      const uid = await seed({
+        state: { boat: COOKING_UNLOCK_BOAT, location: at('home'), bag: [target] },
+      });
+
+      const conflict = await conflictDuringCommit(uid, { type: 'extractEnergy', uids: [target.uid] });
+      expect(conflict).toMatchObject({ status: 409, body: { error: 'version-conflict' } });
+      const save = await readSave(uid);
+      expect(save.data.items).toEqual({});
+      expect(Number(save.version)).toBe(3);
+      expect(await readFishUids(uid)).toEqual([target.uid]);
+      expect(await readEvents(uid)).toEqual([]);
+    });
+
+    it('exchangeArtifact 중 버전 충돌이 나면 409를 반환하고 재료·유물·이벤트를 기록하지 않으며, 재시도 시 한 번만 교환한다', async () => {
+      const art = artifactById('abyss-angler')!;
+      const uid = await seed({ state: { items: { [art.materialId]: 2 } } });
+
+      const conflict = await conflictDuringCommit(uid, { type: 'exchangeArtifact', artifact: art.id });
+      expect(conflict).toMatchObject({ status: 409, body: { error: 'version-conflict' } });
+      const afterConflict = await readSave(uid);
+      expect(afterConflict.data.artifacts).toEqual([]);
+      expect(afterConflict.data.items).toEqual({ [art.materialId]: 2 });
+      expect(Number(afterConflict.version)).toBe(3);
+      expect(await readEvents(uid)).toEqual([]);
+
+      await rewind(uid);
+      const retry = await callAction(userToken(uid), { type: 'exchangeArtifact', artifact: art.id });
+      expect(retry.status).toBe(200);
+      const afterRetry = await readSave(uid);
+      expect(afterRetry.data.artifacts).toEqual([art.id]);
+      expect(afterRetry.data.items).toEqual({ [art.materialId]: 1 });
+      expect(Number(afterRetry.version)).toBe(4);
+      expect(await readEvents(uid)).toEqual([{ type: 'exchangeArtifact', payload: { artifact: art.id } }]);
+    });
+
+    it('levelUpArtifact 중 버전 충돌이 나면 409를 반환하고 재료·레벨·이벤트를 기록하지 않는다', async () => {
+      const art = artifactById('wreck-compass')!;
+      const costLv2 = artifactLevelCost(2);
+      const uid = await seed({
+        state: { artifacts: [art.id], items: { [art.materialId]: costLv2 } },
+      });
+
+      const conflict = await conflictDuringCommit(uid, { type: 'levelUpArtifact', artifact: art.id });
+      expect(conflict).toMatchObject({ status: 409, body: { error: 'version-conflict' } });
+      const save = await readSave(uid);
+      expect(save.data.artifactLevels).toBeUndefined();
+      expect(save.data.items).toEqual({ [art.materialId]: costLv2 });
+      expect(Number(save.version)).toBe(3);
+      expect(await readEvents(uid)).toEqual([]);
+    });
+
+    it('buyHat 중 버전 충돌이 나면 409를 반환하고 골드·모자·이벤트를 기록하지 않는다', async () => {
+      const hat = hatById('cap-red')!;
+      const uid = await seed({ state: { gold: hat.price } });
+
+      const conflict = await conflictDuringCommit(uid, { type: 'buyHat', hat: hat.id });
+      expect(conflict).toMatchObject({ status: 409, body: { error: 'version-conflict' } });
+      const save = await readSave(uid);
+      expect(Number(save.gold)).toBe(hat.price);
+      expect(save.data.hats).toEqual([]);
+      expect(Number(save.version)).toBe(3);
+      expect(await readEvents(uid)).toEqual([]);
+    });
+
+    it('eat 중 버전 충돌이 나면 409를 반환하고 요리 소모·슬롯·이벤트를 기록하지 않는다', async () => {
+      const uid = await seed({
+        state: { boat: COOKING_UNLOCK_BOAT, items: { 'cook-lunch-bite': 2 } },
+      });
+
+      const conflict = await conflictDuringCommit(uid, { type: 'eat', item: 'cook-lunch-bite' });
+      expect(conflict).toMatchObject({ status: 409, body: { error: 'version-conflict' } });
+      const save = await readSave(uid);
+      expect(save.data.items).toEqual({ 'cook-lunch-bite': 2 });
+      expect(save.data.slots?.lunch).toBeNull();
+      expect(Number(save.version)).toBe(3);
+      expect(await readEvents(uid)).toEqual([]);
+    });
+
+    it('claimMail 중 버전 충돌이 나면 409를 반환하고 골드·우편 수령 시각·이벤트를 기록하지 않으며, 재시도 시 한 번만 받는다', async () => {
+      const uid = await seed({ state: { gold: 1000 } });
+      const { rows } = await env.client.query<{ id: string }>(
+        `insert into public.mails (user_id, title, body, gold) values ($1, '충돌우편', '본문', 500) returning id`, [uid]);
+      const id = Number(rows[0].id);
+
+      const conflict = await conflictDuringCommit(uid, { type: 'claimMail', id });
+      expect(conflict).toMatchObject({ status: 409, body: { error: 'version-conflict' } });
+      const afterConflict = await readSave(uid);
+      expect(Number(afterConflict.gold)).toBe(1000);
+      expect(Number(afterConflict.version)).toBe(3);
+      const mailAfterConflict = await env.client.query<{ claimed_at: Date | null; read_at: Date | null }>(
+        'select claimed_at, read_at from public.mails where id = $1', [id]);
+      expect(mailAfterConflict.rows[0]).toEqual({ claimed_at: null, read_at: null });
+      expect(await readEvents(uid)).toEqual([]);
+
+      await rewind(uid);
+      const retry = await callAction(userToken(uid), { type: 'claimMail', id });
+      expect(retry.status).toBe(200);
+      const afterRetry = await readSave(uid);
+      expect(Number(afterRetry.gold)).toBe(1500);
+      expect(Number(afterRetry.version)).toBe(4);
+      const mailAfterRetry = await env.client.query<{ claimed_at: Date | null; read_at: Date | null }>(
+        'select claimed_at, read_at from public.mails where id = $1', [id]);
+      expect(mailAfterRetry.rows[0].claimed_at).not.toBeNull();
+      expect(mailAfterRetry.rows[0].read_at).not.toBeNull();
+      expect(await readEvents(uid)).toEqual([{ type: 'claimMail', payload: { mailId: id, gold: 500 } }]);
+    });
+
+    it('redeemCoupon 중 버전 충돌이 나면 409를 반환하고 골드·쿠폰 사용·이벤트를 기록하지 않으며, 재시도 시 한 번만 적용된다', async () => {
+      await env.client.query(`insert into public.coupons (code, gold, description, active)
+        values ('DYN-CONFLICT-1', 777, '충돌 테스트', true)`);
+      const uid = await seed({ state: { gold: 100 } });
+
+      const conflict = await conflictDuringCommit(uid, { type: 'redeemCoupon', code: 'DYN-CONFLICT-1' });
+      expect(conflict).toMatchObject({ status: 409, body: { error: 'version-conflict' } });
+      const afterConflict = await readSave(uid);
+      expect(Number(afterConflict.gold)).toBe(100);
+      expect(afterConflict.data.coupons).toEqual([]);
+      expect(Number(afterConflict.version)).toBe(3);
+      expect(await readEvents(uid)).toEqual([]);
+
+      await rewind(uid);
+      const retry = await callAction(userToken(uid), { type: 'redeemCoupon', code: 'DYN-CONFLICT-1' });
+      expect(retry.status).toBe(200);
+      const afterRetry = await readSave(uid);
+      expect(Number(afterRetry.gold)).toBe(877);
+      expect(afterRetry.data.coupons).toEqual(['DYN-CONFLICT-1']);
+      expect(Number(afterRetry.version)).toBe(4);
+      expect(await readEvents(uid)).toEqual([{ type: 'coupon', payload: { code: 'DYN-CONFLICT-1', gold: 777 } }]);
+    });
+
+    it('claimAchievement 중 버전 충돌이 나면 409를 반환하고 골드·업적 상태·이벤트를 기록하지 않으며, 재시도 시 한 번만 수령된다', async () => {
+      const def = achievementById('spot-basic-sea')!;
+      const rewardGold = def.reward.kind === 'gold' ? def.reward.gold : 0;
+      const uid = await seed({ state: { gold: 100, achievements: { [def.id]: 'claimable' } } });
+
+      const conflict = await conflictDuringCommit(uid, { type: 'claimAchievement', id: def.id });
+      expect(conflict).toMatchObject({ status: 409, body: { error: 'version-conflict' } });
+      const afterConflict = await readSave(uid);
+      expect(Number(afterConflict.gold)).toBe(100);
+      expect(afterConflict.data.achievements).toEqual({ [def.id]: 'claimable' });
+      expect(Number(afterConflict.version)).toBe(3);
+      expect(await readEvents(uid)).toEqual([]);
+
+      await rewind(uid);
+      const retry = await callAction(userToken(uid), { type: 'claimAchievement', id: def.id });
+      expect(retry.status).toBe(200);
+      const afterRetry = await readSave(uid);
+      expect(Number(afterRetry.gold)).toBe(100 + rewardGold);
+      expect(afterRetry.data.achievements).toEqual({ [def.id]: 'claimed' });
+      expect(Number(afterRetry.version)).toBe(4);
+      expect(await readEvents(uid)).toEqual([{ type: 'claimAchievement', payload: { id: def.id, gold: rewardGold } }]);
+    });
+
+    it('claimAllAchievements 중 버전 충돌이 나면 409를 반환하고 보상·업적 상태·이벤트를 기록하지 않으며, 재시도 시 한 번만 수령된다', async () => {
+      const goldDef = achievementById('spot-basic-sea')!;
+      const hatDef = achievementById('variant-village')!;
+      const rewardGold = goldDef.reward.kind === 'gold' ? goldDef.reward.gold : 0;
+      const rewardHat = hatDef.reward.kind === 'hat' ? hatDef.reward.hatId : '';
+      const uid = await seed({
+        state: { gold: 100, achievements: { [goldDef.id]: 'claimable', [hatDef.id]: 'claimable' } },
+      });
+
+      const conflict = await conflictDuringCommit(uid, { type: 'claimAllAchievements' });
+      expect(conflict).toMatchObject({ status: 409, body: { error: 'version-conflict' } });
+      const afterConflict = await readSave(uid);
+      expect(Number(afterConflict.gold)).toBe(100);
+      expect(afterConflict.data.hats).toEqual([]);
+      expect(afterConflict.data.achievements).toEqual({ [goldDef.id]: 'claimable', [hatDef.id]: 'claimable' });
+      expect(Number(afterConflict.version)).toBe(3);
+      expect(await readEvents(uid)).toEqual([]);
+
+      await rewind(uid);
+      const retry = await callAction(userToken(uid), { type: 'claimAllAchievements' });
+      expect(retry.status).toBe(200);
+      const afterRetry = await readSave(uid);
+      expect(Number(afterRetry.gold)).toBe(100 + rewardGold);
+      expect(afterRetry.data.hats).toEqual([rewardHat]);
+      expect(afterRetry.data.achievements).toEqual({ [goldDef.id]: 'claimed', [hatDef.id]: 'claimed' });
+      expect(Number(afterRetry.version)).toBe(4);
+      expect(await readEvents(uid)).toEqual([{
+        type: 'claimAllAchievements',
+        payload: { ids: [goldDef.id, hatDef.id], gold: rewardGold, hats: [rewardHat] },
+      }]);
+    });
+  });
+});
+
+describe('네임드 토벌 단일 기록과 일일 상한', () => {
+  it('네임드 결투 승리와 납품 연쇄는 bounty_clears에 1행만 남기고 마미 와타의 거울 보유 시 같은 날 2번째 네임드 수주를 허용한다', async () => {
+    const uid = await seed({
+      state: {
+        boat: 6,
+        dex: zoneDex('southatlantic', 'named'),
+        location: at('walvisbay'),
+        artifacts: ['mami-wata-mirror'],
+      },
+    });
+    const first = BOUNTIES.find(q => q.id === 'southatlantic-named-adamastor')!;
+    const second = BOUNTIES.find(q => q.id === 'southatlantic-named-jasconius')!;
+    await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
+      [uid, first.zone, first.id, NOW]);
+    await env.client.query('insert into public.bounty_tickets (user_id, quest_id, issued_at) values ($1, $2, $3)',
+      [uid, first.id, NOW]);
+
+    const duel = await callAction(userToken(uid), { type: 'resolveChallenge', questId: first.id, success: true, hits: 99, misses: 0 });
+    expect(duel.status).toBe(200);
+    vi.setSystemTime(Date.parse(NOW) + 2000);
+    const deliver = await callAction(userToken(uid), { type: 'deliverBounty', questId: first.id });
+    expect(deliver.status).toBe(200);
+
+    const clears = await env.client.query<{ quest_id: string }>(
+      `select quest_id from public.bounty_clears where user_id = $1 and kind = 'named'`, [uid]);
+    expect(clears.rows.map(r => r.quest_id)).toEqual([first.id]);
+
+    vi.setSystemTime(Date.parse(NOW) + 4000);
+    const nextAccept = await callAction(userToken(uid), { type: 'acceptQuest', questId: second.id, port: 'walvisbay' });
+    expect(nextAccept.status).toBe(200);
   });
 });

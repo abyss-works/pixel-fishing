@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, within } from '@testing-library/react';
 import BagTab, { EXHIBIT_UI_ENABLED } from './BagTab';
-import { resetBagView } from './bagView';
+import { resetBagView, setBagSection } from './bagView';
 import { newState, saleBonusOf, sellableValue } from '../../../../../game/rules/logic';
 import { fmtGold } from '../../../../ui/format';
 import type { FishInstance, GameState } from '../../../../../game/rules/logic';
@@ -82,5 +82,34 @@ describe('BagTab - 판매 가능 금액', () => {
     const bonus = saleBonusOf(base, 0.5);
     render(<BagTab sellBonus={0.5} game={g} dispatch={vi.fn()} setToast={vi.fn()} />);
     expect(within(screen.getByText(/판매 가능 금액은/)).getByText(`기본 금액 ${fmtGold(base)}, 판매가 보너스 +${fmtGold(bonus)}, 합계 ${fmtGold(base + bonus)}`)).toBeInTheDocument();
+  });
+});
+
+describe('BagTab - 길드 가방 보너스', () => {
+  it('길드 가방 보너스가 없으면 기본 상한을, 있으면 보너스를 더한 상한을 보인다', () => {
+    const g = game({ boat: 0, bag: [inst('a'), inst('b')] });
+    render(<BagTab sellBonus={0} game={g} dispatch={vi.fn()} setToast={vi.fn()} />);
+    expect(screen.getByRole('heading', { level: 3, name: /물고기/ })).toHaveTextContent(/2\s*\/\s*60/);
+    cleanup();
+    render(<BagTab sellBonus={0} bagBonus={0.2} game={g} dispatch={vi.fn()} setToast={vi.fn()} />);
+    expect(screen.getByRole('heading', { level: 3, name: /물고기/ })).toHaveTextContent(/2\s*\/\s*72/);
+  });
+
+  it('물고기 제목의 보유 수량과 상한이 1,000마리 이상이면 천 단위 쉼표를 찍는다', () => {
+    const bag = Array.from({ length: 1_005 }, (_, i) => inst(`f${i}`));
+    const g = game({ boat: 4, bag });
+    render(<BagTab sellBonus={0} bagBonus={0.2} game={g} dispatch={vi.fn()} setToast={vi.fn()} />);
+    expect(screen.getByRole('heading', { level: 3, name: /물고기/ })).toHaveTextContent(/1,005\s*\/\s*1,200/);
+  });
+});
+
+describe('BagTab - 유물 섹션 시스템 효과', () => {
+  it('전설 유물의 시스템 보너스와 페널티를 유물 목록에 함께 보인다', () => {
+    setBagSection('artifacts');
+    show(game({ artifacts: ['sargasso-net', 'mami-wata-mirror'] }));
+    expect(screen.getByText('미끼 슬롯 +1칸')).toHaveClass('text-accent');
+    expect(screen.getByText('미끼 지속 시간 −50%')).toHaveClass('text-danger');
+    expect(screen.getByText('네임드 토벌 하루 +1번')).toHaveClass('text-accent');
+    expect(screen.getByText('네임드 토벌 골드 −30%')).toHaveClass('text-danger');
   });
 });

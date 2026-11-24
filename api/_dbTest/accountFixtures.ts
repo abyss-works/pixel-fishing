@@ -8,6 +8,7 @@ export const USER_TABLES = [
   'bounty_licenses', 'bounty_accepts', 'bounty_clears', 'bounty_progress', 'bounty_tickets', 'blocks',
   'chat_messages', 'chat_reports', 'play_sessions', 'user_active_days', 'guild_members', 'guild_contributions', 'guild_logs',
   'guild_bonus_donations', 'last_positions', 'guild_join_requests', 'consent_records',
+  'achievement_counters',
 ] as const;
 /** 저장 상태에 딸린 표. 저장이 없는 계정은 이 표에 행이 없다 */
 const SAVE_TABLES: readonly string[] = ['saves_current', 'fish_instances', 'records', 'saves'];
@@ -28,6 +29,8 @@ export interface AccountSpec {
   legacySaveAt?: string;
   /** 개발자에게 보낸 편지가 있는 계정 */
   letter?: boolean;
+  /** auth.accounts 행으로 연결할 로그인 수단(예: 'google') */
+  provider?: string;
 }
 
 let seq = 100;
@@ -48,6 +51,12 @@ export async function seedAccount(client: Client, spec: AccountSpec): Promise<st
   if (spec.lastSignInAt) await client.query('update auth.sessions set updated_at = $2 where user_id = $1', [uid, spec.lastSignInAt]);
   else await client.query('delete from auth.sessions where user_id = $1', [uid]);
   if (spec.admin) await client.query('insert into public.admins (user_id) values ($1)', [uid]);
+  if (spec.provider) {
+    await client.query(
+      'insert into auth.accounts (user_id, account_id, provider_id, created_at, updated_at) values ($1, $2, $3, $4, $4)',
+      [uid, `${spec.provider}-${uid}`, spec.provider, spec.createdAt],
+    );
+  }
   if (spec.legacySave) {
     await client.query('insert into public.saves (user_id, data, updated_at) values ($1, $2, $3)',
       [uid, { v: 4, gold: 0 }, spec.legacySaveAt ?? spec.createdAt]);
@@ -88,6 +97,7 @@ export async function seedFullAccount(client: Client, spec: AccountSpec & { nick
   await client.query(`insert into public.user_active_days (user_id, day) values ($1, current_date)`, [uid]);
   await client.query(`insert into public.last_positions (user_id, region, x, y) values ($1, 'world', 10, 20)`, [uid]);
   await client.query(`insert into public.consent_records (user_id, document, version, age_confirmed, channel) values ($1, 'terms', '2030-01-01', true, 'google-link')`, [uid]);
+  await client.query(`insert into public.achievement_counters (user_id, key, value) values ($1, 'sell.gold', 0)`, [uid]);
   if (spec.save) {
     await client.query(`insert into public.fish_instances (uid, user_id, fish_id, form) values ($1, $2, 'crucian', 'normal')`,
       [fish('crucian').uid, uid]);

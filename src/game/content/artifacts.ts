@@ -14,6 +14,10 @@ export interface ArtifactEffects {
   duelSpeedupCut?: number;
   /** 입질 대기 감소율 — 유효 입질 대기(최소·최대)에 (1 − 값)을 곱한다 (예: 0.1 = 10% 감소) */
   biteWaitCut?: number;
+  /** 일반 등급 가중치 감소율 — 일반 등급 가중치에 (1 − 합)을 곱한다 (예: 0.1 = 10% 감소) */
+  commonWeightCut?: number;
+  /** 가방 용량 증가율 — 배 기본 가방 용량에 (1 + 합)을 곱한다 (예: 0.1 = +10%) */
+  bagCap?: number;
   /** 폼 가중치 — 전역 기본 가중치(돌연변이 1 : 일반 3) 기준 Lv1 값이다. 돌연변이 가중치가 기본보다 올린 몫(여기서는 +25%)이
    *  레벨 계수로 커진다. 이 유물을 가지면 해역의 폼 가중치 오버라이드는 무시하고, 전역 기본 가중치의 돌연변이 쪽에 그 비율을 곱해 쓴다 */
   mutationWeight?: Record<FormId, number>;
@@ -28,9 +32,13 @@ export interface ArtifactCookEffects {
 /** 전설 유물의 고정 효과 — 레벨이 없고 보너스와 페널티가 함께 적용된다 */
 export interface ArtifactSystemEffects {
   /** 네임드 토벌 하루 상한 가산 (예: 1 = +1회) */
-  namedCapBonus: number;
+  namedCapBonus?: number;
   /** 네임드 토벌 골드 보상 감소율 — 골드에만 붙고 교환 재료 수는 그대로다 (예: 0.3 = 30% 감소) */
-  namedRewardCut: number;
+  namedRewardCut?: number;
+  /** 동시 장착 가능한 미끼 슬롯 추가 수 (예: 1 = +1칸) */
+  extraBaitSlots?: number;
+  /** 미끼 지속 시간 감소율 — 미끼 슬롯 지속에 (1 − 값)을 곱한다 (예: 0.5 = 50% 감소) */
+  baitDurationCut?: number;
 }
 
 /** 유물 최고 레벨 — 희귀와 영웅 유물이 Lv1에서 여기까지 오른다 */
@@ -88,6 +96,14 @@ export const ARTIFACTS: readonly Artifact[] = [
     materialId: 'mat-scorched-sinker', materialName: '그을린 봉돌',
     lore: '바깥섬 등의 그을린 자리에서 떼어 낸 돌을 깎아 만든 봉돌이다. 섬의 낚시꾼들은 이 봉돌을 단 줄 아래로 물고기들이 바깥섬 그늘을 찾아가듯 금세 모여든다고 한다.',
     effects: { biteWaitCut: 0.1 } },
+  { id: 'gloucester-vertebra', namedId: 'gloucester-serpent', name: '글로스터의 등마디', zone: 'northatlantic', grade: 'epic',
+    materialId: 'mat-salted-vertebra', materialName: '소금 절인 등마디',
+    lore: '아조레스 해령의 연승 줄에 매달려 올라온 소금 절인 등마디다. 이것을 뱃머리에 두면 흔한 떼고기들이 먼저 비켜서고, 깊은 물의 귀한 것들이 바늘 가까이 다가온다.',
+    effects: { commonWeightCut: 0.1 } },
+  { id: 'sargasso-net', namedId: 'guabancex', name: '사르가소의 그물망', zone: 'northatlantic', grade: 'legendary',
+    materialId: 'mat-wet-sargasso-rope', materialName: '젖은 모자반 밧줄',
+    lore: '버뮤다 모자반 숲에서 건져 올린 질긴 밧줄을 엮어 만든 그물망이다. 촘촘히 걸어 둔 그물코 사이로 서로 다른 미끼를 나란히 매달아 함께 내릴 수 있다. 대신 바닷물이 그물 사이로 거세게 스며들어 미끼의 냄새와 기운은 여느 때보다 훨씬 빨리 씻겨 나간다.',
+    effects: {}, system: { extraBaitSlots: 1, baitDurationCut: 0.5 } },
 ];
 
 const ARTIFACT_BY_ID = new Map(ARTIFACTS.map(a => [a.id, a]));

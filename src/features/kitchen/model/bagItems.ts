@@ -1,14 +1,15 @@
 // 가방 아이템 섹션 모델 — 생명의 기운 격자, 도시락과 미끼 행, 해금 전 잠금과 빈 상태, 먹기 계획과 교체 확인.
 // 먹을 수 있는지는 게임 규칙(canEat)이, 해금은 게임 규칙(cookingUnlocked)이, 게스트 잠금은 메뉴 잠금 모델이 정한다.
 // 보관함에 든 완성분은 조리가 끝난 분까지 센다(settleCooking). 이 모듈은 그 판정을 화면용 행으로 옮긴다.
-import { COOK_KIND_RULES, COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, recipeById } from '../../../game/content/cooking';
+import { COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, recipeById } from '../../../game/content/cooking';
 import type { Recipe } from '../../../game/content/cooking';
 import { RARITY_ORDER } from '../../../game/content/rarity';
 import type { RarityId } from '../../../game/content/rarity';
-import { canEat, settleCooking } from '../../../game/rules/cooking';
+import { canEat, maxBaitSlots, settleCooking, slotDurationMs } from '../../../game/rules/cooking';
 import type { GameState } from '../../../game/rules/logic';
 import type { RuleCheck } from '../../../game/rules/rules';
 import { facilityGuestAllowed, facilityProgress, menuLock, progressNote } from '../../display/model/menuLock';
+import type { AccountLockState } from '../../display/model/menuLock';
 import { energyLabel } from './energy';
 import { recipeEffectLines, recipeEffectNote, recipeLabel, recipesOfKind, recipeTitle } from './recipes';
 import type { RecipeTitle } from './recipes';
@@ -53,6 +54,8 @@ export interface ItemRow {
   /** 효과 줄과 적용 낚시, 지속 안내 - 이름의 툴팁이 보인다 */
   effects: RecipeEffectLine[];
   note: string;
+  /** 지금 슬롯에 장착돼 효과를 내고 있는가 */
+  active: boolean;
 }
 
 export type ItemSectionView =
@@ -60,9 +63,9 @@ export type ItemSectionView =
   | { state: 'locked'; empty: string[]; lines: string[] }
   | { state: 'open'; energy: EnergyCell[]; lunch: ItemRow[]; bait: ItemRow[]; empty: boolean };
 
-export function selectItemSection(game: GameState, now: string, guest: boolean): ItemSectionView {
+export function selectItemSection(game: GameState, now: string, account: AccountLockState): ItemSectionView {
   const progress = facilityProgress('kitchen', game.boat);
-  const lock = menuLock({ guest, guestAllowed: facilityGuestAllowed('kitchen'), feature: '부엌', progress });
+  const lock = menuLock({ account, guestAllowed: facilityGuestAllowed('kitchen'), feature: '부엌', progress });
   if (lock.kind !== 'none') {
     const empty = lock.kind === 'progress'
       ? [NO_ITEMS_TEXT, ...progressNote(COOKING_UNLOCK_BOAT, '부엌에서 도시락과 미끼를 만들 수 있어요.')]
@@ -70,16 +73,30 @@ export function selectItemSection(game: GameState, now: string, guest: boolean):
     return { state: 'locked', empty, lines: lock.lines };
   }
   const items = settleCooking(game, now).items;
+  const activeLunchId = activeSlot(game, 'lunch', now)?.recipe.id;
+  const activeBaitIds = new Set(
+    (['bait', 'bait2'] as const)
+      .map(k => activeSlot(game, k, now)?.recipe.id)
+      .filter((id): id is string => id !== undefined),
+  );
   const rows = (slot: SlotKey): ItemRow[] => recipesOfKind(slot).filter(r => (items[r.id] ?? 0) > 0)
     .map(recipe => ({
       recipe, label: recipeLabel(recipe), title: recipeTitle(recipe), count: items[recipe.id], slot, verb: SLOT_TEXT[slot].verb,
       effects: recipeEffectLines(recipe), note: recipeEffectNote(slot),
+      active: slot === 'lunch' ? recipe.id === activeLunchId : activeBaitIds.has(recipe.id),
     }));
   const energy = RARITY_ORDER.map((grade): EnergyCell => (
     { grade, label: energyLabel(grade), stored: items[ENERGY_ITEM_IDS[grade]] ?? 0 }));
   const lunch = rows('lunch');
   const bait = rows('bait');
   return { state: 'open', energy, lunch, bait, empty: lunch.length === 0 && bait.length === 0 && energy.every(e => e.stored === 0) };
+}
+
+/** 다중 미끼 슬롯이 모두 찼을 때 바꿀 대상 슬롯 선택지 */
+export interface SwapChoice {
+  slotKey: 'bait' | 'bait2';
+  label: string;
+  minutes: number;
 }
 
 /** 교체 확인 — 효과가 든 슬롯에 새로 넣을 때(같은 것을 다시 넣을 때도) 잃는 남은 시간을 보인다 */
@@ -89,6 +106,9 @@ export interface SwapConfirm {
   current: { label: string; minutes: number };
   next: { label: string; minutes: number };
   warning: string;
+  /** 다중 미끼 슬롯이 모두 차 세 번째 미끼를 쓸 때만 채운다 */
+  choices?: SwapChoice[];
+  defaultChoice?: 'bait' | 'bait2';
 }
 
 export interface EatPlan {
@@ -103,16 +123,76 @@ export function planEat(game: GameState, item: string, now: string): EatPlan {
   const recipe = recipeById(item);
   if (recipe === undefined) return { slot: 'lunch', check: canEat(game, item, now), confirm: null };
   const slot = recipe.kind;
-  const current = activeSlot(game, slot, now);
   const text = SLOT_TEXT[slot];
+  const check = canEat(game, item, now);
+  const nextMinutes = slotDurationMs(recipe, game) / MIN_MS;
+
+  if (slot === 'lunch') {
+    const current = activeSlot(game, 'lunch', now);
+    return {
+      slot,
+      check,
+      confirm: current === null ? null : {
+        title: text.swapTitle, confirmLabel: text.verb,
+        current: { label: current.label, minutes: Math.ceil(current.remainingMs / MIN_MS) },
+        next: { label: recipeLabel(recipe), minutes: nextMinutes },
+        warning: SWAP_WARNING,
+      },
+    };
+  }
+
+  const b1 = activeSlot(game, 'bait', now);
+  const b2 = activeSlot(game, 'bait2', now);
+
+  if (maxBaitSlots(game) <= 1) {
+    return {
+      slot,
+      check,
+      confirm: b1 === null ? null : {
+        title: text.swapTitle, confirmLabel: text.verb,
+        current: { label: b1.label, minutes: Math.ceil(b1.remainingMs / MIN_MS) },
+        next: { label: recipeLabel(recipe), minutes: nextMinutes },
+        warning: SWAP_WARNING,
+      },
+    };
+  }
+
+  // 다중 미끼 슬롯: 같은 미끼가 이미 켜져 있으면 그 슬롯을 갱신하는 확인 창
+  const duplicate = b1?.recipe.id === recipe.id ? b1 : b2?.recipe.id === recipe.id ? b2 : null;
+  if (duplicate !== null) {
+    return {
+      slot,
+      check,
+      confirm: {
+        title: text.swapTitle, confirmLabel: text.verb,
+        current: { label: duplicate.label, minutes: Math.ceil(duplicate.remainingMs / MIN_MS) },
+        next: { label: recipeLabel(recipe), minutes: nextMinutes },
+        warning: SWAP_WARNING,
+      },
+    };
+  }
+
+  // 빈 슬롯이 하나라도 있으면 확인 없이 바로 넣는다
+  if (b1 === null || b2 === null) {
+    return { slot, check, confirm: null };
+  }
+
+  // 두 슬롯 모두 다른 미끼로 차 있을 때: 바꿀 슬롯 선택 (먼저 끝나는 슬롯 기본 선택)
+  const defaultChoice: 'bait' | 'bait2' = b1.remainingMs <= b2.remainingMs ? 'bait' : 'bait2';
+  const chosen = defaultChoice === 'bait' ? b1 : b2;
   return {
     slot,
-    check: canEat(game, item, now),
-    confirm: current === null ? null : {
+    check,
+    confirm: {
       title: text.swapTitle, confirmLabel: text.verb,
-      current: { label: current.label, minutes: Math.ceil(current.remainingMs / MIN_MS) },
-      next: { label: recipeLabel(recipe), minutes: COOK_KIND_RULES[slot].slotMs / MIN_MS },
+      current: { label: chosen.label, minutes: Math.ceil(chosen.remainingMs / MIN_MS) },
+      next: { label: recipeLabel(recipe), minutes: nextMinutes },
       warning: SWAP_WARNING,
+      choices: [
+        { slotKey: 'bait', label: b1.label, minutes: Math.ceil(b1.remainingMs / MIN_MS) },
+        { slotKey: 'bait2', label: b2.label, minutes: Math.ceil(b2.remainingMs / MIN_MS) },
+      ],
+      defaultChoice,
     },
   };
 }

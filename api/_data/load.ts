@@ -2,7 +2,7 @@
 // 행은 Postgres JSON 직렬화로 받는다. 시각은 '2030-01-01T00:00:00+00:00' 형식의 문자열, bigint는 수다.
 import { sql } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
-import { guildRanksJson, guildTotal } from './guilds.js';
+import { guildEnhanceRanksJson, guildRanksJson, guildTotal } from './guilds.js';
 import type { GuildBonusId } from '../../src/game/rules/guild.js';
 import { at, jsonParam, textArray } from './json.js';
 
@@ -30,8 +30,16 @@ export interface ActionContext {
   records: RecordRow[] | null;
   /** 수배 행 — 읽지 않았으면 null */
   bounty: BountyRows | null;
-  /** 지금 속한 길드와 그 길드의 누적 기여도, 저장된 보너스별 단계. 길드가 없거나 읽지 않았으면 null */
-  guild: { id: string; total: number; ranks: Partial<Record<GuildBonusId, number>> } | null;
+  /** 지금 속한 길드와 그 길드의 누적 기여도, 저장된 보너스별 단계·자유 강화 단계. 길드가 없거나 읽지 않았으면 null */
+  guild: {
+    id: string; total: number;
+    ranks: Partial<Record<GuildBonusId, number>>;
+    enhanceRanks: Partial<Record<GuildBonusId, number>>;
+  } | null;
+  /** 업적 카운터 누적(키 → 누적값). 행이 없으면 빈 객체다 */
+  counters: Record<string, number>;
+  /** 토벌한 네임드 의뢰 id 목록(bounty_clears의 kind='named' 행) */
+  clearedNamed: string[];
 }
 
 const INSTANCE_COLS = sql`uid, fish_id, form, size, caught_at, spot, judgment, slot, locked`;
@@ -46,6 +54,12 @@ export const stateJson = (uid: string) =>
   sql`(select row_to_json(c) from (select data, version, gold, fame, boat, rod, restricted, updated_at,
        last_catch_at, active_client
        from public.saves_current where user_id = ${uid}) c)`;
+/** 업적 카운터 누적 — 사용자별, 키별 누적값. 행이 없으면 빈 객체 */
+export const countersJson = (uid: string) =>
+  sql`(select coalesce(json_object_agg(key, value), '{}') from public.achievement_counters where user_id = ${uid})`;
+/** 토벌한 네임드 의뢰 id — bounty_clears에서 kind='named'인 행 전부 */
+export const clearedNamedJson = (uid: string) =>
+  sql`(select coalesce(json_agg(quest_id), '[]') from public.bounty_clears where user_id = ${uid} and kind = 'named')`;
 
 /**
  * 프로필·저장 상태와, 필요하면 개체·도감·수배 행을 한 번에 읽는다.
@@ -61,7 +75,7 @@ export async function loadContext(db: Executor, uid: string, opts: {
   const { rows } = await db.execute<{
     nickname: string | null; cur: StateRow | null; instances: InstanceRow[] | null; records: RecordRow[] | null;
     clears: BountyRows['clears'] | null; progress: BountyRows['progress'] | null; tickets: BountyRows['tickets'] | null;
-    guild: ActionContext['guild'];
+    guild: ActionContext['guild']; counters: ActionContext['counters']; clearedNamed: ActionContext['clearedNamed'];
   }>(sql`select
     (select nickname from public.profiles where user_id = ${uid}) as nickname,
     ${stateJson(uid)} as cur,
@@ -74,8 +88,11 @@ export async function loadContext(db: Executor, uid: string, opts: {
     case when ${day !== null} then (select coalesce(json_agg(t), '[]') from (select quest_id, issued_at
       from public.bounty_tickets where user_id = ${uid}) t) end as tickets,
     case when ${opts.guild === true} then (select json_build_object('id', m.guild_id::text, 'total', ${guildTotal(sql`m.guild_id`)},
-      'ranks', ${guildRanksJson(sql`m.guild_id`)})
-      from public.guild_members m where m.user_id = ${uid} and m.left_at is null) end as guild`);
+      'ranks', ${guildRanksJson(sql`m.guild_id`)},
+      'enhanceRanks', ${guildEnhanceRanksJson(sql`m.guild_id`)})
+      from public.guild_members m where m.user_id = ${uid} and m.left_at is null) end as guild,
+    ${countersJson(uid)} as counters,
+    ${clearedNamedJson(uid)} as "clearedNamed"`);
   const r = rows[0];
   return {
     nickname: r.nickname,
@@ -84,7 +101,15 @@ export async function loadContext(db: Executor, uid: string, opts: {
     records: r.records,
     bounty: day !== null ? { clears: r.clears ?? [], progress: r.progress ?? [], tickets: r.tickets ?? [] } : null,
     guild: r.guild ? { ...r.guild, total: Number(r.guild.total) } : null,
+    counters: r.counters,
+    clearedNamed: r.clearedNamed,
   };
+}
+
+/** 사용자의 도감 기록 행 전부 — 개체를 건너뛴 처리에서 업적 재판정에 쓸 때 따로 읽는다 */
+export async function loadRecords(db: Executor, uid: string): Promise<RecordRow[]> {
+  const { rows } = await db.execute<{ records: RecordRow[] }>(sql`select ${recordsJson(uid)} as records`);
+  return rows[0].records;
 }
 
 /** 정규화 이전 저장(구 saves)의 최신 본문 — 첫 액션 시딩의 원본 */
@@ -94,15 +119,49 @@ export async function latestLegacySave(db: Executor, uid: string): Promise<unkno
   return rows[0]?.data ?? null;
 }
 
-/** 캐치 판정용 — 잡힌 어종·폼의 도감 행과 가방(전시 제외) 개체 수 */
-export async function catchLookup(db: Executor, uid: string, fishId: string, form: string): Promise<{
-  dex: { count: number; max_size: number | null; first_caught: string | null } | null; bagCount: number;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export type PrevAutoRow = { uid: string; fish_id: string; form: string; size: number | null; locked: boolean | null };
+
+/** 캐치 판정용 — 잡힌 어종·폼의 도감 행과 가방(전시 제외) 개체 수.
+ *  autoLock이 주어지면 같은 왕복 안에서 (1) 같은 어종·폼의 잠긴 가방 개체 최대 크기(null 크기는 -1)와
+ *  (2) 직전 자동 잠금 개체(prevUid) 행을 함께 읽어 추가 DB 왕복 없이 토글식 자동 잠금을 판정한다 */
+export async function catchLookup(
+  db: Executor, uid: string, fishId: string, form: string,
+  autoLock?: { prevUid: string | null },
+): Promise<{
+  dex: { count: number; max_size: number | null; first_caught: string | null } | null;
+  bagCount: number;
+  maxLockedSize: number | null;
+  prevAuto: PrevAutoRow | null;
 }> {
-  const { rows } = await db.execute<{ dex: { count: number; max_size: number | null; first_caught: string | null } | null; bag: number }>(sql`select
+  const validPrevUid = autoLock?.prevUid && UUID_RE.test(autoLock.prevUid) ? autoLock.prevUid : null;
+  const maxLockedSql = autoLock
+    ? sql`(select max(coalesce(size, -1))::real from public.fish_instances
+        where user_id = ${uid} and fish_id = ${fishId} and form = ${form} and slot is null and locked = true)`
+    : sql`null::real`;
+  const prevAutoSql = validPrevUid
+    ? sql`(select row_to_json(p) from (select uid, fish_id, form, size, locked from public.fish_instances
+        where user_id = ${uid} and uid = ${validPrevUid}::uuid and fish_id = ${fishId} and form = ${form} and slot is null) p)`
+    : sql`null::json`;
+  const { rows } = await db.execute<{
+    dex: { count: number; max_size: number | null; first_caught: string | null } | null;
+    bag: number;
+    max_locked_size: number | null;
+    prev_auto: PrevAutoRow | null;
+  }>(sql`select
     (select row_to_json(d) from (select count, max_size, first_caught from public.records
       where user_id = ${uid} and fish_id = ${fishId} and form = ${form}) d) as dex,
-    (select count(*)::int from public.fish_instances where user_id = ${uid} and slot is null) as bag`);
-  return { dex: rows[0].dex, bagCount: rows[0].bag };
+    (select count(*)::int from public.fish_instances where user_id = ${uid} and slot is null) as bag,
+    ${maxLockedSql} as max_locked_size,
+    ${prevAutoSql} as prev_auto`);
+  const r = rows[0];
+  return {
+    dex: r.dex,
+    bagCount: r.bag,
+    maxLockedSize: r.max_locked_size === null || r.max_locked_size === undefined ? null : Number(r.max_locked_size),
+    prevAuto: r.prev_auto ?? null,
+  };
 }
 
 /** 어종 천장 후보 가운데 일반 폼을 이미 가진 어종 — 후보가 있을 때만 부른다 */

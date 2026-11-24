@@ -5,7 +5,7 @@ import { ADMIN_SECTIONS, ADMIN_TABS, adminHash, adminRouteOf, parseAdminHash } f
 describe('관리자 해시 경로', () => {
   it('정식 해시는 그대로 되돌아온다', () => {
     const canonical = [
-      '#/admin/overview', '#/admin/live', '#/admin/balance', '#/admin/ops',
+      '#/admin/overview', '#/admin/live', '#/admin/balance', '#/admin/content', '#/admin/ops',
       ...ADMIN_SECTIONS.players.map(s => `#/admin/players/${s.key}`),
       ...ADMIN_SECTIONS.comms.map(s => `#/admin/comms/${s.key}`),
       ...ADMIN_SECTIONS.analysis.map(s => `#/admin/analysis/${s.key}`),
@@ -30,11 +30,11 @@ describe('관리자 해시 경로', () => {
   it('탭을 누르면 그 탭의 기본 화면으로 간다', () => {
     expect(ADMIN_TABS.map(t => adminHash(adminRouteOf(t.key)))).toEqual([
       '#/admin/overview', '#/admin/live', '#/admin/players/roster', '#/admin/comms/letters',
-      '#/admin/analysis/economy', '#/admin/balance', '#/admin/ops',
+      '#/admin/analysis/economy', '#/admin/balance', '#/admin/content', '#/admin/ops',
     ]);
   });
 
-  it('탭은 일곱 개이고 이름이 정해져 있다', () => {
-    expect(ADMIN_TABS.map(t => t.label)).toEqual(['개요', '실시간', '플레이어', '소통', '경제·진행', '밸런스', '운영']);
+  it('탭은 여덟 개이고 이름이 정해져 있다', () => {
+    expect(ADMIN_TABS.map(t => t.label)).toEqual(['개요', '실시간', '플레이어', '소통', '경제·진행', '밸런스', '콘텐츠', '운영']);
   });
 });

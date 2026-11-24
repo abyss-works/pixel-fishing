@@ -74,23 +74,89 @@ class HttpAuth implements AuthApi {
 
 import type {
   AdminApi, AdminAccessResult,
-  AdminUserRow, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
+  AdminUserRow, AdminUserState, AdminOverview, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
   AdminLive, AdminDailyStatsRow, AdminSessionRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, AdminChangelogRow, AdminChatReportRow, BalanceLive,
   AdminSentMailRow, AdminMailRequest, AdminMailPlan, AdminResetLink,
 } from '../api/types';
 
-/** 관리자 조회 하나를 GET으로 읽는다. 응답이 실패면(세션이 없으면 401) 조회 이름과 상태를 담아 던진다 */
-async function getAdmin<T>(url: string, label: string): Promise<T> {
-  return adminBody(await fetch(url), label);
+const RATE_LIMIT_MESSAGE = '요청이 너무 많아 잠시 기다렸다가 다시 시도해 주세요.';
+const MAX_RATE_LIMIT_RETRIES = 2;
+const MAX_RETRY_AFTER_MS = 10_000;
+
+class AdminHttpError extends Error {
+  readonly status: number;
+  readonly code?: string;
+  readonly retryAfterMs?: number;
+  readonly retried: boolean;
+
+  constructor(message: string, status: number, code?: string, retryAfterMs?: number, retried = false) {
+    super(message);
+    this.name = 'AdminHttpError';
+    this.status = status;
+    this.code = code;
+    this.retryAfterMs = retryAfterMs;
+    this.retried = retried;
+  }
 }
 
-/** 관리자 조회 응답의 본문. 실패 응답이면 조회 이름과 상태를 담아 던진다 */
-async function adminBody<T>(res: Response, label: string): Promise<T> {
+function parseRetryAfterMs(raw: string | null): number | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (/^\d+$/.test(trimmed)) {
+    return Math.min(Number(trimmed) * 1000, MAX_RETRY_AFTER_MS);
+  }
+  const ts = Date.parse(trimmed);
+  if (!Number.isNaN(ts)) {
+    return Math.min(Math.max(0, ts - Date.now()), MAX_RETRY_AFTER_MS);
+  }
+  return null;
+}
+
+const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+
+/** 429 응답에 대해서만 Retry-After 또는 짧은 백오프로 제한 횟수 내 재시도한다. 401/403 등은 즉시 반환한다 */
+async function fetchAdminWithRetry(url: string): Promise<{ res: Response; retried: boolean }> {
+  let retried = false;
+  for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt++) {
+    const res = await fetch(url);
+    if (res.status !== 429 || attempt === MAX_RATE_LIMIT_RETRIES) {
+      return { res, retried };
+    }
+    retried = true;
+    const waitMs = parseRetryAfterMs(res.headers.get('retry-after')) ?? 300 * (attempt + 1);
+    await sleep(waitMs);
+  }
+  throw new AdminHttpError(RATE_LIMIT_MESSAGE, 429, undefined, undefined, true);
+}
+
+/** 관리자 조회 하나를 GET으로 읽는다. 429는 제한적 백오프 재시도 후 실패 시 안내 문구를 던진다 */
+async function getAdmin<T>(url: string, label: string): Promise<T> {
+  const { res, retried } = await fetchAdminWithRetry(url);
+  return adminBody(res, label, retried);
+}
+
+/** 관리자 조회 응답의 본문. 429와 비-JSON 응답을 삼키지 않고 명확한 오류로 변환한다 */
+async function adminBody<T>(res: Response, label: string, retried = false): Promise<T> {
+  if (res.status === 429) {
+    const retryAfterMs = parseRetryAfterMs(res.headers.get('retry-after')) ?? undefined;
+    throw new AdminHttpError(RATE_LIMIT_MESSAGE, 429, undefined, retryAfterMs, retried);
+  }
   if (!res.ok) {
     const code = await res.json().then((body: { error?: unknown }) => body.error, () => undefined);
-    throw new Error(`${label} 조회 실패: ${res.status}${typeof code === 'string' ? ` ${code}` : ''}`);
+    const codeStr = typeof code === 'string' ? code : undefined;
+    throw new AdminHttpError(
+      `${label} 조회 실패: ${res.status}${codeStr ? ` ${codeStr}` : ''}`,
+      res.status,
+      codeStr,
+      undefined,
+      retried,
+    );
   }
-  return await res.json() as T;
+  try {
+    return await res.json() as T;
+  } catch {
+    throw new AdminHttpError(`${label} 응답이 올바른 JSON 형식이 아니에요.`, res.status, undefined, undefined, retried);
+  }
 }
 
 /** 서버 읽기 함수에 조회 하나를 요청한다(`?q=` 조회) */
@@ -108,18 +174,27 @@ function readAdminPath<T>(path: string, params: Record<string, string | number |
   return getAdmin(`/api/admin/${path}${query ? `?${query}` : ''}`, path);
 }
 
-/** 관리자 쓰기 하나를 POST로 보낸다. 응답이 실패면(세션이 없으면 401) 작업 이름과 상태를 담아 던진다 */
+/** 관리자 쓰기 하나를 POST로 보낸다. 429·비-JSON 오류를 구분해 명확한 오류를 던진다 */
 async function writeAdmin<T>(query: string, body: unknown, label: string): Promise<T> {
   const res = await fetch(`/api/admin?q=${query}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
+  if (res.status === 429) {
+    const retryAfterMs = parseRetryAfterMs(res.headers.get('retry-after')) ?? undefined;
+    throw new AdminHttpError(RATE_LIMIT_MESSAGE, 429, undefined, retryAfterMs, false);
+  }
   if (!res.ok) {
     const code = await res.json().then((b: { error?: unknown }) => b.error, () => undefined);
-    throw new Error(`${label} 실패: ${res.status}${typeof code === 'string' ? ` ${code}` : ''}`);
+    const codeStr = typeof code === 'string' ? code : undefined;
+    throw new AdminHttpError(`${label} 실패: ${res.status}${codeStr ? ` ${codeStr}` : ''}`, res.status, codeStr);
   }
-  return await res.json() as T;
+  try {
+    return await res.json() as T;
+  } catch {
+    throw new AdminHttpError(`${label} 응답이 올바른 JSON 형식이 아니에요.`, res.status);
+  }
 }
 
 /** 관리자 인증 경로에 JSON 본문을 POST한다. 세션 쿠키는 게임과 이름이 다른 관리자 쿠키다 */
@@ -140,9 +215,9 @@ class HttpAdmin implements AdminApi {
 
   /** 관리자 세션이 없으면(401) signedOut이다 */
   async access(): Promise<AdminAccessResult> {
-    const res = await fetch('/api/admin?q=access');
+    const { res, retried } = await fetchAdminWithRetry('/api/admin?q=access');
     if (res.status === 401) return { kind: 'signedOut', uid: null };
-    return adminBody(res, 'access');
+    return adminBody(res, 'access', retried);
   }
   /** 서버가 만든 구글 인증 주소로 이동한다. 성공과 실패 모두 같은 관리자 주소로 돌아오고, 실패는 서버가 error 질의를 더한다 */
   async signIn(): Promise<AuthResult> {
@@ -197,6 +272,9 @@ class HttpAdmin implements AdminApi {
     await postAdminAuth('sign-out', {});
   }
 
+  overview(days?: number): Promise<AdminOverview> {
+    return readAdmin('overview', days === undefined ? {} : { days });
+  }
   users(): Promise<AdminUserRow[]> {
     return readAdmin('users');
   }
@@ -248,8 +326,14 @@ class HttpAdmin implements AdminApi {
   letterHandled(letterId: number, handled: boolean): Promise<{ handled: boolean }> {
     return writeAdmin('letterHandled', { letterId, handled }, '편지 처리 표시');
   }
+  revokeSessions(userId: string): Promise<{ revoked: number }> {
+    return writeAdmin('revokeSessions', { userId }, '세션 강제 종료');
+  }
   userEvents(userId: string, limit = 500): Promise<AdminEventRow[]> {
     return readAdmin('userEvents', { user: userId, limit });
+  }
+  userState(uid: string): Promise<AdminUserState> {
+    return readAdmin('userState', { uid });
   }
   balanceLive(days?: number): Promise<BalanceLive> {
     return readAdmin('balanceLive', days === undefined ? {} : { days });

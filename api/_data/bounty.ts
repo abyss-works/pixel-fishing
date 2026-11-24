@@ -5,8 +5,11 @@ import { sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
 import type { DebugTablePlan } from '../action.js';
-import type { BountyQuest } from '../../src/game/content/bounties.js';
-import { bountyKindOf } from '../../src/game/content/bounties.js';
+import type { BountyKind, BountyQuest } from '../../src/game/content/bounties.js';
+import { bountyKindOf, isBountyKind } from '../../src/game/content/bounties.js';
+import type {
+  BountyClearSnapshot, BountyProgressSnapshot, BountyTicketSnapshot, DevBountySnapshot,
+} from '../../src/game/rules/debug.js';
 import { at, jsonParam, textArray } from './json.js';
 
 /** 납품할 진행 행을 찾는 질의 — 액션 확정의 선행 조건(gate)이다 */
@@ -41,6 +44,30 @@ export function acceptFragments(guard: SQL, uid: string, quest: BountyQuest, por
 export function clearFragment(guard: SQL, uid: string, quest: BountyQuest, nowISO: string): SQL {
   return sql`insert into public.bounty_clears (user_id, kind, quest_id, cleared_at)
     select ${uid}, ${bountyKindOf(quest)}, ${quest.id}, ${at(nowISO)} where ${guard}`;
+}
+
+/** 네임드 토벌 기록 일괄 추가 — 개발 도구 named.unlock용 */
+export function namedClearInsertFragment(guard: SQL, uid: string, questIds: readonly string[], nowISO: string): SQL | null {
+  if (questIds.length === 0) return null;
+  return sql`insert into public.bounty_clears (user_id, kind, quest_id, cleared_at)
+    select ${uid}, 'named', q, ${at(nowISO)} from unnest(${textArray(questIds)}) as q where ${guard}`;
+}
+
+/** 네임드 토벌 기록 선택 삭제 — 개발 도구 named.reset·dex.reset용 */
+export function namedClearDeleteFragment(guard: SQL, uid: string, questIds: readonly string[]): SQL | null {
+  if (questIds.length === 0) return null;
+  return sql`delete from public.bounty_clears
+    where user_id = ${uid} and kind = 'named' and quest_id = any(${textArray(questIds)}) and ${guard}`;
+}
+
+/** 네임드 토벌 기록 원자적 복원 — 기존 kind='named' 행을 지우고 스냅샷 목록으로 채운다 */
+export function namedClearReplaceFragments(guard: SQL, uid: string, questIds: readonly string[], nowISO: string): SQL[] {
+  const out: SQL[] = [
+    sql`delete from public.bounty_clears where user_id = ${uid} and kind = 'named' and ${guard}`,
+  ];
+  const ins = namedClearInsertFragment(guard, uid, questIds, nowISO);
+  if (ins) out.push(ins);
+  return out;
 }
 
 /** 만료된 의뢰의 정리 — 진행 행과 도전권. 응답 뒤 후속 쓰기다(만료 판정은 읽을 때 끝나 있어 정리가 늦어도 판정은 같다).
@@ -93,8 +120,70 @@ export function debugFragment(guard: SQL, uid: string, plan: DebugTablePlan): SQ
     return sql`update ${table} set ${sql.join(sets, sql`, `)} where user_id = ${uid} and ${guard}`;
   }
   if (plan.since && !DEBUG_COLUMNS.has(plan.since.column)) throw new Error(`debug column not allowed: ${plan.since.column}`);
+  if (plan.kind && !isBountyKind(plan.kind)) throw new Error(`debug kind not allowed: ${plan.kind}`);
   const since = plan.since ? sql` and ${sql.raw(plan.since.column)} >= ${at(plan.since.iso)}` : sql``;
-  return sql`delete from ${table} where user_id = ${uid}${since} and ${guard}`;
+  const kindSql = plan.kind ? sql` and kind = ${plan.kind}` : sql``;
+  return sql`delete from ${table} where user_id = ${uid}${since}${kindSql} and ${guard}`;
+}
+
+/** 스냅샷 저장용 — 사용자의 수배 클리어·진행·도전권 행 전체를 원본 시각 그대로 읽는다 */
+export async function readSnapshotBounty(db: Executor, uid: string): Promise<DevBountySnapshot> {
+  const { rows } = await db.execute<{
+    clears: { kind: BountyKind; quest_id: string; cleared_at: string }[];
+    progress: { zone: BountyProgressSnapshot['zone']; quest_id: string; progress: number; started_at: string }[];
+    tickets: { quest_id: string; issued_at: string }[];
+  }>(sql`select
+    (select coalesce(json_agg(c order by c.id), '[]') from (select id, kind, quest_id, cleared_at
+      from public.bounty_clears where user_id = ${uid}) c) as clears,
+    (select coalesce(json_agg(p), '[]') from (select zone, quest_id, progress, started_at
+      from public.bounty_progress where user_id = ${uid}) p) as progress,
+    (select coalesce(json_agg(t), '[]') from (select quest_id, issued_at
+      from public.bounty_tickets where user_id = ${uid}) t) as tickets`);
+  const r = rows[0];
+  return {
+    clears: r.clears.map((c): BountyClearSnapshot => ({
+      kind: c.kind, questId: c.quest_id, clearedAt: c.cleared_at,
+    })),
+    progress: r.progress.map((p): BountyProgressSnapshot => ({
+      zone: p.zone, questId: p.quest_id, progress: Number(p.progress), startedAt: p.started_at,
+    })),
+    tickets: r.tickets.map((t): BountyTicketSnapshot => ({
+      questId: t.quest_id, issuedAt: t.issued_at,
+    })),
+  };
+}
+
+/** 스냅샷 복원용 — bounty_clears(일반/네임드 원본 시각 포함)·bounty_progress·bounty_tickets를 원자적으로 교체한다 */
+export function bountyRestoreFragments(guard: SQL, uid: string, bounty: DevBountySnapshot): SQL[] {
+  const out: SQL[] = [
+    sql`delete from public.bounty_clears where user_id = ${uid} and ${guard}`,
+    sql`delete from public.bounty_progress where user_id = ${uid} and ${guard}`,
+    sql`delete from public.bounty_tickets where user_id = ${uid} and ${guard}`,
+  ];
+  if (bounty.clears.length > 0) {
+    const clearRows = bounty.clears.map(c => ({ kind: c.kind, quest_id: c.questId, cleared_at: c.clearedAt }));
+    out.push(sql`insert into public.bounty_clears (user_id, kind, quest_id, cleared_at)
+      select ${uid}, kind, quest_id, cleared_at
+      from json_to_recordset(${jsonParam(clearRows)}) as x(kind text, quest_id text, cleared_at timestamptz)
+      where ${guard}`);
+  }
+  if (bounty.progress.length > 0) {
+    const progressRows = bounty.progress.map(p => ({
+      zone: p.zone, quest_id: p.questId, progress: p.progress, started_at: p.startedAt,
+    }));
+    out.push(sql`insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at, updated_at)
+      select ${uid}, zone, quest_id, progress, started_at, started_at
+      from json_to_recordset(${jsonParam(progressRows)}) as x(zone text, quest_id text, progress int, started_at timestamptz)
+      where ${guard}`);
+  }
+  if (bounty.tickets.length > 0) {
+    const ticketRows = bounty.tickets.map(t => ({ quest_id: t.questId, issued_at: t.issuedAt }));
+    out.push(sql`insert into public.bounty_tickets (user_id, quest_id, issued_at)
+      select ${uid}, quest_id, issued_at
+      from json_to_recordset(${jsonParam(ticketRows)}) as x(quest_id text, issued_at timestamptz)
+      where ${guard}`);
+  }
+  return out;
 }
 
 /** 캐치가 진전시킨 일반 의뢰의 진행도 +1 — 응답 뒤 후속 쓰기다 */

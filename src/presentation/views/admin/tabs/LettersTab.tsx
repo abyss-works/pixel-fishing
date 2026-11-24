@@ -7,16 +7,17 @@ import Note from '../../../ui/Note';
 import { cx } from '../../../ui/cx';
 import { fmtDT } from '../../../../features/admin/model/metrics';
 import { adminIdentityLookup } from '../../../../features/admin/model/adminViews';
-import { readAdminLetters } from '../../../../features/admin/service/queries';
+import { readAdminLetters, readAdminUsers } from '../../../../features/admin/service/queries';
 import { adminKeys } from '../../../../features/admin/service/queryKeys';
 import { useAdminLetterHandled } from '../../../../features/admin/service/useAdminMail';
 import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
+import type { AdminLetterRow, AdminUserRow } from '../../../../features/admin/model/types';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { Cell, TabState } from '../layout';
 import UserIdentity from '../UserIdentity';
 
-// 조회 전 골격 — 게이트는 내용을 교체하지 않으므로 빈 표를 그린다
-const EMPTY: Awaited<ReturnType<typeof readAdminLetters>> = [[], []];
+const NO_LETTERS: AdminLetterRow[] = [];
+const NO_USERS: AdminUserRow[] = [];
 
 export default function LettersTab({ onCompose }: {
   /** 이 계정을 받는 사람으로 넣고 우편 쓰기를 연다 */
@@ -24,13 +25,20 @@ export default function LettersTab({ onCompose }: {
 }) {
   const { access } = useAdminAuth();
   const granted = access === 'granted';
-  const { data, loading, error, refresh } =
-    useAdminQuery(adminKeys.letters, readAdminLetters, granted);
+  const lettersQuery = useAdminQuery(adminKeys.letters, readAdminLetters, granted);
+  const usersQuery = useAdminQuery(adminKeys.users, readAdminUsers, granted);
   const markHandled = useAdminLetterHandled();
   const [busy, setBusy] = useState<number | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 
-  const [letters, users] = data ?? EMPTY;
+  const letters = lettersQuery.data ?? NO_LETTERS;
+  const users = usersQuery.data ?? NO_USERS;
+  const loading = lettersQuery.loading || usersQuery.loading;
+  const error = lettersQuery.error ?? usersQuery.error;
+  const refresh = () => {
+    lettersQuery.refresh();
+    usersQuery.refresh();
+  };
 
   const identityOf = adminIdentityLookup(users);
 

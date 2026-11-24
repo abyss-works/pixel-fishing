@@ -9,6 +9,7 @@ import type { SpotId } from '../../../../game/content/spots';
 import { COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, toStoredEnergy } from '../../../../game/content/cooking';
 import { resetBagView } from '../../game/tabs/bag/bagView';
 import { resetKeyScopes } from '../../../ui/hotkeys';
+import type { AccountLockState } from '../../../../features/display/model/menuLock';
 import FacilityModal from './FacilityModal';
 
 afterEach(() => { cleanup(); resetKeyScopes(); resetBagView(); });
@@ -22,11 +23,11 @@ const inst = (uid: string, fishId: string, over: Partial<FishInstance> = {}): Fi
   ({ uid, fishId, form: 'normal', size: 20, caughtAt: null, spot: null, judgment: null, locked: false, ...over });
 const inSpot = (uid: string, spot: SpotId, over: Partial<FishInstance> = {}): FishInstance => inst(uid, fishIn(spot).id, over);
 
-function show(game: GameState, opts: { base?: BaseId; guest?: boolean; result?: { type: string; [k: string]: unknown } } = {}) {
+function show(game: GameState, opts: { base?: BaseId; accountState?: AccountLockState; result?: { type: string; [k: string]: unknown } } = {}) {
   const dispatch = vi.fn(() => ({ status: 'ok' as const, state: game, result: (opts.result ?? { type: 'none' }) as never }));
   const setToast = vi.fn();
   const onClose = vi.fn();
-  render(<FacilityModal panel="sell" base={opts.base ?? 'home'} guest={opts.guest} sellBonus={0} game={game}
+  render(<FacilityModal panel="sell" base={opts.base ?? 'home'} accountState={opts.accountState} sellBonus={0} game={game}
                         dispatch={dispatch} setToast={setToast} onClose={onClose} />);
   return { dispatch, setToast, onClose };
 }
@@ -332,25 +333,32 @@ describe('기운 얻기 탭의 잠금', () => {
   it('진행 조건 잠금 툴팁은 구역 항로와 배 단계 두 줄이다', () => {
     show(seed({ boat: COOKING_UNLOCK_BOAT - 1 }));
     const tip = lines(tab('기운 얻기'));
-    expect(tip).toHaveTextContent('인도양 항로가 열리면 기운 얻기를 할 수 있어요.');
-    expect(tip).toHaveTextContent('인도양 항로는 증기선(5단계)부터 열려요.');
+ expect(tip).toHaveTextContent('인도양 항로가 열리면 기운 얻기를 할 수 있어요.');
+ expect(tip).toHaveTextContent('인도양 항로는 증기선(5단계)부터 열려요.');
   });
 
   it('게스트에게는 게스트 잠금이다', () => {
-    show(seed({ boat: COOKING_UNLOCK_BOAT }), { guest: true });
+    show(seed({ boat: COOKING_UNLOCK_BOAT }), { accountState: 'guest' });
     expect(tab('기운 얻기')).toHaveAttribute('aria-disabled', 'true');
     expect(lines(tab('기운 얻기'))).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
   });
 
   it('게스트이면서 해금 전이면 게스트 잠금이 먼저다', () => {
-    show(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), { guest: true });
+    show(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), { accountState: 'guest' });
     const tip = lines(tab('기운 얻기'));
     expect(tip).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
     expect(tip).not.toHaveTextContent('항로');
   });
 
+  it('확인 실패 상태에서는 확인 실패 잠금이다', () => {
+    show(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), { accountState: 'unverified' });
+    const tip = lines(tab('기운 얻기'));
+    expect(tip).toHaveTextContent('계정을 확인하면 쓸 수 있어요.');
+    expect(tip).not.toHaveTextContent('항로');
+  });
+
   it('게스트도 판매 탭은 쓸 수 있다', () => {
-    show(seed({ bag: [inst('a', crucian.id)] }), { guest: true });
+    show(seed({ bag: [inst('a', crucian.id)] }), { accountState: 'guest' });
     expect(screen.getByRole('button', { name: /^판매 \(/ })).toBeEnabled();
   });
 
@@ -390,8 +398,8 @@ describe('해역별 기운 대상 팝오버', () => {
     open();
     fireEvent.click(gear());
     const chips = within(pop()).getAllByRole('button').filter(b => b.hasAttribute('aria-pressed'));
-    expect(chips.map(c => c.getAttribute('aria-label'))[0]).toBe('인도양 기운 대상');
-    expect(within(pop()).getByRole('button', { name: '인도양 기운 대상' })).toHaveTextContent('꺼짐');
+    expect(chips.map(c => c.getAttribute('aria-label'))[0]).toBe('인도양 연안 기운 대상');
+    expect(within(pop()).getByRole('button', { name: '인도양 연안 기운 대상' })).toHaveTextContent('꺼짐');
     expect(within(pop()).getByRole('button', { name: '마을 연못 기운 대상' })).toHaveTextContent('켜짐');
   });
 
@@ -423,7 +431,7 @@ describe('해역별 기운 대상 팝오버', () => {
     expect(dot).not.toBeNull();
     fireEvent.mouseEnter(dot.parentElement!);
     expect(screen.getByRole('tooltip')).toHaveTextContent('기본값은 켜짐이에요.');
-    expect(within(pop()).getByText('인도양').closest('div')!.querySelector('.bg-gold')).toBeNull();
+    expect(within(pop()).getByText('인도양 연안').closest('div')!.querySelector('.bg-gold')).toBeNull();
   });
 
   it('덮어쓴 해역이 있으면 톱니바퀴에 금색 점이 있고 툴팁이 한 줄 더한다', () => {

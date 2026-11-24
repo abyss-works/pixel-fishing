@@ -48,7 +48,7 @@ export type {
   RankingBoardId, RankingRow, RankingBoard, MailItem, FriendItem, FriendOp, FriendOpResult,
   GuildBonusItem, GuildDonorItem, GuildInfo, GuildInvitePreview, GuildJoinRequestItem, GuildLogItem, GuildMemberItem, GuildMyRequest, GuildOp,
   GuildOpResult, GuildState,
-  AdminUserRow, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
+  AdminUserRow, AdminUserState, AdminOverview, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
   AdminLive, AdminLiveConnection, AdminDailyStatsRow, AdminSessionRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, AdminChangelogRow, AdminChatReportRow, BalanceLive,
   AdminSentMailRow, AdminMailRequest, AdminMailPlan, AdminResetLink,
 } from './types';

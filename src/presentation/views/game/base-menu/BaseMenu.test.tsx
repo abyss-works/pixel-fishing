@@ -40,7 +40,7 @@ describe('거점 카드 메뉴', () => {
   describe('게스트 잠금', () => {
     it('게스트의 옷장은 잠금 카드라 눌러도 시설을 알리지 않고 툴팁이 열린다', () => {
       const onFacility = vi.fn();
-      render(<BaseMenu base="home" game={newState()} guest onFacility={onFacility} />);
+      render(<BaseMenu base="home" game={newState()} accountState="guest" onFacility={onFacility} />);
       const card = document.querySelector('[data-facility="wardrobe"]')!;
       expect(card).toHaveAttribute('aria-disabled', 'true');
       expect(card.closest('[title]')).toBeNull();
@@ -50,8 +50,17 @@ describe('거점 카드 메뉴', () => {
       expect(screen.getByRole('tooltip')).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
     });
 
+    it('확인 실패 상태의 옷장은 확인 실패 잠금 툴팁을 보인다', () => {
+      const onFacility = vi.fn();
+      render(<BaseMenu base="home" game={newState()} accountState="unverified" onFacility={onFacility} />);
+      const card = document.querySelector('[data-facility="wardrobe"]')!;
+      expect(card).toHaveAttribute('aria-disabled', 'true');
+      fireEvent.mouseEnter(card.parentElement!);
+      expect(screen.getByRole('tooltip')).toHaveTextContent('계정을 확인하면 쓸 수 있어요.');
+    });
+
     it('게스트에게 열린 카드와 계정의 옷장은 잠기지 않는다', () => {
-      const { unmount } = render(<BaseMenu base="home" game={newState()} guest />);
+      const { unmount } = render(<BaseMenu base="home" game={newState()} accountState="guest" />);
       for (const id of ['rod', 'boat', 'sell', 'rank']) {
         expect(document.querySelector(`[data-facility="${id}"]`)).not.toHaveAttribute('aria-disabled');
       }
@@ -84,7 +93,7 @@ describe('거점 카드 메뉴', () => {
 
     it('게스트의 부엌은 진행 조건을 채워도 안 채워도 게스트 잠금이다', () => {
       for (const boat of [COOKING_UNLOCK_BOAT - 1, COOKING_UNLOCK_BOAT]) {
-        const { unmount } = render(<BaseMenu base="home" game={{ ...newState(), boat }} guest />);
+        const { unmount } = render(<BaseMenu base="home" game={{ ...newState(), boat }} accountState="guest" />);
         expect(kitchen()).toHaveAttribute('aria-disabled', 'true');
         expect(tooltipOf()).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
         unmount();

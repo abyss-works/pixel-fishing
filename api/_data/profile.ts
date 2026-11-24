@@ -1,5 +1,11 @@
 // 프로필(profiles) 쓰기 소유 모듈 — 첫 액션의 게스트명 보장과 닉네임 변경.
 import { sql } from 'drizzle-orm';
+import { achievementById } from '../../src/game/content/achievements.js';
+import { ARTIFACT_MAX_LEVEL, artifactById, artifactHasLevel } from '../../src/game/content/artifacts.js';
+import { isKnownLocation } from '../../src/game/content/places.js';
+import type { LocationRef } from '../../src/game/content/places.js';
+import { hatById, safeLook } from '../../src/game/content/wardrobe.js';
+import type { Look } from '../../src/game/content/wardrobe.js';
 import type { Executor } from '../_db/client.js';
 import { at } from './json.js';
 
@@ -49,30 +55,130 @@ export async function liveIdentity(db: Executor, uid: string): Promise<{ nick: s
 }
 
 /**
- * 다른 사용자에게 보이는 공개 프로필. dexFish는 일반 폼으로 한 번이라도 낚은 어종 id(도감 순위와 같은 기준),
- * artifacts는 가진 유물 id다. 골드·가방·순위는 주지 않는다
+ * 다른 사용자에게 보이는 공개 프로필. dexFish는 일반 폼, dexVariant는 돌연변이 폼으로 한 번이라도 낚은 어종 id,
+ * artifacts는 가진 유물 id, achievements는 보상 수령 완료(claimed) id만 담는다.
+ * 골드·가방·순위·천장·미수령 업적(claimable)·원시 업적 카운터는 주지 않는다.
  */
 export interface PublicProfile {
-  nickname: string | null; boat: number; rod: number; fame: number;
-  dexFish: string[]; artifacts: string[]; account: boolean;
+  nickname: string | null;
+  boat: number;
+  rod: number;
+  fame: number;
+  dexFish: string[];
+  dexVariant: string[];
+  artifacts: string[];
+  artifactLevels: Record<string, number>;
+  hats: string[];
+  look: Look | null;
+  achievements: string[];
+  location: LocationRef | null;
+  lastPos: { region: string; x: number; y: number } | null;
+  account: boolean;
+}
+
+function sanitizeArtifactLevels(raw: unknown, owned: readonly string[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return out;
+  for (const [id, val] of Object.entries(raw as Record<string, unknown>)) {
+    const art = artifactById(id);
+    if (!art || !artifactHasLevel(art) || !owned.includes(id)) continue;
+    if (typeof val !== 'number' || !Number.isInteger(val)) continue;
+    const level = Math.min(ARTIFACT_MAX_LEVEL, Math.max(1, val));
+    if (level > 1) out[id] = level;
+  }
+  return out;
+}
+
+function sanitizeHats(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const h of raw) {
+    if (typeof h === 'string' && !seen.has(h) && hatById(h) !== undefined) {
+      seen.add(h);
+      out.push(h);
+    }
+  }
+  return out;
+}
+
+export function sanitizeClaimedAchievements(raw: unknown): string[] {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return [];
+  return Object.entries(raw as Record<string, unknown>)
+    .filter(([id, status]) => status === 'claimed' && achievementById(id) !== undefined)
+    .map(([id]) => id)
+    .sort();
+}
+
+function sanitizeLocation(raw: unknown): LocationRef | null {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  const loc = raw as Record<string, unknown>;
+  if ((loc.kind === 'base' || loc.kind === 'region') && typeof loc.id === 'string'
+      && isKnownLocation({ kind: loc.kind, id: loc.id })) {
+    return { kind: loc.kind, id: loc.id } as LocationRef;
+  }
+  return null;
 }
 
 /** 공개 프로필을 읽는다. 사용자가 없으면 null. 프로필이 없으면 이름은 null, 저장 상태가 없으면 배·명성은 0, 낚싯대는 1이다 */
 export async function publicProfile(db: Executor, uid: string): Promise<PublicProfile | null> {
-  const { rows } = await db.execute<{ nickname: string | null; boat: number | null; rod: number | null;
-    fame: string | number | null; artifacts: unknown; dex_fish: string[]; account: boolean }>(sql`select
-      p.nickname, c.boat, c.rod, c.fame, c.data->'artifacts' as artifacts, not u.is_anonymous as account,
+  const { rows } = await db.execute<{
+    nickname: string | null;
+    boat: number | null;
+    rod: number | null;
+    fame: string | number | null;
+    artifacts: unknown;
+    artifact_levels: unknown;
+    hats: unknown;
+    look: unknown;
+    achievements: unknown;
+    location: unknown;
+    dex_fish: string[];
+    dex_variant: string[];
+    last_region: string | null;
+    last_x: string | number | null;
+    last_y: string | number | null;
+    account: boolean;
+  }>(sql`select
+      p.nickname, c.boat, c.rod, c.fame,
+      c.data->'artifacts' as artifacts,
+      c.data->'artifactLevels' as artifact_levels,
+      c.data->'hats' as hats,
+      c.data->'look' as look,
+      c.data->'achievements' as achievements,
+      c.data->'location' as location,
+      not u.is_anonymous as account,
       array(select r.fish_id from public.records r
-        where r.user_id = u.id and r.form = 'normal' and r.count > 0 order by r.fish_id) as dex_fish
+        where r.user_id = u.id and r.form = 'normal' and r.count > 0 order by r.fish_id) as dex_fish,
+      array(select r.fish_id from public.records r
+        where r.user_id = u.id and r.form = 'variant' and r.count > 0 order by r.fish_id) as dex_variant,
+      lp.region as last_region, lp.x as last_x, lp.y as last_y
     from auth.users u
     left join public.profiles p on p.user_id = u.id
     left join public.saves_current c on c.user_id = u.id
+    left join public.last_positions lp on lp.user_id = u.id
     where u.id = ${uid}`);
   const r = rows[0];
   if (!r) return null;
   const artifacts = Array.isArray(r.artifacts) ? r.artifacts.filter((a): a is string => typeof a === 'string') : [];
+  const lastX = r.last_x !== null && r.last_x !== undefined ? Number(r.last_x) : Number.NaN;
+  const lastY = r.last_y !== null && r.last_y !== undefined ? Number(r.last_y) : Number.NaN;
+  const lastPos = typeof r.last_region === 'string' && Number.isFinite(lastX) && Number.isFinite(lastY)
+    ? { region: r.last_region, x: lastX, y: lastY } : null;
   return {
-    nickname: r.nickname, boat: r.boat ?? 0, rod: r.rod ?? 1, fame: Number(r.fame ?? 0),
-    dexFish: r.dex_fish, artifacts, account: r.account,
+    nickname: r.nickname,
+    boat: r.boat ?? 0,
+    rod: r.rod ?? 1,
+    fame: Number(r.fame ?? 0),
+    dexFish: r.dex_fish,
+    dexVariant: r.dex_variant,
+    artifacts,
+    artifactLevels: sanitizeArtifactLevels(r.artifact_levels, artifacts),
+    hats: sanitizeHats(r.hats),
+    look: r.look === null || r.look === undefined ? null : safeLook(r.look),
+    achievements: sanitizeClaimedAchievements(r.achievements),
+    location: sanitizeLocation(r.location),
+    lastPos,
+    account: r.account,
   };
 }

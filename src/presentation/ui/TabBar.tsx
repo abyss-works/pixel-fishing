@@ -32,8 +32,11 @@ export default function TabBar<K extends string>({ tabs, activeKey, onSelect, cl
         : (
           <button key={t.key} type="button" className={activeKey === t.key ? 'active' : ''} onClick={() => onSelect(t.key)}>
             {t.icon}
-            <span>{t.label}</span>
-            {t.count ? <span className="pf-accent ml-1 px-1 text-2xs leading-4 bg-gold text-bg" aria-label={`${t.count}건`}>{t.count}</span> : null}
+            {/* 수는 라벨과 한 줄에 둔다. 버튼은 아이콘과 라벨을 세로로 쌓는다 */}
+            <span className="inline-flex items-center">
+              <span>{t.label}</span>
+              {t.count ? <span className="pf-accent ml-1 px-1 text-2xs leading-4 bg-gold text-bg" aria-label={`${t.count}건`}>{t.count}</span> : null}
+            </span>
           </button>
         ))}
     </div>
@@ -44,7 +47,7 @@ function LockedTab({ tab, lines }: { tab: TabDef<string>; lines: readonly string
   const reasonId = useId();
   return (
     <LockTip lines={lines} className="flex flex-1 min-w-0">
-      <button type="button" aria-disabled="true" aria-describedby={reasonId} className="opacity-55 cursor-not-allowed">
+      <button type="button" aria-disabled="true" aria-describedby={reasonId} className="text-text-dim cursor-not-allowed">
         {tab.icon}
         <span className="inline-flex items-center gap-1">{tab.label}<LockIcon size={10} /></span>
       </button>

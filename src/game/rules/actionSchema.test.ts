@@ -19,18 +19,34 @@ describe('parseAction', () => {
     }
   });
 
-  it('catch의 강제 조우 표시는 true만 통과한다 — 허용 여부는 서버가 따로 판정한다', () => {
+  it('catch의 강제 조우·시간대 표시는 유효 값만 통과한다 — 허용 여부는 서버가 따로 판정한다', () => {
     expect(parseAction({ type: 'catch', spot: 'sea', judgment: 'auto', forceEncounter: true }))
       .toEqual({ type: 'catch', spot: 'sea', judgment: 'auto', forceEncounter: true });
+    expect(parseAction({ type: 'catch', spot: 'sea', judgment: 'auto', forcePhase: 'night' }))
+      .toEqual({ type: 'catch', spot: 'sea', judgment: 'auto', forcePhase: 'night' });
+    expect(parseAction({ type: 'catch', spot: 'sea', judgment: 'normal', forcePhase: 'day' }))
+      .toEqual({ type: 'catch', spot: 'sea', judgment: 'normal', forcePhase: 'day' });
     expect(parseAction({ type: 'catch', spot: 'sea', judgment: 'auto', forceEncounter: 'yes' })).toBeNull();
+    expect(parseAction({ type: 'catch', spot: 'sea', judgment: 'auto', forcePhase: 'dawn' })).toBeNull();
   });
 
   it('debug는 목록에 있는 명령만 통과한다 — 인자 형태는 리듀서가 본다', () => {
     expect(parseAction({ type: 'debug', command: 'stats.set', args: { fame: 1 } }))
       .toEqual({ type: 'debug', command: 'stats.set', args: { fame: 1 } });
     expect(parseAction({ type: 'debug', command: 'bounty.clearTickets' })?.type).toBe('debug');
+    expect(parseAction({ type: 'debug', command: 'dex.fill', args: { zone: 'village' } })?.type).toBe('debug');
+    expect(parseAction({ type: 'debug', command: 'snapshot.restore', args: { snapshot: {} } })?.type).toBe('debug');
+    expect(parseAction({ type: 'debug', command: 'bounty.expireTickets' })?.type).toBe('debug');
+    expect(parseAction({ type: 'debug', command: 'bounty.ticketNearExpiry' })).toBeNull();
     expect(parseAction({ type: 'debug', command: 'gold.infinite' })).toBeNull();
     expect(parseAction({ type: 'adminSet', gold: 1 })).toBeNull();
+    expect(parseAction({
+      type: 'debugBatch',
+      steps: [{ command: 'stats.set', args: { gold: 10 } }, { command: 'bounty.resetToday', args: { kind: 'named' } }],
+    })?.type).toBe('debugBatch');
+    expect(parseAction({ type: 'debugBatch', steps: [] })).toBeNull();
+    expect(parseAction({ type: 'debugBatch', steps: [{ command: 'nope' }] })).toBeNull();
+    expect(parseAction({ type: 'debugSnapshot' })).toEqual({ type: 'debugSnapshot' });
   });
 
   it('알 수 없는 type·비객체를 거부한다', () => {
@@ -45,6 +61,10 @@ describe('parseAction', () => {
     expect(parseAction({ type: 'setLocked', uids: [], locked: true })?.type).toBe('setLocked');
     expect(parseAction({ type: 'setLocked', uids: [] })).toBeNull();
     expect(parseAction({ type: 'autoLock' })?.type).toBe('autoLock');
+    expect(parseAction({ type: 'setAutoLockOnCatch', on: true })).toEqual({ type: 'setAutoLockOnCatch', on: true });
+    expect(parseAction({ type: 'setAutoLockOnCatch', on: false })).toEqual({ type: 'setAutoLockOnCatch', on: false });
+    expect(parseAction({ type: 'setAutoLockOnCatch', on: 'yes' })).toBeNull();
+    expect(parseAction({ type: 'setAutoLockOnCatch' })).toBeNull();
     expect(parseAction({ type: 'sendLetter', text: 'hi' })?.type).toBe('sendLetter');
     expect(parseAction({ type: 'sendLetter', text: 7 })).toBeNull();
     expect(parseAction({ type: 'dismissBaitRefund' })).toEqual({ type: 'dismissBaitRefund' });
@@ -65,6 +85,11 @@ describe('parseAction', () => {
     expect(parseAction({ type: 'cook', recipe: 'cook-lunch-bite', count: 1.5 })).toBeNull();
     expect(parseAction({ type: 'cook', recipe: 7, count: 1 })).toBeNull();
     expect(parseAction({ type: 'eat', item: 'cook-lunch-bite' })).toEqual({ type: 'eat', item: 'cook-lunch-bite' });
+    expect(parseAction({ type: 'eat', item: 'cook-bait-rare', replaceSlot: 'bait' }))
+      .toEqual({ type: 'eat', item: 'cook-bait-rare', replaceSlot: 'bait' });
+    expect(parseAction({ type: 'eat', item: 'cook-bait-rare', replaceSlot: 'bait2' }))
+      .toEqual({ type: 'eat', item: 'cook-bait-rare', replaceSlot: 'bait2' });
+    expect(parseAction({ type: 'eat', item: 'cook-bait-rare', replaceSlot: 'lunch' })).toBeNull();
     expect(parseAction({ type: 'eat' })).toBeNull();
   });
 
@@ -84,5 +109,13 @@ describe('parseAction', () => {
     expect(parseAction({ type: 'wearHat', hat: null })).toEqual({ type: 'wearHat', hat: null });
     expect(parseAction({ type: 'buyHat' })).toBeNull();
     expect(parseAction({ type: 'wearHat' })).toBeNull();
+  });
+
+  it('업적 수령 액션의 형태를 검증한다', () => {
+    expect(parseAction({ type: 'claimAchievement', id: 'spot-basic-sea' }))
+      .toEqual({ type: 'claimAchievement', id: 'spot-basic-sea' });
+    expect(parseAction({ type: 'claimAchievement' })).toBeNull();
+    expect(parseAction({ type: 'claimAchievement', id: 1 })).toBeNull();
+    expect(parseAction({ type: 'claimAllAchievements' })).toEqual({ type: 'claimAllAchievements' });
   });
 });

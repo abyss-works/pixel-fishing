@@ -5,27 +5,35 @@ import { useMemo } from 'react';
 import DataTable from '../../../ui/DataTable';
 import KpiTile from '../../../ui/KpiTile';
 import Note from '../../../ui/Note';
+import TableBox from '../../../ui/TableBox';
 import { cx } from '../../../ui/cx';
 import { fmtNum, fmtDT } from '../../../../features/admin/model/metrics';
 import { adminIdentityLookup, adminNumber, selectAntiAbuseRows } from '../../../../features/admin/model/adminViews';
-import { readAdminAntiAbuse } from '../../../../features/admin/service/queries';
+import { readAdminSpamFlags, readAdminUsers } from '../../../../features/admin/service/queries';
 import { adminKeys } from '../../../../features/admin/service/queryKeys';
 import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
+import type { AdminSpamFlagRow, AdminUserRow } from '../../../../features/admin/model/types';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { Cell, CellGrid, KpiRow, TabState } from '../layout';
 import UserIdentity from '../UserIdentity';
 
-// 조회 전 골격 — 게이트는 내용을 교체하지 않으므로 빈 값으로도 표를 그린다
-const EMPTY: Awaited<ReturnType<typeof readAdminAntiAbuse>> = [[], []];
+const NO_USERS: AdminUserRow[] = [];
+const NO_FLAGS: AdminSpamFlagRow[] = [];
 
 export default function AntiAbuseTab() {
   const { access } = useAdminAuth();
   const granted = access === 'granted';
-  const { data, loading, error, refresh } =
-    useAdminQuery(adminKeys.antiAbuse, readAdminAntiAbuse, granted);
-
-  // 유저 명부는 "uid → 식별" 라벨 풀로 쓴다 — 플래그 행에는 개인정보를 조인해 둘 수 없다
-  const [users, flags] = data ?? EMPTY;
+  // 유저 명부와 스팸 플래그는 전역 정규 키를 공유해 탭 전환 시 중복 풀스캔을 없앤다
+  const usersQuery = useAdminQuery(adminKeys.users, readAdminUsers, granted);
+  const flagsQuery = useAdminQuery(adminKeys.spamFlags, readAdminSpamFlags, granted);
+  const users = usersQuery.data ?? NO_USERS;
+  const flags = flagsQuery.data ?? NO_FLAGS;
+  const loading = usersQuery.loading || flagsQuery.loading;
+  const error = usersQuery.error ?? flagsQuery.error;
+  const refresh = () => {
+    usersQuery.refresh();
+    flagsQuery.refresh();
+  };
 
   const identityOf = adminIdentityLookup(users);
 
@@ -55,12 +63,12 @@ export default function AntiAbuseTab() {
 
       {/* 행동 이상 — 낚시 간격과 판정율은 같은 "플레이 행위" 축이라 나란히 본다 */}
       <CellGrid>
-        <Cell title="연타 (낚시 간격 2초 미만 · 최근 7일)">
+        <Cell title="연타 (낚시 간격 2초 미만, 최근 7일)">
           <Note size="2xs" className="my-0">
-            낚을 때마다 획득 카드가 2초 떠 있어서 사람은 이 간격을 만들 수 없어요.
-            서버에 레이트 리밋이 없어서 간격 분포가 유일한 방어 관측점이에요.
+            서버는 직전 액션과의 최소 간격(2단계 페이싱)과 낚시 한 사이클 기준(catchTooSoon)으로 과속 요청을 차단해요.
+            여기는 최근 7일 내 2초 미만 간격으로 기록된 캐치를 관측해요.
           </Note>
-          <div className="overflow-x-auto">
+          <TableBox>
             <DataTable>
               <thead>
                 <tr><th className="text-left">유저</th><th className="text-right">7일 낚시</th>
@@ -83,7 +91,7 @@ export default function AntiAbuseTab() {
                   </td></tr>}
               </tbody>
             </DataTable>
-          </div>
+          </TableBox>
         </Cell>
 
         <Cell title="PERFECT 판정 비율 이상치 (7일)">
@@ -91,7 +99,7 @@ export default function AntiAbuseTab() {
             30일 전체 평균은 {(flags[0]?.perfect_pct_global ?? '—')}%예요.
             PERFECT ×2는 클라이언트의 주장을 따르는 의도된 구멍이라서, 비율 감시가 유일한 대응이에요(7일 20낚시 이상).
           </Note>
-          <div className="overflow-x-auto">
+          <TableBox>
             <DataTable>
               <thead>
                 <tr><th className="text-left">유저</th><th className="text-right">7일 PERFECT%</th>
@@ -112,7 +120,7 @@ export default function AntiAbuseTab() {
                   </td></tr>}
               </tbody>
             </DataTable>
-          </div>
+          </TableBox>
         </Cell>
       </CellGrid>
 

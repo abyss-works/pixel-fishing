@@ -7,18 +7,20 @@ import type { ActionResult, GameAction } from '../rules/actions';
 import type { RejectReason } from '../rules/rules';
 import { nextPhase, phaseDurationMs, resultAtOf } from '../rules/fishing';
 import type { FishingPhase } from '../rules/fishing';
-import { moveSpeed, rodAxes, powerZones, effectiveBite, POWER_RULES } from '../rules/stats';
-import { NO_COOK_EFFECTS, slotEffects } from '../rules/cooking';
+import { rodAxes, powerZones, POWER_RULES } from '../rules/stats';
+import { achievementBonusesOf } from '../rules/achievements';
+import { biteWaitOf, createPlayerContext, moveSpeedOf } from '../rules/effects';
+import { NO_GUILD_EFFECTS } from '../rules/guild';
 import { CAST_RANGE } from '../rules/balance';
 import { guestActionVerdict } from '../rules/guest';
-import { BlockNotice } from './blockNotice';
+import { BLOCK_RENEW_DISTANCE, BlockNotice } from './blockNotice';
 import { when } from '../../shared/lib/when';
 import { setCurrentSpot, setPlayerPos, setZone } from '../world/currentSpot.js';
 import {
   REGION_PACKS, ZoneTracker, entryPoint, inTrigger, movePlayer,
   nearestSchoolInRange, zoneOf, closedSeaBlock,
 } from '../world';
-import type { Point, RegionId, SceneRef, School } from '../world';
+import type { BaseId, Point, RegionId, SceneRef, School } from '../world';
 import type { RegionPack } from '../world/types';
 import { FIELD_VIEW } from '../world/fieldView.js';
 import type { ViewSize } from '../world/fieldView.js';
@@ -102,6 +104,8 @@ export class GameFieldEngine {
   private readonly triggerNotice = new BlockNotice();
   /** 게스트 출항 트리거에서 되밀린 알림의 재알림 판정 */
   private readonly guestNotice = new BlockNotice();
+  /** 거점 진입 트리거가 발동된 뒤 이동 입력을 떼거나 충분히 떨어질 때까지 같은 거점 재진입을 막는 래치 */
+  private latchedBase: { id: BaseId; anchor: Point } | null = null;
   private readonly keys = new Set<string>();
   /** 모바일 원 패드의 이동 방향(길이 1). 패드가 없으면 null */
   private padDir: Point | null = null;
@@ -223,6 +227,7 @@ export class GameFieldEngine {
     if (!locked) return;
     this.keys.clear();
     this.padDir = null;
+    this.latchedBase = null;
   }
 
   /**
@@ -276,6 +281,7 @@ export class GameFieldEngine {
     this.zoneNotice.release();
     this.triggerNotice.release();
     this.guestNotice.release();
+    if (this.keys.size === 0 && !this.padDir) this.latchedBase = null;
   }
 
   cancelFishing(): void {
@@ -304,6 +310,7 @@ export class GameFieldEngine {
     this.clearPhaseTimers();
     this.keys.clear();
     this.padDir = null;
+    this.latchedBase = null;
     this.listeners.clear();
   }
 
@@ -338,7 +345,16 @@ export class GameFieldEngine {
     const pad = this.padDir;
     const attempting = Boolean(dx || dy || pad) && this.snapshot.phase === 'idle';
     if (attempting) {
-      const speed = moveSpeed(this.game, this.def.movement, this.night).value;
+      const speed = moveSpeedOf(
+        createPlayerContext({
+          state: this.game,
+          guild: NO_GUILD_EFFECTS,
+          now: new Date().toISOString(),
+          achievements: achievementBonusesOf(this.game),
+        }),
+        this.def.movement,
+        this.night,
+      ).value;
       movedFrom = { ...this.pos };
       const dirX = pad ? pad.x : Math.sign(dx), dirY = pad ? pad.y : Math.sign(dy);
       closedMessage = closedSeaBlock(this.def, this.pos, dirX, dirY, dt, speed);
@@ -374,10 +390,25 @@ export class GameFieldEngine {
 
     let guestBlocked = false;
     let triggerBlocked: string | null = null;
+    let latchedBaseHit = false;
     for (const trigger of this.def.triggers) {
       if (!inTrigger(this.pos, trigger.rect)) continue;
       if (trigger.action === 'base') {
-        this.callbacks.onScene({ kind: 'base', id: trigger.base ?? this.def.base }, trigger.msg, undefined, movedFrom ?? undefined);
+        const baseId = trigger.base ?? this.def.base;
+        if (this.latchedBase?.id === baseId) {
+          if (movedFrom) {
+            this.pos.x = movedFrom.x;
+            this.pos.y = movedFrom.y;
+            setPlayerPos({ x: this.pos.x, y: this.pos.y });
+          }
+          this.latchedBase.anchor = { x: this.pos.x, y: this.pos.y };
+          latchedBaseHit = true;
+          continue;
+        }
+        if (this.keys.size > 0 || this.padDir) {
+          this.latchedBase = { id: baseId, anchor: movedFrom ? { ...movedFrom } : { x: this.pos.x, y: this.pos.y } };
+        }
+        this.callbacks.onScene({ kind: 'base', id: baseId }, trigger.msg, undefined, movedFrom ?? undefined);
         return false;
       }
       if (trigger.action === 'travel') {
@@ -401,6 +432,12 @@ export class GameFieldEngine {
         }
         triggerBlocked = trigger.blockedMsg;
       }
+    }
+    if (
+      !latchedBaseHit && this.latchedBase
+      && Math.hypot(this.pos.x - this.latchedBase.anchor.x, this.pos.y - this.latchedBase.anchor.y) >= BLOCK_RENEW_DISTANCE
+    ) {
+      this.latchedBase = null;
     }
     if (this.guestNotice.step(guestBlocked, this.pos)) this.callbacks.onEvent({ type: 'guest-blocked' });
     if (this.triggerNotice.step(triggerBlocked !== null, this.pos) && triggerBlocked !== null) {
@@ -513,9 +550,16 @@ export class GameFieldEngine {
     let ms: number;
     if (phase === 'wait' && school) {
       // 도시락 입질 단축은 방치 사이클(직전 캐치가 auto)의 대기에만 넣는다. 수동 낚시와 첫 대기에는 넣지 않는다
-      const cook = this.lastJudgment === 'auto'
-        ? slotEffects(this.game, new Date(Date.now()).toISOString(), 'auto') : NO_COOK_EFFECTS;
-      const bite = effectiveBite(this.game, school.spot, cook);
+      const bite = biteWaitOf(
+        createPlayerContext({
+          state: this.game,
+          guild: NO_GUILD_EFFECTS,
+          now: new Date(Date.now()).toISOString(),
+          achievements: achievementBonusesOf(this.game),
+        }),
+        school.spot,
+        this.lastJudgment === 'auto' ? 'idle' : 'manual',
+      );
       const random = Math.random();
       ms = (bite.min.value + random * (bite.max.value - bite.min.value)) * 1000;
     } else {

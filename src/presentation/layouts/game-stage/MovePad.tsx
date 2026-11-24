@@ -7,14 +7,14 @@ export default function MovePad({ pad }: { pad: Pad }) {
   const ringLeft = pad.origin.x - PAD_RING_PX / 2;
   const ringTop = pad.origin.y - PAD_RING_PX / 2;
   return (
-    <div aria-hidden="true" className="absolute z-(--z-stage-hud) pointer-events-none rounded-full border-2 border-line
+    <div aria-hidden="true" className="absolute z-(--z-stage-hud) pointer-events-none rounded-full border border-line
                                        bg-[color-mix(in_oklab,var(--c-bg)_45%,transparent)]"
          style={{ left: ringLeft, top: ringTop, width: PAD_RING_PX, height: PAD_RING_PX }}>
-      <div className="absolute rounded-full border-2 border-gold-dark bg-[color-mix(in_oklab,var(--c-gold)_70%,transparent)]"
+      <div className="absolute rounded-full border border-gold-dark bg-[color-mix(in_oklab,var(--c-gold)_70%,transparent)]"
            style={{
              width: PAD_KNOB_PX, height: PAD_KNOB_PX,
-             left: (PAD_RING_PX - PAD_KNOB_PX) / 2 + pad.knob.x - 2,
-             top: (PAD_RING_PX - PAD_KNOB_PX) / 2 + pad.knob.y - 2,
+             left: (PAD_RING_PX - PAD_KNOB_PX) / 2 + pad.knob.x - 1,
+             top: (PAD_RING_PX - PAD_KNOB_PX) / 2 + pad.knob.y - 1,
            }} />
     </div>
   );

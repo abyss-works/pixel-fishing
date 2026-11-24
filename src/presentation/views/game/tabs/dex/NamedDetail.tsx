@@ -67,7 +67,7 @@ export default function NamedDetail({ quest, game, onClose }: {
             <KeyValueRow label="출현 구역" value={zone} />
             <KeyValueRow label="결투 체력" value={<span className="pf-accent">{d.hp}</span>} />
             <KeyValueRow label="토벌 보상" value={<AdjustedAmount amount={d.reward} className="text-gold" />} />
-            <KeyValueRow label="처음 토벌한 날" value={d.firstCaught ?? (d.found ? '알 수 없음' : '—')} />
+            <KeyValueRow label="처음 토벌한 날" value={d.firstCaught ?? (d.found ? '알 수 없음' : '미확인')} />
             {d.trace && <KeyValueRow label="흔적" value={<span className="italic text-text-dim">{d.trace}</span>} />}
           </Inset>
         </TitledCell>

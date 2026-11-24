@@ -6,6 +6,7 @@ import { isClaimable, isPending } from '../../../../features/mailbox/model/mailb
 import type { MailItem } from '../../../../features/mailbox/model/mailbox';
 import { useMailbox } from '../../../../features/mailbox/service/useMailbox';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
+import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import { when } from '../../../../shared/lib/when';
 import Button from '../../../ui/Button';
 import { cx } from '../../../ui/cx';
@@ -44,8 +45,13 @@ export default function MailboxModal({ dispatch, setToast, onClose }: {
   const onClaim = (mail: MailItem) => {
     setClaiming(true);
     void Promise.resolve(when(claim(dispatch, mail.id), result => {
-      if (result.status === 'rejected') setToast(REJECT_TEXT[result.error], 'warn');
-      else setToast(`우편에서 ${fmtGold(mail.gold)}를 받았어요!`, 'gold');
+      if (result.status === 'rejected') sendNotice(setToast, { kind: 'system.modalRejected', text: REJECT_TEXT[result.error] });
+      else sendNotice(setToast, {
+        kind: 'social.modalAction',
+        text: `우편에서 ${fmtGold(mail.gold)}를 받았어요!`,
+        toastText: `우편 ${fmtGold(mail.gold)} 수령!`,
+        tone: 'gold',
+      });
     })).finally(() => setClaiming(false));
   };
   const onRowKey = (e: KeyboardEvent, mail: MailItem) => {
@@ -108,7 +114,8 @@ export default function MailboxModal({ dispatch, setToast, onClose }: {
                   <span className="pf-accent text-2xs text-text-dim shrink-0">{dateOf(selected.createdAt)}</span>
                 </div>
                 <p className={`${SCROLL_Y} flex-1 min-h-0 whitespace-pre-line text-sm leading-relaxed`}>{selected.body}</p>
-                <div className="h-9 shrink-0 flex items-center justify-between gap-2 border-t border-line pt-1.5">
+                {/* 받기 버튼(41px)과 구분선 아래 8px이 들어가는 높이 */}
+                <div className="h-[50px] shrink-0 flex items-center justify-between gap-2 border-t border-line pt-2">
                   {selected.gold > 0 && (
                     <>
                       <span className="inline-flex items-center gap-1.5 text-gold">

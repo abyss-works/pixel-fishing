@@ -3,6 +3,27 @@ import { configDefaults } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
+const COMMON_TEST_EXCLUDE = [...configDefaults.exclude, '**/*.db.test.ts', '**/.worktrees/**']
+
+// 브라우저 전역(window·document·location·Notification·localStorage·sessionStorage) 또는 React 렌더링에 의존하는 .test.ts 예외 목록
+const DOM_ONLY_TS_TESTS = [
+  'src/features/announcements/service/whatsNew.test.ts',
+  'src/features/bounty/service/encounterAlert.test.ts',
+  'src/features/inventory/service/baitRefund.test.ts',
+  'src/platform/adapters/announcements.test.ts',
+  'src/platform/adapters/attention.test.ts',
+  'src/platform/adapters/authGoogle.test.ts',
+  'src/platform/adapters/away.test.ts',
+  'src/platform/adapters/fishArtStyle.test.ts',
+  'src/platform/adapters/httpAdmin.test.ts',
+  'src/platform/adapters/live.test.ts',
+  'src/platform/adapters/localGameGateway.timeOverride.test.ts',
+  'src/platform/adapters/minimapVisible.test.ts',
+  'src/presentation/views/devtools/panelPosition.test.ts',
+  'src/presentation/views/game/guestBlockedNotice.test.ts',
+  'src/presentation/views/overlays/world-map/mapView.test.ts',
+]
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -22,8 +43,8 @@ export default defineConfig({
   },
   server: { port: 5199 },
   test: {
-    setupFiles: './src/test-setup.ts',
-    // DOM이 필요 없는 테스트(게임 규칙·서버·도구)는 node 환경으로 돌린다. jsdom 준비 비용이 테스트 시간의 대부분이다.
+    // DOM·브라우저 전역이 필요 없는 .test.ts(게임 규칙·모델·서비스·어댑터·정적 가드·서버·도구)는 node 환경으로 돌린다.
+    // jsdom 준비 비용이 테스트 시간의 대부분이므로, 브라우저 API나 React 렌더링에 의존하는 .test.ts만 예외 목록으로 dom에 남긴다.
     // 실제 Postgres가 필요한 테스트는 test:db(vitest.db.config.ts)가 따로 실행한다. 작업용 워크트리는 검사 대상이 아니다.
     projects: [
       {
@@ -31,8 +52,8 @@ export default defineConfig({
         test: {
           name: 'node',
           environment: 'node',
-          include: ['src/game/**/*.test.ts', 'src/shared/**/*.test.ts', 'api/**/*.test.ts', 'tools/**/*.test.ts'],
-          exclude: [...configDefaults.exclude, '**/*.db.test.ts', '**/.worktrees/**'],
+          include: ['**/*.test.ts'],
+          exclude: [...COMMON_TEST_EXCLUDE, ...DOM_ONLY_TS_TESTS],
         },
       },
       {
@@ -40,9 +61,9 @@ export default defineConfig({
         test: {
           name: 'dom',
           environment: 'jsdom',
-          include: ['**/*.test.{ts,tsx}'],
-          exclude: [...configDefaults.exclude, '**/*.db.test.ts', '**/.worktrees/**',
-            'src/game/**', 'src/shared/**', 'api/**', 'tools/**'],
+          setupFiles: './src/test-setup.ts',
+          include: ['**/*.test.tsx', ...DOM_ONLY_TS_TESTS],
+          exclude: COMMON_TEST_EXCLUDE,
         },
       },
     ],

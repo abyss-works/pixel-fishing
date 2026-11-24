@@ -35,9 +35,10 @@ describe('명령 인자', () => {
     expect(parseArgs([])).toEqual({
       commands: ['transition', 'days', 'opening', 'exception', 'ev'], override: null, json: false,
       legendAt: null, axis: 'idle', axisGiven: false, maxDays: 365, help: false,
-      seed: DEFAULT_SEED, trials: DEFAULT_TRIALS,
-      effect: { bite: 0, rare: 0, epic: 0, legendary: 0, variant: 0, size: 0, move: 0, named: 0 }, margin: 0, units: { common: 1, rare: 5, epic: 25, legendary: 125 }, windowMinutes: 5, recipe: null, hours: 9, cost: {}, manualShare: null, visitHours: null, rodOffset: null, bounty: false, fromBoat: null, withCost: false, rewards: [], rewardSplit: null,
-      growth: false, targets: [], boatShare: null, levels: null, rewardBasis: null, basis: {},
+      seed: DEFAULT_SEED, trials: DEFAULT_TRIALS, bigMarks: [],
+      effect: { bite: 0, rare: 0, epic: 0, legendary: 0, variant: 0, size: 0, move: 0, named: 0, night: 0 }, margin: 0, units: { common: 1, rare: 5, epic: 25, legendary: 125 },
+      zone: null, artifacts: null, artifactBoost: 0, counterBonus: null, windowMinutes: 5, recipe: null, hours: 9, cost: {}, manualShare: null, visitHours: null, rodOffset: null, bounty: false, fromBoat: null, withCost: false, rewards: [], rewardSplit: null, rewardUnit: 'zone',
+      growth: false, targets: [], boatShare: null, levels: null,
       design: { start: null, growth: null, gap: { all: null, by: {} }, hours: { all: null, by: {} }, payback: { all: null, by: {} }, paybackGrowth: null, anchors: [], anchorNone: false, solve: null, grades: {}, night: {}, emitOverride: null, reversalTolerance: 0, hFactors: {}, hScale: null, hStart: null, specialRegions: [] },
     });
   });
@@ -227,7 +228,7 @@ describe('gates 명령', () => {
     const all = runCli(['gates']).stdout;
     const text = all.slice(all.indexOf('## 전환 시간의 목표 판정'));
     const row = (to: string) => text.split(String.fromCharCode(10)).find(l => l.startsWith('| ') && l.includes(`→ ${to} |`) && l.includes('시간'))!;
-    expect(row('인도양')).toMatch(/3~4시간.*예외/);
+    expect(row('인도양 연안')).toMatch(/3~4시간.*예외/);
     expect(row('남인도양')).toContain('범위 없음');
     const gap = (a: SpotId, b: SpotId) => powerReqOf(b) - powerReqOf(a);
     expect(row('남인도양')).toContain(`| ${gap('indian', 'southindian')} | ${gap('barrierreef', 'indian')} |`);
@@ -241,7 +242,7 @@ describe('gates 명령', () => {
     const r = runCli(['gates', '--max-days', String(cut)]);
     expect(r.exitCode).toBe(1);
     expect(r.stdout).toContain('최대 일수 안에 닿지 못한 전환');
-    expect(r.stdout).toMatch(/남대서양 용승대 → 세인트헬레나 \| 지역 안 \| 닿지 못함 .*위반/);
+    expect(r.stdout).toMatch(/아조레스 해령 → 버뮤다 삼각지대 \| 지역 안 \| 닿지 못함 .*위반/);
     expect(r.stdout).toMatch(/위반 [1-9]/);
     expect(runCli(['gates']).exitCode).toBe(0);
   });
@@ -322,7 +323,7 @@ describe('분포와 이동 명령', () => {
     expect(t).not.toContain('이동 시간');
     const arrivals = simulate({ axis: 'idle', bounty: false, maxDays: 365 }).arrivals;
     const hoursTo = (spot: SpotId) => { const i = arrivals.findIndex(a => a.spot === spot); return arrivals[i].hours - arrivals[i - 1].hours; };
-    expect(t).toContain(`| 인도양 → 남인도양 | ${hoursTo('southindian').toFixed(2)}시간`);
+    expect(t).toContain(`| 인도양 연안 → 남인도양 | ${hoursTo('southindian').toFixed(2)}시간`);
     expect(t).toContain(`| 남대서양 용승대 → 세인트헬레나 | ${hoursTo('sthelena').toFixed(2)}시간`);
   });
 
@@ -340,10 +341,10 @@ describe('분포와 이동 명령', () => {
 
 describe('effects 명령', () => {
   it('효과 옵션을 퍼센트와 배수로 읽고 기본은 효과 없음이다', () => {
-    expect(parseArgs([]).effect).toEqual({ bite: 0, rare: 0, epic: 0, legendary: 0, variant: 0, size: 0, move: 0, named: 0 });
+    expect(parseArgs([]).effect).toEqual({ bite: 0, rare: 0, epic: 0, legendary: 0, variant: 0, size: 0, move: 0, named: 0, night: 0 });
     const o = parseArgs(['effects', '--bite', '10', '--rare', '10', '--epic', '50', '--legendary', '200', '--variant', '100', '--size', '50', '--move', '10', '--named', '20', '--margin', '4', '--units', '1,2,3,4']);
     expect(o.commands).toEqual(['effects']);
-    expect(o.effect).toEqual({ bite: 0.1, rare: 0.1, epic: 0.5, legendary: 2, variant: 1, size: 0.5, move: 0.1, named: 0.2 });
+    expect(o.effect).toEqual({ bite: 0.1, rare: 0.1, epic: 0.5, legendary: 2, variant: 1, size: 0.5, move: 0.1, named: 0.2, night: 0 });
     expect(o.margin).toBe(4);
     expect(o.units).toEqual({ common: 1, rare: 2, epic: 3, legendary: 4 });
   });
@@ -434,11 +435,20 @@ describe('window 명령', () => {
     expect(parseArgs(['window', '--window', '45']).windowMinutes).toBe(45);
   });
 
-  it('등급 미끼 이름이 효과 옵션을 채운다', () => {
+  it('미끼 이름이 효과 옵션을 채운다', () => {
     expect(parseArgs(['window', '--bait', 'rare']).effect.rare).toBeCloseTo(0.4, 12);
     expect(parseArgs(['window', '--bait', 'epic']).effect.epic).toBeCloseTo(0.6, 12);
     expect(parseArgs(['window', '--bait', 'legendary']).effect.legendary).toBeCloseTo(0.8, 12);
+    expect(parseArgs(['window', '--bait', 'night']).effect.night).toBe(1);
+    expect(parseArgs(['window', '--bait', 'night']).axis).toBe('manual');
     expect(() => parseArgs(['window', '--bait', 'common'])).toThrow(/미끼/);
+  });
+
+  it('밤 어종 출현 미끼의 window 출력은 밤 풀 기준과 효과 이름을 낸다', () => {
+    const r = runCli(['window', '--bait', 'night', '--trials', '3']);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain('밤 어종 출현');
+    expect(r.stdout).toContain('낮에도 밤 풀 전체');
   });
 
   it('--window는 window 명령에서만, 0보다 커야 한다', () => {
@@ -475,6 +485,8 @@ describe('recipes 명령', () => {
   it('effects와 window에서는 레시피의 효과를 효과 옵션에 채운다', () => {
     expect(parseArgs(['effects', '--recipe', 'cook-lunch-bite']).effect.bite).toBeCloseTo(0.1, 12);
     expect(parseArgs(['window', '--recipe', 'cook-bait-mutation']).effect.variant).toBeCloseTo(1.5, 12);
+    expect(parseArgs(['window', '--recipe', 'cook-bait-night']).effect.night).toBe(1);
+    expect(parseArgs(['effects', '--recipe', 'cook-bait-night']).axis).toBe('manual');
     expect(parseArgs(['effects', '--recipe', 'cook-lunch-bundle']).effect).toMatchObject({ bite: 0.05, rare: 0.05 });
   });
 

@@ -9,13 +9,12 @@ export const signInAdmin = () => api.admin.signIn();
 export const takeAdminSignInReturn = () => api.admin.takeSignInReturn();
 export const signOutAdmin = () => api.admin.signOut();
 export const readAdminUsers = () => api.admin.users();
+export const readAdminSpamFlags = () => api.admin.spamFlags();
+export const readAdminRecentEvents = () => api.admin.recentEvents();
 export const readAdminDeployHost = () => api.admin.deployHost();
 
-export const readAdminOverview = () => Promise.all([
-  api.admin.users(),
-  api.admin.recentEvents(),
-  api.admin.spamFlags(),
-]);
+/** 개요 탭 통합 조회 */
+export const readAdminOverview = (days = 30) => api.admin.overview(days);
 
 export const readAdminLive = () => api.admin.live();
 
@@ -30,33 +29,17 @@ export const readAdminRetention = () => api.admin.retention();
 /** 끝난 접속 세션(최근 순). userId를 주면 그 사람의 기록만 */
 export const readAdminSessions = (userId: string | undefined, limit: number) => api.admin.sessions(userId, limit);
 
-export const readAdminAntiAbuse = () => Promise.all([
-  api.admin.users(),
-  api.admin.spamFlags(),
-]);
+/** 골드 유입·유출 원장 (최근 7일 이벤트 보관 한도 기준) */
+export const readAdminEconomy = (days: number) => api.admin.economy(days);
 
-export const readAdminEconomy = (days: number) => Promise.all([
-  api.admin.economy(days),
-  api.admin.users(),
-]);
-
-export const readAdminLetters = () => Promise.all([
-  api.admin.letters(),
-  api.admin.users(),
-]);
+export const readAdminLetters = () => api.admin.letters();
 
 /** 변경 기록(최신 버전부터, 철회된 항목 포함) */
 export const readAdminChangelog = () => api.admin.changelog();
 
-export const readAdminChatReports = () => Promise.all([
-  api.admin.chatReports(),
-  api.admin.users(),
-]);
+export const readAdminChatReports = () => api.admin.chatReports();
 
-export const readAdminMails = () => Promise.all([
-  api.admin.sentMails(),
-  api.admin.users(),
-]);
+export const readAdminMails = () => api.admin.sentMails();
 
 /** 우편 미리보기(쓰지 않음) 또는 보내기 */
 export const writeAdminMail = (op: 'preview' | 'send', request: AdminMailRequest) => api.admin.mail(op, request);
@@ -70,10 +53,12 @@ export const writeAdminResetLink = (userId: string) => api.admin.resetLink(userI
 /** 편지 처리 표시 또는 취소 */
 export const writeAdminLetterHandled = (letterId: number, handled: boolean) => api.admin.letterHandled(letterId, handled);
 
-export const readAdminUserDetails = (uid: string) => Promise.all([
-  api.admin.userEvents(uid, 300),
-  api.admin.spamFlags(),
-]);
+/** 대상 계정의 활성 인증 세션 강제 종료 */
+export const writeAdminRevokeSessions = (userId: string) => api.admin.revokeSessions(userId);
+
+export const readAdminUserEvents = (uid: string) => api.admin.userEvents(uid, 300);
+
+export const readAdminUserState = (uid: string) => api.admin.userState(uid);
 
 /** 바운티 퍼널 일계 — events 보관(7일) 안의 범위만 의미가 있다 */
 export const readAdminBountyFunnel = (days: number) => api.admin.bountyFunnel(days);

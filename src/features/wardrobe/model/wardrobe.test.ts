@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { HATS, isAchievementHat } from '../../../game/content/wardrobe';
 import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { clothesChanged, hatCountText, hatDetail, outfitName } from './wardrobe';
@@ -27,8 +28,8 @@ describe('outfitName', () => {
 
 describe('hatCountText', () => {
   it('가진 수와 전체 수를 보인다', () => {
-    expect(hatCountText(seed())).toBe('0/5');
-    expect(hatCountText(seed({ hats: ['cap-red', 'cap-blue'] }))).toBe('2/5');
+    expect(hatCountText(seed())).toBe(`0/${HATS.length}`);
+    expect(hatCountText(seed({ hats: ['cap-red', 'cap-blue'] }))).toBe(`2/${HATS.length}`);
   });
 });
 
@@ -47,5 +48,62 @@ describe('hatDetail', () => {
     const d = hatDetail(seed({ gold: 49_999 }), 'cap-red');
     expect(d.action).toBe('buy');
     expect(d.buyBlock).toBe('골드가 부족해요.');
+  });
+  it('아직 없는 업적 모자는 사기 대신 업적 잠금 상태고 해금 업적과 진척을 돌려준다', () => {
+    const d = hatDetail(seed(), 'straw-hat');
+    expect(d.action).toBe('achievement');
+    expect(d.buyBlock).not.toBeNull();
+    expect(d.unlock).toMatchObject({ achievementName: expect.any(String), condition: expect.any(String) });
+    expect(d.unlock!.target).toBeGreaterThan(0);
+    expect(d.unlock!.current).toBe(0);
+  });
+  it('가진 업적 모자는 쓰기 버튼이고 해금 업적 정보와 출처를 유지한다', () => {
+    const game = seed({ hats: ['straw-hat'] });
+    const d = hatDetail(game, 'straw-hat');
+    expect(d).toMatchObject({
+      owned: true,
+      worn: false,
+      price: 0,
+      source: 'achievement',
+      action: 'wear',
+      buyBlock: null,
+    });
+    expect(d.unlock).toMatchObject({
+      achievementName: '마을 돌연변이 도감',
+      condition: expect.any(String),
+    });
+    expect(d.unlock!.target).toBeGreaterThan(0);
+
+    const worn = hatDetail(seed({ hats: ['straw-hat'], look: { shirt: 0, pants: 0, hat: 'straw-hat' } }), 'straw-hat');
+    expect(worn).toMatchObject({ owned: true, worn: true, source: 'achievement', action: 'unwear' });
+    expect(worn.unlock).toEqual(d.unlock);
+  });
+  it('골드 모자는 보유 여부와 무관하게 source가 gold이고 unlock은 null이다', () => {
+    expect(hatDetail(seed(), 'cap-red')).toMatchObject({ source: 'gold', unlock: null });
+    expect(hatDetail(seed({ hats: ['cap-red'] }), 'cap-red')).toMatchObject({ owned: true, source: 'gold', unlock: null });
+  });
+  it('업적 모자가 아닌 모자는 업적 잠금 상태가 아니다', () => {
+    const hat = HATS.find(h => !isAchievementHat(h))!;
+    expect(hatDetail(seed(), hat.id).action).toBe('buy');
+  });
+  it('미토벌 네임드 업적 모자는 상세의 업적 이름과 조건에서 네임드 실명을 가린다', () => {
+    const locked = hatDetail(seed(), 'megalodon-fin-cap');
+    expect(locked.action).toBe('achievement');
+    expect(locked.unlock).toEqual({
+      achievementName: '태평양 네임드 토벌 5회',
+      condition: '태평양의 네임드를 5회 토벌해요.',
+      current: 0,
+      target: 5,
+    });
+    expect(locked.unlock!.achievementName).not.toContain('메갈로돈');
+    expect(locked.unlock!.condition).not.toContain('메갈로돈');
+
+    const cleared = hatDetail(seed({ clearedNamed: ['pacific-named-megalodon'] }), 'megalodon-fin-cap');
+    expect(cleared.unlock).toEqual({
+      achievementName: '메갈로돈 토벌 5회',
+      condition: '메갈로돈 토벌을 5회 마쳐요.',
+      current: 1,
+      target: 5,
+    });
   });
 });

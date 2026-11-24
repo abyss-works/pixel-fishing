@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { GameState } from '../../../../game/rules/logic';
 import type { GuildEffects } from '../../../../game/rules/guild';
+import type { GuildBonusItem } from '../../../../features/guild/model/guild';
 import { powerHelpText } from '../../../../game/rules/stats';
 import type { Movement } from '../../../../game/rules/stats';
 import type { RegionId } from '../../../../game/content/places';
@@ -28,7 +29,7 @@ import { SCROLL_Y } from '../../../ui/scrollArea';
 // 값은 전부 스탯 선택자에서 온다 — 여기서 규칙을 재계산하지 않는다. 넘치는 내용은 탭 본문 안에서만 굴린다.
 // 고른 해역은 탭 사이에 이어진다 — 요약의 해역 칸이 낚싯대 탭에서 고른 해역을 따른다.
 
-type StatsTab = 'summary' | 'boat' | 'rod' | 'bonus';
+export type StatsTab = 'summary' | 'boat' | 'rod' | 'bonus';
 const TABS: TabDef<StatsTab>[] = [
   { key: 'summary', label: '요약' },
   { key: 'boat', label: '배' },
@@ -44,16 +45,17 @@ interface Props {
   region: RegionId;
   nickname: string | null;
   /** 길드 레벨과 서버가 적용하는 길드 보너스 효과. 길드가 없으면 null */
-  guild: { level: number; effects: GuildEffects } | null;
+  guild: { level: number; effects: GuildEffects; bonuses?: readonly GuildBonusItem[] } | null;
+  initialTab?: StatsTab;
   onClose: () => void;
 }
 
-export default function StatsModal({ game, movement, region, nickname, guild, onClose }: Props) {
+export default function StatsModal({ game, movement, region, nickname, guild, initialTab = 'summary', onClose }: Props) {
   const now = useNow();
-  const { spot: here } = useSpotState();
-  const [tab, setTab] = useState<StatsTab>('summary');
+  const { spot: here, zone: currentZone } = useSpotState();
+  const [tab, setTab] = useState<StatsTab>(initialTab);
   // 처음 해역은 창을 연 순간에 정한다 — 창이 떠 있는 동안 어군 사거리가 바뀌어도 고른 해역을 옮기지 않는다
-  const [start] = useState(() => selectInitialStatsSpotIndex(region, here));
+  const [start] = useState(() => selectInitialStatsSpotIndex(region, here, currentZone));
   const [spotIndex, setSpotIndex] = useState(start);
   const rows = useMemo(() => selectStatsSpotRows(game, movement, now), [game, movement, now]);
   const selected = rows[spotIndex];
@@ -73,15 +75,15 @@ export default function StatsModal({ game, movement, region, nickname, guild, on
     <Modal layer="stage" md height={560} onClose={onClose}>
       <ModalCard title="스탯" onClose={onClose} fixed>
         <div className="flex flex-col gap-3 flex-1 min-h-0">
-          <Inset className="flex items-center gap-3 h-10 px-3 shrink-0 text-sm">
+          <Inset className="flex flex-wrap items-center gap-x-3 gap-y-1 min-h-10 px-3 py-1.5 shrink-0 text-sm">
             <b className="max-w-40 truncate text-text">{nickname ?? '불러오는 중'}</b>
-            <span className="flex items-baseline gap-2 pl-3 border-l border-line">
+            <span className="flex items-baseline gap-1.5 whitespace-nowrap">
               <span className="text-xs text-text-dim">배</span><span>{selected.data.boatName}</span>
             </span>
-            <span className="flex items-baseline gap-2 pl-3 border-l border-line">
+            <span className="flex items-baseline gap-1.5 whitespace-nowrap">
               <span className="text-xs text-text-dim">낚싯대</span><span className="pf-accent text-xs">Lv.{game.rod}</span>
             </span>
-            <span className="flex items-baseline gap-2 pl-3 border-l border-line">
+            <span className="flex items-baseline gap-1.5 whitespace-nowrap">
               <span className="text-xs text-text-dim"><Tip text={powerHelpText()}>파워</Tip></span>
               <span className="pf-accent text-xs text-gold">{selected.data.currentPower}</span>
             </span>
