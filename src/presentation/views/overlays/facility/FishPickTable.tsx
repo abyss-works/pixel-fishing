@@ -36,8 +36,8 @@ export default function FishPickTable({ rows, expanded, onToggleExpand, onToggle
   const checked = new Set(rows.flatMap(row => row.selected.map(inst => inst.uid)));
   const chips = gradePickChips(rows);
   return (
-    <>
-      <div role="group" aria-label="등급 일괄 선택" className="flex flex-wrap items-center gap-1.5 mb-2">
+    <div className="flex flex-col gap-2">
+      <div role="group" aria-label="등급 일괄 선택" className="flex flex-wrap items-center gap-1.5">
         <span className="text-2xs text-text-dim">등급 일괄 선택</span>
         {chips.map(chip => (
           <ToggleChip key={chip.grade} pressed={chip.allOn} disabled={chip.uids.length === 0}
@@ -131,6 +131,6 @@ export default function FishPickTable({ rows, expanded, onToggleExpand, onToggle
           })}
         </tbody>
       </DataTable>
-    </>
+    </div>
   );
 }
