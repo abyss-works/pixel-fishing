@@ -13,7 +13,7 @@ export type GlyphId =
   | 'letter' | 'key' | 'ticket' | 'download' | 'upload' | 'exit' | 'close'
   | 'plus' | 'minus'
   | 'compass' | 'backpack' | 'book' | 'question' | 'gear' | 'people' | 'flag'
-  | 'crown' | 'sparkle' | 'warn' | 'menu' | 'lunch' | 'bait'
+  | 'crown' | 'sparkle' | 'warn' | 'menu' | 'grid' | 'lunch' | 'bait'
   | 'clock' | 'target' | 'gem';
 
 const GLYPHS: Record<GlyphId, { cells: Cell[]; holes?: Cell[] }> = {
@@ -31,6 +31,8 @@ const GLYPHS: Record<GlyphId, { cells: Cell[]; holes?: Cell[] }> = {
   },
   // 메뉴 — 가로 막대 셋 (햄버거)
   menu: { cells: [[1, 2, 10, 2], [1, 5, 10, 2], [1, 8, 10, 2]] },
+  // 격자 — 2×2 네모 칸 (카드 보기 전환)
+  grid: { cells: [[1, 1, 4, 4], [7, 1, 4, 4], [1, 7, 4, 4], [7, 7, 4, 4]] },
   // 왕관 — 뾰족 셋 + 띠 + 받침, 가운데 보석 자리 구멍 (가장 큰 개체)
   crown: {
     cells: [[1, 2, 2, 2], [5, 1, 2, 2], [9, 2, 2, 2], [1, 4, 10, 3], [2, 7, 8, 2], [1, 9, 10, 2]],

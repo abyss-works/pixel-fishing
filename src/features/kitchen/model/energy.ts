@@ -7,10 +7,12 @@ import type { RarityId } from '../../../game/content/rarity';
 import { SPOTS } from '../../../game/content/spots';
 import type { SpotId } from '../../../game/content/spots';
 import { energyGain, energyTargetOf, energyTargetRows, energyYield, canExtractEnergy } from '../../../game/rules/cooking';
-import { instanceFish } from '../../../game/rules/logic';
+import { REJECT_TEXT, instanceFish } from '../../../game/rules/logic';
 import type { FishInstance, GameState } from '../../../game/rules/logic';
 import type { RuleCheck } from '../../../game/rules/rules';
 import { gradeName } from '../../../shared/lib/gradeName';
+import { energyTabLock } from '../../display/model/menuLock';
+import type { AccountLockState } from '../../display/model/menuLock';
 import { selectSalePreview } from '../../inventory/model/catalog';
 import type { SaleRow } from '../../inventory/model/catalog';
 
@@ -107,4 +109,25 @@ export const energyRowValue = (row: SaleRow): number => energyYield(row.selected
 /** 결과 한 줄 — 얻은 등급만 등급 순서로. count는 저장 단위다 */
 export function energyResultRows(byGrade: Record<RarityId, number>): { grade: RarityId; count: number }[] {
   return RARITY_ORDER.filter(g => byGrade[g] > 0).map(grade => ({ grade, count: byGrade[grade] }));
+}
+
+export type BagEnergyEntry =
+  | { ok: true }
+  | { ok: false; lines: string[] };
+
+/** 가방 하단 기운 얻기 진입 버튼 활성 조건 — 계정 상태 잠금을 먼저 보고, 위치와 배 단계는 게임 규칙 판정을 따른다 */
+export function selectBagEnergyEntry(
+  game: Pick<GameState, 'boat' | 'location'>,
+  account: AccountLockState,
+): BagEnergyEntry {
+  const lock = energyTabLock(account, game.boat);
+  if (lock.kind === 'guest' || lock.kind === 'unverified') {
+    return { ok: false, lines: lock.lines };
+  }
+  const check = canExtractEnergy(game, false);
+  if (check.ok) return { ok: true };
+  if (check.reason === 'energy-locked' && lock.kind === 'progress') {
+    return { ok: false, lines: lock.lines };
+  }
+  return { ok: false, lines: [REJECT_TEXT[check.reason]] };
 }

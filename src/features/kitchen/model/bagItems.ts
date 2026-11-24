@@ -41,7 +41,7 @@ const SLOT_TEXT: Readonly<Record<SlotKey, { verb: '먹기' | '쓰기'; swapTitle
 };
 
 /** stored는 저장 단위 수량이다(화면 단위의 10배). 아이템 행의 count와 단위가 다르다 */
-export interface EnergyCell { grade: RarityId; label: string; stored: number }
+export interface EnergyCell { id: string; grade: RarityId; label: string; stored: number }
 
 export interface ItemRow {
   recipe: Recipe;
@@ -54,8 +54,12 @@ export interface ItemRow {
   /** 효과 줄과 적용 낚시, 지속 안내 - 이름의 툴팁이 보인다 */
   effects: RecipeEffectLine[];
   note: string;
+  /** 총 지속 시간(분) — 미끼는 사르가소의 그물망 등 보유 유물의 배수를 반영한다 */
+  durationMinutes: number;
   /** 지금 슬롯에 장착돼 효과를 내고 있는가 */
   active: boolean;
+  /** 활성 중일 때 남은 시간(분). 비활성이면 null */
+  remainingMinutes: number | null;
 }
 
 export type ItemSectionView =
@@ -73,20 +77,27 @@ export function selectItemSection(game: GameState, now: string, account: Account
     return { state: 'locked', empty, lines: lock.lines };
   }
   const items = settleCooking(game, now).items;
-  const activeLunchId = activeSlot(game, 'lunch', now)?.recipe.id;
-  const activeBaitIds = new Set(
-    (['bait', 'bait2'] as const)
-      .map(k => activeSlot(game, k, now)?.recipe.id)
-      .filter((id): id is string => id !== undefined),
-  );
+  const activeRemainingMs = new Map<string, number>();
+  for (const k of ['lunch', 'bait', 'bait2'] as const) {
+    const entry = activeSlot(game, k, now);
+    if (!entry) continue;
+    const prev = activeRemainingMs.get(entry.recipe.id) ?? 0;
+    if (entry.remainingMs > prev) activeRemainingMs.set(entry.recipe.id, entry.remainingMs);
+  }
   const rows = (slot: SlotKey): ItemRow[] => recipesOfKind(slot).filter(r => (items[r.id] ?? 0) > 0)
-    .map(recipe => ({
-      recipe, label: recipeLabel(recipe), title: recipeTitle(recipe), count: items[recipe.id], slot, verb: SLOT_TEXT[slot].verb,
-      effects: recipeEffectLines(recipe), note: recipeEffectNote(slot),
-      active: slot === 'lunch' ? recipe.id === activeLunchId : activeBaitIds.has(recipe.id),
-    }));
+    .map(recipe => {
+      const remMs = activeRemainingMs.get(recipe.id);
+      const active = remMs !== undefined;
+      return {
+        recipe, label: recipeLabel(recipe), title: recipeTitle(recipe), count: items[recipe.id], slot, verb: SLOT_TEXT[slot].verb,
+        effects: recipeEffectLines(recipe), note: recipeEffectNote(slot),
+        durationMinutes: slotDurationMs(recipe, game) / MIN_MS,
+        active,
+        remainingMinutes: active ? remMs / MIN_MS : null,
+      };
+    });
   const energy = RARITY_ORDER.map((grade): EnergyCell => (
-    { grade, label: energyLabel(grade), stored: items[ENERGY_ITEM_IDS[grade]] ?? 0 }));
+    { id: ENERGY_ITEM_IDS[grade], grade, label: energyLabel(grade), stored: items[ENERGY_ITEM_IDS[grade]] ?? 0 }));
   const lunch = rows('lunch');
   const bait = rows('bait');
   return { state: 'open', energy, lunch, bait, empty: lunch.length === 0 && bait.length === 0 && energy.every(e => e.stored === 0) };

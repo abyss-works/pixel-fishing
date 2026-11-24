@@ -6,7 +6,7 @@ import { FISH, newState } from '../../../../game/rules/logic';
 import type { FishInstance, GameState } from '../../../../game/rules/logic';
 import type { BaseId } from '../../../../game/content/places';
 import type { SpotId } from '../../../../game/content/spots';
-import { COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, toStoredEnergy } from '../../../../game/content/cooking';
+import { AUTO_ENERGY_BOAT, COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, toStoredEnergy } from '../../../../game/content/cooking';
 import { resetBagView } from '../../game/tabs/bag/bagView';
 import { resetKeyScopes } from '../../../ui/hotkeys';
 import { fmtFishCount, fmtGold } from '../../../ui/format';
@@ -24,11 +24,12 @@ const inst = (uid: string, fishId: string, over: Partial<FishInstance> = {}): Fi
   ({ uid, fishId, form: 'normal', size: 20, caughtAt: null, spot: null, judgment: null, locked: false, ...over });
 const inSpot = (uid: string, spot: SpotId, over: Partial<FishInstance> = {}): FishInstance => inst(uid, fishIn(spot).id, over);
 
-function show(game: GameState, opts: { base?: BaseId; accountState?: AccountLockState; sellBonus?: number; result?: { type: string; [k: string]: unknown } } = {}) {
+function show(game: GameState, opts: { panel?: 'sell' | 'energy'; base?: BaseId; accountState?: AccountLockState; sellBonus?: number; result?: { type: string; [k: string]: unknown } } = {}) {
   const dispatch = vi.fn(() => ({ status: 'ok' as const, state: game, result: (opts.result ?? { type: 'none' }) as never }));
   const setToast = vi.fn();
   const onClose = vi.fn();
-  render(<FacilityModal panel="sell" base={opts.base ?? 'home'} accountState={opts.accountState} sellBonus={opts.sellBonus ?? 0} game={game}
+  const panel = opts.panel ?? 'sell';
+  render(<FacilityModal panel={panel} base={panel === 'energy' ? opts.base : (opts.base ?? 'home')} accountState={opts.accountState} sellBonus={opts.sellBonus ?? 0} game={game}
                         dispatch={dispatch} setToast={setToast} onClose={onClose} />);
   return { dispatch, setToast, onClose };
 }
@@ -316,7 +317,7 @@ describe('기운 얻기 탭', () => {
     const button = screen.getByRole('button', { name: '기운 얻기 (3마리)' });
     expect(button).toBeDisabled();
     fireEvent.mouseEnter(button.parentElement!);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('집이나 항구에서만 할 수 있어요.');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('집이나 항구 또는 가공 플랜트선에서만 할 수 있어요.');
   });
 
   it('잠근 개체 안내 문단은 없고 잠긴 행의 자물쇠 툴팁이 알린다', () => {
@@ -433,6 +434,32 @@ describe('기운 얻기 탭의 잠금', () => {
   it('계정이고 해금했으면 잠기지 않는다', () => {
     show(seed({ boat: COOKING_UNLOCK_BOAT }));
     expect(tab('기운 얻기')).not.toHaveAttribute('aria-disabled');
+  });
+
+  it('거점에서 기운 얻기 진입(panel="energy")으로 열면 기운 얻기 탭이 먼저 열리고 판매 탭도 쓸 수 있다', () => {
+    const sampleBag = [inSpot('a1', 'pond'), inSpot('a2', 'pond'), inSpot('b1', 'sea')];
+    show(seed({ bag: sampleBag }), { panel: 'energy', base: 'harbor' });
+    expect(title()).toBe('어시장');
+    expect(tab('기운 얻기')).toHaveClass('active');
+    expect(tab('판매')).not.toHaveAttribute('aria-disabled');
+    expect(screen.getByRole('button', { name: '기운 얻기 (3마리)' })).toBeEnabled();
+  });
+
+  it('바다에서 열릴 때는 제목이 기운 얻기이고 판매 탭은 잠기며 기운 얻기 탭만 활성된다', () => {
+    const sampleBag = [inSpot('a1', 'pond'), inSpot('a2', 'pond'), inSpot('b1', 'sea')];
+    const seaGame = seed({ boat: AUTO_ENERGY_BOAT, bag: sampleBag, location: { kind: 'region', id: 'world' } });
+    const { dispatch } = show(seaGame, { panel: 'energy' });
+    expect(title()).toBe('기운 얻기');
+    const sell = tab('판매');
+    const energy = tab('기운 얻기');
+    expect(sell).toHaveAttribute('aria-disabled', 'true');
+    expect(energy).toHaveClass('active');
+    fireEvent.mouseEnter(sell.parentElement!);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('집이나 항구에서만 팔 수 있어요.');
+    fireEvent.click(sell);
+    expect(energy).toHaveClass('active');
+    fireEvent.click(screen.getByRole('button', { name: '기운 얻기 (3마리)' }));
+    expect(dispatch).toHaveBeenCalledWith({ type: 'extractEnergy', uids: ['a1', 'a2', 'b1'] });
   });
 });
 
