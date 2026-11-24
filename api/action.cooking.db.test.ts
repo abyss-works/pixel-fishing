@@ -1,7 +1,7 @@
 // 액션 경로의 요리 — 실제 Postgres에서 슬롯 효과가 캐치 경로(빠른 경로, 리듀서 경로)에 같게 걸리는지,
 // 기운 얻기, 해역별 덮어쓰기, 조리, 먹기가 서버 시각과 서버 난수로 저장되는지, 게스트가 거부되는지 검사한다.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { COOKING_UNLOCK_BOAT, COOK_KIND_RULES, ENERGY_ITEM_IDS, recipeById, recipeCostStored } from '../src/game/content/cooking.js';
+import { AUTO_ENERGY_BOAT, COOKING_UNLOCK_BOAT, COOK_KIND_RULES, ENERGY_ITEM_IDS, recipeById, recipeCostStored } from '../src/game/content/cooking.js';
 import { SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
 import type { GameState } from '../src/game/rules/logic.js';
 import { callAction, captureRealClock, dumpUser, fish, seedUser, seededRandom, startActionEnv, testUid, userToken } from './_dbTest/actionHarness.js';
@@ -158,15 +158,46 @@ describe('요리 액션', () => {
       expect((await stored(uid)).data.items).toEqual({ [ENERGY.common]: 10 });
     });
 
-    it('바다에서는 not-at-sale-base, 해금 전에는 energy-locked로 거부한다', async () => {
+    it('가공 플랜트선 이상을 보유한 비게스트는 바다에서도 기운을 얻고 가방 개체가 줄며 기운 아이템이 증가한다', async () => {
+      const common = fish('crucian');
+      const rare = fish('carp');
+      const locked = fish('crucian', { locked: true });
+      const uid = await seed({
+        state: {
+          boat: AUTO_ENERGY_BOAT,
+          location: { kind: 'region', id: 'world' },
+          bag: [common, rare, locked],
+          items: { [ENERGY.common]: 5 },
+        },
+      });
+      const res = await callAction(userToken(uid), { type: 'extractEnergy', uids: [common.uid, rare.uid, locked.uid] });
+      expect(res.status).toBe(200);
+      expect((res.body as { result: unknown }).result).toEqual({
+        type: 'extract', energy: { common: 10, rare: 10, epic: 0, legendary: 0 },
+      });
+      expect(await bagUids(uid)).toEqual([locked.uid]);
+      expect((await stored(uid)).data.items).toEqual({ [ENERGY.common]: 15, [ENERGY.rare]: 10 });
+      expect((await eventsOf(uid)).map(e => e.type)).toEqual(['extractEnergy']);
+    });
+
+    it('비플랜트선이면 바다에서 not-at-sale-base, 해금 전에는 energy-locked로 거부한다', async () => {
       const f = fish('crucian');
       const sea = await seed({ state: { boat: BOAT, location: { kind: 'region', id: 'world' }, bag: [f] } });
       expect(await callAction(userToken(sea), { type: 'extractEnergy', uids: [f.uid] }))
         .toMatchObject({ status: 422, body: { error: 'not-at-sale-base' } });
-      const early = await seed({ state: { boat: BOAT - 1, location: HOME, bag: [fish('crucian')] } });
-      expect(await callAction(userToken(early), { type: 'extractEnergy', uids: [f.uid] }))
+      const f2 = fish('crucian');
+      const nearPlant = await seed({ state: { boat: AUTO_ENERGY_BOAT - 1, location: { kind: 'region', id: 'world' }, bag: [f2] } });
+      expect(await callAction(userToken(nearPlant), { type: 'extractEnergy', uids: [f2.uid] }))
+        .toMatchObject({ status: 422, body: { error: 'not-at-sale-base' } });
+      const f3 = fish('crucian');
+      const early = await seed({ state: { boat: BOAT - 1, location: HOME, bag: [f3] } });
+      expect(await callAction(userToken(early), { type: 'extractEnergy', uids: [f3.uid] }))
         .toMatchObject({ status: 422, body: { error: 'energy-locked' } });
       expect(await bagUids(sea)).toEqual([f.uid]);
+      expect((await stored(sea)).data.items).toEqual({});
+      expect(await eventsOf(sea)).toEqual([]);
+      expect(await bagUids(nearPlant)).toEqual([f2.uid]);
+      expect((await stored(nearPlant)).data.items).toEqual({});
     });
   });
 
@@ -296,5 +327,18 @@ describe('요리 액션', () => {
     }
     expect((await stored(uid)).data).toEqual(before.data);
     expect(await bagUids(uid)).toEqual([f.uid]);
+  });
+
+  it('가공 플랜트선을 보유한 게스트도 바다에서 기운 얻기를 account-only로 거부당한다', async () => {
+    const f = fish('crucian');
+    const uid = await seed({
+      email: null, state: { boat: AUTO_ENERGY_BOAT, location: { kind: 'region', id: 'world' }, bag: [f] },
+    });
+    const before = await stored(uid);
+    expect(await callAction(userToken(uid), { type: 'extractEnergy', uids: [f.uid] }))
+      .toMatchObject({ status: 403, body: { error: 'account-only' } });
+    expect((await stored(uid)).data).toEqual(before.data);
+    expect(await bagUids(uid)).toEqual([f.uid]);
+    expect(await eventsOf(uid)).toEqual([]);
   });
 });

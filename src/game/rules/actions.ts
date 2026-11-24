@@ -79,7 +79,7 @@ export type GameAction =
   | { type: 'debugBatch'; steps: DebugStepInput[] }                  // 개발 도구 명령 일괄 실행 — 단일 트랜잭션으로 순서대로 적용한다
   | { type: 'debugSnapshot' }                                        // 개발 도구 스냅샷 저장용 수배 DB 행 읽기 — 운영 서버는 거부한다
   | { type: 'dismissBaitRefund' }                            // 미끼 환불 안내를 닫는다 — 영수증을 지운다
-  | { type: 'extractEnergy'; uids: string[] }                // 기운 얻기 — 판매 시설이 있는 거점(집, 항구)에서 가방 개체를 등급별 기운으로 바꾼다
+  | { type: 'extractEnergy'; uids: string[] }                // 기운 얻기 — 거점이나 가공 플랜트선에서 가방 개체를 등급별 기운으로 바꾼다
   | { type: 'setEnergyTarget'; spot: SpotId; on: boolean }   // 기운 얻기 기본 선택의 해역별 덮어쓰기 — 고른 값은 기본값과 같아도 남는다
   | { type: 'resetEnergyTargets' }                           // 덮어쓰기를 모두 지워 기본값으로 되돌린다
   | { type: 'cook'; recipe: string; count: number }          // 조리 시작 — 집 거점, 기운 즉시 차감, 추가 완성은 서버가 추첨한다
@@ -708,7 +708,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       // 기운 얻기 — 대상 개체와 등급은 서버가 정한다(클라가 보낸 uid만 받는다). 잠금, 전시, 가방에 없는 개체는 제외한다.
       // 도감과 명성은 잡을 때 이미 남았으므로 건드리지 않는다.
       if (!Array.isArray(action.uids) || action.uids.some(u => typeof u !== 'string')) return { ok: false, error: 'bad-request' };
-      const check = canExtractEnergy(state);
+      const check = canExtractEnergy(state, deps.guest);
       if (!check.ok) return { ok: false, error: check.reason };
       const gain = energyGain(state, action.uids);
       if (gain.uids.length === 0) return { ok: true, state, result: { type: 'extract', energy: gain.byGrade }, events: [] };

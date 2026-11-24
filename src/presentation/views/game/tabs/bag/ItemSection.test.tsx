@@ -34,6 +34,24 @@ describe('아이템 섹션 목록', () => {
     expect(screen.getByRole('group', { name: '생명의 기운(전설) 1개' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '가루디야 먹기' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '롱페퍼 미끼(희귀) 쓰기' })).toBeInTheDocument();
+    expect(document.querySelectorAll('canvas').length).toBeGreaterThanOrEqual(6);
+  });
+
+  it('도시락과 미끼 카드에 총 지속 시간을 인라인으로 보이고 활성 중인 도시락과 미끼 모두 사용 중 배지와 남은 시간을 보인다', () => {
+    const slots = {
+      lunch: { id: 'cook-lunch-bite', endsAt: at(8 * HOUR + 42 * 60_000) },
+      bait: { id: 'cook-bait-rare', endsAt: at(4 * 60_000 + 18_000) },
+    };
+    show(game({
+      artifacts: ['sargasso-net'],
+      items: { 'cook-lunch-bite': 1, 'cook-lunch-rare': 1, 'cook-bait-rare': 1, 'cook-bait-epic': 1 },
+      slots,
+    }));
+    expect(screen.getAllByText('사용 중')).toHaveLength(2);
+    expect(document.body.textContent).toContain('지속 9시간');
+    expect(document.body.textContent).toContain('남음 8시간 42분');
+    expect(document.body.textContent).toContain('지속 2분 30초');
+    expect(document.body.textContent).toContain('남음 4분 18초');
   });
 
   it('기운 칸은 소수 첫째 자리가 0이면 정수로, 아니면 소수로, 천 단위는 쉼표로 쓴다(접근성 이름 포함)', () => {

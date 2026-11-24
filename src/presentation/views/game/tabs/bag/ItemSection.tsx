@@ -93,35 +93,47 @@ function SwapDialog({ confirm, onConfirm, onCancel }: {
   );
 }
 
-/** 도시락 또는 미끼 행 묶음 - 이름 툴팁이 효과를 보이고, 행 끝 버튼이 먹기(쓰기)를 한다 */
-function ItemRows({ title, hint, rows, busy, onEat }: {
+/** 도시락 또는 미끼 카드 격자 - 이름 툴팁이 효과를 보이고, 총 지속 시간과 활성 상태(배지·남은 시간)를 카드 안에 둔다 */
+function ItemCards({ title, hint, rows, busy, onEat }: {
   title: string; hint: string; rows: readonly ItemRow[]; busy: boolean; onEat: (row: ItemRow) => void;
 }) {
   if (rows.length === 0) return null;
   return (
     <div className="mb-2">
       <Subheading><Tip text={hint}>{title}</Tip></Subheading>
-      <Inset divided>
+      <div className="grid grid-cols-2 gap-2">
         {rows.map(row => (
-          <div key={row.recipe.id} className="grid grid-cols-[16px_minmax(0,1fr)_auto_auto] items-center gap-2 px-2 py-1.5 text-sm">
-            <ItemSprite kind={row.slot} id={row.recipe.id} preset="row" />
-            <div className="flex items-center gap-1.5 min-w-0">
-              <Tip text={<RecipeEffectTip label={row.label} effects={row.effects} note={row.note} />} className="block truncate min-w-0">
-                <GradeName name={row.title.name} grade={row.title.grade} />
-              </Tip>
-              {row.slot === 'bait' && row.active && <Badge tone="accent" size="2xs">사용 중</Badge>}
+          <Inset key={row.recipe.id} borderless
+                 className={cx('p-2 flex flex-col gap-1.5 min-w-0 border', row.active ? 'border-accent' : 'border-line')}>
+            <div className="flex items-start gap-2 min-w-0">
+              <ItemSprite kind={row.slot} id={row.recipe.id} preset="list" className="shrink-0" />
+              <div className="min-w-0 flex-1 flex flex-col gap-0.5">
+                <Tip text={<RecipeEffectTip label={row.label} effects={row.effects} note={row.note} />}
+                     className="inline-block text-xs leading-snug break-keep">
+                  <GradeName name={row.title.name} grade={row.title.grade} />
+                </Tip>
+                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-2xs text-text-dim">
+                  <span>지속 <span className="pf-accent text-text">{fmtMinutes(row.durationMinutes)}</span></span>
+                  {row.active && <Badge tone="accent" size="2xs">사용 중</Badge>}
+                </div>
+                {row.active && row.remainingMinutes !== null && (
+                  <div className="text-2xs text-accent pf-accent">남음 {fmtMinutes(row.remainingMinutes)}</div>
+                )}
+              </div>
             </div>
-            <span className="pf-accent text-text-dim whitespace-nowrap">×{row.count}</span>
-            <Button size="sm" aria-label={`${row.label} ${row.verb}`} disabled={busy} onClick={() => onEat(row)}>{row.verb}</Button>
-          </div>
+            <div className="mt-auto pt-1.5 border-t border-line-dim flex items-center justify-between gap-2">
+              <span className="pf-accent text-xs text-text-dim whitespace-nowrap">×{row.count}</span>
+              <Button size="sm" aria-label={`${row.label} ${row.verb}`} disabled={busy} onClick={() => onEat(row)}>{row.verb}</Button>
+            </div>
+          </Inset>
         ))}
-      </Inset>
+      </div>
     </div>
   );
 }
 
 /**
- * 아이템 섹션 - 생명의 기운 4칸 격자, 도시락과 미끼 행. 먹기(쓰기)는 어디서나 한다.
+ * 아이템 섹션 - 생명의 기운 4장 카드, 도시락과 미끼 카드 격자. 먹기(쓰기)는 어디서나 한다.
  * 이미 효과가 든 슬롯에 넣으려면(같은 것도 같다) 교체 확인 창을 거친다. 요리를 쓸 수 없는 동안(해금 전, 게스트)은
  * 세 묶음 자리를 잠금으로 보이고 빈 상태 안내를 둔다. 판정과 문안은 기능 모델이 정한다.
  */
@@ -183,21 +195,24 @@ export default function ItemSection({ game, accountState, dispatch, setToast }: 
       <PageTitle>아이템</PageTitle>
       {view.empty ? <Note>{NO_ITEMS_TEXT}</Note> : (
         <>
-          <ItemRows title={ITEM_GROUPS[0].title} hint={ITEM_GROUP_HINT.lunch} rows={view.lunch} busy={busy} onEat={press} />
-          <ItemRows title={ITEM_GROUPS[1].title} hint={ITEM_GROUP_HINT.bait} rows={view.bait} busy={busy} onEat={press} />
+          <ItemCards title={ITEM_GROUPS[0].title} hint={ITEM_GROUP_HINT.lunch} rows={view.lunch} busy={busy} onEat={press} />
+          <ItemCards title={ITEM_GROUPS[1].title} hint={ITEM_GROUP_HINT.bait} rows={view.bait} busy={busy} onEat={press} />
           <div className="mb-2">
             <Subheading>
               <Tip text={ITEM_GROUP_HINT.energy}>{ITEM_GROUPS[2].title}</Tip>
             </Subheading>
-            <Inset className="grid grid-cols-4 py-2">
-              {view.energy.map((cell, i) => (
-                <div key={cell.grade} role="group" aria-label={`${cell.label} ${formatEnergy(cell.stored)}개`}
-                     className={`flex flex-col items-center gap-0.5 ${i > 0 ? 'border-l border-line' : ''}`}>
-                  <span className="text-xs" aria-hidden="true"><RarityText rarity={cell.grade} /></span>
-                  <span className="pf-accent text-base" aria-hidden="true">{formatEnergy(cell.stored)}</span>
-                </div>
+            <div className="grid grid-cols-2 gap-2">
+              {view.energy.map(cell => (
+                <Inset key={cell.grade} role="group" aria-label={`${cell.label} ${formatEnergy(cell.stored)}개`}
+                       className="flex items-center gap-2 p-2 min-w-0">
+                  <ItemSprite kind="energy" id={cell.id} preset="list" className="shrink-0" />
+                  <div className="min-w-0 flex flex-col">
+                    <span className="text-xs leading-tight" aria-hidden="true"><RarityText rarity={cell.grade} /></span>
+                    <span className="pf-accent text-base leading-tight break-words" aria-hidden="true">{formatEnergy(cell.stored)}</span>
+                  </div>
+                </Inset>
               ))}
-            </Inset>
+            </div>
           </div>
         </>
       )}

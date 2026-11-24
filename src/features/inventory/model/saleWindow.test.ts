@@ -4,7 +4,7 @@ import { FISH, newState } from '../../../game/rules/logic';
 import type { FishInstance, GameState } from '../../../game/rules/logic';
 import { RARITY_ORDER } from '../../../game/content/rarity';
 import { BASE_PACKS } from '../../../game/world';
-import { LOCKED_PICK_TIP, SALE_TABS, gradePickChips, saleWindowTitle, selectSaleTab } from './saleWindow';
+import { LOCKED_PICK_TIP, SALE_TABS, SEA_SELL_LOCK_TEXT, gradePickChips, saleWindowTitle, selectSaleTab, sellTabLock } from './saleWindow';
 
 const fish = FISH.find(f => f.id === 'crucian')!;
 const inst = (uid: string, over: Partial<FishInstance> = {}): FishInstance =>
@@ -26,6 +26,13 @@ describe('판매 창 제목', () => {
       expect(saleWindowTitle(pack.id), pack.id).toBe(card.windowTitle);
       expect(saleWindowTitle(pack.id), pack.id).toBe(card.label({ rod: 1, boatName: '' }).title);
     }
+  });
+
+  it('거점 밖(바다)에서는 제목이 기운 얻기이고 판매 탭은 잠긴다', () => {
+    expect(saleWindowTitle(undefined)).toBe('기운 얻기');
+    expect(sellTabLock(undefined)).toEqual([SEA_SELL_LOCK_TEXT]);
+    expect(sellTabLock('home')).toBeNull();
+    expect(sellTabLock('harbor')).toBeNull();
   });
 });
 

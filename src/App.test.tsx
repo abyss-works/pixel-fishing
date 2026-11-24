@@ -1105,29 +1105,28 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     expect(active()).toBe('설정');
   });
 
-  it('Tab은 가방 물고기 섹션에서 목록 ↔ 카드 서브탭을 순환한다', () => {
+  it('Tab은 가방에서 물고기 → 아이템 → 유물 서브탭을 순환한다', () => {
     seed({});
     render(<App />);
     const pressed = () => document.querySelector('button[aria-pressed="true"]')?.textContent ?? '';
     fireEvent.keyDown(document, { key: '2' });
-    expect(pressed()).toBe('목록');
+    expect(pressed()).toBe('물고기');
     fireEvent.keyDown(document, { key: 'Tab' });
-    expect(pressed()).toBe('카드');
+    expect(pressed()).toBe('아이템');
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(pressed()).toBe('유물');
     fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
-    expect(pressed()).toBe('목록');
+    expect(pressed()).toBe('아이템');
     const active = document.querySelector('.pf-tabbar button.active')?.textContent ?? '';
     expect(active).toContain('가방'); // 메뉴 탭은 안 바뀐다
   });
 
-  it('가방 아이템·유물 섹션에는 서브탭이 없어 Tab이 아무것도 하지 않는다', () => {
-    seed({ items: { 'bait-common': 1 } });
+  it('가방 물고기 섹션의 보기 전환 아이콘으로 목록 ↔ 카드를 전환한다', () => {
+    seed({});
     render(<App />);
     fireEvent.keyDown(document, { key: '2' });
-    fireEvent.keyDown(document, { key: '2' }); // 아이템
-    expect(screen.getByText('가진 아이템이 없어요.')).toBeInTheDocument();
-    fireEvent.keyDown(document, { key: 'Tab' });
-    expect(screen.getByText('가진 아이템이 없어요.')).toBeInTheDocument();
-    expect(document.querySelector('button[aria-pressed]')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '카드 보기' }));
+    expect(screen.getByRole('button', { name: '목록 보기' })).toBeInTheDocument();
   });
 
   it('가방 유물 섹션 — 보유 유물의 등급·효과를 보이고, 없으면 얻는 곳을 안내한다', () => {
@@ -1314,7 +1313,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
            dex: { carp: { normal: rec(2), variant: rec(1) }, crucian: { normal: rec(5) } } });
     render(<App />);
     clickTab(/^가방/);
-    clickTab('카드'); // 물고기 섹션의 목록/카드 서브탭
+    fireEvent.click(screen.getByRole('button', { name: '카드 보기' })); // 물고기 섹션의 목록/카드 보기 전환 아이콘
     expect(screen.getByLabelText('잉어 일반 2마리 돌연변이 1마리 보유')).toBeInTheDocument();
     expect(screen.getAllByText('???').length).toBeGreaterThan(0); // 미발견 종
     expect(screen.queryByText('30G')).not.toBeInTheDocument();    // 카드엔 값을 안 건다
@@ -1342,7 +1341,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     });
     render(<App />);
     clickTab(/^가방/);
-    clickTab('카드');
+    fireEvent.click(screen.getByRole('button', { name: '카드 보기' }));
     const names = screen.getAllByText(/^(잉어|붕어|\?\?\?)$/).map(e => e.textContent);
     expect(names.slice(0, 3)).toEqual(['잉어', '붕어', '???']); // 보유 → 발견 → 미발견
   });
@@ -1411,6 +1410,17 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     fireEvent.click(screen.getByLabelText('자동 잠금'));
     expect(screen.getByText(/정리할 잠금이 없어요/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '정리' })).toBeNull();
+  });
+
+  it('가공 플랜트선 보유 시 바다에서도 가방 하단 기운 얻기 버튼으로 기운 얻기 창을 연다', () => {
+    seed({ boat: MAX_BOAT, location: { kind: 'region', id: 'world' }, bag: [inst('crucian')] });
+    render(<App />);
+    clickTab(/^가방/);
+    fireEvent.click(screen.getByRole('button', { name: '기운 얻기' }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('heading', { level: 3, name: '기운 얻기' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: '판매' })).toHaveAttribute('aria-disabled', 'true');
+    expect(within(dialog).getByRole('button', { name: '기운 얻기 (1마리)' })).toBeEnabled();
   });
 });
 

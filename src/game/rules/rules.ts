@@ -65,7 +65,7 @@ export type RejectReason =
   | 'bag-full' // 가방이 상한이라 전시 개체를 회수할 수 없다
   | 'item-not-owned' // 먹으려는 요리가 가방에 없다
   | 'not-at-home' // 집 거점에서만 하는 동작(조리)을 집 밖에서 요청했다
-  | 'not-at-sale-base' // 판매 시설이 있는 거점(집, 항구)에서만 하는 동작(기운 얻기)을 그 밖에서 요청했다
+  | 'not-at-sale-base' // 판매 시설이 있는 거점(집, 항구) 또는 가공 플랜트선에서 하는 동작(기운 얻기)을 그 밖에서 요청했다
   | 'cooking-locked' // 요리 해금 배 단계 미달 — 조리와 먹기
   | 'energy-locked' // 요리 해금 배 단계 미달 — 기운 얻기
   | 'not-enough-energy' // 조리에 필요한 기운이 모자란다
@@ -118,7 +118,7 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'bag-full': '가방이 가득 차서 회수할 수 없어요. 물고기를 팔거나 놓아준 뒤 다시 해 보세요.',
   'item-not-owned': '가방에 이 요리가 없어요.',
   'not-at-home': '집에서만 할 수 있어요.',
-  'not-at-sale-base': '집이나 항구에서만 할 수 있어요.',
+  'not-at-sale-base': '집이나 항구 또는 가공 플랜트선에서만 할 수 있어요.',
   'cooking-locked': `${COOKING_ZONE_NAME} 항로가 열리면 부엌을 쓸 수 있어요.`,
   'energy-locked': `${COOKING_ZONE_NAME} 항로가 열리면 기운 얻기를 할 수 있어요.`,
   'not-enough-energy': '생명의 기운이 부족해요.',

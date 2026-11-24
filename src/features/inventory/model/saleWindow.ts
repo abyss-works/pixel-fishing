@@ -1,6 +1,7 @@
 // 판매 창 모델 — 창 제목, 탭, 판매 탭의 비교 표와 요약, 어종 표 위 등급 칩, 잠긴 개체 툴팁 문안.
 // 판매 창은 집의 궤짝과 항구의 어시장이 같은 구성으로 연다. 두 탭(판매, 기운 얻기)은 같은 어종 표를 쓰고, 기운 얻기 탭의 모델은 기운 얻기 기능 모델이 맡는다.
 // 판매 대상과 합계는 가방 파생 데이터(selectSalePreview)가 정하고, 이 모듈은 그 값을 창이 비교 표로 그릴 값으로 옮긴다.
+import { SALE_BASES } from '../../../game/content/places';
 import type { BaseId } from '../../../game/content/places';
 import { RARITY, RARITY_ORDER } from '../../../game/content/rarity';
 import type { RarityId } from '../../../game/content/rarity';
@@ -20,8 +21,18 @@ export const SALE_TABS: readonly { key: SaleWindowTab; label: string }[] = [
   { key: 'energy', label: '기운 얻기' },
 ];
 
-/** 창 제목 — 그 거점의 판매 시설 이름이다(집은 궤짝, 항구는 어시장). 거점 데이터의 판매 시설에서 읽고, 판매 시설이 없는 거점이면 탭 이름을 쓴다 */
-export function saleWindowTitle(base: BaseId): string {
+/** 바다에서 기운 얻기 창을 열었을 때 판매 탭 잠금 문구 */
+export const SEA_SELL_LOCK_TEXT = '집이나 항구에서만 팔 수 있어요.';
+
+/** 판매 탭 잠금 줄 — 판매 시설이 있는 거점 밖(바다)이면 잠금 문구를 돌리고, 거점이면 null이다 */
+export function sellTabLock(base?: BaseId): readonly string[] | null {
+  if (base !== undefined && SALE_BASES[base]) return null;
+  return [SEA_SELL_LOCK_TEXT];
+}
+
+/** 창 제목 — 그 거점의 판매 시설 이름이다(집은 궤짝, 항구는 어시장). 거점 밖(바다)에서는 기운 얻기를 쓴다 */
+export function saleWindowTitle(base?: BaseId): string {
+  if (base === undefined || !SALE_BASES[base]) return SALE_TABS[1].label;
   const card = BASE_PACKS[base].furniture.find(f => f.id === 'sell');
   return card?.windowTitle ?? SALE_TABS[0].label;
 }
