@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render } from '@testing-library/react';
 import { api } from '../../../platform/api';
 import { newState } from '../../../game/rules/logic';
+import { resetFortuneModalSession } from '../../../features/fortune/service/fortuneModal';
 import GameView from './GameView';
 
 const seen = vi.hoisted(() => ({ guest: undefined as boolean | undefined }));
@@ -20,6 +21,7 @@ const originalMatchMedia = window.matchMedia;
 
 beforeEach(() => {
   localStorage.clear();
+  resetFortuneModalSession();
   api.auth.isConfigured = true;
   window.matchMedia = ((query: string) => ({
     matches: false, media: query, addEventListener: () => {}, removeEventListener: () => {},
