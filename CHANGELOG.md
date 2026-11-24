@@ -2,6 +2,40 @@
 
 이 파일은 생성된다. 직접 고치지 않는다. 형식은 Keep a Changelog를 따른다.
 
+## [0.20.4] - 2026-11-24
+
+### 기능
+
+- HOME.furniture에 여객선(ferry)을 추가하고 BaseMenu 이동 구역에 문과 함께 배치했다. pacific 존에 entryBoat가 없어 portGate가 0이던 문제를 보완해 항구·바다(world) 빠른 이동과 travel 액션에 최소 배 1단계(boat >= 1) 및 게스트 잠금(menuLock, guestActionVerdict)을 적용했다. 집 출발 시 확인 문구를 분리하고 집 문 앞(마을)을 0.6초 보여 준 뒤 암전 전환으로 목표 항구 앞바다로 이동한다.
+  - 집 거점 여객선 빠른 이동 배치 및 최소 배 게이트: 이전 항구 거점에만 여객선 배치, harbor의 portGate 0으로 배 0단계 차단 부재, 이후 집·항구 모두 여객선 배치, 항구·바다 빠른 이동 boat >= 1 및 게스트 잠금 강제, 집 문 앞 0.6초 전환
+  - 커밋: 658a4d3d, af564391
+
+### UI
+
+- BagTab 물고기 섹션의 자동 잠금·기운 얻기 버튼을 sticky bottom-0 불투명 바(PC 사이드바·모바일 시트 공통)로 고정했다. 가방 하단 기운 얻기 진입(panel === "energy") 시 2칸 SaleWindow 대신 480px 단열 Modal(sm)과 EnergyPanel(등급 토글 칩 기본 미잠금 전체 선택, 4종 기운 획득 요약, 확정 후 닫힘)을 쓰도록 분리하고, 거점 궤짝·어시장(panel === "sell")의 2칸 SaleWindow는 유지했다.
+  - 가방 하단 액션 바 sticky 고정 및 가방 기운 얻기 창 분리: 이전 스크롤 하단 이탈 버튼 바, 가방 기운 얻기 클릭 시 920px 2칸 SaleWindow 공유, 이후 물고기 섹션 하단 sticky 고정 바, 480px 단열 EnergyPanel 신설(확정 시 창 닫힘)
+  - 커밋: 0d78e297, 72417c43, ea77b426, f3c261a6
+- DexTab 상단에 1단 보기 SubTabs(일반·돌연변이·네임드)를 두고 GameTabs의 setDexView와 연결했으며, 기존 2단 구역 SubTabs와 도감 탭 재선택·숫자키 3 순환·Tab/Shift+Tab 구역 순환을 그대로 유지했다.
+  - 도감 탭 1단 보기 서브탭 추가: 이전 도감 탭 재클릭·숫자키로만 보기 전환, 본문에는 구역 서브탭 1단만 표시, 이후 상단 1단 보기 SubTabs + 하단 2단 구역 SubTabs 2단 구조 및 단축키 순환 동기화
+  - 커밋: 0d78e297, 72417c43
+- HudLayout의 statusSlot을 STACK_TRUNK_CLASS 밖 독립 고정 슬롯(absolute, z-(--z-stage-status), slotAt < trunkAt)으로 유지하면서 세로 좌표를 top-20·mobile:top-7에서 bottom-24·mobile:bottom-24로 옮겼다.
+  - statusSlot 세로 위치 하단 중앙 복귀: 이전 PC top-20 · 모바일 mobile:top-7 헤더 바로 아래 고정, 이후 PC·모바일 모두 bottom-24 하단 중앙 독립 고정(방치·흔적·메시지 창 변화와 무관)
+  - 커밋: a7a3e629
+
+### 밸런스
+
+- 0040_guild_member_enhancements 마이그레이션과 api/_data/guilds.ts·load.ts 개편으로 Lv6–10 자유 강화를 (guild_id, user_id) 개인 저장·개인 적용으로 전환했다. 개인 초기화(20,000,000G)는 본인 투자분만 초기화하고 탈퇴·추방 시 해당 길드원의 행을 삭제하며 공용 guild_logs에는 새 강화·초기화를 남기지 않는다(과거 로그 읽기 호환 유지). GuildSkillsTab에서 상단 단계 색상 범례를 제거하고 각 스킬 단계 노드에 Tip 툴팁을 붙였으며 BonusTab과 확인 창 문구를 개인 기준으로 정리했다.
+  - 길드 Lv6–10 자유 강화 적용 범위 및 저장 테이블: 이전 guild_bonuses.enhance_rank 길드 공용 저장·전원 공유, 초기화 시 공용 초기화 및 guild_logs 기록, 이후 guild_member_enhancements(0040) 개인별 저장·적용(Lv6부터 레벨당 1포인트, 최대 5), 20,000,000G 본인 초기화·탈퇴 시 삭제·항해일지 비기록, 기존 enhance_rank 0 초기화
+  - 길드 스킬 단계 색상 안내 위치: 이전 상단 고정 Inset 범례(스킬 단계 색상 안내), 이후 상단 범례 제거, 각 스킬 단계 노드 Tip 툴팁(기본 단계·개인 자유 강화)으로 이동
+  - 영향: 마이그레이션 0040으로 public.guild_member_enhancements(guild_id, user_id, bonus) 표를 추가하고 기존 공용 guild_bonuses.enhance_rank를 모두 0으로 초기화한다. 되돌리기는 0040_guild_member_enhancements.down.sql 적용.
+  - 커밋: bc84adb4, 20018a2e
+
+### 수정
+
+- 공용 Inset이 유틸리티 border-line을 기본 부착해 호출부 className의 border-epic·border-legend·border-gold·border-accent가 CSS 선언 순서상 밀리던 결함을 전용 border prop(InsetBorder) 치환으로 해결했다. PlayerInfo 등 전체 호출부 8곳을 전환하고 uiGuard.test.ts(insetBorderOverrides)와 회귀 테스트를 추가했다.
+  - 공용 Inset 테두리 색 지정 방식 및 사용처 8곳 전환: 이전 Inset 기본 border-line + className 문자열 결합으로 border-epic·border-legend 등 덮어쓰기 누락, 이후 Inset border prop으로 기본 테두리 색 치환, 사용처 8곳 일괄 전환 및 uiGuard 정적 차단 추가
+  - 커밋: 46f2b3f1
+
 ## [0.20.3] - 2026-11-24
 
 ### UI
@@ -2659,6 +2693,7 @@
   - 영향: 미확인
   - 커밋: 92257ad
 
+[0.20.4]: https://github.com/abyss-works/pixel-fishing/releases/tag/v0.20.4
 [0.20.3]: https://github.com/abyss-works/pixel-fishing/releases/tag/v0.20.3
 [0.20.2]: https://github.com/abyss-works/pixel-fishing/releases/tag/v0.20.2
 [0.20.1]: https://github.com/abyss-works/pixel-fishing/releases/tag/v0.20.1
