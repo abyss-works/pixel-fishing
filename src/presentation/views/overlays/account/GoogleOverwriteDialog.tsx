@@ -8,7 +8,7 @@ import Note from '../../../ui/Note';
 // 로그인은 그 계정으로 로그인해 그 계정의 진행을 채택하고 이 기기의 게스트 진행을 버린다. 닫기(X, 바깥 누르기, Esc)는 되돌아가기와 같다.
 export default function GoogleOverwriteDialog({ onProceed, onBack }: { onProceed: () => void; onBack: () => void }) {
   return (
-    <Modal bare onClose={onBack}>
+    <Modal layer="stage" onClose={onBack}>
       <ModalCard title={OVERWRITE_COPY.title} onClose={onBack}
         confirm={(
           <>

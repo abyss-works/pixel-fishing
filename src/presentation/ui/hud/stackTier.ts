@@ -4,7 +4,7 @@
 // 접두사 pc:는 모바일 레이아웃(뷰포트 768 미만)을 제외한다. 모바일 레이아웃은 같은 배치를 mobile: 변형으로 이미 갖고 있다.
 // @max-[Npx]는 폭이 N 미만일 때다. 값(여백 8px, 열 156px, 메시지 창 5줄)은 모바일 레이아웃과 같다.
 
-/** 줄기 - 낚시 상태 띠 슬롯, 오른쪽 아래 열, 메시지 창을 스테이지 아래에 세로로 쌓는다(HudLayout) */
+/** 하단 묶음 - 오른쪽 아래 열과 메시지 창을 스테이지 아래에 세로로 쌓는다(HudLayout). 낚시 상태 띠 슬롯은 스테이지 상단 고정 자리에 따로 둔다 */
 export const STACK_TRUNK_CLASS = 'pc:@max-[464px]:inset-x-2 pc:@max-[464px]:bottom-2 pc:@max-[464px]:flex-col pc:@max-[464px]:flex-nowrap pc:@max-[464px]:items-end pc:@max-[464px]:gap-2';
 
 /** 오른쪽 아래 열 - 줄기 안 오른쪽 정렬의 둘째 자식이 된다 */

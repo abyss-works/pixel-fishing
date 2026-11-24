@@ -23,33 +23,37 @@ const src = (path: string) => {
 const tokens = Object.fromEntries([...css.matchAll(/--z-([a-z-]+):\s*(\d+);/g)].map(m => [m[1], Number(m[2])]));
 
 describe('화면 층 - z 토큰 순서', () => {
-  it('아래부터 스테이지 HUD, 채팅과 헤더, 창, 닫을 수 없는 창, 탭 줄과 시트, 창 위 알림, 전환 덮개, 툴팁 순서다', () => {
-    const order = ['stage-hud', 'stage-card', 'chrome', 'menu-row', 'catch-fx', 'stage-modal', 'app-modal', 'blocker', 'tabs', 'toast', 'veil', 'tooltip', 'devtools'];
+  it('아래부터 stage-hud, stage-status, stage-card, catch-fx, chrome, menu-row, stage-modal, tabs, app-modal, blocker, toast, veil, tooltip, devtools 엄격 오름차순이다', () => {
+    const order = [
+      'stage-hud', 'stage-status', 'stage-card', 'catch-fx',
+      'chrome', 'menu-row', 'stage-modal',
+      'tabs', 'app-modal', 'blocker',
+      'toast', 'veil', 'tooltip', 'devtools',
+    ];
     const values = order.map(name => tokens[name]);
     expect(values.every(v => typeof v === 'number')).toBe(true);
     expect(values).toEqual([...values].sort((a, b) => a - b));
     expect(new Set(values).size).toBe(values.length);
   });
 
-  it('창 위 1줄 알림(toast)은 앱 모달과 탭 줄·시트보다 위이고 전환 덮개와 툴팁보다 아래다', () => {
+  it('창 위 1줄 알림(toast)은 앱 모달·차단기·탭 줄·시트보다 위이고 전환 덮개와 툴팁보다 아래다', () => {
+    expect(tokens['toast']).toBeGreaterThan(tokens['blocker']);
     expect(tokens['toast']).toBeGreaterThan(tokens['app-modal']);
     expect(tokens['toast']).toBeGreaterThan(tokens['tabs']);
     expect(tokens['toast']).toBeLessThan(tokens['veil']);
     expect(tokens['toast']).toBeLessThan(tokens['tooltip']);
   });
 
-  it('창의 바탕은 채팅과 헤더보다 위이고 탭 줄과 시트는 창보다 위다', () => {
+  it('스테이지 창은 채팅·헤더·펼친 메뉴보다 위이고 탭 줄·시트보다 아래다', () => {
     expect(tokens['stage-modal']).toBeGreaterThan(tokens['chrome']);
-    expect(tokens['app-modal']).toBeGreaterThan(tokens['chrome']);
-    expect(tokens['tabs']).toBeGreaterThan(tokens['stage-modal']);
-    expect(tokens['tabs']).toBeGreaterThan(tokens['app-modal']);
+    expect(tokens['stage-modal']).toBeGreaterThan(tokens['menu-row']);
+    expect(tokens['stage-modal']).toBeLessThan(tokens['tabs']);
   });
 
-  it('닫을 수 없는 창은 다른 창보다 위이고 탭 줄보다 아래다 - 탭 줄 위에는 전환 덮개와 툴팁만 있다', () => {
-    expect(tokens['blocker']).toBeGreaterThan(tokens['stage-modal']);
+  it('사이드바 앱 모달과 전역 차단기는 탭 줄·시트 위를 덮고, 차단기가 앱 모달보다 위다', () => {
+    expect(tokens['app-modal']).toBeGreaterThan(tokens['tabs']);
     expect(tokens['blocker']).toBeGreaterThan(tokens['app-modal']);
-    expect(tokens['blocker']).toBeLessThan(tokens['tabs']);
-    expect(tokens['veil']).toBeGreaterThan(tokens['tabs']);
+    expect(tokens['veil']).toBeGreaterThan(tokens['blocker']);
     expect(tokens['tooltip']).toBeGreaterThan(tokens['veil']);
   });
 
@@ -58,17 +62,15 @@ describe('화면 층 - z 토큰 순서', () => {
     expect(tokens['menu-row']).toBeLessThan(tokens['stage-modal']);
   });
 
-  it('잡기 이펙트는 획득 카드 위, 헤더의 펼친 메뉴 줄 위이고 창과 탭 메뉴 아래다', () => {
+  it('잡기 이펙트는 획득 카드 위이고 채팅과 헤더 아래다', () => {
     expect(tokens['catch-fx']).toBeGreaterThan(tokens['stage-card']);
-    expect(tokens['catch-fx']).toBeGreaterThan(tokens['chrome']);
-    expect(tokens['catch-fx']).toBeGreaterThan(tokens['menu-row']);
-    expect(tokens['catch-fx']).toBeLessThan(tokens['stage-modal']);
-    expect(tokens['catch-fx']).toBeLessThan(tokens['tabs']);
+    expect(tokens['catch-fx']).toBeLessThan(tokens['chrome']);
   });
 
-  it('채팅과 헤더는 스테이지 위 HUD보다 위다', () => {
+  it('스테이지 위 HUD < 입질 상태 고정 슬롯 < 획득 카드 < 채팅과 헤더 순서다', () => {
+    expect(tokens['stage-status']).toBeGreaterThan(tokens['stage-hud']);
+    expect(tokens['stage-card']).toBeGreaterThan(tokens['stage-status']);
     expect(tokens['chrome']).toBeGreaterThan(tokens['stage-card']);
-    expect(tokens['stage-card']).toBeGreaterThan(tokens['stage-hud']);
   });
 });
 
@@ -84,6 +86,8 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
     ['layouts/hud/HudHeader.tsx', '--z-chrome'],
     ['layouts/hud/HudHeader.tsx', '--z-menu-row'],
     ['layouts/hud/HudLayout.tsx', '--z-stage-hud'],
+    ['layouts/hud/HudLayout.tsx', '--z-stage-status'],
+    ['layouts/game-stage/Field.tsx', '--z-stage-status'],
     ['layouts/game-stage/MovePad.tsx', '--z-stage-hud'],
     ['ui/hud/CatchCard.tsx', '--z-stage-card'],
     ['ui/hud/CatchCard.tsx', '--z-catch-fx'],
@@ -137,6 +141,96 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
   it('탭 줄은 PC 레이아웃과 모바일 레이아웃 모두 창 위 층 토큰을 쓴다 - 탭 줄과 시트가 각각 자기 층을 갖는다', () => {
     const sidebar = src('layouts/sidebar/index.tsx');
     expect(sidebar.match(/z-\(--z-tabs\)/g)?.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('사이드바는 스테이지 모달에 의해 비활성화(hasOpenWindows/useAnyOpenWindow)되지 않고 app 모달만 막는다', () => {
+    const sidebar = src('layouts/sidebar/index.tsx');
+    expect(sidebar).not.toMatch(/hasOpenWindows|useAnyOpenWindow/);
+    expect(sidebar).toContain('useAnyAppWindow');
+    expect(sidebar).toContain('hasAppWindows');
+  });
+
+  it('Modal의 layer는 필수이며 기본값 app 폴백이 없고, 게임 영역의 모든 Modal 호출은 layer를 명시한다', () => {
+    const modal = src('ui/Modal.tsx');
+    expect(modal).not.toMatch(/layer\s*=\s*['"]app['"]/);
+    expect(modal).toMatch(/layer:\s*'app'/);
+    expect(modal).toMatch(/layer:\s*'stage'/);
+    const nonAdmin = sources.filter(f => !f.path.startsWith('views/admin/'));
+    const missingLayer: string[] = [];
+    for (const f of nonAdmin) {
+      for (const m of f.src.matchAll(/<Modal\b[^>]*>/g)) {
+        if (!/\blayer=/.test(m[0])) missingLayer.push(`${f.path}: ${m[0]}`);
+      }
+    }
+    expect(missingLayer).toEqual([]);
+  });
+
+  it('layer="app" 사용처는 사이드바 메뉴 진입 창과 앱 전역 차단기 화이트리스트뿐이다', () => {
+    const APP_MODAL_WHITELIST = new Set([
+      'views/game/tabs/bag/BagTab.tsx',
+      'views/game/tabs/bag/ItemSection.tsx',
+      'views/game/tabs/dex/DexDetail.tsx',
+      'views/game/tabs/dex/NamedDetail.tsx',
+      'views/game/tabs/bag/ArtifactDetail.tsx',
+      'views/game/tabs/settings/SettingsTab.tsx',
+      'views/overlays/account/AccountModal.tsx',
+      'views/overlays/account/MyInfoModal.tsx',
+      'views/overlays/settings/SettingsModal.tsx',
+      'views/overlays/codes/CodeModal.tsx',
+      'views/overlays/letter/LetterModal.tsx',
+      'views/overlays/patchnotes/PatchNotesModal.tsx',
+      'views/overlays/update/UpdateModal.tsx',
+      'views/overlays/update/SessionReplacedModal.tsx',
+      'views/overlays/update/UnsavedModal.tsx',
+    ]);
+    const nonAdminViews = sources.filter(f => f.path.startsWith('views/') && !f.path.startsWith('views/admin/'));
+    const appUsers = nonAdminViews
+      .filter(f => /\blayer\s*=\s*['"]app['"]/.test(f.src))
+      .map(f => f.path)
+      .sort();
+    expect(appUsers).toEqual([...APP_MODAL_WHITELIST].sort());
+    // AccountModal은 스테이지 게스트 차단 경로에서는 반드시 layer="stage"로 호출한다
+    const gameView = src('views/game/GameView.tsx');
+    expect(gameView).toMatch(/<AccountModal\b[^>]*\blayer\s*=\s*['"]stage['"]/);
+    expect(gameView).not.toMatch(/<AccountModal\b[^>]*\blayer\s*=\s*['"]app['"]/);
+    // 게임 영역 유래 오버레이는 모두 GameStageLayout 내부에 마운트된다
+    const stageStart = gameView.indexOf('<GameStageLayout>');
+    const stageEnd = gameView.indexOf('</GameStageLayout>');
+    expect(stageStart).toBeGreaterThan(-1);
+    expect(stageEnd).toBeGreaterThan(stageStart);
+    const outsideStage = gameView.slice(stageEnd);
+    for (const overlay of ['WorldMapModal', 'TutorialModal', 'BaitRefundModal', 'WhatsNewModal', 'GoogleReturn', 'AccountModal']) {
+      expect(gameView.slice(stageStart, stageEnd)).toContain(`<${overlay}`);
+      expect(outsideStage).not.toContain(`<${overlay}`);
+    }
+  });
+
+  it('fixed 위치 지정은 앱 셸·모달 백드롭·시트·전환 덮개·토스트·툴팁·개발도구 화이트리스트만 허용한다', () => {
+    const FIXED_WHITELIST = new Set([
+      'ui/Modal.tsx',
+      'ui/FloatingToastLayer.tsx',
+      'ui/TooltipBubble.tsx',
+      'layouts/game-stage/FerryVeil.tsx',
+      'layouts/sidebar/index.tsx',
+      'views/game/GameView.tsx',
+      'views/overlays/update/LoadingOverlay.tsx',
+      'views/devtools/DevTools.tsx',
+    ]);
+    const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    const fixedCssClass = (s: string) => {
+      const quoted = [...s.matchAll(/(['"])(?:\\.|(?!\1)[^\n])*?\1/g)].map(m => m[0]);
+      const templates = [...s.matchAll(/`(?:\\.|[^`\\])*`/g)].map(m => m[0].replace(/\$\{[^{}]*\}/g, ' '));
+      return [...quoted, ...templates].some(chunk => /(?<![\w-])fixed(?![\w-])/.test(chunk));
+    };
+    expect(fixedCssClass('className={`\n  pointer-events-none\n  fixed inset-0\n`}')).toBe(true);
+    expect(fixedCssClass("className={cx('min-h-0', fixed && 'flex-1')}")).toBe(false);
+    expect(fixedCssClass('className="w-full table-fixed"')).toBe(false);
+    const users = sources
+      .filter(f => !f.path.startsWith('views/admin/'))
+      .filter(f => fixedCssClass(stripComments(f.src)))
+      .map(f => f.path)
+      .sort();
+    expect(users).toEqual([...FIXED_WHITELIST].sort());
   });
 });
 

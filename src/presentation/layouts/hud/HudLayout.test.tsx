@@ -92,8 +92,8 @@ describe('HudLayout 미니맵 위 칩 줄', () => {
   });
 });
 
-describe('HudLayout 하단 HUD 묶음 구조', () => {
-  it.each([false, true])('PC와 모바일(mobile=%s) 모두 낚시 상태 띠 슬롯, 오른쪽 아래 열, 메시지 창을 같은 묶음에 이 순서로 둔다', mobile => {
+describe('HudLayout 하단 HUD 묶음 및 상태 띠 고정 슬롯 분리', () => {
+  it.each([false, true])('PC와 모바일(mobile=%s) 모두 statusSlot은 하단 묶음과 분리된 스테이지 상단 absolute 고정 슬롯이고, 오른쪽 아래 열과 메시지 창만 하단 묶음에 둔다', mobile => {
     layout.mobile = mobile;
     setMinimapVisible(true);
     let slot: HTMLDivElement | null = null;
@@ -101,11 +101,41 @@ describe('HudLayout 하단 HUD 묶음 구조', () => {
     const log = screen.getByTestId('log');
     const bundle = log.parentElement!;
     expect(slot).not.toBeNull();
-    expect(bundle.firstElementChild).toBe(slot);
+    expect(bundle.contains(slot)).toBe(false);
+    expect(slot!.className).toContain('absolute');
+    expect(slot!.className).toContain('z-(--z-stage-status)');
+    expect(slot!.className).toContain('top-20');
+    expect(slot!.className).toContain('mobile:top-7');
+    expect(slot!.className).toContain('mobile:row-start-2');
+    expect(slot!.className).toContain('mobile:row-end-3');
+    expect(slot!.className).toContain('pointer-events-none');
     expect(bundle.contains(screen.getByTestId('minimap'))).toBe(true);
     expect(bundle.contains(screen.getByText('12:00'))).toBe(true);
     expect(bundle.lastElementChild).toBe(log);
     expect(bundle.className).not.toContain('z-(--z-');
+  });
+
+  it.each([false, true])('PC와 모바일(mobile=%s) 모두 방치 결과 카드·흔적 카드 출현, 미니맵 숨김, 메시지 창 접기에도 statusSlot 위치 클래스와 DOM 슬롯이 불변이다', mobile => {
+    layout.mobile = mobile;
+    setMinimapVisible(true);
+    let slot: HTMLDivElement | null = null;
+    const { rerender } = render(
+      <HudLayout {...props} game={newState()} scene={region} folded={false}
+                 notice={null} onStatusSlot={el => { slot = el; }} />,
+    );
+    const initialClass = slot!.className;
+    const initialParent = slot!.parentElement;
+
+    setMinimapVisible(false);
+    rerender(
+      <HudLayout {...props} game={newState()} scene={region} folded
+                 notice={<><div data-testid="away">방치</div><div data-testid="trace">흔적</div></>}
+                 onStatusSlot={el => { slot = el; }} />,
+    );
+    expect(slot!.className).toBe(initialClass);
+    expect(slot!.parentElement).toBe(initialParent);
+    expect(screen.getByTestId('away')).toBeInTheDocument();
+    expect(screen.getByTestId('trace')).toBeInTheDocument();
   });
 
   it('채팅이 칩 줄, 미니맵과 같은 묶음의 마지막 자식이다 - 채팅 높이가 늘면 칩 줄과 미니맵이 그 위에 쌓인 채 따라 올라간다', () => {

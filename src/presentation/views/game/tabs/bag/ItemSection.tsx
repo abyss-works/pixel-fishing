@@ -43,7 +43,7 @@ function SwapDialog({ confirm, onConfirm, onCancel }: {
     { key: 'next', head: '새로', ...confirm.next, tone: 'text-accent' },
   ];
   return (
-    <ConfirmDialog title={confirm.title} confirmLabel={confirm.confirmLabel}
+    <ConfirmDialog layer="app" title={confirm.title} confirmLabel={confirm.confirmLabel}
                    onConfirm={() => onConfirm(confirm.choices ? replaceSlot : undefined)} onCancel={onCancel}>
       {confirm.choices ? (
         <>

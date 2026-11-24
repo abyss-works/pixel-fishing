@@ -115,8 +115,7 @@ describe('EncounterModal', () => {
     it('승부가 시작되면 닫을 수 없는 창이라 바깥을 눌러도 닫히지 않는다', () => {
       const { onClose } = show();
       enter();
-      expect(backdrop().className).toContain('z-(--z-blocker)');
-      expect(backdrop().className).not.toContain('z-(--z-stage-modal)');
+      expect(backdrop().className).toContain('z-(--z-stage-modal)');
       fireEvent.click(backdrop());
       expect(onClose).not.toHaveBeenCalled();
     });
@@ -127,7 +126,6 @@ describe('EncounterModal', () => {
       act(() => { vi.advanceTimersByTime(8000); });
       expect(screen.getByRole('button', { name: '돌아가기' })).toBeInTheDocument();
       expect(backdrop().className).toContain('z-(--z-stage-modal)');
-      expect(backdrop().className).not.toContain('z-(--z-blocker)');
       fireEvent.click(backdrop());
       expect(onClose).toHaveBeenCalledTimes(1);
     });
@@ -136,7 +134,7 @@ describe('EncounterModal', () => {
       const { onClose } = show();
       enter();
       win();
-      expect(backdrop().className).toContain('z-(--z-blocker)');
+      expect(backdrop().className).toContain('z-(--z-stage-modal)');
       fireEvent.click(backdrop());
       expect(onClose).not.toHaveBeenCalled();
     });

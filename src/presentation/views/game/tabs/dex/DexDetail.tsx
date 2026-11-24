@@ -35,7 +35,7 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
   const meOutside = ranking.data?.me && !ranking.data.top.some(r => r.me) ? ranking.data.me : null;
 
   return (
-    <Modal xl onClose={onClose} header={
+    <Modal layer="app" xl onClose={onClose} header={
       // 미발견 폼도 같은 구조로 렌더(값만 ??? 마스킹) — 폼 전환 시 레이아웃 점프 방지. 제목 줄은 스크롤 칸 밖에 고정한다
       <header className="mb-3 flex items-baseline gap-3 border-b border-line pb-2 pr-8">
         <PageTitle>{known ? form.name : '???'}</PageTitle>

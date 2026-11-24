@@ -20,6 +20,7 @@ import GoogleLogo from '../../../ui/GoogleLogo';
 import Inset from '../../../ui/Inset';
 import KeyValueRow from '../../../ui/KeyValueRow';
 import Modal from '../../../ui/Modal';
+import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
 import SectionTitle from '../../../ui/SectionTitle';
 import Skeleton from '../../../ui/Skeleton';
@@ -35,8 +36,9 @@ import type { Notify } from '../../../ui/hud/messageFeed';
 // 세션 확인에 실패했으면(accountFailed) 게스트로 보지 않고, 확인 실패 안내와 다시 확인 버튼만 둔다. 계정을 바꾸는 동작(구글 연결, 이메일 로그인, 로그아웃, 계정 삭제)은 확인이 끝날 때까지 열지 않는다.
 // 닉네임과 ID는 내 정보 창이 맡는다.
 export default function AccountModal({
-  setToast, onAuthChanged, onClose, account, accountFailed, guestProgress, recheckGuestProgress, syncLabel, syncState,
+  layer, setToast, onAuthChanged, onClose, account, accountFailed, guestProgress, recheckGuestProgress, syncLabel, syncState,
 }: {
+  layer: 'stage' | 'app';
   setToast: Notify;
   onAuthChanged: () => Promise<void>; onClose: () => void;
   account: string | null;
@@ -95,6 +97,7 @@ export default function AccountModal({
     const saved = guestProgress === 'nothing' ? await recheckGuestProgress() : guestProgress;
     if (!mounted.current) return;
     if (saved !== 'nothing' && !(await confirm({
+      layer,
       title: '이메일 계정으로 로그인',
       body: '이 이메일 계정의 진행으로 바뀌어요.\n지금 게스트 진행은 사라져요.',
       confirmLabel: '로그인',
@@ -131,7 +134,7 @@ export default function AccountModal({
   });
 
   const signOut = async () => {
-    if (!(await confirm({ title: '로그아웃', body: '로그아웃할까요?\n이 기기는 새 게스트로 다시 시작해요.', confirmLabel: '로그아웃' }))) return;
+    if (!(await confirm({ layer, title: '로그아웃', body: '로그아웃할까요?\n이 기기는 새 게스트로 다시 시작해요.', confirmLabel: '로그아웃' }))) return;
     await signOutAccount();
     window.location.reload(); // 재부팅 = 새 익명 세션으로 깔끔하게 시작
   };
@@ -139,6 +142,7 @@ export default function AccountModal({
   // 되돌릴 수 없는 동작이라 확인 문구를 직접 입력해야 지운다
   const removeAccount = () => run(async () => {
     const typed = await input({
+      layer,
       title: '계정 삭제',
       body: '계정을 삭제하면 진행, 도감, 골드, 우편, 편지가 모두 지워지고 되돌릴 수 없어요.\n삭제하려면 아래 칸에 “삭제”를 입력해 주세요.',
       label: '확인 문구', placeholder: '삭제', confirmLabel: '계정 삭제',
@@ -209,8 +213,8 @@ export default function AccountModal({
     </div>
   );
 
-  return (
-    <Modal title="계정 관리" narrow onClose={onClose}>
+  const content = (
+    <>
       <Inset divided className="mb-2">
         {accountRow}
         {syncLabel && (
@@ -273,7 +277,19 @@ export default function AccountModal({
           </div>
         </>
       )}
+    </>
+  );
+
+  return (
+    <>
+      {layer === 'stage' ? (
+        <Modal layer="stage" onClose={onClose}>
+          <ModalCard title="계정 관리" onClose={onClose}>{content}</ModalCard>
+        </Modal>
+      ) : (
+        <Modal layer="app" title="계정 관리" narrow onClose={onClose}>{content}</Modal>
+      )}
       {dialogs}
-    </Modal>
+    </>
   );
 }

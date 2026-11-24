@@ -21,5 +21,5 @@ export default function ConfirmDialog({ layer, title, confirmLabel, onConfirm, o
     </ModalCard>
   );
   // 앱 레이어는 박스 안에 카드를 직접 둔다(bare) — 스크롤은 카드 본문 한 곳뿐이다
-  return layer === 'stage' ? <Modal layer="stage" onClose={onCancel}>{card}</Modal> : <Modal bare onClose={onCancel}>{card}</Modal>;
+  return layer === 'stage' ? <Modal layer="stage" onClose={onCancel}>{card}</Modal> : <Modal layer="app" bare onClose={onCancel}>{card}</Modal>;
 }

@@ -1,4 +1,4 @@
-// 모달이 뜬 동안 사이드 메뉴는 배경이다 - 탭을 눌러도 모달은 그대로 있고 탭은 바뀌지 않는다(App 통합).
+// 스테이지 모달은 사이드바 탭 전환·모바일 시트와 상호 비간섭이고, 앱 모달만 사이드바를 막는다(App 통합).
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
 import App from '../../../App';
@@ -28,9 +28,10 @@ function fakeContext(): CanvasRenderingContext2D {
   return ctx as CanvasRenderingContext2D;
 }
 
-function stubMotion(reduce: boolean) {
+function stubMotion(reduce: boolean, mobile = false) {
   window.matchMedia = ((query: string) => ({
-    matches: reduce && query.includes('prefers-reduced-motion'),
+    matches: (reduce && query.includes('prefers-reduced-motion'))
+      || (mobile && query.includes('width <')),
     media: query, addEventListener: () => {}, removeEventListener: () => {},
     addListener: () => {}, removeListener: () => {}, onchange: null, dispatchEvent: () => false,
   })) as typeof window.matchMedia;
@@ -70,23 +71,25 @@ afterEach(() => {
 
 const advance = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
 
-describe('모달이 뜬 동안 사이드 메뉴', () => {
+describe('모달과 사이드 메뉴 상호 비간섭 및 계층 분리', () => {
   const activeTab = () => document.querySelector('.pf-tabbar button.active')?.textContent ?? '';
 
-  it('시설 모달이 떠 있으면 탭을 눌러도 모달이 남고 탭은 바뀌지 않는다', async () => {
+  it('시설 모달(stage)이 떠 있어도 탭을 누르면 모달은 유지되고 탭은 자유롭게 전환된다', async () => {
     stubMotion(false);
     seedAt('home');
     render(<App />);
     await advance(0);
     fireEvent.click(document.querySelector('[data-facility="rod"]')!);
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    const dialog = screen.getByRole('dialog');
+    expect(document.querySelector('[data-game-stage]')!).toContainElement(dialog);
+    expect(dialog.parentElement!.className).toContain('absolute inset-0');
     fireEvent.click(screen.getByRole('button', { name: '도움말' }));
     expect(screen.getByRole('dialog')).toBeInTheDocument();
-    expect(activeTab()).toContain('지역');
-    expect(screen.getByRole('button', { name: '도움말' })).not.toHaveClass('active');
+    expect(activeTab()).toContain('도움말');
+    expect(screen.getByRole('button', { name: '도움말' })).toHaveClass('active');
   });
 
-  it('확인 모달이 떠 있으면 탭을 눌러도 확인 창이 남는다', async () => {
+  it('확인 모달(stage)이 떠 있어도 탭을 누르면 확인 창은 남고 탭은 전환된다', async () => {
     stubMotion(false);
     seedAt('harbor');
     render(<App />);
@@ -96,10 +99,58 @@ describe('모달이 뜬 동안 사이드 메뉴', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '설정' }));
     expect(screen.getByRole('dialog')).toBeInTheDocument();
-    expect(activeTab()).toContain('지역');
+    expect(activeTab()).toContain('설정');
   });
 
-  it('설정 탭에서 연 앱 모달도 다른 탭을 눌러 닫히지 않는다', async () => {
+  it('닫을 수 없는 스테이지 모달이 떠 있어도 탭 전환은 가능하고 창은 그대로 유지된다', async () => {
+    stubMotion(false);
+    seedAt('home');
+    render(<><App /><Modal layer="stage" closable={false} title="진행 중" onClose={() => {}}>결과 전송 전</Modal></>);
+    await advance(0);
+    fireEvent.click(document.querySelector('[data-facility="rod"]')!);
+    expect(screen.getAllByRole('dialog').length).toBe(2);
+    fireEvent.click(screen.getByRole('button', { name: '도움말' }));
+    expect(screen.getAllByRole('dialog').length).toBe(2);
+    expect(screen.getByRole('dialog', { name: '진행 중' })).toBeInTheDocument();
+    expect(activeTab()).toContain('도움말');
+  });
+
+  it('모바일 레이아웃에서 스테이지 모달이 열린 중에도 아래 탭 시트를 열고 닫을 수 있고 모달 상태는 유지된다', async () => {
+    stubMotion(false, true);
+    seedAt('home');
+    render(<App />);
+    await advance(0);
+    fireEvent.click(document.querySelector('[data-facility="rod"]')!);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '도움말' }));
+    expect(screen.getByRole('region', { name: '탭 내용' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '도움말' }));
+    expect(screen.queryByRole('region', { name: '탭 내용' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('바다 미니맵에서 여는 세계지도 창도 스테이지 안에 머무르고 사이드바를 막지 않는다', async () => {
+    stubMotion(false);
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      ...newState(), tutorials: [...TUTORIAL_IDS], boat: MAX_BOAT, location: { kind: 'region', id: 'village' },
+    }));
+    render(<App />);
+    await advance(0);
+    fireEvent.click(screen.getByLabelText('미니맵'));
+    const mapDialog = screen.getByRole('dialog');
+    const stage = document.querySelector('[data-game-stage]')!;
+    expect(stage).toContainElement(mapDialog);
+    expect(mapDialog.parentElement!.className).toContain('absolute inset-0');
+    expect(mapDialog.parentElement!.className).not.toContain('fixed inset-0');
+    fireEvent.click(screen.getByRole('button', { name: /^가방/ }));
+    expect(activeTab()).toContain('가방');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('설정 탭에서 연 앱 모달은 다른 탭을 눌러 닫히지 않고 탭 전환을 막는다', async () => {
     stubMotion(false);
     seedAt('home');
     render(<App />);
@@ -112,31 +163,17 @@ describe('모달이 뜬 동안 사이드 메뉴', () => {
     expect(activeTab()).toContain('설정');
   });
 
-  it('게임 화면 바깥에서 띄운 앱 모달도 게임 화면의 쌓임 맥락 안에 그려져 탭 줄 아래에 놓인다', async () => {
+  it('게임 화면 바깥에서 띄운 앱 모달도 게임 화면의 쌓임 맥락 안에 그려져 탭 줄 위 층에 놓인다', async () => {
     stubMotion(false);
     seedAt('home');
-    render(<><App /><Modal title="바깥 대화상자" onClose={() => {}}>본문</Modal></>);
+    render(<><App /><Modal layer="app" title="바깥 대화상자" onClose={() => {}}>본문</Modal></>);
     await advance(0);
     const root = document.querySelector('[data-game-stage]')!.parentElement as HTMLElement;
     const dialog = screen.getByRole('dialog', { name: '바깥 대화상자' });
     expect(root).toContainElement(dialog);
-    // 탭 줄은 같은 쌓임 맥락 안에서 창보다 위 토큰이다. 창이 떠 있는 동안 탭 입력은 막힌다
     expect(dialog.parentElement!.className).toContain('z-(--z-app-modal)');
     fireEvent.click(screen.getByRole('button', { name: '도움말' }));
     expect(screen.getByRole('dialog', { name: '바깥 대화상자' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '도움말' })).not.toHaveClass('active');
-  });
-
-  it('닫을 수 없는 창이 떠 있어도 탭을 누르면 창은 남고 탭은 바뀌지 않는다', async () => {
-    stubMotion(false);
-    seedAt('home');
-    render(<><App /><Modal layer="stage" closable={false} title="진행 중" onClose={() => {}}>결과 전송 전</Modal></>);
-    await advance(0);
-    fireEvent.click(document.querySelector('[data-facility="rod"]')!);
-    expect(screen.getAllByRole('dialog').length).toBe(2);
-    fireEvent.click(screen.getByRole('button', { name: '도움말' }));
-    expect(screen.getAllByRole('dialog').length).toBe(2);
-    expect(screen.getByRole('dialog', { name: '진행 중' })).toBeInTheDocument();
-    expect(activeTab()).toContain('지역');
   });
 });
