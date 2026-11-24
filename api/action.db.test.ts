@@ -15,6 +15,8 @@ import { FISH } from '../src/game/content/fish.js';
 import { hatById } from '../src/game/content/wardrobe.js';
 import { upgradeCost } from '../src/game/rules/balance.js';
 import { endedFirstCatch, newFirstCatch } from '../src/game/rules/firstCatch.js';
+import { luckMultOf } from '../src/game/rules/fortune.js';
+import type { DailyFortune } from '../src/game/rules/fortune.js';
 import { LICENSE_GRADES, WALK_BAG_CAP, newState, sellSelected, zoneDexMissing } from '../src/game/rules/logic.js';
 import type { GameState } from '../src/game/rules/logic.js';
 import { NAMED_PITY_CATCHES, PITY_DONE, SPECIES_PITY_K } from '../src/game/rules/pity.js';
@@ -110,7 +112,43 @@ describe('요청 경계', () => {
 
 describe('첫 액션', () => {
   it('프로필과 저장 상태가 없는 사용자의 boot는 둘을 만들고 버전 2로 올린다', async () => {
-    expect(await run({ nickname: null }, { type: 'boot', buildId: 'dev' })).toMatchSnapshot();
+    const out = await run({ nickname: null }, { type: 'boot', buildId: 'dev' });
+    const res = out.res as {
+      status: number;
+      body: {
+        result: unknown;
+        patch: {
+          version: number;
+          baseVersion: number;
+          scalars: { fortune: DailyFortune | null };
+          writes: Record<string, unknown[]>;
+        };
+      };
+    };
+    expect(res.status).toBe(200);
+    expect(res.body.result).toEqual({ type: 'boot', schoolDay: TODAY_KST });
+    expect(res.body.patch.version).toBe(2);
+    expect(res.body.patch.baseVersion).toBe(1);
+    expect(res.body.patch.writes).toEqual({
+      instancesAdded: [], instancesRemoved: [], instancesMoved: [], instancesLocked: [], records: [],
+    });
+    expect(out.db.profiles).toHaveLength(1);
+    expect(out.db.profiles[0]).toMatchObject({ user_id: '<user>', nickname: expect.any(String) });
+    expect(out.db.saves_current).toHaveLength(1);
+    const save = out.db.saves_current[0] as {
+      version: string; gold: string; fame: string; boat: number; rod: number; data: GameState;
+    };
+    expect(save).toMatchObject({ version: '2', gold: '0', fame: '0', boat: 0, rod: 1 });
+    expect(save.data.v).toBe(10);
+    expect(save.data.fortune).toEqual({
+      day: TODAY_KST,
+      kind: expect.toBeOneOf(['fish', 'gold', 'shadow']),
+      index: expect.toBeOneOf([3, 5]),
+    });
+    expect(res.body.patch.scalars.fortune).toEqual(save.data.fortune);
+    expect(out.db.events).toEqual([
+      { user_id: '<user>', type: 'boot', payload: { buildId: 'dev' }, created_at: '<now>' },
+    ]);
   });
 
   it('구 saves 행만 있는 사용자는 그 상태로 시딩한다', async () => {
@@ -120,7 +158,36 @@ describe('첫 액션', () => {
       exhibit: [], dex: { crucian: { normal: { count: 3, maxSize: 31, first: '2026-01-02' } } },
       coupons: [], location: at('home'), visited: [], artifacts: [], items: {}, activeBait: null,
     }, '2026-01-03T00:00:00.000Z']);
-    expect(await snapshotOf(uid, await callAction(userToken(uid), { type: 'boot' }))).toMatchSnapshot();
+    const out = await snapshotOf(uid, await callAction(userToken(uid), { type: 'boot' }));
+    const res = out.res as {
+      status: number;
+      body: { result: unknown; patch: { version: number; baseVersion: number; scalars: { fortune: DailyFortune | null } } };
+    };
+    expect(res.status).toBe(200);
+    expect(res.body.result).toEqual({ type: 'boot', schoolDay: TODAY_KST });
+    expect(res.body.patch.version).toBe(2);
+    expect(res.body.patch.baseVersion).toBe(1);
+    const save = out.db.saves_current[0] as {
+      version: string; gold: string; fame: string; boat: number; rod: number; data: GameState;
+    };
+    expect(save).toMatchObject({ version: '2', gold: '500', fame: '20', boat: 0, rod: 2 });
+    expect(save.data.v).toBe(10);
+    expect(save.data.fortune).toEqual({
+      day: TODAY_KST,
+      kind: expect.toBeOneOf(['fish', 'gold', 'shadow']),
+      index: expect.toBeOneOf([3, 5]),
+    });
+    expect(res.body.patch.scalars.fortune).toEqual(save.data.fortune);
+    expect(out.db.fish_instances).toMatchObject([
+      { fish_id: 'crucian', locked: false, slot: null },
+      { fish_id: 'minnow', locked: true, slot: null },
+    ]);
+    expect(out.db.records).toEqual([
+      { user_id: '<user>', fish_id: 'crucian', form: 'normal', count: '3', max_size: 31, first_caught: '2026-01-02T00:00:00.000Z', updated_at: '<now>' },
+    ]);
+    expect(out.db.events).toEqual([
+      { user_id: '<user>', type: 'boot', payload: {}, created_at: '<now>' },
+    ]);
   });
 });
 
@@ -235,7 +302,32 @@ describe('낚시', () => {
 describe('가방', () => {
   it('판매는 개체를 지우고 골드를 더한다', async () => {
     const sold = fish('carp', { uid: testUid(9001) });
-    expect(await run({ state: { bag: [sold, fish('crucian')] } }, { type: 'sell', uids: [sold.uid] })).toMatchSnapshot();
+    const out = await run({ state: { bag: [sold, fish('crucian')] } }, { type: 'sell', uids: [sold.uid] });
+    const res = out.res as {
+      status: number;
+      body: { result: { type: string; gold: number }; patch: { version: number; scalars: { fortune: DailyFortune | null } } };
+    };
+    expect(res.status).toBe(200);
+    const save = out.db.saves_current[0] as { version: string; gold: string; data: GameState };
+    expect(save.version).toBe('3');
+    expect(save.data.fortune).toEqual({
+      day: TODAY_KST,
+      kind: expect.toBeOneOf(['fish', 'gold', 'shadow']),
+      index: expect.toBeOneOf([3, 5]),
+    });
+    expect(res.body.patch.scalars.fortune).toEqual(save.data.fortune);
+    const expectedGold = sellSelected(
+      { ...newState(), bag: [sold], fortune: save.data.fortune },
+      [sold.uid],
+      0,
+      luckMultOf(save.data.fortune, 'sell'),
+    ).gold;
+    expect(Number(save.gold)).toBe(expectedGold);
+    expect(res.body.result).toEqual({ type: 'sell', gold: expectedGold });
+    expect(out.db.fish_instances).toMatchObject([{ fish_id: 'crucian', slot: null }]);
+    expect(out.db.events).toEqual([
+      { user_id: '<user>', type: 'sell', payload: { count: 1, gold: expectedGold, uids: ['<uuid>'] }, created_at: '<now>' },
+    ]);
   });
 
   it('잠금은 개체의 잠금 열만 바꾼다', async () => {
@@ -1379,7 +1471,7 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
     it('sell 동시 요청은 한 번만 확정되고 골드·개체 삭제·sell 이벤트가 이중 적용되지 않는다', async () => {
       const sold = fish('carp', { size: 30 });
       const kept = fish('crucian', { size: 20 });
-      const uid = await seed({ state: { gold: 100, bag: [sold, kept] } });
+      const uid = await seed({ state: { gold: 100, bag: [sold, kept], fortune: { day: TODAY_KST, kind: 'fish', index: 3 } } });
       const expectedGold = sellSelected({ ...newState(), gold: 100, bag: [sold, kept] }, [sold.uid]).gold;
 
       const results = await Promise.all([
@@ -1669,7 +1761,7 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
     it('sell 중 버전 충돌이 나면 개체·골드·이벤트를 쓰지 않고, 재시도 시 한 번만 판매된다', async () => {
       const sold = fish('carp', { size: 30 });
       const kept = fish('crucian', { size: 20 });
-      const uid = await seed({ state: { gold: 100, bag: [sold, kept] } });
+      const uid = await seed({ state: { gold: 100, bag: [sold, kept], fortune: { day: TODAY_KST, kind: 'fish', index: 3 } } });
       const expectedGold = sellSelected({ ...newState(), gold: 100, bag: [sold, kept] }, [sold.uid]).gold;
 
       const conflict = await conflictDuringCommit(uid, { type: 'sell', uids: [sold.uid] });
@@ -1941,5 +2033,109 @@ describe('네임드 토벌 단일 기록과 일일 상한', () => {
     vi.setSystemTime(Date.parse(NOW) + 4000);
     const nextAccept = await callAction(userToken(uid), { type: 'acceptQuest', questId: second.id, port: 'walvisbay' });
     expect(nextAccept.status).toBe(200);
+  });
+});
+
+describe('오늘의 운세', () => {
+  const storedFortune = async (uid: string) => {
+    const { rows } = await env.client.query<{ version: string; gold: string; data: GameState }>(
+      'select version, gold, data from public.saves_current where user_id = $1', [uid],
+    );
+    return { version: Number(rows[0].version), gold: Number(rows[0].gold), fortune: rows[0].data.fortune };
+  };
+
+  it('boot 첫 접속 시 오늘의 운세를 고정해 저장하고, 같은 게임 날짜 내 재접속(04:00 경계 전)에는 바뀌지 않는다', async () => {
+    const uid = await seed({ state: { fortune: null } });
+
+    const firstRes = await callAction(userToken(uid), { type: 'boot', buildId: 'dev' });
+    expect(firstRes.status).toBe(200);
+    const firstScalars = (firstRes.body as { patch: { scalars: { fortune: DailyFortune | null } } }).patch.scalars;
+    const firstSaved = await storedFortune(uid);
+    expect(firstSaved.version).toBe(3);
+    expect(firstSaved.fortune).toEqual({
+      day: TODAY_KST,
+      kind: expect.toBeOneOf(['fish', 'gold', 'shadow']),
+      index: expect.toBeOneOf([3, 5]),
+    });
+    expect(firstScalars.fortune).toEqual(firstSaved.fortune);
+
+    // 같은 게임 날짜의 마지막 시각(KST 03:59:59)에 재접속해도 운세는 그대로다
+    vi.setSystemTime(new Date('2030-03-04T18:59:59.000Z'));
+    const sameDayRes = await callAction(userToken(uid), { type: 'boot', buildId: 'dev' });
+    expect(sameDayRes.status).toBe(200);
+    const sameDayScalars = (sameDayRes.body as { patch: { scalars: { fortune: DailyFortune | null } } }).patch.scalars;
+    const sameDaySaved = await storedFortune(uid);
+    expect(sameDaySaved.version).toBe(4);
+    expect(sameDaySaved.fortune).toEqual(firstSaved.fortune);
+    expect(sameDayScalars.fortune).toEqual(firstSaved.fortune);
+  });
+
+  it('게임 날짜 경계(한국 시각 04:00) 이후 boot 시 새 게임 날짜의 운세로 갱신해 저장한다', async () => {
+    const uid = await seed({ state: { fortune: { day: TODAY_KST, kind: 'fish', index: 3 } } });
+
+    // KST 2030-03-05 04:00:00 — 새 게임 날짜 '2030-03-05' 시작
+    vi.setSystemTime(new Date('2030-03-04T19:00:00.000Z'));
+    const nextDayRes = await callAction(userToken(uid), { type: 'boot', buildId: 'dev' });
+    expect(nextDayRes.status).toBe(200);
+    const nextDayScalars = (nextDayRes.body as { patch: { scalars: { fortune: DailyFortune | null } } }).patch.scalars;
+    const nextDaySaved = await storedFortune(uid);
+    expect(nextDaySaved.version).toBe(3);
+    expect(nextDaySaved.fortune).toEqual({
+      day: '2030-03-05',
+      kind: expect.toBeOneOf(['fish', 'gold', 'shadow']),
+      index: expect.toBeOneOf([3, 5]),
+    });
+    expect(nextDayScalars.fortune).toEqual(nextDaySaved.fortune);
+  });
+
+  it('boot 없이 빠른 경로 catch를 호출해도 백스톱으로 오늘의 운세를 고정해 저장한다', async () => {
+    const uid = await seed({ state: { fortune: null }, version: 2 });
+
+    const res = await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'good' });
+    expect(res.status).toBe(200);
+    const scalars = (res.body as { patch: { scalars: { fortune: DailyFortune | null } } }).patch.scalars;
+    const saved = await storedFortune(uid);
+    expect(saved.version).toBe(3);
+    expect(saved.fortune).toEqual({
+      day: TODAY_KST,
+      kind: expect.toBeOneOf(['fish', 'gold', 'shadow']),
+      index: expect.toBeOneOf([3, 5]),
+    });
+    expect(scalars.fortune).toEqual(saved.fortune);
+  });
+
+  it('boot 없이 sell을 호출해도 백스톱으로 운세를 고정하고 재물운 배율을 판매가에 반영한다', async () => {
+    const soldNoBoot = fish('carp', { size: 30, uid: testUid(9501) });
+    const uidNoBoot = await seed({ state: { fortune: null, bag: [soldNoBoot] } });
+
+    const noBootRes = await callAction(userToken(uidNoBoot), { type: 'sell', uids: [soldNoBoot.uid] });
+    expect(noBootRes.status).toBe(200);
+    const noBootScalars = (noBootRes.body as { patch: { scalars: { fortune: DailyFortune | null } } }).patch.scalars;
+    const noBootSaved = await storedFortune(uidNoBoot);
+    expect(noBootSaved.version).toBe(3);
+    expect(noBootSaved.fortune).toEqual({
+      day: TODAY_KST,
+      kind: expect.toBeOneOf(['fish', 'gold', 'shadow']),
+      index: expect.toBeOneOf([3, 5]),
+    });
+    expect(noBootScalars.fortune).toEqual(noBootSaved.fortune);
+
+    // 재물운 지수 5(×1.05)가 고정된 날에는 판매가가 +5%p 올라 저장된다
+    const soldGoldDay = fish('carp', { size: 30, uid: testUid(9502) });
+    const goldFortune: DailyFortune = { day: TODAY_KST, kind: 'gold', index: 5 };
+    const uidGoldDay = await seed({ state: { fortune: goldFortune, bag: [soldGoldDay] } });
+    const expectedGold = sellSelected(
+      { ...newState(), bag: [soldGoldDay], fortune: goldFortune },
+      [soldGoldDay.uid],
+      0,
+      luckMultOf(goldFortune, 'sell'),
+    ).gold;
+
+    const goldDayRes = await callAction(userToken(uidGoldDay), { type: 'sell', uids: [soldGoldDay.uid] });
+    expect(goldDayRes.status).toBe(200);
+    const goldDaySaved = await storedFortune(uidGoldDay);
+    expect(goldDaySaved.version).toBe(3);
+    expect(goldDaySaved.gold).toBe(expectedGold);
+    expect(goldDaySaved.fortune).toEqual(goldFortune);
   });
 });

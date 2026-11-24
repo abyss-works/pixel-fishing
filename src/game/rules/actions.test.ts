@@ -299,11 +299,11 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
     expect(out.events).toEqual([]);
   });
 
-  it('boot — 상태 무변경, 접속 흔적 한 행 (buildId는 잘라서 남긴다)', () => {
+  it('boot — 그날 첫 접속이면 서버 시각으로 오늘의 운세를 고정하고, 나머지 상태는 유지한다', () => {
     const s = seed({ gold: 42 });
-    const out = applyAction(s, { type: 'boot', buildId: 'a'.repeat(100) }, deps());
+    const out = applyAction(s, { type: 'boot', buildId: 'a'.repeat(100) }, deps({ rng: () => 0.5 }));
     if (!out.ok) throw new Error(out.error);
-    expect(out.state).toEqual(s);                                  // 게임 상태 무변경
+    expect(out.state).toEqual({ ...s, fortune: { day: '2026-08-22', kind: 'gold', index: 5 } });
     // 결과에는 어군 배치 날짜가 실린다 — deps.now(KST 12:00) 기준 당일
     expect(out.result).toEqual({ type: 'boot', schoolDay: '2026-08-22' });
     expect(out.events).toEqual([{ type: 'boot', payload: { buildId: 'a'.repeat(64) } }]);
@@ -311,6 +311,43 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
     expect(out.writes).toEqual({
       instancesAdded: [], instancesRemoved: [], instancesMoved: [], instancesLocked: [], records: [],
     });
+  });
+
+  it('boot — 같은 게임 날짜 재접속에서는 이미 고정된 운세를 유지하고 상태를 바꾸지 않는다', () => {
+    const fixed = { day: '2026-08-22', kind: 'shadow' as const, index: 3 as const };
+    const s = seed({ gold: 42, fortune: fixed });
+    const out = applyAction(s, { type: 'boot' }, deps({
+      now: '2026-08-22T18:59:59.000Z', // KST 2026-08-23 03:59:59 (아직 2026-08-22 게임 날짜)
+      rng: () => { throw new Error('같은 날 재접속 rng 호출 금지'); },
+    }));
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state).toEqual(s);
+  });
+
+  it('boot — 게임 날짜(KST 04:00 경계)가 지나면 새 운세를 굴려 고정한다', () => {
+    const prev = { day: '2026-08-21', kind: 'fish' as const, index: 3 as const };
+    const s = seed({ fortune: prev });
+    // 2026-08-22 03:59:59 KST → 전날 게임 날짜(2026-08-21)라 기존 운세 유지
+    const before = applyAction(s, { type: 'boot' }, deps({
+      now: '2026-08-21T18:59:59.000Z',
+      rng: () => { throw new Error('경계 전 rng 호출 금지'); },
+    }));
+    if (!before.ok) throw new Error(before.error);
+    expect(before.state.fortune).toEqual(prev);
+    // 2026-08-22 04:00:00 KST → 새 게임 날짜(2026-08-22)라 새 운세 고정
+    const after = applyAction(s, { type: 'boot' }, deps({
+      now: '2026-08-21T19:00:00.000Z',
+      rng: () => 0.9,
+    }));
+    if (!after.ok) throw new Error(after.error);
+    expect(after.state.fortune).toEqual({ day: '2026-08-22', kind: 'shadow', index: 5 });
+    // 같은 날 재접속에서는 방금 고정한 운세를 유지한다
+    const revisit = applyAction(after.state, { type: 'boot' }, deps({
+      now: '2026-08-22T03:00:00.000Z',
+      rng: () => { throw new Error('재접속 rng 호출 금지'); },
+    }));
+    if (!revisit.ok) throw new Error(revisit.error);
+    expect(revisit.state).toEqual(after.state);
   });
 
   it('boot — buildId 없음/형식 깨짐은 빈 payload로 수용한다 (텔레메트리가 게임을 막지 않게)', () => {

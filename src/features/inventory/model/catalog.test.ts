@@ -59,4 +59,24 @@ describe('가방 파생 데이터', () => {
     expect(preview.total.value).toBe(sellSelected(state, preview.soldUids, bonus).gold);
     expect(preview.rows.reduce((sum, row) => sum + row.selectedSubtotal, 0)).toBe(preview.total.base);
   });
+
+  it('운 배율(재물운)이 켜지면 보너스 합산 뒤에 곱해지고 오늘의 운세 내역과 서버 판매 결과가 같다', () => {
+    const [fish, other] = FISH.filter(f => f.price >= 100);
+    const bag = [instance('a', fish.id), instance('b', other.id)];
+    const state = { ...newState(), gold: 0, bag };
+    const bonus = 0.2;
+    const luck = 1.05;
+
+    const preview = selectSalePreview(bag, new Set(), bonus, 0, luck);
+    const guildDelta = saleBonusOf(preview.total.base, bonus);
+    const expectedValue = sellSelected(state, preview.soldUids, bonus, luck).gold;
+    const luckDelta = expectedValue - (preview.total.base + guildDelta);
+
+    expect(luckDelta).toBeGreaterThan(0);
+    expect(preview.total.value).toBe(expectedValue);
+    expect(preview.total.mods).toEqual([
+      { id: 'guild-sell', label: '판매가 보너스', delta: guildDelta },
+      { id: 'fortune-sell', label: '오늘의 운세', delta: luckDelta },
+    ]);
+  });
 });

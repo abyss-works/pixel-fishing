@@ -23,7 +23,9 @@ export type StatModSource =
   | { kind: 'relic'; id: string }
   | { kind: 'slot'; recipe: string }
   | { kind: 'achievement'; id: string }
-  | { kind: 'rule'; id: 'night' | 'power' };
+  | { kind: 'rule'; id: 'night' | 'power' }
+  /** "운" 출처 — 다른 보너스를 다 적용한 뒤 곱하는 최종 배율의 몫 */
+  | { kind: 'fortune' };
 
 export interface StatMod {
   id: string;    // 기여 원 식별자 — 낚싯대/밤/아티팩트…

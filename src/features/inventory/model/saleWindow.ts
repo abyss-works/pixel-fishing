@@ -5,6 +5,7 @@ import type { BaseId } from '../../../game/content/places';
 import { RARITY, RARITY_ORDER } from '../../../game/content/rarity';
 import type { RarityId } from '../../../game/content/rarity';
 import { achievementBonusesOf } from '../../../game/rules/achievements';
+import { fortuneOf, luckMultOf } from '../../../game/rules/fortune';
 import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { BASE_PACKS } from '../../../game/world';
@@ -64,14 +65,17 @@ export interface SaleTabView extends SalePreview {
 }
 
 export function selectSaleTab(
-  game: Pick<GameState, 'bag' | 'gold'> & Partial<Pick<GameState, 'achievementCounters'>>,
+  game: Pick<GameState, 'bag' | 'gold' | 'fortune'> & Partial<Pick<GameState, 'achievementCounters'>>,
   excluded: ReadonlySet<string>,
   sellBonus: number,
+  now: string = new Date().toISOString(),
 ): SaleTabView {
   const achSellBonus = game.achievementCounters
     ? achievementBonusesOf({ ...newState(), achievementCounters: game.achievementCounters }).sellBonus
     : 0;
-  const preview = selectSalePreview(game.bag, excluded, sellBonus, achSellBonus);
+  // 돈 운의 날에는 미리보기 합계가 실제 수령액과 같아야 한다 — 서버 판매가 곱하는 운 배율을 그대로 넘긴다
+  const luck = luckMultOf(fortuneOf(game, now), 'sell');
+  const preview = selectSalePreview(game.bag, excluded, sellBonus, achSellBonus, luck);
   const count = preview.soldUids.length;
   return {
     ...preview, count,

@@ -63,6 +63,27 @@ describe('판매 탭', () => {
     expect(v.count).toBe(0);
     expect(v.bag).toEqual({ current: 1, after: 1 });
   });
+
+  it('오늘의 재물운이 켜져 있으면 예상 수령액과 판매 후 골드에 운 배율을 반영한다', () => {
+    const now = '2026-11-24T05:00:00.000Z';
+    const bigFish = FISH.find(f => f.price >= 100)!;
+    const g = seed({
+      gold: 100,
+      bag: [inst('a', { fishId: bigFish.id })],
+      fortune: { day: '2026-11-24', kind: 'gold', index: 5 },
+    });
+    const v = selectSaleTab(g, new Set(), 0, now);
+    const expected = Math.round(bigFish.price * 1.05);
+    expect(v.total.value).toBe(expected);
+    expect(v.total.mods).toEqual([{ id: 'fortune-sell', label: '오늘의 운세', delta: expected - bigFish.price }]);
+    expect(v.gold).toEqual({ current: 100, after: 100 + expected });
+
+    // 날짜가 지난 재물운이나 다른 종류 운세는 반영하지 않는다
+    const stale = selectSaleTab({ ...g, fortune: { day: '2026-11-23', kind: 'gold', index: 5 } }, new Set(), 0, now);
+    expect(stale.total.value).toBe(bigFish.price);
+    const other = selectSaleTab({ ...g, fortune: { day: '2026-11-24', kind: 'fish', index: 5 } }, new Set(), 0, now);
+    expect(other.total.value).toBe(bigFish.price);
+  });
 });
 
 describe('등급 칩', () => {

@@ -92,15 +92,16 @@ const onDay = (p: NamedPity, nowIso: string): NamedPity => {
 /**
  * 네임드 조우 추첨 + 천장. 천장에 닿으면 조우 게이트를 강제로 통과시킨다(rng 소비 횟수는 같다).
  * @param bonus 네임드 조우 가중치에 더하는 비율(길드 네임드 조우 보너스). 천장 문턱은 바꾸지 않는다
+ * @param luck 보너스를 다 적용한 가중치에 곱하는 운 배율(그림자 운). 천장 문턱은 바꾸지 않는다
  */
 export function drawNamedEncounter(
   p: NamedPity, activeIds: readonly string[], spot: SpotId, nowIso: string,
-  rng: () => number = Math.random, force = false, bonus = 0,
+  rng: () => number = Math.random, force = false, bonus = 0, luck = 1,
 ): { quest: BountyQuest | null; pity: NamedPity; byCeiling: boolean } {
   const cur = onDay(p, nowIso);
   if (namedEncounterCandidates(activeIds, spot).length === 0) return { quest: null, pity: cur, byCeiling: false };
   const byCeiling = cur.misses + 1 >= namedPityCeiling(cur.fails);
-  const quest = rollNamedEncounter(activeIds, spot, rng, force || byCeiling, bonus);
+  const quest = rollNamedEncounter(activeIds, spot, rng, force || byCeiling, bonus, luck);
   return quest
     ? { quest, pity: { ...cur, misses: 0 }, byCeiling: byCeiling && !force }
     : { quest: null, pity: { ...cur, misses: cur.misses + 1 }, byCeiling: false };
