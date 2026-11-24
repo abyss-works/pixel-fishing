@@ -185,7 +185,7 @@ export function expiredQuests(rows: BountyRows, dayStartISO: string): { id: stri
 }
 
 /** 개체·도감 스킵 — 이 액션들의 리듀서는 스칼라/blob만 건드린다(가방·도감 무접촉 검증됨):
- * boot/sendLetter/setNickname(상태불변) · upgradeRod/buyBoat/travel/redeemCoupon(스칼라만) · seeTutorial(blob만) · changeClothes/buyHat/wearHat(골드와 blob만).
+ * sendLetter/setNickname(상태불변) · boot(그날 첫 접속이면 운세 스칼라만 고정) · upgradeRod/buyBoat/travel/redeemCoupon(스칼라만) · seeTutorial(blob만) · changeClothes/buyHat/wearHat(골드와 blob만).
  * debug는 도감 명령(dex.completeZone)이 있어 스킵하지 않는다.
  * deliverBounty는 서버 주입 완료 여부만 보니 스킵 유지.
  * exchangeArtifact·levelUpArtifact는 재료(items)와 유물·레벨 맵이 모두 blob이라 스킵한다.
@@ -289,8 +289,8 @@ async function route(req: Req, res: Res): Promise<void> {
   }
 
   // 현재 상태 로드 — 프로필·저장 상태와, 필요한 액션이면 개체·도감·수배 행까지 한 번에 읽는다.
-  // boot/sendLetter는 상태 참조를 그대로 반환해 게임 상태를 바꾸지 않는다.
-  // 그래서 개체·도감 조회가 불필요하고, 응답 델타도 빈 writes다. 스냅샷 경계 버전에서는
+  // sendLetter는 상태 참조를 그대로 반환하고, boot는 그날 첫 접속에 운세 스칼라만 고정한다 —
+  // 둘 다 개체·도감을 건드리지 않아 조회가 불필요하고, 응답 델타도 빈 writes다. 스냅샷 경계 버전에서는
   // 풀 조회로 돌아간다 (saves 아카이브는 풀 스냅샷이 계약이라 빈 가방 스냅샷을 남기면 안 된다).
   const wantsBounty = BOUNTY_ACTIONS.has(action.type)
     && (action.type === 'catch' || typeof (action as { questId?: unknown }).questId === 'string');
