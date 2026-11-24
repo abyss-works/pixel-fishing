@@ -23,6 +23,14 @@ describe('VHelp 요리', () => {
     const { container } = render(<VHelp />);
     expect(container.textContent).toContain('집 부엌의 도시락 탭과 미끼 탭에서 기운으로 요리해요.');
   });
+
+  it('가방은 상단 3서브탭과 Tab 순환, 우상단 목록/카드 아이콘 전환으로 안내한다', () => {
+    const { container } = render(<VHelp />);
+    const t = container.textContent ?? '';
+    expect(t).toContain('상단 서브탭을 고르거나 탭을 한 번 더 누르면');
+    expect(t).toContain('오른쪽 위 아이콘으로 목록 ↔ 카드를 바꿔요.');
+    expect(t).toContain('가방에서는 물고기 → 아이템 → 유물, 도감에서는 구역이 바뀌어요.');
+  });
 });
 
 describe('VHelp 바운티 헌팅', () => {
