@@ -248,4 +248,49 @@ describe('테스트 데이터베이스', () => {
       }
     });
   });
+
+  describe('event_consumer_cutoffs (0039)', () => {
+    it('기본값과 제약(rule_version >= 1, backfill_status enum)을 강제하고 복합 PK를 쓴다', async () => {
+      const { rows } = await client.query<{
+        backfilled_through_event_id: string;
+        backfill_status: string;
+        notes: Record<string, unknown>;
+        updated_at: Date;
+      }>(
+        `insert into public.event_consumer_cutoffs (consumer_key, rule_version, live_since_event_id)
+         values ('achievement_counters', 1, 100)
+         returning backfilled_through_event_id, backfill_status, notes, updated_at`,
+      );
+      expect(Number(rows[0].backfilled_through_event_id)).toBe(0);
+      expect(rows[0].backfill_status).toBe('pending');
+      expect(rows[0].notes).toEqual({});
+      expect(rows[0].updated_at).toBeInstanceOf(Date);
+
+      await expect(client.query(
+        `insert into public.event_consumer_cutoffs (consumer_key, rule_version) values ('achievement_counters', 1)`,
+      )).rejects.toMatchObject({ code: '23505' });
+      await expect(client.query(
+        `insert into public.event_consumer_cutoffs (consumer_key, rule_version) values ('achievement_counters', 0)`,
+      )).rejects.toMatchObject({ code: '23514' });
+      await expect(client.query(
+        `insert into public.event_consumer_cutoffs (consumer_key, rule_version, backfill_status) values ('achievement_counters', 2, 'invalid')`,
+      )).rejects.toMatchObject({ code: '23514' });
+    });
+
+    it('인증 사용자는 읽거나 쓰지 못한다 — 서버 전용', async () => {
+      await client.query(
+        `insert into public.event_consumer_cutoffs (consumer_key, rule_version) values ('cold_archive', 1) on conflict do nothing`,
+      );
+      await client.query('begin');
+      try {
+        await client.query('set local role authenticated');
+        expect((await client.query('select consumer_key from public.event_consumer_cutoffs')).rows).toEqual([]);
+        await expect(client.query(
+          `insert into public.event_consumer_cutoffs (consumer_key, rule_version) values ('other', 1)`,
+        )).rejects.toMatchObject({ code: '42501' });
+      } finally {
+        await client.query('rollback');
+      }
+    });
+  });
 });

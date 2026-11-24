@@ -45,6 +45,7 @@ exports[`콜드 아카이브 크론 > 컷오프 이전 events와 사용자별 �
     {
       "content": [
         {
+          "counted": false,
           "created_at": "2030-02-22T05:06:07.000Z",
           "payload": {
             "at": "2030-02-22T05:06:07.000Z",
@@ -53,6 +54,7 @@ exports[`콜드 아카이브 크론 > 컷오프 이전 events와 사용자별 �
           "user_id": "<user>",
         },
         {
+          "counted": false,
           "created_at": "2030-02-24T05:06:07.000Z",
           "payload": {
             "at": "2030-02-24T05:06:07.000Z",
@@ -61,6 +63,7 @@ exports[`콜드 아카이브 크론 > 컷오프 이전 events와 사용자별 �
           "user_id": "<user>",
         },
         {
+          "counted": false,
           "created_at": "2030-02-23T05:06:07.000Z",
           "payload": {
             "at": "2030-02-23T05:06:07.000Z",
@@ -75,7 +78,7 @@ exports[`콜드 아카이브 크론 > 컷오프 이전 events와 사용자별 �
       "content": {
         "at": "<now>",
         "bytesGzip": "<bytes>",
-        "bytesRaw": 472,
+        "bytesRaw": 520,
         "cutoff": "2030-02-25T05:06:07.000Z",
         "idMax": 3,
         "idMin": 1,
