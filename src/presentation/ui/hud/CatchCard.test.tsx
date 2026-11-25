@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { FISH, RARITY, formName, priceOf } from '../../../game/rules/logic';
+import { FISH, RARITY, RARITY_ORDER, formName, priceOf } from '../../../game/rules/logic';
 import { fmtGold, fmtSize } from '../format';
 import CatchCard from './CatchCard';
 
@@ -13,43 +13,79 @@ const info = (over: Partial<{ form: 'normal' | 'variant'; size: number; percenti
 describe('획득 카드', () => {
   afterEach(cleanup);
 
-  it('좌측 card 스프라이트 칸과 우측 등급·이름·2×2 크기/판매가 지표를 가운뎃점 없이 보인다', () => {
+  it('고정 크기(340×160)·좌측 어종 액자·우측 등급·이름·빈 변이 자리·크기/판매가 2종만 표시한다', () => {
     const { container } = render(<CatchCard fish={fish} info={info()} />);
-    const card = container.firstElementChild!;
+    const card = container.firstElementChild as HTMLElement;
     expect(card).toHaveAttribute('data-rarity', fish.rarity);
-    // card 프리셋(160×90) 캔버스를 사용한다
+    expect(card.className).toContain('w-[340px]');
+    expect(card.className).toContain('h-[160px]');
+
     const canvas = container.querySelector('canvas')!;
     expect(canvas).toHaveAttribute('width', '160');
     expect(canvas).toHaveAttribute('height', '90');
 
     expect(card).toHaveTextContent(RARITY[fish.rarity].name);
     expect(card).toHaveTextContent(fish.name);
-    // 2×2 지표 격자(4개 셀: 크기/값, 판매가/값)
+    // 비돌연변이에서도 로어 1줄 고정 높이를 빈 자리로 유지한다
+    expect(container.querySelector('[data-catch-variant]')).toBeNull();
+    const slot = container.querySelector('[data-catch-variant-slot]') as HTMLElement;
+    expect(slot).not.toBeNull();
+    expect(slot.className).toContain('h-[18px]');
+
+    // 수치 2종(크기, 판매가)만 표시하고 명성·판정·수동/방치·월척 문구는 제외한다
     const metrics = container.querySelector('[data-catch-metrics]')!;
     expect([...metrics.children].map(el => el.textContent)).toEqual([
       '크기', fmtSize(30), '판매가', fmtGold(priceOf(fish, 'normal')),
     ]);
-    expect(card.textContent).not.toMatch(/[·★]/);
-    expect(container.querySelector('[data-catch-variant]')).toBeNull();
+    expect(card.textContent).not.toMatch(/명성|GOOD|PERFECT|수동|방치|월척|돌연변이|[·★]/);
     expect(screen.queryByText('NEW')).not.toBeInTheDocument();
   });
 
-  it('월척이면 왕관 줄에 상위 백분율을 보이고, 신규 발견이면 좌상단 NEW 꼬리표를 단다', () => {
-    const { container } = render(<CatchCard fish={fish} info={info({ isBig: true, isNew: true })} />);
-    expect(container.firstElementChild).toHaveTextContent('월척 상위 3%');
-    const tag = screen.getByText('NEW');
-    expect(tag).toHaveClass('bg-gold');
-    expect(tag.className).not.toMatch(/rotate|rounded/);
+  it('우상단 배지는 왕관 → 돌연변이 → NEW 순서로 우측 정렬된다', () => {
+    const { container } = render(<CatchCard fish={fish} info={info({ isBig: true, form: 'variant', isNew: true })} />);
+    const badges = container.querySelector('[data-catch-badges]')!;
+    expect(badges.className).toContain('justify-end');
+    expect([...badges.children].map(el => el.getAttribute('data-catch-badge'))).toEqual([
+      'record', 'variant', 'new',
+    ]);
+    const newBadge = screen.getByText('NEW');
+    expect(newBadge).toHaveClass('bg-gold');
+    expect(newBadge.className).not.toMatch(/rotate|rounded/);
+    expect(container.firstElementChild!.textContent).not.toMatch(/월척 상위|돌연변이/);
   });
 
-  it('돌연변이면 변이 이름(자홍 강조)과 암시 문구, 변이 잔광 이펙트를 표시한다', () => {
-    const { container } = render(<CatchCard fish={fish} info={info({ form: 'variant' })} />);
-    const variantTitle = screen.getByText(formName(fish, 'variant'));
-    expect(variantTitle).toHaveClass('text-mutation');
-    const variantLine = container.querySelector('[data-catch-variant]');
-    expect(variantLine).not.toBeNull();
-    expect(variantLine!.textContent?.trim().length).toBeGreaterThan(0);
-    expect(container.querySelector('[data-catch-fx]')!.children.length).toBeGreaterThanOrEqual(8);
+  it('돌연변이여도 액자 겉 테두리는 어종 등급색을 유지하고 자홍 반짝이 배지·로어체 1줄·잔광 이펙트를 표시한다', () => {
+    const borderClassByRarity = {
+      common: 'border-common',
+      rare: 'border-rare',
+      epic: 'border-epic',
+      legendary: 'border-legend',
+    } as const;
+    for (const rarity of RARITY_ORDER) {
+      const targetFish = FISH.find(f => f.rarity === rarity)!;
+      const { container } = render(<CatchCard fish={targetFish} info={info({ form: 'variant' })} />);
+      const portrait = container.querySelector('[data-catch-portrait]')!;
+      expect(portrait.className).toContain(borderClassByRarity[rarity]);
+      expect(portrait.className).not.toContain('border-mutation');
+
+      const variantTitle = screen.getByText(formName(targetFish, 'variant'));
+      expect(variantTitle).toHaveClass('text-mutation');
+      const variantLine = container.querySelector('[data-catch-variant]');
+      expect(variantLine).not.toBeNull();
+      expect(variantLine!.textContent?.trim().length).toBeGreaterThan(0);
+      expect(container.querySelector('[data-catch-variant-slot]')).toBeNull();
+      expect(container.querySelector('[data-catch-fx]')!.children.length).toBeGreaterThanOrEqual(8);
+      expect(container.firstElementChild!.textContent).not.toContain('돌연변이');
+      cleanup();
+    }
+  });
+
+  it('긴 어종명은 1줄 말줄임으로 잘려 카드 높이와 폭을 늘리지 않는다', () => {
+    const longFish = { ...fish, name: '아주긴어종이름테스트열두글자이상' };
+    const { container } = render(<CatchCard fish={longFish} info={info()} />);
+    const nameEl = container.querySelector('[data-catch-name]')!;
+    expect(nameEl.className).toContain('truncate');
+    expect(nameEl.className).toContain('h-[28px]');
   });
 
   it('이펙트 층은 카드의 쌓임 맥락 밖에서 카드와 형제로 놓여 채팅과 헤더 위 이펙트 층 토큰을 쓴다', () => {
