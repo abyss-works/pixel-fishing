@@ -1,6 +1,7 @@
 // 방치 결과 알림 카드와 결과 창 — 요약을 문구·절로 보이고, 해당하지 않는 절은 뺀다.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { summarizeAway } from '../../../../game/rules/away';
 import type { AwayEvent } from '../../../../game/rules/away';
 import { BOATS, newState } from '../../../../game/rules/logic';
@@ -108,5 +109,20 @@ describe('결과 창', () => {
     fireEvent.click(screen.getAllByRole('button', { name: '닫기' }).at(-1)!);
     expect(onOpenBag).toHaveBeenCalled();
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('새로 도감에 오른 물고기 카드를 누르면 어종 상세 창이 열린다', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const withDex = { ...game, dex: { seabream: { normal: { count: 1, maxSize: 48, first: T0 } } } };
+    render(
+      <QueryClientProvider client={client}>
+        <AwayReportModal report={full} game={withDex} onClose={() => {}} onOpenBag={() => {}} />
+      </QueryClientProvider>,
+    );
+    const card = screen.getByRole('button', { name: /참돔/ });
+    fireEvent.click(card);
+    const dialogs = screen.getAllByRole('dialog');
+    expect(dialogs[dialogs.length - 1]).toHaveTextContent('참돔');
+    expect(dialogs[dialogs.length - 1]).toHaveTextContent('표본');
   });
 });

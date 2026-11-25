@@ -1,6 +1,7 @@
 // 가방 탭 — 전시대 선반(칸 3개)과 진열·회수 버튼이 exhibit 액션으로 이어지는지 고정한다.
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import BagTab, { EXHIBIT_UI_ENABLED } from './BagTab';
 import { resetBagView, setBagSection } from './bagView';
 import { AUTO_ENERGY_BOAT, COOKING_UNLOCK_BOAT } from '../../../../../game/content/cooking';
@@ -207,15 +208,30 @@ describe('BagTab - 3서브탭, 보기 전환 아이콘, 하단 버튼', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('우상단 보기 전환 아이콘 버튼으로 목록과 카드 보기를 전환한다', () => {
-    show(game({
+  it('우상단 보기 전환 아이콘 버튼으로 목록과 카드 보기를 전환하고 발견 어종 카드를 누르면 도감 상세가 열린다', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const g = game({
       bag: [inst('a')],
       dex: { carp: { normal: { count: 1, maxSize: 20, first: null } } },
-    }));
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <BagTab sellBonus={0} game={g} dispatch={vi.fn()} setToast={vi.fn()} />
+      </QueryClientProvider>,
+    );
+    expect(screen.queryByText(/자물쇠는 개체마다 걸 수 있고/)).toBeNull();
+    const guideTrigger = screen.getByText('목록 안내');
+    fireEvent.mouseEnter(guideTrigger);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('목록은 등급이 높은 순으로 정렬돼요.');
+    fireEvent.mouseLeave(guideTrigger);
+
     const toCards = screen.getByRole('button', { name: '카드 보기' });
     fireEvent.click(toCards);
     expect(screen.getByRole('button', { name: '목록 보기' })).toBeInTheDocument();
-    expect(screen.getByLabelText('잉어 일반 1마리 돌연변이 0마리 보유')).toBeInTheDocument();
+    const card = screen.getByRole('button', { name: '잉어 일반 1마리 돌연변이 0마리 보유' });
+    fireEvent.click(card);
+    expect(screen.getByRole('dialog')).toHaveTextContent('잉어');
+    expect(screen.getByRole('dialog')).toHaveTextContent('표본');
   });
 
   it('거점에서 요리 해금·계정이면 기운 얻기 버튼이 활성화되고 클릭 시 연결 콜백을 호출한다', () => {

@@ -45,7 +45,6 @@ export default function WardrobePanel({ game, busy, onChangeClothes, onBuyHat, o
         <div className="flex flex-col gap-1 min-w-0">
           <span className="text-2xs text-text-dim">{caption}</span>
           <b className="text-base text-text truncate">{outfitName(pick)}, {hatById(hatOnPreview)?.name ?? '모자 없음'}</b>
-          <span className="text-2xs text-text-dim">다른 플레이어에게도 이렇게 보여요.</span>
         </div>
       </Inset>
       <TabBar

@@ -12,9 +12,12 @@ const open = (accountState: AccountLockState) => {
 };
 
 describe('LetterModal', () => {
-  it('계정 사용자는 입력 칸이 열려 있고 건의 안내 툴팁을 보며 편지를 보낸다', () => {
+  it('계정 사용자는 입력 칸이 툴팁에 가리지 않고 열려 있으며 편지를 보낸다', () => {
     const { dispatch } = open('account');
     const field = screen.getByPlaceholderText('예) 가방 칸을 조금 늘려 주세요');
+    fireEvent.mouseEnter(field);
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    expect(screen.getByText(/답장은 계정 이메일로 드려요/)).toBeInTheDocument();
     fireEvent.change(field, { target: { value: '안녕하세요' } });
     fireEvent.click(screen.getByRole('button', { name: '보내기' }));
     expect(dispatch).toHaveBeenCalledWith({ type: 'sendLetter', text: '안녕하세요' });

@@ -44,9 +44,7 @@ const RAW_INPUT = /<(?:input|textarea|select)\b/;
 /** 제목 태그 직접 사용 — 쪽 제목은 PageTitle, 구역은 SectionTitle, 묶음은 Subheading, 창·상자 제목은 Panel·ModalCard의
  *  title이 맡는다. 아래는 그 틀에 맞지 않는 자리라 직접 둔다(줄이기만 한다) */
 const RAW_HEADING = /<h[1-6][\s>]/;
-const RAW_HEADING_EXCEPTIONS = new Set([
-  'views/game/tabs/region/VRegion.tsx', // 지역 탭 로어 상자 — 고정 높이 상자 안 한 줄 제목
-]);
+const RAW_HEADING_EXCEPTIONS = new Set<string>([]);
 
 /** 화면(views·layouts)의 overflow 직접 지정 — 세로 스크롤은 공용 스크롤 방식(pf-vscroll + pf-scroll-panel)이나 TableBox가 맡는다.
  *  아래는 칸 안에서 표를 가로로 굴려야 하는 자리(관리자 표, 지역 탭 표)와 양방향 표 상자라 직접 둔다(줄이기만 한다) */
@@ -181,7 +179,6 @@ const hasVscrollWithoutBar = (line: string) =>
  *  관리자와 개발 도구 화면은 이 규칙을 따로 정한다 */
 const VSCROLL_LITERAL_EXCEPTIONS = new Set([
   'layouts/sidebar/index.tsx',         // 막대를 숨기는 사이드바
-  'views/game/tabs/region/VRegion.tsx', // 사이드바 탭 안의 고정 높이 칸 — 막대 자리 규칙은 창에 적용한다
 ]);
 const isAdminOrDevtools = (path: string) => /^views\/(?:admin|devtools)\//.test(path);
 
@@ -191,7 +188,6 @@ const GUTTER = /\[scrollbar-gutter:stable/;
 const GUTTER_EXCEPTIONS = new Set([
   'ui/hud/MessageLog.tsx', // 캔버스 위 글줄 상자 — 호버 때만 보이는 HUD 막대
   'layouts/sidebar/index.tsx', // 사이드바는 창이 아니며 막대를 숨긴다
-  'views/game/tabs/region/VRegion.tsx', // 사이드바 탭은 창이 아니다(막대 자리 규칙은 창에 적용한다)
 ]);
 
 describe('UI 시스템 가드', () => {

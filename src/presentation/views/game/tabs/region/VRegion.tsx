@@ -1,22 +1,29 @@
-import type { GameState } from '../../../../../game/rules/logic';
+import { useState } from 'react';
+import type { Fish, GameState } from '../../../../../game/rules/logic';
 import type { RegionId } from '../../../../../game/world';
 import { useSpotState } from '../../../../../features/travel/service/useSpotState';
 import { useSchools } from '../../../../../features/gameplay/service/schoolDay';
 import { zoneTips, zoneControls } from '../../../../../game/content/zones';
 import { selectRegionViewData } from '../../../../../features/travel/model/regionView';
-import type { SpotStatus, SpotTendency } from '../../../../../features/travel/model/regionView';
+import type { SpotStatus } from '../../../../../features/travel/model/regionView';
 import { fmtNum } from '../../../../ui/format';
 import { cx } from '../../../../ui/cx';
+import Button from '../../../../ui/Button';
+import Frame from '../../../../ui/Frame';
+import LoreParagraph from '../../../../ui/LoreParagraph';
+import PageTitle from '../../../../ui/PageTitle';
 import PixelIcon from '../../../../ui/PixelIcon';
-import PixelList from '../../../../ui/PixelList';
 import ProgressCount from '../../../../ui/ProgressCount';
 import SectionTitle from '../../../../ui/SectionTitle';
+import Tip, { TipCard } from '../../../../ui/Tip';
 import FishSprite from '../../../../ui/fish/FishSprite';
 import CardCarousel from '../../../../ui/CardCarousel';
 import { DIM_CARD, RARITY_CARD, RarityText } from '../../../../ui/fish/RarityTag';
 import { RARITY_ORDER } from '../../../../../game/content/rarity';
 import DataTable from '../../../../ui/DataTable';
 import Inset from '../../../../ui/Inset';
+import { useDialogs } from '../../../../ui/useDialogs';
+import DexDetail from '../dex/DexDetail';
 
 // 한 화면에 보일 어종 카드 수 — 어군당 보통 5~6종이라 6장이면 대개 한 번에 들어간다.
 const FISH_PER_VIEW = 6;
@@ -28,18 +35,9 @@ function fmtMeters(m: number): string {
   return `${Math.max(10, Math.round(m / 10) * 10)}m`;
 }
 
-/** 슬롯 고정 높이 — 지역 탭의 모든 가변 구간은 **부모 높이를 고정**한다.
- *  구역 전환·수역 입장 전/후 배타 교체 시 레이아웃이 뒤바뀌면 안 된다. 내용이 넘치면
- *  그 슬롯만 스크롤된다. 탭 전체 높이는 씬(마을/바다)이 같으면 항상 같다.
- *  LORE = 구역 로어(제목·한 줄 소개·본문 전문, 넘치면 상자 안 스크롤) · SLOT = 수역 정보(목록↔상세) ·
- *  TABLE = 등급 분포(수역 2~3행) · FOOT = 다음 배·팁·조작(구역별 항목 수·줄바꿈 가변 — 최대
- *  동남아 4팁 8줄 기준, 안전 여유로 스크롤 허용). */
-const LORE_H = 'h-[148px]';
-const SLOT_H = 'h-[168px]';
-/** 등급 분포 — 최대 3행(동남아) + 헤더 + 프레임 여백을 정확히 담는 높이. **스크롤 없음**:
- *  세로 스크롤은 켜지지도 않고(내용 < 높이), 가로만 필요 시 스크롤된다. */
+/** 슬롯 고정 높이 — 수역 정보(목록↔상세)와 등급 분포 표가 구역·어군 전환에도 흔들리지 않게 유지한다. */
+const SLOT_H = 'h-[124px]';
 const TABLE_H = 'h-[124px]';
-const FOOT_H = 'h-[360px]';
 
 /** 해역 상태 표시 — 파워 부족은 경고색(orange)으로 요구 파워를, 배 부족은 자물쇠로 필요한 배를 보인다.
  *  상세(사거리 내 어군)는 내 파워와 요구 파워를 나란히 보인다 */
@@ -59,10 +57,9 @@ function StatusText({ status, detail = false }: { status: SpotStatus; detail?: b
   );
 }
 
-// 어군 슬롯의 두 모드(상세 ⇄ 가까운 목록)가 같은 행·바닥줄 규격을 쓴다 — 전환 시 배치가 흔들리지 않게
+// 어군 슬롯의 두 모드(상세 ⇄ 가까운 목록)가 같은 행 규격을 쓴다 — 전환 시 배치가 흔들리지 않게
 const SLOT_ROW = 'flex items-center justify-between gap-2 px-2 py-1.5 text-sm';
 const SLOT_ROW_SIDE = 'flex items-center gap-1.5 text-xs whitespace-nowrap';
-const SLOT_FOOT = 'mt-auto px-2 py-1.5 text-2xs leading-[1.5] text-text-dim border-t border-line';
 
 const LEVEL_TEXT = { high: '높음', mid: '보통', low: '낮음', none: '-' } as const;
 const LEVEL_CLS = {
@@ -70,8 +67,7 @@ const LEVEL_CLS = {
 } as const;
 
 // 지역 탭 — 존 계층 모델을 표시한다.
-//  로어 슬롯: **항상 존(범위) 정보** — 사거리 내 어군이 있으면 그 어군의 존(하위 존 포함),
-//             없으면 셀 구역의 최상위 존.
+//  구역 머리: 현재 구역 이름과 지역 안내 툴팁, 구역 이야기 보기(상세 모달) 버튼만 둔다.
 //  수역 정보 슬롯: 캐스팅 사거리 내 어군 상세 ⇄ 가까운 어군 목록(거리순 3개, 게임 축척 미터)
 //  등급 분포: 최상위 존 서브트리의 어군 등급 흐름(높음/보통/낮음 — 정성 표시)
 // 좌표·어군·구역은 전역 스토어(Field가 기록, 저장 안 함 — 클라 신뢰).
@@ -80,30 +76,51 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
   const schools = useSchools(region);
   const {
     focused, contextZone, zone, parentZone, tableZone, tableSpots, nearby,
-    focusedFishes, focusedStatus, focusedDex, tendency, nextBoat,
+    focusedFishes, focusedStatus, focusedDex, nextBoat,
   } = selectRegionViewData(game, region, schools, storeZone, currentSpot, pos);
-  const tendencyText: Record<SpotTendency, string> = {
-    legendary: '낮에는 밝은 바다다. 다만 줄을 올릴 때 손끝이 유난히 무거워지는 날이 있다. 그 무게가 언제 오는지는 아무도 가르쳐 주지 않는다.',
-    high: '수면은 평범한 하루처럼 보인다. 그 아래에서는 언제나 시선이 엇갈리고 있다. 줄을 맡겨 둔 손보다 직접 쥔 손에 그 기척이 먼저 닿는다.',
-    ordinary: '대부분의 아침은 익숙한 물고기로 시작한다. 가끔 짧은 손맛이 찾아오지만, 그것은 운보다 꾸준히 줄을 던진 사람에게 온다.',
+  const [fishDetail, setFishDetail] = useState<Fish | null>(null);
+  const { notice, dialogs } = useDialogs();
+
+  const openLore = () => {
+    void notice({
+      layer: 'app',
+      title: parentZone ? `${parentZone.name} > ${zone.name}` : zone.name,
+      body: (
+        <div className="flex flex-col gap-2">
+          <p className="text-sm text-accent">{zone.tagline}</p>
+          <LoreParagraph className="text-xs leading-[1.8] text-text-dim">{zone.lore}</LoreParagraph>
+        </div>
+      ),
+    });
   };
 
   return (
     <div className="flex flex-col gap-3">
-      {/* 로어 슬롯 — 고정 높이. **존(범위) 정보만** 뜬다 — 어군 상세와 배타 교체하지 않는다 */}
-      <Inset className={cx(LORE_H, 'shrink-0 pf-vscroll pf-scroll-panel p-2 flex flex-col justify-start gap-0.5')}>
-        <h3 className="text-sm text-gold pf-accent truncate">
+      <Inset className="shrink-0 p-2 flex items-center justify-between gap-2">
+        <PageTitle className="truncate text-sm">
           {parentZone && <span className="text-text-dim">{parentZone.name} &gt; </span>}
           {zone.name}
-        </h3>
-        <p className="text-accent text-xs">{zone.tagline}</p>
-        <p className="text-2xs leading-[1.6] text-text-dim">
-          {zone.lore}
-        </p>
+        </PageTitle>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <Tip
+            text={(
+              <TipCard
+                title={`${zone.name} 안내`}
+                description={[
+                  ...zoneTips(contextZone),
+                  ...zoneControls(contextZone),
+                ].join('\n')}
+              />
+            )}
+            className="text-2xs text-text-dim"
+          >
+            지역 안내
+          </Tip>
+          <Button size="xs" onClick={openLore}>구역 이야기 보기</Button>
+        </div>
       </Inset>
 
-      {/* 수역 정보 — 고정 높이 슬롯. 캐스팅 사거리 내 어군 상세 ⇄ 가까운 어군 목록 배타 교체.
-          **존 로어를 덮지 않는다** — 존 정보와 별도 슬롯에 표시한다 */}
+      {/* 수역 정보 — 고정 높이 슬롯. 캐스팅 사거리 내 어군 상세 ⇄ 가까운 어군 목록 배타 교체 */}
       <div className="shrink-0">
         <SectionTitle className="flex items-baseline justify-between">
           {focused ? '어군 정보' : '가까운 어군'}
@@ -111,7 +128,7 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
             <span className="text-2xs text-text-dim">도감 <ProgressCount current={focusedDex.caught} target={focusedDex.total} tight /></span>
           )}
         </SectionTitle>
-        <Inset className={cx(SLOT_H, 'pf-vscroll pf-scroll-panel p-0 flex flex-col')}>
+        <Inset className={cx(SLOT_H, 'p-0 flex flex-col')}>
           {focused ? (
             /* ── 사거리 내 어군 상세 ── */
             <div className="flex flex-col flex-1">
@@ -124,26 +141,33 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
               <div className="px-2 py-1.5">
               <CardCarousel perView={FISH_PER_VIEW}>
                 {focusedFishes.map(({ fish: f, discovered: caught }) => {
-                    return (
-                      <div key={f.id} data-rarity={f.rarity}
-                           className={cx(RARITY_CARD, 'p-1 basis-(--card-w)', !caught && DIM_CARD)}>
-                        <FishSprite fish={f} preset="thumb" form="normal" discovered={caught}
-                                    ariaLabel={caught ? f.name : '미확인 어종'}
-                                    className="block mx-auto" />
-                        <div className="text-2xs leading-tight truncate">{caught ? f.name : '???'}</div>
-                        <div className="text-2xs leading-tight"><RarityText rarity={f.rarity} /></div>
-                      </div>
-                    );
-                  })}
+                  const body = (
+                    <>
+                      <FishSprite fish={f} preset="thumb" form="normal" discovered={caught}
+                                  ariaLabel={caught ? f.name : '미확인 어종'}
+                                  className="block mx-auto" />
+                      <div className="text-2xs leading-tight truncate">{caught ? f.name : '???'}</div>
+                      <div className="text-2xs leading-tight"><RarityText rarity={f.rarity} /></div>
+                    </>
+                  );
+                  return caught ? (
+                    <Frame as="button" type="button" key={f.id} data-rarity={f.rarity}
+                           onClick={() => setFishDetail(f)}
+                           className={cx(RARITY_CARD, 'p-1 basis-(--card-w) cursor-pointer hover:border-accent text-center')}>
+                      {body}
+                    </Frame>
+                  ) : (
+                    <div key={f.id} data-rarity={f.rarity}
+                         className={cx(RARITY_CARD, 'p-1 basis-(--card-w)', DIM_CARD)}>
+                      {body}
+                    </div>
+                  );
+                })}
               </CardCarousel>
               </div>
-              <p className={SLOT_FOOT}>
-                {tendency ? tendencyText[tendency] : null}
-              </p>
             </div>
           ) : (
             /* ── 가까운 어군 (거리순 3개, 가벼운 UI) ── */
-            <div className="flex flex-col flex-1">
             <div className="flex flex-col divide-y divide-line">
               {nearby.map(({ spot: s, distancePx: d, status }) => {
                 return (
@@ -157,17 +181,11 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
                 );
               })}
             </div>
-            <p className={SLOT_FOOT}>
-              어군 가까이 가면 사는 물고기를 볼 수 있어요.
-            </p>
-            </div>
           )}
         </Inset>
       </div>
 
-      {/* 등급 분포 — **최상위 존 서브트리** 어군 × 등급의 흐름(높음/보통/낮음, 정성).
-          해역의 등급 확률(가중치 / 해역 가중치 합)을 전역 기본 확률과 비교한 조회 뷰다(selectGradeLevel). 하위 존(해구 등) 위에서도 최상위 존 표가 유지돼 자주 바뀌지 않는다.
-          서브트리마다 행 수가 다르다(마을 2 / 태평양 2 / 동남아 3 / 인도양 2 / 마다가스카르 2) — 높이 고정 */}
+      {/* 등급 분포 — **최상위 존 서브트리** 어군 × 등급의 흐름(높음/보통/낮음, 정성). */}
       <div className="shrink-0">
         <SectionTitle className="flex items-baseline justify-between gap-2">
           <span>등급 분포</span>
@@ -199,34 +217,19 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
         </Inset>
       </div>
 
-      {/* 팁·조작 — 최상위 존 기준(하위 존은 부모 폴백). 항목 수가 가변(3~4개)이라 한
-          컨테이너에 묶어 높이 고정. 이 아래는 아무것도 없으므로 이 컨테이너가 길어질 일도,
-          위 섹션을 밀어낼 일도 없다 */}
-      <div className={cx(FOOT_H, 'shrink-0 pf-vscroll pf-scroll-panel flex flex-col gap-2')}>
-        {nextBoat && (
-          <Inset className="p-2 flex flex-col gap-0.5 text-xs">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-text-dim">다음 배</span>
-              <span className="text-gold">{nextBoat.name}</span>
-            </div>
-            <span className="text-2xs text-text-dim">
-              명성 {fmtNum(nextBoat.fameReq)}, 골드 {fmtNum(nextBoat.price)} (집 목공소나 항구 조선소)
-            </span>
-          </Inset>
-        )}
-        <div>
-          <SectionTitle>여기서 할 수 있는 것</SectionTitle>
-          <PixelList>
-            {zoneTips(contextZone).map((t, i) => <li key={i}>{t}</li>)}
-          </PixelList>
-        </div>
-        <div>
-          <SectionTitle>조작</SectionTitle>
-          <PixelList>
-            {zoneControls(contextZone).map((c, i) => <li key={i}>{c}</li>)}
-          </PixelList>
-        </div>
-      </div>
+      {nextBoat && (
+        <Inset className="shrink-0 p-2 flex flex-col gap-0.5 text-xs">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-text-dim">다음 배</span>
+            <span className="text-gold">{nextBoat.name}</span>
+          </div>
+          <span className="text-2xs text-text-dim">
+            명성 {fmtNum(nextBoat.fameReq)}, 골드 {fmtNum(nextBoat.price)} (집 목공소나 항구 조선소)
+          </span>
+        </Inset>
+      )}
+      {fishDetail && <DexDetail fish={fishDetail} game={game} onClose={() => setFishDetail(null)} />}
+      {dialogs}
     </div>
   );
 }

@@ -54,6 +54,21 @@ describe('자원 바', () => {
     expect(fill.style.width).toBe('100%');
   });
 
+  it('골드, 명성, 배, 낚싯대, 가방 다섯 칸 모두 호버 툴팁으로 정확한 값을 보인다', () => {
+    render(<ResourceBar game={{ ...newState(), gold: 1_534_000, fame: 12_345, boat: 3, rod: 12 }} />);
+    for (const [label, expected] of [
+      ['골드', '골드 1,534,000'],
+      ['명성', '명성 12,345'],
+      ['배', '배 정크선'],
+      ['낚싯대', '낚싯대 Lv.12'],
+    ] as const) {
+      const target = screen.getAllByText(label, { exact: false })[0].parentElement!;
+      fireEvent.mouseEnter(target);
+      expect(screen.getByRole('tooltip')).toHaveTextContent(expected);
+      fireEvent.mouseLeave(target);
+    }
+  });
+
   it('가방 칸에 마우스를 올리면 수량이 툴팁으로 뜨고, 접근성 이름에도 같은 값이 있다', () => {
     render(<ResourceBar game={{ ...newState(), boat: 3, bag: Array.from({ length: 1000 }, (_, i) => fish(i)) }} bagBonus={5} />);
     fireEvent.mouseEnter(screen.getAllByText('가방', { exact: false })[0].parentElement!.parentElement!);
