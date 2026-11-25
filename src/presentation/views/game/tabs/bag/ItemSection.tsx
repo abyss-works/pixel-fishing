@@ -30,12 +30,14 @@ import Locked from '../../../../ui/Locked';
 import Note from '../../../../ui/Note';
 import PageTitle from '../../../../ui/PageTitle';
 import PixelIcon from '../../../../ui/PixelIcon';
-import RecipeEffectTip from '../../../../ui/RecipeEffectTip';
+import PressRow from '../../../../ui/PressRow';
 import SlotCell from '../../../../ui/SlotCell';
 import Subheading from '../../../../ui/Subheading';
-import Tip, { TipCard } from '../../../../ui/Tip';
+import Tip from '../../../../ui/Tip';
 import ToggleChip from '../../../../ui/ToggleChip';
 import type { Notify } from '../../../../ui/hud/messageFeed';
+import ItemDetail from './ItemDetail';
+import type { ItemDetailTarget } from './ItemDetail';
 
 /** 교체 확인을 기다리는 먹기(쓰기) - 확인 내용과 먹을 아이템 */
 interface PendingEat { row: ItemRow; confirm: SwapConfirm }
@@ -104,9 +106,10 @@ function SwapDialog({ confirm, onConfirm, onCancel }: {
   );
 }
 
-/** 도시락 또는 미끼 카드 격자 - 이름 툴팁이 효과를 보이고, 총 지속 시간과 활성 상태(배지·남은 시간)를 카드 안에 둔다 */
-function ItemCards({ title, hint, rows, lockLines, busy, onEat }: {
-  title: string; hint: string; rows: readonly ItemRow[]; lockLines?: readonly string[] | null; busy: boolean; onEat: (row: ItemRow) => void;
+/** 도시락 또는 미끼 카드 격자 - 카드 본문을 누르면 상세 창이 열리고, 공통 주의사항은 소제목 툴팁 한 곳에 모은다 */
+function ItemCards({ title, hint, rows, lockLines, busy, selectedId, onSelect, onEat }: {
+  title: string; hint: string; rows: readonly ItemRow[]; lockLines?: readonly string[] | null;
+  busy: boolean; selectedId: string | null; onSelect: (id: string) => void; onEat: (row: ItemRow) => void;
 }) {
   if (rows.length === 0) return null;
   const locked = Boolean(lockLines);
@@ -117,21 +120,26 @@ function ItemCards({ title, hint, rows, lockLines, busy, onEat }: {
         {rows.map(row => {
           const usable = !locked && row.count > 0;
           const dimmed = locked || (!usable && !row.active);
+          const selected = selectedId === row.recipe.id;
           const button = (
             <Button size="sm" aria-label={`${row.label} ${row.verb}`} disabled={busy || !usable} onClick={() => onEat(row)}>
               {row.verb}
             </Button>
           );
           return (
-            <Inset key={row.recipe.id} tone={dimmed ? 'deep' : 'base'} border={row.active ? 'accent' : 'line'}
+            <Inset key={row.recipe.id} tone={dimmed ? 'deep' : 'base'}
+                   border={selected ? 'gold' : row.active ? 'accent' : 'line'}
                    className={cx('p-2 flex flex-col gap-1.5 min-w-0', dimmed && 'text-text-dim')}>
-              <div className="flex items-start gap-2 min-w-0">
+              <PressRow
+                ariaLabel={`${row.label} 상세 보기`}
+                onPress={() => onSelect(row.recipe.id)}
+                className="flex items-start gap-2 min-w-0 -m-1 p-1"
+              >
                 <ItemSprite kind={row.slot} id={row.recipe.id} preset="list" className="shrink-0" />
                 <div className="min-w-0 flex-1 flex flex-col gap-0.5">
-                  <Tip text={<RecipeEffectTip label={<GradeName name={row.title.name} grade={row.title.grade} />} effects={row.effects} note={row.note} />}
-                       className="inline-block text-xs leading-snug break-keep">
+                  <div className="text-xs leading-snug break-keep">
                     <GradeName name={row.title.name} grade={row.title.grade} />
-                  </Tip>
+                  </div>
                   <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-2xs text-text-dim">
                     <span>지속 <span className={cx('pf-accent', !dimmed && 'text-text')}>{fmtMinutes(row.durationMinutes)}</span></span>
                     {row.active && <Badge tone="accent" size="2xs">사용 중</Badge>}
@@ -140,7 +148,7 @@ function ItemCards({ title, hint, rows, lockLines, busy, onEat }: {
                     <div className="text-2xs text-accent pf-accent">남음 {fmtMinutes(row.remainingMinutes)}</div>
                   )}
                 </div>
-              </div>
+              </PressRow>
               <div className="mt-auto pt-1.5 border-t border-line-dim flex items-center justify-between gap-2">
                 <span className="pf-accent text-xs text-text-dim whitespace-nowrap">×{row.count}</span>
                 {lockLines ? (
@@ -197,10 +205,12 @@ function EnergyCards({ energy, lockLines }: {
 }
 
 /** 물약 카드 격자 — 계정 회원은 배 단계와 무관하게 쓸 수 있고, 게스트·확인 실패는 잠금 상태다 */
-function PotionCards({ rows, potionLock, busy, onUse }: {
+function PotionCards({ rows, potionLock, busy, selectedId, onSelect, onUse }: {
   rows: readonly PotionRow[];
   potionLock: readonly string[] | null;
   busy: boolean;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
   onUse: (row: PotionRow) => void;
 }) {
   if (rows.length === 0) return null;
@@ -211,6 +221,7 @@ function PotionCards({ rows, potionLock, busy, onUse }: {
         {rows.map(row => {
           const locked = potionLock !== null;
           const dimmed = locked || (!row.usable && !row.active);
+          const selected = selectedId === row.potion.id;
           const btnLabel = row.active ? '사용 중' : '사용';
           const button = (
             <Button
@@ -223,28 +234,24 @@ function PotionCards({ rows, potionLock, busy, onUse }: {
             </Button>
           );
           return (
-            <Inset key={row.potion.id} tone={dimmed ? 'deep' : 'base'} border={row.active ? 'accent' : 'line'}
+            <Inset key={row.potion.id} tone={dimmed ? 'deep' : 'base'}
+                   border={selected ? 'gold' : row.active ? 'accent' : 'line'}
                    className={cx('p-2 flex flex-col gap-1.5 min-w-0', dimmed && 'text-text-dim')}>
-              <div className="flex items-start gap-2 min-w-0">
+              <PressRow
+                ariaLabel={`${row.potion.name} 상세 보기`}
+                onPress={() => onSelect(row.potion.id)}
+                className="flex items-start gap-2 min-w-0 -m-1 p-1"
+              >
                 <ItemSprite kind="potion" id={row.potion.id} preset="list" className="shrink-0" />
                 <div className="min-w-0 flex-1 flex flex-col gap-0.5">
-                  <Tip
-                    text={
-                      <TipCard
-                        title={<GradeName name={row.potion.name} grade={row.potion.grade} />}
-                        description={row.potion.description}
-                        status={potionLock ? { tone: 'lock', lines: potionLock } : undefined}
-                      />
-                    }
-                    className="inline-block text-xs leading-snug break-keep"
-                  >
+                  <div className="text-xs leading-snug break-keep">
                     <GradeName name={row.potion.name} grade={row.potion.grade} />
-                  </Tip>
+                  </div>
                   <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-2xs text-text-dim">
                     <span>하루 동안</span>
                   </div>
                 </div>
-              </div>
+              </PressRow>
               <div className="mt-auto pt-1.5 border-t border-line-dim flex items-center justify-between gap-2">
                 <span className="pf-accent text-xs text-text-dim whitespace-nowrap">×{row.count}</span>
                 {potionLock ? (
@@ -277,6 +284,7 @@ export default function ItemSection({ game, accountState, dispatch, setToast }: 
   const [busy, setBusy] = useState(false);
   const [ownedOnly, setOwnedOnly] = useState(false);
   const [pending, setPending] = useState<PendingEat | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   const eat = (row: ItemRow, replaceSlot?: 'bait' | 'bait2') => {
     if (busy) return;
@@ -322,6 +330,17 @@ export default function ItemSection({ game, accountState, dispatch, setToast }: 
 
   const kitchenLock = view.state === 'locked' ? view.lines : null;
   const shown = filterItemSection(view, ownedOnly);
+  const detailRecipe = detailId
+    ? view.lunch.find(r => r.recipe.id === detailId) ?? view.bait.find(r => r.recipe.id === detailId) ?? null
+    : null;
+  const detailPotion = detailId && !detailRecipe
+    ? view.potions.find(p => p.potion.id === detailId) ?? null
+    : null;
+  const detailTarget: ItemDetailTarget | null = detailRecipe
+    ? { kind: 'recipe', row: detailRecipe, lockLines: kitchenLock, onUse: press }
+    : detailPotion
+      ? { kind: 'potion', row: detailPotion, lockLines: view.potionLock, onUse: usePotion }
+      : null;
 
   return (
     <div className="flex flex-col gap-1">
@@ -343,11 +362,17 @@ export default function ItemSection({ game, accountState, dispatch, setToast }: 
       {view.state === 'open' && shown.empty && <Note>{NO_ITEMS_TEXT}</Note>}
       {!shown.empty && (
         <>
-          <ItemCards title={ITEM_GROUPS[0].title} hint={ITEM_GROUP_HINT.lunch} rows={shown.lunch} lockLines={kitchenLock} busy={busy} onEat={press} />
-          <ItemCards title={ITEM_GROUPS[1].title} hint={ITEM_GROUP_HINT.bait} rows={shown.bait} lockLines={kitchenLock} busy={busy} onEat={press} />
+          <ItemCards title={ITEM_GROUPS[0].title} hint={ITEM_GROUP_HINT.lunch} rows={shown.lunch} lockLines={kitchenLock}
+                     busy={busy} selectedId={detailId} onSelect={setDetailId} onEat={press} />
+          <ItemCards title={ITEM_GROUPS[1].title} hint={ITEM_GROUP_HINT.bait} rows={shown.bait} lockLines={kitchenLock}
+                     busy={busy} selectedId={detailId} onSelect={setDetailId} onEat={press} />
           <EnergyCards energy={shown.energy} lockLines={kitchenLock} />
-          <PotionCards rows={shown.potions} potionLock={view.potionLock} busy={busy} onUse={usePotion} />
+          <PotionCards rows={shown.potions} potionLock={view.potionLock} busy={busy}
+                       selectedId={detailId} onSelect={setDetailId} onUse={usePotion} />
         </>
+      )}
+      {detailTarget && (
+        <ItemDetail target={detailTarget} busy={busy} onClose={() => setDetailId(null)} />
       )}
       {pending && (
         <SwapDialog key={pending.row.recipe.id} confirm={pending.confirm} onCancel={() => setPending(null)}
