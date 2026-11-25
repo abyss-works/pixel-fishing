@@ -229,6 +229,7 @@ describe('BountyPanel', () => {
     show(game({ dex: fullDex }));
     fireEvent.click(await screen.findByRole('button', { name: '유물' }));
     expect(screen.getByText('해구의 이빨')).toBeInTheDocument();
+    expect(screen.getByText('(영웅)')).toHaveAttribute('data-rarity', 'epic');
     fireEvent.mouseEnter(screen.getByText('해구의 이빨'));
     expect(screen.queryByRole('tooltip')).toBeNull();
     fireEvent.mouseEnter(screen.getByText('교환 재료'));

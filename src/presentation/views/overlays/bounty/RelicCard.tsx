@@ -12,7 +12,7 @@ import PressRow from '../../../ui/PressRow';
 import ProgressCount from '../../../ui/ProgressCount';
 import Tip from '../../../ui/Tip';
 import { cx } from '../../../ui/cx';
-import { RarityText } from '../../../ui/fish/RarityTag';
+import { GradeName, RarityText } from '../../../ui/fish/RarityTag';
 import { artifactEffectLines, artifactSystemLines } from '../../../ui/artifactEffects';
 import { BoardRows } from './boardParts';
 
@@ -38,7 +38,7 @@ export default function RelicCard({ artifact, owned, level, materialCount, busy,
     <div className="flex items-center gap-2 min-h-8">
       <ItemSprite kind="artifact" id={artifact.id} preset="list" className="shrink-0" />
       <div className="flex items-baseline gap-2 min-w-0 flex-1">
-        <b className="text-base text-gold truncate">{artifact.name}</b>
+        <b className="text-base truncate"><GradeName name={artifact.name} grade={artifact.grade} emphasized /></b>
         {owned && artifactHasLevel(artifact) && <span className="text-xs text-text-dim shrink-0">{levelText(level)}</span>}
       </div>
     </div>

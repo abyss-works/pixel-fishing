@@ -123,29 +123,32 @@ describe('BagTab - 유물 섹션 전체 목록·미보유·보유 중만 보기'
     expect(penaltyLine.querySelector('.text-epic')).toBeNull();
   });
 
-  it('기본 꺼짐 상태에서는 유물 8종 전체를 보이고 미보유는 비활성 행으로 이름·구역·등급만 보이며 눌러도 상세 창이 열리지 않는다', () => {
+  it('기본 꺼짐 상태에서는 유물 8종 전체를 보이고 보유·미보유가 같은 3행 틀에 이름(등급)·구역을 보이며 미보유 효과는 ???와 빈 줄로 가린다', () => {
     setBagSection('artifacts');
     show(game({ artifacts: ['varuna-scale'] }));
     expect(screen.getByRole('heading', { level: 3, name: /유물 1\/8/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '보유 중만 보기' })).toHaveAttribute('aria-pressed', 'false');
 
-    // 보유 유물은 버튼(PressRow)으로 상세 창을 열고 32px 스프라이트를 보이며, 바깥 행에는 로어가 보이지 않는다
+    // 보유 유물은 버튼(PressRow)으로 상세 창을 열고 32px 스프라이트·이름(등급)·구역을 보이며, 바깥 행에는 로어가 보이지 않는다
     const varuna = artifactById('varuna-scale')!;
     const ownedBtn = screen.getByRole('button', { name: /진주 상인의 저울/ });
     expect(ownedBtn).toBeInTheDocument();
     expect(ownedBtn.querySelector('canvas')).toHaveAttribute('width', '32');
+    expect(within(ownedBtn).getByText('(희귀)')).toHaveAttribute('data-rarity', varuna.grade);
+    expect(within(ownedBtn).getByText('인도양')).toBeInTheDocument();
     expect(within(ownedBtn).queryByText(varuna.lore)).not.toBeInTheDocument();
 
-    // 미보유 유물은 비활성 행(버튼 아님)으로 흐린 32px 스프라이트·이름·구역·등급이 보인다
+    // 미보유 유물은 비활성 행(버튼 아님)으로 흐린 32px 스프라이트·이름(등급)·구역·??? + 높이 유지 빈 줄을 보인다
     expect(screen.queryByRole('button', { name: /해구의 이빨/ })).not.toBeInTheDocument();
-    const unownedName = screen.getByText('해구의 이빨');
-    const unownedRow = unownedName.parentElement!;
+    const unownedRow = screen.getByText('해구의 이빨').closest('[data-artifact-row]') as HTMLElement;
     expect(unownedRow.tagName).not.toBe('BUTTON');
     const unownedCanvas = unownedRow.querySelector('canvas');
     expect(unownedCanvas).toHaveAttribute('width', '32');
     expect(unownedCanvas).toHaveClass('grayscale');
     expect(within(unownedRow).getByText('태평양')).toBeInTheDocument();
-    expect(within(unownedRow).getByText('영웅')).toBeInTheDocument();
+    expect(within(unownedRow).getByText('(영웅)')).toHaveAttribute('data-rarity', 'epic');
+    expect(within(unownedRow).getByText('???')).toBeInTheDocument();
+    expect(unownedRow.querySelector('span[aria-hidden="true"]')?.textContent).toBe('\u00A0');
 
     fireEvent.click(unownedRow);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -156,17 +159,17 @@ describe('BagTab - 유물 섹션 전체 목록·미보유·보유 중만 보기'
     expect(within(dialog).getByText(varuna.lore)).toBeInTheDocument();
   });
 
-  it('보유 중만 보기 토글을 켜면 보유 유물만 남기고, 보유 0개면 빈 상태 안내를 보인다. 하단 수배판 안내는 유지한다', () => {
+  it('보유 중만 보기 토글을 켜면 보유 유물만 남기고, 보유 0개면 빈 상태 안내를 보인다. 하단 상시 유물 안내 Note는 두지 않는다', () => {
     setBagSection('artifacts');
     show(game({ artifacts: ['varuna-scale'] }));
-    expect(screen.getByText(/교환은 항구 수배판의 유물 탭에서 할 수 있어요/)).toBeInTheDocument();
+    expect(screen.queryByText(/유물은 가지고만 있어도/)).not.toBeInTheDocument();
 
     const toggle = screen.getByRole('button', { name: '보유 중만 보기' });
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText('진주 상인의 저울')).toBeInTheDocument();
     expect(screen.queryByText('해구의 이빨')).not.toBeInTheDocument();
-    expect(screen.getByText(/교환은 항구 수배판의 유물 탭에서 할 수 있어요/)).toBeInTheDocument();
+    expect(screen.queryByText(/유물은 가지고만 있어도/)).not.toBeInTheDocument();
 
     cleanup();
     setBagSection('artifacts');

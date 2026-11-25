@@ -26,7 +26,7 @@ import IconButton from '../../../../ui/IconButton';
 import Tip, { TipCard } from '../../../../ui/Tip';
 import SubTabs from '../../../../ui/SubTabs';
 import ToggleChip from '../../../../ui/ToggleChip';
-import { HighlightRarityText, RarityDot, RarityText } from '../../../../ui/fish/RarityTag';
+import { GradeName, HighlightRarityText, RarityDot } from '../../../../ui/fish/RarityTag';
 import { groupInstances } from '../../../../../features/inventory/model/bagRows';
 import InstanceLine, { UnsizedLine } from '../../../../ui/fish/InstanceLine';
 import BagCards from './BagCards';
@@ -98,46 +98,59 @@ function ArtifactSection({ game, dispatch, setToast }: {
       {shown.length === 0 ? (
         <Note>아직 유물이 없어요.<br /><HighlightRarityText text="네임드를 토벌하고 받은 교환 재료를 수배판의 유물 탭에서 유물로 바꿔 보세요." /></Note>
       ) : (
-        <>
-          <Inset divided>
-            {shown.map(({ artifact: a, owned, zoneName }) => {
-              if (!owned) {
-                return (
-                  <div key={a.id} className="flex items-center gap-2.5 px-2 py-1.5 text-sm text-text-dim bg-bg">
-                    <ItemSprite kind="artifact" id={a.id} preset="list" className="shrink-0 grayscale brightness-75" />
-                    <span className="truncate flex-1 min-w-0">{a.name}</span>
-                    <span className="flex items-baseline gap-2 text-xs shrink-0">
+        <Inset divided>
+          {shown.map(({ artifact: a, owned, zoneName }) => {
+            const { level, hasLevel } = owned ? selectArtifactLevel(game, a) : { level: 0, hasLevel: false };
+            const { bonus, penalty } = owned ? artifactSystemLines(a) : { bonus: null, penalty: null };
+            const effects = owned ? artifactEffectLines(a, level) : [];
+            const lineCount = effects.length + (bonus ? 1 : 0) + (penalty ? 1 : 0);
+            const body = (
+              <>
+                <ItemSprite
+                  kind="artifact"
+                  id={a.id}
+                  preset="list"
+                  className={cx('shrink-0 mt-0.5', !owned && 'grayscale brightness-75')}
+                />
+                <span className="flex flex-col gap-0.5 min-w-0 flex-1">
+                  <span className="flex items-baseline justify-between gap-2">
+                    <span className="truncate min-w-0">
+                      <GradeName name={a.name} grade={a.grade} emphasized={owned} />
+                    </span>
+                    <span className="flex items-baseline gap-1.5 text-xs shrink-0 text-text-dim">
                       <span>{zoneName}</span>
-                      <RarityText rarity={a.grade} />
+                      {owned && hasLevel && <span className="pf-accent text-accent">{levelText(level)}</span>}
                     </span>
-                  </div>
-                );
-              }
-              const { level, hasLevel } = selectArtifactLevel(game, a);
-              const { bonus, penalty } = artifactSystemLines(a);
-              return (
-                <PressRow key={a.id} onPress={() => setOpenId(a.id)} className="flex items-start gap-2.5 px-2 py-1.5 text-sm">
-                  <ItemSprite kind="artifact" id={a.id} preset="list" className="shrink-0 mt-0.5" />
-                  <span className="flex flex-col gap-0.5 min-w-0 flex-1">
-                    <span className="flex items-baseline justify-between gap-2">
-                      <b className="text-gold">{a.name}</b>
-                      <span className="flex items-baseline gap-2 text-xs shrink-0">
-                        {hasLevel && <span className="pf-accent">{levelText(level)}</span>}
-                        <RarityText rarity={a.grade} />
-                      </span>
-                    </span>
-                    {artifactEffectLines(a, level).map(line => (
-                      <span key={line} className="text-accent text-xs">{line}</span>
-                    ))}
-                    {bonus && <span className="text-accent text-xs">{bonus}</span>}
-                    {penalty && <span className="text-danger text-xs">{penalty}</span>}
                   </span>
-                </PressRow>
-              );
-            })}
-          </Inset>
-          <Note>유물은 가지고만 있어도 효과가 계속돼요.<br />교환은 항구 수배판의 유물 탭에서 할 수 있어요.</Note>
-        </>
+                  {owned ? (
+                    <>
+                      {effects.map(line => (
+                        <span key={line} className="text-accent text-xs">{line}</span>
+                      ))}
+                      {bonus && <span className="text-accent text-xs">{bonus}</span>}
+                      {penalty && <span className="text-danger text-xs">{penalty}</span>}
+                      {lineCount < 2 && <span aria-hidden="true" className="text-xs select-none">{'\u00A0'}</span>}
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-xs text-text-dim">???</span>
+                      <span aria-hidden="true" className="text-xs select-none">{'\u00A0'}</span>
+                    </>
+                  )}
+                </span>
+              </>
+            );
+            return owned ? (
+              <PressRow key={a.id} data-artifact-row onPress={() => setOpenId(a.id)} className="flex items-start gap-2.5 px-2 py-1.5 text-sm">
+                {body}
+              </PressRow>
+            ) : (
+              <div key={a.id} data-artifact-row className="flex items-start gap-2.5 px-2 py-1.5 text-sm text-text-dim bg-bg">
+                {body}
+              </div>
+            );
+          })}
+        </Inset>
       )}
       {opened && (
         <ArtifactDetail artifact={opened} game={game} dispatch={dispatch} setToast={setToast} onClose={() => setOpenId(null)} />
