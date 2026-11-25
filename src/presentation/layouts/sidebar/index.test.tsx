@@ -96,8 +96,19 @@ describe('Sidebar 시트 - 시트에서 연 창', () => {
     );
     const { rerender } = render(view(true));
     const sheet = screen.getByRole('region', { name: '탭 내용' });
-    expect(sheet).toContainElement(screen.getByRole('dialog'));
-    expect(host).not.toContainElement(screen.getByRole('dialog'));
+    const dialog = screen.getByRole('dialog');
+    const backdrop = dialog.parentElement!;
+    expect(sheet).toContainElement(dialog);
+    expect(host).not.toContainElement(dialog);
+    // 시트 안에서 연 앱 창은 z-(--z-tabs)나 fixed 쌓임 맥락 안에 갇히지 않아야 하단 탭 줄(z-(--z-tabs)) 위를 덮는다
+    expect(backdrop.className).toContain('fixed inset-0');
+    expect(backdrop.className).toContain('z-(--z-app-modal)');
+    let ancestor: HTMLElement | null = backdrop.parentElement;
+    while (ancestor && ancestor !== document.body) {
+      expect(ancestor.className).not.toContain('z-(--z-tabs)');
+      expect(ancestor.className).not.toMatch(/(?<![\w-])fixed(?![\w-])/);
+      ancestor = ancestor.parentElement;
+    }
     rerender(view(false));
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.getByRole('region', { name: '탭 내용' })).toContainElement(screen.getByText('시트 내용'));

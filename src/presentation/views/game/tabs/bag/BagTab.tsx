@@ -41,6 +41,7 @@ import ItemSprite from '../../../../ui/ItemSprite';
 import PressRow from '../../../../ui/PressRow';
 import ArtifactDetail from './ArtifactDetail';
 import ItemSection from './ItemSection';
+import EnergyPanel from '../../../overlays/facility/EnergyPanel';
 import { SidebarFooter } from '../../../../layouts/sidebar';
 
 /** 전시대 화면 노출 — 1차 전시대는 이번 배포에서 뺀다. 규칙·액션은 그대로다 */
@@ -187,7 +188,7 @@ function ExhibitShelf({ exhibit, onWithdraw }: {
   );
 }
 
-export default function BagTab({ game, accountState = 'account', sellBonus, bagBonus = 0, dispatch, setToast, onOpenEnergy }: {
+export default function BagTab({ game, accountState = 'account', sellBonus, bagBonus = 0, dispatch, setToast }: {
   game: GameState;
   /** 잠금 판정에 쓰는 계정 상태 - 아이템 섹션과 기운 얻기 진입의 잠금 사유를 정한다 */
   accountState?: AccountLockState;
@@ -197,8 +198,6 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
   bagBonus?: number;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
-  /** 물고기 섹션 하단 기운 얻기 진입 버튼 */
-  onOpenEnergy?: () => void;
 }) {
   const now = useNow();
   const rows = useMemo(() => groupInstances(game.bag), [game.bag]);
@@ -208,6 +207,7 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
   } = selectBagOverview(game, sellBonus, bagBonus, now);
   const energyEntry = selectBagEnergyEntry(game, accountState);
   const [lockConfirm, setLockConfirm] = useState(false);
+  const [energyOpen, setEnergyOpen] = useState(false);
   const { layout, section, opened } = useBagView();
 
   const lock = (uids: string[], locked: boolean, label: string) =>
@@ -455,13 +455,16 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
                          status={{ tone: 'lock', lines: energyEntry.lines }}
                        />
                      )}>
-                <Button size="sm" disabled={!energyEntry.ok} onClick={() => onOpenEnergy?.()}
+                <Button size="sm" disabled={!energyEntry.ok} onClick={() => setEnergyOpen(true)}
                         className="w-full justify-center">
                   기운 얻기
                 </Button>
               </Tip>
             </div>
           </SidebarFooter>
+          {energyOpen && (
+            <EnergyPanel game={game} dispatch={dispatch} setToast={setToast} onClose={() => setEnergyOpen(false)} />
+          )}
         </>
       )}
     </div>
