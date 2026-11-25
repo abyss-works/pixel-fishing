@@ -1,12 +1,12 @@
-import { ACHIEVEMENTS } from '../../../game/content/achievements';
+import { ACHIEVEMENTS, achievementById } from '../../../game/content/achievements';
 import type { AchievementTab } from '../../../game/content/achievements';
 import { ARTIFACT_MAX_LEVEL, ARTIFACTS, artifactHasLevel } from '../../../game/content/artifacts';
 import type { Artifact } from '../../../game/content/artifacts';
 import { boatNameOf } from '../../../game/content/boats';
 import { FISH } from '../../../game/content/fish';
 import type { BaseId } from '../../../game/content/places';
-import { HATS } from '../../../game/content/wardrobe';
-import type { Look } from '../../../game/content/wardrobe';
+import { DEFAULT_LOOK, HATS } from '../../../game/content/wardrobe';
+import type { HatSource, Look } from '../../../game/content/wardrobe';
 import { ZONE_IDS, topZoneOfSpot, zoneById } from '../../../game/content/zones';
 import type { ZoneId } from '../../../game/content/zones';
 import { MAX_BOAT } from '../../../game/rules/logic';
@@ -60,6 +60,25 @@ export interface ProfileAchievementTab {
   total: number;
 }
 
+export interface ProfileAchievementItem {
+  id: string;
+  tab: Exclude<AchievementTab, 'bonus'>;
+  tabLabel: string;
+  name: string;
+  desc: string;
+  rewardText: string;
+  claimed: boolean;
+}
+
+export interface ProfileHatSlot {
+  id: string;
+  name: string;
+  source: HatSource;
+  owned: boolean;
+  look: Look;
+  conditionText: string;
+}
+
 export interface ProfileView {
   online: boolean;
   placeLabel: string | null;
@@ -68,7 +87,7 @@ export interface ProfileView {
   boat: { tier: number; name: string; max: number };
   rod: { level: number; power: number };
   dex: { found: number; variantFound: number; total: number; zones: ProfileDexZone[] };
-  achievements: { claimed: number; total: number; tabs: ProfileAchievementTab[] };
+  achievements: { claimed: number; total: number; tabs: ProfileAchievementTab[]; items: ProfileAchievementItem[] };
   collectibles: {
     hats: {
       owned: number;
@@ -77,6 +96,7 @@ export interface ProfileView {
       goldTotal: number;
       achievementOwned: number;
       achievementTotal: number;
+      slots: ProfileHatSlot[];
     };
     artifacts: { owned: number; total: number; slots: ProfileArtifactSlot[] };
   };
@@ -135,11 +155,35 @@ export function selectProfileView(profile: PublicProfile): ProfileView {
     return { tab, label, claimed, total: inTab.length };
   });
   const totalClaimed = ACHIEVEMENTS.filter(a => claimedAchievements.has(a.id)).length;
+  const tabLabels = new Map(ACHIEVEMENT_TABS.map(t => [t.tab, t.label]));
+  const hatNames = new Map(HATS.map(h => [h.id, h.name]));
+  const achievementItems: ProfileAchievementItem[] = ACHIEVEMENTS.map(a => ({
+    id: a.id,
+    tab: a.tab,
+    tabLabel: tabLabels.get(a.tab) ?? a.tab,
+    name: a.name,
+    desc: a.desc,
+    rewardText: a.reward.kind === 'gold'
+      ? `${a.reward.gold.toLocaleString('ko-KR')}G`
+      : (hatNames.get(a.reward.hatId) ?? '모자'),
+    claimed: claimedAchievements.has(a.id),
+  }));
 
   const goldHats = HATS.filter(h => h.source === 'gold');
   const achievementHats = HATS.filter(h => h.source === 'achievement');
   const goldOwned = goldHats.filter(h => ownedHats.has(h.id)).length;
   const achievementOwned = achievementHats.filter(h => ownedHats.has(h.id)).length;
+  const hatLookBase = profile.look ?? DEFAULT_LOOK;
+  const hatSlots: ProfileHatSlot[] = HATS.map(h => ({
+    id: h.id,
+    name: h.name,
+    source: h.source,
+    owned: ownedHats.has(h.id),
+    look: { shirt: hatLookBase.shirt, pants: hatLookBase.pants, hat: h.id },
+    conditionText: h.source === 'gold'
+      ? `${h.price.toLocaleString('ko-KR')}G 구매`
+      : (achievementById(h.achievementId)?.desc ?? '업적 보상'),
+  }));
 
   const slots: ProfileArtifactSlot[] = ARTIFACTS.map(a => {
     const has = ownedArtifacts.has(a.id);
@@ -176,6 +220,7 @@ export function selectProfileView(profile: PublicProfile): ProfileView {
       claimed: totalClaimed,
       total: ACHIEVEMENTS.length,
       tabs: achievementTabs,
+      items: achievementItems,
     },
     collectibles: {
       hats: {
@@ -185,6 +230,7 @@ export function selectProfileView(profile: PublicProfile): ProfileView {
         goldTotal: goldHats.length,
         achievementOwned,
         achievementTotal: achievementHats.length,
+        slots: hatSlots,
       },
       artifacts: {
         owned: slots.filter(s => s.owned).length,

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ChatLine, Presence } from '../../../game/rules/live';
 import { LIVE_STALE_MS } from '../../../game/rules/live';
 import { DEFAULT_LOOK } from '../../../game/content/wardrobe';
-import { applyLiveMessage, BUBBLE_MS, bubbleOf, CHAT_KEEP, EMPTY_LIVE, idleLabel, isStale, matesInRegion, nextPositionMessage, othersInRegion, TYPING_MS, withoutAuthor } from './live';
+import { applyLiveMessage, BUBBLE_MS, bubbleOf, CHAT_KEEP, EMPTY_LIVE, idleLabel, isStale, matesInRegion, nextPositionMessage, othersInRegion, playerZoneLabel, TYPING_MS, withoutAuthor } from './live';
 
 const p = (uid: string, nick: string, region = 'sea'): Presence =>
   ({ uid, nick, boat: 1, region, x: 0, y: 0, dir: 0, line: false });
@@ -43,6 +43,14 @@ describe('applyLiveMessage', () => {
     ] }, 0);
     expect(matesInRegion(s, 'sea', new Set(['a', 'c', 'zz']))).toEqual([{ uid: 'a', x: 10, y: 20 }]);
     expect(matesInRegion(s, 'sea', new Set())).toEqual([]);
+  });
+
+  it('playerZoneLabel은 실시간 해역의 짧은 이름을 돌려주고 없으면 지역으로 폴백한다', () => {
+    expect(playerZoneLabel({ region: 'world', zone: 'seasia' })).toBe('동남아');
+    expect(playerZoneLabel({ region: 'world', zone: 'deep' })).toBe('해구');
+    expect(playerZoneLabel({ region: 'world', zone: null })).toBe('바다');
+    expect(playerZoneLabel({ region: 'village', zone: null })).toBe('마을');
+    expect(playerZoneLabel({ region: 'unknown', zone: null })).toBeNull();
   });
 });
 
