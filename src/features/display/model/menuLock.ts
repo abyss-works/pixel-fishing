@@ -26,7 +26,7 @@ export const GUEST_LOCK_NOTE = `${PACIFIC_LANE}${josa(PACIFIC_LANE, '은/는')} 
 export const GUEST_LOCK_DEFAULT_LINES: readonly string[] = [GUEST_LOCK_TEXT, GUEST_LOCK_NOTE];
 export const UNVERIFIED_LOCK_TEXT = '계정을 확인하면 쓸 수 있어요.';
 
-/** 게스트에게 닫힌 화면 기능. 메뉴 줄 넷과 채팅, 편지, 닉네임 변경, 플레이어 정보의 친구 요청과 차단, 차단 목록이다 */
+/** 게스트에게 닫힌 화면 기능. 메뉴 줄과 채팅, 편지, 닉네임 변경, 플레이어 정보의 친구 요청과 차단, 차단 목록이다 */
 export type GuestFeature = MenuKey | 'chat' | 'letter' | 'nickname' | 'player';
 
 // 게스트 규칙의 액션으로 판정되는 기능. 규칙 판정은 게스트 규칙 모듈이 하고 여기는 짝만 안다.

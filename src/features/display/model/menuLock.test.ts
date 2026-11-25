@@ -136,6 +136,12 @@ describe('거점 카드의 진행 조건', () => {
 describe('게스트에게 닫힌 화면 기능의 잠금 문안', () => {
   const closed: GuestFeature[] = ['quests', 'guild', 'friends', 'mailbox', 'chat', 'letter', 'nickname', 'player'];
 
+  it('운세 메뉴 줄은 게스트와 확인 실패 상태에서도 열려 있어 창을 열 수 있다', () => {
+    expect(guestLock('fortune', 'guest')).toBeNull();
+    expect(guestLock('fortune', 'unverified')).toBeNull();
+    expect(guestLock('fortune', 'account')).toBeNull();
+  });
+
   it('게스트에게는 닫힌 기능마다 잠금 줄이 있고 계정을 연결한 사용자에게는 없다', () => {
     for (const feature of closed) {
       expect(guestLock(feature, 'guest'), feature).not.toBeNull();

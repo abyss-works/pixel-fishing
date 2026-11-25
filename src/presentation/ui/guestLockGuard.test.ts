@@ -18,6 +18,7 @@ const featureSources = Object.entries(import.meta.glob('../../features/**/*.{ts,
 const GUEST_LOCK_SCREENS = [
   'views/game/base-menu/BaseMenu.tsx',     // 집 시설 카드(옷장, 부엌): MenuCard lock
   'views/overlays/account/MyInfoModal.tsx',  // 닉네임 입력
+  'views/overlays/fortune/FortuneCalendarModal.tsx', // 스테이지 메뉴 운세 창: 월별 달력 잠금
   'views/overlays/letter/LetterModal.tsx',   // 편지 입력 칸
   'views/overlays/live/ChatBar.tsx',         // 채팅 방 버튼과 입력 칸
   'views/overlays/live/PlayerInfo.tsx',      // 친구 요청과 차단

@@ -2,17 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { menuKeys, questBadges, questMenuLabel } from './menuEntries';
 
 describe('메뉴 줄 항목 순서', () => {
-  it('의뢰, 업적, 길드, 소셜, 우편함 순서이고 의뢰와 업적은 늘 있다', () => {
+  it('의뢰, 업적, 운세, 길드, 소셜, 우편함 순서이고 의뢰·업적·운세는 늘 있다', () => {
     expect(menuKeys({ guild: true, friends: true, mailbox: true }))
-      .toEqual(['quests', 'achievements', 'guild', 'friends', 'mailbox']);
-    expect(menuKeys({ guild: false, friends: false, mailbox: false })).toEqual(['quests', 'achievements']);
+      .toEqual(['quests', 'achievements', 'fortune', 'guild', 'friends', 'mailbox']);
+    expect(menuKeys({ guild: false, friends: false, mailbox: false })).toEqual(['quests', 'achievements', 'fortune']);
   });
 
   it('열 수 없는 입구는 빠지고 나머지 순서는 그대로다', () => {
     expect(menuKeys({ guild: false, friends: true, mailbox: true }))
-      .toEqual(['quests', 'achievements', 'friends', 'mailbox']);
+      .toEqual(['quests', 'achievements', 'fortune', 'friends', 'mailbox']);
     expect(menuKeys({ guild: true, friends: false, mailbox: true }))
-      .toEqual(['quests', 'achievements', 'guild', 'mailbox']);
+      .toEqual(['quests', 'achievements', 'fortune', 'guild', 'mailbox']);
   });
 });
 

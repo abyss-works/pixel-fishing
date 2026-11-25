@@ -24,6 +24,7 @@ const WRITE_OWNERS: Record<string, readonly string[]> = {
   '_data/position.ts': ['last_positions'],
   '_data/consent.ts': ['consent_records'],
   '_data/achievements.ts': ['achievement_counters'],
+  '_data/fortune.ts': ['daily_fortunes'],
 };
 
 function sources(dir: string): string[] {

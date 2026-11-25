@@ -12,6 +12,7 @@ import awayReport from '../awayReport.js';
 import devAccount from '../devAccount.js';
 import { blocksHandler, chatReportHandler } from '../chat.js';
 import mail from '../mail.js';
+import fortune from '../fortune.js';
 import friends from '../friends.js';
 import { guildRoutes } from '../guilds.js';
 import me from '../me.js';
@@ -69,6 +70,7 @@ const routes: Record<string, NodeHandler> = {
   '/api/blocks/:uid': blocks,
   '/api/chat/messages/:id/reports': chatReportHandler,
   '/api/mail': mail,
+  '/api/fortune/history': fortune,
   '/api/friends': friends,
   '/api/friends/:uid': friends,
   ...guilds,
