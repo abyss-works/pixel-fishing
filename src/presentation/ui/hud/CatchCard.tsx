@@ -95,7 +95,7 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
                 {formName(fish, info?.form ?? 'normal')}
               </b>
             </div>
-            {isVariant && <span className="text-xs text-text-dim leading-snug">{variantLine}</span>}
+            {isVariant && <span data-catch-variant className="text-xs text-text-dim leading-snug">{variantLine}</span>}
             <div data-catch-metrics
                  className={cx('grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-2 gap-y-0.5 px-2 py-1 text-2xs text-text-dim bg-bg/60', NOTCH_SM)}>
               <span>크기</span>

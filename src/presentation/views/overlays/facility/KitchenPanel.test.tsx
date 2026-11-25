@@ -257,9 +257,10 @@ describe('도시락 탭과 미끼 탭', () => {
     const effect = screen.getByText('도시락 효과').parentElement!;
     const lines = [...effect.children].slice(1).map(l => l.textContent);
     expect(lines).toEqual(['희귀 어종 출현+10%', '영웅 어종 출현+10%', '전설 어종 출현+10%', '지속 시간9시간']);
-    expect(screen.getByText(`${RARE_WAIT_MIN}분`, { selector: '.pf-accent' })).toBeInTheDocument();
+    const cookTime = screen.getByText('조리 시간').parentElement!;
+    expect(within(cookTime).getByText(`${RARE_WAIT_MIN}분`)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '민 몰리(희귀) 수량 증가' }));
-    expect(screen.getByText(`${2 * RARE_WAIT_MIN}분`, { selector: '.pf-accent' })).toBeInTheDocument();
+    expect(within(cookTime).getByText(`${2 * RARE_WAIT_MIN}분`)).toBeInTheDocument();
   });
 
   it('달빛 미끼의 비수치 효과는 키-값으로 쪼개지 않고 상세 설명 한 줄로 보인다', () => {
@@ -360,6 +361,8 @@ describe('기운 변환 탭', () => {
     fireEvent.click(within(commonCard).getByRole('button', { name: '×10' }));
     expect(within(commonCard).getAllByText('25')[0]).toBeInTheDocument();
     expect(within(commonCard).getAllByText('20')[0]).toBeInTheDocument();
+    expect(within(commonCard).getByText('(−100)')).toBeInTheDocument();
+    expect(within(commonCard).getByText('(+10)')).toBeInTheDocument();
     fireEvent.click(within(commonCard).getByRole('button', { name: '변환' }));
     expect(dispatch).toHaveBeenCalledWith({ type: 'transmuteEnergy', from: 'common', count: 10 });
     expect(setToast).toHaveBeenCalled();

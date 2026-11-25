@@ -23,6 +23,9 @@ vi.mock('../../../../platform/api', async importOriginal => {
   };
 });
 
+const layout = vi.hoisted(() => ({ mobile: false }));
+vi.mock('../../../layouts/useMobileLayout', () => ({ useMobileLayout: () => layout.mobile }));
+
 import RankingModal from './RankingModal';
 
 function show() {
@@ -31,7 +34,7 @@ function show() {
 }
 
 describe('랭킹 창', () => {
-  afterEach(() => { cleanup(); state.results = {}; state.errors.clear(); state.pending = false; state.calls = []; });
+  afterEach(() => { cleanup(); layout.mobile = false; state.results = {}; state.errors.clear(); state.pending = false; state.calls = []; });
 
   it('상단 5탭(명성, 도감(일반), 도감(돌연변이), 도감(네임드), 네임드 토벌)을 두고 활성 탭만 지연 조회하며 재전환 시 캐시를 재사용한다', async () => {
     state.results = {
@@ -126,5 +129,24 @@ describe('랭킹 창', () => {
   it('로컬 모드(조회 결과 없음)는 연결 안내를 띄운다', async () => {
     show();
     expect(await screen.findByText('랭킹은 연결된 상태에서만 볼 수 있어요.')).toBeInTheDocument();
+  });
+
+  it('모바일 레이아웃에서는 360px 창 폭 안에서 가로 넘침이 나지 않게 열 폭을 줄이고 값 열 폭을 확보한다', async () => {
+    state.results = {
+      dex: { board: 'dex', top: [{ rank: 1, nickname: '아주긴닉네임예시', value: 117, me: false }], me: { rank: 42, value: 88 } },
+    };
+    show();
+    fireEvent.click(screen.getByRole('button', { name: '도감(일반)' }));
+    const pcTable = (await screen.findByRole('table')) as HTMLTableElement;
+    expect(pcTable.style.minWidth).toBe('calc(136px + 3.5rem + 6rem)');
+    expect([...pcTable.querySelectorAll('col')].map(c => c.style.width)).toEqual(['3.5rem', '', '136px']);
+
+    cleanup();
+    layout.mobile = true;
+    show();
+    fireEvent.click(screen.getByRole('button', { name: '도감(일반)' }));
+    const mobileTable = (await screen.findByRole('table')) as HTMLTableElement;
+    expect(mobileTable.style.minWidth).toBe('calc(144px + 2.5rem + 4.5rem)');
+    expect([...mobileTable.querySelectorAll('col')].map(c => c.style.width)).toEqual(['2.5rem', '', '144px']);
   });
 });
