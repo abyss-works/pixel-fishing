@@ -28,10 +28,10 @@ afterAll(async () => {
   restoreEnv();
 });
 
-const signIn = async (ip: string): Promise<number> => (await handle(new Request(`${ORIGIN}/api/auth/sign-in/email`, {
+const signIn = async (ip: string): Promise<number> => (await handle(new Request(`${ORIGIN}/api/auth/sign-in/anonymous`, {
   method: 'POST',
   headers: { origin: ORIGIN, 'content-type': 'application/json', 'x-forwarded-for': ip },
-  body: JSON.stringify({ email: 'nobody@example.test', password: 'secret1' }),
+  body: JSON.stringify({}),
 }))).status;
 
 const adminSocialSignIn = async (ip: string): Promise<number> => (await adminHandle(new Request(`${ORIGIN}/api/admin/auth/sign-in/social`, {
