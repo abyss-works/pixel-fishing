@@ -11,7 +11,7 @@ import { BIG_CATCH_PERCENTILE } from '../../../src/game/rules/balance';
 import { mutationWeightsOf, variantShare } from '../../../src/game/rules/logic';
 import { zoneOf } from '../model';
 import type { Axis, Pool, Rates } from '../model';
-import { NO_EFFECT, artifactSummaryOf, checkEffect, effectRates, parseArtifacts, resolveZoneSpots } from './effects';
+import { NO_EFFECT, artifactSummaryOf, checkEffect, effectRates, parseArtifacts, resolveArtifactLevel, resolveZoneSpots } from './effects';
 import type { ArtifactLevels, Effect, EffectRates } from './effects';
 import type { RatePlan } from './progress';
 import type { Catch } from './sample';
@@ -114,11 +114,10 @@ function parseArtifactsField(raw: unknown): ArtifactLevels {
   for (const [id, lv] of Object.entries(raw)) {
     const art = artifactById(id);
     if (!art) throw new Error(`알 수 없는 유물입니다: ${id}`);
-    if (typeof lv !== 'number' || !Number.isInteger(lv) || lv < 1 || lv > ARTIFACT_MAX_LEVEL) {
+    if (typeof lv !== 'number') {
       throw new Error(`유물 레벨은 1에서 ${ARTIFACT_MAX_LEVEL} 사이의 정수여야 합니다: ${id}=${String(lv)}`);
     }
-    if (!artifactHasLevel(art) && lv > 1) throw new Error(`전설 유물은 레벨이 없습니다(Lv1 고정): ${id}`);
-    out[id] = lv;
+    out[id] = resolveArtifactLevel(art, lv, `${id}=${String(lv)}`);
   }
   return out;
 }
@@ -258,7 +257,7 @@ export function createCounterBonusTracker(config: CounterBonusConfig): CounterBo
   let analyticBig = false;
   let version = 0;
 
-  // 유물 보유 및 재료 추적 — 초기 보유 Lv5 유물과 전설 유물(고정 레벨)을 maxArtifact에 반영
+  // 유물 보유 및 재료 추적 — 초기 보유 Lv5 유물과 전설 유물(Lv5 고정)을 maxArtifact에 반영
   const baseArtifacts: ArtifactLevels = config.artifacts ? { ...config.artifacts } : {};
   const maxedArtifacts = new Set<string>(
     Object.entries(baseArtifacts)

@@ -171,6 +171,12 @@ describe('bagCapacityOf', () => {
       const ratcheted = bagCapacityOf(lv1Ctx, 100);
       expect(ratcheted.value).toBe(100);
       expect(ratcheted.mods.reduce((s, m) => s + m.delta, ratcheted.base)).toBe(69);
+
+      // 전설 유물은 artifactLevelOf가 5여도 레벨 계수를 곱하지 않고 Lv1 효과(0.1)만 적용한다
+      target.grade = 'legendary';
+      const legendCtx = makeCtx({ state: { boat: 0, artifacts: [target.id] } });
+      const legendCap = bagCapacityOf(legendCtx, 10);
+      expect(legendCap.value).toBe(66);
     } finally {
       target.grade = origGrade;
       target.effects = origEffects;

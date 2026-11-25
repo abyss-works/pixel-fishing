@@ -18,6 +18,7 @@ import type { SpotId } from '../../../src/game/content/spots';
 import { ZONE_IDS } from '../../../src/game/content/zones';
 import type { ZoneId } from '../../../src/game/content/zones';
 import { ARTIFACTS, ARTIFACT_MAX_LEVEL, artifactById, artifactHasLevel } from '../../../src/game/content/artifacts';
+import type { Artifact } from '../../../src/game/content/artifacts';
 import { RARITY_ORDER } from '../../../src/game/content/rarity';
 import type { RarityId } from '../../../src/game/content/rarity';
 import { BOUNTIES } from '../../../src/game/content/bounties';
@@ -89,18 +90,32 @@ export function resolveZoneSpots(id: string): SpotId[] {
   throw new Error(`알 수 없는 구역 또는 해역입니다: ${id} (구역: ${ZONE_IDS.join(', ')}, 해역: ${SPOTS.map(s => s.id).join(', ')})`);
 }
 
+/** 유물의 고정 레벨 규칙에 따라 단일 유물 레벨을 검증·해석한다 */
+export function resolveArtifactLevel(art: Pick<Artifact, 'id' | 'grade'>, lv: number | undefined, label: string): number {
+  if (lv === undefined) return artifactHasLevel(art) ? 1 : ARTIFACT_MAX_LEVEL;
+  if (!Number.isInteger(lv) || lv < 1 || lv > ARTIFACT_MAX_LEVEL) {
+    throw new Error(`유물 레벨은 1에서 ${ARTIFACT_MAX_LEVEL} 사이의 정수여야 합니다: ${label}`);
+  }
+  if (!artifactHasLevel(art) && lv !== ARTIFACT_MAX_LEVEL) {
+    throw new Error(`전설 유물은 레벨이 없습니다(Lv${ARTIFACT_MAX_LEVEL} 고정): ${art.id}`);
+  }
+  return lv;
+}
+
 /** 유물 보유 사양 문자열(all, max, all:N, id[:N],...)을 유물별 레벨 맵으로 파싱한다 */
 export function parseArtifacts(raw: string): ArtifactLevels {
   const trimmed = raw.trim();
   if (trimmed === '') throw new Error('유물 목록이 비어 있습니다 (all, max, all:레벨 또는 유물id[:레벨] 쉼표 구분)');
-  if (trimmed === 'all') return Object.fromEntries(ARTIFACTS.map(a => [a.id, 1]));
-  if (trimmed === 'max') return Object.fromEntries(ARTIFACTS.map(a => [a.id, artifactHasLevel(a) ? ARTIFACT_MAX_LEVEL : 1]));
+  if (trimmed === 'all') {
+    return Object.fromEntries(ARTIFACTS.map(a => [a.id, artifactHasLevel(a) ? 1 : ARTIFACT_MAX_LEVEL]));
+  }
+  if (trimmed === 'max') return Object.fromEntries(ARTIFACTS.map(a => [a.id, ARTIFACT_MAX_LEVEL]));
   const allLv = /^all:(.+)$/.exec(trimmed);
   if (allLv) {
     if (!/^\d+$/.test(allLv[1])) throw new Error(`유물 레벨은 1에서 ${ARTIFACT_MAX_LEVEL} 사이의 정수여야 합니다: ${allLv[1]}`);
     const lv = Number(allLv[1]);
     if (lv < 1 || lv > ARTIFACT_MAX_LEVEL) throw new Error(`유물 레벨은 1에서 ${ARTIFACT_MAX_LEVEL} 사이의 정수여야 합니다: ${lv}`);
-    return Object.fromEntries(ARTIFACTS.map(a => [a.id, artifactHasLevel(a) ? lv : 1]));
+    return Object.fromEntries(ARTIFACTS.map(a => [a.id, artifactHasLevel(a) ? lv : ARTIFACT_MAX_LEVEL]));
   }
   const out: ArtifactLevels = {};
   for (const token of trimmed.split(',')) {
@@ -112,14 +127,11 @@ export function parseArtifacts(raw: string): ArtifactLevels {
     if (!art) throw new Error(`알 수 없는 유물입니다: ${id} (${ARTIFACTS.map(a => a.id).join(', ')} 중 하나)`);
     if (Object.hasOwn(out, id)) throw new Error(`같은 유물이 두 번 있습니다: ${id}`);
     if (lvRaw === undefined) {
-      out[id] = 1;
+      out[id] = resolveArtifactLevel(art, undefined, part);
       continue;
     }
     if (!/^\d+$/.test(lvRaw)) throw new Error(`유물 레벨은 1에서 ${ARTIFACT_MAX_LEVEL} 사이의 정수여야 합니다: ${part}`);
-    const lv = Number(lvRaw);
-    if (lv < 1 || lv > ARTIFACT_MAX_LEVEL) throw new Error(`유물 레벨은 1에서 ${ARTIFACT_MAX_LEVEL} 사이의 정수여야 합니다: ${part}`);
-    if (!artifactHasLevel(art) && lv > 1) throw new Error(`전설 유물은 레벨이 없습니다(Lv1 고정): ${id}`);
-    out[id] = lv;
+    out[id] = resolveArtifactLevel(art, Number(lvRaw), part);
   }
   return out;
 }

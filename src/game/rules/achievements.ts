@@ -8,7 +8,7 @@ import type {
   AchievementCounters, AchievementMap, AchievementMetric, AchievementRule,
   CumulativeBonusMetric, CumulativeBonusSeries, CumulativeBonusStep,
 } from '../content/achievements.js';
-import { ARTIFACT_MAX_LEVEL, artifactById, artifactHasLevel } from '../content/artifacts.js';
+import { ARTIFACT_MAX_LEVEL } from '../content/artifacts.js';
 import { FISH, fishById } from '../content/fish.js';
 import { topZoneOfSpot } from '../content/zones.js';
 import type { ZoneId } from '../content/zones.js';
@@ -50,9 +50,7 @@ const countersOf = (state: GameState): Partial<Record<string, number | undefined
 export function maxArtifactCount(state: ArtifactHolder): number {
   let count = 0;
   for (const id of state.artifacts) {
-    const art = artifactById(id);
-    if (!art) continue;
-    if (!artifactHasLevel(art) || artifactLevelOf(state, id) >= ARTIFACT_MAX_LEVEL) {
+    if (artifactLevelOf(state, id) >= ARTIFACT_MAX_LEVEL) {
       count++;
     }
   }
