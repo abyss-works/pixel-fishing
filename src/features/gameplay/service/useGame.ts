@@ -16,7 +16,6 @@ import { settleForcedEncounter, withForcedEncounter } from '../../bounty/service
 import { getPhaseOverride } from './timeOverride';
 import { fetchSession } from '../../account/service/session';
 import { guestProgress } from '../../account/model/accountRules';
-import { guestHasNoProgress } from '../../../game/rules/guest';
 import { newlyClaimable } from '../../achievement/model/achievements';
 import { setSchoolDay } from './schoolDay';
 import { queueFortuneModal, resetFortuneModalSession } from '../../fortune/service/fortuneModal';
@@ -352,18 +351,6 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
      */
     resync: async (): Promise<void> => {
       await readSave().catch(() => {});
-    },
-    /**
-     * 이 탭이 들고 있는 상태가 낡았을 수 있어, 계정을 바꾸기 직전에 서버 저장 상태를 다시 읽고 버려질 진행이 있는지 판정한다.
-     * 저장 상태가 없으면 진행이 없는 것이고, 읽기에 실패하면 진행이 있는 것으로 본다.
-     */
-    recheckGuestProgress: async (): Promise<'nothing' | 'some'> => {
-      try {
-        const saved = await readSave();
-        return guestHasNoProgress(saved ?? newState()) ? 'nothing' : 'some';
-      } catch {
-        return 'some';
-      }
     },
     /** 캐스팅 순간 서버 함수 워밍 — 콜드 스타트를 wait 구간에 흡수 */
     warmup: () => gameGatewayRef.current.warmup?.(),

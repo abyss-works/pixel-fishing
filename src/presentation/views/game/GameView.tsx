@@ -106,8 +106,6 @@ interface GameViewProps {
   syncState: string;
   /** 이 기기의 게스트 진행 — 계정을 바꿀 때 버려지는 것이 있는지 확인 창을 띄울지 가른다 */
   guestProgress: GuestProgress;
-  /** 계정을 바꾸기 직전에 서버 저장 상태를 다시 읽어 버려질 진행이 있는지 판정한다. 읽기에 실패하면 진행 있음이다 */
-  recheckGuestProgress: () => Promise<GuestProgress>;
   account: string | null;
   /** 계정 확인이 끝났는가 — 끝나기 전의 계정 없음은 게스트가 아니라 미확인이다 */
   accountChecked: boolean;
@@ -418,7 +416,7 @@ export default function GameView(props: GameViewProps) {
         )}
         <GoogleReturn setToast={props.setToast} progress={progress} reopenAccount={() => setAccountOpen(true)} />
         {accountOpen && (
-          <AccountModal layer="stage" setToast={props.setToast} onAuthChanged={props.onAuthChanged} account={props.account} accountFailed={props.accountFailed} guestProgress={progress} recheckGuestProgress={props.recheckGuestProgress}
+          <AccountModal layer="stage" setToast={props.setToast} onAuthChanged={props.onAuthChanged} account={props.account} accountFailed={props.accountFailed}
                         syncLabel={props.syncLabel} syncState={props.syncState} onClose={() => setAccountOpen(false)} />
         )}
         {playersOpen && atSea && (
@@ -456,7 +454,7 @@ export default function GameView(props: GameViewProps) {
         sheetOpen={sheetOpen} onSheetOpenChange={setSheetOpen}
         onOpenEnergy={() => { setSheetOpen(false); setActionPanel('energy'); }}
         game={game} sellBonus={guildBonus?.effects.sell ?? 0} bagBonus={bagBonus} dispatch={props.dispatch} setToast={props.setToast}
-        syncLabel={props.syncLabel} syncState={props.syncState} guestProgress={progress} recheckGuestProgress={props.recheckGuestProgress}
+        syncLabel={props.syncLabel} syncState={props.syncState}
         account={props.account} accountChecked={props.accountChecked} accountFailed={props.accountFailed} uid={props.uid} onAuthChanged={props.onAuthChanged}
         nickname={props.nickname} profileStatus={props.profileStatus} onRename={props.onRename}
       />

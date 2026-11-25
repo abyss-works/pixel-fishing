@@ -77,7 +77,6 @@ describe('GameView 패널 초기화', () => {
           syncLabel={null}
           syncState="off"
           guestProgress="nothing"
-          recheckGuestProgress={async () => 'nothing'}
           account="dev@localhost"
           accountChecked={true}
           accountFailed={false}
@@ -121,7 +120,6 @@ describe('GameView 패널 초기화', () => {
           syncLabel={null}
           syncState="off"
           guestProgress="nothing"
-          recheckGuestProgress={async () => 'nothing'}
           account="dev@localhost"
           accountChecked={true}
           accountFailed={false}

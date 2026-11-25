@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ACCOUNT_CHECK_FAILED_COPY, ACCOUNT_NUDGE_FAME, MIN_PASSWORD_LENGTH,
-  accountLabel, guestProgress, nicknameLabel, passwordLongEnough, shouldNudgeAccount, uidPlaceholder,
+  ACCOUNT_CHECK_FAILED_COPY, ACCOUNT_NUDGE_FAME,
+  accountLabel, guestProgress, nicknameLabel, shouldNudgeAccount, uidPlaceholder,
 } from './accountRules';
 import { newState } from '../../../game/rules/logic';
 
@@ -34,14 +34,6 @@ describe('계정 만들기 넛지', () => {
 
   it('클라우드 미설정이면 띄우지 않는다', () => {
     expect(shouldNudgeAccount({ ...base, configured: false })).toBe(false);
-  });
-});
-
-describe('비밀번호 길이', () => {
-  it(`${MIN_PASSWORD_LENGTH}자 이상만 통과한다`, () => {
-    expect(MIN_PASSWORD_LENGTH).toBe(6);
-    expect(passwordLongEnough('12345')).toBe(false);
-    expect(passwordLongEnough('123456')).toBe(true);
   });
 });
 

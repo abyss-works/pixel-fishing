@@ -1,8 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { writeAdminResetLink, writeAdminRestrict, writeAdminRevokeSessions } from './queries';
+import { writeAdminRestrict, writeAdminRevokeSessions } from './queries';
 
 /**
- * 사용자 상세·신고 구역의 관리자 조치 — 제재·해제, 비밀번호 재설정 링크 발급, 세션 강제 종료.
+ * 사용자 상세·신고 구역의 관리자 조치 — 제재·해제, 세션 강제 종료.
  * 조치는 명부(restricted), 활성 세션, 사용자 이벤트를 바꾸므로 접근 판정을 뺀 관리자 조회를 무효화한다.
  * 화면에 떠 있는 조회만 바로 다시 읽고 나머지는 다음에 열 때 읽는다.
  */
@@ -14,11 +14,6 @@ export function useAdminUserActions() {
       const result = await writeAdminRestrict(userId, restricted);
       await refresh();
       return result;
-    },
-    resetLink: async (userId: string) => {
-      const link = await writeAdminResetLink(userId);
-      await refresh();
-      return link;
     },
     revokeSessions: async (userId: string) => {
       const result = await writeAdminRevokeSessions(userId);

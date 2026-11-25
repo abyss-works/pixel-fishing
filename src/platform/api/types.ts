@@ -35,19 +35,11 @@ export interface AuthApi {
   /** 로그인된 영구 계정을 확인한다. 게스트와 확인 실패를 구분해 돌려준다 */
   currentAccount(): Promise<AccountLookup>;
   getSession(): Promise<{ uid: string | null; email: string | null }>;
-  /** 비밀번호 재설정 링크로 들어왔는가. 'ready'면 새 비밀번호를 받을 차례, 'invalid'면 링크를 쓸 수 없다. 부팅 때 한 번 읽는다 */
-  takePasswordResetLanding(): 'ready' | 'invalid' | null;
-  /** 이미 있는 이메일 계정으로 로그인한다. 새로 가입하는 경로는 없다 */
-  signIn(email: string, password: string): Promise<AuthResult>;
   /** 구글 인증 화면으로 이동한다. 연결(link)은 지금 계정에 구글을 붙이고, 로그인(sign-in)은 이미 연결된 구글 계정으로 들어간다. 표지(tag)는 돌아온 주소에 실린다 */
   startGoogle(start: 'link' | 'sign-in', tag: string): Promise<AuthResult>;
   /** 구글 인증에서 돌아왔는가. 표지와 오류 코드를 돌려준다. 부팅 때 한 번 읽는다 */
   takeGoogleLanding(): { tag: string; error: string | null } | null;
-  /** 이 계정에 붙은 로그인 수단의 공급자 이름(google, credential). 조회하지 못하면 null */
-  accountProviders(): Promise<string[] | null>;
   signOut(): Promise<void>;
-  requestPasswordReset(email: string): Promise<AuthResult>;
-  applyNewPassword(password: string): Promise<AuthResult>;
   /** 본인 계정과 진행을 지운다. 성공하면 세션도 끝낸다 */
   deleteAccount(): Promise<AuthResult>;
   /** 마지막으로 계정 만들기 넛지를 띄운 날(KST yyyy-mm-dd). 없으면 null */
@@ -409,9 +401,6 @@ export interface AdminOverview {
   live: AdminLive;
 }
 
-/** 관리자 — 비밀번호 재설정 링크. url은 게임의 재설정 착지 주소이고 expiresAt까지 쓸 수 있다 */
-export interface AdminResetLink { url: string; expiresAt: string }
-
 export interface AdminApi {
   /** 관리자 로그인이 필요한 클라우드 구현인가. 로컬 모드는 false다 */
   isConfigured: boolean;
@@ -450,8 +439,6 @@ export interface AdminApi {
   mail(op: 'preview' | 'send', request: AdminMailRequest): Promise<AdminMailPlan>;
   /** 계정 제재(true) 또는 해제(false). 저장 상태가 없는 계정은 실패한다 */
   restrict(userId: string, restricted: boolean): Promise<{ restricted: boolean }>;
-  /** 가입 계정의 비밀번호 재설정 링크를 만든다. 메일은 보내지 않는다 */
-  resetLink(userId: string): Promise<AdminResetLink>;
   /** 편지 처리 표시(true) 또는 취소(false) */
   letterHandled(letterId: number, handled: boolean): Promise<{ handled: boolean }>;
   /** 대상 계정의 활성 인증 세션을 모두 강제 종료한다 */

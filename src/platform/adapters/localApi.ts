@@ -20,28 +20,13 @@ class LocalAuth implements AuthApi {
   async getSession(): Promise<{ uid: string | null; email: string | null }> {
     return { uid: DEV_UID, email: DEV_ACCOUNT };
   }
-  takePasswordResetLanding(): 'ready' | 'invalid' | null {
-    return null;
-  }
   async startGoogle(): Promise<AuthResult> {
     return { ok: false, msg: '클라우드가 설정되지 않았어요.' };
   }
   takeGoogleLanding(): { tag: string; error: string | null } | null {
     return null;
   }
-  async accountProviders(): Promise<string[] | null> {
-    return null;
-  }
-  async signIn(): Promise<AuthResult> {
-    return { ok: false, msg: '클라우드가 설정되지 않았어요.' };
-  }
   async signOut(): Promise<void> {}
-  async requestPasswordReset(): Promise<AuthResult> {
-    return { ok: false, msg: '클라우드가 설정되지 않았어요.' };
-  }
-  async applyNewPassword(): Promise<AuthResult> {
-    return { ok: false, msg: '클라우드가 설정되지 않았어요.' };
-  }
   async deleteAccount(): Promise<AuthResult> {
     return { ok: false, msg: '클라우드가 설정되지 않았어요.' };
   }
@@ -91,7 +76,6 @@ class LocalAdmin implements AdminApi {
   sentMails(): Promise<never[]> { return rejected(); }
   mail(_op: 'preview' | 'send', _request: unknown): Promise<never> { return rejected(); }
   restrict(_userId: string, _restricted: boolean): Promise<never> { return rejected(); }
-  resetLink(_userId: string): Promise<never> { return rejected(); }
   letterHandled(_letterId: number, _handled: boolean): Promise<never> { return rejected(); }
   revokeSessions(_userId: string): Promise<never> { return rejected(); }
   userEvents(_userId: string, _limit?: number): Promise<never[]> { return rejected(); }

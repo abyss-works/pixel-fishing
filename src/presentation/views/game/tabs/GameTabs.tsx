@@ -6,7 +6,6 @@ import type { DispatchResult, MaybePromise, ProfileStatus } from '../../../../fe
 import { ZONE_IDS, defaultZoneOfRegion } from '../../../../game/content/zones';
 import type { ZoneId } from '../../../../game/content/zones';
 import type { RegionId } from '../../../../game/content/places';
-import type { GuestProgress } from '../../../../features/account/model/accountRules';
 import { accountLockState } from '../../../../features/account/service/accountActions';
 import { DEX_VIEWS, TAB_ORDER, tabHasViews, type DexView, type TabKey } from './tabs';
 import { selectNamedDex } from '../../../../features/dex/model/catalog';
@@ -38,8 +37,6 @@ interface GameTabsProps {
   setToast: Notify;
   syncLabel: string | null;
   syncState: string;
-  guestProgress: GuestProgress;
-  recheckGuestProgress: () => Promise<GuestProgress>;
   account: string | null;
   /** 계정 확인이 끝났는가 */
   accountChecked?: boolean;
@@ -141,7 +138,7 @@ export default function GameTabs(props: GameTabsProps) {
       {activeTab === 'help' && <VHelp />}
       {activeTab === 'settings' && (
         <SettingsTab autoLockOnCatch={game.autoLockOnCatch} dispatch={props.dispatch} setToast={props.setToast}
-                     syncLabel={props.syncLabel} syncState={props.syncState} guestProgress={props.guestProgress} recheckGuestProgress={props.recheckGuestProgress}
+                     syncLabel={props.syncLabel} syncState={props.syncState}
                      account={props.account} accountChecked={props.accountChecked} accountFailed={props.accountFailed} uid={props.uid}
                      nickname={props.nickname} profileStatus={props.profileStatus} onRename={props.onRename}
                      onAuthChanged={props.onAuthChanged} />

@@ -1,10 +1,9 @@
-// 인증 모듈 — 익명 가입, 옮겨 온 bcrypt 해시 로그인, 비밀번호 재설정, 게임과 분리된 관리자 구글 세션을 실제 Postgres에서 확인한다.
-import bcrypt from 'bcryptjs';
+// 인증 모듈 — 익명 가입, 이메일·비밀번호 경로 비활성화, 게임과 분리된 관리자 구글 세션을 실제 Postgres에서 확인한다.
 import { randomUUID } from 'node:crypto';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { seedPasswordAccount, startActionEnv } from '../_dbTest/actionHarness.js';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { seedCredentialAccount, startActionEnv } from '../_dbTest/actionHarness.js';
 import type { ActionEnv } from '../_dbTest/actionHarness.js';
-import { googleCode, sentMails } from '../_dbTest/serverShim.js';
+import { googleCode } from '../_dbTest/serverShim.js';
 
 const ORIGIN = 'http://localhost:3000';
 
@@ -24,9 +23,6 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   await env?.stop();
-});
-beforeEach(() => {
-  sentMails.length = 0;
 });
 
 /** 인증 경로에 JSON 본문을 보낸다. cookie가 있으면 세션 쿠키로 붙인다 */
@@ -60,39 +56,30 @@ describe('익명 가입', () => {
   });
 });
 
-describe('옮겨 온 계정', () => {
-  it('이전 인증 서버의 bcrypt 해시로 로그인된다', async () => {
-    const uid = '00000000-0000-4000-8000-0000000000b1';
-    await env.client.query(`insert into auth.users (id, email, is_anonymous) values ($1, 'moved@example.test', false)`, [uid]);
-    await env.client.query(`insert into auth.accounts (user_id, account_id, provider_id, password) values ($1, $2, 'credential', $3)`,
-      [uid, uid, bcrypt.hashSync('moved-pass', 10).replace(/^\$2b\$/, '$2a$')]);
-    expect((await post('/sign-in/email', { email: 'moved@example.test', password: 'wrong-pass' })).status).toBe(401);
-    const res = await post('/sign-in/email', { email: 'moved@example.test', password: 'moved-pass' });
-    expect(res.status).toBe(200);
-    expect((res.body.user as { id: string }).id).toBe(uid);
-  });
-});
+describe('이메일·비밀번호 인증 및 재설정 경로 비활성화', () => {
+  it('이메일 가입·로그인·비밀번호 재설정 요청과 재설정을 모두 거부한다', async () => {
+    const uid = await seedCredentialAccount(env.client, 'legacy@example.test');
+    await env.client.query(
+      `insert into auth.verifications (identifier, value, expires_at) values ('reset-password:old-token', $1, now() + interval '1 hour')`,
+      [uid],
+    );
 
-describe('비밀번호 재설정', () => {
-  it('메일 링크의 토큰으로 비밀번호를 바꾸고 기존 세션을 끊는다', async () => {
-    const uid = await seedPasswordAccount(env.client, 'reset@example.test', 'old-pass');
-    const { cookie } = await post('/sign-in/email', { email: 'reset@example.test', password: 'old-pass' });
-    expect((await post('/request-password-reset', { email: 'reset@example.test', redirectTo: `${ORIGIN}/` })).status).toBe(200);
-    expect(sentMails).toHaveLength(1);
-    expect(sentMails[0].to).toEqual(['reset@example.test']);
-    const token = /reset-password\/([^?\s]+)/.exec(sentMails[0].text)?.[1];
-    expect(token).toBeTruthy();
+    const signUp = await post('/sign-up/email', { email: 'new@example.test', password: 'secret1', name: '' });
+    expect(signUp.status).toBe(404);
+    expect(signUp.cookie).toBe('');
+    expect((await env.client.query(`select 1 from auth.users where email = 'new@example.test'`)).rows).toHaveLength(0);
 
-    expect((await post('/reset-password', { newPassword: 'new-pass', token })).status).toBe(200);
-    expect((await post('/sign-in/email', { email: 'reset@example.test', password: 'old-pass' })).status).toBe(401);
-    const login = await post('/sign-in/email', { email: 'reset@example.test', password: 'new-pass' });
-    expect((login.body.user as { id: string }).id).toBe(uid);
-    expect(await sessionOf({ cookie })).toBeNull();
-  });
+    const signIn = await post('/sign-in/email', { email: 'legacy@example.test', password: 'secret1' });
+    expect(signIn.status).toBe(404);
+    expect(signIn.cookie).toBe('');
 
-  it('없는 이메일도 같은 응답이고 메일을 보내지 않는다', async () => {
-    expect((await post('/request-password-reset', { email: 'nobody@example.test', redirectTo: `${ORIGIN}/` })).status).toBe(200);
-    expect(sentMails).toHaveLength(0);
+    const requestReset = await post('/request-password-reset', { email: 'legacy@example.test', redirectTo: `${ORIGIN}/` });
+    expect(requestReset.status).toBe(404);
+    expect((await env.client.query(`select 1 from auth.verifications where value = $1`, [uid])).rows).toHaveLength(1);
+
+    const reset = await post('/reset-password', { newPassword: 'new-password', token: 'old-token' });
+    expect(reset.status).toBe(404);
+    expect((await env.client.query(`select password from auth.accounts where user_id = $1 and provider_id = 'credential'`, [uid])).rows[0].password).toBe('legacy-hash');
   });
 });
 
@@ -173,20 +160,22 @@ describe('관리자 세션', () => {
   });
 
   it('이메일 주소만 같은 계정으로는 로그인하지 않는다', async () => {
-    await seedPasswordAccount(env.client, 'admin-pw@gmail.test', 'admin-pass');
+    await seedCredentialAccount(env.client, 'admin-pw@gmail.test');
     const login = await adminGoogle({ sub: 'admin-same-address', email: 'admin-pw@gmail.test' });
     expect(login.ok).toBe(false);
     expect(await adminSessionUid({ cookie: login.cookie })).toBeNull();
   });
 
-  it('이메일·비밀번호 로그인과 가입 경로는 없다', async () => {
-    await seedPasswordAccount(env.client, 'admin-email@example.test', 'admin-pass');
+  it('이메일·비밀번호 로그인과 가입·재설정 경로는 없다', async () => {
+    await seedCredentialAccount(env.client, 'admin-email@example.test');
     const login = await adminPost('/sign-in/email', { email: 'admin-email@example.test', password: 'admin-pass' });
     expect(login.status).toBeGreaterThanOrEqual(400);
     expect(login.cookie).toBe('');
     const signUp = await adminPost('/sign-up/email', { email: 'admin-signup@example.test', password: 'admin-pass', name: '' });
     expect(signUp.status).toBeGreaterThanOrEqual(400);
     expect((await env.client.query('select 1 from auth.users where email = $1', ['admin-signup@example.test'])).rows).toHaveLength(0);
+    expect((await adminPost('/request-password-reset', { email: 'admin-email@example.test', redirectTo: `${ORIGIN}/` })).status).toBeGreaterThanOrEqual(400);
+    expect((await adminPost('/reset-password', { newPassword: 'new-password', token: 'nope' })).status).toBeGreaterThanOrEqual(400);
   });
 
   it('구글이 준 토큰을 저장하지 않는다', async () => {
@@ -223,9 +212,16 @@ describe('세션의 접속 정보', () => {
     expect(rows).toEqual([{ ip_address: null, user_agent: null }]);
   });
 
-  it('계정 로그인 세션에도 저장하지 않는다', async () => {
-    const uid = await seedPasswordAccount(env.client, 'no-ip@example.test', 'secret1');
-    await post('/sign-in/email', { email: 'no-ip@example.test', password: 'secret1' }, undefined, false, client);
+  it('구글 계정 로그인 세션에도 저장하지 않는다', async () => {
+    const uid = randomUUID();
+    await env.client.query(`insert into auth.users (id, email, is_anonymous, email_verified) values ($1, 'no-ip-google@gmail.test', false, true)`, [uid]);
+    await env.client.query(`insert into auth.accounts (user_id, account_id, provider_id) values ($1, 'no-ip-google-sub', 'google')`, [uid]);
+    const code = googleCode('no-ip-google-code', { sub: 'no-ip-google-sub', email: 'no-ip-google@gmail.test' });
+    const begin = await post('/sign-in/social', { provider: 'google', callbackURL: `${ORIGIN}/`, disableRedirect: true }, undefined, false, client);
+    const state = new URL(String(begin.body.url)).searchParams.get('state');
+    await handle(new Request(`${ORIGIN}/api/auth/callback/google?code=${code}&state=${state}`, {
+      redirect: 'manual', headers: { cookie: begin.cookie, ...client },
+    }));
     const rows = await sessionRows(uid);
     expect(rows.length).toBeGreaterThanOrEqual(1);
     expect(rows.every(r => r.ip_address === null && r.user_agent === null)).toBe(true);

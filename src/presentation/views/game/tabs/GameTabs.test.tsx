@@ -40,8 +40,6 @@ function renderBag(bagBonus: number, mobile = false) {
       setToast={vi.fn()}
       syncLabel={null}
       syncState="on"
-      guestProgress="nothing"
-      recheckGuestProgress={async () => 'nothing'}
       account={null}
       accountFailed={false}
       nickname={null}
@@ -75,8 +73,6 @@ function StatefulTabs() {
       setToast={vi.fn()}
       syncLabel={null}
       syncState="on"
-      guestProgress="nothing"
-      recheckGuestProgress={async () => 'nothing'}
       account={null}
       accountFailed={false}
       nickname={null}

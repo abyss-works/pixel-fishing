@@ -50,5 +50,5 @@ export type {
   GuildOpResult, GuildState,
   AdminUserRow, AdminUserState, AdminOverview, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
   AdminLive, AdminLiveConnection, AdminDailyStatsRow, AdminSessionRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, AdminChangelogRow, AdminChatReportRow, BalanceLive,
-  AdminSentMailRow, AdminMailRequest, AdminMailPlan, AdminResetLink,
+  AdminSentMailRow, AdminMailRequest, AdminMailPlan,
 } from './types';

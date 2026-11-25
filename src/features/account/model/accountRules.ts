@@ -1,15 +1,10 @@
-// 계정 규칙 — 계정 만들기 넛지와 비밀번호 길이, 게스트 진행의 판정.
+// 계정 규칙 — 계정 만들기 넛지와 게스트 진행의 판정.
 import { guestHasNoProgress } from '../../../game/rules/guest';
 import type { GameState } from '../../../game/rules/logic';
 import type { ProfileStatus, SyncState } from '../../gameplay/service/types';
 
 /** 넛지를 띄우는 명성 기준 — 진행이 이만큼 쌓인 게스트에게만 계정을 권한다 */
 export const ACCOUNT_NUDGE_FAME = 500;
-
-/** 비밀번호 최소 길이 — 인증 서버에 설정한 최소 길이와 같은 값이어야 한다 */
-export const MIN_PASSWORD_LENGTH = 6;
-
-export const passwordLongEnough = (password: string): boolean => password.length >= MIN_PASSWORD_LENGTH;
 
 /** 세션 확인에 실패했을 때 메시지 창에 남기는 안내 한 줄 */
 export const ACCOUNT_CHECK_FAILED_NOTICE = '계정을 확인하지 못했어요. 설정 탭의 계정 관리에서 다시 확인을 눌러 주세요.';

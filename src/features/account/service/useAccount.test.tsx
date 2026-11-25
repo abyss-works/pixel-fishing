@@ -18,7 +18,6 @@ vi.mock('../../../platform/api', () => ({
       ensureSession: async () => state.sessionUid,
       currentAccount: async () => state.lookups.shift() ?? { status: 'guest' },
       getSession: async () => ({ uid: state.nextUid, email: null }),
-      takePasswordResetLanding: () => null,
       accountNudgedDay: () => null,
       markAccountNudged: () => {},
     },
@@ -40,7 +39,6 @@ function setup() {
     game: newState(),
     setToast: vi.fn(),
     adoptAccount: vi.fn(async () => {}),
-    askNewPassword: vi.fn(async () => null),
   };
   const hook = renderHook(() => ({ account: useAccount(props), session: useSession() }), { wrapper });
   return { hook, props };
@@ -152,7 +150,7 @@ describe('계정 확인 실패', () => {
     expect(props.setToast).toHaveBeenCalledTimes(1);
   });
 
-  it('이메일 로그인 직후의 조회가 실패해도 게스트가 아니라 실패 상태다', async () => {
+  it('다시 확인 조회가 실패해도 게스트가 아니라 실패 상태다', async () => {
     state.lookups = [{ status: 'guest' }, { status: 'failed' }];
     const { hook } = setup();
     await waitFor(() => expect(hook.result.current.account.accountChecked).toBe(true));

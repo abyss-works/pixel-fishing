@@ -8,7 +8,6 @@ import PlayersTab from './PlayersTab';
 const UID = 'aaaaaaaa-0000-0000-0000-000000000000';
 const mocks = vi.hoisted(() => ({
   restrict: vi.fn(async (_userId: string, restricted: boolean) => ({ restricted })),
-  resetLink: vi.fn(async () => ({ url: 'https://game.example/?token=abcDEF0123456789abcdEFGH', expiresAt: '2026-10-07T01:00:00Z' })),
   revokeSessions: vi.fn(async () => ({ revoked: 2 })),
   compose: vi.fn(),
 }));
@@ -71,7 +70,6 @@ vi.mock('../../../../platform/api', () => ({
           startedAt: '2026-10-06T00:00:00Z', endedAt: '2026-10-06T00:04:10Z', durationSec: 250 },
       ]),
       restrict: mocks.restrict,
-      resetLink: mocks.resetLink,
       revokeSessions: mocks.revokeSessions,
     },
   },
@@ -135,7 +133,7 @@ describe('플레이어 탭', () => {
     expect(screen.getByText(/골드 1,200 · 명성 30 · 마지막 행동/)).toBeInTheDocument();
   });
 
-  it('사용자 상세의 관리 조치 — 우편 보내기, 확인을 거친 제재 해제, 재설정 링크 발급과 복사 칸, 세션 강제 종료', async () => {
+  it('사용자 상세의 관리 조치 — 우편 보내기, 확인을 거친 제재 해제, 세션 강제 종료', async () => {
     show('roster');
     fireEvent.click(await screen.findByText('바다친구(friend@example.com)'));
     const dialog = await screen.findByRole('dialog', { name: '유저 상세: 바다친구(friend@example.com)' });
@@ -153,12 +151,7 @@ describe('플레이어 탭', () => {
     fireEvent.click(await screen.findByRole('button', { name: '해제하기' }));
     await waitFor(() => expect(mocks.restrict).toHaveBeenCalledWith(UID, false));
 
-    fireEvent.click(within(dialog).getByRole('button', { name: '재설정 링크 만들기' }));
-    const field = await within(dialog).findByLabelText('재설정 링크');
-    expect(field).toHaveValue('https://game.example/?token=abcDEF0123456789abcdEFGH');
-    expect(mocks.resetLink).toHaveBeenCalledWith(UID);
-    expect(within(dialog).getByRole('button', { name: '복사' })).toBeInTheDocument();
-    expect(within(dialog).getByText(/메일은 보내지 않았어요/)).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: '재설정 링크 만들기' })).toBeNull();
 
     fireEvent.click(within(dialog).getByRole('button', { name: '세션 강제 종료' }));
     fireEvent.click(await screen.findByRole('button', { name: '종료하기' }));
