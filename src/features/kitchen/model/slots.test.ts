@@ -45,7 +45,7 @@ describe('슬롯의 지금 효과', () => {
   it('끝나는 시각 전의 슬롯은 요리, 남은 시간, 효과 줄을 낸다', () => {
     const game = seed({ slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(8 * HOUR + 12 * MIN) }, bait: null } });
     const s = activeSlot(game, 'lunch', T0)!;
-    expect(s.label).toBe('가루디야');
+    expect(s.label).toBe('가루디야(일반)');
     expect(s.remainingMs).toBe(8 * HOUR + 12 * MIN);
     expect(s.chipTime).toBe('8시간');
     expect(s.timeLeft).toBe('8시간 12분');

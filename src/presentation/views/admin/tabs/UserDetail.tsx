@@ -227,8 +227,16 @@ function UserStateCell({ state, loading, error, onRetry }: {
               state.cooking.cooked.length > 0
                 ? state.cooking.cooked.map(c => `${c.name} ×${c.count}`).join(', ')
                 : '없음',
-              state.cooking.inProgress ? `조리 중: ${state.cooking.inProgress.name} ×${state.cooking.inProgress.count}` : null,
+              state.cooking.inProgress
+                ? `조리 중: ${state.cooking.inProgress.name} ×${state.cooking.inProgress.count}${state.cooking.inProgress.id ? ` (${state.cooking.inProgress.id})` : ''}`
+                : null,
             ].filter(Boolean).join(', ')}
+          />
+          <KeyValueRow
+            label={`조리 대기열 (${state.cooking.queue?.length ?? 0})`}
+            value={!state.cooking.queue || state.cooking.queue.length === 0 ? '없음' : (
+              state.cooking.queue.map(q => `${q.name} ×${q.count}${q.id ? ` (${q.id})` : ''}`).join(', ')
+            )}
           />
           <KeyValueRow
             label="활성 슬롯"

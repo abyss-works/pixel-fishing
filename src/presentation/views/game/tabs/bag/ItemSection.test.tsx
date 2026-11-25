@@ -36,7 +36,7 @@ describe('아이템 섹션 목록', () => {
     expect(screen.getByRole('group', { name: '생명의 기운(일반) 38개' })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: '생명의 기운(희귀) 0개' })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: '생명의 기운(전설) 1개' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '가루디야 먹기' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '가루디야(일반) 먹기' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '롱페퍼 미끼(희귀) 쓰기' })).toBeInTheDocument();
     expect(document.querySelectorAll('canvas').length).toBeGreaterThanOrEqual(6);
   });
@@ -70,7 +70,7 @@ describe('아이템 섹션 목록', () => {
     expect(screen.getByRole('button', { name: '보유 중만 보기' })).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByRole('group', { name: '생명의 기운(일반) 0개' })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: '생명의 기운(전설) 0개' })).toBeInTheDocument();
-    const lunchBtn = screen.getByRole('button', { name: '가루디야 먹기' });
+    const lunchBtn = screen.getByRole('button', { name: '가루디야(일반) 먹기' });
     expect(lunchBtn).toBeDisabled();
     fireEvent.click(lunchBtn);
     expect(dispatch).not.toHaveBeenCalled();
@@ -91,9 +91,9 @@ describe('아이템 섹션 목록', () => {
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-pressed', 'true');
     // 수량 0이어도 적용 중인 가루디야와 보유 중인 민 몰리만 남는다
-    expect(screen.getByRole('button', { name: '가루디야 먹기' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: '민 몰리 먹기' })).toBeEnabled();
-    expect(screen.queryByRole('button', { name: '생선 비리야니 먹기' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '가루디야(일반) 먹기' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '민 몰리(희귀) 먹기' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: '생선 비리야니(영웅) 먹기' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /쓰기$/ })).not.toBeInTheDocument();
     expect(screen.getByRole('group', { name: '생명의 기운(영웅) 1개' })).toBeInTheDocument();
     expect(screen.queryByRole('group', { name: '생명의 기운(일반) 0개' })).not.toBeInTheDocument();
@@ -124,7 +124,7 @@ describe('아이템 섹션 목록', () => {
     fireEvent.mouseLeave(screen.getByText('미끼'));
 
     // 카드 본문을 누르면 상세 창이 열린다
-    fireEvent.click(screen.getByRole('button', { name: '가루디야 상세 보기' }));
+    fireEvent.click(screen.getByRole('button', { name: '가루디야(일반) 상세 보기' }));
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText('입질 대기')).toBeInTheDocument();
     expect(within(dialog).getByText('−10%')).toBeInTheDocument();
@@ -224,7 +224,7 @@ describe('먹기와 쓰기', () => {
   it('효과가 든 슬롯에는 교체 확인 창이 먼저 뜨고 확인해야 eat 액션을 보낸다', () => {
     const slots = { lunch: { id: 'cook-lunch-bite', endsAt: at(8 * HOUR + 12 * 60_000) }, bait: null };
     const { dispatch } = show(game({ items: own, slots }));
-    fireEvent.click(screen.getByRole('button', { name: '민 몰리 먹기' }));
+    fireEvent.click(screen.getByRole('button', { name: '민 몰리(희귀) 먹기' }));
     expect(dispatch).not.toHaveBeenCalled();
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText('도시락 바꾸기')).toBeInTheDocument();
@@ -239,7 +239,7 @@ describe('먹기와 쓰기', () => {
   it('같은 것을 다시 먹어도 교체 확인 창을 거친다', () => {
     const slots = { lunch: { id: 'cook-lunch-bite', endsAt: at(HOUR) }, bait: null };
     const { dispatch } = show(game({ items: own, slots }));
-    fireEvent.click(screen.getByRole('button', { name: '가루디야 먹기' }));
+    fireEvent.click(screen.getByRole('button', { name: '가루디야(일반) 먹기' }));
     expect(dispatch).not.toHaveBeenCalled();
     expect(screen.getByText('도시락 바꾸기')).toBeInTheDocument();
   });
@@ -247,7 +247,7 @@ describe('먹기와 쓰기', () => {
   it('확인 창의 닫기는 취소라 액션을 보내지 않는다', () => {
     const slots = { lunch: { id: 'cook-lunch-bite', endsAt: at(HOUR) }, bait: null };
     const { dispatch } = show(game({ items: own, slots }));
-    fireEvent.click(screen.getByRole('button', { name: '민 몰리 먹기' }));
+    fireEvent.click(screen.getByRole('button', { name: '민 몰리(희귀) 먹기' }));
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(dispatch).not.toHaveBeenCalled();
@@ -319,7 +319,7 @@ describe('해금 전과 게스트', () => {
     expect(screen.getByRole('button', { name: '보유 중만 보기' })).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getAllByRole('button', { name: /먹기$/ })).toHaveLength(5);
     expect(screen.getAllByRole('button', { name: /쓰기$/ })).toHaveLength(5);
-    expect(screen.getByRole('button', { name: '가루디야 먹기' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '가루디야(일반) 먹기' })).toBeDisabled();
     expect(screen.getByRole('group', { name: '생명의 기운 잠김' })).toHaveTextContent('인도양 항로가 열리면 부엌을 쓸 수 있어요.');
 
     // 보유 중만 보기를 켜면 미보유 플레이스홀더를 숨기고 빈 안내만 남긴다
@@ -332,7 +332,7 @@ describe('해금 전과 게스트', () => {
     show(game({ boat: COOKING_UNLOCK_BOAT - 1 }), 'guest');
     expect(screen.getByText('가진 아이템이 없어요.').parentElement!.children).toHaveLength(3);
     expect(screen.getByRole('button', { name: '보유 중만 보기' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '가루디야 먹기' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '가루디야(일반) 먹기' })).toBeDisabled();
     expect(screen.getByRole('group', { name: '생명의 기운 잠김' })).toHaveTextContent('인도양 항로가 열리면 부엌을 쓸 수 있어요.');
     cleanup();
 

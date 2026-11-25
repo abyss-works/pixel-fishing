@@ -6,7 +6,7 @@ import { ACHIEVEMENTS, CUMULATIVE_BONUS_COUNT, CUMULATIVE_BONUS_SERIES } from '.
 import { ARTIFACTS } from '../../../game/content/artifacts';
 import { BOATS, WALK_BAG_CAP } from '../../../game/content/boats';
 import { BOUNTIES } from '../../../game/content/bounties';
-import { RECIPES } from '../../../game/content/cooking';
+import { RECIPES, recipeWaitMs } from '../../../game/content/cooking';
 import { FISH } from '../../../game/content/fish';
 import { NAMED } from '../../../game/content/named';
 import { SPOTS } from '../../../game/content/spots';
@@ -139,8 +139,8 @@ describe('관리자 콘텐츠 카탈로그 모델', () => {
     for (const r of c.recipes) {
       expect(r.costItems.length).toBeGreaterThan(0);
       expect(r.effectLines.length).toBeGreaterThan(0);
-      if (r.kind === 'lunch') expect(r.waitMin).toBeGreaterThan(0);
-      else expect(r.waitMin).toBe(0);
+      expect(r.grade).toBe(r.recipe.grade);
+      expect(r.waitMin).toBe(recipeWaitMs(r.recipe) / 60_000);
     }
     const nightBait = c.recipes.find(r => r.id === 'cook-bait-night')!;
     expect(nightBait.effectLines).toEqual([{ text: '낮에도 밤 어종이 함께 낚여요.' }]);

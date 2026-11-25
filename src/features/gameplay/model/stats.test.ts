@@ -211,7 +211,7 @@ describe('받는 보너스', () => {
       expect(rows.map(b => [b.category, text(b)])).toEqual([
         ['fish', '입질 대기 −5%'], ['fish', '희귀 어종 출현 +5%'], ['fish', '영웅 어종 출현 +5%'], ['fish', '전설 어종 출현 +5%'],
       ]);
-      expect(rows.every(b => b.source.kind === 'slot' && b.source.label === '생선 탈리')).toBe(true);
+      expect(rows.every(b => b.source.kind === 'slot' && b.source.label === '생선 탈리(전설)')).toBe(true);
     });
 
     it('네임드 만날 확률은 결투 갈래다', () => {

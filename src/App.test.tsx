@@ -226,14 +226,15 @@ describe('부엌 창 - 집 거점의 부엌 카드가 연다', () => {
   });
 
   it('도시락 조리를 시작하면 기운이 줄고 정보 줄에 조리 중이 보인다', () => {
-    seed({ boat: 5, items: { [ENERGY_ITEM_IDS.common]: 9000 } });
+    seed({ boat: 5, items: { [ENERGY_ITEM_IDS.common]: 9000, [ENERGY_ITEM_IDS.rare]: 9000 } });
     render(<App />);
     clickFurniture('kitchen');
+    fireEvent.click(screen.getByRole('option', { name: /민 몰리/ }));
     fireEvent.click(screen.getByRole('button', { name: '조리 시작' }));
     const line = screen.getByText('조리 중').closest('div')!;
-    expect(within(line).getByText('가루디야')).toBeInTheDocument();
+    expect(within(line).getByText('민 몰리')).toBeInTheDocument();
     expect(within(line).getByText('0/1')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '조리 시작' })).toBeDisabled(); // 이미 조리 중
+    expect(screen.getByRole('button', { name: '대기열에 추가' })).toBeEnabled();
     expect(screen.getByText('보관함').closest('div')).toHaveTextContent('1/10');
   });
 });
