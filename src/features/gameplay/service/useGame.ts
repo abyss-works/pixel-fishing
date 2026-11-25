@@ -365,6 +365,29 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
     resync: async (): Promise<void> => {
       await readSave().catch(() => {});
     },
+    /** 개발 도구 계정 초기화 결과(state)를 즉시 반영하고 게이트웨이·프로필·조회 캐시를 동기화한다 */
+    applyDevReset: async (state: GameState): Promise<void> => {
+      resetFortuneModalSession();
+      setGame(state);
+      if (api.auth.isConfigured) {
+        await readSave().catch(() => {});
+      } else {
+        gameGatewayRef.current = api.createGameGateway(state);
+      }
+      const next = await readProfile();
+      adoptProfile(next);
+      await client.invalidateQueries();
+    },
+    /** 테스트 정식 계정 승격 직후 게스트 판정과 프로필·조회 캐시를 갱신한다 */
+    refreshAccountStatus: async (): Promise<void> => {
+      if (api.auth.isConfigured) {
+        const lookup = await api.auth.currentAccount().catch(() => ({ status: 'failed' as const }));
+        guestRef.current = lookup.status !== 'account';
+      }
+      const next = await readProfile();
+      adoptProfile(next);
+      await client.invalidateQueries();
+    },
     /** 캐스팅 순간 서버 함수 워밍 — 콜드 스타트를 wait 구간에 흡수 */
     warmup: () => gameGatewayRef.current.warmup?.(),
   };

@@ -1,59 +1,57 @@
-// 개발 도구 패널의 운영 가드 및 6개 묶음·시간/순간이동·스냅샷 UI 검증.
+// 개발 도구 패널의 운영 런타임 차단 및 6개 묶음·시간/순간이동·스냅샷·계정 도구 UI 검증.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import DevTools from './DevTools';
 import { DevEnvContext, devEnvOf } from './devEnv';
+import { api } from '../../../platform/api';
 import { newState } from '../../../game/rules/logic';
 import { resetKeyScopes } from '../../ui/hotkeys';
 import { resetTimeOverride, getPhaseOverride } from '../../../features/gameplay/service/timeOverride';
 
 beforeEach(() => {
-  window.history.replaceState({}, '', '/?admin=1');
   localStorage.clear();
   resetTimeOverride();
 });
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   resetKeyScopes();
   resetTimeOverride();
-  window.history.replaceState({}, '', '/');
 });
 
-const show = (env: string, extraProps: Partial<Parameters<typeof DevTools>[0]> = {}) => {
+const renderPanel = (env: string, extraProps: Partial<Parameters<typeof DevTools>[0]> = {}) => {
   const dispatch = vi.fn().mockResolvedValue({ status: 'ok', state: newState(), result: { type: 'none' } });
   render(
     <DevEnvContext.Provider value={devEnvOf(env)}>
       <DevTools game={newState()} dispatch={dispatch} setToast={() => {}} granted={false} {...extraProps} />
     </DevEnvContext.Provider>,
   );
-  fireEvent.click(screen.getByRole('button', { name: '개발 도구' }));
   return { dispatch };
 };
 
+const show = (env: string, extraProps: Partial<Parameters<typeof DevTools>[0]> = {}) => {
+  const res = renderPanel(env, extraProps);
+  fireEvent.click(screen.getByRole('button', { name: '개발 도구' }));
+  return res;
+};
+
 describe('개발 도구 운영 가드', () => {
-  it('운영이면 계정·스냅샷 묶음에서 열리고 대시보드 이동만 누를 수 있다 — 스냅샷·이사 코드도 막힌다', () => {
-    show('production');
-    expect(screen.getByLabelText('대시보드 열기')).toBeInTheDocument();
-    expect(screen.getAllByText(/운영 서버다 — 여기서는 대시보드 조회만/).length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: '이사 코드 내보내기', hidden: true }).closest('[aria-hidden]')).not.toBeNull();
-    expect(screen.getByRole('button', { name: '현재 상태 저장', hidden: true }).closest('[aria-hidden]')).not.toBeNull();
+  it('운영(production) 환경에서는 granted가 참이어도 버튼과 패널을 렌더링하지 않고 F9도 무시한다', () => {
+    renderPanel('production', { granted: true });
+    expect(screen.queryByRole('button', { name: '개발 도구' })).toBeNull();
+    fireEvent.keyDown(document, { key: 'F9' });
+    expect(screen.queryByRole('dialog', { name: '개발 도구' })).toBeNull();
   });
 
-  it('운영이면 다른 묶음의 조작은 흐림 처리 뒤에 숨는다', () => {
-    show('production');
-    fireEvent.click(screen.getByRole('button', { name: '빠른 프리셋' }));
-    expect(screen.getByRole('button', { name: '메갈로돈 네임드 직전', hidden: true }).closest('[aria-hidden]')).not.toBeNull();
+  it('알 수 없는 환경도 렌더링하지 않는다', () => {
+    renderPanel('', { granted: true });
+    expect(screen.queryByRole('button', { name: '개발 도구' })).toBeNull();
   });
 
-  it('알 수 없는 환경도 운영처럼 막는다', () => {
-    show('');
-    expect(screen.getAllByText(/운영 서버다/).length).toBeGreaterThan(0);
-  });
-
-  it('스테이징이면 빠른 프리셋부터 열리고 막지 않는다', () => {
+  it('스테이징(preview)이면 제한 안내 없이 빠른 프리셋부터 열린다', () => {
     show('preview');
     expect(screen.queryByText(/운영 서버다/)).toBeNull();
-    expect(screen.getByRole('button', { name: '메갈로돈 네임드 직전' }).closest('[aria-hidden]')).toBeNull();
+    expect(screen.getByRole('button', { name: '메갈로돈 네임드 직전' })).toBeInTheDocument();
   });
 });
 
@@ -134,5 +132,38 @@ describe('6개 묶음과 기능 UI', () => {
       type: 'debug',
       command: 'snapshot.restore',
     }));
+  });
+
+  it('계정·스냅샷 묶음의 계정 도구 3종 버튼이 승격·초기화·새 게스트 동작과 실행 기록을 수행한다', async () => {
+    const promoteSpy = vi.spyOn(api.dev, 'promoteTestAccount')
+      .mockResolvedValueOnce({ ok: true, email: 'qa-stage@pixel-fishing.test', isAnonymous: false })
+      .mockResolvedValueOnce({ ok: false, msg: 'already permanent' });
+    const resetState = { ...newState(), gold: 777 };
+    const resetSpy = vi.spyOn(api.dev, 'resetDevAccount').mockResolvedValue({ state: resetState, version: 3 });
+    const signOutSpy = vi.spyOn(api.auth, 'signOut').mockResolvedValue();
+    const onAccountPromoted = vi.fn();
+    const onAccountReset = vi.fn();
+    const onReload = vi.fn();
+
+    show('preview', { onAccountPromoted, onAccountReset, onReload });
+    fireEvent.click(screen.getByRole('button', { name: '계정·스냅샷' }));
+
+    fireEvent.click(screen.getByRole('button', { name: '테스트 정식 계정 승격' }));
+    await waitFor(() => expect(onAccountPromoted).toHaveBeenCalledWith('qa-stage@pixel-fishing.test'));
+    expect(screen.getByLabelText('실행 기록')).toHaveTextContent('테스트 정식 계정 승격 (qa-stage@pixel-fishing.test)');
+
+    fireEvent.click(screen.getByRole('button', { name: '테스트 정식 계정 승격' }));
+    await waitFor(() => expect(promoteSpy).toHaveBeenCalledTimes(2));
+    expect(screen.getByLabelText('실행 기록')).toHaveTextContent('테스트 정식 계정 승격 실패: already permanent');
+
+    fireEvent.click(screen.getByRole('button', { name: '현재 계정 초기화' }));
+    await waitFor(() => expect(onAccountReset).toHaveBeenCalledWith(resetState));
+    expect(resetSpy).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText('실행 기록')).toHaveTextContent('현재 계정 초기화 (v3)');
+
+    fireEvent.click(screen.getByRole('button', { name: '새 게스트 시작' }));
+    await waitFor(() => expect(onReload).toHaveBeenCalledTimes(1));
+    expect(signOutSpy).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText('실행 기록')).toHaveTextContent('새 게스트 시작');
   });
 });

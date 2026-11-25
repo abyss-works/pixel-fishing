@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { BASE_PACKS, HARBORS, LIVE_REGIONS, V_POND, V_SCHOOLS, resumePoint, schoolsOf } from './game/world';
 import type { Point, SceneRef } from './game/world';
 import type { BaseId, LocationRef } from './game/content/places';
@@ -18,8 +18,6 @@ import UpdateModal from './presentation/views/overlays/update/UpdateModal';
 import SessionReplacedModal from './presentation/views/overlays/update/SessionReplacedModal';
 import UnsavedModal from './presentation/views/overlays/update/UnsavedModal';
 import LoadingOverlay from './presentation/views/overlays/update/LoadingOverlay';
-import DevTools from './presentation/views/devtools/DevTools';
-import EnvBadge from './presentation/views/devtools/EnvBadge';
 import { DevEnvContext, devEnvOf } from './presentation/views/devtools/devEnv';
 import { BUILD_LABEL, DEPLOY_ENV } from './buildId';
 import { QueryProvider } from './core/QueryProvider';
@@ -31,14 +29,23 @@ function sceneOf(location: LocationRef): SceneRef {
   return location;
 }
 
-/** 빌드 때 정해지는 값이라 모듈에서 한 번만 만든다 */
-const DEV_ENV = devEnvOf(DEPLOY_ENV);
+/** 빌드 때 정해지는 값 — 비허용/운영 빌드는 컴파일 타임 가드로 개발 도구 청크와 배지를 완전히 제외한다 */
+declare const __DEPLOY_ENV__: string | undefined;
+const DEV_TOOLS_BUILD =
+  typeof __DEPLOY_ENV__ !== 'undefined' &&
+  (__DEPLOY_ENV__ === 'preview' || __DEPLOY_ENV__ === 'development' || __DEPLOY_ENV__ === 'local');
+const DEV_ENV = DEV_TOOLS_BUILD ? devEnvOf(DEPLOY_ENV) : null;
+const LazyDevTools = DEV_TOOLS_BUILD ? lazy(() => import('./presentation/views/devtools/DevTools')) : null;
+const LazyEnvBadge = DEV_TOOLS_BUILD ? lazy(() => import('./presentation/views/devtools/EnvBadge')) : null;
 
 function AppContent() {
   const { log, setToast, toasts, dismissToast, setMirrorEnv } = useMessageLog([
     '집이에요. 가구를 눌러 정비하고, 문으로 나가 마을 물가에서 낚시해 보세요.',
   ]);
-  const { game, dispatch, nickname, profileStatus, devTools, rename, sync, syncLabel, blocker, loading, guestProgress, adoptAccount, warmup, resync } = useGame({ setToast });
+  const {
+    game, dispatch, nickname, profileStatus, devTools, rename, sync, syncLabel,
+    blocker, loading, guestProgress, adoptAccount, warmup, resync, applyDevReset, refreshAccountStatus,
+  } = useGame({ setToast });
   useEffect(() => {
     setMirrorEnv({ blocked: blocker !== null, loading });
   }, [blocker, loading, setMirrorEnv]);
@@ -136,9 +143,8 @@ function AppContent() {
     return false;
   };
 
-  // 게임 화면 위에 개발용 층 둘을 나란히 조합한다 — 환경 배지(운영 빌드면 없음)와
-  // 개발 도구 패널(?admin + 로컬 또는 서버 판정이 참일 때만). 둘 다 게임 화면 바깥의 오버레이이고,
-  // 이 빌드가 운영인지는 개발 환경 공급자 하나가 정한다(운영이면 패널은 대시보드 이동만 남는다).
+  // 게임 화면 위에 개발용 층 둘을 나란히 조합한다 — 환경 배지와 개발 도구 패널(비운영 빌드에서 로컬 또는 서버 판정이 참일 때만).
+  // 운영 빌드에서는 컴파일 타임 가드로 두 컴포넌트와 청크가 완전히 제거된다.
   return (
     <>
       <GameView
@@ -147,12 +153,33 @@ function AppContent() {
         log={log} syncLabel={syncLabel} syncState={sync} guestProgress={guestProgress}
         account={account} accountChecked={accountChecked} accountFailed={accountFailed} uid={uid} nickname={nickname} profileStatus={profileStatus}
         onRename={rename} onAuthChanged={onAuthChanged} onResync={resync} blocker={blocker === 'update' ? <UpdateModal /> : blocker === 'replaced' ? <SessionReplacedModal /> : blocker === 'unsaved' ? <UnsavedModal /> : loading ? <LoadingOverlay /> : null}
-        badge={<DevEnvContext.Provider value={DEV_ENV}><EnvBadge build={BUILD_LABEL} /></DevEnvContext.Provider>}
+        badge={DEV_ENV && LazyEnvBadge ? (
+          <Suspense fallback={null}>
+            <DevEnvContext.Provider value={DEV_ENV}>
+              <LazyEnvBadge build={BUILD_LABEL} />
+            </DevEnvContext.Provider>
+          </Suspense>
+        ) : null}
       />
-      <DevEnvContext.Provider value={DEV_ENV}>
-        <DevTools game={game} dispatch={dispatch} setToast={setToast} granted={devTools}
-                  onTeleportBase={teleportBase} onTeleportSpot={teleportSpot} />
-      </DevEnvContext.Provider>
+      {DEV_ENV && LazyDevTools && (
+        <Suspense fallback={null}>
+          <DevEnvContext.Provider value={DEV_ENV}>
+            <LazyDevTools
+              game={game}
+              dispatch={dispatch}
+              setToast={setToast}
+              granted={profileStatus === 'loaded' && devTools}
+              onTeleportBase={teleportBase}
+              onTeleportSpot={teleportSpot}
+              onAccountPromoted={async () => {
+                await onAuthChanged();
+                await refreshAccountStatus();
+              }}
+              onAccountReset={applyDevReset}
+            />
+          </DevEnvContext.Provider>
+        </Suspense>
+      )}
     </>
   );
 }
