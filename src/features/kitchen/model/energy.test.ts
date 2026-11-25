@@ -195,10 +195,27 @@ describe('가방 하단 기운 얻기 진입 조건', () => {
     });
   });
 
+  it('게스트가 해금 전(0~4단계)이면 위치와 무관하게 인도양 진행 조건 잠금만 낸다', () => {
+    for (const location of [home, harbor, village, sea]) {
+      expect(selectBagEnergyEntry({ boat: 0, location }, 'guest')).toEqual({
+        ok: false,
+        lines: ['인도양 항로가 열리면 기운 얻기를 할 수 있어요.', '인도양 항로는 증기선(5단계)부터 열려요.'],
+      });
+      expect(selectBagEnergyEntry({ boat: COOKING_UNLOCK_BOAT - 1, location }, 'guest')).toEqual({
+        ok: false,
+        lines: ['인도양 항로가 열리면 기운 얻기를 할 수 있어요.', '인도양 항로는 증기선(5단계)부터 열려요.'],
+      });
+    }
+  });
+
   it('거점이면 요리 해금 시 활성, 미해금 시 진행 조건 툴팁을 낸다', () => {
     expect(selectBagEnergyEntry({ boat: COOKING_UNLOCK_BOAT, location: home }, 'account')).toEqual({ ok: true });
     expect(selectBagEnergyEntry({ boat: COOKING_UNLOCK_BOAT, location: harbor }, 'account')).toEqual({ ok: true });
     expect(selectBagEnergyEntry({ boat: COOKING_UNLOCK_BOAT - 1, location: home }, 'account')).toEqual({
+      ok: false,
+      lines: ['인도양 항로가 열리면 기운 얻기를 할 수 있어요.', '인도양 항로는 증기선(5단계)부터 열려요.'],
+    });
+    expect(selectBagEnergyEntry({ boat: 0, location: village }, 'account')).toEqual({
       ok: false,
       lines: ['인도양 항로가 열리면 기운 얻기를 할 수 있어요.', '인도양 항로는 증기선(5단계)부터 열려요.'],
     });

@@ -413,11 +413,12 @@ describe('기운 얻기 탭의 잠금', () => {
     expect(lines(tab('기운 얻기'))).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
   });
 
-  it('게스트이면서 해금 전이면 게스트 잠금이 먼저다', () => {
+  it('게스트이면서 해금 전이면 더 뒷단계인 진행 조건 잠금만 보인다', () => {
     show(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), { accountState: 'guest' });
     const tip = lines(tab('기운 얻기'));
-    expect(tip).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
-    expect(tip).not.toHaveTextContent('인도양');
+    expect(tip).toHaveTextContent('인도양 항로가 열리면 기운 얻기를 할 수 있어요.');
+    expect(tip).toHaveTextContent('인도양 항로는 증기선(5단계)부터 열려요.');
+    expect(tip).not.toHaveTextContent('태평양');
   });
 
   it('확인 실패 상태에서는 확인 실패 잠금이다', () => {
