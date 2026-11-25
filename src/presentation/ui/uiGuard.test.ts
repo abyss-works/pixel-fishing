@@ -959,9 +959,6 @@ describe('UI 시스템 가드', () => {
 
   // 기획·구현 내부 용어와 AI 슬롭 문구 재유입 가드 (테스트·admin·devtools·patchnotes·주석 제외)
   const SLOP_COPY_RE = /한국 시간 새벽|운 배율|일반 폼|돌연변이 폼|클라우드 세이브|을\(를\)|친구 성사/;
-  const SLOP_COPY_EXCEPTIONS = new Set([
-    'features/kitchen/model/bagItems.ts', // 병행 작업 파일 — 별도 정리 후 목록에서 제거
-  ]);
   it('게임·기능·화면 노출 코드 문자열은 기획·시간대·구현 직역 용어를 쓰지 않는다', () => {
     const gameFiles = Object.entries(
       import.meta.glob('../../game/**/*.{ts,tsx}', { query: '?raw', import: 'default', eager: true }) as Record<string, string>,
@@ -972,8 +969,7 @@ describe('UI 시스템 가드', () => {
     const targets = [...gameFiles, ...featureFiles, ...presentationFiles].filter(
       f => !f.path.includes('/admin/') && !f.path.includes('/devtools/')
         && !f.path.startsWith('views/admin/') && !f.path.startsWith('views/devtools/')
-        && !f.path.includes('patchnotes')
-        && !SLOP_COPY_EXCEPTIONS.has(f.path),
+        && !f.path.includes('patchnotes'),
     );
     const offenders = targets.filter(f => SLOP_COPY_RE.test(stripComments(f.src))).map(f => f.path);
     expect(offenders).toEqual([]);
