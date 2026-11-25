@@ -118,4 +118,10 @@ describe('parseAction', () => {
     expect(parseAction({ type: 'claimAchievement', id: 1 })).toBeNull();
     expect(parseAction({ type: 'claimAllAchievements' })).toEqual({ type: 'claimAllAchievements' });
   });
+
+  it('usePotion 액션의 형태를 검증한다', () => {
+    expect(parseAction({ type: 'usePotion', id: 'luck-small' })).toEqual({ type: 'usePotion', id: 'luck-small' });
+    expect(parseAction({ type: 'usePotion' })).toBeNull();
+    expect(parseAction({ type: 'usePotion', id: 1 })).toBeNull();
+  });
 });

@@ -22,6 +22,7 @@ import type { ZoneId } from '../content/zones.js';
 import {
   COOK_KIND_RULES, isEnergyAmount, isEnergyItemId, recipeById, toStoredEnergy,
 } from '../content/cooking.js';
+import { isStackableItemId } from '../content/itemCatalog.js';
 import {
   ACHIEVEMENTS, achievementById, isAchievementCounterKey,
 } from '../content/achievements.js';
@@ -107,8 +108,7 @@ export const DEBUG_ZONES: readonly BountyZone[] = BOUNTY_ZONES;
 const zoneArg = (args: Record<string, unknown>): BountyZone | null =>
   DEBUG_ZONES.includes(args.zone as BountyZone) ? args.zone as BountyZone : null;
 
-const isGrantableItem = (id: string): boolean =>
-  isEnergyItemId(id) || recipeById(id) !== undefined || ARTIFACTS.some(a => a.materialId === id);
+const isGrantableItem = (id: string): boolean => isStackableItemId(id);
 
 const namedQuestIdOf = (namedId: string): string | undefined =>
   BOUNTIES.find(q => q.difficulty === 'named' && q.targetFish === namedId)?.id;

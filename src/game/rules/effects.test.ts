@@ -428,4 +428,38 @@ describe('saleProceedsOf', () => {
     const tinyRes = saleProceedsOf(makeCtx({ state: { bag: tiny, fortune } }), tiny);
     expect(tinyRes).toEqual({ base: tinyPrice, mods: [], value: tinyPrice });
   });
+
+  it('활성 물약이 판매 예상 금액 운 배율에 합산되고 출처 mod를 남긴다', () => {
+    const bag = Array.from({ length: 10 }, (_, i) => sampleFish(`p${i}`, 'crucian', 'variant'));
+    const baseSum = bag.reduce((s, i) => s + priceOfInstance(i), 0);
+    const potions = { 'luck-small': '2026-11-21' };
+
+    // 물약만 활성
+    const potionOnly = saleProceedsOf(makeCtx({ state: { bag, potions } }), bag);
+    expect(potionOnly.value).toBe(Math.round(baseSum * 1.05));
+    expect(potionOnly.mods).toEqual([
+      {
+        id: 'potion-luck-small',
+        label: '작은 행운 물약',
+        delta: potionOnly.value - baseSum,
+        source: { kind: 'potion', id: 'luck-small' },
+      },
+    ]);
+
+    // 재물운(+5%p) + 작은 행운 물약(+5%p) = ×1.10
+    const combined = saleProceedsOf(makeCtx({
+      state: { bag, potions, fortune: { day: '2026-11-21', kind: 'gold', index: 5 } },
+    }), bag);
+    expect(combined.value).toBe(Math.round(baseSum * 1.1));
+    expect(combined.mods.map(m => m.id)).toEqual(['fortune-sell', 'potion-luck-small']);
+    expect(combined.mods.reduce((s, m) => s + m.delta, combined.base)).toBe(combined.value);
+
+    // KST 04:00 경계 이후 만료된 물약은 무시한다
+    const expired = saleProceedsOf(makeCtx({
+      state: { bag, potions },
+      now: '2026-11-21T19:00:00.000Z',
+    }), bag);
+    expect(expired.value).toBe(baseSum);
+    expect(expired.mods).toEqual([]);
+  });
 });

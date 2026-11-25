@@ -5,8 +5,10 @@ import type { ActionDeps } from './actions';
 import { upgradeCost } from './balance';
 import { endedFirstCatch, newFirstCatch } from './firstCatch';
 import { NO_GUILD_EFFECTS } from './guild';
-import { AUTO_ENERGY_BOAT, ENERGY_ITEM_IDS } from '../content/cooking';
-import { BOATS, COUPONS, FISH, WALK_BAG_CAP, newState } from './logic';
+import { AUTO_ENERGY_BOAT, ENERGY_ITEM_IDS, ENERGY_UNIT } from '../content/cooking';
+import { BOATS, COUPONS, FISH, ITEM_CAP, WALK_BAG_CAP, newState } from './logic';
+import { REJECT_TEXT } from './rules';
+import { gameDayOf } from './time';
 import type { FishInstance, FormId, GameState } from './logic';
 
 // newUid는 결정적 목 — 개체 uid가 매 실행 달라지면 재현성 검증이 불가능하다
@@ -563,6 +565,86 @@ describe('claimMail — 우편 골드 받기', () => {
     expect(out.state.gold).toBe(6_310_483);
     expect(out.result).toEqual({ type: 'mail', gold: 6_309_483 });
     expect(out.events).toEqual([{ type: 'claimMail', payload: { mailId: 7, gold: 6_309_483 } }]);
+  });
+
+  it('골드 0에 아이템만 첨부된 우편도 정상 수령하고 생명의 기운(1개=10단위) 및 ITEM_CAP을 지킨다', () => {
+    const attachments = [
+      { id: 'luck-small', qty: 2 },
+      { id: ENERGY_ITEM_IDS.rare, qty: 3 },
+      { id: 'mat-abyss-lantern', qty: 1 },
+    ];
+    const out = applyAction(
+      seed({ gold: 500 }),
+      { type: 'claimMail', id: 9 },
+      deps({ mail: { id: 9, gold: 0, items: attachments } }),
+    );
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.gold).toBe(500);
+    expect(out.state.items['luck-small']).toBe(2);
+    expect(out.state.items[ENERGY_ITEM_IDS.rare]).toBe(3 * ENERGY_UNIT);
+    expect(out.state.items['mat-abyss-lantern']).toBe(1);
+    expect(out.result).toEqual({ type: 'mail', gold: 0, items: attachments });
+    expect(out.events).toEqual([{ type: 'claimMail', payload: { mailId: 9, gold: 0, items: attachments } }]);
+
+    // 상한(ITEM_CAP, 기운은 ITEM_CAP * ENERGY_UNIT)을 넘지 않도록 클램프한다
+    const nearCap = seed({
+      items: { 'luck-small': ITEM_CAP - 1, [ENERGY_ITEM_IDS.common]: ITEM_CAP * ENERGY_UNIT - 5 },
+    });
+    const capped = applyAction(nearCap, { type: 'claimMail', id: 10 }, deps({
+      mail: {
+        id: 10,
+        gold: 0,
+        items: [{ id: 'luck-small', qty: 5 }, { id: ENERGY_ITEM_IDS.common, qty: 2 }],
+      },
+    }));
+    if (!capped.ok) throw new Error(capped.error);
+    expect(capped.state.items['luck-small']).toBe(ITEM_CAP);
+    expect(capped.state.items[ENERGY_ITEM_IDS.common]).toBe(ITEM_CAP * ENERGY_UNIT);
+  });
+});
+
+describe('usePotion — 물약 사용', () => {
+  const now = '2026-08-22T03:00:00.000Z';
+  const day = gameDayOf(now);
+  const nextNow = '2026-08-22T19:00:00.000Z'; // KST 다음날 04:00
+  const nextDay = gameDayOf(nextNow);
+
+  it('게스트, 모르는 id, 미보유, 오늘 이미 적용 중이면 거부한다', () => {
+    expect(applyAction(seed({ items: { 'luck-small': 1 } }), { type: 'usePotion', id: 'luck-small' }, deps({ guest: true })))
+      .toEqual({ ok: false, error: 'account-only' });
+    expect(applyAction(seed({ items: { 'luck-small': 1 } }), { type: 'usePotion', id: 'nope' }, deps()))
+      .toEqual({ ok: false, error: 'bad-request' });
+    expect(applyAction(seed(), { type: 'usePotion', id: 'luck-small' }, deps()))
+      .toEqual({ ok: false, error: 'potion-not-owned' });
+    expect(applyAction(
+      seed({ items: { 'luck-small': 2 }, potions: { 'luck-small': day } }),
+      { type: 'usePotion', id: 'luck-small' },
+      deps({ now }),
+    )).toEqual({ ok: false, error: 'potion-already-active' });
+    expect(REJECT_TEXT['potion-already-active']).toBe('오늘 이미 같은 물약 효과가 적용 중이에요.');
+  });
+
+  it('보유한 물약을 사용하면 1개 차감하고 오늘 게임 날짜를 기록한다', () => {
+    const out = applyAction(
+      seed({ items: { 'luck-small': 2 } }),
+      { type: 'usePotion', id: 'luck-small' },
+      deps({ now }),
+    );
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.items['luck-small']).toBe(1);
+    expect(out.state.potions).toEqual({ 'luck-small': day });
+    expect(out.result).toEqual({ type: 'none' });
+    expect(out.events).toEqual([{ type: 'usePotion', payload: { id: 'luck-small', day } }]);
+
+    // 마지막 1개를 쓰고, KST 04:00 이후 다음 게임 날짜에는 다시 사용할 수 있다
+    const nextDayOut = applyAction(
+      out.state,
+      { type: 'usePotion', id: 'luck-small' },
+      deps({ now: nextNow }),
+    );
+    if (!nextDayOut.ok) throw new Error(nextDayOut.error);
+    expect(nextDayOut.state.items['luck-small']).toBeUndefined();
+    expect(nextDayOut.state.potions).toEqual({ 'luck-small': nextDay });
   });
 });
 

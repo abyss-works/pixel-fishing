@@ -7,7 +7,8 @@ import type { SpotId } from '../content/spots.js';
 import type { ZoneId } from '../content/zones.js';
 import { artifactEffectsAt, artifactLevelOf } from './artifactLevel.js';
 import { WALK_SPEED } from './balance.js';
-import { fortuneOf, luckMultOf } from './fortune.js';
+import { FORTUNE_TARGET_OF, activePotionsOf, fortuneOf, luckMultOf } from './fortune.js';
+import { gameDayOf } from './time.js';
 import { appliedSlots, slotEffects } from './cooking.js';
 import type { GuildEffects } from './guild.js';
 import { boatSpeed, priceOfInstance, rodStats, saleBonusOf } from './logic.js';
@@ -212,13 +213,15 @@ export function biteWaitOf(ctx: PlayerContext, spot: SpotId, mode: 'idle' | 'man
 }
 
 /** 판매 수령액 — 선택한 개체의 기본가 합에 길드·업적 판매가 보너스를 한 번 더하고,
- *  재물운의 날에는 그 합계에 운 배율을 곱한다(서버 판매와 같은 순서 — 반올림은 마지막 곱 뒤 한 번) */
+ *  재물운이나 판매가 물약이 켜진 날에는 그 합계에 합산 운 배율을 곱한다(서버 판매와 같은 순서 — 반올림은 마지막 곱 뒤 한 번) */
 export function saleProceedsOf(ctx: PlayerContext, instances: readonly FishInstance[]): Stat {
   const base = instances.reduce((sum, inst) => sum + priceOfInstance(inst), 0);
   const guildSell = ctx.guild.sell;
   const achSell = ctx.achievements.sellBonus;
   const totalDelta = saleBonusOf(base, clean(guildSell + achSell));
-  const luck = luckMultOf(fortuneOf(ctx.state, ctx.now), 'sell');
+  const fortune = fortuneOf(ctx.state, ctx.now);
+  const day = gameDayOf(ctx.now);
+  const luck = luckMultOf(fortune, 'sell', ctx.state.potions, day);
   const mods: StatMod[] = [];
   if (guildSell > 0) {
     const d = saleBonusOf(base, guildSell);
@@ -232,10 +235,26 @@ export function saleProceedsOf(ctx: PlayerContext, instances: readonly FishInsta
     const rest = mods.slice(0, -1).reduce((sum, mod) => sum + mod.delta, 0);
     mods[mods.length - 1].delta = totalDelta - rest;
   }
-  const value = Math.round((base + totalDelta) * luck);
-  const luckDelta = value - (base + totalDelta);
+  const preLuck = base + totalDelta;
+  const value = Math.round(preLuck * luck);
+  const luckDelta = value - preLuck;
   if (luckDelta !== 0) {
-    mods.push({ id: 'fortune-sell', label: '오늘의 운세', delta: luckDelta, source: { kind: 'fortune' } });
+    const luckMods: StatMod[] = [];
+    const fortuneBonus = fortune !== null && FORTUNE_TARGET_OF[fortune.kind] === 'sell' ? fortune.index / 100 : 0;
+    if (fortuneBonus > 0) {
+      luckMods.push({ id: 'fortune-sell', label: '오늘의 운세', delta: Math.round(preLuck * fortuneBonus), source: { kind: 'fortune' } });
+    }
+    for (const potion of activePotionsOf(ctx.state.potions, ctx.now)) {
+      const bonus = potion.effects.luck?.sell ?? 0;
+      if (bonus > 0) {
+        luckMods.push({ id: `potion-${potion.id}`, label: potion.name, delta: Math.round(preLuck * bonus), source: { kind: 'potion', id: potion.id } });
+      }
+    }
+    if (luckMods.length > 0) {
+      const rest = luckMods.slice(0, -1).reduce((sum, mod) => sum + mod.delta, 0);
+      luckMods[luckMods.length - 1].delta = luckDelta - rest;
+      mods.push(...luckMods);
+    }
   }
   return { base, mods, value };
 }
