@@ -150,7 +150,7 @@ export type GuildOpResult =
   | { ok: true; result?: 'joined' | 'requested'; gold?: number; recovered?: number; enhanceResetCount?: number }
   | { ok: false; error: string };
 
-export type RankingBoardId = 'fame' | 'dex' | 'species';
+export type RankingBoardId = 'fame' | 'dex' | 'variant' | 'named' | 'namedClears' | 'species';
 export interface RankingRow { rank: number; nickname: string | null; value: number; me: boolean }
 /** species 표는 fishId 어종의 사람별 최대 크기(cm) 순위다 */
 export interface RankingBoard { board: RankingBoardId; fishId?: string; top: RankingRow[]; me: { rank: number; value: number } | null }

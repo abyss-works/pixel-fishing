@@ -1,9 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { FISH } from '../../../../game/content/fish';
+import { NAMED } from '../../../../game/content/named';
 
 const state = vi.hoisted(() => ({
   results: {} as Record<string, unknown>,
+  errors: new Set<string>(),
   pending: false,
   calls: [] as string[],
 }));
@@ -13,7 +16,9 @@ vi.mock('../../../../platform/api', async importOriginal => {
     ...mod,
     readRanking: (board: string) => {
       state.calls.push(board);
-      return state.pending ? new Promise(() => {}) : Promise.resolve(state.results[board] ?? null);
+      if (state.pending) return new Promise(() => {});
+      if (state.errors.has(board)) return Promise.reject(new Error('network error'));
+      return Promise.resolve(state.results[board] ?? null);
     },
   };
 });
@@ -21,24 +26,48 @@ vi.mock('../../../../platform/api', async importOriginal => {
 import RankingModal from './RankingModal';
 
 function show() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, retryDelay: 0 } } });
   render(<QueryClientProvider client={client}><RankingModal onClose={() => {}} /></QueryClientProvider>);
 }
 
 describe('랭킹 창', () => {
-  afterEach(() => { cleanup(); state.results = {}; state.pending = false; state.calls = []; });
+  afterEach(() => { cleanup(); state.results = {}; state.errors.clear(); state.pending = false; state.calls = []; });
 
-  it('명성과 도감을 탭으로 나누고, 창을 열 때 두 순위를 함께 불러온다', async () => {
+  it('상단 5탭(명성, 도감(일반), 도감(돌연변이), 도감(네임드), 네임드 토벌)을 두고 활성 탭만 지연 조회하며 재전환 시 캐시를 재사용한다', async () => {
     state.results = {
       fame: { board: 'fame', top: [{ rank: 1, nickname: '가', value: 1200, me: false }], me: null },
       dex: { board: 'dex', top: [{ rank: 1, nickname: '나', value: 42, me: false }], me: null },
+      variant: { board: 'variant', top: [{ rank: 1, nickname: '다', value: 10, me: false }], me: null },
+      named: { board: 'named', top: [{ rank: 1, nickname: '라', value: 3, me: false }], me: null },
+      namedClears: { board: 'namedClears', top: [{ rank: 1, nickname: '마', value: 15, me: false }], me: null },
     };
     show();
+    for (const label of ['명성', '도감(일반)', '도감(돌연변이)', '도감(네임드)', '네임드 토벌']) {
+      expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
+    }
     expect(await screen.findByText('1,200')).toBeInTheDocument();
-    expect(screen.queryByText('42종')).not.toBeInTheDocument();
-    await waitFor(() => expect([...state.calls].sort()).toEqual(['dex', 'fame']));
-    fireEvent.click(screen.getByRole('button', { name: '도감' }));
-    expect(await screen.findByText('42종')).toBeInTheDocument();
+    expect(state.calls).toEqual(['fame']);
+
+    fireEvent.click(screen.getByRole('button', { name: '도감(일반)' }));
+    expect(await screen.findByText(`42 / ${FISH.length} (${Math.round((42 / FISH.length) * 100)}%)`)).toBeInTheDocument();
+    expect(state.calls).toEqual(['fame', 'dex']);
+
+    fireEvent.click(screen.getByRole('button', { name: '도감(돌연변이)' }));
+    expect(await screen.findByText(`10 / ${FISH.length} (${Math.round((10 / FISH.length) * 100)}%)`)).toBeInTheDocument();
+    expect(state.calls).toEqual(['fame', 'dex', 'variant']);
+
+    fireEvent.click(screen.getByRole('button', { name: '도감(네임드)' }));
+    expect(await screen.findByText(`3 / ${NAMED.length} (${Math.round((3 / NAMED.length) * 100)}%)`)).toBeInTheDocument();
+    expect(state.calls).toEqual(['fame', 'dex', 'variant', 'named']);
+
+    fireEvent.click(screen.getByRole('button', { name: '네임드 토벌' }));
+    expect(await screen.findByText('15회')).toBeInTheDocument();
+    expect(state.calls).toEqual(['fame', 'dex', 'variant', 'named', 'namedClears']);
+
+    // 이미 불러온 명성 탭으로 되돌아가면 재조회하지 않는다
+    fireEvent.click(screen.getByRole('button', { name: '명성' }));
+    expect(await screen.findByText('1,200')).toBeInTheDocument();
+    await waitFor(() => expect(state.calls).toEqual(['fame', 'dex', 'variant', 'named', 'namedClears']));
   });
 
   it('1위부터 3위의 순위 숫자는 골드로 쓴다', async () => {
@@ -73,6 +102,18 @@ describe('랭킹 창', () => {
     state.pending = true;
     show();
     expect(screen.getByRole('status', { name: '불러오는 중' })).toBeInTheDocument();
+  });
+
+  it('조회 실패 시 오류 안내를 보이고, 빈 목록이면 빈 상태 안내를 보인다', async () => {
+    state.errors.add('fame');
+    state.results = {
+      namedClears: { board: 'namedClears', top: [], me: null },
+    };
+    show();
+    expect(await screen.findByText(/랭킹을 불러오지 못했어요/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '네임드 토벌' }));
+    expect(await screen.findByText('아직 기록이 없어요.')).toBeInTheDocument();
   });
 
   it('로컬 모드(조회 결과 없음)는 온라인 안내를 띄운다', async () => {

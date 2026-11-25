@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { pinnedMyRank } from '../../../../features/ranking/model/ranking';
+import { formatRankingValue, pinnedMyRank, RANKING_TABS, rankingTabMeta } from '../../../../features/ranking/model/ranking';
+import type { MainRankingBoardId } from '../../../../features/ranking/model/ranking';
 import { useRankingBoard } from '../../../../features/ranking/service/useRanking';
 import { cx } from '../../../ui/cx';
-import { fmtNum } from '../../../ui/format';
 import Inset from '../../../ui/Inset';
 import TableBox from '../../../ui/TableBox';
 import DataTable from '../../../ui/DataTable';
@@ -12,51 +12,52 @@ import TabBar from '../../../ui/TabBar';
 import Tip from '../../../ui/Tip';
 import RankingStatus from './RankingStatus';
 
-// 랭킹 창. 게임 스테이지 안에 뜬다(거점 게시판에서 여는 게임 안 창). 680 폭에 높이를 고정하고, 탭은 명성과 도감 둘이다.
-// 두 순위는 창을 열 때 함께 불러온다. 순위 표는 탭 본문 안에서 굴리고, 1위부터 3위의 순위 숫자는 골드로 쓴다.
+// 랭킹 창. 게임 스테이지 안에 뜬다(거점 게시판에서 여는 게임 안 창). 680 폭에 높이를 고정하고,
+// 상단 탭 다섯(명성·도감(일반)·도감(돌연변이)·도감(네임드)·네임드 토벌)을 전환하며 활성 탭만 지연 조회한다.
+// 순위 표는 탭 본문 안에서 굴리고, 1위부터 3위의 순위 숫자는 골드로 쓴다.
 // 내 행은 하늘색이다. 내가 상위 목록 밖이면 내 줄을 표 아래에 고정하고, 목록 안이면 그 자리를 비워 둔다.
-// 두 탭에 공통인 상태가 없어 고정 정보 줄은 두지 않는다. 어종별 크기 순위는 도감 상세가 보여 준다.
-type Board = 'fame' | 'dex';
-const BOARDS: Record<Board, { valueLabel: string; format: (v: number) => string }> = {
-  fame: { valueLabel: '명성', format: v => fmtNum(v) },
-  dex: { valueLabel: '발견 어종', format: v => `${fmtNum(v)}종` },
-};
-const DEX_HELP = '일반 폼으로 한 번이라도 낚은 어종 수예요.';
+// 두 탭 이상 공통 고정 정보 줄은 두지 않는다. 어종별 크기 순위는 도감 상세가 보여 준다.
 const HEAD = 'h-[30px] px-2 font-normal border-b border-line';
 const nameOf = (nickname: string | null) => nickname ?? '이름 없음';
+const TABS = RANKING_TABS.map(({ key, label }) => ({ key, label }));
 
 export default function RankingModal({ onClose }: { onClose: () => void }) {
-  const [tab, setTab] = useState<Board>('fame');
-  const boards = { fame: useRankingBoard('fame'), dex: useRankingBoard('dex') };
+  const [tab, setTab] = useState<MainRankingBoardId>('fame');
   return (
     // 탭이 있는 창의 높이 520px. 스테이지가 낮으면 위아래 16px을 남긴다
-    <Modal layer="stage" md height={520} onClose={onClose}>
+    <Modal layer="stage" md mobileFixed height={520} onClose={onClose}>
       <ModalCard title="랭킹" onClose={onClose} fixed>
         <div className="flex flex-col gap-3 flex-1 min-h-0">
-          <TabBar<Board> activeKey={tab} onSelect={setTab} tabs={[{ key: 'fame', label: '명성' }, { key: 'dex', label: '도감' }]} />
-          <RankingBoardView board={tab} {...boards[tab]} />
+          <TabBar<MainRankingBoardId>
+            activeKey={tab}
+            onSelect={setTab}
+            tabs={TABS}
+            className="mobile:flex-wrap mobile:[&>button]:flex-[1_0_30%]"
+          />
+          <RankingBoardView board={tab} />
         </div>
       </ModalCard>
     </Modal>
   );
 }
 
-/** 한 탭의 본문: 순위 표와 그 아래 내 줄 자리 */
-function RankingBoardView({ board, data, loading, failed, offline }: { board: Board } & ReturnType<typeof useRankingBoard>) {
-  const { valueLabel, format } = BOARDS[board];
+/** 한 탭의 본문: 활성 보드 지연 조회 결과와 표 아래 내 순위 자리 */
+function RankingBoardView({ board }: { board: MainRankingBoardId }) {
+  const { data, loading, failed, offline } = useRankingBoard(board);
+  const { valueLabel, help } = rankingTabMeta(board);
   const listed = !!data && data.top.length > 0;
   const mine = data ? pinnedMyRank(data) : null;
   return (
     <div className="flex flex-col gap-3 flex-1 min-h-0">
       <TableBox className="flex-1 min-h-0 px-3 pb-2">
         {listed ? (
-          <DataTable cols={['3.5rem', null, '110px']} nameMin="8rem">
+          <DataTable cols={['3.5rem', null, '136px']} nameMin="6rem">
             <thead>
               <tr className="sticky top-0 bg-[color-mix(in_oklab,var(--c-bg)_45%,var(--c-surface))] text-2xs text-text-dim">
                 <th className={cx(HEAD, 'pl-0 text-left')}>순위</th>
                 <th className={cx(HEAD, 'text-left')}>닉네임</th>
                 <th className={cx(HEAD, 'pr-0 text-right')}>
-                  {board === 'dex' ? <Tip text={DEX_HELP}>{valueLabel}</Tip> : valueLabel}
+                  {help ? <Tip text={help}>{valueLabel}</Tip> : valueLabel}
                 </th>
               </tr>
             </thead>
@@ -67,7 +68,7 @@ function RankingBoardView({ board, data, loading, failed, offline }: { board: Bo
                   <tr key={i} className={cx(r.me && 'text-accent')} aria-current={r.me ? 'true' : undefined}>
                     <td className={cx(cell, 'pf-accent text-xs', r.rank <= 3 && !r.me && 'text-gold')}>{r.rank}</td>
                     <td className={cx(cell, 'px-2 truncate', r.me && 'font-bold')}>{nameOf(r.nickname)}</td>
-                    <td className={cx(cell, 'pl-2 text-right pf-accent text-xs')}>{format(r.value)}</td>
+                    <td className={cx(cell, 'pl-2 text-right pf-accent text-xs whitespace-nowrap')}>{formatRankingValue(board, r.value)}</td>
                   </tr>
                 );
               })}
@@ -81,12 +82,12 @@ function RankingBoardView({ board, data, loading, failed, offline }: { board: Bo
       </TableBox>
       {/* 내 줄 자리: 목록 밖일 때만 채우고, 아니면 같은 높이로 비워 둔다 */}
       {mine ? (
-        <Inset tone="light" border="accent" className="h-9 shrink-0 grid grid-cols-[3.5rem_minmax(0,1fr)_110px] items-center px-3 text-accent text-sm"
+        <Inset tone="light" border="accent" className="h-9 shrink-0 grid grid-cols-[3.5rem_minmax(0,1fr)_136px] items-center px-3 text-accent text-sm"
                aria-label="내 순위">
           <span className="pf-accent text-xs">{mine.rank}</span>
           {/* 표의 닉네임 칸과 같은 왼쪽 여백 */}
-          <b className="pl-2">나</b>
-          <span className="pf-accent text-xs text-right">{format(mine.value)}</span>
+          <b className="pl-2 truncate">나</b>
+          <span className="pf-accent text-xs text-right whitespace-nowrap">{formatRankingValue(board, mine.value)}</span>
         </Inset>
       ) : <div className="h-9 shrink-0" aria-hidden="true" />}
     </div>

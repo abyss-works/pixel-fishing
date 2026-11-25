@@ -6,7 +6,9 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { sessionOf } from './_auth/session.js';
 import { database } from './_db/client.js';
-import { dexBoard, fameBoard, speciesBoard } from './_data/rank.js';
+import type { Executor } from './_db/client.js';
+import { dexBoard, fameBoard, namedBoard, namedClearsBoard, speciesBoard, variantBoard } from './_data/rank.js';
+import type { RankBoard } from './_data/rank.js';
 import { FISH } from '../src/game/rules/logic.js';
 import { ApiError, toApiError } from './errors.js';
 import { reportServerIssue } from './observability.js';
@@ -14,9 +16,16 @@ import { reportServerIssue } from './observability.js';
 type Req = IncomingMessage & { query?: Record<string, string | string[] | undefined> };
 type Res = ServerResponse & { status: (code: number) => Res; json: (body: unknown) => void };
 
-const BOARDS = ['fame', 'dex', 'species'] as const;
+const BOARDS = ['fame', 'dex', 'variant', 'named', 'namedClears', 'species'] as const;
 type Board = typeof BOARDS[number];
 const isBoard = (v: unknown): v is Board => typeof v === 'string' && (BOARDS as readonly string[]).includes(v);
+const BOARD_READERS: Record<Exclude<Board, 'species'>, (db: Executor, uid: string | null) => Promise<RankBoard>> = {
+  fame: fameBoard,
+  dex: dexBoard,
+  variant: variantBoard,
+  named: namedBoard,
+  namedClears: namedClearsBoard,
+};
 
 export default async function handler(req: Req, res: Res): Promise<void> {
   try {
@@ -42,7 +51,7 @@ async function route(req: Req, res: Res): Promise<void> {
   const { db } = database();
   const body = board === 'species'
     ? { board, fishId: fish, ...await read(() => speciesBoard(db, fish as string, uid)) }
-    : { board, ...await read(() => (board === 'fame' ? fameBoard : dexBoard)(db, uid)) };
+    : { board, ...await read(() => BOARD_READERS[board](db, uid)) };
 
   res.setHeader('Cache-Control', uid ? 'private, no-store' : 'public, s-maxage=60, stale-while-revalidate=300');
   res.status(200).json(body);

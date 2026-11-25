@@ -4,6 +4,12 @@
 import { sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
+import { FISH } from '../../src/game/content/fish.js';
+import { NAMED } from '../../src/game/content/named.js';
+import { textArray } from './json.js';
+
+const FISH_IDS = FISH.map(f => f.id);
+const NAMED_IDS = NAMED.map(n => n.id);
 
 export const RANK_TOP = 50;
 /** 어종 순위는 도감 상세에 붙어 짧게 보여 준다 */
@@ -37,13 +43,42 @@ export function fameBoard(db: Executor, uid: string | null): Promise<RankBoard> 
     where not s.restricted and not u.is_anonymous and s.fame > 0`, uid);
 }
 
-/** 도감 완성도 순위 — 일반 폼으로 낚은 어종 수. 같은 수면 마지막 새 어종을 먼저 낚은 사람이 위 */
-export function dexBoard(db: Executor, uid: string | null): Promise<RankBoard> {
+/** 도감 종목 수 순위 공통 — 지정 어종 목록·폼의 기록 수, 동순위 시 마지막 새 어종 도달 시각이 이른 사람이 위 */
+function recordsCountBoard(
+  db: Executor,
+  uid: string | null,
+  form: 'normal' | 'variant',
+  ids: readonly string[],
+): Promise<RankBoard> {
   return rankBoard(db, sql`select r.user_id, count(*)::int as value, max(coalesce(r.first_caught, r.updated_at)) as reached
     from public.records r join public.saves_current s on s.user_id = r.user_id and not s.restricted
     join auth.users u on u.id = r.user_id and not u.is_anonymous
-    where r.form = 'normal' and r.count > 0
+    where r.form = ${form} and r.count > 0 and r.fish_id = any(${textArray(ids)})
     group by r.user_id`, uid);
+}
+
+/** 일반 도감 완성도 순위 — 일반 어종의 일반 폼 발견 종 수(네임드 제외) */
+export function dexBoard(db: Executor, uid: string | null): Promise<RankBoard> {
+  return recordsCountBoard(db, uid, 'normal', FISH_IDS);
+}
+
+/** 돌연변이 도감 완성도 순위 — 일반 어종의 돌연변이 폼 발견 종 수 */
+export function variantBoard(db: Executor, uid: string | null): Promise<RankBoard> {
+  return recordsCountBoard(db, uid, 'variant', FISH_IDS);
+}
+
+/** 네임드 도감 순위 — 네임드 어종의 기록 종 수 */
+export function namedBoard(db: Executor, uid: string | null): Promise<RankBoard> {
+  return recordsCountBoard(db, uid, 'normal', NAMED_IDS);
+}
+
+/** 네임드 토벌 누적 순위 — 네임드 토벌 성공 횟수. 같은 수면 마지막 토벌 시각이 이른 사람이 위 */
+export function namedClearsBoard(db: Executor, uid: string | null): Promise<RankBoard> {
+  return rankBoard(db, sql`select bc.user_id, count(*)::int as value, max(bc.cleared_at) as reached
+    from public.bounty_clears bc join public.saves_current s on s.user_id = bc.user_id and not s.restricted
+    join auth.users u on u.id = bc.user_id and not u.is_anonymous
+    where bc.kind = 'named'
+    group by bc.user_id`, uid);
 }
 
 /** 어종 순위 — 그 어종을 사람별로 가장 크게 낚은 크기(폼 무관). 같은 크기면 기록을 먼저 남긴 사람이 위 */
