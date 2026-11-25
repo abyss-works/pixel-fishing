@@ -155,8 +155,8 @@ export default function GameView(props: GameViewProps) {
   const [tracking, setTracking] = useState<string | null>(null);
   const covered = useCanvasCover();
   const atSea = scene.kind === 'region' && scene.id !== 'village';
-  // 튜토리얼 트리거 — 마을(집 포함)과 바다에 처음 나왔을 때
-  useTutorialTrigger('village', scene.kind === 'region' ? scene.id === 'village' : scene.id === 'home');
+  // 튜토리얼 트리거 — 마을 야외와 바다에 처음 나왔을 때
+  useTutorialTrigger('village', scene.kind === 'region' && scene.id === 'village');
   useTutorialTrigger('sea', atSea);
   // 첫 화면의 안내 창 순서 - 업데이트 소식, 미끼 환불 안내, 오늘의 운세, 튜토리얼. 앞 창이 끝나야 다음 창이 뜬다
   const saveReady = props.syncState === 'on' || props.syncState === 'off';
