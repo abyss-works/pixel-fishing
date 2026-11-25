@@ -54,7 +54,7 @@ describe('ItemDetail', () => {
     expect(within(dialog).getByText(recipeById('cook-lunch-named')!.description)).toBeInTheDocument();
     expect(within(dialog).getByText(/방치로 낚을 때만 효과가 있어요/)).toBeInTheDocument();
 
-    // 모달 닫기는 우상단 X만 두고 하단 닫기 버튼은 두지 않는다 (DESIGN.md)
+    // 모달 닫기는 우상단 X만 두고 하단 닫기 버튼은 두지 않는다
     expect(within(dialog).getAllByRole('button', { name: '닫기' })).toHaveLength(1);
     expect(within(dialog).getByRole('button', { name: '먹기' })).toBeEnabled();
 
