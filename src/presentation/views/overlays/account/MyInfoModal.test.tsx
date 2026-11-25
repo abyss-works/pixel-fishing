@@ -89,4 +89,17 @@ describe('MyInfoModal 비동기 상태 구분', () => {
     );
     expect(screen.getByText('계정 연결 필요')).toBeTruthy();
   });
+
+  it('닉네임 규칙과 ID 복사 안내는 바깥 본문에 늘려놓지 않고 각 소제목 툴팁으로 제공한다', () => {
+    open('me@example.com');
+    expect(screen.queryByText(/나중에 랭킹에 표시될 이름이에요/)).toBeNull();
+    expect(screen.queryByText(/전체가 복사돼요/)).toBeNull();
+
+    fireEvent.mouseEnter(screen.getByText('닉네임'));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('한글은 8자, 영문과 숫자는 16자까지 쓸 수 있어요.');
+    fireEvent.mouseLeave(screen.getByText('닉네임'));
+
+    fireEvent.mouseEnter(screen.getByRole('heading', { name: '내 정보', level: 4 }).firstElementChild!);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('복사를 누르면 전체가 복사돼요.');
+  });
 });

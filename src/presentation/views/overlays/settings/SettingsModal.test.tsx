@@ -133,4 +133,20 @@ describe('SettingsModal — 주요 화면 알림 설정', () => {
     expect(toggle).toHaveAttribute('aria-pressed', 'true');
     expect(localStorage.getItem('pf-toast-enabled')).toBe('1');
   });
+
+  it('브라우저 알림 공통 설명은 알림 소제목 툴팁 한 곳에 두고 각 행에 중복하지 않는다', () => {
+    open();
+    fireEvent.mouseEnter(screen.getByText('알림'));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('다른 화면을 보고 있을 때 브라우저 알림과 탭 제목 깜빡임으로 알려 줘요.');
+    fireEvent.mouseLeave(screen.getByText('알림'));
+
+    fireEvent.mouseEnter(screen.getByText('네임드 조우'));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('네임드의 흔적을 만나면 알려 줘요.');
+    expect(screen.getByRole('tooltip').textContent).not.toContain('다른 화면을 보고 있을 때');
+    fireEvent.mouseLeave(screen.getByText('네임드 조우'));
+
+    fireEvent.mouseEnter(screen.getByText('업데이트'));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('업데이트가 나와 진행이 멈추면 알려 줘요.');
+    expect(screen.getByRole('tooltip').textContent).not.toContain('다른 화면을 보고 있을 때');
+  });
 });

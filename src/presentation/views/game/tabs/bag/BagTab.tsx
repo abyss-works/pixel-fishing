@@ -41,6 +41,7 @@ import ItemSprite from '../../../../ui/ItemSprite';
 import PressRow from '../../../../ui/PressRow';
 import ArtifactDetail from './ArtifactDetail';
 import ItemSection from './ItemSection';
+import EnergyPanel from '../../../overlays/facility/EnergyPanel';
 import { SidebarFooter } from '../../../../layouts/sidebar';
 
 /** 전시대 화면 노출 — 1차 전시대는 이번 배포에서 뺀다. 규칙·액션은 그대로다 */
@@ -187,7 +188,7 @@ function ExhibitShelf({ exhibit, onWithdraw }: {
   );
 }
 
-export default function BagTab({ game, accountState = 'account', sellBonus, bagBonus = 0, dispatch, setToast, onOpenEnergy }: {
+export default function BagTab({ game, accountState = 'account', sellBonus, bagBonus = 0, dispatch, setToast }: {
   game: GameState;
   /** 잠금 판정에 쓰는 계정 상태 - 아이템 섹션과 기운 얻기 진입의 잠금 사유를 정한다 */
   accountState?: AccountLockState;
@@ -197,8 +198,6 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
   bagBonus?: number;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
-  /** 물고기 섹션 하단 기운 얻기 진입 버튼 */
-  onOpenEnergy?: () => void;
 }) {
   const now = useNow();
   const rows = useMemo(() => groupInstances(game.bag), [game.bag]);
@@ -208,6 +207,7 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
   } = selectBagOverview(game, sellBonus, bagBonus, now);
   const energyEntry = selectBagEnergyEntry(game, accountState);
   const [lockConfirm, setLockConfirm] = useState(false);
+  const [energyOpen, setEnergyOpen] = useState(false);
   const { layout, section, opened } = useBagView();
 
   const lock = (uids: string[], locked: boolean, label: string) =>
@@ -295,36 +295,55 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
             </PageTitle>
             <div className="flex items-center gap-1.5">
               {layout === 'list' && (
-                <Tip
-                  text={(
-                    <TipCard
-                      title="개체 표시"
-                      rows={[
-                        {
-                          label: (
-                            <span className="inline-flex items-center gap-1">
-                              <PixelIcon glyph="crown" size={11} className="text-gold" />
-                              <span>금색 왕관</span>
-                            </span>
-                          ),
-                          value: '같은 형태 최대',
-                        },
-                        {
-                          label: (
-                            <span className="inline-flex items-center gap-1">
-                              <PixelIcon glyph="sparkle" size={11} className="text-epic" />
-                              <span>보라 반짝이</span>
-                            </span>
-                          ),
-                          value: '돌연변이 개체',
-                        },
-                      ]}
-                    />
-                  )}
-                  className="text-2xs text-text-dim"
-                >
-                  개체 표시
-                </Tip>
+                <>
+                  <Tip
+                    text={(
+                      <TipCard
+                        title="목록 안내"
+                        description={[
+                          '판매는 집 궤짝이나 항구 어시장에서 할 수 있어요.',
+                          '자물쇠는 개체마다 걸 수 있고, 머리 줄의 자물쇠는 그 종 전부에 걸어요.',
+                          ...(EXHIBIT_UI_ENABLED ? ['별을 누르면 전시대에 올라가요. 전시 중에는 팔리지 않아요.'] : []),
+                          '행 소계는 잠근 개체를 포함한 그 종의 값 합계예요.',
+                          '목록은 등급이 높은 순으로 정렬돼요.',
+                        ].join('\n')}
+                      />
+                    )}
+                    className="text-2xs text-text-dim"
+                  >
+                    목록 안내
+                  </Tip>
+                  <Tip
+                    text={(
+                      <TipCard
+                        title="개체 표시"
+                        rows={[
+                          {
+                            label: (
+                              <span className="inline-flex items-center gap-1">
+                                <PixelIcon glyph="crown" size={11} className="text-gold" />
+                                <span>금색 왕관</span>
+                              </span>
+                            ),
+                            value: '같은 형태 최대',
+                          },
+                          {
+                            label: (
+                              <span className="inline-flex items-center gap-1">
+                                <PixelIcon glyph="sparkle" size={11} className="text-epic" />
+                                <span>보라 반짝이</span>
+                              </span>
+                            ),
+                            value: '돌연변이 개체',
+                          },
+                        ]}
+                      />
+                    )}
+                    className="text-2xs text-text-dim"
+                  >
+                    개체 표시
+                  </Tip>
+                </>
               )}
               <Tip wraps text={layout === 'list' ? '카드 보기' : '목록 보기'}>
                 <IconButton
@@ -418,12 +437,7 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
                 })}
               </Inset>
               <Note>
-                판매 가능 금액은 <AdjustedAmount amount={sellable} />이에요.<br />
-                판매는 집 궤짝이나 항구 어시장에서 할 수 있어요.<br />
-                자물쇠는 개체마다 걸 수 있고, 머리 줄의 자물쇠는 그 종 전부에 걸어요.<br />
-                {EXHIBIT_UI_ENABLED && <>별을 누르면 전시대에 올라가요.<br />전시 중에는 팔리지 않아요.<br /></>}
-                행 소계는 잠근 개체를 포함한 그 종의 값 합계예요.<br />
-                목록은 등급이 높은 순으로 정렬돼요.
+                판매 가능 금액은 <AdjustedAmount amount={sellable} />이에요.
               </Note>
             </>
           )}
@@ -455,13 +469,16 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
                          status={{ tone: 'lock', lines: energyEntry.lines }}
                        />
                      )}>
-                <Button size="sm" disabled={!energyEntry.ok} onClick={() => onOpenEnergy?.()}
+                <Button size="sm" disabled={!energyEntry.ok} onClick={() => setEnergyOpen(true)}
                         className="w-full justify-center">
                   기운 얻기
                 </Button>
               </Tip>
             </div>
           </SidebarFooter>
+          {energyOpen && (
+            <EnergyPanel game={game} dispatch={dispatch} setToast={setToast} onClose={() => setEnergyOpen(false)} />
+          )}
         </>
       )}
     </div>

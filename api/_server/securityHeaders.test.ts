@@ -16,6 +16,7 @@ import {
   securityHeaders,
 } from './securityHeaders.js';
 import { GATE_SCRIPT_CSP_HASH, stageGate } from './stageGate.js';
+import { isTrustedProxyAddress } from '../_auth/trustedProxy.js';
 
 const publicDir = fileURLToPath(new URL('../../public/', import.meta.url));
 const PROD_ORIGIN = 'https://pixel-fishing.abyssworks.dev';
@@ -72,6 +73,22 @@ describe('buildContentSecurityPolicy', () => {
       sentryDsn: 'https://publickey@o12345.ingest.us.sentry.io/42',
     });
     expect(directiveOf(cloudCsp, 'connect-src')).not.toContain('o12345');
+
+    const multiCsp = buildContentSecurityPolicy({
+      origin: PROD_ORIGIN,
+      sentryDsn: [
+        'https://k1@sentry-a.internal.example/1',
+        'https://k2@sentry-a.internal.example/2',
+        'https://k3@sentry-b.internal.example/3',
+        'https://k4@pixel-fishing.abyssworks.dev/4',
+        'http://insecure.internal.example/5',
+      ],
+    });
+    const multiConnect = directiveOf(multiCsp, 'connect-src') ?? '';
+    expect(multiConnect.match(/https:\/\/sentry-a\.internal\.example/g)).toHaveLength(1);
+    expect(multiConnect).toContain('https://sentry-b.internal.example');
+    expect(multiConnect).not.toContain('https://pixel-fishing.abyssworks.dev');
+    expect(multiConnect).not.toContain('http://insecure.internal.example');
   });
 
   it('appendScriptHashToCsp는 기존 script-src 지시어에만 해시를 덧붙이고 중복하지 않는다', () => {
@@ -83,13 +100,42 @@ describe('buildContentSecurityPolicy', () => {
   });
 });
 
+describe('isTrustedProxyAddress', () => {
+  it('사설·클러스터·루프백 대역(IPv4 매핑 IPv6 포함)만 신뢰 프록시로 인정하고 공인·미지정 주소는 거부한다', () => {
+    for (const trusted of [
+      '127.0.0.1', '::ffff:127.0.0.1', '10.42.0.5', '::ffff:10.42.0.5',
+      '172.16.0.1', '192.168.1.10', '100.64.0.1', '169.254.1.1',
+      '::1', 'fc00::1', 'fd12:3456::1', 'fe80::1%eth0',
+    ]) {
+      expect(isTrustedProxyAddress(trusted), trusted).toBe(true);
+    }
+    for (const untrusted of [
+      undefined, '', 'not-an-ip', '203.0.113.9', '::ffff:203.0.113.9',
+      '8.8.8.8', '172.32.0.1', '100.128.0.1', '2001:db8::1',
+    ]) {
+      expect(isTrustedProxyAddress(untrusted), String(untrusted)).toBe(false);
+    }
+  });
+});
+
 describe('isHttpsRequest', () => {
-  it('x-forwarded-proto 첫 값이 https이거나 TLS 소켓이면 참이고 일반 HTTP는 거짓이다', () => {
-    expect(isHttpsRequest({ headers: { 'x-forwarded-proto': 'https' }, socket: {} } as never)).toBe(true);
-    expect(isHttpsRequest({ headers: { 'x-forwarded-proto': 'HTTPS, http' }, socket: {} } as never)).toBe(true);
-    expect(isHttpsRequest({ headers: {}, socket: { encrypted: true } } as never)).toBe(true);
-    expect(isHttpsRequest({ headers: { 'x-forwarded-proto': 'http' }, socket: {} } as never)).toBe(false);
-    expect(isHttpsRequest({ headers: {}, socket: {} } as never)).toBe(false);
+  it('신뢰 프록시에서 전달된 x-forwarded-proto 마지막 값이 https이거나 직접 TLS 소켓일 때만 참이다', () => {
+    expect(isHttpsRequest({ headers: { 'x-forwarded-proto': 'https' }, socket: { remoteAddress: '10.42.0.1' } } as never, { origin: PROD_ORIGIN })).toBe(true);
+    expect(isHttpsRequest({ headers: { 'x-forwarded-proto': 'http, HTTPS' }, socket: { remoteAddress: '::ffff:127.0.0.1' } } as never, { origin: PROD_ORIGIN })).toBe(true);
+    expect(isHttpsRequest({ headers: {}, socket: { encrypted: true, remoteAddress: '203.0.113.9' } } as never)).toBe(true);
+    expect(isHttpsRequest({ headers: { 'x-forwarded-proto': 'http' }, socket: { remoteAddress: '10.42.0.1' } } as never, { origin: PROD_ORIGIN })).toBe(false);
+    expect(isHttpsRequest({ headers: {}, socket: { remoteAddress: '10.42.0.1' } } as never, { origin: PROD_ORIGIN })).toBe(false);
+  });
+
+  it('비신뢰 주소나 위조된 앞쪽 x-forwarded-proto, http 오리진의 프록시 헤더는 모두 거부한다', () => {
+    // 공인 IP 직접 접속에서 스푸핑한 x-forwarded-proto 거부
+    expect(isHttpsRequest({ headers: { 'x-forwarded-proto': 'https' }, socket: { remoteAddress: '203.0.113.9' } } as never, { origin: PROD_ORIGIN })).toBe(false);
+    expect(isHttpsRequest({ headers: { 'x-forwarded-proto': 'https' }, socket: { remoteAddress: '::ffff:203.0.113.9' } } as never, { origin: PROD_ORIGIN })).toBe(false);
+    expect(isHttpsRequest({ headers: { 'x-forwarded-proto': 'https' }, socket: {} } as never, { origin: PROD_ORIGIN })).toBe(false);
+    // 앞쪽 위조("https, http")는 프록시가 마지막에 붙인 http 기준으로 거부
+    expect(isHttpsRequest({ headers: { 'x-forwarded-proto': 'https, http' }, socket: { remoteAddress: '10.42.0.1' } } as never, { origin: PROD_ORIGIN })).toBe(false);
+    // HTTP 오리진(로컬 개발 등)에서는 루프백 프록시 헤더가 https여도 HSTS 비활성
+    expect(isHttpsRequest({ headers: { 'x-forwarded-proto': 'https' }, socket: { remoteAddress: '127.0.0.1' } } as never, { origin: 'http://localhost:3000' })).toBe(false);
   });
 });
 
@@ -147,10 +193,30 @@ describe('securityHeaders Express 통합', () => {
     expect(res.headers.has('x-powered-by')).toBe(false);
   });
 
-  it('HTTPS 프록시 요청(x-forwarded-proto: https)에는 Strict-Transport-Security를 함께 설정한다', async () => {
-    const res = await fetch(`${base}/api/ping`, { headers: { 'x-forwarded-proto': 'https' } });
-    expect(res.status).toBe(200);
-    expect(res.headers.get('strict-transport-security')).toBe(HSTS_VALUE);
+  it('HTTPS 프록시 요청(x-forwarded-proto: https)에는 Strict-Transport-Security를 설정하고 위조 헤더에는 보내지 않는다', async () => {
+    const okRes = await fetch(`${base}/api/ping`, { headers: { 'x-forwarded-proto': 'https' } });
+    expect(okRes.status).toBe(200);
+    expect(okRes.headers.get('strict-transport-security')).toBe(HSTS_VALUE);
+
+    const spoofRes = await fetch(`${base}/api/ping`, { headers: { 'x-forwarded-proto': 'https, http' } });
+    expect(spoofRes.status).toBe(200);
+    expect(spoofRes.headers.has('strict-transport-security')).toBe(false);
+  });
+
+  it('HTTP 오리진 서버에서는 x-forwarded-proto: https 헤더가 와도 HSTS를 보내지 않는다', async () => {
+    const httpApp = express();
+    httpApp.use(securityHeaders({ origin: 'http://localhost:3000' }));
+    httpApp.get('/api/ping', (_req, res) => { res.json({ ok: true }); });
+    const httpServer = httpApp.listen(0);
+    await new Promise<void>(resolve => httpServer.once('listening', resolve));
+    try {
+      const httpBase = `http://127.0.0.1:${(httpServer.address() as AddressInfo).port}`;
+      const res = await fetch(`${httpBase}/api/ping`, { headers: { 'x-forwarded-proto': 'https' } });
+      expect(res.status).toBe(200);
+      expect(res.headers.has('strict-transport-security')).toBe(false);
+    } finally {
+      await new Promise<void>(resolve => { httpServer.close(() => resolve()); });
+    }
   });
 
   it('스테이징 진입 게이트 401·403 HTML 응답은 보안 헤더 5종과 인라인 스크립트 SHA-256 해시 CSP를 포함한다', async () => {
@@ -190,12 +256,40 @@ describe('securityHeaders Express 통합', () => {
 describe('서버 진입점 보안 헤더 등록 순서', () => {
   const main = readFileSync(new URL('./main.ts', import.meta.url), 'utf8');
 
-  it('securityHeaders 미들웨어를 stageGate와 인증 경로보다 앞에 전역 등록한다', () => {
+  it('securityHeaders 미들웨어를 stageGate와 인증 경로보다 앞에 전역 등록하고 Sentry DSN 환경변수를 전달한다', () => {
     const secIdx = main.indexOf('app.use(securityHeaders(');
     const gateIdx = main.indexOf('app.use(stageGate())');
     const authIdx = main.indexOf("app.all('/api/auth/*splat'");
     expect(secIdx).toBeGreaterThan(-1);
     expect(gateIdx).toBeGreaterThan(secIdx);
     expect(authIdx).toBeGreaterThan(secIdx);
+    expect(main).toContain('process.env.SENTRY_DSN');
+    expect(main).toContain('process.env.VITE_SENTRY_DSN');
+  });
+});
+
+describe('관리자 정적 서버 nginx 보안 헤더 정렬', () => {
+  const nginxConf = readFileSync(new URL('../../admin/nginx.conf', import.meta.url), 'utf8');
+
+  it('server_tokens를 끄고 모든 location 블록에 기본 보안 헤더 5종을 always와 함께 선언한다', () => {
+    expect(nginxConf).toMatch(/\bserver_tokens\s+off;/);
+
+    const expectedCsp = buildContentSecurityPolicy();
+    const locationBlocks = [...nginxConf.matchAll(/location\s+([^{]+)\{([^}]*)\}/g)];
+    const paths = locationBlocks.map(m => m[1].trim());
+    expect(paths).toEqual(['/', '= /admin', '/admin/assets/', '/admin/']);
+
+    for (const [, locPath, body] of locationBlocks) {
+      expect(body, `${locPath} CSP`).toContain(`add_header Content-Security-Policy "${expectedCsp}" always;`);
+      expect(body, `${locPath} nosniff`).toContain('add_header X-Content-Type-Options "nosniff" always;');
+      expect(body, `${locPath} X-Frame-Options`).toContain('add_header X-Frame-Options "DENY" always;');
+      expect(body, `${locPath} Referrer-Policy`).toContain('add_header Referrer-Policy "strict-origin-when-cross-origin" always;');
+      expect(body, `${locPath} Permissions-Policy`).toContain(`add_header Permissions-Policy "${DEFAULT_PERMISSIONS_POLICY}" always;`);
+    }
+
+    const assetsBlock = locationBlocks.find(m => m[1].trim() === '/admin/assets/')?.[2] ?? '';
+    const adminBlock = locationBlocks.find(m => m[1].trim() === '/admin/')?.[2] ?? '';
+    expect(assetsBlock).toContain('add_header Cache-Control "public, max-age=31536000, immutable";');
+    expect(adminBlock).toContain('add_header Cache-Control "no-cache";');
   });
 });

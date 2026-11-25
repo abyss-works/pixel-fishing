@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
-import Note from '../../../ui/Note';
 import { cx } from '../../../ui/cx';
 import Button from '../../../ui/Button';
 import PixelIcon from '../../../ui/PixelIcon';
@@ -163,10 +162,6 @@ export default function WorldMapModal({ world, onClose }: {
             </Button>
           </div>
         </div>
-        <Note className="mb-0">
-          밝은 바다는 지금 배로 갈 수 있는 곳이에요.<br />회색 바다는 아직 지금 배로 갈 수 없어요.<br />
-          휠이나 버튼으로 확대하고, 끌어서 둘러볼 수 있어요.
-        </Note>
       </ModalCard>
     </Modal>
   );

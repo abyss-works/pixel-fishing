@@ -1,11 +1,13 @@
+import { useState } from 'react';
 import type { AwaySummary } from '../../../../game/rules/away';
 import { awayTips } from '../../../../game/rules/away';
-import type { GameState } from '../../../../game/rules/logic';
+import type { Fish, GameState } from '../../../../game/rules/logic';
 import { FISH, formName } from '../../../../game/rules/logic';
 import { spotById } from '../../../../game/content/spots';
 import { selectStatsSummary } from '../../../../features/gameplay/model/stats';
 import Button from '../../../ui/Button';
 import { cx } from '../../../ui/cx';
+import Frame from '../../../ui/Frame';
 import FishSprite from '../../../ui/fish/FishSprite';
 import { HighlightRarityText, RARITY_CARD, RarityText } from '../../../ui/fish/RarityTag';
 import { fmtCompact, fmtNum, fmtSize } from '../../../ui/format';
@@ -15,6 +17,7 @@ import ModalCard from '../../../ui/ModalCard';
 import NoteTag from '../../../ui/NoteTag';
 import ProgressMeter from '../../../ui/ProgressMeter';
 import SectionTitle from '../../../ui/SectionTitle';
+import DexDetail from '../../game/tabs/dex/DexDetail';
 import { awayDuration, awayPeriodText, awayTipText, bagTimelineText } from './awayText';
 
 const pct = (share: number) => `${(share * 100).toFixed(1)}%`;
@@ -28,6 +31,7 @@ export default function AwayReportModal({ report, game, onClose, onOpenBag }: {
   onClose: () => void;
   onOpenBag: () => void;
 }) {
+  const [detail, setDetail] = useState<{ fish: Fish; initialForm: number } | null>(null);
   const dex = selectStatsSummary(game);
   const tips = awayTips(report, game);
   const spot = report.spot ? spotById(report.spot)?.name : null;
@@ -35,6 +39,7 @@ export default function AwayReportModal({ report, game, onClose, onOpenBag }: {
   const fullPct = full === null ? 0 : Math.min(100, (full / report.awayMs) * 100);
 
   return (
+    <>
     <Modal layer="stage" onClose={onClose}>
       <ModalCard title="자리를 비운 사이" onClose={onClose} confirm={(
         <div className="flex gap-2">
@@ -62,15 +67,16 @@ export default function AwayReportModal({ report, game, onClose, onOpenBag }: {
                 const fish = FISH.find(f => f.id === n.fishId);
                 if (!fish) return null;
                 return (
-                  <div key={`${n.fishId}:${n.form}`} data-rarity={n.rarity}
-                       className={cx(RARITY_CARD, 'flex flex-col items-center gap-0.5 px-1 py-1.5 text-xs')}>
+                  <Frame as="button" type="button" key={`${n.fishId}:${n.form}`} data-rarity={n.rarity}
+                         onClick={() => setDetail({ fish, initialForm: n.form === 'variant' ? 1 : 0 })}
+                         className={cx(RARITY_CARD, 'flex flex-col items-center gap-0.5 px-1 py-1.5 text-xs cursor-pointer hover:border-accent')}>
                     <FishSprite fish={fish} form={n.form} preset="icon" className="max-w-full" />
                     <span>{formName(fish, n.form)}</span>
                     <span className="text-2xs text-text-dim"><RarityText rarity={n.rarity} />, {fmtSize(n.maxSize)}</span>
                     {n.form === 'variant'
                       ? <NoteTag tag="돌연변이" className="text-epic border-epic" />
                       : <NoteTag tag="새 도감" className="text-accent border-accent" />}
-                  </div>
+                  </Frame>
                 );
               })}
             </div>
@@ -128,5 +134,7 @@ export default function AwayReportModal({ report, game, onClose, onOpenBag }: {
         )}
       </ModalCard>
     </Modal>
+    {detail && <DexDetail fish={detail.fish} game={game} initialForm={detail.initialForm} onClose={() => setDetail(null)} />}
+    </>
   );
 }

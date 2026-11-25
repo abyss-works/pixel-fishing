@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { guildAction, liveAvailable, readGuild } from '../../../platform/api';
 import type { GuildOp, GuildOpResult, GuildState } from '../../../platform/api';
 import { useSession } from '../../account/service/session';
+import { useConsentReady } from '../../account/service/consentGate';
 
 // 내 길드 — 계정 유저만, 세션이 선 뒤 읽는다. 길드원의 접속 상태가 바뀌므로 poll이면 30초마다 다시 읽는다.
 // 길드가 없으면 내가 넣어 둔 가입 신청(request)을 함께 준다.
@@ -12,12 +13,13 @@ export const guildQueryKey = (uid: string | null) => ['guild', uid];
 
 export function useGuild(account: boolean, poll = false) {
   const { ready, uid } = useSession();
+  const consentReady = useConsentReady();
   const client = useQueryClient();
   const key = guildQueryKey(uid);
   const q = useQuery({
     queryKey: key,
     queryFn: readGuild,
-    enabled: ready && account && liveAvailable,
+    enabled: ready && consentReady && account && liveAvailable,
     refetchInterval: poll ? REFRESH : false,
     retry: 1,
   });

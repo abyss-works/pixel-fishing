@@ -38,8 +38,7 @@ export default function BountyCard({ quest, progress, accepted, canAccept, reaso
           ? <Button variant="primary" full disabled={busy} onClick={onDeliver}>완료</Button>
           : accepted
             ? <Button full disabled>진행 중</Button>
-            : <AcceptButton disabled={!canAccept || busy} reason={reason} onClick={onAccept}
-                            help={'수주한 뒤에 잡은 물고기부터 세요.\n물고기는 가방에 남아요.'} />}
+            : <AcceptButton disabled={!canAccept || busy} reason={reason} onClick={onAccept} />}
       </div>
     </Inset>
   );

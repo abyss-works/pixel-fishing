@@ -124,6 +124,7 @@ describe('6개 묶음과 기능 UI', () => {
     const { dispatch } = show('local');
     fireEvent.click(screen.getByRole('button', { name: '계정·스냅샷' }));
     expect(screen.getByText(/관리자 전용/)).toBeInTheDocument();
+    expect(screen.queryByText(/계정 전환 시/)).toBeNull();
     fireEvent.change(screen.getByLabelText('스냅샷 이름'), { target: { value: '백업1' } });
     fireEvent.click(screen.getByRole('button', { name: '현재 상태 저장' }));
     expect(screen.getByText('백업1')).toBeInTheDocument();
@@ -165,5 +166,38 @@ describe('6개 묶음과 기능 UI', () => {
     await waitFor(() => expect(onReload).toHaveBeenCalledTimes(1));
     expect(signOutSpy).toHaveBeenCalledTimes(1);
     expect(screen.getByLabelText('실행 기록')).toHaveTextContent('새 게스트 시작');
+  });
+
+  it('이사 코드 대화상자는 개발 도구 패널 밖 devtools 층에 열리고 토스트는 해요체를 쓴다', async () => {
+    const setToast = vi.fn();
+    const writeText = vi.fn().mockRejectedValueOnce(new Error('blocked')).mockResolvedValueOnce(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const { dispatch } = show('local', { setToast });
+    fireEvent.click(screen.getByRole('button', { name: '계정·스냅샷' }));
+
+    const devtoolsPanel = screen.getByRole('dialog', { name: '개발 도구' });
+    fireEvent.click(screen.getByRole('button', { name: '이사 코드 내보내기' }));
+    const noticeDialog = await screen.findByRole('dialog', { name: '이사 코드' });
+    expect(devtoolsPanel).not.toContainElement(noticeDialog);
+    expect(noticeDialog.parentElement!.className).toContain('z-(--z-devtools)');
+    const exportedCode = (screen.getByLabelText('복사할 값') as HTMLTextAreaElement).value;
+    fireEvent.click(screen.getByRole('button', { name: '확인' }));
+
+    fireEvent.click(screen.getByRole('button', { name: '이사 코드 내보내기' }));
+    await waitFor(() => expect(setToast).toHaveBeenCalledWith('이사 코드를 클립보드에 복사했어요.'));
+
+    fireEvent.click(screen.getByRole('button', { name: '이사 코드 불러오기' }));
+    const inputDialog = await screen.findByRole('dialog', { name: '이사 코드 불러오기' });
+    expect(devtoolsPanel).not.toContainElement(inputDialog);
+    expect(inputDialog.parentElement!.className).toContain('z-(--z-devtools)');
+    fireEvent.change(screen.getByLabelText('이사 코드'), { target: { value: 'invalid-base64' } });
+    fireEvent.click(screen.getByRole('button', { name: '불러오기' }));
+    await waitFor(() => expect(setToast).toHaveBeenCalledWith('이사 코드가 올바르지 않아요.', 'warn'));
+
+    fireEvent.click(screen.getByRole('button', { name: '이사 코드 불러오기' }));
+    fireEvent.change(await screen.findByLabelText('이사 코드'), { target: { value: exportedCode } });
+    fireEvent.click(screen.getByRole('button', { name: '불러오기' }));
+    await waitFor(() => expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: 'import' })));
+    await waitFor(() => expect(setToast).toHaveBeenCalledWith('세이브를 불러왔어요.'));
   });
 });

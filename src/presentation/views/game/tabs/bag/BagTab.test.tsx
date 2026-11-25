@@ -1,6 +1,7 @@
 // 가방 탭 — 전시대 선반(칸 3개)과 진열·회수 버튼이 exhibit 액션으로 이어지는지 고정한다.
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import BagTab, { EXHIBIT_UI_ENABLED } from './BagTab';
 import { resetBagView, setBagSection } from './bagView';
 import { AUTO_ENERGY_BOAT, COOKING_UNLOCK_BOAT } from '../../../../../game/content/cooking';
@@ -17,10 +18,10 @@ const inst = (uid: string): FishInstance =>
   ({ uid, fishId: 'carp', form: 'normal', size: 20, caughtAt: null, spot: null, judgment: null, locked: false });
 const game = (over: Partial<GameState> = {}): GameState => ({ ...newState(), ...over });
 
-function show(g: GameState, opts: { accountState?: AccountLockState; onOpenEnergy?: () => void } = {}) {
+function show(g: GameState, opts: { accountState?: AccountLockState } = {}) {
   const dispatch = vi.fn(() => ({ status: 'ok' as const, state: g, result: { type: 'none' as const } }));
   const setToast = vi.fn();
-  render(<BagTab sellBonus={0} game={g} accountState={opts.accountState} onOpenEnergy={opts.onOpenEnergy} dispatch={dispatch} setToast={setToast} />);
+  render(<BagTab sellBonus={0} game={g} accountState={opts.accountState} dispatch={dispatch} setToast={setToast} />);
   return { dispatch, setToast };
 }
 
@@ -207,33 +208,51 @@ describe('BagTab - 3서브탭, 보기 전환 아이콘, 하단 버튼', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('우상단 보기 전환 아이콘 버튼으로 목록과 카드 보기를 전환한다', () => {
-    show(game({
+  it('우상단 보기 전환 아이콘 버튼으로 목록과 카드 보기를 전환하고 발견 어종 카드를 누르면 도감 상세가 열린다', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const g = game({
       bag: [inst('a')],
       dex: { carp: { normal: { count: 1, maxSize: 20, first: null } } },
-    }));
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <BagTab sellBonus={0} game={g} dispatch={vi.fn()} setToast={vi.fn()} />
+      </QueryClientProvider>,
+    );
+    expect(screen.queryByText(/자물쇠는 개체마다 걸 수 있고/)).toBeNull();
+    const guideTrigger = screen.getByText('목록 안내');
+    fireEvent.mouseEnter(guideTrigger);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('목록은 등급이 높은 순으로 정렬돼요.');
+    fireEvent.mouseLeave(guideTrigger);
+
     const toCards = screen.getByRole('button', { name: '카드 보기' });
     fireEvent.click(toCards);
     expect(screen.getByRole('button', { name: '목록 보기' })).toBeInTheDocument();
-    expect(screen.getByLabelText('잉어 일반 1마리 돌연변이 0마리 보유')).toBeInTheDocument();
+    const card = screen.getByRole('button', { name: '잉어 일반 1마리 돌연변이 0마리 보유' });
+    fireEvent.click(card);
+    expect(screen.getByRole('dialog')).toHaveTextContent('잉어');
+    expect(screen.getByRole('dialog')).toHaveTextContent('표본');
   });
 
-  it('거점에서 요리 해금·계정이면 기운 얻기 버튼이 활성화되고 클릭 시 연결 콜백을 호출한다', () => {
-    const onOpenEnergy = vi.fn();
-    show(game({ boat: COOKING_UNLOCK_BOAT, location: { kind: 'base', id: 'home' } }), { onOpenEnergy });
+  it('거점에서 요리 해금·계정이면 기운 얻기 버튼이 활성화되고 클릭 시 앱 모달(layer="app")로 기운 얻기 창을 연다', () => {
+    show(game({ boat: COOKING_UNLOCK_BOAT, location: { kind: 'base', id: 'home' } }));
     const btn = screen.getByRole('button', { name: '기운 얻기' });
     expect(btn).toBeEnabled();
     fireEvent.click(btn);
-    expect(onOpenEnergy).toHaveBeenCalledTimes(1);
+    const dialog = screen.getByRole('dialog', { name: '기운 얻기' });
+    expect(dialog.parentElement!.className).toContain('fixed inset-0');
+    expect(dialog.parentElement!.className).toContain('z-(--z-app-modal)');
+    fireEvent.click(within(dialog).getByRole('button', { name: '닫기' }));
+    expect(screen.queryByRole('dialog', { name: '기운 얻기' })).toBeNull();
   });
 
-  it('바다에서는 가공 플랜트선 이상이면 활성, 미만이면 비활성 + 사유 툴팁이다', () => {
-    const onOpenEnergy = vi.fn();
-    show(game({ boat: AUTO_ENERGY_BOAT, location: { kind: 'region', id: 'world' } }), { onOpenEnergy });
+  it('바다에서는 가공 플랜트선 이상이면 활성(앱 모달로 열림), 미만이면 비활성 + 사유 툴팁이다', () => {
+    show(game({ boat: AUTO_ENERGY_BOAT, location: { kind: 'region', id: 'world' } }));
     const enabled = screen.getByRole('button', { name: '기운 얻기' });
     expect(enabled).toBeEnabled();
     fireEvent.click(enabled);
-    expect(onOpenEnergy).toHaveBeenCalledTimes(1);
+    const dialog = screen.getByRole('dialog', { name: '기운 얻기' });
+    expect(dialog.parentElement!.className).toContain('z-(--z-app-modal)');
 
     cleanup();
     show(game({ boat: AUTO_ENERGY_BOAT - 1, location: { kind: 'region', id: 'world' } }));

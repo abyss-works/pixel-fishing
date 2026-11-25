@@ -1,15 +1,17 @@
 import { useEffect, useSyncExternalStore } from 'react';
 
-// 떠 있는 모달의 등록부 - Modal이 열려 있는 동안 레이어('stage' | 'app')와 함께 등록한다.
+export type WindowLayer = 'stage' | 'app' | 'devtools';
+
+// 떠 있는 모달의 등록부 - Modal이 열려 있는 동안 레이어('stage' | 'app' | 'devtools')와 함께 등록한다.
 // 스테이지 모달은 스테이지 영역 안에 머무르며 사이드바 탭 전환·스크롤과 상호 간섭하지 않는다.
 // 앱 모달(app)이 떠 있는 동안만 사이드바 배경이 불활성(inert)이 된다.
 // 토스트 정책과 게스트 차단 가드는 전체 모달 열림 여부(hasOpenWindows)를 참조한다.
-const open = new Map<object, 'stage' | 'app'>();
+const open = new Map<object, WindowLayer>();
 const listeners = new Set<() => void>();
 const emit = () => { listeners.forEach(l => l()); };
 
 /** 모달이 떠 있는 동안 레이어와 함께 등록한다 */
-export function useOpenWindow(layer: 'stage' | 'app' = 'app') {
+export function useOpenWindow(layer: WindowLayer = 'app') {
   useEffect(() => {
     const token = {};
     open.set(token, layer);

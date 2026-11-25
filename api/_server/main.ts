@@ -95,7 +95,7 @@ const httpMetrics = createHttpMetrics({
   onError: e => { void reportServerIssue('HTTP 지표 기록 실패', e); },
 });
 // 모든 HTTP 응답(API·정적 자산·서버 렌더 HTML)에 기본 보안 헤더를 적용한다.
-app.use(securityHeaders({ origin, sentryDsn: process.env.SENTRY_DSN }));
+app.use(securityHeaders({ origin, sentryDsn: [process.env.SENTRY_DSN, process.env.VITE_SENTRY_DSN] }));
 app.use(httpMetrics.middleware);
 // 스테이징 진입 전용 관리자 OAuth 게이트 — DEPLOY_ENV === 'preview'일 때만 활성화된다.
 app.use(stageGate());

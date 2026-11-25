@@ -11,7 +11,7 @@ export interface ArtifactLevelView {
   status: ArtifactLevelStatus;
   /** 레벨이 있는 유물인가 - 전설 유물은 레벨 줄을 내지 않는다 */
   hasLevel: boolean;
-  /** 보유 레벨. 갖지 않았으면 0, 전설 유물은 1 */
+  /** 보유 레벨. 갖지 않았으면 0, 보유 전설 유물은 최고 레벨(5)을 반환하며 화면의 Lv 표시는 숨김 유지 */
   level: number;
   /** 지금 레벨의 효과 - 갖지 않았으면 Lv1 기준(교환하면 받는 효과) */
   effects: ArtifactEffects;

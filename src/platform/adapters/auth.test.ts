@@ -6,6 +6,7 @@ import {
   currentAccount, startGoogleAuth,
   googleReturnUrl, parseGoogleLanding,
 } from './auth';
+import { createLocalApi } from './localApi';
 import { HttpGameGateway } from './httpGameGateway';
 
 afterEach(() => {
@@ -94,6 +95,94 @@ describe('게임 세션 로그아웃 격리', () => {
       ok: false,
       msg: '요청이 너무 잦아요. 잠시 뒤 다시 시도해 주세요.',
       code: 'rate_limited',
+    });
+  });
+});
+
+describe('계정 약관 상태 조회 및 수락', () => {
+  it('클라우드 GET /api/account 응답의 consent 필드를 파싱한다', async () => {
+    vi.stubEnv('VITE_CLOUD', '1');
+    vi.resetModules();
+    const consent = { required: true, version: '2026-11-25', effectiveAt: '2026-11-25T00:00:00.000Z' };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ consent }), { status: 200, headers: { 'content-type': 'application/json' } }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const { createHttpApi } = await import('./httpApi');
+    await expect(createHttpApi().auth.getAccountConsent()).resolves.toEqual(consent);
+    expect(fetchMock).toHaveBeenCalledWith('/api/account');
+  });
+
+  it('클라우드 GET /api/account 401·429·비정상 응답을 구분해 던진다', async () => {
+    vi.stubEnv('VITE_CLOUD', '1');
+    vi.resetModules();
+    const { createHttpApi } = await import('./httpApi');
+    const auth = createHttpApi().auth;
+
+    vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401 }));
+    await expect(auth.getAccountConsent()).rejects.toMatchObject({ name: 'AppError', kind: 'unauthorized' });
+
+    vi.stubGlobal('fetch', async () => new Response('Too Many Requests', { status: 429 }));
+    await expect(auth.getAccountConsent()).rejects.toMatchObject({ name: 'AppError', kind: 'rate-limited' });
+
+    vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    await expect(auth.getAccountConsent()).rejects.toMatchObject({ name: 'AppError', kind: 'server' });
+  });
+
+  it('POST /api/account/consents 수락 성공과 409/403 오류 코드를 구분해 돌려준다', async () => {
+    vi.stubEnv('VITE_CLOUD', '1');
+    vi.resetModules();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        consent: { required: false, version: '2026-11-25', effectiveAt: '2026-11-25T00:00:00.000Z' },
+      }), { status: 200, headers: { 'content-type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: 'consent-version-mismatch' }), { status: 409 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: 'account-only' }), { status: 403 }))
+      .mockRejectedValueOnce(new Error('offline'));
+    vi.stubGlobal('fetch', fetchMock);
+    const { createHttpApi } = await import('./httpApi');
+    const auth = createHttpApi().auth;
+
+    await expect(auth.acceptConsent('2026-11-25')).resolves.toEqual({
+      ok: true,
+      consent: { required: false, version: '2026-11-25', effectiveAt: '2026-11-25T00:00:00.000Z' },
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/account/consents', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ version: '2026-11-25', ageConfirmed: true }),
+    });
+
+    await expect(auth.acceptConsent('2026-11-24')).resolves.toEqual({
+      ok: false,
+      code: 'consent-version-mismatch',
+      status: 409,
+    });
+    await expect(auth.acceptConsent('2026-11-25')).resolves.toEqual({
+      ok: false,
+      code: 'account-only',
+      status: 403,
+    });
+    await expect(auth.acceptConsent('2026-11-25')).resolves.toEqual({
+      ok: false,
+      code: 'network',
+    });
+  });
+
+  it('localApi 스텁은 2026-11-25 수락 불필요 상태를 반환한다', async () => {
+    const auth = createLocalApi().auth;
+    await expect(auth.getAccountConsent()).resolves.toEqual({
+      required: false,
+      version: '2026-11-25',
+      effectiveAt: '2026-11-25T00:00:00.000Z',
+    });
+    await expect(auth.acceptConsent('2026-11-25')).resolves.toEqual({
+      ok: true,
+      consent: {
+        required: false,
+        version: '2026-11-25',
+        effectiveAt: '2026-11-25T00:00:00.000Z',
+      },
     });
   });
 });

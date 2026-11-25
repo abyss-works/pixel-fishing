@@ -27,6 +27,7 @@ vi.mock('../../../platform/api', async importOriginal => {
 });
 
 import { useFortuneHistory } from './useFortuneHistory';
+import { allowConsentGate, blockConsentGate, resetConsentGate } from '../../account/service/consentGate';
 
 function makeWrapper(uid: string | null = 'u1') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -40,6 +41,7 @@ describe('useFortuneHistory', () => {
   beforeEach(() => {
     apiMock.isConfigured = true;
     apiMock.readFortuneHistory.mockReset();
+    resetConsentGate();
   });
 
   it('활성화되면 지정 월의 운세 이력을 불러온다', async () => {
@@ -95,5 +97,24 @@ describe('useFortuneHistory', () => {
     await act(async () => { result.current.retry(); });
     await waitFor(() => expect(result.current.failed).toBe(false));
     expect(result.current.data?.month).toBe('2026-10');
+  });
+
+  it('약관 게이트가 차단 상태이면 조회를 보내지 않고 해제되면 즉시 조회한다', async () => {
+    blockConsentGate();
+    apiMock.readFortuneHistory.mockResolvedValue({
+      month: '2026-11',
+      firstMonth: '2026-11',
+      currentDay: '2026-11-25',
+      today: null,
+      days: [],
+    });
+
+    const { result } = renderHook(() => useFortuneHistory('2026-11', true), { wrapper: makeWrapper() });
+    await act(async () => {});
+    expect(apiMock.readFortuneHistory).not.toHaveBeenCalled();
+
+    act(() => { allowConsentGate(); });
+    await waitFor(() => expect(result.current.data?.month).toBe('2026-11'));
+    expect(apiMock.readFortuneHistory).toHaveBeenCalledTimes(1);
   });
 });

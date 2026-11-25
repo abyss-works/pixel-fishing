@@ -25,12 +25,11 @@ const inst = (uid: string, fishId: string, over: Partial<FishInstance> = {}): Fi
   ({ uid, fishId, form: 'normal', size: 20, caughtAt: null, spot: null, judgment: null, locked: false, ...over });
 const inSpot = (uid: string, spot: SpotId, over: Partial<FishInstance> = {}): FishInstance => inst(uid, fishIn(spot).id, over);
 
-function show(game: GameState, opts: { panel?: 'sell' | 'energy'; base?: BaseId; accountState?: AccountLockState; sellBonus?: number; result?: { type: string; [k: string]: unknown } } = {}) {
+function show(game: GameState, opts: { base?: BaseId; accountState?: AccountLockState; sellBonus?: number; result?: { type: string; [k: string]: unknown } } = {}) {
   const dispatch = vi.fn(() => ({ status: 'ok' as const, state: game, result: (opts.result ?? { type: 'none' }) as never }));
   const setToast = vi.fn();
   const onClose = vi.fn();
-  const panel = opts.panel ?? 'sell';
-  render(<FacilityModal panel={panel} base={panel === 'energy' ? opts.base : (opts.base ?? 'home')} accountState={opts.accountState} sellBonus={opts.sellBonus ?? 0} game={game}
+  render(<FacilityModal panel="sell" base={opts.base ?? 'home'} accountState={opts.accountState} sellBonus={opts.sellBonus ?? 0} game={game}
                         dispatch={dispatch} setToast={setToast} onClose={onClose} />);
   return { dispatch, setToast, onClose };
 }

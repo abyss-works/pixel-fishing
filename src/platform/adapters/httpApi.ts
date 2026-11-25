@@ -3,11 +3,15 @@ import { HttpGameGateway } from './httpGameGateway';
 import { migrate } from '../../game/rules/logic';
 import type { GameGateway } from '../api/types';
 import type { GameState } from '../../game/rules/logic';
-import type { AccountLookup, AuthApi, AuthResult, DevApi, PromoteTestResult, ResetDevAccountResult } from '../api/types';
+import type {
+  AcceptConsentResult, AccountLookup, AuthApi, AuthResult, ConsentStatus, DevApi, PromoteTestResult, ResetDevAccountResult,
+} from '../api/types';
 import {
   sessionUid,
   ensureSession,
   currentAccount,
+  getAccountConsent,
+  acceptAccountConsent,
   startGoogleAuth,
   takeGoogleLanding,
   signOutAccount,
@@ -26,6 +30,12 @@ class HttpAuth implements AuthApi {
   async getSession(): Promise<{ uid: string | null; email: string | null }> {
     const [uid, lookup] = await Promise.all([sessionUid(), currentAccount()]);
     return { uid, email: lookup.status === 'account' ? lookup.email : null };
+  }
+  getAccountConsent(): Promise<ConsentStatus> {
+    return getAccountConsent();
+  }
+  acceptConsent(version: string): Promise<AcceptConsentResult> {
+    return acceptAccountConsent(version);
   }
   startGoogle(start: 'link' | 'sign-in', tag: string): Promise<AuthResult> {
     return startGoogleAuth(start, tag);

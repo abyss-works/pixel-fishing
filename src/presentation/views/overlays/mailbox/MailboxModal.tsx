@@ -14,19 +14,27 @@ import type { MailItem } from '../../../../features/mailbox/model/mailbox';
 import { useMailbox } from '../../../../features/mailbox/service/useMailbox';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
+import { resolveItemDetail } from '../../../../features/inventory/model/items';
 import { when } from '../../../../shared/lib/when';
+import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
 import { cx } from '../../../ui/cx';
-import { fmtGold } from '../../../ui/format';
+import { GradeName, HighlightRarityText } from '../../../ui/fish/RarityTag';
+import { fmtGold, fmtMinutes, fmtNum } from '../../../ui/format';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import Inset from '../../../ui/Inset';
 import ItemBadge from '../../../ui/ItemBadge';
+import ItemSprite from '../../../ui/ItemSprite';
+import KeyValueRow from '../../../ui/KeyValueRow';
+import LoreParagraph from '../../../ui/LoreParagraph';
 import TableBox from '../../../ui/TableBox';
 import DataTable from '../../../ui/DataTable';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
 import PixelIcon from '../../../ui/PixelIcon';
+import Tip, { TipCard } from '../../../ui/Tip';
+import { useDialogs } from '../../../ui/useDialogs';
 import { SCROLL_Y } from '../../../ui/scrollArea';
 
 // 우편함 창. 게임 스테이지 안에 뜨고, 680 폭에 탭이 없어 내용 높이를 따른다.
@@ -44,7 +52,65 @@ export default function MailboxModal({ dispatch, setToast, onClose }: {
   const { mails, loading, failed, markRead, claim } = useMailbox();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [claiming, setClaiming] = useState(false);
+  const { notice, dialogs } = useDialogs();
   const selected = mails?.find(m => m.id === selectedId) ?? null;
+
+  const openAttachmentDetail = (id: string, qty: number) => {
+    const detail = resolveItemDetail(id);
+    if (!detail) {
+      void notice({
+        layer: 'stage',
+        title: id,
+        body: `첨부 수량 ${fmtNum(qty)}개`,
+      });
+      return;
+    }
+    const duration = detail.durationMinutes !== null ? fmtMinutes(detail.durationMinutes) : detail.durationLabel;
+    void notice({
+      layer: 'stage',
+      title: detail.name,
+      body: (
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-3">
+            {detail.spriteKind ? (
+              <ItemSprite kind={detail.spriteKind} id={detail.id} preset="hero" className="shrink-0" />
+            ) : (
+              <PixelIcon glyph="gem" size={24} className="shrink-0 text-accent" />
+            )}
+            <div className="flex flex-wrap items-baseline gap-2 min-w-0">
+              <b className="text-base text-text"><GradeName name={detail.name} grade={detail.grade} /></b>
+              <Badge>{detail.kindLabel}</Badge>
+              <span className="pf-accent text-xs text-gold">×{fmtNum(qty)}</span>
+            </div>
+          </div>
+          {detail.description && (
+            <LoreParagraph className="text-xs leading-[1.8] text-text-dim">{detail.description}</LoreParagraph>
+          )}
+          {(detail.effects.length > 0 || duration) && (
+            <Inset divided>
+              {detail.effects.map(e => (
+                'text' in e ? (
+                  <div key={e.text} className="px-2 py-1.5 text-sm text-accent">
+                    <HighlightRarityText text={e.text} />
+                  </div>
+                ) : (
+                  <KeyValueRow
+                    key={`${e.label}-${e.value}`}
+                    label={<HighlightRarityText text={e.label} />}
+                    value={<HighlightRarityText text={e.value} />}
+                    valueEnd
+                    valueClassName={/\d/.test(e.value) ? 'pf-accent text-accent' : 'font-bold text-accent'}
+                  />
+                )
+              ))}
+              {duration && <KeyValueRow label="지속 시간" value={duration} valueEnd />}
+            </Inset>
+          )}
+          {detail.note && <Note className="my-0">{detail.note}</Note>}
+        </div>
+      ),
+    });
+  };
 
   const select = (mail: MailItem) => {
     setSelectedId(mail.id);
@@ -69,8 +135,9 @@ export default function MailboxModal({ dispatch, setToast, onClose }: {
   };
 
   return (
-    <Modal layer="stage" md onClose={onClose}>
-      <ModalCard title="우편함" onClose={onClose}>
+    <>
+      <Modal layer="stage" md onClose={onClose}>
+        <ModalCard title="우편함" onClose={onClose}>
         <div className="flex flex-col gap-3">
           {/* 표 머리 한 줄과 우편 다섯 줄 높이 */}
           <TableBox className="h-[212px] px-3 pb-2">
@@ -133,9 +200,34 @@ export default function MailboxModal({ dispatch, setToast, onClose }: {
                             <span className="pf-accent text-xs">{fmtGold(selected.gold)}</span>
                           </span>
                         )}
-                        {selected.items.map(att => (
-                          <ItemBadge key={att.id} id={att.id} qty={att.qty} />
-                        ))}
+                        {selected.items.map(att => {
+                          const detail = resolveItemDetail(att.id);
+                          const badge = (
+                            <ItemBadge
+                              id={att.id}
+                              qty={att.qty}
+                              onClick={() => openAttachmentDetail(att.id, att.qty)}
+                            />
+                          );
+                          return detail ? (
+                            <Tip
+                              key={att.id}
+                              wraps
+                              hoverOnly
+                              text={(
+                                <TipCard
+                                  title={<GradeName name={detail.name} grade={detail.grade} />}
+                                  badge={<Badge tone="dim-plain" size="2xs">{detail.kindLabel}</Badge>}
+                                  description={detail.description ?? detail.note ?? undefined}
+                                />
+                              )}
+                            >
+                              {badge}
+                            </Tip>
+                          ) : (
+                            <span key={att.id}>{badge}</span>
+                          );
+                        })}
                       </div>
                       <div className="shrink-0">
                         {isClaimable(selected) ? (
@@ -155,7 +247,9 @@ export default function MailboxModal({ dispatch, setToast, onClose }: {
             )}
           </Inset>
         </div>
-      </ModalCard>
-    </Modal>
+        </ModalCard>
+      </Modal>
+      {dialogs}
+    </>
   );
 }

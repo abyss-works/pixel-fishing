@@ -7,6 +7,9 @@ import type { ClientMessage, ServerMessage } from '../../game/rules/live.js';
 import { AppError, fail } from '../../core/errors';
 import { BUILD_ID } from '../../buildId';
 import { APP_VERSION } from '../../version';
+import { CONSENT_REQUIRED_CODE, notifyConsentRequired } from './requestFailure';
+
+const LIVE_CLOSE_POLICY = 1008;
 
 export interface LiveConnection {
   /** 연결돼 있을 때만 보낸다. 끊긴 동안의 메시지는 버린다 */
@@ -62,6 +65,12 @@ export function connectLive(
       if (!closed && e.code === LIVE_CLOSE_OUTDATED) {
         closed = true;
         fail(new AppError('outdated', 'live channel client version mismatch'));
+        return;
+      }
+      // 약관 수락이 필요해 정책 위반(1008)으로 닫힌 경우 — 수락 전 재연결해도 반복 거부되므로 백오프를 중단한다.
+      if (!closed && e.code === LIVE_CLOSE_POLICY && e.reason === CONSENT_REQUIRED_CODE) {
+        closed = true;
+        notifyConsentRequired();
         return;
       }
       // 같은 계정의 다른 창이 연결을 가져갔다. 다시 붙으면 두 창이 서로 끊는다.
