@@ -40,7 +40,7 @@ export interface Hat {
   achievementId?: string;
 }
 
-/** 모자 목록 — 골드로 사는 모자 5종 뒤에 업적 보상 모자 41종을 둔다 */
+/** 모자 목록 — 골드로 사는 모자 5종 뒤에 업적 보상 모자 52종을 둔다 */
 export const HATS: readonly Hat[] = [
   { id: 'cap-red', name: '빨간 모자', color: '#c62828', price: 50_000, source: 'gold' },
   { id: 'cap-blue', name: '파란 모자', color: '#1565c0', price: 50_000, source: 'gold' },
@@ -65,6 +65,8 @@ export const HATS: readonly Hat[] = [
   { id: 'inkglass-beanie', name: '먹물 유리 비니', color: '#1a252c', accentColor: '#80cbc4', price: 0, source: 'achievement', achievementId: 'night-madagascar-variant' },
   { id: 'lookout-storm-hat', name: '야간 망루 방풍모', color: '#34424d', accentColor: '#ffd54f', price: 0, source: 'achievement', achievementId: 'night-southatlantic-normal' },
   { id: 'pitch-lookout-cap', name: '칠흑 망루 모자', color: '#141c28', accentColor: '#ba68c8', price: 0, source: 'achievement', achievementId: 'night-southatlantic-variant' },
+  { id: 'measure-band-cap', name: '눈금 띠 챙모자', color: '#796a4e', accentColor: '#eceff1', price: 0, source: 'achievement', achievementId: 'big-10' },
+  { id: 'iron-hook-hat', name: '쇠바늘 낚시 모자', color: '#4e5d6b', accentColor: '#cfd8dc', price: 0, source: 'achievement', achievementId: 'big-25' },
   { id: 'lure-bucket-hat', name: '털바늘 낚시 모자', color: '#6b7a3a', accentColor: '#e0705a', price: 0, source: 'achievement', achievementId: 'big-50' },
   { id: 'gold-hook-hat', name: '금바늘 대어 모자', color: '#3b4d63', accentColor: '#ffd54f', price: 0, source: 'achievement', achievementId: 'big-100-hat' },
   { id: 'harpooner-pillbox', name: '작살잡이 가죽 모자', color: '#4e342e', price: 0, source: 'achievement', achievementId: 'named-all' },

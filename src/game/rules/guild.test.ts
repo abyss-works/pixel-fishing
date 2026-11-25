@@ -252,12 +252,12 @@ describe('길드 보너스 — 기부', () => {
 });
 
 describe('길드 보너스 — 효과(합연산)', () => {
-  it('단계당 효과 — 판매가 +2%, 가방 +4%, 네임드 조우 +5%, 일반 가중치 −2%, 돌연변이 +1%p', () => {
+  it('단계당 효과 — 판매가 +2%, 가방 +4%, 네임드 조우 +5%, 일반 가중치 −2%, 돌연변이 +4%', () => {
     expect([1, 5].map(r => bonusEffect('sell', r))).toEqual([0.02, 0.1]);
     expect([1, 5].map(r => bonusEffect('bag', r))).toEqual([0.04, 0.2]);
     expect([1, 5].map(r => bonusEffect('named', r))).toEqual([0.05, 0.25]);
     expect([1, 5].map(r => bonusEffect('rare', r))).toEqual([0.02, 0.1]);
-    expect([1, 5].map(r => bonusEffect('mutation', r))).toEqual([0.01, 0.05]);
+    expect([1, 5, 10].map(r => bonusEffect('mutation', r))).toEqual([0.04, 0.2, 0.4]);
   });
 
   it('효과는 단계 효과를 더한 값 하나다 — 단계마다 곱하지 않는다', () => {
@@ -269,9 +269,9 @@ describe('길드 보너스 — 효과(합연산)', () => {
   it('길드 효과는 레벨로 열린 1단계와 기부로 오른 단계 중 높은 단계에 자유 강화 단계를 더해 정한다', () => {
     expect(guildEffectsOf(3, { sell: 3, bag: 2 })).toEqual({ sell: 0.06, bag: 0.08, named: 0.05, rare: 0, mutation: 0 });
     expect(guildEffectsOf(1, {})).toEqual({ sell: 0.02, bag: 0, named: 0, rare: 0, mutation: 0 });
-    expect(guildEffectsOf(5, {})).toEqual({ sell: 0.02, bag: 0.04, named: 0.05, rare: 0.02, mutation: 0.01 });
+    expect(guildEffectsOf(5, {})).toEqual({ sell: 0.02, bag: 0.04, named: 0.05, rare: 0.02, mutation: 0.04 });
     expect(guildEffectsOf(10, { sell: 5, bag: 5, named: 5, rare: 5, mutation: 5 }, { sell: 5, bag: 1, mutation: 2 }))
-      .toEqual({ sell: 0.2, bag: 0.24, named: 0.25, rare: 0.1, mutation: 0.07 });
+      .toEqual({ sell: 0.2, bag: 0.24, named: 0.25, rare: 0.1, mutation: 0.28 });
     expect(bonusTotalRank('rare', 6, 1, 3)).toBe(4);
     expect(bonusTotalRank('sell', 10, 5, 5)).toBe(10);
   });

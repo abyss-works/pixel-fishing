@@ -601,9 +601,12 @@ describe('월척(크기)·개체·폼 기록', () => {
     expect(at({ variant: 1, normal: 2 })).toBe('variant'); // 0.3×3 = 0.9 < 1
   });
 
-  it('mutationWeightsOf: 전역 가중치 일반 3 : 돌연변이 1, 코모로의 골판 Lv1이면 돌연변이 가중치 +25%', () => {
+  it('mutationWeightsOf: 전역 가중치 일반 3 : 돌연변이 1, 코모로의 골판 Lv1 +25%, 길드 돌연변이 보너스 가산', () => {
     expect(mutationWeightsOf(newState(), 'pond')).toEqual({ normal: 3, variant: 1 });
     expect(mutationWeightsOf({ ...newState(), artifacts: ['elder-scale'] }, 'pond')).toEqual({ normal: 3, variant: 1.25 });
+    expect(mutationWeightsOf({ ...newState(), artifacts: ['elder-scale'] }, 'pond', 0, 0, 1, 0.2)).toEqual({
+      normal: 3, variant: 1.45,
+    });
   });
 
   it('addCatch: 폼별로 마릿수/크기가 갈리고 종 합계는 폼 합산으로 파생 (v8)', () => {
@@ -1068,9 +1071,10 @@ describe('쿠폰 (클라이언트 검증 — P1에서 서버 이관)', () => {
     expect(redeemCoupon(newState(), `  ${CODE}  `).ok).toBe(true);
   });
 
-  it('첫 쿠폰은 300G와 작은 행운 물약 1개를 지급한다', () => {
+  it('첫 쿠폰은 300G와 작은 바다 영약 1개를 지급한다', () => {
     expect(COUPONS[CODE].gold).toBe(300);
     expect(COUPONS[CODE].items).toEqual([{ id: 'luck-small', qty: 1 }]);
+    expect(COUPONS[CODE].desc).toContain('작은 바다 영약');
   });
 
   it('생명의 기운 등 unitSize가 1보다 큰 아이템도 저장 단위로 환산해 지급한다', () => {

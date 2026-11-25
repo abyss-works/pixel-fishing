@@ -6,14 +6,13 @@ import {
   counterIncrementsForEvents,
   cumulativeBonusProgress,
   evaluateAchievements,
-  maxArtifactCount,
 } from './achievements';
 import {
-  applyAction, pickScalars, applyPatch,
+  applyAction, pickScalars, applyPatch, prepareCatchDraw,
 } from './actions';
 import type { ActionDeps, GameEvent } from './actions';
 import {
-  migrate, newState, sizeParams, BIG_CATCH_PERCENTILE,
+  fishDrawShares, migrate, newState, sizeParams, BIG_CATCH_PERCENTILE,
 } from './logic';
 import type { GameState } from './logic';
 import {
@@ -102,7 +101,7 @@ describe('업적 진척 판정 (achievementProgress)', () => {
     });
   });
 
-  it('월척 장부(big-50)와 월척 백 종(big-100-hat)은 일반 또는 돌연변이 중 하나라도 월척 기준 이상이면 1종으로 센다', () => {
+  it('월척 장부(big-10, big-25, big-50, big-100-hat)는 일반 또는 돌연변이 중 하나라도 월척 기준 이상이면 1종으로 센다', () => {
     expect(BIG_CATCH_PERCENTILE).toBe(20);
     const dex: GameState['dex'] = {};
     for (let i = 0; i < 100; i++) {
@@ -110,6 +109,12 @@ describe('업적 진척 판정 (achievementProgress)', () => {
       const form = i % 2 === 0 ? 'normal' : 'variant';
       dex[f.id] = { [form]: { count: 1, maxSize: bigSizeFor(f), first: '2026-11-15' } };
     }
+    expect(achievementProgress(seed({ dex }), 'big-10')).toEqual({
+      current: 100, target: 10, met: true,
+    });
+    expect(achievementProgress(seed({ dex }), 'big-25')).toEqual({
+      current: 100, target: 25, met: true,
+    });
     expect(achievementProgress(seed({ dex }), 'big-50')).toEqual({
       current: 100, target: 50, met: true,
     });
@@ -163,68 +168,87 @@ describe('업적 진척 판정 (achievementProgress)', () => {
 });
 
 describe('누적 보너스 계산 (achievementBonusesOf)', () => {
-  it('maxArtifactCount는 Lv5 유물과 전설 유물(고정 레벨)을 모두 포함한다', () => {
+  it('유물 누적 8종은 희귀·영웅은 레벨당 +0.5%, 전설은 보유 즉시 +2.5%를 준다', () => {
     const levelable = ARTIFACTS.filter(a => artifactHasLevel(a));
     const legendary = ARTIFACTS.filter(a => !artifactHasLevel(a));
-    expect(legendary.length).toBeGreaterThan(0);
+    expect(legendary).toHaveLength(2);
 
     const partial = seed({
       artifacts: [levelable[0].id, levelable[1].id, legendary[0].id],
-      artifactLevels: { [levelable[0].id]: ARTIFACT_MAX_LEVEL, [levelable[1].id]: 4 },
+      artifactLevels: { [levelable[0].id]: ARTIFACT_MAX_LEVEL, [levelable[1].id]: 3 },
     });
-    expect(maxArtifactCount(partial)).toBe(2);
+    // levelable[0] Lv5(0.025) + levelable[1] Lv3(0.015) + legendary[0] Lv5(0.025) = 0.065
+    expect(achievementBonusesOf(partial).artifactBoost).toBe(0.065);
 
     const allMax = seed({
-      artifacts: [...ARTIFACTS.map(a => a.id), 'unknown-relic'],
+      artifacts: ARTIFACTS.map(a => a.id),
       artifactLevels: Object.fromEntries(levelable.map(a => [a.id, ARTIFACT_MAX_LEVEL])),
     });
-    expect(maxArtifactCount(allMax)).toBe(ARTIFACTS.length);
+    expect(achievementBonusesOf(allMax).artifactBoost).toBe(0.2);
   });
 
   it('모든 누적 보너스 단계가 최대일 때 단계별 최대 합산치와 정확히 일치한다', () => {
-    const pacificLegend = FISH.find(f => topZoneOfSpot(f.spot) === 'pacific' && f.rarity === 'legendary')!;
+    const seaZones = ['pacific', 'seasia', 'indian', 'madagascar', 'southatlantic', 'northatlantic'] as const;
+    const counters: Record<string, number> = {
+      'manual.total': 10_000,
+      'manual.variant.total': 10_000,
+      'catch.auto': 500_000,
+      'catch.perfect': 5_000,
+      'catch.bait': 2_000,
+      'catch.lunch': 20_000,
+      'named.flawless': 20,
+      'sell.gold': 2_500_000_000,
+      'energy.spent': 100_000,
+    };
+    let dayLegSum = 0;
+    let nightLegSum = 0;
+    for (const z of seaZones) {
+      const dayLeg = FISH.find(f => topZoneOfSpot(f.spot) === z && f.rarity === 'legendary' && !f.night)!;
+      const nightLeg = FISH.find(f => topZoneOfSpot(f.spot) === z && f.rarity === 'legendary' && f.night === true)!;
+      // 최대 구역 배수 3 × 2 × 10 = 60, 3 × 1 × 10 = 30; 전역 400 / 200 충족하도록 충분한 값 부여
+      counters[`manual.legendary.${dayLeg.id}`] = 100;
+      counters[`manual.legendary.${nightLeg.id}`] = 50;
+      counters[`manual.variant.${z}`] = 1_500;
+      dayLegSum += 100;
+      nightLegSum += 50;
+    }
+    expect(dayLegSum).toBeGreaterThanOrEqual(400);
+    expect(nightLegSum).toBeGreaterThanOrEqual(200);
+
     const levelable = ARTIFACTS.filter(a => artifactHasLevel(a));
     const s = seed({
       artifacts: ARTIFACTS.map(a => a.id),
       artifactLevels: Object.fromEntries(levelable.map(a => [a.id, ARTIFACT_MAX_LEVEL])),
-      achievementCounters: {
-        'manual.total': 10_000,
-        'manual.legendary.total': 25,
-        'manual.variant.total': 25,
-        'catch.auto': 100_000,
-        'catch.perfect': 10_000,
-        'catch.bait': 1_000,
-        'named.flawless': 50,
-        'sell.gold': 100_000_000,
-        [`manual.legendary.${pacificLegend.id}`]: 5,
-        'manual.variant.pacific': 10,
-      },
+      achievementCounters: counters,
     });
     const b = achievementBonusesOf(s);
-    expect(b.biteWaitCut).toBe(0.10);
-    expect(b.mutationWeight).toBe(0.08);
-    expect(b.rareWeight).toBe(0.04);
-    expect(b.epicWeight).toBe(0.03);
-    expect(b.legendaryWeight).toBe(0.04);
-    expect(b.sellBonus).toBe(0.03);
-    expect(b.namedWeight).toBe(0.10);
+    expect(b.biteWaitCut).toBe(0.08);
+    expect(b.rareWeight).toBe(0.355);
+    expect(b.nightWeight).toBe(0.195);
+    expect(b.mutationWeight).toBe(0.195);
+    expect(b.epicWeight).toBe(0);
+    expect(b.legendaryWeight).toBe(0);
+    expect(b.bagCap).toBe(0.1);
+    expect(b.energyYield).toBe(0.15);
+    expect(b.baitAmplify).toBe(0.2);
+    expect(b.lunchAmplify).toBe(0.15);
+    expect(b.namedWeight).toBe(0.15);
+    expect(b.sellBonus).toBe(0.06);
     expect(b.moveSpeed).toBe(0);
-    expect(b.artifactBoost).toBe(0.15);
-    expect(b.zoneLegendary.pacific).toBe(0.06);
-    expect(b.zoneMutation.pacific).toBe(0.09);
+    expect(b.artifactBoost).toBe(0.2);
 
     const contribs = achievementBonusContributions(s);
-    expect(contribs.length).toBe(11);
+    expect(contribs.length).toBe(37);
   });
 
   it('cumulativeBonusProgress는 현재 단계와 다음 단계를 정확히 계산한다', () => {
     const manualSeries = CUMULATIVE_BONUS_SERIES.find(s => s.id === 'bonus-manual-total')!;
     const p = cumulativeBonusProgress(seed({ achievementCounters: { 'manual.total': 1_240 } }), manualSeries);
     expect(p.current).toBe(1_240);
-    expect(p.completedSteps).toBe(3);
-    expect(p.activeDelta).toBe(0.035);
-    expect(p.maxDelta).toBe(0.05);
-    expect(p.nextStep?.threshold).toBe(10_000);
+    expect(p.completedSteps).toBe(4);
+    expect(p.activeDelta).toBe(0.048);
+    expect(p.maxDelta).toBe(0.08);
+    expect(p.nextStep?.threshold).toBe(2_000);
   });
 
   it('catchTooSoon은 누적 입질 대기 단축과 유물 배율을 반영해 정상 빠른 캐치를 429 오탐하지 않는다', () => {
@@ -262,7 +286,7 @@ describe('세이브 이관과 전방 호환 (migrate)', () => {
       ...newState(),
       achievements: { 'future-ach': 'claimed', 'zone-basic-pacific': 'claimable', bad: 'invalid' },
       achievementCounters: {
-        'sell.gold': 123, 'catch.perfect': -1, unknown: 5,
+        'sell.gold': 123, 'catch.perfect': -1, unknown: 5, 'energy.spent': 400, 'catch.lunch': 7,
         'manual.total': 5, 'manual.total.village': 3, 'manual.legendary.goldcarp': 1,
       },
       clearedNamed: ['pacific-named-megalodon', 'pacific-named-megalodon', 42],
@@ -270,7 +294,8 @@ describe('세이브 이관과 전방 호환 (migrate)', () => {
     const m = migrate(saved);
     expect(m.achievements).toEqual({ 'future-ach': 'claimed', 'zone-basic-pacific': 'claimable' });
     expect(m.achievementCounters).toEqual({
-      'sell.gold': 123, 'manual.total': 5, 'manual.total.village': 3, 'manual.legendary.goldcarp': 1,
+      'sell.gold': 123, 'energy.spent': 400, 'catch.lunch': 7,
+      'manual.total': 5, 'manual.total.village': 3, 'manual.legendary.goldcarp': 1,
     });
     expect(m.clearedNamed).toEqual(['pacific-named-megalodon', 'pacific-named-megalodon']);
   });
@@ -328,7 +353,7 @@ describe('업적 규칙과 액션 (rules, actions)', () => {
     const out = applyAction(s, { type: 'claimAllAchievements' }, deps());
     expect(out.ok).toBe(true);
     if (!out.ok) return;
-    expect(out.state.gold).toBe(100 + 300);
+    expect(out.state.gold).toBe(100 + 1_200);
     expect(out.state.hats).toEqual(['straw-hat', 'shipowner-bowler']);
     expect(out.state.achievements['spot-basic-sea']).toBe('claimed');
     expect(out.state.achievements['variant-village']).toBe('claimed');
@@ -337,7 +362,7 @@ describe('업적 규칙과 액션 (rules, actions)', () => {
     expect(out.state.achievements['manual-variant-1']).toBe('claimable');
     expect(out.result).toEqual({
       type: 'claimAllAchievements',
-      gold: 300,
+      gold: 1_200,
       hats: ['shipowner-bowler'],
     });
     expect(canClaimAllAchievements(out.state)).toEqual({ ok: false, reason: 'no-claimable-achievements' });
@@ -361,20 +386,24 @@ describe('업적 규칙과 액션 (rules, actions)', () => {
       .toEqual({ ok: false, error: 'account-only' });
   });
 
-  it('counterIncrementsForEvents가 기본 카운터 증분을 정확히 계산한다', () => {
+  it('counterIncrementsForEvents가 기본 카운터 증분(catch.lunch, energy.spent 포함)을 정확히 계산한다', () => {
     const events: GameEvent[] = [
       { type: 'sell', payload: { gold: 1500, count: 2, uids: ['a', 'b'] } },
       { type: 'catch', payload: { judgment: 'perfect', bait: 'cook-bait-rare' } },
       { type: 'catch', payload: { judgment: 'good', bait2: 'cook-bait-epic' } },
       { type: 'catch', payload: { judgment: 'auto', lunch: 'cook-lunch-bite' } },
+      { type: 'cook', payload: { recipe: 'cook-lunch-bundle', count: 2, bonus: 0 } }, // (50 + 5*10 + 1*100 + 1*1000) * 2 = 2400
+      { type: 'transmuteEnergy', payload: { from: 'common', to: 'rare', count: 1, spent: 100, gained: 10 } },
       { type: 'resolveChallenge', payload: { questId: 'pacific-named-megalodon', success: true, hits: 5, misses: 0 } },
       { type: 'resolveChallenge', payload: { questId: 'seasia-named-leviathan', success: true, hits: 5, misses: 1 } },
     ];
     expect(counterIncrementsForEvents(events)).toEqual({
       'sell.gold': 1500,
+      'energy.spent': 2400,
       'catch.perfect': 1,
       'catch.auto': 1,
       'catch.bait': 2,
+      'catch.lunch': 1,
       'named.flawless': 1,
       'manual.total': 2,
     });
@@ -446,6 +475,53 @@ describe('업적 규칙과 액션 (rules, actions)', () => {
     expect(REJECT_TEXT['achievement-already-claimed']).toBe('이미 받은 업적이에요.');
     expect(REJECT_TEXT['achievement-not-claimable']).toBe('아직 받을 수 없는 업적이에요.');
     expect(REJECT_TEXT['no-claimable-achievements']).toBe('받을 수 있는 업적이 없어요.');
-    expect(ACHIEVEMENTS).toHaveLength(80);
+    expect(ACHIEVEMENTS).toHaveLength(82);
+  });
+
+  it('신규 채널(energyYield, bagCap, nightWeight, baitAmplify, lunchAmplify)이 실제 액션에 반영된다', () => {
+    // energy.spent 카운터가 cook에서 오르고, energyYield 보너스가 extractEnergy에 반영된다
+    const cooked = applyAction(seed({
+      boat: 5,
+      location: { kind: 'base', id: 'home' },
+      items: { 'energy-common': 6_000 },
+    }), { type: 'cook', recipe: 'cook-lunch-bite', count: 1 }, deps());
+    expect(cooked.ok).toBe(true);
+    if (!cooked.ok) return;
+    expect(cooked.state.achievementCounters['energy.spent']).toBe(600);
+
+    const commonFish = FISH.find(f => f.rarity === 'common')!;
+    const fishInst = { uid: 'u1', fishId: commonFish.id, form: 'normal' as const, size: 10, caughtAt: '2026-11-15T12:00:00.000Z', spot: commonFish.spot, judgment: 'auto' as const, locked: false };
+    const extracted = applyAction(seed({
+      boat: 5,
+      location: { kind: 'base', id: 'home' },
+      bag: [fishInst],
+      achievementCounters: { 'energy.spent': 100_000 }, // energyYield +15%
+    }), { type: 'extractEnergy', uids: ['u1'] }, deps());
+    expect(extracted.ok).toBe(true);
+    if (!extracted.ok) return;
+    expect(extracted.state.items['energy-common']).toBe(12); // round(10 * 1.15)
+
+    // bagCap 보너스(+10%): 도보 상한 60 → 66마리, 60마리 상태에서 방생 없이 61마리째 담김 + catch.lunch 적립
+    const fullBag = Array.from({ length: 60 }, (_, i) => ({ ...fishInst, uid: `b-${i}` }));
+    const autoLunch = applyAction(seed({
+      bag: fullBag,
+      slots: { lunch: { id: 'cook-lunch-bite', endsAt: '2026-11-16T00:00:00.000Z' }, bait: null },
+      achievementCounters: { 'catch.auto': 500_000 }, // bagCap +10%
+    }), { type: 'catch', spot: 'pond', judgment: 'auto' }, deps());
+    expect(autoLunch.ok).toBe(true);
+    if (!autoLunch.ok) return;
+    expect(autoLunch.state.bag).toHaveLength(61);
+    expect(autoLunch.state.achievementCounters['catch.lunch']).toBe(1);
+
+    // nightWeight 보너스: 밤 캐치 시 밤 어종 개체 가중치가 증가한다
+    const nightPlain = fishDrawShares('sea', { phase: 'night', nightDepth: 1 }).filter(s => s.fish.night).reduce((a, s) => a + s.share, 0);
+    const nightBoosted = fishDrawShares('sea', { phase: 'night', nightDepth: 1, nightWeightBonus: 0.195 }).filter(s => s.fish.night).reduce((a, s) => a + s.share, 0);
+    expect(nightBoosted).toBeGreaterThan(nightPlain);
+
+    // baitAmplify·lunchAmplify가 prepareCatchDraw에 반영된다
+    const baitPrep = prepareCatchDraw(seed({
+      slots: { lunch: null, bait: { id: 'cook-bait-rare', endsAt: '2026-11-16T00:00:00.000Z' } },
+    }), 'normal', '2026-11-15T12:00:00.000Z', { power: 10, req: 0, yellow: 10, red: 0, mult: 1, biteExtra: 0 }, undefined, { bait: 0.2, lunch: 0.15 });
+    expect(baitPrep.cook.rarityWeight).toEqual({ rare: 0.48, epic: 0.48, legendary: 0.48 });
   });
 });

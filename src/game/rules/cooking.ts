@@ -101,18 +101,29 @@ export interface EnergyGain {
 /** 개체 n마리에서 얻는 기운(저장 단위) — 개체 하나의 산출을 한 곳에서 정한다 */
 export const energyYield = (individuals: number): number => individuals * ENERGY_PER_INDIVIDUAL;
 
-/** 지목한 개체에서 얻는 기운 — 개체 하나에서 그 등급 기운 화면 단위 1(energyYield). 어종, 크기, 폼은 산출에 영향을 주지 않는다 */
-export function energyGain(state: Pick<GameState, 'bag'>, uids: readonly string[]): EnergyGain {
+/** 지목한 개체에서 얻는 기운 — 개체 하나에서 그 등급 기운 화면 단위 1(energyYield)에 기운 획득량 보너스를 반영한다 */
+export function energyGain(
+  state: Pick<GameState, 'bag'>,
+  uids: readonly string[],
+  energyYieldBonus = 0,
+): EnergyGain {
   const bag = new Map(state.bag.map(i => [i.uid, i]));
-  const byGrade = Object.fromEntries(RARITY_ORDER.map(r => [r, 0])) as Record<RarityId, number>;
+  const counts = Object.fromEntries(RARITY_ORDER.map(r => [r, 0])) as Record<RarityId, number>;
   const taken: string[] = [];
   for (const uid of new Set(uids)) {
     const inst = bag.get(uid);
     const fish = inst ? instanceFish(inst) : undefined;
     if (!inst || inst.locked || !fish) continue;
-    byGrade[fish.rarity] += energyYield(1);
+    counts[fish.rarity] += 1;
     taken.push(uid);
   }
+  const scale = Math.max(0, 1 + energyYieldBonus);
+  const byGrade = Object.fromEntries(
+    RARITY_ORDER.map(r => [
+      r,
+      counts[r] === 0 ? 0 : energyYieldBonus === 0 ? energyYield(counts[r]) : Math.round(energyYield(counts[r]) * scale),
+    ]),
+  ) as Record<RarityId, number>;
   return { uids: taken, byGrade };
 }
 
@@ -135,7 +146,10 @@ export interface OverflowPlan {
  *  내보낼 개체는 가방 상한 규칙이 이미 골랐으므로 여기서 다른 개체로 바꾸지 않는다.
  *  state.bag에는 내보낼 개체가 들어 있어야 한다 */
 export function planOverflow(
-  state: Pick<GameState, 'boat' | 'energyTargets' | 'bag'>, uids: readonly string[], guest: boolean,
+  state: Pick<GameState, 'boat' | 'energyTargets' | 'bag'>,
+  uids: readonly string[],
+  guest: boolean,
+  energyYieldBonus = 0,
 ): OverflowPlan {
   if (guest || state.boat < AUTO_ENERGY_BOAT) return { released: [...uids], gain: energyGain(state, []) };
   const bag = new Map(state.bag.map(i => [i.uid, i]));
@@ -144,7 +158,7 @@ export function planOverflow(
     const fish = inst ? instanceFish(inst) : undefined;
     return fish !== undefined && energyTargetOf(state, fish.spot);
   });
-  const gain = energyGain(state, extractable);
+  const gain = energyGain(state, extractable, energyYieldBonus);
   const taken = new Set(gain.uids);
   return { released: uids.filter(uid => !taken.has(uid)), gain };
 }
@@ -388,20 +402,32 @@ export function appliedSlots(state: Pick<GameState, 'slots'>, now: string, judgm
     : { bait: activeBaits[0], bait2: activeBaits[1] };
 }
 
-/** 그 캐치에 적용하는 슬롯 효과 — 걸린 슬롯(appliedSlots)의 요리 효과를 합한다 */
-export function slotEffects(state: Pick<GameState, 'slots'>, now: string, judgment: Judgment): ActiveCookEffects {
+export interface SlotAmplify {
+  bait?: number;
+  lunch?: number;
+}
+
+/** 그 캐치에 적용하는 슬롯 효과 — 걸린 슬롯(appliedSlots)의 요리 효과에 출처별 증폭 배수를 곱한 뒤 합한다 */
+export function slotEffects(
+  state: Pick<GameState, 'slots'>,
+  now: string,
+  judgment: Judgment,
+  amplify?: SlotAmplify,
+): ActiveCookEffects {
   const active = Object.values(appliedSlots(state, now, judgment))
     .map(id => recipeById(id))
     .filter((r): r is Recipe => r !== undefined);
   const out: ActiveCookEffects = { ...NO_COOK_EFFECTS, rarityWeight: {} };
-  for (const { effects: e } of active) {
-    out.biteWaitCut = clean(out.biteWaitCut + (e.biteWaitCut ?? 0));
-    out.mutationWeight = clean(out.mutationWeight + (e.mutationWeight ?? 0));
-    out.namedWeight = clean(out.namedWeight + (e.namedWeight ?? 0));
+  for (const r of active) {
+    const e = r.effects;
+    const scale = 1 + (r.kind === 'bait' ? (amplify?.bait ?? 0) : (amplify?.lunch ?? 0));
+    out.biteWaitCut = clean(out.biteWaitCut + (e.biteWaitCut ?? 0) * scale);
+    out.mutationWeight = clean(out.mutationWeight + (e.mutationWeight ?? 0) * scale);
+    out.namedWeight = clean(out.namedWeight + (e.namedWeight ?? 0) * scale);
     out.nightUnlock = out.nightUnlock || e.nightUnlock === true;
     if (e.rarityWeight) {
       for (const g of e.rarityWeight.grades) {
-        out.rarityWeight[g] = clean((out.rarityWeight[g] ?? 0) + e.rarityWeight.bonus);
+        out.rarityWeight[g] = clean((out.rarityWeight[g] ?? 0) + e.rarityWeight.bonus * scale);
       }
     }
   }

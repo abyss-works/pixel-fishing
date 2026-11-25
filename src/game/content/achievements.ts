@@ -1,7 +1,7 @@
 // 업적 콘텐츠 — 선언적 규칙, 카탈로그 빌더, 누적 보너스 계열, 카운터 키, 탭, 보상 타입의 단일 근원.
 // 규칙은 대상 선택자·측정 방식·임계값만 갖고, 목표 수는 게임 데이터에서 카탈로그 빌더가 센다.
 // 상대 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버가 직접 불러온다.
-import { ARTIFACTS } from './artifacts.js';
+import { ARTIFACTS, artifactHasLevel } from './artifacts.js';
 import { BOUNTIES } from './bounties.js';
 import { FISH } from './fish.js';
 import type { Fish, FormId } from './fish.js';
@@ -15,18 +15,20 @@ import type { ZoneId } from './zones.js';
 
 export const ACHIEVEMENT_COUNTER_KEYS = [
   'sell.gold',
+  'energy.spent',
   'catch.perfect',
   'catch.auto',
   'catch.bait',
+  'catch.lunch',
   'named.flawless',
 ] as const;
 
 export type AchievementCounterKey = (typeof ACHIEVEMENT_COUNTER_KEYS)[number];
-/** 카운터 맵 — 기본 키 5종에 규칙이 만드는 동적 키(manual.*)를 더한다. 저장은 키-값 표다 */
+/** 카운터 맵 — 기본 키 7종에 규칙이 만드는 동적 키(manual.*)를 더한다. 저장은 키-값 표다 */
 export type AchievementCounters =
   Partial<Record<AchievementCounterKey, number>> & { [key: string]: number | undefined };
 
-/** 위생 처리와 저장이 받아들이는 카운터 키 — 기본 5종과 수동 집계 접두사 */
+/** 위생 처리와 저장이 받아들이는 카운터 키 — 기본 7종과 수동 집계 접두사 */
 export const ACHIEVEMENT_DYNAMIC_COUNTER_PREFIX = 'manual.';
 export const isAchievementCounterKey = (key: string): boolean =>
   ACHIEVEMENT_COUNTER_KEYS.includes(key as AchievementCounterKey)
@@ -117,18 +119,22 @@ export type CumulativeBonusKind =
   | 'rareWeight'
   | 'epicWeight'
   | 'legendaryWeight'
+  | 'nightWeight'
+  | 'bagCap'
+  | 'energyYield'
+  | 'baitAmplify'
+  | 'lunchAmplify'
   | 'sellBonus'
   | 'namedWeight'
   | 'moveSpeed'
-  | 'artifactBoost'
-  | 'zoneLegendary'
-  | 'zoneMutation';
+  | 'artifactBoost';
 
 /** 누적 보너스 측정 방식 */
 export type CumulativeBonusMetric =
   | { kind: 'counter'; key: string }
-  | { kind: 'zoneLegendarySum'; zone: ZoneId }
-  | { kind: 'maxArtifact' };
+  | { kind: 'legendarySum'; night: boolean }
+  | { kind: 'zoneLegendarySum'; zone: ZoneId; night: boolean }
+  | { kind: 'artifactLevel'; artifactId: string };
 
 /** 누적 보너스 단계 하나 */
 export interface CumulativeBonusStep {
@@ -145,13 +151,13 @@ export interface CumulativeBonusSeries {
   id: string;
   name: string;
   desc: string;
-  scope: 'global' | 'zone';
+  scope: 'global' | 'zone' | 'artifact';
   zone?: ZoneId;
   metric: CumulativeBonusMetric;
   bonusKind: CumulativeBonusKind;
   unit: string;
   steps: readonly CumulativeBonusStep[];
-  /** 누적 보너스 업적 집계 가중치(기본 1계열 = 1건, 최고 레벨 유물은 3단계 각각 1건으로 총 25종) */
+  /** 누적 보너스 업적 집계 가중치(기본 1계열 = 1건, 총 37종) */
   tierCount: number;
 }
 
@@ -191,24 +197,24 @@ export function selectorTargetCount(selector: AchievementSelector): number {
   return selectorIds(selector).length;
 }
 
-// ── 1. 진행 업적 30종 (15개 낚시 해역 × 기초/숙련, 총 25,862,870G) ──
+// ── 1. 진행 업적 30종 (15개 낚시 해역 × 기초/숙련, 총 103,451,480G) ──
 
 const SPOT_PROGRESS_REWARDS: Record<SpotId, { basic: number; full: number }> = {
-  pond: { basic: 35, full: 35 },
-  river: { basic: 100, full: 100 },
-  sea: { basic: 300, full: 300 },
-  deep: { basic: 750, full: 750 },
-  dragonhole: { basic: 1_500, full: 1_500 },
-  coron: { basic: 3_500, full: 4_000 },
-  barrierreef: { basic: 10_000, full: 15_000 },
-  indian: { basic: 35_000, full: 40_000 },
-  southindian: { basic: 100_000, full: 100_000 },
-  mozstrait: { basic: 150_000, full: 200_000 },
-  comorodeep: { basic: 350_000, full: 350_000 },
-  benguela: { basic: 500_000, full: 500_000 },
-  sthelena: { basic: 1_500_000, full: 1_500_000 },
-  azores: { basic: 2_500_000, full: 3_000_000 },
-  bermuda: { basic: 7_500_000, full: 7_500_000 },
+  pond: { basic: 140, full: 140 },
+  river: { basic: 400, full: 400 },
+  sea: { basic: 1_200, full: 1_200 },
+  deep: { basic: 3_000, full: 3_000 },
+  dragonhole: { basic: 6_000, full: 6_000 },
+  coron: { basic: 14_000, full: 16_000 },
+  barrierreef: { basic: 40_000, full: 60_000 },
+  indian: { basic: 140_000, full: 160_000 },
+  southindian: { basic: 400_000, full: 400_000 },
+  mozstrait: { basic: 600_000, full: 800_000 },
+  comorodeep: { basic: 1_400_000, full: 1_400_000 },
+  benguela: { basic: 2_000_000, full: 2_000_000 },
+  sthelena: { basic: 6_000_000, full: 6_000_000 },
+  azores: { basic: 10_000_000, full: 12_000_000 },
+  bermuda: { basic: 30_000_000, full: 30_000_000 },
 };
 
 const SPOT_PROGRESS_RULES: AchievementRule[] = SPOTS.flatMap(spot => {
@@ -242,7 +248,7 @@ const SPOT_PROGRESS_RULES: AchievementRule[] = SPOTS.flatMap(spot => {
   ];
 });
 
-// ── 2. 치장 업적 41종 (기존 14종 승계 + 밤 도감 8종 + 월척 100종 1종 + 네임드 다회 토벌 18종) ──
+// ── 2. 치장 업적 52종 (구역 돌연변이 7종 + 밤 도감 12종 + 월척 장부 4종 + 전 구역·전설·완료 5종 + 네임드 다회 토벌 24종) ──
 
 const COSMETIC_LEGACY_AND_COLLECTION_RULES: AchievementRule[] = [
   {
@@ -496,9 +502,34 @@ const COSMETIC_LEGACY_AND_COLLECTION_RULES: AchievementRule[] = [
     reward: { kind: 'hat', hatId: 'vanishing-hood' },
   },
   {
+    id: 'big-10',
+    tab: 'cosmetic',
+    cosmeticKind: 'big',
+    groupId: 'big-ledger',
+    name: '월척 열 종',
+    desc: '월척을 10종 이상 낚아요.',
+    selector: { kind: 'fish' },
+    metric: { kind: 'bigSpecies' },
+    threshold: 10,
+    reward: { kind: 'hat', hatId: 'measure-band-cap' },
+  },
+  {
+    id: 'big-25',
+    tab: 'cosmetic',
+    cosmeticKind: 'big',
+    groupId: 'big-ledger',
+    name: '월척 스물다섯 종',
+    desc: '월척을 25종 이상 낚아요.',
+    selector: { kind: 'fish' },
+    metric: { kind: 'bigSpecies' },
+    threshold: 25,
+    reward: { kind: 'hat', hatId: 'iron-hook-hat' },
+  },
+  {
     id: 'big-50',
     tab: 'cosmetic',
     cosmeticKind: 'big',
+    groupId: 'big-ledger',
     name: '월척 장부',
     desc: '월척을 50종 이상 낚아요.',
     selector: { kind: 'fish' },
@@ -510,6 +541,7 @@ const COSMETIC_LEGACY_AND_COLLECTION_RULES: AchievementRule[] = [
     id: 'big-100-hat',
     tab: 'cosmetic',
     cosmeticKind: 'big',
+    groupId: 'big-ledger',
     name: '월척 백 종',
     desc: '월척을 100종 이상 낚아요.',
     selector: { kind: 'fish' },
@@ -521,7 +553,7 @@ const COSMETIC_LEGACY_AND_COLLECTION_RULES: AchievementRule[] = [
     id: 'named-all',
     tab: 'cosmetic',
     cosmeticKind: 'general',
-    name: '수배판 완결',
+    name: '수배판 완료',
     desc: '모든 네임드를 한 번 이상 쓰러뜨려요.',
     selector: { kind: 'named' },
     metric: { kind: 'set', field: 'named' },
@@ -596,9 +628,57 @@ export function namedSpoilerPlace(namedId: string): string {
   return zoneById(named.zones[0])?.shortName ?? named.zones[0];
 }
 
-// ── 3. 누적 보너스 업적 26종 (전역 8계열 + 구역 7×2=14계열 + 최고 레벨 유물 4단계) ──
+// ── 3. 누적 보너스 업적 37종 (전역 11계열 + 지역 6×3=18계열 + 유물 8계열) ──
 
 const GLOBAL_BONUS_SERIES: readonly CumulativeBonusSeries[] = [
+  {
+    id: 'bonus-day-legendary',
+    name: '전체 전설 손맛',
+    desc: '직접 챔질해 낮에 나타나는 전설 어종을 낚아요.',
+    scope: 'global',
+    metric: { kind: 'legendarySum', night: false },
+    bonusKind: 'rareWeight',
+    unit: '마리',
+    tierCount: 1,
+    steps: [20, 40, 100, 200, 400].map((threshold, idx) => ({
+      id: `bonus-day-legendary-${idx + 1}`,
+      threshold,
+      delta: 0.015,
+      label: `${threshold}마리`,
+    })),
+  },
+  {
+    id: 'bonus-night-legendary',
+    name: '전체 밤 전설 손맛',
+    desc: '직접 챔질해 밤에만 나타나는 전설 어종을 낚아요.',
+    scope: 'global',
+    metric: { kind: 'legendarySum', night: true },
+    bonusKind: 'nightWeight',
+    unit: '마리',
+    tierCount: 1,
+    steps: [10, 20, 50, 100, 200].map((threshold, idx) => ({
+      id: `bonus-night-legendary-${idx + 1}`,
+      threshold,
+      delta: 0.015,
+      label: `${threshold}마리`,
+    })),
+  },
+  {
+    id: 'bonus-manual-variant',
+    name: '전체 돌연변이 손맛',
+    desc: '직접 챔질로 돌연변이 물고기를 낚아요.',
+    scope: 'global',
+    metric: { kind: 'counter', key: 'manual.variant.total' },
+    bonusKind: 'mutationWeight',
+    unit: '마리',
+    tierCount: 1,
+    steps: [500, 1_000, 2_500, 5_000, 10_000].map((threshold, idx) => ({
+      id: `bonus-manual-variant-${idx + 1}`,
+      threshold,
+      delta: 0.015,
+      label: `${threshold.toLocaleString('ko-KR')}마리`,
+    })),
+  },
   {
     id: 'bonus-manual-total',
     name: '수동 손맛',
@@ -609,42 +689,12 @@ const GLOBAL_BONUS_SERIES: readonly CumulativeBonusSeries[] = [
     unit: '마리',
     tierCount: 1,
     steps: [
-      { id: 'bonus-manual-total-1', threshold: 10, delta: 0.01, label: '10마리' },
-      { id: 'bonus-manual-total-2', threshold: 100, delta: 0.01, label: '100마리' },
-      { id: 'bonus-manual-total-3', threshold: 1_000, delta: 0.015, label: '1,000마리' },
-      { id: 'bonus-manual-total-4', threshold: 10_000, delta: 0.015, label: '10,000마리' },
-    ],
-  },
-  {
-    id: 'bonus-manual-legendary',
-    name: '전설 손맛',
-    desc: '직접 챔질로 전설 등급 어종을 낚아요.',
-    scope: 'global',
-    metric: { kind: 'counter', key: 'manual.legendary.total' },
-    bonusKind: 'legendaryWeight',
-    unit: '마리',
-    tierCount: 1,
-    steps: [
-      { id: 'bonus-manual-legendary-1', threshold: 1, delta: 0.01, label: '1마리' },
-      { id: 'bonus-manual-legendary-2', threshold: 5, delta: 0.01, label: '5마리' },
-      { id: 'bonus-manual-legendary-3', threshold: 10, delta: 0.01, label: '10마리' },
-      { id: 'bonus-manual-legendary-4', threshold: 25, delta: 0.01, label: '25마리' },
-    ],
-  },
-  {
-    id: 'bonus-manual-variant',
-    name: '돌연변이 손맛',
-    desc: '직접 챔질로 돌연변이 물고기를 낚아요.',
-    scope: 'global',
-    metric: { kind: 'counter', key: 'manual.variant.total' },
-    bonusKind: 'mutationWeight',
-    unit: '마리',
-    tierCount: 1,
-    steps: [
-      { id: 'bonus-manual-variant-1', threshold: 1, delta: 0.02, label: '1마리' },
-      { id: 'bonus-manual-variant-2', threshold: 5, delta: 0.02, label: '5마리' },
-      { id: 'bonus-manual-variant-3', threshold: 10, delta: 0.02, label: '10마리' },
-      { id: 'bonus-manual-variant-4', threshold: 25, delta: 0.02, label: '25마리' },
+      { id: 'bonus-manual-total-1', threshold: 100, delta: 0.012, label: '100마리' },
+      { id: 'bonus-manual-total-2', threshold: 200, delta: 0.012, label: '200마리' },
+      { id: 'bonus-manual-total-3', threshold: 500, delta: 0.012, label: '500마리' },
+      { id: 'bonus-manual-total-4', threshold: 1_000, delta: 0.012, label: '1,000마리' },
+      { id: 'bonus-manual-total-5', threshold: 2_000, delta: 0.012, label: '2,000마리' },
+      { id: 'bonus-manual-total-6', threshold: 10_000, delta: 0.02, label: '10,000마리' },
     ],
   },
   {
@@ -653,13 +703,16 @@ const GLOBAL_BONUS_SERIES: readonly CumulativeBonusSeries[] = [
     desc: '방치 낚시로 물고기를 낚아요.',
     scope: 'global',
     metric: { kind: 'counter', key: 'catch.auto' },
-    bonusKind: 'biteWaitCut',
+    bonusKind: 'bagCap',
     unit: '마리',
     tierCount: 1,
     steps: [
-      { id: 'bonus-catch-auto-1', threshold: 1_000, delta: 0.01, label: '1,000마리' },
-      { id: 'bonus-catch-auto-2', threshold: 10_000, delta: 0.02, label: '10,000마리' },
-      { id: 'bonus-catch-auto-3', threshold: 100_000, delta: 0.02, label: '100,000마리' },
+      { id: 'bonus-catch-auto-1', threshold: 5_000, delta: 0.015, label: '5,000마리' },
+      { id: 'bonus-catch-auto-2', threshold: 10_000, delta: 0.015, label: '10,000마리' },
+      { id: 'bonus-catch-auto-3', threshold: 25_000, delta: 0.015, label: '25,000마리' },
+      { id: 'bonus-catch-auto-4', threshold: 50_000, delta: 0.015, label: '50,000마리' },
+      { id: 'bonus-catch-auto-5', threshold: 100_000, delta: 0.015, label: '100,000마리' },
+      { id: 'bonus-catch-auto-6', threshold: 500_000, delta: 0.025, label: '500,000마리' },
     ],
   },
   {
@@ -672,9 +725,12 @@ const GLOBAL_BONUS_SERIES: readonly CumulativeBonusSeries[] = [
     unit: '회',
     tierCount: 1,
     steps: [
-      { id: 'bonus-catch-perfect-1', threshold: 100, delta: 0.01, label: '100회' },
-      { id: 'bonus-catch-perfect-2', threshold: 1_000, delta: 0.015, label: '1,000회' },
-      { id: 'bonus-catch-perfect-3', threshold: 10_000, delta: 0.015, label: '10,000회' },
+      { id: 'bonus-catch-perfect-1', threshold: 50, delta: 0.024, label: '50회' },
+      { id: 'bonus-catch-perfect-2', threshold: 100, delta: 0.024, label: '100회' },
+      { id: 'bonus-catch-perfect-3', threshold: 250, delta: 0.024, label: '250회' },
+      { id: 'bonus-catch-perfect-4', threshold: 500, delta: 0.024, label: '500회' },
+      { id: 'bonus-catch-perfect-5', threshold: 1_000, delta: 0.024, label: '1,000회' },
+      { id: 'bonus-catch-perfect-6', threshold: 5_000, delta: 0.04, label: '5,000회' },
     ],
   },
   {
@@ -683,14 +739,33 @@ const GLOBAL_BONUS_SERIES: readonly CumulativeBonusSeries[] = [
     desc: '직접 챔질에서 미끼를 써서 물고기를 낚아요.',
     scope: 'global',
     metric: { kind: 'counter', key: 'catch.bait' },
-    bonusKind: 'epicWeight',
+    bonusKind: 'baitAmplify',
     unit: '마리',
     tierCount: 1,
     steps: [
-      { id: 'bonus-catch-bait-1', threshold: 10, delta: 0.01, label: '10마리' },
-      { id: 'bonus-catch-bait-2', threshold: 100, delta: 0.01, label: '100마리' },
-      { id: 'bonus-catch-bait-3', threshold: 1_000, delta: 0.01, label: '1,000마리' },
+      { id: 'bonus-catch-bait-1', threshold: 20, delta: 0.03, label: '20마리' },
+      { id: 'bonus-catch-bait-2', threshold: 40, delta: 0.03, label: '40마리' },
+      { id: 'bonus-catch-bait-3', threshold: 100, delta: 0.03, label: '100마리' },
+      { id: 'bonus-catch-bait-4', threshold: 200, delta: 0.03, label: '200마리' },
+      { id: 'bonus-catch-bait-5', threshold: 400, delta: 0.03, label: '400마리' },
+      { id: 'bonus-catch-bait-6', threshold: 2_000, delta: 0.05, label: '2,000마리' },
     ],
+  },
+  {
+    id: 'bonus-catch-lunch',
+    name: '도시락 방치',
+    desc: '도시락 효과가 켜진 상태에서 방치 낚시로 물고기를 낚아요.',
+    scope: 'global',
+    metric: { kind: 'counter', key: 'catch.lunch' },
+    bonusKind: 'lunchAmplify',
+    unit: '마리',
+    tierCount: 1,
+    steps: [1_000, 2_000, 5_000, 10_000, 20_000].map((threshold, idx) => ({
+      id: `bonus-catch-lunch-${idx + 1}`,
+      threshold,
+      delta: 0.03,
+      label: `${threshold.toLocaleString('ko-KR')}마리`,
+    })),
   },
   {
     id: 'bonus-named-flawless',
@@ -701,11 +776,12 @@ const GLOBAL_BONUS_SERIES: readonly CumulativeBonusSeries[] = [
     bonusKind: 'namedWeight',
     unit: '회',
     tierCount: 1,
-    steps: [
-      { id: 'bonus-named-flawless-1', threshold: 1, delta: 0.03, label: '1회' },
-      { id: 'bonus-named-flawless-2', threshold: 10, delta: 0.03, label: '10회' },
-      { id: 'bonus-named-flawless-3', threshold: 50, delta: 0.04, label: '50회' },
-    ],
+    steps: [1, 2, 5, 10, 20].map((threshold, idx) => ({
+      id: `bonus-named-flawless-${idx + 1}`,
+      threshold,
+      delta: 0.03,
+      label: `${threshold}회`,
+    })),
   },
   {
     id: 'bonus-sell-gold',
@@ -717,76 +793,119 @@ const GLOBAL_BONUS_SERIES: readonly CumulativeBonusSeries[] = [
     unit: 'G',
     tierCount: 1,
     steps: [
-      { id: 'bonus-sell-gold-1', threshold: 1_000_000, delta: 0.01, label: '1,000,000G' },
-      { id: 'bonus-sell-gold-2', threshold: 10_000_000, delta: 0.01, label: '10,000,000G' },
-      { id: 'bonus-sell-gold-3', threshold: 100_000_000, delta: 0.01, label: '100,000,000G' },
+      { id: 'bonus-sell-gold-1', threshold: 5_000_000, delta: 0.006, label: '5,000,000G' },
+      { id: 'bonus-sell-gold-2', threshold: 10_000_000, delta: 0.006, label: '10,000,000G' },
+      { id: 'bonus-sell-gold-3', threshold: 25_000_000, delta: 0.006, label: '25,000,000G' },
+      { id: 'bonus-sell-gold-4', threshold: 50_000_000, delta: 0.006, label: '50,000,000G' },
+      { id: 'bonus-sell-gold-5', threshold: 100_000_000, delta: 0.006, label: '100,000,000G' },
+      { id: 'bonus-sell-gold-6', threshold: 500_000_000, delta: 0.01, label: '500,000,000G' },
+      { id: 'bonus-sell-gold-7', threshold: 2_500_000_000, delta: 0.02, label: '2,500,000,000G' },
     ],
+  },
+  {
+    id: 'bonus-energy-spent',
+    name: '기운 소모',
+    desc: '부엌에서 도시락과 미끼를 요리하며 생명의 기운을 써요.',
+    scope: 'global',
+    metric: { kind: 'counter', key: 'energy.spent' },
+    bonusKind: 'energyYield',
+    unit: '개',
+    tierCount: 1,
+    steps: [5_000, 10_000, 25_000, 50_000, 100_000].map((threshold, idx) => ({
+      id: `bonus-energy-spent-${idx + 1}`,
+      threshold,
+      delta: 0.03,
+      label: `${threshold.toLocaleString('ko-KR')}개`,
+    })),
   },
 ];
 
-const ZONE_BONUS_SERIES: readonly CumulativeBonusSeries[] = ZONE_IDS.flatMap((zone): CumulativeBonusSeries[] => {
-  const zoneName = zoneById(zone)?.shortName ?? zone;
-  return [
-    {
-      id: `bonus-zone-legendary-${zone}`,
-      name: `${zoneName} 전설 손맛`,
-      desc: `${zoneName}에서 직접 챔질로 전설 등급 어종을 낚아요.`,
-      scope: 'zone',
-      zone,
-      metric: { kind: 'zoneLegendarySum', zone },
-      bonusKind: 'zoneLegendary',
-      unit: '마리',
-      tierCount: 1,
-      steps: [
-        { id: `bonus-zone-legendary-${zone}-1`, threshold: 1, delta: 0.02, label: '1마리' },
-        { id: `bonus-zone-legendary-${zone}-2`, threshold: 3, delta: 0.02, label: '3마리' },
-        { id: `bonus-zone-legendary-${zone}-3`, threshold: 5, delta: 0.02, label: '5마리' },
-      ],
-    },
-    {
-      id: `bonus-zone-variant-${zone}`,
-      name: `${zoneName} 돌연변이 손맛`,
-      desc: `${zoneName}에서 직접 챔질로 돌연변이 물고기를 낚아요.`,
-      scope: 'zone',
-      zone,
-      metric: { kind: 'counter', key: `manual.variant.${zone}` },
-      bonusKind: 'zoneMutation',
-      unit: '마리',
-      tierCount: 1,
-      steps: [
-        { id: `bonus-zone-variant-${zone}-1`, threshold: 1, delta: 0.03, label: '1마리' },
-        { id: `bonus-zone-variant-${zone}-2`, threshold: 5, delta: 0.03, label: '5마리' },
-        { id: `bonus-zone-variant-${zone}-3`, threshold: 10, delta: 0.03, label: '10마리' },
-      ],
-    },
-  ];
-});
+const ZONE_STEP_COEF = [1, 2, 3, 4, 5, 10] as const;
+const ZONE_STEP_DELTAS = [0.003, 0.003, 0.003, 0.003, 0.003, 0.005] as const;
 
-const MAX_ARTIFACT_BONUS_SERIES: CumulativeBonusSeries = {
-  id: 'bonus-max-artifact',
-  name: '최고 레벨 유물',
-  desc: '최고 레벨 유물과 전설 유물을 모아 보유 유물 효과를 높여요.',
-  scope: 'global',
-  metric: { kind: 'maxArtifact' },
+const ZONE_BONUS_SERIES: readonly CumulativeBonusSeries[] = ZONE_IDS
+  .filter((z): z is Exclude<ZoneId, 'village'> => z !== 'village')
+  .flatMap((zone, idx): CumulativeBonusSeries[] => {
+    const zoneName = zoneById(zone)?.shortName ?? zone;
+    const zoneMult = Math.floor(idx / 2) + 1;
+    const stepsFor = (idPrefix: string, axisMult: number): CumulativeBonusStep[] =>
+      ZONE_STEP_COEF.map((k, stepIdx) => {
+        const threshold = zoneMult * axisMult * k;
+        return {
+          id: `${idPrefix}-${stepIdx + 1}`,
+          threshold,
+          delta: ZONE_STEP_DELTAS[stepIdx],
+          label: `${threshold.toLocaleString('ko-KR')}마리`,
+        };
+      });
+    return [
+      {
+        id: `bonus-zone-day-legendary-${zone}`,
+        name: `${zoneName} 전설 손맛`,
+        desc: `${zoneName}에서 직접 챔질로 낮에 나타나는 전설 어종을 낚아요.`,
+        scope: 'zone',
+        zone,
+        metric: { kind: 'zoneLegendarySum', zone, night: false },
+        bonusKind: 'rareWeight',
+        unit: '마리',
+        tierCount: 1,
+        steps: stepsFor(`bonus-zone-day-legendary-${zone}`, 2),
+      },
+      {
+        id: `bonus-zone-night-legendary-${zone}`,
+        name: `${zoneName} 밤 전설 손맛`,
+        desc: `${zoneName}에서 직접 챔질로 밤에만 나타나는 전설 어종을 낚아요.`,
+        scope: 'zone',
+        zone,
+        metric: { kind: 'zoneLegendarySum', zone, night: true },
+        bonusKind: 'nightWeight',
+        unit: '마리',
+        tierCount: 1,
+        steps: stepsFor(`bonus-zone-night-legendary-${zone}`, 1),
+      },
+      {
+        id: `bonus-zone-variant-${zone}`,
+        name: `${zoneName} 돌연변이 손맛`,
+        desc: `${zoneName}에서 직접 챔질로 돌연변이 물고기를 낚아요.`,
+        scope: 'zone',
+        zone,
+        metric: { kind: 'counter', key: `manual.variant.${zone}` },
+        bonusKind: 'mutationWeight',
+        unit: '마리',
+        tierCount: 1,
+        steps: stepsFor(`bonus-zone-variant-${zone}`, 50),
+      },
+    ];
+  });
+
+const ARTIFACT_BONUS_SERIES: readonly CumulativeBonusSeries[] = ARTIFACTS.map(a => ({
+  id: `bonus-artifact-${a.id}`,
+  name: `${a.name} 증폭`,
+  desc: artifactHasLevel(a)
+    ? `${a.name} 유물을 얻고 단계별로 강화해요.`
+    : `${a.name} 유물을 얻으면 강화 없이 보유 즉시 완료돼요.`,
+  scope: 'artifact',
+  zone: a.zone,
+  metric: { kind: 'artifactLevel', artifactId: a.id },
   bonusKind: 'artifactBoost',
-  unit: '개',
-  tierCount: 4,
-  steps: [
-    { id: 'bonus-max-artifact-1', threshold: 1, delta: 0.03, label: '1개' },
-    { id: 'bonus-max-artifact-3', threshold: 3, delta: 0.04, label: '3개' },
-    { id: 'bonus-max-artifact-6', threshold: 6, delta: 0.04, label: '6개' },
-    { id: 'bonus-max-artifact-8', threshold: 8, delta: 0.04, label: '8개' },
-  ],
-};
+  unit: 'Lv',
+  tierCount: 1,
+  steps: [1, 2, 3, 4, 5].map(lv => ({
+    id: `bonus-artifact-${a.id}-${lv}`,
+    threshold: lv,
+    delta: 0.005,
+    label: `Lv${lv}`,
+  })),
+}));
 
-/** 누적 보너스 업적 계열 23개(최고 레벨 유물 4단계 포함 총 26종) */
+/** 누적 보너스 업적 계열 37개(전역 11 + 지역 18 + 유물 8 = 37종) */
 export const CUMULATIVE_BONUS_SERIES: readonly CumulativeBonusSeries[] = [
   ...GLOBAL_BONUS_SERIES,
   ...ZONE_BONUS_SERIES,
-  MAX_ARTIFACT_BONUS_SERIES,
+  ...ARTIFACT_BONUS_SERIES,
 ];
 
-/** 누적 보너스 업적 총 수 (26) */
+/** 누적 보너스 업적 총 수 (37) */
 export const CUMULATIVE_BONUS_COUNT = CUMULATIVE_BONUS_SERIES.reduce((sum, s) => sum + s.tierCount, 0);
 
 // ── 4. 폐지된 옛 업적 id (재사용·수령·노출 금지) ──
@@ -845,7 +964,7 @@ export const ABOLISHED_ACHIEVEMENT_IDS: ReadonlySet<string> = new Set([
   'big-200',
 ]);
 
-// ── 5. 수령형 업적 카탈로그 (진행 30종 + 치장 41종 = 71종) ──
+// ── 5. 수령형 업적 카탈로그 (진행 30종 + 치장 52종 = 82종) ──
 
 export const ACHIEVEMENT_RULES: readonly AchievementRule[] = [
   ...SPOT_PROGRESS_RULES,

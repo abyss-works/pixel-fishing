@@ -78,24 +78,26 @@ export function activePotionsOf(
   return active;
 }
 
-/** 특정 게임 날짜에 활성인 물약들이 대상에 더하는 운 배율 보너스 합계 */
-export function potionLuckBonusOf(
+/** 특정 게임 날짜에 활성인 비약들이 대상에 적용하는 독립 곱연산 배수 */
+export function potionLuckMultOf(
   potions: ActivePotions | undefined,
   target: FortuneTarget,
   day: string,
 ): number {
-  if (!potions) return 0;
-  let sum = 0;
+  if (!potions) return 1;
+  let mult = 1;
   for (const [id, activeDay] of Object.entries(potions)) {
     if (activeDay !== day) continue;
     const bonus = potionById(id)?.effects.luck?.[target];
-    if (typeof bonus === 'number' && Number.isFinite(bonus) && bonus > 0) sum += bonus;
+    if (typeof bonus === 'number' && Number.isFinite(bonus) && bonus > 0) {
+      mult *= 1 + bonus;
+    }
   }
-  return Math.round(sum * 1e9) / 1e9;
+  return Math.round(mult * 1e9) / 1e9;
 }
 
 /**
- * 대상에 걸리는 운 배율 — 일일 운세와 오늘 활성인 물약 보너스를 합해 1 + 합계를 돌려준다.
+ * 대상에 걸리는 최종 행운 배수 — 일일 운세 배수와 오늘 활성인 비약 배수를 독립 곱연산해 돌려준다.
  * 판정에서 다른 보너스를 다 적용한 마지막 곱이다.
  */
 export function luckMultOf(
@@ -104,9 +106,9 @@ export function luckMultOf(
   potions?: ActivePotions,
   day?: string,
 ): number {
-  const fortuneBonus = fortune !== null && FORTUNE_TARGET_OF[fortune.kind] === target ? fortune.index / 100 : 0;
-  const potionBonus = potions && day ? potionLuckBonusOf(potions, target, day) : 0;
-  return Math.round((1 + fortuneBonus + potionBonus) * 1e9) / 1e9;
+  const fortuneMult = fortune !== null && FORTUNE_TARGET_OF[fortune.kind] === target ? 1 + fortune.index / 100 : 1;
+  const potionMult = potions && day ? potionLuckMultOf(potions, target, day) : 1;
+  return Math.round(fortuneMult * potionMult * 1e9) / 1e9;
 }
 
 /** 상태와 현재 시각으로 대상에 걸리는 총 운 배율(일일 운세 + 활성 물약)을 구한다 */

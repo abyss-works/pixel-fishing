@@ -231,6 +231,8 @@ export interface DrawOptions {
   weightEffects?: Partial<Record<RarityId, number>>;
   /** 운 배율 — 희귀 이상 등급 가중치에 곱하는 최종 배수(물고기 운). 다른 보너스를 다 적용한 마지막 곱이다 */
   rarityLuck?: number;
+  /** 밤 어종 개체 가중치 보너스 합 — NIGHT_FISH_WEIGHT × nightDepth × (1 + 합) */
+  nightWeightBonus?: number;
 }
 
 /** 등급 가중치 효과를 더한 옵션 — 같은 등급의 효과는 합쳐진다. 효과를 거는 유일한 길이다 */
@@ -398,11 +400,12 @@ function rarityDrawWeights(pool: Fish[], spotId: SpotId, o: DrawOptions): [Rarit
 }
 
 /** 어종 단계의 가중치 — 다이얼(fishWeights)이 없으면 어종 데이터의 개체 가중치.
- *  기본은 1이고 밤 어종은 NIGHT_FISH_WEIGHT × nightDepth(미지정 시 1, 0~1 클램프) */
+ *  기본은 1이고 밤 어종은 NIGHT_FISH_WEIGHT × nightDepth × (1 + nightWeightBonus)(미지정 시 1, 0~1 클램프) */
 export const fishDrawWeight = (f: Fish, o: DrawOptions): number => {
   const raw = o.nightDepth ?? 1;
   const depth = Number.isFinite(raw) ? Math.max(0, Math.min(1, raw)) : 1;
-  return o.fishWeights?.[f.id] ?? f.weight ?? (f.night ? NIGHT_FISH_WEIGHT * depth : 1);
+  const nightScale = Math.max(0, 1 + (o.nightWeightBonus ?? 0));
+  return o.fishWeights?.[f.id] ?? f.weight ?? (f.night ? NIGHT_FISH_WEIGHT * depth * nightScale : 1);
 };
 
 // 통상 추첨 — 등급을 가중치로 뽑고(rng 1회), 그 등급의 어종을 가중치로 뽑는다(rng 1회).
@@ -596,26 +599,17 @@ export function variantShare(weights: Record<FormId, number> = MUTATION_WEIGHTS)
   return weights.variant / (weights.variant + weights.normal);
 }
 
-/**
- * 돌연변이 확률에 퍼센트포인트를 더한 폼 가중치(길드 돌연변이 보너스). 확률은 1을 넘지 않는다.
- * 가중치를 곱하지 않고 최종 확률에 더한다 — 유물·해역이 정한 확률 위에 그대로 얹힌다. 더할 것이 없으면 그대로 돌려준다.
- */
-export function withVariantPoints(weights: Record<FormId, number>, points: number): Record<FormId, number> {
-  if (points <= 0) return weights;
-  const variant = Math.min(1, variantShare(weights) + points);
-  return { variant, normal: 1 - variant };
-}
-
-/** 폼 가중치 — 보너스 효과(유물 × 유물 배율 + 요리 슬롯 + 업적 누계의 합) → 해역 오버라이드 → 전역 기본 순. 리듀서와 서버 fast path가 같은 함수를 쓴다.
- *  slotBoost는 슬롯의 돌연변이 가중 증가율(slotEffects)이고 achievementBoost는 업적 누적(전역 + 구역) 증가율이다. 보너스 합이 0보다 크면 해역 오버라이드를 쓰지 않는다 */
+/** 폼 가중치 — 보너스 효과(유물 × 유물 배율 + 요리 슬롯 + 업적 누계 + 길드 돌연변이의 합) → 해역 오버라이드 → 전역 기본 순. 리듀서와 서버 fast path가 같은 함수를 쓴다.
+ *  slotBoost는 슬롯의 돌연변이 가중 증가율(slotEffects), achievementBoost는 업적 누적 증가율, guildMutation은 길드 돌연변이 보너스다. 보너스 합이 0보다 크면 해역 오버라이드를 쓰지 않는다 */
 export function mutationWeightsOf(
   state: ArtifactHolder,
   spot: SpotId,
   slotBoost = 0,
   achievementBoost = 0,
   relicScale = 1,
+  guildMutation = 0,
 ): Record<FormId, number> {
-  const boost = Math.round((variantBoostOf(state) * relicScale + slotBoost + achievementBoost) * 1e9) / 1e9;
+  const boost = Math.round((variantBoostOf(state) * relicScale + slotBoost + achievementBoost + guildMutation) * 1e9) / 1e9;
   if (boost > 0) return { variant: MUTATION_WEIGHTS.variant * (1 + boost), normal: MUTATION_WEIGHTS.normal };
   return { ...MUTATION_WEIGHTS, ...spotById(spot)?.mutationWeight };
 }
@@ -1249,7 +1243,7 @@ function safeAchievements(raw: unknown): AchievementMap {
   return out;
 }
 
-/** 업적 카운터 위생 — 기본 5종과 수동 집계(manual.*) 키의 유한 비음수 정수만 보존한다 */
+/** 업적 카운터 위생 — 기본 7종과 수동 집계(manual.*) 키의 유한 비음수 정수만 보존한다 */
 function safeAchievementCounters(raw: unknown): AchievementCounters {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return {};
   const src = raw as Record<string, unknown>;

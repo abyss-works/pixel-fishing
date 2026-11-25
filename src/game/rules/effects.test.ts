@@ -15,11 +15,12 @@ import {
   bagCapacity,
   newState,
   priceOfInstance,
+  rodStats,
   sellSelected,
 } from './logic';
 import type { FishInstance, GameState } from './logic';
 import { WALK_SPEED } from './balance';
-import { NIGHT_SPEED_FACTOR, effectiveBite, moveSpeed } from './stats';
+import { NIGHT_SPEED_FACTOR } from './stats';
 
 const NOW = '2026-11-21T05:00:00.000Z';
 const FUTURE = '2026-11-21T06:00:00.000Z';
@@ -53,20 +54,21 @@ const sampleFish = (uid: string, fishId = 'crucian', form: 'normal' | 'variant' 
 describe('NO_ACHIEVEMENT_BONUSES 및 createPlayerContext', () => {
   it('NO_ACHIEVEMENT_BONUSES는 모든 값이 0이고 동결돼 있다', () => {
     expect(Object.isFrozen(NO_ACHIEVEMENT_BONUSES)).toBe(true);
-    expect(Object.isFrozen(NO_ACHIEVEMENT_BONUSES.zoneLegendary)).toBe(true);
-    expect(Object.isFrozen(NO_ACHIEVEMENT_BONUSES.zoneMutation)).toBe(true);
     expect(NO_ACHIEVEMENT_BONUSES).toEqual({
       biteWaitCut: 0,
       mutationWeight: 0,
       rareWeight: 0,
       epicWeight: 0,
       legendaryWeight: 0,
+      nightWeight: 0,
+      bagCap: 0,
+      energyYield: 0,
+      baitAmplify: 0,
+      lunchAmplify: 0,
       sellBonus: 0,
       namedWeight: 0,
       moveSpeed: 0,
       artifactBoost: 0,
-      zoneLegendary: {},
-      zoneMutation: {},
     });
   });
 
@@ -76,8 +78,8 @@ describe('NO_ACHIEVEMENT_BONUSES 및 createPlayerContext', () => {
     const achievements: AchievementBonuses = {
       ...NO_ACHIEVEMENT_BONUSES,
       moveSpeed: 0.05,
-      zoneLegendary: { pacific: 0.1 },
-      zoneMutation: { seasia: 0.05 },
+      bagCap: 0.1,
+      nightWeight: 0.075,
     };
     const ctx = createPlayerContext({ state, guild, now: NOW, achievements });
     expect(ctx.state).toBe(state);
@@ -85,8 +87,7 @@ describe('NO_ACHIEVEMENT_BONUSES 및 createPlayerContext', () => {
     expect(ctx.guild).not.toBe(guild);
     expect(ctx.now).toBe(NOW);
     expect(ctx.achievements).toEqual(achievements);
-    expect(ctx.achievements.zoneLegendary).not.toBe(achievements.zoneLegendary);
-    expect(ctx.achievements.zoneMutation).not.toBe(achievements.zoneMutation);
+    expect(ctx.achievements).not.toBe(achievements);
   });
 });
 
@@ -182,39 +183,44 @@ describe('bagCapacityOf', () => {
       target.effects = origEffects;
     }
   });
+
+  it('업적 누적 가방 용량(bagCap)이 길드·유물과 합산되고 출처 mod를 남긴다', () => {
+    const ctx = makeCtx({
+      state: { boat: 8 },
+      guild: guildEffectsOf(2, { bag: 1 }), // +4%
+      achievements: { bagCap: 0.1 }, // +10%
+    });
+    const stat = bagCapacityOf(ctx, 100);
+    expect(stat.base).toBe(BOATS[7].bagCap);
+    expect(stat.mods.map(m => m.id)).toEqual(['guild-bag', 'achievement-bagCap']);
+    expect(stat.mods[1].source).toEqual({ kind: 'achievement', id: 'bagCap' });
+    expect(stat.value).toBe(4000 + Math.round(4000 * 0.14));
+    expect(stat.mods.reduce((s, m) => s + m.delta, stat.base)).toBe(stat.value);
+  });
 });
 
 describe('moveSpeedOf', () => {
-  it('효과가 0이면 낮·밤·도보·항해 모두 기존 moveSpeed와 완전히 일치한다', () => {
-    for (const boat of [0, 1, 3]) {
-      for (const movement of ['walk', 'sail'] as const) {
-        for (const night of [false, true]) {
-          const state = makeState({ boat, artifacts: ['wreck-compass'] });
-          const ctx = createPlayerContext({
-            state,
-            guild: NO_GUILD_EFFECTS,
-            now: NOW,
-            achievements: NO_ACHIEVEMENT_BONUSES,
-          });
-          const actual = moveSpeedOf(ctx, movement, night);
-          const legacy = moveSpeed(state, movement, night);
-          expect(actual.base).toBe(legacy.base);
-          expect(actual.value).toBeCloseTo(legacy.value, 10);
-          expect(actual.mods.map(m => ({ id: m.id, delta: m.delta }))).toEqual(
-            legacy.mods.map(m => ({ id: m.id, delta: m.delta })),
-          );
-        }
-      }
-    }
+  it('보너스가 없으면 낮·밤·도보·항해 기본값과 밤 감속 배수(×0.85)를 반영한다', () => {
+    expect(moveSpeedOf(makeCtx({ state: { boat: 3 } }), 'walk', false).value).toBe(WALK_SPEED);
+    expect(moveSpeedOf(makeCtx({ state: { boat: 0 } }), 'sail', false).value).toBe(BOATS[0].speed);
+    expect(moveSpeedOf(makeCtx({ state: { boat: 3 } }), 'sail', false).value).toBe(BOATS[2].speed);
+
+    const nightSail = moveSpeedOf(makeCtx({ state: { boat: 3 } }), 'sail', true);
+    expect(nightSail.mods.map(m => m.id)).toEqual(['night']);
+    expect(nightSail.value).toBeCloseTo(BOATS[2].speed * NIGHT_SPEED_FACTOR, 10);
+
+    const nightWalk = moveSpeedOf(makeCtx({ state: { boat: 3 } }), 'walk', true);
+    expect(nightWalk.value).toBeCloseTo(WALK_SPEED * NIGHT_SPEED_FACTOR, 10);
   });
 
-  it('밤 감속, 유물(artifactBoost 포함), 업적 이동 속도가 반영되고 0이면 mod를 추가하지 않는다', () => {
+  it('밤 감속(NIGHT_SPEED_FACTOR)은 유물·업적 보너스 합산(preNight)에 곱연산으로 걸린다', () => {
     const ctx = makeCtx({
       state: { boat: 1, artifacts: ['wreck-compass'] }, // base 110, sail +10%
-      achievements: { moveSpeed: 0.05, artifactBoost: 0.2 }, // relic +12%, ach +5%
+      achievements: { moveSpeed: 0.05, artifactBoost: 0.2 }, // relic +12%, ach +5% → preNight = base * 1.17
     });
     const st = moveSpeedOf(ctx, 'sail', true);
     const base = BOATS[0].speed;
+    const preNight = base * (1 + 0.12 + 0.05);
     expect(st.base).toBe(base);
     expect(st.mods).toHaveLength(3);
     expect(st.mods[0]).toMatchObject({
@@ -231,8 +237,8 @@ describe('moveSpeedOf', () => {
       id: 'night',
       source: { kind: 'rule', id: 'night' },
     });
-    expect(st.mods[2].delta).toBeCloseTo(base * (NIGHT_SPEED_FACTOR - 1), 10);
-    expect(st.value).toBeCloseTo(base * (1 + 0.12 + 0.05 + (NIGHT_SPEED_FACTOR - 1)), 10);
+    expect(st.mods[2].delta).toBeCloseTo(preNight * (NIGHT_SPEED_FACTOR - 1), 10);
+    expect(st.value).toBeCloseTo(preNight * NIGHT_SPEED_FACTOR, 10);
 
     // 도보에서는 항해 유물 미적용, 업적 이동 속도는 적용
     const walk = moveSpeedOf(ctx, 'walk', false);
@@ -243,29 +249,23 @@ describe('moveSpeedOf', () => {
 });
 
 describe('biteWaitOf', () => {
-  it('효과가 0이면 manual은 기존 effectiveBite(요리 없음)와 완전히 일치한다', () => {
-    const state = makeState({ rod: 5, artifacts: ['outer-isle-sinker'] });
-    const ctx = createPlayerContext({
-      state,
-      guild: NO_GUILD_EFFECTS,
-      now: NOW,
-      achievements: NO_ACHIEVEMENT_BONUSES,
-    });
-    const actual = biteWaitOf(ctx, 'barrierreef', 'manual');
-    const legacy = effectiveBite(state, 'barrierreef');
-    expect(actual.min.base).toBe(legacy.min.base);
-    expect(actual.min.value).toBeCloseTo(legacy.min.value, 10);
-    expect(actual.max.base).toBe(legacy.max.base);
-    expect(actual.max.value).toBeCloseTo(legacy.max.value, 10);
+  it('보너스가 없으면 낚싯대 입질 대기와 파워 부족 가산을 그대로 반환한다', () => {
+    const st = rodStats(5);
+    const actual = biteWaitOf(makeCtx({ state: { rod: 5 } }), 'pond', 'manual');
+    expect(actual.min.base).toBe(st.biteMin);
+    expect(actual.min.value).toBeCloseTo(st.biteMin, 10);
+    expect(actual.max.base).toBe(st.biteMax);
+    expect(actual.max.value).toBeCloseTo(st.biteMax, 10);
   });
 
-  it('도시락 슬롯은 idle일 때만 반영되고 manual과 만료 슬롯에서는 반영되지 않는다', () => {
+  it('도시락 슬롯은 idle일 때만 반영되고 lunchAmplify 증폭 배수가 도시락 기본 효과에 곱해진다', () => {
     const activeCtx = makeCtx({
       state: {
         rod: 10,
         slots: { lunch: { id: 'cook-lunch-bite', endsAt: FUTURE }, bait: null },
       },
       now: NOW,
+      achievements: { lunchAmplify: 0.15 }, // 기본 -10% × 1.15 = -11.5%
     });
     const idle = biteWaitOf(activeCtx, 'pond', 'idle');
     const manual = biteWaitOf(activeCtx, 'pond', 'manual');
@@ -274,7 +274,7 @@ describe('biteWaitOf', () => {
       id: 'cook-lunch',
       source: { kind: 'slot', recipe: 'cook-lunch-bite' },
     });
-    expect(idle.min.value).toBeCloseTo(idle.min.base * 0.9, 10);
+    expect(idle.min.value).toBeCloseTo(idle.min.base * (1 - 0.1 * 1.15), 10);
     expect(manual.min.mods).toEqual([]);
     expect(manual.min.value).toBeCloseTo(manual.min.base, 10);
 
@@ -284,6 +284,7 @@ describe('biteWaitOf', () => {
         slots: { lunch: { id: 'cook-lunch-bite', endsAt: PAST }, bait: null },
       },
       now: NOW,
+      achievements: { lunchAmplify: 0.15 },
     });
     expect(biteWaitOf(expiredCtx, 'pond', 'idle').min.mods).toEqual([]);
   });
@@ -435,32 +436,32 @@ describe('saleProceedsOf', () => {
     expect(tinyRes).toEqual({ base: tinyPrice, mods: [], value: tinyPrice });
   });
 
-  it('활성 물약이 판매 예상 금액 운 배율에 합산되고 출처 mod를 남긴다', () => {
+  it('활성 비약이 판매 예상 금액에 운세와 독립 곱연산되고 출처 mod를 남긴다', () => {
     const bag = Array.from({ length: 10 }, (_, i) => sampleFish(`p${i}`, 'crucian', 'variant'));
     const baseSum = bag.reduce((s, i) => s + priceOfInstance(i), 0);
     const potions = { 'luck-small': '2026-11-21' };
 
-    // 물약만 활성
+    // 비약만 활성
     const potionOnly = saleProceedsOf(makeCtx({ state: { bag, potions } }), bag);
     expect(potionOnly.value).toBe(Math.round(baseSum * 1.05));
     expect(potionOnly.mods).toEqual([
       {
         id: 'potion-luck-small',
-        label: '작은 행운 물약',
+        label: '작은 바다 영약',
         delta: potionOnly.value - baseSum,
         source: { kind: 'potion', id: 'luck-small' },
       },
     ]);
 
-    // 재물운(+5%p) + 작은 행운 물약(+5%p) = ×1.10
+    // 재물운(×1.05) × 작은 바다 영약(×1.05) = ×1.1025
     const combined = saleProceedsOf(makeCtx({
       state: { bag, potions, fortune: { day: '2026-11-21', kind: 'gold', index: 5 } },
     }), bag);
-    expect(combined.value).toBe(Math.round(baseSum * 1.1));
+    expect(combined.value).toBe(Math.round(baseSum * 1.1025));
     expect(combined.mods.map(m => m.id)).toEqual(['fortune-sell', 'potion-luck-small']);
     expect(combined.mods.reduce((s, m) => s + m.delta, combined.base)).toBe(combined.value);
 
-    // KST 04:00 경계 이후 만료된 물약은 무시한다
+    // KST 04:00 경계 이후 만료된 비약은 무시한다
     const expired = saleProceedsOf(makeCtx({
       state: { bag, potions },
       now: '2026-11-21T19:00:00.000Z',

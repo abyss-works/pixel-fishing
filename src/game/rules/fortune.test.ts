@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest';
 import { applyAction } from './actions';
 import type { ActionDeps } from './actions';
 import {
-  activePotionsOf, ensureFortune, fortuneOf, luckMultOf, potionLuckBonusOf, rollFortune, safeFortune, totalLuckMultOf,
+  activePotionsOf, ensureFortune, fortuneOf, luckMultOf, potionLuckMultOf, rollFortune, safeFortune, totalLuckMultOf,
 } from './fortune';
 import type { DailyFortune } from './fortune';
 import {
@@ -126,24 +126,24 @@ describe('luckMultOf — 대상별 운 배율', () => {
     expect(luckMultOf(null, 'named')).toBe(1);
   });
 
-  it('활성 물약이 오늘 날짜면 일일 운세와 보너스를 합산하고 지난 날짜는 무시한다', () => {
+  it('활성 비약이 오늘 날짜면 일일 운세와 독립 곱연산하고 지난 날짜는 무시한다', () => {
     const potions = { 'luck-small': DAY };
     const stalePotions = { 'luck-small': '2026-08-21' };
     expect(activePotionsOf(potions, NOW).map(p => p.id)).toEqual(['luck-small']);
     expect(activePotionsOf(stalePotions, NOW)).toEqual([]);
-    expect(potionLuckBonusOf(potions, 'sell', DAY)).toBeCloseTo(0.05, 9);
-    expect(potionLuckBonusOf(stalePotions, 'sell', DAY)).toBe(0);
+    expect(potionLuckMultOf(potions, 'sell', DAY)).toBeCloseTo(1.05, 9);
+    expect(potionLuckMultOf(stalePotions, 'sell', DAY)).toBe(1);
 
-    // 물약만 활성
+    // 비약만 활성
     expect(luckMultOf(null, 'rarity', potions, DAY)).toBeCloseTo(1.05, 9);
     expect(luckMultOf(null, 'sell', potions, DAY)).toBeCloseTo(1.05, 9);
     expect(luckMultOf(null, 'named', potions, DAY)).toBeCloseTo(1.05, 9);
 
-    // 일일 운세 + 물약 합산 (재물운 +5%p + 작은 행운 물약 +5%p = ×1.10)
+    // 일일 운세 × 비약 독립 곱연산 (재물운 ×1.05 × 작은 바다 영약 ×1.05 = ×1.1025)
     const goldFortune: DailyFortune = { day: DAY, kind: 'gold', index: 5 };
-    expect(luckMultOf(goldFortune, 'sell', potions, DAY)).toBeCloseTo(1.10, 9);
+    expect(luckMultOf(goldFortune, 'sell', potions, DAY)).toBeCloseTo(1.1025, 9);
     expect(luckMultOf(goldFortune, 'rarity', potions, DAY)).toBeCloseTo(1.05, 9);
-    expect(totalLuckMultOf(seed({ fortune: goldFortune, potions }), NOW, 'sell')).toBeCloseTo(1.10, 9);
+    expect(totalLuckMultOf(seed({ fortune: goldFortune, potions }), NOW, 'sell')).toBeCloseTo(1.1025, 9);
     expect(totalLuckMultOf(seed({ fortune: goldFortune, potions }), NEXT_NOW, 'sell')).toBe(1);
   });
 });
@@ -301,20 +301,20 @@ describe('운 배율 적용 — 네임드 조우(그림자 운)', () => {
     expect(lucky.events.find(e => e.type === 'ticket')?.payload).toEqual({ questId: 'pacific-named-megalodon' });
   });
 
-  it('applyAction — 활성 물약이 sell·catch(등급·네임드) 운 배율에 합산된다', () => {
+  it('applyAction — 활성 비약이 sell·catch(등급·네임드) 운세와 독립 곱연산으로 적용된다', () => {
     const bag = [mkInst('a', 'carp')];
     const potions = { 'luck-small': DAY };
 
-    // sell: 재물운 3%p + 작은 행운 물약 5%p = 1.08
+    // sell: 재물운 ×1.03 × 작은 바다 영약 ×1.05 = ×1.0815
     const sold = applyAction(
       seed({ bag, fortune: { day: DAY, kind: 'gold', index: 3 }, potions }),
       { type: 'sell', uids: ['a'] },
       deps(),
     );
     if (!sold.ok) throw new Error(sold.error);
-    expect(sold.state.gold).toBe(Math.round(priceOfInstance(bag[0]) * 1.08));
+    expect(sold.state.gold).toBe(Math.round(priceOfInstance(bag[0]) * 1.0815));
 
-    // catch rarity: 그림자 운(등급 무관) + 작은 행운 물약 5%p = 1.05
+    // catch rarity: 그림자 운(등급 무관) × 작은 바다 영약 1.05 = 1.05
     const commonShare = (luck?: number) =>
       fishDrawShares('pond', luck === undefined ? {} : { rarityLuck: luck })
         .filter(r => r.fish.rarity === 'common').reduce((s, r) => s + r.share, 0);
@@ -327,7 +327,17 @@ describe('운 배율 적용 — 네임드 조우(그림자 운)', () => {
     if (!caught.ok) throw new Error(caught.error);
     expect(FISH.find(f => f.id === caught.state.bag.at(-1)!.fishId)!.rarity).not.toBe('common');
 
-    // catch named: 돈 운(네임드 무관) + 작은 행운 물약 5%p = 1.05
+    // catch rarity: 풍어운 1.05 × 작은 바다 영약 1.05 = 1.1025 (합산 1.10 경계를 넘음)
+    const rRarityStack = (commonShare(1.10) + commonShare(1.1025)) / 2;
+    const stackedCaught = applyAction(
+      seed({ fortune: { day: DAY, kind: 'fish', index: 5 }, potions }),
+      { type: 'catch', spot: 'pond', judgment: 'normal' },
+      deps({ rng: () => rRarityStack }),
+    );
+    if (!stackedCaught.ok) throw new Error(stackedCaught.error);
+    expect(FISH.find(f => f.id === stackedCaught.state.bag.at(-1)!.fishId)!.rarity).not.toBe('common');
+
+    // catch named: 돈 운(네임드 무관) × 작은 바다 영약 1.05 = 1.05
     const w = namedWeightsOf('sea');
     const rNamed = (w.named / (w.named + w.none) + w.named * 1.05 / (w.named * 1.05 + w.none)) / 2;
     const encountered = applyAction(

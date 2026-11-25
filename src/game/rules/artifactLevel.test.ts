@@ -4,7 +4,8 @@ import { applyAction } from './actions';
 import type { ActionDeps } from './actions';
 import { newState, mutationWeightsOf, variantShare, migrate } from './logic';
 import type { GameState } from './logic';
-import { moveSpeed, effectiveBite } from './stats';
+import { biteWaitOf, createPlayerContext, moveSpeedOf, NO_ACHIEVEMENT_BONUSES } from './effects';
+import { NO_GUILD_EFFECTS } from './guild';
 import { canAcceptQuest, canLevelUpArtifact } from './rules';
 import type { BountyCtx } from './rules';
 import {
@@ -115,10 +116,13 @@ describe('레벨이 효과 함수에 반영된다', () => {
     expect(variantShare(lv5)).toBeCloseTo(1 / 3, 10);
   });
 
-  it('moveSpeed: 나침반 Lv5는 항해 +20%', () => {
-    const lv1 = moveSpeed(seed({ boat: 1, artifacts: ['wreck-compass'] }), 'sail').value;
-    const lv5 = moveSpeed(seed({ boat: 1, artifacts: ['wreck-compass'], artifactLevels: { 'wreck-compass': 5 } }), 'sail').value;
-    const none = moveSpeed(seed({ boat: 1 }), 'sail').value;
+  it('moveSpeedOf: 나침반 Lv5는 항해 +20%', () => {
+    const ctxOf = (state: GameState) => createPlayerContext({
+      state, guild: NO_GUILD_EFFECTS, now: '2026-08-22T03:00:00.000Z', achievements: NO_ACHIEVEMENT_BONUSES,
+    });
+    const lv1 = moveSpeedOf(ctxOf(seed({ boat: 1, artifacts: ['wreck-compass'] })), 'sail', false).value;
+    const lv5 = moveSpeedOf(ctxOf(seed({ boat: 1, artifacts: ['wreck-compass'], artifactLevels: { 'wreck-compass': 5 } })), 'sail', false).value;
+    const none = moveSpeedOf(ctxOf(seed({ boat: 1 })), 'sail', false).value;
     expect(lv1).toBeCloseTo(none * 1.1, 8);
     expect(lv5).toBeCloseTo(none * 1.2, 8);
   });
@@ -310,8 +314,11 @@ describe('바깥섬의 봉돌, 입질 대기', () => {
   });
 
   it('유효 입질 대기는 최소와 최대 모두 감소율만큼 줄고 기여 내역에 유물이 남는다', () => {
-    const plain = effectiveBite(seed({ rod: 29 }), 'sthelena');
-    const withRelic = effectiveBite(seed({ rod: 29, artifacts: ['outer-isle-sinker'] }), 'sthelena');
+    const ctxOf = (state: GameState) => createPlayerContext({
+      state, guild: NO_GUILD_EFFECTS, now: '2026-08-22T03:00:00.000Z', achievements: NO_ACHIEVEMENT_BONUSES,
+    });
+    const plain = biteWaitOf(ctxOf(seed({ rod: 29 })), 'sthelena', 'manual');
+    const withRelic = biteWaitOf(ctxOf(seed({ rod: 29, artifacts: ['outer-isle-sinker'] })), 'sthelena', 'manual');
     expect(withRelic.min.value).toBeCloseTo(plain.min.value * 0.9, 10);
     expect(withRelic.max.value).toBeCloseTo(plain.max.value * 0.9, 10);
     expect(withRelic.min.mods.some(m => m.id === 'relic-outer-isle-sinker' && m.label === '바깥섬의 봉돌')).toBe(true);
@@ -319,8 +326,11 @@ describe('바깥섬의 봉돌, 입질 대기', () => {
   });
 
   it('파워 미달의 추가 대기에도 감소율이 걸린다', () => {
-    const plain = effectiveBite(seed({ rod: 1 }), 'sthelena');
-    const withRelic = effectiveBite(seed({ rod: 1, artifacts: ['outer-isle-sinker'] }), 'sthelena');
+    const ctxOf = (state: GameState) => createPlayerContext({
+      state, guild: NO_GUILD_EFFECTS, now: '2026-08-22T03:00:00.000Z', achievements: NO_ACHIEVEMENT_BONUSES,
+    });
+    const plain = biteWaitOf(ctxOf(seed({ rod: 1 })), 'sthelena', 'manual');
+    const withRelic = biteWaitOf(ctxOf(seed({ rod: 1, artifacts: ['outer-isle-sinker'] })), 'sthelena', 'manual');
     expect(plain.min.mods.some(m => m.id === 'power')).toBe(true);
     expect(withRelic.min.value).toBeCloseTo(plain.min.value * 0.9, 10);
   });
