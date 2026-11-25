@@ -22,25 +22,31 @@ const gw = vi.hoisted(() => ({
   dispatchAchievements: {} as Record<string, string>,
   loadFortune: null as null | { day: string; kind: 'fish' | 'gold' | 'shadow'; index: 3 | 5 },
   dispatchFortune: null as null | { day: string; kind: 'fish' | 'gold' | 'shadow'; index: 3 | 5 },
+  visited: [] as ('village' | 'world')[],
   devTools: false,
   account: { status: 'account', email: 'u@example.com' } as { status: 'account'; email: string } | { status: 'guest' } | { status: 'failed' },
 }));
 
 vi.mock('../../../platform/api', async () => {
   const { when } = await import('../../../shared/lib/when');
-  const { newState: fresh } = await import('../../../game/rules/logic');
-  const ok = (action: GameAction) => ({
-    status: 'ok' as const,
-    state: { ...fresh(), achievements: gw.dispatchAchievements, fortune: gw.dispatchFortune },
-    result: action.type === 'boot' ? { type: 'boot', schoolDay: '2026-11-05' } : { type: action.type },
-  });
+  const { newState: fresh, travel } = await import('../../../game/rules/logic');
+  const ok = (action: GameAction) => {
+    if (action.type === 'travel') {
+      gw.visited = travel({ ...fresh(), visited: gw.visited }, action.to).visited;
+    }
+    return {
+      status: 'ok' as const,
+      state: { ...fresh(), achievements: gw.dispatchAchievements, fortune: gw.dispatchFortune, visited: gw.visited },
+      result: action.type === 'boot' ? { type: 'boot', schoolDay: '2026-11-05' } : { type: action.type },
+    };
+  };
   return {
     when,
     api: {
       auth: { isConfigured: true, ensureSession: async () => 'uid-1', currentAccount: async () => gw.account },
       storage: { clearLegacySave: () => { gw.actions.push('clearLegacy'); }, loadLegacy: () => ({ game: fresh(), notice: null, legacy: gw.legacy }), saveCode: () => '' },
       createGameGateway: () => ({
-        load: async () => { gw.loads++; if (gw.loadErrors.length) throw gw.loadErrors.shift(); if (gw.loadError) throw gw.loadError; return gw.cloudEmpty ? null : { ...fresh(), gold: gw.loadGold, dex: gw.loadDex as ReturnType<typeof fresh>['dex'], achievements: gw.loadAchievements, fortune: gw.loadFortune }; },
+        load: async () => { gw.loads++; if (gw.loadErrors.length) throw gw.loadErrors.shift(); if (gw.loadError) throw gw.loadError; return gw.cloudEmpty ? null : { ...fresh(), gold: gw.loadGold, dex: gw.loadDex as ReturnType<typeof fresh>['dex'], achievements: gw.loadAchievements, fortune: gw.loadFortune, visited: gw.visited }; },
         getProfile: async () => ({ nickname: 'nick', devTools: gw.devTools }),
         dispatch: (action: GameAction) => {
           gw.actions.push(action.type);
@@ -58,6 +64,8 @@ vi.mock('../../../platform/observability', () => ({ reportIssue: () => {} }));
 import { useGame } from './useGame';
 import { clearFailureNotice, currentFailureNotice } from './failureNotice';
 import { readFortuneModal, resetFortuneModalSession } from '../../fortune/service/fortuneModal';
+import { registerNoticeSink } from '../../display/model/toastPolicy';
+import type { NoticeSink, SystemNoticeInput } from '../../display/model/toastPolicy';
 
 function setup(setToast: (m: string, tone?: 'info' | 'gold' | 'warn') => void = () => {}, reactStrictMode = false) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -70,6 +78,7 @@ afterEach(() => {
   cleanup(); clearFailureNotice(); resetFortuneModalSession(); gw.bootResolve = null; gw.actions = []; gw.loads = 0; gw.loadGold = 0;
   gw.legacy = false; gw.cloudEmpty = false; gw.importError = null; gw.loadError = null; gw.loadErrors = []; gw.bootErrors = []; gw.loadDex = {}; gw.devTools = false;
   gw.loadAchievements = {}; gw.dispatchAchievements = {}; gw.loadFortune = null; gw.dispatchFortune = null;
+  gw.visited = [];
   gw.account = { status: 'account', email: 'u@example.com' };
 });
 
@@ -565,5 +574,34 @@ describe('오늘의 운세 접속 모달 큐잉', () => {
     gw.dispatchFortune = today;
     await act(async () => { await hook.result.current.dispatch({ type: 'sell', uids: [] }); });
     expect(readFortuneModal({ ready: true, suspended: false })).toEqual({ fortune: null, pending: false });
+  });
+});
+
+describe('최초 지역 진입 알림', () => {
+  it('마을(village) 첫 진입 시에는 알림을 띄우지 않고, 대양(world) 첫 출항 시에만 1회 안내하며 visited 기록은 모두 유지한다', async () => {
+    const notices: SystemNoticeInput[] = [];
+    const sink: NoticeSink = registerNoticeSink(vi.fn(), input => { notices.push(input); });
+    const hook = setup(sink);
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+    notices.length = 0;
+
+    await act(async () => { await hook.result.current.dispatch({ type: 'travel', to: { kind: 'region', id: 'village' } }); });
+    expect(hook.result.current.game.visited).toEqual(['village']);
+    expect(notices.filter(n => n.kind === 'travel.firstVisit')).toEqual([]);
+
+    await act(async () => { await hook.result.current.dispatch({ type: 'travel', to: { kind: 'region', id: 'world' } }); });
+    expect(hook.result.current.game.visited).toEqual(['village', 'world']);
+    expect(notices.filter(n => n.kind === 'travel.firstVisit')).toEqual([{
+      kind: 'travel.firstVisit',
+      text: '대양으로 처음 출항했어요! 태평양 연안에서 바다 낚시를 시작해 보세요.',
+      toastText: '대양 첫 출항!',
+    }]);
+
+    notices.length = 0;
+    await act(async () => { await hook.result.current.dispatch({ type: 'travel', to: { kind: 'base', id: 'harbor' } }); });
+    await act(async () => { await hook.result.current.dispatch({ type: 'travel', to: { kind: 'region', id: 'world' } }); });
+    expect(hook.result.current.game.visited).toEqual(['village', 'world']);
+    expect(notices.filter(n => n.kind === 'travel.firstVisit')).toEqual([]);
   });
 });

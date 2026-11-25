@@ -6,7 +6,6 @@ import type { GameAction } from '../../../game/rules/actions';
 import type { RejectReason } from '../../../game/rules/rules';
 import { newState, REJECT_TEXT } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
-import { REGION_PACKS } from '../../../game/world';
 import { sendNotice } from '../../display/model/toastPolicy';
 import type { NoticeSink } from '../../display/model/toastPolicy';
 import { fail, subscribeFailure, POLICY, AppError } from '../../../core/errors';
@@ -157,18 +156,13 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
             }
           }
         }
-        // 최초 지역 진입 감지 — travel 액션으로 visited에 새 바다가 추가될 때 1회 알린다
-        if (action.type === 'travel') {
-          for (const id of r.state.visited) {
-            if (!prev.visited.includes(id)) {
-              const name = REGION_PACKS[id]?.info.shortName ?? id;
-              sendNotice(setToast, {
-                kind: 'travel.firstVisit',
-                text: `신규 해역 [${name}]에 처음 들어섰어요!`,
-                toastText: `신규 해역 [${name}] 첫 진입!`,
-              });
-            }
-          }
+        // 최초 대양 출항 감지 — 마을 첫 진입은 알리지 않고, travel 액션으로 visited에 world가 처음 추가될 때만 1회 안내한다
+        if (action.type === 'travel' && r.state.visited.includes('world') && !prev.visited.includes('world')) {
+          sendNotice(setToast, {
+            kind: 'travel.firstVisit',
+            text: '대양으로 처음 출항했어요! 태평양 연안에서 바다 낚시를 시작해 보세요.',
+            toastText: '대양 첫 출항!',
+          });
         }
         // 어군 배치 날짜 — 리듀서(서버 시계, 로컬은 클라 시계)가 정한 값으로 세션을 고정한다
         if (r.result.type === 'boot') setSchoolDay(r.result.schoolDay);
