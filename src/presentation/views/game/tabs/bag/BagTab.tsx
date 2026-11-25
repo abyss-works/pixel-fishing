@@ -37,6 +37,7 @@ import { selectBagArtifacts } from '../../../../../features/inventory/model/sele
 import { ARTIFACTS } from '../../../../../game/content/artifacts';
 import { artifactEffectLines, artifactSystemLines } from '../../../../ui/artifactEffects';
 import Inset from '../../../../ui/Inset';
+import ItemSprite from '../../../../ui/ItemSprite';
 import PressRow from '../../../../ui/PressRow';
 import ArtifactDetail from './ArtifactDetail';
 import ItemSection from './ItemSection';
@@ -102,8 +103,9 @@ function ArtifactSection({ game, dispatch, setToast }: {
             {shown.map(({ artifact: a, owned, zoneName }) => {
               if (!owned) {
                 return (
-                  <div key={a.id} className="flex items-baseline justify-between gap-2 px-2 py-1.5 text-sm text-text-dim bg-bg">
-                    <span className="truncate">{a.name}</span>
+                  <div key={a.id} className="flex items-center gap-2.5 px-2 py-1.5 text-sm text-text-dim bg-bg">
+                    <ItemSprite kind="artifact" id={a.id} preset="list" className="shrink-0 grayscale brightness-75" />
+                    <span className="truncate flex-1 min-w-0">{a.name}</span>
                     <span className="flex items-baseline gap-2 text-xs shrink-0">
                       <span>{zoneName}</span>
                       <RarityText rarity={a.grade} />
@@ -114,20 +116,23 @@ function ArtifactSection({ game, dispatch, setToast }: {
               const { level, hasLevel } = selectArtifactLevel(game, a);
               const { bonus, penalty } = artifactSystemLines(a);
               return (
-                <PressRow key={a.id} onPress={() => setOpenId(a.id)} className="flex flex-col gap-0.5 px-2 py-1.5 text-sm">
-                  <span className="flex items-baseline justify-between gap-2">
-                    <b className="text-gold">{a.name}</b>
-                    <span className="flex items-baseline gap-2 text-xs">
-                      {hasLevel && <span className="pf-accent">{levelText(level)}</span>}
-                      <RarityText rarity={a.grade} />
+                <PressRow key={a.id} onPress={() => setOpenId(a.id)} className="flex items-start gap-2.5 px-2 py-1.5 text-sm">
+                  <ItemSprite kind="artifact" id={a.id} preset="list" className="shrink-0 mt-0.5" />
+                  <span className="flex flex-col gap-0.5 min-w-0 flex-1">
+                    <span className="flex items-baseline justify-between gap-2">
+                      <b className="text-gold">{a.name}</b>
+                      <span className="flex items-baseline gap-2 text-xs shrink-0">
+                        {hasLevel && <span className="pf-accent">{levelText(level)}</span>}
+                        <RarityText rarity={a.grade} />
+                      </span>
                     </span>
+                    {artifactEffectLines(a, level).map(line => (
+                      <span key={line} className="text-accent text-xs">{line}</span>
+                    ))}
+                    {bonus && <span className="text-accent text-xs">{bonus}</span>}
+                    {penalty && <span className="text-danger text-xs">{penalty}</span>}
+                    <span className="text-text-dim italic text-xs">{a.lore}</span>
                   </span>
-                  {artifactEffectLines(a, level).map(line => (
-                    <span key={line} className="text-accent text-xs">{line}</span>
-                  ))}
-                  {bonus && <span className="text-accent text-xs">{bonus}</span>}
-                  {penalty && <span className="text-danger text-xs">{penalty}</span>}
-                  <span className="text-text-dim italic text-xs">{a.lore}</span>
                 </PressRow>
               );
             })}

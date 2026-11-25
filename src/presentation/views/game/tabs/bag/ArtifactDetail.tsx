@@ -11,6 +11,7 @@ import Button from '../../../../ui/Button';
 import CostBox from '../../../../ui/CostBox';
 import CostLine from '../../../../ui/CostLine';
 import Inset from '../../../../ui/Inset';
+import ItemSprite from '../../../../ui/ItemSprite';
 import KeyValueRow from '../../../../ui/KeyValueRow';
 import LoreParagraph from '../../../../ui/LoreParagraph';
 import Modal from '../../../../ui/Modal';
@@ -58,9 +59,12 @@ export default function ArtifactDetail({ artifact, game, dispatch, setToast, onC
   return (
     <Modal layer="app" onClose={onClose}
            header={
-             <header className="mb-3 flex flex-wrap items-baseline gap-x-3 border-b border-line pb-2 pr-8">
-               <PageTitle>{artifact.name}</PageTitle>
-               <span className="text-sm"><RarityText rarity={artifact.grade} /> 유물</span>
+             <header className="mb-3 flex items-center gap-3 border-b border-line pb-2 pr-8">
+               <ItemSprite kind="artifact" id={artifact.id} preset="hero" className="shrink-0" />
+               <div className="flex flex-wrap items-baseline gap-x-3 min-w-0">
+                 <PageTitle>{artifact.name}</PageTitle>
+                 <span className="text-sm"><RarityText rarity={artifact.grade} /> 유물</span>
+               </div>
              </header>
            }
            footer={<Footer view={view} busy={busy} onLevelUp={levelUp} />}>

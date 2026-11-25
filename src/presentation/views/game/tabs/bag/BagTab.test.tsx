@@ -123,15 +123,19 @@ describe('BagTab - 유물 섹션 전체 목록·미보유·보유 중만 보기'
     expect(screen.getByRole('heading', { level: 3, name: /유물 1\/8/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '보유 중만 보기' })).toHaveAttribute('aria-pressed', 'false');
 
-    // 보유 유물은 버튼(PressRow)으로 상세 창을 연다
+    // 보유 유물은 버튼(PressRow)으로 상세 창을 열고 32px 스프라이트를 보인다
     const ownedBtn = screen.getByRole('button', { name: /진주 상인의 저울/ });
     expect(ownedBtn).toBeInTheDocument();
+    expect(ownedBtn.querySelector('canvas')).toHaveAttribute('width', '32');
 
-    // 미보유 유물은 비활성 행(버튼 아님)으로 이름·구역·등급이 보인다
+    // 미보유 유물은 비활성 행(버튼 아님)으로 흐린 32px 스프라이트·이름·구역·등급이 보인다
     expect(screen.queryByRole('button', { name: /해구의 이빨/ })).not.toBeInTheDocument();
     const unownedName = screen.getByText('해구의 이빨');
     const unownedRow = unownedName.parentElement!;
     expect(unownedRow.tagName).not.toBe('BUTTON');
+    const unownedCanvas = unownedRow.querySelector('canvas');
+    expect(unownedCanvas).toHaveAttribute('width', '32');
+    expect(unownedCanvas).toHaveClass('grayscale');
     expect(within(unownedRow).getByText('태평양')).toBeInTheDocument();
     expect(within(unownedRow).getByText('영웅')).toBeInTheDocument();
 

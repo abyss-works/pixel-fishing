@@ -15,6 +15,7 @@ import Button from '../../../ui/Button';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import Inset from '../../../ui/Inset';
 import type { InsetBorder } from '../../../ui/Inset';
+import ItemSprite from '../../../ui/ItemSprite';
 import KeyValueRow from '../../../ui/KeyValueRow';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
@@ -280,11 +281,12 @@ function ProfileCells({ name, view, actions }: {
               const gradeStyle = s.grade ? GRADE_STYLE[s.grade] : null;
               return (
                 <Inset as="li" key={s.id} tone="deep" border={gradeStyle?.border}
-                       className={cx('min-h-10 px-1 py-0.5 flex flex-col items-center justify-center text-center text-2xs leading-tight',
+                       className={cx('min-h-10 px-1 py-1 flex flex-col items-center justify-center gap-0.5 text-center text-2xs leading-tight',
                          gradeStyle ? gradeStyle.text : 'border-dashed text-text-dim')}
                        aria-label={s.name ? (s.level !== null ? `유물 ${s.name} Lv.${s.level}` : `유물 ${s.name}`) : `${s.zone} 유물 없음`}>
                   {s.name ? (
                     <>
+                      <ItemSprite kind="artifact" id={s.id} preset="row" className="shrink-0" />
                       <span className="truncate max-w-full">{s.name}</span>
                       {s.level !== null && <span className="font-pixel text-2xs text-text-dim">Lv.{s.level}</span>}
                     </>

@@ -11,14 +11,16 @@ const show = (id: string, owned: boolean, level = 1) => render(
 );
 
 describe('RelicCard', () => {
-  it('보유한 레벨 유물은 보유 레벨을 보인다', () => {
-    show('wreck-compass', true, 3);
+  it('보유한 레벨 유물은 list(32px) 스프라이트와 보유 레벨을 보인다', () => {
+    const { container } = show('wreck-compass', true, 3);
+    expect(container.querySelector('canvas')).toHaveAttribute('width', '32');
     expect(screen.getByText('Lv.3')).toBeInTheDocument();
     expect(screen.getByText('항해 속도 +15%')).toBeInTheDocument();
   });
 
-  it('갖지 않은 유물은 레벨을 보이지 않는다', () => {
-    show('wreck-compass', false);
+  it('갖지 않은 유물도 list(32px) 스프라이트를 보이고 레벨은 보이지 않는다', () => {
+    const { container } = show('wreck-compass', false);
+    expect(container.querySelector('canvas')).toHaveAttribute('width', '32');
     expect(screen.queryByText(/^Lv\./)).toBeNull();
   });
 
