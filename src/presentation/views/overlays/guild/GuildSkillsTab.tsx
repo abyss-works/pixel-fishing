@@ -254,10 +254,7 @@ export default function GuildSkillsTab({ guild, gold, busy, run, dialogHost, onR
                 unlocked={unlocked}
                 remaining={pool.remaining}
                 active={row.id === picked}
-                busy={busy}
-                invest={enhanceInvestState(guild, row)}
                 onPick={() => setPicked(row.id)}
-                onInvest={() => { void onInvest(row.id); }}
               />
             ))}
           </div>
@@ -410,20 +407,23 @@ function ValueRow({ label, value, tone, className, valueClassName }: {
 const GLYPH: Record<GuildBonusId, GlyphId> = { sell: 'coin', bag: 'fish', named: 'star', rare: 'rod', mutation: 'plus' };
 
 /** 스킬 한 열: 볼록한 머리(아이콘, 이름), 5칸 단계(공통 금색/개인 보라색), 열 하단 푸터 */
-function Branch({ row, track, unlocked, remaining, active, busy, invest, onPick, onInvest }: {
+function Branch({ row, track, unlocked, remaining, active, onPick }: {
   row: BonusRow;
   track: SkillTrack;
   unlocked: boolean;
   remaining: number;
   active: boolean;
-  busy: boolean;
-  invest: { canInvest: boolean; reason: string | null };
   onPick: () => void;
-  onInvest: () => void;
 }) {
   const isPersonal = track === 'personal';
   const pNodes = isPersonal ? personalNodes(row, unlocked, remaining) : null;
   const free = unlocked ? row.enhanceRank : 0;
+  const footerText = row.locked
+    ? '잠김'
+    : isPersonal
+      ? (unlocked ? `${free}단계` : 'Lv.6 해금')
+      : `${row.rank}단계`;
+  const footerActive = active && !row.locked && (!isPersonal || unlocked);
 
   return (
     <div className={cx(
@@ -503,65 +503,19 @@ function Branch({ row, track, unlocked, remaining, active, busy, invest, onPick,
         </div>
       )}
 
-      {isPersonal ? (
-        unlocked ? (
-          <div className={cx(
-            'mt-1.5 w-full h-7 px-1.5 flex items-center justify-between gap-1 bg-bg border',
-            'mobile:contents',
-            free > 0 ? 'border-epic bg-[color-mix(in_oklab,var(--c-epic)_12%,var(--c-bg))]' : 'border-line-dim',
-          )}>
-            <span className={cx(
-              'pf-accent text-2xs whitespace-nowrap',
-              'mobile:col-start-2 mobile:row-start-1 mobile:justify-self-end',
-              free > 0 ? 'text-guild font-bold' : 'text-text-dim',
-            )}>
-              {row.locked ? '잠김' : `${free}단계`}
-            </span>
-            {invest.canInvest ? (
-              <Button
-                size="xs"
-                disabled={busy}
-                onClick={onInvest}
-                aria-label={`${row.name} 강화 1단계 올리기`}
-                className="h-5 min-w-8 px-1.5 py-0 pf-accent font-bold bg-[color-mix(in_oklab,var(--c-epic)_20%,var(--c-bg))] border-epic text-guild hover:bg-epic hover:text-bg mobile:col-start-2 mobile:row-start-2 mobile:justify-self-end"
-              >
-                +1
-              </Button>
-            ) : (
-              <Tip wraps text={invest.reason ?? ''} className="mobile:col-start-2 mobile:row-start-2 mobile:justify-self-end">
-                <Button
-                  size="xs"
-                  disabled
-                  aria-label={`${row.name} 강화 불가`}
-                  className="h-5 min-w-8 px-1.5 py-0 pf-accent font-bold bg-surface border-line text-text-dim pointer-events-none"
-                >
-                  +1
-                </Button>
-              </Tip>
-            )}
-          </div>
-        ) : (
-          <div className="mt-1.5 w-full h-7 px-1.5 flex items-center justify-center bg-bg border border-line-dim mobile:contents">
-            <span className="pf-accent text-2xs whitespace-nowrap text-text-dim mobile:col-start-2 mobile:row-start-1 mobile:justify-self-end">
-              {row.locked ? '잠김' : 'Lv.6 해금'}
-            </span>
-          </div>
-        )
-      ) : (
-        <div className={cx(
-          'mt-1.5 w-full h-7 px-1.5 flex items-center justify-center bg-bg border',
-          'mobile:contents',
-          active && !row.locked ? 'border-gold-dark' : 'border-line-dim',
+      <div className={cx(
+        'mt-1.5 w-full h-7 px-1.5 flex items-center justify-center bg-bg border',
+        'mobile:contents',
+        footerActive ? (isPersonal ? 'border-epic' : 'border-gold-dark') : 'border-line-dim',
+      )}>
+        <span className={cx(
+          'pf-accent text-2xs whitespace-nowrap',
+          'mobile:col-start-2 mobile:row-start-1 mobile:justify-self-end',
+          footerActive ? cx(isPersonal ? 'text-guild' : 'text-gold', 'font-bold') : 'text-text-dim',
         )}>
-          <span className={cx(
-            'pf-accent text-2xs whitespace-nowrap',
-            'mobile:col-start-2 mobile:row-start-1 mobile:justify-self-end',
-            active && !row.locked ? 'text-gold font-bold' : 'text-text-dim',
-          )}>
-            {row.locked ? '잠김' : `${row.rank}단계`}
-          </span>
-        </div>
-      )}
+          {footerText}
+        </span>
+      </div>
     </div>
   );
 }

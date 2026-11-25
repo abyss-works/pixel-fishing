@@ -112,6 +112,13 @@ describe('GuildModal', () => {
     // 관리 탭은 바깥 단일 세로 스크롤만 두고 가입 신청 표는 가로 스크롤만 허용한다(중첩 세로 스크롤 금지)
     const manageScroll = screen.getByRole('radiogroup', { name: '가입 방식' }).closest('.pf-vscroll') as HTMLElement;
     expect(manageScroll).toBeTruthy();
+    expect(Array.from(manageScroll.querySelectorAll(':scope > section')).map(el => el.getAttribute('aria-label'))).toEqual([
+      '길드 이름',
+      '가입 방식',
+      '권유 문구',
+      '고유 코드와 링크',
+      '가입 신청',
+    ]);
     expect(manageScroll.querySelectorAll('.overflow-auto')).toHaveLength(0);
     const reqBox = screen.getByRole('region', { name: '가입 신청' }).querySelector('.pf-scroll-panel') as HTMLElement;
     expect(reqBox.className).toContain('overflow-x-auto');
@@ -261,6 +268,8 @@ describe('GuildModal', () => {
     expect(screen.queryByRole('button', { name: '되돌리기' })).toBeNull();
     expect(screen.queryByRole('button', { name: '강화 올리기' })).toBeNull();
     expect(screen.queryByRole('button', { name: '+1' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^\+/ })).toBeNull();
+    expect(within(tree).queryByRole('button', { name: /\+/ })).toBeNull();
     // 상한에 닿은 스킬을 고르면 기부를 열 수 없다
     fireEvent.click(screen.getByRole('button', { name: '가방 용량 증가 고르기' }));
     expect((screen.getByRole('button', { name: '기부' }) as HTMLButtonElement).disabled).toBe(true);
@@ -356,7 +365,7 @@ describe('GuildModal', () => {
     expect(day.getByText('전설 무지개 잉어').className).toContain('text-mutation');
   });
 
-  it('Lv.6 이상 길드에서는 [개인] 서브탭에서 자유 강화 투자(+1·강화 올리기)와 초기화(? 툴팁 포함)를 할 수 있다', async () => {
+  it('Lv.6 이상 길드에서는 [개인] 서브탭에서 스킬을 고른 뒤 강화 올리기와 초기화(? 툴팁 포함)를 할 수 있다', async () => {
     const lv8Guild: GuildInfo = {
       ...GUILD,
       role: 'member',
@@ -391,6 +400,10 @@ describe('GuildModal', () => {
     expect(screen.getByText('남은 강화 포인트')).toBeTruthy();
     expect(screen.getByText('1 / 3')).toBeTruthy();
     expect(screen.queryByRole('button', { name: '기부' })).toBeNull();
+    const personalTree = screen.getByRole('group', { name: '길드 스킬 트리' });
+    expect(within(personalTree).queryByRole('button', { name: /\+/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^\+1?$/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /강화 1단계 올리기|강화 불가/ })).toBeNull();
 
     fireEvent.mouseEnter(screen.getByText('남은 강화 포인트'));
     const headerTip = screen.getByRole('tooltip').textContent ?? '';
@@ -409,7 +422,8 @@ describe('GuildModal', () => {
     expect(enhancedTip).not.toMatch(/[·—–]/);
     fireEvent.mouseLeave(enhancedNode.closest('[tabindex="0"]') as HTMLElement);
 
-    fireEvent.click(screen.getByRole('button', { name: '가방 용량 증가 강화 1단계 올리기' }));
+    fireEvent.click(screen.getByRole('button', { name: '가방 용량 증가 고르기' }));
+    fireEvent.click(screen.getByRole('button', { name: '강화 올리기' }));
     await waitFor(() => expect(s.act).toHaveBeenCalledWith({ op: 'enhance', guildId: 'g1', bonus: 'bag' }));
     expect(toast).toHaveBeenCalledWith('가방 용량 증가 스킬의 내 자유 강화를 1단계로 올렸어요.');
 

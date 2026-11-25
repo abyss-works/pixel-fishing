@@ -25,8 +25,8 @@ import Tip from '../../../ui/Tip';
 import { SCROLL_Y } from '../../../ui/scrollArea';
 import type { GuildPartProps, GuildRun } from './guildProps';
 
-// 관리 탭(길드장만): 위에서부터 가입 방식(세 칸 중 하나, 고른 칸은 눌린 모양), 권유 문구(1줄 인라인 편집), 고유 코드와 초대 링크(코드 복사, 링크 복사),
-// 길드 이름(이름 바꾸기 버튼이 작은 창을 연다), 가입 신청 표(행 끝에 거절과 승인)다. 탭 본문이 세로 스크롤을 맡고 좁은 폭에서는 표가 가로로만 스크롤한다.
+// 관리 탭(길드장만): 위에서부터 길드 이름(이름 바꾸기 버튼이 작은 창을 연다), 가입 방식(세 칸 중 하나, 고른 칸은 눌린 모양), 권유 문구(1줄 인라인 편집),
+// 고유 코드와 초대 링크(코드 복사, 링크 복사), 가입 신청 표(행 끝에 거절과 승인)다. 탭 본문이 세로 스크롤을 맡고 좁은 폭에서는 표가 가로로만 스크롤한다.
 // 거절은 되돌릴 일이 적어 확인 창 없이 행 버튼으로 바로 보낸다.
 export default function GuildManageTab({ guild, busy, run, dialogHost, setToast, gold, onGoldChanged }: Omit<GuildPartProps, 'me'> & {
   /** 내 골드 */
@@ -99,6 +99,20 @@ export default function GuildManageTab({ guild, busy, run, dialogHost, setToast,
 
   return (
     <div className={cx('flex flex-col gap-2.5 flex-1 min-h-0', SCROLL_Y)}>
+      <section aria-label="길드 이름" className="flex flex-col gap-1.5 shrink-0">
+        <Subheading className="mb-0 text-xs">길드 이름</Subheading>
+        <Inset className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 h-10 px-3">
+          <b className="truncate text-text">{guild.name}</b>
+          {rename.reason === null ? (
+            <Button size="sm" disabled={busy} onClick={() => setRenaming(true)}>이름 바꾸기</Button>
+          ) : (
+            <Tip wraps text={rename.reason}>
+              <Button size="sm" disabled>이름 바꾸기</Button>
+            </Tip>
+          )}
+        </Inset>
+      </section>
+
       <section aria-label="가입 방식" className="flex flex-col gap-1.5 shrink-0">
         <Subheading className="mb-0 text-xs">가입 방식</Subheading>
         <div className="grid grid-cols-3 gap-2 mobile:grid-cols-1" role="radiogroup" aria-label="가입 방식">
@@ -162,20 +176,6 @@ export default function GuildManageTab({ guild, busy, run, dialogHost, setToast,
               <Button size="sm" onClick={() => { void copy(inviteShareText(guild.pitch, url), '초대 링크'); }}>링크 복사</Button>
             </Tip>
           </div>
-        </Inset>
-      </section>
-
-      <section aria-label="길드 이름" className="flex flex-col gap-1.5 shrink-0">
-        <Subheading className="mb-0 text-xs">길드 이름</Subheading>
-        <Inset className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 h-10 px-3">
-          <b className="truncate text-text">{guild.name}</b>
-          {rename.reason === null ? (
-            <Button size="sm" disabled={busy} onClick={() => setRenaming(true)}>이름 바꾸기</Button>
-          ) : (
-            <Tip wraps text={rename.reason}>
-              <Button size="sm" disabled>이름 바꾸기</Button>
-            </Tip>
-          )}
         </Inset>
       </section>
 

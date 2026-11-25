@@ -803,11 +803,6 @@ describe('UI 시스템 가드', () => {
     const stripped = withoutTags.replace(/\{[^}]*&&\s*\}/g, '').replace(/\s+/g, '');
     return stripped === '';
   };
-  const isStepperException = (path: string, tag: string, body: string) =>
-    path === 'views/overlays/guild/GuildSkillsTab.tsx'
-    && /\bsize="xs"/.test(tag)
-    && /\bh-5\b/.test(tag)
-    && body.trim() === '+1';
   const fixedHeightButtons = (src: string, path = '') =>
     openingTagsQuoted(src, '(?:Button|ConfirmButton)')
       .filter(t => BUTTON_FIXED_HEIGHT_RE.test(t.tag))
@@ -815,7 +810,7 @@ describe('UI 시스템 가드', () => {
         if (/\/>\s*$/.test(t.tag)) return true;
         const name = t.tag.startsWith('<ConfirmButton') ? 'ConfirmButton' : 'Button';
         const body = childrenOf(src, t, name);
-        return !isIconOnlySquareButton(t.tag, body) && !isStepperException(path, t.tag, body);
+        return !isIconOnlySquareButton(t.tag, body);
       })
       .map(t => `${path ? `${path}: ` : ''}${t.tag}`);
   const fixedHeightConfirmRows = (src: string, path = '') =>
@@ -823,11 +818,9 @@ describe('UI 시스템 가드', () => {
       .filter(t => /\bdata-confirm-row\b/.test(ownTagHead(t.tag)) && CONFIRM_ROW_FIXED_HEIGHT_RE.test(t.tag))
       .map(t => `${path ? `${path}: ` : ''}${t.tag}`);
 
-  it('텍스트·수치를 담는 Button과 data-confirm-row는 고정 높이를 쓰지 않는다 — 아이콘 전용 정사각형과 소형 +1 스테퍼만 예외', () => {
+  it('텍스트·수치를 담는 Button과 data-confirm-row는 고정 높이를 쓰지 않는다 — 아이콘 전용 정사각형만 예외', () => {
     expect(presentationFiles.flatMap(f => fixedHeightButtons(f.src, f.path))).toEqual([]);
     expect(presentationFiles.flatMap(f => fixedHeightConfirmRows(f.src, f.path))).toEqual([]);
-    const guildSkills = presentationFiles.find(f => f.path === 'views/overlays/guild/GuildSkillsTab.tsx')!.src;
-    expect(openingTagsQuoted(guildSkills, 'Button').some(t => isStepperException('views/overlays/guild/GuildSkillsTab.tsx', t.tag, childrenOf(guildSkills, t, 'Button')))).toBe(true);
 
     expect(fixedHeightButtons('<Button variant="primary" full className="h-11">판매 (10마리)</Button>')).toHaveLength(1);
     expect(fixedHeightButtons('<Button className="h-[44px]">확인</Button>')).toHaveLength(1);
@@ -837,7 +830,6 @@ describe('UI 시스템 가드', () => {
     expect(fixedHeightButtons('<Button variant="primary" full className="min-h-11">판매 (10마리)</Button>')).toEqual([]);
     expect(fixedHeightButtons('<Button className="size-11 shrink-0 p-0"><PixelIcon glyph="gear" size={14} /></Button>')).toEqual([]);
     expect(fixedHeightButtons('<Button className="size-11 shrink-0 p-0"><PixelIcon glyph="gear" />{flag && <span className="size-1.5" />}</Button>')).toEqual([]);
-    expect(fixedHeightButtons('<Button size="xs" className="h-5">+1</Button>', 'views/overlays/guild/GuildSkillsTab.tsx')).toEqual([]);
 
     expect(fixedHeightConfirmRows('<div data-confirm-row className="flex flex-col h-11 [&>*]:h-full">{actions}</div>')).toHaveLength(1);
     expect(fixedHeightConfirmRows('<div data-confirm-row className="flex flex-col [&>*]:h-full">{actions}</div>')).toHaveLength(1);
