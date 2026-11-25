@@ -4,7 +4,9 @@ import { zoneById } from '../../../../../game/content/zones';
 import type { ZoneId } from '../../../../../game/content/zones';
 import { selectDexGrid } from '../../../../../features/dex/model/catalog';
 import { cx } from '../../../../ui/cx';
+import Badge from '../../../../ui/Badge';
 import Frame from '../../../../ui/Frame';
+import PixelIcon from '../../../../ui/PixelIcon';
 import SubTabs from '../../../../ui/SubTabs';
 import FishSprite from '../../../../ui/fish/FishSprite';
 import { RarityDot, RARITY_CARD, DIM_CARD } from '../../../../ui/fish/RarityTag';
@@ -41,10 +43,25 @@ export default function DexGrid({ game, view, sub, onSub }: {
         activeKey={sub}
         onSelect={onSub}
       />
-      {data.spots.map(({ spot: s, fishes }) => {
+      {data.spots.map(({ spot: s, normalProgress, fishes }) => {
         return (
           <div key={s.id} className="mt-2">
-            <Subheading className="border-b border-line pb-1">{s.name}</Subheading>
+            <Subheading className="border-b border-line pb-1 flex items-center justify-between gap-2">
+              <span>{s.name}</span>
+              {view === 'base' && (
+                <span className="inline-flex items-center gap-1.5 text-xs">
+                  <span className={cx('pf-accent', normalProgress.completed ? 'text-gold' : 'text-text-dim')}>
+                    {normalProgress.found}/{normalProgress.total}
+                  </span>
+                  {normalProgress.completed && (
+                    <Badge tone="gold" size="xs" inline>
+                      <PixelIcon glyph="check" size={10} />
+                      완성
+                    </Badge>
+                  )}
+                </span>
+              )}
+            </Subheading>
             <div className="grid grid-cols-3 gap-2">
               {fishes.map(({ fish: f, discovered: ok, count, name, price }) => {
                 // 등급은 테두리(알파25%)와 등급 점으로만 — 미획득 카드도 티어는 알 수 있게

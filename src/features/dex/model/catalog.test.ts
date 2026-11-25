@@ -6,20 +6,42 @@ import { selectNamedBountyCardData } from '../../bounty/model/panel';
 import { selectDexDetailData, selectDexGrid, selectNamedDetail, selectNamedDex } from './catalog';
 
 describe('도감 조회 데이터', () => {
-  it('폼별 발견 수와 존·수역 어종을 구성한다', () => {
+  it('폼별 발견 수와 존·수역 어종, 일반 도감 진행도를 구성한다', () => {
     const game = newState();
     const fish = FISH[0];
     game.dex[fish.id] = { normal: { count: 2, maxSize: 20, first: null } };
     const zone = topZoneOfSpot(fish.spot)!;
 
     const data = selectDexGrid(game, zone, 'normal');
+    const spotEntry = data.spots.find(row => row.spot.id === fish.spot)!;
 
     expect(data.foundCount).toBe(1);
     expect(data.fishCount).toBe(FISH.length);
     expect(data.zones.find(row => row.id === zone)?.foundCount).toBeGreaterThanOrEqual(1);
-    expect(data.spots.find(row => row.spot.id === fish.spot)?.fishes
-      .find(row => row.fish.id === fish.id))
+    expect(spotEntry.normalProgress).toEqual({
+      found: 1,
+      total: spotEntry.fishes.length,
+      completed: spotEntry.fishes.length === 1,
+    });
+    expect(spotEntry.fishes.find(row => row.fish.id === fish.id))
       .toMatchObject({ fish, discovered: true, count: 2 });
+  });
+
+  it('해역의 일반 폼 어종을 모두 발견하면 normalProgress.completed가 참이 되고, 돌연변이만 있으면 거짓이다', () => {
+    const spotFish = FISH.filter(f => f.spot === 'pond');
+    const variantOnly = newState();
+    for (const f of spotFish) variantOnly.dex[f.id] = { variant: { count: 1, maxSize: 10, first: null } };
+    const variantGrid = selectDexGrid(variantOnly, 'village', 'variant');
+    expect(variantGrid.spots.find(s => s.spot.id === 'pond')?.normalProgress).toEqual({
+      found: 0, total: spotFish.length, completed: false,
+    });
+
+    const completed = newState();
+    for (const f of spotFish) completed.dex[f.id] = { normal: { count: 1, maxSize: 10, first: null } };
+    const baseGrid = selectDexGrid(completed, 'village', 'normal');
+    expect(baseGrid.spots.find(s => s.spot.id === 'pond')?.normalProgress).toEqual({
+      found: spotFish.length, total: spotFish.length, completed: true,
+    });
   });
 
   it('네임드 도감은 대상 기록으로 달성 수와 공개 데이터를 만든다', () => {
