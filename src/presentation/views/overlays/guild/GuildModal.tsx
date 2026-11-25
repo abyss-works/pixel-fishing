@@ -27,7 +27,7 @@ import type { GuildAsk, GuildPartProps } from './guildProps';
 
 // 길드 창. 게임 스테이지 안에 뜨고, 길드가 있으면 680px 폭에 스테이지 높이로 고정한다.
 // 제목(길드 정보) 아래 한 줄에는 어느 탭에서나 의미가 있는 고정 정보(길드 이름, 레벨, 진행, 인원)를 두고,
-// 그 아래 탭(길드원, 길드 스킬, 항해일지, 길드장에게만 관리)이 각자 자기 일에 쓰는 정보만 보인다. 관리 탭 이름 옆에는 처리할 가입 신청 수를 붙인다.
+// 그 아래 탭(스킬, 길드원, 항해일지, 길드장에게만 관리)이 각자 자기 일에 쓰는 정보만 보인다. 관리 탭 이름 옆에는 처리할 가입 신청 수를 붙인다.
 // 길드가 없으면 400 폭 한 열(코드로 들어가기, 길드 만들기)이다.
 // 길드 스킬 값은 서버가 판정해 적용한다. 이 창은 서버가 보낸 값을 보여 주고 요청을 보내기만 한다.
 // 창 자체는 스크롤하지 않는다. 넘치는 내용은 탭 본문 안에서만 굴린다.
@@ -97,7 +97,7 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
         : <NoGuild busy={busy} run={run} join={join} request={request} setToast={setToast} />;
 
   return (
-    // 길드가 있을 때의 창 높이: 가장 긴 탭(길드 스킬)이 스크롤 없이 들어가는 560px로 고정하고, 스테이지가 그보다 낮으면 위아래 16px을 남긴다.
+    // 길드가 있을 때의 창 높이: 가장 긴 탭(스킬)이 스크롤 없이 들어가는 560px로 고정하고, 스테이지가 그보다 낮으면 위아래 16px을 남긴다.
     // 좁은 화면에서는 내용 높이를 따른다
     <Modal layer="stage" md={inGuild} height={inGuild ? 560 : undefined} onClose={onClose}>
       <ModalCard title={inGuild ? '길드 정보' : '길드'} onClose={onClose} fixed={inGuild}>

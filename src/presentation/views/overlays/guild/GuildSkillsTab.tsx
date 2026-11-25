@@ -307,9 +307,11 @@ export default function GuildSkillsTab({ guild, gold, busy, run, dialogHost, onR
                 <>
                   <ValueRow
                     label="모인 골드"
-                    value={sel.locked ? '-' : sel.rank >= GUILD_BONUS_MAX_RANK || sel.next === null
-                      ? '5단계 완료'
-                      : <ProgressCount current={sel.pool} target={sel.next} />}
+                    value={sel.locked ? '-' : sel.rank >= GUILD_BONUS_MAX_RANK
+                      ? `${GUILD_BONUS_MAX_RANK}단계 완료`
+                      : sel.next === null
+                        ? '현재 상한'
+                        : <ProgressCount current={sel.pool} target={sel.next} />}
                   />
                   <ProgressMeter
                     current={Math.round(sel.ratio * 100)}
@@ -339,6 +341,8 @@ export default function GuildSkillsTab({ guild, gold, busy, run, dialogHost, onR
                         ? '잠김'
                         : `${selFree} / ${GUILD_ENHANCE_MAX_RANK}단계 (필요 포인트 1)`}
                     tone="guild"
+                    className="mobile:h-auto mobile:min-h-6 mobile:flex-wrap mobile:gap-x-1.5 mobile:gap-y-0.5"
+                    valueClassName="mobile:whitespace-normal mobile:overflow-visible mobile:text-clip"
                   />
                   <ProgressMeter
                     current={unlocked && !sel.locked ? selFree : 0}
@@ -387,10 +391,18 @@ export default function GuildSkillsTab({ guild, gold, busy, run, dialogHost, onR
 }
 
 /** 이름은 왼쪽, 값은 오른쪽인 한 줄 */
-function ValueRow({ label, value, tone }: { label: string; value: ReactNode; tone?: 'gold' | 'guild' | 'accent' }) {
+function ValueRow({ label, value, tone, className, valueClassName }: {
+  label: string; value: ReactNode; tone?: 'gold' | 'guild' | 'accent'; className?: string; valueClassName?: string;
+}) {
   const toneClass = tone === 'gold' ? 'text-gold' : tone === 'guild' ? 'text-guild' : tone === 'accent' ? 'text-accent' : undefined;
   return (
-    <KeyValueRow compact className="h-6" label={label} value={value} valueClassName={cx('pf-accent', toneClass)} />
+    <KeyValueRow
+      compact
+      className={cx('h-6', className)}
+      label={label}
+      value={value}
+      valueClassName={cx('pf-accent', toneClass, valueClassName)}
+    />
   );
 }
 

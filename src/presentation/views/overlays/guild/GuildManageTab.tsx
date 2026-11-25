@@ -26,7 +26,7 @@ import { SCROLL_Y } from '../../../ui/scrollArea';
 import type { GuildPartProps, GuildRun } from './guildProps';
 
 // 관리 탭(길드장만): 위에서부터 가입 방식(세 칸 중 하나, 고른 칸은 눌린 모양), 권유 문구(1줄 인라인 편집), 고유 코드와 초대 링크(코드 복사, 링크 복사),
-// 길드 이름(이름 바꾸기 버튼이 작은 창을 연다), 가입 신청 표(행 끝에 거절과 승인)다. 신청 표는 남는 높이를 다 쓰고 그 안에서만 스크롤한다.
+// 길드 이름(이름 바꾸기 버튼이 작은 창을 연다), 가입 신청 표(행 끝에 거절과 승인)다. 탭 본문이 세로 스크롤을 맡고 좁은 폭에서는 표가 가로로만 스크롤한다.
 // 거절은 되돌릴 일이 적어 확인 창 없이 행 버튼으로 바로 보낸다.
 export default function GuildManageTab({ guild, busy, run, dialogHost, setToast, gold, onGoldChanged }: Omit<GuildPartProps, 'me'> & {
   /** 내 골드 */
@@ -179,14 +179,14 @@ export default function GuildManageTab({ guild, busy, run, dialogHost, setToast,
         </Inset>
       </section>
 
-      <section aria-label="가입 신청" className="flex flex-col gap-1.5 flex-1 min-h-0">
+      <section aria-label="가입 신청" className="flex flex-col gap-1.5 shrink-0">
         <Subheading className="mb-0 text-xs">
           <span className="flex items-center justify-between gap-2">
             <span>대기 중인 가입 신청</span>
             <span className="pf-accent text-2xs text-accent">{rows.length}건</span>
           </span>
         </Subheading>
-        <TableBox className="min-h-[140px] flex-1 px-3 pb-2">
+        <TableBox scroll="x" className="px-3 pb-2">
           {guild.joinMode !== 'approval' && rows.length === 0 ? (
             <p className="m-0 py-6 text-center text-sm text-text-dim">
               {guild.joinMode === 'open' ? '자유 가입이라 신청 없이 바로 들어와요.' : '닫혀 있어 새 신청을 받지 않아요.'}

@@ -36,7 +36,7 @@ export default function SubTabs<K extends string>({ items, activeKey, onSelect, 
           >
             <span className="whitespace-nowrap">{it.label}</span>
             {it.sub !== undefined && (
-              <span className={cx('text-2xs whitespace-nowrap', active ? 'text-gold' : 'text-text-dim')}>{it.sub}</span>
+              <span className={cx('text-2xs whitespace-nowrap', active ? (it.tone === 'guild' ? 'text-guild' : 'text-gold') : 'text-text-dim')}>{it.sub}</span>
             )}
           </button>
         );

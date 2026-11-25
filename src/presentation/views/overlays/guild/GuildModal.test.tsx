@@ -98,25 +98,53 @@ describe('GuildModal', () => {
   });
 
   it('길드장의 관리 탭: 처리할 신청 수를 탭에 붙이고, 가입 방식과 권유 문구 인라인 편집, 신청 승인·거절을 처리한다', async () => {
-    s.guild = GUILD;
+    s.guild = { ...GUILD, pitch: '기존 권유 문구' };
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
     const toast = vi.fn();
-    render(<GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={toast} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+    const onClose = vi.fn();
+    render(<GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={toast} onGoldChanged={vi.fn()} onClose={onClose} />);
     fireEvent.click(screen.getByRole('button', { name: /관리.*1건/ }));
     expect(screen.getByText('ABCD2345')).toBeTruthy();
     expect(screen.getByText('승인 가입이어도 초대 링크로 들어온 선원은 별도 승인 없이 바로 참가해요.')).toBeTruthy();
     expect(screen.getByText('대기 중인 가입 신청').parentElement).toHaveTextContent('1건');
 
-    // 권유 문구 1줄 인라인 편집 (변경 -> 확인/취소, Esc로 모달 유지 편집 취소)
+    // 관리 탭은 바깥 단일 세로 스크롤만 두고 가입 신청 표는 가로 스크롤만 허용한다(중첩 세로 스크롤 금지)
+    const manageScroll = screen.getByRole('radiogroup', { name: '가입 방식' }).closest('.pf-vscroll') as HTMLElement;
+    expect(manageScroll).toBeTruthy();
+    expect(manageScroll.querySelectorAll('.overflow-auto')).toHaveLength(0);
+    const reqBox = screen.getByRole('region', { name: '가입 신청' }).querySelector('.pf-scroll-panel') as HTMLElement;
+    expect(reqBox.className).toContain('overflow-x-auto');
+    expect(reqBox.className).toContain('overflow-y-visible');
+
+    // 권유 문구 1줄 인라인 편집: 취소 버튼, 입력 밖 포커스 Esc(useKeyScope), 빈 값 저장(null), 일반 문구 저장
     const pitchInput = () => screen.getByRole('textbox', { name: '권유 문구' }) as HTMLInputElement;
     expect(pitchInput().disabled).toBe(true);
+    expect(pitchInput().value).toBe('기존 권유 문구');
+
     fireEvent.click(screen.getByRole('button', { name: '변경' }));
     expect(pitchInput().disabled).toBe(false);
-    fireEvent.change(pitchInput(), { target: { value: '임시 문구' } });
-    fireEvent.keyDown(pitchInput(), { key: 'Escape' });
+    fireEvent.change(pitchInput(), { target: { value: '취소할 문구' } });
+    fireEvent.click(screen.getByRole('button', { name: '취소' }));
     expect(pitchInput().disabled).toBe(true);
+    expect(pitchInput().value).toBe('기존 권유 문구');
+    expect(s.act).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: '변경' }));
+    fireEvent.change(pitchInput(), { target: { value: '임시 문구' } });
+    const cancelBtn = screen.getByRole('button', { name: '취소' });
+    cancelBtn.focus();
+    fireEvent.keyDown(cancelBtn, { key: 'Escape' });
+    expect(pitchInput().disabled).toBe(true);
+    expect(pitchInput().value).toBe('기존 권유 문구');
+    expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByText('길드 정보')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: '변경' }));
+    fireEvent.change(pitchInput(), { target: { value: '   ' } });
+    fireEvent.click(screen.getByRole('button', { name: '확인' }));
+    await waitFor(() => expect(s.act).toHaveBeenCalledWith({ op: 'settings', guildId: 'g1', pitch: null }));
+    expect(toast).toHaveBeenCalledWith('기본 권유 문구를 써요.');
 
     fireEvent.click(screen.getByRole('button', { name: '변경' }));
     fireEvent.change(pitchInput(), { target: { value: '함께 항해해요!' } });
@@ -243,6 +271,17 @@ describe('GuildModal', () => {
     expect(screen.queryByText('남은 강화 포인트')).toBeNull();
     expect(screen.queryByRole('button', { name: '기부' })).toBeNull();
     expect((screen.getByRole('button', { name: 'Lv.6 해금' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('기본 단계가 5 미만이고 next가 비어 있으면 5단계 완료 대신 현재 상한을 보인다', () => {
+    s.guild = {
+      ...GUILD,
+      bonuses: GUILD.bonuses.map(b => (b.id === 'sell' ? { ...b, rank: 3, cap: 3, next: null } : b)),
+    };
+    render(<GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: '판매가 보너스 고르기' }));
+    expect(screen.getByText('모인 골드').parentElement).toHaveTextContent('현재 상한');
+    expect(screen.queryByText('5단계 완료')).toBeNull();
   });
 
   it('기부 창에서 기부하면 실제로 받을 골드를 알리고 게임 상태를 다시 읽는다. 빠른 금액은 입력에 더한다', async () => {
