@@ -32,7 +32,7 @@ import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
 import Skeleton from '../../../ui/Skeleton';
-import { SCROLL_Y_ROWS } from '../../../ui/scrollArea';
+import { SCROLL_Y, SCROLL_Y_ROWS } from '../../../ui/scrollArea';
 import { HighlightRarityText } from '../../../ui/fish/RarityTag';
 import { FortuneMotifIcon, IndexPips, TodayFortuneBanner } from './fortuneParts';
 
@@ -128,8 +128,8 @@ export default function FortuneCalendarModal({
 
   return (
     <Modal layer="stage" md height={560} mobileFixed onClose={onClose}>
-      <ModalCard title="운세" onClose={onClose}>
-        <div className="flex flex-col gap-3">
+      <ModalCard title="운세" onClose={onClose} fixed>
+        <div className={cx('flex flex-col gap-3 flex-1 min-h-0', SCROLL_Y)}>
           {todayFortune ? (
             <TodayFortuneBanner fortune={todayFortune} showDate />
           ) : (

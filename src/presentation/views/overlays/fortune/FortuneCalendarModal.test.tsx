@@ -146,11 +146,13 @@ describe('운세 월간 달력 창 (FortuneCalendarModal)', () => {
       <FortuneCalendarModal gameFortune={NOV_HISTORY.today} accountState="account" onClose={vi.fn()} />,
     );
     expect(screen.getByRole('status', { name: '운세 달력을 불러오는 중' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: '운세' }).firstElementChild).toHaveClass('flex-1');
 
     // 빈 달
     resolveLoad({ ...NOV_HISTORY, firstMonth: null, days: [] });
     await waitFor(() => expect(screen.getByText('이 달에는 기록된 운세가 없어요.')).toBeInTheDocument());
     expect(screen.getByRole('button', { name: '이전 달' })).toBeDisabled();
+    expect(screen.getByRole('dialog', { name: '운세' }).firstElementChild).toHaveClass('flex-1');
     cleanup();
 
     // 오류 및 재시도

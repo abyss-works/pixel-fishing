@@ -7,6 +7,7 @@ import { cx } from '../../../ui/cx';
 import Divider from '../../../ui/Divider';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
+import { SCROLL_Y } from '../../../ui/scrollArea';
 import NewsStep from './NewsStep';
 import SettingsStep from './SettingsStep';
 
@@ -49,6 +50,7 @@ export default function WhatsNewModal({ game, ready }: {
       <ModalCard
         title={STEP_TITLE[w.step]}
         onClose={w.close}
+        fixed
         footer={w.step === 'news' ? (
           <p className="text-xs leading-normal text-text-dim text-center">
             자세한 전체 패치노트는 설정 &gt; 패치노트에서 언제든 볼 수 있어요.
@@ -65,9 +67,11 @@ export default function WhatsNewModal({ game, ready }: {
           </div>
         )}
       >
-        <StepTrail steps={w.steps} index={w.index} />
-        {w.step === 'news' && w.news.length > 0 && <NewsStep news={w.news} />}
-        {w.step === 'settings' && <SettingsStep prompts={w.prompts} />}
+        <div className={cx('flex flex-col flex-1 min-h-0', SCROLL_Y)}>
+          <StepTrail steps={w.steps} index={w.index} />
+          {w.step === 'news' && w.news.length > 0 && <NewsStep news={w.news} />}
+          {w.step === 'settings' && <SettingsStep prompts={w.prompts} />}
+        </div>
       </ModalCard>
     </Modal>
   );
