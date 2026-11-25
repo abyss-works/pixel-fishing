@@ -19,6 +19,215 @@ const src = (path: string) => {
   return found.src;
 };
 
+type LayerAttr =
+  | { kind: 'literal'; value: string }
+  | { kind: 'expr'; raw: string }
+  | { kind: 'boolean' };
+
+/** 주석 밖의 JSX 여는 태그(`<Name ...>`)를 찾는다. 따옴표("·'·`)와 중괄호({...}) 안의 `>`(화살표 함수 `=>`, 비교 연산 등)에서 조기 종료하지 않는다 */
+function jsxOpeningTags(source: string, tagName: string): string[] {
+  const tags: string[] = [];
+  const pattern = new RegExp(`<${tagName}(?=[\\s/>])`, 'g');
+  const inCommentAt = (pos: number): boolean => {
+    const lineStart = source.lastIndexOf('\n', pos - 1) + 1;
+    const beforeOnLine = source.slice(lineStart, pos);
+    let q: '"' | "'" | null = null;
+    for (let k = 0; k < beforeOnLine.length; k++) {
+      const ch = beforeOnLine[k];
+      if (q) {
+        if (ch === '\\') { k++; continue; }
+        if (ch === q) q = null;
+      } else if (ch === '"' || ch === "'") {
+        q = ch;
+      } else if (ch === '/' && beforeOnLine[k + 1] === '/') {
+        return true;
+      }
+    }
+    const lastOpen = source.lastIndexOf('/*', pos - 1);
+    if (lastOpen >= 0) {
+      const lastClose = source.lastIndexOf('*/', pos - 1);
+      if (lastClose < lastOpen) return true;
+    }
+    return false;
+  };
+  const scanBalancedBraces = (start: number): number => {
+    let depth = 0;
+    let quote: '"' | "'" | '`' | null = null;
+    const tplBraces: number[] = [];
+    for (let i = start; i < source.length; i++) {
+      const c = source[i];
+      if (quote === '`') {
+        if (c === '\\') { i++; continue; }
+        if (c === '`') { quote = null; continue; }
+        if (c === '$' && source[i + 1] === '{') {
+          tplBraces.push(depth);
+          depth++;
+          i++;
+        }
+        continue;
+      }
+      if (quote) {
+        if (c === '\\') { i++; continue; }
+        if (c === quote) quote = null;
+        continue;
+      }
+      if (c === '/' && source[i + 1] === '/') {
+        const nl = source.indexOf('\n', i + 2);
+        i = nl < 0 ? source.length : nl;
+        continue;
+      }
+      if (c === '/' && source[i + 1] === '*') {
+        const end = source.indexOf('*/', i + 2);
+        i = end < 0 ? source.length : end + 1;
+        continue;
+      }
+      if (c === '"' || c === "'" || c === '`') quote = c;
+      else if (c === '{') depth++;
+      else if (c === '}') {
+        depth--;
+        if (tplBraces.length > 0 && tplBraces[tplBraces.length - 1] === depth) {
+          tplBraces.pop();
+          quote = '`';
+        } else if (depth === 0) {
+          return i;
+        }
+      }
+    }
+    return source.length - 1;
+  };
+
+  for (const m of source.matchAll(pattern)) {
+    if (inCommentAt(m.index)) continue;
+    let i = m.index + m[0].length;
+    let quote: '"' | "'" | '`' | null = null;
+    for (; i < source.length; i++) {
+      const c = source[i];
+      if (quote) {
+        if (c === '\\') { i++; continue; }
+        if (c === quote) quote = null;
+        continue;
+      }
+      if (c === '/' && source[i + 1] === '/') {
+        const nl = source.indexOf('\n', i + 2);
+        i = nl < 0 ? source.length : nl;
+        continue;
+      }
+      if (c === '/' && source[i + 1] === '*') {
+        const end = source.indexOf('*/', i + 2);
+        i = end < 0 ? source.length : end + 1;
+        continue;
+      }
+      if (c === '"' || c === "'" || c === '`') quote = c;
+      else if (c === '{') i = scanBalancedBraces(i);
+      else if (c === '>') break;
+    }
+    tags.push(source.slice(m.index, i + 1));
+  }
+  return tags;
+}
+
+/** 여는 태그 자신의 최상위 속성에서 `layer` 값을 읽는다 (중첩 JSX 표현식 안의 layer는 무시) */
+function readOwnLayerAttr(tag: string): LayerAttr | undefined {
+  const headEnd = tag.endsWith('/>') ? tag.length - 2 : tag.length - 1;
+  let i = tag.search(/[\s/>]/);
+  if (i < 0 || i >= headEnd) return undefined;
+
+  const skipExpr = (start: number): number => {
+    let depth = 0;
+    let quote: '"' | "'" | '`' | null = null;
+    const tplBraces: number[] = [];
+    for (let k = start; k < headEnd; k++) {
+      const c = tag[k];
+      if (quote === '`') {
+        if (c === '\\') { k++; continue; }
+        if (c === '`') { quote = null; continue; }
+        if (c === '$' && tag[k + 1] === '{') { tplBraces.push(depth); depth++; k++; }
+        continue;
+      }
+      if (quote) {
+        if (c === '\\') { k++; continue; }
+        if (c === quote) quote = null;
+        continue;
+      }
+      if (c === '"' || c === "'" || c === '`') quote = c;
+      else if (c === '{') depth++;
+      else if (c === '}') {
+        depth--;
+        if (tplBraces.length > 0 && tplBraces[tplBraces.length - 1] === depth) {
+          tplBraces.pop();
+          quote = '`';
+        } else if (depth === 0) {
+          return k;
+        }
+      }
+    }
+    return headEnd - 1;
+  };
+
+  while (i < headEnd) {
+    while (i < headEnd && /\s/.test(tag[i])) i++;
+    if (i >= headEnd) break;
+    if (tag[i] === '{') {
+      i = skipExpr(i) + 1;
+      continue;
+    }
+    const nameStart = i;
+    while (i < headEnd && /[\w-]/.test(tag[i])) i++;
+    const name = tag.slice(nameStart, i);
+    if (!name) { i++; continue; }
+    while (i < headEnd && /\s/.test(tag[i])) i++;
+    let attr: LayerAttr = { kind: 'boolean' };
+    if (tag[i] === '=') {
+      i++;
+      while (i < headEnd && /\s/.test(tag[i])) i++;
+      if (tag[i] === '"' || tag[i] === "'") {
+        const q = tag[i++];
+        const valStart = i;
+        while (i < headEnd && tag[i] !== q) {
+          if (tag[i] === '\\') i++;
+          i++;
+        }
+        attr = { kind: 'literal', value: tag.slice(valStart, i) };
+        i++;
+      } else if (tag[i] === '{') {
+        const end = skipExpr(i);
+        attr = { kind: 'expr', raw: tag.slice(i + 1, end).trim() };
+        i = end + 1;
+      } else {
+        const valStart = i;
+        while (i < headEnd && !/[\s>]/.test(tag[i])) i++;
+        attr = { kind: 'expr', raw: tag.slice(valStart, i) };
+      }
+    }
+    if (name === 'layer') return attr;
+  }
+  return undefined;
+}
+
+const MODAL_LAYER_COMPONENTS = [
+  { name: 'Modal', defaultLayer: null },
+  { name: 'ConfirmDialog', defaultLayer: 'app' },
+  { name: 'InputDialog', defaultLayer: 'app' },
+  { name: 'NoticeDialog', defaultLayer: 'app' },
+  { name: 'AccountModal', defaultLayer: null },
+] as const;
+
+/** 해당 소스 파일이 `app` 레이어 모달/대화상자를 사용하는지(생략 시 기본값 `app` 폴백 포함) 판정한다 */
+function usesAppLayerModal(source: string): boolean {
+  for (const { name, defaultLayer } of MODAL_LAYER_COMPONENTS) {
+    for (const tag of jsxOpeningTags(source, name)) {
+      const layer = readOwnLayerAttr(tag);
+      if (!layer) {
+        if (defaultLayer === 'app' || defaultLayer === null) return true;
+        continue;
+      }
+      if (layer.kind === 'literal' && layer.value === 'app') return true;
+      if (layer.kind === 'expr' && /['"`]app['"`]/.test(layer.raw)) return true;
+    }
+  }
+  return false;
+}
+
 /** 토큰 이름 -> 값 */
 const tokens = Object.fromEntries([...css.matchAll(/--z-([a-z-]+):\s*(\d+);/g)].map(m => [m[1], Number(m[2])]));
 
@@ -158,8 +367,8 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
     const nonAdmin = sources.filter(f => !f.path.startsWith('views/admin/'));
     const missingLayer: string[] = [];
     for (const f of nonAdmin) {
-      for (const m of f.src.matchAll(/<Modal\b[^>]*>/g)) {
-        if (!/\blayer=/.test(m[0])) missingLayer.push(`${f.path}: ${m[0]}`);
+      for (const tag of jsxOpeningTags(f.src, 'Modal')) {
+        if (!readOwnLayerAttr(tag)) missingLayer.push(`${f.path}: ${tag}`);
       }
     }
     expect(missingLayer).toEqual([]);
@@ -186,14 +395,17 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
     ]);
     const nonAdminViews = sources.filter(f => f.path.startsWith('views/') && !f.path.startsWith('views/admin/'));
     const appUsers = nonAdminViews
-      .filter(f => /\blayer\s*=\s*['"]app['"]/.test(f.src))
+      .filter(f => usesAppLayerModal(f.src))
       .map(f => f.path)
       .sort();
     expect(appUsers).toEqual([...APP_MODAL_WHITELIST].sort());
     // AccountModal은 스테이지 게스트 차단 경로에서는 반드시 layer="stage"로 호출한다
     const gameView = src('views/game/GameView.tsx');
-    expect(gameView).toMatch(/<AccountModal\b[^>]*\blayer\s*=\s*['"]stage['"]/);
-    expect(gameView).not.toMatch(/<AccountModal\b[^>]*\blayer\s*=\s*['"]app['"]/);
+    const accountTags = jsxOpeningTags(gameView, 'AccountModal');
+    expect(accountTags.length).toBeGreaterThan(0);
+    for (const tag of accountTags) {
+      expect(readOwnLayerAttr(tag)).toEqual({ kind: 'literal', value: 'stage' });
+    }
     // 게임 영역 유래 오버레이는 모두 GameStageLayout 내부에 마운트된다
     const stageStart = gameView.indexOf('<GameStageLayout>');
     const stageEnd = gameView.indexOf('</GameStageLayout>');
@@ -204,6 +416,32 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
       expect(gameView.slice(stageStart, stageEnd)).toContain(`<${overlay}`);
       expect(outsideStage).not.toContain(`<${overlay}`);
     }
+  });
+
+  it('감지 함수: 화살표 함수(`=>`)와 비교 연산(`>`)이 포함된 태그, layer 생략 기본값 app 폴백을 정확히 판정한다', () => {
+    const withArrowBeforeLayer = '<Modal onClose={() => { if (a > 0) close(); }} layer="stage"><p>x</p></Modal>';
+    expect(jsxOpeningTags(withArrowBeforeLayer, 'Modal')).toEqual([
+      '<Modal onClose={() => { if (a > 0) close(); }} layer="stage">',
+    ]);
+    expect(readOwnLayerAttr(jsxOpeningTags(withArrowBeforeLayer, 'Modal')[0])).toEqual({ kind: 'literal', value: 'stage' });
+    expect(usesAppLayerModal(withArrowBeforeLayer)).toBe(false);
+
+    const missingLayerWithArrow = '<Modal onClose={() => go(1 > 0)} footer={<Button layer="stage" />} />';
+    expect(readOwnLayerAttr(jsxOpeningTags(missingLayerWithArrow, 'Modal')[0])).toBeUndefined();
+    expect(usesAppLayerModal(missingLayerWithArrow)).toBe(true);
+
+    const omittedConfirm = '<ConfirmDialog title="확인" onConfirm={() => save()} onCancel={() => close()}>내용</ConfirmDialog>';
+    expect(usesAppLayerModal(omittedConfirm)).toBe(true);
+
+    const stageConfirmWithArrow = '<ConfirmDialog onConfirm={() => save()} layer="stage" onCancel={() => close()}>내용</ConfirmDialog>';
+    expect(usesAppLayerModal(stageConfirmWithArrow)).toBe(false);
+
+    const exprAppConfirm = "<ConfirmDialog onConfirm={() => save()} layer={'app'} onCancel={() => close()} />";
+    expect(usesAppLayerModal(exprAppConfirm)).toBe(true);
+
+    expect(usesAppLayerModal('<InputDialog title="입력" onSubmit={() => {}} onCancel={() => {}} />')).toBe(true);
+    expect(usesAppLayerModal('<NoticeDialog title="안내" onClose={() => {}} />')).toBe(true);
+    expect(usesAppLayerModal('// <ConfirmDialog title="주석" />')).toBe(false);
   });
 
   it('fixed 위치 지정은 앱 셸·모달 백드롭·시트·전환 덮개·토스트·툴팁·개발도구 화이트리스트만 허용한다', () => {
