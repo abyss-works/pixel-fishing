@@ -7,7 +7,8 @@ import {
 } from './logic';
 import type { GameState } from './logic';
 import { DEBUG_COMMAND_IDS, DEBUG_TABLE_COMMANDS } from './debug';
-import { artifactById } from '../content/artifacts';
+import { ARTIFACT_MAX_LEVEL, artifactById } from '../content/artifacts';
+import { artifactLevelOf } from './artifactLevel';
 import { FISH, fishById } from '../content/fish';
 import { NAMED } from '../content/named';
 import { HATS } from '../content/wardrobe';
@@ -202,6 +203,8 @@ describe('items.grant / cooking.finish / artifact.set / hat.set', () => {
     expect(all.state.artifacts).toHaveLength(8);
     expect(all.state.artifactLevels?.['wreck-compass']).toBe(5);
     expect(all.state.artifactLevels?.['mami-wata-mirror']).toBeUndefined();
+    expect(artifactLevelOf(all.state, 'mami-wata-mirror')).toBe(ARTIFACT_MAX_LEVEL);
+    expect(artifactLevelOf(all.state, 'sargasso-net')).toBe(ARTIFACT_MAX_LEVEL);
 
     const removed = debug(all.state, 'artifact.set', { artifact: 'wreck-compass', level: 0 });
     if (!removed.ok) throw new Error(removed.error);

@@ -47,11 +47,20 @@ describe('artifactLevelOf', () => {
     expect(artifactLevelOf(seed({ artifactLevels: { 'wreck-compass': 3 } }), 'wreck-compass')).toBe(0);
   });
 
-  it('범위 밖 값은 1~5로 접고, 전설은 항상 1이다', () => {
+  it('범위 밖 값은 1~5로 접고, 보유 전설 유물은 항상 최고 레벨(5), 미보유·알 수 없는 id는 0이다', () => {
     const st = (lv: number) => seed({ artifacts: ['wreck-compass'], artifactLevels: { 'wreck-compass': lv } });
     expect(artifactLevelOf(st(9), 'wreck-compass')).toBe(5);
     expect(artifactLevelOf(st(0), 'wreck-compass')).toBe(1);
-    expect(artifactLevelOf(seed({ artifacts: ['mami-wata-mirror'], artifactLevels: { 'mami-wata-mirror': 4 } }), 'mami-wata-mirror')).toBe(1);
+
+    // 보유 전설 유물은 artifactLevels가 비어 있거나 다른 값이 들어 있어도 ARTIFACT_MAX_LEVEL(5)
+    expect(artifactLevelOf(seed({ artifacts: ['mami-wata-mirror'] }), 'mami-wata-mirror')).toBe(ARTIFACT_MAX_LEVEL);
+    expect(artifactLevelOf(seed({ artifacts: ['sargasso-net'], artifactLevels: {} }), 'sargasso-net')).toBe(ARTIFACT_MAX_LEVEL);
+    expect(artifactLevelOf(seed({ artifacts: ['mami-wata-mirror'], artifactLevels: { 'mami-wata-mirror': 1 } }), 'mami-wata-mirror')).toBe(ARTIFACT_MAX_LEVEL);
+
+    // 미보유 전설 및 알 수 없는 id는 0
+    expect(artifactLevelOf(seed(), 'mami-wata-mirror')).toBe(0);
+    expect(artifactLevelOf(seed(), 'sargasso-net')).toBe(0);
+    expect(artifactLevelOf(seed({ artifacts: ['unknown-relic'], artifactLevels: { 'unknown-relic': 3 } }), 'unknown-relic')).toBe(0);
   });
 });
 
@@ -89,6 +98,9 @@ describe('레벨별 효과', () => {
       .toEqual([0.1, 0.125, 0.15, 0.175, 0.2]);
     expect(artifactHasLevel(art('sargasso-net'))).toBe(false);
     expect(artifactEffectsAt(art('sargasso-net'), 5)).toEqual({});
+    const legendaryWithEffects = { ...art('mami-wata-mirror'), effects: { sail: 0.1 }, cook: { extraCookChance: 0.1 } };
+    expect(artifactEffectsAt(legendaryWithEffects, ARTIFACT_MAX_LEVEL).sail).toBe(0.1);
+    expect(artifactExtraCookChanceAt(legendaryWithEffects, ARTIFACT_MAX_LEVEL)).toBe(0.1);
     const bagRelic = { ...art('wreck-compass'), effects: { bagCap: 0.1 } };
     expect([1, 2, 3, 4, 5].map(l => artifactEffectsAt(bagRelic, l).bagCap))
       .toEqual([0.1, 0.125, 0.15, 0.175, 0.2]);
@@ -125,6 +137,7 @@ describe('canLevelUpArtifact', () => {
     expect(canLevelUpArtifact(seed({ items: { 'mat-wreck-compass': 9 } }), 'wreck-compass')).toEqual({ ok: false, reason: 'bad-request' });
     expect(canLevelUpArtifact(owned(1, 1), 'nope')).toEqual({ ok: false, reason: 'bad-request' });
     expect(canLevelUpArtifact(owned(1, 9, 'mami-wata-mirror', 'mat-clouded-mirror'), 'mami-wata-mirror')).toEqual({ ok: false, reason: 'bad-request' });
+    expect(canLevelUpArtifact(owned(1, 9, 'sargasso-net', 'mat-wet-sargasso-rope'), 'sargasso-net')).toEqual({ ok: false, reason: 'bad-request' });
     expect(canLevelUpArtifact(owned(5, 99), 'wreck-compass')).toEqual({ ok: false, reason: 'bad-request' });
   });
 
@@ -206,7 +219,9 @@ describe('세이브', () => {
       artifactLevels: {
         'wreck-compass': 3, 'mami-wata-mirror': 2, 'varuna-scale': 2.5, 'abyss-angler': 4, nope: 3,
       } };
-    expect(migrate(raw).artifactLevels).toEqual({ 'wreck-compass': 3 });
+    const sanitized = migrate(raw);
+    expect(sanitized.artifactLevels).toEqual({ 'wreck-compass': 3 });
+    expect(artifactLevelOf(sanitized, 'mami-wata-mirror')).toBe(ARTIFACT_MAX_LEVEL);
     const bad = migrate({ ...newState(), artifacts: ['wreck-compass'], artifactLevels: { 'wreck-compass': 9 } });
     expect(bad.artifactLevels).toEqual({ 'wreck-compass': 5 });
     expect(migrate({ ...newState(), artifacts: ['wreck-compass'], artifactLevels: 'x' }).artifactLevels).toBeUndefined();

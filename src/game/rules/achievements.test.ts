@@ -175,7 +175,7 @@ describe('누적 보너스 계산 (achievementBonusesOf)', () => {
     expect(maxArtifactCount(partial)).toBe(2);
 
     const allMax = seed({
-      artifacts: ARTIFACTS.map(a => a.id),
+      artifacts: [...ARTIFACTS.map(a => a.id), 'unknown-relic'],
       artifactLevels: Object.fromEntries(levelable.map(a => [a.id, ARTIFACT_MAX_LEVEL])),
     });
     expect(maxArtifactCount(allMax)).toBe(ARTIFACTS.length);
