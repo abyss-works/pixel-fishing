@@ -4,7 +4,7 @@ import { COOKING_UNLOCK_BOAT, COOK_KIND_RULES, ENERGY_ITEM_IDS } from '../../../
 import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { GUEST_LOCK_DEFAULT_LINES, UNVERIFIED_LOCK_TEXT } from '../../display/model/menuLock';
-import { ITEM_GROUP_HINT, planEat, selectItemSection } from './bagItems';
+import { filterItemSection, ITEM_GROUP_HINT, planEat, selectItemSection } from './bagItems';
 import { recipesOfKind } from './recipes';
 
 const T0 = '2026-11-12T00:00:00.000Z';
@@ -96,25 +96,33 @@ describe('아이템 섹션: 열린 뒤', () => {
     });
     const v = selectItemSection(game, T0, 'account');
     if (v.state !== 'open') throw new Error('open이어야 해요');
-    expect(v.lunch.map(r => [r.recipe.id, r.active, r.remainingMinutes])).toEqual([
+    expect(v.lunch.filter(r => r.count > 0).map(r => [r.recipe.id, r.active, r.remainingMinutes])).toEqual([
       ['cook-lunch-bite', true, 8 * 60 + 42],
       ['cook-lunch-rare', false, null],
     ]);
-    expect(v.bait.map(r => [r.recipe.id, r.active, r.remainingMinutes])).toEqual([
+    expect(v.bait.filter(r => r.count > 0).map(r => [r.recipe.id, r.active, r.remainingMinutes])).toEqual([
       ['cook-bait-rare', true, 4.3],
       ['cook-bait-epic', false, null],
     ]);
   });
 
-  it('도시락과 미끼 행은 가진 것만 부엌 목록 순서로, 동작 이름과 슬롯을 갖는다', () => {
+  it('도시락 5종과 미끼 5종 전체를 부엌 목록 순서로 내고 미보유는 수량 0이다', () => {
     const game = seed({ items: { 'cook-lunch-rare': 1, 'cook-lunch-bite': 2, 'cook-bait-epic': 3, 'cook-bait-rare': 4 } });
     const v = selectItemSection(game, T0, 'account');
     if (v.state !== 'open') throw new Error('open이어야 해요');
     expect(v.lunch.map(r => [r.label, r.count, r.verb, r.slot])).toEqual([
-      ['가루디야', 2, '먹기', 'lunch'], ['민 몰리', 1, '먹기', 'lunch'],
+      ['가루디야', 2, '먹기', 'lunch'],
+      ['민 몰리', 1, '먹기', 'lunch'],
+      ['생선 비리야니', 0, '먹기', 'lunch'],
+      ['암불 티얄', 0, '먹기', 'lunch'],
+      ['생선 탈리', 0, '먹기', 'lunch'],
     ]);
     expect(v.bait.map(r => [r.label, r.count, r.verb, r.slot])).toEqual([
-      ['롱페퍼 미끼(희귀)', 4, '쓰기', 'bait'], ['큐베브 미끼(영웅)', 3, '쓰기', 'bait'],
+      ['롱페퍼 미끼(희귀)', 4, '쓰기', 'bait'],
+      ['큐베브 미끼(영웅)', 3, '쓰기', 'bait'],
+      ['용연향 미끼(전설)', 0, '쓰기', 'bait'],
+      ['사프란 미끼(특수)', 0, '쓰기', 'bait'],
+      ['달빛 미끼(특수)', 0, '쓰기', 'bait'],
     ]);
   });
 
@@ -130,7 +138,7 @@ describe('아이템 섹션: 열린 뒤', () => {
     const v = selectItemSection(game, T0, 'account');
     if (v.state !== 'open') throw new Error('open이어야 해요');
     expect(v.lunch[0].title).toEqual({ name: '가루디야', grade: null });
-    expect(v.bait.map(r => r.title)).toEqual([
+    expect(v.bait.filter(r => r.count > 0).map(r => r.title)).toEqual([
       { name: '큐베브 미끼', grade: 'epic' }, { name: '사프란 미끼', grade: 'special' },
     ]);
   });
@@ -150,21 +158,34 @@ describe('아이템 섹션: 열린 뒤', () => {
     // 대기의 2.5배가 지나면 2개가 완성되고 1개는 조리 중이다
     const v = selectItemSection(game, at(2.5 * LUNCH_WAIT), 'account');
     if (v.state !== 'open') throw new Error('open이어야 해요');
-    expect(v.lunch.map(r => [r.recipe.id, r.count])).toEqual([['cook-lunch-bite', 3]]);
+    expect(v.lunch.find(r => r.recipe.id === 'cook-lunch-bite')?.count).toBe(3);
   });
 
   it('조리 중이고 아직 완성되지 않은 분은 행에 세지 않는다', () => {
     const game = seed({ cooking: { recipe: 'cook-lunch-bite', count: 2, bonus: [false, false], startedAt: T0 } });
     const v = selectItemSection(game, at(LUNCH_WAIT / 2), 'account');
     if (v.state !== 'open') throw new Error('open이어야 해요');
-    expect(v.lunch).toEqual([]);
+    expect(v.lunch.every(r => r.count === 0)).toBe(true);
   });
 
-  it('가진 것이 하나도 없으면 비어 있다고 알린다', () => {
-    const v = selectItemSection(seed(), T0, 'account');
-    expect(v.state === 'open' && v.empty).toBe(true);
-    const some = selectItemSection(seed({ items: { [ENERGY_ITEM_IDS.rare]: 1 } }), T0, 'account');
-    expect(some.state === 'open' && some.empty).toBe(false);
+  it('가진 것이 하나도 없으면 비어 있다고 알리고, 보유 중만 보기 필터는 수량 > 0 또는 적용 중인 것만 남긴다', () => {
+    const emptyView = selectItemSection(seed(), T0, 'account');
+    if (emptyView.state !== 'open') throw new Error('open이어야 해요');
+    expect(emptyView.empty).toBe(true);
+    expect(filterItemSection(emptyView, false).empty).toBe(false);
+    expect(filterItemSection(emptyView, true)).toEqual({ lunch: [], bait: [], energy: [], empty: true });
+
+    const activeZeroOwned = selectItemSection(seed({
+      items: { [ENERGY_ITEM_IDS.rare]: 1 },
+      slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(HOUR) }, bait: null },
+    }), T0, 'account');
+    if (activeZeroOwned.state !== 'open') throw new Error('open이어야 해요');
+    expect(activeZeroOwned.empty).toBe(false);
+    const filtered = filterItemSection(activeZeroOwned, true);
+    expect(filtered.empty).toBe(false);
+    expect(filtered.lunch.map(r => [r.recipe.id, r.count, r.active])).toEqual([['cook-lunch-bite', 0, true]]);
+    expect(filtered.bait).toEqual([]);
+    expect(filtered.energy.map(e => e.grade)).toEqual(['rare']);
   });
 });
 
@@ -242,7 +263,7 @@ describe('먹기 계획과 교체 확인', () => {
 
     const sec = selectItemSection(oneActive, T0, 'account');
     if (sec.state !== 'open') throw new Error('open이어야 해요');
-    expect(sec.bait.map(r => [r.recipe.id, r.active])).toEqual([
+    expect(sec.bait.filter(r => r.count > 0).map(r => [r.recipe.id, r.active])).toEqual([
       ['cook-bait-rare', true],
       ['cook-bait-epic', false],
       ['cook-bait-legendary', false],

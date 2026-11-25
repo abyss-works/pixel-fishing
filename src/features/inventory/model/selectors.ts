@@ -13,6 +13,7 @@ import { saleProceeds } from './catalog';
 import { boatNameOf } from '../../../game/content/boats';
 import { ARTIFACTS } from '../../../game/content/artifacts';
 import type { Artifact } from '../../../game/content/artifacts';
+import { zoneById } from '../../../game/content/zones';
 
 /** 가방 채움 경고 단계 — 이 비율(%) 이상이면 warn·danger */
 export const BAG_WARN_PERCENT = 75;
@@ -66,6 +67,22 @@ export function selectBagOverview(
 export function selectOwnedArtifacts(game: Pick<GameState, 'artifacts'>): Artifact[] {
   const owned = new Set(game.artifacts);
   return ARTIFACTS.filter(a => owned.has(a.id));
+}
+
+export interface BagArtifactEntry {
+  artifact: Artifact;
+  owned: boolean;
+  zoneName: string;
+}
+
+/** 가방 유물 목록 — 전체 유물을 레지스트리 순서로 내고 보유 여부와 구역명을 함께 돌려준다 */
+export function selectBagArtifacts(game: Pick<GameState, 'artifacts'>): BagArtifactEntry[] {
+  const owned = new Set(game.artifacts);
+  return ARTIFACTS.map(artifact => ({
+    artifact,
+    owned: owned.has(artifact.id),
+    zoneName: zoneById(artifact.zone)?.shortName ?? artifact.zone,
+  }));
 }
 
 /** 헤더 자원 바의 배와 낚싯대 - 배는 티어와 이름(맨발은 티어 0, 없음), 낚싯대는 레벨 */

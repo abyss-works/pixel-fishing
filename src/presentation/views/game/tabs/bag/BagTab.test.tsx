@@ -105,7 +105,7 @@ describe('BagTab - 길드 가방 보너스', () => {
   });
 });
 
-describe('BagTab - 유물 섹션 시스템 효과', () => {
+describe('BagTab - 유물 섹션 전체 목록·미보유·보유 중만 보기', () => {
   it('전설 유물의 시스템 보너스와 페널티를 유물 목록에 함께 보인다', () => {
     setBagSection('artifacts');
     show(game({ artifacts: ['sargasso-net', 'mami-wata-mirror'] }));
@@ -113,6 +113,52 @@ describe('BagTab - 유물 섹션 시스템 효과', () => {
     expect(screen.getByText('미끼 지속 시간 −50%')).toHaveClass('text-danger');
     expect(screen.getByText('네임드 토벌 하루 +1번')).toHaveClass('text-accent');
     expect(screen.getByText('네임드 토벌 골드 −30%')).toHaveClass('text-danger');
+  });
+
+  it('기본 꺼짐 상태에서는 유물 8종 전체를 순서대로 보이고 미보유는 이름·구역·등급이 흐리게 표시되며 눌러도 상세 창이 열리지 않는다', () => {
+    setBagSection('artifacts');
+    show(game({ artifacts: ['varuna-scale'] }));
+    expect(screen.getByRole('heading', { level: 3, name: /유물 1\/8/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '보유 중만 보기' })).toHaveAttribute('aria-pressed', 'false');
+
+    // 보유 유물은 버튼(PressRow)으로 상세 창을 연다
+    const ownedBtn = screen.getByRole('button', { name: /진주 상인의 저울/ });
+    expect(ownedBtn).toBeInTheDocument();
+
+    // 미보유 유물은 비활성 행(버튼 아님)으로 이름·구역·등급이 보인다
+    const unownedName = screen.getByText('해구의 이빨');
+    const unownedRow = unownedName.parentElement!;
+    expect(unownedRow.tagName).not.toBe('BUTTON');
+    expect(unownedRow).toHaveClass('text-text-dim', 'bg-bg');
+    expect(within(unownedRow).getByText('태평양')).toBeInTheDocument();
+    expect(within(unownedRow).getByText('영웅')).toBeInTheDocument();
+
+    fireEvent.click(unownedRow);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    fireEvent.click(ownedBtn);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('보유 중만 보기 토글을 켜면 보유 유물만 남기고, 보유 0개면 빈 상태 안내를 보인다. 하단 수배판 안내는 유지한다', () => {
+    setBagSection('artifacts');
+    show(game({ artifacts: ['varuna-scale'] }));
+    expect(screen.getByText(/교환은 항구 수배판의 유물 탭에서 할 수 있어요/)).toBeInTheDocument();
+
+    const toggle = screen.getByRole('button', { name: '보유 중만 보기' });
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('진주 상인의 저울')).toBeInTheDocument();
+    expect(screen.queryByText('해구의 이빨')).not.toBeInTheDocument();
+    expect(screen.getByText(/교환은 항구 수배판의 유물 탭에서 할 수 있어요/)).toBeInTheDocument();
+
+    cleanup();
+    setBagSection('artifacts');
+    show(game());
+    expect(screen.getByText('해구의 이빨')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '보유 중만 보기' }));
+    expect(screen.getByText(/아직 유물이 없어요/)).toBeInTheDocument();
+    expect(screen.queryByText('해구의 이빨')).not.toBeInTheDocument();
   });
 });
 

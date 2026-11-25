@@ -25,6 +25,7 @@ import IconButton from '../../../../ui/IconButton';
 import { LockLines } from '../../../../ui/Locked';
 import Tip from '../../../../ui/Tip';
 import SubTabs from '../../../../ui/SubTabs';
+import ToggleChip from '../../../../ui/ToggleChip';
 import { RarityDot, RarityText } from '../../../../ui/fish/RarityTag';
 import { groupInstances } from '../../../../../features/inventory/model/bagRows';
 import HelpHint from '../../../../ui/HelpHint';
@@ -33,7 +34,7 @@ import BagCards from './BagCards';
 import { setBagLayout, setBagSection, toggleBagRow, useBagView } from './bagView';
 import type { BagSection } from './bagView';
 import { levelText, selectArtifactLevel } from '../../../../../features/inventory/model/artifactLevel';
-import { selectOwnedArtifacts } from '../../../../../features/inventory/model/selectors';
+import { selectBagArtifacts } from '../../../../../features/inventory/model/selectors';
 import { ARTIFACTS } from '../../../../../game/content/artifacts';
 import { artifactEffectLines, artifactSystemLines } from '../../../../ui/artifactEffects';
 import Inset from '../../../../ui/Inset';
@@ -64,27 +65,52 @@ export const EXHIBIT_UI_ENABLED = false;
 // 마릿수 열은 행 너비의 15%를 더 받아 이름 바로 뒤에 왼쪽 정렬로 둔다(세 자리 마릿수가 잘리지 않게)
 const ROW = 'grid grid-cols-[10px_30px_1fr_calc(15%+24px)_80px_22px] items-center gap-1';
 
-/** 유물 섹션 — 보유 유물만 레지스트리 순으로. 소유가 곧 효과라 슬롯·장착은 없고, 줄을 누르면 유물 상세 창이 열려 강화한다.
- *  얻는 곳(수배판 유물 탭)은 미보유 목록 대신 안내 한 줄로 알린다 — 수배판이 교환 카드를 이미 보여 준다. */
+/** 유물 섹션 — 레지스트리 순 전체 유물을 보이고 보유 유물만 눌러 유물 상세 창을 연다.
+ *  보유 중만 보기 토글을 켜면 보유 유물만 걸러 보이며, 보유 유물이 없으면 수배판 교환 안내를 보인다. */
 function ArtifactSection({ game, dispatch, setToast }: {
   game: GameState;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
 }) {
-  const owned = selectOwnedArtifacts(game);
+  const entries = selectBagArtifacts(game);
+  const ownedCount = entries.filter(e => e.owned).length;
+  const [ownedOnly, setOwnedOnly] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
-  const opened = owned.find(a => a.id === openId);
+  const shown = ownedOnly ? entries.filter(e => e.owned) : entries;
+  const opened = entries.find(e => e.owned && e.artifact.id === openId)?.artifact;
   return (
     <div className="flex flex-col gap-1">
-      <PageTitle>
-        유물 <span className="pf-accent">{owned.length}/{ARTIFACTS.length}</span>
-      </PageTitle>
-      {owned.length === 0 ? (
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <PageTitle>
+          유물 <span className="pf-accent">{ownedCount}/{ARTIFACTS.length}</span>
+        </PageTitle>
+        <ToggleChip
+          size="sm"
+          pressed={ownedOnly}
+          emphasis={ownedOnly}
+          onClick={() => setOwnedOnly(v => !v)}
+        >
+          <PixelIcon glyph="check" size={10} />
+          보유 중만 보기
+        </ToggleChip>
+      </div>
+      {shown.length === 0 ? (
         <Note>아직 유물이 없어요.<br />네임드를 토벌하고 받은 교환 재료를 수배판의 유물 탭에서 유물로 바꿔 보세요.</Note>
       ) : (
         <>
           <Inset divided>
-            {owned.map(a => {
+            {shown.map(({ artifact: a, owned, zoneName }) => {
+              if (!owned) {
+                return (
+                  <div key={a.id} className="flex items-baseline justify-between gap-2 px-2 py-1.5 text-sm text-text-dim bg-bg">
+                    <span className="truncate">{a.name}</span>
+                    <span className="flex items-baseline gap-2 text-xs shrink-0">
+                      <span>{zoneName}</span>
+                      <RarityText rarity={a.grade} />
+                    </span>
+                  </div>
+                );
+              }
               const { level, hasLevel } = selectArtifactLevel(game, a);
               const { bonus, penalty } = artifactSystemLines(a);
               return (
