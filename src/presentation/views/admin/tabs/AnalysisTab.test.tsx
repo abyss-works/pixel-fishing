@@ -33,6 +33,39 @@ vi.mock('../../../../platform/api', () => ({
         day: todayKST(), named_accepts: 3, tickets: 2, duels_won: 1, duels_lost: 1,
         named_rewards: 1, general_accepts: 4, general_rewards: 4,
       }]),
+      onboardingFunnel: vi.fn(async () => ({
+        eventsWindowDays: 7,
+        conversion: {
+          totalUsers: 10,
+          guestUsers: 6,
+          googleLinkedUsers: 4,
+          conversionRate: 0.4,
+          medianMinutes: 25,
+          p90Minutes: 180,
+          buckets: [
+            { bucket: 'under_10m', count: 2, pct: 50 },
+            { bucket: '10m_to_1h', count: 2, pct: 50 },
+          ],
+        },
+        tutorials: {
+          totalUsers: 10,
+          totalWithSave: 9,
+          stages: [
+            { id: 'village', completed: 8, rate: 0.8, dropOffFromPrev: 0, stepRate: null },
+            { id: 'sea', completed: 6, rate: 0.6, dropOffFromPrev: 2, stepRate: 0.75 },
+            { id: 'bounty-quests', completed: 4, rate: 0.4, dropOffFromPrev: 2, stepRate: 0.667 },
+            { id: 'bounty-named', completed: 2, rate: 0.2, dropOffFromPrev: 2, stepRate: 0.5 },
+          ],
+        },
+        steps: [
+          { id: 'first_visit', users: 10, rate: 1, stepRate: null, basis: 'lifetime' },
+          { id: 'tutorial_complete', users: 2, rate: 0.2, stepRate: 0.2, basis: 'lifetime' },
+          { id: 'first_catch', users: 7, rate: 0.7, stepRate: 3.5, basis: 'lifetime' },
+          { id: 'first_sell', users: 5, rate: 0.5, stepRate: 0.714, basis: 'hybrid_7d' },
+          { id: 'first_harbor', users: 4, rate: 0.4, stepRate: 0.8, basis: 'lifetime' },
+          { id: 'first_upgrade', users: 3, rate: 0.3, stepRate: 0.75, basis: 'lifetime' },
+        ],
+      })),
     },
   },
 }));
@@ -85,6 +118,14 @@ describe('경제·진행 탭', () => {
     expect(await screen.findByText('바운티 퍼널 (최근 7일, 이벤트 보관 한도)')).toBeInTheDocument();
     expect(screen.getByText('결투 없이 남은 흔적')).toBeInTheDocument();
     expect(screen.getByText('결투까지 100%')).toBeInTheDocument();
+    const convCell = (await screen.findByText('게스트 → 구글 계정 전환')).closest('section')!;
+    expect(await within(convCell).findByText('40%')).toBeInTheDocument();
+    expect(within(convCell).getByText('25분')).toBeInTheDocument();
+    expect(within(convCell).getByText('3시간')).toBeInTheDocument();
+    expect(screen.getByText('튜토리얼 4단계 완료·이탈')).toBeInTheDocument();
+    const stepsCell = screen.getByText('초반 온보딩 6단계 퍼널').closest('section')!;
+    expect(within(stepsCell).getByRole('cell', { name: '첫 판매' })).toBeInTheDocument();
+    expect(within(stepsCell).getByText(/첫 판매\(first_sell\)처럼 hybrid_7d 기준 단계는/)).toBeInTheDocument();
     expect(screen.queryByRole('group', { name: '기간 선택' })).not.toBeInTheDocument();
   });
 

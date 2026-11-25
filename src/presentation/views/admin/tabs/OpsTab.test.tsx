@@ -1,13 +1,31 @@
 // 운영 탭 — 환경 정체·권한 상태·이벤트 카탈로그가 칸으로 나뉘어 그려지는지 확인한다.
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen, cleanup, within } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
 import { AdminAuthCtx } from '../../../../features/admin/service/accessContext';
 import type { AdminAccess } from '../../../../features/admin/service/accessContext';
-import { EVENT_LABELS } from '../../../../features/admin/model/metrics';
+import { EVENT_LABELS, todayKST } from '../../../../features/admin/model/metrics';
 import { QueryProvider } from '../../../../core/QueryProvider';
+import { api } from '../../../../platform/api';
 import OpsTab from './OpsTab';
 
-vi.mock('../../../../platform/api', () => ({ api: { admin: { deployHost: () => null, changelog: vi.fn(async () => []) } } }));
+const sampleHttpMetrics = (days = 30) => ({
+  days,
+  scope: 'app_server' as const,
+  summary: { total: 500, status426: 1, status429: 10, status5xx: 2, rate426: 0.002, rate429: 0.02, rate5xx: 0.004 },
+  daily: [{ day: todayKST(), total: 500, status426: 1, status429: 10, status5xx: 2, rate426: 0.002, rate429: 0.02, rate5xx: 0.004 }],
+  byRoute: [{ routeGroup: 'action' as const, total: 400, status426: 1, status429: 8, status5xx: 2, rate426: 0.0025, rate429: 0.02, rate5xx: 0.005 }],
+  rows: [{ day: todayKST(), routeGroup: 'action' as const, total: 400, status426: 1, status429: 8, status5xx: 2 }],
+});
+
+vi.mock('../../../../platform/api', () => ({
+  api: {
+    admin: {
+      deployHost: () => null,
+      changelog: vi.fn(async () => []),
+      httpMetrics: vi.fn(async (days = 30) => sampleHttpMetrics(days)),
+    },
+  },
+}));
 
 afterEach(cleanup);
 
@@ -49,5 +67,18 @@ describe('운영 탭', () => {
     }
     const contract = screen.getByText('데이터 계약').closest('section')!;
     expect(within(contract).getByText(/세션 강제 종료/)).toBeInTheDocument();
+  });
+
+  it('HTTP 오류율·429 섹션은 앱 서버 기준 안내·경로 묶음 표·일별 추이와 기간 전환(7/30/90일)을 제공한다', async () => {
+    show('granted');
+    expect(await screen.findByText('게임 액션')).toBeInTheDocument();
+    expect(screen.getByText(/ingress-nginx/)).toBeInTheDocument();
+    expect(vi.mocked(api.admin.httpMetrics)).toHaveBeenCalledWith(30);
+    expect(screen.getByRole('img', { name: '최근 30일 일별 429 응답 수' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: '최근 30일 일별 5xx 오류 수' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '7일' }));
+    await waitFor(() => expect(vi.mocked(api.admin.httpMetrics)).toHaveBeenCalledWith(7));
+    expect(screen.getByRole('img', { name: '최근 7일 일별 429 응답 수' })).toBeInTheDocument();
   });
 });
