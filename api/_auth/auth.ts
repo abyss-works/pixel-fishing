@@ -22,6 +22,11 @@ export interface AuthConfig {
 const SESSION_EXPIRES_IN = 60 * 60 * 24 * 365;
 // 익명 계정의 자리표시 이메일 도메인. 예약된 최상위 도메인이라 실제 주소와 겹치지 않는다.
 export const ANONYMOUS_EMAIL_DOMAIN = 'anonymous.invalid';
+/** 익명 계정 생성 경로(/api/auth/sign-in/anonymous)의 IP당 생성 상한: 1시간(3600초)당 최대 10회 */
+export const ANONYMOUS_SIGN_IN_RATE_LIMIT = {
+  window: 60 * 60,
+  max: 10,
+} as const;
 // 이메일·비밀번호 로그인·가입·재설정 경로는 사용하지 않아 라우터 진입에서 차단한다.
 const DISABLED_EMAIL_PASSWORD_PATHS = ['/sign-in/email', '/sign-up/email', '/request-password-reset', '/reset-password'];
 
@@ -73,9 +78,31 @@ const ipAddressConfig = {
   trustedProxies: TRUSTED_PROXY_CIDRS,
 };
 
+/** 인증 라이브러리 429 응답의 X-Retry-After 값을 표준 Retry-After 헤더에도 함께 싣는다 */
+function withRetryAfterHeader<
+  T extends { handler: (req: Request) => Promise<Response>; fetch: (req: Request) => Promise<Response> },
+>(auth: T): T {
+  const original = auth.handler;
+  const wrapped = async (req: Request): Promise<Response> => {
+    const res = await original(req);
+    if (res.status !== 429 || res.headers.has('retry-after')) return res;
+    const retryAfter = res.headers.get('x-retry-after');
+    if (!retryAfter) return res;
+    const headers = new Headers(res.headers);
+    headers.set('retry-after', retryAfter);
+    const body = await res.arrayBuffer();
+    return new Response(body, {
+      status: res.status,
+      statusText: res.statusText,
+      headers,
+    });
+  };
+  return { ...auth, handler: wrapped, fetch: wrapped };
+}
+
 export function createAuth(config: AuthConfig) {
   const finishLink = finishGoogleLink(config.recordLinkConsent);
-  return betterAuth({
+  const auth = betterAuth({
     database: config.pool,
     secret: config.secret,
     baseURL: config.baseURL,
@@ -99,6 +126,11 @@ export function createAuth(config: AuthConfig) {
       },
     },
     hooks: { before: guardAuthRequests },
+    rateLimit: {
+      customRules: {
+        '/sign-in/anonymous': { ...ANONYMOUS_SIGN_IN_RATE_LIMIT },
+      },
+    },
     advanced: { database: { generateId: 'uuid' }, ipAddress: ipAddressConfig },
     plugins: [
       anonymous({
@@ -109,6 +141,7 @@ export function createAuth(config: AuthConfig) {
       }),
     ],
   });
+  return withRetryAfterHeader(auth);
 }
 
 /** 관리자 세션 쿠키 이름의 앞부분. 게임 세션 쿠키(better-auth)와 이름이 달라 서로의 로그인·로그아웃이 영향을 주지 않는다 */
@@ -126,7 +159,7 @@ export const adminSecret = (secret: string): string =>
  * 구글을 연결한 적 없는 계정은 로그인하지 못한다. 연결과 익명 로그인은 게임 인증만 제공한다.
  */
 export function createAdminAuth(config: Omit<AuthConfig, 'recordLinkConsent'>) {
-  return betterAuth({
+  const auth = betterAuth({
     database: config.pool,
     secret: adminSecret(config.secret),
     baseURL: config.baseURL,
@@ -147,6 +180,7 @@ export function createAdminAuth(config: Omit<AuthConfig, 'recordLinkConsent'>) {
     },
     advanced: { database: { generateId: 'uuid' }, cookiePrefix: ADMIN_COOKIE_PREFIX, ipAddress: ipAddressConfig },
   });
+  return withRetryAfterHeader(auth);
 }
 
 export type Auth = ReturnType<typeof createAuth>;
