@@ -46,26 +46,27 @@ export default function Sidebar<K extends string>({ tabs, activeKey, onSelect, s
     return (
       <SidebarFooterContext.Provider value={footerEl}>
         {sheetOpen && (
-          <section aria-label="탭 내용"
-                   className="fixed inset-x-0 bottom-14 z-(--z-tabs) h-[50dvh] flex flex-col bg-surface border-t border-line shadow-panel">
-            {/* 시트 안에서 연 창은 창 층이 아니라 시트 바로 위에 쌓인다(WindowSlot) */}
+          <section aria-label="탭 내용" className="contents">
+            {/* 시트 안에서 연 창은 시트(z-(--z-tabs)) 쌓임 맥락 바깥의 같은 자리(WindowSlot)에 그려 탭 줄 위 앱 층에 놓인다 */}
             <WindowSlot>
-              {/* 시트 머리 — 아래로 끌면 닫힌다. 모달이 떠 있으면 배경이라 입력을 받지 않는다 */}
-              <div role="presentation" inert={blocked || undefined}
-                   className="shrink-0 h-6 flex items-center justify-center touch-none border-b border-line/60"
-                   onPointerDown={e => { dragFrom.current = e.clientY; e.currentTarget.setPointerCapture(e.pointerId); }}
-                   onPointerUp={e => {
-                     if (dragFrom.current !== null && isSheetDragClose(dragFrom.current, e.clientY)) onSheetClose?.();
-                     dragFrom.current = null;
-                   }}
-                   onPointerCancel={() => { dragFrom.current = null; }}>
-                <span className="block w-10 h-1 bg-text-dim" />
+              <div className="fixed inset-x-0 bottom-14 z-(--z-tabs) h-[50dvh] flex flex-col bg-surface border-t border-line shadow-panel">
+                {/* 시트 머리 — 아래로 끌면 닫힌다. 모달이 떠 있으면 배경이라 입력을 받지 않는다 */}
+                <div role="presentation" inert={blocked || undefined}
+                     className="shrink-0 h-6 flex items-center justify-center touch-none border-b border-line/60"
+                     onPointerDown={e => { dragFrom.current = e.clientY; e.currentTarget.setPointerCapture(e.pointerId); }}
+                     onPointerUp={e => {
+                       if (dragFrom.current !== null && isSheetDragClose(dragFrom.current, e.clientY)) onSheetClose?.();
+                       dragFrom.current = null;
+                     }}
+                     onPointerCancel={() => { dragFrom.current = null; }}>
+                  <span className="block w-10 h-1 bg-text-dim" />
+                </div>
+                <div inert={blocked || undefined}
+                     className="pf-scroll flex-1 min-h-0 pf-vscroll p-3 flex flex-col gap-2">
+                  {children}
+                </div>
+                <div ref={setFooterEl} inert={blocked || undefined} className="shrink-0" />
               </div>
-              <div inert={blocked || undefined}
-                   className="pf-scroll flex-1 min-h-0 pf-vscroll p-3 flex flex-col gap-2">
-                {children}
-              </div>
-              <div ref={setFooterEl} inert={blocked || undefined} className="shrink-0" />
             </WindowSlot>
           </section>
         )}

@@ -500,6 +500,7 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
       'views/overlays/account/AccountModal.tsx',
       'views/overlays/account/ConsentModal.tsx',
       'views/overlays/account/MyInfoModal.tsx',
+      'views/overlays/facility/EnergyPanel.tsx',
       'views/overlays/settings/SettingsModal.tsx',
       'views/overlays/codes/CodeModal.tsx',
       'views/overlays/letter/LetterModal.tsx',
@@ -584,6 +585,51 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
       }
     }
     expect(offenders).toEqual([]);
+  });
+
+  it('사이드바 탭(views/game/tabs)과 가방 기운 얻기(EnergyPanel)는 스테이지 모달이 아니라 앱 모달(layer="app")만 사용한다', () => {
+    const tabFiles = sources.filter(f => f.path.startsWith('views/game/tabs/'));
+    const energyPanel = src('views/overlays/facility/EnergyPanel.tsx');
+    const facilityModal = src('views/overlays/facility/FacilityModal.tsx');
+    const gameTabs = src('views/game/tabs/GameTabs.tsx');
+    const gameView = src('views/game/GameView.tsx');
+
+    const offenders: string[] = [];
+    for (const f of [...tabFiles, { path: 'views/overlays/facility/EnergyPanel.tsx', src: energyPanel }]) {
+      for (const { name } of MODAL_LAYER_COMPONENTS) {
+        for (const tag of jsxOpeningTags(f.src, name)) {
+          const layer = readOwnLayerAttr(tag);
+          if (layer?.kind === 'literal' && layer.value !== 'app') offenders.push(`${f.path}: ${tag}`);
+          if (!layer && (name === 'Modal' || name === 'AccountModal')) offenders.push(`${f.path}: ${tag}`);
+        }
+      }
+      for (const call of dialogHookCalls(f.src)) {
+        if (call.layer?.kind === 'literal' && call.layer.value !== 'app') {
+          offenders.push(`${f.path}: useDialogs.${call.fn}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+    const energyModalTags = jsxOpeningTags(energyPanel, 'Modal');
+    expect(energyModalTags.length).toBeGreaterThan(0);
+    for (const tag of energyModalTags) {
+      expect(readOwnLayerAttr(tag)).toEqual({ kind: 'literal', value: 'app' });
+    }
+    expect(facilityModal).not.toContain('EnergyPanel');
+    expect(gameTabs).not.toContain('onOpenEnergy');
+    expect(gameView).not.toContain('onOpenEnergy');
+  });
+
+  it('모바일 시트의 WindowSlot은 z-(--z-tabs)나 fixed 쌓임 맥락 바깥에 놓여 시트에서 연 앱 창이 탭 줄에 가리지 않는다', () => {
+    const sidebar = src('layouts/sidebar/index.tsx');
+    const slotAt = sidebar.indexOf('<WindowSlot>');
+    const sectionAt = sidebar.lastIndexOf('<section', slotAt);
+    expect(slotAt).toBeGreaterThan(-1);
+    expect(sectionAt).toBeGreaterThan(-1);
+    const sectionTag = sidebar.slice(sectionAt, sidebar.indexOf('>', sectionAt) + 1);
+    expect(sectionTag).not.toContain('z-(--z-tabs)');
+    expect(sectionTag).not.toMatch(/\bfixed\b/);
+    expect(sectionTag).toContain('contents');
   });
 
   it('fixed 위치 지정은 앱 셸·모달 백드롭·시트·전환 덮개·토스트·툴팁·개발도구 화이트리스트만 허용한다', () => {
