@@ -70,7 +70,7 @@ describe('게스트 액션 허용 목록', () => {
     expect(outcome(await send(uid, { type: 'boot' }))).toEqual([200, 'ok']);
   });
 
-  it('출항준비 정적 쿠폰은 게스트에게도 300G와 작은 행운 물약 1개를 지급하고 DB에 저장하며, 다른 쿠폰은 403 account-only로 거부한다', async () => {
+  it('출항준비 정적 쿠폰은 게스트에게도 300G와 작은 바다 영약 1개를 지급하고 DB에 저장하며, 다른 쿠폰은 403 account-only로 거부한다', async () => {
     await env.client.query(`insert into public.coupons (code, gold, description, active)
       values ('DYN-GUEST-BLOCKED', 500, '동적 쿠폰', true) on conflict (code) do nothing`);
     const uid = await guest({ state: { gold: 0 } });
