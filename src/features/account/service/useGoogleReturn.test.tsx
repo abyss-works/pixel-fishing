@@ -19,6 +19,12 @@ vi.mock('../../../platform/api', () => ({
 }));
 
 import { useGoogleReturn } from './useGoogleReturn';
+import {
+  hasPendingSailReturn,
+  isSailReturnReady,
+  resetSailReturnForTest,
+  setPendingSailReturn,
+} from './sailReturn';
 
 import type { GuestProgress } from '../model/accountRules';
 
@@ -40,8 +46,14 @@ describe('구글 인증 복귀 처리', () => {
     auth.landing = null;
     auth.startGoogle.mockReset();
     auth.startGoogle.mockResolvedValue({ ok: true });
+    sessionStorage.clear();
+    resetSailReturnForTest();
   });
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    sessionStorage.clear();
+    resetSailReturnForTest();
+  });
 
   it('구글에서 돌아온 게 아니면 아무것도 하지 않는다', () => {
     const p = setup();
@@ -196,5 +208,77 @@ describe('버릴 진행이 없는 게스트의 구글 로그인', () => {
     const p = setup(false, 'nothing');
     await waitFor(() => expect(p.showNotice).toHaveBeenCalledTimes(1));
     expect(auth.startGoogle).not.toHaveBeenCalled();
+  });
+});
+
+describe('출항 복귀 표지 처리', () => {
+  beforeEach(() => {
+    auth.isConfigured = true;
+    auth.landing = null;
+    auth.startGoogle.mockReset();
+    auth.startGoogle.mockResolvedValue({ ok: true });
+    sessionStorage.clear();
+    resetSailReturnForTest();
+  });
+  afterEach(() => {
+    cleanup();
+    sessionStorage.clear();
+    resetSailReturnForTest();
+  });
+
+  it('link-guest 성공 시 출항 대기를 소비 가능 상태로 활성화한다', async () => {
+    setPendingSailReturn();
+    auth.landing = { tag: 'link-guest', error: null };
+    setup();
+    await waitFor(() => expect(isSailReturnReady()).toBe(true));
+  });
+
+  it('sign-in 성공 시 출항 대기를 소비 가능 상태로 활성화한다', async () => {
+    setPendingSailReturn();
+    auth.landing = { tag: 'sign-in', error: null };
+    setup();
+    await waitFor(() => expect(isSailReturnReady()).toBe(true));
+  });
+
+  it('취소나 오류 복귀 시 출항 대기를 지운다', async () => {
+    setPendingSailReturn();
+    auth.landing = { tag: 'link-guest', error: 'access_denied' };
+    const p = setup();
+    await waitFor(() => expect(p.setToast).toHaveBeenCalledTimes(1));
+    expect(hasPendingSailReturn()).toBe(false);
+    expect(isSailReturnReady()).toBe(false);
+  });
+
+  it('landing 없이 마운트되면 남아 있던 출항 대기를 지운다', () => {
+    setPendingSailReturn();
+    setup();
+    expect(hasPendingSailReturn()).toBe(false);
+    expect(isSailReturnReady()).toBe(false);
+  });
+
+  it('덮어쓰기 확인을 진행해 sign-in 재인증이 시작되면 출항 대기를 유지한다', async () => {
+    setPendingSailReturn();
+    auth.landing = { tag: 'link-guest', error: 'account_already_linked_to_different_user' };
+    setup(true, 'some');
+    await waitFor(() => expect(auth.startGoogle).toHaveBeenCalledTimes(1));
+    expect(hasPendingSailReturn()).toBe(true);
+    expect(isSailReturnReady()).toBe(false);
+  });
+
+  it('덮어쓰기 확인에서 취소하면 출항 대기를 지운다', async () => {
+    setPendingSailReturn();
+    auth.landing = { tag: 'link-guest', error: 'account_already_linked_to_different_user' };
+    const p = setup(false, 'some');
+    await waitFor(() => expect(p.reopenAccount).toHaveBeenCalledTimes(1));
+    expect(hasPendingSailReturn()).toBe(false);
+  });
+
+  it('덮어쓰기 확인 후 sign-in 재인증 시작이 실패하면 출항 대기를 지운다', async () => {
+    setPendingSailReturn();
+    auth.landing = { tag: 'link-guest', error: 'account_already_linked_to_different_user' };
+    auth.startGoogle.mockResolvedValue({ ok: false, msg: '실패' });
+    const p = setup(true, 'some');
+    await waitFor(() => expect(p.setToast).toHaveBeenCalledTimes(1));
+    expect(hasPendingSailReturn()).toBe(false);
   });
 });

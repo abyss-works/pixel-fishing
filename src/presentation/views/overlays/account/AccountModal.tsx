@@ -5,6 +5,10 @@ import {
   isAccountConfigured,
   signOutAccount,
 } from '../../../../features/account/service/accountActions';
+import {
+  clearPendingSailReturn,
+  setPendingSailReturn,
+} from '../../../../features/account/service/sailReturn';
 import { GOOGLE_BUTTON_LABEL, googleStartFailedText, LEGAL_PATHS } from '../../../../features/account/model/googleFlow';
 import { ACCOUNT_CHECK_FAILED_COPY, accountLabel } from '../../../../features/account/model/accountRules';
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
@@ -27,7 +31,7 @@ import type { Notify } from '../../../ui/hud/messageFeed';
 // 세션 확인에 실패했으면(accountFailed) 게스트로 보지 않고, 확인 실패 안내와 다시 확인 버튼만 둔다. 계정을 바꾸는 동작(구글 연결, 로그아웃, 계정 삭제)은 확인이 끝날 때까지 열지 않는다.
 // 닉네임과 ID는 내 정보 창이 맡는다.
 export default function AccountModal({
-  layer, setToast, onAuthChanged, onClose, account, accountFailed, syncLabel, syncState,
+  layer, setToast, onAuthChanged, onClose, account, accountFailed, syncLabel, syncState, sailReturn = false,
 }: {
   layer: 'stage' | 'app';
   setToast: Notify;
@@ -37,6 +41,8 @@ export default function AccountModal({
   accountFailed: boolean;
   /** 저장 상태 문구(클라우드 켜짐, 미설정 등). 계정과 한 묶음이라 여기서 보여 준다 */
   syncLabel?: string | null; syncState?: string;
+  /** 마을 포구 출항 차단으로 열렸는가 — 로그인 시작 시 출항 복귀 표지를 남기고, 취소해 닫으면 지운다 */
+  sailReturn?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const { confirm, input, dialogs } = useDialogs();
@@ -52,8 +58,18 @@ export default function AccountModal({
   // 구글 인증 화면으로 이동한다. 이동하면 이 페이지는 떠나므로 성공 뒤에는 busy를 풀지 않는다.
   const connect = async () => {
     setBusy(true);
-    const r = await connectGoogle();
-    if (!r.ok) { sendNotice(setToast, { kind: 'system.modalRejected', text: googleStartFailedText, toastText: '구글 계정 화면 열기 실패' }); setBusy(false); }
+    if (sailReturn) setPendingSailReturn();
+    const r = await connectGoogle().catch(() => ({ ok: false as const }));
+    if (!r.ok) {
+      if (sailReturn) clearPendingSailReturn();
+      sendNotice(setToast, { kind: 'system.modalRejected', text: googleStartFailedText, toastText: '구글 계정 화면 열기 실패' });
+      setBusy(false);
+    }
+  };
+
+  const handleClose = () => {
+    if (sailReturn && !busy) clearPendingSailReturn();
+    onClose();
   };
 
   const signOut = async () => {
@@ -154,11 +170,11 @@ export default function AccountModal({
   return (
     <>
       {layer === 'stage' ? (
-        <Modal layer="stage" onClose={onClose}>
-          <ModalCard title="계정 관리" onClose={onClose}>{content}</ModalCard>
+        <Modal layer="stage" onClose={handleClose}>
+          <ModalCard title="계정 관리" onClose={handleClose}>{content}</ModalCard>
         </Modal>
       ) : (
-        <Modal layer="app" title="계정 관리" narrow onClose={onClose}>{content}</Modal>
+        <Modal layer="app" title="계정 관리" narrow onClose={handleClose}>{content}</Modal>
       )}
       {dialogs}
     </>
