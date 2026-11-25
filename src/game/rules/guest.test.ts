@@ -68,6 +68,7 @@ describe('게스트 액션 판정 (guestActionVerdict)', () => {
     const cooking: GameAction[] = [
       { type: 'extractEnergy', uids: [] }, { type: 'setEnergyTarget', spot: 'indian', on: true },
       { type: 'resetEnergyTargets' }, { type: 'cook', recipe: 'cook-lunch-bite', count: 1 },
+      { type: 'cancelCook', id: 'cook-1' }, { type: 'transmuteEnergy', from: 'common', count: 1 },
       { type: 'eat', item: 'cook-lunch-bite' },
     ];
     for (const action of cooking) expect(guestActionVerdict(action), action.type).toBe('account-only');

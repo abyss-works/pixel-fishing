@@ -72,7 +72,8 @@ export type RejectReason =
   | 'cooking-locked' // 요리 해금 배 단계 미달 — 조리와 먹기
   | 'energy-locked' // 요리 해금 배 단계 미달 — 기운 얻기
   | 'not-enough-energy' // 조리에 필요한 기운이 모자란다
-  | 'cooking-busy' // 조리 중인 요리가 모두 완성되기 전에 새 조리를 시작하려 했다
+  | 'cooking-not-found' // 취소할 조리나 대기열 항목을 찾을 수 없다
+  | 'energy-cap' // 상위 기운이 저장 상한에 도달해 더 변환할 수 없다
   | 'storage-full' // 보관함 남은 칸이 넣으려는 수량보다 적다
   | 'debug-forbidden' // 개발 도구 명령 — 운영 서버이거나 소유자·로컬이 아니다
   | 'debug-db-required' // DB 전용 개발 도구를 로컬 모드(DB 없음)에서 호출했다
@@ -129,7 +130,8 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'cooking-locked': `${COOKING_ZONE_NAME} 항로가 열리면 부엌을 쓸 수 있어요.`,
   'energy-locked': `${COOKING_ZONE_NAME} 항로가 열리면 기운 얻기를 할 수 있어요.`,
   'not-enough-energy': '생명의 기운이 부족해요.',
-  'cooking-busy': '이미 조리 중인 요리가 있어요. 모두 완성된 뒤에 시작할 수 있어요.',
+  'cooking-not-found': '취소할 조리가 없어요. 이미 완성되었을 수 있어요.',
+  'energy-cap': '상위 기운이 보관 상한에 닿아 더 바꿀 수 없어요.',
   'storage-full': '보관함이 가득 찼어요. 가방 탭에서 도시락을 먹거나 미끼를 쓰면 자리가 생겨요.',
   'debug-forbidden': '이 서버에서는 개발 도구 명령을 쓸 수 없어요. 운영 서버이거나 권한이 없는 계정이에요.',
   'debug-db-required': '로컬 모드(DB 없음)에서는 수배 DB 도구를 쓸 수 없어요.',
