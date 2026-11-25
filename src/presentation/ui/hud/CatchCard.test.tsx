@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { FISH, RARITY, priceOf } from '../../../game/rules/logic';
+import { FISH, RARITY, formName, priceOf } from '../../../game/rules/logic';
 import { fmtGold, fmtSize } from '../format';
 import CatchCard from './CatchCard';
 
@@ -28,6 +28,7 @@ describe('획득 카드', () => {
       '크기', fmtSize(30), '판매가', fmtGold(priceOf(fish, 'normal')),
     ]);
     expect(card.textContent).not.toMatch(/[·★]/);
+    expect(container.querySelector('[data-catch-variant]')).toBeNull();
     expect(screen.queryByText('NEW')).not.toBeInTheDocument();
   });
 
@@ -39,8 +40,12 @@ describe('획득 카드', () => {
     expect(tag.className).not.toMatch(/rotate|rounded/);
   });
 
-  it('돌연변이면 변이 문구와 변이 잔광 이펙트를 표시한다', () => {
+  it('돌연변이면 변이 이름과 암시 문구, 변이 잔광 이펙트를 표시한다', () => {
     const { container } = render(<CatchCard fish={fish} info={info({ form: 'variant' })} />);
+    expect(container.firstElementChild).toHaveTextContent(formName(fish, 'variant'));
+    const variantLine = container.querySelector('[data-catch-variant]');
+    expect(variantLine).not.toBeNull();
+    expect(variantLine!.textContent?.trim().length).toBeGreaterThan(0);
     expect(container.querySelector('[data-catch-fx]')!.children.length).toBeGreaterThanOrEqual(8);
   });
 

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { RANKING_TABS, pinnedMyRank, rankingTabMeta, rankingValueView } from '../../../../features/ranking/model/ranking';
 import type { MainRankingBoardId } from '../../../../features/ranking/model/ranking';
 import { useRankingBoard } from '../../../../features/ranking/service/useRanking';
+import { useMobileLayout } from '../../../layouts/useMobileLayout';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import ProgressCount from '../../../ui/ProgressCount';
@@ -44,6 +45,7 @@ export default function RankingModal({ onClose }: { onClose: () => void }) {
 
 /** 한 탭의 본문: 활성 보드 지연 조회 결과와 표 아래 내 순위 자리 */
 function RankingBoardView({ board }: { board: MainRankingBoardId }) {
+  const mobile = useMobileLayout();
   const { data, loading, failed, offline } = useRankingBoard(board);
   const { valueLabel, help } = rankingTabMeta(board);
   const listed = !!data && data.top.length > 0;
@@ -52,7 +54,7 @@ function RankingBoardView({ board }: { board: MainRankingBoardId }) {
 
   return (
     <div className="flex flex-col gap-3 flex-1 min-h-0">
-      <TableBox className="flex-1 min-h-0 px-3 pb-2">
+      <TableBox className="flex-1 min-h-0 px-3 mobile:px-2.5 pb-2">
         {listed ? (
           <RankList
             embedded
@@ -60,8 +62,8 @@ function RankingBoardView({ board }: { board: MainRankingBoardId }) {
             me={null}
             valueLabel={valueLabel}
             valueHelp={help}
-            cols={['3.5rem', null, '136px']}
-            nameMin="6rem"
+            cols={mobile ? ['2.5rem', null, '144px'] : ['3.5rem', null, '136px']}
+            nameMin={mobile ? '4.5rem' : '6rem'}
             format={renderValue}
           />
         ) : (

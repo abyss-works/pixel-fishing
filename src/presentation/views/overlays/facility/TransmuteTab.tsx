@@ -61,7 +61,7 @@ export default function TransmuteTab({ game, busy, act, setToast }: {
                     <span className="text-text-dim">{card.fromHaveText}</span>
                     <PixelIcon glyph="caretRight" size={10} className="text-text-dim" />
                     <span className={card.short ? 'text-danger' : 'text-text'}>{card.fromAfterText}</span>
-                    <span className="text-2xs text-text-dim">(-{card.spendText})</span>
+                    <span className="text-2xs text-text-dim">(−{card.spendText})</span>
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-2">

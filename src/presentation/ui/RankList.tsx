@@ -55,7 +55,7 @@ export function RankMeBar({
     <Inset
       tone="light"
       border="accent"
-      className="h-9 shrink-0 grid grid-cols-[3.5rem_minmax(0,1fr)_136px] items-center px-3 text-sm bg-accent/10"
+      className="h-9 shrink-0 grid grid-cols-[3.5rem_minmax(0,1fr)_136px] mobile:grid-cols-[2.5rem_minmax(0,1fr)_144px] mobile:px-2.5 items-center px-3 text-sm bg-accent/10"
       data-me="true"
       data-rank={me.rank}
       aria-label="내 순위"
