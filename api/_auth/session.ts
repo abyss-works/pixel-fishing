@@ -60,6 +60,19 @@ export async function sessionOf(headers: IncomingHttpHeaders): Promise<SessionUs
   return { id: user.id, email: user.isAnonymous ? null : user.email };
 }
 
+/**
+ * 쿠키 캐시를 건너뛰고 DB에서 최신 게임 세션을 다시 읽어 갱신된 Set-Cookie 헤더 목록을 돌려준다.
+ * 계정 상태가 바뀐 직후 cookieCache가 이전 사용자 정보를 돌려주지 않게 할 때 쓴다.
+ */
+export async function refreshAppSessionCookies(headers: IncomingHttpHeaders): Promise<string[]> {
+  const response = await appAuth().api.getSession({
+    headers: fromNodeHeaders(headers),
+    query: { disableCookieCache: true },
+    asResponse: true,
+  });
+  return response.headers.getSetCookie?.() ?? [];
+}
+
 let adminAuthInstance: AdminAuth | null = null;
 
 /** 관리자 대시보드의 인증 인스턴스. 인스턴스마다 한 번 만들고, 필수 환경 변수가 없으면 실패한다 */

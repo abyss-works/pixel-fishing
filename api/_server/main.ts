@@ -9,6 +9,7 @@ import accountConsents from '../consents.js';
 import action from '../action.js';
 import admin from '../admin.js';
 import awayReport from '../awayReport.js';
+import devAccount from '../devAccount.js';
 import { blocksHandler, chatReportHandler } from '../chat.js';
 import mail from '../mail.js';
 import friends from '../friends.js';
@@ -37,6 +38,7 @@ import { applyKeepAlive } from './keepAlive.js';
 import { staleClient } from './clientBuild.js';
 import { consentGate, liveConsentAdmit } from './consentGate.js';
 import { legalPages } from './legalPages.js';
+import { checkStageLiveUpgrade, stageGate } from './stageGate.js';
 
 type NodeHandler = (req: never, res: never) => Promise<void>;
 
@@ -60,6 +62,8 @@ const routes: Record<string, NodeHandler> = {
   '/api/admin/retention': admin,
   '/api/admin/sessions': admin,
   '/api/away-report': awayReport,
+  '/api/dev/promote-test': devAccount,
+  '/api/dev/reset-account': devAccount,
   // 차단 목록이 바뀌면 실시간 채널이 그 사용자에게 보내는 채팅을 바로 다시 거른다
   '/api/blocks': blocks,
   '/api/blocks/:uid': blocks,
@@ -80,6 +84,8 @@ const routes: Record<string, NodeHandler> = {
 
 const app = express();
 app.disable('x-powered-by');
+// 스테이징 진입 전용 관리자 OAuth 게이트 — DEPLOY_ENV === 'preview'일 때만 활성화된다.
+app.use(stageGate());
 // 인증 경로는 본문을 직접 읽으므로 JSON 파서보다 먼저 등록한다. 필수 환경 변수가 없으면 기동하지 않는다.
 app.all('/api/auth/*splat', toNodeHandler(appAuth()));
 // 관리자 인증은 구글 로그인(시작과 콜백)과 로그아웃만 연다. 나머지 경로는 아래의 404로 간다.
@@ -115,6 +121,7 @@ applyKeepAlive(server);
 const live = attachLive(server, {
   origin,
   stale: staleClient,
+  gate: checkStageLiveUpgrade,
   admit: liveConsentAdmit,
   authenticate: async (req) => {
     const session = await sessionOf(req.headers);

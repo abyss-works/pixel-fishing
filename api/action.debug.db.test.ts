@@ -13,7 +13,7 @@ import { database } from './_db/client.js';
 import { readSnapshotBounty } from './_data/bounty.js';
 import { readOwnBounty, readOwnState } from './_data/me.js';
 import {
-  callAction, captureRealClock, fish, seedUser, seededRandom, startActionEnv, testUid, userToken,
+  adminSessionHeaders, callAction, captureRealClock, fish, seedUser, seededRandom, startActionEnv, testUid, userToken,
 } from './_dbTest/actionHarness.js';
 import type { ActionEnv, SeedOptions } from './_dbTest/actionHarness.js';
 
@@ -304,5 +304,46 @@ describe('20개 debug 명령 전수 DB 영속화 및 재로딩 일치', () => {
     expect(loaded.clearedNamed).toHaveLength(NAMED.length);
     expect(loaded.counters).toEqual({ 'sell.gold': 4200 });
     expect((await readOwnBounty(db, uid, gameDayStartISO(NOW))).clears).toEqual([]);
+  });
+});
+
+describe('스테이징(preview) 관리자 OAuth 쿠키 동반 판정', () => {
+  it('게스트·비관리자 세션이라도 관리자 OAuth 쿠키를 동반하면 preview에서 debug·강제 조우·import를 허용하고, production에서는 차단한다', async () => {
+    const adminUid = await seed({ admin: true });
+    const guestUid = await seedUser(env.client, { uid: testUid(nextUid++), state: { gold: 50 } });
+    const memberUid = await seed({ state: { gold: 50 } });
+
+    process.env.DEPLOY_ENV = 'preview';
+    // 관리자 쿠키 없는 게스트는 debug와 import 모두 거부
+    expect(await callAction(userToken(guestUid), {
+      type: 'debug', command: 'stats.set', args: { gold: 300 },
+    })).toMatchObject({ status: 422, body: { error: 'debug-forbidden' } });
+    expect(await callAction(userToken(guestUid), {
+      type: 'import', save: newState(),
+    })).toMatchObject({ status: 403, body: { error: 'import-owner-only' } });
+
+    // 관리자 OAuth 쿠키를 동반한 게스트·일반 계정은 허용 + 페이싱 면제
+    const adminHeaders = adminSessionHeaders(userToken(adminUid));
+    const recent = new Date(Date.parse(NOW) - 10).toISOString();
+    await env.client.query(`update public.saves_current set updated_at = $2, last_catch_at = $2 where user_id = $1`, [guestUid, recent]);
+
+    expect((await callAction(userToken(guestUid), {
+      type: 'debug', command: 'stats.set', args: { gold: 300 },
+    }, { headers: adminHeaders })).status).toBe(200);
+    expect((await callAction(userToken(guestUid), {
+      type: 'catch', spot: 'pond', judgment: 'normal', forceEncounter: true, forcePhase: 'night',
+    }, { headers: adminHeaders })).status).toBe(200);
+    expect((await callAction(userToken(memberUid), {
+      type: 'import', save: { ...newState(), gold: 777 },
+    }, { headers: adminHeaders })).status).toBe(200);
+
+    // production에서는 관리자 OAuth 쿠키가 있어도 모두 차단
+    process.env.DEPLOY_ENV = 'production';
+    expect(await callAction(userToken(guestUid), {
+      type: 'debug', command: 'stats.set', args: { gold: 999 },
+    }, { headers: adminHeaders })).toMatchObject({ status: 422, body: { error: 'debug-forbidden' } });
+    expect(await callAction(userToken(memberUid), {
+      type: 'import', save: { ...newState(), gold: 999 },
+    }, { headers: adminHeaders })).toMatchObject({ status: 403, body: { error: 'import-disabled' } });
   });
 });

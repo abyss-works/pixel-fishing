@@ -1,12 +1,18 @@
 // P1 클라우드 저장 — 오프라인 모드 무해성 
 // 이 파일은 인증과 HTTP 게임 게이트웨이의 오프라인 실패 계약을 확인한다.
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import {
   isCloud, authClient, ensureSession,
   currentAccount, startGoogleAuth,
   googleReturnUrl, parseGoogleLanding,
 } from './auth';
 import { HttpGameGateway } from './httpGameGateway';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+  vi.resetModules();
+});
 
 describe('클라우드 저장', () => {
   it('클라우드 빌드가 아니면 오프라인 모드 (인증 클라이언트 null, 호출은 전부 무해)', async () => {
@@ -50,5 +56,23 @@ describe('구글 인증 복귀 주소', () => {
 
   it('표지 값이 비어 있으면 복귀로 보지 않는다', () => {
     expect(parseGoogleLanding('?google=')).toBeNull();
+  });
+});
+
+describe('게임 세션 로그아웃 격리', () => {
+  it('signOutAccount는 게임 인증 경로(/api/auth/sign-out)만 호출하고 관리자 인증 경로를 건드리지 않는다', async () => {
+    vi.stubEnv('VITE_CLOUD', '1');
+    vi.resetModules();
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: true }), { status: 200, headers: { 'content-type': 'application/json' } }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const mod = await import('./auth');
+    await mod.signOutAccount();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toContain('/api/auth/sign-out');
+    expect(url).not.toContain('/api/admin');
   });
 });

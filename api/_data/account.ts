@@ -158,3 +158,42 @@ export async function revokeUserSessions(db: Executor, uid: string): Promise<num
   const result = await db.execute(sql`delete from auth.sessions where user_id = ${uid}::uuid`);
   return result.rowCount ?? 0;
 }
+
+export type PromoteTestOutcome =
+  | { status: 'promoted'; email: string }
+  | { status: 'already-test'; email: string }
+  | { status: 'not-guest' }
+  | { status: 'missing' };
+
+/** 스테이징 테스트 정식 계정의 자리표시 이메일을 만든다 */
+export function testAccountEmail(uid: string): string {
+  return `test-${uid.slice(0, 8)}@stage.invalid`;
+}
+
+/**
+ * 게스트(익명) 계정을 세이브와 uid를 그대로 유지한 채 스테이징 테스트 정식 계정으로 승격한다.
+ * 실제 이메일을 가진 계정은 덮어쓰지 않고 not-guest를 돌려준다.
+ */
+export async function promoteGuestToTestAccount(
+  withTransaction: Database['withTransaction'],
+  uid: string,
+): Promise<PromoteTestOutcome> {
+  const testEmail = testAccountEmail(uid);
+  return withTransaction(async tx => {
+    const { rows } = await tx.execute<{ email: string | null; is_anonymous: boolean | null }>(
+      sql`select email, is_anonymous from auth.users where id = ${uid}::uuid for update`,
+    );
+    if (rows.length === 0) return { status: 'missing' };
+    const row = rows[0];
+    if (!row.is_anonymous) {
+      if (row.email === testEmail) return { status: 'already-test', email: testEmail };
+      return { status: 'not-guest' };
+    }
+    await tx.execute(
+      sql`update auth.users
+        set is_anonymous = false, email = ${testEmail}, email_verified = true, updated_at = now()
+        where id = ${uid}::uuid and is_anonymous = true`,
+    );
+    return { status: 'promoted', email: testEmail };
+  });
+}

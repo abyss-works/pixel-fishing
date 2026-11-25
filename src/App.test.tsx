@@ -816,16 +816,14 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
     expect(localStorage.getItem('pf-fish-art')).toBe('v2');
   });
 
-  it('이사 코드는 설정 탭에 없다 — 개발 도구 패널의 계정·스냅샷 묶음(관리자 명부 계정 전용)에 있다', () => {
-    window.history.replaceState({}, '', '/?admin=1');
+  it('이사 코드는 설정 탭에 없다 — 개발 도구 패널의 계정·스냅샷 묶음에 있다', async () => {
     render(<App />);
     clickTab('설정');
     expect(screen.queryByRole('button', { name: /이사 코드/ })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '개발 도구' }));
+    fireEvent.click(await screen.findByRole('button', { name: '개발 도구' }));
     fireEvent.click(screen.getByRole('button', { name: '계정·스냅샷' }));
     expect(screen.getByRole('button', { name: '이사 코드 내보내기' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '이사 코드 불러오기' })).toBeInTheDocument();
-    window.history.replaceState({}, '', '/');
   });
 
   it('클라우드 미설정(개발 모드)이면 계정 관리 모달에 경고 표시 — 상태는 메모리에만 있음', () => {
@@ -1443,53 +1441,44 @@ describe('패치노트 (설정 탭)', () => {
 });
 
 describe('환경 배지', () => {
-  it('로컬 빌드(테스트)는 LOCAL DEV 배지를 띄운다 — 운영 가드는 envBadgeLabel이 맡는다', () => {
+  it('로컬 빌드(테스트)는 LOCAL DEV 배지를 띄운다 — 운영 가드는 envBadgeLabel이 맡는다', async () => {
     render(<App />);
-    expect(screen.getByRole('status', { name: 'LOCAL DEV 빌드 dev' })).toHaveTextContent('LOCAL DEVdev');
+    expect(await screen.findByRole('status', { name: 'LOCAL DEV 빌드 dev' })).toHaveTextContent('LOCAL DEVdev');
   });
 });
 
-// 개발 도구 — 게임 화면 위 플로팅 패널 (?admin 게이트). 사이드바는 항상 5탭이다.
-describe('개발 도구 패널 (?admin 게이트)', () => {
-  it('?admin이 없으면 패널 버튼이 없고 사이드바는 5탭이다', () => {
-    render(<App />);
-    expect(screen.queryByRole('button', { name: '개발 도구' })).not.toBeInTheDocument();
-    expect(document.querySelectorAll('.pf-tabbar button')).toHaveLength(TAB_ORDER.length);
-  });
-
-  it('?admin이면(로컬) 버튼과 F9로 패널을 열고 닫는다 — 사이드바 탭은 늘지 않는다', () => {
-    window.history.replaceState({}, '', '/?admin=1');
+// 개발 도구 — 게임 화면 위 플로팅 패널(비운영 빌드에서 로컬 오리진 또는 서버 판정). 사이드바는 항상 5탭이다.
+describe('개발 도구 패널', () => {
+  it('로컬 오리진에서는 ?admin 없이도 버튼과 F9로 패널을 열고 닫는다 — 사이드바 탭은 늘지 않는다', async () => {
     seed();
     render(<App />);
     expect(document.querySelectorAll('.pf-tabbar button')).toHaveLength(TAB_ORDER.length);
+    const toggle = await screen.findByRole('button', { name: '개발 도구' });
     fireEvent.keyDown(document, { key: 'F9' });
     expect(screen.getByText('개발 도구')).toBeInTheDocument();
     expect(screen.getByText('메갈로돈 네임드 직전')).toBeInTheDocument();
     fireEvent.keyDown(document, { key: 'F9' });
     expect(screen.queryByText('메갈로돈 네임드 직전')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '개발 도구' }));
+    fireEvent.click(toggle);
     fireEvent.click(screen.getByRole('button', { name: '계정·스냅샷' }));
     expect(screen.getByLabelText('대시보드 열기').getAttribute('href')).toBe('/admin/#/admin/overview');
-    window.history.replaceState({}, '', '/');
   });
 
   it('장비·아이템·업적 묶음의 스탯 설정은 debug 명령으로 상태를 바꾼다 (로컬 게이트웨이)', async () => {
-    window.history.replaceState({}, '', '/?admin=1');
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: '개발 도구' }));
+    fireEvent.click(await screen.findByRole('button', { name: '개발 도구' }));
     fireEvent.click(screen.getByRole('button', { name: '장비·아이템·업적' }));
     fireEvent.change(screen.getByLabelText('스탯 설정 골드'), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: '스탯 설정' }));
     expect(await screen.findByLabelText('실행 기록')).toHaveTextContent('스탯 설정');
     // 입력칸 placeholder는 현재 값이다 — 상태가 바뀌면 따라 바뀐다
     expect(screen.getByLabelText('스탯 설정 골드')).toHaveAttribute('placeholder', '123456');
-    window.history.replaceState({}, '', '/');
   });
 
-  it('패널은 머리줄을 끌어 옮기고 위치를 기억한다 — 묶음을 바꿔도 크기가 그대로다', () => {
-    window.history.replaceState({}, '', '/?admin=1');
+  it('패널은 머리줄을 끌어 옮기고 위치를 기억한다 — 묶음을 바꿔도 크기가 그대로다', async () => {
     seed();
     render(<App />);
+    await screen.findByRole('button', { name: '개발 도구' });
     fireEvent.keyDown(document, { key: 'F9' });
     const panel = screen.getByRole('dialog', { name: '개발 도구' });
     const box = () => ({ left: panel.style.left, top: panel.style.top, w: panel.style.width, h: panel.style.height });
@@ -1504,20 +1493,17 @@ describe('개발 도구 패널 (?admin 게이트)', () => {
       fireEvent.click(screen.getByRole('button', { name }));
       expect([box().w, box().h]).toEqual([before.w, before.h]);
     }
-    window.history.replaceState({}, '', '/');
   });
 
   it('네임드 직전 프리셋은 오프라인에서 DB 전용 수배 명령을 거부하고, QA 패키지 프리셋은 항구로 자동 이동한다', async () => {
-    window.history.replaceState({}, '', '/?admin=1');
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: '개발 도구' }));
+    fireEvent.click(await screen.findByRole('button', { name: '개발 도구' }));
     fireEvent.click(screen.getByRole('button', { name: '메갈로돈 네임드 직전' }));
     expect(await screen.findByLabelText('실행 기록')).toHaveTextContent('로컬 모드(DB 없음)에서는 수배 DB 도구를 쓸 수 없어요.');
 
     fireEvent.click(screen.getByRole('button', { name: 'v0.20.0 신콘텐츠 QA 패키지' }));
     await waitFor(() => expect(screen.getByLabelText('실행 기록')).toHaveTextContent('거점 이동 (lisbon)'));
     expect(screen.getByLabelText('항구')).toBeInTheDocument();
-    window.history.replaceState({}, '', '/');
   });
 });
 
@@ -1742,5 +1728,31 @@ describe('업데이트 소식 창 — 접속 시 이번 버전 소식과 새 설
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '확인' }));
     expect(screen.queryByRole('dialog', { name: '업데이트 소식' })).not.toBeInTheDocument();
+  });
+});
+
+describe('운영 빌드 개발 도구 제거', () => {
+  it('DEPLOY_ENV가 production이면 ?admin이 있어도 개발 도구 버튼·환경 배지·제한 화면이 마운트되지 않는다', async () => {
+    window.history.replaceState({}, '', '/?admin=1');
+    vi.resetModules();
+    vi.doMock('./buildId', () => ({
+      BUILD_ID: 'prodsha1',
+      BUILD_LABEL: 'prodsha',
+      DEPLOY_ENV: 'production',
+    }));
+    try {
+      const { default: ProdApp } = await import('./App');
+      render(<ProdApp />);
+      await act(async () => { await Promise.resolve(); });
+      expect(screen.queryByRole('button', { name: '개발 도구' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      expect(screen.queryByText(/운영 서버다/)).not.toBeInTheDocument();
+      fireEvent.keyDown(document, { key: 'F9' });
+      expect(screen.queryByRole('dialog', { name: '개발 도구' })).not.toBeInTheDocument();
+    } finally {
+      vi.doUnmock('./buildId');
+      vi.resetModules();
+      window.history.replaceState({}, '', '/');
+    }
   });
 });

@@ -30,6 +30,8 @@ export interface LiveChat {
 }
 
 export interface LiveOptions {
+  /** 업그레이드 요청의 추가 진입 게이트. 거부 시 상태 코드(401·403)를 돌려주고 통과 시 null이다 */
+  gate?: (req: IncomingMessage) => Promise<401 | 403 | null>;
   /** 업그레이드 요청의 로그인 사용자. 세션이 없으면 null을 돌려준다 */
   authenticate: (req: IncomingMessage) => Promise<LiveUser | null>;
   /**
@@ -189,88 +191,101 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
   server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     if (new URL(req.url ?? '/', 'http://x').pathname !== LIVE_PATH) { socket.destroy(); return; }
     if (req.headers.origin !== opts.origin) { reject(socket, 403); return; }
-    // 낡은 빌드는 연결을 받지 않는다. 브라우저는 업그레이드 응답의 상태 코드를 읽을 수 없어 연결을 연 뒤 종료 코드로 알린다.
-    // 이 연결은 접속 목록, 위치, 세션 기록 어디에도 들어가지 않는다
-    const query = new URL(req.url ?? '/', 'http://x').searchParams;
-    if (opts.stale({ build: query.get('build') ?? undefined, version: query.get('version') ?? undefined })) {
-      accept(req, socket, head, (ws) => { ws.close(LIVE_CLOSE_OUTDATED); });
+    const proceed = () => {
+      // 낡은 빌드는 연결을 받지 않는다. 브라우저는 업그레이드 응답의 상태 코드를 읽을 수 없어 연결을 연 뒤 종료 코드로 알린다.
+      // 이 연결은 접속 목록, 위치, 세션 기록 어디에도 들어가지 않는다
+      const query = new URL(req.url ?? '/', 'http://x').searchParams;
+      if (opts.stale({ build: query.get('build') ?? undefined, version: query.get('version') ?? undefined })) {
+        accept(req, socket, head, (ws) => { ws.close(LIVE_CLOSE_OUTDATED); });
+        return;
+      }
+      opts.authenticate(req).then(async (user) => {
+        if (!user) { reject(socket, 401); return; }
+        if (opts.admit && !await opts.admit(user)) { reject(socket, 403); return; }
+        const [recentChat, blocked, guild] = await Promise.all([
+          opts.chat.recent(user.uid, CHAT_RECENT, null), opts.chat.blocked(user.uid), opts.chat.guildOf(user.uid),
+        ]);
+        const recentGuildChat = guild === null ? null : await opts.chat.recent(user.uid, CHAT_RECENT, guild);
+        accept(req, socket, head, (ws) => {
+          // 계정 하나에 연결 하나다. 새 연결이 오면 같은 계정의 이전 연결을 닫는다.
+          for (const [other, c] of conns) {
+            if (c.user.uid !== user.uid) continue;
+            drop(other, c);
+            other.close(LIVE_CLOSE_REPLACED);
+          }
+          const now = Date.now();
+          const conn: Conn = {
+            user, presence: null, idleSince: null, blocked: new Set(blocked), guild, connectedAt: now, lastSeen: now, windowStart: now, windowCount: 0,
+            positionSavedAt: null, positionDirty: false, pending: Promise.resolve(),
+          };
+          conns.set(ws, conn);
+          const handle = (msg: NonNullable<ReturnType<typeof parseClientMessage>>, at: number): void => {
+            if (msg.t === 'move') {
+              const { region, x, y, dir, line, bob, look } = msg;
+              const zone = msg.zone ?? null;
+              conn.idleSince = idleSinceOf(conn.presence && { spot: conn.presence, since: conn.idleSince }, { region, x, y }, line, msg.idleMs, at);
+              const idle = idleField(conn.idleSince, at);
+              if (!conn.presence) {
+                conn.presence = { uid: user.uid, nick: user.nick, boat: user.boat, region, zone, x, y, dir, line, ...(bob ? { bob } : {}), ...(look ? { look } : {}) };
+                broadcast(ws, user, { t: 'join', presence: { ...conn.presence, ...idle } });
+              } else {
+                Object.assign(conn.presence, { region, zone, x, y, dir, line, bob, ...(look ? { look } : {}) });
+                broadcast(ws, user, { t: 'move', uid: user.uid, region, zone, x, y, dir, line, ...idle, ...(bob ? { bob } : {}), ...(look ? { look } : {}) });
+              }
+              // 게스트의 위치는 마지막 위치로 저장하지 않는다
+              if (!user.guest) {
+                conn.positionDirty = true;
+                if (conn.positionSavedAt === null || at - conn.positionSavedAt >= positionSaveMs) savePosition(conn, at);
+              }
+            } else if (msg.t === 'stop' && conn.presence) {
+              broadcast(ws, user, { t: 'stop', uid: user.uid });
+            } else if (msg.t === 'chat') {
+              onChat(ws, conn, msg.text, msg.room).catch((err: unknown) => { console.error('[live] chat save failed', err); });
+            } else if (msg.t === 'typing') {
+              // 입력 중 표시 — 저장하지 않는다
+              broadcast(ws, user, { t: 'typing', uid: user.uid, on: msg.on });
+            }
+          };
+          ws.on('message', (data, isBinary) => {
+            const at = Date.now();
+            if (at - conn.windowStart >= 1000) { conn.windowStart = at; conn.windowCount = 0; }
+            if (++conn.windowCount > LIVE_MAX_PER_SEC) { ws.close(CLOSE_POLICY); return; }
+            conn.lastSeen = at;
+            if (isBinary) return;
+            const msg = parseClientMessage(data.toString());
+            if (!msg) return;
+            if (!opts.admit) { handle(msg, at); return; }
+            // 수락 확인은 비동기라 같은 연결의 메시지가 순서를 바꾸지 않도록 한 줄로 잇는다
+            conn.pending = conn.pending.then(async () => {
+              if (ws.readyState !== WebSocket.OPEN) return;
+              if (!await opts.admit?.(user)) { ws.close(CLOSE_POLICY, 'consent-required'); return; }
+              handle(msg, at);
+            }).catch((err: unknown) => {
+              console.error('[live] message admit failed', err);
+              ws.close(CLOSE_ERROR);
+            });
+          });
+          ws.on('close', () => drop(ws, conn));
+          const sentAt = Date.now();
+          const others = [...conns.values()].flatMap(c => (c !== conn && c.presence && !c.user.guest ? [{ ...c.presence, ...idleField(c.idleSince, sentAt) }] : []));
+          send(ws, { t: 'hello', you: user.uid, others, recentChat, ...(recentGuildChat ? { recentGuildChat } : {}) });
+        });
+      }).catch((err: unknown) => {
+        console.error('[live] upgrade authentication or chat load failed', err);
+        reject(socket, 500);
+      });
+    };
+    if (opts.gate) {
+      opts.gate(req).then((status) => {
+        if (status !== null) { reject(socket, status); return; }
+        proceed();
+      }).catch((err: unknown) => {
+        console.error('[live] upgrade gate failed', err);
+        reject(socket, 500);
+      });
       return;
     }
-    opts.authenticate(req).then(async (user) => {
-      if (!user) { reject(socket, 401); return; }
-      if (opts.admit && !await opts.admit(user)) { reject(socket, 403); return; }
-      const [recentChat, blocked, guild] = await Promise.all([
-        opts.chat.recent(user.uid, CHAT_RECENT, null), opts.chat.blocked(user.uid), opts.chat.guildOf(user.uid),
-      ]);
-      const recentGuildChat = guild === null ? null : await opts.chat.recent(user.uid, CHAT_RECENT, guild);
-      accept(req, socket, head, (ws) => {
-        // 계정 하나에 연결 하나다. 새 연결이 오면 같은 계정의 이전 연결을 닫는다.
-        for (const [other, c] of conns) {
-          if (c.user.uid !== user.uid) continue;
-          drop(other, c);
-          other.close(LIVE_CLOSE_REPLACED);
-        }
-        const now = Date.now();
-        const conn: Conn = {
-          user, presence: null, idleSince: null, blocked: new Set(blocked), guild, connectedAt: now, lastSeen: now, windowStart: now, windowCount: 0,
-          positionSavedAt: null, positionDirty: false, pending: Promise.resolve(),
-        };
-        conns.set(ws, conn);
-        const handle = (msg: NonNullable<ReturnType<typeof parseClientMessage>>, at: number): void => {
-          if (msg.t === 'move') {
-            const { region, x, y, dir, line, bob, look } = msg;
-            const zone = msg.zone ?? null;
-            conn.idleSince = idleSinceOf(conn.presence && { spot: conn.presence, since: conn.idleSince }, { region, x, y }, line, msg.idleMs, at);
-            const idle = idleField(conn.idleSince, at);
-            if (!conn.presence) {
-              conn.presence = { uid: user.uid, nick: user.nick, boat: user.boat, region, zone, x, y, dir, line, ...(bob ? { bob } : {}), ...(look ? { look } : {}) };
-              broadcast(ws, user, { t: 'join', presence: { ...conn.presence, ...idle } });
-            } else {
-              Object.assign(conn.presence, { region, zone, x, y, dir, line, bob, ...(look ? { look } : {}) });
-              broadcast(ws, user, { t: 'move', uid: user.uid, region, zone, x, y, dir, line, ...idle, ...(bob ? { bob } : {}), ...(look ? { look } : {}) });
-            }
-            // 게스트의 위치는 마지막 위치로 저장하지 않는다
-            if (!user.guest) {
-              conn.positionDirty = true;
-              if (conn.positionSavedAt === null || at - conn.positionSavedAt >= positionSaveMs) savePosition(conn, at);
-            }
-          } else if (msg.t === 'stop' && conn.presence) {
-            broadcast(ws, user, { t: 'stop', uid: user.uid });
-          } else if (msg.t === 'chat') {
-            onChat(ws, conn, msg.text, msg.room).catch((err: unknown) => { console.error('[live] chat save failed', err); });
-          } else if (msg.t === 'typing') {
-            // 입력 중 표시 — 저장하지 않는다
-            broadcast(ws, user, { t: 'typing', uid: user.uid, on: msg.on });
-          }
-        };
-        ws.on('message', (data, isBinary) => {
-          const at = Date.now();
-          if (at - conn.windowStart >= 1000) { conn.windowStart = at; conn.windowCount = 0; }
-          if (++conn.windowCount > LIVE_MAX_PER_SEC) { ws.close(CLOSE_POLICY); return; }
-          conn.lastSeen = at;
-          if (isBinary) return;
-          const msg = parseClientMessage(data.toString());
-          if (!msg) return;
-          if (!opts.admit) { handle(msg, at); return; }
-          // 수락 확인은 비동기라 같은 연결의 메시지가 순서를 바꾸지 않도록 한 줄로 잇는다
-          conn.pending = conn.pending.then(async () => {
-            if (ws.readyState !== WebSocket.OPEN) return;
-            if (!await opts.admit?.(user)) { ws.close(CLOSE_POLICY, 'consent-required'); return; }
-            handle(msg, at);
-          }).catch((err: unknown) => {
-            console.error('[live] message admit failed', err);
-            ws.close(CLOSE_ERROR);
-          });
-        });
-        ws.on('close', () => drop(ws, conn));
-        const sentAt = Date.now();
-        const others = [...conns.values()].flatMap(c => (c !== conn && c.presence && !c.user.guest ? [{ ...c.presence, ...idleField(c.idleSince, sentAt) }] : []));
-        send(ws, { t: 'hello', you: user.uid, others, recentChat, ...(recentGuildChat ? { recentGuildChat } : {}) });
-      });
-    }).catch((err: unknown) => {
-      console.error('[live] upgrade authentication or chat load failed', err);
-      reject(socket, 500);
-    });
+    proceed();
   });
 
   // 서버 ping은 프록시가 유휴 연결을 끊지 않게 한다. 클라이언트 ping이 끊긴 연결은 정리한다.

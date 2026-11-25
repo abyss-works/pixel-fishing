@@ -282,4 +282,55 @@ describe('useDevTools + HttpGameGateway + 서버 페이싱 통합', () => {
       window.removeEventListener('unhandledrejection', onRejected);
     }
   });
+
+  it('계정 도구(승격·초기화·새 게스트)가 성공과 오류를 처리하고 실행 기록을 남긴다', async () => {
+    const { api } = await import('../../../platform/api');
+    const onAccountPromoted = vi.fn();
+    const onAccountReset = vi.fn();
+    const onReload = vi.fn();
+
+    const promoteSpy = vi.spyOn(api.dev, 'promoteTestAccount')
+      .mockResolvedValueOnce({ ok: true, email: 'stage-user@pixel-fishing.test', isAnonymous: false })
+      .mockResolvedValueOnce({ ok: false, msg: 'forbidden' })
+      .mockRejectedValueOnce(new Error('network down'));
+    const nextState = { ...newState(), gold: 42 };
+    vi.spyOn(api.dev, 'resetDevAccount')
+      .mockResolvedValueOnce({ state: nextState, version: 5 })
+      .mockRejectedValueOnce(new Error('reset error'));
+    const signOutSpy = vi.spyOn(api.auth, 'signOut')
+      .mockResolvedValueOnce()
+      .mockRejectedValueOnce(new Error('signout error'));
+
+    const dispatch = vi.fn().mockResolvedValue({ status: 'ok', state: newState(), result: { type: 'none' } });
+    const { result } = renderHook(() => useDevTools(dispatch, { onAccountPromoted, onAccountReset, onReload }));
+
+    await act(async () => { await result.current.promoteTestAccount(); });
+    expect(onAccountPromoted).toHaveBeenCalledWith('stage-user@pixel-fishing.test');
+    expect(result.current.log[0]).toMatchObject({ ok: true, text: '테스트 정식 계정 승격 (stage-user@pixel-fishing.test)' });
+
+    await act(async () => { await result.current.promoteTestAccount(); });
+    expect(result.current.log[0]).toMatchObject({ ok: false, text: '테스트 정식 계정 승격 실패: forbidden' });
+
+    await act(async () => { await result.current.promoteTestAccount(); });
+    expect(result.current.log[0]).toMatchObject({ ok: false, text: '테스트 정식 계정 승격 실패: network down' });
+    expect(promoteSpy).toHaveBeenCalledTimes(3);
+
+    await act(async () => { await result.current.resetDevAccount(); });
+    expect(onAccountReset).toHaveBeenCalledWith(nextState);
+    expect(result.current.log[0]).toMatchObject({ ok: true, text: '현재 계정 초기화 (v5)' });
+
+    await act(async () => { await result.current.resetDevAccount(); });
+    expect(result.current.log[0]).toMatchObject({ ok: false, text: '현재 계정 초기화 실패: reset error' });
+
+    await act(async () => { await result.current.startNewGuest(); });
+    expect(signOutSpy).toHaveBeenCalledTimes(1);
+    expect(onReload).toHaveBeenCalledTimes(1);
+    expect(result.current.log[0]).toMatchObject({ ok: true, text: '새 게스트 시작' });
+
+    await act(async () => { await result.current.startNewGuest(); });
+    expect(onReload).toHaveBeenCalledTimes(1);
+    expect(result.current.log[0]).toMatchObject({ ok: false, text: '새 게스트 시작 실패: signout error' });
+
+    vi.restoreAllMocks();
+  });
 });
