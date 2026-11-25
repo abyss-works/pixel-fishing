@@ -45,7 +45,7 @@ describe('포획 이벤트 토스트 분류', () => {
 
     const firstVar = classifyCatchNotice(commonFish, { form: 'variant', size: 20, percentile: 50, isBig: false, isNew: true }, 'auto', undefined);
     expect(firstVar.kind).toBe('catch.legendaryOrFirstVariant');
-    expect(firstVar.tone).toBe('epic');
+    expect(firstVar.tone).toBe('mutation');
   });
 
   it('영웅·신규 도감·최대 크기 경신은 Tier B(catch.epicOrRecord)로 분류하고 수동 포획은 쿨다운을 건너뛴다', () => {
