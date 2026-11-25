@@ -2,8 +2,8 @@
 // 네임드 도전은 여기서 치르지 않는다 — 바다 위 흔적 카드·조우 창이 맡고, 토벌 뒤 보상만 여기서 받는다.
 // 상태 변경은 dispatch(서버 권위)만, 표시용 조회는 useBounty 경유(RLS 본인 읽기)다.
 // 성공할 때마다 스냅샷을 다시 읽는다 — 진행도·오늘 남은 클리어는 서버(DB)가 진실이다.
-// 라이선스 취득 절차는 없다 — 조건 충족이면 본문이 바로 열린다. 미충족이면
-// 본문을 흐리게 하고 조건 리스트를 덮는다.
+// 일반 의뢰 탭은 해당 구역 항구 진입 시 도감 조건 없이 즉시 열리고, 네임드 토벌 탭만
+// 전설을 뺀 일반·희귀·영웅 도감 조건을 본다. 미충족이면 본문을 흐리게 하고 조건 리스트를 덮는다.
 // 창은 탭이 있어 높이가 고정이다. 구역과 오늘 남은 클리어는 어느 탭에서나 의미가 있어 탭 위 고정 정보 줄에 두고,
 // 초기화 시각과 클리어 기준은 그 줄의 툴팁이다. 수주를 막는 이유(오프라인, 한도 소진, 다른 구역 수주)는 수주 버튼의 툴팁이다.
 import { useEffect, useState } from 'react';
@@ -53,8 +53,8 @@ function BoardStatus({ zoneName, leftAll, leftNamed, dailyCap, namedDailyCap }: 
   );
 }
 
-/** 라이선스 미달 조건 목록 — 닫힌 게이트 위에 덮는다 */
-function CondList({ conds }: { conds: ReturnType<typeof selectBountyPanelData>['basicConds'] }) {
+/** 라이선스 미달 조건 목록 — 닫힌 네임드 게이트 위에 덮는다 */
+function CondList({ conds }: { conds: ReturnType<typeof selectBountyPanelData>['namedConds'] }) {
   return (
     <ul>
       {conds.map(c => (
@@ -98,7 +98,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
   const day = gameDay();
   const data = selectBountyPanelData({ game, port, uid, day, nowMs, snapshot: snap });
   const {
-    zone, leftAll, leftNamed, dailyCap, namedDailyCap, offers, progressOf, isAccepted, basicConds, namedConds,
+    zone, leftAll, leftNamed, dailyCap, namedDailyCap, offers, progressOf, isAccepted, namedConds,
     basicOpen, namedOpen, canTake, canTakeNamed, notice, namedOffers, relics,
   } = data;
 
@@ -140,13 +140,11 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
       />
       <div className={`flex flex-col gap-2 flex-1 min-h-0 ${SCROLL_Y}`}>
       {screen === 'quests' ? (
-        <Gated open={basicOpen} overlay={<CondList conds={basicConds} />}>
-          <div className="grid grid-cols-3 gap-2 items-stretch flex-1 min-h-0 mobile:grid-cols-1">
-            {gradeCard('easy')}
-            {gradeCard('normal')}
-            {gradeCard('hard')}
-          </div>
-        </Gated>
+        <div className="grid grid-cols-3 gap-2 items-stretch flex-1 min-h-0 mobile:grid-cols-1">
+          {gradeCard('easy')}
+          {gradeCard('normal')}
+          {gradeCard('hard')}
+        </div>
       ) : screen === 'named' ? (
         <>
         <div className="flex-1 min-h-0 flex flex-col mobile:flex-none">

@@ -22,11 +22,16 @@ vi.mock('../../../../platform/api', async (importOriginal) => {
 const game = (over: Partial<GameState> = {}): GameState => ({ ...newState(), ...over });
 const okDispatch = (g: GameState) => () => ({ status: 'ok' as const, state: g, result: { type: 'none' as const } });
 const rec = (count: number) => ({ count, maxSize: null, first: null });
-// 태평양 전설 제외 전부 (일반 폼) — 기본 라이선스 도감 조건. 일반 3 · 희귀 3 · 영웅 3
+// 태평양 전설을 뺀 전부 (일반 모습) — 네임드 라이선스 도감 조건. 일반 3 · 희귀 3 · 영웅 3
 const fullDex = {
   mackerel: { normal: rec(1) }, hairtail: { normal: rec(1) }, anglerfish: { normal: rec(1) },
   seabream: { normal: rec(1) }, yellowtail: { normal: rec(1) }, squid: { normal: rec(1) },
   tuna: { normal: rec(1) }, coelacanth: { normal: rec(1) }, oarfish: { normal: rec(1) },
+};
+const missingEpicDex = {
+  mackerel: { normal: rec(1) }, hairtail: { normal: rec(1) }, anglerfish: { normal: rec(1) },
+  seabream: { normal: rec(1) }, yellowtail: { normal: rec(1) }, squid: { normal: rec(1) },
+  tuna: { normal: rec(1) }, coelacanth: { normal: rec(1) },
 };
 
 /** 요소에 마우스를 올려 뜬 게임 툴팁의 글을 돌려준다 */
@@ -148,26 +153,40 @@ describe('BountyPanel', () => {
     expect(actual).toEqual(expected);
   });
 
-  it('조건 미충족이면 본문을 가리고 조건 리스트를 덮는다', async () => {
+  it('일반 의뢰 탭은 도감이 비어도 잠금 덮개나 조건 문구 없이 즉시 개방된다', async () => {
+    mockSnap = { clearsToday: { general: 0, named: 0 }, progress: [], tickets: [] };
     show(game({}));
-    expect(await screen.findByText(/^태평양 모든 어종 수집\(전설 제외, 밤 어종 포함\) \(남은 \d+종\)$/)).toBeInTheDocument();
+    const buttons = await screen.findAllByRole('button', { name: '수주' });
+    expect(buttons).toHaveLength(3);
+    await waitFor(() => expect(buttons[0]).not.toBeDisabled());
+    expect(document.querySelector('.blur-sm.pointer-events-none')).toBeNull();
+    expect(screen.queryByText(/모든 어종/)).toBeNull();
+  });
+
+  it('네임드 토벌 탭은 도감 조건 미충족이면 본문을 가리고 남은 종 수 체크리스트를 덮는다', async () => {
+    show(game({}));
+    fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
+    const dexLi = (await screen.findByText(/^태평양 전설을 뺀 모든 어종 모으기 \(남은 \d+종\)$/)).closest('li')!;
+    expect(dexLi.querySelector('[data-glyph="checkOff"]')).not.toBeNull();
+    expect(dexLi.querySelector('[data-glyph="checkOn"]')).toBeNull();
     // 본문은 blur+pointer-events-none으로 가려진다
     const blurred = document.querySelector('.blur-sm.pointer-events-none');
     expect(blurred).not.toBeNull();
     expect(blurred?.getAttribute('aria-hidden')).toBe('true');
   });
 
-  it('체크 방향 — 미달 조건은 빈박스로 보인다', async () => {
-    show(game({})); // 도감 비어 있음
-    const dexLi = (await screen.findByText(/^태평양 모든 어종 수집\(전설 제외, 밤 어종 포함\) \(남은 \d+종\)$/)).closest('li')!;
-    expect(dexLi.querySelector('[data-glyph="checkOff"]')).not.toBeNull();
-    expect(dexLi.querySelector('[data-glyph="checkOn"]')).toBeNull();
+  it('네임드 토벌 탭은 영웅 어종이 하나라도 빠지면 남은 1종 조건으로 잠긴다', async () => {
+    show(game({ dex: missingEpicDex }));
+    fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
+    expect(await screen.findByText('태평양 전설을 뺀 모든 어종 모으기 (남은 1종)')).toBeInTheDocument();
+    expect(document.querySelector('.blur-sm.pointer-events-none')).not.toBeNull();
   });
 
-  it('도감을 채우면 조건 목록과 가림막이 사라진다', async () => {
+  it('네임드 토벌 탭은 전설 없이 일반·희귀·영웅 도감을 채우면 조건 목록과 가림막이 사라진다', async () => {
     show(game({ dex: fullDex }));
-    await screen.findAllByRole('button', { name: '수주' });
-    expect(screen.queryByText(/모든 어종 수집/)).toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
+    expect(await screen.findByRole('button', { name: '수주' })).toBeInTheDocument();
+    expect(screen.queryByText(/모든 어종/)).toBeNull();
     expect(document.querySelector('.blur-sm.pointer-events-none')).toBeNull();
   });
 
@@ -223,14 +242,8 @@ describe('BountyPanel', () => {
       clearsToday: { general: 0, named: 0 }, progress: [],
       tickets: [{ questId: 'pacific-named-megalodon', issuedAt: new Date(Date.now() - 60_000).toISOString() }],
     };
-    // 네임드 개방 상태에서 배너가 보이는지 본다
-    const rec = (count: number) => ({ count, maxSize: null, first: null });
-    const named = (id: string) => ({ [id]: { normal: rec(1) } });
-    const dex = Object.assign({ mackerel: { normal: rec(1) }, hairtail: { normal: rec(1) }, anglerfish: { normal: rec(1) } },
-      named('seabream'), named('yellowtail'), named('squid'),
-      named('tuna'), named('coelacanth'), named('oarfish'),
-      named('shark'), named('kraken'), named('moonveil'), named('abyssveil'));
-    show(game({ dex }));
+    // 전설 없이 비전설 도감만으로 네임드 개방 상태에서 흔적 안내가 보이는지 본다
+    show(game({ dex: fullDex }));
     fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
     // 스냅샷은 세션 게이트가 선 뒤 도착한다
     const trace = tipOf(await screen.findByText('흔적'));
@@ -247,14 +260,8 @@ describe('BountyPanel', () => {
 
   it('오늘 네임드 토벌을 클리어했으면 네임드 수주 버튼이 막히고 이유를 안내한다', async () => {
     mockSnap = { clearsToday: { general: 0, named: 1 }, progress: [], tickets: [] };
-    // 네임드 개방(전설 포함 전부) 상태에서 한도 소진만으로 막히는지 본다
-    const rec = (count: number) => ({ count, maxSize: null, first: null });
-    const named = (id: string) => ({ [id]: { normal: rec(1) } });
-    const dex = Object.assign({ mackerel: { normal: rec(1) }, hairtail: { normal: rec(1) }, anglerfish: { normal: rec(1) } },
-      named('seabream'), named('yellowtail'), named('squid'),
-      named('tuna'), named('coelacanth'), named('oarfish'),
-      named('shark'), named('kraken'), named('moonveil'), named('abyssveil'));
-    show(game({ dex }));
+    // 전설 없이 비전설 도감만으로 네임드 개방 상태에서 한도 소진만으로 막히는지 본다
+    show(game({ dex: fullDex }));
     fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
     // 스냅샷이 오기 전에도 버튼은 막혀 있으므로 고정 정보 줄이 값을 받을 때까지 기다린 뒤 버튼을 본다
     await waitFor(() => expect(screen.getByLabelText('오늘 남은 네임드 토벌')).toHaveTextContent('0/1'));

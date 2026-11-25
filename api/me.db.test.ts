@@ -1,6 +1,6 @@
 // 본인 읽기 함수 — 세션 사용자 자신의 저장 상태·수배·프로필만 돌려준다.
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { LICENSE_GRADES, newState, zoneDexMissing } from '../src/game/rules/logic.js';
+import { newState, zoneDexMissing } from '../src/game/rules/logic.js';
 import { adminSessionHeaders, fish, seedUser, sessionHeaders, startActionEnv, testUid, userToken } from './_dbTest/actionHarness.js';
 import type { ActionEnv } from './_dbTest/actionHarness.js';
 
@@ -63,7 +63,7 @@ describe('본인 읽기', () => {
   it('state: saves_current.data.achievements가 비어 있어도 DB 쓰기 없이 records·네임드 토벌 기반 업적을 claimable로 파생 평가한다', async () => {
     const DERIVED = testUid(7);
     const dex: Record<string, { normal: { count: number; maxSize: number; first: string } }> = {};
-    for (const id of zoneDexMissing(newState(), 'pacific', LICENSE_GRADES.basic)) {
+    for (const id of zoneDexMissing(newState(), 'pacific', ['common', 'rare', 'epic'])) {
       dex[id] = { normal: { count: 1, maxSize: 30, first: '2026-01-01' } };
     }
     await seedUser(env.client, { uid: DERIVED, nickname: '미부팅', state: { dex, achievements: {} }, version: 3 });

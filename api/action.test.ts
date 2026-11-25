@@ -85,8 +85,8 @@ describe('api/action 핸들러 규약 (Node 스타일 req/res)', () => {
     expect(res.body).toEqual({ error: 'server-config' });
   });
 
-  it('acceptQuest는 개체·도감 스킵 금지 — 라이선스 도감 판정이 상태를 본다', () => {
-    // 수주는 상태를 바꾸지 않지만 판정에 dex가 필요해 records를 읽어야 한다.
+  it('acceptQuest는 개체·도감 스킵 금지 — 네임드 라이선스 도감 판정이 상태를 본다', () => {
+    // 수주는 상태를 바꾸지 않지만 네임드 토벌 판정에 dex가 필요해 records를 읽어야 한다.
     // 스킵하면 dex 빈 조립 → 도감과 무관하게 dex-incomplete 422 (수주 불가 장애).
     expect(SKIP_DETAIL.has('acceptQuest')).toBe(false);
     // 납품·불변 액션은 스킵 유지 (서버 주입·스칼라만이라 도감 불필요)

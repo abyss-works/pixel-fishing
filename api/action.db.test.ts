@@ -408,7 +408,7 @@ describe('닉네임', () => {
 });
 
 describe('현상금', () => {
-  const pacificState = (): Partial<GameState> => ({ dex: zoneDex('pacific', 'basic'), location: at('harbor') });
+  const pacificState = (): Partial<GameState> => ({ dex: zoneDex('pacific', 'named'), location: at('harbor') });
 
   it('오늘 배정된 일반 의뢰 수주는 수주·진행 행을 쓴다', async () => {
     const uid = await seed({ state: pacificState() });
@@ -559,19 +559,13 @@ describe('개발 명령', () => {
     expect(recordFishIds).toEqual(expectedIds);
     expect(snap.db.events).toEqual([
       { user_id: '<user>', type: 'debug', payload: { command: 'dex.completeZone', args: { zone: 'pacific' } }, created_at: '<now>' },
-      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'night-normal' }, created_at: '<now>' },
       { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'spot-basic-deep' }, created_at: '<now>' },
       { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'spot-basic-sea' }, created_at: '<now>' },
-      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'spot-full-deep' }, created_at: '<now>' },
-      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'spot-full-sea' }, created_at: '<now>' },
     ]);
     const save = snap.db.saves_current[0] as { data: { achievements: Record<string, string> } };
     expect(save.data.achievements).toEqual({
       'spot-basic-sea': 'claimable',
-      'spot-full-sea': 'claimable',
       'spot-basic-deep': 'claimable',
-      'spot-full-deep': 'claimable',
-      'night-normal': 'claimable',
     });
   });
 
@@ -619,7 +613,7 @@ describe('현상금 — 클리어 기준 한도와 만료', () => {
   // NOW(2030-03-04 KST 14:06)가 속한 게임 날짜는 그날 KST 04:00에 시작했다
   const DAY_START = '2030-03-03T19:00:00.000Z';
   const BEFORE_START = '2030-03-03T18:59:59.999Z';
-  const pacificState = (): Partial<GameState> => ({ dex: zoneDex('pacific', 'basic'), location: at('harbor') });
+  const pacificState = (): Partial<GameState> => ({ dex: zoneDex('pacific', 'named'), location: at('harbor') });
   const namedState = (): Partial<GameState> => ({ dex: zoneDex('pacific', 'named'), location: at('harbor') });
   const offered = (uid: string, difficulty: 'easy' | 'normal' | 'hard' | 'named', day = TODAY_KST) =>
     offeredQuestsFor('pacific', difficulty, uid, day)[0];
@@ -2274,5 +2268,28 @@ describe('우편 아이템 첨부와 물약 사용', () => {
     expect(sellRes.status).toBe(200);
     const saveAfterSell = (await dumpUser(env.client, uid)).saves_current[0] as { gold: number };
     expect(Number(saveAfterSell.gold)).toBe(expectedGold);
+  });
+});
+
+describe('바운티 해금 완화 — 일반 즉시 개방·네임드 전설 제외', () => {
+  it.each(['easy', 'normal', 'hard'] as const)('도감이 비어 있어도 일반 의뢰(%s)를 수주할 수 있다', async difficulty => {
+    const uid = await seed({ state: { dex: {}, location: at('harbor') } });
+    const quest = dailyQuestFor('pacific', difficulty, uid, TODAY_KST)!;
+    const res = await callAction(userToken(uid), { type: 'acceptQuest', questId: quest.id, port: 'harbor' });
+    expect(res.status).toBe(200);
+  });
+
+  it('네임드 토벌은 일반·희귀·영웅만 다 잡으면 전설 없이도 수주하고, 영웅 이하가 1종이라도 빠지면 dex-incomplete(422)다', async () => {
+    const uidOk = await seed({ state: { dex: zoneDex('pacific', 'named'), location: at('harbor') } });
+    const questOk = offeredQuestsFor('pacific', 'named', uidOk, TODAY_KST)[0];
+    expect((await callAction(userToken(uidOk), { type: 'acceptQuest', questId: questOk.id, port: 'harbor' })).status).toBe(200);
+
+    const incompleteDex = zoneDex('pacific', 'named');
+    const removedId = Object.keys(incompleteDex).sort()[0];
+    delete incompleteDex[removedId];
+    const uidMissing = await seed({ state: { dex: incompleteDex, location: at('harbor') } });
+    const questMissing = offeredQuestsFor('pacific', 'named', uidMissing, TODAY_KST)[0];
+    const res = await callAction(userToken(uidMissing), { type: 'acceptQuest', questId: questMissing.id, port: 'harbor' });
+    expect(res).toMatchObject({ status: 422, body: { error: 'dex-incomplete' } });
   });
 });

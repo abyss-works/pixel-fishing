@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP } from '../../../game/rules/balance';
 import { BOUNTIES, bountyById, dailyQuestFor, offeredQuestsFor } from '../../../game/content/bounties';
-import { newState } from '../../../game/rules/logic';
+import { LICENSE_GRADES, newState, zoneDexMissing } from '../../../game/rules/logic';
 import { NAMED_ONE_AT_A_TIME_NOTICE, clearsLeft, clearsStatus, questLabel, selectBountyPanelData, selectNamedBountyCardData } from './panel';
 
 const clears = (general: number, named = 0) => ({ general, named });
@@ -265,5 +265,43 @@ describe('네임드가 둘인 구역의 의뢰판', () => {
     });
     expect(data.namedOffers[0].ticketMins).toBeNull();
     expect(data.namedOffers[1].ticketMins).toBeGreaterThan(0);
+  });
+});
+
+describe('수배판 해금 조건', () => {
+  const input = (game: ReturnType<typeof newState>) => ({
+    game, port: 'harbor' as const, uid: 'p', day: '2026-10-13', nowMs: 0, snapshot: null,
+  });
+
+  it('빈 도감이어도 일반 의뢰(basicOpen)는 조건 없이 즉시 개방된다', () => {
+    const data = selectBountyPanelData(input(newState()));
+    expect(data.basicConds).toEqual([]);
+    expect(data.basicOpen).toBe(true);
+  });
+
+  it('네임드 토벌(namedOpen)은 전설 없이 일반·희귀·영웅 도감만으로 열리고, 하나라도 빠지면 잠긴다', () => {
+    const empty = selectBountyPanelData(input(newState()));
+    const required = zoneDexMissing(newState(), 'pacific', LICENSE_GRADES.named);
+    expect(empty.namedOpen).toBe(false);
+    expect(empty.namedConds).toEqual([
+      { key: 'dex', label: `태평양 전설을 뺀 모든 어종 모으기 (남은 ${required.length}종)`, ok: false },
+    ]);
+
+    const rec = { count: 1, maxSize: null, first: null };
+    const dexWithoutEpic = Object.fromEntries(
+      required.filter(id => id !== 'oarfish').map(id => [id, { normal: rec }]),
+    );
+    const missingEpic = selectBountyPanelData(input({ ...newState(), dex: dexWithoutEpic }));
+    expect(missingEpic.namedOpen).toBe(false);
+    expect(missingEpic.namedConds).toEqual([
+      { key: 'dex', label: '태평양 전설을 뺀 모든 어종 모으기 (남은 1종)', ok: false },
+    ]);
+
+    const fullNonLegendaryDex = Object.fromEntries(required.map(id => [id, { normal: rec }]));
+    const opened = selectBountyPanelData(input({ ...newState(), dex: fullNonLegendaryDex }));
+    expect(opened.namedOpen).toBe(true);
+    expect(opened.namedConds).toEqual([
+      { key: 'dex', label: '태평양 전설을 뺀 모든 어종 모으기', ok: true },
+    ]);
   });
 });
