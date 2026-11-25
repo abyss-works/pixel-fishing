@@ -7,6 +7,7 @@ import type { Artifact } from '../../../../game/content/artifacts.js';
 import { levelText } from '../../../../features/inventory/model/artifactLevel';
 import Button from '../../../ui/Button';
 import Inset from '../../../ui/Inset';
+import ItemSprite from '../../../ui/ItemSprite';
 import Tip from '../../../ui/Tip';
 import { cx } from '../../../ui/cx';
 import { RarityText } from '../../../ui/fish/RarityTag';
@@ -34,9 +35,12 @@ export default function RelicCard({ artifact, owned, level, materialCount, busy,
     <Inset tone={owned ? 'deep' : canExchange ? 'light' : 'base'}
            border={canExchange ? 'gold' : 'line'}
            className={cx('p-3 flex flex-col gap-2 flex-1 min-h-0', canExchange && 'bg-[color-mix(in_oklab,var(--c-gold)_8%,var(--inset-light))]')}>
-      <div className="flex items-baseline gap-2 h-6">
-        <b className="text-base text-gold truncate"><Tip text={artifact.lore}>{artifact.name}</Tip></b>
-        {owned && artifactHasLevel(artifact) && <span className="text-xs text-text-dim shrink-0">{levelText(level)}</span>}
+      <div className="flex items-center gap-2 min-h-8">
+        <ItemSprite kind="artifact" id={artifact.id} preset="list" className="shrink-0" />
+        <div className="flex items-baseline gap-2 min-w-0 flex-1">
+          <b className="text-base text-gold truncate"><Tip text={artifact.lore}>{artifact.name}</Tip></b>
+          {owned && artifactHasLevel(artifact) && <span className="text-xs text-text-dim shrink-0">{levelText(level)}</span>}
+        </div>
       </div>
       <BoardRows rows={[
         { key: 'grade', label: '등급', value: <><RarityText rarity={artifact.grade} /> 유물</> },

@@ -175,7 +175,31 @@ window.SPRITE_EDITOR_DATA = {
     },
     "artifact": {
       "kind": "artifact",
-      "layout": null,
+      "idLabel": "유물 id",
+      "layout": {
+        "grid": {
+          "w": 16,
+          "h": 16
+        },
+        "margin": 2,
+        "presets": {
+          "row": {
+            "w": 16,
+            "h": 16,
+            "scale": 1
+          },
+          "list": {
+            "w": 32,
+            "h": 32,
+            "scale": 2
+          },
+          "hero": {
+            "w": 48,
+            "h": 48,
+            "scale": 3
+          }
+        }
+      },
       "palette": "per-sprite",
       "states": [
         "default"

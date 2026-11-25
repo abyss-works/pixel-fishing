@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { ARTIFACTS } from '../artifacts';
 import { ENERGY_ITEM_IDS, RECIPES } from '../cooking';
 import { POTIONS } from '../potions';
 import { RARITY_ORDER } from '../rarity';
-import { ENERGY_SPRITES, POTION_SPRITES, itemSprite } from './itemSprites';
+import { ARTIFACT_SPRITES, ENERGY_SPRITES, POTION_SPRITES, itemSprite } from './itemSprites';
 import { SPRITE_TARGETS, definedLayout } from './targets';
 import { TRANSPARENT, validateSprite } from './types';
 
@@ -124,13 +125,42 @@ describe('요리·기운 아이템 스프라이트 해석', () => {
     }
   });
 
+  it('유물 8종 스프라이트가 등록돼 있고 격자·연결성·채색 규칙을 통과한다', () => {
+    const { grid, margin } = definedLayout(SPRITE_TARGETS.artifact);
+    const expectedIds = ARTIFACTS.map(a => a.id);
+    expect(Object.keys(ARTIFACT_SPRITES).sort()).toEqual([...expectedIds].sort());
+    for (const id of expectedIds) {
+      const sprite = ARTIFACT_SPRITES[id];
+      expect(sprite, id).toBeDefined();
+      expect([sprite.w, sprite.h], id).toEqual([grid.w, grid.h]);
+      expect(validateSprite(sprite), id).toEqual([]);
+      for (const rows of sprite.frames) {
+        expect(checkGridRules(rows, margin), id).toEqual([]);
+        const conn = countConnectedOpaque(rows);
+        expect(conn.total, id).toBeGreaterThan(0);
+        expect(conn.component, id).toBe(conn.total);
+        expect(hasCheckerboard2x2(rows), id).toBe(false);
+      }
+      const found = itemSprite('artifact', id);
+      expect(found, id).toBeDefined();
+      expect(found!.sprite).toBe(sprite);
+      expect(found!.colors).toHaveLength(sprite.palette.length);
+      for (const c of found!.colors) {
+        expect(c).toMatch(/^#[0-9a-f]{6}$/);
+        expect(c.toLowerCase()).not.toBe('#182540');
+      }
+    }
+  });
+
   it('종류가 다른 대상의 id나 모르는 id는 undefined다', () => {
     expect(itemSprite('bait', 'cook-lunch-bite')).toBeUndefined();
     expect(itemSprite('lunch', 'cook-bait-rare')).toBeUndefined();
     expect(itemSprite('energy', 'cook-lunch-bite')).toBeUndefined();
     expect(itemSprite('potion', 'cook-lunch-bite')).toBeUndefined();
+    expect(itemSprite('artifact', 'cook-lunch-bite')).toBeUndefined();
     expect(itemSprite('lunch', ENERGY_ITEM_IDS.common)).toBeUndefined();
     expect(itemSprite('lunch', 'luck-small')).toBeUndefined();
+    expect(itemSprite('lunch', 'abyss-angler')).toBeUndefined();
     expect(itemSprite('lunch', 'nope')).toBeUndefined();
   });
 });

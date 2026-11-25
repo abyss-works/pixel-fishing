@@ -4,13 +4,14 @@ import { itemSprite } from '../../game/content/sprites/itemSprites';
 import type { ItemSpriteKind } from '../../game/content/sprites/itemSprites';
 import { SPRITE_TARGETS } from '../../game/content/sprites/targets';
 
-// 아이템 스프라이트 — 도시락(요리 대상), 미끼(미끼 대상), 생명의 기운, 물약(16x16 공용 격자). 한 줄(1x), 목록/카드(2x), 상세 머리(3x).
-// 네 대상은 같은 격자와 프리셋을 쓰므로 호출자는 종류와 id만 넘긴다.
+// 아이템 스프라이트 — 도시락(요리 대상), 미끼(미끼 대상), 생명의 기운, 물약, 유물(16x16 공용 격자). 한 줄(1x), 목록/카드(2x), 상세 머리(3x).
+// 다섯 대상은 같은 격자와 프리셋을 쓰므로 호출자는 종류와 id만 넘긴다.
 const TARGETS = {
   lunch: SPRITE_TARGETS.dish,
   bait: SPRITE_TARGETS.bait,
   energy: SPRITE_TARGETS.dish,
   potion: SPRITE_TARGETS.dish,
+  artifact: SPRITE_TARGETS.artifact,
 } as const;
 type Preset = keyof typeof SPRITE_TARGETS.dish.layout.presets;
 

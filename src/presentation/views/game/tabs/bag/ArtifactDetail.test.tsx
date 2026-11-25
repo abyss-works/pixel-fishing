@@ -24,8 +24,12 @@ function open(g: GameState, artifact = COMPASS) {
 }
 
 describe('ArtifactDetail - 상태별 화면', () => {
-  it('강화 가능 - 비교 표에 현재와 강화 후 열, 잔액 칸에 보유에서 쓴 뒤 값, 켜진 강화 버튼', () => {
+  it('강화 가능 - 머리에 hero(48px) 유물 스프라이트, 비교 표에 현재와 강화 후 열, 잔액 칸에 보유에서 쓴 뒤 값, 켜진 강화 버튼', () => {
     open(owning(1, 3));
+    const dialog = screen.getByRole('dialog');
+    const headerCanvas = dialog.querySelector('header canvas');
+    expect(headerCanvas).toHaveAttribute('width', '48');
+    expect(headerCanvas).toHaveAttribute('height', '48');
     expect(screen.getByText('현재(Lv.1)')).toBeInTheDocument();
     expect(screen.getByText('강화 후(Lv.2)')).toBeInTheDocument();
     expect(screen.getByText('항해 속도')).toBeInTheDocument();
