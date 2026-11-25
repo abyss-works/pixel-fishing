@@ -134,7 +134,7 @@ describe('거점 카드의 진행 조건', () => {
 });
 
 describe('게스트에게 닫힌 화면 기능의 잠금 문안', () => {
-  const closed: GuestFeature[] = ['quests', 'guild', 'friends', 'mailbox', 'chat', 'letter', 'nickname', 'player'];
+  const closed: GuestFeature[] = ['quests', 'fortune', 'guild', 'friends', 'mailbox', 'chat', 'letter', 'nickname', 'player'];
 
   it('게스트에게는 닫힌 기능마다 잠금 줄이 있고 계정을 연결한 사용자에게는 없다', () => {
     for (const feature of closed) {

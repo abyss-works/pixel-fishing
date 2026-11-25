@@ -32,7 +32,7 @@ function wrap(node: ReactNode) {
   return { ...view, again: (next: ReactNode) => view.rerender(<QueryClientProvider client={client}>{next}</QueryClientProvider>) };
 }
 
-const handlers = () => ({ game: newState(), accountState: 'account' as const, onQuests: vi.fn(), onAchievements: vi.fn(), onGuild: vi.fn(), onFriends: vi.fn(), onMailbox: vi.fn(), setToast: vi.fn() });
+const handlers = () => ({ game: newState(), accountState: 'account' as const, onQuests: vi.fn(), onAchievements: vi.fn(), onFortune: vi.fn(), onGuild: vi.fn(), onFriends: vi.fn(), onMailbox: vi.fn(), setToast: vi.fn() });
 
 afterEach(() => { cleanup(); bounty.snap = null; state.mails = null; layout.mobile = false; });
 
@@ -41,7 +41,7 @@ describe('게임 메뉴', () => {
     const h = handlers();
     wrap(<GameMenu account={null} {...h} />);
     fireEvent.click(await screen.findByRole('button', { name: '메뉴 열기' }));
-    await waitFor(() => expect(screen.getAllByRole('menuitem').map(i => i.textContent)).toEqual(['의뢰', '업적']));
+    await waitFor(() => expect(screen.getAllByRole('menuitem').map(i => i.textContent)).toEqual(['의뢰', '업적', '운세']));
     expect(h.setToast).not.toHaveBeenCalled();
   });
 
@@ -69,9 +69,9 @@ describe('게임 메뉴', () => {
     wrap(<GameMenu account={null} {...h} />);
     fireEvent.click(await screen.findByRole('button', { name: '메뉴 열기, 새 알림 있음' }));
     const items = screen.getAllByRole('menuitem');
-    expect(items.map(i => i.textContent)).toEqual(['의뢰', '업적', '우편함2']);
-    expect(items[2]).toHaveAccessibleName('우편함, 받지 않은 우편 2통');
-    fireEvent.click(items[2]);
+    expect(items.map(i => i.textContent)).toEqual(['의뢰', '업적', '운세', '우편함2']);
+    expect(items[3]).toHaveAccessibleName('우편함, 받지 않은 우편 2통');
+    fireEvent.click(items[3]);
     expect(h.onMailbox).toHaveBeenCalled();
     expect(screen.queryByRole('menuitem')).not.toBeInTheDocument();
   });
@@ -209,7 +209,21 @@ describe('게임 메뉴', () => {
     });
   });
 
-  // 게임 서버가 있는데 계정을 연결하지 않은 게스트: 다섯 줄이 모두 자리 그대로 잠긴다
+  describe('운세 줄', () => {
+    it('업적 줄 아래 세 번째 줄이고 누르면 운세 창을 열며 메뉴를 접는다', async () => {
+      const h = handlers();
+      wrap(<GameMenu account={null} {...h} />);
+      fireEvent.click(await screen.findByRole('button', { name: /^메뉴 열기/ }));
+      const items = screen.getAllByRole('menuitem');
+      expect(items[2]).toHaveTextContent('운세');
+      expect(items[2]).toHaveAccessibleName('운세');
+      fireEvent.click(items[2]);
+      expect(h.onFortune).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('menuitem')).not.toBeInTheDocument();
+    });
+  });
+
+  // 게임 서버가 있는데 계정을 연결하지 않은 게스트: 여섯 줄이 모두 자리 그대로 잠긴다
   describe('게스트 잠금', () => {
     const guestMenu = async (h = handlers()) => {
       wrap(<GameMenu account={null} {...h} accountState="guest" />);
@@ -217,10 +231,10 @@ describe('게임 메뉴', () => {
       return h;
     };
 
-    it('의뢰, 업적, 길드, 소셜, 우편함 줄이 순서대로 aria-disabled 잠긴 줄이고 자물쇠가 붙으며 title이 없다', async () => {
+    it('의뢰, 업적, 운세, 길드, 소셜, 우편함 줄이 순서대로 aria-disabled 잠긴 줄이고 자물쇠가 붙으며 title이 없다', async () => {
       await guestMenu();
       const items = screen.getAllByRole('menuitem');
-      expect(items.map(i => i.getAttribute('aria-label'))).toEqual(['의뢰', '업적', '길드', '소셜', '우편함']);
+      expect(items.map(i => i.getAttribute('aria-label'))).toEqual(['의뢰', '업적', '운세', '길드', '소셜', '우편함']);
       for (const item of items) {
         expect(item).toHaveAttribute('aria-disabled', 'true');
         expect(item.querySelector('[data-glyph="lock"]')).not.toBeNull();
@@ -234,21 +248,22 @@ describe('게임 메뉴', () => {
       for (const item of items) fireEvent.click(item);
       expect(h.onQuests).not.toHaveBeenCalled();
       expect(h.onAchievements).not.toHaveBeenCalled();
+      expect(h.onFortune).not.toHaveBeenCalled();
       expect(h.onGuild).not.toHaveBeenCalled();
       expect(h.onFriends).not.toHaveBeenCalled();
       expect(h.onMailbox).not.toHaveBeenCalled();
-      expect(screen.getAllByRole('menuitem')).toHaveLength(5);
-      fireEvent.mouseEnter(items[1].parentElement!);
+      expect(screen.getAllByRole('menuitem')).toHaveLength(6);
+      fireEvent.mouseEnter(items[2].parentElement!);
       expect(screen.getByRole('tooltip')).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
       expect(screen.getByRole('tooltip')).toHaveTextContent('태평양 항로는 조각배(1단계)부터 열려요.');
     });
 
-    it('확인 실패 상태에서는 다섯 줄이 확인 실패 전용 문안으로 잠긴다', async () => {
+    it('확인 실패 상태에서는 여섯 줄이 확인 실패 전용 문안으로 잠긴다', async () => {
       const h = handlers();
       wrap(<GameMenu account={null} {...h} accountState="unverified" />);
       fireEvent.click(await screen.findByRole('button', { name: /^메뉴 열기/ }));
       const items = screen.getAllByRole('menuitem');
-      expect(items.map(i => i.getAttribute('aria-label'))).toEqual(['의뢰', '업적', '길드', '소셜', '우편함']);
+      expect(items.map(i => i.getAttribute('aria-label'))).toEqual(['의뢰', '업적', '운세', '길드', '소셜', '우편함']);
       fireEvent.mouseEnter(items[0].parentElement!);
       expect(screen.getByRole('tooltip')).toHaveTextContent('계정을 확인하면 쓸 수 있어요.');
     });

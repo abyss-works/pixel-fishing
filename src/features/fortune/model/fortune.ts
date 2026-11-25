@@ -3,7 +3,7 @@
 import { FORTUNE_TARGET_OF, activePotionsOf, fortuneOf, luckMultOf } from '../../../game/rules/fortune';
 import type { DailyFortune, FortuneKind, FortuneTarget } from '../../../game/rules/fortune';
 import type { GameState } from '../../../game/rules/logic';
-import { gameDayOf } from '../../../game/rules/time';
+import { GAME_DAY_RESET_TEXT, gameDayOf } from '../../../game/rules/time';
 
 /** 운세 대상별 보너스 표시 이름 */
 export const FORTUNE_TARGET_BONUS_LABEL: Record<FortuneTarget, string> = {
@@ -81,6 +81,172 @@ export const FORTUNE_PIPS = 5;
 
 /** 접속 모달의 초기화 시각 보조 안내 */
 export const FORTUNE_RESET_NOTE = '새 운세는 하루마다 새로 뽑혀요.';
+
+/** 접속 모달의 달력 메뉴 안내 */
+export const FORTUNE_MENU_GUIDE_NOTE = '메뉴의 운세 항목에서 지난 달력 기록을 볼 수 있어요.';
+
+/** 운세 달력의 일일 기록 기준 안내 */
+export const FORTUNE_CALENDAR_NOTE = `매일 ${GAME_DAY_RESET_TEXT} 이후 첫 접속부터 달력에 기록돼요.`;
+
+/** 월간 달력의 요일 머리글 (월요일 시작) */
+export const FORTUNE_WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일'] as const;
+
+export type FortuneCalendarCell =
+  | { kind: 'blank'; key: string }
+  | {
+      kind: 'day';
+      key: string;
+      day: string;
+      dateNum: number;
+      isToday: boolean;
+      isFuture: boolean;
+      fortune: DailyFortune | null;
+    };
+
+export interface FortuneMonthStats {
+  total: number;
+  byKind: Record<FortuneKind, number>;
+}
+
+export interface FortuneDayDetail {
+  day: string;
+  dateLabel: string;
+  isToday: boolean;
+  fortune: DailyFortune | null;
+}
+
+const MONTH_RE = /^(\d{4})-(\d{2})$/;
+const DAY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+function parseMonthParts(month: string): { year: number; mon: number } | null {
+  const m = MONTH_RE.exec(month);
+  if (!m) return null;
+  const year = Number(m[1]);
+  const mon = Number(m[2]);
+  if (!Number.isInteger(year) || !Number.isInteger(mon) || mon < 1 || mon > 12) return null;
+  return { year, mon };
+}
+
+/** 기준 시각의 게임 날짜(YYYY-MM-DD) */
+export function currentGameDay(nowIso: string): string {
+  return gameDayOf(nowIso);
+}
+
+/** 기준 시각의 게임 날짜가 속한 월(YYYY-MM) */
+export function currentGameMonth(nowIso: string): string {
+  return gameDayOf(nowIso).slice(0, 7);
+}
+
+/** 게임 상태의 운세가 오늘 게임 날짜에 속하면 돌려주고, 지난 날 운세면 null이다 */
+export function selectTodayFortune(fortune: DailyFortune | null, nowIso: string): DailyFortune | null {
+  return fortuneOf({ fortune }, nowIso);
+}
+
+/** 월 문자열(YYYY-MM)을 delta개월 앞뒤로 이동한다 */
+export function shiftFortuneMonth(month: string, delta: number): string {
+  const parsed = parseMonthParts(month);
+  if (!parsed) return month;
+  const d = new Date(Date.UTC(parsed.year, parsed.mon - 1 + delta, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+/** 월 문자열(YYYY-MM)을 화면 표시용 한글 월 제목으로 바꾼다 */
+export function formatFortuneMonth(month: string): string {
+  const parsed = parseMonthParts(month);
+  if (!parsed) return month;
+  return `${parsed.year}년 ${parsed.mon}월`;
+}
+
+/** 날짜 문자열(YYYY-MM-DD)을 화면 표시용 한글 날짜로 바꾼다 */
+export function formatFortuneDay(day: string): string {
+  const m = DAY_RE.exec(day);
+  if (!m) return day;
+  return `${Number(m[1])}년 ${Number(m[2])}월 ${Number(m[3])}일`;
+}
+
+/** 최초 기록 월과 비교해 이전 달로 이동할 수 있는지 판정한다 */
+export function canGoPrevFortuneMonth(month: string, firstMonth: string | null): boolean {
+  return firstMonth !== null && month > firstMonth;
+}
+
+/** 현재 게임 월과 비교해 다음 달로 이동할 수 있는지 판정한다 */
+export function canGoNextFortuneMonth(month: string, currentMonth: string): boolean {
+  return month < currentMonth;
+}
+
+/** 월요일 시작 기준으로 해당 월의 달력 셀(앞 빈 칸 + 날짜 칸)을 만든다 */
+export function buildFortuneCalendarCells(
+  month: string,
+  days: readonly DailyFortune[],
+  todayDay: string,
+): FortuneCalendarCell[] {
+  const parsed = parseMonthParts(month);
+  if (!parsed) return [];
+  const { year, mon } = parsed;
+  const firstWeekday = (new Date(Date.UTC(year, mon - 1, 1)).getUTCDay() + 6) % 7;
+  const daysInMonth = new Date(Date.UTC(year, mon, 0)).getUTCDate();
+  const byDay = new Map(days.map(d => [d.day, d]));
+
+  const cells: FortuneCalendarCell[] = [];
+  for (let i = 0; i < firstWeekday; i++) {
+    cells.push({ kind: 'blank', key: `blank-${i}` });
+  }
+  for (let dateNum = 1; dateNum <= daysInMonth; dateNum++) {
+    const day = `${month}-${String(dateNum).padStart(2, '0')}`;
+    cells.push({
+      kind: 'day',
+      key: day,
+      day,
+      dateNum,
+      isToday: day === todayDay,
+      isFuture: day > todayDay,
+      fortune: byDay.get(day) ?? null,
+    });
+  }
+  return cells;
+}
+
+/** 해당 월에 기록된 운세의 총 일수와 종류별 횟수를 집계한다 */
+export function selectFortuneMonthStats(days: readonly DailyFortune[]): FortuneMonthStats {
+  const byKind: Record<FortuneKind, number> = { fish: 0, gold: 0, shadow: 0 };
+  const seen = new Set<string>();
+  for (const d of days) {
+    if (seen.has(d.day)) continue;
+    seen.add(d.day);
+    byKind[d.kind]++;
+  }
+  return { total: seen.size, byKind };
+}
+
+/** 월과 기록을 바탕으로 기본 선택 날짜를 정한다. 현재 선택이 같은 달의 유효한 날짜면 유지한다 */
+export function resolveSelectedFortuneDay(
+  month: string,
+  days: readonly DailyFortune[],
+  todayDay: string,
+  currentSelected?: string | null,
+): string | null {
+  if (currentSelected && currentSelected.startsWith(`${month}-`) && currentSelected <= todayDay) {
+    return currentSelected;
+  }
+  if (todayDay.startsWith(`${month}-`)) return todayDay;
+  return days.length > 0 ? days[days.length - 1].day : null;
+}
+
+/** 선택된 날짜의 상세 표시 모델(날짜 라벨, 오늘 여부, 운세 기록)을 만든다 */
+export function selectFortuneDayDetail(
+  day: string | null,
+  days: readonly DailyFortune[],
+  todayDay: string,
+): FortuneDayDetail | null {
+  if (day === null) return null;
+  const fortune = days.find(d => d.day === day) ?? null;
+  return {
+    day,
+    dateLabel: formatFortuneDay(day),
+    isToday: day === todayDay,
+    fortune,
+  };
+}
 
 /** 접속 모달의 요약 표 줄 — 적용 대상과 행운 효과 */
 export function fortuneSummaryRows(fortune: DailyFortune): { label: string; value: string; accent?: boolean }[] {

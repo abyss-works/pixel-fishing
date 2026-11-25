@@ -61,6 +61,7 @@ import BaitRefundModal from '../overlays/bait-refund/BaitRefundModal';
 import { useBaitRefund } from '../../../features/inventory/service/baitRefund';
 import { useWhatsNewPending } from '../../../features/announcements/service/whatsNew';
 import FortuneModal from '../overlays/fortune/FortuneModal';
+import FortuneCalendarModal from '../overlays/fortune/FortuneCalendarModal';
 import { useFortuneModal } from '../../../features/fortune/service/fortuneModal';
 import { useTutorialTrigger } from '../../../features/tutorial/service/tutorial';
 import { guildMatesIn, useChat, useLive } from '../../../features/live/service/useLive';
@@ -143,6 +144,7 @@ export default function GameView(props: GameViewProps) {
   const [statsInitialTab, setStatsInitialTab] = useState<StatsTab>('summary');
   const [questsOpen, setQuestsOpen] = useState(false);
   const [achievementsOpen, setAchievementsOpen] = useState(false);
+  const [fortuneOpen, setFortuneOpen] = useState(false);
   const [rankingOpen, setRankingOpen] = useState(false);
   const [mailboxOpen, setMailboxOpen] = useState(false);
   const [friendsOpen, setFriendsOpen] = useState(false);
@@ -231,7 +233,7 @@ export default function GameView(props: GameViewProps) {
     setToast: props.setToast,
   });
 
-  const resetPanels = () => { setActionPanel(null); setStatsOpen(false); setAchievementsOpen(false); setRankingOpen(false); setTracking(null); };
+  const resetPanels = () => { setActionPanel(null); setStatsOpen(false); setAchievementsOpen(false); setFortuneOpen(false); setRankingOpen(false); setTracking(null); };
 
   const go = (nextScene: SceneRef, message: string, entryPos?: Point, returnPos?: Point) => {
     resetPanels();
@@ -391,6 +393,7 @@ export default function GameView(props: GameViewProps) {
                    menu={(
                      <GameMenu game={game} account={props.account} accountState={accountState} setToast={props.setToast} onQuests={openQuests}
                                onAchievements={() => setAchievementsOpen(true)}
+                               onFortune={() => setFortuneOpen(true)}
                                onGuild={() => setGuildOpen(true)} onFriends={() => setFriendsOpen(true)}
                                onMailbox={() => setMailboxOpen(true)} />
                    )} />
@@ -416,6 +419,9 @@ export default function GameView(props: GameViewProps) {
                                setStatsOpen(true);
                              }}
                              onClose={() => setAchievementsOpen(false)} />
+        )}
+        {fortuneOpen && (
+          <FortuneCalendarModal gameFortune={game.fortune} accountState={accountState} onClose={() => setFortuneOpen(false)} />
         )}
         {rankingOpen && <RankingModal onClose={() => setRankingOpen(false)} />}
         {away.report && awayOpen && (

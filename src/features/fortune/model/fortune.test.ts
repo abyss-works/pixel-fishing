@@ -1,19 +1,33 @@
 import { describe, expect, it } from 'vitest';
 import type { DailyFortune } from '../../../game/rules/fortune';
 import {
+  FORTUNE_CALENDAR_NOTE,
   FORTUNE_INDEX_LABEL,
   FORTUNE_KIND,
+  FORTUNE_MENU_GUIDE_NOTE,
   FORTUNE_PHRASE,
   FORTUNE_PIPS,
   FORTUNE_RESET_NOTE,
   FORTUNE_SOURCE_HELP,
   FORTUNE_SOURCE_LABEL,
+  FORTUNE_WEEKDAYS,
+  buildFortuneCalendarCells,
+  canGoNextFortuneMonth,
+  canGoPrevFortuneMonth,
+  currentGameMonth,
+  formatFortuneDay,
+  formatFortuneMonth,
   fortuneBonusText,
   fortuneBonusTip,
   fortuneEffectNote,
   fortuneLuckMult,
   fortunePhrase,
   fortuneSummaryRows,
+  resolveSelectedFortuneDay,
+  selectFortuneDayDetail,
+  selectFortuneMonthStats,
+  selectTodayFortune,
+  shiftFortuneMonth,
 } from './fortune';
 
 const f = (kind: DailyFortune['kind'], index: DailyFortune['index'], day = '2026-11-24'): DailyFortune => ({
@@ -81,7 +95,10 @@ describe('오늘의 운세 화면 모델', () => {
     const texts: string[] = [
       FORTUNE_SOURCE_LABEL,
       FORTUNE_RESET_NOTE,
+      FORTUNE_CALENDAR_NOTE,
+      FORTUNE_MENU_GUIDE_NOTE,
       FORTUNE_SOURCE_HELP,
+      ...FORTUNE_WEEKDAYS,
       ...Object.values(FORTUNE_INDEX_LABEL),
     ];
     for (const kind of ['fish', 'gold', 'shadow'] as const) {
@@ -98,7 +115,109 @@ describe('오늘의 운세 화면 모델', () => {
       }
     }
     for (const text of texts) {
-      expect(text, text).not.toMatch(/[·—–]/);
+      expect(text, text).not.toMatch(/[·—–★]/);
     }
+  });
+});
+
+describe('운세 월간 달력 파생 로직', () => {
+  it('게임 날짜 경계(새벽 4시)를 반영해 현재 월과 오늘 운세를 계산한다', () => {
+    // UTC 2026-11-30T18:30:00Z = KST 2026-12-01 03:30 (새벽 4시 이전이므로 게임 날짜는 2026-11-30)
+    const beforeBoundary = '2026-11-30T18:30:00.000Z';
+    expect(currentGameMonth(beforeBoundary)).toBe('2026-11');
+    const nov30 = f('fish', 5, '2026-11-30');
+    expect(selectTodayFortune(nov30, beforeBoundary)).toEqual(nov30);
+    expect(selectTodayFortune(f('gold', 3, '2026-11-29'), beforeBoundary)).toBeNull();
+  });
+
+  it('월 이동과 포맷, 이전/다음 달 경계를 계산한다', () => {
+    expect(shiftFortuneMonth('2026-01', -1)).toBe('2025-12');
+    expect(shiftFortuneMonth('2026-12', 1)).toBe('2027-01');
+    expect(formatFortuneMonth('2026-11')).toBe('2026년 11월');
+    expect(formatFortuneDay('2026-11-05')).toBe('2026년 11월 5일');
+
+    expect(canGoPrevFortuneMonth('2026-11', null)).toBe(false);
+    expect(canGoPrevFortuneMonth('2026-11', '2026-11')).toBe(false);
+    expect(canGoPrevFortuneMonth('2026-11', '2026-10')).toBe(true);
+    expect(canGoNextFortuneMonth('2026-11', '2026-11')).toBe(false);
+    expect(canGoNextFortuneMonth('2026-10', '2026-11')).toBe(true);
+  });
+
+  it('월요일 시작 기준으로 달력 격자 셀을 생성하고 오늘·미래·기록을 구분한다', () => {
+    // 2026-11-01은 일요일이므로 월~토 6칸이 빈 칸, 일 30일 총 36셀
+    const records: DailyFortune[] = [
+      f('gold', 3, '2026-11-19'),
+      f('fish', 5, '2026-11-25'),
+    ];
+    const cells = buildFortuneCalendarCells('2026-11', records, '2026-11-25');
+    expect(FORTUNE_WEEKDAYS).toEqual(['월', '화', '수', '목', '금', '토', '일']);
+    expect(cells).toHaveLength(36);
+    expect(cells.slice(0, 6).every(c => c.kind === 'blank')).toBe(true);
+
+    const day1 = cells[6];
+    expect(day1).toEqual({
+      kind: 'day', key: '2026-11-01', day: '2026-11-01', dateNum: 1,
+      isToday: false, isFuture: false, fortune: null,
+    });
+    const day19 = cells.find(c => c.kind === 'day' && c.day === '2026-11-19');
+    expect(day19).toMatchObject({ kind: 'day', isToday: false, isFuture: false, fortune: records[0] });
+    const day25 = cells.find(c => c.kind === 'day' && c.day === '2026-11-25');
+    expect(day25).toMatchObject({ kind: 'day', isToday: true, isFuture: false, fortune: records[1] });
+    const day26 = cells.find(c => c.kind === 'day' && c.day === '2026-11-26');
+    expect(day26).toMatchObject({ kind: 'day', isToday: false, isFuture: true, fortune: null });
+  });
+
+  it('월간 통계로 총 기록 일수와 종류별 횟수를 집계한다', () => {
+    const records: DailyFortune[] = [
+      f('fish', 3, '2026-11-01'),
+      f('fish', 5, '2026-11-02'),
+      f('gold', 3, '2026-11-03'),
+      f('shadow', 5, '2026-11-04'),
+      f('shadow', 3, '2026-11-05'),
+    ];
+    expect(selectFortuneMonthStats(records)).toEqual({
+      total: 5,
+      byKind: { fish: 2, gold: 1, shadow: 2 },
+    });
+    expect(selectFortuneMonthStats([])).toEqual({
+      total: 0,
+      byKind: { fish: 0, gold: 0, shadow: 0 },
+    });
+  });
+
+  it('선택 날짜 기본값과 상세 정보를 파생한다', () => {
+    const records: DailyFortune[] = [
+      f('gold', 3, '2026-10-12'),
+      f('shadow', 5, '2026-10-28'),
+    ];
+    // 현재 월이면 오늘을 기본 선택
+    expect(resolveSelectedFortuneDay('2026-11', [], '2026-11-25')).toBe('2026-11-25');
+    // 과거 월이면 마지막 기록일을 기본 선택
+    expect(resolveSelectedFortuneDay('2026-10', records, '2026-11-25')).toBe('2026-10-28');
+    // 빈 과거 월이면 null
+    expect(resolveSelectedFortuneDay('2026-09', [], '2026-11-25')).toBeNull();
+    // 같은 달 안에서 사용자가 선택한 과거/오늘 날짜가 있으면 유지
+    expect(resolveSelectedFortuneDay('2026-10', records, '2026-11-25', '2026-10-12')).toBe('2026-10-12');
+    // 다른 달에서 넘어온 선택값은 새 달의 기본 선택으로 대체
+    expect(resolveSelectedFortuneDay('2026-10', records, '2026-11-25', '2026-11-25')).toBe('2026-10-28');
+
+    expect(selectFortuneDayDetail('2026-10-12', records, '2026-11-25')).toEqual({
+      day: '2026-10-12',
+      dateLabel: '2026년 10월 12일',
+      isToday: false,
+      fortune: records[0],
+    });
+    expect(selectFortuneDayDetail('2026-10-13', records, '2026-11-25')).toEqual({
+      day: '2026-10-13',
+      dateLabel: '2026년 10월 13일',
+      isToday: false,
+      fortune: null,
+    });
+    expect(selectFortuneDayDetail(null, records, '2026-11-25')).toBeNull();
+  });
+
+  it('달력 안내 문구가 규칙 문구 기준을 지키고 금지 표현을 쓰지 않는다', () => {
+    expect(FORTUNE_CALENDAR_NOTE).toContain('새벽 4시');
+    expect(FORTUNE_CALENDAR_NOTE).not.toContain('한국 시간 새벽');
   });
 });

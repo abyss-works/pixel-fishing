@@ -99,6 +99,48 @@ describe('GameView 패널 초기화', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
+  it('메뉴 줄의 운세를 누르면 스테이지 안에 운세 달력 창이 열리고 거점을 떠나면 닫힌다', () => {
+    const onScene = vi.fn();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <GameView
+          game={{ ...newState(), tutorials: [...TUTORIAL_IDS] }}
+          scene={{ kind: 'base', id: 'home' }}
+          entryPos={null}
+          placeSeq={0}
+          dispatch={() => ({ status: 'ok', state: newState(), result: { type: 'none' } })}
+          setToast={() => {}}
+          onScene={onScene}
+          onPlace={() => {}}
+          onWarmup={() => {}}
+          log={[]}
+          syncLabel={null}
+          syncState="off"
+          guestProgress="nothing"
+          account="dev@localhost"
+          accountChecked={true}
+          accountFailed={false}
+          uid="u1"
+          nickname="테스터"
+          onRename={async () => null}
+          onAuthChanged={async () => {}}
+          onResync={async () => {}}
+        />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /^메뉴 열기/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /^운세/ }));
+    const dialog = screen.getByRole('dialog');
+    expect(document.querySelector('[data-game-stage]')!).toContainElement(dialog);
+    expect(screen.getByRole('heading', { name: '운세' })).toBeInTheDocument();
+
+    fireEvent.click(document.querySelector('[data-facility="exit"]')!);
+    expect(onScene).toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
   it('FloatingToastLayer는 GameStageLayout([container-type:size]) 바깥에 놓이고 앱 모달이 열려도 닫기 버튼이 동작한다', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const onDismissToast = vi.fn();
