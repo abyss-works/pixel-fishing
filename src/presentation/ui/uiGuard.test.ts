@@ -1001,7 +1001,7 @@ describe('UI 시스템 가드', () => {
     const messageFeedSrc = presentationFiles.find(f => f.path === 'ui/hud/messageFeed.ts')!.src;
 
     expect(tipSrc).toMatch(/HighlightRarityText/);
-    expect(tipSrc).toMatch(/function TipList\(\{ rows, note \}:\s*\{\s*rows:\s*readonly\s*\{\s*label:\s*ReactNode;\s*value:\s*ReactNode\s*\}\[\];\s*note\?:\s*ReactNode/);
+    expect(tipSrc).toMatch(/function TipList\(\{ rows, note \}:\s*\{\s*rows:\s*readonly\s*\{\s*label:\s*ReactNode;\s*value:\s*ReactNode(?:;\s*divider\?:\s*boolean)?\s*\}\[\];\s*note\?:\s*ReactNode/);
     expect(recipeTipSrc).toMatch(/HighlightRarityText/);
     expect(recipeTipSrc).toMatch(/export type RecipeEffectTipRow\s*=\s*\|\s*\{\s*label:\s*ReactNode;\s*value:\s*ReactNode\s*\}\s*\|\s*\{\s*text:\s*ReactNode\s*\}/);
     expect(recipeTipSrc).toMatch(/label:\s*ReactNode;\s*effects:\s*readonly\s*RecipeEffectTipRow\[\];\s*note:\s*ReactNode/);
@@ -1030,6 +1030,17 @@ describe('UI 시스템 가드', () => {
     expect(artifactLoreAt).toBeGreaterThan(-1);
     expect(compareAt).toBeGreaterThan(artifactLoreAt);
     expect(systemAt).toBeGreaterThan(artifactLoreAt);
+  });
+
+  it('화면과 기능 코드에서 %p 표기를 쓰지 않는다', () => {
+    const PCT_POINT_RE = /%p\b/;
+    const offenders = appSources
+      .filter(([key, src]) => !isTestFile(key) && PCT_POINT_RE.test(stripComments(src)))
+      .map(([key]) => key);
+    expect(offenders).toEqual([]);
+    expect(PCT_POINT_RE.test('판매가 +5%p')).toBe(true);
+    expect(PCT_POINT_RE.test('판매가 +5%')).toBe(false);
+    expect(PCT_POINT_RE.test('배수 ×1.05')).toBe(false);
   });
 
   const FONT_PIXEL_RE = /\bfont-pixel\b/;

@@ -36,9 +36,9 @@ const f = (kind: DailyFortune['kind'], index: DailyFortune['index'], day = '2026
 
 describe('오늘의 운세 화면 모델', () => {
   it('종류별 이름과 보너스 대상을 제공한다', () => {
-    expect(FORTUNE_KIND.fish).toEqual({ name: '풍어운', target: 'rarity', bonus: '희귀 이상 출현 확률' });
+    expect(FORTUNE_KIND.fish).toEqual({ name: '풍어운', target: 'rarity', bonus: '희귀 이상 출현 비중' });
     expect(FORTUNE_KIND.gold).toEqual({ name: '재물운', target: 'sell', bonus: '판매가' });
-    expect(FORTUNE_KIND.shadow).toEqual({ name: '그림자 운', target: 'named', bonus: '네임드 만날 확률' });
+    expect(FORTUNE_KIND.shadow).toEqual({ name: '그림자 운', target: 'named', bonus: '네임드 조우 확률' });
     expect(FORTUNE_SOURCE_LABEL).toBe('오늘의 운세');
     expect(FORTUNE_PIPS).toBe(5);
   });
@@ -68,26 +68,26 @@ describe('오늘의 운세 화면 모델', () => {
 
   it('모달 요약 표와 효과 안내 및 초기화 시각 안내를 만든다', () => {
     expect(fortuneSummaryRows(f('fish', 5))).toEqual([
-      { label: '적용 대상', value: '희귀 이상 출현 확률' },
-      { label: '행운 효과', value: '+5%p', accent: true },
+      { label: '적용 대상', value: '희귀 이상 출현 비중' },
+      { label: '행운 효과', value: '×1.05', accent: true },
     ]);
     expect(fortuneSummaryRows(f('gold', 3))).toEqual([
       { label: '적용 대상', value: '판매가' },
-      { label: '행운 효과', value: '+3%p', accent: true },
+      { label: '행운 효과', value: '×1.03', accent: true },
     ]);
-    expect(fortuneEffectNote(f('fish', 5))).toBe('오늘 희귀 이상 출현 확률 행운 효과가 +5%p 올라요.');
-    expect(fortuneEffectNote(f('shadow', 3))).toBe('오늘 네임드 만날 확률 행운 효과가 +3%p 올라요.');
-    expect(FORTUNE_RESET_NOTE).toBe('새 운세는 하루마다 새로 뽑혀요.');
+    expect(fortuneEffectNote(f('fish', 5))).toBe('오늘 희귀 이상 출현 비중 행운 효과가 ×1.05 올라요.');
+    expect(fortuneEffectNote(f('shadow', 3))).toBe('오늘 네임드 조우 확률 행운 효과가 ×1.03 올라요.');
+    expect(FORTUNE_RESET_NOTE).toBe('매일 새벽에 새 운세가 찾아와요.');
   });
 
   it('스탯 창 보너스 탭의 효과 문구와 무수치 툴팁·출처 도움말을 만든다', () => {
     expect(fortuneLuckMult(f('fish', 3))).toBe(1.03);
     expect(fortuneLuckMult(f('gold', 5))).toBe(1.05);
-    expect(fortuneBonusText(f('fish', 5))).toBe('희귀 이상 출현 확률 +5%p');
-    expect(fortuneBonusText(f('gold', 3))).toBe('판매가 +3%p');
-    expect(fortuneBonusTip(f('fish', 5))).toBe('희귀 이상 출현 확률 행운 효과가 올라가요.');
+    expect(fortuneBonusText(f('fish', 5))).toBe('희귀 이상 출현 비중 ×1.05');
+    expect(fortuneBonusText(f('gold', 3))).toBe('판매가 ×1.03');
+    expect(fortuneBonusTip(f('fish', 5))).toBe('희귀 이상 출현 비중 행운 효과가 올라가요.');
     expect(fortuneBonusTip(f('gold', 3))).toBe('판매가 행운 효과가 올라가요.');
-    expect(fortuneBonusTip(f('shadow', 5))).toBe('네임드 만날 확률 행운 효과가 올라가요.');
+    expect(fortuneBonusTip(f('shadow', 5))).toBe('네임드 조우 확률 행운 효과가 올라가요.');
     expect(FORTUNE_SOURCE_HELP).toBe('오늘의 운세는 하루마다 새로 뽑혀요. 행운 효과는 다른 보너스 다음에 곱해져요.');
   });
 

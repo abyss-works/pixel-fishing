@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Stat } from '../../../game/rules/stats';
-import { formatStatMods, formatStatValue } from './statFormat';
+import { formatStatModLabel, formatStatMods, formatStatValue } from './statFormat';
 
 const stat = (base: number, mods: Stat['mods'], value: number): Stat => ({ base, mods, value });
 
@@ -49,5 +49,24 @@ describe('formatStatMods', () => {
 
     const speed = stat(110, [{ id: 'relic-wreck-compass', label: '침선의 나침반', delta: 13.2 }], 123.2);
     expect(formatStatMods(speed, '', 0)).toBe('기본 110 +13.2 (침선의 나침반) = 123.2');
+  });
+
+  it('source가 있는 보정은 [출처] 구조화 태그를 붙인다', () => {
+    expect(formatStatModLabel({ id: 'r1', label: '바깥섬의 봉돌', delta: -0.2, source: { kind: 'relic', id: 'outer-isle-sinker' } }))
+      .toBe('[유물] 바깥섬의 봉돌');
+    expect(formatStatModLabel({ id: 'g1', label: '길드 가방 용량', delta: 4, source: { kind: 'guild', bonus: 'bag' } }))
+      .toBe('[길드] 가방 용량');
+    expect(formatStatModLabel({ id: 'a1', label: '업적 누적', delta: 2, source: { kind: 'achievement', id: 'bagCap' } }))
+      .toBe('[업적] 누적');
+    expect(formatStatModLabel({ id: 's1', label: '가루디야(일반)', delta: -0.1, source: { kind: 'slot', recipe: 'cook-lunch-bite' } }))
+      .toBe('[도시락] 가루디야(일반)');
+    expect(formatStatModLabel({ id: 's2', label: '롱페퍼 미끼(희귀)', delta: 0.4, source: { kind: 'slot', recipe: 'cook-bait-rare' } }))
+      .toBe('[미끼] 롱페퍼 미끼(희귀)');
+    expect(formatStatModLabel({ id: 'f1', label: '오늘의 운세', delta: 5, source: { kind: 'fortune' } }))
+      .toBe('[운세] 오늘의 운세');
+    expect(formatStatModLabel({ id: 'p1', label: '작은 바다 영약', delta: 5, source: { kind: 'potion', id: 'luck-small' } }))
+      .toBe('[비약] 작은 바다 영약');
+    expect(formatStatModLabel({ id: 'n1', label: '파워 부족', delta: 1, source: { kind: 'rule', id: 'power' } }))
+      .toBe('파워 부족');
   });
 });

@@ -1,4 +1,5 @@
 import type { Stat } from '../../game/rules/stats';
+import { formatStatModLabel } from '../../features/gameplay/model/statFormat';
 import { cx } from './cx';
 import { fmtGold } from './format';
 import Tip, { TipList } from './Tip';
@@ -17,7 +18,7 @@ export default function AdjustedAmount({ amount, className, inButton }: { amount
   if (mods.length === 0) return <span className={cx('pf-accent whitespace-nowrap', className)}>{fmtGold(amount.value)}</span>;
   const rows = [
     { label: '기본 금액', value: fmtGold(amount.base) },
-    ...mods.map(mod => ({ label: mod.label, value: signed(mod.delta) })),
+    ...mods.map(mod => ({ label: formatStatModLabel(mod), value: signed(mod.delta) })),
     { label: '합계', value: fmtGold(amount.value) },
   ];
   return (

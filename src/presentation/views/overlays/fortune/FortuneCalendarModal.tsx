@@ -243,7 +243,7 @@ export default function FortuneCalendarModal({
                                 <HighlightRarityText text={FORTUNE_KIND[detail.fortune.kind].bonus} />
                               </span>
                             </span>
-                            <span className="text-accent pf-accent">{`+${detail.fortune.index}%p`}</span>
+                            <span className="text-accent pf-accent">{`×${(1 + detail.fortune.index / 100).toFixed(2)}`}</span>
                           </div>
                         </>
                       ) : (

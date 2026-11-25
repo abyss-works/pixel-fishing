@@ -51,4 +51,21 @@ describe('AdjustedAmount', () => {
     const { container } = render(<AdjustedAmount amount={{ base: 500, mods: [{ id: 'x', label: 'x', delta: 0 }], value: 500 }} />);
     expect(container.textContent).toBe('500G');
   });
+
+  it('source가 있는 보정은 [출처] 태그로 툴팁에 표시한다', () => {
+    render(
+      <AdjustedAmount amount={{
+        base: 1000,
+        mods: [
+          { id: 'guild-sell', label: '판매가 보너스', delta: 60, source: { kind: 'guild', bonus: 'sell' } },
+          { id: 'potion-luck-small', label: '작은 바다 영약', delta: 53, source: { kind: 'potion', id: 'luck-small' } },
+        ],
+        value: 1113,
+      }} />,
+    );
+    fireEvent.mouseEnter(screen.getByText('1,113G'));
+    const tip = screen.getByRole('tooltip');
+    expect(tip).toHaveTextContent('[길드] 판매가 보너스+60G');
+    expect(tip).toHaveTextContent('[비약] 작은 바다 영약+53G');
+  });
 });

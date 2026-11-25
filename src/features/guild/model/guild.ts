@@ -230,21 +230,20 @@ export const GUILD_BONUS_NAME: Record<GuildBonusId, string> = {
 export const GUILD_BONUS_TIP: Record<GuildBonusId, string> = {
   sell: '물고기를 팔 때 받는 골드가 늘어요.',
   bag: '배의 가방 칸이 늘어요.',
-  named: '네임드를 만날 확률이 올라가요.',
-  rare: '일반 등급 물고기가 걸릴 확률을 줄여요.',
-  mutation: '돌연변이가 나올 확률이 올라가요.',
+  named: '네임드 조우 확률이 올라가요.',
+  rare: '일반 등급 물고기가 걸릴 비중을 줄여요.',
+  mutation: '돌연변이가 나올 비중이 올라가요.',
 };
 
 const pct = (r: number) => `${Math.round(r * 1000) / 10}%`;
 
-/** 효과 값 하나: 비율은 %, 돌연변이는 확률에 더하는 %p, 희귀 어종은 일반 어종 출현을 줄이므로 − */
+/** 효과 값 하나: 모든 보너스는 %, 희귀 어종은 일반 어종 출현을 줄이므로 − */
 export function bonusEffectValue(id: GuildBonusId, value: number): string {
-  if (id === 'rare') return `−${pct(value)}`;
-  return id === 'mutation' ? `+${pct(value)}p` : `+${pct(value)}`;
+  return id === 'rare' ? `−${pct(value)}` : `+${pct(value)}`;
 }
 
 const EFFECT_LABEL: Record<GuildBonusId, string> = {
-  sell: '판매가', bag: '가방 용량', named: '네임드 조우', rare: '일반 어종 출현', mutation: '돌연변이 확률',
+  sell: '판매가', bag: '가방 용량', named: '네임드 조우 확률', rare: '일반 어종 출현 비중', mutation: '돌연변이 출현 비중',
 };
 
 /** 효과 문장: 무엇이 얼마나 바뀌는지 */

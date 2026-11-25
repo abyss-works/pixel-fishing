@@ -20,9 +20,9 @@ const sources = Object.entries(import.meta.glob('../../{presentation,features}/*
 describe('효과 표기 가드', () => {
   afterEach(cleanup);
 
-  it('스탯 배수를 ×N 또는 xN으로 쓰지 않는다 - 기본 규칙 배수는 N배다(개수 표기 ×{count}는 대상이 아니다)', () => {
-    // 배수 값(toFixed, mult, boost, idle, penalty 등)을 ×나 x 바로 뒤에 붙이는 표기, prefix="×", ×숫자배
-    const STAT_MULT = /prefix="×"|(?<![\w])[×x]\s*\$?\{[^}]*(?:toFixed|[Mm]ult|[Bb]oost|[Ii]dle|[Pp]enalty|applied)[^}]*\}|[×]\s*\d+(?:\.\d+)?\s*배/;
+  it('기본 규칙 스탯 배수를 ×N 또는 xN으로 쓰지 않는다 - 기본 규칙 배수는 N배다(운세·비약·증폭·억제의 ×1.xx/×0.5 곱연산과 개수 ×{count}는 대상이 아니다)', () => {
+    // 기본 규칙 배수(idle, penalty, applied 등)를 ×나 x 바로 뒤에 붙이는 표기, prefix="×", ×숫자배
+    const STAT_MULT = /prefix="×"|(?<![\w])[×x]\s*\$?\{[^}]*(?:[Ii]dle|[Pp]enalty|applied)[^}]*\}|[×]\s*\d+(?:\.\d+)?\s*배/;
     const offenders = sources.filter(([, src]) => STAT_MULT.test(src)).map(([key]) => key);
     expect(offenders).toEqual([]);
   });

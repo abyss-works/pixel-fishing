@@ -20,7 +20,7 @@ describe('오늘의 운세 팝업 (FortuneModal)', () => {
     expect(screen.getByRole('heading', { name: '오늘의 운세' })).toBeInTheDocument();
     expect(screen.getByText('풍어운')).toBeInTheDocument();
     expect(screen.getByLabelText('지수 5, 좋은 운')).toBeInTheDocument();
-    expect(screen.getByText('+5%p')).toBeInTheDocument();
+    expect(screen.getByText('×1.05')).toBeInTheDocument();
     expect(screen.getByText(/메뉴의 운세 항목에서 지난 달력 기록을 볼 수 있어요\./)).toBeInTheDocument();
     // 희귀 낱말은 등급색 강조 요소로 그려진다
     expect(screen.getAllByText('희귀').some(el => el.getAttribute('data-rarity') === 'rare')).toBe(true);
@@ -34,7 +34,7 @@ describe('오늘의 운세 팝업 (FortuneModal)', () => {
 
     expect(screen.getByText('그림자 운')).toBeInTheDocument();
     expect(screen.getByLabelText('지수 3, 적당한 운')).toBeInTheDocument();
-    expect(screen.getByText('+3%p')).toBeInTheDocument();
+    expect(screen.getByText('×1.03')).toBeInTheDocument();
     expect(within(screen.getByLabelText('오늘의 보너스')).getByText('네임드')).toBeInTheDocument();
     expect(screen.getAllByText('네임드').length).toBeGreaterThanOrEqual(2);
   });
