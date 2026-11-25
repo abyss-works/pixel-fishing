@@ -13,8 +13,8 @@ export type DispatchResult =
   | { status: 'ok'; state: GameState; result: ActionResult }
   | { status: 'rejected'; error: RejectReason };
 
-/** 표시용 프로필 읽기 결과. 닉네임은 정하지 않았으면 null, devTools는 서버가 내려 준 개발 도구 사용 판정이다 */
-export interface GameProfile { nickname: string | null; devTools: boolean }
+/** 표시용 프로필 읽기 결과. 닉네임은 정하지 않았으면 null, 읽기 실패는 ok: false로 구분한다 */
+export type GameProfile = { ok: true; nickname: string | null; devTools: boolean } | { ok: false };
 
 /** 게임 상태의 읽기·액션 처리 경계. HTTP와 로컬 구현은 adapters/에 둔다. */
 export interface GameGateway {
