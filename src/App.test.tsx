@@ -1628,9 +1628,12 @@ describe('닉네임 (게스트명 표시·변경)', () => {
 });
 
 describe('튜토리얼 창 — 트리거마다 한 번', () => {
-  it('처음 시작하면 마을 튜토리얼이 뜨고, 닫으면 본 것으로 남아 다시 뜨지 않는다', async () => {
+  it('집 거점에서는 뜨지 않고 마을 야외에 처음 나가면 뜨며, 닫으면 본 것으로 남아 다시 뜨지 않는다', async () => {
     seed({ tutorials: [] });
     const { unmount } = render(<App />);
+    expect(screen.queryByRole('dialog', { name: '마을에 오신 걸 환영해요' })).not.toBeInTheDocument();
+
+    fireEvent.click(document.querySelector('[data-facility="exit"]')!);
     const dialog = await screen.findByRole('dialog', { name: '마을에 오신 걸 환영해요' });
     fireEvent.click(within(dialog).getByRole('button', { name: '알겠어요' }));
     expect(screen.queryByRole('dialog', { name: '마을에 오신 걸 환영해요' })).not.toBeInTheDocument();
@@ -1644,7 +1647,7 @@ describe('튜토리얼 창 — 트리거마다 한 번', () => {
   it('업데이트 소식 창이 떠 있으면 그 창을 닫은 뒤에 뜬다', async () => {
     localStorage.removeItem('pf-announcements');
     resetAnnouncements();
-    seed({ fame: 120, tutorials: [] });
+    seed({ fame: 120, tutorials: [], location: { kind: 'region', id: 'village' } });
     render(<App />);
     expect(screen.getByRole('dialog', { name: '업데이트 소식' })).toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: '마을에 오신 걸 환영해요' })).not.toBeInTheDocument();
