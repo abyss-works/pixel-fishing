@@ -33,6 +33,11 @@ function submitCoupon(code: string, result: DispatchResult) {
 }
 
 describe('CodeModal', () => {
+  it('지원 코드의 일회 사용 제약은 툴팁에 숨기지 않고 화면에 바로 보인다', () => {
+    render(<CodeModal dispatch={vi.fn()} setToast={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByText('한 번만 쓸 수 있어요')).toBeInTheDocument();
+  });
+
   it('쿠폰 팁은 골드와 아이템 지급 동작을 1줄로 안내한다', () => {
     render(<CodeModal dispatch={vi.fn()} setToast={vi.fn()} onClose={vi.fn()} />);
     fireEvent.focus(screen.getByText('쿠폰'));

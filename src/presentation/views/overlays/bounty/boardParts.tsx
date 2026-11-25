@@ -20,13 +20,12 @@ export function BoardRows({ rows }: { rows: { key: string; label: ReactNode; val
   );
 }
 
-/** 수주 버튼 — 누를 수 없는 이유가 있으면 그 이유를, 없으면 수주 규칙 설명(있을 때)을 툴팁으로 보인다 */
-export function AcceptButton({ disabled, reason, help, onClick }: {
-  disabled: boolean; reason: string | null; help?: string; onClick: () => void;
+/** 수주 버튼 — 누를 수 없는 이유가 있으면 그 이유를 툴팁으로 보인다 */
+export function AcceptButton({ disabled, reason, onClick }: {
+  disabled: boolean; reason: string | null; onClick: () => void;
 }) {
   const button = <Button variant="primary" full disabled={disabled} onClick={onClick}>수주</Button>;
-  const tip = reason ?? help;
-  return tip ? <Tip wraps text={tip} className="block">{button}</Tip> : button;
+  return reason ? <Tip wraps text={reason} className="block">{button}</Tip> : button;
 }
 
 /** 진행 막대와 "진행/목표" - 수배판 일반 의뢰 카드와 의뢰 창 카드가 함께 쓴다 */

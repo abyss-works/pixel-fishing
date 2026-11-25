@@ -112,7 +112,9 @@ export default function SettingsModal({ autoLockOnCatch, dispatch, setToast, onC
           )}
         />
       </Inset>
-      <SectionTitle>알림</SectionTitle>
+      <SectionTitle>
+        <Tip text={hint}>알림</Tip>
+      </SectionTitle>
       <Inset divided>
         <KeyValueRow
           label={<Tip text={<TipCard title="주요 화면 알림" description={FLOATING_TOAST_HINT} />}>주요 화면 알림</Tip>}
@@ -123,9 +125,9 @@ export default function SettingsModal({ autoLockOnCatch, dispatch, setToast, onC
             </ToggleChip>
           )}
         />
-        <AlertRow label="네임드 조우" hint={`네임드의 흔적을 만나면 알려 줘요.\n${hint}`} toggle={encounter}
+        <AlertRow label="네임드 조우" hint="네임드의 흔적을 만나면 알려 줘요." toggle={encounter}
                   blockedReason={blockedReason} setToast={setToast} />
-        <AlertRow label="업데이트" hint={`업데이트가 나와 진행이 멈추면 알려 줘요.\n${hint}`} toggle={update}
+        <AlertRow label="업데이트" hint="업데이트가 나와 진행이 멈추면 알려 줘요." toggle={update}
                   blockedReason={blockedReason} setToast={setToast} />
       </Inset>
     </Modal>

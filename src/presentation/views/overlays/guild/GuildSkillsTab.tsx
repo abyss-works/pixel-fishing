@@ -123,8 +123,15 @@ export default function GuildSkillsTab({ guild, gold, busy, run, dialogHost, onR
       <Inset className="shrink-0 flex flex-col gap-2 px-3 py-2.5 mobile:px-2 mobile:py-2">
         <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-line flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
-            <Tip text={'자유 강화 포인트와 효과는 길드원마다 따로 적용돼요.'}
-                 className="text-xs font-bold text-text">
+            <Tip
+              text={(
+                <TipCard
+                  title="길드 스킬 강화 규칙"
+                  description={'자유 강화 포인트와 효과는 길드원마다 따로 적용돼요.\n기부로 올리는 기본 단계는 모든 길드원이 함께 받고, 내 포인트로 올리는 개인 자유 강화는 나에게만 추가로 적용돼요.'}
+                />
+              )}
+              className="text-xs font-bold text-text"
+            >
               남은 강화 포인트
             </Tip>
             <div className="inline-flex items-center gap-1" aria-hidden="true">
@@ -169,7 +176,7 @@ export default function GuildSkillsTab({ guild, gold, busy, run, dialogHost, onR
           <Inset className="p-2.5 flex flex-col gap-1">
             <section aria-label={`${sel.name} 효과`} className="flex flex-col gap-1">
               <div className="flex items-baseline justify-between gap-2 pb-1">
-                <Tip text={GUILD_BONUS_TIP[sel.id]} className="font-bold text-gold">{sel.name}</Tip>
+                <b className="font-bold text-gold">{sel.name}</b>
                 <span className="text-xs text-text-dim whitespace-nowrap">
                   {sel.locked ? '잠김' : sel.enhanceRank > 0 ? (
                     <>기본 {sel.rank} + 강화 {sel.enhanceRank} = <strong className="pf-accent text-guild">{sel.totalRank}단계</strong></>
@@ -325,12 +332,7 @@ function nodeTip(skillName: string, node: BonusNode) {
     <TipCard
       title={`${skillName} ${node.rank}단계`}
       badge={<Badge tone={node.state === 'done' ? 'gold' : 'dim-plain'} size="2xs">{NODE_TEXT[node.state]}</Badge>}
-      description={!node.enhanced || node.state === 'done'
-        ? '길드 공용으로 적용되는 기본 단계예요.\n모든 길드원이 같은 효과를 받아요.'
-        : undefined}
-      status={node.enhanced
-        ? { tone: 'info', lines: ['내 포인트로 올린 개인 자유 강화 단계예요.', '나에게만 추가로 적용돼요.'] }
-        : undefined}
+      status={node.enhanced ? { tone: 'info', lines: ['개인 자유 강화 적용'] } : undefined}
     />
   );
 }

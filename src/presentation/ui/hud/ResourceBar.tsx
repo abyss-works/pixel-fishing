@@ -32,10 +32,18 @@ export default function ResourceBar({ game, bagBonus = 0, onOpen }: { game: Game
   const bag = selectBagStatus(game, bagBonus);
   const text = resourceText(game, bagBonus);
   const stats = [
-    <HudStat key="gold" glyph="coin" label="골드"><b className="font-bold">{fmtCompact(game.gold)}</b></HudStat>,
-    <HudStat key="fame" glyph="star" label="명성"><b className="font-bold">{fmtCompact(game.fame)}</b></HudStat>,
-    <HudStat key="boat" glyph="boat" label="배"><b className="font-bold">{text.boatName}</b></HudStat>,
-    <HudStat key="rod" glyph="rod" label="낚싯대"><b className="font-bold">{text.rodValue}</b></HudStat>,
+    <Tip key="gold" wraps plain hoverOnly text={text.gold}>
+      <HudStat glyph="coin" label="골드"><b className="font-bold">{fmtCompact(game.gold)}</b></HudStat>
+    </Tip>,
+    <Tip key="fame" wraps plain hoverOnly text={text.fame}>
+      <HudStat glyph="star" label="명성"><b className="font-bold">{fmtCompact(game.fame)}</b></HudStat>
+    </Tip>,
+    <Tip key="boat" wraps plain hoverOnly text={text.boat}>
+      <HudStat glyph="boat" label="배"><b className="font-bold">{text.boatName}</b></HudStat>
+    </Tip>,
+    <Tip key="rod" wraps plain hoverOnly text={text.rod}>
+      <HudStat glyph="rod" label="낚싯대"><b className="font-bold">{text.rodValue}</b></HudStat>
+    </Tip>,
     <Tip key="bag" wraps plain hoverOnly text={text.bag}>
       <HudStat glyph="fish" label="가방">
         <span className="flex items-center gap-1.5 h-[17px]">

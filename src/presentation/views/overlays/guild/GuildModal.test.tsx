@@ -286,7 +286,9 @@ describe('GuildModal', () => {
     expect(screen.queryByText(/보라색 테두리/)).toBeNull();
 
     fireEvent.mouseEnter(screen.getByText('남은 강화 포인트'));
-    expect(screen.getByRole('tooltip').textContent).toBe('자유 강화 포인트와 효과는 길드원마다 따로 적용돼요.');
+    const headerTip = screen.getByRole('tooltip').textContent ?? '';
+    expect(headerTip).toContain('자유 강화 포인트와 효과는 길드원마다 따로 적용돼요.');
+    expect(headerTip).toContain('기본 단계는 모든 길드원이 함께 받고');
     fireEvent.mouseLeave(screen.getByText('남은 강화 포인트'));
 
     fireEvent.click(screen.getByRole('button', { name: '희귀 어종 확률 고르기' }));
@@ -295,18 +297,20 @@ describe('GuildModal', () => {
     expect(enhancedNode).toBeTruthy();
     fireEvent.mouseEnter(enhancedNode.closest('[tabindex="0"]') as HTMLElement);
     const enhancedTip = screen.getByRole('tooltip').textContent ?? '';
-    expect(enhancedTip).toContain('길드 공용으로 적용되는 기본 단계예요.');
-    expect(enhancedTip).toContain('내 포인트로 올린 개인 자유 강화 단계예요.');
-    expect(enhancedTip).toContain('나에게만 추가로 적용돼요.');
+    expect(enhancedTip).toContain('희귀 어종 확률 2단계');
+    expect(enhancedTip).toContain('이룸');
+    expect(enhancedTip).toContain('개인 자유 강화 적용');
+    expect(enhancedTip).not.toContain('길드 공용으로 적용되는 기본 단계예요.');
     expect(enhancedTip).not.toMatch(/[·—–]/);
     fireEvent.mouseLeave(enhancedNode.closest('[tabindex="0"]') as HTMLElement);
 
     const baseNode = screen.getByLabelText('희귀 어종 확률 3단계 이룸');
     fireEvent.mouseEnter(baseNode.closest('[tabindex="0"]') as HTMLElement);
     const baseTip = screen.getByRole('tooltip').textContent ?? '';
-    expect(baseTip).toContain('길드 공용으로 적용되는 기본 단계예요.');
-    expect(baseTip).toContain('모든 길드원이 같은 효과를 받아요.');
-    expect(baseTip).not.toContain('내 포인트로 올린 개인 자유 강화 단계예요.');
+    expect(baseTip).toContain('희귀 어종 확률 3단계');
+    expect(baseTip).toContain('이룸');
+    expect(baseTip).not.toContain('길드 공용으로 적용되는 기본 단계예요.');
+    expect(baseTip).not.toContain('개인 자유 강화 적용');
     expect(baseTip).not.toMatch(/[·—–]/);
     fireEvent.mouseLeave(baseNode.closest('[tabindex="0"]') as HTMLElement);
 

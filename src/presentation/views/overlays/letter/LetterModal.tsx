@@ -10,7 +10,7 @@ import type { DispatchResult, MaybePromise } from '../../../../features/gameplay
 import Modal from '../../../ui/Modal';
 import Button from '../../../ui/Button';
 import Locked from '../../../ui/Locked';
-import Tip from '../../../ui/Tip';
+import Note from '../../../ui/Note';
 import TextArea from '../../../ui/TextArea';
 
 // 개발자에게 보내는 편지 — 건의·신고·잡담을 **하나로 뭉뚱그린** 창구.
@@ -19,7 +19,7 @@ import TextArea from '../../../ui/TextArea';
 //
 // 로그인한 계정만 보낼 수 있다. 게스트에게는 **답장할 방법이 없어서**다 —
 // 보안 제한이 아니라 소통이 성립하는 조건이다. 게스트에게도 창은 열리고, 입력 칸은 공용 잠금 표시로 두고 이유를 툴팁으로 보인다.
-const LETTER_HINT = '건의, 버그 제보, 하고 싶은 말 아무거나 좋아요.\n답장은 계정 이메일로 드려요.';
+const LETTER_HINT = '건의, 버그 제보, 하고 싶은 말 아무거나 좋아요. 답장은 계정 이메일로 드려요.';
 
 export default function LetterModal({ dispatch, setToast, accountState, onClose }: {
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
@@ -64,9 +64,8 @@ export default function LetterModal({ dispatch, setToast, accountState, onClose 
 
   return (
     <Modal layer="app" title="개발자에게" narrow onClose={onClose}>
-      {lock
-        ? <Locked lines={lock} label="편지">{field}</Locked>
-        : <Tip plain className="block" text={LETTER_HINT}>{field}</Tip>}
+      <Note className="my-0">{LETTER_HINT}</Note>
+      {lock ? <Locked lines={lock} label="편지">{field}</Locked> : field}
       <div className="flex items-center gap-2">
         <span className={over ? 'text-danger text-2xs' : 'text-text-dim text-2xs'}>
           {body.length} / {LETTER_MAX}

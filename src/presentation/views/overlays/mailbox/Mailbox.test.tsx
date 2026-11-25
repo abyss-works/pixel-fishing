@@ -135,6 +135,33 @@ describe('우편함 창', () => {
     await waitFor(() => expect(toast).toHaveBeenCalledWith('우편에서 500G, 작은 행운 물약 2개를 받았어요!', 'gold'));
   });
 
+  it('첨부 아이템 배지를 올리면 툴팁을, 누르면 효과와 지속 시간이 담긴 상세 창을 보인다', async () => {
+    state.mails = [
+      mail({
+        id: 13,
+        title: '행운 보급',
+        body: '작은 행운 물약이에요.',
+        gold: 0,
+        items: [{ id: 'luck-small', qty: 2 }],
+      }),
+    ];
+    wrap(<MailboxModal dispatch={vi.fn() as never} setToast={vi.fn()} onClose={() => {}} />);
+    fireEvent.click(await screen.findByRole('row', { name: /행운 보급/ }));
+
+    const itemBtn = screen.getByRole('button', { name: /작은 행운 물약/ });
+    fireEvent.mouseEnter(itemBtn.parentElement!);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('물약');
+    fireEvent.mouseLeave(itemBtn.parentElement!);
+
+    fireEvent.click(itemBtn);
+    const dialogs = screen.getAllByRole('dialog');
+    const detailDialog = dialogs[dialogs.length - 1];
+    expect(detailDialog).toHaveTextContent('작은 행운 물약');
+    expect(detailDialog).toHaveTextContent('모든 행운 효과');
+    expect(detailDialog).toHaveTextContent('+5%p');
+    expect(detailDialog).toHaveTextContent('하루 동안');
+  });
+
   it('우편이 없으면 빈 상태를 안내한다', async () => {
     state.mails = [];
     wrap(<MailboxModal dispatch={vi.fn() as never} setToast={vi.fn()} onClose={() => {}} />);
