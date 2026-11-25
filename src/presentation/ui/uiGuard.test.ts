@@ -1003,4 +1003,26 @@ describe('UI 시스템 가드', () => {
     expect(lockedSrc).toMatch(/description\?:\s*ReactNode/);
     expect(messageFeedSrc).toMatch(/rows:\s*readonly\s*\{\s*label:\s*ReactNode;\s*value:\s*ReactNode\s*\}\[\]/);
   });
+
+  it('유물 목록 바깥 행은 로어를 노출하지 않고, ItemDetail·ArtifactDetail 상세 창 본문은 로어(설명)를 효과와 주의사항 앞에 둔다', () => {
+    const bagTabSrc = stripComments(presentationFiles.find(f => f.path === 'views/game/tabs/bag/BagTab.tsx')!.src);
+    const itemDetailSrc = stripComments(presentationFiles.find(f => f.path === 'views/game/tabs/bag/ItemDetail.tsx')!.src);
+    const artifactDetailSrc = stripComments(presentationFiles.find(f => f.path === 'views/game/tabs/bag/ArtifactDetail.tsx')!.src);
+
+    expect(bagTabSrc).not.toMatch(/\.lore\b/);
+
+    const itemLoreAt = itemDetailSrc.indexOf('<LoreParagraph');
+    const itemEffectsAt = itemDetailSrc.indexOf('effects.length');
+    const itemNoteAt = itemDetailSrc.indexOf('<Note');
+    expect(itemLoreAt).toBeGreaterThan(-1);
+    expect(itemEffectsAt).toBeGreaterThan(itemLoreAt);
+    expect(itemNoteAt).toBeGreaterThan(itemEffectsAt);
+
+    const artifactLoreAt = artifactDetailSrc.indexOf('<LoreParagraph');
+    const compareAt = artifactDetailSrc.indexOf('<CompareTable');
+    const systemAt = artifactDetailSrc.indexOf('<SystemRows');
+    expect(artifactLoreAt).toBeGreaterThan(-1);
+    expect(compareAt).toBeGreaterThan(artifactLoreAt);
+    expect(systemAt).toBeGreaterThan(artifactLoreAt);
+  });
 });

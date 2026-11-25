@@ -235,6 +235,7 @@ export default function FortuneCalendarModal({
                       </div>
                       {detail.fortune ? (
                         <>
+                          <span className="text-2xs text-text-dim">{fortunePhrase(detail.fortune)}</span>
                           <div className="flex items-center justify-between gap-2 flex-wrap text-xs">
                             <span className="text-text-dim">
                               보너스 대상{' '}
@@ -244,7 +245,6 @@ export default function FortuneCalendarModal({
                             </span>
                             <span className="text-accent pf-accent">{`+${detail.fortune.index}%p`}</span>
                           </div>
-                          <span className="text-2xs text-text-dim">{fortunePhrase(detail.fortune)}</span>
                         </>
                       ) : (
                         <span className="text-xs text-text-dim">이 날은 기록된 운세가 없어요.</span>

@@ -18,7 +18,7 @@ export type ItemDetailTarget =
   | { kind: 'potion'; row: PotionRow; lockLines: readonly string[] | null; onUse: (row: PotionRow) => void };
 
 // 아이템 상세 창 — 가방 아이템 탭에서 도시락·미끼·물약 카드를 누르면 열린다.
-// 유물 상세 창(ArtifactDetail)과 같은 48px 그림·제목 머리, 효과·상태 표, 규칙 안내·로어, 하단 실행 버튼 구성을 쓰며 우상단 X로만 닫는다.
+// 유물 상세 창(ArtifactDetail)과 같은 48px 그림·제목 머리, 로어(설명), 효과·상태 표, 주의사항, 하단 실행 버튼 구성을 쓰며 우상단 X로만 닫는다.
 export default function ItemDetail({ target, busy, onClose }: {
   target: ItemDetailTarget;
   busy: boolean;
@@ -69,6 +69,10 @@ export default function ItemDetail({ target, busy, onClose }: {
       }
     >
       <div className="flex flex-col gap-3">
+        {description && (
+          <LoreParagraph className="text-xs leading-[1.8] text-text-dim">{description}</LoreParagraph>
+        )}
+
         {effects.length > 0 && (
           <Inset divided>
             {effects.map(e => (
@@ -118,12 +122,10 @@ export default function ItemDetail({ target, busy, onClose }: {
           />
         </Inset>
 
-        <Inset tone="deep" className="px-3 py-2">
-          <Note size="xs" className="my-0"><HighlightRarityText text={note} /></Note>
-        </Inset>
-
-        {description && (
-          <LoreParagraph className="text-xs leading-[1.8] text-text-dim">{description}</LoreParagraph>
+        {note && (
+          <Inset tone="deep" className="px-3 py-2">
+            <Note size="xs" className="my-0"><HighlightRarityText text={note} /></Note>
+          </Inset>
         )}
       </div>
     </Modal>

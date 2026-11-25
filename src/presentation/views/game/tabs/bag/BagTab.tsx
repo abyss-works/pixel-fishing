@@ -131,7 +131,6 @@ function ArtifactSection({ game, dispatch, setToast }: {
                     ))}
                     {bonus && <span className="text-accent text-xs"><HighlightRarityText text={bonus} /></span>}
                     {penalty && <span className="text-danger text-xs"><HighlightRarityText text={penalty} /></span>}
-                    <span className="text-text-dim italic text-xs">{a.lore}</span>
                   </span>
                 </PressRow>
               );

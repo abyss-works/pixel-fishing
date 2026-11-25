@@ -33,6 +33,7 @@ describe('ArtifactDetail - 상태별 화면', () => {
     expect(screen.getByText('현재(Lv.1)')).toBeInTheDocument();
     expect(screen.getByText('강화 후(Lv.2)')).toBeInTheDocument();
     expect(screen.getByText('항해 속도')).toBeInTheDocument();
+    expect(screen.getByText(COMPASS.lore).compareDocumentPosition(screen.getByText('현재(Lv.1)')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByText('+10%')).toBeInTheDocument();
     expect(screen.getByText('+12.5%')).toBeInTheDocument();
     const cost = within(screen.getByRole('group', { name: '필요한 재료' }));
@@ -73,6 +74,7 @@ describe('ArtifactDetail - 상태별 화면', () => {
     expect(screen.getByText('네임드 토벌 하루 +1번')).toBeInTheDocument();
     expect(screen.getByText('페널티')).toBeInTheDocument();
     expect(screen.getByText('네임드 토벌 골드 −30%')).toBeInTheDocument();
+    expect(screen.getByText(MIRROR.lore).compareDocumentPosition(screen.getByText('보너스')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByText(/Lv\./)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /강화|최고 레벨/ })).not.toBeInTheDocument();
   });

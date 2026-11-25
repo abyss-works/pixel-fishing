@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DailyFortune } from '../../../../game/rules/fortune';
 import type { FortuneHistory } from '../../../../platform/api';
-import { currentGameDay } from '../../../../features/fortune/model/fortune';
+import { currentGameDay, fortunePhrase } from '../../../../features/fortune/model/fortune';
 import { sessionKey } from '../../../../features/account/service/session';
 
 const apiMock = vi.hoisted(() => ({
@@ -92,6 +92,9 @@ describe('운세 월간 달력 창 (FortuneCalendarModal)', () => {
     expect(within(detail).getByText('적당한 운')).toBeInTheDocument();
     expect(within(detail).getByText('판매가')).toBeInTheDocument();
     expect(within(detail).getByText('+3%p')).toBeInTheDocument();
+    const phraseEl = within(detail).getByText(fortunePhrase({ day: '2026-11-19', kind: 'gold', index: 3 }));
+    const bonusEl = within(detail).getByText('보너스 대상');
+    expect(phraseEl.compareDocumentPosition(bonusEl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     // 기록 없는 과거 날짜 선택
     fireEvent.click(screen.getByRole('button', { name: /2026년 11월 23일/ }));
