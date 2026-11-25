@@ -56,10 +56,11 @@ const stored = async (uid: string) =>
 const goldOf = async (uid: string) =>
   Number((await env.client.query<{ gold: string }>('select gold from public.saves_current where user_id = $1', [uid])).rows[0].gold);
 
-/** 해역 라이선스 도감 조건을 채운 도감 */
+/** 해역 비전설(일반~영웅) 또는 라이선스 도감 조건을 채운 도감 */
 function zoneDex(zone: 'pacific', tier: keyof typeof LICENSE_GRADES): GameState['dex'] {
+  const grades = tier === 'basic' ? (['common', 'rare', 'epic'] as const) : LICENSE_GRADES[tier];
   const dex: GameState['dex'] = {};
-  for (const id of zoneDexMissing(newState(), zone, LICENSE_GRADES[tier])) {
+  for (const id of zoneDexMissing(newState(), zone, grades)) {
     dex[id] = { normal: { count: 1, maxSize: 30, first: '2026-01-01' } };
   }
   return dex;

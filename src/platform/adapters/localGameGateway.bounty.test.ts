@@ -15,12 +15,15 @@ function readyAtHarbor(): GameState {
 }
 
 describe('LocalGameGateway 바운티 헌팅', () => {
-  it('라이선스 조건을 채워도 수주는 거부한다 — 한도를 셀 서버 기록이 없다', () => {
+  it('라이선스 조건을 채워도(또는 빈 도감 일반 의뢰여도) 수주는 거부한다 — 한도를 셀 서버 기록이 없다', () => {
     const gateway = new LocalGameGateway(readyAtHarbor());
     for (const questId of ['pacific-easy-common', 'pacific-named-megalodon']) {
       expect(gateway.dispatch({ type: 'acceptQuest', questId, port: 'harbor' }), questId)
         .toEqual({ status: 'rejected', error: 'no-license' });
     }
+    const emptyDex = new LocalGameGateway({ ...newState(), location: { kind: 'base', id: 'harbor' } });
+    expect(emptyDex.dispatch({ type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' }))
+      .toEqual({ status: 'rejected', error: 'no-license' });
   });
 
   it('납품은 완료를 증명할 진행 기록이 없어 거부한다 — 클리어가 생기지 않는다', () => {

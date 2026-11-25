@@ -8,7 +8,7 @@ import { ENERGY_ITEM_IDS, RECIPES } from '../src/game/content/cooking.js';
 import { FISH } from '../src/game/content/fish.js';
 import { NAMED } from '../src/game/content/named.js';
 import { HATS } from '../src/game/content/wardrobe.js';
-import { LICENSE_GRADES, newState, zoneDexMissing } from '../src/game/rules/logic.js';
+import { newState, zoneDexMissing } from '../src/game/rules/logic.js';
 import { adminSessionHeaders, seedUser, startActionEnv, testUid, sessionHeaders, userToken } from './_dbTest/actionHarness.js';
 import type { ActionEnv } from './_dbTest/actionHarness.js';
 
@@ -470,7 +470,7 @@ describe('조회 결과', () => {
   it('userState: 미접속(achievements={}) 계정도 records·네임드 토벌 근거로 claimable을 쓰기 없이 파생 집계한다', async () => {
     const UNBOOTED = testUid(908);
     const dex: Record<string, { normal: { count: number; maxSize: number; first: string } }> = {};
-    for (const id of zoneDexMissing(newState(), 'pacific', LICENSE_GRADES.basic)) {
+    for (const id of zoneDexMissing(newState(), 'pacific', ['common', 'rare', 'epic'])) {
       dex[id] = { normal: { count: 1, maxSize: 30, first: '2026-01-01' } };
     }
     await seedUser(env.client, { uid: UNBOOTED, email: 'unbooted@example.test', nickname: '미부팅', state: { dex, achievements: {} }, version: 4 });
