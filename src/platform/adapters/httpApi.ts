@@ -66,6 +66,7 @@ class HttpAuth implements AuthApi {
 import type {
   AdminApi, AdminAccessResult,
   AdminUserRow, AdminUserState, AdminOverview, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
+  AdminOnboardingFunnel, AdminHttpMetrics,
   AdminLive, AdminDailyStatsRow, AdminSessionRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, AdminChangelogRow, AdminChatReportRow, BalanceLive,
   AdminSentMailRow, AdminMailRequest, AdminMailPlan,
 } from '../api/types';
@@ -286,6 +287,12 @@ class HttpAdmin implements AdminApi {
   }
   bountyFunnel(days: number): Promise<AdminBountyFunnelRow[]> {
     return readAdmin('bountyFunnel', { days });
+  }
+  onboardingFunnel(): Promise<AdminOnboardingFunnel> {
+    return readAdmin('onboardingFunnel');
+  }
+  httpMetrics(days?: number): Promise<AdminHttpMetrics> {
+    return readAdmin('httpMetrics', days === undefined ? {} : { days });
   }
   spamFlags(): Promise<AdminSpamFlagRow[]> {
     return readAdmin('spamFlags');

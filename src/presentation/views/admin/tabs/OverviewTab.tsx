@@ -13,12 +13,13 @@ import {
   fmtDuration, latestRetention, selectActiveUsers, selectDailySeries, selectNewToday, selectTodaySessions,
 } from '../../../../features/admin/model/dashboard';
 import type { RetentionPoint } from '../../../../features/admin/model/dashboard';
-import { useAdminDailyStats, useAdminOverview } from '../../../../features/admin/service/useAdminStats';
+import { useAdminDailyStats, useAdminHttpMetrics, useAdminOverview } from '../../../../features/admin/service/useAdminStats';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { BarsChart } from '../charts';
 import { Cell, CellGrid, KpiRow, TabPage, TabState } from '../layout';
 import UserIdentity from '../UserIdentity';
 import MetricSwitch from '../widgets/MetricSwitch';
+import { HttpMetricsOverviewCell } from './HttpMetricsSection';
 import { OVERVIEW_RANGE_OPTIONS } from './dayRange';
 import type { DayRange } from './dayRange';
 
@@ -33,7 +34,8 @@ export default function OverviewTab() {
   // 초기 로드 시 통합 조회 1건으로 모든 개요 데이터를 받고, 다른 기간(7일, 90일)으로 전환할 때만 일별 집계를 추가 조회한다.
   const overview = useAdminOverview(DEFAULT_RANGE_DAYS);
   const extraStats = useAdminDailyStats(days, days !== DEFAULT_RANGE_DAYS);
-  const queries = days === DEFAULT_RANGE_DAYS ? [overview] : [overview, extraStats];
+  const httpMetrics = useAdminHttpMetrics(days);
+  const queries = days === DEFAULT_RANGE_DAYS ? [overview, httpMetrics] : [overview, extraStats, httpMetrics];
 
   const users = overview.data?.users ?? [];
   const recent = overview.data?.recentEvents ?? [];
@@ -144,6 +146,8 @@ export default function OverviewTab() {
             </Note>
           )}
         </Cell>
+
+        <HttpMetricsOverviewCell data={httpMetrics.data} days={days} granted={granted} />
       </CellGrid>
     </TabPage>
   );

@@ -60,5 +60,11 @@ export const readAdminUserState = (uid: string) => api.admin.userState(uid);
 /** 바운티 퍼널 일계 — events 보관(7일) 안의 범위만 의미가 있다 */
 export const readAdminBountyFunnel = (days: number) => api.admin.bountyFunnel(days);
 
+/** 온보딩 퍼널(게스트→구글 전환·튜토리얼 4단계·초반 6단계 도달률) */
+export const readAdminOnboardingFunnel = () => api.admin.onboardingFunnel();
+
+/** 앱 서버 HTTP 오류율·429 지표 */
+export const readAdminHttpMetrics = (days = 30) => api.admin.httpMetrics(days);
+
 /** 밸런스 라이브 지표. 이벤트 지표는 보관 기간(7일) 안의 범위만 의미가 있다 */
 export const readAdminBalanceLive = (days?: number) => api.admin.balanceLive(days);

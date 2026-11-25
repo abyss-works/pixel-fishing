@@ -43,6 +43,15 @@ const overviewPayload = () => ({
   live: { count: 1, online: [{ uid: UID, nick: '테스트어부', nickname: '테스트어부', email: 'angler@example.com', region: 'world', zone: 'pacific', connectedAt: '2026-11-05T02:00:00Z', guest: false }] },
 });
 
+const httpMetricsPayload = () => ({
+  days: 30,
+  scope: 'app_server',
+  summary: { total: 100, status426: 0, status429: 2, status5xx: 1, rate426: 0, rate429: 0.02, rate5xx: 0.01 },
+  daily: [{ day: '2026-11-04', total: 100, status426: 0, status429: 2, status5xx: 1, rate426: 0, rate429: 0.02, rate5xx: 0.01 }],
+  byRoute: [],
+  rows: [],
+});
+
 const userStatePayload = () => ({
   hasSave: true,
   dex: { normal: 3, normalTotal: 120, variant: 0, variantTotal: 120, named: 0, namedTotal: 8 },
@@ -103,6 +112,9 @@ describe('관리자 대시보드 비-목킹 요청 횟수 및 429 통합 테스�
       if (url.startsWith('/api/admin?q=overview')) {
         return new Response(JSON.stringify(overviewPayload()), { status: 200 });
       }
+      if (url.startsWith('/api/admin?q=httpMetrics')) {
+        return new Response(JSON.stringify(httpMetricsPayload()), { status: 200 });
+      }
       if (url.startsWith('/api/admin?q=economy')) {
         return new Response(JSON.stringify([]), { status: 200 });
       }
@@ -123,9 +135,10 @@ describe('관리자 대시보드 비-목킹 요청 횟수 및 429 통합 테스�
 
     // 1. OverviewTab 초기 로드 완료 대기
     expect(await screen.findByText('테스트어부(angler@example.com)')).toBeInTheDocument();
+    await waitFor(() => expect(fetchCalls.some(u => u.startsWith('/api/admin?q=httpMetrics'))).toBe(true));
     const initialDataCalls = fetchCalls.filter(u => u !== '/api/admin?q=access');
     expect(initialDataCalls.length).toBeLessThanOrEqual(3);
-    expect(initialDataCalls).toEqual(['/api/admin?q=overview&days=30']);
+    expect(initialDataCalls).toEqual(['/api/admin?q=overview&days=30', '/api/admin?q=httpMetrics&days=30']);
 
     // 2. PlayersTab (명부 → 이상탐지) 전환 — 캐시 적중으로 추가 users/spamFlags 호출 0회
     const beforePlayers = fetchCalls.length;
@@ -158,8 +171,8 @@ describe('관리자 대시보드 비-목킹 요청 횟수 및 429 통합 테스�
     const refreshBtn = screen.getByRole('button', { name: '현재 탭 새로고침' });
     fireEvent.click(refreshBtn);
     fireEvent.click(refreshBtn);
-    await waitFor(() => expect(fetchCalls.slice(beforeRefresh).length).toBe(1));
-    expect(fetchCalls.slice(beforeRefresh)).toEqual(['/api/admin?q=overview&days=30']);
+    await waitFor(() => expect(fetchCalls.slice(beforeRefresh).length).toBe(2));
+    expect(fetchCalls.slice(beforeRefresh)).toEqual(['/api/admin?q=overview&days=30', '/api/admin?q=httpMetrics&days=30']);
 
     // 전체 여정 동안 별도 ?q=users / ?q=spamFlags 풀스캔 호출 0회 검증
     expect(fetchCalls.filter(u => u === '/api/admin?q=users')).toHaveLength(0);
@@ -183,6 +196,9 @@ describe('관리자 대시보드 비-목킹 요청 횟수 및 429 통합 테스�
           });
         }
         return new Response(JSON.stringify(overviewPayload()), { status: 200 });
+      }
+      if (url.startsWith('/api/admin?q=httpMetrics')) {
+        return new Response(JSON.stringify(httpMetricsPayload()), { status: 200 });
       }
       if (url.startsWith('/api/admin?q=economy')) {
         return new Response('<html>429 Too Many Requests</html>', {

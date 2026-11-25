@@ -16,7 +16,7 @@ import ProgressionTab from './ProgressionTab';
 
 const CONTEXT: Record<AnalysisSection, string> = {
   economy: '최근 7일(이벤트 보관 한도) 골드 유입과 유출 흐름, 전체 잔고 분포를 봐요.',
-  progression: '배와 낚싯대 단계, 오픈월드 존 해금, 명성 게이트에서 막힌 유저를 봐요.',
+  progression: '온보딩 퍼널, 배와 낚싯대 단계, 오픈월드 존 해금, 명성 게이트에서 막힌 유저를 봐요.',
   activity: '일별 집계(daily_stats) 장기 추이와 가입일 코호트 리텐션을 봐요.',
 };
 

@@ -33,11 +33,13 @@ import { blockedIds } from '../_data/blocks.js';
 import { recentChat, saveChat } from '../_data/chat.js';
 import { guildIdOf } from '../_data/guilds.js';
 import { recordSession } from '../_data/activity.js';
+import { flushHttpMetrics } from '../_data/httpMetrics.js';
 import { saveLastPosition } from '../_data/position.js';
 import { reportServerIssue } from '../observability.js';
 import { applyKeepAlive } from './keepAlive.js';
 import { staleClient } from './clientBuild.js';
 import { consentGate, liveConsentAdmit } from './consentGate.js';
+import { createHttpMetrics } from './httpMetrics.js';
 import { legalPages } from './legalPages.js';
 import { securityHeaders } from './securityHeaders.js';
 import { checkStageLiveUpgrade, stageGate } from './stageGate.js';
@@ -87,8 +89,14 @@ const routes: Record<string, NodeHandler> = {
 
 const app = express();
 app.disable('x-powered-by');
+// 앱 서버 통과 HTTP 응답 지표(전체·426·429·5xx)를 메모리에 모아 주기적·종료 시점에 DB로 플러시한다.
+const httpMetrics = createHttpMetrics({
+  persist: rows => flushHttpMetrics(database().db, rows),
+  onError: e => { void reportServerIssue('HTTP 지표 기록 실패', e); },
+});
 // 모든 HTTP 응답(API·정적 자산·서버 렌더 HTML)에 기본 보안 헤더를 적용한다.
 app.use(securityHeaders({ origin, sentryDsn: [process.env.SENTRY_DSN, process.env.VITE_SENTRY_DSN] }));
+app.use(httpMetrics.middleware);
 // 스테이징 진입 전용 관리자 OAuth 게이트 — DEPLOY_ENV === 'preview'일 때만 활성화된다.
 app.use(stageGate());
 // 인증 경로는 본문을 직접 읽으므로 JSON 파서보다 먼저 등록한다. 필수 환경 변수가 없으면 기동하지 않는다.
@@ -160,6 +168,8 @@ provideNotify((uid, msg) => live.sendTo(uid, msg));
 process.on('SIGTERM', () => {
   live.close();
   server.close(() => {
-    void settleAfterResponse().then(() => process.exit(0));
+    void settleAfterResponse()
+      .then(() => httpMetrics.stop())
+      .finally(() => process.exit(0));
   });
 });

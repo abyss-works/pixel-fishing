@@ -16,6 +16,8 @@ import { onlineUsers } from './_server/livePresence.js';
 import { accountKind, revokeUserSessions } from './_data/account.js';
 import * as read from './_data/admin.js';
 import { balanceLive } from './_data/adminBalance.js';
+import { onboardingFunnel } from './_data/adminFunnel.js';
+import { readHttpMetrics } from './_data/httpMetrics.js';
 import { setLetterHandled } from './_data/mail.js';
 import { deliverMail, DuplicateMailError, parseMailRequest, planMail, recentSentMails } from './_data/mailbox.js';
 import { setRestricted } from './_data/save.js';
@@ -141,6 +143,12 @@ function parse(name: string | undefined, req: Req): (db: Executor) => Promise<un
     case 'mails': return db => recentSentMails(db);
     case 'economy': { const days = daysOf(req); return db => read.economy(db, days); }
     case 'bountyFunnel': { const days = daysOf(req); return db => read.bountyFunnel(db, days); }
+    case 'onboardingFunnel': return onboardingFunnel;
+    case 'httpMetrics': {
+      const days = optionalDaysOf(req) ?? STATS_DEFAULT_DAYS;
+      if (days < 1 || days > MAX_DAYS) throw new ApiError(400, 'bad-days');
+      return db => readHttpMetrics(db, days);
+    }
     case 'balanceLive': { const days = optionalDaysOf(req); return db => balanceLive(db, days); }
     case 'userEvents': {
       const user = param(req, 'user');

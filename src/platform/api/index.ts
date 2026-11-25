@@ -51,6 +51,10 @@ export type {
   GuildBonusItem, GuildDonorItem, GuildInfo, GuildInvitePreview, GuildJoinRequestItem, GuildLogItem, GuildMemberItem, GuildMyRequest, GuildOp,
   GuildOpResult, GuildState,
   AdminUserRow, AdminUserState, AdminOverview, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
+  AdminHttpMetricRouteGroup, AdminHttpMetricCounts, AdminHttpMetricDayRow, AdminHttpMetricRouteRow, AdminHttpMetricRawRow, AdminHttpMetrics,
+  AdminConversionTimeBucketId, AdminConversionTimeBucket, AdminOnboardingConversion,
+  AdminTutorialStageId, AdminOnboardingTutorialStage, AdminOnboardingTutorials,
+  AdminOnboardingStepId, AdminOnboardingStepBasis, AdminOnboardingFunnelStep, AdminOnboardingFunnel,
   AdminLive, AdminLiveConnection, AdminDailyStatsRow, AdminSessionRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, AdminChangelogRow, AdminChatReportRow, BalanceLive,
   AdminSentMailRow, AdminMailRequest, AdminMailPlan,
 } from './types';
