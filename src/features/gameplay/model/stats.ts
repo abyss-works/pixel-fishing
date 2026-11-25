@@ -15,8 +15,9 @@ import { FISH, boatNameOf, formDiscovered } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { GUILD_BONUS_IDS, NO_GUILD_EFFECTS, bonusEffect } from '../../../game/rules/guild';
 import type { GuildBonusId, GuildEffects } from '../../../game/rules/guild';
-import { fortuneOf } from '../../../game/rules/fortune';
-import type { DailyFortune } from '../../../game/rules/fortune';
+import { activePotionsOf, fortuneOf } from '../../../game/rules/fortune';
+import type { DailyFortune, FortuneTarget } from '../../../game/rules/fortune';
+import type { Potion } from '../../../game/content/potions';
 import type { GuildBonusItem } from '../../../platform/api/types';
 import {
   minLevelOfPower, powerZones, rodAxes, rodPower,
@@ -29,25 +30,34 @@ import type { RecipeEffectLine } from '../../kitchen/model/recipes';
 import { ALL_SLOT_KEYS, activeSlot } from '../../kitchen/model/slots';
 import type { SlotKey } from '../../kitchen/model/slots';
 
-/** 스탯 화면의 처음 수역 인덱스. 사거리 안의 어군 수역이 있으면 그 수역이고, 없으면 현재 구역(또는 지역)에서 요구 파워가 가장 높은 곳이다. */
+/** 스탯 화면의 처음 수역 인덱스. 사거리 안의 어군 수역이 있으면 그 수역이고, 없으면 현재 구역(또는 지역)에서 현재 파워와 배로 진입 가능한 수역 중 요구 파워가 가장 높은 곳을 고른다. 진입 가능한 곳이 없으면 범위 내 최저 요구 파워 수역으로 폴백한다. */
 export function selectInitialStatsSpotIndex(
   region: RegionId,
   current: SpotId | null = null,
   currentZone: ZoneId | null = null,
+  power = 0,
+  boat = 0,
 ): number {
   const here = current ? SPOTS.findIndex(spot => spot.id === current) : -1;
   if (here >= 0) return here;
   const targetTopZone = region === 'world' && currentZone && zoneById(currentZone) && zoneGroup(currentZone) === 'world'
     ? topZoneOf(currentZone)
     : null;
-  let best = -1;
+  let bestReachable = -1;
+  let lowestFallback = -1;
   SPOTS.forEach((spot, index) => {
     const inScope = targetTopZone
       ? topZoneOfSpot(spot.id) === targetTopZone
       : region === 'world' ? spot.region !== 'village' : spot.region === region;
-    if (inScope && (best < 0 || (spot.powerReq ?? 0) >= (SPOTS[best].powerReq ?? 0))) best = index;
+    if (!inScope) return;
+    const req = spot.powerReq ?? 0;
+    if (lowestFallback < 0 || req < (SPOTS[lowestFallback].powerReq ?? 0)) lowestFallback = index;
+    if (power >= req && boat >= spot.boatTier) {
+      if (bestReachable < 0 || req >= (SPOTS[bestReachable].powerReq ?? 0)) bestReachable = index;
+    }
   });
-  return best >= 0 ? best : 0;
+  if (bestReachable >= 0) return bestReachable;
+  return lowestFallback >= 0 ? lowestFallback : 0;
 }
 
 /** 선택 수역과 현재 세이브 상태에서 스탯 화면이 표시할 값을 조립한다. 입질 대기에는 now 기준으로 효과가 든 도시락의 단축을 싣는다. */
@@ -186,6 +196,9 @@ const COOK_EFFECT_CATEGORY: Record<keyof CookEffects, BonusCategory> = {
 const FORTUNE_CATEGORY: Record<DailyFortune['kind'], BonusCategory> = {
   fish: 'fish', gold: 'shop', shadow: 'duel',
 };
+const POTION_TARGET_CATEGORY: Record<FortuneTarget, BonusCategory> = {
+  rarity: 'fish', named: 'duel', sell: 'shop',
+};
 
 export type BonusSource =
   /** 유물 보너스 - level은 보유 레벨, scale은 업적 보유 유물 효과 배율(1 + artifactBoost)이다 */
@@ -200,7 +213,9 @@ export type BonusSource =
   /** 업적 누적 보너스 — 단계 도달 즉시 자동 적용되는 합산 보너스 */
   | { kind: 'achievement'; label: string; value: string }
   /** 오늘의 운세 — 그 게임 날짜에 고정된 운 배율. 다른 보너스 다음의 최종 곱이다 */
-  | { kind: 'fortune'; fortune: DailyFortune };
+  | { kind: 'fortune'; fortune: DailyFortune }
+  /** 물약 — 그 게임 날짜에 쓴 물약의 운 배율. 오늘의 운세와 합산해 최종 곱한다 */
+  | { kind: 'potion'; potion: Potion; target: FortuneTarget; bonus: number };
 
 export interface BonusRow {
   category: BonusCategory;
@@ -283,30 +298,30 @@ export function selectActiveBonuses(
     out.push({ category: 'fish', source: { kind: 'achievement', label: '입질 대기', value: fmtPct(ach.biteWaitCut, '−') }, manualOnly: false });
   }
   if (ach.mutationWeight > 0) {
-    out.push({ category: 'fish', source: { kind: 'achievement', label: '돌연변이 가중치', value: fmtPct(ach.mutationWeight, '+') }, manualOnly: false });
+    out.push({ category: 'fish', source: { kind: 'achievement', label: '돌연변이 출현 확률', value: fmtPct(ach.mutationWeight, '+') }, manualOnly: false });
   }
   if (ach.rareWeight > 0) {
-    out.push({ category: 'fish', source: { kind: 'achievement', label: '희귀 이상 가중치', value: fmtPct(ach.rareWeight, '+') }, manualOnly: false });
+    out.push({ category: 'fish', source: { kind: 'achievement', label: '희귀 이상 출현 확률', value: fmtPct(ach.rareWeight, '+') }, manualOnly: false });
   }
   if (ach.epicWeight > 0) {
-    out.push({ category: 'fish', source: { kind: 'achievement', label: '영웅 이상 가중치', value: fmtPct(ach.epicWeight, '+') }, manualOnly: false });
+    out.push({ category: 'fish', source: { kind: 'achievement', label: '영웅 이상 출현 확률', value: fmtPct(ach.epicWeight, '+') }, manualOnly: false });
   }
   if (ach.legendaryWeight > 0) {
-    out.push({ category: 'fish', source: { kind: 'achievement', label: '전설 가중치', value: fmtPct(ach.legendaryWeight, '+') }, manualOnly: false });
+    out.push({ category: 'fish', source: { kind: 'achievement', label: '전설 출현 확률', value: fmtPct(ach.legendaryWeight, '+') }, manualOnly: false });
   }
   for (const zone of ZONE_IDS) {
     const zMut = ach.zoneMutation[zone] ?? 0;
     const zLeg = ach.zoneLegendary[zone] ?? 0;
     const zName = zoneById(zone)?.shortName ?? zone;
     if (zMut > 0) {
-      out.push({ category: 'fish', source: { kind: 'achievement', label: `${zName} 돌연변이 가중치`, value: fmtPct(zMut, '+') }, manualOnly: false });
+      out.push({ category: 'fish', source: { kind: 'achievement', label: `${zName} 돌연변이 출현 확률`, value: fmtPct(zMut, '+') }, manualOnly: false });
     }
     if (zLeg > 0) {
-      out.push({ category: 'fish', source: { kind: 'achievement', label: `${zName} 전설 가중치`, value: fmtPct(zLeg, '+') }, manualOnly: false });
+      out.push({ category: 'fish', source: { kind: 'achievement', label: `${zName} 전설 출현 확률`, value: fmtPct(zLeg, '+') }, manualOnly: false });
     }
   }
   if (ach.namedWeight > 0) {
-    out.push({ category: 'duel', source: { kind: 'achievement', label: '네임드 조우 가중치', value: fmtPct(ach.namedWeight, '+') }, manualOnly: false });
+    out.push({ category: 'duel', source: { kind: 'achievement', label: '네임드 만날 확률', value: fmtPct(ach.namedWeight, '+') }, manualOnly: false });
   }
   if (ach.sellBonus > 0) {
     out.push({ category: 'shop', source: { kind: 'achievement', label: '판매가 보너스', value: fmtPct(ach.sellBonus, '+') }, manualOnly: false });
@@ -315,6 +330,19 @@ export function selectActiveBonuses(
   const fortune = fortuneOf(game, now);
   if (fortune) {
     out.push({ category: FORTUNE_CATEGORY[fortune.kind], source: { kind: 'fortune', fortune }, manualOnly: false });
+  }
+  // 활성 물약 — 그 게임 날짜에 쓴 물약의 운 배율 대상을 각 갈래에 한 줄씩 둔다
+  for (const potion of activePotionsOf(game.potions, now)) {
+    for (const target of ['rarity', 'named', 'sell'] as const) {
+      const bonus = potion.effects.luck?.[target];
+      if (bonus && bonus > 0) {
+        out.push({
+          category: POTION_TARGET_CATEGORY[target],
+          source: { kind: 'potion', potion, target, bonus },
+          manualOnly: false,
+        });
+      }
+    }
   }
   return out;
 }

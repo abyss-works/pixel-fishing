@@ -153,23 +153,15 @@ const OAUTH_START_PATHS = ['/link-social', '/sign-in/social'];
 
 const badRequest = (code: string, message: string) => new APIError('BAD_REQUEST', { code, message });
 
-/** 구글 인증 요청의 범위와 매개변수는 서버가 정한다. ID 토큰 연결은 받지 않는다. 비밀번호 수단이 없는 계정의 재설정 토큰은 거부한다 */
+/** 구글 인증 요청의 범위와 매개변수는 서버가 정한다. ID 토큰 연결은 받지 않는다 */
 export const guardAuthRequests = createAuthMiddleware(async ctx => {
-  const body = ctx.body as { scopes?: unknown; additionalParams?: unknown; idToken?: unknown; token?: unknown } | undefined;
+  const body = ctx.body as { scopes?: unknown; additionalParams?: unknown; idToken?: unknown } | undefined;
   if (OAUTH_START_PATHS.includes(ctx.path)) {
     if (body?.scopes !== undefined || body?.additionalParams !== undefined) {
       throw badRequest('OAUTH_REQUEST_OVERRIDE_NOT_ALLOWED', 'Scopes and additional parameters are fixed by the server');
     }
     if (ctx.path === '/link-social' && body?.idToken !== undefined) {
       throw badRequest('ID_TOKEN_LINK_NOT_ALLOWED', 'Linking with an id token is not allowed');
-    }
-  }
-  if (ctx.path === '/reset-password') {
-    const token = body?.token ?? (ctx.query as { token?: unknown } | undefined)?.token;
-    if (typeof token !== 'string') return;
-    const found = await ctx.context.internalAdapter.findVerificationValue(`reset-password:${token}`);
-    if (found && !await ctx.context.internalAdapter.findCredentialAccount(found.value)) {
-      throw badRequest('INVALID_TOKEN', 'Invalid token');
     }
   }
 });

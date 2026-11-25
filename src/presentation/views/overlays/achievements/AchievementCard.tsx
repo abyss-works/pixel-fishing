@@ -43,7 +43,7 @@ const cardFrameClass = (status: AchievementRowStatus) => cx(
 
 function StatusBadge({ status }: { status: AchievementRowStatus }) {
   if (status === 'claimable') {
-    return <Badge tone="gold" size="xs">수령 가능</Badge>;
+    return <Badge tone="gold" size="xs">받기 가능</Badge>;
   }
   if (status === 'claimed') {
     return (
@@ -177,7 +177,7 @@ export function CumulativeBonusCard({ card }: { card: CumulativeBonusCardModel }
         </Tip>
       </div>
       <div className="flex h-9 shrink-0 items-center justify-end px-2.5">
-        <span className="text-xs text-text-dim">자동 적용</span>
+        <span className="text-xs text-text-dim">적용 중</span>
       </div>
     </Inset>
   );
@@ -212,7 +212,7 @@ export function NamedGroupCard({
   const tipContent = (
     <span className="flex min-w-44 flex-col">
       {card.steps.map(step => {
-        const stateLabel = step.status === 'claimed' ? '완료' : step.status === 'claimable' ? '수령 가능' : '예정';
+        const stateLabel = step.status === 'claimed' ? '완료' : step.status === 'claimable' ? '받기 가능' : '예정';
         const stateTone = step.status === 'claimed' ? 'gold-plain' : step.status === 'claimable' ? 'accent' : 'dim-plain';
         return (
           <span key={step.id} className="flex items-center justify-between gap-4 py-0.5">

@@ -3,7 +3,9 @@
 import { describe, it, expect } from 'vitest';
 import { applyAction } from './actions';
 import type { ActionDeps } from './actions';
-import { ensureFortune, fortuneOf, luckMultOf, rollFortune, safeFortune } from './fortune';
+import {
+  activePotionsOf, ensureFortune, fortuneOf, luckMultOf, potionLuckBonusOf, rollFortune, safeFortune, totalLuckMultOf,
+} from './fortune';
 import type { DailyFortune } from './fortune';
 import {
   FISH, fishDrawShares, migrate, namedWeightsOf, newState, priceOfInstance, rollFish, sellSelected,
@@ -122,6 +124,27 @@ describe('luckMultOf — 대상별 운 배율', () => {
     expect(luckMultOf(null, 'rarity')).toBe(1);
     expect(luckMultOf(null, 'sell')).toBe(1);
     expect(luckMultOf(null, 'named')).toBe(1);
+  });
+
+  it('활성 물약이 오늘 날짜면 일일 운세와 보너스를 합산하고 지난 날짜는 무시한다', () => {
+    const potions = { 'luck-small': DAY };
+    const stalePotions = { 'luck-small': '2026-08-21' };
+    expect(activePotionsOf(potions, NOW).map(p => p.id)).toEqual(['luck-small']);
+    expect(activePotionsOf(stalePotions, NOW)).toEqual([]);
+    expect(potionLuckBonusOf(potions, 'sell', DAY)).toBeCloseTo(0.05, 9);
+    expect(potionLuckBonusOf(stalePotions, 'sell', DAY)).toBe(0);
+
+    // 물약만 활성
+    expect(luckMultOf(null, 'rarity', potions, DAY)).toBeCloseTo(1.05, 9);
+    expect(luckMultOf(null, 'sell', potions, DAY)).toBeCloseTo(1.05, 9);
+    expect(luckMultOf(null, 'named', potions, DAY)).toBeCloseTo(1.05, 9);
+
+    // 일일 운세 + 물약 합산 (재물운 +5%p + 작은 행운 물약 +5%p = ×1.10)
+    const goldFortune: DailyFortune = { day: DAY, kind: 'gold', index: 5 };
+    expect(luckMultOf(goldFortune, 'sell', potions, DAY)).toBeCloseTo(1.10, 9);
+    expect(luckMultOf(goldFortune, 'rarity', potions, DAY)).toBeCloseTo(1.05, 9);
+    expect(totalLuckMultOf(seed({ fortune: goldFortune, potions }), NOW, 'sell')).toBeCloseTo(1.10, 9);
+    expect(totalLuckMultOf(seed({ fortune: goldFortune, potions }), NEXT_NOW, 'sell')).toBe(1);
   });
 });
 
@@ -276,5 +299,43 @@ describe('운 배율 적용 — 네임드 조우(그림자 운)', () => {
     if (!plain.ok || !lucky.ok) throw new Error('catch failed');
     expect(plain.events.some(e => e.type === 'ticket')).toBe(false);
     expect(lucky.events.find(e => e.type === 'ticket')?.payload).toEqual({ questId: 'pacific-named-megalodon' });
+  });
+
+  it('applyAction — 활성 물약이 sell·catch(등급·네임드) 운 배율에 합산된다', () => {
+    const bag = [mkInst('a', 'carp')];
+    const potions = { 'luck-small': DAY };
+
+    // sell: 재물운 3%p + 작은 행운 물약 5%p = 1.08
+    const sold = applyAction(
+      seed({ bag, fortune: { day: DAY, kind: 'gold', index: 3 }, potions }),
+      { type: 'sell', uids: ['a'] },
+      deps(),
+    );
+    if (!sold.ok) throw new Error(sold.error);
+    expect(sold.state.gold).toBe(Math.round(priceOfInstance(bag[0]) * 1.08));
+
+    // catch rarity: 그림자 운(등급 무관) + 작은 행운 물약 5%p = 1.05
+    const commonShare = (luck?: number) =>
+      fishDrawShares('pond', luck === undefined ? {} : { rarityLuck: luck })
+        .filter(r => r.fish.rarity === 'common').reduce((s, r) => s + r.share, 0);
+    const rRarity = (commonShare(1) + commonShare(1.05)) / 2;
+    const caught = applyAction(
+      seed({ fortune: { day: DAY, kind: 'shadow', index: 5 }, potions }),
+      { type: 'catch', spot: 'pond', judgment: 'normal' },
+      deps({ rng: () => rRarity }),
+    );
+    if (!caught.ok) throw new Error(caught.error);
+    expect(FISH.find(f => f.id === caught.state.bag.at(-1)!.fishId)!.rarity).not.toBe('common');
+
+    // catch named: 돈 운(네임드 무관) + 작은 행운 물약 5%p = 1.05
+    const w = namedWeightsOf('sea');
+    const rNamed = (w.named / (w.named + w.none) + w.named * 1.05 / (w.named * 1.05 + w.none)) / 2;
+    const encountered = applyAction(
+      seed({ boat: 1, fortune: { day: DAY, kind: 'gold', index: 5 }, potions }),
+      { type: 'catch', spot: 'sea', judgment: 'auto' },
+      deps({ rng: () => rNamed, bounty: ctx({ active: ['pacific-named-megalodon'] }) }),
+    );
+    if (!encountered.ok) throw new Error(encountered.error);
+    expect(encountered.events.find(e => e.type === 'ticket')?.payload).toEqual({ questId: 'pacific-named-megalodon' });
   });
 });

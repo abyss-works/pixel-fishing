@@ -1,15 +1,10 @@
-// 계정 규칙 — 계정 만들기 넛지와 비밀번호 길이, 게스트 진행의 판정.
+// 계정 규칙 — 계정 만들기 넛지와 게스트 진행의 판정.
 import { guestHasNoProgress } from '../../../game/rules/guest';
 import type { GameState } from '../../../game/rules/logic';
-import type { SyncState } from '../../gameplay/service/types';
+import type { ProfileStatus, SyncState } from '../../gameplay/service/types';
 
 /** 넛지를 띄우는 명성 기준 — 진행이 이만큼 쌓인 게스트에게만 계정을 권한다 */
 export const ACCOUNT_NUDGE_FAME = 500;
-
-/** 비밀번호 최소 길이 — 인증 서버에 설정한 최소 길이와 같은 값이어야 한다 */
-export const MIN_PASSWORD_LENGTH = 6;
-
-export const passwordLongEnough = (password: string): boolean => password.length >= MIN_PASSWORD_LENGTH;
 
 /** 세션 확인에 실패했을 때 메시지 창에 남기는 안내 한 줄 */
 export const ACCOUNT_CHECK_FAILED_NOTICE = '계정을 확인하지 못했어요. 설정 탭의 계정 관리에서 다시 확인을 눌러 주세요.';
@@ -24,7 +19,25 @@ export const ACCOUNT_CHECK_FAILED_COPY = {
 /** 계정 표시 이름. 확인에 실패했으면 게스트가 아니라 실패로 표기한다 */
 export function accountLabel(account: string | null, failed: boolean): string {
   if (failed) return ACCOUNT_CHECK_FAILED_COPY.label;
-  return account ?? '게스트(이메일 없음)';
+  return account ?? '게스트';
+}
+
+/** 닉네임 비동기 표시 문안 — 로딩·오류·미설정(null)·정상 닉네임을 구분한다 */
+export function nicknameLabel(nickname: string | null, status: ProfileStatus): string {
+  if (status === 'loading') return '불러오는 중';
+  if (status === 'error') return '불러오기 실패';
+  return nickname ?? '미설정';
+}
+
+/** UID가 아직 없을 때 표시할 비동기 상태 문안 — 확인 중·실패·비연결 게스트를 구분한다 */
+export function uidPlaceholder({ account, accountChecked, accountFailed }: {
+  account: string | null;
+  accountChecked: boolean;
+  accountFailed: boolean;
+}): string {
+  if (accountFailed) return '확인 실패';
+  if (!accountChecked) return '연결 중';
+  return account === null ? '계정 연결 필요' : '확인 실패';
 }
 
 /** 계정 만들기 넛지 — 명성 기준을 넘은 게스트에게 하루(KST 날짜) 한 번, 그날 첫 접속에서 띄운다 */

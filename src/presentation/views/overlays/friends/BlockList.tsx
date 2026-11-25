@@ -19,7 +19,7 @@ const ERROR_TEXT: Record<ChatActionError, string> = {
 };
 
 export default function BlockList({ setToast }: { setToast: Notify }) {
-  const { blocks, unblock } = useChatModeration(true);
+  const { blocks, loading, failed, unblock } = useChatModeration(true);
   const [busy, setBusy] = useState(false);
   const release = async (uid: string, name: string) => {
     setBusy(true);
@@ -54,9 +54,11 @@ export default function BlockList({ setToast }: { setToast: Notify }) {
         </DataTable>
       ) : (
         <div className="flex h-full items-center justify-center text-center">
-          {blocks === null ? <Note>차단 목록을 불러오는 중이에요.</Note>
+          {loading ? <Note>차단 목록을 불러오는 중이에요.</Note>
+            : failed ? <Note tone="warn">차단 목록을 열지 못했어요.</Note>
             : typeof blocks === 'string' ? <Note tone="warn">{ERROR_TEXT[blocks]}</Note>
-            : <Note>차단한 사람이 없어요.<br />채팅 이름을 눌러 연 플레이어 정보에서 차단할 수 있어요.</Note>}
+            : Array.isArray(blocks) ? <Note>차단한 사람이 없어요.<br />채팅 이름을 눌러 연 플레이어 정보에서 차단할 수 있어요.</Note>
+            : <Note tone="warn">차단 목록을 열지 못했어요.</Note>}
         </div>
       )}
     </TableBox>

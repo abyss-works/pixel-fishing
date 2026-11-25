@@ -67,13 +67,13 @@ export function recipeEffectLines(recipe: Recipe): RecipeEffectLine[] {
         return e.biteWaitCut === undefined ? [] : [{ label: '입질 대기', value: `−${pct(e.biteWaitCut)}%` }];
       case 'rarityWeight':
         return e.rarityWeight === undefined ? [] : e.rarityWeight.grades.map(g => (
-          { label: `${RARITY[g].name} 등급 가중치`, value: `+${pct(e.rarityWeight!.bonus)}%` }));
+          { label: `${RARITY[g].name} 어종 출현`, value: `+${pct(e.rarityWeight!.bonus)}%` }));
       case 'mutationWeight':
-        return e.mutationWeight === undefined ? [] : [{ label: '돌연변이 폼 가중치', value: `+${pct(e.mutationWeight)}%` }];
+        return e.mutationWeight === undefined ? [] : [{ label: '돌연변이 출현', value: `+${pct(e.mutationWeight)}%` }];
       case 'namedWeight':
-        return e.namedWeight === undefined ? [] : [{ label: '네임드 조우 가중치', value: `+${pct(e.namedWeight)}%` }];
+        return e.namedWeight === undefined ? [] : [{ label: '네임드 만날 확률', value: `+${pct(e.namedWeight)}%` }];
       case 'nightUnlock':
-        return e.nightUnlock === true ? [{ label: '밤 어종 출현', value: '밤 전용 어종 합류' }] : [];
+        return e.nightUnlock === true ? [{ label: '밤 어종 출현', value: '낮에도 출현' }] : [];
     }
   });
 }
@@ -136,7 +136,7 @@ export function selectRecipeView(game: GameState, recipe: Recipe, requested: num
 
 export interface KitchenStatus {
   /** 조리 중인 것. 모두 완성됐거나 조리하지 않으면 null */
-  cooking: { recipe: Recipe; completed: number; count: number; nextInMin: number } | null;
+  cooking: { recipe: Recipe; title: RecipeTitle; completed: number; count: number; nextInMin: number } | null;
   /** 보관함 수 — 완성한 요리와 조리 중인 수량 */
   stored: number;
   cap: number;
@@ -149,7 +149,7 @@ export function selectKitchenStatus(game: GameState, now: string): KitchenStatus
   const running = progress !== null && progress.nextAt !== null ? progress : null;
   return {
     cooking: running && running.nextAt !== null ? {
-      recipe: running.recipe, completed: running.completed, count: running.count,
+      recipe: running.recipe, title: recipeTitle(running.recipe), completed: running.completed, count: running.count,
       nextInMin: Math.max(1, Math.ceil((Date.parse(running.nextAt) - Date.parse(now)) / MIN_MS)),
     } : null,
     stored, cap: COOK_STORAGE_CAP, full: stored >= COOK_STORAGE_CAP,

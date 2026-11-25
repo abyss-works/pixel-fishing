@@ -33,7 +33,7 @@ function lineClass(hasCheck: boolean, interactive: boolean, dim: boolean) {
 
 function BestMark({ on }: { on: boolean | undefined }) {
   return on
-    ? <span className="text-gold leading-none" role="img" aria-label="이 형태 최대"><PixelIcon glyph="crown" size={12} /></span>
+    ? <span className="text-gold leading-none" role="img" aria-label="최대 크기"><PixelIcon glyph="crown" size={12} /></span>
     : <span />;
 }
 

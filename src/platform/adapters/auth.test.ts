@@ -1,12 +1,18 @@
 // P1 클라우드 저장 — 오프라인 모드 무해성 
 // 이 파일은 인증과 HTTP 게임 게이트웨이의 오프라인 실패 계약을 확인한다.
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import {
   isCloud, authClient, ensureSession,
-  currentAccount, signInWithEmail, requestPasswordReset, applyNewPassword, startGoogleAuth, accountProviders,
-  googleReturnUrl, parseGoogleLanding, classifyEmailSignInFailure,
+  currentAccount, startGoogleAuth,
+  googleReturnUrl, parseGoogleLanding,
 } from './auth';
 import { HttpGameGateway } from './httpGameGateway';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+  vi.resetModules();
+});
 
 describe('클라우드 저장', () => {
   it('클라우드 빌드가 아니면 오프라인 모드 (인증 클라이언트 null, 호출은 전부 무해)', async () => {
@@ -25,10 +31,6 @@ describe('클라우드 저장', () => {
   it('계정 함수도 오프라인 모드에서 무해 (v0.4.0)', async () => {
     expect(await currentAccount()).toEqual({ status: 'guest' });
     expect((await startGoogleAuth('link', 'link-guest')).ok).toBe(false);
-    expect(await accountProviders()).toBeNull();
-    expect((await signInWithEmail('a@b.c', '123456')).ok).toBe(false);
-    expect((await requestPasswordReset('a@b.c')).ok).toBe(false);
-    expect((await applyNewPassword('123456')).ok).toBe(false);
   });
 });
 
@@ -38,7 +40,7 @@ describe('구글 인증 복귀 주소', () => {
   });
 
   it('표지만 있으면 오류 없는 복귀다', () => {
-    expect(parseGoogleLanding('?google=link-email')).toEqual({ tag: 'link-email', error: null, rest: '' });
+    expect(parseGoogleLanding('?google=sign-in')).toEqual({ tag: 'sign-in', error: null, rest: '' });
   });
 
   it('오류 코드가 붙으면 코드를 돌려주고 두 질의를 지운 나머지를 남긴다', () => {
@@ -46,7 +48,7 @@ describe('구글 인증 복귀 주소', () => {
       .toEqual({ tag: 'link-guest', error: 'email_account_exists', rest: '?x=1' });
   });
 
-  it('표지가 없으면 구글 복귀가 아니다 (재설정 링크의 error 질의와 섞이지 않는다)', () => {
+  it('표지가 없으면 구글 복귀가 아니다', () => {
     expect(parseGoogleLanding('')).toBeNull();
     expect(parseGoogleLanding('?error=INVALID_TOKEN')).toBeNull();
     expect(parseGoogleLanding('?token=abc')).toBeNull();
@@ -57,33 +59,41 @@ describe('구글 인증 복귀 주소', () => {
   });
 });
 
-describe('이메일 로그인 실패의 분류', () => {
-  it('서버가 틀린 입력을 알리면 인증 실패 코드다', () => {
-    expect(classifyEmailSignInFailure({ status: 401, code: 'INVALID_EMAIL_OR_PASSWORD', message: 'x' })).toMatchObject({ ok: false, code: 'invalid_credentials' });
+describe('게임 세션 로그아웃 격리', () => {
+  it('signOutAccount는 게임 인증 경로(/api/auth/sign-out)만 호출하고 관리자 인증 경로를 건드리지 않는다', async () => {
+    vi.stubEnv('VITE_CLOUD', '1');
+    vi.resetModules();
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: true }), { status: 200, headers: { 'content-type': 'application/json' } }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const mod = await import('./auth');
+    await mod.signOutAccount();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toContain('/api/auth/sign-out');
+    expect(url).not.toContain('/api/admin');
   });
 
-  it('401은 본문에 코드가 없어도 인증 실패다', () => {
-    expect(classifyEmailSignInFailure({ status: 401, message: '' })).toMatchObject({ ok: false, code: 'invalid_credentials' });
-    expect(classifyEmailSignInFailure({ status: 401 })).toMatchObject({ code: 'invalid_credentials' });
-  });
+  it('startGoogleAuth가 429 응답을 받으면 일반 속도 제한 코드 rate_limited를 돌려준다', async () => {
+    vi.stubEnv('VITE_CLOUD', '1');
+    vi.resetModules();
+    vi.stubGlobal('window', { location: { origin: 'https://game.test' } });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ message: 'Too many requests' }), {
+        status: 429,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const mod = await import('./auth');
+    const result = await mod.startGoogleAuth('sign-in', 'test-tag');
 
-  it('429는 요청 과다 코드다', () => {
-    expect(classifyEmailSignInFailure({ status: 429, message: 'Too many requests' })).toMatchObject({ code: 'over_email_send_rate_limit' });
-  });
-
-  it('이메일 형식 거부는 형식 오류 코드다', () => {
-    expect(classifyEmailSignInFailure({ status: 400, code: 'INVALID_EMAIL' })).toMatchObject({ code: 'validation_failed' });
-  });
-
-  it('알 수 없는 코드와 JSON이 아닌 본문(상태만 있는 오류)은 코드 없는 실패다', () => {
-    for (const e of [{ status: 400, code: 'SOMETHING_NEW' }, { status: 502, message: '' }, undefined]) {
-      const r = classifyEmailSignInFailure(e);
-      expect(r.ok).toBe(false);
-      expect('code' in r ? r.code : undefined).toBeUndefined();
-    }
-  });
-
-  it('요청이 서버에 닿지 못해 던져진 오류는 네트워크 코드다', () => {
-    expect(classifyEmailSignInFailure(new TypeError('Failed to fetch'))).toMatchObject({ ok: false, code: 'network' });
+    expect(result).toEqual({
+      ok: false,
+      msg: '요청이 너무 잦아요. 잠시 뒤 다시 시도해 주세요.',
+      code: 'rate_limited',
+    });
   });
 });

@@ -23,19 +23,13 @@ const deps = (over: Partial<ActionDeps> = {}): ActionDeps => {
 const seed = (over: Partial<GameState> = {}): GameState => ({ ...newState(), ...over });
 const harbor = { location: { kind: 'base', id: 'harbor' } } as const;
 const rec = (count: number) => ({ count, maxSize: null, first: null });
-// 태평양 일반 등급 3종만 (고등어·갈치·아귀) — 기본 라이선스에는 모자란다
+// 태평양 일반 등급 3종만 (고등어·갈치·아귀) — 네임드 라이선스에는 모자란다
 const pacificCommonDex = { mackerel: { normal: rec(1) }, hairtail: { normal: rec(1) }, anglerfish: { normal: rec(1) } };
-// 태평양 전설 제외 전부 (일반 폼만) — 기본 라이선스 도감 조건. 희귀 3·영웅 3 추가
+// 태평양 전설 제외 전부 (일반 폼만) — 네임드 라이선스 도감 조건. 희귀 3·영웅 3 추가
 const pacificDex = {
   ...pacificCommonDex,
   seabream: { normal: rec(1) }, yellowtail: { normal: rec(1) }, squid: { normal: rec(1) },
   tuna: { normal: rec(1) }, coelacanth: { normal: rec(1) }, oarfish: { normal: rec(1) },
-};
-// 태평양 전설 포함 전부 (일반 폼만) — 네임드 라이선스 도감 조건. 전설 4 추가
-const pacificFullDex = {
-  ...pacificDex,
-  shark: { normal: rec(1) }, kraken: { normal: rec(1) },
-  moonveil: { normal: rec(1) }, abyssveil: { normal: rec(1) },
 };
 // 서버 주입 — 오늘 클리어 0회·수주 중인 의뢰 없음이 기본값 (라이선스 조건은 상태에서 직접 본다)
 const ctx = (over: Partial<BountyCtx> = {}): BountyCtx => ({
@@ -52,31 +46,34 @@ describe('acceptQuest', () => {
     expect(out).toEqual({ ok: false, error: 'bad-request' });
   });
 
-  it('명성이 0이어도 도감만 채우면 수주할 수 있다', () => {
-    const out = applyAction(seed({ ...harbor, fame: 0, dex: pacificDex }),
-      { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
-      deps({ bounty: ctx() }));
-    expect(out.ok).toBe(true);
+  it('일반 의뢰는 도감과 명성이 비어 있어도 항구에서 즉시 수주할 수 있다', () => {
+    for (const questId of ['pacific-easy-common', 'pacific-normal-legendary', 'pacific-hard-common']) {
+      const out = applyAction(seed({ ...harbor, fame: 0, dex: {} }),
+        { type: 'acceptQuest', questId, port: 'harbor' },
+        deps({ bounty: ctx() }));
+      expect(out.ok, questId).toBe(true);
+    }
   });
 
-  it('일반 등급만 모았으면 기본 라이선스도 dex-incomplete — 전설 제외 전부(희귀·영웅 포함)가 조건이다', () => {
+  it('네임드는 일반 등급만 모았으면 dex-incomplete — 전설 제외 전부(희귀·영웅 포함)가 조건이다', () => {
     const out = applyAction(seed({ ...harbor, dex: pacificCommonDex }),
-      { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
+      { type: 'acceptQuest', questId: 'pacific-named-megalodon', port: 'harbor' },
       deps({ bounty: ctx() }));
     expect(out).toEqual({ ok: false, error: 'dex-incomplete' });
   });
 
-  it('돌연변이 폼만 잡은 어종은 도감 조건에 세지 않는다', () => {
-    const variantOnly = { ...pacificDex, tuna: { variant: rec(1) } };
+  it('돌연변이 폼만 잡은 어종은 네임드 도감 조건에 세지 않는다', () => {
+    const { tuna: _removed, ...withoutTuna } = pacificDex;
+    const variantOnly = { ...withoutTuna, tuna: { variant: rec(1) } };
     const out = applyAction(seed({ ...harbor, dex: variantOnly }),
-      { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
+      { type: 'acceptQuest', questId: 'pacific-named-megalodon', port: 'harbor' },
       deps({ bounty: ctx() }));
     expect(out).toEqual({ ok: false, error: 'dex-incomplete' });
   });
 
-  it('도감 미완이면 dex-incomplete', () => {
+  it('네임드 도감 미완이면 dex-incomplete', () => {
     const out = applyAction(seed({ ...harbor }),
-      { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
+      { type: 'acceptQuest', questId: 'pacific-named-megalodon', port: 'harbor' },
       deps({ bounty: ctx() }));
     expect(out).toEqual({ ok: false, error: 'dex-incomplete' });
   });
@@ -97,7 +94,7 @@ describe('acceptQuest', () => {
 
   it('네임드도 하루 1회 클리어 — 오늘 이미 보상을 받았으면 daily-cleared', () => {
     const act = { type: 'acceptQuest', questId: 'pacific-named-megalodon', port: 'harbor' } as const;
-    const full = seed({ ...harbor, dex: pacificFullDex });
+    const full = seed({ ...harbor, dex: pacificDex });
     expect(applyAction(full, act, deps({ bounty: ctx({ clearsToday: cleared(0, 1) }) })))
       .toEqual({ ok: false, error: 'daily-cleared' });
   });
@@ -114,16 +111,13 @@ describe('acceptQuest', () => {
 
   it('한 갈래의 클리어는 다른 갈래의 한도를 먹지 않는다 — 일반을 클리어해도 네임드를 수주할 수 있다', () => {
     const named = { type: 'acceptQuest', questId: 'pacific-named-megalodon', port: 'harbor' } as const;
-    const out = applyAction(seed({ ...harbor, dex: pacificFullDex }), named,
+    const out = applyAction(seed({ ...harbor, dex: pacificDex }), named,
       deps({ bounty: ctx({ clearsToday: cleared(1, 0) }) }));
     if (!out.ok) throw new Error(out.error);
     expect(out.events).toEqual([
       { type: 'acceptQuest', payload: { questId: 'pacific-named-megalodon', port: 'harbor' } },
       { type: 'unlockAchievement', payload: { id: 'spot-basic-sea' } },
-      { type: 'unlockAchievement', payload: { id: 'spot-full-sea' } },
       { type: 'unlockAchievement', payload: { id: 'spot-basic-deep' } },
-      { type: 'unlockAchievement', payload: { id: 'spot-full-deep' } },
-      { type: 'unlockAchievement', payload: { id: 'night-normal' } },
     ]);
     // 반대로 네임드를 클리어해도 일반 의뢰는 그대로 열려 있다
     const general = applyAction(seed({ ...ready }),
@@ -177,7 +171,7 @@ describe('acceptQuest', () => {
   });
 
   it('네임드는 한 번에 하나 — 진행 중인 네임드가 있으면 다른 구역 네임드도 quest-active', () => {
-    const out = applyAction(seed({ ...harbor, dex: pacificFullDex }),
+    const out = applyAction(seed({ ...harbor, dex: pacificDex }),
       { type: 'acceptQuest', questId: 'pacific-named-megalodon', port: 'harbor' },
       deps({ bounty: ctx({ active: ['seasia-named-leviathan'] }) }));
     expect(out).toEqual({ ok: false, error: 'quest-active' });
@@ -185,7 +179,7 @@ describe('acceptQuest', () => {
 
   it('진행 중인 갈래가 다르면 막지 않는다 — 일반 의뢰를 진행해도 네임드를 수주할 수 있고 그 반대도 같다', () => {
     const named = { type: 'acceptQuest', questId: 'pacific-named-megalodon', port: 'harbor' } as const;
-    expect(applyAction(seed({ ...harbor, dex: pacificFullDex }), named,
+    expect(applyAction(seed({ ...harbor, dex: pacificDex }), named,
       deps({ bounty: ctx({ active: ['pacific-easy-common'] }) })).ok).toBe(true);
     expect(applyAction(seed({ ...ready }),
       { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
@@ -199,20 +193,17 @@ describe('acceptQuest', () => {
     expect(out).toEqual({ ok: false, error: 'daily-cleared' });
   });
 
-  it('네임드 의뢰는 전설 포함 도감이 있어야 한다', () => {
+  it('네임드 의뢰는 전설 제외 일반·희귀·영웅 도감만으로 개방된다', () => {
     const act = { type: 'acceptQuest', questId: 'pacific-named-megalodon', port: 'harbor' } as const;
-    expect(applyAction(seed({ ...ready }), act, deps({ bounty: ctx() })))
+    expect(applyAction(seed({ ...harbor, dex: pacificCommonDex }), act, deps({ bounty: ctx() })))
       .toEqual({ ok: false, error: 'dex-incomplete' });
-    const out = applyAction(seed({ ...harbor, dex: pacificFullDex }), act,
+    const out = applyAction(seed({ ...harbor, dex: pacificDex }), act,
       deps({ bounty: ctx() }));
     if (!out.ok) throw new Error(out.error);
     expect(out.events).toEqual([
       { type: 'acceptQuest', payload: { questId: 'pacific-named-megalodon', port: 'harbor' } },
       { type: 'unlockAchievement', payload: { id: 'spot-basic-sea' } },
-      { type: 'unlockAchievement', payload: { id: 'spot-full-sea' } },
       { type: 'unlockAchievement', payload: { id: 'spot-basic-deep' } },
-      { type: 'unlockAchievement', payload: { id: 'spot-full-deep' } },
-      { type: 'unlockAchievement', payload: { id: 'night-normal' } },
     ]);
   });
 

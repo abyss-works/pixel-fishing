@@ -7,6 +7,9 @@ import type { Movement } from '../../../../game/rules/stats';
 import type { RegionId } from '../../../../game/content/places';
 import type { ZoneId } from '../../../../game/content/zones';
 import { useNow } from '../../../../features/gameplay/service/useGameTime';
+import { useProfileStatus } from '../../../../features/gameplay/service/profileStatus';
+import type { ProfileStatus } from '../../../../features/gameplay/service/types';
+import { nicknameLabel } from '../../../../features/account/model/accountRules';
 import { useSpotState } from '../../../../features/travel/service/useSpotState';
 import {
   selectActiveBonuses, selectInitialStatsSpotIndex, selectReachableZones,
@@ -44,20 +47,23 @@ interface Props {
   /** 현재 위치 지역 — 사거리 안의 어군이 없으면 이 지역의 기준 해역부터 보여 준다 */
   region: RegionId;
   nickname: string | null;
+  profileStatus?: ProfileStatus;
   /** 길드 레벨과 서버가 적용하는 길드 보너스 효과. 길드가 없으면 null */
   guild: { level: number; effects: GuildEffects; bonuses?: readonly GuildBonusItem[] } | null;
   initialTab?: StatsTab;
   onClose: () => void;
 }
 
-export default function StatsModal({ game, movement, region, nickname, guild, initialTab = 'summary', onClose }: Props) {
+export default function StatsModal({ game, movement, region, nickname, profileStatus, guild, initialTab = 'summary', onClose }: Props) {
   const now = useNow();
+  const sharedProfileStatus = useProfileStatus();
+  const resolvedProfileStatus: ProfileStatus = profileStatus ?? sharedProfileStatus ?? (nickname !== null ? 'loaded' : 'loading');
   const { spot: here, zone: currentZone } = useSpotState();
   const [tab, setTab] = useState<StatsTab>(initialTab);
-  // 처음 해역은 창을 연 순간에 정한다 — 창이 떠 있는 동안 어군 사거리가 바뀌어도 고른 해역을 옮기지 않는다
-  const [start] = useState(() => selectInitialStatsSpotIndex(region, here, currentZone));
-  const [spotIndex, setSpotIndex] = useState(start);
   const rows = useMemo(() => selectStatsSpotRows(game, movement, now), [game, movement, now]);
+  // 처음 해역은 창을 연 순간에 정한다 — 창이 떠 있는 동안 어군 사거리가 바뀌어도 고른 해역을 옮기지 않는다
+  const [start] = useState(() => selectInitialStatsSpotIndex(region, here, currentZone, rows[0]?.data.currentPower ?? 0, game.boat));
+  const [spotIndex, setSpotIndex] = useState(start);
   const selected = rows[spotIndex];
   const [zone, setZone] = useState<ZoneId>(rows[start].zone);
   const zoneTabs = selectStatsZoneTabs(rows, rows[start].zone);
@@ -76,7 +82,7 @@ export default function StatsModal({ game, movement, region, nickname, guild, in
       <ModalCard title="스탯" onClose={onClose} fixed>
         <div className="flex flex-col gap-3 flex-1 min-h-0">
           <Inset className="flex flex-wrap items-center gap-x-3 gap-y-1 min-h-10 px-3 py-1.5 shrink-0 text-sm">
-            <b className="max-w-40 truncate text-text">{nickname ?? '불러오는 중'}</b>
+            <b className="max-w-40 truncate text-text">{nicknameLabel(nickname, resolvedProfileStatus)}</b>
             <span className="flex items-baseline gap-1.5 whitespace-nowrap">
               <span className="text-xs text-text-dim">배</span><span>{selected.data.boatName}</span>
             </span>

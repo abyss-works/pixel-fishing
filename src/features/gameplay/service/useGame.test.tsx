@@ -18,30 +18,42 @@ const gw = vi.hoisted(() => ({
   loadErrors: [] as unknown[],
   bootErrors: [] as unknown[],
   loadDex: {} as Record<string, unknown>,
+  dispatchDex: {} as Record<string, unknown>,
   loadAchievements: {} as Record<string, string>,
   dispatchAchievements: {} as Record<string, string>,
   loadFortune: null as null | { day: string; kind: 'fish' | 'gold' | 'shadow'; index: 3 | 5 },
   dispatchFortune: null as null | { day: string; kind: 'fish' | 'gold' | 'shadow'; index: 3 | 5 },
+  visited: [] as ('village' | 'world')[],
   devTools: false,
+  profileReplies: [] as Array<{ ok: true; nickname: string | null; devTools: boolean } | { ok: false }>,
+  profileCalls: 0,
   account: { status: 'account', email: 'u@example.com' } as { status: 'account'; email: string } | { status: 'guest' } | { status: 'failed' },
 }));
 
 vi.mock('../../../platform/api', async () => {
   const { when } = await import('../../../shared/lib/when');
-  const { newState: fresh } = await import('../../../game/rules/logic');
-  const ok = (action: GameAction) => ({
-    status: 'ok' as const,
-    state: { ...fresh(), achievements: gw.dispatchAchievements, fortune: gw.dispatchFortune },
-    result: action.type === 'boot' ? { type: 'boot', schoolDay: '2026-11-05' } : { type: action.type },
-  });
+  const { newState: fresh, travel } = await import('../../../game/rules/logic');
+  const ok = (action: GameAction) => {
+    if (action.type === 'travel') {
+      gw.visited = travel({ ...fresh(), visited: gw.visited }, action.to).visited;
+    }
+    return {
+      status: 'ok' as const,
+      state: { ...fresh(), dex: gw.dispatchDex as ReturnType<typeof fresh>['dex'], achievements: gw.dispatchAchievements, fortune: gw.dispatchFortune, visited: gw.visited },
+      result: action.type === 'boot' ? { type: 'boot', schoolDay: '2026-11-05' } : { type: action.type },
+    };
+  };
   return {
     when,
     api: {
       auth: { isConfigured: true, ensureSession: async () => 'uid-1', currentAccount: async () => gw.account },
       storage: { clearLegacySave: () => { gw.actions.push('clearLegacy'); }, loadLegacy: () => ({ game: fresh(), notice: null, legacy: gw.legacy }), saveCode: () => '' },
       createGameGateway: () => ({
-        load: async () => { gw.loads++; if (gw.loadErrors.length) throw gw.loadErrors.shift(); if (gw.loadError) throw gw.loadError; return gw.cloudEmpty ? null : { ...fresh(), gold: gw.loadGold, dex: gw.loadDex as ReturnType<typeof fresh>['dex'], achievements: gw.loadAchievements, fortune: gw.loadFortune }; },
-        getProfile: async () => ({ nickname: 'nick', devTools: gw.devTools }),
+        load: async () => { gw.loads++; if (gw.loadErrors.length) throw gw.loadErrors.shift(); if (gw.loadError) throw gw.loadError; return gw.cloudEmpty ? null : { ...fresh(), gold: gw.loadGold, dex: gw.loadDex as ReturnType<typeof fresh>['dex'], achievements: gw.loadAchievements, fortune: gw.loadFortune, visited: gw.visited }; },
+        getProfile: async () => {
+          gw.profileCalls++;
+          return gw.profileReplies.shift() ?? { ok: true as const, nickname: 'nick', devTools: gw.devTools };
+        },
         dispatch: (action: GameAction) => {
           gw.actions.push(action.type);
           if (action.type === 'import' && gw.importError) throw gw.importError;
@@ -58,6 +70,8 @@ vi.mock('../../../platform/observability', () => ({ reportIssue: () => {} }));
 import { useGame } from './useGame';
 import { clearFailureNotice, currentFailureNotice } from './failureNotice';
 import { readFortuneModal, resetFortuneModalSession } from '../../fortune/service/fortuneModal';
+import { registerNoticeSink } from '../../display/model/toastPolicy';
+import type { NoticeSink, SystemNoticeInput } from '../../display/model/toastPolicy';
 
 function setup(setToast: (m: string, tone?: 'info' | 'gold' | 'warn') => void = () => {}, reactStrictMode = false) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -68,8 +82,10 @@ function setup(setToast: (m: string, tone?: 'info' | 'gold' | 'warn') => void = 
 
 afterEach(() => {
   cleanup(); clearFailureNotice(); resetFortuneModalSession(); gw.bootResolve = null; gw.actions = []; gw.loads = 0; gw.loadGold = 0;
-  gw.legacy = false; gw.cloudEmpty = false; gw.importError = null; gw.loadError = null; gw.loadErrors = []; gw.bootErrors = []; gw.loadDex = {}; gw.devTools = false;
+  gw.legacy = false; gw.cloudEmpty = false; gw.importError = null; gw.loadError = null; gw.loadErrors = []; gw.bootErrors = []; gw.loadDex = {}; gw.dispatchDex = {}; gw.devTools = false;
+  gw.profileReplies = []; gw.profileCalls = 0;
   gw.loadAchievements = {}; gw.dispatchAchievements = {}; gw.loadFortune = null; gw.dispatchFortune = null;
+  gw.visited = [];
   gw.account = { status: 'account', email: 'u@example.com' };
 });
 
@@ -172,40 +188,6 @@ describe('레거시 로컬 세이브 브리지', () => {
     const hook = setup();
     await waitFor(() => expect(hook.result.current.loading).toBe(false));
     expect(gw.actions).toEqual(['import']);
-  });
-});
-
-describe('게스트 진행 다시 읽기', () => {
-  async function booted() {
-    const hook = setup();
-    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
-    await act(async () => { gw.bootResolve!(); });
-    return hook;
-  }
-
-  it('서버 저장 상태를 다시 읽어 낚은 수가 0이면 진행 없음이다', async () => {
-    const hook = await booted();
-    const loads = gw.loads;
-    await expect(hook.result.current.recheckGuestProgress()).resolves.toBe('nothing');
-    expect(gw.loads).toBe(loads + 1);
-  });
-
-  it('다시 읽은 상태에 낚은 기록이 있으면 이 탭이 들고 있던 상태가 비어 있어도 진행 있음이다', async () => {
-    const hook = await booted();
-    gw.loadDex = { carp: { normal: { count: 3, maxSize: 5, first: '2026-01-01' } } };
-    await expect(hook.result.current.recheckGuestProgress()).resolves.toBe('some');
-  });
-
-  it('서버에 저장 상태가 없으면 진행 없음이다', async () => {
-    const hook = await booted();
-    gw.cloudEmpty = true;
-    await expect(hook.result.current.recheckGuestProgress()).resolves.toBe('nothing');
-  });
-
-  it.each(['network', 'replaced', 'rate-limited', 'restricted'] as const)('다시 읽기가 %s로 실패하면 진행 있음이다', async kind => {
-    const hook = await booted();
-    gw.loadError = new AppError(kind, 'read failed');
-    await expect(hook.result.current.recheckGuestProgress()).resolves.toBe('some');
   });
 });
 
@@ -480,13 +462,12 @@ describe('요청 속도 초과(429) 재시도', () => {
     expect(gw.actions).toEqual(['boot']);
   });
 
-  it('boot 완료 전이나 boot 무음 실패 시에도 초기 load와 resync의 파생 claimable 업적이 유지되고 recheckGuestProgress를 왜곡하지 않는다', async () => {
+  it('boot 완료 전이나 boot 무음 실패 시에도 초기 load와 resync의 파생 claimable 업적이 유지된다', async () => {
     gw.loadAchievements = { 'spot-basic-sea': 'claimable' };
     gw.bootErrors = [new AppError('network', 'offline')];
     const hook = setup();
     await waitFor(() => expect(hook.result.current.loading).toBe(false));
     expect(hook.result.current.game.achievements).toEqual({ 'spot-basic-sea': 'claimable' });
-    await expect(hook.result.current.recheckGuestProgress()).resolves.toBe('nothing');
 
     gw.loadAchievements = { 'spot-basic-sea': 'claimable', 'spot-basic-deep': 'claimable' };
     await act(async () => { await hook.result.current.resync(); });
@@ -565,5 +546,158 @@ describe('오늘의 운세 접속 모달 큐잉', () => {
     gw.dispatchFortune = today;
     await act(async () => { await hook.result.current.dispatch({ type: 'sell', uids: [] }); });
     expect(readFortuneModal({ ready: true, suspended: false })).toEqual({ fortune: null, pending: false });
+  });
+});
+
+describe('프로필 상태와 부트스트랩 닉네임 동기화', () => {
+  it('첫 세션 부트스트랩 전 getProfile의 nickname이 null이면 boot 완료 후 getProfile을 1회 재조회해 반영한다', async () => {
+    gw.account = { status: 'guest' };
+    gw.profileReplies = [
+      { ok: true, nickname: null, devTools: false },
+      { ok: true, nickname: '행복한_고래', devTools: false },
+    ];
+    const hook = setup();
+    expect(hook.result.current.profileStatus).toBe('loading');
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    expect(hook.result.current.profileStatus).toBe('loading');
+
+    await act(async () => { gw.bootResolve!(); });
+    expect(gw.profileCalls).toBe(2);
+    expect(hook.result.current.profileStatus).toBe('loaded');
+    expect(hook.result.current.nickname).toBe('행복한_고래');
+  });
+
+  it('프로필 조회가 ok: false이면 profileStatus가 error이고 devTools는 닫힌다', async () => {
+    gw.devTools = true;
+    gw.profileReplies = [{ ok: true, nickname: '관리자', devTools: true }];
+    const hook = setup();
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+    expect(hook.result.current.devTools).toBe(true);
+    expect(hook.result.current.profileStatus).toBe('loaded');
+
+    gw.bootResolve = null;
+    gw.profileReplies = [{ ok: false }];
+    let adopted: Promise<void> = Promise.resolve();
+    act(() => { adopted = hook.result.current.adoptAccount(); });
+    expect(hook.result.current.profileStatus).toBe('loading');
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); await adopted; });
+    expect(hook.result.current.profileStatus).toBe('error');
+    expect(hook.result.current.nickname).toBeNull();
+    expect(hook.result.current.devTools).toBe(false);
+  });
+
+  it('adoptAccount에서도 boot 전 nickname이 null이면 boot 뒤 1회 재조회한다', async () => {
+    const hook = setup();
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+
+    gw.bootResolve = null;
+    gw.profileCalls = 0;
+    gw.profileReplies = [
+      { ok: true, nickname: null, devTools: false },
+      { ok: true, nickname: '새_게스트', devTools: false },
+    ];
+    let adopted: Promise<void> = Promise.resolve();
+    act(() => { adopted = hook.result.current.adoptAccount(); });
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); await adopted; });
+    expect(gw.profileCalls).toBe(2);
+    expect(hook.result.current.profileStatus).toBe('loaded');
+    expect(hook.result.current.nickname).toBe('새_게스트');
+  });
+});
+
+describe('최초 지역 진입 알림', () => {
+  it('마을(village) 첫 진입 시에는 알림을 띄우지 않고, 대양(world) 첫 출항 시에만 1회 안내하며 visited 기록은 모두 유지한다', async () => {
+    const notices: SystemNoticeInput[] = [];
+    const sink: NoticeSink = registerNoticeSink(vi.fn(), input => { notices.push(input); });
+    const hook = setup(sink);
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+    notices.length = 0;
+
+    await act(async () => { await hook.result.current.dispatch({ type: 'travel', to: { kind: 'region', id: 'village' } }); });
+    expect(hook.result.current.game.visited).toEqual(['village']);
+    expect(notices.filter(n => n.kind === 'travel.firstVisit')).toEqual([]);
+
+    await act(async () => { await hook.result.current.dispatch({ type: 'travel', to: { kind: 'region', id: 'world' } }); });
+    expect(hook.result.current.game.visited).toEqual(['village', 'world']);
+    expect(notices.filter(n => n.kind === 'travel.firstVisit')).toEqual([{
+      kind: 'travel.firstVisit',
+      text: '대양으로 처음 출항했어요! 태평양 연안에서 바다 낚시를 시작해 보세요.',
+      toastText: '대양 첫 출항!',
+    }]);
+
+    notices.length = 0;
+    await act(async () => { await hook.result.current.dispatch({ type: 'travel', to: { kind: 'base', id: 'harbor' } }); });
+    await act(async () => { await hook.result.current.dispatch({ type: 'travel', to: { kind: 'region', id: 'world' } }); });
+    expect(hook.result.current.game.visited).toEqual(['village', 'world']);
+    expect(notices.filter(n => n.kind === 'travel.firstVisit')).toEqual([]);
+  });
+});
+
+describe('해역 일반 도감 완성 축하 알림', () => {
+  it('게스트가 해역 일반 폼 어종을 100% 완성하면 업적 알림은 띄우지 않고 도감 완성 골드 알림만 띄운다', async () => {
+    const { FISH } = await import('../../../game/rules/logic');
+    const pondSpecies = FISH.filter(f => f.spot === 'pond');
+    const almost = Object.fromEntries(pondSpecies.slice(0, -1).map(f => [f.id, { normal: { count: 1, maxSize: 10, first: null } }]));
+    const complete = Object.fromEntries(pondSpecies.map(f => [f.id, { normal: { count: 1, maxSize: 10, first: null } }]));
+
+    gw.account = { status: 'guest' };
+    gw.loadDex = almost;
+    const notices: SystemNoticeInput[] = [];
+    const sink: NoticeSink = registerNoticeSink(vi.fn(), input => { notices.push(input); });
+    const hook = setup(sink);
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    gw.dispatchDex = almost;
+    await act(async () => { gw.bootResolve!(); });
+    notices.length = 0;
+
+    // 마지막 종을 일반 폼으로 완성(동시에 업적이 열려도 게스트는 업적 알림 제외)
+    gw.dispatchDex = complete;
+    gw.dispatchAchievements = { 'spot-village-pond': 'claimable' };
+    await act(async () => { await hook.result.current.dispatch({ type: 'catch', spot: 'pond', judgment: 'good' }); });
+    expect(notices.filter(n => n.kind === 'dex.spotCompleted')).toEqual([{
+      kind: 'dex.spotCompleted',
+      text: '마을 연못 일반 어종 도감을 완성했어요!',
+      toastText: '마을 연못 도감 완성!',
+    }]);
+    expect(notices.filter(n => n.kind === 'achievement.unlockable')).toEqual([]);
+
+    // 이미 완성된 뒤 추가 포획에는 중복 알림을 내지 않는다
+    notices.length = 0;
+    await act(async () => { await hook.result.current.dispatch({ type: 'catch', spot: 'pond', judgment: 'good' }); });
+    expect(notices.filter(n => n.kind === 'dex.spotCompleted')).toEqual([]);
+  });
+
+  it('계정 사용자도 해역 일반 폼 도감 완성 시 도감 완성 알림을 받고, 돌연변이만 추가될 때는 받지 않는다', async () => {
+    const { FISH } = await import('../../../game/rules/logic');
+    const pondSpecies = FISH.filter(f => f.spot === 'pond');
+    const almost = Object.fromEntries(pondSpecies.slice(0, -1).map(f => [f.id, { normal: { count: 1, maxSize: 10, first: null } }]));
+    const lastFish = pondSpecies[pondSpecies.length - 1];
+    const variantOnly = { ...almost, [lastFish.id]: { variant: { count: 1, maxSize: 10, first: null } } };
+    const complete = Object.fromEntries(pondSpecies.map(f => [f.id, { normal: { count: 1, maxSize: 10, first: null } }]));
+
+    gw.account = { status: 'account', email: 'u@example.com' };
+    gw.loadDex = almost;
+    const notices: SystemNoticeInput[] = [];
+    const sink: NoticeSink = registerNoticeSink(vi.fn(), input => { notices.push(input); });
+    const hook = setup(sink);
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    gw.dispatchDex = almost;
+    await act(async () => { gw.bootResolve!(); });
+    notices.length = 0;
+
+    // 마지막 종의 돌연변이만 잡힌 경우 일반 도감 미완성
+    gw.dispatchDex = variantOnly;
+    await act(async () => { await hook.result.current.dispatch({ type: 'catch', spot: 'pond', judgment: 'good' }); });
+    expect(notices.filter(n => n.kind === 'dex.spotCompleted')).toEqual([]);
+
+    // 일반 폼으로 완성
+    gw.dispatchDex = complete;
+    await act(async () => { await hook.result.current.dispatch({ type: 'catch', spot: 'pond', judgment: 'good' }); });
+    expect(notices.filter(n => n.kind === 'dex.spotCompleted')).toHaveLength(1);
   });
 });

@@ -7,8 +7,8 @@ import { cookingUnlocked, isActiveSlot } from '../../../game/rules/cooking';
 import type { GameState } from '../../../game/rules/logic';
 import { facilityGuestAllowed, facilityProgress, menuLock, progressNote } from '../../display/model/menuLock';
 import type { AccountLockState } from '../../display/model/menuLock';
-import { recipeEffectLines, recipeEffectNote, recipeLabel } from './recipes';
-import type { RecipeEffectLine } from './recipes';
+import { recipeEffectLines, recipeEffectNote, recipeLabel, recipeTitle } from './recipes';
+import type { RecipeEffectLine, RecipeTitle } from './recipes';
 
 const MIN_MS = 60_000;
 
@@ -19,7 +19,7 @@ export type SlotKey = CookKind;
 export type SlotInstanceKey = 'lunch' | 'bait' | 'bait2';
 
 /** 칩 줄과 잠금 문안이 슬롯을 부르는 이름 */
-export const SLOT_NAME: Readonly<Record<SlotKey, string>> = { lunch: '도시락 슬롯', bait: '미끼 슬롯' };
+export const SLOT_NAME: Readonly<Record<SlotKey, string>> = { lunch: '도시락 칸', bait: '미끼 칸' };
 
 /** 칩 줄의 슬롯 순서 — 도시락 칩, 미끼 칩 */
 export const SLOT_ORDER: readonly SlotKey[] = ['lunch', 'bait'];
@@ -56,6 +56,8 @@ export interface ActiveSlot {
   recipe: Recipe;
   /** 화면에 쓰는 요리 이름 */
   label: string;
+  /** 이름과 표시 등급 — 괄호만 등급색으로 칠하는 화면용 */
+  title: RecipeTitle;
   /** 남은 시간(ms) — 0보다 크다 */
   remainingMs: number;
   /** 칩에 쓰는 남은 시간 - 큰 단위 하나("8시간", "25분") */
@@ -80,7 +82,7 @@ export function activeSlot(game: Pick<GameState, 'slots'>, slotKey: SlotInstance
   const timeLeft = fmtSlotTimeLeft(remainingMs);
   const effects = recipeEffectLines(recipe);
   return {
-    key, slotKey, recipe, label: recipeLabel(recipe), remainingMs, chipTime: fmtSlotChipTime(remainingMs), timeLeft,
+    key, slotKey, recipe, label: recipeLabel(recipe), title: recipeTitle(recipe), remainingMs, chipTime: fmtSlotChipTime(remainingMs), timeLeft,
     effects, rows: [...effects, { label: '남은 시간', value: timeLeft }], note: recipeEffectNote(recipe.kind),
   };
 }

@@ -1,73 +1,81 @@
-// 도움말의 바운티 헌팅 절 — 클리어 기준 하루 한도와 04:00 만료, 수주 뒤 어획만 세는 규칙을 안내하고 옛 수주권 표현을 쓰지 않는다.
+// 도움말 탭 — 현재 시스템 안내, 금지 문자·구 정보 배제, 일일 기준 시각 단일 표기, 밸런스 상수 연동, 스포일러 금지를 검증한다.
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
+import { BOATS, WALK_BAG_CAP } from '../../../../../game/content/boats';
+import { BIG_CATCH_PERCENTILE, BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP, CHALLENGE_MISS_LIMIT, VARIANT_PRICE_MULT } from '../../../../../game/rules/balance';
+import { TICKET_EXPIRY_TEXT } from '../../../../../game/rules/challenge';
+import { GAME_DAY_RESET_TEXT } from '../../../../../game/rules/time';
 import VHelp from './VHelp';
 
 afterEach(cleanup);
 
-describe('VHelp 미끼', () => {
-  it('미끼는 집 부엌에서 요리하고 챔질해서 낚을 때만 효과가 있다고 안내한다', () => {
-    const { container } = render(<VHelp />);
-    expect(container.textContent).toContain('집 부엌에서 생명의 기운으로 요리해요. 챔질해서 낚을 때만 효과가 있어요.');
+const renderText = () => {
+  const { container } = render(<VHelp />);
+  return container.textContent ?? '';
+};
+
+describe('VHelp 금지 문자 및 구 정보 제거', () => {
+  it('금지 문장부호(·, —, –, →, ↔)와 을(를)을 쓰지 않는다', () => {
+    const t = renderText();
+    expect(t).not.toMatch(/[·—–→↔]/);
+    expect(t).not.toContain('을(를)');
+  });
+
+  it('제거된 구 정보와 스포일러, 금지 용어를 포함하지 않는다', () => {
+    const t = renderText();
+    for (const old of ['도움말 마지막 갱신', '이메일', '비밀번호', '이사 코드', '데이터', '미상', '수주권', '지명 수배', '지명수배', '수역', '군집', '챌린지']) {
+      expect(t, old).not.toContain(old);
+    }
+    for (const spoiler of ['붕어', '크라켄', '메갈로돈', '마리아나 해구']) {
+      expect(t, spoiler).not.toContain(spoiler);
+    }
+  });
+
+  it('정확한 일일 기준 시각은 상수(GAME_DAY_RESET_TEXT, TICKET_EXPIRY_TEXT)로만 표기한다', () => {
+    const t = renderText();
+    expect(t).toContain(GAME_DAY_RESET_TEXT);
+    expect(t).toContain(TICKET_EXPIRY_TEXT);
+    // 오늘의 운세/물약/바운티 일일 초기화 1회 + 흔적 만료 상수(TICKET_EXPIRY_TEXT) 1회 외 수동 반복 없음
+    expect(t.match(/새벽 4시/g)).toHaveLength(2);
   });
 });
 
-describe('VHelp 요리', () => {
-  it('기운 얻기는 집 궤짝이나 항구 어시장의 기운 얻기 탭에서 한다고 안내한다', () => {
-    const { container } = render(<VHelp />);
-    expect(container.textContent).toContain('집 궤짝이나 항구 어시장의 기운 얻기 탭에서 가방의 물고기를 생명의 기운으로 바꿔요.');
-    expect(container.textContent).not.toContain('집 부엌의 기운 얻기 탭');
+describe('VHelp 현행 시스템 안내', () => {
+  it('단축키, 메뉴 5탭, 목록과 카드 전환, 보유 중만 보기 토글을 안내한다', () => {
+    const t = renderText();
+    for (const text of ['1~5', 'Tab', 'Shift + Tab', 'Esc', 'Enter', '목록과 카드', '보유 중만 보기']) {
+      expect(t, text).toContain(text);
+    }
   });
 
-  it('요리는 집 부엌의 도시락 탭과 미끼 탭에서 한다고 안내한다', () => {
-    const { container } = render(<VHelp />);
-    expect(container.textContent).toContain('집 부엌의 도시락 탭과 미끼 탭에서 기운으로 요리해요.');
+  it('구글 단일 로그인, 게스트 제한, 현재 설정 메뉴 이름을 안내한다', () => {
+    const t = renderText();
+    for (const text of ['구글 계정', '게스트', '계정 관리', '내 정보', '닉네임', '물고기 그래픽', '낚을 때 자동 잠금', '코드 입력', '개발자에게', '패치노트', '최근 소식 다시 보기']) {
+      expect(t, text).toContain(text);
+    }
   });
 
-  it('가방은 상단 3서브탭과 Tab 순환, 우상단 목록/카드 아이콘 전환으로 안내한다', () => {
-    const { container } = render(<VHelp />);
-    const t = container.textContent ?? '';
-    expect(t).toContain('상단 서브탭을 고르거나 탭을 한 번 더 누르면');
-    expect(t).toContain('오른쪽 위 아이콘으로 목록 ↔ 카드를 바꿔요.');
-    expect(t).toContain('가방에서는 물고기 → 아이템 → 유물, 도감에서는 구역이 바뀌어요.');
-  });
-});
-
-describe('VHelp 바운티 헌팅', () => {
-  const text = () => {
-    const { container } = render(<VHelp />);
-    return container.textContent ?? '';
-  };
-
-  it('수주권이라는 말을 쓰지 않는다 — 하루 횟수는 클리어로 센다', () => {
-    expect(text()).not.toContain('수주권');
+  it('오늘의 운세와 물약, 바운티 헌팅 새 규칙, 길드·업적·우편함·랭킹 5탭, 여객선·다중 미끼를 안내한다', () => {
+    const t = renderText();
+    for (const text of [
+      '오늘의 운세', '달력', '물약', '일반 의뢰는 항구 진입 시 바로 수주', '네임드 토벌은 전설을 뺀',
+      '흔적', '결투', '유물', '길드', '업적', '우편함', '랭킹',
+      '명성', '도감(일반)', '도감(돌연변이)', '도감(네임드)', '네임드 토벌',
+      '자동 잠금', '여객선', '두 칸까지',
+    ]) {
+      expect(t, text).toContain(text);
+    }
   });
 
-  it('수배판은 그 구역의 어종을 도감에 모두 채우면 열린다고 안내하고 명성 조건은 말하지 않는다', () => {
-    const t = text();
-    expect(t).toContain('그 구역의 어종을 도감에 모두 채우면 의뢰가 열려요.');
-    expect(t).not.toContain('명성이 기준에 이르고');
-  });
-
-  it('갈래마다 하나씩 수주하고 하루 클리어 횟수가 있으며 메뉴 줄의 의뢰 배지로 남은 횟수를 본다고 안내한다', () => {
-    const t = text();
-    expect(t).toContain('일반 의뢰와 네임드 토벌은 구역에 상관없이 각각 하나씩만 수주할 수 있어요.');
-    expect(t).toContain('수배판에서 보상을 받으면 클리어이고, 하루에 일반 의뢰 1번, 네임드 토벌 1번 클리어할 수 있어요.');
-    expect(t).toContain('오늘 남은 횟수는 수배판 위에서 볼 수 있어요. 메뉴 버튼을 누르면 펼쳐지는 메뉴 줄의 의뢰에도 남은 횟수가 배지로 붙어요.');
-    expect(t).toContain('노란색 배지는 일반 의뢰, 보라색 배지는 네임드 토벌이고, 남은 횟수가 0이면 그 배지는 보이지 않아요.');
-    expect(t).toContain('의뢰를 누르면 수주한 의뢰를 볼 수 있는 의뢰 창이 열려요.');
-    expect(t).not.toContain('의뢰 현황');
-  });
-
-  it('조건을 채우지 못한 의뢰는 한국 시간 새벽 4시에 사라지고 조건을 채운 의뢰는 보상을 받을 수 있다고 안내한다', () => {
-    const t = text();
-    expect(t).toContain('조건을 채우지 못한 의뢰는 한국 시간 새벽 4시에 사라져요.');
-    expect(t).toContain('조건을 모두 채운 의뢰는 그 시각이 지나도 보상을 받을 수 있어요.');
-  });
-
-  it('일반 의뢰는 수주 뒤의 어획만 세고 물고기를 가져가지 않는다고 안내한다', () => {
-    const t = text();
-    expect(t).toContain('수주하기 전에 잡은 물고기는 세지 않아요.');
-    expect(t).toContain('잡은 물고기는 가방에 그대로 남아요.');
+  it('밸런스 수치를 상수에서 읽어 표시한다', () => {
+    const t = renderText();
+    expect(t).toContain(`도보일 때 ${WALK_BAG_CAP}마리`);
+    expect(t).toContain(`${BOATS[BOATS.length - 1].bagCap}마리`);
+    expect(t).toContain(`상위 ${BIG_CATCH_PERCENTILE}%`);
+    expect(t).toContain(`${VARIANT_PRICE_MULT}배 가격`);
+    expect(t).toContain(`일반 의뢰 ${BOUNTY_DAILY_CAP}번`);
+    expect(t).toContain(`네임드 토벌 ${BOUNTY_NAMED_DAILY_CAP}번`);
+    expect(t).toContain(TICKET_EXPIRY_TEXT);
+    expect(t).toContain(`도주 ${CHALLENGE_MISS_LIMIT}칸`);
   });
 });

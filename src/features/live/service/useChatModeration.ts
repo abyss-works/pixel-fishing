@@ -13,6 +13,9 @@ export function useChatModeration(listOpen: boolean) {
   const client = useQueryClient();
   const key = ['chat-blocks', uid];
   const q = useQuery({ queryKey: key, queryFn: readBlocks, enabled: ready && uid !== null && listOpen, retry: false });
+  const unavailable = ready && uid === null;
+  const loading = listOpen && !unavailable && q.isPending && !q.isError;
+  const failed = q.isError || (listOpen && unavailable);
 
   const change = async (op: 'block' | 'unblock', target: string): Promise<ChatActionError | null> => {
     const result = await changeBlock(op, target);
@@ -24,8 +27,10 @@ export function useChatModeration(listOpen: boolean) {
   };
 
   return {
-    /** 차단 목록. 읽는 중이면 null, 실패하면 이유 */
+    /** 차단 목록. 읽는 중이거나 실패했으면 null, 서버 오류 코드면 문자열 */
     blocks: q.data === undefined ? null : 'error' in q.data ? q.data.error : q.data.blocks,
+    loading,
+    failed,
     /** 그 사람을 차단했는가. 목록을 아직 못 읽었으면 null */
     isBlocked: (target: string): boolean | null =>
       q.data === undefined || 'error' in q.data ? null : q.data.blocks.some(b => b.uid === target),

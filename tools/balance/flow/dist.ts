@@ -4,7 +4,6 @@
 import { SPOTS } from '../../../src/game/content/spots';
 import type { SpotId } from '../../../src/game/content/spots';
 import { FISH } from '../../../src/game/content/fish';
-import { FIRST_CATCH_LEGEND_MAX, FIRST_CATCH_LEGEND_MIN } from '../../../src/game/rules/firstCatch';
 import { BOUNTY_ZONES } from '../../../src/game/content/bounties';
 import type { BountyTier, BountyZone } from '../../../src/game/content/bounties';
 import { spotsOfZone, zoneOf, rng } from '../model';
@@ -36,7 +35,7 @@ export interface OpeningDist {
   epic: Dist | null; legend: Dist | null; arrival: Dist | null;
   /** 목표 시간(10분) 안에 도착한 시도의 비율. 못 끝낸 시도가 있으면 null */
   within10: number | null;
-  /** 해석 기댓값 — 전설 보장이 범위 가운데 번호일 때의 도착 시간(초). 못 닿으면 null */
+  /** 해석 기댓값 — 첫 경험 보장(해역별 상한) 적용 시의 도착 시간(초). 못 닿으면 NaN */
   analytic: number;
 }
 
@@ -47,20 +46,19 @@ export function openingDist(o: OpeningDistOptions): OpeningDist {
   const stream = rng(o.seed);
   const epic: number[] = [], legend: number[] = [], arrival: number[] = [];
   for (let i = 0; i < o.trials; i++) {
-    const r = simulateOpening({ judgment: o.judgment, legendAt: 'draw', sampler: createSampler(stream) });
+    const r = simulateOpening({ judgment: o.judgment, firstCatch: true, sampler: createSampler(stream) });
     const at = (rarity: string) => r.steps.find(s => s.kind === 'guarantee' && s.detail === rarity)?.seconds;
     const e = at('epic'), l = at('legendary');
     if (e !== undefined) epic.push(e);
     if (l !== undefined) legend.push(l);
     if (r.arrival) arrival.push(r.arrival.seconds);
   }
-  const mid = Math.round((FIRST_CATCH_LEGEND_MIN + FIRST_CATCH_LEGEND_MAX) / 2);
   return {
     judgment: o.judgment, trials: o.trials, seed: o.seed,
     epic: summarize(epic, o.trials - epic.length), legend: summarize(legend, o.trials - legend.length),
     arrival: summarize(arrival, o.trials - arrival.length),
     within10: arrival.length < o.trials ? null : arrival.filter(s => s <= OPENING_TARGET_SEC).length / o.trials,
-    analytic: simulateOpening({ judgment: o.judgment, legendAt: mid }).arrival?.seconds ?? Number.NaN,
+    analytic: simulateOpening({ judgment: o.judgment, firstCatch: true }).arrival?.seconds ?? Number.NaN,
   };
 }
 

@@ -9,7 +9,7 @@ import type { Executor } from './_db/client.js';
 
 const dbMocks = vi.hoisted(() => ({
   countEventsBefore: vi.fn(async () => 0),
-  eventsBefore: vi.fn(async (): Promise<{ id: number; counted: boolean }[]> => []),
+  eventsBefore: vi.fn(async (): Promise<{ id: number; user_id?: string; type?: string; payload?: unknown; counted: boolean }[]> => []),
   deleteEventsUpTo: vi.fn(async () => 0),
   savesMetaPage: vi.fn(async (): Promise<{ id: number; user_id: string; updated_at: string }[]> => []),
   savesByIds: vi.fn(async (): Promise<unknown[]> => []),
@@ -116,7 +116,7 @@ describe('runArchive 임시 파일·스트림 정리', () => {
     expect(await listFiles(tmpDir)).toEqual([]);
   });
 
-  it('성공 경로에서 events와 saves의 임시·최종 스테이징 파일을 모두 삭제하고 events JSONL에 counted를 보존한다', async () => {
+  it('성공 경로에서 events와 saves의 임시·최종 스테이징 파일을 모두 삭제하고 letter 제외 및 user_id·adminId 비식별화 후 counted를 보존한다', async () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pf-cold-ok-'));
     const putObjects = new Map<string, Buffer>();
     mockR2Ok();
@@ -125,11 +125,15 @@ describe('runArchive 임시 파일·스트림 정리', () => {
       if (init?.method === 'PUT') putObjects.set(String(url), Buffer.from(init.body as Uint8Array));
       return r2Fetch(url, init);
     }) as typeof fetch;
-    dbMocks.countEventsBefore.mockResolvedValue(1);
+    dbMocks.countEventsBefore.mockResolvedValue(3);
     dbMocks.eventsBefore
-      .mockResolvedValueOnce([{ id: 101, counted: true }])
+      .mockResolvedValueOnce([
+        { id: 101, user_id: 'u1', type: 'catch', payload: { fishId: 'crucian' }, counted: true },
+        { id: 102, user_id: 'u1', type: 'letter', payload: { text: '개인 편지' }, counted: false },
+        { id: 103, user_id: 'u2', type: 'adminRestrict', payload: { adminId: 'admin-1' }, counted: false },
+      ])
       .mockResolvedValueOnce([]);
-    dbMocks.deleteEventsUpTo.mockResolvedValue(1);
+    dbMocks.deleteEventsUpTo.mockResolvedValue(3);
     dbMocks.savesMetaPage.mockResolvedValueOnce([
       { id: 2, user_id: 'u1', updated_at: '2026-10-06T00:00:00Z' },
       { id: 1, user_id: 'u1', updated_at: '2026-09-01T00:00:00Z' },
@@ -137,12 +141,33 @@ describe('runArchive 임시 파일·스트림 정리', () => {
     dbMocks.savesByIds.mockResolvedValueOnce([{ id: 1, user_id: 'u1', state: {} }]);
 
     const res = await runArchive(makeEnv(tmpDir), new Date('2026-10-07T00:00:00Z'));
-    expect(res.events.rows).toBe(1);
+    expect(res.events.rows).toBe(2);
     expect(res.saves.rows).toBe(1);
     expect(await listFiles(tmpDir)).toEqual([]);
     const eventGz = putObjects.get(`https://acct.r2.cloudflarestorage.com/bucket/${res.events.r2Key}`)!;
     const lines = gunzipSync(eventGz).toString('utf8').trim().split('\n').map(l => JSON.parse(l) as Record<string, unknown>);
-    expect(lines).toEqual([{ id: 101, counted: true }]);
+    expect(lines).toEqual([
+      { id: 101, type: 'catch', payload: { fishId: 'crucian' }, counted: true },
+      { id: 103, type: 'adminRestrict', payload: {}, counted: false },
+    ]);
+    const saveGz = putObjects.get(`https://acct.r2.cloudflarestorage.com/bucket/${res.saves.r2Key}`)!;
+    const saveLines = gunzipSync(saveGz).toString('utf8').trim().split('\n').map(l => JSON.parse(l) as Record<string, unknown>);
+    expect(saveLines).toEqual([{ id: 1, state: {} }]);
+  });
+
+  it('컷오프 이전 events가 letter뿐이면 R2에 업로드하지 않고 events 표에서만 정리한다', async () => {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pf-cold-letter-only-'));
+    mockR2Ok();
+    dbMocks.countEventsBefore.mockResolvedValue(1);
+    dbMocks.eventsBefore
+      .mockResolvedValueOnce([{ id: 201, user_id: 'u1', type: 'letter', payload: { text: '편지' }, counted: false }])
+      .mockResolvedValueOnce([]);
+    dbMocks.deleteEventsUpTo.mockResolvedValue(1);
+
+    const res = await runArchive(makeEnv(tmpDir), new Date('2026-10-07T00:00:00Z'));
+    expect(res.events).toEqual({ rows: 0, r2Key: null });
+    expect(dbMocks.deleteEventsUpTo).toHaveBeenCalledWith(expect.anything(), 201, '2026-09-30T00:00:00.000Z');
+    expect(await listFiles(tmpDir)).toEqual([]);
   });
 
   it('업로드 실패 경로에서도 스테이징 파일을 남기지 않는다', async () => {

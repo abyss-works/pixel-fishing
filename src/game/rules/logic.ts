@@ -35,10 +35,10 @@ import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
 import type { DayPhase } from './time.js';
 import type { NamedPity, SpeciesPity } from './pity.js';
 import {
-  FIRST_CATCH_LEGEND_MAX, FIRST_CATCH_LEGEND_MIN,
+  FIRST_CATCH_SPOT_CAPS, FIRST_CATCH_SPOTS,
   endedFirstCatch, endedFirstCatchSpot, firstCatchOfLegacy, newFirstCatch, newFirstCatchSpot,
 } from './firstCatch.js';
-import type { FirstCatch, FirstCatchSpot } from './firstCatch.js';
+import type { FirstCatch, FirstCatchSpot, FirstCatchSpotId } from './firstCatch.js';
 import { safeFortune } from './fortune.js';
 import type { DailyFortune } from './fortune.js';
 
@@ -53,7 +53,12 @@ export { FISH } from '../content/fish.js';
 export type { Fish, FormId } from '../content/fish.js';
 export { BOATS, MAX_BOAT, WALK_BAG_CAP, boatNameOf } from '../content/boats.js';
 export type { Boat } from '../content/boats.js';
+import { COUPONS } from '../content/coupons.js';
+import type { Coupon, CouponItem } from '../content/coupons.js';
+import { itemStorageAmount } from '../content/itemCatalog.js';
+
 export { COUPONS } from '../content/coupons.js';
+export type { Coupon, CouponItem } from '../content/coupons.js';
 export { canBuyBoat, canFish, canUpgradeRod, REJECT_TEXT } from './rules.js';
 export { canAcceptQuest, canDeliverBounty } from './rules.js';
 export type { RejectReason, RuleCheck, BountyCtx } from './rules.js';
@@ -159,6 +164,8 @@ export interface GameState {
   autoLockedIds: Record<string, string>;
   /** 오늘의 운세 — 굴린 게임 날짜에 고정된다. 첫 판정(catch·sell)에서 서버가 굴리고, 그날 안에서는 불변 */
   fortune: DailyFortune | null;
+  /** 사용 중인 물약 — 물약 id → 효과가 지속되는 게임 날짜(YYYY-MM-DD, KST 04:00 경계) */
+  potions: Record<string, string>;
 }
 
 export interface RodStats {
@@ -304,26 +311,47 @@ export function zoneDexMissing(
     .map(f => f.id);
 }
 
+/** 해역 일반 폼 도감 진행도 — 해당 해역 전체 어종 중 일반 폼으로 잡힌 종 수와 완료 여부를 돌려준다 */
+export function spotNormalDexProgress(
+  dex: GameState['dex'], spot: SpotId,
+): { found: number; total: number; completed: boolean } {
+  const species = FISH.filter(f => f.spot === spot);
+  const found = species.filter(f => (dex[f.id]?.normal?.count ?? 0) > 0).length;
+  const total = species.length;
+  return { found, total, completed: total > 0 && found === total };
+}
+
+/** 해역 일반 폼 도감 100% 완성 여부 */
+export function isSpotNormalDexComplete(dex: GameState['dex'], spot: SpotId): boolean {
+  return spotNormalDexProgress(dex, spot).completed;
+}
+
+/** 이번 도감 변화로 해당 해역의 일반 폼 도감이 새로 100% 완성되었으면 그 해역 id, 아니면 null */
+export function newlyCompletedSpotDex(
+  prevDex: GameState['dex'], nextDex: GameState['dex'], spot: SpotId,
+): SpotId | null {
+  return !isSpotNormalDexComplete(prevDex, spot) && isSpotNormalDexComplete(nextDex, spot) ? spot : null;
+}
+
 /** 라이선스 조건 — 도감. UI 체크리스트와 리듀서 판정의 단일 근원 */
 export interface LicenseCondition { key: 'dex'; label: string; ok: boolean }
 /** 라이선스 단계별 도감 판정 등급 — 판정과 개발 도구(도감 채우기)가 같은 표를 본다.
- *  도감은 일반 폼(돌연변이 제외)만 센다. 기본 = 전설 제외 전부, 네임드 = 전설 포함 전부 */
+ *  도감은 일반 모습(돌연변이 제외)만 센다. 일반 의뢰(basic)는 도감 조건이 없고, 네임드 토벌(named)은 전설을 뺀 등급만 본다 */
 export const LICENSE_GRADES: Record<BountyTier, readonly RarityId[]> = {
-  basic: ['common', 'rare', 'epic'],
-  named: ['common', 'rare', 'epic', 'legendary'],
+  basic: [],
+  named: ['common', 'rare', 'epic'],
 };
 export function licenseConditions(
   state: GameState, zone: BountyZone, tier: BountyTier,
 ): LicenseCondition[] {
   const grades = LICENSE_GRADES[tier];
+  if (grades.length === 0) return [];
   const missing = zoneDexMissing(state, zone, grades).length;
   const area = zoneById(zone)?.shortName ?? zone;
   // 미달이면 남은 어종 수를 붙인다 — 어떤 어종인지는 밝히지 않는다(도감이 보여 준다)
   const left = missing > 0 ? ` (남은 ${missing}종)` : '';
   return [
-    { key: 'dex', label: (tier === 'named'
-      ? `${area} 모든 어종 수집(밤 어종 포함)`
-      : `${area} 모든 어종 수집(전설 제외, 밤 어종 포함)`) + left, ok: missing === 0 },
+    { key: 'dex', label: `${area} 전설을 뺀 모든 어종 모으기${left}`, ok: missing === 0 },
   ];
 }
 
@@ -471,6 +499,7 @@ export function newState(): GameState {
     autoLockOnCatch: false,
     autoLockedIds: {},
     fortune: null,
+    potions: {},
   };
 }
 
@@ -641,25 +670,31 @@ export function buildCatchInfo(fish: Fish, extras: CatchExtras, isNew: boolean):
 }
 
 // 쿠폰 데이터는 게임 데이터에서 관리하고 검증·지급 규칙은 여기서 처리한다.
-import { COUPONS } from '../content/coupons.js';
-
 export type CouponResult =
-  | { ok: true; state: GameState; reward: { gold: number; desc: string } }
+  | { ok: true; state: GameState; reward: { gold: number; items: readonly CouponItem[]; desc: string } }
   | { ok: false; reason: 'invalid' | 'used' };
 
 // extra — DB(coupons 테이블)에서 조회한 동적 쿠폰. 정적 COUPONS와 병합해 판정한다.
 export function redeemCoupon(
   state: GameState, codeRaw: string,
-  extra: Record<string, { gold: number; desc: string }> = {},
+  extra: Record<string, Coupon> = {},
 ): CouponResult {
   const code = codeRaw.trim();
   const c = COUPONS[code] ?? extra[code];
   if (!c) return { ok: false, reason: 'invalid' };
   if (state.coupons.includes(code)) return { ok: false, reason: 'used' };
+  let next = { ...state, gold: state.gold + c.gold, coupons: [...state.coupons, code] };
+  const grantedItems: CouponItem[] = [];
+  for (const item of c.items ?? []) {
+    const amount = itemStorageAmount(item.id, item.qty);
+    if (amount < 1) continue;
+    next = addItem(next, item.id, amount);
+    grantedItems.push({ id: item.id, qty: item.qty });
+  }
   return {
     ok: true,
-    reward: c,
-    state: { ...state, gold: state.gold + c.gold, coupons: [...state.coupons, code] },
+    reward: { gold: c.gold, items: grantedItems, desc: c.desc },
+    state: next,
   };
 }
 
@@ -876,16 +911,30 @@ function safeArtifactLevels(v: unknown, owned: string[]): { artifactLevels?: Rec
 
 // 아이템 위생 — id → 개수 스택 맵. 정수 0~백만만 통과시킨다(기운은 저장 단위라 상한도 ENERGY_UNIT배).
 // **모르는 키는 버리지 않는다**(safeDex의 폼 키와 같은 원칙 — 미래 아이템 축 전방 호환). 값이 깨진 행만 탈락.
-const ITEM_CAP = 1_000_000;
+export const ITEM_CAP = 1_000_000;
+export const itemCapOf = (id: string): number => (isEnergyItemId(id) ? ITEM_CAP * ENERGY_UNIT : ITEM_CAP);
 
 function safeItems(v: unknown): Record<string, number> {
   const out: Record<string, number> = {};
   for (const [id, n] of Object.entries(safeRecord<number>(v))) {
-    const cap = isEnergyItemId(id) ? ITEM_CAP * ENERGY_UNIT : ITEM_CAP;
+    const cap = itemCapOf(id);
     if (typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= cap) out[id] = n;
   }
   // 개수 0인 행은 저장하지 않는다 — 보유 부재와 동일한 의미라 세이브가 쓰레기로 쌓이지 않는다
   for (const [id, n] of Object.entries(out)) if (n === 0) delete out[id];
+  return out;
+}
+
+/** 활성 물약 위생 — 물약 id → 게임 날짜(비어 있지 않은 문자열)만 살린다. 모르는 물약 id도 전방 호환으로 보존한다 */
+function safePotions(v: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return out;
+  for (const [id, day] of Object.entries(v as Record<string, unknown>)) {
+    if (id.length > 0 && id !== '__proto__' && id !== 'constructor' && id !== 'prototype'
+      && typeof day === 'string' && day.length > 0) {
+      out[id] = day;
+    }
+  }
   return out;
 }
 
@@ -909,29 +958,42 @@ function safeNamedPity(v: unknown): NamedPity {
   return { day: typeof r.day === 'string' ? r.day : '', misses: count(r.misses), fails: count(r.fails), wounds };
 }
 
-/** 첫 경험 보장 위생 — 새 해역별 구조는 보존, 구 단일 객체는 해역별로 이관, 없거나 손상되면 이전 세이브 규칙을 따른다 */
+/** 첫 경험 보장 위생 — 새 해역별 구조는 보존하고, 구 해역별/단일 객체는 안전하게 이관하며, 완료 계정은 재활성화하지 않는다 */
 function safeFirstCatch(v: unknown, dex: GameState['dex'], fame: number): FirstCatch {
   const r = safeRecord<unknown>(v);
   const int = (n: unknown) => typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= 1_000_000;
-  const parseSpot = (raw: unknown): FirstCatchSpot | null => {
+  const parseSpot = (raw: unknown, cap: number): FirstCatchSpot | null => {
     const o = safeRecord<unknown>(raw);
-    if (!int(o.n) || !int(o.legendAt) || typeof o.epic !== 'boolean' || typeof o.legend !== 'boolean') return null;
-    return o.epic || o.legend
-      ? { n: o.n as number, legendAt: o.legendAt as number, epic: o.epic, legend: o.legend }
-      : endedFirstCatchSpot();
+    if (int(o.n) && typeof o.active === 'boolean') {
+      return o.active && (o.n as number) < cap
+        ? { n: o.n as number, active: true }
+        : endedFirstCatchSpot();
+    }
+    if (int(o.n) && int(o.legendAt) && typeof o.epic === 'boolean' && typeof o.legend === 'boolean') {
+      return (o.epic || o.legend) && (o.n as number) < cap
+        ? { n: o.n as number, active: true }
+        : endedFirstCatchSpot();
+    }
+    return null;
   };
-  const pond = parseSpot(r.pond);
-  const river = parseSpot(r.river);
-  if (pond && river) return { pond, river };
+  const parsed = {} as Partial<Record<FirstCatchSpotId, FirstCatchSpot>>;
+  let allSpotsValid = true;
+  for (const s of FIRST_CATCH_SPOTS) {
+    const spotState = parseSpot(r[s], FIRST_CATCH_SPOT_CAPS[s] ?? 0);
+    if (!spotState) {
+      allSpotsValid = false;
+      break;
+    }
+    parsed[s] = spotState;
+  }
+  if (allSpotsValid) return parsed as FirstCatch;
   if (int(r.n) && int(r.legendAt) && typeof r.epic === 'boolean' && typeof r.legend === 'boolean') {
     if (!r.epic && !r.legend) return endedFirstCatch();
-    const rawLegendAt = r.legendAt as number;
-    const legendAt = rawLegendAt === 0 ? 0
-      : Math.min(FIRST_CATCH_LEGEND_MAX, Math.max(FIRST_CATCH_LEGEND_MIN, rawLegendAt));
+    const pondCap = FIRST_CATCH_SPOT_CAPS.pond ?? 0;
     const hasRiverCatch = FISH.some(f => f.spot === 'river'
       && Object.values(dex[f.id] ?? {}).some(rec => (rec?.count ?? 0) > 0));
     return {
-      pond: { n: r.n as number, legendAt, epic: r.epic, legend: r.legend },
+      pond: (r.n as number) < pondCap ? { n: r.n as number, active: true } : endedFirstCatchSpot(),
       river: hasRiverCatch ? endedFirstCatchSpot() : newFirstCatchSpot(),
     };
   }
@@ -1119,6 +1181,7 @@ export function migrate(raw: unknown, uidGen: () => string = () => crypto.random
     autoLockOnCatch: s.autoLockOnCatch === true,
     autoLockedIds: safeAutoLockedIds(s.autoLockedIds),
     fortune: safeFortune(s.fortune),
+    potions: safePotions(s.potions),
   };
 }
 
@@ -1170,11 +1233,13 @@ function safeHats(raw: unknown): string[] {
 
 // ---------- 아이템 (스택형 — 세이브 v8 접기) ----------
 
-/** 아이템 추가(구매·지급) — n은 1 이상 정수만. 음수 지원 안 함(차감은 takeItem 하나) */
+/** 아이템 추가(구매·지급) — n은 1 이상 정수만. 음수 지원 안 함(차감은 takeItem 하나). 상한(ITEM_CAP)을 넘지 않는다 */
 export function addItem(state: GameState, itemId: string, n: number): GameState {
   if (!Number.isInteger(n) || n < 1) return state;
   const cur = state.items[itemId] ?? 0;
-  return { ...state, items: { ...state.items, [itemId]: cur + n } };
+  const next = Math.min(itemCapOf(itemId), cur + n);
+  if (next === cur) return state;
+  return { ...state, items: { ...state.items, [itemId]: next } };
 }
 
 /** 아이템 차감 — 기본 1개, 유물 레벨업은 개수를 넘긴다. 모자라면 무변환(위 방어).

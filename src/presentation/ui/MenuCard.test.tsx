@@ -140,21 +140,51 @@ describe('MenuCard 잠금', () => {
     error.mockRestore();
   });
 
-  it('설명 줄이 숨겨졌을 때 잠금 툴팁은 잠금 안내 아래에 설명도 보인다', () => {
+  it('잠긴 여객선 카드는 제목·역할·잠김 배지 헤더가 구분선과 잠금 사유보다 먼저 렌더링된다', () => {
+    render(
+      <MenuCard
+        icon={null}
+        title="여객선"
+        sub="빠른 이동"
+        subRole="omittable"
+        lock={['태평양 항로가 열리면 쓸 수 있어요.', '태평양 항로는 조각배(1단계)부터 열려요.']}
+      />,
+    );
+    fireEvent.mouseEnter(screen.getByRole('button').parentElement!);
+    const tip = screen.getByRole('tooltip');
+    const title = tip.querySelector('b')!;
+    const sub = [...tip.querySelectorAll('span')].find(el => el.textContent === '빠른 이동')!;
+    const badge = [...tip.querySelectorAll('span')].find(el => el.textContent === '잠김')!;
+    const firstLock = [...tip.querySelectorAll('.block')][0];
+    expect(title.textContent).toBe('여객선');
+    expect(sub).toBeTruthy();
+    expect(badge).toBeTruthy();
+    expect(tip.querySelector('.border-t')).not.toBeNull();
+    expect(title.compareDocumentPosition(firstLock) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(sub.compareDocumentPosition(firstLock) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('설명 줄이 숨겨졌을 때도 잠금 툴팁 헤더에 설명이 보이고 잠금 사유가 구분선 아래에 놓인다', () => {
     const style = document.createElement('style');
     style.textContent = '[data-omittable] { display: none; }';
     document.head.appendChild(style);
     render(<MenuCard icon={null} title="부엌" sub="준비 설명" subRole="omittable" lock={['잠금 안내']} />);
     fireEvent.mouseEnter(screen.getByRole('button').parentElement!);
-    const lines = [...screen.getByRole('tooltip').querySelectorAll('.block')].map(e => e.textContent);
-    expect(lines).toEqual(['잠금 안내', '준비 설명']);
+    const tip = screen.getByRole('tooltip');
+    const lines = [...tip.querySelectorAll('.block')].map(e => e.textContent);
+    expect(lines).toEqual(['잠금 안내']);
+    expect(tip.textContent).toContain('부엌');
+    expect(tip.textContent).toContain('준비 설명');
   });
 
-  it('설명 줄이 보이는 동안 잠금 툴팁은 설명을 되풀이하지 않는다', () => {
+  it('설명 줄이 보이는 동안에도 잠금 툴팁 헤더는 제목·역할·잠김 배지를 함께 보인다', () => {
     render(<MenuCard icon={null} title="부엌" sub="준비 설명" subRole="omittable" lock={['잠금 안내']} />);
     fireEvent.mouseEnter(screen.getByRole('button').parentElement!);
-    const lines = [...screen.getByRole('tooltip').querySelectorAll('.block')].map(e => e.textContent);
+    const tip = screen.getByRole('tooltip');
+    const lines = [...tip.querySelectorAll('.block')].map(e => e.textContent);
     expect(lines).toEqual(['잠금 안내']);
+    expect(tip.textContent).toContain('부엌');
+    expect(tip.textContent).toContain('준비 설명');
   });
 
   it('안내 줄마다 줄을 나눠 보인다', () => {

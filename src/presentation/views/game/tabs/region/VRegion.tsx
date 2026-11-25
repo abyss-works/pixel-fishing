@@ -12,9 +12,8 @@ import PixelList from '../../../../ui/PixelList';
 import SectionTitle from '../../../../ui/SectionTitle';
 import FishSprite from '../../../../ui/fish/FishSprite';
 import CardCarousel from '../../../../ui/CardCarousel';
-import { RarityText } from '../../../../ui/fish/RarityTag';
-import { RARITY, RARITY_ORDER } from '../../../../../game/content/rarity';
-import { RARITY_CARD, DIM_CARD } from '../../../../ui/fish/RarityTag';
+import { DIM_CARD, RARITY_CARD, RarityText } from '../../../../ui/fish/RarityTag';
+import { RARITY_ORDER } from '../../../../../game/content/rarity';
 import DataTable from '../../../../ui/DataTable';
 import Inset from '../../../../ui/Inset';
 
@@ -178,7 +177,7 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
             <thead>
               <tr className="text-text-dim">
                 <th scope="col" className="text-left font-normal pb-1">어군</th>
-                {RARITY_ORDER.map(r => <th scope="col" key={r} className="font-normal pb-1 w-[3.6em]">{RARITY[r].name}</th>)}
+                {RARITY_ORDER.map(r => <th scope="col" key={r} className="font-normal pb-1 w-[3.6em]"><RarityText rarity={r} /></th>)}
               </tr>
             </thead>
             <tbody className="border-t border-line">

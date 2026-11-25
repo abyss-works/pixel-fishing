@@ -2,10 +2,12 @@
 // 보내기는 미리보기로 대상 수와 골드 합계를 확인한 뒤에만 열린다. 운영 스크립트(pnpm mail:send)와 같은 서버 모듈을 쓴다.
 // 받는 사람은 계정 id를 붙여 넣거나, 이메일·닉네임으로 검색해 고른 계정을 입력에 한 줄로 더한다.
 import { useState } from 'react';
+import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
 import DataTable from '../../../ui/DataTable';
 import Field from '../../../ui/Field';
 import { fmtGold } from '../../../ui/format';
+import ItemBadge from '../../../ui/ItemBadge';
 import Note from '../../../ui/Note';
 import SelectList from '../../../ui/SelectList';
 import SubTabs from '../../../ui/SubTabs';
@@ -14,7 +16,20 @@ import TextArea from '../../../ui/TextArea';
 import TextInput from '../../../ui/TextInput';
 import { useDialogs } from '../../../ui/useDialogs';
 import { fmtDT } from '../../../../features/admin/model/metrics';
-import { MAIL_PROBLEM_TEXT, MAX_MAIL_BATCH_TOTAL_GOLD, addRecipient, parseRecipients, searchRecipients } from '../../../../features/admin/model/mailDraft';
+import {
+  MAIL_PROBLEM_TEXT,
+  MAX_MAIL_BATCH_TOTAL_GOLD,
+  STACKABLE_ITEM_KIND_LABEL,
+  addRecipient,
+  findStackableItem,
+  formatMailItemsSummary,
+  parseRecipients,
+  removeMailAttachment,
+  searchAttachableItems,
+  searchRecipients,
+  upsertMailAttachment,
+} from '../../../../features/admin/model/mailDraft';
+import type { MailItemAttachment } from '../../../../features/admin/model/mailDraft';
 import { adminIdentityLookup, adminUserLabel } from '../../../../features/admin/model/adminViews';
 import { readAdminMails, readAdminUsers } from '../../../../features/admin/service/queries';
 import type { writeAdminMail } from '../../../../features/admin/service/queries';
@@ -57,6 +72,10 @@ export default function MailTab({ to = null }: {
   const [recipientText, setRecipientText] = useState(() => (to ? addRecipient('', to) : ''));
   const [search, setSearch] = useState('');
   const [allGold, setAllGold] = useState('0');
+  const [attachments, setAttachments] = useState<MailItemAttachment[]>([]);
+  const [itemQuery, setItemQuery] = useState('');
+  const [itemQty, setItemQty] = useState('1');
+  const [itemError, setItemError] = useState<string | undefined>(undefined);
   const [idempotencyKey, setIdempotencyKey] = useState(newDraftKey);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [busy, setBusy] = useState(false);
@@ -68,10 +87,13 @@ export default function MailTab({ to = null }: {
   const request = {
     title, body,
     target: kind === 'all' ? { kind: 'all' as const, gold } : { kind: 'users' as const, recipients: parsed.recipients },
+    ...(attachments.length > 0 ? { items: attachments } : {}),
     idempotencyKey,
   };
   const clientTotalGold = kind === 'users' ? parsed.recipients.reduce((sum, r) => sum + r.gold, 0) : null;
   const clientCapExceeded = clientTotalGold !== null && clientTotalGold > MAX_MAIL_BATCH_TOTAL_GOLD;
+  const hasEmptyReward = attachments.length === 0
+    && (kind === 'users' ? parsed.recipients.every(r => r.gold === 0) : gold === 0);
   const inputBad = kind === 'users'
     ? parsed.badLines.length > 0 || parsed.duplicates.length > 0
     : !Number.isSafeInteger(gold) || gold < 0;
@@ -88,6 +110,7 @@ export default function MailTab({ to = null }: {
     setBusy(true);
     setFailure(null);
     setDone(null);
+    const itemsSummary = attachments.length > 0 ? formatMailItemsSummary(attachments) : '';
     try {
       const result = await writeMail(op, request);
       setPlan(op === 'send' ? null : result);
@@ -100,14 +123,16 @@ export default function MailTab({ to = null }: {
           setFailure(`${result.problems.map(p => MAIL_PROBLEM_TEXT[p] ?? p).join(' ')}${extraDupes}`);
         } else {
           setTitle(''); setBody(''); setRecipientText(''); setAllGold('0');
+          setAttachments([]); setItemQuery(''); setItemQty('1'); setItemError(undefined);
           setIdempotencyKey(newDraftKey());
-          setDone(`${result.sent ?? 0}통을 보냈어요. 골드 합계 ${fmtGold(result.preview?.totalGold ?? 0)}.`);
+          const itemSuffix = itemsSummary ? `, 첨부 아이템 ${itemsSummary}` : '';
+          setDone(`${result.sent ?? 0}통을 보냈어요. 골드 합계 ${fmtGold(result.preview?.totalGold ?? 0)}${itemSuffix}.`);
         }
       }
     } catch (e) {
       const msg = String((e as { message?: unknown }).message ?? e);
       setFailure(msg.includes('duplicate-mail')
-        ? '최근 10분 이내에 동일한 제목·본문·골드·수신자로 보낸 우편이 있어 중복 발송을 막았어요.'
+        ? '최근 10분 이내에 동일한 제목, 본문, 보상, 수신자로 보낸 우편이 있어 중복 발송을 막았어요.'
         : msg);
     } finally {
       setBusy(false);
@@ -116,9 +141,10 @@ export default function MailTab({ to = null }: {
 
   const send = async () => {
     if (!plan?.preview || plan.preview.capExceeded || clientCapExceeded) return;
+    const itemSuffix = attachments.length > 0 ? `, 첨부 아이템 ${formatMailItemsSummary(attachments)}` : '';
     const ok = await confirm({
       layer: 'app', title: '우편 보내기', confirmLabel: '보내기',
-      body: `${plan.preview.count}명에게 보내요. 골드 합계 ${fmtGold(plan.preview.totalGold)}. 보낸 우편은 되돌릴 수 없어요.`,
+      body: `${plan.preview.count}명에게 보내요. 골드 합계 ${fmtGold(plan.preview.totalGold)}${itemSuffix}. 보낸 우편은 되돌릴 수 없어요.`,
     });
     if (ok) await run('send');
   };
@@ -126,6 +152,22 @@ export default function MailTab({ to = null }: {
   const identityOf = adminIdentityLookup(users);
   const found = searchRecipients(users, search);
   const pick = (uid: string) => { edit(setRecipientText)(addRecipient(recipientText, uid)); setSearch(''); };
+  const foundItems = searchAttachableItems(itemQuery);
+  const pickItem = (id: string) => {
+    const qty = Number(itemQty);
+    const next = upsertMailAttachment(attachments, id, qty);
+    if (next.error) {
+      setItemError(next.error);
+      return;
+    }
+    setItemError(undefined);
+    edit(setAttachments)(next.items);
+    setItemQuery('');
+  };
+  const removeItem = (id: string) => {
+    setItemError(undefined);
+    edit(setAttachments)(removeMailAttachment(attachments, id));
+  };
   const recipientError = [
     parsed.badLines.length > 0 ? `형식이 틀린 줄: ${parsed.badLines.join(', ')}` : null,
     parsed.duplicates.length > 0 ? `중복된 계정 id: ${parsed.duplicates.join(', ')}` : null,
@@ -146,21 +188,32 @@ export default function MailTab({ to = null }: {
                   <th className="text-left">받는 사람</th>
                   <th className="text-left">제목</th>
                   <th className="text-right">골드</th>
+                  <th className="text-left">아이템</th>
                   <th className="text-left">상태</th>
                 </tr>
               </thead>
               <tbody>
-                {mails.map(m => (
-                  <tr key={m.id}>
-                    <td className="text-2xs text-text-dim whitespace-nowrap">{fmtDT(m.createdAt)}</td>
-                    <td><UserIdentity user={identityOf(m.userId)} /></td>
-                    <td className="text-xs">{m.title}</td>
-                    <td className="text-xs text-right">{m.gold > 0 ? fmtGold(m.gold) : '–'}</td>
-                    <td className="text-xs text-text-dim">{m.claimedAt ? '받음' : m.readAt ? '읽음' : '안 읽음'}</td>
-                  </tr>
-                ))}
+                {mails.map(m => {
+                  const items = m.items ?? [];
+                  return (
+                    <tr key={m.id}>
+                      <td className="text-2xs text-text-dim whitespace-nowrap">{fmtDT(m.createdAt)}</td>
+                      <td><UserIdentity user={identityOf(m.userId)} /></td>
+                      <td className="text-xs">{m.title}</td>
+                      <td className="text-xs text-right">{m.gold > 0 ? fmtGold(m.gold) : '-'}</td>
+                      <td className="text-xs">
+                        {items.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {items.map(att => <ItemBadge key={att.id} id={att.id} qty={att.qty} />)}
+                          </div>
+                        ) : <span className="text-text-dim">-</span>}
+                      </td>
+                      <td className="text-xs text-text-dim">{m.claimedAt ? '받음' : m.readAt ? '읽음' : '안 읽음'}</td>
+                    </tr>
+                  );
+                })}
                 {mails.length === 0 && (
-                  <tr><td colSpan={5} className="text-text-dim text-center py-3">보낸 우편이 없어요.</td></tr>
+                  <tr><td colSpan={6} className="text-text-dim text-center py-3">보낸 우편이 없어요.</td></tr>
                 )}
               </tbody>
             </DataTable>
@@ -203,6 +256,38 @@ export default function MailTab({ to = null }: {
                 <TextInput inputMode="numeric" value={allGold} onChange={e => edit(setAllGold)(e.target.value)} />
               </Field>
             )}
+            <div className="grid grid-cols-[1fr_7rem] gap-2 items-start">
+              <Field label="첨부 아이템 찾기" hint="이름, 종류(물약, 생명의 기운, 도시락, 미끼, 재료), id 일부를 입력해 고르세요.">
+                <TextInput value={itemQuery} onChange={e => setItemQuery(e.target.value)} placeholder="아이템 이름 또는 종류" />
+              </Field>
+              <Field label="첨부 수량" error={itemError}>
+                <TextInput inputMode="numeric" value={itemQty} onChange={e => { setItemQty(e.target.value); setItemError(undefined); }} />
+              </Field>
+            </div>
+            {foundItems.length > 0 && (
+              <SelectList label="아이템 검색 결과" items={foundItems} keyOf={item => item.id} selectedKey="" onSelect={pickItem}
+                          renderItem={item => (
+                            <span className="flex items-center gap-2 min-w-0">
+                              <Badge size="2xs">{STACKABLE_ITEM_KIND_LABEL[item.kind]}</Badge>
+                              <ItemBadge id={item.id} />
+                              <span className="text-2xs text-text-dim truncate">{item.id}</span>
+                            </span>
+                          )} />
+            )}
+            {itemQuery.trim() !== '' && foundItems.length === 0 && (
+              <Note size="xs" className="my-0">찾는 아이템이 없어요.</Note>
+            )}
+            {attachments.length > 0 && (
+              <div className="flex flex-wrap gap-1.5" aria-label="첨부된 아이템">
+                {attachments.map(att => (
+                  <span key={att.id} className="inline-flex items-center gap-1">
+                    <ItemBadge id={att.id} qty={att.qty} />
+                    <Button size="sm" onClick={() => removeItem(att.id)}
+                            aria-label={`${findStackableItem(att.id)?.name ?? att.id} 첨부 빼기`}>삭제</Button>
+                  </span>
+                ))}
+              </div>
+            )}
             {visibleProblems.length > 0 && (
               <Note tone="warn" className="my-0">
                 {visibleProblems.map(p => MAIL_PROBLEM_TEXT[p] ?? p).join(' ')}
@@ -211,7 +296,7 @@ export default function MailTab({ to = null }: {
             )}
             {plan?.preview && (
               <Note className="my-0">
-                {`대상 ${plan.preview.recipientCount ?? plan.preview.count}명, 골드 합계 ${fmtGold(plan.preview.totalGold)}.`}
+                {`대상 ${plan.preview.recipientCount ?? plan.preview.count}명, 골드 합계 ${fmtGold(plan.preview.totalGold)}${attachments.length > 0 ? `, 1인당 첨부 아이템 ${formatMailItemsSummary(attachments)}` : ''}.`}
                 {plan.preview.missing.length > 0 && ` 계정이 없어 빠지는 대상 ${plan.preview.missing.length}명.`}
               </Note>
             )}
@@ -227,7 +312,7 @@ export default function MailTab({ to = null }: {
             <div className="flex gap-2">
               <Button size="sm" disabled={!granted || busy || inputBad} onClick={() => void run('preview')}>미리보기</Button>
               <Button size="sm" variant="primary"
-                      disabled={!granted || busy || !plan?.preview || plan.preview.count === 0 || plan.preview.capExceeded || clientCapExceeded}
+                      disabled={!granted || busy || !plan?.preview || plan.preview.count === 0 || plan.preview.capExceeded || clientCapExceeded || plan.problems.length > 0 || hasEmptyReward}
                       onClick={() => void send()}>보내기</Button>
             </div>
           </div>

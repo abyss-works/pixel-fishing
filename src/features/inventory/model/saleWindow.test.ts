@@ -132,3 +132,21 @@ describe('잠긴 개체 툴팁', () => {
     expect(LOCKED_PICK_TIP).toBe('잠근 개체는 고를 수 없어요.\n잠금은 가방 탭에서 풀 수 있어요.');
   });
 });
+
+describe('물약 판매가 합계', () => {
+  it('오늘 쓴 작은 행운 물약이 있으면 판매 창 합계에 운 배율을 반영하고 물약 이름으로 내역을 남긴다', () => {
+    const now = '2026-11-24T05:00:00.000Z';
+    const rare = FISH.find(f => f.id === 'carp')!;
+    const tab = selectSaleTab(
+      seed({ bag: [inst('a', { fishId: rare.id }), inst('b', { fishId: rare.id })], potions: { 'luck-small': '2026-11-24' } }),
+      new Set(),
+      0,
+      now,
+    );
+    const base = tab.total.base;
+    expect(tab.total.value).toBe(Math.round(base * 1.05));
+    expect(tab.total.mods).toEqual([
+      { id: 'potion-luck-small', label: '작은 행운 물약', delta: tab.total.value - base },
+    ]);
+  });
+});

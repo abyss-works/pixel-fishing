@@ -21,5 +21,11 @@ export function useGuildInvite(code: string | null) {
     staleTime: 30_000,
     retry: 1,
   });
-  return { preview: q.data ?? null, settled: q.isSuccess, failed: q.isError, refresh: q.refetch };
+  return {
+    preview: q.data ?? null,
+    settled: q.isSuccess,
+    failed: q.isError,
+    loading: code !== null && q.isPending && !q.isError,
+    refresh: q.refetch,
+  };
 }

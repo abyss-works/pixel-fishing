@@ -4,9 +4,9 @@ import { api, when } from '../../../platform/api';
 import type { GameGateway, GameProfile, DispatchResult, MaybePromise } from '../../../platform/api';
 import type { GameAction } from '../../../game/rules/actions';
 import type { RejectReason } from '../../../game/rules/rules';
-import { newState, REJECT_TEXT } from '../../../game/rules/logic';
+import { newState, newlyCompletedSpotDex, REJECT_TEXT } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
-import { REGION_PACKS } from '../../../game/world';
+import { spotById } from '../../../game/content/spots';
 import { sendNotice } from '../../display/model/toastPolicy';
 import type { NoticeSink } from '../../display/model/toastPolicy';
 import { fail, subscribeFailure, POLICY, AppError } from '../../../core/errors';
@@ -17,11 +17,11 @@ import { settleForcedEncounter, withForcedEncounter } from '../../bounty/service
 import { getPhaseOverride } from './timeOverride';
 import { fetchSession } from '../../account/service/session';
 import { guestProgress } from '../../account/model/accountRules';
-import { guestHasNoProgress } from '../../../game/rules/guest';
 import { newlyClaimable } from '../../achievement/model/achievements';
 import { setSchoolDay } from './schoolDay';
 import { queueFortuneModal, resetFortuneModalSession } from '../../fortune/service/fortuneModal';
-import type { SyncState } from './types';
+import { setSharedProfileStatus } from './profileStatus';
+import type { ProfileStatus, SyncState } from './types';
 import { alertUpdate } from './updateAlert';
 import { isRetryExhausted, retryOnRateLimit } from './rateLimitRetry';
 
@@ -31,10 +31,10 @@ import { isRetryExhausted, retryOnRateLimit } from './rateLimitRetry';
 // 구 20초 동기화 루프·dirty 플래그·beforeunload flush는 소멸 — "액션이 곧 저장"이라 동기화 개념 자체가 없다.
 
 const SYNC_LABEL: Record<SyncState, string | null> = {
-  off: '클라우드가 설정되지 않았어요. 새로고침하면 진행이 사라져요. (개발 모드)',
-  connecting: '클라우드 연결 중…',
-  on: '클라우드 저장 켜짐',
-  error: '클라우드에 연결하지 못했어요. 지금은 진행이 저장되지 않아요.',
+  off: '저장 서버가 연결되지 않아 새로고침하면 진행이 사라져요. (오프라인)',
+  connecting: '진행 연결 중…',
+  on: '진행 저장 켜짐',
+  error: '저장에 연결하지 못했어요. 지금은 진행이 저장되지 않아요.',
 };
 
 /** 게스트가 마을 밖으로 나가려 할 때의 안내. 서버가 거부할 때와 같은 문구다 */
@@ -75,9 +75,26 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
   // 게스트는 업적이 잠겨 있으므로 새로 받을 수 있는 업적 알림을 띄우지 않는다
   const guestRef = useRef(api.auth.isConfigured);
   const [nickname, setNickname] = useState<string | null>(null);
+  const [profileStatus, setProfileStatus] = useState<ProfileStatus>('loading');
   // 서버가 내려 준 개발 도구 사용 판정 — 계정이 바뀌면 새 계정의 판정으로 바뀐다
   const [devTools, setDevTools] = useState(false);
-  const adoptProfile = (profile: GameProfile) => { setNickname(profile.nickname); setDevTools(profile.devTools); };
+  const readProfile = (): Promise<GameProfile> =>
+    Promise.resolve(gameGatewayRef.current.getProfile()).catch((): GameProfile => ({ ok: false }));
+  const adoptProfile = (profile: GameProfile) => {
+    if (profile.ok) {
+      setNickname(profile.nickname);
+      setDevTools(profile.devTools);
+      setProfileStatus('loaded');
+    } else {
+      setNickname(null);
+      setDevTools(false);
+      setProfileStatus('error');
+    }
+  };
+  useEffect(() => {
+    setSharedProfileStatus(profileStatus);
+  }, [profileStatus]);
+  useEffect(() => () => { setSharedProfileStatus(null); }, []);
   const [sync, setSync] = useState<SyncState>(api.auth.isConfigured ? 'connecting' : 'off');
   // 세이브를 불러오고 이 창을 접속(boot)시키는 중 — 서버는 접속한 창의 액션만 받으므로 그 전에는 플레이를 막는다.
   // 그동안의 게임 상태는 서버 세이브가 아니라 기본값이라 화면에도 보이지 않는다.
@@ -145,30 +162,37 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
             sendNotice(setToast, {
               kind: 'achievement.unlockable',
               text: `${unlocked.length}개 업적을 받을 수 있어요.`,
-              toastText: `${unlocked.length}개 업적 달성 가능!`,
+              toastText: `업적 보상 ${unlocked.length}개 도착!`,
             });
           } else {
             for (const name of unlocked) {
               sendNotice(setToast, {
                 kind: 'achievement.unlockable',
                 text: `“${name}” 업적을 받을 수 있어요.`,
-                toastText: `업적 "${name}" 달성 가능!`,
+                toastText: `업적 “${name}” 보상 도착!`,
               });
             }
           }
         }
-        // 최초 지역 진입 감지 — travel 액션으로 visited에 새 바다가 추가될 때 1회 알린다
-        if (action.type === 'travel') {
-          for (const id of r.state.visited) {
-            if (!prev.visited.includes(id)) {
-              const name = REGION_PACKS[id]?.info.shortName ?? id;
-              sendNotice(setToast, {
-                kind: 'travel.firstVisit',
-                text: `신규 해역 [${name}]에 처음 들어섰어요!`,
-                toastText: `신규 해역 [${name}] 첫 진입!`,
-              });
-            }
+        // 해역 일반 도감 100% 완성 알림 — 업적 잠금 여부와 무관하게 게스트 포함 모든 플레이어에게 알린다
+        if (action.type === 'catch') {
+          const completedSpot = newlyCompletedSpotDex(prev.dex, r.state.dex, action.spot);
+          if (completedSpot) {
+            const spotName = spotById(completedSpot)?.name ?? completedSpot;
+            sendNotice(setToast, {
+              kind: 'dex.spotCompleted',
+              text: `${spotName} 일반 어종 도감을 완성했어요!`,
+              toastText: `${spotName} 도감 완성!`,
+            });
           }
+        }
+        // 최초 대양 출항 감지 — 마을 첫 진입은 알리지 않고, travel 액션으로 visited에 world가 처음 추가될 때만 1회 안내한다
+        if (action.type === 'travel' && r.state.visited.includes('world') && !prev.visited.includes('world')) {
+          sendNotice(setToast, {
+            kind: 'travel.firstVisit',
+            text: '대양으로 처음 출항했어요! 태평양 연안에서 바다 낚시를 시작해 보세요.',
+            toastText: '대양 첫 출항!',
+          });
         }
         // 어군 배치 날짜 — 리듀서(서버 시계, 로컬은 클라 시계)가 정한 값으로 세션을 고정한다
         if (r.result.type === 'boot') setSchoolDay(r.result.schoolDay);
@@ -219,18 +243,24 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
   // import 액션으로 수입(신뢰 채널 재사용 — 서버가 saves_current를 시딩한다).
   useEffect(() => {
     if (!api.auth.isConfigured) {
-      void Promise.resolve(gameGatewayRef.current.getProfile()).then(adoptProfile);
-      // 로컬 모드도 같은 리듀서로 부팅한다 — 어군 배치 날짜를 클라 시계로 같은 규칙에 따라 정한다
-      void boot(newRetryScope()).catch(fail);
+      void (async () => {
+        const initialProfile = await readProfile();
+        // 로컬 모드도 같은 리듀서로 부팅한다 — 어군 배치 날짜를 클라 시계로 같은 규칙에 따라 정한다
+        await boot(newRetryScope()).catch(fail);
+        const profile = initialProfile.ok && initialProfile.nickname === null
+          ? await readProfile()
+          : initialProfile;
+        adoptProfile(profile);
+      })();
       return;
     }
     const signal = newRetryScope();
     (async () => {
       const uid = await fetchSession(client);
       if (!uid) throw new AppError('unauthorized', 'anonymous session failed');
-      const [cloud, profile, lookup] = await Promise.all([
+      const [cloud, initialProfile, lookup] = await Promise.all([
         loadSave(signal),
-        gameGatewayRef.current.getProfile(),
+        readProfile(),
         api.auth.currentAccount().catch(() => ({ status: 'failed' as const })),
       ]);
       if (signal.aborted) return;
@@ -239,7 +269,7 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
         setGame(cloud);
         sendNotice(setToast, {
           kind: 'boot.cloudLoaded',
-          text: '클라우드 세이브를 불러왔어요.',
+          text: '저장된 진행을 불러왔어요.',
         });
       } else if (init.legacy) {
         // 구세대(localStorage) 브리지도 import 액션이므로 서버의 불러오기 허용 판정을 따른다(운영은 전면 거부).
@@ -254,9 +284,18 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
       // 세션 시작에 1회, 새로고침마다 다시 센다.
       await boot(signal);
       if (signal.aborted) return;
+      const profile = initialProfile.ok && initialProfile.nickname === null
+        ? await readProfile()
+        : initialProfile;
+      if (signal.aborted) return;
       adoptProfile(profile);
       setSync('on');
-    })().catch(e => { if (!signal.aborted) fail(e); }) // 정책 한 곳으로 — 여기서 UX를 정하지 않는다
+    })().catch(e => {
+      if (!signal.aborted) {
+        setProfileStatus('error');
+        fail(e);
+      }
+    }) // 정책 한 곳으로 — 여기서 UX를 정하지 않는다
       .finally(() => { if (!signal.aborted) setLoading(false); });
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회 부트스트랩
   }, [init.legacy]);
@@ -269,14 +308,16 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
   };
 
   return {
-    game, dispatch, nickname, devTools, sync, syncLabel: SYNC_LABEL[sync], blocker, loading,
+    game, dispatch, nickname, profileStatus, devTools, sync, syncLabel: SYNC_LABEL[sync], blocker, loading,
     /** 이 기기의 게스트 진행 — 계정을 바꿀 때 버려지는 것이 있는지 확인 창을 띄울지 가르는 근거 */
     guestProgress: guestProgress({ sync, loading, blocked: blocker !== null, game }),
     /** 닉네임 변경 — 성공하면 표시값을 다시 읽는다. null이면 성공, 아니면 거부 사유. */
     rename: async (name: string): Promise<null | RejectReason> => {
       const r = await gameGatewayRef.current.dispatch({ type: 'setNickname', nickname: name });
       if (r.status === 'ok') {
-        setNickname((await gameGatewayRef.current.getProfile()).nickname);
+        const next = await readProfile();
+        if (next.ok) adoptProfile(next);
+        else { setNickname(name); setProfileStatus('loaded'); }
         return null;
       }
       return r.error;
@@ -288,21 +329,29 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
     adoptAccount: async (): Promise<void> => {
       const signal = newRetryScope();
       setLoading(true);
+      setProfileStatus('loading');
+      setNickname(null);
       try {
-        const [cloud, profile, lookup] = await Promise.all([
+        const [cloud, initialProfile, lookup] = await Promise.all([
           loadSave(signal),
-          gameGatewayRef.current.getProfile(),
+          readProfile(),
           api.auth.currentAccount().catch(() => ({ status: 'failed' as const })),
         ]);
         if (signal.aborted) return;
         guestRef.current = lookup.status !== 'account';
         resetFortuneModalSession();
         setGame(cloud ?? newState());
-        adoptProfile(profile);
         await boot(signal);
+        if (signal.aborted) return;
+        const profile = initialProfile.ok && initialProfile.nickname === null
+          ? await readProfile()
+          : initialProfile;
+        if (signal.aborted) return;
+        adoptProfile(profile);
       } catch (e) {
         // 더 새로운 교체가 이어받았으면 이 흐름의 결과는 버린다
         if (signal.aborted) return;
+        setProfileStatus('error');
         if (isRetryExhausted(e)) fail(e);
         throw e;
       } finally {
@@ -316,17 +365,28 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
     resync: async (): Promise<void> => {
       await readSave().catch(() => {});
     },
-    /**
-     * 이 탭이 들고 있는 상태가 낡았을 수 있어, 계정을 바꾸기 직전에 서버 저장 상태를 다시 읽고 버려질 진행이 있는지 판정한다.
-     * 저장 상태가 없으면 진행이 없는 것이고, 읽기에 실패하면 진행이 있는 것으로 본다.
-     */
-    recheckGuestProgress: async (): Promise<'nothing' | 'some'> => {
-      try {
-        const saved = await readSave();
-        return guestHasNoProgress(saved ?? newState()) ? 'nothing' : 'some';
-      } catch {
-        return 'some';
+    /** 개발 도구 계정 초기화 결과(state)를 즉시 반영하고 게이트웨이·프로필·조회 캐시를 동기화한다 */
+    applyDevReset: async (state: GameState): Promise<void> => {
+      resetFortuneModalSession();
+      setGame(state);
+      if (api.auth.isConfigured) {
+        await readSave().catch(() => {});
+      } else {
+        gameGatewayRef.current = api.createGameGateway(state);
       }
+      const next = await readProfile();
+      adoptProfile(next);
+      await client.invalidateQueries();
+    },
+    /** 테스트 정식 계정 승격 직후 게스트 판정과 프로필·조회 캐시를 갱신한다 */
+    refreshAccountStatus: async (): Promise<void> => {
+      if (api.auth.isConfigured) {
+        const lookup = await api.auth.currentAccount().catch(() => ({ status: 'failed' as const }));
+        guestRef.current = lookup.status !== 'account';
+      }
+      const next = await readProfile();
+      adoptProfile(next);
+      await client.invalidateQueries();
     },
     /** 캐스팅 순간 서버 함수 워밍 — 콜드 스타트를 wait 구간에 흡수 */
     warmup: () => gameGatewayRef.current.warmup?.(),

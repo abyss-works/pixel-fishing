@@ -77,12 +77,11 @@ describe('AdminGate', () => {
     expect(notice.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('주소가 같은 이메일 계정이 있는 구글로 돌아오면 세 줄 안내를 보이고 버튼은 다시 누를 수 있다', async () => {
+  it('주소가 같은 기존 계정이 있는 구글로 돌아오면 안내를 보이고 버튼은 다시 누를 수 있다', async () => {
     vi.spyOn(api.admin, 'takeSignInReturn').mockReturnValue({ error: 'account_not_linked' });
     renderGate({ access: 'signedOut', uid: null });
-    const notice = await screen.findByText(/주소가 같은 이메일 계정이 있어요\./);
-    expect(notice.textContent).toBe('이 구글 계정과 주소가 같은 이메일 계정이 있어요.\n게임의 계정 관리에서 그 이메일 계정으로 로그인해 이 구글 계정을 연결해 주세요.\n그다음 여기서 다시 로그인해 주세요.');
-    expect(notice).toHaveClass('text-danger');
+    const notice = await screen.findByText(/주소가 같은 기존 계정이 있어 로그인할 수 없어요\./);
+    expect(notice.textContent).toBe('이 구글 계정과 주소가 같은 기존 계정이 있어 로그인할 수 없어요.\n관리자 계정에 연결된 구글 계정으로 다시 로그인하거나 운영자에게 문의해 주세요.');
     expect(screen.getByRole('button', { name: 'Google로 계속하기' })).toBeEnabled();
   });
 

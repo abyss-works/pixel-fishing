@@ -1,10 +1,9 @@
-// 구글 연결 — 게스트와 이메일 계정의 연결, 충돌 판별, 로그인 전환, 비밀번호 수단 삭제를 실제 Postgres에서 확인한다.
+// 구글 연결 — 게스트와 레거시 이메일 계정의 연결, 충돌 판별, 로그인 전환, 비밀번호 수단 정리를 실제 Postgres에서 확인한다.
 // 구글 토큰 교환은 서버 대역이 인가 코드별 신원으로 대신한다. 콜백 경로는 운영과 같다.
-import bcrypt from 'bcryptjs';
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { seedPasswordAccount, startActionEnv } from '../_dbTest/actionHarness.js';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { seedCredentialAccount, sessionHeaders, startActionEnv } from '../_dbTest/actionHarness.js';
 import type { ActionEnv } from '../_dbTest/actionHarness.js';
-import { googleCode, sentMails } from '../_dbTest/serverShim.js';
+import { googleCode } from '../_dbTest/serverShim.js';
 import type { GoogleIdentity } from '../_dbTest/serverShim.js';
 
 const ORIGIN = 'http://localhost:3000';
@@ -23,9 +22,12 @@ beforeAll(async () => {
 afterAll(async () => {
   await env?.stop();
 });
-beforeEach(() => {
-  sentMails.length = 0;
-});
+
+async function seedSession(uid: string, label = 's'): Promise<string> {
+  const token = `test-session-${uid}-${label}`;
+  await env.client.query(`insert into auth.sessions (user_id, token, expires_at) values ($1, $2, '2100-01-01T00:00:00Z')`, [uid, token]);
+  return sessionHeaders(token).cookie;
+}
 
 interface Res { status: number; body: Record<string, unknown>; cookie: string; location: string | null }
 
@@ -72,8 +74,7 @@ const nextSub = () => `sub-${seq++}`;
 describe('이메일 가입과 승격 경로', () => {
   it('이메일 신규 가입은 거부한다', async () => {
     const res = await call('POST', '/sign-up/email', { email: 'signup@example.test', password: 'secret1', name: '' });
-    expect(res.status).toBe(400);
-    expect(res.body.code).toBe('EMAIL_PASSWORD_SIGN_UP_DISABLED');
+    expect(res.status).toBe(404);
     expect((await env.client.query(`select 1 from auth.users where email = 'signup@example.test'`)).rows).toHaveLength(0);
   });
 
@@ -84,11 +85,11 @@ describe('이메일 가입과 승격 경로', () => {
     expect((await userRow(uid)).is_anonymous).toBe(true);
   });
 
-  it('기존 이메일 계정은 이메일과 비밀번호로 로그인된다', async () => {
-    const uid = await seedPasswordAccount(env.client, 'old@example.test', 'old-pass');
+  it('레거시 이메일 계정이 남아 있어도 이메일과 비밀번호 로그인은 거부한다', async () => {
+    await seedCredentialAccount(env.client, 'old@example.test');
     const res = await call('POST', '/sign-in/email', { email: 'old@example.test', password: 'old-pass' });
-    expect(res.status).toBe(200);
-    expect((res.body.user as { id: string }).id).toBe(uid);
+    expect(res.status).toBe(404);
+    expect(res.cookie).toBe('');
   });
 });
 
@@ -181,19 +182,19 @@ describe('이미 다른 계정에 연결된 구글', () => {
     const who = { sub: nextSub(), email: 'taken-google@gmail.test' };
     const owner = await guest();
     await link(owner.cookie, who);
-    const uid = await seedPasswordAccount(env.client, 'member1@example.test', 'secret1');
-    const login = await call('POST', '/sign-in/email', { email: 'member1@example.test', password: 'secret1' });
-    const r = await link(login.cookie, who);
+    const uid = await seedCredentialAccount(env.client, 'member1@example.test');
+    const cookie = await seedSession(uid);
+    const r = await link(cookie, who);
     expect(r.error).toBe('account_already_linked_to_different_user');
     expect(await accountRows(uid)).toEqual([{ provider_id: 'credential', account_id: uid }]);
     expect((await userRow(uid)).email).toBe('member1@example.test');
   });
 
   it('이메일 계정이 고른 구글의 주소를 다른 계정이 이메일로 쓰면 같은 코드로 거부한다', async () => {
-    await seedPasswordAccount(env.client, 'someone@gmail.test', 'secret1');
-    const uid = await seedPasswordAccount(env.client, 'member2@example.test', 'secret1');
-    const login = await call('POST', '/sign-in/email', { email: 'member2@example.test', password: 'secret1' });
-    const r = await link(login.cookie, { sub: nextSub(), email: 'Someone@Gmail.test' });
+    await seedCredentialAccount(env.client, 'someone@gmail.test');
+    const uid = await seedCredentialAccount(env.client, 'member2@example.test');
+    const cookie = await seedSession(uid);
+    const r = await link(cookie, { sub: nextSub(), email: 'Someone@Gmail.test' });
     expect(r.error).toBe('account_already_linked_to_different_user');
     expect(await accountRows(uid)).toEqual([{ provider_id: 'credential', account_id: uid }]);
   });
@@ -201,7 +202,7 @@ describe('이미 다른 계정에 연결된 구글', () => {
 
 describe('구글 연결 전 이메일 계정과 같은 주소', () => {
   it('게스트의 연결은 email_account_exists이고 아무것도 바뀌지 않는다', async () => {
-    await seedPasswordAccount(env.client, 'same@gmail.test', 'secret1');
+    await seedCredentialAccount(env.client, 'same@gmail.test');
     const { uid, cookie } = await guest();
     const r = await link(cookie, { sub: nextSub(), email: 'Same@Gmail.test' });
     expect(r.error).toBe('email_account_exists');
@@ -210,7 +211,7 @@ describe('구글 연결 전 이메일 계정과 같은 주소', () => {
   });
 
   it('같은 경우의 구글 로그인은 account_not_linked다', async () => {
-    await seedPasswordAccount(env.client, 'same2@gmail.test', 'secret1');
+    await seedCredentialAccount(env.client, 'same2@gmail.test');
     const { cookie } = await guest();
     const r = await signIn(cookie, { sub: nextSub(), email: 'same2@gmail.test' });
     expect(r.error).toBe('account_not_linked');
@@ -219,25 +220,23 @@ describe('구글 연결 전 이메일 계정과 같은 주소', () => {
 
 describe('이메일 계정의 구글 연결', () => {
   it('자기 이메일과 같은 주소의 구글을 연결할 수 있다', async () => {
-    const uid = await seedPasswordAccount(env.client, 'self@gmail.test', 'secret1');
-    const login = await call('POST', '/sign-in/email', { email: 'self@gmail.test', password: 'secret1' });
-    const r = await link(login.cookie, { sub: nextSub(), email: 'self@gmail.test' });
+    const uid = await seedCredentialAccount(env.client, 'self@gmail.test');
+    const cookie = await seedSession(uid);
+    const r = await link(cookie, { sub: nextSub(), email: 'self@gmail.test' });
     expect(r.ok).toBe(true);
     expect(await accountRows(uid)).toEqual([{ provider_id: 'google', account_id: expect.any(String) }]);
   });
 
   it('연결하면 이메일을 구글 주소로 바꾸고 비밀번호 수단을 지우며, 다른 세션만 끊는다', async () => {
-    const uid = await seedPasswordAccount(env.client, 'old-address@example.test', 'secret1');
-    const here = await call('POST', '/sign-in/email', { email: 'old-address@example.test', password: 'secret1' });
-    const other = await call('POST', '/sign-in/email', { email: 'old-address@example.test', password: 'secret1' });
-    const r = await link(here.cookie, { sub: nextSub(), email: 'New.Address@Gmail.test' });
+    const uid = await seedCredentialAccount(env.client, 'old-address@example.test');
+    const hereCookie = await seedSession(uid, 'here');
+    const otherCookie = await seedSession(uid, 'other');
+    const r = await link(hereCookie, { sub: nextSub(), email: 'New.Address@Gmail.test' });
     expect(r.ok).toBe(true);
     expect(await userRow(uid)).toEqual({ email: 'new.address@gmail.test', email_verified: true, is_anonymous: false });
     expect((await accountRows(uid)).map(a => a.provider_id)).toEqual(['google']);
-    expect(await aliveSession(here.cookie)).toBe(true);
-    expect(await aliveSession(other.cookie)).toBe(false);
-    expect((await call('POST', '/sign-in/email', { email: 'old-address@example.test', password: 'secret1' })).status).toBe(401);
-    expect((await call('POST', '/sign-in/email', { email: 'new.address@gmail.test', password: 'secret1' })).status).toBe(401);
+    expect(await aliveSession(hereCookie)).toBe(true);
+    expect(await aliveSession(otherCookie)).toBe(false);
   });
 
   it('이미 구글을 연결한 계정이 다른 구글을 고르면 google_already_connected다', async () => {
@@ -247,29 +246,6 @@ describe('이메일 계정의 구글 연결', () => {
     expect(r.error).toBe('google_already_connected');
     expect(await accountRows(uid)).toHaveLength(1);
     expect((await userRow(uid)).email).toBe('first@gmail.test');
-  });
-
-  it('연결 뒤에는 재설정 메일을 보내지 않고, 연결 전에 받은 토큰으로도 비밀번호 수단이 생기지 않는다', async () => {
-    const uid = await seedPasswordAccount(env.client, 'reset-me@example.test', 'secret1');
-    expect((await call('POST', '/request-password-reset', { email: 'reset-me@example.test', redirectTo: `${ORIGIN}/` })).status).toBe(200);
-    expect(sentMails).toHaveLength(1);
-    const token = /reset-password\/([^?\s]+)/.exec(sentMails[0].text)?.[1];
-    const login = await call('POST', '/sign-in/email', { email: 'reset-me@example.test', password: 'secret1' });
-    const r = await link(login.cookie, { sub: nextSub(), email: 'reset-done@gmail.test' });
-    expect(r.ok).toBe(true);
-
-    sentMails.length = 0;
-    expect((await call('POST', '/request-password-reset', { email: 'reset-done@gmail.test', redirectTo: `${ORIGIN}/` })).status).toBe(200);
-    expect(sentMails).toHaveLength(0);
-    expect((await call('POST', '/reset-password', { newPassword: 'brand-new', token })).status).toBe(400);
-    expect((await accountRows(uid)).map(a => a.provider_id)).toEqual(['google']);
-  });
-
-  it('연결 전에는 재설정 메일이 그대로 나간다', async () => {
-    await seedPasswordAccount(env.client, 'still-pw@example.test', 'secret1');
-    await call('POST', '/request-password-reset', { email: 'still-pw@example.test', redirectTo: `${ORIGIN}/` });
-    expect(sentMails.map(m => m.to)).toEqual([['still-pw@example.test']]);
-    expect(bcrypt.compareSync('secret1', (await env.client.query(`select password from auth.accounts where provider_id = 'credential' and account_id = (select id::text from auth.users where email = 'still-pw@example.test')`)).rows[0].password)).toBe(true);
   });
 });
 
@@ -327,16 +303,16 @@ describe('연결 마무리의 재실행', () => {
 
   it('구글 계정 행과 비밀번호 수단이 함께 남은 이메일 계정도 다시 연결하면 비밀번호 수단과 다른 세션이 정리된다', async () => {
     const who = { sub: nextSub(), email: 'half-member@gmail.test' };
-    const uid = await seedPasswordAccount(env.client, 'half-member@example.test', 'secret1');
+    const uid = await seedCredentialAccount(env.client, 'half-member@example.test');
     await env.client.query(`insert into auth.accounts (user_id, account_id, provider_id) values ($1, $2, 'google')`, [uid, who.sub]);
-    const here = await call('POST', '/sign-in/email', { email: 'half-member@example.test', password: 'secret1' });
-    const other = await call('POST', '/sign-in/email', { email: 'half-member@example.test', password: 'secret1' });
-    const r = await link(here.cookie, who);
+    const hereCookie = await seedSession(uid, 'here');
+    const otherCookie = await seedSession(uid, 'other');
+    const r = await link(hereCookie, who);
     expect(r.ok).toBe(true);
     expect((await accountRows(uid)).map(a => a.provider_id)).toEqual(['google']);
     expect((await userRow(uid)).email).toBe('half-member@gmail.test');
-    expect(await aliveSession(here.cookie)).toBe(true);
-    expect(await aliveSession(other.cookie)).toBe(false);
+    expect(await aliveSession(hereCookie)).toBe(true);
+    expect(await aliveSession(otherCookie)).toBe(false);
   });
 
   it('마무리가 끝난 계정에 같은 구글을 다시 연결해도 결과가 같다', async () => {
@@ -354,14 +330,13 @@ describe('연결 마무리의 재실행', () => {
   });
 });
 
-describe('재설정 엔드포인트 가드', () => {
-  it('비밀번호 수단이 없는 계정의 재설정 토큰은 비밀번호 수단을 만들지 않고 거부한다', async () => {
+describe('재설정 경로 비활성화', () => {
+  it('구글 계정의 재설정 토큰이 남아 있어도 /reset-password는 비활성화되어 비밀번호 수단을 만들지 않는다', async () => {
     const { uid, cookie } = await guest();
     await link(cookie, { sub: nextSub(), email: 'no-pw@gmail.test' });
     await env.client.query(`insert into auth.verifications (identifier, value, expires_at) values ('reset-password:raced-token', $1, now() + interval '1 hour')`, [uid]);
     const res = await call('POST', '/reset-password', { newPassword: 'brand-new', token: 'raced-token' });
-    expect(res.status).toBe(400);
-    expect(res.body.code).toBe('INVALID_TOKEN');
+    expect(res.status).toBe(404);
     expect((await accountRows(uid)).map(a => a.provider_id)).toEqual(['google']);
   });
 });
@@ -371,14 +346,13 @@ describe('구글 연결의 약관 수락 기록', () => {
     'select document, version, age_confirmed, channel, accepted_at from public.consent_records where user_id = $1 order by version, document', [uid])).rows;
   const version = () => process.env.CONSENT_EFFECTIVE_DATE as string;
 
-  it('게스트의 연결이 끝나면 현재 판의 약관과 처리방침 수락을 만 14세 확인과 함께 기록한다', async () => {
+  it('게스트의 연결이 끝나면 현재 판의 이용약관 수락을 만 14세 확인과 함께 기록한다', async () => {
     const { uid, cookie } = await guest();
     expect(await consentRows(uid)).toEqual([]);
     const before = Date.now();
     expect((await link(cookie, { sub: nextSub(), email: 'consent-guest@gmail.test' })).ok).toBe(true);
     const rows = await consentRows(uid);
     expect(rows.map(r => [r.document, r.version, r.age_confirmed, r.channel])).toEqual([
-      ['privacy', version(), true, 'google-link'],
       ['terms', version(), true, 'google-link'],
     ]);
     for (const r of rows) {
@@ -388,14 +362,14 @@ describe('구글 연결의 약관 수락 기록', () => {
   });
 
   it('이메일 계정의 연결도 같은 기록을 남긴다', async () => {
-    const uid = await seedPasswordAccount(env.client, 'consent-member@example.test', 'secret1');
-    const login = await call('POST', '/sign-in/email', { email: 'consent-member@example.test', password: 'secret1' });
-    expect((await link(login.cookie, { sub: nextSub(), email: 'consent-member@gmail.test' })).ok).toBe(true);
-    expect((await consentRows(uid)).map(r => `${r.document}/${r.channel}`)).toEqual(['privacy/google-link', 'terms/google-link']);
+    const uid = await seedCredentialAccount(env.client, 'consent-member@example.test');
+    const cookie = await seedSession(uid);
+    expect((await link(cookie, { sub: nextSub(), email: 'consent-member@gmail.test' })).ok).toBe(true);
+    expect((await consentRows(uid)).map(r => `${r.document}/${r.channel}`)).toEqual(['terms/google-link']);
   });
 
   it('연결이 거부되면 기록하지 않는다', async () => {
-    await seedPasswordAccount(env.client, 'consent-taken@gmail.test', 'secret1');
+    await seedCredentialAccount(env.client, 'consent-taken@gmail.test');
     const rejected = await guest();
     expect((await link(rejected.cookie, { sub: nextSub(), email: 'consent-taken@gmail.test' })).error).toBe('email_account_exists');
     expect(await consentRows(rejected.uid)).toEqual([]);
@@ -408,7 +382,7 @@ describe('구글 연결의 약관 수락 기록', () => {
     await link(first.cookie, { sub: nextSub(), email: 'consent-first@gmail.test' });
     const second = await link(first.cookie, { sub: nextSub(), email: 'consent-second@gmail.test' });
     expect(second.error).toBe('google_already_connected');
-    expect(await consentRows(first.uid)).toHaveLength(2);
+    expect(await consentRows(first.uid)).toHaveLength(1);
   });
 
   it('구글 인증을 시작만 하고 돌아오지 않으면 기록하지 않는다', async () => {
@@ -440,9 +414,9 @@ describe('구글 연결의 약관 수락 기록', () => {
       process.env.CONSENT_EFFECTIVE_DATE = saved;
     }
     const rows = await consentRows(uid);
-    expect(rows).toHaveLength(4);
+    expect(rows).toHaveLength(2);
     expect(rows.filter(r => r.version === old[0].version)).toEqual(old);
-    expect(rows.filter(r => r.version === '2100-06-01').map(r => r.document)).toEqual(['privacy', 'terms']);
+    expect(rows.filter(r => r.version === '2100-06-01').map(r => r.document)).toEqual(['terms']);
   });
 
   it('마무리가 끝나지 않은 계정을 마저 마무리하는 재연결도 기록을 남긴다', async () => {
@@ -451,7 +425,7 @@ describe('구글 연결의 약관 수락 기록', () => {
     await env.client.query(`insert into auth.accounts (user_id, account_id, provider_id) values ($1, $2, 'google')`, [uid, who.sub]);
     expect(await consentRows(uid)).toEqual([]);
     expect((await link(cookie, who)).ok).toBe(true);
-    expect(await consentRows(uid)).toHaveLength(2);
+    expect(await consentRows(uid)).toHaveLength(1);
   });
 
   it('기록이 실패해도 연결은 성공으로 답하고 기록 없이 error 로그(스택 포함)를 남기며, 같은 구글을 다시 연결하면 기록이 남는다', async () => {
@@ -474,7 +448,7 @@ describe('구글 연결의 약관 수락 기록', () => {
     expect(error?.stack).toBeTruthy();
     expect(logged.flat().some(a => typeof a === 'string' && a.includes('수락 기록'))).toBe(true);
     expect((await link(done.cookie, who)).ok).toBe(true);
-    expect(await consentRows(uid)).toHaveLength(2);
+    expect(await consentRows(uid)).toHaveLength(1);
   });
 
   it('구글 로그인(연결이 아님)은 기록하지 않는다', async () => {

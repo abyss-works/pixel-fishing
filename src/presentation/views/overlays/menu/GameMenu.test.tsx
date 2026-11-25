@@ -23,7 +23,7 @@ vi.mock('../../../layouts/useMobileLayout', () => ({ useMobileLayout: () => layo
 import GameMenu from './GameMenu';
 
 const mail = (over: Partial<MailItem>): MailItem => ({
-  id: 1, title: '우편', body: '본문', gold: 0, createdAt: '2026-10-23T00:00:00.000Z', readAt: null, claimedAt: null, ...over,
+  id: 1, title: '우편', body: '본문', gold: 0, items: [], createdAt: '2026-10-23T00:00:00.000Z', readAt: null, claimedAt: null, ...over,
 });
 
 function wrap(node: ReactNode) {
@@ -239,7 +239,8 @@ describe('게임 메뉴', () => {
       expect(h.onMailbox).not.toHaveBeenCalled();
       expect(screen.getAllByRole('menuitem')).toHaveLength(5);
       fireEvent.mouseEnter(items[1].parentElement!);
-      expect(screen.getByRole('tooltip')).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
+      expect(screen.getByRole('tooltip')).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
+      expect(screen.getByRole('tooltip')).toHaveTextContent('태평양 항로는 조각배(1단계)부터 열려요.');
     });
 
     it('확인 실패 상태에서는 다섯 줄이 확인 실패 전용 문안으로 잠긴다', async () => {

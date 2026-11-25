@@ -97,13 +97,13 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
         <BoatPanel game={game} onClose={onClose} busy={busy}
           onBuy={() => run({ type: 'buyBoat' }, r => {
             const { boatName, openedSpots } = selectBoatPurchaseResult(r.state.boat);
-            onClose();
             sendNotice(setToast, {
               kind: 'facility.boatBought',
               text: r.state.boat === 1
                 ? `${josa(boatName, '을/를')} 구매했어요! 이제 포구에서 대양으로 나갈 수 있어요.`
                 : `${josa(boatName, '을/를')} 구매했어요! ${openedSpots.length > 0 ? `배가 더 빨라졌고 [${openedSpots.map(spot => spot.name).join(', ')}] 해역이 열렸어요.` : '배가 더 빠르고 튼튼해졌어요.'}`,
               toastText: r.state.boat === 1 || openedSpots.length > 0 ? `[${boatName}] 구매! 새 해역 개방` : `[${boatName}] 건조 완료!`,
+              replaceKey: 'boat-buy',
             });
           })} />
       )}

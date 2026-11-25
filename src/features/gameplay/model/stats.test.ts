@@ -13,27 +13,33 @@ const indexOf = (id: string) => SPOTS.findIndex(spot => spot.id === id);
 const rowOf = (g: GameState, id: string) => selectStatsSpotRows(g, 'sail').find(row => row.spot.id === id)!;
 
 describe('플레이 스탯 화면 데이터', () => {
-  it('현재 지역에서 요구 파워가 가장 높은 수역부터 시작한다', () => {
-    const index = selectInitialStatsSpotIndex('village');
-    const expected = SPOTS.map((spot, spotIndex) => ({ spot, spotIndex }))
-      .filter(({ spot }) => spot.region === 'village')
-      .sort((a, b) => (a.spot.powerReq ?? 0) - (b.spot.powerReq ?? 0))
-      .at(-1)!;
-
-    expect(index).toBe(expected.spotIndex);
+  it('마을 거점처럼 해역을 특정할 수 없으면 파워와 배 조건을 채운 해역 중 요구 파워가 가장 높은 곳을 고르고, 없으면 최저 요구 파워 해역으로 폴백한다', () => {
+    expect(selectInitialStatsSpotIndex('village', null, 'village', 10, 0)).toBe(indexOf('pond'));
+    expect(selectInitialStatsSpotIndex('village', null, 'village', 20, 0)).toBe(indexOf('river'));
+    expect(selectInitialStatsSpotIndex('village', null, 'village', 0, 0)).toBe(indexOf('pond'));
   });
 
-  it('사거리 안의 어군 수역이 있으면 그 수역부터 시작한다', () => {
-    expect(selectInitialStatsSpotIndex('world', 'deep')).toBe(indexOf('deep'));
-    expect(selectInitialStatsSpotIndex('world', null)).toBe(selectInitialStatsSpotIndex('world'));
+  it('사거리 안의 어군 수역이 있으면 파워나 배가 모자라도 그 수역부터 시작한다', () => {
+    expect(selectInitialStatsSpotIndex('world', 'deep', 'pacific', 10, 0)).toBe(indexOf('deep'));
+    expect(selectInitialStatsSpotIndex('world', null, null, 350, 9)).toBe(selectInitialStatsSpotIndex('world', null, undefined, 350, 9));
   });
 
-  it('바다에서 어군 사거리 밖이면 현재 구역의 해역 중 요구 파워가 가장 높은 곳부터 시작한다', () => {
-    expect(selectInitialStatsSpotIndex('world', null, 'indian')).toBe(indexOf('southindian'));
-    expect(selectInitialStatsSpotIndex('world', null, 'southindian')).toBe(indexOf('southindian'));
-    expect(selectInitialStatsSpotIndex('world', null, 'madagascar')).toBe(indexOf('comorodeep'));
-    expect(selectInitialStatsSpotIndex('world', null, 'pacific')).toBe(indexOf('deep'));
-    expect(selectInitialStatsSpotIndex('world', null, 'village')).toBe(selectInitialStatsSpotIndex('world', null, null));
+  it('바다에서 어군 사거리 밖이면 현재 구역(또는 바다 전체)에서 진입 가능한 최고 해역을 고르고, 없으면 최저 요구 파워 해역으로 폴백한다', () => {
+    expect(selectInitialStatsSpotIndex('world', null, 'indian', 135, 5)).toBe(indexOf('indian'));
+    expect(selectInitialStatsSpotIndex('world', null, 'indian', 200, 5)).toBe(indexOf('indian'));
+    expect(selectInitialStatsSpotIndex('world', null, 'indian', 150, 6)).toBe(indexOf('indian'));
+    expect(selectInitialStatsSpotIndex('world', null, 'indian', 160, 6)).toBe(indexOf('southindian'));
+    expect(selectInitialStatsSpotIndex('world', null, 'indian', 10, 0)).toBe(indexOf('indian'));
+
+    expect(selectInitialStatsSpotIndex('world', null, 'madagascar', 210, 7)).toBe(indexOf('comorodeep'));
+    expect(selectInitialStatsSpotIndex('world', null, 'madagascar', 185, 7)).toBe(indexOf('mozstrait'));
+    expect(selectInitialStatsSpotIndex('world', null, 'pacific', 55, 2)).toBe(indexOf('deep'));
+    expect(selectInitialStatsSpotIndex('world', null, 'pacific', 10, 0)).toBe(indexOf('sea'));
+
+    expect(selectInitialStatsSpotIndex('world', null, null, 315, 5)).toBe(indexOf('indian'));
+    expect(selectInitialStatsSpotIndex('world', null, null, 315, 9)).toBe(indexOf('bermuda'));
+    expect(selectInitialStatsSpotIndex('world', null, null, 10, 0)).toBe(indexOf('sea'));
+    expect(selectInitialStatsSpotIndex('world', null, 'village', 10, 0)).toBe(indexOf('sea'));
   });
 
   it('선택한 수역 기준 스탯과 파워 상태를 구성한다', () => {
@@ -201,14 +207,14 @@ describe('받는 보너스', () => {
       const g = game({ slots: { lunch: { id: 'cook-lunch-bundle', endsAt: at(3_600_000) }, bait: null } });
       const rows = slotRows(g);
       expect(rows.map(b => [b.category, text(b)])).toEqual([
-        ['fish', '입질 대기 −5%'], ['fish', '희귀 등급 가중치 +5%'], ['fish', '영웅 등급 가중치 +5%'], ['fish', '전설 등급 가중치 +5%'],
+        ['fish', '입질 대기 −5%'], ['fish', '희귀 어종 출현 +5%'], ['fish', '영웅 어종 출현 +5%'], ['fish', '전설 어종 출현 +5%'],
       ]);
       expect(rows.every(b => b.source.kind === 'slot' && b.source.label === '생선 탈리')).toBe(true);
     });
 
-    it('네임드 조우 가중은 결투 갈래다', () => {
+    it('네임드 만날 확률은 결투 갈래다', () => {
       const g = game({ slots: { lunch: { id: 'cook-lunch-named', endsAt: at(3_600_000) }, bait: null } });
-      expect(slotRows(g).map(b => [b.category, text(b)])).toEqual([['duel', '네임드 조우 가중치 +50%']]);
+      expect(slotRows(g).map(b => [b.category, text(b)])).toEqual([['duel', '네임드 만날 확률 +50%']]);
     });
 
     it('도시락은 방치로 낚을 때만, 미끼는 챔질해서 낚을 때만 붙는다고 표시한다', () => {
@@ -256,7 +262,7 @@ describe('받는 보너스', () => {
     const bonuses = selectActiveBonuses(g);
     expect(bonuses.filter(b => b.source.kind === 'achievement').map(b => b.source)).toEqual([
       { kind: 'achievement', label: '입질 대기', value: '−3.5%' },
-      { kind: 'achievement', label: '네임드 조우 가중치', value: '+3%' },
+      { kind: 'achievement', label: '네임드 만날 확률', value: '+3%' },
       { kind: 'achievement', label: '판매가 보너스', value: '+2%' },
     ]);
     const data = selectStatsModalData(g, 'sail', 0);
@@ -298,10 +304,10 @@ describe('받는 보너스', () => {
     });
     const rows = selectActiveBonuses(dual, null, now).filter(b => b.source.kind === 'slot');
     expect(rows.map(b => b.source.kind === 'slot' ? `${b.source.label}:${b.source.effect.label}` : '')).toEqual([
-      '롱페퍼 미끼(희귀):희귀 등급 가중치',
-      '롱페퍼 미끼(희귀):영웅 등급 가중치',
-      '롱페퍼 미끼(희귀):전설 등급 가중치',
-      '사프란 미끼(특수):돌연변이 폼 가중치',
+      '롱페퍼 미끼(희귀):희귀 어종 출현',
+      '롱페퍼 미끼(희귀):영웅 어종 출현',
+      '롱페퍼 미끼(희귀):전설 어종 출현',
+      '사프란 미끼(특수):돌연변이 출현',
     ]);
 
     const dup = game({
@@ -333,6 +339,19 @@ describe('받는 보너스', () => {
 
     // 날짜가 지난 운세는 보너스 내역에서 빠진다
     const stale = selectActiveBonuses(game({ fortune: { day: '2026-11-23', kind: 'gold', index: 5 } }), null, now);
+    expect(stale).toEqual([]);
+  });
+
+  it('오늘 쓴 물약은 낚시·결투·상점 갈래에 각각 +5%p 운 배율 보너스로 들어간다', () => {
+    const now = '2026-11-24T05:00:00.000Z';
+    const active = selectActiveBonuses(game({ potions: { 'luck-small': '2026-11-24' } }), null, now);
+    expect(active.map(b => [b.category, b.source.kind, b.source.kind === 'potion' ? b.source.target : null, b.source.kind === 'potion' ? b.source.bonus : null])).toEqual([
+      ['fish', 'potion', 'rarity', 0.05],
+      ['duel', 'potion', 'named', 0.05],
+      ['shop', 'potion', 'sell', 0.05],
+    ]);
+
+    const stale = selectActiveBonuses(game({ potions: { 'luck-small': '2026-11-23' } }), null, now);
     expect(stale).toEqual([]);
   });
 });

@@ -89,6 +89,15 @@ export function goldDebit(uid: string, gold: number): SQL {
   return sql`update public.saves_current set gold = gold - ${gold}, version = version + 1 where user_id = ${uid} and gold >= ${gold}`;
 }
 
+/**
+ * 길드 개인 자유 강화 초기화 전용 차감 문장 — 골드 차감·버전 증가와 함께 계정 누적 초기화 횟수를 원자적으로 +1 한다.
+ */
+export function guildEnhanceResetDebit(uid: string, cost: number): SQL {
+  return sql`update public.saves_current
+    set gold = gold - ${cost}, version = version + 1, guild_enhance_reset_count = guild_enhance_reset_count + 1
+    where user_id = ${uid} and gold >= ${cost}`;
+}
+
 /** 낙관 락 갱신 — 읽은 version 그대로일 때만 바뀐다. 핵심 쓰기의 첫 조각이며 다른 조각의 guard가 된다.
  *  gate가 있으면 그 질의가 행을 돌려줄 때만 바뀐다 */
 export function versionUpdate(uid: string, state: GameState, readVersion: number, nowISO: string, marks: CommitMarks = {}, gate: SQL | null = null): SQL {
@@ -192,6 +201,33 @@ export async function deleteUserSaves(db: Executor, uid: string): Promise<void> 
   await db.execute(sql`delete from public.records where user_id = ${uid}`);
   await db.execute(sql`delete from public.saves where user_id = ${uid}`);
   await db.execute(sql`delete from public.saves_current where user_id = ${uid}`);
+}
+
+/** 계정 초기 상태 되돌리기용 저장 상태 덮어쓰기와 개체·도감 삭제 조각을 돌려준다 */
+export function resetAccountSaveFragments(uid: string, initial: GameState, nowISO: string): {
+  upsertSave: SQL;
+  clears: SQL[];
+} {
+  const r = stateRow(initial);
+  return {
+    upsertSave: sql`insert into public.saves_current (user_id, version, gold, fame, boat, rod, data, updated_at, last_catch_at, active_client)
+      values (${uid}, 1, ${r.gold}, ${r.fame}, ${r.boat}, ${r.rod}, ${JSON.stringify(r.data)}::jsonb, ${at(nowISO)}, null, null)
+      on conflict (user_id) do update set
+        gold = excluded.gold,
+        fame = excluded.fame,
+        boat = excluded.boat,
+        rod = excluded.rod,
+        data = excluded.data,
+        version = saves_current.version + 1,
+        updated_at = excluded.updated_at,
+        last_catch_at = null,
+        active_client = null
+      returning version`,
+    clears: [
+      sql`delete from public.fish_instances where user_id = ${uid}`,
+      sql`delete from public.records where user_id = ${uid}`,
+    ],
+  };
 }
 
 /** 단일 트랜잭션 내부에서 조건 없이 실행하는 쓰기 조각용 가드 */

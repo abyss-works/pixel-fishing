@@ -29,6 +29,12 @@ describe('게스트 액션 판정 (guestActionVerdict)', () => {
     expect(guestActionVerdict({ type: 'dismissBaitRefund' })).toBe('ok');
   });
 
+  it('출항준비 쿠폰만 게스트에게 허용되고 다른 쿠폰은 계정 전용으로 거부한다', () => {
+    expect(guestActionVerdict({ type: 'redeemCoupon', code: '출항준비' })).toBe('ok');
+    expect(guestActionVerdict({ type: 'redeemCoupon', code: ' 출항준비 ' })).toBe('ok');
+    expect(guestActionVerdict({ type: 'redeemCoupon', code: 'x' })).toBe('account-only');
+  });
+
   it('바다로 나가는 이동과 마을 밖 낚시는 마을 전용 코드로 거부한다', () => {
     expect(guestActionVerdict(travelTo('region', 'world'))).toBe('guest-village-only');
     for (const base of ['harbor', 'manila', 'colombo', 'toamasina', 'walvisbay']) {
@@ -53,6 +59,7 @@ describe('게스트 액션 판정 (guestActionVerdict)', () => {
       { type: 'resolveChallenge', questId: 'q', success: true, hits: 1, misses: 0 },
       { type: 'redeemCoupon', code: 'x' }, { type: 'claimRelief', code: 'x' }, { type: 'claimMail', id: 1 },
       { type: 'exhibit', uid: 'u', slot: 0 }, { type: 'exchangeArtifact', artifact: 'a' }, { type: 'levelUpArtifact', artifact: 'a' },
+      { type: 'usePotion', id: 'luck-small' },
     ];
     for (const action of rejected) expect(guestActionVerdict(action), action.type).toBe('account-only');
   });

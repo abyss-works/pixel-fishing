@@ -5,8 +5,8 @@
 import type { SpotId } from '../content/spots';
 import { ZONES, zoneGroup, zoneOfSpot } from '../content/zones';
 import type { ZoneId } from '../content/zones';
-import type { RegionId, Rect, School } from './types';
-import { WORLD, WORLD_MAP } from './regions/world';
+import type { Point, RegionId, Rect, School } from './types';
+import { HARBORS, WORLD, WORLD_MAP } from './regions/world';
 import { V_SCHOOLS } from './regions/village';
 import { cellIndex, indexCenter, localCell } from './mask';
 import { canMove } from './engine';
@@ -20,6 +20,15 @@ export const SPECIAL_SCHOOLS = { min: 1, max: 2 } as const;
  *  밸런스 상수를 여기서 import하면 층서(rules → world)가 뒤집히므로 값을 두고 테스트가 대조한다.
  *  항구 앞(스폰·접안 트리거) 여유로도 같은 값을 쓴다 — 접안 직후 바로 캐스팅되지 않게. */
 export const SCHOOL_MIN_GAP = 100;
+
+/** 일반 해역 첫 어군의 대응 항구 출항점 기준 근접 반경(px) */
+export const HARBOR_NEARBY_RANGE = { min: SCHOOL_MIN_GAP, max: 220 } as const;
+
+const NEARBY_HARBOR: Partial<Record<SpotId, Point>> = {
+  sea: HARBORS.harbor.departure,
+  indian: HARBORS.colombo.departure,
+  mozstrait: HARBORS.toamasina.departure,
+};
 
 export function schoolsOf(region: RegionId, day: string): School[] {
   return region === 'village' ? V_SCHOOLS : worldSchools(day);
@@ -139,16 +148,34 @@ export function generateWorldSchools(day: string): School[] {
     const pool = zone ? [...(candidates.get(zone) ?? [])] : [];
     const rng = mulberry32(hashSeed(`${day}/${spot}`));
     const count = min + Math.floor(rng() * (max - min + 1));
+    const canPlace = (x: number, y: number): boolean =>
+      !placed.some(s => Math.hypot(s.x - x, s.y - y) < SCHOOL_MIN_GAP);
+    let n = 0;
+
+    // 일반 해역은 대응 항구 출항점 근접 링에서 자기 존 유효 후보 중 첫 어군 1개를 우선 고른다
+    const departure = NEARBY_HARBOR[spot];
+    if (departure && count > 0) {
+      const nearPool = pool.filter(idx => {
+        const { x, y } = indexCenter(WORLD_MAP, idx);
+        const d = Math.hypot(x - departure.x, y - departure.y);
+        return d >= HARBOR_NEARBY_RANGE.min && d <= HARBOR_NEARBY_RANGE.max && canPlace(x, y);
+      });
+      if (nearPool.length > 0) {
+        const idx = nearPool[Math.floor(rng() * nearPool.length)];
+        const { x, y } = indexCenter(WORLD_MAP, idx);
+        placed.push({ id: `${spot}-${++n}`, spot, x, y });
+      }
+    }
+
     // Fisher–Yates 셔플 뒤 앞에서부터 간격 조건을 만족하는 칸을 고른다
     for (let i = pool.length - 1; i > 0; i--) {
       const j = Math.floor(rng() * (i + 1));
       [pool[i], pool[j]] = [pool[j], pool[i]];
     }
-    let n = 0;
     for (const idx of pool) {
       if (n >= count) break;
       const { x, y } = indexCenter(WORLD_MAP, idx);
-      if (placed.some(s => Math.hypot(s.x - x, s.y - y) < SCHOOL_MIN_GAP)) continue;
+      if (!canPlace(x, y)) continue;
       placed.push({ id: `${spot}-${++n}`, spot, x, y });
     }
   }

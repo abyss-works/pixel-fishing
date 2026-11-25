@@ -7,6 +7,7 @@ import type { AccountLockState } from '../../../features/display/model/menuLock'
 import { useNow } from '../../../features/gameplay/service/useGameTime';
 import { SLOT_NAME, selectSlotChips } from '../../../features/kitchen/model/slots';
 import type { ActiveSlot, SlotChip, SlotKey } from '../../../features/kitchen/model/slots';
+import { GradeName } from '../fish/RarityTag';
 import Locked from '../Locked';
 import PixelIcon from '../PixelIcon';
 import type { GlyphId } from '../PixelIcon';
@@ -19,7 +20,7 @@ const SLOT_TONE: Record<SlotKey, string> = { lunch: 'text-gold', bait: 'text-acc
 
 function ActiveChip({ slot }: { slot: ActiveSlot }) {
   return (
-    <Tip wraps pressOpens className="flex" text={<RecipeEffectTip label={slot.label} effects={slot.rows} note={slot.note} />}>
+    <Tip wraps pressOpens className="flex" text={<RecipeEffectTip label={<GradeName name={slot.title.name} grade={slot.title.grade} />} effects={slot.rows} note={slot.note} />}>
       <HudChip tabIndex={0} role="group" aria-label={`${SLOT_NAME[slot.key]}, ${slot.label}, 남은 시간 ${slot.timeLeft}`}>
         <PixelIcon glyph={SLOT_GLYPH[slot.key]} size={12} className={SLOT_TONE[slot.key]} />
         <span className="pf-accent leading-none text-text">{slot.chipTime}</span>
@@ -30,7 +31,7 @@ function ActiveChip({ slot }: { slot: ActiveSlot }) {
 
 function LockedChip({ slotKey, lines }: { slotKey: SlotKey; lines: readonly string[] }) {
   return (
-    <Locked lines={lines} label={SLOT_NAME[slotKey]} className="flex">
+    <Locked lines={lines} title={SLOT_NAME[slotKey]} label={SLOT_NAME[slotKey]} className="flex">
       <HudChip>
         <PixelIcon glyph={SLOT_GLYPH[slotKey]} size={12} />
       </HudChip>

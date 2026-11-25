@@ -8,10 +8,9 @@ import { ENERGY_ITEM_IDS, RECIPES } from '../src/game/content/cooking.js';
 import { FISH } from '../src/game/content/fish.js';
 import { NAMED } from '../src/game/content/named.js';
 import { HATS } from '../src/game/content/wardrobe.js';
-import { LICENSE_GRADES, newState, zoneDexMissing } from '../src/game/rules/logic.js';
+import { newState, zoneDexMissing } from '../src/game/rules/logic.js';
 import { adminSessionHeaders, seedUser, startActionEnv, testUid, sessionHeaders, userToken } from './_dbTest/actionHarness.js';
 import type { ActionEnv } from './_dbTest/actionHarness.js';
-import { appAuth } from './_auth/session.js';
 
 const ADMIN = testUid(901);  // 관리자 명부에 있는 사용자
 const PLAYER = testUid(902); // 명부에 없는 일반 사용자
@@ -471,7 +470,7 @@ describe('조회 결과', () => {
   it('userState: 미접속(achievements={}) 계정도 records·네임드 토벌 근거로 claimable을 쓰기 없이 파생 집계한다', async () => {
     const UNBOOTED = testUid(908);
     const dex: Record<string, { normal: { count: number; maxSize: number; first: string } }> = {};
-    for (const id of zoneDexMissing(newState(), 'pacific', LICENSE_GRADES.basic)) {
+    for (const id of zoneDexMissing(newState(), 'pacific', ['common', 'rare', 'epic'])) {
       dex[id] = { normal: { count: 1, maxSize: 30, first: '2026-01-01' } };
     }
     await seedUser(env.client, { uid: UNBOOTED, email: 'unbooted@example.test', nickname: '미부팅', state: { dex, achievements: {} }, version: 4 });
@@ -605,7 +604,7 @@ describe('우편 보내기', () => {
 });
 
 describe('관리자 조치', () => {
-  const TARGET = testUid(906); // 제재·재설정 대상인 가입 사용자
+  const TARGET = testUid(906); // 제재·세션 종료 대상인 가입 사용자
   const NO_SAVE = testUid(907); // 저장 상태가 없는 가입 사용자
   const post = (q: string, body: unknown, token: string | null = userToken(ADMIN)) => callAdmin({ q }, token, 'POST', body);
   const restrictedOf = async (uid: string) =>
@@ -616,27 +615,21 @@ describe('관리자 조치', () => {
   beforeAll(async () => {
     await seedUser(env.client, { uid: TARGET, email: 'target@example.test', nickname: '대상', state: { gold: 5, fame: 1 } });
     await seedUser(env.client, { uid: NO_SAVE, email: 'nosave@example.test', nickname: '저장없음' });
-    // 재설정 링크는 비밀번호 수단이 있는 계정에만 만든다. NO_SAVE는 구글만 연결한 계정이다
-    await env.client.query(`insert into auth.accounts (user_id, account_id, provider_id, password) values ($1::uuid, $1::text, 'credential', 'hash')`, [TARGET]);
     await env.client.query(`insert into auth.accounts (user_id, account_id, provider_id) values ($1::uuid, 'no-save-google', 'google')`, [NO_SAVE]);
   });
 
   it('관리자가 아니면 403, 세션이 없으면 401이고 아무것도 바꾸지 않는다', async () => {
-    for (const [q, body] of [['restrict', { userId: TARGET, restricted: true }], ['resetLink', { userId: TARGET }]] as const) {
+    for (const [q, body] of [['restrict', { userId: TARGET, restricted: true }]] as const) {
       expect(await post(q, body, userToken(PLAYER)), q).toMatchObject({ status: 403, body: { error: 'forbidden' } });
       expect(await post(q, body, null), q).toMatchObject({ status: 401 });
     }
     expect(await restrictedOf(TARGET)).toBe(false);
-    expect((await env.client.query(`select 1 from auth.verifications where value = $1`, [TARGET])).rows).toEqual([]);
     expect(await adminEvents(TARGET)).toEqual([]);
   });
 
   it('형태가 틀린 요청은 400이다', async () => {
     for (const body of [null, {}, { userId: 'x', restricted: true }, { userId: TARGET }, { userId: TARGET, restricted: 'yes' }]) {
       expect(await post('restrict', body), JSON.stringify(body)).toMatchObject({ status: 400, body: { error: 'bad-restrict' } });
-    }
-    for (const body of [null, {}, { userId: 'not-a-uuid' }]) {
-      expect(await post('resetLink', body), JSON.stringify(body)).toMatchObject({ status: 400, body: { error: 'bad-user' } });
     }
   });
 
@@ -656,39 +649,9 @@ describe('관리자 조치', () => {
     expect(await adminEvents(NO_SAVE)).toEqual([]);
   });
 
-  it('익명 계정과 없는 계정에는 재설정 링크를 만들지 않는다', async () => {
-    expect(await post('resetLink', { userId: GUEST })).toMatchObject({ status: 409, body: { error: 'anonymous-user' } });
-    expect(await post('resetLink', { userId: testUid(998) })).toMatchObject({ status: 404, body: { error: 'no-user' } });
-    expect((await env.client.query(`select 1 from auth.verifications where value = $1`, [GUEST])).rows).toEqual([]);
-    expect(await adminEvents(GUEST)).toEqual([]);
-  });
-
-  it('비밀번호 수단이 없는 계정에는 재설정 링크를 만들지 않는다', async () => {
-    expect(await post('resetLink', { userId: NO_SAVE })).toMatchObject({ status: 409, body: { error: 'no-password' } });
-    expect((await env.client.query(`select 1 from auth.verifications where value = $1`, [NO_SAVE])).rows).toEqual([]);
-    expect(await adminEvents(NO_SAVE)).toEqual([]);
-  });
-
-  it('재설정 링크는 1시간 유효한 재설정 토큰으로 게임 착지 주소를 만들고, 그 토큰으로 비밀번호를 바꿀 수 있다', async () => {
-    const before = Date.now();
-    const res = await post('resetLink', { userId: TARGET });
-    expect(res.status).toBe(200);
-    const { url, expiresAt } = res.body as { url: string; expiresAt: string };
-    // 재설정 메일의 링크가 서버 콜백을 거쳐 도착하는 주소와 같다: 앱 주소의 루트에 token 질의
-    const token = /^http:\/\/localhost:3000\/\?token=([A-Za-z0-9]{24})$/.exec(url)?.[1];
-    expect(token, url).toBeDefined();
-    const ttl = Date.parse(expiresAt) - before;
-    expect(ttl).toBeGreaterThan(3590_000);
-    expect(ttl).toBeLessThan(3610_000);
-    const { rows } = await env.client.query(`select value, expires_at from auth.verifications where identifier = $1`, [`reset-password:${token}`]);
-    expect(rows).toHaveLength(1);
-    expect(rows[0].value).toBe(TARGET);
-    expect((rows[0].expires_at as Date).toISOString()).toBe(new Date(expiresAt).toISOString());
-    expect(await adminEvents(TARGET)).toContainEqual({ type: 'adminResetLink', payload: { adminId: ADMIN, expiresAt } });
-
-    await expect(appAuth().api.resetPassword({ body: { newPassword: 'new-pass-906', token: token! } })).resolves.toEqual({ status: true });
-    expect((await env.client.query(`select 1 from auth.verifications where identifier = $1`, [`reset-password:${token}`])).rows).toEqual([]);
-    expect((await env.client.query(`select 1 from auth.accounts where user_id = $1 and provider_id = 'credential'`, [TARGET])).rows).toHaveLength(1);
+  it('폐지된 resetLink 쓰기는 허용하지 않는다', async () => {
+    expect(await post('resetLink', { userId: TARGET })).toMatchObject({ status: 405, body: { error: 'method-not-allowed' } });
+    expect((await env.client.query(`select 1 from auth.verifications where value = $1`, [TARGET])).rows).toEqual([]);
   });
 
   it('편지 처리 표시는 처음 처리한 시각을 남기고 취소하면 비운다. 관리자만 바꾸고 형식이 틀리면 400, 없는 편지는 404다', async () => {
@@ -721,7 +684,7 @@ describe('관리자 조치', () => {
     expect(await post('revokeSessions', { userId: 'nope' })).toMatchObject({ status: 400, body: { error: 'bad-user' } });
     expect(await post('revokeSessions', { userId: testUid(998) })).toMatchObject({ status: 404, body: { error: 'no-user' } });
 
-    // 앞선 resetPassword 테스트가 기존 세션을 지우므로 대상 계정의 활성 세션을 명시적으로 심는다
+    // 대상 계정의 활성 세션을 명시적으로 심는다
     await env.client.query(
       `insert into auth.sessions (user_id, token, expires_at) values ($1, $2, '2100-01-01T00:00:00Z')
        on conflict (token) do nothing`,

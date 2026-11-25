@@ -45,7 +45,7 @@ describe('StatsModal(스탯창)', () => {
     fireEvent.click(screen.getByRole('button', { name: '배' }));
     expect(screen.getByRole('columnheader', { name: '필요한 배' })).toBeTruthy();
     const rows = screen.getAllByRole('row').slice(1);
-    expect(rows.some(row => row.textContent?.includes(`${boatNameOf(3)}(3단계)`))).toBe(true);
+    expect(rows.some(row => row.textContent?.includes(boatNameOf(3)))).toBe(true);
   });
 
   it('배 탭의 가방 용량은 길드 보너스와 래칫 초과 보유 시 툴팁을 연결한다', () => {
@@ -68,6 +68,27 @@ describe('StatsModal(스탯창)', () => {
     expect(screen.getByRole('tooltip')).toBeTruthy();
   });
 
+  it('스탯 창을 처음 열 때 현재 파워와 배로 진입 가능한 최고 해역을 고르고, 미달이면 최저 해역으로 폴백한다', () => {
+    render(<StatsModal game={game({ rod: 1, boat: 0 })} movement="walk" region="village" nickname="바다사나이" guild={null} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: '낚싯대' }));
+    expect(screen.getByRole('row', { name: /마을 연못/ })).toHaveAttribute('aria-selected', 'true');
+    cleanup();
+
+    render(<StatsModal game={game({ rod: 3, boat: 0 })} movement="walk" region="village" nickname="바다사나이" guild={null} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: '낚싯대' }));
+    expect(screen.getByRole('row', { name: /마을 강/ })).toHaveAttribute('aria-selected', 'true');
+    cleanup();
+
+    show(game({ rod: 1, boat: 0 }));
+    fireEvent.click(screen.getByRole('button', { name: '낚싯대' }));
+    expect(screen.getByRole('row', { name: /태평양 연안/ })).toHaveAttribute('aria-selected', 'true');
+    cleanup();
+
+    show(game({ rod: 31, boat: 6 }));
+    fireEvent.click(screen.getByRole('button', { name: '낚싯대' }));
+    expect(screen.getByRole('row', { name: /남인도양/ })).toHaveAttribute('aria-selected', 'true');
+  });
+
   it('낚싯대 탭에서 해역 행을 고르면 그 해역 기준의 수치를 보인다', () => {
     show(game({ boat: 9, rod: 7 }));
     fireEvent.click(screen.getByRole('button', { name: '낚싯대' }));
@@ -87,9 +108,12 @@ describe('StatsModal(스탯창)', () => {
     }));
     fireEvent.click(screen.getByRole('button', { name: '보너스' }));
 
+    const bonusCell = (text: string) => screen.getByText((_, el) => el?.tagName === 'TD' && el.textContent === text);
+
     expect(screen.getByText('항해 속도 +10.3%')).toBeTruthy();
     expect(screen.getByText('입질 대기 −10.3%')).toBeTruthy();
-    expect(screen.getByText('네임드 결투 가속 −10.3%')).toBeTruthy();
+    expect(bonusCell('네임드 결투 가속 −10.3%')).toBeTruthy();
+    expect(within(bonusCell('네임드 결투 가속 −10.3%')).getByText('네임드')).toHaveClass('text-epic');
     expect(screen.queryByText(/보유 유물 효과 \+3%/)).toBeNull();
 
     // 툴팁에 기본 효과, 보유 유물 효과, 적용 효과가 표시된다
@@ -123,9 +147,45 @@ describe('StatsModal(스탯창)', () => {
     const today = gameDayOf(new Date().toISOString());
     show(game({ fortune: { day: today, kind: 'fish', index: 5 } }));
     fireEvent.click(screen.getByRole('button', { name: '보너스' }));
-    const row = screen.getByText('희귀 이상 등급 가중치 +5%p').closest('tr')!;
+    const cell = screen.getByText((_, el) => el?.tagName === 'TD' && el.textContent === '희귀 이상 출현 확률 +5%p');
+    expect(within(cell).getByText('희귀')).toHaveAttribute('data-rarity', 'rare');
+    const row = cell.closest('tr')!;
     expect(within(row).getByText('오늘의 운세')).toBeTruthy();
-    fireEvent.mouseEnter(screen.getByText('희귀 이상 등급 가중치 +5%p'));
-    expect(screen.getByRole('tooltip')).toHaveTextContent('희귀 이상 등급 가중치에 운 배율이 적용돼요.');
+    fireEvent.mouseEnter(within(cell).getByText('희귀'));
+    const tip = screen.getByRole('tooltip');
+    expect(tip).toHaveTextContent('희귀 이상 출현 확률 행운 효과가 올라가요.');
+    expect(within(tip).getByText('희귀')).toHaveAttribute('data-rarity', 'rare');
+  });
+
+  it('보너스 탭은 활성 물약을 각 갈래에 +5%p 효과와 물약 아이콘·이름으로 보인다', () => {
+    const today = gameDayOf(new Date().toISOString());
+    show(game({ potions: { 'luck-small': today } }));
+    fireEvent.click(screen.getByRole('button', { name: '보너스' }));
+
+    const rarityRow = screen.getByText((_, el) => el?.tagName === 'TD' && el.textContent === '희귀 이상 출현 확률 +5%p').closest('tr')!;
+    expect(within(rarityRow).getByText('작은 행운 물약')).toBeTruthy();
+    expect(within(rarityRow).getByText('(특수)')).toHaveAttribute('data-rarity', 'special');
+    expect(rarityRow.querySelector('canvas')).not.toBeNull();
+
+    const namedCell = screen.getByText((_, el) => el?.tagName === 'TD' && el.textContent === '네임드 만날 확률 +5%p');
+    expect(namedCell).toBeTruthy();
+    expect(within(namedCell).getByText('네임드')).toHaveClass('text-epic');
+    expect(screen.getByText('판매가 +5%p')).toBeTruthy();
+
+    fireEvent.mouseEnter(screen.getByText('판매가 +5%p'));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('마시면 하루 동안 모든 행운 효과가 +5%p 올라요.');
+  });
+
+  it('닉네임 상태에 따라 불러오는 중, 미설정, 불러오기 실패를 구분해 보인다', () => {
+    const { rerender } = render(
+      <StatsModal game={game({})} movement="sail" region="world" nickname={null} profileStatus="loading" guild={null} onClose={vi.fn()} />,
+    );
+    expect(screen.getByText('불러오는 중')).toBeTruthy();
+
+    rerender(<StatsModal game={game({})} movement="sail" region="world" nickname={null} profileStatus="loaded" guild={null} onClose={vi.fn()} />);
+    expect(screen.getByText('미설정')).toBeTruthy();
+
+    rerender(<StatsModal game={game({})} movement="sail" region="world" nickname={null} profileStatus="error" guild={null} onClose={vi.fn()} />);
+    expect(screen.getByText('불러오기 실패')).toBeTruthy();
   });
 });

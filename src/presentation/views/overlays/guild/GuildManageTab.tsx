@@ -44,7 +44,7 @@ export default function GuildManageTab({ guild, busy, run, setToast, gold, onGol
   const copy = async (text: string, what: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      sendNotice(setToast, { kind: 'system.modalConfirmUtility', text: `${what}을 복사했어요.` });
+      sendNotice(setToast, { kind: 'system.modalConfirmUtility', text: `${what}${josa(what, '을/를')} 복사했어요.` });
     } catch {
       sendNotice(setToast, { kind: 'system.modalRejected', text: '복사하지 못했어요. 직접 옮겨 적어 주세요.', toastText: '복사하지 못했어요.' });
     }

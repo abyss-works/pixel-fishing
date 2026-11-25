@@ -20,26 +20,28 @@ import Note from '../../../../ui/Note';
 import ConfirmDialog from '../../../../ui/ConfirmDialog';
 import FishSprite from '../../../../ui/fish/FishSprite';
 import PixelIcon from '../../../../ui/PixelIcon';
+import Badge from '../../../../ui/Badge';
 import Button from '../../../../ui/Button';
 import IconButton from '../../../../ui/IconButton';
-import { LockLines } from '../../../../ui/Locked';
-import Tip from '../../../../ui/Tip';
+import Tip, { TipCard } from '../../../../ui/Tip';
 import SubTabs from '../../../../ui/SubTabs';
-import { RarityDot, RarityText } from '../../../../ui/fish/RarityTag';
+import ToggleChip from '../../../../ui/ToggleChip';
+import { HighlightRarityText, RarityDot, RarityText } from '../../../../ui/fish/RarityTag';
 import { groupInstances } from '../../../../../features/inventory/model/bagRows';
-import HelpHint from '../../../../ui/HelpHint';
 import InstanceLine, { UnsizedLine } from '../../../../ui/fish/InstanceLine';
 import BagCards from './BagCards';
 import { setBagLayout, setBagSection, toggleBagRow, useBagView } from './bagView';
 import type { BagSection } from './bagView';
 import { levelText, selectArtifactLevel } from '../../../../../features/inventory/model/artifactLevel';
-import { selectOwnedArtifacts } from '../../../../../features/inventory/model/selectors';
+import { selectBagArtifacts } from '../../../../../features/inventory/model/selectors';
 import { ARTIFACTS } from '../../../../../game/content/artifacts';
 import { artifactEffectLines, artifactSystemLines } from '../../../../ui/artifactEffects';
 import Inset from '../../../../ui/Inset';
+import ItemSprite from '../../../../ui/ItemSprite';
 import PressRow from '../../../../ui/PressRow';
 import ArtifactDetail from './ArtifactDetail';
 import ItemSection from './ItemSection';
+import { SidebarFooter } from '../../../../layouts/sidebar';
 
 /** 전시대 화면 노출 — 1차 전시대는 이번 배포에서 뺀다. 규칙·액션은 그대로다 */
 export const EXHIBIT_UI_ENABLED = false;
@@ -64,44 +66,73 @@ export const EXHIBIT_UI_ENABLED = false;
 // 마릿수 열은 행 너비의 15%를 더 받아 이름 바로 뒤에 왼쪽 정렬로 둔다(세 자리 마릿수가 잘리지 않게)
 const ROW = 'grid grid-cols-[10px_30px_1fr_calc(15%+24px)_80px_22px] items-center gap-1';
 
-/** 유물 섹션 — 보유 유물만 레지스트리 순으로. 소유가 곧 효과라 슬롯·장착은 없고, 줄을 누르면 유물 상세 창이 열려 강화한다.
- *  얻는 곳(수배판 유물 탭)은 미보유 목록 대신 안내 한 줄로 알린다 — 수배판이 교환 카드를 이미 보여 준다. */
+/** 유물 섹션 — 레지스트리 순 전체 유물을 보이고 보유 유물만 눌러 유물 상세 창을 연다.
+ *  보유 중만 보기 토글을 켜면 보유 유물만 걸러 보이며, 보유 유물이 없으면 수배판 교환 안내를 보인다. */
 function ArtifactSection({ game, dispatch, setToast }: {
   game: GameState;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
 }) {
-  const owned = selectOwnedArtifacts(game);
+  const entries = selectBagArtifacts(game);
+  const ownedCount = entries.filter(e => e.owned).length;
+  const [ownedOnly, setOwnedOnly] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
-  const opened = owned.find(a => a.id === openId);
+  const shown = ownedOnly ? entries.filter(e => e.owned) : entries;
+  const opened = entries.find(e => e.owned && e.artifact.id === openId)?.artifact;
   return (
     <div className="flex flex-col gap-1">
-      <PageTitle>
-        유물 <span className="pf-accent">{owned.length}/{ARTIFACTS.length}</span>
-      </PageTitle>
-      {owned.length === 0 ? (
-        <Note>아직 유물이 없어요.<br />네임드를 토벌하고 받은 교환 재료를 수배판의 유물 탭에서 유물로 바꿔 보세요.</Note>
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <PageTitle>
+          유물 <span className="pf-accent">{ownedCount}/{ARTIFACTS.length}</span>
+        </PageTitle>
+        <ToggleChip
+          size="sm"
+          pressed={ownedOnly}
+          emphasis={ownedOnly}
+          onClick={() => setOwnedOnly(v => !v)}
+        >
+          <PixelIcon glyph="check" size={10} />
+          보유 중만 보기
+        </ToggleChip>
+      </div>
+      {shown.length === 0 ? (
+        <Note>아직 유물이 없어요.<br /><HighlightRarityText text="네임드를 토벌하고 받은 교환 재료를 수배판의 유물 탭에서 유물로 바꿔 보세요." /></Note>
       ) : (
         <>
           <Inset divided>
-            {owned.map(a => {
+            {shown.map(({ artifact: a, owned, zoneName }) => {
+              if (!owned) {
+                return (
+                  <div key={a.id} className="flex items-center gap-2.5 px-2 py-1.5 text-sm text-text-dim bg-bg">
+                    <ItemSprite kind="artifact" id={a.id} preset="list" className="shrink-0 grayscale brightness-75" />
+                    <span className="truncate flex-1 min-w-0">{a.name}</span>
+                    <span className="flex items-baseline gap-2 text-xs shrink-0">
+                      <span>{zoneName}</span>
+                      <RarityText rarity={a.grade} />
+                    </span>
+                  </div>
+                );
+              }
               const { level, hasLevel } = selectArtifactLevel(game, a);
               const { bonus, penalty } = artifactSystemLines(a);
               return (
-                <PressRow key={a.id} onPress={() => setOpenId(a.id)} className="flex flex-col gap-0.5 px-2 py-1.5 text-sm">
-                  <span className="flex items-baseline justify-between gap-2">
-                    <b className="text-gold">{a.name}</b>
-                    <span className="flex items-baseline gap-2 text-xs">
-                      {hasLevel && <span className="pf-accent">{levelText(level)}</span>}
-                      <RarityText rarity={a.grade} />
+                <PressRow key={a.id} onPress={() => setOpenId(a.id)} className="flex items-start gap-2.5 px-2 py-1.5 text-sm">
+                  <ItemSprite kind="artifact" id={a.id} preset="list" className="shrink-0 mt-0.5" />
+                  <span className="flex flex-col gap-0.5 min-w-0 flex-1">
+                    <span className="flex items-baseline justify-between gap-2">
+                      <b className="text-gold">{a.name}</b>
+                      <span className="flex items-baseline gap-2 text-xs shrink-0">
+                        {hasLevel && <span className="pf-accent">{levelText(level)}</span>}
+                        <RarityText rarity={a.grade} />
+                      </span>
                     </span>
+                    {artifactEffectLines(a, level).map(line => (
+                      <span key={line} className="text-accent text-xs"><HighlightRarityText text={line} /></span>
+                    ))}
+                    {bonus && <span className="text-accent text-xs"><HighlightRarityText text={bonus} /></span>}
+                    {penalty && <span className="text-danger text-xs"><HighlightRarityText text={penalty} /></span>}
+                    <span className="text-text-dim italic text-xs">{a.lore}</span>
                   </span>
-                  {artifactEffectLines(a, level).map(line => (
-                    <span key={line} className="text-accent text-xs">{line}</span>
-                  ))}
-                  {bonus && <span className="text-accent text-xs">{bonus}</span>}
-                  {penalty && <span className="text-danger text-xs">{penalty}</span>}
-                  <span className="text-text-dim italic text-xs">{a.lore}</span>
                 </PressRow>
               );
             })}
@@ -241,7 +272,7 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
   };
 
   return (
-    <div className={cx('flex-1 flex flex-col', section === 'fish' && '-mb-3')}>
+    <div className="flex-1 flex flex-col">
       <SubTabs
         items={[
           { key: 'fish' as BagSection, label: '물고기' },
@@ -257,28 +288,62 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
         <ArtifactSection game={game} dispatch={dispatch} setToast={setToast} />
       ) : (
         <>
-          {/* 헤더 — 용량 표시(좌) + 목록/카드 보기 전환 아이콘(우측 끝) */}
+          {/* 헤더 — 용량 표시(좌) + 개체 표시 및 목록/카드 보기 전환(우측 끝) */}
           <div className="flex items-center justify-between gap-2 mb-1">
             <PageTitle>
               물고기 (<span className={cx(bagFull && 'text-danger')}>{fmtNum(bagCount)}</span>
               <span className="text-text-dim">/{fmtNum(cap)}</span>마리)
             </PageTitle>
-            <Tip wraps text={layout === 'list' ? '카드 보기' : '목록 보기'}>
-              <IconButton
-                glyph={layout === 'list' ? 'grid' : 'menu'}
-                size={14}
-                tone="dim"
-                className="p-1"
-                aria-label={layout === 'list' ? '카드 보기' : '목록 보기'}
-                onClick={() => setBagLayout(layout === 'list' ? 'cards' : 'list')}
-              />
-            </Tip>
+            <div className="flex items-center gap-1.5">
+              {layout === 'list' && (
+                <Tip
+                  text={(
+                    <TipCard
+                      title="개체 표시"
+                      rows={[
+                        {
+                          label: (
+                            <span className="inline-flex items-center gap-1">
+                              <PixelIcon glyph="crown" size={11} className="text-gold" />
+                              <span>금색 왕관</span>
+                            </span>
+                          ),
+                          value: '같은 형태 최대',
+                        },
+                        {
+                          label: (
+                            <span className="inline-flex items-center gap-1">
+                              <PixelIcon glyph="sparkle" size={11} className="text-epic" />
+                              <span>보라 반짝이</span>
+                            </span>
+                          ),
+                          value: '돌연변이 개체',
+                        },
+                      ]}
+                    />
+                  )}
+                  className="text-2xs text-text-dim"
+                >
+                  개체 표시
+                </Tip>
+              )}
+              <Tip wraps text={layout === 'list' ? '카드 보기' : '목록 보기'}>
+                <IconButton
+                  glyph={layout === 'list' ? 'grid' : 'menu'}
+                  size={14}
+                  tone="dim"
+                  className="p-1"
+                  aria-label={layout === 'list' ? '카드 보기' : '목록 보기'}
+                  onClick={() => setBagLayout(layout === 'list' ? 'cards' : 'list')}
+                />
+              </Tip>
+            </div>
           </div>
           {lockConfirm && (
             <ConfirmDialog layer="app" title="자동 잠금" confirmLabel="정리"
                            onConfirm={applyAutoLock} onCancel={() => setLockConfirm(false)}>
                 <p className="text-sm leading-relaxed">
-                  어종마다 일반과 돌연변이 각각 <b className="text-gold">가장 큰 물고기 한 마리만</b> 잠그고,
+                  어종마다 <HighlightRarityText text="일반과 돌연변이" /> 각각 <b className="text-gold">가장 큰 물고기 한 마리만</b> 잠그고,
                   나머지는 잠금이 풀려요.<br />
                   직접 잠근 물고기도 가장 크지 않으면 풀려요.
                 </p>
@@ -360,29 +425,44 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
                 {EXHIBIT_UI_ENABLED && <>별을 누르면 전시대에 올라가요.<br />전시 중에는 팔리지 않아요.<br /></>}
                 행 소계는 잠근 개체를 포함한 그 종의 값 합계예요.<br />
                 목록은 등급이 높은 순으로 정렬돼요.
-                <HelpHint text="펼친 개체 줄의 금색 왕관은 같은 형태에서 가장 큰 개체, 보라 반짝이는 돌연변이 개체예요." />
               </Note>
             </>
           )}
-          <div className="sticky bottom-0 z-1 -mx-3 px-3 pb-3 pt-2 mt-auto bg-surface border-t border-line-dim grid grid-cols-2 gap-2">
-            <Tip wraps className="flex min-w-0"
-                 text={bagCount === 0
-                   ? '가방에 물고기가 없어요.'
-                   : '어종마다 일반과 돌연변이 각각 가장 큰 물고기 한 마리만 잠그고, 나머지 잠금은 풀어요'}>
-              <Button size="sm" aria-label="자동 잠금" disabled={bagCount === 0} onClick={autoLock}
-                      className="w-full justify-center">
-                <PixelIcon glyph="lockOpen" size={12} />
-                자동 잠금
-              </Button>
-            </Tip>
-            <Tip wraps className="flex min-w-0"
-                 text={energyEntry.ok ? '가방의 물고기를 생명의 기운으로 바꿔요' : <LockLines lines={energyEntry.lines} />}>
-              <Button size="sm" disabled={!energyEntry.ok} onClick={() => onOpenEnergy?.()}
-                      className="w-full justify-center">
-                기운 얻기
-              </Button>
-            </Tip>
-          </div>
+          <SidebarFooter>
+            <div className="px-3 pb-3 pt-2 bg-surface border-t border-line-dim grid grid-cols-2 gap-2">
+              <Tip wraps className="flex min-w-0"
+                   text={(
+                     <TipCard
+                       title="자동 잠금"
+                       description={bagCount === 0
+                         ? '가방에 물고기가 없어요.'
+                         : '어종마다 일반과 돌연변이 각각 가장 큰 물고기 한 마리만 잠그고, 나머지 잠금은 풀어요.'}
+                     />
+                   )}>
+                <Button size="sm" aria-label="자동 잠금" disabled={bagCount === 0} onClick={autoLock}
+                        className="w-full justify-center">
+                  <PixelIcon glyph="lockOpen" size={12} />
+                  자동 잠금
+                </Button>
+              </Tip>
+              <Tip wraps className="flex min-w-0"
+                   text={energyEntry.ok
+                     ? <TipCard title="기운 얻기" description="가방의 물고기를 생명의 기운으로 바꿔요." />
+                     : (
+                       <TipCard
+                         title="기운 얻기"
+                         description="가방의 물고기를 생명의 기운으로 바꿔요."
+                         badge={<Badge tone="dim-plain" size="2xs">잠김</Badge>}
+                         status={{ tone: 'lock', lines: energyEntry.lines }}
+                       />
+                     )}>
+                <Button size="sm" disabled={!energyEntry.ok} onClick={() => onOpenEnergy?.()}
+                        className="w-full justify-center">
+                  기운 얻기
+                </Button>
+              </Tip>
+            </div>
+          </SidebarFooter>
         </>
       )}
     </div>

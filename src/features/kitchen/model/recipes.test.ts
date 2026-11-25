@@ -54,29 +54,29 @@ describe('효과 줄', () => {
     expect(recipeEffectLines(recipe('cook-lunch-bite'))).toEqual([{ label: '입질 대기', value: '−10%' }]);
   });
 
-  it('등급 가중은 가중되는 등급마다 한 줄이다', () => {
+  it('등급 출현은 올라가는 등급마다 한 줄이다', () => {
     expect(recipeEffectLines(recipe('cook-lunch-rare'))).toEqual([
-      { label: '희귀 등급 가중치', value: '+10%' },
-      { label: '영웅 등급 가중치', value: '+10%' },
-      { label: '전설 등급 가중치', value: '+10%' },
+      { label: '희귀 어종 출현', value: '+10%' },
+      { label: '영웅 어종 출현', value: '+10%' },
+      { label: '전설 어종 출현', value: '+10%' },
     ]);
-    expect(recipeEffectLines(recipe('cook-bait-legendary'))).toEqual([{ label: '전설 등급 가중치', value: '+80%' }]);
+    expect(recipeEffectLines(recipe('cook-bait-legendary'))).toEqual([{ label: '전설 어종 출현', value: '+80%' }]);
   });
 
-  it('묶음 도시락은 입질 대기와 등급 가중을 모두 낸다', () => {
+  it('묶음 도시락은 입질 대기와 등급 출현을 모두 낸다', () => {
     expect(recipeEffectLines(recipe('cook-lunch-bundle')).map(l => `${l.label} ${l.value}`)).toEqual([
-      '입질 대기 −5%', '희귀 등급 가중치 +5%', '영웅 등급 가중치 +5%', '전설 등급 가중치 +5%',
+      '입질 대기 −5%', '희귀 어종 출현 +5%', '영웅 어종 출현 +5%', '전설 어종 출현 +5%',
     ]);
   });
 
-  it('돌연변이와 네임드 조우 가중치는 비율로 낸다', () => {
-    expect(recipeEffectLines(recipe('cook-lunch-mutation'))).toEqual([{ label: '돌연변이 폼 가중치', value: '+50%' }]);
-    expect(recipeEffectLines(recipe('cook-lunch-named'))).toEqual([{ label: '네임드 조우 가중치', value: '+50%' }]);
-    expect(recipeEffectLines(recipe('cook-bait-mutation'))).toEqual([{ label: '돌연변이 폼 가중치', value: '+150%' }]);
+  it('돌연변이와 네임드 만날 확률은 비율로 낸다', () => {
+    expect(recipeEffectLines(recipe('cook-lunch-mutation'))).toEqual([{ label: '돌연변이 출현', value: '+50%' }]);
+    expect(recipeEffectLines(recipe('cook-lunch-named'))).toEqual([{ label: '네임드 만날 확률', value: '+50%' }]);
+    expect(recipeEffectLines(recipe('cook-bait-mutation'))).toEqual([{ label: '돌연변이 출현', value: '+150%' }]);
   });
 
-  it('밤 어종 출현 미끼는 밤 전용 어종 합류 한 줄이다', () => {
-    expect(recipeEffectLines(recipe('cook-bait-night'))).toEqual([{ label: '밤 어종 출현', value: '밤 전용 어종 합류' }]);
+  it('밤 어종 출현 미끼는 낮에도 출현 한 줄이다', () => {
+    expect(recipeEffectLines(recipe('cook-bait-night'))).toEqual([{ label: '밤 어종 출현', value: '낮에도 출현' }]);
   });
 });
 

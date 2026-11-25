@@ -15,15 +15,8 @@ export const accountLockState = (account: string | null, accountFailed: boolean)
 /** 계정 확인이 끝나 게스트로 확정됐는가. 확인 전이나 확인에 실패한 로그인 계정도 계정이 없어 보이므로, 되밀기처럼 오판이 해로운 곳은 이 판정을 쓴다 */
 export const isConfirmedGuest = (account: string | null, accountChecked: boolean): boolean => accountChecked && isGuest(account);
 
-/** 구글 인증 화면으로 이동해 지금 계정에 구글을 붙인다. 시작한 쪽(게스트 또는 이메일 계정)이 돌아온 뒤 알림을 고르는 근거다 */
-export const connectGoogle = (from: 'guest' | 'email') =>
-  api.auth.startGoogle('link', from === 'guest' ? GOOGLE_TAG.linkGuest : GOOGLE_TAG.linkEmail);
-
-export const signInAccount = (email: string, password: string) =>
-  api.auth.signIn(email, password);
-
-export const requestAccountPasswordReset = (email: string) =>
-  api.auth.requestPasswordReset(email);
+/** 구글 인증 화면으로 이동해 지금 게스트 계정에 구글을 붙인다 */
+export const connectGoogle = () => api.auth.startGoogle('link', GOOGLE_TAG.linkGuest);
 
 export const signOutAccount = () => api.auth.signOut();
 

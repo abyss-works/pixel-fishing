@@ -4,11 +4,11 @@ import { ZONES, zoneGroup, zoneOfSpot } from '../content/zones';
 import type { SpotId } from '../content/spots';
 import { cellDefAt } from './mask';
 import { canMove, zoneOf } from './engine';
-import { WORLD, WORLD_MAP } from './regions/world';
+import { HARBORS, WORLD, WORLD_MAP } from './regions/world';
 import { V_SCHOOLS } from './regions/village';
 import { CAST_RANGE } from '../rules/balance';
 import {
-  GENERAL_SCHOOLS, SCHOOL_MIN_GAP, SPECIAL_SCHOOLS, generateWorldSchools, schoolsOf,
+  GENERAL_SCHOOLS, HARBOR_NEARBY_RANGE, SCHOOL_MIN_GAP, SPECIAL_SCHOOLS, generateWorldSchools, schoolsOf,
 } from './schools';
 import type { School } from './types';
 
@@ -119,6 +119,31 @@ describe('generateWorldSchools — 자리 규칙', () => {
           const dx = Math.max(trig.rect.x - s.x, 0, s.x - (trig.rect.x + trig.rect.w));
           const dy = Math.max(trig.rect.y - s.y, 0, s.y - (trig.rect.y + trig.rect.h));
           expect(Math.hypot(dx, dy), `${day} ${s.id} ${trig.action}`).toBeGreaterThan(CAST_RANGE);
+        }
+      }
+    }
+  });
+
+  it('일반 해역은 대응 항구 출항점 기준 근접 반경(100~220px) 안에 자기 존 첫 어군을 최소 1개 배치한다', () => {
+    const pairs = [
+      { spot: 'sea', harbor: 'harbor', departure: HARBORS.harbor.departure },
+      { spot: 'indian', harbor: 'colombo', departure: HARBORS.colombo.departure },
+      { spot: 'mozstrait', harbor: 'toamasina', departure: HARBORS.toamasina.departure },
+    ] as const;
+    const testDays = [...DAYS, '2026-11-01', '2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05'];
+
+    expect(HARBOR_NEARBY_RANGE).toEqual({ min: SCHOOL_MIN_GAP, max: 220 });
+    for (const day of testDays) {
+      const groups = bySpot(generateWorldSchools(day));
+      for (const { spot, harbor, departure } of pairs) {
+        const list = groups.get(spot) ?? [];
+        const nearby = list.filter(s => {
+          const d = Math.hypot(s.x - departure.x, s.y - departure.y);
+          return d >= HARBOR_NEARBY_RANGE.min && d <= HARBOR_NEARBY_RANGE.max;
+        });
+        expect(nearby.length, `${day} ${harbor}→${spot}`).toBeGreaterThanOrEqual(1);
+        for (const s of nearby) {
+          expect(zoneOf(WORLD, s.x, s.y), `${day} ${s.id}`).toBe(zoneOfSpot(spot));
         }
       }
     }

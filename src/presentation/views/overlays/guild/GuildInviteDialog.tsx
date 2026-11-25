@@ -24,10 +24,13 @@ export default function GuildInviteDialog({ code, account, onAccount, onClose, s
   setToast: Notify;
 }) {
   const invite = useGuildInvite(code);
-  const { guild, loading, act } = useGuild(account !== null);
+  const { guild, loading: guildLoading, failed: guildFailed, act } = useGuild(account !== null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const ready = invite.settled && (account === null || !loading);
+  const inviteLoading = invite.loading ?? (!invite.settled && !invite.failed);
+  const asyncLoading = inviteLoading || (account !== null && guildLoading);
+  const asyncFailed = invite.failed || (account !== null && guildFailed);
+  const ready = !asyncLoading && !asyncFailed && invite.settled;
   const view = ready ? inviteDialogView(invite.preview, { account: account !== null, guild: guild?.name ?? null }, 'link') : null;
 
   const confirm = async () => {
@@ -49,7 +52,7 @@ export default function GuildInviteDialog({ code, account, onAccount, onClose, s
   };
 
   // 주 버튼은 카드의 확정 자리(하단 고정)에 둔다
-  const action = invite.failed || !view ? undefined
+  const action = asyncFailed || asyncLoading || !view ? undefined
     : view.state === 'bad' ? <Button full onClick={onClose}>확인</Button>
     : view.state === 'guest' ? <Button full variant="primary" onClick={onAccount}>계정 관리</Button>
     : invite.preview ? <GuildInviteAction view={view} busy={busy} onConfirm={() => { void confirm(); }} /> : undefined;
@@ -58,8 +61,9 @@ export default function GuildInviteDialog({ code, account, onAccount, onClose, s
     <Modal layer="stage" onClose={onClose}>
       <ModalCard title="길드 초대" onClose={onClose} confirm={action}>
         <div className="flex flex-col gap-3">
-          {invite.failed ? <Note tone="warn">초대를 불러오지 못했어요.<br />잠시 뒤 다시 열어 주세요.</Note>
-            : !view ? <Note>초대를 불러오는 중이에요.</Note>
+          {asyncFailed ? <Note tone="warn">길드 초대 정보를 열지 못했어요.</Note>
+            : asyncLoading ? <Note>초대를 불러오는 중이에요.</Note>
+            : !view ? <Note tone="warn">길드 초대 정보를 열지 못했어요.</Note>
             : view.state === 'bad' ? (
               <p className="m-0 text-sm text-text-dim whitespace-pre-line" role="status">{view.text}</p>
             ) : view.state === 'guest' ? (

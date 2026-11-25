@@ -17,7 +17,7 @@ vi.mock('../../../../platform/api', async importOriginal => {
 import MailboxModal from './MailboxModal';
 
 const mail = (over: Partial<MailItem>): MailItem => ({
-  id: 1, title: '우편', body: '본문', gold: 0, createdAt: '2026-10-23T00:00:00.000Z', readAt: null, claimedAt: null, ...over,
+  id: 1, title: '우편', body: '본문', gold: 0, items: [], createdAt: '2026-10-23T00:00:00.000Z', readAt: null, claimedAt: null, ...over,
 });
 
 function wrap(node: ReactNode) {
@@ -78,6 +78,61 @@ describe('우편함 창', () => {
     fireEvent.keyDown(screen.getByRole('row', { name: /새 소식/ }), { key: 'Enter' });
     expect(screen.getByRole('row', { name: /새 소식/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('본문')).toBeInTheDocument();
+  });
+
+  it('골드 없이 아이템만 첨부된 우편도 배지와 받기 버튼을 보이고 한 번에 받는다', async () => {
+    state.mails = [
+      mail({
+        id: 11,
+        title: '보상 선물',
+        body: '물약을 보내드려요.',
+        gold: 0,
+        items: [{ id: 'luck-small', qty: 2 }, { id: 'mat-abyss-lantern', qty: 1 }],
+      }),
+    ];
+    const dispatch = vi.fn(() => {
+      state.mails = state.mails!.map(m => ({ ...m, claimedAt: '2026-10-23T02:00:00.000Z' }));
+      return { status: 'ok', state: {}, result: { type: 'mail', gold: 0, items: { 'luck-small': 2, 'mat-abyss-lantern': 1 } } } as never;
+    });
+    const toast = vi.fn();
+    wrap(<MailboxModal dispatch={dispatch} setToast={toast} onClose={() => {}} />);
+    fireEvent.click(await screen.findByRole('row', { name: /보상 선물/ }));
+    expect(screen.getByText('작은 행운 물약')).toBeInTheDocument();
+    expect(screen.getByText('×2')).toBeInTheDocument();
+    expect(screen.getByText('돌이 된 이빨')).toBeInTheDocument();
+    expect(screen.getByText('×1')).toBeInTheDocument();
+    const claimBtns = screen.getAllByRole('button', { name: '받기' });
+    expect(claimBtns).toHaveLength(1);
+    fireEvent.click(claimBtns[0]);
+    expect(dispatch).toHaveBeenCalledWith({ type: 'claimMail', id: 11 });
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('우편에서 작은 행운 물약 2개, 돌이 된 이빨 1개를 받았어요!', 'gold'));
+    expect(screen.queryByRole('button', { name: '받기' })).not.toBeInTheDocument();
+    expect(screen.getByText('받음')).toBeInTheDocument();
+  });
+
+  it('골드와 아이템이 함께 첨부된 우편은 둘 다 보이고 받기 한 번으로 함께 받는다', async () => {
+    state.mails = [
+      mail({
+        id: 12,
+        title: '특별 보급',
+        body: '골드와 물약이에요.',
+        gold: 500,
+        items: [{ id: 'luck-small', qty: 2 }],
+      }),
+    ];
+    const dispatch = vi.fn(() => {
+      state.mails = state.mails!.map(m => ({ ...m, claimedAt: '2026-10-23T02:00:00.000Z' }));
+      return { status: 'ok', state: {}, result: { type: 'mail', gold: 500, items: { 'luck-small': 2 } } } as never;
+    });
+    const toast = vi.fn();
+    wrap(<MailboxModal dispatch={dispatch} setToast={toast} onClose={() => {}} />);
+    fireEvent.click(await screen.findByRole('row', { name: /특별 보급/ }));
+    expect(screen.getByText('500G')).toBeInTheDocument();
+    expect(screen.getByText('작은 행운 물약')).toBeInTheDocument();
+    const claimBtns = screen.getAllByRole('button', { name: '받기' });
+    expect(claimBtns).toHaveLength(1);
+    fireEvent.click(claimBtns[0]);
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('우편에서 500G, 작은 행운 물약 2개를 받았어요!', 'gold'));
   });
 
   it('우편이 없으면 빈 상태를 안내한다', async () => {

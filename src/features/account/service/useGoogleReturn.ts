@@ -4,6 +4,11 @@ import { sendNotice, toastToneFromLogTone } from '../../display/model/toastPolic
 import type { NoticeSink } from '../../display/model/toastPolicy';
 import type { GuestProgress } from '../model/accountRules';
 import { GOOGLE_TAG, googleOutcome, googleStartFailedText, overwriteCanceledText } from '../model/googleFlow';
+import {
+  activateSailReturnIfPending,
+  clearPendingSailReturn,
+  isSailReturnReady,
+} from './sailReturn';
 
 // 구글 인증에서 돌아온 직후 한 번 처리한다. 돌아온 주소는 읽는 즉시 지워져 새로고침이나 개발 모드의 효과 재실행에서 다시 읽히지 않는다.
 // 로그인과 연결이 끝난 세션은 이미 새 계정이라, 부팅이 그 세션으로 계정과 진행을 읽는다. 여기서는 결과를 알리는 일만 한다.
@@ -21,11 +26,24 @@ export function useGoogleReturn({ setToast, askOverwrite, showNotice, reopenAcco
   const [overwritePending, setOverwritePending] = useState(false);
 
   useEffect(() => {
-    if (!api.auth.isConfigured) return;
+    if (!api.auth.isConfigured) {
+      if (!isSailReturnReady()) clearPendingSailReturn();
+      return;
+    }
     const landing = api.auth.takeGoogleLanding();
-    if (!landing) return;
+    if (!landing) {
+      if (!isSailReturnReady()) clearPendingSailReturn();
+      return;
+    }
     const outcome = googleOutcome(landing);
-    if (!outcome) return;
+    if (!outcome) {
+      clearPendingSailReturn();
+      return;
+    }
+    if (outcome.kind !== 'overwrite') {
+      if (landing.error) clearPendingSailReturn();
+      else activateSailReturnIfPending();
+    }
     if (outcome.kind === 'none') return;
     if (outcome.kind === 'toast') {
       sendNotice(setToast, {
@@ -48,12 +66,14 @@ export function useGoogleReturn({ setToast, askOverwrite, showNotice, reopenAcco
     setOverwritePending(false);
     void (progress === 'nothing' ? Promise.resolve(true) : askOverwrite()).then(async proceed => {
       if (!proceed) {
+        clearPendingSailReturn();
         sendNotice(setToast, { kind: 'account.authMilestone', text: overwriteCanceledText, tone: 'accent', logTone: 'info' });
         reopenAccount();
         return;
       }
       const started = await api.auth.startGoogle('sign-in', GOOGLE_TAG.signIn).then(r => r.ok, () => false);
       if (!started) {
+        clearPendingSailReturn();
         sendNotice(setToast, {
           kind: 'account.authMilestone',
           text: googleStartFailedText,

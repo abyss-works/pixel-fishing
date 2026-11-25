@@ -3,10 +3,12 @@ import { describe, it, expect } from 'vitest';
 import { applyAction, LETTER_MAX } from './actions';
 import type { ActionDeps } from './actions';
 import { upgradeCost } from './balance';
-import { endedFirstCatch, newFirstCatch } from './firstCatch';
+import { endedFirstCatch, endedFirstCatchSpot, newFirstCatch } from './firstCatch';
 import { NO_GUILD_EFFECTS } from './guild';
-import { AUTO_ENERGY_BOAT, ENERGY_ITEM_IDS } from '../content/cooking';
-import { BOATS, COUPONS, FISH, WALK_BAG_CAP, newState } from './logic';
+import { AUTO_ENERGY_BOAT, ENERGY_ITEM_IDS, ENERGY_UNIT } from '../content/cooking';
+import { BOATS, COUPONS, FISH, ITEM_CAP, WALK_BAG_CAP, newState } from './logic';
+import { REJECT_TEXT } from './rules';
+import { gameDayOf } from './time';
 import type { FishInstance, FormId, GameState } from './logic';
 
 // newUid는 결정적 목 — 개체 uid가 매 실행 달라지면 재현성 검증이 불가능하다
@@ -24,28 +26,51 @@ const mkInst = (uid: string, fishId: string, form: FormId = 'normal', locked = f
   ({ uid, fishId, form, size: 20, caughtAt: null, spot: null, judgment: null, locked });
 
 describe('catch — 첫 경험 보장', () => {
-  it('5번째 캐치는 그 수역의 영웅 어종이고 도감·명성은 일반 캐치와 같다', () => {
+  it('보장 캐치는 미보유 어종을 일반 폼으로 확정하고 도감·명성은 일반 캐치와 같다', () => {
     const out = applyAction(
-      seed({ firstCatch: { ...newFirstCatch(), pond: { n: 4, legendAt: 12, epic: true, legend: true } } }),
-      { type: 'catch', spot: 'pond', judgment: 'normal' }, deps({ rng: () => 0.5 }),
+      seed({ firstCatch: { ...newFirstCatch(), pond: { n: 19, active: true } } }),
+      { type: 'catch', spot: 'pond', judgment: 'normal' }, deps({ rng: () => 0 }),
     );
     if (!out.ok) throw new Error('catch failed');
-    const caught = FISH.find(f => f.id === (out.result as { fishId: string }).fishId)!;
-    expect(caught).toMatchObject({ rarity: 'epic', spot: 'pond' });
-    expect(out.state.fame).toBe(40);
-    expect(out.state.firstCatch.pond).toMatchObject({ n: 5, epic: false, legend: true });
+    expect(out.result).toMatchObject({ type: 'catch', info: { form: 'normal' } });
+    expect(out.state.fame).toBeGreaterThan(0);
+    expect(out.state.firstCatch.pond).toEqual(endedFirstCatchSpot());
     expect(out.state.firstCatch.river).toEqual(newFirstCatch().river);
   });
 
-  it('첫 캐치에서 전설 번호를 정하고, 보장이 끝난 계정은 상태가 변하지 않는다', () => {
+  it('첫 캐치에서 카운트만 올리고, 보장이 끝난 계정은 상태가 변하지 않는다', () => {
     const first = applyAction(seed(), { type: 'catch', spot: 'pond', judgment: 'normal' }, deps({ rng: () => 0.5 }));
     if (!first.ok) throw new Error('catch failed');
-    expect(first.state.firstCatch.pond).toMatchObject({ n: 1, legendAt: 13 });
+    expect(first.state.firstCatch.pond).toEqual({ n: 1, active: true });
     expect(first.state.firstCatch.river).toEqual(newFirstCatch().river);
     const ended = endedFirstCatch();
     const out = applyAction(seed({ firstCatch: ended }), { type: 'catch', spot: 'pond', judgment: 'normal' }, deps());
     if (!out.ok) throw new Error('catch failed');
     expect(out.state.firstCatch).toEqual(ended);
+  });
+
+  it('연못 20회·강 30회 연속 캐치로 각 해역 6종 일반 폼이 100% 완성되고 보장이 종료된다', () => {
+    let st = seed();
+    for (let i = 0; i < 20; i++) {
+      const out = applyAction(st, { type: 'catch', spot: 'pond', judgment: 'normal' }, deps({ rng: () => 0 }));
+      if (!out.ok) throw new Error(out.error);
+      st = out.state;
+    }
+    expect(st.firstCatch.pond).toEqual(endedFirstCatchSpot());
+    expect(st.firstCatch.river).toEqual(newFirstCatch().river);
+    for (const f of FISH.filter(x => x.spot === 'pond')) {
+      expect(st.dex[f.id]?.normal?.count, f.id).toBeGreaterThan(0);
+    }
+
+    for (let i = 0; i < 30; i++) {
+      const out = applyAction(st, { type: 'catch', spot: 'river', judgment: 'normal' }, deps({ rng: () => 0 }));
+      if (!out.ok) throw new Error(out.error);
+      st = out.state;
+    }
+    expect(st.firstCatch.river).toEqual(endedFirstCatchSpot());
+    for (const f of FISH.filter(x => x.spot === 'river')) {
+      expect(st.dex[f.id]?.normal?.count, f.id).toBeGreaterThan(0);
+    }
   });
 });
 
@@ -382,10 +407,21 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
 describe('redeemCoupon', () => {
   const staticCode = Object.keys(COUPONS)[0];
 
-  it('정적 쿠폰 — 지급 + 재사용 거부', () => {
+  it('정적 쿠폰 — 골드·아이템 지급 + 결과·이벤트 포함 + 재사용 거부', () => {
     const out = applyAction(seed(), { type: 'redeemCoupon', code: ` ${staticCode} ` }, deps());
     if (!out.ok) throw new Error(out.error);
-    expect(out.state.gold).toBe(COUPONS[staticCode].gold);
+    expect(out.state.gold).toBe(300);
+    expect(out.state.items['luck-small']).toBe(1);
+    expect(out.result).toEqual({
+      type: 'coupon',
+      gold: 300,
+      items: [{ id: 'luck-small', qty: 1 }],
+      desc: COUPONS[staticCode].desc,
+    });
+    expect(out.events).toEqual([{
+      type: 'coupon',
+      payload: { code: staticCode, gold: 300, items: [{ id: 'luck-small', qty: 1 }] },
+    }]);
     const again = applyAction(out.state, { type: 'redeemCoupon', code: staticCode }, deps());
     expect(again).toEqual({ ok: false, error: 'coupon-used' });
   });
@@ -396,6 +432,8 @@ describe('redeemCoupon', () => {
       deps({ dynamicCoupon: dyn }));
     if (!out.ok) throw new Error(out.error);
     expect(out.state.gold).toBe(77);
+    expect(out.result).toEqual({ type: 'coupon', gold: 77, desc: '이벤트' });
+    expect(out.events).toEqual([{ type: 'coupon', payload: { code: '이벤트코드', gold: 77 } }]);
     expect(applyAction(seed(), { type: 'redeemCoupon', code: '이벤트코드' }, deps()))
       .toEqual({ ok: false, error: 'coupon-invalid' });
   });
@@ -563,6 +601,86 @@ describe('claimMail — 우편 골드 받기', () => {
     expect(out.state.gold).toBe(6_310_483);
     expect(out.result).toEqual({ type: 'mail', gold: 6_309_483 });
     expect(out.events).toEqual([{ type: 'claimMail', payload: { mailId: 7, gold: 6_309_483 } }]);
+  });
+
+  it('골드 0에 아이템만 첨부된 우편도 정상 수령하고 생명의 기운(1개=10단위) 및 ITEM_CAP을 지킨다', () => {
+    const attachments = [
+      { id: 'luck-small', qty: 2 },
+      { id: ENERGY_ITEM_IDS.rare, qty: 3 },
+      { id: 'mat-abyss-lantern', qty: 1 },
+    ];
+    const out = applyAction(
+      seed({ gold: 500 }),
+      { type: 'claimMail', id: 9 },
+      deps({ mail: { id: 9, gold: 0, items: attachments } }),
+    );
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.gold).toBe(500);
+    expect(out.state.items['luck-small']).toBe(2);
+    expect(out.state.items[ENERGY_ITEM_IDS.rare]).toBe(3 * ENERGY_UNIT);
+    expect(out.state.items['mat-abyss-lantern']).toBe(1);
+    expect(out.result).toEqual({ type: 'mail', gold: 0, items: attachments });
+    expect(out.events).toEqual([{ type: 'claimMail', payload: { mailId: 9, gold: 0, items: attachments } }]);
+
+    // 상한(ITEM_CAP, 기운은 ITEM_CAP * ENERGY_UNIT)을 넘지 않도록 클램프한다
+    const nearCap = seed({
+      items: { 'luck-small': ITEM_CAP - 1, [ENERGY_ITEM_IDS.common]: ITEM_CAP * ENERGY_UNIT - 5 },
+    });
+    const capped = applyAction(nearCap, { type: 'claimMail', id: 10 }, deps({
+      mail: {
+        id: 10,
+        gold: 0,
+        items: [{ id: 'luck-small', qty: 5 }, { id: ENERGY_ITEM_IDS.common, qty: 2 }],
+      },
+    }));
+    if (!capped.ok) throw new Error(capped.error);
+    expect(capped.state.items['luck-small']).toBe(ITEM_CAP);
+    expect(capped.state.items[ENERGY_ITEM_IDS.common]).toBe(ITEM_CAP * ENERGY_UNIT);
+  });
+});
+
+describe('usePotion — 물약 사용', () => {
+  const now = '2026-08-22T03:00:00.000Z';
+  const day = gameDayOf(now);
+  const nextNow = '2026-08-22T19:00:00.000Z'; // KST 다음날 04:00
+  const nextDay = gameDayOf(nextNow);
+
+  it('게스트, 모르는 id, 미보유, 오늘 이미 적용 중이면 거부한다', () => {
+    expect(applyAction(seed({ items: { 'luck-small': 1 } }), { type: 'usePotion', id: 'luck-small' }, deps({ guest: true })))
+      .toEqual({ ok: false, error: 'account-only' });
+    expect(applyAction(seed({ items: { 'luck-small': 1 } }), { type: 'usePotion', id: 'nope' }, deps()))
+      .toEqual({ ok: false, error: 'bad-request' });
+    expect(applyAction(seed(), { type: 'usePotion', id: 'luck-small' }, deps()))
+      .toEqual({ ok: false, error: 'potion-not-owned' });
+    expect(applyAction(
+      seed({ items: { 'luck-small': 2 }, potions: { 'luck-small': day } }),
+      { type: 'usePotion', id: 'luck-small' },
+      deps({ now }),
+    )).toEqual({ ok: false, error: 'potion-already-active' });
+    expect(REJECT_TEXT['potion-already-active']).toMatch(/이미.*물약/);
+  });
+
+  it('보유한 물약을 사용하면 1개 차감하고 오늘 게임 날짜를 기록한다', () => {
+    const out = applyAction(
+      seed({ items: { 'luck-small': 2 } }),
+      { type: 'usePotion', id: 'luck-small' },
+      deps({ now }),
+    );
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.items['luck-small']).toBe(1);
+    expect(out.state.potions).toEqual({ 'luck-small': day });
+    expect(out.result).toEqual({ type: 'none' });
+    expect(out.events).toEqual([{ type: 'usePotion', payload: { id: 'luck-small', day } }]);
+
+    // 마지막 1개를 쓰고, KST 04:00 이후 다음 게임 날짜에는 다시 사용할 수 있다
+    const nextDayOut = applyAction(
+      out.state,
+      { type: 'usePotion', id: 'luck-small' },
+      deps({ now: nextNow }),
+    );
+    if (!nextDayOut.ok) throw new Error(nextDayOut.error);
+    expect(nextDayOut.state.items['luck-small']).toBeUndefined();
+    expect(nextDayOut.state.potions).toEqual({ 'luck-small': nextDay });
   });
 });
 

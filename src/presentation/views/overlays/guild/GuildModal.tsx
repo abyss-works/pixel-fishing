@@ -72,20 +72,25 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
   };
 
   const inGuild = Boolean(guild && you);
-  const body = guild && you
+  const body = loading
     ? (
-      <GuildView guild={guild} me={you} busy={busy} run={run}
-                 onResetEnhancements={() => runOp({ op: 'resetEnhancements', guildId: guild.id })}
-                 setToast={setToast} ask={setConfirm} gold={gold} artifacts={artifacts} onGoldChanged={onGoldChanged} />
+      <div className="flex h-40 items-center justify-center">
+        <Note>길드 정보를 불러오는 중이에요.</Note>
+      </div>
     )
-    : guild === null && !loading && !failed
-      ? <NoGuild busy={busy} run={run} join={join} request={request} setToast={setToast} />
-      : (
+    : failed || (guild !== null && !you)
+      ? (
         <div className="flex h-40 items-center justify-center">
-          {failed ? <Note tone="warn">길드 정보를 불러오지 못했어요.<br />잠시 뒤 다시 열어 주세요.</Note>
-            : <Note>길드 정보를 불러오는 중이에요.</Note>}
+          <Note tone="warn">길드 정보를 열지 못했어요.</Note>
         </div>
-      );
+      )
+      : guild && you
+        ? (
+          <GuildView guild={guild} me={you} busy={busy} run={run}
+                     onResetEnhancements={() => runOp({ op: 'resetEnhancements', guildId: guild.id })}
+                     setToast={setToast} ask={setConfirm} gold={gold} artifacts={artifacts} onGoldChanged={onGoldChanged} />
+        )
+        : <NoGuild busy={busy} run={run} join={join} request={request} setToast={setToast} />;
 
   return (
     // 길드가 있을 때의 창 높이: 가장 긴 탭(길드 스킬)이 스크롤 없이 들어가는 560px로 고정하고, 스테이지가 그보다 낮으면 위아래 16px을 남긴다.

@@ -55,7 +55,7 @@ export default function RodPanel({ game, onUpgrade, onClose, busy }: {
             rows={[
               { label: <Tip text="물고기가 미끼를 물기까지 기다리는 시간이에요.">입질 대기</Tip>,
                 value: bite(current), next: bite(next), delta: secDelta(next.biteMax - current.biteMax) },
-              { label: <Tip text={<>해역 요구 파워를 넘을수록 GOOD과 PERFECT 영역이 넓어져요.<br />해역별 충족은 스탯 창에서 볼 수 있어요.</>}>파워</Tip>,
+              { label: <Tip text={<>해역 기준 파워를 넘을수록 GOOD과 PERFECT 영역이 넓어져요.<br />해역별 충족은 스탯 창에서 볼 수 있어요.</>}>파워</Tip>,
                 value: fmtNum(power.current), next: fmtNum(power.next), delta: `+${fmtNum(power.next - power.current)}` },
             ]} />
       </>} />

@@ -64,6 +64,23 @@ describe('toastPolicy — 이벤트 분류 및 미러링 결정', () => {
     }
   });
 
+  it('dex.spotCompleted는 Tier A 골드 톤으로 모달이 닫혀 있어도 즉시 토스트로 미러링된다', () => {
+    expect(TOAST_POLICY['dex.spotCompleted']).toMatchObject({ tier: 'A', defaultTone: 'gold', priority: 1 });
+    const history = createMirrorHistory();
+    const d = decideToastMirror(
+      { kind: 'dex.spotCompleted', text: '마을 연못 일반 어종 도감을 완성했어요!', toastText: '마을 연못 도감 완성!' },
+      baseEnv({ hasOpenWindows: false, folded: false }),
+      1000,
+      history,
+    );
+    expect(d.action).toBe('emit');
+    if (d.action === 'emit') {
+      expect(d.toast.tone).toBe('gold');
+      expect(d.toast.text).toBe('마을 연못 도감 완성!');
+      expect(logToneOf({ kind: 'dex.spotCompleted', text: 'x' })).toBe('gold');
+    }
+  });
+
   it('2초 이내 동일 kind+text 재발행은 중복 억제되고, 2초가 지나면 다시 허용된다', () => {
     const history = createMirrorHistory();
     const env = baseEnv();

@@ -6,7 +6,7 @@ describe('조우 알림 문구', () => {
     const text = encounterAlertText('pacific-named-megalodon')!;
     expect(text.title).toBe('흔적 발견');
     expect(text.body).toContain('태평양');
-    expect(text.body).toContain('한국 시간 새벽 4시까지');
+    expect(text.body).toContain('다음 날 새벽 4시까지');
   });
 
   it('네임드 이름은 알림에 드러내지 않는다 — 이름은 승부에서 이긴 뒤에 공개된다', () => {

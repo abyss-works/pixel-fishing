@@ -17,6 +17,7 @@ export const savesCurrent = pgTable('saves_current', {
   restricted: boolean('restricted').notNull().default(false),
   lastCatchAt: at('last_catch_at'),
   activeClient: text('active_client'),
+  guildEnhanceResetCount: integer('guild_enhance_reset_count').notNull().default(0),
 });
 
 export const fishInstances = pgTable('fish_instances', {
@@ -113,6 +114,7 @@ export const mails = pgTable('mails', {
   title: text('title').notNull(),
   body: text('body').notNull(),
   gold: bigint('gold', { mode: 'number' }).notNull().default(0),
+  items: jsonb('items').$type<{ id: string; qty: number }[]>().notNull().default([]),
   createdAt: at('created_at').notNull().defaultNow(),
   readAt: at('read_at'),
   claimedAt: at('claimed_at'),

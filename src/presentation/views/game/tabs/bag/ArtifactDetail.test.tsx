@@ -24,8 +24,12 @@ function open(g: GameState, artifact = COMPASS) {
 }
 
 describe('ArtifactDetail - 상태별 화면', () => {
-  it('강화 가능 - 비교 표에 현재와 강화 후 열, 잔액 칸에 보유에서 쓴 뒤 값, 켜진 강화 버튼', () => {
+  it('강화 가능 - 머리에 hero(48px) 유물 스프라이트, 비교 표에 현재와 강화 후 열, 잔액 칸에 보유에서 쓴 뒤 값, 켜진 강화 버튼', () => {
     open(owning(1, 3));
+    const dialog = screen.getByRole('dialog');
+    const headerCanvas = dialog.querySelector('header canvas');
+    expect(headerCanvas).toHaveAttribute('width', '48');
+    expect(headerCanvas).toHaveAttribute('height', '48');
     expect(screen.getByText('현재(Lv.1)')).toBeInTheDocument();
     expect(screen.getByText('강화 후(Lv.2)')).toBeInTheDocument();
     expect(screen.getByText('항해 속도')).toBeInTheDocument();
@@ -35,14 +39,21 @@ describe('ArtifactDetail - 상태별 화면', () => {
     expect(cost.getByText('필요한 재료')).toBeVisible();
     expect(cost.getByText(COMPASS.materialName)).toBeInTheDocument();
     expect(cost.getByText('3')).toBeInTheDocument();
-    expect(cost.getByText('2')).not.toHaveClass('text-danger');
+    expect(cost.getByText('2')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '강화' })).toBeEnabled();
   });
 
-  it('재료 부족 - 강화 버튼이 꺼지고 강화 뒤 값이 위험색', () => {
-    open(owning(3, 2));
-    expect(screen.getByRole('button', { name: '강화' })).toBeDisabled();
-    expect(screen.getByText('-2')).toHaveClass('text-danger');
+  it('재료 부족 - 강화 버튼이 꺼지고 부족 안내 툴팁과 음수 잔액이 보인다', () => {
+    const { dispatch } = open(owning(3, 2));
+    const btn = screen.getByRole('button', { name: '강화' });
+    expect(btn).toBeDisabled();
+    fireEvent.click(btn);
+    expect(dispatch).not.toHaveBeenCalled();
+    fireEvent.mouseEnter(btn.parentElement!);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('교환 재료가 부족해요.');
+    const cost = within(screen.getByRole('group', { name: '필요한 재료' }));
+    expect(cost.getByText('2')).toBeInTheDocument();
+    expect(cost.getByText('-2')).toBeInTheDocument();
     expect(screen.getByText('강화 후(Lv.4)')).toBeInTheDocument();
   });
 

@@ -7,7 +7,7 @@ import { selectStatsSummary } from '../../../../features/gameplay/model/stats';
 import Button from '../../../ui/Button';
 import { cx } from '../../../ui/cx';
 import FishSprite from '../../../ui/fish/FishSprite';
-import { RARITY_CARD, RarityText } from '../../../ui/fish/RarityTag';
+import { HighlightRarityText, RARITY_CARD, RarityText } from '../../../ui/fish/RarityTag';
 import { fmtCompact, fmtNum, fmtSize } from '../../../ui/format';
 import KpiTile from '../../../ui/KpiTile';
 import Modal from '../../../ui/Modal';
@@ -80,7 +80,7 @@ export default function AwayReportModal({ report, game, onClose, onOpenBag }: {
         <section aria-label="등급">
           <SectionTitle className="flex justify-between items-baseline">
             <span>등급</span>
-            <span className="text-xs text-text-dim">돌연변이 {fmtNum(report.variants.count)}마리 ({pct(report.variants.share)})</span>
+            <span className="text-xs text-text-dim"><HighlightRarityText text="돌연변이" /> {fmtNum(report.variants.count)}마리 ({pct(report.variants.share)})</span>
           </SectionTitle>
           <div className="flex h-2.5 border border-line" aria-hidden>
             {report.grades.map(g => g.count > 0 && (

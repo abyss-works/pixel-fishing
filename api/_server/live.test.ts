@@ -118,6 +118,29 @@ describe('실시간 채널 서버', () => {
     expect(await rejected(url, 'u1', 'https://evil.test')).toBe(403);
   });
 
+  it('진입 게이트(gate)가 401·403을 돌려주면 인증 전에 업그레이드를 거부하고, null이면 통과시킨다', async () => {
+    const authenticate = vi.fn(async (req) => {
+      const uid = req.headers.cookie;
+      return uid ? { uid, nick: `n-${uid}`, boat: 2, guest: false } : null;
+    });
+    const { url, live } = await start({
+      authenticate,
+      gate: async (req) => {
+        if (req.headers.cookie === 'no-admin') return 401;
+        if (req.headers.cookie === 'non-admin') return 403;
+        return null;
+      },
+    });
+    expect(await rejected(url, 'no-admin')).toBe(401);
+    expect(await rejected(url, 'non-admin')).toBe(403);
+    expect(authenticate).not.toHaveBeenCalled();
+
+    const ok = connect(url, 'u1');
+    await ok.next();
+    expect(authenticate).toHaveBeenCalledTimes(1);
+    expect(live.online().map(o => o.uid)).toEqual(['u1']);
+  });
+
   it('접속을 허용하지 않는 계정은 403으로 거부하고 허용하는 계정은 받는다', async () => {
     const { url, live } = await start({ admit: async (user) => user.uid !== 'held' });
     expect(await rejected(url, 'held')).toBe(403);

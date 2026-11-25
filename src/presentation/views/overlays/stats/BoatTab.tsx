@@ -25,12 +25,11 @@ export default function BoatTab({ game, summary, row, zones }: {
       <div className="flex items-center gap-3 min-h-12">
         {game.boat > 0 && <BoatSprite tier={game.boat} preset="hero" />}
         <b className="pf-accent text-base font-normal text-gold truncate">{boatNameOf(game.boat, '배 없음')}</b>
-        {game.boat > 0 && <span className="text-sm text-text-dim">({game.boat}단계)</span>}
       </div>
       <Inset className="px-3 py-2.5 flex flex-col gap-1.5">
         <ul className="flex flex-col text-xs">
-          <BoatStatLine label="이동 속도"><StatValue stat={row.data.speed} unit="" digits={0} /></BoatStatLine>
-          <BoatStatLine label="가방 용량"><StatValue stat={bag.capStat} unit="마리" digits={0} /></BoatStatLine>
+          <BoatStatLine label="이동 속도"><StatValue label="이동 속도" stat={row.data.speed} unit="" digits={0} /></BoatStatLine>
+          <BoatStatLine label="가방 용량"><StatValue label="가방 용량" stat={bag.capStat} unit="마리" digits={0} /></BoatStatLine>
         </ul>
         <div className="flex items-center gap-2.5 text-xs">
           <span className="text-text-dim shrink-0">가방</span>
@@ -62,7 +61,7 @@ export default function BoatTab({ game, summary, row, zones }: {
                   <td className={cx(cell, 'truncate')}>{z.name}</td>
                   <td className={cx(cell, 'px-2 text-right pf-accent text-xs')}>{z.open}/{z.total}</td>
                   <td className={cx(cell, 'pl-2 text-right text-xs truncate', !closed && 'text-text-dim')}>
-                    {z.nextBoat !== null && `${boatNameOf(z.nextBoat)}(${z.nextBoat}단계)`}
+                    {z.nextBoat !== null && boatNameOf(z.nextBoat)}
                   </td>
                 </tr>
               );

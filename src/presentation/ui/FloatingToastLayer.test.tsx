@@ -187,7 +187,7 @@ describe('useMessageLog — 시스템 로그 정본 +α 미러링 라우터', ()
       sendNotice(result.current.setToast, {
         kind: 'achievement.unlockable',
         text: '“업적 B” 업적을 받을 수 있어요.',
-        toastText: '업적 "업적 B" 달성 가능!',
+        toastText: '업적 “업적 B” 보상 도착!',
       });
     });
     // 150ms 배치 창 완료 전에는 대기 중
@@ -197,7 +197,7 @@ describe('useMessageLog — 시스템 로그 정본 +α 미러링 라우터', ()
     act(() => {
       vi.advanceTimersByTime(150);
     });
-    expect(result.current.toasts.map(t => t.text)).toEqual(['2개 업적 달성 가능!', '낚싯대 Lv.3 강화 완료!']);
+    expect(result.current.toasts.map(t => t.text)).toEqual(['업적 보상 2개 도착!', '낚싯대 Lv.3 강화 완료!']);
   });
 
   it('로딩 중 보류된 Tier A 알림은 로딩 해제 시 노출되고, 차단 모달 시에는 억제·초기화된다', () => {
@@ -207,7 +207,7 @@ describe('useMessageLog — 시스템 로그 정본 +α 미러링 라우터', ()
       sendNotice(result.current.setToast, {
         kind: 'achievement.unlockable',
         text: '2개 업적을 받을 수 있어요.',
-        toastText: '2개 업적 달성 가능!',
+        toastText: '업적 보상 2개 도착!',
       });
     });
     expect(result.current.log).toHaveLength(1);
@@ -218,7 +218,7 @@ describe('useMessageLog — 시스템 로그 정본 +α 미러링 라우터', ()
       result.current.setMirrorEnv({ loading: false });
       vi.advanceTimersByTime(150);
     });
-    expect(result.current.toasts.map(t => t.text)).toEqual(['2개 업적 달성 가능!']);
+    expect(result.current.toasts.map(t => t.text)).toEqual(['업적 보상 2개 도착!']);
 
     act(() => {
       result.current.setMirrorEnv({ blocked: true });

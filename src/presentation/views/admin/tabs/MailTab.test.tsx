@@ -13,8 +13,11 @@ vi.mock('../../../../platform/api', () => ({
   api: {
     admin: {
       sentMails: vi.fn(async () => [
-        { id: 1, userId: '30e63c95-12de-4ba6-b397-e8b69ce0311c', title: '지난 우편', body: 'b', gold: 500,
+        { id: 1, userId: '30e63c95-12de-4ba6-b397-e8b69ce0311c', title: '지난 우편', body: 'b', gold: 500, items: [],
           createdAt: '2026-10-22T00:00:00Z', readAt: '2026-10-22T01:00:00Z', claimedAt: null },
+        { id: 2, userId: '30e63c95-12de-4ba6-b397-e8b69ce0311c', title: '물약 지급', body: 'b2', gold: 0,
+          items: [{ id: 'luck-small', qty: 2 }],
+          createdAt: '2026-10-23T00:00:00Z', readAt: null, claimedAt: null },
       ]),
       users: vi.fn(async () => [
         { user_id: '30e63c95-12de-4ba6-b397-e8b69ce0311c', email: 'friend@example.com', nickname: '바다친구', is_anonymous: false },
@@ -38,10 +41,13 @@ function show() {
 describe('MailTab', () => {
   afterEach(() => { cleanup(); mocks.mail.mockReset(); });
 
-  it('보낸 우편을 받는 사람의 닉네임(이메일)과 상태로 그린다', async () => {
+  it('보낸 우편을 받는 사람의 닉네임(이메일)과 첨부 아이템, 상태로 그린다', async () => {
     show();
     expect(await screen.findByText('지난 우편')).toBeTruthy();
-    expect(screen.getByText('바다친구(friend@example.com)')).toBeTruthy();
+    expect(screen.getAllByText('바다친구(friend@example.com)').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('물약 지급')).toBeTruthy();
+    expect(screen.getByText('작은 행운 물약')).toBeTruthy();
+    expect(screen.getByText('×2')).toBeTruthy();
     expect(screen.getByText('읽음')).toBeTruthy();
   });
 
@@ -137,5 +143,52 @@ describe('MailTab', () => {
     );
     expect((screen.getByLabelText(/받는 사람\(/) as HTMLTextAreaElement).value).toBe(`${USER} 0`);
     expect(await screen.findByText('받는 사람 1명: 바다친구(friend@example.com)')).toBeTruthy();
+  });
+
+  it('아이템을 찾아 수량과 함께 첨부하고 빼며, items 포함 요청으로 보낸다', async () => {
+    mocks.mail.mockImplementation(async (op: string) => (op === 'preview'
+      ? { problems: [], preview: { count: 1, recipientCount: 1, totalGold: 0, capExceeded: false, maxTotalGold: 500_000_000, missing: [] } }
+      : { problems: [], preview: { count: 1, recipientCount: 1, totalGold: 0, capExceeded: false, maxTotalGold: 500_000_000, missing: [] }, sent: 1 }));
+    show();
+    fireEvent.change(screen.getByLabelText('제목'), { target: { value: '물약 선물' } });
+    fireEvent.change(screen.getByLabelText('본문'), { target: { value: '행운이 함께하길!' } });
+    fireEvent.change(screen.getByLabelText(/받는 사람/), { target: { value: `${USER} 0` } });
+
+    fireEvent.change(screen.getByLabelText(/첨부 수량/), { target: { value: '3' } });
+    fireEvent.change(screen.getByLabelText(/첨부 아이템 찾기/), { target: { value: '행운 물약' } });
+    fireEvent.click(screen.getByRole('option', { name: /작은 행운 물약/ }));
+
+    expect(screen.getByLabelText('첨부된 아이템')).toHaveTextContent('작은 행운 물약×3');
+
+    fireEvent.click(screen.getByRole('button', { name: '미리보기' }));
+    expect(await screen.findByText(/작은 행운 물약 3개/)).toBeTruthy();
+    expect(mocks.mail).toHaveBeenLastCalledWith('preview', {
+      title: '물약 선물',
+      body: '행운이 함께하길!',
+      target: { kind: 'users', recipients: [{ userId: USER, gold: 0 }] },
+      items: [{ id: 'luck-small', qty: 3 }],
+      idempotencyKey: expect.any(String),
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '보내기' }));
+    const sendButtons = await screen.findAllByRole('button', { name: '보내기' });
+    fireEvent.click(sendButtons[sendButtons.length - 1]);
+    await waitFor(() => expect(mocks.mail).toHaveBeenLastCalledWith('send', expect.objectContaining({
+      items: [{ id: 'luck-small', qty: 3 }],
+    })));
+  });
+
+  it('골드도 아이템도 없는 우편은 empty 안내를 보이고 보내기를 막는다', async () => {
+    mocks.mail.mockResolvedValueOnce({
+      problems: ['empty'],
+      preview: { count: 1, recipientCount: 1, totalGold: 0, capExceeded: false, maxTotalGold: 500_000_000, missing: [] },
+    });
+    show();
+    fireEvent.change(screen.getByLabelText('제목'), { target: { value: '빈 보상' } });
+    fireEvent.change(screen.getByLabelText('본문'), { target: { value: '본문' } });
+    fireEvent.change(screen.getByLabelText(/받는 사람/), { target: { value: `${USER} 0` } });
+    fireEvent.click(screen.getByRole('button', { name: '미리보기' }));
+    expect(await screen.findByText('골드나 아이템 중 하나 이상을 보내야 해요.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '보내기' })).toBeDisabled();
   });
 });

@@ -15,6 +15,7 @@ import Button from '../../../ui/Button';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import Inset from '../../../ui/Inset';
 import type { InsetBorder } from '../../../ui/Inset';
+import ItemSprite from '../../../ui/ItemSprite';
 import KeyValueRow from '../../../ui/KeyValueRow';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
@@ -45,7 +46,7 @@ const BLOCK_ERROR_TEXT: Record<ChatActionError, string> = {
   missing: '대상을 찾을 수 없어요. 오래된 메시지는 신고할 수 없어요.',
   failed: '요청을 처리하지 못했어요. 잠시 뒤에 다시 시도해 주세요.',
 };
-const DEX_HELP = '일반 폼과 돌연변이 폼으로 한 번이라도 낚은 어종';
+const DEX_HELP = '일반과 돌연변이로 한 번이라도 낚은 어종';
 
 export function PlayerInfo({ target, self, account, accountFailed = false, setToast }: {
   target: PlayerTarget;
@@ -91,7 +92,7 @@ export function PlayerInfo({ target, self, account, accountFailed = false, setTo
       text: r.result === 'requested' ? `${name} 님에게 친구 요청을 보냈어요.`
         : r.result === 'already' ? `${name} 님과는 이미 친구이거나 요청 중이에요.` : `${name} 님과 친구가 됐어요.`,
       toastText: r.result === 'requested' ? `${name} 님 친구 요청 전송`
-        : r.result === 'already' ? '이미 친구이거나 요청 중' : `${name} 님과 친구 성사`,
+        : r.result === 'already' ? '이미 친구이거나 요청 중' : `${name} 님과 친구가 됐어요.`,
     });
     return null;
   });
@@ -280,11 +281,12 @@ function ProfileCells({ name, view, actions }: {
               const gradeStyle = s.grade ? GRADE_STYLE[s.grade] : null;
               return (
                 <Inset as="li" key={s.id} tone="deep" border={gradeStyle?.border}
-                       className={cx('min-h-10 px-1 py-0.5 flex flex-col items-center justify-center text-center text-2xs leading-tight',
+                       className={cx('min-h-10 px-1 py-1 flex flex-col items-center justify-center gap-0.5 text-center text-2xs leading-tight',
                          gradeStyle ? gradeStyle.text : 'border-dashed text-text-dim')}
                        aria-label={s.name ? (s.level !== null ? `유물 ${s.name} Lv.${s.level}` : `유물 ${s.name}`) : `${s.zone} 유물 없음`}>
                   {s.name ? (
                     <>
+                      <ItemSprite kind="artifact" id={s.id} preset="row" className="shrink-0" />
                       <span className="truncate max-w-full">{s.name}</span>
                       {s.level !== null && <span className="font-pixel text-2xs text-text-dim">Lv.{s.level}</span>}
                     </>

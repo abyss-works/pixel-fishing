@@ -100,12 +100,17 @@ describe('PlayerInfo', () => {
     expect(hatTip).toHaveTextContent('업적');
     fireEvent.mouseLeave(screen.getByText('모자'));
     expect(screen.getByText(`2 / ${ARTIFACTS.length}`)).toBeTruthy();
-    expect(screen.getByLabelText('유물 해구의 이빨 Lv.3')).toBeTruthy();
+    const leveledCard = screen.getByLabelText('유물 해구의 이빨 Lv.3');
+    expect(leveledCard).toBeTruthy();
+    expect(leveledCard.querySelector('canvas')).toHaveAttribute('width', '16');
     const legendCard = screen.getByLabelText('유물 마미 와타의 거울');
     expect(legendCard).toBeTruthy();
+    expect(legendCard.querySelector('canvas')).toHaveAttribute('width', '16');
     expect(legendCard.textContent).toBe('마미 와타의 거울');
     expect(screen.queryByText('전설')).toBeNull();
-    expect(screen.getAllByLabelText(/유물 없음$/)).toHaveLength(ARTIFACTS.length - 2);
+    const emptySlots = screen.getAllByLabelText(/유물 없음$/);
+    expect(emptySlots).toHaveLength(ARTIFACTS.length - 2);
+    expect(emptySlots.every(el => el.querySelector('canvas') === null)).toBe(true);
     expect(screen.getByText(`2 / ${FISH.length}`)).toBeTruthy();
     expect(screen.getByText(`1 / ${FISH.length}`)).toBeTruthy();
 
@@ -150,7 +155,7 @@ describe('PlayerInfo', () => {
     const groups = screen.getAllByRole('group');
     expect(groups.map(g => g.getAttribute('aria-label'))).toEqual(['친구 요청', '차단']);
     fireEvent.mouseEnter(groups[0].parentElement!);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
     fireEvent.mouseLeave(groups[0].parentElement!);
     groups.forEach(g => fireEvent.click(g));
     buttons.forEach(b => fireEvent.click(b));

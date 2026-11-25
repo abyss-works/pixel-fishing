@@ -677,7 +677,6 @@ describe('UI 시스템 가드', () => {
   });
 
   const TIER1_FLAT_PRIMITIVES = [
-    'ui/HelpHint.tsx',
     'ui/ArrowButton.tsx',
     'ui/ProgressMeter.tsx',
     'ui/SegmentedStepBar.tsx',
@@ -907,5 +906,100 @@ describe('UI 시스템 가드', () => {
     expect(insetBorderOverrides('<Inset border="accent" className="px-3 text-accent">x</Inset>')).toEqual([]);
     expect(insetBorderOverrides('<Inset border={s.grade ? "epic" : undefined} className="border-dashed text-text-dim">x</Inset>')).toEqual([]);
     expect(insetBorderOverrides('<Inset borderless tone="deep" className="flex flex-wrap gap-1">x</Inset>')).toEqual([]);
+  });
+
+  // 비동기 상태 구분 — null·미설정·오류를 '불러오는 중'이나 '연결 중' 같은 로딩 문구로 폴백하지 않는다
+  const NULLISH_LOADING_FALLBACK_RE = /(?:\?\?|\|\|)\s*(?:<[^>]+>)?\s*['"`][^'"`\r\n]*(?:불러오는 중|연결 중)/;
+  const NULL_EQ_LOADING_FALLBACK_RE = /(?:===?\s*null\b|!\s*(?:view|data|blocks|uid|nickname|guild|profile|preview)\b)\s*\?\s*(?:<[^>]+>)?\s*[^:\r\n]*(?:불러오는 중|연결 중)/;
+  const VALUE_TRUTHY_LOADING_FALLBACK_RE = /\b(?:uid|nickname|blocks|view|data|guild|profile|preview)\s*\?\s*[^:\r\n]+:\s*(?:<[^>]+>)?\s*['"`][^'"`\r\n]*(?:불러오는 중|연결 중)/;
+
+  const asyncLoadingFallbacks = (src: string, path = '') => {
+    const code = src.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+    const hits: string[] = [];
+    for (const [i, line] of code.split(/\r?\n/).entries()) {
+      if (NULLISH_LOADING_FALLBACK_RE.test(line)
+        || NULL_EQ_LOADING_FALLBACK_RE.test(line)
+        || VALUE_TRUTHY_LOADING_FALLBACK_RE.test(line)) {
+        hits.push(`${path ? `${path}:${i + 1}: ` : ''}${line.trim()}`);
+      }
+    }
+    return hits;
+  };
+
+  it('표현 계층은 nullish/null 폴백으로 로딩 문구(불러오는 중·연결 중)를 표시하지 않는다', () => {
+    expect(presentationFiles.flatMap(f => asyncLoadingFallbacks(f.src, f.path))).toEqual([]);
+
+    expect(asyncLoadingFallbacks('{nickname ?? "불러오는 중"}')).toHaveLength(1);
+    expect(asyncLoadingFallbacks('{uid || "연결 중"}')).toHaveLength(1);
+    expect(asyncLoadingFallbacks('{blocks === null ? <Note>차단 목록을 불러오는 중이에요.</Note> : null}')).toHaveLength(1);
+    expect(asyncLoadingFallbacks('{!view ? <Note>초대를 불러오는 중이에요.</Note> : null}')).toHaveLength(1);
+    expect(asyncLoadingFallbacks('{uid ? maskUid(uid) : "연결 중"}')).toHaveLength(1);
+    expect(asyncLoadingFallbacks('{loading ? <Note>목록을 불러오는 중이에요.</Note> : null}')).toEqual([]);
+    expect(asyncLoadingFallbacks('{status === "loading" ? "불러오는 중" : "미설정"}')).toEqual([]);
+  });
+
+  // 툴팁 해부학 가드 — HelpHint 은퇴, LockLines 외부 조립 금지, MenuCard·Locked의 TipCard 사용
+  it('게임 UI는 물음표 도움말 아이콘(HelpHint)을 쓰지 않고 공용 Tip을 쓴다', () => {
+    const targets = presentationFiles.filter(f => isGameUi(f.path));
+    expect(targets.filter(f => /\bHelpHint\b/.test(f.src)).map(f => f.path)).toEqual([]);
+    expect(presentationFiles.some(f => f.path === 'ui/HelpHint.tsx')).toBe(false);
+  });
+
+  it('잠금 툴팁 줄은 ui/Locked.tsx 외부에서 <LockLines로 직접 조립하지 않고 Locked·LockTip·TipCard를 쓴다', () => {
+    const targets = presentationFiles.filter(f => f.path !== 'ui/Locked.tsx');
+    expect(targets.filter(f => /<LockLines\b/.test(f.src)).map(f => f.path)).toEqual([]);
+  });
+
+  it('MenuCard와 Locked는 구조형 툴팁 TipCard로 잠금 헤더와 구분선 위계를 유지한다', () => {
+    const menuCard = presentationFiles.find(f => f.path === 'ui/MenuCard.tsx')!.src;
+    const locked = presentationFiles.find(f => f.path === 'ui/Locked.tsx')!.src;
+    expect(menuCard).toMatch(/<TipCard\b/);
+    expect(locked).toMatch(/<TipCard\b/);
+  });
+
+  // 기획·구현 내부 용어와 AI 슬롭 문구 재유입 가드 (테스트·admin·devtools·patchnotes·주석 제외)
+  const SLOP_COPY_RE = /한국 시간 새벽|운 배율|일반 폼|돌연변이 폼|클라우드 세이브|을\(를\)|친구 성사/;
+  it('게임·기능·화면 노출 코드 문자열은 기획·시간대·구현 직역 용어를 쓰지 않는다', () => {
+    const gameFiles = Object.entries(
+      import.meta.glob('../../game/**/*.{ts,tsx}', { query: '?raw', import: 'default', eager: true }) as Record<string, string>,
+    )
+      .map(([key, src]) => ({ path: key.replace(/^\.\.\/\.\.\//, ''), src }))
+      .filter(f => !isTestFile(f.path));
+
+    const targets = [...gameFiles, ...featureFiles, ...presentationFiles].filter(
+      f => !f.path.includes('/admin/') && !f.path.includes('/devtools/')
+        && !f.path.startsWith('views/admin/') && !f.path.startsWith('views/devtools/')
+        && !f.path.includes('patchnotes'),
+    );
+    const offenders = targets.filter(f => SLOP_COPY_RE.test(stripComments(f.src))).map(f => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  // 등급색 표기 및 공용 툴팁 등급색 구조 가드
+  const RAW_RARITY_NAME_RE = /\b(?:RARITY|DISPLAY_GRADE)\[[^\]]+\]\.name\b/;
+  it('게임 UI는 RarityTag 외부에서 RARITY[...].name을 민글자로 쓰지 않고 RarityText·GradeName을 쓴다', () => {
+    const targets = presentationFiles.filter(
+      f => isGameUi(f.path) && f.path !== 'ui/fish/RarityTag.tsx',
+    );
+    const offenders = targets.filter(f => RAW_RARITY_NAME_RE.test(stripComments(f.src))).map(f => f.path);
+    expect(offenders).toEqual([]);
+    expect(RAW_RARITY_NAME_RE.test('<th>{RARITY[r].name}</th>')).toBe(true);
+    expect(RAW_RARITY_NAME_RE.test('{DISPLAY_GRADE[g].name}')).toBe(true);
+    expect(RAW_RARITY_NAME_RE.test('<RarityText rarity={r} />')).toBe(false);
+  });
+
+  it('공용 툴팁(TipList·TipCard·RecipeEffectTip·Locked·MessageTip)은 ReactNode와 등급색 강조를 유지한다', () => {
+    const tipSrc = presentationFiles.find(f => f.path === 'ui/Tip.tsx')!.src;
+    const recipeTipSrc = presentationFiles.find(f => f.path === 'ui/RecipeEffectTip.tsx')!.src;
+    const lockedSrc = presentationFiles.find(f => f.path === 'ui/Locked.tsx')!.src;
+    const messageFeedSrc = presentationFiles.find(f => f.path === 'ui/hud/messageFeed.ts')!.src;
+
+    expect(tipSrc).toMatch(/HighlightRarityText/);
+    expect(tipSrc).toMatch(/function TipList\(\{ rows, note \}:\s*\{\s*rows:\s*readonly\s*\{\s*label:\s*ReactNode;\s*value:\s*ReactNode\s*\}\[\];\s*note\?:\s*ReactNode/);
+    expect(recipeTipSrc).toMatch(/HighlightRarityText/);
+    expect(recipeTipSrc).toMatch(/label:\s*ReactNode;\s*effects:\s*readonly\s*\{\s*label:\s*ReactNode;\s*value:\s*ReactNode\s*\}\[\];\s*note:\s*ReactNode/);
+    expect(lockedSrc).toMatch(/title\?:\s*ReactNode/);
+    expect(lockedSrc).toMatch(/description\?:\s*ReactNode/);
+    expect(messageFeedSrc).toMatch(/rows:\s*readonly\s*\{\s*label:\s*ReactNode;\s*value:\s*ReactNode\s*\}\[\]/);
   });
 });

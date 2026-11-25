@@ -2,11 +2,10 @@ import { useState } from 'react';
 import type { GameState } from '../../../../game/rules/logic';
 import type { GameAction } from '../../../../game/rules/actions';
 import type { RejectReason } from '../../../../game/rules/rules';
-import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
+import type { DispatchResult, MaybePromise, ProfileStatus } from '../../../../features/gameplay/service/types';
 import { ZONE_IDS, defaultZoneOfRegion } from '../../../../game/content/zones';
 import type { ZoneId } from '../../../../game/content/zones';
 import type { RegionId } from '../../../../game/content/places';
-import type { GuestProgress } from '../../../../features/account/model/accountRules';
 import { accountLockState } from '../../../../features/account/service/accountActions';
 import { DEX_VIEWS, TAB_ORDER, tabHasViews, type DexView, type TabKey } from './tabs';
 import { selectNamedDex } from '../../../../features/dex/model/catalog';
@@ -38,12 +37,13 @@ interface GameTabsProps {
   setToast: Notify;
   syncLabel: string | null;
   syncState: string;
-  guestProgress: GuestProgress;
-  recheckGuestProgress: () => Promise<GuestProgress>;
   account: string | null;
+  /** 계정 확인이 끝났는가 */
+  accountChecked?: boolean;
   /** 세션 확인에 실패했는가 */
   accountFailed: boolean;
   nickname: string | null;
+  profileStatus?: ProfileStatus;
   onRename: (name: string) => Promise<null | RejectReason>;
   uid: string | null;
   onAuthChanged: () => Promise<void>;
@@ -138,9 +138,9 @@ export default function GameTabs(props: GameTabsProps) {
       {activeTab === 'help' && <VHelp />}
       {activeTab === 'settings' && (
         <SettingsTab autoLockOnCatch={game.autoLockOnCatch} dispatch={props.dispatch} setToast={props.setToast}
-                     syncLabel={props.syncLabel} syncState={props.syncState} guestProgress={props.guestProgress} recheckGuestProgress={props.recheckGuestProgress}
-                     account={props.account} accountFailed={props.accountFailed} uid={props.uid}
-                     nickname={props.nickname} onRename={props.onRename}
+                     syncLabel={props.syncLabel} syncState={props.syncState}
+                     account={props.account} accountChecked={props.accountChecked} accountFailed={props.accountFailed} uid={props.uid}
+                     nickname={props.nickname} profileStatus={props.profileStatus} onRename={props.onRename}
                      onAuthChanged={props.onAuthChanged} />
       )}
     </Sidebar>

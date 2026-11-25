@@ -15,6 +15,6 @@ export function alertUpdate(): void {
   });
   if (plan.flash) flashTitle('업데이트');
   if (plan.notify) {
-    showNotification({ title: '새 버전', body: '게임이 업데이트됐어요. 돌아와서 새로고침하면 이어서 플레이할 수 있어요.', tag: 'pf-update' });
+    showNotification({ title: '업데이트 안내', body: '게임이 업데이트됐어요. 돌아와서 새로고침하면 이어서 플레이할 수 있어요.', tag: 'pf-update' });
   }
 }

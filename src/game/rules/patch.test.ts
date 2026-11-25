@@ -34,6 +34,10 @@ describe('patch 동등성 — 전 액션', () => {
   it('catch — 추첨+개체+도감+명성', () => {
     check(seed(), { type: 'catch', spot: 'pond', judgment: 'normal' });
   });
+  it('catch — 첫 경험 보장 확정 캐치 델타 일치', () => {
+    check(seed({ firstCatch: { pond: { n: 19, active: true }, river: { n: 0, active: true } } }),
+      { type: 'catch', spot: 'pond', judgment: 'normal' });
+  });
   it('catch — 방치 판정', () => {
     check(seed(), { type: 'catch', spot: 'river', judgment: 'auto' });
   });
@@ -84,7 +88,7 @@ describe('patch 동등성 — 전 액션', () => {
     check(seed({ baitRefund: { gold: 200, items: { 'bait-rare': 1 } } }), { type: 'dismissBaitRefund' });
     check(seed(), { type: 'dismissBaitRefund' });
   });
-  it('redeemCoupon — 골드+사용기록', () => {
+  it('redeemCoupon — 골드+아이템+사용기록', () => {
     check(seed(), { type: 'redeemCoupon', code: '출항준비' });
   });
   it('claimRelief — 합산 도감', () => {
@@ -124,6 +128,13 @@ describe('patch 동등성 — 전 액션', () => {
     check(rich, { type: 'debug', command: 'achievement.resetCounters', args: { resetAchievements: true } });
     check(rich, { type: 'debug', command: 'snapshot.restore', args: { snapshot: seed({ gold: 42 }) } });
   });
+  it('usePotion / claimMail(아이템) — items·potions 스칼라가 패치로 동기화된다', () => {
+    check(seed({ items: { 'luck-small': 2 } }), { type: 'usePotion', id: 'luck-small' });
+    check(seed(), { type: 'claimMail', id: 7 }, {
+      mail: { id: 7, gold: 0, items: [{ id: 'luck-small', qty: 1 }, { id: 'energy-common', qty: 2 }] },
+    });
+  });
+
   it('import — 통째 교체도 델타로 표현된다', () => {
     const prev = seed({ bag: [mkInst('a')], gold: 10 });
     const save = { ...newState(), gold: 777, fame: 888 };

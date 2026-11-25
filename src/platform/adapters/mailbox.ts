@@ -11,7 +11,8 @@ export async function readMails(): Promise<MailItem[] | null> {
   const res = await fetch('/api/mail');
   if (res.status === 401) throw new AppError('unauthorized', 'mail read before session');
   if (!res.ok) throw requestFailure(res, 'mail read failed');
-  return (await res.json() as { mails: MailItem[] }).mails;
+  const { mails } = await res.json() as { mails: MailItem[] };
+  return mails.map(m => ({ ...m, items: Array.isArray(m.items) ? m.items : [] }));
 }
 
 /** 처음 열어 본 시각을 남긴다 */

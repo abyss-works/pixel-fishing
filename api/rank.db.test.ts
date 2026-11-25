@@ -104,3 +104,157 @@ describe('랭킹 읽기 함수', () => {
     });
   });
 });
+
+describe('확장 순위 표 (일반·돌연변이·네임드 도감·네임드 토벌)', () => {
+  type RankBody = { board: string; top: { rank: number; nickname: string | null; value: number; me: boolean }[]; me: { rank: number; value: number } | null };
+  let u1: string, u2: string, u3: string, guest: string, zero: string;
+
+  beforeAll(async () => {
+    u1 = await seedUser(env.client, {
+      uid: testUid(201), email: 'r201@example.test', nickname: '라일',
+      state: {
+        fame: 0,
+        dex: {
+          crucian: { normal: { count: 1, maxSize: 10, first: '2026-02-01T00:00:00Z' } },
+          megalodon: { normal: { count: 1, maxSize: 10, first: '2026-02-01T00:00:00Z' } },
+          leviathan: { normal: { count: 1, maxSize: 10, first: '2026-02-03T00:00:00Z' } },
+          carp: { variant: { count: 1, maxSize: 10, first: '2026-02-02T00:00:00Z' } },
+          goldfish: { variant: { count: 1, maxSize: 10, first: '2026-02-05T00:00:00Z' } },
+        },
+      },
+    });
+    u2 = await seedUser(env.client, {
+      uid: testUid(202), email: 'r202@example.test', nickname: '마루',
+      state: {
+        fame: 0,
+        dex: {
+          megalodon: { normal: { count: 1, maxSize: 10, first: '2026-02-01T00:00:00Z' } },
+          leviathan: { normal: { count: 1, maxSize: 10, first: '2026-02-02T00:00:00Z' } },
+          crucian: { variant: { count: 1, maxSize: 10, first: '2026-02-01T00:00:00Z' } },
+          minnow: { variant: { count: 1, maxSize: 10, first: '2026-02-03T00:00:00Z' } },
+          loach: { variant: { count: 0, maxSize: null, first: '2026-02-01T00:00:00Z' } },
+        },
+      },
+    });
+    u3 = await seedUser(env.client, {
+      uid: testUid(203), email: 'r203@example.test', nickname: '바다',
+      state: {
+        fame: 0,
+        dex: {
+          ananta: { normal: { count: 1, maxSize: 10, first: '2026-02-04T00:00:00Z' } },
+          megalodon: { variant: { count: 1, maxSize: 10, first: '2026-02-01T00:00:00Z' } },
+        },
+      },
+    });
+    guest = await seedUser(env.client, {
+      uid: testUid(204), email: null, nickname: '게스트',
+      state: {
+        fame: 999,
+        dex: {
+          crucian: { normal: { count: 1, maxSize: 10, first: '2026-01-01T00:00:00Z' }, variant: { count: 1, maxSize: 10, first: '2026-01-01T00:00:00Z' } },
+          megalodon: { normal: { count: 1, maxSize: 10, first: '2026-01-01T00:00:00Z' } },
+        },
+      },
+    });
+    const restricted = await seedUser(env.client, {
+      uid: testUid(205), email: 'r205@example.test', nickname: '제재2', restricted: true,
+      state: {
+        fame: 999,
+        dex: {
+          crucian: { normal: { count: 1, maxSize: 10, first: '2026-01-01T00:00:00Z' }, variant: { count: 1, maxSize: 10, first: '2026-01-01T00:00:00Z' } },
+          megalodon: { normal: { count: 1, maxSize: 10, first: '2026-01-01T00:00:00Z' } },
+        },
+      },
+    });
+    zero = await seedUser(env.client, { uid: testUid(206), email: 'r206@example.test', nickname: '빈계정', state: { fame: 0 } });
+
+    for (const [uid, kind, questId, clearedAt] of [
+      [u1, 'named', 'pacific-named-megalodon', '2026-02-05T00:00:00Z'],
+      [u1, 'named', 'seasia-named-leviathan', '2026-02-06T00:00:00Z'],
+      [u1, 'general', 'pacific-easy-common', '2026-02-07T00:00:00Z'],
+      [u2, 'named', 'pacific-named-megalodon', '2026-02-01T00:00:00Z'],
+      [u2, 'named', 'pacific-named-megalodon', '2026-02-04T00:00:00Z'],
+      [u3, 'named', 'indian-named-ananta', '2026-02-02T00:00:00Z'],
+      [guest, 'named', 'pacific-named-megalodon', '2026-01-01T00:00:00Z'],
+      [guest, 'named', 'seasia-named-leviathan', '2026-01-02T00:00:00Z'],
+      [guest, 'named', 'indian-named-ananta', '2026-01-03T00:00:00Z'],
+      [restricted, 'named', 'pacific-named-megalodon', '2026-01-01T00:00:00Z'],
+      [restricted, 'named', 'seasia-named-leviathan', '2026-01-02T00:00:00Z'],
+      [restricted, 'named', 'indian-named-ananta', '2026-01-03T00:00:00Z'],
+      [zero, 'general', 'pacific-easy-common', '2026-02-01T00:00:00Z'],
+    ] as const) {
+      await env.client.query(
+        'insert into public.bounty_clears (user_id, kind, quest_id, cleared_at) values ($1, $2, $3, $4)',
+        [uid, kind, questId, clearedAt],
+      );
+    }
+  });
+
+  it('일반 도감은 네임드 어종·게스트·제재·0건을 제외한다', async () => {
+    const resU1 = await callRank({ board: 'dex' }, userToken(u1));
+    expect(resU1.status).toBe(200);
+    const bodyU1 = resU1.body as RankBody;
+    expect(bodyU1.me).toEqual({ rank: 4, value: 1 });
+    expect(bodyU1.top.map(r => r.nickname)).toEqual(['나', '다', '가', '라일']);
+
+    const resU2 = await callRank({ board: 'dex' }, userToken(u2));
+    expect((resU2.body as RankBody).me).toBeNull();
+  });
+
+  it('돌연변이 도감은 일반 어종 돌연변이 폼만 세고 동점 시 먼저 도달한 사람이 위다', async () => {
+    const pub = await callRank({ board: 'variant' });
+    expect(pub.status).toBe(200);
+    expect(pub.headers['cache-control']).toContain('s-maxage=60');
+    expect(pub.body).toEqual({
+      board: 'variant',
+      top: [
+        { rank: 1, nickname: '마루', value: 2, me: false },
+        { rank: 1, nickname: '라일', value: 2, me: false },
+      ],
+      me: null,
+    });
+
+    expect(((await callRank({ board: 'variant' }, userToken(u1))).body as RankBody).me).toEqual({ rank: 1, value: 2 });
+    expect(((await callRank({ board: 'variant' }, userToken(u3))).body as RankBody).me).toBeNull();
+  });
+
+  it('네임드 도감은 네임드 어종만 세고 동점 시 먼저 도달한 사람이 위다', async () => {
+    const res = await callRank({ board: 'named' }, userToken(u1));
+    expect(res.status).toBe(200);
+    expect(res.headers['cache-control']).toContain('no-store');
+    expect(res.body).toEqual({
+      board: 'named',
+      top: [
+        { rank: 1, nickname: '마루', value: 2, me: false },
+        { rank: 1, nickname: '라일', value: 2, me: true },
+        { rank: 3, nickname: '바다', value: 1, me: false },
+      ],
+      me: { rank: 1, value: 2 },
+    });
+  });
+
+  it('네임드 토벌 누적은 named만 세고 같은 유저의 중복 토벌을 합산하며 동점 시 마지막 토벌 시각이 이른 사람이 위다', async () => {
+    const res = await callRank({ board: 'namedClears' }, userToken(u2));
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      board: 'namedClears',
+      top: [
+        { rank: 1, nickname: '마루', value: 2, me: true },
+        { rank: 1, nickname: '라일', value: 2, me: false },
+        { rank: 3, nickname: '바다', value: 1, me: false },
+      ],
+      me: { rank: 1, value: 2 },
+    });
+    expect(((await callRank({ board: 'namedClears' }, userToken(zero))).body as RankBody).me).toBeNull();
+  });
+
+  it('게스트는 모든 순위 표에서 제외되고 본인 순위(me)도 비어 있다', async () => {
+    for (const board of ['fame', 'dex', 'variant', 'named', 'namedClears'] as const) {
+      const res = await callRank({ board }, userToken(guest));
+      expect(res.status).toBe(200);
+      const body = res.body as RankBody;
+      expect(body.me).toBeNull();
+      expect(body.top.some(r => r.nickname === '게스트' || r.me)).toBe(false);
+    }
+  });
+});

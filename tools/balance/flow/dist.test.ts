@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { FIRST_CATCH_SPOT_CAPS } from '../../../src/game/rules/firstCatch';
 import { rng } from '../model';
 import { simulate } from './progress';
 import { transitionTimings } from './transitions';
 import { createSampler } from './sample';
-import { simulateOpening } from './opening';
+import { OPENING_TARGET_SEC, simulateOpening } from './opening';
 import { openingDist, transitionDist } from './dist';
 
 describe('표본 추출 진행 시뮬레이션', () => {
@@ -16,38 +17,34 @@ describe('표본 추출 진행 시뮬레이션', () => {
 });
 
 describe('최초 10분 표본', () => {
-  it('마을 해역별 보장은 해역 5번째 캐치 영웅, 10~15번째 캐치 전설 범위로 동작한다', () => {
+  it('마을 해역별 보장은 연못 20회, 강 30회 상한 안에서만 발동하고 모두 도착한다', () => {
     for (let seed = 1; seed <= 30; seed++) {
-      const r = simulateOpening({ judgment: 'normal', legendAt: 'draw', sampler: createSampler(rng(seed)) });
+      const r = simulateOpening({ judgment: 'normal', firstCatch: true, sampler: createSampler(rng(seed)) });
       const g = r.steps.filter(s => s.kind === 'guarantee');
       const move = r.steps.find(s => s.kind === 'move' && s.detail === 'river');
-      expect(g.length).toBeGreaterThanOrEqual(1);
-      for (const e of g.filter(s => s.detail === 'epic')) {
-        const spotCatches = move && e.catches > move.catches ? e.catches - move.catches : e.catches;
-        expect(spotCatches).toBe(5);
-      }
-      for (const l of g.filter(s => s.detail === 'legendary')) {
-        const spotCatches = move && l.catches > move.catches ? l.catches - move.catches : l.catches;
-        expect(spotCatches).toBeGreaterThanOrEqual(10);
-        expect(spotCatches).toBeLessThanOrEqual(15);
+      for (const s of g) {
+        if (!move || s.catches <= move.catches) {
+          expect(s.catches).toBeLessThanOrEqual(FIRST_CATCH_SPOT_CAPS.pond!);
+        } else {
+          expect(s.catches - move.catches).toBeLessThanOrEqual(FIRST_CATCH_SPOT_CAPS.river!);
+        }
       }
       expect(r.arrival).not.toBeNull();
     }
   });
 
-  it('전설 번호를 주면 해당 마을 해역의 그 캐치에서 전설이 나온다', () => {
-    const r = simulateOpening({ judgment: 'good', legendAt: 13, sampler: createSampler(rng(3)) });
-    const move = r.steps.find(s => s.kind === 'move' && s.detail === 'river');
-    const legend = r.steps.find(s => s.kind === 'guarantee' && s.detail === 'legendary')!;
-    const spotCatches = move && legend.catches > move.catches ? legend.catches - move.catches : legend.catches;
-    expect(spotCatches).toBe(13);
+  it('firstCatch를 끄면 보장 단계가 없고 켜면 상한 보장이 적용된다', () => {
+    const off = simulateOpening({ judgment: 'good', firstCatch: false, sampler: createSampler(rng(3)) });
+    const on = simulateOpening({ judgment: 'good', firstCatch: true, sampler: createSampler(rng(3)) });
+    expect(off.steps.some(s => s.kind === 'guarantee')).toBe(false);
+    expect(on.arrival).not.toBeNull();
   });
 });
 
 describe('최초 10분 분포', () => {
   const d = openingDist({ judgment: 'normal', trials: 300, seed: 7 });
 
-  it('영웅, 전설, 도착 시간의 분포를 낸다', () => {
+  it('도착 시간과 보장 분포를 내고 모든 시도가 10분 안에 도착한다', () => {
     expect(d.trials).toBe(300);
     for (const k of ['epic', 'legend', 'arrival'] as const) {
       const x = d[k]!;
@@ -55,9 +52,9 @@ describe('최초 10분 분포', () => {
       expect(x.p10).toBeLessThanOrEqual(x.p50);
       expect(x.p50).toBeLessThanOrEqual(x.p90);
     }
-    expect(d.epic!.p50).toBeLessThan(d.legend!.p50);
-    expect(d.within10).toBeGreaterThanOrEqual(0);
-    expect(d.within10).toBeLessThanOrEqual(1);
+    expect(d.arrival!.missing).toBe(0);
+    expect(d.arrival!.p90).toBeLessThanOrEqual(OPENING_TARGET_SEC);
+    expect(d.within10).toBe(1);
   });
 
   it('같은 시드는 같은 분포를 낸다', () => {

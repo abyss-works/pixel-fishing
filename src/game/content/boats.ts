@@ -70,6 +70,6 @@ export function nextBoatText(boat: number): string {
   const next = BOATS[boat];
   if (!next) return '';
   const fmt = (n: number) => n.toLocaleString('ko-KR');
-  const fame = next.fameReq > 0 ? `명성 ${fmt(next.fameReq)} · ` : '';
+  const fame = next.fameReq > 0 ? `명성 ${fmt(next.fameReq)}, ` : '';
   return `다음 배 ${next.name}: ${fame}골드 ${fmt(next.price)}. 집 목공소나 항구 조선소에서 살 수 있어요.`;
 }

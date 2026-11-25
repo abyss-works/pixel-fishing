@@ -11,7 +11,6 @@ import type { BountyZone } from '../src/game/content/bounties.js';
 import {
   COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, ENERGY_PER_INDIVIDUAL, recipeById, recipeCostStored,
 } from '../src/game/content/cooking.js';
-import { FISH } from '../src/game/content/fish.js';
 import { hatById } from '../src/game/content/wardrobe.js';
 import { upgradeCost } from '../src/game/rules/balance.js';
 import { endedFirstCatch, newFirstCatch } from '../src/game/rules/firstCatch.js';
@@ -409,7 +408,7 @@ describe('닉네임', () => {
 });
 
 describe('현상금', () => {
-  const pacificState = (): Partial<GameState> => ({ dex: zoneDex('pacific', 'basic'), location: at('harbor') });
+  const pacificState = (): Partial<GameState> => ({ dex: zoneDex('pacific', 'named'), location: at('harbor') });
 
   it('오늘 배정된 일반 의뢰 수주는 수주·진행 행을 쓴다', async () => {
     const uid = await seed({ state: pacificState() });
@@ -560,19 +559,13 @@ describe('개발 명령', () => {
     expect(recordFishIds).toEqual(expectedIds);
     expect(snap.db.events).toEqual([
       { user_id: '<user>', type: 'debug', payload: { command: 'dex.completeZone', args: { zone: 'pacific' } }, created_at: '<now>' },
-      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'night-normal' }, created_at: '<now>' },
       { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'spot-basic-deep' }, created_at: '<now>' },
       { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'spot-basic-sea' }, created_at: '<now>' },
-      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'spot-full-deep' }, created_at: '<now>' },
-      { user_id: '<user>', type: 'unlockAchievement', payload: { id: 'spot-full-sea' }, created_at: '<now>' },
     ]);
     const save = snap.db.saves_current[0] as { data: { achievements: Record<string, string> } };
     expect(save.data.achievements).toEqual({
       'spot-basic-sea': 'claimable',
-      'spot-full-sea': 'claimable',
       'spot-basic-deep': 'claimable',
-      'spot-full-deep': 'claimable',
-      'night-normal': 'claimable',
     });
   });
 
@@ -620,7 +613,7 @@ describe('현상금 — 클리어 기준 한도와 만료', () => {
   // NOW(2030-03-04 KST 14:06)가 속한 게임 날짜는 그날 KST 04:00에 시작했다
   const DAY_START = '2030-03-03T19:00:00.000Z';
   const BEFORE_START = '2030-03-03T18:59:59.999Z';
-  const pacificState = (): Partial<GameState> => ({ dex: zoneDex('pacific', 'basic'), location: at('harbor') });
+  const pacificState = (): Partial<GameState> => ({ dex: zoneDex('pacific', 'named'), location: at('harbor') });
   const namedState = (): Partial<GameState> => ({ dex: zoneDex('pacific', 'named'), location: at('harbor') });
   const offered = (uid: string, difficulty: 'easy' | 'normal' | 'hard' | 'named', day = TODAY_KST) =>
     offeredQuestsFor('pacific', difficulty, uid, day)[0];
@@ -853,34 +846,61 @@ describe('현상금 — 클리어 기준 한도와 만료', () => {
 
 describe('첫 경험 보장', () => {
   const stateOf = (out: Awaited<ReturnType<typeof run>>) => (out.db.saves_current[0] as { data: GameState }).data;
+  const normalDex = (...ids: string[]): GameState['dex'] =>
+    Object.fromEntries(ids.map(id => [id, { normal: { count: 1, maxSize: 20, first: '2026-01-01' } }]));
 
-  it('마을 연못 5번째 캐치는 금붕어이고 연못 진척만 저장된다', async () => {
+  it('마을 연못 상한 마지막 캐치는 미보유 일반 폼 어종을 일반 폼으로 보장하고 연못 보장만 끝난다', async () => {
     const out = await run({
-      state: { firstCatch: { ...newFirstCatch(), pond: { n: 4, legendAt: 12, epic: true, legend: true } } },
+      state: {
+        dex: normalDex('crucian', 'minnow', 'loach', 'carp', 'goldfish'),
+        firstCatch: { ...newFirstCatch(), pond: { n: 19, active: true } },
+      },
     }, { type: 'catch', spot: 'pond', judgment: 'auto' });
-    const caught = (out.db.events[0] as { payload: { fishId: string } }).payload;
-    expect(FISH.find(f => f.id === caught.fishId)).toMatchObject({ id: 'goldfish', rarity: 'epic', spot: 'pond' });
-    expect(stateOf(out).firstCatch.pond).toEqual({ n: 5, legendAt: 12, epic: false, legend: true });
+    const caught = (out.db.events[0] as { payload: { fishId: string; form: string } }).payload;
+    expect(caught).toMatchObject({ fishId: 'goldcarp', form: 'normal' });
+    expect(stateOf(out).firstCatch.pond).toEqual(endedFirstCatch().pond);
     expect(stateOf(out).firstCatch.river).toEqual(newFirstCatch().river);
   });
 
-  it('첫 캐치에서 서버가 해당 마을 해역의 전설 번호를 10~15 사이로 정해 저장한다', async () => {
+  it('첫 캐치에서 해당 해역의 카운트만 오르고 다른 해역 진척은 그대로다', async () => {
     const out = await run({ state: {} }, { type: 'catch', spot: 'pond', judgment: 'auto' });
     const fc = stateOf(out).firstCatch;
-    expect(fc.pond.n).toBe(1);
-    expect(fc.pond.legendAt).toBeGreaterThanOrEqual(10);
-    expect(fc.pond.legendAt).toBeLessThanOrEqual(15);
+    expect(fc.pond).toEqual({ n: 1, active: true });
     expect(fc.river).toEqual(newFirstCatch().river);
   });
 
-  it('마을 강 정해진 번호의 캐치는 강의 주인이고 강 보장만 끝난다', async () => {
+  it('마을 연못 여유 구간 지연 보장은 일반 폼을 고정하고 활성 상태를 유지한다', async () => {
     const out = await run({
-      state: { firstCatch: { ...newFirstCatch(), river: { n: 11, legendAt: 12, epic: false, legend: true } } },
+      state: { firstCatch: { ...newFirstCatch(), pond: { n: 3, active: true } } },
+    }, { type: 'catch', spot: 'pond', judgment: 'auto' });
+    const caught = (out.db.events[0] as { payload: { form: string } }).payload;
+    expect(caught.form).toBe('normal');
+    expect(stateOf(out).firstCatch.pond).toEqual({ n: 4, active: true });
+    expect(stateOf(out).firstCatch.river).toEqual(newFirstCatch().river);
+  });
+
+  it('마을 강 상한 마지막 캐치는 미보유 일반 폼 어종을 일반 폼으로 보장하고 강 보장만 끝난다', async () => {
+    const out = await run({
+      state: {
+        dex: normalDex('sweetfish', 'catfish', 'mandarin', 'salmon', 'rainbow'),
+        firstCatch: { ...newFirstCatch(), river: { n: 29, active: true } },
+      },
     }, { type: 'catch', spot: 'river', judgment: 'auto' });
-    const caught = (out.db.events[0] as { payload: { fishId: string } }).payload;
-    expect(FISH.find(f => f.id === caught.fishId)).toMatchObject({ id: 'riverlord', rarity: 'legendary', spot: 'river' });
+    const caught = (out.db.events[0] as { payload: { fishId: string; form: string } }).payload;
+    expect(caught).toMatchObject({ fishId: 'riverlord', form: 'normal' });
     expect(stateOf(out).firstCatch.river).toEqual(endedFirstCatch().river);
     expect(stateOf(out).firstCatch.pond).toEqual(newFirstCatch().pond);
+  });
+
+  it('마을 연못 전종 일반 폼을 이미 보유하면 상한 전이라도 캐치 후 연못 보장이 닫힌다', async () => {
+    const out = await run({
+      state: {
+        dex: normalDex('crucian', 'minnow', 'loach', 'carp', 'goldfish', 'goldcarp'),
+        firstCatch: { ...newFirstCatch(), pond: { n: 5, active: true } },
+      },
+    }, { type: 'catch', spot: 'pond', judgment: 'auto' });
+    expect(stateOf(out).firstCatch.pond).toEqual(endedFirstCatch().pond);
+    expect(stateOf(out).firstCatch.river).toEqual(newFirstCatch().river);
   });
 
   it('구 단일 firstCatch가 진행 중이고 강 도감이 있으면 catch가 풀 경로로 폴백해 강 보장을 중복 지급하지 않는다', async () => {
@@ -894,7 +914,7 @@ describe('첫 경험 보장', () => {
     const out = await snapshotOf(uid, await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'auto' }));
     expect((out.res as { status: number }).status).toBe(200);
     expect(stateOf(out).firstCatch).toEqual({
-      pond: { n: 7, legendAt: 15, epic: false, legend: true },
+      pond: { n: 7, active: true },
       river: endedFirstCatch().river,
     });
   });
@@ -2178,5 +2198,98 @@ describe('밤 깊이 경계와 빠른 경로 천장 조회', () => {
       .find(e => e.type === 'catch')?.payload;
     expect(caughtPayload).toMatchObject({ fishId: 'moonveil', form: 'normal', pity: true });
     expect((peakDb.saves_current[0] as { data: GameState }).data.pity.moonveil).toBe(PITY_DONE);
+  });
+});
+
+describe('우편 아이템 첨부와 물약 사용', () => {
+  it('골드가 0이고 아이템만 첨부된 우편도 수령 가능하며 저장 단위(기운 1개=10단위)로 지급되고 재수령은 422다', async () => {
+    const uid = await seed({ state: { gold: 100, items: {} } });
+    const items = [{ id: 'luck-small', qty: 2 }, { id: 'energy-common', qty: 3 }];
+    const { rows } = await env.client.query<{ id: string }>(
+      `insert into public.mails (user_id, title, body, gold, items) values ($1, '아이템', '본문', 0, $2::jsonb) returning id`,
+      [uid, JSON.stringify(items)],
+    );
+    const id = Number(rows[0].id);
+
+    const res = await callAction(userToken(uid), { type: 'claimMail', id });
+    expect(res.status).toBe(200);
+    expect((res.body as { result: unknown }).result).toEqual({ type: 'mail', gold: 0, items });
+
+    vi.setSystemTime(Date.parse(NOW) + 2000);
+    const again = await callAction(userToken(uid), { type: 'claimMail', id });
+    expect(again).toMatchObject({ status: 422, body: { error: 'mail-unavailable' } });
+
+    const db = await dumpUser(env.client, uid);
+    const save = db.saves_current[0] as { gold: number; data: GameState };
+    expect(Number(save.gold)).toBe(100);
+    expect(save.data.items).toEqual({ 'luck-small': 2, 'energy-common': 30 });
+    expect((db.events as { type: string; payload: unknown }[]).map(e => ({ type: e.type, payload: e.payload }))).toEqual([
+      { type: 'claimMail', payload: { mailId: id, gold: 0, items } },
+    ]);
+  });
+
+  it('usePotion은 가방 물약 1개를 소비해 오늘 게임 날짜까지 효과를 켜고 판매 가격·포획 운 배율에 합산된다', async () => {
+    const sold = fish('carp', { size: 30, uid: testUid(9601) });
+    const uid = await seed({
+      state: {
+        gold: 0,
+        fortune: { day: TODAY_KST, kind: 'gold', index: 5 },
+        items: { 'luck-small': 2 },
+        bag: [sold],
+      },
+    });
+
+    const res = await callAction(userToken(uid), { type: 'usePotion', id: 'luck-small' });
+    expect(res.status).toBe(200);
+    expect((res.body as { result: unknown }).result).toEqual({ type: 'none' });
+
+    const afterUse = await dumpUser(env.client, uid);
+    const saveAfterUse = afterUse.saves_current[0] as { data: GameState };
+    expect(saveAfterUse.data.items).toEqual({ 'luck-small': 1 });
+    expect(saveAfterUse.data.potions).toEqual({ 'luck-small': TODAY_KST });
+    expect((afterUse.events as { type: string; payload: unknown }[]).map(e => ({ type: e.type, payload: e.payload }))).toEqual([
+      { type: 'usePotion', payload: { id: 'luck-small', day: TODAY_KST } },
+    ]);
+
+    // 같은 날 재사용은 거부된다
+    vi.setSystemTime(Date.parse(NOW) + 2000);
+    const dup = await callAction(userToken(uid), { type: 'usePotion', id: 'luck-small' });
+    expect(dup).toMatchObject({ status: 422, body: { error: 'potion-already-active' } });
+
+    // 재물운 ×1.05 + 물약 +0.05 = ×1.10 배율이 판매가에 적용된다
+    vi.setSystemTime(Date.parse(NOW) + 4000);
+    const expectedGold = sellSelected(
+      { ...newState(), bag: [sold], fortune: { day: TODAY_KST, kind: 'gold', index: 5 }, potions: { 'luck-small': TODAY_KST } },
+      [sold.uid],
+      0,
+      1.10,
+    ).gold;
+    const sellRes = await callAction(userToken(uid), { type: 'sell', uids: [sold.uid] });
+    expect(sellRes.status).toBe(200);
+    const saveAfterSell = (await dumpUser(env.client, uid)).saves_current[0] as { gold: number };
+    expect(Number(saveAfterSell.gold)).toBe(expectedGold);
+  });
+});
+
+describe('바운티 해금 완화 — 일반 즉시 개방·네임드 전설 제외', () => {
+  it.each(['easy', 'normal', 'hard'] as const)('도감이 비어 있어도 일반 의뢰(%s)를 수주할 수 있다', async difficulty => {
+    const uid = await seed({ state: { dex: {}, location: at('harbor') } });
+    const quest = dailyQuestFor('pacific', difficulty, uid, TODAY_KST)!;
+    const res = await callAction(userToken(uid), { type: 'acceptQuest', questId: quest.id, port: 'harbor' });
+    expect(res.status).toBe(200);
+  });
+
+  it('네임드 토벌은 일반·희귀·영웅만 다 잡으면 전설 없이도 수주하고, 영웅 이하가 1종이라도 빠지면 dex-incomplete(422)다', async () => {
+    const uidOk = await seed({ state: { dex: zoneDex('pacific', 'named'), location: at('harbor') } });
+    const questOk = offeredQuestsFor('pacific', 'named', uidOk, TODAY_KST)[0];
+    expect((await callAction(userToken(uidOk), { type: 'acceptQuest', questId: questOk.id, port: 'harbor' })).status).toBe(200);
+
+    const incompleteDex = zoneDex('pacific', 'named');
+    const removedId = Object.keys(incompleteDex).sort()[0];
+    delete incompleteDex[removedId];
+    const uidMissing = await seed({ state: { dex: incompleteDex, location: at('harbor') } });
+    const questMissing = offeredQuestsFor('pacific', 'named', uidMissing, TODAY_KST)[0];
+    const res = await callAction(userToken(uidMissing), { type: 'acceptQuest', questId: questMissing.id, port: 'harbor' });
+    expect(res).toMatchObject({ status: 422, body: { error: 'dex-incomplete' } });
   });
 });

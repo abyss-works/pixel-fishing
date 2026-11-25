@@ -61,10 +61,11 @@ describe('stats.set', () => {
 });
 
 describe('dex.completeZone', () => {
-  it('구역 도감을 채워 네임드 라이선스 도감 조건을 만족시킨다 — 판정 함수와 같은 기준', () => {
+  it('구역 도감을 채워 네임드 라이선스 도감 조건(전설 제외)을 만족시킨다 — 판정 함수와 같은 기준', () => {
     const out = debug(seed(), 'dex.completeZone', { zone: 'madagascar' });
     if (!out.ok) throw new Error(out.error);
-    expect(zoneDexMissing(out.state, 'madagascar', ['common', 'rare', 'epic', 'legendary'])).toEqual([]);
+    expect(zoneDexMissing(out.state, 'madagascar', ['common', 'rare', 'epic'])).toEqual([]);
+    expect(zoneDexMissing(out.state, 'madagascar', ['legendary']).length).toBeGreaterThan(0);
     expect(licenseConditions(out.state, 'madagascar', 'named').find(c => c.key === 'dex')?.ok).toBe(true);
   });
 
@@ -175,6 +176,10 @@ describe('items.grant / cooking.finish / artifact.set / hat.set', () => {
     if (!r.ok) throw new Error(r.error);
     expect(r.state.items['cook-bait-night']).toBe(3);
 
+    const p = debug(r.state, 'items.grant', { itemId: 'luck-small', count: 2 });
+    if (!p.ok) throw new Error(p.error);
+    expect(p.state.items['luck-small']).toBe(2);
+
     expect(debug(seed(), 'items.grant', { itemId: 'nope', count: 1 })).toEqual({ ok: false, error: 'bad-request' });
   });
 
@@ -242,7 +247,7 @@ describe('achievement.setCounter / resetCounters / evaluate & bag.spawn & snapsh
   });
 
   it('achievement.evaluate reset은 도감 조건이 채워져 있어도 같은 턴에 다시 claimable로 덮어쓰지 않는다', () => {
-    const filled = debug(seed(), 'dex.completeZone', { zone: 'pacific' });
+    const filled = debug(seed(), 'dex.fill', { zone: 'pacific', form: 'normal' });
     if (!filled.ok) throw new Error(filled.error);
     expect(filled.state.achievements['spot-basic-sea']).toBe('claimable');
     expect(filled.state.achievements['spot-full-sea']).toBe('claimable');

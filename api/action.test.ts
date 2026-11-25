@@ -3,7 +3,7 @@
 // 그 계약(시그니처·res.status().json() 체인·메서드/설정 가드)이 커밋 전에 깨지면 CI에서 즉사시킨다.
 // NodeNext 설정이 서버 모듈의 해상도를 정적으로 검사하므로 여기서는 중복하지 않는다.
 import { afterEach, describe, it, expect } from 'vitest';
-import handler, { SKIP_DETAIL } from './action.js';
+import handler, { guildLogsOf, SKIP_DETAIL } from './action.js';
 import { APP_VERSION } from '../src/version.js';
 
 function mkRes() {
@@ -85,8 +85,8 @@ describe('api/action 핸들러 규약 (Node 스타일 req/res)', () => {
     expect(res.body).toEqual({ error: 'server-config' });
   });
 
-  it('acceptQuest는 개체·도감 스킵 금지 — 라이선스 도감 판정이 상태를 본다', () => {
-    // 수주는 상태를 바꾸지 않지만 판정에 dex가 필요해 records를 읽어야 한다.
+  it('acceptQuest는 개체·도감 스킵 금지 — 네임드 라이선스 도감 판정이 상태를 본다', () => {
+    // 수주는 상태를 바꾸지 않지만 네임드 토벌 판정에 dex가 필요해 records를 읽어야 한다.
     // 스킵하면 dex 빈 조립 → 도감과 무관하게 dex-incomplete 422 (수주 불가 장애).
     expect(SKIP_DETAIL.has('acceptQuest')).toBe(false);
     // 납품·불변 액션은 스킵 유지 (서버 주입·스칼라만이라 도감 불필요)
@@ -94,10 +94,36 @@ describe('api/action 핸들러 규약 (Node 스타일 req/res)', () => {
     expect(SKIP_DETAIL.has('exchangeArtifact')).toBe(true); // 재료·유물은 blob이라 스칼라 동봉
     expect(SKIP_DETAIL.has('levelUpArtifact')).toBe(true); // 레벨 맵과 재료도 blob이라 같은 기준
     expect(SKIP_DETAIL.has('boot')).toBe(true);
-    // 옷장 액션은 골드와 blob(외형·가진 모자)만 바꾼다
-    for (const t of ['changeClothes', 'buyHat', 'wearHat']) expect(SKIP_DETAIL.has(t), t).toBe(true);
-    // 요리와 기운 설정은 가방 개체를 쓰지 않아 스킵하고, 기운 얻기는 개체를 소비하므로 스킵하지 않는다
-    for (const t of ['cook', 'eat', 'setEnergyTarget', 'resetEnergyTargets', 'dismissBaitRefund', 'setAutoLockOnCatch']) expect(SKIP_DETAIL.has(t), t).toBe(true);
+    // 옷장·쿠폰 액션은 골드와 blob(외형·가진 모자·사용 쿠폰·아이템)만 바꾼다
+    for (const t of ['redeemCoupon', 'changeClothes', 'buyHat', 'wearHat']) expect(SKIP_DETAIL.has(t), t).toBe(true);
+    // 요리와 기운 설정·물약 사용은 가방 개체를 쓰지 않아 스킵하고, 기운 얻기는 개체를 소비하므로 스킵하지 않는다
+    for (const t of ['cook', 'eat', 'usePotion', 'setEnergyTarget', 'resetEnergyTargets', 'dismissBaitRefund', 'setAutoLockOnCatch']) expect(SKIP_DETAIL.has(t), t).toBe(true);
     expect(SKIP_DETAIL.has('extractEnergy')).toBe(false);
+  });
+});
+
+describe('guildLogsOf', () => {
+  it('일반 전설 또는 form이 생략된 전설 캐치는 fishId만 기록한다', () => {
+    expect(guildLogsOf([
+      { type: 'catch', payload: { fishId: 'goldcarp', form: 'normal' } },
+      { type: 'catch', payload: { fishId: 'goldcarp' } },
+    ])).toEqual([
+      { kind: 'legendary', detail: 'goldcarp' },
+      { kind: 'legendary', detail: 'goldcarp' },
+    ]);
+  });
+
+  it('돌연변이 전설 캐치는 fishId|variant 형식으로 기록한다', () => {
+    expect(guildLogsOf([
+      { type: 'catch', payload: { fishId: 'goldcarp', form: 'variant' } },
+    ])).toEqual([
+      { kind: 'legendary', detail: 'goldcarp|variant' },
+    ]);
+  });
+
+  it('전설이 아닌 돌연변이 캐치는 항해일지에 남기지 않는다', () => {
+    expect(guildLogsOf([
+      { type: 'catch', payload: { fishId: 'crucian', form: 'variant' } },
+    ])).toEqual([]);
   });
 });

@@ -4,7 +4,7 @@ import { namedById, namedFishOf } from '../../../game/content/named';
 import { rarityRank } from '../../../game/content/rarity';
 import { ZONE_IDS, subtreeSpots, topZoneOfSpot } from '../../../game/content/zones';
 import type { ZoneId } from '../../../game/content/zones';
-import { FISH, dexRecord, formDiscovered, formName, priceOf, sizeParams, sizePercentile } from '../../../game/rules/logic';
+import { FISH, dexRecord, formDiscovered, formName, priceOf, sizeParams, sizePercentile, spotNormalDexProgress } from '../../../game/rules/logic';
 import type { Fish, FormId, GameState } from '../../../game/rules/logic';
 import { namedRewardStat } from '../../../game/rules/artifactLevel';
 import type { Stat } from '../../../game/rules/stats';
@@ -19,6 +19,8 @@ export interface DexFishEntry {
 
 export interface DexSpotEntry {
   spot: ReturnType<typeof subtreeSpots>[number];
+  /** 일반 폼 기준 해역 도감 진행도 */
+  normalProgress: { found: number; total: number; completed: boolean };
   fishes: DexFishEntry[];
 }
 
@@ -44,6 +46,7 @@ export function selectDexGrid(game: GameState, zone: ZoneId, form: FormId): DexG
   });
   const spots = subtreeSpots(zone).map(spot => ({
     spot,
+    normalProgress: spotNormalDexProgress(game.dex, spot.id),
     fishes: FISH.filter(fish => fish.spot === spot.id)
       .sort((a, b) => rarityRank(a.rarity) - rarityRank(b.rarity))
       .map(fish => ({

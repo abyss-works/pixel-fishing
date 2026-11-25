@@ -40,7 +40,7 @@ function gridPresets<K extends string>(grid: SpriteGrid, scales: Record<K, numbe
 const GRID_32X16: SpriteGrid = { w: 32, h: 16 };
 const SHIP_PRESETS = gridPresets(GRID_32X16, { thumb: 1, row: 2, hero: 3 });
 const GRID_16X16: SpriteGrid = { w: 16, h: 16 };
-// 요리·미끼: 한 줄로 나열하는 자리는 row(1배), 부엌 창의 레시피 목록은 list(2배), 상세 머리는 hero(3배, 같은 자리의 배·낚싯대 그림과 높이가 같다).
+// 요리·미끼·유물: 한 줄로 나열하는 자리는 row(1배), 목록은 list(2배), 상세 머리는 hero(3배, 같은 자리의 배·낚싯대 그림과 높이가 같다).
 const ITEM_LAYOUT = { grid: GRID_16X16, margin: 2, presets: gridPresets(GRID_16X16, { row: 1, list: 2, hero: 3 }) } satisfies SpriteLayout;
 
 export const SPRITE_TARGETS = {
@@ -78,9 +78,7 @@ export const SPRITE_TARGETS = {
   },
   dish: { kind: 'dish', idLabel: '요리 id', layout: ITEM_LAYOUT, palette: 'per-sprite', states: ['default'], motion: 'none' },
   bait: { kind: 'bait', idLabel: '요리 id', layout: ITEM_LAYOUT, palette: 'per-sprite', states: ['default'], motion: 'none' },
-  // 유물: 정사각 격자를 쓰는 것까지만 정해졌고 크기와 배율은 미정이다. layout이 null인 동안
-  // 생성 도구가 이 대상을 거부하며, 값이 정해지면 layout을 채운다.
-  artifact: { kind: 'artifact', layout: null, palette: 'per-sprite', states: ['default'], motion: 'none' },
+  artifact: { kind: 'artifact', idLabel: '유물 id', layout: ITEM_LAYOUT, palette: 'per-sprite', states: ['default'], motion: 'none' },
 } as const satisfies Record<string, SpriteTarget>;
 
 /** 정의된 대상 종류 — SPRITE_TARGETS의 키 */

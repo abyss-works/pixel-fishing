@@ -48,32 +48,19 @@ export async function sessionUid(): Promise<string | null> {
 }
 
 // ---------- 계정 로그인 ----------
-// 새 계정의 로그인 수단은 구글 하나다. 게스트(익명)는 같은 uid에 구글 계정을 붙여(연결) 영구 계정이 된다.
-// 이메일과 비밀번호는 이미 있는 계정의 로그인에만 남아 있다.
-
-// 인증 서버 오류 코드 → 화면이 분기에 쓰는 코드
-const CODE: Record<string, string> = {
-  INVALID_EMAIL_OR_PASSWORD: 'invalid_credentials',
-  PASSWORD_TOO_SHORT: 'weak_password',
-  INVALID_EMAIL: 'validation_failed',
-  INVALID_TOKEN: 'invalid_token',
-};
-
-// 화면 코드 → 유저가 행동할 수 있는 한국어 안내 (코드 없으면 원문 노출)
-const AUTH_MSG: Record<string, string> = {
-  weak_password: '비밀번호가 너무 짧아요. 6자 이상으로 입력해 주세요.',
-  invalid_credentials: '이메일 또는 비밀번호가 틀렸어요.',
-  validation_failed: '이메일 형식을 확인해 주세요.',
-  over_email_send_rate_limit: '요청이 너무 잦아요. 잠시 뒤 다시 시도해 주세요.',
-  invalid_token: '재설정 링크가 만료됐거나 이미 쓰였어요. 비밀번호 재설정을 다시 요청해 주세요.',
-};
+// 계정의 로그인 수단은 구글과 익명 게스트다. 게스트는 같은 uid에 구글 계정을 붙여(연결) 영구 계정이 된다.
 
 const authErr = (e: AuthError): AuthResult => {
-  const code = e?.status === 429 ? 'over_email_send_rate_limit' : (e?.code ? CODE[e.code] : undefined);
+  if (e?.status === 429) {
+    return {
+      ok: false,
+      msg: '요청이 너무 잦아요. 잠시 뒤 다시 시도해 주세요.',
+      code: 'rate_limited',
+    };
+  }
   return {
     ok: false,
-    msg: (code && AUTH_MSG[code]) ?? `${e?.message ?? '알 수 없는 오류'}${e?.status ? ` (${e.status})` : ''}`,
-    code,
+    msg: `${e?.message ?? '알 수 없는 오류'}${e?.status ? ` (${e.status})` : ''}`,
   };
 };
 
@@ -88,28 +75,6 @@ export async function currentAccount(): Promise<AccountLookup> {
     return { status: 'failed' };
   }
   return u && !u.isAnonymous && u.email ? { status: 'account', email: u.email } : { status: 'guest' };
-}
-
-/**
- * 이메일 로그인 실패를 화면이 분기에 쓰는 코드로 가른다. 서버는 틀린 입력, 없는 계정, 구글을 연결해 이메일 로그인이 꺼진 계정을
- * 구분하지 않고 401로 돌려주므로 모두 인증 실패다. 요청이 서버에 닿지 못해 던져진 오류는 network다.
- */
-export function classifyEmailSignInFailure(e: AuthError | Error): AuthResult {
-  if (e instanceof Error) return { ok: false, msg: e.message, code: 'network' };
-  const base = authErr(e);
-  if (base.ok || base.code) return base;
-  return e?.status === 401 ? { ...base, code: 'invalid_credentials' } : base;
-}
-
-// 이미 있는 이메일 계정으로 로그인 — 현재 기기의 게스트 진행은 버려진다 (호출 전 UI가 확인을 받는다)
-export async function signInWithEmail(email: string, password: string): Promise<AuthResult> {
-  if (!authClient) return NOT_CLOUD;
-  try {
-    const { error } = await authClient.signIn.email({ email, password });
-    return error ? classifyEmailSignInFailure(error) : { ok: true };
-  } catch (e) {
-    return classifyEmailSignInFailure(e instanceof Error ? e : new Error(String(e)));
-  }
 }
 
 // ---------- 구글 연결과 로그인 ----------
@@ -182,54 +147,9 @@ export function takeGoogleLanding(): { tag: string; error: string | null } | nul
   return { tag: landing.tag, error: landing.error };
 }
 
-/** 이 계정에 붙은 로그인 수단의 공급자 이름(google, credential). 조회하지 못하면 null */
-export async function accountProviders(): Promise<string[] | null> {
-  if (!authClient) return null;
-  const { data, error } = await authClient.listAccounts();
-  if (error || !data) return null;
-  return data.map(a => a.providerId);
-}
-
 export async function signOutAccount(): Promise<void> {
   if (!authClient) return;
   await authClient.signOut();
-}
-
-// 재설정 메일의 링크는 서버를 거쳐 redirectTo?token=… 으로 돌아온다(토큰이 틀리면 ?error=INVALID_TOKEN)
-export async function requestPasswordReset(email: string): Promise<AuthResult> {
-  if (!authClient) return NOT_CLOUD;
-  const { error } = await authClient.requestPasswordReset({ email, redirectTo: `${window.location.origin}/` });
-  return error ? authErr(error) : { ok: true };
-}
-
-// 재설정 착지 — 부팅 때 한 번 주소에서 토큰을 꺼내 들고, 주소에서는 바로 지운다(새로고침·공유로 다시 쓰이지 않게)
-let resetToken: string | null = null;
-
-/** 재설정 링크로 들어왔는가. 'ready'면 새 비밀번호를 받을 차례, 'invalid'면 링크가 쓸 수 없는 것이다 */
-export function takePasswordResetLanding(): 'ready' | 'invalid' | null {
-  if (!authClient) return null;
-  const url = new URL(window.location.href);
-  // 구글 인증에서 돌아온 주소의 error 질의는 재설정 링크의 오류가 아니다
-  if (url.searchParams.has(GOOGLE_RETURN_PARAM)) return null;
-  const token = url.searchParams.get('token');
-  const error = url.searchParams.get('error');
-  if (!token && !error) return null;
-  url.searchParams.delete('token');
-  url.searchParams.delete('error');
-  window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
-  if (error || !token) return 'invalid';
-  resetToken = token;
-  return 'ready';
-}
-
-// 재설정 착지 후 새 비밀번호 적용
-export async function applyNewPassword(password: string): Promise<AuthResult> {
-  if (!authClient) return NOT_CLOUD;
-  if (!resetToken) return { ok: false, msg: AUTH_MSG.invalid_token, code: 'invalid_token' };
-  const { error } = await authClient.resetPassword({ newPassword: password, token: resetToken });
-  if (error) return authErr(error);
-  resetToken = null;
-  return { ok: true };
 }
 
 // 본인 탈퇴 — 서버 함수(/api/account)가 계정 행과 인증 계정을 지운다. 지운 뒤 이 기기의 세션을 끝낸다

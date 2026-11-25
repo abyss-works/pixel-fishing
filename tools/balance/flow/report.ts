@@ -6,7 +6,7 @@ import { zoneById } from '../../../src/game/content/zones';
 import type { ZoneId } from '../../../src/game/content/zones';
 import { BOUNTY_ZONES } from '../../../src/game/content/bounties';
 import type { BountyTier } from '../../../src/game/content/bounties';
-import { FIRST_CATCH_EPIC_AT, FIRST_CATCH_LEGEND_MAX, FIRST_CATCH_LEGEND_MIN } from '../../../src/game/rules/firstCatch';
+import { FIRST_CATCH_SPOT_CAPS } from '../../../src/game/rules/firstCatch';
 import { entryLevel } from '../model';
 import { virtualZoneOf } from '../virtualSpots';
 import { FAME_RATIO_LIMIT, OPENING_LIMIT_SEC, PERFECT_LIMIT } from '../gates';
@@ -162,7 +162,7 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
 명령
   transition  해역 전환(효과 옵션을 주면 효과를 넣은 관측값과 효과 없음 대비 차이를 함께 낸다): 전환 골드(다음 진입 레벨까지 강화비 + 새 배 가격)와 비중, 전환 시간(실질 낚시 시간)과 8시간 환산 일수, 배 명성 대기
   days        해역별 누적 실질 낚시 시간과 8시간 환산 일수, 마지막 해역 레벨업 시간. 일반 의뢰와 네임드 토벌 수행 여부별(효과 옵션을 주면 효과를 넣은 관측값과 효과 없음 대비 차이를 함께 낸다)
-  opening     최초 10분: 수동 낚시로 첫 바다 해역에 닿는 시간. 영웅 1회와 전설 1회 보장
+  opening     최초 10분: 수동 낚시로 첫 바다 해역에 닿는 시간. 해역별 상한 내 미보유 일반 폼 전종 보장
   exception   예외 흐름: 진입 레벨 -4부터 +4까지 수입, 조기 진입, 낮은 지역으로 돌아옴, 네임드 토벌 비용
   ev          방치 EV: 해역별 방치 시간당 기대 골드(딱렙, 다음 진입 직전), 구역 대표 EV, 의뢰·토벌 보상의 EV 시간 환산과 목표 대비 차이, 새 보상과 변화율. 항상 방치 기준이다. --growth를 주면 해역 사이 딱렙 EV 증가율 열을 더한다
   dist        분포: 같은 규칙과 상수로 캐치마다 뽑는 몬테카를로. 최초 10분(영웅 보장, 전설 보장, 첫 바다 해역 도착 시각)과 해역 전환 시간의 p10, 중앙값, p90, 평균을 해석 기댓값과 함께 낸다. p90이 운이 나쁜(느린) 쪽이다
@@ -193,7 +193,7 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
                      addSpots(opening, exception, travel, effects, window, recipes에서는 쓸 수 없다): 진행 순서 끝에 가상 해역을 더한다. like(생략하면 그때 마지막 해역)의 어종 구성을 복사하고 가격은 priceMult를 곱하거나 growth(ref 해역 딱렙 방치 EV 대비 증가율)에 맞춘다(가격 사다리로 맞추지 않는다).
                      zone을 주면 그 이름의 새 지역이고 생략하면 like의 지역이다. boat를 주면 그 해역을 여는 새 배를 더한다. 가상 어종은 구역 도감 조건에 세지 않는다
   --json             표 대신 JSON으로 낸다
-  --legend-at <N>    opening의 전설 보장 캐치 번호(${FIRST_CATCH_LEGEND_MIN}에서 ${FIRST_CATCH_LEGEND_MAX}). 생략하면 ${FIRST_CATCH_LEGEND_MIN}, ${Math.round((FIRST_CATCH_LEGEND_MIN + FIRST_CATCH_LEGEND_MAX) / 2)}, ${FIRST_CATCH_LEGEND_MAX}를 모두 낸다
+  --legend-at <N>    이전 전설 보장 번호 호환 옵션(현재 해역별 상한 보장으로 대체됨)
   --axis <idle|manual|perfect>  낚시 방식. 기본 idle(방치). manual은 GOOD 판정(파워 미달 해역은 무판정). perfect는 effects, window에서만: 빨간 존이 열렸는지와 관계없이 PERFECT 다이얼을 적용한 상한이고 effects는 방치 대비 비율 열을 더한다
   --max-days <N>     시뮬레이션 최대 일수(하루는 실질 낚시 ${DAY_HOURS}시간). 기본 365
   --seed <N>         dist의 난수 시드(정수). 기본 ${DEFAULT_SEED}. 같은 시드, 시도 횟수, 인자의 출력은 항상 같다
@@ -627,9 +627,8 @@ export interface FlowResult {
   exception?: { income: IncomeRow[]; earlyEntry: EarlyEntryRow[]; returnTrips: ReturnTrip[]; huntCost: HuntRow[] };
 }
 
-/** 전설 보장 번호 후보 — 지정하면 그 번호, 아니면 제품 범위의 처음, 가운데, 끝 */
-const legendCandidates = (legendAt: number | null): number[] =>
-  legendAt !== null ? [legendAt] : [FIRST_CATCH_LEGEND_MIN, Math.round((FIRST_CATCH_LEGEND_MIN + FIRST_CATCH_LEGEND_MAX) / 2), FIRST_CATCH_LEGEND_MAX];
+/** 호환용 게이트 후보 — 현재는 해역별 상한 보장이 고정 적용되므로 1회만 실행한다 */
+const legendCandidates = (legendAt: number | null): number[] => [legendAt ?? 1];
 
 /** 가상 해역(addSpots)을 지원하지 않는 명령 — 해역 표나 지도 데이터를 해역 id로 직접 읽는다 */
 const NO_VIRTUAL_COMMANDS: readonly Command[] = ['opening', 'exception', 'travel', 'effects', 'window', 'recipes'];
@@ -687,7 +686,7 @@ export function runFlow(o: FlowOptions): FlowResult {
     if (o.commands.includes('days')) res.days = daysReport({ ...sim, plan, reward, counterBonus });
     if (o.commands.includes('opening')) {
       const judgments: Judgment[] = ['normal', 'good'];
-      res.opening = judgments.flatMap(judgment => [null, ...legendCandidates(o.legendAt)].map(legendAt => simulateOpening({ judgment, legendAt })));
+      res.opening = judgments.flatMap(judgment => [false, true].map(firstCatch => simulateOpening({ judgment, firstCatch })));
     }
     if (o.commands.includes('dist')) {
       res.dist = {
@@ -825,7 +824,7 @@ function rewardAssumptions(unit: RewardUnit = 'zone'): string[] {
   }
   return [
     '업적 보상을 넣은 값은 관측용이다. 보상 없이 잰 값이 메인 지표이고 전환 시간 목표와 게이트 판정은 보상 없는 값으로 한다',
-    '진행 업적은 구역의 일반 폼 도감 조건이다(기본 라이선스 조건은 전설 제외, 네임드 라이선스 조건은 전설 포함, 일반 폼만 센다). 기댓값 경로는 구역 도감 완성 확률이 라이선스 문턱(0.5)을 넘은 시점에, 표본 경로(dist)는 실제로 뽑은 일반 폼이 조건을 채운 시점에 달성한다',
+    '진행 업적은 구역의 일반 폼 도감 조건이다(기본 업적은 전설 제외, 도감 완결 업적은 전설 포함, 일반 폼만 센다). 기댓값 경로는 구역 도감 완성 확률이 문턱(0.5)을 넘은 시점에, 표본 경로(dist)는 실제로 뽑은 일반 폼이 조건을 채운 시점에 달성한다',
     '시뮬레이션은 열린 가장 뒤 해역에서만 낚고 지나온 해역으로 돌아가 도감을 채우지 않는다. 그래서 구역을 떠나기 전에 도감을 채우지 못하면 그 업적은 채워지지 않고 지급하지 않는다',
     '보상은 달성한 시점에 골드를 한 번에 지급하고, 지급한 골드는 바로 구매에 쓴다. 구역 보상 크기와 두 업적의 나눔은 achievements 명령과 같은 값이다',
   ];
@@ -839,7 +838,7 @@ function assumptionText(command: Command, o: FlowResult['options'], windowMateri
     if (o.reward) lines.push(...rewardAssumptions(o.reward.unit));
   } else if (command === 'days') {
     lines.push(
-      '의뢰 라이선스는 그 구역 도감(일반 폼)을 모두 모았을 확률이 0.5를 넘는 날부터 쓴다. 어종은 서로 독립이고 낚은 해역에서만 쌓이며 어종 천장은 넣지 않는다',
+      '일반 의뢰 라이선스는 도감 조건 없이 해역이 열리면 바로 쓰고, 네임드 토벌 라이선스는 전설을 뺀 구역 도감(일반 폼)을 모두 모았을 확률이 0.5를 넘는 날부터 쓴다. 어종은 서로 독립이고 낚은 해역에서만 쌓이며 어종 천장은 넣지 않는다',
       '지나온 해역으로 돌아가 도감을 채우지 않는다',
       '일반 의뢰는 물고기를 건네지 않고 골드 보상만 받는다. 난이도마다 그날 후보 중 끝낼 수 있는 후보의 평균으로 보고 하루 1회, 네임드 토벌도 하루 1회다',
       '네임드 결투는 항상 이기고 조우는 천장을 넣은 기대 캐치 수로 센다. 의뢰 중에는 그 구역에서 낚을 수 있는 해역을 같은 시간씩 낚고 항구 이동 시간은 넣지 않는다',
@@ -852,7 +851,7 @@ function assumptionText(command: Command, o: FlowResult['options'], windowMateri
       '해석적 기댓값 경로와 같은 확률, 판매가, 캐치 주기, 첫 경험 보장 규칙을 캐치마다 뽑는다. 입질 대기는 범위 균등이고 어종은 낮밤 혼합 확률, 돌연변이는 전역 확률이다. 기댓값 경로에 없는 pity, 미끼, 유물은 넣지 않는다',
       `난수는 시드 고정 mulberry32이고 시도마다 같은 흐름을 이어 쓴다. 같은 시드(${o.seed}), 시도 횟수(${o.trials}), 인자의 출력은 항상 같다`,
       'p10은 빠른 쪽(운이 좋은 10%의 경계), p90은 느린 쪽(운이 나쁜 10%의 경계)이다',
-      '최초 10분: 전설 보장 번호는 제품 규칙대로 시도마다 10에서 20 사이로 뽑는다. 도착 뒤에도 보장이 남으면 그 해역에서 더 낚아 보장 시각을 재고, 10분 안에 못 닿은 시도도 도착 시간에 넣는다. 해석 기댓값은 전설 보장이 가운데 번호일 때의 값이다',
+      '최초 10분: 첫 경험 보장은 제품 규칙(해역별 상한 테이블 내 미보유 일반 폼 전종 보장)을 따른다. 도착 뒤에도 보장이 남으면 그 해역에서 더 낚아 보장 시각을 재고, 10분 안에 못 닿은 시도도 도착 시간에 넣는다. 해석 기댓값은 첫 경험 보장을 적용한 경로의 값이다',
       '해역 전환: 방치로 낚는 새 계정을 시도마다 처음부터 끝까지 한 번 시뮬레이션하고 전환별 시간을 모은다. 앞 해역은 전환 소요가 짧아, 캐치 가격이 한쪽으로 치우쳐 고가 어종으로 문턱을 넘은 초과분이 다음 전환으로 넘어가는 효과와 1분 단위 문턱 판정의 영향이 커서 개별 전환의 표본 평균이 기댓값과 벌어진다. 누적 소요가 긴 남인도양 이후 해역은 누적 시간으로 보면 기댓값과 일치하지만, 앞 해역은 누적으로도 표본 평균이 기댓값보다 크다',
     );
   } else if (command === 'achievements') {
@@ -953,7 +952,7 @@ function assumptionText(command: Command, o: FlowResult['options'], windowMateri
       '집 기운으로 만들 수 있는 개수는 필요한 등급 중 가장 모자란 등급이 정한다',
     );
   } else if (command === 'opening') {
-    lines.push('낚는 시간만 센다. 도보 이동, 판매와 구매 창 조작, 안내 시간은 넣지 않는다', '보장 캐치의 획득 연출도 일반 캐치와 같은 길이이고 보장 어종 가격은 그 해역 풀의 해당 등급 평균이다', '강화를 먼저 다 하고 배를 산다');
+    lines.push('낚는 시간만 센다. 도보 이동, 판매와 구매 창 조작, 안내 시간은 넣지 않는다', '보장 캐치의 획득 연출도 일반 캐치와 같은 길이이고 보장 캐치는 일반 폼으로 잡혀 해당 어종 기본 가격을 받는다', '강화를 먼저 다 하고 배를 산다');
   } else {
     lines.push(
       `낚시 방식은 ${AXIS_LABEL[o.axis]}이고 낮밤 혼합 기댓값이다`,
@@ -1132,20 +1131,25 @@ function daysText(d: NonNullable<FlowResult['days']>, o: FlowResult['options']):
   return out;
 }
 
+function spotCapsLabel(): string {
+  return Object.entries(FIRST_CATCH_SPOT_CAPS).map(([id, cap]) => `${nameOf(id as SpotId)} ${cap}회`).join(' · ');
+}
+
 function openingText(rows: OpeningResult[]): string[] {
   const out: string[] = [];
   out.push(`\n## 최초 10분 — 수동 낚시로 첫 바다 해역(${nameOf(rows[0].target)})에 닿기까지, 낚는 시간만 센 값 (목표 ${OPENING_TARGET_SEC / 60}분)`);
   const stepName = (s: OpeningResult['steps'][number]) =>
-    s.kind === 'guarantee' ? `${s.detail === 'epic' ? '영웅' : '전설'} 보장@${s.catches}`
+    s.kind === 'guarantee' ? `${RARITY[s.detail as RarityId]?.name ?? s.detail} 보장@${s.catches}`
       : s.kind === 'upgrade' ? `Lv${s.detail}@${s.catches}`
         : s.kind === 'boat' ? `배${s.detail}@${s.catches}` : `${s.kind === 'move' ? '이동 ' : '도착 '}${nameOf(s.detail as SpotId)}@${s.catches}`;
+  const caps = spotCapsLabel();
   out.push(table(
     ['판정', '첫 경험 보장', '도착 시간', '캐치 수', `10분까지 남는 시간`, '단계(캐치 번호)'],
     rows.map(r => {
       const a = r.arrival;
       return [
         r.options.judgment === 'good' ? 'GOOD' : '무판정',
-        r.options.legendAt === null ? '보장 없음' : `영웅 ${FIRST_CATCH_EPIC_AT}번째, 전설 ${r.options.legendAt}번째`,
+        r.options.firstCatch === false || r.options.legendAt === null ? '보장 없음' : `상한 보장(${caps})`,
         a ? `${(a.seconds / 60).toFixed(1)}분` : '미도착', a ? a.catches : '—',
         a ? `${((OPENING_TARGET_SEC - a.seconds) / 60).toFixed(1)}분` : '—', r.steps.map(stepName).join(' '),
       ];
@@ -1245,7 +1249,7 @@ function distText(d: NonNullable<FlowResult['dist']>): string[] {
   }
   out.push(table(['판정', '지표', 'p10(빠른 쪽)', '중앙값', 'p90(느린 쪽)', '평균', '못 끝냄(횟수)'], rows));
   for (const x of d.opening) {
-    out.push(`- ${x.judgment === 'good' ? 'GOOD' : '무판정'}: 목표 ${OPENING_TARGET_SEC / 60}분 안에 도착한 비율 ${x.within10 === null ? '—(못 끝낸 시도가 있다)' : pct1(x.within10)}, 해석 기댓값 ${Number.isFinite(x.analytic) ? minutes(x.analytic) : '미도달'}(전설 보장 가운데 번호)`);
+    out.push(`- ${x.judgment === 'good' ? 'GOOD' : '무판정'}: 목표 ${OPENING_TARGET_SEC / 60}분 안에 도착한 비율 ${x.within10 === null ? '—(못 끝낸 시도가 있다)' : pct1(x.within10)}, 해석 기댓값 ${Number.isFinite(x.analytic) ? minutes(x.analytic) : '미도달'}(상한 보장)`);
   }
   const ratio = (mean: number | null | undefined, analytic: number | null) =>
     mean !== null && mean !== undefined && analytic !== null && analytic > 0 ? `${(mean / analytic).toFixed(2)}배` : '—';
@@ -1433,10 +1437,11 @@ function gatesText(g: GatesReport, o: FlowResult['options']): string[] {
   out.push(`\n${count(g.fame.map(r => r.verdict))}`);
 
   if (!g.moveBase) {
-    out.push(`\n## 게이트 검사 — 최초 10분 도달 (새 계정이 수동 낚시로 ${OPENING_LIMIT_SEC / 60}분 안에 ${nameOf(SPOTS.find(s => s.boatTier >= 1)!.id)}에 닿는다. 전설 보장 번호 후보 중 가장 느린 값)`);
+    const caps = spotCapsLabel();
+    out.push(`\n## 게이트 검사 — 최초 10분 도달 (새 계정이 수동 낚시로 ${OPENING_LIMIT_SEC / 60}분 안에 ${nameOf(SPOTS.find(s => s.boatTier >= 1)!.id)}에 닿는다. 상한 보장 ${caps})`);
     out.push(table(
-      ['판정 방식', '가장 느린 보장 번호', '도착 시간', '캐치 수', '판정'],
-      g.opening.map(r => [r.judgment === 'good' ? 'GOOD' : '무판정', `전설 ${r.legendAt}번째`, r.seconds === null ? '미도착' : minutes(r.seconds), r.catches ?? '—', show(r.verdict)]),
+      ['판정 방식', '첫 경험 보장', '도착 시간', '캐치 수', '판정'],
+      g.opening.map(r => [r.judgment === 'good' ? 'GOOD' : '무판정', caps, r.seconds === null ? '미도착' : minutes(r.seconds), r.catches ?? '—', show(r.verdict)]),
     ));
     out.push(`\n${count(g.opening.map(r => r.verdict))}`);
   }

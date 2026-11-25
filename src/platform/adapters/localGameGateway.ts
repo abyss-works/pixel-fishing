@@ -34,7 +34,7 @@ export class LocalGameGateway implements GameGateway {
 
   getProfile(): GameProfile {
     if (!this.nickname) this.nickname = pickGuestName(Math.random);
-    return { nickname: this.nickname, devTools: false };
+    return { ok: true, nickname: this.nickname, devTools: false };
   }
 
   dispatch(action: GameAction): DispatchResult {

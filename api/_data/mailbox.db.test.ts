@@ -8,7 +8,7 @@ import type { Database } from '../_db/client.js';
 import { createTestDatabase } from '../_dbTest/testDatabase.js';
 import type { TestDatabase } from '../_dbTest/testDatabase.js';
 import {
-  allPlayerIds, claimMailFragment, claimableGold, clearMailIdempotencyCache, deliverMail, draftProblems, DuplicateMailError, listMails, markMailRead,
+  allPlayerIds, claimMailFragment, claimableMail, clearMailIdempotencyCache, deliverMail, draftProblems, DuplicateMailError, listMails, markMailRead,
   MAIL_LIST_LIMIT, MAX_MAIL_BATCH_TOTAL_GOLD, parseMailRequest, planMail, previewMails, recentSentMails, sendMails,
 } from './mailbox.js';
 
@@ -41,15 +41,20 @@ async function user(withSave = true, restricted = false): Promise<string> {
 }
 
 describe('보내기', () => {
-  it('요청 본문 해석 — 지정 계정과 전체 대상, 형태가 틀리면 null', () => {
+  it('요청 본문 해석 — 지정 계정과 전체 대상, items·생략 gold, 형태가 틀리면 null', () => {
     const id = randomUUID();
     expect(parseMailRequest({ title: 't', body: 'b', target: { kind: 'all', gold: 5 } }))
       .toEqual({ title: 't', body: 'b', target: { kind: 'all', gold: 5 } });
     expect(parseMailRequest({ title: 't', body: 'b', target: { kind: 'users', recipients: [{ userId: id, gold: 1 }] } }))
       .toEqual({ title: 't', body: 'b', target: { kind: 'users', recipients: [{ userId: id, gold: 1 }] } });
+    expect(parseMailRequest({ title: 't', body: 'b', target: { kind: 'users', recipients: [{ userId: id }] } }))
+      .toEqual({ title: 't', body: 'b', target: { kind: 'users', recipients: [{ userId: id, gold: 0 }] } });
+    expect(parseMailRequest({ title: 't', body: 'b', target: { kind: 'all', items: [{ id: 'luck-small', qty: 2 }] } }))
+      .toEqual({ title: 't', body: 'b', target: { kind: 'all', gold: 0, items: [{ id: 'luck-small', qty: 2 }] } });
     for (const bad of [null, 'x', { title: 't', body: 'b' }, { title: 't', body: 'b', target: { kind: 'all', gold: '5' } },
       { title: 't', body: 'b', target: { kind: 'users', recipients: 'x' } },
-      { title: 't', body: 'b', target: { kind: 'users', recipients: [{ userId: id }] } },
+      { title: 't', body: 'b', target: { kind: 'users', recipients: [{ userId: id, gold: '1' }] } },
+      { title: 't', body: 'b', target: { kind: 'all', gold: 0, items: [{ id: 'luck-small', qty: '2' }] } },
       { title: 1, body: 'b', target: { kind: 'all', gold: 1 } }]) {
       expect(parseMailRequest(bad)).toBeNull();
     }
@@ -187,25 +192,74 @@ describe('플레이어 쪽', () => {
     expect(list[0].title).toBe(`읽은 글 ${MAIL_LIST_LIMIT + 5}`);
   });
 
-  it('받을 골드는 본인의 받지 않은 골드 우편에만 있고, 받기 조각은 확정 조건이 참일 때 한 번만 쓴다', async () => {
+  it('받을 보상은 본인의 받지 않은 골드·아이템 우편에만 있고, 받기 조각은 확정 조건이 참일 때 한 번만 쓴다', async () => {
     const me = await user();
     const other = await user();
     await sendMails(database.db, { title: '골드', body: 'b', recipients: [{ userId: me, gold: 300 }] }, NOW);
+    await sendMails(database.db, {
+      title: '아이템만', body: 'b',
+      recipients: [{ userId: me, gold: 0, items: [{ id: 'luck-small', qty: 2 }, { id: 'energy-common', qty: 3 }] }],
+    }, NOW);
     await sendMails(database.db, { title: '글', body: 'b', recipients: [{ userId: me, gold: 0 }] }, NOW);
-    const [gold, text] = (await listMails(database.db, me)).sort((x, y) => y.gold - x.gold);
-    expect(await claimableGold(database.db, me, gold.id)).toBe(300);
-    expect(await claimableGold(database.db, me, text.id)).toBeNull();
-    expect(await claimableGold(database.db, other, gold.id)).toBeNull();
+    const list = await listMails(database.db, me);
+    const gold = list.find(m => m.title === '골드')!;
+    const itemOnly = list.find(m => m.title === '아이템만')!;
+    const text = list.find(m => m.title === '글')!;
+    expect(await claimableMail(database.db, me, gold.id)).toEqual({ gold: 300, items: [] });
+    expect(await claimableMail(database.db, me, itemOnly.id)).toEqual({
+      gold: 0,
+      items: [{ id: 'energy-common', qty: 3 }, { id: 'luck-small', qty: 2 }],
+    });
+    expect(await claimableMail(database.db, me, text.id)).toBeNull();
+    expect(await claimableMail(database.db, other, gold.id)).toBeNull();
 
     // 확정 조건이 거짓이면 쓰지 않는다
     await database.db.execute(claimMailFragment(sql`false`, me, gold.id, NOW));
-    expect(await claimableGold(database.db, me, gold.id)).toBe(300);
+    expect(await claimableMail(database.db, me, gold.id)).toEqual({ gold: 300, items: [] });
 
     await database.db.execute(claimMailFragment(sql`true`, me, gold.id, NOW));
     await database.db.execute(claimMailFragment(sql`true`, me, gold.id, LATER));
     const claimed = (await listMails(database.db, me)).find(m => m.id === gold.id)!;
     expect(claimed.claimedAt).toBe(NOW);
     expect(claimed.readAt).toBe(NOW);
-    expect(await claimableGold(database.db, me, gold.id)).toBeNull();
+    expect(await claimableMail(database.db, me, gold.id)).toBeNull();
+  });
+
+  it('아이템 첨부 우편은 읽어도 미수령이면 목록 상한 밖으로 밀리지 않고, 최근 중복 창도 정규화된 items까지 대조한다', async () => {
+    clearMailIdempotencyCache();
+    const me = await user();
+    const firstItems = [{ id: 'luck-small', qty: 2 }, { id: 'mat-abyss-lantern', qty: 1 }];
+    const sent = await deliverMail(database.db, {
+      title: '아이템 공지', body: '본문',
+      target: { kind: 'users', recipients: [{ userId: me, gold: 0, items: firstItems }] },
+      idempotencyKey: randomUUID(),
+    }, NOW);
+    expect(sent.sent).toBe(1);
+
+    // 같은 items의 순서만 뒤집어 10분 내 재발송하면 중복 차단된다
+    await expect(deliverMail(database.db, {
+      title: '아이템 공지', body: '본문',
+      target: { kind: 'users', recipients: [{ userId: me, gold: 0, items: [...firstItems].reverse() }] },
+      idempotencyKey: randomUUID(),
+    }, '2026-10-23T00:05:00.000Z')).rejects.toBeInstanceOf(DuplicateMailError);
+
+    // 수량이 다르면 다른 우편이므로 발송된다
+    const diffSent = await deliverMail(database.db, {
+      title: '아이템 공지', body: '본문',
+      target: { kind: 'users', recipients: [{ userId: me, gold: 0, items: [{ id: 'luck-small', qty: 3 }] }] },
+      idempotencyKey: randomUUID(),
+    }, '2026-10-23T00:06:00.000Z');
+    expect(diffSent.sent).toBe(1);
+
+    // 읽은 뒤 상한을 넘는 글 우편이 쌓여도 미수령 아이템 우편은 목록에 남는다
+    const [itemMail] = await listMails(database.db, me);
+    await markMailRead(database.db, me, itemMail.id, LATER);
+    await client.query(`insert into public.mails (user_id, title, body, gold, created_at, read_at)
+      select $1, '읽은 글 ' || g, 'b', 0, '2026-11-01T00:00:00Z'::timestamptz + g * interval '1 minute', '2026-11-01T00:00:00Z'::timestamptz
+      from generate_series(1, ${MAIL_LIST_LIMIT + 5}) g`, [me]);
+    const list = await listMails(database.db, me);
+    expect(list.some(m => m.id === itemMail.id)).toBe(true);
+    const recent = await recentSentMails(database.db);
+    expect(recent.find(m => m.id === itemMail.id)?.items).toEqual([{ id: 'luck-small', qty: 3 }]);
   });
 });

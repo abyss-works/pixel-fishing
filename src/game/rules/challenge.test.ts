@@ -47,7 +47,8 @@ describe('도전권 유효 — 발급한 게임 날짜가 끝나는 KST 04:00까
     expect(ticketRemainingMs('깨짐', Date.parse('2026-10-20T00:00:00.000Z'))).toBe(0);
   });
 
-  it('안내 문구는 경계 시각을 쓴다', () => {
-    expect(TICKET_EXPIRY_TEXT).toBe('한국 시간 새벽 4시까지');
+  it('안내 문구는 경계 시각을 쓰고 시간대 내부 용어를 노출하지 않는다', () => {
+    expect(TICKET_EXPIRY_TEXT).toBe('다음 날 새벽 4시까지');
+    expect(TICKET_EXPIRY_TEXT).not.toContain('한국 시간');
   });
 });

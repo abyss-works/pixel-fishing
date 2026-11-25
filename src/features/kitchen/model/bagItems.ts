@@ -3,11 +3,16 @@
 // 보관함에 든 완성분은 조리가 끝난 분까지 센다(settleCooking). 이 모듈은 그 판정을 화면용 행으로 옮긴다.
 import { COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, recipeById } from '../../../game/content/cooking';
 import type { Recipe } from '../../../game/content/cooking';
+import { POTIONS } from '../../../game/content/potions';
+import type { Potion } from '../../../game/content/potions';
 import { RARITY_ORDER } from '../../../game/content/rarity';
 import type { RarityId } from '../../../game/content/rarity';
 import { canEat, maxBaitSlots, settleCooking, slotDurationMs } from '../../../game/rules/cooking';
+import { activePotionsOf } from '../../../game/rules/fortune';
 import type { GameState } from '../../../game/rules/logic';
+import { canUsePotion } from '../../../game/rules/rules';
 import type { RuleCheck } from '../../../game/rules/rules';
+import { josa } from '../../../shared/lib/josa';
 import { facilityGuestAllowed, facilityProgress, menuLock, progressNote } from '../../display/model/menuLock';
 import type { AccountLockState } from '../../display/model/menuLock';
 import { energyLabel } from './energy';
@@ -23,9 +28,13 @@ export const NO_ITEMS_TEXT = '가진 아이템이 없어요.';
 /** 묶음 소제목의 점선 툴팁 - 그 묶음이 무엇이고 어디서 얻고 쓰는지 */
 export const ITEM_GROUP_HINT = {
   energy: '물고기 한 마리에서 그 등급의 생명의 기운 하나를 얻어요.\n기운 얻기는 집 궤짝이나 항구 어시장에서 할 수 있어요.',
-  lunch: '먹기를 누르면 도시락 슬롯에 들어가요.',
-  bait: '쓰기를 누르면 미끼 슬롯에 들어가요.',
+  lunch: '먹기를 누르면 바로 효과가 시작돼요.',
+  bait: '쓰기를 누르면 미끼 효과가 켜져요.',
+  potion: '마시면 하루 동안 모든 행운 효과가 올라요.',
 } as const;
+/** 물약 적용 안내 문구 */
+export const potionUseNoticeText = (potionName: string): string =>
+  `${potionName}${josa(potionName, '을/를')} 마셨어요. 하루 동안 이어져요.`;
 /** 아이템 섹션의 묶음 순서와 소제목 - 잠긴 자리와 열린 섹션이 같은 순서를 쓴다 */
 export const ITEM_GROUPS = [
   { key: 'lunch', title: '도시락' },
@@ -62,20 +71,46 @@ export interface ItemRow {
   remainingMinutes: number | null;
 }
 
+export interface PotionRow {
+  potion: Potion;
+  count: number;
+  active: boolean;
+  usable: boolean;
+}
+
 export type ItemSectionView =
   /** 요리를 쓸 수 없는 상태(해금 전, 게스트). empty는 빈 상태 안내 줄, lines는 잠긴 칸의 툴팁 줄이다 */
-  | { state: 'locked'; empty: string[]; lines: string[] }
-  | { state: 'open'; energy: EnergyCell[]; lunch: ItemRow[]; bait: ItemRow[]; empty: boolean };
+  | {
+    state: 'locked';
+    empty: string[];
+    lines: string[];
+    energy: EnergyCell[];
+    lunch: ItemRow[];
+    bait: ItemRow[];
+    potions: PotionRow[];
+    potionLock: string[] | null;
+  }
+  | {
+    state: 'open';
+    energy: EnergyCell[];
+    lunch: ItemRow[];
+    bait: ItemRow[];
+    potions: PotionRow[];
+    potionLock: string[] | null;
+    empty: boolean;
+  };
 
 export function selectItemSection(game: GameState, now: string, account: AccountLockState): ItemSectionView {
-  const progress = facilityProgress('kitchen', game.boat);
-  const lock = menuLock({ account, guestAllowed: facilityGuestAllowed('kitchen'), feature: '부엌', progress });
-  if (lock.kind !== 'none') {
-    const empty = lock.kind === 'progress'
-      ? [NO_ITEMS_TEXT, ...progressNote(COOKING_UNLOCK_BOAT, '부엌에서 도시락과 미끼를 만들 수 있어요.')]
-      : [NO_ITEMS_TEXT];
-    return { state: 'locked', empty, lines: lock.lines };
-  }
+  const activePotionIds = new Set(activePotionsOf(game.potions, now).map(p => p.id));
+  const potionLockResult = menuLock({ account, guestAllowed: false, feature: '물약' });
+  const potionLock = potionLockResult.kind === 'none' ? null : potionLockResult.lines;
+  const potions: PotionRow[] = POTIONS.map(potion => ({
+    potion,
+    count: game.items[potion.id] ?? 0,
+    active: activePotionIds.has(potion.id),
+    usable: canUsePotion(game, potion.id, now, account !== 'account').ok,
+  }));
+
   const items = settleCooking(game, now).items;
   const activeRemainingMs = new Map<string, number>();
   for (const k of ['lunch', 'bait', 'bait2'] as const) {
@@ -84,12 +119,12 @@ export function selectItemSection(game: GameState, now: string, account: Account
     const prev = activeRemainingMs.get(entry.recipe.id) ?? 0;
     if (entry.remainingMs > prev) activeRemainingMs.set(entry.recipe.id, entry.remainingMs);
   }
-  const rows = (slot: SlotKey): ItemRow[] => recipesOfKind(slot).filter(r => (items[r.id] ?? 0) > 0)
+  const rows = (slot: SlotKey): ItemRow[] => recipesOfKind(slot)
     .map(recipe => {
       const remMs = activeRemainingMs.get(recipe.id);
       const active = remMs !== undefined;
       return {
-        recipe, label: recipeLabel(recipe), title: recipeTitle(recipe), count: items[recipe.id], slot, verb: SLOT_TEXT[slot].verb,
+        recipe, label: recipeLabel(recipe), title: recipeTitle(recipe), count: items[recipe.id] ?? 0, slot, verb: SLOT_TEXT[slot].verb,
         effects: recipeEffectLines(recipe), note: recipeEffectNote(slot),
         durationMinutes: slotDurationMs(recipe, game) / MIN_MS,
         active,
@@ -100,13 +135,64 @@ export function selectItemSection(game: GameState, now: string, account: Account
     { id: ENERGY_ITEM_IDS[grade], grade, label: energyLabel(grade), stored: items[ENERGY_ITEM_IDS[grade]] ?? 0 }));
   const lunch = rows('lunch');
   const bait = rows('bait');
-  return { state: 'open', energy, lunch, bait, empty: lunch.length === 0 && bait.length === 0 && energy.every(e => e.stored === 0) };
+
+  const progress = facilityProgress('kitchen', game.boat);
+  const lock = menuLock({ account, guestAllowed: facilityGuestAllowed('kitchen'), feature: '부엌', progress });
+  if (lock.kind !== 'none') {
+    const empty = lock.kind === 'progress'
+      ? [NO_ITEMS_TEXT, ...progressNote(COOKING_UNLOCK_BOAT, '부엌에서 도시락과 미끼를 만들 수 있어요.')]
+      : [NO_ITEMS_TEXT];
+    return { state: 'locked', empty, lines: lock.lines, energy, lunch, bait, potions, potionLock };
+  }
+  const empty = lunch.every(r => !isOwnedOrActiveItem(r))
+    && bait.every(r => !isOwnedOrActiveItem(r))
+    && energy.every(e => e.stored === 0)
+    && potions.every(p => !isOwnedOrActivePotion(p));
+  return { state: 'open', energy, lunch, bait, potions, potionLock, empty };
+}
+
+/** 보유 중만 보기 필터 기준 — 수량이 1개 이상이거나 현재 슬롯에서 효과가 적용 중인 아이템 */
+export const isOwnedOrActiveItem = (row: Pick<ItemRow, 'count' | 'active'>): boolean =>
+  row.count > 0 || row.active;
+
+/** 보유 중만 보기 필터 기준 — 수량이 1개 이상이거나 오늘 사용 중인 물약 */
+export const isOwnedOrActivePotion = (row: Pick<PotionRow, 'count' | 'active'>): boolean =>
+  row.count > 0 || row.active;
+
+export interface OpenItemLists {
+  lunch: ItemRow[];
+  bait: ItemRow[];
+  energy: EnergyCell[];
+  potions: PotionRow[];
+  empty: boolean;
+}
+
+/** 아이템 섹션에서 보유 중만 보기 토글 상태에 맞는 목록을 돌려준다 */
+export function filterItemSection(
+  view: ItemSectionView,
+  ownedOnly: boolean,
+): OpenItemLists {
+  if (!ownedOnly) {
+    return { lunch: view.lunch, bait: view.bait, energy: view.energy, potions: view.potions, empty: false };
+  }
+  const lunch = view.lunch.filter(isOwnedOrActiveItem);
+  const bait = view.bait.filter(isOwnedOrActiveItem);
+  const energy = view.energy.filter(e => e.stored > 0);
+  const potions = view.potions.filter(isOwnedOrActivePotion);
+  return {
+    lunch,
+    bait,
+    energy,
+    potions,
+    empty: lunch.length === 0 && bait.length === 0 && energy.length === 0 && potions.length === 0,
+  };
 }
 
 /** 다중 미끼 슬롯이 모두 찼을 때 바꿀 대상 슬롯 선택지 */
 export interface SwapChoice {
   slotKey: 'bait' | 'bait2';
   label: string;
+  title: RecipeTitle;
   minutes: number;
 }
 
@@ -114,8 +200,8 @@ export interface SwapChoice {
 export interface SwapConfirm {
   title: string;
   confirmLabel: '먹기' | '쓰기';
-  current: { label: string; minutes: number };
-  next: { label: string; minutes: number };
+  current: { label: string; title: RecipeTitle; minutes: number };
+  next: { label: string; title: RecipeTitle; minutes: number };
   warning: string;
   /** 다중 미끼 슬롯이 모두 차 세 번째 미끼를 쓸 때만 채운다 */
   choices?: SwapChoice[];
@@ -138,6 +224,8 @@ export function planEat(game: GameState, item: string, now: string): EatPlan {
   const check = canEat(game, item, now);
   const nextMinutes = slotDurationMs(recipe, game) / MIN_MS;
 
+  const nextTitle = recipeTitle(recipe);
+
   if (slot === 'lunch') {
     const current = activeSlot(game, 'lunch', now);
     return {
@@ -145,8 +233,8 @@ export function planEat(game: GameState, item: string, now: string): EatPlan {
       check,
       confirm: current === null ? null : {
         title: text.swapTitle, confirmLabel: text.verb,
-        current: { label: current.label, minutes: Math.ceil(current.remainingMs / MIN_MS) },
-        next: { label: recipeLabel(recipe), minutes: nextMinutes },
+        current: { label: current.label, title: current.title, minutes: Math.ceil(current.remainingMs / MIN_MS) },
+        next: { label: recipeLabel(recipe), title: nextTitle, minutes: nextMinutes },
         warning: SWAP_WARNING,
       },
     };
@@ -161,8 +249,8 @@ export function planEat(game: GameState, item: string, now: string): EatPlan {
       check,
       confirm: b1 === null ? null : {
         title: text.swapTitle, confirmLabel: text.verb,
-        current: { label: b1.label, minutes: Math.ceil(b1.remainingMs / MIN_MS) },
-        next: { label: recipeLabel(recipe), minutes: nextMinutes },
+        current: { label: b1.label, title: b1.title, minutes: Math.ceil(b1.remainingMs / MIN_MS) },
+        next: { label: recipeLabel(recipe), title: nextTitle, minutes: nextMinutes },
         warning: SWAP_WARNING,
       },
     };
@@ -176,8 +264,8 @@ export function planEat(game: GameState, item: string, now: string): EatPlan {
       check,
       confirm: {
         title: text.swapTitle, confirmLabel: text.verb,
-        current: { label: duplicate.label, minutes: Math.ceil(duplicate.remainingMs / MIN_MS) },
-        next: { label: recipeLabel(recipe), minutes: nextMinutes },
+        current: { label: duplicate.label, title: duplicate.title, minutes: Math.ceil(duplicate.remainingMs / MIN_MS) },
+        next: { label: recipeLabel(recipe), title: nextTitle, minutes: nextMinutes },
         warning: SWAP_WARNING,
       },
     };
@@ -196,12 +284,12 @@ export function planEat(game: GameState, item: string, now: string): EatPlan {
     check,
     confirm: {
       title: text.swapTitle, confirmLabel: text.verb,
-      current: { label: chosen.label, minutes: Math.ceil(chosen.remainingMs / MIN_MS) },
-      next: { label: recipeLabel(recipe), minutes: nextMinutes },
+      current: { label: chosen.label, title: chosen.title, minutes: Math.ceil(chosen.remainingMs / MIN_MS) },
+      next: { label: recipeLabel(recipe), title: nextTitle, minutes: nextMinutes },
       warning: SWAP_WARNING,
       choices: [
-        { slotKey: 'bait', label: b1.label, minutes: Math.ceil(b1.remainingMs / MIN_MS) },
-        { slotKey: 'bait2', label: b2.label, minutes: Math.ceil(b2.remainingMs / MIN_MS) },
+        { slotKey: 'bait', label: b1.label, title: b1.title, minutes: Math.ceil(b1.remainingMs / MIN_MS) },
+        { slotKey: 'bait2', label: b2.label, title: b2.title, minutes: Math.ceil(b2.remainingMs / MIN_MS) },
       ],
       defaultChoice,
     },

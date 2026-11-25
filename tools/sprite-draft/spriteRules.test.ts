@@ -6,6 +6,7 @@ import { FISH_SHAPE_SPRITES } from '../../src/game/content/sprites/fishShapes.ge
 import { FISH_SPRITES_GENERATED } from '../../src/game/content/sprites/fishSprites.generated';
 import { FISH_SPRITES } from '../../src/game/content/sprites/fishSprites';
 import { ROD_SPRITE } from '../../src/game/content/sprites/gearSprites.generated';
+import { ARTIFACT_SPRITES } from '../../src/game/content/sprites/itemSprites';
 import { SPRITE_KINDS, SPRITE_TARGETS } from '../../src/game/content/sprites/targets';
 import type { SpriteKind } from '../../src/game/content/sprites/targets';
 import type { PixelSprite } from '../../src/game/content/sprites/types';
@@ -21,7 +22,6 @@ function tagged(prefix: string, sprites: Readonly<Record<string, PixelSprite | u
 
 /**
  * 대상별로 코드에 들어 있는 모든 격자. 대상 종류를 더하면 이 표에 행을 더해야 컴파일된다.
- * 유물은 격자가 미정이라 아직 격자가 없다.
  */
 const GRIDS: Record<SpriteKind, Record<string, PixelSprite>> = {
   fish: { ...tagged('', FISH_SPRITES_GENERATED), ...tagged('hand:', FISH_SPRITES), ...tagged('shape:', FISH_SHAPE_SPRITES) },
@@ -29,7 +29,7 @@ const GRIDS: Record<SpriteKind, Record<string, PixelSprite>> = {
   gear: { rod: ROD_SPRITE },
   dish: tagged('', DISH_SPRITES_GENERATED),
   bait: tagged('', BAIT_SPRITES_GENERATED),
-  artifact: {},
+  artifact: tagged('', ARTIFACT_SPRITES),
 };
 
 /** 기존 격자의 규칙 위반 예외. 격자를 고치는 작업과 따로 다루므로 위치와 이유를 적어 둔다. 고치면 이 항목을 지운다. */

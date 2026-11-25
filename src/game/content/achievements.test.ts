@@ -111,6 +111,7 @@ describe('업적 콘텐츠', () => {
     for (const a of ACHIEVEMENTS) {
       expect(a.name).not.toMatch(/[·—–]/);
       expect(a.desc).not.toMatch(/[·—–]/);
+      expect(a.desc).not.toMatch(/일반 폼|수동 낚시/);
     }
     for (const s of CUMULATIVE_BONUS_SERIES) {
       expect(s.name).not.toMatch(/[·—–]/);

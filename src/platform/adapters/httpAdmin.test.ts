@@ -48,16 +48,19 @@ describe('HttpAdmin', () => {
     }
   });
 
-  it('AdminApi의 모든 조회가 위 표에 있다. 서버 조회가 아닌 것은 deployHost, 쓰기(mail·restrict·resetLink·letterHandled·revokeSessions), 관리자 로그인·로그아웃·로그인 복귀뿐이다', () => {
-    const writes = ['constructor', 'deployHost', 'mail', 'restrict', 'resetLink', 'letterHandled', 'revokeSessions', 'signIn', 'signOut', 'takeSignInReturn'];
+  it('AdminApi의 모든 조회가 위 표에 있다. 서버 조회가 아닌 것은 deployHost, 쓰기(mail·restrict·letterHandled·revokeSessions), 관리자 로그인·로그아웃·로그인 복귀뿐이다', () => {
+    const writes = ['constructor', 'deployHost', 'mail', 'restrict', 'letterHandled', 'revokeSessions', 'signIn', 'signOut', 'takeSignInReturn'];
     const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(admin))
       .filter(m => !writes.includes(m));
     expect(methods.sort()).toEqual(CALLS.map(([method]) => method).sort());
   });
 
-  it('우편 쓰기는 POST로 op와 요청을 보낸다', async () => {
+  it('우편 쓰기는 POST로 op와 요청(items 포함)을 보낸다', async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ problems: [], preview: { count: 1, totalGold: 5, missing: [] } }), { status: 200 }));
-    const request = { title: 't', body: 'b', target: { kind: 'all' as const, gold: 5 } };
+    const request = {
+      title: 't', body: 'b',
+      target: { kind: 'all' as const, gold: 0, items: [{ id: 'luck-small', qty: 2 }] },
+    };
     const plan = await admin.mail('preview', request);
     expect(plan.preview?.count).toBe(1);
     expect(fetchMock).toHaveBeenCalledWith('/api/admin?q=mail', {
@@ -67,17 +70,28 @@ describe('HttpAdmin', () => {
     });
   });
 
-  it('제재와 재설정 링크 발급은 POST로 계정 id를 보내고, 실패하면 작업 이름과 서버 오류 코드를 담아 던진다', async () => {
+  it('sentMails는 응답의 items 배열을 정규화해 매핑한다', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify([
+      {
+        id: 1, userId: 'u-1', title: '선물', body: 'b', gold: 0,
+        items: [{ id: 'luck-small', qty: 3 }],
+        createdAt: '2026-11-25T00:00:00.000Z', readAt: null, claimedAt: null,
+      },
+      {
+        id: 2, userId: 'u-2', title: '구버전', body: 'b', gold: 100,
+        createdAt: '2026-11-24T00:00:00.000Z', readAt: null, claimedAt: null,
+      },
+    ]), { status: 200 }));
+    const rows = await admin.sentMails();
+    expect(rows[0].items).toEqual([{ id: 'luck-small', qty: 3 }]);
+    expect(rows[1].items).toEqual([]);
+  });
+
+  it('제재·편지 처리·세션 강제 종료는 POST로 인자를 보내고, 실패하면 작업 이름과 서버 오류 코드를 담아 던진다', async () => {
     const post = (body: unknown) => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ restricted: true }), { status: 200 }));
     await expect(admin.restrict('u-1', true)).resolves.toEqual({ restricted: true });
     expect(fetchMock).toHaveBeenLastCalledWith('/api/admin?q=restrict', post({ userId: 'u-1', restricted: true }));
-    const link = { url: 'https://example.test/?token=abc', expiresAt: '2026-11-05T01:00:00.000Z' };
-    fetchMock.mockResolvedValue(new Response(JSON.stringify(link), { status: 200 }));
-    await expect(admin.resetLink('u-1')).resolves.toEqual(link);
-    expect(fetchMock).toHaveBeenLastCalledWith('/api/admin?q=resetLink', post({ userId: 'u-1' }));
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: 'anonymous-user' }), { status: 409 }));
-    await expect(admin.resetLink('u-1')).rejects.toThrow('재설정 링크 발급 실패: 409 anonymous-user');
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: 'no-save' }), { status: 404 }));
     await expect(admin.restrict('u-1', false)).rejects.toThrow('제재 해제 실패: 404 no-save');
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ handled: true }), { status: 200 }));

@@ -209,7 +209,7 @@ describe('extractEnergy', () => {
     expect(rejected(seed({ bag: bag() }), { type: 'extractEnergy', uids: 'a' as never })).toBe('bad-request');
   });
   it('거부 문구는 기운 얻기용이 따로 있고 조리의 문구는 그대로다', () => {
-    expect(REJECT_TEXT['not-at-sale-base']).toBe('집이나 항구 또는 가공 플랜트선에서만 할 수 있어요.');
+    expect(REJECT_TEXT['not-at-sale-base']).toBe('집이나 항구에서만 할 수 있어요.');
     expect(REJECT_TEXT['not-at-home']).toBe('집에서만 할 수 있어요.');
     expect(REJECT_TEXT['energy-locked']).toMatch(/ 항로가 열리면 기운 얻기를 할 수 있어요\.$/);
     expect(REJECT_TEXT['cooking-locked']).toMatch(/ 항로가 열리면 부엌을 쓸 수 있어요\.$/);

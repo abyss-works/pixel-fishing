@@ -17,14 +17,14 @@ import { afterResponse } from './_server/afterResponse.js';
 import { migrate, newState } from '../src/game/rules/logic.js';
 import type { FishInstance, FormRecord, GameState, Judgment } from '../src/game/rules/logic.js';
 import {
-  autoLockKey, buildCatchInfo, canFish, decideCatchAutoLock, FISH, formName, instanceFish,
+  autoLockKey, buildCatchInfo, canFish, decideCatchAutoLock, FISH, fishPool, formName, instanceFish,
   evictionPriceRows, makeInstance, nextDexRec, pickEvict, pruneAutoLockedIds, RARITY, RARITY_ORDER,
   matchBountyCatch,
 } from '../src/game/rules/logic.js';
 import { appliedSlots, applyEnergyGain, planOverflow } from '../src/game/rules/cooking.js';
-import { needsLegacyFirstCatchMigration } from '../src/game/rules/firstCatch.js';
+import { isFirstCatchSpot, needsLegacyFirstCatchMigration } from '../src/game/rules/firstCatch.js';
 import { drawNamedEncounter, speciesPityCandidates } from '../src/game/rules/pity.js';
-import { ensureFortune, luckMultOf } from '../src/game/rules/fortune.js';
+import { ensureFortune, totalLuckMultOf } from '../src/game/rules/fortune.js';
 import { bountyById, isQuestOffered } from '../src/game/content/bounties.js';
 import type { BountyKind, BountyQuest } from '../src/game/content/bounties.js';
 import type { SpotId } from '../src/game/content/spots.js';
@@ -62,7 +62,7 @@ import {
   namedClearInsertFragment, namedClearReplaceFragments, readSnapshotBounty, ticketFragment,
 } from './_data/bounty.js';
 import { consumeRelief, findCoupon, findRelief } from './_data/codes.js';
-import { claimMailFragment, claimableGold } from './_data/mailbox.js';
+import { claimMailFragment, claimableMail } from './_data/mailbox.js';
 import { COMMIT_GUARD, commitAction, commitConsumingCode, commitGated, runFollowUps } from './_data/commit.js';
 import {
   counterClearFragment, counterRestoreFragments, counterSetFragment, counterUpsertFragment,
@@ -186,20 +186,20 @@ export function expiredQuests(rows: BountyRows, dayStartISO: string): { id: stri
 }
 
 /** 개체·도감 스킵 — 이 액션들의 리듀서는 스칼라/blob만 건드린다(가방·도감 무접촉 검증됨):
- * sendLetter/setNickname(상태불변) · boot(그날 첫 접속이면 운세 스칼라만 고정) · upgradeRod/buyBoat/travel/redeemCoupon(스칼라만) · seeTutorial(blob만) · changeClothes/buyHat/wearHat(골드와 blob만).
+ * sendLetter/setNickname(상태불변) · boot(그날 첫 접속이면 운세 스칼라만 고정) · upgradeRod/buyBoat/travel(스칼라만) · redeemCoupon/seeTutorial/changeClothes/buyHat/wearHat(골드·blob만).
  * debug는 도감 명령(dex.completeZone)이 있어 스킵하지 않는다.
  * deliverBounty는 서버 주입 완료 여부만 보니 스킵 유지.
  * exchangeArtifact·levelUpArtifact는 재료(items)와 유물·레벨 맵이 모두 blob이라 스킵한다.
  * 요리(cook·eat)는 아이템 수량·조리 상태·슬롯이 모두 blob이라 가방 개체를 쓰지 않고, 기운 대상 설정과 환불 안내 닫기는 blob 스칼라만 바꾼다.
  * extractEnergy는 가방 개체를 소비하므로 스킵하지 않는다.
- * acceptQuest는 라이선스 도감 판정을 상태로 보므로(records 필요) 스킵 금지 —
- * 스킵하면 dex가 빈 채로 조립되어 도감과 무관하게 dex-incomplete 422가 된다.
+ * acceptQuest는 네임드 라이선스 도감 판정을 상태로 보므로(records 필요) 스킵 금지 —
+ * 스킵하면 dex가 빈 채로 조립되어 네임드 수주 시 도감과 무관하게 dex-incomplete 422가 된다.
  * 회귀 가드는 acceptQuest가 이 경로에 포함되지 않음을 검증한다. */
 export const SKIP_DETAIL = new Set([
   'boot', 'sendLetter', 'upgradeRod', 'buyBoat', 'travel', 'redeemCoupon', 'catch',
   'setNickname', 'deliverBounty', 'exchangeArtifact', 'levelUpArtifact', 'claimMail', 'seeTutorial',
   'changeClothes', 'buyHat', 'wearHat',
-  'cook', 'eat', 'setEnergyTarget', 'resetEnergyTargets', 'dismissBaitRefund', 'setAutoLockOnCatch',
+  'cook', 'eat', 'usePotion', 'setEnergyTarget', 'resetEnergyTargets', 'dismissBaitRefund', 'setAutoLockOnCatch',
   'debugSnapshot',
 ]);
 
@@ -311,7 +311,7 @@ async function route(req: Req, res: Res): Promise<void> {
   // 호출자 판정 — 서버 환경과 계정만 쓴다. 요청 헤더(Origin 등)는 호출자가 정하므로 읽지 않는다.
   // 관리자 명부는 개발 도구 계열 액션에서만 조회한다.
   const isAdminCaller = (): Promise<boolean> =>
-    step('db-read', { uid, action: action.type }, () => isListedAdmin(db, user, process.env.DEPLOY_ENV));
+    step('db-read', { uid, action: action.type }, () => isListedAdmin(db, user, process.env.DEPLOY_ENV, req.headers));
   const debugAllowed = async (): Promise<boolean> =>
     debugTriggerAllowed({ deployEnv: process.env.DEPLOY_ENV, admin: await isAdminCaller() });
 
@@ -440,9 +440,9 @@ async function route(req: Req, res: Res): Promise<void> {
     return;
   }
 
-  // 동적 쿠폰(coupons 테이블) — 쿠폰 액션일 때만 서버가 직접 조회 (active=false는 신규 사용 차단)
+  // 동적 쿠폰(coupons 테이블) — 정식 계정의 쿠폰 액션일 때만 서버가 직접 조회 (active=false는 신규 사용 차단, 게스트는 정적 쿠폰만 허용)
   let dynamicCoupon: { gold: number; desc: string } | null = null;
-  if (action.type === 'redeemCoupon' && typeof action.code === 'string') {
+  if (action.type === 'redeemCoupon' && typeof action.code === 'string' && user.email !== null) {
     const code = action.code.trim();
     dynamicCoupon = await step('db-read', { uid, action: action.type }, () => findCoupon(db, code));
   }
@@ -465,13 +465,13 @@ async function route(req: Req, res: Res): Promise<void> {
     }
   }
 
-  // 우편 골드 — 본인의 받지 않은 골드 우편이면 금액을 주입한다. 받은 기록은 아래 확정 문장에서 함께 쓰므로
-  // 낙관 락을 통과한 요청 하나만 받고, 그 뒤의 요청은 여기서 금액이 없어 거부된다.
+  // 우편 보상 — 본인의 받지 않은 우편이면 골드·첨부 아이템을 주입한다. 받은 기록은 아래 확정 문장에서 함께 쓰므로
+  // 낙관 락을 통과한 요청 하나만 받고, 그 뒤의 요청은 여기서 받을 수 있는 보상이 없어 거부된다.
   let mail: ActionDeps['mail'] = null;
   if (action.type === 'claimMail') {
     const mailId = action.id;
-    const gold = await step('db-read', { uid, action: action.type }, () => claimableGold(db, uid, mailId));
-    if (gold !== null) mail = { id: mailId, gold };
+    const claimable = await step('db-read', { uid, action: action.type }, () => claimableMail(db, uid, mailId));
+    if (claimable !== null) mail = { id: mailId, gold: claimable.gold, items: claimable.items };
   }
 
   // 닉네임 변경 — 형태는 리듀서가 재검증한다. 여기서 할 일은 중복 검사 + 반영뿐.
@@ -555,7 +555,7 @@ async function route(req: Req, res: Res): Promise<void> {
     const named = drawNamedEncounter(catchBase.namedPity, encounterQuests(bounty), action.spot, now,
       Math.random, action.forceEncounter === true,
       namedWeightBonus(catchBase, action.judgment, now, guildEffects, achievementBonusesOf(catchBase)),
-      luckMultOf(out.state.fortune, 'named'));
+      totalLuckMultOf(out.state, now, 'named'));
     out = { ...out, state: { ...out.state, namedPity: named.pity } };
     if (named.quest) {
       out.events.push({ type: 'ticket', payload: { questId: named.quest.id, ...(named.byCeiling ? { pity: true } : {}) } });
@@ -812,12 +812,15 @@ export function clearQuestForAction(action: GameAction): BountyQuest | null {
   return null;
 }
 
-/** 액션 이벤트가 길드 항해일지에 남기는 줄 — 전설 등급 캐치와 네임드 토벌 납품 */
+/** 액션 이벤트가 길드 항해일지에 남기는 줄 — 전설 등급 캐치(돌연변이는 |variant 구분)와 네임드 토벌 납품 */
 export function guildLogsOf(events: readonly GameEvent[]): { kind: GuildLogKind; detail: string }[] {
   return events.flatMap((e): { kind: GuildLogKind; detail: string }[] => {
-    const p = e.payload as { fishId?: unknown; questId?: unknown };
+    const p = e.payload as { fishId?: unknown; form?: unknown; questId?: unknown };
     if (e.type === 'catch' && typeof p.fishId === 'string'
-      && FISH.find(f => f.id === p.fishId)?.rarity === 'legendary') return [{ kind: 'legendary', detail: p.fishId }];
+      && FISH.find(f => f.id === p.fishId)?.rarity === 'legendary') {
+      const detail = p.form === 'variant' ? `${p.fishId}|variant` : p.fishId;
+      return [{ kind: 'legendary', detail }];
+    }
     if (e.type === 'deliverBounty' && typeof p.questId === 'string'
       && bountyById(p.questId)?.difficulty === 'named') return [{ kind: 'named', detail: p.questId }];
     return [];
@@ -855,14 +858,18 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
   const pz = powerZones(base, spot);
   const { judgment, phaseOpts, cook } = prepareCatchDraw(base, judgmentIn, now, pz, forcePhase);
   const today = todayKST();
-  // 어종 천장 — 후보가 있을 때만 그 어종들의 일반 폼 소유를 조회한다(fast path는 도감을 들고 있지 않다)
-  const candidates = speciesPityCandidates(base.pity, spot, phaseOpts);
+  // 어종 천장·첫 경험 보장 — 후보가 있을 때만 그 어종들의 일반 폼 소유를 조회한다(fast path는 도감을 들고 있지 않다)
+  const pityCandidates = speciesPityCandidates(base.pity, spot, phaseOpts);
+  const firstCatchActive = isFirstCatchSpot(spot) && base.firstCatch[spot].active;
+  const candidates = firstCatchActive
+    ? [...new Set([...pityCandidates, ...fishPool(spot, 'night').map(f => f.id)])]
+    : pityCandidates;
   const owned = candidates.length === 0 ? new Set<string>()
     : await step('db-read', { uid, action: 'catch' }, () => ownedNormalForms(db, uid, candidates));
   const achBonuses = achievementBonusesOf(base);
   const drawn = drawCatch(
     base, spot, judgment, rodPower(base), pz.mult, Math.random,
-    { ...phaseOpts, rarityLuck: luckMultOf(base.fortune, 'rarity') },
+    { ...phaseOpts, rarityLuck: totalLuckMultOf(base, now, 'rarity') },
     id => owned.has(id), guild, cook, achBonuses,
   );
   const { fish, extras } = drawn;

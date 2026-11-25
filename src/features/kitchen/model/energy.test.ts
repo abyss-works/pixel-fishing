@@ -4,7 +4,7 @@ import { FISH, newState } from '../../../game/rules/logic';
 import type { FishInstance, GameState } from '../../../game/rules/logic';
 import { AUTO_ENERGY_BOAT, COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS } from '../../../game/content/cooking';
 import type { SpotId } from '../../../game/content/spots';
-import { GUEST_LOCK_TEXT, UNVERIFIED_LOCK_TEXT } from '../../display/model/menuLock';
+import { GUEST_LOCK_DEFAULT_LINES, UNVERIFIED_LOCK_TEXT } from '../../display/model/menuLock';
 import {
   buildEnergyExtractNotice, clearSpotPicks, defaultQuickEnergyGrades, energyLabel, energyResultRows, energyRowValue, energyTotal, pickEnergyUids, selectBagEnergyEntry, selectEnergyView, selectQuickEnergyView,
 } from './energy';
@@ -182,10 +182,10 @@ describe('가방 하단 기운 얻기 진입 조건', () => {
 
   it('계정 상태 잠금(게스트, 확인 실패)을 위치와 배 단계보다 먼저 확인한다', () => {
     expect(selectBagEnergyEntry({ boat: AUTO_ENERGY_BOAT, location: home }, 'guest')).toEqual({
-      ok: false, lines: [GUEST_LOCK_TEXT],
+      ok: false, lines: [...GUEST_LOCK_DEFAULT_LINES],
     });
     expect(selectBagEnergyEntry({ boat: AUTO_ENERGY_BOAT, location: sea }, 'guest')).toEqual({
-      ok: false, lines: [GUEST_LOCK_TEXT],
+      ok: false, lines: [...GUEST_LOCK_DEFAULT_LINES],
     });
     expect(selectBagEnergyEntry({ boat: 0, location: home }, 'unverified')).toEqual({
       ok: false, lines: [UNVERIFIED_LOCK_TEXT],
@@ -195,10 +195,27 @@ describe('가방 하단 기운 얻기 진입 조건', () => {
     });
   });
 
+  it('게스트가 해금 전(0~4단계)이면 위치와 무관하게 인도양 진행 조건 잠금만 낸다', () => {
+    for (const location of [home, harbor, village, sea]) {
+      expect(selectBagEnergyEntry({ boat: 0, location }, 'guest')).toEqual({
+        ok: false,
+        lines: ['인도양 항로가 열리면 기운 얻기를 할 수 있어요.', '인도양 항로는 증기선(5단계)부터 열려요.'],
+      });
+      expect(selectBagEnergyEntry({ boat: COOKING_UNLOCK_BOAT - 1, location }, 'guest')).toEqual({
+        ok: false,
+        lines: ['인도양 항로가 열리면 기운 얻기를 할 수 있어요.', '인도양 항로는 증기선(5단계)부터 열려요.'],
+      });
+    }
+  });
+
   it('거점이면 요리 해금 시 활성, 미해금 시 진행 조건 툴팁을 낸다', () => {
     expect(selectBagEnergyEntry({ boat: COOKING_UNLOCK_BOAT, location: home }, 'account')).toEqual({ ok: true });
     expect(selectBagEnergyEntry({ boat: COOKING_UNLOCK_BOAT, location: harbor }, 'account')).toEqual({ ok: true });
     expect(selectBagEnergyEntry({ boat: COOKING_UNLOCK_BOAT - 1, location: home }, 'account')).toEqual({
+      ok: false,
+      lines: ['인도양 항로가 열리면 기운 얻기를 할 수 있어요.', '인도양 항로는 증기선(5단계)부터 열려요.'],
+    });
+    expect(selectBagEnergyEntry({ boat: 0, location: village }, 'account')).toEqual({
       ok: false,
       lines: ['인도양 항로가 열리면 기운 얻기를 할 수 있어요.', '인도양 항로는 증기선(5단계)부터 열려요.'],
     });
@@ -209,11 +226,11 @@ describe('가방 하단 기운 얻기 진입 조건', () => {
     expect(selectBagEnergyEntry({ boat: AUTO_ENERGY_BOAT, location: village }, 'account')).toEqual({ ok: true });
     expect(selectBagEnergyEntry({ boat: AUTO_ENERGY_BOAT - 1, location: sea }, 'account')).toEqual({
       ok: false,
-      lines: ['집이나 항구 또는 가공 플랜트선에서만 할 수 있어요.'],
+      lines: ['집이나 항구에서만 할 수 있어요.'],
     });
     expect(selectBagEnergyEntry({ boat: COOKING_UNLOCK_BOAT, location: village }, 'account')).toEqual({
       ok: false,
-      lines: ['집이나 항구 또는 가공 플랜트선에서만 할 수 있어요.'],
+      lines: ['집이나 항구에서만 할 수 있어요.'],
     });
   });
 });

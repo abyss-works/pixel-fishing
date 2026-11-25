@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { api } from '../../../platform/api';
 import type { DebugStepInput, GameAction } from '../../../game/rules/actions';
+import type { GameState } from '../../../game/rules/logic';
 import type { BaseId } from '../../../game/content/places';
 import type { SpotId } from '../../../game/content/spots';
 import { REJECT_TEXT } from '../../../game/rules/rules';
@@ -16,6 +18,12 @@ const LOG_MAX = 8;
 export interface DevTeleportHandlers {
   onTeleportBase?: (base: BaseId) => MaybePromise<boolean>;
   onTeleportSpot?: (spot: SpotId) => MaybePromise<boolean>;
+}
+
+export interface DevToolHandlers extends DevTeleportHandlers {
+  onAccountPromoted?: (email: string) => MaybePromise<void>;
+  onAccountReset?: (state: GameState) => MaybePromise<void>;
+  onReload?: () => void;
 }
 
 type BatchedPresetStep =
@@ -60,7 +68,7 @@ function formatDispatchError(e: unknown): string {
  *  프리셋 스텝은 느림 창 대상이 아니라 따로 간격을 두지 않는다 */
 export function useDevTools(
   dispatch: (action: GameAction) => MaybePromise<DispatchResult>,
-  teleports: DevTeleportHandlers = {},
+  teleports: DevToolHandlers = {},
 ) {
   const [log, setLog] = useState<DevLogEntry[]>([]);
   const [busy, setBusy] = useState(false);
@@ -164,6 +172,40 @@ export function useDevTools(
           push(ok, ok ? `${label} 이동` : `${label} 이동 불가`);
         } catch (e) {
           push(false, `${label} 이동 — ${formatDispatchError(e)}`);
+        }
+      }),
+    promoteTestAccount: () =>
+      guard(async () => {
+        try {
+          const r = await api.dev.promoteTestAccount();
+          if (!r.ok) {
+            push(false, `테스트 정식 계정 승격 실패: ${r.msg}`);
+            return;
+          }
+          await Promise.resolve(teleports.onAccountPromoted?.(r.email));
+          push(true, `테스트 정식 계정 승격 (${r.email})`);
+        } catch (e) {
+          push(false, `테스트 정식 계정 승격 실패: ${formatDispatchError(e)}`);
+        }
+      }),
+    resetDevAccount: () =>
+      guard(async () => {
+        try {
+          const r = await api.dev.resetDevAccount();
+          await Promise.resolve(teleports.onAccountReset?.(r.state));
+          push(true, `현재 계정 초기화 (v${r.version})`);
+        } catch (e) {
+          push(false, `현재 계정 초기화 실패: ${formatDispatchError(e)}`);
+        }
+      }),
+    startNewGuest: () =>
+      guard(async () => {
+        try {
+          await api.auth.signOut();
+          push(true, '새 게스트 시작');
+          (teleports.onReload ?? (() => window.location.reload()))();
+        } catch (e) {
+          push(false, `새 게스트 시작 실패: ${formatDispatchError(e)}`);
         }
       }),
   };

@@ -67,6 +67,8 @@ describe('간소화 기운 얻기 창 (가방 하단 진입)', () => {
     expect(commonChip).toHaveAttribute('aria-pressed', 'true');
     expect(rareChip).toHaveAttribute('aria-pressed', 'true');
     expect(epicChip).toBeDisabled();
+    expect(commonChip.querySelector('[data-rarity="common"]')).not.toBeNull();
+    expect(epicChip.querySelector('[data-rarity]')).toBeNull();
     expect(screen.getByRole('button', { name: '기운 얻기 (2마리)' })).toBeEnabled();
     expect(screen.getByText(/잠근 물고기 1마리는 빠져요/)).toBeInTheDocument();
   });

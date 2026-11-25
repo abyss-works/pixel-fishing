@@ -1,5 +1,8 @@
 import { useState } from 'react';
+import { nicknameLabel, uidPlaceholder } from '../../../../features/account/model/accountRules';
 import { accountLockState } from '../../../../features/account/service/accountActions';
+import { useProfileStatus } from '../../../../features/gameplay/service/profileStatus';
+import type { ProfileStatus } from '../../../../features/gameplay/service/types';
 import { guestLock } from '../../../../features/display/model/menuLock';
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import { REJECT_TEXT } from '../../../../game/rules/logic';
@@ -20,11 +23,13 @@ import { maskUid } from './maskUid';
 const NICKNAME_RULE = '한글은 8자, 영문과 숫자는 16자까지 쓸 수 있어요.';
 
 // 내 정보 창 - 닉네임(현재, 변경)과 ID. 계정의 연결과 로그인 상태는 계정 관리 창이 맡는다.
-export default function MyInfoModal({ setToast, onClose, account, accountFailed = false, uid, nickname, onRename }: {
+export default function MyInfoModal({ setToast, onClose, account, accountChecked = true, accountFailed = false, uid, nickname, profileStatus, onRename }: {
   setToast: Notify; onClose: () => void;
-  account: string | null; accountFailed?: boolean; uid: string | null;
-  nickname: string | null; onRename: (name: string) => Promise<null | RejectReason>;
+  account: string | null; accountChecked?: boolean; accountFailed?: boolean; uid: string | null;
+  nickname: string | null; profileStatus?: ProfileStatus; onRename: (name: string) => Promise<null | RejectReason>;
 }) {
+  const sharedProfileStatus = useProfileStatus();
+  const resolvedProfileStatus: ProfileStatus = profileStatus ?? sharedProfileStatus ?? (nickname !== null ? 'loaded' : 'loading');
   const [draft, setDraft] = useState('');
   const [nickBusy, setNickBusy] = useState(false);
   const { notice, dialogs } = useDialogs();
@@ -41,7 +46,7 @@ export default function MyInfoModal({ setToast, onClose, account, accountFailed 
       else {
         sendNotice(setToast, {
           kind: 'social.modalAction',
-          text: `닉네임을 ${draft}(으)로 바꿨어요.`,
+          text: `닉네임을 “${draft}” 이름으로 바꿨어요.`,
           toastText: '닉네임을 바꿨어요.',
         });
         setDraft('');
@@ -85,7 +90,7 @@ export default function MyInfoModal({ setToast, onClose, account, accountFailed 
       <Inset divided className="mb-2">
         <KeyValueRow className="py-1 text-xs"
                      label="현재"
-                     value={<span aria-label="현재 닉네임">{nickname ?? '불러오는 중'}</span>} />
+                     value={<span aria-label="현재 닉네임">{nicknameLabel(nickname, resolvedProfileStatus)}</span>} />
         {nickLock ? <Locked lines={nickLock} label="닉네임 변경" badge={false}>{nickRow}</Locked> : nickRow}
       </Inset>
       <Note>{NICKNAME_RULE}<br />나중에 랭킹에 표시될 이름이에요.</Note>
@@ -96,7 +101,7 @@ export default function MyInfoModal({ setToast, onClose, account, accountFailed 
       <Inset divided className="mb-2">
         <KeyValueRow className="py-1 text-xs"
                      label="ID"
-                     value={<span className="pf-accent text-2xs select-text">{uid ? maskUid(uid) : '연결 중'}</span>}
+                     value={<span className="pf-accent text-2xs select-text">{uid ? maskUid(uid) : uidPlaceholder({ account, accountChecked, accountFailed })}</span>}
                      action={<Button size="sm" className="shrink-0" disabled={!uid} onClick={() => copyId(uid)}>복사</Button>} />
       </Inset>
       <Note>문의하실 때 이 <b>ID</b>를 함께 알려 주시면 빠르게 해결할 수 있어요.<br />

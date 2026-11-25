@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { BASE_PACKS, HARBORS, LIVE_REGIONS, V_POND, V_SCHOOLS, resumePoint, schoolsOf } from './game/world';
+import { Suspense, lazy, useEffect, useRef, useState } from 'react';
+import { BASE_PACKS, HARBORS, LIVE_REGIONS, V_POND, V_SCHOOLS, boardingOf, resumePoint, schoolsOf } from './game/world';
 import type { Point, SceneRef } from './game/world';
 import type { BaseId, LocationRef } from './game/content/places';
 import { spotById } from './game/content/spots';
@@ -9,18 +9,16 @@ import { topZoneOfSpot, zoneById } from './game/content/zones';
 import { minLevelOfPower } from './game/rules/stats';
 import { getSchoolDay } from './features/gameplay/service/schoolDay';
 import { settleAction, useGame } from './features/gameplay/service/useGame';
+import { consumeSailReturn, isSailReturnReady } from './features/account/service/sailReturn';
 import { useAccount } from './features/account/service/useAccount';
 import { useLastPosition } from './features/gameplay/service/useLastPosition';
 import { useMessageLog } from './presentation/layouts/hud/useMessageLog';
 import { sendNotice } from './features/display/model/toastPolicy';
-import { useDialogs } from './presentation/ui/useDialogs';
 import GameView from './presentation/views/game/GameView';
 import UpdateModal from './presentation/views/overlays/update/UpdateModal';
 import SessionReplacedModal from './presentation/views/overlays/update/SessionReplacedModal';
 import UnsavedModal from './presentation/views/overlays/update/UnsavedModal';
 import LoadingOverlay from './presentation/views/overlays/update/LoadingOverlay';
-import DevTools from './presentation/views/devtools/DevTools';
-import EnvBadge from './presentation/views/devtools/EnvBadge';
 import { DevEnvContext, devEnvOf } from './presentation/views/devtools/devEnv';
 import { BUILD_LABEL, DEPLOY_ENV } from './buildId';
 import { QueryProvider } from './core/QueryProvider';
@@ -32,26 +30,28 @@ function sceneOf(location: LocationRef): SceneRef {
   return location;
 }
 
-/** 빌드 때 정해지는 값이라 모듈에서 한 번만 만든다 */
-const DEV_ENV = devEnvOf(DEPLOY_ENV);
+/** 빌드 때 정해지는 값 — 비허용/운영 빌드는 컴파일 타임 가드로 개발 도구 청크와 배지를 완전히 제외한다 */
+declare const __DEPLOY_ENV__: string | undefined;
+const DEV_TOOLS_BUILD =
+  typeof __DEPLOY_ENV__ !== 'undefined' &&
+  (__DEPLOY_ENV__ === 'preview' || __DEPLOY_ENV__ === 'development' || __DEPLOY_ENV__ === 'local');
+const DEV_ENV = DEV_TOOLS_BUILD ? devEnvOf(DEPLOY_ENV) : null;
+const LazyDevTools = DEV_TOOLS_BUILD ? lazy(() => import('./presentation/views/devtools/DevTools')) : null;
+const LazyEnvBadge = DEV_TOOLS_BUILD ? lazy(() => import('./presentation/views/devtools/EnvBadge')) : null;
 
 function AppContent() {
   const { log, setToast, toasts, dismissToast, setMirrorEnv } = useMessageLog([
     '집이에요. 가구를 눌러 정비하고, 문으로 나가 마을 물가에서 낚시해 보세요.',
   ]);
-  const { game, dispatch, nickname, devTools, rename, sync, syncLabel, blocker, loading, guestProgress, recheckGuestProgress, adoptAccount, warmup, resync } = useGame({ setToast });
+  const {
+    game, dispatch, nickname, profileStatus, devTools, rename, sync, syncLabel,
+    blocker, loading, guestProgress, adoptAccount, warmup, resync, applyDevReset, refreshAccountStatus,
+  } = useGame({ setToast });
   useEffect(() => {
     setMirrorEnv({ blocked: blocker !== null, loading });
   }, [blocker, loading, setMirrorEnv]);
-  const { input, dialogs } = useDialogs();
   const { account, accountChecked, accountFailed, uid, onAuthChanged } = useAccount({
     game, setToast, adoptAccount,
-    askNewPassword: min => input({
-      layer: 'app',
-      title: '새 비밀번호', body: `새 비밀번호를 입력해 주세요.
-${min}자 이상이어야 해요.`,
-      label: '새 비밀번호', secret: true, confirmLabel: '바꾸기',
-    }),
   });
 
   const [scene, setScene] = useState<SceneRef>(() => sceneOf(game.location));
@@ -59,15 +59,37 @@ ${min}자 이상이어야 해요.`,
   // 장소를 지정할 때마다 늘어나는 순번 — 같은 지역 안에서 같은 좌표로 다시 옮기는 경우도 Field가 알아챈다
   const [placeSeq, setPlaceSeq] = useState(0);
   // 접속 복원 — 저장된 장소로 옮기고, 바다면 마지막 위치를 읽은 뒤 그 자리에서 시작한다(갈 수 없는 자리면 출발점)
+  // 단, 포구 출항 차단 뒤 구글 인증으로 돌아온 경우에는 부팅·계정 확인이 끝난 뒤 1회 표지를 소비해 대양 출항 위치로 바로 이동한다.
   const last = useLastPosition();
   const restored = useRef(false);
   useEffect(() => {
     if (restored.current || sync !== 'on' || !last.settled) return;
-    restored.current = true;
+    if (isSailReturnReady() && (loading || (!accountChecked && !accountFailed))) return;
+
     const next = sceneOf(game.location);
+    restored.current = true;
+
+    if (consumeSailReturn() && account !== null && game.boat >= 1 && next.id !== 'world') {
+      const { region, at, msg } = boardingOf('harbor');
+      const worldScene: SceneRef = { kind: 'region', id: region };
+      const departure = at ?? HARBORS.harbor.departure;
+      setScene(worldScene);
+      setEntryPos(departure);
+      setPlaceSeq(seq => seq + 1);
+      sendNotice(setToast, { kind: 'travel.routineMove', text: msg });
+      void settleAction(() => dispatch({ type: 'travel', to: worldScene })).then(settled => {
+        if (settled.ok) return;
+        setScene(next);
+        setEntryPos(next.kind === 'region' ? resumePoint(next.id, last.position) : null);
+        setPlaceSeq(seq => seq + 1);
+        if (settled.notice) sendNotice(setToast, { kind: 'travel.blocked', text: settled.notice, cooldownKey: 'travel.blocked:go' });
+      });
+      return;
+    }
+
     setScene(next);
     setEntryPos(next.kind === 'region' ? resumePoint(next.id, last.position) : null);
-  }, [sync, game.location, last.settled, last.position]);
+  }, [sync, loading, accountChecked, accountFailed, account, game.location, game.boat, last.settled, last.position, dispatch, setToast]);
 
   const place = (nextScene: SceneRef, position?: Point) => {
     setScene(nextScene);
@@ -144,24 +166,43 @@ ${min}자 이상이어야 해요.`,
     return false;
   };
 
-  // 게임 화면 위에 개발용 층 둘을 나란히 조합한다 — 환경 배지(운영 빌드면 없음)와
-  // 개발 도구 패널(?admin + 로컬 또는 서버 판정이 참일 때만). 둘 다 게임 화면 바깥의 오버레이이고,
-  // 이 빌드가 운영인지는 개발 환경 공급자 하나가 정한다(운영이면 패널은 대시보드 이동만 남는다).
+  // 게임 화면 위에 개발용 층 둘을 나란히 조합한다 — 환경 배지와 개발 도구 패널(비운영 빌드에서 로컬 또는 서버 판정이 참일 때만).
+  // 운영 빌드에서는 컴파일 타임 가드로 두 컴포넌트와 청크가 완전히 제거된다.
   return (
     <>
       <GameView
         game={game} scene={scene} entryPos={entryPos} placeSeq={placeSeq}
         dispatch={dispatch} setToast={setToast} toasts={toasts} onDismissToast={dismissToast} onMirrorEnv={setMirrorEnv} onScene={go} onPlace={place} onWarmup={warmup}
-        log={log} syncLabel={syncLabel} syncState={sync} guestProgress={guestProgress} recheckGuestProgress={recheckGuestProgress}
-        account={account} accountChecked={accountChecked} accountFailed={accountFailed} uid={uid} nickname={nickname}
+        log={log} syncLabel={syncLabel} syncState={sync} guestProgress={guestProgress}
+        account={account} accountChecked={accountChecked} accountFailed={accountFailed} uid={uid} nickname={nickname} profileStatus={profileStatus}
         onRename={rename} onAuthChanged={onAuthChanged} onResync={resync} blocker={blocker === 'update' ? <UpdateModal /> : blocker === 'replaced' ? <SessionReplacedModal /> : blocker === 'unsaved' ? <UnsavedModal /> : loading ? <LoadingOverlay /> : null}
-        badge={<DevEnvContext.Provider value={DEV_ENV}><EnvBadge build={BUILD_LABEL} /></DevEnvContext.Provider>}
+        badge={DEV_ENV && LazyEnvBadge ? (
+          <Suspense fallback={null}>
+            <DevEnvContext.Provider value={DEV_ENV}>
+              <LazyEnvBadge build={BUILD_LABEL} />
+            </DevEnvContext.Provider>
+          </Suspense>
+        ) : null}
       />
-      <DevEnvContext.Provider value={DEV_ENV}>
-        <DevTools game={game} dispatch={dispatch} setToast={setToast} granted={devTools}
-                  onTeleportBase={teleportBase} onTeleportSpot={teleportSpot} />
-      </DevEnvContext.Provider>
-      {dialogs}
+      {DEV_ENV && LazyDevTools && (
+        <Suspense fallback={null}>
+          <DevEnvContext.Provider value={DEV_ENV}>
+            <LazyDevTools
+              game={game}
+              dispatch={dispatch}
+              setToast={setToast}
+              granted={profileStatus === 'loaded' && devTools}
+              onTeleportBase={teleportBase}
+              onTeleportSpot={teleportSpot}
+              onAccountPromoted={async () => {
+                await onAuthChanged();
+                await refreshAccountStatus();
+              }}
+              onAccountReset={applyDevReset}
+            />
+          </DevEnvContext.Provider>
+        </Suspense>
+      )}
     </>
   );
 }

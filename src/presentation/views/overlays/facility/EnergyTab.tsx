@@ -15,7 +15,7 @@ import { GradeName } from '../../../ui/fish/RarityTag';
 import PixelIcon from '../../../ui/PixelIcon';
 import Popover from '../../../ui/Popover';
 import ToggleChip from '../../../ui/ToggleChip';
-import Tip, { TipList } from '../../../ui/Tip';
+import Tip, { TipCard, TipList } from '../../../ui/Tip';
 import { SCROLL_Y_ROWS } from '../../../ui/scrollArea';
 import FishPickTable from './FishPickTable';
 import PickTab from './PickTab';
@@ -31,6 +31,12 @@ const POPOVER_TIP = [
 /** 얻는 기운을 등급마다 한 줄로 — 합계 툴팁과 결과 메시지 툴팁이 같은 목록을 쓴다 */
 const energyRows = (byGrade: Parameters<typeof energyResultRows>[0]) =>
   energyResultRows(byGrade).map(({ grade, count }) => ({ label: energyLabel(grade), value: `+${formatEnergy(count)}` }));
+
+const energyTipRows = (byGrade: Parameters<typeof energyResultRows>[0]) =>
+  energyResultRows(byGrade).map(({ grade, count }) => ({
+    label: <GradeName name={ENERGY_NAME} grade={grade} />,
+    value: `+${formatEnergy(count)}`,
+  }));
 
 // 기운 얻기 탭 — 판매 탭과 같은 어종 표(FishPickTable)로 물고기를 골라 생명의 기운으로 바꾼다. 확정한 뒤에도 창은 열려 있고
 // 결과는 메시지 창에 한 줄로 남는다. 체크 기본값은 해역 기준이고 게임 규칙이 정한다. 해역별 켜짐과 꺼짐은 확정 버튼 왼쪽
@@ -94,13 +100,18 @@ export default function EnergyTab({ game, busy, act, setToast, picks, setPicks }
       }))}
       summary={{
         label: '얻을 생명의 기운', dim: view.count === 0,
-        value: <Tip text={<TipList rows={energyRows(view.byGrade)} />} className="pf-accent text-xs">+{formatEnergy(view.energyTotal)}</Tip>,
+        value: <Tip text={<TipList rows={energyTipRows(view.byGrade)} />} className="pf-accent text-xs">+{formatEnergy(view.energyTotal)}</Tip>,
       }}
       notes={['기운을 얻은 물고기는 가방에서 사라져요.', '도감과 명성은 그대로 남아요.']}
       actions={(
         <div className="relative flex items-center gap-2">
           <Tip wraps className="flex shrink-0"
-               text={view.hasOverride ? '해역별 기운 대상 고르기\n기본값과 다르게 고른 해역이 있어요.' : '해역별 기운 대상 고르기'}>
+               text={(
+                 <TipCard
+                   title="해역별 기운 대상 고르기"
+                   description={view.hasOverride ? '기본값과 다르게 고른 해역이 있어요.' : '켜거나 끈 해역대로 물고기를 골라요.'}
+                 />
+               )}>
             <Button ref={gearRef} pressed={popOpen} aria-expanded={popOpen} aria-label="해역별 기운 대상 고르기"
                     className="relative size-11 shrink-0 p-0 flex items-center justify-center" onClick={() => setPopOpen(o => !o)}>
               <PixelIcon glyph="gear" size={14} />
@@ -108,7 +119,7 @@ export default function EnergyTab({ game, busy, act, setToast, picks, setPicks }
             </Button>
           </Tip>
           <Popover open={popOpen} onClose={() => setPopOpen(false)} anchorRef={gearRef} label="해역별 기운 대상">
-            <Tip text={POPOVER_TIP} className="self-start text-sm">해역별 기운 대상</Tip>
+            <Tip text={<TipCard title="해역별 기운 대상" description={POPOVER_TIP} />} className="self-start text-sm">해역별 기운 대상</Tip>
             <div className={`${SCROLL_Y_ROWS} max-h-[216px] flex flex-col`}>
               {view.spots.map(s => (
                 <div key={s.id} className="grid grid-cols-[10px_minmax(0,1fr)_auto] items-center gap-2 py-1.5 text-sm">

@@ -9,7 +9,6 @@ import { createAdminAuth, createAuth } from './auth.js';
 import { consentPolicy } from './consentPolicy.js';
 import type { AdminAuth, Auth } from './auth.js';
 import type { GoogleConfig } from './googleLink.js';
-import { resendSender } from './mail.js';
 
 let appAuthInstance: Auth | null = null;
 
@@ -25,15 +24,12 @@ export function appAuth(): Auth {
   if (appAuthInstance) return appAuthInstance;
   const secret = process.env.BETTER_AUTH_SECRET;
   const baseURL = process.env.BETTER_AUTH_URL;
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.MAIL_FROM;
   const google = googleConfig();
-  if (!secret || !baseURL || !apiKey || !from || !google) throw new ApiError(500, 'server-config');
+  if (!secret || !baseURL || !google) throw new ApiError(500, 'server-config');
   // 약관 시행일이 없거나 날짜가 아니면 서버가 기동하지 않는다
   consentPolicy();
   appAuthInstance = createAuth({
     pool: database().pool, secret, baseURL, google,
-    mail: resendSender({ apiKey, from, serviceName: '픽셀 낚시' }),
     // 연결은 이미 확정된 뒤라 기록이 실패해도 연결은 성공으로 답한다. 빠진 기록은 시행일 뒤 확인 화면이 채운다
     recordLinkConsent: async uid => {
       try {
@@ -62,6 +58,19 @@ export async function sessionOf(headers: IncomingHttpHeaders): Promise<SessionUs
   if (!result) return null;
   const user = result.user as { id: string; email: string; isAnonymous?: boolean | null };
   return { id: user.id, email: user.isAnonymous ? null : user.email };
+}
+
+/**
+ * 쿠키 캐시를 건너뛰고 DB에서 최신 게임 세션을 다시 읽어 갱신된 Set-Cookie 헤더 목록을 돌려준다.
+ * 계정 상태가 바뀐 직후 cookieCache가 이전 사용자 정보를 돌려주지 않게 할 때 쓴다.
+ */
+export async function refreshAppSessionCookies(headers: IncomingHttpHeaders): Promise<string[]> {
+  const response = await appAuth().api.getSession({
+    headers: fromNodeHeaders(headers),
+    query: { disableCookieCache: true },
+    asResponse: true,
+  });
+  return response.headers.getSetCookie?.() ?? [];
 }
 
 let adminAuthInstance: AdminAuth | null = null;
