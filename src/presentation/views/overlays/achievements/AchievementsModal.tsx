@@ -23,7 +23,7 @@ import { SCROLL_Y } from '../../../ui/scrollArea';
 import Button from '../../../ui/Button';
 import CountBadge from '../../../ui/CountBadge';
 import Inset from '../../../ui/Inset';
-import { LockLines } from '../../../ui/Locked';
+import { LockTip } from '../../../ui/Locked';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import PixelIcon from '../../../ui/PixelIcon';
@@ -65,11 +65,6 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
     ...t,
     count: tabClaimableCount(game, t.key),
   }));
-  const claimAllDisabledReason = guest
-    ? <LockLines lines={GUEST_LOCK_DEFAULT_LINES} />
-    : !summary.canClaimAll
-      ? '지금 받을 수 있는 업적이 없어요.'
-      : '';
 
   const run = (action: GameAction, onOk: (r: Extract<DispatchResult, { status: 'ok' }>) => void) => {
     if (busy) return;
@@ -121,6 +116,11 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
   ] : [];
   const cosmeticItems = tab === 'cosmetic' ? cosmeticCards(game, cosmeticFilter) : [];
   const filterStats = tab === 'cosmetic' ? cosmeticFilterStats(game) : null;
+  const btn = (
+    <Button variant="primary" size="sm" disabled={busy || !summary.canClaimAll} onClick={claimAll}>
+      모두 받기
+    </Button>
+  );
 
   return (
     <Modal layer="stage" md height={560} mobileFixed onClose={onClose}>
@@ -138,11 +138,11 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
                 받을 모자 <b className="pf-accent">{fmtNum(summary.hats)}개</b>
               </span>
             </div>
-            <Tip wraps text={claimAllDisabledReason} onlyIf={() => Boolean(claimAllDisabledReason)}>
-              <Button variant="primary" size="sm" disabled={busy || !summary.canClaimAll} onClick={claimAll}>
-                모두 받기
-              </Button>
-            </Tip>
+            {guest ? (
+              <LockTip lines={GUEST_LOCK_DEFAULT_LINES}>{btn}</LockTip>
+            ) : (
+              <Tip wraps text="지금 받을 수 있는 업적이 없어요." onlyIf={() => !summary.canClaimAll}>{btn}</Tip>
+            )}
           </Inset>
 
           <TabBar tabs={tabs} activeKey={tab} onSelect={setTab} />
