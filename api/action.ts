@@ -310,7 +310,7 @@ async function route(req: Req, res: Res): Promise<void> {
   // 호출자 판정 — 서버 환경과 계정만 쓴다. 요청 헤더(Origin 등)는 호출자가 정하므로 읽지 않는다.
   // 관리자 명부는 개발 도구 계열 액션에서만 조회한다.
   const isAdminCaller = (): Promise<boolean> =>
-    step('db-read', { uid, action: action.type }, () => isListedAdmin(db, user, process.env.DEPLOY_ENV));
+    step('db-read', { uid, action: action.type }, () => isListedAdmin(db, user, process.env.DEPLOY_ENV, req.headers));
   const debugAllowed = async (): Promise<boolean> =>
     debugTriggerAllowed({ deployEnv: process.env.DEPLOY_ENV, admin: await isAdminCaller() });
 

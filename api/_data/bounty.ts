@@ -193,11 +193,18 @@ export function advanceProgress(uid: string, questIds: readonly string[], nowISO
     where user_id = ${uid} and quest_id = any(${textArray(questIds)})`;
 }
 
+/** 사용자의 수배 관련 표(도전권·진행·수주·클리어·라이선스) 전체 삭제 SQL 조각을 돌려준다 */
+export function bountyClearAllFragments(uid: string): SQL[] {
+  return [
+    sql`delete from public.bounty_tickets where user_id = ${uid}`,
+    sql`delete from public.bounty_progress where user_id = ${uid}`,
+    sql`delete from public.bounty_accepts where user_id = ${uid}`,
+    sql`delete from public.bounty_clears where user_id = ${uid}`,
+    sql`delete from public.bounty_licenses where user_id = ${uid}`,
+  ];
+}
+
 /** 계정 정리에서 사용자의 도전권·진행·수주·라이선스 행을 모두 지운다 */
 export async function deleteUserBounty(db: Executor, uid: string): Promise<void> {
-  await db.execute(sql`delete from public.bounty_tickets where user_id = ${uid}`);
-  await db.execute(sql`delete from public.bounty_progress where user_id = ${uid}`);
-  await db.execute(sql`delete from public.bounty_accepts where user_id = ${uid}`);
-  await db.execute(sql`delete from public.bounty_clears where user_id = ${uid}`);
-  await db.execute(sql`delete from public.bounty_licenses where user_id = ${uid}`);
+  for (const frag of bountyClearAllFragments(uid)) await db.execute(frag);
 }

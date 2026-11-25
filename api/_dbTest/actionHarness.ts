@@ -69,11 +69,18 @@ export interface ActionResponse { status: number; body: unknown }
 
 /** 요청 처리 함수를 한 번 호출한다. 배포 식별자는 테스트 프로세스의 기본값('dev'), 버전은 현재 APP_VERSION이다 */
 export async function callAction(token: string | null, body: unknown, opts: {
-  method?: string; origin?: string; buildId?: string; clientId?: string;
+  method?: string; origin?: string; buildId?: string; clientId?: string; headers?: Record<string, string>;
 } = {}): Promise<ActionResponse> {
   const { default: handler } = await import('../action.js');
+  const baseHeaders = sessionHeaders(token);
+  const extraCookie = opts.headers?.cookie;
+  const mergedCookie = [baseHeaders.cookie, extraCookie].filter(Boolean).join('; ');
   const headers: Record<string, string> = {
-    'x-build-id': opts.buildId ?? 'dev', 'x-client-version': APP_VERSION, ...sessionHeaders(token),
+    'x-build-id': opts.buildId ?? 'dev',
+    'x-client-version': APP_VERSION,
+    ...opts.headers,
+    ...baseHeaders,
+    ...(mergedCookie ? { cookie: mergedCookie } : {}),
   };
   if (opts.origin) headers.origin = opts.origin;
   if (opts.clientId) headers['x-client-id'] = opts.clientId;

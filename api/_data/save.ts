@@ -203,6 +203,33 @@ export async function deleteUserSaves(db: Executor, uid: string): Promise<void> 
   await db.execute(sql`delete from public.saves_current where user_id = ${uid}`);
 }
 
+/** 계정 초기 상태 되돌리기용 저장 상태 덮어쓰기와 개체·도감 삭제 조각을 돌려준다 */
+export function resetAccountSaveFragments(uid: string, initial: GameState, nowISO: string): {
+  upsertSave: SQL;
+  clears: SQL[];
+} {
+  const r = stateRow(initial);
+  return {
+    upsertSave: sql`insert into public.saves_current (user_id, version, gold, fame, boat, rod, data, updated_at, last_catch_at, active_client)
+      values (${uid}, 1, ${r.gold}, ${r.fame}, ${r.boat}, ${r.rod}, ${JSON.stringify(r.data)}::jsonb, ${at(nowISO)}, null, null)
+      on conflict (user_id) do update set
+        gold = excluded.gold,
+        fame = excluded.fame,
+        boat = excluded.boat,
+        rod = excluded.rod,
+        data = excluded.data,
+        version = saves_current.version + 1,
+        updated_at = excluded.updated_at,
+        last_catch_at = null,
+        active_client = null
+      returning version`,
+    clears: [
+      sql`delete from public.fish_instances where user_id = ${uid}`,
+      sql`delete from public.records where user_id = ${uid}`,
+    ],
+  };
+}
+
 /** 단일 트랜잭션 내부에서 조건 없이 실행하는 쓰기 조각용 가드 */
 export const ALWAYS_GUARD: SQL = sql`true`;
 

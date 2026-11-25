@@ -48,7 +48,7 @@ async function route(req: Req, res: Res): Promise<void> {
   else if (q === 'bounty') body = await read(() => readOwnBounty(db, uid, gameDayStartISO(new Date().toISOString())));
   else if (q === 'profile') {
     body = await read(async () => ({
-      ...await readOwnProfile(db, uid), devTools: await devToolsGranted(db, user, process.env.DEPLOY_ENV),
+      ...await readOwnProfile(db, uid), devTools: await devToolsGranted(db, user, process.env.DEPLOY_ENV, req.headers),
     }));
   }
   else throw new ApiError(400, 'bad-query');
