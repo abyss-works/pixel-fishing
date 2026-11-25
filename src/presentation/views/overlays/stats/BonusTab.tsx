@@ -5,7 +5,7 @@ import { cx } from '../../../ui/cx';
 import { useMobileLayout } from '../../../layouts/useMobileLayout';
 import TableBox from '../../../ui/TableBox';
 import DataTable from '../../../ui/DataTable';
-import Tip, { TipList } from '../../../ui/Tip';
+import Tip, { TipCard, TipList } from '../../../ui/Tip';
 import { artifactEffectLine, artifactEffectValue } from '../../../ui/artifactEffects';
 import { fmtDecimal2 } from '../../../ui/format';
 import { bonusEffectText, bonusEffectValue } from '../../../../features/guild/model/guild';
@@ -82,7 +82,12 @@ export default function BonusTab({ rows }: { rows: BonusRow[] }) {
           <tr className="sticky top-0 z-1 bg-[color-mix(in_oklab,var(--c-bg)_45%,var(--c-surface))] text-2xs text-text-dim">
             <th className={cx(HEAD, 'text-left')}>받는 효과</th>
             <th className={cx(HEAD, 'text-right')}>
-              <Tip text={<span className="flex flex-col gap-0.5">{SOURCE_HELP.map(line => <span key={line}>{line}</span>)}</span>}>출처</Tip>
+              <Tip text={(
+                <TipCard
+                  title="보너스 출처"
+                  description={<span className="flex flex-col gap-1">{SOURCE_HELP.map(line => <span key={line}>{line}</span>)}</span>}
+                />
+              )}>출처</Tip>
             </th>
           </tr>
         </thead>

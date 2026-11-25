@@ -18,6 +18,7 @@ const gw = vi.hoisted(() => ({
   loadErrors: [] as unknown[],
   bootErrors: [] as unknown[],
   loadDex: {} as Record<string, unknown>,
+  dispatchDex: {} as Record<string, unknown>,
   loadAchievements: {} as Record<string, string>,
   dispatchAchievements: {} as Record<string, string>,
   loadFortune: null as null | { day: string; kind: 'fish' | 'gold' | 'shadow'; index: 3 | 5 },
@@ -38,7 +39,7 @@ vi.mock('../../../platform/api', async () => {
     }
     return {
       status: 'ok' as const,
-      state: { ...fresh(), achievements: gw.dispatchAchievements, fortune: gw.dispatchFortune, visited: gw.visited },
+      state: { ...fresh(), dex: gw.dispatchDex as ReturnType<typeof fresh>['dex'], achievements: gw.dispatchAchievements, fortune: gw.dispatchFortune, visited: gw.visited },
       result: action.type === 'boot' ? { type: 'boot', schoolDay: '2026-11-05' } : { type: action.type },
     };
   };
@@ -81,7 +82,7 @@ function setup(setToast: (m: string, tone?: 'info' | 'gold' | 'warn') => void = 
 
 afterEach(() => {
   cleanup(); clearFailureNotice(); resetFortuneModalSession(); gw.bootResolve = null; gw.actions = []; gw.loads = 0; gw.loadGold = 0;
-  gw.legacy = false; gw.cloudEmpty = false; gw.importError = null; gw.loadError = null; gw.loadErrors = []; gw.bootErrors = []; gw.loadDex = {}; gw.devTools = false;
+  gw.legacy = false; gw.cloudEmpty = false; gw.importError = null; gw.loadError = null; gw.loadErrors = []; gw.bootErrors = []; gw.loadDex = {}; gw.dispatchDex = {}; gw.devTools = false;
   gw.profileReplies = []; gw.profileCalls = 0;
   gw.loadAchievements = {}; gw.dispatchAchievements = {}; gw.loadFortune = null; gw.dispatchFortune = null;
   gw.visited = [];
@@ -634,5 +635,69 @@ describe('최초 지역 진입 알림', () => {
     await act(async () => { await hook.result.current.dispatch({ type: 'travel', to: { kind: 'region', id: 'world' } }); });
     expect(hook.result.current.game.visited).toEqual(['village', 'world']);
     expect(notices.filter(n => n.kind === 'travel.firstVisit')).toEqual([]);
+  });
+});
+
+describe('해역 일반 도감 완성 축하 알림', () => {
+  it('게스트가 해역 일반 폼 어종을 100% 완성하면 업적 알림은 띄우지 않고 도감 완성 골드 알림만 띄운다', async () => {
+    const { FISH } = await import('../../../game/rules/logic');
+    const pondSpecies = FISH.filter(f => f.spot === 'pond');
+    const almost = Object.fromEntries(pondSpecies.slice(0, -1).map(f => [f.id, { normal: { count: 1, maxSize: 10, first: null } }]));
+    const complete = Object.fromEntries(pondSpecies.map(f => [f.id, { normal: { count: 1, maxSize: 10, first: null } }]));
+
+    gw.account = { status: 'guest' };
+    gw.loadDex = almost;
+    const notices: SystemNoticeInput[] = [];
+    const sink: NoticeSink = registerNoticeSink(vi.fn(), input => { notices.push(input); });
+    const hook = setup(sink);
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    gw.dispatchDex = almost;
+    await act(async () => { gw.bootResolve!(); });
+    notices.length = 0;
+
+    // 마지막 종을 일반 폼으로 완성(동시에 업적이 열려도 게스트는 업적 알림 제외)
+    gw.dispatchDex = complete;
+    gw.dispatchAchievements = { 'spot-village-pond': 'claimable' };
+    await act(async () => { await hook.result.current.dispatch({ type: 'catch', spot: 'pond', judgment: 'good' }); });
+    expect(notices.filter(n => n.kind === 'dex.spotCompleted')).toEqual([{
+      kind: 'dex.spotCompleted',
+      text: '마을 연못 일반 어종 도감을 완성했어요!',
+      toastText: '마을 연못 도감 완성!',
+    }]);
+    expect(notices.filter(n => n.kind === 'achievement.unlockable')).toEqual([]);
+
+    // 이미 완성된 뒤 추가 포획에는 중복 알림을 내지 않는다
+    notices.length = 0;
+    await act(async () => { await hook.result.current.dispatch({ type: 'catch', spot: 'pond', judgment: 'good' }); });
+    expect(notices.filter(n => n.kind === 'dex.spotCompleted')).toEqual([]);
+  });
+
+  it('계정 사용자도 해역 일반 폼 도감 완성 시 도감 완성 알림을 받고, 돌연변이만 추가될 때는 받지 않는다', async () => {
+    const { FISH } = await import('../../../game/rules/logic');
+    const pondSpecies = FISH.filter(f => f.spot === 'pond');
+    const almost = Object.fromEntries(pondSpecies.slice(0, -1).map(f => [f.id, { normal: { count: 1, maxSize: 10, first: null } }]));
+    const lastFish = pondSpecies[pondSpecies.length - 1];
+    const variantOnly = { ...almost, [lastFish.id]: { variant: { count: 1, maxSize: 10, first: null } } };
+    const complete = Object.fromEntries(pondSpecies.map(f => [f.id, { normal: { count: 1, maxSize: 10, first: null } }]));
+
+    gw.account = { status: 'account', email: 'u@example.com' };
+    gw.loadDex = almost;
+    const notices: SystemNoticeInput[] = [];
+    const sink: NoticeSink = registerNoticeSink(vi.fn(), input => { notices.push(input); });
+    const hook = setup(sink);
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    gw.dispatchDex = almost;
+    await act(async () => { gw.bootResolve!(); });
+    notices.length = 0;
+
+    // 마지막 종의 돌연변이만 잡힌 경우 일반 도감 미완성
+    gw.dispatchDex = variantOnly;
+    await act(async () => { await hook.result.current.dispatch({ type: 'catch', spot: 'pond', judgment: 'good' }); });
+    expect(notices.filter(n => n.kind === 'dex.spotCompleted')).toEqual([]);
+
+    // 일반 폼으로 완성
+    gw.dispatchDex = complete;
+    await act(async () => { await hook.result.current.dispatch({ type: 'catch', spot: 'pond', judgment: 'good' }); });
+    expect(notices.filter(n => n.kind === 'dex.spotCompleted')).toHaveLength(1);
   });
 });

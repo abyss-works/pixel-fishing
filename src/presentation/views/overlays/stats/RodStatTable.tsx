@@ -5,7 +5,8 @@ import { formatStatMods, formatStatValue } from '../../../../features/gameplay/m
 import type { StatsSpotRow, SpotFit } from '../../../../features/gameplay/model/stats';
 import { cx } from '../../../ui/cx';
 import KeyValueRow from '../../../ui/KeyValueRow';
-import Tip, { TipList } from '../../../ui/Tip';
+import Tip, { TipCard } from '../../../ui/Tip';
+import type { TipRow } from '../../../ui/Tip';
 import { FIT_LABEL, FIT_TONE, goodText, idleRows, idleText } from './statsText';
 
 // 낚싯대 수치: 고른 해역 기준의 유효 스탯을 두 열 목록으로 보인다. 입질 대기와 방치 페널티는 해역 대비 상대치이고,
@@ -13,10 +14,34 @@ import { FIT_LABEL, FIT_TONE, goodText, idleRows, idleText } from './statsText';
 // 값은 스탯 선택자에서 오고 여기서 규칙을 재계산하지 않는다.
 
 /** 값. 보정이나 초과 유지가 있으면 툴팁으로 내역을 보인다 */
-export function StatValue({ stat, unit, digits = 1, prefix = '' }: { stat: Stat; unit: string; digits?: number; prefix?: string }) {
+function buildStatRows(stat: Stat, unit: string, digits: number, prefix: string): { rows: TipRow[]; note?: string } {
+  const sum = stat.base + stat.mods.reduce((acc, mod) => acc + mod.delta, 0);
+  const sumDigits = digits === 0 && stat.mods.some(mod => !Number.isInteger(mod.delta)) ? 1 : digits;
+  const rows: TipRow[] = [
+    { label: '기본', value: formatStatValue(stat.base, unit, digits, prefix) },
+    ...stat.mods.map(mod => {
+      const modDigits = digits === 0 && !Number.isInteger(mod.delta) ? 1 : digits;
+      const sign = mod.delta >= 0 ? '+' : '';
+      return { label: mod.label, value: `${sign}${formatStatValue(mod.delta, unit, modDigits, prefix)}` };
+    }),
+  ];
+  if (stat.mods.length > 0) {
+    rows.push({ label: '합계', value: formatStatValue(sum, unit, sumDigits, prefix) });
+  }
+  const ratcheted = Math.abs(stat.value - sum) > 1e-6;
+  const note = ratcheted ? `초과 보유 ${formatStatValue(stat.value, unit, digits, prefix)} 유지` : undefined;
+  return { rows, note };
+}
+
+/** 보정 내역이 있으면 계산 과정을 툴팁으로 보여 주는 수치 */
+export function StatValue({ stat, unit, digits = 1, prefix = '', label }: {
+  stat: Stat; unit: string; digits?: number; prefix?: string; label?: string;
+}) {
   const value = formatStatValue(stat.value, unit, digits, prefix);
   const detail = formatStatMods(stat, unit, digits, prefix);
-  return detail ? <Tip text={detail}>{value}</Tip> : <span>{value}</span>;
+  if (!detail) return <span>{value}</span>;
+  const { rows, note } = buildStatRows(stat, unit, digits, prefix);
+  return <Tip text={<TipCard title={label ?? '적용 내역'} rows={rows} note={note} />}>{value}</Tip>;
 }
 
 /** 해역 적합도: 충족(하늘), 파워 부족(위험), 배 필요(보조색)의 굵은 글자 */
@@ -39,18 +64,18 @@ export default function RodStatTable({ row }: { row: StatsSpotRow }) {
     <div className="grid grid-cols-2 gap-x-5 mobile:grid-cols-1">
       <ul className="flex flex-col">
         <RodStatLine label="바 시간">{axes.sweep.value.toFixed(2)}초</RodStatLine>
-        <RodStatLine label="입질 최소 대기"><StatValue stat={effectiveBite.min} unit="초" /></RodStatLine>
-        <RodStatLine label="입질 최대 대기"><StatValue stat={effectiveBite.max} unit="초" /></RodStatLine>
-        <RodStatLine label={<Tip text={'노란 영역이 바 폭에서 차지하는 크기예요.\n가운데 빨간 영역도 포함해요.\n요구 파워를 넘을수록 넓어져요.'}>GOOD 영역</Tip>}>
+        <RodStatLine label="입질 최소 대기"><StatValue label="입질 최소 대기" stat={effectiveBite.min} unit="초" /></RodStatLine>
+        <RodStatLine label="입질 최대 대기"><StatValue label="입질 최대 대기" stat={effectiveBite.max} unit="초" /></RodStatLine>
+        <RodStatLine label={<Tip text={<TipCard title="GOOD 영역" description={'노란 영역이 바 폭에서 차지하는 크기예요.\n가운데 빨간 영역도 포함해요.\n요구 파워를 넘을수록 넓어져요.'} />}>GOOD 영역</Tip>}>
           {goodText(row)}
         </RodStatLine>
       </ul>
       <ul className="flex flex-col">
-        <RodStatLine label={<Tip text={`가운데에 열리는 빨간 영역이에요.\n파워가 요구치보다 ${POWER_RULES.redMinExcess} 넘게 높으면 생겨요.`}>PERFECT 영역</Tip>}>
+        <RodStatLine label={<Tip text={<TipCard title="PERFECT 영역" description={`가운데에 열리는 빨간 영역이에요.\n파워가 요구치보다 ${POWER_RULES.redMinExcess} 넘게 높으면 생겨요.`} />}>PERFECT 영역</Tip>}>
           {perfectText(row)}
         </RodStatLine>
-        <RodStatLine label={<Tip text={autoPenaltyHelpText()}>방치 낚시 페널티</Tip>}>
-          {idleDetail ? <Tip text={<TipList rows={idleDetail} />}>{idleText(idle)}</Tip> : <span>{idleText(idle)}</span>}
+        <RodStatLine label={<Tip text={<TipCard title="방치 낚시 페널티" description={autoPenaltyHelpText()} />}>방치 낚시 페널티</Tip>}>
+          {idleDetail ? <Tip text={<TipCard title="방치 낚시 배수" rows={idleDetail} />}>{idleText(idle)}</Tip> : <span>{idleText(idle)}</span>}
         </RodStatLine>
       </ul>
     </div>

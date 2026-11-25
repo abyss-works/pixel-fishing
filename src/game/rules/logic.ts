@@ -35,10 +35,10 @@ import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
 import type { DayPhase } from './time.js';
 import type { NamedPity, SpeciesPity } from './pity.js';
 import {
-  FIRST_CATCH_LEGEND_MAX, FIRST_CATCH_LEGEND_MIN,
+  FIRST_CATCH_SPOT_CAPS, FIRST_CATCH_SPOTS,
   endedFirstCatch, endedFirstCatchSpot, firstCatchOfLegacy, newFirstCatch, newFirstCatchSpot,
 } from './firstCatch.js';
-import type { FirstCatch, FirstCatchSpot } from './firstCatch.js';
+import type { FirstCatch, FirstCatchSpot, FirstCatchSpotId } from './firstCatch.js';
 import { safeFortune } from './fortune.js';
 import type { DailyFortune } from './fortune.js';
 
@@ -302,6 +302,28 @@ export function zoneDexMissing(
   return zoneDexSpecies(zone, grades)
     .filter(f => (state.dex[f.id]?.normal?.count ?? 0) === 0)
     .map(f => f.id);
+}
+
+/** 해역 일반 폼 도감 진행도 — 해당 해역 전체 어종 중 일반 폼으로 잡힌 종 수와 완료 여부를 돌려준다 */
+export function spotNormalDexProgress(
+  dex: GameState['dex'], spot: SpotId,
+): { found: number; total: number; completed: boolean } {
+  const species = FISH.filter(f => f.spot === spot);
+  const found = species.filter(f => (dex[f.id]?.normal?.count ?? 0) > 0).length;
+  const total = species.length;
+  return { found, total, completed: total > 0 && found === total };
+}
+
+/** 해역 일반 폼 도감 100% 완성 여부 */
+export function isSpotNormalDexComplete(dex: GameState['dex'], spot: SpotId): boolean {
+  return spotNormalDexProgress(dex, spot).completed;
+}
+
+/** 이번 도감 변화로 해당 해역의 일반 폼 도감이 새로 100% 완성되었으면 그 해역 id, 아니면 null */
+export function newlyCompletedSpotDex(
+  prevDex: GameState['dex'], nextDex: GameState['dex'], spot: SpotId,
+): SpotId | null {
+  return !isSpotNormalDexComplete(prevDex, spot) && isSpotNormalDexComplete(nextDex, spot) ? spot : null;
 }
 
 /** 라이선스 조건 — 도감. UI 체크리스트와 리듀서 판정의 단일 근원 */
@@ -909,29 +931,42 @@ function safeNamedPity(v: unknown): NamedPity {
   return { day: typeof r.day === 'string' ? r.day : '', misses: count(r.misses), fails: count(r.fails), wounds };
 }
 
-/** 첫 경험 보장 위생 — 새 해역별 구조는 보존, 구 단일 객체는 해역별로 이관, 없거나 손상되면 이전 세이브 규칙을 따른다 */
+/** 첫 경험 보장 위생 — 새 해역별 구조는 보존하고, 구 해역별/단일 객체는 안전하게 이관하며, 완료 계정은 재활성화하지 않는다 */
 function safeFirstCatch(v: unknown, dex: GameState['dex'], fame: number): FirstCatch {
   const r = safeRecord<unknown>(v);
   const int = (n: unknown) => typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= 1_000_000;
-  const parseSpot = (raw: unknown): FirstCatchSpot | null => {
+  const parseSpot = (raw: unknown, cap: number): FirstCatchSpot | null => {
     const o = safeRecord<unknown>(raw);
-    if (!int(o.n) || !int(o.legendAt) || typeof o.epic !== 'boolean' || typeof o.legend !== 'boolean') return null;
-    return o.epic || o.legend
-      ? { n: o.n as number, legendAt: o.legendAt as number, epic: o.epic, legend: o.legend }
-      : endedFirstCatchSpot();
+    if (int(o.n) && typeof o.active === 'boolean') {
+      return o.active && (o.n as number) < cap
+        ? { n: o.n as number, active: true }
+        : endedFirstCatchSpot();
+    }
+    if (int(o.n) && int(o.legendAt) && typeof o.epic === 'boolean' && typeof o.legend === 'boolean') {
+      return (o.epic || o.legend) && (o.n as number) < cap
+        ? { n: o.n as number, active: true }
+        : endedFirstCatchSpot();
+    }
+    return null;
   };
-  const pond = parseSpot(r.pond);
-  const river = parseSpot(r.river);
-  if (pond && river) return { pond, river };
+  const parsed = {} as Partial<Record<FirstCatchSpotId, FirstCatchSpot>>;
+  let allSpotsValid = true;
+  for (const s of FIRST_CATCH_SPOTS) {
+    const spotState = parseSpot(r[s], FIRST_CATCH_SPOT_CAPS[s] ?? 0);
+    if (!spotState) {
+      allSpotsValid = false;
+      break;
+    }
+    parsed[s] = spotState;
+  }
+  if (allSpotsValid) return parsed as FirstCatch;
   if (int(r.n) && int(r.legendAt) && typeof r.epic === 'boolean' && typeof r.legend === 'boolean') {
     if (!r.epic && !r.legend) return endedFirstCatch();
-    const rawLegendAt = r.legendAt as number;
-    const legendAt = rawLegendAt === 0 ? 0
-      : Math.min(FIRST_CATCH_LEGEND_MAX, Math.max(FIRST_CATCH_LEGEND_MIN, rawLegendAt));
+    const pondCap = FIRST_CATCH_SPOT_CAPS.pond ?? 0;
     const hasRiverCatch = FISH.some(f => f.spot === 'river'
       && Object.values(dex[f.id] ?? {}).some(rec => (rec?.count ?? 0) > 0));
     return {
-      pond: { n: r.n as number, legendAt, epic: r.epic, legend: r.legend },
+      pond: (r.n as number) < pondCap ? { n: r.n as number, active: true } : endedFirstCatchSpot(),
       river: hasRiverCatch ? endedFirstCatchSpot() : newFirstCatchSpot(),
     };
   }

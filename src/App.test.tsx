@@ -34,6 +34,7 @@ import { when } from './platform/api';
 import { V_SPAWN, schoolsOf } from './game/world';
 import type { Point, RegionId } from './game/world';
 import { setSchoolDay } from './features/gameplay/service/schoolDay';
+import { setSharedProfileStatus } from './features/gameplay/service/profileStatus';
 
 // 업데이트 소식 창은 현재 버전의 패치노트 항목이 있다고 가정해 검증한다. 실제 노트의 현재 버전 항목에 의존하지 않는다.
 // 판매 금액은 어종 데이터에서 유도한다(값이 바뀌어도 기대가 같이 움직인다)
@@ -1628,6 +1629,27 @@ describe('닉네임 (게스트명 표시·변경)', () => {
     fireEvent.change(screen.getByLabelText('새 닉네임'), { target: { value: '__' } });
     fireEvent.click(screen.getByRole('button', { name: '변경' }));
     await waitFor(() => expect(screen.getByLabelText('현재 닉네임')).toHaveTextContent(before!));
+  });
+
+  it('App은 GameView에 profileStatus prop을 직접 전달해 공용 저장소가 비워져도 불러오기 실패와 미설정을 구분한다', async () => {
+    seed({});
+    const spy = vi.spyOn(LocalGameGateway.prototype, 'getProfile').mockResolvedValueOnce({ ok: false });
+    render(<App />);
+    clickTab(/설정/);
+    await waitFor(() => expect(screen.getByText('불러오기 실패')).toBeInTheDocument());
+    act(() => setSharedProfileStatus(null));
+    expect(screen.getByText('불러오기 실패')).toBeInTheDocument();
+    expect(screen.queryByText('불러오는 중')).not.toBeInTheDocument();
+    cleanup();
+
+    spy.mockResolvedValue({ ok: true, nickname: null, devTools: false });
+    render(<App />);
+    clickTab(/설정/);
+    await waitFor(() => expect(screen.getByText('미설정')).toBeInTheDocument());
+    act(() => setSharedProfileStatus(null));
+    expect(screen.getByText('미설정')).toBeInTheDocument();
+    expect(screen.queryByText('불러오는 중')).not.toBeInTheDocument();
+    spy.mockRestore();
   });
 });
 

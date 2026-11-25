@@ -1,21 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import { SPOTS } from '../../../src/game/content/spots';
-import { FIRST_CATCH_EPIC_AT, FIRST_CATCH_LEGEND_MAX, FIRST_CATCH_LEGEND_MIN } from '../../../src/game/rules/firstCatch';
-import { entryLevel } from '../model';
+import { FIRST_CATCH_SPOT_CAPS, newFirstCatch } from '../../../src/game/rules/firstCatch';
+import { entryLevel, rng } from '../model';
 import { applyOverride } from './override';
+import { createSampler } from './sample';
 import { OPENING_TARGET_SEC, simulateOpening } from './opening';
 import type { Judgment } from './opening';
 
-const run = (legendAt: number | null, judgment: Judgment = 'normal') => simulateOpening({ judgment, legendAt });
+const run = (firstCatch: boolean, judgment: Judgment = 'normal') => simulateOpening({ judgment, firstCatch });
 const sea = SPOTS.find(s => s.boatTier >= 1)!;
 
 describe('최초 10분', () => {
-  it('목표 시간은 10분이다', () => {
+  it('목표 시간은 10분이고 해역별 첫 경험 보장 상한과 초기 상태를 따른다', () => {
     expect(OPENING_TARGET_SEC).toBe(600);
+    expect(FIRST_CATCH_SPOT_CAPS).toEqual({ pond: 20, river: 30 });
+    expect(newFirstCatch()).toEqual({
+      pond: { n: 0, active: true },
+      river: { n: 0, active: true },
+    });
   });
 
   it('수동 낚시로 첫 바다 해역에 도착하고 강화와 배 구매를 거친다', () => {
-    const r = run(null);
+    const r = run(false);
     expect(r.arrival).not.toBeNull();
     expect(r.steps.filter(s => s.kind === 'upgrade')).toHaveLength(entryLevel(sea.id) - 1);
     expect(r.steps.filter(s => s.kind === 'boat')).toHaveLength(1);
@@ -24,61 +30,59 @@ describe('최초 10분', () => {
     expect(times).toEqual([...times].sort((a, b) => a - b));
   });
 
-  it('보장이 없으면 영웅과 전설 단계가 없다', () => {
-    expect(run(null).steps.some(s => s.kind === 'guarantee')).toBe(false);
+  it('보장이 없으면 보장 단계가 없다', () => {
+    expect(run(false).steps.some(s => s.kind === 'guarantee')).toBe(false);
   });
 
-  it('마을 해역마다 5번째 캐치에서 영웅을 받고, 전설 번호까지 머무르면 전설을 받는다', () => {
-    const r = run(15);
-    const g = r.steps.filter(s => s.kind === 'guarantee');
-    expect(g[0]).toMatchObject({ detail: 'epic', catches: FIRST_CATCH_EPIC_AT });
-    expect(g.every(s => s.detail === 'epic' || s.detail === 'legendary')).toBe(true);
+  it('해역별 상한(연못 20, 강 30) 안에서 미보유 일반 폼 어종을 보장한다', () => {
+    const r = run(true);
+    const pondGuarantees = r.steps.filter(s => s.kind === 'guarantee');
+    expect(pondGuarantees.length).toBeGreaterThan(0);
 
-    // 배 가격을 높여 마을 강에 오래 머무르게 하면 마을 강 전설 보장도 정한 번호에 발동한다
+    // 배 가격을 높여 연못과 강에 오래 머무르게 하면 각 해역 상한 안에서만 보장이 발동한다
     const restore = applyOverride({ boats: { '1': { price: 3000 } } });
     try {
-      const slow = run(15);
+      const slow = simulateOpening({ judgment: 'normal', firstCatch: true, sampler: createSampler(rng(1)) });
       const move = slow.steps.find(s => s.kind === 'move' && s.detail === 'river')!;
-      const legend = slow.steps.find(s => s.kind === 'guarantee' && s.detail === 'legendary')!;
-      expect(legend.catches - move.catches).toBe(15);
+      const guarantees = slow.steps.filter(s => s.kind === 'guarantee');
+      for (const g of guarantees) {
+        if (g.catches <= move.catches) {
+          expect(g.catches).toBeLessThanOrEqual(FIRST_CATCH_SPOT_CAPS.pond!);
+        } else {
+          expect(g.catches - move.catches).toBeLessThanOrEqual(FIRST_CATCH_SPOT_CAPS.river!);
+        }
+      }
     } finally {
       restore();
     }
   });
 
-  it('보장은 도착을 앞당기고 전설 번호가 이를수록 늦지 않다', () => {
-    const none = run(null).arrival!.seconds;
-    const l10 = run(10).arrival!.seconds, l13 = run(13).arrival!.seconds, l15 = run(15).arrival!.seconds;
-    expect(l10).toBeLessThanOrEqual(l13);
-    expect(l13).toBeLessThanOrEqual(l15);
-    expect(l15).toBeLessThan(none);
-  });
-
-  it('GOOD는 보장 없을 때 무판정보다 빠르고, 보장이 있어도 같은 캐치 수 이하로 도착한다', () => {
-    expect(run(null, 'good').arrival!.seconds).toBeLessThan(run(null).arrival!.seconds);
-    for (const at of [10, 13, 15]) {
-      expect(run(at, 'good').arrival!.catches, `${at}`).toBeLessThanOrEqual(run(at).arrival!.catches);
-    }
+  it('GOOD는 무판정보다 빠르게 도착한다', () => {
+    expect(run(false, 'good').arrival!.seconds).toBeLessThan(run(false).arrival!.seconds);
+    expect(run(true, 'good').arrival!.seconds).toBeLessThan(run(true).arrival!.seconds);
   });
 
   it('기본 상수에서는 보장이 있든 없든 10분 안에 도착한다', () => {
-    for (const at of [null, 10, 13, 15]) expect(run(at).arrival!.seconds).toBeLessThanOrEqual(OPENING_TARGET_SEC);
+    for (const fc of [false, true]) expect(run(fc).arrival!.seconds).toBeLessThanOrEqual(OPENING_TARGET_SEC);
+    for (let seed = 1; seed <= 20; seed++) {
+      const r = simulateOpening({ judgment: 'normal', firstCatch: true, sampler: createSampler(rng(seed)) });
+      expect(r.arrival).not.toBeNull();
+      expect(r.arrival!.seconds).toBeLessThanOrEqual(OPENING_TARGET_SEC);
+    }
   });
 
-  it('전설 번호는 제품의 범위(10~15) 안이어야 한다', () => {
-    expect(FIRST_CATCH_LEGEND_MAX).toBe(15);
-    expect(() => run(FIRST_CATCH_LEGEND_MIN - 1)).toThrow(/전설/);
-    expect(() => run(FIRST_CATCH_LEGEND_MAX + 1)).toThrow(/전설/);
-    expect(() => run(Number.NaN)).toThrow(/전설/);
+  it('호환 인자 legendAt은 null이면 보장 없음, 그 외에는 상한 보장으로 동작한다', () => {
+    expect(simulateOpening({ judgment: 'normal', legendAt: null }).steps).toEqual(run(false).steps);
+    expect(simulateOpening({ judgment: 'normal', legendAt: 15 }).steps).toEqual(run(true).steps);
   });
 
   it('같은 입력은 같은 결과다', () => {
-    expect(run(15)).toEqual(run(15));
+    expect(run(true)).toEqual(run(true));
   });
 
   it('배 가격 덮어쓰기는 도착을 늦춘다', () => {
-    const base = run(15).arrival!.seconds;
+    const base = run(true).arrival!.seconds;
     const restore = applyOverride({ boats: { '1': { price: 3000 } } });
-    try { expect(run(15).arrival!.seconds).toBeGreaterThan(base); } finally { restore(); }
+    try { expect(run(true).arrival!.seconds).toBeGreaterThan(base); } finally { restore(); }
   });
 });
