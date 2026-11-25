@@ -1,14 +1,22 @@
 import type { CSSProperties } from 'react';
 import { RARITY, formName, priceOf } from '../../../game/rules/logic';
-import type { CatchInfo, Fish } from '../../../game/rules/logic';
+import type { CatchInfo, Fish, RarityId } from '../../../game/rules/logic';
 import { cx } from '../cx';
 import { fmtGold, fmtSize } from '../format';
 import Inset from '../Inset';
+import type { InsetBorder } from '../Inset';
 import { NOTCH_SM } from '../notch';
 import PixelIcon from '../PixelIcon';
 import HudPanel from './HudPanel';
 import FishSprite from '../fish/FishSprite';
 import { RarityText } from '../fish/RarityTag';
+
+const PORTRAIT_BORDER: Record<RarityId, InsetBorder> = {
+  common: 'common',
+  rare: 'rare',
+  epic: 'epic',
+  legendary: 'legend',
+};
 
 // 변이 문구 풀 — 대놓고 "변이"라 하지 않고 낮춰 말하는 의미심장한 한 줄 (매번 랜덤)
 const VARIANT_LINES = [
@@ -20,18 +28,18 @@ const VARIANT_LINES = [
   '…자꾸만 눈이 가는 녀석이다.',
 ] as const;
 
-// 획득 오버레이 — 2열 가로형 노치 카드(좌측 스프라이트 칸 + 우측 정보·2×2 지표).
-// 스프라이트만 캔버스, 나머지(이름/크기/판매가/월척/변이/NEW)는 전부 DOM — 폰트·그림자·CSS 애니메이션.
-// 좌측 스프라이트 칸 왼쪽 위 모서리에 신규 발견 골드 노치 꼬리표를 둔다.
+// 획득 오버레이 — 2열 가로형 고정 크기(340×160) 노치 카드(좌측 어종 액자 + 우측 등급·배지·이름·변이 문구·크기/판매가).
+// 스프라이트만 캔버스, 나머지(등급/배지/이름/변이 문구/크기/판매가)는 전부 DOM — 폰트·그림자·CSS 애니메이션.
+// 돌연변이여도 초상화 액자의 겉 테두리는 어종 등급색으로 고정하고, 우상단 배지는 왕관 → 돌연변이 → NEW 순서로 우측 정렬한다.
 export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo | null }) {
   const r = RARITY[fish.rarity];
   // 문구 선택은 이번 캐치의 크기 롤(이미 랜덤)에서 파생 — 렌더 순수성 유지 + 카드 떠 있는 동안 고정
   const isVariant = info?.form === 'variant';
   const variantLine = VARIANT_LINES[info ? Math.floor(info.size * 997) % VARIANT_LINES.length : 0];
-  // 연출 파라미터는 등급 데이터 소관 — 등급 리터럴 하드코딩 금지 (6등급 개편 대비)
+  // 연출 파라미터는 등급 데이터 소관 — 등급 리터럴 하드코딩 금지
   const { sparks, sparkDist, halo } = r;
   return (
-    <div data-rarity={fish.rarity} className="relative w-full max-w-[380px] pointer-events-none">
+    <div data-rarity={fish.rarity} className="relative w-[340px] h-[160px] shrink-0 pointer-events-none">
       {/* 이펙트 레이어 — 카드의 쌓임 맥락 안에 두면 카드 층에 갇혀 채팅과 헤더 뒤로 가려지므로
           카드와 형제로 두고 이펙트 층(catch-fx)에 놓는다. 패널의 노치가 잘라 내지 않도록 패널 바깥 층이다 */}
       <div data-catch-fx className="absolute inset-0 z-(--z-catch-fx) pointer-events-none" aria-hidden="true">
@@ -70,45 +78,54 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
                 style={{ '--i': i } as CSSProperties} />
         ))}
       </div>
-      <div className="relative z-(--z-stage-card) animate-catch-pop">
+      <div className="relative z-(--z-stage-card) w-full h-full animate-catch-pop">
         <HudPanel tone="none"
-                  className="flex items-center gap-3.5 mobile:gap-2.5 w-full px-3.5 py-3 mobile:px-2.5 mobile:py-2
+                  className="w-full h-full p-3 grid grid-cols-[120px_minmax(0,1fr)] gap-3 items-stretch overflow-hidden
                              bg-[color-mix(in_oklab,var(--c-bg)_85%,transparent)] shadow-panel
                              border-[color-mix(in_srgb,var(--rarity-color)_70%,transparent)]">
-          {/* 좌측 열: 오목한 어종 칸 + 좌상단 신규 발견 골드 노치 */}
-          <div className="relative shrink-0 flex">
-            <Inset tone="deep" border="line-dim" className="flex items-center justify-center p-2 mobile:p-1.5">
-              <FishSprite fish={fish} preset="card" form={info?.form ?? 'normal'} animate className="max-w-full" />
-            </Inset>
-            {info?.isNew && (
-              <span className={cx('absolute -top-1 -left-1 px-1.5 py-0.5 pf-accent text-2xs leading-none bg-gold text-bg animate-fade-in', NOTCH_SM)}>
-                NEW
-              </span>
-            )}
-          </div>
-          {/* 우측 열: 등급·이름, 변이 문구, 2×2 지표 격자, 월척 줄 */}
-          <div className="flex flex-col gap-1.5 min-w-0 flex-1">
-            <div className="flex items-baseline gap-1.5 flex-wrap min-w-0">
-              <span className="text-xs font-bold shrink-0"><RarityText rarity={fish.rarity} /></span>
-              {/* 변이 — 이름에 자홍 강조·반짝이와 은은한 빛을 입히고, 문구는 오히려 낮춰 말한다 */}
-              {isVariant && <PixelIcon glyph="sparkle" size={14} className="text-mutation shrink-0 self-center" />}
-              <b className={cx('text-lg mobile:text-base leading-tight break-keep', isVariant && 'text-mutation animate-mutated-shimmer')}>
-                {formName(fish, info?.form ?? 'normal')}
-              </b>
+          {/* 좌측 열: 등급색 겉 테두리 고정 어종 액자 */}
+          <Inset data-catch-portrait tone="deep" border={PORTRAIT_BORDER[fish.rarity]}
+                 className="w-[120px] h-full p-2 flex items-center justify-center overflow-hidden">
+            <FishSprite fish={fish} preset="card" form={info?.form ?? 'normal'} animate className="w-full h-auto max-h-full object-contain" />
+          </Inset>
+          {/* 우측 열: 등급·우상단 배지(왕관→돌연변이→NEW), 이름, 고정 높이 변이 로어 자리, 크기·판매가 2종 */}
+          <div className="h-full min-w-0 grid grid-rows-[20px_28px_18px_56px] gap-y-1">
+            <div className="h-[20px] flex items-center justify-between gap-2 overflow-hidden">
+              <span className="text-xs font-bold leading-none whitespace-nowrap"><RarityText rarity={fish.rarity} /></span>
+              <div data-catch-badges className="flex items-center justify-end gap-1.5 shrink-0">
+                {info?.isBig && (
+                  <span data-catch-badge="record" className="inline-flex items-center justify-center shrink-0 text-gold">
+                    <PixelIcon glyph="crown" size={14} />
+                  </span>
+                )}
+                {isVariant && (
+                  <span data-catch-badge="variant" className="inline-flex items-center justify-center shrink-0 text-mutation">
+                    <PixelIcon glyph="sparkle" size={14} />
+                  </span>
+                )}
+                {info?.isNew && (
+                  <span data-catch-badge="new"
+                        className={cx('inline-flex items-center justify-center px-1.5 h-4 pf-accent text-2xs leading-none bg-gold border border-gold-dark text-bg shrink-0', NOTCH_SM)}>
+                    NEW
+                  </span>
+                )}
+              </div>
             </div>
-            {isVariant && <span data-catch-variant className="text-xs text-text-dim leading-snug">{variantLine}</span>}
+            <b data-catch-name className={cx('block h-[28px] leading-[28px] text-lg font-bold truncate', isVariant ? 'text-mutation animate-mutated-shimmer' : 'text-text')}>
+              {formName(fish, info?.form ?? 'normal')}
+            </b>
+            {isVariant ? (
+              <span data-catch-variant className="block h-[18px] leading-[18px] text-xs text-mutation truncate">{variantLine}</span>
+            ) : (
+              <span aria-hidden="true" data-catch-variant-slot className="block h-[18px]" />
+            )}
             <div data-catch-metrics
-                 className={cx('grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-2.5 gap-y-1 px-2.5 py-1.5 text-xs text-text-dim bg-bg/60', NOTCH_SM)}>
+                 className={cx('h-[56px] grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-0.5 px-2.5 py-1.5 text-xs text-text-dim bg-bg border border-line-dim overflow-hidden', NOTCH_SM)}>
               <span>크기</span>
-              <b className="pf-accent text-sm mobile:text-xs text-text text-right whitespace-nowrap">{info ? fmtSize(info.size) : ''}</b>
+              <b className="pf-accent tabular-nums text-sm text-text text-right whitespace-nowrap">{info ? fmtSize(info.size) : ''}</b>
               <span>판매가</span>
-              <b className="pf-accent text-sm mobile:text-xs text-gold text-right whitespace-nowrap">{fmtGold(priceOf(fish, info?.form ?? 'normal'))}</b>
+              <b className="pf-accent tabular-nums text-sm text-gold text-right whitespace-nowrap">{fmtGold(priceOf(fish, info?.form ?? 'normal'))}</b>
             </div>
-            {info?.isBig && (
-              <span className="flex items-center gap-1 text-xs text-gold">
-                <PixelIcon glyph="crown" size={13} />월척 <span className="pf-accent">상위 {info.percentile}%</span>
-              </span>
-            )}
           </div>
         </HudPanel>
       </div>
