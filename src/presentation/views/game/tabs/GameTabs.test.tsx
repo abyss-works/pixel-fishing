@@ -59,6 +59,15 @@ describe('GameTabs - 가방 탭 길드 보너스 전달', () => {
     renderBag(0.2, mobile);
     expect(screen.getByRole('heading', { level: 3, name: /물고기/ })).toHaveTextContent(/0\s*\/\s*72/);
   });
+
+  it.each([['PC 레이아웃', false], ['모바일 레이아웃', true]])('%s에서 가방 물고기 하단 액션 바는 스크롤 영역(.pf-vscroll) 바깥 고정 footer 슬롯에 놓인다', (_, mobile) => {
+    renderBag(0, mobile);
+    const autoLock = screen.getByRole('button', { name: '자동 잠금' });
+    const energy = screen.getByRole('button', { name: '기운 얻기' });
+    expect(autoLock.closest('.pf-vscroll')).toBeNull();
+    expect(energy.closest('.pf-vscroll')).toBeNull();
+    expect(screen.getByRole('heading', { level: 3, name: /물고기/ }).closest('.pf-vscroll')).not.toBeNull();
+  });
 });
 
 function StatefulTabs() {

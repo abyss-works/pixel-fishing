@@ -41,6 +41,7 @@ import Inset from '../../../../ui/Inset';
 import PressRow from '../../../../ui/PressRow';
 import ArtifactDetail from './ArtifactDetail';
 import ItemSection from './ItemSection';
+import { SidebarFooter } from '../../../../layouts/sidebar';
 
 /** 전시대 화면 노출 — 1차 전시대는 이번 배포에서 뺀다. 규칙·액션은 그대로다 */
 export const EXHIBIT_UI_ENABLED = false;
@@ -267,7 +268,7 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
   };
 
   return (
-    <div className={cx('flex-1 flex flex-col', section === 'fish' && '-mb-3')}>
+    <div className="flex-1 flex flex-col">
       <SubTabs
         items={[
           { key: 'fish' as BagSection, label: '물고기' },
@@ -390,25 +391,27 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
               </Note>
             </>
           )}
-          <div className="sticky bottom-0 z-1 -mx-3 px-3 pb-3 pt-2 mt-auto bg-surface border-t border-line-dim grid grid-cols-2 gap-2">
-            <Tip wraps className="flex min-w-0"
-                 text={bagCount === 0
-                   ? '가방에 물고기가 없어요.'
-                   : '어종마다 일반과 돌연변이 각각 가장 큰 물고기 한 마리만 잠그고, 나머지 잠금은 풀어요'}>
-              <Button size="sm" aria-label="자동 잠금" disabled={bagCount === 0} onClick={autoLock}
-                      className="w-full justify-center">
-                <PixelIcon glyph="lockOpen" size={12} />
-                자동 잠금
-              </Button>
-            </Tip>
-            <Tip wraps className="flex min-w-0"
-                 text={energyEntry.ok ? '가방의 물고기를 생명의 기운으로 바꿔요' : <LockLines lines={energyEntry.lines} />}>
-              <Button size="sm" disabled={!energyEntry.ok} onClick={() => onOpenEnergy?.()}
-                      className="w-full justify-center">
-                기운 얻기
-              </Button>
-            </Tip>
-          </div>
+          <SidebarFooter>
+            <div className="px-3 pb-3 pt-2 bg-surface border-t border-line-dim grid grid-cols-2 gap-2">
+              <Tip wraps className="flex min-w-0"
+                   text={bagCount === 0
+                     ? '가방에 물고기가 없어요.'
+                     : '어종마다 일반과 돌연변이 각각 가장 큰 물고기 한 마리만 잠그고, 나머지 잠금은 풀어요'}>
+                <Button size="sm" aria-label="자동 잠금" disabled={bagCount === 0} onClick={autoLock}
+                        className="w-full justify-center">
+                  <PixelIcon glyph="lockOpen" size={12} />
+                  자동 잠금
+                </Button>
+              </Tip>
+              <Tip wraps className="flex min-w-0"
+                   text={energyEntry.ok ? '가방의 물고기를 생명의 기운으로 바꿔요' : <LockLines lines={energyEntry.lines} />}>
+                <Button size="sm" disabled={!energyEntry.ok} onClick={() => onOpenEnergy?.()}
+                        className="w-full justify-center">
+                  기운 얻기
+                </Button>
+              </Tip>
+            </div>
+          </SidebarFooter>
         </>
       )}
     </div>
