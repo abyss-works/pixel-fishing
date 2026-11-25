@@ -8,6 +8,7 @@ import { variantShare } from '../../../../../game/rules/logic';
 import { BOATS, WALK_BAG_CAP } from '../../../../../game/content/boats';
 import { SLOT_SCOPE } from '../../../../../features/kitchen/model/recipes';
 import Accordion from '../../../../ui/Accordion';
+import { HighlightRarityText, RarityText } from '../../../../ui/fish/RarityTag';
 import Note from '../../../../ui/Note';
 import PixelList from '../../../../ui/PixelList';
 import SectionTitle from '../../../../ui/SectionTitle';
@@ -52,7 +53,7 @@ export default function VHelp() {
             <li>가방 물고기 오른쪽 위 아이콘으로 <b>목록과 카드</b> 보기를 전환해요.</li>
             <li>가방 아이템과 유물에서는 <b>보유 중만 보기</b> 토글로 가진 것만 추려 봐요.</li>
             <li>오른쪽 위 메뉴에 <b>의뢰</b>, <b>업적</b>, <b>길드</b>, <b>소셜</b>, <b>우편함</b> 창이 있어요.</li>
-            <li>집과 항구의 <b>게시판</b>에서 명성, 도감(일반), 도감(돌연변이), 도감(네임드), 네임드 토벌 다섯 탭으로 <b>랭킹</b>을 봐요.</li>
+            <li>집과 항구의 <b>게시판</b>에서 <HighlightRarityText text="명성, 도감(일반), 도감(돌연변이), 도감(네임드), 네임드 토벌" /> 다섯 탭으로 <b>랭킹</b>을 봐요.</li>
           </PixelList>
         </Topic>
 
@@ -61,7 +62,7 @@ export default function VHelp() {
             <li>찌를 던지고 기다려 느낌표가 뜨면 타이밍 바가 나타나요.</li>
             <li>커서가 <b>노란 영역</b>에 있을 때 누르면 <b>GOOD</b>, 가운데 <b>빨간 영역</b>에서는 <b>PERFECT</b>예요.</li>
             <li>아무것도 누르지 않으면 바 끝에서 자동으로 잡히는 방치 낚시가 이어져요.</li>
-            <li>요구 파워를 넘긴 뒤에도 낚싯대를 강화할수록 방치 낚시에서 희귀한 물고기가 더 잘 걸려요.</li>
+            <li><HighlightRarityText text="요구 파워를 넘긴 뒤에도 낚싯대를 강화할수록 방치 낚시에서 희귀한 물고기가 더 잘 걸려요." /></li>
             <li>요구 파워에 못 미치면 입질이 느려지며, 세부 수치는 자원 바를 눌러 여는 <b>스탯 창</b>에서 확인해요.</li>
             <li>낚시 중에 이동하면 찌를 거두고 바로 움직여요.</li>
           </PixelList>
@@ -69,10 +70,10 @@ export default function VHelp() {
 
         <Topic title="물고기" hint="등급, 월척, 돌연변이">
           <PixelList>
-            <li><b>일반</b>부터 <b>전설</b>까지 등급이 높을수록 비싸게 팔리고 명성이 크게 올라요.</li>
+            <li><b><RarityText rarity="common" /></b>부터 <b><RarityText rarity="legendary" /></b>까지 등급이 높을수록 비싸게 팔리고 명성이 크게 올라요.</li>
             <li>같은 어종 중 크기 <b>상위 {BIG_CATCH_PERCENTILE}%</b>면 <b>월척</b>이며, 최고 기록은 팔아도 도감에 남아요.</li>
-            <li>잡을 때마다 {Math.round(variantShare() * 100)}% 확률로 색이 다른 <b>돌연변이</b>가 나오며 <b>{VARIANT_PRICE_MULT}배 가격</b>에 팔려요.</li>
-            <li>도감의 각 보기에서 일반, 돌연변이, 네임드 기록을 따로 모아 봐요.</li>
+            <li>잡을 때마다 {Math.round(variantShare() * 100)}% 확률로 색이 다른 <b><HighlightRarityText text="돌연변이" /></b>가 나오며 <b>{VARIANT_PRICE_MULT}배 가격</b>에 팔려요.</li>
+            <li><HighlightRarityText text="도감의 각 보기에서 일반, 돌연변이, 네임드 기록을 따로 모아 봐요." /></li>
           </PixelList>
         </Topic>
 
@@ -102,10 +103,10 @@ export default function VHelp() {
         <Topic title="바운티 헌팅" hint="수배판, 일반 의뢰, 네임드 토벌, 유물">
           <PixelList>
             <li>항구의 <b>수배판</b>에서 <b>일반 의뢰는 항구 진입 시 바로 수주</b>하고, 목표를 채운 뒤 완료를 눌러 골드를 받아요.</li>
-            <li><b>네임드 토벌은 전설을 뺀</b> 그 구역 도감을 모두 채우면 열리며, 수주 뒤 낚시하다 드물게 조우해요.</li>
-            <li>하루에 일반 의뢰 {BOUNTY_DAILY_CAP}번, 네임드 토벌 {BOUNTY_NAMED_DAILY_CAP}번 클리어하며, 메뉴 줄 <b>의뢰</b> 배지에서 남은 횟수를 봐요.</li>
+            <li><b><HighlightRarityText text="네임드 토벌은 전설을 뺀" /></b> 그 구역 도감을 모두 채우면 열리며, 수주 뒤 낚시하다 드물게 조우해요.</li>
+            <li>하루에 일반 의뢰 {BOUNTY_DAILY_CAP}번, <HighlightRarityText text="네임드 토벌" /> {BOUNTY_NAMED_DAILY_CAP}번 클리어하며, 메뉴 줄 <b>의뢰</b> 배지에서 남은 횟수를 봐요.</li>
             <li>일반 의뢰는 수주 뒤 잡은 물고기만 세고 가방에 그대로 남으며, 조건을 채운 의뢰는 날짜가 지나도 보상을 받아요.</li>
-            <li>네임드를 만나면 <b>흔적</b> 카드가 {TICKET_EXPIRY_TEXT} 남고, 추적 뒤 조우를 누르면 결투가 시작돼요.</li>
+            <li><HighlightRarityText text="네임드를 만나면" /> <b>흔적</b> 카드가 {TICKET_EXPIRY_TEXT} 남고, 추적 뒤 조우를 누르면 결투가 시작돼요.</li>
             <li>결투에서는 금색 칸에 맞춰 챔질해 체력을 깎고, 도주 {CHALLENGE_MISS_LIMIT}칸이 차기 전에 이겨야 해요.</li>
             <li>토벌 보상으로 받은 재료는 수배판에서 지니기만 해도 효과가 이어지는 <b>유물</b>로 바꿔요.</li>
           </PixelList>
@@ -114,7 +115,7 @@ export default function VHelp() {
         <Topic title="가방과 요리" hint="자물쇠, 자동 잠금, 기운 얻기, 미끼">
           <PixelList>
             <li><b>자물쇠</b>로 잠근 물고기는 팔리거나 가방 정리에서 놓아지지 않아요.</li>
-            <li><b>자동 잠금</b>은 어종과 돌연변이별 가장 큰 한 마리만 남기고 나머지 잠금은 풀어요.</li>
+            <li><b>자동 잠금</b>은 <HighlightRarityText text="어종과 돌연변이별 가장 큰 한 마리만 남기고 나머지 잠금은 풀어요." /></li>
             <li>가방 용량은 도보일 때 <b>{WALK_BAG_CAP}마리</b>부터 가장 좋은 배의 <b>{BOATS[BOATS.length - 1].bagCap}마리</b>까지 늘어요.</li>
             <li>가득 찬 채 더 낚으면 가장 평범한 물고기부터 놓아주지만 명성과 도감 기록은 남아요.</li>
             <li>집 궤짝이나 항구 어시장의 <b>기운 얻기</b>로 생명의 기운을 얻고, 집 부엌에서 요리해요.</li>

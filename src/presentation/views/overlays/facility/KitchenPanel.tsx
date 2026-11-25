@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import type { GameState } from '../../../../game/rules/logic';
 import { useNow } from '../../../../features/gameplay/service/useGameTime';
-import { recipeLabel, selectKitchenStatus } from '../../../../features/kitchen/model/recipes';
+import { selectKitchenStatus } from '../../../../features/kitchen/model/recipes';
+import { GradeName } from '../../../ui/fish/RarityTag';
 import Inset from '../../../ui/Inset';
 import ItemSprite from '../../../ui/ItemSprite';
 import ModalCard from '../../../ui/ModalCard';
@@ -34,7 +35,7 @@ export default function KitchenPanel({ game, busy, act, setToast, onClose }: {
         {status.cooking ? (
           <>
             <span><span className="text-text-dim">조리 중</span>{' '}
-              <span className="inline-flex align-middle"><ItemSprite kind={status.cooking.recipe.kind} id={status.cooking.recipe.id} preset="row" /></span>{' '}<b>{recipeLabel(status.cooking.recipe)}</b>{' '}
+              <span className="inline-flex align-middle"><ItemSprite kind={status.cooking.recipe.kind} id={status.cooking.recipe.id} preset="row" /></span>{' '}<GradeName name={status.cooking.title.name} grade={status.cooking.title.grade} />{' '}
               <span className="pf-accent">{status.cooking.completed}/{status.cooking.count}</span></span>
             <span className="text-text-dim">다음 완성 <span className="pf-accent text-text">{fmtMinutes(status.cooking.nextInMin)}</span></span>
           </>

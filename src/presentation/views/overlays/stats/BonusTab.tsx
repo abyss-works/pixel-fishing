@@ -2,6 +2,7 @@ import { Fragment } from 'react';
 import { BONUS_CATEGORIES } from '../../../../features/gameplay/model/stats';
 import type { BonusCategory, BonusRow } from '../../../../features/gameplay/model/stats';
 import { cx } from '../../../ui/cx';
+import { GradeName, HighlightRarityText } from '../../../ui/fish/RarityTag';
 import { useMobileLayout } from '../../../layouts/useMobileLayout';
 import ItemSprite from '../../../ui/ItemSprite';
 import TableBox from '../../../ui/TableBox';
@@ -128,7 +129,7 @@ export default function BonusTab({ rows }: { rows: BonusRow[] }) {
                     <tr key={`${sourceText(row)}-${text}`}>
                       <td className={cx('h-[34px] border-t border-line/60', cell)}>
                         <span className="text-accent">
-                          {tipContent ? <Tip text={tipContent}>{text}</Tip> : text}
+                          {tipContent ? <Tip text={tipContent}><HighlightRarityText text={text} /></Tip> : <HighlightRarityText text={text} />}
                         </span>
                         {row.manualOnly && <span className="ml-2 text-2xs text-text-dim">{SLOT_SCOPE.bait}</span>}
                         {row.autoOnly && <span className="ml-2 text-2xs text-text-dim">{SLOT_SCOPE.lunch}</span>}
@@ -137,7 +138,7 @@ export default function BonusTab({ rows }: { rows: BonusRow[] }) {
                         {row.source.kind === 'potion' ? (
                           <span className="inline-flex items-center justify-end gap-1.5">
                             <ItemSprite kind="potion" id={row.source.potion.id} preset="row" className="shrink-0" />
-                            <span>{row.source.potion.name}</span>
+                            <span><GradeName name={row.source.potion.name} grade={row.source.potion.grade} /></span>
                           </span>
                         ) : sourceText(row)}
                       </td>

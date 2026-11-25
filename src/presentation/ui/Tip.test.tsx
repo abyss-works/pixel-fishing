@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import Badge from './Badge';
 import { resetKeyScopes } from './hotkeys';
-import Tip, { TipCard } from './Tip';
+import Tip, { TipCard, TipList } from './Tip';
+import RecipeEffectTip from './RecipeEffectTip';
+import { GradeName } from './fish/RarityTag';
 
 const original = window.matchMedia;
 afterEach(() => { cleanup(); resetKeyScopes(); window.matchMedia = original; });
@@ -187,5 +189,32 @@ describe('TipCard: 구조형 툴팁 위계', () => {
     expect(tip.querySelectorAll('.border-t').length).toBeGreaterThanOrEqual(2);
     expect(tip.querySelector('[data-glyph="lock"]')).not.toBeNull();
     expect(tip.textContent).not.toMatch(/[·—–]/);
+  });
+
+  it('Tip·TipCard·TipList·RecipeEffectTip은 문자열 속 등급·네임드·돌연변이와 ReactNode를 함께 색칠한다', () => {
+    render(
+      <>
+        <Tip text="네임드 토벌과 전설 어종 안내">단문</Tip>
+        <Tip text={<TipList rows={[{ label: <GradeName name="생명의 기운" grade="rare" />, value: '+2' }]} note="일반 등급 안내" />}>목록</Tip>
+        <Tip text={<RecipeEffectTip label={<GradeName name="사프란 미끼" grade="special" />} effects={[{ label: '돌연변이 출현', value: '+5%' }]} note="특수 효과" />}>요리</Tip>
+      </>,
+    );
+    fireEvent.mouseEnter(screen.getByText('단문'));
+    let tip = screen.getByRole('tooltip');
+    expect(within(tip).getByText('네임드')).toHaveClass('text-epic');
+    expect(within(tip).getByText('전설')).toHaveAttribute('data-rarity', 'legendary');
+    fireEvent.mouseLeave(screen.getByText('단문'));
+
+    fireEvent.mouseEnter(screen.getByText('목록'));
+    tip = screen.getByRole('tooltip');
+    expect(within(tip).getByText('(희귀)')).toHaveAttribute('data-rarity', 'rare');
+    expect(within(tip).getByText('일반')).toHaveAttribute('data-rarity', 'common');
+    fireEvent.mouseLeave(screen.getByText('목록'));
+
+    fireEvent.mouseEnter(screen.getByText('요리'));
+    tip = screen.getByRole('tooltip');
+    expect(within(tip).getByText('(특수)')).toHaveAttribute('data-rarity', 'special');
+    expect(within(tip).getByText('돌연변이')).toHaveClass('text-epic');
+    expect(within(tip).getByText('특수')).toHaveAttribute('data-rarity', 'special');
   });
 });

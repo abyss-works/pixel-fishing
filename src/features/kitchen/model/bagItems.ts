@@ -192,6 +192,7 @@ export function filterItemSection(
 export interface SwapChoice {
   slotKey: 'bait' | 'bait2';
   label: string;
+  title: RecipeTitle;
   minutes: number;
 }
 
@@ -199,8 +200,8 @@ export interface SwapChoice {
 export interface SwapConfirm {
   title: string;
   confirmLabel: '먹기' | '쓰기';
-  current: { label: string; minutes: number };
-  next: { label: string; minutes: number };
+  current: { label: string; title: RecipeTitle; minutes: number };
+  next: { label: string; title: RecipeTitle; minutes: number };
   warning: string;
   /** 다중 미끼 슬롯이 모두 차 세 번째 미끼를 쓸 때만 채운다 */
   choices?: SwapChoice[];
@@ -223,6 +224,8 @@ export function planEat(game: GameState, item: string, now: string): EatPlan {
   const check = canEat(game, item, now);
   const nextMinutes = slotDurationMs(recipe, game) / MIN_MS;
 
+  const nextTitle = recipeTitle(recipe);
+
   if (slot === 'lunch') {
     const current = activeSlot(game, 'lunch', now);
     return {
@@ -230,8 +233,8 @@ export function planEat(game: GameState, item: string, now: string): EatPlan {
       check,
       confirm: current === null ? null : {
         title: text.swapTitle, confirmLabel: text.verb,
-        current: { label: current.label, minutes: Math.ceil(current.remainingMs / MIN_MS) },
-        next: { label: recipeLabel(recipe), minutes: nextMinutes },
+        current: { label: current.label, title: current.title, minutes: Math.ceil(current.remainingMs / MIN_MS) },
+        next: { label: recipeLabel(recipe), title: nextTitle, minutes: nextMinutes },
         warning: SWAP_WARNING,
       },
     };
@@ -246,8 +249,8 @@ export function planEat(game: GameState, item: string, now: string): EatPlan {
       check,
       confirm: b1 === null ? null : {
         title: text.swapTitle, confirmLabel: text.verb,
-        current: { label: b1.label, minutes: Math.ceil(b1.remainingMs / MIN_MS) },
-        next: { label: recipeLabel(recipe), minutes: nextMinutes },
+        current: { label: b1.label, title: b1.title, minutes: Math.ceil(b1.remainingMs / MIN_MS) },
+        next: { label: recipeLabel(recipe), title: nextTitle, minutes: nextMinutes },
         warning: SWAP_WARNING,
       },
     };
@@ -261,8 +264,8 @@ export function planEat(game: GameState, item: string, now: string): EatPlan {
       check,
       confirm: {
         title: text.swapTitle, confirmLabel: text.verb,
-        current: { label: duplicate.label, minutes: Math.ceil(duplicate.remainingMs / MIN_MS) },
-        next: { label: recipeLabel(recipe), minutes: nextMinutes },
+        current: { label: duplicate.label, title: duplicate.title, minutes: Math.ceil(duplicate.remainingMs / MIN_MS) },
+        next: { label: recipeLabel(recipe), title: nextTitle, minutes: nextMinutes },
         warning: SWAP_WARNING,
       },
     };
@@ -281,12 +284,12 @@ export function planEat(game: GameState, item: string, now: string): EatPlan {
     check,
     confirm: {
       title: text.swapTitle, confirmLabel: text.verb,
-      current: { label: chosen.label, minutes: Math.ceil(chosen.remainingMs / MIN_MS) },
-      next: { label: recipeLabel(recipe), minutes: nextMinutes },
+      current: { label: chosen.label, title: chosen.title, minutes: Math.ceil(chosen.remainingMs / MIN_MS) },
+      next: { label: recipeLabel(recipe), title: nextTitle, minutes: nextMinutes },
       warning: SWAP_WARNING,
       choices: [
-        { slotKey: 'bait', label: b1.label, minutes: Math.ceil(b1.remainingMs / MIN_MS) },
-        { slotKey: 'bait2', label: b2.label, minutes: Math.ceil(b2.remainingMs / MIN_MS) },
+        { slotKey: 'bait', label: b1.label, title: b1.title, minutes: Math.ceil(b1.remainingMs / MIN_MS) },
+        { slotKey: 'bait2', label: b2.label, title: b2.title, minutes: Math.ceil(b2.remainingMs / MIN_MS) },
       ],
       defaultChoice,
     },

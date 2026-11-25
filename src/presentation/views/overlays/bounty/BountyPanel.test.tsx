@@ -2,7 +2,7 @@
 // 테스트 환경은 클라우드 빌드가 아니라 readBounty가 null이다 — 티켓·진행은 빈 값으로,
 // 조건 게이팅(순수 판정)과 화면 구조를 여기서 고정한다.
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import BountyPanel from './BountyPanel';
 import { gameDay } from '../../../../features/bounty/service/queryKeys';
@@ -166,7 +166,8 @@ describe('BountyPanel', () => {
   it('네임드 토벌 탭은 도감 조건 미충족이면 본문을 가리고 남은 종 수 체크리스트를 덮는다', async () => {
     show(game({}));
     fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
-    const dexLi = (await screen.findByText(/^태평양 전설을 뺀 모든 어종 모으기 \(남은 \d+종\)$/)).closest('li')!;
+    const dexLi = await screen.findByText((_, el) => el?.tagName === 'LI' && /^태평양 전설을 뺀 모든 어종 모으기 \(남은 \d+종\)$/.test(el.textContent?.trim() ?? ''));
+    expect(within(dexLi).getByText('전설')).toHaveAttribute('data-rarity', 'legendary');
     expect(dexLi.querySelector('[data-glyph="checkOff"]')).not.toBeNull();
     expect(dexLi.querySelector('[data-glyph="checkOn"]')).toBeNull();
     // 본문은 blur+pointer-events-none으로 가려진다
@@ -178,7 +179,7 @@ describe('BountyPanel', () => {
   it('네임드 토벌 탭은 영웅 어종이 하나라도 빠지면 남은 1종 조건으로 잠긴다', async () => {
     show(game({ dex: missingEpicDex }));
     fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
-    expect(await screen.findByText('태평양 전설을 뺀 모든 어종 모으기 (남은 1종)')).toBeInTheDocument();
+    expect(await screen.findByText((_, el) => el?.tagName === 'LI' && el.textContent?.trim() === '태평양 전설을 뺀 모든 어종 모으기 (남은 1종)')).toBeInTheDocument();
     expect(document.querySelector('.blur-sm.pointer-events-none')).not.toBeNull();
   });
 

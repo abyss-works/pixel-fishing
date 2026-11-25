@@ -50,7 +50,9 @@ describe('부엌 창 틀', () => {
   it('조리 중이면 정보 줄에 레시피와 완성 수와 다음 완성까지 남은 시간이 보이고 탭을 옮겨도 그대로다', () => {
     show(seed({ cooking: { recipe: 'cook-lunch-bite', count: 3, bonus: [false, false, false], startedAt: minutesAgo(LUNCH_WAIT_MIN + 5) } }));
     const line = screen.getByText('조리 중').closest('div')!;
-    expect(within(line).getByText('가루디야')).toBeInTheDocument();
+    const cookingName = within(line).getByText('가루디야');
+    expect(cookingName).toBeInTheDocument();
+    expect(cookingName.closest('b')).toBeNull();
     expect(within(line).getByText('1/3')).toBeInTheDocument();
     expect(screen.getByText(`${LUNCH_WAIT_MIN - 5}분`)).toBeInTheDocument();
     fireEvent.click(tab('미끼'));

@@ -9,6 +9,7 @@ import { useWhatsNewPending } from '../../../../features/announcements/service/w
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Button from '../../../ui/Button';
+import { HighlightRarityText } from '../../../ui/fish/RarityTag';
 import Note from '../../../ui/Note';
 import PixelList from '../../../ui/PixelList';
 
@@ -29,7 +30,7 @@ const TUTORIAL: Record<TutorialId, { title: string; lines: ReactNode[] }> = {
     lines: [
       <>바다는 여러 <b>구역</b>으로 이어져 있고, 구역마다 사는 물고기가 달라요.</>,
       <>다음 구역으로 가려면 그만한 <b>배</b>가 필요해요.<br />배가 부족하면 경계에서 되돌아와요.</>,
-      <>바다마다 낚싯대 <b>파워</b> 요구치가 있어요.<br />모자라면 입질이 늦고 희귀한 물고기가 잘 걸리지 않아요.</>,
+      <>바다마다 낚싯대 <b>파워</b> 요구치가 있어요.<br /><HighlightRarityText text="모자라면 입질이 늦고 희귀한 물고기가 잘 걸리지 않아요." /></>,
       <><b>항구</b>에 배를 대면 팔고 정비할 수 있어요.<br />항구의 <b>여객선</b>을 타면 마을로 돌아가요.</>,
       <>화면 구석의 미니맵을 누르면 <b>세계지도</b>가 열려요.</>,
     ],
@@ -46,7 +47,7 @@ const TUTORIAL: Record<TutorialId, { title: string; lines: ReactNode[] }> = {
   'bounty-named': {
     title: '네임드 토벌',
     lines: [
-      <>네임드 토벌을 수주한 채 그 구역에서 낚시하면 아주 드물게 네임드를 마주쳐요.<br />방치 낚시 중에도 마주칠 수 있어요.</>,
+      <><HighlightRarityText text="네임드 토벌을 수주한 채 그 구역에서 낚시하면 아주 드물게 네임드를 마주쳐요." /><br />방치 낚시 중에도 마주칠 수 있어요.</>,
       <>마주치면 바다 화면에 <b>흔적</b> 카드가 떠요.<br />흔적은 {TICKET_EXPIRY_TEXT} 남아요.</>,
       <><b>추적</b>과 <b>조우</b>를 누르면 결투가 시작돼요. 커서가 금색 칸에 들어왔을 때 <b>챔질</b>해 체력을 깎아요.<br />
         도주 {CHALLENGE_MISS_LIMIT}칸이 다 차면 놓쳐요.</>,

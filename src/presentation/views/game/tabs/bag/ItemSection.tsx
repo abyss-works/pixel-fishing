@@ -71,7 +71,9 @@ function SwapDialog({ confirm, onConfirm, onCancel }: {
                   <span className="flex items-center gap-1.5 w-full min-w-0">
                     <PixelIcon glyph={selected ? 'checkOn' : 'checkOff'} size={11}
                                className={selected ? 'text-gold shrink-0' : 'text-text-dim shrink-0'} />
-                    <b className={cx('truncate text-xs', selected ? 'text-gold' : 'text-text')}>{c.label}</b>
+                    <span className={cx('truncate text-xs', !selected && 'text-text')}>
+                      <GradeName name={c.title.name} grade={c.title.grade} emphasized={selected} />
+                    </span>
                   </span>
                   <span className="pf-accent text-xs text-danger pl-4">{fmtMinutes(c.minutes)}</span>
                 </SlotCell>
@@ -81,7 +83,7 @@ function SwapDialog({ confirm, onConfirm, onCancel }: {
           <Inset divided className="px-3">
             <div className="grid grid-cols-[2.5rem_1fr_auto] items-center gap-2 py-2 text-sm">
               <span className="text-text-dim">새로</span>
-              <b className="truncate">{confirm.next.label}</b>
+              <span className="truncate"><GradeName name={confirm.next.title.name} grade={confirm.next.title.grade} /></span>
               <span className="pf-accent text-xs text-accent">{fmtMinutes(confirm.next.minutes)}</span>
             </div>
           </Inset>
@@ -91,7 +93,7 @@ function SwapDialog({ confirm, onConfirm, onCancel }: {
           {rows.map(r => (
             <div key={r.key} className="grid grid-cols-[2.5rem_1fr_auto] items-center gap-2 py-2 text-sm">
               <span className="text-text-dim">{r.head}</span>
-              <b className="truncate">{r.label}</b>
+              <span className="truncate"><GradeName name={r.title.name} grade={r.title.grade} /></span>
               <span className={`pf-accent text-xs ${r.tone}`}>{fmtMinutes(r.minutes)}</span>
             </div>
           ))}
@@ -126,7 +128,7 @@ function ItemCards({ title, hint, rows, lockLines, busy, onEat }: {
               <div className="flex items-start gap-2 min-w-0">
                 <ItemSprite kind={row.slot} id={row.recipe.id} preset="list" className="shrink-0" />
                 <div className="min-w-0 flex-1 flex flex-col gap-0.5">
-                  <Tip text={<RecipeEffectTip label={row.label} effects={row.effects} note={row.note} />}
+                  <Tip text={<RecipeEffectTip label={<GradeName name={row.title.name} grade={row.title.grade} />} effects={row.effects} note={row.note} />}
                        className="inline-block text-xs leading-snug break-keep">
                     <GradeName name={row.title.name} grade={row.title.grade} />
                   </Tip>
@@ -142,7 +144,7 @@ function ItemCards({ title, hint, rows, lockLines, busy, onEat }: {
               <div className="mt-auto pt-1.5 border-t border-line-dim flex items-center justify-between gap-2">
                 <span className="pf-accent text-xs text-text-dim whitespace-nowrap">×{row.count}</span>
                 {lockLines ? (
-                  <Locked lines={lockLines} title={row.label} label={`${row.label} 잠김`} className="inline-block">
+                  <Locked lines={lockLines} title={<GradeName name={row.title.name} grade={row.title.grade} />} label={`${row.label} 잠김`} className="inline-block">
                     {button}
                   </Locked>
                 ) : button}
@@ -229,14 +231,14 @@ function PotionCards({ rows, potionLock, busy, onUse }: {
                   <Tip
                     text={
                       <TipCard
-                        title={row.potion.name}
+                        title={<GradeName name={row.potion.name} grade={row.potion.grade} />}
                         description={row.potion.description}
                         status={potionLock ? { tone: 'lock', lines: potionLock } : undefined}
                       />
                     }
                     className="inline-block text-xs leading-snug break-keep"
                   >
-                    {row.potion.name}
+                    <GradeName name={row.potion.name} grade={row.potion.grade} />
                   </Tip>
                   <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-2xs text-text-dim">
                     <span>하루 동안</span>
@@ -246,7 +248,7 @@ function PotionCards({ rows, potionLock, busy, onUse }: {
               <div className="mt-auto pt-1.5 border-t border-line-dim flex items-center justify-between gap-2">
                 <span className="pf-accent text-xs text-text-dim whitespace-nowrap">×{row.count}</span>
                 {potionLock ? (
-                  <Locked lines={potionLock} title={row.potion.name} label={`${row.potion.name} 잠김`} className="inline-block">
+                  <Locked lines={potionLock} title={<GradeName name={row.potion.name} grade={row.potion.grade} />} label={`${row.potion.name} 잠김`} className="inline-block">
                     {button}
                   </Locked>
                 ) : button}

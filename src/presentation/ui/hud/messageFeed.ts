@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { NoticeSink } from '../../../features/display/model/toastPolicy';
 
 // 메시지 피드 — HUD 메시지 창이 보여 주는 기록의 형식과 보관 규칙(순수 함수).
@@ -10,7 +11,7 @@ export type MessageTone = 'info' | 'gold' | 'warn';
 /** 글줄의 한 대목에 다는 툴팁 — target은 글줄 문구 안의 대목이고, rows는 이름 왼쪽 값 오른쪽 목록이다 */
 export interface MessageTip {
   target: string;
-  rows: { label: string; value: string }[];
+  rows: readonly { label: ReactNode; value: ReactNode }[];
 }
 
 /** 메시지를 남기는 쪽이 받는 함수 — 톤은 부르는 쪽이 정한다(기본 info).

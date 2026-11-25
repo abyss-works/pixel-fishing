@@ -11,6 +11,7 @@ import {
 } from '../../../features/display/model/toastPolicy';
 import type {
   MirrorEnv,
+  NoticeTip,
   PlannedToast,
   QueuedToast,
   SystemNoticeInput,
@@ -18,7 +19,7 @@ import type {
 import { getToastEnabled } from '../../../features/display/service/toastEnabled';
 import type { FloatingToastItem } from '../../ui/FloatingToastLayer';
 import { appendMessage, createMessage } from '../../ui/hud/messageFeed';
-import type { MessageTip, MessageTone, Msg, Notify } from '../../ui/hud/messageFeed';
+import type { MessageTone, Msg, Notify } from '../../ui/hud/messageFeed';
 import { hasOpenWindows } from '../../ui/openWindows';
 
 export type { Msg } from '../../ui/hud/messageFeed';
@@ -174,7 +175,7 @@ export function useMessageLog(initial: string[]) {
     }
   }, [clearBatches, clearToastTimers, tryMirror]);
 
-  const setToast: Notify = useCallback((text: string, tone?: MessageTone, tip?: MessageTip) => {
+  const setToast: Notify = useCallback((text: string, tone?: MessageTone, tip?: NoticeTip) => {
     const id = msgSeq++;
     const resolvedLogTone = tone ?? 'info';
     setLog(l => appendMessage(l, createMessage(id, text, { tone: resolvedLogTone, tip })));
