@@ -109,13 +109,15 @@ describe('BagTab - 유물 섹션 전체 목록·미보유·보유 중만 보기'
   it('전설 유물의 시스템 보너스와 페널티를 유물 목록에 함께 보인다', () => {
     setBagSection('artifacts');
     show(game({ artifacts: ['sargasso-net', 'mami-wata-mirror'] }));
-    expect(screen.getByText('미끼 슬롯 +1칸')).toHaveClass('text-accent');
-    expect(screen.getByText('미끼 지속 시간 −50%')).toHaveClass('text-danger');
-    expect(screen.getByText('네임드 토벌 하루 +1번')).toHaveClass('text-accent');
-    expect(screen.getByText('네임드 토벌 골드 −30%')).toHaveClass('text-danger');
+    const sargasso = within(screen.getByRole('button', { name: /사르가소의 그물망/ }));
+    expect(sargasso.getByText('미끼 슬롯 +1칸')).toBeInTheDocument();
+    expect(sargasso.getByText('미끼 지속 시간 −50%')).toBeInTheDocument();
+    const mirror = within(screen.getByRole('button', { name: /마미 와타의 거울/ }));
+    expect(mirror.getByText('네임드 토벌 하루 +1번')).toBeInTheDocument();
+    expect(mirror.getByText('네임드 토벌 골드 −30%')).toBeInTheDocument();
   });
 
-  it('기본 꺼짐 상태에서는 유물 8종 전체를 순서대로 보이고 미보유는 이름·구역·등급이 흐리게 표시되며 눌러도 상세 창이 열리지 않는다', () => {
+  it('기본 꺼짐 상태에서는 유물 8종 전체를 보이고 미보유는 비활성 행으로 이름·구역·등급만 보이며 눌러도 상세 창이 열리지 않는다', () => {
     setBagSection('artifacts');
     show(game({ artifacts: ['varuna-scale'] }));
     expect(screen.getByRole('heading', { level: 3, name: /유물 1\/8/ })).toBeInTheDocument();
@@ -126,10 +128,10 @@ describe('BagTab - 유물 섹션 전체 목록·미보유·보유 중만 보기'
     expect(ownedBtn).toBeInTheDocument();
 
     // 미보유 유물은 비활성 행(버튼 아님)으로 이름·구역·등급이 보인다
+    expect(screen.queryByRole('button', { name: /해구의 이빨/ })).not.toBeInTheDocument();
     const unownedName = screen.getByText('해구의 이빨');
     const unownedRow = unownedName.parentElement!;
     expect(unownedRow.tagName).not.toBe('BUTTON');
-    expect(unownedRow).toHaveClass('text-text-dim', 'bg-bg');
     expect(within(unownedRow).getByText('태평양')).toBeInTheDocument();
     expect(within(unownedRow).getByText('영웅')).toBeInTheDocument();
 
@@ -182,13 +184,17 @@ describe('BagTab - 3서브탭, 보기 전환 아이콘, 하단 버튼', () => {
     expect(screen.queryByRole('button', { name: '기운 얻기' })).not.toBeInTheDocument();
   });
 
-  it('물고기 섹션 하단 액션 바는 스크롤 영역 아래에 sticky 고정되고 불투명 배경과 상단 경계선을 가진다', () => {
-    show(game({ boat: COOKING_UNLOCK_BOAT, location: { kind: 'base', id: 'home' } }));
-    const bar = screen.getByRole('button', { name: '자동 잠금' }).closest('div')!;
-    expect(bar.className).toContain('sticky');
-    expect(bar.className).toContain('bottom-0');
-    expect(bar.className).toContain('bg-surface');
-    expect(bar.className).toContain('border-t');
+  it('물고기 섹션 하단 액션 바에 자동 잠금과 기운 얻기 버튼이 함께 배치되고 가방이 비면 자동 잠금이 비활성이다', () => {
+    const { dispatch } = show(game({ boat: COOKING_UNLOCK_BOAT, location: { kind: 'base', id: 'home' } }));
+    const autoLock = screen.getByRole('button', { name: '자동 잠금' });
+    const bar = autoLock.closest('div')!;
+    expect(bar).toBe(bar.parentElement?.lastElementChild);
+    expect(within(bar).getAllByRole('button')).toHaveLength(2);
+    expect(within(bar).getByRole('button', { name: '자동 잠금' })).toBeDisabled();
+    expect(within(bar).getByRole('button', { name: '기운 얻기' })).toBeEnabled();
+    fireEvent.click(autoLock);
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('우상단 보기 전환 아이콘 버튼으로 목록과 카드 보기를 전환한다', () => {
