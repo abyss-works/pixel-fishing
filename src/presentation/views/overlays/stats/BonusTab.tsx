@@ -3,6 +3,7 @@ import { BONUS_CATEGORIES } from '../../../../features/gameplay/model/stats';
 import type { BonusCategory, BonusRow } from '../../../../features/gameplay/model/stats';
 import { cx } from '../../../ui/cx';
 import { useMobileLayout } from '../../../layouts/useMobileLayout';
+import ItemSprite from '../../../ui/ItemSprite';
 import TableBox from '../../../ui/TableBox';
 import DataTable from '../../../ui/DataTable';
 import Tip, { TipCard, TipList } from '../../../ui/Tip';
@@ -11,7 +12,12 @@ import { fmtDecimal2 } from '../../../ui/format';
 import { bonusEffectText, bonusEffectValue } from '../../../../features/guild/model/guild';
 import { SLOT_SCOPE } from '../../../../features/kitchen/model/recipes';
 import {
-  FORTUNE_SOURCE_HELP, FORTUNE_SOURCE_LABEL, fortuneBonusText, fortuneBonusTip,
+  FORTUNE_SOURCE_HELP,
+  FORTUNE_SOURCE_LABEL,
+  FORTUNE_TARGET_BONUS_LABEL,
+  POTION_SOURCE_HELP,
+  fortuneBonusText,
+  fortuneBonusTip,
 } from '../../../../features/fortune/model/fortune';
 
 const CATEGORY_LABEL: Record<BonusCategory, string> = { move: '이동', fish: '낚시', duel: '결투', shop: '상점' };
@@ -20,10 +26,11 @@ const SOURCE_HELP = [
   '길드 보너스는 길드 창에서 기부와 개인 자유 강화로 올려요.',
   '업적 누적 보너스는 업적 조건 단계에 닿으면 자동으로 적용돼요.',
   FORTUNE_SOURCE_HELP,
+  POTION_SOURCE_HELP,
 ];
 const HEAD = 'h-[30px] font-normal border-b border-line';
 
-/** 효과 문장 — 유물과 길드 보너스의 기존 문장 함수와 슬롯·업적 누적 효과 줄에서 뽑는다 */
+/** 효과 문장 — 유물과 길드 보너스의 기존 문장 함수와 슬롯·업적 누적·운세·물약 효과 줄에서 뽑는다 */
 function effectText(row: BonusRow): string {
   switch (row.source.kind) {
     case 'relic': return artifactEffectLine(row.source.artifact, row.source.effect, row.source.level, row.source.scale) ?? '';
@@ -31,6 +38,10 @@ function effectText(row: BonusRow): string {
     case 'slot': return `${row.source.effect.label} ${row.source.effect.value}`;
     case 'achievement': return `${row.source.label} ${row.source.value}`;
     case 'fortune': return fortuneBonusText(row.source.fortune);
+    case 'potion': {
+      const pct = Math.round(row.source.bonus * 1000) / 10;
+      return `${FORTUNE_TARGET_BONUS_LABEL[row.source.target]} +${pct}%p`;
+    }
   }
 }
 
@@ -66,6 +77,7 @@ function sourceText(row: BonusRow): string {
     case 'slot': return row.source.label;
     case 'achievement': return '업적 누적';
     case 'fortune': return FORTUNE_SOURCE_LABEL;
+    case 'potion': return row.source.potion.name;
   }
 }
 
@@ -105,7 +117,13 @@ export default function BonusTab({ rows }: { rows: BonusRow[] }) {
                 {list.length > 0 ? list.map(row => {
                   const text = effectText(row);
                   const tipRows = relicTipRows(row) ?? guildTipRows(row);
-                  const tipContent = tipRows ? <TipList rows={tipRows} /> : row.source.kind === 'fortune' ? fortuneBonusTip(row.source.fortune) : null;
+                  const tipContent = tipRows
+                    ? <TipList rows={tipRows} />
+                    : row.source.kind === 'fortune'
+                      ? fortuneBonusTip(row.source.fortune)
+                      : row.source.kind === 'potion'
+                        ? row.source.potion.description
+                        : null;
                   return (
                     <tr key={`${sourceText(row)}-${text}`}>
                       <td className={cx('h-[34px] border-t border-line/60', cell)}>
@@ -115,7 +133,14 @@ export default function BonusTab({ rows }: { rows: BonusRow[] }) {
                         {row.manualOnly && <span className="ml-2 text-2xs text-text-dim">{SLOT_SCOPE.bait}</span>}
                         {row.autoOnly && <span className="ml-2 text-2xs text-text-dim">{SLOT_SCOPE.lunch}</span>}
                       </td>
-                      <td className={cx('h-[34px] border-t border-line/60 text-right text-xs', cell)}>{sourceText(row)}</td>
+                      <td className={cx('h-[34px] border-t border-line/60 text-right text-xs', cell)}>
+                        {row.source.kind === 'potion' ? (
+                          <span className="inline-flex items-center justify-end gap-1.5">
+                            <ItemSprite kind="potion" id={row.source.potion.id} preset="row" className="shrink-0" />
+                            <span>{row.source.potion.name}</span>
+                          </span>
+                        ) : sourceText(row)}
+                      </td>
                     </tr>
                   );
                 }) : (

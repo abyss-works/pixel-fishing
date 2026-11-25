@@ -150,6 +150,22 @@ describe('StatsModal(스탯창)', () => {
     expect(screen.getByRole('tooltip')).toHaveTextContent('희귀 이상 등급 가중치에 운 배율이 적용돼요.');
   });
 
+  it('보너스 탭은 활성 물약을 각 갈래에 +5%p 효과와 물약 아이콘·이름으로 보인다', () => {
+    const today = gameDayOf(new Date().toISOString());
+    show(game({ potions: { 'luck-small': today } }));
+    fireEvent.click(screen.getByRole('button', { name: '보너스' }));
+
+    const rarityRow = screen.getByText('희귀 이상 등급 가중치 +5%p').closest('tr')!;
+    expect(within(rarityRow).getByText('작은 행운 물약')).toBeTruthy();
+    expect(rarityRow.querySelector('canvas')).not.toBeNull();
+
+    expect(screen.getByText('네임드 조우 가중치 +5%p')).toBeTruthy();
+    expect(screen.getByText('판매가 +5%p')).toBeTruthy();
+
+    fireEvent.mouseEnter(screen.getByText('판매가 +5%p'));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('사용하면 한국 시간 새벽 4시까지 모든 운 배율이 +5%p 올라요.');
+  });
+
   it('닉네임 상태에 따라 불러오는 중, 미설정, 불러오기 실패를 구분해 보인다', () => {
     const { rerender } = render(
       <StatsModal game={game({})} movement="sail" region="world" nickname={null} profileStatus="loading" guild={null} onClose={vi.fn()} />,

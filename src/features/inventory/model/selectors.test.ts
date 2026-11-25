@@ -153,6 +153,26 @@ describe('selectBagOverview - 판매 가능 금액', () => {
     ).sellable;
     expect(expired).toEqual({ base, mods: [], value: base });
   });
+
+  it('판매가 물약이 켜져 있으면 운세와 합산해 판매 가능 금액에 반영하고 출처를 물약 이름으로 분리한다', () => {
+    const now = '2026-11-24T05:00:00.000Z';
+    const game: GameState = {
+      ...newState(),
+      bag: [
+        { uid: 'a', fishId: 'carp', form: 'normal', size: 20, caughtAt: null, spot: null, judgment: null, locked: false },
+        { uid: 'b', fishId: 'carp', form: 'normal', size: 20, caughtAt: null, spot: null, judgment: null, locked: false },
+      ],
+      fortune: { day: '2026-11-24', kind: 'gold', index: 5 },
+      potions: { 'luck-small': '2026-11-24' },
+    };
+    const base = sellableValue(game);
+    const active = selectBagOverview(game, 0, 0, now).sellable;
+    expect(active.value).toBe(Math.round(base * 1.1));
+    expect(active.mods).toEqual([
+      { id: 'fortune-sell', label: '오늘의 운세', delta: Math.round(base * 0.05) },
+      { id: 'potion-luck-small', label: '작은 행운 물약', delta: active.value - base - Math.round(base * 0.05) },
+    ]);
+  });
 });
 
 describe('selectBagOverview - 길드 가방 보너스', () => {

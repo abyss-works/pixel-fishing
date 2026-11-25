@@ -1172,7 +1172,7 @@ describe('아이템 (세이브 v8 접기 — 가산 필드 자가 치유)', () =
     expect(st.items).toEqual({ 'energy-common': 2, 'future-kept': 4 }); // future-item은 0이라 접힘
   });
 
-  it('addItem/takeItem — 적립·정확히 1개 차감·하한 방어', () => {
+  it('addItem/takeItem — 적립·정확히 1개 차감·하한 방어·상한 클램프', () => {
     let st = newState();
     st = addItem(st, 'energy-common', 3);
     expect(st.items['energy-common']).toBe(3);
@@ -1182,6 +1182,25 @@ describe('아이템 (세이브 v8 접기 — 가산 필드 자가 치유)', () =
     st = takeItem(st, 'energy-common');
     expect(st.items['energy-common']).toBeUndefined(); // 0은 아예 기록하지 않는다
     expect(takeItem(st, 'energy-common')).toBe(st);     // 더 떨어뜨리지 않는다
+
+    const cappedPotion = addItem(newState(), 'luck-small', 2_000_000);
+    expect(cappedPotion.items['luck-small']).toBe(1_000_000);
+    const cappedEnergy = addItem(newState(), 'energy-common', 20_000_000);
+    expect(cappedEnergy.items['energy-common']).toBe(10_000_000);
+  });
+
+  it('migrate: potions 누락 시 {} 보정하고 세이브 버전은 유지하며 깨진 항목만 버린다', () => {
+    const legacy = { ...newState() } as Record<string, unknown>;
+    delete legacy.potions;
+    const migrated = mig(legacy as never);
+    expect(migrated.v).toBe(newState().v);
+    expect(migrated.potions).toEqual({});
+
+    const sanitized = mig({
+      v: newState().v,
+      potions: { 'luck-small': '2026-08-22', broken: 123, empty: '', 'future-potion': '2026-08-23' },
+    } as never);
+    expect(sanitized.potions).toEqual({ 'luck-small': '2026-08-22', 'future-potion': '2026-08-23' });
   });
 
   it('등급 예산 ×2 — 등급 실질확률이 정확히 상승하고 타 등급은 비례 감소한다', () => {

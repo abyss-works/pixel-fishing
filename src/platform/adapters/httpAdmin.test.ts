@@ -55,9 +55,12 @@ describe('HttpAdmin', () => {
     expect(methods.sort()).toEqual(CALLS.map(([method]) => method).sort());
   });
 
-  it('우편 쓰기는 POST로 op와 요청을 보낸다', async () => {
+  it('우편 쓰기는 POST로 op와 요청(items 포함)을 보낸다', async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ problems: [], preview: { count: 1, totalGold: 5, missing: [] } }), { status: 200 }));
-    const request = { title: 't', body: 'b', target: { kind: 'all' as const, gold: 5 } };
+    const request = {
+      title: 't', body: 'b',
+      target: { kind: 'all' as const, gold: 0, items: [{ id: 'luck-small', qty: 2 }] },
+    };
     const plan = await admin.mail('preview', request);
     expect(plan.preview?.count).toBe(1);
     expect(fetchMock).toHaveBeenCalledWith('/api/admin?q=mail', {
@@ -65,6 +68,23 @@ describe('HttpAdmin', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ op: 'preview', request }),
     });
+  });
+
+  it('sentMails는 응답의 items 배열을 정규화해 매핑한다', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify([
+      {
+        id: 1, userId: 'u-1', title: '선물', body: 'b', gold: 0,
+        items: [{ id: 'luck-small', qty: 3 }],
+        createdAt: '2026-11-25T00:00:00.000Z', readAt: null, claimedAt: null,
+      },
+      {
+        id: 2, userId: 'u-2', title: '구버전', body: 'b', gold: 100,
+        createdAt: '2026-11-24T00:00:00.000Z', readAt: null, claimedAt: null,
+      },
+    ]), { status: 200 }));
+    const rows = await admin.sentMails();
+    expect(rows[0].items).toEqual([{ id: 'luck-small', qty: 3 }]);
+    expect(rows[1].items).toEqual([]);
   });
 
   it('제재·편지 처리·세션 강제 종료는 POST로 인자를 보내고, 실패하면 작업 이름과 서버 오류 코드를 담아 던진다', async () => {

@@ -5,6 +5,8 @@
 // 마지막에 운 배율(1 + 지수/100)을 곱한다. "운"을 표방하는 다른 출처가 늘어나도
 // 같은 운 배율에 더하고, 대상별 적용 지점은 바뀌지 않는다.
 // 상대경로 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버가 이 체인을 직접 불러온다.
+import { potionById } from '../content/potions.js';
+import type { Potion } from '../content/potions.js';
 import { gameDayOf } from './time.js';
 
 /** 운세 종류 — 보너스가 걸리는 대상을 정한다 */
@@ -57,12 +59,63 @@ export function fortuneOf(state: { fortune: DailyFortune | null }, nowIso: strin
   return state.fortune?.day === gameDayOf(nowIso) ? state.fortune : null;
 }
 
+/** 활성 물약 맵 — 물약 id → 효과가 지속되는 게임 날짜 */
+export type ActivePotions = Readonly<Record<string, string>>;
+
+/** 지금 게임 날짜에 효과가 살아 있는 물약 목록 — 날짜가 지난 항목은 제외한다 */
+export function activePotionsOf(
+  potions: ActivePotions | undefined,
+  nowIso: string,
+): Potion[] {
+  if (!potions) return [];
+  const day = gameDayOf(nowIso);
+  const active: Potion[] = [];
+  for (const [id, activeDay] of Object.entries(potions)) {
+    if (activeDay !== day) continue;
+    const potion = potionById(id);
+    if (potion) active.push(potion);
+  }
+  return active;
+}
+
+/** 특정 게임 날짜에 활성인 물약들이 대상에 더하는 운 배율 보너스 합계 */
+export function potionLuckBonusOf(
+  potions: ActivePotions | undefined,
+  target: FortuneTarget,
+  day: string,
+): number {
+  if (!potions) return 0;
+  let sum = 0;
+  for (const [id, activeDay] of Object.entries(potions)) {
+    if (activeDay !== day) continue;
+    const bonus = potionById(id)?.effects.luck?.[target];
+    if (typeof bonus === 'number' && Number.isFinite(bonus) && bonus > 0) sum += bonus;
+  }
+  return Math.round(sum * 1e9) / 1e9;
+}
+
 /**
- * 대상에 걸리는 운 배율 — 운세 종류가 그 대상을 가리키면 1 + 지수/100, 아니면 1.
+ * 대상에 걸리는 운 배율 — 일일 운세와 오늘 활성인 물약 보너스를 합해 1 + 합계를 돌려준다.
  * 판정에서 다른 보너스를 다 적용한 마지막 곱이다.
  */
-export function luckMultOf(fortune: DailyFortune | null, target: FortuneTarget): number {
-  return fortune !== null && FORTUNE_TARGET_OF[fortune.kind] === target ? 1 + fortune.index / 100 : 1;
+export function luckMultOf(
+  fortune: DailyFortune | null,
+  target: FortuneTarget,
+  potions?: ActivePotions,
+  day?: string,
+): number {
+  const fortuneBonus = fortune !== null && FORTUNE_TARGET_OF[fortune.kind] === target ? fortune.index / 100 : 0;
+  const potionBonus = potions && day ? potionLuckBonusOf(potions, target, day) : 0;
+  return Math.round((1 + fortuneBonus + potionBonus) * 1e9) / 1e9;
+}
+
+/** 상태와 현재 시각으로 대상에 걸리는 총 운 배율(일일 운세 + 활성 물약)을 구한다 */
+export function totalLuckMultOf(
+  state: { fortune: DailyFortune | null; potions?: ActivePotions },
+  nowIso: string,
+  target: FortuneTarget,
+): number {
+  return luckMultOf(fortuneOf(state, nowIso), target, state.potions, gameDayOf(nowIso));
 }
 
 /** 세이브 위생 — 운세는 하루짜리라 필드가 없는(구) 세이브는 없는 것으로 둔다.

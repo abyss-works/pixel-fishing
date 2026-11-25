@@ -1,8 +1,16 @@
 // 운세의 화면 표시 모델 — 접속 모달과 스탯 창 보너스 탭이 같이 쓴다.
 // 운세 표시 규칙과 문구를 제공한다.
-import { FORTUNE_TARGET_OF, luckMultOf } from '../../../game/rules/fortune';
+import { FORTUNE_TARGET_OF, activePotionsOf, fortuneOf, luckMultOf } from '../../../game/rules/fortune';
 import type { DailyFortune, FortuneKind, FortuneTarget } from '../../../game/rules/fortune';
-import { GAME_DAY_RESET_HOUR_KST, GAME_DAY_RESET_TEXT } from '../../../game/rules/time';
+import type { GameState } from '../../../game/rules/logic';
+import { GAME_DAY_RESET_HOUR_KST, GAME_DAY_RESET_TEXT, gameDayOf } from '../../../game/rules/time';
+
+/** 운 배율 대상별 보너스 표시 이름 */
+export const FORTUNE_TARGET_BONUS_LABEL: Record<FortuneTarget, string> = {
+  rarity: '희귀 이상 등급 가중치',
+  sell: '판매가',
+  named: '네임드 조우 가중치',
+};
 
 /** 운세 종류의 표시 묶음 — name은 정식 명칭, bonus는 보너스가 걸리는 대상의 표시명.
  *  target은 규칙의 종류와 대상 짝(FORTUNE_TARGET_OF)을 그대로 가리킨다 */
@@ -17,6 +25,9 @@ export const FORTUNE_SOURCE_LABEL = '오늘의 운세';
 
 /** 스탯 창 보너스 탭의 출처 도움말 중 운세 설명 */
 export const FORTUNE_SOURCE_HELP = `오늘의 운세는 ${GAME_DAY_RESET_TEXT}에 새로 뽑혀요. 운 배율은 다른 보너스 다음에 곱해져요.`;
+
+/** 스탯 창 보너스 탭의 출처 도움말 중 물약 설명 */
+export const POTION_SOURCE_HELP = `물약은 가방 탭에서 쓰면 ${GAME_DAY_RESET_TEXT}까지 모든 운 배율에 더해져요.`;
 
 /** 지수 등급 라벨 — 3은 적당한 운, 5는 좋은 운 */
 export const FORTUNE_INDEX_LABEL: Record<DailyFortune['index'], string> = {
@@ -77,4 +88,25 @@ export function fortuneSummaryRows(fortune: DailyFortune): { label: string; valu
     { label: '적용 대상', value: FORTUNE_KIND[fortune.kind].bonus },
     { label: '운 배율', value: `+${fortune.index}%p`, accent: true },
   ];
+}
+
+export interface SellLuckBreakdown {
+  mult: number;
+  fortuneBonus: number;
+  potions: { id: string; name: string; bonus: number }[];
+}
+
+/** 판매에 적용되는 오늘의 운세·물약 합산 운 배율과 출처별 비율 */
+export function selectSellLuck(
+  game: Pick<GameState, 'fortune'> & Partial<Pick<GameState, 'potions'>>,
+  now: string,
+): SellLuckBreakdown {
+  const fortune = fortuneOf(game, now);
+  const day = gameDayOf(now);
+  const mult = luckMultOf(fortune, 'sell', game.potions, day);
+  const fortuneBonus = fortune !== null && FORTUNE_TARGET_OF[fortune.kind] === 'sell' ? fortune.index / 100 : 0;
+  const potions = activePotionsOf(game.potions, now)
+    .map(p => ({ id: p.id, name: p.name, bonus: p.effects.luck?.sell ?? 0 }))
+    .filter(p => p.bonus > 0);
+  return { mult, fortuneBonus, potions };
 }

@@ -6,8 +6,16 @@ import type { DispatchResult, MaybePromise } from '../../../../../features/gamep
 import { useNow } from '../../../../../features/gameplay/service/useGameTime';
 import type { AccountLockState } from '../../../../../features/display/model/menuLock';
 import { sendNotice } from '../../../../../features/display/model/toastPolicy';
-import { filterItemSection, ITEM_GROUPS, ITEM_GROUP_HINT, NO_ITEMS_TEXT, planEat, selectItemSection } from '../../../../../features/kitchen/model/bagItems';
-import type { ItemRow, SwapConfirm } from '../../../../../features/kitchen/model/bagItems';
+import {
+  filterItemSection,
+  ITEM_GROUPS,
+  ITEM_GROUP_HINT,
+  NO_ITEMS_TEXT,
+  planEat,
+  potionUseNoticeText,
+  selectItemSection,
+} from '../../../../../features/kitchen/model/bagItems';
+import type { ItemRow, PotionRow, SwapConfirm } from '../../../../../features/kitchen/model/bagItems';
 import { formatEnergy } from '../../../../../game/content/cooking';
 import { when } from '../../../../../shared/lib/when';
 import ConfirmDialog from '../../../../ui/ConfirmDialog';
@@ -25,7 +33,7 @@ import PixelIcon from '../../../../ui/PixelIcon';
 import RecipeEffectTip from '../../../../ui/RecipeEffectTip';
 import SlotCell from '../../../../ui/SlotCell';
 import Subheading from '../../../../ui/Subheading';
-import Tip from '../../../../ui/Tip';
+import Tip, { TipCard } from '../../../../ui/Tip';
 import ToggleChip from '../../../../ui/ToggleChip';
 import type { Notify } from '../../../../ui/hud/messageFeed';
 
@@ -137,8 +145,73 @@ function ItemCards({ title, hint, rows, busy, onEat }: {
   );
 }
 
+/** 물약 카드 격자 — 계정 회원은 배 단계와 무관하게 쓸 수 있고, 게스트·확인 실패는 잠금 상태다 */
+function PotionCards({ rows, potionLock, busy, onUse }: {
+  rows: readonly PotionRow[];
+  potionLock: readonly string[] | null;
+  busy: boolean;
+  onUse: (row: PotionRow) => void;
+}) {
+  if (rows.length === 0) return null;
+  return (
+    <div className="mb-2">
+      <Subheading><Tip text={ITEM_GROUP_HINT.potion}>물약</Tip></Subheading>
+      <div className="grid grid-cols-2 gap-2">
+        {rows.map(row => {
+          const locked = potionLock !== null;
+          const dimmed = locked || (!row.usable && !row.active);
+          const btnLabel = row.active ? '사용 중' : '사용';
+          const button = (
+            <Button
+              size="sm"
+              aria-label={`${row.potion.name} ${btnLabel}`}
+              disabled={busy || locked || !row.usable}
+              onClick={() => onUse(row)}
+            >
+              {btnLabel}
+            </Button>
+          );
+          return (
+            <Inset key={row.potion.id} tone={dimmed ? 'deep' : 'base'} border={row.active ? 'accent' : 'line'}
+                   className={cx('p-2 flex flex-col gap-1.5 min-w-0', dimmed && 'text-text-dim')}>
+              <div className="flex items-start gap-2 min-w-0">
+                <ItemSprite kind="potion" id={row.potion.id} preset="list" className="shrink-0" />
+                <div className="min-w-0 flex-1 flex flex-col gap-0.5">
+                  <Tip
+                    text={
+                      <TipCard
+                        title={row.potion.name}
+                        description={row.potion.description}
+                        status={potionLock ? { tone: 'lock', lines: potionLock } : undefined}
+                      />
+                    }
+                    className="inline-block text-xs leading-snug break-keep"
+                  >
+                    {row.potion.name}
+                  </Tip>
+                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-2xs text-text-dim">
+                    <span>새벽 4시 초기화</span>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-auto pt-1.5 border-t border-line-dim flex items-center justify-between gap-2">
+                <span className="pf-accent text-xs text-text-dim whitespace-nowrap">×{row.count}</span>
+                {potionLock ? (
+                  <Locked lines={potionLock} title={row.potion.name} label={`${row.potion.name} 잠김`} className="inline-block">
+                    {button}
+                  </Locked>
+                ) : button}
+              </div>
+            </Inset>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /**
- * 아이템 섹션 - 생명의 기운 4장 카드, 도시락과 미끼 카드 격자. 먹기(쓰기)는 어디서나 한다.
+ * 아이템 섹션 - 생명의 기운 4장 카드, 도시락과 미끼 카드 격자, 물약 카드 격자. 먹기(쓰기)와 물약 사용은 어디서나 한다.
  * 이미 효과가 든 슬롯에 넣으려면(같은 것도 같다) 교체 확인 창을 거친다. 요리를 쓸 수 없는 동안(해금 전, 게스트)은
  * 세 묶음 자리를 잠금으로 보이고 빈 상태 안내를 둔다. 판정과 문안은 기능 모델이 정한다.
  */
@@ -178,6 +251,22 @@ export default function ItemSection({ game, accountState, dispatch, setToast }: 
     if (plan.confirm) setPending({ row, confirm: plan.confirm });
     else eat(row);
   };
+  const usePotion = (row: PotionRow) => {
+    if (busy) return;
+    setBusy(true);
+    when(dispatch({ type: 'usePotion', id: row.potion.id }), r => {
+      setBusy(false);
+      if (r.status === 'ok') {
+        sendNotice(setToast, {
+          kind: 'kitchen.cookAndBuff',
+          text: potionUseNoticeText(row.potion.name),
+          toastText: `${row.potion.name} 효과 적용`,
+        });
+      } else if (r.status === 'rejected') {
+        sendNotice(setToast, { kind: 'system.modalRejected', text: REJECT_TEXT[r.error] });
+      }
+    });
+  };
 
   if (view.state === 'locked') {
     return (
@@ -192,6 +281,7 @@ export default function ItemSection({ game, accountState, dispatch, setToast }: 
             </div>
           ))}
         </Locked>
+        <PotionCards rows={view.potions} potionLock={view.potionLock} busy={busy} onUse={usePotion} />
       </div>
     );
   }
@@ -239,6 +329,7 @@ export default function ItemSection({ game, accountState, dispatch, setToast }: 
               </div>
             </div>
           )}
+          <PotionCards rows={shown.potions} potionLock={view.potionLock} busy={busy} onUse={usePotion} />
         </>
       )}
       {pending && (

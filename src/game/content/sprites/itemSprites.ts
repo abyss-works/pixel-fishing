@@ -1,4 +1,4 @@
-// 아이템 id → 스프라이트와 색 배열. 도시락·미끼는 생성 격자를, 생명의 기운은 16×16 등록 격자를 읽는다 (DOM 비의존).
+// 아이템 id → 스프라이트와 색 배열. 도시락·미끼는 생성 격자를, 생명의 기운과 물약은 16×16 등록 격자를 읽는다 (DOM 비의존).
 // 원화 격자는 팔레트가 고정 hex라 기준색은 색 해석에 쓰이지 않는다.
 import type { CookKind } from '../cooking.js';
 import { BAIT_SPRITES_GENERATED } from './baitSprites.generated.js';
@@ -6,7 +6,7 @@ import { DISH_SPRITES_GENERATED } from './dishSprites.generated.js';
 import { paletteColors } from './types.js';
 import type { PixelSprite } from './types.js';
 
-export type ItemSpriteKind = CookKind | 'energy';
+export type ItemSpriteKind = CookKind | 'energy' | 'potion';
 
 export interface ItemSpriteArt { sprite: PixelSprite; colors: readonly string[] }
 
@@ -101,10 +101,36 @@ export const ENERGY_SPRITES: Readonly<Record<string, PixelSprite>> = {
   },
 };
 
+export const POTION_SPRITES: Readonly<Record<string, PixelSprite>> = {
+  'luck-small': {
+    w: 16, h: 16,
+    palette: ['#8c5a32', '#c48a52', '#7ca8ba', '#cbe8f5', '#1c6b48', '#2fa86e', '#7ae89a', '#f6ffd6'],
+    frames: [[
+      '................',
+      '................',
+      '......1110......',
+      '......1100......',
+      '.....332222.....',
+      '......3222......',
+      '.....336654.....',
+      '....36655544....',
+      '...3765555444...',
+      '...3555555444...',
+      '...2555554444...',
+      '....24444444....',
+      '.....224442.....',
+      '................',
+      '................',
+      '................',
+    ]],
+  },
+};
+
 const ART: Readonly<Record<ItemSpriteKind, ReadonlyMap<string, ItemSpriteArt>>> = {
   lunch: toArt(DISH_SPRITES_GENERATED),
   bait: toArt(BAIT_SPRITES_GENERATED),
   energy: toArt(ENERGY_SPRITES),
+  potion: toArt(POTION_SPRITES),
 };
 
 function toArt(sprites: Readonly<Record<string, PixelSprite>>): Map<string, ItemSpriteArt> {

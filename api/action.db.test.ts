@@ -2206,3 +2206,73 @@ describe('밤 깊이 경계와 빠른 경로 천장 조회', () => {
     expect((peakDb.saves_current[0] as { data: GameState }).data.pity.moonveil).toBe(PITY_DONE);
   });
 });
+
+describe('우편 아이템 첨부와 물약 사용', () => {
+  it('골드가 0이고 아이템만 첨부된 우편도 수령 가능하며 저장 단위(기운 1개=10단위)로 지급되고 재수령은 422다', async () => {
+    const uid = await seed({ state: { gold: 100, items: {} } });
+    const items = [{ id: 'luck-small', qty: 2 }, { id: 'energy-common', qty: 3 }];
+    const { rows } = await env.client.query<{ id: string }>(
+      `insert into public.mails (user_id, title, body, gold, items) values ($1, '아이템', '본문', 0, $2::jsonb) returning id`,
+      [uid, JSON.stringify(items)],
+    );
+    const id = Number(rows[0].id);
+
+    const res = await callAction(userToken(uid), { type: 'claimMail', id });
+    expect(res.status).toBe(200);
+    expect((res.body as { result: unknown }).result).toEqual({ type: 'mail', gold: 0, items });
+
+    vi.setSystemTime(Date.parse(NOW) + 2000);
+    const again = await callAction(userToken(uid), { type: 'claimMail', id });
+    expect(again).toMatchObject({ status: 422, body: { error: 'mail-unavailable' } });
+
+    const db = await dumpUser(env.client, uid);
+    const save = db.saves_current[0] as { gold: number; data: GameState };
+    expect(Number(save.gold)).toBe(100);
+    expect(save.data.items).toEqual({ 'luck-small': 2, 'energy-common': 30 });
+    expect((db.events as { type: string; payload: unknown }[]).map(e => ({ type: e.type, payload: e.payload }))).toEqual([
+      { type: 'claimMail', payload: { mailId: id, gold: 0, items } },
+    ]);
+  });
+
+  it('usePotion은 가방 물약 1개를 소비해 오늘 게임 날짜까지 효과를 켜고 판매 가격·포획 운 배율에 합산된다', async () => {
+    const sold = fish('carp', { size: 30, uid: testUid(9601) });
+    const uid = await seed({
+      state: {
+        gold: 0,
+        fortune: { day: TODAY_KST, kind: 'gold', index: 5 },
+        items: { 'luck-small': 2 },
+        bag: [sold],
+      },
+    });
+
+    const res = await callAction(userToken(uid), { type: 'usePotion', id: 'luck-small' });
+    expect(res.status).toBe(200);
+    expect((res.body as { result: unknown }).result).toEqual({ type: 'none' });
+
+    const afterUse = await dumpUser(env.client, uid);
+    const saveAfterUse = afterUse.saves_current[0] as { data: GameState };
+    expect(saveAfterUse.data.items).toEqual({ 'luck-small': 1 });
+    expect(saveAfterUse.data.potions).toEqual({ 'luck-small': TODAY_KST });
+    expect((afterUse.events as { type: string; payload: unknown }[]).map(e => ({ type: e.type, payload: e.payload }))).toEqual([
+      { type: 'usePotion', payload: { id: 'luck-small', day: TODAY_KST } },
+    ]);
+
+    // 같은 날 재사용은 거부된다
+    vi.setSystemTime(Date.parse(NOW) + 2000);
+    const dup = await callAction(userToken(uid), { type: 'usePotion', id: 'luck-small' });
+    expect(dup).toMatchObject({ status: 422, body: { error: 'potion-already-active' } });
+
+    // 재물운 ×1.05 + 물약 +0.05 = ×1.10 배율이 판매가에 적용된다
+    vi.setSystemTime(Date.parse(NOW) + 4000);
+    const expectedGold = sellSelected(
+      { ...newState(), bag: [sold], fortune: { day: TODAY_KST, kind: 'gold', index: 5 }, potions: { 'luck-small': TODAY_KST } },
+      [sold.uid],
+      0,
+      1.10,
+    ).gold;
+    const sellRes = await callAction(userToken(uid), { type: 'sell', uids: [sold.uid] });
+    expect(sellRes.status).toBe(200);
+    const saveAfterSell = (await dumpUser(env.client, uid)).saves_current[0] as { gold: number };
+    expect(Number(saveAfterSell.gold)).toBe(expectedGold);
+  });
+});

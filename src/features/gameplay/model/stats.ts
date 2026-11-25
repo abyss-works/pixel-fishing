@@ -15,8 +15,9 @@ import { FISH, boatNameOf, formDiscovered } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { GUILD_BONUS_IDS, NO_GUILD_EFFECTS, bonusEffect } from '../../../game/rules/guild';
 import type { GuildBonusId, GuildEffects } from '../../../game/rules/guild';
-import { fortuneOf } from '../../../game/rules/fortune';
-import type { DailyFortune } from '../../../game/rules/fortune';
+import { activePotionsOf, fortuneOf } from '../../../game/rules/fortune';
+import type { DailyFortune, FortuneTarget } from '../../../game/rules/fortune';
+import type { Potion } from '../../../game/content/potions';
 import type { GuildBonusItem } from '../../../platform/api/types';
 import {
   minLevelOfPower, powerZones, rodAxes, rodPower,
@@ -195,6 +196,9 @@ const COOK_EFFECT_CATEGORY: Record<keyof CookEffects, BonusCategory> = {
 const FORTUNE_CATEGORY: Record<DailyFortune['kind'], BonusCategory> = {
   fish: 'fish', gold: 'shop', shadow: 'duel',
 };
+const POTION_TARGET_CATEGORY: Record<FortuneTarget, BonusCategory> = {
+  rarity: 'fish', named: 'duel', sell: 'shop',
+};
 
 export type BonusSource =
   /** 유물 보너스 - level은 보유 레벨, scale은 업적 보유 유물 효과 배율(1 + artifactBoost)이다 */
@@ -209,7 +213,9 @@ export type BonusSource =
   /** 업적 누적 보너스 — 단계 도달 즉시 자동 적용되는 합산 보너스 */
   | { kind: 'achievement'; label: string; value: string }
   /** 오늘의 운세 — 그 게임 날짜에 고정된 운 배율. 다른 보너스 다음의 최종 곱이다 */
-  | { kind: 'fortune'; fortune: DailyFortune };
+  | { kind: 'fortune'; fortune: DailyFortune }
+  /** 물약 — 그 게임 날짜에 쓴 물약의 운 배율. 오늘의 운세와 합산해 최종 곱한다 */
+  | { kind: 'potion'; potion: Potion; target: FortuneTarget; bonus: number };
 
 export interface BonusRow {
   category: BonusCategory;
@@ -324,6 +330,19 @@ export function selectActiveBonuses(
   const fortune = fortuneOf(game, now);
   if (fortune) {
     out.push({ category: FORTUNE_CATEGORY[fortune.kind], source: { kind: 'fortune', fortune }, manualOnly: false });
+  }
+  // 활성 물약 — 그 게임 날짜에 쓴 물약의 운 배율 대상을 각 갈래에 한 줄씩 둔다
+  for (const potion of activePotionsOf(game.potions, now)) {
+    for (const target of ['rarity', 'named', 'sell'] as const) {
+      const bonus = potion.effects.luck?.[target];
+      if (bonus && bonus > 0) {
+        out.push({
+          category: POTION_TARGET_CATEGORY[target],
+          source: { kind: 'potion', potion, target, bonus },
+          manualOnly: false,
+        });
+      }
+    }
   }
   return out;
 }

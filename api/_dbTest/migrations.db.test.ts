@@ -436,4 +436,38 @@ describe('테스트 데이터베이스', () => {
       }
     });
   });
+
+  describe('mails.items (0043)', () => {
+    const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
+
+    it('기본값 빈 배열([])과 NOT NULL을 강제하고, 업/다운 적용으로 열이 추가·제거된다', async () => {
+      const uid = randomUUID();
+      await client.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, true)`, [uid, `${uid}@anonymous.invalid`]);
+      const { rows: [row] } = await client.query<{ items: unknown }>(
+        `insert into public.mails (user_id, title, body) values ($1, '제목', '본문') returning items`,
+        [uid],
+      );
+      expect(row.items).toEqual([]);
+
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        await other.query(migration('0043_mail_items.down.sql'));
+        const { rows: afterDown } = await other.query(
+          `select 1 from information_schema.columns where table_schema = 'public' and table_name = 'mails' and column_name = 'items'`,
+        );
+        expect(afterDown).toHaveLength(0);
+        await other.query(migration('0043_mail_items.sql'));
+        const { rows: afterUp } = await other.query<{ is_nullable: string; column_default: string | null }>(
+          `select is_nullable, column_default from information_schema.columns where table_schema = 'public' and table_name = 'mails' and column_name = 'items'`,
+        );
+        expect(afterUp).toHaveLength(1);
+        expect(afterUp[0].is_nullable).toBe('NO');
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
 });

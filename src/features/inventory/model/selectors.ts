@@ -6,7 +6,7 @@ import { autoLockPlan, sellableValue } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { achievementBonusesOf } from '../../../game/rules/achievements';
 import { bagCapacityOf, createPlayerContext } from '../../../game/rules/effects';
-import { fortuneOf, luckMultOf } from '../../../game/rules/fortune';
+import { selectSellLuck } from '../../fortune/model/fortune';
 import { NO_GUILD_EFFECTS } from '../../../game/rules/guild';
 import type { Stat } from '../../../game/rules/stats';
 import { saleProceeds } from './catalog';
@@ -53,11 +53,12 @@ export interface BagOverview extends BagStatus {
 export function selectBagOverview(
   game: GameState, sellBonus: number, bagBonus = 0, now: string = new Date().toISOString(),
 ): BagOverview {
+  const luck = selectSellLuck(game, now);
   return {
     ...selectBagStatus(game, bagBonus),
     sellable: saleProceeds(
       sellableValue(game), sellBonus, achievementBonusesOf(game).sellBonus,
-      luckMultOf(fortuneOf(game, now), 'sell'),
+      luck.mult, { fortuneBonus: luck.fortuneBonus, potions: luck.potions },
     ),
     autoLock: autoLockPlan(game.bag),
   };

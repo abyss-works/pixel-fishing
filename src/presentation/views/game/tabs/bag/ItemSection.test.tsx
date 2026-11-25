@@ -100,6 +100,51 @@ describe('아이템 섹션 목록', () => {
     expect(screen.getByText('가진 아이템이 없어요.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /먹기|쓰기/ })).not.toBeInTheDocument();
   });
+
+  it('물약은 배 해금 전 계정에서도 열려 있고, 사용하면 usePotion 액션과 안내를 보낸다', () => {
+    const { dispatch, setToast } = show(game({ boat: 0, items: { 'luck-small': 2 } }));
+    expect(screen.getByRole('group', { name: '도시락, 미끼, 생명의 기운' })).toBeInTheDocument();
+    expect(screen.getByText('작은 행운 물약')).toBeInTheDocument();
+    expect(screen.getByText('×2')).toBeInTheDocument();
+
+    fireEvent.mouseEnter(screen.getByText('작은 행운 물약'));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('사용하면 한국 시간 새벽 4시까지 모든 운 배율이 +5%p 올라요.');
+
+    const btn = screen.getByRole('button', { name: '작은 행운 물약 사용' });
+    expect(btn).toBeEnabled();
+    fireEvent.click(btn);
+    expect(dispatch).toHaveBeenCalledWith({ type: 'usePotion', id: 'luck-small' });
+    expect(setToast).toHaveBeenCalledWith('작은 행운 물약 효과가 한국 시간 새벽 4시까지 적용돼요.');
+  });
+
+  it('물약은 이미 사용 중이면 사용 중 비활성 버튼이고, 미보유면 사용 버튼이 비활성이다', () => {
+    show(game({ items: { 'luck-small': 1 }, potions: { 'luck-small': '2026-11-12' } }));
+    const activeBtn = screen.getByRole('button', { name: '작은 행운 물약 사용 중' });
+    expect(activeBtn).toBeDisabled();
+    expect(activeBtn).toHaveTextContent('사용 중');
+
+    cleanup();
+    show(game({ items: {} }));
+    const emptyBtn = screen.getByRole('button', { name: '작은 행운 물약 사용' });
+    expect(emptyBtn).toBeDisabled();
+
+    // 보유 중만 보기에서 수량 0이어도 오늘 사용 중이면 남는다
+    cleanup();
+    show(game({ items: {}, potions: { 'luck-small': '2026-11-12' } }));
+    fireEvent.click(screen.getByRole('button', { name: '보유 중만 보기' }));
+    expect(screen.getByRole('button', { name: '작은 행운 물약 사용 중' })).toBeDisabled();
+  });
+
+  it('게스트는 물약 이름 툴팁 아래에 잠금 줄을 보이고 사용 버튼이 잠겨 있다', () => {
+    show(game({ items: { 'luck-small': 2 } }), 'guest');
+    fireEvent.mouseEnter(screen.getByText('작은 행운 물약'));
+    const tip = screen.getByRole('tooltip');
+    expect(tip).toHaveTextContent('사용하면 한국 시간 새벽 4시까지 모든 운 배율이 +5%p 올라요.');
+    expect(tip).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
+
+    const lockGroup = screen.getByRole('group', { name: '작은 행운 물약 잠김' });
+    expect(within(lockGroup).getByRole('button', { name: '작은 행운 물약 사용' })).toBeDisabled();
+  });
 });
 
 describe('묶음 순서', () => {

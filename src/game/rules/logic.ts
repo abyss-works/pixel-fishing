@@ -159,6 +159,8 @@ export interface GameState {
   autoLockedIds: Record<string, string>;
   /** 오늘의 운세 — 굴린 게임 날짜에 고정된다. 첫 판정(catch·sell)에서 서버가 굴리고, 그날 안에서는 불변 */
   fortune: DailyFortune | null;
+  /** 사용 중인 물약 — 물약 id → 효과가 지속되는 게임 날짜(YYYY-MM-DD, KST 04:00 경계) */
+  potions: Record<string, string>;
 }
 
 export interface RodStats {
@@ -493,6 +495,7 @@ export function newState(): GameState {
     autoLockOnCatch: false,
     autoLockedIds: {},
     fortune: null,
+    potions: {},
   };
 }
 
@@ -898,16 +901,30 @@ function safeArtifactLevels(v: unknown, owned: string[]): { artifactLevels?: Rec
 
 // 아이템 위생 — id → 개수 스택 맵. 정수 0~백만만 통과시킨다(기운은 저장 단위라 상한도 ENERGY_UNIT배).
 // **모르는 키는 버리지 않는다**(safeDex의 폼 키와 같은 원칙 — 미래 아이템 축 전방 호환). 값이 깨진 행만 탈락.
-const ITEM_CAP = 1_000_000;
+export const ITEM_CAP = 1_000_000;
+export const itemCapOf = (id: string): number => (isEnergyItemId(id) ? ITEM_CAP * ENERGY_UNIT : ITEM_CAP);
 
 function safeItems(v: unknown): Record<string, number> {
   const out: Record<string, number> = {};
   for (const [id, n] of Object.entries(safeRecord<number>(v))) {
-    const cap = isEnergyItemId(id) ? ITEM_CAP * ENERGY_UNIT : ITEM_CAP;
+    const cap = itemCapOf(id);
     if (typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= cap) out[id] = n;
   }
   // 개수 0인 행은 저장하지 않는다 — 보유 부재와 동일한 의미라 세이브가 쓰레기로 쌓이지 않는다
   for (const [id, n] of Object.entries(out)) if (n === 0) delete out[id];
+  return out;
+}
+
+/** 활성 물약 위생 — 물약 id → 게임 날짜(비어 있지 않은 문자열)만 살린다. 모르는 물약 id도 전방 호환으로 보존한다 */
+function safePotions(v: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return out;
+  for (const [id, day] of Object.entries(v as Record<string, unknown>)) {
+    if (id.length > 0 && id !== '__proto__' && id !== 'constructor' && id !== 'prototype'
+      && typeof day === 'string' && day.length > 0) {
+      out[id] = day;
+    }
+  }
   return out;
 }
 
@@ -1154,6 +1171,7 @@ export function migrate(raw: unknown, uidGen: () => string = () => crypto.random
     autoLockOnCatch: s.autoLockOnCatch === true,
     autoLockedIds: safeAutoLockedIds(s.autoLockedIds),
     fortune: safeFortune(s.fortune),
+    potions: safePotions(s.potions),
   };
 }
 
@@ -1205,11 +1223,13 @@ function safeHats(raw: unknown): string[] {
 
 // ---------- 아이템 (스택형 — 세이브 v8 접기) ----------
 
-/** 아이템 추가(구매·지급) — n은 1 이상 정수만. 음수 지원 안 함(차감은 takeItem 하나) */
+/** 아이템 추가(구매·지급) — n은 1 이상 정수만. 음수 지원 안 함(차감은 takeItem 하나). 상한(ITEM_CAP)을 넘지 않는다 */
 export function addItem(state: GameState, itemId: string, n: number): GameState {
   if (!Number.isInteger(n) || n < 1) return state;
   const cur = state.items[itemId] ?? 0;
-  return { ...state, items: { ...state.items, [itemId]: cur + n } };
+  const next = Math.min(itemCapOf(itemId), cur + n);
+  if (next === cur) return state;
+  return { ...state, items: { ...state.items, [itemId]: next } };
 }
 
 /** 아이템 차감 — 기본 1개, 유물 레벨업은 개수를 넘긴다. 모자라면 무변환(위 방어).

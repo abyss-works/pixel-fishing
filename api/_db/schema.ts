@@ -114,6 +114,7 @@ export const mails = pgTable('mails', {
   title: text('title').notNull(),
   body: text('body').notNull(),
   gold: bigint('gold', { mode: 'number' }).notNull().default(0),
+  items: jsonb('items').$type<{ id: string; qty: number }[]>().notNull().default([]),
   createdAt: at('created_at').notNull().defaultNow(),
   readAt: at('read_at'),
   claimedAt: at('claimed_at'),

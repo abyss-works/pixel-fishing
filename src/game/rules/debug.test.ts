@@ -175,6 +175,10 @@ describe('items.grant / cooking.finish / artifact.set / hat.set', () => {
     if (!r.ok) throw new Error(r.error);
     expect(r.state.items['cook-bait-night']).toBe(3);
 
+    const p = debug(r.state, 'items.grant', { itemId: 'luck-small', count: 2 });
+    if (!p.ok) throw new Error(p.error);
+    expect(p.state.items['luck-small']).toBe(2);
+
     expect(debug(seed(), 'items.grant', { itemId: 'nope', count: 1 })).toEqual({ ok: false, error: 'bad-request' });
   });
 

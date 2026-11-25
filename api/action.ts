@@ -24,7 +24,7 @@ import {
 import { appliedSlots, applyEnergyGain, planOverflow } from '../src/game/rules/cooking.js';
 import { isFirstCatchSpot, needsLegacyFirstCatchMigration } from '../src/game/rules/firstCatch.js';
 import { drawNamedEncounter, speciesPityCandidates } from '../src/game/rules/pity.js';
-import { ensureFortune, luckMultOf } from '../src/game/rules/fortune.js';
+import { ensureFortune, totalLuckMultOf } from '../src/game/rules/fortune.js';
 import { bountyById, isQuestOffered } from '../src/game/content/bounties.js';
 import type { BountyKind, BountyQuest } from '../src/game/content/bounties.js';
 import type { SpotId } from '../src/game/content/spots.js';
@@ -62,7 +62,7 @@ import {
   namedClearInsertFragment, namedClearReplaceFragments, readSnapshotBounty, ticketFragment,
 } from './_data/bounty.js';
 import { consumeRelief, findCoupon, findRelief } from './_data/codes.js';
-import { claimMailFragment, claimableGold } from './_data/mailbox.js';
+import { claimMailFragment, claimableMail } from './_data/mailbox.js';
 import { COMMIT_GUARD, commitAction, commitConsumingCode, commitGated, runFollowUps } from './_data/commit.js';
 import {
   counterClearFragment, counterRestoreFragments, counterSetFragment, counterUpsertFragment,
@@ -198,7 +198,7 @@ export const SKIP_DETAIL = new Set([
   'boot', 'sendLetter', 'upgradeRod', 'buyBoat', 'travel', 'redeemCoupon', 'catch',
   'setNickname', 'deliverBounty', 'exchangeArtifact', 'levelUpArtifact', 'claimMail', 'seeTutorial',
   'changeClothes', 'buyHat', 'wearHat',
-  'cook', 'eat', 'setEnergyTarget', 'resetEnergyTargets', 'dismissBaitRefund', 'setAutoLockOnCatch',
+  'cook', 'eat', 'usePotion', 'setEnergyTarget', 'resetEnergyTargets', 'dismissBaitRefund', 'setAutoLockOnCatch',
   'debugSnapshot',
 ]);
 
@@ -464,13 +464,13 @@ async function route(req: Req, res: Res): Promise<void> {
     }
   }
 
-  // 우편 골드 — 본인의 받지 않은 골드 우편이면 금액을 주입한다. 받은 기록은 아래 확정 문장에서 함께 쓰므로
-  // 낙관 락을 통과한 요청 하나만 받고, 그 뒤의 요청은 여기서 금액이 없어 거부된다.
+  // 우편 보상 — 본인의 받지 않은 우편이면 골드·첨부 아이템을 주입한다. 받은 기록은 아래 확정 문장에서 함께 쓰므로
+  // 낙관 락을 통과한 요청 하나만 받고, 그 뒤의 요청은 여기서 받을 수 있는 보상이 없어 거부된다.
   let mail: ActionDeps['mail'] = null;
   if (action.type === 'claimMail') {
     const mailId = action.id;
-    const gold = await step('db-read', { uid, action: action.type }, () => claimableGold(db, uid, mailId));
-    if (gold !== null) mail = { id: mailId, gold };
+    const claimable = await step('db-read', { uid, action: action.type }, () => claimableMail(db, uid, mailId));
+    if (claimable !== null) mail = { id: mailId, gold: claimable.gold, items: claimable.items };
   }
 
   // 닉네임 변경 — 형태는 리듀서가 재검증한다. 여기서 할 일은 중복 검사 + 반영뿐.
@@ -549,7 +549,7 @@ async function route(req: Req, res: Res): Promise<void> {
     const named = drawNamedEncounter(catchBase.namedPity, encounterQuests(bounty), action.spot, now,
       Math.random, action.forceEncounter === true,
       namedWeightBonus(catchBase, action.judgment, now, guildEffects, achievementBonusesOf(catchBase)),
-      luckMultOf(out.state.fortune, 'named'));
+      totalLuckMultOf(out.state, now, 'named'));
     out = { ...out, state: { ...out.state, namedPity: named.pity } };
     if (named.quest) {
       out.events.push({ type: 'ticket', payload: { questId: named.quest.id, ...(named.byCeiling ? { pity: true } : {}) } });
@@ -854,7 +854,7 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
   const achBonuses = achievementBonusesOf(base);
   const drawn = drawCatch(
     base, spot, judgment, rodPower(base), pz.mult, Math.random,
-    { ...phaseOpts, rarityLuck: luckMultOf(base.fortune, 'rarity') },
+    { ...phaseOpts, rarityLuck: totalLuckMultOf(base, now, 'rarity') },
     id => owned.has(id), guild, cook, achBonuses,
   );
   const { fish, extras } = drawn;
