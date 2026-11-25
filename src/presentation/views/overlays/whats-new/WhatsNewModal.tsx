@@ -45,15 +45,17 @@ export default function WhatsNewModal({ game, ready }: {
   const nextStep = w.steps[w.index + 1];
 
   return (
-    <Modal layer="stage" md onClose={w.close}>
+    <Modal layer="stage" md height={520} mobileFixed onClose={w.close}>
       <ModalCard
         title={STEP_TITLE[w.step]}
         onClose={w.close}
         footer={w.step === 'news' ? (
-          <p className="text-xs text-text-dim text-center">
+          <p className="text-xs leading-normal text-text-dim text-center">
             자세한 전체 패치노트는 설정 &gt; 패치노트에서 언제든 볼 수 있어요.
           </p>
-        ) : undefined}
+        ) : (
+          <p className="text-xs leading-normal invisible" aria-hidden="true">&nbsp;</p>
+        )}
         confirm={(
           <div className="flex gap-2">
             {w.index > 0 && <Button variant="ghost" onClick={w.back}>이전</Button>}

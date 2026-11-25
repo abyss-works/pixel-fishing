@@ -96,12 +96,21 @@ describe('운세 월간 달력 창 (FortuneCalendarModal)', () => {
     const bonusEl = within(detail).getByText('보너스 대상');
     expect(phraseEl.compareDocumentPosition(bonusEl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
-    // 기록 없는 과거 날짜 선택
-    fireEvent.click(screen.getByRole('button', { name: /2026년 11월 23일/ }));
-    expect(within(detail).getByText('이 날은 기록된 운세가 없어요.')).toBeInTheDocument();
+    // 기록 없는 과거 날짜와 미래 날짜는 모두 비활성
+    const unrecordedPast = screen.getByRole('button', { name: /2026년 11월 23일/ });
+    expect(unrecordedPast).toBeDisabled();
+    fireEvent.click(unrecordedPast);
+    expect(within(detail).getByText('2026년 11월 19일')).toBeInTheDocument();
 
     // 미래 날짜는 비활성
     expect(screen.getByRole('button', { name: /2026년 11월 26일/ })).toBeDisabled();
+
+    // 6주 고정 달력 격자(42칸)와 상세 패널 고정 높이 유지
+    const calendarRegion = screen.getByRole('region', { name: '2026년 11월 운세 달력' });
+    const dayGrid = calendarRegion.querySelector('.grid-rows-6')!;
+    expect(dayGrid).not.toBeNull();
+    expect(dayGrid.children).toHaveLength(42);
+    expect(detail.className).toMatch(/\bh-\[/);
   });
 
   it('이전 달과 다음 달 이동 시 해당 월 이력을 조회하고 경계 월에서 버튼을 비활성화한다', async () => {

@@ -32,6 +32,7 @@ import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
 import Skeleton from '../../../ui/Skeleton';
+import { SCROLL_Y_ROWS } from '../../../ui/scrollArea';
 import { HighlightRarityText } from '../../../ui/fish/RarityTag';
 import { FortuneMotifIcon, IndexPips, TodayFortuneBanner } from './fortuneParts';
 
@@ -126,7 +127,7 @@ export default function FortuneCalendarModal({
   const detail = selectFortuneDayDetail(effectiveSelectedDay, days, todayDay);
 
   return (
-    <Modal layer="stage" md onClose={onClose}>
+    <Modal layer="stage" md height={560} mobileFixed onClose={onClose}>
       <ModalCard title="운세" onClose={onClose}>
         <div className="flex flex-col gap-3">
           {todayFortune ? (
@@ -161,82 +162,88 @@ export default function FortuneCalendarModal({
               ) : (
                 <>
                   <div
-                    className="grid grid-cols-7 gap-1"
                     role="region"
                     aria-label={`${formatFortuneMonth(activeMonth)} 운세 달력`}
                   >
-                    {FORTUNE_WEEKDAYS.map(dow => (
-                      <div key={dow} className="text-center text-2xs text-text-dim py-0.5">{dow}</div>
-                    ))}
-                    {cells.map(cell => {
-                      if (cell.kind === 'blank') return <div key={cell.key} aria-hidden="true" />;
-                      const isSelected = cell.day === effectiveSelectedDay;
-                      const f = cell.fortune;
-                      const kind = f ? FORTUNE_KIND[f.kind] : null;
-                      const ariaLabel = f
-                        ? `${formatFortuneDay(cell.day)}${cell.isToday ? ', 오늘' : ''}, ${kind!.name}, 지수 ${f.index}, ${FORTUNE_INDEX_LABEL[f.index]}`
-                        : `${formatFortuneDay(cell.day)}${cell.isToday ? ', 오늘' : ''}, 기록 없음`;
-                      return (
-                        <Button
-                          key={cell.key}
-                          size="sm"
-                          pressed={isSelected}
-                          disabled={cell.isFuture}
-                          onClick={() => setSelectedDay(cell.day)}
-                          aria-label={ariaLabel}
-                          aria-pressed={isSelected}
-                          className={cx(
-                            'flex flex-col items-stretch justify-between gap-1 min-h-12 px-1.5 mobile:px-1 py-1 text-left font-normal',
-                            isSelected && 'border-gold bg-(--inset-light)',
-                            !isSelected && cell.isToday && 'border-accent',
-                            !isSelected && !cell.isToday && !f && 'bg-bg border-line-dim text-text-dim',
-                          )}
-                        >
-                          <span className="flex items-center justify-between w-full text-2xs font-bold leading-none">
-                            <span>{cell.dateNum}</span>
-                            {cell.isToday && <span className="text-accent mobile:hidden">오늘</span>}
-                            {cell.isToday && <span className="hidden mobile:inline-block size-1.5 bg-accent" aria-hidden="true" />}
-                          </span>
-                          {f ? (
-                            <span className={cx('flex flex-wrap items-end justify-between gap-x-0.5 gap-y-0.5 w-full text-2xs leading-tight', KIND_TONE[f.kind])}>
-                              <span className="font-bold break-keep mobile:hidden">{kind!.name}</span>
-                              <span className="hidden mobile:inline-flex">
-                                <FortuneMotifIcon kind={f.kind} size={10} />
-                              </span>
-                              <span className="pf-accent shrink-0">{f.index}</span>
+                    <div className="grid grid-cols-7 gap-1 mb-1">
+                      {FORTUNE_WEEKDAYS.map(dow => (
+                        <div key={dow} className="text-center text-2xs text-text-dim py-0.5">{dow}</div>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-7 grid-rows-6 gap-1">
+                      {cells.map(cell => {
+                        if (cell.kind === 'blank') return <div key={cell.key} className="min-h-12" aria-hidden="true" />;
+                        const isSelected = cell.day === effectiveSelectedDay;
+                        const f = cell.fortune;
+                        const kind = f ? FORTUNE_KIND[f.kind] : null;
+                        const ariaLabel = f
+                          ? `${formatFortuneDay(cell.day)}${cell.isToday ? ', 오늘' : ''}, ${kind!.name}, 지수 ${f.index}, ${FORTUNE_INDEX_LABEL[f.index]}`
+                          : `${formatFortuneDay(cell.day)}${cell.isToday ? ', 오늘' : ''}, 기록 없음`;
+                        return (
+                          <Button
+                            key={cell.key}
+                            size="sm"
+                            pressed={isSelected}
+                            disabled={cell.isFuture || !f}
+                            onClick={() => setSelectedDay(cell.day)}
+                            aria-label={ariaLabel}
+                            aria-pressed={isSelected}
+                            className={cx(
+                              'flex flex-col items-stretch justify-between gap-1 min-h-12 px-1.5 mobile:px-1 py-1 text-left font-normal',
+                              isSelected && 'border-gold bg-(--inset-light)',
+                              !isSelected && cell.isToday && 'border-accent',
+                              !isSelected && !cell.isToday && !f && 'bg-bg border-line-dim text-text-dim',
+                            )}
+                          >
+                            <span className="flex items-center justify-between w-full text-2xs font-bold leading-none">
+                              <span>{cell.dateNum}</span>
+                              {cell.isToday && <span className="text-accent mobile:hidden">오늘</span>}
+                              {cell.isToday && <span className="hidden mobile:inline-block size-1.5 bg-accent" aria-hidden="true" />}
                             </span>
-                          ) : (
-                            <span className="text-2xs leading-none" aria-hidden="true">&nbsp;</span>
-                          )}
-                        </Button>
-                      );
-                    })}
+                            {f ? (
+                              <span className={cx('flex flex-wrap items-end justify-between gap-x-0.5 gap-y-0.5 w-full text-2xs leading-tight', KIND_TONE[f.kind])}>
+                                <span className="font-bold break-keep mobile:hidden">{kind!.name}</span>
+                                <span className="hidden mobile:inline-flex">
+                                  <FortuneMotifIcon kind={f.kind} size={10} />
+                                </span>
+                                <span className="pf-accent shrink-0">{f.index}</span>
+                              </span>
+                            ) : (
+                              <span className="text-2xs leading-none" aria-hidden="true">&nbsp;</span>
+                            )}
+                          </Button>
+                        );
+                      })}
+                      {Array.from({ length: Math.max(0, 42 - cells.length) }, (_, idx) => (
+                        <div key={`trail-${idx}`} className="min-h-12" aria-hidden="true" />
+                      ))}
+                    </div>
                   </div>
 
-                  {days.length === 0 ? (
-                    <EmptyState glyph="sparkle" message="이 달에는 기록된 운세가 없어요." />
-                  ) : detail && (
-                    <Inset className="px-3 py-2.5 flex flex-col gap-1.5" aria-label="선택한 날짜 운세 상세">
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-text">{detail.dateLabel}</span>
-                          {detail.isToday && <Badge tone="accent" size="2xs">오늘</Badge>}
+                  <Inset className="h-[116px] mobile:h-[132px] shrink-0 px-3 py-2.5" aria-label="선택한 날짜 운세 상세">
+                    <div className={cx(SCROLL_Y_ROWS, 'h-[92px] mobile:h-[108px] flex flex-col gap-1.5')}>
+                      {days.length === 0 ? (
+                        <div className="flex-1 flex items-center justify-center text-xs text-text-dim">
+                          이 달에는 기록된 운세가 없어요.
                         </div>
-                        {detail.fortune && (
-                          <div className="flex items-center gap-2">
-                            <span className={cx('text-xs font-bold', KIND_TONE[detail.fortune.kind])}>
-                              {FORTUNE_KIND[detail.fortune.kind].name}
-                            </span>
-                            <IndexPips index={detail.fortune.index} compact />
-                            <span className="pf-accent text-xs text-gold">{detail.fortune.index}</span>
-                            <span className="text-2xs text-text-dim">{FORTUNE_INDEX_LABEL[detail.fortune.index]}</span>
-                          </div>
-                        )}
-                      </div>
-                      {detail.fortune ? (
+                      ) : detail && detail.fortune ? (
                         <>
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-text">{detail.dateLabel}</span>
+                              {detail.isToday && <Badge tone="accent" size="2xs">오늘</Badge>}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className={cx('text-xs font-bold', KIND_TONE[detail.fortune.kind])}>
+                                {FORTUNE_KIND[detail.fortune.kind].name}
+                              </span>
+                              <IndexPips index={detail.fortune.index} compact />
+                              <span className="pf-accent text-xs text-gold">{detail.fortune.index}</span>
+                              <span className="text-2xs text-text-dim">{FORTUNE_INDEX_LABEL[detail.fortune.index]}</span>
+                            </div>
+                          </div>
                           <span className="text-2xs text-text-dim">{fortunePhrase(detail.fortune)}</span>
-                          <div className="flex items-center justify-between gap-2 flex-wrap text-xs">
+                          <div className="flex items-center justify-between gap-2 flex-wrap text-xs mt-auto">
                             <span className="text-text-dim">
                               보너스 대상{' '}
                               <span className="text-text">
@@ -247,10 +254,12 @@ export default function FortuneCalendarModal({
                           </div>
                         </>
                       ) : (
-                        <span className="text-xs text-text-dim">이 날은 기록된 운세가 없어요.</span>
+                        <div className="flex-1 flex items-center justify-center text-xs text-text-dim">
+                          기록이 있는 날짜를 고르면 운세 상세를 볼 수 있어요.
+                        </div>
                       )}
-                    </Inset>
-                  )}
+                    </div>
+                  </Inset>
 
                   <div className="grid grid-cols-4 mobile:grid-cols-2 gap-1.5" aria-label="월간 운세 집계">
                     <Inset className="flex min-w-0 flex-col gap-0.5 px-3 py-2">

@@ -34,5 +34,6 @@ describe('WhatsNewModal 하단 패치노트 안내', () => {
     fireEvent.click(screen.getByRole('button', { name: /다음: 새 설정 고르기/ }));
     expect(screen.getByRole('dialog', { name: '새 설정' })).toBeInTheDocument();
     expect(screen.queryByText(FOOTER_GUIDE)).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: '새 설정' }).className).toMatch(/\bh-\[min\(/);
   });
 });

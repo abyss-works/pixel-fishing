@@ -1067,4 +1067,22 @@ describe('UI 시스템 가드', () => {
     expect(dexDetailSrc).toMatch(/<RankList\b/);
     expect(dexDetailSrc).toMatch(/<RankMeBar\b/);
   });
+
+  it('선택 가능 상세(운세 달력)와 다단계·형태 전환 창(소식·도감 상세)은 고정·최소 높이로 전환 시 레이아웃이 밀리지 않는다', () => {
+    const fortuneSrc = stripComments(presentationFiles.find(f => f.path === 'views/overlays/fortune/FortuneCalendarModal.tsx')!.src);
+    const whatsNewSrc = stripComments(presentationFiles.find(f => f.path === 'views/overlays/whats-new/WhatsNewModal.tsx')!.src);
+    const dexDetailSrc = stripComments(presentationFiles.find(f => f.path === 'views/game/tabs/dex/DexDetail.tsx')!.src);
+
+    expect(fortuneSrc).toMatch(/<Modal\b[^>]*height=\{/);
+    expect(fortuneSrc).toContain('grid-rows-6');
+    expect(fortuneSrc).toMatch(/disabled=\{cell\.isFuture \|\| !f\}/);
+    expect(fortuneSrc).toMatch(/aria-label="선택한 날짜 운세 상세"/);
+    expect(fortuneSrc).toMatch(/h-\[\d+px\][^>]*aria-label="선택한 날짜 운세 상세"/);
+
+    expect(whatsNewSrc).toMatch(/<Modal\b[^>]*height=\{/);
+    expect(whatsNewSrc).toMatch(/aria-hidden="true"/);
+
+    expect(dexDetailSrc).toMatch(/<LoreParagraph[^>]*min-h-/);
+    expect(dexDetailSrc).toMatch(/<p[^>]*min-h-/);
+  });
 });

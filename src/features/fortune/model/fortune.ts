@@ -218,17 +218,18 @@ export function selectFortuneMonthStats(days: readonly DailyFortune[]): FortuneM
   return { total: seen.size, byKind };
 }
 
-/** 월과 기록을 바탕으로 기본 선택 날짜를 정한다. 현재 선택이 같은 달의 유효한 날짜면 유지한다 */
+/** 월과 기록을 바탕으로 기본 선택 날짜를 정한다. 기록이 있는 날짜만 선택 가능하며 기록이 없으면 null이다 */
 export function resolveSelectedFortuneDay(
   month: string,
   days: readonly DailyFortune[],
   todayDay: string,
   currentSelected?: string | null,
 ): string | null {
-  if (currentSelected && currentSelected.startsWith(`${month}-`) && currentSelected <= todayDay) {
+  const recorded = new Set(days.map(d => d.day));
+  if (currentSelected && currentSelected.startsWith(`${month}-`) && currentSelected <= todayDay && recorded.has(currentSelected)) {
     return currentSelected;
   }
-  if (todayDay.startsWith(`${month}-`)) return todayDay;
+  if (todayDay.startsWith(`${month}-`) && recorded.has(todayDay)) return todayDay;
   return days.length > 0 ? days[days.length - 1].day : null;
 }
 
