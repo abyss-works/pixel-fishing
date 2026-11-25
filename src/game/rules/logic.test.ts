@@ -1013,11 +1013,17 @@ describe('세이브 v9 — 미끼 환불과 요리 상태', () => {
 describe('쿠폰 (클라이언트 검증 — P1에서 서버 이관)', () => {
   const CODE = Object.keys(COUPONS)[0];
 
-  it('유효 코드: 골드 지급 + 사용 기록, 재사용 불가', () => {
+  it('유효 코드: 골드·아이템 지급 + 사용 기록, 재사용 불가', () => {
     const r1 = redeemCoupon(newState(), CODE);
     expect(r1.ok).toBe(true);
     if (!r1.ok) return;
-    expect(r1.state.gold).toBe(COUPONS[CODE].gold);
+    expect(r1.state.gold).toBe(300);
+    expect(r1.state.items['luck-small']).toBe(1);
+    expect(r1.reward).toEqual({
+      gold: 300,
+      items: [{ id: 'luck-small', qty: 1 }],
+      desc: COUPONS[CODE].desc,
+    });
     expect(r1.state.coupons).toContain(CODE);
     const r2 = redeemCoupon(r1.state, CODE);
     expect(r2).toEqual({ ok: false, reason: 'used' });
@@ -1028,8 +1034,19 @@ describe('쿠폰 (클라이언트 검증 — P1에서 서버 이관)', () => {
     expect(redeemCoupon(newState(), `  ${CODE}  `).ok).toBe(true);
   });
 
-  it('첫 쿠폰은 조각배 값을 지급한다', () => {
-    expect(COUPONS[CODE].gold).toBe(BOATS[0].price);
+  it('첫 쿠폰은 300G와 작은 행운 물약 1개를 지급한다', () => {
+    expect(COUPONS[CODE].gold).toBe(300);
+    expect(COUPONS[CODE].items).toEqual([{ id: 'luck-small', qty: 1 }]);
+  });
+
+  it('생명의 기운 등 unitSize가 1보다 큰 아이템도 저장 단위로 환산해 지급한다', () => {
+    const r = redeemCoupon(newState(), '기운쿠폰', {
+      기운쿠폰: { gold: 0, items: [{ id: 'energy-common', qty: 2 }], desc: '기운 지원' },
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.state.items['energy-common']).toBe(20);
+    expect(r.reward.items).toEqual([{ id: 'energy-common', qty: 2 }]);
   });
 });
 

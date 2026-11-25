@@ -94,8 +94,8 @@ describe('api/action 핸들러 규약 (Node 스타일 req/res)', () => {
     expect(SKIP_DETAIL.has('exchangeArtifact')).toBe(true); // 재료·유물은 blob이라 스칼라 동봉
     expect(SKIP_DETAIL.has('levelUpArtifact')).toBe(true); // 레벨 맵과 재료도 blob이라 같은 기준
     expect(SKIP_DETAIL.has('boot')).toBe(true);
-    // 옷장 액션은 골드와 blob(외형·가진 모자)만 바꾼다
-    for (const t of ['changeClothes', 'buyHat', 'wearHat']) expect(SKIP_DETAIL.has(t), t).toBe(true);
+    // 옷장·쿠폰 액션은 골드와 blob(외형·가진 모자·사용 쿠폰·아이템)만 바꾼다
+    for (const t of ['redeemCoupon', 'changeClothes', 'buyHat', 'wearHat']) expect(SKIP_DETAIL.has(t), t).toBe(true);
     // 요리와 기운 설정·물약 사용은 가방 개체를 쓰지 않아 스킵하고, 기운 얻기는 개체를 소비하므로 스킵하지 않는다
     for (const t of ['cook', 'eat', 'usePotion', 'setEnergyTarget', 'resetEnergyTargets', 'dismissBaitRefund', 'setAutoLockOnCatch']) expect(SKIP_DETAIL.has(t), t).toBe(true);
     expect(SKIP_DETAIL.has('extractEnergy')).toBe(false);

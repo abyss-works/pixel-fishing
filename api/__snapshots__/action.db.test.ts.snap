@@ -2822,7 +2822,13 @@ exports[`쿠폰·지원 코드·편지 > 정적 쿠폰 1`] = `
         "created_at": "<now>",
         "payload": {
           "code": "출항준비",
-          "gold": 125,
+          "gold": 300,
+          "items": [
+            {
+              "id": "luck-small",
+              "qty": 1,
+            },
+          ],
         },
         "type": "coupon",
         "user_id": "<user>",
@@ -2867,7 +2873,9 @@ exports[`쿠폰·지원 코드·편지 > 정적 쿠폰 1`] = `
           },
           "fortune": null,
           "hats": [],
-          "items": {},
+          "items": {
+            "luck-small": 1,
+          },
           "location": {
             "id": "home",
             "kind": "base",
@@ -2894,7 +2902,7 @@ exports[`쿠폰·지원 코드·편지 > 정적 쿠폰 1`] = `
           "visited": [],
         },
         "fame": "0",
-        "gold": "125",
+        "gold": "300",
         "guild_enhance_reset_count": 0,
         "last_catch_at": null,
         "restricted": false,
@@ -2925,9 +2933,11 @@ exports[`쿠폰·지원 코드·편지 > 정적 쿠폰 1`] = `
           "energyTargets": {},
           "fame": 0,
           "fortune": null,
-          "gold": 125,
+          "gold": 300,
           "hats": [],
-          "items": {},
+          "items": {
+            "luck-small": 1,
+          },
           "location": {
             "id": "home",
             "kind": "base",
@@ -2962,8 +2972,14 @@ exports[`쿠폰·지원 코드·편지 > 정적 쿠폰 1`] = `
         },
       },
       "result": {
-        "desc": "조각배 한 척 값의 출항 지원금",
-        "gold": 125,
+        "desc": "출항 지원금과 작은 행운 물약",
+        "gold": 300,
+        "items": [
+          {
+            "id": "luck-small",
+            "qty": 1,
+          },
+        ],
         "type": "coupon",
       },
     },

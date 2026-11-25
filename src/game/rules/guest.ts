@@ -1,5 +1,5 @@
 // 게스트(계정을 연결하지 않은 익명 계정)가 할 수 있는 액션의 판정.
-// 게스트는 마을 안의 이동, 낚시, 판매, 낚싯대 강화, 배 구매만 한다. 서버가 이 판정으로 그 밖의 액션을 거부한다.
+// 게스트는 마을 안의 이동, 낚시, 판매, 낚싯대 강화, 배 구매, 출항준비 쿠폰만 한다. 서버가 이 판정으로 그 밖의 액션을 거부한다.
 // 거부 사유는 코드로 돌려준다. 화면은 코드로 안내를 고른다.
 import type { GameAction } from './actions.js';
 import type { GameState } from './logic.js';
@@ -35,6 +35,9 @@ export function guestActionVerdict(action: GameAction): GuestVerdict {
   if (OPEN.has(action.type) || GATED_ELSEWHERE.has(action.type)) return 'ok';
   if (action.type === 'travel') return inVillage(action.to) ? 'ok' : 'guest-village-only';
   if (action.type === 'catch') return spotById(action.spot)?.region === 'village' ? 'ok' : 'guest-village-only';
+  if (action.type === 'redeemCoupon') {
+    return typeof action.code === 'string' && action.code.trim() === '출항준비' ? 'ok' : 'account-only';
+  }
   return 'account-only';
 }
 
