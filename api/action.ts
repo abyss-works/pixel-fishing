@@ -800,12 +800,15 @@ export function clearQuestForAction(action: GameAction): BountyQuest | null {
   return null;
 }
 
-/** 액션 이벤트가 길드 항해일지에 남기는 줄 — 전설 등급 캐치와 네임드 토벌 납품 */
+/** 액션 이벤트가 길드 항해일지에 남기는 줄 — 전설 등급 캐치(돌연변이는 |variant 구분)와 네임드 토벌 납품 */
 export function guildLogsOf(events: readonly GameEvent[]): { kind: GuildLogKind; detail: string }[] {
   return events.flatMap((e): { kind: GuildLogKind; detail: string }[] => {
-    const p = e.payload as { fishId?: unknown; questId?: unknown };
+    const p = e.payload as { fishId?: unknown; form?: unknown; questId?: unknown };
     if (e.type === 'catch' && typeof p.fishId === 'string'
-      && FISH.find(f => f.id === p.fishId)?.rarity === 'legendary') return [{ kind: 'legendary', detail: p.fishId }];
+      && FISH.find(f => f.id === p.fishId)?.rarity === 'legendary') {
+      const detail = p.form === 'variant' ? `${p.fishId}|variant` : p.fishId;
+      return [{ kind: 'legendary', detail }];
+    }
     if (e.type === 'deliverBounty' && typeof p.questId === 'string'
       && bountyById(p.questId)?.difficulty === 'named') return [{ kind: 'named', detail: p.questId }];
     return [];

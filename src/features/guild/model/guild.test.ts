@@ -186,6 +186,20 @@ describe('항해일지', () => {
       [{ text: '길드 스킬 ' }, { text: '희귀 어종 확률', tone: 'skill' }, { text: '이 ' }, { text: '2', tone: 'num' }, { text: '단계가 됐어요!' }],
     ]);
   });
+
+  it('전설 돌연변이 기록은 돌연변이명과 variant 톤으로, 미상 어종은 어종으로 폴백한다', () => {
+    const at = '2026-11-05T05:20:00.000Z';
+    const [day] = logbookDays([
+      log(2, 'legendary', at, 'goldcarp|variant', null, 'me', '나'),
+      log(1, 'legendary', at, 'unknown|variant', null, 'u', '가람'),
+    ], 'me');
+    expect(day.items[0].parts).toEqual([
+      { text: '나', tone: 'me' }, { text: ' 님이 ' }, { text: '전설 무지개 잉어', tone: 'variant' }, { text: '를 낚았어요!' },
+    ]);
+    expect(day.items[1].parts).toEqual([
+      { text: '가람', tone: 'nick' }, { text: ' 님이 ' }, { text: '전설 어종', tone: 'variant' }, { text: '을 낚았어요!' },
+    ]);
+  });
 });
 
 describe('길드 이름 바꾸기 화면 모델', () => {

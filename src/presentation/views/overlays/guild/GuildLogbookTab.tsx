@@ -29,6 +29,7 @@ const TONE: Record<NonNullable<LogPart['tone']>, string> = {
   nick: 'font-bold text-text',
   me: 'font-bold text-gold',
   legend: 'font-bold text-legend',
+  variant: 'font-bold text-epic',
   named: 'font-bold text-epic',
   skill: 'font-bold text-gold',
   enhance: 'pf-accent text-xs text-guild',
