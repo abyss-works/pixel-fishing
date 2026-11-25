@@ -3,13 +3,13 @@
 import { usePlayersIn } from '../../../../features/live/service/useLive';
 import HudChip from '../../../ui/hud/HudChip';
 import PixelIcon from '../../../ui/PixelIcon';
-import Tip from '../../../ui/Tip';
+import Tip, { TipCard } from '../../../ui/Tip';
 
 export default function PresenceChip({ region, onOpen }: { region: string; onOpen: () => void }) {
   const count = usePlayersIn(region).length;
   if (count === 0) return null;
   return (
-    <Tip wraps className="flex" text={<>이 바다의 플레이어 {count}명<br />누르면 목록을 열어요.</>}>
+    <Tip wraps className="flex" text={<TipCard title={`이 바다의 플레이어 ${count}명`} description="누르면 목록을 열어요." />}>
       <HudChip onClick={onOpen} aria-label={`이 바다의 플레이어 ${count}명, 목록 열기`}>
         <PixelIcon glyph="people" size={12} />
         <span className="pf-accent leading-none">{count}</span>

@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import Tip from './Tip';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import Badge from './Badge';
+import { resetKeyScopes } from './hotkeys';
+import Tip, { TipCard } from './Tip';
 
 const original = window.matchMedia;
-afterEach(() => { cleanup(); window.matchMedia = original; });
+afterEach(() => { cleanup(); resetKeyScopes(); window.matchMedia = original; });
 
 function setPointer(coarse: boolean) {
   window.matchMedia = ((query: string) => ({
@@ -123,5 +125,67 @@ describe('Tip: hoverOnly', () => {
     render(<Tip wraps text="설명"><span>대상</span></Tip>);
     fireEvent.click(screen.getByText('대상').parentElement!);
     expect(screen.getByRole('tooltip')).toHaveTextContent('설명');
+  });
+});
+
+describe('Tip: Esc 및 스크롤 닫힘', () => {
+  it('열린 상태에서 Esc를 누르면 포커스 이동 없이 툴팁이 닫힌다', () => {
+    setPointer(false);
+    render(<><Tip text="설명">대상</Tip><button type="button">다음</button></>);
+    const trigger = screen.getByText('대상');
+    trigger.focus();
+    fireEvent.focus(trigger);
+    expect(screen.getByRole('tooltip')).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('열린 상태에서 스크롤 이벤트가 발생하면 툴팁이 닫힌다', () => {
+    setPointer(true);
+    render(<div data-testid="scroller"><Tip text="설명">대상</Tip></div>);
+    fireEvent.click(screen.getByText('대상'));
+    expect(screen.getByRole('tooltip')).toBeInTheDocument();
+    fireEvent.scroll(screen.getByTestId('scroller'));
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  });
+});
+
+describe('TipCard: 구조형 툴팁 위계', () => {
+  it('헤더(제목·부제·배지), 본문/목록, 구분선 아래 잠금 상태, 주석 순서를 지키고 금지 문자가 없다', () => {
+    render(
+      <Tip
+        text={(
+          <TipCard
+            title="여객선"
+            subtitle="빠른 이동"
+            badge={<Badge tone="dim-plain" size="2xs">잠김</Badge>}
+            description="다른 항구로 이동해요."
+            rows={[{ label: '필요 배', value: '조각배(1단계)' }]}
+            status={{ tone: 'lock', lines: ['태평양 항로가 열리면 쓸 수 있어요.', '조각배부터 탈 수 있어요.'] }}
+            note="항구마다 같은 기능을 써요."
+          />
+        )}
+      >
+        대상
+      </Tip>,
+    );
+    fireEvent.mouseEnter(screen.getByText('대상'));
+    const tip = screen.getByRole('tooltip');
+    const title = within(tip).getByText('여객선');
+    const subtitle = within(tip).getByText('빠른 이동');
+    const badge = within(tip).getByText('잠김');
+    const desc = within(tip).getByText('다른 항구로 이동해요.');
+    const lockLine = within(tip).getByText('태평양 항로가 열리면 쓸 수 있어요.');
+    const note = within(tip).getByText('항구마다 같은 기능을 써요.');
+
+    expect(title.tagName).toBe('B');
+    expect(title.compareDocumentPosition(subtitle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(badge.compareDocumentPosition(desc) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(desc.compareDocumentPosition(lockLine) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(lockLine.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(tip.querySelectorAll('.border-t').length).toBeGreaterThanOrEqual(2);
+    expect(tip.querySelector('[data-glyph="lock"]')).not.toBeNull();
+    expect(tip.textContent).not.toMatch(/[·—–]/);
   });
 });
