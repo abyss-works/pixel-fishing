@@ -8,7 +8,7 @@ import {
   overflowUids, release, instanceFish, formName, travel, applyRelief, moveExhibit,
   addItem, takeItem, nextDexRec, mutationWeightsOf, withVariantPoints,
 } from './logic.js';
-import type { GameState, Judgment, CatchInfo, CatchExtras, DrawOptions, FishInstance, FormRecord, FormId, ReliefGrant, Fish } from './logic.js';
+import type { GameState, Judgment, CatchInfo, CatchExtras, DrawOptions, FishInstance, FormRecord, FormId, ReliefGrant, Fish, Coupon, CouponItem } from './logic.js';
 import { FISH } from '../content/fish.js';
 import { isKnownLocation } from '../content/places.js';
 import {
@@ -123,7 +123,7 @@ export interface ActionDeps {
   today: string;         // YYYY-MM-DD, 유저 체감 날짜(KST) — 도감 첫 조우일
   now: string;           // ISO datetime — 개체의 caughtAt
   newUid: () => string;  // 개체 uid 생성기 (서버/로컬 = crypto.randomUUID, 테스트는 결정적 목)
-  dynamicCoupon?: { gold: number; desc: string } | null;
+  dynamicCoupon?: Coupon | null;
   /** 지원 코드 자산 — 서버가 코드를 조회해 지급분을 공급하고, 소비는 서버가 저장 확정과 함께 한다. 로컬 dev엔 항상 없다 */
   relief?: ReliefGrant | null;
   /** 수배 DB 진실 — 서버가 오늘 클리어 횟수·수주 중 의뢰·완료 목록을 조회해 공급한다 (relief 선례).
@@ -144,7 +144,7 @@ export type ActionResult =
   | { type: 'catch'; fishId: string; uid: string; info: CatchInfo; released: ReleasedFish[]; extracted?: ReleasedFish[];
       energy?: Record<RarityId, number>; ticket?: string }
   | { type: 'sell'; gold: number }
-  | { type: 'coupon'; gold: number; desc: string }
+  | { type: 'coupon'; gold: number; items?: readonly CouponItem[]; desc: string }
   | { type: 'mail'; gold: number; items?: readonly { id: string; qty: number }[] }
   /** energy = 이번 기운 얻기로 얻은 등급별 기운(저장 단위) */
   | { type: 'extract'; energy: Record<RarityId, number> }
@@ -679,10 +679,11 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const extra = deps.dynamicCoupon ? { [code]: deps.dynamicCoupon } : {};
       const res = redeemCoupon(state, code, extra);
       if (!res.ok) return { ok: false, error: res.reason === 'used' ? 'coupon-used' : 'coupon-invalid' };
+      const itemsField = res.reward.items.length > 0 ? { items: res.reward.items } : {};
       return {
         ok: true, state: res.state,
-        result: { type: 'coupon', gold: res.reward.gold, desc: res.reward.desc },
-        events: [{ type: 'coupon', payload: { code, gold: res.reward.gold } }],
+        result: { type: 'coupon', gold: res.reward.gold, ...itemsField, desc: res.reward.desc },
+        events: [{ type: 'coupon', payload: { code, gold: res.reward.gold, ...itemsField } }],
       };
     }
     case 'claimRelief': {

@@ -53,7 +53,12 @@ export { FISH } from '../content/fish.js';
 export type { Fish, FormId } from '../content/fish.js';
 export { BOATS, MAX_BOAT, WALK_BAG_CAP, boatNameOf } from '../content/boats.js';
 export type { Boat } from '../content/boats.js';
+import { COUPONS } from '../content/coupons.js';
+import type { Coupon, CouponItem } from '../content/coupons.js';
+import { itemStorageAmount } from '../content/itemCatalog.js';
+
 export { COUPONS } from '../content/coupons.js';
+export type { Coupon, CouponItem } from '../content/coupons.js';
 export { canBuyBoat, canFish, canUpgradeRod, REJECT_TEXT } from './rules.js';
 export { canAcceptQuest, canDeliverBounty } from './rules.js';
 export type { RejectReason, RuleCheck, BountyCtx } from './rules.js';
@@ -665,25 +670,31 @@ export function buildCatchInfo(fish: Fish, extras: CatchExtras, isNew: boolean):
 }
 
 // 쿠폰 데이터는 게임 데이터에서 관리하고 검증·지급 규칙은 여기서 처리한다.
-import { COUPONS } from '../content/coupons.js';
-
 export type CouponResult =
-  | { ok: true; state: GameState; reward: { gold: number; desc: string } }
+  | { ok: true; state: GameState; reward: { gold: number; items: readonly CouponItem[]; desc: string } }
   | { ok: false; reason: 'invalid' | 'used' };
 
 // extra — DB(coupons 테이블)에서 조회한 동적 쿠폰. 정적 COUPONS와 병합해 판정한다.
 export function redeemCoupon(
   state: GameState, codeRaw: string,
-  extra: Record<string, { gold: number; desc: string }> = {},
+  extra: Record<string, Coupon> = {},
 ): CouponResult {
   const code = codeRaw.trim();
   const c = COUPONS[code] ?? extra[code];
   if (!c) return { ok: false, reason: 'invalid' };
   if (state.coupons.includes(code)) return { ok: false, reason: 'used' };
+  let next = { ...state, gold: state.gold + c.gold, coupons: [...state.coupons, code] };
+  const grantedItems: CouponItem[] = [];
+  for (const item of c.items ?? []) {
+    const amount = itemStorageAmount(item.id, item.qty);
+    if (amount < 1) continue;
+    next = addItem(next, item.id, amount);
+    grantedItems.push({ id: item.id, qty: item.qty });
+  }
   return {
     ok: true,
-    reward: c,
-    state: { ...state, gold: state.gold + c.gold, coupons: [...state.coupons, code] },
+    reward: { gold: c.gold, items: grantedItems, desc: c.desc },
+    state: next,
   };
 }
 

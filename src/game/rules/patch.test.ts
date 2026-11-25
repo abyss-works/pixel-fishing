@@ -88,7 +88,7 @@ describe('patch 동등성 — 전 액션', () => {
     check(seed({ baitRefund: { gold: 200, items: { 'bait-rare': 1 } } }), { type: 'dismissBaitRefund' });
     check(seed(), { type: 'dismissBaitRefund' });
   });
-  it('redeemCoupon — 골드+사용기록', () => {
+  it('redeemCoupon — 골드+아이템+사용기록', () => {
     check(seed(), { type: 'redeemCoupon', code: '출항준비' });
   });
   it('claimRelief — 합산 도감', () => {

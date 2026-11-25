@@ -407,10 +407,21 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
 describe('redeemCoupon', () => {
   const staticCode = Object.keys(COUPONS)[0];
 
-  it('정적 쿠폰 — 지급 + 재사용 거부', () => {
+  it('정적 쿠폰 — 골드·아이템 지급 + 결과·이벤트 포함 + 재사용 거부', () => {
     const out = applyAction(seed(), { type: 'redeemCoupon', code: ` ${staticCode} ` }, deps());
     if (!out.ok) throw new Error(out.error);
-    expect(out.state.gold).toBe(COUPONS[staticCode].gold);
+    expect(out.state.gold).toBe(300);
+    expect(out.state.items['luck-small']).toBe(1);
+    expect(out.result).toEqual({
+      type: 'coupon',
+      gold: 300,
+      items: [{ id: 'luck-small', qty: 1 }],
+      desc: COUPONS[staticCode].desc,
+    });
+    expect(out.events).toEqual([{
+      type: 'coupon',
+      payload: { code: staticCode, gold: 300, items: [{ id: 'luck-small', qty: 1 }] },
+    }]);
     const again = applyAction(out.state, { type: 'redeemCoupon', code: staticCode }, deps());
     expect(again).toEqual({ ok: false, error: 'coupon-used' });
   });
@@ -421,6 +432,8 @@ describe('redeemCoupon', () => {
       deps({ dynamicCoupon: dyn }));
     if (!out.ok) throw new Error(out.error);
     expect(out.state.gold).toBe(77);
+    expect(out.result).toEqual({ type: 'coupon', gold: 77, desc: '이벤트' });
+    expect(out.events).toEqual([{ type: 'coupon', payload: { code: '이벤트코드', gold: 77 } }]);
     expect(applyAction(seed(), { type: 'redeemCoupon', code: '이벤트코드' }, deps()))
       .toEqual({ ok: false, error: 'coupon-invalid' });
   });
