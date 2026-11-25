@@ -1326,7 +1326,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     expect(screen.getByText('잉어')).toBeInTheDocument();
     expect(screen.queryByText('금빛 잉어')).not.toBeInTheDocument(); // 행이 갈리지 않는다
     expect(screen.getByText('×2')).toBeInTheDocument();
-    expect(screen.getAllByText(`${CARP * (1 + VARIANT_PRICE_MULT)}G`)).toHaveLength(2); // 행 소계 + 하단 판매 가능 합
+    expect(screen.getAllByText(`${CARP * (1 + VARIANT_PRICE_MULT)}G`)).toHaveLength(1); // 행 소계 (하단 판매 가능 금액 미노출)
     expect(screen.getByRole('img', { name: '돌연변이' })).toBeInTheDocument(); // 개체 줄의 아이콘
     expect(screen.getAllByRole('img', { name: '최대 크기' })).toHaveLength(2); // 최대는 폼별 — 일반·변이 각각
   });

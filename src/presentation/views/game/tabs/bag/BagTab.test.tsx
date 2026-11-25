@@ -6,8 +6,7 @@ import BagTab, { EXHIBIT_UI_ENABLED } from './BagTab';
 import { resetBagView, setBagSection } from './bagView';
 import { AUTO_ENERGY_BOAT, COOKING_UNLOCK_BOAT } from '../../../../../game/content/cooking';
 import { artifactById } from '../../../../../game/content/artifacts';
-import { newState, saleBonusOf, sellableValue } from '../../../../../game/rules/logic';
-import { fmtGold } from '../../../../ui/format';
+import { newState } from '../../../../../game/rules/logic';
 import type { FishInstance, GameState } from '../../../../../game/rules/logic';
 import type { AccountLockState } from '../../../../../features/display/model/menuLock';
 
@@ -69,23 +68,10 @@ describe('BagTab - 잠금 안내', () => {
   });
 });
 
-describe('BagTab - 판매 가능 금액', () => {
-  const owned = (): GameState => game({ bag: [inst('a'), inst('b')] });
-
-  it('길드 판매가 보너스가 없으면 금액 하나만 보인다', () => {
-    render(<BagTab sellBonus={0} game={owned()} dispatch={vi.fn()} setToast={vi.fn()} />);
-    const base = sellableValue(owned());
-    const note = within(screen.getByText(/판매 가능 금액은/));
-    expect(note.getByText(fmtGold(base))).toBeInTheDocument();
-    expect(note.queryByText(/판매가 보너스/)).not.toBeInTheDocument();
-  });
-
-  it('길드 판매가 보너스가 있으면 기본 금액, 증감, 합계 내역을 판매 화면과 같은 값으로 보인다', () => {
-    const g = owned();
-    const base = sellableValue(g);
-    const bonus = saleBonusOf(base, 0.5);
-    render(<BagTab sellBonus={0.5} game={g} dispatch={vi.fn()} setToast={vi.fn()} />);
-    expect(within(screen.getByText(/판매 가능 금액은/)).getByText(`기본 금액 ${fmtGold(base)}, 판매가 보너스 +${fmtGold(bonus)}, 합계 ${fmtGold(base + bonus)}`)).toBeInTheDocument();
+describe('BagTab - 판매 가능 금액 미노출', () => {
+  it('물고기 섹션 하단에 판매 가능 금액 안내를 두지 않는다', () => {
+    render(<BagTab sellBonus={0} game={game({ bag: [inst('a'), inst('b')] })} dispatch={vi.fn()} setToast={vi.fn()} />);
+    expect(screen.queryByText(/판매 가능 금액은/)).toBeNull();
   });
 });
 
@@ -226,10 +212,7 @@ describe('BagTab - 3서브탭, 보기 전환 아이콘, 하단 버튼', () => {
       </QueryClientProvider>,
     );
     expect(screen.queryByText(/자물쇠는 개체마다 걸 수 있고/)).toBeNull();
-    const guideTrigger = screen.getByText('목록 안내');
-    fireEvent.mouseEnter(guideTrigger);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('목록은 등급이 높은 순으로 정렬돼요.');
-    fireEvent.mouseLeave(guideTrigger);
+    expect(screen.queryByText('목록 안내')).toBeNull();
 
     const toCards = screen.getByRole('button', { name: '카드 보기' });
     fireEvent.click(toCards);
@@ -292,27 +275,25 @@ describe('BagTab - 3서브탭, 보기 전환 아이콘, 하단 버튼', () => {
     expect(screen.getByRole('tooltip')).toHaveTextContent('계정을 확인하면 쓸 수 있어요.');
   });
 
-  it('물음표 도움말 없이 개체 표시 툴팁으로 왕관과 반짝이 범례를 보이고, 잠긴 기운 얻기 툴팁에 제목·잠김·구분선을 둔다', () => {
+  it('목록 안내·개체 표시 풀 텍스트 없이 물음표 범례 아이콘으로 최대 크기·돌연변이 2줄 툴팁을 보이고, 잠긴 기운 얻기 툴팁에 제목·잠김·구분선을 둔다', () => {
     show(game({ boat: COOKING_UNLOCK_BOAT - 1, location: { kind: 'base', id: 'home' }, bag: [inst('a')] }));
-    expect(screen.queryByRole('button', { name: '도움말' })).toBeNull();
+    expect(screen.queryByText('목록 안내')).toBeNull();
+    expect(screen.queryByText('개체 표시')).toBeNull();
 
-    const legendTrigger = screen.getByText('개체 표시');
-    expect(legendTrigger).toHaveAttribute('tabindex', '0');
-    fireEvent.focus(legendTrigger);
+    const legendBtn = screen.getByRole('button', { name: '개체 표시' });
+    fireEvent.focus(legendBtn);
     const focusLegendTip = screen.getByRole('tooltip');
-    expect(focusLegendTip).toHaveTextContent('개체 표시');
-    expect(focusLegendTip).toHaveTextContent('금색 왕관');
-    expect(focusLegendTip).toHaveTextContent('보라 반짝이');
-    expect(focusLegendTip.querySelector('.border-t')).not.toBeNull();
-    fireEvent.blur(legendTrigger);
+    expect(focusLegendTip).toHaveTextContent('최대 크기');
+    expect(focusLegendTip).toHaveTextContent('돌연변이');
+    expect(focusLegendTip.querySelector('.text-gold[data-glyph="crown"]')).not.toBeNull();
+    expect(focusLegendTip.querySelector('.text-mutation[data-glyph="sparkle"]')).not.toBeNull();
+    fireEvent.blur(legendBtn);
 
-    fireEvent.mouseEnter(legendTrigger);
+    fireEvent.mouseEnter(legendBtn.parentElement!);
     const legendTip = screen.getByRole('tooltip');
-    expect(legendTip).toHaveTextContent('개체 표시');
-    expect(legendTip).toHaveTextContent('금색 왕관');
-    expect(legendTip).toHaveTextContent('보라 반짝이');
-    expect(legendTip.querySelector('.border-t')).not.toBeNull();
-    fireEvent.mouseLeave(legendTrigger);
+    expect(legendTip).toHaveTextContent('최대 크기');
+    expect(legendTip).toHaveTextContent('돌연변이');
+    fireEvent.mouseLeave(legendBtn.parentElement!);
 
     const energyBtn = screen.getByRole('button', { name: '기운 얻기' });
     fireEvent.mouseEnter(energyBtn.parentElement!);

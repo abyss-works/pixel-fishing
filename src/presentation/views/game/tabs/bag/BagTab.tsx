@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { REJECT_TEXT, freeExhibitSlot, instanceFish, formName } from '../../../../../game/rules/logic';
-import AdjustedAmount from '../../../../ui/AdjustedAmount';
 import PageTitle from '../../../../ui/PageTitle';
 import Subheading from '../../../../ui/Subheading';
 import { fmtGold, fmtNum, fmtSize, josa } from '../../../../ui/format';
@@ -214,7 +213,7 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
   const now = useNow();
   const rows = useMemo(() => groupInstances(game.bag), [game.bag]);
   const {
-    count: bagCount, cap, full: bagFull, sellable,
+    count: bagCount, cap, full: bagFull,
     autoLock: autoLockPlan,
   } = selectBagOverview(game, sellBonus, bagBonus, now);
   const energyEntry = selectBagEnergyEntry(game, accountState);
@@ -307,55 +306,35 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
             </PageTitle>
             <div className="flex items-center gap-1.5">
               {layout === 'list' && (
-                <>
-                  <Tip
-                    text={(
-                      <TipCard
-                        title="목록 안내"
-                        description={[
-                          '판매는 집 궤짝이나 항구 어시장에서 할 수 있어요.',
-                          '자물쇠는 개체마다 걸 수 있고, 머리 줄의 자물쇠는 그 종 전부에 걸어요.',
-                          ...(EXHIBIT_UI_ENABLED ? ['별을 누르면 전시대에 올라가요. 전시 중에는 팔리지 않아요.'] : []),
-                          '행 소계는 잠근 개체를 포함한 그 종의 값 합계예요.',
-                          '목록은 등급이 높은 순으로 정렬돼요.',
-                        ].join('\n')}
-                      />
-                    )}
-                    className="text-2xs text-text-dim"
-                  >
-                    목록 안내
-                  </Tip>
-                  <Tip
-                    text={(
-                      <TipCard
-                        title="개체 표시"
-                        rows={[
-                          {
-                            label: (
-                              <span className="inline-flex items-center gap-1">
-                                <PixelIcon glyph="crown" size={11} className="text-gold" />
-                                <span>금색 왕관</span>
-                              </span>
-                            ),
-                            value: '같은 형태 최대',
-                          },
-                          {
-                            label: (
-                              <span className="inline-flex items-center gap-1">
-                                <PixelIcon glyph="sparkle" size={11} className="text-epic" />
-                                <span>보라 반짝이</span>
-                              </span>
-                            ),
-                            value: '돌연변이 개체',
-                          },
-                        ]}
-                      />
-                    )}
-                    className="text-2xs text-text-dim"
-                  >
-                    개체 표시
-                  </Tip>
-                </>
+                <Tip
+                  wraps
+                  pressOpens
+                  text={(
+                    <TipCard
+                      title="개체 표시"
+                      rows={[
+                        {
+                          text: (
+                            <span className="inline-flex items-center gap-1.5">
+                              <PixelIcon glyph="crown" size={11} className="text-gold shrink-0" />
+                              <span>최대 크기</span>
+                            </span>
+                          ),
+                        },
+                        {
+                          text: (
+                            <span className="inline-flex items-center gap-1.5">
+                              <PixelIcon glyph="sparkle" size={11} className="text-mutation shrink-0" />
+                              <span className="text-mutation">돌연변이</span>
+                            </span>
+                          ),
+                        },
+                      ]}
+                    />
+                  )}
+                >
+                  <IconButton type="button" glyph="question" size={12} tone="dim" aria-label="개체 표시" />
+                </Tip>
               )}
               <Tip wraps text={layout === 'list' ? '카드 보기' : '목록 보기'}>
                 <IconButton
@@ -448,9 +427,6 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
                   );
                 })}
               </Inset>
-              <Note>
-                판매 가능 금액은 <AdjustedAmount amount={sellable} />이에요.
-              </Note>
             </>
           )}
           <SidebarFooter>

@@ -402,7 +402,6 @@ describe('UI 시스템 가드', () => {
     'views/overlays/bounty/NamedCard.tsx',
     'views/overlays/bounty/QuestInfoCards.tsx',
     'views/overlays/facility/SellTab.tsx',
-    'views/game/tabs/bag/BagTab.tsx',
   ];
   /** 허용 줄 - 파일마다 허용하는 줄의 모양과 사유. 파일 단위가 아니라 줄 단위로 가리고, 쓰이지 않는 허용은 지운다 */
   type Allowed = Map<string, { line: RegExp; why: string }[]>;
