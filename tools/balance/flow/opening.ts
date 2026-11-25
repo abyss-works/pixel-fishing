@@ -1,5 +1,5 @@
 // 최초 10분 — 새 계정이 수동 낚시로 첫 바다 해역(배가 필요한 첫 해역)에 닿기까지.
-// 첫 경험 보장(영웅과 전설 한 번씩)은 제품의 보장 규칙 함수로 판정하고, 보장 어종의 판매가는 그 해역 풀의 해당 등급 평균으로 본다.
+// 첫 경험 보장(해역별 상한 테이블 내 미보유 일반 폼 전종 보장)은 제품의 보장 규칙 함수로 판정하고, 보장 캐치는 일반 폼으로 잡혀 해당 어종 기본 가격을 받는다.
 // 가정: 캐치마다 판매는 즉시이고 보장 캐치의 획득 연출도 일반 캐치와 같은 길이다. 쿠폰은 쓰지 않는다. 낚는 시간만 센다
 //       (도보 이동, 판매와 구매 창 조작, 안내에 드는 시간은 넣지 않는다). 강화를 먼저 다 하고 배를 산다.
 import { SPOTS } from '../../../src/game/content/spots';
@@ -7,13 +7,12 @@ import type { SpotId } from '../../../src/game/content/spots';
 import { BOATS } from '../../../src/game/content/boats';
 import { RARITY } from '../../../src/game/content/rarity';
 import {
-  FIRST_CATCH_LEGEND_MAX, FIRST_CATCH_LEGEND_MIN,
-  endedFirstCatch, firstCatchTarget, fixedFirstCatch, hasPendingFirstCatch, isFirstCatchSpot, newFirstCatch, settleFirstCatch,
+  endedFirstCatch, firstCatchTarget, hasPendingFirstCatch, isFirstCatchSpot, newFirstCatch, settleFirstCatch,
 } from '../../../src/game/rules/firstCatch';
-import { fishPool } from '../../../src/game/rules/logic';
+import type { FirstCatch } from '../../../src/game/rules/firstCatch';
 import { powerOfLevel } from '../rodRules';
 import { upgradeCost } from '../../../src/game/rules/balance';
-import { VARIANT_EV, axisAvailable, entryLevel, rates, rodSpec } from '../model';
+import { axisAvailable, entryLevel, rates, rodSpec } from '../model';
 import type { Axis, Rates } from '../model';
 import type { Sampler } from './sample';
 
@@ -25,8 +24,10 @@ export type Judgment = 'normal' | 'good';
 
 export interface OpeningOptions {
   judgment: Judgment;
-  /** 전설 보장이 나올 캐치 번호. null이면 첫 경험 보장이 없는 비교용이고, 'draw'면 제품 규칙대로 표본 난수가 번호를 정한다(sampler 필요) */
-  legendAt: number | 'draw' | null;
+  /** 첫 경험 보장(해역별 상한 내 미보유 일반 폼 전종 보장) 적용 여부. 기본 true, false면 보장 없는 비교용이다 */
+  firstCatch?: boolean;
+  /** 호환용 선택 인자 — null이면 보장 없음, 그 외에는 첫 경험 보장을 적용한다 */
+  legendAt?: number | 'draw' | null;
   /** 주면 캐치마다 시간, 어종, 돌연변이를 뽑는다(몬테카를로). 생략하면 기댓값 경로다 */
   sampler?: Sampler;
 }
@@ -49,16 +50,15 @@ export interface OpeningResult {
 const MAX_CATCHES = 2000;
 
 export function simulateOpening(o: OpeningOptions): OpeningResult {
-  if (o.legendAt === 'draw' && !o.sampler) throw new Error('전설 번호를 뽑으려면 표본 추출기가 필요합니다');
-  if (typeof o.legendAt === 'number' && (!Number.isInteger(o.legendAt) || o.legendAt < FIRST_CATCH_LEGEND_MIN || o.legendAt > FIRST_CATCH_LEGEND_MAX)) {
-    throw new Error(`전설 보장 번호는 ${FIRST_CATCH_LEGEND_MIN}에서 ${FIRST_CATCH_LEGEND_MAX} 사이 정수여야 합니다`);
-  }
+  const guaranteeOn = o.firstCatch ?? (o.legendAt !== null);
   const target = SPOTS.find(s => s.boatTier >= 1)!;
   const targetLevel = entryLevel(target.id);
   const boatToBuy = BOATS.find(b => b.tier === target.boatTier)!;
   const sampler = o.sampler;
   const noRng = () => 0;
-  let fc = o.legendAt === null ? endedFirstCatch() : o.legendAt === 'draw' ? newFirstCatch() : fixedFirstCatch(o.legendAt);
+  let fc: FirstCatch = guaranteeOn ? newFirstCatch() : endedFirstCatch();
+  const ownedNormal = new Set<string>();
+  const ownsNormal = (id: string) => ownedNormal.has(id);
   let gold = 0, fame = 0, level = 1, boat = 0, sec = 0, n = 0;
   let spot = SPOTS[0];
   const steps: OpeningStep[] = [];
@@ -81,26 +81,22 @@ export function simulateOpening(o: OpeningOptions): OpeningResult {
     const r = rateAt(spot.id, level);
     sec += sampler ? sampler.cycleSec(r) : 3600 / r.catchesPerHour;
     n += 1;
-    // 보장 대상이면 해역 풀의 해당 등급 평균 판매가(표본이면 뽑힌 어종의 판매가)를, 아니면 통상 기댓값(표본이면 뽑힌 캐치)을 번다
-    const guaranteed = firstCatchTarget(fc, spot.id, 'day', sampler?.rng ?? noRng);
+    // 보장 대상이면 일반 폼으로 확정 지급되고(기본 가격 + 등급 명성), 아니면 통상 기댓값(표본이면 뽑힌 캐치)을 번다
+    const guaranteed = firstCatchTarget(fc, spot.id, 'day', ownsNormal, sampler?.rng ?? noRng);
     if (guaranteed) {
-      if (sampler) {
-        const c = sampler.valueOf(guaranteed);
-        gold += c.gold; fame += c.fame;
-      } else {
-        const pool = fishPool(spot.id, 'day').filter(f => f.rarity === guaranteed.rarity);
-        gold += pool.reduce((s, f) => s + f.price, 0) / pool.length * VARIANT_EV;
-        fame += RARITY[guaranteed.rarity].fame;
-      }
+      gold += guaranteed.price;
+      fame += RARITY[guaranteed.rarity].fame;
+      ownedNormal.add(guaranteed.id);
       log('guarantee', guaranteed.rarity);
     } else if (sampler) {
       const c = sampler.catchOf(r);
       gold += c.gold; fame += c.fame;
+      if (!c.variant) ownedNormal.add(c.fish.id);
     } else {
       gold += r.goldPerHour / r.catchesPerHour;
       fame += r.famePerHour / r.catchesPerHour;
     }
-    fc = settleFirstCatch(fc, spot.id, guaranteed, sampler?.rng ?? noRng);
+    fc = settleFirstCatch(fc, spot.id, ownsNormal);
 
     while (level < targetLevel && gold >= upgradeCost(level)) {
       gold -= upgradeCost(level); level += 1;
