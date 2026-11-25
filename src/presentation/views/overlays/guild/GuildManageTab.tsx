@@ -1,5 +1,6 @@
 import { useId, useState } from 'react';
 import type { FormEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { GUILD_JOIN_MODES, checkGuildName } from '../../../../game/rules/guild';
 import type { GuildJoinMode } from '../../../../game/rules/guild';
 import {
@@ -25,9 +26,10 @@ import type { GuildPartProps, GuildRun } from './guildProps';
 // 관리 탭(길드장만): 위에서부터 가입 방식(세 칸 중 하나, 고른 칸은 눌린 모양), 고유 코드와 초대 링크(코드 복사, 링크 복사),
 // 링크와 함께 복사하는 권유 문구, 길드 이름(이름 바꾸기 버튼이 작은 창을 연다), 가입 신청 표(행 끝에 거절과 승인)다. 신청 표는 남는 높이를 다 쓰고 그 안에서만 스크롤한다.
 // 거절은 되돌릴 일이 적어 확인 창 없이 행 버튼으로 바로 보낸다.
-export default function GuildManageTab({ guild, busy, run, setToast, gold, onGoldChanged }: Omit<GuildPartProps, 'me'> & {
+export default function GuildManageTab({ guild, busy, run, dialogHost, setToast, gold, onGoldChanged }: Omit<GuildPartProps, 'me'> & {
   /** 내 골드 */
   gold: number;
+  dialogHost?: HTMLElement | null;
   onGoldChanged: () => Promise<void> | void;
 }) {
   const nowISO = useNow();
@@ -55,6 +57,11 @@ export default function GuildManageTab({ guild, busy, run, setToast, gold, onGol
     void send({ op: 'settings', guildId: guild.id, pitch: next }, next === null ? '기본 권유 문구를 써요.' : '권유 문구를 바꿨어요.');
   };
   const rows = requestRows(guild.requests, nowISO);
+
+  const renameDialog = renaming ? (
+    <RenameDialog guildId={guild.id} current={guild.name} busy={busy} run={run} setToast={setToast}
+                  onGoldChanged={onGoldChanged} onClose={() => setRenaming(false)} />
+  ) : null;
 
   return (
     <div className="flex flex-col gap-3 flex-1 min-h-0">
@@ -151,10 +158,7 @@ export default function GuildManageTab({ guild, busy, run, setToast, gold, onGol
           )}
         </TableBox>
       </section>
-      {renaming && (
-        <RenameDialog guildId={guild.id} current={guild.name} busy={busy} run={run} setToast={setToast}
-                      onGoldChanged={onGoldChanged} onClose={() => setRenaming(false)} />
-      )}
+      {renameDialog && (dialogHost ? createPortal(renameDialog, dialogHost) : renameDialog)}
     </div>
   );
 }

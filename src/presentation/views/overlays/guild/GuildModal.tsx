@@ -44,6 +44,7 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
   const { guild, request, loading, failed, you, act } = useGuild(true, true);
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<GuildConfirm | null>(null);
+  const [dialogHost, setDialogHost] = useState<HTMLDivElement | null>(null);
 
   /** 요청 하나. 거부는 안내 문장으로 돌려주고, 연결 실패는 알림으로 보인다 */
   const runOp = async (op: GuildOp): Promise<{ error: string | null; recovered?: number }> => {
@@ -89,7 +90,7 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
         ? (
           <GuildView guild={guild} me={you} busy={busy} run={run}
                      onResetEnhancements={() => runOp({ op: 'resetEnhancements', guildId: guild.id })}
-                     setToast={setToast} ask={setConfirm} gold={gold} artifacts={artifacts} onGoldChanged={onGoldChanged} />
+                     setToast={setToast} ask={setConfirm} dialogHost={dialogHost} gold={gold} artifacts={artifacts} onGoldChanged={onGoldChanged} />
         )
         : <NoGuild busy={busy} run={run} join={join} request={request} setToast={setToast} />;
 
@@ -114,6 +115,7 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
           <p className="text-sm whitespace-pre-line">{confirm.text}</p>
         </ConfirmDialog>
       )}
+      <div ref={setDialogHost} />
     </Modal>
   );
 }
@@ -121,8 +123,8 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
 type GuildTab = 'members' | 'skills' | 'logbook' | 'manage';
 
 /** 길드가 있을 때: 고정 정보 줄과 탭(길드장은 관리 탭까지 넷) */
-function GuildView({ ask, gold, artifacts, onGoldChanged, onResetEnhancements, ...part }: GuildPartProps & {
-  ask: GuildAsk; gold: number; artifacts: ArtifactHolder; onGoldChanged: () => Promise<void> | void;
+function GuildView({ ask, dialogHost, gold, artifacts, onGoldChanged, onResetEnhancements, ...part }: GuildPartProps & {
+  ask: GuildAsk; dialogHost: HTMLElement | null; gold: number; artifacts: ArtifactHolder; onGoldChanged: () => Promise<void> | void;
   onResetEnhancements: () => Promise<{ error: string | null; recovered?: number }>;
 }) {
   const [tab, setTab] = useState<GuildTab>('members');
@@ -137,9 +139,9 @@ function GuildView({ ask, gold, artifacts, onGoldChanged, onResetEnhancements, .
       ]} />
       <div className="flex flex-col flex-1 min-h-0">
         {tab === 'members' && <GuildMembersTab {...part} ask={ask} artifacts={artifacts} />}
-        {tab === 'skills' && <GuildSkillsTab {...part} gold={gold} onResetEnhancements={onResetEnhancements} onGoldChanged={onGoldChanged} />}
+        {tab === 'skills' && <GuildSkillsTab {...part} gold={gold} dialogHost={dialogHost} onResetEnhancements={onResetEnhancements} onGoldChanged={onGoldChanged} />}
         {tab === 'logbook' && <GuildLogbookTab logbook={part.guild.logbook} me={part.me} />}
-        {tab === 'manage' && part.guild.role === 'leader' && <GuildManageTab {...part} gold={gold} onGoldChanged={onGoldChanged} />}
+        {tab === 'manage' && part.guild.role === 'leader' && <GuildManageTab {...part} gold={gold} dialogHost={dialogHost} onGoldChanged={onGoldChanged} />}
       </div>
     </div>
   );

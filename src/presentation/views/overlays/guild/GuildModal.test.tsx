@@ -428,4 +428,48 @@ describe('GuildModal', () => {
     expect(screen.getByText('길드 정보를 열지 못했어요.')).toBeTruthy();
     expect(screen.queryByText('길드 정보를 불러오는 중이에요.')).toBeNull();
   });
+
+  it('길드 스킬 탭의 기부·되돌리기 창과 관리 탭의 이름 바꾸기 창은 ModalCard 프레임과 스크롤 영역 밖에 뜬다', () => {
+    const onClose = vi.fn();
+    s.guild = {
+      ...GUILD,
+      growth: { level: 7, total: 350_000, floor: 350_000, next: 550_000 },
+      bonuses: [
+        { id: 'sell', unlock: 1, rank: 2, enhanceRank: 1, totalRank: 3, cap: 5, pool: 125_000, next: 500_000, effect: 0.06, nextEffect: 0.08, mine: 100_000 },
+        ...GUILD.bonuses.slice(1),
+      ],
+    };
+    render(<GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={onClose} />);
+
+    // 1. 길드 스킬 탭 - 기부 창 (Modal layer="stage")
+    fireEvent.click(screen.getByRole('button', { name: '길드 스킬' }));
+    fireEvent.click(screen.getByRole('button', { name: '기부' }));
+    const donateDialog = screen.getAllByRole('dialog').at(-1) as HTMLElement;
+    expect(within(donateDialog).getByText('판매가 보너스 기부')).toBeTruthy();
+    expect(donateDialog.closest('.pf-frame')).toBeNull();
+    expect(donateDialog.closest('.pf-vscroll')).toBeNull();
+    fireEvent.click(donateDialog.parentElement as HTMLElement);
+    expect(screen.queryByText('판매가 보너스 기부')).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+
+    // 2. 길드 스킬 탭 - 자유 강화 되돌리기 확인 창 (ConfirmDialog layer="stage")
+    fireEvent.click(screen.getByRole('button', { name: '되돌리기' }));
+    const resetDialog = screen.getAllByRole('dialog').at(-1) as HTMLElement;
+    expect(within(resetDialog).getByText('내 자유 강화 되돌리기')).toBeTruthy();
+    expect(resetDialog.closest('.pf-frame')).toBeNull();
+    expect(resetDialog.closest('.pf-vscroll')).toBeNull();
+    fireEvent.click(resetDialog.parentElement as HTMLElement);
+    expect(screen.queryByText('내 자유 강화 되돌리기')).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+
+    // 3. 관리 탭 - 길드 이름 바꾸기 창 (Modal layer="stage")
+    fireEvent.click(screen.getByRole('button', { name: /관리.*1건/ }));
+    fireEvent.click(screen.getByRole('button', { name: '이름 바꾸기' }));
+    const renameDialog = screen.getAllByRole('dialog').at(-1) as HTMLElement;
+    expect(within(renameDialog).getByText('길드 이름 바꾸기')).toBeTruthy();
+    expect(renameDialog.closest('.pf-frame')).toBeNull();
+    fireEvent.click(renameDialog.parentElement as HTMLElement);
+    expect(screen.queryByText('길드 이름 바꾸기')).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });

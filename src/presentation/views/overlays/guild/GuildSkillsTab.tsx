@@ -1,5 +1,6 @@
 import { useId, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { applyDonation } from '../../../../game/rules/guild';
 import type { GuildBonusId } from '../../../../game/rules/guild';
 import {
@@ -31,8 +32,9 @@ import { SCROLL_Y } from '../../../ui/scrollArea';
 
 // 길드 스킬 탭: 오목한 판 위의 개인 강화 포인트 줄과 스킬 트리, 그 아래 고른 스킬의 두 칸(효과, 모인 골드와 기부·강화 버튼).
 // 기본 단계는 길드 공용이고, 개인 자유 강화(1~5)가 적용된 칸은 기존 칸 바깥에 보라색 테두리로 표시하며 각 단계 툴팁으로 구분을 안내한다.
-export default function GuildSkillsTab({ guild, gold, busy, run, onResetEnhancements, setToast, onGoldChanged }: GuildPartProps & {
+export default function GuildSkillsTab({ guild, gold, busy, run, dialogHost, onResetEnhancements, setToast, onGoldChanged }: GuildPartProps & {
   gold: number;
+  dialogHost?: HTMLElement | null;
   onResetEnhancements: () => Promise<{ error: string | null; recovered?: number }>;
   onGoldChanged: () => Promise<void> | void;
 }) {
@@ -61,6 +63,60 @@ export default function GuildSkillsTab({ guild, gold, busy, run, onResetEnhancem
   };
 
   const selInvest = sel ? enhanceInvestState(guild, sel) : { canInvest: false, reason: null };
+
+  const donateDialog = donating && sel ? (
+    <DonateDialog row={sel} guildId={guild.id} busy={busy} run={run} setToast={setToast}
+                  onGoldChanged={onGoldChanged} onClose={() => setDonating(false)} />
+  ) : null;
+
+  const resetDialog = resetting ? (
+    <ConfirmDialog
+      layer="stage"
+      title="내 자유 강화 되돌리기"
+      confirmLabel="되돌리기"
+      onCancel={() => setResetting(false)}
+      onConfirm={() => {
+        if (busy) return;
+        const fallbackUsed = resetState.used;
+        setResetting(false);
+        void onResetEnhancements().then(async ({ error, recovered }) => {
+          if (error) {
+            sendNotice(setToast, { kind: 'system.modalRejected', text: error });
+            return;
+          }
+          sendNotice(setToast, {
+            kind: 'guild.modalAction',
+            text: `내 길드 스킬 자유 강화를 되돌려 ${recovered ?? fallbackUsed}포인트를 회수했어요.`,
+            toastText: '내 길드 스킬 자유 강화를 되돌렸어요.',
+          });
+          await onGoldChanged();
+        });
+      }}
+    >
+      <div className="flex flex-col gap-2">
+        <p className="m-0 text-sm text-text whitespace-pre-line">
+          {`${fmtNum(resetState.cost)}G를 내고 내 자유 강화만 되돌릴까요?\n투자한 ${resetState.used}포인트를 돌려받으며, 다른 길드원의 자유 강화와 길드 기본 단계는 그대로 유지돼요.`}
+        </p>
+        <Inset className="p-2.5 flex flex-col gap-1">
+          <div className="flex items-center justify-between pb-1 border-b border-line text-sm">
+            <span className="font-bold text-text">돌려받을 포인트</span>
+            <span className="pf-accent text-xs text-gold font-bold">{resetState.used}포인트</span>
+          </div>
+          {rows.filter(r => r.enhanceRank > 0).map(r => (
+            <KeyValueRow key={r.id} compact className="h-auto border-t-0"
+                         label={r.name}
+                         value={`강화 ${r.enhanceRank}단계 회수`}
+                         valueClassName="pf-accent text-guild" />
+          ))}
+        </Inset>
+        <KeyValueRow compact className="h-auto border-t-0"
+                     label="필요 골드"
+                     value={`${fmtNum(resetState.cost)}G`}
+                     valueClassName="pf-accent text-gold" />
+        <p className="m-0 text-2xs text-text-dim">되돌리기에 쓴 골드는 돌려받지 않아요.</p>
+      </div>
+    </ConfirmDialog>
+  ) : null;
 
   return (
     <div className={`flex flex-col gap-2 flex-1 min-h-0 ${SCROLL_Y}`}>
@@ -162,59 +218,8 @@ export default function GuildSkillsTab({ guild, gold, busy, run, onResetEnhancem
         </div>
       )}
 
-      {donating && sel && (
-        <DonateDialog row={sel} guildId={guild.id} busy={busy} run={run} setToast={setToast}
-                      onGoldChanged={onGoldChanged} onClose={() => setDonating(false)} />
-      )}
-
-      {resetting && (
-        <ConfirmDialog
-          layer="stage"
-          title="내 자유 강화 되돌리기"
-          confirmLabel="되돌리기"
-          onCancel={() => setResetting(false)}
-          onConfirm={() => {
-            if (busy) return;
-            const fallbackUsed = resetState.used;
-            setResetting(false);
-            void onResetEnhancements().then(async ({ error, recovered }) => {
-              if (error) {
-                sendNotice(setToast, { kind: 'system.modalRejected', text: error });
-                return;
-              }
-              sendNotice(setToast, {
-                kind: 'guild.modalAction',
-                text: `내 길드 스킬 자유 강화를 되돌려 ${recovered ?? fallbackUsed}포인트를 회수했어요.`,
-                toastText: '내 길드 스킬 자유 강화를 되돌렸어요.',
-              });
-              await onGoldChanged();
-            });
-          }}
-        >
-          <div className="flex flex-col gap-2">
-            <p className="m-0 text-sm text-text whitespace-pre-line">
-              {`${fmtNum(resetState.cost)}G를 내고 내 자유 강화만 되돌릴까요?\n투자한 ${resetState.used}포인트를 돌려받으며, 다른 길드원의 자유 강화와 길드 기본 단계는 그대로 유지돼요.`}
-            </p>
-            <Inset className="p-2.5 flex flex-col gap-1">
-              <div className="flex items-center justify-between pb-1 border-b border-line text-sm">
-                <span className="font-bold text-text">돌려받을 포인트</span>
-                <span className="pf-accent text-xs text-gold font-bold">{resetState.used}포인트</span>
-              </div>
-              {rows.filter(r => r.enhanceRank > 0).map(r => (
-                <KeyValueRow key={r.id} compact className="h-auto border-t-0"
-                             label={r.name}
-                             value={`강화 ${r.enhanceRank}단계 회수`}
-                             valueClassName="pf-accent text-guild" />
-              ))}
-            </Inset>
-            <KeyValueRow compact className="h-auto border-t-0"
-                         label="필요 골드"
-                         value={`${fmtNum(resetState.cost)}G`}
-                         valueClassName="pf-accent text-gold" />
-            <p className="m-0 text-2xs text-text-dim">되돌리기에 쓴 골드는 돌려받지 않아요.</p>
-          </div>
-        </ConfirmDialog>
-      )}
+      {donateDialog && (dialogHost ? createPortal(donateDialog, dialogHost) : donateDialog)}
+      {resetDialog && (dialogHost ? createPortal(resetDialog, dialogHost) : resetDialog)}
     </div>
   );
 }
