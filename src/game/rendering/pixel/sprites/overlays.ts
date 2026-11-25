@@ -24,7 +24,7 @@ export interface GearView {
   /** catch 전이 후 경과 초 — 훅 점프 연출. catch가 아니면 null */
   catchT?: number | null;
   catchFish?: { id: string; form: FormId } | null;
-  /** 물고기 그래픽 스타일 — 움직임을 지원하지 않는 스타일이면 훅 점프를 그리지 않는다 */
+  /** 물고기 그래픽 스타일 — 훅 점프 연출에 사용할 어댑터를 고른다 */
   fishArt?: FishArtStyle;
 }
 
@@ -58,7 +58,6 @@ export function drawHookJump(ctx: Ctx, v: GearView) {
   const fish = fishById(v.catchFish.id);
   if (!fish) return;
   const art = fishArt(v.fishArt ?? DEFAULT_FISH_ART_STYLE);
-  if (!art.motion) return;
   // 정점을 지나면 뒤집혀 떨어진다 — 한 번 튀는 느낌
   art.drawCentered(ctx, fish, v.school.x, v.school.y - h,
                    { scale: 1, form: v.catchFish.form, flip: v.catchT > JUMP_S / 2 });

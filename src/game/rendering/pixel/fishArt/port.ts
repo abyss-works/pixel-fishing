@@ -15,7 +15,7 @@ export interface FishArtDraw {
   form?: FormId;
   /** false면 실루엣 — 형태만 보이고 색은 숨긴다(도감 스포일러 규칙) */
   discovered?: boolean;
-  /** 좌우 반전 — motion을 지원하는 어댑터만 반영한다 */
+  /** 좌우 반전 — 기본 방향(왼쪽)을 반대로 그린다 */
   flip?: boolean;
   /** 초 단위 시각 — 유영 흔들기. motion을 지원하는 어댑터만 반영한다 */
   t?: number;
@@ -23,7 +23,7 @@ export interface FishArtDraw {
 
 export interface FishArt {
   readonly style: FishArtStyle;
-  /** 움직임 연출(유영 흔들기·훅 점프) 지원 여부. false면 호출자는 정지 화면만 그린다 */
+  /** 유영 흔들기 연출 지원 여부. false면 호출자는 정적 화면에서 애니메이션 루프를 돌리지 않는다 */
   readonly motion: boolean;
   /** 몸 중심을 (cx, cy)에 맞춰 그린다 */
   drawCentered(ctx: Ctx, fish: FishArtSubject, cx: number, cy: number, o: FishArtDraw): void;
