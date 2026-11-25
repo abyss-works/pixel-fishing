@@ -162,7 +162,7 @@ export const GUILD_ERROR_TEXT: Record<string, string> = {
   'not-member': '길드원을 찾지 못했어요. 창을 다시 열어 주세요.',
   'handover-first': '다른 길드원이 있으면 길드장을 넘긴 뒤에 떠날 수 있어요.',
   self: '자기 자신에게는 넘길 수 없어요.',
-  'account-only': '길드는 태평양 항로가 열리면 쓸 수 있어요. 계정 관리에서 계정을 연결해 주세요.',
+  'account-only': '길드는 태평양 항로가 열리면 쓸 수 있어요.',
   'not-enough-gold': '골드가 모자라요.',
   'bonus-locked': '아직 열리지 않은 길드 스킬이에요. 길드 레벨이 오르면 열려요.',
   'rank-maxed': '지금 길드 레벨에서 올릴 수 있는 단계를 모두 채웠어요. 길드 레벨이 오르면 더 올릴 수 있어요.',

@@ -98,8 +98,8 @@ describe('길드 화면 모델', () => {
     }
   });
 
-  it('게스트 거부 안내는 계정 연결을 알린다', () => {
-    expect(GUILD_ERROR_TEXT['account-only']).toBe('길드는 태평양 항로가 열리면 쓸 수 있어요. 계정 관리에서 계정을 연결해 주세요.');
+  it('게스트 거부 안내는 태평양 항로 해금을 알린다', () => {
+    expect(GUILD_ERROR_TEXT['account-only']).toBe('길드는 태평양 항로가 열리면 쓸 수 있어요.');
   });
 });
 

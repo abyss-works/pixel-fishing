@@ -1,7 +1,7 @@
 // 메뉴 카드 잠금 - 잠금 사유 선택과 툴팁 문안의 단일 출처. 카드의 모양과 툴팁 열기는 표현 계층이 정한다.
-import { BOATS } from '../../../game/content/boats';
+import { BOATS, boatGateText } from '../../../game/content/boats';
 import { COOKING_UNLOCK_BOAT } from '../../../game/content/cooking';
-import { ZONES } from '../../../game/content/zones';
+import { ZONES, zoneById } from '../../../game/content/zones';
 import type { GameAction } from '../../../game/rules/actions';
 import { cookingUnlocked } from '../../../game/rules/cooking';
 import { REJECT_TEXT } from '../../../game/rules/rules';
@@ -19,8 +19,10 @@ export type MenuLock =
   | { kind: 'unverified'; lines: string[] }
   | { kind: 'progress'; lines: string[] };
 
-export const GUEST_LOCK_TEXT = '태평양 항로가 열리면 쓸 수 있어요.';
-export const GUEST_LOCK_NOTE = '태평양 항로는 계정 관리에서 계정을 연결하면 열려요.';
+const PACIFIC_LANE = `${zoneById('pacific')?.shortName ?? '태평양'} 항로`;
+
+export const GUEST_LOCK_TEXT = `${PACIFIC_LANE}${josa(PACIFIC_LANE, '이/가')} 열리면 쓸 수 있어요.`;
+export const GUEST_LOCK_NOTE = `${PACIFIC_LANE}${josa(PACIFIC_LANE, '은/는')} ${boatGateText(1)}부터 열려요.`;
 export const GUEST_LOCK_DEFAULT_LINES: readonly string[] = [GUEST_LOCK_TEXT, GUEST_LOCK_NOTE];
 export const UNVERIFIED_LOCK_TEXT = '계정을 확인하면 쓸 수 있어요.';
 
@@ -41,14 +43,14 @@ const GUEST_FEATURE_ACTION: Partial<Record<GuestFeature, GameAction>> = {
 // 그래서 지금은 이 클라이언트 목록이 필요하다. 서버가 이 거부를 규칙 모듈의 판정으로 옮기면 이 목록을 규칙 판정으로 바꾼다.
 const GUEST_CLOSED_FEATURES: ReadonlySet<GuestFeature> = new Set(['guild', 'friends', 'chat', 'player']);
 
-// 기능 이름과 이유를 더해야 하는 기능의 잠금 문안. 나머지는 공통 두 줄이다.
+// 첫 줄에 기능 이름을 더해야 하는 기능의 잠금 문안. 둘째 줄은 공통 항로 안내를 따른다.
 const GUEST_LOCK_LINES: Partial<Record<GuestFeature, readonly string[]>> = {
-  chat: ['채팅은 태평양 항로가 열리면 쓸 수 있어요.', GUEST_LOCK_NOTE],
-  letter: ['편지는 태평양 항로가 열리면 쓸 수 있어요.', '계정 관리에서 계정을 연결해야 답장을 보내 드릴 수 있어요.'],
+  chat: [`채팅은 ${GUEST_LOCK_TEXT}`, GUEST_LOCK_NOTE],
+  letter: [`편지는 ${GUEST_LOCK_TEXT}`, GUEST_LOCK_NOTE],
 };
 
 /** 서버가 채팅 쓰기를 거부했을 때 메시지 창 한 줄로 보이는 안내 */
-export const GUEST_CHAT_NOTICE = '채팅은 태평양 항로가 열리면 쓸 수 있어요. 계정 관리에서 계정을 연결해 주세요.';
+export const GUEST_CHAT_NOTICE = `채팅은 ${GUEST_LOCK_TEXT}`;
 
 /**
  * 계정 상태에 따라 닫힌 화면 기능의 잠금 툴팁 줄. 계정이 확인됐거나 그 기능이 계정 없이 열려 있으면 null이다.

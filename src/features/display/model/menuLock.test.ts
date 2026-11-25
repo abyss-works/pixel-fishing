@@ -135,20 +135,22 @@ describe('게스트에게 닫힌 화면 기능의 잠금 문안', () => {
   });
 
   it('메뉴 줄, 플레이어 정보, 차단 목록, 닉네임은 공통 두 줄이다', () => {
+    expect(GUEST_LOCK_DEFAULT_LINES).toEqual([
+      '태평양 항로가 열리면 쓸 수 있어요.', '태평양 항로는 조각배(1단계)부터 열려요.']);
     for (const feature of ['quests', 'guild', 'friends', 'mailbox', 'player', 'nickname'] as const) {
       expect(guestLock(feature, 'guest'), feature).toEqual(GUEST_LOCK_DEFAULT_LINES);
     }
   });
 
-  it('채팅과 편지는 기능 이름과 이유를 둘째 줄에 더한다', () => {
+  it('채팅과 편지는 첫 줄에 기능 이름을 더하고 둘째 줄은 태평양 항로 배 단계를 알린다', () => {
     expect(guestLock('chat', 'guest')).toEqual([
-      '채팅은 태평양 항로가 열리면 쓸 수 있어요.', '태평양 항로는 계정 관리에서 계정을 연결하면 열려요.']);
+      '채팅은 태평양 항로가 열리면 쓸 수 있어요.', '태평양 항로는 조각배(1단계)부터 열려요.']);
     expect(guestLock('letter', 'guest')).toEqual([
-      '편지는 태평양 항로가 열리면 쓸 수 있어요.', '계정 관리에서 계정을 연결해야 답장을 보내 드릴 수 있어요.']);
+      '편지는 태평양 항로가 열리면 쓸 수 있어요.', '태평양 항로는 조각배(1단계)부터 열려요.']);
   });
 
-  it('채팅 거부 안내는 채팅 잠금 문구와 계정 관리 안내를 한 줄로 잇는다', () => {
-    expect(GUEST_CHAT_NOTICE).toBe('채팅은 태평양 항로가 열리면 쓸 수 있어요. 계정 관리에서 계정을 연결해 주세요.');
+  it('채팅 거부 안내는 채팅 잠금 첫 줄 문구다', () => {
+    expect(GUEST_CHAT_NOTICE).toBe('채팅은 태평양 항로가 열리면 쓸 수 있어요.');
   });
 
   it('계정 전용 거부 정책 문구는 공통 잠금 문장으로 시작한다', () => {

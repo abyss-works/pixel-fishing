@@ -79,12 +79,12 @@ export const POLICY: Record<FailureKind, FailureResponse> = {
   'guest-village-only': {
     // 게스트의 바다 이동·낚시 거부 — 액션은 적용되지 않았다. 태평양 항로 해금을 안내한다.
     level: 'warning',
-    message: '바다로 나가려면 태평양 항로를 열어야 해요. 계정 관리에서 계정을 연결해 주세요.',
+    message: '바다로 나가려면 태평양 항로를 열어야 해요.',
   },
   'account-only': {
     // 게스트에게 열리지 않은 기능 — 액션은 적용되지 않았다. 태평양 항로 해금을 안내한다.
     level: 'warning',
-    message: '태평양 항로가 열리면 쓸 수 있어요. 계정 관리에서 계정을 연결해 주세요.',
+    message: '태평양 항로가 열리면 쓸 수 있어요.',
   },
   'rate-limited': {
     // 429(매크로 페이싱, 인그레스 요청 한도) — 요청은 적용되지 않았으니 진행은 안전. 재시도 타이밍은 유저 몫.

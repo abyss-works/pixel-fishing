@@ -240,6 +240,7 @@ describe('게임 메뉴', () => {
       expect(screen.getAllByRole('menuitem')).toHaveLength(5);
       fireEvent.mouseEnter(items[1].parentElement!);
       expect(screen.getByRole('tooltip')).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
+      expect(screen.getByRole('tooltip')).toHaveTextContent('태평양 항로는 조각배(1단계)부터 열려요.');
     });
 
     it('확인 실패 상태에서는 다섯 줄이 확인 실패 전용 문안으로 잠긴다', async () => {
