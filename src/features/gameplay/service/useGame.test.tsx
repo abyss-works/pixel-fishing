@@ -123,9 +123,11 @@ describe('부트스트랩', () => {
     await waitFor(() => expect(gw.bootResolve).not.toBeNull());
     expect(hook.result.current.loading).toBe(true);
     expect(hook.result.current.sync).toBe('connecting');
+    expect(hook.result.current.syncLabel).toBe('클라우드 연결 중…');
     await act(async () => { gw.bootResolve!(); });
     expect(hook.result.current.loading).toBe(false);
     expect(hook.result.current.sync).toBe('on');
+    expect(hook.result.current.syncLabel).toBe('클라우드 저장 켜짐');
   });
 
   it('게스트 진행은 불러오는 동안 아직 모르고, 접속이 끝난 뒤 낚은 수로 판정한다', async () => {
@@ -427,6 +429,7 @@ describe('요청 속도 초과(429) 재시도', () => {
     expect(hook.result.current.blocker).toBe('unsaved');
     expect(gw.actions).not.toContain('boot');
     expect(hook.result.current.sync).toBe('error');
+    expect(hook.result.current.syncLabel).toBe('클라우드에 연결하지 못했어요. 지금은 진행이 저장되지 않아요.');
   });
 
   it('계정 교체의 세이브 읽기가 계속 429면 저장 실패 안내 창을 띄운다', async () => {

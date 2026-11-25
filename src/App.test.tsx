@@ -833,14 +833,14 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
     }
   });
 
-  it('설정 창에서 물고기 그래픽을 미리보기로 고른다 — 기본 그림 시작, 선택은 기기에 남는다', () => {
+  it('설정 창에서 물고기 그래픽을 미리보기로 고른다 — 기본 v1, 선택은 기기에 남는다', () => {
     seed();
     render(<App />);
     clickTab('설정');
     fireEvent.click(openerButton('설정'));
     expect(screen.getByRole('dialog', { name: '설정' })).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: /^기본 그림/ })).toHaveAttribute('aria-checked', 'true');
-    fireEvent.click(screen.getByRole('radio', { name: /^새 픽셀 그림/ }));
+    expect(screen.getByRole('radio', { name: /^v1/ })).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(screen.getByRole('radio', { name: /^v2/ }));
     expect(localStorage.getItem('pf-fish-art')).toBe('v2');
   });
 
@@ -1715,9 +1715,9 @@ describe('업데이트 소식 창 — 접속 시 이번 버전 소식과 새 설
 
     fireEvent.click(screen.getByRole('button', { name: /다음/ }));
     expect(screen.getByRole('dialog', { name: '새 설정' })).toBeInTheDocument();
-    const v1 = screen.getByRole('radio', { name: /^기본 그림/ });
-    const v2 = screen.getByRole('radio', { name: /^새 픽셀 그림/ });
-    expect(v1).toHaveAttribute('aria-checked', 'true'); // 기본 그림
+    const v1 = screen.getByRole('radio', { name: /^v1/ });
+    const v2 = screen.getByRole('radio', { name: /^v2/ });
+    expect(v1).toHaveAttribute('aria-checked', 'true'); // 기본 v1
     fireEvent.click(v2);
     expect(v2).toHaveAttribute('aria-checked', 'true');
     expect(localStorage.getItem('pf-fish-art')).toBe('v2');

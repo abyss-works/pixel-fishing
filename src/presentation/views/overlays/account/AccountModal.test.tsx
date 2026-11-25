@@ -41,7 +41,7 @@ const open = (
   const onClose = vi.fn();
   const view = render(
     <AccountModal layer={mode === 'connect' ? 'stage' : 'app'} mode={mode} setToast={setToast} onAuthChanged={onAuthChanged} onClose={onClose}
-                  account={account} accountFailed={accountFailed} sailReturn={sailReturn} syncLabel="진행 저장 켜짐" syncState="on" />,
+                  account={account} accountFailed={accountFailed} sailReturn={sailReturn} syncLabel="클라우드 저장 켜짐" syncState="on" />,
   );
   return { setToast, onAuthChanged, onClose, unmount: view.unmount };
 };
@@ -186,7 +186,7 @@ describe('출항 전용 연결 창 (mode="connect")', () => {
     expect(screen.getByRole('button', { name: '나중에 하기' })).toBeInTheDocument();
 
     expect(screen.queryByText('게스트')).toBeNull();
-    expect(screen.queryByText('진행 저장 켜짐')).toBeNull();
+    expect(screen.queryByText('클라우드 저장 켜짐')).toBeNull();
     expect(screen.queryByRole('button', { name: '로그아웃' })).toBeNull();
     expect(screen.queryByRole('button', { name: '계정 삭제' })).toBeNull();
     expect(screen.queryByRole('link', { name: '운영정책' })).toBeNull();

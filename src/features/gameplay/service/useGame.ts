@@ -33,9 +33,9 @@ import { isRetryExhausted, retryOnRateLimit } from './rateLimitRetry';
 
 const SYNC_LABEL: Record<SyncState, string | null> = {
   off: '저장 서버가 연결되지 않아 새로고침하면 진행이 사라져요. (오프라인)',
-  connecting: '진행 연결 중…',
-  on: '진행 저장 켜짐',
-  error: '저장에 연결하지 못했어요. 지금은 진행이 저장되지 않아요.',
+  connecting: '클라우드 연결 중…',
+  on: '클라우드 저장 켜짐',
+  error: '클라우드에 연결하지 못했어요. 지금은 진행이 저장되지 않아요.',
 };
 
 /** 게스트가 마을 밖으로 나가려 할 때의 안내. 서버가 거부할 때와 같은 문구다 */
