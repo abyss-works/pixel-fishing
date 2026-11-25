@@ -9,9 +9,9 @@ const EFFECT_ORDER: readonly ArtifactEffectKey[] = ['sail', 'duelSpeedupCut', 'm
 const EFFECT_LABEL: Record<ArtifactEffectKey, string> = {
   sail: '항해 속도',
   duelSpeedupCut: '네임드 결투 가속',
-  mutationWeight: '돌연변이 가중치',
+  mutationWeight: '돌연변이 출현 확률',
   biteWaitCut: '입질 대기',
-  commonWeightCut: '일반 등급 가중치',
+  commonWeightCut: '일반 어종 출현',
   bagCap: '가방 용량',
   extraCookChance: '요리 추가 완성',
 };
@@ -69,7 +69,7 @@ export function artifactSystemLines(a: Artifact): { bonus: string | null; penalt
   if (!sys) return { bonus: null, penalty: null };
   const bonuses: string[] = [];
   if ((sys.namedCapBonus ?? 0) > 0) bonuses.push(`네임드 토벌 하루 +${sys.namedCapBonus}번`);
-  if ((sys.extraBaitSlots ?? 0) > 0) bonuses.push(`미끼 슬롯 +${sys.extraBaitSlots}칸`);
+  if ((sys.extraBaitSlots ?? 0) > 0) bonuses.push(`미끼 칸 +${sys.extraBaitSlots}칸`);
   const penalties: string[] = [];
   if ((sys.namedRewardCut ?? 0) > 0) penalties.push(`네임드 토벌 골드 ${fmtCutPercent(sys.namedRewardCut!)}`);
   if ((sys.baitDurationCut ?? 0) > 0) penalties.push(`미끼 지속 시간 ${fmtCutPercent(sys.baitDurationCut!)}`);

@@ -110,14 +110,14 @@ describe('랭킹 창', () => {
       namedClears: { board: 'namedClears', top: [], me: null },
     };
     show();
-    expect(await screen.findByText(/랭킹을 불러오지 못했어요/)).toBeInTheDocument();
+    expect(await screen.findByText(/랭킹을 열지 못했어요/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '네임드 토벌' }));
     expect(await screen.findByText('아직 기록이 없어요.')).toBeInTheDocument();
   });
 
-  it('로컬 모드(조회 결과 없음)는 온라인 안내를 띄운다', async () => {
+  it('로컬 모드(조회 결과 없음)는 연결 안내를 띄운다', async () => {
     show();
-    expect(await screen.findByText('랭킹은 온라인에서만 볼 수 있어요.')).toBeInTheDocument();
+    expect(await screen.findByText('랭킹은 연결된 상태에서만 볼 수 있어요.')).toBeInTheDocument();
   });
 });

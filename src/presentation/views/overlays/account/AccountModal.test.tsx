@@ -71,7 +71,7 @@ describe('로그인 상태별 구성', () => {
   it('게임 서버가 없는 로컬 모드에서는 안내가 보이고 계정 동작 버튼이 비활성이다', () => {
     actions.configured = false;
     open('dev@localhost');
-    expect(screen.getByText(/로컬 개발 모드에서는 계정 기능이 동작하지 않아요/)).toBeInTheDocument();
+    expect(screen.getByText(/오프라인 상태에서는 계정 기능이 동작하지 않아요/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '로그아웃' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '계정 삭제' })).toBeDisabled();
   });
@@ -82,7 +82,7 @@ describe('계정 확인 실패', () => {
     open(null, true);
     expect(screen.getByText(ACCOUNT_CHECK_FAILED_COPY.label)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: ACCOUNT_CHECK_FAILED_COPY.retry })).toBeInTheDocument();
-    expect(screen.queryByText('게스트(이메일 없음)')).toBeNull();
+    expect(screen.queryByText('게스트')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Google로 계속하기' })).toBeNull();
     expect(screen.queryByRole('button', { name: '로그아웃' })).toBeNull();
     expect(screen.queryByRole('button', { name: '계정 삭제' })).toBeNull();

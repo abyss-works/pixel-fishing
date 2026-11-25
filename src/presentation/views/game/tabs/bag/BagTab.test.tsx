@@ -110,7 +110,7 @@ describe('BagTab - 유물 섹션 전체 목록·미보유·보유 중만 보기'
     setBagSection('artifacts');
     show(game({ artifacts: ['sargasso-net', 'mami-wata-mirror'] }));
     const sargasso = within(screen.getByRole('button', { name: /사르가소의 그물망/ }));
-    expect(sargasso.getByText('미끼 슬롯 +1칸')).toBeInTheDocument();
+    expect(sargasso.getByText('미끼 칸 +1칸')).toBeInTheDocument();
     expect(sargasso.getByText('미끼 지속 시간 −50%')).toBeInTheDocument();
     const mirror = within(screen.getByRole('button', { name: /마미 와타의 거울/ }));
     expect(mirror.getByText('네임드 토벌 하루 +1번')).toBeInTheDocument();
@@ -230,7 +230,7 @@ describe('BagTab - 3서브탭, 보기 전환 아이콘, 하단 버튼', () => {
     const disabled = screen.getByRole('button', { name: '기운 얻기' });
     expect(disabled).toBeDisabled();
     fireEvent.mouseEnter(disabled.parentElement!);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('집이나 항구 또는 가공 플랜트선에서만 할 수 있어요.');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('집이나 항구에서만 할 수 있어요.');
   });
 
   it('게스트와 확인 실패 상태에서는 가공 플랜트선이나 거점에서도 비활성 + 계정 잠금 툴팁이다', () => {

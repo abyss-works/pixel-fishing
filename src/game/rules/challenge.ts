@@ -64,4 +64,4 @@ export function expiredTicketIssuedAt(nowMs: number): string {
 }
 
 /** 도전권이 언제까지 남는지 안내하는 구 */
-export const TICKET_EXPIRY_TEXT = `${GAME_DAY_RESET_TEXT}까지`;
+export const TICKET_EXPIRY_TEXT = `다음 날 ${GAME_DAY_RESET_TEXT}까지`;

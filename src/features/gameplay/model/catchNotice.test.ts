@@ -10,9 +10,9 @@ describe('가방 초과 안내', () => {
     expect(bagOverflowNotice({ released: [], extracted: [] })).toBeNull();
   });
 
-  it('놓아주기만 있으면 기존 문구 그대로다', () => {
+  it('놓아주기만 있으면 조사를 맞춰 알린다', () => {
     expect(bagOverflowNotice({ released: [fish('a', '붕어'), fish('b', '잉어')] }))
-      .toBe('가방이 가득 차 [붕어, 잉어]을(를) 놓아줬어요. 명성은 그대로 남아요.');
+      .toBe('가방이 가득 차 붕어, 잉어를 놓아줬어요. 명성은 그대로 남아요.');
   });
 
   it('기운으로 바꾸기만 있으면 바꾼 수를 알린다', () => {

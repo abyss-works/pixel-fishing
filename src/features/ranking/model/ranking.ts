@@ -20,14 +20,14 @@ export const RANKING_TABS: readonly RankingTabMeta[] = [
     key: 'dex',
     label: '도감(일반)',
     valueLabel: '발견 어종',
-    help: '일반 어종을 일반 폼으로 한 번이라도 낚은 종 수예요.',
+    help: '한 번이라도 낚은 일반 어종 수예요.',
     total: FISH.length,
   },
   {
     key: 'variant',
     label: '도감(돌연변이)',
     valueLabel: '발견 어종',
-    help: '일반 어종을 돌연변이 폼으로 한 번이라도 낚은 종 수예요.',
+    help: '돌연변이로 한 번이라도 낚은 일반 어종 수예요.',
     total: FISH.length,
   },
   {

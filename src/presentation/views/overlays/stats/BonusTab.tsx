@@ -24,7 +24,7 @@ const CATEGORY_LABEL: Record<BonusCategory, string> = { move: '이동', fish: '�
 const SOURCE_HELP = [
   '유물은 수배판에서 네임드 토벌 재료로 바꿀 수 있어요.',
   '길드 보너스는 길드 창에서 기부와 개인 자유 강화로 올려요.',
-  '업적 누적 보너스는 업적 조건 단계에 닿으면 자동으로 적용돼요.',
+  '업적 누적 보너스는 조건을 채우면 바로 붙어요.',
   FORTUNE_SOURCE_HELP,
   POTION_SOURCE_HELP,
 ];
@@ -56,7 +56,7 @@ function relicTipRows(row: BonusRow): { label: string; value: string }[] | null 
   return [
     { label: `유물 기본(Lv.${level})`, value: base },
     { label: '보유 유물 효과', value: `+${boostPct}%` },
-    { label: '적용 효과', value: applied },
+    { label: '합계', value: applied },
   ];
 }
 

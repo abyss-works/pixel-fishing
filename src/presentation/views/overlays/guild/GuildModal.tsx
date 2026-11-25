@@ -81,7 +81,7 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
     : failed || (guild !== null && !you)
       ? (
         <div className="flex h-40 items-center justify-center">
-          <Note tone="warn">길드 정보를 불러오지 못했어요.</Note>
+          <Note tone="warn">길드 정보를 열지 못했어요.</Note>
         </div>
       )
       : guild && you

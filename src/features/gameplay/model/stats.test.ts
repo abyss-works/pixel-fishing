@@ -207,14 +207,14 @@ describe('받는 보너스', () => {
       const g = game({ slots: { lunch: { id: 'cook-lunch-bundle', endsAt: at(3_600_000) }, bait: null } });
       const rows = slotRows(g);
       expect(rows.map(b => [b.category, text(b)])).toEqual([
-        ['fish', '입질 대기 −5%'], ['fish', '희귀 등급 가중치 +5%'], ['fish', '영웅 등급 가중치 +5%'], ['fish', '전설 등급 가중치 +5%'],
+        ['fish', '입질 대기 −5%'], ['fish', '희귀 어종 출현 +5%'], ['fish', '영웅 어종 출현 +5%'], ['fish', '전설 어종 출현 +5%'],
       ]);
       expect(rows.every(b => b.source.kind === 'slot' && b.source.label === '생선 탈리')).toBe(true);
     });
 
-    it('네임드 조우 가중은 결투 갈래다', () => {
+    it('네임드 만날 확률은 결투 갈래다', () => {
       const g = game({ slots: { lunch: { id: 'cook-lunch-named', endsAt: at(3_600_000) }, bait: null } });
-      expect(slotRows(g).map(b => [b.category, text(b)])).toEqual([['duel', '네임드 조우 가중치 +50%']]);
+      expect(slotRows(g).map(b => [b.category, text(b)])).toEqual([['duel', '네임드 만날 확률 +50%']]);
     });
 
     it('도시락은 방치로 낚을 때만, 미끼는 챔질해서 낚을 때만 붙는다고 표시한다', () => {
@@ -262,7 +262,7 @@ describe('받는 보너스', () => {
     const bonuses = selectActiveBonuses(g);
     expect(bonuses.filter(b => b.source.kind === 'achievement').map(b => b.source)).toEqual([
       { kind: 'achievement', label: '입질 대기', value: '−3.5%' },
-      { kind: 'achievement', label: '네임드 조우 가중치', value: '+3%' },
+      { kind: 'achievement', label: '네임드 만날 확률', value: '+3%' },
       { kind: 'achievement', label: '판매가 보너스', value: '+2%' },
     ]);
     const data = selectStatsModalData(g, 'sail', 0);
@@ -304,10 +304,10 @@ describe('받는 보너스', () => {
     });
     const rows = selectActiveBonuses(dual, null, now).filter(b => b.source.kind === 'slot');
     expect(rows.map(b => b.source.kind === 'slot' ? `${b.source.label}:${b.source.effect.label}` : '')).toEqual([
-      '롱페퍼 미끼(희귀):희귀 등급 가중치',
-      '롱페퍼 미끼(희귀):영웅 등급 가중치',
-      '롱페퍼 미끼(희귀):전설 등급 가중치',
-      '사프란 미끼(특수):돌연변이 폼 가중치',
+      '롱페퍼 미끼(희귀):희귀 어종 출현',
+      '롱페퍼 미끼(희귀):영웅 어종 출현',
+      '롱페퍼 미끼(희귀):전설 어종 출현',
+      '사프란 미끼(특수):돌연변이 출현',
     ]);
 
     const dup = game({

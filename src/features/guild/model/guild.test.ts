@@ -212,7 +212,7 @@ describe('길드 이름 바꾸기 화면 모델', () => {
   it('오늘 이미 바꿨으면 막고 다시 바꿀 수 있는 시각을 알린다', () => {
     const s = renameButtonState(now, now, 5_000_000);
     expect(s.disabled).toBe(true);
-    expect(s.reason).toBe('오늘은 이미 이름을 바꿨어요.\n한국 시간 새벽 4시 이후에 다시 바꿀 수 있어요.');
+    expect(s.reason).toBe('오늘은 이미 이름을 바꿨어요.\n새벽 4시 이후에 다시 바꿀 수 있어요.');
   });
 
   it('골드가 모자라면 막고 필요한 골드를 알린다', () => {
@@ -250,11 +250,11 @@ describe('길드 보너스 화면 모델', () => {
     expect(bonusEffectValue('mutation', 0.03)).toBe('+3%p');
   });
 
-  it('효과 문장 — 비율은 %, 돌연변이는 %p, 희귀 어종은 일반 등급 가중치를 줄인다', () => {
+  it('효과 문장 — 비율은 %, 돌연변이는 %p, 희귀 어종은 일반 어종 출현을 줄인다', () => {
     expect(bonusEffectText('sell', 0.06)).toBe('판매가 +6%');
     expect(bonusEffectText('bag', 0.2)).toBe('가방 용량 +20%');
     expect(bonusEffectText('named', 0.05)).toBe('네임드 조우 +5%');
-    expect(bonusEffectText('rare', 0.04)).toBe('일반 등급 가중치 −4%');
+    expect(bonusEffectText('rare', 0.04)).toBe('일반 어종 출현 −4%');
     expect(bonusEffectText('mutation', 0.03)).toBe('돌연변이 확률 +3%p');
   });
 
@@ -318,7 +318,7 @@ describe('길드 보너스 화면 모델', () => {
       const target = { ...g, enhanceResetCount };
       expect(enhanceResetState(target, cost - 1), `count ${enhanceResetCount} 부족`).toEqual({
         canReset: false,
-        reason: `골드가 모자라요.\n${cost.toLocaleString('ko-KR')}G를 내고 내 자유 강화만 초기화할 수 있어요.`,
+        reason: `골드가 모자라요.\n${cost.toLocaleString('ko-KR')}G를 내고 내 자유 강화만 되돌릴 수 있어요.`,
         used: 1,
         cost,
       });
@@ -337,7 +337,7 @@ describe('길드 보너스 화면 모델', () => {
       { id: 2, kind: 'enhance-reset', uid: 'u', nick: '가람', detail: null, value: 2, at },
       { id: 1, kind: 'enhance', uid: 'me', nick: '나', detail: 'rare', value: 3, at },
     ], 'me');
-    expect(day.items[0].parts.map(p => p.text).join('')).toBe('가람 님이 길드 스킬 강화를 초기화했어요.');
+    expect(day.items[0].parts.map(p => p.text).join('')).toBe('가람 님이 길드 스킬 강화를 되돌렸어요.');
     expect(day.items[1].parts.map(p => p.text).join('')).toBe('나 님이 희귀 어종 확률 스킬을 강화 3단계로 올렸어요.');
   });
 });

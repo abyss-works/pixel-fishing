@@ -72,7 +72,7 @@ export function useAccount({ game, setToast, adoptAccount }: {
       await adoptAccount();
       sendNotice(setToast, {
         kind: 'boot.cloudLoaded',
-        text: '계정의 클라우드 세이브를 불러왔어요.',
+        text: '계정의 저장된 진행을 불러왔어요.',
       });
     }
   };
@@ -88,7 +88,7 @@ export function useAccount({ game, setToast, adoptAccount }: {
     // oxlint-disable-next-line react/set-state-in-effect -- 조건이 처음 맞는 순간(그날 첫 접속·명성 도달)에 한 번 쏘는 알림이라 이벤트 지점이 따로 없다
     sendNotice(setToast, {
       kind: 'account.authMilestone',
-      text: `명성이 ${ACCOUNT_NUDGE_FAME.toLocaleString()}에 이르렀어요. 진행을 지키려면 설정 탭의 계정 관리에서 계정을 만들어 보세요.`,
+      text: `명성이 ${ACCOUNT_NUDGE_FAME.toLocaleString()}에 이르렀어요. 진행을 지키려면 설정 탭의 계정 관리에서 구글 계정을 연결해 보세요.`,
       toastText: '계정 연결을 추천해요.',
     });
     // oxlint-disable-next-line react-hooks/exhaustive-deps

@@ -56,7 +56,7 @@ export default function FriendsModal({ setToast, onClose }: { setToast: Notify; 
   };
   /** 목록을 아직 못 받았을 때 표 자리에 띄우는 안내 */
   const pending = loading ? <Note>친구 목록을 불러오는 중이에요.</Note>
-    : failed ? <Note tone="warn">친구 목록을 불러오지 못했어요.<br />잠시 뒤 다시 열어 주세요.</Note> : null;
+    : failed ? <Note tone="warn">친구 목록을 열지 못했어요.<br />잠시 뒤 다시 열어 주세요.</Note> : null;
 
   return (
     // 탭이 있는 창의 높이: 요청 탭(입력과 받은·보낸 요청 표 둘)이 들어가는 480px. 스테이지가 낮으면 위아래 16px을 남긴다
@@ -170,7 +170,7 @@ function FriendRequests({ groups, pending, busy, act, run, setToast }: {
       kind: 'social.modalAction',
       text: r.result === 'accepted' ? `${name} 님과 친구가 됐어요.`
         : r.result === 'already' ? `${name} 님과는 이미 친구이거나 요청 중이에요.` : `${name} 님에게 친구 요청을 보냈어요.`,
-      toastText: r.result === 'accepted' ? `${name} 님과 친구 성사`
+      toastText: r.result === 'accepted' ? `${name} 님과 친구가 됐어요.`
         : r.result === 'already' ? '이미 친구이거나 요청 중' : `${name} 님 친구 요청 전송`,
     });
   };
@@ -203,7 +203,7 @@ function FriendRequests({ groups, pending, busy, act, run, setToast }: {
                                         void run({ op: 'accept', uid: f.uid }, () => sendNotice(setToast, {
                                           kind: 'social.modalAction',
                                           text: `${nameOf(f)} 님과 친구가 됐어요.`,
-                                          toastText: `${nameOf(f)} 님과 친구 성사`,
+                                          toastText: `${nameOf(f)} 님과 친구가 됐어요.`,
                                         }));
                                       }}>수락</Button>
                             </>

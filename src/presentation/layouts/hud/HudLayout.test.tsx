@@ -66,7 +66,7 @@ describe('HudLayout 미니맵 위 칩 줄', () => {
     render(<HudLayout {...props} game={unlocked({ lunch: { id: 'cook-lunch-bite', endsAt: HOUR_LATER }, bait: null })}
                       scene={region} chips={chip} />);
     expect(rowOf().className).toContain('pointer-events-none');
-    const slot = screen.getByLabelText(/^도시락 슬롯, 가루디야/);
+    const slot = screen.getByLabelText(/^도시락 칸, 가루디야/);
     expect(slot.className).toContain('pointer-events-auto');
     expect(screen.getByText('12:00').closest('div')!.className).toContain('pointer-events-auto');
   });

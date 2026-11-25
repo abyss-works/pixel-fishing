@@ -25,7 +25,6 @@ export default function BoatTab({ game, summary, row, zones }: {
       <div className="flex items-center gap-3 min-h-12">
         {game.boat > 0 && <BoatSprite tier={game.boat} preset="hero" />}
         <b className="pf-accent text-base font-normal text-gold truncate">{boatNameOf(game.boat, '배 없음')}</b>
-        {game.boat > 0 && <span className="text-sm text-text-dim">({game.boat}단계)</span>}
       </div>
       <Inset className="px-3 py-2.5 flex flex-col gap-1.5">
         <ul className="flex flex-col text-xs">
@@ -62,7 +61,7 @@ export default function BoatTab({ game, summary, row, zones }: {
                   <td className={cx(cell, 'truncate')}>{z.name}</td>
                   <td className={cx(cell, 'px-2 text-right pf-accent text-xs')}>{z.open}/{z.total}</td>
                   <td className={cx(cell, 'pl-2 text-right text-xs truncate', !closed && 'text-text-dim')}>
-                    {z.nextBoat !== null && `${boatNameOf(z.nextBoat)}(${z.nextBoat}단계)`}
+                    {z.nextBoat !== null && boatNameOf(z.nextBoat)}
                   </td>
                 </tr>
               );

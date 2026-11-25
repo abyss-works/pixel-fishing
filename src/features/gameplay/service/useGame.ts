@@ -31,10 +31,10 @@ import { isRetryExhausted, retryOnRateLimit } from './rateLimitRetry';
 // 구 20초 동기화 루프·dirty 플래그·beforeunload flush는 소멸 — "액션이 곧 저장"이라 동기화 개념 자체가 없다.
 
 const SYNC_LABEL: Record<SyncState, string | null> = {
-  off: '클라우드가 설정되지 않았어요. 새로고침하면 진행이 사라져요. (개발 모드)',
-  connecting: '클라우드 연결 중…',
-  on: '클라우드 저장 켜짐',
-  error: '클라우드에 연결하지 못했어요. 지금은 진행이 저장되지 않아요.',
+  off: '저장 서버가 연결되지 않아 새로고침하면 진행이 사라져요. (오프라인)',
+  connecting: '진행 연결 중…',
+  on: '진행 저장 켜짐',
+  error: '저장에 연결하지 못했어요. 지금은 진행이 저장되지 않아요.',
 };
 
 /** 게스트가 마을 밖으로 나가려 할 때의 안내. 서버가 거부할 때와 같은 문구다 */
@@ -162,14 +162,14 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
             sendNotice(setToast, {
               kind: 'achievement.unlockable',
               text: `${unlocked.length}개 업적을 받을 수 있어요.`,
-              toastText: `${unlocked.length}개 업적 달성 가능!`,
+              toastText: `업적 보상 ${unlocked.length}개 도착!`,
             });
           } else {
             for (const name of unlocked) {
               sendNotice(setToast, {
                 kind: 'achievement.unlockable',
                 text: `“${name}” 업적을 받을 수 있어요.`,
-                toastText: `업적 "${name}" 달성 가능!`,
+                toastText: `업적 “${name}” 보상 도착!`,
               });
             }
           }
@@ -269,7 +269,7 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
         setGame(cloud);
         sendNotice(setToast, {
           kind: 'boot.cloudLoaded',
-          text: '클라우드 세이브를 불러왔어요.',
+          text: '저장된 진행을 불러왔어요.',
         });
       } else if (init.legacy) {
         // 구세대(localStorage) 브리지도 import 액션이므로 서버의 불러오기 허용 판정을 따른다(운영은 전면 거부).

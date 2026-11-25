@@ -59,7 +59,7 @@ export default function WardrobePanel({ game, busy, onChangeClothes, onBuyHat, o
         <div className="flex flex-col gap-2 flex-1 min-h-0">
           <div className={`flex flex-col gap-3 flex-1 min-h-0 ${SCROLL_Y}`}>
             <div>
-              <Subheading>프리셋</Subheading>
+              <Subheading>기본 옷차림</Subheading>
               <div className="grid grid-cols-6 gap-2 mobile:grid-cols-3">
                 {LOOK_PRESETS.map(p => (
                   <SlotCell key={p.name} ariaLabel={`${p.name} 옷 고르기`}

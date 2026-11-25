@@ -644,7 +644,7 @@ describe('usePotion — 물약 사용', () => {
       { type: 'usePotion', id: 'luck-small' },
       deps({ now }),
     )).toEqual({ ok: false, error: 'potion-already-active' });
-    expect(REJECT_TEXT['potion-already-active']).toBe('오늘 이미 같은 물약 효과가 적용 중이에요.');
+    expect(REJECT_TEXT['potion-already-active']).toMatch(/이미.*물약/);
   });
 
   it('보유한 물약을 사용하면 1개 차감하고 오늘 게임 날짜를 기록한다', () => {

@@ -66,7 +66,7 @@ describe('게스트 진행의 판정 (guestProgress)', () => {
 describe('계정 표시 이름', () => {
   it('이메일이 있으면 이메일, 게스트로 확인됐으면 게스트 표기다', () => {
     expect(accountLabel('a@example.com', false)).toBe('a@example.com');
-    expect(accountLabel(null, false)).toBe('게스트(이메일 없음)');
+    expect(accountLabel(null, false)).toBe('게스트');
   });
 
   it('확인에 실패했으면 게스트 표기가 아니라 실패 표기다', () => {

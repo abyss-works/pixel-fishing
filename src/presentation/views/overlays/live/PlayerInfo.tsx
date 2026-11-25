@@ -45,7 +45,7 @@ const BLOCK_ERROR_TEXT: Record<ChatActionError, string> = {
   missing: '대상을 찾을 수 없어요. 오래된 메시지는 신고할 수 없어요.',
   failed: '요청을 처리하지 못했어요. 잠시 뒤에 다시 시도해 주세요.',
 };
-const DEX_HELP = '일반 폼과 돌연변이 폼으로 한 번이라도 낚은 어종';
+const DEX_HELP = '일반과 돌연변이로 한 번이라도 낚은 어종';
 
 export function PlayerInfo({ target, self, account, accountFailed = false, setToast }: {
   target: PlayerTarget;
@@ -91,7 +91,7 @@ export function PlayerInfo({ target, self, account, accountFailed = false, setTo
       text: r.result === 'requested' ? `${name} 님에게 친구 요청을 보냈어요.`
         : r.result === 'already' ? `${name} 님과는 이미 친구이거나 요청 중이에요.` : `${name} 님과 친구가 됐어요.`,
       toastText: r.result === 'requested' ? `${name} 님 친구 요청 전송`
-        : r.result === 'already' ? '이미 친구이거나 요청 중' : `${name} 님과 친구 성사`,
+        : r.result === 'already' ? '이미 친구이거나 요청 중' : `${name} 님과 친구가 됐어요.`,
     });
     return null;
   });

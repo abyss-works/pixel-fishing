@@ -210,11 +210,11 @@ describe('업적 카드', () => {
 });
 
 describe('누적 보너스 카드', () => {
-  it('전역 카드는 범위 문구를 숨기고, 단일 분절 게이지(meter 1개)와 단계 수를 보인다', () => {
+  it('전체 카드는 범위 문구를 숨기고, 단일 분절 게이지(meter 1개)와 단계 수를 보인다', () => {
     const game = seed({ achievementCounters: { 'manual.total': 100 } });
     const card = cumulativeBonusCards(game).find(c => c.series.scope === 'global' && c.current === 100)!;
     render(<CumulativeBonusCard card={card} />);
-    expect(screen.queryByText('전역')).toBeNull();
+    expect(screen.queryByText('전체')).toBeNull();
     expect(screen.getAllByRole('meter')).toHaveLength(1);
     expect(screen.getByText(`${card.steps.filter(s => s.state === 'done').length} / ${card.steps.length}단계`)).toBeInTheDocument();
     expect(screen.queryByText(`${card.steps[0].label} (${card.steps[0].deltaText})`)).toBeNull();

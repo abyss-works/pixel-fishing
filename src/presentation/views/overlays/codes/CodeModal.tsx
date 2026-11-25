@@ -60,7 +60,7 @@ export default function CodeModal({ dispatch, setToast, onClose }: {
         sendNotice(setToast, {
           kind: 'social.modalAction',
           text: `쿠폰을 사용했어요! ${fmtGold(r.result.gold)}를 받았어요. (${r.result.desc})`,
-          toastText: `쿠폰 ${fmtGold(r.result.gold)} 수령!`,
+          toastText: `쿠폰 ${fmtGold(r.result.gold)} 받음!`,
           tone: 'gold',
         });
         done(true);

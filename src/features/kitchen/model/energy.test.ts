@@ -209,11 +209,11 @@ describe('가방 하단 기운 얻기 진입 조건', () => {
     expect(selectBagEnergyEntry({ boat: AUTO_ENERGY_BOAT, location: village }, 'account')).toEqual({ ok: true });
     expect(selectBagEnergyEntry({ boat: AUTO_ENERGY_BOAT - 1, location: sea }, 'account')).toEqual({
       ok: false,
-      lines: ['집이나 항구 또는 가공 플랜트선에서만 할 수 있어요.'],
+      lines: ['집이나 항구에서만 할 수 있어요.'],
     });
     expect(selectBagEnergyEntry({ boat: COOKING_UNLOCK_BOAT, location: village }, 'account')).toEqual({
       ok: false,
-      lines: ['집이나 항구 또는 가공 플랜트선에서만 할 수 있어요.'],
+      lines: ['집이나 항구에서만 할 수 있어요.'],
     });
   });
 });

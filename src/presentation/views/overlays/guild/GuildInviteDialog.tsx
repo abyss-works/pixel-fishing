@@ -61,9 +61,9 @@ export default function GuildInviteDialog({ code, account, onAccount, onClose, s
     <Modal layer="stage" onClose={onClose}>
       <ModalCard title="길드 초대" onClose={onClose} confirm={action}>
         <div className="flex flex-col gap-3">
-          {asyncFailed ? <Note tone="warn">길드 초대 정보를 불러오지 못했어요.</Note>
+          {asyncFailed ? <Note tone="warn">길드 초대 정보를 열지 못했어요.</Note>
             : asyncLoading ? <Note>초대를 불러오는 중이에요.</Note>
-            : !view ? <Note tone="warn">길드 초대 정보를 불러오지 못했어요.</Note>
+            : !view ? <Note tone="warn">길드 초대 정보를 열지 못했어요.</Note>
             : view.state === 'bad' ? (
               <p className="m-0 text-sm text-text-dim whitespace-pre-line" role="status">{view.text}</p>
             ) : view.state === 'guest' ? (

@@ -110,7 +110,7 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
   const progressGroups = tab === 'progress' ? progressZoneGroups(game, incompleteOnly) : [];
   const bonusCards = tab === 'bonus' ? cumulativeBonusCards(game) : [];
   const bonusGroups = tab === 'bonus' ? [
-    { key: 'global', title: '전역 누적 보너스', items: sortBonusDoneLast(bonusCards.filter(c => c.series.scope === 'global' && c.series.id !== 'bonus-max-artifact')) },
+    { key: 'global', title: '전체 누적 보너스', items: sortBonusDoneLast(bonusCards.filter(c => c.series.scope === 'global' && c.series.id !== 'bonus-max-artifact')) },
     { key: 'zone', title: '구역별 누적 보너스', items: sortBonusDoneLast(bonusCards.filter(c => c.series.scope === 'zone')) },
     { key: 'artifact', title: '유물 누적 보너스', items: sortBonusDoneLast(bonusCards.filter(c => c.series.id === 'bonus-max-artifact')) },
   ] : [];
@@ -163,7 +163,7 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
 
           {tab === 'bonus' && (
             <div className="flex flex-wrap items-center justify-between gap-2 shrink-0">
-              <span className="text-xs text-text-dim">달성한 단계는 수령 없이 즉시 적용돼요.</span>
+              <span className="text-xs text-text-dim">달성한 단계는 따로 받지 않아도 바로 붙어요.</span>
               {onOpenStatsBonus && (
                 <Button size="sm" type="button" onClick={onOpenStatsBonus}>
                   스탯 창 보너스 탭에서 전체 합계 확인

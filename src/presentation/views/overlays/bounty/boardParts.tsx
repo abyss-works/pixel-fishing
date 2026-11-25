@@ -56,7 +56,7 @@ export function ClearsLeft({ leftAll, leftNamed, dailyCap, namedDailyCap, shortL
   return (
     <>
       <span className="text-text-dim whitespace-nowrap">
-        <Tip text={<>보상을 받으면 클리어 1번이에요.<br />조건을 채우지 못한 의뢰는 {GAME_DAY_RESET_TEXT}에 사라져요.</>}>오늘 남은 클리어</Tip>
+        <Tip text={<>보상을 받으면 완료 1회예요.<br />조건을 채우지 못한 의뢰는 {GAME_DAY_RESET_TEXT}에 사라져요.</>}>오늘 남은 클리어</Tip>
       </span>
       <span className="flex items-baseline gap-1.5 whitespace-nowrap">
         <span className="text-text-dim">{shortLabels ? '일반' : '일반 의뢰'}</span>

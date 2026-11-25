@@ -45,7 +45,7 @@ describe('StatsModal(스탯창)', () => {
     fireEvent.click(screen.getByRole('button', { name: '배' }));
     expect(screen.getByRole('columnheader', { name: '필요한 배' })).toBeTruthy();
     const rows = screen.getAllByRole('row').slice(1);
-    expect(rows.some(row => row.textContent?.includes(`${boatNameOf(3)}(3단계)`))).toBe(true);
+    expect(rows.some(row => row.textContent?.includes(boatNameOf(3)))).toBe(true);
   });
 
   it('배 탭의 가방 용량은 길드 보너스와 래칫 초과 보유 시 툴팁을 연결한다', () => {
@@ -144,10 +144,10 @@ describe('StatsModal(스탯창)', () => {
     const today = gameDayOf(new Date().toISOString());
     show(game({ fortune: { day: today, kind: 'fish', index: 5 } }));
     fireEvent.click(screen.getByRole('button', { name: '보너스' }));
-    const row = screen.getByText('희귀 이상 등급 가중치 +5%p').closest('tr')!;
+    const row = screen.getByText('희귀 이상 출현 확률 +5%p').closest('tr')!;
     expect(within(row).getByText('오늘의 운세')).toBeTruthy();
-    fireEvent.mouseEnter(screen.getByText('희귀 이상 등급 가중치 +5%p'));
-    expect(screen.getByRole('tooltip')).toHaveTextContent('희귀 이상 등급 가중치에 운 배율이 적용돼요.');
+    fireEvent.mouseEnter(screen.getByText('희귀 이상 출현 확률 +5%p'));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('희귀 이상 출현 확률 행운 효과가 올라가요.');
   });
 
   it('보너스 탭은 활성 물약을 각 갈래에 +5%p 효과와 물약 아이콘·이름으로 보인다', () => {
@@ -155,15 +155,15 @@ describe('StatsModal(스탯창)', () => {
     show(game({ potions: { 'luck-small': today } }));
     fireEvent.click(screen.getByRole('button', { name: '보너스' }));
 
-    const rarityRow = screen.getByText('희귀 이상 등급 가중치 +5%p').closest('tr')!;
+    const rarityRow = screen.getByText('희귀 이상 출현 확률 +5%p').closest('tr')!;
     expect(within(rarityRow).getByText('작은 행운 물약')).toBeTruthy();
     expect(rarityRow.querySelector('canvas')).not.toBeNull();
 
-    expect(screen.getByText('네임드 조우 가중치 +5%p')).toBeTruthy();
+    expect(screen.getByText('네임드 만날 확률 +5%p')).toBeTruthy();
     expect(screen.getByText('판매가 +5%p')).toBeTruthy();
 
     fireEvent.mouseEnter(screen.getByText('판매가 +5%p'));
-    expect(screen.getByRole('tooltip')).toHaveTextContent('사용하면 한국 시간 새벽 4시까지 모든 운 배율이 +5%p 올라요.');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('마시면 하루 동안 모든 행운 효과가 +5%p 올라요.');
   });
 
   it('닉네임 상태에 따라 불러오는 중, 미설정, 불러오기 실패를 구분해 보인다', () => {

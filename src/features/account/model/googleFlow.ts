@@ -47,11 +47,11 @@ export const SIGN_IN_FAILED_TEXT = SIGN_IN_FAILED_SENTENCES.join(' ');
 const FAIL_TITLE = '구글 계정 연결';
 
 const NOTICE_BODY = {
-  linkedElsewhere: '이 구글 계정은 다른 계정에서 쓰고 있어 연결하지 않았어요.\n다른 구글 계정으로 연결해 주세요.\n이 구글 계정을 꼭 연결해야 한다면 개발자에게 문의해 주세요.',
-  emailAccountExists: '이 구글 계정과 주소가 같은 기존 계정이 있어 연결하지 않았어요.\n다른 구글 계정으로 연결해 주세요.\n이 구글 계정을 꼭 연결해야 한다면 개발자에게 문의해 주세요.',
+  linkedElsewhere: '이 구글 계정은 다른 계정에서 쓰고 있어 연결하지 않았어요.\n다른 구글 계정으로 연결해 주세요.\n이 구글 계정을 꼭 연결해야 한다면 편지로 문의해 주세요.',
+  emailAccountExists: '이 구글 계정과 주소가 같은 기존 계정이 있어 연결하지 않았어요.\n다른 구글 계정으로 연결해 주세요.\n이 구글 계정을 꼭 연결해야 한다면 편지로 문의해 주세요.',
   alreadyConnected: '고른 구글 계정은 연결하지 않았어요.\n이 계정에는 이미 다른 구글 계정이 연결돼 있어요.',
   signupDisabled: '연결한 적 없는 구글 계정으로는 로그인할 수 없어요.\n게스트로 시작한 뒤 계정 관리에서 구글 계정을 연결해 주세요.',
-  unableToLink: '이 구글 계정으로는 연결할 수 없어요.\n다른 구글 계정으로 연결해 주세요.\n이 구글 계정을 꼭 연결해야 한다면 개발자에게 문의해 주세요.',
+  unableToLink: '이 구글 계정으로는 연결할 수 없어요.\n다른 구글 계정으로 연결해 주세요.\n이 구글 계정을 꼭 연결해야 한다면 편지로 문의해 주세요.',
 } as const;
 
 const notice = (body: string): GoogleOutcome => ({ kind: 'notice', title: FAIL_TITLE, body });

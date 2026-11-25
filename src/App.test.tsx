@@ -141,7 +141,7 @@ afterEach(() => {
 // ---------- 집(마을 거점): 가구 클릭 → 정비 탭 인라인 패널 ----------
 
 describe('마을 랭킹 게시판', () => {
-  it('게시판 클릭 → 5탭(명성·도감 3종·네임드 토벌) 랭킹 창이 열린다(로컬 모드는 온라인 안내)', async () => {
+  it('게시판 클릭 → 5탭(명성·도감 3종·네임드 토벌) 랭킹 창이 열린다(로컬 모드는 연결 안내)', async () => {
     seed({});
     render(<App />);
     clickFurniture('rank');
@@ -149,7 +149,7 @@ describe('마을 랭킹 게시판', () => {
     for (const label of ['명성', '도감(일반)', '도감(돌연변이)', '도감(네임드)', '네임드 토벌']) {
       expect(within(dialog).getByRole('button', { name: label })).toBeInTheDocument();
     }
-    await waitFor(() => expect(within(dialog).getByText('랭킹은 온라인에서만 볼 수 있어요.')).toBeInTheDocument());
+    await waitFor(() => expect(within(dialog).getByText('랭킹은 연결된 상태에서만 볼 수 있어요.')).toBeInTheDocument());
   });
 });
 
@@ -250,7 +250,7 @@ describe('R1b 개체 단위 선택 — 같은 종에서 큰 놈만 남기기', (
     // 행이 기본 닫힘 — 펼친 뒤 개체가 보인다
     fireEvent.click(screen.getByLabelText('잉어 개체 펼치기'));
     expect(screen.getByText('42.0cm')).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: '이 형태 최대' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: '최대 크기' })).toBeInTheDocument();
 
     // 42cm 개체를 판매에서 제외 → 12cm 한 마리만 팔린다
     fireEvent.click(screen.getByText('42.0cm').closest('[role="button"]')!);
@@ -832,14 +832,14 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
     }
   });
 
-  it('설정 창에서 물고기 그래픽을 미리보기로 고른다 — 기본 v1, 선택은 기기에 남는다', () => {
+  it('설정 창에서 물고기 그래픽을 미리보기로 고른다 — 기본 그림 시작, 선택은 기기에 남는다', () => {
     seed();
     render(<App />);
     clickTab('설정');
     fireEvent.click(openerButton('설정'));
     expect(screen.getByRole('dialog', { name: '설정' })).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: /^v1/ })).toHaveAttribute('aria-checked', 'true');
-    fireEvent.click(screen.getByRole('radio', { name: /^v2/ }));
+    expect(screen.getByRole('radio', { name: /^기본 그림/ })).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(screen.getByRole('radio', { name: /^새 픽셀 그림/ }));
     expect(localStorage.getItem('pf-fish-art')).toBe('v2');
   });
 
@@ -853,13 +853,13 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
     expect(screen.getByRole('button', { name: '이사 코드 불러오기' })).toBeInTheDocument();
   });
 
-  it('클라우드 미설정(개발 모드)이면 계정 관리 모달에 경고 표시 — 상태는 메모리에만 있음', () => {
+  it('저장 서버 미연결(오프라인)이면 계정 관리 모달에 경고 표시 — 상태는 메모리에만 있음', () => {
     seed();
     render(<App />);
     clickTab('설정');
-    expect(screen.queryByText(/클라우드가 설정되지 않았어요/)).not.toBeInTheDocument(); // 설정 화면에는 없다
+    expect(screen.queryByText(/저장 서버가 연결되지 않아/)).not.toBeInTheDocument(); // 설정 화면에는 없다
     clickTab(/계정 관리/);
-    expect(screen.getByText(/클라우드가 설정되지 않았어요/)).toBeInTheDocument();
+    expect(screen.getByText(/저장 서버가 연결되지 않아/)).toBeInTheDocument();
   });
 
   it('구버전 세이브는 조각배 증정 + 도감 소급 명성 + 환영 안내', () => {
@@ -1308,7 +1308,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     render(<App />);
     clickTab(/^가방/);
     openRow('잉어');
-    expect(screen.getAllByRole('img', { name: '이 형태 최대' })).toHaveLength(2); // 일반 42 + 변이 30
+    expect(screen.getAllByRole('img', { name: '최대 크기' })).toHaveLength(2); // 일반 42 + 변이 30
   });
 
   it('변이는 별도 행이 아니라 같은 행의 배지 — 소계는 폼별 가격 합', () => {
@@ -1322,7 +1322,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     expect(screen.getByText('×2')).toBeInTheDocument();
     expect(screen.getAllByText(`${CARP * (1 + VARIANT_PRICE_MULT)}G`)).toHaveLength(2); // 행 소계 + 하단 판매 가능 합
     expect(screen.getByRole('img', { name: '돌연변이' })).toBeInTheDocument(); // 개체 줄의 아이콘
-    expect(screen.getAllByRole('img', { name: '이 형태 최대' })).toHaveLength(2); // 최대는 폼별 — 일반·변이 각각
+    expect(screen.getAllByRole('img', { name: '최대 크기' })).toHaveLength(2); // 최대는 폼별 — 일반·변이 각각
   });
 
   it('변이만 골라 파는 것도 개체 단위로 된다', () => {
@@ -1574,9 +1574,9 @@ describe('스탯창 — 자원 바 클릭 진입 (v0.6.1)', () => {
 
     // 낚싯대 — 지역 서브탭과 해역 목록, 고른 해역의 상대 스탯 행
     openTab('낚싯대');
-    expect(dialog.getByText('바 시간')).toBeInTheDocument();
+    expect(dialog.getByText('왕복 속도')).toBeInTheDocument();
     expect(dialog.getByText('입질 최소 대기')).toBeInTheDocument();
-    expect(dialog.getByText('방치 낚시 페널티')).toBeInTheDocument();
+    expect(dialog.getByText('방치 효율')).toBeInTheDocument();
     expect(dialog.getByRole('row', { name: /마을 연못/ })).toHaveAttribute('aria-selected', 'true');
     fireEvent.click(dialog.getByRole('row', { name: /마을 강/ }));
     expect(dialog.getByRole('row', { name: /마을 강/ })).toHaveAttribute('aria-selected', 'true');
@@ -1710,9 +1710,9 @@ describe('업데이트 소식 창 — 접속 시 이번 버전 소식과 새 설
 
     fireEvent.click(screen.getByRole('button', { name: /다음/ }));
     expect(screen.getByRole('dialog', { name: '새 설정' })).toBeInTheDocument();
-    const v1 = screen.getByRole('radio', { name: /^v1/ });
-    const v2 = screen.getByRole('radio', { name: /^v2/ });
-    expect(v1).toHaveAttribute('aria-checked', 'true'); // 기본 v1
+    const v1 = screen.getByRole('radio', { name: /^기본 그림/ });
+    const v2 = screen.getByRole('radio', { name: /^새 픽셀 그림/ });
+    expect(v1).toHaveAttribute('aria-checked', 'true'); // 기본 그림
     fireEvent.click(v2);
     expect(v2).toHaveAttribute('aria-checked', 'true');
     expect(localStorage.getItem('pf-fish-art')).toBe('v2');

@@ -33,7 +33,7 @@ export const VILLAGE: RegionPack = {
     lore: '낚시꾼들이 나고 자란 조용한 마을. 집 앞 연못과 마을을 가로지르는 강에는 어릴 적부터 봐 온 물고기들이 산다. 하지만 강을 따라 남쪽으로 내려가면 포구 너머로 바다가 열려 있다. 배 한 척만 있다면.',
     tips: [
       '연못과 강은 배 없이 낚시할 수 있어요.',
-      '강 다리를 건너 남쪽 포구로 가면 대양으로 출항할 수 있어요 (배 필요).',
+      '강 다리를 건너 남쪽 포구로 가면 배를 타고 대양으로 나갈 수 있어요.',
       '배는 집의 목공소에서 살 수 있어요.',
       '집 문 앞에 서면 자동으로 집에 들어가요.',
     ],
@@ -67,7 +67,7 @@ export const VILLAGE: RegionPack = {
       blockedMsg: '바다에 나가려면 배가 필요해요. 집의 목공소에서 조각배를 구매해 보세요.' },
   ],
   labels: [
-    { text: '포구 — 대양으로', x: V_PIER.x + 8, y: V_PIER.y - 4, color: 'gold', size: 8 },
+    { text: '대양 포구', x: V_PIER.x + 8, y: V_PIER.y - 4, color: 'gold', size: 8 },
     { text: '집', x: V_HOUSE.x + V_HOUSE.w / 2, y: V_HOUSE.y - 4, color: 'text', size: 8 },
   ],
 };

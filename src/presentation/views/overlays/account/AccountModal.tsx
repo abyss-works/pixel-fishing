@@ -114,7 +114,7 @@ export default function AccountModal({
           </div>
         )}
       </Inset>
-      {offline && <Note className="mt-0">로컬 개발 모드에서는 계정 기능이 동작하지 않아요.<br />화면 확인용이에요.</Note>}
+      {offline && <Note className="mt-0">오프라인 상태에서는 계정 기능이 동작하지 않아요.<br />화면 확인용이에요.</Note>}
 
       {accountFailed ? (
         <>

@@ -94,11 +94,11 @@ describe('BountyPanel', () => {
     expect(screen.getByLabelText('오늘 남은 네임드 토벌')).toHaveTextContent('-');
   });
 
-  it('클리어 기준과 마치지 못한 의뢰가 한국 시간 새벽 4시에 사라진다는 안내는 오늘 남은 클리어의 툴팁이다', async () => {
+  it('완료 기준과 마치지 못한 의뢰가 새벽 4시에 사라진다는 안내는 오늘 남은 클리어의 툴팁이다', async () => {
     show(game({ dex: fullDex }));
     const tip = tipOf(await screen.findByText('오늘 남은 클리어'));
-    expect(tip).toContain('보상을 받으면 클리어 1번이에요.');
-    expect(tip).toContain('조건을 채우지 못한 의뢰는 한국 시간 새벽 4시에 사라져요.');
+    expect(tip).toContain('보상을 받으면 완료 1회예요.');
+    expect(tip).toContain('조건을 채우지 못한 의뢰는 새벽 4시에 사라져요.');
   });
 
   it('일반 의뢰를 오늘 클리어했으면 수주 버튼이 모두 막히고 이유를 버튼 툴팁으로 안내한다', async () => {
@@ -108,7 +108,7 @@ describe('BountyPanel', () => {
     expect(screen.getByLabelText('오늘 남은 네임드 토벌')).toHaveTextContent('1/1');
     const buttons = screen.getAllByRole('button', { name: '수주' });
     for (const button of buttons) expect(button).toBeDisabled();
-    expect(tipOfButton(buttons[0])).toBe('오늘 일반 의뢰는 이미 마쳤어요. 한국 시간 새벽 4시가 지나면 다시 수주할 수 있어요.');
+    expect(tipOfButton(buttons[0])).toBe('오늘 일반 의뢰는 이미 마쳤어요. 새벽 4시가 지나면 다시 수주할 수 있어요.');
   });
 
   it('다른 구역에서 수주한 일반 의뢰가 진행 중이면 이 판의 수주가 막히고 이유를 버튼 툴팁으로 안내한다', async () => {
@@ -267,6 +267,6 @@ describe('BountyPanel', () => {
     await waitFor(() => expect(screen.getByLabelText('오늘 남은 네임드 토벌')).toHaveTextContent('0/1'));
     const accept = screen.getByRole('button', { name: '수주' });
     expect(accept).toBeDisabled();
-    expect(tipOfButton(accept)).toBe('오늘 네임드 토벌은 이미 마쳤어요. 한국 시간 새벽 4시가 지나면 다시 수주할 수 있어요.');
+    expect(tipOfButton(accept)).toBe('오늘 네임드 토벌은 이미 마쳤어요. 새벽 4시가 지나면 다시 수주할 수 있어요.');
   });
 });
