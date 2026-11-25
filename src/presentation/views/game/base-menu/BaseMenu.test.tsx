@@ -48,6 +48,7 @@ describe('거점 카드 메뉴', () => {
       expect(onFacility).not.toHaveBeenCalled();
       fireEvent.mouseEnter(card.parentElement!);
       expect(screen.getByRole('tooltip')).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
+      expect(screen.getByRole('tooltip')).toHaveTextContent('태평양 항로는 조각배(1단계)부터 열려요.');
     });
 
     it('확인 실패 상태의 옷장은 확인 실패 잠금 툴팁을 보인다', () => {

@@ -53,8 +53,8 @@ describe('게스트 잠금 가드', () => {
     expect(locked).not.toMatch(/\bonClick\b|\bonKeyDown\b|\bonSelect\b/);
   });
 
-  it('화면과 기능 모델에 옛 게스트 잠금 문구(계정을 만든 뒤)가 없다', () => {
-    const old = /계정을 만든 뒤|계정을 만든 후|계정이 있어야 들어갈/;
+  it('화면과 기능 모델에 옛 게스트 잠금 문구가 없다', () => {
+    const old = /계정을 만든 뒤|계정을 만든 후|계정이 있어야 들어갈|계정 관리에서 계정을 연결/;
     for (const f of [...sources, ...featureSources]) expect(f.src, f.path).not.toMatch(old);
   });
 });

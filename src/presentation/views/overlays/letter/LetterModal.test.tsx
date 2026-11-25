@@ -30,7 +30,7 @@ describe('LetterModal', () => {
     const group = screen.getByRole('group', { name: '편지' });
     fireEvent.mouseEnter(group.parentElement!);
     const lines = [...screen.getByRole('tooltip').querySelectorAll('.block')].map(e => e.textContent);
-    expect(lines).toEqual(['편지는 태평양 항로가 열리면 쓸 수 있어요.', '계정 관리에서 계정을 연결해야 답장을 보내 드릴 수 있어요.']);
+    expect(lines).toEqual(['편지는 태평양 항로가 열리면 쓸 수 있어요.', '태평양 항로는 조각배(1단계)부터 열려요.']);
     fireEvent.mouseLeave(group.parentElement!);
     fireEvent.click(group);
     fireEvent.click(screen.getByRole('button', { name: '보내기' }));
