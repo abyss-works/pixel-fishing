@@ -2,7 +2,14 @@ import { useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { REJECT_TEXT } from '../../../../game/rules/logic';
 import type { GameAction } from '../../../../game/rules/actions';
-import { isClaimable, isPending } from '../../../../features/mailbox/model/mailbox';
+import {
+  claimMailNoticeText,
+  claimMailToastText,
+  hasReward,
+  isClaimable,
+  isPending,
+  mailRewardSummary,
+} from '../../../../features/mailbox/model/mailbox';
 import type { MailItem } from '../../../../features/mailbox/model/mailbox';
 import { useMailbox } from '../../../../features/mailbox/service/useMailbox';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
@@ -13,6 +20,7 @@ import { cx } from '../../../ui/cx';
 import { fmtGold } from '../../../ui/format';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import Inset from '../../../ui/Inset';
+import ItemBadge from '../../../ui/ItemBadge';
 import TableBox from '../../../ui/TableBox';
 import DataTable from '../../../ui/DataTable';
 import Modal from '../../../ui/Modal';
@@ -48,8 +56,8 @@ export default function MailboxModal({ dispatch, setToast, onClose }: {
       if (result.status === 'rejected') sendNotice(setToast, { kind: 'system.modalRejected', text: REJECT_TEXT[result.error] });
       else sendNotice(setToast, {
         kind: 'social.modalAction',
-        text: `우편에서 ${fmtGold(mail.gold)}를 받았어요!`,
-        toastText: `우편 ${fmtGold(mail.gold)} 수령!`,
+        text: claimMailNoticeText(mail),
+        toastText: claimMailToastText(mail),
         tone: 'gold',
       });
     })).finally(() => setClaiming(false));
@@ -67,13 +75,13 @@ export default function MailboxModal({ dispatch, setToast, onClose }: {
           {/* 표 머리 한 줄과 우편 다섯 줄 높이 */}
           <TableBox className="h-[212px] px-3 pb-2">
             {mails && mails.length > 0 ? (
-              <DataTable cols={['1.25rem', null, '120px', '5rem']} nameMin="10rem" aria-label="받은 우편">
+              <DataTable cols={['1.25rem', null, '110px', '7.5rem']} nameMin="10rem" aria-label="받은 우편">
                 <thead>
                   <tr className="sticky top-0 bg-[color-mix(in_oklab,var(--c-bg)_45%,var(--c-surface))] text-2xs text-text-dim">
                     <th className={cx(HEAD, 'pl-0')} aria-label="상태" />
                     <th className={cx(HEAD, 'text-left')}>제목</th>
                     <th className={cx(HEAD, 'text-right')}>받은 날</th>
-                    <th className={cx(HEAD, 'text-right pr-0')}>골드</th>
+                    <th className={cx(HEAD, 'text-right pr-0')}>보상</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -90,8 +98,8 @@ export default function MailboxModal({ dispatch, setToast, onClose }: {
                         <td className={cx(cell, 'px-2 truncate', pending ? 'font-bold' : 'font-normal',
                           on ? 'text-gold' : pending ? 'text-text' : 'text-text-dim')}>{m.title}</td>
                         <td className={cx(cell, 'px-2 text-right pf-accent text-2xs text-text-dim')}>{dateOf(m.createdAt)}</td>
-                        <td className={cx(cell, 'pl-2 text-right pf-accent text-xs', isClaimable(m) ? 'text-gold' : 'text-text-dim')}>
-                          {m.gold > 0 ? fmtGold(m.gold) : ''}
+                        <td className={cx(cell, 'pl-2 text-right pf-accent text-xs truncate', isClaimable(m) ? 'text-gold' : 'text-text-dim')}>
+                          {mailRewardSummary(m)}
                         </td>
                       </tr>
                     );
@@ -114,19 +122,28 @@ export default function MailboxModal({ dispatch, setToast, onClose }: {
                   <span className="pf-accent text-2xs text-text-dim shrink-0">{dateOf(selected.createdAt)}</span>
                 </div>
                 <p className={`${SCROLL_Y} flex-1 min-h-0 whitespace-pre-line text-sm leading-relaxed`}>{selected.body}</p>
-                {/* 받기 버튼(41px)과 구분선 아래 8px이 들어가는 높이 */}
-                <div className="h-[50px] shrink-0 flex items-center justify-between gap-2 border-t border-line pt-2">
-                  {selected.gold > 0 && (
+                {/* 받기 버튼(41px)과 구분선 아래 8px이 들어가는 높이. 첨부 배지가 많으면 줄을 늘린다 */}
+                <div className="min-h-[50px] shrink-0 flex items-center justify-between gap-2 border-t border-line pt-2">
+                  {hasReward(selected) && (
                     <>
-                      <span className="inline-flex items-center gap-1.5 text-gold">
-                        <PixelIcon glyph="coin" size={12} />
-                        <span className="pf-accent text-xs">{fmtGold(selected.gold)}</span>
-                      </span>
-                      {isClaimable(selected) ? (
-                        <Button variant="primary" disabled={claiming} onClick={() => onClaim(selected)}>받기</Button>
-                      ) : (
-                        <span className="text-xs text-text-dim">받음</span>
-                      )}
+                      <div className="flex-1 min-w-0 flex flex-wrap items-center gap-1.5">
+                        {selected.gold > 0 && (
+                          <span className="inline-flex items-center gap-1.5 text-gold">
+                            <PixelIcon glyph="coin" size={12} />
+                            <span className="pf-accent text-xs">{fmtGold(selected.gold)}</span>
+                          </span>
+                        )}
+                        {selected.items.map(att => (
+                          <ItemBadge key={att.id} id={att.id} qty={att.qty} />
+                        ))}
+                      </div>
+                      <div className="shrink-0">
+                        {isClaimable(selected) ? (
+                          <Button variant="primary" disabled={claiming} onClick={() => onClaim(selected)}>받기</Button>
+                        ) : (
+                          <span className="text-xs text-text-dim">받음</span>
+                        )}
+                      </div>
                     </>
                   )}
                 </div>

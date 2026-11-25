@@ -23,7 +23,7 @@ vi.mock('../../../layouts/useMobileLayout', () => ({ useMobileLayout: () => layo
 import GameMenu from './GameMenu';
 
 const mail = (over: Partial<MailItem>): MailItem => ({
-  id: 1, title: '우편', body: '본문', gold: 0, createdAt: '2026-10-23T00:00:00.000Z', readAt: null, claimedAt: null, ...over,
+  id: 1, title: '우편', body: '본문', gold: 0, items: [], createdAt: '2026-10-23T00:00:00.000Z', readAt: null, claimedAt: null, ...over,
 });
 
 function wrap(node: ReactNode) {

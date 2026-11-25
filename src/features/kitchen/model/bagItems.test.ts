@@ -173,7 +173,7 @@ describe('아이템 섹션: 열린 뒤', () => {
     if (emptyView.state !== 'open') throw new Error('open이어야 해요');
     expect(emptyView.empty).toBe(true);
     expect(filterItemSection(emptyView, false).empty).toBe(false);
-    expect(filterItemSection(emptyView, true)).toEqual({ lunch: [], bait: [], energy: [], empty: true });
+    expect(filterItemSection(emptyView, true)).toEqual({ lunch: [], bait: [], energy: [], potions: [], empty: true });
 
     const activeZeroOwned = selectItemSection(seed({
       items: { [ENERGY_ITEM_IDS.rare]: 1 },
@@ -293,5 +293,36 @@ describe('먹기 계획과 교체 확인', () => {
       ],
       defaultChoice: 'bait2',
     });
+  });
+});
+
+describe('물약 묶음', () => {
+  it('계정 회원은 배 단계와 무관하게 물약 잠금이 없고 보유·활성·사용 가능 여부를 돌려준다', () => {
+    const lowBoat = selectItemSection(
+      seed({ boat: 0, items: { 'luck-small': 2 } }),
+      T0,
+      'account',
+    );
+    expect(lowBoat.state).toBe('locked');
+    expect(lowBoat.potionLock).toBeNull();
+    expect(lowBoat.potions).toHaveLength(1);
+    expect(lowBoat.potions[0]).toMatchObject({ count: 2, active: false, usable: true });
+
+    const active = selectItemSection(
+      seed({ boat: 0, items: { 'luck-small': 2 }, potions: { 'luck-small': '2026-11-12' } }),
+      T0,
+      'account',
+    );
+    expect(active.potions[0]).toMatchObject({ count: 2, active: true, usable: false });
+  });
+
+  it('게스트와 확인 실패는 물약 잠금 줄을 받고 사용할 수 없다', () => {
+    const guest = selectItemSection(seed({ items: { 'luck-small': 2 } }), T0, 'guest');
+    expect(guest.potionLock).toEqual(GUEST_LOCK_DEFAULT_LINES);
+    expect(guest.potions[0].usable).toBe(false);
+
+    const unverified = selectItemSection(seed({ items: { 'luck-small': 2 } }), T0, 'unverified');
+    expect(unverified.potionLock).toEqual([UNVERIFIED_LOCK_TEXT]);
+    expect(unverified.potions[0].usable).toBe(false);
   });
 });

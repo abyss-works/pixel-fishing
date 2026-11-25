@@ -3,11 +3,16 @@
 // 보관함에 든 완성분은 조리가 끝난 분까지 센다(settleCooking). 이 모듈은 그 판정을 화면용 행으로 옮긴다.
 import { COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, recipeById } from '../../../game/content/cooking';
 import type { Recipe } from '../../../game/content/cooking';
+import { POTIONS } from '../../../game/content/potions';
+import type { Potion } from '../../../game/content/potions';
 import { RARITY_ORDER } from '../../../game/content/rarity';
 import type { RarityId } from '../../../game/content/rarity';
 import { canEat, maxBaitSlots, settleCooking, slotDurationMs } from '../../../game/rules/cooking';
+import { activePotionsOf } from '../../../game/rules/fortune';
 import type { GameState } from '../../../game/rules/logic';
+import { canUsePotion } from '../../../game/rules/rules';
 import type { RuleCheck } from '../../../game/rules/rules';
+import { GAME_DAY_RESET_TEXT } from '../../../game/rules/time';
 import { facilityGuestAllowed, facilityProgress, menuLock, progressNote } from '../../display/model/menuLock';
 import type { AccountLockState } from '../../display/model/menuLock';
 import { energyLabel } from './energy';
@@ -25,7 +30,11 @@ export const ITEM_GROUP_HINT = {
   energy: '물고기 한 마리에서 그 등급의 생명의 기운 하나를 얻어요.\n기운 얻기는 집 궤짝이나 항구 어시장에서 할 수 있어요.',
   lunch: '먹기를 누르면 도시락 슬롯에 들어가요.',
   bait: '쓰기를 누르면 미끼 슬롯에 들어가요.',
+  potion: `사용을 누르면 ${GAME_DAY_RESET_TEXT}까지 모든 운 배율이 올라요.`,
 } as const;
+/** 물약 적용 안내 문구 */
+export const potionUseNoticeText = (potionName: string): string =>
+  `${potionName} 효과가 ${GAME_DAY_RESET_TEXT}까지 적용돼요.`;
 /** 아이템 섹션의 묶음 순서와 소제목 - 잠긴 자리와 열린 섹션이 같은 순서를 쓴다 */
 export const ITEM_GROUPS = [
   { key: 'lunch', title: '도시락' },
@@ -62,19 +71,36 @@ export interface ItemRow {
   remainingMinutes: number | null;
 }
 
+export interface PotionRow {
+  potion: Potion;
+  count: number;
+  active: boolean;
+  usable: boolean;
+}
+
 export type ItemSectionView =
   /** 요리를 쓸 수 없는 상태(해금 전, 게스트). empty는 빈 상태 안내 줄, lines는 잠긴 칸의 툴팁 줄이다 */
-  | { state: 'locked'; empty: string[]; lines: string[] }
-  | { state: 'open'; energy: EnergyCell[]; lunch: ItemRow[]; bait: ItemRow[]; empty: boolean };
+  | { state: 'locked'; empty: string[]; lines: string[]; potions: PotionRow[]; potionLock: string[] | null }
+  | { state: 'open'; energy: EnergyCell[]; lunch: ItemRow[]; bait: ItemRow[]; potions: PotionRow[]; potionLock: string[] | null; empty: boolean };
 
 export function selectItemSection(game: GameState, now: string, account: AccountLockState): ItemSectionView {
+  const activePotionIds = new Set(activePotionsOf(game.potions, now).map(p => p.id));
+  const potionLockResult = menuLock({ account, guestAllowed: false, feature: '물약' });
+  const potionLock = potionLockResult.kind === 'none' ? null : potionLockResult.lines;
+  const potions: PotionRow[] = POTIONS.map(potion => ({
+    potion,
+    count: game.items[potion.id] ?? 0,
+    active: activePotionIds.has(potion.id),
+    usable: canUsePotion(game, potion.id, now, account !== 'account').ok,
+  }));
+
   const progress = facilityProgress('kitchen', game.boat);
   const lock = menuLock({ account, guestAllowed: facilityGuestAllowed('kitchen'), feature: '부엌', progress });
   if (lock.kind !== 'none') {
     const empty = lock.kind === 'progress'
       ? [NO_ITEMS_TEXT, ...progressNote(COOKING_UNLOCK_BOAT, '부엌에서 도시락과 미끼를 만들 수 있어요.')]
       : [NO_ITEMS_TEXT];
-    return { state: 'locked', empty, lines: lock.lines };
+    return { state: 'locked', empty, lines: lock.lines, potions, potionLock };
   }
   const items = settleCooking(game, now).items;
   const activeRemainingMs = new Map<string, number>();
@@ -102,18 +128,24 @@ export function selectItemSection(game: GameState, now: string, account: Account
   const bait = rows('bait');
   const empty = lunch.every(r => !isOwnedOrActiveItem(r))
     && bait.every(r => !isOwnedOrActiveItem(r))
-    && energy.every(e => e.stored === 0);
-  return { state: 'open', energy, lunch, bait, empty };
+    && energy.every(e => e.stored === 0)
+    && potions.every(p => !isOwnedOrActivePotion(p));
+  return { state: 'open', energy, lunch, bait, potions, potionLock, empty };
 }
 
 /** 보유 중만 보기 필터 기준 — 수량이 1개 이상이거나 현재 슬롯에서 효과가 적용 중인 아이템 */
 export const isOwnedOrActiveItem = (row: Pick<ItemRow, 'count' | 'active'>): boolean =>
   row.count > 0 || row.active;
 
+/** 보유 중만 보기 필터 기준 — 수량이 1개 이상이거나 오늘 사용 중인 물약 */
+export const isOwnedOrActivePotion = (row: Pick<PotionRow, 'count' | 'active'>): boolean =>
+  row.count > 0 || row.active;
+
 export interface OpenItemLists {
   lunch: ItemRow[];
   bait: ItemRow[];
   energy: EnergyCell[];
+  potions: PotionRow[];
   empty: boolean;
 }
 
@@ -123,16 +155,18 @@ export function filterItemSection(
   ownedOnly: boolean,
 ): OpenItemLists {
   if (!ownedOnly) {
-    return { lunch: view.lunch, bait: view.bait, energy: view.energy, empty: false };
+    return { lunch: view.lunch, bait: view.bait, energy: view.energy, potions: view.potions, empty: false };
   }
   const lunch = view.lunch.filter(isOwnedOrActiveItem);
   const bait = view.bait.filter(isOwnedOrActiveItem);
   const energy = view.energy.filter(e => e.stored > 0);
+  const potions = view.potions.filter(isOwnedOrActivePotion);
   return {
     lunch,
     bait,
     energy,
-    empty: lunch.length === 0 && bait.length === 0 && energy.length === 0,
+    potions,
+    empty: lunch.length === 0 && bait.length === 0 && energy.length === 0 && potions.length === 0,
   };
 }
 

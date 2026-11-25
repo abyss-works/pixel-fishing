@@ -341,4 +341,17 @@ describe('받는 보너스', () => {
     const stale = selectActiveBonuses(game({ fortune: { day: '2026-11-23', kind: 'gold', index: 5 } }), null, now);
     expect(stale).toEqual([]);
   });
+
+  it('오늘 쓴 물약은 낚시·결투·상점 갈래에 각각 +5%p 운 배율 보너스로 들어간다', () => {
+    const now = '2026-11-24T05:00:00.000Z';
+    const active = selectActiveBonuses(game({ potions: { 'luck-small': '2026-11-24' } }), null, now);
+    expect(active.map(b => [b.category, b.source.kind, b.source.kind === 'potion' ? b.source.target : null, b.source.kind === 'potion' ? b.source.bonus : null])).toEqual([
+      ['fish', 'potion', 'rarity', 0.05],
+      ['duel', 'potion', 'named', 0.05],
+      ['shop', 'potion', 'sell', 0.05],
+    ]);
+
+    const stale = selectActiveBonuses(game({ potions: { 'luck-small': '2026-11-23' } }), null, now);
+    expect(stale).toEqual([]);
+  });
 });
