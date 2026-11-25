@@ -62,13 +62,16 @@ describe('아이템 섹션 목록', () => {
   });
 
   it('부엌 해금 후에는 보유 중만 보기 기본 꺼짐으로 도시락 5종·미끼 5종·기운 4종 전체를 보이고, 미보유 카드는 비활성이다', () => {
-    show(game());
+    const { dispatch } = show(game());
     expect(screen.getByRole('button', { name: '보유 중만 보기' })).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByRole('group', { name: '생명의 기운(일반) 0개' })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: '생명의 기운(전설) 0개' })).toBeInTheDocument();
     const lunchBtn = screen.getByRole('button', { name: '가루디야 먹기' });
     expect(lunchBtn).toBeDisabled();
-    expect(lunchBtn.closest('.pf-notch')).toHaveClass('bg-bg', 'text-text-dim');
+    fireEvent.click(lunchBtn);
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByText('사용 중')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '사프란 미끼(특수) 쓰기' })).toBeDisabled();
     expect(screen.getAllByRole('button', { name: /먹기$/ })).toHaveLength(5);
     expect(screen.getAllByRole('button', { name: /쓰기$/ })).toHaveLength(5);
