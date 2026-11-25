@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { friendAction, readFriends } from '../../../platform/api';
 import type { FriendOp, FriendOpResult } from '../../../platform/api';
 import { useSession } from '../../account/service/session';
+import { useConsentReady } from '../../account/service/consentGate';
 import { groupFriends } from '../model/friends';
 
 // 친구 목록 — 세션이 선 뒤 읽는다. 접속 상태가 바뀌므로 열려 있는 동안 30초마다 다시 읽는다.
@@ -10,12 +11,13 @@ const REFRESH = 30_000;
 
 export function useFriends(enabled: boolean) {
   const { ready, uid } = useSession();
+  const consentReady = useConsentReady();
   const client = useQueryClient();
   const key = ['friends', uid];
   const q = useQuery({
     queryKey: key,
     queryFn: readFriends,
-    enabled: ready && enabled,
+    enabled: ready && consentReady && enabled,
     refetchInterval: REFRESH,
     retry: 1,
   });

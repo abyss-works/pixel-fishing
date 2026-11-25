@@ -468,8 +468,8 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
         setBlocker(c => (c === 'consent' ? null : c));
         const resume = pendingResumeRef.current;
         pendingResumeRef.current = null;
+        void client.invalidateQueries({ predicate: q => q.queryKey[0] !== 'session' });
         if (resume) resumeFlowRef.current(resume);
-        else void client.invalidateQueries();
         return;
       }
       if (res.code === 'consent-version-mismatch') {
@@ -480,6 +480,7 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
           setBlocker(c => (c === 'consent' ? null : c));
           const resume = pendingResumeRef.current;
           pendingResumeRef.current = null;
+          void client.invalidateQueries({ predicate: q => q.queryKey[0] !== 'session' });
           if (resume) resumeFlowRef.current(resume);
           return;
         }
