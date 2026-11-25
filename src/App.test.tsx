@@ -6,6 +6,7 @@ import App from './App';
 import Field from './presentation/layouts/game-stage/Field';
 import Base from './presentation/layouts/game-stage/Base';
 import FacilityModal from './presentation/views/overlays/facility/FacilityModal';
+import { fmtGold } from './presentation/ui/format';
 import { resetBagView } from './presentation/views/game/tabs/bag/bagView';
 import { resetCanvasCover } from './presentation/layouts/game-stage/canvasCover';
 import { resetTimeOverride } from './features/gameplay/service/timeOverride';
@@ -369,6 +370,32 @@ describe('R2b: 목공소/조선소(배 구매) 모달', () => {
     renderBoatPanel({ gold: BOATS[0].price });
     fireEvent.click(screen.getByRole('button', { name: '닫기' }));
     expect(screen.queryByText(/^구매 \(/)).not.toBeInTheDocument();
+    expect(screen.getByText('모달 닫힘')).toBeInTheDocument();
+  });
+
+  it('배를 구매해도 모달이 닫히지 않고 다음 배 상태로 유지되며, 닫기를 누를 때만 닫힌다', () => {
+    renderBoatPanel({
+      gold: BOATS[0].price + BOATS[1].price,
+      fame: BOATS[1].fameReq,
+    });
+    fireEvent.click(screen.getByRole('button', { name: `구매 (-${fmtGold(BOATS[0].price)})` }));
+    expect(lastGame.boat).toBe(1);
+    expect(screen.queryByText('모달 닫힘')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: `구매 (-${fmtGold(BOATS[1].price)})` })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole('button', { name: '닫기' }));
+    expect(screen.getByText('모달 닫힘')).toBeInTheDocument();
+  });
+
+  it('마지막 배를 구매해도 창이 닫히지 않고 최고 배 안내 상태로 바뀐다', () => {
+    const last = BOATS[MAX_BOAT - 1];
+    renderBoatPanel({ boat: MAX_BOAT - 1, gold: last.price, fame: last.fameReq });
+    fireEvent.click(screen.getByRole('button', { name: `구매 (-${fmtGold(last.price)})` }));
+    expect(lastGame.boat).toBe(MAX_BOAT);
+    expect(screen.queryByText('모달 닫힘')).not.toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`이미 가장 좋은 배\\(${last.name}\\)`))).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '닫기' }));
     expect(screen.getByText('모달 닫힘')).toBeInTheDocument();
   });
 });
