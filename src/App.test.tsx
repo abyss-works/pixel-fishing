@@ -1674,6 +1674,7 @@ describe('튜토리얼 창 — 트리거마다 한 번', () => {
 
     fireEvent.click(document.querySelector('[data-facility="exit"]')!);
     const dialog = await screen.findByRole('dialog', { name: '마을에 오신 걸 환영해요' });
+    for (let i = 0; i < 3; i++) fireEvent.click(within(dialog).getByRole('button', { name: '다음' }));
     fireEvent.click(within(dialog).getByRole('button', { name: '알겠어요' }));
     expect(screen.queryByRole('dialog', { name: '마을에 오신 걸 환영해요' })).not.toBeInTheDocument();
     await waitFor(() => expect(JSON.parse(localStorage.getItem(SAVE_KEY) ?? '{}').tutorials).toEqual(['village']));
