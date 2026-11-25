@@ -108,13 +108,13 @@ describe('아이템 섹션 목록', () => {
     expect(screen.getByText('×2')).toBeInTheDocument();
 
     fireEvent.mouseEnter(screen.getByText('작은 행운 물약'));
-    expect(screen.getByRole('tooltip')).toHaveTextContent('사용하면 한국 시간 새벽 4시까지 모든 운 배율이 +5%p 올라요.');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('마시면 하루 동안 모든 행운 효과가 +5%p 올라요.');
 
     const btn = screen.getByRole('button', { name: '작은 행운 물약 사용' });
     expect(btn).toBeEnabled();
     fireEvent.click(btn);
     expect(dispatch).toHaveBeenCalledWith({ type: 'usePotion', id: 'luck-small' });
-    expect(setToast).toHaveBeenCalledWith('작은 행운 물약 효과가 한국 시간 새벽 4시까지 적용돼요.');
+    expect(setToast).toHaveBeenCalledWith('작은 행운 물약 효과가 새벽 4시까지 적용돼요.');
   });
 
   it('물약은 이미 사용 중이면 사용 중 비활성 버튼이고, 미보유면 사용 버튼이 비활성이다', () => {
@@ -139,7 +139,7 @@ describe('아이템 섹션 목록', () => {
     show(game({ items: { 'luck-small': 2 } }), 'guest');
     fireEvent.mouseEnter(screen.getByText('작은 행운 물약'));
     const tip = screen.getByRole('tooltip');
-    expect(tip).toHaveTextContent('사용하면 한국 시간 새벽 4시까지 모든 운 배율이 +5%p 올라요.');
+    expect(tip).toHaveTextContent('마시면 하루 동안 모든 행운 효과가 +5%p 올라요.');
     expect(tip).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
 
     const lockGroup = screen.getByRole('group', { name: '작은 행운 물약 잠김' });

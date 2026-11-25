@@ -41,7 +41,7 @@ export function StatValue({ stat, unit, digits = 1, prefix = '', label }: {
   const detail = formatStatMods(stat, unit, digits, prefix);
   if (!detail) return <span>{value}</span>;
   const { rows, note } = buildStatRows(stat, unit, digits, prefix);
-  return <Tip text={<TipCard title={label ?? '적용 내역'} rows={rows} note={note} />}>{value}</Tip>;
+  return <Tip text={<TipCard title={label ?? '세부 내역'} rows={rows} note={note} />}>{value}</Tip>;
 }
 
 /** 해역 적합도: 충족(하늘), 파워 부족(위험), 배 필요(보조색)의 굵은 글자 */
@@ -50,7 +50,7 @@ export function FitText({ fit, className }: { fit: SpotFit; className?: string }
 }
 
 const perfectText = (row: StatsSpotRow): string =>
-  row.data.powerZones.red > 0 ? `${Math.round(row.data.powerZones.red)}%` : row.data.powerZones.yellow > 0 ? '-' : '요구 미달';
+  row.data.powerZones.red > 0 ? `${Math.round(row.data.powerZones.red)}%` : row.data.powerZones.yellow > 0 ? '-' : '파워 부족';
 
 /** 한 줄: 이름은 왼쪽(보조색), 값은 오른쪽 */
 function RodStatLine({ label, children }: { label: ReactNode; children: ReactNode }) {
@@ -63,19 +63,19 @@ export default function RodStatTable({ row }: { row: StatsSpotRow }) {
   return (
     <div className="grid grid-cols-2 gap-x-5 mobile:grid-cols-1">
       <ul className="flex flex-col">
-        <RodStatLine label="바 시간">{axes.sweep.value.toFixed(2)}초</RodStatLine>
+        <RodStatLine label="왕복 속도">{axes.sweep.value.toFixed(2)}초</RodStatLine>
         <RodStatLine label="입질 최소 대기"><StatValue label="입질 최소 대기" stat={effectiveBite.min} unit="초" /></RodStatLine>
         <RodStatLine label="입질 최대 대기"><StatValue label="입질 최대 대기" stat={effectiveBite.max} unit="초" /></RodStatLine>
-        <RodStatLine label={<Tip text={<TipCard title="GOOD 영역" description={'노란 영역이 바 폭에서 차지하는 크기예요.\n가운데 빨간 영역도 포함해요.\n요구 파워를 넘을수록 넓어져요.'} />}>GOOD 영역</Tip>}>
+        <RodStatLine label={<Tip text={<TipCard title="GOOD 영역" description={'노란 영역이 바 폭에서 차지하는 크기예요.\n가운데 빨간 영역도 포함해요.\n기준 파워를 넘을수록 넓어져요.'} />}>GOOD 영역</Tip>}>
           {goodText(row)}
         </RodStatLine>
       </ul>
       <ul className="flex flex-col">
-        <RodStatLine label={<Tip text={<TipCard title="PERFECT 영역" description={`가운데에 열리는 빨간 영역이에요.\n파워가 요구치보다 ${POWER_RULES.redMinExcess} 넘게 높으면 생겨요.`} />}>PERFECT 영역</Tip>}>
+        <RodStatLine label={<Tip text={<TipCard title="PERFECT 영역" description={`가운데에 열리는 빨간 영역이에요.\n파워가 기준 파워보다 ${POWER_RULES.redMinExcess} 넘게 높으면 생겨요.`} />}>PERFECT 영역</Tip>}>
           {perfectText(row)}
         </RodStatLine>
-        <RodStatLine label={<Tip text={<TipCard title="방치 낚시 페널티" description={autoPenaltyHelpText()} />}>방치 낚시 페널티</Tip>}>
-          {idleDetail ? <Tip text={<TipCard title="방치 낚시 배수" rows={idleDetail} />}>{idleText(idle)}</Tip> : <span>{idleText(idle)}</span>}
+        <RodStatLine label={<Tip text={<TipCard title="방치 효율" description={autoPenaltyHelpText()} />}>방치 효율</Tip>}>
+          {idleDetail ? <Tip text={<TipCard title="방치 보정" rows={idleDetail} />}>{idleText(idle)}</Tip> : <span>{idleText(idle)}</span>}
         </RodStatLine>
       </ul>
     </div>

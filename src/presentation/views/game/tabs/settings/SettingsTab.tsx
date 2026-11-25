@@ -18,7 +18,6 @@ import MyInfoModal from '../../../overlays/account/MyInfoModal';
 import CodeModal from '../../../overlays/codes/CodeModal';
 import LetterModal from '../../../overlays/letter/LetterModal';
 import PatchNotesModal from '../../../overlays/patchnotes/PatchNotesModal';
-import Tip from '../../../../ui/Tip';
 import SettingsModal from '../../../overlays/settings/SettingsModal';
 import type { Notify } from '../../../../ui/hud/messageFeed';
 
@@ -86,7 +85,7 @@ export default function SettingsTab({ autoLockOnCatch, dispatch, setToast, syncL
       <div className="flex items-center gap-1.5 text-2xs text-text-dim mt-auto pt-2">
         v{APP_VERSION}
         <Divider vertical />
-        <Tip text="배포 식별자 (커밋 SHA)" className="pf-accent">{BUILD_LABEL}</Tip>
+        <span className="pf-accent">{BUILD_LABEL}</span>
       </div>
     </div>
   );

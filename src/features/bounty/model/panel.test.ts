@@ -115,11 +115,11 @@ describe('의뢰판의 수주 가능 여부와 안내', () => {
     expect(d.notice).toEqual({ general: null, named: null });
   });
 
-  it('일반 의뢰를 오늘 클리어했으면 일반만 막히고 한국 시간 새벽 4시를 안내한다', () => {
+  it('일반 의뢰를 오늘 클리어했으면 일반만 막히고 새벽 4시를 안내한다', () => {
     const d = data(snap({ clearsToday: clears(1, 0) }));
     expect(d.canTake).toBe(false);
     expect(d.canTakeNamed).toBe(true);
-    expect(d.notice.general).toBe('오늘 일반 의뢰는 이미 마쳤어요. 한국 시간 새벽 4시가 지나면 다시 수주할 수 있어요.');
+    expect(d.notice.general).toBe('오늘 일반 의뢰는 이미 마쳤어요. 새벽 4시가 지나면 다시 수주할 수 있어요.');
     expect(d.notice.named).toBeNull();
   });
 
@@ -127,7 +127,7 @@ describe('의뢰판의 수주 가능 여부와 안내', () => {
     const d = data(snap({ clearsToday: clears(0, 1) }));
     expect(d.canTake).toBe(true);
     expect(d.canTakeNamed).toBe(false);
-    expect(d.notice.named).toBe('오늘 네임드 토벌은 이미 마쳤어요. 한국 시간 새벽 4시가 지나면 다시 수주할 수 있어요.');
+    expect(d.notice.named).toBe('오늘 네임드 토벌은 이미 마쳤어요. 새벽 4시가 지나면 다시 수주할 수 있어요.');
   });
 
   it('일반 의뢰가 진행 중이면 이 구역의 다른 난이도도 막히고, 한 번에 하나만 수주한다고 안내한다', () => {

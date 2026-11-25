@@ -110,7 +110,7 @@ describe('FriendsModal(소셜 창)', () => {
     moderation.failed = true;
     render(<FriendsModal setToast={vi.fn()} onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: '차단' }));
-    expect(screen.getByText('차단 목록을 불러오지 못했어요.')).toBeTruthy();
+    expect(screen.getByText('차단 목록을 열지 못했어요.')).toBeTruthy();
     expect(screen.queryByText('차단 목록을 불러오는 중이에요.')).toBeNull();
     cleanup();
 

@@ -56,7 +56,7 @@ describe('GuildInviteDialog 비동기 상태 구분', () => {
     state.loading = false;
     state.failed = true;
     rerender(<GuildInviteDialog code="K7QX2MAB" account="u@example.com" onAccount={vi.fn()} onClose={vi.fn()} setToast={vi.fn()} />);
-    expect(screen.getByText('길드 초대 정보를 불러오지 못했어요.')).toBeTruthy();
+    expect(screen.getByText('길드 초대 정보를 열지 못했어요.')).toBeTruthy();
     expect(screen.queryByText('초대를 불러오는 중이에요.')).toBeNull();
 
     state.failed = false;
@@ -64,7 +64,7 @@ describe('GuildInviteDialog 비동기 상태 구분', () => {
     state.preview = { code: 'K7QX2MAB', name: '새벽선단', level: 3, members: 4, cap: 10, joinMode: 'open' };
     state.guildFailed = true;
     rerender(<GuildInviteDialog code="K7QX2MAB" account="u@example.com" onAccount={vi.fn()} onClose={vi.fn()} setToast={vi.fn()} />);
-    expect(screen.getByText('길드 초대 정보를 불러오지 못했어요.')).toBeTruthy();
+    expect(screen.getByText('길드 초대 정보를 열지 못했어요.')).toBeTruthy();
     expect(screen.queryByText('초대를 불러오는 중이에요.')).toBeNull();
   });
 });

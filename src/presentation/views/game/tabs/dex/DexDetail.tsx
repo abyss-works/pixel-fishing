@@ -41,7 +41,7 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
         <PageTitle>{known ? form.name : '???'}</PageTitle>
         <span className="text-sm"><RarityText rarity={fish.rarity} /></span>
         <span className="pf-accent ml-auto text-2xs text-text-dim">
-          {form.form === 'variant' ? '돌연변이' : '기본형'} {i + 1}/{forms.length}
+          {form.form === 'variant' ? '돌연변이' : '일반'} {i + 1}/{forms.length}
         </span>
       </header>
     }>
@@ -76,7 +76,7 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
           <Inset divided className="flex-1">
             <KeyValueRow label="가격" value={<span className="pf-accent">{known ? fmtGold(form.price) : '???'}</span>} />
             <KeyValueRow label="잡은 수" value={<span className="pf-accent">{known ? `${form.count}마리` : '???'}</span>} />
-            <KeyValueRow label="이 형태 최대" value={known
+            <KeyValueRow label="최대 크기" value={known
               ? <><span className="pf-accent text-gold">{fmtSize(form.maxSize)}</span>
                   <span className="ml-1.5 text-xs text-text-dim">상위 {form.sizePercentile}%</span></>
               : '???'} />

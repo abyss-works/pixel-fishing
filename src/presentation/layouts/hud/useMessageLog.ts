@@ -45,7 +45,7 @@ let msgSeq = 0;
 
 function batchSummaryText(batchKey: string, firstText: string, count: number): string {
   if (count <= 1) return firstText;
-  if (batchKey === 'achievement.unlockable') return `${count}개 업적 달성 가능!`;
+  if (batchKey === 'achievement.unlockable') return `업적 보상 ${count}개 도착!`;
   if (batchKey === 'achievement.claimed') return `${count}개 업적 보상 수령!`;
   return firstText;
 }

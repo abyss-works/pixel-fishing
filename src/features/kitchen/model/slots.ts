@@ -19,7 +19,7 @@ export type SlotKey = CookKind;
 export type SlotInstanceKey = 'lunch' | 'bait' | 'bait2';
 
 /** 칩 줄과 잠금 문안이 슬롯을 부르는 이름 */
-export const SLOT_NAME: Readonly<Record<SlotKey, string>> = { lunch: '도시락 슬롯', bait: '미끼 슬롯' };
+export const SLOT_NAME: Readonly<Record<SlotKey, string>> = { lunch: '도시락 칸', bait: '미끼 칸' };
 
 /** 칩 줄의 슬롯 순서 — 도시락 칩, 미끼 칩 */
 export const SLOT_ORDER: readonly SlotKey[] = ['lunch', 'bait'];

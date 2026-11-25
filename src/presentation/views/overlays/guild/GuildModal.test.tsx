@@ -134,7 +134,7 @@ describe('GuildModal', () => {
     fireEvent.mouseEnter(screen.getByText('오늘 기여'));
     const tip = screen.getByRole('tooltip');
     expect(within(tip).getByText('네임드 토벌')).toBeTruthy();
-    expect(tip.textContent).toContain('새벽 4시');
+    expect(tip.textContent).toContain('매일 새로 세요.');
     fireEvent.mouseLeave(screen.getByText('오늘 기여'));
     const row = screen.getByText('나루').closest('tr') as HTMLElement;
     expect(within(row).getByText('900,000')).toBeTruthy();
@@ -292,22 +292,22 @@ describe('GuildModal', () => {
     await waitFor(() => expect(s.act).toHaveBeenCalledWith({ op: 'enhance', guildId: 'g1', bonus: 'bag' }));
     expect(toast).toHaveBeenCalledWith('가방 용량 증가 스킬의 내 자유 강화를 1단계로 올렸어요.');
 
-    fireEvent.mouseEnter(screen.getByRole('button', { name: '초기화' }).parentElement as HTMLElement);
-    expect(screen.getByRole('tooltip').textContent).toBe('100,000G를 내고 내 자유 강화만 초기화할 수 있어요.');
-    fireEvent.mouseLeave(screen.getByRole('button', { name: '초기화' }).parentElement as HTMLElement);
+    fireEvent.mouseEnter(screen.getByRole('button', { name: '되돌리기' }).parentElement as HTMLElement);
+    expect(screen.getByRole('tooltip').textContent).toBe('100,000G를 내고 내 자유 강화만 되돌릴 수 있어요.');
+    fireEvent.mouseLeave(screen.getByRole('button', { name: '되돌리기' }).parentElement as HTMLElement);
 
     s.act.mockResolvedValueOnce({ ok: true, recovered: 2 });
-    fireEvent.click(screen.getByRole('button', { name: '초기화' }));
+    fireEvent.click(screen.getByRole('button', { name: '되돌리기' }));
     const dialog = within(screen.getAllByRole('dialog').at(-1) as HTMLElement);
-    expect(dialog.getByText(/100,000G를 내고 내 자유 강화만 초기화할까요\?/)).toBeTruthy();
+    expect(dialog.getByText(/100,000G를 내고 내 자유 강화만 되돌릴까요\?/)).toBeTruthy();
     expect(dialog.getByText(/다른 길드원의 자유 강화와 길드 기본 단계는 그대로 유지돼요\./)).toBeTruthy();
     expect(dialog.getByText('100,000G')).toBeTruthy();
     expect(dialog.getByText('2포인트')).toBeTruthy();
     expect((screen.getAllByRole('dialog').at(-1) as HTMLElement).textContent).not.toMatch(/[·—–]/);
-    fireEvent.click(dialog.getByRole('button', { name: '초기화' }));
+    fireEvent.click(dialog.getByRole('button', { name: '되돌리기' }));
     await waitFor(() => expect(s.act).toHaveBeenCalledWith({ op: 'resetEnhancements', guildId: 'g1' }));
     await waitFor(() => expect(resync).toHaveBeenCalled());
-    expect(toast).toHaveBeenCalledWith('내 길드 스킬 자유 강화를 초기화해 2포인트를 되돌렸어요.');
+    expect(toast).toHaveBeenCalledWith('내 길드 스킬 자유 강화를 되돌려 2포인트를 회수했어요.');
   });
 
   it('초기화 누적 횟수에 따라 툴팁과 확인 창 비용이 바뀌고 5회차 이상은 10,000,000G 상한이다', () => {
@@ -330,29 +330,29 @@ describe('GuildModal', () => {
       <GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />,
     );
     fireEvent.click(screen.getByRole('button', { name: '길드 스킬' }));
-    fireEvent.mouseEnter(screen.getByRole('button', { name: '초기화' }).parentElement as HTMLElement);
-    expect(screen.getByRole('tooltip').textContent).toBe('500,000G를 내고 내 자유 강화만 초기화할 수 있어요.');
-    fireEvent.click(screen.getByRole('button', { name: '초기화' }));
+    fireEvent.mouseEnter(screen.getByRole('button', { name: '되돌리기' }).parentElement as HTMLElement);
+    expect(screen.getByRole('tooltip').textContent).toBe('500,000G를 내고 내 자유 강화만 되돌릴 수 있어요.');
+    fireEvent.click(screen.getByRole('button', { name: '되돌리기' }));
     const dialog1 = within(screen.getAllByRole('dialog').at(-1) as HTMLElement);
-    expect(dialog1.getByText(/500,000G를 내고 내 자유 강화만 초기화할까요\?/)).toBeTruthy();
+    expect(dialog1.getByText(/500,000G를 내고 내 자유 강화만 되돌릴까요\?/)).toBeTruthy();
     expect(dialog1.getByText('500,000G')).toBeTruthy();
     fireEvent.click(dialog1.getByRole('button', { name: '닫기' }));
 
     s.guild = { ...baseGuild, enhanceResetCount: 5 };
     rerender(<GuildModal gold={9_999_999} artifacts={{ artifacts: [] }} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
-    const resetBtn = screen.getByRole('button', { name: '초기화' });
+    const resetBtn = screen.getByRole('button', { name: '되돌리기' });
     expect(resetBtn).toBeDisabled();
     fireEvent.mouseEnter(resetBtn.parentElement as HTMLElement);
-    expect(screen.getByRole('tooltip').textContent).toContain('10,000,000G를 내고 내 자유 강화만 초기화할 수 있어요.');
+    expect(screen.getByRole('tooltip').textContent).toContain('10,000,000G를 내고 내 자유 강화만 되돌릴 수 있어요.');
 
     rerender(<GuildModal gold={10_000_000} artifacts={{ artifacts: [] }} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: '초기화' }));
+    fireEvent.click(screen.getByRole('button', { name: '되돌리기' }));
     const dialogCap = within(screen.getAllByRole('dialog').at(-1) as HTMLElement);
-    expect(dialogCap.getByText(/10,000,000G를 내고 내 자유 강화만 초기화할까요\?/)).toBeTruthy();
+    expect(dialogCap.getByText(/10,000,000G를 내고 내 자유 강화만 되돌릴까요\?/)).toBeTruthy();
     expect(dialogCap.getByText('10,000,000G')).toBeTruthy();
   });
 
-  it('개인 자유 강화 초기화 완료 시 플로팅 토스트 문구를 내 길드 스킬 자유 강화를 초기화했어요 로 보낸다', async () => {
+  it('개인 자유 강화 되돌리기 완료 시 플로팅 토스트 문구를 내 길드 스킬 자유 강화를 되돌렸어요 로 보낸다', async () => {
     s.guild = {
       ...GUILD,
       role: 'member',
@@ -372,13 +372,13 @@ describe('GuildModal', () => {
     s.act.mockResolvedValueOnce({ ok: true, recovered: 1 });
     render(<GuildModal gold={100_000} artifacts={{ artifacts: [] }} setToast={sink} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: '길드 스킬' }));
-    fireEvent.click(screen.getByRole('button', { name: '초기화' }));
+    fireEvent.click(screen.getByRole('button', { name: '되돌리기' }));
     const dialog = within(screen.getAllByRole('dialog').at(-1) as HTMLElement);
-    fireEvent.click(dialog.getByRole('button', { name: '초기화' }));
+    fireEvent.click(dialog.getByRole('button', { name: '되돌리기' }));
     await waitFor(() => expect(noticeHandler).toHaveBeenCalledWith(expect.objectContaining({
       kind: 'guild.modalAction',
-      toastText: '내 길드 스킬 자유 강화를 초기화했어요.',
-      text: '내 길드 스킬 자유 강화를 초기화해 1포인트를 되돌렸어요.',
+      toastText: '내 길드 스킬 자유 강화를 되돌렸어요.',
+      text: '내 길드 스킬 자유 강화를 되돌려 1포인트를 회수했어요.',
     })));
   });
 
@@ -392,14 +392,14 @@ describe('GuildModal', () => {
     s.loading = false;
     s.failed = true;
     rerender(<GuildModal gold={0} artifacts={{ artifacts: [] }} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
-    expect(screen.getByText('길드 정보를 불러오지 못했어요.')).toBeTruthy();
+    expect(screen.getByText('길드 정보를 열지 못했어요.')).toBeTruthy();
     expect(screen.queryByText('길드 정보를 불러오는 중이에요.')).toBeNull();
 
     s.failed = false;
     s.guild = GUILD;
     s.you = null;
     rerender(<GuildModal gold={0} artifacts={{ artifacts: [] }} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
-    expect(screen.getByText('길드 정보를 불러오지 못했어요.')).toBeTruthy();
+    expect(screen.getByText('길드 정보를 열지 못했어요.')).toBeTruthy();
     expect(screen.queryByText('길드 정보를 불러오는 중이에요.')).toBeNull();
   });
 });

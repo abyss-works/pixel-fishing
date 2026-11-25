@@ -118,16 +118,16 @@ const bonusEffectLabelOf = (series: CumulativeBonusSeries): string => {
   const zoneName = series.zone ? (zoneById(series.zone)?.shortName ?? series.zone) : '';
   switch (series.bonusKind) {
     case 'biteWaitCut': return '입질 대기';
-    case 'mutationWeight': return '돌연변이 가중치';
-    case 'rareWeight': return '희귀 이상 가중치';
-    case 'epicWeight': return '영웅 이상 가중치';
-    case 'legendaryWeight': return '전설 가중치';
+    case 'mutationWeight': return '돌연변이 출현 확률';
+    case 'rareWeight': return '희귀 이상 출현 확률';
+    case 'epicWeight': return '영웅 이상 출현 확률';
+    case 'legendaryWeight': return '전설 출현 확률';
     case 'sellBonus': return '판매가 보너스';
-    case 'namedWeight': return '네임드 조우 가중치';
+    case 'namedWeight': return '네임드 만날 확률';
     case 'moveSpeed': return '이동 속도';
     case 'artifactBoost': return '보유 유물 효과';
-    case 'zoneLegendary': return `${zoneName} 전설 가중치`;
-    case 'zoneMutation': return `${zoneName} 돌연변이 가중치`;
+    case 'zoneLegendary': return `${zoneName} 전설 출현 확률`;
+    case 'zoneMutation': return `${zoneName} 돌연변이 출현 확률`;
   }
 };
 
@@ -229,7 +229,7 @@ export function cumulativeBonusCards(game: GameState): CumulativeBonusCardModel[
     const nextThreshold = p.nextStep?.threshold ?? lastStep.threshold;
     const allDone = p.nextStep === null;
     const scopeLabel = series.scope === 'global'
-      ? '전역'
+      ? '전체'
       : (zoneById(series.zone!)?.shortName ?? series.zone!);
 
     let nowAssigned = false;
@@ -252,8 +252,8 @@ export function cumulativeBonusCards(game: GameState): CumulativeBonusCardModel[
 
     const activeText = p.activeDelta > 0
       ? `${effectLabel} ${fmtPct(p.activeDelta, sign)}`
-      : `${effectLabel} 적용 전`;
-    const maxText = `최대 누적 ${fmtPct(p.maxDelta, sign)} (달성 즉시 자동 적용)`;
+      : `${effectLabel} 아직 없음`;
+    const maxText = `최대 누적 ${fmtPct(p.maxDelta, sign)} (달성하면 바로 붙어요)`;
     const nextDeltaText = p.nextStep ? fmtPct(p.nextStep.delta, sign) : null;
 
     return {

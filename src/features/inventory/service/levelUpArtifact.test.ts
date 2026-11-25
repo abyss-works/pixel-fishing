@@ -32,9 +32,9 @@ describe('유물 강화 보내기', () => {
     expect(dispatch).not.toHaveBeenCalled();
   });
 
-  it('없는 유물 id는 보내지 않고 처리할 수 없는 요청 문구를 돌려준다', async () => {
+  it('없는 유물 id는 보내지 않고 공용 거부 문구를 돌려준다', async () => {
     const dispatch = vi.fn();
-    expect(await levelUpArtifact(dispatch, ready, 'nope')).toEqual({ ok: false, notice: '처리할 수 없는 요청이에요.' });
+    expect(await levelUpArtifact(dispatch, ready, 'nope')).toEqual({ ok: false, notice: '요청을 처리하지 못했어요. 잠시 뒤 다시 해 주세요.' });
     expect(dispatch).not.toHaveBeenCalled();
   });
 
@@ -45,6 +45,6 @@ describe('유물 강화 보내기', () => {
 
   it('그 밖의 거부는 공용 거부 문구를 쓴다', async () => {
     const out = await levelUpArtifact(() => ({ status: 'rejected', error: 'bad-request' }), ready, 'wreck-compass');
-    expect(out).toEqual({ ok: false, notice: '처리할 수 없는 요청이에요.' });
+    expect(out).toEqual({ ok: false, notice: '요청을 처리하지 못했어요. 잠시 뒤 다시 해 주세요.' });
   });
 });

@@ -30,9 +30,9 @@ describe('SlotChips', () => {
     const groups = screen.getAllByRole('group');
     expect(groups).toHaveLength(3);
     expect(groups.map(g => g.getAttribute('aria-label'))).toEqual([
-      '도시락 슬롯, 가루디야, 남은 시간 1시간',
-      '미끼 슬롯, 롱페퍼 미끼(희귀), 남은 시간 3분',
-      '미끼 슬롯, 큐베브 미끼(영웅), 남은 시간 2분',
+      '도시락 칸, 가루디야, 남은 시간 1시간',
+      '미끼 칸, 롱페퍼 미끼(희귀), 남은 시간 3분',
+      '미끼 칸, 큐베브 미끼(영웅), 남은 시간 2분',
     ]);
     expect(errSpy).not.toHaveBeenCalled();
     errSpy.mockRestore();

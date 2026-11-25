@@ -3,31 +3,31 @@
 import { FORTUNE_TARGET_OF, activePotionsOf, fortuneOf, luckMultOf } from '../../../game/rules/fortune';
 import type { DailyFortune, FortuneKind, FortuneTarget } from '../../../game/rules/fortune';
 import type { GameState } from '../../../game/rules/logic';
-import { GAME_DAY_RESET_HOUR_KST, GAME_DAY_RESET_TEXT, gameDayOf } from '../../../game/rules/time';
+import { gameDayOf } from '../../../game/rules/time';
 
-/** 운 배율 대상별 보너스 표시 이름 */
+/** 운세 대상별 보너스 표시 이름 */
 export const FORTUNE_TARGET_BONUS_LABEL: Record<FortuneTarget, string> = {
-  rarity: '희귀 이상 등급 가중치',
+  rarity: '희귀 이상 출현 확률',
   sell: '판매가',
-  named: '네임드 조우 가중치',
+  named: '네임드 만날 확률',
 };
 
 /** 운세 종류의 표시 묶음 — name은 정식 명칭, bonus는 보너스가 걸리는 대상의 표시명.
  *  target은 규칙의 종류와 대상 짝(FORTUNE_TARGET_OF)을 그대로 가리킨다 */
 export const FORTUNE_KIND: Record<FortuneKind, { name: string; target: FortuneTarget; bonus: string }> = {
-  fish: { name: '풍어운', target: FORTUNE_TARGET_OF.fish, bonus: '희귀 이상 등급 가중치' },
+  fish: { name: '풍어운', target: FORTUNE_TARGET_OF.fish, bonus: '희귀 이상 출현 확률' },
   gold: { name: '재물운', target: FORTUNE_TARGET_OF.gold, bonus: '판매가' },
-  shadow: { name: '그림자 운', target: FORTUNE_TARGET_OF.shadow, bonus: '네임드 조우 가중치' },
+  shadow: { name: '그림자 운', target: FORTUNE_TARGET_OF.shadow, bonus: '네임드 만날 확률' },
 };
 
 /** 운세 출처 이름 — 보너스 내역과 금액 내역에 붙는 단일 표기 */
 export const FORTUNE_SOURCE_LABEL = '오늘의 운세';
 
 /** 스탯 창 보너스 탭의 출처 도움말 중 운세 설명 */
-export const FORTUNE_SOURCE_HELP = `오늘의 운세는 ${GAME_DAY_RESET_TEXT}에 새로 뽑혀요. 운 배율은 다른 보너스 다음에 곱해져요.`;
+export const FORTUNE_SOURCE_HELP = '오늘의 운세는 하루마다 새로 뽑혀요. 행운 효과는 다른 보너스 다음에 곱해져요.';
 
 /** 스탯 창 보너스 탭의 출처 도움말 중 물약 설명 */
-export const POTION_SOURCE_HELP = `물약은 가방 탭에서 쓰면 ${GAME_DAY_RESET_TEXT}까지 모든 운 배율에 더해져요.`;
+export const POTION_SOURCE_HELP = '물약은 가방 탭에서 쓰면 하루 동안 모든 행운 효과가 커져요.';
 
 /** 지수 등급 라벨 — 3은 적당한 운, 5는 좋은 운 */
 export const FORTUNE_INDEX_LABEL: Record<DailyFortune['index'], string> = {
@@ -68,25 +68,25 @@ export function fortuneBonusText(fortune: DailyFortune): string {
 
 /** 스탯 창 보너스 탭의 툴팁 문구(무수치) */
 export function fortuneBonusTip(fortune: DailyFortune): string {
-  return `${FORTUNE_KIND[fortune.kind].bonus}에 운 배율이 적용돼요.`;
+  return `${FORTUNE_KIND[fortune.kind].bonus} 행운 효과가 올라가요.`;
 }
 
 /** 접속 모달의 효과 안내 문구 */
 export function fortuneEffectNote(fortune: DailyFortune): string {
-  return `오늘 ${FORTUNE_KIND[fortune.kind].bonus}의 운 배율이 +${fortune.index}%p 올라요.`;
+  return `오늘 ${FORTUNE_KIND[fortune.kind].bonus} 행운 효과가 +${fortune.index}%p 올라요.`;
 }
 
 /** 지수 칸 수 — 지수의 최댓값(5)만큼 칸을 그리고 지수만큼 채운다 */
 export const FORTUNE_PIPS = 5;
 
 /** 접속 모달의 초기화 시각 보조 안내 */
-export const FORTUNE_RESET_NOTE = `새 운세는 매일 새벽 ${GAME_DAY_RESET_HOUR_KST}시에 다시 정해져요.`;
+export const FORTUNE_RESET_NOTE = '새 운세는 하루마다 새로 뽑혀요.';
 
-/** 접속 모달의 요약 표 줄 — 적용 대상과 운 배율 */
+/** 접속 모달의 요약 표 줄 — 적용 대상과 행운 효과 */
 export function fortuneSummaryRows(fortune: DailyFortune): { label: string; value: string; accent?: boolean }[] {
   return [
     { label: '적용 대상', value: FORTUNE_KIND[fortune.kind].bonus },
-    { label: '운 배율', value: `+${fortune.index}%p`, accent: true },
+    { label: '행운 효과', value: `+${fortune.index}%p`, accent: true },
   ];
 }
 

@@ -166,14 +166,14 @@ export const GUILD_ERROR_TEXT: Record<string, string> = {
   'not-enough-gold': '골드가 모자라요.',
   'bonus-locked': '아직 열리지 않은 길드 스킬이에요. 길드 레벨이 오르면 열려요.',
   'rank-maxed': '지금 길드 레벨에서 올릴 수 있는 단계를 모두 채웠어요. 길드 레벨이 오르면 더 올릴 수 있어요.',
-  'bad-amount': '기부할 골드를 1 이상의 정수로 입력해 주세요.',
+  'bad-amount': '기부할 골드를 1G 이상으로 입력해 주세요.',
   restricted: '이용이 제한된 계정은 기부할 수 없어요.',
   'same-name': '지금 쓰는 이름과 같아요.',
   'renamed-today': '오늘은 이미 이름을 바꿨어요.',
   'enhance-locked': '길드 Lv.6부터 강화 포인트를 얻을 수 있어요.',
   'no-enhance-points': '남은 강화 포인트가 없어요.',
   'enhance-maxed': '이 스킬은 자유 강화를 모두 채웠어요.',
-  'no-enhance-used': '초기화할 자유 강화가 없어요.',
+  'no-enhance-used': '회수할 자유 강화가 없어요.',
 };
 
 // ── 이름 바꾸기 ──────────────────────────────────────────────
@@ -208,7 +208,7 @@ export function growthTotalText(growth: GuildInfo['growth']): string {
 }
 
 /** 진행 막대 도움말: 레벨이 오르는 조건과 길드 스킬의 관계. 하루 기여 상한은 오늘 기여 도움말이 맡는다 */
-export const GUILD_LEVEL_HELP = '길드원 모두가 쌓은 기여가 다음 문턱에 닿으면 길드 레벨이 올라요.\n'
+export const GUILD_LEVEL_HELP = '길드원 모두가 쌓은 기여가 다음 기준에 닿으면 길드 레벨이 올라요.\n'
   + 'Lv.5까지는 길드 스킬이 열리고, Lv.6부터는 개인 강화 포인트를 1개씩 얻어요.';
 
 /** 오늘 기여 도움말: 한 사람이 하루에 쌓을 수 있는 기여의 갈래별 상한. 네임드 토벌은 보유 유물의 가산을 반영한다 */
@@ -244,7 +244,7 @@ export function bonusEffectValue(id: GuildBonusId, value: number): string {
 }
 
 const EFFECT_LABEL: Record<GuildBonusId, string> = {
-  sell: '판매가', bag: '가방 용량', named: '네임드 조우', rare: '일반 등급 가중치', mutation: '돌연변이 확률',
+  sell: '판매가', bag: '가방 용량', named: '네임드 조우', rare: '희귀 어종 확률', mutation: '돌연변이 확률',
 };
 
 /** 효과 문장: 무엇이 얼마나 바뀌는지 */
@@ -333,12 +333,12 @@ export function enhanceResetState(guild: GuildInfo, gold: number):
     return { canReset: false, reason: 'Lv.6부터 강화 포인트를 얻어요.', used, cost };
   }
   if (used <= 0) {
-    return { canReset: false, reason: '초기화할 자유 강화가 없어요.', used, cost };
+    return { canReset: false, reason: '회수할 자유 강화가 없어요.', used, cost };
   }
   if (gold < cost) {
     return {
       canReset: false,
-      reason: `골드가 모자라요.\n${num(cost)}G를 내고 내 자유 강화만 초기화할 수 있어요.`,
+      reason: `골드가 모자라요.\n${num(cost)}G를 내고 내 자유 강화만 되돌릴 수 있어요.`,
       used,
       cost,
     };
@@ -424,7 +424,7 @@ function logParts(log: GuildLogItem, me: string): LogPart[] {
       ];
     }
     case 'enhance-reset':
-      return [who, { text: ' 님이 길드 스킬 강화를 초기화했어요.' }];
+      return [who, { text: ' 님이 길드 스킬 강화를 되돌렸어요.' }];
   }
 }
 

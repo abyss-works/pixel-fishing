@@ -325,7 +325,7 @@ export default function GameView(props: GameViewProps) {
         sendNotice(props.setToast, {
           kind: 'bounty.challengeResolved',
           text: `${josa(encounter.named.name, '을/를')} 토벌했어요! ${zoneName}의 수배판에서 보상 받기를 눌러 주세요.`,
-          toastText: `${encounter.named.name} 토벌 성공! 보상 수령`,
+          toastText: `${encounter.named.name} 토벌 성공!`,
         });
         setTracking(null);
       }

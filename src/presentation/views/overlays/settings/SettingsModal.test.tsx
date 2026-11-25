@@ -116,10 +116,10 @@ describe('SettingsModal — 가방 설정(낚을 때 자동 잠금)', () => {
   });
 });
 
-describe('SettingsModal — 주요 알림 플로팅 토스트 설정', () => {
+describe('SettingsModal — 주요 화면 알림 설정', () => {
   it('기본값 켜짐으로 표시되고 클릭 시 localStorage에 저장된다(브라우저 알림 권한과 무관)', () => {
     open();
-    const toggle = screen.getByRole('button', { name: '주요 알림 플로팅 토스트' });
+    const toggle = screen.getByRole('button', { name: '주요 화면 알림' });
     expect(toggle).toBeEnabled();
     expect(toggle).toHaveAttribute('aria-pressed', 'true');
     expect(toggle).toHaveTextContent('켜짐');

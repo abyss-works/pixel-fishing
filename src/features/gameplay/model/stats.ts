@@ -298,30 +298,30 @@ export function selectActiveBonuses(
     out.push({ category: 'fish', source: { kind: 'achievement', label: '입질 대기', value: fmtPct(ach.biteWaitCut, '−') }, manualOnly: false });
   }
   if (ach.mutationWeight > 0) {
-    out.push({ category: 'fish', source: { kind: 'achievement', label: '돌연변이 가중치', value: fmtPct(ach.mutationWeight, '+') }, manualOnly: false });
+    out.push({ category: 'fish', source: { kind: 'achievement', label: '돌연변이 출현 확률', value: fmtPct(ach.mutationWeight, '+') }, manualOnly: false });
   }
   if (ach.rareWeight > 0) {
-    out.push({ category: 'fish', source: { kind: 'achievement', label: '희귀 이상 가중치', value: fmtPct(ach.rareWeight, '+') }, manualOnly: false });
+    out.push({ category: 'fish', source: { kind: 'achievement', label: '희귀 이상 출현 확률', value: fmtPct(ach.rareWeight, '+') }, manualOnly: false });
   }
   if (ach.epicWeight > 0) {
-    out.push({ category: 'fish', source: { kind: 'achievement', label: '영웅 이상 가중치', value: fmtPct(ach.epicWeight, '+') }, manualOnly: false });
+    out.push({ category: 'fish', source: { kind: 'achievement', label: '영웅 이상 출현 확률', value: fmtPct(ach.epicWeight, '+') }, manualOnly: false });
   }
   if (ach.legendaryWeight > 0) {
-    out.push({ category: 'fish', source: { kind: 'achievement', label: '전설 가중치', value: fmtPct(ach.legendaryWeight, '+') }, manualOnly: false });
+    out.push({ category: 'fish', source: { kind: 'achievement', label: '전설 출현 확률', value: fmtPct(ach.legendaryWeight, '+') }, manualOnly: false });
   }
   for (const zone of ZONE_IDS) {
     const zMut = ach.zoneMutation[zone] ?? 0;
     const zLeg = ach.zoneLegendary[zone] ?? 0;
     const zName = zoneById(zone)?.shortName ?? zone;
     if (zMut > 0) {
-      out.push({ category: 'fish', source: { kind: 'achievement', label: `${zName} 돌연변이 가중치`, value: fmtPct(zMut, '+') }, manualOnly: false });
+      out.push({ category: 'fish', source: { kind: 'achievement', label: `${zName} 돌연변이 출현 확률`, value: fmtPct(zMut, '+') }, manualOnly: false });
     }
     if (zLeg > 0) {
-      out.push({ category: 'fish', source: { kind: 'achievement', label: `${zName} 전설 가중치`, value: fmtPct(zLeg, '+') }, manualOnly: false });
+      out.push({ category: 'fish', source: { kind: 'achievement', label: `${zName} 전설 출현 확률`, value: fmtPct(zLeg, '+') }, manualOnly: false });
     }
   }
   if (ach.namedWeight > 0) {
-    out.push({ category: 'duel', source: { kind: 'achievement', label: '네임드 조우 가중치', value: fmtPct(ach.namedWeight, '+') }, manualOnly: false });
+    out.push({ category: 'duel', source: { kind: 'achievement', label: '네임드 만날 확률', value: fmtPct(ach.namedWeight, '+') }, manualOnly: false });
   }
   if (ach.sellBonus > 0) {
     out.push({ category: 'shop', source: { kind: 'achievement', label: '판매가 보너스', value: fmtPct(ach.sellBonus, '+') }, manualOnly: false });

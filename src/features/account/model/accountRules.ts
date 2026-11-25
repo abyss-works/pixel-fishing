@@ -19,7 +19,7 @@ export const ACCOUNT_CHECK_FAILED_COPY = {
 /** 계정 표시 이름. 확인에 실패했으면 게스트가 아니라 실패로 표기한다 */
 export function accountLabel(account: string | null, failed: boolean): string {
   if (failed) return ACCOUNT_CHECK_FAILED_COPY.label;
-  return account ?? '게스트(이메일 없음)';
+  return account ?? '게스트';
 }
 
 /** 닉네임 비동기 표시 문안 — 로딩·오류·미설정(null)·정상 닉네임을 구분한다 */

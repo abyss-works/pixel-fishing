@@ -318,7 +318,7 @@ describe('기운 얻기 탭', () => {
     const button = screen.getByRole('button', { name: '기운 얻기 (3마리)' });
     expect(button).toBeDisabled();
     fireEvent.mouseEnter(button.parentElement!);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('집이나 항구 또는 가공 플랜트선에서만 할 수 있어요.');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('집이나 항구에서만 할 수 있어요.');
   });
 
   it('잠근 개체 안내 문단은 없고 잠긴 행의 자물쇠 툴팁이 알린다', () => {

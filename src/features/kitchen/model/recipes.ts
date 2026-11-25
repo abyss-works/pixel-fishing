@@ -67,13 +67,13 @@ export function recipeEffectLines(recipe: Recipe): RecipeEffectLine[] {
         return e.biteWaitCut === undefined ? [] : [{ label: '입질 대기', value: `−${pct(e.biteWaitCut)}%` }];
       case 'rarityWeight':
         return e.rarityWeight === undefined ? [] : e.rarityWeight.grades.map(g => (
-          { label: `${RARITY[g].name} 등급 가중치`, value: `+${pct(e.rarityWeight!.bonus)}%` }));
+          { label: `${RARITY[g].name} 어종 출현`, value: `+${pct(e.rarityWeight!.bonus)}%` }));
       case 'mutationWeight':
-        return e.mutationWeight === undefined ? [] : [{ label: '돌연변이 폼 가중치', value: `+${pct(e.mutationWeight)}%` }];
+        return e.mutationWeight === undefined ? [] : [{ label: '돌연변이 출현', value: `+${pct(e.mutationWeight)}%` }];
       case 'namedWeight':
-        return e.namedWeight === undefined ? [] : [{ label: '네임드 조우 가중치', value: `+${pct(e.namedWeight)}%` }];
+        return e.namedWeight === undefined ? [] : [{ label: '네임드 만날 확률', value: `+${pct(e.namedWeight)}%` }];
       case 'nightUnlock':
-        return e.nightUnlock === true ? [{ label: '밤 어종 출현', value: '밤 전용 어종 합류' }] : [];
+        return e.nightUnlock === true ? [{ label: '밤 어종 출현', value: '낮에도 출현' }] : [];
     }
   });
 }
