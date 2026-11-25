@@ -190,40 +190,6 @@ describe('레거시 로컬 세이브 브리지', () => {
   });
 });
 
-describe('게스트 진행 다시 읽기', () => {
-  async function booted() {
-    const hook = setup();
-    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
-    await act(async () => { gw.bootResolve!(); });
-    return hook;
-  }
-
-  it('서버 저장 상태를 다시 읽어 낚은 수가 0이면 진행 없음이다', async () => {
-    const hook = await booted();
-    const loads = gw.loads;
-    await expect(hook.result.current.recheckGuestProgress()).resolves.toBe('nothing');
-    expect(gw.loads).toBe(loads + 1);
-  });
-
-  it('다시 읽은 상태에 낚은 기록이 있으면 이 탭이 들고 있던 상태가 비어 있어도 진행 있음이다', async () => {
-    const hook = await booted();
-    gw.loadDex = { carp: { normal: { count: 3, maxSize: 5, first: '2026-01-01' } } };
-    await expect(hook.result.current.recheckGuestProgress()).resolves.toBe('some');
-  });
-
-  it('서버에 저장 상태가 없으면 진행 없음이다', async () => {
-    const hook = await booted();
-    gw.cloudEmpty = true;
-    await expect(hook.result.current.recheckGuestProgress()).resolves.toBe('nothing');
-  });
-
-  it.each(['network', 'replaced', 'rate-limited', 'restricted'] as const)('다시 읽기가 %s로 실패하면 진행 있음이다', async kind => {
-    const hook = await booted();
-    gw.loadError = new AppError(kind, 'read failed');
-    await expect(hook.result.current.recheckGuestProgress()).resolves.toBe('some');
-  });
-});
-
 describe('새로 받을 수 있게 된 업적 알림', () => {
   async function booted(toasts: [string, string | undefined][]) {
     const hook = setup((m, tone) => { toasts.push([m, tone]); });
@@ -495,13 +461,12 @@ describe('요청 속도 초과(429) 재시도', () => {
     expect(gw.actions).toEqual(['boot']);
   });
 
-  it('boot 완료 전이나 boot 무음 실패 시에도 초기 load와 resync의 파생 claimable 업적이 유지되고 recheckGuestProgress를 왜곡하지 않는다', async () => {
+  it('boot 완료 전이나 boot 무음 실패 시에도 초기 load와 resync의 파생 claimable 업적이 유지된다', async () => {
     gw.loadAchievements = { 'spot-basic-sea': 'claimable' };
     gw.bootErrors = [new AppError('network', 'offline')];
     const hook = setup();
     await waitFor(() => expect(hook.result.current.loading).toBe(false));
     expect(hook.result.current.game.achievements).toEqual({ 'spot-basic-sea': 'claimable' });
-    await expect(hook.result.current.recheckGuestProgress()).resolves.toBe('nothing');
 
     gw.loadAchievements = { 'spot-basic-sea': 'claimable', 'spot-basic-deep': 'claimable' };
     await act(async () => { await hook.result.current.resync(); });

@@ -42,7 +42,7 @@ function renderView(account: string | null, accountChecked: boolean) {
     <QueryClientProvider client={client}><GameView
       game={newState()} scene={{ kind: 'region', id: 'village' }} entryPos={null} placeSeq={0}
       dispatch={() => { throw new Error('dispatch is not used'); }} setToast={() => {} } onScene={() => {}} onPlace={() => {} } onWarmup={() => {}}
-      log={[]} syncLabel={null} syncState="on" guestProgress="nothing" recheckGuestProgress={async () => 'nothing'}
+      log={[]} syncLabel={null} syncState="on" guestProgress="nothing"
       account={account} accountChecked={accountChecked} accountFailed={false} uid={null} nickname={null}
       onRename={async () => null} onAuthChanged={async () => {}} onResync={async () => {}}
     /></QueryClientProvider>,

@@ -48,8 +48,8 @@ describe('HttpAdmin', () => {
     }
   });
 
-  it('AdminApi의 모든 조회가 위 표에 있다. 서버 조회가 아닌 것은 deployHost, 쓰기(mail·restrict·resetLink·letterHandled·revokeSessions), 관리자 로그인·로그아웃·로그인 복귀뿐이다', () => {
-    const writes = ['constructor', 'deployHost', 'mail', 'restrict', 'resetLink', 'letterHandled', 'revokeSessions', 'signIn', 'signOut', 'takeSignInReturn'];
+  it('AdminApi의 모든 조회가 위 표에 있다. 서버 조회가 아닌 것은 deployHost, 쓰기(mail·restrict·letterHandled·revokeSessions), 관리자 로그인·로그아웃·로그인 복귀뿐이다', () => {
+    const writes = ['constructor', 'deployHost', 'mail', 'restrict', 'letterHandled', 'revokeSessions', 'signIn', 'signOut', 'takeSignInReturn'];
     const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(admin))
       .filter(m => !writes.includes(m));
     expect(methods.sort()).toEqual(CALLS.map(([method]) => method).sort());
@@ -67,17 +67,11 @@ describe('HttpAdmin', () => {
     });
   });
 
-  it('제재와 재설정 링크 발급은 POST로 계정 id를 보내고, 실패하면 작업 이름과 서버 오류 코드를 담아 던진다', async () => {
+  it('제재·편지 처리·세션 강제 종료는 POST로 인자를 보내고, 실패하면 작업 이름과 서버 오류 코드를 담아 던진다', async () => {
     const post = (body: unknown) => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ restricted: true }), { status: 200 }));
     await expect(admin.restrict('u-1', true)).resolves.toEqual({ restricted: true });
     expect(fetchMock).toHaveBeenLastCalledWith('/api/admin?q=restrict', post({ userId: 'u-1', restricted: true }));
-    const link = { url: 'https://example.test/?token=abc', expiresAt: '2026-11-05T01:00:00.000Z' };
-    fetchMock.mockResolvedValue(new Response(JSON.stringify(link), { status: 200 }));
-    await expect(admin.resetLink('u-1')).resolves.toEqual(link);
-    expect(fetchMock).toHaveBeenLastCalledWith('/api/admin?q=resetLink', post({ userId: 'u-1' }));
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: 'anonymous-user' }), { status: 409 }));
-    await expect(admin.resetLink('u-1')).rejects.toThrow('재설정 링크 발급 실패: 409 anonymous-user');
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: 'no-save' }), { status: 404 }));
     await expect(admin.restrict('u-1', false)).rejects.toThrow('제재 해제 실패: 404 no-save');
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ handled: true }), { status: 200 }));

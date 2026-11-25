@@ -13,7 +13,6 @@ import { useAccount } from './features/account/service/useAccount';
 import { useLastPosition } from './features/gameplay/service/useLastPosition';
 import { useMessageLog } from './presentation/layouts/hud/useMessageLog';
 import { sendNotice } from './features/display/model/toastPolicy';
-import { useDialogs } from './presentation/ui/useDialogs';
 import GameView from './presentation/views/game/GameView';
 import UpdateModal from './presentation/views/overlays/update/UpdateModal';
 import SessionReplacedModal from './presentation/views/overlays/update/SessionReplacedModal';
@@ -39,19 +38,12 @@ function AppContent() {
   const { log, setToast, toasts, dismissToast, setMirrorEnv } = useMessageLog([
     '집이에요. 가구를 눌러 정비하고, 문으로 나가 마을 물가에서 낚시해 보세요.',
   ]);
-  const { game, dispatch, nickname, devTools, rename, sync, syncLabel, blocker, loading, guestProgress, recheckGuestProgress, adoptAccount, warmup, resync } = useGame({ setToast });
+  const { game, dispatch, nickname, devTools, rename, sync, syncLabel, blocker, loading, guestProgress, adoptAccount, warmup, resync } = useGame({ setToast });
   useEffect(() => {
     setMirrorEnv({ blocked: blocker !== null, loading });
   }, [blocker, loading, setMirrorEnv]);
-  const { input, dialogs } = useDialogs();
   const { account, accountChecked, accountFailed, uid, onAuthChanged } = useAccount({
     game, setToast, adoptAccount,
-    askNewPassword: min => input({
-      layer: 'app',
-      title: '새 비밀번호', body: `새 비밀번호를 입력해 주세요.
-${min}자 이상이어야 해요.`,
-      label: '새 비밀번호', secret: true, confirmLabel: '바꾸기',
-    }),
   });
 
   const [scene, setScene] = useState<SceneRef>(() => sceneOf(game.location));
@@ -152,7 +144,7 @@ ${min}자 이상이어야 해요.`,
       <GameView
         game={game} scene={scene} entryPos={entryPos} placeSeq={placeSeq}
         dispatch={dispatch} setToast={setToast} toasts={toasts} onDismissToast={dismissToast} onMirrorEnv={setMirrorEnv} onScene={go} onPlace={place} onWarmup={warmup}
-        log={log} syncLabel={syncLabel} syncState={sync} guestProgress={guestProgress} recheckGuestProgress={recheckGuestProgress}
+        log={log} syncLabel={syncLabel} syncState={sync} guestProgress={guestProgress}
         account={account} accountChecked={accountChecked} accountFailed={accountFailed} uid={uid} nickname={nickname}
         onRename={rename} onAuthChanged={onAuthChanged} onResync={resync} blocker={blocker === 'update' ? <UpdateModal /> : blocker === 'replaced' ? <SessionReplacedModal /> : blocker === 'unsaved' ? <UnsavedModal /> : loading ? <LoadingOverlay /> : null}
         badge={<DevEnvContext.Provider value={DEV_ENV}><EnvBadge build={BUILD_LABEL} /></DevEnvContext.Provider>}
@@ -161,7 +153,6 @@ ${min}자 이상이어야 해요.`,
         <DevTools game={game} dispatch={dispatch} setToast={setToast} granted={devTools}
                   onTeleportBase={teleportBase} onTeleportSpot={teleportSpot} />
       </DevEnvContext.Provider>
-      {dialogs}
     </>
   );
 }

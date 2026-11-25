@@ -64,11 +64,11 @@ describe('구글 인증 복귀 처리', () => {
     expect(p.setToast).toHaveBeenCalledWith('구글 계정을 연결했어요. 진행은 이 계정에 저장돼요.', 'info');
   });
 
-  it('이메일 계정이 겹친다는 코드는 안내 창으로 알린다', async () => {
+  it('기존 계정이 겹친다는 코드는 안내 창으로 알린다', async () => {
     auth.landing = { tag: 'link-guest', error: 'email_account_exists' };
     const p = setup();
     await waitFor(() => expect(p.showNotice).toHaveBeenCalledTimes(1));
-    expect(p.showNotice.mock.calls[0][1]).toContain('계정 관리');
+    expect(p.showNotice.mock.calls[0][1]).toContain('다른 구글 계정으로 연결');
     expect(p.askOverwrite).not.toHaveBeenCalled();
   });
 
@@ -97,8 +97,8 @@ describe('구글 인증 복귀 처리', () => {
     expect(p.setToast).toHaveBeenCalledWith('구글 계정 선택 화면을 열지 못했어요. 잠시 뒤 다시 시도해 주세요.', 'warn');
   });
 
-  it('이메일 계정이 같은 코드를 받으면 확인 없이 안내 창이다', async () => {
-    auth.landing = { tag: 'link-email', error: 'account_already_linked_to_different_user' };
+  it('sign-in 표지가 같은 코드를 받으면 확인 없이 안내 창이다', async () => {
+    auth.landing = { tag: 'sign-in', error: 'account_already_linked_to_different_user' };
     const p = setup();
     await waitFor(() => expect(p.showNotice).toHaveBeenCalledTimes(1));
     expect(p.askOverwrite).not.toHaveBeenCalled();
@@ -191,8 +191,8 @@ describe('버릴 진행이 없는 게스트의 구글 로그인', () => {
     await waitFor(() => expect(p.setToast).toHaveBeenCalledWith('구글 계정 선택 화면을 열지 못했어요. 잠시 뒤 다시 시도해 주세요.', 'warn'));
   });
 
-  it('이메일 계정이나 다른 오류 코드는 진행 판정과 관계없이 복귀 안내를 보이고 로그인을 시작하지 않는다', async () => {
-    auth.landing = { tag: 'link-email', error: 'account_already_linked_to_different_user' };
+  it('다른 오류 코드는 진행 판정과 관계없이 복귀 안내를 보이고 로그인을 시작하지 않는다', async () => {
+    auth.landing = { tag: 'sign-in', error: 'account_already_linked_to_different_user' };
     const p = setup(false, 'nothing');
     await waitFor(() => expect(p.showNotice).toHaveBeenCalledTimes(1));
     expect(auth.startGoogle).not.toHaveBeenCalled();

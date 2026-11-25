@@ -7,14 +7,9 @@ import {
   sessionUid,
   ensureSession,
   currentAccount,
-  signInWithEmail,
   startGoogleAuth,
   takeGoogleLanding,
-  accountProviders,
   signOutAccount,
-  requestPasswordReset,
-  applyNewPassword,
-  takePasswordResetLanding,
   deleteOwnAccount,
 } from './auth';
 
@@ -31,29 +26,14 @@ class HttpAuth implements AuthApi {
     const [uid, lookup] = await Promise.all([sessionUid(), currentAccount()]);
     return { uid, email: lookup.status === 'account' ? lookup.email : null };
   }
-  takePasswordResetLanding(): 'ready' | 'invalid' | null {
-    return takePasswordResetLanding();
-  }
   startGoogle(start: 'link' | 'sign-in', tag: string): Promise<AuthResult> {
     return startGoogleAuth(start, tag);
   }
   takeGoogleLanding(): { tag: string; error: string | null } | null {
     return takeGoogleLanding();
   }
-  accountProviders(): Promise<string[] | null> {
-    return accountProviders();
-  }
-  signIn(email: string, password: string): Promise<AuthResult> {
-    return signInWithEmail(email, password);
-  }
   signOut(): Promise<void> {
     return signOutAccount();
-  }
-  requestPasswordReset(email: string): Promise<AuthResult> {
-    return requestPasswordReset(email);
-  }
-  applyNewPassword(password: string): Promise<AuthResult> {
-    return applyNewPassword(password);
   }
   deleteAccount(): Promise<AuthResult> {
     return deleteOwnAccount();
@@ -76,7 +56,7 @@ import type {
   AdminApi, AdminAccessResult,
   AdminUserRow, AdminUserState, AdminOverview, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
   AdminLive, AdminDailyStatsRow, AdminSessionRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, AdminChangelogRow, AdminChatReportRow, BalanceLive,
-  AdminSentMailRow, AdminMailRequest, AdminMailPlan, AdminResetLink,
+  AdminSentMailRow, AdminMailRequest, AdminMailPlan,
 } from '../api/types';
 
 const RATE_LIMIT_MESSAGE = '요청이 너무 많아 잠시 기다렸다가 다시 시도해 주세요.';
@@ -319,9 +299,6 @@ class HttpAdmin implements AdminApi {
   }
   restrict(userId: string, restricted: boolean): Promise<{ restricted: boolean }> {
     return writeAdmin('restrict', { userId, restricted }, restricted ? '제재' : '제재 해제');
-  }
-  resetLink(userId: string): Promise<AdminResetLink> {
-    return writeAdmin('resetLink', { userId }, '재설정 링크 발급');
   }
   letterHandled(letterId: number, handled: boolean): Promise<{ handled: boolean }> {
     return writeAdmin('letterHandled', { letterId, handled }, '편지 처리 표시');

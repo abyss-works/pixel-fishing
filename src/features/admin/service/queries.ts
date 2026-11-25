@@ -47,9 +47,6 @@ export const writeAdminMail = (op: 'preview' | 'send', request: AdminMailRequest
 /** 계정 제재(true) 또는 해제(false) */
 export const writeAdminRestrict = (userId: string, restricted: boolean) => api.admin.restrict(userId, restricted);
 
-/** 가입 계정의 비밀번호 재설정 링크 발급 */
-export const writeAdminResetLink = (userId: string) => api.admin.resetLink(userId);
-
 /** 편지 처리 표시 또는 취소 */
 export const writeAdminLetterHandled = (letterId: number, handled: boolean) => api.admin.letterHandled(letterId, handled);
 

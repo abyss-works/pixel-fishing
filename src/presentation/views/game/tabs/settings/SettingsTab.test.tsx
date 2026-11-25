@@ -14,8 +14,6 @@ function renderSettings(nickname: string | null, profileStatus: ProfileStatus) {
       setToast={vi.fn()}
       syncLabel={null}
       syncState="on"
-      guestProgress="nothing"
-      recheckGuestProgress={async () => 'nothing'}
       account="u@example.com"
       accountFailed={false}
       uid="u1"
@@ -39,8 +37,6 @@ describe('SettingsTab 닉네임 비동기 상태 구분', () => {
         setToast={vi.fn()}
         syncLabel={null}
         syncState="on"
-        guestProgress="nothing"
-        recheckGuestProgress={async () => 'nothing'}
         account="u@example.com"
         accountFailed={false}
         uid="u1"
@@ -59,8 +55,6 @@ describe('SettingsTab 닉네임 비동기 상태 구분', () => {
         setToast={vi.fn()}
         syncLabel={null}
         syncState="on"
-        guestProgress="nothing"
-        recheckGuestProgress={async () => 'nothing'}
         account="u@example.com"
         accountFailed={false}
         uid="u1"
@@ -79,8 +73,6 @@ describe('SettingsTab 닉네임 비동기 상태 구분', () => {
         setToast={vi.fn()}
         syncLabel={null}
         syncState="on"
-        guestProgress="nothing"
-        recheckGuestProgress={async () => 'nothing'}
         account="u@example.com"
         accountFailed={false}
         uid="u1"
