@@ -1627,12 +1627,13 @@ describe('닉네임 (게스트명 표시·변경)', () => {
     render(<App />);
     clickTab(/설정/);
     fireEvent.click(openerButton('내 정보'));
-    const current = screen.getByLabelText('현재 닉네임');
-    await waitFor(() => expect(current.textContent).not.toContain('불러오는 중'));
-    expect(current.textContent).toContain('_');
-    fireEvent.change(screen.getByLabelText('새 닉네임'), { target: { value: '날치' } });
+    const current = screen.getByLabelText('현재 닉네임') as HTMLInputElement;
+    await waitFor(() => expect(current.value).not.toBe('불러오는 중'));
+    expect(current.value).toContain('_');
     fireEvent.click(screen.getByRole('button', { name: '변경' }));
-    await waitFor(() => expect(screen.getByLabelText('현재 닉네임')).toHaveTextContent('날치'));
+    fireEvent.change(screen.getByLabelText('새 닉네임'), { target: { value: '날치' } });
+    fireEvent.click(screen.getByRole('button', { name: '확인' }));
+    await waitFor(() => expect(screen.getByLabelText('현재 닉네임')).toHaveValue('날치'));
   });
 
   it('규칙에 어긋나는 이름은 보내지 않고 안내한다', async () => {
@@ -1640,12 +1641,14 @@ describe('닉네임 (게스트명 표시·변경)', () => {
     render(<App />);
     clickTab(/설정/);
     fireEvent.click(openerButton('내 정보'));
-    const current = screen.getByLabelText('현재 닉네임');
-    await waitFor(() => expect(current.textContent).not.toContain('불러오는 중'));
-    const before = current.textContent;
-    fireEvent.change(screen.getByLabelText('새 닉네임'), { target: { value: '__' } });
+    const current = screen.getByLabelText('현재 닉네임') as HTMLInputElement;
+    await waitFor(() => expect(current.value).not.toBe('불러오는 중'));
+    const before = current.value;
     fireEvent.click(screen.getByRole('button', { name: '변경' }));
-    await waitFor(() => expect(screen.getByLabelText('현재 닉네임')).toHaveTextContent(before!));
+    fireEvent.change(screen.getByLabelText('새 닉네임'), { target: { value: '__' } });
+    fireEvent.click(screen.getByRole('button', { name: '확인' }));
+    fireEvent.click(screen.getByRole('button', { name: '취소' }));
+    await waitFor(() => expect(screen.getByLabelText('현재 닉네임')).toHaveValue(before));
   });
 
   it('App은 GameView에 profileStatus prop을 직접 전달해 공용 저장소가 비워져도 불러오기 실패와 미설정을 구분한다', async () => {

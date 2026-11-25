@@ -155,10 +155,10 @@ export function PlayerInfo({ target, self, account, accountFailed = false, setTo
   const lock = guestLock('player', accountLockState(account, accountFailed));
   const actions = self ? null : lock ? (
     <div className="flex items-center gap-2">
-      <Locked lines={lock} label="친구 요청">
+      <Locked lines={lock} label="친구 요청" badge={false}>
         <Button variant="primary" size="sm" disabled>친구 요청</Button>
       </Locked>
-      <Locked lines={lock} label="차단">
+      <Locked lines={lock} label="차단" badge={false}>
         <Button size="sm" disabled>차단</Button>
       </Locked>
     </div>
