@@ -38,10 +38,10 @@ const GUEST_FEATURE_ACTION: Partial<Record<GuestFeature, GameAction>> = {
   nickname: { type: 'setNickname', nickname: '' },
 };
 
-// 게스트 규칙(guestActionVerdict)은 게임 액션만 판정한다. 운세 달력, 길드, 친구, 채팅 쓰기, 플레이어 정보의 친구 요청과 차단은
+// 게스트 규칙(guestActionVerdict)은 게임 액션만 판정한다. 길드, 친구, 채팅 쓰기, 플레이어 정보의 친구 요청과 차단은
 // 게임 액션이 아니라 서버 API 함수라 대응 액션이 없고, 서버가 각 함수에서 세션의 이메일이 없으면(게스트) 거부한다.
 // 그래서 지금은 이 클라이언트 목록이 필요하다. 서버가 이 거부를 규칙 모듈의 판정으로 옮기면 이 목록을 규칙 판정으로 바꾼다.
-const GUEST_CLOSED_FEATURES: ReadonlySet<GuestFeature> = new Set(['fortune', 'guild', 'friends', 'chat', 'player']);
+const GUEST_CLOSED_FEATURES: ReadonlySet<GuestFeature> = new Set(['guild', 'friends', 'chat', 'player']);
 
 // 첫 줄에 기능 이름을 더해야 하는 기능의 잠금 문안. 둘째 줄은 공통 항로 안내를 따른다.
 const GUEST_LOCK_LINES: Partial<Record<GuestFeature, readonly string[]>> = {

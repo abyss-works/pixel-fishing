@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DailyFortune } from '../../../../game/rules/fortune';
 import type { FortuneHistory } from '../../../../platform/api';
+import { currentGameDay } from '../../../../features/fortune/model/fortune';
 import { sessionKey } from '../../../../features/account/service/session';
 
 const apiMock = vi.hoisted(() => ({
@@ -72,7 +73,7 @@ describe('운세 월간 달력 창 (FortuneCalendarModal)', () => {
       <FortuneCalendarModal gameFortune={NOV_HISTORY.today} accountState="account" onClose={vi.fn()} />,
     );
 
-    await waitFor(() => expect(screen.getByRole('grid', { name: '2026년 11월 운세 달력' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('region', { name: '2026년 11월 운세 달력' })).toBeInTheDocument());
     expect(screen.getByText('오늘의 풍어운')).toBeInTheDocument();
 
     const stats = screen.getByLabelText('월간 운세 집계');
@@ -108,21 +109,21 @@ describe('운세 월간 달력 창 (FortuneCalendarModal)', () => {
       <FortuneCalendarModal gameFortune={NOV_HISTORY.today} accountState="account" onClose={vi.fn()} />,
     );
 
-    await waitFor(() => expect(screen.getByRole('grid', { name: '2026년 11월 운세 달력' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('region', { name: '2026년 11월 운세 달력' })).toBeInTheDocument());
     const prevBtn = screen.getByRole('button', { name: '이전 달' });
     const nextBtn = screen.getByRole('button', { name: '다음 달' });
     expect(prevBtn).toBeEnabled();
     expect(nextBtn).toBeDisabled();
 
     fireEvent.click(prevBtn);
-    await waitFor(() => expect(screen.getByRole('grid', { name: '2026년 10월 운세 달력' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('region', { name: '2026년 10월 운세 달력' })).toBeInTheDocument());
     expect(apiMock.readFortuneHistory).toHaveBeenCalledWith('2026-10');
     expect(screen.getByRole('button', { name: '이전 달' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '다음 달' })).toBeEnabled();
     expect(within(screen.getByLabelText('선택한 날짜 운세 상세')).getByText('2026년 10월 30일')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '다음 달' }));
-    await waitFor(() => expect(screen.getByRole('grid', { name: '2026년 11월 운세 달력' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('region', { name: '2026년 11월 운세 달력' })).toBeInTheDocument());
   });
 
   it('빈 달, 로딩, 오류 재시도, 오프라인 상태를 구분해 표시한다', async () => {
@@ -150,7 +151,7 @@ describe('운세 월간 달력 창 (FortuneCalendarModal)', () => {
     );
     await waitFor(() => expect(screen.getByText(/운세 달력을 불러오지 못했어요/)).toBeInTheDocument(), { timeout: 3000 });
     fireEvent.click(screen.getByRole('button', { name: '다시 불러오기' }));
-    await waitFor(() => expect(screen.getByRole('grid', { name: '2026년 11월 운세 달력' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('region', { name: '2026년 11월 운세 달력' })).toBeInTheDocument());
     cleanup();
 
     // 오프라인(로컬 모드)
@@ -164,13 +165,14 @@ describe('운세 월간 달력 창 (FortuneCalendarModal)', () => {
   });
 
   it('게스트에게는 오늘의 운세와 공용 잠금 달력 안내를 보이고 이력을 조회하지 않는다', () => {
-    const today: DailyFortune = { day: new Date().toISOString().slice(0, 10), kind: 'gold', index: 3 };
+    const today: DailyFortune = { day: currentGameDay(new Date().toISOString()), kind: 'gold', index: 3 };
     const onClose = vi.fn();
     renderWithQuery(
       <FortuneCalendarModal gameFortune={today} accountState="guest" onClose={onClose} />,
     );
 
     expect(apiMock.readFortuneHistory).not.toHaveBeenCalled();
+    expect(screen.getByText('오늘의 재물운')).toBeInTheDocument();
     expect(screen.getByText('월별 운세 달력 잠금')).toBeInTheDocument();
     expect(screen.getByText('태평양 항로가 열리면 쓸 수 있어요.')).toBeInTheDocument();
     expect(screen.getByText('태평양 항로는 조각배(1단계)부터 열려요.')).toBeInTheDocument();
@@ -178,7 +180,7 @@ describe('운세 월간 달력 창 (FortuneCalendarModal)', () => {
     fireEvent.mouseEnter(screen.getByRole('group', { name: '월별 운세 달력 잠금' }).parentElement!);
     expect(screen.getByRole('tooltip')).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
 
-    fireEvent.click(screen.getByRole('button', { name: '확인' }));
+    fireEvent.click(screen.getByRole('button', { name: '닫기' }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 

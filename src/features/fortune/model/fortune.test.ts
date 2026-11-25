@@ -217,7 +217,7 @@ describe('운세 월간 달력 파생 로직', () => {
   });
 
   it('달력 안내 문구가 규칙 문구 기준을 지키고 금지 표현을 쓰지 않는다', () => {
-    expect(FORTUNE_CALENDAR_NOTE).toContain('새벽 4시');
-    expect(FORTUNE_CALENDAR_NOTE).not.toContain('한국 시간 새벽');
+    expect(FORTUNE_CALENDAR_NOTE).toContain('매일 새벽');
+    expect(FORTUNE_CALENDAR_NOTE).not.toMatch(/4시|한국 시간 새벽/);
   });
 });

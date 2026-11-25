@@ -3,7 +3,7 @@
 import { FORTUNE_TARGET_OF, activePotionsOf, fortuneOf, luckMultOf } from '../../../game/rules/fortune';
 import type { DailyFortune, FortuneKind, FortuneTarget } from '../../../game/rules/fortune';
 import type { GameState } from '../../../game/rules/logic';
-import { GAME_DAY_RESET_TEXT, gameDayOf } from '../../../game/rules/time';
+import { gameDayOf } from '../../../game/rules/time';
 
 /** 운세 대상별 보너스 표시 이름 */
 export const FORTUNE_TARGET_BONUS_LABEL: Record<FortuneTarget, string> = {
@@ -86,7 +86,7 @@ export const FORTUNE_RESET_NOTE = '새 운세는 하루마다 새로 뽑혀요.'
 export const FORTUNE_MENU_GUIDE_NOTE = '메뉴의 운세 항목에서 지난 달력 기록을 볼 수 있어요.';
 
 /** 운세 달력의 일일 기록 기준 안내 */
-export const FORTUNE_CALENDAR_NOTE = `매일 ${GAME_DAY_RESET_TEXT} 이후 첫 접속부터 달력에 기록돼요.`;
+export const FORTUNE_CALENDAR_NOTE = '매일 새벽 이후 첫 접속부터 달력에 기록돼요.';
 
 /** 월간 달력의 요일 머리글 (월요일 시작) */
 export const FORTUNE_WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일'] as const;

@@ -14,6 +14,7 @@ const TONE = {
 
 const BORDER = {
   line: 'border-line',
+  'line-dim': 'border-line-dim',
   gold: 'border-gold',
   accent: 'border-accent',
   common: 'border-common',

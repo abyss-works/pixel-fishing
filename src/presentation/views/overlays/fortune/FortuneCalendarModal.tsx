@@ -20,7 +20,7 @@ import {
   shiftFortuneMonth,
 } from '../../../../features/fortune/model/fortune';
 import { useFortuneHistory } from '../../../../features/fortune/service/useFortuneHistory';
-import { guestLock } from '../../../../features/display/model/menuLock';
+import { menuLock } from '../../../../features/display/model/menuLock';
 import type { AccountLockState } from '../../../../features/display/model/menuLock';
 import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
@@ -66,7 +66,8 @@ export default function FortuneCalendarModal({
   }));
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
-  const lockLines = guestLock('fortune', accountState);
+  const lock = menuLock({ account: accountState, guestAllowed: false, feature: '월별 운세 달력' });
+  const lockLines = lock.kind === 'none' ? null : lock.lines;
   const canLoadHistory = lockLines === null;
   const history = useFortuneHistory(navState.month, canLoadHistory);
 
@@ -76,11 +77,7 @@ export default function FortuneCalendarModal({
   if (lockLines !== null) {
     return (
       <Modal layer="stage" onClose={onClose}>
-        <ModalCard
-          title="운세"
-          onClose={onClose}
-          confirm={<Button variant="primary" full onClick={onClose}>확인</Button>}
-        >
+        <ModalCard title="운세" onClose={onClose}>
           <div className="flex flex-col gap-3">
             {todayFortune ? (
               <TodayFortuneBanner fortune={todayFortune} />
@@ -89,12 +86,12 @@ export default function FortuneCalendarModal({
             )}
             <Locked
               title="월별 운세 달력"
-              description="로그인 계정의 지난 운세 기록"
+              description="매일 받은 지난 운세를 달력으로 확인해요."
               lines={lockLines}
               label="월별 운세 달력 잠금"
             >
-              <Inset tone="deep" className="p-4 text-center flex flex-col items-center gap-1.5">
-                <span className="text-sm font-bold text-text">월별 운세 달력 잠금</span>
+              <Inset tone="deep" border="line-dim" className="p-4 text-center flex flex-col items-center gap-1.5">
+                <span className="text-sm font-bold text-text-dim">월별 운세 달력 잠금</span>
                 {lockLines.map(line => (
                   <span key={line} className="text-xs text-text-dim">{line}</span>
                 ))}
@@ -165,7 +162,7 @@ export default function FortuneCalendarModal({
                 <>
                   <div
                     className="grid grid-cols-7 gap-1"
-                    role="grid"
+                    role="region"
                     aria-label={`${formatFortuneMonth(activeMonth)} 운세 달력`}
                   >
                     {FORTUNE_WEEKDAYS.map(dow => (
@@ -189,7 +186,7 @@ export default function FortuneCalendarModal({
                           aria-label={ariaLabel}
                           aria-pressed={isSelected}
                           className={cx(
-                            'flex flex-col items-stretch justify-between gap-1 min-h-12 px-1.5 py-1 text-left font-normal',
+                            'flex flex-col items-stretch justify-between gap-1 min-h-12 px-1.5 mobile:px-1 py-1 text-left font-normal',
                             isSelected && 'border-gold bg-(--inset-light)',
                             !isSelected && cell.isToday && 'border-accent',
                             !isSelected && !cell.isToday && !f && 'bg-bg border-line-dim text-text-dim',
@@ -201,8 +198,8 @@ export default function FortuneCalendarModal({
                             {cell.isToday && <span className="hidden mobile:inline-block size-1.5 bg-accent" aria-hidden="true" />}
                           </span>
                           {f ? (
-                            <span className={cx('flex items-center justify-between gap-0.5 w-full text-2xs leading-none', KIND_TONE[f.kind])}>
-                              <span className="font-bold truncate mobile:hidden">{kind!.name}</span>
+                            <span className={cx('flex flex-wrap items-end justify-between gap-x-0.5 gap-y-0.5 w-full text-2xs leading-tight', KIND_TONE[f.kind])}>
+                              <span className="font-bold break-keep mobile:hidden">{kind!.name}</span>
                               <span className="hidden mobile:inline-flex">
                                 <FortuneMotifIcon kind={f.kind} size={10} />
                               </span>

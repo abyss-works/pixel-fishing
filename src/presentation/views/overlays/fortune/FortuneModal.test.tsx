@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DailyFortune } from '../../../../game/rules/fortune';
 import FortuneModal from './FortuneModal';
@@ -35,6 +35,7 @@ describe('오늘의 운세 팝업 (FortuneModal)', () => {
     expect(screen.getByText('그림자 운')).toBeInTheDocument();
     expect(screen.getByLabelText('지수 3, 적당한 운')).toBeInTheDocument();
     expect(screen.getByText('+3%p')).toBeInTheDocument();
-    expect(screen.getAllByText('네임드').some(el => el.className.includes('text-epic'))).toBe(true);
+    expect(within(screen.getByLabelText('오늘의 보너스')).getByText('네임드')).toBeInTheDocument();
+    expect(screen.getAllByText('네임드').length).toBeGreaterThanOrEqual(2);
   });
 });

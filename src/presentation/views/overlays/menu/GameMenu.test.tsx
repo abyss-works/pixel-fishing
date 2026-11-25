@@ -223,7 +223,7 @@ describe('게임 메뉴', () => {
     });
   });
 
-  // 게임 서버가 있는데 계정을 연결하지 않은 게스트: 여섯 줄이 모두 자리 그대로 잠긴다
+  // 게임 서버가 있는데 계정을 연결하지 않은 게스트: 의뢰, 업적, 길드, 소셜, 우편함 다섯 줄이 잠기고 운세 줄은 열린다
   describe('게스트 잠금', () => {
     const guestMenu = async (h = handlers()) => {
       wrap(<GameMenu account={null} {...h} accountState="guest" />);
@@ -231,39 +231,50 @@ describe('게임 메뉴', () => {
       return h;
     };
 
-    it('의뢰, 업적, 운세, 길드, 소셜, 우편함 줄이 순서대로 aria-disabled 잠긴 줄이고 자물쇠가 붙으며 title이 없다', async () => {
+    it('의뢰, 업적, 길드, 소셜, 우편함은 aria-disabled 잠긴 줄이고 운세 줄만 열려 있다', async () => {
       await guestMenu();
       const items = screen.getAllByRole('menuitem');
       expect(items.map(i => i.getAttribute('aria-label'))).toEqual(['의뢰', '업적', '운세', '길드', '소셜', '우편함']);
-      for (const item of items) {
-        expect(item).toHaveAttribute('aria-disabled', 'true');
-        expect(item.querySelector('[data-glyph="lock"]')).not.toBeNull();
+      for (const [idx, item] of items.entries()) {
+        if (idx === 2) {
+          expect(item).not.toHaveAttribute('aria-disabled');
+          expect(item.querySelector('[data-glyph="lock"]')).toBeNull();
+        } else {
+          expect(item).toHaveAttribute('aria-disabled', 'true');
+          expect(item.querySelector('[data-glyph="lock"]')).not.toBeNull();
+        }
         expect(item.closest('[title]')).toBeNull();
       }
     });
 
-    it('줄을 누르거나 올리면 공용 툴팁이 열리고 창은 열리지 않으며 메뉴도 접히지 않는다', async () => {
+    it('잠긴 줄은 눌러도 열리지 않고 툴팁이 열리며, 운세 줄은 누르면 운세 창을 연다', async () => {
       const h = await guestMenu();
       const items = screen.getAllByRole('menuitem');
-      for (const item of items) fireEvent.click(item);
+      for (const [idx, item] of items.entries()) {
+        if (idx !== 2) fireEvent.click(item);
+      }
       expect(h.onQuests).not.toHaveBeenCalled();
       expect(h.onAchievements).not.toHaveBeenCalled();
-      expect(h.onFortune).not.toHaveBeenCalled();
       expect(h.onGuild).not.toHaveBeenCalled();
       expect(h.onFriends).not.toHaveBeenCalled();
       expect(h.onMailbox).not.toHaveBeenCalled();
       expect(screen.getAllByRole('menuitem')).toHaveLength(6);
-      fireEvent.mouseEnter(items[2].parentElement!);
+      fireEvent.mouseEnter(items[1].parentElement!);
       expect(screen.getByRole('tooltip')).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
       expect(screen.getByRole('tooltip')).toHaveTextContent('태평양 항로는 조각배(1단계)부터 열려요.');
+
+      fireEvent.click(items[2]);
+      expect(h.onFortune).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('menuitem')).not.toBeInTheDocument();
     });
 
-    it('확인 실패 상태에서는 여섯 줄이 확인 실패 전용 문안으로 잠긴다', async () => {
+    it('확인 실패 상태에서는 다섯 줄이 확인 실패 전용 문안으로 잠기고 운세 줄은 열려 있다', async () => {
       const h = handlers();
       wrap(<GameMenu account={null} {...h} accountState="unverified" />);
       fireEvent.click(await screen.findByRole('button', { name: /^메뉴 열기/ }));
       const items = screen.getAllByRole('menuitem');
       expect(items.map(i => i.getAttribute('aria-label'))).toEqual(['의뢰', '업적', '운세', '길드', '소셜', '우편함']);
+      expect(items[2]).not.toHaveAttribute('aria-disabled');
       fireEvent.mouseEnter(items[0].parentElement!);
       expect(screen.getByRole('tooltip')).toHaveTextContent('계정을 확인하면 쓸 수 있어요.');
     });
