@@ -66,7 +66,7 @@ export function moveSpeed(state: GameState, movement: Movement, night = false): 
     if (bonus > 0) mods.push({ id: `relic-${a.id}`, label: a.name, delta: base * bonus });
   }
   if (night) mods.push({
-    id: 'night', label: '밤 — 어둠 속 이동 감속',
+    id: 'night', label: '밤 항해 감속',
     delta: base * (NIGHT_SPEED_FACTOR - 1),
   });
   return stat(base, mods);
@@ -197,6 +197,6 @@ export function powerHelpText(): string {
 
 export function autoPenaltyHelpText(): string {
   return '방치로 낚을 때는 희귀한 어종이 잘 걸리지 않아요.\n'
-    + '낚싯대 파워가 이 해역 요구치를 넘을수록 그 차이가 줄어들어요.\n'
-    + '요구치에 못 미치면 그 차이가 더 커져요.';
+    + '낚싯대 파워가 이 해역 기준 파워를 넘을수록 그 차이가 줄어들어요.\n'
+    + '기준 파워에 못 미치면 그 차이가 더 커져요.';
 }

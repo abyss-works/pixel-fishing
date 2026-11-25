@@ -30,7 +30,7 @@ import {
   duelHpOf, ticketRemainingMs,
 } from './challenge.js';
 import { bagCapacity, licenseConditions } from './logic.js';
-import { GAME_DAY_RESET_TEXT, gameDayOf } from './time.js';
+import { gameDayOf } from './time.js';
 import type { GameState } from './logic.js';
 import type { NamedPity } from './pity.js';
 
@@ -104,8 +104,8 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'relief-invalid': '지원 코드가 맞지 않아요. 이미 사용했거나 없는 코드예요.',
   'mail-unavailable': '이미 받았거나 받을 수 없는 우편이에요.',
   'nickname-taken': '이미 쓰이는 닉네임이에요.',
-  'no-license': '오프라인에서는 의뢰를 수주하거나 마칠 수 없어요. 서버에 연결된 뒤 다시 해 주세요.',
-  'daily-cleared': `오늘 이 종류의 의뢰는 이미 마쳤어요. ${GAME_DAY_RESET_TEXT}가 지나면 다시 수주할 수 있어요.`,
+  'no-license': '연결이 끊긴 상태에서는 의뢰를 받거나 마칠 수 없어요. 연결된 뒤 다시 해 주세요.',
+  'daily-cleared': '오늘 의뢰는 이미 마쳤어요. 내일 다시 받을 수 있어요.',
   'quest-incomplete': '아직 마칠 조건을 채우지 못했어요.',
   'quest-active': '이미 수주 중인 의뢰가 있어요. 먼저 마쳐 주세요.',
   'dex-incomplete': '그 구역 도감을 아직 다 채우지 못했어요. 수배판에서 남은 조건을 확인해 보세요.',
@@ -123,9 +123,9 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'bag-full': '가방이 가득 차서 회수할 수 없어요. 물고기를 팔거나 놓아준 뒤 다시 해 보세요.',
   'item-not-owned': '가방에 이 요리가 없어요.',
   'potion-not-owned': '가방에 이 물약이 없어요.',
-  'potion-already-active': '오늘 이미 같은 물약 효과가 적용 중이에요.',
+  'potion-already-active': '오늘은 이미 같은 물약을 마셨어요.',
   'not-at-home': '집에서만 할 수 있어요.',
-  'not-at-sale-base': '집이나 항구 또는 가공 플랜트선에서만 할 수 있어요.',
+  'not-at-sale-base': '집이나 항구에서만 할 수 있어요.',
   'cooking-locked': `${COOKING_ZONE_NAME} 항로가 열리면 부엌을 쓸 수 있어요.`,
   'energy-locked': `${COOKING_ZONE_NAME} 항로가 열리면 기운 얻기를 할 수 있어요.`,
   'not-enough-energy': '생명의 기운이 부족해요.',
@@ -133,7 +133,7 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'storage-full': '보관함이 가득 찼어요. 가방 탭에서 도시락을 먹거나 미끼를 쓰면 자리가 생겨요.',
   'debug-forbidden': '이 서버에서는 개발 도구 명령을 쓸 수 없어요. 운영 서버이거나 권한이 없는 계정이에요.',
   'debug-db-required': '로컬 모드(DB 없음)에서는 수배 DB 도구를 쓸 수 없어요.',
-  'bad-request': '처리할 수 없는 요청이에요.',
+  'bad-request': '요청을 처리하지 못했어요. 잠시 뒤 다시 해 주세요.',
 };
 
 /** 전시대 이동 — slot 번호면 가방 → 그 칸(비어 있어야 한다), null이면 전시대 → 가방(상한 검사).

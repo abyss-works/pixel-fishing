@@ -25,7 +25,7 @@ export const POTIONS: readonly Potion[] = [
     id: 'luck-small',
     name: '작은 행운 물약',
     grade: 'special',
-    description: '사용하면 한국 시간 새벽 4시까지 모든 운 배율이 +5%p 올라요.',
+    description: '마시면 하루 동안 모든 행운 효과가 +5%p 올라요.',
     duration: 'game-day',
     effects: {
       luck: { rarity: 0.05, sell: 0.05, named: 0.05 },

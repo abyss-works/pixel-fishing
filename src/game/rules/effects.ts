@@ -154,7 +154,7 @@ export function moveSpeedOf(ctx: PlayerContext, movement: Movement, night: boole
   if (night) {
     mods.push({
       id: 'night',
-      label: '밤 — 어둠 속 이동 감속',
+      label: '밤 항해 감속',
       delta: base * (NIGHT_SPEED_FACTOR - 1),
       source: { kind: 'rule', id: 'night' },
     });
