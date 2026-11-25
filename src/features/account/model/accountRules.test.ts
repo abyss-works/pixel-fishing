@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { ACCOUNT_CHECK_FAILED_COPY, ACCOUNT_NUDGE_FAME, MIN_PASSWORD_LENGTH, accountLabel, guestProgress, passwordLongEnough, shouldNudgeAccount } from './accountRules';
+import {
+  ACCOUNT_CHECK_FAILED_COPY, ACCOUNT_NUDGE_FAME, MIN_PASSWORD_LENGTH,
+  accountLabel, guestProgress, nicknameLabel, passwordLongEnough, shouldNudgeAccount, uidPlaceholder,
+} from './accountRules';
 import { newState } from '../../../game/rules/logic';
 
 const base = { configured: true, accountChecked: true, signedIn: false, fame: ACCOUNT_NUDGE_FAME, lastNudgedDay: null, today: '2030-03-04' };
@@ -77,5 +80,23 @@ describe('계정 표시 이름', () => {
   it('확인에 실패했으면 게스트 표기가 아니라 실패 표기다', () => {
     expect(accountLabel(null, true)).toBe(ACCOUNT_CHECK_FAILED_COPY.label);
     expect(ACCOUNT_CHECK_FAILED_COPY.label).not.toContain('게스트');
+  });
+});
+
+describe('비동기 닉네임과 UID 표시 문안', () => {
+  it('닉네임 상태(loading, error, loaded+null, loaded+값)를 구분한다', () => {
+    expect(nicknameLabel(null, 'loading')).toBe('불러오는 중');
+    expect(nicknameLabel('바다', 'loading')).toBe('불러오는 중');
+    expect(nicknameLabel(null, 'error')).toBe('불러오기 실패');
+    expect(nicknameLabel(null, 'loaded')).toBe('미설정');
+    expect(nicknameLabel('배부른_참치', 'loaded')).toBe('배부른_참치');
+  });
+
+  it('UID 미보유 상태(확인 중, 확인 실패, 비연결 게스트)를 구분한다', () => {
+    expect(uidPlaceholder({ account: null, accountChecked: false, accountFailed: false })).toBe('연결 중');
+    expect(uidPlaceholder({ account: null, accountChecked: false, accountFailed: true })).toBe('확인 실패');
+    expect(uidPlaceholder({ account: null, accountChecked: true, accountFailed: true })).toBe('확인 실패');
+    expect(uidPlaceholder({ account: null, accountChecked: true, accountFailed: false })).toBe('계정 연결 필요');
+    expect(uidPlaceholder({ account: 'u@example.com', accountChecked: true, accountFailed: false })).toBe('확인 실패');
   });
 });

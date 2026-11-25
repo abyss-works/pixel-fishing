@@ -91,11 +91,12 @@ export class HttpGameGateway implements GameGateway {
   }
 
   // 실패는 전부 AppError로 던진다 — 여기서 UX를 정하지 않는다 (에러 처리 정책 소관)
-  // 표시용 프로필 읽기 — 표시 전용이라 실패는 이름 없음(null)과 개발 도구 닫힘으로 둔다.
+  // 표시용 프로필 읽기 — 정상 응답(빈 닉네임 포함)과 읽기 실패를 구분해 돌려준다.
   async getProfile(): Promise<GameProfile> {
-    if (!isCloud) return { nickname: null, devTools: false };
+    if (!isCloud) return { ok: true, nickname: null, devTools: false };
     const me = await readMe<{ nickname: unknown; devTools: unknown }>('profile').catch(() => null);
-    return { nickname: typeof me?.nickname === 'string' ? me.nickname : null, devTools: me?.devTools === true };
+    if (!me) return { ok: false };
+    return { ok: true, nickname: typeof me.nickname === 'string' ? me.nickname : null, devTools: me.devTools === true };
   }
 
   async dispatch(action: GameAction, retried = false): Promise<DispatchResult> {

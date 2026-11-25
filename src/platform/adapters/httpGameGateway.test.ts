@@ -59,19 +59,27 @@ describe('HttpGameGateway의 요청 한도 응답', () => {
 describe('HttpGameGateway의 프로필 읽기', () => {
   it('닉네임과 개발 도구 판정을 서버 응답 그대로 돌려준다', async () => {
     me.value = { nickname: '나', devTools: true };
-    expect(await new HttpGameGateway().getProfile()).toEqual({ nickname: '나', devTools: true });
+    expect(await new HttpGameGateway().getProfile()).toEqual({ ok: true, nickname: '나', devTools: true });
   });
 
   it('판정 필드가 참이 아니면 닫힌 것으로 본다', async () => {
     for (const devTools of [false, undefined, 'true', 1, null]) {
       me.value = { nickname: '나', devTools };
-      expect(await new HttpGameGateway().getProfile()).toEqual({ nickname: '나', devTools: false });
+      expect(await new HttpGameGateway().getProfile()).toEqual({ ok: true, nickname: '나', devTools: false });
     }
   });
 
-  it('읽기에 실패하면 이름 없음과 닫힘이다', async () => {
+  it('닉네임이 비어 있는 정상 응답은 ok: true와 null 닉네임으로 돌려준다', async () => {
+    me.value = { nickname: null, devTools: false };
+    expect(await new HttpGameGateway().getProfile()).toEqual({ ok: true, nickname: null, devTools: false });
+  });
+
+  it('응답이 null이거나 읽기에 실패하면 ok: false를 돌려준다', async () => {
     me.value = null;
-    expect(await new HttpGameGateway().getProfile()).toEqual({ nickname: null, devTools: false });
+    expect(await new HttpGameGateway().getProfile()).toEqual({ ok: false });
+
+    me.fn = async () => { throw new AppError('network', 'profile request failed'); };
+    expect(await new HttpGameGateway().getProfile()).toEqual({ ok: false });
   });
 });
 

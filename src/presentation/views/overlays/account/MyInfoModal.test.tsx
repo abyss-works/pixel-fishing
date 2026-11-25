@@ -58,3 +58,35 @@ describe('MyInfoModal 닉네임 변경 잠금', () => {
     expect((screen.getByLabelText('새 닉네임') as HTMLInputElement).disabled).toBe(false);
   });
 });
+
+describe('MyInfoModal 비동기 상태 구분', () => {
+  it('닉네임 상태에 따라 불러오는 중, 미설정, 불러오기 실패를 구분해 보인다', () => {
+    const { rerender } = render(
+      <MyInfoModal setToast={vi.fn()} onClose={vi.fn()} account="me@example.com" uid="u1" nickname={null} profileStatus="loading" onRename={vi.fn(async () => null)} />,
+    );
+    expect(screen.getByLabelText('현재 닉네임')).toHaveTextContent('불러오는 중');
+
+    rerender(<MyInfoModal setToast={vi.fn()} onClose={vi.fn()} account="me@example.com" uid="u1" nickname={null} profileStatus="loaded" onRename={vi.fn(async () => null)} />);
+    expect(screen.getByLabelText('현재 닉네임')).toHaveTextContent('미설정');
+
+    rerender(<MyInfoModal setToast={vi.fn()} onClose={vi.fn()} account="me@example.com" uid="u1" nickname={null} profileStatus="error" onRename={vi.fn(async () => null)} />);
+    expect(screen.getByLabelText('현재 닉네임')).toHaveTextContent('불러오기 실패');
+  });
+
+  it('UID가 없을 때 세션 확인 중, 확인 실패, 비연결 게스트를 구분해 보인다', () => {
+    const { rerender } = render(
+      <MyInfoModal setToast={vi.fn()} onClose={vi.fn()} account={null} accountChecked={false} accountFailed={false} uid={null} nickname={null} profileStatus="loading" onRename={vi.fn(async () => null)} />,
+    );
+    expect(screen.getByText('연결 중')).toBeTruthy();
+
+    rerender(
+      <MyInfoModal setToast={vi.fn()} onClose={vi.fn()} account={null} accountChecked={false} accountFailed uid={null} nickname={null} profileStatus="error" onRename={vi.fn(async () => null)} />,
+    );
+    expect(screen.getByText('확인 실패')).toBeTruthy();
+
+    rerender(
+      <MyInfoModal setToast={vi.fn()} onClose={vi.fn()} account={null} accountChecked accountFailed={false} uid={null} nickname={null} profileStatus="loaded" onRename={vi.fn(async () => null)} />,
+    );
+    expect(screen.getByText('계정 연결 필요')).toBeTruthy();
+  });
+});

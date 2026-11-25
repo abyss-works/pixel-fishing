@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import type { GameAction } from '../../../../../game/rules/actions';
-import type { DispatchResult, MaybePromise } from '../../../../../features/gameplay/service/types';
+import type { DispatchResult, MaybePromise, ProfileStatus } from '../../../../../features/gameplay/service/types';
+import { useProfileStatus } from '../../../../../features/gameplay/service/profileStatus';
 import type { RejectReason } from '../../../../../game/rules/rules';
 import { accountLockState } from '../../../../../features/account/service/accountActions';
-import { accountLabel, type GuestProgress } from '../../../../../features/account/model/accountRules';
+import { accountLabel, nicknameLabel, type GuestProgress } from '../../../../../features/account/model/accountRules';
 import { APP_VERSION } from '../../../../../version';
 import { BUILD_LABEL } from '../../../../../buildId';
 import Button from '../../../../ui/Button';
@@ -26,24 +27,26 @@ type OpenWindow = 'account' | 'myInfo' | 'settings' | 'codes' | 'letter' | 'patc
 // 설정 탭 - 맨 위 계정 묶음(계정, 닉네임, 계정 관리, 내 정보), 옅은 가로선, 창을 여는 줄 버튼 넷
 // (설정, 코드 입력, 개발자에게, 패치노트), 맨 아래 버전 줄. 세부 값은 각 버튼이 여는 창에서 다룬다.
 // 연 창이 떠 있는 동안 그 창을 연 버튼은 눌린 모양이다. 이사 코드는 소유자 전용이라 개발 도구 패널에 있다.
-export default function SettingsTab({ autoLockOnCatch, dispatch, setToast, syncLabel, syncState, guestProgress, recheckGuestProgress, account, accountFailed, uid, onAuthChanged, nickname, onRename }: {
+export default function SettingsTab({ autoLockOnCatch, dispatch, setToast, syncLabel, syncState, guestProgress, recheckGuestProgress, account, accountChecked = true, accountFailed, uid, onAuthChanged, nickname, profileStatus, onRename }: {
   autoLockOnCatch: boolean;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
   syncLabel: string | null; syncState: string;
   guestProgress: GuestProgress;
   recheckGuestProgress: () => Promise<GuestProgress>;
-  account: string | null; accountFailed: boolean; uid: string | null; onAuthChanged: () => Promise<void>;
-  nickname: string | null; onRename: (name: string) => Promise<null | RejectReason>;
+  account: string | null; accountChecked?: boolean; accountFailed: boolean; uid: string | null; onAuthChanged: () => Promise<void>;
+  nickname: string | null; profileStatus?: ProfileStatus; onRename: (name: string) => Promise<null | RejectReason>;
   }) {
   const [open, setOpen] = useState<OpenWindow | null>(null);
   const close = () => setOpen(null);
+  const sharedProfileStatus = useProfileStatus();
+  const resolvedProfileStatus: ProfileStatus = profileStatus ?? sharedProfileStatus ?? (nickname !== null ? 'loaded' : 'loading');
 
   return (
     <div className="flex flex-col flex-1">
       <Inset divided className="mb-2">
         <KeyValueRow label="계정" value={accountLabel(account, accountFailed)} />
-        <KeyValueRow label="닉네임" value={nickname ?? '불러오는 중'} />
+        <KeyValueRow label="닉네임" value={nicknameLabel(nickname, resolvedProfileStatus)} />
       </Inset>
       <Button variant="primary" full pressed={open === 'account'} onClick={() => setOpen('account')}
               className="text-sm flex items-center justify-center gap-1.5">
@@ -70,7 +73,7 @@ export default function SettingsTab({ autoLockOnCatch, dispatch, setToast, syncL
                       syncLabel={syncLabel} syncState={syncState} onClose={close} />
       )}
       {open === 'myInfo' && (
-        <MyInfoModal setToast={setToast} account={account} accountFailed={accountFailed} uid={uid} nickname={nickname} onRename={onRename} onClose={close} />
+        <MyInfoModal setToast={setToast} account={account} accountChecked={accountChecked} accountFailed={accountFailed} uid={uid} nickname={nickname} profileStatus={resolvedProfileStatus} onRename={onRename} onClose={close} />
       )}
       {open === 'settings' && (
         <SettingsModal autoLockOnCatch={autoLockOnCatch} dispatch={dispatch} setToast={setToast} onClose={close} />

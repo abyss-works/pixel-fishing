@@ -11,9 +11,19 @@ const s = vi.hoisted(() => ({
 vi.mock('../../../../features/friends/service/useFriends', () => ({
   useFriends: () => ({ groups: s.groups, loading: false, failed: false, act: s.act }),
 }));
-const moderation = vi.hoisted(() => ({ unblock: vi.fn(async () => null) }));
+const moderation = vi.hoisted(() => ({
+  blocks: [{ uid: 'b1', nick: '무례' }] as Array<{ uid: string; nick: string | null }> | string | null,
+  loading: false,
+  failed: false,
+  unblock: vi.fn(async () => null),
+}));
 vi.mock('../../../../features/live/service/useChatModeration', () => ({
-  useChatModeration: () => ({ blocks: [{ uid: 'b1', nick: '무례' }], ...moderation }),
+  useChatModeration: () => ({
+    blocks: moderation.blocks,
+    loading: moderation.loading,
+    failed: moderation.failed,
+    unblock: moderation.unblock,
+  }),
 }));
 vi.mock('../../../../features/gameplay/service/useGameTime', () => ({ useNow: () => '2026-11-05T00:00:00.000Z' }));
 vi.mock('../../../../features/friends/service/useNicknameSuggestions', () => ({
@@ -29,6 +39,9 @@ describe('FriendsModal(소셜 창)', () => {
   afterEach(() => {
     cleanup();
     s.groups = { friends: [], incoming: [], outgoing: [] };
+    moderation.blocks = [{ uid: 'b1', nick: '무례' }];
+    moderation.loading = false;
+    moderation.failed = false;
     vi.clearAllMocks();
   });
 
@@ -81,5 +94,31 @@ describe('FriendsModal(소셜 창)', () => {
     fireEvent.click(screen.getByRole('button', { name: '해제' }));
     await waitFor(() => expect(setToast).toHaveBeenCalledWith('무례 님의 차단을 풀었어요.'));
     expect(moderation.unblock).toHaveBeenCalledWith('b1');
+  });
+
+  it('차단 탭은 불러오는 중, 불러오기 실패, 빈 목록을 구분해 보인다', () => {
+    moderation.blocks = null;
+    moderation.loading = true;
+    moderation.failed = false;
+    const { unmount } = render(<FriendsModal setToast={vi.fn()} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: '차단' }));
+    expect(screen.getByText('차단 목록을 불러오는 중이에요.')).toBeTruthy();
+    unmount();
+
+    moderation.blocks = null;
+    moderation.loading = false;
+    moderation.failed = true;
+    render(<FriendsModal setToast={vi.fn()} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: '차단' }));
+    expect(screen.getByText('차단 목록을 불러오지 못했어요.')).toBeTruthy();
+    expect(screen.queryByText('차단 목록을 불러오는 중이에요.')).toBeNull();
+    cleanup();
+
+    moderation.blocks = [];
+    moderation.loading = false;
+    moderation.failed = false;
+    render(<FriendsModal setToast={vi.fn()} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: '차단' }));
+    expect(screen.getByText(/차단한 사람이 없어요\./)).toBeTruthy();
   });
 });

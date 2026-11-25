@@ -908,4 +908,34 @@ describe('UI 시스템 가드', () => {
     expect(insetBorderOverrides('<Inset border={s.grade ? "epic" : undefined} className="border-dashed text-text-dim">x</Inset>')).toEqual([]);
     expect(insetBorderOverrides('<Inset borderless tone="deep" className="flex flex-wrap gap-1">x</Inset>')).toEqual([]);
   });
+
+  // 비동기 상태 구분 — null·미설정·오류를 '불러오는 중'이나 '연결 중' 같은 로딩 문구로 폴백하지 않는다
+  const NULLISH_LOADING_FALLBACK_RE = /(?:\?\?|\|\|)\s*(?:<[^>]+>)?\s*['"`][^'"`\r\n]*(?:불러오는 중|연결 중)/;
+  const NULL_EQ_LOADING_FALLBACK_RE = /(?:===?\s*null\b|!\s*(?:view|data|blocks|uid|nickname|guild|profile|preview)\b)\s*\?\s*(?:<[^>]+>)?\s*[^:\r\n]*(?:불러오는 중|연결 중)/;
+  const VALUE_TRUTHY_LOADING_FALLBACK_RE = /\b(?:uid|nickname|blocks|view|data|guild|profile|preview)\s*\?\s*[^:\r\n]+:\s*(?:<[^>]+>)?\s*['"`][^'"`\r\n]*(?:불러오는 중|연결 중)/;
+
+  const asyncLoadingFallbacks = (src: string, path = '') => {
+    const code = src.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+    const hits: string[] = [];
+    for (const [i, line] of code.split(/\r?\n/).entries()) {
+      if (NULLISH_LOADING_FALLBACK_RE.test(line)
+        || NULL_EQ_LOADING_FALLBACK_RE.test(line)
+        || VALUE_TRUTHY_LOADING_FALLBACK_RE.test(line)) {
+        hits.push(`${path ? `${path}:${i + 1}: ` : ''}${line.trim()}`);
+      }
+    }
+    return hits;
+  };
+
+  it('표현 계층은 nullish/null 폴백으로 로딩 문구(불러오는 중·연결 중)를 표시하지 않는다', () => {
+    expect(presentationFiles.flatMap(f => asyncLoadingFallbacks(f.src, f.path))).toEqual([]);
+
+    expect(asyncLoadingFallbacks('{nickname ?? "불러오는 중"}')).toHaveLength(1);
+    expect(asyncLoadingFallbacks('{uid || "연결 중"}')).toHaveLength(1);
+    expect(asyncLoadingFallbacks('{blocks === null ? <Note>차단 목록을 불러오는 중이에요.</Note> : null}')).toHaveLength(1);
+    expect(asyncLoadingFallbacks('{!view ? <Note>초대를 불러오는 중이에요.</Note> : null}')).toHaveLength(1);
+    expect(asyncLoadingFallbacks('{uid ? maskUid(uid) : "연결 중"}')).toHaveLength(1);
+    expect(asyncLoadingFallbacks('{loading ? <Note>목록을 불러오는 중이에요.</Note> : null}')).toEqual([]);
+    expect(asyncLoadingFallbacks('{status === "loading" ? "불러오는 중" : "미설정"}')).toEqual([]);
+  });
 });
