@@ -158,6 +158,8 @@ describe('튜토리얼 카드 덱', () => {
       deck.subs.forEach((sub, idx) => {
         expect(screen.getByText(`${idx + 1} / ${deck.subs.length}`)).toBeInTheDocument();
         expect(screen.getByText(sub)).toBeInTheDocument();
+        if (sub === '미니맵으로 세계지도 보기') expect(screen.getByText('오른쪽 아래 미니맵')).toBeInTheDocument();
+        if (sub === '다른 탭에서도 조우 알림') expect(screen.getByText('브라우저 알림')).toBeInTheDocument();
         if (idx < deck.subs.length - 1) {
           fireEvent.click(screen.getByRole('button', { name: '다음' }));
         } else {

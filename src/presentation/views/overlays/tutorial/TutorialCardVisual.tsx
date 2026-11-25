@@ -181,7 +181,7 @@ export default function TutorialCardVisual({ kind, dailyCap = 1, resetText = '',
       return (
         <div className="flex flex-wrap items-center justify-center gap-2">
           <Inset border="line" className="px-2.5 py-1.5 flex items-center gap-1.5 text-xs text-text">
-            <PixelIcon glyph="compass" size={14} className="text-accent" />오른쪽 위 미니맵
+            <PixelIcon glyph="compass" size={14} className="text-accent" />오른쪽 아래 미니맵
           </Inset>
           <PixelIcon glyph="caretRight" size={12} className="text-gold" />
           <Badge tone="gold" size="sm">세계지도 열기</Badge>
@@ -260,7 +260,7 @@ export default function TutorialCardVisual({ kind, dailyCap = 1, resetText = '',
           </Badge>
           <PixelIcon glyph="caretRight" size={12} className="text-text-dim" />
           <Badge tone="gold" size="sm" inline>
-            <PixelIcon glyph="warn" size={12} />상단 조우 배너
+            <PixelIcon glyph="warn" size={12} />브라우저 알림
           </Badge>
         </div>
       );
