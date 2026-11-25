@@ -607,6 +607,8 @@ describe('월척(크기)·개체·폼 기록', () => {
     expect(mutationWeightsOf({ ...newState(), artifacts: ['elder-scale'] }, 'pond', 0, 0, 1, 0.2)).toEqual({
       normal: 3, variant: 1.45,
     });
+    expect(mutationWeightsOf(newState(), 'pond', 0, 0, 1, 0, 0.5)).toEqual({ normal: 3, variant: 0.5 });
+    expect(mutationWeightsOf(newState(), 'pond', 1.5, 0, 1, 0, 0.5)).toEqual({ normal: 3, variant: 1.25 });
   });
 
   it('addCatch: 폼별로 마릿수/크기가 갈리고 종 합계는 폼 합산으로 파생 (v8)', () => {
@@ -1401,6 +1403,7 @@ describe('가중치 추첨', () => {
       pond.mutationWeight = { variant: 2 };
       pond.namedWeight = { named: 9 };
       expect(mutationWeightsOf(newState(), 'pond')).toEqual({ variant: 2, normal: 3 });
+      expect(mutationWeightsOf(newState(), 'pond', 0, 0, 1, 0, 0.5)).toEqual({ variant: 1, normal: 3 });
       expect(mutationWeightsOf({ ...newState(), artifacts: ['elder-scale'] }, 'pond')).toEqual({ variant: 1.25, normal: 3 });
       expect(namedWeightsOf('pond')).toEqual({ named: 9, none: 999 });
       expect(namedWeightsOf('river')).toEqual({ named: 1, none: 999 });

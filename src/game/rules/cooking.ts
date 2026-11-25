@@ -363,6 +363,8 @@ export interface ActiveCookEffects {
   rarityWeight: Partial<Record<RarityId, number>>;
   /** 돌연변이 폼 가중치 증가율의 합 */
   mutationWeight: number;
+  /** 돌연변이 폼 가중치 독립 배수의 곱 (기본 1, 억제 요리 활성 시 ×0.5) */
+  mutationMult: number;
   /** 네임드 조우 가중치 증가율의 합 */
   namedWeight: number;
   /** 낮의 추첨 풀에 밤 전용 어종을 합류시키는 효과 — 미끼 슬롯이 켜져 있는 동안 참 */
@@ -370,7 +372,7 @@ export interface ActiveCookEffects {
 }
 
 export const NO_COOK_EFFECTS: ActiveCookEffects = {
-  biteWaitCut: 0, rarityWeight: {}, mutationWeight: 0, namedWeight: 0, nightUnlock: false,
+  biteWaitCut: 0, rarityWeight: {}, mutationWeight: 0, mutationMult: 1, namedWeight: 0, nightUnlock: false,
 };
 
 /** 그 캐치에 걸린 슬롯과 요리 id. 걸린 슬롯의 키만 둔다 */
@@ -423,6 +425,7 @@ export function slotEffects(
     const scale = 1 + (r.kind === 'bait' ? (amplify?.bait ?? 0) : (amplify?.lunch ?? 0));
     out.biteWaitCut = clean(out.biteWaitCut + (e.biteWaitCut ?? 0) * scale);
     out.mutationWeight = clean(out.mutationWeight + (e.mutationWeight ?? 0) * scale);
+    if (e.mutationMult !== undefined) out.mutationMult = clean(out.mutationMult * e.mutationMult);
     out.namedWeight = clean(out.namedWeight + (e.namedWeight ?? 0) * scale);
     out.nightUnlock = out.nightUnlock || e.nightUnlock === true;
     if (e.rarityWeight) {

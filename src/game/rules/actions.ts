@@ -491,6 +491,7 @@ export function drawCatch(
   const pityFixed = !guaranteed && target !== undefined;
   const forms = mutationWeightsOf(
     state, spot, cook.mutationWeight, achievements.mutationWeight, 1 + achievements.artifactBoost, guild.mutation,
+    cook.mutationMult,
   );
   const extras = rollCatchExtras(fish, rng, (guaranteed !== null || pityFixed) ? { normal: 1, variant: 0 } : forms);
   const opts = catchDrawOptions(judgment, power, spot, pzMult, phaseOpts);

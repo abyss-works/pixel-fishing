@@ -102,6 +102,8 @@ export interface CookEffects {
   rarityWeight?: RarityWeightEffect;
   /** 돌연변이 폼 가중치 증가율 (예: 0.5 = +50%) */
   mutationWeight?: number;
+  /** 돌연변이 폼 가중치 독립 배수 (예: 0.5 = ×0.5, 증폭 업적 비적용) */
+  mutationMult?: number;
   /** 네임드 조우 가중치 증가율 */
   namedWeight?: number;
   /** 낮의 추첨 풀에 밤 전용 어종을 합류시키는가 — 밤에는 이미 풀에 있어 변화가 없다 */
@@ -109,7 +111,7 @@ export interface CookEffects {
 }
 
 export const COOK_EFFECT_KEYS: readonly (keyof CookEffects)[] =
-  ['biteWaitCut', 'rarityWeight', 'mutationWeight', 'namedWeight', 'nightUnlock'];
+  ['biteWaitCut', 'rarityWeight', 'mutationWeight', 'mutationMult', 'namedWeight', 'nightUnlock'];
 
 /** 그 등급부터 전설까지 */
 const gradesFrom = (min: RarityId): readonly RarityId[] => RARITY_ORDER.slice(RARITY_ORDER.indexOf(min));
@@ -140,6 +142,10 @@ export const RECIPES: readonly Recipe[] = [
     description: '코코넛 밀크와 강황으로 끓인 국물에 생선 살이 잠긴다. 귀한 생선을 넣을수록 맛이 깊어진다.',
     kind: 'lunch', grade: 'rare', waitMs: 3 * MIN_MS,
     cost: { common: 100, rare: 20 }, effects: { rarityWeight: { grades: gradesFrom('rare'), bonus: 0.1 } } },
+  { id: 'cook-lunch-calm', name: '키리바트',
+    description: '도톰하게 썬 흰 쌀밥에서 순한 코코넛 밀크 내음이 올라온다. 향신료를 전혀 넣지 않아 별난 고기를 거르고 싶은 어부가 뱃머리에 챙겨 탄다.',
+    kind: 'lunch', grade: 'rare', waitMs: 3 * MIN_MS,
+    cost: { common: 100, rare: 20 }, effects: { mutationMult: 0.5 } },
   { id: 'cook-lunch-mutation', name: '생선 비리야니',
     description: '솥을 봉한 반죽을 뜯어내면 향신료 냄새가 한꺼번에 퍼진다. 밝은 빛으로 따로 물들인 밥이 생선과 켜를 이룬다.',
     kind: 'lunch', grade: 'epic', waitMs: 5 * MIN_MS,
@@ -158,6 +164,10 @@ export const RECIPES: readonly Recipe[] = [
     description: '붉은 사프란 암술을 물에 담그면 금빛이 번져 나온다. 이 미끼를 문 물고기는 가끔 비늘 빛부터 남다르다.',
     kind: 'bait', grade: 'special', waitMs: 0,
     cost: { epic: 4, legendary: 1 }, effects: { mutationWeight: 1.5 } },
+  { id: 'cook-bait-calm', name: '백단향 미끼',
+    description: '흰 백단향 나무 가루를 맑은 물로 개어 반죽에 섞은 미끼다. 물에 풀려도 색이 번지지 않아 평범한 빛깔의 물고기가 찌를 주로 건드린다.',
+    kind: 'bait', grade: 'special', waitMs: 0,
+    cost: { rare: 15, epic: 2 }, effects: { mutationMult: 0.5 } },
   { id: 'cook-bait-rare', name: '롱페퍼 미끼',
     description: '롱페퍼 이삭을 말려 빻아 반죽에 섞은 미끼다. 후추보다 이 열매가 비싸게 팔리던 때가 있었다.',
     kind: 'bait', grade: 'rare', waitMs: 0,

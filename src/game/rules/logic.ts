@@ -599,8 +599,8 @@ export function variantShare(weights: Record<FormId, number> = MUTATION_WEIGHTS)
   return weights.variant / (weights.variant + weights.normal);
 }
 
-/** 폼 가중치 — 보너스 효과(유물 × 유물 배율 + 요리 슬롯 + 업적 누계 + 길드 돌연변이의 합) → 해역 오버라이드 → 전역 기본 순. 리듀서와 서버 fast path가 같은 함수를 쓴다.
- *  slotBoost는 슬롯의 돌연변이 가중 증가율(slotEffects), achievementBoost는 업적 누적 증가율, guildMutation은 길드 돌연변이 보너스다. 보너스 합이 0보다 크면 해역 오버라이드를 쓰지 않는다 */
+/** 폼 가중치 — 보너스 효과(유물 × 유물 배율 + 요리 슬롯 + 업적 누계 + 길드 돌연변이의 합) → 해역 오버라이드 → 전역 기본 순에 독립 배수(mutationMult)를 마지막에 곱한다.
+ *  slotBoost는 슬롯의 돌연변이 가중 증가율(slotEffects), achievementBoost는 업적 누적 증가율, guildMutation은 길드 돌연변이 보너스, mutationMult는 억제 요리 독립 배수다. 보너스 합이 0보다 크면 해역 오버라이드를 쓰지 않는다 */
 export function mutationWeightsOf(
   state: ArtifactHolder,
   spot: SpotId,
@@ -608,10 +608,17 @@ export function mutationWeightsOf(
   achievementBoost = 0,
   relicScale = 1,
   guildMutation = 0,
+  mutationMult = 1,
 ): Record<FormId, number> {
   const boost = Math.round((variantBoostOf(state) * relicScale + slotBoost + achievementBoost + guildMutation) * 1e9) / 1e9;
-  if (boost > 0) return { variant: MUTATION_WEIGHTS.variant * (1 + boost), normal: MUTATION_WEIGHTS.normal };
-  return { ...MUTATION_WEIGHTS, ...spotById(spot)?.mutationWeight };
+  const base = boost > 0
+    ? { variant: MUTATION_WEIGHTS.variant * (1 + boost), normal: MUTATION_WEIGHTS.normal }
+    : { ...MUTATION_WEIGHTS, ...spotById(spot)?.mutationWeight };
+  if (mutationMult === 1) return base;
+  return {
+    variant: Math.round(base.variant * mutationMult * 1e9) / 1e9,
+    normal: base.normal,
+  };
 }
 
 // ---------- 개체 (세이브 v8) ----------
