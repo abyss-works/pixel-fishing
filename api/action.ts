@@ -185,7 +185,7 @@ export function expiredQuests(rows: BountyRows, dayStartISO: string): { id: stri
 }
 
 /** 개체·도감 스킵 — 이 액션들의 리듀서는 스칼라/blob만 건드린다(가방·도감 무접촉 검증됨):
- * sendLetter/setNickname(상태불변) · boot(그날 첫 접속이면 운세 스칼라만 고정) · upgradeRod/buyBoat/travel/redeemCoupon(스칼라만) · seeTutorial(blob만) · changeClothes/buyHat/wearHat(골드와 blob만).
+ * sendLetter/setNickname(상태불변) · boot(그날 첫 접속이면 운세 스칼라만 고정) · upgradeRod/buyBoat/travel(스칼라만) · redeemCoupon/seeTutorial/changeClothes/buyHat/wearHat(골드·blob만).
  * debug는 도감 명령(dex.completeZone)이 있어 스킵하지 않는다.
  * deliverBounty는 서버 주입 완료 여부만 보니 스킵 유지.
  * exchangeArtifact·levelUpArtifact는 재료(items)와 유물·레벨 맵이 모두 blob이라 스킵한다.
@@ -439,9 +439,9 @@ async function route(req: Req, res: Res): Promise<void> {
     return;
   }
 
-  // 동적 쿠폰(coupons 테이블) — 쿠폰 액션일 때만 서버가 직접 조회 (active=false는 신규 사용 차단)
+  // 동적 쿠폰(coupons 테이블) — 정식 계정의 쿠폰 액션일 때만 서버가 직접 조회 (active=false는 신규 사용 차단, 게스트는 정적 쿠폰만 허용)
   let dynamicCoupon: { gold: number; desc: string } | null = null;
-  if (action.type === 'redeemCoupon' && typeof action.code === 'string') {
+  if (action.type === 'redeemCoupon' && typeof action.code === 'string' && user.email !== null) {
     const code = action.code.trim();
     dynamicCoupon = await step('db-read', { uid, action: action.type }, () => findCoupon(db, code));
   }
