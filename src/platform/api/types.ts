@@ -146,7 +146,7 @@ export type GuildOp =
 /** 길드 요청 결과 — 들어오기는 바로 들어갔는지(joined) 신청이 됐는지(requested)를, 자유 강화 초기화는 되돌린 포인트(recovered)를 싣는다. 실패는 서버 오류 코드 */
 export type GuildOpResult = { ok: true; result?: 'joined' | 'requested'; recovered?: number } | { ok: false; error: string };
 
-export type RankingBoardId = 'fame' | 'dex' | 'species';
+export type RankingBoardId = 'fame' | 'dex' | 'variant' | 'named' | 'namedClears' | 'species';
 export interface RankingRow { rank: number; nickname: string | null; value: number; me: boolean }
 /** species 표는 fishId 어종의 사람별 최대 크기(cm) 순위다 */
 export interface RankingBoard { board: RankingBoardId; fishId?: string; top: RankingRow[]; me: { rank: number; value: number } | null }

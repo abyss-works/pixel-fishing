@@ -14,9 +14,11 @@ describe('readRanking', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('표를 읽는다. 인증 헤더는 붙이지 않는다', async () => {
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({ board: 'fame', top: [], me: null }), { status: 200 }));
-    await expect(readRanking('fame')).resolves.toEqual({ board: 'fame', top: [], me: null });
-    expect(fetchMock).toHaveBeenCalledWith('/api/rank?board=fame');
+    for (const board of ['fame', 'dex', 'variant', 'named', 'namedClears'] as const) {
+      fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ board, top: [], me: null }), { status: 200 }));
+      await expect(readRanking(board)).resolves.toEqual({ board, top: [], me: null });
+      expect(fetchMock).toHaveBeenLastCalledWith(`/api/rank?board=${board}`);
+    }
   });
 
   it('어종 순위는 어종 id를 붙인다', async () => {
