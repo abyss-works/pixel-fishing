@@ -140,7 +140,9 @@ describe('GuildModal', () => {
     render(<GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
     fireEvent.mouseEnter(screen.getByText('오늘 기여'));
     const tip = screen.getByRole('tooltip');
-    expect(within(tip).getByText('네임드 토벌')).toBeTruthy();
+    expect(within(tip).getByText('일반 의뢰')).not.toHaveAttribute('data-rarity');
+    expect(tip).toHaveTextContent('네임드 토벌');
+    expect(within(tip).getByText('네임드')).toHaveClass('text-epic');
     expect(tip.textContent).toContain('매일 새로 세요.');
     fireEvent.mouseLeave(screen.getByText('오늘 기여'));
     const row = screen.getByText('나루').closest('tr') as HTMLElement;
