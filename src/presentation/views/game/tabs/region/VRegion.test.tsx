@@ -34,7 +34,9 @@ describe('VRegion', () => {
     fireEvent.mouseLeave(screen.getByText('지역 안내'));
 
     fireEvent.click(screen.getByRole('button', { name: '구역 이야기 보기' }));
-    expect(screen.getByRole('dialog')).toHaveTextContent('고향 마을');
+    const loreDialog = screen.getByRole('dialog');
+    expect(loreDialog).toHaveTextContent('고향 마을');
+    expect(loreDialog.parentElement!.className).toContain('z-(--z-app-modal)');
   });
 
   it('사거리 내 어군에서 발견한 어종 카드를 누르면 어종 상세 창이 열린다', () => {
