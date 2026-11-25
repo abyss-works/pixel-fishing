@@ -9,7 +9,7 @@ export interface PatchNote {
   date: string;
   /** 아코디언 접힘 상태에서 보이는 한 줄 요약. 모든 버전에 필수다 */
   summary?: string;
-  notes: { tag: NoteTag; text: string }[];
+  notes: { tag: NoteTag; text: string; compact?: string; important?: boolean }[];
 }
 
 // changelog-generated:begin

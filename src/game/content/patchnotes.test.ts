@@ -1,9 +1,9 @@
 // 패치노트 데이터 가드 — 버전은 중복 없이 내림차순이고 앞으로 낼 버전의 항목은 미리 넣지 않는다.
 // 태그, 태그 순서, 요약도 함께 지킨다.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import { latestNewsAtOrBelow } from '../../features/announcements/model/whatsNew';
 import { APP_VERSION } from '../../version';
-import { NOTE_TAGS, PATCH_NOTES } from './patchnotes';
+import { NOTE_TAGS, PATCH_NOTES, type PatchNote } from './patchnotes';
 
 const parts = (v: string) => v.split('.').map(Number);
 const cmp = (a: string, b: string) => {
@@ -45,6 +45,24 @@ describe('PATCH_NOTES 데이터', () => {
   it('모든 버전은 요약이 비어 있지 않다', () => {
     for (const p of PATCH_NOTES) {
       expect(p.summary?.trim(), p.version).toBeTruthy();
+    }
+  });
+
+  it('항목의 선택 필드 compact는 비어 있지 않은 문자열이고 important는 불리언이다', () => {
+    type NoteItem = PatchNote['notes'][number];
+    expectTypeOf<NoteItem['compact']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<NoteItem['important']>().toEqualTypeOf<boolean | undefined>();
+
+    for (const p of PATCH_NOTES) {
+      for (const n of p.notes) {
+        if (n.compact !== undefined) {
+          expect(typeof n.compact, `${p.version} ${n.text}`).toBe('string');
+          expect(n.compact.trim(), `${p.version} ${n.text}`).toBeTruthy();
+        }
+        if (n.important !== undefined) {
+          expect(typeof n.important, `${p.version} ${n.text}`).toBe('boolean');
+        }
+      }
     }
   });
 });

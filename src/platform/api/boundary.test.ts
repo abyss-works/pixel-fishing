@@ -123,7 +123,6 @@ const INITIAL_PRESENTATION_GAME_VALUE_IMPORTS: Record<string, readonly string[]>
   'presentation/views/overlays/tutorial/TutorialModal.tsx': ['BOUNTY_DAILY_CAP', 'CHALLENGE_MISS_LIMIT', 'GAME_DAY_RESET_TEXT', 'TICKET_EXPIRY_TEXT'],
   'presentation/views/overlays/wardrobe/WardrobePanel.tsx': ['HATS', 'LOOK_PRESETS', 'PANTS_COLORS', 'SHIRT_COLORS', 'hatById'],
   'presentation/views/overlays/whats-new/FishArtPreview.tsx': ['FISH'],
-  'presentation/views/overlays/whats-new/NewsStep.tsx': ['NOTE_TAGS'],
 };
 
 function normalize(path: string): string {

@@ -46,14 +46,23 @@ export default function WhatsNewModal({ game, ready }: {
 
   return (
     <Modal layer="stage" md onClose={w.close}>
-      <ModalCard title={STEP_TITLE[w.step]} onClose={w.close} confirm={(
-        <div className="flex gap-2">
-          {w.index > 0 && <Button variant="ghost" onClick={w.back}>이전</Button>}
-          <Button variant="primary" className="flex-1" onClick={w.next}>
-            {last ? (w.step === 'settings' ? '완료' : '확인') : `다음: ${STEP_TITLE[nextStep]} 고르기`}
-          </Button>
-        </div>
-      )}>
+      <ModalCard
+        title={STEP_TITLE[w.step]}
+        onClose={w.close}
+        footer={w.step === 'news' ? (
+          <p className="text-xs text-text-dim text-center">
+            자세한 전체 패치노트는 설정 &gt; 패치노트에서 언제든 볼 수 있어요.
+          </p>
+        ) : undefined}
+        confirm={(
+          <div className="flex gap-2">
+            {w.index > 0 && <Button variant="ghost" onClick={w.back}>이전</Button>}
+            <Button variant="primary" className="flex-1" onClick={w.next}>
+              {last ? (w.step === 'settings' ? '완료' : '확인') : `다음: ${STEP_TITLE[nextStep]} 고르기`}
+            </Button>
+          </div>
+        )}
+      >
         <StepTrail steps={w.steps} index={w.index} />
         {w.step === 'news' && w.news.length > 0 && <NewsStep news={w.news} />}
         {w.step === 'settings' && <SettingsStep prompts={w.prompts} />}
