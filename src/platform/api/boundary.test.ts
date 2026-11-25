@@ -94,7 +94,7 @@ const INITIAL_PRESENTATION_GAME_VALUE_IMPORTS: Record<string, readonly string[]>
     'CHALLENGE_MISS_LIMIT', 'GAME_DAY_RESET_TEXT', 'TICKET_EXPIRY_TEXT',
     'VARIANT_PRICE_MULT', 'WALK_BAG_CAP', 'variantShare',
   ],
-  'presentation/views/game/tabs/region/VRegion.tsx': ['RARITY_ORDER', 'zoneControls', 'zoneTips'],
+  'presentation/views/game/tabs/region/VRegion.tsx': ['RARITY_ORDER'],
   'presentation/views/overlays/account/MyInfoModal.tsx': ['checkNickname'],
   'presentation/views/overlays/achievements/AchievementCard.tsx': ['DEFAULT_LOOK', 'hatById'],
   'presentation/views/overlays/achievements/AchievementsModal.tsx': ['hatById'],

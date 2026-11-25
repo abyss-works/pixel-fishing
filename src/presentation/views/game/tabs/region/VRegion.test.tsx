@@ -23,26 +23,34 @@ function show(over: Partial<ReturnType<typeof newState>> = {}) {
 }
 
 describe('VRegion', () => {
-  it('바깥 표면에 구역 로어와 팁 목록을 펼치지 않고 지역 안내 툴팁과 구역 이야기 보기 모달로 분리한다', () => {
+  it('최상단 인라인 구역 이야기 상자 → 등급 분포 → 가까운 어군 순서로 배치하고 지역 안내 툴팁과 이야기 모달을 두지 않는다', () => {
     show();
-    expect(screen.getByRole('heading', { name: '고향 마을' })).toBeInTheDocument();
+    const title = screen.getByRole('heading', { name: '고향 마을' });
+    expect(title).toBeInTheDocument();
+    expect(screen.queryByText('지역 안내')).toBeNull();
+    expect(screen.queryByRole('button', { name: '구역 이야기 보기' })).toBeNull();
     expect(screen.queryByText('여기서 할 수 있는 것')).toBeNull();
-    expect(screen.queryByText('어군 가까이 가면 사는 물고기를 볼 수 있어요.')).toBeNull();
 
-    fireEvent.mouseEnter(screen.getByText('지역 안내'));
-    expect(screen.getByRole('tooltip')).toHaveTextContent('고향 마을 안내');
-    fireEvent.mouseLeave(screen.getByText('지역 안내'));
-
-    fireEvent.click(screen.getByRole('button', { name: '구역 이야기 보기' }));
-    const loreDialog = screen.getByRole('dialog');
-    expect(loreDialog).toHaveTextContent('고향 마을');
-    expect(loreDialog.parentElement!.className).toContain('z-(--z-app-modal)');
+    const tableHeading = screen.getByRole('heading', { name: /^등급 분포/ });
+    const nearbyHeading = screen.getByRole('heading', { name: '가까운 어군' });
+    expect(title.compareDocumentPosition(tableHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(tableHeading.compareDocumentPosition(nearbyHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('사거리 내 어군에서 발견한 어종 카드를 누르면 어종 상세 창이 열린다', () => {
+  it('사거리 내 어군에서는 4등급 묶음(일반→희귀→영웅→전설) 2열 격자로 보이고 발견 어종을 누르면 도감 상세가 열린다', () => {
     act(() => setCurrentSpot('pond'));
     show({ dex: { crucian: { normal: { count: 1, maxSize: 18, first: null } } } });
-    fireEvent.click(screen.getByRole('button', { name: /붕어/ }));
+    const infoHeading = screen.getByRole('heading', { name: /^어군 정보/ });
+    const tableHeading = screen.getByRole('heading', { name: /^등급 분포/ });
+    expect(tableHeading.compareDocumentPosition(infoHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    const unknownCards = screen.getAllByText('???').map(el => el.parentElement!);
+    expect(unknownCards.length).toBeGreaterThan(0);
+    const knownBtn = screen.getByRole('button', { name: /붕어/ });
+    expect(knownBtn.className).toContain('min-h-[68px]');
+    expect(unknownCards[0].className).toContain('min-h-[68px]');
+
+    fireEvent.click(knownBtn);
     const dialog = screen.getByRole('dialog');
     expect(dialog).toHaveTextContent('붕어');
     expect(dialog).toHaveTextContent('표본');
