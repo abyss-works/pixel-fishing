@@ -526,4 +526,28 @@ describe('테스트 데이터베이스', () => {
       }
     });
   });
+
+  describe('daily_fortunes 중복 인덱스 제거 (0044)', () => {
+    const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
+    const indexesOf = async (c: Client) => (await c.query<{ indexname: string }>(
+      `select indexname from pg_indexes where schemaname = 'public' and tablename = 'daily_fortunes' order by indexname`,
+    )).rows.map(r => r.indexname);
+
+    it('기본 키 인덱스는 유지하고 중복 daily_fortunes_user_day_idx만 제거하며, 다운/업이 동작한다', async () => {
+      expect(await indexesOf(client)).toEqual(['daily_fortunes_pkey']);
+
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        await other.query(migration('0044_drop_redundant_daily_fortunes_index.down.sql'));
+        expect(await indexesOf(other)).toEqual(['daily_fortunes_pkey', 'daily_fortunes_user_day_idx']);
+        await other.query(migration('0044_drop_redundant_daily_fortunes_index.sql'));
+        expect(await indexesOf(other)).toEqual(['daily_fortunes_pkey']);
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
 });

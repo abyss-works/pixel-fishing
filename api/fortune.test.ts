@@ -25,9 +25,10 @@ describe('parseFortuneMonth / fortuneMonthRange', () => {
     }
   });
 
-  it('해당 월 시작일과 다음 달 시작일(연도 경계 포함)을 계산한다', () => {
+  it('해당 월 시작일과 다음 달 시작일(연도 경계·9999-12 상한 포함)을 계산한다', () => {
     expect(fortuneMonthRange('2030-03')).toEqual({ fromDay: '2030-03-01', toDay: '2030-04-01' });
     expect(fortuneMonthRange('2030-12')).toEqual({ fromDay: '2030-12-01', toDay: '2031-01-01' });
+    expect(fortuneMonthRange('9999-12')).toEqual({ fromDay: '9999-12-01', toDay: null });
   });
 });
 

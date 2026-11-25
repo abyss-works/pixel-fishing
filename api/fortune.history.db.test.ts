@@ -1,4 +1,4 @@
-// 일일 운세 이력 — 실제 Postgres에서 로그인 계정의 접속·판정 기록, 멱등성, 주간 범위 조회(최신순),
+// 일일 운세 이력 — 실제 Postgres에서 로그인 계정의 접속·판정 기록, 멱등성, 월별 범위 조회(오름차순),
 // 게스트 미기록·403 거부, 비로그인 401 거부, 후속 쓰기 실패 보고를 검증한다.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DailyFortune } from '../src/game/rules/fortune.js';
@@ -245,6 +245,31 @@ describe('일일 운세 이력 기록 및 조회', () => {
         body: { error: 'bad-month' },
       });
     }
+
+    const maxUid = await seed({ state: {} });
+    for (const r of [
+      { day: '9999-11-30', kind: 'shadow', index: 3 },
+      { day: '9999-12-01', kind: 'fish', index: 3 },
+      { day: '9999-12-31', kind: 'gold', index: 5 },
+    ] as const) {
+      await env.client.query(
+        'insert into public.daily_fortunes (user_id, day, kind, index) values ($1, $2, $3, $4)',
+        [maxUid, r.day, r.kind, r.index],
+      );
+    }
+    expect(await callHistory(userToken(maxUid), { month: '9999-12' })).toEqual({
+      status: 200,
+      body: {
+        month: '9999-12',
+        firstMonth: '9999-11',
+        currentDay: '2030-03-06',
+        today: null,
+        days: [
+          { day: '9999-12-01', kind: 'fish', index: 3 },
+          { day: '9999-12-31', kind: 'gold', index: 5 },
+        ],
+      },
+    });
   });
 
   it('KST 04:00 게임 날짜 경계에 맞춰 currentDay와 월별 기본 조회를 계산한다', async () => {
