@@ -1067,26 +1067,34 @@ describe('규칙 판정 (rules.ts)', () => {
 
 describe('라이선스 도감 조건 — 남은 어종 수', () => {
   const dexLabel = (state: ReturnType<typeof newState>) =>
-    licenseConditions(state, 'pacific', 'basic').find(c => c.key === 'dex')!;
+    licenseConditions(state, 'pacific', 'named').find(c => c.key === 'dex')!;
 
-  it('미달이면 판정과 같은 기준으로 센 남은 어종 수를 붙인다', () => {
+  it('일반 의뢰(basic)는 도감 조건이 없고 남은 어종도 0종이다', () => {
     const state = newState();
-    const missing = zoneDexMissing(state, 'pacific', LICENSE_GRADES.basic);
+    expect(LICENSE_GRADES.basic).toEqual([]);
+    expect(zoneDexMissing(state, 'pacific', LICENSE_GRADES.basic)).toEqual([]);
+    expect(licenseConditions(state, 'pacific', 'basic')).toEqual([]);
+  });
+
+  it('네임드 토벌(named)은 전설 제외 일반·희귀·영웅이 기준이고 미달이면 남은 어종 수를 붙인다', () => {
+    expect(LICENSE_GRADES.named).toEqual(['common', 'rare', 'epic']);
+    const state = newState();
+    const missing = zoneDexMissing(state, 'pacific', LICENSE_GRADES.named);
     expect(missing.length).toBeGreaterThan(1);
     expect(dexLabel(state)).toEqual({
-      key: 'dex', ok: false, label: `태평양 모든 어종 수집(전설 제외, 밤 어종 포함) (남은 ${missing.length}종)`,
+      key: 'dex', ok: false, label: `태평양 전설을 뺀 모든 어종 모으기 (남은 ${missing.length}종)`,
     });
     const caught = { count: 1, maxSize: 1, first: '2026-01-01' };
     const oneCaught = { ...state, dex: { [missing[0]]: { normal: caught } } };
     expect(dexLabel(oneCaught).label).toMatch(new RegExp(` \\(남은 ${missing.length - 1}종\\)$`));
   });
 
-  it('다 채우면 남은 수 없이 원래 문구다', () => {
+  it('전설 없이 일반·희귀·영웅만 다 채우면 남은 수 없이 통과한다', () => {
     const state = newState();
     const caught = { count: 1, maxSize: 1, first: '2026-01-01' };
     const full = { ...state, dex: Object.fromEntries(
-      zoneDexMissing(state, 'pacific', LICENSE_GRADES.basic).map(id => [id, { normal: caught }])) };
-    expect(dexLabel(full)).toEqual({ key: 'dex', ok: true, label: '태평양 모든 어종 수집(전설 제외, 밤 어종 포함)' });
+      zoneDexMissing(state, 'pacific', LICENSE_GRADES.named).map(id => [id, { normal: caught }])) };
+    expect(dexLabel(full)).toEqual({ key: 'dex', ok: true, label: '태평양 전설을 뺀 모든 어종 모으기' });
   });
 });
 

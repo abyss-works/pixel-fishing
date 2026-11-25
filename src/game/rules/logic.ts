@@ -331,23 +331,22 @@ export function newlyCompletedSpotDex(
 /** 라이선스 조건 — 도감. UI 체크리스트와 리듀서 판정의 단일 근원 */
 export interface LicenseCondition { key: 'dex'; label: string; ok: boolean }
 /** 라이선스 단계별 도감 판정 등급 — 판정과 개발 도구(도감 채우기)가 같은 표를 본다.
- *  도감은 일반 폼(돌연변이 제외)만 센다. 기본 = 전설 제외 전부, 네임드 = 전설 포함 전부 */
+ *  도감은 일반 모습(돌연변이 제외)만 센다. 일반 의뢰(basic)는 도감 조건이 없고, 네임드 토벌(named)은 전설을 뺀 등급만 본다 */
 export const LICENSE_GRADES: Record<BountyTier, readonly RarityId[]> = {
-  basic: ['common', 'rare', 'epic'],
-  named: ['common', 'rare', 'epic', 'legendary'],
+  basic: [],
+  named: ['common', 'rare', 'epic'],
 };
 export function licenseConditions(
   state: GameState, zone: BountyZone, tier: BountyTier,
 ): LicenseCondition[] {
   const grades = LICENSE_GRADES[tier];
+  if (grades.length === 0) return [];
   const missing = zoneDexMissing(state, zone, grades).length;
   const area = zoneById(zone)?.shortName ?? zone;
   // 미달이면 남은 어종 수를 붙인다 — 어떤 어종인지는 밝히지 않는다(도감이 보여 준다)
   const left = missing > 0 ? ` (남은 ${missing}종)` : '';
   return [
-    { key: 'dex', label: (tier === 'named'
-      ? `${area} 모든 어종 수집(밤 어종 포함)`
-      : `${area} 모든 어종 수집(전설 제외, 밤 어종 포함)`) + left, ok: missing === 0 },
+    { key: 'dex', label: `${area} 전설을 뺀 모든 어종 모으기${left}`, ok: missing === 0 },
   ];
 }
 
