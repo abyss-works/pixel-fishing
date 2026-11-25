@@ -84,12 +84,12 @@ export function selectItemSection(game: GameState, now: string, account: Account
     const prev = activeRemainingMs.get(entry.recipe.id) ?? 0;
     if (entry.remainingMs > prev) activeRemainingMs.set(entry.recipe.id, entry.remainingMs);
   }
-  const rows = (slot: SlotKey): ItemRow[] => recipesOfKind(slot).filter(r => (items[r.id] ?? 0) > 0)
+  const rows = (slot: SlotKey): ItemRow[] => recipesOfKind(slot)
     .map(recipe => {
       const remMs = activeRemainingMs.get(recipe.id);
       const active = remMs !== undefined;
       return {
-        recipe, label: recipeLabel(recipe), title: recipeTitle(recipe), count: items[recipe.id], slot, verb: SLOT_TEXT[slot].verb,
+        recipe, label: recipeLabel(recipe), title: recipeTitle(recipe), count: items[recipe.id] ?? 0, slot, verb: SLOT_TEXT[slot].verb,
         effects: recipeEffectLines(recipe), note: recipeEffectNote(slot),
         durationMinutes: slotDurationMs(recipe, game) / MIN_MS,
         active,
@@ -100,7 +100,40 @@ export function selectItemSection(game: GameState, now: string, account: Account
     { id: ENERGY_ITEM_IDS[grade], grade, label: energyLabel(grade), stored: items[ENERGY_ITEM_IDS[grade]] ?? 0 }));
   const lunch = rows('lunch');
   const bait = rows('bait');
-  return { state: 'open', energy, lunch, bait, empty: lunch.length === 0 && bait.length === 0 && energy.every(e => e.stored === 0) };
+  const empty = lunch.every(r => !isOwnedOrActiveItem(r))
+    && bait.every(r => !isOwnedOrActiveItem(r))
+    && energy.every(e => e.stored === 0);
+  return { state: 'open', energy, lunch, bait, empty };
+}
+
+/** 보유 중만 보기 필터 기준 — 수량이 1개 이상이거나 현재 슬롯에서 효과가 적용 중인 아이템 */
+export const isOwnedOrActiveItem = (row: Pick<ItemRow, 'count' | 'active'>): boolean =>
+  row.count > 0 || row.active;
+
+export interface OpenItemLists {
+  lunch: ItemRow[];
+  bait: ItemRow[];
+  energy: EnergyCell[];
+  empty: boolean;
+}
+
+/** 열린 아이템 섹션에서 보유 중만 보기 토글 상태에 맞는 목록을 돌려준다 */
+export function filterItemSection(
+  view: Extract<ItemSectionView, { state: 'open' }>,
+  ownedOnly: boolean,
+): OpenItemLists {
+  if (!ownedOnly) {
+    return { lunch: view.lunch, bait: view.bait, energy: view.energy, empty: false };
+  }
+  const lunch = view.lunch.filter(isOwnedOrActiveItem);
+  const bait = view.bait.filter(isOwnedOrActiveItem);
+  const energy = view.energy.filter(e => e.stored > 0);
+  return {
+    lunch,
+    bait,
+    energy,
+    empty: lunch.length === 0 && bait.length === 0 && energy.length === 0,
+  };
 }
 
 /** 다중 미끼 슬롯이 모두 찼을 때 바꿀 대상 슬롯 선택지 */

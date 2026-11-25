@@ -61,10 +61,41 @@ describe('아이템 섹션 목록', () => {
     expect(screen.getByRole('group', { name: '생명의 기운(영웅) 0.5개' })).toHaveTextContent('0.5');
   });
 
-  it('가진 것이 없으면 안내 한 줄만 보인다', () => {
+  it('부엌 해금 후에는 보유 중만 보기 기본 꺼짐으로 도시락 5종·미끼 5종·기운 4종 전체를 보이고, 미보유 카드는 비활성이다', () => {
     show(game());
+    expect(screen.getByRole('button', { name: '보유 중만 보기' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('group', { name: '생명의 기운(일반) 0개' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: '생명의 기운(전설) 0개' })).toBeInTheDocument();
+    const lunchBtn = screen.getByRole('button', { name: '가루디야 먹기' });
+    expect(lunchBtn).toBeDisabled();
+    expect(lunchBtn.closest('.pf-notch')).toHaveClass('bg-bg', 'text-text-dim');
+    expect(screen.getByRole('button', { name: '사프란 미끼(특수) 쓰기' })).toBeDisabled();
+    expect(screen.getAllByRole('button', { name: /먹기$/ })).toHaveLength(5);
+    expect(screen.getAllByRole('button', { name: /쓰기$/ })).toHaveLength(5);
+    expect(screen.queryByText('가진 아이템이 없어요.')).not.toBeInTheDocument();
+  });
+
+  it('보유 중만 보기 토글을 켜면 보유하거나 적용 중인 항목만 남기고, 없으면 빈 안내를 보인다', () => {
+    show(game({
+      items: { 'cook-lunch-rare': 2, [ENERGY_ITEM_IDS.epic]: 10 },
+      slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(HOUR) }, bait: null },
+    }));
+    const toggle = screen.getByRole('button', { name: '보유 중만 보기' });
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    // 수량 0이어도 적용 중인 가루디야와 보유 중인 민 몰리만 남는다
+    expect(screen.getByRole('button', { name: '가루디야 먹기' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '민 몰리 먹기' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: '생선 비리야니 먹기' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /쓰기$/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('group', { name: '생명의 기운(영웅) 1개' })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: '생명의 기운(일반) 0개' })).not.toBeInTheDocument();
+
+    cleanup();
+    show(game());
+    fireEvent.click(screen.getByRole('button', { name: '보유 중만 보기' }));
     expect(screen.getByText('가진 아이템이 없어요.')).toBeInTheDocument();
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /먹기|쓰기/ })).not.toBeInTheDocument();
   });
 });
 

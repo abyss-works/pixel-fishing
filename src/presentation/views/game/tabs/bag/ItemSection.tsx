@@ -6,7 +6,7 @@ import type { DispatchResult, MaybePromise } from '../../../../../features/gamep
 import { useNow } from '../../../../../features/gameplay/service/useGameTime';
 import type { AccountLockState } from '../../../../../features/display/model/menuLock';
 import { sendNotice } from '../../../../../features/display/model/toastPolicy';
-import { ITEM_GROUPS, ITEM_GROUP_HINT, NO_ITEMS_TEXT, planEat, selectItemSection } from '../../../../../features/kitchen/model/bagItems';
+import { filterItemSection, ITEM_GROUPS, ITEM_GROUP_HINT, NO_ITEMS_TEXT, planEat, selectItemSection } from '../../../../../features/kitchen/model/bagItems';
 import type { ItemRow, SwapConfirm } from '../../../../../features/kitchen/model/bagItems';
 import { formatEnergy } from '../../../../../game/content/cooking';
 import { when } from '../../../../../shared/lib/when';
@@ -26,6 +26,7 @@ import RecipeEffectTip from '../../../../ui/RecipeEffectTip';
 import SlotCell from '../../../../ui/SlotCell';
 import Subheading from '../../../../ui/Subheading';
 import Tip from '../../../../ui/Tip';
+import ToggleChip from '../../../../ui/ToggleChip';
 import type { Notify } from '../../../../ui/hud/messageFeed';
 
 /** 교체 확인을 기다리는 먹기(쓰기) - 확인 내용과 먹을 아이템 */
@@ -102,31 +103,35 @@ function ItemCards({ title, hint, rows, busy, onEat }: {
     <div className="mb-2">
       <Subheading><Tip text={hint}>{title}</Tip></Subheading>
       <div className="grid grid-cols-2 gap-2">
-        {rows.map(row => (
-          <Inset key={row.recipe.id} border={row.active ? 'accent' : 'line'}
-                 className="p-2 flex flex-col gap-1.5 min-w-0">
-            <div className="flex items-start gap-2 min-w-0">
-              <ItemSprite kind={row.slot} id={row.recipe.id} preset="list" className="shrink-0" />
-              <div className="min-w-0 flex-1 flex flex-col gap-0.5">
-                <Tip text={<RecipeEffectTip label={row.label} effects={row.effects} note={row.note} />}
-                     className="inline-block text-xs leading-snug break-keep">
-                  <GradeName name={row.title.name} grade={row.title.grade} />
-                </Tip>
-                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-2xs text-text-dim">
-                  <span>지속 <span className="pf-accent text-text">{fmtMinutes(row.durationMinutes)}</span></span>
-                  {row.active && <Badge tone="accent" size="2xs">사용 중</Badge>}
+        {rows.map(row => {
+          const usable = row.count > 0;
+          const dimmed = !usable && !row.active;
+          return (
+            <Inset key={row.recipe.id} tone={dimmed ? 'deep' : 'base'} border={row.active ? 'accent' : 'line'}
+                   className={cx('p-2 flex flex-col gap-1.5 min-w-0', dimmed && 'text-text-dim')}>
+              <div className="flex items-start gap-2 min-w-0">
+                <ItemSprite kind={row.slot} id={row.recipe.id} preset="list" className="shrink-0" />
+                <div className="min-w-0 flex-1 flex flex-col gap-0.5">
+                  <Tip text={<RecipeEffectTip label={row.label} effects={row.effects} note={row.note} />}
+                       className="inline-block text-xs leading-snug break-keep">
+                    <GradeName name={row.title.name} grade={row.title.grade} />
+                  </Tip>
+                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-2xs text-text-dim">
+                    <span>지속 <span className={cx('pf-accent', !dimmed && 'text-text')}>{fmtMinutes(row.durationMinutes)}</span></span>
+                    {row.active && <Badge tone="accent" size="2xs">사용 중</Badge>}
+                  </div>
+                  {row.active && row.remainingMinutes !== null && (
+                    <div className="text-2xs text-accent pf-accent">남음 {fmtMinutes(row.remainingMinutes)}</div>
+                  )}
                 </div>
-                {row.active && row.remainingMinutes !== null && (
-                  <div className="text-2xs text-accent pf-accent">남음 {fmtMinutes(row.remainingMinutes)}</div>
-                )}
               </div>
-            </div>
-            <div className="mt-auto pt-1.5 border-t border-line-dim flex items-center justify-between gap-2">
-              <span className="pf-accent text-xs text-text-dim whitespace-nowrap">×{row.count}</span>
-              <Button size="sm" aria-label={`${row.label} ${row.verb}`} disabled={busy} onClick={() => onEat(row)}>{row.verb}</Button>
-            </div>
-          </Inset>
-        ))}
+              <div className="mt-auto pt-1.5 border-t border-line-dim flex items-center justify-between gap-2">
+                <span className="pf-accent text-xs text-text-dim whitespace-nowrap">×{row.count}</span>
+                <Button size="sm" aria-label={`${row.label} ${row.verb}`} disabled={busy || !usable} onClick={() => onEat(row)}>{row.verb}</Button>
+              </div>
+            </Inset>
+          );
+        })}
       </div>
     </div>
   );
@@ -146,6 +151,7 @@ export default function ItemSection({ game, accountState, dispatch, setToast }: 
   const now = useNow();
   const view = selectItemSection(game, now, accountState);
   const [busy, setBusy] = useState(false);
+  const [ownedOnly, setOwnedOnly] = useState(false);
   const [pending, setPending] = useState<PendingEat | null>(null);
 
   const eat = (row: ItemRow, replaceSlot?: 'bait' | 'bait2') => {
@@ -190,30 +196,49 @@ export default function ItemSection({ game, accountState, dispatch, setToast }: 
     );
   }
 
+  const shown = filterItemSection(view, ownedOnly);
+
   return (
     <div className="flex flex-col gap-1">
-      <PageTitle>아이템</PageTitle>
-      {view.empty ? <Note>{NO_ITEMS_TEXT}</Note> : (
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <PageTitle>아이템</PageTitle>
+        <ToggleChip
+          size="sm"
+          pressed={ownedOnly}
+          emphasis={ownedOnly}
+          onClick={() => setOwnedOnly(v => !v)}
+        >
+          <PixelIcon glyph="check" size={10} />
+          보유 중만 보기
+        </ToggleChip>
+      </div>
+      {shown.empty ? <Note>{NO_ITEMS_TEXT}</Note> : (
         <>
-          <ItemCards title={ITEM_GROUPS[0].title} hint={ITEM_GROUP_HINT.lunch} rows={view.lunch} busy={busy} onEat={press} />
-          <ItemCards title={ITEM_GROUPS[1].title} hint={ITEM_GROUP_HINT.bait} rows={view.bait} busy={busy} onEat={press} />
-          <div className="mb-2">
-            <Subheading>
-              <Tip text={ITEM_GROUP_HINT.energy}>{ITEM_GROUPS[2].title}</Tip>
-            </Subheading>
-            <div className="grid grid-cols-2 gap-2">
-              {view.energy.map(cell => (
-                <Inset key={cell.grade} role="group" aria-label={`${cell.label} ${formatEnergy(cell.stored)}개`}
-                       className="flex items-center gap-2 p-2 min-w-0">
-                  <ItemSprite kind="energy" id={cell.id} preset="list" className="shrink-0" />
-                  <div className="min-w-0 flex flex-col">
-                    <span className="text-xs leading-tight" aria-hidden="true"><RarityText rarity={cell.grade} /></span>
-                    <span className="pf-accent text-base leading-tight break-words" aria-hidden="true">{formatEnergy(cell.stored)}</span>
-                  </div>
-                </Inset>
-              ))}
+          <ItemCards title={ITEM_GROUPS[0].title} hint={ITEM_GROUP_HINT.lunch} rows={shown.lunch} busy={busy} onEat={press} />
+          <ItemCards title={ITEM_GROUPS[1].title} hint={ITEM_GROUP_HINT.bait} rows={shown.bait} busy={busy} onEat={press} />
+          {shown.energy.length > 0 && (
+            <div className="mb-2">
+              <Subheading>
+                <Tip text={ITEM_GROUP_HINT.energy}>{ITEM_GROUPS[2].title}</Tip>
+              </Subheading>
+              <div className="grid grid-cols-2 gap-2">
+                {shown.energy.map(cell => {
+                  const unowned = cell.stored === 0;
+                  return (
+                    <Inset key={cell.grade} tone={unowned ? 'deep' : 'base'}
+                           role="group" aria-label={`${cell.label} ${formatEnergy(cell.stored)}개`}
+                           className={cx('flex items-center gap-2 p-2 min-w-0', unowned && 'text-text-dim')}>
+                      <ItemSprite kind="energy" id={cell.id} preset="list" className="shrink-0" />
+                      <div className="min-w-0 flex flex-col">
+                        <span className="text-xs leading-tight" aria-hidden="true"><RarityText rarity={cell.grade} /></span>
+                        <span className="pf-accent text-base leading-tight break-words" aria-hidden="true">{formatEnergy(cell.stored)}</span>
+                      </div>
+                    </Inset>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
         </>
       )}
       {pending && (

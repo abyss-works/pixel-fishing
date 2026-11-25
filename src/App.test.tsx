@@ -1129,7 +1129,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     expect(screen.getByRole('button', { name: '목록 보기' })).toBeInTheDocument();
   });
 
-  it('가방 유물 섹션 — 보유 유물의 등급·효과를 보이고, 없으면 얻는 곳을 안내한다', () => {
+  it('가방 유물 섹션 — 전체 유물을 보이고 보유는 등급·효과를, 보유 중만 보기 켜면 보유 유물만 보인다', () => {
     seed({ artifacts: ['varuna-scale'] });
     render(<App />);
     fireEvent.keyDown(document, { key: '2' });
@@ -1138,7 +1138,10 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     expect(screen.getByRole('heading', { name: /^유물/ })).toBeInTheDocument();
     expect(screen.getByText('진주 상인의 저울')).toBeInTheDocument();
     expect(screen.getByText('요리 추가 완성 +10%p')).toBeInTheDocument();
-    expect(screen.queryByText('해구의 이빨')).not.toBeInTheDocument(); // 미보유는 나열하지 않는다
+    expect(screen.getByText('해구의 이빨')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '보유 중만 보기' }));
+    expect(screen.getByText('진주 상인의 저울')).toBeInTheDocument();
+    expect(screen.queryByText('해구의 이빨')).not.toBeInTheDocument();
   });
 
   it('가방 유물 섹션 — 보유가 없으면 수배판 안내', () => {

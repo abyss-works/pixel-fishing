@@ -2,7 +2,7 @@
 // useGame이 통째 game을 내려주는 동안은 호출부(useMemo 등)가 이 함수들로 파생값을
 // 읽고, 나중에 외부 스토어로 옮기면 같은 함수가 구독 셀렉터가 된다.
 import { describe, it, expect } from 'vitest';
-import { selectBagOverview, selectBagStatus, selectOwnedArtifacts, selectGearSummary } from './selectors';
+import { selectBagArtifacts, selectBagOverview, selectBagStatus, selectOwnedArtifacts, selectGearSummary } from './selectors';
 import { newState, saleBonusOf, sellableValue } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 
@@ -91,6 +91,20 @@ describe('selectOwnedArtifacts', () => {
 
   it('보유가 없으면 빈 목록이다', () => {
     expect(selectOwnedArtifacts(seed())).toEqual([]);
+  });
+});
+
+describe('selectBagArtifacts', () => {
+  it('전체 유물을 레지스트리 순서로 내고 보유 여부와 구역명을 함께 돌려준다', () => {
+    const entries = selectBagArtifacts(seed({ artifacts: ['varuna-scale'] }));
+    expect(entries).toHaveLength(8);
+    expect(entries[0]).toMatchObject({
+      owned: false,
+      zoneName: '태평양',
+      artifact: { id: 'abyss-angler', name: '해구의 이빨' },
+    });
+    const owned = entries.find(e => e.artifact.id === 'varuna-scale');
+    expect(owned).toMatchObject({ owned: true, zoneName: '인도양' });
   });
 });
 
