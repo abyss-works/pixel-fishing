@@ -157,7 +157,7 @@ export function TipCard({ title, subtitle, badge, description, rows, status, not
             {status.lines.map((line, i) => (
               <span key={typeof line === 'string' ? `${i}-${line}` : i}
                     className={cx('block leading-snug', i === 0 ? (status.tone === 'warn' ? 'text-danger' : 'text-text') : 'text-text-dim')}>
-                {highlightText(line)}
+                {i === 0 && status.tone === 'warn' ? line : highlightText(line)}
               </span>
             ))}
           </span>

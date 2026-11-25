@@ -91,13 +91,13 @@ export default function MailboxModal({ dispatch, setToast, onClose }: {
               {detail.effects.map(e => (
                 'text' in e ? (
                   <div key={e.text} className="px-2 py-1.5 text-sm text-accent">
-                    <HighlightRarityText text={e.text} />
+                    {e.text}
                   </div>
                 ) : (
                   <KeyValueRow
                     key={`${e.label}-${e.value}`}
                     label={<HighlightRarityText text={e.label} />}
-                    value={<HighlightRarityText text={e.value} />}
+                    value={e.value}
                     valueEnd
                     valueClassName={/\d/.test(e.value) ? 'pf-accent text-accent' : 'font-bold text-accent'}
                   />

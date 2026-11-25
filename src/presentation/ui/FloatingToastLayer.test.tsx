@@ -84,11 +84,11 @@ describe('FloatingToastLayer', () => {
     expect(screen.getAllByRole('status')).toHaveLength(2);
   });
 
-  it('앱 모달(layer="app")이 떠 있는 위에서도 닫기 버튼을 클릭할 수 있고 컨테이너는 pointer-events-none을 유지한다', () => {
+  it('스테이지 창(layer="stage") 위에서도 닫기 버튼을 클릭할 수 있고 컨테이너는 스테이지 내 absolute + pointer-events-none을 유지한다', () => {
     const onDismiss = vi.fn();
     render(
       <>
-        <Modal layer="app" title="테스트 창" onClose={vi.fn()}>내용</Modal>
+        <Modal layer="stage" onClose={vi.fn()}>내용</Modal>
         <FloatingToastLayer
           toasts={[{ id: 7, text: '요청이 거부됐어요.', tone: 'danger' }]}
           onDismiss={onDismiss}
@@ -97,7 +97,9 @@ describe('FloatingToastLayer', () => {
     );
     const toast = screen.getByRole('status');
     expect(toast.parentElement?.className).toContain('pointer-events-none');
-    expect(toast.parentElement?.className).toContain('fixed');
+    expect(toast.parentElement?.className).toContain('absolute');
+    expect(toast.parentElement?.className).toContain('z-(--z-toast)');
+    expect(toast.parentElement?.className).not.toMatch(/(?:^|\s)fixed(?:\s|$)/);
     fireEvent.click(screen.getByRole('button', { name: '알림 닫기' }));
     expect(onDismiss).toHaveBeenCalledWith(7);
   });

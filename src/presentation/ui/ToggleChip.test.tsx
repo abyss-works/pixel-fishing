@@ -28,4 +28,18 @@ describe('토글 칩', () => {
     expect(chip('라')).toBeDisabled();
     expect(chip('라')).toHaveAttribute('data-tier', 'off-disabled');
   });
+
+  it('pressed가 true일 때만 체크 아이콘을 그리고 false·비활성일 때는 그리지 않는다', () => {
+    render(<>
+      <ToggleChip pressed emphasis>가</ToggleChip>
+      <ToggleChip pressed>나</ToggleChip>
+      <ToggleChip pressed={false}>다</ToggleChip>
+      <ToggleChip pressed={false} disabled>라</ToggleChip>
+    </>);
+    const chip = (name: string) => screen.getByRole('button', { name });
+    expect(chip('가').querySelector('[data-glyph="check"]')).not.toBeNull();
+    expect(chip('나').querySelector('[data-glyph="check"]')).not.toBeNull();
+    expect(chip('다').querySelector('[data-glyph="check"]')).toBeNull();
+    expect(chip('라').querySelector('[data-glyph="check"]')).toBeNull();
+  });
 });

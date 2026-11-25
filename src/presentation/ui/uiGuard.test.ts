@@ -1085,4 +1085,41 @@ describe('UI 시스템 가드', () => {
     expect(dexDetailSrc).toMatch(/<LoreParagraph[^>]*min-h-/);
     expect(dexDetailSrc).toMatch(/<p[^>]*min-h-/);
   });
+
+  it('시맨틱 색이 걸린 줄 안에 HighlightRarityText를 중첩하지 않고 Tip 경고 첫 줄도 원문을 그대로 쓴다', () => {
+    const semanticLineWithHighlight = /className=\{?[^>\n]*\btext-(?:accent|danger|gold|guild|epic)\b[^>\n]*\}?[^>]*>[^<\n]*<HighlightRarityText\b/;
+    const kvSemanticValueWithHighlight = /value=\{<HighlightRarityText\b[\s\S]{0,120}?valueClassName=\{?[^}\n]*\btext-(?:accent|danger|gold|guild|epic)\b/;
+    const offenders = presentationFiles
+      .filter(f => !isTestFile(f.path) && f.path !== 'views/overlays/stats/BonusTab.tsx')
+      .filter(f => {
+        const clean = stripComments(f.src);
+        return semanticLineWithHighlight.test(clean) || kvSemanticValueWithHighlight.test(clean);
+      })
+      .map(f => f.path);
+    expect(offenders).toEqual([]);
+
+    const tipSrc = stripComments(presentationFiles.find(f => f.path === 'ui/Tip.tsx')!.src);
+    expect(tipSrc).toMatch(/status\.tone === 'warn'\s*\?\s*line\s*:\s*highlightText\(line\)/);
+  });
+
+  it('ScrollRow는 hidden·inline-flex 충돌 없이 edge.prev·edge.next 조건부 렌더로 화살표를 표시한다', () => {
+    const scrollRowSrc = stripComments(presentationFiles.find(f => f.path === 'ui/ScrollRow.tsx')!.src);
+    expect(scrollRowSrc).toMatch(/\{edge\.prev\s*&&\s*\(?\s*<ArrowButton\b/);
+    expect(scrollRowSrc).toMatch(/\{edge\.next\s*&&\s*\(?\s*<ArrowButton\b/);
+    expect(scrollRowSrc).not.toMatch(/['"`][^'"`]*(?<![\w-])hidden(?![\w-])[^'"`]*['"`]/);
+  });
+
+  it('ToggleChip이 pressed일 때만 체크 아이콘을 직접 소유하고 호출부는 체크 아이콘을 중복 삽입하지 않는다', () => {
+    const toggleSrc = stripComments(presentationFiles.find(f => f.path === 'ui/ToggleChip.tsx')!.src);
+    expect(toggleSrc).toMatch(/\{pressed\s*&&\s*<PixelIcon\b[^>]*glyph="check"/);
+
+    // AchievementsModal.tsx는 별도 작업 브랜치와 겹쳐 제외한다
+    const TOGGLE_CHECK_EXCEPTIONS = new Set(['views/overlays/achievements/AchievementsModal.tsx']);
+    const toggleBlock = /<ToggleChip\b[\s\S]*?<\/ToggleChip>/g;
+    const callers = presentationFiles
+      .filter(f => !isTestFile(f.path) && f.path !== 'ui/ToggleChip.tsx' && !TOGGLE_CHECK_EXCEPTIONS.has(f.path))
+      .filter(f => [...stripComments(f.src).matchAll(toggleBlock)].some(m => /glyph="check"/.test(m[0])))
+      .map(f => f.path);
+    expect(callers).toEqual([]);
+  });
 });

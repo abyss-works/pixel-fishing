@@ -24,7 +24,6 @@ import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
 import PersonSprite from '../../../ui/PersonSprite';
-import PixelIcon from '../../../ui/PixelIcon';
 import ProgressCount from '../../../ui/ProgressCount';
 import ProgressMeter from '../../../ui/ProgressMeter';
 import { SCROLL_Y } from '../../../ui/scrollArea';
@@ -303,7 +302,6 @@ function AchievementSubtab({
           })}
         </div>
         <ToggleChip size="sm" pressed={claimedOnly} emphasis={claimedOnly} onClick={onToggleClaimedOnly}>
-          <PixelIcon glyph="check" size={10} />
           달성만 보기
         </ToggleChip>
       </div>

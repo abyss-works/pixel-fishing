@@ -37,7 +37,7 @@ export default function FortuneModal({ fortune, onClose }: { fortune: DailyFortu
               <KeyValueRow
                 key={row.label}
                 label={row.label}
-                value={<HighlightRarityText text={row.value} />}
+                value={row.accent ? row.value : <HighlightRarityText text={row.value} />}
                 valueEnd
                 valueClassName={row.accent ? 'pf-accent text-accent' : undefined}
               />

@@ -92,7 +92,6 @@ function ArtifactSection({ game, dispatch, setToast }: {
           emphasis={ownedOnly}
           onClick={() => setOwnedOnly(v => !v)}
         >
-          <PixelIcon glyph="check" size={10} />
           보유 중만 보기
         </ToggleChip>
       </div>
@@ -128,10 +127,10 @@ function ArtifactSection({ game, dispatch, setToast }: {
                       </span>
                     </span>
                     {artifactEffectLines(a, level).map(line => (
-                      <span key={line} className="text-accent text-xs"><HighlightRarityText text={line} /></span>
+                      <span key={line} className="text-accent text-xs">{line}</span>
                     ))}
-                    {bonus && <span className="text-accent text-xs"><HighlightRarityText text={bonus} /></span>}
-                    {penalty && <span className="text-danger text-xs"><HighlightRarityText text={penalty} /></span>}
+                    {bonus && <span className="text-accent text-xs">{bonus}</span>}
+                    {penalty && <span className="text-danger text-xs">{penalty}</span>}
                   </span>
                 </PressRow>
               );
