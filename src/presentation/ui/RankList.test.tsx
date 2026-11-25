@@ -24,12 +24,14 @@ describe('RankList(공용 랭킹 표)', () => {
     expect(myRow).toHaveAttribute('aria-current', 'true');
     expect(myRow).toHaveAttribute('data-me', 'true');
     expect(myRow).toHaveAttribute('data-rank', '2');
+    expect(within(myRow).getAllByRole('cell')[0]).toHaveAttribute('data-rank-tone', 'gold');
     const myValueCell = within(myRow).getAllByRole('cell')[2];
     expect(myValueCell.querySelector('[data-progress-count]')).toHaveAttribute('data-tone', 'gold');
 
     const mine = screen.getByLabelText('내 순위');
     expect(mine).toHaveAttribute('data-me', 'true');
     expect(mine).toHaveAttribute('data-rank', '15');
+    expect(mine.querySelector('[data-rank-tone]')).toHaveAttribute('data-rank-tone', 'accent');
     expect(mine.querySelector('[data-progress-count]')).toHaveAttribute('data-tone', 'gold');
     expect(mine.querySelector('[data-progress-current]')?.textContent).toBe('100');
     expect(mine.querySelector('[data-progress-target]')?.textContent).toBe(' / 200');

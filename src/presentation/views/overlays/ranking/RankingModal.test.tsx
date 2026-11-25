@@ -80,8 +80,8 @@ describe('랭킹 창', () => {
     show();
     await screen.findByText('p1');
     const rankCell = (name: string) => within(screen.getByText(name).closest('tr')!).getAllByRole('cell')[0];
-    expect(rankCell('p3')).toHaveClass('text-gold');
-    expect(rankCell('p4')).not.toHaveClass('text-gold');
+    expect(rankCell('p3')).toHaveAttribute('data-rank-tone', 'gold');
+    expect(rankCell('p4')).toHaveAttribute('data-rank-tone', 'default');
   });
 
   it('목록 밖이면 내 줄을 표 아래에 고정한다', async () => {
@@ -90,7 +90,7 @@ describe('랭킹 창', () => {
     };
     show();
     const mine = await screen.findByLabelText('내 순위');
-    expect(within(mine).getByText('57')).toBeInTheDocument();
+    expect(within(mine).getByText('57')).toHaveAttribute('data-rank-tone', 'accent');
     expect(within(mine).getByText('10')).toBeInTheDocument();
   });
 
@@ -100,7 +100,7 @@ describe('랭킹 창', () => {
     const tr = (await screen.findByText('나')).closest('tr')!;
     expect(tr).toHaveAttribute('aria-current', 'true');
     expect(tr).toHaveAttribute('data-me', 'true');
-    expect(within(tr).getAllByRole('cell')[0]).toHaveClass('text-gold');
+    expect(within(tr).getAllByRole('cell')[0]).toHaveAttribute('data-rank-tone', 'gold');
     expect(within(tr).getAllByRole('cell')[2].querySelector('[data-progress-count]')).toHaveAttribute('data-tone', 'gold');
     expect(screen.queryByLabelText('내 순위')).not.toBeInTheDocument();
   });

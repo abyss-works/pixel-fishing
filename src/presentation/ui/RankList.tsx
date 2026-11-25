@@ -33,7 +33,8 @@ export function RankMeBar({
 }) {
   if (!me) return reserveSpace ? <div className="h-9 shrink-0" aria-hidden="true" /> : null;
 
-  const rankClass = cx('pf-accent text-xs', me.rank <= 3 ? 'text-gold' : 'text-accent');
+  const rankTone = me.rank <= 3 ? 'gold' : 'accent';
+  const rankClass = cx('pf-accent text-xs', rankTone === 'gold' ? 'text-gold' : 'text-accent');
   if (compact) {
     return (
       <div
@@ -44,7 +45,7 @@ export function RankMeBar({
       >
         <span className="flex items-center gap-1.5 text-accent font-bold">
           <span>내 순위</span>
-          <span className={rankClass}>{me.rank}위</span>
+          <span className={rankClass} data-rank-tone={rankTone}>{me.rank}위</span>
         </span>
         <span className="text-xs whitespace-nowrap">{renderRankValue(me.value, format)}</span>
       </div>
@@ -59,7 +60,7 @@ export function RankMeBar({
       data-rank={me.rank}
       aria-label="내 순위"
     >
-      <span className={rankClass}>{me.rank}</span>
+      <span className={rankClass} data-rank-tone={rankTone}>{me.rank}</span>
       {/* 표의 닉네임 칸과 같은 왼쪽 여백 */}
       <b className="pl-2 truncate text-accent">나</b>
       <span className="text-right text-xs whitespace-nowrap">{renderRankValue(me.value, format)}</span>
@@ -106,6 +107,7 @@ export default function RankList({
       <tbody>
         {rows.map((r, i) => {
           const cell = cx('h-[34px]', i > 0 && 'border-t border-line/60');
+          const rankTone = r.rank <= 3 ? 'gold' : r.me ? 'accent' : 'default';
           return (
             <tr
               key={i}
@@ -114,7 +116,10 @@ export default function RankList({
               data-me={r.me ? 'true' : undefined}
               aria-current={r.me ? 'true' : undefined}
             >
-              <td className={cx(cell, 'pf-accent text-xs', r.rank <= 3 ? 'text-gold' : r.me && 'text-accent')}>
+              <td
+                className={cx(cell, 'pf-accent text-xs', r.rank <= 3 ? 'text-gold' : r.me && 'text-accent')}
+                data-rank-tone={rankTone}
+              >
                 {r.rank}
               </td>
               <td className={cx(cell, 'px-2 truncate', r.me && 'text-accent font-bold')}>
