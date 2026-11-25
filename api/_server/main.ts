@@ -43,6 +43,7 @@ import { createHttpMetrics } from './httpMetrics.js';
 import { legalPages } from './legalPages.js';
 import { securityHeaders } from './securityHeaders.js';
 import { checkStageLiveUpgrade, stageGate } from './stageGate.js';
+import { stageMockups } from './stageMockups.js';
 
 type NodeHandler = (req: never, res: never) => Promise<void>;
 
@@ -112,6 +113,11 @@ for (const [path, handler] of Object.entries(routes)) {
   app.all(path, (req: Request, res: Response) => handler(req as never, res as never));
 }
 app.use('/api', (_req, res) => { res.status(404).json({ error: 'not-found' }); });
+
+// 스테이징 전용 시안 HTML 동적 서빙 — preview 환경과 MOCKUPS_DIR 설정이 모두 있을 때만 게이트 뒤에 등록한다.
+if (process.env.DEPLOY_ENV === 'preview' && Boolean(process.env.MOCKUPS_DIR)) {
+  app.use(stageMockups());
+}
 
 // 해시가 붙은 빌드 산출물만 오래 캐시한다. index.html은 매번 검증해 새 배포를 바로 받는다.
 app.use('/assets', express.static(`${staticDir}assets`, { immutable: true, maxAge: '1y' }));

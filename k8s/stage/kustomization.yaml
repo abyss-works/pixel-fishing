@@ -4,6 +4,7 @@ kind: Kustomization
 namespace: pixel-fishing-stage
 resources:
   - ../prod
+  - pvc-mockups.yaml
 labels:
   - pairs:
       abyssworks.dev/environment: stage
@@ -46,6 +47,12 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/env/3/value
         value: "2026-11-25"
+      # 스테이징 전용 시안 HTML 디렉터리 경로(아래 볼륨 마운트와 맞춘다).
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: MOCKUPS_DIR
+          value: /data/mockups
   # 같은 노드를 쓰는 운영의 CPU 몫을 지키려고 스테이징 앱과 DB의 한도 합계를 0.8코어로 묶는다(관리자 200m을 더하면 1.0코어).
   - target:
       kind: Deployment
@@ -54,6 +61,31 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/resources/limits/cpu
         value: 400m
+  # 스테이징 시안 PVC는 RWO이므로 롤아웃 교착을 피하려고 Recreate 전략과 fsGroup 1000(node)을 쓴다.
+  - target:
+      kind: Deployment
+      name: pixel-fishing
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: pixel-fishing
+      spec:
+        strategy:
+          type: Recreate
+        template:
+          spec:
+            securityContext:
+              fsGroup: 1000
+            volumes:
+              - name: mockups
+                persistentVolumeClaim:
+                  claimName: pixel-fishing-mockups
+            containers:
+              - name: pixel-fishing
+                volumeMounts:
+                  - name: mockups
+                    mountPath: /data/mockups
   - target:
       kind: Cluster
       name: pixel-fishing-db
