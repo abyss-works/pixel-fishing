@@ -170,7 +170,11 @@ describe('GuildModal', () => {
     const tree = screen.getByRole('group', { name: '길드 스킬 트리' });
     expect(within(tree).getByRole('button', { name: '희귀 어종 확률 고르기' }).getAttribute('aria-disabled')).toBe('true');
     fireEvent.mouseEnter(within(tree).getByRole('button', { name: '희귀 어종 확률 고르기' }).parentElement as HTMLElement);
-    expect(screen.getByRole('tooltip').textContent).toBe('길드 Lv.4에 열려요.');
+    const lockedSkillTip = screen.getByRole('tooltip');
+    expect(lockedSkillTip.textContent).toContain('희귀 어종 확률');
+    expect(lockedSkillTip.textContent).toContain('일반 등급 물고기가 걸릴 확률을 줄여요.');
+    expect(lockedSkillTip.textContent).toContain('길드 Lv.4에 열려요.');
+    expect(lockedSkillTip.querySelector('.border-t')).not.toBeNull();
     expect(within(tree).getByLabelText('판매가 보너스 3단계 모으는 중')).toBeTruthy();
     expect(screen.getByText('현재(2단계)')).toBeTruthy();
     expect(screen.getByText('다음(3단계)')).toBeTruthy();

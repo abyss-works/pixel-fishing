@@ -247,4 +247,25 @@ describe('BagTab - 3서브탭, 보기 전환 아이콘, 하단 버튼', () => {
     fireEvent.mouseEnter(unverifiedBtn.parentElement!);
     expect(screen.getByRole('tooltip')).toHaveTextContent('계정을 확인하면 쓸 수 있어요.');
   });
+
+  it('물음표 도움말 없이 개체 표시 툴팁으로 왕관과 반짝이 범례를 보이고, 잠긴 기운 얻기 툴팁에 제목·잠김·구분선을 둔다', () => {
+    show(game({ boat: COOKING_UNLOCK_BOAT - 1, location: { kind: 'base', id: 'home' }, bag: [inst('a')] }));
+    expect(screen.queryByRole('button', { name: '도움말' })).toBeNull();
+
+    const legendTrigger = screen.getByText('개체 표시');
+    fireEvent.mouseEnter(legendTrigger);
+    const legendTip = screen.getByRole('tooltip');
+    expect(legendTip).toHaveTextContent('개체 표시');
+    expect(legendTip).toHaveTextContent('금색 왕관');
+    expect(legendTip).toHaveTextContent('보라 반짝이');
+    expect(legendTip.querySelector('.border-t')).not.toBeNull();
+    fireEvent.mouseLeave(legendTrigger);
+
+    const energyBtn = screen.getByRole('button', { name: '기운 얻기' });
+    fireEvent.mouseEnter(energyBtn.parentElement!);
+    const energyTip = screen.getByRole('tooltip');
+    expect(energyTip).toHaveTextContent('기운 얻기');
+    expect(energyTip).toHaveTextContent('잠김');
+    expect(energyTip.querySelector('.border-t')).not.toBeNull();
+  });
 });

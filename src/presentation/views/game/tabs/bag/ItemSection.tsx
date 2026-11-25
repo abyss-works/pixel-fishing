@@ -184,7 +184,7 @@ export default function ItemSection({ game, accountState, dispatch, setToast }: 
       <div className="flex flex-col gap-1">
         <PageTitle>아이템</PageTitle>
         <Note>{view.empty.map(line => <span key={line} className="block">{line}</span>)}</Note>
-        <Locked lines={view.lines} label={ITEM_GROUPS.map(g => g.title).join(', ')}>
+        <Locked lines={view.lines} title="아이템" label={ITEM_GROUPS.map(g => g.title).join(', ')}>
           {ITEM_GROUPS.map(g => (
             <div key={g.key} className="mb-2">
               <Subheading>{g.title}</Subheading>

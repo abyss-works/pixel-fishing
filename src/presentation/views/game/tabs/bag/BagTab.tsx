@@ -20,15 +20,14 @@ import Note from '../../../../ui/Note';
 import ConfirmDialog from '../../../../ui/ConfirmDialog';
 import FishSprite from '../../../../ui/fish/FishSprite';
 import PixelIcon from '../../../../ui/PixelIcon';
+import Badge from '../../../../ui/Badge';
 import Button from '../../../../ui/Button';
 import IconButton from '../../../../ui/IconButton';
-import { LockLines } from '../../../../ui/Locked';
-import Tip from '../../../../ui/Tip';
+import Tip, { TipCard } from '../../../../ui/Tip';
 import SubTabs from '../../../../ui/SubTabs';
 import ToggleChip from '../../../../ui/ToggleChip';
 import { RarityDot, RarityText } from '../../../../ui/fish/RarityTag';
 import { groupInstances } from '../../../../../features/inventory/model/bagRows';
-import HelpHint from '../../../../ui/HelpHint';
 import InstanceLine, { UnsizedLine } from '../../../../ui/fish/InstanceLine';
 import BagCards from './BagCards';
 import { setBagLayout, setBagSection, toggleBagRow, useBagView } from './bagView';
@@ -283,22 +282,57 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
         <ArtifactSection game={game} dispatch={dispatch} setToast={setToast} />
       ) : (
         <>
-          {/* 헤더 — 용량 표시(좌) + 목록/카드 보기 전환 아이콘(우측 끝) */}
+          {/* 헤더 — 용량 표시(좌) + 개체 표시 및 목록/카드 보기 전환(우측 끝) */}
           <div className="flex items-center justify-between gap-2 mb-1">
             <PageTitle>
               물고기 (<span className={cx(bagFull && 'text-danger')}>{fmtNum(bagCount)}</span>
               <span className="text-text-dim">/{fmtNum(cap)}</span>마리)
             </PageTitle>
-            <Tip wraps text={layout === 'list' ? '카드 보기' : '목록 보기'}>
-              <IconButton
-                glyph={layout === 'list' ? 'grid' : 'menu'}
-                size={14}
-                tone="dim"
-                className="p-1"
-                aria-label={layout === 'list' ? '카드 보기' : '목록 보기'}
-                onClick={() => setBagLayout(layout === 'list' ? 'cards' : 'list')}
-              />
-            </Tip>
+            <div className="flex items-center gap-1.5">
+              {layout === 'list' && (
+                <Tip
+                  wraps
+                  text={(
+                    <TipCard
+                      title="개체 표시"
+                      rows={[
+                        {
+                          label: (
+                            <span className="inline-flex items-center gap-1">
+                              <PixelIcon glyph="crown" size={11} className="text-gold" />
+                              <span>금색 왕관</span>
+                            </span>
+                          ),
+                          value: '같은 형태 최대',
+                        },
+                        {
+                          label: (
+                            <span className="inline-flex items-center gap-1">
+                              <PixelIcon glyph="sparkle" size={11} className="text-epic" />
+                              <span>보라 반짝이</span>
+                            </span>
+                          ),
+                          value: '돌연변이 개체',
+                        },
+                      ]}
+                    />
+                  )}
+                  className="text-2xs text-text-dim"
+                >
+                  개체 표시
+                </Tip>
+              )}
+              <Tip wraps text={layout === 'list' ? '카드 보기' : '목록 보기'}>
+                <IconButton
+                  glyph={layout === 'list' ? 'grid' : 'menu'}
+                  size={14}
+                  tone="dim"
+                  className="p-1"
+                  aria-label={layout === 'list' ? '카드 보기' : '목록 보기'}
+                  onClick={() => setBagLayout(layout === 'list' ? 'cards' : 'list')}
+                />
+              </Tip>
+            </div>
           </div>
           {lockConfirm && (
             <ConfirmDialog layer="app" title="자동 잠금" confirmLabel="정리"
@@ -386,15 +420,19 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
                 {EXHIBIT_UI_ENABLED && <>별을 누르면 전시대에 올라가요.<br />전시 중에는 팔리지 않아요.<br /></>}
                 행 소계는 잠근 개체를 포함한 그 종의 값 합계예요.<br />
                 목록은 등급이 높은 순으로 정렬돼요.
-                <HelpHint text="펼친 개체 줄의 금색 왕관은 같은 형태에서 가장 큰 개체, 보라 반짝이는 돌연변이 개체예요." />
               </Note>
             </>
           )}
           <div className="sticky bottom-0 z-1 -mx-3 px-3 pb-3 pt-2 mt-auto bg-surface border-t border-line-dim grid grid-cols-2 gap-2">
             <Tip wraps className="flex min-w-0"
-                 text={bagCount === 0
-                   ? '가방에 물고기가 없어요.'
-                   : '어종마다 일반과 돌연변이 각각 가장 큰 물고기 한 마리만 잠그고, 나머지 잠금은 풀어요'}>
+                 text={(
+                   <TipCard
+                     title="자동 잠금"
+                     description={bagCount === 0
+                       ? '가방에 물고기가 없어요.'
+                       : '어종마다 일반과 돌연변이 각각 가장 큰 물고기 한 마리만 잠그고, 나머지 잠금은 풀어요.'}
+                   />
+                 )}>
               <Button size="sm" aria-label="자동 잠금" disabled={bagCount === 0} onClick={autoLock}
                       className="w-full justify-center">
                 <PixelIcon glyph="lockOpen" size={12} />
@@ -402,7 +440,16 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
               </Button>
             </Tip>
             <Tip wraps className="flex min-w-0"
-                 text={energyEntry.ok ? '가방의 물고기를 생명의 기운으로 바꿔요' : <LockLines lines={energyEntry.lines} />}>
+                 text={energyEntry.ok
+                   ? <TipCard title="기운 얻기" description="가방의 물고기를 생명의 기운으로 바꿔요." />
+                   : (
+                     <TipCard
+                       title="기운 얻기"
+                       description="가방의 물고기를 생명의 기운으로 바꿔요."
+                       badge={<Badge tone="dim-plain" size="2xs">잠김</Badge>}
+                       status={{ tone: 'lock', lines: energyEntry.lines }}
+                     />
+                   )}>
               <Button size="sm" disabled={!energyEntry.ok} onClick={() => onOpenEnergy?.()}
                       className="w-full justify-center">
                 기운 얻기

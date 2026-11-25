@@ -20,7 +20,7 @@ export default function MenuList({ items, className }: { items: readonly MenuLis
   return (
     <Frame divided role="menu" className={className}>
       {items.map(item => item.lock ? (
-        <Locked key={item.key} role="menuitem" lines={item.lock} label={item.label} badge={false}>{item.content}</Locked>
+        <Locked key={item.key} role="menuitem" title={item.label} lines={item.lock} label={item.label} badge={false}>{item.content}</Locked>
       ) : (
         <button key={item.key} type="button" role="menuitem" aria-label={item.label}
                 onClick={item.onSelect}
