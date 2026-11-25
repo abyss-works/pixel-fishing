@@ -8,7 +8,7 @@ import {
   COOK_KIND_RULES, COOK_STORAGE_CAP, ENERGY_ITEM_IDS, RECIPES, recipeById, recipeWaitMs, toStoredEnergy,
 } from '../../../game/content/cooking';
 import {
-  recipeEffectLines, recipeGrade, recipeLabel, recipeTitle, recipesOfKind, selectKitchenStatus, selectRecipeView,
+  SLOT_SCOPE, recipeEffectLines, recipeEffectNote, recipeGrade, recipeLabel, recipeTitle, recipesOfKind, selectKitchenStatus, selectRecipeView,
 } from './recipes';
 
 const T0 = '2026-11-12T00:00:00.000Z';
@@ -33,7 +33,7 @@ describe('종류별 레시피', () => {
 
   it('미끼 탭은 등급순으로 두고 특수 등급 미끼를 맨 뒤에 둔다. 순서는 데이터 순서가 아니다', () => {
     expect(recipesOfKind('bait').map(r => r.id)).toEqual(
-      ['cook-bait-rare', 'cook-bait-epic', 'cook-bait-legendary', 'cook-bait-mutation', 'cook-bait-night']);
+      ['cook-bait-rare', 'cook-bait-epic', 'cook-bait-legendary', 'cook-bait-mutation', 'cook-bait-calm', 'cook-bait-night']);
     expect(recipesOfKind('bait')[0].id).toBe('cook-bait-rare'); // 미끼 탭의 기본 선택은 첫째다
   });
 
@@ -62,23 +62,37 @@ describe('효과 줄', () => {
 
   it('등급 출현은 올라가는 등급마다 한 줄이다', () => {
     expect(recipeEffectLines(recipe('cook-lunch-rare'))).toEqual([
-      { label: '희귀 어종 출현', value: '+10%' },
-      { label: '영웅 어종 출현', value: '+10%' },
-      { label: '전설 어종 출현', value: '+10%' },
+      { label: '희귀 어종 출현 비중', value: '+10%' },
+      { label: '영웅 어종 출현 비중', value: '+10%' },
+      { label: '전설 어종 출현 비중', value: '+10%' },
     ]);
-    expect(recipeEffectLines(recipe('cook-bait-legendary'))).toEqual([{ label: '전설 어종 출현', value: '+80%' }]);
+    expect(recipeEffectLines(recipe('cook-bait-legendary'))).toEqual([{ label: '전설 어종 출현 비중', value: '+80%' }]);
   });
 
   it('묶음 도시락은 입질 대기와 등급 출현을 모두 낸다', () => {
     expect(recipeEffectLines(recipe('cook-lunch-bundle')).map(l => ('text' in l ? l.text : `${l.label} ${l.value}`))).toEqual([
-      '입질 대기 −5%', '희귀 어종 출현 +5%', '영웅 어종 출현 +5%', '전설 어종 출현 +5%',
+      '입질 대기 −5%', '희귀 어종 출현 비중 +5%', '영웅 어종 출현 비중 +5%', '전설 어종 출현 비중 +5%',
     ]);
   });
 
-  it('돌연변이와 네임드 만날 확률은 비율로 낸다', () => {
-    expect(recipeEffectLines(recipe('cook-lunch-mutation'))).toEqual([{ label: '돌연변이 출현', value: '+50%' }]);
-    expect(recipeEffectLines(recipe('cook-lunch-named'))).toEqual([{ label: '네임드 만날 확률', value: '+50%' }]);
-    expect(recipeEffectLines(recipe('cook-bait-mutation'))).toEqual([{ label: '돌연변이 출현', value: '+150%' }]);
+  it('돌연변이·네임드는 비율로, 돌연변이 억제 요리는 배수로 낸다', () => {
+    expect(recipeEffectLines(recipe('cook-lunch-mutation'))).toEqual([{ label: '돌연변이 출현 비중', value: '+50%' }]);
+    expect(recipeEffectLines(recipe('cook-lunch-named'))).toEqual([{ label: '네임드 조우 확률', value: '+50%' }]);
+    expect(recipeEffectLines(recipe('cook-bait-mutation'))).toEqual([{ label: '돌연변이 출현 비중', value: '+150%' }]);
+    expect(recipeEffectLines(recipe('cook-lunch-calm'))).toEqual([{ label: '돌연변이 등장', value: '×0.5' }]);
+    expect(recipeEffectLines(recipe('cook-bait-calm'))).toEqual([{ label: '돌연변이 등장', value: '×0.5' }]);
+  });
+
+  it('도시락과 미끼 안내 문구는 전용 낚시 방식과 비접속 지속 두 줄이다', () => {
+    expect(SLOT_SCOPE).toEqual({ lunch: '방치로 낚을 때만', bait: '직접 챔질해 낚을 때만' });
+    expect(recipeEffectNote('lunch').split('\n')).toEqual([
+      '방치로 낚을 때만 효과가 있어요.',
+      '접속하지 않아도 지속 시간이 흘러요.',
+    ]);
+    expect(recipeEffectNote('bait').split('\n')).toEqual([
+      '직접 챔질해 낚을 때만 효과가 있어요.',
+      '접속하지 않아도 지속 시간이 흘러요.',
+    ]);
   });
 
   it('밤 어종 출현 미끼는 비수치 상세 설명 한 줄이다', () => {

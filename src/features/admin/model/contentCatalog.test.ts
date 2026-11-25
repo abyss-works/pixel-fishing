@@ -100,23 +100,23 @@ describe('관리자 콘텐츠 카탈로그 모델', () => {
     }
   });
 
-  it('4) 업적 80종(진행 30 + 치장 50)과 누적 보너스 23계열(26종)이 정본과 일치한다', () => {
+  it('4) 업적 82종(진행 30 + 치장 52)과 누적 보너스 37계열(37종)이 정본과 일치한다', () => {
     expect(CONTENT_CATALOG.achievements).toHaveLength(ACHIEVEMENTS.length);
-    expect(CONTENT_CATALOG.achievements).toHaveLength(80);
+    expect(CONTENT_CATALOG.achievements).toHaveLength(82);
     expect(CONTENT_CATALOG.achievements.filter(a => a.tab === 'progress')).toHaveLength(30);
-    expect(CONTENT_CATALOG.achievements.filter(a => a.tab === 'cosmetic')).toHaveLength(50);
+    expect(CONTENT_CATALOG.achievements.filter(a => a.tab === 'cosmetic')).toHaveLength(52);
 
     expect(CONTENT_CATALOG.bonusSeries).toHaveLength(CUMULATIVE_BONUS_SERIES.length);
     expect(CONTENT_CATALOG.cumulativeBonusCount).toBe(CUMULATIVE_BONUS_COUNT);
-    expect(CONTENT_CATALOG.cumulativeBonusCount).toBe(26);
+    expect(CONTENT_CATALOG.cumulativeBonusCount).toBe(37);
   });
 
-  it('5) 모자 55종(상점 5 + 업적 50)과 의상 팔레트·프리셋 6종이 정본과 일치한다', () => {
+  it('5) 모자 57종(상점 5 + 업적 52)과 의상 팔레트·프리셋 6종이 정본과 일치한다', () => {
     const w = CONTENT_CATALOG.wardrobe;
     expect(w.hats).toHaveLength(HATS.length);
-    expect(w.hats).toHaveLength(55);
+    expect(w.hats).toHaveLength(57);
     expect(w.shopHatCount).toBe(5);
-    expect(w.achievementHatCount).toBe(50);
+    expect(w.achievementHatCount).toBe(52);
     expect(w.shirtColors).toHaveLength(SHIRT_COLORS.length);
     expect(w.pantsColors).toHaveLength(PANTS_COLORS.length);
     expect(w.presets).toHaveLength(LOOK_PRESETS.length);
@@ -128,12 +128,12 @@ describe('관리자 콘텐츠 카탈로그 모델', () => {
     }
   });
 
-  it('6) 요리 10종(도시락 5 + 미끼 5)과 생명의 기운 4종이 정본과 일치한다', () => {
+  it('6) 요리 12종(도시락 6 + 미끼 6)과 생명의 기운 4종이 정본과 일치한다', () => {
     const c = CONTENT_CATALOG.cooking;
     expect(c.recipes).toHaveLength(RECIPES.length);
-    expect(c.recipes).toHaveLength(10);
-    expect(c.lunchCount).toBe(5);
-    expect(c.baitCount).toBe(5);
+    expect(c.recipes).toHaveLength(12);
+    expect(c.lunchCount).toBe(6);
+    expect(c.baitCount).toBe(6);
     expect(c.energies).toHaveLength(4);
 
     for (const r of c.recipes) {
@@ -199,7 +199,7 @@ describe('관리자 콘텐츠 카탈로그 모델', () => {
     expect(achNight.length).toBeGreaterThan(0);
 
     const bonusInd = filterBonusSeriesCatalog(CONTENT_CATALOG.bonusSeries, { zone: 'indian' });
-    expect(bonusInd).toHaveLength(2);
+    expect(bonusInd).toHaveLength(3);
 
     const hatSearch = filterHatCatalog(CONTENT_CATALOG.wardrobe.hats, { query: '밀짚모자' });
     expect(hatSearch.map(h => h.id)).toEqual(['straw-hat']);

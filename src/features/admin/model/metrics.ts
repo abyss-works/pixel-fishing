@@ -107,7 +107,7 @@ export const EVENT_LABELS: Record<string, string> = {
   setActiveBait: '미끼 활성화',
   extractEnergy: '기운 얻기',
   cook: '조리 시작',
-  eat: '먹기와 쓰기',
+  eat: '아이템 사용',
   acceptQuest: '의뢰 수주',
   deliverBounty: '납품·토벌',
   exchangeArtifact: '유물 교환',

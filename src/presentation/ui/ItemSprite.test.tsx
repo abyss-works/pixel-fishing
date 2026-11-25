@@ -4,10 +4,10 @@ import ItemSprite from './ItemSprite';
 
 describe('ItemSprite', () => {
   it('potion 종류 스프라이트를 캔버스로 렌더링한다', () => {
-    const { container } = render(<ItemSprite kind="potion" id="luck-small" preset="list" ariaLabel="작은 행운 물약" />);
+    const { container } = render(<ItemSprite kind="potion" id="luck-small" preset="list" ariaLabel="작은 바다 영약" />);
     const canvas = container.querySelector('canvas');
     expect(canvas).not.toBeNull();
-    expect(canvas?.getAttribute('aria-label')).toBe('작은 행운 물약');
+    expect(canvas?.getAttribute('aria-label')).toBe('작은 바다 영약');
   });
 
   it('artifact 종류 스프라이트를 row·list·hero 프리셋 크기로 렌더링한다', () => {

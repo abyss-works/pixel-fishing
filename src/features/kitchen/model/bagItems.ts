@@ -32,13 +32,13 @@ export const ITEM_GROUP_HINT = {
   energy: '물고기 한 마리에서 그 등급의 생명의 기운 하나를 얻어요.\n기운 얻기는 집 궤짝이나 항구 어시장에서 할 수 있어요.',
   lunch: recipeEffectNote('lunch'),
   bait: recipeEffectNote('bait'),
-  potion: '마시면 하루 동안 모든 행운 효과가 올라요.',
+  potion: '사용하면 하루 동안 모든 행운 효과가 올라요.',
 } as const;
 const POTION_DETAIL_NOTE = `하루 동안 이어져요. 하루는 ${GAME_DAY_RESET_TEXT}에 새로 시작해요.`;
 const LUCK_TARGETS = ['rarity', 'named', 'sell'] as const;
-const pctPoint = (x: number): string => `+${Math.round(x * 1000) / 10}%p`;
+const luckMultText = (x: number): string => `×${(1 + x).toFixed(2)}`;
 
-/** 물약 효과 줄 — 모든 행운 대상이 같은 값이면 한 줄로 묶고, 아니면 대상별 줄을 만든다 */
+/** 비약 효과 줄 — 모든 행운 대상이 같은 값이면 한 줄로 묶고, 아니면 대상별 줄을 만든다 */
 export function potionEffectLines(potion: Potion): RecipeEffectLine[] {
   const luck = potion.effects.luck;
   if (!luck) return [];
@@ -46,13 +46,13 @@ export function potionEffectLines(potion: Potion): RecipeEffectLine[] {
     .map(target => ({ target, value: luck[target] }))
     .filter((e): e is { target: (typeof LUCK_TARGETS)[number]; value: number } => e.value !== undefined && e.value > 0);
   if (entries.length === LUCK_TARGETS.length && entries.every(e => e.value === entries[0].value)) {
-    return [{ label: '모든 행운 효과', value: pctPoint(entries[0].value) }];
+    return [{ label: '모든 행운 효과', value: luckMultText(entries[0].value) }];
   }
-  return entries.map(e => ({ label: FORTUNE_TARGET_BONUS_LABEL[e.target], value: pctPoint(e.value) }));
+  return entries.map(e => ({ label: FORTUNE_TARGET_BONUS_LABEL[e.target], value: luckMultText(e.value) }));
 }
-/** 물약 적용 안내 문구 */
+/** 비약 적용 안내 문구 */
 export const potionUseNoticeText = (potionName: string): string =>
-  `${potionName}${josa(potionName, '을/를')} 마셨어요. 하루 동안 이어져요.`;
+  `${potionName}${josa(potionName, '을/를')} 사용했어요. 하루 동안 이어져요.`;
 /** 아이템 섹션의 묶음 순서와 소제목 - 잠긴 자리와 열린 섹션이 같은 순서를 쓴다 */
 export const ITEM_GROUPS = [
   { key: 'lunch', title: '도시락' },
@@ -62,9 +62,9 @@ export const ITEM_GROUPS = [
 const SWAP_WARNING = '지금 효과의 남은 시간은 사라져요.';
 
 /** 슬롯 종류별 동작 이름과 교체 확인 제목 */
-const SLOT_TEXT: Readonly<Record<SlotKey, { verb: '먹기' | '쓰기'; swapTitle: string }>> = {
-  lunch: { verb: '먹기', swapTitle: '도시락 바꾸기' },
-  bait: { verb: '쓰기', swapTitle: '미끼 바꾸기' },
+const SLOT_TEXT: Readonly<Record<SlotKey, { verb: '사용'; swapTitle: string }>> = {
+  lunch: { verb: '사용', swapTitle: '도시락 바꾸기' },
+  bait: { verb: '사용', swapTitle: '미끼 바꾸기' },
 };
 
 /** stored는 저장 단위 수량이다(화면 단위의 10배). 아이템 행의 count와 단위가 다르다 */
@@ -77,7 +77,7 @@ export interface ItemRow {
   title: RecipeTitle;
   count: number;
   slot: SlotKey;
-  verb: '먹기' | '쓰기';
+  verb: '사용';
   /** 효과 줄과 적용 낚시, 지속 안내 - 이름의 툴팁이 보인다 */
   effects: RecipeEffectLine[];
   note: string;
@@ -122,7 +122,7 @@ export type ItemSectionView =
 
 export function selectItemSection(game: GameState, now: string, account: AccountLockState): ItemSectionView {
   const activePotionIds = new Set(activePotionsOf(game.potions, now).map(p => p.id));
-  const potionLockResult = menuLock({ account, guestAllowed: false, feature: '물약' });
+  const potionLockResult = menuLock({ account, guestAllowed: false, feature: '비약' });
   const potionLock = potionLockResult.kind === 'none' ? null : potionLockResult.lines;
   const potions: PotionRow[] = POTIONS.map(potion => ({
     potion,
@@ -221,7 +221,7 @@ export interface SwapChoice {
 /** 교체 확인 — 효과가 든 슬롯에 새로 넣을 때(같은 것을 다시 넣을 때도) 잃는 남은 시간을 보인다 */
 export interface SwapConfirm {
   title: string;
-  confirmLabel: '먹기' | '쓰기';
+  confirmLabel: '사용';
   current: { label: string; title: RecipeTitle; minutes: number };
   next: { label: string; title: RecipeTitle; minutes: number };
   warning: string;

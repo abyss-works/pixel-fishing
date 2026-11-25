@@ -113,7 +113,7 @@ describe('보너스 통합 칩 표시 조건과 내역', () => {
     });
   });
 
-  it('요리가 열리기 전이나 게스트라도 물약이나 오늘의 운세가 켜져 있으면 통합 활성 칩을 낸다', () => {
+  it('요리가 열리기 전이나 게스트라도 비약이나 오늘의 운세가 켜져 있으면 통합 활성 칩을 낸다', () => {
     const day = gameDayOf(T0);
     const chip = selectBonusChip(
       seed({
@@ -128,8 +128,8 @@ describe('보너스 통합 칩 표시 조건과 내역', () => {
     if (chip.state !== 'active') return;
     expect(chip.count).toBe(2);
     expect(chip.items.map(i => [i.id, i.kindLabel, i.title, i.summary, i.durationText])).toEqual([
-      ['potion:luck-small', '물약', { name: '작은 행운 물약', grade: 'special' }, '모든 행운 효과 +5%p', '하루 동안'],
-      ['fortune', '풍어운', { name: '오늘의 운세', grade: null }, '희귀 이상 출현 확률 +5%p', '하루 동안'],
+      ['potion:luck-small', '비약', { name: '작은 바다 영약', grade: 'special' }, '모든 행운 효과 ×1.05', '하루 동안'],
+      ['fortune', '풍어운', { name: '오늘의 운세', grade: null }, '희귀 이상 출현 비중 ×1.05', '하루 동안'],
     ]);
   });
 
@@ -137,7 +137,7 @@ describe('보너스 통합 칩 표시 조건과 내역', () => {
     expect(selectBonusChip(seed(), T0, 'account')).toEqual({ state: 'empty' });
   });
 
-  it('끝난 슬롯과 지난 날짜 물약·운세는 통합 칩에서 빠진다', () => {
+  it('끝난 슬롯과 지난 날짜 비약·운세는 통합 칩에서 빠진다', () => {
     const game = seed({
       slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(HOUR) }, bait: null },
       potions: { 'luck-small': '2026-11-11' },
@@ -146,7 +146,7 @@ describe('보너스 통합 칩 표시 조건과 내역', () => {
     expect(selectBonusChip(game, at(HOUR), 'account')).toEqual({ state: 'empty' });
   });
 
-  it('도시락, 다중 미끼(bait, bait2), 물약, 오늘의 운세를 모두 한 통합 목록으로 묶고 slotKey를 구분 유지한다', () => {
+  it('도시락, 다중 미끼(bait, bait2), 비약, 오늘의 운세를 모두 한 통합 목록으로 묶고 slotKey를 구분 유지한다', () => {
     const day = gameDayOf(T0);
     const dual = seed({
       artifacts: ['sargasso-net'],
@@ -166,7 +166,7 @@ describe('보너스 통합 칩 표시 조건과 내역', () => {
       ['lunch', 'lunch', '가루디야', '1시간 42분 남음'],
       ['bait', 'bait', '롱페퍼 미끼', '2분 남음'],
       ['bait2', 'bait', '큐베브 미끼', '3분 남음'],
-      ['potion:luck-small', 'potion', '작은 행운 물약', '하루 동안'],
+      ['potion:luck-small', 'potion', '작은 바다 영약', '하루 동안'],
       ['fortune', 'fortune', '오늘의 운세', '하루 동안'],
     ]);
 

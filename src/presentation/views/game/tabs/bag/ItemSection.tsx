@@ -204,7 +204,7 @@ function EnergyCards({ energy, lockLines }: {
   );
 }
 
-/** 물약 카드 격자 — 계정 회원은 배 단계와 무관하게 쓸 수 있고, 게스트·확인 실패는 잠금 상태다 */
+/** 비약 카드 격자 — 계정 회원은 배 단계와 무관하게 쓸 수 있고, 게스트·확인 실패는 잠금 상태다 */
 function PotionCards({ rows, potionLock, busy, selectedId, onSelect, onUse }: {
   rows: readonly PotionRow[];
   potionLock: readonly string[] | null;
@@ -216,7 +216,7 @@ function PotionCards({ rows, potionLock, busy, selectedId, onSelect, onUse }: {
   if (rows.length === 0) return null;
   return (
     <div className="mb-2">
-      <Subheading><Tip text={ITEM_GROUP_HINT.potion}>물약</Tip></Subheading>
+      <Subheading><Tip text={ITEM_GROUP_HINT.potion}>비약</Tip></Subheading>
       <div className="grid grid-cols-2 gap-2">
         {rows.map(row => {
           const locked = potionLock !== null;
@@ -295,10 +295,9 @@ export default function ItemSection({ game, accountState, dispatch, setToast }: 
     when(dispatch(action), r => {
       setBusy(false);
       if (r.status === 'ok') {
-        const verbDone = row.slot === 'lunch' ? '먹었어요.' : '썼어요.';
         sendNotice(setToast, {
           kind: 'kitchen.cookAndBuff',
-          text: `${josa(row.label, '을/를')} ${verbDone}`,
+          text: `${josa(row.label, '을/를')} 사용했어요.`,
           toastText: `${row.label} 사용`,
         });
       } else if (r.status === 'rejected') {

@@ -92,11 +92,11 @@ export default function VHelp() {
           </PixelList>
         </Topic>
 
-        <Topic title="오늘의 운세와 물약" hint="운세 창, 달력, 물약">
+        <Topic title="오늘의 운세와 비약" hint="운세 창, 달력, 비약">
           <PixelList>
             <li>매일 처음 접속하면 <b>오늘의 운세</b> 창이 뜨고, 달력과 스탯 창 보너스 탭에서도 오늘 효과를 봐요.</li>
-            <li>가방 아이템에서 <b>물약</b>을 마시면 하루 동안 모든 행운 효과가 올라요.</li>
-            <li>오늘의 운세, 물약, 바운티 헌팅의 하루는 <b>{GAME_DAY_RESET_TEXT}</b>에 새로 시작해요.</li>
+            <li>가방 아이템에서 <b>비약</b>을 사용하면 하루 동안 모든 행운 효과가 올라요.</li>
+            <li>오늘의 운세, 비약, 바운티 헌팅의 하루는 <b>{GAME_DAY_RESET_TEXT}</b>에 새로 시작해요.</li>
           </PixelList>
         </Topic>
 
@@ -119,7 +119,7 @@ export default function VHelp() {
             <li>가방 용량은 도보일 때 <b>{WALK_BAG_CAP}마리</b>부터 가장 좋은 배의 <b>{BOATS[BOATS.length - 1].bagCap}마리</b>까지 늘어요.</li>
             <li>가득 찬 채 더 낚으면 가장 평범한 물고기부터 놓아주지만 명성과 도감 기록은 남아요.</li>
             <li>집 궤짝이나 항구 어시장의 <b>기운 얻기</b>로 생명의 기운을 얻고, 집 부엌에서 요리해요.</li>
-            <li>가방에서 도시락을 먹으면 {SLOT_SCOPE.lunch}, 미끼를 쓰면 {SLOT_SCOPE.bait} 효과가 켜져요.</li>
+            <li>가방에서 도시락을 사용하면 {SLOT_SCOPE.lunch}, 미끼를 사용하면 {SLOT_SCOPE.bait} 효과가 켜져요.</li>
             <li>일부 유물을 지니면 미끼를 <b>두 칸까지</b> 함께 쓸 수 있어요.</li>
           </PixelList>
         </Topic>

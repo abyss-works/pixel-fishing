@@ -5,9 +5,9 @@ import ItemBadge from './ItemBadge';
 afterEach(cleanup);
 
 describe('ItemBadge', () => {
-  it('물약은 픽셀 스프라이트와 이름, 수량을 함께 표시한다', () => {
+  it('비약은 픽셀 스프라이트와 이름, 수량을 함께 표시한다', () => {
     const { container } = render(<ItemBadge id="luck-small" qty={2} />);
-    expect(screen.getByText('작은 행운 물약')).toBeTruthy();
+    expect(screen.getByText('작은 바다 영약')).toBeTruthy();
     expect(screen.getByText('×2')).toBeTruthy();
     expect(container.querySelector('canvas')).not.toBeNull();
   });

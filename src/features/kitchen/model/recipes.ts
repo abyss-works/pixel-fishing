@@ -42,12 +42,12 @@ export function recipeLabel(recipe: Recipe): string {
 }
 
 /** 그 종류의 효과가 걸리는 낚시 - 보너스 탭, 칩 툴팁, 부엌 창이 같은 표기를 쓴다 */
-export const SLOT_SCOPE: Readonly<Record<CookKind, string>> = { lunch: '방치로 낚을 때만', bait: '챔질해서 낚을 때만' };
+export const SLOT_SCOPE: Readonly<Record<CookKind, string>> = { lunch: '방치로 낚을 때만', bait: '직접 챔질해 낚을 때만' };
 
-// 효과 설명 — 종류마다 적용되는 낚시와 지속 시간이 다르다. 칩 줄의 슬롯 칩과 부엌 창이 같은 문안을 쓴다
+// 효과 설명 — 전용 낚시 방식과 비접속 지속 두 줄로 간결히 적는다
 const EFFECT_NOTE: Readonly<Record<CookKind, string>> = {
-  lunch: `${SLOT_SCOPE.lunch} 효과가 있어요.\n지속 시간은 먹은 때부터 흐르고, 낚시하지 않거나 접속하지 않아도 멈추지 않아요.`,
-  bait: `${SLOT_SCOPE.bait} 효과가 있어요.\n물고기를 낚아도 미끼가 줄지 않아요.\n지속 시간은 쓴 때부터 흐르고, 낚시하지 않거나 접속하지 않아도 멈추지 않아요.`,
+  lunch: `${SLOT_SCOPE.lunch} 효과가 있어요.\n접속하지 않아도 지속 시간이 흘러요.`,
+  bait: `${SLOT_SCOPE.bait} 효과가 있어요.\n접속하지 않아도 지속 시간이 흘러요.`,
 };
 
 /** 그 종류의 효과 설명 — 줄마다 줄바꿈으로 나뉜다 */
@@ -76,11 +76,13 @@ export function recipeEffectLines(recipe: Recipe): RecipeEffectLine[] {
         return e.biteWaitCut === undefined ? [] : [{ label: '입질 대기', value: `−${pct(e.biteWaitCut)}%` }];
       case 'rarityWeight':
         return e.rarityWeight === undefined ? [] : e.rarityWeight.grades.map(g => (
-          { label: `${RARITY[g].name} 어종 출현`, value: `+${pct(e.rarityWeight!.bonus)}%` }));
+          { label: `${RARITY[g].name} 어종 출현 비중`, value: `+${pct(e.rarityWeight!.bonus)}%` }));
       case 'mutationWeight':
-        return e.mutationWeight === undefined ? [] : [{ label: '돌연변이 출현', value: `+${pct(e.mutationWeight)}%` }];
+        return e.mutationWeight === undefined ? [] : [{ label: '돌연변이 출현 비중', value: `+${pct(e.mutationWeight)}%` }];
+      case 'mutationMult':
+        return e.mutationMult === undefined ? [] : [{ label: '돌연변이 등장', value: `×${e.mutationMult}` }];
       case 'namedWeight':
-        return e.namedWeight === undefined ? [] : [{ label: '네임드 만날 확률', value: `+${pct(e.namedWeight)}%` }];
+        return e.namedWeight === undefined ? [] : [{ label: '네임드 조우 확률', value: `+${pct(e.namedWeight)}%` }];
       case 'nightUnlock':
         return e.nightUnlock === true ? [{ text: NIGHT_UNLOCK_EFFECT_TEXT }] : [];
     }

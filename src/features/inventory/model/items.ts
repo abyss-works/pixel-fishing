@@ -13,7 +13,7 @@ export { STACKABLE_ITEMS, findStackableItem, itemStorageAmount, ITEM_CAP };
 export type { StackableItem, StackableItemKind };
 
 export const STACKABLE_ITEM_KIND_LABEL: Record<StackableItemKind, string> = {
-  potion: '물약',
+  potion: '비약',
   energy: '생명의 기운',
   dish: '도시락',
   bait: '미끼',
@@ -58,7 +58,7 @@ export function maxAttachableQty(id: string): number {
   return Math.floor(ITEM_CAP / item.unitSize);
 }
 
-/** 아이템 이름과 수량을 문장으로 포맷한다 (예: '작은 행운 물약 2개') */
+/** 아이템 이름과 수량을 문장으로 포맷한다 (예: '작은 바다 영약 2개') */
 export function formatItemQtyText(id: string, qty: number): string {
   const name = findStackableItem(id)?.name ?? id;
   return `${name} ${qty.toLocaleString('ko-KR')}개`;

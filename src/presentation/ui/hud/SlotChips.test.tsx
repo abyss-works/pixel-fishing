@@ -38,10 +38,10 @@ describe('SlotChips (보너스 통합 칩)', () => {
     fireEvent.mouseEnter(group);
     const tip = screen.getByRole('tooltip');
     expect(within(tip).getByText('없음')).toBeInTheDocument();
-    expect(tip).toHaveTextContent('적용 중인 요리나 물약, 운세가 없어요.');
+    expect(tip).toHaveTextContent('적용 중인 요리나 비약, 운세가 없어요.');
   });
 
-  it('도시락, 다중 미끼, 물약, 오늘의 운세가 모두 켜져도 React key 중복 경고 없이 한 칩에 활성 수를 모으고 툴팁에 등급색과 남은 시간을 보인다', () => {
+  it('도시락, 다중 미끼, 비약, 오늘의 운세가 모두 켜져도 React key 중복 경고 없이 한 칩에 활성 수를 모으고 툴팁에 등급색과 남은 시간을 보인다', () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const day = gameDayOf(NOW);
     const game: GameState = {
@@ -73,7 +73,7 @@ describe('SlotChips (보너스 통합 칩)', () => {
     expect(within(tip).getByText('(희귀)')).toHaveAttribute('data-rarity', 'rare');
     expect(within(tip).getByText('큐베브 미끼')).toBeInTheDocument();
     expect(within(tip).getByText('(영웅)')).toHaveAttribute('data-rarity', 'epic');
-    expect(within(tip).getByText('작은 행운 물약')).toBeInTheDocument();
+    expect(within(tip).getByText('작은 바다 영약')).toBeInTheDocument();
     expect(within(tip).getByText('(특수)')).toHaveAttribute('data-rarity', 'special');
     expect(within(tip).getByText('오늘의 운세')).toBeInTheDocument();
     expect(within(tip).getByText('그림자 운')).toBeInTheDocument();

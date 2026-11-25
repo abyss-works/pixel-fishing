@@ -257,7 +257,7 @@ export default function MailTab({ to = null }: {
               </Field>
             )}
             <div className="grid grid-cols-[1fr_7rem] gap-2 items-start">
-              <Field label="첨부 아이템 찾기" hint="이름, 종류(물약, 생명의 기운, 도시락, 미끼, 재료), id 일부를 입력해 고르세요.">
+              <Field label="첨부 아이템 찾기" hint="이름, 종류(비약, 생명의 기운, 도시락, 미끼, 재료), id 일부를 입력해 고르세요.">
                 <TextInput value={itemQuery} onChange={e => setItemQuery(e.target.value)} placeholder="아이템 이름 또는 종류" />
               </Field>
               <Field label="첨부 수량" error={itemError}>

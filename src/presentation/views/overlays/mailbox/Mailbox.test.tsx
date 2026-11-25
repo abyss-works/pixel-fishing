@@ -85,7 +85,7 @@ describe('우편함 창', () => {
       mail({
         id: 11,
         title: '보상 선물',
-        body: '물약을 보내드려요.',
+        body: '비약을 보내드려요.',
         gold: 0,
         items: [{ id: 'luck-small', qty: 2 }, { id: 'mat-abyss-lantern', qty: 1 }],
       }),
@@ -97,7 +97,7 @@ describe('우편함 창', () => {
     const toast = vi.fn();
     wrap(<MailboxModal dispatch={dispatch} setToast={toast} onClose={() => {}} />);
     fireEvent.click(await screen.findByRole('row', { name: /보상 선물/ }));
-    expect(screen.getByText('작은 행운 물약')).toBeInTheDocument();
+    expect(screen.getByText('작은 바다 영약')).toBeInTheDocument();
     expect(screen.getByText('×2')).toBeInTheDocument();
     expect(screen.getByText('돌이 된 이빨')).toBeInTheDocument();
     expect(screen.getByText('×1')).toBeInTheDocument();
@@ -105,7 +105,7 @@ describe('우편함 창', () => {
     expect(claimBtns).toHaveLength(1);
     fireEvent.click(claimBtns[0]);
     expect(dispatch).toHaveBeenCalledWith({ type: 'claimMail', id: 11 });
-    await waitFor(() => expect(toast).toHaveBeenCalledWith('우편에서 작은 행운 물약 2개, 돌이 된 이빨 1개를 받았어요!', 'gold'));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('우편에서 작은 바다 영약 2개, 돌이 된 이빨 1개를 받았어요!', 'gold'));
     expect(screen.queryByRole('button', { name: '받기' })).not.toBeInTheDocument();
     expect(screen.getByText('받음')).toBeInTheDocument();
   });
@@ -115,7 +115,7 @@ describe('우편함 창', () => {
       mail({
         id: 12,
         title: '특별 보급',
-        body: '골드와 물약이에요.',
+        body: '골드와 비약이에요.',
         gold: 500,
         items: [{ id: 'luck-small', qty: 2 }],
       }),
@@ -128,11 +128,11 @@ describe('우편함 창', () => {
     wrap(<MailboxModal dispatch={dispatch} setToast={toast} onClose={() => {}} />);
     fireEvent.click(await screen.findByRole('row', { name: /특별 보급/ }));
     expect(screen.getByText('500G')).toBeInTheDocument();
-    expect(screen.getByText('작은 행운 물약')).toBeInTheDocument();
+    expect(screen.getByText('작은 바다 영약')).toBeInTheDocument();
     const claimBtns = screen.getAllByRole('button', { name: '받기' });
     expect(claimBtns).toHaveLength(1);
     fireEvent.click(claimBtns[0]);
-    await waitFor(() => expect(toast).toHaveBeenCalledWith('우편에서 500G, 작은 행운 물약 2개를 받았어요!', 'gold'));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('우편에서 500G, 작은 바다 영약 2개를 받았어요!', 'gold'));
   });
 
   it('우편이 없으면 빈 상태를 안내한다', async () => {
