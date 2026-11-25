@@ -30,13 +30,18 @@ afterEach(() => {
   resetSailReturnForTest();
 });
 
-const open = (account: string | null, accountFailed = false, sailReturn = false) => {
+const open = (
+  account: string | null,
+  accountFailed = false,
+  sailReturn = false,
+  mode: 'manage' | 'connect' = 'manage',
+) => {
   const setToast = vi.fn();
   const onAuthChanged = vi.fn(async () => {});
   const onClose = vi.fn();
   const view = render(
-    <AccountModal layer="app" setToast={setToast} onAuthChanged={onAuthChanged} onClose={onClose}
-                  account={account} accountFailed={accountFailed} sailReturn={sailReturn} />,
+    <AccountModal layer={mode === 'connect' ? 'stage' : 'app'} mode={mode} setToast={setToast} onAuthChanged={onAuthChanged} onClose={onClose}
+                  account={account} accountFailed={accountFailed} sailReturn={sailReturn} syncLabel="진행 저장 켜짐" syncState="on" />,
   );
   return { setToast, onAuthChanged, onClose, unmount: view.unmount };
 };
@@ -164,5 +169,51 @@ describe('출항 차단 후 로그인 의도 표지', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Google로 계속하기' }));
     await waitFor(() => expect(actions.connectGoogle).toHaveBeenCalledTimes(1));
     expect(hasPendingSailReturn()).toBe(false);
+  });
+});
+
+describe('출항 전용 연결 창 (mode="connect")', () => {
+  it('게스트 상태에서는 출항 안내와 해금 3항목, 구글 버튼, 약관 고지, 나중에 하기만 보이고 계정 삭제·상태 박스는 없다', () => {
+    open(null, false, true, 'connect');
+    expect(screen.getByRole('dialog', { name: '태평양 출항 준비' })).toBeInTheDocument();
+    expect(screen.getByText('태평양 너머 넓은 바다로 나갈 준비가 되었어요.')).toBeInTheDocument();
+    expect(screen.getByText('태평양과 세계 해역 개방')).toBeInTheDocument();
+    expect(screen.getByText('업적 보상과 소셜 기능 해금')).toBeInTheDocument();
+    expect(screen.getByText('현재 마을 진행 그대로 유지')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Google로 계속하기' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '이용약관' })).toHaveAttribute('target', '_blank');
+    expect(screen.getByRole('link', { name: '개인정보 처리방침' })).toHaveAttribute('target', '_blank');
+    expect(screen.getByRole('button', { name: '나중에 하기' })).toBeInTheDocument();
+
+    expect(screen.queryByText('게스트')).toBeNull();
+    expect(screen.queryByText('진행 저장 켜짐')).toBeNull();
+    expect(screen.queryByRole('button', { name: '로그아웃' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '계정 삭제' })).toBeNull();
+    expect(screen.queryByRole('link', { name: '운영정책' })).toBeNull();
+  });
+
+  it('나중에 하기를 누르면 출항 대기를 지우고 창을 닫는다', () => {
+    setPendingSailReturn();
+    const { onClose } = open(null, false, true, 'connect');
+    fireEvent.click(screen.getByRole('button', { name: '나중에 하기' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(hasPendingSailReturn()).toBe(false);
+  });
+
+  it('연결 창에서 구글 로그인을 시작하면 sailReturn 표지를 저장한다', async () => {
+    open(null, false, true, 'connect');
+    fireEvent.click(screen.getByRole('button', { name: 'Google로 계속하기' }));
+    await waitFor(() => expect(actions.connectGoogle).toHaveBeenCalledTimes(1));
+    expect(hasPendingSailReturn()).toBe(true);
+  });
+
+  it('세션 확인 실패 상태에서는 출항 전용 창에서도 확인 실패 안내와 다시 확인 버튼만 둔다', () => {
+    open(null, true, false, 'connect');
+    expect(screen.getByRole('dialog', { name: '태평양 출항 준비' })).toBeInTheDocument();
+    expect(screen.getByText(ACCOUNT_CHECK_FAILED_COPY.label)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: ACCOUNT_CHECK_FAILED_COPY.retry })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Google로 계속하기' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '나중에 하기' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '계정 삭제' })).toBeNull();
   });
 });

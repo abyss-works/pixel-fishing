@@ -91,11 +91,13 @@ describe('필드에 넘기는 확정된 게스트 여부', () => {
     expect(seen.guest).toBe(false);
   });
 
-  it('포구 출항 차단으로 열린 계정 창에서 구글 로그인을 시작하면 출항 대기를 저장한다', async () => {
+  it('포구 출항 차단으로 열린 연결 창에서 계정 삭제 없이 출항 전용 안내를 보이고 구글 로그인을 시작하면 출항 대기를 저장한다', async () => {
     vi.spyOn(api.auth, 'startGoogle').mockResolvedValue({ ok: true });
     renderView(null, true);
     act(() => { seen.onGuestBlocked?.(); });
-    const googleBtn = await screen.findByRole('button', { name: 'Google로 계속하기' });
+    expect(await screen.findByRole('dialog', { name: '태평양 출항 준비' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '계정 삭제' })).toBeNull();
+    const googleBtn = screen.getByRole('button', { name: 'Google로 계속하기' });
     fireEvent.click(googleBtn);
     await waitFor(() => expect(api.auth.startGoogle).toHaveBeenCalledTimes(1));
     expect(hasPendingSailReturn()).toBe(true);

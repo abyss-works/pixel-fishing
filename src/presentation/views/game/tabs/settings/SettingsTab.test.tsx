@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { newState } from '../../../../../game/rules/logic';
 import type { ProfileStatus } from '../../../../../features/gameplay/service/types';
 import SettingsTab from './SettingsTab';
@@ -83,5 +83,13 @@ describe('SettingsTab 닉네임 비동기 상태 구분', () => {
       />,
     );
     expect(screen.getByText('바다사나이')).toBeInTheDocument();
+  });
+
+  it('계정 관리 버튼은 기존 계정 관리 창(로그아웃·계정 삭제 포함)을 연다', () => {
+    renderSettings('바다사나이', 'loaded');
+    fireEvent.click(screen.getByRole('button', { name: '계정 관리' }));
+    expect(screen.getByRole('dialog', { name: '계정 관리' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '로그아웃' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '계정 삭제' })).toBeInTheDocument();
   });
 });

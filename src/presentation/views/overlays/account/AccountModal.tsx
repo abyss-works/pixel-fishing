@@ -12,6 +12,8 @@ import {
 import { GOOGLE_BUTTON_LABEL, googleStartFailedText, LEGAL_PATHS } from '../../../../features/account/model/googleFlow';
 import { ACCOUNT_CHECK_FAILED_COPY, accountLabel } from '../../../../features/account/model/accountRules';
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
+import Badge from '../../../ui/Badge';
+import BoatSprite from '../../../ui/BoatSprite';
 import Button from '../../../ui/Button';
 import Divider from '../../../ui/Divider';
 import ExternalLink from '../../../ui/ExternalLink';
@@ -26,14 +28,33 @@ import { cx } from '../../../ui/cx';
 import { useDialogs } from '../../../ui/useDialogs';
 import type { Notify } from '../../../ui/hud/messageFeed';
 
-// 계정 관리 창 - 구글 계정 연결과 로그인 상태, 로그아웃, 계정 삭제, 약관과 처리방침 링크.
-// 로그인 수단은 구글과 익명 게스트다: 게스트는 구글 계정을 연결해 같은 진행으로 영구 계정이 된다.
+const CONNECT_PERKS = [
+  {
+    badge: '항로',
+    title: '태평양과 세계 해역 개방',
+    desc: '마을 포구에서 출항해 여섯 대양과 네임드 수배에 도전할 수 있어요.',
+  },
+  {
+    badge: '교류',
+    title: '업적 보상과 소셜 기능 해금',
+    desc: '업적 수령, 의뢰, 우편, 채팅, 친구, 길드를 모두 쓸 수 있어요.',
+  },
+  {
+    badge: '보존',
+    title: '현재 마을 진행 그대로 유지',
+    desc: '모아 둔 도감과 골드, 배와 낚싯대가 연결한 계정으로 이어져요.',
+  },
+] as const;
+
+// 계정 관리·출항 연결 창 - settings(manage)에서는 계정 상태·로그아웃·계정 삭제를, 게임 출항/해금 진입(connect)에서는 출항 안내와 구글 연결만 제공한다.
 // 세션 확인에 실패했으면(accountFailed) 게스트로 보지 않고, 확인 실패 안내와 다시 확인 버튼만 둔다. 계정을 바꾸는 동작(구글 연결, 로그아웃, 계정 삭제)은 확인이 끝날 때까지 열지 않는다.
 // 닉네임과 ID는 내 정보 창이 맡는다.
 export default function AccountModal({
-  layer, setToast, onAuthChanged, onClose, account, accountFailed, syncLabel, syncState, sailReturn = false,
+  layer, mode = 'manage', setToast, onAuthChanged, onClose, account, accountFailed, syncLabel, syncState, sailReturn = false,
 }: {
   layer: 'stage' | 'app';
+  /** manage: 설정 탭의 계정 관리 창 · connect: 포구 출항 등 게임 흐름에서 여는 출항 전용 연결 창 */
+  mode?: 'connect' | 'manage';
   setToast: Notify;
   onAuthChanged: () => Promise<void>; onClose: () => void;
   account: string | null;
@@ -120,17 +141,61 @@ export default function AccountModal({
     </div>
   );
 
-  const content = (
+  const connectMode = mode === 'connect';
+  const title = connectMode ? '태평양 출항 준비' : '계정 관리';
+
+  const legalNotice = (
+    <Note size="xs" className="text-center mt-2 mb-0">
+      계속하면 만 14세 이상이며 <ExternalLink href={LEGAL_PATHS.terms}>이용약관</ExternalLink>에 동의하고{' '}
+      <ExternalLink href={LEGAL_PATHS.privacy}>개인정보 처리방침</ExternalLink>을 확인한 것으로 봐요.
+    </Note>
+  );
+
+  const offlineNote = offline && (
+    <Note className="mt-0">오프라인 상태에서는 계정 기능이 동작하지 않아요.<br />화면 확인용이에요.</Note>
+  );
+
+  const content = connectMode && guest ? (
+    <>
+      <Inset tone="light" border="accent" className="p-2.5 flex items-center gap-3">
+        <BoatSprite tier={1} preset="row" className="shrink-0" />
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <p className="text-sm font-bold text-text">태평양 너머 넓은 바다로 나갈 준비가 되었어요.</p>
+          <p className="text-xs text-text-dim">지금까지의 마을 진행을 계정에 이어 두고 바다 항로를 열어요.</p>
+        </div>
+      </Inset>
+
+      <Inset divided>
+        {CONNECT_PERKS.map(perk => (
+          <div key={perk.badge} className="flex items-start gap-2.5 px-2.5 py-2">
+            <Badge tone="accent" size="xs" className="mt-0.5">{perk.badge}</Badge>
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-text">{perk.title}</p>
+              <p className="text-xs text-text-dim">{perk.desc}</p>
+            </div>
+          </div>
+        ))}
+      </Inset>
+
+      {offlineNote}
+      <GoogleButton disabled={busy || offline} onClick={() => void connect()}>{GOOGLE_BUTTON_LABEL}</GoogleButton>
+      {legalNotice}
+
+      <div className="flex justify-center">
+        <Button variant="ghost" size="sm" disabled={busy} onClick={handleClose}>나중에 하기</Button>
+      </div>
+    </>
+  ) : (
     <>
       <Inset divided className="mb-2">
         {accountRow}
-        {syncLabel && (
+        {!connectMode && syncLabel && (
           <div className={cx('px-2 py-1.5 text-xs', syncState === 'error' ? 'text-danger' : 'text-text-dim')}>
             {syncLabel}
           </div>
         )}
       </Inset>
-      {offline && <Note className="mt-0">오프라인 상태에서는 계정 기능이 동작하지 않아요.<br />화면 확인용이에요.</Note>}
+      {offlineNote}
 
       {accountFailed ? (
         <>
@@ -142,10 +207,7 @@ export default function AccountModal({
       ) : guest ? (
         <>
           <GoogleButton disabled={busy || offline} onClick={() => void connect()}>{GOOGLE_BUTTON_LABEL}</GoogleButton>
-          <Note size="xs" className="text-center mt-2 mb-0">
-            계속하면 만 14세 이상이며 <ExternalLink href={LEGAL_PATHS.terms}>이용약관</ExternalLink>에 동의하고{' '}
-            <ExternalLink href={LEGAL_PATHS.privacy}>개인정보 처리방침</ExternalLink>을 확인한 것으로 봐요.
-          </Note>
+          {legalNotice}
           <Note className="text-center">구글 계정을 연결하면 지금까지의 진행이 그 계정에 이어져요.</Note>
         </>
       ) : (
@@ -170,11 +232,11 @@ export default function AccountModal({
   return (
     <>
       {layer === 'stage' ? (
-        <Modal layer="stage" onClose={handleClose}>
-          <ModalCard title="계정 관리" onClose={handleClose}>{content}</ModalCard>
+        <Modal layer="stage" sm={connectMode} onClose={handleClose}>
+          <ModalCard title={title} onClose={handleClose}>{content}</ModalCard>
         </Modal>
       ) : (
-        <Modal layer="app" title="계정 관리" narrow onClose={handleClose}>{content}</Modal>
+        <Modal layer="app" title={title} narrow onClose={handleClose}>{content}</Modal>
       )}
       {dialogs}
     </>
