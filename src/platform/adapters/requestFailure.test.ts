@@ -42,6 +42,7 @@ describe('requestFailure', () => {
     const err = requestFailure(new Response('', { status: 403 }), 'x failed', 'consent-required');
     expect(err).toBeInstanceOf(AppError);
     expect(err).toBeInstanceOf(ConsentRequiredError);
+    expect(err.kind).toBe('consent-required');
     expect(isConsentRequiredError(err)).toBe(true);
     expect(err.context).toEqual({ status: 403, code: 'consent-required' });
 
@@ -67,6 +68,7 @@ describe('readMe의 403 consent-required 처리', () => {
     }));
     try {
       const err = await readMe('state').catch(e => e);
+      expect((err as AppError).kind).toBe('consent-required');
       expect(isConsentRequiredError(err)).toBe(true);
       expect(onConsent).toHaveBeenCalledTimes(1);
     } finally {

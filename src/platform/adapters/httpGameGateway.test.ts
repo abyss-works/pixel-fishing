@@ -103,6 +103,7 @@ describe('HttpGameGateway의 게스트 거부', () => {
     try {
       const err = await new HttpGameGateway().dispatch({ type: 'boot' }).catch(e => e);
       expect(err).toBeInstanceOf(AppError);
+      expect((err as AppError).kind).toBe('consent-required');
       expect(isConsentRequiredError(err)).toBe(true);
       expect((err as AppError).context).toMatchObject({ action: 'boot', code: 'consent-required' });
       expect(onConsent).toHaveBeenCalledTimes(1);

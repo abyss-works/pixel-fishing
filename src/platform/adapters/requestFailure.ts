@@ -4,22 +4,19 @@ import { AppError } from '../../core/errors';
 
 export const CONSENT_REQUIRED_CODE = 'consent-required' as const;
 
-/**
- * 이용약관 수락이 필요한 계정의 403/WS 1008 거부 오류.
- * 핵심 실패 정책이 아직 전용 FailureKind를 갖기 전까지 안전한 폴백 kind('restricted')를 유지하되 code와 타입 가드로 구분한다.
- */
+/** 이용약관 수락이 필요한 계정의 403/WS 1008 거부 오류 */
 export class ConsentRequiredError extends AppError {
   readonly code = CONSENT_REQUIRED_CODE;
 
   constructor(message: string, context: Record<string, unknown> = {}) {
-    super('restricted', message, { ...context, code: CONSENT_REQUIRED_CODE });
+    super('consent-required', message, { ...context, code: CONSENT_REQUIRED_CODE });
     this.name = 'ConsentRequiredError';
   }
 }
 
 export function isConsentRequiredError(e: unknown): e is ConsentRequiredError {
   return e instanceof ConsentRequiredError
-    || (e instanceof AppError && e.context.code === CONSENT_REQUIRED_CODE);
+    || (e instanceof AppError && (e.kind === CONSENT_REQUIRED_CODE || e.context.code === CONSENT_REQUIRED_CODE));
 }
 
 type ConsentListener = () => void;
