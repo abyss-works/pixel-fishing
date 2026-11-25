@@ -26,6 +26,7 @@ import { ClearsLeft } from './boardParts';
 import NamedCard from './NamedCard';
 import RelicCard from './RelicCard';
 import CheckToggle from '../../../ui/CheckToggle';
+import { HighlightRarityText } from '../../../ui/fish/RarityTag';
 import Gated from '../../../ui/Gated';
 import Inset from '../../../ui/Inset';
 import PixelIcon from '../../../ui/PixelIcon';
@@ -59,7 +60,7 @@ function CondList({ conds }: { conds: ReturnType<typeof selectBountyPanelData>['
     <ul>
       {conds.map(c => (
         <li key={c.key}>
-          <PixelIcon glyph="checkOff" size={11} /> {c.label}
+          <PixelIcon glyph="checkOff" size={11} /> <HighlightRarityText text={c.label} />
         </li>
       ))}
     </ul>

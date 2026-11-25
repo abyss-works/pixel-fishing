@@ -11,8 +11,8 @@ export function LockIcon({ size = 12, className }: { size?: number; className?: 
 
 /** 잠금 툴팁 - 마우스를 올리거나 포커스하거나 누르면 잠금 줄이 열린다. 감싼 요소의 배치는 className으로 정한다 */
 export function LockTip({ title, description, lines, className, onlyIf, children }: {
-  title?: string;
-  description?: string;
+  title?: ReactNode;
+  description?: ReactNode;
   lines: readonly string[];
   className?: string;
   onlyIf?: () => boolean;
@@ -46,9 +46,9 @@ export function LockBadge({ size = 12, outside = false }: { size?: number; outsi
 // 자물쇠는 오른쪽 위 모서리에 붙는다. 줄 안에 자기 자리가 있는 요소(메뉴 줄)는 badge를 끄고 LockIcon을 그 자리에 둔다.
 export default function Locked({ title, description, lines, role = 'group', label, badge = true, hoverAfterMove = false, className, children }: {
   /** 툴팁 헤더 제목 — 생략 시 label을 쓴다 */
-  title?: string;
+  title?: ReactNode;
   /** 툴팁 본문 역할 설명 */
-  description?: string;
+  description?: ReactNode;
   /** 잠금 안내 줄들 */
   lines: readonly string[];
   /** 접근성 역할. 메뉴 항목 자리에서는 menuitem */

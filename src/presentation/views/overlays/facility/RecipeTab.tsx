@@ -1,13 +1,12 @@
 import { useState } from 'react';
 import { formatEnergy } from '../../../../game/content/cooking';
 import type { CookKind } from '../../../../game/content/cooking';
-import { RARITY } from '../../../../game/content/rarity';
 import { REJECT_TEXT } from '../../../../game/rules/logic';
 import type { GameState } from '../../../../game/rules/logic';
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import { recipeEffectNote, recipeLabel, recipesOfKind, selectRecipeView } from '../../../../features/kitchen/model/recipes';
 import { ENERGY_NAME } from '../../../../features/kitchen/model/energy';
-import { GradeName } from '../../../ui/fish/RarityTag';
+import { GradeName, HighlightRarityText, RarityText } from '../../../ui/fish/RarityTag';
 import HeroHeader from '../../../ui/HeroHeader';
 import Inset from '../../../ui/Inset';
 import ItemSprite from '../../../ui/ItemSprite';
@@ -56,7 +55,7 @@ export default function RecipeTab({ kind, game, now, busy, act, setToast }: {
                       <span className="flex flex-wrap gap-x-2 text-2xs text-text-dim">
                         {v.unitCost.map(c => (
                           <span key={c.grade} className={c.short ? 'text-danger' : undefined}>
-                            {RARITY[c.grade].name} <span className="pf-accent">{formatEnergy(c.per)}</span>
+                            <RarityText rarity={c.grade} /> <span className="pf-accent">{formatEnergy(c.per)}</span>
                           </span>
                         ))}
                       </span>
@@ -75,7 +74,7 @@ export default function RecipeTab({ kind, game, now, busy, act, setToast }: {
         <Tip text={recipeEffectNote(kind)} className="self-start text-xs text-text-dim">{EFFECT_TITLE[kind]}</Tip>
         {view.effects.map(line => (
           <KeyValueRow key={line.label} compact className="h-auto border-t-0"
-                       label={<span className="text-text">{line.label}</span>}
+                       label={<span className="text-text"><HighlightRarityText text={line.label} /></span>}
                        value={line.value} valueClassName="pf-accent text-accent" />
         ))}
         <KeyValueRow compact className="h-auto border-t-0"

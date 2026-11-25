@@ -26,7 +26,7 @@ import IconButton from '../../../../ui/IconButton';
 import Tip, { TipCard } from '../../../../ui/Tip';
 import SubTabs from '../../../../ui/SubTabs';
 import ToggleChip from '../../../../ui/ToggleChip';
-import { RarityDot, RarityText } from '../../../../ui/fish/RarityTag';
+import { HighlightRarityText, RarityDot, RarityText } from '../../../../ui/fish/RarityTag';
 import { groupInstances } from '../../../../../features/inventory/model/bagRows';
 import InstanceLine, { UnsizedLine } from '../../../../ui/fish/InstanceLine';
 import BagCards from './BagCards';
@@ -96,7 +96,7 @@ function ArtifactSection({ game, dispatch, setToast }: {
         </ToggleChip>
       </div>
       {shown.length === 0 ? (
-        <Note>아직 유물이 없어요.<br />네임드를 토벌하고 받은 교환 재료를 수배판의 유물 탭에서 유물로 바꿔 보세요.</Note>
+        <Note>아직 유물이 없어요.<br /><HighlightRarityText text="네임드를 토벌하고 받은 교환 재료를 수배판의 유물 탭에서 유물로 바꿔 보세요." /></Note>
       ) : (
         <>
           <Inset divided>
@@ -127,10 +127,10 @@ function ArtifactSection({ game, dispatch, setToast }: {
                       </span>
                     </span>
                     {artifactEffectLines(a, level).map(line => (
-                      <span key={line} className="text-accent text-xs">{line}</span>
+                      <span key={line} className="text-accent text-xs"><HighlightRarityText text={line} /></span>
                     ))}
-                    {bonus && <span className="text-accent text-xs">{bonus}</span>}
-                    {penalty && <span className="text-danger text-xs">{penalty}</span>}
+                    {bonus && <span className="text-accent text-xs"><HighlightRarityText text={bonus} /></span>}
+                    {penalty && <span className="text-danger text-xs"><HighlightRarityText text={penalty} /></span>}
                     <span className="text-text-dim italic text-xs">{a.lore}</span>
                   </span>
                 </PressRow>
@@ -343,7 +343,7 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
             <ConfirmDialog layer="app" title="자동 잠금" confirmLabel="정리"
                            onConfirm={applyAutoLock} onCancel={() => setLockConfirm(false)}>
                 <p className="text-sm leading-relaxed">
-                  어종마다 일반과 돌연변이 각각 <b className="text-gold">가장 큰 물고기 한 마리만</b> 잠그고,
+                  어종마다 <HighlightRarityText text="일반과 돌연변이" /> 각각 <b className="text-gold">가장 큰 물고기 한 마리만</b> 잠그고,
                   나머지는 잠금이 풀려요.<br />
                   직접 잠근 물고기도 가장 크지 않으면 풀려요.
                 </p>

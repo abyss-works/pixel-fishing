@@ -44,6 +44,8 @@ describe('메시지 창', () => {
     expect(bubble).toHaveTextContent('생명의 기운(일반)');
     expect(bubble).toHaveTextContent('+38');
     expect(bubble).toHaveTextContent('생명의 기운(희귀)');
+    expect(within(bubble).getByText('(일반)')).toHaveAttribute('data-rarity', 'common');
+    expect(within(bubble).getByText('(희귀)')).toHaveAttribute('data-rarity', 'rare');
   });
 
   it('툴팁 대목이 글줄에 없으면 툴팁 없이 문구만 그린다', () => {

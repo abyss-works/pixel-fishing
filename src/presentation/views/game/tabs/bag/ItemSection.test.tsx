@@ -103,7 +103,9 @@ describe('아이템 섹션 목록', () => {
 
   it('물약은 배 해금 전 계정에서도 열려 있고, 사용하면 usePotion 액션과 안내를 보낸다', () => {
     const { dispatch, setToast } = show(game({ boat: 0, items: { 'luck-small': 2 } }));
-    expect(screen.getByText('작은 행운 물약')).toBeInTheDocument();
+    const potionName = screen.getByText('작은 행운 물약');
+    expect(potionName).toBeInTheDocument();
+    expect(within(potionName.parentElement!).getByText('(특수)')).toHaveAttribute('data-rarity', 'special');
     expect(screen.getByText('하루 동안')).toBeInTheDocument();
     expect(screen.getByText('×2')).toBeInTheDocument();
 

@@ -209,8 +209,8 @@ describe('먹기 계획과 교체 확인', () => {
     const plan = planEat(seed({ items: own, slots: { lunch, bait: null } }), 'cook-lunch-rare', T0);
     expect(plan.confirm).toEqual({
       title: '도시락 바꾸기', confirmLabel: '먹기',
-      current: { label: '가루디야', minutes: 8 * 60 + 12 },
-      next: { label: '민 몰리', minutes: 9 * 60 },
+      current: { label: '가루디야', title: { name: '가루디야', grade: null }, minutes: 8 * 60 + 12 },
+      next: { label: '민 몰리', title: { name: '민 몰리', grade: null }, minutes: 9 * 60 },
       warning: '지금 효과의 남은 시간은 사라져요.',
     });
   });
@@ -261,8 +261,8 @@ describe('먹기 계획과 교체 확인', () => {
     const dup = planEat(oneActive, 'cook-bait-rare', T0);
     expect(dup.confirm).toEqual({
       title: '미끼 바꾸기', confirmLabel: '쓰기',
-      current: { label: '롱페퍼 미끼(희귀)', minutes: 2 },
-      next: { label: '롱페퍼 미끼(희귀)', minutes: 2.5 },
+      current: { label: '롱페퍼 미끼(희귀)', title: { name: '롱페퍼 미끼', grade: 'rare' }, minutes: 2 },
+      next: { label: '롱페퍼 미끼(희귀)', title: { name: '롱페퍼 미끼', grade: 'rare' }, minutes: 2.5 },
       warning: '지금 효과의 남은 시간은 사라져요.',
     });
 
@@ -289,12 +289,12 @@ describe('먹기 계획과 교체 확인', () => {
     const plan = planEat(both, 'cook-bait-legendary', T0);
     expect(plan.confirm).toEqual({
       title: '미끼 바꾸기', confirmLabel: '쓰기',
-      current: { label: '큐베브 미끼(영웅)', minutes: 1 },
-      next: { label: '용연향 미끼(전설)', minutes: 2.5 },
+      current: { label: '큐베브 미끼(영웅)', title: { name: '큐베브 미끼', grade: 'epic' }, minutes: 1 },
+      next: { label: '용연향 미끼(전설)', title: { name: '용연향 미끼', grade: 'legendary' }, minutes: 2.5 },
       warning: '지금 효과의 남은 시간은 사라져요.',
       choices: [
-        { slotKey: 'bait', label: '롱페퍼 미끼(희귀)', minutes: 3 },
-        { slotKey: 'bait2', label: '큐베브 미끼(영웅)', minutes: 1 },
+        { slotKey: 'bait', label: '롱페퍼 미끼(희귀)', title: { name: '롱페퍼 미끼', grade: 'rare' }, minutes: 3 },
+        { slotKey: 'bait2', label: '큐베브 미끼(영웅)', title: { name: '큐베브 미끼', grade: 'epic' }, minutes: 1 },
       ],
       defaultChoice: 'bait2',
     });

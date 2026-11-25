@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { FILTER_CHANNELS, isChannelShown } from '../../../features/display/model/messageFilter';
 import type { MessageFilter } from '../../../features/display/model/messageFilter';
 import { cx } from '../cx';
+import { FormatGradeLabel } from '../fish/RarityTag';
 import ToggleChip from '../ToggleChip';
 import PixelIcon from '../PixelIcon';
 import Tip, { TipList } from '../Tip';
@@ -54,10 +55,14 @@ const GLASS_ALWAYS = cx(
 function LineText({ m }: { m: Msg }) {
   const at = m.tip ? m.text.indexOf(m.tip.target) : -1;
   if (!m.tip || at < 0) return <>{m.text}</>;
+  const rows = m.tip.rows.map(r => ({
+    label: typeof r.label === 'string' ? <FormatGradeLabel text={r.label} /> : r.label,
+    value: r.value,
+  }));
   return (
     <>
       {m.text.slice(0, at)}
-      <Tip text={<TipList rows={m.tip.rows} />}>{m.tip.target}</Tip>
+      <Tip text={<TipList rows={rows} />}>{m.tip.target}</Tip>
       {m.text.slice(at + m.tip.target.length)}
     </>
   );

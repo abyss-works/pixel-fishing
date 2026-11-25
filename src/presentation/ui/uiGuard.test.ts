@@ -974,4 +974,32 @@ describe('UI 시스템 가드', () => {
     const offenders = targets.filter(f => SLOP_COPY_RE.test(stripComments(f.src))).map(f => f.path);
     expect(offenders).toEqual([]);
   });
+
+  // 등급색 표기 및 공용 툴팁 등급색 구조 가드
+  const RAW_RARITY_NAME_RE = /\b(?:RARITY|DISPLAY_GRADE)\[[^\]]+\]\.name\b/;
+  it('게임 UI는 RarityTag 외부에서 RARITY[...].name을 민글자로 쓰지 않고 RarityText·GradeName을 쓴다', () => {
+    const targets = presentationFiles.filter(
+      f => isGameUi(f.path) && f.path !== 'ui/fish/RarityTag.tsx',
+    );
+    const offenders = targets.filter(f => RAW_RARITY_NAME_RE.test(stripComments(f.src))).map(f => f.path);
+    expect(offenders).toEqual([]);
+    expect(RAW_RARITY_NAME_RE.test('<th>{RARITY[r].name}</th>')).toBe(true);
+    expect(RAW_RARITY_NAME_RE.test('{DISPLAY_GRADE[g].name}')).toBe(true);
+    expect(RAW_RARITY_NAME_RE.test('<RarityText rarity={r} />')).toBe(false);
+  });
+
+  it('공용 툴팁(TipList·TipCard·RecipeEffectTip·Locked·MessageTip)은 ReactNode와 등급색 강조를 유지한다', () => {
+    const tipSrc = presentationFiles.find(f => f.path === 'ui/Tip.tsx')!.src;
+    const recipeTipSrc = presentationFiles.find(f => f.path === 'ui/RecipeEffectTip.tsx')!.src;
+    const lockedSrc = presentationFiles.find(f => f.path === 'ui/Locked.tsx')!.src;
+    const messageFeedSrc = presentationFiles.find(f => f.path === 'ui/hud/messageFeed.ts')!.src;
+
+    expect(tipSrc).toMatch(/HighlightRarityText/);
+    expect(tipSrc).toMatch(/function TipList\(\{ rows, note \}:\s*\{\s*rows:\s*readonly\s*\{\s*label:\s*ReactNode;\s*value:\s*ReactNode\s*\}\[\];\s*note\?:\s*ReactNode/);
+    expect(recipeTipSrc).toMatch(/HighlightRarityText/);
+    expect(recipeTipSrc).toMatch(/label:\s*ReactNode;\s*effects:\s*readonly\s*\{\s*label:\s*ReactNode;\s*value:\s*ReactNode\s*\}\[\];\s*note:\s*ReactNode/);
+    expect(lockedSrc).toMatch(/title\?:\s*ReactNode/);
+    expect(lockedSrc).toMatch(/description\?:\s*ReactNode/);
+    expect(messageFeedSrc).toMatch(/rows:\s*readonly\s*\{\s*label:\s*ReactNode;\s*value:\s*ReactNode\s*\}\[\]/);
+  });
 });

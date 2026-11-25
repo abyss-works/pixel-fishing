@@ -14,7 +14,7 @@ import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
 import Tip from '../../../ui/Tip';
 import ToggleChip from '../../../ui/ToggleChip';
-import { GradeName, RarityDot } from '../../../ui/fish/RarityTag';
+import { GradeName, RarityText } from '../../../ui/fish/RarityTag';
 import type { FacilityAct } from './facilityParts';
 
 // 가방 하단 기운 얻기 단열 창 — 480px 대화상자에서 미잠금 물고기를 등급 칩으로만 켜고 끄고 한 번에 기운으로 바꾼다.
@@ -67,8 +67,7 @@ export default function EnergyPanel({ game, busy, act, setToast, onClose }: {
             aria-label={`${chip.name} 등급 (${fmtNum(chip.fishCount)}마리) ${chip.on ? '해제' : '선택'}`}
             onClick={() => toggleGrade(chip.grade)}
           >
-            <RarityDot rarity={chip.grade} />
-            <span>{chip.name} ({fmtNum(chip.fishCount)})</span>
+            <span>{chip.on ? <RarityText rarity={chip.grade} /> : chip.name} ({fmtNum(chip.fishCount)})</span>
           </ToggleChip>
         ))}
       </div>

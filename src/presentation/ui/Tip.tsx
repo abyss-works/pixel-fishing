@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, MouseEvent, ReactNode } from 'react';
 import { cx } from './cx';
+import { HighlightRarityText } from './fish/RarityTag';
 import { useKeyScope } from './hotkeys';
 import PixelIcon from './PixelIcon';
 import TooltipBubble from './TooltipBubble';
@@ -19,6 +20,9 @@ import { useCoarsePointer } from './useMediaQuery';
 // hoverOnly는 거친 포인터(터치)에서 어떤 경로로도 열지 않는다. 누르면 동작이 실행되는 요소 안의 칸(헤더의 자원 바 칸 등)에 쓴다 -
 // 감싼 칸의 여백을 눌러도 툴팁이 동작과 함께 열리지 않는다.
 // 버블은 TooltipBubble이다. 요소의 왼쪽 아래에서 펼치고, 화면 끝에 닿으면 안쪽으로 들어온다.
+
+const highlightText = (node: ReactNode): ReactNode =>
+  typeof node === 'string' ? <HighlightRarityText text={node} /> : node;
 
 function TipClose({ onClose }: { onClose: () => void }) {
   const closeRef = useRef(onClose);
@@ -88,7 +92,7 @@ export default function Tip({ text, plain, wraps, pressOpens, hoverOnly, onlyIf,
         {children}
       </span>
       {isOpen && <TipClose onClose={hide} />}
-      {open && <TooltipBubble anchor={open.anchor} className="font-sans font-normal">{text}</TooltipBubble>}
+      {open && <TooltipBubble anchor={open.anchor} className="font-sans font-normal">{highlightText(text)}</TooltipBubble>}
     </>
   );
 }
@@ -106,7 +110,7 @@ export function TipCard({ title, subtitle, badge, description, rows, status, not
   badge?: ReactNode;
   description?: ReactNode;
   rows?: readonly TipRow[];
-  status?: { tone: 'lock' | 'warn' | 'info'; lines: readonly string[] };
+  status?: { tone: 'lock' | 'warn' | 'info'; lines: readonly ReactNode[] };
   note?: ReactNode;
 }) {
   const hasHeader = Boolean(title || subtitle || badge);
@@ -118,25 +122,25 @@ export function TipCard({ title, subtitle, badge, description, rows, status, not
         <span className="flex flex-col gap-0.5">
           {(title || badge) && (
             <span className="flex items-center justify-between gap-2">
-              {title && <b className="text-text font-bold leading-snug">{title}</b>}
+              {title && <b className="text-text font-bold leading-snug">{highlightText(title)}</b>}
               {badge && <span className="shrink-0">{badge}</span>}
             </span>
           )}
-          {subtitle && <span className="text-2xs text-text-dim leading-snug">{subtitle}</span>}
+          {subtitle && <span className="text-2xs text-text-dim leading-snug">{highlightText(subtitle)}</span>}
         </span>
       )}
       {hasBody && (
         <span className={cx('flex flex-col gap-1', hasHeader && 'pt-1.5 border-t border-line')}>
-          {description && <span className="text-text leading-snug">{description}</span>}
+          {description && <span className="text-text leading-snug">{highlightText(description)}</span>}
           {rows && rows.length > 0 && (
             <span className="flex flex-col">
               {rows.map((r, i) => (
                 <span key={typeof r.label === 'string' ? `${i}-${r.label}` : i} className="flex items-center justify-between gap-4 py-0.5">
                   <span className="flex items-center gap-1.5 text-text-dim">
-                    <span>{r.label}</span>
+                    <span>{highlightText(r.label)}</span>
                     {r.badge}
                   </span>
-                  <span className="pf-accent text-text shrink-0">{r.value}</span>
+                  <span className="pf-accent text-text shrink-0">{highlightText(r.value)}</span>
                 </span>
               ))}
             </span>
@@ -149,9 +153,9 @@ export function TipCard({ title, subtitle, badge, description, rows, status, not
           {status.tone === 'warn' && <PixelIcon glyph="warn" size={11} className="shrink-0 mt-[3px] text-danger" />}
           <span className="flex flex-col gap-0.5 min-w-0">
             {status.lines.map((line, i) => (
-              <span key={`${i}-${line}`}
+              <span key={typeof line === 'string' ? `${i}-${line}` : i}
                     className={cx('block leading-snug', i === 0 ? (status.tone === 'warn' ? 'text-danger' : 'text-text') : 'text-text-dim')}>
-                {line}
+                {highlightText(line)}
               </span>
             ))}
           </span>
@@ -159,7 +163,7 @@ export function TipCard({ title, subtitle, badge, description, rows, status, not
       )}
       {note && (
         <span className={cx('text-2xs text-text-dim leading-snug', (hasHeader || hasBody || hasStatus) && 'pt-1.5 border-t border-line')}>
-          {note}
+          {highlightText(note)}
         </span>
       )}
     </span>
@@ -167,17 +171,17 @@ export function TipCard({ title, subtitle, badge, description, rows, status, not
 }
 
 /** 툴팁 안의 목록: 이름은 왼쪽, 값은 오른쪽. 아래에 덧붙일 한 줄(note)을 둘 수 있다 */
-export function TipList({ rows, note }: { rows: { label: string; value: string }[]; note?: string }) {
+export function TipList({ rows, note }: { rows: readonly { label: ReactNode; value: ReactNode }[]; note?: ReactNode }) {
   return (
     <span className="flex flex-col gap-1 min-w-40">
       <span className="flex flex-col">
-        {rows.map(r => (
-          <span key={r.label} className="flex items-center justify-between gap-4 py-0.5">
-            <span className="text-text-dim">{r.label}</span><span className="pf-accent text-text">{r.value}</span>
+        {rows.map((r, i) => (
+          <span key={typeof r.label === 'string' ? `${i}-${r.label}` : i} className="flex items-center justify-between gap-4 py-0.5">
+            <span className="text-text-dim">{highlightText(r.label)}</span><span className="pf-accent text-text">{highlightText(r.value)}</span>
           </span>
         ))}
       </span>
-      {note && <span className="pt-1 border-t border-line text-2xs text-text-dim">{note}</span>}
+      {note && <span className="pt-1 border-t border-line text-2xs text-text-dim">{highlightText(note)}</span>}
     </span>
   );
 }

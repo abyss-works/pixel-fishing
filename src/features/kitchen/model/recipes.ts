@@ -136,7 +136,7 @@ export function selectRecipeView(game: GameState, recipe: Recipe, requested: num
 
 export interface KitchenStatus {
   /** 조리 중인 것. 모두 완성됐거나 조리하지 않으면 null */
-  cooking: { recipe: Recipe; completed: number; count: number; nextInMin: number } | null;
+  cooking: { recipe: Recipe; title: RecipeTitle; completed: number; count: number; nextInMin: number } | null;
   /** 보관함 수 — 완성한 요리와 조리 중인 수량 */
   stored: number;
   cap: number;
@@ -149,7 +149,7 @@ export function selectKitchenStatus(game: GameState, now: string): KitchenStatus
   const running = progress !== null && progress.nextAt !== null ? progress : null;
   return {
     cooking: running && running.nextAt !== null ? {
-      recipe: running.recipe, completed: running.completed, count: running.count,
+      recipe: running.recipe, title: recipeTitle(running.recipe), completed: running.completed, count: running.count,
       nextInMin: Math.max(1, Math.ceil((Date.parse(running.nextAt) - Date.parse(now)) / MIN_MS)),
     } : null,
     stored, cap: COOK_STORAGE_CAP, full: stored >= COOK_STORAGE_CAP,

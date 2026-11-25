@@ -32,6 +32,12 @@ const POPOVER_TIP = [
 const energyRows = (byGrade: Parameters<typeof energyResultRows>[0]) =>
   energyResultRows(byGrade).map(({ grade, count }) => ({ label: energyLabel(grade), value: `+${formatEnergy(count)}` }));
 
+const energyTipRows = (byGrade: Parameters<typeof energyResultRows>[0]) =>
+  energyResultRows(byGrade).map(({ grade, count }) => ({
+    label: <GradeName name={ENERGY_NAME} grade={grade} />,
+    value: `+${formatEnergy(count)}`,
+  }));
+
 // 기운 얻기 탭 — 판매 탭과 같은 어종 표(FishPickTable)로 물고기를 골라 생명의 기운으로 바꾼다. 확정한 뒤에도 창은 열려 있고
 // 결과는 메시지 창에 한 줄로 남는다. 체크 기본값은 해역 기준이고 게임 규칙이 정한다. 해역별 켜짐과 꺼짐은 확정 버튼 왼쪽
 // 정사각형 톱니바퀴 버튼에 붙은 팝오버에서 고른다(서버 액션). 직접 고른 값(picks)은 창이 들고 있어 탭을 오가도 남는다.
@@ -94,7 +100,7 @@ export default function EnergyTab({ game, busy, act, setToast, picks, setPicks }
       }))}
       summary={{
         label: '얻을 생명의 기운', dim: view.count === 0,
-        value: <Tip text={<TipList rows={energyRows(view.byGrade)} />} className="pf-accent text-xs">+{formatEnergy(view.energyTotal)}</Tip>,
+        value: <Tip text={<TipList rows={energyTipRows(view.byGrade)} />} className="pf-accent text-xs">+{formatEnergy(view.energyTotal)}</Tip>,
       }}
       notes={['기운을 얻은 물고기는 가방에서 사라져요.', '도감과 명성은 그대로 남아요.']}
       actions={(

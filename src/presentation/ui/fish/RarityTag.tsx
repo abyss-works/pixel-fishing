@@ -1,5 +1,52 @@
+import type { ReactNode } from 'react';
 import { DISPLAY_GRADE, RARITY } from '../../../game/content/rarity';
 import type { DisplayGradeId, RarityId } from '../../../game/content/rarity';
+
+const RARITY_WORD_GRADE: Readonly<Record<string, DisplayGradeId>> = {
+  일반: 'common',
+  '(일반)': 'common',
+  희귀: 'rare',
+  '(희귀)': 'rare',
+  영웅: 'epic',
+  '(영웅)': 'epic',
+  전설: 'legendary',
+  '(전설)': 'legendary',
+  특수: 'special',
+  '(특수)': 'special',
+};
+
+const RARITY_TEXT_RE = /(\((?:일반|희귀|영웅|전설|특수)\)|전설|영웅|희귀|특수|돌연변이|네임드|일반(?=\s*(?:등급|어종|생명의 기운)|과(?:\s|$|[,.])))/g;
+
+/** 문장·구절 안의 등급 낱말(전설·영웅·희귀·특수 및 등급 맥락의 일반), (등급), 돌연변이·네임드를 공용 색으로 강조한다 */
+export function HighlightRarityText({ text }: { text: string }) {
+  const matches = [...text.matchAll(RARITY_TEXT_RE)];
+  if (matches.length === 0) return <>{text}</>;
+  const nodes: ReactNode[] = [];
+  let cursor = 0;
+  for (const m of matches) {
+    const idx = m.index ?? 0;
+    const word = m[0];
+    if (idx > cursor) nodes.push(text.slice(cursor, idx));
+    const grade = RARITY_WORD_GRADE[word];
+    nodes.push(
+      grade
+        ? <span key={idx} data-rarity={grade} className="text-(--rarity-color)">{word}</span>
+        : <span key={idx} className="text-epic">{word}</span>,
+    );
+    cursor = idx + word.length;
+  }
+  if (cursor < text.length) nodes.push(text.slice(cursor));
+  return <>{nodes}</>;
+}
+
+const GRADE_LABEL_RE = /^(.+)\((일반|희귀|영웅|전설|특수)\)$/;
+
+/** `이름(등급)` 문자열을 GradeName으로, 그 밖의 문자열은 HighlightRarityText로 바꾼다 */
+export function FormatGradeLabel({ text }: { text: string }) {
+  const m = GRADE_LABEL_RE.exec(text);
+  if (!m) return <HighlightRarityText text={text} />;
+  return <GradeName name={m[1]} grade={RARITY_WORD_GRADE[m[2]]} />;
+}
 
 // 등급 텍스트 — data-rarity 속성으로 색 지정 (전역 스타일 [data-rarity] → --rarity-color)
 export function RarityText({ rarity }: { rarity: RarityId }) {
