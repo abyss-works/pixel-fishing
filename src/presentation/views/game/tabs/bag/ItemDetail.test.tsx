@@ -100,8 +100,7 @@ describe('ItemDetail', () => {
     dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText('달빛 미끼')).toBeInTheDocument();
     expect(within(dialog).getByText('(특수)')).toHaveAttribute('data-rarity', 'special');
-    expect(within(dialog).getByText('밤 어종 출현')).toBeInTheDocument();
-    expect(within(dialog).getByText('낮에도 출현')).toBeInTheDocument();
+    expect(within(dialog).getByText('낮에도 밤 어종이 함께 낚여요.')).toBeInTheDocument();
     expect(within(dialog).getByText('미적용')).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: '쓰기' })).toBeEnabled();
   });

@@ -16,7 +16,7 @@ import {
   FORTUNE_TARGET_BONUS_LABEL,
   fortuneBonusText,
 } from '../../fortune/model/fortune';
-import { recipeEffectLines, recipeEffectNote, recipeLabel, recipeTitle } from './recipes';
+import { recipeEffectLines, recipeEffectNote, recipeEffectText, recipeLabel, recipeTitle } from './recipes';
 import type { RecipeEffectLine, RecipeTitle } from './recipes';
 
 const MIN_MS = 60_000;
@@ -137,7 +137,7 @@ export function selectBonusChip(game: GameState, now: string, account: AccountLo
       kind: slot.key,
       kindLabel: slot.key === 'lunch' ? '도시락' : '미끼',
       title: slot.title,
-      summary: slot.effects.map(e => `${e.label} ${e.value}`).join(', '),
+      summary: slot.effects.map(recipeEffectText).join(', '),
       durationText: `${slot.timeLeft} 남음`,
     }];
   });

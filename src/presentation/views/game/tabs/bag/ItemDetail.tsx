@@ -72,7 +72,11 @@ export default function ItemDetail({ target, busy, onClose }: {
         {effects.length > 0 && (
           <Inset divided>
             {effects.map(e => (
-              e.label ? (
+              'text' in e ? (
+                <div key={e.text} className="px-2 py-1.5 text-sm text-accent">
+                  <HighlightRarityText text={e.text} />
+                </div>
+              ) : (
                 <KeyValueRow
                   key={`${e.label}-${e.value}`}
                   label={<HighlightRarityText text={e.label} />}
@@ -80,10 +84,6 @@ export default function ItemDetail({ target, busy, onClose }: {
                   valueEnd
                   valueClassName={/\d/.test(e.value) ? 'pf-accent text-accent' : 'font-bold text-accent'}
                 />
-              ) : (
-                <div key={e.value} className="px-2 py-1.5 text-sm text-accent">
-                  <HighlightRarityText text={e.value} />
-                </div>
               )
             ))}
           </Inset>
