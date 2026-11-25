@@ -1,4 +1,6 @@
 import type { Look } from '../../../game/content/wardrobe';
+import { zoneById } from '../../../game/content/zones';
+import type { ZoneId } from '../../../game/content/zones';
 import type { Bob, ChatLine, ClientMessage, Dir, Presence, ServerMessage } from '../../../game/rules/live';
 import { formatIdle, LIVE_STALE_MS } from '../../../game/rules/live';
 
@@ -109,6 +111,17 @@ export function othersInRegion(state: LiveState, region: string): OtherPlayer[] 
   return Object.values(state.others)
     .filter(o => o.presence.region === region)
     .sort((a, b) => a.presence.nick.localeCompare(b.presence.nick));
+}
+
+/** 실시간 접속자 목록 행에 표시할 짧은 위치 이름 */
+export function playerZoneLabel(presence: Pick<Presence, 'region' | 'zone'>): string | null {
+  if (presence.zone) {
+    const z = zoneById(presence.zone as ZoneId);
+    if (z) return z.shortName;
+  }
+  if (presence.region === 'village') return '마을';
+  if (presence.region === 'world') return '바다';
+  return null;
 }
 
 /** 마지막으로 보낸 내 위치 */

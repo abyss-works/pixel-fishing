@@ -117,7 +117,7 @@ describe('플레이어 정보 화면 데이터', () => {
     expect(selectProfileView(profile()).placeLabel).toBeNull();
   });
 
-  it('업적은 카탈로그에 존재하는 수령 완료(claimed) 항목만 센다', () => {
+  it('업적은 카탈로그에 존재하는 수령 완료(claimed) 항목만 세고, 전체 업적 목록과 보상 문구를 만든다', () => {
     const first = ACHIEVEMENTS[0].id;
     const second = ACHIEVEMENTS[1].id;
     const view = selectProfileView(profile({
@@ -127,9 +127,14 @@ describe('플레이어 정보 화면 데이터', () => {
     expect(view.achievements.total).toBe(ACHIEVEMENTS.length);
     expect(view.achievements.tabs.reduce((n, t) => n + t.claimed, 0)).toBe(2);
     expect(view.achievements.tabs.reduce((n, t) => n + t.total, 0)).toBe(ACHIEVEMENTS.length);
+    expect(view.achievements.items).toHaveLength(ACHIEVEMENTS.length);
+    expect(view.achievements.items.filter(item => item.claimed)).toHaveLength(2);
+    const firstItem = view.achievements.items.find(item => item.id === first)!;
+    expect(firstItem).toMatchObject({ id: first, claimed: true, name: ACHIEVEMENTS[0].name });
+    expect(firstItem.rewardText.length).toBeGreaterThan(0);
   });
 
-  it('수집품은 모자(골드와 업적 분류)와 유물(희귀·영웅 Lv1~5, 전설 레벨 없음)을 집계한다', () => {
+  it('수집품은 모자(골드와 업적 분류, 카드 목록)와 유물(희귀·영웅 Lv1~5, 전설 레벨 없음)을 집계한다', () => {
     const goldHat = HATS.find(h => h.source === 'gold')!;
     const achHat = HATS.find(h => h.source === 'achievement')!;
     const rare = ARTIFACTS.find(a => a.grade === 'rare')!;
@@ -141,7 +146,7 @@ describe('플레이어 정보 화면 데이터', () => {
       artifactLevels: { [rare.id]: 4, [legend.id]: 3 },
     }));
 
-    expect(view.collectibles.hats).toEqual({
+    expect(view.collectibles.hats).toMatchObject({
       owned: 2,
       total: HATS.length,
       goldOwned: 1,
@@ -149,6 +154,14 @@ describe('플레이어 정보 화면 데이터', () => {
       achievementOwned: 1,
       achievementTotal: HATS.filter(h => h.source === 'achievement').length,
     });
+    expect(view.collectibles.hats.slots).toHaveLength(HATS.length);
+    expect(view.collectibles.hats.slots.find(h => h.id === goldHat.id)).toMatchObject({
+      owned: true,
+      name: goldHat.name,
+      source: 'gold',
+    });
+    const unownedHat = view.collectibles.hats.slots.find(h => !h.owned)!;
+    expect(unownedHat.conditionText.length).toBeGreaterThan(0);
     expect(view.collectibles.artifacts.owned).toBe(3);
     expect(view.collectibles.artifacts.total).toBe(ARTIFACTS.length);
     expect(view.collectibles.artifacts.slots).toHaveLength(ARTIFACTS.length);
