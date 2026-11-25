@@ -55,7 +55,7 @@ const authErr = (e: AuthError): AuthResult => {
     return {
       ok: false,
       msg: '요청이 너무 잦아요. 잠시 뒤 다시 시도해 주세요.',
-      code: 'over_email_send_rate_limit',
+      code: 'rate_limited',
     };
   }
   return {
