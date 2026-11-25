@@ -15,14 +15,14 @@ import { SCROLL_Y } from '../../../ui/scrollArea';
 const MARK: Record<LogEntry['kind'], { glyph: GlyphId; tone: string }> = {
   join: { glyph: 'people', tone: 'text-accent' },
   leave: { glyph: 'exit', tone: 'text-text-dim' },
-  kick: { glyph: 'exit', tone: 'text-danger' },
-  legendary: { glyph: 'star', tone: 'text-legend border-gold-dark bg-[color-mix(in_oklab,var(--c-legend)_22%,var(--c-surface-2))]' },
-  named: { glyph: 'target', tone: 'text-named border-named bg-[color-mix(in_oklab,var(--c-named)_22%,var(--c-surface-2))]' },
+  kick: { glyph: 'exit', tone: 'text-text-dim' },
+  legendary: { glyph: 'star', tone: 'text-gold border-gold-dark' },
+  named: { glyph: 'target', tone: 'text-gold border-gold-dark' },
   donate: { glyph: 'coin', tone: 'text-gold' },
   'bonus-up': { glyph: 'upload', tone: 'text-gold border-gold-dark' },
   rename: { glyph: 'book', tone: 'text-text' },
-  enhance: { glyph: 'sparkle', tone: 'text-guild border-epic bg-[color-mix(in_oklab,var(--c-epic)_22%,var(--c-surface-2))]' },
-  'enhance-reset': { glyph: 'gear', tone: 'text-danger border-danger bg-[color-mix(in_oklab,var(--c-danger)_15%,var(--c-surface-2))]' },
+  enhance: { glyph: 'sparkle', tone: 'text-accent' },
+  'enhance-reset': { glyph: 'gear', tone: 'text-text-dim' },
 };
 
 const TONE: Record<NonNullable<LogPart['tone']>, string> = {

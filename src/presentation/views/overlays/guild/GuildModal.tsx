@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { GUILD_MAX_MEMBERS } from '../../../../game/rules/guild';
 import type { ArtifactHolder } from '../../../../game/rules/artifactLevel';
-import { GUILD_LEVEL_HELP, GUILD_ERROR_TEXT, growthBar, splitMembers } from '../../../../features/guild/model/guild';
+import {
+  GUILD_LEVEL_HELP, GUILD_ERROR_TEXT, enhancePoolSummary, growthBar, splitMembers,
+} from '../../../../features/guild/model/guild';
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import type { GuildConfirm, GuildInfo, GuildOp } from '../../../../features/guild/model/guild';
 import { useGuild } from '../../../../features/guild/service/useGuild';
@@ -113,6 +115,12 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
                          });
                        }}>
           <p className="text-sm whitespace-pre-line">{confirm.text}</p>
+          {confirm.warn && (
+            <Inset tone="deep" className="mt-2.5 p-2.5 flex flex-col gap-0.5 text-2xs text-text-dim">
+              <strong className="text-danger">재가입 제한 안내</strong>
+              <span>{confirm.warn}</span>
+            </Inset>
+          )}
         </ConfirmDialog>
       )}
       <div ref={setDialogHost} />
@@ -120,26 +128,27 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
   );
 }
 
-type GuildTab = 'members' | 'skills' | 'logbook' | 'manage';
+type GuildTab = 'skills' | 'members' | 'logbook' | 'manage';
 
 /** 길드가 있을 때: 고정 정보 줄과 탭(길드장은 관리 탭까지 넷) */
 function GuildView({ ask, dialogHost, gold, artifacts, onGoldChanged, onResetEnhancements, ...part }: GuildPartProps & {
   ask: GuildAsk; dialogHost: HTMLElement | null; gold: number; artifacts: ArtifactHolder; onGoldChanged: () => Promise<void> | void;
   onResetEnhancements: () => Promise<{ error: string | null; recovered?: number }>;
 }) {
-  const [tab, setTab] = useState<GuildTab>('members');
+  const [tab, setTab] = useState<GuildTab>('skills');
+  const remainingPoints = enhancePoolSummary(part.guild).remaining;
   return (
     <div className="flex flex-col gap-3 flex-1 min-h-0">
       <GuildStatus guild={part.guild} />
       <TabBar<GuildTab> activeKey={tab} onSelect={setTab} tabs={[
+        { key: 'skills', label: '스킬', count: remainingPoints, countTone: 'guild', countLabel: `${remainingPoints}포인트` },
         { key: 'members', label: '길드원' },
-        { key: 'skills', label: '길드 스킬' },
         { key: 'logbook', label: '항해일지' },
         ...(part.guild.role === 'leader' ? [{ key: 'manage' as const, label: '관리', count: part.guild.requests.length }] : []),
       ]} />
       <div className="flex flex-col flex-1 min-h-0">
-        {tab === 'members' && <GuildMembersTab {...part} ask={ask} artifacts={artifacts} />}
         {tab === 'skills' && <GuildSkillsTab {...part} gold={gold} dialogHost={dialogHost} onResetEnhancements={onResetEnhancements} onGoldChanged={onGoldChanged} />}
+        {tab === 'members' && <GuildMembersTab {...part} ask={ask} artifacts={artifacts} />}
         {tab === 'logbook' && <GuildLogbookTab logbook={part.guild.logbook} me={part.me} />}
         {tab === 'manage' && part.guild.role === 'leader' && <GuildManageTab {...part} gold={gold} dialogHost={dialogHost} onGoldChanged={onGoldChanged} />}
       </div>

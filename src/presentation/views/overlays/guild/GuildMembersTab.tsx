@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
-  GUILD_ERROR_TEXT, dailyContributionRows, leaveConfirm, memberActions, memberConfirm, memberRows, splitMembers,
+  GUILD_ERROR_TEXT, GUILD_LEAVE_COOLDOWN_NOTE, dailyContributionRows, leaveConfirm, memberActions, memberConfirm,
+  memberRows, splitMembers,
 } from '../../../../features/guild/model/guild';
 import type { MemberRow } from '../../../../features/guild/model/guild';
 import type { ArtifactHolder } from '../../../../game/rules/artifactLevel';
@@ -59,7 +60,8 @@ export default function GuildMembersTab({ guild, me, busy, setToast, ask, artifa
           </tbody>
         </DataTable>
       </TableBox>
-      <div className="h-8 shrink-0 flex items-center justify-end">
+      <div className="min-h-8 shrink-0 pt-1.5 border-t border-line flex items-center justify-between gap-2 flex-wrap">
+        <span className="text-2xs text-text-dim">{GUILD_LEAVE_COOLDOWN_NOTE}</span>
         <Button size="sm" variant="ghost" disabled={busy} onClick={leave}>길드 떠나기</Button>
       </div>
     </div>

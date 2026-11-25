@@ -5,7 +5,7 @@ import type { ArtifactHolder } from '../../../../game/rules/artifactLevel';
 import type { GameState } from '../../../../game/rules/logic';
 import { clearsStatus } from '../../../../features/bounty/model/panel';
 import { useBounty } from '../../../../features/bounty/service/useBounty';
-import { menuKeys, questBadges, questMenuLabel } from '../../../../features/display/model/menuEntries';
+import { menuKeys, guildMenuBadges, guildMenuLabel, questBadges, questMenuLabel } from '../../../../features/display/model/menuEntries';
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import { claimableCount } from '../../../../features/achievement/model/achievements';
 import type { MenuKey } from '../../../../features/display/model/menuEntries';
@@ -13,6 +13,7 @@ import { guestLock } from '../../../../features/display/model/menuLock';
 import type { AccountLockState } from '../../../../features/display/model/menuLock';
 import { useMailbox } from '../../../../features/mailbox/service/useMailbox';
 import CountBadge from '../../../ui/CountBadge';
+import type { CountBadgeTone } from '../../../ui/CountBadge';
 import { LockIcon } from '../../../ui/Locked';
 import MenuList from '../../../ui/MenuList';
 import type { Notify } from '../../../ui/hud/messageFeed';
@@ -24,7 +25,7 @@ import type { GlyphId } from '../../../ui/PixelIcon';
 
 // 게임 메뉴 — 햄버거 버튼 하나. PC 레이아웃은 헤더 단계가 크기를 정하는 메뉴 버튼(HudMenuButton, 60px 또는 두 행 단계 40px), 모바일 레이아웃은 40px 메뉴 버튼(MobileHudMenuButton)이다. 누르면 아래로 의뢰, 업적, 운세, 길드, 소셜, 우편함 줄이 펼쳐진다(순서는 menuKeys).
 // 줄은 라벨이 왼쪽, 아이콘이 오른쪽이고, 할 일이 있으면 라벨 옆에 수 배지를 붙인다. 의뢰 줄은 일반(노랑), 네임드(보라) 순으로 오늘 남은 클리어를 배지로 보인다.
-// 접힌 상태에서는 새 알림(소셜의 받은 요청, 우편함의 받지 않은 우편)이 있으면 버튼 모서리에 빨간 점을 찍는다. 의뢰 배지는 점을 켜지 않는다.
+// 접힌 상태에서는 새 알림(소셜의 받은 요청, 우편함의 받지 않은 우편, 길드의 대기 가입 신청)이 있으면 버튼 모서리에 빨간 점을 찍는다. 의뢰 배지와 개인 강화 포인트 배지는 점을 켜지 않는다.
 // 입구마다 보이는 조건: 의뢰, 업적, 운세는 늘 보이고, 길드와 소셜은 계정 유저만 열며, 우편함은 클라우드 모드에서만 보인다.
 // 게스트 잠금을 적용하는 게스트에게는 의뢰, 업적, 길드, 소셜, 우편함 다섯 줄이 자리 그대로 잠긴 줄(공용 잠금)로 보이고, 눌러도 창이 열리지 않으며 잠금 줄이 툴팁으로 열린다. 운세 줄은 열려 있어 오늘의 운세와 잠금 안내를 볼 수 있다.
 // 잠긴 줄에는 배지와 알림 점이 없다.
@@ -36,8 +37,8 @@ interface Entry {
   /** 줄의 접근성 이름 */
   name: string;
   glyph: GlyphId;
-  /** 줄에 붙는 배지 - 의뢰는 종류별 두 개, 나머지는 새 알림 수 하나 */
-  badges: { tone: 'danger' | 'gold' | 'epic' | 'named'; count: number }[];
+  /** 줄에 붙는 배지 - 의뢰·길드는 종류별 최대 두 개, 나머지는 새 알림 수 하나 */
+  badges: { tone: CountBadgeTone; count: number }[];
   /** 메뉴 버튼의 새 알림 점을 켜는 수 */
   alerts: number;
   /** 게스트 잠금 줄. 있으면 잠긴 줄이다 */
@@ -96,6 +97,8 @@ export default function GameMenu({ game, account, accountState, onQuests, onAchi
   }, [open]);
 
   const friendRequests = friends.groups?.incoming.length ?? 0;
+  const guildBadges = guildMenuBadges(guild.guild);
+  const guildRequests = guild.guild?.role === 'leader' ? guild.guild.requests.length : 0;
   const claimable = claimableCount(game);
   const byKey: Record<MenuKey, Entry> = {
     quests: { key: 'quests', label: '의뢰', name: questMenuLabel(clearsLeft), glyph: 'book',
@@ -104,7 +107,8 @@ export default function GameMenu({ game, account, accountState, onQuests, onAchi
       name: claimable > 0 ? `업적, 받을 수 있는 업적 ${claimable}개` : '업적',
       glyph: 'star', badges: claimable > 0 ? [{ tone: 'gold', count: claimable }] : [], alerts: claimable, lock: null, onOpen: onAchievements },
     fortune: { key: 'fortune', label: '운세', name: '운세', glyph: 'sparkle', badges: [], alerts: 0, lock: null, onOpen: onFortune },
-    guild: { key: 'guild', label: '길드', name: '길드', glyph: 'flag', badges: [], alerts: 0, lock: null, onOpen: onGuild },
+    guild: { key: 'guild', label: '길드', name: guildMenuLabel(guild.guild), glyph: 'flag',
+      badges: guildBadges, alerts: guildRequests, lock: null, onOpen: onGuild },
     friends: { key: 'friends', label: '소셜', glyph: 'people',
       name: friendRequests > 0 ? `소셜, 받은 친구 요청 ${friendRequests}개` : '소셜',
       badges: friendRequests > 0 ? [{ tone: 'danger', count: friendRequests }] : [], alerts: friendRequests, lock: null, onOpen: onFriends },
