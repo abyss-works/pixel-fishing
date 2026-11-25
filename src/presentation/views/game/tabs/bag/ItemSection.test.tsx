@@ -9,9 +9,13 @@ const NOW = '2026-11-12T00:00:00.000Z';
 vi.mock('../../../../../features/gameplay/service/useGameTime', () => ({ useNow: () => NOW }));
 
 import type { AccountLockState } from '../../../../../features/display/model/menuLock';
+import { resetKeyScopes } from '../../../../ui/hotkeys';
 import ItemSection from './ItemSection';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  resetKeyScopes();
+});
 
 const HOUR = 3_600_000;
 const at = (ms: number): string => new Date(Date.parse(NOW) + ms).toISOString();
@@ -101,7 +105,34 @@ describe('아이템 섹션 목록', () => {
     expect(screen.queryByRole('button', { name: /먹기|쓰기/ })).not.toBeInTheDocument();
   });
 
-  it('물약은 배 해금 전 계정에서도 열려 있고, 사용하면 usePotion 액션과 안내를 보낸다', () => {
+  it('도시락과 미끼 주의사항은 각 카드가 아니라 묶음 소제목 툴팁 한 곳에만 있고 카드 클릭으로 상세 창을 연다', () => {
+    show(game({ items: own }));
+
+    // 카드 이름에 마우스를 올려도 반복 호버 툴팁이 뜨지 않는다
+    fireEvent.mouseEnter(screen.getByText('가루디야'));
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+
+    // 도시락·미끼 소제목 툴팁 한 곳에 공통 주의사항이 집약돼 있다
+    fireEvent.mouseEnter(screen.getByText('도시락'));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('방치로 낚을 때만 효과가 있어요.');
+    fireEvent.mouseLeave(screen.getByText('도시락'));
+
+    fireEvent.mouseEnter(screen.getByText('미끼'));
+    const baitTip = screen.getByRole('tooltip');
+    expect(baitTip).toHaveTextContent('챔질해서 낚을 때만 효과가 있어요.');
+    expect(baitTip).toHaveTextContent('물고기를 낚아도 미끼가 줄지 않아요.');
+    fireEvent.mouseLeave(screen.getByText('미끼'));
+
+    // 카드 본문을 누르면 상세 창이 열린다
+    fireEvent.click(screen.getByRole('button', { name: '가루디야 상세 보기' }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('입질 대기')).toBeInTheDocument();
+    expect(within(dialog).getByText('−10%')).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: '닫기' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('물약은 배 해금 전 계정에서도 열려 있고, 카드 클릭으로 상세를 보며 사용하면 usePotion 액션과 안내를 보낸다', () => {
     const { dispatch, setToast } = show(game({ boat: 0, items: { 'luck-small': 2 } }));
     const potionName = screen.getByText('작은 행운 물약');
     expect(potionName).toBeInTheDocument();
@@ -109,12 +140,20 @@ describe('아이템 섹션 목록', () => {
     expect(screen.getByText('하루 동안')).toBeInTheDocument();
     expect(screen.getByText('×2')).toBeInTheDocument();
 
-    fireEvent.mouseEnter(screen.getByText('작은 행운 물약'));
-    expect(screen.getByRole('tooltip')).toHaveTextContent('마시면 하루 동안 모든 행운 효과가 +5%p 올라요.');
+    fireEvent.mouseEnter(potionName);
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '작은 행운 물약 상세 보기' }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('모든 행운 효과')).toBeInTheDocument();
+    expect(within(dialog).getByText('+5%p')).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: '닫기' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
     const btn = screen.getByRole('button', { name: '작은 행운 물약 사용' });
     expect(btn).toBeEnabled();
     fireEvent.click(btn);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(dispatch).toHaveBeenCalledWith({ type: 'usePotion', id: 'luck-small' });
     expect(setToast).toHaveBeenCalledWith('작은 행운 물약을 마셨어요. 하루 동안 이어져요.');
   });
@@ -137,15 +176,17 @@ describe('아이템 섹션 목록', () => {
     expect(screen.getByRole('button', { name: '작은 행운 물약 사용 중' })).toBeDisabled();
   });
 
-  it('게스트는 물약 이름 툴팁 아래에 잠금 줄을 보이고 사용 버튼이 잠겨 있다', () => {
+  it('게스트는 물약 카드 사용 버튼과 상세 창 안의 사용 버튼이 모두 잠겨 있다', () => {
     show(game({ items: { 'luck-small': 2 } }), 'guest');
-    fireEvent.mouseEnter(screen.getByText('작은 행운 물약'));
-    const tip = screen.getByRole('tooltip');
-    expect(tip).toHaveTextContent('마시면 하루 동안 모든 행운 효과가 +5%p 올라요.');
-    expect(tip).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
-
     const lockGroup = screen.getByRole('group', { name: '작은 행운 물약 잠김' });
+    expect(lockGroup).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
     expect(within(lockGroup).getByRole('button', { name: '작은 행운 물약 사용' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: '작은 행운 물약 상세 보기' }));
+    const dialog = screen.getByRole('dialog');
+    const detailLock = within(dialog).getByRole('group', { name: '작은 행운 물약 사용 잠김' });
+    expect(detailLock).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
+    expect(within(detailLock).getByRole('button', { name: '사용' })).toBeDisabled();
   });
 });
 

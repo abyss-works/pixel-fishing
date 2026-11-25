@@ -12,9 +12,11 @@ import { activePotionsOf } from '../../../game/rules/fortune';
 import type { GameState } from '../../../game/rules/logic';
 import { canUsePotion } from '../../../game/rules/rules';
 import type { RuleCheck } from '../../../game/rules/rules';
+import { GAME_DAY_RESET_TEXT } from '../../../game/rules/time';
 import { josa } from '../../../shared/lib/josa';
 import { facilityGuestAllowed, facilityProgress, menuLock, progressNote } from '../../display/model/menuLock';
 import type { AccountLockState } from '../../display/model/menuLock';
+import { FORTUNE_TARGET_BONUS_LABEL } from '../../fortune/model/fortune';
 import { energyLabel } from './energy';
 import { recipeEffectLines, recipeEffectNote, recipeLabel, recipesOfKind, recipeTitle } from './recipes';
 import type { RecipeTitle } from './recipes';
@@ -25,13 +27,29 @@ import type { SlotKey } from './slots';
 const MIN_MS = 60_000;
 
 export const NO_ITEMS_TEXT = '가진 아이템이 없어요.';
-/** 묶음 소제목의 점선 툴팁 - 그 묶음이 무엇이고 어디서 얻고 쓰는지 */
+/** 묶음 소제목의 점선 툴팁 - 그 묶음이 무엇이고 어디서 얻고 쓰는지, 도시락·미끼 공통 주의사항 집약 */
 export const ITEM_GROUP_HINT = {
   energy: '물고기 한 마리에서 그 등급의 생명의 기운 하나를 얻어요.\n기운 얻기는 집 궤짝이나 항구 어시장에서 할 수 있어요.',
-  lunch: '먹기를 누르면 바로 효과가 시작돼요.',
-  bait: '쓰기를 누르면 미끼 효과가 켜져요.',
+  lunch: recipeEffectNote('lunch'),
+  bait: recipeEffectNote('bait'),
   potion: '마시면 하루 동안 모든 행운 효과가 올라요.',
 } as const;
+const POTION_DETAIL_NOTE = `하루 동안 이어져요. 하루는 ${GAME_DAY_RESET_TEXT}에 새로 시작해요.`;
+const LUCK_TARGETS = ['rarity', 'named', 'sell'] as const;
+const pctPoint = (x: number): string => `+${Math.round(x * 1000) / 10}%p`;
+
+/** 물약 효과 줄 — 모든 행운 대상이 같은 값이면 한 줄로 묶고, 아니면 대상별 줄을 만든다 */
+export function potionEffectLines(potion: Potion): RecipeEffectLine[] {
+  const luck = potion.effects.luck;
+  if (!luck) return [];
+  const entries = LUCK_TARGETS
+    .map(target => ({ target, value: luck[target] }))
+    .filter((e): e is { target: (typeof LUCK_TARGETS)[number]; value: number } => e.value !== undefined && e.value > 0);
+  if (entries.length === LUCK_TARGETS.length && entries.every(e => e.value === entries[0].value)) {
+    return [{ label: '모든 행운 효과', value: pctPoint(entries[0].value) }];
+  }
+  return entries.map(e => ({ label: FORTUNE_TARGET_BONUS_LABEL[e.target], value: pctPoint(e.value) }));
+}
 /** 물약 적용 안내 문구 */
 export const potionUseNoticeText = (potionName: string): string =>
   `${potionName}${josa(potionName, '을/를')} 마셨어요. 하루 동안 이어져요.`;
@@ -76,6 +94,8 @@ export interface PotionRow {
   count: number;
   active: boolean;
   usable: boolean;
+  effects: RecipeEffectLine[];
+  note: string;
 }
 
 export type ItemSectionView =
@@ -109,6 +129,8 @@ export function selectItemSection(game: GameState, now: string, account: Account
     count: game.items[potion.id] ?? 0,
     active: activePotionIds.has(potion.id),
     usable: canUsePotion(game, potion.id, now, account !== 'account').ok,
+    effects: potionEffectLines(potion),
+    note: POTION_DETAIL_NOTE,
   }));
 
   const items = settleCooking(game, now).items;

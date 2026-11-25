@@ -69,6 +69,18 @@ describe('묶음 소제목 툴팁', () => {
       '기운 얻기는 집 궤짝이나 항구 어시장에서 할 수 있어요.',
     ]);
   });
+
+  it('도시락과 미끼 소제목 툴팁은 방치·수동 적용 범위와 지속 시간 흐름 공통 주의사항을 담는다', () => {
+    expect(ITEM_GROUP_HINT.lunch.split('\n')).toEqual([
+      '방치로 낚을 때만 효과가 있어요.',
+      '지속 시간은 먹은 때부터 흐르고, 낚시하지 않거나 접속하지 않아도 멈추지 않아요.',
+    ]);
+    expect(ITEM_GROUP_HINT.bait.split('\n')).toEqual([
+      '챔질해서 낚을 때만 효과가 있어요.',
+      '물고기를 낚아도 미끼가 줄지 않아요.',
+      '지속 시간은 쓴 때부터 흐르고, 낚시하지 않거나 접속하지 않아도 멈추지 않아요.',
+    ]);
+  });
 });
 
 describe('아이템 섹션: 열린 뒤', () => {
@@ -321,7 +333,13 @@ describe('물약 묶음', () => {
     expect(lowBoat.state).toBe('locked');
     expect(lowBoat.potionLock).toBeNull();
     expect(lowBoat.potions).toHaveLength(1);
-    expect(lowBoat.potions[0]).toMatchObject({ count: 2, active: false, usable: true });
+    expect(lowBoat.potions[0]).toMatchObject({
+      count: 2,
+      active: false,
+      usable: true,
+      effects: [{ label: '모든 행운 효과', value: '+5%p' }],
+      note: '하루 동안 이어져요. 하루는 새벽 4시에 새로 시작해요.',
+    });
 
     const active = selectItemSection(
       seed({ boat: 0, items: { 'luck-small': 2 }, potions: { 'luck-small': '2026-11-12' } }),

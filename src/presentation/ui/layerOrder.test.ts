@@ -168,6 +168,7 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
   it('layer="app" 사용처는 사이드바 메뉴 진입 창과 앱 전역 차단기 화이트리스트뿐이다', () => {
     const APP_MODAL_WHITELIST = new Set([
       'views/game/tabs/bag/BagTab.tsx',
+      'views/game/tabs/bag/ItemDetail.tsx',
       'views/game/tabs/bag/ItemSection.tsx',
       'views/game/tabs/dex/DexDetail.tsx',
       'views/game/tabs/dex/NamedDetail.tsx',
