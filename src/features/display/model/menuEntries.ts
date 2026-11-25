@@ -1,4 +1,6 @@
-// 메뉴 줄 - 항목 순서와 의뢰 줄 배지의 단일 출처. 줄의 모양과 열 창은 표현 계층이 정한다.
+// 메뉴 줄 - 항목 순서와 의뢰·길드 줄 배지의 단일 출처. 줄의 모양과 열 창은 표현 계층이 정한다.
+import { enhancePoolSummary } from '../../guild/model/guild';
+import type { GuildInfo } from '../../guild/model/guild';
 
 export type MenuKey = 'quests' | 'achievements' | 'fortune' | 'guild' | 'friends' | 'mailbox';
 
@@ -30,4 +32,29 @@ export function questMenuLabel(left: ClearsLeft): string {
   if (left && left.general > 0) parts.push(`일반 ${left.general}`);
   if (left && left.named > 0) parts.push(`네임드 ${left.named}`);
   return parts.length ? `의뢰, 오늘 남은 클리어 ${parts.join(' ')}` : '의뢰';
+}
+
+export type GuildBadgeTone = 'danger' | 'guild';
+export interface GuildBadge { tone: GuildBadgeTone; count: number }
+
+/** 길드 줄 배지 - 길드장의 대기 가입 신청은 danger, Lv.6 이상 남은 개인 강화 포인트는 guild */
+export function guildMenuBadges(guild: GuildInfo | null): GuildBadge[] {
+  if (!guild) return [];
+  const badges: GuildBadge[] = [];
+  if (guild.role === 'leader' && guild.requests.length > 0) {
+    badges.push({ tone: 'danger', count: guild.requests.length });
+  }
+  const remaining = enhancePoolSummary(guild).remaining;
+  if (remaining > 0) badges.push({ tone: 'guild', count: remaining });
+  return badges;
+}
+
+/** 길드 줄의 접근성 이름 - 배지로 보이는 대기 신청과 남은 개인 강화 포인트를 함께 싣는다 */
+export function guildMenuLabel(guild: GuildInfo | null): string {
+  if (!guild) return '길드';
+  const parts: string[] = [];
+  if (guild.role === 'leader' && guild.requests.length > 0) parts.push(`가입 신청 ${guild.requests.length}건`);
+  const remaining = enhancePoolSummary(guild).remaining;
+  if (remaining > 0) parts.push(`개인 강화 포인트 ${remaining}개`);
+  return parts.length ? `길드, ${parts.join(', ')}` : '길드';
 }

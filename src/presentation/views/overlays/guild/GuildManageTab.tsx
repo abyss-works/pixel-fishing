@@ -12,6 +12,7 @@ import { useNow } from '../../../../features/gameplay/service/useGameTime';
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import Button from '../../../ui/Button';
 import { cx } from '../../../ui/cx';
+import { useKeyScope } from '../../../ui/hotkeys';
 import Inset from '../../../ui/Inset';
 import SlotCell from '../../../ui/SlotCell';
 import TableBox from '../../../ui/TableBox';
@@ -21,10 +22,11 @@ import ModalCard from '../../../ui/ModalCard';
 import Subheading from '../../../ui/Subheading';
 import TextInput from '../../../ui/TextInput';
 import Tip from '../../../ui/Tip';
+import { SCROLL_Y } from '../../../ui/scrollArea';
 import type { GuildPartProps, GuildRun } from './guildProps';
 
-// 관리 탭(길드장만): 위에서부터 가입 방식(세 칸 중 하나, 고른 칸은 눌린 모양), 고유 코드와 초대 링크(코드 복사, 링크 복사),
-// 링크와 함께 복사하는 권유 문구, 길드 이름(이름 바꾸기 버튼이 작은 창을 연다), 가입 신청 표(행 끝에 거절과 승인)다. 신청 표는 남는 높이를 다 쓰고 그 안에서만 스크롤한다.
+// 관리 탭(길드장만): 위에서부터 가입 방식(세 칸 중 하나, 고른 칸은 눌린 모양), 권유 문구(1줄 인라인 편집), 고유 코드와 초대 링크(코드 복사, 링크 복사),
+// 길드 이름(이름 바꾸기 버튼이 작은 창을 연다), 가입 신청 표(행 끝에 거절과 승인)다. 탭 본문이 세로 스크롤을 맡고 좁은 폭에서는 표가 가로로만 스크롤한다.
 // 거절은 되돌릴 일이 적어 확인 창 없이 행 버튼으로 바로 보낸다.
 export default function GuildManageTab({ guild, busy, run, dialogHost, setToast, gold, onGoldChanged }: Omit<GuildPartProps, 'me'> & {
   /** 내 골드 */
@@ -36,7 +38,9 @@ export default function GuildManageTab({ guild, busy, run, dialogHost, setToast,
   const [renaming, setRenaming] = useState(false);
   const rename = renameButtonState(guild.renamedAt, nowISO, gold);
   const url = guildLinkUrl(window.location.origin, guild.code);
-  const [pitch, setPitch] = useState(guild.pitch ?? '');
+  const [editingPitch, setEditingPitch] = useState(false);
+  const [pitchDraft, setPitchDraft] = useState(guild.pitch ?? '');
+  const [pitchBusy, setPitchBusy] = useState(false);
 
   const send = async (op: Parameters<GuildPartProps['run']>[0], done: string) => {
     const error = await run(op);
@@ -51,10 +55,40 @@ export default function GuildManageTab({ guild, busy, run, dialogHost, setToast,
       sendNotice(setToast, { kind: 'system.modalRejected', text: '복사하지 못했어요. 직접 옮겨 적어 주세요.', toastText: '복사하지 못했어요.' });
     }
   };
-  const savePitch = () => {
-    const next = pitch.trim() === '' ? null : pitch.trim();
-    if (next === guild.pitch) return;
-    void send({ op: 'settings', guildId: guild.id, pitch: next }, next === null ? '기본 권유 문구를 써요.' : '권유 문구를 바꿨어요.');
+  const startPitchEdit = () => {
+    setPitchDraft(guild.pitch ?? '');
+    setEditingPitch(true);
+  };
+  const cancelPitchEdit = () => {
+    if (pitchBusy) return;
+    setEditingPitch(false);
+    setPitchDraft(guild.pitch ?? '');
+  };
+  useKeyScope(e => {
+    if (editingPitch && e.key === 'Escape') {
+      e.preventDefault();
+      cancelPitchEdit();
+      return true;
+    }
+  });
+  const submitPitch = async () => {
+    if (pitchBusy || !editingPitch) return;
+    const next = pitchDraft.trim() === '' ? null : pitchDraft.trim();
+    if (next === guild.pitch) {
+      setEditingPitch(false);
+      return;
+    }
+    setPitchBusy(true);
+    try {
+      const error = await run({ op: 'settings', guildId: guild.id, pitch: next });
+      if (error) sendNotice(setToast, { kind: 'system.modalRejected', text: error });
+      else {
+        sendNotice(setToast, { kind: 'guild.modalAction', text: next === null ? '기본 권유 문구를 써요.' : '권유 문구를 바꿨어요.' });
+        setEditingPitch(false);
+      }
+    } finally {
+      setPitchBusy(false);
+    }
   };
   const rows = requestRows(guild.requests, nowISO);
 
@@ -64,7 +98,7 @@ export default function GuildManageTab({ guild, busy, run, dialogHost, setToast,
   ) : null;
 
   return (
-    <div className="flex flex-col gap-3 flex-1 min-h-0">
+    <div className={cx('flex flex-col gap-2.5 flex-1 min-h-0', SCROLL_Y)}>
       <section aria-label="가입 방식" className="flex flex-col gap-1.5 shrink-0">
         <Subheading className="mb-0 text-xs">가입 방식</Subheading>
         <div className="grid grid-cols-3 gap-2 mobile:grid-cols-1" role="radiogroup" aria-label="가입 방식">
@@ -77,11 +111,49 @@ export default function GuildManageTab({ guild, busy, run, dialogHost, setToast,
                       }} />
           ))}
         </div>
+        {guild.joinMode === 'approval' && (
+          <p className="m-0 px-2.5 py-1 bg-bg border border-line-dim text-2xs text-accent">
+            승인 가입이어도 초대 링크로 들어온 선원은 별도 승인 없이 바로 참가해요.
+          </p>
+        )}
+      </section>
+
+      <section aria-label="권유 문구" className="flex flex-col gap-1.5 shrink-0">
+        <Subheading className="mb-0 text-xs">권유 문구</Subheading>
+        <Inset className="flex items-center gap-2 px-2.5 py-1.5">
+          {editingPitch ? (
+            <>
+              <TextInput key="pitch-edit" compact className="flex-1 min-w-0" value={pitchDraft} maxLength={GUILD_PITCH_LIMIT}
+                         disabled={busy || pitchBusy} autoFocus
+                         onChange={e => setPitchDraft(e.target.value)}
+                         onKeyDown={e => {
+                           if (e.key === 'Enter') { e.preventDefault(); void submitPitch(); }
+                           else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cancelPitchEdit(); }
+                         }}
+                         aria-label="권유 문구" placeholder={GUILD_PITCH_PLACEHOLDER} />
+              <Button variant="primary" size="sm" className="shrink-0" disabled={busy || pitchBusy}
+                      onClick={() => { void submitPitch(); }}>
+                확인
+              </Button>
+              <Button size="sm" className="shrink-0" disabled={busy || pitchBusy} onClick={cancelPitchEdit}>
+                취소
+              </Button>
+            </>
+          ) : (
+            <>
+              <TextInput key="pitch-view" compact className="flex-1 min-w-0" value={guild.pitch ?? ''}
+                         disabled readOnly aria-label="권유 문구" placeholder={GUILD_PITCH_PLACEHOLDER} />
+              <Button size="sm" className="shrink-0" disabled={busy} onClick={startPitchEdit}>
+                변경
+              </Button>
+            </>
+          )}
+        </Inset>
       </section>
 
       <section aria-label="고유 코드와 링크" className="flex flex-col gap-1.5 shrink-0">
         <Subheading className="mb-0 text-xs">고유 코드와 링크</Subheading>
-        <Inset className="flex flex-wrap items-center gap-x-3 gap-y-1.5 min-h-11 px-3 py-1.5">
+        <Inset className="flex flex-wrap items-center gap-x-3 gap-y-1.5 min-h-10 px-3 py-1">
           <span className="pf-accent tracking-widest text-gold shrink-0">{guild.code}</span>
           <span className="truncate text-xs text-text-dim flex-1 min-w-0">{url.replace(/^https?:\/\//, '')}</span>
           <div className="flex items-center gap-2 shrink-0 ml-auto">
@@ -91,18 +163,11 @@ export default function GuildManageTab({ guild, busy, run, dialogHost, setToast,
             </Tip>
           </div>
         </Inset>
-        <div className="flex items-center gap-2">
-          <TextInput compact className="flex-1 min-w-0" value={pitch} maxLength={GUILD_PITCH_LIMIT}
-                     onChange={e => setPitch(e.target.value)} onBlur={savePitch}
-                     onKeyDown={e => { if (e.key === 'Enter') savePitch(); }}
-                     aria-label="권유 문구" placeholder={GUILD_PITCH_PLACEHOLDER} />
-          <span className="pf-accent w-12 text-right text-2xs text-text-dim">{[...pitch].length}/{GUILD_PITCH_LIMIT}</span>
-        </div>
       </section>
 
       <section aria-label="길드 이름" className="flex flex-col gap-1.5 shrink-0">
         <Subheading className="mb-0 text-xs">길드 이름</Subheading>
-        <Inset className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 h-11 px-3">
+        <Inset className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 h-10 px-3">
           <b className="truncate text-text">{guild.name}</b>
           {rename.reason === null ? (
             <Button size="sm" disabled={busy} onClick={() => setRenaming(true)}>이름 바꾸기</Button>
@@ -114,9 +179,14 @@ export default function GuildManageTab({ guild, busy, run, dialogHost, setToast,
         </Inset>
       </section>
 
-      <section aria-label="가입 신청" className="flex flex-col gap-1.5 flex-1 min-h-0">
-        <Subheading className="mb-0 text-xs">가입 신청</Subheading>
-        <TableBox className="flex-1 min-h-0 px-3 pb-2">
+      <section aria-label="가입 신청" className="flex flex-col gap-1.5 shrink-0">
+        <Subheading className="mb-0 text-xs">
+          <span className="flex items-center justify-between gap-2">
+            <span>대기 중인 가입 신청</span>
+            <span className="pf-accent text-2xs text-accent">{rows.length}건</span>
+          </span>
+        </Subheading>
+        <TableBox scroll="x" className="px-3 pb-2">
           {guild.joinMode !== 'approval' && rows.length === 0 ? (
             <p className="m-0 py-6 text-center text-sm text-text-dim">
               {guild.joinMode === 'open' ? '자유 가입이라 신청 없이 바로 들어와요.' : '닫혀 있어 새 신청을 받지 않아요.'}

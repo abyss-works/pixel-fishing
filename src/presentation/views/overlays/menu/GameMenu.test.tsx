@@ -3,8 +3,10 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { MailItem } from '../../../../platform/api';
+import { NO_GUILD_EFFECTS } from '../../../../game/rules/guild';
 import { newState } from '../../../../game/rules/logic';
 import { BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP } from '../../../../game/rules/balance';
+import type { GuildInfo } from '../../../../features/guild/model/guild';
 
 const state = vi.hoisted(() => ({ mails: null as MailItem[] | null }));
 vi.mock('../../../../platform/api', async importOriginal => {
@@ -20,6 +22,11 @@ vi.mock('../../../../features/bounty/service/useBounty', () => ({
 const layout = vi.hoisted(() => ({ mobile: false }));
 vi.mock('../../../layouts/useMobileLayout', () => ({ useMobileLayout: () => layout.mobile }));
 
+const guildState = vi.hoisted(() => ({ available: false, guild: null as GuildInfo | null }));
+vi.mock('../../../../features/guild/service/useGuild', () => ({
+  useGuild: () => ({ available: guildState.available, guild: guildState.guild }),
+}));
+
 import GameMenu from './GameMenu';
 
 const mail = (over: Partial<MailItem>): MailItem => ({
@@ -34,7 +41,7 @@ function wrap(node: ReactNode) {
 
 const handlers = () => ({ game: newState(), accountState: 'account' as const, onQuests: vi.fn(), onAchievements: vi.fn(), onFortune: vi.fn(), onGuild: vi.fn(), onFriends: vi.fn(), onMailbox: vi.fn(), setToast: vi.fn() });
 
-afterEach(() => { cleanup(); bounty.snap = null; state.mails = null; layout.mobile = false; });
+afterEach(() => { cleanup(); bounty.snap = null; state.mails = null; layout.mobile = false; guildState.available = false; guildState.guild = null; });
 
 describe('게임 메뉴', () => {
   it('길드, 소셜, 우편함을 열 수 없어도(로컬 모드, 게스트) 의뢰 때문에 메뉴 버튼은 늘 있다', async () => {
@@ -300,6 +307,77 @@ describe('게임 메뉴', () => {
       wrap(<GameMenu account={null} {...handlers()} />);
       fireEvent.click(await screen.findByRole('button', { name: /^메뉴 열기/ }));
       for (const item of screen.getAllByRole('menuitem')) expect(item).not.toHaveAttribute('aria-disabled');
+    });
+  });
+
+  describe('길드 줄', () => {
+    const makeGuild = (over: Partial<GuildInfo> = {}): GuildInfo => ({
+      id: 'g1',
+      name: '새벽선단',
+      createdAt: '2026-11-05T00:00:00.000Z',
+      role: 'leader',
+      renamedAt: null,
+      code: 'ABCD2345',
+      joinMode: 'approval',
+      pitch: null,
+      requests: [],
+      members: [],
+      growth: { level: 5, total: 100_000, floor: 100_000, next: 200_000 },
+      bonuses: [
+        { id: 'sell', unlock: 1, rank: 1, enhanceRank: 0, totalRank: 1, cap: 5, pool: 0, next: 150_000, effect: 0.02, nextEffect: 0.04, mine: 0 },
+      ],
+      effects: NO_GUILD_EFFECTS,
+      enhanceResetCount: 0,
+      donors: [],
+      logbook: [],
+      ...over,
+    });
+    const badgesOf = (row: HTMLElement) =>
+      [...row.querySelectorAll('[data-badge]')].map(b => [b.getAttribute('data-badge'), b.textContent]);
+
+    it('길드장에게 대기 가입 신청이 있으면 danger 배지와 메뉴 알림 점을 켠다', async () => {
+      guildState.available = true;
+      guildState.guild = makeGuild({
+        requests: [{ uid: 'r1', nick: '산호', requestedAt: '2026-11-05T00:00:00.000Z' }],
+      });
+      wrap(<GameMenu account="me@example.com" {...handlers()} />);
+      const button = await screen.findByRole('button', { name: '메뉴 열기, 새 알림 있음' });
+      expect(button.querySelector('.bg-danger')).not.toBeNull();
+      fireEvent.click(button);
+      const row = screen.getByRole('menuitem', { name: '길드, 가입 신청 1건' });
+      expect(badgesOf(row)).toEqual([['danger', '1']]);
+    });
+
+    it('Lv.6 이상에서 남은 개인 강화 포인트가 있으면 guild 배지를 보이고 알림 점은 켜지 않는다', async () => {
+      guildState.available = true;
+      guildState.guild = makeGuild({
+        role: 'member',
+        growth: { level: 7, total: 350_000, floor: 350_000, next: 550_000 },
+      });
+      wrap(<GameMenu account="me@example.com" {...handlers()} />);
+      const button = await screen.findByRole('button', { name: '메뉴 열기' });
+      expect(button.querySelector('.bg-danger')).toBeNull();
+      fireEvent.click(button);
+      const row = screen.getByRole('menuitem', { name: '길드, 개인 강화 포인트 2개' });
+      expect(badgesOf(row)).toEqual([['guild', '2']]);
+    });
+
+    it('대기 신청과 남은 개인 강화 포인트가 함께 있으면 danger, guild 순서로 배지를 보인다', async () => {
+      guildState.available = true;
+      guildState.guild = makeGuild({
+        growth: { level: 8, total: 550_000, floor: 550_000, next: 800_000 },
+        requests: [
+          { uid: 'r1', nick: '산호', requestedAt: '2026-11-05T00:00:00.000Z' },
+          { uid: 'r2', nick: '별빛', requestedAt: '2026-11-05T00:00:00.000Z' },
+        ],
+        bonuses: [
+          { id: 'sell', unlock: 1, rank: 5, enhanceRank: 1, totalRank: 6, cap: 5, pool: 0, next: null, effect: 0.12, nextEffect: 0.14, mine: 0 },
+        ],
+      });
+      wrap(<GameMenu account="me@example.com" {...handlers()} />);
+      fireEvent.click(await screen.findByRole('button', { name: '메뉴 열기, 새 알림 있음' }));
+      const row = screen.getByRole('menuitem', { name: '길드, 가입 신청 2건, 개인 강화 포인트 2개' });
+      expect(badgesOf(row)).toEqual([['danger', '2'], ['guild', '2']]);
     });
   });
 });
