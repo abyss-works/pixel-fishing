@@ -368,7 +368,7 @@ export function memberRows(guild: GuildInfo, me: string): MemberRow[] {
 }
 
 /** 항해일지 문장 조각. tone이 없으면 보통 글자다 */
-export interface LogPart { text: string; tone?: 'nick' | 'me' | 'legend' | 'named' | 'skill' | 'enhance' | 'num' }
+export interface LogPart { text: string; tone?: 'nick' | 'me' | 'legend' | 'variant' | 'named' | 'skill' | 'enhance' | 'num' }
 export interface LogEntry {
   id: number; kind: GuildLogItem['kind'];
   /** 한국 시각 HH:MM */
@@ -392,8 +392,12 @@ function logParts(log: GuildLogItem, me: string): LogPart[] {
     case 'leave': return [who, { text: ' 님이 길드를 떠났어요.' }];
     case 'kick': return [who, { text: ' 님이 길드에서 내보내졌어요.' }];
     case 'legendary': {
-      const fish = FISH.find(f => f.id === log.detail)?.name ?? '어종';
-      return [who, { text: ' 님이 ' }, { text: `전설 ${fish}`, tone: 'legend' }, { text: `${josa(fish, '을/를')} 낚았어요!` }];
+      const suffix = '|variant';
+      const isVariant = log.detail?.endsWith(suffix) ?? false;
+      const fishId = isVariant ? log.detail!.slice(0, -suffix.length) : log.detail;
+      const fish = fishId ? FISH.find(f => f.id === fishId) : undefined;
+      const name = isVariant ? (fish?.variant?.name ?? fish?.name ?? '어종') : (fish?.name ?? '어종');
+      return [who, { text: ' 님이 ' }, { text: `전설 ${name}`, tone: isVariant ? 'variant' : 'legend' }, { text: `${josa(name, '을/를')} 낚았어요!` }];
     }
     case 'named': {
       const quest = log.detail ? bountyById(log.detail) : undefined;

@@ -231,6 +231,22 @@ describe('GuildModal', () => {
     expect(day.getByText('나루')).toBeTruthy();
   });
 
+  it('항해일지의 전설 돌연변이는 돌연변이명과 보라색 강조(text-epic)로 보인다', () => {
+    const at = '2026-11-05T00:00:00.000Z';
+    s.guild = {
+      ...GUILD,
+      logbook: [
+        { id: 1, kind: 'legendary', uid: 'L', nick: '가람', detail: 'goldcarp', value: null, at },
+        { id: 2, kind: 'legendary', uid: 'L', nick: '가람', detail: 'goldcarp|variant', value: null, at },
+      ],
+    };
+    render(<GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: '항해일지' }));
+    const day = within(screen.getByRole('region', { name: '11월 5일' }));
+    expect(day.getByText('전설 황금 잉어').className).toContain('text-legend');
+    expect(day.getByText('전설 무지개 잉어').className).toContain('text-epic');
+  });
+
   it('Lv.6 이상 길드에서는 일반 길드원도 자유 강화 투자(+1)와 첫 100,000G 초기화를 할 수 있다', async () => {
     const lv8Guild: GuildInfo = {
       ...GUILD,
