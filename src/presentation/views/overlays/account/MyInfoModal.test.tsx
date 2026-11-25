@@ -30,7 +30,7 @@ describe('MyInfoModal 닉네임 변경 잠금', () => {
     const group = screen.getByRole('group', { name: '닉네임 변경' });
     expect(group.querySelector('[data-glyph="lock"]')).not.toBeNull();
     fireEvent.mouseEnter(group.parentElement!);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
     fireEvent.click(group);
     fireEvent.click(screen.getByRole('button', { name: '변경' }));
     expect(onRename).not.toHaveBeenCalled();

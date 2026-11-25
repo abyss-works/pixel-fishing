@@ -47,7 +47,7 @@ describe('거점 카드 메뉴', () => {
       fireEvent.click(card);
       expect(onFacility).not.toHaveBeenCalled();
       fireEvent.mouseEnter(card.parentElement!);
-      expect(screen.getByRole('tooltip')).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
+      expect(screen.getByRole('tooltip')).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
     });
 
     it('확인 실패 상태의 옷장은 확인 실패 잠금 툴팁을 보인다', () => {
@@ -95,7 +95,7 @@ describe('거점 카드 메뉴', () => {
       for (const boat of [COOKING_UNLOCK_BOAT - 1, COOKING_UNLOCK_BOAT]) {
         const { unmount } = render(<BaseMenu base="home" game={{ ...newState(), boat }} accountState="guest" />);
         expect(kitchen()).toHaveAttribute('aria-disabled', 'true');
-        expect(tooltipOf()).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
+        expect(tooltipOf()).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
         unmount();
       }
     });
@@ -126,7 +126,7 @@ describe('거점 카드 메뉴', () => {
       for (const boat of [0, 1]) {
         const { unmount } = render(<BaseMenu base="home" game={{ ...newState(), boat }} accountState="guest" />);
         expect(ferry()).toHaveAttribute('aria-disabled', 'true');
-        expect(tooltipOf()).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
+        expect(tooltipOf()).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
         unmount();
       }
     });

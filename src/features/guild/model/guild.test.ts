@@ -99,7 +99,7 @@ describe('길드 화면 모델', () => {
   });
 
   it('게스트 거부 안내는 계정 연결을 알린다', () => {
-    expect(GUILD_ERROR_TEXT['account-only']).toBe('길드는 계정을 연결하면 쓸 수 있어요.');
+    expect(GUILD_ERROR_TEXT['account-only']).toBe('길드는 태평양 항로가 열리면 쓸 수 있어요. 계정 관리에서 계정을 연결해 주세요.');
   });
 });
 
@@ -320,9 +320,9 @@ describe('초대 확인 창', () => {
     expect(inviteDialogView(null, viewer, 'link')).toEqual({ state: 'bad', text: '초대 코드를 찾지 못했어요.\n링크가 맞는지 확인해 주세요.', action: null });
   });
 
-  it('게스트는 계정이 있어야 한다고 알린다', () => {
+  it('게스트는 태평양 항로가 열려야 들어갈 수 있다고 알린다', () => {
     expect(inviteDialogView(preview(), { account: false, guild: null }, 'link')).toMatchObject({ state: 'guest', action: null,
-      text: '길드는 계정을 연결하면 들어갈 수 있어요.\n계정을 연결하거나 로그인하면 이 창이 다시 떠요.' });
+      text: '길드는 태평양 항로가 열리면 들어갈 수 있어요.\n계정을 연결하거나 로그인해 항로를 열면 이 창이 다시 떠요.' });
   });
 
   it('다른 길드에 있으면 떠난 뒤에 들어갈 수 있다고 알리고, 같은 길드면 이미 있다고 알린다', () => {

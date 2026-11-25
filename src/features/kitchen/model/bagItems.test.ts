@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { COOKING_UNLOCK_BOAT, COOK_KIND_RULES, ENERGY_ITEM_IDS } from '../../../game/content/cooking';
 import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
-import { GUEST_LOCK_TEXT, UNVERIFIED_LOCK_TEXT } from '../../display/model/menuLock';
+import { GUEST_LOCK_DEFAULT_LINES, UNVERIFIED_LOCK_TEXT } from '../../display/model/menuLock';
 import { ITEM_GROUP_HINT, planEat, selectItemSection } from './bagItems';
 import { recipesOfKind } from './recipes';
 
@@ -33,7 +33,7 @@ describe('아이템 섹션: 해금 전과 게스트', () => {
       expect(v.state).toBe('locked');
       if (v.state !== 'locked') continue;
       expect(v.empty).toEqual(['가진 아이템이 없어요.']);
-      expect(v.lines).toEqual([GUEST_LOCK_TEXT]);
+      expect(v.lines).toEqual(GUEST_LOCK_DEFAULT_LINES);
     }
   });
 

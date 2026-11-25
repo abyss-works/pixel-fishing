@@ -201,6 +201,6 @@ describe('해금 전과 게스트', () => {
   it('게스트는 한 줄 빈 상태이고 잠금 줄이 게스트 잠금이다', () => {
     show(game(), 'guest');
     expect(screen.getByText('가진 아이템이 없어요.').parentElement!.children).toHaveLength(1);
-    expect(screen.getByRole('group', { name: '도시락, 미끼, 생명의 기운' })).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
+    expect(screen.getByRole('group', { name: '도시락, 미끼, 생명의 기운' })).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
   });
 });

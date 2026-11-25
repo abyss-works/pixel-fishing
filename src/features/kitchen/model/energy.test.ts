@@ -4,7 +4,7 @@ import { FISH, newState } from '../../../game/rules/logic';
 import type { FishInstance, GameState } from '../../../game/rules/logic';
 import { AUTO_ENERGY_BOAT, COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS } from '../../../game/content/cooking';
 import type { SpotId } from '../../../game/content/spots';
-import { GUEST_LOCK_TEXT, UNVERIFIED_LOCK_TEXT } from '../../display/model/menuLock';
+import { GUEST_LOCK_DEFAULT_LINES, UNVERIFIED_LOCK_TEXT } from '../../display/model/menuLock';
 import {
   buildEnergyExtractNotice, clearSpotPicks, defaultQuickEnergyGrades, energyLabel, energyResultRows, energyRowValue, energyTotal, pickEnergyUids, selectBagEnergyEntry, selectEnergyView, selectQuickEnergyView,
 } from './energy';
@@ -182,10 +182,10 @@ describe('가방 하단 기운 얻기 진입 조건', () => {
 
   it('계정 상태 잠금(게스트, 확인 실패)을 위치와 배 단계보다 먼저 확인한다', () => {
     expect(selectBagEnergyEntry({ boat: AUTO_ENERGY_BOAT, location: home }, 'guest')).toEqual({
-      ok: false, lines: [GUEST_LOCK_TEXT],
+      ok: false, lines: [...GUEST_LOCK_DEFAULT_LINES],
     });
     expect(selectBagEnergyEntry({ boat: AUTO_ENERGY_BOAT, location: sea }, 'guest')).toEqual({
-      ok: false, lines: [GUEST_LOCK_TEXT],
+      ok: false, lines: [...GUEST_LOCK_DEFAULT_LINES],
     });
     expect(selectBagEnergyEntry({ boat: 0, location: home }, 'unverified')).toEqual({
       ok: false, lines: [UNVERIFIED_LOCK_TEXT],

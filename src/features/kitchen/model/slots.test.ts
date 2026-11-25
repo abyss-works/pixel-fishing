@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { COOKING_UNLOCK_BOAT } from '../../../game/content/cooking';
 import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
-import { GUEST_LOCK_TEXT, UNVERIFIED_LOCK_TEXT } from '../../display/model/menuLock';
+import { GUEST_LOCK_DEFAULT_LINES, UNVERIFIED_LOCK_TEXT } from '../../display/model/menuLock';
 import { activeSlot, fmtSlotChipTime, fmtSlotTimeLeft, selectSlotChips } from './slots';
 
 const T0 = '2026-11-12T00:00:00.000Z';
@@ -87,7 +87,7 @@ describe('슬롯 칩 표시 조건', () => {
 
   it('게스트는 해금 전이어도 게스트 잠금이 먼저다', () => {
     const chips = selectSlotChips(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), T0, 'guest');
-    expect(chips.every(c => c.state === 'locked' && c.lines.join() === GUEST_LOCK_TEXT)).toBe(true);
+    expect(chips.every(c => c.state === 'locked' && c.lines.join() === GUEST_LOCK_DEFAULT_LINES.join())).toBe(true);
   });
 
   it('확인 실패 상태는 해금 전이어도 확인 실패 잠금이 먼저다', () => {
