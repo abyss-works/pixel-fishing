@@ -85,9 +85,20 @@ describe('슬롯 칩 표시 조건', () => {
     ]);
   });
 
-  it('게스트는 해금 전이어도 게스트 잠금이 먼저다', () => {
-    const chips = selectSlotChips(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), T0, 'guest');
-    expect(chips.every(c => c.state === 'locked' && c.lines.join() === GUEST_LOCK_DEFAULT_LINES.join())).toBe(true);
+  it('게스트는 해금 전이면 진행 조건 잠금이고, 해금 뒤에는 게스트 잠금이다', () => {
+    const pre = selectSlotChips(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), T0, 'guest');
+    expect(pre[0].state === 'locked' && pre[0].lines).toEqual([
+      '인도양 항로가 열리면 도시락을 먹을 수 있어요.',
+      '인도양 항로는 증기선(5단계)부터 열려요.',
+    ]);
+    expect(pre[1].state === 'locked' && pre[1].lines).toEqual([
+      '인도양 항로가 열리면 미끼를 쓸 수 있어요.',
+      '인도양 항로는 증기선(5단계)부터 열려요.',
+    ]);
+
+    const post = selectSlotChips(seed({ boat: COOKING_UNLOCK_BOAT }), T0, 'guest');
+    expect(post).toHaveLength(2);
+    expect(post.every(c => c.state === 'locked' && c.lines.join() === GUEST_LOCK_DEFAULT_LINES.join())).toBe(true);
   });
 
   it('확인 실패 상태는 해금 전이어도 확인 실패 잠금이 먼저다', () => {

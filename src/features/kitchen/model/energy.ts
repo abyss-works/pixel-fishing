@@ -246,19 +246,16 @@ export type BagEnergyEntry =
   | { ok: true }
   | { ok: false; lines: string[] };
 
-/** 가방 하단 기운 얻기 진입 버튼 활성 조건 — 계정 상태 잠금을 먼저 보고, 위치와 배 단계는 게임 규칙 판정을 따른다 */
+/** 가방 하단 기운 얻기 진입 버튼 활성 조건 — 계정·진행 잠금 판정을 먼저 보고, 열린 뒤 위치와 배 단계는 게임 규칙 판정을 따른다 */
 export function selectBagEnergyEntry(
   game: Pick<GameState, 'boat' | 'location'>,
   account: AccountLockState,
 ): BagEnergyEntry {
   const lock = energyTabLock(account, game.boat);
-  if (lock.kind === 'guest' || lock.kind === 'unverified') {
+  if (lock.kind !== 'none') {
     return { ok: false, lines: lock.lines };
   }
   const check = canExtractEnergy(game, false);
   if (check.ok) return { ok: true };
-  if (check.reason === 'energy-locked' && lock.kind === 'progress') {
-    return { ok: false, lines: lock.lines };
-  }
   return { ok: false, lines: [REJECT_TEXT[check.reason]] };
 }

@@ -92,13 +92,17 @@ describe('거점 카드 메뉴', () => {
       expect(onFacility).toHaveBeenCalledWith('kitchen');
     });
 
-    it('게스트의 부엌은 진행 조건을 채워도 안 채워도 게스트 잠금이다', () => {
-      for (const boat of [COOKING_UNLOCK_BOAT - 1, COOKING_UNLOCK_BOAT]) {
-        const { unmount } = render(<BaseMenu base="home" game={{ ...newState(), boat }} accountState="guest" />);
-        expect(kitchen()).toHaveAttribute('aria-disabled', 'true');
-        expect(tooltipOf()).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
-        unmount();
-      }
+    it('게스트의 부엌은 해금 전이면 인도양 진행 잠금만, 해금 뒤에는 게스트 잠금만 보인다', () => {
+      const { unmount } = render(<BaseMenu base="home" game={{ ...newState(), boat: COOKING_UNLOCK_BOAT - 1 }} accountState="guest" />);
+      expect(kitchen()).toHaveAttribute('aria-disabled', 'true');
+      const preTip = tooltipOf();
+      expect(preTip).toHaveTextContent('인도양 항로가 열리면 부엌을 쓸 수 있어요.');
+      expect(preTip).not.toHaveTextContent('태평양');
+      unmount();
+
+      render(<BaseMenu base="home" game={{ ...newState(), boat: COOKING_UNLOCK_BOAT }} accountState="guest" />);
+      expect(kitchen()).toHaveAttribute('aria-disabled', 'true');
+      expect(tooltipOf()).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
     });
   });
 

@@ -237,7 +237,16 @@ describe('BagTab - 3서브탭, 보기 전환 아이콘, 하단 버튼', () => {
     expect(screen.getByRole('tooltip')).toHaveTextContent('집이나 항구에서만 할 수 있어요.');
   });
 
-  it('게스트와 확인 실패 상태에서는 가공 플랜트선이나 거점에서도 비활성 + 계정 잠금 툴팁이다', () => {
+  it('게스트가 해금 전(0~4단계)이면 인도양 잠금을, 해금 뒤와 확인 실패는 계정 잠금 툴팁을 보인다', () => {
+    show(game({ boat: COOKING_UNLOCK_BOAT - 1, location: { kind: 'region', id: 'village' } }), { accountState: 'guest' });
+    const preGuestBtn = screen.getByRole('button', { name: '기운 얻기' });
+    expect(preGuestBtn).toBeDisabled();
+    fireEvent.mouseEnter(preGuestBtn.parentElement!);
+    const preTip = screen.getByRole('tooltip');
+    expect(preTip).toHaveTextContent('인도양 항로가 열리면 기운 얻기를 할 수 있어요.');
+    expect(preTip).not.toHaveTextContent('태평양');
+
+    cleanup();
     show(game({ boat: AUTO_ENERGY_BOAT, location: { kind: 'base', id: 'home' } }), { accountState: 'guest' });
     const guestBtn = screen.getByRole('button', { name: '기운 얻기' });
     expect(guestBtn).toBeDisabled();

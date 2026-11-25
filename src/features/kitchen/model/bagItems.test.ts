@@ -32,13 +32,23 @@ describe('아이템 섹션: 해금 전과 게스트', () => {
     expect(filterItemSection(v, true)).toEqual({ lunch: [], bait: [], energy: [], potions: [], empty: true });
   });
 
-  it('게스트는 해금 전후 모두 한 줄 빈 상태와 게스트 잠금 줄이다', () => {
-    for (const boat of [COOKING_UNLOCK_BOAT - 1, COOKING_UNLOCK_BOAT]) {
-      const v = selectItemSection(seed({ boat }), T0, 'guest');
-      expect(v.state).toBe('locked');
-      if (v.state !== 'locked') continue;
-      expect(v.empty).toEqual(['가진 아이템이 없어요.']);
-      expect(v.lines).toEqual(GUEST_LOCK_DEFAULT_LINES);
+  it('게스트는 해금 전이면 진행 조건 빈 상태·잠금 줄이고, 해금 뒤에는 한 줄 빈 상태와 게스트 잠금 줄이다', () => {
+    const locked = selectItemSection(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), T0, 'guest');
+    expect(locked.state).toBe('locked');
+    if (locked.state === 'locked') {
+      expect(locked.empty).toEqual([
+        '가진 아이템이 없어요.',
+        '인도양 항로가 열리면 부엌에서 도시락과 미끼를 만들 수 있어요.',
+        '인도양 항로는 증기선(5단계)부터 열려요.',
+      ]);
+      expect(locked.lines).toEqual(['인도양 항로가 열리면 부엌을 쓸 수 있어요.', '인도양 항로는 증기선(5단계)부터 열려요.']);
+    }
+
+    const postUnlock = selectItemSection(seed({ boat: COOKING_UNLOCK_BOAT }), T0, 'guest');
+    expect(postUnlock.state).toBe('locked');
+    if (postUnlock.state === 'locked') {
+      expect(postUnlock.empty).toEqual(['가진 아이템이 없어요.']);
+      expect(postUnlock.lines).toEqual(GUEST_LOCK_DEFAULT_LINES);
     }
   });
 

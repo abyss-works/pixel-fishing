@@ -37,9 +37,24 @@ describe('메뉴 카드 잠금 사유', () => {
     expect(menuLock({ ...base, account: 'account', progress: { met: true, boat: 5 } })).toEqual({ kind: 'none' });
   });
 
-  it('게스트 잠금과 진행 조건 잠금이 둘 다 걸리면 게스트 잠금이 우선한다', () => {
+  it('게스트에게 진행 조건이 1단계보다 뒷단계이면 진행 조건 잠금만 반환한다', () => {
     const r = menuLock({ ...base, account: 'guest', guestAllowed: false, progress: { met: false, boat: 5 } });
-    expect(r.kind).toBe('guest');
+    expect(r).toEqual({
+      kind: 'progress',
+      lines: ['인도양 항로가 열리면 부엌을 쓸 수 있어요.', '인도양 항로는 증기선(5단계)부터 열려요.'],
+    });
+  });
+
+  it('게스트에게 진행 조건이 없거나 충족했거나 1단계 이하이면 게스트 잠금을 반환한다', () => {
+    expect(menuLock({ ...base, account: 'guest', guestAllowed: false, progress: undefined })).toEqual({
+      kind: 'guest', lines: [...GUEST_LOCK_DEFAULT_LINES],
+    });
+    expect(menuLock({ ...base, account: 'guest', guestAllowed: false, progress: { met: true, boat: 5 } })).toEqual({
+      kind: 'guest', lines: [...GUEST_LOCK_DEFAULT_LINES],
+    });
+    expect(menuLock({ ...base, account: 'guest', guestAllowed: false, progress: { met: false, boat: 1 } })).toEqual({
+      kind: 'guest', lines: [...GUEST_LOCK_DEFAULT_LINES],
+    });
   });
 
   it('확인 실패 잠금과 진행 조건 잠금이 둘 다 걸리면 확인 실패 잠금이 우선한다', () => {
@@ -163,9 +178,12 @@ describe('게스트에게 닫힌 화면 기능의 잠금 문안', () => {
 });
 
 describe('판매 창의 기운 얻기 탭 잠금', () => {
-  it('게스트는 해금 여부와 상관없이 게스트 잠금이다', () => {
+  it('게스트는 해금 전(5단계 미만)이면 진행 조건 잠금이고, 해금 뒤에는 게스트 잠금이다', () => {
     expect(energyTabLock('guest', COOKING_UNLOCK_BOAT)).toEqual({ kind: 'guest', lines: [...GUEST_LOCK_DEFAULT_LINES] });
-    expect(energyTabLock('guest', COOKING_UNLOCK_BOAT - 1)).toEqual({ kind: 'guest', lines: [...GUEST_LOCK_DEFAULT_LINES] });
+    expect(energyTabLock('guest', COOKING_UNLOCK_BOAT - 1)).toEqual({
+      kind: 'progress',
+      lines: ['인도양 항로가 열리면 기운 얻기를 할 수 있어요.', '인도양 항로는 증기선(5단계)부터 열려요.'],
+    });
   });
 
   it('확인 실패 상태는 해금 여부와 상관없이 확인 실패 잠금이다', () => {

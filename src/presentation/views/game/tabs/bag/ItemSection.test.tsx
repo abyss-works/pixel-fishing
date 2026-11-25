@@ -285,11 +285,16 @@ describe('해금 전과 게스트', () => {
     expect(screen.queryByRole('button', { name: /먹기|쓰기/ })).not.toBeInTheDocument();
   });
 
-  it('게스트는 한 줄 빈 상태와 전체 플레이스홀더 카드·게스트 잠금 툴팁을 본다', () => {
-    show(game(), 'guest');
-    expect(screen.getByText('가진 아이템이 없어요.').parentElement!.children).toHaveLength(1);
+  it('게스트는 해금 전에는 진행 조건 안내·잠금 툴팁을, 해금 뒤에는 한 줄 빈 상태·게스트 잠금 툴팁을 본다', () => {
+    show(game({ boat: COOKING_UNLOCK_BOAT - 1 }), 'guest');
+    expect(screen.getByText('가진 아이템이 없어요.').parentElement!.children).toHaveLength(3);
     expect(screen.getByRole('button', { name: '보유 중만 보기' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '가루디야 먹기' })).toBeDisabled();
+    expect(screen.getByRole('group', { name: '생명의 기운 잠김' })).toHaveTextContent('인도양 항로가 열리면 부엌을 쓸 수 있어요.');
+    cleanup();
+
+    show(game(), 'guest');
+    expect(screen.getByText('가진 아이템이 없어요.').parentElement!.children).toHaveLength(1);
     expect(screen.getByRole('group', { name: '생명의 기운 잠김' })).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
   });
 });
