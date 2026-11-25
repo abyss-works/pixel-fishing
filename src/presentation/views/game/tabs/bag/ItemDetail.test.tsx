@@ -54,6 +54,15 @@ describe('ItemDetail', () => {
     expect(within(dialog).getByText(recipeById('cook-lunch-named')!.description)).toBeInTheDocument();
     expect(within(dialog).getByText(/방치로 낚을 때만 효과가 있어요/)).toBeInTheDocument();
 
+    // 본문 순서: 설명(로어) → 효과 → 상태 수치(지속 시간·보유 수량·현재 상태) → 주의사항
+    const descEl = within(dialog).getByText(recipeById('cook-lunch-named')!.description);
+    const effectEl = within(dialog).getByText((_, el) => el?.tagName === 'SPAN' && el.textContent === '네임드 만날 확률');
+    const durationEl = within(dialog).getByText('지속 시간');
+    const noteEl = within(dialog).getByText(/방치로 낚을 때만 효과가 있어요/);
+    expect(descEl.compareDocumentPosition(effectEl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(effectEl.compareDocumentPosition(durationEl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(durationEl.compareDocumentPosition(noteEl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
     // 모달 닫기는 우상단 X만 두고 하단 닫기 버튼은 두지 않는다
     expect(within(dialog).getAllByRole('button', { name: '닫기' })).toHaveLength(1);
     expect(within(dialog).getByRole('button', { name: '먹기' })).toBeEnabled();

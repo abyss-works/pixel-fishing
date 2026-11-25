@@ -4,6 +4,7 @@ import { render, screen, fireEvent, cleanup, within } from '@testing-library/rea
 import BagTab, { EXHIBIT_UI_ENABLED } from './BagTab';
 import { resetBagView, setBagSection } from './bagView';
 import { AUTO_ENERGY_BOAT, COOKING_UNLOCK_BOAT } from '../../../../../game/content/cooking';
+import { artifactById } from '../../../../../game/content/artifacts';
 import { newState, saleBonusOf, sellableValue } from '../../../../../game/rules/logic';
 import { fmtGold } from '../../../../ui/format';
 import type { FishInstance, GameState } from '../../../../../game/rules/logic';
@@ -124,10 +125,12 @@ describe('BagTab - 유물 섹션 전체 목록·미보유·보유 중만 보기'
     expect(screen.getByRole('heading', { level: 3, name: /유물 1\/8/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '보유 중만 보기' })).toHaveAttribute('aria-pressed', 'false');
 
-    // 보유 유물은 버튼(PressRow)으로 상세 창을 열고 32px 스프라이트를 보인다
+    // 보유 유물은 버튼(PressRow)으로 상세 창을 열고 32px 스프라이트를 보이며, 바깥 행에는 로어가 보이지 않는다
+    const varuna = artifactById('varuna-scale')!;
     const ownedBtn = screen.getByRole('button', { name: /진주 상인의 저울/ });
     expect(ownedBtn).toBeInTheDocument();
     expect(ownedBtn.querySelector('canvas')).toHaveAttribute('width', '32');
+    expect(within(ownedBtn).queryByText(varuna.lore)).not.toBeInTheDocument();
 
     // 미보유 유물은 비활성 행(버튼 아님)으로 흐린 32px 스프라이트·이름·구역·등급이 보인다
     expect(screen.queryByRole('button', { name: /해구의 이빨/ })).not.toBeInTheDocument();
@@ -144,7 +147,9 @@ describe('BagTab - 유물 섹션 전체 목록·미보유·보유 중만 보기'
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
     fireEvent.click(ownedBtn);
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toBeInTheDocument();
+    expect(within(dialog).getByText(varuna.lore)).toBeInTheDocument();
   });
 
   it('보유 중만 보기 토글을 켜면 보유 유물만 남기고, 보유 0개면 빈 상태 안내를 보인다. 하단 수배판 안내는 유지한다', () => {

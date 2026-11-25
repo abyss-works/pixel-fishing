@@ -27,8 +27,8 @@ import {
 import { CompareTable, ConfirmButton } from '../../../overlays/facility/facilityParts';
 
 // 유물 상세 창 - 가방 탭의 유물 보기에서 보유 유물 줄을 누르면 열린다. 강화 버튼은 이 창 안에만 있다.
-// 위에서 아래로: 제목(이름과 등급), 지금 레벨과 강화 후 레벨의 비교 표, 로어, 그리고 아래 고정 영역의
-// 잔액 칸(필요한 재료의 보유 → 강화 후)과 강화 버튼. 최고 레벨은 현재 열만 보이고 잔액 칸 없이 꺼진 버튼이 서며,
+// 위에서 아래로: 제목(이름과 등급), 로어, 지금 레벨과 강화 후 레벨의 비교 표(또는 전설 유물 보너스와 페널티),
+// 그리고 아래 고정 영역의 잔액 칸(필요한 재료의 보유 → 강화 후)과 강화 버튼. 최고 레벨은 현재 열만 보이고 잔액 칸 없이 꺼진 버튼이 서며,
 // 레벨이 없는 전설 유물은 보너스와 페널티 두 줄뿐이고 버튼이 없다.
 export default function ArtifactDetail({ artifact, game, dispatch, setToast, onClose }: {
   artifact: Artifact;
@@ -69,6 +69,7 @@ export default function ArtifactDetail({ artifact, game, dispatch, setToast, onC
            }
            footer={<Footer view={view} busy={busy} onLevelUp={levelUp} />}>
       <div className="flex flex-col gap-3">
+        <LoreParagraph className="text-xs leading-[1.8] text-text-dim">{artifact.lore}</LoreParagraph>
         {view.hasLevel ? (
           <CompareTable
             heads={next
@@ -80,7 +81,6 @@ export default function ArtifactDetail({ artifact, game, dispatch, setToast, onC
               next: next ? artifactEffectValue(artifact, effect, next.level) : undefined,
             }))} />
         ) : <SystemRows artifact={artifact} />}
-        <LoreParagraph className="text-xs leading-[1.8] text-text-dim">{artifact.lore}</LoreParagraph>
       </div>
     </Modal>
   );
