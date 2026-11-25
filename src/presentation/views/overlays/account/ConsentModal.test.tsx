@@ -32,7 +32,7 @@ describe('ConsentModal', () => {
     resetKeyScopes();
   });
 
-  it('이용약관 동의 안내, 새 탭 링크 2종, 버튼 4개를 보이고 Esc·바깥 클릭으로 닫히지 않는다', async () => {
+  it('이용약관 동의 안내, 한국어 날짜, 문서 카드 2종, 통합 문의 링크를 보이고 Esc·바깥 클릭으로 닫히지 않는다', async () => {
     const onAccept = vi.fn();
     render(
       <ConsentModal consent={CONSENT} mismatch={false} error={null} busy={false} onAccept={onAccept} />,
@@ -41,21 +41,30 @@ describe('ConsentModal', () => {
     const dialog = screen.getByRole('dialog', { name: '이용약관 동의' });
     expect(dialog).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '닫기' })).toBeNull();
-    expect(screen.getByText('2026-11-25부터 이용약관이 시행돼요.')).toBeInTheDocument();
+    expect(screen.getByText('2026년 11월 25일부터 이용약관이 시행돼요.')).toBeInTheDocument();
+    expect(screen.queryByText(/2026-11-25/)).toBeNull();
     expect(screen.getByText('기존 계정은 약관에 동의해야 이어서 플레이할 수 있어요.')).toBeInTheDocument();
-    expect(screen.getByText(/동의하고 시작을 누르면 만 14세 이상이며/)).toBeInTheDocument();
+    expect(
+      screen.getByText('동의하고 시작을 누르면 만 14세 이상이며 이용약관에 동의하고 개인정보 처리방침을 확인한 것으로 봐요.'),
+    ).toBeInTheDocument();
 
+    const docCard = screen.getByLabelText('법무 문서 목록');
+    expect(docCard).toBeInTheDocument();
     const terms = screen.getByRole('link', { name: '이용약관' });
     expect(terms).toHaveAttribute('href', '/terms');
     expect(terms).toHaveAttribute('target', '_blank');
+    expect(docCard).toContainElement(terms);
 
     const privacy = screen.getByRole('link', { name: '개인정보 처리방침' });
     expect(privacy).toHaveAttribute('href', '/privacy');
     expect(privacy).toHaveAttribute('target', '_blank');
+    expect(docCard).toContainElement(privacy);
+    expect(screen.getAllByText('새 탭')).toHaveLength(2);
 
-    const inquiry = screen.getByRole('link', { name: '문의' });
-    expect(inquiry).toHaveAttribute('href', 'mailto:contact@abyssworks.dev');
-    expect(screen.getByText(/contact@abyssworks\.dev/)).toBeInTheDocument();
+    const inquiryLinks = screen.getAllByRole('link', { name: '문의' });
+    expect(inquiryLinks).toHaveLength(1);
+    expect(inquiryLinks[0]).toHaveAttribute('href', 'mailto:contact@abyssworks.dev');
+    expect(screen.getAllByText('contact@abyssworks.dev')).toHaveLength(1);
 
     expect(screen.getByRole('button', { name: '동의하고 시작' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '나중에 하기' })).toBeInTheDocument();
@@ -70,28 +79,46 @@ describe('ConsentModal', () => {
     await waitFor(() => expect(onAccept).toHaveBeenCalledTimes(1));
   });
 
-  it('409 버전 변경 시 재확인 안내 문구를 표시한다', () => {
+  it('전용 진입 배경(entry)일 때 브랜드 표식을 모달 바깥 상단에 함께 보인다', () => {
+    const { rerender } = render(
+      <ConsentModal consent={CONSENT} mismatch={false} error={null} busy={false} entry onAccept={vi.fn()} />,
+    );
+    const dialog = screen.getByRole('dialog', { name: '이용약관 동의' });
+    const brand = screen.getByText('PIXEL FISHING');
+    expect(brand).toBeInTheDocument();
+    expect(dialog).not.toContainElement(brand);
+
+    rerender(
+      <ConsentModal consent={CONSENT} mismatch={false} error={null} busy={false} entry={false} onAccept={vi.fn()} />,
+    );
+    expect(screen.queryByText('PIXEL FISHING')).toBeNull();
+  });
+
+  it('409 버전 변경 시 재확인 안내 문구와 한국어 시행일을 표시한다', () => {
     render(
       <ConsentModal consent={{ ...CONSENT, version: '2026-12-01' }} mismatch error={null} busy={false} onAccept={vi.fn()} />,
     );
-    expect(screen.getByText('2026-12-01부터 이용약관이 시행돼요.')).toBeInTheDocument();
+    expect(screen.getByText('2026년 12월 1일부터 이용약관이 시행돼요.')).toBeInTheDocument();
     expect(screen.getByText(/확인하는 사이에 이용약관이 바뀌었어요\./)).toBeInTheDocument();
     expect(screen.getByText(/새 이용약관을 확인한 뒤 다시 동의하고 시작을 눌러 주세요\./)).toBeInTheDocument();
   });
 
-  it('나중에 하기를 누르면 모달 내 대기 상태로 전환하고 이용약관 다시 보기로 돌아간다', () => {
+  it('나중에 하기를 누르면 모달 내 대기 상태로 전환하고 문서 카드와 통합 문의 링크를 유지한 채 이용약관 다시 보기로 돌아간다', () => {
     render(
       <ConsentModal consent={CONSENT} mismatch={false} error={null} busy={false} onAccept={vi.fn()} />,
     );
     fireEvent.click(screen.getByRole('button', { name: '나중에 하기' }));
     expect(screen.getByText('이용약관에 동의하지 않아 게임을 시작하지 않았어요.')).toBeInTheDocument();
     expect(screen.getByText('진행과 기록은 그대로 남으며 다음 접속에서 다시 물어요.')).toBeInTheDocument();
+    expect(screen.getByLabelText('법무 문서 목록')).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: '문의' })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: '계정 삭제' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '이용약관 다시 보기' }));
     expect(screen.getByRole('button', { name: '동의하고 시작' })).toBeInTheDocument();
   });
 
-  it('계정 삭제를 누르면 모달 내부 단계로 전환해 "삭제" 입력을 확인하고, 일치 시 삭제 후 새로고침한다', async () => {
+  it('계정 삭제를 누르면 모달 내부 단계로 전환해 문의 링크만 남기고 "삭제" 입력을 확인해 삭제 후 새로고침한다', async () => {
     const onReload = vi.fn();
     render(
       <ConsentModal consent={CONSENT} mismatch={false} error={null} busy={false} onAccept={vi.fn()} onReload={onReload} />,
@@ -102,6 +129,8 @@ describe('ConsentModal', () => {
     expect(screen.getAllByRole('dialog')).toHaveLength(1);
     expect(screen.getByText('계정을 삭제하면 모든 진행과 기록이 영구 삭제되며 되돌릴 수 없어요.')).toBeInTheDocument();
     expect(screen.getByText('삭제하려면 아래 칸에 “삭제”를 입력해 주세요.')).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: '문의' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: '계정 삭제' })).toHaveLength(1);
 
     // 불일치 시 오류 문구를 보이고 삭제를 요청하지 않는다
     const input = screen.getByLabelText('확인 문구');

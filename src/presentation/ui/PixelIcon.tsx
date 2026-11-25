@@ -14,7 +14,7 @@ export type GlyphId =
   | 'plus' | 'minus'
   | 'compass' | 'backpack' | 'book' | 'question' | 'gear' | 'people' | 'flag'
   | 'crown' | 'sparkle' | 'warn' | 'menu' | 'grid' | 'lunch' | 'bait'
-  | 'clock' | 'target' | 'gem';
+  | 'clock' | 'target' | 'gem' | 'external';
 
 const GLYPHS: Record<GlyphId, { cells: Cell[]; holes?: Cell[] }> = {
   // 경고 — 느낌표 삼각 기둥 + 점
@@ -205,6 +205,14 @@ const GLYPHS: Record<GlyphId, { cells: Cell[]; holes?: Cell[] }> = {
   // 보석 — 유물/최고 레벨 유물 보너스
   gem: {
     cells: [[3, 1, 6, 1], [2, 2, 8, 2], [1, 4, 10, 2], [2, 6, 8, 2], [4, 8, 4, 2], [5, 10, 2, 1]],
+  },
+  // 새 탭 — 열린 사각형과 우상단 화살표
+  external: {
+    cells: [
+      [1, 3, 1, 8], [1, 10, 8, 1], [8, 7, 1, 4], [1, 3, 4, 1],
+      [7, 1, 4, 1], [10, 1, 1, 4],
+      [8, 3, 2, 1], [7, 4, 2, 1], [6, 5, 2, 1], [5, 6, 2, 1],
+    ],
   },
 };
 

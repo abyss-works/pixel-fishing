@@ -1933,4 +1933,37 @@ describe('포구 출항 차단 후 로그인 복귀', () => {
     await waitFor(() => expect(seenField.initialPos).toEqual(expectedResume));
     expect(seenField.region).toBe('village');
   });
+
+  it('초기 세이브 로드 전 이용약관 동의 차단 시 전용 불투명 진입 화면 위에 모달을 띄운다', async () => {
+    seed({});
+    vi.resetModules();
+    vi.doMock('./platform/api', async importActual => {
+      const actual = await importActual<typeof import('./platform/api')>();
+      const base = actual.createApi();
+      Object.defineProperties(base.auth, {
+        isConfigured: { value: true, configurable: true },
+        ensureSession: { value: async () => 'uid-consent-entry', configurable: true },
+        currentAccount: { value: async () => ({ status: 'account', email: 'me@example.com' }), configurable: true },
+        getAccountConsent: {
+          value: async () => ({ required: true, version: '2026-11-25', effectiveAt: '2026-11-25T00:00:00.000Z' }),
+          configurable: true,
+        },
+      });
+      return {
+        ...actual,
+        readLastPosition: async () => null,
+        api: base,
+      };
+    });
+
+    try {
+      const { default: CloudApp } = await import('./App');
+      render(<CloudApp />);
+      await waitFor(() => expect(screen.getByRole('dialog', { name: '이용약관 동의' })).toBeInTheDocument());
+      expect(screen.getByText('PIXEL FISHING')).toBeInTheDocument();
+      expect(screen.getByText('2026년 11월 25일부터 이용약관이 시행돼요.')).toBeInTheDocument();
+    } finally {
+      vi.doUnmock('./platform/api');
+    }
+  });
 });

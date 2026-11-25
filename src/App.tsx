@@ -185,6 +185,7 @@ function AppContent() {
               mismatch={consentPrompt.mismatch}
               error={consentPrompt.error}
               busy={consentPrompt.busy}
+              entry={sync !== 'on'}
               onAccept={acceptConsent}
               onRetryLoad={retryLoadConsent}
             />
