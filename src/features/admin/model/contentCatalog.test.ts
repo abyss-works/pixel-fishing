@@ -142,6 +142,8 @@ describe('관리자 콘텐츠 카탈로그 모델', () => {
       if (r.kind === 'lunch') expect(r.waitMin).toBeGreaterThan(0);
       else expect(r.waitMin).toBe(0);
     }
+    const nightBait = c.recipes.find(r => r.id === 'cook-bait-night')!;
+    expect(nightBait.effectLines).toEqual([{ text: '낮에도 밤 어종이 함께 낚여요.' }]);
   });
 
   it('7) 배 9척과 도보 가방 상한이 정본과 일치한다', () => {

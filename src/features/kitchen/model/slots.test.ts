@@ -67,6 +67,16 @@ describe('슬롯의 지금 효과', () => {
     const game = seed({ slots: { lunch: null, bait: { id: 'cook-bait-rare', endsAt: at(30 * MIN) } } });
     expect(activeSlot(game, 'bait', T0)!.label).toBe('롱페퍼 미끼(희귀)');
   });
+
+  it('달빛 미끼는 비수치 상세 설명 한 줄과 남은 시간을 함께 낸다', () => {
+    const game = seed({ slots: { lunch: null, bait: { id: 'cook-bait-night', endsAt: at(30 * MIN) } } });
+    const s = activeSlot(game, 'bait', T0)!;
+    expect(s.effects).toEqual([{ text: '낮에도 밤 어종이 함께 낚여요.' }]);
+    expect(s.rows).toEqual([
+      { text: '낮에도 밤 어종이 함께 낚여요.' },
+      { label: '남은 시간', value: '30분' },
+    ]);
+  });
 });
 
 describe('슬롯 칩 표시 조건', () => {

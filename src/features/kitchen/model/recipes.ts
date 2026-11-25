@@ -53,12 +53,21 @@ const EFFECT_NOTE: Readonly<Record<CookKind, string>> = {
 /** 그 종류의 효과 설명 — 줄마다 줄바꿈으로 나뉜다 */
 export const recipeEffectNote = (kind: CookKind): string => EFFECT_NOTE[kind];
 
-export interface RecipeEffectLine { label: string; value: string }
+export type RecipeEffectLine =
+  | { label: string; value: string }
+  | { text: string };
+
+/** 밤 어종 출현 미끼의 상세 설명 — 키-값으로 쪼개지 않고 한 줄 설명으로 쓴다 */
+export const NIGHT_UNLOCK_EFFECT_TEXT = '낮에도 밤 어종이 함께 낚여요.';
+
+/** 효과 줄을 한 줄 문자열로 합친다 — 보너스 표와 검색 필터가 함께 쓴다 */
+export const recipeEffectText = (line: RecipeEffectLine): string =>
+  'text' in line ? line.text : `${line.label} ${line.value}`;
 
 /** 소수 둘째 자리까지, 끝의 0은 뺀다 */
 const pct = (x: number): string => String(Number((x * 100).toFixed(2)));
 
-/** 효과 줄 — 이름은 왼쪽, 값은 오른쪽에 쓴다. 등급 가중은 가중되는 등급마다 한 줄이다 */
+/** 효과 줄 — 수치 효과는 이름 왼쪽·값 오른쪽, 비수치 효과는 상세 설명 한 줄이다. 등급 가중은 가중되는 등급마다 한 줄이다 */
 export function recipeEffectLines(recipe: Recipe): RecipeEffectLine[] {
   const e = recipe.effects;
   return COOK_EFFECT_KEYS.flatMap((key): RecipeEffectLine[] => {
@@ -73,7 +82,7 @@ export function recipeEffectLines(recipe: Recipe): RecipeEffectLine[] {
       case 'namedWeight':
         return e.namedWeight === undefined ? [] : [{ label: '네임드 만날 확률', value: `+${pct(e.namedWeight)}%` }];
       case 'nightUnlock':
-        return e.nightUnlock === true ? [{ label: '밤 어종 출현', value: '낮에도 출현' }] : [];
+        return e.nightUnlock === true ? [{ text: NIGHT_UNLOCK_EFFECT_TEXT }] : [];
     }
   });
 }

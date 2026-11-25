@@ -97,11 +97,9 @@ export default function Tip({ text, plain, wraps, pressOpens, hoverOnly, onlyIf,
   );
 }
 
-export interface TipRow {
-  label: ReactNode;
-  value: ReactNode;
-  badge?: ReactNode;
-}
+export type TipRow =
+  | { label: ReactNode; value: ReactNode; badge?: ReactNode }
+  | { text: ReactNode };
 
 /** 구조형 툴팁 카드 — 헤더(제목·배지·부제) → 본문/목록 → 구분선 아래 상태/잠금 → 하단 주석 순서를 고정한다 */
 export function TipCard({ title, subtitle, badge, description, rows, status, note }: {
@@ -134,7 +132,11 @@ export function TipCard({ title, subtitle, badge, description, rows, status, not
           {description && <span className="text-text leading-snug">{highlightText(description)}</span>}
           {rows && rows.length > 0 && (
             <span className="flex flex-col">
-              {rows.map((r, i) => (
+              {rows.map((r, i) => 'text' in r ? (
+                <span key={typeof r.text === 'string' ? `${i}-${r.text}` : i} className="py-0.5 text-text leading-snug">
+                  {highlightText(r.text)}
+                </span>
+              ) : (
                 <span key={typeof r.label === 'string' ? `${i}-${r.label}` : i} className="flex items-center justify-between gap-4 py-0.5">
                   <span className="flex items-center gap-1.5 text-text-dim">
                     <span>{highlightText(r.label)}</span>

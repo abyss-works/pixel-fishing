@@ -40,6 +40,15 @@ describe('StatsModal(스탯창)', () => {
     expect(screen.getAllByText('받는 보너스가 없어요.')).toHaveLength(3);
   });
 
+  it('보너스 탭은 달빛 미끼의 비수치 효과를 중복 없이 상세 설명 한 줄로 보인다', () => {
+    const endsAt = new Date(Date.now() + 3_600_000).toISOString();
+    show(game({ boat: 5, slots: { lunch: null, bait: { id: 'cook-bait-night', endsAt } } }));
+    fireEvent.click(screen.getByRole('button', { name: '보너스' }));
+    const row = screen.getByText('낮에도 밤 어종이 함께 낚여요.').closest('tr')!;
+    expect(within(row).getByText('달빛 미끼(특수)')).toBeTruthy();
+    expect(within(row).getByText('챔질해서 낚을 때만')).toBeTruthy();
+  });
+
   it('배 탭은 지역마다 열린 해역 수와 남은 해역을 여는 배를 표로 보인다', () => {
     show(game({ boat: 1 }));
     fireEvent.click(screen.getByRole('button', { name: '배' }));

@@ -64,7 +64,7 @@ describe('효과 줄', () => {
   });
 
   it('묶음 도시락은 입질 대기와 등급 출현을 모두 낸다', () => {
-    expect(recipeEffectLines(recipe('cook-lunch-bundle')).map(l => `${l.label} ${l.value}`)).toEqual([
+    expect(recipeEffectLines(recipe('cook-lunch-bundle')).map(l => ('text' in l ? l.text : `${l.label} ${l.value}`))).toEqual([
       '입질 대기 −5%', '희귀 어종 출현 +5%', '영웅 어종 출현 +5%', '전설 어종 출현 +5%',
     ]);
   });
@@ -75,8 +75,8 @@ describe('효과 줄', () => {
     expect(recipeEffectLines(recipe('cook-bait-mutation'))).toEqual([{ label: '돌연변이 출현', value: '+150%' }]);
   });
 
-  it('밤 어종 출현 미끼는 낮에도 출현 한 줄이다', () => {
-    expect(recipeEffectLines(recipe('cook-bait-night'))).toEqual([{ label: '밤 어종 출현', value: '낮에도 출현' }]);
+  it('밤 어종 출현 미끼는 비수치 상세 설명 한 줄이다', () => {
+    expect(recipeEffectLines(recipe('cook-bait-night'))).toEqual([{ text: '낮에도 밤 어종이 함께 낚여요.' }]);
   });
 });
 

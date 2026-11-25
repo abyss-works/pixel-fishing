@@ -997,7 +997,8 @@ describe('UI 시스템 가드', () => {
     expect(tipSrc).toMatch(/HighlightRarityText/);
     expect(tipSrc).toMatch(/function TipList\(\{ rows, note \}:\s*\{\s*rows:\s*readonly\s*\{\s*label:\s*ReactNode;\s*value:\s*ReactNode\s*\}\[\];\s*note\?:\s*ReactNode/);
     expect(recipeTipSrc).toMatch(/HighlightRarityText/);
-    expect(recipeTipSrc).toMatch(/label:\s*ReactNode;\s*effects:\s*readonly\s*\{\s*label:\s*ReactNode;\s*value:\s*ReactNode\s*\}\[\];\s*note:\s*ReactNode/);
+    expect(recipeTipSrc).toMatch(/export type RecipeEffectTipRow\s*=\s*\|\s*\{\s*label:\s*ReactNode;\s*value:\s*ReactNode\s*\}\s*\|\s*\{\s*text:\s*ReactNode\s*\}/);
+    expect(recipeTipSrc).toMatch(/label:\s*ReactNode;\s*effects:\s*readonly\s*RecipeEffectTipRow\[\];\s*note:\s*ReactNode/);
     expect(lockedSrc).toMatch(/title\?:\s*ReactNode/);
     expect(lockedSrc).toMatch(/description\?:\s*ReactNode/);
     expect(messageFeedSrc).toMatch(/rows:\s*readonly\s*\{\s*label:\s*ReactNode;\s*value:\s*ReactNode\s*\}\[\]/);
