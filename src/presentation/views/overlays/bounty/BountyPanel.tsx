@@ -29,6 +29,7 @@ import RelicCard from './RelicCard';
 import CheckToggle from '../../../ui/CheckToggle';
 import { HighlightRarityText } from '../../../ui/fish/RarityTag';
 import Gated from '../../../ui/Gated';
+import IconButton from '../../../ui/IconButton';
 import Inset from '../../../ui/Inset';
 import PixelIcon from '../../../ui/PixelIcon';
 import SectionTitle from '../../../ui/SectionTitle';
@@ -149,10 +150,10 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
       <div className={`flex flex-col gap-2 flex-1 min-h-0 ${SCROLL_Y}`}>
       {screen === 'quests' ? (
         <>
-          <SectionTitle className="flex items-baseline justify-between gap-2">
+          <SectionTitle className="flex items-center justify-between gap-2">
             <span>오늘의 의뢰</span>
-            <Tip text={'수주한 뒤에 잡은 물고기부터 세요.\n물고기는 가방에 남아요.'} className="text-2xs font-normal text-text-dim">
-              수주 안내
+            <Tip wraps pressOpens text={'수주한 뒤에 잡은 물고기부터 세요.\n물고기는 가방에 남아요.'}>
+              <IconButton type="button" glyph="question" size={12} tone="dim" aria-label="수주 안내" className="p-0.5" />
             </Tip>
           </SectionTitle>
           <div className="grid grid-cols-3 gap-2 items-stretch flex-1 min-h-0 mobile:grid-cols-1">
@@ -209,10 +210,10 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         </>
       ) : (
         <>
-          <SectionTitle className="flex items-baseline justify-between gap-2">
+          <SectionTitle className="flex items-center justify-between gap-2">
             <span>해역 유물</span>
-            <Tip text="교환 재료는 네임드 토벌 보상으로 받아요." className="text-2xs font-normal text-text-dim">
-              교환 재료 안내
+            <Tip wraps pressOpens text="교환 재료는 네임드 토벌 보상으로 받아요.">
+              <IconButton type="button" glyph="question" size={12} tone="dim" aria-label="교환 재료 안내" className="p-0.5" />
             </Tip>
           </SectionTitle>
           <div className={CARD_ROW}>

@@ -17,14 +17,14 @@ describe('메뉴 줄 항목 순서', () => {
 });
 
 describe('의뢰 줄 배지', () => {
-  it('일반은 노랑(gold), 네임드는 보라(epic)이고 오늘 남은 횟수를 그대로 쓴다', () => {
+  it('일반은 노랑(gold), 네임드는 네임드(named)이고 오늘 남은 횟수를 그대로 쓴다', () => {
     expect(questBadges({ general: 3, named: 1 })).toEqual([
-      { tone: 'gold', count: 3 }, { tone: 'epic', count: 1 },
+      { tone: 'gold', count: 3 }, { tone: 'named', count: 1 },
     ]);
   });
 
   it('남은 횟수가 0인 종류의 배지는 그리지 않는다', () => {
-    expect(questBadges({ general: 0, named: 1 })).toEqual([{ tone: 'epic', count: 1 }]);
+    expect(questBadges({ general: 0, named: 1 })).toEqual([{ tone: 'named', count: 1 }]);
     expect(questBadges({ general: 2, named: 0 })).toEqual([{ tone: 'gold', count: 2 }]);
     expect(questBadges({ general: 0, named: 0 })).toEqual([]);
   });

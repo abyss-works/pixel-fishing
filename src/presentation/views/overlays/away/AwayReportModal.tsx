@@ -74,7 +74,7 @@ export default function AwayReportModal({ report, game, onClose, onOpenBag }: {
                     <span>{formName(fish, n.form)}</span>
                     <span className="text-2xs text-text-dim"><RarityText rarity={n.rarity} />, {fmtSize(n.maxSize)}</span>
                     {n.form === 'variant'
-                      ? <NoteTag tag="돌연변이" className="text-epic border-epic" />
+                      ? <NoteTag tag="돌연변이" className="text-mutation border-mutation" />
                       : <NoteTag tag="새 도감" className="text-accent border-accent" />}
                   </Frame>
                 );

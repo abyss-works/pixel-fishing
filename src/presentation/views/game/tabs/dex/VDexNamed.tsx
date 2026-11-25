@@ -10,6 +10,7 @@ import SubTabs from '../../../../ui/SubTabs';
 import FishSprite from '../../../../ui/fish/FishSprite';
 import { RARITY_CARD, DIM_CARD } from '../../../../ui/fish/RarityTag';
 import PageTitle from '../../../../ui/PageTitle';
+import PixelIcon from '../../../../ui/PixelIcon';
 import Note from '../../../../ui/Note';
 import NamedDetail from './NamedDetail';
 
@@ -43,12 +44,19 @@ export default function DexNamedView({ game, sub, onSub }: {
           return (
             <Frame as="button" type="button" key={q.id} aria-label={`${ok ? (displayName ?? q.targetFish) : '미확인 네임드'} 상세 보기`}
                    onClick={() => setDetail(q)}
-                   className={cx(RARITY_CARD, 'p-4 w-full aspect-[3/2] flex flex-col items-center justify-center cursor-pointer hover:brightness-110', !ok && DIM_CARD)}>
+                   className={cx(
+                     RARITY_CARD,
+                     'p-4 w-full aspect-[3/2] flex flex-col items-center justify-center cursor-pointer hover:brightness-110',
+                     ok ? 'border-named bg-[color-mix(in_oklab,var(--c-named)_7%,var(--c-surface))]' : DIM_CARD,
+                   )}>
               {fish && (
                 <FishSprite fish={fish} preset="portrait" discovered={ok}
                             ariaLabel={ok && displayName ? displayName : '미확인 네임드'} className="block mx-auto" />
               )}
-              <b className="block mt-1 text-center">{ok ? (displayName ?? q.targetFish) : '???'}</b>
+              <b className={cx('mt-1 text-center inline-flex items-center justify-center gap-1', ok && 'text-named')}>
+                {ok && <PixelIcon glyph="target" size={12} className="shrink-0" />}
+                {ok ? (displayName ?? q.targetFish) : '???'}
+              </b>
               <span className="block text-center text-text-dim text-xs">
                 {ok ? '토벌' : '미확인'}
               </span>

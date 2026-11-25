@@ -131,7 +131,8 @@ describe('BountyPanel', () => {
     await waitFor(() => expect(buttons[0]).not.toBeDisabled());
     fireEvent.mouseEnter(buttons[0].parentElement!);
     expect(screen.queryByRole('tooltip')).toBeNull();
-    expect(tipOf(screen.getByText('수주 안내'))).toBe('수주한 뒤에 잡은 물고기부터 세요.\n물고기는 가방에 남아요.');
+    expect(screen.queryByText('수주 안내')).toBeNull();
+    expect(tipOfButton(screen.getByRole('button', { name: '수주 안내' }))).toBe('수주한 뒤에 잡은 물고기부터 세요.\n물고기는 가방에 남아요.');
   });
 
   it('날이 바뀐 뒤에도 마친 의뢰는 오늘의 의뢰와 달라도 그 칸에 보이고 완료할 수 있다', async () => {
@@ -229,12 +230,15 @@ describe('BountyPanel', () => {
     show(game({ dex: fullDex }));
     fireEvent.click(await screen.findByRole('button', { name: '유물' }));
     expect(screen.getByText('해구의 이빨')).toBeInTheDocument();
+    expect(screen.getByText('(영웅)')).toHaveAttribute('data-rarity', 'epic');
     fireEvent.mouseEnter(screen.getByText('해구의 이빨'));
     expect(screen.queryByRole('tooltip')).toBeNull();
     fireEvent.mouseEnter(screen.getByText('교환 재료'));
     expect(screen.queryByRole('tooltip')).toBeNull();
-    expect(tipOf(screen.getByText('교환 재료 안내'))).toBe('교환 재료는 네임드 토벌 보상으로 받아요.');
-    fireEvent.mouseLeave(screen.getByText('교환 재료 안내'));
+    expect(screen.queryByText('교환 재료 안내')).toBeNull();
+    const tipBtn = screen.getByRole('button', { name: '교환 재료 안내' });
+    expect(tipOfButton(tipBtn)).toBe('교환 재료는 네임드 토벌 보상으로 받아요.');
+    fireEvent.mouseLeave(tipBtn.parentElement!);
 
     const mat = screen.getByText(/돌이 된 이빨/);
     expect(mat).toBeInTheDocument();

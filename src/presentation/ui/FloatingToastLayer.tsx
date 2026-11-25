@@ -17,6 +17,8 @@ const TONE_STYLE: Record<ToastTone, { border: string; icon: GlyphId; iconColor: 
   danger: { border: 'border-danger', icon: 'warn', iconColor: 'text-danger' },
   guild: { border: 'border-guild', icon: 'flag', iconColor: 'text-guild' },
   epic: { border: 'border-epic', icon: 'sparkle', iconColor: 'text-epic' },
+  named: { border: 'border-named', icon: 'target', iconColor: 'text-named' },
+  mutation: { border: 'border-mutation', icon: 'sparkle', iconColor: 'text-mutation' },
   neutral: { border: 'border-line', icon: 'check', iconColor: 'text-text-dim' },
 };
 

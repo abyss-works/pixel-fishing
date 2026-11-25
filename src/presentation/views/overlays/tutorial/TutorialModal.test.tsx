@@ -121,7 +121,7 @@ describe('튜토리얼 카드 덱', () => {
     const namedDialog = screen.getByRole('dialog', { name: '네임드 토벌' });
     expect(namedDialog).toBeInTheDocument();
     expect(screen.getByText('1 / 5')).toBeInTheDocument();
-    expect(screen.getByText('네임드', { selector: '.text-epic' })).toBeInTheDocument();
+    expect(screen.getByText('네임드', { selector: '.text-named' })).toBeInTheDocument();
     fireEvent.click(namedDialog.parentElement!);
     expect(dispatch).toHaveBeenNthCalledWith(4, { type: 'seeTutorial', id: 'bounty-named' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();

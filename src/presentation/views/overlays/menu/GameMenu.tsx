@@ -37,7 +37,7 @@ interface Entry {
   name: string;
   glyph: GlyphId;
   /** 줄에 붙는 배지 - 의뢰는 종류별 두 개, 나머지는 새 알림 수 하나 */
-  badges: { tone: 'danger' | 'gold' | 'epic'; count: number }[];
+  badges: { tone: 'danger' | 'gold' | 'epic' | 'named'; count: number }[];
   /** 메뉴 버튼의 새 알림 점을 켜는 수 */
   alerts: number;
   /** 게스트 잠금 줄. 있으면 잠긴 줄이다 */

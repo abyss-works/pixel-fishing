@@ -142,7 +142,7 @@ describe('GuildModal', () => {
     const tip = screen.getByRole('tooltip');
     expect(within(tip).getByText('일반 의뢰')).not.toHaveAttribute('data-rarity');
     expect(tip).toHaveTextContent('네임드 토벌');
-    expect(within(tip).getByText('네임드')).toHaveClass('text-epic');
+    expect(within(tip).getByText('네임드')).toHaveClass('text-named');
     expect(tip.textContent).toContain('매일 새로 세요.');
     fireEvent.mouseLeave(screen.getByText('오늘 기여'));
     const row = screen.getByText('나루').closest('tr') as HTMLElement;
@@ -241,7 +241,7 @@ describe('GuildModal', () => {
     expect(day.getByText('나루')).toBeTruthy();
   });
 
-  it('항해일지의 전설 돌연변이는 돌연변이명과 보라색 강조(text-epic)로 보인다', () => {
+  it('항해일지의 전설 돌연변이는 돌연변이명과 자홍 강조(text-mutation)로 보인다', () => {
     const at = '2026-11-05T00:00:00.000Z';
     s.guild = {
       ...GUILD,
@@ -254,7 +254,7 @@ describe('GuildModal', () => {
     fireEvent.click(screen.getByRole('button', { name: '항해일지' }));
     const day = within(screen.getByRole('region', { name: '11월 5일' }));
     expect(day.getByText('전설 황금 잉어').className).toContain('text-legend');
-    expect(day.getByText('전설 무지개 잉어').className).toContain('text-epic');
+    expect(day.getByText('전설 무지개 잉어').className).toContain('text-mutation');
   });
 
   it('Lv.6 이상 길드에서는 일반 길드원도 자유 강화 투자(+1)와 첫 100,000G 초기화를 할 수 있다', async () => {

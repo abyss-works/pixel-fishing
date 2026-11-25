@@ -152,7 +152,7 @@ function ItemCards({ title, hint, rows, lockLines, busy, selectedId, onSelect, o
               <div className="mt-auto pt-1.5 border-t border-line-dim flex items-center justify-between gap-2">
                 <span className="pf-accent text-xs text-text-dim whitespace-nowrap">×{row.count}</span>
                 {lockLines ? (
-                  <Locked lines={lockLines} title={<GradeName name={row.title.name} grade={row.title.grade} />} label={`${row.label} 잠김`} className="inline-block">
+                  <Locked badge={false} lines={lockLines} title={<GradeName name={row.title.name} grade={row.title.grade} />} label={`${row.label} 잠김`} className="inline-block">
                     {button}
                   </Locked>
                 ) : button}
@@ -196,7 +196,7 @@ function EnergyCards({ energy, lockLines }: {
         <Tip text={ITEM_GROUP_HINT.energy}>{ITEM_GROUPS[0].title}</Tip>
       </Subheading>
       {lockLines ? (
-        <Locked lines={lockLines} title={ITEM_GROUPS[0].title} label="생명의 기운 잠김">
+        <Locked badge={false} lines={lockLines} title={ITEM_GROUPS[0].title} label="생명의 기운 잠김">
           {grid}
         </Locked>
       ) : grid}
@@ -255,7 +255,7 @@ function PotionCards({ rows, potionLock, busy, selectedId, onSelect, onUse }: {
               <div className="mt-auto pt-1.5 border-t border-line-dim flex items-center justify-between gap-2">
                 <span className="pf-accent text-xs text-text-dim whitespace-nowrap">×{row.count}</span>
                 {potionLock ? (
-                  <Locked lines={potionLock} title={<GradeName name={row.potion.name} grade={row.potion.grade} />} label={`${row.potion.name} 잠김`} className="inline-block">
+                  <Locked badge={false} lines={potionLock} title={<GradeName name={row.potion.name} grade={row.potion.grade} />} label={`${row.potion.name} 잠김`} className="inline-block">
                     {button}
                   </Locked>
                 ) : button}
@@ -355,10 +355,16 @@ export default function ItemSection({ game, accountState, dispatch, setToast }: 
           보유 중만 보기
         </ToggleChip>
       </div>
-      {view.state === 'locked' && (!ownedOnly || shown.empty) && (
-        <Note>{view.empty.map(line => <span key={line} className="block">{line}</span>)}</Note>
+      {view.state === 'locked' && !ownedOnly && view.unlockNotice && (
+        <Note>{view.unlockNotice}</Note>
       )}
-      {view.state === 'open' && shown.empty && <Note>{NO_ITEMS_TEXT}</Note>}
+      {shown.empty && (
+        <Note>
+          {view.state === 'locked'
+            ? view.empty.map(line => <span key={line} className="block">{line}</span>)
+            : NO_ITEMS_TEXT}
+        </Note>
+      )}
       {!shown.empty && (
         <>
           <EnergyCards energy={shown.energy} lockLines={kitchenLock} />

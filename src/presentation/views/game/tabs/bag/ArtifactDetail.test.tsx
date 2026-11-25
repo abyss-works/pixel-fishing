@@ -30,6 +30,8 @@ describe('ArtifactDetail - 상태별 화면', () => {
     const headerCanvas = dialog.querySelector('header canvas');
     expect(headerCanvas).toHaveAttribute('width', '48');
     expect(headerCanvas).toHaveAttribute('height', '48');
+    expect(within(dialog).getByRole('heading', { name: /침선의 나침반\(희귀\)/ })).toBeInTheDocument();
+    expect(within(dialog).getByText('(희귀)')).toHaveAttribute('data-rarity', 'rare');
     expect(screen.getByText('현재(Lv.1)')).toBeInTheDocument();
     expect(screen.getByText('강화 후(Lv.2)')).toBeInTheDocument();
     expect(screen.getByText('항해 속도')).toBeInTheDocument();

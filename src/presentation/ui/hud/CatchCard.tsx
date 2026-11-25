@@ -55,7 +55,7 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
                            animate-fx-orbit [animation-delay:calc(var(--i)*-0.24s)]"
                 style={{ '--i': i } as CSSProperties} />
         ))}
-        {/* 변이 — 신비로운 잔광: 카드 곁에서 피어올라 흩어지는 보랏빛/물빛.
+        {/* 변이 — 신비로운 잔광: 카드 곁에서 피어올라 흩어지는 자홍빛.
             정적 X 오프셋은 transform, 상승은 keyframe의 translate 속성 — 서로 충돌하지 않는다 */}
         {isVariant && Array.from({ length: 8 }, (_, i) => (
           <span key={i}
@@ -64,8 +64,8 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
                   '[transform:translateX(calc((var(--i)-3.5)*38px))]',
                   'animate-fx-wisp [animation-delay:calc(var(--i)*-0.4s)]',
                   i % 2
-                    ? 'bg-[#a0e7fc] shadow-[0_0_8px_2px_rgba(160,231,252,0.8)]'
-                    : 'bg-[#e0c3fc] shadow-[0_0_8px_2px_rgba(224,195,252,0.8)]',
+                    ? 'bg-[color-mix(in_oklab,var(--c-mutation)_60%,white)] shadow-[0_0_8px_2px_rgba(244,114,182,0.8)]'
+                    : 'bg-mutation shadow-[0_0_8px_2px_rgba(244,114,182,0.85)]',
                 )}
                 style={{ '--i': i } as CSSProperties} />
         ))}
@@ -90,8 +90,9 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
           <div className="flex flex-col gap-1.5 min-w-0 flex-1">
             <div className="flex items-baseline gap-1.5 flex-wrap min-w-0">
               <span className="text-xs font-bold shrink-0"><RarityText rarity={fish.rarity} /></span>
-              {/* 변이 — 이름만 은은히 빛나고, 문구는 오히려 낮춰 말한다 */}
-              <b className={cx('text-lg mobile:text-base leading-tight break-keep', isVariant && 'animate-mutated-shimmer')}>
+              {/* 변이 — 이름에 자홍 강조·반짝이와 은은한 빛을 입히고, 문구는 오히려 낮춰 말한다 */}
+              {isVariant && <PixelIcon glyph="sparkle" size={14} className="text-mutation shrink-0 self-center" />}
+              <b className={cx('text-lg mobile:text-base leading-tight break-keep', isVariant && 'text-mutation animate-mutated-shimmer')}>
                 {formName(fish, info?.form ?? 'normal')}
               </b>
             </div>

@@ -45,18 +45,20 @@ describe('FloatingToastLayer', () => {
     expect(onDismiss).toHaveBeenCalledWith(1);
   });
 
-  it('6종 톤(gold, accent, danger, guild, epic, neutral)을 각 톤 색 토큰으로 렌더링한다', () => {
+  it('8종 톤(gold, accent, danger, guild, epic, named, mutation, neutral)을 각 톤 색 토큰으로 렌더링한다', () => {
     const onDismiss = vi.fn();
     render(
       <FloatingToastLayer
-        maxVisible={6}
+        maxVisible={8}
         toasts={[
           { id: 1, text: '골드', tone: 'gold' },
           { id: 2, text: '강조', tone: 'accent' },
           { id: 3, text: '위험', tone: 'danger' },
           { id: 4, text: '길드', tone: 'guild' },
           { id: 5, text: '영웅', tone: 'epic' },
-          { id: 6, text: '중립', tone: 'neutral' },
+          { id: 6, text: '네임드', tone: 'named' },
+          { id: 7, text: '돌연변이', tone: 'mutation' },
+          { id: 8, text: '중립', tone: 'neutral' },
         ]}
         onDismiss={onDismiss}
       />,
@@ -67,7 +69,9 @@ describe('FloatingToastLayer', () => {
     expect(statuses[2].className).toContain('border-danger');
     expect(statuses[3].className).toContain('border-guild');
     expect(statuses[4].className).toContain('border-epic');
-    expect(statuses[5].className).toContain('border-line');
+    expect(statuses[5].className).toContain('border-named');
+    expect(statuses[6].className).toContain('border-mutation');
+    expect(statuses[7].className).toContain('border-line');
   });
 
   it('PC는 최대 3개, 모바일(maxVisible=2)은 최대 2개까지 표시한다', () => {

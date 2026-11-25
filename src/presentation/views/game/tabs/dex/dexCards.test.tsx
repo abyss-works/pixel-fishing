@@ -31,6 +31,7 @@ describe('도감 네임드 카드', () => {
     const name = screen.getByText(named.name, { selector: 'b' });
     const status = screen.getByText('토벌');
     expect(name.className).toContain('text-center');
+    expect(name.className).toContain('text-named');
     expect(status.className).toContain('text-center');
     expect(name.compareDocumentPosition(status) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });

@@ -31,7 +31,7 @@ export function HighlightRarityText({ text }: { text: string }) {
     nodes.push(
       grade
         ? <span key={idx} data-rarity={grade} className="text-(--rarity-color)">{word}</span>
-        : <span key={idx} className="text-epic">{word}</span>,
+        : <span key={idx} className={word === '네임드' ? 'text-named' : 'text-mutation'}>{word}</span>,
     );
     cursor = idx + word.length;
   }

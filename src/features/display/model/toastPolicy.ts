@@ -1,7 +1,7 @@
 // 시스템 로그 기반 +α 플로팅 토스트 미러링 정책(순수 모델).
 // 모든 시스템 이벤트는 예외 없이 먼저 MessageLog에 기록되고, 이 정책이 플로팅 토스트 미러링 여부·우선순위·중복 억제를 결정한다.
 
-export type ToastTone = 'gold' | 'accent' | 'danger' | 'guild' | 'epic' | 'neutral';
+export type ToastTone = 'gold' | 'accent' | 'danger' | 'guild' | 'epic' | 'named' | 'mutation' | 'neutral';
 export type LogTone = 'info' | 'gold' | 'warn';
 export type ToastPriority = 0 | 1 | 2 | 3;
 export type ToastTier = 'A' | 'B' | 'C';
@@ -84,7 +84,7 @@ export const MAX_TOAST_MOBILE = 2;
 export const TOAST_POLICY: Record<SystemEventKind, ToastRule> = {
   // Tier A
   'catch.legendaryOrFirstVariant': { tier: 'A', defaultTone: 'gold', priority: 1, ttlMs: TTL_BY_PRIORITY[1] },
-  'catch.encounterTicket': { tier: 'A', defaultTone: 'epic', priority: 1, ttlMs: TTL_BY_PRIORITY[1] },
+  'catch.encounterTicket': { tier: 'A', defaultTone: 'named', priority: 1, ttlMs: TTL_BY_PRIORITY[1] },
   'catch.rejected': { tier: 'A', defaultTone: 'danger', priority: 0, ttlMs: TTL_BY_PRIORITY[0] },
   'dex.spotCompleted': { tier: 'A', defaultTone: 'gold', priority: 1, ttlMs: TTL_BY_PRIORITY[1] },
   'achievement.unlockable': {
@@ -205,6 +205,8 @@ export function registerNoticeSink(sink: NoticeSink, handler: (input: SystemNoti
 const TOAST_TO_LOG_TONE: Record<ToastTone, LogTone> = {
   gold: 'gold',
   epic: 'gold',
+  named: 'gold',
+  mutation: 'gold',
   accent: 'info',
   guild: 'info',
   neutral: 'info',

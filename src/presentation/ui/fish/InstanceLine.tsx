@@ -39,7 +39,7 @@ function BestMark({ on }: { on: boolean | undefined }) {
 
 function VariantMark({ on }: { on: boolean }) {
   return on
-    ? <span className="text-epic leading-none" role="img" aria-label="돌연변이"><PixelIcon glyph="sparkle" size={12} /></span>
+    ? <span className="text-mutation leading-none" role="img" aria-label="돌연변이"><PixelIcon glyph="sparkle" size={12} /></span>
     : <span />;
 }
 
