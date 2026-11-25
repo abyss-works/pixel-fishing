@@ -890,7 +890,7 @@ describe('R22: 도움말 탭', () => {
     render(<App />);
     clickTab('도움말');
     const help = document.body.textContent ?? '';
-    for (const topic of ['키보드 단축키', 'Shift + Tab', '자물쇠', '목록 ↔ 카드', '계정 관리', '새로고침']) {
+    for (const topic of ['키보드 단축키', 'Shift + Tab', '자물쇠', '목록과 카드', '계정 관리', '새로고침']) {
       expect(help, topic).toContain(topic);
     }
   });
@@ -901,7 +901,7 @@ describe('R22: 도움말 탭', () => {
     clickTab('도움말');
     const help = document.body.textContent ?? '';
     for (const topic of ['바다와 항해', '세계지도', '낮과 밤', '바운티 헌팅', '완료를 눌러', '네임드 토벌', '흔적', '추적', '조우', '유물',
-      '미끼', 'Esc', '물고기 그래픽', '최근 소식 다시 보기', '닉네임', '도움말 마지막 갱신']) {
+      '미끼', 'Esc', '물고기 그래픽', '최근 소식 다시 보기', '닉네임', '오늘의 운세', '물약', '여객선']) {
       expect(help, topic).toContain(topic);
     }
     // 정본에서 쓰지 않는 말

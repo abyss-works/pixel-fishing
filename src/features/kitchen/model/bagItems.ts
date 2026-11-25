@@ -12,7 +12,7 @@ import { activePotionsOf } from '../../../game/rules/fortune';
 import type { GameState } from '../../../game/rules/logic';
 import { canUsePotion } from '../../../game/rules/rules';
 import type { RuleCheck } from '../../../game/rules/rules';
-import { GAME_DAY_RESET_TEXT } from '../../../game/rules/time';
+import { josa } from '../../../shared/lib/josa';
 import { facilityGuestAllowed, facilityProgress, menuLock, progressNote } from '../../display/model/menuLock';
 import type { AccountLockState } from '../../display/model/menuLock';
 import { energyLabel } from './energy';
@@ -28,13 +28,13 @@ export const NO_ITEMS_TEXT = '가진 아이템이 없어요.';
 /** 묶음 소제목의 점선 툴팁 - 그 묶음이 무엇이고 어디서 얻고 쓰는지 */
 export const ITEM_GROUP_HINT = {
   energy: '물고기 한 마리에서 그 등급의 생명의 기운 하나를 얻어요.\n기운 얻기는 집 궤짝이나 항구 어시장에서 할 수 있어요.',
-  lunch: '먹기를 누르면 도시락 슬롯에 들어가요.',
-  bait: '쓰기를 누르면 미끼 슬롯에 들어가요.',
-  potion: `사용을 누르면 ${GAME_DAY_RESET_TEXT}까지 모든 운 배율이 올라요.`,
+  lunch: '먹기를 누르면 바로 효과가 시작돼요.',
+  bait: '쓰기를 누르면 미끼 효과가 켜져요.',
+  potion: '마시면 하루 동안 모든 행운 효과가 올라요.',
 } as const;
 /** 물약 적용 안내 문구 */
 export const potionUseNoticeText = (potionName: string): string =>
-  `${potionName} 효과가 ${GAME_DAY_RESET_TEXT}까지 적용돼요.`;
+  `${potionName}${josa(potionName, '을/를')} 마셨어요. 하루 동안 이어져요.`;
 /** 아이템 섹션의 묶음 순서와 소제목 - 잠긴 자리와 열린 섹션이 같은 순서를 쓴다 */
 export const ITEM_GROUPS = [
   { key: 'lunch', title: '도시락' },
@@ -80,8 +80,25 @@ export interface PotionRow {
 
 export type ItemSectionView =
   /** 요리를 쓸 수 없는 상태(해금 전, 게스트). empty는 빈 상태 안내 줄, lines는 잠긴 칸의 툴팁 줄이다 */
-  | { state: 'locked'; empty: string[]; lines: string[]; potions: PotionRow[]; potionLock: string[] | null }
-  | { state: 'open'; energy: EnergyCell[]; lunch: ItemRow[]; bait: ItemRow[]; potions: PotionRow[]; potionLock: string[] | null; empty: boolean };
+  | {
+    state: 'locked';
+    empty: string[];
+    lines: string[];
+    energy: EnergyCell[];
+    lunch: ItemRow[];
+    bait: ItemRow[];
+    potions: PotionRow[];
+    potionLock: string[] | null;
+  }
+  | {
+    state: 'open';
+    energy: EnergyCell[];
+    lunch: ItemRow[];
+    bait: ItemRow[];
+    potions: PotionRow[];
+    potionLock: string[] | null;
+    empty: boolean;
+  };
 
 export function selectItemSection(game: GameState, now: string, account: AccountLockState): ItemSectionView {
   const activePotionIds = new Set(activePotionsOf(game.potions, now).map(p => p.id));
@@ -94,14 +111,6 @@ export function selectItemSection(game: GameState, now: string, account: Account
     usable: canUsePotion(game, potion.id, now, account !== 'account').ok,
   }));
 
-  const progress = facilityProgress('kitchen', game.boat);
-  const lock = menuLock({ account, guestAllowed: facilityGuestAllowed('kitchen'), feature: '부엌', progress });
-  if (lock.kind !== 'none') {
-    const empty = lock.kind === 'progress'
-      ? [NO_ITEMS_TEXT, ...progressNote(COOKING_UNLOCK_BOAT, '부엌에서 도시락과 미끼를 만들 수 있어요.')]
-      : [NO_ITEMS_TEXT];
-    return { state: 'locked', empty, lines: lock.lines, potions, potionLock };
-  }
   const items = settleCooking(game, now).items;
   const activeRemainingMs = new Map<string, number>();
   for (const k of ['lunch', 'bait', 'bait2'] as const) {
@@ -126,6 +135,15 @@ export function selectItemSection(game: GameState, now: string, account: Account
     { id: ENERGY_ITEM_IDS[grade], grade, label: energyLabel(grade), stored: items[ENERGY_ITEM_IDS[grade]] ?? 0 }));
   const lunch = rows('lunch');
   const bait = rows('bait');
+
+  const progress = facilityProgress('kitchen', game.boat);
+  const lock = menuLock({ account, guestAllowed: facilityGuestAllowed('kitchen'), feature: '부엌', progress });
+  if (lock.kind !== 'none') {
+    const empty = lock.kind === 'progress'
+      ? [NO_ITEMS_TEXT, ...progressNote(COOKING_UNLOCK_BOAT, '부엌에서 도시락과 미끼를 만들 수 있어요.')]
+      : [NO_ITEMS_TEXT];
+    return { state: 'locked', empty, lines: lock.lines, energy, lunch, bait, potions, potionLock };
+  }
   const empty = lunch.every(r => !isOwnedOrActiveItem(r))
     && bait.every(r => !isOwnedOrActiveItem(r))
     && energy.every(e => e.stored === 0)
@@ -149,9 +167,9 @@ export interface OpenItemLists {
   empty: boolean;
 }
 
-/** 열린 아이템 섹션에서 보유 중만 보기 토글 상태에 맞는 목록을 돌려준다 */
+/** 아이템 섹션에서 보유 중만 보기 토글 상태에 맞는 목록을 돌려준다 */
 export function filterItemSection(
-  view: Extract<ItemSectionView, { state: 'open' }>,
+  view: ItemSectionView,
   ownedOnly: boolean,
 ): OpenItemLists {
   if (!ownedOnly) {

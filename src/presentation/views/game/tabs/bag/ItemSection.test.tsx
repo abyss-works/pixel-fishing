@@ -103,8 +103,8 @@ describe('아이템 섹션 목록', () => {
 
   it('물약은 배 해금 전 계정에서도 열려 있고, 사용하면 usePotion 액션과 안내를 보낸다', () => {
     const { dispatch, setToast } = show(game({ boat: 0, items: { 'luck-small': 2 } }));
-    expect(screen.getByRole('group', { name: '도시락, 미끼, 생명의 기운' })).toBeInTheDocument();
     expect(screen.getByText('작은 행운 물약')).toBeInTheDocument();
+    expect(screen.getByText('하루 동안')).toBeInTheDocument();
     expect(screen.getByText('×2')).toBeInTheDocument();
 
     fireEvent.mouseEnter(screen.getByText('작은 행운 물약'));
@@ -114,7 +114,7 @@ describe('아이템 섹션 목록', () => {
     expect(btn).toBeEnabled();
     fireEvent.click(btn);
     expect(dispatch).toHaveBeenCalledWith({ type: 'usePotion', id: 'luck-small' });
-    expect(setToast).toHaveBeenCalledWith('작은 행운 물약 효과가 한국 시간 새벽 4시까지 적용돼요.');
+    expect(setToast).toHaveBeenCalledWith('작은 행운 물약을 마셨어요. 하루 동안 이어져요.');
   });
 
   it('물약은 이미 사용 중이면 사용 중 비활성 버튼이고, 미보유면 사용 버튼이 비활성이다', () => {
@@ -151,30 +151,30 @@ describe('묶음 순서', () => {
   // 소제목은 모두 점선 툴팁이거나 글자이고, 섹션 본문에서 이 이름들이 나타나는 순서가 곧 묶음 순서다
   const order = (container: HTMLElement): string[] => {
     const text = container.textContent ?? '';
-    return ['도시락', '미끼', '생명의 기운'].map(n => [n, text.indexOf(n)] as const)
+    return ['도시락', '미끼', '생명의 기운', '물약'].map(n => [n, text.indexOf(n)] as const)
       .filter(([, i]) => i >= 0).sort((a, b) => a[1] - b[1]).map(([n]) => n);
   };
 
-  it('해금 전 잠금 자리와 해금 뒤 섹션은 도시락, 미끼, 생명의 기운 순서로 같다', () => {
+  it('해금 전 잠금 자리와 해금 뒤 섹션은 도시락, 미끼, 생명의 기운, 물약 순서로 같다', () => {
     const own = { 'cook-lunch-bite': 1, 'cook-bait-rare': 1, [ENERGY_ITEM_IDS.common]: 1 };
     const opened = render(<ItemSection game={game({ items: own })} accountState="account" dispatch={vi.fn()} setToast={vi.fn()} />);
     const openedOrder = order(opened.container);
     cleanup();
     const locked = render(<ItemSection game={game({ boat: COOKING_UNLOCK_BOAT - 1 })} accountState="account" dispatch={vi.fn()} setToast={vi.fn()} />);
-    // 잠금 상태의 빈 안내 문장에 도시락, 미끼 말이 앞서 나오므로 잠금 자리(그룹) 안에서만 센다
-    const group = within(locked.container).getByRole('group', { name: '도시락, 미끼, 생명의 기운' });
-    expect(order(group)).toEqual(['도시락', '미끼', '생명의 기운']);
-    expect(openedOrder).toEqual(['도시락', '미끼', '생명의 기운']);
+    const lockedOrder = order(locked.container);
+    expect(lockedOrder).toEqual(['도시락', '미끼', '생명의 기운', '물약']);
+    expect(openedOrder).toEqual(['도시락', '미끼', '생명의 기운', '물약']);
   });
 });
 
 describe('먹기와 쓰기', () => {
   const own = { 'cook-lunch-bite': 1, 'cook-lunch-rare': 1, 'cook-bait-mutation': 1 };
 
-  it('슬롯이 비어 있으면 확인 없이 eat 액션을 보낸다', () => {
-    const { dispatch } = show(game({ items: own }));
+  it('슬롯이 비어 있으면 확인 없이 eat 액션을 보내고 조사에 맞는 사용 안내를 알린다', () => {
+    const { dispatch, setToast } = show(game({ items: own }));
     fireEvent.click(screen.getByRole('button', { name: '사프란 미끼(특수) 쓰기' }));
     expect(dispatch).toHaveBeenCalledWith({ type: 'eat', item: 'cook-bait-mutation' });
+    expect(setToast).toHaveBeenCalledWith('사프란 미끼(특수)를 썼어요.');
     expect(screen.queryByText('미끼 바꾸기')).not.toBeInTheDocument();
   });
 
@@ -265,7 +265,7 @@ describe('먹기와 쓰기', () => {
 });
 
 describe('해금 전과 게스트', () => {
-  it('해금 전 계정 사용자는 빈 상태 세 줄과 잠금 자리를 본다', () => {
+  it('해금 전 계정 사용자도 보유 중만 보기 토글과 전체 플레이스홀더 카드·잠금 툴팁을 본다', () => {
     show(game({ boat: COOKING_UNLOCK_BOAT - 1 }));
     const note = screen.getByText('가진 아이템이 없어요.').parentElement!;
     expect([...note.children].map(el => el.textContent)).toEqual([
@@ -273,13 +273,23 @@ describe('해금 전과 게스트', () => {
       '인도양 항로가 열리면 부엌에서 도시락과 미끼를 만들 수 있어요.',
       '인도양 항로는 증기선(5단계)부터 열려요.',
     ]);
-    expect(screen.getByRole('group', { name: '도시락, 미끼, 생명의 기운' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '보유 중만 보기' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getAllByRole('button', { name: /먹기$/ })).toHaveLength(5);
+    expect(screen.getAllByRole('button', { name: /쓰기$/ })).toHaveLength(5);
+    expect(screen.getByRole('button', { name: '가루디야 먹기' })).toBeDisabled();
+    expect(screen.getByRole('group', { name: '생명의 기운 잠김' })).toHaveTextContent('인도양 항로가 열리면 부엌을 쓸 수 있어요.');
+
+    // 보유 중만 보기를 켜면 미보유 플레이스홀더를 숨기고 빈 안내만 남긴다
+    fireEvent.click(screen.getByRole('button', { name: '보유 중만 보기' }));
+    expect(screen.getByText('가진 아이템이 없어요.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /먹기|쓰기/ })).not.toBeInTheDocument();
   });
 
-  it('게스트는 한 줄 빈 상태이고 잠금 줄이 게스트 잠금이다', () => {
+  it('게스트는 한 줄 빈 상태와 전체 플레이스홀더 카드·게스트 잠금 툴팁을 본다', () => {
     show(game(), 'guest');
     expect(screen.getByText('가진 아이템이 없어요.').parentElement!.children).toHaveLength(1);
-    expect(screen.getByRole('group', { name: '도시락, 미끼, 생명의 기운' })).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
+    expect(screen.getByRole('button', { name: '보유 중만 보기' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '가루디야 먹기' })).toBeDisabled();
+    expect(screen.getByRole('group', { name: '생명의 기운 잠김' })).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
   });
 });

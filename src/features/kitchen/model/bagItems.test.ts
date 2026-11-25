@@ -15,7 +15,7 @@ const at = (ms: number): string => new Date(Date.parse(T0) + ms).toISOString();
 const seed = (over: Partial<GameState> = {}): GameState => ({ ...newState(), boat: COOKING_UNLOCK_BOAT, ...over });
 
 describe('아이템 섹션: 해금 전과 게스트', () => {
-  it('해금 전 계정 사용자는 빈 상태 세 줄과 진행 조건 잠금 줄을 받는다', () => {
+  it('해금 전 계정 사용자는 빈 상태 세 줄, 진행 조건 잠금 줄과 함께 전체 플레이스홀더 항목을 받는다', () => {
     const v = selectItemSection(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), T0, 'account');
     expect(v.state).toBe('locked');
     if (v.state !== 'locked') return;
@@ -25,6 +25,11 @@ describe('아이템 섹션: 해금 전과 게스트', () => {
       '인도양 항로는 증기선(5단계)부터 열려요.',
     ]);
     expect(v.lines).toEqual(['인도양 항로가 열리면 부엌을 쓸 수 있어요.', '인도양 항로는 증기선(5단계)부터 열려요.']);
+    expect(v.lunch).toHaveLength(5);
+    expect(v.bait).toHaveLength(5);
+    expect(v.energy).toHaveLength(4);
+    expect(v.potions).toHaveLength(1);
+    expect(filterItemSection(v, true)).toEqual({ lunch: [], bait: [], energy: [], potions: [], empty: true });
   });
 
   it('게스트는 해금 전후 모두 한 줄 빈 상태와 게스트 잠금 줄이다', () => {
