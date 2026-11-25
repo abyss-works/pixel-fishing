@@ -115,9 +115,12 @@ describe('BagTab - 유물 섹션 전체 목록·미보유·보유 중만 보기'
     expect(sargasso.getByText('미끼 칸 +1칸')).toBeInTheDocument();
     expect(sargasso.getByText('미끼 지속 시간 −50%')).toBeInTheDocument();
     const mirror = within(screen.getByRole('button', { name: /마미 와타의 거울/ }));
-    expect(mirror.getByText((_, el) => el?.tagName === 'SPAN' && el.textContent === '네임드 토벌 하루 +1번')).toBeInTheDocument();
-    expect(mirror.getByText((_, el) => el?.tagName === 'SPAN' && el.textContent === '네임드 토벌 골드 −30%')).toBeInTheDocument();
-    expect(mirror.getAllByText('네임드')[0]).toHaveClass('text-epic');
+    const bonusLine = mirror.getByText('네임드 토벌 하루 +1번');
+    const penaltyLine = mirror.getByText('네임드 토벌 골드 −30%');
+    expect(bonusLine).toHaveClass('text-accent');
+    expect(penaltyLine).toHaveClass('text-danger');
+    expect(bonusLine.querySelector('.text-epic')).toBeNull();
+    expect(penaltyLine.querySelector('.text-epic')).toBeNull();
   });
 
   it('기본 꺼짐 상태에서는 유물 8종 전체를 보이고 미보유는 비활성 행으로 이름·구역·등급만 보이며 눌러도 상세 창이 열리지 않는다', () => {

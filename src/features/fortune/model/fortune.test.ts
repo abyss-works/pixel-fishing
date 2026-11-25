@@ -190,14 +190,20 @@ describe('운세 월간 달력 파생 로직', () => {
       f('gold', 3, '2026-10-12'),
       f('shadow', 5, '2026-10-28'),
     ];
-    // 현재 월이면 오늘을 기본 선택
-    expect(resolveSelectedFortuneDay('2026-11', [], '2026-11-25')).toBe('2026-11-25');
+    // 기록이 없는 달이면 null (현재 월이어도 오늘 기록이 없으면 null)
+    expect(resolveSelectedFortuneDay('2026-11', [], '2026-11-25')).toBeNull();
+    // 현재 월에 오늘 기록이 있으면 오늘을 기본 선택
+    expect(resolveSelectedFortuneDay('2026-11', [f('fish', 5, '2026-11-20'), f('gold', 3, '2026-11-25')], '2026-11-25')).toBe('2026-11-25');
+    // 현재 월이지만 오늘 기록이 없고 이전 기록만 있으면 마지막 기록일을 기본 선택
+    expect(resolveSelectedFortuneDay('2026-11', [f('fish', 5, '2026-11-20')], '2026-11-25')).toBe('2026-11-20');
     // 과거 월이면 마지막 기록일을 기본 선택
     expect(resolveSelectedFortuneDay('2026-10', records, '2026-11-25')).toBe('2026-10-28');
     // 빈 과거 월이면 null
     expect(resolveSelectedFortuneDay('2026-09', [], '2026-11-25')).toBeNull();
-    // 같은 달 안에서 사용자가 선택한 과거/오늘 날짜가 있으면 유지
+    // 같은 달 안에서 사용자가 선택한 기록 날짜가 있으면 유지
     expect(resolveSelectedFortuneDay('2026-10', records, '2026-11-25', '2026-10-12')).toBe('2026-10-12');
+    // 기록이 없는 과거 날짜를 선택값으로 넘기면 기본 기록일로 대체
+    expect(resolveSelectedFortuneDay('2026-10', records, '2026-11-25', '2026-10-13')).toBe('2026-10-28');
     // 다른 달에서 넘어온 선택값은 새 달의 기본 선택으로 대체
     expect(resolveSelectedFortuneDay('2026-10', records, '2026-11-25', '2026-11-25')).toBe('2026-10-28');
 

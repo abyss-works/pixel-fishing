@@ -338,12 +338,12 @@ function usesAppLayerModal(source: string): boolean {
 const tokens = Object.fromEntries([...css.matchAll(/--z-([a-z-]+):\s*(\d+);/g)].map(m => [m[1], Number(m[2])]));
 
 describe('화면 층 - z 토큰 순서', () => {
-  it('아래부터 stage-hud, stage-status, stage-card, catch-fx, chrome, menu-row, stage-modal, tabs, app-modal, blocker, toast, veil, tooltip, devtools 엄격 오름차순이다', () => {
+  it('아래부터 stage-hud, stage-status, stage-card, catch-fx, chrome, menu-row, stage-modal, toast, tabs, app-modal, blocker, veil, tooltip, devtools 엄격 오름차순이다', () => {
     const order = [
       'stage-hud', 'stage-status', 'stage-card', 'catch-fx',
-      'chrome', 'menu-row', 'stage-modal',
+      'chrome', 'menu-row', 'stage-modal', 'toast',
       'tabs', 'app-modal', 'blocker',
-      'toast', 'veil', 'tooltip', 'devtools',
+      'veil', 'tooltip', 'devtools',
     ];
     const values = order.map(name => tokens[name]);
     expect(values.every(v => typeof v === 'number')).toBe(true);
@@ -351,12 +351,11 @@ describe('화면 층 - z 토큰 순서', () => {
     expect(new Set(values).size).toBe(values.length);
   });
 
-  it('창 위 1줄 알림(toast)은 앱 모달·차단기·탭 줄·시트보다 위이고 전환 덮개와 툴팁보다 아래다', () => {
-    expect(tokens['toast']).toBeGreaterThan(tokens['blocker']);
-    expect(tokens['toast']).toBeGreaterThan(tokens['app-modal']);
-    expect(tokens['toast']).toBeGreaterThan(tokens['tabs']);
-    expect(tokens['toast']).toBeLessThan(tokens['veil']);
-    expect(tokens['toast']).toBeLessThan(tokens['tooltip']);
+  it('스테이지 위 1줄 알림(toast)은 스테이지 창보다 위이고 탭 줄·시트·앱 모달·차단기보다 아래다', () => {
+    expect(tokens['toast']).toBeGreaterThan(tokens['stage-modal']);
+    expect(tokens['toast']).toBeLessThan(tokens['tabs']);
+    expect(tokens['toast']).toBeLessThan(tokens['app-modal']);
+    expect(tokens['toast']).toBeLessThan(tokens['blocker']);
   });
 
   it('스테이지 창은 채팅·헤더·펼친 메뉴보다 위이고 탭 줄·시트보다 아래다', () => {
@@ -632,10 +631,9 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
     expect(sectionTag).toContain('contents');
   });
 
-  it('fixed 위치 지정은 앱 셸·모달 백드롭·시트·전환 덮개·토스트·툴팁·개발도구 화이트리스트만 허용한다', () => {
+  it('fixed 위치 지정은 앱 셸·모달 백드롭·시트·전환 덮개·툴팁·개발도구 화이트리스트만 허용한다', () => {
     const FIXED_WHITELIST = new Set([
       'ui/Modal.tsx',
-      'ui/FloatingToastLayer.tsx',
       'ui/TooltipBubble.tsx',
       'layouts/game-stage/FerryVeil.tsx',
       'layouts/sidebar/index.tsx',
@@ -658,6 +656,20 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
       .map(f => f.path)
       .sort();
     expect(users).toEqual([...FIXED_WHITELIST].sort());
+  });
+
+  it('FloatingToastLayer는 fixed가 아닌 absolute로 GameStageLayout 안에 놓여 사이드바와 앱 창을 가리지 않는다', () => {
+    const toastSrc = src('ui/FloatingToastLayer.tsx');
+    expect(toastSrc).toContain('absolute');
+    expect(toastSrc).not.toMatch(/(?<![\w-])fixed(?![\w-])/);
+
+    const gameViewSrc = src('views/game/GameView.tsx');
+    const stageStart = gameViewSrc.indexOf('<GameStageLayout>');
+    const stageEnd = gameViewSrc.indexOf('</GameStageLayout>');
+    const toastAt = gameViewSrc.indexOf('<FloatingToastLayer');
+    expect(stageStart).toBeGreaterThan(-1);
+    expect(toastAt).toBeGreaterThan(stageStart);
+    expect(toastAt).toBeLessThan(stageEnd);
   });
 });
 

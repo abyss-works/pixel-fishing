@@ -33,9 +33,9 @@ export const SETTING_PROMPTS: readonly SettingPrompt[] = [
     title: '물고기 그래픽',
     description: '물고기를 어떤 그림으로 볼지 골라 주세요.\n나중에 설정 탭의 화면 항목에서 바꿀 수 있어요.',
     options: [
-      { value: 'v1', label: '기본 그림', badge: '기본',
+      { value: 'v1', label: 'v1', sub: 'legacy', badge: '기본',
         description: '지금까지 보던 그림이에요.' },
-      { value: 'v2', label: '새 픽셀 그림', badge: '실험',
+      { value: 'v2', label: 'v2', sub: 'beta', badge: '실험',
         description: '새로 그린 픽셀 그래픽이에요.\n헤엄치고 물 위로 튀어오르지만, 일부 물고기는 모양이 실제와 다를 수 있어요.' },
     ],
   },

@@ -55,9 +55,9 @@ export const potionUseNoticeText = (potionName: string): string =>
   `${potionName}${josa(potionName, '을/를')} 마셨어요. 하루 동안 이어져요.`;
 /** 아이템 섹션의 묶음 순서와 소제목 - 잠긴 자리와 열린 섹션이 같은 순서를 쓴다 */
 export const ITEM_GROUPS = [
+  { key: 'energy', title: '생명의 기운' },
   { key: 'lunch', title: '도시락' },
   { key: 'bait', title: '미끼' },
-  { key: 'energy', title: '생명의 기운' },
 ] as const;
 const SWAP_WARNING = '지금 효과의 남은 시간은 사라져요.';
 

@@ -46,4 +46,14 @@ describe('도감 상세의 크기 순위', () => {
     await new Promise(r => setTimeout(r, 0));
     expect(screen.queryByText('크기 순위')).not.toBeInTheDocument();
   });
+
+  it('형태 전환 시 로어 문단 높이가 흔들리지 않도록 최소 높이를 유지한다', () => {
+    const { container } = render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <DexDetail fish={fish} game={game} onClose={() => {}} />
+      </QueryClientProvider>,
+    );
+    const loreEl = container.querySelector('p[class*="leading-"]');
+    expect(loreEl?.className).toContain('min-h-');
+  });
 });

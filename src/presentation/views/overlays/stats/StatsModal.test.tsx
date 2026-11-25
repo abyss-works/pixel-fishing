@@ -121,8 +121,9 @@ describe('StatsModal(스탯창)', () => {
 
     expect(screen.getByText('항해 속도 +10.3%')).toBeTruthy();
     expect(screen.getByText('입질 대기 −10.3%')).toBeTruthy();
-    expect(bonusCell('네임드 결투 가속 −10.3%')).toBeTruthy();
-    expect(within(bonusCell('네임드 결투 가속 −10.3%')).getByText('네임드')).toHaveClass('text-epic');
+    const namedDuels = bonusCell('네임드 결투 가속 −10.3%');
+    expect(namedDuels).toBeTruthy();
+    expect(namedDuels.querySelector('.text-epic')).toBeNull();
     expect(screen.queryByText(/보유 유물 효과 \+3%/)).toBeNull();
 
     // 툴팁에 기본 효과, 보유 유물 효과, 적용 효과가 표시된다
@@ -157,10 +158,10 @@ describe('StatsModal(스탯창)', () => {
     show(game({ fortune: { day: today, kind: 'fish', index: 5 } }));
     fireEvent.click(screen.getByRole('button', { name: '보너스' }));
     const cell = screen.getByText((_, el) => el?.tagName === 'TD' && el.textContent === '희귀 이상 출현 확률 +5%p');
-    expect(within(cell).getByText('희귀')).toHaveAttribute('data-rarity', 'rare');
+    expect(cell.querySelector('[data-rarity]')).toBeNull();
     const row = cell.closest('tr')!;
     expect(within(row).getByText('오늘의 운세')).toBeTruthy();
-    fireEvent.mouseEnter(within(cell).getByText('희귀'));
+    fireEvent.mouseEnter(screen.getByText('희귀 이상 출현 확률 +5%p'));
     const tip = screen.getByRole('tooltip');
     expect(tip).toHaveTextContent('희귀 이상 출현 확률 행운 효과가 올라가요.');
     expect(within(tip).getByText('희귀')).toHaveAttribute('data-rarity', 'rare');
@@ -178,7 +179,7 @@ describe('StatsModal(스탯창)', () => {
 
     const namedCell = screen.getByText((_, el) => el?.tagName === 'TD' && el.textContent === '네임드 만날 확률 +5%p');
     expect(namedCell).toBeTruthy();
-    expect(within(namedCell).getByText('네임드')).toHaveClass('text-epic');
+    expect(namedCell.querySelector('.text-epic')).toBeNull();
     expect(screen.getByText('판매가 +5%p')).toBeTruthy();
 
     fireEvent.mouseEnter(screen.getByText('판매가 +5%p'));

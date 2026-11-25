@@ -1067,4 +1067,62 @@ describe('UI 시스템 가드', () => {
     expect(dexDetailSrc).toMatch(/<RankList\b/);
     expect(dexDetailSrc).toMatch(/<RankMeBar\b/);
   });
+
+  it('선택 가능 상세(운세 달력)와 다단계·형태 전환 창(소식·도감 상세)은 고정·최소 높이로 전환 시 레이아웃이 밀리지 않는다', () => {
+    const fortuneSrc = stripComments(presentationFiles.find(f => f.path === 'views/overlays/fortune/FortuneCalendarModal.tsx')!.src);
+    const whatsNewSrc = stripComments(presentationFiles.find(f => f.path === 'views/overlays/whats-new/WhatsNewModal.tsx')!.src);
+    const dexDetailSrc = stripComments(presentationFiles.find(f => f.path === 'views/game/tabs/dex/DexDetail.tsx')!.src);
+
+    expect(fortuneSrc).toMatch(/<Modal\b[^>]*height=\{/);
+    expect(fortuneSrc).toMatch(/<ModalCard\b[^>]*fixed\b/);
+    expect(fortuneSrc).toContain('grid-rows-6');
+    expect(fortuneSrc).toMatch(/disabled=\{cell\.isFuture \|\| !f\}/);
+    expect(fortuneSrc).toMatch(/aria-label="선택한 날짜 운세 상세"/);
+    expect(fortuneSrc).toMatch(/h-\[\d+px\][^>]*aria-label="선택한 날짜 운세 상세"/);
+
+    expect(whatsNewSrc).toMatch(/<Modal\b[^>]*height=\{/);
+    expect(whatsNewSrc).toMatch(/<ModalCard\b[\s\S]*?\bfixed\b/);
+    expect(whatsNewSrc).toMatch(/aria-hidden="true"/);
+
+    expect(dexDetailSrc).toMatch(/<LoreParagraph[^>]*min-h-/);
+    expect(dexDetailSrc).toMatch(/<p[^>]*min-h-/);
+  });
+
+  it('시맨틱 색이 걸린 줄 안에 HighlightRarityText를 중첩하지 않고 Tip 경고 첫 줄도 원문을 그대로 쓴다', () => {
+    const semanticLineWithHighlight = /className=\{?[^>\n]*\btext-(?:accent|danger|gold|guild|epic)\b[^>\n]*\}?[^>]*>[^<\n]*<HighlightRarityText\b/;
+    const semanticBlockWithHighlight = /className=\{?[^>\n]*\btext-(?:accent|danger|gold|guild|epic)\b[^>\n]*\}?[^>]*>[\s\S]{0,160}?<HighlightRarityText\b/;
+    const kvSemanticValueWithHighlight = /value=\{<HighlightRarityText\b[\s\S]{0,120}?valueClassName=\{?[^}\n]*\btext-(?:accent|danger|gold|guild|epic)\b/;
+    const offenders = presentationFiles
+      .filter(f => !isTestFile(f.path))
+      .filter(f => {
+        const clean = stripComments(f.src);
+        return semanticLineWithHighlight.test(clean)
+          || semanticBlockWithHighlight.test(clean)
+          || kvSemanticValueWithHighlight.test(clean);
+      })
+      .map(f => f.path);
+    expect(offenders).toEqual([]);
+
+    const tipSrc = stripComments(presentationFiles.find(f => f.path === 'ui/Tip.tsx')!.src);
+    expect(tipSrc).toMatch(/status\.tone === 'warn'\s*\?\s*line\s*:\s*highlightText\(line\)/);
+  });
+
+  it('ScrollRow는 hidden·inline-flex 충돌 없이 edge.prev·edge.next 조건부 렌더로 화살표를 표시한다', () => {
+    const scrollRowSrc = stripComments(presentationFiles.find(f => f.path === 'ui/ScrollRow.tsx')!.src);
+    expect(scrollRowSrc).toMatch(/\{edge\.prev\s*&&\s*\(?\s*<ArrowButton\b/);
+    expect(scrollRowSrc).toMatch(/\{edge\.next\s*&&\s*\(?\s*<ArrowButton\b/);
+    expect(scrollRowSrc).not.toMatch(/['"`][^'"`]*(?<![\w-])hidden(?![\w-])[^'"`]*['"`]/);
+  });
+
+  it('ToggleChip이 pressed일 때만 체크 아이콘을 직접 소유하고 호출부는 체크 아이콘을 중복 삽입하지 않는다', () => {
+    const toggleSrc = stripComments(presentationFiles.find(f => f.path === 'ui/ToggleChip.tsx')!.src);
+    expect(toggleSrc).toMatch(/\{pressed\s*&&\s*<PixelIcon\b[^>]*glyph="check"/);
+
+    const toggleBlock = /<ToggleChip\b[\s\S]*?<\/ToggleChip>/g;
+    const callers = presentationFiles
+      .filter(f => !isTestFile(f.path) && f.path !== 'ui/ToggleChip.tsx')
+      .filter(f => [...stripComments(f.src).matchAll(toggleBlock)].some(m => /glyph="check"/.test(m[0])))
+      .map(f => f.path);
+    expect(callers).toEqual([]);
+  });
 });

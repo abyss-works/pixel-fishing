@@ -469,6 +469,9 @@ export default function GameView(props: GameViewProps) {
         {baitRefund.notice && <BaitRefundModal notice={baitRefund.notice} onClose={baitRefund.close} />}
         {fortune.fortune && <FortuneModal fortune={fortune.fortune} onClose={fortune.close} />}
         <TutorialModal seen={game.tutorials} ready={saveReady} after={baitRefund.pending || fortune.pending} dispatch={props.dispatch} />
+        {props.toasts && props.toasts.length > 0 && props.onDismissToast && (
+          <FloatingToastLayer toasts={props.toasts} maxVisible={mobile ? 2 : 3} onDismiss={props.onDismissToast} />
+        )}
       </GameStageLayout>
 
       <GameTabs
@@ -482,9 +485,6 @@ export default function GameView(props: GameViewProps) {
       />
 
       {props.blocker}
-      {props.toasts && props.toasts.length > 0 && props.onDismissToast && (
-        <FloatingToastLayer toasts={props.toasts} maxVisible={mobile ? 2 : 3} onDismiss={props.onDismissToast} />
-      )}
     </div>
   );
 }

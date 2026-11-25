@@ -190,23 +190,22 @@ describe('아이템 섹션 목록', () => {
   });
 });
 
-describe('묶음 순서', () => {
-  // 소제목은 모두 점선 툴팁이거나 글자이고, 섹션 본문에서 이 이름들이 나타나는 순서가 곧 묶음 순서다
-  const order = (container: HTMLElement): string[] => {
-    const text = container.textContent ?? '';
-    return ['도시락', '미끼', '생명의 기운', '물약'].map(n => [n, text.indexOf(n)] as const)
-      .filter(([, i]) => i >= 0).sort((a, b) => a[1] - b[1]).map(([n]) => n);
-  };
+describe('묶음 순서 및 기운 격자', () => {
+  // 소제목은 모두 Subheading(h5)이며, 그 나타나는 순서가 곧 묶음 순서다
+  const order = (container: HTMLElement): string[] =>
+    [...container.querySelectorAll('h5')].map(el => el.textContent?.trim() ?? '').filter(Boolean);
 
-  it('해금 전 잠금 자리와 해금 뒤 섹션은 도시락, 미끼, 생명의 기운, 물약 순서로 같다', () => {
+  it('해금 전 잠금 자리와 해금 뒤 섹션은 생명의 기운, 도시락, 미끼, 물약 순서로 같다', () => {
     const own = { 'cook-lunch-bite': 1, 'cook-bait-rare': 1, [ENERGY_ITEM_IDS.common]: 1 };
     const opened = render(<ItemSection game={game({ items: own })} accountState="account" dispatch={vi.fn()} setToast={vi.fn()} />);
     const openedOrder = order(opened.container);
+    const energyCell = screen.getByRole('group', { name: /생명의 기운\(일반\)/ });
+    expect(energyCell.parentElement?.className).toContain('grid-cols-4');
     cleanup();
     const locked = render(<ItemSection game={game({ boat: COOKING_UNLOCK_BOAT - 1 })} accountState="account" dispatch={vi.fn()} setToast={vi.fn()} />);
     const lockedOrder = order(locked.container);
-    expect(lockedOrder).toEqual(['도시락', '미끼', '생명의 기운', '물약']);
-    expect(openedOrder).toEqual(['도시락', '미끼', '생명의 기운', '물약']);
+    expect(lockedOrder).toEqual(['생명의 기운', '도시락', '미끼', '물약']);
+    expect(openedOrder).toEqual(['생명의 기운', '도시락', '미끼', '물약']);
   });
 });
 
