@@ -186,6 +186,17 @@ describe('도시락 탭과 미끼 탭', () => {
     expect(screen.getByText(`${2 * LUNCH_WAIT_MIN}분`)).toBeInTheDocument();
   });
 
+  it('달빛 미끼의 비수치 효과는 키-값으로 쪼개지 않고 상세 설명 한 줄로 보인다', () => {
+    show(seed({ items: energy(1000) }));
+    fireEvent.click(tab('미끼'));
+    fireEvent.click(screen.getByRole('option', { name: /달빛 미끼/ }));
+    const effectBox = screen.getByText('미끼 효과').parentElement!;
+    expect(within(effectBox).getByText('낮에도 밤 어종이 함께 낚여요.')).toBeInTheDocument();
+    expect(within(effectBox).queryByText('낮에도 출현')).toBeNull();
+    expect(within(effectBox).queryByText('밤 어종 출현')).toBeNull();
+    expect(within(effectBox).getByText('지속 시간')).toBeInTheDocument();
+  });
+
   it('미끼의 조리 시간은 0분 대신 즉시로 보인다', () => {
     show(seed({ items: energy(1000) }));
     fireEvent.click(tab('미끼'));

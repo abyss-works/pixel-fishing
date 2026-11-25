@@ -72,7 +72,11 @@ export default function RecipeTab({ kind, game, now, busy, act, setToast }: {
                   description={view.recipe.description} />
       <Inset className="px-3 py-2.5 flex flex-col gap-1.5">
         <Tip text={recipeEffectNote(kind)} className="self-start text-xs text-text-dim">{EFFECT_TITLE[kind]}</Tip>
-        {view.effects.map(line => (
+        {view.effects.map(line => 'text' in line ? (
+          <p key={line.text} className="min-h-[26px] flex items-center text-xs text-text leading-snug">
+            <HighlightRarityText text={line.text} />
+          </p>
+        ) : (
           <KeyValueRow key={line.label} compact className="h-auto border-t-0"
                        label={<span className="text-text"><HighlightRarityText text={line.label} /></span>}
                        value={line.value} valueClassName="pf-accent text-accent" />

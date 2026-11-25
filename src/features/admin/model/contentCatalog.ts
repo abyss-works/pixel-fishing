@@ -304,10 +304,9 @@ export interface RecipeCostItem {
   amount: number;
 }
 
-export interface RecipeEffectItem {
-  label: string;
-  value: string;
-}
+export type RecipeEffectItem =
+  | { label: string; value: string }
+  | { text: string };
 
 export interface RecipeCatalogItem {
   recipe: Recipe;
@@ -602,7 +601,7 @@ function buildRecipeEffectItems(recipe: Recipe): RecipeEffectItem[] {
   }
   if (e.mutationWeight !== undefined) items.push({ label: '돌연변이 폼 가중치', value: `+${fmtDecimal(e.mutationWeight * 100)}%` });
   if (e.namedWeight !== undefined) items.push({ label: '네임드 조우 가중치', value: `+${fmtDecimal(e.namedWeight * 100)}%` });
-  if (e.nightUnlock === true) items.push({ label: '밤 어종 출현', value: '밤 전용 어종 합류' });
+  if (e.nightUnlock === true) items.push({ text: '낮에도 밤 어종이 함께 낚여요.' });
   return items;
 }
 
@@ -1173,7 +1172,7 @@ export function filterRecipeCatalog(
     }
     return matchesQuery(q, [
       it.id, it.name, it.displayName, it.kindLabel, it.description, it.costSummary,
-      ...it.effectLines.map(e => `${e.label} ${e.value}`),
+      ...it.effectLines.map(e => ('text' in e ? e.text : `${e.label} ${e.value}`)),
     ]);
   });
 }

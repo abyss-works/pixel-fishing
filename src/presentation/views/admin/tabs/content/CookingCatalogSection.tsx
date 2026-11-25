@@ -91,7 +91,7 @@ export default function CookingCatalogSection({
                       </div>
                     </td>
                     <td className="text-xs text-gold whitespace-nowrap">
-                      {r.effectLines.map(e => `${e.label} ${e.value}`).join(' · ')}
+                      {r.effectLines.map(e => ('text' in e ? e.text : `${e.label} ${e.value}`)).join(' · ')}
                     </td>
                     <td className="text-xs text-text-dim min-w-[220px]">
                       <LoreParagraph>{r.description}</LoreParagraph>

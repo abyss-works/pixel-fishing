@@ -217,4 +217,25 @@ describe('TipCard: 구조형 툴팁 위계', () => {
     expect(within(tip).getByText('돌연변이')).toHaveClass('text-epic');
     expect(within(tip).getByText('특수')).toHaveAttribute('data-rarity', 'special');
   });
+
+  it('RecipeEffectTip의 비수치 설명 줄은 2열로 쪼개지 않고 한 줄 전체 폭으로 렌더링한다', () => {
+    render(
+      <Tip
+        text={(
+          <RecipeEffectTip
+            label={<GradeName name="달빛 미끼" grade="special" />}
+            effects={[{ text: '낮에도 밤 어종이 함께 낚여요.' }, { label: '남은 시간', value: '30분' }]}
+            note="챔질해서 낚을 때만 효과가 있어요."
+          />
+        )}
+      >
+        달빛 미끼
+      </Tip>,
+    );
+    fireEvent.mouseEnter(screen.getByText('달빛 미끼'));
+    const tip = screen.getByRole('tooltip');
+    const textRow = within(tip).getByText('낮에도 밤 어종이 함께 낚여요.');
+    expect(textRow.className).not.toContain('justify-between');
+    expect(within(tip).getByText('남은 시간').closest('.justify-between')).not.toBeNull();
+  });
 });

@@ -11,7 +11,7 @@ import Tip, { TipCard, TipList } from '../../../ui/Tip';
 import { artifactEffectLine, artifactEffectValue } from '../../../ui/artifactEffects';
 import { fmtDecimal2 } from '../../../ui/format';
 import { bonusEffectText, bonusEffectValue } from '../../../../features/guild/model/guild';
-import { SLOT_SCOPE } from '../../../../features/kitchen/model/recipes';
+import { SLOT_SCOPE, recipeEffectText } from '../../../../features/kitchen/model/recipes';
 import {
   FORTUNE_SOURCE_HELP,
   FORTUNE_SOURCE_LABEL,
@@ -36,7 +36,7 @@ function effectText(row: BonusRow): string {
   switch (row.source.kind) {
     case 'relic': return artifactEffectLine(row.source.artifact, row.source.effect, row.source.level, row.source.scale) ?? '';
     case 'guild': return bonusEffectText(row.source.bonus, row.source.value);
-    case 'slot': return `${row.source.effect.label} ${row.source.effect.value}`;
+    case 'slot': return recipeEffectText(row.source.effect);
     case 'achievement': return `${row.source.label} ${row.source.value}`;
     case 'fortune': return fortuneBonusText(row.source.fortune);
     case 'potion': {

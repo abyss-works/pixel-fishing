@@ -201,7 +201,9 @@ describe('받는 보너스', () => {
     const at = (ms: number): string => new Date(Date.parse(T0) + ms).toISOString();
     const slotRows = (g: GameState, now = T0) => selectActiveBonuses(g, null, now).filter(b => b.source.kind === 'slot');
     const text = (b: ReturnType<typeof slotRows>[number]) =>
-      b.source.kind === 'slot' ? `${b.source.effect.label} ${b.source.effect.value}` : '';
+      b.source.kind === 'slot'
+        ? ('text' in b.source.effect ? b.source.effect.text : `${b.source.effect.label} ${b.source.effect.value}`)
+        : '';
 
     it('효과가 든 슬롯은 요리 이름을 출처로 효과마다 한 줄, 갈래를 붙여 모은다', () => {
       const g = game({ slots: { lunch: { id: 'cook-lunch-bundle', endsAt: at(3_600_000) }, bait: null } });
@@ -215,6 +217,11 @@ describe('받는 보너스', () => {
     it('네임드 만날 확률은 결투 갈래다', () => {
       const g = game({ slots: { lunch: { id: 'cook-lunch-named', endsAt: at(3_600_000) }, bait: null } });
       expect(slotRows(g).map(b => [b.category, text(b)])).toEqual([['duel', '네임드 만날 확률 +50%']]);
+    });
+
+    it('달빛 미끼의 비수치 효과는 낚시 갈래의 상세 설명 한 줄로 모은다', () => {
+      const g = game({ slots: { lunch: null, bait: { id: 'cook-bait-night', endsAt: at(3_600_000) } } });
+      expect(slotRows(g).map(b => [b.category, text(b)])).toEqual([['fish', '낮에도 밤 어종이 함께 낚여요.']]);
     });
 
     it('도시락은 방치로 낚을 때만, 미끼는 챔질해서 낚을 때만 붙는다고 표시한다', () => {
@@ -303,7 +310,9 @@ describe('받는 보너스', () => {
       },
     });
     const rows = selectActiveBonuses(dual, null, now).filter(b => b.source.kind === 'slot');
-    expect(rows.map(b => b.source.kind === 'slot' ? `${b.source.label}:${b.source.effect.label}` : '')).toEqual([
+    expect(rows.map(b => b.source.kind === 'slot'
+      ? `${b.source.label}:${'text' in b.source.effect ? b.source.effect.text : b.source.effect.label}`
+      : '')).toEqual([
       '롱페퍼 미끼(희귀):희귀 어종 출현',
       '롱페퍼 미끼(희귀):영웅 어종 출현',
       '롱페퍼 미끼(희귀):전설 어종 출현',
