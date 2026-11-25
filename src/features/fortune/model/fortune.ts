@@ -12,12 +12,11 @@ export const FORTUNE_TARGET_BONUS_LABEL: Record<FortuneTarget, string> = {
   named: '네임드 조우 확률',
 };
 
-/** 운세 종류의 표시 묶음 — name은 정식 명칭, bonus는 보너스가 걸리는 대상의 표시명.
- *  target은 규칙의 종류와 대상 짝(FORTUNE_TARGET_OF)을 그대로 가리킨다 */
-export const FORTUNE_KIND: Record<FortuneKind, { name: string; target: FortuneTarget; bonus: string }> = {
-  fish: { name: '풍어운', target: FORTUNE_TARGET_OF.fish, bonus: '희귀 이상 출현 비중' },
-  gold: { name: '재물운', target: FORTUNE_TARGET_OF.gold, bonus: '판매가' },
-  shadow: { name: '그림자 운', target: FORTUNE_TARGET_OF.shadow, bonus: '네임드 조우 확률' },
+/** 운세 종류의 표시 묶음 — name은 정식 명칭, target은 규칙의 종류와 대상 짝(FORTUNE_TARGET_OF)을 그대로 가리킨다 */
+export const FORTUNE_KIND: Record<FortuneKind, { name: string; target: FortuneTarget }> = {
+  fish: { name: '풍어운', target: FORTUNE_TARGET_OF.fish },
+  gold: { name: '재물운', target: FORTUNE_TARGET_OF.gold },
+  shadow: { name: '그림자 운', target: FORTUNE_TARGET_OF.shadow },
 };
 
 /** HUD 효과 칩 툴팁용 운세 3글자 요약 */
@@ -97,31 +96,16 @@ export function fortuneModalRows(fortune: DailyFortune): { label: string; value:
 
 /** 스탯 창 보너스 탭의 "받는 효과" 칸 문구 */
 export function fortuneBonusText(fortune: DailyFortune): string {
-  return `${FORTUNE_KIND[fortune.kind].bonus} ${fmtFortuneMult(fortune.index)}`;
+  return `${FORTUNE_TARGET_BONUS_LABEL[FORTUNE_TARGET_OF[fortune.kind]]} ${fmtFortuneMult(fortune.index)}`;
 }
 
 /** 스탯 창 보너스 탭의 툴팁 문구(무수치) */
 export function fortuneBonusTip(fortune: DailyFortune): string {
-  return `${FORTUNE_KIND[fortune.kind].bonus} 행운 효과가 올라가요.`;
+  return `${FORTUNE_TARGET_BONUS_LABEL[FORTUNE_TARGET_OF[fortune.kind]]} 행운 효과가 올라가요.`;
 }
 
-/** 접속 모달의 효과 안내 문구 */
-export function fortuneEffectNote(fortune: DailyFortune): string {
-  return `오늘 ${FORTUNE_KIND[fortune.kind].bonus} 행운 효과가 ${fmtFortuneMult(fortune.index)} 올라요.`;
-}
-
-/** 지수 칸 수 — 지수의 최댓값(5)만큼 칸을 그리고 지수만큼 채운다 */
+/** 강도 칸 수 — 강도의 최댓값(5)만큼 칸을 그리고 강도만큼 채운다 */
 export const FORTUNE_PIPS = 5;
-
-/** 접속 모달의 초기화 시각 보조 안내 */
-export const FORTUNE_RESET_NOTE = '매일 새벽에 새 운세가 찾아와요.';
-
-/** 접속 모달의 달력 메뉴 안내 */
-export const FORTUNE_MENU_GUIDE_NOTE = '메뉴의 운세 항목에서 지난 달력 기록을 볼 수 있어요.';
-
-/** 운세 달력의 일일 기록 기준 안내 */
-export const FORTUNE_CALENDAR_NOTE = '매일 새벽 이후 첫 접속부터 달력에 기록돼요.';
-
 /** 월간 달력의 요일 머리글 (월요일 시작) */
 export const FORTUNE_WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일'] as const;
 
@@ -136,11 +120,6 @@ export type FortuneCalendarCell =
       isFuture: boolean;
       fortune: DailyFortune | null;
     };
-
-export interface FortuneMonthStats {
-  total: number;
-  byKind: Record<FortuneKind, number>;
-}
 
 export interface FortuneDayDetail {
   day: string;
@@ -240,18 +219,6 @@ export function buildFortuneCalendarCells(
   return cells;
 }
 
-/** 해당 월에 기록된 운세의 총 일수와 종류별 횟수를 집계한다 */
-export function selectFortuneMonthStats(days: readonly DailyFortune[]): FortuneMonthStats {
-  const byKind: Record<FortuneKind, number> = { fish: 0, gold: 0, shadow: 0 };
-  const seen = new Set<string>();
-  for (const d of days) {
-    if (seen.has(d.day)) continue;
-    seen.add(d.day);
-    byKind[d.kind]++;
-  }
-  return { total: seen.size, byKind };
-}
-
 /** 월과 기록을 바탕으로 기본 선택 날짜를 정한다. 기록이 있는 날짜만 선택 가능하며 기록이 없으면 null이다 */
 export function resolveSelectedFortuneDay(
   month: string,
@@ -281,14 +248,6 @@ export function selectFortuneDayDetail(
     isToday: day === todayDay,
     fortune,
   };
-}
-
-/** 접속 모달의 요약 표 줄 — 적용 대상과 행운 효과 */
-export function fortuneSummaryRows(fortune: DailyFortune): { label: string; value: string; accent?: boolean }[] {
-  return [
-    { label: '적용 대상', value: FORTUNE_KIND[fortune.kind].bonus },
-    { label: '행운 효과', value: fmtFortuneMult(fortune.index), accent: true },
-  ];
 }
 
 export interface SellLuckBreakdown {

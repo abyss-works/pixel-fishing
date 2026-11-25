@@ -149,6 +149,25 @@ const nestedScrollCells = (src: string) => {
     .filter(tag => SCROLL_CELL_RE.test(tag) && !/SCROLL_Y_ROWS/.test(tag) && !HEIGHT_CLASS_RE.test(tag)));
 };
 
+/** 고정 높이 ModalCard(fixed) 안에서 바깥 스크롤 칸 안에 또 다른 스크롤 칸을 중첩한 호출부 */
+const FIXED_MODAL_SCROLL_RE = /\bSCROLL_Y(?:_ROWS)?\b|^<TableBox\b|pf-vscroll/;
+const nestedScrollInFixedModal = (src: string) =>
+  openingTagsAt(src, 'ModalCard')
+    .filter(t => /\bfixed\b/.test(t.tag))
+    .flatMap(card => {
+      const cardBody = childrenOf(src, card, 'ModalCard');
+      return openingTagsAt(cardBody, ANY_TAG)
+        .filter(t => FIXED_MODAL_SCROLL_RE.test(t.tag))
+        .filter(outer => !/\/>\s*$/.test(outer.tag))
+        .filter(outer => {
+          const name = outer.tag.match(/^<([A-Za-z][\w.]*)/)?.[1];
+          if (!name) return false;
+          const inner = childrenOf(cardBody, outer, name);
+          return openingTags(inner, ANY_TAG).some(tag => FIXED_MODAL_SCROLL_RE.test(tag));
+        })
+        .map(outer => outer.tag);
+    });
+
 /** 본문이 스크롤하는 ModalCard(fixed가 아닌 카드)의 본문 안에 있는 주 버튼(variant="primary", ConfirmButton) — 확정 버튼은 confirm 자리에 둔다.
  *  높이를 고정한 카드(fixed)는 본문이 스크롤하지 않고 탭 안의 동작 줄이 고정 영역에 있어 대상이 아니다 */
 const PRIMARY_BUTTON = /variant="primary"|^<ConfirmButton/;
@@ -277,11 +296,13 @@ describe('UI 시스템 가드', () => {
   it('본문이 스크롤하는 창 안에는 높이를 정하지 않은 스크롤 칸을 겹치지 않는다 — 앱 모달과 높이를 고정하지 않은 ModalCard', () => {
     expect(screens.filter(f => !NESTED_SCROLL_EXCEPTIONS.has(f.path)).flatMap(f => nestedScrollCells(f.src).map(tag => `${f.path}: ${tag}`))).toEqual([]);
     expect([...NESTED_SCROLL_EXCEPTIONS].filter(p => nestedScrollCells(screens.find(f => f.path === p)?.src ?? '').length === 0)).toEqual([]);
+    expect(screens.flatMap(f => nestedScrollInFixedModal(f.src).map(tag => `${f.path}: ${tag}`))).toEqual([]);
     const cell = '<div className={`${SCROLL_Y} flex-1`}>';
     expect(nestedScrollCells(`<Modal onClose={c}>${cell}</div></Modal>`)).toHaveLength(1);
     expect(nestedScrollCells(`<ModalCard title="가">${cell}</div></ModalCard>`)).toHaveLength(1);
     expect(nestedScrollCells(`<ModalCard title="가"><TableBox className="flex-1 min-h-0">x</TableBox></ModalCard>`)).toHaveLength(1);
     expect(nestedScrollCells(`<ModalCard title="가" fixed>${cell}</div></ModalCard>`)).toEqual([]);
+    expect(nestedScrollInFixedModal(`<ModalCard title="가" fixed><div className={SCROLL_Y}><div className={SCROLL_Y_ROWS}>x</div></div></ModalCard>`)).toHaveLength(1);
     expect(nestedScrollCells(`<Modal layer="stage" onClose={c}>${cell}</div></Modal>`)).toEqual([]);
     expect(nestedScrollCells(`<ModalCard title="가"><TableBox className="h-[138px] shrink">x</TableBox></ModalCard>`)).toEqual([]);
     expect(nestedScrollCells('<Modal onClose={c}><div className={`${SCROLL_Y_ROWS} max-h-[9px]`}></div></Modal>')).toEqual([]);
@@ -1083,12 +1104,16 @@ describe('UI 시스템 가드', () => {
     const whatsNewSrc = stripComments(presentationFiles.find(f => f.path === 'views/overlays/whats-new/WhatsNewModal.tsx')!.src);
     const dexDetailSrc = stripComments(presentationFiles.find(f => f.path === 'views/game/tabs/dex/DexDetail.tsx')!.src);
 
-    expect(fortuneSrc).toMatch(/<Modal\b[^>]*height=\{/);
+    expect(fortuneSrc).toMatch(/<Modal\b[^>]*height=\{500\}/);
+    expect(fortuneSrc).toMatch(/<Modal\b[^>]*mobileHeight=\{552\}/);
     expect(fortuneSrc).toMatch(/<ModalCard\b[^>]*fixed\b/);
     expect(fortuneSrc).toContain('grid-rows-6');
     expect(fortuneSrc).toMatch(/disabled=\{cell\.isFuture \|\| !f\}/);
     expect(fortuneSrc).toMatch(/aria-label="선택한 날짜 운세 상세"/);
     expect(fortuneSrc).toMatch(/h-\[\d+px\][^>]*aria-label="선택한 날짜 운세 상세"/);
+    expect(fortuneSrc).not.toMatch(/\bSCROLL_Y\b|\bSCROLL_Y_ROWS\b|overflow-y-auto/);
+    expect(fortuneSrc).not.toContain('월간 운세 집계');
+    expect(fortuneSrc).toContain('text-named');
 
     expect(whatsNewSrc).toMatch(/<Modal\b[^>]*height=\{/);
     expect(whatsNewSrc).toMatch(/<ModalCard\b[\s\S]*?\bfixed\b/);
@@ -1096,6 +1121,13 @@ describe('UI 시스템 가드', () => {
 
     expect(dexDetailSrc).toMatch(/<LoreParagraph[^>]*min-h-/);
     expect(dexDetailSrc).toMatch(/<p[^>]*min-h-/);
+  });
+
+  it('운세 UI는 구형 표기(지수·%p·만날 확률·보너스 대상·미기록·TodayFortuneBanner·FortuneIndexMeter)를 쓰지 않는다', () => {
+    const fortuneFiles = presentationFiles.filter(f => !isTestFile(f.path) && f.path.startsWith('views/overlays/fortune/'));
+    const BANNED_FORTUNE_RE = /지수|만날 확률|%p|%P|보너스 대상|미기록|기록 없음|\bTodayFortuneBanner\b|\bFortuneIndexMeter\b/;
+    const offenders = fortuneFiles.filter(f => BANNED_FORTUNE_RE.test(stripComments(f.src))).map(f => f.path);
+    expect(offenders).toEqual([]);
   });
 
   it('시맨틱 색이 걸린 줄 안에 HighlightRarityText를 중첩하지 않고 Tip 경고 첫 줄도 원문을 그대로 쓴다', () => {
