@@ -30,8 +30,13 @@ export default function NamedCard({ game, quest, canAccept, reason, busy, progre
   const title = found && name ? name : '???';
   const head = <NamedCardHead title={title} traceMins={!done ? ticketMins : null} />;
   return (
-    <Inset tone={done ? 'light' : 'base'} border={done ? 'gold' : 'line'}
-           className={cx('p-3 flex flex-col gap-2 flex-1 min-h-0', done && 'bg-[color-mix(in_oklab,var(--c-gold)_8%,var(--inset-light))]')}>
+    <Inset tone={done ? 'light' : 'base'} border={done ? 'gold' : 'named'}
+           className={cx(
+             'p-3 flex flex-col gap-2 flex-1 min-h-0',
+             done
+               ? 'bg-[color-mix(in_oklab,var(--c-gold)_8%,var(--inset-light))]'
+               : 'bg-[color-mix(in_oklab,var(--c-named)_7%,var(--inset-base))]',
+           )}>
       {onOpenDetail
         ? <PressRow onPress={onOpenDetail} ariaLabel={`${title} 상세 보기`} className="px-1 -mx-1">{head}</PressRow>
         : head}

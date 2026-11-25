@@ -57,8 +57,8 @@ describe('인라인 등급·형태 강조(HighlightRarityText)', () => {
     expect(screen.getByText('영웅')).toHaveAttribute('data-rarity', 'epic');
     expect(screen.getByText('희귀')).toHaveAttribute('data-rarity', 'rare');
     expect(screen.getByText('특수')).toHaveAttribute('data-rarity', 'special');
-    expect(screen.getByText('돌연변이')).toHaveClass('text-epic');
-    expect(screen.getByText('네임드')).toHaveClass('text-epic');
+    expect(screen.getByText('돌연변이')).toHaveClass('text-mutation');
+    expect(screen.getByText('네임드')).toHaveClass('text-named');
     expect(container.textContent).toBe('전설과 영웅, 희귀, 특수 미끼, 돌연변이, 네임드 토벌');
   });
 
@@ -69,7 +69,7 @@ describe('인라인 등급·형태 강조(HighlightRarityText)', () => {
     expect(screen.getAllByText('일반')).toHaveLength(4);
     for (const el of screen.getAllByText('일반')) expect(el).toHaveAttribute('data-rarity', 'common');
     expect(screen.getByText('(일반)')).toHaveAttribute('data-rarity', 'common');
-    expect(screen.getByText('돌연변이')).toHaveClass('text-epic');
+    expect(screen.getByText('돌연변이')).toHaveClass('text-mutation');
 
     cleanup();
     const { container: plain } = render(
@@ -85,8 +85,8 @@ describe('인라인 등급·형태 강조(HighlightRarityText)', () => {
       <HighlightRarityText text="도감의 각 보기에서 일반, 돌연변이, 네임드 기록을 따로 모아 봐요." />,
     );
     expect(screen.getByText('일반')).toHaveAttribute('data-rarity', 'common');
-    expect(screen.getByText('돌연변이')).toHaveClass('text-epic');
-    expect(screen.getByText('네임드')).toHaveClass('text-epic');
+    expect(screen.getByText('돌연변이')).toHaveClass('text-mutation');
+    expect(screen.getByText('네임드')).toHaveClass('text-named');
   });
 
   it('FormatGradeLabel은 이름(등급) 꼴을 GradeName으로 분리한다', () => {

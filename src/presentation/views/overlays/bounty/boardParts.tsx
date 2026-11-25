@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { GAME_DAY_RESET_TEXT } from '../../../../game/rules/time.js';
 import Button from '../../../ui/Button';
 import KeyValueRow from '../../../ui/KeyValueRow';
+import PixelIcon from '../../../ui/PixelIcon';
 import SharedProgressMeter from '../../../ui/ProgressMeter';
 import ProgressCount from '../../../ui/ProgressCount';
 import Tip from '../../../ui/Tip';
@@ -86,7 +87,10 @@ export function NamedCardHead({ title, titleTip, traceMins }: {
 }) {
   return (
     <div className="flex items-baseline justify-between gap-2 h-6">
-      <b className="text-base text-epic truncate">{titleTip ? <Tip text={titleTip}>{title}</Tip> : title}</b>
+      <b className="inline-flex items-center gap-1.5 text-base text-named truncate min-w-0">
+        <PixelIcon glyph="target" size={13} className="shrink-0" />
+        <span className="truncate">{titleTip ? <Tip text={titleTip}>{title}</Tip> : title}</span>
+      </b>
       {traceMins !== null && <TraceTime mins={traceMins} />}
     </div>
   );

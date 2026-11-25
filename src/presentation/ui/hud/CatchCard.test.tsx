@@ -42,9 +42,10 @@ describe('획득 카드', () => {
     expect(tag.className).not.toMatch(/rotate|rounded/);
   });
 
-  it('돌연변이면 변이 이름과 암시 문구, 변이 잔광 이펙트를 표시한다', () => {
+  it('돌연변이면 변이 이름(자홍 강조)과 암시 문구, 변이 잔광 이펙트를 표시한다', () => {
     const { container } = render(<CatchCard fish={fish} info={info({ form: 'variant' })} />);
-    expect(container.firstElementChild).toHaveTextContent(formName(fish, 'variant'));
+    const variantTitle = screen.getByText(formName(fish, 'variant'));
+    expect(variantTitle).toHaveClass('text-mutation');
     const variantLine = container.querySelector('[data-catch-variant]');
     expect(variantLine).not.toBeNull();
     expect(variantLine!.textContent?.trim().length).toBeGreaterThan(0);

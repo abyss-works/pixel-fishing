@@ -77,7 +77,7 @@ describe('SlotChips (보너스 통합 칩)', () => {
     expect(within(tip).getByText('(특수)')).toHaveAttribute('data-rarity', 'special');
     expect(within(tip).getByText('오늘의 운세')).toBeInTheDocument();
     expect(within(tip).getByText('그림자 운')).toBeInTheDocument();
-    expect(within(tip).getByText('네임드')).toHaveClass('text-epic');
+    expect(within(tip).getByText('네임드')).toHaveClass('text-named');
     expect(within(tip).getByText('1시간 남음')).toBeInTheDocument();
     expect(within(tip).getByText('3분 남음')).toBeInTheDocument();
     expect(within(tip).getAllByText('하루 동안')).toHaveLength(2);

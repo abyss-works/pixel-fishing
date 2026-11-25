@@ -36,11 +36,11 @@ export default function BagCards({ bag, game }: { bag: readonly FishInstance[]; 
                 안 들고 있는 종에 0을 적거나 "미확인"을 덧붙이면 읽을 게 늘기만 한다. */}
             <b className="block truncate">{known ? name : '???'}</b>
             {n > 0 && (
-              /* 일반/변이를 한 행에 — 흰 글씨 일반, 보라 변이, 사이에 얇은 구분 바 */
+              /* 일반/변이를 한 행에 — 흰 글씨 일반, 자홍 변이, 사이에 얇은 구분 바 */
               <span className="pf-accent inline-flex items-center justify-center gap-1.5">
                 <span className={normalCount > 0 ? 'text-text' : 'text-text-dim'}>{normalCount}</span>
                 <Divider vertical className="h-2.5 min-h-0" />
-                <span className={variantCount > 0 ? 'text-epic' : 'text-text-dim'}>{variantCount}</span>
+                <span className={variantCount > 0 ? 'text-mutation' : 'text-text-dim'}>{variantCount}</span>
               </span>
             )}
           </>

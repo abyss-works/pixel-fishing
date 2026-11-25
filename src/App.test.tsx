@@ -1359,7 +1359,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     expect(normal.textContent).toBe('2');
     expect(normal.className).toContain('text-text');
     expect(variant.textContent).toBe('1');
-    expect(variant.className).toContain('text-epic');
+    expect(variant.className).toContain('text-mutation');
 
     // 안 들고 있는 종은 마릿수 줄 자체가 없다 — 가방은 보유 현황만 본다
     const empty = screen.getByLabelText('붕어 미보유');

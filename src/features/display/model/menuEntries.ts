@@ -11,16 +11,16 @@ export function menuKeys(open: { guild: boolean; friends: boolean; mailbox: bool
   return keys;
 }
 
-export type QuestBadgeTone = 'gold' | 'epic';
+export type QuestBadgeTone = 'gold' | 'named';
 export interface QuestBadge { tone: QuestBadgeTone; count: number }
 type ClearsLeft = { general: number; named: number } | null;
 
-/** 의뢰 줄 배지 - 일반 의뢰는 gold, 네임드 토벌은 epic. 숫자는 오늘 남은 클리어이고 0이거나 모르면 그 배지는 없다 */
+/** 의뢰 줄 배지 - 일반 의뢰는 gold, 네임드 토벌은 named. 숫자는 오늘 남은 클리어이고 0이거나 모르면 그 배지는 없다 */
 export function questBadges(left: ClearsLeft): QuestBadge[] {
   if (!left) return [];
   const badges: QuestBadge[] = [];
   if (left.general > 0) badges.push({ tone: 'gold', count: left.general });
-  if (left.named > 0) badges.push({ tone: 'epic', count: left.named });
+  if (left.named > 0) badges.push({ tone: 'named', count: left.named });
   return badges;
 }
 

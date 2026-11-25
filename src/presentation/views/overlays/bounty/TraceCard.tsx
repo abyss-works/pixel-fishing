@@ -40,7 +40,7 @@ export default function TraceCard({ onTrack }: {
     return (
       <HudPanel tone="gold" className={CARD} role="status" aria-label="토벌">
         <TraceHead label="토벌" />
-        <span><b className="text-epic">{name}</b>{josa(name, '을/를').slice(name.length)} 토벌했어요. {card.zoneName}의 수배판에서 보상을 받아 주세요.</span>
+        <span><b className="text-named">{name}</b>{josa(name, '을/를').slice(name.length)} 토벌했어요. {card.zoneName}의 수배판에서 보상을 받아 주세요.</span>
       </HudPanel>
     );
   }

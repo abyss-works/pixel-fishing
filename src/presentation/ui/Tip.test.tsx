@@ -201,7 +201,7 @@ describe('TipCard: 구조형 툴팁 위계', () => {
     );
     fireEvent.mouseEnter(screen.getByText('단문'));
     let tip = screen.getByRole('tooltip');
-    expect(within(tip).getByText('네임드')).toHaveClass('text-epic');
+    expect(within(tip).getByText('네임드')).toHaveClass('text-named');
     expect(within(tip).getByText('전설')).toHaveAttribute('data-rarity', 'legendary');
     fireEvent.mouseLeave(screen.getByText('단문'));
 
@@ -214,7 +214,7 @@ describe('TipCard: 구조형 툴팁 위계', () => {
     fireEvent.mouseEnter(screen.getByText('요리'));
     tip = screen.getByRole('tooltip');
     expect(within(tip).getByText('(특수)')).toHaveAttribute('data-rarity', 'special');
-    expect(within(tip).getByText('돌연변이')).toHaveClass('text-epic');
+    expect(within(tip).getByText('돌연변이')).toHaveClass('text-mutation');
     expect(within(tip).getByText('특수')).toHaveAttribute('data-rarity', 'special');
   });
 

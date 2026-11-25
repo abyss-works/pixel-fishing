@@ -125,18 +125,18 @@ describe('게임 메뉴', () => {
       return screen.getAllByRole('menuitem')[0];
     };
 
-    it('오늘 클리어가 0이면 상한만큼 남아 일반(노랑), 네임드(보라) 순서로 배지가 붙는다', async () => {
+    it('오늘 클리어가 0이면 상한만큼 남아 일반(노랑), 네임드(산호) 순서로 배지가 붙는다', async () => {
       bounty.snap = { clearsToday: { general: 0, named: 0 } };
       wrap(<GameMenu account={null} {...handlers()} />);
       const row = await openRow();
-      expect(badgesOf(row)).toEqual([['gold', String(BOUNTY_DAILY_CAP)], ['epic', String(BOUNTY_NAMED_DAILY_CAP)]]);
+      expect(badgesOf(row)).toEqual([['gold', String(BOUNTY_DAILY_CAP)], ['named', String(BOUNTY_NAMED_DAILY_CAP)]]);
       expect(row).toHaveAccessibleName(`의뢰, 오늘 남은 클리어 일반 ${BOUNTY_DAILY_CAP} 네임드 ${BOUNTY_NAMED_DAILY_CAP}`);
     });
 
     it('한 종류를 상한까지 클리어하면 그 배지만 사라진다', async () => {
       bounty.snap = { clearsToday: { general: BOUNTY_DAILY_CAP, named: 0 } };
       wrap(<GameMenu account={null} {...handlers()} />);
-      expect(badgesOf(await openRow())).toEqual([['epic', String(BOUNTY_NAMED_DAILY_CAP)]]);
+      expect(badgesOf(await openRow())).toEqual([['named', String(BOUNTY_NAMED_DAILY_CAP)]]);
     });
 
     it('둘 다 상한까지 클리어하면(상한 1이면 클리어 1) 배지가 없다', async () => {
