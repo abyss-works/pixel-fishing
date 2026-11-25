@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type { GuildBonusItem, GuildInfo, GuildInvitePreview, GuildMemberItem } from '../../../platform/api';
 import { NO_GUILD_EFFECTS } from '../../../game/rules/guild';
 import {
-  GUILD_BONUS_NAME, GUILD_JOIN_MODE_TEXT, GUILD_LEVEL_HELP, dailyContributionRows, GUILD_ERROR_TEXT, bonusEffectText, bonusEffectValue,
-  bonusRows, donateDisabledReason, enhanceInvestState, enhancePoolSummary, enhanceResetState, growthBar, growthTotalText,
-  guildAlertText, guildLinkUrl, inviteDialogView, inviteShareText, leaveConfirm, leaveOutcome, logbookDays, memberActions,
-  memberConfirm, memberName, memberRows, renameButtonState, requestRows, splitMembers,
+  GUILD_BONUS_NAME, GUILD_ENHANCE_LOCK_NOTE, GUILD_JOIN_MODE_TEXT, GUILD_LEAVE_COOLDOWN_NOTE, GUILD_LEVEL_HELP,
+  dailyContributionRows, GUILD_ERROR_TEXT, bonusEffectText, bonusEffectValue,
+  bonusRows, donateDisabledReason, enhanceInvestState, enhancePoolSummary, enhanceResetCostRows, enhanceResetState,
+  growthBar, growthTotalText, guildAlertText, guildLinkUrl, inviteDialogView, inviteShareText, leaveConfirm, leaveOutcome,
+  logbookDays, memberActions, memberConfirm, memberName, memberRows, personalNodes, renameButtonState, requestRows, splitMembers,
 } from './guild';
 
 const member = (uid: string, role: GuildMemberItem['role'], leftAt: string | null = null): GuildMemberItem =>
@@ -72,6 +73,7 @@ describe('길드 화면 모델', () => {
     expect(memberConfirm(g, members[1], 'kick')).toEqual({
       title: '길드원 내보내기', label: '내보내기', op: { op: 'remove', guildId: 'g', uid: 'A' },
       text: 'A 님을 길드에서 내보낼까요?\n쌓은 기여와 기록은 길드에 남아요.',
+      warn: '내보내기 처리 시 20시간 동안 모든 길드에 재가입할 수 없어요.',
       done: 'A 님을 내보냈어요.',
     });
   });
@@ -80,11 +82,13 @@ describe('길드 화면 모델', () => {
     expect(leaveConfirm(guild('member', members), 'A')).toEqual({
       title: '길드 떠나기', label: '떠나기', op: { op: 'remove', guildId: 'g', uid: 'A' },
       text: '심해 길드를 떠날까요?\n쌓은 기여와 기록은 길드에 남고, 다시 들어오려면 길드 코드가 필요해요.',
+      warn: GUILD_LEAVE_COOLDOWN_NOTE,
       done: '심해 길드를 떠났어요.',
     });
     expect(leaveConfirm(guild('leader', [members[0]]), 'L')).toEqual({
       title: '길드 해산', label: '해산', op: { op: 'remove', guildId: 'g', uid: 'L' },
       text: '혼자 남은 길드라 떠나면 심해 길드가 없어지고 길드 채팅도 지워져요.\n떠날까요?',
+      warn: GUILD_LEAVE_COOLDOWN_NOTE,
       done: '심해 길드를 해산했어요.',
     });
     expect(leaveConfirm(guild('leader', members), 'L')).toBeNull();
@@ -339,6 +343,43 @@ describe('길드 보너스 화면 모델', () => {
     ], 'me');
     expect(day.items[0].parts.map(p => p.text).join('')).toBe('가람 님이 길드 스킬 강화를 되돌렸어요.');
     expect(day.items[1].parts.map(p => p.text).join('')).toBe('나 님이 희귀 어종 확률 스킬을 강화 3단계로 올렸어요.');
+  });
+
+  it('공통과 개인 트랙 효과, 개인 트리 노드, 초기화 비용 단계표, 잠금 안내 상수를 제공한다', () => {
+    const [sell, rare] = bonusRows([
+      item({ id: 'sell', rank: 4, enhanceRank: 1, totalRank: 5, cap: 5, effect: 0.1 }),
+      item({ id: 'rare', unlock: 4, rank: 0, enhanceRank: 0, totalRank: 0, cap: 0 }),
+    ]);
+    expect(sell).toMatchObject({
+      baseNow: '+8%',
+      baseAfter: '+10%',
+      enhanceNow: '+2%',
+      enhanceAfter: '+4%',
+      totalEffect: '+10%',
+    });
+    expect(rare).toMatchObject({
+      baseNow: null,
+      baseAfter: null,
+      enhanceNow: '0%',
+      enhanceAfter: '−2%',
+    });
+    expect(personalNodes(sell, true, 2)).toEqual([
+      { rank: 1, state: 'done' },
+      { rank: 2, state: 'next' },
+      { rank: 3, state: 'open' },
+      { rank: 4, state: 'open' },
+      { rank: 5, state: 'open' },
+    ]);
+    expect(personalNodes(sell, false, 0).every(n => n.state === 'locked')).toBe(true);
+    expect(personalNodes(rare, true, 2).every(n => n.state === 'locked')).toBe(true);
+    expect(enhanceResetCostRows()).toEqual([
+      { label: '1회', value: '10만G' },
+      { label: '2회', value: '50만G' },
+      { label: '3회', value: '100만G' },
+      { label: '4회', value: '500만G' },
+      { label: '5회 이상', value: '1,000만G' },
+    ]);
+    expect(GUILD_ENHANCE_LOCK_NOTE).toBe('길드 Lv.6부터 개인 무료 자유 강화가 열려요.');
   });
 });
 
