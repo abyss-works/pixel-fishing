@@ -25,7 +25,7 @@ export const POTIONS: readonly Potion[] = [
     id: 'luck-small',
     name: '작은 바다 영약',
     grade: 'special',
-    description: '마시면 하루 동안 희귀 이상 출현 비중, 판매가, 네임드 조우 비중이 ×1.05 올라요.',
+    description: '마시면 하루 동안 희귀 이상 출현 비중, 판매가, 네임드 조우 확률이 ×1.05 올라요.',
     duration: 'game-day',
     effects: {
       luck: { rarity: 0.05, sell: 0.05, named: 0.05 },
@@ -35,10 +35,10 @@ export const POTIONS: readonly Potion[] = [
 
 export const POTION_BY_ID: ReadonlyMap<string, Potion> = new Map(POTIONS.map(p => [p.id, p]));
 
-/** id → 물약. 없는 id나 비문자열 입력은 undefined */
+/** id → 비약. 없는 id나 비문자열 입력은 undefined */
 export const potionById = (id: unknown): Potion | undefined =>
   typeof id === 'string' ? POTION_BY_ID.get(id) : undefined;
 
-/** 등록된 물약 id인가 */
+/** 등록된 비약 id인가 */
 export const isPotionId = (id: unknown): id is string =>
   typeof id === 'string' && POTION_BY_ID.has(id);

@@ -175,7 +175,7 @@ export interface GameState {
   autoLockedIds: Record<string, string>;
   /** 오늘의 운세 — 굴린 게임 날짜에 고정된다. 첫 판정(catch·sell)에서 서버가 굴리고, 그날 안에서는 불변 */
   fortune: DailyFortune | null;
-  /** 사용 중인 물약 — 물약 id → 효과가 지속되는 게임 날짜(YYYY-MM-DD, KST 04:00 경계) */
+  /** 사용 중인 비약 — 비약 id → 효과가 지속되는 게임 날짜(YYYY-MM-DD, KST 04:00 경계) */
   potions: Record<string, string>;
 }
 
@@ -229,7 +229,7 @@ export interface DrawOptions {
   /** 등급 가중치에 걸리는 보너스 효과의 합(미끼 +, 길드 희귀 어종 보너스 −). 등급마다 (1 + 합)을 한 번 곱한다.
    *  효과는 addGradeEffect로 더하고, 다이얼(판정·방치·페널티)과는 곱한다 */
   weightEffects?: Partial<Record<RarityId, number>>;
-  /** 운 배율 — 희귀 이상 등급 가중치에 곱하는 최종 배수(물고기 운). 다른 보너스를 다 적용한 마지막 곱이다 */
+  /** 행운 배수 — 희귀 이상 등급 가중치에 곱하는 최종 배수(풍어운). 다른 보너스를 다 적용한 마지막 곱이다 */
   rarityLuck?: number;
   /** 밤 어종 개체 가중치 보너스 합 — NIGHT_FISH_WEIGHT × nightDepth × (1 + 합) */
   nightWeightBonus?: number;
@@ -265,7 +265,7 @@ export function pickWeighted<K>(entries: readonly (readonly [K, number])[], rng:
 /**
  * 해역의 네임드 조우 가중치 — 해역 오버라이드 → 전역 기본.
  * @param bonus 네임드 가중치에 더하는 비율(길드 네임드 조우 보너스). 네임드 가중치에 (1 + bonus)를 한 번 곱한다
- * @param luck 운 배율 — 보너스를 다 적용한 네임드 가중치에 곱하는 최종 배수(그림자 운)
+ * @param luck 행운 배수 — 보너스를 다 적용한 네임드 가중치에 곱하는 최종 배수(그림자 운)
  */
 export function namedWeightsOf(spot: SpotId, bonus = 0, luck = 1): { named: number; none: number } {
   const w = { ...NAMED_ENCOUNTER_WEIGHTS, ...spotById(spot)?.namedWeight };
@@ -295,7 +295,7 @@ export function namedEncounterCandidates(activeIds: readonly string[], spot: Spo
 // 진행하고, 호출부가 도전권 발급 이벤트만 덧붙인다.
 // rng 소비: 후보 없음 0회 · 빗나감 1회 · 명중 2회(게이트+후보 선택).
 // force는 테스트용 강제 조우다 — 확률 게이트만 건너뛰고 rng 소비 횟수는 같게 둔다.
-// bonus는 네임드 가중치에 더하는 비율이고 luck은 그 뒤에 곱하는 운 배율이다(namedWeightsOf).
+// bonus는 네임드 가중치에 더하는 비율이고 luck은 그 뒤에 곱하는 행운 배수다(namedWeightsOf).
 export function rollNamedEncounter(
   activeIds: readonly string[], spot: SpotId, rng: () => number = Math.random, force = false,
   bonus = 0, luck = 1,
@@ -938,7 +938,7 @@ function safeItems(v: unknown): Record<string, number> {
   return out;
 }
 
-/** 활성 물약 위생 — 물약 id → 게임 날짜(비어 있지 않은 문자열)만 살린다. 모르는 물약 id도 전방 호환으로 보존한다 */
+/** 활성 비약 위생 — 비약 id → 게임 날짜(비어 있지 않은 문자열)만 살린다. 모르는 비약 id도 전방 호환으로 보존한다 */
 function safePotions(v: unknown): Record<string, string> {
   const out: Record<string, string> = {};
   if (typeof v !== 'object' || v === null || Array.isArray(v)) return out;
@@ -1457,7 +1457,7 @@ export function saleBonusOf(base: number, bonus: number): number {
 // 선택 판매 — uid로 개체를 지목한다 (판매의 원자 단위 = 개체).
 // 잠근 개체는 uid가 와도 팔리지 않는다(이중 방어)
 // bonus는 판매가에 더하는 비율(길드 판매가 보너스)이다. 판매 총액에 한 번 더하고 반올림한다.
-// luck은 보너스를 다 적용한 수령액에 곱하는 운 배율(돈 운)이다 — 반올림은 마지막 곱 뒤 한 번.
+// luck은 보너스를 다 적용한 수령액에 곱하는 행운 배수(재물운)다 — 반올림은 마지막 곱 뒤 한 번.
 export function sellSelected(state: GameState, uids: readonly string[], bonus = 0, luck = 1): GameState {
   const want = new Set(uids);
   const sold = state.bag.filter(i => want.has(i.uid) && !i.locked);

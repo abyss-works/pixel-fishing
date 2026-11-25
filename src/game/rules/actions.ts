@@ -89,7 +89,7 @@ export type GameAction =
   | { type: 'cancelCook'; id: string }                       // 조리 취소 — 완성분 정산 뒤 미완성 수량 기운 100% 환급
   | { type: 'transmuteEnergy'; from: RarityId; count: number } // 기운 변환 — 하위 기운 10개 → 상위 기운 1개 정방향 변환
   | { type: 'eat'; item: string; replaceSlot?: 'bait' | 'bait2' } // 먹기(쓰기) — 가방의 완성 요리 하나를 슬롯에 넣는다. 위치 제한 없음
-  | { type: 'usePotion'; id: string }                        // 물약 사용 — 가방의 물약 1개를 쓰고 오늘 게임 날짜 끝까지 지속한다
+  | { type: 'usePotion'; id: string }                        // 비약 사용 — 가방의 비약 1개를 쓰고 오늘 게임 날짜 끝까지 지속한다
   | { type: 'boot'; buildId?: unknown }                      // 접속(부팅) 기록 — DAU 정본. 그날 첫 접속이면 운세를 굴려 고정한다
   | { type: 'setNickname'; nickname: unknown }     // 닉네임 변경 — 형태는 리듀서, 중복은 서버(DB)가 본다
   | { type: 'seeTutorial'; id: unknown }           // 튜토리얼 창을 봤다 — 같은 트리거에서 다시 뜨지 않게 남긴다

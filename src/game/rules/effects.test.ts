@@ -356,7 +356,7 @@ describe('saleProceedsOf', () => {
     expect(resGA.mods.map(m => m.id)).toEqual(['guild-sell', 'achievement-sellBonus']);
   });
 
-  it('재물운(gold) 활성 시 판매 예상 금액에 운 배율(×1.03/×1.05)을 마지막에 곱하고 오늘의 운세 mod를 남긴다', () => {
+  it('재물운(gold) 활성 시 판매 예상 금액에 행운 배수(×1.03/×1.05)를 마지막에 곱하고 오늘의 운세 mod를 남긴다', () => {
     // NOW = 2026-11-21T05:00:00.000Z (KST 14:00) → 게임 날짜 2026-11-21
     const bag = Array.from({ length: 10 }, (_, i) => sampleFish(`g${i}`, 'crucian', 'variant'));
     const baseSum = bag.reduce((s, i) => s + priceOfInstance(i), 0);
@@ -379,7 +379,7 @@ describe('saleProceedsOf', () => {
         },
       ]);
 
-      // 길드 + 업적 보너스 합산 후 운 배율 마지막 곱 — sellSelected와 일치해야 한다
+      // 길드 + 업적 보너스 합산 후 행운 배수 마지막 곱 — sellSelected와 일치해야 한다
       const stackedCtx = makeCtx({
         state: { bag, fortune: { day: '2026-11-21', kind: 'gold', index } },
         guild,
@@ -394,7 +394,7 @@ describe('saleProceedsOf', () => {
     }
   });
 
-  it('다른 종류의 운세·날짜가 지난 재물운·빈 선택에는 운 배율 mod를 적용하지 않는다', () => {
+  it('다른 종류의 운세·날짜가 지난 재물운·빈 선택에는 행운 배수 mod를 적용하지 않는다', () => {
     const bag = Array.from({ length: 10 }, (_, i) => sampleFish(`f${i}`, 'crucian', 'variant'));
     const baseSum = bag.reduce((s, i) => s + priceOfInstance(i), 0);
 

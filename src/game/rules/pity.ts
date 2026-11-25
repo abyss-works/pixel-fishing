@@ -95,7 +95,7 @@ const onDay = (p: NamedPity, nowIso: string): NamedPity => {
 /**
  * 네임드 조우 추첨 + 천장. 천장에 닿으면 조우 게이트를 강제로 통과시킨다(rng 소비 횟수는 같다).
  * @param bonus 네임드 조우 가중치에 더하는 비율(길드 네임드 조우 보너스). 천장 문턱은 바꾸지 않는다
- * @param luck 보너스를 다 적용한 가중치에 곱하는 운 배율(그림자 운). 천장 문턱은 바꾸지 않는다
+ * @param luck 보너스를 다 적용한 가중치에 곱하는 행운 배수(그림자 운). 천장 문턱은 바꾸지 않는다
  */
 export function drawNamedEncounter(
   p: NamedPity, activeIds: readonly string[], spot: SpotId, nowIso: string,
