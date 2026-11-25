@@ -6,6 +6,7 @@ import type { Bob, ServerMessage } from '../../../game/rules/live';
 import { glidePosition, LIVE_MOVE_MS, nextGlide } from '../../../game/rules/live';
 import type { Glide } from '../../../game/rules/live';
 import { useSession } from '../../account/service/session';
+import { useConsentReady } from '../../account/service/consentGate';
 import { applyLiveMessage, bubbleOf, EMPTY_LIVE, idleLabel, isStale, matesInRegion, nextPositionMessage, othersInRegion, playerZoneLabel, withoutAuthor } from '../model/live';
 import type { Bubble, ChatError, ChatRoom, LiveState, MyPosition, SentPosition } from '../model/live';
 import type { ChatLine } from '../../../game/rules/live';
@@ -79,11 +80,12 @@ const getState = () => state;
 /** 실시간 채널 연결을 게임 화면 수명에 묶는다 */
 export function useLive(): void {
   const { ready, uid } = useSession();
+  const consentReady = useConsentReady();
   useEffect(() => {
-    if (!ready || !uid) return;
+    if (!ready || !uid || !consentReady) return;
     conn = openLive(receive);
     return () => { conn?.close(); conn = null; reset(); };
-  }, [ready, uid]);
+  }, [ready, uid, consentReady]);
 }
 
 /** 그 바다에 있는 다른 플레이어 — 이름 순. 차단한 사람도 들어 있다(접속 상태는 차단과 무관하다) */

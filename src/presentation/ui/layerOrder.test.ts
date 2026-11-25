@@ -329,8 +329,13 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
     expect(src('views/overlays/bounty/EncounterModal.tsx')).toMatch(/layer="stage"/);
   });
 
-  it('닫을 수 없는 앱 창(새 버전 안내, 세션 교체 안내, 저장 안 됨 안내)은 스테이지 창이 아니다', () => {
-    for (const path of ['views/overlays/update/UpdateModal.tsx', 'views/overlays/update/SessionReplacedModal.tsx', 'views/overlays/update/UnsavedModal.tsx']) {
+  it('닫을 수 없는 앱 창(새 버전 안내, 세션 교체 안내, 저장 안 됨 안내, 이용약관 동의)은 스테이지 창이 아니다', () => {
+    for (const path of [
+      'views/overlays/update/UpdateModal.tsx',
+      'views/overlays/update/SessionReplacedModal.tsx',
+      'views/overlays/update/UnsavedModal.tsx',
+      'views/overlays/account/ConsentModal.tsx',
+    ]) {
       expect(src(path)).toContain('closable={false}');
       expect(src(path)).not.toContain('layer="stage"');
     }
@@ -384,6 +389,7 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
       'views/game/tabs/bag/ArtifactDetail.tsx',
       'views/game/tabs/settings/SettingsTab.tsx',
       'views/overlays/account/AccountModal.tsx',
+      'views/overlays/account/ConsentModal.tsx',
       'views/overlays/account/MyInfoModal.tsx',
       'views/overlays/settings/SettingsModal.tsx',
       'views/overlays/codes/CodeModal.tsx',

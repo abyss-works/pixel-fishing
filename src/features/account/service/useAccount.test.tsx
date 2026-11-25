@@ -35,10 +35,10 @@ function setup() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const wrapper = ({ children }: { children: ReactNode }) =>
     <QueryClientProvider client={client}>{children}</QueryClientProvider>;
-  const props = {
+    const props = {
     game: newState(),
     setToast: vi.fn(),
-    adoptAccount: vi.fn(async () => {}),
+    adoptAccount: vi.fn(async () => true),
   };
   const hook = renderHook(() => ({ account: useAccount(props), session: useSession() }), { wrapper });
   return { hook, props };
@@ -65,6 +65,16 @@ describe('계정 교체', () => {
     await waitFor(() => expect(hook.result.current.session.ready).toBe(true));
     await act(() => hook.result.current.account.onAuthChanged());
     expect(props.adoptAccount).not.toHaveBeenCalled();
+  });
+
+  it('계정 교체 중 약관 차단이 걸려 adoptAccount가 false를 반환하면 저장된 진행 알림을 띄우지 않는다', async () => {
+    const { hook, props } = setup();
+    await waitFor(() => expect(hook.result.current.session.ready).toBe(true));
+    state.nextUid = 'unconsented-uid';
+    props.adoptAccount.mockResolvedValueOnce(false);
+    await act(() => hook.result.current.account.onAuthChanged());
+    expect(props.adoptAccount).toHaveBeenCalledTimes(1);
+    expect(props.setToast).not.toHaveBeenCalledWith('계정의 저장된 진행을 불러왔어요.');
   });
 });
 
