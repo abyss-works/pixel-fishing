@@ -114,14 +114,14 @@ describe('업적 카드', () => {
   it('진척은 천 단위 쉼표를 넣어 현재 / 목표를 쓰고 게이지 채움은 목표에 대한 비율이다', () => {
     const game = seed();
     const { row } = show(game, 'spot-basic-sea');
-    expect(screen.getByText(`${row.progress.current} / ${row.progress.target}`)).toBeInTheDocument();
+    expect(document.querySelector('[data-progress-count] + *') || screen.getByRole('meter').parentElement).toHaveTextContent(`${row.progress.current} / ${row.progress.target}`);
     const fill = document.querySelector('[data-achievement-gauge-fill]') as HTMLElement;
     expect(fill.style.width).toBe(`${Math.min(row.progress.current, row.progress.target) / row.progress.target * 100}%`);
 
     cleanup();
     const half: AchievementRow = { def: row.def, status: 'progress', progress: { current: 1250, target: 5000 } };
     show(game, 'spot-basic-sea', { row: half });
-    expect(screen.getByText('1,250 / 5,000')).toBeInTheDocument();
+    expect(screen.getByRole('meter').parentElement).toHaveTextContent('1,250 / 5,000');
     expect((document.querySelector('[data-achievement-gauge-fill]') as HTMLElement).style.width).toBe('25%');
   });
 
@@ -130,7 +130,7 @@ describe('업적 카드', () => {
     const { row } = show(game, 'spot-basic-sea');
     cleanup();
     show(game, 'spot-basic-sea', { row: { def: row.def, status: 'progress', progress: { current: 3, target: 0 } } });
-    expect(screen.getByText('3 / 0')).toBeInTheDocument();
+    expect(screen.getByRole('meter').parentElement).toHaveTextContent('3 / 0');
     expect((document.querySelector('[data-achievement-gauge-fill]') as HTMLElement).style.width).toBe('0%');
   });
 

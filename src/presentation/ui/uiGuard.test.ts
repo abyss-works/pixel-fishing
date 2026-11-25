@@ -1025,4 +1025,44 @@ describe('UI 시스템 가드', () => {
     expect(compareAt).toBeGreaterThan(artifactLoreAt);
     expect(systemAt).toBeGreaterThan(artifactLoreAt);
   });
+
+  const FONT_PIXEL_RE = /\bfont-pixel\b/;
+  it('표현 계층은 Tailwind font-pixel을 직접 쓰지 않고 .pf-accent와 공용 수치 컴포넌트를 쓴다', () => {
+    const offenders = presentationFiles.filter(f => FONT_PIXEL_RE.test(stripComments(f.src))).map(f => f.path);
+    expect(offenders).toEqual([]);
+    expect(FONT_PIXEL_RE.test('className="font-pixel text-gold"')).toBe(true);
+    expect(FONT_PIXEL_RE.test('className="pf-accent text-gold"')).toBe(false);
+  });
+
+  it('공용 ProgressCount는 .pf-accent 서체와 골드 현재값·보조색 기준 분모 계약을 유지한다', () => {
+    const src = stripComments(presentationFiles.find(f => f.path === 'ui/ProgressCount.tsx')!.src);
+    expect(src).toContain('pf-accent');
+    expect(src).toContain("gold: 'text-gold'");
+    expect(src).toContain("guild: 'text-guild'");
+    expect(src).toContain("accent: 'text-accent'");
+    expect(src).toContain("orange: 'text-orange'");
+    expect(src).toContain("danger: 'text-danger'");
+    expect(src).toContain('text-text-dim');
+    expect(src).toContain('data-progress-count');
+    expect(src).toContain('data-progress-current');
+    expect(src).toContain('data-progress-target');
+    expect(src).toContain('data-progress-percent');
+  });
+
+  it('랭킹 표(RankingModal·DexDetail)는 공용 RankList와 RankMeBar로 1~3위 골드·내 줄 하늘색·수치 열 골드 강조를 공유한다', () => {
+    const rankListSrc = stripComments(presentationFiles.find(f => f.path === 'ui/RankList.tsx')!.src);
+    const rankingModalSrc = stripComments(presentationFiles.find(f => f.path === 'views/overlays/ranking/RankingModal.tsx')!.src);
+    const dexDetailSrc = stripComments(presentationFiles.find(f => f.path === 'views/game/tabs/dex/DexDetail.tsx')!.src);
+
+    expect(rankListSrc).toContain('<ProgressCount');
+    expect(rankListSrc).toContain('r.rank <= 3');
+    expect(rankListSrc).toContain('text-gold');
+    expect(rankListSrc).toContain('bg-accent/10');
+    expect(rankListSrc).toContain('text-accent');
+    expect(rankingModalSrc).toMatch(/<RankList\b/);
+    expect(rankingModalSrc).toMatch(/<RankMeBar\b/);
+    expect(rankingModalSrc).not.toMatch(/<DataTable\b/);
+    expect(dexDetailSrc).toMatch(/<RankList\b/);
+    expect(dexDetailSrc).toMatch(/<RankMeBar\b/);
+  });
 });

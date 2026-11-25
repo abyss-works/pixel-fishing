@@ -38,8 +38,7 @@ describe('부엌 창 틀', () => {
     show(seed());
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByText('조리 중인 요리 없음')).toBeInTheDocument();
-    expect(screen.getByText('보관함')).toBeInTheDocument();
-    expect(screen.getByText(`0/${COOK_STORAGE_CAP}`)).toBeInTheDocument();
+    expect(screen.getByText('보관함').closest('div')).toHaveTextContent(`0/${COOK_STORAGE_CAP}`);
     const tabs = ['도시락', '미끼'].map(tab);
     expect(tabs[0]).toHaveClass('active');
     expect(tabs[0].compareDocumentPosition(tabs[1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -53,15 +52,17 @@ describe('부엌 창 틀', () => {
     const cookingName = within(line).getByText('가루디야');
     expect(cookingName).toBeInTheDocument();
     expect(cookingName.closest('b')).toBeNull();
-    expect(within(line).getByText('1/3')).toBeInTheDocument();
+    expect(line).toHaveTextContent('1/3');
     expect(screen.getByText(`${LUNCH_WAIT_MIN - 5}분`)).toBeInTheDocument();
     fireEvent.click(tab('미끼'));
-    expect(screen.getByText('1/3')).toBeInTheDocument();
+    expect(screen.getByText('조리 중').closest('div')).toHaveTextContent('1/3');
   });
 
   it('보관함이 가득 차면 수를 위험색으로 보인다', () => {
     show(seed({ items: { 'cook-lunch-bite': COOK_STORAGE_CAP } }));
-    expect(screen.getByText(`${COOK_STORAGE_CAP}/${COOK_STORAGE_CAP}`)).toHaveClass('text-danger');
+    const storageCount = screen.getByText('보관함').closest('span')?.parentElement?.querySelector('[data-progress-count]') as HTMLElement;
+    expect(storageCount).toHaveTextContent(`${COOK_STORAGE_CAP}/${COOK_STORAGE_CAP}`);
+    expect(storageCount).toHaveAttribute('data-tone', 'danger');
   });
 });
 

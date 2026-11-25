@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import type { FormEvent } from 'react';
+import type { FormEvent, ReactNode } from 'react';
 import { applyDonation } from '../../../../game/rules/guild';
 import type { GuildBonusId } from '../../../../game/rules/guild';
 import {
@@ -21,6 +21,7 @@ import ModalCard from '../../../ui/ModalCard';
 import { NOTCH_SM } from '../../../ui/notch';
 import PixelIcon from '../../../ui/PixelIcon';
 import type { GlyphId } from '../../../ui/PixelIcon';
+import ProgressCount from '../../../ui/ProgressCount';
 import ProgressMeter from '../../../ui/ProgressMeter';
 import SlotCell from '../../../ui/SlotCell';
 import TextInput from '../../../ui/TextInput';
@@ -129,7 +130,7 @@ export default function GuildSkillsTab({ guild, gold, busy, run, onResetEnhancem
 
           <Inset className="p-2.5 flex flex-col gap-1.5">
             <ValueRow label="모인 골드"
-                      value={sel.locked ? '-' : sel.next === null ? '5단계 완료' : `${fmtNum(sel.pool)} / ${fmtNum(sel.next)}`} />
+                      value={sel.locked ? '-' : sel.next === null ? '5단계 완료' : <ProgressCount current={sel.pool} target={sel.next} />} />
             <ProgressMeter
               current={Math.round(sel.ratio * 100)}
               target={100}
@@ -219,7 +220,7 @@ export default function GuildSkillsTab({ guild, gold, busy, run, onResetEnhancem
 }
 
 /** 이름은 왼쪽, 값은 오른쪽인 한 줄 */
-function ValueRow({ label, value, up }: { label: string; value: string; up?: boolean }) {
+function ValueRow({ label, value, up }: { label: string; value: ReactNode; up?: boolean }) {
   return (
     <KeyValueRow compact className="h-6" label={label} value={value} valueClassName={cx('pf-accent', up && 'text-guild')} />
   );

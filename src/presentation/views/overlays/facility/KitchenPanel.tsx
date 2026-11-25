@@ -6,6 +6,7 @@ import { GradeName } from '../../../ui/fish/RarityTag';
 import Inset from '../../../ui/Inset';
 import ItemSprite from '../../../ui/ItemSprite';
 import ModalCard from '../../../ui/ModalCard';
+import ProgressCount from '../../../ui/ProgressCount';
 import TabBar from '../../../ui/TabBar';
 import Tip from '../../../ui/Tip';
 import { fmtMinutes } from '../../../ui/format';
@@ -36,7 +37,7 @@ export default function KitchenPanel({ game, busy, act, setToast, onClose }: {
           <>
             <span><span className="text-text-dim">조리 중</span>{' '}
               <span className="inline-flex align-middle"><ItemSprite kind={status.cooking.recipe.kind} id={status.cooking.recipe.id} preset="row" /></span>{' '}<GradeName name={status.cooking.title.name} grade={status.cooking.title.grade} />{' '}
-              <span className="pf-accent">{status.cooking.completed}/{status.cooking.count}</span></span>
+              <ProgressCount current={status.cooking.completed} target={status.cooking.count} tight /></span>
             <span className="text-text-dim">다음 완성 <span className="pf-accent text-text">{fmtMinutes(status.cooking.nextInMin)}</span></span>
           </>
         ) : (
@@ -44,7 +45,7 @@ export default function KitchenPanel({ game, busy, act, setToast, onClose }: {
         )}
         <span className="ml-auto text-text-dim">
           <Tip text={<>가방에 있는 요리와 조리 중인 요리를 함께 세요.<br />가득 차면 조리를 시작할 수 없어요.</>}>보관함</Tip>{' '}
-          <span className={status.full ? 'pf-accent text-danger' : 'pf-accent text-text'}>{status.stored}/{status.cap}</span>
+          <ProgressCount current={status.stored} target={status.cap} tight tone={status.full ? 'danger' : 'gold'} />
         </span>
       </Inset>
       <TabBar

@@ -27,6 +27,7 @@ import { LockTip } from '../../../ui/Locked';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import PixelIcon from '../../../ui/PixelIcon';
+import ProgressCount from '../../../ui/ProgressCount';
 import Subheading from '../../../ui/Subheading';
 import TabBar from '../../../ui/TabBar';
 import Tip from '../../../ui/Tip';
@@ -129,13 +130,13 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
           <Inset className="flex flex-wrap items-center justify-between gap-2 min-h-10 px-3 py-1.5 shrink-0 text-xs">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
               <span className="whitespace-nowrap">
-                받은 업적 <b className="pf-accent">{fmtNum(summary.claimed)}/{fmtNum(summary.total)}</b>
+                받은 업적 <ProgressCount current={summary.claimed} target={summary.total} tight className="font-bold" />
               </span>
               <span className="whitespace-nowrap">
-                받을 골드 <b className="pf-accent text-gold">{fmtGold(summary.gold)}</b>
+                받을 골드 <ProgressCount value={fmtGold(summary.gold)} className="font-bold" />
               </span>
               <span className="whitespace-nowrap">
-                받을 모자 <b className="pf-accent">{fmtNum(summary.hats)}개</b>
+                받을 모자 <ProgressCount value={`${fmtNum(summary.hats)}개`} className="font-bold" />
               </span>
             </div>
             {guest ? (
@@ -186,7 +187,9 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
                     onClick={() => setCosmeticFilter(f.key)}
                   >
                     <span>{f.label}</span>
-                    <span className="pf-accent text-2xs text-text-dim">({st.achieved}/{st.total})</span>
+                    <span className="text-2xs text-text-dim">
+                      (<ProgressCount current={st.achieved} target={st.total} tight />)
+                    </span>
                     {st.claimable > 0 && <CountBadge tone="gold" count={st.claimable} />}
                   </ToggleChip>
                 );
@@ -206,7 +209,7 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
                     <div key={g.zone}>
                       <Subheading className="flex items-center justify-between mb-1.5">
                         <span>{g.zoneName}</span>
-                        <span className="pf-accent text-2xs">{g.claimedCount}/{g.items.length}</span>
+                        <ProgressCount current={g.claimedCount} target={g.items.length} tight className="text-2xs" />
                       </Subheading>
                       <div className={CARD_GRID}>
                         {g.items.map(row => (
@@ -225,7 +228,13 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
                   <div key={g.key}>
                     <Subheading className="flex items-center justify-between mb-1.5">
                       <span>{g.title}</span>
-                      <span className="pf-accent text-2xs">{g.items.filter(x => x.allDone).length}/{g.items.length} 완결</span>
+                      <ProgressCount
+                        current={g.items.filter(x => x.allDone).length}
+                        target={g.items.length}
+                        tight
+                        suffix=" 완결"
+                        className="text-2xs"
+                      />
                     </Subheading>
                     <div className={CARD_GRID}>
                       {g.items.map(card => (

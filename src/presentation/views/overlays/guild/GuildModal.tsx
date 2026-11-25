@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { GUILD_MAX_MEMBERS } from '../../../../game/rules/guild';
 import type { ArtifactHolder } from '../../../../game/rules/artifactLevel';
-import { GUILD_LEVEL_HELP, GUILD_ERROR_TEXT, growthBar, growthTotalText, splitMembers } from '../../../../features/guild/model/guild';
+import { GUILD_LEVEL_HELP, GUILD_ERROR_TEXT, growthBar, splitMembers } from '../../../../features/guild/model/guild';
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import type { GuildConfirm, GuildInfo, GuildOp } from '../../../../features/guild/model/guild';
 import { useGuild } from '../../../../features/guild/service/useGuild';
@@ -11,6 +11,7 @@ import Inset from '../../../ui/Inset';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
+import ProgressCount from '../../../ui/ProgressCount';
 import ProgressMeter from '../../../ui/ProgressMeter';
 import TabBar from '../../../ui/TabBar';
 import Tip from '../../../ui/Tip';
@@ -160,10 +161,21 @@ function GuildStatus({ guild }: { guild: GuildInfo }) {
           ariaLabel="다음 레벨까지 진행"
         />
       </Tip>
-      <span className="pf-accent text-xs whitespace-nowrap mobile:row-start-2 mobile:justify-self-end">{growthTotalText(guild.growth)}</span>
+      {guild.growth.next !== null ? (
+        <ProgressCount
+          current={guild.growth.total}
+          target={guild.growth.next}
+          className="text-xs whitespace-nowrap mobile:row-start-2 mobile:justify-self-end"
+        />
+      ) : (
+        <ProgressCount
+          value={guild.growth.total}
+          className="text-xs whitespace-nowrap mobile:row-start-2 mobile:justify-self-end"
+        />
+      )}
       <span className="flex items-baseline gap-1.5 whitespace-nowrap mobile:col-start-3 mobile:row-start-1">
         <span className="text-xs text-text-dim">인원</span>
-        <span className="pf-accent text-xs">{splitMembers(guild.members).active.length}/{GUILD_MAX_MEMBERS}</span>
+        <ProgressCount current={splitMembers(guild.members).active.length} target={GUILD_MAX_MEMBERS} tight className="text-xs" />
       </span>
     </Inset>
   );

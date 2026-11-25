@@ -52,6 +52,20 @@ const TAB_BY_ID: Readonly<Record<MainRankingBoardId, RankingTabMeta>> = Object.f
 
 export const rankingTabMeta = (board: MainRankingBoardId): RankingTabMeta => TAB_BY_ID[board];
 
+/** 보드별 점수 구조화 — 도감 보드는 현재값/전체/퍼센트 분리, 그 외 보드는 단일 문자열 */
+export type RankingValueView =
+  | { kind: 'ratio'; current: number; total: number; percent: number }
+  | { kind: 'single'; text: string };
+
+export function rankingValueView(board: MainRankingBoardId, value: number): RankingValueView {
+  const total = TAB_BY_ID[board].total;
+  if (total !== null) {
+    const percent = total > 0 ? Math.round((value / total) * 100) : 0;
+    return { kind: 'ratio', current: value, total, percent };
+  }
+  return { kind: 'single', text: formatRankingValue(board, value) };
+}
+
 /** 보드별 점수 표시 — 도감 보드는 발견 종 수(n / 전체)와 완성도(%)를 함께 보인다 */
 export function formatRankingValue(board: MainRankingBoardId, value: number): string {
   const num = value.toLocaleString('ko-KR');

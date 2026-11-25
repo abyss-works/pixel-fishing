@@ -5,6 +5,7 @@ import { fmtNum } from '../../../ui/format';
 import HudPanel from '../../../ui/hud/HudPanel';
 import HudRows from '../../../ui/hud/HudRows';
 import { STACK_OMIT_CLASS } from '../../../ui/hud/stackTier';
+import ProgressCount from '../../../ui/ProgressCount';
 import Tip, { TipList } from '../../../ui/Tip';
 import { useOmitted } from '../../../ui/useOmitted';
 import { awayDuration, bagFullText } from './awayText';
@@ -30,9 +31,9 @@ export default function AwayCard({ report, onClose, onDetail }: {
         <span className="text-text-dim">자리를 비운 사이</span>
         <span className="pf-accent text-gold text-lg leading-none">{awayDuration(report.awayMs)}</span>
         <HudRows rows={[
-          { key: 'catches', label: '잡은 물고기', value: fmtNum(report.catches) },
-          { key: 'fame', label: '명성', value: `+${fmtNum(report.fame)}` },
-          { key: 'dex', label: '새 도감', value: dex, omittable: true, omitRef: dexRef },
+          { key: 'catches', label: '잡은 물고기', value: <ProgressCount value={report.catches} /> },
+          { key: 'fame', label: '명성', value: <ProgressCount value={`+${fmtNum(report.fame)}`} /> },
+          { key: 'dex', label: '새 도감', value: <ProgressCount value={dex} />, omittable: true, omitRef: dexRef },
         ]} />
         {bag && <span data-omittable className={`text-orange ${STACK_OMIT_CLASS}`}>{bag}</span>}
         <Button size="sm" variant="primary" full onClick={onDetail}>자세히</Button>

@@ -8,6 +8,7 @@ import ColorSwatch from '../../../ui/ColorSwatch';
 import Inset from '../../../ui/Inset';
 import ModalCard from '../../../ui/ModalCard';
 import PersonSprite from '../../../ui/PersonSprite';
+import ProgressCount from '../../../ui/ProgressCount';
 import SlotCell from '../../../ui/SlotCell';
 import Subheading from '../../../ui/Subheading';
 import TabBar from '../../../ui/TabBar';
@@ -141,7 +142,7 @@ function HatDetailBox({ game, hatId, busy, onBuy, onWear }: {
             <span className="text-xs text-text-dim break-keep break-words">해금 조건 {d.unlock.condition}</span>
           )}
           {d.unlock && (
-            <span className="text-xs text-text-dim">진척 <span className="pf-accent text-text">{d.unlock.current}/{d.unlock.target}</span></span>
+            <span className="text-xs text-text-dim">진척 <ProgressCount current={d.unlock.current} target={d.unlock.target} tight /></span>
           )}
         </div>
         <Tip wraps text={d.buyBlock ?? ''} className="block mobile:self-end">

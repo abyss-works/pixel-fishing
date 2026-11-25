@@ -8,7 +8,7 @@ import type {
   CumulativeBonusCardModel,
   NamedGroupCardModel,
 } from '../../../../features/achievement/model/achievements';
-import { fmtGold, fmtNum } from '../../../ui/format';
+import { fmtGold } from '../../../ui/format';
 import { cx } from '../../../ui/cx';
 import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
@@ -16,6 +16,7 @@ import Inset from '../../../ui/Inset';
 import type { InsetBorder } from '../../../ui/Inset';
 import PersonSprite from '../../../ui/PersonSprite';
 import PixelIcon from '../../../ui/PixelIcon';
+import ProgressCount from '../../../ui/ProgressCount';
 import ProgressMeter from '../../../ui/ProgressMeter';
 import SegmentedStepBar from '../../../ui/SegmentedStepBar';
 import Tip from '../../../ui/Tip';
@@ -81,8 +82,8 @@ export default function AchievementCard({ row, game, guest = false, busy, onClai
           tone={row.status === 'claimable' ? 'gold' : row.status === 'claimed' ? 'dim' : 'accent'}
           ariaLabel={`진척, ${def.name}`}
           fillTestAttr="achievement"
-          leftLabel={<span className={cx('pf-accent', row.status === 'claimable' ? 'text-gold' : 'text-text-dim')}>{pct}%</span>}
-          rightLabel={<span className="pf-accent text-text">{fmtNum(progress.current)} / {fmtNum(progress.target)}</span>}
+          leftLabel={<ProgressCount value={`${pct}%`} />}
+          rightLabel={<ProgressCount current={progress.current} target={progress.target} />}
         />
       </div>
       <div className="flex min-w-0 items-center gap-2 border-t border-line px-2.5 py-1.5">
@@ -159,7 +160,7 @@ export function CumulativeBonusCard({ card }: { card: CumulativeBonusCardModel }
             <span className="pf-accent text-text-dim">
               {card.allDone ? '최대 도달' : `다음 ${doneCount + 1}단계 ${card.nextDeltaText ?? ''}`}
             </span>
-            <span className="pf-accent text-text whitespace-nowrap">{fmtNum(card.current)} / {fmtNum(card.nextThreshold)}</span>
+            <ProgressCount current={card.current} target={card.nextThreshold} className="whitespace-nowrap" />
           </div>
         </div>
       </div>
@@ -260,10 +261,10 @@ export function NamedGroupCard({
             fillTestAttr="achievement"
           />
           <div className="flex items-center justify-between gap-2 text-2xs">
-            <span className={cx('pf-accent', card.status === 'claimable' ? 'text-gold' : 'text-text-dim')}>
-              {card.discovered ? `목표 ${card.target}회` : `${pct}%`}
-            </span>
-            <span className="pf-accent text-text whitespace-nowrap">{fmtNum(card.current)} / {fmtNum(card.target)}</span>
+            {card.discovered
+              ? <span className={cx('pf-accent', card.status === 'claimable' ? 'text-gold' : 'text-text-dim')}>{`목표 ${card.target}회`}</span>
+              : <ProgressCount value={`${pct}%`} />}
+            <ProgressCount current={card.current} target={card.target} className="whitespace-nowrap" />
           </div>
         </div>
       </div>
@@ -317,7 +318,7 @@ function Reward({ reward }: { reward: AchievementReward }) {
     return (
       <>
         <PixelIcon glyph="coin" className="shrink-0 text-gold" />
-        <b data-achievement-reward className="pf-accent text-2xs text-gold break-keep break-words">{fmtGold(reward.gold)}</b>
+        <ProgressCount data-achievement-reward="" value={fmtGold(reward.gold)} className="text-2xs font-bold break-keep break-words" />
       </>
     );
   }

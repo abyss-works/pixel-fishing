@@ -8,8 +8,8 @@ import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
 import { cx } from '../../../ui/cx';
-import { fmtNum } from '../../../ui/format';
 import { NOTCH_SM } from '../../../ui/notch';
+import ProgressCount from '../../../ui/ProgressCount';
 import TableBox from '../../../ui/TableBox';
 import DataTable from '../../../ui/DataTable';
 import Tip, { TipList } from '../../../ui/Tip';
@@ -87,9 +87,9 @@ function MemberLine({ row, first, busy, open, onToggle, onHandover, onKick }: {
             {row.leader && <Badge>길드장</Badge>}
           </span>
         </td>
-        <td className={cx(line, 'px-2 text-right pf-accent text-xs')}>{fmtNum(row.today)}</td>
-        <td className={cx(line, 'px-2 text-right pf-accent text-xs')}>{fmtNum(row.total)}</td>
-        <td className={cx(line, 'px-2 text-right pf-accent text-xs')}>{fmtNum(row.gave)}</td>
+        <td className={cx(line, 'px-2 text-right text-xs')}><ProgressCount value={row.today} /></td>
+        <td className={cx(line, 'px-2 text-right text-xs')}><ProgressCount value={row.total} /></td>
+        <td className={cx(line, 'px-2 text-right text-xs')}><ProgressCount value={row.gave} /></td>
         <td className={cx(line, 'text-center')}>
           {onToggle && (
             <Button size="xs" pressed={open} aria-pressed={undefined} aria-expanded={open}

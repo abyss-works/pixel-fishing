@@ -71,8 +71,9 @@ describe('BountyPanel', () => {
     mockSnap = { clearsToday: { general: 0, named: 0 },
       progress: [{ questId: quest.id, progress: 0 }], tickets: [] };
     show(game({ dex: fullDex }));
-    expect(await screen.findByText(`0/${quest.count}`)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '진행 중' })).toBeDisabled();
+    const button = await screen.findByRole('button', { name: '진행 중' });
+    expect(button).toBeDisabled();
+    expect(button.closest('div')?.parentElement).toHaveTextContent(`0/${quest.count}`);
     // 일반 의뢰는 한 번에 하나 — 나머지 두 난이도는 보이지만 누를 수 없다
     const others = screen.getAllByRole('button', { name: '수주' });
     expect(others).toHaveLength(2);
@@ -219,8 +220,9 @@ describe('BountyPanel', () => {
     show(game({ dex: fullDex }));
     fireEvent.click(await screen.findByRole('button', { name: '유물' }));
     expect(screen.getByText('해구의 이빨')).toBeInTheDocument();
-    expect(screen.getByText(/돌이 된 이빨/)).toBeInTheDocument();
-    expect(screen.getByText('0/1')).toBeInTheDocument();
+    const mat = screen.getByText(/돌이 된 이빨/);
+    expect(mat).toBeInTheDocument();
+    expect(mat.closest('li')).toHaveTextContent('0/1');
     // 재료 없으면 교환 불가 — 이유는 버튼 툴팁이다
     const exchange = screen.getByRole('button', { name: '교환' });
     expect(exchange).toBeDisabled();

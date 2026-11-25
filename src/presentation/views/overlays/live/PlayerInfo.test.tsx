@@ -97,7 +97,7 @@ describe('PlayerInfo', () => {
     expect(screen.getByText('Lv.7')).toBeTruthy();
 
     // 기본 서브탭: 업적
-    expect(screen.getByText(`2 / ${ACHIEVEMENTS.length}`)).toBeTruthy();
+    expect(screen.getByRole('meter', { name: /업적 달성/ }).parentElement).toHaveTextContent(`2 / ${ACHIEVEMENTS.length}`);
     const progressItem = ACHIEVEMENTS.find(a => a.id === 'spot-basic-pond')!;
     const cosmeticItem = ACHIEVEMENTS.find(a => a.id === 'variant-village')!;
     const unachievedItem = ACHIEVEMENTS.find(a => a.id === 'spot-full-pond')!;
@@ -130,7 +130,7 @@ describe('PlayerInfo', () => {
 
     // 두 번째 서브탭: 수집품 (모자 + 유물)
     fireEvent.click(screen.getByRole('button', { name: /수집품/ }));
-    expect(screen.getByText(`2 / ${HATS.length}`)).toBeTruthy();
+    expect(screen.getByText('모자').closest('div')).toHaveTextContent(`2 / ${HATS.length}`);
     expect(screen.queryByText(/모자 \(구매/)).toBeNull();
     fireEvent.mouseEnter(screen.getByText('모자'));
     const hatTip = screen.getByRole('tooltip');
@@ -145,7 +145,7 @@ describe('PlayerInfo', () => {
     expect(unownedHatCard).toHaveTextContent('미보유');
     expect(unownedHatCard).toHaveClass('border-dashed');
 
-    expect(screen.getByText(`2 / ${ARTIFACTS.length}`)).toBeTruthy();
+    expect(screen.getByRole('heading', { name: '유물' }).closest('div')).toHaveTextContent(`2 / ${ARTIFACTS.length}`);
     const leveledCard = screen.getByLabelText('유물 해구의 이빨 Lv.3');
     expect(leveledCard).toBeTruthy();
     expect(leveledCard.querySelector('canvas')).toHaveAttribute('width', '16');
@@ -160,8 +160,10 @@ describe('PlayerInfo', () => {
 
     // 세 번째 서브탭: 도감 진척도
     fireEvent.click(screen.getByRole('button', { name: '도감 진척도' }));
-    expect(screen.getByText(`2 / ${FISH.length}`)).toBeTruthy();
-    expect(screen.getByText(`1 / ${FISH.length}`)).toBeTruthy();
+    const dexHeader = screen.getByRole('heading', { name: '해역별 도감' }).parentElement!;
+    expect(dexHeader).toHaveTextContent(`일반 2 / ${FISH.length}`);
+    expect(dexHeader).toHaveTextContent(`돌연변이 1 / ${FISH.length}`);
+    expect(dexHeader.querySelectorAll('[data-progress-count]')[1]).toHaveAttribute('data-tone', 'guild');
 
     // 관계 동작(친구 요청·신고·차단)
     fireEvent.click(screen.getByRole('button', { name: '친구 요청' }));

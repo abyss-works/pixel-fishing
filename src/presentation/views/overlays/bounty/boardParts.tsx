@@ -3,8 +3,9 @@ import { GAME_DAY_RESET_TEXT } from '../../../../game/rules/time.js';
 import Button from '../../../ui/Button';
 import KeyValueRow from '../../../ui/KeyValueRow';
 import SharedProgressMeter from '../../../ui/ProgressMeter';
+import ProgressCount from '../../../ui/ProgressCount';
 import Tip from '../../../ui/Tip';
-import { fmtMinutes, fmtRatioTight } from '../../../ui/format';
+import { fmtMinutes } from '../../../ui/format';
 
 // 수배판 카드(일반 의뢰, 네임드 토벌, 유물)가 함께 쓰는 조각.
 
@@ -38,7 +39,7 @@ export function ProgressMeter({ progress, count }: { progress: number; count: nu
       tone="accent"
       ariaLabel="진행"
       className="h-3.5"
-      rightLabel={`${shown}/${count}`}
+      rightLabel={<ProgressCount current={shown} target={count} tight />}
     />
   );
 }
@@ -52,7 +53,6 @@ export function ClearsLeft({ leftAll, leftNamed, dailyCap, namedDailyCap, shortL
   /** 값 이름을 메뉴 줄의 의뢰 배지처럼 "일반", "네임드"로 줄인다 */
   shortLabels?: boolean;
 }) {
-  const left = fmtRatioTight;
   return (
     <>
       <span className="text-text-dim whitespace-nowrap">
@@ -60,11 +60,11 @@ export function ClearsLeft({ leftAll, leftNamed, dailyCap, namedDailyCap, shortL
       </span>
       <span className="flex items-baseline gap-1.5 whitespace-nowrap">
         <span className="text-text-dim">{shortLabels ? '일반' : '일반 의뢰'}</span>
-        <span className="pf-accent" aria-label="오늘 남은 일반 의뢰">{left(leftAll, dailyCap)}</span>
+        <span aria-label="오늘 남은 일반 의뢰"><ProgressCount current={leftAll} target={dailyCap} tight /></span>
       </span>
       <span className="flex items-baseline gap-1.5 whitespace-nowrap">
         <span className="text-text-dim">{shortLabels ? '네임드' : '네임드 토벌'}</span>
-        <span className="pf-accent" aria-label="오늘 남은 네임드 토벌">{left(leftNamed, namedDailyCap)}</span>
+        <span aria-label="오늘 남은 네임드 토벌"><ProgressCount current={leftNamed} target={namedDailyCap} tight /></span>
       </span>
     </>
   );

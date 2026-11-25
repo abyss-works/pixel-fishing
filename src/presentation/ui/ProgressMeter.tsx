@@ -85,7 +85,7 @@ export default function ProgressMeter({
         {(leftLabel !== undefined || rightLabel !== undefined) && (
           <div className="flex items-center justify-between gap-2 text-2xs">
             <span>{leftLabel}</span>
-            <span className="whitespace-nowrap">{rightLabel}</span>
+            <span className="pf-accent whitespace-nowrap">{rightLabel}</span>
           </div>
         )}
       </div>

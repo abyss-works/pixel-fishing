@@ -3,7 +3,7 @@ import type { Fish, GameState } from '../../../../../game/rules/logic';
 import { selectDexDetailData } from '../../../../../features/dex/model/catalog';
 import { selectSizeDistribution } from '../../../../../features/dex/model/sizeDistribution';
 import { useSpeciesRanking } from '../../../../../features/ranking/service/useRanking';
-import RankList from '../../../../ui/RankList';
+import RankList, { RankMeBar } from '../../../../ui/RankList';
 import RankingStatus from '../../../overlays/ranking/RankingStatus';
 import ArrowButton from '../../../../ui/ArrowButton';
 import Modal from '../../../../ui/Modal';
@@ -92,15 +92,10 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
                   {/* 표 머리(28px)와 순위 다섯 줄(28.5px씩)에 위 여백 4px을 더한 높이 — 그 아래는 칸 안에서 스크롤한다 */}
                   <div className={`${SCROLL_Y_ROWS} max-h-[min(174.5px,40dvh)]`}>
                     <div className="pl-1">
-                      <RankList rows={ranking.data.top} me={null} valueLabel="크기" format={fmtSize} />
+                      <RankList embedded rows={ranking.data.top} me={null} valueLabel="크기" format={fmtSize} />
                     </div>
                   </div>
-                  {meOutside && (
-                    <div className="mt-auto flex items-center justify-between gap-2 border-t border-line px-2 py-1.5 text-sm text-accent">
-                      <span>내 순위 {meOutside.rank}위</span>
-                      <span className="pf-accent text-xs">{fmtSize(meOutside.value)}</span>
-                    </div>
-                  )}
+                  {meOutside && <RankMeBar me={meOutside} compact format={fmtSize} />}
                 </>
               ) : (
                 <div className="flex flex-1 min-h-24 items-center justify-center px-3">

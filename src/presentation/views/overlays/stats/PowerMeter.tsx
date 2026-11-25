@@ -1,4 +1,5 @@
 import { cx } from '../../../ui/cx';
+import ProgressCount from '../../../ui/ProgressCount';
 import ProgressMeter from '../../../ui/ProgressMeter';
 
 // 파워 막대: 채움이 현재 파워, 금색 눈금이 해역의 요구 파워다. 막대 끝은 둘 중 큰 값이다.
@@ -17,9 +18,13 @@ export default function PowerMeter({ power, requirement, className }: { power: n
         markerRatio={requirement / top}
         ariaLabel="파워"
       />
-      <span className="pf-accent shrink-0">
-        <span className={cx(short && 'text-danger')}>{power}</span> <span className="text-text-dim">/ 요구 {requirement}</span>
-      </span>
+      <ProgressCount
+        current={power}
+        target={requirement}
+        targetPrefix="요구 "
+        tone={short ? 'danger' : 'gold'}
+        className="shrink-0"
+      />
     </div>
   );
 }

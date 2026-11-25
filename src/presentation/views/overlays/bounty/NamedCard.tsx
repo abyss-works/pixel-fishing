@@ -7,6 +7,7 @@ import { selectNamedBountyCardData } from '../../../../features/bounty/model/pan
 import AdjustedAmount from '../../../ui/AdjustedAmount';
 import Button from '../../../ui/Button';
 import Inset from '../../../ui/Inset';
+import ProgressCount from '../../../ui/ProgressCount';
 import Tip from '../../../ui/Tip';
 import { cx } from '../../../ui/cx';
 import { AcceptButton, BoardRows, NamedCardHead } from './boardParts';
@@ -31,7 +32,7 @@ export default function NamedCard({ game, quest, canAccept, reason, busy, progre
       <BoardRows rows={[
         { key: 'haunt', label: '나타나는 곳', value: haunt },
         { key: 'progress', label: <Tip text={`${haunt}에서 낚시하면 아주 드물게 마주쳐요.`}>진행</Tip>,
-          value: <span className="pf-accent">{Math.min(progress, quest.count)}/{quest.count}</span> },
+          value: <ProgressCount current={Math.min(progress, quest.count)} target={quest.count} tight /> },
         { key: 'reward', label: '보상', value: <AdjustedAmount amount={reward} className="text-gold" /> },
         ...(materialName ? [{ key: 'material', label: '교환 재료', value: materialName }] : []),
       ]} />

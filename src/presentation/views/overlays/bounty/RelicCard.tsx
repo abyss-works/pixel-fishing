@@ -8,6 +8,7 @@ import { levelText } from '../../../../features/inventory/model/artifactLevel';
 import Button from '../../../ui/Button';
 import Inset from '../../../ui/Inset';
 import ItemSprite from '../../../ui/ItemSprite';
+import ProgressCount from '../../../ui/ProgressCount';
 import Tip from '../../../ui/Tip';
 import { cx } from '../../../ui/cx';
 import { RarityText } from '../../../ui/fish/RarityTag';
@@ -48,7 +49,7 @@ export default function RelicCard({ artifact, owned, level, materialCount, busy,
           key: `effect-${i}`, label: i === 0 ? '효과' : '', value: <span className={tone}>{line}</span>,
         })),
         { key: 'material', label: <Tip text="교환 재료는 네임드 토벌 보상으로 받아요.">교환 재료</Tip>,
-          value: <>{artifact.materialName} <span className="pf-accent">{materialCount}/1</span></> },
+          value: <>{artifact.materialName} <ProgressCount current={materialCount} target={1} tight /></> },
       ]} />
       <div className="mt-auto">
         {owned

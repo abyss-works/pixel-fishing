@@ -4,9 +4,9 @@ import { boatNameOf } from '../../../../game/content/boats';
 import type { ReachableZone, StatsSpotRow, StatsSummary } from '../../../../features/gameplay/model/stats';
 import BoatSprite from '../../../ui/BoatSprite';
 import { cx } from '../../../ui/cx';
-import { fmtNum } from '../../../ui/format';
 import Inset from '../../../ui/Inset';
 import KeyValueRow from '../../../ui/KeyValueRow';
+import ProgressCount from '../../../ui/ProgressCount';
 import ProgressMeter from '../../../ui/ProgressMeter';
 import TableBox from '../../../ui/TableBox';
 import DataTable from '../../../ui/DataTable';
@@ -40,7 +40,13 @@ export default function BoatTab({ game, summary, row, zones }: {
             tone={BAG_TONE[bag.level]}
             ariaLabel="가방"
           />
-          <span className="pf-accent shrink-0">{fmtNum(bag.count)} / {fmtNum(bag.cap)} <span className="text-text-dim">({bag.percent}%)</span></span>
+          <ProgressCount
+            current={bag.count}
+            target={bag.cap}
+            percent={bag.percent}
+            tone={BAG_TONE[bag.level]}
+            className="shrink-0"
+          />
         </div>
       </Inset>
       <TableBox className="flex-1 min-h-0 px-3 pb-2">
@@ -59,7 +65,7 @@ export default function BoatTab({ game, summary, row, zones }: {
               return (
                 <tr key={z.zone} className={cx(closed && 'text-text-dim')}>
                   <td className={cx(cell, 'truncate')}>{z.name}</td>
-                  <td className={cx(cell, 'px-2 text-right pf-accent text-xs')}>{z.open}/{z.total}</td>
+                  <td className={cx(cell, 'px-2 text-right text-xs')}><ProgressCount current={z.open} target={z.total} tight /></td>
                   <td className={cx(cell, 'pl-2 text-right text-xs truncate', !closed && 'text-text-dim')}>
                     {z.nextBoat !== null && boatNameOf(z.nextBoat)}
                   </td>
