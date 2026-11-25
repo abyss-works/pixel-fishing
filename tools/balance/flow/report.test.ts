@@ -92,13 +92,13 @@ describe('실행과 출력', () => {
     expect(JSON.stringify(runFlow(j))).toBe(JSON.stringify(runFlow(j)));
   });
 
-  it('최초 10분 출력은 판정과 보장 번호별 도착 시간을 담는다', () => {
-    const text = renderText(runFlow(base({ commands: ['opening'], legendAt: 15 })));
+  it('최초 10분 출력은 판정과 상한 보장별 도착 시간을 담는다', () => {
+    const text = renderText(runFlow(base({ commands: ['opening'] })));
     expect(text).toContain('최초 10분');
     expect(text).toContain('무판정');
     expect(text).toContain('GOOD');
     expect(text).toContain('보장 없음');
-    expect(text).toContain('전설 15번째');
+    expect(text).toContain('상한 보장(마을 연못 20회 · 마을 강 30회)');
   });
 
   it('예외 흐름 출력은 오프셋 표와 조기 진입, 복귀, 토벌 표를 담는다', () => {

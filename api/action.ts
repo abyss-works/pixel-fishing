@@ -17,12 +17,12 @@ import { afterResponse } from './_server/afterResponse.js';
 import { migrate, newState } from '../src/game/rules/logic.js';
 import type { FishInstance, FormRecord, GameState, Judgment } from '../src/game/rules/logic.js';
 import {
-  autoLockKey, buildCatchInfo, canFish, decideCatchAutoLock, FISH, formName, instanceFish,
+  autoLockKey, buildCatchInfo, canFish, decideCatchAutoLock, FISH, fishPool, formName, instanceFish,
   evictionPriceRows, makeInstance, nextDexRec, pickEvict, pruneAutoLockedIds, RARITY, RARITY_ORDER,
   matchBountyCatch,
 } from '../src/game/rules/logic.js';
 import { appliedSlots, applyEnergyGain, planOverflow } from '../src/game/rules/cooking.js';
-import { needsLegacyFirstCatchMigration } from '../src/game/rules/firstCatch.js';
+import { isFirstCatchSpot, needsLegacyFirstCatchMigration } from '../src/game/rules/firstCatch.js';
 import { drawNamedEncounter, speciesPityCandidates } from '../src/game/rules/pity.js';
 import { ensureFortune, luckMultOf } from '../src/game/rules/fortune.js';
 import { bountyById, isQuestOffered } from '../src/game/content/bounties.js';
@@ -843,8 +843,12 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
   const pz = powerZones(base, spot);
   const { judgment, phaseOpts, cook } = prepareCatchDraw(base, judgmentIn, now, pz, forcePhase);
   const today = todayKST();
-  // 어종 천장 — 후보가 있을 때만 그 어종들의 일반 폼 소유를 조회한다(fast path는 도감을 들고 있지 않다)
-  const candidates = speciesPityCandidates(base.pity, spot, phaseOpts);
+  // 어종 천장·첫 경험 보장 — 후보가 있을 때만 그 어종들의 일반 폼 소유를 조회한다(fast path는 도감을 들고 있지 않다)
+  const pityCandidates = speciesPityCandidates(base.pity, spot, phaseOpts);
+  const firstCatchActive = isFirstCatchSpot(spot) && base.firstCatch[spot].active;
+  const candidates = firstCatchActive
+    ? [...new Set([...pityCandidates, ...fishPool(spot, 'night').map(f => f.id)])]
+    : pityCandidates;
   const owned = candidates.length === 0 ? new Set<string>()
     : await step('db-read', { uid, action: 'catch' }, () => ownedNormalForms(db, uid, candidates));
   const achBonuses = achievementBonusesOf(base);

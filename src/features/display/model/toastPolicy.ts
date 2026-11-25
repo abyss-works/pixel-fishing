@@ -11,6 +11,7 @@ export type SystemEventKind =
   | 'catch.legendaryOrFirstVariant'
   | 'catch.encounterTicket'
   | 'catch.rejected'
+  | 'dex.spotCompleted'
   | 'achievement.unlockable'
   | 'away.summary'
   | 'bounty.challengeResolved'
@@ -85,6 +86,7 @@ export const TOAST_POLICY: Record<SystemEventKind, ToastRule> = {
   'catch.legendaryOrFirstVariant': { tier: 'A', defaultTone: 'gold', priority: 1, ttlMs: TTL_BY_PRIORITY[1] },
   'catch.encounterTicket': { tier: 'A', defaultTone: 'epic', priority: 1, ttlMs: TTL_BY_PRIORITY[1] },
   'catch.rejected': { tier: 'A', defaultTone: 'danger', priority: 0, ttlMs: TTL_BY_PRIORITY[0] },
+  'dex.spotCompleted': { tier: 'A', defaultTone: 'gold', priority: 1, ttlMs: TTL_BY_PRIORITY[1] },
   'achievement.unlockable': {
     tier: 'A', defaultTone: 'gold', priority: 1, ttlMs: TTL_BY_PRIORITY[1],
     batchKey: 'achievement.unlockable', batchWindowMs: 150,

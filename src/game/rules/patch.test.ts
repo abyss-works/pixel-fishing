@@ -34,6 +34,10 @@ describe('patch 동등성 — 전 액션', () => {
   it('catch — 추첨+개체+도감+명성', () => {
     check(seed(), { type: 'catch', spot: 'pond', judgment: 'normal' });
   });
+  it('catch — 첫 경험 보장 확정 캐치 델타 일치', () => {
+    check(seed({ firstCatch: { pond: { n: 19, active: true }, river: { n: 0, active: true } } }),
+      { type: 'catch', spot: 'pond', judgment: 'normal' });
+  });
   it('catch — 방치 판정', () => {
     check(seed(), { type: 'catch', spot: 'river', judgment: 'auto' });
   });
