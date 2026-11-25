@@ -10,10 +10,10 @@ export default function TimeBadge() {
   const { clock, phase } = useGameTime();
   const night = phase === 'night';
   return (
-    <HudChip size="sm">
+    <HudChip>
       <PixelIcon glyph={night ? 'moon' : 'sun'} size={11}
                  className={night ? 'text-accent' : 'text-gold'} />
-      <span className="pf-accent text-xs leading-none text-text">{clock}</span>
+      <span className="pf-accent leading-none text-text">{clock}</span>
     </HudChip>
   );
 }

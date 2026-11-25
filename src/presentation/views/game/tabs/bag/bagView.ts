@@ -14,7 +14,7 @@ export const BAG_SECTIONS: readonly BagSection[] = ['fish', 'items', 'artifacts'
 
 interface BagViewState {
   layout: BagLayout;
-  section: BagSection;            // 가방 섹션(물고기/아이템/유물) — 탭 라벨 둘째 줄에 보인다
+  section: BagSection;            // 가방 섹션(물고기/아이템/유물) — 상단 서브탭이 현재 섹션을 보여 준다
   opened: ReadonlySet<string>;    // 가방: **펼친** 행 키만 기록 — 기본은 전부 닫힘
   collapsed: ReadonlySet<string>; // 판매 패널: **펼친** 행 키만 기록 — 기본은 전부 닫힘
 }

@@ -30,6 +30,7 @@ describe('SlotChips (보너스 통합 칩)', () => {
     const onOpenEffects = vi.fn();
     render(<SlotChips game={{ ...newState(), boat: COOKING_UNLOCK_BOAT }} accountState="account" onOpenEffects={onOpenEffects} />);
     const btn = screen.getByRole('button', { name: '활성 효과 없음' });
+    expect(btn).toHaveClass('h-[26px]', 'text-xs');
     expect(btn).toHaveTextContent('효과0');
     expect(btn.className).toContain('text-text-dim');
     const dot = btn.querySelector('span[aria-hidden="true"]')!;

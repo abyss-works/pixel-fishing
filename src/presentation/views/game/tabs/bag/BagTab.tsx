@@ -47,7 +47,7 @@ import { SidebarFooter } from '../../../../layouts/sidebar';
 export const EXHIBIT_UI_ENABLED = false;
 
 // 가방 탭 — **서브탭 3개: 물고기 / 아이템 / 유물**. 상단 서브탭, Tab 키, 가방 탭 재선택(클릭·같은 숫자키)으로
-// 전환하며 탭 라벨 둘째 줄이 현재 섹션을 보여 준다. 물고기 1,500마리를 아이템과 한 스크롤에서
+// 전환한다. 물고기 1,500마리를 아이템과 한 스크롤에서
 // 훑게 하지 않는다. 선택은 가방 보기 상태에 살아서 탭을 왕래해도 유지된다.
 //
 // 물고기 섹션 — 우상단 보기 전환 아이콘으로 목록/카드 보기를 바꾼다. 카드뷰는 **물고기 목록의 렌더링만** 바꾼다.
@@ -113,13 +113,13 @@ function ArtifactSection({ game, dispatch, setToast }: {
                 />
                 <span className="flex flex-col gap-0.5 min-w-0 flex-1">
                   <span className="flex items-baseline justify-between gap-2">
-                    <span className="truncate min-w-0">
-                      <GradeName name={a.name} grade={a.grade} emphasized={owned} />
+                    <span className="flex items-baseline gap-1.5 min-w-0">
+                      <span className="truncate min-w-0">
+                        <GradeName name={a.name} grade={a.grade} />
+                      </span>
+                      {owned && hasLevel && <span className="pf-accent text-accent text-xs shrink-0">{levelText(level)}</span>}
                     </span>
-                    <span className="flex items-baseline gap-1.5 text-xs shrink-0 text-text-dim">
-                      <span>{zoneName}</span>
-                      {owned && hasLevel && <span className="pf-accent text-accent">{levelText(level)}</span>}
-                    </span>
+                    <span className="text-xs shrink-0 text-text-dim">{zoneName}</span>
                   </span>
                   {owned ? (
                     <>
@@ -140,7 +140,7 @@ function ArtifactSection({ game, dispatch, setToast }: {
               </>
             );
             return owned ? (
-              <PressRow key={a.id} data-artifact-row onPress={() => setOpenId(a.id)} className="flex items-start gap-2.5 px-2 py-1.5 text-sm">
+              <PressRow key={a.id} data-artifact-row onPress={() => setOpenId(a.id)} className="flex items-start gap-2.5 px-2 py-1.5 text-sm text-text">
                 {body}
               </PressRow>
             ) : (

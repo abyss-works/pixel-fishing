@@ -258,8 +258,23 @@ describe('GuildModal', () => {
     expect(lockedSkillTip.textContent).toContain('일반 등급 물고기가 걸릴 비중을 줄여요.');
     expect(lockedSkillTip.textContent).toContain('길드 Lv.4에 열려요.');
     expect(lockedSkillTip.querySelector('.border-t')).not.toBeNull();
+    fireEvent.mouseLeave(within(tree).getByRole('button', { name: '희귀 어종 확률 고르기' }).parentElement as HTMLElement);
     expect(within(tree).getByLabelText('판매가 보너스 3단계 모으는 중')).toBeTruthy();
-    expect(screen.getByText('기본 상한 5단계')).toBeTruthy();
+    // [공통] 상단 바: 공용 기본 단계(5칸 슬롯 + 3 / 5)와 길드 Lv.3 배지, 툴팁
+    const sharedLabel = screen.getByText('공용 기본 단계');
+    const sharedTopBar = sharedLabel.closest('.border-b') as HTMLElement;
+    expect(sharedTopBar.className).toContain('h-9');
+    expect(sharedTopBar.className).toContain('mobile:min-h-9');
+    expect(sharedTopBar).toHaveTextContent('3 / 5');
+    expect(within(sharedTopBar).getByText('길드 Lv.3')).toBeTruthy();
+    const sharedPips = sharedTopBar.querySelectorAll('[aria-hidden="true"] > span');
+    expect(sharedPips).toHaveLength(5);
+    expect([...sharedPips].filter(el => el.className.includes('bg-gold'))).toHaveLength(3);
+    expect([...sharedPips].filter(el => el.className.includes('bg-bg'))).toHaveLength(2);
+    fireEvent.mouseEnter(sharedLabel);
+    expect(screen.getByRole('tooltip').textContent).toBe('기부한 골드를 모아 길드원 모두에게 적용되는 공용 기본 단계를 올려요.');
+    fireEvent.mouseLeave(sharedLabel);
+
     expect(screen.getByText('현재(2단계)')).toBeTruthy();
     expect(screen.getByText('다음(3단계)')).toBeTruthy();
     expect(screen.getByText('모인 골드').parentElement).toHaveTextContent('125,000 / 500,000');
@@ -274,9 +289,13 @@ describe('GuildModal', () => {
     fireEvent.click(screen.getByRole('button', { name: '가방 용량 증가 고르기' }));
     expect((screen.getByRole('button', { name: '기부' }) as HTMLButtonElement).disabled).toBe(true);
 
-    // Lv.5 이하에서 [개인] 서브탭 전환 시 단일 잠금 안내만 보인다
+    // Lv.5 이하에서 [개인] 서브탭 전환 시 단일 잠금 안내와 오른쪽 길드 Lv.3 배지가 같은 높이 상단 바에 보인다
     fireEvent.click(screen.getByRole('button', { name: '개인' }));
-    expect(screen.getAllByText('길드 Lv.6부터 개인 무료 자유 강화가 열려요.').length).toBeGreaterThanOrEqual(1);
+    const lockNoteEl = screen.getAllByText('길드 Lv.6부터 개인 무료 자유 강화가 열려요.')[0];
+    const lockedTopBar = lockNoteEl.closest('.border-b') as HTMLElement;
+    expect(lockedTopBar.className).toContain('h-9');
+    expect(lockedTopBar.className).toContain('mobile:min-h-9');
+    expect(within(lockedTopBar).getByText('길드 Lv.3')).toBeTruthy();
     expect(screen.queryByText('남은 강화 포인트')).toBeNull();
     expect(screen.queryByRole('button', { name: '기부' })).toBeNull();
     expect((screen.getByRole('button', { name: 'Lv.6 해금' }) as HTMLButtonElement).disabled).toBe(true);
