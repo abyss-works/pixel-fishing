@@ -88,9 +88,16 @@ describe('GuildModal', () => {
 
   it('길드장의 관리 탭: 처리할 신청 수를 탭에 붙이고, 가입 방식을 바꾸며, 신청을 승인하거나 거절한다', async () => {
     s.guild = GUILD;
-    render(<GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    const toast = vi.fn();
+    render(<GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={toast} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /관리.*1건/ }));
     expect(screen.getByText('ABCD2345')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '코드 복사' }));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('길드 코드를 복사했어요.'));
+    fireEvent.click(screen.getByRole('button', { name: '링크 복사' }));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('초대 링크를 복사했어요.'));
     fireEvent.click(screen.getByRole('radio', { name: /자유 가입/ }));
     await waitFor(() => expect(s.act).toHaveBeenCalledWith({ op: 'settings', guildId: 'g1', joinMode: 'open' }));
     fireEvent.click(screen.getByRole('button', { name: '승인' }));

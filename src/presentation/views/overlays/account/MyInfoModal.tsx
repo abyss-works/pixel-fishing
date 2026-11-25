@@ -46,7 +46,7 @@ export default function MyInfoModal({ setToast, onClose, account, accountChecked
       else {
         sendNotice(setToast, {
           kind: 'social.modalAction',
-          text: `닉네임을 “${draft}”로 바꿨어요.`,
+          text: `닉네임을 “${draft}” 이름으로 바꿨어요.`,
           toastText: '닉네임을 바꿨어요.',
         });
         setDraft('');
