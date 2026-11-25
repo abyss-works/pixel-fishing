@@ -47,78 +47,188 @@ export async function checkStageLiveUpgrade(
   return result.ok ? null : result.status;
 }
 
-function gateHtml(status: 401 | 403): string {
-  const title = status === 403 ? '접근 권한 없음 — 스테이징' : '스테이징 관리자 인증';
-  const desc = status === 403
-    ? '현재 로그인한 계정은 스테이징 접근 권한(관리자 명부)이 없습니다. 권한이 있는 Google 계정으로 다시 로그인해 주세요.'
-    : '스테이징 환경은 관리자 Google 계정으로 로그인한 뒤 이용할 수 있습니다.';
-  const buttonLabel = status === 403 ? '다른 Google 관리자 계정으로 로그인' : 'Google 관리자 계정으로 로그인';
+const GOOGLE_LOGO_SVG = `<svg viewBox="0 0 48 48" width="20" height="20" aria-hidden="true" style="display:block;flex:none;margin-right:10px;">
+  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+  <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+</svg>`;
+
+/** 스테이징 진입 게이트 HTML을 생성한다 */
+export function gateHtml(status: 401 | 403): string {
+  const isDenied = status === 403;
+  const badge = isDenied ? '접근 제한' : '관리자 인증';
+  const title = isDenied ? '스테이징 접근 제한' : '스테이징 관리자 인증';
+  const desc = isDenied
+    ? '로그인한 계정이 관리자 명부에 없어 이용할 수 없어요.<br />로그아웃한 뒤 권한이 있는 계정으로 다시 로그인해 주세요.'
+    : '프리뷰 환경은 관리자 구글 계정으로 로그인해야 이용할 수 있어요.<br />관리자 권한이 있는 구글 계정으로 로그인해 주세요.';
+  const logoutButton = isDenied
+    ? '\n      <button id="stage-logout" class="pf-btn-sec" type="button">로그아웃</button>'
+    : '';
   return `<!doctype html>
 <html lang="ko">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   <title>${title}</title>
   <style>
     :root { color-scheme: dark; }
     * { box-sizing: border-box; }
+    html, body { height: 100%; }
     body {
-      margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px;
-      background: #0d1624; color: #e6eef8;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px;
+      background: #0a1526; color: #f2f7fb;
+      font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', system-ui, sans-serif;
+      font-size: 13px; line-height: 1.55;
+      word-break: keep-all; overflow-wrap: break-word;
     }
-    main {
-      width: 100%; max-width: 400px; padding: 28px 24px; border-radius: 12px;
-      background: #142236; border: 1px solid #29405e;
-      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+    .pf-card {
+      width: 100%; max-width: 384px; padding: 20px;
+      display: flex; flex-direction: column; gap: 12px;
+      background: #14243d; border: 1px solid #2b4568; border-radius: 0;
+      clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+      box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.08), inset -1px -1px 0 rgba(0, 0, 0, 0.45);
     }
-    h1 { margin: 0 0 12px; font-size: 1.15rem; font-weight: 700; }
-    p { margin: 0 0 20px; font-size: 0.92rem; line-height: 1.55; color: #b7c8de; }
-    button {
-      width: 100%; padding: 12px 16px; border: 0; border-radius: 8px; cursor: pointer;
-      font-size: 0.95rem; font-weight: 600; background: #3b82f6; color: #ffffff;
+    .pf-badge {
+      align-self: flex-start; padding: 3px 8px;
+      background: #0f1c31; border: 1px solid #2b4568; border-radius: 0;
+      color: #93a8c4; font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
     }
-    button:hover:not(:disabled) { background: #2563eb; }
-    button:disabled { opacity: 0.6; cursor: wait; }
-    [role="alert"] { margin: 12px 0 0; min-height: 1.2em; font-size: 0.85rem; color: #fca5a5; }
+    h1 {
+      margin: 0; font-size: 17px; font-weight: 700; letter-spacing: 0.5px; color: #ffd54f;
+    }
+    .pf-desc {
+      margin: 0; font-size: 12px; line-height: 1.625; color: #93a8c4;
+    }
+    .pf-actions {
+      display: flex; flex-direction: column; gap: 8px; margin-top: 2px;
+    }
+    .google-btn {
+      display: flex; align-items: center; width: 100%; height: 40px; padding: 0 12px;
+      border-radius: 4px; border: 1px solid #747775; background: #ffffff; color: #1F1F1F;
+      cursor: pointer; font-family: inherit; font-size: 14px; font-weight: 700; line-height: 20px;
+    }
+    .google-btn:hover:not(:disabled) { background: color-mix(in srgb, #303030 8%, #ffffff); }
+    .google-btn:active:not(:disabled) { background: color-mix(in srgb, #303030 12%, #ffffff); }
+    .google-btn:disabled {
+      cursor: default; opacity: 0.38;
+      border-color: rgba(31, 31, 31, 0.12); color: rgba(31, 31, 31, 0.38);
+    }
+    .google-btn:focus-visible { outline: 2px solid #4fc3f7; outline-offset: 1px; }
+    .google-label { flex: 1; text-align: center; white-space: nowrap; }
+    .pf-btn-sec {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 100%; min-height: 44px; padding: 8px 16px;
+      background: #1b3152; border: 1px solid #2b4568; border-radius: 0;
+      color: #f2f7fb; font-family: inherit; font-size: 15px; font-weight: 600;
+      cursor: pointer;
+      box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.08), inset -1px -1px 0 rgba(0, 0, 0, 0.45);
+    }
+    .pf-btn-sec:hover:not(:disabled) { border-color: #4fc3f7; }
+    .pf-btn-sec:active:not(:disabled) {
+      box-shadow: inset -1px -1px 0 rgba(255, 255, 255, 0.08), inset 1px 1px 0 rgba(0, 0, 0, 0.45);
+      transform: translateY(1px);
+    }
+    .pf-btn-sec:disabled { opacity: 0.4; cursor: default; }
+    .pf-btn-sec:focus-visible { outline: 2px solid #4fc3f7; outline-offset: 1px; }
+    [role="alert"] { margin: 0; font-size: 12px; line-height: 1.5; color: #ff8a80; }
+    [role="alert"]:empty { display: none; }
   </style>
 </head>
 <body>
-  <main>
+  <main class="pf-card">
+    <span class="pf-badge">${badge}</span>
     <h1>${title}</h1>
-    <p>${desc}</p>
-    <button id="stage-login" type="button">${buttonLabel}</button>
+    <p class="pf-desc">${desc}</p>
     <p id="stage-error" role="alert"></p>
+    <div class="pf-actions">
+      <button id="stage-login" class="google-btn" type="button">
+        ${GOOGLE_LOGO_SVG}
+        <span class="google-label">Google로 계속하기</span>
+      </button>${logoutButton}
+    </div>
   </main>
   <script>
     (() => {
       const btn = document.getElementById('stage-login');
+      const logoutBtn = document.getElementById('stage-logout');
       const err = document.getElementById('stage-error');
-      btn.addEventListener('click', async () => {
-        btn.disabled = true;
-        err.textContent = '';
-        try {
-          const res = await fetch('/api/admin/auth/sign-in/social', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              provider: 'google',
-              callbackURL: window.location.href,
-              disableRedirect: true,
-            }),
-          });
-          const data = await res.json().catch(() => null);
-          if (!res.ok || !data || typeof data.url !== 'string') {
-            err.textContent = '로그인 시작에 실패했습니다. 잠시 후 다시 시도해 주세요.';
-            btn.disabled = false;
-            return;
+      const current = new URL(window.location.href);
+      const returnedError = current.searchParams.get('error');
+      if (returnedError !== null) {
+        current.searchParams.delete('error');
+        current.searchParams.delete('error_description');
+        window.history.replaceState(window.history.state, '', current.toString());
+        err.textContent = returnedError === 'access_denied'
+          ? '구글 로그인을 취소했어요. 계속하려면 다시 로그인해 주세요.'
+          : '구글 인증에 실패했어요. 잠시 뒤 다시 시도해 주세요.';
+      }
+      const cleanUrl = current.toString();
+
+      const setBusy = (busy) => {
+        if (btn) btn.disabled = busy;
+        if (logoutBtn) logoutBtn.disabled = busy;
+      };
+
+      if (btn) {
+        btn.addEventListener('click', async () => {
+          setBusy(true);
+          err.textContent = '';
+          try {
+            const res = await fetch('/api/admin/auth/sign-in/social', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                provider: 'google',
+                callbackURL: cleanUrl,
+                errorCallbackURL: cleanUrl,
+                disableRedirect: true,
+              }),
+            });
+            if (res.status === 429) {
+              err.textContent = '로그인 요청이 너무 많아요. 잠시 기다린 뒤 다시 시도해 주세요.';
+              setBusy(false);
+              return;
+            }
+            const data = await res.json().catch(() => null);
+            if (!res.ok || !data || typeof data.url !== 'string') {
+              err.textContent = '구글 로그인을 시작하지 못했어요. 잠시 뒤 다시 시도해 주세요.';
+              setBusy(false);
+              return;
+            }
+            window.location.assign(data.url);
+          } catch {
+            err.textContent = '네트워크에 연결하지 못했어요. 연결 상태를 확인한 뒤 다시 시도해 주세요.';
+            setBusy(false);
           }
-          window.location.href = data.url;
-        } catch {
-          err.textContent = '네트워크 오류로 로그인을 시작할 수 없습니다.';
-          btn.disabled = false;
-        }
-      });
+        });
+      }
+
+      if (logoutBtn) {
+        logoutBtn.addEventListener('click', async () => {
+          setBusy(true);
+          err.textContent = '';
+          try {
+            const res = await fetch('/api/admin/auth/sign-out', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: '{}',
+            });
+            if (!res.ok) {
+              err.textContent = '로그아웃하지 못했어요. 잠시 뒤 다시 시도해 주세요.';
+              setBusy(false);
+              return;
+            }
+            window.location.reload();
+          } catch {
+            err.textContent = '네트워크에 연결하지 못했어요. 연결 상태를 확인한 뒤 다시 시도해 주세요.';
+            setBusy(false);
+          }
+        });
+      }
     })();
   </script>
 </body>
