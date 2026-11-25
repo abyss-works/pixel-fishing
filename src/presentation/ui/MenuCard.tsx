@@ -1,8 +1,9 @@
-import { useId, useState } from 'react';
+import { useId } from 'react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import Badge from './Badge';
 import Button from './Button';
-import { LockBadge, LockLines } from './Locked';
-import Tip from './Tip';
+import { LockBadge } from './Locked';
+import Tip, { TipCard } from './Tip';
 import { useOmitted } from './useOmitted';
 
 /** 글자의 렌더링 역할. required는 화면 용어의 필수, omittable은 생략이다. 역할을 정하지 않은 글자는 required다 */
@@ -45,8 +46,6 @@ export default function MenuCard({ icon, title, sub, subRole = 'required', lock,
   const { ref: subRef, isOmitted } = useOmitted<HTMLSpanElement>();
   const omittable = !!sub && subRole === 'omittable';
   const lockReasonId = useId();
-  // 잠금 툴팁을 열 때 설명 줄이 숨겨져 있었는지. 숨겨졌다면 잠금 안내 아래에 설명도 함께 보인다
-  const [subHidden, setSubHidden] = useState(false);
   const card = (
     <Button type="button" aria-label={sub ? `${title} ${sub}` : title} {...rest}
             onClick={lock ? undefined : onClick} aria-disabled={lock ? true : undefined}
@@ -61,20 +60,20 @@ export default function MenuCard({ icon, title, sub, subRole = 'required', lock,
     </Button>
   );
   if (lock) {
-    const text = (
-      <>
-        <LockLines lines={lock} />
-        {omittable && subHidden && <span className="block text-text-dim">{sub}</span>}
-      </>
+    const tip = (
+      <TipCard
+        title={title}
+        subtitle={sub}
+        badge={<Badge tone="dim-plain" size="2xs">잠김</Badge>}
+        status={{ tone: 'lock', lines: lock }}
+      />
     );
-    // 판정은 툴팁을 여는 순간에 하므로 열기 전에 설명 줄의 숨김 여부를 읽어 둔다
-    const readSubHidden = () => { setSubHidden(isOmitted()); return true; };
-    return <Tip wraps pressOpens className="flex" onlyIf={readSubHidden} text={text}>
+    return <Tip wraps pressOpens className="flex" text={tip}>
       {card}
       <span id={lockReasonId} className="sr-only">{lock.join(' ')}</span>
     </Tip>;
   }
   if (!omittable) return card;
   // 생략되어 보이지 않을 때만 툴팁으로 내용을 보인다. 감싼 칸이 같은 행의 카드 높이를 따르도록 flex로 둔다
-  return <Tip wraps className="flex" onlyIf={isOmitted} text={sub}>{card}</Tip>;
+  return <Tip wraps className="flex" onlyIf={isOmitted} text={<TipCard title={title} description={sub} />}>{card}</Tip>;
 }

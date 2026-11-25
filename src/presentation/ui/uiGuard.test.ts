@@ -677,7 +677,6 @@ describe('UI 시스템 가드', () => {
   });
 
   const TIER1_FLAT_PRIMITIVES = [
-    'ui/HelpHint.tsx',
     'ui/ArrowButton.tsx',
     'ui/ProgressMeter.tsx',
     'ui/SegmentedStepBar.tsx',
@@ -937,5 +936,24 @@ describe('UI 시스템 가드', () => {
     expect(asyncLoadingFallbacks('{uid ? maskUid(uid) : "연결 중"}')).toHaveLength(1);
     expect(asyncLoadingFallbacks('{loading ? <Note>목록을 불러오는 중이에요.</Note> : null}')).toEqual([]);
     expect(asyncLoadingFallbacks('{status === "loading" ? "불러오는 중" : "미설정"}')).toEqual([]);
+  });
+
+  // 툴팁 해부학 가드 — HelpHint 은퇴, LockLines 외부 조립 금지, MenuCard·Locked의 TipCard 사용
+  it('게임 UI는 물음표 도움말 아이콘(HelpHint)을 쓰지 않고 공용 Tip을 쓴다', () => {
+    const targets = presentationFiles.filter(f => isGameUi(f.path));
+    expect(targets.filter(f => /\bHelpHint\b/.test(f.src)).map(f => f.path)).toEqual([]);
+    expect(presentationFiles.some(f => f.path === 'ui/HelpHint.tsx')).toBe(false);
+  });
+
+  it('잠금 툴팁 줄은 ui/Locked.tsx 외부에서 <LockLines로 직접 조립하지 않고 Locked·LockTip·TipCard를 쓴다', () => {
+    const targets = presentationFiles.filter(f => f.path !== 'ui/Locked.tsx');
+    expect(targets.filter(f => /<LockLines\b/.test(f.src)).map(f => f.path)).toEqual([]);
+  });
+
+  it('MenuCard와 Locked는 구조형 툴팁 TipCard로 잠금 헤더와 구분선 위계를 유지한다', () => {
+    const menuCard = presentationFiles.find(f => f.path === 'ui/MenuCard.tsx')!.src;
+    const locked = presentationFiles.find(f => f.path === 'ui/Locked.tsx')!.src;
+    expect(menuCard).toMatch(/<TipCard\b/);
+    expect(locked).toMatch(/<TipCard\b/);
   });
 });

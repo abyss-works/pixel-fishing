@@ -46,7 +46,7 @@ export default function TabBar<K extends string>({ tabs, activeKey, onSelect, cl
 function LockedTab({ tab, lines }: { tab: TabDef<string>; lines: readonly string[] }) {
   const reasonId = useId();
   return (
-    <LockTip lines={lines} className="flex flex-1 min-w-0">
+    <LockTip title={tab.label.replace(/\n/g, ' ')} lines={lines} className="flex flex-1 min-w-0">
       <button type="button" aria-disabled="true" aria-describedby={reasonId} className="text-text-dim cursor-not-allowed">
         {tab.icon}
         <span className="inline-flex items-center gap-1">{tab.label}<LockIcon size={10} /></span>

@@ -1,136 +1,193 @@
-// 마을 해역별 첫 경험 보장 — 마을 연못·마을 강 각각 5번째 캐치에서 영웅, 정해진 10~15번째 캐치에서 전설.
+// 마을 해역별 첫 경험 보장 — 상한 테이블(pond 20, river 30) 안에서 해당 해역 전종 일반 폼 1회 이상 획득을 보장한다.
 import { describe, it, expect } from 'vitest';
 import {
-  FIRST_CATCH_EPIC_AT, FIRST_CATCH_LEGEND_MAX, FIRST_CATCH_LEGEND_MIN, FIRST_CATCH_SPOTS,
-  endedFirstCatch, firstCatchTarget, fixedFirstCatch, hasPendingFirstCatch, newFirstCatch, settleFirstCatch,
+  FIRST_CATCH_SPOT_CAPS, FIRST_CATCH_SPOTS,
+  endedFirstCatch, endedFirstCatchSpot, firstCatchTarget, hasPendingFirstCatch,
+  isFirstCatchSpot, newFirstCatch, newFirstCatchSpot, settleFirstCatch,
 } from './firstCatch';
 import type { FirstCatch, FirstCatchSpot, FirstCatchSpotId } from './firstCatch';
 import { drawCatch } from './actions';
+import { fishPool } from './logic';
+import { NO_GUILD_EFFECTS } from './guild';
+import { NO_COOK_EFFECTS } from './cooking';
+import { NO_ACHIEVEMENT_BONUSES } from './effects';
+import { PITY_DONE, SPECIES_PITY_K } from './pity';
 import { FISH } from '../content/fish';
+import type { SpotId } from '../content/spots';
 
 const rngOf = (...v: number[]) => { let i = 0; return () => v[i++ % v.length]; };
+const mkPrng = (seed = 1) => {
+  let s = seed >>> 0;
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 0x100000000;
+  };
+};
 const spotAt = (spot: FirstCatchSpotId, n: number, over: Partial<FirstCatchSpot> = {}): FirstCatch => ({
   ...newFirstCatch(),
-  [spot]: { n, legendAt: 12, epic: true, legend: true, ...over },
+  [spot]: { n, active: true, ...over },
 });
 
 describe('상수 및 헬퍼', () => {
-  it('보장 대상 해역은 마을 연못과 마을 강이고 전설 구간은 10~15다', () => {
+  it('보장 대상 해역 상한 테이블은 마을 연못 20회, 마을 강 30회다', () => {
+    expect(FIRST_CATCH_SPOT_CAPS).toEqual({ pond: 20, river: 30 });
     expect(FIRST_CATCH_SPOTS).toEqual(['pond', 'river']);
-    expect(FIRST_CATCH_EPIC_AT).toBe(5);
-    expect(FIRST_CATCH_LEGEND_MIN).toBe(10);
-    expect(FIRST_CATCH_LEGEND_MAX).toBe(15);
+    expect(isFirstCatchSpot('pond')).toBe(true);
+    expect(isFirstCatchSpot('river')).toBe(true);
+    expect(isFirstCatchSpot('sea')).toBe(false);
   });
 
-  it('hasPendingFirstCatch와 fixedFirstCatch가 해역별 상태를 반영한다', () => {
+  it('hasPendingFirstCatch와 초기/종료 생성자가 해역별 상태를 반영한다', () => {
+    expect(newFirstCatchSpot()).toEqual({ n: 0, active: true });
+    expect(endedFirstCatchSpot()).toEqual({ n: 0, active: false });
     expect(hasPendingFirstCatch(newFirstCatch())).toBe(true);
     expect(hasPendingFirstCatch(endedFirstCatch())).toBe(false);
     expect(hasPendingFirstCatch({ pond: endedFirstCatch().pond, river: newFirstCatch().river })).toBe(true);
-    expect(fixedFirstCatch(13)).toEqual({
-      pond: { n: 0, legendAt: 13, epic: true, legend: true },
-      river: { n: 0, legendAt: 13, epic: true, legend: true },
-    });
   });
 });
 
 describe('firstCatchTarget', () => {
-  it('마을 연못은 4번째까지 null, 5번째 금붕어, 정해진 번호(10~15)에서 황금 잉어를 고른다', () => {
-    for (let n = 0; n < FIRST_CATCH_EPIC_AT - 1; n++) {
-      expect(firstCatchTarget(spotAt('pond', n), 'pond', 'day', rngOf(0))).toBeNull();
-    }
-    expect(firstCatchTarget(spotAt('pond', 4), 'pond', 'day', rngOf(0))?.id).toBe('goldfish');
-    expect(firstCatchTarget(spotAt('pond', 10, { epic: false }), 'pond', 'day', rngOf(0))).toBeNull();
-    expect(firstCatchTarget(spotAt('pond', 11, { epic: false }), 'pond', 'day', rngOf(0))?.id).toBe('goldcarp');
+  it('여유 구간(rem > missing)에서는 진척이 뒤처진 체크포인트에서만 미보유 어종을 고른다', () => {
+    // pond: 6종 / 상한 20 -> 첫 체크포인트는 4번째(n=3)
+    expect(firstCatchTarget(spotAt('pond', 0), 'pond', 'day', () => false, rngOf(0))).toBeNull();
+    expect(firstCatchTarget(spotAt('pond', 2), 'pond', 'day', () => false, rngOf(0))).toBeNull();
+    // 아직 0종이면 4번째(n=3)에서 미보유 어종을 보장
+    expect(firstCatchTarget(spotAt('pond', 3), 'pond', 'day', () => false, rngOf(0))?.spot).toBe('pond');
+    // 이미 1종 이상 보유했으면 4번째에는 개입하지 않는다
+    expect(firstCatchTarget(spotAt('pond', 3), 'pond', 'day', id => id === 'crucian', rngOf(0))).toBeNull();
   });
 
-  it('마을 강은 4번째까지 null, 5번째 무지개 송어, 정해진 번호(10~15)에서 강의 주인을 고른다', () => {
-    for (let n = 0; n < FIRST_CATCH_EPIC_AT - 1; n++) {
-      expect(firstCatchTarget(spotAt('river', n), 'river', 'day', rngOf(0))).toBeNull();
-    }
-    expect(firstCatchTarget(spotAt('river', 4), 'river', 'day', rngOf(0))?.id).toBe('rainbow');
-    expect(firstCatchTarget(spotAt('river', 10, { epic: false }), 'river', 'day', rngOf(0))).toBeNull();
-    expect(firstCatchTarget(spotAt('river', 11, { epic: false }), 'river', 'day', rngOf(0))?.id).toBe('riverlord');
+  it('남은 보장 횟수(cap - n)가 미보유 어종 수 이하일 때는 반드시 미보유 어종 중 하나를 선택한다', () => {
+    const pondPool = fishPool('pond', 'day');
+    const missingTwo = new Set(['goldfish', 'goldcarp']);
+    const owns = (id: string) => !missingTwo.has(id);
+    // n=18 -> rem = 20 - 18 = 2 === missing(2)
+    const picked = firstCatchTarget(spotAt('pond', 18), 'pond', 'day', owns, rngOf(0));
+    expect(picked).not.toBeNull();
+    expect(missingTwo.has(picked!.id)).toBe(true);
+
+    // river: cap=30, n=28 -> rem = 2 === missing(2)
+    const riverMissing = new Set(['rainbow', 'riverlord']);
+    const pickedRiver = firstCatchTarget(spotAt('river', 28), 'river', 'day', id => !riverMissing.has(id), rngOf(0.99));
+    expect(pickedRiver?.id).toBe('riverlord');
+    expect(pondPool.length).toBe(6);
   });
 
-  it('영웅과 전설이 동시에 기한에 닿으면 전설을 우선 고른다', () => {
-    expect(firstCatchTarget(spotAt('pond', 11, { epic: true, legend: true }), 'pond', 'day', rngOf(0))?.id).toBe('goldcarp');
-  });
-
-  it('전설 번호가 아직 정해지지 않았으면 전설은 나오지 않는다', () => {
-    expect(firstCatchTarget(spotAt('pond', 11, { legendAt: 0, epic: false }), 'pond', 'day', rngOf(0))).toBeNull();
-  });
-
-  it('끝난 보장은 대상이 없다', () => {
-    expect(firstCatchTarget(endedFirstCatch(), 'pond', 'day', rngOf(0))).toBeNull();
-    expect(firstCatchTarget(endedFirstCatch(), 'river', 'day', rngOf(0))).toBeNull();
-  });
-
-  it('바다 해역(sea 등)에는 보장을 적용하지 않는다', () => {
-    expect(firstCatchTarget(spotAt('pond', 4), 'sea', 'day', rngOf(0))).toBeNull();
-    expect(firstCatchTarget(spotAt('pond', 11, { epic: false }), 'sea', 'day', rngOf(0))).toBeNull();
-    expect(firstCatchTarget(spotAt('pond', 4), 'barrierreef', 'day', rngOf(0))).toBeNull();
+  it('이미 모든 어종 일반 폼을 보유했거나 상한에 도달했거나 비활성/비대상 해역이면 null을 돌려준다', () => {
+    expect(firstCatchTarget(spotAt('pond', 19), 'pond', 'day', () => true, rngOf(0))).toBeNull();
+    expect(firstCatchTarget(spotAt('pond', 20), 'pond', 'day', () => false, rngOf(0))).toBeNull();
+    expect(firstCatchTarget(endedFirstCatch(), 'pond', 'day', () => false, rngOf(0))).toBeNull();
+    expect(firstCatchTarget(endedFirstCatch(), 'river', 'day', () => false, rngOf(0))).toBeNull();
+    expect(firstCatchTarget(spotAt('pond', 19), 'sea', 'day', () => false, rngOf(0))).toBeNull();
+    expect(firstCatchTarget(spotAt('pond', 19), 'barrierreef', 'day', () => false, rngOf(0))).toBeNull();
   });
 });
 
 describe('settleFirstCatch', () => {
-  it('연못 캐치는 연못만 10~15 안에서 전설 번호를 정하고 카운트를 올리며 강은 건드리지 않는다', () => {
-    const lo = settleFirstCatch(newFirstCatch(), 'pond', null, rngOf(0));
-    const hi = settleFirstCatch(newFirstCatch(), 'pond', null, rngOf(0.999999));
-    expect(lo.pond).toEqual({ n: 1, legendAt: 10, epic: true, legend: true });
-    expect(hi.pond).toEqual({ n: 1, legendAt: 15, epic: true, legend: true });
-    expect(lo.river).toEqual(newFirstCatch().river);
-    expect(settleFirstCatch(lo, 'pond', null, rngOf(0.9)).pond.legendAt).toBe(10);
+  it('대상 해역 카운트만 올리고 다른 마을 해역은 건드리지 않는다', () => {
+    const p = settleFirstCatch(newFirstCatch(), 'pond', () => false);
+    expect(p.pond).toEqual({ n: 1, active: true });
+    expect(p.river).toEqual(newFirstCatch().river);
+
+    const r = settleFirstCatch(newFirstCatch(), 'river', () => false);
+    expect(r.river).toEqual({ n: 1, active: true });
+    expect(r.pond).toEqual(newFirstCatch().pond);
   });
 
-  it('강 캐치는 강만 카운트를 올리고 연못은 건드리지 않는다', () => {
-    const next = settleFirstCatch(newFirstCatch(), 'river', null, rngOf(0.5));
-    expect(next.river).toEqual({ n: 1, legendAt: 13, epic: true, legend: true });
-    expect(next.pond).toEqual(newFirstCatch().pond);
-  });
+  it('상한에 도달하거나 모든 어종 일반 폼을 보유하면 그 해역의 보장을 종료한다', () => {
+    const atCap = settleFirstCatch(spotAt('pond', 19), 'pond', () => false);
+    expect(atCap.pond).toEqual(endedFirstCatchSpot());
+    expect(atCap.river).toEqual(newFirstCatch().river);
 
-  it('보장으로 잡은 등급의 몫만 해당 해역에서 닫고, 그 해역이 끝나도 다른 마을 해역은 유지된다', () => {
-    const epic = FISH.find(f => f.id === 'goldfish')!;
-    const legend = FISH.find(f => f.id === 'goldcarp')!;
-    const a = settleFirstCatch(spotAt('pond', 4), 'pond', epic, rngOf(0));
-    expect(a.pond).toEqual({ n: 5, legendAt: 12, epic: false, legend: true });
-    expect(a.river).toEqual(newFirstCatch().river);
-    const b = settleFirstCatch(a, 'pond', legend, rngOf(0));
-    expect(b.pond).toEqual(endedFirstCatch().pond);
-    expect(b.river).toEqual(newFirstCatch().river);
+    const allOwned = settleFirstCatch(spotAt('river', 5), 'river', () => true);
+    expect(allOwned.river).toEqual(endedFirstCatchSpot());
+    expect(allOwned.pond).toEqual(newFirstCatch().pond);
   });
 
   it('끝난 해역이나 바다 해역은 상태를 변경하지 않는다', () => {
+    const ended = endedFirstCatch();
+    expect(settleFirstCatch(ended, 'pond', () => false)).toBe(ended);
     const init = newFirstCatch();
-    expect(settleFirstCatch(endedFirstCatch(), 'pond', null, rngOf(0))).toEqual(endedFirstCatch());
-    expect(settleFirstCatch(init, 'sea', null, rngOf(0))).toBe(init);
-    expect(settleFirstCatch(init, 'barrierreef', null, rngOf(0))).toBe(init);
+    expect(settleFirstCatch(init, 'sea', () => false)).toBe(init);
+    expect(settleFirstCatch(init, 'barrierreef', () => false)).toBe(init);
   });
 });
 
 describe('drawCatch 보장', () => {
   const base = { pity: {}, artifacts: [] as string[] };
   const phaseOpts = { phase: 'day' as const };
-  const draw = (fc: FirstCatch, spot: 'pond' | 'river' | 'sea' = 'pond') =>
-    drawCatch({ ...base, firstCatch: fc }, spot, 'auto', 10, 1, rngOf(0.1), phaseOpts, () => false);
 
-  it('연못 5번째 캐치는 금붕어이고 연못 영웅 몫만 닫으며 강은 그대로다', () => {
-    const d = draw(spotAt('pond', 4), 'pond');
-    expect(d.fish.id).toBe('goldfish');
-    expect(d.firstCatch.pond).toMatchObject({ n: 5, epic: false, legend: true });
-    expect(d.firstCatch.river).toEqual(newFirstCatch().river);
-    expect(d.byCeiling).toBe(false);
+  const simulateSpot = (spot: SpotId, count: number, rng: () => number) => {
+    let fc = newFirstCatch();
+    let pity: Record<string, number> = {};
+    const normalOwned = new Set<string>();
+    const forms: string[] = [];
+    for (let i = 0; i < count; i++) {
+      const d = drawCatch(
+        { ...base, pity, firstCatch: fc },
+        spot, 'normal', 10, 1, rng, phaseOpts,
+        id => normalOwned.has(id),
+      );
+      fc = d.firstCatch;
+      pity = d.pity;
+      forms.push(d.extras.form);
+      if (d.extras.form === 'normal') normalOwned.add(d.fish.id);
+    }
+    return { fc, pity, normalOwned, forms };
+  };
+
+  it('마을 연못은 상한 20회 안에 6종 일반 폼을 100% 완성하고 보장을 종료한다 (최악 rng=0 및 난수 시퀀스)', () => {
+    const pondIds = FISH.filter(f => f.spot === 'pond').map(f => f.id);
+    expect(pondIds).toHaveLength(6);
+
+    for (const rng of [rngOf(0), rngOf(0.999999), mkPrng(42), mkPrng(999)]) {
+      const res = simulateSpot('pond', 20, rng);
+      for (const id of pondIds) expect(res.normalOwned.has(id), id).toBe(true);
+      expect(res.fc.pond).toEqual(endedFirstCatchSpot());
+      expect(res.fc.river).toEqual(newFirstCatchSpot());
+    }
   });
 
-  it('강 5번째 캐치는 무지개 송어이고 강 영웅 몫만 닫으며 연못은 그대로다', () => {
-    const d = draw(spotAt('river', 4), 'river');
-    expect(d.fish.id).toBe('rainbow');
-    expect(d.firstCatch.river).toMatchObject({ n: 5, epic: false, legend: true });
-    expect(d.firstCatch.pond).toEqual(newFirstCatch().pond);
+  it('마을 강은 상한 30회 안에 6종 일반 폼을 100% 완성하고 보장을 종료한다 (최악 rng=0 및 난수 시퀀스)', () => {
+    const riverIds = FISH.filter(f => f.spot === 'river').map(f => f.id);
+    expect(riverIds).toHaveLength(6);
+
+    for (const rng of [rngOf(0), rngOf(0.999999), mkPrng(7), mkPrng(2026)]) {
+      const res = simulateSpot('river', 30, rng);
+      for (const id of riverIds) expect(res.normalOwned.has(id), id).toBe(true);
+      expect(res.fc.river).toEqual(endedFirstCatchSpot());
+      expect(res.fc.pond).toEqual(newFirstCatchSpot());
+    }
+  });
+
+  it('보장 캐치(guaranteed !== null)는 rng=0이어도 반드시 일반 폼(normal)으로 고정된다', () => {
+    // n=3, 보유 0종 -> 4번째 캐치에서 guaranteed 발동. rng=0은 통상 변이를 뽑지만 일반으로 고정되어야 한다
+    const d = drawCatch(
+      { ...base, firstCatch: spotAt('pond', 3) },
+      'pond', 'auto', 10, 1, rngOf(0), phaseOpts, () => false,
+    );
+    expect(d.extras.form).toBe('normal');
+    expect(d.byCeiling).toBe(false);
+    expect(d.firstCatch.pond).toEqual({ n: 4, active: true });
+    // 보장 캐치로 잡은 어종은 어종 천장도 PITY_DONE으로 정산된다
+    expect(d.pity[d.fish.id]).toBe(PITY_DONE);
+  });
+
+  it('SPECIES_PITY_K 어종 천장은 충돌이 없을 때 그대로 일반 폼으로 확정된다', () => {
+    const d = drawCatch(
+      { ...base, pity: { goldcarp: SPECIES_PITY_K }, firstCatch: newFirstCatch() },
+      'pond', 'auto', 10, 1, rngOf(0), phaseOpts, () => false,
+      NO_GUILD_EFFECTS, NO_COOK_EFFECTS, NO_ACHIEVEMENT_BONUSES,
+    );
+    expect(d.fish.id).toBe('goldcarp');
+    expect(d.extras.form).toBe('normal');
+    expect(d.byCeiling).toBe(true);
+    expect(d.pity.goldcarp).toBe(PITY_DONE);
   });
 
   it('바다 해역 캐치는 첫 경험 보장 상태를 건드리지 않는다', () => {
     const init = newFirstCatch();
-    const d = draw(init, 'sea');
+    const d = drawCatch({ ...base, firstCatch: init }, 'sea', 'auto', 10, 1, rngOf(0.1), phaseOpts, () => false);
     expect(d.firstCatch).toEqual(init);
   });
 });

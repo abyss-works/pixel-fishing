@@ -11,7 +11,6 @@ import type { BountyZone } from '../src/game/content/bounties.js';
 import {
   COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, ENERGY_PER_INDIVIDUAL, recipeById, recipeCostStored,
 } from '../src/game/content/cooking.js';
-import { FISH } from '../src/game/content/fish.js';
 import { hatById } from '../src/game/content/wardrobe.js';
 import { upgradeCost } from '../src/game/rules/balance.js';
 import { endedFirstCatch, newFirstCatch } from '../src/game/rules/firstCatch.js';
@@ -853,34 +852,61 @@ describe('현상금 — 클리어 기준 한도와 만료', () => {
 
 describe('첫 경험 보장', () => {
   const stateOf = (out: Awaited<ReturnType<typeof run>>) => (out.db.saves_current[0] as { data: GameState }).data;
+  const normalDex = (...ids: string[]): GameState['dex'] =>
+    Object.fromEntries(ids.map(id => [id, { normal: { count: 1, maxSize: 20, first: '2026-01-01' } }]));
 
-  it('마을 연못 5번째 캐치는 금붕어이고 연못 진척만 저장된다', async () => {
+  it('마을 연못 상한 마지막 캐치는 미보유 일반 폼 어종을 일반 폼으로 보장하고 연못 보장만 끝난다', async () => {
     const out = await run({
-      state: { firstCatch: { ...newFirstCatch(), pond: { n: 4, legendAt: 12, epic: true, legend: true } } },
+      state: {
+        dex: normalDex('crucian', 'minnow', 'loach', 'carp', 'goldfish'),
+        firstCatch: { ...newFirstCatch(), pond: { n: 19, active: true } },
+      },
     }, { type: 'catch', spot: 'pond', judgment: 'auto' });
-    const caught = (out.db.events[0] as { payload: { fishId: string } }).payload;
-    expect(FISH.find(f => f.id === caught.fishId)).toMatchObject({ id: 'goldfish', rarity: 'epic', spot: 'pond' });
-    expect(stateOf(out).firstCatch.pond).toEqual({ n: 5, legendAt: 12, epic: false, legend: true });
+    const caught = (out.db.events[0] as { payload: { fishId: string; form: string } }).payload;
+    expect(caught).toMatchObject({ fishId: 'goldcarp', form: 'normal' });
+    expect(stateOf(out).firstCatch.pond).toEqual(endedFirstCatch().pond);
     expect(stateOf(out).firstCatch.river).toEqual(newFirstCatch().river);
   });
 
-  it('첫 캐치에서 서버가 해당 마을 해역의 전설 번호를 10~15 사이로 정해 저장한다', async () => {
+  it('첫 캐치에서 해당 해역의 카운트만 오르고 다른 해역 진척은 그대로다', async () => {
     const out = await run({ state: {} }, { type: 'catch', spot: 'pond', judgment: 'auto' });
     const fc = stateOf(out).firstCatch;
-    expect(fc.pond.n).toBe(1);
-    expect(fc.pond.legendAt).toBeGreaterThanOrEqual(10);
-    expect(fc.pond.legendAt).toBeLessThanOrEqual(15);
+    expect(fc.pond).toEqual({ n: 1, active: true });
     expect(fc.river).toEqual(newFirstCatch().river);
   });
 
-  it('마을 강 정해진 번호의 캐치는 강의 주인이고 강 보장만 끝난다', async () => {
+  it('마을 연못 여유 구간 지연 보장은 일반 폼을 고정하고 활성 상태를 유지한다', async () => {
     const out = await run({
-      state: { firstCatch: { ...newFirstCatch(), river: { n: 11, legendAt: 12, epic: false, legend: true } } },
+      state: { firstCatch: { ...newFirstCatch(), pond: { n: 3, active: true } } },
+    }, { type: 'catch', spot: 'pond', judgment: 'auto' });
+    const caught = (out.db.events[0] as { payload: { form: string } }).payload;
+    expect(caught.form).toBe('normal');
+    expect(stateOf(out).firstCatch.pond).toEqual({ n: 4, active: true });
+    expect(stateOf(out).firstCatch.river).toEqual(newFirstCatch().river);
+  });
+
+  it('마을 강 상한 마지막 캐치는 미보유 일반 폼 어종을 일반 폼으로 보장하고 강 보장만 끝난다', async () => {
+    const out = await run({
+      state: {
+        dex: normalDex('sweetfish', 'catfish', 'mandarin', 'salmon', 'rainbow'),
+        firstCatch: { ...newFirstCatch(), river: { n: 29, active: true } },
+      },
     }, { type: 'catch', spot: 'river', judgment: 'auto' });
-    const caught = (out.db.events[0] as { payload: { fishId: string } }).payload;
-    expect(FISH.find(f => f.id === caught.fishId)).toMatchObject({ id: 'riverlord', rarity: 'legendary', spot: 'river' });
+    const caught = (out.db.events[0] as { payload: { fishId: string; form: string } }).payload;
+    expect(caught).toMatchObject({ fishId: 'riverlord', form: 'normal' });
     expect(stateOf(out).firstCatch.river).toEqual(endedFirstCatch().river);
     expect(stateOf(out).firstCatch.pond).toEqual(newFirstCatch().pond);
+  });
+
+  it('마을 연못 전종 일반 폼을 이미 보유하면 상한 전이라도 캐치 후 연못 보장이 닫힌다', async () => {
+    const out = await run({
+      state: {
+        dex: normalDex('crucian', 'minnow', 'loach', 'carp', 'goldfish', 'goldcarp'),
+        firstCatch: { ...newFirstCatch(), pond: { n: 5, active: true } },
+      },
+    }, { type: 'catch', spot: 'pond', judgment: 'auto' });
+    expect(stateOf(out).firstCatch.pond).toEqual(endedFirstCatch().pond);
+    expect(stateOf(out).firstCatch.river).toEqual(newFirstCatch().river);
   });
 
   it('구 단일 firstCatch가 진행 중이고 강 도감이 있으면 catch가 풀 경로로 폴백해 강 보장을 중복 지급하지 않는다', async () => {
@@ -894,7 +920,7 @@ describe('첫 경험 보장', () => {
     const out = await snapshotOf(uid, await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'auto' }));
     expect((out.res as { status: number }).status).toBe(200);
     expect(stateOf(out).firstCatch).toEqual({
-      pond: { n: 7, legendAt: 15, epic: false, legend: true },
+      pond: { n: 7, active: true },
       river: endedFirstCatch().river,
     });
   });

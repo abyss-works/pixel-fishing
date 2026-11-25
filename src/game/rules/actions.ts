@@ -442,10 +442,10 @@ export function rollCatchFish(
   return rollFish(spot, o.rareMult, rng, o.commonMult, o);
 }
 
-/** 캐치의 어종 결정 — 첫 경험 보장 대상이 있으면 그 어종, 어종 천장이 확정한 대상이 있으면 그 어종(일반 폼),
- *  없으면 통상 추첨. 보장 캐치는 폼·크기 롤이 일반 캐치와 같고, 어종 천장의 누적과 정산도 그대로 거친다.
- *  보장 어종을 고르는 rng 한 번이 통상 추첨 자리를 대신한다(추첨 → 부가 롤 → 보장 번호 롤 순서).
- *  천장 대상도 크기는 정상 추첨하고 폼만 일반으로 고정한다(rng 소비 순서는 같다).
+/** 캐치의 어종 결정 — 첫 경험 보장 대상이 있으면 그 어종(일반 폼), 어종 천장이 확정한 대상이 있으면 그 어종(일반 폼),
+ *  없으면 통상 추첨. 보장 캐치와 천장 캐치는 크기는 정상 추첨하고 폼만 일반으로 고정하며,
+ *  어종 천장의 누적과 정산은 그대로 거친다.
+ *  보장 어종을 고르는 rng 한 번이 통상 추첨 자리를 대신한다(추첨 → 부가 롤 순서).
  *  리듀서 catch와 서버 fast path가 공유한다 — 소유 여부(ownsNormal)와 길드 효과만 호출자가 공급한다.
  *  요리 슬롯의 돌연변이 가중(cook)은 유물과 합산해 폼 가중치를 정한다(등급 가중은 prepareCatchDraw가 추첨 옵션에 얹는다).
  *  길드 효과는 여기서 한 번만 얹는다 — 일반 등급 가중치 효과(−합, 미끼 등 같은 등급 효과와 합산)와 돌연변이 확률 퍼센트포인트. 천장 누적도
@@ -477,7 +477,7 @@ export function drawCatch(
   const candidates = speciesPityCandidates(state.pity, spot, phaseOpts);
   const resolved = resolveSpeciesPity(state.pity, candidates, ownsNormal);
   const target = resolved.target ? FISH.find(f => f.id === resolved.target) : undefined;
-  const guaranteed = firstCatchTarget(state.firstCatch, spot, phaseOpts.phase, rng);
+  const guaranteed = firstCatchTarget(state.firstCatch, spot, phaseOpts.phase, ownsNormal, rng);
   const fish = guaranteed ?? target ?? rollCatchFish(spot, judgment, power, pzMult, rng, phaseOpts);
   const pityFixed = !guaranteed && target !== undefined;
   const achMut = achievements.mutationWeight + (zone ? (achievements.zoneMutation[zone] ?? 0) : 0);
@@ -485,12 +485,13 @@ export function drawCatch(
     mutationWeightsOf(state, spot, cook.mutationWeight, achMut, 1 + achievements.artifactBoost),
     guild.mutation,
   );
-  const extras = rollCatchExtras(fish, rng, pityFixed ? { normal: 1, variant: 0 } : forms);
+  const extras = rollCatchExtras(fish, rng, (guaranteed !== null || pityFixed) ? { normal: 1, variant: 0 } : forms);
   const opts = catchDrawOptions(judgment, power, spot, pzMult, phaseOpts);
   const accrued = accrueSpeciesPity(resolved.pity, spot, opts, forms.normal / (forms.normal + forms.variant));
+  const ownsAfter = (id: string) => ownsNormal(id) || (id === fish.id && extras.form === 'normal');
   return {
     fish, extras, pity: settleSpeciesPity(accrued, fish.id, extras.form),
-    firstCatch: settleFirstCatch(state.firstCatch, spot, guaranteed, rng), byCeiling: pityFixed,
+    firstCatch: settleFirstCatch(state.firstCatch, spot, ownsAfter), byCeiling: pityFixed,
   };
 }
 

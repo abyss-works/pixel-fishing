@@ -30,7 +30,7 @@ function ActiveChip({ slot }: { slot: ActiveSlot }) {
 
 function LockedChip({ slotKey, lines }: { slotKey: SlotKey; lines: readonly string[] }) {
   return (
-    <Locked lines={lines} label={SLOT_NAME[slotKey]} className="flex">
+    <Locked lines={lines} title={SLOT_NAME[slotKey]} label={SLOT_NAME[slotKey]} className="flex">
       <HudChip>
         <PixelIcon glyph={SLOT_GLYPH[slotKey]} size={12} />
       </HudChip>

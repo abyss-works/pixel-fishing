@@ -90,6 +90,8 @@ const COOKING_ZONE_NAME: string = (() => {
   return zone.shortName;
 })();
 
+const PACIFIC_ZONE_NAME: string = zoneById('pacific')?.shortName ?? '태평양';
+
 /** 유저에게 보일 문구의 단일 근원 — Record라 새 사유를 추가하면 누락이 컴파일 에러가 된다 */
 export const REJECT_TEXT: Record<RejectReason, string> = {
   'not-enough-gold': '골드가 부족해요.',
@@ -116,7 +118,7 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'achievement-already-claimed': '이미 받은 업적이에요.',
   'achievement-not-claimable': '아직 받을 수 없는 업적이에요.',
   'no-claimable-achievements': '받을 수 있는 업적이 없어요.',
-  'account-only': '계정을 연결하면 쓸 수 있어요.',
+  'account-only': `${PACIFIC_ZONE_NAME} 항로가 열리면 쓸 수 있어요.`,
   'slot-taken': '그 전시 칸은 이미 차 있어요. 먼저 회수해 주세요.',
   'bag-full': '가방이 가득 차서 회수할 수 없어요. 물고기를 팔거나 놓아준 뒤 다시 해 보세요.',
   'item-not-owned': '가방에 이 요리가 없어요.',

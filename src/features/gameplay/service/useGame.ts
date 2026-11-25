@@ -4,8 +4,9 @@ import { api, when } from '../../../platform/api';
 import type { GameGateway, GameProfile, DispatchResult, MaybePromise } from '../../../platform/api';
 import type { GameAction } from '../../../game/rules/actions';
 import type { RejectReason } from '../../../game/rules/rules';
-import { newState, REJECT_TEXT } from '../../../game/rules/logic';
+import { newState, newlyCompletedSpotDex, REJECT_TEXT } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
+import { spotById } from '../../../game/content/spots';
 import { sendNotice } from '../../display/model/toastPolicy';
 import type { NoticeSink } from '../../display/model/toastPolicy';
 import { fail, subscribeFailure, POLICY, AppError } from '../../../core/errors';
@@ -171,6 +172,18 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
                 toastText: `업적 "${name}" 달성 가능!`,
               });
             }
+          }
+        }
+        // 해역 일반 도감 100% 완성 알림 — 업적 잠금 여부와 무관하게 게스트 포함 모든 플레이어에게 알린다
+        if (action.type === 'catch') {
+          const completedSpot = newlyCompletedSpotDex(prev.dex, r.state.dex, action.spot);
+          if (completedSpot) {
+            const spotName = spotById(completedSpot)?.name ?? completedSpot;
+            sendNotice(setToast, {
+              kind: 'dex.spotCompleted',
+              text: `${spotName} 일반 어종 도감을 완성했어요!`,
+              toastText: `${spotName} 도감 완성!`,
+            });
           }
         }
         // 최초 대양 출항 감지 — 마을 첫 진입은 알리지 않고, travel 액션으로 visited에 world가 처음 추가될 때만 1회 안내한다

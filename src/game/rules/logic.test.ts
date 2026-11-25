@@ -18,6 +18,7 @@ import {
   formDiscovered, variantDiscovered, dexSpeciesCount,
   canBuyBoat, canUpgradeRod, canFish, REJECT_TEXT,
   licenseConditions, zoneDexMissing, LICENSE_GRADES,
+  isSpotNormalDexComplete, spotNormalDexProgress, newlyCompletedSpotDex,
 } from './logic';
 import { WALK_SPEED } from './balance';
 import type { CatchExtras, FishInstance, FormId } from './logic';
@@ -1086,6 +1087,35 @@ describe('라이선스 도감 조건 — 남은 어종 수', () => {
     const full = { ...state, dex: Object.fromEntries(
       zoneDexMissing(state, 'pacific', LICENSE_GRADES.basic).map(id => [id, { normal: caught }])) };
     expect(dexLabel(full)).toEqual({ key: 'dex', ok: true, label: '태평양 모든 어종 수집(전설 제외, 밤 어종 포함)' });
+  });
+});
+
+describe('해역 일반 폼 도감 완성 판정', () => {
+  const caught = { count: 1, maxSize: 10, first: '2026-01-01' };
+  const pondIds = FISH.filter(f => f.spot === 'pond').map(f => f.id);
+
+  it('빈 도감과 변이 폼만 있는 도감은 일반 폼 완성으로 세지 않는다', () => {
+    expect(spotNormalDexProgress({}, 'pond')).toEqual({ found: 0, total: pondIds.length, completed: false });
+    expect(isSpotNormalDexComplete({}, 'pond')).toBe(false);
+
+    const variantsOnly = Object.fromEntries(pondIds.map(id => [id, { variant: caught }]));
+    expect(spotNormalDexProgress(variantsOnly, 'pond')).toEqual({ found: 0, total: pondIds.length, completed: false });
+    expect(isSpotNormalDexComplete(variantsOnly, 'pond')).toBe(false);
+  });
+
+  it('모든 어종 일반 폼이 기록되면 완성과 새로 완성된 해역을 정확히 판정한다', () => {
+    const five = Object.fromEntries(pondIds.slice(0, -1).map(id => [id, { normal: caught }]));
+    const lastId = pondIds[pondIds.length - 1];
+    const fivePlusLastVariant = { ...five, [lastId]: { variant: caught } };
+    const six = { ...five, [lastId]: { normal: caught } };
+
+    expect(spotNormalDexProgress(five, 'pond')).toEqual({ found: pondIds.length - 1, total: pondIds.length, completed: false });
+    expect(spotNormalDexProgress(six, 'pond')).toEqual({ found: pondIds.length, total: pondIds.length, completed: true });
+    expect(isSpotNormalDexComplete(six, 'pond')).toBe(true);
+
+    expect(newlyCompletedSpotDex(five, fivePlusLastVariant, 'pond')).toBeNull();
+    expect(newlyCompletedSpotDex(five, six, 'pond')).toBe('pond');
+    expect(newlyCompletedSpotDex(six, six, 'pond')).toBeNull();
   });
 });
 

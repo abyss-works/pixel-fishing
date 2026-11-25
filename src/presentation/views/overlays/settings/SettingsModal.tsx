@@ -7,11 +7,12 @@ import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import type { GameAction } from '../../../../game/rules/actions';
 import { REJECT_TEXT } from '../../../../game/rules/rules';
+import Badge from '../../../ui/Badge';
 import Inset from '../../../ui/Inset';
 import KeyValueRow from '../../../ui/KeyValueRow';
 import Modal from '../../../ui/Modal';
 import SectionTitle from '../../../ui/SectionTitle';
-import Tip from '../../../ui/Tip';
+import Tip, { TipCard } from '../../../ui/Tip';
 import ToggleChip from '../../../ui/ToggleChip';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import { PromptChoices } from '../whats-new/SettingsStep';
@@ -48,8 +49,20 @@ function AlertRow({ label, hint, toggle, blockedReason, setToast }: {
     </ToggleChip>
   );
   return (
-    <KeyValueRow label={<Tip text={hint}>{label}</Tip>} value=""
-                 action={blockedReason ? <Tip wraps text={blockedReason}>{chip}</Tip> : chip} />
+    <KeyValueRow label={<Tip text={<TipCard title={label} description={hint} />}>{label}</Tip>} value=""
+                 action={blockedReason
+                   ? (
+                     <Tip wraps text={(
+                       <TipCard
+                         title={label}
+                         badge={<Badge tone="dim-plain" size="2xs">차단</Badge>}
+                         status={{ tone: 'warn', lines: blockedReason.split('\n') }}
+                       />
+                     )}>
+                       {chip}
+                     </Tip>
+                   )
+                   : chip} />
   );
 }
 
@@ -90,7 +103,7 @@ export default function SettingsModal({ autoLockOnCatch, dispatch, setToast, onC
       <SectionTitle>가방</SectionTitle>
       <Inset divided>
         <KeyValueRow
-          label={<Tip text={AUTO_LOCK_HINT}>낚을 때 자동 잠금</Tip>}
+          label={<Tip text={<TipCard title="낚을 때 자동 잠금" description={AUTO_LOCK_HINT} />}>낚을 때 자동 잠금</Tip>}
           value=""
           action={(
             <ToggleChip pressed={autoLockOnCatch} disabled={busy} aria-label="낚을 때 자동 잠금" onClick={toggleAutoLock}>
@@ -102,7 +115,7 @@ export default function SettingsModal({ autoLockOnCatch, dispatch, setToast, onC
       <SectionTitle>알림</SectionTitle>
       <Inset divided>
         <KeyValueRow
-          label={<Tip text={FLOATING_TOAST_HINT}>주요 알림 플로팅 토스트</Tip>}
+          label={<Tip text={<TipCard title="주요 알림 플로팅 토스트" description={FLOATING_TOAST_HINT} />}>주요 알림 플로팅 토스트</Tip>}
           value=""
           action={(
             <ToggleChip pressed={toastEnabled} aria-label="주요 알림 플로팅 토스트" onClick={() => setToastEnabled(!toastEnabled)}>

@@ -15,7 +15,7 @@ import { GradeName } from '../../../ui/fish/RarityTag';
 import PixelIcon from '../../../ui/PixelIcon';
 import Popover from '../../../ui/Popover';
 import ToggleChip from '../../../ui/ToggleChip';
-import Tip, { TipList } from '../../../ui/Tip';
+import Tip, { TipCard, TipList } from '../../../ui/Tip';
 import { SCROLL_Y_ROWS } from '../../../ui/scrollArea';
 import FishPickTable from './FishPickTable';
 import PickTab from './PickTab';
@@ -100,7 +100,12 @@ export default function EnergyTab({ game, busy, act, setToast, picks, setPicks }
       actions={(
         <div className="relative flex items-center gap-2">
           <Tip wraps className="flex shrink-0"
-               text={view.hasOverride ? '해역별 기운 대상 고르기\n기본값과 다르게 고른 해역이 있어요.' : '해역별 기운 대상 고르기'}>
+               text={(
+                 <TipCard
+                   title="해역별 기운 대상 고르기"
+                   description={view.hasOverride ? '기본값과 다르게 고른 해역이 있어요.' : '켜거나 끈 해역대로 물고기를 골라요.'}
+                 />
+               )}>
             <Button ref={gearRef} pressed={popOpen} aria-expanded={popOpen} aria-label="해역별 기운 대상 고르기"
                     className="relative size-11 shrink-0 p-0 flex items-center justify-center" onClick={() => setPopOpen(o => !o)}>
               <PixelIcon glyph="gear" size={14} />
@@ -108,7 +113,7 @@ export default function EnergyTab({ game, busy, act, setToast, picks, setPicks }
             </Button>
           </Tip>
           <Popover open={popOpen} onClose={() => setPopOpen(false)} anchorRef={gearRef} label="해역별 기운 대상">
-            <Tip text={POPOVER_TIP} className="self-start text-sm">해역별 기운 대상</Tip>
+            <Tip text={<TipCard title="해역별 기운 대상" description={POPOVER_TIP} />} className="self-start text-sm">해역별 기운 대상</Tip>
             <div className={`${SCROLL_Y_ROWS} max-h-[216px] flex flex-col`}>
               {view.spots.map(s => (
                 <div key={s.id} className="grid grid-cols-[10px_minmax(0,1fr)_auto] items-center gap-2 py-1.5 text-sm">
