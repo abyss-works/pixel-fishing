@@ -30,12 +30,37 @@ export type AccountLookup = { status: 'account'; email: string } | { status: 'gu
 
 export type AuthResult = { ok: true } | { ok: false; msg: string; code?: string };
 
+/** 계정의 이용약관 수락 상태. 확인이 필요한 계정이면 required가 true다 */
+export interface ConsentStatus {
+  required: boolean;
+  version: string;
+  effectiveAt: string;
+}
+
+export type AcceptConsentError =
+  | 'consent-version-mismatch'
+  | 'account-only'
+  | 'unauthorized'
+  | 'bad-request'
+  | 'rate-limited'
+  | 'network'
+  | 'server'
+  | 'bad-response';
+
+export type AcceptConsentResult =
+  | { ok: true; consent: ConsentStatus }
+  | { ok: false; code: AcceptConsentError | (string & {}); status?: number };
+
 export interface AuthApi {
   isConfigured: boolean;
   ensureSession(): Promise<string | null>;
   /** 로그인된 영구 계정을 확인한다. 게스트와 확인 실패를 구분해 돌려준다 */
   currentAccount(): Promise<AccountLookup>;
   getSession(): Promise<{ uid: string | null; email: string | null }>;
+  /** 현재 계정의 이용약관 수락 상태를 조회한다 */
+  getAccountConsent(): Promise<ConsentStatus>;
+  /** 확인 화면에서 현재 판의 이용약관을 수락한다 */
+  acceptConsent(version: string): Promise<AcceptConsentResult>;
   /** 구글 인증 화면으로 이동한다. 연결(link)은 지금 계정에 구글을 붙이고, 로그인(sign-in)은 이미 연결된 구글 계정으로 들어간다. 표지(tag)는 돌아온 주소에 실린다 */
   startGoogle(start: 'link' | 'sign-in', tag: string): Promise<AuthResult>;
   /** 구글 인증에서 돌아왔는가. 표지와 오류 코드를 돌려준다. 부팅 때 한 번 읽는다 */

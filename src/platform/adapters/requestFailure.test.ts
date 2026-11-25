@@ -3,7 +3,14 @@ import { AppError } from '../../core/errors';
 
 vi.mock('./auth', () => ({ isCloud: true }));
 
-import { isRateLimited, requestFailure } from './requestFailure';
+import {
+  ConsentRequiredError,
+  isConsentRequiredError,
+  isRateLimited,
+  readRequestFailure,
+  requestFailure,
+  subscribeConsentRequired,
+} from './requestFailure';
 import { readMe } from './me';
 import { readFriends } from './friends';
 import { readRanking } from './ranking';
@@ -29,6 +36,56 @@ describe('requestFailure', () => {
   it('isRateLimited는 429만 참이다', () => {
     expect(isRateLimited(tooMany())).toBe(true);
     expect(isRateLimited(new Response('', { status: 503 }))).toBe(false);
+  });
+
+  it('403 consent-required 코드는 ConsentRequiredError로 구분하고 다른 403은 network로 남는다', async () => {
+    const err = requestFailure(new Response('', { status: 403 }), 'x failed', 'consent-required');
+    expect(err).toBeInstanceOf(AppError);
+    expect(err).toBeInstanceOf(ConsentRequiredError);
+    expect(isConsentRequiredError(err)).toBe(true);
+    expect(err.context).toEqual({ status: 403, code: 'consent-required' });
+
+    const plain = requestFailure(new Response('', { status: 403 }), 'x failed');
+    expect(plain.kind).toBe('network');
+    expect(isConsentRequiredError(plain)).toBe(false);
+
+    const fromRes = await readRequestFailure(
+      new Response(JSON.stringify({ error: 'consent-required' }), { status: 403 }),
+      'x failed',
+    );
+    expect(isConsentRequiredError(fromRes)).toBe(true);
+  });
+});
+
+describe('readMe의 403 consent-required 처리', () => {
+  it('403 consent-required 본문을 받으면 ConsentRequiredError를 던지고 구독자에 알린다', async () => {
+    const onConsent = vi.fn();
+    const off = subscribeConsentRequired(onConsent);
+    vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ error: 'consent-required' }), {
+      status: 403,
+      headers: { 'content-type': 'application/json' },
+    }));
+    try {
+      const err = await readMe('state').catch(e => e);
+      expect(isConsentRequiredError(err)).toBe(true);
+      expect(onConsent).toHaveBeenCalledTimes(1);
+    } finally {
+      off();
+    }
+  });
+
+  it('consent-required가 아닌 403은 network로 던지고 알림을 보내지 않는다', async () => {
+    const onConsent = vi.fn();
+    const off = subscribeConsentRequired(onConsent);
+    vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ error: 'forbidden' }), { status: 403 }));
+    try {
+      const err = await readMe('state').catch(e => e);
+      expect(isConsentRequiredError(err)).toBe(false);
+      expect((err as AppError).kind).toBe('network');
+      expect(onConsent).not.toHaveBeenCalled();
+    } finally {
+      off();
+    }
   });
 });
 

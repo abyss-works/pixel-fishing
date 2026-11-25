@@ -19,6 +19,7 @@ import { newState } from '../../game/rules/logic';
 import { pickScalars } from '../../game/rules/actions';
 import type { StatePatch } from '../../game/rules/actions';
 import { HttpGameGateway } from './httpGameGateway';
+import { isConsentRequiredError, subscribeConsentRequired } from './requestFailure';
 
 afterEach(() => { vi.unstubAllGlobals(); me.value = null; me.fn = null; me.calls = 0; });
 
@@ -91,6 +92,23 @@ describe('HttpGameGateway의 게스트 거부', () => {
     const err = await new HttpGameGateway().dispatch({ type: 'travel', to: { kind: 'region', id: 'world' } }).catch(e => e);
     expect(err).toBeInstanceOf(AppError);
     expect((err as AppError).kind).toBe(code);
+  });
+
+  it('403 consent-required는 ConsentRequiredError로 던지고 구독자에 알린다', async () => {
+    const onConsent = vi.fn();
+    const off = subscribeConsentRequired(onConsent);
+    vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ error: 'consent-required' }), {
+      status: 403, headers: { 'content-type': 'application/json' },
+    }));
+    try {
+      const err = await new HttpGameGateway().dispatch({ type: 'boot' }).catch(e => e);
+      expect(err).toBeInstanceOf(AppError);
+      expect(isConsentRequiredError(err)).toBe(true);
+      expect((err as AppError).context).toMatchObject({ action: 'boot', code: 'consent-required' });
+      expect(onConsent).toHaveBeenCalledTimes(1);
+    } finally {
+      off();
+    }
   });
 });
 
