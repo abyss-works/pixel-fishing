@@ -1,5 +1,5 @@
 // v1 물고기 그래픽 — 스프라이트화 직전 렌더러의 스냅샷. 좌표 × 배율 사각형으로 14형태를 그린다.
-// 그림은 고정된 기록이라 기능을 더하지 않는다(윤곽·유영·점프 없음). 신규 어종은 shape 하나를 고르면
+// 그림은 고정된 기록이라 윤곽·유영을 더하지 않는다(좌우 반전만 지원). 신규 어종은 shape 하나를 고르면
 // 그대로 그려지고, 새 몸 형태가 필요할 때만 여기에 형태를 더한다.
 // v2 형태 격자(초안용)는 이 형태들을 격자 생성 도구로 변환해 만든다.
 // detail=false면 실루엣 — 눈/하이라이트 생략, 몸 형태는 그대로.
@@ -209,7 +209,16 @@ export const SHAPES: Record<FishShape, Draw> = {
 };
 
 export function drawFishSprite(
-  ctx: RectCtx, cx: number, cy: number, shape: FishShape, color: string, s: number, detail = true,
+  ctx: RectCtx, cx: number, cy: number, shape: FishShape, color: string, s: number, detail = true, flip = false,
 ) {
-  SHAPES[shape](ctx, cx, cy, s, color, detail);
+  if (!flip) {
+    SHAPES[shape](ctx, cx, cy, s, color, detail);
+    return;
+  }
+  const mirrored: RectCtx = {
+    get fillStyle() { return ctx.fillStyle; },
+    set fillStyle(v) { ctx.fillStyle = v; },
+    fillRect(x, y, w, h) { ctx.fillRect((cx - x - w) | 0, (cy + y) | 0, w, h); },
+  };
+  SHAPES[shape](mirrored, 0, 0, s, color, detail);
 }
