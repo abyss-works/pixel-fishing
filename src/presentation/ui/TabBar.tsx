@@ -9,6 +9,10 @@ export interface TabDef<K extends string> {
   icon?: ReactNode;
   /** 라벨 옆에 붙이는 처리할 일의 수. 0이거나 없으면 붙이지 않는다 */
   count?: number;
+  /** count 배지 색. 기본 gold */
+  countTone?: 'gold' | 'guild';
+  /** count 배지의 접근성 이름. 생략 시 `${count}건` */
+  countLabel?: string;
   /** 잠금 안내 줄. 있으면 잠긴 탭이다 - 자리를 그대로 두고 자물쇠를 붙이며 눌러도 열리지 않는다 */
   lock?: readonly string[];
 }
@@ -35,7 +39,12 @@ export default function TabBar<K extends string>({ tabs, activeKey, onSelect, cl
             {/* 수는 라벨과 한 줄에 둔다. 버튼은 아이콘과 라벨을 세로로 쌓는다 */}
             <span className="inline-flex items-center">
               <span>{t.label}</span>
-              {t.count ? <span className="pf-accent ml-1 px-1 text-2xs leading-4 bg-gold text-bg" aria-label={`${t.count}건`}>{t.count}</span> : null}
+              {t.count ? (
+                <span className={cx('pf-accent ml-1 px-1 text-2xs leading-4 text-bg', t.countTone === 'guild' ? 'bg-guild' : 'bg-gold')}
+                      aria-label={t.countLabel ?? `${t.count}건`}>
+                  {t.count}
+                </span>
+              ) : null}
             </span>
           </button>
         ))}
