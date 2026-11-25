@@ -1,7 +1,7 @@
 // 스테이징 진입 전용 관리자 OAuth 게이트 단위 테스트.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Request, Response } from 'express';
-import { checkStageLiveUpgrade, isStageGateExempt, stageGate } from './stageGate.js';
+import { checkStageLiveUpgrade, gateHtml, isStageGateExempt, stageGate } from './stageGate.js';
 
 function createRes() {
   const headers: Record<string, string> = {};
@@ -162,7 +162,8 @@ describe('stageGate 미들웨어', () => {
       const html = String(out().body);
       expect(html).toContain('/api/admin/auth/sign-in/social');
       expect(html).toContain("provider: 'google'");
-      expect(html).toContain('callbackURL: window.location.href');
+      expect(html).toContain('callbackURL: cleanUrl');
+      expect(html).toContain('errorCallbackURL: cleanUrl');
       expect(html).toContain('disableRedirect: true');
     }
 
@@ -172,6 +173,72 @@ describe('stageGate 미들웨어', () => {
     await vi.waitFor(() => expect(out403().status).toBe(403));
     expect(out403().contentType).toBe('html');
     expect(String(out403().body)).toContain('/api/admin/auth/sign-in/social');
+    expect(String(out403().body)).toContain('/api/admin/auth/sign-out');
+  });
+});
+
+describe('gateHtml 정본 디자인·문안 기계 가드', () => {
+  it('401·403 HTML은 금지 문자(·, —, –)와 합쇼체(습니다, 입니다)를 포함하지 않는다', () => {
+    for (const status of [401, 403] as const) {
+      const html = gateHtml(status);
+      expect(html).not.toMatch(/[·—–]/);
+      expect(html).not.toMatch(/(?:습니다|입니다)/);
+    }
+  });
+
+  it('파란 기본 버튼과 둥근 카드 모서리를 쓰지 않고 정본 팔레트·노치·베벨·keep-all·파비콘 3종을 사용한다', () => {
+    for (const status of [401, 403] as const) {
+      const html = gateHtml(status);
+      expect(html).not.toContain('#3b82f6');
+      expect(html).not.toContain('#2563eb');
+      expect(html).not.toMatch(/border-radius:\s*(?:12px|8px)/);
+      const radiusMatches = [...html.matchAll(/border-radius:\s*([^;]+);/g)].map(m => m[1].trim());
+      for (const value of radiusMatches) {
+        expect(['0', '4px']).toContain(value);
+      }
+
+      for (const token of ['#0a1526', '#14243d', '#2b4568', '#ffd54f', '#f2f7fb', '#93a8c4', '#ff8a80']) {
+        expect(html).toContain(token);
+      }
+      expect(html).toContain('clip-path');
+      expect(html).toContain('word-break: keep-all');
+      expect(html).toContain('inset 1px 1px 0 rgba(255, 255, 255, 0.08)');
+      expect(html).toContain('<link rel="icon" type="image/svg+xml" href="/favicon.svg" />');
+      expect(html).toContain('<link rel="icon" href="/favicon.ico" sizes="any" />');
+      expect(html).toContain('<link rel="apple-touch-icon" href="/apple-touch-icon.png" />');
+    }
+  });
+
+  it('공식 Google 4색 G 로고와 버튼 라벨·스타일을 포함한다', () => {
+    for (const status of [401, 403] as const) {
+      const html = gateHtml(status);
+      for (const color of ['#4285F4', '#34A853', '#FBBC05', '#EA4335', '#747775', '#1F1F1F']) {
+        expect(html).toContain(color);
+      }
+      expect(html).toContain('Google로 계속하기');
+      expect(html).toContain('height: 40px');
+      expect(html).toContain('border-radius: 4px');
+    }
+  });
+
+  it('401·403별 확정 문안과 403 로그아웃 버튼, errorCallbackURL·429·access_denied 분기를 포함한다', () => {
+    const html401 = gateHtml(401);
+    expect(html401).toContain('관리자 인증');
+    expect(html401).toContain('스테이징 관리자 인증');
+    expect(html401).toContain('프리뷰 환경은 관리자 구글 계정으로 로그인해야 이용할 수 있어요.');
+    expect(html401).not.toContain('id="stage-logout"');
+
+    const html403 = gateHtml(403);
+    expect(html403).toContain('접근 제한');
+    expect(html403).toContain('스테이징 접근 제한');
+    expect(html403).toContain('로그인한 계정이 관리자 명부에 없어 이용할 수 없어요.');
+    expect(html403).toContain('id="stage-logout"');
+    expect(html403).toContain('로그아웃');
+    expect(html403).toContain('/api/admin/auth/sign-out');
+    expect(html403).toContain('window.location.reload()');
+    expect(html403).toContain('errorCallbackURL');
+    expect(html403).toContain('429');
+    expect(html403).toContain('access_denied');
   });
 });
 
