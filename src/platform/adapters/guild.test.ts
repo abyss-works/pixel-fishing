@@ -46,4 +46,11 @@ describe('guildAction — 보너스 기부', () => {
     await expect(guildAction({ op: 'donate', guildId: 'g1', bonus: 'bag', amount: 1 }))
       .resolves.toEqual({ ok: false, error: 'not-enough-gold' });
   });
+
+  it('POST /api/guilds/:id/enhancements/reset은 잔여 골드·회수 포인트·누적 초기화 횟수를 돌려준다', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ gold: 400_000, recovered: 3, enhanceResetCount: 2 }), { status: 200 }));
+    await expect(guildAction({ op: 'resetEnhancements', guildId: 'g1' }))
+      .resolves.toEqual({ ok: true, gold: 400_000, recovered: 3, enhanceResetCount: 2 });
+    expect(fetchMock).toHaveBeenCalledWith('/api/guilds/g1/enhancements/reset', { method: 'POST' });
+  });
 });

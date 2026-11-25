@@ -6,15 +6,15 @@ import { sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { Database, Executor } from '../_db/client.js';
 import {
-  GUILD_BONUS_MAX_RANK, GUILD_DAILY_FAME_CAP, GUILD_ENHANCE_MAX_RANK, GUILD_ENHANCE_RESET_COST, GUILD_RENAME_COST,
+  GUILD_BONUS_MAX_RANK, GUILD_DAILY_FAME_CAP, GUILD_ENHANCE_MAX_RANK, GUILD_RENAME_COST,
   bonusEffect, bonusRank, bonusRankCost, contributionDayOf, donationOutcome, enhanceOutcome, enhanceResetOutcome,
   guildBonusLevels, GUILD_JOIN_REQUEST_TTL_MS, GUILD_MAX_MEMBERS, guildEffectsOf, guildLevelOf, guildProgress,
-  handoverOutcome, joinOutcome, remainingEnhancePoints, removalOutcome, renameOutcome, usedEnhancePoints,
+  handoverOutcome, joinOutcome, remainingEnhancePoints, removalOutcome, renameOutcome,
 } from '../../src/game/rules/guild.js';
 import type { EnhanceError, EnhanceResetError, RenameError } from '../../src/game/rules/guild.js';
 import type { GuildActor, GuildJoinVia, GuildBonusId, GuildEffects, GuildJoinMode, GuildLogKind, GuildRole } from '../../src/game/rules/guild.js';
 import { at } from './json.js';
-import { goldDebit } from './save.js';
+import { goldDebit, guildEnhanceResetDebit } from './save.js';
 
 type Tx = Database['withTransaction'];
 
@@ -94,6 +94,8 @@ export interface GuildView {
   /** 보너스 다섯(해금 순)과, 그 단계로 서버가 액션에 적용하는 효과, 기부 순위(전체 기부액 많은 순) */
   bonuses: GuildBonusView[];
   effects: GuildEffects;
+  /** 내 계정 기준 자유 강화 누적 초기화 횟수 — 다음 초기화 비용 산정의 정본이다 */
+  enhanceResetCount: number;
   donors: GuildDonor[];
   /** 항해일지 — 최근 순 */
   logbook: GuildLog[];
@@ -112,10 +114,13 @@ export async function guildIdOf(db: Executor, uid: string): Promise<string | nul
 export async function myGuild(db: Executor, uid: string, nowISO: string): Promise<GuildView | null> {
   const { rows: [g] } = await db.execute<{
     id: string; name: string; created_at: string | Date; renamed_at: string | Date | null; role: GuildRole; code: string;
-    join_mode: GuildJoinMode; pitch: string | null;
+    join_mode: GuildJoinMode; pitch: string | null; enhance_reset_count: number | string;
   }>(sql`
-    select g.id::text as id, g.name, g.created_at, g.renamed_at, m.role, g.code, g.join_mode, g.pitch from public.guild_members m
+    select g.id::text as id, g.name, g.created_at, g.renamed_at, m.role, g.code, g.join_mode, g.pitch,
+      coalesce(s.guild_enhance_reset_count, 0) as enhance_reset_count
+    from public.guild_members m
     join public.guilds g on g.id = m.guild_id
+    left join public.saves_current s on s.user_id = m.user_id
     where m.user_id = ${uid} and m.left_at is null`);
   if (!g) return null;
   const today = contributionDayOf(nowISO);
@@ -147,7 +152,7 @@ export async function myGuild(db: Executor, uid: string, nowISO: string): Promis
   const { bonuses, effects, donors } = await bonusViews(db, g.id, uid, progress.level);
   const requests = g.role === 'leader' ? await joinRequests(db, g.id, nowISO) : [];
   return { id: g.id, name: g.name, createdAt: iso(g.created_at), renamedAt: g.renamed_at ? iso(g.renamed_at) : null, role: g.role, members, code: g.code, joinMode: g.join_mode,
-    pitch: g.pitch, requests, growth: progress, bonuses, effects, donors, logbook };
+    pitch: g.pitch, requests, growth: progress, bonuses, effects, enhanceResetCount: Number(g.enhance_reset_count), donors, logbook };
 }
 
 /** 보너스 다섯의 상태, 효과, 기부 순위 — 기부가 없던 보너스는 저장된 단계 0, 자유 강화 0, 모인 골드 0이다 */
@@ -269,11 +274,12 @@ export async function enhanceBonus(
 }
 
 export type EnhanceResetOutcome =
-  | { ok: true; gold: number; recovered: number }
+  | { ok: true; gold: number; recovered: number; enhanceResetCount: number }
   | { ok: false; error: 'not-member' | 'restricted' | EnhanceResetError };
 
 /**
- * 개인 자유 강화 초기화(길드원 누구나). 실행한 길드원의 골드 20,000,000G를 빼고 본인의 자유 강화 행만 비운다.
+ * 개인 자유 강화 초기화(길드원 누구나). 실행한 길드원의 누적 초기화 횟수에 따른 개인 골드를 빼고
+ * 계정 누적 초기화 횟수를 +1 한 뒤 본인의 자유 강화 행만 비운다.
  * 기본 기부 단계와 풀, 다른 길드원의 자유 강화는 건드리지 않으며 공용 항해일지에 남기지 않는다. 횟수 제한이 없다.
  */
 export async function resetEnhancements(
@@ -288,17 +294,20 @@ export async function resetEnhancements(
     const enhanceRanks = Object.fromEntries(
       currentRows.map(r => [r.bonus, r.rank]),
     ) as Partial<Record<GuildBonusId, number>>;
-    const { rows: [save] } = await tx.execute<{ gold: number | string; restricted: boolean | null }>(
-      sql`select gold, restricted from public.saves_current where user_id = ${uid} for update`,
+    const { rows: [save] } = await tx.execute<{
+      gold: number | string; restricted: boolean | null; guild_enhance_reset_count: number | string;
+    }>(
+      sql`select gold, restricted, guild_enhance_reset_count from public.saves_current where user_id = ${uid} for update`,
     );
     if (save?.restricted) return { ok: false, error: 'restricted' };
     const gold = Number(save?.gold ?? 0);
-    const r = enhanceResetOutcome(enhanceRanks, gold);
-    if (!r.ok) return r;
-    const recovered = usedEnhancePoints(enhanceRanks);
-    await tx.execute(goldDebit(uid, GUILD_ENHANCE_RESET_COST));
+    const resetCount = Number(save?.guild_enhance_reset_count ?? 0);
+    const r = enhanceResetOutcome(enhanceRanks, gold, resetCount);
+    if (!r.ok) return { ok: false, error: r.error };
+    const { rowCount } = await tx.execute(guildEnhanceResetDebit(uid, r.cost));
+    if (!rowCount) return { ok: false, error: 'not-enough-gold' };
     await tx.execute(sql`delete from public.guild_member_enhancements where guild_id = ${guildId} and user_id = ${uid}`);
-    return { ok: true, gold: gold - GUILD_ENHANCE_RESET_COST, recovered };
+    return { ok: true, gold: gold - r.cost, recovered: r.recovered, enhanceResetCount: resetCount + 1 };
   });
 }
 

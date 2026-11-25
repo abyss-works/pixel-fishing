@@ -12,7 +12,7 @@ const member = (uid: string, role: GuildMemberItem['role'], leftAt: string | nul
   ({ uid, nick: uid, role, joinedAt: '2026-11-05T00:00:00.000Z', leftAt, online: false, contribution: { total: 0, today: 0 } });
 const guild = (role: GuildInfo['role'], members: GuildMemberItem[]): GuildInfo =>
   ({ id: 'g', name: '심해', createdAt: '2026-11-05T00:00:00.000Z', role, members, code: 'K7QX2MAB', joinMode: 'approval', pitch: null,
-    requests: [], renamedAt: null,
+    requests: [], renamedAt: null, enhanceResetCount: 0,
     growth: { level: 1, total: 0, floor: 0, next: 10_000 }, bonuses: [], effects: NO_GUILD_EFFECTS, donors: [], logbook: [] });
 
 describe('길드 화면 모델', () => {
@@ -275,7 +275,7 @@ describe('길드 보너스 화면 모델', () => {
     ]);
   });
 
-  it('자유 강화 포인트와 투자·초기화 상태는 일반 길드원에게도 열리고 20,000,000G가 필요하다', () => {
+  it('자유 강화 포인트와 투자·초기화 상태는 일반 길드원에게도 열리고 누적 횟수별 단계 비용이 필요하다', () => {
     const g: GuildInfo = {
       ...guild('member', [member('M', 'member')]),
       growth: { level: 7, total: 350_000, floor: 350_000, next: 550_000 },
@@ -291,13 +291,30 @@ describe('길드 보너스 화면 모델', () => {
     expect(donateDisabledReason(bonusRows([item({ id: 'bag', unlock: 2, rank: 3, cap: 3 })])[0])).toBe(GUILD_ERROR_TEXT['rank-maxed']);
     expect(enhancePoolSummary(g)).toEqual({ max: 2, used: 1, remaining: 1, maxSlots: 5 });
     expect(enhanceInvestState(g, rows[1])).toEqual({ canInvest: true, reason: null });
-    expect(enhanceResetState(g, 19_999_999)).toEqual({
-      canReset: false,
-      reason: '골드가 모자라요.\n20,000,000G를 내고 내 자유 강화만 초기화할 수 있어요.',
-      used: 1,
-      cost: 20_000_000,
-    });
-    expect(enhanceResetState(g, 20_000_000)).toEqual({ canReset: true, reason: null, used: 1, cost: 20_000_000 });
+
+    const expectedCosts: [number, number][] = [
+      [0, 100_000],
+      [1, 500_000],
+      [2, 1_000_000],
+      [3, 5_000_000],
+      [4, 10_000_000],
+      [5, 10_000_000],
+    ];
+    for (const [enhanceResetCount, cost] of expectedCosts) {
+      const target = { ...g, enhanceResetCount };
+      expect(enhanceResetState(target, cost - 1), `count ${enhanceResetCount} 부족`).toEqual({
+        canReset: false,
+        reason: `골드가 모자라요.\n${cost.toLocaleString('ko-KR')}G를 내고 내 자유 강화만 초기화할 수 있어요.`,
+        used: 1,
+        cost,
+      });
+      expect(enhanceResetState(target, cost), `count ${enhanceResetCount} 허용`).toEqual({
+        canReset: true,
+        reason: null,
+        used: 1,
+        cost,
+      });
+    }
   });
 
   it('자유 강화·초기화 항해일지 문장', () => {

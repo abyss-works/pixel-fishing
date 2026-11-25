@@ -89,6 +89,15 @@ export function goldDebit(uid: string, gold: number): SQL {
   return sql`update public.saves_current set gold = gold - ${gold}, version = version + 1 where user_id = ${uid} and gold >= ${gold}`;
 }
 
+/**
+ * 길드 개인 자유 강화 초기화 전용 차감 문장 — 골드 차감·버전 증가와 함께 계정 누적 초기화 횟수를 원자적으로 +1 한다.
+ */
+export function guildEnhanceResetDebit(uid: string, cost: number): SQL {
+  return sql`update public.saves_current
+    set gold = gold - ${cost}, version = version + 1, guild_enhance_reset_count = guild_enhance_reset_count + 1
+    where user_id = ${uid} and gold >= ${cost}`;
+}
+
 /** 낙관 락 갱신 — 읽은 version 그대로일 때만 바뀐다. 핵심 쓰기의 첫 조각이며 다른 조각의 guard가 된다.
  *  gate가 있으면 그 질의가 행을 돌려줄 때만 바뀐다 */
 export function versionUpdate(uid: string, state: GameState, readVersion: number, nowISO: string, marks: CommitMarks = {}, gate: SQL | null = null): SQL {
