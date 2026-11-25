@@ -233,7 +233,7 @@ describe('부엌 창 - 집 거점의 부엌 카드가 연다', () => {
     fireEvent.click(screen.getByRole('button', { name: '조리 시작' }));
     const line = screen.getByText('조리 중').closest('div')!;
     expect(within(line).getByText('민 몰리')).toBeInTheDocument();
-    expect(within(line).getByText('0/1')).toBeInTheDocument();
+    expect(line).toHaveTextContent('0/1');
     expect(screen.getByRole('button', { name: '대기열에 추가' })).toBeEnabled();
     expect(screen.getByText('보관함').closest('div')).toHaveTextContent('1/10');
   });

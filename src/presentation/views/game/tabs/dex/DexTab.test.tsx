@@ -47,11 +47,11 @@ describe('DexTab - 2단 서브탭', () => {
 
     const { rerender } = render(<DexTab game={game} view="base" onView={vi.fn()} sub="village" onSub={vi.fn()} />);
     const pondHeading = screen.getByRole('heading', { level: 5, name: /마을 연못/ });
-    expect(within(pondHeading).getByText(`${pondFish.length}/${pondFish.length}`)).toBeInTheDocument();
+    expect(pondHeading).toHaveTextContent(`${pondFish.length}/${pondFish.length}`);
     expect(within(pondHeading).getByText('완성')).toBeInTheDocument();
 
     const riverHeading = screen.getByRole('heading', { level: 5, name: /마을 강/ });
-    expect(within(riverHeading).getByText(`0/${riverFish.length}`)).toBeInTheDocument();
+    expect(riverHeading).toHaveTextContent(`0/${riverFish.length}`);
     expect(within(riverHeading).queryByText('완성')).toBeNull();
 
     // 돌연변이 보기에서는 일반 도감 완성 배지를 표시하지 않는다

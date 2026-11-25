@@ -1,25 +1,26 @@
 import { useState } from 'react';
-import { formatRankingValue, pinnedMyRank, RANKING_TABS, rankingTabMeta } from '../../../../features/ranking/model/ranking';
+import { RANKING_TABS, pinnedMyRank, rankingTabMeta, rankingValueView } from '../../../../features/ranking/model/ranking';
 import type { MainRankingBoardId } from '../../../../features/ranking/model/ranking';
 import { useRankingBoard } from '../../../../features/ranking/service/useRanking';
-import { cx } from '../../../ui/cx';
-import Inset from '../../../ui/Inset';
-import TableBox from '../../../ui/TableBox';
-import DataTable from '../../../ui/DataTable';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
+import ProgressCount from '../../../ui/ProgressCount';
+import RankList, { RankMeBar } from '../../../ui/RankList';
 import TabBar from '../../../ui/TabBar';
-import Tip from '../../../ui/Tip';
+import TableBox from '../../../ui/TableBox';
 import RankingStatus from './RankingStatus';
 
 // 랭킹 창. 게임 스테이지 안에 뜬다(거점 게시판에서 여는 게임 안 창). 680 폭에 높이를 고정하고,
 // 상단 탭 다섯(명성·도감(일반)·도감(돌연변이)·도감(네임드)·네임드 토벌)을 전환하며 활성 탭만 지연 조회한다.
-// 순위 표는 탭 본문 안에서 굴리고, 1위부터 3위의 순위 숫자는 골드로 쓴다.
-// 내 행은 하늘색이다. 내가 상위 목록 밖이면 내 줄을 표 아래에 고정하고, 목록 안이면 그 자리를 비워 둔다.
-// 두 탭 이상 공통 고정 정보 줄은 두지 않는다. 어종별 크기 순위는 도감 상세가 보여 준다.
-const HEAD = 'h-[30px] px-2 font-normal border-b border-line';
-const nameOf = (nickname: string | null) => nickname ?? '이름 없음';
+// 순위 표와 하단 고정 내 순위 바는 공용 RankList 규칙(1~3위 골드, 내 줄 하늘색 구분, 오른쪽 수치 골드 강조)을 따른다.
 const TABS = RANKING_TABS.map(({ key, label }) => ({ key, label }));
+
+function renderBoardValue(board: MainRankingBoardId, value: number) {
+  const view = rankingValueView(board, value);
+  return view.kind === 'ratio'
+    ? <ProgressCount current={view.current} target={view.total} percent={view.percent} />
+    : <ProgressCount value={view.text} />;
+}
 
 export default function RankingModal({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<MainRankingBoardId>('fame');
@@ -47,49 +48,29 @@ function RankingBoardView({ board }: { board: MainRankingBoardId }) {
   const { valueLabel, help } = rankingTabMeta(board);
   const listed = !!data && data.top.length > 0;
   const mine = data ? pinnedMyRank(data) : null;
+  const renderValue = (value: number) => renderBoardValue(board, value);
+
   return (
     <div className="flex flex-col gap-3 flex-1 min-h-0">
       <TableBox className="flex-1 min-h-0 px-3 pb-2">
         {listed ? (
-          <DataTable cols={['3.5rem', null, '136px']} nameMin="6rem">
-            <thead>
-              <tr className="sticky top-0 bg-[color-mix(in_oklab,var(--c-bg)_45%,var(--c-surface))] text-2xs text-text-dim">
-                <th className={cx(HEAD, 'pl-0 text-left')}>순위</th>
-                <th className={cx(HEAD, 'text-left')}>닉네임</th>
-                <th className={cx(HEAD, 'pr-0 text-right')}>
-                  {help ? <Tip text={help}>{valueLabel}</Tip> : valueLabel}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.top.map((r, i) => {
-                const cell = cx('h-[34px]', i > 0 && 'border-t border-line/60');
-                return (
-                  <tr key={i} className={cx(r.me && 'text-accent')} aria-current={r.me ? 'true' : undefined}>
-                    <td className={cx(cell, 'pf-accent text-xs', r.rank <= 3 && !r.me && 'text-gold')}>{r.rank}</td>
-                    <td className={cx(cell, 'px-2 truncate', r.me && 'font-bold')}>{nameOf(r.nickname)}</td>
-                    <td className={cx(cell, 'pl-2 text-right pf-accent text-xs whitespace-nowrap')}>{formatRankingValue(board, r.value)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </DataTable>
+          <RankList
+            embedded
+            rows={data.top}
+            me={null}
+            valueLabel={valueLabel}
+            valueHelp={help}
+            cols={['3.5rem', null, '136px']}
+            nameMin="6rem"
+            format={renderValue}
+          />
         ) : (
           <div className="flex h-full items-center justify-center">
             <RankingStatus loading={loading} failed={failed} offline={offline} empty={!!data} />
           </div>
         )}
       </TableBox>
-      {/* 내 줄 자리: 목록 밖일 때만 채우고, 아니면 같은 높이로 비워 둔다 */}
-      {mine ? (
-        <Inset tone="light" border="accent" className="h-9 shrink-0 grid grid-cols-[3.5rem_minmax(0,1fr)_136px] items-center px-3 text-accent text-sm"
-               aria-label="내 순위">
-          <span className="pf-accent text-xs">{mine.rank}</span>
-          {/* 표의 닉네임 칸과 같은 왼쪽 여백 */}
-          <b className="pl-2 truncate">나</b>
-          <span className="pf-accent text-xs text-right whitespace-nowrap">{formatRankingValue(board, mine.value)}</span>
-        </Inset>
-      ) : <div className="h-9 shrink-0" aria-hidden="true" />}
+      <RankMeBar me={mine} reserveSpace format={renderValue} />
     </div>
   );
 }

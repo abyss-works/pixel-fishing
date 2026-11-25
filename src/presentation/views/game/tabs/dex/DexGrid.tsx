@@ -7,6 +7,7 @@ import { cx } from '../../../../ui/cx';
 import Badge from '../../../../ui/Badge';
 import Frame from '../../../../ui/Frame';
 import PixelIcon from '../../../../ui/PixelIcon';
+import ProgressCount from '../../../../ui/ProgressCount';
 import SubTabs from '../../../../ui/SubTabs';
 import FishSprite from '../../../../ui/fish/FishSprite';
 import { RarityDot, RARITY_CARD, DIM_CARD } from '../../../../ui/fish/RarityTag';
@@ -50,9 +51,7 @@ export default function DexGrid({ game, view, sub, onSub }: {
               <span>{s.name}</span>
               {view === 'base' && (
                 <span className="inline-flex items-center gap-1.5 text-xs">
-                  <span className={cx('pf-accent', normalProgress.completed ? 'text-gold' : 'text-text-dim')}>
-                    {normalProgress.found}/{normalProgress.total}
-                  </span>
+                  <ProgressCount current={normalProgress.found} target={normalProgress.total} tight />
                   {normalProgress.completed && (
                     <Badge tone="gold" size="xs" inline>
                       <PixelIcon glyph="check" size={10} />

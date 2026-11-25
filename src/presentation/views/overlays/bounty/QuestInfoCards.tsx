@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import type { QuestInfoGeneral, QuestInfoNamed } from '../../../../features/bounty/model/questInfo';
 import AdjustedAmount from '../../../ui/AdjustedAmount';
 import Inset from '../../../ui/Inset';
+import ProgressCount from '../../../ui/ProgressCount';
 import { RarityText } from '../../../ui/fish/RarityTag';
 import { fmtGold, fmtNum } from '../../../ui/format';
 import { BoardRows, NamedCardHead, ProgressMeter } from './boardParts';
@@ -17,9 +18,9 @@ export function GeneralInfoCard({ info }: { info: QuestInfoGeneral }) {
     <Inset className={CARD}>
       <b className="text-base">{info.title}</b>
       <BoardRows rows={[
-        { key: 'target', label: '목표', value: <><b><RarityText rarity={info.grade} /></b> 등급 어종 <span className="pf-accent">{fmtNum(info.count)}</span>마리</> },
+        { key: 'target', label: '목표', value: <><b><RarityText rarity={info.grade} /></b> 등급 어종 <ProgressCount value={fmtNum(info.count)} />마리</> },
         { key: 'progress', label: '진행', value: <span className="inline-block w-40 align-middle"><ProgressMeter progress={info.progress} count={info.count} /></span> },
-        { key: 'reward', label: '보상', value: <span className="pf-accent text-gold">{fmtGold(info.reward)}</span> },
+        { key: 'reward', label: '보상', value: <ProgressCount value={fmtGold(info.reward)} /> },
         { key: 'finish', label: '마치는 곳', value: info.finishAt },
       ]} />
     </Inset>
@@ -32,7 +33,7 @@ export function NamedInfoCard({ info }: { info: QuestInfoNamed }) {
       <NamedCardHead title={info.title} traceMins={info.traceMins} />
       <BoardRows rows={[
         { key: 'haunt', label: '나타나는 곳', value: info.haunt },
-        { key: 'progress', label: '진행', value: <span className="pf-accent">{info.progress}/{info.count}</span> },
+        { key: 'progress', label: '진행', value: <ProgressCount current={info.progress} target={info.count} tight /> },
         { key: 'reward', label: '보상', value: <AdjustedAmount amount={info.reward} className="text-gold" /> },
         ...(info.materialName ? [{ key: 'material', label: '교환 재료', value: info.materialName }] : []),
         { key: 'finish', label: '마치는 곳', value: info.finishAt },

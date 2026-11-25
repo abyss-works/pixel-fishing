@@ -18,6 +18,7 @@ import {
 import Inset from '../../../ui/Inset';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
+import ProgressCount from '../../../ui/ProgressCount';
 import TabBar from '../../../ui/TabBar';
 import type { TabDef } from '../../../ui/TabBar';
 import Tip from '../../../ui/Tip';
@@ -87,11 +88,11 @@ export default function StatsModal({ game, movement, region, nickname, profileSt
               <span className="text-xs text-text-dim">배</span><span>{selected.data.boatName}</span>
             </span>
             <span className="flex items-baseline gap-1.5 whitespace-nowrap">
-              <span className="text-xs text-text-dim">낚싯대</span><span className="pf-accent text-xs">Lv.{game.rod}</span>
+              <span className="text-xs text-text-dim">낚싯대</span><ProgressCount value={`Lv.${game.rod}`} className="text-xs" />
             </span>
             <span className="flex items-baseline gap-1.5 whitespace-nowrap">
               <span className="text-xs text-text-dim"><Tip text={powerHelpText()}>파워</Tip></span>
-              <span className="pf-accent text-xs text-gold">{selected.data.currentPower}</span>
+              <ProgressCount value={selected.data.currentPower} className="text-xs" />
             </span>
           </Inset>
           <TabBar tabs={TABS} activeKey={tab} onSelect={setTab} />

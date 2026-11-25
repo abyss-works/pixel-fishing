@@ -9,6 +9,7 @@ import { fmtNum } from '../../../../ui/format';
 import { cx } from '../../../../ui/cx';
 import PixelIcon from '../../../../ui/PixelIcon';
 import PixelList from '../../../../ui/PixelList';
+import ProgressCount from '../../../../ui/ProgressCount';
 import SectionTitle from '../../../../ui/SectionTitle';
 import FishSprite from '../../../../ui/fish/FishSprite';
 import CardCarousel from '../../../../ui/CardCarousel';
@@ -107,7 +108,7 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
         <SectionTitle className="flex items-baseline justify-between">
           {focused ? '어군 정보' : '가까운 어군'}
           {focusedDex && (
-            <span className="text-2xs text-text-dim">도감 {focusedDex.caught}/{focusedDex.total}</span>
+            <span className="text-2xs text-text-dim">도감 <ProgressCount current={focusedDex.caught} target={focusedDex.total} tight /></span>
           )}
         </SectionTitle>
         <Inset className={cx(SLOT_H, 'pf-vscroll pf-scroll-panel p-0 flex flex-col')}>

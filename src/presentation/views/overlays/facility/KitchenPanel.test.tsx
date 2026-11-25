@@ -39,8 +39,7 @@ describe('부엌 창 틀과 대기열', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByText('조리 중인 요리 없음')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '대기열 0건' })).toBeDisabled();
-    expect(screen.getByText('보관함')).toBeInTheDocument();
-    expect(screen.getByText(`0/${COOK_STORAGE_CAP}`)).toBeInTheDocument();
+    expect(screen.getByText('보관함').closest('div')).toHaveTextContent(`0/${COOK_STORAGE_CAP}`);
     const tabs = ['도시락', '미끼', '기운 변환'].map(tab);
     expect(tabs[0]).toHaveClass('active');
     expect(tabs[0].compareDocumentPosition(tabs[1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -63,10 +62,10 @@ describe('부엌 창 틀과 대기열', () => {
     const cookingName = within(line).getByText('민 몰리');
     expect(cookingName).toBeInTheDocument();
     expect(cookingName.closest('b')).toBeNull();
-    expect(within(line).getByText('1/3')).toBeInTheDocument();
+    expect(line).toHaveTextContent('1/3');
     expect(screen.getByText(`${RARE_WAIT_MIN - 1}분`)).toBeInTheDocument();
     fireEvent.click(tab('기운 변환'));
-    expect(screen.getByText('1/3')).toBeInTheDocument();
+    expect(screen.getByText('조리 중').closest('div')).toHaveTextContent('1/3');
   });
 
   it('대기열 펼치기 후 취소 버튼은 짧은 취소만 적고, 누르면 ConfirmDialog에서 100% 환급·승계 안내 후 cancelCook을 보낸다', () => {
@@ -123,7 +122,9 @@ describe('부엌 창 틀과 대기열', () => {
 
   it('보관함이 가득 차면 수를 위험색으로 보인다', () => {
     show(seed({ items: { 'cook-lunch-bite': COOK_STORAGE_CAP } }));
-    expect(screen.getByText(`${COOK_STORAGE_CAP}/${COOK_STORAGE_CAP}`)).toHaveClass('text-danger');
+    const storageCount = screen.getByText('보관함').closest('span')?.parentElement?.querySelector('[data-progress-count]') as HTMLElement;
+    expect(storageCount).toHaveTextContent(`${COOK_STORAGE_CAP}/${COOK_STORAGE_CAP}`);
+    expect(storageCount).toHaveAttribute('data-tone', 'danger');
   });
 });
 

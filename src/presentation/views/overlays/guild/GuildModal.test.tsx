@@ -160,8 +160,9 @@ describe('GuildModal', () => {
     const stays = () => {
       expect(screen.getByText('심해선단')).toBeTruthy();
       expect(screen.getByText('Lv.3')).toBeTruthy();
-      expect(screen.getByText('31,000 / 50,000')).toBeTruthy();
-      expect(screen.getByText('2/10')).toBeTruthy();
+      const statusBar = screen.getByText('심해선단').parentElement as HTMLElement;
+      expect(statusBar).toHaveTextContent('31,000 / 50,000');
+      expect(statusBar).toHaveTextContent('2/10');
     };
     stays();
     fireEvent.mouseEnter(screen.getByRole('meter', { name: '다음 레벨까지 진행' }).parentElement as HTMLElement);
@@ -187,7 +188,7 @@ describe('GuildModal', () => {
     expect(within(tree).getByLabelText('판매가 보너스 3단계 모으는 중')).toBeTruthy();
     expect(screen.getByText('현재(2단계)')).toBeTruthy();
     expect(screen.getByText('다음(3단계)')).toBeTruthy();
-    expect(screen.getByText('125,000 / 500,000')).toBeTruthy();
+    expect(screen.getByText('모인 골드').parentElement).toHaveTextContent('125,000 / 500,000');
     // 상한에 닿은 스킬을 고르면 기부를 열 수 없다
     fireEvent.click(screen.getByRole('button', { name: '가방 용량 증가 고르기' }));
     expect((screen.getByRole('button', { name: '기부' }) as HTMLButtonElement).disabled).toBe(true);

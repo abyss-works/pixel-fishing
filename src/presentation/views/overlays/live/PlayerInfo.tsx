@@ -25,6 +25,7 @@ import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
 import PersonSprite from '../../../ui/PersonSprite';
 import PixelIcon from '../../../ui/PixelIcon';
+import ProgressCount from '../../../ui/ProgressCount';
 import ProgressMeter from '../../../ui/ProgressMeter';
 import { SCROLL_Y } from '../../../ui/scrollArea';
 import Subheading from '../../../ui/Subheading';
@@ -229,10 +230,10 @@ function ProfileDetail({ name, view, actions }: {
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-2xs text-text-dim">
-              <span>명성 <b className="pf-accent text-text">{fmtNum(view.fame)}</b></span>
+              <span>명성 <ProgressCount value={fmtNum(view.fame)} /></span>
               <span>배 <b className="text-text">{boat.tier > 0 ? `${boat.name} (${boat.tier}단계)` : '없음'}</b></span>
-              <span>낚싯대 <b className="pf-accent text-text">Lv.{rod.level}</b></span>
-              <span>파워 <b className="pf-accent text-text">{fmtNum(rod.power)}</b></span>
+              <span>낚싯대 <ProgressCount value={`Lv.${rod.level}`} /></span>
+              <span>파워 <ProgressCount value={fmtNum(rod.power)} /></span>
             </div>
           </div>
         </div>
@@ -311,7 +312,7 @@ function AchievementSubtab({
         <div className="shrink-0 flex flex-wrap items-center justify-between gap-2 text-2xs">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <span className="text-text-dim">
-              달성 <span className="font-pixel text-gold">{achievements.claimed} / {achievements.total}</span>
+              달성 <ProgressCount current={achievements.claimed} target={achievements.total} />
             </span>
             <span className="text-text-dim">
               ({achievements.tabs.map(t => `${t.label} ${t.claimed}/${t.total}`).join(', ')})
@@ -379,7 +380,7 @@ function CollectiblesSubtab({ collectibles }: { collectibles: ProfileView['colle
             <Subheading className="mb-0">유물</Subheading>
             <div className="flex items-center gap-2">
               <span className="text-text-dim">보유 {artifacts.owned} / 미보유 {artifacts.total - artifacts.owned}</span>
-              <span className="pf-accent">{artifacts.owned} / {artifacts.total}</span>
+              <ProgressCount current={artifacts.owned} target={artifacts.total} />
             </div>
           </div>
           <ul className="grid grid-cols-4 gap-1.5 mobile:grid-cols-2">
@@ -413,7 +414,7 @@ function CollectiblesSubtab({ collectibles }: { collectibles: ProfileView['colle
                       <ItemSprite kind="artifact" id={s.id} preset="row" className="shrink-0" />
                       <span className="flex flex-col min-w-0">
                         <span className="break-keep break-words">{s.name}</span>
-                        {s.level !== null && <span className="font-pixel text-2xs text-text-dim">Lv.{s.level}</span>}
+                        {s.level !== null && <span className="pf-accent text-2xs text-text-dim">Lv.{s.level}</span>}
                       </span>
                     </Tip>
                   ) : (
@@ -441,7 +442,7 @@ function CollectiblesSubtab({ collectibles }: { collectibles: ProfileView['colle
                 모자
               </Tip>
             </span>
-            <span className="pf-accent shrink-0">{hats.owned} / {hats.total}</span>
+            <ProgressCount current={hats.owned} target={hats.total} className="shrink-0" />
           </div>
           <ul className="grid grid-cols-4 gap-1.5 mobile:grid-cols-2">
             {hats.slots.map(h => (
@@ -488,8 +489,8 @@ function DexSubtab({ dex }: { dex: ProfileView['dex'] }) {
       <div className="flex flex-wrap items-center justify-between gap-2 text-2xs shrink-0">
         <Subheading className="mb-0"><Tip text={DEX_HELP}>해역별 도감</Tip></Subheading>
         <div className="flex items-center gap-3">
-          <span className="text-text-dim">일반 <span className="pf-accent">{dex.found} / {dex.total}</span></span>
-          <span className="text-text-dim">돌연변이 <span className="font-pixel text-guild">{dex.variantFound} / {dex.total}</span></span>
+          <span className="text-text-dim">일반 <ProgressCount current={dex.found} target={dex.total} /></span>
+          <span className="text-text-dim">돌연변이 <ProgressCount current={dex.variantFound} target={dex.total} tone="guild" /></span>
         </div>
       </div>
 
@@ -519,7 +520,7 @@ function DexSubtab({ dex }: { dex: ProfileView['dex'] }) {
                   heightClass="h-1.5"
                   ariaLabel={`${z.name} 일반 도감`}
                 />
-                <span className={cx('text-right', z.complete ? 'font-pixel text-gold' : 'pf-accent')}>{z.found} / {z.total}</span>
+                <ProgressCount current={z.found} target={z.total} className="text-right" />
               </div>
               <div
                 className="grid grid-cols-[minmax(0,1fr)_4.2em] items-center gap-1.5 h-5 whitespace-nowrap"
@@ -532,7 +533,12 @@ function DexSubtab({ dex }: { dex: ProfileView['dex'] }) {
                   heightClass="h-1.5"
                   ariaLabel={`${z.name} 돌연변이 도감`}
                 />
-                <span className={cx('font-pixel text-right', z.variantComplete ? 'text-gold' : 'text-guild')}>{z.variantFound} / {z.total}</span>
+                <ProgressCount
+                  current={z.variantFound}
+                  target={z.total}
+                  tone={z.variantComplete ? 'gold' : 'guild'}
+                  className="text-right"
+                />
               </div>
             </div>
           </div>

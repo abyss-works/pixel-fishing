@@ -49,15 +49,18 @@ describe('랭킹 창', () => {
     expect(state.calls).toEqual(['fame']);
 
     fireEvent.click(screen.getByRole('button', { name: '도감(일반)' }));
-    expect(await screen.findByText(`42 / ${FISH.length} (${Math.round((42 / FISH.length) * 100)}%)`)).toBeInTheDocument();
+    await screen.findByText('나');
+    expect(screen.getByText('나').closest('tr')).toHaveTextContent(`42 / ${FISH.length} (${Math.round((42 / FISH.length) * 100)}%)`);
     expect(state.calls).toEqual(['fame', 'dex']);
 
     fireEvent.click(screen.getByRole('button', { name: '도감(돌연변이)' }));
-    expect(await screen.findByText(`10 / ${FISH.length} (${Math.round((10 / FISH.length) * 100)}%)`)).toBeInTheDocument();
+    await screen.findByText('다');
+    expect(screen.getByText('다').closest('tr')).toHaveTextContent(`10 / ${FISH.length} (${Math.round((10 / FISH.length) * 100)}%)`);
     expect(state.calls).toEqual(['fame', 'dex', 'variant']);
 
     fireEvent.click(screen.getByRole('button', { name: '도감(네임드)' }));
-    expect(await screen.findByText(`3 / ${NAMED.length} (${Math.round((3 / NAMED.length) * 100)}%)`)).toBeInTheDocument();
+    await screen.findByText('라');
+    expect(screen.getByText('라').closest('tr')).toHaveTextContent(`3 / ${NAMED.length} (${Math.round((3 / NAMED.length) * 100)}%)`);
     expect(state.calls).toEqual(['fame', 'dex', 'variant', 'named']);
 
     fireEvent.click(screen.getByRole('button', { name: '네임드 토벌' }));
@@ -77,8 +80,8 @@ describe('랭킹 창', () => {
     show();
     await screen.findByText('p1');
     const rankCell = (name: string) => within(screen.getByText(name).closest('tr')!).getAllByRole('cell')[0];
-    expect(rankCell('p3')).toHaveClass('text-gold');
-    expect(rankCell('p4')).not.toHaveClass('text-gold');
+    expect(rankCell('p3')).toHaveAttribute('data-rank-tone', 'gold');
+    expect(rankCell('p4')).toHaveAttribute('data-rank-tone', 'default');
   });
 
   it('목록 밖이면 내 줄을 표 아래에 고정한다', async () => {
@@ -87,14 +90,18 @@ describe('랭킹 창', () => {
     };
     show();
     const mine = await screen.findByLabelText('내 순위');
-    expect(within(mine).getByText('57')).toBeInTheDocument();
+    expect(within(mine).getByText('57')).toHaveAttribute('data-rank-tone', 'accent');
     expect(within(mine).getByText('10')).toBeInTheDocument();
   });
 
-  it('상위 목록 안의 내 행은 강조하고 따로 반복하지 않는다', async () => {
+  it('상위 목록 안의 내 행은 강조하고 따로 반복하지 않으며, 1~3위 순위와 수치 열의 골드 강조를 유지한다', async () => {
     state.results = { fame: { board: 'fame', top: [{ rank: 1, nickname: '나', value: 5, me: true }], me: { rank: 1, value: 5 } } };
     show();
-    expect((await screen.findByText('나')).closest('tr')).toHaveAttribute('aria-current', 'true');
+    const tr = (await screen.findByText('나')).closest('tr')!;
+    expect(tr).toHaveAttribute('aria-current', 'true');
+    expect(tr).toHaveAttribute('data-me', 'true');
+    expect(within(tr).getAllByRole('cell')[0]).toHaveAttribute('data-rank-tone', 'gold');
+    expect(within(tr).getAllByRole('cell')[2].querySelector('[data-progress-count]')).toHaveAttribute('data-tone', 'gold');
     expect(screen.queryByLabelText('내 순위')).not.toBeInTheDocument();
   });
 
