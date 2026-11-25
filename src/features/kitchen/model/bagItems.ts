@@ -1,7 +1,7 @@
 // 가방 아이템 섹션 모델 — 생명의 기운 격자, 도시락과 미끼 행, 해금 전 잠금과 빈 상태, 먹기 계획과 교체 확인.
 // 먹을 수 있는지는 게임 규칙(canEat)이, 해금은 게임 규칙(cookingUnlocked)이, 게스트 잠금은 메뉴 잠금 모델이 정한다.
 // 보관함에 든 완성분은 조리가 끝난 분까지 센다(settleCooking). 이 모듈은 그 판정을 화면용 행으로 옮긴다.
-import { COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, recipeById } from '../../../game/content/cooking';
+import { ENERGY_ITEM_IDS, recipeById } from '../../../game/content/cooking';
 import type { Recipe } from '../../../game/content/cooking';
 import { POTIONS } from '../../../game/content/potions';
 import type { Potion } from '../../../game/content/potions';
@@ -14,7 +14,7 @@ import { canUsePotion } from '../../../game/rules/rules';
 import type { RuleCheck } from '../../../game/rules/rules';
 import { GAME_DAY_RESET_TEXT } from '../../../game/rules/time';
 import { josa } from '../../../shared/lib/josa';
-import { facilityGuestAllowed, facilityProgress, menuLock, progressNote } from '../../display/model/menuLock';
+import { facilityGuestAllowed, facilityProgress, menuLock } from '../../display/model/menuLock';
 import type { AccountLockState } from '../../display/model/menuLock';
 import { FORTUNE_TARGET_BONUS_LABEL } from '../../fortune/model/fortune';
 import { energyLabel } from './energy';
@@ -99,9 +99,10 @@ export interface PotionRow {
 }
 
 export type ItemSectionView =
-  /** 요리를 쓸 수 없는 상태(해금 전, 게스트). empty는 빈 상태 안내 줄, lines는 잠긴 칸의 툴팁 줄이다 */
+  /** 요리를 쓸 수 없는 상태(해금 전, 게스트). unlockNotice는 전체 보기 상단의 1줄 해금 안내, empty는 보유 중만 보기가 비었을 때의 안내 줄, lines는 잠긴 칸의 툴팁 줄이다 */
   | {
     state: 'locked';
+    unlockNotice: string | null;
     empty: string[];
     lines: string[];
     energy: EnergyCell[];
@@ -161,10 +162,9 @@ export function selectItemSection(game: GameState, now: string, account: Account
   const progress = facilityProgress('kitchen', game.boat);
   const lock = menuLock({ account, guestAllowed: facilityGuestAllowed('kitchen'), feature: '부엌', progress });
   if (lock.kind !== 'none') {
-    const empty = lock.kind === 'progress'
-      ? [NO_ITEMS_TEXT, ...progressNote(COOKING_UNLOCK_BOAT, '부엌에서 도시락과 미끼를 만들 수 있어요.')]
-      : [NO_ITEMS_TEXT];
-    return { state: 'locked', empty, lines: lock.lines, energy, lunch, bait, potions, potionLock };
+    const unlockNotice = lock.kind === 'progress' ? lock.lines[0] ?? null : null;
+    const empty = [NO_ITEMS_TEXT];
+    return { state: 'locked', unlockNotice, empty, lines: lock.lines, energy, lunch, bait, potions, potionLock };
   }
   const empty = lunch.every(r => !isOwnedOrActiveItem(r))
     && bait.every(r => !isOwnedOrActiveItem(r))

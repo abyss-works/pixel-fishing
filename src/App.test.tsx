@@ -1175,12 +1175,14 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     expect(screen.queryByText('해구의 이빨')).not.toBeInTheDocument();
   });
 
-  it('가방 유물 섹션 — 보유가 없으면 수배판 안내', () => {
+  it('가방 유물 섹션 — 기본 전체 보기에는 하단 안내가 없고 보유 중만 보기에서 보유가 없으면 수배판 안내를 보인다', () => {
     seed({});
     render(<App />);
     fireEvent.keyDown(document, { key: '2' });
     fireEvent.keyDown(document, { key: '2' });
     fireEvent.keyDown(document, { key: '2' });
+    expect(screen.queryByText(/수배판/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '보유 중만 보기' }));
     expect(screen.getByText(/수배판/)).toBeInTheDocument();
   });
 
@@ -1611,13 +1613,15 @@ describe('스탯창 — 자원 바 클릭 진입 (v0.6.1)', () => {
 });
 
 describe('아이템 — 가방 아이템 섹션', () => {
-  it('가방 아이템 섹션은 빈 안내를 보이고, 필드에 활성 미끼 오버레이가 없다', () => {
+  it('가방 아이템 섹션은 전체 보기에서 빈 안내 없이 항목 카드를 보이고 보유 중만 보기에서 빈 안내를 보이며 필드에 활성 미끼 오버레이가 없다', () => {
     seed({});
     render(<App />);
     fireEvent.keyDown(document, { key: '2' });
     fireEvent.keyDown(document, { key: '2' }); // 아이템
-    expect(screen.getByText('가진 아이템이 없어요.')).toBeInTheDocument();
+    expect(screen.queryByText('가진 아이템이 없어요.')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('활성 미끼')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '보유 중만 보기' }));
+    expect(screen.getByText('가진 아이템이 없어요.')).toBeInTheDocument();
   });
 });
 
