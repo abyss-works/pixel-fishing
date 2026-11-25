@@ -213,9 +213,10 @@ export default function MailboxModal({ dispatch, setToast, onClose }: {
                             <Tip
                               key={att.id}
                               wraps
+                              hoverOnly
                               text={(
                                 <TipCard
-                                  title={detail.name}
+                                  title={<GradeName name={detail.name} grade={detail.grade} />}
                                   badge={<Badge tone="dim-plain" size="2xs">{detail.kindLabel}</Badge>}
                                   description={detail.description ?? detail.note ?? undefined}
                                 />

@@ -7,6 +7,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import BountyPanel from './BountyPanel';
 import { gameDay } from '../../../../features/bounty/service/queryKeys';
 import { BOUNTIES, dailyQuestFor } from '../../../../game/content/bounties';
+import { artifactById } from '../../../../game/content/artifacts';
+import { artifactEffectValue } from '../../../ui/artifactEffects';
 import { newState } from '../../../../game/rules/logic';
 import type { GameState } from '../../../../game/rules/logic';
 import type { BountySnapshot } from '../../../../features/bounty/model/types';
@@ -243,7 +245,12 @@ describe('BountyPanel', () => {
     expect(tipOfButton(exchange)).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: '해구의 이빨 상세 보기' }));
-    expect(screen.getByRole('dialog')).toHaveTextContent('해구의 이빨');
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveTextContent('해구의 이빨');
+    expect(dialog).toHaveTextContent('획득 시(Lv.1)');
+    expect(dialog).toHaveTextContent('네임드 결투 가속');
+    expect(dialog).toHaveTextContent(artifactEffectValue(artifactById('abyss-angler')!, 'duelSpeedupCut', 1)!);
+    expect(dialog.textContent).not.toContain('Lv.0');
   });
 
   it('재료가 있으면 교환하기가 exchangeArtifact를 보낸다', async () => {

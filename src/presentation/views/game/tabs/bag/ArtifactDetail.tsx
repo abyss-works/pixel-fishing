@@ -40,6 +40,7 @@ export default function ArtifactDetail({ artifact, game, dispatch, setToast, onC
   const [busy, setBusy] = useState(false);
   const view = selectArtifactLevel(game, artifact);
   const { next } = view;
+  const displayLevel = view.status === 'unowned' ? 1 : view.level;
 
   const levelUp = async () => {
     setBusy(true);
@@ -72,12 +73,14 @@ export default function ArtifactDetail({ artifact, game, dispatch, setToast, onC
         <LoreParagraph className="text-xs leading-[1.8] text-text-dim">{artifact.lore}</LoreParagraph>
         {view.hasLevel ? (
           <CompareTable
-            heads={next
-              ? [`현재(${levelText(view.level)})`, `강화 후(${levelText(next.level)})`]
-              : [`현재(${levelText(view.level)})`]}
+            heads={view.status === 'unowned'
+              ? [`획득 시(${levelText(1)})`]
+              : next
+                ? [`현재(${levelText(view.level)})`, `강화 후(${levelText(next.level)})`]
+                : [`현재(${levelText(view.level)})`]}
             rows={artifactEffectKeys(artifact).map(effect => ({
               label: artifactEffectLabel(effect),
-              value: artifactEffectValue(artifact, effect, view.level),
+              value: artifactEffectValue(artifact, effect, displayLevel),
               next: next ? artifactEffectValue(artifact, effect, next.level) : undefined,
             }))} />
         ) : <SystemRows artifact={artifact} />}
