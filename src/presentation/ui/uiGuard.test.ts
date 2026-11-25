@@ -582,30 +582,36 @@ describe('UI 시스템 가드', () => {
     expect(presentationFiles.find(f => f.path === 'ui/hud/HudChip.tsx')!.src).toContain('pointer-events-auto');
   });
 
-  // 하단 HUD 흐름 & 낚시 상태 띠 고정 슬롯 분리 — 오른쪽 아래 열과 메시지 창은 하단 단일 흐름 컨테이너 안에 두고,
-  // 낚시 상태 띠(statusSlot)는 하단 트렁크에서 분리해 스테이지 상단 고정 절대 좌표 슬롯(z-(--z-stage-status))에 둔다.
-  it('Field는 PC와 모바일 모두 공용 statusSlot 포털로 z-(--z-stage-status) 낚시 상태 띠를 공급하고 게임 프레임 하단에 따로 절대 배치하지 않는다', () => {
+  // 하단 HUD 흐름 & 낚시 상태 띠·획득 카드 고정 슬롯 분리 — 오른쪽 아래 열과 메시지 창은 하단 단일 흐름 컨테이너 안에 두고,
+  // 낚시 상태 띠(statusSlot)와 획득 카드(catchSlot)는 하단 트렁크에서 분리해 스테이지 고정 절대 좌표 슬롯에 둔다.
+  it('Field는 PC와 모바일 모두 공용 statusSlot·catchSlot 포털로 상태 띠와 획득 카드를 공급하고 게임 프레임 하단에 따로 절대 배치하지 않는다', () => {
     const field = presentationFiles.find(f => f.path === 'layouts/game-stage/Field.tsx')!.src;
     expect(field).toMatch(/createPortal\(\s*statusBand\s*,\s*statusSlot\s*\)/);
+    expect(field).toMatch(/createPortal\(\s*<CatchCard\b[\s\S]*?,\s*catchSlot\s*\)/);
     expect(field).toContain('z-(--z-stage-status)');
-    expect(field).not.toMatch(/mobile\s*&&\s*statusSlot|statusSlot\s*&&\s*mobile/);
+    expect(field).not.toMatch(/mobile\s*&&\s*(?:statusSlot|catchSlot)|(?:statusSlot|catchSlot)\s*&&\s*mobile/);
     expect(field).not.toMatch(/\bbottom-3\b|-translate-x-1\/2/);
   });
 
-  it('HudLayout은 statusSlot을 하단 flex-wrap 트렁크와 분리된 독립 absolute 슬롯(z-(--z-stage-status))에 두고, 오른쪽 아래 열과 메시지 창은 하단 단일 흐름에 둔다', () => {
+  it('HudLayout은 statusSlot·catchSlot을 하단 flex-wrap 트렁크와 분리된 독립 absolute 슬롯에 두고, catchSlot 래퍼는 z-index를 갖지 않으며, 오른쪽 아래 열과 메시지 창만 하단 단일 흐름에 둔다', () => {
     const hud = presentationFiles.find(f => f.path === 'layouts/hud/HudLayout.tsx')!.src;
     const log = presentationFiles.find(f => f.path === 'ui/hud/MessageLog.tsx')!.src;
     expect(hud).toMatch(/ref=\{onStatusSlot\}/);
+    expect(hud).toMatch(/ref=\{onCatchSlot\}/);
     expect(hud).toContain('z-(--z-stage-status)');
-    expect(hud).not.toMatch(/mobile\s*&&\s*<div\b[^>]*ref=\{onStatusSlot\}/);
+    expect(hud).not.toMatch(/mobile\s*&&\s*<div\b[^>]*ref=\{(?:onStatusSlot|onCatchSlot)\}/);
+    const catchSlotTag = openingTagsAt(hud, 'div').find(t => /ref=\{onCatchSlot\}/.test(t.tag))?.tag ?? '';
+    expect(catchSlotTag).not.toMatch(/\bz-/);
     expect(hud).not.toMatch(/['"`]contents\b/);
     expect(hud).not.toMatch(/\babsolute\s+right-3\s+bottom-3\b/);
     expect(log).not.toMatch(/\babsolute\s+left-3\s+bottom-3\b/);
-    // statusSlot은 하단 트렁크 div 바깥(앞)에 독립 배치된다
+    // statusSlot·catchSlot은 하단 트렁크 div 바깥(앞)에 독립 배치된다
     const slotAt = hud.indexOf('<div ref={onStatusSlot}');
+    const catchAt = hud.indexOf('<div ref={onCatchSlot}');
     const trunkAt = hud.lastIndexOf('STACK_TRUNK_CLASS');
     expect(slotAt).toBeGreaterThan(-1);
-    expect(trunkAt).toBeGreaterThan(slotAt);
+    expect(catchAt).toBeGreaterThan(slotAt);
+    expect(trunkAt).toBeGreaterThan(catchAt);
   });
 
   // 초록(ok) 상태색 금지 — 초록은 특수 등급에만 쓰고 상태(성공, 활성, 접속)에는 쓰지 않는다

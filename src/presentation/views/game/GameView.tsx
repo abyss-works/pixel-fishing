@@ -139,6 +139,8 @@ export default function GameView(props: GameViewProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
   /** 모바일 낚시 상태 띠가 들어갈 HUD 자리 */
   const [statusSlot, setStatusSlot] = useState<HTMLElement | null>(null);
+  /** 획득 카드가 들어갈 HUD 자리 */
+  const [catchSlot, setCatchSlot] = useState<HTMLElement | null>(null);
   const [actionPanel, setActionPanel] = useState<ActionPanel>(null);
   const [statsOpen, setStatsOpen] = useState(false);
   const [statsInitialTab, setStatsInitialTab] = useState<StatsTab>('summary');
@@ -360,7 +362,7 @@ export default function GameView(props: GameViewProps) {
           <Field key={scene.id} region={scene.id} game={game} dispatch={props.dispatch} setToast={props.setToast}
                  onScene={go} onWarmup={props.onWarmup} guest={isConfirmedGuest(props.account, props.accountChecked)} onGuestBlocked={onGuestBlocked} paused={encounter !== null || props.blocker != null}
                  initialPos={props.entryPos ?? undefined} placeSeq={props.placeSeq}
-                 locked={trip !== null} statusSlot={statusSlot} />
+                 locked={trip !== null} statusSlot={statusSlot} catchSlot={catchSlot} />
         )}
 
         <HudLayout game={game} bagBonus={bagBonus} scene={scene} log={log} covered={covered}
@@ -371,6 +373,7 @@ export default function GameView(props: GameViewProps) {
                    filter={messageFilter.filter} onToggleFilter={messageFilter.toggle}
                    folded={folded} onFold={chat.enabled ? fold.toggle : undefined}
                    onStatusSlot={setStatusSlot}
+                   onCatchSlot={setCatchSlot}
                    onPickLine={chat.enabled ? m => {
                      if (!m.from) return;
                      setPlayer({ uid: m.from.uid, nick: m.author ?? '', chatId: m.from.uid === chat.you ? undefined : m.from.chatId });

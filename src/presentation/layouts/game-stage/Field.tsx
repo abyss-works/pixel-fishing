@@ -58,6 +58,8 @@ interface Props {
   paused?: boolean;
   /** 낚시 상태 띠를 넣을 HUD 자리 */
   statusSlot?: HTMLElement | null;
+  /** 획득 카드를 넣을 HUD 자리 */
+  catchSlot?: HTMLElement | null;
 }
 
 function presentEvent(event: FieldEvent, setToast: Props['setToast'], game: GameState, region: RegionId): void {
@@ -144,7 +146,7 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast'], game: Game
 }
 
 export default function Field({
-  region, game, dispatch, setToast, onScene, onWarmup, guest, onGuestBlocked, initialPos, placeSeq, locked, paused, statusSlot,
+  region, game, dispatch, setToast, onScene, onWarmup, guest, onGuestBlocked, initialPos, placeSeq, locked, paused, statusSlot, catchSlot,
 }: Props) {
   const mobile = useMobileLayout();
   // 현재 어군 — 세션의 배치 날짜가 정한다. 부트 결과로 날짜가 바뀌면 엔진에 교체해 준다.
@@ -285,11 +287,13 @@ export default function Field({
       )}
       <NightOverlay />
       {pad?.active && !locked && <MovePad pad={pad} />}
-      {/* 낚시 상태 — HUD 배치 컨테이너가 정한 슬롯에 반투명 노치 띠를 꽂는다. 획득 순간에는 카드가 같은 내용을 보여 띠를 숨긴다 */}
+      {/* 낚시 상태 — HUD 배치 컨테이너가 정한 슬롯에 반투명 노치 띠를 꽂는다. 획득 순간에는 카드 슬롯에 카드를 꽂고 띠를 숨긴다 */}
       {snapshot.phase !== 'idle' && (
         <div data-phase={snapshot.phase} className="status-overlay contents">
           {snapshot.phase === 'catch' && fish ? (
-            <CatchCard fish={fish} info={snapshot.catchInfo} />
+            catchSlot !== undefined
+              ? (catchSlot != null ? createPortal(<CatchCard fish={fish} info={snapshot.catchInfo} />, catchSlot) : null)
+              : <CatchCard fish={fish} info={snapshot.catchInfo} />
           ) : (
             statusSlot != null && statusBand ? createPortal(statusBand, statusSlot) : null
           )}

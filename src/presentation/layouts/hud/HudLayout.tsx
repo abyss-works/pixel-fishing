@@ -57,6 +57,8 @@ interface HudLayoutProps {
   accountState?: AccountLockState;
   /** 낚시 상태 띠가 들어갈 자리를 알린다 */
   onStatusSlot?: (el: HTMLDivElement | null) => void;
+  /** 획득 카드가 들어갈 자리를 알린다 */
+  onCatchSlot?: (el: HTMLDivElement | null) => void;
 }
 
 // 플레이 화면에서 공통으로 쓰는 자원 표시, 미니맵, 시스템 로그를 배치한다.
@@ -64,9 +66,10 @@ interface HudLayoutProps {
 // 칩 줄은 포인터 이벤트를 받지 않고 칩 자신만 받는다(HudChip) - 칩 밖은 아래 화면으로 통과한다.
 // 시계는 바다와 거점이 같은 자리이고, 미니맵을 숨겨도 남는다. 표시 상태를 바꾸는 지도 버튼은 정보 항목 뒤 줄 끝에 둔다.
 // 아래 칸의 크기가 바뀌어도 위 칸이 따라 올라가 겹치지 않는다. 폭은 화면의 32.5%(156~292px)다.
-// 낚시 상태 띠 슬롯(statusSlot)은 하단 흐름 묶음과 분리된 스테이지 하단 중앙 고정 절대 좌표 슬롯(z-(--z-stage-status))에 둔다.
-// PC와 모바일(게임 영역 2행) 모두 bottom-24(96px)에 고정되므로
-// 방치 결과 카드와 흔적 카드 출현, 미니맵 표시 여부, 메시지 창 접기/펼치기와 무관하게 좌표가 변하지 않는다.
+// 낚시 상태 띠 슬롯(statusSlot)과 획득 카드 슬롯(catchSlot)은 하단 흐름 묶음과 분리된 독립 절대 좌표 슬롯으로 둔다.
+// statusSlot(z-(--z-stage-status))은 PC와 모바일 모두 bottom-24(96px)에 고정되고,
+// catchSlot은 래퍼 자체에 층 토큰을 두지 않아 내부 카드(z-(--z-stage-card))와 이펙트(z-(--z-catch-fx))의 쌓임 맥락을 가두지 않는다.
+// catchSlot은 PC 좌측 채팅창 위(bottom-62)에 왼쪽 정렬, 모바일은 펼쳐진 5줄 채팅창 위(mobile:bottom-48)에 가로 가운데 정렬한다.
 // 하단 HUD(오른쪽 아래 열, 메시지 창)는 PC 레이아웃과 모바일 레이아웃 모두 단일 흐름 컨테이너 안에 둔다.
 // 모바일 레이아웃과 PC 쌓기 단계(464 미만, stackTier)에서는 한 줄기에 세로로 쌓는다 —
 // 아래에서부터 메시지 창(폭 전체), 그 위 오른쪽의 칩과 미니맵(156px), 알림 카드.
@@ -76,7 +79,7 @@ interface HudLayoutProps {
 // 헤더의 펼친 메뉴 줄이 메시지 창과 상태 띠 위에 오는 것은 DOM 순서가 아니라 층 토큰(menu-row)이 보장하고, 탭 이동 순서는 헤더, 채팅 순이다.
 // 화면 키보드가 올라오면 줄기만 키보드 위로 올라가고(--keyboard-h, 탭 줄 높이 56px는 이미 비어 있다) 스테이지 크기는 그대로다.
 // 시트가 열려도 이 줄기는 자리를 지키고 시트가 그 위를 덮는다.
-export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onOpenStats, onOpenMap, notice, chips, badge, logFooter, onPickLine, you, channels, disabledChannels, guildMates, filter, onToggleFilter, folded, onFold, onStatusSlot, menu, accountState = 'account' }: HudLayoutProps) {
+export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onOpenStats, onOpenMap, notice, chips, badge, logFooter, onPickLine, you, channels, disabledChannels, guildMates, filter, onToggleFilter, folded, onFold, onStatusSlot, onCatchSlot, menu, accountState = 'account' }: HudLayoutProps) {
   const mobile = useMobileLayout();
   const minimapVisible = useMinimapVisible();
   const hasMinimap = scene.kind === 'region';
@@ -87,6 +90,9 @@ export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onO
       <div ref={onStatusSlot}
            className={cx('absolute inset-x-3 bottom-24 z-(--z-stage-status) flex justify-center pointer-events-none empty:hidden',
                          'mobile:row-start-2 mobile:row-end-3 mobile:col-span-full mobile:inset-x-2 mobile:bottom-24')} />
+      <div ref={onCatchSlot}
+           className={cx('absolute inset-x-3 bottom-62 flex justify-start pointer-events-none empty:hidden',
+                         'mobile:row-start-2 mobile:row-end-3 mobile:col-span-full mobile:inset-x-2 mobile:bottom-48 mobile:justify-center')} />
       <div className={cx('absolute inset-x-3 bottom-3 flex flex-wrap items-end justify-between gap-y-2 gap-x-3 pointer-events-none',
                          'mobile:row-start-2 mobile:row-end-3 mobile:inset-x-2',
                          'mobile:bottom-[calc(0.5rem_+_max(0px,_var(--keyboard-h,0px)_-_3.5rem))]',
