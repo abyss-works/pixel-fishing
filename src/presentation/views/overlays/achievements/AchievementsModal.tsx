@@ -5,6 +5,7 @@ import type { AchievementTab } from '../../../../game/content/achievements';
 import { REJECT_TEXT } from '../../../../game/rules/logic';
 import { when } from '../../../../shared/lib/when';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
+import { GUEST_LOCK_DEFAULT_LINES } from '../../../../features/display/model/menuLock';
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import {
   ACHIEVEMENT_TABS,
@@ -22,6 +23,7 @@ import { SCROLL_Y } from '../../../ui/scrollArea';
 import Button from '../../../ui/Button';
 import CountBadge from '../../../ui/CountBadge';
 import Inset from '../../../ui/Inset';
+import { LockLines } from '../../../ui/Locked';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import PixelIcon from '../../../ui/PixelIcon';
@@ -64,7 +66,7 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
     count: tabClaimableCount(game, t.key),
   }));
   const claimAllDisabledReason = guest
-    ? '게스트는 계정을 연결해야 보상을 받을 수 있어요.'
+    ? <LockLines lines={GUEST_LOCK_DEFAULT_LINES} />
     : !summary.canClaimAll
       ? '지금 받을 수 있는 업적이 없어요.'
       : '';
