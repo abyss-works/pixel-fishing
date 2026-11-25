@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 import type { DailyFortune } from '../../../game/rules/fortune';
 import {
   FORTUNE_CALENDAR_NOTE,
+  FORTUNE_EFFECT_TARGET_LABEL,
   FORTUNE_INDEX_LABEL,
   FORTUNE_KIND,
   FORTUNE_MENU_GUIDE_NOTE,
   FORTUNE_PHRASE,
   FORTUNE_PIPS,
   FORTUNE_RESET_NOTE,
+  FORTUNE_SHORT_NAME,
   FORTUNE_SOURCE_HELP,
   FORTUNE_SOURCE_LABEL,
   FORTUNE_WEEKDAYS,
@@ -17,10 +19,13 @@ import {
   currentGameMonth,
   formatFortuneDay,
   formatFortuneMonth,
+  formatLuckMult,
   fortuneBonusText,
   fortuneBonusTip,
   fortuneEffectNote,
   fortuneLuckMult,
+  fortuneLuckMultText,
+  fortuneModalRows,
   fortunePhrase,
   fortuneSummaryRows,
   resolveSelectedFortuneDay,
@@ -102,7 +107,7 @@ describe('오늘의 운세 화면 모델', () => {
       ...Object.values(FORTUNE_INDEX_LABEL),
     ];
     for (const kind of ['fish', 'gold', 'shadow'] as const) {
-      texts.push(FORTUNE_KIND[kind].name, FORTUNE_KIND[kind].bonus);
+      texts.push(FORTUNE_KIND[kind].name, FORTUNE_KIND[kind].bonus, FORTUNE_SHORT_NAME[kind], FORTUNE_EFFECT_TARGET_LABEL[kind]);
       for (const index of [3, 5] as const) {
         const sample = f(kind, index);
         texts.push(
@@ -110,13 +115,33 @@ describe('오늘의 운세 화면 모델', () => {
           fortuneBonusText(sample),
           fortuneBonusTip(sample),
           fortuneEffectNote(sample),
+          fortuneLuckMultText(sample),
           ...fortuneSummaryRows(sample).flatMap(r => [r.label, r.value]),
+          ...fortuneModalRows(sample).flatMap(r => [r.label, r.value]),
         );
       }
     }
     for (const text of texts) {
       expect(text, text).not.toMatch(/[·—–★]/);
     }
+  });
+
+  it('오늘의 운세 팝업 요약 표(fortuneModalRows)와 3글자 요약·곱연산 배수를 제공한다', () => {
+    expect(FORTUNE_SHORT_NAME).toEqual({ fish: '풍어운', gold: '재물운', shadow: '그림자' });
+    expect(formatLuckMult(1.03)).toBe('×1.03');
+    expect(formatLuckMult(1.05)).toBe('×1.05');
+    expect(fortuneModalRows(f('fish', 5))).toEqual([
+      { label: '적용 대상', value: '희귀 이상 출현 비중' },
+      { label: '행운 효과', value: '×1.05', accent: true },
+    ]);
+    expect(fortuneModalRows(f('gold', 3))).toEqual([
+      { label: '적용 대상', value: '판매가' },
+      { label: '행운 효과', value: '×1.03', accent: true },
+    ]);
+    expect(fortuneModalRows(f('shadow', 3))).toEqual([
+      { label: '적용 대상', value: '네임드 조우 확률' },
+      { label: '행운 효과', value: '×1.03', accent: true },
+    ]);
   });
 });
 
