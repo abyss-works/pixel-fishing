@@ -54,9 +54,15 @@ export interface StorageApi {
 }
 
 /** 랭킹 — 서버 읽기 함수의 응답. 닉네임·순위·값만 담긴다 */
-/** 우편 한 통 — 골드가 0이면 글만 있는 우편이다. 시각은 ISO 문자열 */
+export interface MailItemAttachment {
+  id: string;
+  qty: number;
+}
+
+/** 우편 한 통 — 골드와 첨부 아이템이 모두 없으면 글만 있는 우편이다. 시각은 ISO 문자열 */
 export interface MailItem {
   id: number; title: string; body: string; gold: number;
+  items: MailItemAttachment[];
   createdAt: string; readAt: string | null; claimedAt: string | null;
 }
 
@@ -304,15 +310,18 @@ export interface AdminAccessResult {
 
 /** 관리자 — 보낸 우편 한 통(받는 사람 포함) */
 export interface AdminSentMailRow extends MailItem { userId: string }
-/** 관리자 — 우편 보내기 요청. 대상은 지정 계정별 금액 또는 전체 플레이어 같은 금액이다 */
+/** 관리자 — 우편 보내기 요청. 대상은 지정 계정별 금액·첨부 또는 전체 플레이어 같은 금액·첨부이다 */
 export interface AdminMailRequest {
   title: string; body: string;
-  target: { kind: 'users'; recipients: { userId: string; gold: number }[] } | { kind: 'all'; gold: number };
+  target:
+    | { kind: 'users'; recipients: { userId: string; gold?: number; items?: MailItemAttachment[] }[] }
+    | { kind: 'all'; gold?: number; items?: MailItemAttachment[] };
+  items?: MailItemAttachment[];
   idempotencyKey?: string;
 }
 /** 관리자 — 우편 미리보기·보내기 결과. problems가 있으면 미리보기가 없고 보내지 않는다 */
 export interface AdminMailPlan {
-  problems: ('title' | 'body' | 'gold' | 'recipients' | 'duplicate' | 'totalGold')[];
+  problems: ('title' | 'body' | 'gold' | 'items' | 'empty' | 'recipients' | 'duplicate' | 'totalGold')[];
   duplicates?: string[];
   preview: {
     count: number;

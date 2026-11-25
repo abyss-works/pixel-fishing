@@ -56,12 +56,113 @@ describe('우편 요청 해석 및 중복/상한 검증', () => {
     ])).toEqual([A]);
   });
 
-  it('parseMailRequest는 선택적 idempotencyKey를 검증·보존한다', () => {
+  it('parseMailRequest는 선택적 idempotencyKey·items·생략된 gold를 해석·보존한다', () => {
     const base = { title: 't', body: 'b', target: { kind: 'all', gold: 5 } };
     expect(parseMailRequest(base)).toEqual(base);
     expect(parseMailRequest({ ...base, idempotencyKey: '  key-1  ' })).toEqual({ ...base, idempotencyKey: 'key-1' });
     expect(parseMailRequest({ ...base, idempotencyKey: '' })).toBeNull();
     expect(parseMailRequest({ ...base, idempotencyKey: 123 })).toBeNull();
+
+    expect(parseMailRequest({
+      title: 't', body: 'b',
+      target: { kind: 'all', items: [{ id: 'luck-small', qty: 2 }] },
+    })).toEqual({
+      title: 't', body: 'b',
+      target: { kind: 'all', gold: 0, items: [{ id: 'luck-small', qty: 2 }] },
+    });
+    expect(parseMailRequest({
+      title: 't', body: 'b',
+      items: [{ id: 'luck-small', qty: 1 }],
+      target: { kind: 'users', recipients: [{ userId: A }] },
+    })).toEqual({
+      title: 't', body: 'b',
+      items: [{ id: 'luck-small', qty: 1 }],
+      target: { kind: 'users', recipients: [{ userId: A, gold: 0 }] },
+    });
+    expect(parseMailRequest({
+      title: 't', body: 'b',
+      items: 'bad',
+      target: { kind: 'all', gold: 0 },
+    })).toBeNull();
+    expect(parseMailRequest({
+      title: 't', body: 'b',
+      target: { kind: 'all', gold: 0, items: [{ id: 'luck-small', qty: '1' }] },
+    })).toBeNull();
+  });
+
+  it('draftProblems는 골드·아이템 모두 비면 거부하고, items 카탈로그·정수 수량·저장 상한·중복 id를 검증한다', () => {
+    expect(draftProblems({
+      title: '제목', body: '본문',
+      recipients: [{ userId: A, gold: 0 }],
+    })).toContain('empty');
+
+    expect(draftProblems({
+      title: '제목', body: '본문',
+      recipients: [{ userId: A, gold: 0, items: [{ id: 'luck-small', qty: 2 }, { id: 'energy-common', qty: 5 }] }],
+    })).toEqual([]);
+
+    expect(draftProblems({
+      title: '제목', body: '본문',
+      recipients: [{ userId: A, gold: 0, items: [{ id: 'unknown-item', qty: 1 }] }],
+    })).toContain('items');
+
+    expect(draftProblems({
+      title: '제목', body: '본문',
+      recipients: [{ userId: A, gold: 0, items: [{ id: 'luck-small', qty: 0 }] }],
+    })).toContain('items');
+
+    expect(draftProblems({
+      title: '제목', body: '본문',
+      recipients: [{ userId: A, gold: 0, items: [{ id: 'luck-small', qty: 1.5 }] }],
+    })).toContain('items');
+
+    // 생명의 기운은 1개당 저장 단위 10이므로 100,001개는 ITEM_CAP(1,000,000)을 초과한다
+    expect(draftProblems({
+      title: '제목', body: '본문',
+      recipients: [{ userId: A, gold: 0, items: [{ id: 'energy-common', qty: 100_000 }] }],
+    })).toEqual([]);
+    expect(draftProblems({
+      title: '제목', body: '본문',
+      recipients: [{ userId: A, gold: 0, items: [{ id: 'energy-common', qty: 100_001 }] }],
+    })).toContain('items');
+
+    expect(draftProblems({
+      title: '제목', body: '본문',
+      recipients: [{ userId: A, gold: 0, items: [{ id: 'luck-small', qty: 1 }, { id: 'luck-small', qty: 2 }] }],
+    })).toContain('items');
+  });
+
+  it('deliverMail 멱등 지문은 items 순서 차이를 정규화하고 items 내용이 다르면 DuplicateMailError를 던진다', async () => {
+    const db = mockExecutor({ foundIds: [A], sentCount: 1 });
+    const req1 = {
+      title: '선물', body: '본문',
+      target: {
+        kind: 'users' as const,
+        recipients: [{ userId: A, gold: 0, items: [{ id: 'mat-abyss-lantern', qty: 1 }, { id: 'luck-small', qty: 2 }] }],
+      },
+      idempotencyKey: 'items-idem-1',
+    };
+    const first = await deliverMail(db, req1, NOW);
+    expect(first).toMatchObject({ problems: [], sent: 1 });
+
+    // 같은 items의 순서만 바꿔 재전송하면 멱등으로 통과한다
+    const replay = await deliverMail(db, {
+      ...req1,
+      target: {
+        kind: 'users' as const,
+        recipients: [{ userId: A, gold: 0, items: [{ id: 'luck-small', qty: 2 }, { id: 'mat-abyss-lantern', qty: 1 }] }],
+      },
+    }, NOW);
+    expect(replay).toMatchObject({ problems: [], sent: 0, idempotent: true });
+
+    // 같은 키에 items 수량이 다르면 충돌한다
+    await expect(deliverMail(db, {
+      ...req1,
+      target: {
+        kind: 'users' as const,
+        recipients: [{ userId: A, gold: 0, items: [{ id: 'luck-small', qty: 3 }, { id: 'mat-abyss-lantern', qty: 1 }] }],
+      },
+    }, NOW)).rejects.toBeInstanceOf(DuplicateMailError);
   });
 
   it('draftProblems는 중복 수신자를 duplicate로 차단한다', () => {
