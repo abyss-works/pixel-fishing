@@ -346,14 +346,13 @@ describe('구글 연결의 약관 수락 기록', () => {
     'select document, version, age_confirmed, channel, accepted_at from public.consent_records where user_id = $1 order by version, document', [uid])).rows;
   const version = () => process.env.CONSENT_EFFECTIVE_DATE as string;
 
-  it('게스트의 연결이 끝나면 현재 판의 약관과 처리방침 수락을 만 14세 확인과 함께 기록한다', async () => {
+  it('게스트의 연결이 끝나면 현재 판의 이용약관 수락을 만 14세 확인과 함께 기록한다', async () => {
     const { uid, cookie } = await guest();
     expect(await consentRows(uid)).toEqual([]);
     const before = Date.now();
     expect((await link(cookie, { sub: nextSub(), email: 'consent-guest@gmail.test' })).ok).toBe(true);
     const rows = await consentRows(uid);
     expect(rows.map(r => [r.document, r.version, r.age_confirmed, r.channel])).toEqual([
-      ['privacy', version(), true, 'google-link'],
       ['terms', version(), true, 'google-link'],
     ]);
     for (const r of rows) {
@@ -366,7 +365,7 @@ describe('구글 연결의 약관 수락 기록', () => {
     const uid = await seedCredentialAccount(env.client, 'consent-member@example.test');
     const cookie = await seedSession(uid);
     expect((await link(cookie, { sub: nextSub(), email: 'consent-member@gmail.test' })).ok).toBe(true);
-    expect((await consentRows(uid)).map(r => `${r.document}/${r.channel}`)).toEqual(['privacy/google-link', 'terms/google-link']);
+    expect((await consentRows(uid)).map(r => `${r.document}/${r.channel}`)).toEqual(['terms/google-link']);
   });
 
   it('연결이 거부되면 기록하지 않는다', async () => {
@@ -383,7 +382,7 @@ describe('구글 연결의 약관 수락 기록', () => {
     await link(first.cookie, { sub: nextSub(), email: 'consent-first@gmail.test' });
     const second = await link(first.cookie, { sub: nextSub(), email: 'consent-second@gmail.test' });
     expect(second.error).toBe('google_already_connected');
-    expect(await consentRows(first.uid)).toHaveLength(2);
+    expect(await consentRows(first.uid)).toHaveLength(1);
   });
 
   it('구글 인증을 시작만 하고 돌아오지 않으면 기록하지 않는다', async () => {
@@ -415,9 +414,9 @@ describe('구글 연결의 약관 수락 기록', () => {
       process.env.CONSENT_EFFECTIVE_DATE = saved;
     }
     const rows = await consentRows(uid);
-    expect(rows).toHaveLength(4);
+    expect(rows).toHaveLength(2);
     expect(rows.filter(r => r.version === old[0].version)).toEqual(old);
-    expect(rows.filter(r => r.version === '2100-06-01').map(r => r.document)).toEqual(['privacy', 'terms']);
+    expect(rows.filter(r => r.version === '2100-06-01').map(r => r.document)).toEqual(['terms']);
   });
 
   it('마무리가 끝나지 않은 계정을 마저 마무리하는 재연결도 기록을 남긴다', async () => {
@@ -426,7 +425,7 @@ describe('구글 연결의 약관 수락 기록', () => {
     await env.client.query(`insert into auth.accounts (user_id, account_id, provider_id) values ($1, $2, 'google')`, [uid, who.sub]);
     expect(await consentRows(uid)).toEqual([]);
     expect((await link(cookie, who)).ok).toBe(true);
-    expect(await consentRows(uid)).toHaveLength(2);
+    expect(await consentRows(uid)).toHaveLength(1);
   });
 
   it('기록이 실패해도 연결은 성공으로 답하고 기록 없이 error 로그(스택 포함)를 남기며, 같은 구글을 다시 연결하면 기록이 남는다', async () => {
@@ -449,7 +448,7 @@ describe('구글 연결의 약관 수락 기록', () => {
     expect(error?.stack).toBeTruthy();
     expect(logged.flat().some(a => typeof a === 'string' && a.includes('수락 기록'))).toBe(true);
     expect((await link(done.cookie, who)).ok).toBe(true);
-    expect(await consentRows(uid)).toHaveLength(2);
+    expect(await consentRows(uid)).toHaveLength(1);
   });
 
   it('구글 로그인(연결이 아님)은 기록하지 않는다', async () => {

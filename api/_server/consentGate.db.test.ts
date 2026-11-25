@@ -70,9 +70,14 @@ describe('consentGate', () => {
     }
   });
 
-  it('현재 판을 수락한 계정은 막지 않는다', async () => {
+  it('현재 판을 수락한 계정은 막지 않으며 privacy 행만 있고 terms가 없으면 여전히 막는다', async () => {
     process.env.CONSENT_EFFECTIVE_DATE = dayOffset(-2);
     const uid = await member('accepted');
+    await env.client.query(
+      `insert into public.consent_records (user_id, document, version, age_confirmed, channel) values ($1, 'privacy', $2, true, 'confirm-screen')`,
+      [uid, dayOffset(-2)],
+    );
+    expect(await through('/action', userToken(uid))).toEqual(REJECTED);
     await recordConsent(database().db, uid, dayOffset(-2), 'confirm-screen');
     expect(await through('/action', userToken(uid))).toEqual(PASSED);
   });

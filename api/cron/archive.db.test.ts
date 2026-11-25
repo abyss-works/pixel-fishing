@@ -113,4 +113,54 @@ describe('콜드 아카이브 크론', () => {
       vi.useRealTimers();
     }
   });
+
+  it('R2 적재 시 letter 이벤트를 제외하고 user_id·adminId 등 직접 식별자를 남기지 않으며 탈퇴 시 letters는 즉시 삭제된다', async () => {
+    objects.clear();
+    const u = await seedUser(env.client, { uid: testUid(3) });
+    const admin = await seedUser(env.client, { uid: testUid(4), admin: true });
+    await env.client.query(
+      `insert into public.letters (user_id, text, created_at) values ($1, '개인 문의 편지', $2)`,
+      [u, ago(10)],
+    );
+    for (const [type, payload, at] of [
+      ['letter', { text: '개인 문의 편지' }, ago(10)],
+      ['adminRestrict', { adminId: admin }, ago(9)],
+      ['catch', { fishId: 'crucian', at: ago(8) }, ago(8)],
+    ] as const) {
+      await env.client.query(
+        'insert into public.events (user_id, type, payload, created_at) values ($1, $2, $3, $4)',
+        [u, type, payload, at],
+      );
+    }
+    for (const [gold, at] of [[10, ago(20)], [20, ago(1)]] as const) {
+      await env.client.query(
+        'insert into public.saves (user_id, data, updated_at) values ($1, $2, $3)',
+        [u, { gold }, at],
+      );
+    }
+
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date(NOW) });
+    try {
+      const res = await callCron('Bearer test-cron-secret');
+      expect(res).toMatchObject({ status: 200, body: { events: { rows: 2 }, saves: { rows: 1 } } });
+      const body = res.body as { events: { r2Key: string }; saves: { r2Key: string } };
+      const eventLines = gunzipSync(objects.get(body.events.r2Key)!).toString('utf8').trim().split('\n')
+        .map(line => JSON.parse(line) as Record<string, unknown>);
+      expect(eventLines.map(r => r.type)).toEqual(['adminRestrict', 'catch']);
+      for (const row of eventLines) {
+        expect(row).not.toHaveProperty('user_id');
+        expect(row.payload).not.toHaveProperty('adminId');
+      }
+      const saveLines = gunzipSync(objects.get(body.saves.r2Key)!).toString('utf8').trim().split('\n')
+        .map(line => JSON.parse(line) as Record<string, unknown>);
+      expect(saveLines).toHaveLength(1);
+      expect(saveLines[0]).not.toHaveProperty('user_id');
+      expect((await env.client.query('select 1 from public.events where user_id = $1', [u])).rows).toEqual([]);
+      expect((await env.client.query('select text from public.letters where user_id = $1', [u])).rows).toEqual([{ text: '개인 문의 편지' }]);
+      await env.client.query('delete from auth.users where id = $1', [u]);
+      expect((await env.client.query('select 1 from public.letters where user_id = $1', [u])).rows).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

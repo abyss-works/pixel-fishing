@@ -1,4 +1,4 @@
-// 약관 수락 함수 — 확인 화면에서 현재 판의 약관과 개인정보 처리방침 수락을 기록한다 (Node 런타임)
+// 약관 수락 함수 — 확인 화면에서 현재 판의 이용약관 수락을 기록한다 (Node 런타임)
 //   POST /api/account/consents { version, ageConfirmed: true }
 // 요청의 판이 서버의 현재 판과 같을 때만 받는다(다르면 409 consent-version-mismatch). 게스트는 403 account-only로 거부한다.
 // 같은 판을 다시 요청해도 성공하고 처음 기록을 바꾸지 않는다. 응답은 수락 뒤의 약관 상태다.

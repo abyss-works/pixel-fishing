@@ -1,4 +1,4 @@
-// 약관 수락 기록 저장 모듈을 실제 Postgres에서 검사한다. 두 문서의 원자적 기록, 중복 무시, 판별 조회, 삭제를 고정한다.
+// 약관 수락 기록 저장 모듈을 실제 Postgres에서 검사한다. 약관 단일 문서 기록, 중복 무시, 판별 조회, 삭제를 고정한다.
 import { randomUUID } from 'node:crypto';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -33,13 +33,12 @@ const rows = async (uid: string) => (await client.query<{ document: string; vers
   'select document, version, age_confirmed, channel, accepted_at from public.consent_records where user_id = $1 order by version, document', [uid])).rows;
 
 describe('recordConsent', () => {
-  it('한 번의 수락이 약관과 처리방침 두 행을 현재 시각(UTC)으로 남긴다', async () => {
+  it('한 번의 수락이 이용약관 한 행을 현재 시각(UTC)으로 남긴다', async () => {
     const uid = await user();
     const before = Date.now();
     await recordConsent(database.db, uid, '2030-01-01', 'confirm-screen');
     const got = await rows(uid);
     expect(got.map(r => [r.document, r.version, r.age_confirmed, r.channel])).toEqual([
-      ['privacy', '2030-01-01', true, 'confirm-screen'],
       ['terms', '2030-01-01', true, 'confirm-screen'],
     ]);
     for (const r of got) {
@@ -61,7 +60,7 @@ describe('recordConsent', () => {
     await recordConsent(database.db, uid, '2030-01-01', 'google-link');
     await recordConsent(database.db, uid, '2030-06-01', 'confirm-screen');
     expect((await rows(uid)).map(r => `${r.version}/${r.document}`)).toEqual([
-      '2030-01-01/privacy', '2030-01-01/terms', '2030-06-01/privacy', '2030-06-01/terms',
+      '2030-01-01/terms', '2030-06-01/terms',
     ]);
   });
 
@@ -77,10 +76,10 @@ describe('recordConsent', () => {
 });
 
 describe('hasAcceptedVersion', () => {
-  it('두 문서가 모두 있는 판만 수락한 것으로 본다', async () => {
+  it('이용약관(terms)이 있는 판만 수락한 것으로 보고 privacy 단독 행은 수락으로 보지 않는다', async () => {
     const uid = await user();
     expect(await hasAcceptedVersion(database.db, uid, '2030-01-01')).toBe(false);
-    await client.query(`insert into public.consent_records (user_id, document, version, age_confirmed, channel) values ($1, 'terms', '2030-01-01', true, 'google-link')`, [uid]);
+    await client.query(`insert into public.consent_records (user_id, document, version, age_confirmed, channel) values ($1, 'privacy', '2030-01-01', true, 'google-link')`, [uid]);
     expect(await hasAcceptedVersion(database.db, uid, '2030-01-01')).toBe(false);
     await recordConsent(database.db, uid, '2030-01-01', 'google-link');
     expect(await hasAcceptedVersion(database.db, uid, '2030-01-01')).toBe(true);
@@ -109,7 +108,7 @@ describe('삭제', () => {
     await recordConsent(database.db, b, '2030-01-01', 'google-link');
     await deleteUserConsents(database.db, a);
     expect(await rows(a)).toEqual([]);
-    expect(await rows(b)).toHaveLength(2);
+    expect(await rows(b)).toHaveLength(1);
   });
 
   it('인증 계정을 지우면 연쇄 삭제로 함께 지워진다', async () => {
