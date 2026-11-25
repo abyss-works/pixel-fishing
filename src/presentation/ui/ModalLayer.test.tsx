@@ -40,6 +40,21 @@ describe('Modal 층', () => {
     expect(Number(alpha)).toBeGreaterThan(0.4);
     expect(Number(alpha)).toBeLessThan(1);
   });
+
+  it('app 모달 opaque 옵션은 반투명 배경 대신 불투명 배경 토큰을 쓰고 above 슬롯을 창 위에 둔다', () => {
+    render(
+      <Modal layer="app" closable={false} opaque above={<div data-testid="brand">PIXEL FISHING</div>} onClose={() => {}}>
+        본문
+      </Modal>,
+    );
+    const dialog = screen.getByRole('dialog');
+    const brand = screen.getByTestId('brand');
+    const backdrop = brand.parentElement!.parentElement!;
+    expect(backdrop.className).toContain('bg-bg');
+    expect(backdrop.className).not.toContain('bg-[rgba');
+    expect(backdrop.className).toContain('z-(--z-blocker)');
+    expect(dialog.parentElement).toBe(brand.parentElement);
+  });
 });
 
 describe('Modal 창 층 자리', () => {

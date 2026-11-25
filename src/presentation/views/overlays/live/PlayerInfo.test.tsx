@@ -198,11 +198,11 @@ describe('PlayerInfo', () => {
     expect(screen.getByText('친구 요청을 보냈어요')).toBeTruthy();
   });
 
-  it('게스트에게는 친구 요청과 차단을 공용 잠금으로 두고 이유를 툴팁으로 보인다. 누르면 아무 일도 없다', () => {
+  it('게스트에게는 친구 요청과 차단을 바깥 자물쇠 배지 없는 공용 잠금으로 두고 이유를 툴팁으로 보인다. 누르면 아무 일도 없다', () => {
     const { container } = show({ account: null });
     const buttons = screen.getAllByRole('button', { name: /^(친구 요청|차단)$/ }) as HTMLButtonElement[];
     expect(buttons.map(b => [b.textContent, b.disabled])).toEqual([['친구 요청', true], ['차단', true]]);
-    expect(container.querySelectorAll('[data-glyph="lock"]')).toHaveLength(2);
+    expect(container.querySelectorAll('[data-glyph="lock"]')).toHaveLength(0);
     expect(container.querySelector('[title]')).toBeNull();
     const groups = screen.getAllByRole('group');
     expect(groups.map(g => g.getAttribute('aria-label'))).toEqual(['친구 요청', '차단']);

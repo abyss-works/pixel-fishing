@@ -65,7 +65,7 @@ export default function LetterModal({ dispatch, setToast, accountState, onClose 
   return (
     <Modal layer="app" title="개발자에게" narrow onClose={onClose}>
       <Note className="my-0">{LETTER_HINT}</Note>
-      {lock ? <Locked lines={lock} label="편지">{field}</Locked> : field}
+      {lock ? <Locked lines={lock} label="편지" badge={false}>{field}</Locked> : field}
       <div className="flex items-center gap-2">
         <span className={over ? 'text-danger text-2xs' : 'text-text-dim text-2xs'}>
           {body.length} / {LETTER_MAX}
@@ -77,7 +77,7 @@ export default function LetterModal({ dispatch, setToast, accountState, onClose 
                 보내기
               </Button>
             );
-            return lock ? <Locked lines={lock} label="보내기">{sendButton}</Locked> : sendButton;
+            return lock ? <Locked lines={lock} label="보내기" badge={false}>{sendButton}</Locked> : sendButton;
           })()}
         </span>
       </div>

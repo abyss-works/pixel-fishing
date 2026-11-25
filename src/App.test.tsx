@@ -1627,12 +1627,13 @@ describe('닉네임 (게스트명 표시·변경)', () => {
     render(<App />);
     clickTab(/설정/);
     fireEvent.click(openerButton('내 정보'));
-    const current = screen.getByLabelText('현재 닉네임');
-    await waitFor(() => expect(current.textContent).not.toContain('불러오는 중'));
-    expect(current.textContent).toContain('_');
-    fireEvent.change(screen.getByLabelText('새 닉네임'), { target: { value: '날치' } });
+    const current = screen.getByLabelText('현재 닉네임') as HTMLInputElement;
+    await waitFor(() => expect(current.value).not.toBe('불러오는 중'));
+    expect(current.value).toContain('_');
     fireEvent.click(screen.getByRole('button', { name: '변경' }));
-    await waitFor(() => expect(screen.getByLabelText('현재 닉네임')).toHaveTextContent('날치'));
+    fireEvent.change(screen.getByLabelText('새 닉네임'), { target: { value: '날치' } });
+    fireEvent.click(screen.getByRole('button', { name: '확인' }));
+    await waitFor(() => expect(screen.getByLabelText('현재 닉네임')).toHaveValue('날치'));
   });
 
   it('규칙에 어긋나는 이름은 보내지 않고 안내한다', async () => {
@@ -1640,12 +1641,14 @@ describe('닉네임 (게스트명 표시·변경)', () => {
     render(<App />);
     clickTab(/설정/);
     fireEvent.click(openerButton('내 정보'));
-    const current = screen.getByLabelText('현재 닉네임');
-    await waitFor(() => expect(current.textContent).not.toContain('불러오는 중'));
-    const before = current.textContent;
-    fireEvent.change(screen.getByLabelText('새 닉네임'), { target: { value: '__' } });
+    const current = screen.getByLabelText('현재 닉네임') as HTMLInputElement;
+    await waitFor(() => expect(current.value).not.toBe('불러오는 중'));
+    const before = current.value;
     fireEvent.click(screen.getByRole('button', { name: '변경' }));
-    await waitFor(() => expect(screen.getByLabelText('현재 닉네임')).toHaveTextContent(before!));
+    fireEvent.change(screen.getByLabelText('새 닉네임'), { target: { value: '__' } });
+    fireEvent.click(screen.getByRole('button', { name: '확인' }));
+    fireEvent.click(screen.getByRole('button', { name: '취소' }));
+    await waitFor(() => expect(screen.getByLabelText('현재 닉네임')).toHaveValue(before));
   });
 
   it('App은 GameView에 profileStatus prop을 직접 전달해 공용 저장소가 비워져도 불러오기 실패와 미설정을 구분한다', async () => {
@@ -1932,5 +1935,38 @@ describe('포구 출항 차단 후 로그인 복귀', () => {
     await waitFor(() => expect(sessionStorage.getItem('pf-sail-return')).toBeNull());
     await waitFor(() => expect(seenField.initialPos).toEqual(expectedResume));
     expect(seenField.region).toBe('village');
+  });
+
+  it('초기 세이브 로드 전 이용약관 동의 차단 시 전용 불투명 진입 화면 위에 모달을 띄운다', async () => {
+    seed({});
+    vi.resetModules();
+    vi.doMock('./platform/api', async importActual => {
+      const actual = await importActual<typeof import('./platform/api')>();
+      const base = actual.createApi();
+      Object.defineProperties(base.auth, {
+        isConfigured: { value: true, configurable: true },
+        ensureSession: { value: async () => 'uid-consent-entry', configurable: true },
+        currentAccount: { value: async () => ({ status: 'account', email: 'me@example.com' }), configurable: true },
+        getAccountConsent: {
+          value: async () => ({ required: true, version: '2026-11-25', effectiveAt: '2026-11-25T00:00:00.000Z' }),
+          configurable: true,
+        },
+      });
+      return {
+        ...actual,
+        readLastPosition: async () => null,
+        api: base,
+      };
+    });
+
+    try {
+      const { default: CloudApp } = await import('./App');
+      render(<CloudApp />);
+      await waitFor(() => expect(screen.getByRole('dialog', { name: '이용약관 동의' })).toBeInTheDocument());
+      expect(screen.getByText('PIXEL FISHING')).toBeInTheDocument();
+      expect(screen.getByText('2026년 11월 25일부터 이용약관이 시행돼요.')).toBeInTheDocument();
+    } finally {
+      vi.doUnmock('./platform/api');
+    }
   });
 });

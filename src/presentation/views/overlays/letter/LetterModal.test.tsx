@@ -24,11 +24,11 @@ describe('LetterModal', () => {
     expect(screen.queryByRole('group', { name: '편지' })).toBeNull();
   });
 
-  it('게스트는 입력 칸과 보내기가 비활성인 공용 잠금이고 이유를 툴팁으로 보인다', () => {
+  it('게스트는 입력 칸과 보내기가 비활성인 공용 잠금이고 바깥 자물쇠 배지 없이 이유를 툴팁으로 보인다', () => {
     const { dispatch, baseElement } = open('guest');
     expect((screen.getByPlaceholderText('예) 가방 칸을 조금 늘려 주세요') as HTMLTextAreaElement).disabled).toBe(true);
     expect((screen.getByRole('button', { name: '보내기' }) as HTMLButtonElement).disabled).toBe(true);
-    expect(baseElement.querySelector('[data-glyph="lock"]')).not.toBeNull();
+    expect(baseElement.querySelector('[data-glyph="lock"]')).toBeNull();
     expect(baseElement.querySelector('[title]')).toBeNull();
     const group = screen.getByRole('group', { name: '편지' });
     fireEvent.mouseEnter(group.parentElement!);
