@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { applyAction, LETTER_MAX } from './actions';
 import type { ActionDeps } from './actions';
 import { upgradeCost } from './balance';
-import { endedFirstCatch, newFirstCatch } from './firstCatch';
+import { endedFirstCatch, endedFirstCatchSpot, newFirstCatch } from './firstCatch';
 import { NO_GUILD_EFFECTS } from './guild';
 import { AUTO_ENERGY_BOAT, ENERGY_ITEM_IDS } from '../content/cooking';
 import { BOATS, COUPONS, FISH, WALK_BAG_CAP, newState } from './logic';
@@ -24,28 +24,51 @@ const mkInst = (uid: string, fishId: string, form: FormId = 'normal', locked = f
   ({ uid, fishId, form, size: 20, caughtAt: null, spot: null, judgment: null, locked });
 
 describe('catch — 첫 경험 보장', () => {
-  it('5번째 캐치는 그 수역의 영웅 어종이고 도감·명성은 일반 캐치와 같다', () => {
+  it('보장 캐치는 미보유 어종을 일반 폼으로 확정하고 도감·명성은 일반 캐치와 같다', () => {
     const out = applyAction(
-      seed({ firstCatch: { ...newFirstCatch(), pond: { n: 4, legendAt: 12, epic: true, legend: true } } }),
-      { type: 'catch', spot: 'pond', judgment: 'normal' }, deps({ rng: () => 0.5 }),
+      seed({ firstCatch: { ...newFirstCatch(), pond: { n: 19, active: true } } }),
+      { type: 'catch', spot: 'pond', judgment: 'normal' }, deps({ rng: () => 0 }),
     );
     if (!out.ok) throw new Error('catch failed');
-    const caught = FISH.find(f => f.id === (out.result as { fishId: string }).fishId)!;
-    expect(caught).toMatchObject({ rarity: 'epic', spot: 'pond' });
-    expect(out.state.fame).toBe(40);
-    expect(out.state.firstCatch.pond).toMatchObject({ n: 5, epic: false, legend: true });
+    expect(out.result).toMatchObject({ type: 'catch', info: { form: 'normal' } });
+    expect(out.state.fame).toBeGreaterThan(0);
+    expect(out.state.firstCatch.pond).toEqual(endedFirstCatchSpot());
     expect(out.state.firstCatch.river).toEqual(newFirstCatch().river);
   });
 
-  it('첫 캐치에서 전설 번호를 정하고, 보장이 끝난 계정은 상태가 변하지 않는다', () => {
+  it('첫 캐치에서 카운트만 올리고, 보장이 끝난 계정은 상태가 변하지 않는다', () => {
     const first = applyAction(seed(), { type: 'catch', spot: 'pond', judgment: 'normal' }, deps({ rng: () => 0.5 }));
     if (!first.ok) throw new Error('catch failed');
-    expect(first.state.firstCatch.pond).toMatchObject({ n: 1, legendAt: 13 });
+    expect(first.state.firstCatch.pond).toEqual({ n: 1, active: true });
     expect(first.state.firstCatch.river).toEqual(newFirstCatch().river);
     const ended = endedFirstCatch();
     const out = applyAction(seed({ firstCatch: ended }), { type: 'catch', spot: 'pond', judgment: 'normal' }, deps());
     if (!out.ok) throw new Error('catch failed');
     expect(out.state.firstCatch).toEqual(ended);
+  });
+
+  it('연못 20회·강 30회 연속 캐치로 각 해역 6종 일반 폼이 100% 완성되고 보장이 종료된다', () => {
+    let st = seed();
+    for (let i = 0; i < 20; i++) {
+      const out = applyAction(st, { type: 'catch', spot: 'pond', judgment: 'normal' }, deps({ rng: () => 0 }));
+      if (!out.ok) throw new Error(out.error);
+      st = out.state;
+    }
+    expect(st.firstCatch.pond).toEqual(endedFirstCatchSpot());
+    expect(st.firstCatch.river).toEqual(newFirstCatch().river);
+    for (const f of FISH.filter(x => x.spot === 'pond')) {
+      expect(st.dex[f.id]?.normal?.count, f.id).toBeGreaterThan(0);
+    }
+
+    for (let i = 0; i < 30; i++) {
+      const out = applyAction(st, { type: 'catch', spot: 'river', judgment: 'normal' }, deps({ rng: () => 0 }));
+      if (!out.ok) throw new Error(out.error);
+      st = out.state;
+    }
+    expect(st.firstCatch.river).toEqual(endedFirstCatchSpot());
+    for (const f of FISH.filter(x => x.spot === 'river')) {
+      expect(st.dex[f.id]?.normal?.count, f.id).toBeGreaterThan(0);
+    }
   });
 });
 
