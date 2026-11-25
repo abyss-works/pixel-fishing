@@ -25,7 +25,7 @@ describe('테스트 데이터베이스', () => {
     const names = rows.map(r => r.name);
     for (const t of ['saves_current', 'fish_instances', 'records', 'saves', 'profiles', 'events', 'letters',
       'coupons', 'reliefs', 'bounty_accepts', 'bounty_progress', 'bounty_tickets', 'bounty_licenses',
-      'bounty_clears', 'mails', 'v_bounty_funnel_daily']) {
+      'bounty_clears', 'mails', 'daily_fortunes', 'v_bounty_funnel_daily']) {
       expect(names).toContain(t);
     }
   });
@@ -395,6 +395,62 @@ describe('테스트 데이터베이스', () => {
       } finally {
         await other.end();
         await copy.drop();
+      }
+    });
+  });
+
+  describe('daily_fortunes (0042)', () => {
+    const user = async (c: Client): Promise<string> => {
+      const uid = randomUUID();
+      await c.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, false)`, [uid, `${uid}@example.test`]);
+      return uid;
+    };
+
+    it('복합 PK·check 제약(kind, index)·기본 created_at·cascade 삭제를 강제한다', async () => {
+      const uid = await user(client);
+      const { rows: [inserted] } = await client.query<{ created_at: Date }>(
+        `insert into public.daily_fortunes (user_id, day, kind, index) values ($1, '2030-03-04', 'fish', 3)
+         returning created_at`,
+        [uid],
+      );
+      expect(inserted.created_at).toBeInstanceOf(Date);
+
+      await expect(client.query(
+        `insert into public.daily_fortunes (user_id, day, kind, index) values ($1, '2030-03-04', 'gold', 5)`,
+        [uid],
+      )).rejects.toMatchObject({ code: '23505' });
+      await expect(client.query(
+        `insert into public.daily_fortunes (user_id, day, kind, index) values ($1, '2030-03-05', 'luck', 3)`,
+        [uid],
+      )).rejects.toMatchObject({ code: '23514' });
+      await expect(client.query(
+        `insert into public.daily_fortunes (user_id, day, kind, index) values ($1, '2030-03-05', 'gold', 4)`,
+        [uid],
+      )).rejects.toMatchObject({ code: '23514' });
+
+      await client.query(`delete from auth.users where id = $1`, [uid]);
+      expect((await client.query(
+        `select 1 from public.daily_fortunes where user_id = $1`, [uid],
+      )).rows).toHaveLength(0);
+    });
+
+    it('인증 사용자는 본인 운세 이력도 읽거나 쓰지 못한다 — 서버 전용', async () => {
+      const uid = await user(client);
+      await client.query(
+        `insert into public.daily_fortunes (user_id, day, kind, index) values ($1, '2030-03-04', 'shadow', 5)`,
+        [uid],
+      );
+      await client.query('begin');
+      try {
+        await client.query('set local role authenticated');
+        await client.query(`select set_config('request.jwt.claim.sub', $1, true)`, [uid]);
+        expect((await client.query('select day from public.daily_fortunes')).rows).toEqual([]);
+        await expect(client.query(
+          `insert into public.daily_fortunes (user_id, day, kind, index) values ($1, '2030-03-05', 'fish', 3)`,
+          [uid],
+        )).rejects.toMatchObject({ code: '42501' });
+      } finally {
+        await client.query('rollback');
       }
     });
   });

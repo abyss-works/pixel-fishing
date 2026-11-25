@@ -74,6 +74,7 @@ import { ensureProfile, nicknameTaken, profileExists, setNickname } from './_dat
 import { ALWAYS_GUARD, blobInput, commitDebugBatch, instRow, seedState, snapshotInsert, stateRow, versionUpdate, writeFragments } from './_data/save.js';
 import { eventsInsert } from './_data/telemetry.js';
 import { activeDayUpsert } from './_data/activity.js';
+import { recordDailyFortune } from './_data/fortune.js';
 import { contributionUpsert, logbookInsert } from './_data/guilds.js';
 import { NO_GUILD_EFFECTS, contributionFor, guildEffectsOf, guildLevelOf } from '../src/game/rules/guild.js';
 import type { GuildEffects, GuildLogKind } from '../src/game/rules/guild.js';
@@ -516,10 +517,14 @@ async function route(req: Req, res: Res): Promise<void> {
   let initialState: GameState | null = null;
   // fast path의 조립 상태 — 네임드 교체 블록이 재사용한다 (아래 out 교체 참조)
   let catchBase: GameState | null = null;
+  let prevFortune: GameState['fortune'] = null;
   if (action.type === 'catch' && skipDetail) {
     out = await fastCatch(db, uid, row, action.spot, action.judgment, now, guildEffects, user.email === null,
       loaded.counters, loaded.clearedNamed, action.forcePhase);
-    if (out.ok) catchBase = scalarState(row, loaded.counters, loaded.clearedNamed);
+    if (out.ok) {
+      catchBase = scalarState(row, loaded.counters, loaded.clearedNamed);
+      prevFortune = catchBase.fortune;
+    }
   } else {
     let state = assemble(row, instances, records, loaded.counters, loaded.clearedNamed);
     // 수령 액션은 저장된 achievements가 아니라 표 기준으로 서버가 다시 판정한다.
@@ -528,6 +533,7 @@ async function route(req: Req, res: Res): Promise<void> {
       state = { ...state, achievements: evaluateAchievements(state).achievements };
     }
     initialState = state;
+    prevFortune = state.fortune;
     out = applyAction(state, action, {
       rng: Math.random, today,
       now, newUid: () => crypto.randomUUID(),
@@ -710,6 +716,12 @@ async function route(req: Req, res: Res): Promise<void> {
   const actionType = action.type;
   afterResponse(runFollowUps(db, followUps).catch(e =>
     reportServerIssue('후속 쓰기 실패 — events/스냅샷/의뢰 진행 유실', e, { uid, action: actionType, version: nextVersion })));
+  // 일일 운세 이력 — 로그인 계정의 첫 접속(boot)과 당일 운세 확정(catch·sell 백스톱 포함)만 멱등 기록한다. 게스트는 저장하지 않는다
+  if (user.email !== null && out.state.fortune
+      && (action.type === 'boot' || ((action.type === 'catch' || action.type === 'sell') && prevFortune?.day !== out.state.fortune.day))) {
+    afterResponse(recordDailyFortune(db, uid, out.state.fortune).catch(e =>
+      reportServerIssue('후속 쓰기 실패 — 일일 운세 이력 유실', e, { uid, action: actionType, version: nextVersion })));
+  }
   // 길드 기여와 항해일지 — 확정된 액션마다 한 번 쓴다(낙관 락을 통과한 요청만 여기 온다). 실패가 이벤트 쓰기를 막지 않게 따로 실행한다
   if (loaded.guild && GUILD_ACTIONS.has(action.type)) {
     const guildId = loaded.guild.id;

@@ -30,6 +30,7 @@ export type { LiveConnection };
 
 export { when } from '../../shared/lib/when';
 export { readBounty, kstDay, gameDay } from '../adapters/bounty';
+export { readFortuneHistory } from '../adapters/fortune';
 export { readRanking } from '../adapters/ranking';
 export { readMails, markMailRead } from '../adapters/mailbox';
 export { readBlocks, changeBlock, reportChat } from '../adapters/chat';
@@ -44,7 +45,7 @@ export type { PublicProfile } from '../adapters/player';
 export type {
   ApiClient, AuthApi, StorageApi, AdminApi, AdminAccessResult,
   AccountLookup, AuthResult, GameGateway, GameProfile, MaybePromise, DispatchResult,
-  BountySnapshot, BountyProgressRow, BountyTicketRow,
+  BountySnapshot, BountyProgressRow, BountyTicketRow, FortuneHistory,
   RankingBoardId, RankingRow, RankingBoard, MailItem, FriendItem, FriendOp, FriendOpResult,
   GuildBonusItem, GuildDonorItem, GuildInfo, GuildInvitePreview, GuildJoinRequestItem, GuildLogItem, GuildMemberItem, GuildMyRequest, GuildOp,
   GuildOpResult, GuildState,
