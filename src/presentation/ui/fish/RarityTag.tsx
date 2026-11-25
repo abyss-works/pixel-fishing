@@ -15,7 +15,7 @@ const RARITY_WORD_GRADE: Readonly<Record<string, DisplayGradeId>> = {
   '(특수)': 'special',
 };
 
-const RARITY_TEXT_RE = /(\((?:일반|희귀|영웅|전설|특수)\)|전설|영웅|희귀|특수|돌연변이|네임드|일반(?=\s*(?:등급|어종|생명의 기운)|과(?:\s|$|[,.])))/g;
+const RARITY_TEXT_RE = /(\((?:일반|희귀|영웅|전설|특수)\)|전설|영웅|희귀|특수|돌연변이|네임드|일반(?=\s*(?:등급|어종|생명의 기운)|과(?:\s|$|[,.])|,\s*(?:희귀|영웅|전설|특수|돌연변이|네임드)))/g;
 
 /** 문장·구절 안의 등급 낱말(전설·영웅·희귀·특수 및 등급 맥락의 일반), (등급), 돌연변이·네임드를 공용 색으로 강조한다 */
 export function HighlightRarityText({ text }: { text: string }) {
@@ -60,7 +60,7 @@ export function GradeName({ name, grade, emphasized = false }: { name: string; g
   if (grade === null) return nameEl;
   return (
     <span>
-      {nameEl}<span data-rarity={grade} className="text-(--rarity-color)">({DISPLAY_GRADE[grade].name})</span>
+      {nameEl}<span data-rarity={grade} className="font-normal text-(--rarity-color)">({DISPLAY_GRADE[grade].name})</span>
     </span>
   );
 }

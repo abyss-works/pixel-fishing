@@ -21,10 +21,11 @@ describe('이름(등급) 표기', () => {
     expect(screen.getByText('(특수)')).toHaveAttribute('data-rarity', 'special');
   });
 
-  it('기본 꼴은 이름과 등급에 굵기 클래스를 붙이지 않는다', () => {
+  it('기본 꼴은 이름과 등급에 굵기 클래스를 붙이지 않고 괄호(등급)는 font-normal로 굵기 상속을 막는다', () => {
     render(<GradeName name="생명의 기운" grade="epic" />);
     expect(screen.getByText('생명의 기운').className).not.toMatch(/font-(bold|semibold|medium)/);
     expect(screen.getByText('(영웅)').className).not.toMatch(/font-(bold|semibold|medium)/);
+    expect(screen.getByText('(영웅)')).toHaveClass('font-normal');
   });
 
   it('강조하면 이름만 굵은 골드이고 괄호의 등급색은 그대로다', () => {
@@ -77,6 +78,15 @@ describe('인라인 등급·형태 강조(HighlightRarityText)', () => {
     expect(plain.querySelector('[data-rarity]')).toBeNull();
     expect(plain.textContent).toBe('일반 의뢰는 일반적인 경우와 일반 바다, 일반 모습에서 나오지 않아요.');
     expect(container).toBeTruthy();
+  });
+
+  it('쉼표 열거 속 일반(일반, 돌연변이, 네임드)도 일반 등급색으로 강조한다', () => {
+    render(
+      <HighlightRarityText text="도감의 각 보기에서 일반, 돌연변이, 네임드 기록을 따로 모아 봐요." />,
+    );
+    expect(screen.getByText('일반')).toHaveAttribute('data-rarity', 'common');
+    expect(screen.getByText('돌연변이')).toHaveClass('text-epic');
+    expect(screen.getByText('네임드')).toHaveClass('text-epic');
   });
 
   it('FormatGradeLabel은 이름(등급) 꼴을 GradeName으로 분리한다', () => {

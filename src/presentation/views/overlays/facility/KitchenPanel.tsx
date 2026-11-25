@@ -35,7 +35,7 @@ export default function KitchenPanel({ game, busy, act, setToast, onClose }: {
         {status.cooking ? (
           <>
             <span><span className="text-text-dim">조리 중</span>{' '}
-              <span className="inline-flex align-middle"><ItemSprite kind={status.cooking.recipe.kind} id={status.cooking.recipe.id} preset="row" /></span>{' '}<b><GradeName name={status.cooking.title.name} grade={status.cooking.title.grade} /></b>{' '}
+              <span className="inline-flex align-middle"><ItemSprite kind={status.cooking.recipe.kind} id={status.cooking.recipe.id} preset="row" /></span>{' '}<GradeName name={status.cooking.title.name} grade={status.cooking.title.grade} />{' '}
               <span className="pf-accent">{status.cooking.completed}/{status.cooking.count}</span></span>
             <span className="text-text-dim">다음 완성 <span className="pf-accent text-text">{fmtMinutes(status.cooking.nextInMin)}</span></span>
           </>
