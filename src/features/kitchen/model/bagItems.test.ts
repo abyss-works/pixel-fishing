@@ -1,6 +1,6 @@
 // 가방 아이템 섹션 모델 — 기운 격자, 도시락과 미끼 행(보관함 완성분 포함), 해금 전 잠금과 빈 상태, 먹기 계획과 교체 확인.
 import { describe, expect, it } from 'vitest';
-import { COOKING_UNLOCK_BOAT, COOK_KIND_RULES, ENERGY_ITEM_IDS } from '../../../game/content/cooking';
+import { COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, recipeById } from '../../../game/content/cooking';
 import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { GUEST_LOCK_DEFAULT_LINES, UNVERIFIED_LOCK_TEXT } from '../../display/model/menuLock';
@@ -10,7 +10,7 @@ import { recipesOfKind } from './recipes';
 const T0 = '2026-11-12T00:00:00.000Z';
 const MIN = 60_000;
 const HOUR = 60 * MIN;
-const LUNCH_WAIT = COOK_KIND_RULES.lunch.waitMs;
+const RARE_WAIT = recipeById('cook-lunch-rare')!.waitMs;
 const at = (ms: number): string => new Date(Date.parse(T0) + ms).toISOString();
 const seed = (over: Partial<GameState> = {}): GameState => ({ ...newState(), boat: COOKING_UNLOCK_BOAT, ...over });
 
@@ -138,11 +138,11 @@ describe('아이템 섹션: 열린 뒤', () => {
     const v = selectItemSection(game, T0, 'account');
     if (v.state !== 'open') throw new Error('open이어야 해요');
     expect(v.lunch.map(r => [r.label, r.count, r.verb, r.slot])).toEqual([
-      ['가루디야', 2, '먹기', 'lunch'],
-      ['민 몰리', 1, '먹기', 'lunch'],
-      ['생선 비리야니', 0, '먹기', 'lunch'],
-      ['암불 티얄', 0, '먹기', 'lunch'],
-      ['생선 탈리', 0, '먹기', 'lunch'],
+      ['가루디야(일반)', 2, '먹기', 'lunch'],
+      ['민 몰리(희귀)', 1, '먹기', 'lunch'],
+      ['생선 비리야니(영웅)', 0, '먹기', 'lunch'],
+      ['암불 티얄(영웅)', 0, '먹기', 'lunch'],
+      ['생선 탈리(전설)', 0, '먹기', 'lunch'],
     ]);
     expect(v.bait.map(r => [r.label, r.count, r.verb, r.slot])).toEqual([
       ['롱페퍼 미끼(희귀)', 4, '쓰기', 'bait'],
@@ -164,7 +164,7 @@ describe('아이템 섹션: 열린 뒤', () => {
     const game = seed({ items: { 'cook-lunch-bite': 1, 'cook-bait-epic': 1, 'cook-bait-mutation': 1 } });
     const v = selectItemSection(game, T0, 'account');
     if (v.state !== 'open') throw new Error('open이어야 해요');
-    expect(v.lunch[0].title).toEqual({ name: '가루디야', grade: null });
+    expect(v.lunch[0].title).toEqual({ name: '가루디야', grade: 'common' });
     expect(v.bait.filter(r => r.count > 0).map(r => r.title)).toEqual([
       { name: '큐베브 미끼', grade: 'epic' }, { name: '사프란 미끼', grade: 'special' },
     ]);
@@ -179,18 +179,18 @@ describe('아이템 섹션: 열린 뒤', () => {
 
   it('조리가 끝났지만 보관함으로 옮겨지지 않은 완성분도 행에 센다', () => {
     const game = seed({
-      items: { 'cook-lunch-bite': 1 },
-      cooking: { recipe: 'cook-lunch-bite', count: 3, bonus: [false, false, false], startedAt: T0 },
+      items: { 'cook-lunch-rare': 1 },
+      cooking: { id: 'c1', recipe: 'cook-lunch-rare', count: 3, bonus: [false, false, false], startedAt: T0 },
     });
     // 대기의 2.5배가 지나면 2개가 완성되고 1개는 조리 중이다
-    const v = selectItemSection(game, at(2.5 * LUNCH_WAIT), 'account');
+    const v = selectItemSection(game, at(2.5 * RARE_WAIT), 'account');
     if (v.state !== 'open') throw new Error('open이어야 해요');
-    expect(v.lunch.find(r => r.recipe.id === 'cook-lunch-bite')?.count).toBe(3);
+    expect(v.lunch.find(r => r.recipe.id === 'cook-lunch-rare')?.count).toBe(3);
   });
 
   it('조리 중이고 아직 완성되지 않은 분은 행에 세지 않는다', () => {
-    const game = seed({ cooking: { recipe: 'cook-lunch-bite', count: 2, bonus: [false, false], startedAt: T0 } });
-    const v = selectItemSection(game, at(LUNCH_WAIT / 2), 'account');
+    const game = seed({ cooking: { id: 'c1', recipe: 'cook-lunch-rare', count: 2, bonus: [false, false], startedAt: T0 } });
+    const v = selectItemSection(game, at(RARE_WAIT / 2), 'account');
     if (v.state !== 'open') throw new Error('open이어야 해요');
     expect(v.lunch.every(r => r.count === 0)).toBe(true);
   });
@@ -231,8 +231,8 @@ describe('먹기 계획과 교체 확인', () => {
     const plan = planEat(seed({ items: own, slots: { lunch, bait: null } }), 'cook-lunch-rare', T0);
     expect(plan.confirm).toEqual({
       title: '도시락 바꾸기', confirmLabel: '먹기',
-      current: { label: '가루디야', title: { name: '가루디야', grade: null }, minutes: 8 * 60 + 12 },
-      next: { label: '민 몰리', title: { name: '민 몰리', grade: null }, minutes: 9 * 60 },
+      current: { label: '가루디야(일반)', title: { name: '가루디야', grade: 'common' }, minutes: 8 * 60 + 12 },
+      next: { label: '민 몰리(희귀)', title: { name: '민 몰리', grade: 'rare' }, minutes: 9 * 60 },
       warning: '지금 효과의 남은 시간은 사라져요.',
     });
   });
@@ -240,8 +240,8 @@ describe('먹기 계획과 교체 확인', () => {
   it('같은 것을 다시 넣어도 교체 확인이다', () => {
     const plan = planEat(seed({ items: own, slots: { lunch, bait: null } }), 'cook-lunch-bite', T0);
     expect(plan.confirm?.title).toBe('도시락 바꾸기');
-    expect(plan.confirm?.current.label).toBe('가루디야');
-    expect(plan.confirm?.next.label).toBe('가루디야');
+    expect(plan.confirm?.current.label).toBe('가루디야(일반)');
+    expect(plan.confirm?.next.label).toBe('가루디야(일반)');
   });
 
   it('미끼 슬롯은 미끼 바꾸기이고 쓰기다', () => {

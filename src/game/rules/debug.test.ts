@@ -183,14 +183,17 @@ describe('items.grant / cooking.finish / artifact.set / hat.set', () => {
     expect(debug(seed(), 'items.grant', { itemId: 'nope', count: 1 })).toEqual({ ok: false, error: 'bad-request' });
   });
 
-  it('cooking.finish는 진행 중인 조리를 즉시 완료해 보관함으로 옮긴다', () => {
+  it('cooking.finish는 진행 중인 조리와 대기열 전체를 즉시 완료해 보관함으로 옮긴다', () => {
     const cookingState = seed({
-      cooking: { recipe: 'cook-lunch-bite', count: 2, bonus: [true, false], startedAt: '2026-10-16T03:00:00.000Z' },
+      cooking: { id: 'c1', recipe: 'cook-lunch-rare', count: 2, bonus: [true, false], startedAt: '2026-10-16T03:00:00.000Z' },
+      cookingQueue: [{ id: 'q1', recipe: 'cook-lunch-mutation', count: 2, bonus: [false, true] }],
     });
     const out = debug(cookingState, 'cooking.finish', {});
     if (!out.ok) throw new Error(out.error);
     expect(out.state.cooking).toBeNull();
-    expect(out.state.items['cook-lunch-bite']).toBe(3);
+    expect(out.state.cookingQueue).toEqual([]);
+    expect(out.state.items['cook-lunch-rare']).toBe(3);
+    expect(out.state.items['cook-lunch-mutation']).toBe(3);
   });
 
   it('artifact.set은 보유·레벨(0=회수, 1..5=레벨)을 설정하고 전설 유물은 레벨 맵에 남기지 않는다', () => {

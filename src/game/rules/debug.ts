@@ -20,7 +20,7 @@ import { HATS, hatById } from '../content/wardrobe.js';
 import { ZONE_IDS, topZoneOf, topZoneOfSpot, zoneById, zoneOfSpot } from '../content/zones.js';
 import type { ZoneId } from '../content/zones.js';
 import {
-  COOK_KIND_RULES, isEnergyAmount, isEnergyItemId, recipeById, toStoredEnergy,
+  isEnergyAmount, isEnergyItemId, recipeById, recipeWaitMs, toStoredEnergy,
 } from '../content/cooking.js';
 import { isStackableItemId } from '../content/itemCatalog.js';
 import {
@@ -280,13 +280,17 @@ function grantItems(state: GameState, args: Record<string, unknown>): GameState 
   return addItem(state, itemId, count);
 }
 
-/** cooking.finish — 진행 중인 조리를 즉시 완료해 보관함으로 옮긴다 */
+/** cooking.finish — 진행 중인 조리와 대기열 전체를 즉시 완료해 보관함으로 옮긴다 */
 function finishCooking(state: GameState, now: string): GameState {
   const cooking = state.cooking;
   if (!cooking) return state;
+  let totalWaitMs = 0;
   const recipe = recipeById(cooking.recipe);
-  if (!recipe) return state;
-  const totalWaitMs = COOK_KIND_RULES[recipe.kind].waitMs * cooking.count;
+  if (recipe) totalWaitMs += recipeWaitMs(recipe) * cooking.count;
+  for (const item of state.cookingQueue) {
+    const queuedRecipe = recipeById(item.recipe);
+    if (queuedRecipe) totalWaitMs += recipeWaitMs(queuedRecipe) * item.count;
+  }
   const nowMs = Number.isFinite(Date.parse(now)) ? Date.parse(now) : Date.now();
   const startedAt = new Date(nowMs - totalWaitMs - 1000).toISOString();
   return settleCooking({ ...state, cooking: { ...cooking, startedAt } }, now);

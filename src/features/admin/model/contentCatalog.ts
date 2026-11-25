@@ -29,6 +29,7 @@ import {
   COOKING_UNLOCK_BOAT,
   ENERGY_ITEM_IDS,
   RECIPES,
+  recipeWaitMs,
 } from '../../../game/content/cooking';
 import type { CookKind, Recipe } from '../../../game/content/cooking';
 import { FISH } from '../../../game/content/fish';
@@ -314,8 +315,8 @@ export interface RecipeCatalogItem {
   name: string;
   kind: CookKind;
   kindLabel: string;
-  grade: DisplayGradeId | null;
-  gradeLabel: string | null;
+  grade: DisplayGradeId;
+  gradeLabel: string;
   displayName: string;
   description: string;
   waitMin: number;
@@ -583,11 +584,8 @@ function formatArtifactEffects(art: Artifact, level: number): string[] {
   return lines;
 }
 
-function recipeDisplayGrade(recipe: Recipe): DisplayGradeId | null {
-  if (recipe.kind !== 'bait') return null;
-  const weighted = recipe.effects.rarityWeight?.grades[0];
-  if (weighted !== undefined) return weighted;
-  return recipe.effects.mutationWeight !== undefined || recipe.effects.nightUnlock === true ? 'special' : null;
+function recipeDisplayGrade(recipe: Recipe): DisplayGradeId {
+  return recipe.grade;
 }
 
 function buildRecipeEffectItems(recipe: Recipe): RecipeEffectItem[] {
@@ -834,13 +832,11 @@ export function buildContentCatalog(): ContentCatalog {
   const recipeItems: RecipeCatalogItem[] = [...RECIPES]
     .sort((a, b) => {
       if (a.kind !== b.kind) return a.kind === 'lunch' ? -1 : 1;
-      const ga = recipeDisplayGrade(a);
-      const gb = recipeDisplayGrade(b);
-      return (ga ? displayGradeRank(ga) : -1) - (gb ? displayGradeRank(gb) : -1);
+      return displayGradeRank(recipeDisplayGrade(a)) - displayGradeRank(recipeDisplayGrade(b));
     })
     .map(r => {
       const grade = recipeDisplayGrade(r);
-      const gradeLabel = grade ? DISPLAY_GRADE[grade].name : null;
+      const gradeLabel = DISPLAY_GRADE[grade].name;
       const costItems: RecipeCostItem[] = RARITY_ORDER
         .filter(g => (r.cost[g] ?? 0) > 0)
         .map(g => ({ grade: g, gradeName: RARITY[g].name, amount: r.cost[g]! }));
@@ -853,9 +849,9 @@ export function buildContentCatalog(): ContentCatalog {
         kindLabel: r.kind === 'lunch' ? '도시락' : '미끼',
         grade,
         gradeLabel,
-        displayName: gradeLabel ? gradeName(r.name, gradeLabel) : r.name,
+        displayName: gradeName(r.name, gradeLabel),
         description: r.description,
-        waitMin: rules.waitMs / 60_000,
+        waitMin: recipeWaitMs(r) / 60_000,
         slotMin: rules.slotMs / 60_000,
         costItems,
         costSummary: costItems.map(c => `${c.gradeName} ${c.amount}`).join(' · '),

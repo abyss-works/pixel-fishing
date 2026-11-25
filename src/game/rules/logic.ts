@@ -20,7 +20,7 @@ import { BOATS, MAX_BOAT, WALK_BAG_CAP, boatAt } from '../content/boats.js';
 import { topZoneOfSpot, zoneById } from '../content/zones.js';
 import { bountyById } from '../content/bounties.js';
 import type { BountyQuest, BountyTier, BountyZone } from '../content/bounties.js';
-import { COOK_STORAGE_CAP, ENERGY_UNIT, LEGACY_BAIT_REFUND, isEnergyItemId, recipeById } from '../content/cooking.js';
+import { COOK_STORAGE_CAP, ENERGY_UNIT, LEGACY_BAIT_REFUND, isEnergyItemId, recipeById, recipeWaitMs } from '../content/cooking.js';
 import { ARTIFACT_MAX_LEVEL, artifactById, artifactHasLevel } from '../content/artifacts.js';
 import { variantBoostOf } from './artifactLevel.js';
 import type { ArtifactHolder } from './artifactLevel.js';
@@ -87,10 +87,19 @@ export interface FormRecord {
 
 /** 조리 중인 것 — 완성 수는 startedAt과 서버 시각에서 파생하므로 저장하지 않는다 */
 export interface Cooking {
+  id: string;           // 조리 작업 고유 id
   recipe: string;       // 레시피 id
   count: number;        // 넣은 수량
   bonus: boolean[];     // 수량별 추가 완성 여부 — 조리를 시작할 때 서버가 정한다
   startedAt: string;    // 시작 시각(UTC ISO)
+}
+
+/** 조리 대기열 항목 — 현재 조리 뒤에 순서대로 이어질 대기 작업 */
+export interface CookingQueueItem {
+  id: string;           // 대기 작업 고유 id
+  recipe: string;       // 레시피 id(대기 시간이 있는 레시피만 허용)
+  count: number;        // 넣은 수량
+  bonus: boolean[];     // 수량별 추가 완성 여부
 }
 
 /** 슬롯에 들어간 요리 — 끝나는 시각(UTC ISO) 전까지 효과가 이어진다 */
@@ -133,6 +142,8 @@ export interface GameState {
   items: Record<string, number>;
   /** 조리 중인 것. 조리하지 않으면 null */
   cooking: Cooking | null;
+  /** 현재 조리 뒤에 대기 중인 조리 목록 */
+  cookingQueue: CookingQueueItem[];
   /** 도시락 슬롯과 미끼 슬롯 — 비어 있으면 null (bait2는 다중 미끼 유물 보유 시 사용, 없으면 생략) */
   slots: { lunch: SlotEffect | null; bait: SlotEffect | null; bait2?: SlotEffect | null };
   /** 기운 얻기 기본 선택의 해역별 덮어쓰기 — 해역 id → 기운 대상 여부. 덮어쓴 해역만 둔다.
@@ -484,6 +495,7 @@ export function newState(): GameState {
     artifacts: [],
     items: {},
     cooking: null,
+    cookingQueue: [],
     slots: { lunch: null, bait: null },
     energyTargets: {},
     baitRefund: null,
@@ -1004,15 +1016,39 @@ function safeFirstCatch(v: unknown, dex: GameState['dex'], fame: number): FirstC
 
 const isIsoTime = (v: unknown): v is string => typeof v === 'string' && !Number.isNaN(Date.parse(v));
 
-/** 조리 위생 — 레시피 id, 수량(1~보관함 상한), 수량과 같은 길이의 boolean 목록, ISO 시각이 모두 성립해야 살린다 */
-function safeCooking(v: unknown): Cooking | null {
+/** 조리 위생 — 대기 시간 있는 레시피 id, 수량(1~보관함 상한), 수량과 같은 길이의 boolean 목록, ISO 시각이 모두 성립해야 살린다 */
+function safeCooking(v: unknown, uidGen: () => string): Cooking | null {
   const r = v as Partial<Cooking> | null;
   if (typeof r !== 'object' || r === null || Array.isArray(r)) return null;
-  if (!recipeById(r.recipe)) return null;
+  const recipe = recipeById(r.recipe);
+  if (!recipe || recipeWaitMs(recipe) <= 0) return null;
   if (typeof r.count !== 'number' || !Number.isInteger(r.count) || r.count < 1 || r.count > COOK_STORAGE_CAP) return null;
   if (!Array.isArray(r.bonus) || r.bonus.length !== r.count || !r.bonus.every(b => typeof b === 'boolean')) return null;
   if (!isIsoTime(r.startedAt)) return null;
-  return { recipe: r.recipe as string, count: r.count, bonus: [...r.bonus], startedAt: r.startedAt };
+  const id = typeof r.id === 'string' && r.id.length > 0 ? r.id : uidGen();
+  return { id, recipe: recipe.id, count: r.count, bonus: [...r.bonus], startedAt: r.startedAt };
+}
+
+/** 조리 대기열 위생 — 현재 조리가 있을 때만 유효 대기 레시피·수량·bonus 항목을 보관함 상한까지 남긴다 */
+function safeCookingQueue(
+  v: unknown, cooking: Cooking | null, uidGen: () => string,
+): CookingQueueItem[] {
+  if (!cooking || !Array.isArray(v)) return [];
+  const out: CookingQueueItem[] = [];
+  let used = cooking.count;
+  for (const raw of v) {
+    const r = raw as Partial<CookingQueueItem> | null;
+    if (typeof r !== 'object' || r === null || Array.isArray(r)) continue;
+    const recipe = recipeById(r.recipe);
+    if (!recipe || recipeWaitMs(recipe) <= 0) continue;
+    if (typeof r.count !== 'number' || !Number.isInteger(r.count) || r.count < 1 || r.count > COOK_STORAGE_CAP) continue;
+    if (!Array.isArray(r.bonus) || r.bonus.length !== r.count || !r.bonus.every(b => typeof b === 'boolean')) continue;
+    if (used + r.count > COOK_STORAGE_CAP) break;
+    const id = typeof r.id === 'string' && r.id.length > 0 ? r.id : uidGen();
+    out.push({ id, recipe: recipe.id, count: r.count, bonus: [...r.bonus] });
+    used += r.count;
+  }
+  return out;
 }
 
 /** 슬롯 한 칸 위생 — 그 슬롯에 넣는 종류의 요리 id와 ISO 시각만 살린다 */
@@ -1150,6 +1186,7 @@ export function migrate(raw: unknown, uidGen: () => string = () => crypto.random
   const look = safeLook(s.look);
   const dex = safeDex(s.dex);
   const fame = typeof s.fame === 'number' ? s.fame : 0;
+  const cooking = safeCooking(s.cooking, uidGen);
   return {
     ...base,
     gold: typeof s.gold === 'number' ? s.gold : 0,
@@ -1165,7 +1202,8 @@ export function migrate(raw: unknown, uidGen: () => string = () => crypto.random
     artifacts: safeStrings(s.artifacts),
     ...safeArtifactLevels(s.artifactLevels, safeStrings(s.artifacts)),
     items: safeItems(s.items),
-    cooking: safeCooking(s.cooking),
+    cooking,
+    cookingQueue: safeCookingQueue(s.cookingQueue, cooking, uidGen),
     slots: safeSlots(s.slots),
     energyTargets: safeEnergyTargets(s.energyTargets),
     baitRefund: safeBaitRefund(s.baitRefund),

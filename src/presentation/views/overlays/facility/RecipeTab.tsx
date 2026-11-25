@@ -6,6 +6,7 @@ import type { GameState } from '../../../../game/rules/logic';
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import { recipeEffectNote, recipeLabel, recipesOfKind, selectRecipeView } from '../../../../features/kitchen/model/recipes';
 import { ENERGY_NAME } from '../../../../features/kitchen/model/energy';
+import Badge from '../../../ui/Badge';
 import { GradeName, HighlightRarityText, RarityText } from '../../../ui/fish/RarityTag';
 import HeroHeader from '../../../ui/HeroHeader';
 import Inset from '../../../ui/Inset';
@@ -24,10 +25,9 @@ const MIN_MS = 60_000;
 
 const EFFECT_TITLE: Readonly<Record<CookKind, string>> = { lunch: '도시락 효과', bait: '미끼 효과' };
 
-// 도시락 탭과 미끼 탭 — 왼쪽은 그 종류의 레시피 목록(이름, 1개에 드는 기운, 보유한 완성품)이고, 오른쪽은 고른 레시피의 머리(그림, 이름, 설명),
+// 도시락 탭과 미끼 탭 — 왼쪽은 그 종류의 레시피 목록(이름, 1개에 드는 기운, 보유한 완성품, 제작 시간)이고, 오른쪽은 고른 레시피의 머리(그림, 이름, 설명),
 // 효과(마지막 줄이 지속 시간), 조리에 필요한 기운과 보유(맨 아래 줄이 보유한 완성 요리), 조리 수량과 조리 시간이다.
-// 조리 시작 버튼은 오른쪽 열 맨 아래에 고정한다.
-// 조리 중이어도 다른 레시피를 골라 볼 수 있고, 시작만 막힌다. 막힌 이유는 게임 규칙의 판정 사유 문구이며 버튼의 툴팁으로 보인다.
+// 조리 버튼은 즉시 완성 / 조리 시작 / 대기열에 추가 세 가지로 나뉘며 오른쪽 열 맨 아래에 고정한다.
 export default function RecipeTab({ kind, game, now, busy, act, setToast }: {
   kind: CookKind;
   game: GameState;
@@ -43,6 +43,7 @@ export default function RecipeTab({ kind, game, now, busy, act, setToast }: {
   const views = recipes.map(r => selectRecipeView(game, r, r.id === picked.id ? qty : 1, now));
   const view = views.find(v => v.recipe.id === picked.id)!;
   const reason = view.check.ok ? null : REJECT_TEXT[view.check.reason];
+  const actionLabel = view.mode === 'instant' ? '즉시 완성' : view.mode === 'queue' ? '대기열에 추가' : '조리 시작';
 
   const list = (
     <SelectList label={kind === 'lunch' ? '도시락 목록' : '미끼 목록'} items={views} keyOf={v => v.recipe.id}
@@ -60,7 +61,12 @@ export default function RecipeTab({ kind, game, now, busy, act, setToast }: {
                         ))}
                       </span>
                     </span>
-                    <span className="shrink-0 text-2xs text-text-dim">보유 <span className="pf-accent">{v.owned}</span></span>
+                    <span className="shrink-0 flex flex-col items-end gap-0.5">
+                      <span className="text-2xs text-text-dim">보유 <span className="pf-accent">{v.owned}</span></span>
+                      <Badge tone={v.unitWaitMs === 0 ? 'accent' : 'dim'} size="2xs">
+                        {v.unitWaitMs === 0 ? '즉시' : fmtMinutes(v.unitWaitMs / MIN_MS)}
+                      </Badge>
+                    </span>
                   </>
                 )} />
   );
@@ -125,13 +131,19 @@ export default function RecipeTab({ kind, game, now, busy, act, setToast }: {
                        onClick={() => act({ type: 'cook', recipe: view.recipe.id, count: view.count }, () => {
                          if (!setToast) return;
                          const name = recipeLabel(view.recipe);
-                         sendNotice(setToast, {
-                           kind: 'kitchen.cookAndBuff',
-                           text: `${name} ${view.count}개 조리를 시작했어요.`,
-                           toastText: `${name} 조리 시작`,
-                         });
+                         const text = view.mode === 'instant'
+                           ? `${name} ${view.count}개를 만들었어요.`
+                           : view.mode === 'queue'
+                             ? `${name} ${view.count}개를 대기열에 넣었어요.`
+                             : `${name} ${view.count}개 조리를 시작했어요.`;
+                         const toastText = view.mode === 'instant'
+                           ? `${name} 완성`
+                           : view.mode === 'queue'
+                             ? `${name} 대기열 추가`
+                             : `${name} 조리 시작`;
+                         sendNotice(setToast, { kind: 'kitchen.cookAndBuff', text, toastText });
                        })}>
-          조리 시작
+          {actionLabel}
         </ConfirmButton>
       } />
   );

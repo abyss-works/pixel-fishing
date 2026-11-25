@@ -25,6 +25,9 @@ describe('공용 스택 아이템 카탈로그', () => {
     expect(stackableItemsByKind('material').map(i => i.id)).toEqual(ARTIFACTS.map(a => a.materialId));
 
     expect(STACKABLE_ITEMS).toHaveLength(POTIONS.length + RARITY_ORDER.length + RECIPES.length + ARTIFACTS.length);
+    for (const r of RECIPES) {
+      expect(findStackableItem(r.id)?.grade, r.id).toBe(r.grade);
+    }
   });
 
   it('생명의 기운 4등급은 rarity와 저장 단위(1개 = 10단위) 변환을 제공한다', () => {

@@ -19,11 +19,13 @@ import { firstCatchTarget, settleFirstCatch } from './firstCatch.js';
 import type { FirstCatch } from './firstCatch.js';
 import { relativeIdleBoost } from './power.js';
 import {
-  applyEnergyGain, canCook, planOverflow, canEat, canExtractEnergy, canUseEnergy, energyGain, settleCooking,
+  applyEnergyGain, canCancelCook, canCook, canTransmuteEnergy, cookRefundOf, planOverflow, canEat, canExtractEnergy, canUseEnergy, energyGain, settleCooking,
   appliedSlots, isActiveSlot, maxBaitSlots, slotEffects, slotEndsAt, NO_COOK_EFFECTS,
 } from './cooking.js';
 import type { ActiveCookEffects } from './cooking.js';
-import { ENERGY_ITEM_IDS, recipeById, recipeCostStored } from '../content/cooking.js';
+import {
+  ENERGY_ITEM_IDS, ENERGY_TRANSMUTE_RATIO, ENERGY_UNIT, recipeById, recipeCostStored, recipeWaitMs, transmuteTargetOf,
+} from '../content/cooking.js';
 import { itemStorageAmount } from '../content/itemCatalog.js';
 import { potionById } from '../content/potions.js';
 import { RARITY_ORDER } from '../content/rarity.js';
@@ -85,6 +87,8 @@ export type GameAction =
   | { type: 'setEnergyTarget'; spot: SpotId; on: boolean }   // 기운 얻기 기본 선택의 해역별 덮어쓰기 — 고른 값은 기본값과 같아도 남는다
   | { type: 'resetEnergyTargets' }                           // 덮어쓰기를 모두 지워 기본값으로 되돌린다
   | { type: 'cook'; recipe: string; count: number }          // 조리 시작 — 집 거점, 기운 즉시 차감, 추가 완성은 서버가 추첨한다
+  | { type: 'cancelCook'; id: string }                       // 조리 취소 — 완성분 정산 뒤 미완성 수량 기운 100% 환급
+  | { type: 'transmuteEnergy'; from: RarityId; count: number } // 기운 변환 — 하위 기운 10개 → 상위 기운 1개 정방향 변환
   | { type: 'eat'; item: string; replaceSlot?: 'bait' | 'bait2' } // 먹기(쓰기) — 가방의 완성 요리 하나를 슬롯에 넣는다. 위치 제한 없음
   | { type: 'usePotion'; id: string }                        // 물약 사용 — 가방의 물약 1개를 쓰고 오늘 게임 날짜 끝까지 지속한다
   | { type: 'boot'; buildId?: unknown }                      // 접속(부팅) 기록 — DAU 정본. 그날 첫 접속이면 운세를 굴려 고정한다
@@ -109,7 +113,7 @@ const ACTION_TYPE_MAP: Record<GameAction['type'], true> = {
   catch: true, sell: true, upgradeRod: true, buyBoat: true,
   setLocked: true, autoLock: true, setAutoLockOnCatch: true, travel: true, sendLetter: true, redeemCoupon: true,
   claimRelief: true, claimMail: true, debug: true, debugBatch: true, debugSnapshot: true, setNickname: true,
-  dismissBaitRefund: true, extractEnergy: true, setEnergyTarget: true, resetEnergyTargets: true, cook: true, eat: true, usePotion: true,
+  dismissBaitRefund: true, extractEnergy: true, setEnergyTarget: true, resetEnergyTargets: true, cook: true, cancelCook: true, transmuteEnergy: true, eat: true, usePotion: true,
   boot: true, import: true,
   acceptQuest: true, deliverBounty: true, exchangeArtifact: true, levelUpArtifact: true, exhibit: true, resolveChallenge: true,
   seeTutorial: true, changeClothes: true, buyHat: true, wearHat: true,
@@ -148,6 +152,10 @@ export type ActionResult =
   | { type: 'mail'; gold: number; items?: readonly { id: string; qty: number }[] }
   /** energy = 이번 기운 얻기로 얻은 등급별 기운(저장 단위) */
   | { type: 'extract'; energy: Record<RarityId, number> }
+  /** 조리 취소 결과 — 취소된 레시피·수량과 등급별 환급 기운(저장 단위) */
+  | { type: 'cancelCook'; recipe: string; count: number; refund: Record<RarityId, number> }
+  /** 기운 변환 결과 — 소모·획득 기운(저장 단위) */
+  | { type: 'transmuteEnergy'; from: RarityId; to: RarityId; count: number; spent: number; gained: number }
   /** schoolDay = 이 세션의 대양 어군 배치 날짜(게임 날짜, KST 04:00 경계) — 시계의 정본은 서버다 */
   | { type: 'boot'; schoolDay: string }
   /** claimAllAchievements 확정 — 받은 골드 합계와 모자 id 목록. 클라가 이 값으로 수령 문구를 만든다
@@ -750,20 +758,79 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       return { ok: true, state: { ...state, energyTargets: {} }, result: { type: 'none' }, events: [] };
     }
     case 'cook': {
-      const check = canCook(state, action.recipe, action.count, deps.now);
+      const check = canCook(state, action.recipe, action.count, deps.now, deps.guest);
       if (!check.ok) return { ok: false, error: check.reason };
       const recipe = recipeById(action.recipe)!;
-      // 조리가 끝난 앞 요리는 보관함으로 정산한 뒤 기운을 차감하고 새 조리를 시작한다. 시작 시각은 서버 시각이다
+      // 조리가 끝난 앞 요리는 보관함으로 정산한 뒤 기운을 차감한다. 대기 0이면 즉시 보관함으로, 아니면 대기열을 쓴다
       let next = settleCooking(state, deps.now);
       for (const r of RARITY_ORDER) next = takeItem(next, ENERGY_ITEM_IDS[r], recipeCostStored(recipe, r) * action.count);
       // 추가 완성은 시작할 때 수량마다 추첨해 저장한다 — 추가분은 기운을 차감하지 않는다
       const chance = extraCookChance(state, achievementBonusesOf(state).artifactBoost);
       const bonus = Array.from({ length: action.count }, () => deps.rng() < chance);
+      const bonusCount = bonus.filter(Boolean).length;
+      if (recipeWaitMs(recipe) === 0) {
+        next = addItem(next, recipe.id, action.count + bonusCount);
+      } else {
+        const id = deps.newUid();
+        next = next.cooking === null
+          ? { ...next, cooking: { id, recipe: recipe.id, count: action.count, bonus, startedAt: deps.now } }
+          : { ...next, cookingQueue: [...next.cookingQueue, { id, recipe: recipe.id, count: action.count, bonus }] };
+      }
       return {
         ok: true,
-        state: { ...next, cooking: { recipe: recipe.id, count: action.count, bonus, startedAt: deps.now } },
+        state: next,
         result: { type: 'none' },
-        events: [{ type: 'cook', payload: { recipe: recipe.id, count: action.count, bonus: bonus.filter(Boolean).length } }],
+        events: [{ type: 'cook', payload: { recipe: recipe.id, count: action.count, bonus: bonusCount } }],
+      };
+    }
+    case 'cancelCook': {
+      const check = canCancelCook(state, action.id, deps.now, deps.guest);
+      if (!check.ok) return { ok: false, error: check.reason };
+      let next = settleCooking(state, deps.now);
+      let recipeId: string;
+      let cancelCount: number;
+      if (next.cooking?.id === action.id) {
+        recipeId = next.cooking.recipe;
+        cancelCount = next.cooking.count;
+        if (next.cookingQueue.length > 0) {
+          const [head, ...rest] = next.cookingQueue;
+          next = {
+            ...next,
+            cooking: { id: head.id, recipe: head.recipe, count: head.count, bonus: [...head.bonus], startedAt: deps.now },
+            cookingQueue: rest,
+          };
+        } else {
+          next = { ...next, cooking: null, cookingQueue: [] };
+        }
+      } else {
+        const target = next.cookingQueue.find(q => q.id === action.id)!;
+        recipeId = target.recipe;
+        cancelCount = target.count;
+        next = { ...next, cookingQueue: next.cookingQueue.filter(q => q.id !== action.id) };
+      }
+      const recipe = recipeById(recipeId)!;
+      const refund = cookRefundOf(recipe, cancelCount);
+      for (const r of RARITY_ORDER) next = addItem(next, ENERGY_ITEM_IDS[r], refund[r]);
+      return {
+        ok: true,
+        state: next,
+        result: { type: 'cancelCook', recipe: recipe.id, count: cancelCount, refund },
+        events: [{ type: 'cancelCook', payload: { id: action.id, recipe: recipe.id, count: cancelCount, refund } }],
+      };
+    }
+    case 'transmuteEnergy': {
+      const check = canTransmuteEnergy(state, action.from, action.count, deps.guest);
+      if (!check.ok) return { ok: false, error: check.reason };
+      const to = transmuteTargetOf(action.from)!;
+      const spent = action.count * ENERGY_TRANSMUTE_RATIO * ENERGY_UNIT;
+      const gained = action.count * ENERGY_UNIT;
+      let next = takeItem(state, ENERGY_ITEM_IDS[action.from], spent);
+      next = addItem(next, ENERGY_ITEM_IDS[to], gained);
+      return {
+        ok: true,
+        state: next,
+        result: { type: 'transmuteEnergy', from: action.from, to, count: action.count, spent, gained },
+        events: [{ type: 'transmuteEnergy', payload: { from: action.from, to, count: action.count, spent, gained } }],
       };
     }
     case 'eat': {

@@ -383,7 +383,8 @@ describe('조회 결과', () => {
       hats: [hat.id],
       achievements: { [achClaimed.id]: 'claimed', [achClaimable.id]: 'claimable' },
       items: { [ENERGY_ITEM_IDS.common]: 20, [ENERGY_ITEM_IDS.rare]: 5, [lunchRecipe.id]: 2 },
-      cooking: { recipe: baitRecipe.id, count: 1, startedAt: '2026-10-18T09:50:00.000Z' },
+      cooking: { id: 'cook-admin-1', recipe: baitRecipe.id, count: 1, startedAt: '2026-10-18T09:50:00.000Z' },
+      cookingQueue: [{ id: 'cook-queue-1', recipe: lunchRecipe.id, count: 2, bonus: [false, false] }],
       slots: {
         lunch: { id: lunchRecipe.id, endsAt: '2026-10-18T11:00:00.000Z' },
         bait: { id: baitRecipe.id, endsAt: '2026-10-18T10:05:00.000Z' },
@@ -426,11 +427,20 @@ describe('조회 결과', () => {
         energy: { common: 20, rare: 5, epic: 0, legendary: 0 },
         cooked: [{ id: lunchRecipe.id, name: lunchRecipe.name, kind: lunchRecipe.kind, count: 2 }],
         inProgress: {
+          id: 'cook-admin-1',
           recipe: baitRecipe.id,
           name: baitRecipe.name,
           count: 1,
           startedAt: '2026-10-18T09:50:00.000Z',
         },
+        queue: [
+          {
+            id: 'cook-queue-1',
+            recipe: lunchRecipe.id,
+            name: lunchRecipe.name,
+            count: 2,
+          },
+        ],
         slots: {
           lunch: { id: lunchRecipe.id, name: lunchRecipe.name, endsAt: '2026-10-18T11:00:00.000Z' },
           bait: { id: baitRecipe.id, name: baitRecipe.name, endsAt: '2026-10-18T10:05:00.000Z' },

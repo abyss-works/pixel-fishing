@@ -2,7 +2,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   COOKING_UNLOCK_BOAT, COOK_EFFECT_KEYS, COOK_KIND_RULES, COOK_STORAGE_CAP, ENERGY_ITEM_IDS, ENERGY_PER_INDIVIDUAL,
-  ENERGY_UNIT, LEGACY_BAIT_REFUND, RECIPES, formatEnergy, isEnergyAmount, recipeById, recipeCostStored, toStoredEnergy,
+  ENERGY_TRANSMUTE_RATIO, ENERGY_TRANSMUTE_STEPS, ENERGY_UNIT, LEGACY_BAIT_REFUND, RECIPES, formatEnergy, isEnergyAmount,
+  recipeById, recipeCostStored, recipeWaitMs, toStoredEnergy, transmuteTargetOf,
 } from './cooking';
 import { ARTIFACTS } from './artifacts';
 import { RARITY_ORDER } from './rarity';
@@ -140,11 +141,41 @@ describe('해금, 조리 대기, 보관함, 슬롯', () => {
     expect(COOKING_UNLOCK_BOAT).toBeLessThanOrEqual(MAX_BOAT);
   });
 
-  it('명세 4.3, 5.1 표의 값과 같다', () => {
+  it('명세 4.2, 4.3, 5.1 표의 등급과 조리 대기 시간·보관함·슬롯 값과 같다', () => {
     const MIN = 60_000;
-    expect(COOK_KIND_RULES.lunch).toEqual({ waitMs: 15 * MIN, slotMs: 9 * 60 * MIN });
+    expect(COOK_KIND_RULES.lunch.slotMs).toBe(9 * 60 * MIN);
     expect(COOK_KIND_RULES.bait).toEqual({ waitMs: 0, slotMs: 5 * MIN });
     expect(COOK_STORAGE_CAP).toBe(10);
+
+    const expectedMeta: Record<string, { grade: string; waitMs: number }> = {
+      'cook-lunch-bite': { grade: 'common', waitMs: 0 },
+      'cook-lunch-rare': { grade: 'rare', waitMs: 3 * MIN },
+      'cook-lunch-mutation': { grade: 'epic', waitMs: 5 * MIN },
+      'cook-lunch-named': { grade: 'epic', waitMs: 5 * MIN },
+      'cook-lunch-bundle': { grade: 'legendary', waitMs: 10 * MIN },
+      'cook-bait-mutation': { grade: 'special', waitMs: 0 },
+      'cook-bait-rare': { grade: 'rare', waitMs: 0 },
+      'cook-bait-epic': { grade: 'epic', waitMs: 0 },
+      'cook-bait-legendary': { grade: 'legendary', waitMs: 0 },
+      'cook-bait-night': { grade: 'special', waitMs: 0 },
+    };
+    for (const r of RECIPES) {
+      expect({ grade: r.grade, waitMs: recipeWaitMs(r) }, r.id).toEqual(expectedMeta[r.id]);
+    }
+  });
+
+  it('기운 정방향 10:1 변환 단계와 목표 등급을 정의한다', () => {
+    expect(ENERGY_TRANSMUTE_RATIO).toBe(10);
+    expect(ENERGY_TRANSMUTE_STEPS).toEqual([
+      { from: 'common', to: 'rare' },
+      { from: 'rare', to: 'epic' },
+      { from: 'epic', to: 'legendary' },
+    ]);
+    expect(transmuteTargetOf('common')).toBe('rare');
+    expect(transmuteTargetOf('rare')).toBe('epic');
+    expect(transmuteTargetOf('epic')).toBe('legendary');
+    expect(transmuteTargetOf('legendary')).toBeUndefined();
+    expect(transmuteTargetOf('nope')).toBeUndefined();
   });
 });
 

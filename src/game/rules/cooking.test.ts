@@ -2,10 +2,10 @@
 import { describe, it, expect } from 'vitest';
 import { applyAction, drawCatch, namedWeightBonus, prepareCatchDraw } from './actions';
 import type { ActionDeps, GameAction } from './actions';
-import { FISH, fishDrawShares, newState } from './logic';
+import { FISH, fishDrawShares, ITEM_CAP, newState } from './logic';
 import type { FishInstance, GameState } from './logic';
 import {
-  AUTO_ENERGY_BOAT, COOK_KIND_RULES, COOK_STORAGE_CAP, COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, ENERGY_PER_INDIVIDUAL, RECIPES, recipeById, toStoredEnergy,
+  AUTO_ENERGY_BOAT, COOK_STORAGE_CAP, COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, ENERGY_PER_INDIVIDUAL, ENERGY_TRANSMUTE_RATIO, RECIPES, recipeById, recipeWaitMs, toStoredEnergy,
 } from '../content/cooking';
 import type { RarityId } from '../content/rarity';
 import {
@@ -226,7 +226,8 @@ describe('cook', () => {
     expect(out.state.items[ENERGY_ITEM_IDS.common]).toBe(toStoredEnergy(1000 - 200));
     expect(out.state.items[ENERGY_ITEM_IDS.rare]).toBe(toStoredEnergy(1000 - 40));
     expect(out.state.items[ENERGY_ITEM_IDS.epic]).toBe(toStoredEnergy(1000));
-    expect(out.state.cooking).toEqual({ recipe: R.id, count: 2, bonus: [false, false], startedAt: T0 });
+    expect(out.state.cooking).toEqual({ id: 'uid-new', recipe: R.id, count: 2, bonus: [false, false], startedAt: T0 });
+    expect(out.state.cookingQueue).toEqual([]);
     expect(out.events[0]).toMatchObject({ type: 'cook', payload: { recipe: R.id, count: 2 } });
   });
   it('기운이 딱 맞으면 되고 한 개 모자라면 not-enough-energy다', () => {
@@ -242,18 +243,20 @@ describe('cook', () => {
     expect(out.state.items).toEqual({ [ENERGY_ITEM_IDS.common]: 3, [ENERGY_ITEM_IDS.rare]: 1 });
   });
   it('저울이 있으면 수량마다 추가 완성을 추첨해 bonus에 저장하고 기운은 더 쓰지 않는다', () => {
-    const s = rich({ artifacts: ['varuna-scale'], items: energy(2000) });
+    const s = rich({ artifacts: ['varuna-scale'], items: energy(2000, 1000) });
     const draws = [0.05, 0.5, 0.099];
     let i = 0;
-    const out = ok(s, { type: 'cook', recipe: lunchBite.id, count: 3 }, deps({ rng: () => draws[i++] }));
+    const out = ok(s, { type: 'cook', recipe: R.id, count: 3 }, deps({ rng: () => draws[i++] }));
     expect(out.state.cooking!.bonus).toEqual([true, false, true]);
-    expect(out.state.items[ENERGY_ITEM_IDS.common]).toBe(toStoredEnergy(2000 - 1800));
+    expect(out.state.items[ENERGY_ITEM_IDS.common]).toBe(toStoredEnergy(2000 - 300));
+    expect(out.state.items[ENERGY_ITEM_IDS.rare]).toBe(toStoredEnergy(1000 - 60));
   });
   it('저울이 없으면 추가 완성이 없다', () => {
-    const out = ok(rich({ items: energy(2000) }), { type: 'cook', recipe: lunchBite.id, count: 2 }, deps({ rng: () => 0 }));
+    const out = ok(rich({ items: energy(2000, 1000) }), { type: 'cook', recipe: R.id, count: 2 }, deps({ rng: () => 0 }));
     expect(out.state.cooking!.bonus).toEqual([false, false]);
   });
-  it('집 밖은 not-at-home, 해금 전은 cooking-locked다', () => {
+  it('게스트는 account-only, 집 밖은 not-at-home, 해금 전은 cooking-locked다', () => {
+    expect(rejected(rich(), { type: 'cook', recipe: R.id, count: 1 }, deps({ guest: true }))).toBe('account-only');
     expect(rejected(rich({ location: { kind: 'base', id: 'harbor' } }), { type: 'cook', recipe: R.id, count: 1 })).toBe('not-at-home');
     expect(rejected(rich({ boat: 4 }), { type: 'cook', recipe: R.id, count: 1 })).toBe('cooking-locked');
   });
@@ -263,34 +266,52 @@ describe('cook', () => {
     expect(rejected(rich(), { type: 'cook', recipe: R.id, count: 1.5 })).toBe('bad-request');
     expect(rejected(rich(), { type: 'cook', recipe: R.id, count: '1' as never })).toBe('bad-request');
   });
-  it('보관함 상한(완성품과 조리 중인 수량의 합)을 넘기는 수량은 storage-full이다', () => {
+  it('보관함 상한(완성품·조리 중 미완성·대기열 수량의 합)을 넘기는 수량은 storage-full이다', () => {
     const full = rich({ items: { ...energy(1000, 1000, 1000, 1000), [R.id]: COOK_STORAGE_CAP } });
     expect(rejected(full, { type: 'cook', recipe: R.id, count: 1 })).toBe('storage-full');
     const nine = rich({ items: { ...energy(1000, 1000, 1000, 1000), [recipeById('cook-bait-mutation')!.id]: 7 } });
     expect(rejected(nine, { type: 'cook', recipe: R.id, count: COOK_STORAGE_CAP - 7 + 1 })).toBe('storage-full');
     expect(ok(nine, { type: 'cook', recipe: R.id, count: COOK_STORAGE_CAP - 7 }).state.cooking!.count).toBe(3);
   });
-  it('조리 중인 수량도 보관함에 센다', () => {
-    const s = rich({ cooking: { recipe: R.id, count: 9, bonus: Array(9).fill(false), startedAt: T0 } });
-    expect(rejected(s, { type: 'cook', recipe: R.id, count: 2 }, deps({ now: at(T0, 10 * MIN) }))).toBe('storage-full');
+  it('조리 중·대기열 수량도 보관함에 센다', () => {
+    const s = rich({
+      cooking: { id: 'c1', recipe: R.id, count: 5, bonus: Array(5).fill(false), startedAt: T0 },
+      cookingQueue: [{ id: 'q1', recipe: R.id, count: 4, bonus: Array(4).fill(false) }],
+    });
+    expect(rejected(s, { type: 'cook', recipe: R.id, count: 2 }, deps({ now: at(T0, 2 * MIN) }))).toBe('storage-full');
+    const one = ok(s, { type: 'cook', recipe: R.id, count: 1 }, deps({ now: at(T0, 2 * MIN), newUid: () => 'q2' }));
+    expect(one.state.cookingQueue).toHaveLength(2);
+    expect(one.state.cookingQueue[1]).toEqual({ id: 'q2', recipe: R.id, count: 1, bonus: [false] });
   });
-  it('조리 중이면 새 조리를 시작할 수 없다. 모두 완성되면 시작할 수 있다', () => {
-    const wait = COOK_KIND_RULES.lunch.waitMs;
-    const s = rich({ cooking: { recipe: R.id, count: 2, bonus: [false, false], startedAt: T0 } });
-    expect(rejected(s, { type: 'cook', recipe: R.id, count: 1 }, deps({ now: at(T0, wait) }))).toBe('cooking-busy');
-    expect(rejected(s, { type: 'cook', recipe: R.id, count: 1 }, deps({ now: at(T0, 2 * wait - 1) }))).toBe('cooking-busy');
-    const next = ok(s, { type: 'cook', recipe: R.id, count: 1 }, deps({ now: at(T0, 2 * wait) })).state;
-    expect(next.items[R.id]).toBe(2); // 앞 조리는 보관함으로 들어갔다
-    expect(next.cooking).toMatchObject({ recipe: R.id, count: 1, startedAt: at(T0, 2 * wait) });
+  it('조리 대기가 0인 즉시 요리(가루디야·미끼)는 조리 중·대기열과 무관하게 즉시 items에 적립된다', () => {
+    const busy = seed({
+      artifacts: ['varuna-scale'],
+      items: energy(3000, 1000, 1000, 1000),
+      cooking: { id: 'c1', recipe: R.id, count: 2, bonus: [false, false], startedAt: T0 },
+      cookingQueue: [{ id: 'q1', recipe: R.id, count: 1, bonus: [false] }],
+    });
+    let i = 0;
+    const draws = [0.05, 0.5]; // 첫 개체 추가 완성 +1
+    const instantLunch = ok(busy, { type: 'cook', recipe: lunchBite.id, count: 2 }, deps({ rng: () => draws[i++] }));
+    expect(instantLunch.state.items[lunchBite.id]).toBe(3);
+    expect(instantLunch.state.cooking).toEqual(busy.cooking);
+    expect(instantLunch.state.cookingQueue).toEqual(busy.cookingQueue);
+    expect(instantLunch.events[0]).toMatchObject({ type: 'cook', payload: { recipe: lunchBite.id, count: 2, bonus: 1 } });
+
+    const bait = recipeById('cook-bait-rare')!;
+    const instantBait = ok(instantLunch.state, { type: 'cook', recipe: bait.id, count: 2 });
+    expect(instantBait.state.items[bait.id]).toBe(2);
+    expect(instantBait.state.cookingQueue).toEqual(busy.cookingQueue);
   });
 });
 
 describe('조리 진행과 완성', () => {
-  const lunch = recipeById('cook-lunch-bite')!;
+  const lunch = recipeById('cook-lunch-rare')!;
+  const epicLunch = recipeById('cook-lunch-mutation')!;
   const miniBait = recipeById('cook-bait-mutation')!;
-  const W = COOK_KIND_RULES.lunch.waitMs;
+  const W = recipeWaitMs(lunch); // 3분
   const cooking = (count: number, bonus: boolean[], recipe = lunch.id) =>
-    seed({ cooking: { recipe, count, bonus, startedAt: T0 } });
+    seed({ cooking: { id: 'c1', recipe, count, bonus, startedAt: T0 } });
 
   it('완성 수는 경과 시간을 레시피 1개의 대기로 나눈 몫이고 넣은 수량을 넘지 않는다', () => {
     const s = cooking(3, [false, false, false]);
@@ -301,6 +322,7 @@ describe('조리 진행과 완성', () => {
   });
   it('다음 완성 시각과 모두 완성되는 시각을 알려 준다', () => {
     const p = cookingProgress(cooking(3, [false, false, false]), at(T0, W + 5))!;
+    expect(p.id).toBe('c1');
     expect(p.nextAt).toBe(at(T0, 2 * W));
     expect(p.finishAt).toBe(at(T0, 3 * W));
     expect(cookingProgress(seed(), T0)).toBeNull();
@@ -318,10 +340,33 @@ describe('조리 진행과 완성', () => {
     const s = cooking(3, [false, true, false]);
     const mid = settleCooking(s, at(T0, 2 * W + 1));
     expect(mid.items[lunch.id]).toBe(3);
-    expect(mid.cooking).toEqual({ recipe: lunch.id, count: 1, bonus: [false], startedAt: at(T0, 2 * W) });
+    expect(mid.cooking).toEqual({ id: 'c1', recipe: lunch.id, count: 1, bonus: [false], startedAt: at(T0, 2 * W) });
     const done = settleCooking(mid, at(T0, 3 * W));
     expect(done.items[lunch.id]).toBe(4);
     expect(done.cooking).toBeNull();
+  });
+  it('settleCooking은 앞 작업 완료 시각을 이어받아 대기열을 연쇄 정산한다', () => {
+    const epicWait = recipeWaitMs(epicLunch); // 5분
+    const s = seed({
+      cooking: { id: 'c1', recipe: lunch.id, count: 2, bonus: [false, true], startedAt: T0 }, // 0~6분 완료(총 3개)
+      cookingQueue: [
+        { id: 'q1', recipe: epicLunch.id, count: 2, bonus: [false, false] }, // 6~16분 완료(총 2개)
+        { id: 'q2', recipe: lunch.id, count: 3, bonus: [true, false, false] }, // 16~25분 완료
+      ],
+    });
+    // 19분 경과: c1(6분) 완료, q1(16분) 완료, q2는 16분 시작이므로 1개 완료(19분에 딱 1개 + bonus true → 2개), 2개 남음(startedAt 19분)
+    const settled = settleCooking(s, at(T0, 19 * MIN));
+    expect(settled.items[lunch.id]).toBe(3 + 2);
+    expect(settled.items[epicLunch.id]).toBe(2);
+    expect(settled.cooking).toEqual({
+      id: 'q2', recipe: lunch.id, count: 2, bonus: [false, false], startedAt: at(T0, 19 * MIN),
+    });
+    expect(settled.cookingQueue).toEqual([]);
+
+    // 25분 경과 시 모두 완료
+    const allDone = settleCooking(settled, at(T0, 2 * W + 2 * epicWait + 3 * W));
+    expect(allDone.items[lunch.id]).toBe(7);
+    expect(allDone.cooking).toBeNull();
   });
   it('아직 완성된 것이 없으면 같은 상태를 그대로 돌려준다', () => {
     const s = cooking(2, [false, false]);
@@ -335,8 +380,113 @@ describe('조리 진행과 완성', () => {
   });
 });
 
+describe('cancelCook — 조리 취소 및 100% 환급', () => {
+  const rareLunch = recipeById('cook-lunch-rare')!; // 일반 100, 희귀 20, 3분
+  const epicLunch = recipeById('cook-lunch-mutation')!; // 희귀 20, 영웅 4, 5분
+  const W = recipeWaitMs(rareLunch);
+
+  it('현재 조리 중 취소 시 now까지 완성분을 먼저 정산하고 미완성분 기운 100% 환급·대기열 첫 항목을 now로 승계한다', () => {
+    const s = seed({
+      cooking: { id: 'c1', recipe: rareLunch.id, count: 3, bonus: [true, false, true], startedAt: T0 },
+      cookingQueue: [{ id: 'q1', recipe: epicLunch.id, count: 2, bonus: [false, false] }],
+    });
+    // 4분 경과: 1개(보너스 포함 2개) 완성, 2개 미완성(미완성분의 bonus true는 무효)
+    const now = at(T0, W + MIN);
+    const out = ok(s, { type: 'cancelCook', id: 'c1' }, deps({ now }));
+    expect(out.state.items[rareLunch.id]).toBe(2);
+    expect(out.state.items[ENERGY_ITEM_IDS.common]).toBe(toStoredEnergy(200));
+    expect(out.state.items[ENERGY_ITEM_IDS.rare]).toBe(toStoredEnergy(40));
+    expect(out.state.cooking).toEqual({
+      id: 'q1', recipe: epicLunch.id, count: 2, bonus: [false, false], startedAt: now,
+    });
+    expect(out.state.cookingQueue).toEqual([]);
+    const expectedRefund = { common: toStoredEnergy(200), rare: toStoredEnergy(40), epic: 0, legendary: 0 };
+    expect(out.result).toEqual({ type: 'cancelCook', recipe: rareLunch.id, count: 2, refund: expectedRefund });
+    expect(out.events).toEqual([{
+      type: 'cancelCook',
+      payload: { id: 'c1', recipe: rareLunch.id, count: 2, refund: expectedRefund },
+    }]);
+  });
+
+  it('대기열 항목을 취소하면 진행 중인 조리는 유지되고 해당 항목 기운만 100% 환급된다', () => {
+    const s = seed({
+      cooking: { id: 'c1', recipe: rareLunch.id, count: 2, bonus: [false, false], startedAt: T0 },
+      cookingQueue: [
+        { id: 'q1', recipe: epicLunch.id, count: 2, bonus: [false, true] },
+        { id: 'q2', recipe: rareLunch.id, count: 1, bonus: [false] },
+      ],
+    });
+    const out = ok(s, { type: 'cancelCook', id: 'q1' }, deps({ now: at(T0, MIN) }));
+    expect(out.state.cooking).toEqual(s.cooking);
+    expect(out.state.cookingQueue).toEqual([{ id: 'q2', recipe: rareLunch.id, count: 1, bonus: [false] }]);
+    expect(out.state.items[ENERGY_ITEM_IDS.rare]).toBe(toStoredEnergy(40));
+    expect(out.state.items[ENERGY_ITEM_IDS.epic]).toBe(toStoredEnergy(8));
+    expect(out.result).toMatchObject({ type: 'cancelCook', recipe: epicLunch.id, count: 2 });
+  });
+
+  it('이미 완료된 작업을 취소하려 하면 정산은 유지되고 cooking-not-found로 거부된다', () => {
+    const s = seed({
+      cooking: { id: 'c1', recipe: rareLunch.id, count: 1, bonus: [false], startedAt: T0 },
+    });
+    expect(rejected(s, { type: 'cancelCook', id: 'c1' }, deps({ now: at(T0, W) }))).toBe('cooking-not-found');
+    expect(rejected(s, { type: 'cancelCook', id: 'nope' })).toBe('cooking-not-found');
+  });
+
+  it('게스트·집 밖·해금 전·빈 id는 거부한다', () => {
+    const s = seed({ cooking: { id: 'c1', recipe: rareLunch.id, count: 1, bonus: [false], startedAt: T0 } });
+    expect(rejected(s, { type: 'cancelCook', id: 'c1' }, deps({ guest: true }))).toBe('account-only');
+    expect(rejected({ ...s, location: { kind: 'base', id: 'harbor' } }, { type: 'cancelCook', id: 'c1' })).toBe('not-at-home');
+    expect(rejected({ ...s, boat: 4 }, { type: 'cancelCook', id: 'c1' })).toBe('cooking-locked');
+    expect(rejected(s, { type: 'cancelCook', id: '' })).toBe('bad-request');
+  });
+});
+
+describe('transmuteEnergy — 하위 기운 10:1 정방향 변환', () => {
+  it('일반→희귀, 희귀→영웅, 영웅→전설 10:1 변환이 정확히 동작한다', () => {
+    const s1 = seed({ items: energy(25, 0, 0, 0) });
+    const out1 = ok(s1, { type: 'transmuteEnergy', from: 'common', count: 2 });
+    expect(out1.state.items[ENERGY_ITEM_IDS.common]).toBe(toStoredEnergy(5));
+    expect(out1.state.items[ENERGY_ITEM_IDS.rare]).toBe(toStoredEnergy(2));
+    expect(out1.result).toEqual({
+      type: 'transmuteEnergy',
+      from: 'common',
+      to: 'rare',
+      count: 2,
+      spent: 2 * ENERGY_TRANSMUTE_RATIO * 10,
+      gained: 2 * 10,
+    });
+    expect(out1.events).toEqual([{
+      type: 'transmuteEnergy',
+      payload: { from: 'common', to: 'rare', count: 2, spent: 200, gained: 20 },
+    }]);
+
+    const s2 = seed({ items: energy(0, 10, 10, 0) });
+    const out2 = ok(s2, { type: 'transmuteEnergy', from: 'rare', count: 1 });
+    expect(out2.state.items[ENERGY_ITEM_IDS.rare]).toBeUndefined();
+    expect(out2.state.items[ENERGY_ITEM_IDS.epic]).toBe(toStoredEnergy(11));
+
+    const out3 = ok(out2.state, { type: 'transmuteEnergy', from: 'epic', count: 1 });
+    expect(out3.state.items[ENERGY_ITEM_IDS.epic]).toBe(toStoredEnergy(1));
+    expect(out3.state.items[ENERGY_ITEM_IDS.legendary]).toBe(toStoredEnergy(1));
+  });
+
+  it('기운 부족, 상위 기운 저장 상한 초과, 잘못된 등급/수량, 권한·위치 조건을 거부한다', () => {
+    expect(rejected(seed({ items: energy(9.9) }), { type: 'transmuteEnergy', from: 'common', count: 1 })).toBe('not-enough-energy');
+    expect(rejected(seed({
+      items: { [ENERGY_ITEM_IDS.common]: toStoredEnergy(100), [ENERGY_ITEM_IDS.rare]: ITEM_CAP * 10 },
+    }), { type: 'transmuteEnergy', from: 'common', count: 1 })).toBe('energy-cap');
+
+    expect(rejected(seed({ items: energy(0, 0, 0, 100) }), { type: 'transmuteEnergy', from: 'legendary', count: 1 })).toBe('bad-request');
+    expect(rejected(seed({ items: energy(100) }), { type: 'transmuteEnergy', from: 'common', count: 0 })).toBe('bad-request');
+    expect(rejected(seed({ items: energy(100) }), { type: 'transmuteEnergy', from: 'common', count: 1.5 })).toBe('bad-request');
+    expect(rejected(seed({ items: energy(100) }), { type: 'transmuteEnergy', from: 'common', count: 1 }, deps({ guest: true }))).toBe('account-only');
+    expect(rejected(seed({ items: energy(100), location: { kind: 'base', id: 'harbor' } }), { type: 'transmuteEnergy', from: 'common', count: 1 })).toBe('not-at-home');
+    expect(rejected(seed({ items: energy(100), boat: 4 }), { type: 'transmuteEnergy', from: 'common', count: 1 })).toBe('cooking-locked');
+  });
+});
+
 describe('eat', () => {
-  const lunch = recipeById('cook-lunch-bite')!;
+  const lunch = recipeById('cook-lunch-rare')!;
   const bait = recipeById('cook-bait-mutation')!;
   it('도시락은 도시락 슬롯에 9시간, 미끼 요리는 미끼 슬롯에 5분 들어가고 1개 줄어든다', () => {
     const s = seed({ items: { [lunch.id]: 2, [bait.id]: 1 } });
@@ -350,7 +500,7 @@ describe('eat', () => {
     expect(a.events[0]).toMatchObject({ type: 'eat', payload: { item: lunch.id } });
   });
   it('감사 이벤트의 replaced는 이전 슬롯 효과가 끝나기 전일 때만 이전 id를 남긴다', () => {
-    const other = recipeById('cook-lunch-rare')!;
+    const other = recipeById('cook-lunch-bite')!;
     const s = seed({ items: { [other.id]: 1 }, slots: { lunch: { id: lunch.id, endsAt: at(T0, 60 * MIN) }, bait: null } });
     expect(ok(s, { type: 'eat', item: other.id }, deps({ now: at(T0, 30 * MIN) })).events[0])
       .toMatchObject({ payload: { replaced: lunch.id } });
@@ -362,7 +512,7 @@ describe('eat', () => {
     expect(out.state.slots.lunch!.endsAt).toBe('2026-11-12T17:30:15.123Z');
   });
   it('이미 든 슬롯에 넣으면 이전 효과는 즉시 끝나고 남은 시간은 사라진다. 같은 것을 다시 넣어도 같다', () => {
-    const other = recipeById('cook-lunch-rare')!;
+    const other = recipeById('cook-lunch-bite')!;
     const s = seed({ items: { [lunch.id]: 2, [other.id]: 1 }, slots: { lunch: { id: lunch.id, endsAt: at(T0, 8 * 60 * MIN) }, bait: null } });
     const swapped = ok(s, { type: 'eat', item: other.id }, deps({ now: at(T0, 60 * MIN) })).state;
     expect(swapped.slots.lunch).toEqual({ id: other.id, endsAt: at(T0, 60 * MIN + 9 * 60 * MIN) });
@@ -370,8 +520,8 @@ describe('eat', () => {
     expect(again.slots.lunch!.endsAt).toBe(at(T0, 60 * MIN + 9 * 60 * MIN));
   });
   it('조리가 끝난 완성품을 먼저 정산한 뒤 먹는다', () => {
-    const s = seed({ cooking: { recipe: lunch.id, count: 1, bonus: [false], startedAt: T0 } });
-    const out = ok(s, { type: 'eat', item: lunch.id }, deps({ now: at(T0, COOK_KIND_RULES.lunch.waitMs) }));
+    const s = seed({ cooking: { id: 'c1', recipe: lunch.id, count: 1, bonus: [false], startedAt: T0 } });
+    const out = ok(s, { type: 'eat', item: lunch.id }, deps({ now: at(T0, recipeWaitMs(lunch)) }));
     expect(out.state.slots.lunch).not.toBeNull();
     expect(out.state.cooking).toBeNull();
     expect(out.state.items[lunch.id]).toBeUndefined();

@@ -13,7 +13,7 @@ export interface StackableItem {
   id: string;
   kind: StackableItemKind;
   name: string;
-  /** 표시 등급 — 물약과 생명의 기운에만 둔다 */
+  /** 표시 등급 */
   grade?: DisplayGradeId;
   /** 생명의 기운 등급 — 기운 종류에만 둔다 */
   rarity?: RarityId;
@@ -49,6 +49,7 @@ const COOK_ITEMS: readonly StackableItem[] = RECIPES.map(r => ({
   id: r.id,
   kind: r.kind === 'lunch' ? 'dish' : 'bait',
   name: r.name,
+  grade: r.grade,
   unitSize: 1,
   attachable: true,
   description: r.description,

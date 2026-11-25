@@ -3,7 +3,7 @@
 // 레시피 id는 완성품이 items에 쌓이는 키이며 표시 이름과 분리된 고정 신분증이다. 표시 이름은 콘텐츠 값이다.
 // 상대경로 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버의 import 그래프에 포함된다.
 import { RARITY_ORDER } from './rarity.js';
-import type { RarityId } from './rarity.js';
+import type { DisplayGradeId, RarityId } from './rarity.js';
 import { zoneById } from './zones.js';
 
 // ---------- 해금 ----------
@@ -43,6 +43,27 @@ export const isEnergyAmount = (x: unknown): x is number =>
 
 /** 화면 단위 수량 → 저장 단위 정수. 소수 연산의 오차는 반올림으로 걷어 낸다 */
 export const toStoredEnergy = (amount: number): number => Math.round(amount * ENERGY_UNIT);
+
+/** 하위 등급 기운을 한 단계 위 등급 기운으로 바꾸는 정방향 비율 (10:1) */
+export const ENERGY_TRANSMUTE_RATIO = 10;
+
+export interface EnergyTransmuteStep {
+  from: RarityId;
+  to: RarityId;
+}
+
+/** 정방향 기운 변환 단계 — 일반→희귀, 희귀→영웅, 영웅→전설 */
+export const ENERGY_TRANSMUTE_STEPS: readonly EnergyTransmuteStep[] = [
+  { from: 'common', to: 'rare' },
+  { from: 'rare', to: 'epic' },
+  { from: 'epic', to: 'legendary' },
+];
+
+/** 원본 기운 등급이 변환되는 상위 등급 — 변환 불가 등급·비문자열은 undefined */
+export const transmuteTargetOf = (from: unknown): RarityId | undefined =>
+  typeof from === 'string'
+    ? ENERGY_TRANSMUTE_STEPS.find(step => step.from === from)?.to
+    : undefined;
 
 /** 저장 단위 기운 → 화면 문자열. 소수 첫째 자리가 0이면 정수, 아니면 소수 첫째 자리까지, 정수부는 천 단위 쉼표.
  *  정수가 아닌 입력은 가장 가까운 저장 단위로 반올림하고, 유한하지 않은 수는 0으로 표시한다 */
@@ -101,6 +122,9 @@ export interface Recipe {
   /** 레시피 상세 머리에 이름 아래 보이는 로어 두 문장 */
   description: string;
   kind: CookKind;
+  grade: DisplayGradeId;
+  /** 1개 제작 대기 시간(ms). 0이면 즉시 완성된다 */
+  waitMs: number;
   /** 기운 요구 — 등급별 수량(1개를 만드는 데 드는 양). 사람이 읽는 화면 단위로 적고 소수 첫째 자리까지 허용한다 */
   cost: Readonly<Partial<Record<RarityId, number>>>;
   effects: CookEffects;
@@ -110,51 +134,54 @@ export const RECIPES: readonly Recipe[] = [
   // 도시락 — 도시락 슬롯, 방치 캐치에 적용
   { id: 'cook-lunch-bite', name: '가루디야',
     description: '소금물에 끓인 다랑어 국물에서 짠 김이 피어오른다. 그릇을 다 비우기도 전에 찌가 먼저 가라앉는다.',
-    kind: 'lunch',
+    kind: 'lunch', grade: 'common', waitMs: 0,
     cost: { common: 600 }, effects: { biteWaitCut: 0.1 } },
   { id: 'cook-lunch-rare', name: '민 몰리',
     description: '코코넛 밀크와 강황으로 끓인 국물에 생선 살이 잠긴다. 귀한 생선을 넣을수록 맛이 깊어진다.',
-    kind: 'lunch',
+    kind: 'lunch', grade: 'rare', waitMs: 3 * MIN_MS,
     cost: { common: 100, rare: 20 }, effects: { rarityWeight: { grades: gradesFrom('rare'), bonus: 0.1 } } },
   { id: 'cook-lunch-mutation', name: '생선 비리야니',
     description: '솥을 봉한 반죽을 뜯어내면 향신료 냄새가 한꺼번에 퍼진다. 밝은 빛으로 따로 물들인 밥이 생선과 켜를 이룬다.',
-    kind: 'lunch',
+    kind: 'lunch', grade: 'epic', waitMs: 5 * MIN_MS,
     cost: { rare: 20, epic: 4 }, effects: { mutationWeight: 0.5 } },
   { id: 'cook-lunch-named', name: '암불 티얄',
     description: '고라카 열매의 신맛이 바짝 졸인 다랑어 살 속까지 밴다. 콜롬보항 뱃사람들은 큰 그림자를 쫓아 오래 나가는 날 이 요리를 싣는다.',
-    kind: 'lunch',
+    kind: 'lunch', grade: 'epic', waitMs: 5 * MIN_MS,
     cost: { epic: 8 }, effects: { namedWeight: 0.5 } },
   { id: 'cook-lunch-bundle', name: '생선 탈리',
     description: '밥을 가운데 두고 생선 반찬을 작은 그릇에 나눠 둥근 쟁반에 차린 인도식 한 상이다. 그릇마다 양은 적어도 빠진 맛이 없다.',
-    kind: 'lunch',
+    kind: 'lunch', grade: 'legendary', waitMs: 10 * MIN_MS,
     cost: { common: 50, rare: 5, epic: 1, legendary: 1 },
     effects: { biteWaitCut: 0.05, rarityWeight: { grades: gradesFrom('rare'), bonus: 0.05 } } },
   // 미끼 요리 — 미끼 슬롯, 수동 캐치에 적용
   { id: 'cook-bait-mutation', name: '사프란 미끼',
     description: '붉은 사프란 암술을 물에 담그면 금빛이 번져 나온다. 이 미끼를 문 물고기는 가끔 비늘 빛부터 남다르다.',
-    kind: 'bait',
+    kind: 'bait', grade: 'special', waitMs: 0,
     cost: { epic: 4, legendary: 1 }, effects: { mutationWeight: 1.5 } },
   { id: 'cook-bait-rare', name: '롱페퍼 미끼',
     description: '롱페퍼 이삭을 말려 빻아 반죽에 섞은 미끼다. 후추보다 이 열매가 비싸게 팔리던 때가 있었다.',
-    kind: 'bait',
+    kind: 'bait', grade: 'rare', waitMs: 0,
     cost: { common: 50, rare: 15 },
     effects: { rarityWeight: { grades: gradesFrom('rare'), bonus: 0.4 } } },
   { id: 'cook-bait-epic', name: '큐베브 미끼',
     description: '큐베브 열매에는 짧은 꼬리 같은 꼭지가 하나씩 달려 있다. 아린 맛이 오래 남는 열매 가루가 물에 풀리면 덩치 큰 것들이 먼저 줄을 당긴다.',
-    kind: 'bait',
+    kind: 'bait', grade: 'epic', waitMs: 0,
     cost: { common: 50, epic: 5 },
     effects: { rarityWeight: { grades: gradesFrom('epic'), bonus: 0.6 } } },
   { id: 'cook-bait-legendary', name: '용연향 미끼',
     description: '해변에 밀려온 용연향 덩어리를 옛 중국 사람들은 용이 흘린 침이 굳은 것으로 여겼다. 이 냄새를 따라 이야기로만 듣던 물고기가 올라오기도 한다.',
-    kind: 'bait',
+    kind: 'bait', grade: 'legendary', waitMs: 0,
     cost: { common: 50, legendary: 3 },
     effects: { rarityWeight: { grades: gradesFrom('legendary'), bonus: 0.8 } } },
   { id: 'cook-bait-night', name: '달빛 미끼',
     description: '달빛이 스민 물고기의 비늘을 말려 반죽에 섞는다. 낮에 던진 미끼에서도 밤의 물결이 따라 올라온다.',
-    kind: 'bait',
+    kind: 'bait', grade: 'special', waitMs: 0,
     cost: { rare: 10, epic: 3, legendary: 1 },
     effects: { nightUnlock: true } },
 ];
+
+/** 레시피 1개의 제작 대기 시간(ms) */
+export const recipeWaitMs = (recipe: Pick<Recipe, 'waitMs'>): number => recipe.waitMs;
 
 /** 그 레시피 1개의 등급별 기운 요구(저장 단위). 요구가 없는 등급은 0 */
 export const recipeCostStored = (recipe: Recipe, grade: RarityId): number => toStoredEnergy(recipe.cost[grade] ?? 0);

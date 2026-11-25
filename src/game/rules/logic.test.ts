@@ -924,17 +924,27 @@ describe('세이브 v9 — 미끼 환불과 요리 상태', () => {
 
   it('newState는 v10 기본 상태다', () => {
     const s = newState();
-    expect(s).toMatchObject({ v: 10, cooking: null, slots: { lunch: null, bait: null }, energyTargets: {}, baitRefund: null });
+    expect(s).toMatchObject({ v: 10, cooking: null, cookingQueue: [], slots: { lunch: null, bait: null }, energyTargets: {}, baitRefund: null });
     expect('activeBait' in s).toBe(false);
   });
 
-  it('cooking 위생 — 유효한 조리는 그대로 살린다', () => {
-    const cooking = { recipe: 'cook-lunch-bite', count: 2, bonus: [false, true], startedAt: START };
+  it('cooking 위생 — 대기 시간 있는 유효 조리만 살리고 id 누락 시 보정한다', () => {
+    const cooking = { id: 'cook-1', recipe: 'cook-lunch-rare', count: 2, bonus: [false, true], startedAt: START };
     expect(mig({ ...newState(), cooking }).cooking).toEqual(cooking);
+
+    const legacyNoId = { recipe: 'cook-lunch-rare', count: 1, bonus: [false], startedAt: START };
+    const migrated = mig({ ...newState(), cooking: legacyNoId });
+    expect(migrated.cooking).toMatchObject({ recipe: 'cook-lunch-rare', count: 1, bonus: [false], startedAt: START });
+    expect(typeof migrated.cooking?.id).toBe('string');
+    expect(migrated.cooking!.id.length).toBeGreaterThan(0);
+
+    // 대기 시간 0인 즉시 요리(가루디야, 미끼)는 cooking에 두지 않는다
+    expect(mig({ ...newState(), cooking: { id: 'c0', recipe: 'cook-lunch-bite', count: 1, bonus: [false], startedAt: START } }).cooking).toBeNull();
+    expect(mig({ ...newState(), cooking: { id: 'c0', recipe: 'cook-bait-rare', count: 1, bonus: [false], startedAt: START } }).cooking).toBeNull();
   });
 
   it('cooking 위생 — 없는 레시피, 범위 밖 수량, 길이가 다른 bonus, 시각이 아닌 값은 조리 없음으로 접는다', () => {
-    const ok = { recipe: 'cook-lunch-bite', count: 2, bonus: [false, true], startedAt: START };
+    const ok = { id: 'cook-1', recipe: 'cook-lunch-rare', count: 2, bonus: [false, true], startedAt: START };
     const bad: unknown[] = [
       { ...ok, recipe: 'nope' }, { ...ok, recipe: 3 },
       { ...ok, count: 0, bonus: [] }, { ...ok, count: 1.5 },
@@ -946,6 +956,30 @@ describe('세이브 v9 — 미끼 환불과 요리 상태', () => {
     for (const cooking of bad) expect(mig({ ...newState(), cooking }).cooking, JSON.stringify(cooking)).toBeNull();
     expect(mig({ ...newState(), cooking: { ...ok, count: COOK_STORAGE_CAP, bonus: new Array(COOK_STORAGE_CAP).fill(false) } }).cooking)
       .not.toBeNull();
+  });
+
+  it('cookingQueue 위생 — cooking이 null이면 비우고, 유효 대기 레시피만 보관함 상한(10)까지 남긴다', () => {
+    const active = { id: 'c1', recipe: 'cook-lunch-rare', count: 4, bonus: [false, false, false, false], startedAt: START };
+    expect(mig({
+      ...newState(),
+      cooking: null,
+      cookingQueue: [{ id: 'q1', recipe: 'cook-lunch-rare', count: 2, bonus: [false, false] }],
+    }).cookingQueue).toEqual([]);
+
+    const migrated = mig({
+      ...newState(),
+      cooking: active,
+      cookingQueue: [
+        { id: 'q-instant', recipe: 'cook-lunch-bite', count: 1, bonus: [false] }, // 즉시 요리는 탈락
+        { recipe: 'cook-lunch-mutation', count: 3, bonus: [false, true, false] }, // id 누락 보정
+        { id: 'q-fit', recipe: 'cook-lunch-bundle', count: 3, bonus: [false, false, false] }, // 합계 4+3+3=10까지 살림
+        { id: 'q-over', recipe: 'cook-lunch-rare', count: 1, bonus: [false] }, // 상한 초과로 잘림
+      ],
+    });
+    expect(migrated.cookingQueue).toHaveLength(2);
+    expect(migrated.cookingQueue[0]).toMatchObject({ recipe: 'cook-lunch-mutation', count: 3, bonus: [false, true, false] });
+    expect(migrated.cookingQueue[0].id.length).toBeGreaterThan(0);
+    expect(migrated.cookingQueue[1]).toEqual({ id: 'q-fit', recipe: 'cook-lunch-bundle', count: 3, bonus: [false, false, false] });
   });
 
   it('slots 위생 — 슬롯 종류에 맞는 요리 id와 시각만 살린다', () => {

@@ -35,7 +35,7 @@ describe('StatsModal(스탯창)', () => {
     show(game({ boat: 5, slots: { lunch: { id: 'cook-lunch-bite', endsAt }, bait: null } }));
     fireEvent.click(screen.getByRole('button', { name: '보너스' }));
     const row = screen.getByText('입질 대기 −10%').closest('tr')!;
-    expect(within(row).getByText('가루디야')).toBeTruthy();
+    expect(within(row).getByText('가루디야(일반)')).toBeTruthy();
     expect(within(row).getByText('방치로 낚을 때만')).toBeTruthy();
     expect(screen.getAllByText('받는 보너스가 없어요.')).toHaveLength(3);
   });

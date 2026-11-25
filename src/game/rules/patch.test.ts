@@ -135,6 +135,19 @@ describe('patch 동등성 — 전 액션', () => {
     });
   });
 
+  it('cook(대기열) / cancelCook / transmuteEnergy — 조리 대기열과 기운 변환 스칼라가 패치로 동기화된다', () => {
+    const busy = seed({
+      boat: 5,
+      location: { kind: 'base', id: 'home' },
+      items: { 'energy-common': 10_000, 'energy-rare': 5_000 },
+      cooking: { id: 'c1', recipe: 'cook-lunch-rare', count: 2, bonus: [false, false], startedAt: '2026-08-22T03:00:00.000Z' },
+      cookingQueue: [{ id: 'q1', recipe: 'cook-lunch-rare', count: 1, bonus: [false] }],
+    });
+    check(busy, { type: 'cook', recipe: 'cook-lunch-rare', count: 1 });
+    check(busy, { type: 'cancelCook', id: 'c1' });
+    check(busy, { type: 'transmuteEnergy', from: 'common', count: 3 });
+  });
+
   it('import — 통째 교체도 델타로 표현된다', () => {
     const prev = seed({ bag: [mkInst('a')], gold: 10 });
     const save = { ...newState(), gold: 777, fame: 888 };

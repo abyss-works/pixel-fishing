@@ -1,30 +1,30 @@
-// 요리 탭 모델 — 레시피 표시값, 필요와 보유, 조리 가능 판정, 조리 상태 줄.
+// 요리 탭 모델 — 레시피 표시값, 필요와 보유, 조리 가능 판정, 조리 상태 줄과 대기열.
 // 조리 가능 여부는 게임 규칙(canCook)이, 보관함 수와 완성 수는 게임 규칙(cookStorageUsed, cookingProgress)이 정한다.
 // 이 모듈은 그 판정을 화면용 값으로 옮기고, 규칙의 매개변수(수량, 대기, 지속, 효과 값)는 콘텐츠 표에서 읽는다.
-import { COOK_EFFECT_KEYS, COOK_KIND_RULES, COOK_STORAGE_CAP, ENERGY_ITEM_IDS, RECIPES, recipeCostStored } from '../../../game/content/cooking';
+import {
+  COOK_EFFECT_KEYS, COOK_STORAGE_CAP, ENERGY_ITEM_IDS, RECIPES, formatEnergy, recipeById, recipeCostStored, recipeWaitMs,
+} from '../../../game/content/cooking';
 import type { CookKind, Recipe } from '../../../game/content/cooking';
 import { DISPLAY_GRADE, RARITY, RARITY_ORDER, displayGradeRank } from '../../../game/content/rarity';
 import type { DisplayGradeId, RarityId } from '../../../game/content/rarity';
-import { canCook, cookingProgress, cookStorageUsed, settleCooking, slotDurationMs } from '../../../game/rules/cooking';
+import { canCook, cookRefundOf, cookingProgress, cookStorageUsed, settleCooking, slotDurationMs } from '../../../game/rules/cooking';
 import { achievementBonusesOf } from '../../../game/rules/achievements';
 import { extraCookChance } from '../../../game/rules/artifactLevel';
 import type { GameState } from '../../../game/rules/logic';
 import type { RuleCheck } from '../../../game/rules/rules';
 import { gradeName } from '../../../shared/lib/gradeName';
+import { energyLabel } from './energy';
 
 const MIN_MS = 60_000;
 
-/** 미끼의 표시 등급 — 등급 가중 효과가 가중하는 가장 낮은 등급이고, 등급 가중이 아닌 효과의 미끼는 특수다. 도시락은 null이다 */
-export function recipeGrade(recipe: Recipe): DisplayGradeId | null {
-  if (recipe.kind !== 'bait') return null;
-  const weighted = recipe.effects.rarityWeight?.grades[0];
-  if (weighted !== undefined) return weighted;
-  return recipe.effects.mutationWeight !== undefined || recipe.effects.nightUnlock === true ? 'special' : null;
+/** 레시피의 표시 등급 — 도시락과 미끼 모두 콘텐츠 정본의 등급을 따른다 */
+export function recipeGrade(recipe: Recipe): DisplayGradeId {
+  return recipe.grade;
 }
 
-/** 그 종류의 부엌 레시피 — 등급이 있으면 등급순(특수는 뒤), 같은 등급과 등급이 없는 것은 콘텐츠 순서대로 */
+/** 그 종류의 부엌 레시피 — 등급순(특수는 뒤), 같은 등급은 콘텐츠 순서대로 */
 export function recipesOfKind(kind: CookKind): Recipe[] {
-  const rank = (r: Recipe): number => { const g = recipeGrade(r); return g === null ? -1 : displayGradeRank(g); };
+  const rank = (r: Recipe): number => displayGradeRank(recipeGrade(r));
   return RECIPES.filter(r => r.kind === kind).sort((a, b) => rank(a) - rank(b));
 }
 
@@ -91,9 +91,11 @@ export function recipeEffectLines(recipe: Recipe): RecipeEffectLine[] {
 export interface RecipeCostRow { grade: RarityId; need: number; have: number; short: boolean }
 export interface RecipeUnitCost { grade: RarityId; per: number; short: boolean }
 
+export type CookRunMode = 'instant' | 'start' | 'queue';
+
 export interface RecipeView {
   recipe: Recipe;
-  grade: DisplayGradeId | null;
+  grade: DisplayGradeId;
   /** 이름과 표시 등급 - 괄호만 등급색으로 칠하는 화면용 */
   title: RecipeTitle;
   /** 가진 완성품 수 */
@@ -109,6 +111,10 @@ export interface RecipeView {
   maxCount: number;
   /** 조리 시작 판정 — 게임 규칙의 판정 그대로 */
   check: RuleCheck;
+  /** 조리 버튼 실행 방식 — 즉시 완성 / 조리 시작 / 대기열 추가 */
+  mode: CookRunMode;
+  /** 1개 제작 대기 시간(ms) */
+  unitWaitMs: number;
   /** 고른 수량의 조리 시간(ms) */
   waitMs: number;
   /** 먹거나 쓴 뒤 슬롯 효과가 이어지는 시간(ms) */
@@ -123,7 +129,8 @@ export function selectRecipeView(game: GameState, recipe: Recipe, requested: num
   const count = maxCount === 0 ? 0 : Math.min(maxCount, Math.max(1, Math.floor(requested)));
   const have = (grade: RarityId): number => settled.items[ENERGY_ITEM_IDS[grade]] ?? 0;
   const needed = RARITY_ORDER.filter(g => recipeCostStored(recipe, g) > 0);
-  const rules = COOK_KIND_RULES[recipe.kind];
+  const unitWaitMs = recipeWaitMs(recipe);
+  const mode: CookRunMode = unitWaitMs === 0 ? 'instant' : settled.cooking !== null ? 'queue' : 'start';
   return {
     recipe, grade: recipeGrade(recipe), title: recipeTitle(recipe), owned: settled.items[recipe.id] ?? 0,
     effects: recipeEffectLines(recipe),
@@ -138,29 +145,124 @@ export function selectRecipeView(game: GameState, recipe: Recipe, requested: num
     count, maxCount,
     // 수량 0(보관함 가득)도 이유는 보관함이라, 판정은 최소 1개로 묻는다
     check: canCook(game, recipe.id, Math.max(1, count), now),
-    waitMs: rules.waitMs * count, slotMs: slotDurationMs(recipe, game),
+    mode,
+    unitWaitMs,
+    waitMs: unitWaitMs * count,
+    slotMs: slotDurationMs(recipe, game),
     extraChance: extraCookChance(game, achievementBonusesOf(game).artifactBoost),
   };
 }
 
+export interface KitchenRefundLine {
+  grade: RarityId;
+  label: string;
+  amountText: string;
+  stored: number;
+}
+
+export interface KitchenQueueEntry {
+  id: string;
+  recipe: Recipe;
+  title: RecipeTitle;
+  label: string;
+  completed: number;
+  count: number;
+  pending: number;
+  estimatedMin: number;
+  isCurrent: boolean;
+  refundLines: KitchenRefundLine[];
+}
+
 export interface KitchenStatus {
   /** 조리 중인 것. 모두 완성됐거나 조리하지 않으면 null */
-  cooking: { recipe: Recipe; title: RecipeTitle; completed: number; count: number; nextInMin: number } | null;
-  /** 보관함 수 — 완성한 요리와 조리 중인 수량 */
+  cooking: { id: string; recipe: Recipe; title: RecipeTitle; completed: number; count: number; nextInMin: number } | null;
+  /** 현재 조리와 대기 중인 작업 목록 */
+  queue: KitchenQueueEntry[];
+  queueCount: number;
+  /** 보관함 수 — 완성한 요리와 조리 중·대기열 수량의 합 */
   stored: number;
   cap: number;
   full: boolean;
 }
 
+function buildRefundLines(recipe: Recipe, pending: number): KitchenRefundLine[] {
+  const refund = cookRefundOf(recipe, pending);
+  return RARITY_ORDER
+    .filter(grade => refund[grade] > 0)
+    .map(grade => ({
+      grade,
+      label: energyLabel(grade),
+      amountText: formatEnergy(refund[grade]),
+      stored: refund[grade],
+    }));
+}
+
 export function selectKitchenStatus(game: GameState, now: string): KitchenStatus {
-  const progress = cookingProgress(game, now);
-  const stored = cookStorageUsed(settleCooking(game, now));
-  const running = progress !== null && progress.nextAt !== null ? progress : null;
+  const settled = settleCooking(game, now);
+  const stored = cookStorageUsed(settled);
+  const rawProgress = cookingProgress(game, now);
+  const settledProgress = cookingProgress(settled, now);
+
+  const activeProgress = rawProgress && rawProgress.pending > 0
+    ? rawProgress
+    : settledProgress && settledProgress.pending > 0
+      ? settledProgress
+      : null;
+  const waitingItems = rawProgress && rawProgress.pending > 0
+    ? (game.cookingQueue ?? [])
+    : settled.cookingQueue;
+
+  const nowMs = Date.parse(now);
+  const queue: KitchenQueueEntry[] = [];
+  let cursorMs = nowMs;
+
+  if (activeProgress && activeProgress.nextAt !== null) {
+    cursorMs = Date.parse(activeProgress.finishAt);
+    queue.push({
+      id: activeProgress.id,
+      recipe: activeProgress.recipe,
+      title: recipeTitle(activeProgress.recipe),
+      label: recipeLabel(activeProgress.recipe),
+      completed: activeProgress.completed,
+      count: activeProgress.count,
+      pending: activeProgress.pending,
+      estimatedMin: Math.max(1, Math.ceil((cursorMs - nowMs) / MIN_MS)),
+      isCurrent: true,
+      refundLines: buildRefundLines(activeProgress.recipe, activeProgress.pending),
+    });
+  }
+
+  for (const item of waitingItems) {
+    const recipe = recipeById(item.recipe);
+    if (!recipe) continue;
+    cursorMs += item.count * recipeWaitMs(recipe);
+    queue.push({
+      id: item.id,
+      recipe,
+      title: recipeTitle(recipe),
+      label: recipeLabel(recipe),
+      completed: 0,
+      count: item.count,
+      pending: item.count,
+      estimatedMin: Math.max(1, Math.ceil((cursorMs - nowMs) / MIN_MS)),
+      isCurrent: false,
+      refundLines: buildRefundLines(recipe, item.count),
+    });
+  }
+
   return {
-    cooking: running && running.nextAt !== null ? {
-      recipe: running.recipe, title: recipeTitle(running.recipe), completed: running.completed, count: running.count,
-      nextInMin: Math.max(1, Math.ceil((Date.parse(running.nextAt) - Date.parse(now)) / MIN_MS)),
+    cooking: activeProgress && activeProgress.nextAt !== null ? {
+      id: activeProgress.id,
+      recipe: activeProgress.recipe,
+      title: recipeTitle(activeProgress.recipe),
+      completed: activeProgress.completed,
+      count: activeProgress.count,
+      nextInMin: Math.max(1, Math.ceil((Date.parse(activeProgress.nextAt) - nowMs) / MIN_MS)),
     } : null,
-    stored, cap: COOK_STORAGE_CAP, full: stored >= COOK_STORAGE_CAP,
+    queue,
+    queueCount: queue.length,
+    stored,
+    cap: COOK_STORAGE_CAP,
+    full: stored >= COOK_STORAGE_CAP,
   };
 }
