@@ -17,15 +17,17 @@ describe('Modal 층', () => {
     ['app', false, 'z-(--z-blocker)'],
     ['stage', true, 'z-(--z-stage-modal)'],
     ['stage', false, 'z-(--z-stage-modal)'],
+    ['devtools', true, 'z-(--z-devtools)'],
   ] as const)('%s 창 closable=%s의 바탕은 %s 층이다', (layer, closable, token) => {
     render(<Modal layer={layer} closable={closable} onClose={() => {}}>본문</Modal>);
     expect(backdropOf().className).toContain(token);
-    const other = ['z-(--z-app-modal)', 'z-(--z-stage-modal)', 'z-(--z-blocker)'].filter(t => t !== token);
+    const other = ['z-(--z-app-modal)', 'z-(--z-stage-modal)', 'z-(--z-blocker)', 'z-(--z-devtools)'].filter(t => t !== token);
     for (const t of other) expect(backdropOf().className).not.toContain(t);
   });
 
   it.each([
     ['app', 'fixed inset-0'],
+    ['devtools', 'fixed inset-0'],
     ['stage', 'absolute inset-0'],
   ] as const)('%s 창의 바탕은 화면을 덮는 위치와 반투명 어두운 배경을 갖는다', (layer, cover) => {
     render(<Modal layer={layer} onClose={() => {}}>본문</Modal>);
@@ -63,6 +65,20 @@ describe('Modal 창 층 자리', () => {
     const release = windowHostRef(host);
     render(<div data-testid="outside"><Modal layer="stage" onClose={() => {}}>본문</Modal></div>);
     expect(screen.getByTestId('outside')).toContainElement(screen.getByRole('dialog'));
+    act(() => release?.());
+    host.remove();
+  });
+
+  it('개발 도구 창은 windowHost와 부모 틀 밖의 document.body에 그리고 devtools 층을 쓴다', () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const release = windowHostRef(host);
+    render(<div data-testid="devtools-panel"><Modal layer="devtools" onClose={() => {}}>본문</Modal></div>);
+    const dialog = screen.getByRole('dialog');
+    expect(document.body).toContainElement(dialog);
+    expect(screen.getByTestId('devtools-panel')).not.toContainElement(dialog);
+    expect(host).not.toContainElement(dialog);
+    expect(backdropOf().className).toContain('z-(--z-devtools)');
     act(() => release?.());
     host.remove();
   });
