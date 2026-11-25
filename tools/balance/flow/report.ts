@@ -209,7 +209,7 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
   --sell <N>         effects: 판매가 증가 %(-100 초과). 기본 0
   --named <N>        effects: 네임드 조우 가중치 증가 %(0 이상). 수입은 그대로이고 조우 기대 시간만 변한다. 네임드 의뢰가 있고 출현 해역이 맞는 해역만 낸다. 기본 0
   --zone <id>        effects: 특정 구역(village, pacific, seasia, indian, madagascar, southatlantic) 또는 개별 해역 id로 효과를 한정하고 해당 해역 단면만 출력한다
-  --artifacts [목록] effects: 보유 유물 효과를 합산(1±합 1회 적용)해 비교한다. 값 생략 또는 all은 전 유물 Lv1, max는 레벨 유물 Lv5, 또는 유물id[:레벨] 쉼표 구분(예: outer-isle-sinker:5,elder-scale:5)
+  --artifacts [목록] effects: 보유 유물 효과를 합산(1±합 1회 적용)해 비교한다. 값 생략 또는 all은 레벨 유물 Lv1·전설 유물 Lv5, max는 전 유물 Lv5, 또는 유물id[:레벨] 쉼표 구분(예: outer-isle-sinker:5,elder-scale:5)
   --artifact-boost <N>  effects: 보유 유물 수치 효과 증가 %(0 이상). --artifacts와 함께 쓴다
   --counter-bonus <파일>  transition, days, gates, dist: 카운터 임계점 연동 보너스 JSON 파일 경로. 진행 중 카운터 누적에 따라 임계점을 넘은 보너스를 동적으로 누적 합산한다
   --margin <N>       effects: 해역 진입 레벨에 더하는 낚싯대 레벨(-4 이상 정수). 기본 0, 여유 스펙은 4. 음수면 레벨 1 미만이 되는 해역은 건너뛰고 조기 진입 비교 표를 더한다

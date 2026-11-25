@@ -2,10 +2,11 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
+import { ARTIFACT_MAX_LEVEL } from '../../../src/game/content/artifacts';
 import { FISH } from '../../../src/game/content/fish';
 import { SPOTS } from '../../../src/game/content/spots';
 import { rng } from '../model';
-import { loadCounterBonus, parseCounterBonus } from './counterBonus';
+import { createCounterBonusTracker, loadCounterBonus, parseCounterBonus } from './counterBonus';
 import type { CounterBonusConfig } from './counterBonus';
 import { effectPlan } from './cooking';
 import { daysReport } from './days';
@@ -74,6 +75,23 @@ describe('카운터 보너스 JSON 스키마 검증', () => {
     });
     const cfg = loadCounterBonus(file);
     expect(cfg.rules[0].counter).toBe('catch.auto');
+  });
+
+  it('전설 유물은 문자열과 객체 모두 최고 레벨(Lv5) 고정으로 검증·반영한다', () => {
+    const rule = [{ counter: 'maxArtifact', thresholds: [1], effects: [{ bite: 0.05 }] }];
+    const fromStr = parseCounterBonus({ artifacts: 'mami-wata-mirror', rules: rule });
+    expect(fromStr.artifacts).toEqual({ 'mami-wata-mirror': ARTIFACT_MAX_LEVEL });
+
+    const fromObj = parseCounterBonus({ artifacts: { 'mami-wata-mirror': ARTIFACT_MAX_LEVEL }, rules: rule });
+    expect(fromObj.artifacts).toEqual({ 'mami-wata-mirror': ARTIFACT_MAX_LEVEL });
+
+    expect(() => parseCounterBonus({ artifacts: 'mami-wata-mirror:1', rules: rule })).toThrow(/Lv5 고정/);
+    expect(() => parseCounterBonus({ artifacts: { 'mami-wata-mirror': 1 }, rules: rule })).toThrow(/Lv5 고정/);
+    expect(() => parseCounterBonus({ artifacts: { 'mami-wata-mirror': 3 }, rules: rule })).toThrow(/Lv5 고정/);
+
+    const tracker = createCounterBonusTracker(fromObj);
+    expect(tracker.evaluate(0, 'sea')).toBe(true);
+    expect(tracker.unlocks).toHaveLength(1);
   });
 });
 
