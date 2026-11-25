@@ -1,4 +1,4 @@
-// 약관과 개인정보 처리방침의 수락 기록 저장 모듈 — 계정, 문서, 판마다 한 행(consent_records)을 쓰고 읽는다.
+// 이용약관의 수락 기록 저장 모듈 — 계정, 문서, 판마다 한 행(consent_records)을 쓰고 읽는다.
 import { sql } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
 import { CONSENT_DOCUMENTS, consentInEffect, consentRequired } from '../_auth/consentPolicy.js';
@@ -6,7 +6,7 @@ import type { ConsentChannel, ConsentPolicy } from '../_auth/consentPolicy.js';
 import type { SessionUser } from '../_auth/session.js';
 
 /**
- * 그 계정이 그 판의 약관과 처리방침을 수락한 것으로 기록한다. 두 문서를 한 문장으로 쓰므로 한쪽만 남지 않는다.
+ * 그 계정이 그 판의 수락 대상 문서를 수락한 것으로 기록한다.
  * 만 14세 이상 확인은 두 수락 경로 모두 참으로 받는다. 이미 같은 판의 기록이 있으면 새로 쓰지 않는다.
  */
 export async function recordConsent(db: Executor, uid: string, version: string, channel: ConsentChannel): Promise<void> {

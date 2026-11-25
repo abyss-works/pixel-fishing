@@ -3,10 +3,10 @@ import { readFileSync } from 'node:fs';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { LEGAL_PATHS } from '../../src/features/account/model/googleFlow.js';
 import { consentGate } from './consentGate.js';
-import { legalPages } from './legalPages.js';
+import { LEGAL_DISPLAY_DATE, legalDisplayDate, legalPages } from './legalPages.js';
 
 // 정적 폴더에는 문서 파일이 없고 스타일 파일만 있다
 const publicDir = fileURLToPath(new URL('../../public/', import.meta.url));
@@ -14,10 +14,12 @@ const publicDir = fileURLToPath(new URL('../../public/', import.meta.url));
 let server: Server;
 let base: string;
 const savedDate = process.env.CONSENT_EFFECTIVE_DATE;
+const savedDisplayDate = process.env.LEGAL_DISPLAY_DATE;
 
 beforeAll(async () => {
-  // 시행일을 과거로 둬 약관 수락 게이트가 켜진 상태에서 확인한다. 게이트는 서버 진입점처럼 /api에만 마운트한다
-  process.env.CONSENT_EFFECTIVE_DATE = '2020-01-01';
+  // 수락 게이트 시행일을 미래로 두고 공개 표시일은 기본(2026-11-25)으로 분리되는지 함께 확인한다. 게이트는 /api에만 마운트한다
+  process.env.CONSENT_EFFECTIVE_DATE = '2099-12-31';
+  delete process.env.LEGAL_DISPLAY_DATE;
   const app = express();
   app.use('/api', consentGate());
   app.use(legalPages());
@@ -32,7 +34,14 @@ beforeAll(async () => {
 afterAll(async () => {
   if (savedDate === undefined) delete process.env.CONSENT_EFFECTIVE_DATE;
   else process.env.CONSENT_EFFECTIVE_DATE = savedDate;
+  if (savedDisplayDate === undefined) delete process.env.LEGAL_DISPLAY_DATE;
+  else process.env.LEGAL_DISPLAY_DATE = savedDisplayDate;
   await new Promise<void>(resolve => { server.close(() => resolve()); });
+});
+
+afterEach(() => {
+  if (savedDisplayDate === undefined) delete process.env.LEGAL_DISPLAY_DATE;
+  else process.env.LEGAL_DISPLAY_DATE = savedDisplayDate;
 });
 
 describe('공개 문서 제공', () => {
@@ -58,18 +67,27 @@ describe('공개 문서 제공', () => {
     expect(maxAge).toBeLessThanOrEqual(3600);
   });
 
-  it.each(['/terms', '/privacy', '/policy'])('%s의 머리에 서버의 현재 판이 들어가고 토큰이 남지 않는다', async (path) => {
+  it.each(['/terms', '/privacy', '/policy'])('%s의 머리에 공개 문서 표시일(LEGAL_DISPLAY_DATE)이 들어가고 토큰과 수락 게이트 시행일은 들어가지 않는다', async (path) => {
     const html = await (await fetch(base + path)).text();
-    expect(html).toContain('<p class="edition">시행일(판): 2020-01-01</p>');
+    expect(html).toContain(`<p class="edition">시행일(판): ${LEGAL_DISPLAY_DATE}</p>`);
+    expect(html).not.toContain('2099-12-31');
     expect(html).not.toContain('{{');
   });
 
-  it('이용약관 부칙의 시행일도 현재 판이다', async () => {
-    expect(await (await fetch(`${base}/terms`)).text()).toContain('<li>이 약관은 2020-01-01부터 시행합니다.</li>');
+  it('이용약관 부칙의 시행일도 공개 문서 표시일이다', async () => {
+    expect(await (await fetch(`${base}/terms`)).text()).toContain(`<li>이 약관은 ${LEGAL_DISPLAY_DATE}부터 시행합니다.</li>`);
+  });
+
+  it('LEGAL_DISPLAY_DATE 환경 변수가 있으면 유효성을 검증해 우선 적용하고, 잘못된 날짜면 500 server-config로 실패한다', () => {
+    expect(legalDisplayDate(undefined)).toBe('2026-11-25');
+    expect(legalDisplayDate('2026-12-01')).toBe('2026-12-01');
+    for (const bad of ['', 'soon', '2026-02-30', '2026/11/25']) {
+      expect(() => legalDisplayDate(bad)).toThrowError(expect.objectContaining({ status: 500, code: 'server-config' }));
+    }
   });
 
   it('판이 없는 소개 문서는 그대로 낸다', async () => {
-    expect(await (await fetch(`${base}/about`)).text()).not.toContain('2020-01-01');
+    expect(await (await fetch(`${base}/about`)).text()).not.toContain(LEGAL_DISPLAY_DATE);
   });
 
   it.each(['/about', '/terms', '/privacy', '/policy'])('/api에만 게이트를 마운트한 앱에서 시행일이 지난 뒤 수락하지 않은 계정의 세션 쿠키로도 %s가 200이고 쿠키를 만들지 않는다', async (path) => {

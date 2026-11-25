@@ -10,6 +10,7 @@ import type { Executor } from './_db/client.js';
 import { deleteSavesByIds, savesByIds, savesMetaPage } from './_data/save.js';
 import { inStage } from './cronFailure.js';
 import { countEventsBefore, deleteEventsUpTo, eventsBefore } from './_data/telemetry.js';
+import type { EventArchiveRow } from './_data/telemetry.js';
 
 export interface ColdArchiveEnv {
   db: Executor;
@@ -34,6 +35,22 @@ const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 const sha256hex = (buf: Buffer | string) => createHash('sha256').update(buf).digest('hex');
 const stamp = () => new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + 'Z';
 const toJsonl = (rows: unknown[]) => rows.map(r => JSON.stringify(r)).join('\n') + '\n';
+
+/** 이벤트 아카이브 행에서 user_id와 관리자 식별자(payload.adminId)를 제거한다 */
+function deidentifyEvent(row: EventArchiveRow): Omit<EventArchiveRow, 'user_id'> {
+  const { user_id: _uid, ...rest } = row;
+  if (rest.payload && typeof rest.payload === 'object' && !Array.isArray(rest.payload) && 'adminId' in rest.payload) {
+    const { adminId: _adminId, ...cleanPayload } = rest.payload as Record<string, unknown>;
+    return { ...rest, payload: cleanPayload };
+  }
+  return rest;
+}
+
+/** 스냅샷 아카이브 행에서 user_id를 제거한다 */
+function deidentifySave(row: Record<string, unknown>): Record<string, unknown> {
+  const { user_id: _uid, ...rest } = row;
+  return rest;
+}
 
 /** 컷오프 = now − days (ISO) */
 export function cutoffIso(days: number, now: Date): string {
@@ -177,7 +194,7 @@ async function openStager(tmpDir: string, key: string) {
   };
 }
 
-// ---------- events: 단일 패스(id 오름차순) → 스테이징 → 업로드 검증 → 범위 DELETE ----------
+// ---------- events: 단일 패스(id 오름차순, letter 제외·비식별화) → 스테이징 → 업로드 검증 → 범위 DELETE ----------
 async function archiveEvents(env: ColdArchiveEnv, cutoff: string): Promise<TableResult> {
   const date = cutoff.slice(0, 10);
   const tmpKey = `${env.r2Prefix}/events/created_lt_${date}/_tmp_${stamp()}.jsonl.gz`;
@@ -185,19 +202,27 @@ async function archiveEvents(env: ColdArchiveEnv, cutoff: string): Promise<Table
   console.log(`events 대상 약 ${est} rows`);
   const st = await inStage('events-stage-file', () => openStager(env.tmpDir, tmpKey));
   try {
-    let lastId = 0, minId: number | null = null, maxId = 0, n = 0;
+    let lastId = 0, minId: number | null = null, maxId = 0, n = 0, scanned = 0;
     await inStage('events-scan', async () => {
       for (;;) {
         const data = await eventsBefore(env.db, cutoff, lastId, BATCH);
         if (data.length === 0) break;
-        st.write(data);
-        minId ??= Number(data[0].id);
+        scanned += data.length;
         maxId = Number(data[data.length - 1].id);
         lastId = maxId;
-        n += data.length;
+        const exportRows = data.filter(r => r.type !== 'letter').map(deidentifyEvent);
+        if (exportRows.length > 0) {
+          st.write(exportRows);
+          minId ??= Number(exportRows[0].id);
+          n += exportRows.length;
+        }
       }
     });
-    if (n === 0) return { rows: 0, r2Key: null };
+    if (scanned === 0) return { rows: 0, r2Key: null };
+    if (n === 0) {
+      await inStage('events-delete', () => deleteEventsUpTo(env.db, maxId, cutoff));
+      return { rows: 0, r2Key: null };
+    }
     const key = `${env.r2Prefix}/events/created_lt_${date}/${stamp()}_ids_${minId}-${maxId}_n${n}.jsonl.gz`;
     const { raw, gz } = await inStage('events-stage-file', async () => {
       const staged = await st.finish();
@@ -216,8 +241,8 @@ async function archiveEvents(env: ColdArchiveEnv, cutoff: string): Promise<Table
       await r2put(env, key + '.manifest.json', Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
     });
     const deleted = await inStage('events-delete', () => deleteEventsUpTo(env.db, maxId, cutoff));
-    if (deleted !== n) {
-      console.log(`events delete ${deleted} != archived ${n} — R2에 전량 있으므로 유실 없음`);
+    if (deleted !== scanned) {
+      console.log(`events delete ${deleted} != scanned ${scanned} — R2에 비식별 대상 전량 있으므로 유실 없음`);
     }
     return { rows: n, r2Key: key };
   } finally {
@@ -245,7 +270,8 @@ async function archiveSaves(env: ColdArchiveEnv, cutoff: string): Promise<TableR
   try {
     await inStage('saves-fetch', async () => {
       for (let i = 0; i < victims.length; i += SAVES_FETCH_CHUNK) {
-        st.write(await withRetry(() => savesByIds(env.db, victims.slice(i, i + SAVES_FETCH_CHUNK))));
+        const rows = await withRetry(() => savesByIds(env.db, victims.slice(i, i + SAVES_FETCH_CHUNK)));
+        st.write(rows.map(deidentifySave));
       }
     });
     const { raw, gz } = await inStage('saves-stage-file', () => st.finish());
