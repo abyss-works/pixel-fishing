@@ -163,11 +163,13 @@ export interface BountySnapshot {
   tickets: BountyTicketRow[];
 }
 
-/** 최근 운세 이력 — 서버 기준 오늘 게임 날짜, 오늘의 운세, 지난주 월요일 이후의 운세 목록(최신순) */
+/** 월별 운세 이력 — 조회 월(YYYY-MM), 최초 기록 월, 서버 기준 오늘 게임 날짜, 오늘의 운세, 해당 월의 일별 운세 목록(오름차순) */
 export interface FortuneHistory {
-  today: DailyFortune | null;
-  history: DailyFortune[];
+  month: string;
+  firstMonth: string | null;
   currentDay: string;
+  today: DailyFortune | null;
+  days: DailyFortune[];
 }
 
 // ---------- 관리자 읽기 API (서버 읽기 함수, 읽기 전용) ----------

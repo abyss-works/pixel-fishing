@@ -56,14 +56,18 @@ async function seed(opts: SeedOptions = {}): Promise<string> {
   return seedUser(env.client, { uid, email: `fortune-${nextUid}@example.test`, ...opts });
 }
 
-async function callHistory(token: string | null, method = 'GET'): Promise<{ status: number; body: unknown }> {
+async function callHistory(
+  token: string | null,
+  opts: { method?: string; month?: string } = {},
+): Promise<{ status: number; body: unknown }> {
   const out = { status: 0, body: undefined as unknown };
   const res = {
     setHeader() {},
     status(code: number) { out.status = code; return res; },
     json(b: unknown) { out.body = b; },
   };
-  await fortuneHandler({ method, headers: { ...sessionHeaders(token) } } as never, res as never);
+  const query = opts.month !== undefined ? { month: opts.month } : {};
+  await fortuneHandler({ method: opts.method ?? 'GET', query, headers: { ...sessionHeaders(token) } } as never, res as never);
   return out;
 }
 
@@ -136,14 +140,25 @@ describe('일일 운세 이력 기록 및 조회', () => {
     expect(await fortuneRows(uidSell)).toEqual([fSell!]);
   });
 
-  it('GET /api/fortune/history는 지난주 월요일 이후 이력을 최신순으로 돌려주고 이전 날짜는 제외한다', async () => {
+  it('GET /api/fortune/history는 월별 일일 운세(오름차순), 최초 기록 월, 오늘 운세를 돌려준다', async () => {
+    const emptyUid = await seed({ state: {} });
+    expect(await callHistory(userToken(emptyUid))).toEqual({
+      status: 200,
+      body: {
+        month: '2030-03',
+        firstMonth: null,
+        currentDay: '2030-03-06',
+        today: null,
+        days: [],
+      },
+    });
+
     const uid = await seed({ state: {} });
     const rows: DailyFortune[] = [
-      { day: '2030-02-23', kind: 'fish', index: 3 },   // 지난주 이전(제외)
-      { day: '2030-02-24', kind: 'gold', index: 5 },   // 지지난주 일요일(제외)
-      { day: '2030-02-25', kind: 'shadow', index: 3 }, // 지난주 월요일(포함 경계)
-      { day: '2030-03-03', kind: 'gold', index: 5 },   // 지난주 일요일(포함)
-      { day: '2030-03-04', kind: 'fish', index: 5 },   // 이번 주 월요일(포함)
+      { day: '2030-02-14', kind: 'shadow', index: 3 },
+      { day: '2030-02-28', kind: 'gold', index: 5 },
+      { day: '2030-03-01', kind: 'fish', index: 3 },
+      { day: '2030-03-04', kind: 'fish', index: 5 },
     ];
     for (const r of rows) {
       await env.client.query(
@@ -152,60 +167,107 @@ describe('일일 운세 이력 기록 및 조회', () => {
       );
     }
 
-    // 오늘 접속 전에는 today가 null이고 지난주 월요일 이후 이력만 최신순이다
-    const beforeBoot = await callHistory(userToken(uid));
-    expect(beforeBoot).toEqual({
+    // month 미지정 시 이번 달(2030-03)과 firstMonth(2030-02)를 돌려주며, 오늘 접속 전이면 today는 null이다
+    expect(await callHistory(userToken(uid))).toEqual({
       status: 200,
       body: {
-        today: null,
+        month: '2030-03',
+        firstMonth: '2030-02',
         currentDay: '2030-03-06',
-        history: [
+        today: null,
+        days: [
+          { day: '2030-03-01', kind: 'fish', index: 3 },
           { day: '2030-03-04', kind: 'fish', index: 5 },
-          { day: '2030-03-03', kind: 'gold', index: 5 },
-          { day: '2030-02-25', kind: 'shadow', index: 3 },
         ],
       },
     });
 
-    // 오늘 boot 후에는 today와 history 선두가 오늘 운세로 채워진다
+    // 오늘 boot 후 이전 달(2030-02)을 조회해도 today는 오늘(2030-03-06) 운세를 유지한다
     await callAction(userToken(uid), { type: 'boot' });
     const todayFortune = (await storedFortune(uid))!;
-    const afterBoot = await callHistory(userToken(uid));
-    expect(afterBoot).toEqual({
+    expect(await callHistory(userToken(uid), { month: '2030-02' })).toEqual({
       status: 200,
       body: {
-        today: todayFortune,
+        month: '2030-02',
+        firstMonth: '2030-02',
         currentDay: '2030-03-06',
-        history: [
-          todayFortune,
-          { day: '2030-03-04', kind: 'fish', index: 5 },
-          { day: '2030-03-03', kind: 'gold', index: 5 },
-          { day: '2030-02-25', kind: 'shadow', index: 3 },
+        today: todayFortune,
+        days: [
+          { day: '2030-02-14', kind: 'shadow', index: 3 },
+          { day: '2030-02-28', kind: 'gold', index: 5 },
         ],
+      },
+    });
+
+    // 기록이 없는 달 조회 시 days는 빈 배열이지만 firstMonth와 today는 유지된다
+    expect(await callHistory(userToken(uid), { month: '2030-01' })).toEqual({
+      status: 200,
+      body: {
+        month: '2030-01',
+        firstMonth: '2030-02',
+        currentDay: '2030-03-06',
+        today: todayFortune,
+        days: [],
       },
     });
   });
 
-  it('KST 04:00 게임 날짜 경계에 맞춰 currentDay와 주간 필터 범위를 계산한다', async () => {
+  it('12월 연도 경계 조회와 잘못된 month 쿼리 거부를 검증한다', async () => {
     const uid = await seed({ state: {} });
-    // KST 2030-03-05 03:59:59 → 게임 날짜 2030-03-04 (월요일), 지난주 월요일 2030-02-25
+    for (const r of [
+      { day: '2030-12-01', kind: 'fish', index: 3 },
+      { day: '2030-12-31', kind: 'gold', index: 5 },
+      { day: '2031-01-01', kind: 'shadow', index: 3 },
+    ] as const) {
+      await env.client.query(
+        'insert into public.daily_fortunes (user_id, day, kind, index) values ($1, $2, $3, $4)',
+        [uid, r.day, r.kind, r.index],
+      );
+    }
+
+    expect(await callHistory(userToken(uid), { month: '2030-12' })).toEqual({
+      status: 200,
+      body: {
+        month: '2030-12',
+        firstMonth: '2030-12',
+        currentDay: '2030-03-06',
+        today: null,
+        days: [
+          { day: '2030-12-01', kind: 'fish', index: 3 },
+          { day: '2030-12-31', kind: 'gold', index: 5 },
+        ],
+      },
+    });
+
+    for (const bad of ['', '2030-00', '2030-13', 'invalid']) {
+      expect(await callHistory(userToken(uid), { month: bad })).toEqual({
+        status: 400,
+        body: { error: 'bad-month' },
+      });
+    }
+  });
+
+  it('KST 04:00 게임 날짜 경계에 맞춰 currentDay와 월별 기본 조회를 계산한다', async () => {
+    const uid = await seed({ state: {} });
+    // KST 2030-03-05 03:59:59 → 게임 날짜 2030-03-04
     vi.setSystemTime(new Date('2030-03-04T18:59:59.000Z'));
     await callAction(userToken(uid), { type: 'boot' });
     const day4 = await callHistory(userToken(uid));
     expect(day4.status).toBe(200);
-    expect((day4.body as { currentDay: string; today: DailyFortune | null })).toMatchObject({
+    expect((day4.body as { month: string; currentDay: string; today: DailyFortune | null })).toMatchObject({
+      month: '2030-03',
       currentDay: '2030-03-04',
       today: { day: '2030-03-04' },
     });
 
-    // KST 2030-03-05 04:00:00 → 게임 날짜 2030-03-05 (화요일)
+    // KST 2030-03-05 04:00:00 → 게임 날짜 2030-03-05
     await rewind(uid);
     vi.setSystemTime(new Date('2030-03-04T19:00:00.000Z'));
     await callAction(userToken(uid), { type: 'boot' });
     const day5 = await callHistory(userToken(uid));
     expect(day5.status).toBe(200);
-    expect((day5.body as { currentDay: string; history: DailyFortune[] }).currentDay).toBe('2030-03-05');
-    expect((day5.body as { history: DailyFortune[] }).history.map(h => h.day)).toEqual(['2030-03-05', '2030-03-04']);
+    expect((day5.body as { currentDay: string; days: DailyFortune[] }).currentDay).toBe('2030-03-05');
+    expect((day5.body as { days: DailyFortune[] }).days.map(h => h.day)).toEqual(['2030-03-04', '2030-03-05']);
   });
 
   it('게스트는 boot·catch·sell을 실행해도 daily_fortunes에 기록되지 않고 조회는 403 account-only로 거부된다', async () => {

@@ -4,10 +4,11 @@ import { isCloud } from './auth';
 import type { FortuneHistory } from '../api/types';
 import { requestFailure } from './requestFailure';
 
-/** 로그인 계정의 오늘·이번 주·지난주 운세 이력을 읽는다 */
-export async function readFortuneHistory(): Promise<FortuneHistory | null> {
+/** 로그인 계정의 월별 운세 이력과 오늘 운세를 읽는다 */
+export async function readFortuneHistory(month?: string): Promise<FortuneHistory | null> {
   if (!isCloud) return null;
-  const res = await fetch('/api/fortune/history');
+  const url = month !== undefined ? `/api/fortune/history?month=${encodeURIComponent(month)}` : '/api/fortune/history';
+  const res = await fetch(url);
   if (!res.ok) throw requestFailure(res, 'fortune history read failed');
   return await res.json() as FortuneHistory;
 }
