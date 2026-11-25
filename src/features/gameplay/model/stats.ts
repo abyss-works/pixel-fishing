@@ -29,25 +29,34 @@ import type { RecipeEffectLine } from '../../kitchen/model/recipes';
 import { ALL_SLOT_KEYS, activeSlot } from '../../kitchen/model/slots';
 import type { SlotKey } from '../../kitchen/model/slots';
 
-/** 스탯 화면의 처음 수역 인덱스. 사거리 안의 어군 수역이 있으면 그 수역이고, 없으면 현재 구역(또는 지역)에서 요구 파워가 가장 높은 곳이다. */
+/** 스탯 화면의 처음 수역 인덱스. 사거리 안의 어군 수역이 있으면 그 수역이고, 없으면 현재 구역(또는 지역)에서 현재 파워와 배로 진입 가능한 수역 중 요구 파워가 가장 높은 곳을 고른다. 진입 가능한 곳이 없으면 범위 내 최저 요구 파워 수역으로 폴백한다. */
 export function selectInitialStatsSpotIndex(
   region: RegionId,
   current: SpotId | null = null,
   currentZone: ZoneId | null = null,
+  power = 0,
+  boat = 0,
 ): number {
   const here = current ? SPOTS.findIndex(spot => spot.id === current) : -1;
   if (here >= 0) return here;
   const targetTopZone = region === 'world' && currentZone && zoneById(currentZone) && zoneGroup(currentZone) === 'world'
     ? topZoneOf(currentZone)
     : null;
-  let best = -1;
+  let bestReachable = -1;
+  let lowestFallback = -1;
   SPOTS.forEach((spot, index) => {
     const inScope = targetTopZone
       ? topZoneOfSpot(spot.id) === targetTopZone
       : region === 'world' ? spot.region !== 'village' : spot.region === region;
-    if (inScope && (best < 0 || (spot.powerReq ?? 0) >= (SPOTS[best].powerReq ?? 0))) best = index;
+    if (!inScope) return;
+    const req = spot.powerReq ?? 0;
+    if (lowestFallback < 0 || req < (SPOTS[lowestFallback].powerReq ?? 0)) lowestFallback = index;
+    if (power >= req && boat >= spot.boatTier) {
+      if (bestReachable < 0 || req >= (SPOTS[bestReachable].powerReq ?? 0)) bestReachable = index;
+    }
   });
-  return best >= 0 ? best : 0;
+  if (bestReachable >= 0) return bestReachable;
+  return lowestFallback >= 0 ? lowestFallback : 0;
 }
 
 /** 선택 수역과 현재 세이브 상태에서 스탯 화면이 표시할 값을 조립한다. 입질 대기에는 now 기준으로 효과가 든 도시락의 단축을 싣는다. */

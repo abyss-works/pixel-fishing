@@ -13,27 +13,33 @@ const indexOf = (id: string) => SPOTS.findIndex(spot => spot.id === id);
 const rowOf = (g: GameState, id: string) => selectStatsSpotRows(g, 'sail').find(row => row.spot.id === id)!;
 
 describe('플레이 스탯 화면 데이터', () => {
-  it('현재 지역에서 요구 파워가 가장 높은 수역부터 시작한다', () => {
-    const index = selectInitialStatsSpotIndex('village');
-    const expected = SPOTS.map((spot, spotIndex) => ({ spot, spotIndex }))
-      .filter(({ spot }) => spot.region === 'village')
-      .sort((a, b) => (a.spot.powerReq ?? 0) - (b.spot.powerReq ?? 0))
-      .at(-1)!;
-
-    expect(index).toBe(expected.spotIndex);
+  it('마을 거점처럼 해역을 특정할 수 없으면 파워와 배 조건을 채운 해역 중 요구 파워가 가장 높은 곳을 고르고, 없으면 최저 요구 파워 해역으로 폴백한다', () => {
+    expect(selectInitialStatsSpotIndex('village', null, 'village', 10, 0)).toBe(indexOf('pond'));
+    expect(selectInitialStatsSpotIndex('village', null, 'village', 20, 0)).toBe(indexOf('river'));
+    expect(selectInitialStatsSpotIndex('village', null, 'village', 0, 0)).toBe(indexOf('pond'));
   });
 
-  it('사거리 안의 어군 수역이 있으면 그 수역부터 시작한다', () => {
-    expect(selectInitialStatsSpotIndex('world', 'deep')).toBe(indexOf('deep'));
-    expect(selectInitialStatsSpotIndex('world', null)).toBe(selectInitialStatsSpotIndex('world'));
+  it('사거리 안의 어군 수역이 있으면 파워나 배가 모자라도 그 수역부터 시작한다', () => {
+    expect(selectInitialStatsSpotIndex('world', 'deep', 'pacific', 10, 0)).toBe(indexOf('deep'));
+    expect(selectInitialStatsSpotIndex('world', null, null, 350, 9)).toBe(selectInitialStatsSpotIndex('world', null, undefined, 350, 9));
   });
 
-  it('바다에서 어군 사거리 밖이면 현재 구역의 해역 중 요구 파워가 가장 높은 곳부터 시작한다', () => {
-    expect(selectInitialStatsSpotIndex('world', null, 'indian')).toBe(indexOf('southindian'));
-    expect(selectInitialStatsSpotIndex('world', null, 'southindian')).toBe(indexOf('southindian'));
-    expect(selectInitialStatsSpotIndex('world', null, 'madagascar')).toBe(indexOf('comorodeep'));
-    expect(selectInitialStatsSpotIndex('world', null, 'pacific')).toBe(indexOf('deep'));
-    expect(selectInitialStatsSpotIndex('world', null, 'village')).toBe(selectInitialStatsSpotIndex('world', null, null));
+  it('바다에서 어군 사거리 밖이면 현재 구역(또는 바다 전체)에서 진입 가능한 최고 해역을 고르고, 없으면 최저 요구 파워 해역으로 폴백한다', () => {
+    expect(selectInitialStatsSpotIndex('world', null, 'indian', 135, 5)).toBe(indexOf('indian'));
+    expect(selectInitialStatsSpotIndex('world', null, 'indian', 200, 5)).toBe(indexOf('indian'));
+    expect(selectInitialStatsSpotIndex('world', null, 'indian', 150, 6)).toBe(indexOf('indian'));
+    expect(selectInitialStatsSpotIndex('world', null, 'indian', 160, 6)).toBe(indexOf('southindian'));
+    expect(selectInitialStatsSpotIndex('world', null, 'indian', 10, 0)).toBe(indexOf('indian'));
+
+    expect(selectInitialStatsSpotIndex('world', null, 'madagascar', 210, 7)).toBe(indexOf('comorodeep'));
+    expect(selectInitialStatsSpotIndex('world', null, 'madagascar', 185, 7)).toBe(indexOf('mozstrait'));
+    expect(selectInitialStatsSpotIndex('world', null, 'pacific', 55, 2)).toBe(indexOf('deep'));
+    expect(selectInitialStatsSpotIndex('world', null, 'pacific', 10, 0)).toBe(indexOf('sea'));
+
+    expect(selectInitialStatsSpotIndex('world', null, null, 315, 5)).toBe(indexOf('indian'));
+    expect(selectInitialStatsSpotIndex('world', null, null, 315, 9)).toBe(indexOf('bermuda'));
+    expect(selectInitialStatsSpotIndex('world', null, null, 10, 0)).toBe(indexOf('sea'));
+    expect(selectInitialStatsSpotIndex('world', null, 'village', 10, 0)).toBe(indexOf('sea'));
   });
 
   it('선택한 수역 기준 스탯과 파워 상태를 구성한다', () => {

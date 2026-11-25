@@ -68,6 +68,27 @@ describe('StatsModal(스탯창)', () => {
     expect(screen.getByRole('tooltip')).toBeTruthy();
   });
 
+  it('스탯 창을 처음 열 때 현재 파워와 배로 진입 가능한 최고 해역을 고르고, 미달이면 최저 해역으로 폴백한다', () => {
+    render(<StatsModal game={game({ rod: 1, boat: 0 })} movement="walk" region="village" nickname="바다사나이" guild={null} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: '낚싯대' }));
+    expect(screen.getByRole('row', { name: /마을 연못/ })).toHaveAttribute('aria-selected', 'true');
+    cleanup();
+
+    render(<StatsModal game={game({ rod: 3, boat: 0 })} movement="walk" region="village" nickname="바다사나이" guild={null} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: '낚싯대' }));
+    expect(screen.getByRole('row', { name: /마을 강/ })).toHaveAttribute('aria-selected', 'true');
+    cleanup();
+
+    show(game({ rod: 1, boat: 0 }));
+    fireEvent.click(screen.getByRole('button', { name: '낚싯대' }));
+    expect(screen.getByRole('row', { name: /태평양 연안/ })).toHaveAttribute('aria-selected', 'true');
+    cleanup();
+
+    show(game({ rod: 31, boat: 6 }));
+    fireEvent.click(screen.getByRole('button', { name: '낚싯대' }));
+    expect(screen.getByRole('row', { name: /남인도양/ })).toHaveAttribute('aria-selected', 'true');
+  });
+
   it('낚싯대 탭에서 해역 행을 고르면 그 해역 기준의 수치를 보인다', () => {
     show(game({ boat: 9, rod: 7 }));
     fireEvent.click(screen.getByRole('button', { name: '낚싯대' }));

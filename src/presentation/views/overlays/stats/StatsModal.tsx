@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import type { GameState } from '../../../../game/rules/logic';
 import type { GuildEffects } from '../../../../game/rules/guild';
 import type { GuildBonusItem } from '../../../../features/guild/model/guild';
-import { powerHelpText } from '../../../../game/rules/stats';
+import { powerHelpText, rodPower } from '../../../../game/rules/stats';
 import type { Movement } from '../../../../game/rules/stats';
 import type { RegionId } from '../../../../game/content/places';
 import type { ZoneId } from '../../../../game/content/zones';
@@ -55,7 +55,7 @@ export default function StatsModal({ game, movement, region, nickname, guild, in
   const { spot: here, zone: currentZone } = useSpotState();
   const [tab, setTab] = useState<StatsTab>(initialTab);
   // 처음 해역은 창을 연 순간에 정한다 — 창이 떠 있는 동안 어군 사거리가 바뀌어도 고른 해역을 옮기지 않는다
-  const [start] = useState(() => selectInitialStatsSpotIndex(region, here, currentZone));
+  const [start] = useState(() => selectInitialStatsSpotIndex(region, here, currentZone, rodPower(game), game.boat));
   const [spotIndex, setSpotIndex] = useState(start);
   const rows = useMemo(() => selectStatsSpotRows(game, movement, now), [game, movement, now]);
   const selected = rows[spotIndex];
