@@ -253,6 +253,15 @@ describe('BagTab - 3서브탭, 보기 전환 아이콘, 하단 버튼', () => {
     expect(screen.queryByRole('button', { name: '도움말' })).toBeNull();
 
     const legendTrigger = screen.getByText('개체 표시');
+    expect(legendTrigger).toHaveAttribute('tabindex', '0');
+    fireEvent.focus(legendTrigger);
+    const focusLegendTip = screen.getByRole('tooltip');
+    expect(focusLegendTip).toHaveTextContent('개체 표시');
+    expect(focusLegendTip).toHaveTextContent('금색 왕관');
+    expect(focusLegendTip).toHaveTextContent('보라 반짝이');
+    expect(focusLegendTip.querySelector('.border-t')).not.toBeNull();
+    fireEvent.blur(legendTrigger);
+
     fireEvent.mouseEnter(legendTrigger);
     const legendTip = screen.getByRole('tooltip');
     expect(legendTip).toHaveTextContent('개체 표시');

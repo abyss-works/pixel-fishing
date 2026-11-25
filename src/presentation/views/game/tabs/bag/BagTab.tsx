@@ -291,7 +291,6 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
             <div className="flex items-center gap-1.5">
               {layout === 'list' && (
                 <Tip
-                  wraps
                   text={(
                     <TipCard
                       title="개체 표시"
