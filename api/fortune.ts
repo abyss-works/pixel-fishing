@@ -27,14 +27,16 @@ export function parseFortuneMonth(raw: unknown, currentDay: string): string | nu
   return raw;
 }
 
-/** YYYY-MM 월의 시작일(포함)과 다음 달 시작일(미포함)을 돌려준다 */
-export function fortuneMonthRange(month: string): { fromDay: string; toDay: string } {
+/** YYYY-MM 월의 시작일(포함)과 다음 달 시작일(미포함, 9999-12는 null)을 돌려준다 */
+export function fortuneMonthRange(month: string): { fromDay: string; toDay: string | null } {
   const year = Number(month.slice(0, 4));
   const m = Number(month.slice(5, 7));
+  const fromDay = `${month}-01`;
+  if (year === 9999 && m === 12) return { fromDay, toDay: null };
   const nextYear = m === 12 ? year + 1 : year;
   const nextMonth = m === 12 ? 1 : m + 1;
   return {
-    fromDay: `${month}-01`,
+    fromDay,
     toDay: `${String(nextYear).padStart(4, '0')}-${String(nextMonth).padStart(2, '0')}-01`,
   };
 }

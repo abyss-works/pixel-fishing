@@ -17,14 +17,17 @@ export async function recordDailyFortune(db: Executor, uid: string, fortune: Dai
     on conflict (user_id, day) do nothing`);
 }
 
-/** 지정 월 구간([fromDay, toDay))의 일별 운세(오름차순), 최초 기록 월, 오늘(currentDay) 운세를 조회한다 */
+/** 지정 월 구간([fromDay, toDay), 상한 null이면 9999-12-31 이하)의 일별 운세(오름차순), 최초 기록 월, 오늘(currentDay) 운세를 조회한다 */
 export async function loadFortuneMonth(
   db: Executor,
   uid: string,
   fromDay: string,
-  toDay: string,
+  toDay: string | null,
   currentDay: string,
 ): Promise<FortuneMonthData> {
+  const monthFilter = toDay === null
+    ? sql`day >= ${fromDay} and day <= '9999-12-31'`
+    : sql`day >= ${fromDay} and day < ${toDay}`;
   const { rows } = await db.execute<{
     first_month: string | null;
     today: DailyFortune | null;
@@ -36,7 +39,7 @@ export async function loadFortuneMonth(
       where user_id = ${uid} and day = ${currentDay}) as today,
     (select coalesce(json_agg(json_build_object('day', day, 'kind', kind, 'index', index) order by day asc), '[]')
       from public.daily_fortunes
-      where user_id = ${uid} and day >= ${fromDay} and day < ${toDay}) as days`);
+      where user_id = ${uid} and ${monthFilter}) as days`);
   const row = rows[0];
   return {
     firstMonth: row.first_month,
