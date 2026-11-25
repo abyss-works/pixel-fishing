@@ -1,14 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { DailyFortune } from '../../../game/rules/fortune';
 import {
-  FORTUNE_CALENDAR_NOTE,
   FORTUNE_EFFECT_TARGET_LABEL,
   FORTUNE_INDEX_LABEL,
   FORTUNE_KIND,
-  FORTUNE_MENU_GUIDE_NOTE,
   FORTUNE_PHRASE,
   FORTUNE_PIPS,
-  FORTUNE_RESET_NOTE,
   FORTUNE_SHORT_NAME,
   FORTUNE_SOURCE_HELP,
   FORTUNE_SOURCE_LABEL,
@@ -22,15 +19,12 @@ import {
   formatLuckMult,
   fortuneBonusText,
   fortuneBonusTip,
-  fortuneEffectNote,
   fortuneLuckMult,
   fortuneLuckMultText,
   fortuneModalRows,
   fortunePhrase,
-  fortuneSummaryRows,
   resolveSelectedFortuneDay,
   selectFortuneDayDetail,
-  selectFortuneMonthStats,
   selectTodayFortune,
   shiftFortuneMonth,
 } from './fortune';
@@ -40,15 +34,15 @@ const f = (kind: DailyFortune['kind'], index: DailyFortune['index'], day = '2026
 });
 
 describe('오늘의 운세 화면 모델', () => {
-  it('종류별 이름과 보너스 대상을 제공한다', () => {
-    expect(FORTUNE_KIND.fish).toEqual({ name: '풍어운', target: 'rarity', bonus: '희귀 이상 출현 확률' });
-    expect(FORTUNE_KIND.gold).toEqual({ name: '재물운', target: 'sell', bonus: '판매가' });
-    expect(FORTUNE_KIND.shadow).toEqual({ name: '그림자 운', target: 'named', bonus: '네임드 만날 확률' });
+  it('종류별 이름과 적용 대상을 제공한다', () => {
+    expect(FORTUNE_KIND.fish).toEqual({ name: '풍어운', target: 'rarity' });
+    expect(FORTUNE_KIND.gold).toEqual({ name: '재물운', target: 'sell' });
+    expect(FORTUNE_KIND.shadow).toEqual({ name: '그림자 운', target: 'named' });
     expect(FORTUNE_SOURCE_LABEL).toBe('오늘의 운세');
     expect(FORTUNE_PIPS).toBe(5);
   });
 
-  it('지수 3과 5의 등급 라벨과 운세 문구를 제공한다', () => {
+  it('강도 3과 5의 등급 라벨과 운세 문구를 제공한다', () => {
     expect(FORTUNE_INDEX_LABEL).toEqual({ 3: '적당한 운', 5: '좋은 운' });
     expect(FORTUNE_PHRASE.fish[3]).toBe(
       '물결이 맑아 찌 아래로 지나가는 비늘이 한결 또렷하다. 잔 고기 떼 사이로 보기 드문 고기의 입질이 간간이 섞여 든다.',
@@ -71,20 +65,6 @@ describe('오늘의 운세 화면 모델', () => {
     expect(fortunePhrase(f('gold', 5))).toBe(FORTUNE_PHRASE.gold[5]);
   });
 
-  it('모달 요약 표와 효과 안내 및 초기화 시각 안내를 만든다', () => {
-    expect(fortuneSummaryRows(f('fish', 5))).toEqual([
-      { label: '적용 대상', value: '희귀 이상 출현 확률' },
-      { label: '행운 효과', value: '+5%p', accent: true },
-    ]);
-    expect(fortuneSummaryRows(f('gold', 3))).toEqual([
-      { label: '적용 대상', value: '판매가' },
-      { label: '행운 효과', value: '+3%p', accent: true },
-    ]);
-    expect(fortuneEffectNote(f('fish', 5))).toBe('오늘 희귀 이상 출현 확률 행운 효과가 +5%p 올라요.');
-    expect(fortuneEffectNote(f('shadow', 3))).toBe('오늘 네임드 만날 확률 행운 효과가 +3%p 올라요.');
-    expect(FORTUNE_RESET_NOTE).toBe('새 운세는 하루마다 새로 뽑혀요.');
-  });
-
   it('스탯 창 보너스 탭의 효과 문구와 무수치 툴팁·출처 도움말을 만든다', () => {
     expect(fortuneLuckMult(f('fish', 3))).toBe(1.03);
     expect(fortuneLuckMult(f('gold', 5))).toBe(1.05);
@@ -99,24 +79,19 @@ describe('오늘의 운세 화면 모델', () => {
   it('모든 표시 문구에 금지 문자(가운뎃점·줄표)가 없다', () => {
     const texts: string[] = [
       FORTUNE_SOURCE_LABEL,
-      FORTUNE_RESET_NOTE,
-      FORTUNE_CALENDAR_NOTE,
-      FORTUNE_MENU_GUIDE_NOTE,
       FORTUNE_SOURCE_HELP,
       ...FORTUNE_WEEKDAYS,
       ...Object.values(FORTUNE_INDEX_LABEL),
     ];
     for (const kind of ['fish', 'gold', 'shadow'] as const) {
-      texts.push(FORTUNE_KIND[kind].name, FORTUNE_KIND[kind].bonus, FORTUNE_SHORT_NAME[kind], FORTUNE_EFFECT_TARGET_LABEL[kind]);
+      texts.push(FORTUNE_KIND[kind].name, FORTUNE_SHORT_NAME[kind], FORTUNE_EFFECT_TARGET_LABEL[kind]);
       for (const index of [3, 5] as const) {
         const sample = f(kind, index);
         texts.push(
           fortunePhrase(sample),
           fortuneBonusText(sample),
           fortuneBonusTip(sample),
-          fortuneEffectNote(sample),
           fortuneLuckMultText(sample),
-          ...fortuneSummaryRows(sample).flatMap(r => [r.label, r.value]),
           ...fortuneModalRows(sample).flatMap(r => [r.label, r.value]),
         );
       }
@@ -192,24 +167,6 @@ describe('운세 월간 달력 파생 로직', () => {
     expect(day26).toMatchObject({ kind: 'day', isToday: false, isFuture: true, fortune: null });
   });
 
-  it('월간 통계로 총 기록 일수와 종류별 횟수를 집계한다', () => {
-    const records: DailyFortune[] = [
-      f('fish', 3, '2026-11-01'),
-      f('fish', 5, '2026-11-02'),
-      f('gold', 3, '2026-11-03'),
-      f('shadow', 5, '2026-11-04'),
-      f('shadow', 3, '2026-11-05'),
-    ];
-    expect(selectFortuneMonthStats(records)).toEqual({
-      total: 5,
-      byKind: { fish: 2, gold: 1, shadow: 2 },
-    });
-    expect(selectFortuneMonthStats([])).toEqual({
-      total: 0,
-      byKind: { fish: 0, gold: 0, shadow: 0 },
-    });
-  });
-
   it('선택 날짜 기본값과 상세 정보를 파생한다', () => {
     const records: DailyFortune[] = [
       f('gold', 3, '2026-10-12'),
@@ -245,10 +202,5 @@ describe('운세 월간 달력 파생 로직', () => {
       fortune: null,
     });
     expect(selectFortuneDayDetail(null, records, '2026-11-25')).toBeNull();
-  });
-
-  it('달력 안내 문구가 규칙 문구 기준을 지키고 금지 표현을 쓰지 않는다', () => {
-    expect(FORTUNE_CALENDAR_NOTE).toContain('매일 새벽');
-    expect(FORTUNE_CALENDAR_NOTE).not.toMatch(/4시|한국 시간 새벽/);
   });
 });

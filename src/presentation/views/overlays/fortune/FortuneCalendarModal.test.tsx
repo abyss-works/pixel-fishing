@@ -67,50 +67,86 @@ describe('운세 월간 달력 창 (FortuneCalendarModal)', () => {
 
   afterEach(() => cleanup());
 
-  it('오늘의 운세 요약, 월간 달력 격자, 월간 통계, 선택 날짜 상세를 표시하고 날짜를 바꾸면 상세가 갱신된다', async () => {
+  it('좌우 2단 고정 레이아웃으로 오늘의 운세 미니 카드, 6행 달력, 선택 날짜 상세를 표시하고 월간 통계·중첩 스크롤·구형 표기를 쓰지 않는다', async () => {
     apiMock.readFortuneHistory.mockResolvedValue(NOV_HISTORY);
     renderWithQuery(
       <FortuneCalendarModal gameFortune={NOV_HISTORY.today} accountState="account" onClose={vi.fn()} />,
     );
 
     await waitFor(() => expect(screen.getByRole('region', { name: '2026년 11월 운세 달력' })).toBeInTheDocument());
-    expect(screen.getByText('오늘의 풍어운')).toBeInTheDocument();
 
-    const stats = screen.getByLabelText('월간 운세 집계');
-    expect(within(stats).getByText('4일')).toBeInTheDocument();
-    expect(within(stats).getByText('2회')).toBeInTheDocument();
-    expect(within(stats).getAllByText('1회')).toHaveLength(2);
+    const dialog = screen.getByRole('dialog', { name: '운세' });
+    expect(dialog.className).toContain('h-[min(500px,calc(100%-32px))]');
+    expect(dialog.className).toContain('mobile:h-[min(552px,calc(100%-48px))]');
+    expect(dialog.firstElementChild).toHaveClass('flex-1');
+    expect(dialog.querySelector('.pf-vscroll')).toBeNull();
+
+    // 오늘의 운세 미니 카드 (상단 중복 TodayFortuneBanner 없음)
+    const todayCard = screen.getByLabelText('오늘의 운세 요약');
+    expect(within(todayCard).getByText('오늘의 운세')).toBeInTheDocument();
+    expect(within(todayCard).getByText('풍어운')).toBeInTheDocument();
+    expect(within(todayCard).getByText('좋은 운')).toBeInTheDocument();
+    expect(within(todayCard).getByText('×1.05')).toBeInTheDocument();
+    expect(screen.queryByText('오늘의 풍어운')).toBeNull();
+
+    // 제거 항목 검증: 월간 운세 집계, 안내 문구, 미기록/기록 없음, 지수/만날 확률/%p/보너스 대상, 셀 내 단독 숫자 3/5
+    expect(screen.queryByLabelText('월간 운세 집계')).toBeNull();
+    expect(screen.queryByText(/이번 달 기록/)).toBeNull();
+    expect(screen.queryByText(/매일 새벽 이후 첫 접속부터/)).toBeNull();
+    expect(screen.queryByText(/미기록|기록 없음/)).toBeNull();
+    expect(screen.queryByText(/지수|만날 확률|보너스 대상|%p/i)).toBeNull();
 
     const detail = screen.getByLabelText('선택한 날짜 운세 상세');
     expect(within(detail).getByText('2026년 11월 25일')).toBeInTheDocument();
     expect(within(detail).getByText('좋은 운')).toBeInTheDocument();
+    expect(within(detail).getByText('희귀')).toHaveAttribute('data-rarity', 'rare');
+    expect(within(detail).getByText(/이상 출현 비중/)).toBeInTheDocument();
+    expect(within(detail).getByText('×1.05')).toBeInTheDocument();
 
-    // 과거 기록 날짜 선택
+    // 과거 기록 날짜 선택 (재물운)
     fireEvent.click(screen.getByRole('button', { name: /2026년 11월 19일/ }));
     expect(within(detail).getByText('2026년 11월 19일')).toBeInTheDocument();
     expect(within(detail).getByText('재물운')).toBeInTheDocument();
     expect(within(detail).getByText('적당한 운')).toBeInTheDocument();
     expect(within(detail).getByText('판매가')).toBeInTheDocument();
-    expect(within(detail).getByText('+3%p')).toBeInTheDocument();
+    expect(within(detail).getByText('×1.03')).toBeInTheDocument();
     const phraseEl = within(detail).getByText(fortunePhrase({ day: '2026-11-19', kind: 'gold', index: 3 }));
-    const bonusEl = within(detail).getByText('보너스 대상');
-    expect(phraseEl.compareDocumentPosition(bonusEl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const targetLabelEl = within(detail).getByText('적용 대상');
+    expect(phraseEl.compareDocumentPosition(targetLabelEl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
-    // 기록 없는 과거 날짜와 미래 날짜는 모두 비활성
-    const unrecordedPast = screen.getByRole('button', { name: /2026년 11월 23일/ });
-    expect(unrecordedPast).toBeDisabled();
-    fireEvent.click(unrecordedPast);
-    expect(within(detail).getByText('2026년 11월 19일')).toBeInTheDocument();
+    // 그림자 운 날짜 선택: text-named 색과 target 아이콘 통일 검증 (아이콘 축소·라벨 말줄임 없음)
+    const shadowCell = screen.getByRole('button', { name: /2026년 11월 21일/ });
+    const shadowIcon = shadowCell.querySelector('[data-glyph="target"]');
+    expect(shadowIcon).not.toBeNull();
+    expect(shadowIcon).toHaveClass('shrink-0');
+    expect(shadowCell.querySelector('.text-named')).not.toBeNull();
+    const shadowShortLabel = within(shadowCell).getByText('그림자');
+    expect(shadowShortLabel).toHaveClass('mobile:hidden');
+    expect(shadowShortLabel).not.toHaveClass('truncate');
+    fireEvent.click(shadowCell);
+    expect(within(detail).getByText('그림자 운')).toHaveClass('text-named');
+    expect(detail.querySelector('[data-glyph="target"]')).not.toBeNull();
+    expect(within(detail).getByText('네임드')).toHaveClass('text-named');
+    expect(within(detail).getByText(/조우 확률/)).toBeInTheDocument();
 
-    // 미래 날짜는 비활성
-    expect(screen.getByRole('button', { name: /2026년 11월 26일/ })).toBeDisabled();
+    // 과거 미방문 비활성 날짜와 미래 비활성 날짜 구분
+    const unvisitedPast = screen.getByRole('button', { name: /2026년 11월 23일/ });
+    const futureDay = screen.getByRole('button', { name: /2026년 11월 26일/ });
+    expect(unvisitedPast).toBeDisabled();
+    expect(futureDay).toBeDisabled();
+    expect(unvisitedPast).toHaveAttribute('data-day-state', 'unvisited');
+    expect(futureDay).toHaveAttribute('data-day-state', 'future');
+    expect(unvisitedPast.className).not.toBe(futureDay.className);
+    fireEvent.click(unvisitedPast);
+    expect(within(detail).getByText('2026년 11월 21일')).toBeInTheDocument();
 
     // 6주 고정 달력 격자(42칸)와 상세 패널 고정 높이 유지
     const calendarRegion = screen.getByRole('region', { name: '2026년 11월 운세 달력' });
     const dayGrid = calendarRegion.querySelector('.grid-rows-6')!;
     expect(dayGrid).not.toBeNull();
     expect(dayGrid.children).toHaveLength(42);
-    expect(detail.className).toMatch(/\bh-\[/);
+    expect(detail.className).toMatch(/\bh-\[372px\]/);
+    expect(detail.className).toMatch(/\bmobile:h-\[202px\]/);
   });
 
   it('이전 달과 다음 달 이동 시 해당 월 이력을 조회하고 경계 월에서 버튼을 비활성화한다', async () => {
@@ -132,13 +168,16 @@ describe('운세 월간 달력 창 (FortuneCalendarModal)', () => {
     expect(apiMock.readFortuneHistory).toHaveBeenCalledWith('2026-10');
     expect(screen.getByRole('button', { name: '이전 달' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '다음 달' })).toBeEnabled();
-    expect(within(screen.getByLabelText('선택한 날짜 운세 상세')).getByText('2026년 10월 30일')).toBeInTheDocument();
+    const octDetail = screen.getByLabelText('선택한 날짜 운세 상세');
+    expect(within(octDetail).getByText('2026년 10월 30일')).toBeInTheDocument();
+    expect(within(octDetail).getByText('그림자 운')).toHaveClass('text-named');
+    expect(within(octDetail).getByText('×1.05')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '다음 달' }));
     await waitFor(() => expect(screen.getByRole('region', { name: '2026년 11월 운세 달력' })).toBeInTheDocument());
   });
 
-  it('빈 달, 로딩, 오류 재시도, 오프라인 상태를 구분해 표시한다', async () => {
+  it('빈 달, 로딩, 오류 재시도, 오프라인 상태가 모두 동일한 바깥 고정 창 안에서 구분되어 표시된다', async () => {
     // 로딩 상태
     let resolveLoad!: (v: FortuneHistory | null) => void;
     apiMock.readFortuneHistory.mockImplementationOnce(() => new Promise(res => { resolveLoad = res; }));
@@ -146,7 +185,9 @@ describe('운세 월간 달력 창 (FortuneCalendarModal)', () => {
       <FortuneCalendarModal gameFortune={NOV_HISTORY.today} accountState="account" onClose={vi.fn()} />,
     );
     expect(screen.getByRole('status', { name: '운세 달력을 불러오는 중' })).toBeInTheDocument();
-    expect(screen.getByRole('dialog', { name: '운세' }).firstElementChild).toHaveClass('flex-1');
+    const loadingDialog = screen.getByRole('dialog', { name: '운세' });
+    expect(loadingDialog.className).toContain('h-[min(500px,calc(100%-32px))]');
+    expect(loadingDialog.firstElementChild).toHaveClass('flex-1');
 
     // 빈 달
     resolveLoad({ ...NOV_HISTORY, firstMonth: null, days: [] });
@@ -164,6 +205,7 @@ describe('운세 월간 달력 창 (FortuneCalendarModal)', () => {
       <FortuneCalendarModal gameFortune={NOV_HISTORY.today} accountState="account" onClose={vi.fn()} />,
     );
     await waitFor(() => expect(screen.getByText(/운세 달력을 불러오지 못했어요/)).toBeInTheDocument(), { timeout: 3000 });
+    expect(screen.getByRole('dialog', { name: '운세' }).className).toContain('h-[min(500px,calc(100%-32px))]');
     fireEvent.click(screen.getByRole('button', { name: '다시 불러오기' }));
     await waitFor(() => expect(screen.getByRole('region', { name: '2026년 11월 운세 달력' })).toBeInTheDocument());
     cleanup();
@@ -176,9 +218,10 @@ describe('운세 월간 달력 창 (FortuneCalendarModal)', () => {
       null,
     );
     await waitFor(() => expect(screen.getByText('운세 달력은 연결된 상태에서만 볼 수 있어요.')).toBeInTheDocument());
+    expect(screen.getByRole('dialog', { name: '운세' }).className).toContain('h-[min(500px,calc(100%-32px))]');
   });
 
-  it('게스트에게는 오늘의 운세와 공용 잠금 달력 안내를 보이고 이력을 조회하지 않는다', () => {
+  it('게스트에게는 같은 고정 창 안에서 오늘의 운세와 표준 잠금 달력을 보이고 잠금 줄을 이중 렌더링하지 않는다', () => {
     const today: DailyFortune = { day: currentGameDay(new Date().toISOString()), kind: 'gold', index: 3 };
     const onClose = vi.fn();
     renderWithQuery(
@@ -186,24 +229,39 @@ describe('운세 월간 달력 창 (FortuneCalendarModal)', () => {
     );
 
     expect(apiMock.readFortuneHistory).not.toHaveBeenCalled();
-    expect(screen.getByText('오늘의 재물운')).toBeInTheDocument();
-    expect(screen.getByText('월별 운세 달력 잠금')).toBeInTheDocument();
-    expect(screen.getByText('태평양 항로가 열리면 쓸 수 있어요.')).toBeInTheDocument();
-    expect(screen.getByText('태평양 항로는 조각배(1단계)부터 열려요.')).toBeInTheDocument();
+    const dialog = screen.getByRole('dialog', { name: '운세' });
+    expect(dialog.className).toContain('h-[min(500px,calc(100%-32px))]');
+    expect(dialog.className).toContain('mobile:h-[min(552px,calc(100%-48px))]');
+    expect(dialog.firstElementChild).toHaveClass('flex-1');
 
-    fireEvent.mouseEnter(screen.getByRole('group', { name: '월별 운세 달력 잠금' }).parentElement!);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
+    expect(within(screen.getByLabelText('오늘의 운세 요약')).getByText('재물운')).toBeInTheDocument();
+    expect(within(screen.getByLabelText('선택한 날짜 운세 상세')).getByText('×1.03')).toBeInTheDocument();
+    expect(screen.queryByText('오늘의 재물운')).toBeNull();
+
+    const lockGroup = screen.getByRole('group', { name: '월별 운세 달력 잠금' });
+    expect(within(lockGroup).getByText('월별 운세 달력 잠금')).toBeInTheDocument();
+    const lockBox = within(lockGroup).getByText('월별 운세 달력 잠금').closest('.pf-notch')!;
+    expect(lockBox.className).toContain('h-[404px]');
+    expect(lockBox.className).toContain('mobile:h-[212px]');
+    // Locked 내부 sr-only LockReason 외에 보이는 잠금 줄을 중복 출력하지 않는다
+    const visibleClone = lockGroup.cloneNode(true) as HTMLElement;
+    visibleClone.querySelectorAll('.sr-only').forEach(el => el.remove());
+    expect(visibleClone.textContent).not.toMatch(/태평양 항로|조각배|계정을 확인하면/);
+
+    fireEvent.mouseEnter(lockGroup.parentElement!);
+    expect(screen.getByRole('tooltip')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '닫기' }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('계정 확인 실패 상태에서는 확인 실패 전용 잠금 문안을 표시한다', () => {
+  it('계정 확인 실패 상태에서도 같은 고정 창과 표준 잠금 문안을 표시한다', () => {
     renderWithQuery(
       <FortuneCalendarModal gameFortune={null} accountState="unverified" onClose={vi.fn()} />,
     );
 
     expect(apiMock.readFortuneHistory).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: '운세' }).className).toContain('h-[min(500px,calc(100%-32px))]');
     expect(screen.getByRole('group', { name: '월별 운세 달력 잠금' })).toHaveTextContent('계정을 확인하면 쓸 수 있어요.');
   });
 });
