@@ -1543,11 +1543,11 @@ describe('스탯창 — 자원 바 클릭 진입 (v0.6.1)', () => {
     render(<App />);
     fireEvent.click(screen.getByLabelText(/^스탯창 열기/));
     expect(screen.getByText('스탯')).toBeInTheDocument(); // Panel 프레임 제목
-    // 요약 — 명성·골드·도감·가방 타일과 기준 해역(마을에서는 요구 파워가 가장 높은 마을 강)
+    // 요약 — 명성·골드·도감·가방 타일과 기준 해역(마을 Lv.1에서는 진입 가능한 마을 연못)
     const dialog = within(statsDialog());
     expect(dialog.getByText('도감')).toBeInTheDocument();
     expect(dialog.getByText('이 지역 해역')).toBeInTheDocument();
-    expect(dialog.getAllByText(/마을 강/).length).toBeGreaterThan(0);
+    expect(dialog.getAllByText(/마을 연못/).length).toBeGreaterThan(0);
     expect(dialog.getByRole('meter', { name: '파워' })).toBeInTheDocument();
 
     openTab('배');
@@ -1559,9 +1559,9 @@ describe('스탯창 — 자원 바 클릭 진입 (v0.6.1)', () => {
     expect(dialog.getByText('바 시간')).toBeInTheDocument();
     expect(dialog.getByText('입질 최소 대기')).toBeInTheDocument();
     expect(dialog.getByText('방치 낚시 페널티')).toBeInTheDocument();
-    expect(dialog.getByRole('row', { name: /마을 강/ })).toHaveAttribute('aria-selected', 'true');
-    fireEvent.click(dialog.getByRole('row', { name: /마을 연못/ }));
     expect(dialog.getByRole('row', { name: /마을 연못/ })).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(dialog.getByRole('row', { name: /마을 강/ }));
+    expect(dialog.getByRole('row', { name: /마을 강/ })).toHaveAttribute('aria-selected', 'true');
     // 고정 정보 줄의 파워 툴팁 — 게임 스타일 버블(title 툴팁 아님)
     fireEvent.mouseEnter(dialog.getByText('파워', { selector: '[tabindex="0"]' }));
     expect(screen.getByRole('tooltip')).toHaveTextContent('요구하는 파워가 달라서');
