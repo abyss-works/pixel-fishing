@@ -12,10 +12,10 @@ describe('selectEncounter', () => {
   it('해구의 이빨은 레벨이 오를수록 가속 배수를 더 줄인다', () => {
     const scale = (level: number) => selectEncounter(
       seed({ artifacts: ['abyss-angler'], artifactLevels: { 'abyss-angler': level } }), QUEST, NOW)!.speedupScale;
-    expect(scale(1)).toBeCloseTo(0.9, 10);
-    expect(scale(3)).toBeCloseTo(0.85, 10);
-    // Lv5는 최고 레벨 유물 1개 업적 누적 보너스(+3%)가 자동 적용된다: 1 - 0.2 * 1.03 = 0.794
-    expect(scale(5)).toBeCloseTo(0.794, 10);
+    expect(scale(1)).toBeCloseTo(1 - 0.1 * 1.005, 10);
+    expect(scale(3)).toBeCloseTo(1 - 0.15 * 1.015, 10);
+    // Lv5는 유물 레벨 합(5) 업적 누적 보너스(+2.5%)가 자동 적용된다: 1 - 0.2 * 1.025 = 0.795
+    expect(scale(5)).toBeCloseTo(1 - 0.2 * 1.025, 10);
   });
 
   it('가속 배수는 유물이 없으면 1이다', () => {
@@ -33,6 +33,6 @@ describe('selectEncounter', () => {
   });
 
   it('해구의 이빨이 있으면 가속 배수가 줄어든다', () => {
-    expect(selectEncounter(seed({ artifacts: ['abyss-angler'] }), QUEST, NOW)?.speedupScale).toBeCloseTo(0.9, 10);
+    expect(selectEncounter(seed({ artifacts: ['abyss-angler'] }), QUEST, NOW)?.speedupScale).toBeCloseTo(1 - 0.1 * 1.005, 10);
   });
 });

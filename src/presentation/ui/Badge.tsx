@@ -7,6 +7,7 @@ const TONE = {
   gold: 'border-gold text-gold bg-[color-mix(in_oklab,var(--c-gold)_12%,transparent)]',
   'gold-plain': 'border-gold text-gold',
   accent: 'border-accent text-accent',
+  orange: 'border-orange text-orange',
   'dim-plain': 'border-line text-text-dim',
 } as const;
 

@@ -45,6 +45,8 @@ export interface Effect {
   sell?: number;
   /** 대어/월척 확률 증가 비율(0 이상, 예: 0.1 = +10%). 생략하면 0 */
   big?: number;
+  /** 밤 어종 개체 가중치 증가 비율(0 이상, 예: 0.15 = +15%). 생략하면 0 */
+  nightWeight?: number;
 }
 
 export const NO_EFFECT: Effect = { bite: 0, rare: 0, epic: 0, legendary: 0, variant: 0, size: 0, move: 0, named: 0, night: 0 };
@@ -77,6 +79,22 @@ export function checkEffect(e: Effect): void {
   if (e.night !== 0 && e.night !== 1) bad('밤 어종 출현은 0 또는 1이어야 합니다');
   if (e.sell !== undefined && !(e.sell > -1)) bad('판매가 증가는 -100 초과(%)여야 합니다');
   if (e.big !== undefined && !(e.big >= 0)) bad('대어 확률 증가는 0 이상(%)이어야 합니다');
+  if (e.nightWeight !== undefined && !(e.nightWeight >= 0)) bad('밤 어종 가중치 증가는 0 이상(%)이어야 합니다');
+}
+
+/** 슬롯 증폭 배수를 활성 요리 효과에 반영한다 (야간 해금은 증폭하지 않음) */
+export function scaleSlotEffect(e: Effect, amplify: number): Effect {
+  if (amplify === 0) return e;
+  const scale = 1 + amplify;
+  return {
+    ...e,
+    bite: clean(e.bite * scale),
+    rare: clean(e.rare * scale),
+    epic: clean(e.epic * scale),
+    legendary: clean(e.legendary * scale),
+    variant: clean(e.variant * scale),
+    named: clean(e.named * scale),
+  };
 }
 
 /** 구역 id 또는 개별 해역 id를 대상 해역 목록으로 해석한다 */
@@ -205,6 +223,7 @@ export function effectRates(spot: SpotId, level: number, axis: Axis, e: Effect, 
   // 밤 어종 출현은 낮에 쓰든 밤에 쓰든 최대 밤 깊이(nightDepth: 1)의 밤 풀로 낚는다
   const usePool: Pool = e.night > 0 ? 'night' : pool;
   if (e.night > 0) extra = { ...extra, nightDepth: 1 };
+  if (e.nightWeight) extra = { ...extra, nightWeightBonus: e.nightWeight };
   const base = rates(spot, level, axis, extra, usePool);
   const cycle = {
     ...base.cycle,

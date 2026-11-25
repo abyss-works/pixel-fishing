@@ -249,7 +249,7 @@ export interface BonusSeriesCatalogItem {
   id: string;
   name: string;
   desc: string;
-  scope: 'global' | 'zone';
+  scope: 'global' | 'zone' | 'artifact';
   zoneId: ZoneId | null;
   zoneName: string | null;
   bonusKind: CumulativeBonusKind;
@@ -501,16 +501,19 @@ const COSMETIC_KIND_LABELS: Record<CosmeticKind, string> = {
 
 const BONUS_KIND_LABELS: Record<CumulativeBonusKind, string> = {
   biteWaitCut: '입질 대기 감소',
-  mutationWeight: '돌연변이 가중치',
-  rareWeight: '희귀 이상 가중치',
-  epicWeight: '영웅 이상 가중치',
-  legendaryWeight: '전설 가중치',
+  mutationWeight: '돌연변이 출현 비중',
+  rareWeight: '희귀 이상 출현 비중',
+  epicWeight: '영웅 이상 출현 비중',
+  legendaryWeight: '전설 출현 비중',
+  nightWeight: '밤 어종 출현 비중',
+  bagCap: '가방 용량',
+  energyYield: '기운 획득량',
+  baitAmplify: '미끼 증폭',
+  lunchAmplify: '도시락 증폭',
   sellBonus: '판매가 보너스',
-  namedWeight: '네임드 조우 가중치',
-  moveSpeed: '이동 속도',
-  artifactBoost: '유물 효과 배율',
-  zoneLegendary: '구역 전설 가중치',
-  zoneMutation: '구역 돌연변이 가중치',
+  namedWeight: '네임드 조우 확률',
+  moveSpeed: '항해 속도',
+  artifactBoost: '유물 증폭',
 };
 
 const DIFFICULTY_LABELS: Record<BountyDifficulty, string> = {
@@ -568,13 +571,13 @@ function formatArtifactEffects(art: Artifact, level: number): string[] {
   if ((e.duelSpeedupCut ?? 0) > 0) lines.push(`네임드 결투 가속 −${fmtDecimal(e.duelSpeedupCut! * 100)}%`);
   if (e.mutationWeight !== undefined) {
     const pct = (e.mutationWeight.variant / MUTATION_WEIGHTS.variant - 1) * 100;
-    lines.push(`돌연변이 가중치 +${fmtDecimal(pct)}%`);
+    lines.push(`돌연변이 출현 비중 +${fmtDecimal(pct)}%`);
   }
   if ((e.biteWaitCut ?? 0) > 0) lines.push(`입질 대기 −${fmtDecimal(e.biteWaitCut! * 100)}%`);
-  if ((e.commonWeightCut ?? 0) > 0) lines.push(`일반 등급 가중치 −${fmtDecimal(e.commonWeightCut! * 100)}%`);
+  if ((e.commonWeightCut ?? 0) > 0) lines.push(`일반 어종 출현 비중 −${fmtDecimal(e.commonWeightCut! * 100)}%`);
   if ((e.bagCap ?? 0) > 0) lines.push(`가방 용량 +${fmtDecimal(e.bagCap! * 100)}%`);
   const cookChance = artifactExtraCookChanceAt(art, level);
-  if (cookChance > 0) lines.push(`요리 추가 완성 +${fmtDecimal(cookChance * 100)}%p`);
+  if (cookChance > 0) lines.push(`요리 추가 완성 +${fmtDecimal(cookChance * 100)}%`);
   if (art.system) {
     if ((art.system.namedCapBonus ?? 0) > 0) lines.push(`네임드 토벌 하루 +${art.system.namedCapBonus}회`);
     if ((art.system.namedRewardCut ?? 0) > 0) lines.push(`네임드 토벌 골드 −${fmtDecimal(art.system.namedRewardCut! * 100)}%`);
@@ -594,11 +597,12 @@ function buildRecipeEffectItems(recipe: Recipe): RecipeEffectItem[] {
   if (e.biteWaitCut !== undefined) items.push({ label: '입질 대기', value: `−${fmtDecimal(e.biteWaitCut * 100)}%` });
   if (e.rarityWeight !== undefined) {
     for (const g of e.rarityWeight.grades) {
-      items.push({ label: `${RARITY[g].name} 등급 가중치`, value: `+${fmtDecimal(e.rarityWeight.bonus * 100)}%` });
+      items.push({ label: `${RARITY[g].name} 어종 출현 비중`, value: `+${fmtDecimal(e.rarityWeight.bonus * 100)}%` });
     }
   }
-  if (e.mutationWeight !== undefined) items.push({ label: '돌연변이 폼 가중치', value: `+${fmtDecimal(e.mutationWeight * 100)}%` });
-  if (e.namedWeight !== undefined) items.push({ label: '네임드 조우 가중치', value: `+${fmtDecimal(e.namedWeight * 100)}%` });
+  if (e.mutationWeight !== undefined) items.push({ label: '돌연변이 출현 비중', value: `+${fmtDecimal(e.mutationWeight * 100)}%` });
+  if (e.mutationMult !== undefined) items.push({ label: '돌연변이 등장', value: `×${e.mutationMult}` });
+  if (e.namedWeight !== undefined) items.push({ label: '네임드 조우 확률', value: `+${fmtDecimal(e.namedWeight * 100)}%` });
   if (e.nightUnlock === true) items.push({ text: '낮에도 밤 어종이 함께 낚여요.' });
   return items;
 }
@@ -780,9 +784,11 @@ export function buildContentCatalog(): ContentCatalog {
     const zoneName = series.zone ? (zoneById(series.zone)?.name ?? series.zone) : null;
     const metricSummary = series.metric.kind === 'counter'
       ? series.metric.key
-      : series.metric.kind === 'zoneLegendarySum'
-        ? `${zoneName ?? series.zone} 수동 전설 합계`
-        : '최고 레벨·전설 유물 보유 수';
+      : series.metric.kind === 'legendarySum'
+        ? (series.metric.night ? '전체 밤 전설 수동 합계' : '전체 낮 전설 수동 합계')
+        : series.metric.kind === 'zoneLegendarySum'
+          ? `${zoneName ?? series.zone} 수동 ${series.metric.night ? '밤 ' : ''}전설 합계`
+          : `유물 레벨 (${series.metric.artifactId})`;
     return {
       id: series.id,
       name: series.name,

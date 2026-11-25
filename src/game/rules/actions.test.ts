@@ -639,7 +639,7 @@ describe('claimMail — 우편 골드 받기', () => {
   });
 });
 
-describe('usePotion — 물약 사용', () => {
+describe('usePotion — 비약 사용', () => {
   const now = '2026-08-22T03:00:00.000Z';
   const day = gameDayOf(now);
   const nextNow = '2026-08-22T19:00:00.000Z'; // KST 다음날 04:00
@@ -657,10 +657,11 @@ describe('usePotion — 물약 사용', () => {
       { type: 'usePotion', id: 'luck-small' },
       deps({ now }),
     )).toEqual({ ok: false, error: 'potion-already-active' });
-    expect(REJECT_TEXT['potion-already-active']).toMatch(/이미.*물약/);
+    expect(REJECT_TEXT['potion-not-owned']).toMatch(/비약/);
+    expect(REJECT_TEXT['potion-already-active']).toMatch(/이미.*비약/);
   });
 
-  it('보유한 물약을 사용하면 1개 차감하고 오늘 게임 날짜를 기록한다', () => {
+  it('보유한 비약을 사용하면 1개 차감하고 오늘 게임 날짜를 기록한다', () => {
     const out = applyAction(
       seed({ items: { 'luck-small': 2 } }),
       { type: 'usePotion', id: 'luck-small' },

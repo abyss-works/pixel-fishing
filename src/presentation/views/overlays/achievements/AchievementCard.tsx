@@ -5,6 +5,7 @@ import { canClaim } from '../../../../features/achievement/model/achievements';
 import type {
   AchievementRow,
   AchievementRowStatus,
+  BigGroupCardModel,
   CumulativeBonusCardModel,
   NamedGroupCardModel,
 } from '../../../../features/achievement/model/achievements';
@@ -184,16 +185,17 @@ export function CumulativeBonusCard({ card }: { card: CumulativeBonusCardModel }
   );
 }
 
-/** 네임드 다회 토벌(1·5·10회) 치장 다단계 압축 카드 — 미토벌 시 스포일러 실명·모자 실루엣·툴팁까지 100% 가린다 */
+/** 다단계 치장 압축 카드(네임드 다회 토벌·월척 장부) — 미토벌 네임드는 스포일러 실명·모자 실루엣·툴팁까지 가린다 */
 export function NamedGroupCard({
   card, game, guest = false, busy, onClaim,
 }: {
-  card: NamedGroupCardModel;
+  card: NamedGroupCardModel | BigGroupCardModel;
   game: GameState;
   guest?: boolean;
   busy: boolean;
   onClaim: (row: AchievementRow) => void;
 }) {
+  const isBig = card.kind === 'bigGroup';
   const clamped = Math.min(card.current, card.target);
   const ratio = card.target > 0 ? clamped / card.target : 0;
   const pct = Math.min(100, Math.round(ratio * 100));
@@ -262,7 +264,7 @@ export function NamedGroupCard({
           />
           <div className="flex items-center justify-between gap-2 text-2xs">
             {card.discovered
-              ? <span className={cx('pf-accent', card.status === 'claimable' ? 'text-gold' : 'text-text-dim')}>{`목표 ${card.target}회`}</span>
+              ? <span className={cx('pf-accent', card.status === 'claimable' ? 'text-gold' : 'text-text-dim')}>{`목표 ${card.target}${isBig ? '종' : '회'}`}</span>
               : <ProgressCount value={`${pct}%`} />}
             <ProgressCount current={card.current} target={card.target} className="whitespace-nowrap" />
           </div>
@@ -285,7 +287,7 @@ export function NamedGroupCard({
                 </b>
               </Tip>
               <span className="text-2xs text-text-dim">
-                {card.discovered ? `${card.target}회 토벌 보상` : '토벌하면 정체와 모자가 열려요'}
+                {card.discovered ? `${card.target}${isBig ? '종 달성 보상' : '회 토벌 보상'}` : '토벌하면 정체와 모자가 열려요'}
               </span>
             </div>
           </>

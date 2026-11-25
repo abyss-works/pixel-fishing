@@ -12,7 +12,7 @@ import type { ProfileStatus } from '../../../../features/gameplay/service/types'
 import { nicknameLabel } from '../../../../features/account/model/accountRules';
 import { useSpotState } from '../../../../features/travel/service/useSpotState';
 import {
-  selectActiveBonuses, selectInitialStatsSpotIndex, selectReachableZones,
+  selectBonusTableRows, selectInitialStatsSpotIndex, selectReachableZones,
   selectStatsSpotRows, selectStatsSummary, selectStatsZoneTabs,
 } from '../../../../features/gameplay/model/stats';
 import Inset from '../../../ui/Inset';
@@ -108,7 +108,7 @@ export default function StatsModal({ game, movement, region, nickname, profileSt
               <RodTab rows={rows} zoneTabs={zoneTabs} zone={zone} selected={selected}
                       onZone={pickZone} onSelect={setSpotIndex} />
             )}
-            {tab === 'bonus' && <BonusTab rows={selectActiveBonuses(game, guild, now)} />}
+            {tab === 'bonus' && <BonusTab rows={selectBonusTableRows(game, guild, now)} />}
           </div>
         </div>
       </ModalCard>

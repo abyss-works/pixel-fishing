@@ -55,7 +55,9 @@ describe('가방 파생 데이터', () => {
     expect(preview.total.base).toBe(none.total.base);
     const delta = saleBonusOf(none.total.base, bonus);
     expect(delta).toBeGreaterThan(0);
-    expect(preview.total.mods).toEqual([{ id: 'guild-sell', label: '판매가 보너스', delta }]);
+    expect(preview.total.mods).toEqual([
+      { id: 'guild-sell', label: '판매가 보너스', source: { kind: 'guild', bonus: 'sell' }, delta },
+    ]);
     expect(preview.total.value).toBe(sellSelected(state, preview.soldUids, bonus).gold);
     expect(preview.rows.reduce((sum, row) => sum + row.selectedSubtotal, 0)).toBe(preview.total.base);
   });
@@ -75,8 +77,8 @@ describe('가방 파생 데이터', () => {
     expect(luckDelta).toBeGreaterThan(0);
     expect(preview.total.value).toBe(expectedValue);
     expect(preview.total.mods).toEqual([
-      { id: 'guild-sell', label: '판매가 보너스', delta: guildDelta },
-      { id: 'fortune-sell', label: '오늘의 운세', delta: luckDelta },
+      { id: 'guild-sell', label: '판매가 보너스', source: { kind: 'guild', bonus: 'sell' }, delta: guildDelta },
+      { id: 'fortune-sell', label: '오늘의 운세', source: { kind: 'fortune' }, delta: luckDelta },
     ]);
   });
 });

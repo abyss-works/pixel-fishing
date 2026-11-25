@@ -119,16 +119,16 @@ function potionEffectSummary(potion: Potion): string {
     .map(target => [target, potion.effects.luck?.[target]] as const)
     .filter((entry): entry is readonly [FortuneTarget, number] => typeof entry[1] === 'number' && entry[1] > 0);
   if (entries.length === 0) return potion.description;
-  const pct = (n: number) => Math.round(n * 1000) / 10;
+  const mult = (n: number) => `×${(1 + n).toFixed(2)}`;
   if (entries.length === POTION_TARGETS.length && entries.every(([, v]) => v === entries[0][1])) {
-    return `모든 행운 효과 +${pct(entries[0][1])}%p`;
+    return `모든 행운 효과 ${mult(entries[0][1])}`;
   }
-  return entries.map(([target, v]) => `${FORTUNE_TARGET_BONUS_LABEL[target]} +${pct(v)}%p`).join(', ');
+  return entries.map(([target, v]) => `${FORTUNE_TARGET_BONUS_LABEL[target]} ${mult(v)}`).join(', ');
 }
 
 /**
  * 칩 줄의 보너스 통합 칩.
- * 활성 효과(도시락·미끼·물약·오늘의 운세)가 하나라도 있으면 활성 수와 내역을 내고,
+ * 활성 효과(도시락·미끼·비약·오늘의 운세)가 하나라도 있으면 활성 수와 내역을 내고,
  * 요리가 열리기 전이나 게스트 상태에서 활성 효과도 없으면 잠금 칩 하나를,
  * 열린 뒤 활성 효과가 없으면 빈 통합 칩(empty)을 낸다.
  */
@@ -149,7 +149,7 @@ export function selectBonusChip(game: GameState, now: string, account: AccountLo
   const potionItems: BonusChipItem[] = activePotionsOf(game.potions, now).map(potion => ({
     id: `potion:${potion.id}`,
     kind: 'potion',
-    kindLabel: '물약',
+    kindLabel: '비약',
     title: { name: potion.name, grade: potion.grade },
     summary: potionEffectSummary(potion),
     durationText: '하루 동안',

@@ -855,8 +855,12 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
   // 오늘의 운세 — 리듀서 catch와 같은 규칙. 첫 판정에서 굴려 게임 날짜에 고정하고,
   // 이미 그날의 운세면 그대로 쓴다(불변 — rng를 쓰지 않는다)
   base = ensureFortune(base, now, Math.random);
+  const achBonuses = achievementBonusesOf(base);
   const pz = powerZones(base, spot);
-  const { judgment, phaseOpts, cook } = prepareCatchDraw(base, judgmentIn, now, pz, forcePhase);
+  const { judgment, phaseOpts, cook } = prepareCatchDraw(
+    base, judgmentIn, now, pz, forcePhase,
+    { bait: achBonuses.baitAmplify, lunch: achBonuses.lunchAmplify },
+  );
   const today = todayKST();
   // 어종 천장·첫 경험 보장 — 후보가 있을 때만 그 어종들의 일반 폼 소유를 조회한다(fast path는 도감을 들고 있지 않다)
   const pityCandidates = speciesPityCandidates(base.pity, spot, phaseOpts);
@@ -866,7 +870,6 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
     : pityCandidates;
   const owned = candidates.length === 0 ? new Set<string>()
     : await step('db-read', { uid, action: 'catch' }, () => ownedNormalForms(db, uid, candidates));
-  const achBonuses = achievementBonusesOf(base);
   const drawn = drawCatch(
     base, spot, judgment, rodPower(base), pz.mult, Math.random,
     { ...phaseOpts, rarityLuck: totalLuckMultOf(base, now, 'rarity') },
@@ -932,7 +935,7 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
     : lockDecision.autoLockedIds;
   const overflow = removed.length > 0 ? removed : (added.length === 0 ? [inst.uid] : []);
   // 내보낼 개체를 놓아줄 것과 기운으로 바꿀 것으로 나누는 판정은 게임 규칙이 한다
-  const plan = planOverflow({ boat: base.boat, energyTargets: base.energyTargets, bag: evictBag }, overflow, guest);
+  const plan = planOverflow({ boat: base.boat, energyTargets: base.energyTargets, bag: evictBag }, overflow, guest, achBonuses.energyYield);
   const view = (uids: readonly string[]) => uids.map(uid => evictBag.find(i => i.uid === uid)!);
   const toReleased = (i: FishInstance): ReleasedFish => {
     const f = instanceFish(i);

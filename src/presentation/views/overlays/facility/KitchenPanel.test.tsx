@@ -129,11 +129,12 @@ describe('부엌 창 틀과 대기열', () => {
 });
 
 describe('도시락 탭과 미끼 탭', () => {
-  it('도시락 탭은 도시락 다섯 가지에 등급을 괄호로 붙여 목록에 보이고 제작 시간 배지를 둔다', () => {
+  it('도시락 탭은 도시락 여섯 가지에 등급을 괄호로 붙여 목록에 보이고 제작 시간 배지를 둔다', () => {
     show(seed());
     expect(optionNames('도시락 목록')).toEqual([
       '가루디야(일반)',
       '민 몰리(희귀)',
+      '키리바트(희귀)',
       '생선 비리야니(영웅)',
       '암불 티얄(영웅)',
       '생선 탈리(전설)',
@@ -142,14 +143,16 @@ describe('도시락 탭과 미끼 탭', () => {
     expect(within(options[0]).getByText('즉시')).toBeInTheDocument();
     expect(within(options[0]).getByText('(일반)')).toHaveAttribute('data-rarity', 'common');
     expect(within(options[1]).getByText('3분')).toBeInTheDocument();
-    expect(within(options[2]).getByText('5분')).toBeInTheDocument();
-    expect(within(options[4]).getByText('10분')).toBeInTheDocument();
+    expect(within(options[3]).getByText('5분')).toBeInTheDocument();
+    expect(within(options[5]).getByText('10분')).toBeInTheDocument();
   });
 
   it('미끼 탭은 미끼의 이름 뒤에 표시 등급을 괄호로 붙이고 등급순에 특수를 뒤에 둔다', () => {
     show(seed());
     fireEvent.click(tab('미끼'));
-    expect(optionNames('미끼 목록')).toEqual(['롱페퍼 미끼(희귀)', '큐베브 미끼(영웅)', '용연향 미끼(전설)', '사프란 미끼(특수)', '달빛 미끼(특수)']);
+    expect(optionNames('미끼 목록')).toEqual([
+      '롱페퍼 미끼(희귀)', '큐베브 미끼(영웅)', '용연향 미끼(전설)', '사프란 미끼(특수)', '백단향 미끼(특수)', '달빛 미끼(특수)',
+    ]);
   });
 
   it('미끼 탭의 기본 선택은 목록의 첫째이고, 목록의 괄호만 등급색이다', () => {
@@ -248,7 +251,8 @@ describe('도시락 탭과 미끼 탭', () => {
     fireEvent.mouseLeave(screen.getByText('도시락 효과'));
     fireEvent.click(tab('미끼'));
     fireEvent.mouseEnter(screen.getByText('미끼 효과'));
-    expect(screen.getByRole('tooltip')).toHaveTextContent('챔질해서 낚을 때만 효과가 있어요.');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('직접 챔질해 낚을 때만 효과가 있어요.');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('접속하지 않아도 지속 시간이 흘러요.');
   });
 
   it('지속 시간은 효과 칸의 마지막 줄이고 조리 시간은 수량 칸에 보인다', () => {
@@ -256,7 +260,7 @@ describe('도시락 탭과 미끼 탭', () => {
     fireEvent.click(screen.getByRole('option', { name: /민 몰리/ }));
     const effect = screen.getByText('도시락 효과').parentElement!;
     const lines = [...effect.children].slice(1).map(l => l.textContent);
-    expect(lines).toEqual(['희귀 어종 출현+10%', '영웅 어종 출현+10%', '전설 어종 출현+10%', '지속 시간9시간']);
+    expect(lines).toEqual(['희귀 어종 출현 비중+10%', '영웅 어종 출현 비중+10%', '전설 어종 출현 비중+10%', '지속 시간9시간']);
     const cookTime = screen.getByText('조리 시간').parentElement!;
     expect(within(cookTime).getByText(`${RARE_WAIT_MIN}분`)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '민 몰리(희귀) 수량 증가' }));
@@ -333,13 +337,13 @@ describe('도시락 탭과 미끼 탭', () => {
     expect(screen.getByRole('tooltip')).toHaveTextContent('집에서만 할 수 있어요.');
   });
 
-  it('진주 상인의 저울이 있으면 추가 완성 확률을 요리 추가 완성 +N%p로 보이고 없으면 줄이 없다', () => {
+  it('진주 상인의 저울이 있으면 추가 완성 확률을 요리 추가 완성 +N%로 보이고 없으면 줄이 없다', () => {
     show(seed({ items: energy(1000) }));
     expect(screen.queryByText('요리 추가 완성')).toBeNull();
     cleanup();
     show(seed({ items: energy(1000), artifacts: ['varuna-scale'] }));
     expect(screen.getByText('요리 추가 완성')).toBeInTheDocument();
-    expect(screen.getByText('+10%p')).toBeInTheDocument();
+    expect(screen.getByText('+10.05%')).toBeInTheDocument();
   });
 });
 

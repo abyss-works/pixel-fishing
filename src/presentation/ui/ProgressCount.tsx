@@ -27,7 +27,7 @@ export interface ProgressCountProps extends Omit<HTMLAttributes<HTMLSpanElement>
   percent?: number | string;
   /** 분모 앞 접두어(예: '요구 ') */
   targetPrefix?: string;
-  /** 뒤에 붙일 단위·꼬리표(예: ' 완결', '단계') */
+  /** 뒤에 붙일 단위·꼬리표(예: ' 완료', '단계') */
   suffix?: string;
   /** true면 공백 없이 a/b로, false면 a / b로 쓴다 */
   tight?: boolean;

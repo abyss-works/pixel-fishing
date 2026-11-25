@@ -30,23 +30,26 @@ describe('StatsModal(스탯창)', () => {
     expect(screen.getAllByText('받는 보너스가 없어요.')).toHaveLength(4);
   });
 
-  it('보너스 탭은 효과가 든 슬롯의 효과를 요리 이름 출처와 적용 낚시와 함께 보인다', () => {
+  it('보너스 탭은 효과가 든 슬롯의 효과를 방치·수동 배지와 [도시락]·[미끼] 툴팁으로 보인다', () => {
     const endsAt = new Date(Date.now() + 3_600_000).toISOString();
     show(game({ boat: 5, slots: { lunch: { id: 'cook-lunch-bite', endsAt }, bait: null } }));
     fireEvent.click(screen.getByRole('button', { name: '보너스' }));
-    const row = screen.getByText('입질 대기 −10%').closest('tr')!;
-    expect(within(row).getByText('가루디야(일반)')).toBeTruthy();
-    expect(within(row).getByText('방치로 낚을 때만')).toBeTruthy();
+    const row = screen.getByText('입질 대기').closest('tr')!;
+    expect(row).toHaveTextContent('−10%');
+    expect(within(row).getByText('방치')).toBeTruthy();
     expect(screen.getAllByText('받는 보너스가 없어요.')).toHaveLength(3);
+    fireEvent.mouseEnter(screen.getByText('입질 대기'));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('[도시락] 가루디야−10%');
   });
 
-  it('보너스 탭은 달빛 미끼의 비수치 효과를 중복 없이 상세 설명 한 줄로 보인다', () => {
+  it('보너스 탭은 달빛 미끼의 비수치 효과를 중복 없이 상세 설명 한 줄과 수동 배지로 보인다', () => {
     const endsAt = new Date(Date.now() + 3_600_000).toISOString();
     show(game({ boat: 5, slots: { lunch: null, bait: { id: 'cook-bait-night', endsAt } } }));
     fireEvent.click(screen.getByRole('button', { name: '보너스' }));
     const row = screen.getByText('낮에도 밤 어종이 함께 낚여요.').closest('tr')!;
-    expect(within(row).getByText('달빛 미끼(특수)')).toBeTruthy();
-    expect(within(row).getByText('챔질해서 낚을 때만')).toBeTruthy();
+    expect(within(row).getByText('수동')).toBeTruthy();
+    fireEvent.mouseEnter(screen.getByText('낮에도 밤 어종이 함께 낚여요.'));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('[미끼] 달빛 미끼');
   });
 
   it('배 탭은 지역마다 열린 해역 수와 남은 해역을 여는 배를 표로 보인다', () => {
@@ -109,32 +112,36 @@ describe('StatsModal(스탯창)', () => {
     expect(screen.getByRole('meter', { name: '파워' })).toBeTruthy();
   });
 
-  it('보너스 탭은 유물 배율(artifactBoost)이 적용된 실제 값을 각 갈래에 보이고 툴팁으로 배율 내역을 보인다', () => {
-    // 전설 유물 + 이동/낚시/결투 유물 → artifactBoost +3% 적용
+  it('보너스 탭은 출처 열 없이 효과 1줄로 합산하고 유물 증폭 배수를 툴팁에 합연산→곱연산·최종 적용 순으로 보인다', () => {
+    // 전설 유물(+2.5%) + 일반 유물 3개 Lv1(각 +0.5%) → artifactBoost +4% (×1.04)
     show(game({
       boat: 5,
       artifacts: ['mami-wata-mirror', 'wreck-compass', 'outer-isle-sinker', 'abyss-angler'],
     }));
     fireEvent.click(screen.getByRole('button', { name: '보너스' }));
 
-    const bonusCell = (text: string) => screen.getByText((_, el) => el?.tagName === 'TD' && el.textContent === text);
+    // 우측 출처 열 머리가 없다
+    expect(screen.queryByRole('columnheader', { name: '출처' })).toBeNull();
+    expect(screen.getByRole('columnheader', { name: '받는 효과' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: '적용' })).toBeInTheDocument();
 
-    expect(screen.getByText('항해 속도 +10.3%')).toBeTruthy();
-    expect(screen.getByText('입질 대기 −10.3%')).toBeTruthy();
-    const namedDuels = bonusCell('네임드 결투 가속 −10.3%');
-    expect(namedDuels).toBeTruthy();
-    expect(namedDuels.querySelector('.text-epic')).toBeNull();
-    expect(screen.queryByText(/보유 유물 효과 \+3%/)).toBeNull();
+    const rowOf = (label: string) => screen.getByText((_, el) => el?.tagName === 'TR' && (el.textContent ?? '').includes(label))!;
+    expect(rowOf('항해 속도')).toHaveTextContent('+10.4%');
+    expect(rowOf('입질 대기')).toHaveTextContent('−10.4%');
+    const duelRow = rowOf('네임드 결투 가속');
+    expect(duelRow).toHaveTextContent('−10.4%');
+    expect(within(duelRow).getByText('네임드')).toHaveClass('text-named');
+    expect(screen.queryByText(/유물 증폭 \+4%/)).toBeNull();
 
-    // 툴팁에 기본 효과, 보유 유물 효과, 적용 효과가 표시된다
-    fireEvent.mouseEnter(screen.getByText('항해 속도 +10.3%'));
+    // 툴팁에 [유물] 기본 효과, [업적] 유물 증폭 ×1.04, 최종 적용이 표시된다
+    fireEvent.mouseEnter(screen.getByText('항해 속도'));
     const tip = screen.getByRole('tooltip');
-    expect(within(tip).getByText('+10%')).toBeTruthy();
-    expect(within(tip).getByText('+3%')).toBeTruthy();
-    expect(within(tip).getByText('+10.3%')).toBeTruthy();
+    expect(tip).toHaveTextContent('[유물] 침선의 나침반+10%');
+    expect(tip).toHaveTextContent('[업적] 유물 증폭×1.04');
+    expect(tip).toHaveTextContent('최종 적용+10.4%');
   });
 
-  it('보너스 탭은 기본과 자유 강화가 합산된 길드 효과를 출처 길드 Lv.N과 함께 보이고 자유 강화가 있으면 툴팁으로 내역을 보인다', () => {
+  it('보너스 탭은 기본과 자유 강화가 합산된 길드 효과를 [길드] 툴팁으로 보인다', () => {
     const guild = {
       level: 10,
       effects: guildEffectsOf(10, { sell: 5 }, { sell: 5 }),
@@ -144,46 +151,33 @@ describe('StatsModal(스탯창)', () => {
     };
     render(<StatsModal game={game({})} movement="sail" region="world" nickname="바다사나이" guild={guild} onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: '보너스' }));
-    const row = screen.getByText('판매가 +20%').closest('tr')!;
-    expect(within(row).getByText('길드 Lv.10')).toBeTruthy();
-    fireEvent.mouseEnter(screen.getByText('판매가 +20%'));
+    const row = screen.getByText('판매가').closest('tr')!;
+    expect(row).toHaveTextContent('+20%');
+    expect(screen.queryByText('길드 Lv.10')).toBeNull();
+    fireEvent.mouseEnter(screen.getByText('판매가'));
     const tip = screen.getByRole('tooltip');
-    expect(within(tip).getByText('기본 5단계')).toBeTruthy();
-    expect(within(tip).getByText('개인 자유 강화 5단계')).toBeTruthy();
-    expect(within(tip).getByText('합계 10단계')).toBeTruthy();
+    expect(tip).toHaveTextContent('[길드] 판매가 보너스 (10단)+20%');
+    expect(tip).toHaveTextContent('최종 적용+20%');
   });
 
-  it('보너스 탭은 오늘의 운세를 오늘의 운세 출처로 보이고 툴팁은 수치 없이 적용 대상만 알린다', () => {
+  it('보너스 탭은 오늘의 운세와 비약을 독립 곱연산(×1.1025)으로 합치고 [운세]·[비약] 툴팁으로 보인다', () => {
     const today = gameDayOf(new Date().toISOString());
-    show(game({ fortune: { day: today, kind: 'fish', index: 5 } }));
+    show(game({ fortune: { day: today, kind: 'fish', index: 5 }, potions: { 'luck-small': today } }));
     fireEvent.click(screen.getByRole('button', { name: '보너스' }));
-    const cell = screen.getByText((_, el) => el?.tagName === 'TD' && el.textContent === '희귀 이상 출현 확률 +5%p');
-    expect(cell.querySelector('[data-rarity]')).toBeNull();
-    const row = cell.closest('tr')!;
-    expect(within(row).getByText('오늘의 운세')).toBeTruthy();
-    fireEvent.mouseEnter(screen.getByText('희귀 이상 출현 확률 +5%p'));
+    const rareRow = screen.getByText((_, el) => el?.tagName === 'TR' && (el.textContent ?? '').includes('희귀 이상 출현 비중'))!;
+    expect(within(rareRow).getByText('희귀')).toHaveAttribute('data-rarity', 'rare');
+    expect(rareRow).toHaveTextContent('×1.1025');
+    fireEvent.mouseEnter(within(rareRow).getByText('희귀'));
     const tip = screen.getByRole('tooltip');
-    expect(tip).toHaveTextContent('희귀 이상 출현 확률 행운 효과가 올라가요.');
-    expect(within(tip).getByText('희귀')).toHaveAttribute('data-rarity', 'rare');
-  });
+    expect(tip).toHaveTextContent('[운세] 풍어운×1.05');
+    expect(tip).toHaveTextContent('[비약] 작은 바다 영약×1.05');
+    expect(tip).toHaveTextContent('최종 적용×1.1025');
 
-  it('보너스 탭은 활성 물약을 각 갈래에 +5%p 효과와 물약 아이콘·이름으로 보인다', () => {
-    const today = gameDayOf(new Date().toISOString());
-    show(game({ potions: { 'luck-small': today } }));
-    fireEvent.click(screen.getByRole('button', { name: '보너스' }));
-
-    const rarityRow = screen.getByText((_, el) => el?.tagName === 'TD' && el.textContent === '희귀 이상 출현 확률 +5%p').closest('tr')!;
-    expect(within(rarityRow).getByText('작은 행운 물약')).toBeTruthy();
-    expect(within(rarityRow).getByText('(특수)')).toHaveAttribute('data-rarity', 'special');
-    expect(rarityRow.querySelector('canvas')).not.toBeNull();
-
-    const namedCell = screen.getByText((_, el) => el?.tagName === 'TD' && el.textContent === '네임드 만날 확률 +5%p');
-    expect(namedCell).toBeTruthy();
-    expect(namedCell.querySelector('.text-epic')).toBeNull();
-    expect(screen.getByText('판매가 +5%p')).toBeTruthy();
-
-    fireEvent.mouseEnter(screen.getByText('판매가 +5%p'));
-    expect(screen.getByRole('tooltip')).toHaveTextContent('마시면 하루 동안 모든 행운 효과가 +5%p 올라요.');
+    const namedRow = screen.getByText((_, el) => el?.tagName === 'TR' && (el.textContent ?? '').includes('네임드 조우 확률'))!;
+    expect(namedRow).toHaveTextContent('×1.05');
+    expect(within(namedRow).getByText('네임드')).toHaveClass('text-named');
+    const sellRow = screen.getByText((_, el) => el?.tagName === 'TR' && (el.textContent ?? '').includes('판매가'))!;
+    expect(sellRow).toHaveTextContent('×1.05');
   });
 
   it('닉네임 상태에 따라 불러오는 중, 미설정, 불러오기 실패를 구분해 보인다', () => {

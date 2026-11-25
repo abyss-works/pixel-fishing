@@ -82,7 +82,7 @@ describe('판매 탭', () => {
     const v = selectSaleTab(g, new Set(), 0, now);
     const expected = Math.round(bigFish.price * 1.05);
     expect(v.total.value).toBe(expected);
-    expect(v.total.mods).toEqual([{ id: 'fortune-sell', label: '오늘의 운세', delta: expected - bigFish.price }]);
+    expect(v.total.mods).toEqual([{ id: 'fortune-sell', label: '오늘의 운세', delta: expected - bigFish.price, source: { kind: 'fortune' } }]);
     expect(v.gold).toEqual({ current: 100, after: 100 + expected });
 
     // 날짜가 지난 재물운이나 다른 종류 운세는 반영하지 않는다
@@ -133,8 +133,8 @@ describe('잠긴 개체 툴팁', () => {
   });
 });
 
-describe('물약 판매가 합계', () => {
-  it('오늘 쓴 작은 행운 물약이 있으면 판매 창 합계에 운 배율을 반영하고 물약 이름으로 내역을 남긴다', () => {
+describe('비약 판매가 합계', () => {
+  it('오늘 사용한 작은 바다 영약이 있으면 판매 창 합계에 운 배율을 반영하고 비약 이름으로 내역을 남긴다', () => {
     const now = '2026-11-24T05:00:00.000Z';
     const rare = FISH.find(f => f.id === 'carp')!;
     const tab = selectSaleTab(
@@ -146,7 +146,7 @@ describe('물약 판매가 합계', () => {
     const base = tab.total.base;
     expect(tab.total.value).toBe(Math.round(base * 1.05));
     expect(tab.total.mods).toEqual([
-      { id: 'potion-luck-small', label: '작은 행운 물약', delta: tab.total.value - base },
+      { id: 'potion-luck-small', label: '작은 바다 영약', delta: tab.total.value - base, source: { kind: 'potion', id: 'luck-small' } },
     ]);
   });
 });

@@ -2228,8 +2228,8 @@ describe('우편 아이템 첨부와 물약 사용', () => {
     ]);
   });
 
-  it('usePotion은 가방 물약 1개를 소비해 오늘 게임 날짜까지 효과를 켜고 판매 가격·포획 운 배율에 합산된다', async () => {
-    const sold = fish('carp', { size: 30, uid: testUid(9601) });
+  it('usePotion은 가방 비약 1개를 소비해 오늘 게임 날짜까지 효과를 켜고 판매 가격·포획 운 배율에 독립 곱연산된다', async () => {
+    const sold = fish('goldcarp', { size: 30, uid: testUid(9601) });
     const uid = await seed({
       state: {
         gold: 0,
@@ -2256,14 +2256,15 @@ describe('우편 아이템 첨부와 물약 사용', () => {
     const dup = await callAction(userToken(uid), { type: 'usePotion', id: 'luck-small' });
     expect(dup).toMatchObject({ status: 422, body: { error: 'potion-already-active' } });
 
-    // 재물운 ×1.05 + 물약 +0.05 = ×1.10 배율이 판매가에 적용된다
+    // 재물운 ×1.05 × 작은 바다 영약 ×1.05 = ×1.1025 독립 곱연산 배율이 판매가에 적용된다 (단순 합산 880과 구분되는 882)
     vi.setSystemTime(Date.parse(NOW) + 4000);
     const expectedGold = sellSelected(
       { ...newState(), bag: [sold], fortune: { day: TODAY_KST, kind: 'gold', index: 5 }, potions: { 'luck-small': TODAY_KST } },
       [sold.uid],
       0,
-      1.10,
+      1.05 * 1.05,
     ).gold;
+    expect(expectedGold).toBe(882);
     const sellRes = await callAction(userToken(uid), { type: 'sell', uids: [sold.uid] });
     expect(sellRes.status).toBe(200);
     const saveAfterSell = (await dumpUser(env.client, uid)).saves_current[0] as { gold: number };

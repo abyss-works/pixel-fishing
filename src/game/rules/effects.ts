@@ -4,7 +4,6 @@ import { ARTIFACTS } from '../content/artifacts.js';
 import { WALK_BAG_CAP, boatAt } from '../content/boats.js';
 import { recipeById } from '../content/cooking.js';
 import type { SpotId } from '../content/spots.js';
-import type { ZoneId } from '../content/zones.js';
 import { artifactEffectsAt, artifactLevelOf } from './artifactLevel.js';
 import { WALK_SPEED } from './balance.js';
 import { FORTUNE_TARGET_OF, activePotionsOf, fortuneOf, luckMultOf } from './fortune.js';
@@ -37,6 +36,16 @@ export interface AchievementBonuses {
   epicWeight: number;
   /** 전설 등급 가중치 증가율 합 */
   legendaryWeight: number;
+  /** 밤 어종 가중치 증가율 합 */
+  nightWeight: number;
+  /** 가방 용량 증가율 합 */
+  bagCap: number;
+  /** 기운 획득량 증가율 합 */
+  energyYield: number;
+  /** 미끼 증폭 증가율 합 */
+  baitAmplify: number;
+  /** 도시락 증폭 증가율 합 */
+  lunchAmplify: number;
   /** 판매가 보너스 증가율 합 */
   sellBonus: number;
   /** 네임드 조우 가중치 증가율 합 */
@@ -45,10 +54,6 @@ export interface AchievementBonuses {
   moveSpeed: number;
   /** 보유 유물 효과 배율 증가 합 */
   artifactBoost: number;
-  /** 존별 전설 등급 가중치 증가율 합 */
-  zoneLegendary: Partial<Record<ZoneId, number>>;
-  /** 존별 돌연변이 가중치 증가율 합 */
-  zoneMutation: Partial<Record<ZoneId, number>>;
 }
 
 /** 업적 보너스가 없을 때 명시적으로 넘기는 동결 상수 */
@@ -58,12 +63,15 @@ export const NO_ACHIEVEMENT_BONUSES: Readonly<AchievementBonuses> = Object.freez
   rareWeight: 0,
   epicWeight: 0,
   legendaryWeight: 0,
+  nightWeight: 0,
+  bagCap: 0,
+  energyYield: 0,
+  baitAmplify: 0,
+  lunchAmplify: 0,
   sellBonus: 0,
   namedWeight: 0,
   moveSpeed: 0,
   artifactBoost: 0,
-  zoneLegendary: Object.freeze({}),
-  zoneMutation: Object.freeze({}),
 });
 
 /** 플레이어 한 명의 파생 값 계산에 필요한 효과 묶음 */
@@ -86,17 +94,20 @@ export function createPlayerContext(input: PlayerContext): PlayerContext {
       rareWeight: input.achievements.rareWeight,
       epicWeight: input.achievements.epicWeight,
       legendaryWeight: input.achievements.legendaryWeight,
+      nightWeight: input.achievements.nightWeight,
+      bagCap: input.achievements.bagCap,
+      energyYield: input.achievements.energyYield,
+      baitAmplify: input.achievements.baitAmplify,
+      lunchAmplify: input.achievements.lunchAmplify,
       sellBonus: input.achievements.sellBonus,
       namedWeight: input.achievements.namedWeight,
       moveSpeed: input.achievements.moveSpeed,
       artifactBoost: input.achievements.artifactBoost,
-      zoneLegendary: { ...input.achievements.zoneLegendary },
-      zoneMutation: { ...input.achievements.zoneMutation },
     },
   };
 }
 
-/** 가방 상한 — 배 기본 칸에 길드·유물 가방 용량 보너스를 더하고, 이미 넘겨 든 개체 수(heldCount)로 래칫을 적용한다 */
+/** 가방 상한 — 배 기본 칸에 길드·업적·유물 가방 용량 보너스를 더하고, 이미 넘겨 든 개체 수(heldCount)로 래칫을 적용한다 */
 export function bagCapacityOf(ctx: PlayerContext, heldCount: number): Stat {
   const base = ctx.state.boat < 1 ? WALK_BAG_CAP : boatAt(ctx.state.boat)!.bagCap;
   const mods: StatMod[] = [];
@@ -104,6 +115,10 @@ export function bagCapacityOf(ctx: PlayerContext, heldCount: number): Stat {
   let bonusSum = ctx.guild.bag;
   if (ctx.guild.bag > 0) {
     mods.push({ id: 'guild-bag', label: '길드 가방 용량', delta: Math.round(base * ctx.guild.bag), source: { kind: 'guild', bonus: 'bag' } });
+  }
+  if (ctx.achievements.bagCap > 0) {
+    bonusSum = clean(bonusSum + ctx.achievements.bagCap);
+    mods.push({ id: 'achievement-bagCap', label: '업적 누적', delta: Math.round(base * ctx.achievements.bagCap), source: { kind: 'achievement', id: 'bagCap' } });
   }
   for (const a of ARTIFACTS) {
     const level = artifactLevelOf(ctx.state, a.id);
@@ -124,7 +139,7 @@ export function bagCapacityOf(ctx: PlayerContext, heldCount: number): Stat {
   return { base, mods, value: Math.max(cap, heldCount) };
 }
 
-/** 이동 속도(px/s) — 도보·항해 기본값에 유물(항해 전용, 업적 유물 배율 반영), 업적 이동 속도, 밤 감속을 반영한다 */
+/** 이동 속도(px/s) — 도보·항해 기본값에 유물(항해 전용, 업적 유물 배율 반영)과 업적 이동 속도를 더하고, 밤 감속 배수를 곱한다 */
 export function moveSpeedOf(ctx: PlayerContext, movement: Movement, night: boolean): Stat {
   const base = movement === 'walk' ? WALK_SPEED : boatSpeed(ctx.state);
   const mods: StatMod[] = [];
@@ -152,23 +167,24 @@ export function moveSpeedOf(ctx: PlayerContext, movement: Movement, night: boole
     });
   }
   if (night) {
+    const preNight = buildStat(base, mods).value;
     mods.push({
       id: 'night',
       label: '밤 항해 감속',
-      delta: base * (NIGHT_SPEED_FACTOR - 1),
+      delta: preNight * (NIGHT_SPEED_FACTOR - 1),
       source: { kind: 'rule', id: 'night' },
     });
   }
   return buildStat(base, mods);
 }
 
-/** 유효 입질 대기(초) — 파워 미달 추가, 유물(업적 유물 배율 반영), 업적 입질 대기, 방치 모드 도시락 슬롯을 반영한다 */
+/** 유효 입질 대기(초) — 파워 미달 추가, 유물(업적 유물 배율 반영), 업적 입질 대기, 방치 모드 도시락 슬롯(도시락 증폭 반영)을 반영한다 */
 export function biteWaitOf(ctx: PlayerContext, spot: SpotId, mode: 'idle' | 'manual'): { min: Stat; max: Stat } {
   const st = rodStats(ctx.state.rod);
   const pz = powerZones(ctx.state, spot);
   const relicScale = 1 + ctx.achievements.artifactBoost;
   const activeSlots = mode === 'idle' ? appliedSlots(ctx.state, ctx.now, 'auto') : {};
-  const cook = mode === 'idle' ? slotEffects(ctx.state, ctx.now, 'auto') : null;
+  const cook = mode === 'idle' ? slotEffects(ctx.state, ctx.now, 'auto', { lunch: ctx.achievements.lunchAmplify }) : null;
   const lunchId = activeSlots.lunch;
   const lunchRecipe = lunchId ? recipeById(lunchId) : undefined;
 
@@ -213,7 +229,7 @@ export function biteWaitOf(ctx: PlayerContext, spot: SpotId, mode: 'idle' | 'man
 }
 
 /** 판매 수령액 — 선택한 개체의 기본가 합에 길드·업적 판매가 보너스를 한 번 더하고,
- *  재물운이나 판매가 물약이 켜진 날에는 그 합계에 합산 운 배율을 곱한다(서버 판매와 같은 순서 — 반올림은 마지막 곱 뒤 한 번) */
+ *  재물운이나 판매가 비약이 켜진 날에는 그 합계에 독립 곱연산 배수를 곱한다(서버 판매와 같은 순서 — 반올림은 마지막 곱 뒤 한 번) */
 export function saleProceedsOf(ctx: PlayerContext, instances: readonly FishInstance[]): Stat {
   const base = instances.reduce((sum, inst) => sum + priceOfInstance(inst), 0);
   const guildSell = ctx.guild.sell;
@@ -240,14 +256,19 @@ export function saleProceedsOf(ctx: PlayerContext, instances: readonly FishInsta
   const luckDelta = value - preLuck;
   if (luckDelta !== 0) {
     const luckMods: StatMod[] = [];
+    let running = preLuck;
     const fortuneBonus = fortune !== null && FORTUNE_TARGET_OF[fortune.kind] === 'sell' ? fortune.index / 100 : 0;
     if (fortuneBonus > 0) {
-      luckMods.push({ id: 'fortune-sell', label: '오늘의 운세', delta: Math.round(preLuck * fortuneBonus), source: { kind: 'fortune' } });
+      const d = Math.round(running * fortuneBonus);
+      luckMods.push({ id: 'fortune-sell', label: '오늘의 운세', delta: d, source: { kind: 'fortune' } });
+      running += d;
     }
     for (const potion of activePotionsOf(ctx.state.potions, ctx.now)) {
       const bonus = potion.effects.luck?.sell ?? 0;
       if (bonus > 0) {
-        luckMods.push({ id: `potion-${potion.id}`, label: potion.name, delta: Math.round(preLuck * bonus), source: { kind: 'potion', id: potion.id } });
+        const d = Math.round(running * bonus);
+        luckMods.push({ id: `potion-${potion.id}`, label: potion.name, delta: d, source: { kind: 'potion', id: potion.id } });
+        running += d;
       }
     }
     if (luckMods.length > 0) {

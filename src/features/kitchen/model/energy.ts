@@ -6,6 +6,7 @@ import { RARITY, RARITY_ORDER } from '../../../game/content/rarity';
 import type { RarityId } from '../../../game/content/rarity';
 import { SPOTS } from '../../../game/content/spots';
 import type { SpotId } from '../../../game/content/spots';
+import { achievementBonusesOf } from '../../../game/rules/achievements';
 import { energyGain, energyTargetOf, energyTargetRows, energyYield, canExtractEnergy } from '../../../game/rules/cooking';
 import { REJECT_TEXT, instanceFish } from '../../../game/rules/logic';
 import type { FishInstance, GameState } from '../../../game/rules/logic';
@@ -58,6 +59,8 @@ export interface EnergyView {
   hasOverride: boolean;
   /** 확정 가능 여부 — 게임 규칙의 판정 그대로 */
   allowed: RuleCheck;
+  /** 기운 획득량 업적 누적 보너스 비율 */
+  energyYieldBonus: number;
 }
 
 const isChecked = (game: GameState, picks: EnergyPicks, inst: FishInstance): boolean => {
@@ -70,7 +73,8 @@ const isChecked = (game: GameState, picks: EnergyPicks, inst: FishInstance): boo
 export function selectEnergyView(game: GameState, picks: EnergyPicks): EnergyView {
   const excluded = new Set(game.bag.filter(i => !isChecked(game, picks, i)).map(i => i.uid));
   const { rows, soldUids } = selectSalePreview(game.bag, excluded, 0);
-  const gain = energyGain(game, soldUids);
+  const energyYieldBonus = achievementBonusesOf(game).energyYield;
+  const gain = energyGain(game, soldUids, energyYieldBonus);
   // 해역 목록과 켜짐, 기본값 여부는 게임 규칙(energyTargetRows)이 정한다. 가장 앞선 해역부터 보인다
   const spots = energyTargetRows(game).reverse().map((r): EnergySpotRow => ({
     id: r.spot, name: SPOTS.find(s => s.id === r.spot)!.name,
@@ -85,6 +89,7 @@ export function selectEnergyView(game: GameState, picks: EnergyPicks): EnergyVie
     energyTotal: energyTotal(gain.byGrade), count: gain.uids.length, spots,
     hasOverride: spots.some(s => s.overridden),
     allowed: canExtractEnergy(game),
+    energyYieldBonus,
   };
 }
 
@@ -103,8 +108,12 @@ export function clearSpotPicks(picks: EnergyPicks, bag: readonly FishInstance[],
 export const energyTotal = (byGrade: Record<RarityId, number>): number =>
   RARITY_ORDER.reduce((sum, g) => sum + byGrade[g], 0);
 
-/** 어종 행에서 고른 개체가 내는 기운(저장 단위) — 산출은 게임 규칙(energyYield)이 정한다 */
-export const energyRowValue = (row: SaleRow): number => energyYield(row.selectedCount);
+/** 어종 행에서 고른 개체가 내는 기운(저장 단위) — 산출은 게임 규칙(energyYield)에 보너스를 반영한다 */
+export const energyRowValue = (row: SaleRow, energyYieldBonus = 0): number => {
+  const base = energyYield(row.selectedCount);
+  if (base === 0 || energyYieldBonus === 0) return base;
+  return Math.round(base * Math.max(0, 1 + energyYieldBonus));
+};
 
 /** 결과 한 줄 — 얻은 등급만 등급 순서로. count는 저장 단위다 */
 export function energyResultRows(byGrade: Record<RarityId, number>): { grade: RarityId; count: number }[] {
@@ -112,7 +121,7 @@ export function energyResultRows(byGrade: Record<RarityId, number>): { grade: Ra
 }
 
 export type EnergyGrade = RarityId;
-export type QuickEnergyGame = Pick<GameState, 'bag' | 'items' | 'boat' | 'location'>;
+export type QuickEnergyGame = GameState;
 
 export const defaultQuickEnergyGrades = (): Set<EnergyGrade> => new Set(RARITY_ORDER);
 
@@ -180,7 +189,7 @@ export function selectQuickEnergyView(
   }
   const unlockedCount = RARITY_ORDER.reduce((sum, r) => sum + byRarity[r].length, 0);
   const selectedUids = RARITY_ORDER.flatMap(r => (selectedGrades.has(r) ? byRarity[r] : []));
-  const gain = energyGain(game, selectedUids);
+  const gain = energyGain(game, selectedUids, achievementBonusesOf(game).energyYield);
 
   const chips = RARITY_ORDER.map((grade): QuickEnergyChip => {
     const fishCount = byRarity[grade].length;

@@ -22,9 +22,9 @@ describe('ProgressCount', () => {
     expect(root.querySelector('[data-progress-target]')?.textContent).toBe(' / 90');
     expect(root.querySelector('[data-progress-percent]')?.textContent).toBe('(47%)');
 
-    rerender(<ProgressCount current={2} target={8} tight suffix=" 완결" />);
+    rerender(<ProgressCount current={2} target={8} tight suffix=" 완료" />);
     root = container.querySelector('[data-progress-count]') as HTMLElement;
-    expect(root.textContent).toBe('2/8 완결');
+    expect(root.textContent).toBe('2/8 완료');
 
     rerender(<ProgressCount current={40} target={60} targetPrefix="요구 " tone="danger" />);
     root = container.querySelector('[data-progress-count]') as HTMLElement;

@@ -9,7 +9,9 @@ import WebSocket from 'ws';
 import { DEFAULT_LOOK } from '../../src/game/content/wardrobe';
 import { V_SCHOOLS, V_SPAWN } from '../../src/game/world/regions/village';
 import { FISH, judgeTiming, newState } from '../../src/game/rules/logic';
-import { effectiveBite, powerZones, rodAxes } from '../../src/game/rules/stats';
+import { biteWaitOf, createPlayerContext, NO_ACHIEVEMENT_BONUSES } from '../../src/game/rules/effects';
+import { NO_GUILD_EFFECTS } from '../../src/game/rules/guild';
+import { powerZones, rodAxes } from '../../src/game/rules/stats';
 import { phaseDurationMs } from '../../src/game/rules/fishing';
 import { LIVE_CLOSE_OUTDATED, LIVE_CLOSE_REPLACED, LIVE_MOVE_MS, LIVE_PATH, LIVE_PING_MS } from '../../src/game/rules/live';
 import type { ClientMessage, ServerMessage } from '../../src/game/rules/live';
@@ -51,6 +53,12 @@ type CatchBody = { result?: { fishId?: string } } | null;
 const between = (min: number, max: number): number => min + Math.random() * (max - min);
 // 낚싯대 Lv1의 새 계정. 입질 대기와 판정 구간은 이 상태의 규칙값을 쓴다
 const START_STATE = newState();
+const START_CTX = createPlayerContext({
+  state: START_STATE,
+  guild: NO_GUILD_EFFECTS,
+  now: '1970-01-01T00:00:00.000Z',
+  achievements: NO_ACHIEVEMENT_BONUSES,
+});
 
 export class Player {
   private readonly abort = new AbortController();
@@ -315,7 +323,7 @@ export class Player {
 
   /** 입질 대기 → 판정 → catch → 획득 표시. 줄은 그대로 두고 자동으로 다시 던진다 */
   private async catchCycle(): Promise<void> {
-    const bite = effectiveBite(START_STATE, this.spot);
+    const bite = biteWaitOf(START_CTX, this.spot, this.idle ? 'idle' : 'manual');
     await this.sleep(between(bite.min.value, bite.max.value) * 1000);
     const sweepMs = rodAxes(START_STATE).sweep.value * 1000;
     let judgment: 'auto' | 'perfect' | 'good' | 'normal' = 'auto';

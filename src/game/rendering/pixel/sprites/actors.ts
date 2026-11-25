@@ -62,6 +62,20 @@ function drawAchievementHat(ctx: Ctx, x: number, y: number, hat: Hat) {
       R(ctx, x - 4, y - 16, 2, 2, c);
       R(ctx, x + 2, y - 16, 2, 2, c);
       return;
+    case 'measure-band-cap':
+      R(ctx, x - 3, y - 20, 6, 3, c);
+      R(ctx, x - 5, y - 17, 10, 1, c);
+      R(ctx, x - 3, y - 18, 6, 1, a);
+      R(ctx, x - 2, y - 18, 1, 1, c);
+      R(ctx, x, y - 18, 1, 1, c);
+      R(ctx, x + 2, y - 18, 1, 1, c);
+      return;
+    case 'iron-hook-hat':
+      R(ctx, x - 3, y - 19, 6, 3, c);
+      R(ctx, x - 5, y - 17, 10, 1, c);
+      R(ctx, x + 1, y - 19, 2, 1, a);
+      R(ctx, x + 2, y - 18, 1, 2, a);
+      return;
     case 'lure-bucket-hat':
       R(ctx, x - 3, y - 19, 6, 3, c);
       R(ctx, x - 5, y - 17, 10, 1, c);

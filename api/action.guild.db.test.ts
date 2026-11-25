@@ -143,8 +143,10 @@ describe('보너스 효과(서버 판정)', () => {
     expect((boosted.body as { result: { released: unknown[] } }).result.released).toEqual([]);
   });
 
-  it('캐치 fast path는 돌연변이 확률에 퍼센트포인트를 더한다', async () => {
-    const r = variantShare(mutationWeightsOf(newState(), 'pond')) + 0.02;
+  it('캐치 fast path는 돌연변이 폼 가중치에 길드 보너스(+4%/단)를 더한다', async () => {
+    const baseShare = variantShare(mutationWeightsOf(newState(), 'pond'));
+    const boostedShare = variantShare(mutationWeightsOf(newState(), 'pond', 0, 0, 1, 0.2));
+    const r = (baseShare + boostedShare) / 2;
     vi.spyOn(Math, 'random').mockReturnValue(r);
     const solo = await seedUser(env.client, { uid: testUid(nextUid++), email: 'mut-solo@test.dev', state: {} });
     const plain = await callAction(userToken(solo), catchPond);

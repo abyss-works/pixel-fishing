@@ -74,7 +74,7 @@ describe('받는 사람 검색', () => {
 describe('첨부 아이템 검색과 편집', () => {
   it('빈 검색어는 아무것도 찾지 않고, 종류나 이름으로 찾는다', () => {
     expect(searchAttachableItems('   ')).toEqual([]);
-    expect(searchAttachableItems('물약').map(i => i.id)).toContain('luck-small');
+    expect(searchAttachableItems('비약').map(i => i.id)).toContain('luck-small');
     expect(searchAttachableItems('기운').map(i => i.kind)).toContain('energy');
   });
 

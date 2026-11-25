@@ -63,7 +63,7 @@ describe('CodeModal', () => {
     expect(screen.getByLabelText('쿠폰 코드')).toHaveValue('');
   });
 
-  it('출항준비 쿠폰을 사용하면 300G와 작은 행운 물약 1개를 함께 알린다', () => {
+  it('출항준비 쿠폰을 사용하면 300G와 작은 바다 영약 1개를 함께 알린다', () => {
     const { dispatch, notices } = submitCoupon('출항준비', {
       status: 'ok',
       state: newState(),
@@ -71,7 +71,7 @@ describe('CodeModal', () => {
         type: 'coupon',
         gold: 300,
         items: [{ id: 'luck-small', qty: 1 }],
-        desc: '출항 지원금과 작은 행운 물약',
+        desc: '출항 지원금과 작은 바다 영약',
       },
     });
 
@@ -80,8 +80,8 @@ describe('CodeModal', () => {
       expect.objectContaining({
         kind: 'social.modalAction',
         tone: 'gold',
-        text: '쿠폰을 사용했어요! 300G와 작은 행운 물약 1개를 받았어요.',
-        toastText: '쿠폰 300G와 작은 행운 물약 1개 받음!',
+        text: '쿠폰을 사용했어요! 300G와 작은 바다 영약 1개를 받았어요.',
+        toastText: '쿠폰 300G와 작은 바다 영약 1개 받음!',
       }),
     ]);
     expect(notices[0]?.text).not.toMatch(/[()·—–]/);
@@ -97,7 +97,7 @@ describe('CodeModal', () => {
         type: 'coupon',
         gold: 0,
         items: [{ id: 'luck-small', qty: 2 }],
-        desc: '물약 선물',
+        desc: '비약 선물',
       },
     });
 
@@ -105,8 +105,8 @@ describe('CodeModal', () => {
       expect.objectContaining({
         kind: 'social.modalAction',
         tone: 'gold',
-        text: '쿠폰을 사용했어요! 작은 행운 물약 2개를 받았어요.',
-        toastText: '쿠폰 작은 행운 물약 2개 받음!',
+        text: '쿠폰을 사용했어요! 작은 바다 영약 2개를 받았어요.',
+        toastText: '쿠폰 작은 바다 영약 2개 받음!',
       }),
     ]);
   });
@@ -134,7 +134,7 @@ describe('CodeModal', () => {
         type: 'coupon' as const,
         gold: 300,
         items: [{ id: 'luck-small', qty: 1 }],
-        desc: '출항 지원금과 작은 행운 물약',
+        desc: '출항 지원금과 작은 바다 영약',
       },
     }));
     const recorded = createRecordedToast();
@@ -161,6 +161,6 @@ describe('CodeModal', () => {
     fireEvent.click(screen.getByRole('button', { name: '쿠폰 코드 사용' }));
 
     expect(dispatch).toHaveBeenCalledWith({ type: 'redeemCoupon', code: '출항준비' });
-    expect(recorded.notices[0]?.text).toBe('쿠폰을 사용했어요! 300G와 작은 행운 물약 1개를 받았어요.');
+    expect(recorded.notices[0]?.text).toBe('쿠폰을 사용했어요! 300G와 작은 바다 영약 1개를 받았어요.');
   });
 });

@@ -82,7 +82,7 @@ describe('적용 중인 효과 창 (ActiveEffectsModal)', () => {
     expect(within(dialog).getByText('3분 남음')).toBeInTheDocument();
 
     expect(within(dialog).getByText('비약')).toBeInTheDocument();
-    expect(within(dialog).getByText('작은 행운 물약')).toBeInTheDocument();
+    expect(within(dialog).getByText('작은 바다 영약')).toBeInTheDocument();
     expect(within(dialog).getByText('×1.05')).toBeInTheDocument();
 
     expect(within(dialog).getByText('오늘의 운세')).toBeInTheDocument();

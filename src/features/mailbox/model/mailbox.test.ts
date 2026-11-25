@@ -29,9 +29,9 @@ describe('우편함 모델', () => {
 
   it('수령 안내 문구는 골드, 아이템, 복합 보상을 구분한다', () => {
     expect(claimMailNoticeText(mail({ gold: 6309483 }))).toBe('우편에서 6,309,483G를 받았어요!');
-    expect(claimMailNoticeText(mail({ items: [{ id: 'luck-small', qty: 2 }] }))).toBe('우편에서 작은 행운 물약 2개를 받았어요!');
+    expect(claimMailNoticeText(mail({ items: [{ id: 'luck-small', qty: 2 }] }))).toBe('우편에서 작은 바다 영약 2개를 받았어요!');
     expect(claimMailNoticeText(mail({ gold: 500, items: [{ id: 'luck-small', qty: 2 }] }))).toBe(
-      '우편에서 500G, 작은 행운 물약 2개를 받았어요!',
+      '우편에서 500G, 작은 바다 영약 2개를 받았어요!',
     );
   });
 

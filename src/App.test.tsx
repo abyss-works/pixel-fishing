@@ -929,7 +929,7 @@ describe('R22: 도움말 탭', () => {
     clickTab('도움말');
     const help = document.body.textContent ?? '';
     for (const topic of ['바다와 항해', '세계지도', '낮과 밤', '바운티 헌팅', '완료를 눌러', '네임드 토벌', '흔적', '추적', '조우', '유물',
-      '미끼', 'Esc', '물고기 그래픽', '최근 소식 다시 보기', '닉네임', '오늘의 운세', '물약', '여객선']) {
+      '미끼', 'Esc', '물고기 그래픽', '최근 소식 다시 보기', '닉네임', '오늘의 운세', '비약', '여객선']) {
       expect(help, topic).toContain(topic);
     }
     // 정본에서 쓰지 않는 말
@@ -1168,7 +1168,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     fireEvent.keyDown(document, { key: '2' }); // 유물
     expect(screen.getByRole('heading', { name: /^유물/ })).toBeInTheDocument();
     expect(screen.getByText('진주 상인의 저울')).toBeInTheDocument();
-    expect(screen.getByText('요리 추가 완성 +10%p')).toBeInTheDocument();
+    expect(screen.getByText('요리 추가 완성 +10%')).toBeInTheDocument();
     expect(screen.getByText('해구의 이빨')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '보유 중만 보기' }));
     expect(screen.getByText('진주 상인의 저울')).toBeInTheDocument();

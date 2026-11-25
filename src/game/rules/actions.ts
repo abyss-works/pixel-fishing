@@ -6,7 +6,7 @@ import {
   addCatch, buildCatchInfo, makeInstance, migrate,
   redeemCoupon, rollCatchExtras, sellSelected, setLocked, applyAutoLock, applyCatchAutoLock, tryBuyBoat, tryUpgrade,
   overflowUids, release, instanceFish, formName, travel, applyRelief, moveExhibit,
-  addItem, takeItem, nextDexRec, mutationWeightsOf, withVariantPoints,
+  addItem, takeItem, nextDexRec, mutationWeightsOf,
 } from './logic.js';
 import type { GameState, Judgment, CatchInfo, CatchExtras, DrawOptions, FishInstance, FormRecord, FormId, ReliefGrant, Fish, Coupon, CouponItem } from './logic.js';
 import { FISH } from '../content/fish.js';
@@ -22,7 +22,7 @@ import {
   applyEnergyGain, canCancelCook, canCook, canTransmuteEnergy, cookRefundOf, planOverflow, canEat, canExtractEnergy, canUseEnergy, energyGain, settleCooking,
   appliedSlots, isActiveSlot, maxBaitSlots, slotEffects, slotEndsAt, NO_COOK_EFFECTS,
 } from './cooking.js';
-import type { ActiveCookEffects } from './cooking.js';
+import type { ActiveCookEffects, SlotAmplify } from './cooking.js';
 import {
   ENERGY_ITEM_IDS, ENERGY_TRANSMUTE_RATIO, ENERGY_UNIT, recipeById, recipeCostStored, recipeWaitMs, transmuteTargetOf,
 } from '../content/cooking.js';
@@ -40,7 +40,6 @@ import type { LocationRef } from '../content/places.js';
 import { canBuyBoat, canBuyHat, canChangeClothes, canClaimAchievement, canClaimAllAchievements, canFish, canTravel, canUpgradeRod, canUsePotion, canWearHat, encounterQuests } from './rules.js';
 import { hatById } from '../content/wardrobe.js';
 import { ACHIEVEMENTS, achievementById } from '../content/achievements.js';
-import { topZoneOfSpot } from '../content/zones.js';
 import { achievementBonusesOf, counterIncrementsForEvents, evaluateAchievements } from './achievements.js';
 import { NO_ACHIEVEMENT_BONUSES, bagCapacityOf, createPlayerContext } from './effects.js';
 import type { AchievementBonuses } from './effects.js';
@@ -90,7 +89,7 @@ export type GameAction =
   | { type: 'cancelCook'; id: string }                       // 조리 취소 — 완성분 정산 뒤 미완성 수량 기운 100% 환급
   | { type: 'transmuteEnergy'; from: RarityId; count: number } // 기운 변환 — 하위 기운 10개 → 상위 기운 1개 정방향 변환
   | { type: 'eat'; item: string; replaceSlot?: 'bait' | 'bait2' } // 먹기(쓰기) — 가방의 완성 요리 하나를 슬롯에 넣는다. 위치 제한 없음
-  | { type: 'usePotion'; id: string }                        // 물약 사용 — 가방의 물약 1개를 쓰고 오늘 게임 날짜 끝까지 지속한다
+  | { type: 'usePotion'; id: string }                        // 비약 사용 — 가방의 비약 1개를 쓰고 오늘 게임 날짜 끝까지 지속한다
   | { type: 'boot'; buildId?: unknown }                      // 접속(부팅) 기록 — DAU 정본. 그날 첫 접속이면 운세를 굴려 고정한다
   | { type: 'setNickname'; nickname: unknown }     // 닉네임 변경 — 형태는 리듀서, 중복은 서버(DB)가 본다
   | { type: 'seeTutorial'; id: unknown }           // 튜토리얼 창을 봤다 — 같은 트리거에서 다시 뜨지 않게 남긴다
@@ -388,13 +387,14 @@ export interface CatchDraw {
 export function prepareCatchDraw(
   state: Pick<GameState, 'slots'>, claimed: Judgment, now: string, pz: PowerZone,
   forcePhase?: DayPhase,
+  amplify?: SlotAmplify,
 ): CatchDraw {
   // 파워 게이트 백스톱 — 클라 주장을 존이 허용하는 최고 등급으로 내린다: PERFECT→GOOD→NORMAL.
   let judgment = claimed;
   if (judgment === 'perfect' && pz.red <= 0) judgment = pz.yellow > 0 ? 'good' : 'normal';
   else if (judgment === 'good' && pz.yellow <= 0) judgment = 'normal';
   // 요리 슬롯 효과 — 서버 시각(now)으로 적용 여부를 정한다. 방치와 수동의 구분은 주장 판정으로 하며 강등으로 바뀌지 않는다.
-  const cook = slotEffects(state, now, claimed);
+  const cook = slotEffects(state, now, claimed, amplify);
   // 시간대 — 판정은 서버(액션 시각)라 클라가 시각을 주장할 수 없다 (게임 시계).
   // 개발 도구 forcePhase가 허용되면 요청 단위로 낮/밤을 전환한다. 밤 어종 출현 미끼는 낮에도 밤 풀을 쓴다.
   const nightNow = forcePhase ? forcePhase === 'night' : isNight(now);
@@ -408,7 +408,7 @@ export function prepareCatchDraw(
   return { judgment, phaseOpts, cook };
 }
 
-/** 네임드 조우 가중치에 더하는 비율 — 길드 보너스, 요리 슬롯(도시락), 업적 누적 보너스의 합. 리듀서와 서버 fast path가 같이 쓴다 */
+/** 네임드 조우 가중치에 더하는 비율 — 길드 보너스, 요리 슬롯(도시락 증폭 반영), 업적 누적 보너스의 합. 리듀서와 서버 fast path가 같이 쓴다 */
 export function namedWeightBonus(
   state: Pick<GameState, 'slots'>,
   judgment: Judgment,
@@ -416,7 +416,8 @@ export function namedWeightBonus(
   guild: GuildEffects = NO_GUILD_EFFECTS,
   achievements: AchievementBonuses = NO_ACHIEVEMENT_BONUSES,
 ): number {
-  return guild.named + slotEffects(state, now, judgment).namedWeight + achievements.namedWeight;
+  const cookNamed = slotEffects(state, now, judgment, { bait: achievements.baitAmplify, lunch: achievements.lunchAmplify }).namedWeight;
+  return guild.named + cookNamed + achievements.namedWeight;
 }
 
 /** 일반 등급 가중치에 걸리는 기본 규칙 배수 — 보너스 효과는 포함하지 않는다.
@@ -464,7 +465,6 @@ export function drawCatch(
   ownsNormal: (fishId: string) => boolean, guild: GuildEffects = NO_GUILD_EFFECTS, cook: ActiveCookEffects = NO_COOK_EFFECTS,
   achievements: AchievementBonuses = NO_ACHIEVEMENT_BONUSES,
 ): { fish: Fish; extras: CatchExtras; pity: SpeciesPity; firstCatch: FirstCatch; byCeiling: boolean } {
-  const zone = topZoneOfSpot(spot);
   const commonCut = guild.rare + commonWeightCutOf(state, achievements.artifactBoost);
   let phaseOpts = commonCut > 0 ? addGradeEffect(basePhaseOpts, 'common', -commonCut) : basePhaseOpts;
   if (achievements.rareWeight > 0) {
@@ -480,18 +480,18 @@ export function drawCatch(
   if (achievements.legendaryWeight > 0) {
     phaseOpts = addGradeEffect(phaseOpts, 'legendary', achievements.legendaryWeight);
   }
-  const zoneLeg = zone ? (achievements.zoneLegendary[zone] ?? 0) : 0;
-  if (zoneLeg > 0) phaseOpts = addGradeEffect(phaseOpts, 'legendary', zoneLeg);
+  if (achievements.nightWeight > 0) {
+    phaseOpts = { ...phaseOpts, nightWeightBonus: (phaseOpts.nightWeightBonus ?? 0) + achievements.nightWeight };
+  }
   const candidates = speciesPityCandidates(state.pity, spot, phaseOpts);
   const resolved = resolveSpeciesPity(state.pity, candidates, ownsNormal);
   const target = resolved.target ? FISH.find(f => f.id === resolved.target) : undefined;
   const guaranteed = firstCatchTarget(state.firstCatch, spot, phaseOpts.phase, ownsNormal, rng);
   const fish = guaranteed ?? target ?? rollCatchFish(spot, judgment, power, pzMult, rng, phaseOpts);
   const pityFixed = !guaranteed && target !== undefined;
-  const achMut = achievements.mutationWeight + (zone ? (achievements.zoneMutation[zone] ?? 0) : 0);
-  const forms = withVariantPoints(
-    mutationWeightsOf(state, spot, cook.mutationWeight, achMut, 1 + achievements.artifactBoost),
-    guild.mutation,
+  const forms = mutationWeightsOf(
+    state, spot, cook.mutationWeight, achievements.mutationWeight, 1 + achievements.artifactBoost, guild.mutation,
+    cook.mutationMult,
   );
   const extras = rollCatchExtras(fish, rng, (guaranteed !== null || pityFixed) ? { normal: 1, variant: 0 } : forms);
   const opts = catchDrawOptions(judgment, power, spot, pzMult, phaseOpts);
@@ -531,7 +531,10 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const achBonuses = achievementBonusesOf(state);
       // 파워 게이트(서버 권위 백스톱)·요리 슬롯 효과·시간대 — prepareCatchDraw가 단일 계산한다(rng를 쓰지 않는다).
       const pz = powerZones(state, action.spot);
-      const { judgment, phaseOpts, cook } = prepareCatchDraw(state, action.judgment, deps.now, pz, action.forcePhase);
+      const { judgment, phaseOpts, cook } = prepareCatchDraw(
+        state, action.judgment, deps.now, pz, action.forcePhase,
+        { bait: achBonuses.baitAmplify, lunch: achBonuses.lunchAmplify },
+      );
       const named = drawNamedEncounter(state.namedPity, encounterQuests(deps.bounty), action.spot, deps.now,
         deps.rng, action.forceEncounter === true, namedWeightBonus(state, action.judgment, deps.now, guild, achBonuses),
         totalLuckMultOf(state, deps.now, 'named'));
@@ -563,7 +566,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const ctx = createPlayerContext({ state, guild, now: deps.now, achievements: achBonuses });
       const overflow = overflowUids(caught.bag, bagCapacityOf(ctx, state.bag.length).value);
       // 가공 플랜트선은 내보낼 개체가 기운 대상이면 놓아주지 않고 기운으로 바꾼다
-      const plan = planOverflow({ ...caught, boat: state.boat, energyTargets: state.energyTargets }, overflow, deps.guest === true);
+      const plan = planOverflow({ ...caught, boat: state.boat, energyTargets: state.energyTargets }, overflow, deps.guest === true, achBonuses.energyYield);
       const view = (uids: readonly string[]) => uids.map(uid => caught.bag.find(b => b.uid === uid)!);
       const gone = view(plan.released);
       const taken = view(plan.gain.uids);
@@ -732,7 +735,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       if (!Array.isArray(action.uids) || action.uids.some(u => typeof u !== 'string')) return { ok: false, error: 'bad-request' };
       const check = canExtractEnergy(state, deps.guest);
       if (!check.ok) return { ok: false, error: check.reason };
-      const gain = energyGain(state, action.uids);
+      const gain = energyGain(state, action.uids, achievementBonusesOf(state).energyYield);
       if (gain.uids.length === 0) return { ok: true, state, result: { type: 'extract', energy: gain.byGrade }, events: [] };
       return {
         ok: true, state: applyEnergyGain(state, gain),

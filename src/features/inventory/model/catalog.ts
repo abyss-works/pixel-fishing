@@ -89,7 +89,7 @@ export interface SellLuckSources {
 }
 
 /** 기본 판매액에 길드·업적 판매가 보너스를 더한 내역 — 서버 판매와 같은 증가분 규칙(saleBonusOf)을 쓴다.
- *  luck은 운 배율(돈 운·물약 합산) — 보너스를 다 적용한 합계에 마지막으로 곱하고, 반올림은 곱 뒤 한 번이다(sellSelected와 같은 순서). */
+ *  luck은 운 배율(재물운·비약 독립 곱연산) — 보너스를 다 적용한 합계에 마지막으로 곱하고, 반올림은 곱 뒤 한 번이다(sellSelected와 같은 순서). */
 export function saleProceeds(
   base: number,
   sellBonus: number,
@@ -102,11 +102,11 @@ export function saleProceeds(
   const mods: Stat['mods'] = [];
   if (sellBonus > 0) {
     const d = saleBonusOf(base, sellBonus);
-    if (d > 0) mods.push({ id: 'guild-sell', label: GUILD_BONUS_NAME.sell, delta: d });
+    if (d > 0) mods.push({ id: 'guild-sell', label: GUILD_BONUS_NAME.sell, delta: d, source: { kind: 'guild', bonus: 'sell' } });
   }
   if (achSellBonus > 0) {
     const d = saleBonusOf(base, achSellBonus);
-    if (d > 0) mods.push({ id: 'achievement-sellBonus', label: '업적 누적', delta: d });
+    if (d > 0) mods.push({ id: 'achievement-sellBonus', label: '업적 누적', delta: d, source: { kind: 'achievement', id: 'sellBonus' } });
   }
   if (mods.length > 0) {
     const rest = mods.slice(0, -1).reduce((sum, mod) => sum + mod.delta, 0);
@@ -117,15 +117,20 @@ export function saleProceeds(
   const luckDelta = value - preLuck;
   if (luckDelta !== 0) {
     if (!luckSources) {
-      mods.push({ id: 'fortune-sell', label: FORTUNE_SOURCE_LABEL, delta: luckDelta });
+      mods.push({ id: 'fortune-sell', label: FORTUNE_SOURCE_LABEL, delta: luckDelta, source: { kind: 'fortune' } });
     } else {
       const luckMods: Stat['mods'] = [];
+      let running = preLuck;
       if (luckSources.fortuneBonus > 0) {
-        luckMods.push({ id: 'fortune-sell', label: FORTUNE_SOURCE_LABEL, delta: Math.round(preLuck * luckSources.fortuneBonus) });
+        const d = Math.round(running * luckSources.fortuneBonus);
+        luckMods.push({ id: 'fortune-sell', label: FORTUNE_SOURCE_LABEL, delta: d, source: { kind: 'fortune' } });
+        running += d;
       }
       for (const potion of luckSources.potions) {
         if (potion.bonus > 0) {
-          luckMods.push({ id: `potion-${potion.id}`, label: potion.name, delta: Math.round(preLuck * potion.bonus) });
+          const d = Math.round(running * potion.bonus);
+          luckMods.push({ id: `potion-${potion.id}`, label: potion.name, delta: d, source: { kind: 'potion', id: potion.id } });
+          running += d;
         }
       }
       if (luckMods.length > 0) {
@@ -133,7 +138,7 @@ export function saleProceeds(
         luckMods[luckMods.length - 1].delta = luckDelta - rest;
         mods.push(...luckMods);
       } else {
-        mods.push({ id: 'fortune-sell', label: FORTUNE_SOURCE_LABEL, delta: luckDelta });
+        mods.push({ id: 'fortune-sell', label: FORTUNE_SOURCE_LABEL, delta: luckDelta, source: { kind: 'fortune' } });
       }
     }
   }
@@ -145,7 +150,7 @@ export function saleProceeds(
 }
 
 /** 가방의 잠금·선택 제외 상태를 반영한 판매 대상과 합계를 만든다. sellBonus는 길드 판매가 보너스 비율이고,
- *  luck은 운 배율(돈 운·물약 합산)이다 — 미리보기 합계가 실제 수령액과 같아야 하므로 넘긴다. */
+ *  luck은 운 배율(재물운·비약 독립 곱연산)이다 — 미리보기 합계가 실제 수령액과 같아야 하므로 넘긴다. */
 export function selectSalePreview(
   bag: readonly FishInstance[], excluded: ReadonlySet<string>, sellBonus: number, achSellBonus = 0, luck = 1,
   luckSources?: SellLuckSources,

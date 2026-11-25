@@ -11,7 +11,7 @@ import type { RarityId } from '../content/rarity';
 import {
   baitDurationScale, canExtractEnergy, cookingProgress, cookingUnlocked, energyDefaultExcluded, energyTargetRows, energyGain, energyYield, energyTargetOf, maxBaitSlots, settleCooking, slotDurationMs, slotEffects, slotEndsAt, appliedSlots,
 } from './cooking';
-import { effectiveBite } from './stats';
+import { biteWaitOf, createPlayerContext, NO_ACHIEVEMENT_BONUSES } from './effects';
 import { BASE_REGION } from '../content/places';
 import type { BaseId } from '../content/places';
 import { REJECT_TEXT } from './rules';
@@ -138,6 +138,7 @@ describe('energyGain', () => {
   it('개체 하나의 산출은 한 곳에 정의한 값(ENERGY_PER_INDIVIDUAL)이다. 잠금과 중복은 산출에서 빠진다', () => {
     const s = seed({ bag: [inst('a', fishOf('epic')), inst('b', fishOf('epic'), true)] });
     expect(energyGain(s, ['a', 'a', 'b']).byGrade.epic).toBe(ENERGY_PER_INDIVIDUAL);
+    expect(energyGain(s, ['a'], 0.15).byGrade.epic).toBe(12);
     expect(energyYield(3)).toBe(3 * ENERGY_PER_INDIVIDUAL);
     expect(energyYield(0)).toBe(0);
   });
@@ -550,7 +551,7 @@ describe('slotEffects', () => {
 
   it('슬롯이 비어 있으면 효과가 없다', () => {
     expect(slotEffects(seed(), T0, 'auto')).toEqual({
-      biteWaitCut: 0, rarityWeight: {}, mutationWeight: 0, namedWeight: 0, nightUnlock: false,
+      biteWaitCut: 0, rarityWeight: {}, mutationWeight: 0, mutationMult: 1, namedWeight: 0, nightUnlock: false,
     });
   });
   it('도시락은 방치(auto) 판정에만, 미끼 슬롯은 수동 판정에만 적용한다', () => {
@@ -598,20 +599,50 @@ describe('slotEffects', () => {
       const e = slotEffects(seed({ slots: slot }), T0, r.kind === 'lunch' ? 'auto' : 'good');
       expect(e.biteWaitCut, r.id).toBe(r.effects.biteWaitCut ?? 0);
       expect(e.mutationWeight, r.id).toBe(r.effects.mutationWeight ?? 0);
+      expect(e.mutationMult, r.id).toBe(r.effects.mutationMult ?? 1);
       expect(e.namedWeight, r.id).toBe(r.effects.namedWeight ?? 0);
       expect(e.nightUnlock, r.id).toBe(r.effects.nightUnlock === true);
     }
+  });
+  it('돌연변이 억제 요리는 증폭 업적을 적용하지 않고 독립 배수 mutationMult로 집계한다', () => {
+    const lunch = seed({ slots: slots('cook-lunch-calm', null) });
+    expect(slotEffects(lunch, T0, 'auto', { bait: 0.2, lunch: 0.15 })).toMatchObject({
+      mutationWeight: 0,
+      mutationMult: 0.5,
+    });
+    expect(slotEffects(lunch, T0, 'normal', { bait: 0.2, lunch: 0.15 }).mutationMult).toBe(1);
+
+    const bait = seed({ slots: slots(null, 'cook-bait-calm') });
+    expect(slotEffects(bait, T0, 'normal', { bait: 0.2, lunch: 0.15 })).toMatchObject({
+      mutationWeight: 0,
+      mutationMult: 0.5,
+    });
+    expect(slotEffects(bait, T0, 'auto', { bait: 0.2, lunch: 0.15 }).mutationMult).toBe(1);
+  });
+  it('미끼·도시락 증폭 배수가 해당 슬롯 효과의 수치에만 곱해진다', () => {
+    const s = seed({ slots: slots('cook-lunch-bundle', 'cook-bait-rare') });
+    expect(slotEffects(s, T0, 'auto', { bait: 0.2, lunch: 0.15 })).toMatchObject({
+      biteWaitCut: 0.0575,
+      rarityWeight: { rare: 0.0575, epic: 0.0575, legendary: 0.0575 },
+    });
+    expect(slotEffects(s, T0, 'normal', { bait: 0.2, lunch: 0.15 }).rarityWeight).toEqual({
+      rare: 0.48,
+      epic: 0.48,
+      legendary: 0.48,
+    });
   });
 });
 
 describe('효과 합산', () => {
   it('입질 단축 도시락 −10%와 입질 대기 −10% 유물은 더해 ×0.8로 적용한다', () => {
-    const plain = effectiveBite(seed(), 'pond').min.value;
+    const ctxOf = (state: GameState) =>
+      createPlayerContext({ state, guild: NO_GUILD_EFFECTS, now: T0, achievements: NO_ACHIEVEMENT_BONUSES });
+    const plain = biteWaitOf(ctxOf(seed()), 'pond', 'idle').min.value;
     const relic = seed({ artifacts: ['outer-isle-sinker'] });
-    expect(effectiveBite(relic, 'pond').min.value).toBeCloseTo(plain * 0.9, 9);
-    const cook = slotEffects(seed({ slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(T0, 60 * MIN) }, bait: null } }), T0, 'auto');
-    expect(effectiveBite(seed(), 'pond', cook).min.value).toBeCloseTo(plain * 0.9, 9);
-    expect(effectiveBite(relic, 'pond', cook).min.value).toBeCloseTo(plain * 0.8, 9);
+    expect(biteWaitOf(ctxOf(relic), 'pond', 'idle').min.value).toBeCloseTo(plain * 0.9, 9);
+    const withLunch = { ...seed(), slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(T0, 60 * MIN) }, bait: null } };
+    expect(biteWaitOf(ctxOf(withLunch), 'pond', 'idle').min.value).toBeCloseTo(plain * 0.9, 9);
+    expect(biteWaitOf(ctxOf({ ...relic, slots: withLunch.slots }), 'pond', 'idle').min.value).toBeCloseTo(plain * 0.8, 9);
   });
   it('돌연변이 가중은 유물과 슬롯을 더한 값이 0보다 크면 전역 가중치에 (1 + 합)을 곱하고 해역 덮어쓰기를 쓰지 않는다', () => {
     const relic = seed({ artifacts: ['elder-scale'] }); // +25% (Lv1)
@@ -690,10 +721,26 @@ describe('캐치에 적용', () => {
     expect(run({ lunch: null, bait: { id: 'cook-bait-mutation', endsAt: at(T0, 60 * MIN) } })).toBe('variant');
   });
 
+  it('돌연변이 억제 슬롯은 폼 추첨의 변이 가중치에 독립 배수(×0.5)를 곱한다', () => {
+    const state = { ...seed(), firstCatch: endedFirstCatch() };
+    const base = MUTATION_WEIGHTS.variant / (MUTATION_WEIGHTS.variant + MUTATION_WEIGHTS.normal);
+    const suppressed = (MUTATION_WEIGHTS.variant * 0.5) / (MUTATION_WEIGHTS.variant * 0.5 + MUTATION_WEIGHTS.normal);
+    const r = (suppressed + base) / 2;
+    const run = (judgment: 'auto' | 'normal', slots: GameState['slots']) => {
+      const s = { ...state, slots };
+      const prep = prepareCatchDraw(s, judgment, LATER, PZ);
+      return drawCatch(s, 'pond', prep.judgment, 100, 1, () => r, prep.phaseOpts, () => false, NO_GUILD_EFFECTS, prep.cook)
+        .extras.form;
+    };
+    expect(run('normal', { lunch: null, bait: null })).toBe('variant');
+    expect(run('normal', { lunch: null, bait: { id: 'cook-bait-calm', endsAt: at(T0, 60 * MIN) } })).toBe('normal');
+    expect(run('auto', { lunch: { id: 'cook-lunch-calm', endsAt: at(T0, 60 * MIN) }, bait: null })).toBe('normal');
+  });
+
   it('캐치 간격 검사는 활성 도시락의 입질 단축을 판정과 관계없이 넣는다', () => {
     const plain = seed();
     const lunch = withSlots('cook-lunch-bite', null, at(T0, 9 * 60 * MIN));
-    const biteMs = effectiveBite(plain, 'pond').min.value * 1000;
+    const biteMs = biteWaitOf(createPlayerContext({ state: plain, guild: NO_GUILD_EFFECTS, now: T0, achievements: NO_ACHIEVEMENT_BONUSES }), 'pond', 'idle').min.value * 1000;
     const showMs = Math.min(CATCH_MS, ...Object.values(CATCH_MS_BY_RARITY));
     const thresholdPlain = showMs + biteMs - CATCH_PACING_SLACK_MS;
     const thresholdLunch = showMs + biteMs * 0.9 - CATCH_PACING_SLACK_MS;
@@ -706,7 +753,7 @@ describe('캐치에 적용', () => {
   });
   it('끝난 도시락의 단축은 페이싱에 넣지 않는다', () => {
     const ended = withSlots('cook-lunch-bite', null, at(T0, 1 * MIN));
-    const biteMs = effectiveBite(seed(), 'pond').min.value * 1000;
+    const biteMs = biteWaitOf(createPlayerContext({ state: seed(), guild: NO_GUILD_EFFECTS, now: T0, achievements: NO_ACHIEVEMENT_BONUSES }), 'pond', 'idle').min.value * 1000;
     const showMs = Math.min(CATCH_MS, ...Object.values(CATCH_MS_BY_RARITY));
     const gap = (2 * showMs + 1.9 * biteMs) / 2 - CATCH_PACING_SLACK_MS;
     const lastCatch = at(T0, 10 * MIN);
@@ -940,6 +987,33 @@ describe('사르가소의 그물망 — 다중 미끼와 지속 시간 절반', 
     });
     expect(appliedSlots(dupSave, T0, 'normal')).toEqual({ bait: mutBait });
     expect(slotEffects(dupSave, T0, 'normal').mutationWeight).toBe(1.5);
+  });
+
+  it('사르가소의 그물망 2슬롯에서 돌연변이 가중(+150%)과 억제(×0.5) 동시 장착 시 (1 + additiveSum) × 0.5로 계산된다', () => {
+    const calmBait = 'cook-bait-calm';
+    const combo = seed({
+      artifacts: ['sargasso-net'],
+      slots: {
+        lunch: null,
+        bait: { id: mutBait, endsAt: at(T0, 150_000) },
+        bait2: { id: calmBait, endsAt: at(T0, 150_000) },
+      },
+    });
+    const eff = slotEffects(combo, T0, 'normal');
+    expect(eff.mutationWeight).toBe(1.5);
+    expect(eff.mutationMult).toBe(0.5);
+    expect(mutationWeightsOf(combo, 'pond', eff.mutationWeight, 0, 1, 0, eff.mutationMult)).toEqual({
+      variant: MUTATION_WEIGHTS.variant * (1 + 1.5) * 0.5,
+      normal: MUTATION_WEIGHTS.normal,
+    });
+
+    const amplified = slotEffects(combo, T0, 'normal', { bait: 0.2 });
+    expect(amplified.mutationWeight).toBe(1.8);
+    expect(amplified.mutationMult).toBe(0.5);
+    expect(mutationWeightsOf(combo, 'pond', amplified.mutationWeight, 0, 1, 0, amplified.mutationMult)).toEqual({
+      variant: MUTATION_WEIGHTS.variant * (1 + 1.8) * 0.5,
+      normal: MUTATION_WEIGHTS.normal,
+    });
   });
 });
 

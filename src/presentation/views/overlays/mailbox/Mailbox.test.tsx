@@ -85,7 +85,7 @@ describe('우편함 창', () => {
       mail({
         id: 11,
         title: '보상 선물',
-        body: '물약을 보내드려요.',
+        body: '비약을 보내드려요.',
         gold: 0,
         items: [{ id: 'luck-small', qty: 2 }, { id: 'mat-abyss-lantern', qty: 1 }],
       }),
@@ -97,7 +97,7 @@ describe('우편함 창', () => {
     const toast = vi.fn();
     wrap(<MailboxModal dispatch={dispatch} setToast={toast} onClose={() => {}} />);
     fireEvent.click(await screen.findByRole('row', { name: /보상 선물/ }));
-    expect(screen.getByText('작은 행운 물약')).toBeInTheDocument();
+    expect(screen.getByText('작은 바다 영약')).toBeInTheDocument();
     expect(screen.getByText('×2')).toBeInTheDocument();
     expect(screen.getByText('돌이 된 이빨')).toBeInTheDocument();
     expect(screen.getByText('×1')).toBeInTheDocument();
@@ -105,7 +105,7 @@ describe('우편함 창', () => {
     expect(claimBtns).toHaveLength(1);
     fireEvent.click(claimBtns[0]);
     expect(dispatch).toHaveBeenCalledWith({ type: 'claimMail', id: 11 });
-    await waitFor(() => expect(toast).toHaveBeenCalledWith('우편에서 작은 행운 물약 2개, 돌이 된 이빨 1개를 받았어요!', 'gold'));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('우편에서 작은 바다 영약 2개, 돌이 된 이빨 1개를 받았어요!', 'gold'));
     expect(screen.queryByRole('button', { name: '받기' })).not.toBeInTheDocument();
     expect(screen.getByText('받음')).toBeInTheDocument();
   });
@@ -115,7 +115,7 @@ describe('우편함 창', () => {
       mail({
         id: 12,
         title: '특별 보급',
-        body: '골드와 물약이에요.',
+        body: '골드와 비약이에요.',
         gold: 500,
         items: [{ id: 'luck-small', qty: 2 }],
       }),
@@ -128,11 +128,11 @@ describe('우편함 창', () => {
     wrap(<MailboxModal dispatch={dispatch} setToast={toast} onClose={() => {}} />);
     fireEvent.click(await screen.findByRole('row', { name: /특별 보급/ }));
     expect(screen.getByText('500G')).toBeInTheDocument();
-    expect(screen.getByText('작은 행운 물약')).toBeInTheDocument();
+    expect(screen.getByText('작은 바다 영약')).toBeInTheDocument();
     const claimBtns = screen.getAllByRole('button', { name: '받기' });
     expect(claimBtns).toHaveLength(1);
     fireEvent.click(claimBtns[0]);
-    await waitFor(() => expect(toast).toHaveBeenCalledWith('우편에서 500G, 작은 행운 물약 2개를 받았어요!', 'gold'));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('우편에서 500G, 작은 바다 영약 2개를 받았어요!', 'gold'));
   });
 
   it('첨부 아이템 배지를 올리면 툴팁을, 누르면 효과와 지속 시간이 담긴 상세 창을 보인다', async () => {
@@ -148,9 +148,9 @@ describe('우편함 창', () => {
     wrap(<MailboxModal dispatch={vi.fn() as never} setToast={vi.fn()} onClose={() => {}} />);
     fireEvent.click(await screen.findByRole('row', { name: /행운 보급/ }));
 
-    const itemBtn = screen.getByRole('button', { name: /작은 행운 물약/ });
+    const itemBtn = screen.getByRole('button', { name: /작은 바다 영약/ });
     fireEvent.mouseEnter(itemBtn.parentElement!);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('물약');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('비약');
     fireEvent.mouseLeave(itemBtn.parentElement!);
 
     fireEvent.click(itemBtn);
@@ -158,9 +158,9 @@ describe('우편함 창', () => {
     const detailDialog = dialogs[dialogs.length - 1];
     expect(detailDialog.parentElement!.className).toContain('z-(--z-stage-modal)');
     expect(detailDialog.parentElement!.className).not.toContain('z-(--z-app-modal)');
-    expect(detailDialog).toHaveTextContent('작은 행운 물약');
+    expect(detailDialog).toHaveTextContent('작은 바다 영약');
     expect(detailDialog).toHaveTextContent('모든 행운 효과');
-    expect(detailDialog).toHaveTextContent('+5%p');
+    expect(detailDialog).toHaveTextContent('×1.05');
     expect(detailDialog).toHaveTextContent('하루 동안');
   });
 

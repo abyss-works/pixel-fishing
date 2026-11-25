@@ -3,8 +3,9 @@
 // 수령 액션이 서버 재평가로 멱등 지급하는지, 업적 모자 구매가 거절되는지 검사한다.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ACHIEVEMENTS, achievementById } from '../src/game/content/achievements.js';
+import { AUTO_ENERGY_BOAT, COOKING_UNLOCK_BOAT } from '../src/game/content/cooking.js';
 import { BOUNTIES } from '../src/game/content/bounties.js';
-import { LICENSE_GRADES, newState, zoneDexMissing } from '../src/game/rules/logic.js';
+import { LICENSE_GRADES, capOfBoat, newState, zoneDexMissing } from '../src/game/rules/logic.js';
 import type { GameState } from '../src/game/rules/logic.js';
 import { hatById, isAchievementHat } from '../src/game/content/wardrobe.js';
 import {
@@ -99,6 +100,33 @@ describe('카운터 upsert와 counted 플래그', () => {
     const res = await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'good' });
     expect(res.status).toBe(200);
     expect((await counters(uid))['catch.bait']).toBe(1);
+  });
+
+  it('도시락이 켜진 방치 캐치는 catch.lunch를 올리고 이벤트를 counted=true로 남긴다', async () => {
+    const uid = await seed({
+      state: {
+        slots: { lunch: { id: 'cook-lunch-bite', endsAt: '2030-03-04T09:00:00Z' }, bait: null },
+      },
+      version: 2,
+    });
+    const res = await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'auto' });
+    expect(res.status).toBe(200);
+    expect(await counters(uid)).toEqual({ 'catch.auto': 1, 'catch.lunch': 1 });
+    expect((await eventsOf(uid))[0].counted).toBe(true);
+  });
+
+  it('조리는 소모 기운을 일반 기운 등가로 환산해 energy.spent를 올리고 이벤트를 counted=true로 남긴다', async () => {
+    const uid = await seed({
+      state: {
+        boat: COOKING_UNLOCK_BOAT,
+        location: { kind: 'base', id: 'home' },
+        items: { 'energy-common': 6000 },
+      },
+    });
+    const res = await callAction(userToken(uid), { type: 'cook', recipe: 'cook-lunch-bite', count: 1 });
+    expect(res.status).toBe(200);
+    expect(await counters(uid)).toEqual({ 'energy.spent': 600 });
+    expect((await eventsOf(uid))[0].counted).toBe(true);
   });
 
   it('네임드 결투 무실패 성공은 named.flawless를 올린다', async () => {
@@ -248,5 +276,45 @@ describe('소급 판정 및 초기 파생 상태 직후 수령', () => {
       'named-megalodon-1': 'claimed',
     });
     expect((await stored(uid)).hats).toContain('megalodon-work-cap');
+  });
+});
+
+describe('빠른 캐치 경로 업적 누적 보너스 연동', () => {
+  it('fastCatch는 prepareCatchDraw에 도시락 증폭(lunchAmplify)을 전달한다', async () => {
+    // cook-lunch-mutation(+0.5) 단독 변이 점유율 = 1.5/4.5 = 0.3333..., +15% 증폭(catch.lunch=20_000) = 1.575/4.575 = 0.3442...
+    vi.spyOn(Math, 'random').mockReturnValue(0.338);
+    const lunchSlot = { id: 'cook-lunch-mutation', endsAt: '2030-03-04T09:00:00Z' };
+    const plainUid = await seed({ state: { slots: { lunch: lunchSlot, bait: null } }, version: 2 });
+    const plainRes = await callAction(userToken(plainUid), { type: 'catch', spot: 'pond', judgment: 'auto' });
+    expect(plainRes.status).toBe(200);
+    expect((plainRes.body as { result: { info: { form: string } } }).result.info.form).toBe('normal');
+
+    const boostedUid = await seed({ state: { slots: { lunch: lunchSlot, bait: null } }, version: 2 });
+    await env.client.query(
+      `insert into public.achievement_counters (user_id, key, value) values ($1, 'catch.lunch', 20000)`,
+      [boostedUid],
+    );
+    const boostedRes = await callAction(userToken(boostedUid), { type: 'catch', spot: 'pond', judgment: 'auto' });
+    expect(boostedRes.status).toBe(200);
+    expect((boostedRes.body as { result: { info: { form: string } } }).result.info.form).toBe('variant');
+  });
+
+  it('fastCatch는 가방 초과 자동 기운 추출(planOverflow)에 기운 획득량 보너스(energyYield)를 전달한다', async () => {
+    const fullBag = () => Array.from({ length: capOfBoat(AUTO_ENERGY_BOAT) }, () => fish('minnow'));
+    const uid = await seed({
+      state: {
+        boat: AUTO_ENERGY_BOAT,
+        energyTargets: { pond: true },
+        bag: fullBag(),
+      },
+      version: 2,
+    });
+    await env.client.query(
+      `insert into public.achievement_counters (user_id, key, value) values ($1, 'energy.spent', 100000)`,
+      [uid],
+    );
+    const res = await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'auto' });
+    expect(res.status).toBe(200);
+    expect((res.body as { result: { energy?: { common: number } } }).result.energy?.common).toBe(12);
   });
 });

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import type { Stat } from '../../../../game/rules/stats';
 import { POWER_RULES, autoPenaltyHelpText } from '../../../../game/rules/stats';
-import { formatStatMods, formatStatValue } from '../../../../features/gameplay/model/statFormat';
+import { formatStatModLabel, formatStatMods, formatStatValue } from '../../../../features/gameplay/model/statFormat';
 import type { StatsSpotRow, SpotFit } from '../../../../features/gameplay/model/stats';
 import { cx } from '../../../ui/cx';
 import KeyValueRow from '../../../ui/KeyValueRow';
@@ -22,7 +22,7 @@ function buildStatRows(stat: Stat, unit: string, digits: number, prefix: string)
     ...stat.mods.map(mod => {
       const modDigits = digits === 0 && !Number.isInteger(mod.delta) ? 1 : digits;
       const sign = mod.delta >= 0 ? '+' : '';
-      return { label: mod.label, value: `${sign}${formatStatValue(mod.delta, unit, modDigits, prefix)}` };
+      return { label: formatStatModLabel(mod), value: `${sign}${formatStatValue(mod.delta, unit, modDigits, prefix)}` };
     }),
   ];
   if (stat.mods.length > 0) {

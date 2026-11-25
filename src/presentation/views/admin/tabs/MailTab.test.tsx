@@ -15,7 +15,7 @@ vi.mock('../../../../platform/api', () => ({
       sentMails: vi.fn(async () => [
         { id: 1, userId: '30e63c95-12de-4ba6-b397-e8b69ce0311c', title: '지난 우편', body: 'b', gold: 500, items: [],
           createdAt: '2026-10-22T00:00:00Z', readAt: '2026-10-22T01:00:00Z', claimedAt: null },
-        { id: 2, userId: '30e63c95-12de-4ba6-b397-e8b69ce0311c', title: '물약 지급', body: 'b2', gold: 0,
+        { id: 2, userId: '30e63c95-12de-4ba6-b397-e8b69ce0311c', title: '비약 지급', body: 'b2', gold: 0,
           items: [{ id: 'luck-small', qty: 2 }],
           createdAt: '2026-10-23T00:00:00Z', readAt: null, claimedAt: null },
       ]),
@@ -45,8 +45,8 @@ describe('MailTab', () => {
     show();
     expect(await screen.findByText('지난 우편')).toBeTruthy();
     expect(screen.getAllByText('바다친구(friend@example.com)').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('물약 지급')).toBeTruthy();
-    expect(screen.getByText('작은 행운 물약')).toBeTruthy();
+    expect(screen.getByText('비약 지급')).toBeTruthy();
+    expect(screen.getByText('작은 바다 영약')).toBeTruthy();
     expect(screen.getByText('×2')).toBeTruthy();
     expect(screen.getByText('읽음')).toBeTruthy();
   });
@@ -150,20 +150,20 @@ describe('MailTab', () => {
       ? { problems: [], preview: { count: 1, recipientCount: 1, totalGold: 0, capExceeded: false, maxTotalGold: 500_000_000, missing: [] } }
       : { problems: [], preview: { count: 1, recipientCount: 1, totalGold: 0, capExceeded: false, maxTotalGold: 500_000_000, missing: [] }, sent: 1 }));
     show();
-    fireEvent.change(screen.getByLabelText('제목'), { target: { value: '물약 선물' } });
+    fireEvent.change(screen.getByLabelText('제목'), { target: { value: '비약 선물' } });
     fireEvent.change(screen.getByLabelText('본문'), { target: { value: '행운이 함께하길!' } });
     fireEvent.change(screen.getByLabelText(/받는 사람/), { target: { value: `${USER} 0` } });
 
     fireEvent.change(screen.getByLabelText(/첨부 수량/), { target: { value: '3' } });
-    fireEvent.change(screen.getByLabelText(/첨부 아이템 찾기/), { target: { value: '행운 물약' } });
-    fireEvent.click(screen.getByRole('option', { name: /작은 행운 물약/ }));
+    fireEvent.change(screen.getByLabelText(/첨부 아이템 찾기/), { target: { value: '바다 영약' } });
+    fireEvent.click(screen.getByRole('option', { name: /작은 바다 영약/ }));
 
-    expect(screen.getByLabelText('첨부된 아이템')).toHaveTextContent('작은 행운 물약×3');
+    expect(screen.getByLabelText('첨부된 아이템')).toHaveTextContent('작은 바다 영약×3');
 
     fireEvent.click(screen.getByRole('button', { name: '미리보기' }));
-    expect(await screen.findByText(/작은 행운 물약 3개/)).toBeTruthy();
+    expect(await screen.findByText(/작은 바다 영약 3개/)).toBeTruthy();
     expect(mocks.mail).toHaveBeenLastCalledWith('preview', {
-      title: '물약 선물',
+      title: '비약 선물',
       body: '행운이 함께하길!',
       target: { kind: 'users', recipients: [{ userId: USER, gold: 0 }] },
       items: [{ id: 'luck-small', qty: 3 }],

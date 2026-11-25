@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import {
+  ACHIEVEMENT_MODAL_TABS,
   ACHIEVEMENT_TABS,
   achievementRowById,
   achievementRows,
@@ -10,6 +11,7 @@ import {
   claimableCount,
   cosmeticCards,
   cumulativeBonusCards,
+  modalTabClaimableCount,
   newlyClaimable,
   rowStatusOf,
   tabClaimableCount,
@@ -18,9 +20,11 @@ import {
 const seed = (over: Partial<GameState> = {}): GameState => ({ ...newState(), ...over });
 
 describe('탭', () => {
-  it('탭 순서는 진행, 누적 보너스, 치장 셋이다', () => {
+  it('프로필 호환 3탭과 모달 4탭 구성을 함께 제공한다', () => {
     expect(ACHIEVEMENT_TABS.map(t => t.key)).toEqual(['progress', 'bonus', 'cosmetic']);
     expect(ACHIEVEMENT_TABS.map(t => t.label)).toEqual(['진행', '누적 보너스', '치장']);
+    expect(ACHIEVEMENT_MODAL_TABS.map(t => t.key)).toEqual(['progress', 'global', 'zoneArtifact', 'cosmetic']);
+    expect(ACHIEVEMENT_MODAL_TABS.map(t => t.label)).toEqual(['진행', '전체 누적', '구역과 유물', '치장']);
   });
 });
 
@@ -74,10 +78,12 @@ describe('요약 줄', () => {
         'spot-full-sea': 'claimed',
       },
     });
-    expect(achievementSummary(state)).toEqual({ claimed: 1, total: 80, gold: 300, hats: 1, canClaimAll: true });
+    expect(achievementSummary(state)).toEqual({ claimed: 1, total: 82, gold: 1_200, hats: 1, canClaimAll: true });
     expect(tabClaimableCount(state, 'progress')).toBe(1);
     expect(tabClaimableCount(state, 'bonus')).toBe(0);
     expect(tabClaimableCount(state, 'cosmetic')).toBe(1);
+    expect(modalTabClaimableCount(state, 'global')).toBe(0);
+    expect(modalTabClaimableCount(state, 'zoneArtifact')).toBe(0);
   });
   it('받을 수 있는 업적이 없으면 모두 받기는 거짓이다', () => {
     expect(achievementSummary(seed())).toMatchObject({ gold: 0, hats: 0, canClaimAll: false });
@@ -130,23 +136,54 @@ describe('요약 줄', () => {
 });
 
 describe('누적 보너스 카드', () => {
-  it('23개 다단계 누적 보너스 카드를 생성한다', () => {
+  it('37개(전체 11 + 구역 18 + 유물 8) 다단계 누적 보너스 카드를 생성한다', () => {
     const boosted = seed({
+      artifacts: ['mami-wata-mirror'],
       achievementCounters: {
         'manual.total': 1_000,
         'sell.gold': 10_000_000,
         'named.flawless': 1,
+        'energy.spent': 10_000,
+        'catch.bait': 40,
+        'catch.lunch': 1_000,
       },
     });
     const cards = cumulativeBonusCards(boosted);
-    expect(cards).toHaveLength(23);
+    expect(cards).toHaveLength(37);
+    expect(cards.filter(c => c.series.scope === 'global')).toHaveLength(11);
+    expect(cards.filter(c => c.series.scope === 'zone')).toHaveLength(18);
+    expect(cards.filter(c => c.series.scope === 'artifact')).toHaveLength(8);
+
     const manual = cards.find(c => c.series.id === 'bonus-manual-total')!;
-    expect(manual.steps.map(s => s.state)).toEqual(['done', 'done', 'done', 'now']);
-    expect(manual.activeText).toBe('입질 대기 −3.5%');
+    expect(manual.steps.map(s => s.state)).toEqual(['done', 'done', 'done', 'done', 'now', 'todo']);
+    expect(manual.activeText).toBe('입질 대기 −4.8%');
+
+    const named = cards.find(c => c.series.id === 'bonus-named-flawless')!;
+    expect(named.activeText).toBe('네임드 조우 확률 +3%');
+
+    const energy = cards.find(c => c.series.id === 'bonus-energy-spent')!;
+    expect(energy.activeText).toBe('기운 획득량 +6%');
+
+    const relic = cards.find(c => c.series.id === 'bonus-artifact-mami-wata-mirror')!;
+    expect(relic.scopeLabel).toBe('유물');
+    expect(relic.allDone).toBe(true);
+    expect(relic.activeText).toBe('유물 증폭 +2.5%');
   });
 });
 
 describe('치장 다단계 카드와 스포일러 가림', () => {
+  it('월척 4단계(10·25·50·100종)는 월척 장부 1장 다단계 카드로 압축한다', () => {
+    const cards = cosmeticCards(seed({ achievements: { 'big-10': 'claimable' } }), 'big');
+    expect(cards).toHaveLength(1);
+    const big = cards[0];
+    expect(big.kind).toBe('bigGroup');
+    if (big.kind === 'bigGroup') {
+      expect(big.title).toBe('월척 장부');
+      expect(big.status).toBe('claimable');
+      expect(big.activeRow.def.id).toBe('big-10');
+      expect(big.steps.map(s => s.label)).toEqual(['10종', '25종', '50종', '100종']);
+    }
+  });
   it('미토벌 네임드는 실명을 가리고 출현 해역·구역 이름으로 표기한다', () => {
     const namedCards = cosmeticCards(seed(), 'named');
     expect(namedCards).toHaveLength(8);

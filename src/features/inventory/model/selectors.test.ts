@@ -129,7 +129,7 @@ describe('selectBagOverview - 판매 가능 금액', () => {
     const bonus = 0.3;
     const sellable = selectBagOverview(game, bonus).sellable;
     expect(sellable.value).toBe(base + saleBonusOf(base, bonus));
-    expect(sellable.mods).toEqual([{ id: 'guild-sell', label: '판매가 보너스', delta: saleBonusOf(base, bonus) }]);
+    expect(sellable.mods).toEqual([{ id: 'guild-sell', label: '판매가 보너스', delta: saleBonusOf(base, bonus), source: { kind: 'guild', bonus: 'sell' } }]);
   });
 
   it('오늘의 재물운이 켜져 있으면 판매 가능 금액에 운 배율을 반영하고 날짜가 지나면 반영하지 않는다', () => {
@@ -146,7 +146,7 @@ describe('selectBagOverview - 판매 가능 금액', () => {
     const expected = Math.round(base * 1.05);
     const active = selectBagOverview(game, 0, 0, now).sellable;
     expect(active.value).toBe(expected);
-    expect(active.mods).toEqual([{ id: 'fortune-sell', label: '오늘의 운세', delta: expected - base }]);
+    expect(active.mods).toEqual([{ id: 'fortune-sell', label: '오늘의 운세', delta: expected - base, source: { kind: 'fortune' } }]);
 
     const expired = selectBagOverview(
       { ...game, fortune: { day: '2026-11-23', kind: 'gold', index: 5 } }, 0, 0, now,
@@ -154,7 +154,7 @@ describe('selectBagOverview - 판매 가능 금액', () => {
     expect(expired).toEqual({ base, mods: [], value: base });
   });
 
-  it('판매가 물약이 켜져 있으면 운세와 합산해 판매 가능 금액에 반영하고 출처를 물약 이름으로 분리한다', () => {
+  it('판매가 비약이 켜져 있으면 운세와 독립 곱연산해 판매 가능 금액에 반영하고 출처를 비약 이름으로 분리한다', () => {
     const now = '2026-11-24T05:00:00.000Z';
     const game: GameState = {
       ...newState(),
@@ -167,10 +167,11 @@ describe('selectBagOverview - 판매 가능 금액', () => {
     };
     const base = sellableValue(game);
     const active = selectBagOverview(game, 0, 0, now).sellable;
-    expect(active.value).toBe(Math.round(base * 1.1));
+    const fortuneDelta = Math.round(base * 0.05);
+    expect(active.value).toBe(Math.round(base * 1.05 * 1.05));
     expect(active.mods).toEqual([
-      { id: 'fortune-sell', label: '오늘의 운세', delta: Math.round(base * 0.05) },
-      { id: 'potion-luck-small', label: '작은 행운 물약', delta: active.value - base - Math.round(base * 0.05) },
+      { id: 'fortune-sell', label: '오늘의 운세', delta: fortuneDelta, source: { kind: 'fortune' } },
+      { id: 'potion-luck-small', label: '작은 바다 영약', delta: active.value - base - fortuneDelta, source: { kind: 'potion', id: 'luck-small' } },
     ]);
   });
 });

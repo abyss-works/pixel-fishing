@@ -244,18 +244,18 @@ describe('길드 보너스 화면 모델', () => {
     expect(Object.values(GUILD_BONUS_NAME)).toEqual(['판매가 보너스', '가방 용량 증가', '네임드 조우 확률', '희귀 어종 확률', '돌연변이 확률']);
   });
 
-  it('효과 값 — 비율은 %, 돌연변이는 %p, 희귀 어종은 줄이는 쪽이라 −', () => {
+  it('효과 값 — 모든 보너스는 %, 희귀 어종은 일반 어종을 줄이므로 −', () => {
     expect(bonusEffectValue('sell', 0.06)).toBe('+6%');
     expect(bonusEffectValue('rare', 0.04)).toBe('−4%');
-    expect(bonusEffectValue('mutation', 0.03)).toBe('+3%p');
+    expect(bonusEffectValue('mutation', 0.03)).toBe('+3%');
   });
 
-  it('효과 문장 — 비율은 %, 돌연변이는 %p, 희귀 어종은 일반 어종 출현을 줄인다', () => {
+  it('효과 문장 — 출현 비중·조우 확률 용어를 쓰고 희귀 어종은 일반 어종 출현을 줄인다', () => {
     expect(bonusEffectText('sell', 0.06)).toBe('판매가 +6%');
     expect(bonusEffectText('bag', 0.2)).toBe('가방 용량 +20%');
-    expect(bonusEffectText('named', 0.05)).toBe('네임드 조우 +5%');
-    expect(bonusEffectText('rare', 0.04)).toBe('일반 어종 출현 −4%');
-    expect(bonusEffectText('mutation', 0.03)).toBe('돌연변이 확률 +3%p');
+    expect(bonusEffectText('named', 0.05)).toBe('네임드 조우 확률 +5%');
+    expect(bonusEffectText('rare', 0.04)).toBe('일반 어종 출현 비중 −4%');
+    expect(bonusEffectText('mutation', 0.03)).toBe('돌연변이 출현 비중 +3%');
   });
 
   it('보너스 열 — 잠김, 지금→다음 효과, 다음 단계까지 모인 비율과 남은 골드, 기부 가능 여부', () => {

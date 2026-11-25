@@ -13,5 +13,5 @@ export interface Coupon {
 }
 
 export const COUPONS: Record<string, Coupon> = {
-  '출항준비': { gold: 300, items: [{ id: 'luck-small', qty: 1 }], desc: '출항 지원금과 작은 행운 물약' },
+  '출항준비': { gold: 300, items: [{ id: 'luck-small', qty: 1 }], desc: '출항 지원금과 작은 바다 영약' },
 };

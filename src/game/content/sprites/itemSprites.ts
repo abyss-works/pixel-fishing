@@ -1,4 +1,4 @@
-// 아이템 id → 스프라이트와 색 배열. 도시락·미끼는 생성 격자를, 생명의 기운·물약·유물은 16×16 등록 격자를 읽는다 (DOM 비의존).
+// 아이템 id → 스프라이트와 색 배열. 도시락·미끼는 생성 격자를, 생명의 기운·비약·유물은 16×16 등록 격자를 읽는다 (DOM 비의존).
 // 원화 격자는 팔레트가 고정 hex라 기준색은 색 해석에 쓰이지 않는다.
 import type { CookKind } from '../cooking.js';
 import { BAIT_SPRITES_GENERATED } from './baitSprites.generated.js';

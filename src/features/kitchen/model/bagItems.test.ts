@@ -22,8 +22,8 @@ describe('아이템 섹션: 해금 전과 게스트', () => {
     expect(v.unlockNotice).toBe('인도양 항로가 열리면 부엌을 쓸 수 있어요.');
     expect(v.empty).toEqual(['가진 아이템이 없어요.']);
     expect(v.lines).toEqual(['인도양 항로가 열리면 부엌을 쓸 수 있어요.', '인도양 항로는 증기선(5단계)부터 열려요.']);
-    expect(v.lunch).toHaveLength(5);
-    expect(v.bait).toHaveLength(5);
+    expect(v.lunch).toHaveLength(6);
+    expect(v.bait).toHaveLength(6);
     expect(v.energy).toHaveLength(4);
     expect(v.potions).toHaveLength(1);
     expect(filterItemSection(v, true)).toEqual({ lunch: [], bait: [], energy: [], potions: [], empty: true });
@@ -65,15 +65,14 @@ describe('묶음 소제목 툴팁', () => {
     ]);
   });
 
-  it('도시락과 미끼 소제목 툴팁은 방치·수동 적용 범위와 지속 시간 흐름 공통 주의사항을 담는다', () => {
+  it('도시락과 미끼 소제목 툴팁은 전용 낚시 방식과 비접속 지속 두 줄을 담는다', () => {
     expect(ITEM_GROUP_HINT.lunch.split('\n')).toEqual([
       '방치로 낚을 때만 효과가 있어요.',
-      '지속 시간은 먹은 때부터 흐르고, 낚시하지 않거나 접속하지 않아도 멈추지 않아요.',
+      '접속하지 않아도 지속 시간이 흘러요.',
     ]);
     expect(ITEM_GROUP_HINT.bait.split('\n')).toEqual([
-      '챔질해서 낚을 때만 효과가 있어요.',
-      '물고기를 낚아도 미끼가 줄지 않아요.',
-      '지속 시간은 쓴 때부터 흐르고, 낚시하지 않거나 접속하지 않아도 멈추지 않아요.',
+      '직접 챔질해 낚을 때만 효과가 있어요.',
+      '접속하지 않아도 지속 시간이 흘러요.',
     ]);
   });
 });
@@ -128,23 +127,25 @@ describe('아이템 섹션: 열린 뒤', () => {
     ]);
   });
 
-  it('도시락 5종과 미끼 5종 전체를 부엌 목록 순서로 내고 미보유는 수량 0이다', () => {
+  it('도시락 6종과 미끼 6종 전체를 부엌 목록 순서로 내고 미보유는 수량 0이며 동작은 사용이다', () => {
     const game = seed({ items: { 'cook-lunch-rare': 1, 'cook-lunch-bite': 2, 'cook-bait-epic': 3, 'cook-bait-rare': 4 } });
     const v = selectItemSection(game, T0, 'account');
     if (v.state !== 'open') throw new Error('open이어야 해요');
     expect(v.lunch.map(r => [r.label, r.count, r.verb, r.slot])).toEqual([
-      ['가루디야(일반)', 2, '먹기', 'lunch'],
-      ['민 몰리(희귀)', 1, '먹기', 'lunch'],
-      ['생선 비리야니(영웅)', 0, '먹기', 'lunch'],
-      ['암불 티얄(영웅)', 0, '먹기', 'lunch'],
-      ['생선 탈리(전설)', 0, '먹기', 'lunch'],
+      ['가루디야(일반)', 2, '사용', 'lunch'],
+      ['민 몰리(희귀)', 1, '사용', 'lunch'],
+      ['키리바트(희귀)', 0, '사용', 'lunch'],
+      ['생선 비리야니(영웅)', 0, '사용', 'lunch'],
+      ['암불 티얄(영웅)', 0, '사용', 'lunch'],
+      ['생선 탈리(전설)', 0, '사용', 'lunch'],
     ]);
     expect(v.bait.map(r => [r.label, r.count, r.verb, r.slot])).toEqual([
-      ['롱페퍼 미끼(희귀)', 4, '쓰기', 'bait'],
-      ['큐베브 미끼(영웅)', 3, '쓰기', 'bait'],
-      ['용연향 미끼(전설)', 0, '쓰기', 'bait'],
-      ['사프란 미끼(특수)', 0, '쓰기', 'bait'],
-      ['달빛 미끼(특수)', 0, '쓰기', 'bait'],
+      ['롱페퍼 미끼(희귀)', 4, '사용', 'bait'],
+      ['큐베브 미끼(영웅)', 3, '사용', 'bait'],
+      ['용연향 미끼(전설)', 0, '사용', 'bait'],
+      ['사프란 미끼(특수)', 0, '사용', 'bait'],
+      ['백단향 미끼(특수)', 0, '사용', 'bait'],
+      ['달빛 미끼(특수)', 0, '사용', 'bait'],
     ]);
   });
 
@@ -225,7 +226,7 @@ describe('먹기 계획과 교체 확인', () => {
   it('효과가 든 슬롯에 다른 것을 넣으면 교체 확인이다. 제목과 두 행과 경고가 있다', () => {
     const plan = planEat(seed({ items: own, slots: { lunch, bait: null } }), 'cook-lunch-rare', T0);
     expect(plan.confirm).toEqual({
-      title: '도시락 바꾸기', confirmLabel: '먹기',
+      title: '도시락 바꾸기', confirmLabel: '사용',
       current: { label: '가루디야(일반)', title: { name: '가루디야', grade: 'common' }, minutes: 8 * 60 + 12 },
       next: { label: '민 몰리(희귀)', title: { name: '민 몰리', grade: 'rare' }, minutes: 9 * 60 },
       warning: '지금 효과의 남은 시간은 사라져요.',
@@ -239,12 +240,12 @@ describe('먹기 계획과 교체 확인', () => {
     expect(plan.confirm?.next.label).toBe('가루디야(일반)');
   });
 
-  it('미끼 슬롯은 미끼 바꾸기이고 쓰기다', () => {
+  it('미끼 슬롯은 미끼 바꾸기이고 확인 버튼은 사용이다', () => {
     const bait = { id: 'cook-bait-rare', endsAt: at(24 * MIN) };
     const plan = planEat(seed({ items: own, slots: { lunch: null, bait } }), 'cook-bait-epic', T0);
     expect(plan.slot).toBe('bait');
     expect(plan.confirm).toMatchObject({
-      title: '미끼 바꾸기', confirmLabel: '쓰기',
+      title: '미끼 바꾸기', confirmLabel: '사용',
       current: { label: '롱페퍼 미끼(희귀)', minutes: 24 }, next: { label: '큐베브 미끼(영웅)', minutes: 5 },
     });
   });
@@ -277,7 +278,7 @@ describe('먹기 계획과 교체 확인', () => {
     // 같은 미끼를 다시 쓰면 확인 창이 뜨고 지속 시간은 절반(2.5분)
     const dup = planEat(oneActive, 'cook-bait-rare', T0);
     expect(dup.confirm).toEqual({
-      title: '미끼 바꾸기', confirmLabel: '쓰기',
+      title: '미끼 바꾸기', confirmLabel: '사용',
       current: { label: '롱페퍼 미끼(희귀)', title: { name: '롱페퍼 미끼', grade: 'rare' }, minutes: 2 },
       next: { label: '롱페퍼 미끼(희귀)', title: { name: '롱페퍼 미끼', grade: 'rare' }, minutes: 2.5 },
       warning: '지금 효과의 남은 시간은 사라져요.',
@@ -305,7 +306,7 @@ describe('먹기 계획과 교체 확인', () => {
     });
     const plan = planEat(both, 'cook-bait-legendary', T0);
     expect(plan.confirm).toEqual({
-      title: '미끼 바꾸기', confirmLabel: '쓰기',
+      title: '미끼 바꾸기', confirmLabel: '사용',
       current: { label: '큐베브 미끼(영웅)', title: { name: '큐베브 미끼', grade: 'epic' }, minutes: 1 },
       next: { label: '용연향 미끼(전설)', title: { name: '용연향 미끼', grade: 'legendary' }, minutes: 2.5 },
       warning: '지금 효과의 남은 시간은 사라져요.',
@@ -318,8 +319,8 @@ describe('먹기 계획과 교체 확인', () => {
   });
 });
 
-describe('물약 묶음', () => {
-  it('계정 회원은 배 단계와 무관하게 물약 잠금이 없고 보유·활성·사용 가능 여부를 돌려준다', () => {
+describe('비약 묶음', () => {
+  it('계정 회원은 배 단계와 무관하게 비약 잠금이 없고 보유·활성·사용 가능 여부를 돌려준다', () => {
     const lowBoat = selectItemSection(
       seed({ boat: 0, items: { 'luck-small': 2 } }),
       T0,
@@ -332,7 +333,7 @@ describe('물약 묶음', () => {
       count: 2,
       active: false,
       usable: true,
-      effects: [{ label: '모든 행운 효과', value: '+5%p' }],
+      effects: [{ label: '모든 행운 효과', value: '×1.05' }],
       note: '하루 동안 이어져요. 하루는 새벽 4시에 새로 시작해요.',
     });
 

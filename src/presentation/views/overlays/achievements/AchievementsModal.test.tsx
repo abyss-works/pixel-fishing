@@ -64,19 +64,38 @@ describe('업적 창 카드 격자', () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
-  it('누적 보너스 탭에는 중복 요약 칸을 두지 않고 카드 목록만 보인다', () => {
+  it('전체 누적 탭과 구역과 유물 탭으로 나뉘며 중복 요약 칸·고정 안내 문구 없이 카드 목록만 보인다', () => {
     const boosted = seed({
+      artifacts: ['mami-wata-mirror'],
       achievementCounters: { 'manual.total': 100, 'sell.gold': 1_000_000 },
     });
     render(<AchievementsModal game={boosted} dispatch={vi.fn()} setToast={vi.fn()} onClose={() => {}} />);
     expect(screen.queryByText('적용 중인 누적 보너스')).toBeNull();
+    expect(screen.queryByText(/해역 일반 도감 15곳/)).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: '누적 보너스' }));
+    // 미완료만 보기 꺼짐일 때는 check 아이콘이 없다
+    const incompleteBtn = screen.getByRole('button', { name: '미완료만 보기' });
+    expect(incompleteBtn).toHaveAttribute('aria-pressed', 'false');
+    expect(incompleteBtn.querySelector('[data-glyph="check"]')).toBeNull();
+    fireEvent.click(incompleteBtn);
+    expect(incompleteBtn).toHaveAttribute('aria-pressed', 'true');
+    expect(incompleteBtn.querySelector('[data-glyph="check"]')).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '전체 누적' }));
     expect(screen.queryByText('적용 중인 누적 보너스')).toBeNull();
+    expect(screen.queryByText(/달성한 단계는 따로 받지 않아도/)).toBeNull();
+    expect(screen.getByText('전체 누적 보너스')).toBeInTheDocument();
     expect(screen.getByText('수동 손맛')).toBeInTheDocument();
-    expect(screen.getByText('입질 대기 −2%')).toBeInTheDocument();
+    expect(screen.getByText('입질 대기 −1.2%')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^받기,/ })).toBeNull();
     expect(screen.queryByText(/조건 단계에 닿으면/)).toBeNull();
+    expect(screen.queryByText(/완결/)).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '구역과 유물' }));
+    expect(screen.getByText('구역별 누적 보너스')).toBeInTheDocument();
+    expect(screen.getByText('유물 누적 보너스')).toBeInTheDocument();
+    expect(screen.getByText('마미 와타의 거울 증폭')).toBeInTheDocument();
+    expect(screen.queryByText(/완결/)).toBeNull();
   });
 
   it('폐지된 옛 id만 claimable인 세이브에서는 받을 골드가 0G이고 모두 받기가 비활성이다', () => {
@@ -119,7 +138,7 @@ describe('업적 창 카드 격자', () => {
     render(
       <AchievementsModal game={seed()} dispatch={vi.fn()} setToast={vi.fn()} onOpenStatsBonus={onOpenStatsBonus} onClose={() => {}} />,
     );
-    fireEvent.click(screen.getByRole('button', { name: '누적 보너스' }));
+    fireEvent.click(screen.getByRole('button', { name: '전체 누적' }));
     fireEvent.click(screen.getByRole('button', { name: '스탯 창 보너스 탭에서 전체 합계 확인' }));
     expect(onOpenStatsBonus).toHaveBeenCalledTimes(1);
   });

@@ -173,13 +173,20 @@ export function TipCard({ title, subtitle, badge, description, rows, status, not
 }
 
 /** 툴팁 안의 목록: 이름은 왼쪽, 값은 오른쪽. 아래에 덧붙일 한 줄(note)을 둘 수 있다 */
-export function TipList({ rows, note }: { rows: readonly { label: ReactNode; value: ReactNode }[]; note?: ReactNode }) {
+export function TipList({ rows, note }: { rows: readonly { label: ReactNode; value: ReactNode; divider?: boolean }[]; note?: ReactNode }) {
   return (
     <span className="flex flex-col gap-1 min-w-40">
       <span className="flex flex-col">
         {rows.map((r, i) => (
-          <span key={typeof r.label === 'string' ? `${i}-${r.label}` : i} className="flex items-center justify-between gap-4 py-0.5">
-            <span className="text-text-dim">{highlightText(r.label)}</span><span className="pf-accent text-text">{highlightText(r.value)}</span>
+          <span
+            key={typeof r.label === 'string' ? `${i}-${r.label}` : i}
+            className={cx(
+              'flex items-center justify-between gap-4 py-0.5',
+              r.divider && 'mt-0.5 pt-1 border-t border-line',
+            )}
+          >
+            <span className={r.divider ? 'text-text font-medium' : 'text-text-dim'}>{highlightText(r.label)}</span>
+            <span className={cx('pf-accent', r.divider ? 'text-gold' : 'text-text')}>{highlightText(r.value)}</span>
           </span>
         ))}
       </span>

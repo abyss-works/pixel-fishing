@@ -16,7 +16,7 @@ import NumberStepper from '../../../ui/NumberStepper';
 import SelectList from '../../../ui/SelectList';
 import Tip from '../../../ui/Tip';
 import { artifactEffectLabel } from '../../../ui/artifactEffects';
-import { fmtMinutes, fmtPlusPoint } from '../../../ui/format';
+import { fmtDecimal2, fmtMinutes } from '../../../ui/format';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import { CompareTable, ConfirmButton, FacilityTabBody } from './facilityParts';
 import type { FacilityAct } from './facilityParts';
@@ -77,7 +77,21 @@ export default function RecipeTab({ kind, game, now, busy, act, setToast }: {
                   title={<GradeName name={view.title.name} grade={view.title.grade} emphasized />}
                   description={view.recipe.description} />
       <Inset className="px-3 py-2.5 flex flex-col gap-1.5">
-        <Tip text={recipeEffectNote(kind)} className="self-start text-xs text-text-dim">{EFFECT_TITLE[kind]}</Tip>
+        <Tip
+          text={(
+            <span className="flex flex-col gap-0.5">
+              {recipeEffectNote(kind).split('\n').map(line => (
+                <span key={line} className="flex items-baseline gap-1.5">
+                  <span aria-hidden="true">-</span>
+                  <span>{line}</span>
+                </span>
+              ))}
+            </span>
+          )}
+          className="self-start text-xs text-text-dim"
+        >
+          {EFFECT_TITLE[kind]}
+        </Tip>
         {view.effects.map(line => 'text' in line ? (
           <p key={line.text} className="min-h-[26px] flex items-center text-xs text-text leading-snug">
             <HighlightRarityText text={line.text} />
@@ -117,7 +131,7 @@ export default function RecipeTab({ kind, game, now, busy, act, setToast }: {
         {view.extraChance > 0 && (
           <KeyValueRow compact className="h-auto border-t-0"
                        label={artifactEffectLabel('extraCookChance')}
-                       value={fmtPlusPoint(view.extraChance * 100)}
+                       value={`+${fmtDecimal2(view.extraChance * 100)}%`}
                        valueClassName="pf-accent text-accent" />
         )}
       </Inset>

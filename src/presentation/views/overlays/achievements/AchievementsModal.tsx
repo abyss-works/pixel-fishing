@@ -1,23 +1,22 @@
 import { useState } from 'react';
 import type { GameState } from '../../../../game/rules/logic';
 import type { GameAction } from '../../../../game/rules/actions';
-import type { AchievementTab } from '../../../../game/content/achievements';
 import { REJECT_TEXT } from '../../../../game/rules/logic';
 import { when } from '../../../../shared/lib/when';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import { GUEST_LOCK_DEFAULT_LINES } from '../../../../features/display/model/menuLock';
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import {
-  ACHIEVEMENT_TABS,
+  ACHIEVEMENT_MODAL_TABS,
   COSMETIC_FILTERS,
   achievementSummary,
   cosmeticCards,
   cosmeticFilterStats,
   cumulativeBonusCards,
+  modalTabClaimableCount,
   progressZoneGroups,
-  tabClaimableCount,
 } from '../../../../features/achievement/model/achievements';
-import type { AchievementRow, CosmeticFilter, CumulativeBonusCardModel } from '../../../../features/achievement/model/achievements';
+import type { AchievementModalTab, AchievementRow, CosmeticFilter, CumulativeBonusCardModel } from '../../../../features/achievement/model/achievements';
 import { fmtGold, fmtNum, josa } from '../../../ui/format';
 import { SCROLL_Y } from '../../../ui/scrollArea';
 import Button from '../../../ui/Button';
@@ -50,20 +49,20 @@ const CARD_GRID = 'grid grid-cols-[repeat(auto-fill,minmax(min(14rem,100%),1fr))
 const sortBonusDoneLast = (cards: readonly CumulativeBonusCardModel[]) =>
   [...cards].sort((a, b) => Number(a.allDone) - Number(b.allDone));
 
-// 업적 창 — 진행, 누적 보너스, 치장 탭 셋으로 나눈다.
+// 업적 창 — 진행, 전체 누적, 구역과 유물, 치장 4탭으로 나눈다.
 // 상단 요약 바는 구분선 없는 흐름 배치로 모바일 줄바꿈에서도 고아 선이 생기지 않는다.
-// 진행 탭은 구역 소제목 묶음 + 미완료만 보기 토글, 누적 보너스는 전역/구역별/유물 3묶음 + 스탯 창 보너스 탭 바로가기,
-// 치장 탭은 3열 모바일 노치 토글 칩 필터를 제공한다.
+// 진행 탭은 구역 소제목 묶음 + 미완료만 보기 토글, 전체 누적·구역과 유물 탭은 스탯 창 보너스 탭 바로가기,
+// 치장 탭은 2열 모바일 노치 토글 칩 필터를 제공한다.
 export default function AchievementsModal({ game, guest = false, dispatch, setToast, onOpenStatsBonus, onClose }: Props) {
-  const [tab, setTab] = useState<AchievementTab>('progress');
+  const [tab, setTab] = useState<AchievementModalTab>('progress');
   const [incompleteOnly, setIncompleteOnly] = useState(false);
   const [cosmeticFilter, setCosmeticFilter] = useState<CosmeticFilter>('all');
   const [busy, setBusy] = useState(false);
 
   const summary = achievementSummary(game, guest);
-  const tabs = ACHIEVEMENT_TABS.map(t => ({
+  const tabs = ACHIEVEMENT_MODAL_TABS.map(t => ({
     ...t,
-    count: tabClaimableCount(game, t.key),
+    count: modalTabClaimableCount(game, t.key),
   }));
 
   const run = (action: GameAction, onOk: (r: Extract<DispatchResult, { status: 'ok' }>) => void) => {
@@ -108,12 +107,16 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
   };
 
   const progressGroups = tab === 'progress' ? progressZoneGroups(game, incompleteOnly) : [];
-  const bonusCards = tab === 'bonus' ? cumulativeBonusCards(game) : [];
-  const bonusGroups = tab === 'bonus' ? [
-    { key: 'global', title: '전체 누적 보너스', items: sortBonusDoneLast(bonusCards.filter(c => c.series.scope === 'global' && c.series.id !== 'bonus-max-artifact')) },
-    { key: 'zone', title: '구역별 누적 보너스', items: sortBonusDoneLast(bonusCards.filter(c => c.series.scope === 'zone')) },
-    { key: 'artifact', title: '유물 누적 보너스', items: sortBonusDoneLast(bonusCards.filter(c => c.series.id === 'bonus-max-artifact')) },
-  ] : [];
+  const isBonusTab = tab === 'global' || tab === 'zoneArtifact';
+  const bonusCards = isBonusTab ? cumulativeBonusCards(game) : [];
+  const bonusGroups = tab === 'global'
+    ? [{ key: 'global', title: '전체 누적 보너스', items: sortBonusDoneLast(bonusCards.filter(c => c.series.scope === 'global')) }]
+    : tab === 'zoneArtifact'
+      ? [
+        { key: 'zone', title: '구역별 누적 보너스', items: sortBonusDoneLast(bonusCards.filter(c => c.series.scope === 'zone')) },
+        { key: 'artifact', title: '유물 누적 보너스', items: sortBonusDoneLast(bonusCards.filter(c => c.series.scope === 'artifact')) },
+      ]
+      : [];
   const cosmeticItems = tab === 'cosmetic' ? cosmeticCards(game, cosmeticFilter) : [];
   const filterStats = tab === 'cosmetic' ? cosmeticFilterStats(game) : null;
   const btn = (
@@ -148,8 +151,7 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
           <TabBar tabs={tabs} activeKey={tab} onSelect={setTab} />
 
           {tab === 'progress' && (
-            <div className="flex flex-wrap items-center justify-between gap-2 shrink-0">
-              <span className="text-xs text-text-dim">해역 일반 도감 15곳 (기초 및 숙련 30종)</span>
+            <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
               <ToggleChip
                 pressed={incompleteOnly}
                 emphasis={incompleteOnly}
@@ -160,14 +162,11 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
             </div>
           )}
 
-          {tab === 'bonus' && (
-            <div className="flex flex-wrap items-center justify-between gap-2 shrink-0">
-              <span className="text-xs text-text-dim">달성한 단계는 따로 받지 않아도 바로 붙어요.</span>
-              {onOpenStatsBonus && (
-                <Button size="sm" type="button" onClick={onOpenStatsBonus}>
-                  스탯 창 보너스 탭에서 전체 합계 확인
-                </Button>
-              )}
+          {isBonusTab && onOpenStatsBonus && (
+            <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
+              <Button size="sm" type="button" onClick={onOpenStatsBonus}>
+                스탯 창 보너스 탭에서 전체 합계 확인
+              </Button>
             </div>
           )}
 
@@ -220,7 +219,7 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
               )
             )}
 
-            {tab === 'bonus' && (
+            {isBonusTab && (
               <div className="flex flex-col gap-3">
                 {bonusGroups.map(g => (
                   <div key={g.key}>
@@ -230,7 +229,7 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
                         current={g.items.filter(x => x.allDone).length}
                         target={g.items.length}
                         tight
-                        suffix=" 완결"
+                        suffix=" 완료"
                         className="text-2xs"
                       />
                     </Subheading>

@@ -224,8 +224,8 @@ export const GUILD_BONUS_IDS: readonly GuildBonusId[] = ['sell', 'bag', 'named',
 export const GUILD_BONUS_MAX_RANK = 5;
 /** 단계 2~5에 오르는 비용(골드). 1단계는 레벨 도달로 열려 비용이 없다 */
 const RANK_COSTS: Readonly<Record<number, number>> = { 2: 150_000, 3: 500_000, 4: 1_500_000, 5: 5_000_000 };
-/** 단계당 효과(만분율) — 판매가 +2%, 가방 칸 +4%, 네임드 조우 가중치 +5%, 일반 등급 가중치 −2%, 돌연변이 확률 +1%p */
-const EFFECT_BP_PER_RANK: Record<GuildBonusId, number> = { sell: 200, bag: 400, named: 500, rare: 200, mutation: 100 };
+/** 단계당 효과(만분율) — 판매가 +2%, 가방 칸 +4%, 네임드 조우 가중치 +5%, 일반 등급 가중치 −2%, 돌연변이 폼 가중치 +4% */
+const EFFECT_BP_PER_RANK: Record<GuildBonusId, number> = { sell: 200, bag: 400, named: 500, rare: 200, mutation: 400 };
 
 /** 보너스가 열리는 길드 레벨 */
 export function bonusUnlockLevel(id: GuildBonusId): number {
@@ -300,7 +300,7 @@ export function validDonationAmount(v: unknown): v is number {
 
 /**
  * 길드 보너스 효과 — 보너스마다 단계 효과를 더한 값 하나다. 판매가·가방·네임드는 늘어나는 비율, rare는 일반 등급 가중치가
- * 줄어드는 비율, mutation은 돌연변이 확률에 더하는 퍼센트포인트(0.01 = 1%p)다. 서버 액션 경로만 적용한다.
+ * 줄어드는 비율, mutation은 돌연변이 폼 가중치에 더하는 비율(0.04 = +4%)이다. 서버 액션 경로만 적용한다.
  */
 export interface GuildEffects {
   sell: number;

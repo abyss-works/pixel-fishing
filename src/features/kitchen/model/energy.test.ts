@@ -289,6 +289,22 @@ describe('간소화 기운 얻기 모델 (selectQuickEnergyView)', () => {
     expect(view.uids).toEqual([]);
   });
 
+  it('기운 소모 업적 보너스(energyYield)가 있으면 기운 얻기와 간소화 기운 얻기 모두에 반영된다', () => {
+    const g = seed({
+      bag: [inst('c1', 'deep', false, 'common'), inst('r1', 'deep', false, 'rare')],
+      achievementCounters: { 'energy.spent': 10_000 }, // +6%
+    });
+    const fullView = selectEnergyView(g, {});
+    expect(fullView.byGrade.common).toBe(11);
+    expect(fullView.byGrade.rare).toBe(11);
+    expect(fullView.energyTotal).toBe(22);
+
+    const quickView = selectQuickEnergyView(g, defaultQuickEnergyGrades());
+    expect(quickView.byGrade.common).toBe(11);
+    expect(quickView.byGrade.rare).toBe(11);
+    expect(quickView.energyTotal).toBe(22);
+  });
+
   it('확정 불가 상태면 거부 사유 문구를 reason으로 내보내고 결과 알림 행을 조립한다', () => {
     const locked = selectQuickEnergyView(seed({ boat: 4 }), defaultQuickEnergyGrades());
     expect(locked.reason).toBe('인도양 항로가 열리면 기운 얻기를 할 수 있어요.');

@@ -82,7 +82,7 @@ export default function EnergyTab({ game, busy, act, setToast, picks, setPicks }
     <FishPickTable rows={view.rows} expanded={collapsed} onToggleExpand={toggleSellRow}
                    onToggleRow={toggleRow} onToggleOne={toggleOne}
                    action="기운 얻기" heads={{ check: '선택', value: ENERGY_NAME }}
-                   valueOf={row => `+${formatEnergy(energyRowValue(row))}`} emptyValue="0" />
+                   valueOf={row => `+${formatEnergy(energyRowValue(row, view.energyYieldBonus))}`} emptyValue="0" />
   );
 
   const confirm = (

@@ -98,7 +98,7 @@ describe('요리·기운 아이템 스프라이트 해석', () => {
     }
   });
 
-  it('물약 스프라이트가 등록돼 있고 격자·연결성·채색 규칙을 통과한다', () => {
+  it('비약 스프라이트가 등록돼 있고 격자·연결성·채색 규칙을 통과한다', () => {
     const { grid, margin } = definedLayout(SPRITE_TARGETS.dish);
     const expectedIds = POTIONS.map(p => p.id);
     expect(Object.keys(POTION_SPRITES).sort()).toEqual([...expectedIds].sort());

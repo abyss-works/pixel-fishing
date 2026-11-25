@@ -1,5 +1,6 @@
 import type { ItemRow, PotionRow } from '../../../../../features/kitchen/model/bagItems';
 import type { RecipeTitle } from '../../../../../features/kitchen/model/recipes';
+import { cx } from '../../../../ui/cx';
 import Badge from '../../../../ui/Badge';
 import Button from '../../../../ui/Button';
 import Inset from '../../../../ui/Inset';
@@ -17,7 +18,7 @@ export type ItemDetailTarget =
   | { kind: 'recipe'; row: ItemRow; lockLines: readonly string[] | null; onUse: (row: ItemRow) => void }
   | { kind: 'potion'; row: PotionRow; lockLines: readonly string[] | null; onUse: (row: PotionRow) => void };
 
-// 아이템 상세 창 — 가방 아이템 탭에서 도시락·미끼·물약 카드를 누르면 열린다.
+// 아이템 상세 창 — 가방 아이템 탭에서 도시락·미끼·비약 카드를 누르면 열린다.
 // 유물 상세 창(ArtifactDetail)과 같은 48px 그림·제목 머리, 로어(설명), 효과·상태 표, 주의사항, 하단 실행 버튼 구성을 쓰며 우상단 X로만 닫는다.
 export default function ItemDetail({ target, busy, onClose }: {
   target: ItemDetailTarget;
@@ -31,7 +32,7 @@ export default function ItemDetail({ target, busy, onClose }: {
     ? { name: target.row.potion.name, grade: target.row.potion.grade }
     : target.row.title;
   const label = isPotion ? target.row.potion.name : target.row.label;
-  const categoryLabel = isPotion ? '물약' : target.row.slot === 'lunch' ? '도시락' : '미끼';
+  const categoryLabel = isPotion ? '비약' : target.row.slot === 'lunch' ? '도시락' : '미끼';
   const description = isPotion ? target.row.potion.description : target.row.recipe.description;
   const { effects, note, count, active } = target.row;
   const durationText = isPotion ? '하루 동안' : fmtMinutes(target.row.durationMinutes);
@@ -124,7 +125,18 @@ export default function ItemDetail({ target, busy, onClose }: {
 
         {note && (
           <Inset tone="deep" className="px-3 py-2">
-            <Note size="xs" className="my-0"><HighlightRarityText text={note} /></Note>
+            {note.includes('\n') ? (
+              <Note size="xs" className="my-0">
+                {note.split('\n').map((line, i) => (
+                  <span key={line} className={cx('flex items-baseline gap-1.5', i > 0 && 'mt-0.5')}>
+                    <span aria-hidden="true">-</span>
+                    <span><HighlightRarityText text={line} /></span>
+                  </span>
+                ))}
+              </Note>
+            ) : (
+              <Note size="xs" className="my-0"><HighlightRarityText text={note} /></Note>
+            )}
           </Inset>
         )}
       </div>

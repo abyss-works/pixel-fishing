@@ -4,7 +4,7 @@ import { commonWeightMultiplier } from '../../../game/rules/actions';
 import { FISH, newState } from '../../../game/rules/logic';
 import type { FishInstance, GameState } from '../../../game/rules/logic';
 import {
-  BONUS_CATEGORIES, selectActiveBonuses, selectInitialStatsSpotIndex, selectReachableZones,
+  BONUS_CATEGORIES, selectActiveBonuses, selectBonusTableRows, selectInitialStatsSpotIndex, selectReachableZones,
   selectStatsModalData, selectStatsSpotRows, selectStatsSummary, selectStatsZoneTabs,
 } from './stats';
 
@@ -209,14 +209,27 @@ describe('받는 보너스', () => {
       const g = game({ slots: { lunch: { id: 'cook-lunch-bundle', endsAt: at(3_600_000) }, bait: null } });
       const rows = slotRows(g);
       expect(rows.map(b => [b.category, text(b)])).toEqual([
-        ['fish', '입질 대기 −5%'], ['fish', '희귀 어종 출현 +5%'], ['fish', '영웅 어종 출현 +5%'], ['fish', '전설 어종 출현 +5%'],
+        ['fish', '입질 대기 −5%'], ['fish', '희귀 어종 출현 비중 +5%'], ['fish', '영웅 어종 출현 비중 +5%'], ['fish', '전설 어종 출현 비중 +5%'],
       ]);
       expect(rows.every(b => b.source.kind === 'slot' && b.source.label === '생선 탈리(전설)')).toBe(true);
     });
 
-    it('네임드 만날 확률은 결투 갈래다', () => {
+    it('네임드 조우 확률은 결투 갈래다', () => {
       const g = game({ slots: { lunch: { id: 'cook-lunch-named', endsAt: at(3_600_000) }, bait: null } });
-      expect(slotRows(g).map(b => [b.category, text(b)])).toEqual([['duel', '네임드 만날 확률 +50%']]);
+      expect(slotRows(g).map(b => [b.category, text(b)])).toEqual([['duel', '네임드 조우 확률 +50%']]);
+    });
+
+    it('돌연변이 억제(키리바트·백단향 미끼)는 낚시 갈래의 ×0.5다', () => {
+      const g = game({
+        slots: {
+          lunch: { id: 'cook-lunch-calm', endsAt: at(3_600_000) },
+          bait: { id: 'cook-bait-calm', endsAt: at(300_000) },
+        },
+      });
+      expect(slotRows(g).map(b => [b.category, b.autoOnly, b.manualOnly, text(b)])).toEqual([
+        ['fish', true, false, '돌연변이 등장 ×0.5'],
+        ['fish', false, true, '돌연변이 등장 ×0.5'],
+      ]);
     });
 
     it('달빛 미끼의 비수치 효과는 낚시 갈래의 상세 설명 한 줄로 모은다', () => {
@@ -224,7 +237,7 @@ describe('받는 보너스', () => {
       expect(slotRows(g).map(b => [b.category, text(b)])).toEqual([['fish', '낮에도 밤 어종이 함께 낚여요.']]);
     });
 
-    it('도시락은 방치로 낚을 때만, 미끼는 챔질해서 낚을 때만 붙는다고 표시한다', () => {
+    it('도시락은 방치로 낚을 때만, 미끼는 직접 챔질해 낚을 때만 붙는다고 표시한다', () => {
       const g = game({ slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(3_600_000) }, bait: { id: 'cook-bait-mutation', endsAt: at(60_000) } } });
       const [lunch, bait] = slotRows(g);
       expect([lunch.autoOnly, lunch.manualOnly]).toEqual([true, false]);
@@ -268,25 +281,25 @@ describe('받는 보너스', () => {
     });
     const bonuses = selectActiveBonuses(g);
     expect(bonuses.filter(b => b.source.kind === 'achievement').map(b => b.source)).toEqual([
-      { kind: 'achievement', label: '입질 대기', value: '−3.5%' },
-      { kind: 'achievement', label: '네임드 만날 확률', value: '+3%' },
-      { kind: 'achievement', label: '판매가 보너스', value: '+2%' },
+      { kind: 'achievement', label: '입질 대기', value: '−4.8%' },
+      { kind: 'achievement', label: '네임드 조우 확률', value: '+3%' },
+      { kind: 'achievement', label: '판매가 보너스', value: '+1.2%' },
     ]);
     const data = selectStatsModalData(g, 'sail', 0);
     expect(data.effectiveBite.min.mods.some(m => m.id === 'achievement-biteWaitCut' && m.label === '업적 누적')).toBe(true);
   });
 
   it('보유 유물 효과 배율(artifactBoost)이 활성 유물 행 모두에 반영되고 낚시 갈래 단독 행으로 중복 분리하지 않는다', () => {
-    // 전설 유물 1개(mami-wata-mirror) → maxArtifactCount 1 → artifactBoost +3% (scale = 1.03)
+    // 전설 유물 1개(+2.5%) + 일반 유물 3개 Lv1(각 +0.5%) → artifactBoost +4% (scale = 1.04)
     const g = game({
       artifacts: ['mami-wata-mirror', 'wreck-compass', 'abyss-angler', 'outer-isle-sinker'],
     });
     const bonuses = selectActiveBonuses(g);
     const relics = bonuses.filter(b => b.source.kind === 'relic');
     expect(relics.map(b => [b.category, b.source.kind === 'relic' && b.source.artifact.id, b.source.kind === 'relic' && b.source.scale])).toEqual([
-      ['duel', 'abyss-angler', 1.03],
-      ['move', 'wreck-compass', 1.03],
-      ['fish', 'outer-isle-sinker', 1.03],
+      ['duel', 'abyss-angler', 1.04],
+      ['move', 'wreck-compass', 1.04],
+      ['fish', 'outer-isle-sinker', 1.04],
     ]);
     // 낚시 갈래에만 따로 '보유 유물 효과' 행을 두지 않는다
     expect(bonuses.some(b => b.source.kind === 'achievement' && b.source.label === '보유 유물 효과')).toBe(false);
@@ -313,10 +326,10 @@ describe('받는 보너스', () => {
     expect(rows.map(b => b.source.kind === 'slot'
       ? `${b.source.label}:${'text' in b.source.effect ? b.source.effect.text : b.source.effect.label}`
       : '')).toEqual([
-      '롱페퍼 미끼(희귀):희귀 어종 출현',
-      '롱페퍼 미끼(희귀):영웅 어종 출현',
-      '롱페퍼 미끼(희귀):전설 어종 출현',
-      '사프란 미끼(특수):돌연변이 출현',
+      '롱페퍼 미끼(희귀):희귀 어종 출현 비중',
+      '롱페퍼 미끼(희귀):영웅 어종 출현 비중',
+      '롱페퍼 미끼(희귀):전설 어종 출현 비중',
+      '사프란 미끼(특수):돌연변이 출현 비중',
     ]);
 
     const dup = game({
@@ -351,7 +364,7 @@ describe('받는 보너스', () => {
     expect(stale).toEqual([]);
   });
 
-  it('오늘 쓴 물약은 낚시·결투·상점 갈래에 각각 +5%p 운 배율 보너스로 들어간다', () => {
+  it('오늘 사용한 비약은 낚시·결투·상점 갈래에 각각 ×1.05 곱연산 보너스로 들어간다', () => {
     const now = '2026-11-24T05:00:00.000Z';
     const active = selectActiveBonuses(game({ potions: { 'luck-small': '2026-11-24' } }), null, now);
     expect(active.map(b => [b.category, b.source.kind, b.source.kind === 'potion' ? b.source.target : null, b.source.kind === 'potion' ? b.source.bonus : null])).toEqual([
@@ -362,5 +375,95 @@ describe('받는 보너스', () => {
 
     const stale = selectActiveBonuses(game({ potions: { 'luck-small': '2026-11-23' } }), null, now);
     expect(stale).toEqual([]);
+  });
+
+  describe('보너스 탭 통합 행 (selectBonusTableRows)', () => {
+    const T0 = '2026-11-24T05:00:00.000Z';
+    const at = (ms: number) => new Date(Date.parse(T0) + ms).toISOString();
+
+    it('동일 효과를 1줄로 합산하고 구역 누적은 구역별 이름 대신 N곳으로 묶으며 합연산→곱연산 내림차순·최종 적용 순으로 툴팁을 정렬한다', () => {
+      const g = game({
+        artifacts: ['mami-wata-mirror', 'elder-scale'], // 전설 유물 1개 -> artifactBoost +2.5% (×1.025), 코모로 Lv1 +25%
+        achievementCounters: {
+          'manual.variant.total': 10_000, // +7.5%
+          'manual.variant.pacific': 50,   // +0.3%
+          'manual.variant.seasia': 50,    // +0.3%
+        },
+      });
+      const guild = {
+        level: 10,
+        effects: { sell: 0, bag: 0, named: 0, rare: 0, mutation: 0.4 },
+      };
+      const rows = selectBonusTableRows(g, guild, T0);
+      const mutRow = rows.find(r => r.category === 'fish' && r.effect === '돌연변이 출현 비중' && r.scope === 'all')!;
+      // 25% * 1.03 + 40% + 7.5% + 0.6% = 25.75 + 48.1 = 73.85%
+      expect(mutRow.totalText).toBe('+73.85%');
+      expect(mutRow.tipRows).toEqual([
+        { label: '[길드] 돌연변이 확률', value: '+40%' },
+        { label: '[유물] 코모로의 골판', value: '+25%' },
+        { label: '[업적] 전체 돌연변이 손맛', value: '+7.5%' },
+        { label: '[업적] 구역 돌연변이 2곳', value: '+0.6%' },
+        { label: '[업적] 유물 증폭', value: '×1.03' },
+        { label: '최종 적용', value: '+73.85%', divider: true },
+      ]);
+      // 구역 이름이 툴팁에 직접 나오지 않는다
+      expect(mutRow.tipRows.some(r => String(r.label).includes('태평양') || String(r.label).includes('동남아'))).toBe(false);
+    });
+
+    it('운세와 비약은 독립 곱연산(1.05 × 1.05 = ×1.1025)으로 합산하고 수동·방치 요리는 각각의 범위 배지와 증폭을 붙이며 억제 요리는 ×0.5로 낸다', () => {
+      const g = game({
+        boat: 5,
+        artifacts: ['sargasso-net'],
+        achievementCounters: {
+          'catch.bait': 40,    // baitAmplify +6% (×1.06)
+          'catch.lunch': 1000, // lunchAmplify +3% (×1.03)
+          'energy.spent': 5000, // energyYield +3%
+          'catch.auto': 5000,  // bagCap +1.5%
+        },
+        slots: {
+          lunch: { id: 'cook-lunch-calm', endsAt: at(3_600_000) },
+          bait: { id: 'cook-bait-mutation', endsAt: at(300_000) },
+          bait2: { id: 'cook-bait-calm', endsAt: at(300_000) },
+        },
+        fortune: { day: '2026-11-24', kind: 'fish', index: 5 },
+        potions: { 'luck-small': '2026-11-24' },
+      });
+      const rows = selectBonusTableRows(g, null, T0);
+
+      const rareLuck = rows.find(r => r.effect === '희귀 이상 출현 비중' && r.totalText.startsWith('×'))!;
+      expect(rareLuck.scope).toBe('all');
+      expect(rareLuck.totalText).toBe('×1.1025');
+      expect(rareLuck.tipRows).toEqual([
+        { label: '[운세] 풍어운', value: '×1.05' },
+        { label: '[비약] 작은 바다 영약', value: '×1.05' },
+        { label: '최종 적용', value: '×1.1025', divider: true },
+      ]);
+
+      const baitMut = rows.find(r => r.effect === '돌연변이 출현 비중' && r.scope === 'manual')!;
+      // +150% * 1.06 = +159%
+      expect(baitMut.totalText).toBe('+159%');
+      expect(baitMut.tipRows).toEqual([
+        { label: '[미끼] 사프란 미끼', value: '+150%' },
+        { label: '[업적] 미끼 손맛 증폭', value: '×1.06' },
+        { label: '최종 적용', value: '+159%', divider: true },
+      ]);
+
+      const calmBait = rows.find(r => r.effect === '돌연변이 등장' && r.scope === 'manual')!;
+      expect(calmBait.totalText).toBe('×0.5');
+      expect(calmBait.tipRows).toEqual([
+        { label: '[미끼] 백단향 미끼', value: '×0.5' },
+        { label: '최종 적용', value: '×0.5', divider: true },
+      ]);
+
+      const calmLunch = rows.find(r => r.effect === '돌연변이 등장' && r.scope === 'auto')!;
+      expect(calmLunch.totalText).toBe('×0.5');
+      expect(calmLunch.tipRows).toEqual([
+        { label: '[도시락] 키리바트', value: '×0.5' },
+        { label: '최종 적용', value: '×0.5', divider: true },
+      ]);
+
+      expect(rows.find(r => r.effect === '기운 획득량')?.totalText).toBe('+3%');
+      expect(rows.find(r => r.effect === '가방 용량')?.totalText).toBe('+1.5%');
+    });
   });
 });

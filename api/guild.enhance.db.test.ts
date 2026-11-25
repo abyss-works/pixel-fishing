@@ -203,8 +203,10 @@ describe('길드 10레벨 및 자유 강화', () => {
     expect((await callAction(userToken(u2), { type: 'sell', uids: bagB.map(i => i.uid) })).status).toBe(200);
     expect(await goldOf(u2)).toBe(baseSell + Math.round(baseSell * 0.1));
 
-    // u1은 돌연변이 10단계(+10%p) 적용
-    const r = variantShare(mutationWeightsOf(newState(), 'pond')) + 0.08;
+    // u1은 돌연변이 10단계(+40% 가중치 = 1.4/4.4 ≈ 0.318) 적용, 기본(0.25)과의 중간값으로 검증
+    const baseShare = variantShare(mutationWeightsOf(newState(), 'pond'));
+    const boostedShare = variantShare(mutationWeightsOf(newState(), 'pond', 0, 0, 1, 0.4));
+    const r = (baseShare + boostedShare) / 2;
     vi.spyOn(Math, 'random').mockReturnValue(r);
     vi.setSystemTime(Date.now() + 2_000);
     const caught = await callAction(userToken(u1), { type: 'catch', spot: 'pond', judgment: 'auto' });

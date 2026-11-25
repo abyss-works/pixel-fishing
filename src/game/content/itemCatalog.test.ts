@@ -14,7 +14,7 @@ import {
 } from './itemCatalog';
 
 describe('공용 스택 아이템 카탈로그', () => {
-  it('물약·생명의 기운 4종·레시피 10종·유물 재료 8종을 빠짐없이 통합한다', () => {
+  it('비약·생명의 기운 4종·레시피 12종·유물 재료 8종을 빠짐없이 통합한다', () => {
     const ids = STACKABLE_ITEMS.map(item => item.id);
     expect(new Set(ids).size).toBe(ids.length);
 
@@ -44,7 +44,7 @@ describe('공용 스택 아이템 카탈로그', () => {
     }
   });
 
-  it('물약·요리·재료는 표시 개수와 저장 단위가 1:1이며 비정수·무효 수량은 0으로 막는다', () => {
+  it('비약·요리·재료는 표시 개수와 저장 단위가 1:1이며 비정수·무효 수량은 0으로 막는다', () => {
     for (const id of ['luck-small', 'cook-lunch-bite', 'cook-bait-rare', 'mat-abyss-lantern']) {
       expect(isStackableItemId(id)).toBe(true);
       expect(isAttachableItemId(id)).toBe(true);
