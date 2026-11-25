@@ -3,7 +3,7 @@
 import type { LocationRef } from '../../game/content/places';
 import type { Look } from '../../game/content/wardrobe';
 import { isCloud } from './auth';
-import { requestFailure } from './requestFailure';
+import { throwRequestFailure } from './requestFailure';
 
 /**
  * 다른 플레이어에게 보이는 정보. dexFish는 일반 폼, dexVariant는 돌연변이 폼으로 한 번이라도 낚은 어종 id,
@@ -32,7 +32,7 @@ export interface PublicProfile {
 export async function readPlayer(uid: string): Promise<PublicProfile | null> {
   if (!isCloud) return null;
   const res = await fetch(`/api/players/${encodeURIComponent(uid)}`);
-  if (!res.ok) throw requestFailure(res, 'player read failed');
+  if (!res.ok) await throwRequestFailure(res, 'player read failed');
   return await res.json() as PublicProfile;
 }
 
@@ -40,6 +40,6 @@ export async function readPlayer(uid: string): Promise<PublicProfile | null> {
 export async function searchPlayers(prefix: string): Promise<{ uid: string; nickname: string }[]> {
   if (!isCloud) return [];
   const res = await fetch(`/api/players?nickname=${encodeURIComponent(prefix)}`);
-  if (!res.ok) throw requestFailure(res, 'player search failed');
+  if (!res.ok) await throwRequestFailure(res, 'player search failed');
   return ((await res.json()) as { players: { uid: string; nickname: string }[] }).players;
 }

@@ -14,7 +14,7 @@ import { APP_VERSION } from '../../version';
 import { REJECT_TEXT } from '../../game/rules/rules';
 import type { RejectReason } from '../../game/rules/rules';
 import { getPhaseOverride } from './timeOverride';
-import { CONSENT_REQUIRED_CODE, ConsentRequiredError, notifyConsentRequired } from './requestFailure';
+import { CONSENT_REQUIRED_CODE, throwConsentRequired } from './requestFailure';
 
 type Row = Record<string, never> | Record<string, unknown>;
 
@@ -162,8 +162,7 @@ export class HttpGameGateway implements GameGateway {
     // 403 = 약관 수락 필요, 게스트 거부(코드로 구분), 제재 계정(0008 restricted)이나 권한 없는 요청(import 게이트)
     if (res.status === 403) {
       if (body?.error === CONSENT_REQUIRED_CODE) {
-        notifyConsentRequired();
-        throw new ConsentRequiredError(`consent required (${action.type})`, { action: action.type });
+        throwConsentRequired(`consent required (${action.type})`, { action: action.type });
       }
       if (body?.error === 'guest-village-only' || body?.error === 'account-only') {
         throw new AppError(body.error, `guest rejected (${body.error})`, { action: action.type });

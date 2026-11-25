@@ -59,12 +59,30 @@ export function requestFailure(res: Response, message: string, code?: string): A
   return new AppError(isRateLimited(res) ? 'rate-limited' : 'network', message, { status: res.status });
 }
 
+/** 403 응답 본문의 error 코드가 consent-required인지 확인한다 */
+export async function readConsentRequired(res: Response): Promise<boolean> {
+  if (res.status !== 403) return false;
+  const body = await res.clone().json().catch(() => null) as { error?: unknown } | null;
+  return body?.error === CONSENT_REQUIRED_CODE;
+}
+
+/** 약관 확인 구독자에 알린 뒤 ConsentRequiredError를 던진다 */
+export function throwConsentRequired(message: string, context: Record<string, unknown> = {}): never {
+  notifyConsentRequired();
+  throw new ConsentRequiredError(message, context);
+}
+
 /** 비동기 읽기 어댑터용 실패 판정. 403 응답만 본문의 error 코드를 확인해 consent-required를 구분한다 */
 export async function readRequestFailure(res: Response, message: string): Promise<AppError> {
-  if (res.status === 403) {
-    const body = await res.clone().json().catch(() => null) as { error?: unknown } | null;
-    const code = typeof body?.error === 'string' ? body.error : undefined;
-    return requestFailure(res, message, code);
+  if (await readConsentRequired(res)) {
+    return requestFailure(res, message, CONSENT_REQUIRED_CODE);
   }
   return requestFailure(res, message);
+}
+
+/** 비동기 어댑터용 실패 처리 — consent-required면 약관 확인 구독자에 알린 뒤 예외를 던진다 */
+export async function throwRequestFailure(res: Response, message: string): Promise<never> {
+  const err = await readRequestFailure(res, message);
+  if (isConsentRequiredError(err)) notifyConsentRequired();
+  throw err;
 }

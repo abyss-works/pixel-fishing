@@ -3,14 +3,16 @@
 import { AppError } from '../../core/errors';
 import { isCloud } from './auth';
 import type { FriendItem, FriendOp, FriendOpResult } from '../api/types';
-import { isRateLimited, requestFailure } from './requestFailure';
+import {
+  CONSENT_REQUIRED_CODE, isRateLimited, requestFailure, throwConsentRequired, throwRequestFailure,
+} from './requestFailure';
 
 /** 친구·받은 요청·보낸 요청 */
 export async function readFriends(): Promise<FriendItem[] | null> {
   if (!isCloud) return null;
   const res = await fetch('/api/friends');
   if (res.status === 401) throw new AppError('unauthorized', 'friends read before session');
-  if (!res.ok) throw requestFailure(res, 'friends read failed');
+  if (!res.ok) await throwRequestFailure(res, 'friends read failed');
   return (await res.json() as { friends: FriendItem[] }).friends;
 }
 
@@ -27,5 +29,6 @@ export async function friendAction(body: FriendOp): Promise<FriendOpResult> {
   // 앱 서버의 429는 오류 코드를 싣는다(아래에서 거절로 돌려준다). 코드가 없는 429는 인그레스의 요청 한도다
   const json = await (isRateLimited(res) ? res.json().catch(() => ({})) : res.json()) as { result?: string; error?: string };
   if (isRateLimited(res) && typeof json.error !== 'string') throw requestFailure(res, 'friend action failed');
+  if (res.status === 403 && json.error === CONSENT_REQUIRED_CODE) throwConsentRequired('friend action failed', { status: 403 });
   return res.ok ? { ok: true, result: json.result ?? '' } : { ok: false, error: json.error ?? 'unknown' };
 }
