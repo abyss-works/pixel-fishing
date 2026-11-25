@@ -126,7 +126,7 @@ export default function AchievementCatalogSection({
                   {bonusSeries.map(s => (
                     <tr key={s.id}>
                       <td className="whitespace-nowrap">
-                        <Badge>{s.scope === 'global' ? '전역' : (s.zoneName ?? '구역')}</Badge>
+                        <Badge>{s.scope === 'global' ? '전역' : s.scope === 'artifact' ? '유물' : (s.zoneName ?? '구역')}</Badge>
                       </td>
                       <td className="whitespace-nowrap">
                         <div className="font-medium text-text">{s.name}</div>
