@@ -101,8 +101,8 @@
     50%      { text-shadow: 0 0 14px rgba(160, 231, 252, 0.9); opacity: 0.8; }
   }
   @keyframes fx-orbit {
-    from { transform: rotate(0turn) translateX(150px); }
-    to   { transform: rotate(1turn) translateX(150px); }
+    from { transform: rotate(0turn) translateX(78px); }
+    to   { transform: rotate(1turn) translateX(78px); }
   }
   @keyframes fx-spark {
     0%   { transform: rotate(var(--a)) translateX(8px) scale(1.4); opacity: 1; }

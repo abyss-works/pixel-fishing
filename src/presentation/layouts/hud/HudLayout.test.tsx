@@ -166,4 +166,23 @@ describe('HudLayout 하단 HUD 묶음 및 상태 띠 고정 슬롯 분리', () =
     expect(src.indexOf('<HudHeader')).toBeGreaterThan(-1);
     expect(src.indexOf('<HudHeader')).toBeLessThan(src.indexOf('<MessageLog'));
   });
+
+  it.each([false, true])('PC와 모바일(mobile=%s) 모두 catchSlot은 하단 묶음과 분리되고 z-index 없이 PC 좌측·모바일 중앙 채팅창 위에 배치된다', mobile => {
+    layout.mobile = mobile;
+    setMinimapVisible(true);
+    let catchSlot: HTMLDivElement | null = null;
+    render(<HudLayout {...props} game={newState()} scene={region} onCatchSlot={el => { catchSlot = el; }} />);
+    const log = screen.getByTestId('log');
+    const bundle = log.parentElement!;
+    expect(catchSlot).not.toBeNull();
+    expect(bundle.contains(catchSlot)).toBe(false);
+    expect(catchSlot!.className).toContain('absolute');
+    expect(catchSlot!.className).toContain('pointer-events-none');
+    expect(catchSlot!.className).toContain('empty:hidden');
+    expect(catchSlot!.className).toContain('justify-start');
+    expect(catchSlot!.className).toContain('bottom-62');
+    expect(catchSlot!.className).toContain('mobile:justify-center');
+    expect(catchSlot!.className).toContain('mobile:bottom-48');
+    expect(catchSlot!.className).not.toMatch(/\bz-/);
+  });
 });
