@@ -186,7 +186,7 @@ describe('BagTab - 3서브탭, 보기 전환 아이콘, 하단 버튼', () => {
     const guestBtn = screen.getByRole('button', { name: '기운 얻기' });
     expect(guestBtn).toBeDisabled();
     fireEvent.mouseEnter(guestBtn.parentElement!);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
 
     cleanup();
     show(game({ boat: COOKING_UNLOCK_BOAT - 1, location: { kind: 'base', id: 'home' } }), { accountState: 'unverified' });

@@ -128,7 +128,7 @@ describe('ChatBar', () => {
   it('서버가 거부한 이유를 문장마다 줄바꿈해 보인다', () => {
     live.error = 'chat-guest';
     render(<ChatBar />);
-    expect(screen.getByRole('status').textContent).toBe('채팅은 계정을 연결하면 쓸 수 있어요.\n계정 관리에서 계정을 연결해 주세요.');
+    expect(screen.getByRole('status').textContent).toBe('채팅은 태평양 항로가 열리면 쓸 수 있어요.\n계정 관리에서 계정을 연결해 주세요.');
   });
 
   it('거부 이유가 없으면 말풍선을 그리지 않고, 있으면 입력 줄 위에 떠서 자리를 차지하지 않는다', () => {
@@ -173,8 +173,8 @@ describe('ChatBar', () => {
       fireEvent.mouseMove(document.body);
       fireEvent.mouseEnter(wrap);
       const tip = screen.getByRole('tooltip');
-      expect(tip).toHaveTextContent('채팅은 계정을 연결하면 쓸 수 있어요.');
-      expect(tip).toHaveTextContent('계정 관리에서 계정을 연결해 주세요.');
+      expect(tip).toHaveTextContent('채팅은 태평양 항로가 열리면 쓸 수 있어요.');
+      expect(tip).toHaveTextContent('태평양 항로는 계정 관리에서 계정을 연결하면 열려요.');
     });
 
     it('확인 실패 상태에서는 확인 실패 전용 잠금 문안이 툴팁으로 열린다', () => {

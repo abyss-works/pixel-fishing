@@ -410,14 +410,14 @@ describe('기운 얻기 탭의 잠금', () => {
   it('게스트에게는 게스트 잠금이다', () => {
     show(seed({ boat: COOKING_UNLOCK_BOAT }), { accountState: 'guest' });
     expect(tab('기운 얻기')).toHaveAttribute('aria-disabled', 'true');
-    expect(lines(tab('기운 얻기'))).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
+    expect(lines(tab('기운 얻기'))).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
   });
 
   it('게스트이면서 해금 전이면 게스트 잠금이 먼저다', () => {
     show(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), { accountState: 'guest' });
     const tip = lines(tab('기운 얻기'));
-    expect(tip).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
-    expect(tip).not.toHaveTextContent('항로');
+    expect(tip).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
+    expect(tip).not.toHaveTextContent('인도양');
   });
 
   it('확인 실패 상태에서는 확인 실패 잠금이다', () => {

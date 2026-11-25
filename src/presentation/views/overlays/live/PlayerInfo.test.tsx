@@ -150,7 +150,7 @@ describe('PlayerInfo', () => {
     const groups = screen.getAllByRole('group');
     expect(groups.map(g => g.getAttribute('aria-label'))).toEqual(['친구 요청', '차단']);
     fireEvent.mouseEnter(groups[0].parentElement!);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
     fireEvent.mouseLeave(groups[0].parentElement!);
     groups.forEach(g => fireEvent.click(g));
     buttons.forEach(b => fireEvent.click(b));

@@ -52,6 +52,6 @@ describe('친구 알림 문구', () => {
 
 describe('FRIEND_ERROR_TEXT', () => {
   it('게스트 거부 안내는 계정 연결을 알린다', () => {
-    expect(FRIEND_ERROR_TEXT['account-only']).toBe('친구는 계정을 연결하면 쓸 수 있어요.');
+    expect(FRIEND_ERROR_TEXT['account-only']).toBe('친구는 태평양 항로가 열리면 쓸 수 있어요. 계정 관리에서 계정을 연결해 주세요.');
   });
 });
