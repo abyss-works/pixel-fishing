@@ -35,13 +35,16 @@ const open = (
   accountFailed = false,
   sailReturn = false,
   mode: 'manage' | 'connect' = 'manage',
+  sync: { syncState?: string; syncLabel?: string | null } = {},
 ) => {
   const setToast = vi.fn();
   const onAuthChanged = vi.fn(async () => {});
   const onClose = vi.fn();
   const view = render(
     <AccountModal layer={mode === 'connect' ? 'stage' : 'app'} mode={mode} setToast={setToast} onAuthChanged={onAuthChanged} onClose={onClose}
-                  account={account} accountFailed={accountFailed} sailReturn={sailReturn} syncLabel="클라우드 저장 켜짐" syncState="on" />,
+                  account={account} accountFailed={accountFailed} sailReturn={sailReturn}
+                  syncLabel={'syncLabel' in sync ? sync.syncLabel : '클라우드 저장 켜짐'}
+                  syncState={sync.syncState ?? 'on'} />,
   );
   return { setToast, onAuthChanged, onClose, unmount: view.unmount };
 };
@@ -72,20 +75,83 @@ describe('게스트의 구글 연결', () => {
 });
 
 describe('로그인 상태별 구성', () => {
-  it('구글 계정 사용자는 구글 버튼 없이 로그아웃과 약관·처리방침·운영정책 링크가 있다', () => {
+  it('구글 계정 사용자는 별도 클라우드 저장 구획·중복 안내 없이 전폭 로그아웃과 실선 법무 링크 3종을 보인다', () => {
     open('me@gmail.test');
     expect(screen.queryByRole('button', { name: 'Google로 계속하기' })).toBeNull();
-    expect(screen.getByRole('button', { name: '로그아웃' })).toBeInTheDocument();
+    expect(screen.queryByText('진행은 이 계정에 저장돼요.')).toBeNull();
+    expect(screen.queryByText('클라우드 저장 켜짐')).toBeNull();
+    expect(screen.queryByRole('tooltip')).toBeNull();
+
+    const logout = screen.getByRole('button', { name: '로그아웃' });
+    expect(logout).toBeInTheDocument();
+    expect(logout).toHaveClass('full');
+
     for (const [name, href] of [['이용약관', '/terms'], ['개인정보 처리방침', '/privacy'], ['운영정책', '/policy']]) {
       const link = screen.getByRole('link', { name });
       expect(link).toHaveAttribute('href', href);
       expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveClass('decoration-solid');
+      expect(link).not.toHaveClass('decoration-dotted');
+      expect(link.querySelector('[data-glyph="external"]')).not.toBeNull();
     }
   });
 
-  it('게임 서버가 없는 로컬 모드에서는 안내가 보이고 계정 동작 버튼이 비활성이다', () => {
+  it('구름 아이콘은 호버·포커스·터치 누르기 시에만 2줄 상태 툴팁을 열고 Esc로 닫힌다', () => {
+    open('me@gmail.test');
+    const trigger = screen.getByRole('button', { name: '클라우드 저장 켜짐' });
+    expect(trigger.querySelector('[data-glyph="cloudOk"]')).not.toBeNull();
+    expect(screen.queryByRole('tooltip')).toBeNull();
+
+    fireEvent.mouseEnter(trigger);
+    const tip = screen.getByRole('tooltip');
+    expect(tip).toHaveTextContent('클라우드 저장 켜짐');
+    expect(tip).toHaveTextContent('진행 상황이 계정에 자동 저장되고 있어요.');
+    fireEvent.mouseLeave(trigger);
+    expect(screen.queryByRole('tooltip')).toBeNull();
+
+    fireEvent.focus(trigger);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('클라우드 저장 켜짐');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  });
+
+  it('터치(coarse pointer)에서 구름 아이콘을 누르면 툴팁이 열리고 다시 누르면 닫힌다', () => {
+    const origMatchMedia = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query === '(pointer: coarse)',
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })) as unknown as typeof window.matchMedia;
+    try {
+      open('me@gmail.test');
+      const trigger = screen.getByRole('button', { name: '클라우드 저장 켜짐' });
+      fireEvent.click(trigger);
+      expect(screen.getByRole('tooltip')).toHaveTextContent('진행 상황이 계정에 자동 저장되고 있어요.');
+      fireEvent.click(trigger);
+      expect(screen.queryByRole('tooltip')).toBeNull();
+    } finally {
+      window.matchMedia = origMatchMedia;
+    }
+  });
+
+  it.each([
+    ['connecting', '클라우드 저장 연결 중', 'cloudSyncing', '계정 저장 상태를 확인하고 있어요.'],
+    ['error', '클라우드 저장 연결 실패', 'cloudError', '저장 서버에 닿지 않았어요. 잠시 뒤 다시 시도해 주세요.'],
+  ] as const)('클라우드 상태(%s)에 맞는 구름 아이콘과 2줄 툴팁을 보인다', (syncState, label, glyph, desc) => {
+    open('me@gmail.test', false, false, 'manage', { syncState, syncLabel: label });
+    const trigger = screen.getByRole('button', { name: label });
+    expect(trigger.querySelector(`[data-glyph="${glyph}"]`)).not.toBeNull();
+    fireEvent.mouseEnter(trigger);
+    const tip = screen.getByRole('tooltip');
+    expect(tip).toHaveTextContent(label);
+    expect(tip).toHaveTextContent(desc);
+  });
+
+  it('게임 서버가 없는 로컬 모드에서는 구름 아이콘 없이 안내가 보이고 계정 동작 버튼이 비활성이다', () => {
     actions.configured = false;
     open('dev@localhost');
+    expect(screen.queryByRole('button', { name: /클라우드 저장/ })).toBeNull();
     expect(screen.getByText(/오프라인 상태에서는 계정 기능이 동작하지 않아요/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '로그아웃' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '계정 삭제' })).toBeDisabled();

@@ -14,7 +14,10 @@ export type GlyphId =
   | 'plus' | 'minus'
   | 'compass' | 'backpack' | 'book' | 'question' | 'gear' | 'people' | 'flag'
   | 'crown' | 'sparkle' | 'warn' | 'menu' | 'grid' | 'lunch' | 'bait'
-  | 'clock' | 'target' | 'gem' | 'external';
+  | 'clock' | 'target' | 'gem' | 'external'
+  | 'cloudOk' | 'cloudSyncing' | 'cloudError';
+
+const CLOUD_CELLS: Cell[] = [[4, 2, 3, 1], [3, 3, 5, 1], [2, 4, 8, 1], [1, 5, 10, 1], [0, 6, 12, 3], [1, 9, 10, 1]];
 
 const GLYPHS: Record<GlyphId, { cells: Cell[]; holes?: Cell[] }> = {
   // 경고 — 느낌표 삼각 기둥 + 점
@@ -213,6 +216,19 @@ const GLYPHS: Record<GlyphId, { cells: Cell[]; holes?: Cell[] }> = {
       [7, 1, 4, 1], [10, 1, 1, 4],
       [8, 3, 2, 1], [7, 4, 2, 1], [6, 5, 2, 1], [5, 6, 2, 1],
     ],
+  },
+  // 클라우드 저장 상태 — 구름 바탕 + 체크/세 점/느낌표 구멍
+  cloudOk: {
+    cells: CLOUD_CELLS,
+    holes: [[3, 6, 1, 1], [4, 7, 1, 1], [5, 8, 1, 1], [6, 7, 1, 1], [7, 6, 1, 1], [8, 5, 1, 1]],
+  },
+  cloudSyncing: {
+    cells: CLOUD_CELLS,
+    holes: [[2, 6, 2, 2], [5, 6, 2, 2], [8, 6, 2, 2]],
+  },
+  cloudError: {
+    cells: CLOUD_CELLS,
+    holes: [[5, 4, 2, 3], [5, 8, 2, 1]],
   },
 };
 

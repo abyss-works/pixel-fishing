@@ -19,11 +19,13 @@ import Divider from '../../../ui/Divider';
 import ExternalLink from '../../../ui/ExternalLink';
 import GoogleButton from '../../../ui/GoogleButton';
 import GoogleLogo from '../../../ui/GoogleLogo';
+import IconButton from '../../../ui/IconButton';
 import Inset from '../../../ui/Inset';
 import KeyValueRow from '../../../ui/KeyValueRow';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
+import Tip, { TipCard } from '../../../ui/Tip';
 import { cx } from '../../../ui/cx';
 import { useDialogs } from '../../../ui/useDialogs';
 import type { Notify } from '../../../ui/hud/messageFeed';
@@ -45,6 +47,40 @@ const CONNECT_PERKS = [
     desc: '모아 둔 도감과 골드, 배와 낚싯대가 연결한 계정으로 이어져요.',
   },
 ] as const;
+
+type CloudStatusKey = 'on' | 'connecting' | 'error';
+
+const CLOUD_STATUS: Record<CloudStatusKey, {
+  glyph: 'cloudOk' | 'cloudSyncing' | 'cloudError';
+  title: string;
+  desc: string;
+  triggerClass: string;
+  dotClass: string;
+  error?: boolean;
+}> = {
+  on: {
+    glyph: 'cloudOk',
+    title: '클라우드 저장 켜짐',
+    desc: '진행 상황이 계정에 자동 저장되고 있어요.',
+    triggerClass: 'text-accent border-accent/50 hover:border-accent hover:bg-accent/10',
+    dotClass: 'bg-accent',
+  },
+  connecting: {
+    glyph: 'cloudSyncing',
+    title: '클라우드 저장 연결 중',
+    desc: '계정 저장 상태를 확인하고 있어요.',
+    triggerClass: 'text-text-dim border-line hover:border-text-dim hover:bg-line/30',
+    dotClass: 'bg-text-dim',
+  },
+  error: {
+    glyph: 'cloudError',
+    title: '클라우드 저장 연결 실패',
+    desc: '저장 서버에 닿지 않았어요. 잠시 뒤 다시 시도해 주세요.',
+    triggerClass: 'text-danger border-danger/65 hover:border-danger hover:bg-danger/10',
+    dotClass: 'bg-danger',
+    error: true,
+  },
+};
 
 // 계정 관리·출항 연결 창 - settings(manage)에서는 계정 상태·로그아웃·계정 삭제를, 게임 출항/해금 진입(connect)에서는 출항 안내와 구글 연결만 제공한다.
 // 세션 확인에 실패했으면(accountFailed) 게스트로 보지 않고, 확인 실패 안내와 다시 확인 버튼만 둔다. 계정을 바꾸는 동작(구글 연결, 로그아웃, 계정 삭제)은 확인이 끝날 때까지 열지 않는다.
@@ -69,7 +105,10 @@ export default function AccountModal({
   const { confirm, input, dialogs } = useDialogs();
   const guest = account === null && !accountFailed;
   // 로컬(클라우드 미설정)에서도 화면은 보여준다 - 계정 기능만 막는다.
-  const offline = !isAccountConfigured();
+  const offline = !isAccountConfigured() || syncState === 'off';
+  const signedInOnline = !guest && !accountFailed && !offline;
+  const cloudKey: CloudStatusKey = syncState === 'connecting' || syncState === 'error' ? syncState : 'on';
+  const cloud = CLOUD_STATUS[cloudKey];
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -128,16 +167,44 @@ export default function AccountModal({
     window.location.reload(); // 재부팅 = 새 익명 세션으로 처음부터 시작
   });
 
-  const accountRow = (
-    <KeyValueRow label="계정" value={accountLabel(account, accountFailed)}
-                 action={!guest && !accountFailed && !offline ? <GoogleLogo size={16} /> : undefined} />
+  const cloudTip = (
+    <TipCard
+      title={(
+        <span className={cx('inline-flex items-center gap-1.5', cloud.error && 'text-danger')}>
+          <span className={cx('size-1.5 shrink-0', cloud.dotClass)} aria-hidden="true" />
+          <span>{cloud.title}</span>
+        </span>
+      )}
+      description={cloud.desc}
+    />
+  );
+
+  const accountRow = signedInOnline ? (
+    <div className="flex items-center justify-between gap-2.5 px-3 py-2 min-h-[50px]">
+      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+        <GoogleLogo size={18} className="shrink-0" />
+        <span className="text-sm font-bold text-text truncate min-w-0">{account}</span>
+      </div>
+      <Tip wraps pressOpens text={cloudTip}>
+        <IconButton
+          type="button"
+          boxed
+          glyph={cloud.glyph}
+          size={18}
+          aria-label={cloud.title}
+          className={cx('size-8 shrink-0 cursor-help transition-colors', cloud.triggerClass)}
+        />
+      </Tip>
+    </div>
+  ) : (
+    <KeyValueRow label="계정" value={accountLabel(account, accountFailed)} />
   );
 
   const links = (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-      <ExternalLink href={LEGAL_PATHS.terms}>이용약관</ExternalLink>
-      <ExternalLink href={LEGAL_PATHS.privacy}>개인정보 처리방침</ExternalLink>
-      <ExternalLink href={LEGAL_PATHS.policy}>운영정책</ExternalLink>
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
+      <ExternalLink icon href={LEGAL_PATHS.terms}>이용약관</ExternalLink>
+      <ExternalLink icon href={LEGAL_PATHS.privacy}>개인정보 처리방침</ExternalLink>
+      <ExternalLink icon href={LEGAL_PATHS.policy}>운영정책</ExternalLink>
     </div>
   );
 
@@ -187,10 +254,10 @@ export default function AccountModal({
     </>
   ) : (
     <>
-      <Inset divided className="mb-2">
+      <Inset divided className="mb-3">
         {accountRow}
-        {!connectMode && syncLabel && (
-          <div className={cx('px-2 py-1.5 text-xs', syncState === 'error' ? 'text-danger' : 'text-text-dim')}>
+        {!connectMode && offline && syncState === 'off' && syncLabel && (
+          <div className="px-2 py-1.5 text-xs text-text-dim">
             {syncLabel}
           </div>
         )}
@@ -211,16 +278,13 @@ export default function AccountModal({
           <Note className="text-center">구글 계정을 연결하면 지금까지의 진행이 그 계정에 이어져요.</Note>
         </>
       ) : (
-        <>
-          <Note className="mt-0">진행은 이 계정에 저장돼요.</Note>
-          <Button full className="mt-3" disabled={offline} onClick={signOut}>로그아웃</Button>
-        </>
+        <Button full disabled={offline} onClick={signOut}>로그아웃</Button>
       )}
 
       {!accountFailed && (
         <>
-          <Divider className="mt-3 mb-2" />
-          <div className="flex items-center gap-2 flex-wrap">
+          <Divider className="mt-3 mb-2.5" />
+          <div className="flex items-center justify-between gap-x-3 gap-y-2 flex-wrap">
             {!guest && links}
             <Button variant="ghost" size="sm" className="ml-auto" disabled={busy || offline} onClick={removeAccount}>계정 삭제</Button>
           </div>
