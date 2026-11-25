@@ -1,12 +1,14 @@
 // 로컬 API 구현 — 클라우드 미설정(dev·테스트) 전용
 // 게임은 LocalGameGateway(메모리 + localStorage), 인증은 가짜 계정으로 동작한다
 import { LocalGameGateway } from './localGameGateway';
-import type { AccountLookup, GameGateway, AuthApi, AuthResult } from '../api/types';
+import type { AccountLookup, GameGateway, AuthApi, AuthResult, DevApi, PromoteTestResult, ResetDevAccountResult } from '../api/types';
 import type { AdminApi } from '../api/types';
+import { newState } from '../../game/rules/logic';
 import type { GameState } from '../../game/rules/logic';
 
 const DEV_ACCOUNT = 'dev@localhost';
 const DEV_UID = '00000000-0000-4000-8000-000000000000';
+const LOCAL_SAVE_KEY = 'pixel-fishing-save';
 
 class LocalAuth implements AuthApi {
   isConfigured = false;
@@ -86,11 +88,28 @@ class LocalAdmin implements AdminApi {
   }
 }
 
+class LocalDev implements DevApi {
+  async promoteTestAccount(): Promise<PromoteTestResult> {
+    return { ok: true, email: DEV_ACCOUNT, isAnonymous: false };
+  }
+
+  async resetDevAccount(): Promise<ResetDevAccountResult> {
+    const initial = newState();
+    try {
+      localStorage.setItem(LOCAL_SAVE_KEY, JSON.stringify(initial));
+    } catch {
+      /* 저장소 쓰기 실패는 무시 — 초기 상태 반환은 유지한다 */
+    }
+    return { state: initial, version: 1 };
+  }
+}
+
 export function createLocalApi():
-{ createGameGateway(initial: GameState): GameGateway; auth: AuthApi; admin: AdminApi } {
+{ createGameGateway(initial: GameState): GameGateway; auth: AuthApi; admin: AdminApi; dev: DevApi } {
   return {
     createGameGateway: initial => new LocalGameGateway(initial),
     auth: new LocalAuth(),
     admin: new LocalAdmin(),
+    dev: new LocalDev(),
   };
 }

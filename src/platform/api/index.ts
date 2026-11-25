@@ -42,7 +42,7 @@ export { readLastPosition } from '../adapters/position';
 export type { LastPosition } from '../adapters/position';
 export type { PublicProfile } from '../adapters/player';
 export type {
-  ApiClient, AuthApi, StorageApi, AdminApi, AdminAccessResult,
+  ApiClient, AuthApi, StorageApi, AdminApi, AdminAccessResult, DevApi, PromoteTestResult, ResetDevAccountResult,
   AccountLookup, AuthResult, GameGateway, GameProfile, MaybePromise, DispatchResult,
   BountySnapshot, BountyProgressRow, BountyTicketRow,
   RankingBoardId, RankingRow, RankingBoard, MailItem, FriendItem, FriendOp, FriendOpResult,

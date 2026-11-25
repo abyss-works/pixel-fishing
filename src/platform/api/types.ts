@@ -449,10 +449,28 @@ export interface AdminApi {
   deployHost(): string | null;
 }
 
+export type PromoteTestResult =
+  | { ok: true; email: string; isAnonymous: false }
+  | { ok: false; msg: string; code?: string };
+
+export interface ResetDevAccountResult {
+  state: GameState;
+  version: number;
+}
+
+/** 스테이징·로컬 개발 계정 도구 API. 운영 환경에서는 서버가 404로 차단한다 */
+export interface DevApi {
+  /** 현재 게스트 계정의 세이브를 유지한 채 스테이징 테스트 정식 계정으로 승격한다 */
+  promoteTestAccount(): Promise<PromoteTestResult>;
+  /** 현재 계정의 세이브·수배·업적·운세를 초기 상태로 되돌린다 */
+  resetDevAccount(): Promise<ResetDevAccountResult>;
+}
+
 export interface ApiClient {
   /** 게임 상태 게이트웨이 생성. LocalGameGateway가 상태를 소유하므로 마운트마다 새로 만든다. */
   createGameGateway(initial: GameState): GameGateway;
   auth: AuthApi;
   storage: StorageApi;
   admin: AdminApi;
+  dev: DevApi;
 }
