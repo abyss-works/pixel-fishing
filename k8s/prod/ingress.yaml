@@ -4,6 +4,7 @@ metadata:
   name: pixel-fishing
   annotations:
     # 정적 파일과 화면 경로. 본문 한도는 같은 호스트의 다른 경로와 같은 값으로 둔다. 요청 한도는 Ingress 단위라 경로별로 나눈다.
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: 5m
     nginx.ingress.kubernetes.io/limit-rps: "50"
     nginx.ingress.kubernetes.io/limit-burst-multiplier: "6"
@@ -30,7 +31,8 @@ kind: Ingress
 metadata:
   name: pixel-fishing-api
   annotations:
-    # 게임 서버 API(관리자 API는 pixel-fishing-admin-api로 분리). import 액션이 게임 상태 전체를 싣는다. 본문 한도는 서버 본문 한도(5mb)와 맞춘다.
+    # 게임 서버 API(관리자 API는 pixel-fishing-admin-api, 익명 가입은 pixel-fishing-auth-anon으로 분리). import 액션이 게임 상태 전체를 싣는다. 본문 한도는 서버 본문 한도(5mb)와 맞춘다.
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: 5m
     nginx.ingress.kubernetes.io/limit-rps: "20"
     nginx.ingress.kubernetes.io/limit-burst-multiplier: "5"
@@ -55,9 +57,38 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
+  name: pixel-fishing-auth-anon
+  annotations:
+    # 익명 계정 생성 전용 경로. 앱의 IP당 시간당 상한 앞단에서 연결 IP 기준 분당 요청 수를 강하게 제한한다.
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: 5m
+    nginx.ingress.kubernetes.io/limit-rpm: "2"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "5"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: pixel-fishing.abyssworks.dev
+      http:
+        paths:
+          - path: /api/auth/sign-in/anonymous
+            pathType: Prefix
+            backend:
+              service:
+                name: pixel-fishing
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - pixel-fishing.abyssworks.dev
+      secretName: pixel-fishing-tls
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
   name: pixel-fishing-admin-api
   annotations:
     # 관리자 API(/api/admin). 게임 API(/api)와 요청 한도 버킷을 분리해 대시보드 조회가 게임 한도에 걸리지 않게 한다.
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: 5m
     nginx.ingress.kubernetes.io/limit-rps: "50"
     nginx.ingress.kubernetes.io/limit-burst-multiplier: "6"
@@ -85,6 +116,7 @@ metadata:
   name: pixel-fishing-live
   annotations:
     # 실시간 연결(WebSocket 업그레이드). 연결 시도 빈도를 낮게 묶는다.
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: 5m
     nginx.ingress.kubernetes.io/limit-rps: "2"
     nginx.ingress.kubernetes.io/limit-burst-multiplier: "10"
@@ -112,6 +144,7 @@ metadata:
   name: pixel-fishing-admin
   annotations:
     # 관리자 대시보드는 별도 이미지로 배포한다.
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: 5m
     nginx.ingress.kubernetes.io/limit-rps: "50"
     nginx.ingress.kubernetes.io/limit-burst-multiplier: "6"
