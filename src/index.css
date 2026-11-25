@@ -72,7 +72,7 @@
   /* 애니메이션 — animate-* 유틸로 노출. 파라미터(--a/--d/--i)는 사용처가 inline style로 주입 */
   --animate-fade-in: fade-in 0.2s ease-out;
   --animate-overlay-in: overlay-in 0.25s ease-out;
-  --animate-catch-pop: catch-pop 0.3s cubic-bezier(0.2, 1.4, 0.4, 1);
+  --animate-catch-pop: catch-pop 0.28s ease-out;
   --animate-mutated-shimmer: mutated-shimmer 2.4s ease-in-out infinite;
   --animate-fx-orbit: fx-orbit 2.4s linear infinite;
   --animate-fx-spark: fx-spark 0.5s ease-out forwards;
@@ -88,21 +88,19 @@
     from { opacity: 0; }
     to   { opacity: 1; }
   }
-  /* ⚠ 키프레임 규칙: 위치는 건드리지 않는다 — Tailwind v4의 translate/rotate 유틸은 transform이
-     아니라 별도 CSS 속성이라, 키프레임이 transform으로 이동까지 잡으면 이동이 "중첩"된다
-     (v0.4.1 QA: 획득 카드가 -100%,-100%에서 떴다가 점프한 사고). scale/opacity만 애니메이션하고
-     중앙 정렬은 요소의 translate 유틸에 맡긴다 — scale은 요소 중심(transform-origin) 기준. */
+  /* ⚠ 키프레임 규칙: 세로 중앙 정렬(-translate-y-1/2)은 부모 슬롯(catchSlot)에 두고 카드 래퍼 자체에는
+     Tailwind translate 유틸을 두지 않아, 좌측 슬라이드 인(translateX)과 점프 충돌하지 않는다. */
   @keyframes catch-pop {
-    from { opacity: 0; transform: scale(0.7); }
-    to   { opacity: 1; transform: scale(1); }
+    from { opacity: 0; transform: translateX(-24px); }
+    to   { opacity: 1; transform: translateX(0); }
   }
   @keyframes mutated-shimmer {
     0%, 100% { text-shadow: 0 0 6px rgba(224, 195, 252, 0.7); opacity: 1; }
     50%      { text-shadow: 0 0 14px rgba(160, 231, 252, 0.9); opacity: 0.8; }
   }
   @keyframes fx-orbit {
-    from { transform: rotate(0turn) translateX(78px); }
-    to   { transform: rotate(1turn) translateX(78px); }
+    from { transform: rotate(0turn) translateX(96px); }
+    to   { transform: rotate(1turn) translateX(96px); }
   }
   @keyframes fx-spark {
     0%   { transform: rotate(var(--a)) translateX(8px) scale(1.4); opacity: 1; }

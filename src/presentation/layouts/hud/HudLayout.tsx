@@ -69,7 +69,7 @@ interface HudLayoutProps {
 // 낚시 상태 띠 슬롯(statusSlot)과 획득 카드 슬롯(catchSlot)은 하단 흐름 묶음과 분리된 독립 절대 좌표 슬롯으로 둔다.
 // statusSlot(z-(--z-stage-status))은 PC와 모바일 모두 bottom-24(96px)에 고정되고,
 // catchSlot은 래퍼 자체에 층 토큰을 두지 않아 내부 카드(z-(--z-stage-card))와 이펙트(z-(--z-catch-fx))의 쌓임 맥락을 가두지 않는다.
-// catchSlot은 PC 좌측 채팅창 위(bottom-62)에 왼쪽 정렬, 모바일은 펼쳐진 5줄 채팅창 위(mobile:bottom-48)에 가로 가운데 정렬한다.
+// catchSlot은 PC 좌측 세로 중앙(채팅창 위 상한 유지)에 왼쪽 정렬, 모바일은 펼쳐진 5줄 채팅창 위(mobile:bottom-48)에 가로 가운데 정렬한다.
 // 하단 HUD(오른쪽 아래 열, 메시지 창)는 PC 레이아웃과 모바일 레이아웃 모두 단일 흐름 컨테이너 안에 둔다.
 // 모바일 레이아웃과 PC 쌓기 단계(464 미만, stackTier)에서는 한 줄기에 세로로 쌓는다 —
 // 아래에서부터 메시지 창(폭 전체), 그 위 오른쪽의 칩과 미니맵(156px), 알림 카드.
@@ -91,8 +91,8 @@ export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onO
            className={cx('absolute inset-x-3 bottom-24 z-(--z-stage-status) flex justify-center pointer-events-none empty:hidden',
                          'mobile:row-start-2 mobile:row-end-3 mobile:col-span-full mobile:inset-x-2 mobile:bottom-24')} />
       <div ref={onCatchSlot}
-           className={cx('absolute inset-x-3 bottom-62 flex justify-start pointer-events-none empty:hidden',
-                         'mobile:row-start-2 mobile:row-end-3 mobile:col-span-full mobile:inset-x-2 mobile:bottom-48 mobile:justify-center')} />
+           className={cx('absolute inset-x-3 top-[min(50%,calc(100%-19rem))] -translate-y-1/2 flex justify-start pointer-events-none empty:hidden',
+                         'mobile:row-start-2 mobile:row-end-3 mobile:col-span-full mobile:inset-x-2 mobile:top-auto mobile:bottom-48 mobile:translate-y-0 mobile:justify-center')} />
       <div className={cx('absolute inset-x-3 bottom-3 flex flex-wrap items-end justify-between gap-y-2 gap-x-3 pointer-events-none',
                          'mobile:row-start-2 mobile:row-end-3 mobile:inset-x-2',
                          'mobile:bottom-[calc(0.5rem_+_max(0px,_var(--keyboard-h,0px)_-_3.5rem))]',

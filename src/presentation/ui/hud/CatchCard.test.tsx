@@ -1,3 +1,5 @@
+/// <reference types="node" />
+import { readFileSync } from 'node:fs';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { FISH, RARITY, formName, priceOf } from '../../../game/rules/logic';
@@ -11,14 +13,14 @@ const info = (over: Partial<{ form: 'normal' | 'variant'; size: number; percenti
 describe('획득 카드', () => {
   afterEach(cleanup);
 
-  it('좌측 icon 스프라이트 칸과 우측 등급·이름·2×2 크기/판매가 지표를 가운뎃점 없이 보인다', () => {
+  it('좌측 card 스프라이트 칸과 우측 등급·이름·2×2 크기/판매가 지표를 가운뎃점 없이 보인다', () => {
     const { container } = render(<CatchCard fish={fish} info={info()} />);
     const card = container.firstElementChild!;
     expect(card).toHaveAttribute('data-rarity', fish.rarity);
-    // icon 프리셋(84×44) 캔버스를 사용한다
+    // card 프리셋(160×90) 캔버스를 사용한다
     const canvas = container.querySelector('canvas')!;
-    expect(canvas).toHaveAttribute('width', '84');
-    expect(canvas).toHaveAttribute('height', '44');
+    expect(canvas).toHaveAttribute('width', '160');
+    expect(canvas).toHaveAttribute('height', '90');
 
     expect(card).toHaveTextContent(RARITY[fish.rarity].name);
     expect(card).toHaveTextContent(fish.name);
@@ -56,5 +58,11 @@ describe('획득 카드', () => {
     expect(fx.closest('[class*="z-(--z-stage-card)"]')).toBeNull();
     expect(fx.closest('.animate-catch-pop')).toBeNull();
     expect(fx.parentElement).toBe(container.querySelector('.animate-catch-pop')!.parentElement);
+  });
+
+  it('등장 애니메이션 catch-pop은 scale 팝이 아니라 좌측 슬라이드 인(translateX(-24px) → 0, ease-out)이다', () => {
+    const css = readFileSync('src/index.css', 'utf-8');
+    expect(css).toMatch(/--animate-catch-pop:\s*catch-pop\s+[\d.]+s\s+ease-out;/);
+    expect(css).toMatch(/@keyframes catch-pop\s*\{\s*from\s*\{\s*opacity:\s*0;\s*transform:\s*translateX\(-24px\);\s*\}\s*to\s*\{\s*opacity:\s*1;\s*transform:\s*translateX\(0\);\s*\}\s*\}/);
   });
 });
