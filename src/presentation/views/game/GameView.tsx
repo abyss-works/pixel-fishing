@@ -430,7 +430,7 @@ export default function GameView(props: GameViewProps) {
         )}
         <GoogleReturn setToast={props.setToast} progress={progress} reopenAccount={() => openAccount(false)} />
         {accountOpen && (
-          <AccountModal layer="stage" setToast={props.setToast} onAuthChanged={props.onAuthChanged} account={props.account} accountFailed={props.accountFailed}
+          <AccountModal layer="stage" mode="connect" setToast={props.setToast} onAuthChanged={props.onAuthChanged} account={props.account} accountFailed={props.accountFailed}
                         syncLabel={props.syncLabel} syncState={props.syncState} sailReturn={accountSailIntent} onClose={closeAccount} />
         )}
         {playersOpen && atSea && (
