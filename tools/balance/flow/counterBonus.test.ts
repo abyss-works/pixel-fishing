@@ -6,9 +6,9 @@ import { ARTIFACT_MAX_LEVEL } from '../../../src/game/content/artifacts';
 import { FISH } from '../../../src/game/content/fish';
 import { SPOTS } from '../../../src/game/content/spots';
 import { rng } from '../model';
-import { createCounterBonusTracker, loadCounterBonus, parseCounterBonus } from './counterBonus';
+import { createCounterBonusTracker, isValidCounterKey, loadCounterBonus, parseCounterBonus } from './counterBonus';
 import type { CounterBonusConfig } from './counterBonus';
-import { effectPlan } from './cooking';
+import { RECIPES, effectPlan } from './cooking';
 import { daysReport } from './days';
 import { bigMarksDist, transitionDist } from './dist';
 import { NO_EFFECT } from './effects';
@@ -40,13 +40,15 @@ describe('카운터 보너스 JSON 스키마 검증', () => {
         { counter: 'catch.auto', thresholds: [500, 2000], effects: [{ bite: 0.05 }, { bite: 0.05 }] },
         { counter: 'catch.perfect', thresholds: [100], effects: [{ epic: 0.1 }] },
         { counter: 'catch.bait', thresholds: [10], effects: [{ named: 0.1 }] },
+        { counter: 'catch.lunch', thresholds: [100], effects: [{ lunchAmplify: 0.15 }] },
+        { counter: 'energy.spent', thresholds: [5000], effects: [{ energyYield: 0.15 }] },
         { counter: 'named.flawless', thresholds: [1, 5], effects: [{ move: 0.05 }, { artifactBoost: 0.1 }] },
         { counter: 'sell.gold', thresholds: [10000, 100000], effects: [{ sell: 0.05 }, { sell: 0.05 }] },
         { counter: 'bigSpecies', thresholds: [10, 30], effects: [{ big: 0.1 }, { big: 0.15 }] },
         { counter: 'maxArtifact', thresholds: [1], effects: [{ artifactBoost: 0.2 }] },
         { counter: 'manual.variant.pacific', thresholds: [1], effects: [{ variant: 0.1, zone: 'pacific' }] },
-        { counter: 'manual.legendary.pacific', thresholds: [1], effects: [{ rare: 0.1, zone: 'pacific' }] },
-        { counter: `manual.legendary.${sampleLegendary}`, thresholds: [1], effects: [{ sell: 0.05 }] },
+        { counter: 'manual.legendary.pacific', thresholds: [1], effects: [{ rare: 0.1, nightWeight: 0.05, zone: 'pacific' }] },
+        { counter: `manual.legendary.${sampleLegendary}`, thresholds: [1], effects: [{ sell: 0.05, bagCap: 0.1, baitAmplify: 0.2 }] },
         { counter: 'manual.total.village', thresholds: [50], effects: [{ bite: 0.05, zone: 'village' }] },
       ],
     };
@@ -56,6 +58,11 @@ describe('카운터 보너스 JSON 스키마 검증', () => {
   });
 
   it('잘못된 카운터 키, 임계점 순서, 효과 길이·범위를 거부한다', () => {
+    expect(isValidCounterKey('catch.lunch')).toBe(true);
+    expect(isValidCounterKey('energy.spent')).toBe(true);
+    for (const k of ['nightWeight', 'bagCap', 'energyYield', 'baitAmplify', 'lunchAmplify'] as const) {
+      expect(() => parseCounterBonus({ rules: [{ counter: 'catch.auto', thresholds: [10], effects: [{ [k]: -0.1 }] }] })).toThrow(/0 이상/);
+    }
     expect(() => parseCounterBonus({ rules: [] })).toThrow(/rules/);
     expect(() => parseCounterBonus({ rules: [{ counter: 'unknown.key', thresholds: [10], effects: [{ bite: 0.05 }] }] })).toThrow(/카운터/);
     expect(() => parseCounterBonus({ rules: [{ counter: 'manual.variant.mars', thresholds: [1], effects: [{ variant: 0.1 }] }] })).toThrow(/카운터/);
@@ -182,6 +189,27 @@ describe('시뮬레이션 동적 카운터 누적 및 보너스 반영', () => {
     // 태평양 연안 이후(마리아나 해구 도착)는 빨라진다
     const deepIdx = SPOTS.findIndex(s => s.id === 'deep');
     expect(withZone.arrivals[deepIdx].hours).toBeLessThan(base.arrivals[deepIdx].hours);
+  });
+
+  it('catch.lunch 카운터, lunchAmplify 슬롯 증폭, nightWeight 채널이 시뮬레이션에 반영된다', () => {
+    const lunch = RECIPES.find(r => r.id === 'cook-lunch-bite')!;
+    const plan = effectPlan({ effect: lunch.effect, recipe: lunch, fromBoat: 0 });
+    const ampCfg = parseCounterBonus({
+      rules: [{ counter: 'catch.lunch', thresholds: [10], effects: [{ lunchAmplify: 1 }] }],
+    });
+    const baseLunch = simulate({ axis: 'idle', bounty: false, maxDays: 365, plan });
+    const ampLunch = simulate({ axis: 'idle', bounty: false, maxDays: 365, plan, counterBonus: ampCfg });
+    expect(ampLunch.counterUnlocks?.some(u => u.counter === 'catch.lunch')).toBe(true);
+    expect(ampLunch.arrivals.at(-1)!.hours).toBeLessThan(baseLunch.arrivals.at(-1)!.hours);
+
+    const nightCfg = parseCounterBonus({
+      rules: [{ counter: 'catch.auto', thresholds: [1], effects: [{ nightWeight: 0.5 }] }],
+    });
+    const tracker = createCounterBonusTracker(nightCfg);
+    expect(tracker.evaluate(0, 'sea')).toBe(false);
+    tracker.recordCatch('sea', 'idle', { fish: FISH[0], gold: 10, fame: 1, variant: false }, false, false);
+    expect(tracker.evaluate(0, 'sea')).toBe(true);
+    expect(tracker.activeFor('sea').effect.nightWeight).toBeCloseTo(0.5, 12);
   });
 });
 

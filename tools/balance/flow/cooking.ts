@@ -9,8 +9,8 @@ import { RARITY_ORDER } from '../../../src/game/content/rarity';
 import type { RarityId } from '../../../src/game/content/rarity';
 import { SPOTS } from '../../../src/game/content/spots';
 import type { SpotId } from '../../../src/game/content/spots';
-import { energyDefaultExcluded, slotEffects, slotEndsAt } from '../../../src/game/rules/cooking';
-import type { ActiveCookEffects } from '../../../src/game/rules/cooking';
+import { energyDefaultExcluded, energyYield, slotEffects, slotEndsAt } from '../../../src/game/rules/cooking';
+import type { ActiveCookEffects, SlotAmplify } from '../../../src/game/rules/cooking';
 import { canFishSpot, capOfBoat, compareBlandness, newState, priceOf } from '../../../src/game/rules/logic';
 import type { FishInstance } from '../../../src/game/rules/logic';
 import { NO_EFFECT, checkEffect, dexRows, effectRates, spotsAt, variantEv } from './effects';
@@ -44,10 +44,10 @@ export function effectOf(e: ActiveCookEffects): Effect {
 
 /** 요리 하나를 그 종류의 슬롯에 담았을 때 그 캐치에 걸리는 효과 — 게임의 슬롯 효과(slotEffects)를 그대로 불러 옮긴다.
  *  도시락은 방치 판정, 미끼 요리는 수동 판정에 걸린다 */
-export function effectOfRecipe(r: CookRecipe): Effect {
+export function effectOfRecipe(r: CookRecipe, amplify?: SlotAmplify): Effect {
   const now = '2026-01-01T00:00:00.000Z';
   const slots = { lunch: null, bait: null, [r.kind]: { id: r.id, endsAt: slotEndsAt(r, now) } };
-  return effectOf(slotEffects({ slots }, now, r.kind === 'lunch' ? 'auto' : 'normal'));
+  return effectOf(slotEffects({ slots }, now, r.kind === 'lunch' ? 'auto' : 'normal', amplify));
 }
 
 /** 미끼 효과 — 요리 콘텐츠의 등급 미끼(희귀, 영웅, 전설)와 밤 어종 출현 미끼 레시피에서 불러온다 */
@@ -320,6 +320,8 @@ export interface BagSupplyOptions {
   manualShare?: number;
   /** 집에 들러 가방을 기운으로 바꾸고 비우는 간격(시간). 생략하면 낚는 시간 전체에 한 번 들른다 */
   visitHours?: number;
+  /** 기운 획득량 보너스 비율(0 이상, 예: 0.15 = +15%). 생략하면 0 */
+  energyYield?: number;
 }
 
 export interface BagSupplyRow {
@@ -345,6 +347,8 @@ export function bagSupplyRows(o: BagSupplyOptions): BagSupplyRow[] {
   if (!Number.isInteger(o.trials) || o.trials < 1) throw new Error('시도 횟수는 1 이상의 정수여야 합니다');
   if (o.manualShare !== undefined && !(o.manualShare >= 0 && o.manualShare <= 1)) throw new Error('수동 비율은 0 이상 1 이하여야 합니다');
   if (o.visitHours !== undefined && !(o.visitHours >= MIN_VISIT_HOURS)) throw new Error(`방문 간격은 ${MIN_VISIT_HOURS}시간 이상이어야 합니다`);
+  if (o.energyYield !== undefined && (!Number.isFinite(o.energyYield) || o.energyYield < 0)) throw new Error('기운 획득량 보너스는 0 이상이어야 합니다');
+  const yieldBonus = o.energyYield ?? 0;
   const unlock = o.unlockBoat ?? COOKING_UNLOCK_BOAT;
   const stages = [...new Set(SPOTS.map(s => s.boatTier))].filter(b => b >= unlock).sort((a, b) => a - b);
   const visit = Math.min(o.visitHours ?? o.hours, o.hours);
@@ -374,7 +378,7 @@ export function bagSupplyRows(o: BagSupplyOptions): BagSupplyRow[] {
       });
       const n = counts.reduce((a, c) => a + c.reduce((x, y) => x + y, 0), 0);
       const rand = rng(o.seed + i);
-      const kept = zeroGrades(), released = zeroGrades();
+      const kept = zeroGrades(), released = zeroGrades(), extracted = zeroGrades();
       let keptGold = 0, releasedGold = 0;
       function* draw(segment: number[]): Generator<Bucket> {
         for (let m = 0; m < sources.length; m++) {
@@ -390,14 +394,20 @@ export function bagSupplyRows(o: BagSupplyOptions): BagSupplyRow[] {
       for (let t = 0; t < o.trials; t++) {
         for (const segment of counts) {
           const f = fillBag(draw(segment), cap);
-          for (const g of RARITY_ORDER) { kept[g] += f.kept[g] / o.trials; released[g] += f.released[g] / o.trials; }
+          for (const g of RARITY_ORDER) {
+            kept[g] += f.kept[g] / o.trials;
+            released[g] += f.released[g] / o.trials;
+            if (yieldBonus > 0 && f.kept[g] > 0) {
+              extracted[g] += Math.round(energyYield(f.kept[g]) * (1 + yieldBonus)) / ENERGY_UNIT / o.trials;
+            }
+          }
           keptGold += f.keptGold / o.trials; releasedGold += f.releasedGold / o.trials;
         }
       }
       const frontmost = front.has(s.id);
       return {
         boat, spot: s.id, level, cap, catches: n, frontmost, kept, keptGold, released, releasedGold,
-        energy: frontmost ? zeroGrades() : energyOf(kept), energyGold: frontmost ? 0 : keptGold,
+        energy: frontmost ? zeroGrades() : yieldBonus === 0 ? energyOf(kept) : extracted, energyGold: frontmost ? 0 : keptGold,
       };
     });
   });

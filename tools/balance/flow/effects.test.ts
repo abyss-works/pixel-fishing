@@ -429,6 +429,21 @@ describe('PERFECT 축', () => {
   });
 });
 
+describe('밤 어종 가중치 증가', () => {
+  it('음수는 거부하고, 0 이상이면 제품의 nightWeightBonus 경로로 밤 어종 비율이 늘어난다', () => {
+    expect(() => checkEffect(fx({ nightWeight: -0.1 }))).toThrow(/밤 어종/);
+    const spot = SPOTS.find(s => FISH.some(f => f.spot === s.id && f.night))!.id;
+    const level = levelOf(spot);
+    const base = effectRates(spot, level, 'idle', NO_EFFECT);
+    const now = effectRates(spot, level, 'idle', fx({ nightWeight: 0.5 }));
+    const expected = rates(spot, level, 'idle', { nightWeightBonus: 0.5 });
+    const nightShare = (r: { rows: Row[] }) => r.rows.filter(x => x.fish.night).reduce((s, x) => s + x.prob, 0);
+    expect(now.goldPerHour).toBeCloseTo(expected.goldPerHour, 6);
+    expect(nightShare(now)).toBeCloseTo(nightShare(expected), 12);
+    expect(nightShare(now)).toBeGreaterThan(nightShare(base));
+  });
+});
+
 describe('전설 유물 고정 레벨 파싱과 제품 규칙 일치', () => {
   it('all, max, all:N, 단독 지정은 전설 유물을 제품 규칙과 같은 최고 레벨(Lv5)로 반환한다', () => {
     const legendaries = ARTIFACTS.filter(a => !artifactHasLevel(a));
