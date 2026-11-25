@@ -53,12 +53,12 @@ describe('HudLayout 미니맵 위 칩 줄', () => {
     setMinimapVisible(true);
     const { unmount } = render(<HudLayout {...props} game={unlocked()} scene={region} chips={chip} />);
     expect(kinds()).toEqual(['접속 칩', '보너스 통합 칩', '시계']);
-    expect(screen.getByRole('group', { name: '활성 효과 없음' })).toHaveTextContent('효과0');
+    expect(screen.getByRole('button', { name: '활성 효과 없음' })).toHaveTextContent('효과0');
     unmount();
     render(<HudLayout {...props} scene={region} chips={chip}
                       game={unlocked({ lunch: null, bait: { id: 'cook-bait-mutation', endsAt: HOUR_LATER } })} />);
     expect(kinds()).toEqual(['접속 칩', '보너스 통합 칩', '시계']);
-    expect(screen.getByRole('group', { name: '활성 효과 1개' })).toHaveTextContent('효과1');
+    expect(screen.getByRole('button', { name: '활성 효과 1개' })).toHaveTextContent('효과1');
   });
 
   it('칩 줄은 포인터 이벤트를 받지 않고 칩 자신만 받는다', () => {
@@ -66,7 +66,7 @@ describe('HudLayout 미니맵 위 칩 줄', () => {
     render(<HudLayout {...props} game={unlocked({ lunch: { id: 'cook-lunch-bite', endsAt: HOUR_LATER }, bait: null })}
                       scene={region} chips={chip} />);
     expect(rowOf().className).toContain('pointer-events-none');
-    const slot = screen.getByRole('group', { name: '활성 효과 1개' });
+    const slot = screen.getByRole('button', { name: '활성 효과 1개' });
     expect(slot.className).toContain('pointer-events-auto');
     expect(screen.getByText('12:00').closest('div')!.className).toContain('pointer-events-auto');
   });

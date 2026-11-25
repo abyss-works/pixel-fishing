@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { COOKING_UNLOCK_BOAT } from '../../../game/content/cooking';
 import { api } from '../../../platform/api';
 import { newState } from '../../../game/rules/logic';
 import { TUTORIAL_IDS } from '../../../game/content/tutorials';
@@ -183,5 +184,49 @@ describe('GameView 패널 초기화', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '알림 닫기' }));
     expect(onDismissToast).toHaveBeenCalledWith(99);
+  });
+
+  it('HUD 효과 칩을 누르면 적용 중인 효과 창이 열리고 전체 보너스 보기·가방 열기로 바로 이동한다', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <GameView
+          game={{ ...newState(), boat: COOKING_UNLOCK_BOAT, tutorials: [...TUTORIAL_IDS] }}
+          scene={{ kind: 'base', id: 'home' }}
+          entryPos={null}
+          placeSeq={0}
+          dispatch={() => ({ status: 'ok', state: newState(), result: { type: 'none' } })}
+          setToast={() => {}}
+          onScene={() => {}}
+          onPlace={() => {}}
+          onWarmup={() => {}}
+          log={[]}
+          syncLabel={null}
+          syncState="off"
+          guestProgress="nothing"
+          account="dev@localhost"
+          accountChecked={true}
+          accountFailed={false}
+          uid="u1"
+          nickname="테스터"
+          onRename={async () => null}
+          onAuthChanged={async () => {}}
+          onResync={async () => {}}
+        />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '활성 효과 없음' }));
+    expect(screen.getByRole('dialog', { name: '적용 중인 효과' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '전체 보너스 보기' }));
+    expect(screen.queryByRole('dialog', { name: '적용 중인 효과' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '보너스' }).className).toContain('active');
+    fireEvent.click(screen.getByRole('button', { name: '닫기' }));
+
+    fireEvent.click(screen.getByRole('button', { name: '활성 효과 없음' }));
+    fireEvent.click(screen.getByRole('button', { name: '가방 열기' }));
+    expect(screen.queryByRole('dialog', { name: '적용 중인 효과' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '아이템' })).toHaveAttribute('aria-pressed', 'true');
   });
 });

@@ -52,6 +52,17 @@ export function FortuneIndexMeter({ index }: { index: DailyFortune['index'] }) {
   );
 }
 
+/** 강도 5칸 막대와 강도 등급 — 지수 단어와 중복 숫자 없이 강도만 간결하게 표시한다 */
+export function FortuneStrength({ index }: { index: DailyFortune['index'] }) {
+  const indexLabel = FORTUNE_INDEX_LABEL[index];
+  return (
+    <span className="inline-flex items-center gap-2 flex-wrap" aria-label={`강도 ${indexLabel}`}>
+      <IndexPips index={index} />
+      <span className="text-xs text-text-dim">{indexLabel}</span>
+    </span>
+  );
+}
+
 /** 오늘의 운세 요약 배너 — 달력 창과 게스트 안내에서 함께 쓴다 */
 export function TodayFortuneBanner({ fortune, showDate = false }: { fortune: DailyFortune; showDate?: boolean }) {
   const kind = FORTUNE_KIND[fortune.kind];

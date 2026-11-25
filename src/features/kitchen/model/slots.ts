@@ -4,19 +4,23 @@
 import { COOKING_UNLOCK_BOAT, recipeById } from '../../../game/content/cooking';
 import type { CookKind, Recipe } from '../../../game/content/cooking';
 import type { Potion } from '../../../game/content/potions';
-import { cookingUnlocked, isActiveSlot } from '../../../game/rules/cooking';
+import { cookingUnlocked, isActiveSlot, maxBaitSlots } from '../../../game/rules/cooking';
 import { activePotionsOf, fortuneOf } from '../../../game/rules/fortune';
 import type { FortuneTarget } from '../../../game/rules/fortune';
 import type { GameState } from '../../../game/rules/logic';
 import { facilityGuestAllowed, facilityProgress, menuLock, progressNote } from '../../display/model/menuLock';
 import type { AccountLockState } from '../../display/model/menuLock';
 import {
+  FORTUNE_EFFECT_TARGET_LABEL,
   FORTUNE_KIND,
+  FORTUNE_SHORT_NAME,
   FORTUNE_SOURCE_LABEL,
   FORTUNE_TARGET_BONUS_LABEL,
+  formatLuckMult,
   fortuneBonusText,
+  fortuneLuckMultText,
 } from '../../fortune/model/fortune';
-import { recipeEffectLines, recipeEffectNote, recipeEffectText, recipeLabel, recipeTitle } from './recipes';
+import { SLOT_SCOPE, recipeEffectLines, recipeEffectNote, recipeEffectText, recipeLabel, recipeTitle } from './recipes';
 import type { RecipeEffectLine, RecipeTitle } from './recipes';
 
 const MIN_MS = 60_000;
@@ -179,4 +183,100 @@ export function selectBonusChip(game: GameState, now: string, account: AccountLo
   }
 
   return { state: 'empty' };
+}
+
+export interface BonusTipRow {
+  label: string;
+  value: string;
+}
+
+/** HUD 효과 칩 최소 4행 호버 표 — 도시락·미끼·비약 활성 여부와 운세 3글자 요약 */
+export function selectBonusTipRows(game: GameState, now: string): BonusTipRow[] {
+  const lunchActive = activeSlot(game, 'lunch', now) !== null;
+  const baitMax = maxBaitSlots(game);
+  const baitCount = (activeSlot(game, 'bait', now) ? 1 : 0) + (activeSlot(game, 'bait2', now) ? 1 : 0);
+  const potionActive = activePotionsOf(game.potions, now).length > 0;
+  const fortune = fortuneOf(game, now);
+  return [
+    { label: '도시락', value: lunchActive ? '활성' : '없음' },
+    { label: '미끼', value: baitCount === 0 ? '없음' : baitMax > 1 ? `${baitCount}/${baitMax}` : '활성' },
+    { label: '비약', value: potionActive ? '활성' : '없음' },
+    { label: '운세', value: fortune ? FORTUNE_SHORT_NAME[fortune.kind] : '없음' },
+  ];
+}
+
+export interface ActiveEffectEntry {
+  id: string;
+  title: RecipeTitle;
+  durationText: string;
+  stats: readonly RecipeEffectLine[];
+  description?: string;
+}
+
+export interface ActiveEffectsView {
+  hasAny: boolean;
+  lunch: ActiveEffectEntry[];
+  bait: {
+    slots: ActiveEffectEntry[];
+    maxSlots: number;
+  };
+  potions: ActiveEffectEntry[];
+  fortune: ActiveEffectEntry | null;
+}
+
+function potionEffectMultiplierRows(potion: Potion): RecipeEffectLine[] {
+  const entries = POTION_TARGETS
+    .map(target => [target, potion.effects.luck?.[target]] as const)
+    .filter((entry): entry is readonly [FortuneTarget, number] => typeof entry[1] === 'number' && entry[1] > 0);
+  if (entries.length === 0) return [{ text: potion.description }];
+  if (entries.length === POTION_TARGETS.length && entries.every(([, v]) => v === entries[0][1])) {
+    return [{ label: '모든 행운 효과', value: formatLuckMult(1 + entries[0][1]) }];
+  }
+  return entries.map(([target, v]) => ({ label: FORTUNE_TARGET_BONUS_LABEL[target], value: formatLuckMult(1 + v) }));
+}
+
+/** 적용 중인 효과 창 모델 — 도시락(방치)·미끼(수동)·비약·오늘의 운세 4개 구획 */
+export function selectActiveEffectsView(game: GameState, now: string): ActiveEffectsView {
+  const lunchSlot = activeSlot(game, 'lunch', now);
+  const lunch: ActiveEffectEntry[] = lunchSlot ? [{
+    id: lunchSlot.slotKey,
+    title: lunchSlot.title,
+    durationText: `${lunchSlot.timeLeft} 남음`,
+    stats: lunchSlot.effects,
+    description: `${SLOT_SCOPE.lunch} 효과가 있어요.`,
+  }] : [];
+
+  const baitSlots: ActiveEffectEntry[] = (['bait', 'bait2'] as const).flatMap((key): ActiveEffectEntry[] => {
+    const slot = activeSlot(game, key, now);
+    if (!slot) return [];
+    return [{
+      id: slot.slotKey,
+      title: slot.title,
+      durationText: `${slot.timeLeft} 남음`,
+      stats: slot.effects,
+    }];
+  });
+
+  const potions: ActiveEffectEntry[] = activePotionsOf(game.potions, now).map(potion => ({
+    id: `potion:${potion.id}`,
+    title: { name: potion.name, grade: potion.grade },
+    durationText: '하루 동안',
+    stats: potionEffectMultiplierRows(potion),
+  }));
+
+  const dailyFortune = fortuneOf(game, now);
+  const fortune: ActiveEffectEntry | null = dailyFortune ? {
+    id: 'fortune',
+    title: { name: FORTUNE_KIND[dailyFortune.kind].name, grade: null },
+    durationText: '하루 동안',
+    stats: [{ label: FORTUNE_EFFECT_TARGET_LABEL[dailyFortune.kind], value: fortuneLuckMultText(dailyFortune) }],
+  } : null;
+
+  return {
+    hasAny: lunch.length > 0 || baitSlots.length > 0 || potions.length > 0 || fortune !== null,
+    lunch,
+    bait: { slots: baitSlots, maxSlots: maxBaitSlots(game) },
+    potions,
+    fortune,
+  };
 }
