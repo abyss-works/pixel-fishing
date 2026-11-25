@@ -8,13 +8,15 @@ import GuildModal from './GuildModal';
 
 const s = vi.hoisted(() => ({
   guild: null as GuildInfo | null,
-  you: 'L',
+  you: 'L' as string | null,
+  loading: false,
+  failed: false,
   act: vi.fn(async (_op: unknown): Promise<{ ok: true; result?: 'joined' | 'requested'; recovered?: number } | { ok: false; error: string }> => ({ ok: true })),
   request: null as { code: string; name: string; requestedAt: string } | null,
   preview: null as unknown,
 }));
 vi.mock('../../../../features/guild/service/useGuild', () => ({
-  useGuild: () => ({ available: true, guild: s.guild, request: s.request, loading: false, failed: false, you: s.you, act: s.act }),
+  useGuild: () => ({ available: true, guild: s.guild, request: s.request, loading: s.loading, failed: s.failed, you: s.you, act: s.act }),
 }));
 vi.mock('../../../../features/guild/service/useGuildInvite', () => ({
   useGuildInvite: (code: string | null) => ({ preview: code ? s.preview : null, settled: code !== null, failed: false, refresh: vi.fn() }),
@@ -48,7 +50,7 @@ const GUILD: GuildInfo = {
 };
 
 describe('GuildModal', () => {
-  afterEach(() => { cleanup(); s.guild = null; s.you = 'L'; s.request = null; s.preview = null; vi.clearAllMocks(); });
+  afterEach(() => { cleanup(); s.guild = null; s.you = 'L'; s.loading = false; s.failed = false; s.request = null; s.preview = null; vi.clearAllMocks(); });
 
   it('길드가 없으면 이름으로 만든다', async () => {
     const toast = vi.fn();
@@ -374,5 +376,26 @@ describe('GuildModal', () => {
       toastText: '내 길드 스킬 자유 강화를 초기화했어요.',
       text: '내 길드 스킬 자유 강화를 초기화해 1포인트를 되돌렸어요.',
     })));
+  });
+
+  it('길드 정보 불러오는 중, 조회 실패, 세션 미확보 상태를 구분해 보인다', () => {
+    s.loading = true;
+    const { rerender } = render(
+      <GuildModal gold={0} artifacts={{ artifacts: [] }} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />,
+    );
+    expect(screen.getByText('길드 정보를 불러오는 중이에요.')).toBeTruthy();
+
+    s.loading = false;
+    s.failed = true;
+    rerender(<GuildModal gold={0} artifacts={{ artifacts: [] }} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByText('길드 정보를 불러오지 못했어요.')).toBeTruthy();
+    expect(screen.queryByText('길드 정보를 불러오는 중이에요.')).toBeNull();
+
+    s.failed = false;
+    s.guild = GUILD;
+    s.you = null;
+    rerender(<GuildModal gold={0} artifacts={{ artifacts: [] }} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByText('길드 정보를 불러오지 못했어요.')).toBeTruthy();
+    expect(screen.queryByText('길드 정보를 불러오는 중이에요.')).toBeNull();
   });
 });

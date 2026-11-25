@@ -18,6 +18,7 @@ import type { FloatingToastItem } from '../../ui/FloatingToastLayer';
 import FloatingToastLayer from '../../ui/FloatingToastLayer';
 import type { MirrorContextPatch, Msg } from '../../layouts/hud/useMessageLog';
 import type { StatsTab } from '../overlays/stats/StatsModal';
+import type { ProfileStatus } from '../../../features/gameplay/service/types';
 import type { Notify } from '../../ui/hud/messageFeed';
 import GameStageLayout from '../../layouts/game-stage/GameStageLayout';
 import Field from '../../layouts/game-stage/Field';
@@ -114,6 +115,7 @@ interface GameViewProps {
   accountFailed: boolean;
   uid: string | null;
   nickname: string | null;
+  profileStatus?: ProfileStatus;
   onRename: (name: string) => Promise<null | RejectReason>;
   onAuthChanged: () => Promise<void>;
   /** 액션 밖에서 서버가 바꾼 게임 상태를 다시 읽는다(길드 보너스 기부의 골드) */
@@ -389,7 +391,7 @@ export default function GameView(props: GameViewProps) {
         {statsOpen && (
           <StatsModal game={game} guild={guildBonus} initialTab={statsInitialTab}
                       movement={scene.kind === 'region' ? REGION_PACKS[scene.id].movement : 'walk'}
-                      region={region} nickname={props.nickname}
+                      region={region} nickname={props.nickname} profileStatus={props.profileStatus}
                       onClose={() => setStatsOpen(false)} />
         )}
         {questsOpen && <QuestInfoModal game={game} onClose={() => setQuestsOpen(false)} />}
@@ -455,8 +457,8 @@ export default function GameView(props: GameViewProps) {
         onOpenEnergy={() => { setSheetOpen(false); setActionPanel('energy'); }}
         game={game} sellBonus={guildBonus?.effects.sell ?? 0} bagBonus={bagBonus} dispatch={props.dispatch} setToast={props.setToast}
         syncLabel={props.syncLabel} syncState={props.syncState} guestProgress={progress} recheckGuestProgress={props.recheckGuestProgress}
-        account={props.account} accountFailed={props.accountFailed} uid={props.uid} onAuthChanged={props.onAuthChanged}
-        nickname={props.nickname} onRename={props.onRename}
+        account={props.account} accountChecked={props.accountChecked} accountFailed={props.accountFailed} uid={props.uid} onAuthChanged={props.onAuthChanged}
+        nickname={props.nickname} profileStatus={props.profileStatus} onRename={props.onRename}
       />
 
       {props.blocker}

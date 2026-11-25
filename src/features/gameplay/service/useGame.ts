@@ -21,7 +21,8 @@ import { guestHasNoProgress } from '../../../game/rules/guest';
 import { newlyClaimable } from '../../achievement/model/achievements';
 import { setSchoolDay } from './schoolDay';
 import { queueFortuneModal, resetFortuneModalSession } from '../../fortune/service/fortuneModal';
-import type { SyncState } from './types';
+import { setSharedProfileStatus } from './profileStatus';
+import type { ProfileStatus, SyncState } from './types';
 import { alertUpdate } from './updateAlert';
 import { isRetryExhausted, retryOnRateLimit } from './rateLimitRetry';
 
@@ -75,9 +76,26 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
   // 게스트는 업적이 잠겨 있으므로 새로 받을 수 있는 업적 알림을 띄우지 않는다
   const guestRef = useRef(api.auth.isConfigured);
   const [nickname, setNickname] = useState<string | null>(null);
+  const [profileStatus, setProfileStatus] = useState<ProfileStatus>('loading');
   // 서버가 내려 준 개발 도구 사용 판정 — 계정이 바뀌면 새 계정의 판정으로 바뀐다
   const [devTools, setDevTools] = useState(false);
-  const adoptProfile = (profile: GameProfile) => { setNickname(profile.nickname); setDevTools(profile.devTools); };
+  const readProfile = (): Promise<GameProfile> =>
+    Promise.resolve(gameGatewayRef.current.getProfile()).catch((): GameProfile => ({ ok: false }));
+  const adoptProfile = (profile: GameProfile) => {
+    if (profile.ok) {
+      setNickname(profile.nickname);
+      setDevTools(profile.devTools);
+      setProfileStatus('loaded');
+    } else {
+      setNickname(null);
+      setDevTools(false);
+      setProfileStatus('error');
+    }
+  };
+  useEffect(() => {
+    setSharedProfileStatus(profileStatus);
+  }, [profileStatus]);
+  useEffect(() => () => { setSharedProfileStatus(null); }, []);
   const [sync, setSync] = useState<SyncState>(api.auth.isConfigured ? 'connecting' : 'off');
   // 세이브를 불러오고 이 창을 접속(boot)시키는 중 — 서버는 접속한 창의 액션만 받으므로 그 전에는 플레이를 막는다.
   // 그동안의 게임 상태는 서버 세이브가 아니라 기본값이라 화면에도 보이지 않는다.
@@ -219,18 +237,24 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
   // import 액션으로 수입(신뢰 채널 재사용 — 서버가 saves_current를 시딩한다).
   useEffect(() => {
     if (!api.auth.isConfigured) {
-      void Promise.resolve(gameGatewayRef.current.getProfile()).then(adoptProfile);
-      // 로컬 모드도 같은 리듀서로 부팅한다 — 어군 배치 날짜를 클라 시계로 같은 규칙에 따라 정한다
-      void boot(newRetryScope()).catch(fail);
+      void (async () => {
+        const initialProfile = await readProfile();
+        // 로컬 모드도 같은 리듀서로 부팅한다 — 어군 배치 날짜를 클라 시계로 같은 규칙에 따라 정한다
+        await boot(newRetryScope()).catch(fail);
+        const profile = initialProfile.ok && initialProfile.nickname === null
+          ? await readProfile()
+          : initialProfile;
+        adoptProfile(profile);
+      })();
       return;
     }
     const signal = newRetryScope();
     (async () => {
       const uid = await fetchSession(client);
       if (!uid) throw new AppError('unauthorized', 'anonymous session failed');
-      const [cloud, profile, lookup] = await Promise.all([
+      const [cloud, initialProfile, lookup] = await Promise.all([
         loadSave(signal),
-        gameGatewayRef.current.getProfile(),
+        readProfile(),
         api.auth.currentAccount().catch(() => ({ status: 'failed' as const })),
       ]);
       if (signal.aborted) return;
@@ -254,9 +278,18 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
       // 세션 시작에 1회, 새로고침마다 다시 센다.
       await boot(signal);
       if (signal.aborted) return;
+      const profile = initialProfile.ok && initialProfile.nickname === null
+        ? await readProfile()
+        : initialProfile;
+      if (signal.aborted) return;
       adoptProfile(profile);
       setSync('on');
-    })().catch(e => { if (!signal.aborted) fail(e); }) // 정책 한 곳으로 — 여기서 UX를 정하지 않는다
+    })().catch(e => {
+      if (!signal.aborted) {
+        setProfileStatus('error');
+        fail(e);
+      }
+    }) // 정책 한 곳으로 — 여기서 UX를 정하지 않는다
       .finally(() => { if (!signal.aborted) setLoading(false); });
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회 부트스트랩
   }, [init.legacy]);
@@ -269,14 +302,16 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
   };
 
   return {
-    game, dispatch, nickname, devTools, sync, syncLabel: SYNC_LABEL[sync], blocker, loading,
+    game, dispatch, nickname, profileStatus, devTools, sync, syncLabel: SYNC_LABEL[sync], blocker, loading,
     /** 이 기기의 게스트 진행 — 계정을 바꿀 때 버려지는 것이 있는지 확인 창을 띄울지 가르는 근거 */
     guestProgress: guestProgress({ sync, loading, blocked: blocker !== null, game }),
     /** 닉네임 변경 — 성공하면 표시값을 다시 읽는다. null이면 성공, 아니면 거부 사유. */
     rename: async (name: string): Promise<null | RejectReason> => {
       const r = await gameGatewayRef.current.dispatch({ type: 'setNickname', nickname: name });
       if (r.status === 'ok') {
-        setNickname((await gameGatewayRef.current.getProfile()).nickname);
+        const next = await readProfile();
+        if (next.ok) adoptProfile(next);
+        else { setNickname(name); setProfileStatus('loaded'); }
         return null;
       }
       return r.error;
@@ -288,21 +323,29 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
     adoptAccount: async (): Promise<void> => {
       const signal = newRetryScope();
       setLoading(true);
+      setProfileStatus('loading');
+      setNickname(null);
       try {
-        const [cloud, profile, lookup] = await Promise.all([
+        const [cloud, initialProfile, lookup] = await Promise.all([
           loadSave(signal),
-          gameGatewayRef.current.getProfile(),
+          readProfile(),
           api.auth.currentAccount().catch(() => ({ status: 'failed' as const })),
         ]);
         if (signal.aborted) return;
         guestRef.current = lookup.status !== 'account';
         resetFortuneModalSession();
         setGame(cloud ?? newState());
-        adoptProfile(profile);
         await boot(signal);
+        if (signal.aborted) return;
+        const profile = initialProfile.ok && initialProfile.nickname === null
+          ? await readProfile()
+          : initialProfile;
+        if (signal.aborted) return;
+        adoptProfile(profile);
       } catch (e) {
         // 더 새로운 교체가 이어받았으면 이 흐름의 결과는 버린다
         if (signal.aborted) return;
+        setProfileStatus('error');
         if (isRetryExhausted(e)) fail(e);
         throw e;
       } finally {

@@ -128,4 +128,17 @@ describe('StatsModal(스탯창)', () => {
     fireEvent.mouseEnter(screen.getByText('희귀 이상 등급 가중치 +5%p'));
     expect(screen.getByRole('tooltip')).toHaveTextContent('희귀 이상 등급 가중치에 운 배율이 적용돼요.');
   });
+
+  it('닉네임 상태에 따라 불러오는 중, 미설정, 불러오기 실패를 구분해 보인다', () => {
+    const { rerender } = render(
+      <StatsModal game={game({})} movement="sail" region="world" nickname={null} profileStatus="loading" guild={null} onClose={vi.fn()} />,
+    );
+    expect(screen.getByText('불러오는 중')).toBeTruthy();
+
+    rerender(<StatsModal game={game({})} movement="sail" region="world" nickname={null} profileStatus="loaded" guild={null} onClose={vi.fn()} />);
+    expect(screen.getByText('미설정')).toBeTruthy();
+
+    rerender(<StatsModal game={game({})} movement="sail" region="world" nickname={null} profileStatus="error" guild={null} onClose={vi.fn()} />);
+    expect(screen.getByText('불러오기 실패')).toBeTruthy();
+  });
 });

@@ -23,6 +23,8 @@ const gw = vi.hoisted(() => ({
   loadFortune: null as null | { day: string; kind: 'fish' | 'gold' | 'shadow'; index: 3 | 5 },
   dispatchFortune: null as null | { day: string; kind: 'fish' | 'gold' | 'shadow'; index: 3 | 5 },
   devTools: false,
+  profileReplies: [] as Array<{ ok: true; nickname: string | null; devTools: boolean } | { ok: false }>,
+  profileCalls: 0,
   account: { status: 'account', email: 'u@example.com' } as { status: 'account'; email: string } | { status: 'guest' } | { status: 'failed' },
 }));
 
@@ -41,7 +43,10 @@ vi.mock('../../../platform/api', async () => {
       storage: { clearLegacySave: () => { gw.actions.push('clearLegacy'); }, loadLegacy: () => ({ game: fresh(), notice: null, legacy: gw.legacy }), saveCode: () => '' },
       createGameGateway: () => ({
         load: async () => { gw.loads++; if (gw.loadErrors.length) throw gw.loadErrors.shift(); if (gw.loadError) throw gw.loadError; return gw.cloudEmpty ? null : { ...fresh(), gold: gw.loadGold, dex: gw.loadDex as ReturnType<typeof fresh>['dex'], achievements: gw.loadAchievements, fortune: gw.loadFortune }; },
-        getProfile: async () => ({ nickname: 'nick', devTools: gw.devTools }),
+        getProfile: async () => {
+          gw.profileCalls++;
+          return gw.profileReplies.shift() ?? { ok: true as const, nickname: 'nick', devTools: gw.devTools };
+        },
         dispatch: (action: GameAction) => {
           gw.actions.push(action.type);
           if (action.type === 'import' && gw.importError) throw gw.importError;
@@ -69,6 +74,7 @@ function setup(setToast: (m: string, tone?: 'info' | 'gold' | 'warn') => void = 
 afterEach(() => {
   cleanup(); clearFailureNotice(); resetFortuneModalSession(); gw.bootResolve = null; gw.actions = []; gw.loads = 0; gw.loadGold = 0;
   gw.legacy = false; gw.cloudEmpty = false; gw.importError = null; gw.loadError = null; gw.loadErrors = []; gw.bootErrors = []; gw.loadDex = {}; gw.devTools = false;
+  gw.profileReplies = []; gw.profileCalls = 0;
   gw.loadAchievements = {}; gw.dispatchAchievements = {}; gw.loadFortune = null; gw.dispatchFortune = null;
   gw.account = { status: 'account', email: 'u@example.com' };
 });
@@ -565,5 +571,65 @@ describe('오늘의 운세 접속 모달 큐잉', () => {
     gw.dispatchFortune = today;
     await act(async () => { await hook.result.current.dispatch({ type: 'sell', uids: [] }); });
     expect(readFortuneModal({ ready: true, suspended: false })).toEqual({ fortune: null, pending: false });
+  });
+});
+
+describe('프로필 상태와 부트스트랩 닉네임 동기화', () => {
+  it('첫 세션 부트스트랩 전 getProfile의 nickname이 null이면 boot 완료 후 getProfile을 1회 재조회해 반영한다', async () => {
+    gw.account = { status: 'guest' };
+    gw.profileReplies = [
+      { ok: true, nickname: null, devTools: false },
+      { ok: true, nickname: '행복한_고래', devTools: false },
+    ];
+    const hook = setup();
+    expect(hook.result.current.profileStatus).toBe('loading');
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    expect(hook.result.current.profileStatus).toBe('loading');
+
+    await act(async () => { gw.bootResolve!(); });
+    expect(gw.profileCalls).toBe(2);
+    expect(hook.result.current.profileStatus).toBe('loaded');
+    expect(hook.result.current.nickname).toBe('행복한_고래');
+  });
+
+  it('프로필 조회가 ok: false이면 profileStatus가 error이고 devTools는 닫힌다', async () => {
+    gw.devTools = true;
+    gw.profileReplies = [{ ok: true, nickname: '관리자', devTools: true }];
+    const hook = setup();
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+    expect(hook.result.current.devTools).toBe(true);
+    expect(hook.result.current.profileStatus).toBe('loaded');
+
+    gw.bootResolve = null;
+    gw.profileReplies = [{ ok: false }];
+    let adopted: Promise<void> = Promise.resolve();
+    act(() => { adopted = hook.result.current.adoptAccount(); });
+    expect(hook.result.current.profileStatus).toBe('loading');
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); await adopted; });
+    expect(hook.result.current.profileStatus).toBe('error');
+    expect(hook.result.current.nickname).toBeNull();
+    expect(hook.result.current.devTools).toBe(false);
+  });
+
+  it('adoptAccount에서도 boot 전 nickname이 null이면 boot 뒤 1회 재조회한다', async () => {
+    const hook = setup();
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+
+    gw.bootResolve = null;
+    gw.profileCalls = 0;
+    gw.profileReplies = [
+      { ok: true, nickname: null, devTools: false },
+      { ok: true, nickname: '새_게스트', devTools: false },
+    ];
+    let adopted: Promise<void> = Promise.resolve();
+    act(() => { adopted = hook.result.current.adoptAccount(); });
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); await adopted; });
+    expect(gw.profileCalls).toBe(2);
+    expect(hook.result.current.profileStatus).toBe('loaded');
+    expect(hook.result.current.nickname).toBe('새_게스트');
   });
 });
