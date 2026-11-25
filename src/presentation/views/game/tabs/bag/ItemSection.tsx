@@ -15,7 +15,7 @@ import {
   potionUseNoticeText,
   selectItemSection,
 } from '../../../../../features/kitchen/model/bagItems';
-import type { ItemRow, PotionRow, SwapConfirm } from '../../../../../features/kitchen/model/bagItems';
+import type { EnergyCell, ItemRow, PotionRow, SwapConfirm } from '../../../../../features/kitchen/model/bagItems';
 import { formatEnergy } from '../../../../../game/content/cooking';
 import { when } from '../../../../../shared/lib/when';
 import ConfirmDialog from '../../../../ui/ConfirmDialog';
@@ -23,7 +23,7 @@ import Badge from '../../../../ui/Badge';
 import Button from '../../../../ui/Button';
 import { cx } from '../../../../ui/cx';
 import { GradeName, RarityText } from '../../../../ui/fish/RarityTag';
-import { fmtMinutes } from '../../../../ui/format';
+import { fmtMinutes, josa } from '../../../../ui/format';
 import Inset from '../../../../ui/Inset';
 import ItemSprite from '../../../../ui/ItemSprite';
 import Locked from '../../../../ui/Locked';
@@ -103,17 +103,23 @@ function SwapDialog({ confirm, onConfirm, onCancel }: {
 }
 
 /** 도시락 또는 미끼 카드 격자 - 이름 툴팁이 효과를 보이고, 총 지속 시간과 활성 상태(배지·남은 시간)를 카드 안에 둔다 */
-function ItemCards({ title, hint, rows, busy, onEat }: {
-  title: string; hint: string; rows: readonly ItemRow[]; busy: boolean; onEat: (row: ItemRow) => void;
+function ItemCards({ title, hint, rows, lockLines, busy, onEat }: {
+  title: string; hint: string; rows: readonly ItemRow[]; lockLines?: readonly string[] | null; busy: boolean; onEat: (row: ItemRow) => void;
 }) {
   if (rows.length === 0) return null;
+  const locked = Boolean(lockLines);
   return (
     <div className="mb-2">
       <Subheading><Tip text={hint}>{title}</Tip></Subheading>
       <div className="grid grid-cols-2 gap-2">
         {rows.map(row => {
-          const usable = row.count > 0;
-          const dimmed = !usable && !row.active;
+          const usable = !locked && row.count > 0;
+          const dimmed = locked || (!usable && !row.active);
+          const button = (
+            <Button size="sm" aria-label={`${row.label} ${row.verb}`} disabled={busy || !usable} onClick={() => onEat(row)}>
+              {row.verb}
+            </Button>
+          );
           return (
             <Inset key={row.recipe.id} tone={dimmed ? 'deep' : 'base'} border={row.active ? 'accent' : 'line'}
                    className={cx('p-2 flex flex-col gap-1.5 min-w-0', dimmed && 'text-text-dim')}>
@@ -135,12 +141,55 @@ function ItemCards({ title, hint, rows, busy, onEat }: {
               </div>
               <div className="mt-auto pt-1.5 border-t border-line-dim flex items-center justify-between gap-2">
                 <span className="pf-accent text-xs text-text-dim whitespace-nowrap">×{row.count}</span>
-                <Button size="sm" aria-label={`${row.label} ${row.verb}`} disabled={busy || !usable} onClick={() => onEat(row)}>{row.verb}</Button>
+                {lockLines ? (
+                  <Locked lines={lockLines} title={row.label} label={`${row.label} 잠김`} className="inline-block">
+                    {button}
+                  </Locked>
+                ) : button}
               </div>
             </Inset>
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/** 생명의 기운 4장 카드 격자 — 부엌 잠금 상태에서도 플레이스홀더를 보이고 묶음에 잠금 툴팁을 건다 */
+function EnergyCards({ energy, lockLines }: {
+  energy: readonly EnergyCell[];
+  lockLines?: readonly string[] | null;
+}) {
+  if (energy.length === 0) return null;
+  const locked = Boolean(lockLines);
+  const grid = (
+    <div className="grid grid-cols-2 gap-2">
+      {energy.map(cell => {
+        const unowned = locked || cell.stored === 0;
+        return (
+          <Inset key={cell.grade} tone={unowned ? 'deep' : 'base'}
+                 role="group" aria-label={`${cell.label} ${formatEnergy(cell.stored)}개`}
+                 className={cx('flex items-center gap-2 p-2 min-w-0', unowned && 'text-text-dim')}>
+            <ItemSprite kind="energy" id={cell.id} preset="list" className="shrink-0" />
+            <div className="min-w-0 flex flex-col">
+              <span className="text-xs leading-tight" aria-hidden="true"><RarityText rarity={cell.grade} /></span>
+              <span className="pf-accent text-base leading-tight break-words" aria-hidden="true">{formatEnergy(cell.stored)}</span>
+            </div>
+          </Inset>
+        );
+      })}
+    </div>
+  );
+  return (
+    <div className="mb-2">
+      <Subheading>
+        <Tip text={ITEM_GROUP_HINT.energy}>{ITEM_GROUPS[2].title}</Tip>
+      </Subheading>
+      {lockLines ? (
+        <Locked lines={lockLines} title={ITEM_GROUPS[2].title} label="생명의 기운 잠김">
+          {grid}
+        </Locked>
+      ) : grid}
     </div>
   );
 }
@@ -190,7 +239,7 @@ function PotionCards({ rows, potionLock, busy, onUse }: {
                     {row.potion.name}
                   </Tip>
                   <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-2xs text-text-dim">
-                    <span>새벽 4시 초기화</span>
+                    <span>하루 동안</span>
                   </div>
                 </div>
               </div>
@@ -236,10 +285,11 @@ export default function ItemSection({ game, accountState, dispatch, setToast }: 
     when(dispatch(action), r => {
       setBusy(false);
       if (r.status === 'ok') {
+        const verbDone = row.slot === 'lunch' ? '먹었어요.' : '썼어요.';
         sendNotice(setToast, {
           kind: 'kitchen.cookAndBuff',
-          text: `${row.label} 효과를 적용했어요.`,
-          toastText: `${row.label} 효과 적용`,
+          text: `${josa(row.label, '을/를')} ${verbDone}`,
+          toastText: `${row.label} 사용`,
         });
       } else if (r.status === 'rejected') {
         sendNotice(setToast, { kind: 'system.modalRejected', text: REJECT_TEXT[r.error] });
@@ -260,7 +310,7 @@ export default function ItemSection({ game, accountState, dispatch, setToast }: 
         sendNotice(setToast, {
           kind: 'kitchen.cookAndBuff',
           text: potionUseNoticeText(row.potion.name),
-          toastText: `${row.potion.name} 효과 적용`,
+          toastText: `${row.potion.name} 사용!`,
         });
       } else if (r.status === 'rejected') {
         sendNotice(setToast, { kind: 'system.modalRejected', text: REJECT_TEXT[r.error] });
@@ -268,24 +318,7 @@ export default function ItemSection({ game, accountState, dispatch, setToast }: 
     });
   };
 
-  if (view.state === 'locked') {
-    return (
-      <div className="flex flex-col gap-1">
-        <PageTitle>아이템</PageTitle>
-        <Note>{view.empty.map(line => <span key={line} className="block">{line}</span>)}</Note>
-        <Locked lines={view.lines} title="아이템" label={ITEM_GROUPS.map(g => g.title).join(', ')}>
-          {ITEM_GROUPS.map(g => (
-            <div key={g.key} className="mb-2">
-              <Subheading>{g.title}</Subheading>
-              <Inset className="h-9" />
-            </div>
-          ))}
-        </Locked>
-        <PotionCards rows={view.potions} potionLock={view.potionLock} busy={busy} onUse={usePotion} />
-      </div>
-    );
-  }
-
+  const kitchenLock = view.state === 'locked' ? view.lines : null;
   const shown = filterItemSection(view, ownedOnly);
 
   return (
@@ -302,33 +335,15 @@ export default function ItemSection({ game, accountState, dispatch, setToast }: 
           보유 중만 보기
         </ToggleChip>
       </div>
-      {shown.empty ? <Note>{NO_ITEMS_TEXT}</Note> : (
+      {view.state === 'locked' && (!ownedOnly || shown.empty) && (
+        <Note>{view.empty.map(line => <span key={line} className="block">{line}</span>)}</Note>
+      )}
+      {view.state === 'open' && shown.empty && <Note>{NO_ITEMS_TEXT}</Note>}
+      {!shown.empty && (
         <>
-          <ItemCards title={ITEM_GROUPS[0].title} hint={ITEM_GROUP_HINT.lunch} rows={shown.lunch} busy={busy} onEat={press} />
-          <ItemCards title={ITEM_GROUPS[1].title} hint={ITEM_GROUP_HINT.bait} rows={shown.bait} busy={busy} onEat={press} />
-          {shown.energy.length > 0 && (
-            <div className="mb-2">
-              <Subheading>
-                <Tip text={ITEM_GROUP_HINT.energy}>{ITEM_GROUPS[2].title}</Tip>
-              </Subheading>
-              <div className="grid grid-cols-2 gap-2">
-                {shown.energy.map(cell => {
-                  const unowned = cell.stored === 0;
-                  return (
-                    <Inset key={cell.grade} tone={unowned ? 'deep' : 'base'}
-                           role="group" aria-label={`${cell.label} ${formatEnergy(cell.stored)}개`}
-                           className={cx('flex items-center gap-2 p-2 min-w-0', unowned && 'text-text-dim')}>
-                      <ItemSprite kind="energy" id={cell.id} preset="list" className="shrink-0" />
-                      <div className="min-w-0 flex flex-col">
-                        <span className="text-xs leading-tight" aria-hidden="true"><RarityText rarity={cell.grade} /></span>
-                        <span className="pf-accent text-base leading-tight break-words" aria-hidden="true">{formatEnergy(cell.stored)}</span>
-                      </div>
-                    </Inset>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          <ItemCards title={ITEM_GROUPS[0].title} hint={ITEM_GROUP_HINT.lunch} rows={shown.lunch} lockLines={kitchenLock} busy={busy} onEat={press} />
+          <ItemCards title={ITEM_GROUPS[1].title} hint={ITEM_GROUP_HINT.bait} rows={shown.bait} lockLines={kitchenLock} busy={busy} onEat={press} />
+          <EnergyCards energy={shown.energy} lockLines={kitchenLock} />
           <PotionCards rows={shown.potions} potionLock={view.potionLock} busy={busy} onUse={usePotion} />
         </>
       )}
