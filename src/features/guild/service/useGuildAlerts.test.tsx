@@ -44,6 +44,7 @@ function makeGuild(over: Partial<GuildInfo> = {}): GuildInfo {
       { id: 'sell', unlock: 1, rank: 0, enhanceRank: 0, totalRank: 0, cap: 5, pool: 0, next: 100, effect: 0, nextEffect: 0.05, mine: 0 },
     ],
     effects: { ...NO_GUILD_EFFECTS },
+    enhanceResetCount: 0,
     donors: [],
     logbook: [],
     ...over,

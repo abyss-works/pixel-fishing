@@ -4,8 +4,8 @@ import type {
 import type { ServerMessage } from '../../../game/rules/live';
 import {
   DEFAULT_GUILD_PITCH, GUILD_BONUS_IDS, GUILD_BONUS_MAX_RANK, GUILD_ENHANCE_MAX_RANK, GUILD_ENHANCE_MIN_LEVEL,
-  GUILD_ENHANCE_RESET_COST, GUILD_JOIN_REQUEST_TTL_MS, GUILD_PITCH_MAX, GUILD_RENAME_COST,
-  guildDailyContributionCaps, guildLinkPath, handoverOutcome, joinOutcome, joinRequestDaysLeft,
+  GUILD_JOIN_REQUEST_TTL_MS, GUILD_PITCH_MAX, GUILD_RENAME_COST,
+  guildDailyContributionCaps, guildEnhanceResetCost, guildLinkPath, handoverOutcome, joinOutcome, joinRequestDaysLeft,
   maxEnhancePoints, removalOutcome, renameBlock,
 } from '../../../game/rules/guild';
 import type { GuildBonusId, GuildJoinMode, GuildJoinVia } from '../../../game/rules/guild';
@@ -328,21 +328,22 @@ export function enhanceInvestState(guild: GuildInfo, row: BonusRow): { canInvest
 export function enhanceResetState(guild: GuildInfo, gold: number):
   { canReset: boolean; reason: string | null; used: number; cost: number } {
   const { used } = enhancePoolSummary(guild);
+  const cost = guildEnhanceResetCost(guild.enhanceResetCount);
   if (guild.growth.level < GUILD_ENHANCE_MIN_LEVEL) {
-    return { canReset: false, reason: 'Lv.6부터 강화 포인트를 얻어요.', used, cost: GUILD_ENHANCE_RESET_COST };
+    return { canReset: false, reason: 'Lv.6부터 강화 포인트를 얻어요.', used, cost };
   }
   if (used <= 0) {
-    return { canReset: false, reason: '초기화할 자유 강화가 없어요.', used, cost: GUILD_ENHANCE_RESET_COST };
+    return { canReset: false, reason: '초기화할 자유 강화가 없어요.', used, cost };
   }
-  if (gold < GUILD_ENHANCE_RESET_COST) {
+  if (gold < cost) {
     return {
       canReset: false,
-      reason: `골드가 모자라요.\n${num(GUILD_ENHANCE_RESET_COST)}G를 내고 내 자유 강화만 초기화할 수 있어요.`,
+      reason: `골드가 모자라요.\n${num(cost)}G를 내고 내 자유 강화만 초기화할 수 있어요.`,
       used,
-      cost: GUILD_ENHANCE_RESET_COST,
+      cost,
     };
   }
-  return { canReset: true, reason: null, used, cost: GUILD_ENHANCE_RESET_COST };
+  return { canReset: true, reason: null, used, cost };
 }
 
 /** 기부 입력의 빠른 금액 — 10만·50만 더하기와 다음 단계까지 남은 만큼 */
