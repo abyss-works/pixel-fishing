@@ -1790,11 +1790,13 @@ describe('포구 출항 차단 후 로그인 복귀', () => {
     landing,
     lastPosition,
     pendingSail,
+    accountLookup = { status: 'account', email: 'sailor@example.test' },
   }: {
     save: Partial<GameState>;
     landing: { tag: string; error: string | null } | null;
     lastPosition: { region: RegionId; x: number; y: number } | null;
     pendingSail: boolean;
+    accountLookup?: { status: 'account'; email: string } | { status: 'guest' } | { status: 'failed' };
   }) {
     seed(save);
     if (pendingSail) sessionStorage.setItem('pf-sail-return', 'world');
@@ -1808,7 +1810,7 @@ describe('포구 출항 차단 후 로그인 복귀', () => {
       Object.defineProperties(base.auth, {
         isConfigured: { value: true, configurable: true },
         ensureSession: { value: async () => 'uid-sail-return', configurable: true },
-        currentAccount: { value: async () => ({ status: 'account' as const, email: 'sailor@gmail.com' }), configurable: true },
+        currentAccount: { value: async () => accountLookup, configurable: true },
         takeGoogleLanding: { value: () => landing, configurable: true },
       });
       return {
@@ -1908,6 +1910,21 @@ describe('포구 출항 차단 후 로그인 복귀', () => {
       lastPosition: villageLast,
       pendingSail: false,
     });
+    await waitFor(() => expect(seenField.initialPos).toEqual(expectedResume));
+    expect(seenField.region).toBe('village');
+  });
+
+  it('계정 확인에 실패해도 출항 대기 표지를 소비하고 기존 마지막 위치 복원을 완료한다', async () => {
+    const villageLast = { region: 'village' as const, x: 100, y: 120 };
+    const expectedResume = resumePoint('village', villageLast);
+    const { seenField } = await renderCloudReturn({
+      save: { boat: 1, location: { kind: 'region', id: 'village' } },
+      landing: { tag: 'link-guest', error: null },
+      lastPosition: villageLast,
+      pendingSail: true,
+      accountLookup: { status: 'failed' },
+    });
+    await waitFor(() => expect(sessionStorage.getItem('pf-sail-return')).toBeNull());
     await waitFor(() => expect(seenField.initialPos).toEqual(expectedResume));
     expect(seenField.region).toBe('village');
   });

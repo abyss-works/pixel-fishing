@@ -64,7 +64,7 @@ function AppContent() {
   const restored = useRef(false);
   useEffect(() => {
     if (restored.current || sync !== 'on' || !last.settled) return;
-    if (isSailReturnReady() && (loading || !accountChecked)) return;
+    if (isSailReturnReady() && (loading || (!accountChecked && !accountFailed))) return;
 
     const next = sceneOf(game.location);
     restored.current = true;
@@ -89,7 +89,7 @@ function AppContent() {
 
     setScene(next);
     setEntryPos(next.kind === 'region' ? resumePoint(next.id, last.position) : null);
-  }, [sync, loading, accountChecked, account, game.location, game.boat, last.settled, last.position, dispatch, setToast]);
+  }, [sync, loading, accountChecked, accountFailed, account, game.location, game.boat, last.settled, last.position, dispatch, setToast]);
 
   const place = (nextScene: SceneRef, position?: Point) => {
     setScene(nextScene);
