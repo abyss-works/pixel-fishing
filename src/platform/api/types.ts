@@ -421,6 +421,144 @@ export interface AdminOverview {
   live: AdminLive;
 }
 
+/** 앱 서버 HTTP 응답 지표 경로 묶음 */
+export type AdminHttpMetricRouteGroup = 'action' | 'auth' | 'admin' | 'api' | 'web';
+
+/** 앱 서버 HTTP 응답 지표 건수·비율(비율은 0~1, total이 0이면 0) */
+export interface AdminHttpMetricCounts {
+  total: number;
+  status426: number;
+  status429: number;
+  status5xx: number;
+  rate426: number;
+  rate429: number;
+  rate5xx: number;
+}
+
+/** KST 일별 HTTP 지표 합계·비율 */
+export interface AdminHttpMetricDayRow extends AdminHttpMetricCounts {
+  day: string;
+}
+
+/** 경로 묶음별 HTTP 지표 합계·비율 */
+export interface AdminHttpMetricRouteRow extends AdminHttpMetricCounts {
+  routeGroup: AdminHttpMetricRouteGroup;
+}
+
+/** 일자·경로 묶음별 HTTP 지표 원본 행 */
+export interface AdminHttpMetricRawRow {
+  day: string;
+  routeGroup: AdminHttpMetricRouteGroup;
+  total: number;
+  status426: number;
+  status429: number;
+  status5xx: number;
+}
+
+/**
+ * 관리자 — 앱 서버 HTTP 오류율·429 지표 응답.
+ * 클러스터 앞단(ingress-nginx)에서 직접 차단한 429 응답은 앱 서버에 도달하지 않으므로
+ * 앱 서버 통과 요청 기준(scope: 'app_server')이다.
+ */
+export interface AdminHttpMetrics {
+  days: number;
+  scope: 'app_server';
+  summary: AdminHttpMetricCounts;
+  /** KST 날짜 오름차순 일별 추이 */
+  daily: AdminHttpMetricDayRow[];
+  /** 요청 수 내림차순 경로 묶음별 집계 */
+  byRoute: AdminHttpMetricRouteRow[];
+  /** KST 날짜 내림차순, 경로 묶음 오름차순 원본 행 */
+  rows: AdminHttpMetricRawRow[];
+}
+
+/** 게스트 → 구글 전환 소요 시간 구간 */
+export type AdminConversionTimeBucketId =
+  | 'under_10m'
+  | '10m_to_1h'
+  | '1h_to_24h'
+  | '1d_to_7d'
+  | 'over_7d';
+
+/** 게스트 → 구글 전환 소요 시간 구간별 인원과 비율(0~100, 소수 첫째 자리) */
+export interface AdminConversionTimeBucket {
+  bucket: AdminConversionTimeBucketId;
+  count: number;
+  pct: number;
+}
+
+/** 게스트 → 구글 계정 전환율 및 소요 시간 분포 */
+export interface AdminOnboardingConversion {
+  totalUsers: number;
+  guestUsers: number;
+  googleLinkedUsers: number;
+  /** 전체 사용자 대비 구글 연결 비율(0~1) */
+  conversionRate: number;
+  /** 전환 소요 시간 중앙값(분). 전환 사용자가 없으면 null */
+  medianMinutes: number | null;
+  /** 전환 소요 시간 90분위(분). 전환 사용자가 없으면 null */
+  p90Minutes: number | null;
+  buckets: AdminConversionTimeBucket[];
+}
+
+/** 튜토리얼 4단계 식별자 */
+export type AdminTutorialStageId = 'village' | 'sea' | 'bounty-quests' | 'bounty-named';
+
+/** 튜토리얼 단계별 완료·이탈 현황 */
+export interface AdminOnboardingTutorialStage {
+  id: AdminTutorialStageId;
+  completed: number;
+  /** 전체 사용자 대비 완료 비율(0~1) */
+  rate: number;
+  /** 직전 단계 대비 이탈 인원(첫 단계는 0) */
+  dropOffFromPrev: number;
+  /** 직전 단계 대비 유지 비율(0~1, 첫 단계이거나 직전 인원이 0이면 null) */
+  stepRate: number | null;
+}
+
+/** 튜토리얼 4단계 완료·이탈 요약 */
+export interface AdminOnboardingTutorials {
+  totalUsers: number;
+  totalWithSave: number;
+  stages: AdminOnboardingTutorialStage[];
+}
+
+/** 초반 온보딩 6단계 식별자 */
+export type AdminOnboardingStepId =
+  | 'first_visit'
+  | 'tutorial_complete'
+  | 'first_catch'
+  | 'first_sell'
+  | 'first_harbor'
+  | 'first_upgrade';
+
+/**
+ * 지표 산출 근거 구분.
+ * lifetime: 누적 저장 상태(계정·세이브·도감·수배) 정본 기준(최근 7일 이벤트 보조 포함).
+ * hybrid_7d: 누적 카운터와 최근 7일 이벤트 합집합(카운터 도입 전 활동은 7일 창 한도 영향).
+ */
+export type AdminOnboardingStepBasis = 'lifetime' | 'hybrid_7d';
+
+/** 초반 온보딩 6단계 퍼널 단계 한 건 */
+export interface AdminOnboardingFunnelStep {
+  id: AdminOnboardingStepId;
+  users: number;
+  /** 전체 사용자 대비 도달 비율(0~1) */
+  rate: number;
+  /** 직전 단계 대비 전환 비율(0~1, 첫 단계이거나 직전 인원이 0이면 null) */
+  stepRate: number | null;
+  basis: AdminOnboardingStepBasis;
+}
+
+/** 관리자 — 온보딩 퍼널 응답 */
+export interface AdminOnboardingFunnel {
+  /** 이벤트 보조 신호의 조회 창(일, 7일 고정) */
+  eventsWindowDays: number;
+  conversion: AdminOnboardingConversion;
+  tutorials: AdminOnboardingTutorials;
+  steps: AdminOnboardingFunnelStep[];
+}
+
 export interface AdminApi {
   /** 관리자 로그인이 필요한 클라우드 구현인가. 로컬 모드는 false다 */
   isConfigured: boolean;
@@ -444,6 +582,10 @@ export interface AdminApi {
   sessions(userId?: string, limit?: number): Promise<AdminSessionRow[]>;
   economy(days: number): Promise<AdminEconomyRow[]>;
   bountyFunnel(days: number): Promise<AdminBountyFunnelRow[]>;
+  /** 온보딩 퍼널(게스트→구글 전환·튜토리얼 4단계·초반 6단계 도달률) */
+  onboardingFunnel(): Promise<AdminOnboardingFunnel>;
+  /** 앱 서버 HTTP 오류율·429 지표. days(1~90)를 생략하면 서버 기본 기간(30일)이다 */
+  httpMetrics(days?: number): Promise<AdminHttpMetrics>;
   spamFlags(): Promise<AdminSpamFlagRow[]>;
   recentEvents(): Promise<AdminEventRow[]>;
   userEvents(userId: string, limit?: number): Promise<AdminEventRow[]>;

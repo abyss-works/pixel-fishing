@@ -550,4 +550,63 @@ describe('테스트 데이터베이스', () => {
       }
     });
   });
+
+  describe('http_metrics_daily (0045)', () => {
+    const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
+
+    it('기본 키·허용 경로 묶음·음수 금지·기본값·서버 전용 RLS·다운/업 라운드트립을 검증한다', async () => {
+      const { rows: [inserted] } = await client.query<{ total: string; status_426: string; status_429: string; status_5xx: string }>(
+        `insert into public.http_metrics_daily (day, route_group) values ('2030-03-04', 'action')
+         returning total, status_426, status_429, status_5xx`,
+      );
+      expect(inserted).toEqual({ total: '0', status_426: '0', status_429: '0', status_5xx: '0' });
+
+      // 중복 (day, route_group) 거부
+      await expect(client.query(
+        `insert into public.http_metrics_daily (day, route_group, total) values ('2030-03-04', 'action', 1)`,
+      )).rejects.toMatchObject({ code: '23505' });
+
+      // 허용되지 않은 route_group 거부
+      await expect(client.query(
+        `insert into public.http_metrics_daily (day, route_group, total) values ('2030-03-04', 'unknown', 1)`,
+      )).rejects.toMatchObject({ code: '23514' });
+
+      // 음수 카운트 거부
+      await expect(client.query(
+        `insert into public.http_metrics_daily (day, route_group, total) values ('2030-03-04', 'api', -1)`,
+      )).rejects.toMatchObject({ code: '23514' });
+
+      // 인증 사용자는 읽거나 쓰지 못한다 — 서버 전용 RLS
+      await client.query('begin');
+      try {
+        await client.query('set local role authenticated');
+        expect((await client.query('select day from public.http_metrics_daily')).rows).toEqual([]);
+        await expect(client.query(
+          `insert into public.http_metrics_daily (day, route_group, total) values ('2030-03-05', 'web', 1)`,
+        )).rejects.toMatchObject({ code: '42501' });
+      } finally {
+        await client.query('rollback');
+      }
+
+      // 다운/업 라운드트립
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        await other.query(migration('0045_http_metrics.down.sql'));
+        const { rows: afterDown } = await other.query(
+          `select 1 from information_schema.tables where table_schema = 'public' and table_name = 'http_metrics_daily'`,
+        );
+        expect(afterDown).toHaveLength(0);
+        await other.query(migration('0045_http_metrics.sql'));
+        const { rows: afterUp } = await other.query(
+          `select 1 from information_schema.tables where table_schema = 'public' and table_name = 'http_metrics_daily'`,
+        );
+        expect(afterUp).toHaveLength(1);
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
 });
