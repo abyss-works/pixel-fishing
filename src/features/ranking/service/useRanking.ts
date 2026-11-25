@@ -3,6 +3,7 @@ import { readRanking } from '../../../platform/api';
 import type { RankingBoard, RankingBoardId } from '../../../platform/api';
 import type { MainRankingBoardId } from '../model/ranking';
 import { useSession } from '../../account/service/session';
+import { useConsentReady } from '../../account/service/consentGate';
 
 // 랭킹 조회 — 세션 게이트가 선 뒤 읽는다(내 순위가 세션 토큰에 달려 있다).
 // 서버가 60초 동안 같은 상위 목록을 돌려줄 수 있어 같은 주기로 신선하다고 본다.
@@ -11,10 +12,11 @@ const STALE = 60_000;
 
 function useBoard(board: RankingBoardId, fishId?: string) {
   const { ready, uid } = useSession();
+  const consentReady = useConsentReady();
   const q = useQuery({
     queryKey: ['ranking', board, fishId ?? null, uid],
     queryFn: () => readRanking(board, fishId),
-    enabled: ready,
+    enabled: ready && consentReady,
     staleTime: STALE,
     retry: 1,
   });

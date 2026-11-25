@@ -3,14 +3,14 @@
 // 클라우드 미설정(로컬 dev·테스트)이면 행동 기록이 없어 null이다. 그 밖의 실패는 던진다.
 import { isCloud } from './auth';
 import type { AwaySummary } from '../../game/rules/away';
-import { requestFailure } from './requestFailure';
+import { throwRequestFailure } from './requestFailure';
 
 export const AWAY_LEFT_KEY = 'pf-away-left';
 
 export async function readAwayReport(awayMs: number): Promise<AwaySummary | null> {
   if (!isCloud) return null;
   const res = await fetch(`/api/away-report?awayMs=${Math.floor(awayMs)}`);
-  if (!res.ok) throw requestFailure(res, 'away report read failed');
+  if (!res.ok) await throwRequestFailure(res, 'away report read failed');
   return await res.json() as AwaySummary;
 }
 

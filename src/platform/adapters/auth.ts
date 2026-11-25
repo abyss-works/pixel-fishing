@@ -2,7 +2,8 @@
 // VITE_CLOUD가 '1'이 아니면 authClient = null → 게임은 로컬 저장만으로 정상 동작 (오프라인 모드).
 import { createAuthClient } from 'better-auth/client';
 import { anonymousClient } from 'better-auth/client/plugins';
-import type { AccountLookup, AuthResult } from '../api/types';
+import type { AcceptConsentResult, AccountLookup, AuthResult, ConsentStatus } from '../api/types';
+import { networkError, requestFailure, serverError, unauthorizedError } from './requestFailure';
 
 /** 서버(스테이징·운영)에 붙는 빌드인가 — 빌드 때 정해진다 */
 export const isCloud = import.meta.env.VITE_CLOUD === '1';
@@ -174,6 +175,63 @@ export async function deleteOwnAccount(): Promise<AuthResult> {
   // 인증 계정이 이미 없어 서버 로그아웃이 실패할 수 있다 — 쿠키를 지우는 것이 목적이라 결과는 보지 않는다
   await authClient.signOut().catch(() => {});
   return { ok: true };
+}
+
+function parseConsentStatus(raw: unknown): ConsentStatus | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const consent = (raw as { consent?: unknown }).consent;
+  if (typeof consent !== 'object' || consent === null) return null;
+  const obj = consent as { required?: unknown; version?: unknown; effectiveAt?: unknown };
+  if (typeof obj.required !== 'boolean' || typeof obj.version !== 'string' || typeof obj.effectiveAt !== 'string') {
+    return null;
+  }
+  return { required: obj.required, version: obj.version, effectiveAt: obj.effectiveAt };
+}
+
+/** 현재 세션 계정의 이용약관 수락 상태를 조회한다 */
+export async function getAccountConsent(): Promise<ConsentStatus> {
+  if (!authClient) throw networkError('cloud not configured');
+  let res: Response;
+  try {
+    res = await fetch('/api/account');
+  } catch (cause) {
+    throw networkError('account consent request failed', cause);
+  }
+  if (res.status === 401) throw unauthorizedError('account consent read before session');
+  if (!res.ok) throw requestFailure(res, 'account consent read failed');
+  const data = await res.json().catch(() => null);
+  const consent = parseConsentStatus(data);
+  if (!consent) throw serverError('invalid account consent response', { status: res.status });
+  return consent;
+}
+
+/** 확인 화면에서 현재 판의 이용약관을 수락하고 서버가 반환한 최신 약관 상태를 돌려준다 */
+export async function acceptAccountConsent(version: string): Promise<AcceptConsentResult> {
+  if (!authClient) return { ok: false, code: 'network' };
+  let res: Response;
+  try {
+    res = await fetch('/api/account/consents', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ version, ageConfirmed: true }),
+    });
+  } catch {
+    return { ok: false, code: 'network' };
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => null) as { error?: unknown } | null;
+    const bodyCode = typeof body?.error === 'string' ? body.error : undefined;
+    if (res.status === 429) return { ok: false, code: bodyCode ?? 'rate-limited', status: 429 };
+    if (res.status === 409) return { ok: false, code: bodyCode ?? 'consent-version-mismatch', status: 409 };
+    if (res.status === 403) return { ok: false, code: bodyCode ?? 'account-only', status: 403 };
+    if (res.status === 401) return { ok: false, code: bodyCode ?? 'unauthorized', status: 401 };
+    if (res.status === 400) return { ok: false, code: bodyCode ?? 'bad-request', status: 400 };
+    return { ok: false, code: bodyCode ?? 'server', status: res.status };
+  }
+  const data = await res.json().catch(() => null);
+  const consent = parseConsentStatus(data);
+  if (!consent) return { ok: false, code: 'bad-response', status: res.status };
+  return { ok: true, consent };
 }
 
 // 이 모듈은 인증을 맡으며 세이브 읽기와 액션 전송은 게임 게이트웨이가 맡는다.

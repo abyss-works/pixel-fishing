@@ -39,9 +39,9 @@ spec:
               value: https://pixel-fishing.abyssworks.dev
             - name: DEPLOY_ENV
               value: production
-            # 약관과 처리방침의 판이자 시행일(YYYY-MM-DD). 시행 전에는 먼 미래 날짜를 둔다.
+            # 약관과 처리방침의 판이자 시행일(YYYY-MM-DD).
             - name: CONSENT_EFFECTIVE_DATE
-              value: "2099-12-31"
+              value: "2026-11-25"
           ports:
             - containerPort: 3000
           resources:

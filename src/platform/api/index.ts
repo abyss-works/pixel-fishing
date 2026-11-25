@@ -40,11 +40,12 @@ export { readGuild, readGuildInvite, guildAction, takeGuildInviteLanding } from 
 export { readPlayer, searchPlayers } from '../adapters/player';
 export { readAwayReport, watchAway } from '../adapters/away';
 export { readLastPosition } from '../adapters/position';
+export { ConsentRequiredError, isConsentRequiredError, subscribeConsentRequired } from '../adapters/requestFailure';
 export type { LastPosition } from '../adapters/position';
 export type { PublicProfile } from '../adapters/player';
 export type {
   ApiClient, AuthApi, StorageApi, AdminApi, AdminAccessResult, DevApi, PromoteTestResult, ResetDevAccountResult,
-  AccountLookup, AuthResult, GameGateway, GameProfile, MaybePromise, DispatchResult,
+  AccountLookup, AuthResult, ConsentStatus, AcceptConsentError, AcceptConsentResult, GameGateway, GameProfile, MaybePromise, DispatchResult,
   BountySnapshot, BountyProgressRow, BountyTicketRow, FortuneHistory,
   RankingBoardId, RankingRow, RankingBoard, MailItem, MailItemAttachment, FriendItem, FriendOp, FriendOpResult,
   GuildBonusItem, GuildDonorItem, GuildInfo, GuildInvitePreview, GuildJoinRequestItem, GuildLogItem, GuildMemberItem, GuildMyRequest, GuildOp,
