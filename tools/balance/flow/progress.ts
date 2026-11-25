@@ -16,7 +16,7 @@ import type { Axis, Pool, Rates } from '../model';
 import { virtualZoneOf } from '../virtualSpots';
 import { BOUNTY_ZONES } from '../../../src/game/content/bounties';
 import type { BountyTier, BountyZone } from '../../../src/game/content/bounties';
-import { licenseFish, licenseHeld, licenseKey, planBounties, spotLicenseFish, spotLicenseHeld } from './bounty';
+import { licenseHeld, licenseKey, planBounties, spotLicenseFish, spotLicenseHeld, zoneAchievementFish, zoneAchievementHeld } from './bounty';
 import type { Activity, DexLog } from './bounty';
 import type { Reward, RewardUnit } from './achievement';
 import { createCounterBonusTracker } from './counterBonus';
@@ -238,7 +238,7 @@ export function simulate(opts: SimOptions): SimResult {
   const neededOf = (zone: BountyZone, tier: BountyTier): string[] => {
     const key = `zone:${zone}:${tier}`;
     let ids = needed.get(key);
-    if (!ids) { ids = licenseFish(zone, tier).map(f => f.id); needed.set(key, ids); }
+    if (!ids) { ids = zoneAchievementFish(zone, tier).map(f => f.id); needed.set(key, ids); }
     return ids;
   };
   const spotNeededOf = (spot: SpotId, tier: BountyTier): string[] => {
@@ -376,7 +376,7 @@ export function simulate(opts: SimOptions): SimResult {
     for (const zone of BOUNTY_ZONES) {
       for (const tier of ['basic', 'named'] as const) {
         if (achieved.some(x => x.zone === zone && x.tier === tier)) continue;
-        const done = opts.sampler ? neededOf(zone, tier).every(id => normalSeen.has(id)) : licenseHeld(dex, zone, tier);
+        const done = opts.sampler ? neededOf(zone, tier).every(id => normalSeen.has(id)) : zoneAchievementHeld(dex, zone, tier);
         if (!done) continue;
         const granted = a.reward(zone, tier);
         if (granted) gold += granted.gold;

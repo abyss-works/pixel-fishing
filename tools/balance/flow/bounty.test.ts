@@ -7,7 +7,9 @@ import { entryLevel, rates, zoneOf } from '../model';
 import type { Axis } from '../model';
 import type { SpotId } from '../../../src/game/content/spots';
 import {
+  ACHIEVEMENT_GRADES,
   accessibleSpots, dexCompletion, expectedEncounterCatches, licenseHeld, planBounties,
+  spotDexCompletion, spotLicenseFish, spotLicenseHeld, zoneAchievementFish, zoneAchievementHeld,
 } from './bounty';
 import type { DexLog, PlanInput } from './bounty';
 
@@ -15,33 +17,58 @@ const zoneFish = (zone: string) => FISH.filter(f => zoneOf(f.spot) === zone);
 const logOf = (fish: { id: string }[], v: number): DexLog => new Map(fish.map(f => [f.id, v]));
 
 describe('도감 라이선스', () => {
-  it('기록이 없으면 완성 확률 0이고 라이선스가 없다', () => {
-    expect(dexCompletion(new Map(), 'pacific', 'basic')).toBe(0);
-    expect(licenseHeld(new Map(), 'pacific', 'basic')).toBe(false);
+  it('일반 의뢰 라이선스는 도감 조건이 없어 기록이 없어도 해금된다', () => {
+    expect(LICENSE_GRADES.basic).toEqual([]);
+    expect(dexCompletion(new Map(), 'pacific', 'basic')).toBe(1);
+    expect(licenseHeld(new Map(), 'pacific', 'basic')).toBe(true);
+    expect(dexCompletion(new Map(), 'pacific', 'named')).toBe(0);
+    expect(licenseHeld(new Map(), 'pacific', 'named')).toBe(false);
   });
 
-  it('구역 어종을 모두 확실히 잡았으면 완성이다', () => {
-    const dex = logOf(zoneFish('pacific'), -50);
-    expect(dexCompletion(dex, 'pacific', 'basic')).toBeCloseTo(1, 6);
+  it('네임드 토벌 라이선스는 전설을 뺀 일반~영웅 어종만 모두 잡으면 해금된다', () => {
+    const rest = zoneFish('pacific').filter(f => f.rarity !== 'legendary');
+    const dex = logOf(rest, -50);
+    expect(LICENSE_GRADES.named).toEqual(['common', 'rare', 'epic']);
+    expect(dexCompletion(dex, 'pacific', 'named')).toBeCloseTo(1, 6);
     expect(licenseHeld(dex, 'pacific', 'named')).toBe(true);
   });
 
-  it('한 종이라도 기록이 없으면 라이선스가 없다', () => {
-    const fish = zoneFish('pacific').filter(f => LICENSE_GRADES.basic.includes(f.rarity));
+  it('네임드 토벌 대상 어종이 한 종이라도 없으면 라이선스가 없다', () => {
+    const fish = zoneFish('pacific').filter(f => LICENSE_GRADES.named.includes(f.rarity));
     const dex = logOf(fish.slice(1), -50);
-    expect(licenseHeld(dex, 'pacific', 'basic')).toBe(false);
-  });
-
-  it('네임드 라이선스는 전설까지, 기본은 전설을 뺀다', () => {
-    const rest = zoneFish('pacific').filter(f => f.rarity !== 'legendary');
-    const dex = logOf(rest, -50);
-    expect(licenseHeld(dex, 'pacific', 'basic')).toBe(true);
     expect(licenseHeld(dex, 'pacific', 'named')).toBe(false);
   });
 
-  it('완성 확률이 0.5 이하이면 라이선스를 쓰지 못한다', () => {
+  it('완성 확률이 0.5 이하이면 네임드 토벌 라이선스를 쓰지 못한다', () => {
     const dex = logOf(zoneFish('pacific'), Math.log(0.5));
-    expect(licenseHeld(dex, 'pacific', 'basic')).toBe(false);
+    expect(licenseHeld(dex, 'pacific', 'named')).toBe(false);
+  });
+});
+
+describe('해역·구역 진행 업적 등급 표', () => {
+  it('진행 업적은 바운티 라이선스와 분리되어 기초·기본은 일반~영웅, 숙련·완결은 전설까지 포함한다', () => {
+    expect(ACHIEVEMENT_GRADES).toEqual({
+      basic: ['common', 'rare', 'epic'],
+      named: ['common', 'rare', 'epic', 'legendary'],
+    });
+    expect(spotLicenseFish('sea', 'basic').some(f => f.rarity === 'legendary')).toBe(false);
+    expect(spotLicenseFish('sea', 'named').some(f => f.rarity === 'legendary')).toBe(true);
+    expect(zoneAchievementFish('pacific', 'basic').some(f => f.rarity === 'legendary')).toBe(false);
+    expect(zoneAchievementFish('pacific', 'named').some(f => f.rarity === 'legendary')).toBe(true);
+  });
+
+  it('기록이 없으면 해역·구역 진행 업적은 미달성이고 전설 제외 수집 시 기초만 달성된다', () => {
+    expect(spotDexCompletion(new Map(), 'sea', 'basic')).toBe(0);
+    expect(spotLicenseHeld(new Map(), 'sea', 'basic')).toBe(false);
+    expect(zoneAchievementHeld(new Map(), 'pacific', 'basic')).toBe(false);
+
+    const noLegendSpot = FISH.filter(f => f.spot === 'sea' && f.rarity !== 'legendary');
+    expect(spotLicenseHeld(logOf(noLegendSpot, -50), 'sea', 'basic')).toBe(true);
+    expect(spotLicenseHeld(logOf(noLegendSpot, -50), 'sea', 'named')).toBe(false);
+
+    const noLegendZone = zoneFish('pacific').filter(f => f.rarity !== 'legendary');
+    expect(zoneAchievementHeld(logOf(noLegendZone, -50), 'pacific', 'basic')).toBe(true);
+    expect(zoneAchievementHeld(logOf(noLegendZone, -50), 'pacific', 'named')).toBe(false);
   });
 });
 
