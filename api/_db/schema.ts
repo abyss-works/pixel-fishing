@@ -17,6 +17,7 @@ export const savesCurrent = pgTable('saves_current', {
   restricted: boolean('restricted').notNull().default(false),
   lastCatchAt: at('last_catch_at'),
   activeClient: text('active_client'),
+  guildEnhanceResetCount: integer('guild_enhance_reset_count').notNull().default(0),
 });
 
 export const fishInstances = pgTable('fish_instances', {
