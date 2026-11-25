@@ -156,6 +156,8 @@ describe('우편함 창', () => {
     fireEvent.click(itemBtn);
     const dialogs = screen.getAllByRole('dialog');
     const detailDialog = dialogs[dialogs.length - 1];
+    expect(detailDialog.parentElement!.className).toContain('z-(--z-stage-modal)');
+    expect(detailDialog.parentElement!.className).not.toContain('z-(--z-app-modal)');
     expect(detailDialog).toHaveTextContent('작은 행운 물약');
     expect(detailDialog).toHaveTextContent('모든 행운 효과');
     expect(detailDialog).toHaveTextContent('+5%p');

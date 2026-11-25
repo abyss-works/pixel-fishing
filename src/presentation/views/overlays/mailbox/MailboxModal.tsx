@@ -59,7 +59,7 @@ export default function MailboxModal({ dispatch, setToast, onClose }: {
     const detail = resolveItemDetail(id);
     if (!detail) {
       void notice({
-        layer: 'app',
+        layer: 'stage',
         title: id,
         body: `첨부 수량 ${fmtNum(qty)}개`,
       });
@@ -67,7 +67,7 @@ export default function MailboxModal({ dispatch, setToast, onClose }: {
     }
     const duration = detail.durationMinutes !== null ? fmtMinutes(detail.durationMinutes) : detail.durationLabel;
     void notice({
-      layer: 'app',
+      layer: 'stage',
       title: detail.name,
       body: (
         <div className="flex flex-col gap-3">
