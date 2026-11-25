@@ -62,6 +62,8 @@ import { useBaitRefund } from '../../../features/inventory/service/baitRefund';
 import { useWhatsNewPending } from '../../../features/announcements/service/whatsNew';
 import FortuneModal from '../overlays/fortune/FortuneModal';
 import FortuneCalendarModal from '../overlays/fortune/FortuneCalendarModal';
+import ActiveEffectsModal from '../overlays/effects/ActiveEffectsModal';
+import { setBagSection } from './tabs/bag/bagView';
 import { useFortuneModal } from '../../../features/fortune/service/fortuneModal';
 import { useTutorialTrigger } from '../../../features/tutorial/service/tutorial';
 import { guildMatesIn, useChat, useLive } from '../../../features/live/service/useLive';
@@ -144,6 +146,7 @@ export default function GameView(props: GameViewProps) {
   const [actionPanel, setActionPanel] = useState<ActionPanel>(null);
   const [statsOpen, setStatsOpen] = useState(false);
   const [statsInitialTab, setStatsInitialTab] = useState<StatsTab>('summary');
+  const [effectsOpen, setEffectsOpen] = useState(false);
   const [questsOpen, setQuestsOpen] = useState(false);
   const [achievementsOpen, setAchievementsOpen] = useState(false);
   const [fortuneOpen, setFortuneOpen] = useState(false);
@@ -235,7 +238,7 @@ export default function GameView(props: GameViewProps) {
     setToast: props.setToast,
   });
 
-  const resetPanels = () => { setActionPanel(null); setStatsOpen(false); setAchievementsOpen(false); setFortuneOpen(false); setRankingOpen(false); setTracking(null); };
+  const resetPanels = () => { setActionPanel(null); setStatsOpen(false); setEffectsOpen(false); setAchievementsOpen(false); setFortuneOpen(false); setRankingOpen(false); setTracking(null); };
 
   const go = (nextScene: SceneRef, message: string, entryPos?: Point, returnPos?: Point) => {
     resetPanels();
@@ -382,7 +385,7 @@ export default function GameView(props: GameViewProps) {
                    guildMates={guildMates}
                    channels={chat.enabled ? FILTER_CHANNELS : undefined}
                    disabledChannels={guild === null ? GUILD_OFF : undefined}
-                   onOpenStats={openStats} onOpenMap={onOpenMap}
+                   onOpenStats={openStats} onOpenEffects={() => setEffectsOpen(open => !open)} onOpenMap={onOpenMap}
                    notice={atSea || (away.report && !awayOpen) ? (
                      <div className="flex flex-col gap-2">
                        {away.report && !awayOpen && (
@@ -411,6 +414,23 @@ export default function GameView(props: GameViewProps) {
                       movement={scene.kind === 'region' ? REGION_PACKS[scene.id].movement : 'walk'}
                       region={region} nickname={props.nickname} profileStatus={props.profileStatus}
                       onClose={() => setStatsOpen(false)} />
+        )}
+        {effectsOpen && (
+          <ActiveEffectsModal
+            game={game}
+            onClose={() => setEffectsOpen(false)}
+            onOpenBag={() => {
+              setEffectsOpen(false);
+              setBagSection('items');
+              setActiveTab('bag');
+              if (mobile) setSheetOpen(true);
+            }}
+            onOpenStatsBonus={() => {
+              setEffectsOpen(false);
+              setStatsInitialTab('bonus');
+              setStatsOpen(true);
+            }}
+          />
         )}
         {questsOpen && <QuestInfoModal game={game} onClose={() => setQuestsOpen(false)} />}
         {achievementsOpen && (

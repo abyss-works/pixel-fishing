@@ -5,7 +5,9 @@ import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { gameDayOf } from '../../../game/rules/time';
 import { GUEST_LOCK_DEFAULT_LINES, UNVERIFIED_LOCK_TEXT } from '../../display/model/menuLock';
-import { activeSlot, fmtSlotChipTime, fmtSlotTimeLeft, selectBonusChip } from './slots';
+import {
+  activeSlot, fmtSlotChipTime, fmtSlotTimeLeft, selectActiveEffectsView, selectBonusChip, selectBonusTipRows,
+} from './slots';
 
 const T0 = '2026-11-12T00:00:00.000Z';
 const MIN = 60_000;
@@ -175,5 +177,91 @@ describe('보너스 통합 칩 표시 조건과 내역', () => {
     expect(afterFirst.state).toBe('active');
     if (afterFirst.state !== 'active') return;
     expect(afterFirst.items.map(i => i.id)).toEqual(['lunch', 'bait2', 'potion:luck-small', 'fortune']);
+  });
+});
+
+describe('HUD 칩 4행 요약 및 적용 중인 효과 창 모델', () => {
+  it('selectBonusTipRows는 도시락·미끼·비약 활성 여부와 운세 3글자 요약을 돌려준다', () => {
+    expect(selectBonusTipRows(seed(), T0)).toEqual([
+      { label: '도시락', value: '없음' },
+      { label: '미끼', value: '없음' },
+      { label: '비약', value: '없음' },
+      { label: '운세', value: '없음' },
+    ]);
+
+    const day = gameDayOf(T0);
+    expect(selectBonusTipRows(seed({
+      slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(HOUR) }, bait: { id: 'cook-bait-rare', endsAt: at(MIN) } },
+      potions: { 'luck-small': day },
+      fortune: { day, kind: 'shadow', index: 3 },
+    }), T0)).toEqual([
+      { label: '도시락', value: '활성' },
+      { label: '미끼', value: '활성' },
+      { label: '비약', value: '활성' },
+      { label: '운세', value: '그림자' },
+    ]);
+
+    expect(selectBonusTipRows(seed({
+      artifacts: ['sargasso-net'],
+      slots: { lunch: null, bait: { id: 'cook-bait-rare', endsAt: at(MIN) }, bait2: { id: 'cook-bait-epic', endsAt: at(MIN) } },
+      fortune: { day, kind: 'fish', index: 5 },
+    }), T0)).toEqual([
+      { label: '도시락', value: '없음' },
+      { label: '미끼', value: '2/2' },
+      { label: '비약', value: '없음' },
+      { label: '운세', value: '풍어운' },
+    ]);
+
+    expect(selectBonusTipRows(seed({
+      artifacts: ['sargasso-net'],
+      slots: { lunch: null, bait: { id: 'cook-bait-rare', endsAt: at(MIN) } },
+      fortune: { day, kind: 'gold', index: 3 },
+    }), T0)).toEqual([
+      { label: '도시락', value: '없음' },
+      { label: '미끼', value: '1/2' },
+      { label: '비약', value: '없음' },
+      { label: '운세', value: '재물운' },
+    ]);
+  });
+
+  it('selectActiveEffectsView는 비어 있는 상태와 4종 활성 효과(비약·운세 곱연산 배수 포함)를 구획별로 돌려준다', () => {
+    expect(selectActiveEffectsView(seed(), T0)).toEqual({
+      hasAny: false,
+      lunch: [],
+      bait: { slots: [], maxSlots: 1 },
+      potions: [],
+      fortune: null,
+    });
+
+    const day = gameDayOf(T0);
+    const view = selectActiveEffectsView(seed({
+      artifacts: ['sargasso-net'],
+      slots: {
+        lunch: { id: 'cook-lunch-bite', endsAt: at(HOUR + 42 * MIN) },
+        bait: { id: 'cook-bait-rare', endsAt: at(2 * MIN) },
+        bait2: { id: 'cook-bait-epic', endsAt: at(3 * MIN) },
+      },
+      potions: { 'luck-small': day },
+      fortune: { day, kind: 'gold', index: 3 },
+    }), T0);
+
+    expect(view.hasAny).toBe(true);
+    expect(view.lunch).toHaveLength(1);
+    expect(view.lunch[0].durationText).toBe('1시간 42분 남음');
+    expect(view.lunch[0].description).toContain('방치');
+    expect(view.bait.maxSlots).toBe(2);
+    expect(view.bait.slots).toHaveLength(2);
+    expect(view.potions).toEqual([{
+      id: 'potion:luck-small',
+      title: { name: '작은 행운 물약', grade: 'special' },
+      durationText: '하루 동안',
+      stats: [{ label: '모든 행운 효과', value: '×1.05' }],
+    }]);
+    expect(view.fortune).toEqual({
+      id: 'fortune',
+      title: { name: '재물운', grade: null },
+      durationText: '하루 동안',
+      stats: [{ label: '판매가', value: '×1.03' }],
+    });
   });
 });

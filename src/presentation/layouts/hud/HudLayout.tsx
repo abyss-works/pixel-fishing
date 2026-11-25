@@ -27,6 +27,7 @@ interface HudLayoutProps {
   log: Msg[];
   covered: boolean;
   onOpenStats: () => void;
+  onOpenEffects?: () => void;
   onOpenMap: () => void;
   /** 미니맵에 그릴 같은 바다의 길드원 위치 */
   guildMates?: () => readonly { x: number; y: number }[];
@@ -79,7 +80,7 @@ interface HudLayoutProps {
 // 헤더의 펼친 메뉴 줄이 메시지 창과 상태 띠 위에 오는 것은 DOM 순서가 아니라 층 토큰(menu-row)이 보장하고, 탭 이동 순서는 헤더, 채팅 순이다.
 // 화면 키보드가 올라오면 줄기만 키보드 위로 올라가고(--keyboard-h, 탭 줄 높이 56px는 이미 비어 있다) 스테이지 크기는 그대로다.
 // 시트가 열려도 이 줄기는 자리를 지키고 시트가 그 위를 덮는다.
-export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onOpenStats, onOpenMap, notice, chips, badge, logFooter, onPickLine, you, channels, disabledChannels, guildMates, filter, onToggleFilter, folded, onFold, onStatusSlot, onCatchSlot, menu, accountState = 'account' }: HudLayoutProps) {
+export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onOpenStats, onOpenEffects, onOpenMap, notice, chips, badge, logFooter, onPickLine, you, channels, disabledChannels, guildMates, filter, onToggleFilter, folded, onFold, onStatusSlot, onCatchSlot, menu, accountState = 'account' }: HudLayoutProps) {
   const mobile = useMobileLayout();
   const minimapVisible = useMinimapVisible();
   const hasMinimap = scene.kind === 'region';
@@ -103,7 +104,7 @@ export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onO
           {notice && <div className="w-full pointer-events-auto">{notice}</div>}
           <div className="flex pc:flex-wrap items-center justify-end gap-1.5 pointer-events-none">
             {chips}
-            <SlotChips game={game} accountState={accountState} />
+            <SlotChips game={game} accountState={accountState} onOpenEffects={onOpenEffects} />
             <TimeBadge />
             {hasMinimap && !minimapVisible && (
               <Tip wraps className="flex" text="미니맵 보이기">

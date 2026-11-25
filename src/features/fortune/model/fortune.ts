@@ -20,6 +20,20 @@ export const FORTUNE_KIND: Record<FortuneKind, { name: string; target: FortuneTa
   shadow: { name: '그림자 운', target: FORTUNE_TARGET_OF.shadow, bonus: '네임드 만날 확률' },
 };
 
+/** HUD 효과 칩 툴팁용 운세 3글자 요약 */
+export const FORTUNE_SHORT_NAME: Record<FortuneKind, string> = {
+  fish: '풍어운',
+  gold: '재물운',
+  shadow: '그림자',
+};
+
+/** 오늘의 운세 창·적용 중인 효과 창에서 쓰는 적용 대상 표시명 */
+export const FORTUNE_EFFECT_TARGET_LABEL: Record<FortuneKind, string> = {
+  fish: '희귀 이상 출현 비중',
+  gold: '판매가',
+  shadow: '네임드 조우 확률',
+};
+
 /** 운세 출처 이름 — 보너스 내역과 금액 내역에 붙는 단일 표기 */
 export const FORTUNE_SOURCE_LABEL = '오늘의 운세';
 
@@ -59,6 +73,24 @@ export function fortunePhrase(fortune: DailyFortune): string {
 /** 운세의 운 배율 — 그 운세의 대상에 규칙(luckMultOf)이 곱하는 값 그대로다 */
 export function fortuneLuckMult(fortune: DailyFortune): number {
   return luckMultOf(fortune, FORTUNE_TARGET_OF[fortune.kind]);
+}
+
+/** 독립 곱연산 배수 표기("×1.03", "×1.05") */
+export function formatLuckMult(mult: number): string {
+  return `×${Number(mult.toFixed(4))}`;
+}
+
+/** 오늘의 운세 독립 곱연산 배수 문자열 */
+export function fortuneLuckMultText(fortune: DailyFortune): string {
+  return formatLuckMult(fortuneLuckMult(fortune));
+}
+
+/** 오늘의 운세 팝업 요약 카드 줄 */
+export function fortuneModalRows(fortune: DailyFortune): { label: string; value: string; accent?: boolean }[] {
+  return [
+    { label: '적용 대상', value: FORTUNE_EFFECT_TARGET_LABEL[fortune.kind] },
+    { label: '행운 효과', value: fortuneLuckMultText(fortune), accent: true },
+  ];
 }
 
 /** 스탯 창 보너스 탭의 "받는 효과" 칸 문구 */
