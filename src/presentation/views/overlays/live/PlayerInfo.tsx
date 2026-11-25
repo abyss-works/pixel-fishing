@@ -24,7 +24,6 @@ import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
 import PersonSprite from '../../../ui/PersonSprite';
-import PixelIcon from '../../../ui/PixelIcon';
 import ProgressCount from '../../../ui/ProgressCount';
 import ProgressMeter from '../../../ui/ProgressMeter';
 import { SCROLL_Y } from '../../../ui/scrollArea';
@@ -155,10 +154,10 @@ export function PlayerInfo({ target, self, account, accountFailed = false, setTo
   const lock = guestLock('player', accountLockState(account, accountFailed));
   const actions = self ? null : lock ? (
     <div className="flex items-center gap-2">
-      <Locked lines={lock} label="친구 요청">
+      <Locked lines={lock} label="친구 요청" badge={false}>
         <Button variant="primary" size="sm" disabled>친구 요청</Button>
       </Locked>
-      <Locked lines={lock} label="차단">
+      <Locked lines={lock} label="차단" badge={false}>
         <Button size="sm" disabled>차단</Button>
       </Locked>
     </div>
@@ -303,7 +302,6 @@ function AchievementSubtab({
           })}
         </div>
         <ToggleChip size="sm" pressed={claimedOnly} emphasis={claimedOnly} onClick={onToggleClaimedOnly}>
-          <PixelIcon glyph="check" size={10} />
           달성만 보기
         </ToggleChip>
       </div>

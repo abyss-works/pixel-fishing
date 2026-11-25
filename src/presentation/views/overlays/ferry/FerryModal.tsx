@@ -7,7 +7,6 @@ import Button from '../../../ui/Button';
 import { cx } from '../../../ui/cx';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
-import Note from '../../../ui/Note';
 
 // 여객선 빠른 이동 창 — 게임 스테이지 안에 뜬다. 지금 있는 거점을 뺀 항구를 바다 이름과 함께 늘어놓고,
 // 배가 그 바다에 들어설 수 없는 항구는 필요한 배를 회색으로 보이며 잠근다. 확인과 이동은 호출부가 맡는다.
@@ -20,7 +19,6 @@ export default function FerryModal({ game, from, onPick, onClose }: {
   return (
     <Modal layer="stage" onClose={onClose}>
       <ModalCard title="여객선 빠른 이동" onClose={onClose}>
-        <Note className="my-0">다른 항구로 바로 건너가요.<br />그 항구가 있는 바다에 들어설 수 있는 배가 있어야 해요.</Note>
         <div className="flex flex-col gap-2">
           {fastTravelTargets(game, from).map(t => {
             const name = BASE_PACKS[t.port].name;

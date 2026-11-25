@@ -225,13 +225,13 @@ export default function TutorialCardVisual({ kind, dailyCap = 1, resetText = '',
           <PixelIcon glyph="caretRight" size={12} className="text-text-dim" />
           <Badge tone="dim" size="sm">해당 구역 낚시</Badge>
           <PixelIcon glyph="caretRight" size={12} className="text-text-dim" />
-          <Inset border="epic" className="px-2 py-0.5 text-xs text-epic">흔적 포착</Inset>
+          <Inset border="named" className="px-2 py-0.5 text-xs text-named">흔적 포착</Inset>
         </div>
       );
     case 'named-trace':
       return (
         <div className="flex flex-wrap items-center justify-center gap-2">
-          <Inset border="epic" className="px-2.5 py-1.5 flex items-center gap-1.5 text-xs text-epic">
+          <Inset border="named" className="px-2.5 py-1.5 flex items-center gap-1.5 text-xs text-named">
             <PixelIcon glyph="warn" size={14} />바다 흔적 카드
           </Inset>
           <Badge tone="dim" size="sm" inline>

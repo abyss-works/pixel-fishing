@@ -18,6 +18,7 @@ import GameView from './presentation/views/game/GameView';
 import UpdateModal from './presentation/views/overlays/update/UpdateModal';
 import SessionReplacedModal from './presentation/views/overlays/update/SessionReplacedModal';
 import UnsavedModal from './presentation/views/overlays/update/UnsavedModal';
+import ConsentModal from './presentation/views/overlays/account/ConsentModal';
 import LoadingOverlay from './presentation/views/overlays/update/LoadingOverlay';
 import { DevEnvContext, devEnvOf } from './presentation/views/devtools/devEnv';
 import { BUILD_LABEL, DEPLOY_ENV } from './buildId';
@@ -45,7 +46,8 @@ function AppContent() {
   ]);
   const {
     game, dispatch, nickname, profileStatus, devTools, rename, sync, syncLabel,
-    blocker, loading, guestProgress, adoptAccount, warmup, resync, applyDevReset, refreshAccountStatus,
+    blocker, loading, consentPrompt, acceptConsent, retryLoadConsent,
+    guestProgress, adoptAccount, warmup, resync, applyDevReset, refreshAccountStatus,
   } = useGame({ setToast });
   useEffect(() => {
     setMirrorEnv({ blocked: blocker !== null, loading });
@@ -175,7 +177,20 @@ function AppContent() {
         dispatch={dispatch} setToast={setToast} toasts={toasts} onDismissToast={dismissToast} onMirrorEnv={setMirrorEnv} onScene={go} onPlace={place} onWarmup={warmup}
         log={log} syncLabel={syncLabel} syncState={sync} guestProgress={guestProgress}
         account={account} accountChecked={accountChecked} accountFailed={accountFailed} uid={uid} nickname={nickname} profileStatus={profileStatus}
-        onRename={rename} onAuthChanged={onAuthChanged} onResync={resync} blocker={blocker === 'update' ? <UpdateModal /> : blocker === 'replaced' ? <SessionReplacedModal /> : blocker === 'unsaved' ? <UnsavedModal /> : loading ? <LoadingOverlay /> : null}
+        onRename={rename} onAuthChanged={onAuthChanged} onResync={resync}
+        blocker={
+          blocker === 'consent' ? (
+            <ConsentModal
+              consent={consentPrompt.consent}
+              mismatch={consentPrompt.mismatch}
+              error={consentPrompt.error}
+              busy={consentPrompt.busy}
+              entry={sync !== 'on'}
+              onAccept={acceptConsent}
+              onRetryLoad={retryLoadConsent}
+            />
+          ) : blocker === 'update' ? <UpdateModal /> : blocker === 'replaced' ? <SessionReplacedModal /> : blocker === 'unsaved' ? <UnsavedModal /> : loading ? <LoadingOverlay /> : null
+        }
         badge={DEV_ENV && LazyEnvBadge ? (
           <Suspense fallback={null}>
             <DevEnvContext.Provider value={DEV_ENV}>

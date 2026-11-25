@@ -64,7 +64,7 @@ export function classifyCatchNotice(
       kind: 'catch.legendaryOrFirstVariant',
       text,
       toastText: `첫 돌연변이 [${name}] 발견!`,
-      tone: 'epic',
+      tone: 'mutation',
     };
   }
   const manual = judgment !== 'auto';

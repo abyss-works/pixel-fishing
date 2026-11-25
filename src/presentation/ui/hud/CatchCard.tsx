@@ -31,7 +31,7 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
   // 연출 파라미터는 등급 데이터 소관 — 등급 리터럴 하드코딩 금지 (6등급 개편 대비)
   const { sparks, sparkDist, halo } = r;
   return (
-    <div data-rarity={fish.rarity} className="relative w-full max-w-[310px] pointer-events-none">
+    <div data-rarity={fish.rarity} className="relative w-full max-w-[380px] pointer-events-none">
       {/* 이펙트 레이어 — 카드의 쌓임 맥락 안에 두면 카드 층에 갇혀 채팅과 헤더 뒤로 가려지므로
           카드와 형제로 두고 이펙트 층(catch-fx)에 놓는다. 패널의 노치가 잘라 내지 않도록 패널 바깥 층이다 */}
       <div data-catch-fx className="absolute inset-0 z-(--z-catch-fx) pointer-events-none" aria-hidden="true">
@@ -55,7 +55,7 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
                            animate-fx-orbit [animation-delay:calc(var(--i)*-0.24s)]"
                 style={{ '--i': i } as CSSProperties} />
         ))}
-        {/* 변이 — 신비로운 잔광: 카드 곁에서 피어올라 흩어지는 보랏빛/물빛.
+        {/* 변이 — 신비로운 잔광: 카드 곁에서 피어올라 흩어지는 자홍빛.
             정적 X 오프셋은 transform, 상승은 keyframe의 translate 속성 — 서로 충돌하지 않는다 */}
         {isVariant && Array.from({ length: 8 }, (_, i) => (
           <span key={i}
@@ -64,21 +64,21 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
                   '[transform:translateX(calc((var(--i)-3.5)*38px))]',
                   'animate-fx-wisp [animation-delay:calc(var(--i)*-0.4s)]',
                   i % 2
-                    ? 'bg-[#a0e7fc] shadow-[0_0_8px_2px_rgba(160,231,252,0.8)]'
-                    : 'bg-[#e0c3fc] shadow-[0_0_8px_2px_rgba(224,195,252,0.8)]',
+                    ? 'bg-[color-mix(in_oklab,var(--c-mutation)_60%,white)] shadow-[0_0_8px_2px_rgba(244,114,182,0.8)]'
+                    : 'bg-mutation shadow-[0_0_8px_2px_rgba(244,114,182,0.85)]',
                 )}
                 style={{ '--i': i } as CSSProperties} />
         ))}
       </div>
       <div className="relative z-(--z-stage-card) animate-catch-pop">
         <HudPanel tone="none"
-                  className="flex items-center gap-2.5 w-full px-3 py-2
+                  className="flex items-center gap-3.5 mobile:gap-2.5 w-full px-3.5 py-3 mobile:px-2.5 mobile:py-2
                              bg-[color-mix(in_oklab,var(--c-bg)_85%,transparent)] shadow-panel
                              border-[color-mix(in_srgb,var(--rarity-color)_70%,transparent)]">
           {/* 좌측 열: 오목한 어종 칸 + 좌상단 신규 발견 골드 노치 */}
           <div className="relative shrink-0 flex">
-            <Inset tone="deep" border="line-dim" className="flex items-center justify-center px-2 py-2.5">
-              <FishSprite fish={fish} preset="icon" form={info?.form ?? 'normal'} animate />
+            <Inset tone="deep" border="line-dim" className="flex items-center justify-center p-2 mobile:p-1.5">
+              <FishSprite fish={fish} preset="card" form={info?.form ?? 'normal'} animate className="max-w-full" />
             </Inset>
             {info?.isNew && (
               <span className={cx('absolute -top-1 -left-1 px-1.5 py-0.5 pf-accent text-2xs leading-none bg-gold text-bg animate-fade-in', NOTCH_SM)}>
@@ -87,25 +87,26 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
             )}
           </div>
           {/* 우측 열: 등급·이름, 변이 문구, 2×2 지표 격자, 월척 줄 */}
-          <div className="flex flex-col gap-1 min-w-0 flex-1">
+          <div className="flex flex-col gap-1.5 min-w-0 flex-1">
             <div className="flex items-baseline gap-1.5 flex-wrap min-w-0">
               <span className="text-xs font-bold shrink-0"><RarityText rarity={fish.rarity} /></span>
-              {/* 변이 — 이름만 은은히 빛나고, 문구는 오히려 낮춰 말한다 */}
-              <b className={cx('text-base leading-tight break-keep', isVariant && 'animate-mutated-shimmer')}>
+              {/* 변이 — 이름에 자홍 강조·반짝이와 은은한 빛을 입히고, 문구는 오히려 낮춰 말한다 */}
+              {isVariant && <PixelIcon glyph="sparkle" size={14} className="text-mutation shrink-0 self-center" />}
+              <b className={cx('text-lg mobile:text-base leading-tight break-keep', isVariant && 'text-mutation animate-mutated-shimmer')}>
                 {formName(fish, info?.form ?? 'normal')}
               </b>
             </div>
             {isVariant && <span data-catch-variant className="text-xs text-text-dim leading-snug">{variantLine}</span>}
             <div data-catch-metrics
-                 className={cx('grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-2 gap-y-0.5 px-2 py-1 text-2xs text-text-dim bg-bg/60', NOTCH_SM)}>
+                 className={cx('grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-2.5 gap-y-1 px-2.5 py-1.5 text-xs text-text-dim bg-bg/60', NOTCH_SM)}>
               <span>크기</span>
-              <b className="pf-accent text-xs text-text text-right whitespace-nowrap">{info ? fmtSize(info.size) : ''}</b>
+              <b className="pf-accent text-sm mobile:text-xs text-text text-right whitespace-nowrap">{info ? fmtSize(info.size) : ''}</b>
               <span>판매가</span>
-              <b className="pf-accent text-xs text-gold text-right whitespace-nowrap">{fmtGold(priceOf(fish, info?.form ?? 'normal'))}</b>
+              <b className="pf-accent text-sm mobile:text-xs text-gold text-right whitespace-nowrap">{fmtGold(priceOf(fish, info?.form ?? 'normal'))}</b>
             </div>
             {info?.isBig && (
               <span className="flex items-center gap-1 text-xs text-gold">
-                <PixelIcon glyph="crown" size={12} />월척 <span className="pf-accent">상위 {info.percentile}%</span>
+                <PixelIcon glyph="crown" size={13} />월척 <span className="pf-accent">상위 {info.percentile}%</span>
               </span>
             )}
           </div>

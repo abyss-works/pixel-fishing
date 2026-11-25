@@ -186,3 +186,13 @@ export const dailyFortunes = pgTable('daily_fortunes', {
   index: smallint('index').notNull(),
   createdAt: at('created_at').notNull().defaultNow(),
 }, t => [primaryKey({ columns: [t.userId, t.day] })]);
+
+export const httpMetricsDaily = pgTable('http_metrics_daily', {
+  day: date('day', { mode: 'string' }).notNull(),
+  routeGroup: text('route_group').notNull(),
+  total: bigint('total', { mode: 'number' }).notNull().default(0),
+  status426: bigint('status_426', { mode: 'number' }).notNull().default(0),
+  status429: bigint('status_429', { mode: 'number' }).notNull().default(0),
+  status5xx: bigint('status_5xx', { mode: 'number' }).notNull().default(0),
+  updatedAt: at('updated_at').notNull().defaultNow(),
+}, t => [primaryKey({ columns: [t.day, t.routeGroup] })]);

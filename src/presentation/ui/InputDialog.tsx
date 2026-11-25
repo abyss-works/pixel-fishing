@@ -4,12 +4,13 @@ import Button from './Button';
 import Modal from './Modal';
 import ModalCard from './ModalCard';
 import TextArea from './TextArea';
+import type { WindowLayer } from './openWindows';
 
 // 입력 창 — 긴 값(코드 등)을 붙여넣어 받는다. 닫기(X·Esc·바깥 클릭)는 취소다.
 // 빈 값이면 확정 버튼이 잠긴다.
 export default function InputDialog({ layer = 'app', title, body, label, placeholder, confirmLabel, onSubmit, onCancel }: {
-  /** 띄울 레이어 — 게임 안 입력 창은 stage, 그 밖은 app(기본) */
-  layer?: 'app' | 'stage';
+  /** 띄울 레이어 — 게임 안 입력 창은 stage, 개발 도구 안은 devtools, 그 밖은 app(기본) */
+  layer?: WindowLayer;
   title: string;
   body?: ReactNode;
   /** 입력칸의 접근성 이름 */
@@ -28,5 +29,7 @@ export default function InputDialog({ layer = 'app', title, body, label, placeho
                 onChange={e => setValue(e.target.value)} autoFocus />
     </ModalCard>
   );
-  return layer === 'stage' ? <Modal layer="stage" onClose={onCancel}>{card}</Modal> : <Modal layer="app" bare onClose={onCancel}>{card}</Modal>;
+  if (layer === 'stage') return <Modal layer="stage" onClose={onCancel}>{card}</Modal>;
+  if (layer === 'devtools') return <Modal layer="devtools" bare onClose={onCancel}>{card}</Modal>;
+  return <Modal layer="app" bare onClose={onCancel}>{card}</Modal>;
 }

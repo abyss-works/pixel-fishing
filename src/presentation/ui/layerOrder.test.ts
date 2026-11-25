@@ -212,6 +212,107 @@ const MODAL_LAYER_COMPONENTS = [
   { name: 'AccountModal', defaultLayer: null },
 ] as const;
 
+interface DialogHookCall {
+  fn: 'confirm' | 'input' | 'notice';
+  layer: LayerAttr | undefined;
+}
+
+/** `useDialogs()`의 `confirm`/`input`/`notice` 객체 리터럴 호출과 최상위 `layer` 옵션을 읽는다 */
+function dialogHookCalls(source: string): DialogHookCall[] {
+  if (!/\buseDialogs\b/.test(source)) return [];
+  const calls: DialogHookCall[] = [];
+  const skipStringOrComment = (i: number): number | null => {
+    const c = source[i];
+    if (c === '/' && source[i + 1] === '/') {
+      const nl = source.indexOf('\n', i + 2);
+      return nl < 0 ? source.length : nl + 1;
+    }
+    if (c === '/' && source[i + 1] === '*') {
+      const end = source.indexOf('*/', i + 2);
+      return end < 0 ? source.length : end + 2;
+    }
+    if (c === '"' || c === "'" || c === '`') {
+      let k = i + 1;
+      for (; k < source.length; k++) {
+        if (source[k] === '\\') { k++; continue; }
+        if (source[k] === c) return k + 1;
+      }
+      return source.length;
+    }
+    return null;
+  };
+  const readObjLayer = (objStart: number, objEnd: number): LayerAttr | undefined => {
+    let depth = 0;
+    let i = objStart + 1;
+    while (i < objEnd) {
+      const jumped = skipStringOrComment(i);
+      if (jumped !== null) { i = jumped; continue; }
+      const c = source[i];
+      if (c === '{' || c === '[' || c === '(') { depth++; i++; continue; }
+      if (c === '}' || c === ']' || c === ')') { depth--; i++; continue; }
+      if (depth === 0 && /[\w$]/.test(c)) {
+        const start = i;
+        while (i < objEnd && /[\w$]/.test(source[i])) i++;
+        const key = source.slice(start, i);
+        let j = i;
+        while (j < objEnd && /\s/.test(source[j])) j++;
+        if (key === 'layer' && (source[j] === ':' || source[j] === ',' || source[j] === '}')) {
+          if (source[j] !== ':') return { kind: 'expr', raw: 'layer' };
+          j++;
+          while (j < objEnd && /\s/.test(source[j])) j++;
+          if (source[j] === '"' || source[j] === "'") {
+            const q = source[j++];
+            const valStart = j;
+            while (j < objEnd && source[j] !== q) { if (source[j] === '\\') j++; j++; }
+            return { kind: 'literal', value: source.slice(valStart, j) };
+          }
+          const valStart = j;
+          let vDepth = 0;
+          while (j < objEnd) {
+            const sj = skipStringOrComment(j);
+            if (sj !== null) { j = sj; continue; }
+            const ch = source[j];
+            if (ch === '{' || ch === '[' || ch === '(') vDepth++;
+            else if (ch === '}' || ch === ']' || ch === ')') {
+              if (vDepth === 0) break;
+              vDepth--;
+            } else if (ch === ',' && vDepth === 0) break;
+            j++;
+          }
+          return { kind: 'expr', raw: source.slice(valStart, j).trim() };
+        }
+        continue;
+      }
+      i++;
+    }
+    return undefined;
+  };
+
+  for (let i = 0; i < source.length; i++) {
+    const jumped = skipStringOrComment(i);
+    if (jumped !== null) { i = jumped - 1; continue; }
+    if (!/[a-z]/.test(source[i])) continue;
+    if (i > 0 && /[.\w$]/.test(source[i - 1])) continue;
+    const match = /^(confirm|input|notice)\s*\(\s*\{/.exec(source.slice(i));
+    if (!match) continue;
+    const objStart = i + match[0].length - 1;
+    let depth = 0;
+    let end = objStart;
+    for (; end < source.length; end++) {
+      const sj = skipStringOrComment(end);
+      if (sj !== null) { end = sj - 1; continue; }
+      if (source[end] === '{') depth++;
+      else if (source[end] === '}') {
+        depth--;
+        if (depth === 0) break;
+      }
+    }
+    calls.push({ fn: match[1] as DialogHookCall['fn'], layer: readObjLayer(objStart, end) });
+    i = end;
+  }
+  return calls;
+}
+
 /** 해당 소스 파일이 `app` 레이어 모달/대화상자를 사용하는지(생략 시 기본값 `app` 폴백 포함) 판정한다 */
 function usesAppLayerModal(source: string): boolean {
   for (const { name, defaultLayer } of MODAL_LAYER_COMPONENTS) {
@@ -225,6 +326,11 @@ function usesAppLayerModal(source: string): boolean {
       if (layer.kind === 'expr' && /['"`]app['"`]/.test(layer.raw)) return true;
     }
   }
+  for (const call of dialogHookCalls(source)) {
+    if (!call.layer) return true;
+    if (call.layer.kind === 'literal' && call.layer.value === 'app') return true;
+    if (call.layer.kind === 'expr' && (call.layer.raw === 'layer' || /['"`]app['"`]/.test(call.layer.raw))) return true;
+  }
   return false;
 }
 
@@ -232,12 +338,12 @@ function usesAppLayerModal(source: string): boolean {
 const tokens = Object.fromEntries([...css.matchAll(/--z-([a-z-]+):\s*(\d+);/g)].map(m => [m[1], Number(m[2])]));
 
 describe('화면 층 - z 토큰 순서', () => {
-  it('아래부터 stage-hud, stage-status, stage-card, catch-fx, chrome, menu-row, stage-modal, tabs, app-modal, blocker, toast, veil, tooltip, devtools 엄격 오름차순이다', () => {
+  it('아래부터 stage-hud, stage-status, stage-card, catch-fx, chrome, menu-row, stage-modal, toast, tabs, app-modal, blocker, veil, tooltip, devtools 엄격 오름차순이다', () => {
     const order = [
       'stage-hud', 'stage-status', 'stage-card', 'catch-fx',
-      'chrome', 'menu-row', 'stage-modal',
+      'chrome', 'menu-row', 'stage-modal', 'toast',
       'tabs', 'app-modal', 'blocker',
-      'toast', 'veil', 'tooltip', 'devtools',
+      'veil', 'tooltip', 'devtools',
     ];
     const values = order.map(name => tokens[name]);
     expect(values.every(v => typeof v === 'number')).toBe(true);
@@ -245,12 +351,11 @@ describe('화면 층 - z 토큰 순서', () => {
     expect(new Set(values).size).toBe(values.length);
   });
 
-  it('창 위 1줄 알림(toast)은 앱 모달·차단기·탭 줄·시트보다 위이고 전환 덮개와 툴팁보다 아래다', () => {
-    expect(tokens['toast']).toBeGreaterThan(tokens['blocker']);
-    expect(tokens['toast']).toBeGreaterThan(tokens['app-modal']);
-    expect(tokens['toast']).toBeGreaterThan(tokens['tabs']);
-    expect(tokens['toast']).toBeLessThan(tokens['veil']);
-    expect(tokens['toast']).toBeLessThan(tokens['tooltip']);
+  it('스테이지 위 1줄 알림(toast)은 스테이지 창보다 위이고 탭 줄·시트·앱 모달·차단기보다 아래다', () => {
+    expect(tokens['toast']).toBeGreaterThan(tokens['stage-modal']);
+    expect(tokens['toast']).toBeLessThan(tokens['tabs']);
+    expect(tokens['toast']).toBeLessThan(tokens['app-modal']);
+    expect(tokens['toast']).toBeLessThan(tokens['blocker']);
   });
 
   it('스테이지 창은 채팅·헤더·펼친 메뉴보다 위이고 탭 줄·시트보다 아래다', () => {
@@ -308,6 +413,7 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
     ['layouts/sidebar/index.tsx', '--z-tabs'],
     ['views/overlays/update/LoadingOverlay.tsx', '--z-veil'],
     ['ui/TooltipBubble.tsx', '--z-tooltip'],
+    ['ui/Modal.tsx', '--z-devtools'],
     ['views/devtools/DevTools.tsx', '--z-devtools'],
   ])('%s는 %s를 쓴다', (path, token) => {
     expect(src(path)).toContain(token);
@@ -321,16 +427,22 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
     expect(src('layouts/game-stage/FerryVeil.tsx')).toContain('createPortal');
   });
 
-  it('앱 창은 공용 창 컴포넌트가 정한 자리로 포털하고, 스테이지 창은 닫을 수 없어도 제자리(스테이지 안)에 둔다', () => {
+  it('앱 창은 공용 창 컴포넌트가 정한 자리로 포털하고, 스테이지 창은 닫을 수 없어도 제자리(스테이지 안)에 두며, 개발 도구 창은 body로 포털한다', () => {
     const modal = src('ui/Modal.tsx');
     expect(modal).toContain('useWindowHost()');
-    expect(modal).toContain("if (layer !== 'app') return modal;");
+    expect(modal).toContain("if (layer === 'stage') return modal;");
     expect(modal).toContain('createPortal(modal, windowHost)');
+    expect(modal).toContain('createPortal(modal, document.body)');
     expect(src('views/overlays/bounty/EncounterModal.tsx')).toMatch(/layer="stage"/);
   });
 
-  it('닫을 수 없는 앱 창(새 버전 안내, 세션 교체 안내, 저장 안 됨 안내)은 스테이지 창이 아니다', () => {
-    for (const path of ['views/overlays/update/UpdateModal.tsx', 'views/overlays/update/SessionReplacedModal.tsx', 'views/overlays/update/UnsavedModal.tsx']) {
+  it('닫을 수 없는 앱 창(새 버전 안내, 세션 교체 안내, 저장 안 됨 안내, 이용약관 동의)은 스테이지 창이 아니다', () => {
+    for (const path of [
+      'views/overlays/update/UpdateModal.tsx',
+      'views/overlays/update/SessionReplacedModal.tsx',
+      'views/overlays/update/UnsavedModal.tsx',
+      'views/overlays/account/ConsentModal.tsx',
+    ]) {
       expect(src(path)).toContain('closable={false}');
       expect(src(path)).not.toContain('layer="stage"');
     }
@@ -384,7 +496,9 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
       'views/game/tabs/bag/ArtifactDetail.tsx',
       'views/game/tabs/settings/SettingsTab.tsx',
       'views/overlays/account/AccountModal.tsx',
+      'views/overlays/account/ConsentModal.tsx',
       'views/overlays/account/MyInfoModal.tsx',
+      'views/overlays/facility/EnergyPanel.tsx',
       'views/overlays/settings/SettingsModal.tsx',
       'views/overlays/codes/CodeModal.tsx',
       'views/overlays/letter/LetterModal.tsx',
@@ -442,12 +556,83 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
     expect(usesAppLayerModal('<InputDialog title="입력" onSubmit={() => {}} onCancel={() => {}} />')).toBe(true);
     expect(usesAppLayerModal('<NoticeDialog title="안내" onClose={() => {}} />')).toBe(true);
     expect(usesAppLayerModal('// <ConfirmDialog title="주석" />')).toBe(false);
+
+    // useDialogs() 호출의 layer 생략·app·devtools·stage 판정
+    expect(usesAppLayerModal("const { notice } = useDialogs(); void notice({ title: '안내', body: '내용' });")).toBe(true);
+    expect(usesAppLayerModal("const { input } = useDialogs(); void input({ layer: 'app', title: '입력', label: '값', confirmLabel: '확인' });")).toBe(true);
+    expect(usesAppLayerModal("const { notice, input } = useDialogs(); void notice({ layer: 'devtools', title: '안내', body: '내용' }); void input({ layer: 'devtools', title: '입력', label: '값', confirmLabel: '확인' });")).toBe(false);
+    expect(usesAppLayerModal("const { confirm } = useDialogs(); void confirm({ layer: 'stage', title: '확인', body: '내용', confirmLabel: '확인' });")).toBe(false);
   });
 
-  it('fixed 위치 지정은 앱 셸·모달 백드롭·시트·전환 덮개·토스트·툴팁·개발도구 화이트리스트만 허용한다', () => {
+  it('개발 도구(views/devtools)의 모달·대화상자는 모두 layer="devtools"로 열어야 한다', () => {
+    const devtoolsFiles = sources.filter(f => f.path.startsWith('views/devtools/'));
+    const offenders: string[] = [];
+    for (const f of devtoolsFiles) {
+      for (const call of dialogHookCalls(f.src)) {
+        if (!call.layer || call.layer.kind !== 'literal' || call.layer.value !== 'devtools') {
+          offenders.push(`${f.path}: useDialogs.${call.fn}`);
+        }
+      }
+      for (const { name } of MODAL_LAYER_COMPONENTS) {
+        for (const tag of jsxOpeningTags(f.src, name)) {
+          const layer = readOwnLayerAttr(tag);
+          if (!layer || layer.kind !== 'literal' || layer.value !== 'devtools') {
+            offenders.push(`${f.path}: ${tag}`);
+          }
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('사이드바 탭(views/game/tabs)과 가방 기운 얻기(EnergyPanel)는 스테이지 모달이 아니라 앱 모달(layer="app")만 사용한다', () => {
+    const tabFiles = sources.filter(f => f.path.startsWith('views/game/tabs/'));
+    const energyPanel = src('views/overlays/facility/EnergyPanel.tsx');
+    const facilityModal = src('views/overlays/facility/FacilityModal.tsx');
+    const gameTabs = src('views/game/tabs/GameTabs.tsx');
+    const gameView = src('views/game/GameView.tsx');
+
+    const offenders: string[] = [];
+    for (const f of [...tabFiles, { path: 'views/overlays/facility/EnergyPanel.tsx', src: energyPanel }]) {
+      for (const { name } of MODAL_LAYER_COMPONENTS) {
+        for (const tag of jsxOpeningTags(f.src, name)) {
+          const layer = readOwnLayerAttr(tag);
+          if (layer?.kind === 'literal' && layer.value !== 'app') offenders.push(`${f.path}: ${tag}`);
+          if (!layer && (name === 'Modal' || name === 'AccountModal')) offenders.push(`${f.path}: ${tag}`);
+        }
+      }
+      for (const call of dialogHookCalls(f.src)) {
+        if (call.layer?.kind === 'literal' && call.layer.value !== 'app') {
+          offenders.push(`${f.path}: useDialogs.${call.fn}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+    const energyModalTags = jsxOpeningTags(energyPanel, 'Modal');
+    expect(energyModalTags.length).toBeGreaterThan(0);
+    for (const tag of energyModalTags) {
+      expect(readOwnLayerAttr(tag)).toEqual({ kind: 'literal', value: 'app' });
+    }
+    expect(facilityModal).not.toContain('EnergyPanel');
+    expect(gameTabs).not.toContain('onOpenEnergy');
+    expect(gameView).not.toContain('onOpenEnergy');
+  });
+
+  it('모바일 시트의 WindowSlot은 z-(--z-tabs)나 fixed 쌓임 맥락 바깥에 놓여 시트에서 연 앱 창이 탭 줄에 가리지 않는다', () => {
+    const sidebar = src('layouts/sidebar/index.tsx');
+    const slotAt = sidebar.indexOf('<WindowSlot>');
+    const sectionAt = sidebar.lastIndexOf('<section', slotAt);
+    expect(slotAt).toBeGreaterThan(-1);
+    expect(sectionAt).toBeGreaterThan(-1);
+    const sectionTag = sidebar.slice(sectionAt, sidebar.indexOf('>', sectionAt) + 1);
+    expect(sectionTag).not.toContain('z-(--z-tabs)');
+    expect(sectionTag).not.toMatch(/\bfixed\b/);
+    expect(sectionTag).toContain('contents');
+  });
+
+  it('fixed 위치 지정은 앱 셸·모달 백드롭·시트·전환 덮개·툴팁·개발도구 화이트리스트만 허용한다', () => {
     const FIXED_WHITELIST = new Set([
       'ui/Modal.tsx',
-      'ui/FloatingToastLayer.tsx',
       'ui/TooltipBubble.tsx',
       'layouts/game-stage/FerryVeil.tsx',
       'layouts/sidebar/index.tsx',
@@ -470,6 +655,20 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
       .map(f => f.path)
       .sort();
     expect(users).toEqual([...FIXED_WHITELIST].sort());
+  });
+
+  it('FloatingToastLayer는 fixed가 아닌 absolute로 GameStageLayout 안에 놓여 사이드바와 앱 창을 가리지 않는다', () => {
+    const toastSrc = src('ui/FloatingToastLayer.tsx');
+    expect(toastSrc).toContain('absolute');
+    expect(toastSrc).not.toMatch(/(?<![\w-])fixed(?![\w-])/);
+
+    const gameViewSrc = src('views/game/GameView.tsx');
+    const stageStart = gameViewSrc.indexOf('<GameStageLayout>');
+    const stageEnd = gameViewSrc.indexOf('</GameStageLayout>');
+    const toastAt = gameViewSrc.indexOf('<FloatingToastLayer');
+    expect(stageStart).toBeGreaterThan(-1);
+    expect(toastAt).toBeGreaterThan(stageStart);
+    expect(toastAt).toBeLessThan(stageEnd);
   });
 });
 

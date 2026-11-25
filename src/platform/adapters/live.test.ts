@@ -5,6 +5,7 @@ import { BUILD_ID } from '../../buildId';
 import { APP_VERSION } from '../../version';
 import { subscribeFailure } from '../../core/errors';
 import type { AppError } from '../../core/errors';
+import { subscribeConsentRequired } from './requestFailure';
 
 class FakeSocket {
   static all: FakeSocket[] = [];
@@ -12,13 +13,13 @@ class FakeSocket {
   sent: string[] = [];
   onopen: (() => void) | null = null;
   onmessage: ((e: { data: string }) => void) | null = null;
-  onclose: ((e: { code: number }) => void) | null = null;
+  onclose: ((e: { code: number; reason?: string }) => void) | null = null;
   constructor() { FakeSocket.all.push(this); }
   send(data: string) { this.sent.push(data); }
-  close() { this.readyState = 3; this.onclose?.({ code: 1000 }); }
+  close() { this.readyState = 3; this.onclose?.({ code: 1000, reason: '' }); }
   // 서버 쪽 사건
   accept() { this.readyState = 1; this.onopen?.(); }
-  drop(code = 1006) { this.readyState = 3; this.onclose?.({ code }); }
+  drop(code = 1006, reason = '') { this.readyState = 3; this.onclose?.({ code, reason }); }
 }
 
 const last = () => FakeSocket.all[FakeSocket.all.length - 1];
@@ -89,6 +90,28 @@ describe('connectLive', () => {
     expect(FakeSocket.all).toHaveLength(1);
     expect(failures).toHaveLength(1);
     expect(failures[0].kind).toBe('outdated');
+  });
+
+  it('서버가 1008 consent-required로 닫으면 무한 재연결 백오프를 중단하고 약관 확인 알림을 보낸다', () => {
+    const onConsent = vi.fn();
+    const off = subscribeConsentRequired(onConsent);
+    connect();
+    last().drop(1008, 'consent-required');
+    vi.advanceTimersByTime(LIVE_RETRY_MAX_MS * 2);
+    off();
+    expect(FakeSocket.all).toHaveLength(1);
+    expect(onConsent).toHaveBeenCalledTimes(1);
+  });
+
+  it('사유가 consent-required가 아닌 1008 종료는 기존처럼 재연결한다', () => {
+    const onConsent = vi.fn();
+    const off = subscribeConsentRequired(onConsent);
+    connect();
+    last().drop(1008, '');
+    vi.advanceTimersByTime(LIVE_RETRY_MIN_MS);
+    off();
+    expect(FakeSocket.all).toHaveLength(2);
+    expect(onConsent).not.toHaveBeenCalled();
   });
 
   it('send는 연결돼 있을 때만 보낸다', () => {

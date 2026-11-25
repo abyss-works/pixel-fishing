@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { GAME_DAY_RESET_TEXT } from '../../../../game/rules/time.js';
 import Button from '../../../ui/Button';
 import KeyValueRow from '../../../ui/KeyValueRow';
+import PixelIcon from '../../../ui/PixelIcon';
 import SharedProgressMeter from '../../../ui/ProgressMeter';
 import ProgressCount from '../../../ui/ProgressCount';
 import Tip from '../../../ui/Tip';
@@ -20,13 +21,12 @@ export function BoardRows({ rows }: { rows: { key: string; label: ReactNode; val
   );
 }
 
-/** 수주 버튼 — 누를 수 없는 이유가 있으면 그 이유를, 없으면 수주 규칙 설명(있을 때)을 툴팁으로 보인다 */
-export function AcceptButton({ disabled, reason, help, onClick }: {
-  disabled: boolean; reason: string | null; help?: string; onClick: () => void;
+/** 수주 버튼 — 누를 수 없는 이유가 있으면 그 이유를 툴팁으로 보인다 */
+export function AcceptButton({ disabled, reason, onClick }: {
+  disabled: boolean; reason: string | null; onClick: () => void;
 }) {
   const button = <Button variant="primary" full disabled={disabled} onClick={onClick}>수주</Button>;
-  const tip = reason ?? help;
-  return tip ? <Tip wraps text={tip} className="block">{button}</Tip> : button;
+  return reason ? <Tip wraps text={reason} className="block">{button}</Tip> : button;
 }
 
 /** 진행 막대와 "진행/목표" - 수배판 일반 의뢰 카드와 의뢰 창 카드가 함께 쓴다 */
@@ -87,7 +87,10 @@ export function NamedCardHead({ title, titleTip, traceMins }: {
 }) {
   return (
     <div className="flex items-baseline justify-between gap-2 h-6">
-      <b className="text-base text-epic truncate">{titleTip ? <Tip text={titleTip}>{title}</Tip> : title}</b>
+      <b className="inline-flex items-center gap-1.5 text-base text-named truncate min-w-0">
+        <PixelIcon glyph="target" size={13} className="shrink-0" />
+        <span className="truncate">{titleTip ? <Tip text={titleTip}>{title}</Tip> : title}</span>
+      </b>
       {traceMins !== null && <TraceTime mins={traceMins} />}
     </div>
   );

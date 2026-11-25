@@ -21,6 +21,8 @@ const BORDER = {
   rare: 'border-rare',
   epic: 'border-epic',
   legend: 'border-legend',
+  mutation: 'border-mutation',
+  named: 'border-named',
 } as const;
 
 export type InsetBorder = keyof typeof BORDER;

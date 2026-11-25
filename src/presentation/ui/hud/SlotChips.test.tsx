@@ -26,23 +26,29 @@ describe('SlotChips (보너스 통합 칩)', () => {
     expect(tip).toHaveTextContent('인도양 항로가 열리면 도시락과 미끼를 쓸 수 있어요.');
   });
 
-  it('요리가 열린 뒤 활성 효과가 없으면 네모 점과 흐린 효과 0을 보이고, 툴팁에 없음 안내를 연다', () => {
-    render(<SlotChips game={{ ...newState(), boat: COOKING_UNLOCK_BOAT }} accountState="account" />);
-    const group = screen.getByRole('group', { name: '활성 효과 없음' });
-    expect(group).toHaveTextContent('효과0');
-    expect(group.className).toContain('text-text-dim');
-    const dot = group.querySelector('span[aria-hidden="true"]')!;
+  it('요리가 열린 뒤 활성 효과가 없으면 네모 점과 흐린 효과 0 버튼을 보이고, 호버 시 4행 2열 최소 표를 연다', () => {
+    const onOpenEffects = vi.fn();
+    render(<SlotChips game={{ ...newState(), boat: COOKING_UNLOCK_BOAT }} accountState="account" onOpenEffects={onOpenEffects} />);
+    const btn = screen.getByRole('button', { name: '활성 효과 없음' });
+    expect(btn).toHaveTextContent('효과0');
+    expect(btn.className).toContain('text-text-dim');
+    const dot = btn.querySelector('span[aria-hidden="true"]')!;
     expect(dot.className).toContain('size-1.5');
     expect(dot.className).not.toContain('rounded-full');
 
-    fireEvent.mouseEnter(group);
+    fireEvent.mouseEnter(btn);
     const tip = screen.getByRole('tooltip');
-    expect(within(tip).getByText('없음')).toBeInTheDocument();
-    expect(tip).toHaveTextContent('적용 중인 요리나 비약, 운세가 없어요.');
+    expect(tip).toHaveTextContent('도시락없음');
+    expect(tip).toHaveTextContent('미끼없음');
+    expect(tip).toHaveTextContent('비약없음');
+    expect(tip).toHaveTextContent('운세없음');
+
+    fireEvent.click(btn);
+    expect(onOpenEffects).toHaveBeenCalledTimes(1);
   });
 
-  it('도시락, 다중 미끼, 비약, 오늘의 운세가 모두 켜져도 React key 중복 경고 없이 한 칩에 활성 수를 모으고 툴팁에 등급색과 남은 시간을 보인다', () => {
-    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  it('활성 효과가 있으면 한 칩에 활성 수를 모으고, 호버 시 4행 2열 최소 정보만 보이며 클릭 시 상세 창 콜백을 부른다', () => {
+    const onOpenEffects = vi.fn();
     const day = gameDayOf(NOW);
     const game: GameState = {
       ...newState(),
@@ -56,30 +62,46 @@ describe('SlotChips (보너스 통합 칩)', () => {
       potions: { 'luck-small': day },
       fortune: { day, kind: 'shadow', index: 5 },
     };
-    render(<SlotChips game={game} accountState="account" />);
-    const groups = screen.getAllByRole('group');
-    expect(groups).toHaveLength(1);
-    expect(groups[0]).toHaveAttribute('aria-label', '활성 효과 5개');
-    expect(groups[0]).toHaveTextContent('효과5');
-    expect(groups[0].className).toContain('border-accent');
-    expect(errSpy).not.toHaveBeenCalled();
-    errSpy.mockRestore();
+    render(<SlotChips game={game} accountState="account" onOpenEffects={onOpenEffects} />);
+    const btn = screen.getByRole('button', { name: '활성 효과 5개' });
+    expect(btn).toHaveTextContent('효과5');
+    expect(btn.className).toContain('border-accent');
 
-    fireEvent.mouseEnter(groups[0]);
+    fireEvent.mouseEnter(btn);
     const tip = screen.getByRole('tooltip');
-    expect(within(tip).getByText('5개 적용 중')).toBeInTheDocument();
-    expect(within(tip).getByText('가루디야')).toBeInTheDocument();
-    expect(within(tip).getByText('롱페퍼 미끼')).toBeInTheDocument();
-    expect(within(tip).getByText('(희귀)')).toHaveAttribute('data-rarity', 'rare');
-    expect(within(tip).getByText('큐베브 미끼')).toBeInTheDocument();
-    expect(within(tip).getByText('(영웅)')).toHaveAttribute('data-rarity', 'epic');
-    expect(within(tip).getByText('작은 바다 영약')).toBeInTheDocument();
-    expect(within(tip).getByText('(특수)')).toHaveAttribute('data-rarity', 'special');
-    expect(within(tip).getByText('오늘의 운세')).toBeInTheDocument();
-    expect(within(tip).getByText('그림자 운')).toBeInTheDocument();
-    expect(within(tip).getByText('네임드')).toHaveClass('text-epic');
-    expect(within(tip).getByText('1시간 남음')).toBeInTheDocument();
-    expect(within(tip).getByText('3분 남음')).toBeInTheDocument();
-    expect(within(tip).getAllByText('하루 동안')).toHaveLength(2);
+    expect(tip).toHaveTextContent('도시락활성');
+    expect(tip).toHaveTextContent('미끼2/2');
+    expect(tip).toHaveTextContent('비약활성');
+    expect(tip).toHaveTextContent('운세그림자');
+    expect(within(tip).queryByText('5개 적용 중')).toBeNull();
+    expect(within(tip).queryByText('가루디야')).toBeNull();
+    expect(within(tip).queryByText('1시간 남음')).toBeNull();
+
+    fireEvent.click(btn);
+    expect(onOpenEffects).toHaveBeenCalledTimes(1);
+  });
+
+  it('터치 포인터에서는 칩을 눌러도 툴팁이 이중으로 열리지 않고 상세 창 콜백만 실행한다', () => {
+    const origMatchMedia = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query === '(pointer: coarse)',
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      onchange: null,
+      dispatchEvent: () => false,
+    })) as typeof window.matchMedia;
+    try {
+      const onOpenEffects = vi.fn();
+      render(<SlotChips game={{ ...newState(), boat: COOKING_UNLOCK_BOAT }} accountState="account" onOpenEffects={onOpenEffects} />);
+      const btn = screen.getByRole('button', { name: '활성 효과 없음' });
+      fireEvent.click(btn);
+      expect(onOpenEffects).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('tooltip')).toBeNull();
+    } finally {
+      window.matchMedia = origMatchMedia;
+    }
   });
 });

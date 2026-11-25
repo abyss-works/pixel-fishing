@@ -17,20 +17,20 @@ describe('구글 연결 복귀', () => {
   it('다른 표지가 account_already_linked_to_different_user를 받으면 확인 없이 다른 구글 계정 안내와 문의 줄을 보인다', () => {
     expect(back(GOOGLE_TAG.signIn, 'account_already_linked_to_different_user')).toEqual({
       kind: 'notice', title: '구글 계정 연결',
-      body: '이 구글 계정은 다른 계정에서 쓰고 있어 연결하지 않았어요.\n다른 구글 계정으로 연결해 주세요.\n이 구글 계정을 꼭 연결해야 한다면 편지로 문의해 주세요.',
+      body: '이 구글 계정은 다른 계정에서 쓰고 있어 연결하지 않았어요.\n다른 구글 계정으로 연결해 주세요.\n이 구글 계정을 꼭 연결해야 한다면 개발자에게 문의해 주세요.',
     });
   });
 
   it.each([GOOGLE_TAG.linkGuest, GOOGLE_TAG.signIn])('unable_to_link_account는 %s에서도 안내 창이다', tag => {
     expect(back(tag, 'unable_to_link_account')).toEqual({
       kind: 'notice', title: '구글 계정 연결',
-      body: '이 구글 계정으로는 연결할 수 없어요.\n다른 구글 계정으로 연결해 주세요.\n이 구글 계정을 꼭 연결해야 한다면 편지로 문의해 주세요.',
+      body: '이 구글 계정으로는 연결할 수 없어요.\n다른 구글 계정으로 연결해 주세요.\n이 구글 계정을 꼭 연결해야 한다면 개발자에게 문의해 주세요.',
     });
   });
 
   it.each(['email_account_exists', 'account_not_linked'])('%s는 다른 구글 계정 연결 또는 문의 안내다', code => {
     expect(bodyOf(back(GOOGLE_TAG.linkGuest, code))).toBe(
-      '이 구글 계정과 주소가 같은 기존 계정이 있어 연결하지 않았어요.\n다른 구글 계정으로 연결해 주세요.\n이 구글 계정을 꼭 연결해야 한다면 편지로 문의해 주세요.');
+      '이 구글 계정과 주소가 같은 기존 계정이 있어 연결하지 않았어요.\n다른 구글 계정으로 연결해 주세요.\n이 구글 계정을 꼭 연결해야 한다면 개발자에게 문의해 주세요.');
   });
 
   it('이미 구글을 연결한 계정이 다른 구글을 고르면 안내한다', () => {

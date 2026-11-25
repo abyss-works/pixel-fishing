@@ -61,8 +61,8 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
                            onClick={() => setI((i + 1) % forms.length)} />
             </div>
             {known
-              ? <LoreParagraph className="mt-auto px-3 pb-3 pt-2 text-sm leading-[1.8] text-text-dim">{form.lore}</LoreParagraph>
-              : <p className="mt-auto px-3 pb-3 pt-2 text-sm leading-[1.8] text-text-dim">…아직 만나지 못한 개체다. 어딘가에서 헤엄치고 있을 것이다.</p>}
+              ? <LoreParagraph className="mt-auto min-h-[6.5rem] px-3 pb-3 pt-2 text-sm leading-[1.8] text-text-dim">{form.lore}</LoreParagraph>
+              : <p className="mt-auto min-h-[6.5rem] px-3 pb-3 pt-2 text-sm leading-[1.8] text-text-dim">…아직 만나지 못한 개체다. 어딘가에서 헤엄치고 있을 것이다.</p>}
           </Inset>
         </TitledCell>
 

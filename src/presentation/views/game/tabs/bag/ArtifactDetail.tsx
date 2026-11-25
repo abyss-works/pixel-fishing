@@ -18,7 +18,7 @@ import Modal from '../../../../ui/Modal';
 import PageTitle from '../../../../ui/PageTitle';
 import Subheading from '../../../../ui/Subheading';
 import Tip from '../../../../ui/Tip';
-import { RarityText } from '../../../../ui/fish/RarityTag';
+import { GradeName } from '../../../../ui/fish/RarityTag';
 import type { Notify } from '../../../../ui/hud/messageFeed';
 import { fmtNum } from '../../../../ui/format';
 import {
@@ -40,6 +40,7 @@ export default function ArtifactDetail({ artifact, game, dispatch, setToast, onC
   const [busy, setBusy] = useState(false);
   const view = selectArtifactLevel(game, artifact);
   const { next } = view;
+  const displayLevel = view.status === 'unowned' ? 1 : view.level;
 
   const levelUp = async () => {
     setBusy(true);
@@ -61,10 +62,9 @@ export default function ArtifactDetail({ artifact, game, dispatch, setToast, onC
            header={
              <header className="mb-3 flex items-center gap-3 border-b border-line pb-2 pr-8">
                <ItemSprite kind="artifact" id={artifact.id} preset="hero" className="shrink-0" />
-               <div className="flex flex-wrap items-baseline gap-x-3 min-w-0">
-                 <PageTitle>{artifact.name}</PageTitle>
-                 <span className="text-sm"><RarityText rarity={artifact.grade} /> 유물</span>
-               </div>
+               <PageTitle className="min-w-0">
+                 <GradeName name={artifact.name} grade={artifact.grade} />
+               </PageTitle>
              </header>
            }
            footer={<Footer view={view} busy={busy} onLevelUp={levelUp} />}>
@@ -72,12 +72,14 @@ export default function ArtifactDetail({ artifact, game, dispatch, setToast, onC
         <LoreParagraph className="text-xs leading-[1.8] text-text-dim">{artifact.lore}</LoreParagraph>
         {view.hasLevel ? (
           <CompareTable
-            heads={next
-              ? [`현재(${levelText(view.level)})`, `강화 후(${levelText(next.level)})`]
-              : [`현재(${levelText(view.level)})`]}
+            heads={view.status === 'unowned'
+              ? [`획득 시(${levelText(1)})`]
+              : next
+                ? [`현재(${levelText(view.level)})`, `강화 후(${levelText(next.level)})`]
+                : [`현재(${levelText(view.level)})`]}
             rows={artifactEffectKeys(artifact).map(effect => ({
               label: artifactEffectLabel(effect),
-              value: artifactEffectValue(artifact, effect, view.level),
+              value: artifactEffectValue(artifact, effect, displayLevel),
               next: next ? artifactEffectValue(artifact, effect, next.level) : undefined,
             }))} />
         ) : <SystemRows artifact={artifact} />}

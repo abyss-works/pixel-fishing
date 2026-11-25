@@ -833,14 +833,14 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
     }
   });
 
-  it('설정 창에서 물고기 그래픽을 미리보기로 고른다 — 기본 그림 시작, 선택은 기기에 남는다', () => {
+  it('설정 창에서 물고기 그래픽을 미리보기로 고른다 — 기본 v1, 선택은 기기에 남는다', () => {
     seed();
     render(<App />);
     clickTab('설정');
     fireEvent.click(openerButton('설정'));
     expect(screen.getByRole('dialog', { name: '설정' })).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: /^기본 그림/ })).toHaveAttribute('aria-checked', 'true');
-    fireEvent.click(screen.getByRole('radio', { name: /^새 픽셀 그림/ }));
+    expect(screen.getByRole('radio', { name: /^v1/ })).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(screen.getByRole('radio', { name: /^v2/ }));
     expect(localStorage.getItem('pf-fish-art')).toBe('v2');
   });
 
@@ -1007,11 +1007,14 @@ describe('설정 — 내 정보 (문의 대응용 uid 노출)', () => {
     // 로컬은 로그인 상태로 가정하므로 가짜 계정이 설정 탭 요약에 뜬다(배포 빌드에선 실제 이메일 또는 '게스트')
     expect(screen.getByText('dev@localhost')).toBeInTheDocument();
     fireEvent.click(openerButton('내 정보'));
-    expect(screen.getByRole('dialog', { name: '내 정보' })).toBeInTheDocument();
+    const dialog = screen.getByRole('dialog', { name: '내 정보' });
+    expect(dialog).toBeInTheDocument();
     // body에 user-select:none이 걸려 있어 드래그 복사가 안 된다 → 버튼이 유일한 경로.
     // 화면은 가운데를 가리지만 복사는 전체 값이라, 버튼이 없으면 문의 대응이 불가능해진다.
     expect(screen.getByRole('button', { name: '복사' })).toBeInTheDocument();
-    expect(document.body.textContent).toContain('전체가 복사돼요');
+    expect(document.body.textContent).not.toContain('전체가 복사돼요');
+    fireEvent.mouseEnter(within(dialog).getByRole('heading', { name: '내 정보', level: 4 }).firstElementChild!);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('전체가 복사돼요');
   });
 });
 
@@ -1172,12 +1175,14 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     expect(screen.queryByText('해구의 이빨')).not.toBeInTheDocument();
   });
 
-  it('가방 유물 섹션 — 보유가 없으면 수배판 안내', () => {
+  it('가방 유물 섹션 — 기본 전체 보기에는 하단 안내가 없고 보유 중만 보기에서 보유가 없으면 수배판 안내를 보인다', () => {
     seed({});
     render(<App />);
     fireEvent.keyDown(document, { key: '2' });
     fireEvent.keyDown(document, { key: '2' });
     fireEvent.keyDown(document, { key: '2' });
+    expect(screen.queryByText(/수배판/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '보유 중만 보기' }));
     expect(screen.getByText(/수배판/)).toBeInTheDocument();
   });
 
@@ -1321,7 +1326,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     expect(screen.getByText('잉어')).toBeInTheDocument();
     expect(screen.queryByText('금빛 잉어')).not.toBeInTheDocument(); // 행이 갈리지 않는다
     expect(screen.getByText('×2')).toBeInTheDocument();
-    expect(screen.getAllByText(`${CARP * (1 + VARIANT_PRICE_MULT)}G`)).toHaveLength(2); // 행 소계 + 하단 판매 가능 합
+    expect(screen.getAllByText(`${CARP * (1 + VARIANT_PRICE_MULT)}G`)).toHaveLength(1); // 행 소계 (하단 판매 가능 금액 미노출)
     expect(screen.getByRole('img', { name: '돌연변이' })).toBeInTheDocument(); // 개체 줄의 아이콘
     expect(screen.getAllByRole('img', { name: '최대 크기' })).toHaveLength(2); // 최대는 폼별 — 일반·변이 각각
   });
@@ -1356,7 +1361,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     expect(normal.textContent).toBe('2');
     expect(normal.className).toContain('text-text');
     expect(variant.textContent).toBe('1');
-    expect(variant.className).toContain('text-epic');
+    expect(variant.className).toContain('text-mutation');
 
     // 안 들고 있는 종은 마릿수 줄 자체가 없다 — 가방은 보유 현황만 본다
     const empty = screen.getByLabelText('붕어 미보유');
@@ -1608,13 +1613,15 @@ describe('스탯창 — 자원 바 클릭 진입 (v0.6.1)', () => {
 });
 
 describe('아이템 — 가방 아이템 섹션', () => {
-  it('가방 아이템 섹션은 빈 안내를 보이고, 필드에 활성 미끼 오버레이가 없다', () => {
+  it('가방 아이템 섹션은 전체 보기에서 빈 안내 없이 항목 카드를 보이고 보유 중만 보기에서 빈 안내를 보이며 필드에 활성 미끼 오버레이가 없다', () => {
     seed({});
     render(<App />);
     fireEvent.keyDown(document, { key: '2' });
     fireEvent.keyDown(document, { key: '2' }); // 아이템
-    expect(screen.getByText('가진 아이템이 없어요.')).toBeInTheDocument();
+    expect(screen.queryByText('가진 아이템이 없어요.')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('활성 미끼')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '보유 중만 보기' }));
+    expect(screen.getByText('가진 아이템이 없어요.')).toBeInTheDocument();
   });
 });
 
@@ -1624,12 +1631,13 @@ describe('닉네임 (게스트명 표시·변경)', () => {
     render(<App />);
     clickTab(/설정/);
     fireEvent.click(openerButton('내 정보'));
-    const current = screen.getByLabelText('현재 닉네임');
-    await waitFor(() => expect(current.textContent).not.toContain('불러오는 중'));
-    expect(current.textContent).toContain('_');
-    fireEvent.change(screen.getByLabelText('새 닉네임'), { target: { value: '날치' } });
+    const current = screen.getByLabelText('현재 닉네임') as HTMLInputElement;
+    await waitFor(() => expect(current.value).not.toBe('불러오는 중'));
+    expect(current.value).toContain('_');
     fireEvent.click(screen.getByRole('button', { name: '변경' }));
-    await waitFor(() => expect(screen.getByLabelText('현재 닉네임')).toHaveTextContent('날치'));
+    fireEvent.change(screen.getByLabelText('새 닉네임'), { target: { value: '날치' } });
+    fireEvent.click(screen.getByRole('button', { name: '확인' }));
+    await waitFor(() => expect(screen.getByLabelText('현재 닉네임')).toHaveValue('날치'));
   });
 
   it('규칙에 어긋나는 이름은 보내지 않고 안내한다', async () => {
@@ -1637,12 +1645,14 @@ describe('닉네임 (게스트명 표시·변경)', () => {
     render(<App />);
     clickTab(/설정/);
     fireEvent.click(openerButton('내 정보'));
-    const current = screen.getByLabelText('현재 닉네임');
-    await waitFor(() => expect(current.textContent).not.toContain('불러오는 중'));
-    const before = current.textContent;
-    fireEvent.change(screen.getByLabelText('새 닉네임'), { target: { value: '__' } });
+    const current = screen.getByLabelText('현재 닉네임') as HTMLInputElement;
+    await waitFor(() => expect(current.value).not.toBe('불러오는 중'));
+    const before = current.value;
     fireEvent.click(screen.getByRole('button', { name: '변경' }));
-    await waitFor(() => expect(screen.getByLabelText('현재 닉네임')).toHaveTextContent(before!));
+    fireEvent.change(screen.getByLabelText('새 닉네임'), { target: { value: '__' } });
+    fireEvent.click(screen.getByRole('button', { name: '확인' }));
+    fireEvent.click(screen.getByRole('button', { name: '취소' }));
+    await waitFor(() => expect(screen.getByLabelText('현재 닉네임')).toHaveValue(before));
   });
 
   it('App은 GameView에 profileStatus prop을 직접 전달해 공용 저장소가 비워져도 불러오기 실패와 미설정을 구분한다', async () => {
@@ -1712,9 +1722,9 @@ describe('업데이트 소식 창 — 접속 시 이번 버전 소식과 새 설
 
     fireEvent.click(screen.getByRole('button', { name: /다음/ }));
     expect(screen.getByRole('dialog', { name: '새 설정' })).toBeInTheDocument();
-    const v1 = screen.getByRole('radio', { name: /^기본 그림/ });
-    const v2 = screen.getByRole('radio', { name: /^새 픽셀 그림/ });
-    expect(v1).toHaveAttribute('aria-checked', 'true'); // 기본 그림
+    const v1 = screen.getByRole('radio', { name: /^v1/ });
+    const v2 = screen.getByRole('radio', { name: /^v2/ });
+    expect(v1).toHaveAttribute('aria-checked', 'true'); // 기본 v1
     fireEvent.click(v2);
     expect(v2).toHaveAttribute('aria-checked', 'true');
     expect(localStorage.getItem('pf-fish-art')).toBe('v2');
@@ -1929,5 +1939,38 @@ describe('포구 출항 차단 후 로그인 복귀', () => {
     await waitFor(() => expect(sessionStorage.getItem('pf-sail-return')).toBeNull());
     await waitFor(() => expect(seenField.initialPos).toEqual(expectedResume));
     expect(seenField.region).toBe('village');
+  });
+
+  it('초기 세이브 로드 전 이용약관 동의 차단 시 전용 불투명 진입 화면 위에 모달을 띄운다', async () => {
+    seed({});
+    vi.resetModules();
+    vi.doMock('./platform/api', async importActual => {
+      const actual = await importActual<typeof import('./platform/api')>();
+      const base = actual.createApi();
+      Object.defineProperties(base.auth, {
+        isConfigured: { value: true, configurable: true },
+        ensureSession: { value: async () => 'uid-consent-entry', configurable: true },
+        currentAccount: { value: async () => ({ status: 'account', email: 'me@example.com' }), configurable: true },
+        getAccountConsent: {
+          value: async () => ({ required: true, version: '2026-11-25', effectiveAt: '2026-11-25T00:00:00.000Z' }),
+          configurable: true,
+        },
+      });
+      return {
+        ...actual,
+        readLastPosition: async () => null,
+        api: base,
+      };
+    });
+
+    try {
+      const { default: CloudApp } = await import('./App');
+      render(<CloudApp />);
+      await waitFor(() => expect(screen.getByRole('dialog', { name: '이용약관 동의' })).toBeInTheDocument());
+      expect(screen.getByText('PIXEL FISHING')).toBeInTheDocument();
+      expect(screen.getByText('2026년 11월 25일부터 이용약관이 시행돼요.')).toBeInTheDocument();
+    } finally {
+      vi.doUnmock('./platform/api');
+    }
   });
 });

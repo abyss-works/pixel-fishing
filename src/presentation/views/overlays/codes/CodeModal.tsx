@@ -119,8 +119,9 @@ export default function CodeModal({ dispatch, setToast, onClose }: {
       </SectionTitle>
       <CodeField label="쿠폰 코드" placeholder="예) 출항준비" submit={redeemCoupon} />
 
-      <SectionTitle>
-        <Tip text={'운영자가 따로 보내 드린 지원 코드를 붙여 넣으면 그 자산이 이 계정에 더해져요.\n한 번만 쓸 수 있어요.'}>지원 코드</Tip>
+      <SectionTitle className="flex items-baseline justify-between gap-2">
+        <Tip text="운영자가 따로 보내 드린 지원 코드를 붙여 넣으면 그 자산이 이 계정에 더해져요.">지원 코드</Tip>
+        <span className="text-2xs font-normal text-text-dim">한 번만 쓸 수 있어요</span>
       </SectionTitle>
       <CodeField label="지원 코드" placeholder="받은 코드를 붙여 넣기" submit={claimRelief} />
     </Modal>

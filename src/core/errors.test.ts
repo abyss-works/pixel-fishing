@@ -20,6 +20,8 @@ describe('실패 분류', () => {
     expect(POLICY.outdated.modal).toBe('update');
     // replaced: 다른 창이 활성 창이 됐다 — 진행은 서버에 안전, 이 창을 막고 새로고침으로 되찾는다
     expect(POLICY.replaced.modal).toBe('replaced');
+    // consent-required: 약관 수락 전까지 진행을 막고 확인 창을 연다
+    expect(POLICY['consent-required'].modal).toBe('consent');
     // bug: 완료된 액션은 이미 서버에 있다 + ErrorBoundary 화면과 겹친다
     expect(POLICY.bug.modal).toBeUndefined();
     expect(POLICY.restricted.modal).toBeUndefined();

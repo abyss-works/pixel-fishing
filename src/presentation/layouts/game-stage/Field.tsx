@@ -116,7 +116,7 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast'], game: Game
           kind: 'catch.encounterTicket',
           text: '흔적을 찾았어요. 화면 오른쪽 흔적 카드에서 추적을 눌러 보세요.',
           toastText: '네임드 흔적을 발견했어요.',
-          tone: 'epic',
+          tone: 'named',
           logTone: 'info',
         });
         alertEncounter(event.result.ticket);

@@ -17,6 +17,8 @@ export const adminKeys = {
   sessions: (userId: string | null, limit: number) => ['admin', 'sessions', userId, limit] as const,
   economy: (days: number) => ['admin', 'economy', days] as const,
   bountyFunnel: (days: number) => ['admin', 'bountyFunnel', days] as const,
+  onboardingFunnel: ['admin', 'onboardingFunnel'] as const,
+  httpMetrics: (days: number) => ['admin', 'httpMetrics', days] as const,
   balanceLive: (days: number) => ['admin', 'balanceLive', days] as const,
   userEvents: (uid: string) => ['admin', 'userEvents', uid] as const,
   userState: (uid: string) => ['admin', 'userState', uid] as const,

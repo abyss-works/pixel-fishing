@@ -43,23 +43,24 @@ export default function ScrollRow({ step = 0.8, className, innerClassName, style
     el?.scrollBy?.({ left: dir * el.clientWidth * step, behavior: 'smooth' });
   };
 
-  const arrow = (dir: 1 | -1, on: boolean) => (
-    <ArrowButton dir={dir} tone="edge"
-      className={cx('absolute top-0 bottom-0 z-1 w-4', dir < 0 ? 'left-0' : 'right-0', !on && 'hidden')}
-      onClick={() => page(dir)} />
-  );
-
   return (
-    // 좌우에 화살표 폭(w-4)만큼 늘 비워 둔다 — 화살표가 내용을 덮지 않고, 화살표가
-    // 생기고 사라질 때 내용 폭이 흔들리지 않는다.
-    <div className={cx('relative px-4', className)}>
-      {arrow(-1, edge.prev)}
+    // 화살표가 보이는 쪽에만 화살표 폭(w-4)만큼 여백을 두어 화살표가 내용을 덮지 않게 한다.
+    <div className={cx('relative', edge.prev && 'pl-4', edge.next && 'pr-4', className)}>
+      {edge.prev && (
+        <ArrowButton dir={-1} tone="edge"
+          className="absolute top-0 bottom-0 left-0 z-1 w-4"
+          onClick={() => page(-1)} />
+      )}
       <div ref={ref} onScroll={measure}
            className={cx('pf-scroll flex gap-1 overflow-x-auto overflow-y-hidden [&>*]:shrink-0', innerClassName)}
            style={style}>
         {children}
       </div>
-      {arrow(1, edge.next)}
+      {edge.next && (
+        <ArrowButton dir={1} tone="edge"
+          className="absolute top-0 bottom-0 right-0 z-1 w-4"
+          onClick={() => page(1)} />
+      )}
     </div>
   );
 }

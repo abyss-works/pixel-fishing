@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { COOKING_UNLOCK_BOAT } from '../../../game/content/cooking';
 import { api } from '../../../platform/api';
 import { newState } from '../../../game/rules/logic';
 import { TUTORIAL_IDS } from '../../../game/content/tutorials';
@@ -141,7 +142,7 @@ describe('GameView 패널 초기화', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('FloatingToastLayer는 GameStageLayout([container-type:size]) 바깥에 놓이고 앱 모달이 열려도 닫기 버튼이 동작한다', () => {
+  it('FloatingToastLayer는 GameStageLayout([data-game-stage]) 안에 놓이고 닫기 버튼이 동작한다', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const onDismissToast = vi.fn();
     render(
@@ -174,19 +175,58 @@ describe('GameView 패널 초기화', () => {
       </QueryClientProvider>,
     );
 
-    // 설정 앱 모달(layer="app")을 연 상태에서도 플로팅 토스트가 스테이지([data-game-stage]) 밖에 위치한다
-    fireEvent.click(screen.getByRole('button', { name: '설정' }));
-    const settingBtn = screen.getAllByRole('button', { name: '설정' }).find(b => b.hasAttribute('aria-pressed'))!;
-    fireEvent.click(settingBtn);
-    expect(screen.getByRole('dialog', { name: '설정' })).toBeInTheDocument();
-
     const stage = document.querySelector('[data-game-stage]')!;
     const toastStatus = screen.getAllByRole('status').find(el => el.textContent?.includes('골드가 모자라요.'))!;
-    expect(stage.contains(toastStatus)).toBe(false);
-    expect(toastStatus.parentElement?.className).toContain('fixed');
+    expect(stage.contains(toastStatus)).toBe(true);
+    expect(toastStatus.parentElement?.className).toContain('absolute');
+    expect(toastStatus.parentElement?.className).toContain('z-(--z-toast)');
     expect(toastStatus.parentElement?.className).toContain('pointer-events-none');
 
     fireEvent.click(screen.getByRole('button', { name: '알림 닫기' }));
     expect(onDismissToast).toHaveBeenCalledWith(99);
+  });
+
+  it('HUD 효과 칩을 누르면 적용 중인 효과 창이 열리고 전체 보너스 보기·가방 열기로 바로 이동한다', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <GameView
+          game={{ ...newState(), boat: COOKING_UNLOCK_BOAT, tutorials: [...TUTORIAL_IDS] }}
+          scene={{ kind: 'base', id: 'home' }}
+          entryPos={null}
+          placeSeq={0}
+          dispatch={() => ({ status: 'ok', state: newState(), result: { type: 'none' } })}
+          setToast={() => {}}
+          onScene={() => {}}
+          onPlace={() => {}}
+          onWarmup={() => {}}
+          log={[]}
+          syncLabel={null}
+          syncState="off"
+          guestProgress="nothing"
+          account="dev@localhost"
+          accountChecked={true}
+          accountFailed={false}
+          uid="u1"
+          nickname="테스터"
+          onRename={async () => null}
+          onAuthChanged={async () => {}}
+          onResync={async () => {}}
+        />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '활성 효과 없음' }));
+    expect(screen.getByRole('dialog', { name: '적용 중인 효과' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '전체 보너스 보기' }));
+    expect(screen.queryByRole('dialog', { name: '적용 중인 효과' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '보너스' }).className).toContain('active');
+    fireEvent.click(screen.getByRole('button', { name: '닫기' }));
+
+    fireEvent.click(screen.getByRole('button', { name: '활성 효과 없음' }));
+    fireEvent.click(screen.getByRole('button', { name: '가방 열기' }));
+    expect(screen.queryByRole('dialog', { name: '적용 중인 효과' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '아이템' })).toHaveAttribute('aria-pressed', 'true');
   });
 });

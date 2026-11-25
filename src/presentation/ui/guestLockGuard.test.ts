@@ -58,4 +58,20 @@ describe('게스트 잠금 가드', () => {
     const old = /계정을 만든 뒤|계정을 만든 후|계정이 있어야 들어갈|계정 관리에서 계정을 연결/;
     for (const f of [...sources, ...featureSources]) expect(f.src, f.path).not.toMatch(old);
   });
+
+  it('인라인·소형 버튼·카드 잠금(내 정보, 개발자에게, 플레이어 정보, 가방 아이템)은 바깥 자물쇠 배지와 외부 LockIcon을 쓰지 않는다', () => {
+    for (const path of [
+      'views/overlays/account/MyInfoModal.tsx',
+      'views/overlays/letter/LetterModal.tsx',
+      'views/overlays/live/PlayerInfo.tsx',
+      'views/game/tabs/bag/ItemSection.tsx',
+      'views/game/tabs/bag/ItemDetail.tsx',
+    ]) {
+      const src = sources.find(f => f.path === path)!.src;
+      expect(src, path).not.toMatch(/<LockIcon\b/);
+      const lockedTags = [...src.matchAll(/<Locked\b[^>]*>/g)].map(m => m[0]);
+      expect(lockedTags.length, path).toBeGreaterThan(0);
+      for (const tag of lockedTags) expect(tag, `${path}: ${tag}`).toContain('badge={false}');
+    }
+  });
 });

@@ -18,6 +18,20 @@ const mocks = vi.hoisted(() => ({
     live: { count: 0, online: [] },
   })),
   economy: vi.fn(async () => []),
+  onboardingFunnel: vi.fn(async (): Promise<unknown> => ({
+    eventsWindowDays: 7,
+    conversion: { totalUsers: 0, guestUsers: 0, googleLinkedUsers: 0, conversionRate: 0, medianMinutes: null, p90Minutes: null, buckets: [] },
+    tutorials: { totalUsers: 0, totalWithSave: 0, stages: [] },
+    steps: [],
+  })),
+  readHttpMetrics: vi.fn(async (): Promise<unknown> => ({
+    days: 30,
+    scope: 'app_server',
+    summary: { total: 0, status426: 0, status429: 0, status5xx: 0, rate426: 0, rate429: 0, rate5xx: 0 },
+    daily: [],
+    byRoute: [],
+    rows: [],
+  })),
   accountKind: vi.fn(async () => 'member' as const),
   revokeUserSessions: vi.fn(async () => 2),
   recordAdminAction: vi.fn(async () => {}),
@@ -43,6 +57,12 @@ vi.mock('./_data/admin.js', async () => {
     economy: mocks.economy,
   };
 });
+vi.mock('./_data/adminFunnel.js', () => ({
+  onboardingFunnel: mocks.onboardingFunnel,
+}));
+vi.mock('./_data/httpMetrics.js', () => ({
+  readHttpMetrics: mocks.readHttpMetrics,
+}));
 vi.mock('./_data/account.js', async () => {
   const actual = await vi.importActual<typeof import('./_data/account.js')>('./_data/account.js');
   return {
@@ -201,5 +221,39 @@ describe('api/admin 핸들러 단위 테스트', () => {
     expect(okRes).toMatchObject({ status: 200, body: { revoked: 3 } });
     expect(mocks.revokeUserSessions).toHaveBeenCalledWith(mocks.db, TARGET_UID);
     expect(mocks.recordAdminAction).toHaveBeenCalledWith(mocks.db, TARGET_UID, 'adminRevokeSessions', ADMIN_UID, { revoked: 3 });
+  });
+
+  it('GET ?q=onboardingFunnel은 온보딩 퍼널 조회를 호출한다', async () => {
+    const sample = {
+      eventsWindowDays: 7,
+      conversion: { totalUsers: 5, guestUsers: 3, googleLinkedUsers: 2, conversionRate: 0.4, medianMinutes: 15, p90Minutes: 60, buckets: [] },
+      tutorials: { totalUsers: 5, totalWithSave: 4, stages: [] },
+      steps: [],
+    };
+    mocks.onboardingFunnel.mockResolvedValueOnce(sample);
+    const res = await call('GET', { q: 'onboardingFunnel' });
+    expect(res).toMatchObject({ status: 200, body: sample });
+    expect(mocks.onboardingFunnel).toHaveBeenCalledWith(mocks.db);
+  });
+
+  it('GET ?q=httpMetrics는 기본 30일 또는 1~90일 범위로 조회하고 잘못된 기간은 400이다', async () => {
+    for (const bad of ['0', '91', 'abc']) {
+      expect(await call('GET', { q: 'httpMetrics', days: bad })).toMatchObject({ status: 400, body: { error: 'bad-days' } });
+    }
+    const sample = {
+      days: 7,
+      scope: 'app_server',
+      summary: { total: 100, status426: 1, status429: 2, status5xx: 3, rate426: 0.01, rate429: 0.02, rate5xx: 0.03 },
+      daily: [],
+      byRoute: [],
+      rows: [],
+    };
+    mocks.readHttpMetrics.mockResolvedValueOnce(sample);
+    expect(await call('GET', { q: 'httpMetrics' })).toMatchObject({ status: 200, body: sample });
+    expect(mocks.readHttpMetrics).toHaveBeenCalledWith(mocks.db, 30);
+
+    mocks.readHttpMetrics.mockResolvedValueOnce(sample);
+    expect(await call('GET', { q: 'httpMetrics', days: '7' })).toMatchObject({ status: 200, body: sample });
+    expect(mocks.readHttpMetrics).toHaveBeenLastCalledWith(mocks.db, 7);
   });
 });

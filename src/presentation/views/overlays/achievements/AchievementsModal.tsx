@@ -25,7 +25,6 @@ import Inset from '../../../ui/Inset';
 import { LockTip } from '../../../ui/Locked';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
-import PixelIcon from '../../../ui/PixelIcon';
 import ProgressCount from '../../../ui/ProgressCount';
 import Subheading from '../../../ui/Subheading';
 import TabBar from '../../../ui/TabBar';
@@ -158,7 +157,6 @@ export default function AchievementsModal({ game, guest = false, dispatch, setTo
                 emphasis={incompleteOnly}
                 onClick={() => setIncompleteOnly(v => !v)}
               >
-                {incompleteOnly && <PixelIcon glyph="check" size={10} />}
                 미완료만 보기
               </ToggleChip>
             </div>

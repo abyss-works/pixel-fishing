@@ -1,11 +1,13 @@
 import type { ButtonHTMLAttributes } from 'react';
 import { cx } from './cx';
 import { NOTCH_SM } from './notch';
+import PixelIcon from './PixelIcon';
 
 // 토글 칩 — 켜고 끄는 작은 노치 버튼(메시지 창 채널 토글 등). 강조는 세 단계다.
 // 완전 강조(emphasis): 골드 테두리와 골드 글자. 한 묶음에서 가장 중요한 하나에만 준다.
 // 일반 켜짐: 선 색 테두리와 본문색 글자, 표면 바탕.
 // 꺼짐: 테두리 없이 보조색 글자. 쓸 수 없으면 더 흐리게 두고 누를 수 없다.
+// 체크 아이콘은 ToggleChip이 직접 소유해 pressed === true일 때만 그린다.
 // 칩 안에 덧붙일 표시(새 글 점 등)는 children으로 이름 뒤에 둔다.
 interface ToggleChipProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'type'> {
   pressed: boolean;
@@ -27,6 +29,7 @@ export default function ToggleChip({ pressed, emphasis = false, size = 'md', dis
               tier === 'off-disabled' && 'border-transparent text-text-dim opacity-40 cursor-not-allowed',
               className)}
             {...props}>
+      {pressed && <PixelIcon glyph="check" size={10} className="shrink-0" />}
       {children}
     </button>
   );

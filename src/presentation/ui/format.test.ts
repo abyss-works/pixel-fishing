@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fmtCompact, fmtCompact3, fmtDecimal2, fmtFishCount, fmtLevel, fmtMinutes, fmtRatio, fmtRatioTight, fmtSize, josa } from './format';
+import { fmtCompact, fmtCompact3, fmtDecimal2, fmtFishCount, fmtKoreanDate, fmtLevel, fmtMinutes, fmtRatio, fmtRatioTight, fmtSize, josa } from './format';
 
 describe('fmtSize — 물고기 크기', () => {
   it('1m 미만은 cm 소수 한 자리, 1m 이상은 m 소수 두 자리', () => {
@@ -151,5 +151,14 @@ describe('fmtFishCount - 마릿수', () => {
     expect(fmtFishCount(0)).toBe('0마리');
     expect(fmtFishCount(999)).toBe('999마리');
     expect(fmtFishCount(1500)).toBe('1,500마리');
+  });
+});
+
+describe('fmtKoreanDate - 한국어 날짜', () => {
+  it('ISO 날짜 문자열을 YYYY년 M월 D일 형식으로 바꾼다', () => {
+    expect(fmtKoreanDate('2026-11-25')).toBe('2026년 11월 25일');
+    expect(fmtKoreanDate('2026-01-05')).toBe('2026년 1월 5일');
+    expect(fmtKoreanDate('2026-12-01T00:00:00.000Z')).toBe('2026년 12월 1일');
+    expect(fmtKoreanDate('v2')).toBe('v2');
   });
 });

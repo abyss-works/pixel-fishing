@@ -189,23 +189,22 @@ describe('아이템 섹션 목록', () => {
   });
 });
 
-describe('묶음 순서', () => {
-  // 소제목은 모두 점선 툴팁이거나 글자이고, 섹션 본문에서 이 이름들이 나타나는 순서가 곧 묶음 순서다
-  const order = (container: HTMLElement): string[] => {
-    const text = container.textContent ?? '';
-    return ['도시락', '미끼', '생명의 기운', '비약'].map(n => [n, text.indexOf(n)] as const)
-      .filter(([, i]) => i >= 0).sort((a, b) => a[1] - b[1]).map(([n]) => n);
-  };
+describe('묶음 순서 및 기운 격자', () => {
+  // 소제목은 모두 Subheading(h5)이며, 그 나타나는 순서가 곧 묶음 순서다
+  const order = (container: HTMLElement): string[] =>
+    [...container.querySelectorAll('h5')].map(el => el.textContent?.trim() ?? '').filter(Boolean);
 
-  it('해금 전 잠금 자리와 해금 뒤 섹션은 도시락, 미끼, 생명의 기운, 비약 순서로 같다', () => {
+  it('해금 전 잠금 자리와 해금 뒤 섹션은 생명의 기운, 도시락, 미끼, 비약 순서로 같다', () => {
     const own = { 'cook-lunch-bite': 1, 'cook-bait-rare': 1, [ENERGY_ITEM_IDS.common]: 1 };
     const opened = render(<ItemSection game={game({ items: own })} accountState="account" dispatch={vi.fn()} setToast={vi.fn()} />);
     const openedOrder = order(opened.container);
+    const energyCell = screen.getByRole('group', { name: /생명의 기운\(일반\)/ });
+    expect(energyCell.parentElement?.className).toContain('grid-cols-4');
     cleanup();
     const locked = render(<ItemSection game={game({ boat: COOKING_UNLOCK_BOAT - 1 })} accountState="account" dispatch={vi.fn()} setToast={vi.fn()} />);
     const lockedOrder = order(locked.container);
-    expect(lockedOrder).toEqual(['도시락', '미끼', '생명의 기운', '비약']);
-    expect(openedOrder).toEqual(['도시락', '미끼', '생명의 기운', '비약']);
+    expect(lockedOrder).toEqual(['생명의 기운', '도시락', '미끼', '비약']);
+    expect(openedOrder).toEqual(['생명의 기운', '도시락', '미끼', '비약']);
   });
 });
 
@@ -307,14 +306,10 @@ describe('아이템 사용과 교체', () => {
 });
 
 describe('해금 전과 게스트', () => {
-  it('해금 전 계정 사용자도 보유 중만 보기 토글과 전체 플레이스홀더 카드·잠금 툴팁을 본다', () => {
+  it('해금 전 계정 사용자는 전체 보기에서 1줄 안내만 보이고 보유 중만 보기에서 빈 안내를 본다', () => {
     show(game({ boat: COOKING_UNLOCK_BOAT - 1 }));
-    const note = screen.getByText('가진 아이템이 없어요.').parentElement!;
-    expect([...note.children].map(el => el.textContent)).toEqual([
-      '가진 아이템이 없어요.',
-      '인도양 항로가 열리면 부엌에서 도시락과 미끼를 만들 수 있어요.',
-      '인도양 항로는 증기선(5단계)부터 열려요.',
-    ]);
+    expect(screen.queryByText('가진 아이템이 없어요.')).not.toBeInTheDocument();
+    expect(screen.getByText('인도양 항로가 열리면 부엌을 쓸 수 있어요.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '보유 중만 보기' })).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getAllByRole('button', { name: /\)\s사용$/ })).toHaveLength(12);
     expect(screen.getByRole('button', { name: '가루디야(일반) 사용' })).toBeDisabled();
@@ -326,16 +321,19 @@ describe('해금 전과 게스트', () => {
     expect(screen.queryByRole('button', { name: /\)\s사용$/ })).not.toBeInTheDocument();
   });
 
-  it('게스트는 해금 전에는 진행 조건 안내·잠금 툴팁을, 해금 뒤에는 한 줄 빈 상태·게스트 잠금 툴팁을 본다', () => {
+  it('게스트는 해금 전에는 1줄 진행 조건 안내·잠금 툴팁을, 해금 뒤 전체 보기에서는 빈 안내 없이 카드·게스트 잠금 툴팁만 본다', () => {
     show(game({ boat: COOKING_UNLOCK_BOAT - 1 }), 'guest');
-    expect(screen.getByText('가진 아이템이 없어요.').parentElement!.children).toHaveLength(3);
+    expect(screen.queryByText('가진 아이템이 없어요.')).not.toBeInTheDocument();
+    expect(screen.getByText('인도양 항로가 열리면 부엌을 쓸 수 있어요.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '보유 중만 보기' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '가루디야(일반) 사용' })).toBeDisabled();
     expect(screen.getByRole('group', { name: '생명의 기운 잠김' })).toHaveTextContent('인도양 항로가 열리면 부엌을 쓸 수 있어요.');
     cleanup();
 
     show(game(), 'guest');
-    expect(screen.getByText('가진 아이템이 없어요.').parentElement!.children).toHaveLength(1);
+    expect(screen.queryByText('가진 아이템이 없어요.')).not.toBeInTheDocument();
     expect(screen.getByRole('group', { name: '생명의 기운 잠김' })).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
+    fireEvent.click(screen.getByRole('button', { name: '보유 중만 보기' }));
+    expect(screen.getByText('가진 아이템이 없어요.')).toBeInTheDocument();
   });
 });

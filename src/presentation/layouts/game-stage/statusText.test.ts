@@ -19,8 +19,8 @@ describe('statusText', () => {
     expect(mobile.replace('화면을', '스페이스를')).toBe(statusText('wait', false));
   });
 
-  it('입질 안내는 문장마다 줄을 바꾼다', () => {
-    expect(statusText('bite', false)).toBe('지금 눌러 주세요.\n빨간 영역이면 PERFECT, 노란 영역이면 GOOD이에요.');
+  it('입질 안내는 간결한 행동 지시만 보인다', () => {
+    expect(statusText('bite', false)).toBe('지금 눌러 주세요.');
   });
 
   it('입질과 끌어올림 안내는 모바일에서도 같다', () => {
@@ -30,12 +30,9 @@ describe('statusText', () => {
 });
 
 describe('statusParts', () => {
-  it('판정 영역 설명은 입질 기다림과 입질 단계에서 따로 떼어 준다', () => {
-    expect(statusParts('wait', false).judge).toBe('빨간 영역은 PERFECT, 노란 영역은 GOOD이에요.');
-    expect(statusParts('bite', false)).toEqual({ lead: '지금 눌러 주세요.', judge: '빨간 영역이면 PERFECT, 노란 영역이면 GOOD이에요.' });
-  });
-
-  it('끌어올림 안내에는 판정 영역 설명이 없다', () => {
+  it('낚시 상태 띠에는 판정 영역 반복 설명을 붙이지 않는다', () => {
+    expect(statusParts('wait', false).judge).toBeUndefined();
+    expect(statusParts('bite', false)).toEqual({ lead: '지금 눌러 주세요.' });
     expect(statusParts('catch', false).judge).toBeUndefined();
   });
 });

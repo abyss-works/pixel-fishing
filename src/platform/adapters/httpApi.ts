@@ -3,11 +3,15 @@ import { HttpGameGateway } from './httpGameGateway';
 import { migrate } from '../../game/rules/logic';
 import type { GameGateway } from '../api/types';
 import type { GameState } from '../../game/rules/logic';
-import type { AccountLookup, AuthApi, AuthResult, DevApi, PromoteTestResult, ResetDevAccountResult } from '../api/types';
+import type {
+  AcceptConsentResult, AccountLookup, AuthApi, AuthResult, ConsentStatus, DevApi, PromoteTestResult, ResetDevAccountResult,
+} from '../api/types';
 import {
   sessionUid,
   ensureSession,
   currentAccount,
+  getAccountConsent,
+  acceptAccountConsent,
   startGoogleAuth,
   takeGoogleLanding,
   signOutAccount,
@@ -26,6 +30,12 @@ class HttpAuth implements AuthApi {
   async getSession(): Promise<{ uid: string | null; email: string | null }> {
     const [uid, lookup] = await Promise.all([sessionUid(), currentAccount()]);
     return { uid, email: lookup.status === 'account' ? lookup.email : null };
+  }
+  getAccountConsent(): Promise<ConsentStatus> {
+    return getAccountConsent();
+  }
+  acceptConsent(version: string): Promise<AcceptConsentResult> {
+    return acceptAccountConsent(version);
   }
   startGoogle(start: 'link' | 'sign-in', tag: string): Promise<AuthResult> {
     return startGoogleAuth(start, tag);
@@ -56,6 +66,7 @@ class HttpAuth implements AuthApi {
 import type {
   AdminApi, AdminAccessResult,
   AdminUserRow, AdminUserState, AdminOverview, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
+  AdminOnboardingFunnel, AdminHttpMetrics,
   AdminLive, AdminDailyStatsRow, AdminSessionRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, AdminChangelogRow, AdminChatReportRow, BalanceLive,
   AdminSentMailRow, AdminMailRequest, AdminMailPlan,
 } from '../api/types';
@@ -276,6 +287,12 @@ class HttpAdmin implements AdminApi {
   }
   bountyFunnel(days: number): Promise<AdminBountyFunnelRow[]> {
     return readAdmin('bountyFunnel', { days });
+  }
+  onboardingFunnel(): Promise<AdminOnboardingFunnel> {
+    return readAdmin('onboardingFunnel');
+  }
+  httpMetrics(days?: number): Promise<AdminHttpMetrics> {
+    return readAdmin('httpMetrics', days === undefined ? {} : { days });
   }
   spamFlags(): Promise<AdminSpamFlagRow[]> {
     return readAdmin('spamFlags');

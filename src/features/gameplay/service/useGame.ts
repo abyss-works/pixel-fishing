@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { api, when } from '../../../platform/api';
-import type { GameGateway, GameProfile, DispatchResult, MaybePromise } from '../../../platform/api';
+import { api, isConsentRequiredError, subscribeConsentRequired, when } from '../../../platform/api';
+import type { ConsentStatus, GameGateway, GameProfile, DispatchResult, MaybePromise } from '../../../platform/api';
 import type { GameAction } from '../../../game/rules/actions';
 import type { RejectReason } from '../../../game/rules/rules';
 import { newState, newlyCompletedSpotDex, REJECT_TEXT } from '../../../game/rules/logic';
@@ -16,6 +16,7 @@ import { BUILD_ID } from '../../../buildId';
 import { settleForcedEncounter, withForcedEncounter } from '../../bounty/service/forceEncounter';
 import { getPhaseOverride } from './timeOverride';
 import { fetchSession } from '../../account/service/session';
+import { allowConsentGate, blockConsentGate, holdConsentGate, resetConsentGate } from '../../account/service/consentGate';
 import { guestProgress } from '../../account/model/accountRules';
 import { newlyClaimable } from '../../achievement/model/achievements';
 import { setSchoolDay } from './schoolDay';
@@ -32,15 +33,22 @@ import { isRetryExhausted, retryOnRateLimit } from './rateLimitRetry';
 
 const SYNC_LABEL: Record<SyncState, string | null> = {
   off: '저장 서버가 연결되지 않아 새로고침하면 진행이 사라져요. (오프라인)',
-  connecting: '진행 연결 중…',
-  on: '진행 저장 켜짐',
-  error: '저장에 연결하지 못했어요. 지금은 진행이 저장되지 않아요.',
+  connecting: '클라우드 연결 중…',
+  on: '클라우드 저장 켜짐',
+  error: '클라우드에 연결하지 못했어요. 지금은 진행이 저장되지 않아요.',
 };
 
 /** 게스트가 마을 밖으로 나가려 할 때의 안내. 서버가 거부할 때와 같은 문구다 */
 export const GUEST_VILLAGE_ONLY_TEXT = POLICY['guest-village-only'].message;
 
 export type ActionSettled = { ok: true } | { ok: false; notice: string | null };
+
+export interface ConsentPromptState {
+  consent: ConsentStatus | null;
+  mismatch: boolean;
+  error: string | null;
+  busy: boolean;
+}
 
 /**
  * 행동 결과에 따라 화면을 되돌려야 하는 호출부용 — 성공이 아니면 ok false와 알릴 한 줄을 돌려준다.
@@ -56,7 +64,9 @@ export async function settleAction(
     if (result.status === 'ok') return { ok: true };
     return { ok: false, notice: rejectText[result.error] ?? REJECT_TEXT[result.error] };
   } catch (e) {
-    const policy = POLICY[fail(e).kind];
+    const appErr = fail(e);
+    const kind = isConsentRequiredError(appErr) ? 'consent-required' : appErr.kind;
+    const policy = POLICY[kind];
     return { ok: false, notice: policy.modal || policy.slot ? null : policy.message };
   }
 }
@@ -99,8 +109,59 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
   // 세이브를 불러오고 이 창을 접속(boot)시키는 중 — 서버는 접속한 창의 액션만 받으므로 그 전에는 플레이를 막는다.
   // 그동안의 게임 상태는 서버 세이브가 아니라 기본값이라 화면에도 보이지 않는다.
   const [loading, setLoading] = useState(api.auth.isConfigured);
-  // 진행을 막는 모달 — 낡은 탭(서버 426)이나 다른 창의 접속(서버 423). 값이 있으면 GameView가 그 모달로 전체를 덮는다
+  // 진행을 막는 모달 — 낡은 탭(서버 426), 다른 창의 접속(서버 423), 약관 미수락(서버 403/1008). 값이 있으면 GameView가 그 모달로 전체를 덮는다
   const [blocker, setBlocker] = useState<BlockingModal | null>(null);
+  const [consentPrompt, setConsentPrompt] = useState<ConsentPromptState>({
+    consent: null, mismatch: false, error: null, busy: false,
+  });
+  const consentPromptRef = useRef(consentPrompt);
+  consentPromptRef.current = consentPrompt;
+  const bootedRef = useRef(false);
+  const activeFlowRef = useRef<'boot' | 'adopt'>('boot');
+  const pendingResumeRef = useRef<'boot' | 'adopt' | null>(null);
+  const consentFetchingRef = useRef(false);
+  const resumeFlowRef = useRef<(flow: 'boot' | 'adopt') => void>(() => {});
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  const openConsentGate = (initial?: ConsentStatus) => {
+    if (!bootedRef.current && pendingResumeRef.current === null) {
+      pendingResumeRef.current = activeFlowRef.current;
+    }
+    blockConsentGate();
+    setBlocker(current => current ?? 'consent');
+    if (initial) {
+      setConsentPrompt({ consent: initial, mismatch: false, error: null, busy: false });
+      return;
+    }
+    if (consentPromptRef.current.consent?.required || consentFetchingRef.current) return;
+    consentFetchingRef.current = true;
+    setConsentPrompt(p => ({ ...p, error: null }));
+    void api.auth.getAccountConsent()
+      .then(latest => {
+        if (!mountedRef.current) return;
+        if (!latest.required) {
+          allowConsentGate();
+          setConsentPrompt({ consent: null, mismatch: false, error: null, busy: false });
+          setBlocker(c => (c === 'consent' ? null : c));
+          const resume = pendingResumeRef.current;
+          pendingResumeRef.current = null;
+          if (resume) resumeFlowRef.current(resume);
+          return;
+        }
+        setConsentPrompt({ consent: latest, mismatch: false, error: null, busy: false });
+      })
+      .catch(() => {
+        if (!mountedRef.current) return;
+        setConsentPrompt(p => ({ ...p, error: '이용약관 정보를 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.' }));
+      })
+      .finally(() => {
+        consentFetchingRef.current = false;
+      });
+  };
 
   // 레거시 이관 환영 안내 (R18b) — 오프라인 모드에서도 표시돼야 하므로 부트스트랩과 분리
   useEffect(() => {
@@ -117,7 +178,12 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
   // 이 훅은 그 결정을 화면에 반영만 한다.
   useEffect(() => {
     const off = subscribeFailure((err: AppError) => {
-      const policy = POLICY[err.kind];
+      const kind = isConsentRequiredError(err) ? 'consent-required' : err.kind;
+      if (kind === 'consent-required') {
+        openConsentGate();
+        return;
+      }
+      const policy = POLICY[kind];
       // 메시지 창에 한 줄 남기고, 접혀 있을 때는 오류 자리가 같은 문구를 보인다
       if (policy.slot && showFailureNotice(policy.message)) {
         sendNotice(setToast, {
@@ -132,8 +198,11 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
       if (modal === 'update') alertUpdate();
       if (modal === 'unsaved') setSync(api.auth.isConfigured ? 'error' : 'off');
     });
-    // 구독이 끝나면 오류 자리의 안내도 함께 지운다
-    return () => { off(); clearFailureNotice(); };
+    const offConsent = subscribeConsentRequired(() => {
+      openConsentGate();
+    });
+    // 구독이 끝나면 오류 자리의 안내와 약관 게이트도 함께 지운다
+    return () => { off(); offConsent(); clearFailureNotice(); resetConsentGate(); };
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회 구독. setToast는 메시지 기록에 줄을 더할 뿐 상태를 읽지 않는다
   }, []);
 
@@ -234,30 +303,46 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
     try {
       await retryOnRateLimit(async () => { await dispatch({ type: 'boot', buildId: BUILD_ID }); }, signal);
     } catch (e) {
-      if (signal.aborted || !isRetryExhausted(e)) return;
+      if (signal.aborted) return;
+      if (isConsentRequiredError(e) || (e instanceof AppError && e.kind === 'consent-required')) throw e;
+      if (!isRetryExhausted(e)) return;
       throw e;
     }
   };
 
-  // 부트스트랩 — 세션 게이트(직렬) → 서버 상태·닉네임(병렬) → 채택. 서버가 비어 있고 레거시 진행이 있으면
+  // 부트스트랩 — 세션 게이트(직렬) → 이용약관 확인 → 서버 상태·닉네임(병렬) → 채택. 서버가 비어 있고 레거시 진행이 있으면
   // import 액션으로 수입(신뢰 채널 재사용 — 서버가 saves_current를 시딩한다).
-  useEffect(() => {
+  const runBootstrap = async (skipConsent = false): Promise<void> => {
     if (!api.auth.isConfigured) {
-      void (async () => {
-        const initialProfile = await readProfile();
-        // 로컬 모드도 같은 리듀서로 부팅한다 — 어군 배치 날짜를 클라 시계로 같은 규칙에 따라 정한다
-        await boot(newRetryScope()).catch(fail);
-        const profile = initialProfile.ok && initialProfile.nickname === null
-          ? await readProfile()
-          : initialProfile;
-        adoptProfile(profile);
-      })();
+      const initialProfile = await readProfile();
+      // 로컬 모드도 같은 리듀서로 부팅한다 — 어군 배치 날짜를 클라 시계로 같은 규칙에 따라 정한다
+      await boot(newRetryScope()).catch(fail);
+      const profile = initialProfile.ok && initialProfile.nickname === null
+        ? await readProfile()
+        : initialProfile;
+      adoptProfile(profile);
+      bootedRef.current = true;
       return;
     }
+    activeFlowRef.current = 'boot';
+    bootedRef.current = false;
+    holdConsentGate();
+    setLoading(true);
     const signal = newRetryScope();
-    (async () => {
+    try {
       const uid = await fetchSession(client);
+      if (signal.aborted) return;
       if (!uid) throw new AppError('unauthorized', 'anonymous session failed');
+      if (!skipConsent) {
+        const consent = await retryOnRateLimit(() => api.auth.getAccountConsent(), signal);
+        if (signal.aborted) return;
+        if (consent.required) {
+          pendingResumeRef.current = 'boot';
+          openConsentGate(consent);
+          return;
+        }
+      }
+      allowConsentGate();
       const [cloud, initialProfile, lookup] = await Promise.all([
         loadSave(signal),
         readProfile(),
@@ -278,25 +363,31 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
           await dispatch({ type: 'import', save: init.game });
           api.storage.clearLegacySave(); // 브리지 성공 — 로컬 저장 사용 종료
         } catch (e) {
-          if (!(e instanceof AppError && e.kind === 'restricted')) throw e;
+          if (!(e instanceof AppError && e.kind === 'restricted' && !isConsentRequiredError(e))) throw e;
         }
       }
       // 세션 시작에 1회, 새로고침마다 다시 센다.
       await boot(signal);
       if (signal.aborted) return;
+      bootedRef.current = true;
       const profile = initialProfile.ok && initialProfile.nickname === null
         ? await readProfile()
         : initialProfile;
       if (signal.aborted) return;
       adoptProfile(profile);
       setSync('on');
-    })().catch(e => {
+    } catch (e) {
       if (!signal.aborted) {
         setProfileStatus('error');
         fail(e);
       }
-    }) // 정책 한 곳으로 — 여기서 UX를 정하지 않는다
-      .finally(() => { if (!signal.aborted) setLoading(false); });
+    } finally {
+      if (!signal.aborted) setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void runBootstrap();
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회 부트스트랩
   }, [init.legacy]);
 
@@ -307,8 +398,109 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
     return saved;
   };
 
+  const adoptAccount = async (skipConsent = false): Promise<boolean> => {
+    activeFlowRef.current = 'adopt';
+    bootedRef.current = false;
+    const signal = newRetryScope();
+    setLoading(true);
+    setProfileStatus('loading');
+    setNickname(null);
+    if (api.auth.isConfigured) holdConsentGate();
+    try {
+      if (api.auth.isConfigured && !skipConsent) {
+        const consent = await retryOnRateLimit(() => api.auth.getAccountConsent(), signal);
+        if (signal.aborted) return false;
+        if (consent.required) {
+          pendingResumeRef.current = 'adopt';
+          openConsentGate(consent);
+          return false;
+        }
+      }
+      allowConsentGate();
+      const [cloud, initialProfile, lookup] = await Promise.all([
+        loadSave(signal),
+        readProfile(),
+        api.auth.currentAccount().catch(() => ({ status: 'failed' as const })),
+      ]);
+      if (signal.aborted) return false;
+      guestRef.current = lookup.status !== 'account';
+      resetFortuneModalSession();
+      setGame(cloud ?? newState());
+      await boot(signal);
+      if (signal.aborted) return false;
+      bootedRef.current = true;
+      const profile = initialProfile.ok && initialProfile.nickname === null
+        ? await readProfile()
+        : initialProfile;
+      if (signal.aborted) return false;
+      adoptProfile(profile);
+      return true;
+    } catch (e) {
+      // 더 새로운 교체가 이어받았으면 이 흐름의 결과는 버린다
+      if (signal.aborted) return false;
+      setProfileStatus('error');
+      const isConsent = isConsentRequiredError(e) || (e instanceof AppError && e.kind === 'consent-required');
+      if (isRetryExhausted(e) || isConsent) fail(e);
+      if (isConsent) return false;
+      throw e;
+    } finally {
+      if (!signal.aborted) setLoading(false);
+    }
+  };
+  resumeFlowRef.current = flow => {
+    if (flow === 'boot') void runBootstrap(true);
+    else void adoptAccount(true);
+  };
+
+  const acceptConsent = async (): Promise<void> => {
+    const current = consentPromptRef.current.consent;
+    if (!current || consentPromptRef.current.busy) return;
+    setConsentPrompt(p => ({ ...p, busy: true, error: null }));
+    try {
+      const res = await api.auth.acceptConsent(current.version);
+      if (res.ok) {
+        if (res.consent.required) {
+          setConsentPrompt({ consent: res.consent, mismatch: true, error: null, busy: false });
+          return;
+        }
+        allowConsentGate();
+        setConsentPrompt({ consent: null, mismatch: false, error: null, busy: false });
+        setBlocker(c => (c === 'consent' ? null : c));
+        const resume = pendingResumeRef.current;
+        pendingResumeRef.current = null;
+        void client.invalidateQueries({ predicate: q => q.queryKey[0] !== 'session' });
+        if (resume) resumeFlowRef.current(resume);
+        return;
+      }
+      if (res.code === 'consent-version-mismatch') {
+        const latest = await api.auth.getAccountConsent();
+        if (!latest.required) {
+          allowConsentGate();
+          setConsentPrompt({ consent: null, mismatch: false, error: null, busy: false });
+          setBlocker(c => (c === 'consent' ? null : c));
+          const resume = pendingResumeRef.current;
+          pendingResumeRef.current = null;
+          void client.invalidateQueries({ predicate: q => q.queryKey[0] !== 'session' });
+          if (resume) resumeFlowRef.current(resume);
+          return;
+        }
+        setConsentPrompt({ consent: latest, mismatch: true, error: null, busy: false });
+        return;
+      }
+      const errorMsg = res.code === 'rate-limited'
+        ? '요청이 너무 많아요. 잠시 뒤에 다시 시도해 주세요.'
+        : res.code === 'account-only'
+          ? '로그인 상태를 확인한 뒤 다시 시도해 주세요.'
+          : '이용약관 동의를 처리하지 못했어요. 잠시 뒤 다시 시도해 주세요.';
+      setConsentPrompt(p => ({ ...p, busy: false, error: errorMsg }));
+    } catch {
+      setConsentPrompt(p => ({ ...p, busy: false, error: '이용약관 동의를 처리하지 못했어요. 연결을 확인해 주세요.' }));
+    }
+  };
+
   return {
     game, dispatch, nickname, profileStatus, devTools, sync, syncLabel: SYNC_LABEL[sync], blocker, loading,
+    consentPrompt, acceptConsent, retryLoadConsent: () => openConsentGate(),
     /** 이 기기의 게스트 진행 — 계정을 바꿀 때 버려지는 것이 있는지 확인 창을 띄울지 가르는 근거 */
     guestProgress: guestProgress({ sync, loading, blocked: blocker !== null, game }),
     /** 닉네임 변경 — 성공하면 표시값을 다시 읽는다. null이면 성공, 아니면 거부 사유. */
@@ -326,38 +518,7 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
      * 계정 교체(useAccount) — 그 계정의 서버 상태를 채택하고 이 창을 그 계정의 활성 창으로 접속시킨다.
      * 끝날 때까지 불러오는 중이다. 상태 읽기 실패는 호출자에게 던진다.
      */
-    adoptAccount: async (): Promise<void> => {
-      const signal = newRetryScope();
-      setLoading(true);
-      setProfileStatus('loading');
-      setNickname(null);
-      try {
-        const [cloud, initialProfile, lookup] = await Promise.all([
-          loadSave(signal),
-          readProfile(),
-          api.auth.currentAccount().catch(() => ({ status: 'failed' as const })),
-        ]);
-        if (signal.aborted) return;
-        guestRef.current = lookup.status !== 'account';
-        resetFortuneModalSession();
-        setGame(cloud ?? newState());
-        await boot(signal);
-        if (signal.aborted) return;
-        const profile = initialProfile.ok && initialProfile.nickname === null
-          ? await readProfile()
-          : initialProfile;
-        if (signal.aborted) return;
-        adoptProfile(profile);
-      } catch (e) {
-        // 더 새로운 교체가 이어받았으면 이 흐름의 결과는 버린다
-        if (signal.aborted) return;
-        setProfileStatus('error');
-        if (isRetryExhausted(e)) fail(e);
-        throw e;
-      } finally {
-        if (!signal.aborted) setLoading(false);
-      }
-    },
+    adoptAccount,
     /**
      * 액션 밖에서 서버가 바꾼 상태(길드 보너스 기부로 빠진 골드 등)를 다시 읽어 채택한다. 게이트웨이의 캐시와 버전도
      * 새로 읽은 상태로 맞춰진다. 읽기에 실패하면 그대로 둔다 — 다음 액션의 응답이 버전 차이를 보고 다시 읽는다.

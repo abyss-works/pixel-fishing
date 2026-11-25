@@ -152,7 +152,7 @@ function ItemCards({ title, hint, rows, lockLines, busy, selectedId, onSelect, o
               <div className="mt-auto pt-1.5 border-t border-line-dim flex items-center justify-between gap-2">
                 <span className="pf-accent text-xs text-text-dim whitespace-nowrap">×{row.count}</span>
                 {lockLines ? (
-                  <Locked lines={lockLines} title={<GradeName name={row.title.name} grade={row.title.grade} />} label={`${row.label} 잠김`} className="inline-block">
+                  <Locked badge={false} lines={lockLines} title={<GradeName name={row.title.name} grade={row.title.grade} />} label={`${row.label} 잠김`} className="inline-block">
                     {button}
                   </Locked>
                 ) : button}
@@ -165,7 +165,7 @@ function ItemCards({ title, hint, rows, lockLines, busy, selectedId, onSelect, o
   );
 }
 
-/** 생명의 기운 4장 카드 격자 — 부엌 잠금 상태에서도 플레이스홀더를 보이고 묶음에 잠금 툴팁을 건다 */
+/** 생명의 기운 1×4 컴팩트 한 줄 격자 — 부엌 잠금 상태에서도 플레이스홀더를 보이고 묶음에 잠금 툴팁을 건다 */
 function EnergyCards({ energy, lockLines }: {
   energy: readonly EnergyCell[];
   lockLines?: readonly string[] | null;
@@ -173,18 +173,18 @@ function EnergyCards({ energy, lockLines }: {
   if (energy.length === 0) return null;
   const locked = Boolean(lockLines);
   const grid = (
-    <div className="grid grid-cols-2 gap-2">
+    <div className="grid grid-cols-4 gap-1.5">
       {energy.map(cell => {
         const unowned = locked || cell.stored === 0;
         return (
           <Inset key={cell.grade} tone={unowned ? 'deep' : 'base'}
                  role="group" aria-label={`${cell.label} ${formatEnergy(cell.stored)}개`}
-                 className={cx('flex items-center gap-2 p-2 min-w-0', unowned && 'text-text-dim')}>
-            <ItemSprite kind="energy" id={cell.id} preset="list" className="shrink-0" />
-            <div className="min-w-0 flex flex-col">
-              <span className="text-xs leading-tight" aria-hidden="true"><RarityText rarity={cell.grade} /></span>
-              <span className="pf-accent text-base leading-tight break-words" aria-hidden="true">{formatEnergy(cell.stored)}</span>
+                 className={cx('flex flex-col items-center justify-center gap-0.5 px-1.5 py-1.5 min-w-0 text-center', unowned && 'text-text-dim')}>
+            <div className="flex items-center justify-center gap-1 min-w-0" aria-hidden="true">
+              <ItemSprite kind="energy" id={cell.id} preset="row" className="shrink-0" />
+              <span className="text-2xs leading-none"><RarityText rarity={cell.grade} /></span>
             </div>
+            <span className="pf-accent text-xs leading-tight truncate max-w-full" aria-hidden="true">{formatEnergy(cell.stored)}</span>
           </Inset>
         );
       })}
@@ -193,10 +193,10 @@ function EnergyCards({ energy, lockLines }: {
   return (
     <div className="mb-2">
       <Subheading>
-        <Tip text={ITEM_GROUP_HINT.energy}>{ITEM_GROUPS[2].title}</Tip>
+        <Tip text={ITEM_GROUP_HINT.energy}>{ITEM_GROUPS[0].title}</Tip>
       </Subheading>
       {lockLines ? (
-        <Locked lines={lockLines} title={ITEM_GROUPS[2].title} label="생명의 기운 잠김">
+        <Locked badge={false} lines={lockLines} title={ITEM_GROUPS[0].title} label="생명의 기운 잠김">
           {grid}
         </Locked>
       ) : grid}
@@ -255,7 +255,7 @@ function PotionCards({ rows, potionLock, busy, selectedId, onSelect, onUse }: {
               <div className="mt-auto pt-1.5 border-t border-line-dim flex items-center justify-between gap-2">
                 <span className="pf-accent text-xs text-text-dim whitespace-nowrap">×{row.count}</span>
                 {potionLock ? (
-                  <Locked lines={potionLock} title={<GradeName name={row.potion.name} grade={row.potion.grade} />} label={`${row.potion.name} 잠김`} className="inline-block">
+                  <Locked badge={false} lines={potionLock} title={<GradeName name={row.potion.name} grade={row.potion.grade} />} label={`${row.potion.name} 잠김`} className="inline-block">
                     {button}
                   </Locked>
                 ) : button}
@@ -351,21 +351,26 @@ export default function ItemSection({ game, accountState, dispatch, setToast }: 
           emphasis={ownedOnly}
           onClick={() => setOwnedOnly(v => !v)}
         >
-          <PixelIcon glyph="check" size={10} />
           보유 중만 보기
         </ToggleChip>
       </div>
-      {view.state === 'locked' && (!ownedOnly || shown.empty) && (
-        <Note>{view.empty.map(line => <span key={line} className="block">{line}</span>)}</Note>
+      {view.state === 'locked' && !ownedOnly && view.unlockNotice && (
+        <Note>{view.unlockNotice}</Note>
       )}
-      {view.state === 'open' && shown.empty && <Note>{NO_ITEMS_TEXT}</Note>}
+      {shown.empty && (
+        <Note>
+          {view.state === 'locked'
+            ? view.empty.map(line => <span key={line} className="block">{line}</span>)
+            : NO_ITEMS_TEXT}
+        </Note>
+      )}
       {!shown.empty && (
         <>
-          <ItemCards title={ITEM_GROUPS[0].title} hint={ITEM_GROUP_HINT.lunch} rows={shown.lunch} lockLines={kitchenLock}
-                     busy={busy} selectedId={detailId} onSelect={setDetailId} onEat={press} />
-          <ItemCards title={ITEM_GROUPS[1].title} hint={ITEM_GROUP_HINT.bait} rows={shown.bait} lockLines={kitchenLock}
-                     busy={busy} selectedId={detailId} onSelect={setDetailId} onEat={press} />
           <EnergyCards energy={shown.energy} lockLines={kitchenLock} />
+          <ItemCards title={ITEM_GROUPS[1].title} hint={ITEM_GROUP_HINT.lunch} rows={shown.lunch} lockLines={kitchenLock}
+                     busy={busy} selectedId={detailId} onSelect={setDetailId} onEat={press} />
+          <ItemCards title={ITEM_GROUPS[2].title} hint={ITEM_GROUP_HINT.bait} rows={shown.bait} lockLines={kitchenLock}
+                     busy={busy} selectedId={detailId} onSelect={setDetailId} onEat={press} />
           <PotionCards rows={shown.potions} potionLock={view.potionLock} busy={busy}
                        selectedId={detailId} onSelect={setDetailId} onUse={usePotion} />
         </>

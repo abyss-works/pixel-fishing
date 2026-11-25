@@ -1,7 +1,9 @@
 // 로컬 API 구현 — 클라우드 미설정(dev·테스트) 전용
 // 게임은 LocalGameGateway(메모리 + localStorage), 인증은 가짜 계정으로 동작한다
 import { LocalGameGateway } from './localGameGateway';
-import type { AccountLookup, GameGateway, AuthApi, AuthResult, DevApi, PromoteTestResult, ResetDevAccountResult } from '../api/types';
+import type {
+  AcceptConsentResult, AccountLookup, GameGateway, AuthApi, AuthResult, ConsentStatus, DevApi, PromoteTestResult, ResetDevAccountResult,
+} from '../api/types';
 import type { AdminApi } from '../api/types';
 import { newState } from '../../game/rules/logic';
 import type { GameState } from '../../game/rules/logic';
@@ -9,6 +11,11 @@ import type { GameState } from '../../game/rules/logic';
 const DEV_ACCOUNT = 'dev@localhost';
 const DEV_UID = '00000000-0000-4000-8000-000000000000';
 const LOCAL_SAVE_KEY = 'pixel-fishing-save';
+const LOCAL_CONSENT: ConsentStatus = {
+  required: false,
+  version: '2026-11-25',
+  effectiveAt: '2026-11-25T00:00:00.000Z',
+};
 
 class LocalAuth implements AuthApi {
   isConfigured = false;
@@ -21,6 +28,12 @@ class LocalAuth implements AuthApi {
   }
   async getSession(): Promise<{ uid: string | null; email: string | null }> {
     return { uid: DEV_UID, email: DEV_ACCOUNT };
+  }
+  async getAccountConsent(): Promise<ConsentStatus> {
+    return { ...LOCAL_CONSENT };
+  }
+  async acceptConsent(_version: string): Promise<AcceptConsentResult> {
+    return { ok: true, consent: { ...LOCAL_CONSENT } };
   }
   async startGoogle(): Promise<AuthResult> {
     return { ok: false, msg: '클라우드가 설정되지 않았어요.' };
@@ -70,6 +83,8 @@ class LocalAdmin implements AdminApi {
   sessions(_userId?: string, _limit?: number): Promise<never[]> { return rejected(); }
   economy(_days: number): Promise<never[]> { return rejected(); }
   bountyFunnel(_days: number): Promise<never[]> { return rejected(); }
+  onboardingFunnel(): Promise<never> { return rejected(); }
+  httpMetrics(_days?: number): Promise<never> { return rejected(); }
   spamFlags(): Promise<never[]> { return rejected(); }
   recentEvents(): Promise<never[]> { return rejected(); }
   letters(): Promise<never[]> { return rejected(); }

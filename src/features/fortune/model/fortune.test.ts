@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 import type { DailyFortune } from '../../../game/rules/fortune';
 import {
   FORTUNE_CALENDAR_NOTE,
+  FORTUNE_EFFECT_TARGET_LABEL,
   FORTUNE_INDEX_LABEL,
   FORTUNE_KIND,
   FORTUNE_MENU_GUIDE_NOTE,
   FORTUNE_PHRASE,
   FORTUNE_PIPS,
   FORTUNE_RESET_NOTE,
+  FORTUNE_SHORT_NAME,
   FORTUNE_SOURCE_HELP,
   FORTUNE_SOURCE_LABEL,
   FORTUNE_WEEKDAYS,
@@ -17,10 +19,13 @@ import {
   currentGameMonth,
   formatFortuneDay,
   formatFortuneMonth,
+  formatLuckMult,
   fortuneBonusText,
   fortuneBonusTip,
   fortuneEffectNote,
   fortuneLuckMult,
+  fortuneLuckMultText,
+  fortuneModalRows,
   fortunePhrase,
   fortuneSummaryRows,
   resolveSelectedFortuneDay,
@@ -102,7 +107,7 @@ describe('오늘의 운세 화면 모델', () => {
       ...Object.values(FORTUNE_INDEX_LABEL),
     ];
     for (const kind of ['fish', 'gold', 'shadow'] as const) {
-      texts.push(FORTUNE_KIND[kind].name, FORTUNE_KIND[kind].bonus);
+      texts.push(FORTUNE_KIND[kind].name, FORTUNE_KIND[kind].bonus, FORTUNE_SHORT_NAME[kind], FORTUNE_EFFECT_TARGET_LABEL[kind]);
       for (const index of [3, 5] as const) {
         const sample = f(kind, index);
         texts.push(
@@ -110,13 +115,33 @@ describe('오늘의 운세 화면 모델', () => {
           fortuneBonusText(sample),
           fortuneBonusTip(sample),
           fortuneEffectNote(sample),
+          fortuneLuckMultText(sample),
           ...fortuneSummaryRows(sample).flatMap(r => [r.label, r.value]),
+          ...fortuneModalRows(sample).flatMap(r => [r.label, r.value]),
         );
       }
     }
     for (const text of texts) {
       expect(text, text).not.toMatch(/[·—–★]/);
     }
+  });
+
+  it('오늘의 운세 팝업 요약 표(fortuneModalRows)와 3글자 요약·곱연산 배수를 제공한다', () => {
+    expect(FORTUNE_SHORT_NAME).toEqual({ fish: '풍어운', gold: '재물운', shadow: '그림자' });
+    expect(formatLuckMult(1.03)).toBe('×1.03');
+    expect(formatLuckMult(1.05)).toBe('×1.05');
+    expect(fortuneModalRows(f('fish', 5))).toEqual([
+      { label: '적용 대상', value: '희귀 이상 출현 비중' },
+      { label: '행운 효과', value: '×1.05', accent: true },
+    ]);
+    expect(fortuneModalRows(f('gold', 3))).toEqual([
+      { label: '적용 대상', value: '판매가' },
+      { label: '행운 효과', value: '×1.03', accent: true },
+    ]);
+    expect(fortuneModalRows(f('shadow', 3))).toEqual([
+      { label: '적용 대상', value: '네임드 조우 확률' },
+      { label: '행운 효과', value: '×1.03', accent: true },
+    ]);
   });
 });
 
@@ -190,14 +215,20 @@ describe('운세 월간 달력 파생 로직', () => {
       f('gold', 3, '2026-10-12'),
       f('shadow', 5, '2026-10-28'),
     ];
-    // 현재 월이면 오늘을 기본 선택
-    expect(resolveSelectedFortuneDay('2026-11', [], '2026-11-25')).toBe('2026-11-25');
+    // 기록이 없는 달이면 null (현재 월이어도 오늘 기록이 없으면 null)
+    expect(resolveSelectedFortuneDay('2026-11', [], '2026-11-25')).toBeNull();
+    // 현재 월에 오늘 기록이 있으면 오늘을 기본 선택
+    expect(resolveSelectedFortuneDay('2026-11', [f('fish', 5, '2026-11-20'), f('gold', 3, '2026-11-25')], '2026-11-25')).toBe('2026-11-25');
+    // 현재 월이지만 오늘 기록이 없고 이전 기록만 있으면 마지막 기록일을 기본 선택
+    expect(resolveSelectedFortuneDay('2026-11', [f('fish', 5, '2026-11-20')], '2026-11-25')).toBe('2026-11-20');
     // 과거 월이면 마지막 기록일을 기본 선택
     expect(resolveSelectedFortuneDay('2026-10', records, '2026-11-25')).toBe('2026-10-28');
     // 빈 과거 월이면 null
     expect(resolveSelectedFortuneDay('2026-09', [], '2026-11-25')).toBeNull();
-    // 같은 달 안에서 사용자가 선택한 과거/오늘 날짜가 있으면 유지
+    // 같은 달 안에서 사용자가 선택한 기록 날짜가 있으면 유지
     expect(resolveSelectedFortuneDay('2026-10', records, '2026-11-25', '2026-10-12')).toBe('2026-10-12');
+    // 기록이 없는 과거 날짜를 선택값으로 넘기면 기본 기록일로 대체
+    expect(resolveSelectedFortuneDay('2026-10', records, '2026-11-25', '2026-10-13')).toBe('2026-10-28');
     // 다른 달에서 넘어온 선택값은 새 달의 기본 선택으로 대체
     expect(resolveSelectedFortuneDay('2026-10', records, '2026-11-25', '2026-11-25')).toBe('2026-10-28');
 

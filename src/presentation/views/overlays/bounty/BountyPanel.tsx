@@ -10,7 +10,8 @@ import { useEffect, useState } from 'react';
 import { useTutorialTrigger } from '../../../../features/tutorial/service/tutorial';
 import { REJECT_TEXT } from '../../../../game/rules/logic.js';
 import type { GameState } from '../../../../game/rules/logic.js';
-import type { BountyKind, BountyPort } from '../../../../game/content/bounties.js';
+import type { Artifact } from '../../../../game/content/artifacts.js';
+import type { BountyKind, BountyPort, BountyQuest } from '../../../../game/content/bounties.js';
 import { zoneById } from '../../../../game/content/zones.js';
 import type { GameAction } from '../../../../game/rules/actions.js';
 import { gameDay } from '../../../../features/bounty/service/queryKeys';
@@ -28,9 +29,14 @@ import RelicCard from './RelicCard';
 import CheckToggle from '../../../ui/CheckToggle';
 import { HighlightRarityText } from '../../../ui/fish/RarityTag';
 import Gated from '../../../ui/Gated';
+import IconButton from '../../../ui/IconButton';
 import Inset from '../../../ui/Inset';
 import PixelIcon from '../../../ui/PixelIcon';
+import SectionTitle from '../../../ui/SectionTitle';
 import TabBar from '../../../ui/TabBar';
+import Tip from '../../../ui/Tip';
+import ArtifactDetail from '../../game/tabs/bag/ArtifactDetail';
+import NamedDetail from '../../game/tabs/dex/NamedDetail';
 import { fmtGold, josa } from '../../../ui/format';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import { SCROLL_Y } from '../../../ui/scrollArea';
@@ -79,6 +85,8 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
   const alertSetting = useEncounterAlertSetting();
   const [busy, setBusy] = useState(false);
   const [screen, setScreen] = useState<BoardScreen>('quests');
+  const [namedDetail, setNamedDetail] = useState<BountyQuest | null>(null);
+  const [relicDetail, setRelicDetail] = useState<Artifact | null>(null);
   // 튜토리얼 트리거 — 일반 의뢰·네임드 토벌 탭을 처음 열었을 때
   useTutorialTrigger('bounty-quests', screen === 'quests');
   useTutorialTrigger('bounty-named', screen === 'named');
@@ -141,11 +149,19 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
       />
       <div className={`flex flex-col gap-2 flex-1 min-h-0 ${SCROLL_Y}`}>
       {screen === 'quests' ? (
-        <div className="grid grid-cols-3 gap-2 items-stretch flex-1 min-h-0 mobile:grid-cols-1">
-          {gradeCard('easy')}
-          {gradeCard('normal')}
-          {gradeCard('hard')}
-        </div>
+        <>
+          <SectionTitle className="flex items-center justify-between gap-2">
+            <span>오늘의 의뢰</span>
+            <Tip wraps pressOpens text={'수주한 뒤에 잡은 물고기부터 세요.\n물고기는 가방에 남아요.'}>
+              <IconButton type="button" glyph="question" size={12} tone="dim" aria-label="수주 안내" className="p-0.5" />
+            </Tip>
+          </SectionTitle>
+          <div className="grid grid-cols-3 gap-2 items-stretch flex-1 min-h-0 mobile:grid-cols-1">
+            {gradeCard('easy')}
+            {gradeCard('normal')}
+            {gradeCard('hard')}
+          </div>
+        </>
       ) : screen === 'named' ? (
         <>
         <div className="flex-1 min-h-0 flex flex-col mobile:flex-none">
@@ -157,6 +173,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
                 progress={progressOf(quest.id)} accepted={isAccepted(quest.id)}
                 ticketMins={ticketMins}
                 materialName={relic?.materialName ?? null}
+                onOpenDetail={() => setNamedDetail(quest)}
                 onAccept={() => run(
                   { type: 'acceptQuest', questId: quest.id, port },
                   'bounty.questAccepted',
@@ -192,20 +209,31 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         </div>
         </>
       ) : (
-        <div className={CARD_ROW}>
-          {relics.map(({ artifact, owned, level, mats }) => (
-            <RelicCard key={artifact.id} artifact={artifact} owned={owned} level={level}
-              materialCount={mats} busy={busy}
-              onExchange={() => run(
-                { type: 'exchangeArtifact', artifact: artifact.id },
-                'artifact.exchanged',
-                `${josa(artifact.name, '을/를')} 손에 넣었어요!`,
-                `유물 [${artifact.name}] 획득!`,
-                'gold')} />
-          ))}
-        </div>
+        <>
+          <SectionTitle className="flex items-center justify-between gap-2">
+            <span>해역 유물</span>
+            <Tip wraps pressOpens text="교환 재료는 네임드 토벌 보상으로 받아요.">
+              <IconButton type="button" glyph="question" size={12} tone="dim" aria-label="교환 재료 안내" className="p-0.5" />
+            </Tip>
+          </SectionTitle>
+          <div className={CARD_ROW}>
+            {relics.map(({ artifact, owned, level, mats }) => (
+              <RelicCard key={artifact.id} artifact={artifact} owned={owned} level={level}
+                materialCount={mats} busy={busy}
+                onOpenDetail={() => setRelicDetail(artifact)}
+                onExchange={() => run(
+                  { type: 'exchangeArtifact', artifact: artifact.id },
+                  'artifact.exchanged',
+                  `${josa(artifact.name, '을/를')} 손에 넣었어요!`,
+                  `유물 [${artifact.name}] 획득!`,
+                  'gold')} />
+            ))}
+          </div>
+        </>
       )}
       </div>
+      {namedDetail && <NamedDetail quest={namedDetail} game={game} onClose={() => setNamedDetail(null)} />}
+      {relicDetail && <ArtifactDetail artifact={relicDetail} game={game} dispatch={dispatch} setToast={setToast} onClose={() => setRelicDetail(null)} />}
     </div>
   );
 }

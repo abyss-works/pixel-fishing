@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { REJECT_TEXT, freeExhibitSlot, instanceFish, formName } from '../../../../../game/rules/logic';
-import AdjustedAmount from '../../../../ui/AdjustedAmount';
 import PageTitle from '../../../../ui/PageTitle';
 import Subheading from '../../../../ui/Subheading';
 import { fmtGold, fmtNum, fmtSize, josa } from '../../../../ui/format';
@@ -26,7 +25,7 @@ import IconButton from '../../../../ui/IconButton';
 import Tip, { TipCard } from '../../../../ui/Tip';
 import SubTabs from '../../../../ui/SubTabs';
 import ToggleChip from '../../../../ui/ToggleChip';
-import { HighlightRarityText, RarityDot, RarityText } from '../../../../ui/fish/RarityTag';
+import { GradeName, HighlightRarityText, RarityDot } from '../../../../ui/fish/RarityTag';
 import { groupInstances } from '../../../../../features/inventory/model/bagRows';
 import InstanceLine, { UnsizedLine } from '../../../../ui/fish/InstanceLine';
 import BagCards from './BagCards';
@@ -41,6 +40,7 @@ import ItemSprite from '../../../../ui/ItemSprite';
 import PressRow from '../../../../ui/PressRow';
 import ArtifactDetail from './ArtifactDetail';
 import ItemSection from './ItemSection';
+import EnergyPanel from '../../../overlays/facility/EnergyPanel';
 import { SidebarFooter } from '../../../../layouts/sidebar';
 
 /** 전시대 화면 노출 — 1차 전시대는 이번 배포에서 뺀다. 규칙·액션은 그대로다 */
@@ -91,53 +91,65 @@ function ArtifactSection({ game, dispatch, setToast }: {
           emphasis={ownedOnly}
           onClick={() => setOwnedOnly(v => !v)}
         >
-          <PixelIcon glyph="check" size={10} />
           보유 중만 보기
         </ToggleChip>
       </div>
       {shown.length === 0 ? (
         <Note>아직 유물이 없어요.<br /><HighlightRarityText text="네임드를 토벌하고 받은 교환 재료를 수배판의 유물 탭에서 유물로 바꿔 보세요." /></Note>
       ) : (
-        <>
-          <Inset divided>
-            {shown.map(({ artifact: a, owned, zoneName }) => {
-              if (!owned) {
-                return (
-                  <div key={a.id} className="flex items-center gap-2.5 px-2 py-1.5 text-sm text-text-dim bg-bg">
-                    <ItemSprite kind="artifact" id={a.id} preset="list" className="shrink-0 grayscale brightness-75" />
-                    <span className="truncate flex-1 min-w-0">{a.name}</span>
-                    <span className="flex items-baseline gap-2 text-xs shrink-0">
+        <Inset divided>
+          {shown.map(({ artifact: a, owned, zoneName }) => {
+            const { level, hasLevel } = owned ? selectArtifactLevel(game, a) : { level: 0, hasLevel: false };
+            const { bonus, penalty } = owned ? artifactSystemLines(a) : { bonus: null, penalty: null };
+            const effects = owned ? artifactEffectLines(a, level) : [];
+            const lineCount = effects.length + (bonus ? 1 : 0) + (penalty ? 1 : 0);
+            const body = (
+              <>
+                <ItemSprite
+                  kind="artifact"
+                  id={a.id}
+                  preset="list"
+                  className={cx('shrink-0 mt-0.5', !owned && 'grayscale brightness-75')}
+                />
+                <span className="flex flex-col gap-0.5 min-w-0 flex-1">
+                  <span className="flex items-baseline justify-between gap-2">
+                    <span className="truncate min-w-0">
+                      <GradeName name={a.name} grade={a.grade} emphasized={owned} />
+                    </span>
+                    <span className="flex items-baseline gap-1.5 text-xs shrink-0 text-text-dim">
                       <span>{zoneName}</span>
-                      <RarityText rarity={a.grade} />
+                      {owned && hasLevel && <span className="pf-accent text-accent">{levelText(level)}</span>}
                     </span>
-                  </div>
-                );
-              }
-              const { level, hasLevel } = selectArtifactLevel(game, a);
-              const { bonus, penalty } = artifactSystemLines(a);
-              return (
-                <PressRow key={a.id} onPress={() => setOpenId(a.id)} className="flex items-start gap-2.5 px-2 py-1.5 text-sm">
-                  <ItemSprite kind="artifact" id={a.id} preset="list" className="shrink-0 mt-0.5" />
-                  <span className="flex flex-col gap-0.5 min-w-0 flex-1">
-                    <span className="flex items-baseline justify-between gap-2">
-                      <b className="text-gold">{a.name}</b>
-                      <span className="flex items-baseline gap-2 text-xs shrink-0">
-                        {hasLevel && <span className="pf-accent">{levelText(level)}</span>}
-                        <RarityText rarity={a.grade} />
-                      </span>
-                    </span>
-                    {artifactEffectLines(a, level).map(line => (
-                      <span key={line} className="text-accent text-xs"><HighlightRarityText text={line} /></span>
-                    ))}
-                    {bonus && <span className="text-accent text-xs"><HighlightRarityText text={bonus} /></span>}
-                    {penalty && <span className="text-danger text-xs"><HighlightRarityText text={penalty} /></span>}
                   </span>
-                </PressRow>
-              );
-            })}
-          </Inset>
-          <Note>유물은 가지고만 있어도 효과가 계속돼요.<br />교환은 항구 수배판의 유물 탭에서 할 수 있어요.</Note>
-        </>
+                  {owned ? (
+                    <>
+                      {effects.map(line => (
+                        <span key={line} className="text-accent text-xs">{line}</span>
+                      ))}
+                      {bonus && <span className="text-accent text-xs">{bonus}</span>}
+                      {penalty && <span className="text-danger text-xs">{penalty}</span>}
+                      {lineCount < 2 && <span aria-hidden="true" className="text-xs select-none">{'\u00A0'}</span>}
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-xs text-text-dim">???</span>
+                      <span aria-hidden="true" className="text-xs select-none">{'\u00A0'}</span>
+                    </>
+                  )}
+                </span>
+              </>
+            );
+            return owned ? (
+              <PressRow key={a.id} data-artifact-row onPress={() => setOpenId(a.id)} className="flex items-start gap-2.5 px-2 py-1.5 text-sm">
+                {body}
+              </PressRow>
+            ) : (
+              <div key={a.id} data-artifact-row className="flex items-start gap-2.5 px-2 py-1.5 text-sm text-text-dim bg-bg">
+                {body}
+              </div>
+            );
+          })}
+        </Inset>
       )}
       {opened && (
         <ArtifactDetail artifact={opened} game={game} dispatch={dispatch} setToast={setToast} onClose={() => setOpenId(null)} />
@@ -187,7 +199,7 @@ function ExhibitShelf({ exhibit, onWithdraw }: {
   );
 }
 
-export default function BagTab({ game, accountState = 'account', sellBonus, bagBonus = 0, dispatch, setToast, onOpenEnergy }: {
+export default function BagTab({ game, accountState = 'account', sellBonus, bagBonus = 0, dispatch, setToast }: {
   game: GameState;
   /** 잠금 판정에 쓰는 계정 상태 - 아이템 섹션과 기운 얻기 진입의 잠금 사유를 정한다 */
   accountState?: AccountLockState;
@@ -197,17 +209,16 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
   bagBonus?: number;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
-  /** 물고기 섹션 하단 기운 얻기 진입 버튼 */
-  onOpenEnergy?: () => void;
 }) {
   const now = useNow();
   const rows = useMemo(() => groupInstances(game.bag), [game.bag]);
   const {
-    count: bagCount, cap, full: bagFull, sellable,
+    count: bagCount, cap, full: bagFull,
     autoLock: autoLockPlan,
   } = selectBagOverview(game, sellBonus, bagBonus, now);
   const energyEntry = selectBagEnergyEntry(game, accountState);
   const [lockConfirm, setLockConfirm] = useState(false);
+  const [energyOpen, setEnergyOpen] = useState(false);
   const { layout, section, opened } = useBagView();
 
   const lock = (uids: string[], locked: boolean, label: string) =>
@@ -296,34 +307,33 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
             <div className="flex items-center gap-1.5">
               {layout === 'list' && (
                 <Tip
+                  wraps
+                  pressOpens
                   text={(
                     <TipCard
                       title="개체 표시"
                       rows={[
                         {
-                          label: (
-                            <span className="inline-flex items-center gap-1">
-                              <PixelIcon glyph="crown" size={11} className="text-gold" />
-                              <span>금색 왕관</span>
+                          text: (
+                            <span className="inline-flex items-center gap-1.5">
+                              <PixelIcon glyph="crown" size={11} className="text-gold shrink-0" />
+                              <span>최대 크기</span>
                             </span>
                           ),
-                          value: '같은 형태 최대',
                         },
                         {
-                          label: (
-                            <span className="inline-flex items-center gap-1">
-                              <PixelIcon glyph="sparkle" size={11} className="text-epic" />
-                              <span>보라 반짝이</span>
+                          text: (
+                            <span className="inline-flex items-center gap-1.5">
+                              <PixelIcon glyph="sparkle" size={11} className="text-mutation shrink-0" />
+                              <span className="text-mutation">돌연변이</span>
                             </span>
                           ),
-                          value: '돌연변이 개체',
                         },
                       ]}
                     />
                   )}
-                  className="text-2xs text-text-dim"
                 >
-                  개체 표시
+                  <IconButton type="button" glyph="question" size={12} tone="dim" aria-label="개체 표시" />
                 </Tip>
               )}
               <Tip wraps text={layout === 'list' ? '카드 보기' : '목록 보기'}>
@@ -417,14 +427,6 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
                   );
                 })}
               </Inset>
-              <Note>
-                판매 가능 금액은 <AdjustedAmount amount={sellable} />이에요.<br />
-                판매는 집 궤짝이나 항구 어시장에서 할 수 있어요.<br />
-                자물쇠는 개체마다 걸 수 있고, 머리 줄의 자물쇠는 그 종 전부에 걸어요.<br />
-                {EXHIBIT_UI_ENABLED && <>별을 누르면 전시대에 올라가요.<br />전시 중에는 팔리지 않아요.<br /></>}
-                행 소계는 잠근 개체를 포함한 그 종의 값 합계예요.<br />
-                목록은 등급이 높은 순으로 정렬돼요.
-              </Note>
             </>
           )}
           <SidebarFooter>
@@ -455,13 +457,16 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
                          status={{ tone: 'lock', lines: energyEntry.lines }}
                        />
                      )}>
-                <Button size="sm" disabled={!energyEntry.ok} onClick={() => onOpenEnergy?.()}
+                <Button size="sm" disabled={!energyEntry.ok} onClick={() => setEnergyOpen(true)}
                         className="w-full justify-center">
                   기운 얻기
                 </Button>
               </Tip>
             </div>
           </SidebarFooter>
+          {energyOpen && (
+            <EnergyPanel game={game} dispatch={dispatch} setToast={setToast} onClose={() => setEnergyOpen(false)} />
+          )}
         </>
       )}
     </div>

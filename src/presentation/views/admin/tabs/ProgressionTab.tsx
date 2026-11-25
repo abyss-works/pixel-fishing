@@ -16,6 +16,7 @@ import { BarsChart } from '../charts';
 import { Cell, CellGrid, TabState } from '../layout';
 import UserIdentity from '../UserIdentity';
 import BountyFunnelSection from './BountyFunnelSection';
+import OnboardingFunnelSection from './OnboardingFunnelSection';
 
 // 조회 전 골격 — 아래 파생 계산이 매 렌더 다시 돌지 않도록 같은 배열을 재사용한다
 const NO_USERS: AdminUserRow[] = [];
@@ -112,6 +113,8 @@ export default function ProgressionTab() {
             </div>
           )}
         </Cell>
+
+        <OnboardingFunnelSection granted={granted} />
 
         <BountyFunnelSection granted={granted} />
       </CellGrid>

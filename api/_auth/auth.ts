@@ -7,6 +7,7 @@ import { createHmac, randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { accountLinking, dropOAuthTokens, finishGoogleLink, googleProvider, guardAuthRequests, validateGoogleLink } from './googleLink.js';
 import type { GoogleConfig, RecordLinkConsent } from './googleLink.js';
+import { TRUSTED_PROXY_CIDRS } from './trustedProxy.js';
 
 export interface AuthConfig {
   pool: Pool;
@@ -61,21 +62,9 @@ const verificationTable = {
   fields: { expiresAt: 'expires_at', ...timestamps },
 };
 
-const TRUSTED_PROXY_CIDRS = [
-  '127.0.0.0/8',
-  '10.0.0.0/8',
-  '172.16.0.0/12',
-  '192.168.0.0/16',
-  '100.64.0.0/10',
-  '169.254.0.0/16',
-  '::1/128',
-  'fc00::/7',
-  'fe80::/10',
-];
-
 const ipAddressConfig = {
   ipAddressHeaders: ['x-forwarded-for', 'x-real-ip'],
-  trustedProxies: TRUSTED_PROXY_CIDRS,
+  trustedProxies: [...TRUSTED_PROXY_CIDRS],
 };
 
 /** 인증 라이브러리 429 응답의 X-Retry-After 값을 표준 Retry-After 헤더에도 함께 싣는다 */

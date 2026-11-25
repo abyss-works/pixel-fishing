@@ -7,6 +7,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import BountyPanel from './BountyPanel';
 import { gameDay } from '../../../../features/bounty/service/queryKeys';
 import { BOUNTIES, dailyQuestFor } from '../../../../game/content/bounties';
+import { artifactById } from '../../../../game/content/artifacts';
+import { artifactEffectValue } from '../../../ui/artifactEffects';
 import { newState } from '../../../../game/rules/logic';
 import type { GameState } from '../../../../game/rules/logic';
 import type { BountySnapshot } from '../../../../features/bounty/model/types';
@@ -122,12 +124,15 @@ describe('BountyPanel', () => {
     expect(tipOfButton(buttons[0])).toBe('동남아에서 수주한 일반 의뢰가 있어요.\n그 구역의 수배판에서 먼저 마쳐 주세요.');
   });
 
-  it('수주할 수 있으면 수주 버튼의 툴팁은 세는 기준을 알린다', async () => {
+  it('수주할 수 있으면 수주 버튼에 중복 안내를 달지 않고, 일반 의뢰 머리글 툴팁 한 곳에 세는 기준을 알린다', async () => {
     mockSnap = { clearsToday: { general: 0, named: 0 }, progress: [], tickets: [] };
     show(game({ dex: fullDex }));
     const buttons = await screen.findAllByRole('button', { name: '수주' });
     await waitFor(() => expect(buttons[0]).not.toBeDisabled());
-    expect(tipOfButton(buttons[0])).toBe('수주한 뒤에 잡은 물고기부터 세요.\n물고기는 가방에 남아요.');
+    fireEvent.mouseEnter(buttons[0].parentElement!);
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    expect(screen.queryByText('수주 안내')).toBeNull();
+    expect(tipOfButton(screen.getByRole('button', { name: '수주 안내' }))).toBe('수주한 뒤에 잡은 물고기부터 세요.\n물고기는 가방에 남아요.');
   });
 
   it('날이 바뀐 뒤에도 마친 의뢰는 오늘의 의뢰와 달라도 그 칸에 보이고 완료할 수 있다', async () => {
@@ -206,20 +211,35 @@ describe('BountyPanel', () => {
       expect.objectContaining({ type: 'acceptQuest', questId: want.id, port: 'harbor' })));
   });
 
-  it('네임드 화면 — 이름은 ???, 수배서 전용 문구는 이름의 툴팁, 나타나는 곳과 보상과 교환 재료를 줄로 보인다', async () => {
+  it('네임드 화면 — 이름은 ???(클릭 시 네임드 상세 열림), 나타나는 곳과 보상과 교환 재료를 줄로 보인다', async () => {
     show(game({ dex: fullDex }));
     fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
-    expect(tipOf(screen.getByText('???'))).toMatch(/반달 모양의 이빨 자국/);
+    const detailBtn = screen.getByRole('button', { name: '??? 상세 보기' });
+    fireEvent.mouseEnter(screen.getByText('???'));
+    expect(screen.queryByRole('tooltip')).toBeNull();
     expect(screen.getByText('나타나는 곳')).toBeInTheDocument();
     const reward = BOUNTIES.find(q => q.zone === 'pacific' && q.difficulty === 'named')!.reward;
     expect(screen.getByText(new RegExp(`${reward.toLocaleString('en-US')}G`))).toBeInTheDocument();
     expect(screen.getByText('돌이 된 이빨')).toBeInTheDocument();
+
+    fireEvent.click(detailBtn);
+    expect(screen.getByRole('dialog')).toHaveTextContent('전해 오는 이야기');
   });
 
-  it('유물 화면 — 해역 유물 카드와 교환 버튼을 보인다', async () => {
+  it('유물 화면 — 해역 유물 카드와 교환 버튼을 보이고 카드 머리 클릭 시 유물 상세를 열며 교환 재료 안내는 소제목 툴팁 한 곳에 둔다', async () => {
     show(game({ dex: fullDex }));
     fireEvent.click(await screen.findByRole('button', { name: '유물' }));
     expect(screen.getByText('해구의 이빨')).toBeInTheDocument();
+    expect(screen.getByText('(영웅)')).toHaveAttribute('data-rarity', 'epic');
+    fireEvent.mouseEnter(screen.getByText('해구의 이빨'));
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    fireEvent.mouseEnter(screen.getByText('교환 재료'));
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    expect(screen.queryByText('교환 재료 안내')).toBeNull();
+    const tipBtn = screen.getByRole('button', { name: '교환 재료 안내' });
+    expect(tipOfButton(tipBtn)).toBe('교환 재료는 네임드 토벌 보상으로 받아요.');
+    fireEvent.mouseLeave(tipBtn.parentElement!);
+
     const mat = screen.getByText(/돌이 된 이빨/);
     expect(mat).toBeInTheDocument();
     expect(mat.closest('li')).toHaveTextContent('0/1');
@@ -227,6 +247,14 @@ describe('BountyPanel', () => {
     const exchange = screen.getByRole('button', { name: '교환' });
     expect(exchange).toBeDisabled();
     expect(tipOfButton(exchange)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: '해구의 이빨 상세 보기' }));
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveTextContent('해구의 이빨');
+    expect(dialog).toHaveTextContent('획득 시(Lv.1)');
+    expect(dialog).toHaveTextContent('네임드 결투 가속');
+    expect(dialog).toHaveTextContent(artifactEffectValue(artifactById('abyss-angler')!, 'duelSpeedupCut', 1)!);
+    expect(dialog.textContent).not.toContain('Lv.0');
   });
 
   it('재료가 있으면 교환하기가 exchangeArtifact를 보낸다', async () => {
@@ -256,7 +284,8 @@ describe('BountyPanel', () => {
     expect(screen.queryByText('도전권')).toBeNull();
     expect(document.body.textContent).not.toContain('도전권');
     fireEvent.mouseLeave(screen.getByText('흔적'));
-    expect(tipOf(screen.getByText('???'))).not.toContain('도전권');
+    fireEvent.mouseEnter(screen.getByText('???'));
+    expect(screen.queryByRole('tooltip')).toBeNull();
     expect(screen.queryByRole('button', { name: '도전 시작' })).toBeNull();
     expect(screen.queryByRole('dialog')).toBeNull();
   });

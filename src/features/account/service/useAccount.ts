@@ -19,7 +19,7 @@ export function useAccount({ game, setToast, adoptAccount }: {
   /** 메시지 창에 남긴다 — 거부·실패는 tone 'warn'을 넘긴다 */
   setToast: NoticeSink;
   /** useGame의 계정 교체 — 그 계정의 서버 상태를 채택하고 이 창을 그 계정의 활성 창으로 접속시킨다 */
-  adoptAccount: () => Promise<void>;
+  adoptAccount: () => Promise<boolean | void>;
 }) {
   // 로컬 개발(클라우드 미설정)은 UI 확인 용도로 가짜 계정으로 시작한다
   const [account, setAccount] = useState<string | null>(api.auth.isConfigured ? null : 'dev@localhost');
@@ -69,11 +69,13 @@ export function useAccount({ game, setToast, adoptAccount }: {
     if (next) setSessionUid(client, next);
     if (next && next !== uidRef.current) { // 로그인(계정 교체)만 서버 상태 로드
       uidRef.current = next;
-      await adoptAccount();
-      sendNotice(setToast, {
-        kind: 'boot.cloudLoaded',
-        text: '계정의 저장된 진행을 불러왔어요.',
-      });
+      const adopted = await adoptAccount();
+      if (adopted !== false) {
+        sendNotice(setToast, {
+          kind: 'boot.cloudLoaded',
+          text: '계정의 저장된 진행을 불러왔어요.',
+        });
+      }
     }
   };
 

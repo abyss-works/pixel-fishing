@@ -187,4 +187,40 @@ describe('모달과 사이드 메뉴 상호 비간섭 및 계층 분리', () => 
     expect(screen.getByRole('dialog', { name: '바깥 대화상자' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '도움말' })).not.toHaveClass('active');
   });
+
+  it('모바일 가방 시트에서 기운 얻기·자동 잠금 창은 시트를 닫지 않고 z-(--z-tabs) 바깥의 앱 모달 층(z-(--z-app-modal))에 뜬다', async () => {
+    stubMotion(false, true);
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      ...newState(),
+      tutorials: [...TUTORIAL_IDS],
+      fortune: { day: gameDayOf(new Date().toISOString()), kind: 'shadow', index: 3 },
+      boat: MAX_BOAT,
+      location: { kind: 'region', id: 'world' },
+      bag: [{ uid: 'f1', fishId: 'crucian', form: 'normal', size: 20, caughtAt: null, spot: null, judgment: null, locked: false }],
+    }));
+    render(<App />);
+    await advance(0);
+
+    fireEvent.click(screen.getByRole('button', { name: /^가방/ }));
+    expect(screen.getByRole('region', { name: '탭 내용' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '기운 얻기' }));
+    const energyDialog = screen.getByRole('dialog', { name: '기운 얻기' });
+    const stage = document.querySelector('[data-game-stage]')!;
+    expect(stage).not.toContainElement(energyDialog);
+    expect(energyDialog.parentElement!.className).toContain('fixed inset-0');
+    expect(energyDialog.parentElement!.className).toContain('z-(--z-app-modal)');
+    expect(energyDialog.parentElement!.closest('[class*="z-(--z-tabs)"]')).toBeNull();
+    expect(screen.getByRole('region', { name: '탭 내용' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '닫기' }));
+    expect(screen.queryByRole('dialog', { name: '기운 얻기' })).toBeNull();
+    expect(screen.getByRole('region', { name: '탭 내용' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '자동 잠금' }));
+    const lockDialog = screen.getByRole('dialog', { name: '자동 잠금' });
+    expect(stage).not.toContainElement(lockDialog);
+    expect(lockDialog.parentElement!.className).toContain('z-(--z-app-modal)');
+    expect(lockDialog.parentElement!.closest('[class*="z-(--z-tabs)"]')).toBeNull();
+  });
 });

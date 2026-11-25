@@ -53,6 +53,11 @@ export default function SummaryTab({ game, summary, row, here }: {
           </Tip>
         </div>
         <PowerMeter power={data.currentPower} requirement={data.requirement} />
+        {data.underpowered && (
+          <p className="text-2xs text-orange leading-snug">
+            필요 파워({data.requirement})보다 낮아요. GOOD과 PERFECT 영역이 사라지고 희귀한 물고기가 덜 걸리며 입질이 늦어져요.
+          </p>
+        )}
         <div className="grid grid-cols-3">
           <SummaryFigure label="입질 대기">{data.effectiveBite.min.value.toFixed(1)}~{data.effectiveBite.max.value.toFixed(1)}초</SummaryFigure>
           <SummaryFigure label="GOOD 영역">{goodText(row)}</SummaryFigure>
