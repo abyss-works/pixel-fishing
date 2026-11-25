@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useRef, useState } from 'react';
-import { BASE_PACKS, HARBORS, LIVE_REGIONS, V_POND, V_SCHOOLS, resumePoint, schoolsOf } from './game/world';
+import { BASE_PACKS, HARBORS, LIVE_REGIONS, V_POND, V_SCHOOLS, boardingOf, resumePoint, schoolsOf } from './game/world';
 import type { Point, SceneRef } from './game/world';
 import type { BaseId, LocationRef } from './game/content/places';
 import { spotById } from './game/content/spots';
@@ -9,6 +9,7 @@ import { topZoneOfSpot, zoneById } from './game/content/zones';
 import { minLevelOfPower } from './game/rules/stats';
 import { getSchoolDay } from './features/gameplay/service/schoolDay';
 import { settleAction, useGame } from './features/gameplay/service/useGame';
+import { consumeSailReturn, isSailReturnReady } from './features/account/service/sailReturn';
 import { useAccount } from './features/account/service/useAccount';
 import { useLastPosition } from './features/gameplay/service/useLastPosition';
 import { useMessageLog } from './presentation/layouts/hud/useMessageLog';
@@ -58,15 +59,37 @@ function AppContent() {
   // 장소를 지정할 때마다 늘어나는 순번 — 같은 지역 안에서 같은 좌표로 다시 옮기는 경우도 Field가 알아챈다
   const [placeSeq, setPlaceSeq] = useState(0);
   // 접속 복원 — 저장된 장소로 옮기고, 바다면 마지막 위치를 읽은 뒤 그 자리에서 시작한다(갈 수 없는 자리면 출발점)
+  // 단, 포구 출항 차단 뒤 구글 인증으로 돌아온 경우에는 부팅·계정 확인이 끝난 뒤 1회 표지를 소비해 대양 출항 위치로 바로 이동한다.
   const last = useLastPosition();
   const restored = useRef(false);
   useEffect(() => {
     if (restored.current || sync !== 'on' || !last.settled) return;
-    restored.current = true;
+    if (isSailReturnReady() && (loading || (!accountChecked && !accountFailed))) return;
+
     const next = sceneOf(game.location);
+    restored.current = true;
+
+    if (consumeSailReturn() && account !== null && game.boat >= 1 && next.id !== 'world') {
+      const { region, at, msg } = boardingOf('harbor');
+      const worldScene: SceneRef = { kind: 'region', id: region };
+      const departure = at ?? HARBORS.harbor.departure;
+      setScene(worldScene);
+      setEntryPos(departure);
+      setPlaceSeq(seq => seq + 1);
+      sendNotice(setToast, { kind: 'travel.routineMove', text: msg });
+      void settleAction(() => dispatch({ type: 'travel', to: worldScene })).then(settled => {
+        if (settled.ok) return;
+        setScene(next);
+        setEntryPos(next.kind === 'region' ? resumePoint(next.id, last.position) : null);
+        setPlaceSeq(seq => seq + 1);
+        if (settled.notice) sendNotice(setToast, { kind: 'travel.blocked', text: settled.notice, cooldownKey: 'travel.blocked:go' });
+      });
+      return;
+    }
+
     setScene(next);
     setEntryPos(next.kind === 'region' ? resumePoint(next.id, last.position) : null);
-  }, [sync, game.location, last.settled, last.position]);
+  }, [sync, loading, accountChecked, accountFailed, account, game.location, game.boat, last.settled, last.position, dispatch, setToast]);
 
   const place = (nextScene: SceneRef, position?: Point) => {
     setScene(nextScene);

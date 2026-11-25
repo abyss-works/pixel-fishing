@@ -15,19 +15,29 @@ vi.mock('../../../../features/account/service/accountActions', async importOrigi
 
 import AccountModal from './AccountModal';
 import { ACCOUNT_CHECK_FAILED_COPY } from '../../../../features/account/model/accountRules';
+import { hasPendingSailReturn, resetSailReturnForTest, setPendingSailReturn } from '../../../../features/account/service/sailReturn';
 
 beforeEach(() => {
   actions.connectGoogle.mockReset();
   actions.connectGoogle.mockResolvedValue({ ok: true });
   actions.configured = true;
+  sessionStorage.clear();
+  resetSailReturnForTest();
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  sessionStorage.clear();
+  resetSailReturnForTest();
+});
 
-const open = (account: string | null, accountFailed = false) => {
+const open = (account: string | null, accountFailed = false, sailReturn = false) => {
   const setToast = vi.fn();
   const onAuthChanged = vi.fn(async () => {});
   const onClose = vi.fn();
-  const view = render(<AccountModal layer="app" setToast={setToast} onAuthChanged={onAuthChanged} onClose={onClose} account={account} accountFailed={accountFailed} />);
+  const view = render(
+    <AccountModal layer="app" setToast={setToast} onAuthChanged={onAuthChanged} onClose={onClose}
+                  account={account} accountFailed={accountFailed} sailReturn={sailReturn} />,
+  );
   return { setToast, onAuthChanged, onClose, unmount: view.unmount };
 };
 
@@ -122,5 +132,37 @@ describe('계정 확인 실패', () => {
     expect(accountDialog).not.toBe(deleteDialog);
     expect(accountDialog.contains(deleteDialog)).toBe(false);
     expect(stage).toContainElement(deleteDialog);
+  });
+});
+
+describe('출항 차단 후 로그인 의도 표지', () => {
+  it('출항 의도로 열린 창에서 구글 로그인을 시작하면 출항 대기를 저장한다', async () => {
+    open(null, false, true);
+    fireEvent.click(screen.getByRole('button', { name: 'Google로 계속하기' }));
+    await waitFor(() => expect(actions.connectGoogle).toHaveBeenCalledTimes(1));
+    expect(hasPendingSailReturn()).toBe(true);
+  });
+
+  it('출항 의도로 열린 창에서 구글 로그인 시작이 실패하면 출항 대기를 지운다', async () => {
+    actions.connectGoogle.mockResolvedValue({ ok: false, msg: '실패' });
+    open(null, false, true);
+    fireEvent.click(screen.getByRole('button', { name: 'Google로 계속하기' }));
+    await waitFor(() => expect(actions.connectGoogle).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(hasPendingSailReturn()).toBe(false));
+  });
+
+  it('출항 의도로 열린 창을 로그인 없이 닫으면 출항 대기를 지우고 닫는다', () => {
+    setPendingSailReturn();
+    const { onClose } = open(null, false, true);
+    fireEvent.click(screen.getByRole('button', { name: '닫기' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(hasPendingSailReturn()).toBe(false);
+  });
+
+  it('일반 계정 관리 창(설정 등)에서는 구글 로그인을 눌러도 출항 대기를 저장하지 않는다', async () => {
+    open(null, false, false);
+    fireEvent.click(screen.getByRole('button', { name: 'Google로 계속하기' }));
+    await waitFor(() => expect(actions.connectGoogle).toHaveBeenCalledTimes(1));
+    expect(hasPendingSailReturn()).toBe(false);
   });
 });

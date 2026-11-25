@@ -32,7 +32,7 @@ import { gameDayOf } from './game/rules/time';
 import type { GameAction } from './game/rules/actions';
 import { LocalGameGateway } from './platform/adapters/localGameGateway';
 import { when } from './platform/api';
-import { V_SPAWN, schoolsOf } from './game/world';
+import { V_SPAWN, HARBORS, resumePoint, schoolsOf } from './game/world';
 import type { Point, RegionId } from './game/world';
 import { setSchoolDay } from './features/gameplay/service/schoolDay';
 import { setSharedProfileStatus } from './features/gameplay/service/profileStatus';
@@ -1781,5 +1781,151 @@ describe('운영 빌드 개발 도구 제거', () => {
       vi.resetModules();
       window.history.replaceState({}, '', '/');
     }
+  });
+});
+
+describe('포구 출항 차단 후 로그인 복귀', () => {
+  async function renderCloudReturn({
+    save,
+    landing,
+    lastPosition,
+    pendingSail,
+    accountLookup = { status: 'account', email: 'sailor@example.test' },
+  }: {
+    save: Partial<GameState>;
+    landing: { tag: string; error: string | null } | null;
+    lastPosition: { region: RegionId; x: number; y: number } | null;
+    pendingSail: boolean;
+    accountLookup?: { status: 'account'; email: string } | { status: 'guest' } | { status: 'failed' };
+  }) {
+    seed(save);
+    if (pendingSail) sessionStorage.setItem('pf-sail-return', 'world');
+    else sessionStorage.removeItem('pf-sail-return');
+
+    const seenField: { region?: RegionId; initialPos?: Point } = {};
+    vi.resetModules();
+    vi.doMock('./platform/api', async importActual => {
+      const actual = await importActual<typeof import('./platform/api')>();
+      const base = actual.createApi();
+      Object.defineProperties(base.auth, {
+        isConfigured: { value: true, configurable: true },
+        ensureSession: { value: async () => 'uid-sail-return', configurable: true },
+        currentAccount: { value: async () => accountLookup, configurable: true },
+        takeGoogleLanding: { value: () => landing, configurable: true },
+      });
+      return {
+        ...actual,
+        readLastPosition: async () => lastPosition,
+        api: base,
+      };
+    });
+    vi.doMock('./presentation/layouts/game-stage/Field', async importActual => {
+      const actual = await importActual<typeof import('./presentation/layouts/game-stage/Field')>();
+      const Wrapped = (props: Parameters<typeof actual.default>[0]) => {
+        seenField.region = props.region;
+        seenField.initialPos = props.initialPos;
+        return actual.default(props);
+      };
+      return { default: Wrapped };
+    });
+
+    try {
+      const { default: CloudApp } = await import('./App');
+      render(<CloudApp />);
+      await waitFor(() => {
+        expect(screen.queryByRole('status', { name: /불러오는 중/ })).not.toBeInTheDocument();
+        expect(seenField.region).toBeDefined();
+      });
+      return { seenField };
+    } finally {
+      vi.doUnmock('./platform/api');
+      vi.doUnmock('./presentation/layouts/game-stage/Field');
+    }
+  }
+
+  afterEach(() => {
+    sessionStorage.clear();
+    vi.resetModules();
+  });
+
+  it('link-guest 복귀 시 출항 대기가 있고 배를 보유하면 대양 출항 좌표로 바로 이동한다', async () => {
+    const { seenField } = await renderCloudReturn({
+      save: { boat: 1, location: { kind: 'region', id: 'village' } },
+      landing: { tag: 'link-guest', error: null },
+      lastPosition: { region: 'village', x: 100, y: 120 },
+      pendingSail: true,
+    });
+    await waitFor(() => expect(seenField.region).toBe('world'));
+    expect(seenField.initialPos).toEqual(HARBORS.harbor.departure);
+    expect(sessionStorage.getItem('pf-sail-return')).toBeNull();
+    await waitFor(() => {
+      const saved = JSON.parse(localStorage.getItem(SAVE_KEY)!) as GameState;
+      expect(saved.location).toEqual({ kind: 'region', id: 'world' });
+    });
+  });
+
+  it('sign-in 덮어쓰기 복귀 시에도 출항 대기가 있고 배를 보유하면 대양 출항 좌표로 바로 이동한다', async () => {
+    const { seenField } = await renderCloudReturn({
+      save: { boat: 2, location: { kind: 'region', id: 'village' } },
+      landing: { tag: 'sign-in', error: null },
+      lastPosition: { region: 'village', x: 100, y: 120 },
+      pendingSail: true,
+    });
+    await waitFor(() => expect(seenField.region).toBe('world'));
+    expect(seenField.initialPos).toEqual(HARBORS.harbor.departure);
+    expect(sessionStorage.getItem('pf-sail-return')).toBeNull();
+  });
+
+  it('다른 계정 로그인 후 배가 없으면 대양으로 이동하지 않고 대기 표지만 지운다', async () => {
+    const { seenField } = await renderCloudReturn({
+      save: { boat: 0, location: { kind: 'region', id: 'village' } },
+      landing: { tag: 'sign-in', error: null },
+      lastPosition: { region: 'village', x: 100, y: 120 },
+      pendingSail: true,
+    });
+    await waitFor(() => expect(sessionStorage.getItem('pf-sail-return')).toBeNull());
+    expect(seenField.region).toBe('village');
+  });
+
+  it('로그인한 계정이 이미 대양에 있으면 마지막 위치를 유지하고 대기 표지만 지운다', async () => {
+    const worldLast = { region: 'world' as const, x: 10128, y: 1851 };
+    const expectedResume = resumePoint('world', worldLast);
+    const { seenField } = await renderCloudReturn({
+      save: { boat: 1, location: { kind: 'region', id: 'world' } },
+      landing: { tag: 'sign-in', error: null },
+      lastPosition: worldLast,
+      pendingSail: true,
+    });
+    await waitFor(() => expect(sessionStorage.getItem('pf-sail-return')).toBeNull());
+    expect(seenField.region).toBe('world');
+    expect(seenField.initialPos).toEqual(expectedResume);
+  });
+
+  it('출항 대기 표지가 없는 일반 로그인은 기존 마지막 위치 복원을 따른다', async () => {
+    const villageLast = { region: 'village' as const, x: 100, y: 120 };
+    const expectedResume = resumePoint('village', villageLast);
+    const { seenField } = await renderCloudReturn({
+      save: { boat: 1, location: { kind: 'region', id: 'village' } },
+      landing: { tag: 'sign-in', error: null },
+      lastPosition: villageLast,
+      pendingSail: false,
+    });
+    await waitFor(() => expect(seenField.initialPos).toEqual(expectedResume));
+    expect(seenField.region).toBe('village');
+  });
+
+  it('계정 확인에 실패해도 출항 대기 표지를 소비하고 기존 마지막 위치 복원을 완료한다', async () => {
+    const villageLast = { region: 'village' as const, x: 100, y: 120 };
+    const expectedResume = resumePoint('village', villageLast);
+    const { seenField } = await renderCloudReturn({
+      save: { boat: 1, location: { kind: 'region', id: 'village' } },
+      landing: { tag: 'link-guest', error: null },
+      lastPosition: villageLast,
+      pendingSail: true,
+      accountLookup: { status: 'failed' },
+    });
+    await waitFor(() => expect(sessionStorage.getItem('pf-sail-return')).toBeNull());
+    await waitFor(() => expect(seenField.initialPos).toEqual(expectedResume));
+    expect(seenField.region).toBe('village');
   });
 });
