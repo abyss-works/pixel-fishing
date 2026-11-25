@@ -6,7 +6,8 @@ import type { DispatchResult } from '../../../../features/gameplay/service/types
 import { resetKeyScopes } from '../../../ui/hotkeys';
 import AchievementsModal from './AchievementsModal';
 
-afterEach(() => { cleanup(); resetKeyScopes(); });
+const originalMatchMedia = window.matchMedia;
+afterEach(() => { window.matchMedia = originalMatchMedia; cleanup(); resetKeyScopes(); });
 
 const seed = (over: Partial<GameState> = {}): GameState => ({ ...newState(), ...over });
 
@@ -121,5 +122,32 @@ describe('업적 창 카드 격자', () => {
     fireEvent.click(screen.getByRole('button', { name: '누적 보너스' }));
     fireEvent.click(screen.getByRole('button', { name: '스탯 창 보너스 탭에서 전체 합계 확인' }));
     expect(onOpenStatsBonus).toHaveBeenCalledTimes(1);
+  });
+
+  it('게스트 상태에서는 모두 받기 툴팁이 태평양 항로 해금 두 줄 안내를 보이고 거친 포인터에서 누르기로도 열린다', () => {
+    render(<AchievementsModal game={claimable} guest dispatch={vi.fn()} setToast={vi.fn()} onClose={() => {}} />);
+    const btn = screen.getByRole('button', { name: '모두 받기' });
+    expect(btn).toBeDisabled();
+    fireEvent.mouseEnter(btn.parentElement!);
+    const tooltip = screen.getByRole('tooltip');
+    expect(tooltip).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
+    expect(tooltip).toHaveTextContent('태평양 항로는 조각배(1단계)부터 열려요.');
+    cleanup();
+
+    window.matchMedia = ((query: string) => ({
+      matches: query === '(pointer: coarse)', media: query,
+      addEventListener: () => {}, removeEventListener: () => {},
+    })) as unknown as typeof window.matchMedia;
+    render(<AchievementsModal game={claimable} guest dispatch={vi.fn()} setToast={vi.fn()} onClose={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: '모두 받기' }));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
+  });
+
+  it('비게스트 상태에서 받을 수 있는 업적이 없으면 비활성 이유 툴팁을 보인다', () => {
+    render(<AchievementsModal game={seed()} dispatch={vi.fn()} setToast={vi.fn()} onClose={() => {}} />);
+    const btn = screen.getByRole('button', { name: '모두 받기' });
+    expect(btn).toBeDisabled();
+    fireEvent.mouseEnter(btn.parentElement!);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('지금 받을 수 있는 업적이 없어요.');
   });
 });

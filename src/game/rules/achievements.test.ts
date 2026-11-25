@@ -442,7 +442,7 @@ describe('업적 규칙과 액션 (rules, actions)', () => {
   });
 
   it('REJECT_TEXT에 업적 관련 문구가 모두 정의되어 있다', () => {
-    expect(REJECT_TEXT['account-only']).toBeTruthy();
+    expect(REJECT_TEXT['account-only']).toBe('태평양 항로가 열리면 쓸 수 있어요.');
     expect(REJECT_TEXT['achievement-already-claimed']).toBe('이미 받은 업적이에요.');
     expect(REJECT_TEXT['achievement-not-claimable']).toBe('아직 받을 수 없는 업적이에요.');
     expect(REJECT_TEXT['no-claimable-achievements']).toBe('받을 수 있는 업적이 없어요.');
