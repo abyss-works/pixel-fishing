@@ -229,12 +229,23 @@ export async function userState(db: Executor, uid: string): Promise<unknown> {
   const rawCooking = asRecord(data.cooking);
   const inProgress = typeof rawCooking.recipe === 'string'
     ? {
+        id: typeof rawCooking.id === 'string' ? rawCooking.id : null,
         recipe: rawCooking.recipe,
         name: recipeById(rawCooking.recipe)?.name ?? rawCooking.recipe,
         count: asNum(rawCooking.count),
         startedAt: typeof rawCooking.startedAt === 'string' ? rawCooking.startedAt : '',
       }
     : null;
+  const queue = (Array.isArray(data.cookingQueue) ? data.cookingQueue : []).flatMap(entry => {
+    const q = asRecord(entry);
+    if (typeof q.recipe !== 'string') return [];
+    return [{
+      id: typeof q.id === 'string' ? q.id : null,
+      recipe: q.recipe,
+      name: recipeById(q.recipe)?.name ?? q.recipe,
+      count: asNum(q.count),
+    }];
+  });
   const rawSlots = asRecord(data.slots);
   const parseSlot = (slot: unknown): { id: string; name: string; endsAt: string } | null => {
     const s = asRecord(slot);
@@ -308,6 +319,7 @@ export async function userState(db: Executor, uid: string): Promise<unknown> {
       energy,
       cooked,
       inProgress,
+      queue,
       slots: {
         lunch: parseSlot(rawSlots.lunch),
         bait: parseSlot(rawSlots.bait),

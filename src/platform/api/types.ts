@@ -378,7 +378,8 @@ export interface AdminUserState {
   cooking: {
     energy: { common: number; rare: number; epic: number; legendary: number };
     cooked: { id: string; name: string; kind: 'lunch' | 'bait'; count: number }[];
-    inProgress: { recipe: string; name: string; count: number; startedAt: string } | null;
+    inProgress: { id?: string | null; recipe: string; name: string; count: number; startedAt: string } | null;
+    queue?: { id: string | null; recipe: string; name: string; count: number }[];
     slots: {
       lunch: { id: string; name: string; endsAt: string } | null;
       bait: { id: string; name: string; endsAt: string } | null;

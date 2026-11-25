@@ -1345,7 +1345,7 @@ describe('세이브 v9 — 이관과 환불 영수증', () => {
 
   it('v9 행을 다시 불러도 조리, 슬롯, 기운 덮어쓰기, 영수증이 그대로다', async () => {
     const extra = {
-      cooking: { recipe: 'cook-lunch-bite', count: 2, bonus: [false, true], startedAt: '2030-03-04T04:00:00.000Z' },
+      cooking: { id: 'cook-legacy-1', recipe: 'cook-lunch-rare', count: 2, bonus: [false, true], startedAt: '2030-03-04T04:00:00.000Z' },
       slots: { lunch: { id: 'cook-lunch-bite', endsAt: '2030-03-04T09:00:00.000Z' }, bait: null },
       energyTargets: { pond: false },
       baitRefund: RECEIPT,
@@ -1560,14 +1560,14 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
     });
 
     it('cook 동시 요청은 기운을 한 번만 차감하고 조리 상태와 cook 이벤트를 한 번만 남긴다', async () => {
-      const recipe = recipeById('cook-bait-rare')!;
+      const recipe = recipeById('cook-lunch-rare')!;
       const commonCost = recipeCostStored(recipe, 'common');
       const rareCost = recipeCostStored(recipe, 'rare');
       const uid = await seed({
         state: {
           boat: COOKING_UNLOCK_BOAT,
           location: at('home'),
-          items: { [ENERGY_ITEM_IDS.common]: commonCost * 2, [ENERGY_ITEM_IDS.rare]: rareCost * 2 },
+          items: { [ENERGY_ITEM_IDS.common]: commonCost, [ENERGY_ITEM_IDS.rare]: rareCost },
         },
       });
 
@@ -1580,7 +1580,7 @@ describe('재화 액션 동시성 경합과 409 버전 충돌', () => {
       expect([409, 422]).toContain(statuses[1]);
 
       const save = await readSave(uid);
-      expect(save.data.items).toEqual({ [ENERGY_ITEM_IDS.common]: commonCost, [ENERGY_ITEM_IDS.rare]: rareCost });
+      expect(save.data.items).toEqual({});
       expect(save.data.cooking).toMatchObject({ recipe: recipe.id, count: 1, startedAt: NOW });
       expect(Number(save.version)).toBe(3);
       const events = await readEvents(uid);

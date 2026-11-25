@@ -489,7 +489,7 @@ describe('HttpGameGateway의 오류·거부 응답 처리', () => {
   const json = (body: unknown, status: number) =>
     new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
-  it.each(['not-enough-gold', 'max-boat', 'cooking-busy', 'material-missing'] as const)(
+  it.each(['not-enough-gold', 'max-boat', 'cooking-not-found', 'energy-cap', 'material-missing'] as const)(
     '422의 알려진 사유 %s는 그대로 돌려준다', async code => {
       vi.stubGlobal('fetch', async () => json({ error: code }, 422));
       const res = await new HttpGameGateway().dispatch({ type: 'buyBoat' });

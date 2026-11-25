@@ -90,7 +90,7 @@ describe('20개 debug 명령 전수 DB 영속화 및 재로딩 일치', () => {
   it('20개 전 debug 명령이 DB 테이블에 정확히 영속화되고 readOwnState로 재로딩 시 일치한다', async () => {
     const uid = await seed({
       state: {
-        cooking: { recipe: 'cook-lunch-bite', count: 2, bonus: [false, true], startedAt: NOW },
+        cooking: { id: 'cook-debug-1', recipe: 'cook-lunch-rare', count: 2, bonus: [false, true], startedAt: NOW },
         location: { kind: 'base', id: 'harbor' },
       },
     });
@@ -138,7 +138,7 @@ describe('20개 debug 명령 전수 DB 영속화 및 재로딩 일치', () => {
     expect(stateNow.cur?.rod).toBe(65);
     const savedItems = (stateNow.cur!.data as GameState).items;
     expect(savedItems[ENERGY_ITEM_IDS.common]).toBe(toStoredEnergy(15));
-    expect(savedItems['cook-lunch-bite']).toBe(3);
+    expect(savedItems['cook-lunch-rare']).toBe(3);
     expect(savedItems['mat-wreck-compass']).toBe(3);
     expect(stateNow.instances).toHaveLength(2);
     expect(stateNow.records.some(r => r.fish_id === 'guabancex' && r.form === 'normal')).toBe(true);
