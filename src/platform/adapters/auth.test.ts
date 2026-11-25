@@ -75,4 +75,25 @@ describe('게임 세션 로그아웃 격리', () => {
     expect(url).toContain('/api/auth/sign-out');
     expect(url).not.toContain('/api/admin');
   });
+
+  it('startGoogleAuth가 429 응답을 받으면 일반 속도 제한 코드 rate_limited를 돌려준다', async () => {
+    vi.stubEnv('VITE_CLOUD', '1');
+    vi.resetModules();
+    vi.stubGlobal('window', { location: { origin: 'https://game.test' } });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ message: 'Too many requests' }), {
+        status: 429,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const mod = await import('./auth');
+    const result = await mod.startGoogleAuth('sign-in', 'test-tag');
+
+    expect(result).toEqual({
+      ok: false,
+      msg: '요청이 너무 잦아요. 잠시 뒤 다시 시도해 주세요.',
+      code: 'rate_limited',
+    });
+  });
 });
