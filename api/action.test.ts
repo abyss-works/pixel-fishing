@@ -3,7 +3,7 @@
 // 그 계약(시그니처·res.status().json() 체인·메서드/설정 가드)이 커밋 전에 깨지면 CI에서 즉사시킨다.
 // NodeNext 설정이 서버 모듈의 해상도를 정적으로 검사하므로 여기서는 중복하지 않는다.
 import { afterEach, describe, it, expect } from 'vitest';
-import handler, { SKIP_DETAIL } from './action.js';
+import handler, { guildLogsOf, SKIP_DETAIL } from './action.js';
 import { APP_VERSION } from '../src/version.js';
 
 function mkRes() {
@@ -99,5 +99,31 @@ describe('api/action 핸들러 규약 (Node 스타일 req/res)', () => {
     // 요리와 기운 설정·물약 사용은 가방 개체를 쓰지 않아 스킵하고, 기운 얻기는 개체를 소비하므로 스킵하지 않는다
     for (const t of ['cook', 'eat', 'usePotion', 'setEnergyTarget', 'resetEnergyTargets', 'dismissBaitRefund', 'setAutoLockOnCatch']) expect(SKIP_DETAIL.has(t), t).toBe(true);
     expect(SKIP_DETAIL.has('extractEnergy')).toBe(false);
+  });
+});
+
+describe('guildLogsOf', () => {
+  it('일반 전설 또는 form이 생략된 전설 캐치는 fishId만 기록한다', () => {
+    expect(guildLogsOf([
+      { type: 'catch', payload: { fishId: 'goldcarp', form: 'normal' } },
+      { type: 'catch', payload: { fishId: 'goldcarp' } },
+    ])).toEqual([
+      { kind: 'legendary', detail: 'goldcarp' },
+      { kind: 'legendary', detail: 'goldcarp' },
+    ]);
+  });
+
+  it('돌연변이 전설 캐치는 fishId|variant 형식으로 기록한다', () => {
+    expect(guildLogsOf([
+      { type: 'catch', payload: { fishId: 'goldcarp', form: 'variant' } },
+    ])).toEqual([
+      { kind: 'legendary', detail: 'goldcarp|variant' },
+    ]);
+  });
+
+  it('전설이 아닌 돌연변이 캐치는 항해일지에 남기지 않는다', () => {
+    expect(guildLogsOf([
+      { type: 'catch', payload: { fishId: 'crucian', form: 'variant' } },
+    ])).toEqual([]);
   });
 });
