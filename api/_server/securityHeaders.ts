@@ -1,12 +1,13 @@
 // HTTP 보안 헤더 미들웨어 — 모든 HTTP 응답(API, 서버 렌더 HTML, 정적 자산)에 기본 보안 헤더를 적용한다.
 import type { RequestHandler } from 'express';
 import type { IncomingMessage } from 'node:http';
+import { isTrustedProxyAddress } from '../_auth/trustedProxy.js';
 
 export interface SecurityHeadersOptions {
-  /** 서비스의 신뢰 오리진(예: https://pixel-fishing.abyssworks.dev). 설정하면 해당 호스트의 WebSocket 출처를 connect-src에 포함한다 */
+  /** 서비스의 신뢰 오리진(예: https://pixel-fishing.abyssworks.dev). WebSocket 출처와 HSTS 스킴 판별에 쓴다 */
   origin?: string;
-  /** 오류 수집용 Sentry DSN. 자체 호스팅 도메인이면 키를 제외한 오리진만 connect-src에 추가한다 */
-  sentryDsn?: string;
+  /** 오류 수집용 Sentry DSN(단일 또는 목록). 자체 호스팅 도메인이면 키를 제외한 오리진만 connect-src에 추가한다 */
+  sentryDsn?: string | readonly (string | undefined)[];
   /** 특정 서버 렌더 HTML 응답에 제한적으로 허용할 인라인 스크립트 해시 토큰 목록 */
   scriptHashes?: readonly string[];
 }
@@ -29,40 +30,48 @@ const STANDARD_SENTRY_SUFFIXES = [
   '.ingest.de.sentry.io',
 ] as const;
 
-function wsOriginOf(origin: string | undefined): string | null {
-  if (!origin) return null;
+function originUrlOf(raw: string | undefined): URL | null {
+  if (!raw) return null;
   try {
-    const url = new URL(origin);
-    if (url.protocol === 'https:') return `wss://${url.host}`;
-    if (url.protocol === 'http:') return `ws://${url.host}`;
-    return null;
+    return new URL(raw.trim());
   } catch {
     return null;
   }
 }
 
-function customSentryOriginOf(dsn: string | undefined): string | null {
-  if (!dsn) return null;
-  try {
-    const url = new URL(dsn);
-    if (url.protocol !== 'https:') return null;
-    const host = url.hostname.toLowerCase();
-    if (STANDARD_SENTRY_SUFFIXES.some(suffix => host.endsWith(suffix))) return null;
-    return url.origin;
-  } catch {
-    return null;
-  }
+function wsOriginOf(origin: string | undefined): string | null {
+  const url = originUrlOf(origin);
+  if (!url) return null;
+  if (url.protocol === 'https:') return `wss://${url.host}`;
+  if (url.protocol === 'http:') return `ws://${url.host}`;
+  return null;
+}
+
+function customSentryOriginOf(dsn: string | undefined, selfOrigin: string | null): string | null {
+  const url = originUrlOf(dsn);
+  if (!url || url.protocol !== 'https:') return null;
+  if (selfOrigin && url.origin === selfOrigin) return null;
+  const host = url.hostname.toLowerCase();
+  if (STANDARD_SENTRY_SUFFIXES.some(suffix => host.endsWith(suffix))) return null;
+  return url.origin;
 }
 
 /** 애플리케이션 응답에 적용할 Content-Security-Policy 헤더 값을 조립한다 */
 export function buildContentSecurityPolicy(options: SecurityHeadersOptions = {}): string {
   const scriptSrc = ["'self'", ...(options.scriptHashes ?? [])];
   const connectSrc: string[] = ["'self'"];
+  const selfOrigin = originUrlOf(options.origin)?.origin ?? null;
   const wsOrigin = wsOriginOf(options.origin);
   if (wsOrigin) connectSrc.push(wsOrigin);
   connectSrc.push(...SENTRY_INGEST_SOURCES);
-  const customSentry = customSentryOriginOf(options.sentryDsn);
-  if (customSentry) connectSrc.push(customSentry);
+
+  const dsns = Array.isArray(options.sentryDsn) ? options.sentryDsn : [options.sentryDsn];
+  const extraOrigins = new Set<string>();
+  for (const dsn of dsns) {
+    const customSentry = customSentryOriginOf(dsn, selfOrigin);
+    if (customSentry) extraOrigins.add(customSentry);
+  }
+  connectSrc.push(...extraOrigins);
 
   return [
     "default-src 'self'",
@@ -95,12 +104,16 @@ export function appendScriptHashToCsp(csp: string, hash: string): string {
   return next.join('; ');
 }
 
-/** 요청이 TLS 종단 프록시(X-Forwarded-Proto: https) 또는 직접 TLS 소켓으로 들어왔는지 판별한다 */
-export function isHttpsRequest(req: IncomingMessage): boolean {
+/** 요청이 직접 TLS 소켓이거나, HTTPS 오리진에서 신뢰 프록시가 마지막으로 전달한 HTTPS 요청인지 판별한다 */
+export function isHttpsRequest(req: IncomingMessage, options?: { origin?: string }): boolean {
+  if ((req.socket as { encrypted?: boolean } | undefined)?.encrypted === true) return true;
+  const configured = originUrlOf(options?.origin);
+  if (configured && configured.protocol !== 'https:') return false;
+  if (!isTrustedProxyAddress(req.socket?.remoteAddress)) return false;
   const proto = req.headers['x-forwarded-proto'];
-  const first = (Array.isArray(proto) ? proto[0] : proto)?.split(',')[0]?.trim().toLowerCase();
-  if (first === 'https') return true;
-  return (req.socket as { encrypted?: boolean } | undefined)?.encrypted === true;
+  const joined = Array.isArray(proto) ? proto.join(',') : proto;
+  const tokens = joined?.split(',').map(v => v.trim().toLowerCase()).filter(Boolean) ?? [];
+  return tokens.at(-1) === 'https';
 }
 
 /** 기본 HTTP 보안 헤더 5종과 HTTPS 한정 HSTS를 모든 응답에 설정하는 미들웨어 */
@@ -112,7 +125,7 @@ export function securityHeaders(options: SecurityHeadersOptions = {}): RequestHa
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('Permissions-Policy', DEFAULT_PERMISSIONS_POLICY);
-    if (isHttpsRequest(req)) {
+    if (isHttpsRequest(req, options)) {
       res.setHeader('Strict-Transport-Security', HSTS_VALUE);
     }
     next();
