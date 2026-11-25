@@ -1007,11 +1007,14 @@ describe('설정 — 내 정보 (문의 대응용 uid 노출)', () => {
     // 로컬은 로그인 상태로 가정하므로 가짜 계정이 설정 탭 요약에 뜬다(배포 빌드에선 실제 이메일 또는 '게스트')
     expect(screen.getByText('dev@localhost')).toBeInTheDocument();
     fireEvent.click(openerButton('내 정보'));
-    expect(screen.getByRole('dialog', { name: '내 정보' })).toBeInTheDocument();
+    const dialog = screen.getByRole('dialog', { name: '내 정보' });
+    expect(dialog).toBeInTheDocument();
     // body에 user-select:none이 걸려 있어 드래그 복사가 안 된다 → 버튼이 유일한 경로.
     // 화면은 가운데를 가리지만 복사는 전체 값이라, 버튼이 없으면 문의 대응이 불가능해진다.
     expect(screen.getByRole('button', { name: '복사' })).toBeInTheDocument();
-    expect(document.body.textContent).toContain('전체가 복사돼요');
+    expect(document.body.textContent).not.toContain('전체가 복사돼요');
+    fireEvent.mouseEnter(within(dialog).getByRole('heading', { name: '내 정보', level: 4 }).firstElementChild!);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('전체가 복사돼요');
   });
 });
 
