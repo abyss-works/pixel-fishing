@@ -7,6 +7,7 @@ import { cx } from '../../../ui/cx';
 import KeyValueRow from '../../../ui/KeyValueRow';
 import Tip, { TipCard } from '../../../ui/Tip';
 import type { TipRow } from '../../../ui/Tip';
+import { splitTipLines } from '../../../ui/tipText';
 import { FIT_LABEL, FIT_TONE, goodText, idleRows, idleText } from './statsText';
 
 // 낚싯대 수치: 고른 해역 기준의 유효 스탯을 두 열 목록으로 보인다. 입질 대기와 방치 페널티는 해역 대비 상대치이고,
@@ -66,15 +67,15 @@ export default function RodStatTable({ row }: { row: StatsSpotRow }) {
         <RodStatLine label="왕복 속도">{axes.sweep.value.toFixed(2)}초</RodStatLine>
         <RodStatLine label="입질 최소 대기"><StatValue label="입질 최소 대기" stat={effectiveBite.min} unit="초" /></RodStatLine>
         <RodStatLine label="입질 최대 대기"><StatValue label="입질 최대 대기" stat={effectiveBite.max} unit="초" /></RodStatLine>
-        <RodStatLine label={<Tip text={<TipCard title="GOOD 영역" description={'노란 영역이 바 폭에서 차지하는 크기예요.\n가운데 빨간 영역도 포함해요.\n기준 파워를 넘을수록 넓어져요.'} />}>GOOD 영역</Tip>}>
+        <RodStatLine label={<Tip text={<TipCard title="GOOD 영역" bullets={['노란 영역이 바 폭에서 차지하는 크기예요.', '가운데 빨간 영역도 포함해요.', '기준 파워를 넘을수록 넓어져요.']} />}>GOOD 영역</Tip>}>
           {goodText(row)}
         </RodStatLine>
       </ul>
       <ul className="flex flex-col">
-        <RodStatLine label={<Tip text={<TipCard title="PERFECT 영역" description={`가운데에 열리는 빨간 영역이에요.\n파워가 기준 파워보다 ${POWER_RULES.redMinExcess} 넘게 높으면 생겨요.`} />}>PERFECT 영역</Tip>}>
+        <RodStatLine label={<Tip text={<TipCard title="PERFECT 영역" bullets={['가운데에 열리는 빨간 영역이에요.', `파워가 기준 파워보다 ${POWER_RULES.redMinExcess} 넘게 높으면 생겨요.`]} />}>PERFECT 영역</Tip>}>
           {perfectText(row)}
         </RodStatLine>
-        <RodStatLine label={<Tip text={<TipCard title="방치 효율" description={autoPenaltyHelpText()} />}>방치 효율</Tip>}>
+        <RodStatLine label={<Tip text={<TipCard title="방치 효율" bullets={splitTipLines(autoPenaltyHelpText())} />}>방치 효율</Tip>}>
           {idleDetail ? <Tip text={<TipCard title="방치 보정" rows={idleDetail} />}>{idleText(idle)}</Tip> : <span>{idleText(idle)}</span>}
         </RodStatLine>
       </ul>

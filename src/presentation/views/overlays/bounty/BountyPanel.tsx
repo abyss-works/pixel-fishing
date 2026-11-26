@@ -34,7 +34,7 @@ import Inset from '../../../ui/Inset';
 import PixelIcon from '../../../ui/PixelIcon';
 import SectionTitle from '../../../ui/SectionTitle';
 import TabBar from '../../../ui/TabBar';
-import Tip from '../../../ui/Tip';
+import Tip, { TipBullets } from '../../../ui/Tip';
 import ArtifactDetail from '../../game/tabs/bag/ArtifactDetail';
 import NamedDetail from '../../game/tabs/dex/NamedDetail';
 import { fmtGold, josa } from '../../../ui/format';
@@ -152,7 +152,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         <>
           <SectionTitle className="flex items-center justify-between gap-2">
             <span>오늘의 의뢰</span>
-            <Tip wraps pressOpens text={'수주한 뒤에 잡은 물고기부터 세요.\n물고기는 가방에 남아요.'}>
+            <Tip wraps pressOpens text={<TipBullets items={['수주한 뒤에 잡은 물고기부터 세요.', '물고기는 가방에 남아요.']} />}>
               <IconButton type="button" glyph="question" size={12} tone="dim" aria-label="수주 안내" className="p-0.5" />
             </Tip>
           </SectionTitle>

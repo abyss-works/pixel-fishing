@@ -17,7 +17,8 @@ import LoreParagraph from '../../../../ui/LoreParagraph';
 import Modal from '../../../../ui/Modal';
 import PageTitle from '../../../../ui/PageTitle';
 import Subheading from '../../../../ui/Subheading';
-import Tip from '../../../../ui/Tip';
+import Tip, { TipBullets } from '../../../../ui/Tip';
+import { splitTipLines } from '../../../../ui/tipText';
 import { GradeName } from '../../../../ui/fish/RarityTag';
 import type { Notify } from '../../../../ui/hud/messageFeed';
 import { fmtNum } from '../../../../ui/format';
@@ -116,7 +117,7 @@ function Footer({ view, busy, onLevelUp }: { view: ArtifactLevelView; busy: bool
         <Subheading>{LEVEL_UP_TEXT.materialLabel}</Subheading>
         <CostBox>
           <CostLine have={material.have} delta={-next!.cost} format={fmtNum}
-                    label={<Tip text={LEVEL_UP_TEXT.materialTip}>{material.name}</Tip>} />
+                    label={<Tip text={<TipBullets items={splitTipLines(LEVEL_UP_TEXT.materialTip)} />}>{material.name}</Tip>} />
         </CostBox>
       </div>
       <ConfirmButton reason={status === 'short' ? LEVEL_UP_TEXT.notice.short : null}

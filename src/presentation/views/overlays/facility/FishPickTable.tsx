@@ -6,7 +6,8 @@ import { RarityText } from '../../../ui/fish/RarityTag';
 import DataTable from '../../../ui/DataTable';
 import IconButton from '../../../ui/IconButton';
 import PixelIcon from '../../../ui/PixelIcon';
-import Tip from '../../../ui/Tip';
+import Tip, { TipBullets } from '../../../ui/Tip';
+import { splitTipLines } from '../../../ui/tipText';
 import ToggleChip from '../../../ui/ToggleChip';
 
 // 어종 선택 표 — 판매 창의 판매 탭과 기운 얻기 탭이 함께 쓰는 표다.
@@ -35,6 +36,7 @@ export default function FishPickTable({ rows, expanded, onToggleExpand, onToggle
 }) {
   const checked = new Set(rows.flatMap(row => row.selected.map(inst => inst.uid)));
   const chips = gradePickChips(rows);
+  const lockedPickTip = <TipBullets items={splitTipLines(LOCKED_PICK_TIP)} />;
   return (
     <div className="flex flex-col gap-2">
       <div role="group" aria-label="등급 일괄 선택" className="flex flex-wrap items-center gap-1.5">
@@ -59,7 +61,7 @@ export default function FishPickTable({ rows, expanded, onToggleExpand, onToggle
               <tr key={key} className={locked || on === 0 ? 'text-text-dim' : ''}>
                 <td>
                   {locked ? (
-                    <Tip plain text={LOCKED_PICK_TIP} className="text-text-dim">
+                    <Tip plain text={lockedPickTip} className="text-text-dim">
                       <PixelIcon glyph="lock" size={13} />
                     </Tip>
                   ) : (
@@ -98,7 +100,7 @@ export default function FishPickTable({ rows, expanded, onToggleExpand, onToggle
                                       checked={!inst.locked && on}
                                       onToggle={inst.locked ? undefined : () => onToggleOne(inst.uid)}>
                           {inst.locked ? (
-                            <Tip plain text={LOCKED_PICK_TIP} className="text-text-dim"><PixelIcon size={11} glyph="lock" /></Tip>
+                            <Tip plain text={lockedPickTip} className="text-text-dim"><PixelIcon size={11} glyph="lock" /></Tip>
                           ) : (
                             <PixelIcon size={11} className={on ? 'text-gold' : 'text-text-dim'} glyph={on ? 'checkOn' : 'checkOff'} />
                           )}
@@ -117,7 +119,7 @@ export default function FishPickTable({ rows, expanded, onToggleExpand, onToggle
                                        ? undefined
                                        : () => onToggleRow(g.free.map(i => i.uid), g.allSelected)}>
                           {g.free.length === 0 ? (
-                            <Tip plain text={LOCKED_PICK_TIP} className="text-text-dim"><PixelIcon size={11} glyph="lock" /></Tip>
+                            <Tip plain text={lockedPickTip} className="text-text-dim"><PixelIcon size={11} glyph="lock" /></Tip>
                           ) : (
                             <PixelIcon size={11} glyph={gGlyph} className={gOn > 0 ? 'text-gold' : 'text-text-dim'} />
                           )}

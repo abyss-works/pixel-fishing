@@ -19,7 +19,7 @@ import SelectList from '../../../ui/SelectList';
 import Subheading from '../../../ui/Subheading';
 import TabBar from '../../../ui/TabBar';
 import TextInput from '../../../ui/TextInput';
-import Tip from '../../../ui/Tip';
+import Tip, { TipBullets } from '../../../ui/Tip';
 import BlockList from './BlockList';
 import { SOCIAL_CELL, SOCIAL_HEAD } from './socialTable';
 
@@ -29,7 +29,10 @@ import { SOCIAL_CELL, SOCIAL_HEAD } from './socialTable';
 // 닉네임을 치는 동안 앞부분이 같은 계정 유저를 입력 아래에 후보로 띄우고, 후보를 고르면 입력을 그 이름으로 채운다.
 // 창 전체에 공통인 상태가 없어 고정 정보 줄은 두지 않는다. 창 자체는 스크롤하지 않고, 넘치는 내용은 탭 본문 안에서 굴린다.
 const nameOf = (f: FriendItem) => f.nick ?? '이름 없음';
-const PLACE_HELP = '접속 중이면 지금 있는 해역이에요.\n접속하지 않았으면 마지막 접속에서 지난 시간이에요.';
+const PLACE_HELP = [
+  '접속 중이면 지금 있는 해역이에요.',
+  '접속하지 않았으면 마지막 접속에서 지난 시간이에요.',
+] as const;
 
 type SocialTab = 'friends' | 'requests' | 'blocks';
 type FriendOp = Parameters<ReturnType<typeof useFriends>['act']>[0];
@@ -110,7 +113,7 @@ function FriendTable({ friends, pending, busy, onRemove }: {
           <thead>
             <tr className={SOCIAL_HEAD.row}>
               <th className={SOCIAL_HEAD.left}>이름</th>
-              <th className={SOCIAL_HEAD.right}><Tip text={PLACE_HELP}>있는 곳</Tip></th>
+              <th className={SOCIAL_HEAD.right}><Tip text={<TipBullets items={PLACE_HELP} />}>있는 곳</Tip></th>
               <th className={SOCIAL_HEAD.right} aria-label="끊기" />
             </tr>
           </thead>

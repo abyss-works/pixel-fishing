@@ -17,7 +17,7 @@ import Note from '../../../ui/Note';
 import ProgressCount from '../../../ui/ProgressCount';
 import { SCROLL_Y_ROWS } from '../../../ui/scrollArea';
 import TabBar from '../../../ui/TabBar';
-import Tip from '../../../ui/Tip';
+import Tip, { TipBullets } from '../../../ui/Tip';
 import { fmtMinutes } from '../../../ui/format';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import RecipeTab from './RecipeTab';
@@ -70,7 +70,7 @@ export default function KitchenPanel({ game, busy, act, setToast, onClose }: {
               대기열 {status.queueCount}건
             </Button>
             <span className="text-text-dim">
-              <Tip text={<>가방에 있는 요리와 조리 중이거나 대기 중인 요리를 함께 세요.<br />가득 차면 조리를 시작할 수 없어요.</>}>보관함</Tip>{' '}
+              <Tip text={<TipBullets items={['가방에 있는 요리와 조리 중이거나 대기 중인 요리를 함께 세요.', '가득 차면 조리를 시작할 수 없어요.']} />}>보관함</Tip>{' '}
               <ProgressCount current={status.stored} target={status.cap} tight tone={status.full ? 'danger' : 'gold'} />
             </span>
           </span>

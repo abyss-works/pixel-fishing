@@ -16,7 +16,8 @@ import Note from '../../../ui/Note';
 import ProgressCount from '../../../ui/ProgressCount';
 import ProgressMeter from '../../../ui/ProgressMeter';
 import TabBar from '../../../ui/TabBar';
-import Tip from '../../../ui/Tip';
+import Tip, { TipBullets } from '../../../ui/Tip';
+import { splitTipLines } from '../../../ui/tipText';
 import GuildLogbookTab from './GuildLogbookTab';
 import GuildManageTab from './GuildManageTab';
 import GuildMembersTab from './GuildMembersTab';
@@ -163,7 +164,7 @@ function GuildStatus({ guild }: { guild: GuildInfo }) {
     <Inset className="grid grid-cols-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-x-3 gap-y-1 min-h-10 px-3 py-1.5 shrink-0 mobile:grid-cols-[minmax(0,1fr)_auto_auto]">
       <b className="max-w-40 truncate text-text mobile:max-w-none">{guild.name}</b>
       <span className="pf-accent text-base text-gold">Lv.{guild.growth.level}</span>
-      <Tip plain text={GUILD_LEVEL_HELP} className="block mobile:col-span-2 mobile:row-start-2">
+      <Tip plain text={<TipBullets items={splitTipLines(GUILD_LEVEL_HELP)} />} className="block mobile:col-span-2 mobile:row-start-2">
         <ProgressMeter
           current={Math.round(bar.ratio * 100)}
           target={100}

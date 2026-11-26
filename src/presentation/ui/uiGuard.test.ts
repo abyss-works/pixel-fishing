@@ -1164,4 +1164,30 @@ describe('UI 시스템 가드', () => {
       .map(f => f.path);
     expect(callers).toEqual([]);
   });
+
+  // 툴팁 내 수동 불릿 조립 금지 — TipBullets·TipCard bullets 공용 컴포넌트만 쓴다
+  const MANUAL_TOOLTIP_BULLET_SPAN_RE = /<span[^>]*>\s*(?:-|•|\{['"](?:-|•)['"]\})\s*<\/span>/;
+  const MANUAL_TOOLTIP_BULLET_CHAR_RE = /(?:•|\\n\s*-\s+|['"`]\s*-\s+[^\d])/;
+  const manualTooltipBullets = (src: string, path = '') =>
+    openingTagsQuoted(src, '(?:Tip|TipCard|TipList)')
+      .filter(t => MANUAL_TOOLTIP_BULLET_SPAN_RE.test(t.tag) || MANUAL_TOOLTIP_BULLET_CHAR_RE.test(t.tag))
+      .map(t => `${path ? `${path}: ` : ''}${t.tag}`);
+
+  it('툴팁은 수동 - 또는 • 불릿 문자를 조립하지 않고 TipBullets와 TipCard bullets를 쓴다', () => {
+    const tipSrc = stripComments(presentationFiles.find(f => f.path === 'ui/Tip.tsx')!.src);
+    expect(tipSrc).toMatch(/export function TipBullets\b/);
+    expect(tipSrc).not.toMatch(/<(?:ul|li)\b/);
+    expect(tipSrc).toMatch(/bullets\?:\s*readonly\s+ReactNode\[\]/);
+
+    const offenders = presentationFiles
+      .filter(f => !isTestFile(f.path))
+      .flatMap(f => manualTooltipBullets(stripComments(f.src), f.path));
+    expect(offenders).toEqual([]);
+
+    expect(manualTooltipBullets('<Tip text={<span><span aria-hidden="true">-</span><span>안내</span></span>}>대상</Tip>')).toHaveLength(1);
+    expect(manualTooltipBullets('<Tip text={"- 첫째\\n- 둘째"}>대상</Tip>')).toHaveLength(1);
+    expect(manualTooltipBullets('<TipCard title="안내" description={"• 첫째\\n• 둘째"} />')).toHaveLength(1);
+    expect(manualTooltipBullets('<Tip text={<TipBullets items={["첫째", "둘째"]} />}>대상</Tip>')).toEqual([]);
+    expect(manualTooltipBullets('<TipCard title="안내" bullets={["첫째", "둘째"]} />')).toEqual([]);
+  });
 });

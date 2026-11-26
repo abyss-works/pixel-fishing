@@ -16,7 +16,7 @@ import Locked from '../../../ui/Locked';
 import Modal from '../../../ui/Modal';
 import SectionTitle from '../../../ui/SectionTitle';
 import TextInput from '../../../ui/TextInput';
-import Tip from '../../../ui/Tip';
+import Tip, { TipBullets } from '../../../ui/Tip';
 import { useDialogs } from '../../../ui/useDialogs';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import { maskUid } from './maskUid';
@@ -123,7 +123,7 @@ export default function MyInfoModal({ setToast, onClose, account, accountChecked
   return (
     <Modal layer="app" title="내 정보" narrow onClose={onClose}>
       <SectionTitle>
-        <Tip text={`${NICKNAME_RULE}\n나중에 랭킹에 표시될 이름이에요.`}>닉네임</Tip>
+        <Tip text={<TipBullets items={[NICKNAME_RULE, '나중에 랭킹에 표시될 이름이에요.']} />}>닉네임</Tip>
       </SectionTitle>
       <Inset className="mb-2">
         {nickRow}
@@ -132,7 +132,7 @@ export default function MyInfoModal({ setToast, onClose, account, accountChecked
       {/* 문의 대응용이다. 게스트는 이메일조차 없어 uid 말고는 식별할 방법이 없다.
           화면은 가운데를 가리지만 복사는 전체 값이라, 버튼이 없으면 문의 대응이 불가능해진다. */}
       <SectionTitle>
-        <Tip text={'문의하실 때 이 ID를 함께 알려 주시면 빠르게 해결할 수 있어요.\n가운데는 가려 두었지만 복사를 누르면 전체가 복사돼요.'}>내 정보</Tip>
+        <Tip text={<TipBullets items={['문의하실 때 이 ID를 함께 알려 주시면 빠르게 해결할 수 있어요.', '가운데는 가려 두었지만 복사를 누르면 전체가 복사돼요.']} />}>내 정보</Tip>
       </SectionTitle>
       <Inset divided className="mb-2">
         <KeyValueRow className="py-1 text-xs"

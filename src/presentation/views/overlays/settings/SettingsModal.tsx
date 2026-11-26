@@ -19,11 +19,17 @@ import { PromptChoices } from '../whats-new/SettingsStep';
 
 const FISH_ART = SETTING_PROMPTS.find(p => p.id === 'fish-art')!;
 
-const AUTO_LOCK_HINT = '어종과 돌연변이별로 더 큰 물고기를 낚으면 자동으로 잠그고 기존 자동 잠금을 풀어요.\n직접 잠근 물고기는 그대로 유지돼요.';
+const AUTO_LOCK_HINT = [
+  '어종과 돌연변이별로 더 큰 물고기를 낚으면 자동으로 잠그고 기존 자동 잠금을 풀어요.',
+  '직접 잠근 물고기는 그대로 유지돼요.',
+] as const;
 const DENIED_REASON = '브라우저가 이 사이트의 알림을 막았어요.\n주소창 왼쪽의 사이트 설정에서 알림을 허용하면 켤 수 있어요.';
 const UNSUPPORTED_REASON = '이 브라우저는 알림을 지원하지 않아요.';
 const DENIED_TOAST = '브라우저가 알림을 막았어요. 주소창의 사이트 설정에서 허용할 수 있어요.';
-const FLOATING_TOAST_HINT = '중요한 획득, 업적, 의뢰, 길드 알림을 화면 아래 1줄 알림으로 함께 띄워요.\n꺼도 메시지 창 기록은 그대로 남아요.';
+const FLOATING_TOAST_HINT = [
+  '중요한 획득, 업적, 의뢰, 길드 알림을 화면 아래 1줄 알림으로 함께 띄워요.',
+  '꺼도 메시지 창 기록은 그대로 남아요.',
+] as const;
 
 function AlertRow({ label, hint, toggle, blockedReason, setToast }: {
   label: string;
@@ -103,7 +109,7 @@ export default function SettingsModal({ autoLockOnCatch, dispatch, setToast, onC
       <SectionTitle>가방</SectionTitle>
       <Inset divided>
         <KeyValueRow
-          label={<Tip text={<TipCard title="낚을 때 자동 잠금" description={AUTO_LOCK_HINT} />}>낚을 때 자동 잠금</Tip>}
+          label={<Tip text={<TipCard title="낚을 때 자동 잠금" bullets={AUTO_LOCK_HINT} />}>낚을 때 자동 잠금</Tip>}
           value=""
           action={(
             <ToggleChip pressed={autoLockOnCatch} disabled={busy} aria-label="낚을 때 자동 잠금" onClick={toggleAutoLock}>
@@ -117,7 +123,7 @@ export default function SettingsModal({ autoLockOnCatch, dispatch, setToast, onC
       </SectionTitle>
       <Inset divided>
         <KeyValueRow
-          label={<Tip text={<TipCard title="주요 화면 알림" description={FLOATING_TOAST_HINT} />}>주요 화면 알림</Tip>}
+          label={<Tip text={<TipCard title="주요 화면 알림" bullets={FLOATING_TOAST_HINT} />}>주요 화면 알림</Tip>}
           value=""
           action={(
             <ToggleChip pressed={toastEnabled} aria-label="주요 화면 알림" onClick={() => setToastEnabled(!toastEnabled)}>

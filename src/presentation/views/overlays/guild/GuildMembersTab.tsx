@@ -13,7 +13,7 @@ import { NOTCH_SM } from '../../../ui/notch';
 import ProgressCount from '../../../ui/ProgressCount';
 import TableBox from '../../../ui/TableBox';
 import DataTable from '../../../ui/DataTable';
-import Tip, { TipList } from '../../../ui/Tip';
+import Tip, { TipBullets, TipList } from '../../../ui/Tip';
 import type { GuildAsk, GuildPartProps } from './guildProps';
 
 // 길드원 탭: 길드원 표(접속 점, 이름, 오늘 기여, 누적 기여, 기부)와 맨 아래 한 줄(떠나기). 길드 코드와 초대 링크는 관리 탭에 있다.
@@ -38,7 +38,7 @@ export default function GuildMembersTab({ guild, me, busy, setToast, ask, artifa
             <tr className="sticky top-0 bg-[color-mix(in_oklab,var(--c-bg)_45%,var(--c-surface))] text-2xs text-text-dim">
               <th className="h-8 text-left font-normal border-b border-line">이름</th>
               <th className="h-8 px-2 text-right font-normal border-b border-line">
-                <Tip text={<TipList rows={dailyContributionRows(artifacts)} note={'하루 상한이에요.\n매일 새로 세요.'} />}>오늘 기여</Tip>
+                <Tip text={<TipList rows={dailyContributionRows(artifacts)} note={<TipBullets items={['하루 상한이에요.', '매일 새로 세요.']} />} />}>오늘 기여</Tip>
               </th>
               <th className="h-8 px-2 text-right font-normal border-b border-line">누적 기여</th>
               <th className="h-8 px-2 text-right font-normal border-b border-line">기부</th>

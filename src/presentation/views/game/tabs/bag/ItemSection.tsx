@@ -33,7 +33,8 @@ import PixelIcon from '../../../../ui/PixelIcon';
 import PressRow from '../../../../ui/PressRow';
 import SlotCell from '../../../../ui/SlotCell';
 import Subheading from '../../../../ui/Subheading';
-import Tip from '../../../../ui/Tip';
+import Tip, { TipBullets } from '../../../../ui/Tip';
+import { splitTipLines } from '../../../../ui/tipText';
 import ToggleChip from '../../../../ui/ToggleChip';
 import type { Notify } from '../../../../ui/hud/messageFeed';
 import ItemDetail from './ItemDetail';
@@ -113,9 +114,10 @@ function ItemCards({ title, hint, rows, lockLines, busy, selectedId, onSelect, o
 }) {
   if (rows.length === 0) return null;
   const locked = Boolean(lockLines);
+  const hintLines = splitTipLines(hint);
   return (
     <div className="mb-2">
-      <Subheading><Tip text={hint}>{title}</Tip></Subheading>
+      <Subheading><Tip text={hintLines.length > 1 ? <TipBullets items={hintLines} /> : hint}>{title}</Tip></Subheading>
       <div className="grid grid-cols-2 gap-2">
         {rows.map(row => {
           const usable = !locked && row.count > 0;
@@ -193,7 +195,7 @@ function EnergyCards({ energy, lockLines }: {
   return (
     <div className="mb-2">
       <Subheading>
-        <Tip text={ITEM_GROUP_HINT.energy}>{ITEM_GROUPS[0].title}</Tip>
+        <Tip text={<TipBullets items={splitTipLines(ITEM_GROUP_HINT.energy)} />}>{ITEM_GROUPS[0].title}</Tip>
       </Subheading>
       {lockLines ? (
         <Locked badge={false} lines={lockLines} title={ITEM_GROUPS[0].title} label="생명의 기운 잠김">

@@ -35,9 +35,10 @@ export default function SummaryTab({ game, summary, row, here }: {
             <TipCard
               title={row.spot.name}
               badge={<Badge tone="dim-plain" size="2xs">{FIT_LABEL[row.fit]}</Badge>}
-              description={data.underpowered
-                ? 'GOOD과 PERFECT 영역이 사라지고 희귀한 물고기가 덜 걸려요.\n입질도 늦어져요.'
-                : POWERED_NOTE}
+              description={data.underpowered ? undefined : POWERED_NOTE}
+              bullets={data.underpowered
+                ? ['GOOD과 PERFECT 영역이 사라지고 희귀한 물고기가 덜 걸려요.', '입질도 늦어져요.']
+                : undefined}
               status={data.underpowered
                 ? {
                   tone: 'warn',

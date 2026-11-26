@@ -5,7 +5,8 @@ import { isFishArtStyle } from '../../../../game/rendering/pixel/fishArt';
 import ChoiceCard from '../../../ui/ChoiceCard';
 import Note from '../../../ui/Note';
 import SectionTitle from '../../../ui/SectionTitle';
-import Tip from '../../../ui/Tip';
+import Tip, { TipBullets } from '../../../ui/Tip';
+import { splitTipLines } from '../../../ui/tipText';
 import FishArtPreview from './FishArtPreview';
 
 /** 질문별 선택지 미리보기 — 질문이 늘면 여기 한 줄 */
@@ -19,9 +20,10 @@ function previewOf(prompt: SettingPrompt, value: string): ReactNode {
 /** 질문 하나의 선택 카드 묶음 — 소식 창의 새 설정 단계와 설정 창이 함께 쓴다. 설정 창은 설명을 제목 툴팁에 둔다(describeInTip) */
 export function PromptChoices({ prompt, describeInTip = false }: { prompt: SettingPrompt; describeInTip?: boolean }) {
   const [value, setValue] = usePromptValue(prompt.id);
+  const tipLines = splitTipLines(prompt.description);
   return (
     <section className="flex flex-col gap-1.5">
-      <SectionTitle>{describeInTip ? <Tip text={prompt.description}>{prompt.title}</Tip> : prompt.title}</SectionTitle>
+      <SectionTitle>{describeInTip ? <Tip text={tipLines.length > 1 ? <TipBullets items={tipLines} /> : prompt.description}>{prompt.title}</Tip> : prompt.title}</SectionTitle>
       {!describeInTip && <Note size="xs" className="my-0">{prompt.description}</Note>}
       <div role="radiogroup" aria-label={prompt.title}
            className="grid grid-cols-2 gap-2 mobile:grid-cols-1">
