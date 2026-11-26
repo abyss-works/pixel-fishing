@@ -40,7 +40,7 @@ function view(overrides: Partial<GearView> = {}): GearView {
 }
 
 describe('drawHookJump', () => {
-  it('v1 스타일에서도 catch 중 점프 높이가 양수이면 2배 크기 물고기를 그린다(정점 전 flip: false)', () => {
+  it('v1 스타일에서도 catch 중 점프 높이가 양수이면 1배(원본) 크기 물고기를 그린다(정점 전 flip: false)', () => {
     expect(JUMP_S).toBe(0.9);
     expect(JUMP_PX).toBe(24);
     const catchT = JUMP_S / 2 - 0.1;
@@ -49,32 +49,32 @@ describe('drawHookJump', () => {
 
     const actual = recorder(), expected = recorder();
     drawHookJump(actual.ctx, view({ catchT, fishArt: 'v1' }));
-    fishArt('v1').drawCentered(expected.ctx, carp, 100, 80 - h, { scale: 2, form: 'normal', flip: false });
+    fishArt('v1').drawCentered(expected.ctx, carp, 100, 80 - h, { scale: 1, form: 'normal', flip: false });
 
     expect(actual.calls.length).toBeGreaterThan(0);
     expect(actual.calls).toEqual(expected.calls);
   });
 
-  it('v1 스타일에서 정점 이후에는 flip: true로 2배 크기 물고기를 뒤집어 그린다', () => {
+  it('v1 스타일에서 정점 이후에는 flip: true로 1배(원본) 크기 물고기를 뒤집어 그린다', () => {
     const catchT = JUMP_S / 2 + 0.1;
     const h = jumpHeight(catchT);
     expect(h).toBeGreaterThan(0);
 
     const flipped = recorder(), expected = recorder(), unflipped = recorder();
     drawHookJump(flipped.ctx, view({ catchT, fishArt: 'v1' }));
-    fishArt('v1').drawCentered(expected.ctx, carp, 100, 80 - h, { scale: 2, form: 'normal', flip: true });
-    fishArt('v1').drawCentered(unflipped.ctx, carp, 100, 80 - h, { scale: 2, form: 'normal', flip: false });
+    fishArt('v1').drawCentered(expected.ctx, carp, 100, 80 - h, { scale: 1, form: 'normal', flip: true });
+    fishArt('v1').drawCentered(unflipped.ctx, carp, 100, 80 - h, { scale: 1, form: 'normal', flip: false });
 
     expect(flipped.calls).toEqual(expected.calls);
     expect(flipped.calls).not.toEqual(unflipped.calls);
   });
 
-  it('변이 폼은 2배 크기 물고기와 마젠타 스파클을 함께 그린다', () => {
+  it('변이 폼은 1배(원본) 크기 물고기와 마젠타 스파클을 함께 그린다', () => {
     const catchT = JUMP_S / 2;
     const h = jumpHeight(catchT);
     const actual = recorder(), fishOnly = recorder();
     drawHookJump(actual.ctx, view({ catchT, catchFish: { id: 'carp', form: 'variant' }, fishArt: 'v1' }));
-    fishArt('v1').drawCentered(fishOnly.ctx, carp, 100, 80 - h, { scale: 2, form: 'variant', flip: false });
+    fishArt('v1').drawCentered(fishOnly.ctx, carp, 100, 80 - h, { scale: 1, form: 'variant', flip: false });
 
     for (const call of fishOnly.calls) expect(actual.calls).toContain(call);
     expect(actual.calls.some(call => call.startsWith('#f472b6@'))).toBe(true);
@@ -99,7 +99,7 @@ describe('drawFishJump', () => {
 
   it('이륙(t < 0.25)과 착수(t > JUMP_S - 0.22) 구간에서만 수면 물방울을 그린다', () => {
     const fishMid = recorder(), takeoff = recorder(), mid = recorder(), landing = recorder();
-    fishArt('v1').drawCentered(fishMid.ctx, crucian, 100, 80 - jumpHeight(JUMP_S / 2), { scale: 2, form: 'normal', flip: false });
+    fishArt('v1').drawCentered(fishMid.ctx, crucian, 100, 80 - jumpHeight(JUMP_S / 2), { scale: 1, form: 'normal', flip: false });
 
     drawFishJump(takeoff.ctx, jump({ t: 0.1 }), 'v1');
     drawFishJump(mid.ctx, jump({ t: JUMP_S / 2 }), 'v1');

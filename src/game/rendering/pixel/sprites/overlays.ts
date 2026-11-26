@@ -14,7 +14,7 @@ import { JUMP_S, jumpHeight, orbit } from './schoolView.js';
 
 const fishById = (id: string) => FISH.find(f => f.id === id);
 
-const JUMP_FISH_SCALE = 2;
+const JUMP_FISH_SCALE = 1;
 const TAKEOFF_SPLASH_S = 0.25;
 const LANDING_SPLASH_S = 0.22;
 const VARIANT_SPARK_COLOR = '#f472b6';
@@ -95,10 +95,10 @@ function drawJumpSparks(
   if (rarity === 'epic') {
     const color = RARITY.epic.color;
     const count = 6;
-    const baseRadius = 15 + pulse * 7;
+    const baseRadius = 10 + pulse * 5;
     for (let i = 0; i < count; i++) {
       const a = (i / count) * Math.PI * 2 + progress * 2.4;
-      const r = baseRadius + (i % 2 === 0 ? 3 : -2);
+      const r = baseRadius + (i % 2 === 0 ? 2 : -1);
       const sx = Math.round(x + Math.cos(a) * r);
       const sy = Math.round(cy + Math.sin(a) * r * 0.75);
       const size = i % 2 === 0 ? 2 : 1;
@@ -107,10 +107,10 @@ function drawJumpSparks(
   } else if (rarity === 'legendary') {
     const color = RARITY.legendary.color;
     const count = 8;
-    const baseRadius = 17 + pulse * 9;
+    const baseRadius = 12 + pulse * 6;
     for (let i = 0; i < count; i++) {
       const a = (i / count) * Math.PI * 2 + progress * 3.0;
-      const r = baseRadius + (i % 2 === 0 ? 4 : -2);
+      const r = baseRadius + (i % 2 === 0 ? 2 : -1);
       const sx = Math.round(x + Math.cos(a) * r);
       const sy = Math.round(cy + Math.sin(a) * r * 0.78);
       if (i % 2 === 0) {
@@ -125,7 +125,7 @@ function drawJumpSparks(
 
   if (form === 'variant') {
     const count = 6;
-    const baseRadius = 13 + pulse * 6;
+    const baseRadius = 9 + pulse * 4;
     for (let i = 0; i < count; i++) {
       const a = (i / count) * Math.PI * 2 - progress * 2.2 + Math.PI / 6;
       const r = baseRadius + (i % 2 === 0 ? 2 : -1);
