@@ -88,6 +88,7 @@ const ALLOWED_EFFECT_KEYS = new Set([
 
 const LEGENDARY_IDS = new Set(FISH.filter(f => f.rarity === 'legendary').map(f => f.id));
 const ZONE_ID_SET = new Set<string>(ZONE_IDS);
+const SEA_ZONE_ID_SET = new Set<string>(ZONE_IDS.filter(z => z !== 'village'));
 const STATIC_KEY_SET = new Set<string>(STATIC_COUNTER_KEYS);
 const BIG_PROB_BASE = BIG_CATCH_PERCENTILE / 100;
 
@@ -99,7 +100,7 @@ const MAX_ARTIFACT_MATERIALS = 1 + Array.from(
 
 const clean = (x: number): number => Math.round(x * 1e9) / 1e9;
 
-/** 지원하는 카운터 키인지 판정한다 — 기본 키와 구역·전설 어종 수동 손맛 키 */
+/** 지원하는 카운터 키인지 판정한다 — 기본 키, 구역·전설 어종 수동 손맛 키, 바다 구역 도감(수동+방치) 키 */
 export function isValidCounterKey(key: string): boolean {
   if (STATIC_KEY_SET.has(key)) return true;
   if (key.startsWith('manual.total.')) return ZONE_ID_SET.has(key.slice('manual.total.'.length));
@@ -108,6 +109,9 @@ export function isValidCounterKey(key: string): boolean {
     const rest = key.slice('manual.legendary.'.length);
     return ZONE_ID_SET.has(rest) || LEGENDARY_IDS.has(rest);
   }
+  if (key.startsWith('dex.legendary.day.')) return SEA_ZONE_ID_SET.has(key.slice('dex.legendary.day.'.length));
+  if (key.startsWith('dex.legendary.night.')) return SEA_ZONE_ID_SET.has(key.slice('dex.legendary.night.'.length));
+  if (key.startsWith('dex.variant.')) return SEA_ZONE_ID_SET.has(key.slice('dex.variant.'.length));
   return false;
 }
 
@@ -422,12 +426,18 @@ export function createCounterBonusTracker(config: CounterBonusConfig): CounterBo
       };
     },
     recordCatch(spot: SpotId, axis: Axis, c: Catch, baitActive: boolean, isBig: boolean, lunchActive = false) {
+      const z = zoneOf(spot);
       add('sell.gold', c.gold);
+      if (SEA_ZONE_ID_SET.has(z)) {
+        if (c.fish.rarity === 'legendary') {
+          add(c.fish.night ? `dex.legendary.night.${z}` : `dex.legendary.day.${z}`, 1);
+        }
+        if (c.variant) add(`dex.variant.${z}`, 1);
+      }
       if (axis === 'idle') {
         add('catch.auto', 1);
         if (lunchActive) add('catch.lunch', 1);
       } else {
-        const z = zoneOf(spot);
         add('manual.total', 1);
         add(`manual.total.${z}`, 1);
         if (axis === 'perfect') add('catch.perfect', 1);
@@ -445,12 +455,26 @@ export function createCounterBonusTracker(config: CounterBonusConfig): CounterBo
       if (isBig) bigSeen.add(c.fish.id);
     },
     recordStep(spot: SpotId, axis: Axis, r: Rates, catches: number, goldEarned: number, baitActive: boolean, lunchActive = false) {
+      const z = zoneOf(spot);
       add('sell.gold', goldEarned);
+      const vShare = (r as Partial<EffectRates>).variantShare ?? variantShare(mutationWeightsOf({ artifacts: [] }, spot));
+      if (SEA_ZONE_ID_SET.has(z)) {
+        let dayLegShare = 0;
+        let nightLegShare = 0;
+        for (const row of r.rows) {
+          if (row.fish.rarity === 'legendary') {
+            if (row.fish.night) nightLegShare += row.prob;
+            else dayLegShare += row.prob;
+          }
+        }
+        if (dayLegShare > 0) add(`dex.legendary.day.${z}`, catches * dayLegShare);
+        if (nightLegShare > 0) add(`dex.legendary.night.${z}`, catches * nightLegShare);
+        if (vShare > 0) add(`dex.variant.${z}`, catches * vShare);
+      }
       if (axis === 'idle') {
         add('catch.auto', catches);
         if (lunchActive) add('catch.lunch', catches);
       } else {
-        const z = zoneOf(spot);
         add('manual.total', catches);
         add(`manual.total.${z}`, catches);
         if (axis === 'perfect') add('catch.perfect', catches);
@@ -462,7 +486,6 @@ export function createCounterBonusTracker(config: CounterBonusConfig): CounterBo
             if (row.fish.rarity === 'legendary') add(`manual.legendary.${row.fish.id}`, catches * row.prob);
           }
         }
-        const vShare = (r as Partial<EffectRates>).variantShare ?? variantShare(mutationWeightsOf({ artifacts: [] }, spot));
         if (vShare > 0) {
           add('manual.variant.total', catches * vShare);
           add(`manual.variant.${z}`, catches * vShare);

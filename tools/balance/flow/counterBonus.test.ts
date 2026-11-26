@@ -3,8 +3,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { ARTIFACT_MAX_LEVEL } from '../../../src/game/content/artifacts';
+import { CUMULATIVE_BONUS_SERIES } from '../../../src/game/content/achievements';
 import { FISH } from '../../../src/game/content/fish';
 import { SPOTS } from '../../../src/game/content/spots';
+import { ZONE_IDS } from '../../../src/game/content/zones';
 import { rng } from '../model';
 import { createCounterBonusTracker, isValidCounterKey, loadCounterBonus, parseCounterBonus } from './counterBonus';
 import type { CounterBonusConfig } from './counterBonus';
@@ -50,11 +52,53 @@ describe('카운터 보너스 JSON 스키마 검증', () => {
         { counter: 'manual.legendary.pacific', thresholds: [1], effects: [{ rare: 0.1, nightWeight: 0.05, zone: 'pacific' }] },
         { counter: `manual.legendary.${sampleLegendary}`, thresholds: [1], effects: [{ sell: 0.05, bagCap: 0.1, baitAmplify: 0.2 }] },
         { counter: 'manual.total.village', thresholds: [50], effects: [{ bite: 0.05, zone: 'village' }] },
+        { counter: 'dex.legendary.day.pacific', thresholds: [2], effects: [{ rare: 0.003 }] },
+        { counter: 'dex.legendary.night.pacific', thresholds: [1], effects: [{ nightWeight: 0.003 }] },
+        { counter: 'dex.variant.pacific', thresholds: [50], effects: [{ variant: 0.003 }] },
       ],
     };
     const cfg = parseCounterBonus(raw);
     expect(cfg.rules).toHaveLength(raw.rules.length);
     expect(cfg.artifacts).toEqual({ 'outer-isle-sinker': 5, 'elder-scale': 5 });
+  });
+
+  it('바다 6구역 누적 보너스 18종(낮 전설·밤 전설·돌연변이)의 도감 카운터 키를 허용하고 village 및 미등록 구역을 거부한다', () => {
+    const seaZoneSeries = CUMULATIVE_BONUS_SERIES.filter(s => s.scope === 'zone');
+    expect(seaZoneSeries).toHaveLength(18);
+    const rules = seaZoneSeries.map(s => {
+      const m = s.metric;
+      const counter = m.kind === 'dexZoneLegendarySum'
+        ? `dex.legendary.${m.night ? 'night' : 'day'}.${m.zone}`
+        : m.kind === 'dexZoneVariantSum'
+          ? `dex.variant.${m.zone}`
+          : '';
+      const effectKey = s.bonusKind === 'rareWeight' ? 'rare' : s.bonusKind === 'nightWeight' ? 'nightWeight' : 'variant';
+      return {
+        counter,
+        thresholds: s.steps.map(st => st.threshold),
+        effects: s.steps.map(st => ({ [effectKey]: st.delta })),
+      };
+    });
+    const cfg = parseCounterBonus({ rules });
+    expect(cfg.rules).toHaveLength(18);
+
+    for (const zone of ZONE_IDS.filter(z => z !== 'village')) {
+      expect(isValidCounterKey(`dex.legendary.day.${zone}`)).toBe(true);
+      expect(isValidCounterKey(`dex.legendary.night.${zone}`)).toBe(true);
+      expect(isValidCounterKey(`dex.variant.${zone}`)).toBe(true);
+    }
+    for (const invalid of [
+      'dex.legendary.day.village',
+      'dex.legendary.night.village',
+      'dex.variant.village',
+      'dex.legendary.day.mars',
+      'dex.legendary.night.mars',
+      'dex.variant.mars',
+    ]) {
+      expect(isValidCounterKey(invalid)).toBe(false);
+      expect(() => parseCounterBonus({ rules: [{ counter: invalid, thresholds: [1], effects: [{ rare: 0.01 }] }] }))
+        .toThrow(/카운터/);
+    }
   });
 
   it('잘못된 카운터 키, 임계점 순서, 효과 길이·범위를 거부한다', () => {
@@ -135,6 +179,71 @@ describe('시뮬레이션 동적 카운터 누적 및 보너스 반영', () => {
     const manualWith = simulate({ axis: 'manual', bounty: false, maxDays: 365, counterBonus: cfg });
     expect(manualWith.counterUnlocks!.length).toBe(1);
     expect(manualWith.arrivals.at(-1)!.hours).toBeLessThan(manualBase.arrivals.at(-1)!.hours);
+  });
+
+  it('바다 구역 도감 누적 키(dex.*)는 방치와 수동 모두에서 쌓이고, 전역·수동 카운터(manual.*)는 수동에서만 쌓인다', () => {
+    const pacificDayLeg = FISH.find(f => f.spot === 'sea' && f.rarity === 'legendary' && !f.night)!;
+    const pacificNightLeg = FISH.find(f => f.spot === 'sea' && f.rarity === 'legendary' && f.night === true)!;
+    const pacificCommon = FISH.find(f => f.spot === 'sea' && f.rarity === 'common')!;
+    const villageVariant = FISH.find(f => f.spot === 'pond' && f.rarity === 'common')!;
+
+    // 1. 표본 경로(recordCatch): 방치에서도 dex.legendary.day/night와 dex.variant가 누적되지만 manual.*는 오르지 않는다
+    const catchCfg = parseCounterBonus({
+      rules: [
+        { counter: 'dex.legendary.day.pacific', thresholds: [2], effects: [{ rare: 0.003 }] },
+        { counter: 'dex.legendary.night.pacific', thresholds: [1], effects: [{ nightWeight: 0.003 }] },
+        { counter: 'dex.variant.pacific', thresholds: [2], effects: [{ variant: 0.003 }] },
+        { counter: 'manual.legendary.pacific', thresholds: [1], effects: [{ rare: 0.01 }] },
+        { counter: 'manual.variant.pacific', thresholds: [1], effects: [{ variant: 0.01 }] },
+        { counter: 'manual.variant.total', thresholds: [1], effects: [{ variant: 0.01 }] },
+        { counter: `manual.legendary.${pacificDayLeg.id}`, thresholds: [1], effects: [{ rare: 0.01 }] },
+      ],
+    });
+    const tracker = createCounterBonusTracker(catchCfg);
+    // 마을 변이는 바다 구역 dex.*를 올리지 않는다
+    tracker.recordCatch('pond', 'idle', { fish: villageVariant, gold: 1, fame: 1, variant: true }, false, false);
+    expect(tracker.evaluate(0.1, 'pond')).toBe(false);
+
+    // 방치로 낮 전설(일반 폼 1 + 돌연변이 폼 1)과 밤 전설(일반 폼 1)을 낚으면 dex 3종만 임계점에 도달한다
+    tracker.recordCatch('sea', 'idle', { fish: pacificDayLeg, gold: 100, fame: 10, variant: false }, false, false);
+    tracker.recordCatch('sea', 'idle', { fish: pacificDayLeg, gold: 200, fame: 10, variant: true }, false, false);
+    tracker.recordCatch('sea', 'idle', { fish: pacificNightLeg, gold: 100, fame: 10, variant: false }, false, false);
+    tracker.recordCatch('sea', 'idle', { fish: pacificCommon, gold: 10, fame: 1, variant: true }, false, false);
+    expect(tracker.evaluate(1, 'sea')).toBe(true);
+    expect(tracker.unlocks.map(u => u.counter)).toEqual([
+      'dex.legendary.day.pacific',
+      'dex.legendary.night.pacific',
+      'dex.variant.pacific',
+    ]);
+
+    // 수동 캐치 시에는 기존 manual.* 카운터도 함께 해금된다
+    tracker.recordCatch('sea', 'good', { fish: pacificDayLeg, gold: 100, fame: 10, variant: true }, false, false);
+    expect(tracker.evaluate(2, 'sea')).toBe(true);
+    expect(tracker.unlocks.map(u => u.counter)).toContain('manual.legendary.pacific');
+    expect(tracker.unlocks.map(u => u.counter)).toContain('manual.variant.pacific');
+    expect(tracker.unlocks.map(u => u.counter)).toContain('manual.variant.total');
+    expect(tracker.unlocks.map(u => u.counter)).toContain(`manual.legendary.${pacificDayLeg.id}`);
+
+    // 2. 기댓값 경로(recordStep & simulate): 방치에서 바다 구역 dex 3종은 누적·해금되지만 전역 수동 3종·수동 3종은 쌓이지 않는다
+    const idleDexCfg = parseCounterBonus({
+      rules: [
+        { counter: 'dex.legendary.day.pacific', thresholds: [0.01], effects: [{ rare: 0.05 }] },
+        { counter: 'dex.legendary.night.pacific', thresholds: [0.01], effects: [{ nightWeight: 0.05 }] },
+        { counter: 'dex.variant.pacific', thresholds: [5], effects: [{ variant: 0.05 }] },
+        { counter: 'manual.total', thresholds: [1], effects: [{ bite: 0.05 }] },
+        { counter: 'catch.perfect', thresholds: [1], effects: [{ rare: 0.05 }] },
+        { counter: 'catch.bait', thresholds: [1], effects: [{ baitAmplify: 0.05 }] },
+        { counter: 'manual.variant.total', thresholds: [1], effects: [{ variant: 0.05 }] },
+        { counter: `manual.legendary.${pacificDayLeg.id}`, thresholds: [1], effects: [{ rare: 0.05 }] },
+        { counter: `manual.legendary.${pacificNightLeg.id}`, thresholds: [1], effects: [{ nightWeight: 0.05 }] },
+      ],
+    });
+    const idleRes = simulate({ axis: 'idle', bounty: false, maxDays: 365, counterBonus: idleDexCfg });
+    expect(idleRes.counterUnlocks!.map(u => u.counter).sort()).toEqual([
+      'dex.legendary.day.pacific',
+      'dex.legendary.night.pacific',
+      'dex.variant.pacific',
+    ]);
   });
 
   it('bigSpecies와 대어(big) 보너스, 표본 경로 판매가 보너스가 동적으로 작동한다', () => {
