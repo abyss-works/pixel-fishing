@@ -72,6 +72,20 @@ describe('게스트의 구글 연결', () => {
     expect(screen.getByRole('link', { name: '이용약관' })).toHaveAttribute('target', '_blank');
     expect(screen.getByRole('link', { name: '개인정보 처리방침' })).toHaveAttribute('target', '_blank');
   });
+
+  it('설정 계정 관리 창에서 게스트에게는 최초 연결 선물 미니 칩이 보이고, 로그인 계정에는 보이지 않는다', () => {
+    open(null);
+    expect(screen.getByText('최초 연결 선물')).toBeInTheDocument();
+    expect(screen.getByText('우편함 지급')).toBeInTheDocument();
+    expect(screen.getByText('작은 바다 영약')).toBeInTheDocument();
+    expect(screen.getByText('생선 탈리')).toBeInTheDocument();
+    expect(screen.getByText('용연향 미끼')).toBeInTheDocument();
+
+    cleanup();
+    open('me@gmail.test');
+    expect(screen.queryByText('최초 연결 선물')).toBeNull();
+    expect(screen.queryByText('우편함 지급')).toBeNull();
+  });
 });
 
 describe('로그인 상태별 구성', () => {
@@ -254,23 +268,53 @@ describe('출항 차단 후 로그인 의도 표지', () => {
 });
 
 describe('출항 전용 연결 창 (mode="connect")', () => {
-  it('게스트 상태에서는 출항 안내와 해금 3항목, 구글 버튼, 약관 고지, 나중에 하기만 보이고 계정 삭제·상태 박스는 없다', () => {
+  it('게스트 상태에서는 출항 안내와 최초 연결 선물 3종, 구글 버튼, 약관 고지, 나중에 하기와 바깥 애드온 패널이 보이고 계정 삭제·상태 박스는 없다', () => {
     open(null, false, true, 'connect');
-    expect(screen.getByRole('dialog', { name: '태평양 출항 준비' })).toBeInTheDocument();
-    expect(screen.getByText('태평양 너머 넓은 바다로 나갈 준비가 되었어요.')).toBeInTheDocument();
+    const dialog = screen.getByRole('dialog', { name: '태평양 출항 준비' });
+    expect(dialog).toBeInTheDocument();
+    expect(within(dialog).getByText('태평양 너머 넓은 바다로 나갈 준비가 되었어요.')).toBeInTheDocument();
+    expect(within(dialog).getByText('최초 연결 선물')).toBeInTheDocument();
+    expect(within(dialog).getByText('우편함 지급')).toBeInTheDocument();
+    expect(within(dialog).getByText('작은 바다 영약')).toBeInTheDocument();
+    expect(within(dialog).getByText('생선 탈리')).toBeInTheDocument();
+    expect(within(dialog).getByText('용연향 미끼')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Google로 계속하기' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: '이용약관' })).toHaveAttribute('target', '_blank');
+    expect(within(dialog).getByRole('link', { name: '개인정보 처리방침' })).toHaveAttribute('target', '_blank');
+    expect(within(dialog).getByRole('button', { name: '나중에 하기' })).toBeInTheDocument();
+
+    const asideHeading = screen.getByText('연결하면 열리는 것');
+    expect(dialog.contains(asideHeading)).toBe(false);
     expect(screen.getByText('태평양과 세계 해역 개방')).toBeInTheDocument();
     expect(screen.getByText('업적 보상과 소셜 기능 해금')).toBeInTheDocument();
     expect(screen.getByText('현재 마을 진행 그대로 유지')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Google로 계속하기' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '이용약관' })).toHaveAttribute('target', '_blank');
-    expect(screen.getByRole('link', { name: '개인정보 처리방침' })).toHaveAttribute('target', '_blank');
-    expect(screen.getByRole('button', { name: '나중에 하기' })).toBeInTheDocument();
 
     expect(screen.queryByText('게스트')).toBeNull();
     expect(screen.queryByText('클라우드 저장 켜짐')).toBeNull();
     expect(screen.queryByRole('button', { name: '로그아웃' })).toBeNull();
     expect(screen.queryByRole('button', { name: '계정 삭제' })).toBeNull();
     expect(screen.queryByRole('link', { name: '운영정책' })).toBeNull();
+  });
+
+  it('연결 창 보상 행에 호버하면 지속과 효과 툴팁이 열린다', () => {
+    open(null, false, true, 'connect');
+    fireEvent.mouseEnter(screen.getByText('작은 바다 영약'));
+    const tip = screen.getByRole('tooltip');
+    expect(tip).toHaveTextContent('지속');
+    expect(tip).toHaveTextContent('하루 동안');
+    expect(tip).toHaveTextContent('효과');
+    expect(tip).toHaveTextContent('모든 행운 효과 ×1.05');
+    fireEvent.mouseLeave(screen.getByText('작은 바다 영약'));
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  });
+
+  it('연결 창의 우측 애드온 패널 닫기를 누르면 메인 창은 유지되고 애드온만 닫힌다', () => {
+    const { onClose } = open(null, false, true, 'connect');
+    expect(screen.getByText('연결하면 열리는 것')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '연결 안내 닫기' }));
+    expect(screen.queryByText('연결하면 열리는 것')).toBeNull();
+    expect(screen.getByRole('dialog', { name: '태평양 출항 준비' })).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('나중에 하기를 누르면 출항 대기를 지우고 창을 닫는다', () => {
@@ -293,6 +337,8 @@ describe('출항 전용 연결 창 (mode="connect")', () => {
     expect(screen.getByRole('dialog', { name: '태평양 출항 준비' })).toBeInTheDocument();
     expect(screen.getByText(ACCOUNT_CHECK_FAILED_COPY.label)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: ACCOUNT_CHECK_FAILED_COPY.retry })).toBeInTheDocument();
+    expect(screen.queryByText('최초 연결 선물')).toBeNull();
+    expect(screen.queryByText('연결하면 열리는 것')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Google로 계속하기' })).toBeNull();
     expect(screen.queryByRole('button', { name: '나중에 하기' })).toBeNull();
     expect(screen.queryByRole('button', { name: '계정 삭제' })).toBeNull();

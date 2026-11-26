@@ -11,22 +11,28 @@ import {
 } from '../../../../features/account/service/sailReturn';
 import { GOOGLE_BUTTON_LABEL, googleStartFailedText, LEGAL_PATHS } from '../../../../features/account/model/googleFlow';
 import { ACCOUNT_CHECK_FAILED_COPY, accountLabel } from '../../../../features/account/model/accountRules';
+import { selectFirstLinkRewardItems } from '../../../../features/account/model/firstLinkReward';
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import Badge from '../../../ui/Badge';
 import BoatSprite from '../../../ui/BoatSprite';
 import Button from '../../../ui/Button';
 import Divider from '../../../ui/Divider';
 import ExternalLink from '../../../ui/ExternalLink';
+import Frame from '../../../ui/Frame';
 import GoogleButton from '../../../ui/GoogleButton';
 import GoogleLogo from '../../../ui/GoogleLogo';
 import IconButton from '../../../ui/IconButton';
 import Inset from '../../../ui/Inset';
+import ItemBadge from '../../../ui/ItemBadge';
+import ItemSprite from '../../../ui/ItemSprite';
 import KeyValueRow from '../../../ui/KeyValueRow';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
-import Tip, { TipCard } from '../../../ui/Tip';
+import Subheading from '../../../ui/Subheading';
+import Tip, { TipCard, TipList } from '../../../ui/Tip';
 import { cx } from '../../../ui/cx';
+import { GradeName } from '../../../ui/fish/RarityTag';
 import { useDialogs } from '../../../ui/useDialogs';
 import type { Notify } from '../../../ui/hud/messageFeed';
 
@@ -102,8 +108,10 @@ export default function AccountModal({
   sailReturn?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
+  const [showPerks, setShowPerks] = useState(true);
   const { confirm, input, dialogs } = useDialogs();
   const guest = account === null && !accountFailed;
+  const firstLinkRewards = selectFirstLinkRewardItems();
   // 로컬(클라우드 미설정)에서도 화면은 보여준다 - 계정 기능만 막는다.
   const offline = !isAccountConfigured() || syncState === 'off';
   const signedInOnline = !guest && !accountFailed && !offline;
@@ -222,9 +230,37 @@ export default function AccountModal({
     <Note className="mt-0">오프라인 상태에서는 계정 기능이 동작하지 않아요.<br />화면 확인용이에요.</Note>
   );
 
+  const perksAside = connectMode && guest && showPerks ? (
+    <Frame className="w-[232px] p-2.5 flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="pf-accent text-sm text-gold">연결하면 열리는 것</span>
+        <IconButton
+          type="button"
+          glyph="close"
+          size={12}
+          tone="dim"
+          aria-label="연결 안내 닫기"
+          className="p-1 hover:text-text shrink-0"
+          onClick={() => setShowPerks(false)}
+        />
+      </div>
+      <Inset divided>
+        {CONNECT_PERKS.map(perk => (
+          <div key={perk.badge} className="flex items-start gap-2 px-2 py-2">
+            <Badge tone="accent" size="xs" className="mt-0.5">{perk.badge}</Badge>
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-text">{perk.title}</p>
+              <p className="text-2xs text-text-dim leading-snug">{perk.desc}</p>
+            </div>
+          </div>
+        ))}
+      </Inset>
+    </Frame>
+  ) : undefined;
+
   const content = connectMode && guest ? (
     <>
-      <Inset tone="light" border="accent" className="p-2.5 flex items-center gap-3">
+      <Inset className="p-2.5 flex items-center gap-3">
         <BoatSprite tier={1} preset="row" className="shrink-0" />
         <div className="flex flex-col gap-0.5 min-w-0">
           <p className="text-sm font-bold text-text">태평양 너머 넓은 바다로 나갈 준비가 되었어요.</p>
@@ -232,15 +268,38 @@ export default function AccountModal({
         </div>
       </Inset>
 
+      <div className="flex items-center justify-between gap-2 mt-1">
+        <Subheading className="mb-0 text-xs font-bold text-text">최초 연결 선물</Subheading>
+        <Badge tone="dim-plain" size="xs">우편함 지급</Badge>
+      </div>
+
       <Inset divided>
-        {CONNECT_PERKS.map(perk => (
-          <div key={perk.badge} className="flex items-start gap-2.5 px-2.5 py-2">
-            <Badge tone="accent" size="xs" className="mt-0.5">{perk.badge}</Badge>
-            <div className="min-w-0">
-              <p className="text-xs font-bold text-text">{perk.title}</p>
-              <p className="text-xs text-text-dim">{perk.desc}</p>
+        {firstLinkRewards.map(item => (
+          <Tip
+            key={item.id}
+            plain
+            hoverOnly
+            className="block"
+            text={(
+              <TipList
+                rows={[
+                  { label: '지속', value: item.durationLabel },
+                  { label: '효과', value: item.effectLabel },
+                ]}
+              />
+            )}
+          >
+            <div className="flex items-center gap-2.5 px-2.5 py-2">
+              <ItemSprite kind={item.spriteKind} id={item.id} preset="list" className="shrink-0" />
+              <div className="min-w-0 flex-1 flex flex-col gap-0.5">
+                <div className="text-xs font-bold leading-snug">
+                  <GradeName name={item.name} grade={item.grade} />
+                </div>
+                <p className="text-2xs text-text-dim leading-snug">{item.summaryLine}</p>
+              </div>
+              <span className="pf-accent text-xs text-gold shrink-0 whitespace-nowrap">×{item.qty}</span>
             </div>
-          </div>
+          </Tip>
         ))}
       </Inset>
 
@@ -276,6 +335,17 @@ export default function AccountModal({
           <GoogleButton disabled={busy || offline} onClick={() => void connect()}>{GOOGLE_BUTTON_LABEL}</GoogleButton>
           {legalNotice}
           <Note className="text-center">구글 계정을 연결하면 지금까지의 진행이 그 계정에 이어져요.</Note>
+          <Inset tone="deep" className="p-2.5 flex flex-col gap-2 mt-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-bold text-text">최초 연결 선물</span>
+              <Badge tone="dim-plain" size="xs">우편함 지급</Badge>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {firstLinkRewards.map(item => (
+                <ItemBadge key={item.id} id={item.id} qty={item.qty} />
+              ))}
+            </div>
+          </Inset>
         </>
       ) : (
         <Button full disabled={offline || busy} onClick={signOut}>로그아웃</Button>
@@ -296,7 +366,7 @@ export default function AccountModal({
   return (
     <>
       {layer === 'stage' ? (
-        <Modal layer="stage" sm={connectMode} onClose={handleClose}>
+        <Modal layer="stage" sm={connectMode} aside={perksAside} onClose={handleClose}>
           <ModalCard title={title} onClose={handleClose}>{content}</ModalCard>
         </Modal>
       ) : (

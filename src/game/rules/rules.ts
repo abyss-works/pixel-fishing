@@ -69,7 +69,7 @@ export type RejectReason =
   | 'potion-already-active' // 오늘 이미 같은 비약 효과가 적용 중이다
   | 'not-at-home' // 집 거점에서만 하는 동작(조리)을 집 밖에서 요청했다
   | 'not-at-sale-base' // 판매 시설이 있는 거점(집, 항구) 또는 가공 플랜트선에서 하는 동작(기운 얻기)을 그 밖에서 요청했다
-  | 'cooking-locked' // 요리 해금 배 단계 미달 — 조리와 먹기
+  | 'cooking-locked' // 요리 해금 배 단계 미달 — 조리와 기운 변환
   | 'energy-locked' // 요리 해금 배 단계 미달 — 기운 얻기
   | 'not-enough-energy' // 조리에 필요한 기운이 모자란다
   | 'cooking-not-found' // 취소할 조리나 대기열 항목을 찾을 수 없다

@@ -660,4 +660,53 @@ describe('테스트 데이터베이스', () => {
       }
     });
   });
+
+  describe('mails.idempotency_key (0047)', () => {
+    const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
+    const user = async (c: Client): Promise<string> => {
+      const uid = randomUUID();
+      await c.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, true)`, [uid, `${uid}@anonymous.invalid`]);
+      return uid;
+    };
+
+    it('NULL idempotency_key는 중복 허용하고 비NULL (user_id, idempotency_key)는 계정당 1건만 허용하며, 다운/업이 동작한다', async () => {
+      const a = await user(client);
+      const b = await user(client);
+      await client.query(`insert into public.mails (user_id, title, body) values ($1, '일반1', 'b'), ($1, '일반2', 'b')`, [a]);
+      await client.query(`insert into public.mails (user_id, idempotency_key, title, body) values ($1, 'welcome', '선물', 'b')`, [a]);
+      await client.query(`insert into public.mails (user_id, idempotency_key, title, body) values ($1, 'welcome', '선물', 'b')`, [b]);
+      await expect(client.query(
+        `insert into public.mails (user_id, idempotency_key, title, body) values ($1, 'welcome', '중복', 'b')`,
+        [a],
+      )).rejects.toMatchObject({ code: '23505' });
+
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        await other.query(migration('0047_mail_idempotency_key.down.sql'));
+        const { rows: afterDownCol } = await other.query(
+          `select 1 from information_schema.columns where table_schema = 'public' and table_name = 'mails' and column_name = 'idempotency_key'`,
+        );
+        expect(afterDownCol).toHaveLength(0);
+        const { rows: afterDownIdx } = await other.query(
+          `select 1 from pg_indexes where schemaname = 'public' and tablename = 'mails' and indexname = 'mails_user_idempotency_idx'`,
+        );
+        expect(afterDownIdx).toHaveLength(0);
+
+        await other.query(migration('0047_mail_idempotency_key.sql'));
+        const { rows: afterUpCol } = await other.query<{ is_nullable: string }>(
+          `select is_nullable from information_schema.columns where table_schema = 'public' and table_name = 'mails' and column_name = 'idempotency_key'`,
+        );
+        expect(afterUpCol).toEqual([{ is_nullable: 'YES' }]);
+        const { rows: afterUpIdx } = await other.query(
+          `select 1 from pg_indexes where schemaname = 'public' and tablename = 'mails' and indexname = 'mails_user_idempotency_idx'`,
+        );
+        expect(afterUpIdx).toHaveLength(1);
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
 });

@@ -4,7 +4,7 @@ import type { Executor } from '../_db/client.js';
 import {
   clearMailIdempotencyCache, deliverMail, draftProblems, DuplicateMailError,
   duplicateRecipientIds, MAIL_IDEMPOTENCY_TTL_MS, MAX_MAIL_BATCH_TOTAL_GOLD,
-  parseMailRequest, planMail,
+  parseMailRequest, planMail, sendIdempotentMail,
 } from './mailbox.js';
 
 const A = '00000000-0000-4000-8000-000000000001';
@@ -285,5 +285,44 @@ describe('우편 요청 해석 및 중복/상한 검증', () => {
     release();
     expect(await p1).toMatchObject({ problems: [], sent: 1 });
     expect(await pSame).toMatchObject({ problems: [], sent: 0, idempotent: true });
+  });
+
+  it('sendIdempotentMail은 입력·카탈로그·수량·금화 검증 후 삽입 행 유무를 boolean으로 반환한다', async () => {
+    const db = {
+      execute: vi.fn(async () => ({ rows: [{ id: 101 }] })),
+    } as unknown as Executor;
+
+    const valid = {
+      userId: A,
+      idempotencyKey: 'google-first-link-reward',
+      title: '출항 연결 선물',
+      body: '선물을 보냈어요.',
+      gold: 0,
+      items: [{ id: 'luck-small', qty: 1 }, { id: 'cook-lunch-bundle', qty: 1 }],
+    };
+    await expect(sendIdempotentMail(db, valid, NOW)).resolves.toBe(true);
+    expect(db.execute).toHaveBeenCalledTimes(1);
+
+    const dupDb = {
+      execute: vi.fn(async () => ({ rows: [] })),
+    } as unknown as Executor;
+    await expect(sendIdempotentMail(dupDb, valid, NOW)).resolves.toBe(false);
+
+    const badDb = { execute: vi.fn() } as unknown as Executor;
+    for (const bad of [
+      { ...valid, idempotencyKey: '   ' },
+      { ...valid, idempotencyKey: 'k'.repeat(129) },
+      { ...valid, userId: 'not-uuid' },
+      { ...valid, title: ' ' },
+      { ...valid, body: '' },
+      { ...valid, gold: -1 },
+      { ...valid, items: [{ id: 'unknown-item', qty: 1 }] },
+      { ...valid, items: [{ id: 'luck-small', qty: 0 }] },
+      { ...valid, items: [{ id: 'energy-common', qty: 100_001 }] },
+      { ...valid, gold: 0, items: [] },
+    ]) {
+      await expect(sendIdempotentMail(badDb, bad, NOW)).rejects.toThrow();
+    }
+    expect(badDb.execute).not.toHaveBeenCalled();
   });
 });

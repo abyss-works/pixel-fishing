@@ -9,7 +9,7 @@ import {
 } from '../content/cooking';
 import type { RarityId } from '../content/rarity';
 import {
-  baitDurationScale, canExtractEnergy, cookingProgress, cookingUnlocked, energyDefaultExcluded, energyTargetRows, energyGain, energyYield, energyTargetOf, maxBaitSlots, settleCooking, slotDurationMs, slotEffects, slotEndsAt, appliedSlots,
+  baitDurationScale, canEat, canExtractEnergy, cookingProgress, cookingUnlocked, energyDefaultExcluded, energyTargetRows, energyGain, energyYield, energyTargetOf, maxBaitSlots, settleCooking, slotDurationMs, slotEffects, slotEndsAt, appliedSlots,
 } from './cooking';
 import { biteWaitOf, createPlayerContext, NO_ACHIEVEMENT_BONUSES } from './effects';
 import { BASE_REGION } from '../content/places';
@@ -531,11 +531,30 @@ describe('eat', () => {
     const s = seed({ items: { [lunch.id]: 1 }, location: { kind: 'region', id: 'world' } });
     expect(ok(s, { type: 'eat', item: lunch.id }).state.slots.lunch).not.toBeNull();
   });
-  it('보유하지 않았으면 item-not-owned, 해금 전은 cooking-locked, 먹을 수 없는 아이템은 bad-request다', () => {
+  it('보유하지 않았으면 item-not-owned, 게스트는 account-only, 먹을 수 없는 아이템은 bad-request다', () => {
     expect(rejected(seed(), { type: 'eat', item: lunch.id })).toBe('item-not-owned');
-    expect(rejected(seed({ boat: 4, items: { [lunch.id]: 1 } }), { type: 'eat', item: lunch.id })).toBe('cooking-locked');
+    expect(canEat(seed({ items: { [lunch.id]: 1 } }), lunch.id, T0, true)).toEqual({ ok: false, reason: 'account-only' });
+    expect(rejected(seed({ items: { [lunch.id]: 1 } }), { type: 'eat', item: lunch.id }, deps({ guest: true }))).toBe('account-only');
+    expect(rejected(seed({ boat: 1, items: { [lunch.id]: 1 } }), { type: 'eat', item: lunch.id }, deps({ guest: true }))).toBe('account-only');
     expect(rejected(seed({ items: energy(5) }), { type: 'eat', item: ENERGY_ITEM_IDS.common })).toBe('bad-request');
     expect(rejected(seed(), { type: 'eat', item: 7 as never })).toBe('bad-request');
+  });
+  it('요리 제작 해금 전(boat 1, 4)이라도 로그인 계정이 보유한 도시락·미끼는 정상 사용할 수 있다', () => {
+    const bundleId = 'cook-lunch-bundle';
+    const legBaitId = 'cook-bait-legendary';
+    for (const boat of [1, 4]) {
+      const s = seed({ boat, items: { [bundleId]: 1, [legBaitId]: 3 } });
+      expect(canEat(s, bundleId, T0, false)).toEqual({ ok: true });
+      expect(canEat(s, legBaitId, T0, false)).toEqual({ ok: true });
+
+      const afterLunch = ok(s, { type: 'eat', item: bundleId }, deps({ guest: false }));
+      expect(afterLunch.state.slots.lunch).toEqual({ id: bundleId, endsAt: at(T0, 9 * 60 * MIN) });
+      expect(afterLunch.state.items[bundleId]).toBeUndefined();
+
+      const afterBait = ok(afterLunch.state, { type: 'eat', item: legBaitId }, deps({ guest: false }));
+      expect(afterBait.state.slots.bait).toEqual({ id: legBaitId, endsAt: at(T0, 5 * MIN) });
+      expect(afterBait.state.items[legBaitId]).toBe(2);
+    }
   });
 });
 
@@ -629,6 +648,18 @@ describe('slotEffects', () => {
       rare: 0.48,
       epic: 0.48,
       legendary: 0.48,
+    });
+  });
+  it('요리 제작 해금 전(boat 1)에서도 슬롯에 장착된 도시락·미끼 효과가 appliedSlots·slotEffects에 적용된다', () => {
+    const s = seed({ boat: 1, slots: slots('cook-lunch-bundle', 'cook-bait-legendary') });
+    expect(appliedSlots(s, T0, 'auto')).toEqual({ lunch: 'cook-lunch-bundle' });
+    expect(slotEffects(s, T0, 'auto')).toMatchObject({
+      biteWaitCut: 0.05,
+      rarityWeight: { rare: 0.05, epic: 0.05, legendary: 0.05 },
+    });
+    expect(appliedSlots(s, T0, 'good')).toEqual({ bait: 'cook-bait-legendary' });
+    expect(slotEffects(s, T0, 'good')).toMatchObject({
+      rarityWeight: { legendary: 0.8 },
     });
   });
 });
