@@ -69,7 +69,7 @@ describe('debug 페이싱 면제 & 운영 차단', () => {
     process.env.DEPLOY_ENV = 'production';
     const uid = await seed({ state: {}, admin: true });
     const recent = new Date(Date.parse(NOW) - 10).toISOString();
-    await env.client.query(`update public.saves_current set updated_at = $2 where user_id = $1`, [uid, recent]);
+    await env.client.query(`update public.saves_current set updated_at = $2, last_catch_at = $2 where user_id = $1`, [uid, recent]);
 
     for (const action of [
       { type: 'debug', command: 'stats.set', args: { gold: 100 } },

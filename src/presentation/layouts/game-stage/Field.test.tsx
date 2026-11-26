@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { AppError, fail } from '../../../core/errors';
 import { newState } from '../../../game/rules/logic';
 import { FISH } from '../../../game/content/fish';
 import { setSchoolDay } from '../../../features/gameplay/service/schoolDay';
@@ -89,6 +90,58 @@ describe('Field 낚시 상태 띠 슬롯 포털', () => {
     } finally {
       statusSlot.remove();
       catchSlot.remove();
+    }
+  });
+});
+
+describe('Field 일시적 429(rate-limited) 낚시 세션 유지', () => {
+  it('진행 중인 낚시(wait·bite)에서 일시적 rate-limited 실패가 발생해도 낚시 세션을 강제 중단하지 않는다', () => {
+    const slot = document.createElement('div');
+    document.body.appendChild(slot);
+    try {
+      const { container } = render(
+        <Field region="village" game={newState()}
+               dispatch={() => ({ status: 'ok', result: {} as never, state: newState() })}
+               setToast={() => {}} onScene={() => {}} initialPos={POND_SHORE} statusSlot={slot} />,
+      );
+      fireEvent.keyDown(document, { code: 'Space' });
+      expect(container.querySelector('[data-phase="wait"]')).not.toBeNull();
+
+      act(() => { fail(new AppError('rate-limited', 'too-fast')); });
+      expect(container.querySelector('[data-phase="wait"]')).not.toBeNull();
+
+      act(() => { vi.advanceTimersByTime(4000); });
+      expect(container.querySelector('[data-phase="bite"]')).not.toBeNull();
+
+      act(() => { fail(new AppError('rate-limited', 'too-fast', { action: 'sendLetter' })); });
+      expect(container.querySelector('[data-phase="bite"]')).not.toBeNull();
+
+      // 네트워크 등 다른 오류는 기존처럼 낚시를 중단한다
+      act(() => { fail(new AppError('network', 'offline')); });
+      expect(container.querySelector('[data-phase]')).toBeNull();
+    } finally {
+      slot.remove();
+    }
+  });
+
+  it('catch 요청이 rate-limited로 실패해도 낚시 세션을 idle로 끊거나 catch에 멈추지 않고 대기 상태로 복구한다', () => {
+    const slot = document.createElement('div');
+    document.body.appendChild(slot);
+    try {
+      const { container } = render(
+        <Field region="village" game={newState()}
+               dispatch={() => new Promise(() => {}) as never}
+               setToast={() => {}} onScene={() => {}} initialPos={POND_SHORE} statusSlot={slot} />,
+      );
+      fireEvent.keyDown(document, { code: 'Space' });
+      act(() => { vi.advanceTimersByTime(4000); });
+      fireEvent.keyDown(document, { code: 'Space' });
+      expect(container.querySelector('[data-phase="catch"]')).not.toBeNull();
+
+      act(() => { fail(new AppError('rate-limited', 'too-fast', { action: 'catch' })); });
+      expect(container.querySelector('[data-phase="wait"]')).not.toBeNull();
+    } finally {
+      slot.remove();
     }
   });
 });

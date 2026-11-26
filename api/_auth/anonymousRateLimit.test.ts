@@ -199,4 +199,34 @@ describe('익명 가입 IP 레이트리밋', () => {
     expect(Number(blocked.headers.get('retry-after'))).toBeGreaterThan(3500);
     expect((await postWithRealIp('198.51.100.44')).status).toBe(200);
   });
+
+  it('소셜 로그인(/sign-in/social)은 공유 NAT에서 10초당 4회 이상 연속 호출해도 429로 막히지 않는다', async () => {
+    const postSocial = (forwardedFor: string) =>
+      fetch(`${origin}/api/auth/sign-in/social`, {
+        method: 'POST',
+        headers: {
+          origin,
+          'content-type': 'application/json',
+          'x-forwarded-for': forwardedFor,
+        },
+        body: JSON.stringify({ provider: 'google', callbackURL: '/' }),
+      });
+
+    const natIp = '203.0.113.77, 10.0.0.1';
+    const otherIp = '203.0.113.78, 10.0.0.1';
+
+    for (let i = 0; i < 30; i++) {
+      const res = await postSocial(natIp);
+      expect(res.status, `social attempt ${i + 1}`).not.toBe(429);
+    }
+
+    const blocked = await postSocial(natIp);
+    expect(blocked.status).toBe(429);
+    const retryAfter = Number(blocked.headers.get('retry-after'));
+    expect(retryAfter).toBeGreaterThan(0);
+    expect(retryAfter).toBeLessThanOrEqual(10);
+    expect(blocked.headers.get('x-content-type-options')).toBe('nosniff');
+
+    expect((await postSocial(otherIp)).status).not.toBe(429);
+  });
 });

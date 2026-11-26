@@ -47,6 +47,8 @@ export function anonymousSignInRateLimit(env: NodeJS.ProcessEnv = process.env): 
 
 /** 익명 계정 생성 경로(/api/auth/sign-in/anonymous)의 IP당 생성 상한(기본 3600초당 최대 200회) */
 export const ANONYMOUS_SIGN_IN_RATE_LIMIT = anonymousSignInRateLimit();
+/** 공유 NAT 환경에서 여러 사용자가 동시에 구글 로그인을 시작할 수 있도록 기본 특수 규칙(10초 3회) 대신 10초당 30회를 허용한다 */
+const SOCIAL_SIGN_IN_RATE_LIMIT = { window: 10, max: 30 };
 // 이메일·비밀번호 로그인·가입·재설정 경로는 사용하지 않아 라우터 진입에서 차단한다.
 const DISABLED_EMAIL_PASSWORD_PATHS = ['/sign-in/email', '/sign-up/email', '/request-password-reset', '/reset-password'];
 
@@ -137,6 +139,7 @@ export function createAuth(config: AuthConfig) {
     rateLimit: {
       customRules: {
         '/sign-in/anonymous': anonymousSignInRateLimit(),
+        '/sign-in/social': SOCIAL_SIGN_IN_RATE_LIMIT,
       },
     },
     advanced: { database: { generateId: 'uuid' }, ipAddress: ipAddressConfig },
