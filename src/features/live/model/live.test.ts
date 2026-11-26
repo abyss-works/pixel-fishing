@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import type { ChatLine, Presence } from '../../../game/rules/live';
 import { LIVE_STALE_MS } from '../../../game/rules/live';
 import { DEFAULT_LOOK } from '../../../game/content/wardrobe';
-import { applyLiveMessage, BUBBLE_MS, bubbleOf, CHAT_KEEP, EMPTY_LIVE, GLOBAL_CHAT_COOLDOWN_MS, idleLabel, isStale, matesInRegion, nextPositionMessage, othersInRegion, playerZoneLabel, resolveLiveRegion, TYPING_MS, withoutAuthor } from './live';
+import { applyLiveMessage, boatTierLabel, BUBBLE_MS, bubbleOf, CHAT_KEEP, EMPTY_LIVE, filterPlayers, GLOBAL_CHAT_COOLDOWN_MS, idleLabel, isStale, matesInRegion, nextPositionMessage, othersInRegion, PLAYER_LIST_SORT_OPTIONS, playerZoneLabel, resolveLiveRegion, selectPlayerList, selectPlayersInRegion, sortPlayers, TYPING_MS, withoutAuthor } from './live';
 
-const p = (uid: string, nick: string, region = 'sea'): Presence =>
-  ({ uid, nick, boat: 1, region, x: 0, y: 0, dir: 0, line: false });
+const p = (uid: string, nick: string, region = 'sea', fame = 0): Presence =>
+  ({ uid, nick, boat: 1, fame, region, x: 0, y: 0, dir: 0, line: false });
 
 describe('applyLiveMessage', () => {
   it('hello로 시작해 join·move·stop·leave를 반영하고, 자기 자신과 모르는 사람은 무시한다', () => {
@@ -78,6 +78,110 @@ describe('applyLiveMessage', () => {
     // 같은 닉네임이거나 모르는 사용자면 상태를 그대로 돌려준다
     expect(applyLiveMessage(s, { t: 'nick', uid: 'a', nick: '새이름' }, 2)).toBe(s);
     expect(applyLiveMessage(s, { t: 'nick', uid: 'unknown', nick: '아무개' }, 3)).toBe(s);
+  });
+
+  it('hello와 join의 fame·boat·look을 보존하고 move·stop·nick 뒤에도 유지한다', () => {
+    const look = { shirt: 3, pants: 2, hat: 'cap-red' };
+    let s = applyLiveMessage(EMPTY_LIVE, {
+      t: 'hello',
+      you: 'me',
+      others: [{ ...p('a', '가람', 'world', 12_500), boat: 7, look }],
+      recentChat: [],
+    }, 0);
+    expect(s.others.a.presence.fame).toBe(12_500);
+
+    s = applyLiveMessage(s, { t: 'move', uid: 'a', region: 'world', x: 12, y: 34, dir: 1, line: true }, 10);
+    expect(s.others.a.presence.fame).toBe(12_500);
+    expect(s.others.a.presence.boat).toBe(7);
+    expect(s.others.a.presence.look).toEqual(look);
+
+    s = applyLiveMessage(s, { t: 'stop', uid: 'a' }, 20);
+    expect(s.others.a.presence.fame).toBe(12_500);
+
+    s = applyLiveMessage(s, { t: 'nick', uid: 'a', nick: '바다사냥꾼' }, 30);
+    expect(s.others.a.presence.fame).toBe(12_500);
+    expect(s.others.a.presence.nick).toBe('바다사냥꾼');
+
+    s = applyLiveMessage(s, {
+      t: 'join',
+      presence: { ...p('b', '새접속', 'world', 4_200), boat: 4, look },
+    }, 40);
+    expect(s.others.b.presence.fame).toBe(4_200);
+  });
+});
+
+describe('접속자 목록 모델(정렬·검색·배 티어)', () => {
+  it('정렬 옵션은 명성순(기본)과 가나다순 2종만 제공한다', () => {
+    expect(PLAYER_LIST_SORT_OPTIONS).toEqual([
+      { value: 'fame', label: '명성순' },
+      { value: 'name', label: '가나다순' },
+    ]);
+  });
+
+  it('boatTierLabel은 1~9단계는 T1~T9로, 0단계 이하는 도보로 바꾼다', () => {
+    expect(boatTierLabel(0)).toBe('도보');
+    expect(boatTierLabel(-1)).toBe('도보');
+    expect(boatTierLabel(1)).toBe('T1');
+    expect(boatTierLabel(5)).toBe('T5');
+    expect(boatTierLabel(9)).toBe('T9');
+  });
+
+  it('sortPlayers는 명성순 내림차순(동률 시 가나다순 오름차순)과 가나다순 오름차순으로 정렬한다', () => {
+    const items = [
+      { uid: 'u1', nick: '하늘', fame: 500 },
+      { uid: 'u2', nick: '가람', fame: 500 },
+      { uid: 'u3', nick: '바다', fame: 1200 },
+      { uid: 'u4', nick: '나루', fame: 300 },
+    ];
+    expect(sortPlayers(items, 'fame').map(i => i.uid)).toEqual(['u3', 'u2', 'u1', 'u4']);
+    expect(sortPlayers(items, 'name').map(i => i.uid)).toEqual(['u2', 'u4', 'u3', 'u1']);
+  });
+
+  it('filterPlayers와 selectPlayerList는 공백 트림·대소문자 무시 부분 일치로 즉시 걸러 정렬한다', () => {
+    const items = [
+      { uid: 'u1', nick: 'AlphaFisher', fame: 100 },
+      { uid: 'u2', nick: 'alphaKing', fame: 500 },
+      { uid: 'u3', nick: '바다사나이', fame: 300 },
+    ];
+    expect(filterPlayers(items, '  ALPHA  ').map(i => i.uid)).toEqual(['u1', 'u2']);
+    expect(filterPlayers(items, '   ').map(i => i.uid)).toEqual(['u1', 'u2', 'u3']);
+    expect(selectPlayerList(items, { query: 'alpha', sort: 'fame' }).map(i => i.uid)).toEqual(['u2', 'u1']);
+    expect(selectPlayerList(items, { query: 'alpha', sort: 'name' }).map(i => i.uid)).toEqual(['u1', 'u2']);
+  });
+
+  it('selectPlayersInRegion은 해당 지역 접속자의 fame·배 티어·외형(기본 외형 폴백)을 파생한다', () => {
+    const customLook = { shirt: 4, pants: 2, hat: 'straw-hat' };
+    const s = applyLiveMessage(EMPTY_LIVE, {
+      t: 'hello',
+      you: 'me',
+      others: [
+        { ...p('u1', '도보낚시꾼', 'world', 250), boat: 0, zone: 'pacific' },
+        { ...p('u2', '원양선장', 'world', 98_000), boat: 9, zone: 'northatlantic', look: customLook },
+        { ...p('u3', '마을사람', 'village', 50_000), boat: 3 },
+      ],
+      recentChat: [],
+    }, 0);
+
+    expect(selectPlayersInRegion(s, 'world')).toEqual([
+      {
+        uid: 'u2',
+        nick: '원양선장',
+        boat: 9,
+        boatTierLabel: 'T9',
+        fame: 98_000,
+        look: customLook,
+        zoneLabel: '북대서양',
+      },
+      {
+        uid: 'u1',
+        nick: '도보낚시꾼',
+        boat: 0,
+        boatTierLabel: '도보',
+        fame: 250,
+        look: DEFAULT_LOOK,
+        zoneLabel: '태평양',
+      },
+    ]);
   });
 });
 

@@ -17,8 +17,8 @@ import type { ChatLine, ChatRoom, NoticeItem, Presence, ServerMessage } from '..
 import { topZoneOf, zoneById } from '../../src/game/content/zones.js';
 import type { ZoneId } from '../../src/game/content/zones.js';
 
-/** 연결한 사용자 — 표시 이름과 배는 서버가 DB에서 읽는다. 클라이언트가 보낸 값을 믿지 않는다. guest는 이메일이 없는 계정이다 */
-export interface LiveUser { uid: string; nick: string; boat: number; guest: boolean }
+/** 연결한 사용자 — 표시 이름·배·명성은 서버가 DB에서 읽는다. 클라이언트가 보낸 값을 믿지 않는다. guest는 이메일이 없는 계정이다 */
+export interface LiveUser { uid: string; nick: string; boat: number; fame: number; guest: boolean }
 
 export type LiveChatSaveResult =
   | { ok: true; line: ChatLine; room: ChatRoom; region: string | null; guild: string | null }
@@ -98,6 +98,8 @@ export interface LiveServer {
   setGuild(uid: string, guild: string | null): void;
   /** 그 사용자의 닉네임이 바뀌었다. 활성 연결의 캐시를 즉시 갱신하고 본인 포함 접속자에게 알린다(게스트 제외) */
   setNick(uid: string, nick: string): void;
+  /** 그 사용자의 명성이 바뀌었다. 활성 연결의 캐시를 즉시 갱신해 이후 합류·접속 상태에 반영한다 */
+  setFame(uid: string, fame: number): void;
   /** 그 사용자의 연결에만 메시지를 보낸다. 연결돼 있지 않으면 아무것도 하지 않는다 */
   sendTo(uid: string, msg: ServerMessage): void;
   /** 그 길드에 속한 접속자의 연결에만 메시지를 보낸다 */
@@ -317,7 +319,7 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
               conn.idleSince = idleSinceOf(conn.presence && { spot: conn.presence, since: conn.idleSince }, { region, x, y }, line, msg.idleMs, at);
               const idle = idleField(conn.idleSince, at);
               if (!conn.presence) {
-                conn.presence = { uid: user.uid, nick: user.nick, boat: user.boat, region, zone, x, y, dir, line, ...(bob ? { bob } : {}), ...(look ? { look } : {}) };
+                conn.presence = { uid: user.uid, nick: user.nick, boat: user.boat, fame: user.fame, region, zone, x, y, dir, line, ...(bob ? { bob } : {}), ...(look ? { look } : {}) };
                 broadcast(ws, user, { t: 'join', presence: { ...conn.presence, ...idle } });
               } else {
                 Object.assign(conn.presence, { region, zone, x, y, dir, line, bob, ...(look ? { look } : {}) });
@@ -443,6 +445,13 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
         const msg: ServerMessage = { t: 'nick', uid, nick };
         send(sender.ws, msg);
         broadcast(sender.ws, sender.user, msg);
+      }
+    },
+    setFame(uid, fame) {
+      for (const c of conns.values()) {
+        if (c.user.uid !== uid) continue;
+        c.user.fame = fame;
+        if (c.presence) c.presence.fame = fame;
       }
     },
     sendTo(uid, msg) {

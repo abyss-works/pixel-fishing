@@ -1,3 +1,4 @@
+import { DEFAULT_LOOK } from '../../../game/content/wardrobe';
 import type { Look } from '../../../game/content/wardrobe';
 import { zoneOfPort } from '../../../game/content/bounties';
 import { defaultZoneOfRegion, topZoneOf, zoneById } from '../../../game/content/zones';
@@ -208,6 +209,79 @@ export function othersInRegion(state: LiveState, region: string): OtherPlayer[] 
   return Object.values(state.others)
     .filter(o => o.presence.region === region)
     .sort((a, b) => a.presence.nick.localeCompare(b.presence.nick));
+}
+
+export type PlayerListSort = 'fame' | 'name';
+
+export const PLAYER_LIST_SORT_OPTIONS: readonly { value: PlayerListSort; label: string }[] = [
+  { value: 'fame', label: '명성순' },
+  { value: 'name', label: '가나다순' },
+];
+
+export interface PlayerListItem {
+  uid: string;
+  nick: string;
+  boat: number;
+  boatTierLabel: string;
+  fame: number;
+  look: Look;
+  zoneLabel: string | null;
+}
+
+/** 배 단계를 목록 카드용 짧은 티어 표기(`T1`–`T9`, 0단계 이하는 `도보`)로 바꾼다 */
+export function boatTierLabel(boat: number): string {
+  if (!Number.isFinite(boat) || boat < 1) return '도보';
+  return `T${Math.trunc(boat)}`;
+}
+
+/** 접속자 목록을 정렬한다 (`명성순`: 명성 내림차순·동률 시 가나다순 / `가나다순`: 한국어 로캘 오름차순) */
+export function sortPlayers<T extends { uid: string; nick: string; fame: number }>(
+  players: readonly T[],
+  sort: PlayerListSort = 'fame',
+): T[] {
+  const copy = players.slice();
+  copy.sort((a, b) => {
+    if (sort === 'fame' && b.fame !== a.fame) return b.fame - a.fame;
+    const nickCmp = a.nick.localeCompare(b.nick, 'ko');
+    if (nickCmp !== 0) return nickCmp;
+    return a.uid.localeCompare(b.uid);
+  });
+  return copy;
+}
+
+/** 검색어로 접속자 목록을 대소문자 무시 부분 일치 필터링한다 */
+export function filterPlayers<T extends { nick: string }>(players: readonly T[], query: string): T[] {
+  const normalized = query.trim().toLocaleLowerCase();
+  if (!normalized) return players.slice();
+  return players.filter(p => p.nick.toLocaleLowerCase().includes(normalized));
+}
+
+/** 검색어 필터와 정렬 기준을 적용한 접속자 목록을 돌려준다 */
+export function selectPlayerList<T extends { uid: string; nick: string; fame: number }>(
+  players: readonly T[],
+  { query = '', sort = 'fame' }: { query?: string; sort?: PlayerListSort } = {},
+): T[] {
+  return sortPlayers(filterPlayers(players, query), sort);
+}
+
+/** 그 바다의 다른 플레이어 목록 뷰 모델을 기본 정렬(`명성순`)로 파생한다 */
+export function selectPlayersInRegion(state: LiveState, region: string): PlayerListItem[] {
+  const items: PlayerListItem[] = Object.values(state.others)
+    .filter(o => o.presence.region === region)
+    .map(o => {
+      const { presence } = o;
+      const fame = Number.isFinite(presence.fame) ? presence.fame : 0;
+      return {
+        uid: presence.uid,
+        nick: presence.nick,
+        boat: presence.boat,
+        boatTierLabel: boatTierLabel(presence.boat),
+        fame,
+        look: presence.look ?? DEFAULT_LOOK,
+        zoneLabel: playerZoneLabel(presence),
+      };
+    });
+  return sortPlayers(items, 'fame');
 }
 
 /** 실시간 접속자 목록 행에 표시할 짧은 위치 이름 */

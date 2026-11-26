@@ -47,7 +47,7 @@ describe('친구 함수', () => {
     expect(await call('POST', userToken(A), { nickname: '나루' })).toMatchObject({ status: 200, body: { result: 'requested' } });
     expect((await list(userToken(B))).friends).toMatchObject([{ uid: A, state: 'incoming', online: false }]);
     expect(await call('PUT', userToken(B), undefined, A)).toMatchObject({ status: 200 });
-    providePresence(uid => (uid === B ? { uid: B, nick: '나루', boat: 1, region: 'deep', x: 0, y: 0, dir: 0, line: false } : null));
+    providePresence(uid => (uid === B ? { uid: B, nick: '나루', boat: 1, fame: 0, region: 'deep', x: 0, y: 0, dir: 0, line: false } : null));
     expect((await list(userToken(A))).friends).toEqual([expect.objectContaining({ uid: B, state: 'friend', online: true, region: 'deep' })]);
     expect(await call('DELETE', userToken(A), undefined, B)).toMatchObject({ status: 200 });
     expect((await list(userToken(A))).friends).toEqual([]);

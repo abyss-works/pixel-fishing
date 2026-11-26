@@ -104,13 +104,15 @@ describe('useLive 약관 수락 게이트 및 3방·공지 연동', () => {
       liveMock.connections[0].onMessage({
         t: 'hello',
         you: 'u1',
-        others: [{ uid: 'u2', nick: '옛닉', boat: 1, region: 'world', x: 0, y: 0, dir: 0, line: false }],
+        others: [{ uid: 'u2', nick: '옛닉', boat: 3, fame: 1500, region: 'world', x: 0, y: 0, dir: 0, line: false }],
         recentChat: [{ id: 1, uid: 'u2', nick: '옛닉', text: '안녕', at: '2026-11-26T00:00:00.000Z' }],
         recentLocalChat: [{ id: 2, uid: 'u2', nick: '옛닉', text: '지역안녕', at: '2026-11-26T00:00:01.000Z' }],
         recentGuildChat: [],
       });
     });
     expect(result.current.players.map(p => p.nick)).toEqual(['옛닉']);
+    expect(result.current.players[0].fame).toBe(1500);
+    expect(result.current.players[0].boatTierLabel).toBe('T3');
     expect(result.current.chat.globalLines.map(l => l.nick)).toEqual(['옛닉']);
     expect(result.current.chat.localLines.map(l => l.nick)).toEqual(['옛닉']);
 
@@ -118,8 +120,20 @@ describe('useLive 약관 수락 게이트 및 3방·공지 연동', () => {
       liveMock.connections[0].onMessage({ t: 'nick', uid: 'u2', nick: '새닉' });
     });
     expect(result.current.players.map(p => p.nick)).toEqual(['새닉']);
+    expect(result.current.players[0].fame).toBe(1500);
     expect(result.current.chat.globalLines.map(l => l.nick)).toEqual(['새닉']);
     expect(result.current.chat.localLines.map(l => l.nick)).toEqual(['새닉']);
+
+    act(() => {
+      liveMock.connections[0].onMessage({
+        t: 'join',
+        presence: { uid: 'u3', nick: '합류꾼', boat: 9, fame: 92_000, region: 'world', x: 1, y: 2, dir: 1, line: false },
+      });
+    });
+    expect(result.current.players.map(p => ({ uid: p.uid, fame: p.fame, tier: p.boatTierLabel }))).toEqual([
+      { uid: 'u3', fame: 92_000, tier: 'T9' },
+      { uid: 'u2', fame: 1500, tier: 'T3' },
+    ]);
   });
 
   it('sendRegion은 현재 지역을 전송하고 hello 재연결 시에도 기억한 지역을 다시 보낸다', () => {

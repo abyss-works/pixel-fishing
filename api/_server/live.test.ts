@@ -61,7 +61,7 @@ async function start(extra: Partial<LiveOptions> = {}): Promise<{ url: string; u
       if (!cookie) return null;
       const guest = cookie.startsWith('guest:');
       const uid = guest ? cookie.slice('guest:'.length) : cookie;
-      return { uid, nick: `n-${uid}`, boat: 2, guest };
+      return { uid, nick: `n-${uid}`, boat: 2, fame: 100, guest };
     },
     chat: {
       save: async (user, text, guild, room: ChatRoom = 'local', region: string | null = null) => {
@@ -131,7 +131,7 @@ describe('실시간 채널 서버', () => {
   it('진입 게이트(gate)가 401·403을 돌려주면 인증 전에 업그레이드를 거부하고, null이면 통과시킨다', async () => {
     const authenticate = vi.fn(async (req) => {
       const uid = req.headers.cookie;
-      return uid ? { uid, nick: `n-${uid}`, boat: 2, guest: false } : null;
+      return uid ? { uid, nick: `n-${uid}`, boat: 2, fame: 100, guest: false } : null;
     });
     const { url, live } = await start({
       authenticate,
@@ -237,7 +237,7 @@ describe('실시간 채널 서버', () => {
     await a.next(); await b.next();
     a.ws.send('{"t":"move","x":"bad"}');
     a.ws.send(JSON.stringify({ t: 'move', region: 'sea', x: 3, y: 4, dir: 1, line: false }));
-    expect(await b.next()).toEqual({ t: 'join', presence: { uid: 'u1', nick: 'n-u1', boat: 2, region: 'sea', zone: null, x: 3, y: 4, dir: 1, line: false } });
+    expect(await b.next()).toEqual({ t: 'join', presence: { uid: 'u1', nick: 'n-u1', boat: 2, fame: 100, region: 'sea', zone: null, x: 3, y: 4, dir: 1, line: false } });
     a.ws.send(JSON.stringify({ t: 'move', region: 'sea', x: 5, y: 4, dir: 1, line: true }));
     expect(await b.next()).toEqual({ t: 'move', uid: 'u1', region: 'sea', zone: null, x: 5, y: 4, dir: 1, line: true });
     a.ws.send('{"t":"stop"}');
@@ -305,7 +305,7 @@ describe('실시간 채널 서버', () => {
     expect(live.presenceOf('u3')).toBeNull();
     const b = connect(url, 'u2');
     expect(await b.next()).toEqual({ t: 'hello', you: 'u2', recentChat: [],
-      others: [{ uid: 'u1', nick: 'n-u1', boat: 2, region: 'deep', zone: null, x: 1, y: 2, dir: 0, line: false }] });
+      others: [{ uid: 'u1', nick: 'n-u1', boat: 2, fame: 100, region: 'deep', zone: null, x: 1, y: 2, dir: 0, line: false }] });
     a.ws.close();
     expect(await b.next()).toEqual({ t: 'leave', uid: 'u1' });
   });
@@ -763,6 +763,31 @@ describe('실시간 닉네임 즉시 동기화', () => {
     live.setNick('not-online', '아무개');
     expect(live.online().find(o => o.uid === 'g1')?.nick).toBe('게스트변경');
     expect(a.messages).toEqual([]);
+    expect(b.messages).toEqual([]);
+  });
+
+  it('setFame은 활성 연결의 user.fame과 presence.fame을 갱신해 이후 join과 hello.others에 반영한다', async () => {
+    const { url, live } = await start();
+    const a = connect(url, 'u1');
+    const b = connect(url, 'u2');
+    await a.next(); await b.next();
+
+    // 첫 move 전 갱신은 join presence에 실린다
+    live.setFame('u1', 550);
+    a.ws.send(JSON.stringify({ t: 'move', region: 'sea', x: 1, y: 2, dir: 0, line: false }));
+    expect(await b.next()).toMatchObject({ t: 'join', presence: { uid: 'u1', fame: 550 } });
+    expect(live.presenceOf('u1')?.fame).toBe(550);
+
+    // 이동 후 갱신은 presenceOf와 이후 접속자의 hello.others에 반영된다
+    live.setFame('u1', 770);
+    live.setFame('not-online', 999);
+    expect(live.presenceOf('u1')?.fame).toBe(770);
+    const c = connect(url, 'u3');
+    expect(await c.next()).toMatchObject({
+      t: 'hello',
+      you: 'u3',
+      others: [expect.objectContaining({ uid: 'u1', fame: 770 })],
+    });
     expect(b.messages).toEqual([]);
   });
 });

@@ -11,7 +11,7 @@ import type { ServerMessage } from '../src/game/rules/live.js';
 import { saveChat } from './_data/chat.js';
 import { liveIdentity } from './_data/profile.js';
 import { attachLive } from './_server/live.js';
-import { provideSetNick } from './_server/livePresence.js';
+import { provideSetFame, provideSetNick } from './_server/livePresence.js';
 import { achievementById } from '../src/game/content/achievements.js';
 import { artifactById, artifactLevelCost } from '../src/game/content/artifacts.js';
 import { BOATS } from '../src/game/content/boats.js';
@@ -2388,8 +2388,8 @@ describe('실시간 닉네임 즉시 동기화', () => {
       authenticate: async (req) => {
         const uid = req.headers.cookie;
         if (!uid) return null;
-        const { nick, boat } = await liveIdentity(db, uid);
-        return { uid, nick: nick ?? '낚시꾼', boat, guest: false };
+        const { nick, boat, fame } = await liveIdentity(db, uid);
+        return { uid, nick: nick ?? '낚시꾼', boat, fame, guest: false };
       },
       chat: {
         save: (user, text, guild, room, region) => saveChat(db, {
@@ -2517,6 +2517,35 @@ describe('일반 의뢰 진행도 동기 반영', () => {
     } finally {
       await env.client.query('drop trigger if exists test_block_bounty_progress_update on public.bounty_progress');
       await env.client.query('drop function if exists public.test_block_bounty_progress_update()');
+    }
+  });
+});
+
+describe('실시간 명성 갱신', () => {
+  it('명성이 오르는 액션이 커밋되면 setFame을 호출하고, 명성이 변하지 않거나 거부되면 호출하지 않는다', async () => {
+    const calls: Array<[string, number]> = [];
+    provideSetFame((u, f) => { calls.push([u, f]); });
+    try {
+      const uid = await seed({ state: { boat: 1, fame: 10 } });
+
+      const noChange = await callAction(userToken(uid), { type: 'travel', to: { kind: 'region', id: 'world' } });
+      expect(noChange.status).toBe(200);
+      expect(calls).toEqual([]);
+
+      vi.setSystemTime(Date.parse(NOW) + 2000);
+      const caught = await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good' });
+      expect(caught.status).toBe(200);
+      const db = await dumpUser(env.client, uid);
+      const nextFame = Number((db.saves_current[0] as { fame: string }).fame);
+      expect(nextFame).toBeGreaterThan(10);
+      expect(calls).toEqual([[uid, nextFame]]);
+
+      vi.setSystemTime(Date.parse(NOW) + 4000);
+      const rejected = await callAction(userToken(uid), { type: 'setNickname', nickname: '!' });
+      expect(rejected.status).toBe(422);
+      expect(calls).toEqual([[uid, nextFame]]);
+    } finally {
+      provideSetFame(() => {});
     }
   });
 });

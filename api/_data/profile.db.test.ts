@@ -32,15 +32,15 @@ async function user(account = false): Promise<string> {
 }
 
 describe('liveIdentity', () => {
-  it('프로필 이름과 저장 상태의 배를 읽는다', async () => {
+  it('프로필 이름과 저장 상태의 배·명성을 읽는다', async () => {
     const uid = await user();
     await client.query(`insert into public.profiles (user_id, nickname) values ($1, '갈매기')`, [uid]);
-    await client.query(`insert into public.saves_current (user_id, data, boat) values ($1, '{}', 3)`, [uid]);
-    expect(await liveIdentity(database.db, uid)).toEqual({ nick: '갈매기', boat: 3 });
+    await client.query(`insert into public.saves_current (user_id, data, boat, fame) values ($1, '{}', 3, 420)`, [uid]);
+    expect(await liveIdentity(database.db, uid)).toEqual({ nick: '갈매기', boat: 3, fame: 420 });
   });
 
-  it('프로필과 저장 상태가 없으면 이름은 null, 배는 0이다', async () => {
-    expect(await liveIdentity(database.db, await user())).toEqual({ nick: null, boat: 0 });
+  it('프로필과 저장 상태가 없으면 이름은 null, 배·명성은 0이다', async () => {
+    expect(await liveIdentity(database.db, await user())).toEqual({ nick: null, boat: 0, fame: 0 });
   });
 });
 

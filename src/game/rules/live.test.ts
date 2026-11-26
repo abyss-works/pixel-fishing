@@ -4,7 +4,7 @@ import {
   GLOBAL_CHAT_COOLDOWN_MS, LIVE_MAX_LENGTH, LIVE_MOVE_MS, NOTICE_BODY_MAX, NOTICE_TITLE_MAX,
   chatRate, chatText, formatIdle, glidePosition, globalChatCooldown, idleSinceOf,
   isDuplicateChat, isNoticeActive, nextGlide, normalizeNoticeDraft, parseClientMessage,
-  type ChatLine, type ChatRoom, type ClientMessage, type NoticeItem, type ServerMessage,
+  type ChatLine, type ChatRoom, type ClientMessage, type NoticeItem, type Presence, type ServerMessage,
 } from './live';
 
 describe('parseClientMessage', () => {
@@ -344,5 +344,48 @@ describe('채팅 3채널·공지 프로토콜 타입 계약', () => {
       code: 'chat-guest' | 'chat-rate' | 'chat-length' | 'chat-restricted' | 'chat-no-guild' | 'chat-global-cooldown' | 'chat-duplicate';
       retryAfterMs?: number;
     }>();
+  });
+});
+
+describe('Presence fame 필드 계약', () => {
+  it('Presence는 필수 fame 숫자 필드를 포함한 접속자 정보를 가진다', () => {
+    expectTypeOf<Presence>().toEqualTypeOf<{
+      uid: string;
+      nick: string;
+      boat: number;
+      fame: number;
+      region: string;
+      zone?: string | null;
+      x: number;
+      y: number;
+      dir: 0 | 1 | 2 | 3;
+      line: boolean;
+      bob?: { x: number; y: number };
+      look?: { shirt: number; pants: number; hat: string | null };
+      idleMs?: number;
+    }>();
+
+    const presence: Presence = {
+      uid: 'u-1',
+      nick: '어부',
+      boat: 3,
+      fame: 1200,
+      region: 'sea',
+      x: 10,
+      y: 20,
+      dir: 1,
+      line: false,
+    };
+    expect(JSON.parse(JSON.stringify(presence))).toEqual({
+      uid: 'u-1',
+      nick: '어부',
+      boat: 3,
+      fame: 1200,
+      region: 'sea',
+      x: 10,
+      y: 20,
+      dir: 1,
+      line: false,
+    });
   });
 });
