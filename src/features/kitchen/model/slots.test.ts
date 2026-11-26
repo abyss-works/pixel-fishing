@@ -6,7 +6,7 @@ import type { GameState } from '../../../game/rules/logic';
 import { gameDayOf } from '../../../game/rules/time';
 import { GUEST_LOCK_DEFAULT_LINES, UNVERIFIED_LOCK_TEXT } from '../../display/model/menuLock';
 import {
-  activeSlot, fmtSlotChipTime, fmtSlotTimeLeft, selectActiveEffectsView, selectBonusChip, selectBonusTipRows,
+  activeSlot, fmtSlotTimeLeft, selectActiveEffectsView, selectBonusChip, selectBonusTipRows,
 } from './slots';
 
 const T0 = '2026-11-12T00:00:00.000Z';
@@ -16,30 +16,19 @@ const at = (ms: number): string => new Date(Date.parse(T0) + ms).toISOString();
 const seed = (over: Partial<GameState> = {}): GameState => ({ ...newState(), boat: COOKING_UNLOCK_BOAT, ...over });
 
 describe('슬롯 남은 시간 표기', () => {
-  it('칩은 큰 단위 하나만 쓴다. 1시간 이상은 시간을 버리고 1시간 미만은 분을 올린다', () => {
-    expect(fmtSlotChipTime(8 * HOUR + 12 * MIN)).toBe('8시간');
-    expect(fmtSlotChipTime(9 * HOUR)).toBe('9시간');
-    expect(fmtSlotChipTime(HOUR + 59 * MIN)).toBe('1시간');
-    expect(fmtSlotChipTime(25 * MIN)).toBe('25분');
-    expect(fmtSlotChipTime(24 * MIN + 1)).toBe('25분');
-  });
-
-  it('1분 안쪽 남은 시간은 올려서 0분으로 보이지 않고 60분은 1시간이다', () => {
-    expect(fmtSlotChipTime(1)).toBe('1분');
-    expect(fmtSlotChipTime(30_000)).toBe('1분');
-    expect(fmtSlotChipTime(59 * MIN + 30_000)).toBe('1시간');
-  });
-
-  it('툴팁 목록은 시간과 분을 모두 쓴다', () => {
+  it('1분 이상은 분까지만 표시하고 초는 버린다', () => {
     expect(fmtSlotTimeLeft(8 * HOUR + 12 * MIN)).toBe('8시간 12분');
+    expect(fmtSlotTimeLeft(8 * HOUR + 12 * MIN + 59_000)).toBe('8시간 12분');
     expect(fmtSlotTimeLeft(9 * HOUR)).toBe('9시간');
     expect(fmtSlotTimeLeft(25 * MIN)).toBe('25분');
-    expect(fmtSlotTimeLeft(8 * HOUR + 12 * MIN + 1)).toBe('8시간 13분');
+    expect(fmtSlotTimeLeft(119_000)).toBe('1분');
   });
 
-  it('0 이하는 0분이다', () => {
-    expect(fmtSlotChipTime(0)).toBe('0분');
-    expect(fmtSlotTimeLeft(-5)).toBe('0분');
+  it('1분 미만은 초만 표시하고 0 이하는 0초다', () => {
+    expect(fmtSlotTimeLeft(54_000)).toBe('54초');
+    expect(fmtSlotTimeLeft(999)).toBe('0초');
+    expect(fmtSlotTimeLeft(0)).toBe('0초');
+    expect(fmtSlotTimeLeft(-5)).toBe('0초');
   });
 });
 
@@ -49,7 +38,6 @@ describe('슬롯의 지금 효과', () => {
     const s = activeSlot(game, 'lunch', T0)!;
     expect(s.label).toBe('가루디야(일반)');
     expect(s.remainingMs).toBe(8 * HOUR + 12 * MIN);
-    expect(s.chipTime).toBe('8시간');
     expect(s.timeLeft).toBe('8시간 12분');
     expect(s.rows).toEqual([{ label: '입질 대기', value: '−10%' }, { label: '남은 시간', value: '8시간 12분' }]);
     expect(s.effects).toEqual([{ label: '입질 대기', value: '−10%' }]);

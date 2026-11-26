@@ -52,10 +52,12 @@ describe('아이템 섹션 목록', () => {
       slots,
     }));
     expect(screen.getAllByText('사용 중')).toHaveLength(2);
+    const useButton = screen.getByRole('button', { name: '가루디야(일반) 사용' });
+    expect(within(useButton.parentElement!).getByText('사용 중')).toBeInTheDocument();
+    expect(within(useButton.parentElement!).getByText('남음 8시간 42분')).toBeInTheDocument();
     expect(document.body.textContent).toContain('지속 9시간');
-    expect(document.body.textContent).toContain('남음 8시간 42분');
-    expect(document.body.textContent).toContain('지속 2분 30초');
-    expect(document.body.textContent).toContain('남음 4분 18초');
+    expect(document.body.textContent).toContain('지속 2분');
+    expect(document.body.textContent).toContain('남음 4분');
   });
 
   it('기운 칸은 소수 첫째 자리가 0이면 정수로, 아니면 소수로, 천 단위는 쉼표로 쓴다(접근성 이름 포함)', () => {
@@ -107,9 +109,13 @@ describe('아이템 섹션 목록', () => {
   it('도시락과 미끼 주의사항은 각 카드가 아니라 묶음 소제목 툴팁 한 곳에만 있고 카드 클릭으로 상세 창을 연다', () => {
     show(game({ items: own }));
 
-    // 카드 이름에 마우스를 올려도 반복 호버 툴팁이 뜨지 않는다
-    fireEvent.mouseEnter(screen.getByText('가루디야'));
-    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    // 카드에 마우스를 올리면 효과 툴팁이 뜬다
+    fireEvent.mouseEnter(screen.getAllByText('가루디야')[0]);
+    const cardTip = screen.getByRole('tooltip');
+    expect(cardTip).toHaveTextContent('입질 대기');
+    expect(cardTip).toHaveTextContent('−10%');
+    expect(cardTip).not.toHaveTextContent('방치로 낚을 때만 효과가 있어요.');
+    fireEvent.mouseLeave(screen.getAllByText('가루디야')[0]);
 
     // 도시락·미끼 소제목 툴팁 한 곳에 공통 주의사항이 집약돼 있다
     fireEvent.mouseEnter(screen.getByText('도시락'));
@@ -127,6 +133,7 @@ describe('아이템 섹션 목록', () => {
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText('입질 대기')).toBeInTheDocument();
     expect(within(dialog).getByText('−10%')).toBeInTheDocument();
+    expect(within(dialog).queryByText(/방치로 낚을 때만 효과가 있어요/)).toBeNull();
     fireEvent.click(within(dialog).getByRole('button', { name: '닫기' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
@@ -257,7 +264,7 @@ describe('아이템 사용과 교체', () => {
     await vi.waitFor(() => expect(setToast).toHaveBeenCalledWith('가방에 이 요리가 없어요.', 'warn'));
   });
 
-  it('다중 미끼 유물 — 사용 중 배지, 빈 두 번째 칸 무확인 적용, 중복 갱신 2분 30초, 세 번째 미끼 교체 슬롯 선택', () => {
+  it('다중 미끼 유물 — 사용 중 배지, 빈 두 번째 칸 무확인 적용, 중복 갱신 분 표기, 세 번째 미끼 교체 슬롯 선택', () => {
     const items = { 'cook-bait-rare': 1, 'cook-bait-epic': 1, 'cook-bait-legendary': 1 };
     const oneActive = game({
       artifacts: ['sargasso-net'],
@@ -271,10 +278,10 @@ describe('아이템 사용과 교체', () => {
     expect(d1).toHaveBeenCalledWith({ type: 'eat', item: 'cook-bait-epic' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
-    // 중복 미끼는 확인 창을 띄우고 새로 2분 30초를 보인다
+    // 중복 미끼는 확인 창을 띄우고 새로 지속 시간을 분까지만 보인다
     fireEvent.click(screen.getByRole('button', { name: '롱페퍼 미끼(희귀) 사용' }));
     const dupDialog = screen.getByRole('dialog');
-    expect(within(dupDialog).getByText('2분 30초')).toBeInTheDocument();
+    expect(within(dupDialog).getAllByText('2분').length).toBeGreaterThan(0);
     fireEvent.click(within(dupDialog).getByRole('button', { name: '사용' }));
     expect(d1).toHaveBeenCalledWith({ type: 'eat', item: 'cook-bait-rare' });
 
@@ -299,7 +306,7 @@ describe('아이템 사용과 교체', () => {
     // 첫 번째 미끼(bait)로 바꿔 선택하고 확정
     fireEvent.click(radios[0]);
     expect(radios[0]).toHaveAttribute('aria-checked', 'true');
-    expect(within(dialog).getByText('2분 30초')).toBeInTheDocument();
+    expect(within(dialog).getAllByText('2분').length).toBeGreaterThan(0);
     fireEvent.click(within(dialog).getByRole('button', { name: '사용' }));
     expect(d2).toHaveBeenCalledWith({ type: 'eat', item: 'cook-bait-legendary', replaceSlot: 'bait' });
   });

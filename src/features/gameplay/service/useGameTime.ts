@@ -9,14 +9,14 @@ import { dayPhase, formatGameClock, darkness } from '../../../game/rules/time';
 // catch 판정과 화면 연출을 함께 바꾼다. 없으면 실제 시계로 폴백.
 
 /** 지금 게임 시각 ISO — 표시용. 오버라이드/실제 시계. */
-export function useNow(): string {
+export function useNow(intervalMs = 5_000): string {
   const override = useTimeOverride();
   const [, setTick] = useState(0);
   useEffect(() => {
     if (override) return; // 고정 모드 — 갱신 불필요
-    const id = setInterval(() => setTick(t => t + 1), 5_000);
+    const id = setInterval(() => setTick(t => t + 1), intervalMs);
     return () => clearInterval(id);
-  }, [override]);
+  }, [override, intervalMs]);
   return override ?? new Date().toISOString();
 }
 

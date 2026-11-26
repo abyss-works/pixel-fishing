@@ -78,9 +78,8 @@ export interface ItemRow {
   count: number;
   slot: SlotKey;
   verb: '사용';
-  /** 효과 줄과 적용 낚시, 지속 안내 - 이름의 툴팁이 보인다 */
+  /** 효과 툴팁과 상세 창에 쓰는 효과 줄 */
   effects: RecipeEffectLine[];
-  note: string;
   /** 총 지속 시간(분) — 미끼는 사르가소의 그물망 등 보유 유물의 배수를 반영한다 */
   durationMinutes: number;
   /** 지금 슬롯에 장착돼 효과를 내고 있는가 */
@@ -148,7 +147,7 @@ export function selectItemSection(game: GameState, now: string, account: Account
       const active = remMs !== undefined;
       return {
         recipe, label: recipeLabel(recipe), title: recipeTitle(recipe), count: items[recipe.id] ?? 0, slot, verb: SLOT_TEXT[slot].verb,
-        effects: recipeEffectLines(recipe), note: recipeEffectNote(slot),
+        effects: recipeEffectLines(recipe),
         durationMinutes: slotDurationMs(recipe, game) / MIN_MS,
         active,
         remainingMinutes: active ? remMs / MIN_MS : null,
@@ -255,7 +254,7 @@ export function planEat(game: GameState, item: string, now: string): EatPlan {
       check,
       confirm: current === null ? null : {
         title: text.swapTitle, confirmLabel: text.verb,
-        current: { label: current.label, title: current.title, minutes: Math.ceil(current.remainingMs / MIN_MS) },
+        current: { label: current.label, title: current.title, minutes: current.remainingMs / MIN_MS },
         next: { label: recipeLabel(recipe), title: nextTitle, minutes: nextMinutes },
         warning: SWAP_WARNING,
       },
@@ -271,7 +270,7 @@ export function planEat(game: GameState, item: string, now: string): EatPlan {
       check,
       confirm: b1 === null ? null : {
         title: text.swapTitle, confirmLabel: text.verb,
-        current: { label: b1.label, title: b1.title, minutes: Math.ceil(b1.remainingMs / MIN_MS) },
+        current: { label: b1.label, title: b1.title, minutes: b1.remainingMs / MIN_MS },
         next: { label: recipeLabel(recipe), title: nextTitle, minutes: nextMinutes },
         warning: SWAP_WARNING,
       },
@@ -286,7 +285,7 @@ export function planEat(game: GameState, item: string, now: string): EatPlan {
       check,
       confirm: {
         title: text.swapTitle, confirmLabel: text.verb,
-        current: { label: duplicate.label, title: duplicate.title, minutes: Math.ceil(duplicate.remainingMs / MIN_MS) },
+        current: { label: duplicate.label, title: duplicate.title, minutes: duplicate.remainingMs / MIN_MS },
         next: { label: recipeLabel(recipe), title: nextTitle, minutes: nextMinutes },
         warning: SWAP_WARNING,
       },
@@ -306,12 +305,12 @@ export function planEat(game: GameState, item: string, now: string): EatPlan {
     check,
     confirm: {
       title: text.swapTitle, confirmLabel: text.verb,
-      current: { label: chosen.label, title: chosen.title, minutes: Math.ceil(chosen.remainingMs / MIN_MS) },
+      current: { label: chosen.label, title: chosen.title, minutes: chosen.remainingMs / MIN_MS },
       next: { label: recipeLabel(recipe), title: nextTitle, minutes: nextMinutes },
       warning: SWAP_WARNING,
       choices: [
-        { slotKey: 'bait', label: b1.label, title: b1.title, minutes: Math.ceil(b1.remainingMs / MIN_MS) },
-        { slotKey: 'bait2', label: b2.label, title: b2.title, minutes: Math.ceil(b2.remainingMs / MIN_MS) },
+        { slotKey: 'bait', label: b1.label, title: b1.title, minutes: b1.remainingMs / MIN_MS },
+        { slotKey: 'bait2', label: b2.label, title: b2.title, minutes: b2.remainingMs / MIN_MS },
       ],
       defaultChoice,
     },

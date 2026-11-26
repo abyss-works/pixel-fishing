@@ -91,4 +91,26 @@ describe('적용 중인 효과 창 (ActiveEffectsModal)', () => {
     expect(within(dialog).getAllByText('하루 동안')).toHaveLength(2);
     expect(within(dialog).queryByText(/%p/i)).toBeNull();
   });
+  it('1분 미만으로 남은 슬롯은 초 단위로 보인다', () => {
+    const game: GameState = {
+      ...newState(),
+      boat: COOKING_UNLOCK_BOAT,
+      slots: {
+        lunch: { id: 'cook-lunch-bite', endsAt: at(54_000) },
+        bait: null,
+      },
+    };
+
+    render(
+      <ActiveEffectsModal
+        game={game}
+        onClose={vi.fn()}
+        onOpenBag={vi.fn()}
+        onOpenStatsBonus={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('dialog', { name: '적용 중인 효과' })).toHaveTextContent('54초 남음');
+  });
+
 });
