@@ -2639,6 +2639,109 @@ describe('게스트·배 0단계 보유 소비 아이템 사용', () => {
   });
 });
 
+describe('미완료 의뢰 포기', () => {
+  it('미완료 일반 의뢰를 포기하면 진행 행만 지우고 클리어 기록을 유지하며 같은 날 다시 수주할 수 있다', async () => {
+    const uid = await seed({ state: { dex: zoneDex('pacific', 'named'), location: at('harbor') } });
+    const quest = dailyQuestFor('pacific', 'easy', uid, TODAY_KST)!;
+    expect((await callAction(userToken(uid), { type: 'acceptQuest', questId: quest.id, port: 'harbor' })).status).toBe(200);
+    await env.client.query(
+      'update public.bounty_progress set progress = $2 where user_id = $1 and quest_id = $3',
+      [uid, Math.max(1, quest.count - 1), quest.id],
+    );
+
+    vi.setSystemTime(Date.parse(NOW) + 2000);
+    const abandonRes = await callAction(userToken(uid), { type: 'abandonQuest', questId: quest.id });
+    expect(abandonRes.status).toBe(200);
+
+    const afterAbandon = await dumpUser(env.client, uid);
+    expect(afterAbandon.bounty_progress).toEqual([]);
+    expect(afterAbandon.bounty_clears).toEqual([]);
+    expect(afterAbandon.bounty_accepts).toHaveLength(1);
+    expect((afterAbandon.events as { type: string; payload: unknown }[]).some(
+      e => e.type === 'abandonQuest' && (e.payload as { questId?: string }).questId === quest.id,
+    )).toBe(true);
+
+    vi.setSystemTime(Date.parse(NOW) + 4000);
+    const reacceptRes = await callAction(userToken(uid), { type: 'acceptQuest', questId: quest.id, port: 'harbor' });
+    expect(reacceptRes.status).toBe(200);
+    const afterReaccept = await dumpUser(env.client, uid);
+    expect(afterReaccept.bounty_progress).toMatchObject([{ quest_id: quest.id, progress: 0 }]);
+    expect(afterReaccept.bounty_accepts).toHaveLength(2);
+  });
+
+  it('미완료 네임드 토벌을 포기하면 진행 행과 해당 의뢰의 도전권만 지우고 상처와 클리어 기록은 유지한다', async () => {
+    const named = BOUNTIES.find(b => b.zone === 'pacific' && b.difficulty === 'named')!;
+    const general = BOUNTIES.find(b => b.zone === 'pacific' && b.difficulty === 'easy')!;
+    const uid = await seed({
+      state: {
+        boat: 1,
+        location: at('home'), // 위치 무관 포기 확인
+        namedPity: { day: TODAY_KST, misses: 12, fails: 1, wounds: { [named.id]: 2 } },
+      },
+    });
+    await env.client.query(
+      'insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4), ($1, $5, $6, 3, $4)',
+      [uid, named.zone, named.id, NOW, general.zone, general.id],
+    );
+    await env.client.query(
+      'insert into public.bounty_tickets (user_id, quest_id, issued_at) values ($1, $2, $3)',
+      [uid, named.id, NOW],
+    );
+
+    const res = await callAction(userToken(uid), { type: 'abandonQuest', questId: named.id });
+    expect(res.status).toBe(200);
+
+    const dump = await dumpUser(env.client, uid);
+    expect(dump.bounty_tickets).toEqual([]);
+    expect((dump.bounty_progress as { quest_id: string }[]).map(r => r.quest_id)).toEqual([general.id]);
+    expect(dump.bounty_clears).toEqual([]);
+    const save = dump.saves_current[0] as { data: GameState };
+    expect(save.data.namedPity).toEqual({
+      day: TODAY_KST,
+      misses: 12,
+      fails: 1,
+      wounds: { [named.id]: 2 },
+    });
+  });
+
+  it('완료되어 보상 대기 중인 의뢰 포기는 quest-already-complete로 거부하고 진행 행을 유지한다', async () => {
+    const quest = BOUNTIES.find(b => b.zone === 'pacific' && b.difficulty === 'easy')!;
+    const uid = await seed({ state: {} });
+    await env.client.query(
+      'insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, $4, $5)',
+      [uid, quest.zone, quest.id, quest.count, NOW],
+    );
+
+    const res = await callAction(userToken(uid), { type: 'abandonQuest', questId: quest.id });
+    expect(res).toMatchObject({ status: 422, body: { error: 'quest-already-complete' } });
+    const dump = await dumpUser(env.client, uid);
+    expect(dump.bounty_progress).toHaveLength(1);
+  });
+
+  it('수주하지 않았거나 만료된 의뢰 포기는 quest-not-active로 거부한다', async () => {
+    const quest = BOUNTIES.find(b => b.zone === 'pacific' && b.difficulty === 'easy')!;
+    const uid = await seed({ state: {} });
+
+    expect(await callAction(userToken(uid), { type: 'abandonQuest', questId: quest.id }))
+      .toMatchObject({ status: 422, body: { error: 'quest-not-active' } });
+
+    const beforeDayStart = '2030-03-03T18:59:59.999Z';
+    await env.client.query(
+      'insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
+      [uid, quest.zone, quest.id, beforeDayStart],
+    );
+    vi.setSystemTime(Date.parse(NOW) + 2000);
+    expect(await callAction(userToken(uid), { type: 'abandonQuest', questId: quest.id }))
+      .toMatchObject({ status: 422, body: { error: 'quest-not-active' } });
+  });
+
+  it('게스트는 의뢰 포기가 403 account-only로 거부된다', async () => {
+    const uid = await seed({ email: null, state: {} });
+    const res = await callAction(userToken(uid), { type: 'abandonQuest', questId: 'pacific-easy-common' });
+    expect(res).toMatchObject({ status: 403, body: { error: 'account-only' } });
+  });
+});
+
 describe('서버 확정 어획 점프 브로드캐스트', () => {
   it('정식 계정의 빠른 경로·일반 경로 캐치가 커밋되면 broadcastCatchFx를 호출하고, 규칙 거부·버전 충돌·게스트 캐치에는 호출하지 않는다', async () => {
     const calls: Array<[string, CatchFxPayload]> = [];

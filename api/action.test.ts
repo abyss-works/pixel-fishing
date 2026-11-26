@@ -101,8 +101,9 @@ describe('api/action 핸들러 규약 (Node 스타일 req/res)', () => {
     // 수주는 상태를 바꾸지 않지만 네임드 토벌 판정에 dex가 필요해 records를 읽어야 한다.
     // 스킵하면 dex 빈 조립 → 도감과 무관하게 dex-incomplete 422 (수주 불가 장애).
     expect(SKIP_DETAIL.has('acceptQuest')).toBe(false);
-    // 납품·불변 액션은 스킵 유지 (서버 주입·스칼라만이라 도감 불필요)
+    // 납품·포기·불변 액션은 스킵 유지 (서버 주입·스칼라만이라 도감 불필요)
     expect(SKIP_DETAIL.has('deliverBounty')).toBe(true);
+    expect(SKIP_DETAIL.has('abandonQuest')).toBe(true);
     expect(SKIP_DETAIL.has('exchangeArtifact')).toBe(true); // 재료·유물은 blob이라 스칼라 동봉
     expect(SKIP_DETAIL.has('levelUpArtifact')).toBe(true); // 레벨 맵과 재료도 blob이라 같은 기준
     expect(SKIP_DETAIL.has('boot')).toBe(true);

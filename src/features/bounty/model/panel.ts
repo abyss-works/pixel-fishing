@@ -13,6 +13,7 @@ import type { Stat } from '../../../game/rules/stats';
 import { formDiscovered, licenseConditions } from '../../../game/rules/logic';
 import type { GameState, LicenseCondition } from '../../../game/rules/logic';
 import { GAME_DAY_RESET_TEXT } from '../../../game/rules/time';
+import { canAbandonQuestInSnapshot } from './abandon';
 import { ticketMinsOf } from './ticket';
 import type { BountySnapshot } from './types';
 
@@ -36,11 +37,13 @@ export interface BountyPanelInput {
   snapshot: BountySnapshot | null;
 }
 
-/** 네임드 토벌 항목 하나 - 의뢰, 보상 감소 내역을 담은 골드, 남은 도전권 분, 토벌 보상으로 받는 유물 */
+/** 네임드 토벌 항목 하나 - 의뢰, 보상 감소 내역을 담은 골드, 남은 흔적 분, 흔적 보유·포기 가능 여부, 토벌 보상으로 받는 유물 */
 export interface NamedOffer {
   quest: BountyQuest;
   reward: Stat;
   ticketMins: number | null;
+  hasTicket: boolean;
+  canAbandon: boolean;
   relic: Artifact | undefined;
 }
 
@@ -68,6 +71,8 @@ export interface BountyPanelData {
   progressOf: (questId: string) => number;
   /** 수주 중인가 — 수주하면 진행 행(진행도 0)이 생기므로 행의 존재가 곧 수주다 */
   isAccepted: (questId: string) => boolean;
+  /** 미완료 수주 의뢰를 지금 포기할 수 있는가 */
+  canAbandon: (questId: string) => boolean;
   basicConds: LicenseCondition[];
   namedConds: LicenseCondition[];
   basicOpen: boolean;
@@ -143,12 +148,18 @@ export function selectBountyPanelData({
   const offers = Object.fromEntries(difficulties.map(difficulty => [
     difficulty, heldHere(difficulty) ?? offeredQuestsFor(zone, difficulty, who, day)[0],
   ])) as BountyPanelData['offers'];
-  const namedOffers: NamedOffer[] = offeredQuestsFor(zone, 'named', who, day).map(quest => ({
-    quest,
-    reward: namedRewardStat(game, quest.reward),
-    ticketMins: ticketMinsOf(snapshot, quest.id, nowMs),
-    relic: artifactOfNamed(quest.targetFish ?? ''),
-  }));
+  const canAbandon = (questId: string): boolean => canAbandonQuestInSnapshot(game, questId, snapshot);
+  const namedOffers: NamedOffer[] = offeredQuestsFor(zone, 'named', who, day).map(quest => {
+    const ticketMins = ticketMinsOf(snapshot, quest.id, nowMs);
+    return {
+      quest,
+      reward: namedRewardStat(game, quest.reward),
+      ticketMins,
+      hasTicket: ticketMins !== null,
+      canAbandon: canAbandon(quest.id),
+      relic: artifactOfNamed(quest.targetFish ?? ''),
+    };
+  });
   const shown = new Set([...Object.values(offers).map(q => q?.id), ...namedOffers.map(o => o.quest.id)]);
   const noticeOf = (kind: BountyKind): string | null => {
     if (left === null) return null;
@@ -181,6 +192,7 @@ export function selectBountyPanelData({
     namedOffers,
     progressOf,
     isAccepted,
+    canAbandon,
     basicConds,
     namedConds,
     basicOpen: basicConds.every(condition => condition.ok),
@@ -198,7 +210,8 @@ export interface NamedBountyCardData {
   fish: ReturnType<typeof namedFishOf> | null;
   found: boolean;
   done: boolean;
-  /** 나타나는 곳 — 출현 수역이 정해진 네임드는 그 수역, 아니면 해역 이름 */
+  zoneName: string;
+  /** 나타나는 곳 — 최상위 구역과 출현 해역(특정 해역이 없으면 구역 전체) */
   haunt: string;
   /** 토벌 골드 보상 - 원본, 보유 유물의 보상 감소, 받는 값의 내역 */
   reward: Stat;
@@ -209,6 +222,8 @@ export function selectNamedBountyCardData(
   game: GameState, quest: BountyQuest, progress: number,
 ): NamedBountyCardData {
   const named = quest.targetFish ? namedById(quest.targetFish) : undefined;
+  const zoneName = zoneById(quest.zone)?.shortName ?? quest.zone;
+  const spotName = named?.spot ? spotById(named.spot)?.name : undefined;
   return {
     name: named?.name,
     poster: named?.poster ?? '수배서에만 이름이 돈다.',
@@ -216,6 +231,7 @@ export function selectNamedBountyCardData(
     found: quest.targetFish ? formDiscovered(game, quest.targetFish, 'normal') : false,
     done: progress >= quest.count,
     reward: namedRewardStat(game, quest.reward),
-    haunt: (named?.spot ? spotById(named.spot)?.name : undefined) ?? zoneById(quest.zone)?.shortName ?? quest.zone,
+    zoneName,
+    haunt: spotName ? `${zoneName} (${spotName})` : `${zoneName} 전체`,
   };
 }

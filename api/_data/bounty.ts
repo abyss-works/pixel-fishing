@@ -6,7 +6,7 @@ import type { SQL } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
 import type { DebugTablePlan } from '../action.js';
 import type { BountyKind, BountyQuest } from '../../src/game/content/bounties.js';
-import { bountyKindOf, isBountyKind } from '../../src/game/content/bounties.js';
+import { bountyById, bountyKindOf, isBountyKind } from '../../src/game/content/bounties.js';
 import type {
   BountyClearSnapshot, BountyProgressSnapshot, BountyTicketSnapshot, DevBountySnapshot,
 } from '../../src/game/rules/debug.js';
@@ -20,6 +20,35 @@ export function deliveryGate(uid: string, questId: string): SQL {
 /** 납품 소비 조각 — 액션 확정 문장 안에서 진행 행을 지운다. 낙관 락을 통과한 요청만 지우고, 확정이 어긋나면 행이 남는다 */
 export function consumeDeliveryFragment(guard: SQL, uid: string, questId: string): SQL {
   return sql`delete from public.bounty_progress where user_id = ${uid} and quest_id = ${questId} and ${guard}`;
+}
+
+/** 포기할 미완료 진행 행을 찾는 질의 — 수주 중이며 아직 목표 수량을 채우지 않은 행만 통과한다 */
+export function abandonGate(uid: string, questId: string, dayStartISO?: string): SQL {
+  const quest = bountyById(questId);
+  if (!quest) return sql`select 1 where false`;
+  const liveFilter = dayStartISO ? sql` and started_at >= ${at(dayStartISO)}` : sql``;
+  return sql`select 1 from public.bounty_progress
+    where user_id = ${uid} and quest_id = ${questId} and progress < ${quest.count}${liveFilter}`;
+}
+
+/** 진행 행이 목표 수량을 채워 완료 상태인지 확인한다 — 포기 경합 시 거부 사유 구분에 쓴다 */
+export async function isQuestProgressComplete(
+  db: Executor, uid: string, questId: string, count: number,
+): Promise<boolean> {
+  const { rows } = await db.execute<{ complete: boolean }>(sql`select exists (
+    select 1 from public.bounty_progress
+    where user_id = ${uid} and quest_id = ${questId} and progress >= ${count}
+  ) as complete`);
+  return rows[0].complete;
+}
+
+/** 의뢰 포기 조각 — 낙관 락과 미완료 조건(gate)을 통과한 요청만 진행 행과 해당 의뢰의 도전권을 지운다.
+ *  수주 기록(bounty_accepts)은 이력이고 클리어 기록(bounty_clears)은 건드리지 않는다. */
+export function abandonFragments(guard: SQL, uid: string, questId: string): SQL[] {
+  return [
+    sql`delete from public.bounty_progress where user_id = ${uid} and quest_id = ${questId} and ${guard}`,
+    sql`delete from public.bounty_tickets where user_id = ${uid} and quest_id = ${questId} and ${guard}`,
+  ];
 }
 
 /** 수주 — 수주 기록 행, 진행 행, 같은 의뢰의 묵은 도전권 삭제. 모두 서버 시각으로 쓴다.

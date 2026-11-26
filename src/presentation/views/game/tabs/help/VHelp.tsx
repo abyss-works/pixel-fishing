@@ -107,6 +107,7 @@ export default function VHelp() {
             <li><b><HighlightRarityText text="네임드 토벌은 전설을 뺀" /></b> 그 구역 도감을 모두 채우면 열리며, 수주 뒤 낚시하다 드물게 조우해요.</li>
             <li>하루에 일반 의뢰 {BOUNTY_DAILY_CAP}번, <HighlightRarityText text="네임드 토벌" /> {BOUNTY_NAMED_DAILY_CAP}번 클리어하며, 메뉴 줄 <b>의뢰</b> 배지에서 남은 횟수를 봐요.</li>
             <li>일반 의뢰는 수주 뒤 잡은 물고기만 세고 가방에 그대로 남으며, 조건을 채운 의뢰는 날짜가 지나도 보상을 받아요.</li>
+            <li>수주한 일반 의뢰에서는 대상 해역을 확인할 수 있고, 목표를 채우기 전에는 의뢰를 포기할 수 있어요.</li>
             <li><HighlightRarityText text="네임드를 만나면" /> <b>흔적</b> 카드가 {TICKET_EXPIRY_TEXT} 남고, 추적 뒤 조우를 누르면 결투가 시작돼요.</li>
             <li>결투에서는 금색 칸에 맞춰 챔질해 체력을 깎고, 도주 {CHALLENGE_MISS_LIMIT}칸이 차기 전에 이겨야 해요.</li>
             <li>토벌 보상으로 받은 재료는 수배판에서 지니기만 해도 효과가 이어지는 <b>유물</b>로 바꿔요.</li>

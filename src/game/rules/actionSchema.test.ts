@@ -142,4 +142,11 @@ describe('parseAction', () => {
     expect(parseAction({ type: 'usePotion' })).toBeNull();
     expect(parseAction({ type: 'usePotion', id: 1 })).toBeNull();
   });
+
+  it('abandonQuest 액션의 형태를 검증한다', () => {
+    expect(parseAction({ type: 'abandonQuest', questId: 'pacific-easy-common' }))
+      .toEqual({ type: 'abandonQuest', questId: 'pacific-easy-common' });
+    expect(parseAction({ type: 'abandonQuest' })).toBeNull();
+    expect(parseAction({ type: 'abandonQuest', questId: 1 })).toBeNull();
+  });
 });

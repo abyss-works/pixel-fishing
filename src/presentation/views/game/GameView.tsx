@@ -497,7 +497,10 @@ export default function GameView(props: GameViewProps) {
             }}
           />
         )}
-        {questsOpen && <QuestInfoModal game={game} onClose={() => setQuestsOpen(false)} />}
+        {questsOpen && (
+          <QuestInfoModal game={game} dispatch={props.dispatch} setToast={props.setToast} confirm={confirm}
+                          onClose={() => setQuestsOpen(false)} />
+        )}
         {achievementsOpen && (
           <AchievementsModal game={game} guest={accountState !== 'account'} dispatch={props.dispatch}
                              setToast={props.setToast}
@@ -553,7 +556,7 @@ export default function GameView(props: GameViewProps) {
           <FacilityModal panel={actionPanel} game={game} dispatch={props.dispatch}
                          base={scene.kind === 'base' ? scene.id : undefined} uid={props.uid}
                          sellBonus={guildBonus?.effects.sell ?? 0} accountState={accountState}
-                         setToast={props.setToast} onClose={() => setActionPanel(null)} />
+                         setToast={props.setToast} confirm={confirm} onClose={() => setActionPanel(null)} />
         )}
         {worldMapOpen && <WorldMapModal world={worldScene} onClose={() => setWorldMapOpen(false)} />}
         {/* 세이브가 준비된 뒤(서버 연결 또는 로컬)에만 소식 창을 계획한다 */}

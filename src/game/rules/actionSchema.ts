@@ -70,6 +70,7 @@ const schemas = {
   setNickname: z.object({ type: z.literal('setNickname'), nickname: z.unknown() }),
   acceptQuest: z.object({ type: z.literal('acceptQuest'), questId: z.string(), port: z.string() }),
   deliverBounty: z.object({ type: z.literal('deliverBounty'), questId: z.string() }),
+  abandonQuest: z.object({ type: z.literal('abandonQuest'), questId: z.string() }),
   exchangeArtifact: z.object({ type: z.literal('exchangeArtifact'), artifact: z.string() }),
   levelUpArtifact: z.object({ type: z.literal('levelUpArtifact'), artifact: z.string() }),
   exhibit: z.object({ type: z.literal('exhibit'), uid: z.string(), slot: z.number().int().nullable() }),
@@ -91,7 +92,7 @@ const ActionSchema = z.discriminatedUnion('type', [
   schemas.claimRelief, schemas.claimMail, schemas.debug, schemas.debugBatch, schemas.debugSnapshot, schemas.dismissBaitRefund,
   schemas.extractEnergy, schemas.setEnergyTarget, schemas.resetEnergyTargets, schemas.cook, schemas.cancelCook, schemas.transmuteEnergy, schemas.eat, schemas.usePotion,
   schemas.boot, schemas.setNickname, schemas.acceptQuest,
-  schemas.deliverBounty, schemas.exchangeArtifact, schemas.levelUpArtifact, schemas.exhibit, schemas.resolveChallenge,
+  schemas.deliverBounty, schemas.abandonQuest, schemas.exchangeArtifact, schemas.levelUpArtifact, schemas.exhibit, schemas.resolveChallenge,
   schemas.claimAchievement, schemas.claimAllAchievements,
   schemas.import, schemas.seeTutorial, schemas.changeClothes, schemas.buyHat, schemas.wearHat,
 ]);

@@ -1,10 +1,11 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bountyById } from '../../../../game/content/bounties';
-import { newState } from '../../../../game/rules/logic';
+import { REJECT_TEXT, newState } from '../../../../game/rules/logic';
 import { namedById } from '../../../../game/content/named';
 import type { BountySnapshot } from '../../../../features/bounty/model/types';
 import { fmtGold } from '../../../ui/format';
+import type { ConfirmDialogFn } from './abandonQuest';
 
 let snap: BountySnapshot | null = null;
 let loaded = true;
@@ -21,7 +22,19 @@ const named = bountyById('pacific-named-megalodon')!;
 const snapshot = (over: Partial<BountySnapshot> = {}): BountySnapshot => ({
   clearsToday: { general: 0, named: 0 }, progress: [], tickets: [], ...over,
 });
-const open = () => render(<QuestInfoModal game={newState()} onClose={() => {}} />);
+const open = (opts: {
+  dispatch?: ReturnType<typeof vi.fn>;
+  setToast?: ReturnType<typeof vi.fn>;
+  confirm?: ConfirmDialogFn;
+} = {}) => render(
+  <QuestInfoModal
+    game={newState()}
+    dispatch={opts.dispatch as never}
+    setToast={opts.setToast as never}
+    confirm={opts.confirm}
+    onClose={() => {}}
+  />,
+);
 const dialog = () => screen.getByRole('dialog');
 
 beforeEach(() => {
@@ -70,12 +83,14 @@ describe('의뢰 창', () => {
     expect(screen.getByText('???')).toBeInTheDocument();
   });
 
-  it('진행 중인 일반 의뢰는 이름, 목표, 진행도, 보상, 마치는 곳을 보인다', () => {
+  it('진행 중인 일반 의뢰는 이름, 목표, 대상 해역, 진행도, 보상, 마치는 곳을 보인다', () => {
     snap = snapshot({ progress: [{ questId: general.id, progress: 3 }] });
     open();
     const card = dialog();
     expect(card).toHaveTextContent('태평양 쉬움 의뢰');
     expect(card).toHaveTextContent(`${general.count}마리`);
+    expect(card).toHaveTextContent('대상 해역');
+    expect(card).toHaveTextContent('태평양 (태평양 연안, 마리아나 해구)');
     expect(within(card).getByRole('meter', { name: '진행' })).toHaveAttribute('aria-valuenow', '3');
     expect(card).toHaveTextContent(`3/${general.count}`);
     expect(card).toHaveTextContent(fmtGold(general.reward));
@@ -93,6 +108,7 @@ describe('의뢰 창', () => {
     const card = dialog();
     expect(card).toHaveTextContent('???');
     expect(card).toHaveTextContent('나타나는 곳');
+    expect(card).toHaveTextContent('태평양 전체');
     expect(card).toHaveTextContent(fmtGold(named.reward));
     expect(card).toHaveTextContent('교환 재료');
     expect(card).toHaveTextContent('돌이 된 이빨');
@@ -130,13 +146,81 @@ describe('의뢰 창', () => {
     expect(dialog().textContent).not.toContain('흔적');
   });
 
-  it('포기 버튼을 두지 않는다 - 어느 탭에도 없다', () => {
-    snap = snapshot({ progress: [{ questId: general.id, progress: 1 }, { questId: named.id, progress: 0 }] });
+  it('미완료 일반 의뢰 포기 시 확인 창을 거쳐 abandonQuest를 보내고 토스트를 띄운다', async () => {
+    snap = snapshot({ progress: [{ questId: general.id, progress: 1 }] });
+    const confirm = vi.fn().mockResolvedValue(true);
+    const dispatch = vi.fn().mockResolvedValue({ status: 'ok', state: newState(), result: { type: 'none' } });
+    const setToast = vi.fn();
+    open({ confirm: confirm as ConfirmDialogFn, dispatch, setToast });
+
+    fireEvent.click(screen.getByRole('button', { name: '의뢰 포기' }));
+    await waitFor(() => expect(confirm).toHaveBeenCalledWith({
+      layer: 'stage',
+      title: '의뢰 포기',
+      body: '지금 진행 중인 의뢰를 포기할까요?\n지금까지 쌓은 진행도는 사라지며 되돌릴 수 없어요.',
+      confirmLabel: '포기',
+    }));
+    await waitFor(() => expect(dispatch).toHaveBeenCalledWith({ type: 'abandonQuest', questId: general.id }));
+    expect(setToast).toHaveBeenCalledWith('의뢰를 포기했어요.');
+  });
+
+  it('미완료 네임드 토벌 포기는 흔적 유무에 따라 다른 확인 문구를 보이고 취소 시 액션을 보내지 않는다', async () => {
+    snap = snapshot({ progress: [{ questId: named.id, progress: 0 }] });
+    const confirm = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    const dispatch = vi.fn().mockResolvedValue({ status: 'ok', state: newState(), result: { type: 'none' } });
+    const setToast = vi.fn();
+    const view = open({ confirm: confirm as ConfirmDialogFn, dispatch, setToast });
+
+    fireEvent.click(screen.getByRole('button', { name: '의뢰 포기' }));
+    await waitFor(() => expect(confirm).toHaveBeenCalledWith({
+      layer: 'stage',
+      title: '의뢰 포기',
+      body: '진행 중인 네임드 토벌을 포기할까요?\n이미 입힌 네임드의 상처는 그대로 남아요.',
+      confirmLabel: '포기',
+    }));
+    expect(dispatch).not.toHaveBeenCalled();
+
+    snap = snapshot({
+      progress: [{ questId: named.id, progress: 0 }],
+      tickets: [{ questId: named.id, issuedAt: '2026-10-13T00:00:00.000Z' }],
+    });
+    view.rerender(
+      <QuestInfoModal game={newState()} dispatch={dispatch as never} setToast={setToast as never}
+                      confirm={confirm as ConfirmDialogFn} onClose={() => {}} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: '의뢰 포기' }));
+    await waitFor(() => expect(confirm).toHaveBeenLastCalledWith({
+      layer: 'stage',
+      title: '의뢰 포기',
+      body: '진행 중인 네임드 토벌을 포기하면 남아 있는 흔적이 함께 사라져요.\n이미 입힌 네임드의 상처는 그대로 유지돼요.',
+      confirmLabel: '포기',
+    }));
+    await waitFor(() => expect(dispatch).toHaveBeenCalledWith({ type: 'abandonQuest', questId: named.id }));
+  });
+
+  it('포기 액션이 규칙 거부되면 REJECT_TEXT 사유를 알린다', async () => {
+    snap = snapshot({ progress: [{ questId: general.id, progress: 1 }] });
+    const confirm = vi.fn().mockResolvedValue(true);
+    const dispatch = vi.fn().mockResolvedValue({ status: 'rejected', error: 'quest-already-complete' });
+    const setToast = vi.fn();
+    open({ confirm: confirm as ConfirmDialogFn, dispatch, setToast });
+
+    fireEvent.click(screen.getByRole('button', { name: '의뢰 포기' }));
+    await waitFor(() => expect(setToast).toHaveBeenCalledWith(REJECT_TEXT['quest-already-complete'], 'warn'));
+  });
+
+  it('목표를 모두 채워 보상 대기 중인 의뢰는 포기 버튼을 숨기고 수배판 보상 안내를 보인다', () => {
+    snap = snapshot({
+      progress: [
+        { questId: general.id, progress: general.count },
+        { questId: named.id, progress: named.count },
+      ],
+    });
     open();
     for (const tab of ['일반 의뢰', '네임드 토벌']) {
       fireEvent.click(screen.getByRole('button', { name: tab }));
       expect(screen.queryByRole('button', { name: /포기/ })).not.toBeInTheDocument();
-      expect(dialog().textContent).not.toContain('포기');
+      expect(dialog()).toHaveTextContent('목표를 모두 채워 포기할 수 없어요. 수배판에서 보상을 받아 주세요.');
     }
   });
 

@@ -11,6 +11,7 @@ export default function KeyValueRow({
   action,
   valueEnd,
   compact = false,
+  wrap = false,
   className,
   valueClassName,
 }: {
@@ -20,17 +21,19 @@ export default function KeyValueRow({
   action?: ReactNode;
   valueEnd?: boolean;
   compact?: boolean;
+  wrap?: boolean;
   className?: string;
   valueClassName?: string;
 }) {
   if (compact) {
     return (
       <Tag className={cx(
-        'flex items-center justify-between gap-2 h-[26px] text-xs border-t border-line/60 first:border-t-0',
+        'flex justify-between gap-2 text-xs border-t border-line/60 first:border-t-0',
+        wrap ? 'items-start min-h-[26px] py-1' : 'items-center h-[26px]',
         className,
       )}>
         <span className="text-text-dim shrink-0">{label}</span>
-        <span className={cx('min-w-0 truncate text-right', valueClassName)}>{value}</span>
+        <span className={cx('min-w-0 text-right', wrap ? 'whitespace-normal break-keep' : 'truncate', valueClassName)}>{value}</span>
       </Tag>
     );
   }
