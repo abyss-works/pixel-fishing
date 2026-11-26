@@ -17,6 +17,7 @@ export type FailureKind =
   | 'guest-village-only' // 403 — 게스트가 마을 밖으로 나가려 함
   | 'account-only'  // 403 — 게스트에게 열리지 않은 기능
   | 'rate-limited'  // 429 — 매크로 페이싱 게이트(최소 액션 간격)나 인그레스의 요청 한도
+  | 'auth-rate-limited' // 429 — 익명 가입·인증 경로의 요청 한도 초과
   | 'server'        // 5xx
   | 'bug';          // 예상 못 한 예외
 
@@ -38,8 +39,8 @@ export class AppError extends Error {
   }
 }
 
-/** 화면 전체를 덮어 진행을 막는 모달 — update·replaced·unsaved는 새로고침, consent는 약관 수락이 출구다 */
-export type BlockingModal = 'update' | 'replaced' | 'unsaved' | 'consent';
+/** 화면 전체를 덮어 진행을 막는 모달 — update·replaced·unsaved·rate-limited는 새로고침, consent는 약관 수락이 출구다 */
+export type BlockingModal = 'update' | 'replaced' | 'unsaved' | 'consent' | 'rate-limited';
 
 /** 종류별 대응 — 새 실패 종류 = 여기 행 하나. UI 문구를 각 지점에 흩지 않는다 */
 export interface FailureResponse {
@@ -97,6 +98,11 @@ export const POLICY: Record<FailureKind, FailureResponse> = {
     // 부팅과 계정 교체의 세이브 읽기와 접속(boot)은 서비스 계층이 기다렸다 다시 시도하고, 끝내 실패하면 network로 바꿔 올린다.
     level: 'warning', slot: true,
     message: '너무 빠르게 연달아 시도하고 있어요. 잠시 후에 다시 해 주세요.',
+  },
+  'auth-rate-limited': {
+    // 익명 가입·인증 경로의 HTTP 429 한도 초과 — 일반 인증 실패(unsaved)와 구분해 혼잡 안내 차단 창을 연다.
+    modal: 'rate-limited', level: 'warning',
+    message: '같은 네트워크에서 접속이 잠시 몰려 있어요. 잠시 뒤 다시 시도해 주세요.',
   },
   server: {
     modal: 'unsaved', level: 'error',

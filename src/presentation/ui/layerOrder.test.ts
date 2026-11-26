@@ -441,6 +441,7 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
       'views/overlays/update/UpdateModal.tsx',
       'views/overlays/update/SessionReplacedModal.tsx',
       'views/overlays/update/UnsavedModal.tsx',
+      'views/overlays/update/RateLimitModal.tsx',
       'views/overlays/account/ConsentModal.tsx',
     ]) {
       expect(src(path)).toContain('closable={false}');
@@ -506,6 +507,7 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
       'views/overlays/update/UpdateModal.tsx',
       'views/overlays/update/SessionReplacedModal.tsx',
       'views/overlays/update/UnsavedModal.tsx',
+      'views/overlays/update/RateLimitModal.tsx',
     ]);
     const nonAdminViews = sources.filter(f => f.path.startsWith('views/') && !f.path.startsWith('views/admin/'));
     const appUsers = nonAdminViews

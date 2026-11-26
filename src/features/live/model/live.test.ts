@@ -52,6 +52,30 @@ describe('applyLiveMessage', () => {
     expect(playerZoneLabel({ region: 'village', zone: null })).toBe('마을');
     expect(playerZoneLabel({ region: 'unknown', zone: null })).toBeNull();
   });
+
+  it('nick 알림을 받으면 접속자 목록과 월드·길드 채팅 발신자의 닉네임을 즉시 갱신한다', () => {
+    const worldLine: ChatLine = { id: 1, uid: 'a', nick: '가', text: '안녕', at: '2030-01-01T00:00:00.000Z' };
+    const guildLine: ChatLine = { id: 2, uid: 'a', nick: '가', text: '길드안녕', at: '2030-01-01T00:00:01.000Z' };
+    const otherLine: ChatLine = { id: 3, uid: 'b', nick: '나', text: '반가워', at: '2030-01-01T00:00:02.000Z' };
+    let s = applyLiveMessage(EMPTY_LIVE, {
+      t: 'hello',
+      you: 'me',
+      others: [p('a', '가'), p('b', '나')],
+      recentChat: [worldLine, otherLine],
+      recentGuildChat: [guildLine],
+    }, 0);
+
+    s = applyLiveMessage(s, { t: 'nick', uid: 'a', nick: '새이름' }, 1);
+    expect(s.others.a.presence.nick).toBe('새이름');
+    expect(s.others.b.presence.nick).toBe('나');
+    expect(s.chat.map(l => l.nick)).toEqual(['새이름', '나']);
+    expect(s.guildChat.map(l => l.nick)).toEqual(['새이름']);
+    expect(othersInRegion(s, 'sea').map(o => o.presence.nick)).toEqual(['나', '새이름']);
+
+    // 같은 닉네임이거나 모르는 사용자면 상태를 그대로 돌려준다
+    expect(applyLiveMessage(s, { t: 'nick', uid: 'a', nick: '새이름' }, 2)).toBe(s);
+    expect(applyLiveMessage(s, { t: 'nick', uid: 'unknown', nick: '아무개' }, 3)).toBe(s);
+  });
 });
 
 describe('nextPositionMessage', () => {
