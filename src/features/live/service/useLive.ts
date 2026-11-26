@@ -16,10 +16,10 @@ import {
   matesInRegion,
   nextPositionMessage,
   othersInRegion,
-  playerZoneLabel,
+  selectPlayersInRegion,
   withoutAuthor,
 } from '../model/live';
-import type { Bubble, ChatError, ChatRoom, LiveState, MyPosition, SentPosition } from '../model/live';
+import type { Bubble, ChatError, ChatRoom, LiveState, MyPosition, PlayerListItem, SentPosition } from '../model/live';
 
 // 실시간 채널 연결과 다른 플레이어 상태 — 게임 화면이 떠 있는 동안 연결을 유지한다.
 // 연결은 로그인 쿠키로 인증되므로 세션이 선 뒤 열고, 계정이 바뀌면 새 쿠키로 다시 연다.
@@ -76,6 +76,9 @@ function receive(msg: ServerMessage): void {
   if (msg.t === 'move') glides.set(msg.uid, nextGlide(glides.get(msg.uid) ?? null, msg, performance.now()));
   const regionChanged = msg.t === 'move' && prev.others[msg.uid]?.presence.region !== msg.region;
   const zoneChanged = msg.t === 'move' && (prev.others[msg.uid]?.presence.zone ?? null) !== (msg.zone ?? null);
+  const prevLook = msg.t === 'move' ? prev.others[msg.uid]?.presence.look : undefined;
+  const lookChanged = msg.t === 'move' && msg.look !== undefined
+    && (prevLook?.shirt !== msg.look.shirt || prevLook?.pants !== msg.look.pants || prevLook?.hat !== msg.look.hat);
   const nickChanged = msg.t === 'nick' && state !== prev;
   if (
     msg.t === 'hello'
@@ -87,6 +90,7 @@ function receive(msg: ServerMessage): void {
     || msg.t === 'error'
     || regionChanged
     || zoneChanged
+    || lookChanged
     || nickChanged
   ) {
     notify();
@@ -123,14 +127,10 @@ export function useLive(): void {
   }, [ready, uid, consentReady]);
 }
 
-/** 그 바다에 있는 다른 플레이어 — 이름 순. 차단한 사람도 들어 있다(접속 상태는 차단과 무관하다) */
-export function usePlayersIn(region: string): { uid: string; nick: string; zoneLabel?: string | null }[] {
+/** 그 바다에 있는 다른 플레이어 목록. 차단한 사람도 들어 있다(접속 상태는 차단과 무관하다) */
+export function usePlayersIn(region: string): PlayerListItem[] {
   const s = useSyncExternalStore(subscribe, getState, getState);
-  return othersInRegion(s, region).map(o => ({
-    uid: o.presence.uid,
-    nick: o.presence.nick,
-    zoneLabel: playerZoneLabel(o.presence),
-  }));
+  return selectPlayersInRegion(s, region);
 }
 
 /** 친구 알림(받은 요청·내 요청의 수락)을 받는다. 돌려준 함수로 구독을 끝낸다 */
