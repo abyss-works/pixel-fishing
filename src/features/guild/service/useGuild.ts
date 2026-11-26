@@ -1,13 +1,17 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { isUnauthorizedFailure } from '../../../core/retryPolicy';
 import { guildAction, liveAvailable, readGuild } from '../../../platform/api';
 import type { GuildOp, GuildOpResult, GuildState } from '../../../platform/api';
 import { useSession } from '../../account/service/session';
 import { useConsentReady } from '../../account/service/consentGate';
 
 // 내 길드 — 계정 유저만, 세션이 선 뒤 읽는다. 길드원의 접속 상태가 바뀌므로 poll이면 30초마다 다시 읽는다.
-// 길드가 없으면 내가 넣어 둔 가입 신청(request)을 함께 준다.
+// 세션 만료(401)면 폴링을 멈춘다. 길드가 없으면 내가 넣어 둔 가입 신청(request)을 함께 준다.
 // 로컬 모드에는 게임 서버가 없어 길드 기능이 없다(available이 거짓).
 const REFRESH = 30_000;
+const PUBLIC_OR_INVITE_OPS: ReadonlySet<GuildOp['op']> = new Set([
+  'create', 'join', 'joinPublic', 'remove', 'settings', 'rename', 'approve',
+]);
 
 export const guildQueryKey = (uid: string | null) => ['guild', uid];
 
@@ -20,7 +24,7 @@ export function useGuild(account: boolean, poll = false) {
     queryKey: key,
     queryFn: readGuild,
     enabled: ready && consentReady && account && liveAvailable,
-    refetchInterval: poll ? REFRESH : false,
+    refetchInterval: query => (poll && !isUnauthorizedFailure(query.state.error) ? REFRESH : false),
   });
   /** 길드 요청 하나 — 자유 강화 초기화는 응답 값을 캐시에 먼저 반영한 뒤 서버 상태로 재조회한다 */
   const act = async (op: GuildOp): Promise<GuildOpResult> => {
@@ -42,8 +46,9 @@ export function useGuild(account: boolean, poll = false) {
         });
       }
       await client.invalidateQueries({ queryKey: key });
-      if (op.op === 'join' || op.op === 'joinPublic' || op.op === 'create') {
+      if (PUBLIC_OR_INVITE_OPS.has(op.op)) {
         await client.invalidateQueries({ queryKey: ['publicGuilds'] });
+        await client.invalidateQueries({ queryKey: ['guildInvite'] });
       }
     }
     return result;
@@ -55,7 +60,7 @@ export function useGuild(account: boolean, poll = false) {
     loading: q.isPending,
     failed: q.isError,
     you: uid,
-    act,
     refresh: () => { void q.refetch(); },
+    act,
   };
 }

@@ -46,7 +46,7 @@ export default function RankingModal({ onClose }: { onClose: () => void }) {
 /** 한 탭의 본문: 활성 보드 지연 조회 결과와 표 아래 내 순위 자리 */
 function RankingBoardView({ board }: { board: MainRankingBoardId }) {
   const mobile = useMobileLayout();
-  const { data, loading, failed, offline } = useRankingBoard(board);
+  const { data, loading, failed, offline, retry } = useRankingBoard(board);
   const { valueLabel, help } = rankingTabMeta(board);
   const listed = !!data && data.top.length > 0;
   const mine = data ? pinnedMyRank(data) : null;
@@ -68,7 +68,7 @@ function RankingBoardView({ board }: { board: MainRankingBoardId }) {
           />
         ) : (
           <div className="flex h-full items-center justify-center">
-            <RankingStatus loading={loading} failed={failed} offline={offline} empty={!!data} />
+            <RankingStatus loading={loading} failed={failed} offline={offline} empty={!!data} onRetry={retry} />
           </div>
         )}
       </TableBox>

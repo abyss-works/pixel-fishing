@@ -72,7 +72,7 @@ export function PlayerInfo({ target, self, account, accountFailed = false, setTo
   accountFailed?: boolean;
   setToast: Notify;
 }) {
-  const { profile, loading, failed } = usePlayerProfile(target.uid);
+  const { profile, loading, failed, unavailable, retry } = usePlayerProfile(target.uid);
   const member = account !== null && !self;
   const friends = useFriends(member);
   const moderation = useChatModeration(member);
@@ -86,10 +86,11 @@ export function PlayerInfo({ target, self, account, accountFailed = false, setTo
       </div>
     );
   }
-  if (failed || !profile) {
+  if (failed || unavailable || !profile) {
     return (
-      <div className="flex-1 min-h-0 flex items-center justify-center">
-        <Note tone="warn">정보를 불러오지 못했어요.<br />잠시 뒤 다시 열어 주세요.</Note>
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-2 text-center">
+        <Note tone="warn" className="my-0">정보를 불러오지 못했어요.<br />잠시 뒤 다시 시도해 주세요.</Note>
+        {failed && <Button size="sm" onClick={retry}>다시 시도</Button>}
       </div>
     );
   }
@@ -164,6 +165,12 @@ export function PlayerInfo({ target, self, account, accountFailed = false, setTo
   ) : (
     <div className="flex flex-wrap items-center gap-2">
       {friendSlot}
+      {profile.account && !friends.offline && blocked !== true && !friends.groups && friends.failed && (
+        <>
+          <span className="text-xs text-text-dim">친구 정보를 불러오지 못했어요.</span>
+          <Button size="sm" onClick={friends.refresh}>다시 확인</Button>
+        </>
+      )}
       {blocked !== null && (
         <Button size="sm" disabled={busy} onClick={() => void block(blocked ? 'unblock' : 'block')}>
           {blocked ? '차단 해제' : '차단'}

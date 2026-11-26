@@ -318,6 +318,14 @@ export async function resetEnhancements(
 export const guildTotal = (guildId: SQL) =>
   sql`(select coalesce(sum(c.fame + c.clears), 0)::bigint from public.guild_contributions c where c.guild_id = ${guildId})`;
 
+/** 길드의 누적 기여도 합계를 읽는다. 길드가 없으면 0 */
+export async function guildTotalOf(db: Executor, guildId: string): Promise<number> {
+  const { rows: [r] } = await db.execute<{ total: number | string }>(
+    sql`select ${guildTotal(sql`${guildId}::uuid`)} as total`,
+  );
+  return Number(r?.total ?? 0);
+}
+
 /** 항해일지 한 줄을 쓰는 문장 */
 const logInsert = (guildId: string, uid: string, kind: GuildLogKind, nowISO: string) =>
   sql`insert into public.guild_logs (guild_id, user_id, kind, created_at) values (${guildId}, ${uid}, ${kind}, ${at(nowISO)})`;
@@ -601,9 +609,18 @@ export async function decideJoinRequest(withTransaction: Tx, uid: string, guildI
   });
 }
 
-/** 내가 넣어 둔 가입 신청을 거둔다. 없으면 아무것도 하지 않는다 */
-export async function cancelJoinRequest(db: Executor, uid: string): Promise<void> {
-  await db.execute(sql`delete from public.guild_join_requests where user_id = ${uid}`);
+/** 내가 넣어 둔 가입 신청을 거두고 해당 길드와 현재 길드장을 돌려준다. 신청이 없으면 null */
+export async function cancelJoinRequest(db: Executor, uid: string): Promise<{ guildId: string; leaderId: string | null } | null> {
+  const { rows: [r] } = await db.execute<{ guild_id: string; leader_id: string | null }>(sql`
+    with deleted as (
+      delete from public.guild_join_requests where user_id = ${uid} returning guild_id
+    )
+    select d.guild_id::text as guild_id, m.user_id::text as leader_id
+    from deleted d
+    left join public.guild_members m
+      on m.guild_id = d.guild_id and m.role = 'leader' and m.left_at is null
+    limit 1`);
+  return r ? { guildId: r.guild_id, leaderId: r.leader_id } : null;
 }
 
 export type SettingsOutcome =

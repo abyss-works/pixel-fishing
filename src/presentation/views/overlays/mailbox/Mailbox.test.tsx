@@ -4,12 +4,15 @@ import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { MailItem } from '../../../../platform/api';
 
-const state = vi.hoisted(() => ({ mails: null as MailItem[] | null, read: [] as number[] }));
+const state = vi.hoisted(() => ({ mails: null as MailItem[] | null, read: [] as number[], fail: false }));
 vi.mock('../../../../platform/api', async importOriginal => {
   const mod = await importOriginal<typeof import('../../../../platform/api')>();
   return {
     ...mod,
-    readMails: async () => state.mails,
+    readMails: async () => {
+      if (state.fail) throw new Error('mail error');
+      return state.mails;
+    },
     markMailRead: async (id: number) => { state.read.push(id); },
   };
 });
@@ -26,7 +29,7 @@ function wrap(node: ReactNode) {
   return { ...view, again: (next: ReactNode) => view.rerender(<QueryClientProvider client={client}>{next}</QueryClientProvider>) };
 }
 
-afterEach(() => { cleanup(); state.mails = null; state.read = []; });
+afterEach(() => { cleanup(); state.mails = null; state.read = []; state.fail = false; });
 
 describe('우편함 창', () => {
   it('우편을 고르면 본문을 보이고 읽음을 남긴다. 골드 우편은 받기로 받는다', async () => {
@@ -168,5 +171,16 @@ describe('우편함 창', () => {
     state.mails = [];
     wrap(<MailboxModal dispatch={vi.fn() as never} setToast={vi.fn()} onClose={() => {}} />);
     expect(await screen.findByText('받은 우편이 없어요.')).toBeInTheDocument();
+  });
+
+  it('우편 조회 실패 시 다시 시도 버튼을 보이고 누르면 우편을 다시 읽는다', async () => {
+    state.fail = true;
+    state.mails = [mail({ id: 21, title: '복구된 우편' })];
+    wrap(<MailboxModal dispatch={vi.fn() as never} setToast={vi.fn()} onClose={() => {}} />);
+    expect(await screen.findByText(/우편을 열지 못했어요/)).toBeInTheDocument();
+
+    state.fail = false;
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(await screen.findByText('복구된 우편')).toBeInTheDocument();
   });
 });

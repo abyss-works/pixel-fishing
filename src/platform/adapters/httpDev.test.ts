@@ -4,7 +4,9 @@ import { newState } from '../../game/rules/logic';
 import { createHttpApi } from './httpApi';
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   vi.unstubAllGlobals();
+  vi.resetModules();
 });
 
 const jsonRes = (body: unknown, status = 200): Response =>
@@ -24,6 +26,29 @@ describe('HttpDev', () => {
       isAnonymous: false,
     });
     expect(fetchMock).toHaveBeenCalledWith('/api/dev/promote-test', { method: 'POST' });
+  });
+
+  it('promoteTestAccount 성공 시 1.5초 세션 캐시를 무효화해 직후 currentAccount가 승격된 계정을 읽는다', async () => {
+    vi.stubEnv('VITE_CLOUD', '1');
+    vi.resetModules();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonRes({ user: { id: 'g1', email: 'g1@anonymous.invalid', isAnonymous: true } }))
+      .mockResolvedValueOnce(jsonRes({ ok: true, email: 'test-12345678@stage.invalid', isAnonymous: false }))
+      .mockResolvedValueOnce(jsonRes({ user: { id: 'g1', email: 'test-12345678@stage.invalid', isAnonymous: false } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { createHttpApi: loadHttpApi } = await import('./httpApi');
+    const api = loadHttpApi();
+    await expect(api.auth.currentAccount()).resolves.toEqual({ status: 'guest' });
+    await expect(api.dev.promoteTestAccount()).resolves.toEqual({
+      ok: true,
+      email: 'test-12345678@stage.invalid',
+      isAnonymous: false,
+    });
+    await expect(api.auth.currentAccount()).resolves.toEqual({
+      status: 'account',
+      email: 'test-12345678@stage.invalid',
+    });
   });
 
   it('promoteTestAccount는 HTTP 상태와 오류 코드를 일관된 실패 응답으로 매핑한다', async () => {

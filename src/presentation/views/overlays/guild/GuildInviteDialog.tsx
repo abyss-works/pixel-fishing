@@ -24,7 +24,7 @@ export default function GuildInviteDialog({ code, account, onAccount, onClose, s
   setToast: Notify;
 }) {
   const invite = useGuildInvite(code);
-  const { guild, loading: guildLoading, failed: guildFailed, act } = useGuild(account !== null);
+  const { guild, loading: guildLoading, failed: guildFailed, act, refresh: refreshGuild } = useGuild(account !== null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inviteLoading = invite.loading ?? (!invite.settled && !invite.failed);
@@ -32,6 +32,10 @@ export default function GuildInviteDialog({ code, account, onAccount, onClose, s
   const asyncFailed = invite.failed || (account !== null && guildFailed);
   const ready = !asyncLoading && !asyncFailed && invite.settled;
   const view = ready ? inviteDialogView(invite.preview, { account: account !== null, guild: guild?.name ?? null }, 'link') : null;
+  const retry = () => {
+    if (invite.failed) void invite.refresh();
+    if (account !== null && guildFailed) refreshGuild();
+  };
 
   const confirm = async () => {
     setBusy(true);
@@ -61,9 +65,19 @@ export default function GuildInviteDialog({ code, account, onAccount, onClose, s
     <Modal layer="stage" onClose={onClose}>
       <ModalCard title="길드 초대" onClose={onClose} confirm={action}>
         <div className="flex flex-col gap-3">
-          {asyncFailed ? <Note tone="warn">길드 초대 정보를 열지 못했어요.</Note>
+          {asyncFailed ? (
+            <div className="flex flex-col items-center gap-2 py-2 text-center">
+              <Note tone="warn" className="my-0">길드 초대 정보를 열지 못했어요.</Note>
+              <Button size="sm" onClick={retry}>다시 시도</Button>
+            </div>
+          )
             : asyncLoading ? <Note>초대를 불러오는 중이에요.</Note>
-            : !view ? <Note tone="warn">길드 초대 정보를 열지 못했어요.</Note>
+            : !view ? (
+              <div className="flex flex-col items-center gap-2 py-2 text-center">
+                <Note tone="warn" className="my-0">길드 초대 정보를 열지 못했어요.</Note>
+                <Button size="sm" onClick={retry}>다시 시도</Button>
+              </div>
+            )
             : view.state === 'bad' ? (
               <p className="m-0 text-sm text-text-dim whitespace-pre-line" role="status">{view.text}</p>
             ) : view.state === 'guest' ? (

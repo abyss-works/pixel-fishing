@@ -34,7 +34,7 @@ metadata:
     # 게임 서버 API(관리자 API는 pixel-fishing-admin-api, 익명 가입은 pixel-fishing-auth-anon으로 분리). import 액션이 게임 상태 전체를 싣는다. 본문 한도는 서버 본문 한도(5mb)와 맞춘다.
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: 5m
-    nginx.ingress.kubernetes.io/limit-rps: "20"
+    nginx.ingress.kubernetes.io/limit-rps: "100"
     nginx.ingress.kubernetes.io/limit-burst-multiplier: "5"
 spec:
   ingressClassName: nginx

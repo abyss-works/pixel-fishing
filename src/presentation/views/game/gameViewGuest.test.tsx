@@ -74,7 +74,7 @@ function renderView(account: string | null, accountChecked: boolean) {
   render(
     <QueryClientProvider client={client}><GameView
       game={{ ...newState(), tutorials: [...TUTORIAL_IDS] }} scene={{ kind: 'region', id: 'village' }} entryPos={null} placeSeq={0}
-      dispatch={() => { throw new Error('dispatch is not used'); }} setToast={() => {} } onScene={() => {}} onPlace={() => {} } onWarmup={() => {}}
+      dispatch={() => { throw new Error('dispatch is not used'); }} setToast={() => {} } onScene={() => {}} onPlace={() => {} }
       log={[]} syncLabel={null} syncState="on" guestProgress="nothing"
       account={account} accountChecked={accountChecked} accountFailed={false} uid={null} nickname={null}
       onRename={async () => null} onAuthChanged={async () => {}} onResync={async () => {}}
@@ -117,7 +117,7 @@ describe('필드에 넘기는 확정된 게스트 여부', () => {
     const renderGame = (tutorials: GameState['tutorials']) => render(
       <QueryClientProvider client={client}><GameView
         game={{ ...newState(), tutorials }} scene={{ kind: 'region', id: 'village' }} entryPos={null} placeSeq={0}
-        dispatch={() => ({ status: 'ok' as const, state: newState(), result: { type: 'none' as const } })} setToast={() => {} } onScene={() => {}} onPlace={() => {} } onWarmup={() => {}}
+        dispatch={() => ({ status: 'ok' as const, state: newState(), result: { type: 'none' as const } })} setToast={() => {} } onScene={() => {}} onPlace={() => {} }
         log={[]} syncLabel={null} syncState="off" guestProgress="nothing"
         account={null} accountChecked={true} accountFailed={false} uid={null} nickname={null}
         onRename={async () => null} onAuthChanged={async () => {}} onResync={async () => {}}
@@ -149,7 +149,7 @@ describe('필드에 넘기는 확정된 게스트 여부', () => {
     render(
       <QueryClientProvider client={client}><GameView
         game={{ ...newState(), tutorials: [...TUTORIAL_IDS] }} scene={{ kind: 'region', id: 'village' }} entryPos={null} placeSeq={0}
-        dispatch={() => { throw new Error('dispatch is not used'); }} setToast={() => {} } onScene={() => {}} onPlace={() => {} } onWarmup={() => {}}
+        dispatch={() => { throw new Error('dispatch is not used'); }} setToast={() => {} } onScene={() => {}} onPlace={() => {} }
         log={[]} syncLabel={null} syncState="on" guestProgress="some"
         account={null} accountChecked={true} accountFailed={false} uid={null} nickname={null}
         onRename={async () => null} onAuthChanged={async () => {}} onResync={async () => {}}

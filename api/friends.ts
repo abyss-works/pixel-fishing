@@ -80,7 +80,8 @@ async function route(req: Req, res: Res): Promise<void> {
     res.status(200).json({ result: 'accepted' });
     return;
   }
-  await run('db-write', () => removeFriend(db, me, other));
+  const removed = await run('db-write', () => removeFriend(db, me, other));
+  if (removed) notifyUser(other, { t: 'friend', kind: 'updated' });
   res.status(200).json({ result: 'removed' });
 }
 

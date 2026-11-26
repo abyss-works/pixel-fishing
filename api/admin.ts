@@ -12,7 +12,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { adminSessionUid } from './_auth/session.js';
 import { database } from './_db/client.js';
 import type { Database, Executor } from './_db/client.js';
-import { notifyAll, onlineUsers } from './_server/livePresence.js';
+import { notifyAll, notifyUser, onlineUsers } from './_server/livePresence.js';
 import { normalizeNoticeDraft } from '../src/game/rules/live.js';
 import { accountKind, revokeUserSessions } from './_data/account.js';
 import * as read from './_data/admin.js';
@@ -186,7 +186,19 @@ async function mail(db: Executor, raw: unknown): Promise<unknown> {
     : request;
   if (op === 'preview') return dbRead(() => planMail(db, merged));
   try {
-    return await deliverMail(db, merged, new Date().toISOString());
+    const result = await deliverMail(db, merged, new Date().toISOString());
+    if (result.problems.length === 0 && result.sent > 0 && !result.idempotent) {
+      if (merged.target.kind === 'all') {
+        for (const online of onlineUsers()) {
+          if (!online.guest) notifyUser(online.uid, { t: 'mail' });
+        }
+      } else {
+        for (const recipient of merged.target.recipients) {
+          notifyUser(recipient.userId.trim().toLowerCase(), { t: 'mail' });
+        }
+      }
+    }
+    return result;
   } catch (e) {
     if (e instanceof DuplicateMailError) throw new ApiError(409, 'duplicate-mail');
     if (e instanceof ApiError) throw e;

@@ -52,7 +52,7 @@ import { gameDayOf, gameDayStartISO, previousGameDayISO } from '../src/game/rule
 import type { DayPhase } from '../src/game/rules/time.js';
 import { checkNickname, pickGuestName } from '../src/game/rules/nickname.js';
 import { powerZones, rodPower } from '../src/game/rules/stats.js';
-import { MIN_ACTION_GAP_MS, PACING_SLOW_TYPES, SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
+import { MIN_ACTION_GAP_MS, SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
 import { catchWaitMs } from '../src/game/rules/pacing.js';
 import { APP_VERSION } from '../src/version.js';
 import { staleClient } from './_server/clientBuild.js';
@@ -72,14 +72,16 @@ import {
 } from './_data/achievements.js';
 import { catchLookup, evictionCandidates, latestLegacySave, loadContext, loadRecords, ownedNormalForms } from './_data/load.js';
 import type { BountyRows, InstanceRow, RecordRow, StateRow } from './_data/load.js';
-import { letterFragment } from './_data/mail.js';
-import { ensureProfile, nicknameTaken, profileExists, setNickname } from './_data/profile.js';
+import { lastLetterAt, letterFragment } from './_data/mail.js';
+import { ensureProfile, nicknameTaken, profileExists, setNicknameFragment } from './_data/profile.js';
 import { ALWAYS_GUARD, blobInput, commitDebugBatch, instRow, seedState, snapshotInsert, stateRow, versionUpdate, writeFragments } from './_data/save.js';
 import { eventsInsert } from './_data/telemetry.js';
 import { activeDayUpsert } from './_data/activity.js';
 import { recordDailyFortuneFragment, upsertDailyFortuneFragment } from './_data/fortune.js';
-import { recordGuildActivity } from './_data/guilds.js';
-import { NO_GUILD_EFFECTS, contributionFor, guildEffectsOf, guildLevelOf } from '../src/game/rules/guild.js';
+import { guildTotalOf, recordGuildActivity } from './_data/guilds.js';
+import {
+  GUILD_LEVEL_FLOORS, GUILD_MAX_LEVEL, NO_GUILD_EFFECTS, contributionFor, guildEffectsOf, guildLevelOf,
+} from '../src/game/rules/guild.js';
 import type { GuildEffects, GuildLogKind } from '../src/game/rules/guild.js';
 
 export type { BountyRows } from './_data/load.js';
@@ -220,10 +222,9 @@ const BOUNTY_ACTIONS = new Set(['acceptQuest', 'deliverBounty', 'resolveChalleng
  *  네임드 결투 성공(resolveChallenge)은 명성을 주지 않고 납품을 열 뿐이라, 토벌 기여와 항해일지는 뒤이은 납품(deliverBounty)이 한 번만 쓴다 */
 const GUILD_ACTIONS = new Set(['catch', 'sell', 'exhibit', 'deliverBounty', 'claimRelief']);
 
-// 액션 페이싱 게이트 — 서버 추첨으로 가치를 생성하는 catch와 쓰기 비용이 큰 sendLetter에만
-// 직전 성공 액션과의 최소 간격을 검사한다. 그 밖의 액션은 간격 검사를 두지 않는다.
-// 밸런스 상수와 액션 목록은 각 정의를 단일 출처로 삼는다.
-const PACING_SLOW = new Set<string>(PACING_SLOW_TYPES);
+// 액션 페이싱 게이트 — 서버 추첨으로 가치를 생성하는 catch(last_catch_at 기준)와
+// 쓰기 비용이 큰 sendLetter(letters 최근 발송 시각 기준)만 각각 독립 간격을 검사한다.
+// 그 밖의 일반 액션에는 saves_current.updated_at 기반 간격 제한을 두지 않는다.
 
 const isPlainRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -536,21 +537,22 @@ async function route(req: Req, res: Res): Promise<void> {
     throw new ApiError(423, 'session-replaced');
   }
 
-  // 매크로 페이싱 검사 — 비어획 느림 창 대상(sendLetter)만 직전 성공 액션(updated_at)과의 최소 간격을 검사하고,
-  // catch는 전용 last_catch_at 기반 낚시 한 사이클 검사만 적용해 비어획 직후 정상 어획과 409 재시도를 막지 않는다.
-  // 시딩 행(v1)과 첫 액션은 제외하며, 개발 도구 명령과 승인된 강제 조우·시간대 테스트 캐치는 면제한다.
+  // 액션별 독립 페이싱 검사 — sendLetter는 최근 편지 발송 시각만 보고, catch는 last_catch_at 기반 낚시 한 사이클만 본다.
+  // 일반 액션의 saves_current.updated_at과는 분리해 판매·어획 직후 편지 발송이나 409 재시도를 막지 않는다.
+  // 개발 도구 명령과 승인된 강제 조우·시간대 테스트 캐치는 면제한다.
   const pacingExempt = action.type === 'debug'
     || action.type === 'debugBatch'
     || action.type === 'debugSnapshot'
     || forceCatchAllowed;
   if (!pacingExempt) {
-    const lastActionMs = Date.parse(String(row.updated_at ?? ''));
-    const gapElapsedMs = Date.now() - lastActionMs;
-    if (action.type !== 'catch' && PACING_SLOW.has(action.type)
-        && Number.isFinite(lastActionMs) && Number(row.version) > 1
-        && gapElapsedMs < MIN_ACTION_GAP_MS) {
-      const retryAfter = String(Math.max(1, Math.ceil((MIN_ACTION_GAP_MS - gapElapsedMs) / 1000)));
-      throw new ApiError(429, 'too-fast', { retryAfter });
+    if (action.type === 'sendLetter') {
+      const sentAt = await step('db-read', { uid, action: action.type }, () => lastLetterAt(db, uid));
+      const lastSentMs = sentAt ? Date.parse(sentAt) : Number.NaN;
+      const elapsedMs = Date.now() - lastSentMs;
+      if (Number.isFinite(lastSentMs) && elapsedMs < MIN_ACTION_GAP_MS) {
+        const retryAfter = String(Math.max(1, Math.ceil((MIN_ACTION_GAP_MS - elapsedMs) / 1000)));
+        throw new ApiError(429, 'too-fast', { retryAfter });
+      }
     }
     // 캐치 간격 검사 — 직전 캐치로부터 낚시 한 사이클(획득 표시 + 최소 입질 대기)이 지나야 다음 캐치를 받는다.
     if (action.type === 'catch') {
@@ -615,16 +617,15 @@ async function route(req: Req, res: Res): Promise<void> {
     if (claimable !== null) mail = { id: mailId, gold: claimable.gold, items: claimable.items };
   }
 
-  // 닉네임 변경 — 형태는 리듀서가 재검증한다. 여기서 할 일은 중복 검사 + 반영뿐.
-  let committedNickname: string | null = null;
+  // 닉네임 변경 — 형태는 리듀서가 재검증한다. 여기서는 중복만 먼저 거르고, 실제 쓰기는 확정 문장에서 낙관 락과 함께 원자 실행한다.
+  let pendingNickname: string | null = null;
   if (action.type === 'setNickname' && typeof action.nickname === 'string'
       && checkNickname(action.nickname).ok) {
     const wanted = action.nickname;
     if (await step('db-read', { uid, action: action.type }, () => nicknameTaken(db, uid, wanted))) {
       throw new ApiError(422, 'nickname-taken');
     }
-    await step('db-write', { uid, action: 'setNickname' }, () => setNickname(db, uid, wanted, new Date().toISOString()));
-    committedNickname = wanted;
+    pendingNickname = wanted;
   }
 
   // 현상금 — DB가 진실의 원천인 데이터에 대한 서버 담당분.
@@ -831,6 +832,7 @@ async function route(req: Req, res: Res): Promise<void> {
     }
   }
   fragments.push(letterFragment(guard, uid, out.events, eventNow));
+  if (pendingNickname !== null) fragments.push(setNicknameFragment(guard, uid, pendingNickname, nowISO));
   if (action.type === 'claimMail' && mail) fragments.push(claimMailFragment(guard, uid, mail.id, nowISO));
   // 업적 카운터 — 확정 문장 안에서 상태 변경과 같은 원자 단위로 오른다. 클라이언트 주장으로 올리지 않는다.
   fragments.push(counterUpsertFragment(guard, uid, counterIncrementsForEvents(out.events)));
@@ -883,22 +885,30 @@ async function route(req: Req, res: Res): Promise<void> {
     }
   }
   // 길드 기여와 항해일지 — 확정된 액션마다 한 번 쓴다(낙관 락을 통과한 요청만 여기 온다). 응답 직후의 길드 조회가 보도록 응답 전에 쓰되,
-  // 실패가 확정된 액션을 되돌리지 않게 보고만 한다
+  // 실패가 확정된 액션을 되돌리지 않게 보고만 한다. 전체 길드원 브로드캐스트는 길드 레벨업이나 전설/네임드 항해일지가 생긴 때만 보낸다.
   if (loaded.guild && GUILD_ACTIONS.has(action.type)) {
     const guildId = loaded.guild.id;
+    const prevTotal = loaded.guild.total;
+    const prevLevel = guildLevelOf(prevTotal);
     const cleared = action.type === 'deliverBounty' ? bountyById(action.questId) ?? null : null;
     const add = contributionFor(out.state.fame - Number(row.fame), cleared);
+    const logEntries = guildLogsOf(out.events);
     try {
-      if (await recordGuildActivity(db, guildId, uid, nowISO, add, guildLogsOf(out.events)) > 0) {
+      if (await recordGuildActivity(db, guildId, uid, nowISO, add, logEntries) > 0) {
         const r = out.result;
         if (r.type === 'catch' || r.type === 'sell' || r.type === 'none') r.guildUpdated = true;
-        notifyGuild(guildId, { t: 'guild', kind: 'updated', guild: '', nick: null });
+        const mayLevelUp = prevLevel < GUILD_MAX_LEVEL
+          && prevTotal + add.fame + add.clears >= GUILD_LEVEL_FLOORS[prevLevel];
+        const leveledUp = mayLevelUp && guildLevelOf(await guildTotalOf(db, guildId)) > prevLevel;
+        if (logEntries.length > 0 || leveledUp) {
+          notifyGuild(guildId, { t: 'guild', kind: 'updated', guild: '', nick: null });
+        }
       }
     } catch (e) {
       await reportServerIssue('후속 쓰기 실패 — 길드 기여/항해일지 반영 실패', e, { uid, action: action.type, version: nextVersion });
     }
   }
-  if (committedNickname !== null) setNick(uid, committedNickname);
+  if (pendingNickname !== null) setNick(uid, pendingNickname);
 
   // 후속 쓰기 — 이벤트 append, 활동일, 주기 스냅샷, 만료 의뢰 정리. 유실 허용 묶음이라 응답 뒤에 실행하고
   // 실패해도 상태는 되돌리지 않는다. 다만 조용히 잃지 않도록 보고한다.

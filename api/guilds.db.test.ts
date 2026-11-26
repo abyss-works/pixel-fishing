@@ -82,6 +82,7 @@ describe('길드 함수', () => {
     expect(await call('/api/guilds/:id', 'PATCH', A, { params: { id }, body: {} })).toMatchObject({ status: 400, body: { error: 'bad-settings' } });
     expect(await call('/api/guilds/:id', 'PATCH', A, { params: { id }, body: { joinMode: 'open', pitch: '  같이 낚시해요 ' } }))
       .toMatchObject({ status: 200, body: { joinMode: 'open', pitch: '같이 낚시해요' } });
+    expect(guildNotes.at(-1)).toEqual([id, { t: 'guild', kind: 'updated', guild: '', nick: null }]);
     expect(await call('/api/guild-memberships', 'POST', B, { body: { code: 'nope' } })).toMatchObject({ status: 400, body: { error: 'bad-code' } });
     expect(await call('/api/guild-memberships', 'POST', B, { body: { code: 'ZZZZ2222' } })).toMatchObject({ status: 404, body: { error: 'bad-code' } });
     expect(await call('/api/guild-memberships', 'POST', B, { body: { code: code.toLowerCase() } }))
@@ -112,10 +113,13 @@ describe('길드 함수', () => {
     expect(await call('/api/guilds/:id/members/:uid', 'DELETE', A, { params: { id, uid: C } }))
       .toMatchObject({ status: 200, body: { result: 'kicked' } });
     expect(changes.at(-1)).toEqual([C, null]);
+    expect(notes.at(-1)).toEqual([C, { t: 'guild', kind: 'updated', guild: '', nick: null }]);
+    expect(guildNotes.at(-1)).toEqual([id, { t: 'guild', kind: 'updated', guild: '', nick: null }]);
     expect(await call('/api/guilds/:id/leader', 'PUT', A, { params: { id }, body: { uid: 'x' } })).toMatchObject({ status: 400 });
     expect(await call('/api/guilds/:id/leader', 'PUT', A, { params: { id }, body: { uid: C } })).toMatchObject({ status: 404 });
     expect(await call('/api/guilds/:id/leader', 'PUT', A, { params: { id }, body: { uid: B } }))
       .toMatchObject({ status: 200, body: { result: 'handed-over' } });
+    expect(guildNotes.at(-1)).toEqual([id, { t: 'guild', kind: 'updated', guild: '', nick: null }]);
     expect(await call('/api/guilds/:id/members/:uid', 'DELETE', A, { params: { id, uid: A } }))
       .toMatchObject({ status: 200, body: { result: 'left' } });
     expect(changes.at(-1)).toEqual([A, null]);
@@ -148,7 +152,9 @@ describe('길드 함수', () => {
     expect(await call('/api/guilds/:id/requests/:uid', 'DELETE', A, { params: { id, uid: C } })).toMatchObject({ status: 404, body: { error: 'no-request' } });
 
     await call('/api/guild-memberships', 'POST', C, { body: { code } });
+    notes.length = 0;
     expect(await call('/api/guild-requests/me', 'DELETE', C)).toMatchObject({ status: 200, body: { result: 'cancelled' } });
+    expect(notes).toEqual([[A, { t: 'guild', kind: 'updated', guild: '', nick: null }]]);
     expect(await mine(C)).toEqual({ guild: null, request: null });
 
     await call('/api/guilds/:id', 'PATCH', A, { params: { id }, body: { joinMode: 'closed' } });
@@ -299,35 +305,36 @@ describe('길드 갱신 실시간 알림', () => {
     expect(guildNotes).toEqual([[id, updated]]);
 
     await call('/api/guilds/:id', 'PATCH', J, { params: { id }, body: { joinMode: 'open' } });
-    expect(await call('/api/guild-memberships', 'POST', K, { body: { code } })).toMatchObject({ status: 201 });
     expect(guildNotes).toHaveLength(2);
+    expect(await call('/api/guild-memberships', 'POST', K, { body: { code } })).toMatchObject({ status: 201 });
+    expect(guildNotes).toHaveLength(3);
 
     await env.client.query(`insert into public.guild_contributions (guild_id, user_id, day, fame, clears)
       values ($1, null, '2030-01-01', 0, 10000)`, [id]);
     expect(await call('/api/guilds/:id/bonuses/:bonus/donations', 'POST', J, { params: { id, bonus: 'sell' }, body: { amount: 150_000 } }))
       .toMatchObject({ status: 201 });
-    expect(guildNotes).toHaveLength(3);
+    expect(guildNotes).toHaveLength(4);
     expect(await call('/api/guilds/:id/bonuses/:bonus/donations', 'POST', J, { params: { id, bonus: 'sell' }, body: { amount: 1_000 } }))
       .toMatchObject({ status: 409 });
-    expect(guildNotes).toHaveLength(3);
+    expect(guildNotes).toHaveLength(4);
 
     await env.client.query(`insert into public.guild_contributions (guild_id, user_id, day, fame, clears)
       values ($1, null, '2030-01-02', 0, 190000)`, [id]);
     expect(await call('/api/guilds/:id/bonuses/:bonus/enhancements', 'POST', J, { params: { id, bonus: 'sell' } }))
       .toMatchObject({ status: 201 });
-    expect(guildNotes).toHaveLength(4);
+    expect(guildNotes).toHaveLength(5);
     expect(await call('/api/guilds/:id/enhancements/reset', 'POST', J, { params: { id } }))
       .toMatchObject({ status: 200 });
-    expect(guildNotes).toHaveLength(5);
+    expect(guildNotes).toHaveLength(6);
 
     expect(await call('/api/guilds/:id/name', 'PUT', J, { params: { id }, body: { name: '새갱신선단' } })).toMatchObject({ status: 200 });
-    expect(guildNotes).toHaveLength(6);
+    expect(guildNotes).toHaveLength(7);
 
     expect(await call('/api/guilds/:id/members/:uid', 'DELETE', L, { params: { id, uid: L } })).toMatchObject({ body: { result: 'left' } });
     expect(await call('/api/guilds/:id/members/:uid', 'DELETE', J, { params: { id, uid: K } })).toMatchObject({ body: { result: 'kicked' } });
-    expect(guildNotes).toHaveLength(8);
+    expect(guildNotes).toHaveLength(9);
     expect(await call('/api/guilds/:id/members/:uid', 'DELETE', J, { params: { id, uid: J } })).toMatchObject({ body: { result: 'dissolved' } });
-    expect(guildNotes).toHaveLength(8);
+    expect(guildNotes).toHaveLength(9);
     expect(guildNotes.every(([g, m]) => g === id && JSON.stringify(m) === JSON.stringify(updated))).toBe(true);
   });
 });
@@ -409,9 +416,11 @@ describe('공개 길드 목록과 guildId 바로 가입', () => {
       .filter(g => ours.has(g.guildId));
     expect(bySlots.map(g => g.guildId)).toEqual([gOpenOld, gOpenHigh]);
 
-    // 검색어 q 부분 일치
+    // 검색어 q 부분 일치 및 50자 초과 검색어 안전 절단
     const searched = ((await call('/api/guilds/public', 'GET', P1, { query: { q: '태평양' } })).body as { guilds: { guildId: string }[] }).guilds;
     expect(searched.map(g => g.guildId)).toEqual([gOpenHigh]);
+    const longQueryRes = await call('/api/guilds/public', 'GET', P1, { query: { q: '가'.repeat(80) } });
+    expect(longQueryRes).toMatchObject({ status: 200, body: { guilds: [] } });
   });
 
   it('guildId로 바로 가입하면 기존 대기 신청을 자동 취소하고, 만석·승인가입·닫힘·존재하지 않는 길드는 거부한다', async () => {

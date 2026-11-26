@@ -22,7 +22,7 @@ type Res = ServerResponse & { status: (code: number) => Res; json: (body: unknow
 type NodeHandler = (req: Req, res: Res) => Promise<void>;
 
 /** 접속 주소 하나가 1분에 열 수 있는 미리보기 수(두 경로 합) */
-const PER_MINUTE = 30;
+const PER_MINUTE = 120;
 
 /** 미리보기 글자. 제목은 길드 이름, 설명은 레벨과 인원이다 */
 export function inviteMetaText(p: GuildPreview): { title: string; description: string } {
@@ -49,7 +49,11 @@ export function guildInviteRoutes(origin: string, indexHtml: () => Promise<strin
     res.setHeader('Cache-Control', 'no-store');
     try {
       if (req.method !== 'GET') throw new ApiError(405, 'method-not-allowed');
-      if (!limit.take(clientKey(req), Date.now())) throw new ApiError(429, 'rate-limited');
+      const key = clientKey(req);
+      const now = Date.now();
+      if (!limit.take(key, now)) {
+        throw new ApiError(429, 'rate-limited', { retryAfter: String(limit.retryAfterSec(key, now)) });
+      }
       if (!process.env.DATABASE_URL) throw new ApiError(500, 'server-config');
       let invite: GuildPreview | null;
       try {
@@ -61,6 +65,9 @@ export function guildInviteRoutes(origin: string, indexHtml: () => Promise<strin
       res.status(200).json({ invite });
     } catch (e) {
       const err = toApiError(e);
+      if (err.status === 429 && typeof err.context.retryAfter === 'string') {
+        res.setHeader('Retry-After', err.context.retryAfter);
+      }
       if (err.status >= 500) await reportServerIssue(err.code, err.cause ?? err, err.context);
       res.status(err.status).json({ error: err.code });
     }

@@ -107,6 +107,7 @@ import { clearFailureNotice, currentFailureNotice } from './failureNotice';
 import { readFortuneModal, resetFortuneModalSession } from '../../fortune/service/fortuneModal';
 import { registerNoticeSink } from '../../display/model/toastPolicy';
 import type { NoticeSink, SystemNoticeInput } from '../../display/model/toastPolicy';
+import * as liveService from '../../live/service/useLive';
 
 function setup(setToast: (m: string, tone?: 'info' | 'gold' | 'warn') => void = () => {}, reactStrictMode = false) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -494,15 +495,28 @@ describe('요청 속도 초과(429) 재시도', () => {
     expect(hook.result.current.blocker).toBe('unsaved');
   });
 
-  it('boot 액션의 429가 아닌 실패는 지금처럼 조용히 삼킨다', async () => {
-    gw.bootErrors = [new AppError('network', 'offline')];
-    const hook = setup();
-    await waitFor(() => expect(hook.result.current.loading).toBe(false));
-    expect(hook.result.current.blocker).toBeNull();
-    expect(gw.actions).toEqual(['boot']);
+  it('boot 액션의 429·consent 외 실패(network·5xx·401·423·426)는 삼키지 않고 전파하며 sync를 on으로 열지 않는다', async () => {
+    const cases = [
+      { err: new AppError('network', 'offline'), blocker: 'unsaved' },
+      { err: new AppError('server', 'boom', { status: 500 }), blocker: 'unsaved' },
+      { err: new AppError('unauthorized', 'expired', { status: 401 }), blocker: 'unsaved' },
+      { err: new AppError('replaced', 'another tab', { status: 423 }), blocker: 'replaced' },
+      { err: new AppError('outdated', 'old build', { status: 426 }), blocker: 'update' },
+    ] as const;
+
+    for (const c of cases) {
+      gw.bootErrors = [c.err];
+      gw.actions = [];
+      const hook = setup();
+      await waitFor(() => expect(hook.result.current.loading).toBe(false));
+      expect(hook.result.current.blocker).toBe(c.blocker);
+      expect(hook.result.current.sync).not.toBe('on');
+      expect(gw.actions).toEqual(['boot']);
+      cleanup();
+    }
   });
 
-  it('boot 완료 전이나 boot 무음 실패 시에도 초기 load와 resync의 파생 claimable 업적이 유지된다', async () => {
+  it('boot 완료 전이나 boot 실패 시에도 초기 load와 resync의 파생 claimable 업적이 유지된다', async () => {
     gw.loadAchievements = { 'spot-basic-sea': 'claimable' };
     gw.bootErrors = [new AppError('network', 'offline')];
     const hook = setup();
@@ -677,6 +691,9 @@ describe('수배 스냅샷 무효화', () => {
     expect(spy).toHaveBeenCalledWith(ranking);
     spy.mockClear();
     await act(async () => { await hook.result.current.dispatch({ type: 'claimRelief', code: 'c' }); });
+    expect(spy).toHaveBeenCalledWith(ranking);
+    spy.mockClear();
+    await act(async () => { await hook.result.current.dispatch({ type: 'import', save: newState() }); });
     expect(spy).toHaveBeenCalledWith(ranking);
     spy.mockClear();
     await act(async () => { await hook.result.current.dispatch({ type: 'sell', uids: [] }); });
@@ -985,12 +1002,14 @@ describe('닉네임 변경 시 프로필 및 조회 캐시 무효화', () => {
     await act(async () => { gw.bootResolve!(); });
 
     gw.profileReplies = [{ ok: true, nickname: '새이름', devTools: false }];
+    const applyNickSpy = vi.spyOn(liveService, 'applyLocalNick');
     spy.mockClear();
     let err: unknown = 'pending';
     await act(async () => { err = await hook.result.current.rename('새이름'); });
 
     expect(err).toBeNull();
     expect(hook.result.current.nickname).toBe('새이름');
+    expect(applyNickSpy).toHaveBeenCalledWith('uid-1', '새이름');
     expect(spy).toHaveBeenCalledWith({ queryKey: ['ranking'] });
     expect(spy).toHaveBeenCalledWith({ queryKey: ['guild'] });
     expect(spy).toHaveBeenCalledWith({ queryKey: ['friends'] });
@@ -1001,6 +1020,29 @@ describe('닉네임 변경 시 프로필 및 조회 캐시 무효화', () => {
     expect(client.getQueryState(['friends', 'uid-1'])?.isInvalidated).toBe(true);
     expect(client.getQueryState(['player', 'uid-1'])?.isInvalidated).toBe(true);
     expect(client.getQueryState(['bounty', 'uid-1', '2026-11-26'])?.isInvalidated).toBe(false);
+  });
+
+  it('다른 탭에서 본인 닉네임 변경 실시간 이벤트를 받으면 본인 nickname과 readProfile을 갱신한다', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(['session'], 'uid-1');
+    let nickListener: ((e: { t: 'nick'; uid: string; nick: string }) => void) | null = null;
+    const onNickSpy = vi.spyOn(liveService, 'onNickEvent').mockImplementation(fn => {
+      nickListener = fn;
+      return () => { nickListener = null; };
+    });
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    const hook = renderHook(() => useGame({ setToast: () => {} }), { wrapper });
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+
+    gw.profileReplies = [{ ok: true, nickname: '다른탭새닉', devTools: false }];
+    await act(async () => {
+      nickListener?.({ t: 'nick', uid: 'uid-1', nick: '다른탭새닉' });
+      await Promise.resolve();
+    });
+    expect(hook.result.current.nickname).toBe('다른탭새닉');
+    onNickSpy.mockRestore();
   });
 });
 

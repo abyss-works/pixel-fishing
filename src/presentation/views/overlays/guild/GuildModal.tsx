@@ -46,11 +46,8 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
   /** 조회 실패 시 다시 시도 콜백 */
   onRetry?: () => void;
 }) {
-  const guildState = useGuild(true, true);
-  const { guild, request, loading, failed, you, act } = guildState;
-  const retryGuild = onRetry
-    ?? (guildState as { retry?: () => unknown; refresh?: () => unknown }).retry
-    ?? (guildState as { refresh?: () => unknown }).refresh;
+  const { guild, request, loading, failed, you, act, refresh } = useGuild(true, true);
+  const retryGuild = onRetry ?? refresh;
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<GuildConfirm | null>(null);
   const [dialogHost, setDialogHost] = useState<HTMLDivElement | null>(null);
@@ -91,9 +88,9 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
     )
     : failed || (guild !== null && !you)
       ? (
-        <div className="flex h-40 flex-col items-center justify-center gap-2">
-          <Note tone="warn">길드 정보를 열지 못했어요.</Note>
-          {retryGuild && <Button size="sm" onClick={() => { void retryGuild(); }}>다시 시도</Button>}
+        <div className="flex h-40 flex-col items-center justify-center gap-2 text-center">
+          <Note tone="warn" className="my-0">길드 정보를 열지 못했어요.</Note>
+          <Button size="sm" onClick={() => { void retryGuild(); }}>다시 시도</Button>
         </div>
       )
       : guild && you

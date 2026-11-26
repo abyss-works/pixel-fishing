@@ -80,26 +80,26 @@ describe('익명 가입 IP 레이트리밋', () => {
       body: '{}',
     });
 
-  it('기본 상한 설정은 1시간(3600초)당 IP별 200회다', () => {
-    expect(limitWindow).toBe(3600);
-    expect(limitMax).toBe(200);
+  it('기본 상한 설정은 10분(600초)당 IP별 150회다', () => {
+    expect(limitWindow).toBe(600);
+    expect(limitMax).toBe(150);
   });
 
   it('환경변수 파서는 빈 문자열·0 이하·비정수 입력 시 기본값으로 폴백하고 양의 정수는 반영한다', async () => {
     const { anonymousSignInRateLimit, parsePositiveIntEnv } = await import('./auth.js');
 
-    expect(parsePositiveIntEnv(undefined, 200)).toBe(200);
+    expect(parsePositiveIntEnv(undefined, 150)).toBe(150);
     for (const invalid of ['', '   ', '0', '-1', '-200', '1.5', 'abc', '200ms', '1e2', 'Infinity', 'NaN', '99999999999999999999']) {
-      expect(parsePositiveIntEnv(invalid, 200), `invalid=${invalid}`).toBe(200);
+      expect(parsePositiveIntEnv(invalid, 150), `invalid=${invalid}`).toBe(150);
     }
-    expect(parsePositiveIntEnv('1', 200)).toBe(1);
-    expect(parsePositiveIntEnv(' 300 ', 200)).toBe(300);
+    expect(parsePositiveIntEnv('1', 150)).toBe(1);
+    expect(parsePositiveIntEnv(' 300 ', 150)).toBe(300);
 
-    expect(anonymousSignInRateLimit({})).toEqual({ window: 3600, max: 200 });
+    expect(anonymousSignInRateLimit({})).toEqual({ window: 600, max: 150 });
     expect(anonymousSignInRateLimit({
       ANON_SIGN_IN_RATE_MAX: '0',
       ANON_SIGN_IN_RATE_WINDOW_SEC: 'bad',
-    })).toEqual({ window: 3600, max: 200 });
+    })).toEqual({ window: 600, max: 150 });
     expect(anonymousSignInRateLimit({
       ANON_SIGN_IN_RATE_MAX: '45',
       ANON_SIGN_IN_RATE_WINDOW_SEC: '120',
@@ -166,7 +166,7 @@ describe('익명 가입 IP 레이트리밋', () => {
     expect(blocked.status).toBe(429);
     const retryAfter = Number(blocked.headers.get('retry-after'));
     expect(Number.isInteger(retryAfter)).toBe(true);
-    expect(retryAfter).toBeGreaterThan(3500);
+    expect(retryAfter).toBeGreaterThan(500);
     expect(retryAfter).toBeLessThanOrEqual(limitWindow);
     expect(blocked.headers.get('x-retry-after')).toBe(String(retryAfter));
     expect(blocked.headers.get('x-content-type-options')).toBe('nosniff');
@@ -196,11 +196,11 @@ describe('익명 가입 IP 레이트리밋', () => {
     }
     const blocked = await postWithRealIp('198.51.100.43');
     expect(blocked.status).toBe(429);
-    expect(Number(blocked.headers.get('retry-after'))).toBeGreaterThan(3500);
+    expect(Number(blocked.headers.get('retry-after'))).toBeGreaterThan(500);
     expect((await postWithRealIp('198.51.100.44')).status).toBe(200);
   });
 
-  it('소셜 로그인(/sign-in/social)은 공유 NAT에서 10초당 4회 이상 연속 호출해도 429로 막히지 않는다', async () => {
+  it('소셜 로그인(/sign-in/social)은 공유 NAT에서 10초당 60회까지 허용하고 초과 시 429다', async () => {
     const postSocial = (forwardedFor: string) =>
       fetch(`${origin}/api/auth/sign-in/social`, {
         method: 'POST',
@@ -215,7 +215,7 @@ describe('익명 가입 IP 레이트리밋', () => {
     const natIp = '203.0.113.77, 10.0.0.1';
     const otherIp = '203.0.113.78, 10.0.0.1';
 
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 60; i++) {
       const res = await postSocial(natIp);
       expect(res.status, `social attempt ${i + 1}`).not.toBe(429);
     }
@@ -228,5 +228,22 @@ describe('익명 가입 IP 레이트리밋', () => {
     expect(blocked.headers.get('x-content-type-options')).toBe('nosniff');
 
     expect((await postSocial(otherIp)).status).not.toBe(429);
+  });
+
+  it('전역 기본 레이트리밋은 공유 NAT에서 10초당 300회까지(/get-session 등) 허용한다', async () => {
+    const natIp = '203.0.113.88, 10.0.0.1';
+    const getSession = () =>
+      fetch(`${origin}/api/auth/get-session`, {
+        method: 'GET',
+        headers: { origin, 'x-forwarded-for': natIp },
+      });
+
+    for (let i = 0; i < 300; i++) {
+      const res = await getSession();
+      expect(res.status, `session attempt ${i + 1}`).toBe(200);
+    }
+    const blocked = await getSession();
+    expect(blocked.status).toBe(429);
+    expect(Number(blocked.headers.get('retry-after'))).toBeGreaterThan(0);
   });
 });

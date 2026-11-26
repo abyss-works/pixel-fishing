@@ -46,7 +46,7 @@ function AppContent() {
   const {
     game, dispatch, nickname, profileStatus, devTools, rename, sync, syncLabel,
     blocker, loading, consentPrompt, acceptConsent, retryLoadConsent,
-    guestProgress, adoptAccount, warmup, resync, applyDevReset, refreshAccountStatus,
+    guestProgress, adoptAccount, resync, applyDevReset, refreshAccountStatus,
   } = useGame({ setToast });
   useEffect(() => {
     setMirrorEnv({ blocked: blocker !== null, loading });
@@ -173,7 +173,7 @@ function AppContent() {
     <>
       <GameView
         game={game} scene={scene} entryPos={entryPos} placeSeq={placeSeq}
-        dispatch={dispatch} setToast={setToast} toasts={toasts} onDismissToast={dismissToast} onMirrorEnv={setMirrorEnv} onScene={go} onPlace={place} onWarmup={warmup}
+        dispatch={dispatch} setToast={setToast} toasts={toasts} onDismissToast={dismissToast} onMirrorEnv={setMirrorEnv} onScene={go} onPlace={place}
         log={log} syncLabel={syncLabel} syncState={sync} guestProgress={guestProgress}
         account={account} accountChecked={accountChecked} accountFailed={accountFailed} uid={uid} nickname={nickname} profileStatus={profileStatus}
         onRename={rename} onAuthChanged={onAuthChanged} onResync={resync}
