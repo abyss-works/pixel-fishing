@@ -421,4 +421,81 @@ describe('live_events CRUD 및 진행·순위·추첨', () => {
     expect(afterRead.trio?.won).toBe(true);
     expect(afterRead.trio?.claimedAt).toBe('2030-03-06T07:00:00.000Z');
   });
+
+  it('행운왕 추첨은 총점이 같아도 출석 일수가 많은 후보를 상위 티어로 분리해 시드와 무관하게 우선 당첨시킨다', async () => {
+    const moreDays = await seedMember('삼일출석');
+    const fewerDaysA = await seedMember('이일출석A');
+    const fewerDaysB = await seedMember('이일출석B');
+
+    await createAdminEvent(database.db, {
+      id: 'luck-tie-days',
+      kind: 'draw',
+      title: '행운왕 출석일 우선순위 테스트',
+      description: '총점 동점 시 출석일수 티어 분리',
+      startsAt: '2030-03-09T19:00:00.000Z', // KST 2030-03-10 04:00
+      endsAt: '2030-03-15T19:00:00.000Z',   // KST 2030-03-16 04:00 (2030-03-10..15)
+      active: true,
+      config: {},
+    });
+
+    // 모두 총점 490점이지만 moreDays는 6일(85+81*5), fewerDaysA/B는 5일(490)이며 created_at은 5일 출석 쪽이 더 이르다
+    await env.client.query(
+      `insert into public.daily_fortunes (user_id, day, kind, index, score, created_at) values
+       ($1, '2030-03-10', 'fish', 3, 85, '2030-03-10T06:00:00Z'),
+       ($1, '2030-03-11', 'fish', 3, 81, '2030-03-11T06:00:00Z'),
+       ($1, '2030-03-12', 'fish', 3, 81, '2030-03-12T06:00:00Z'),
+       ($1, '2030-03-13', 'fish', 3, 81, '2030-03-13T06:00:00Z'),
+       ($1, '2030-03-14', 'fish', 3, 81, '2030-03-14T06:00:00Z'),
+       ($1, '2030-03-15', 'fish', 3, 81, '2030-03-15T06:00:00Z'),
+       ($2, '2030-03-10', 'fish', 5, 100, '2030-03-10T04:10:00Z'),
+       ($2, '2030-03-11', 'fish', 5, 100, '2030-03-11T04:10:00Z'),
+       ($2, '2030-03-12', 'fish', 5, 100, '2030-03-12T04:10:00Z'),
+       ($2, '2030-03-13', 'fish', 5, 100, '2030-03-13T04:10:00Z'),
+       ($2, '2030-03-14', 'fish', 3, 90, '2030-03-14T04:10:00Z'),
+       ($3, '2030-03-10', 'fish', 5, 100, '2030-03-10T04:20:00Z'),
+       ($3, '2030-03-11', 'fish', 5, 100, '2030-03-11T04:20:00Z'),
+       ($3, '2030-03-12', 'fish', 5, 100, '2030-03-12T04:20:00Z'),
+       ($3, '2030-03-13', 'fish', 5, 95, '2030-03-13T04:20:00Z'),
+       ($3, '2030-03-14', 'fish', 5, 95, '2030-03-14T04:20:00Z')`,
+      [moreDays, fewerDaysA, fewerDaysB],
+    );
+
+    const snap = await loadEventsSnapshot(database.db, moreDays, false, '2030-03-15T10:00:00.000Z');
+    expect(snap.draw?.rank).toBe(1);
+    expect(snap.draw?.top.map(r => r.userId)).toEqual([moreDays, fewerDaysA, fewerDaysB]);
+
+    for (const seed of ['s1', 's2', 's3', 's4', 's5', 's6', 's7', 's8']) {
+      await env.client.query(`delete from public.event_draws where event_id = 'luck-tie-days'`);
+      const single = await drawEventWinners(database.withTransaction, {
+        eventId: 'luck-tie-days',
+        count: 1,
+        rewardKind: 'gold',
+        rewardId: null,
+        rewardQty: 0,
+        gold: 100,
+        seed,
+      }, '2030-03-16T00:00:00.000Z');
+      expect(single).not.toBe('no-event');
+      if (single !== 'no-event') {
+        expect(single.draws.map(d => d.userId)).toEqual([moreDays]);
+      }
+    }
+
+    await env.client.query(`delete from public.event_draws where event_id = 'luck-tie-days'`);
+    const twoWinners = await drawEventWinners(database.withTransaction, {
+      eventId: 'luck-tie-days',
+      count: 2,
+      rewardKind: 'gold',
+      rewardId: null,
+      rewardQty: 0,
+      gold: 100,
+      seed: 'tier-two-seed',
+    }, '2030-03-16T00:00:00.000Z');
+    expect(twoWinners).not.toBe('no-event');
+    if (twoWinners !== 'no-event') {
+      const ids = twoWinners.draws.map(d => d.userId);
+      expect(ids[0]).toBe(moreDays);
+      expect([fewerDaysA, fewerDaysB]).toContain(ids[1]);
+    }
+  });
 });

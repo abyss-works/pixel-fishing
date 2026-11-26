@@ -1182,12 +1182,19 @@ export async function drawEventWinners(
       const remaining = rankings.filter(r => !already.has(r.userId) && r.totalScore > 0);
       eligibleCount = remaining.length;
 
-      // 동점(totalScore) 티어별로 높은 점수부터 순서대로 채우고, 남은 정원보다 큰 티어에서만 시드 PRNG 추첨한다.
+      // 동점(totalScore, attendedDays) 티어별로 높은 순위부터 순서대로 채우고, 남은 정원보다 큰 티어에서만 시드 PRNG 추첨한다.
       const groups: Array<Array<{ userId: string; nickname: string | null }>> = [];
       let currentScore: number | null = null;
+      let currentDays: number | null = null;
       for (const r of remaining) {
-        if (currentScore === null || r.totalScore !== currentScore) {
+        if (
+          currentScore === null
+          || currentDays === null
+          || r.totalScore !== currentScore
+          || r.attendedDays !== currentDays
+        ) {
           currentScore = r.totalScore;
+          currentDays = r.attendedDays;
           groups.push([]);
         }
         groups[groups.length - 1].push({ userId: r.userId, nickname: r.nickname });
