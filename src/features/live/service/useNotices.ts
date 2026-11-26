@@ -30,7 +30,7 @@ function writeDismissedToStorage(ids: readonly number[]): void {
 
 /** 기간제 상시 공지의 활성 필터링·경계 타이머 재계산·기기별 닫힘 상태를 관리한다. */
 export function useNotices() {
-  const { notices, updatedAt } = useLiveNotices();
+  const { notices, updatedAt, noticesSynced } = useLiveNotices();
   const [tickNow, setTickNow] = useState(() => Date.now());
   const [dismissedIds, setDismissedIds] = useState<number[]>(() => readDismissedFromStorage());
   const now = Math.max(tickNow, updatedAt);
@@ -42,24 +42,28 @@ export function useNotices() {
     return () => clearTimeout(timer);
   }, [notices, now]);
 
-  const activeDismissed = useMemo(() => pruneDismissedIds(dismissedIds, notices), [dismissedIds, notices]);
+  const activeDismissed = useMemo(
+    () => (noticesSynced ? pruneDismissedIds(dismissedIds, notices) : dismissedIds),
+    [dismissedIds, notices, noticesSynced],
+  );
 
   useEffect(() => {
+    if (!noticesSynced) return;
     writeDismissedToStorage(activeDismissed);
-  }, [activeDismissed]);
+  }, [activeDismissed, noticesSynced]);
 
   const activeNotices = useMemo(() => visibleActiveNotices(notices, now), [notices, now]);
   const stackNotices = useMemo(() => stackableNotices(activeNotices, activeDismissed), [activeNotices, activeDismissed]);
 
   const dismissNotice = useCallback((id: number) => {
     setDismissedIds(prev => {
-      const pruned = pruneDismissedIds(prev, notices);
-      if (pruned.includes(id)) return pruned;
-      const next = [...pruned, id];
+      const base = noticesSynced ? pruneDismissedIds(prev, notices) : prev;
+      if (base.includes(id)) return base;
+      const next = [...base, id];
       writeDismissedToStorage(next);
       return next;
     });
-  }, [notices]);
+  }, [notices, noticesSynced]);
 
   return { activeNotices, stackNotices, dismissNotice };
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ChatLine, Presence } from '../../../game/rules/live';
 import { LIVE_STALE_MS } from '../../../game/rules/live';
 import { DEFAULT_LOOK } from '../../../game/content/wardrobe';
-import { applyLiveMessage, BUBBLE_MS, bubbleOf, CHAT_KEEP, EMPTY_LIVE, idleLabel, isStale, matesInRegion, nextPositionMessage, othersInRegion, playerZoneLabel, resolveLiveRegion, TYPING_MS, withoutAuthor } from './live';
+import { applyLiveMessage, BUBBLE_MS, bubbleOf, CHAT_KEEP, EMPTY_LIVE, GLOBAL_CHAT_COOLDOWN_MS, idleLabel, isStale, matesInRegion, nextPositionMessage, othersInRegion, playerZoneLabel, resolveLiveRegion, TYPING_MS, withoutAuthor } from './live';
 
 const p = (uid: string, nick: string, region = 'sea'): Presence =>
   ({ uid, nick, boat: 1, region, x: 0, y: 0, dir: 0, line: false });
@@ -176,12 +176,15 @@ describe('채팅 상태', () => {
     expect(reset.notices).toEqual([]);
   });
 
-  it('localHistory와 notices를 받으면 해당 목록을 교체한다', () => {
+  it('localHistory와 notices를 받으면 해당 목록을 교체하고, noticesSynced는 hello/notices 수신 뒤에만 true가 된다', () => {
+    expect(EMPTY_LIVE.noticesSynced).toBe(false);
     let s = hello([line(1)]);
+    expect(s.noticesSynced).toBe(true);
     s = applyLiveMessage(s, { t: 'localHistory', region: 'seasia', lines: [line(10), line(11)] }, 1);
     expect(s.localChat.map(l => l.id)).toEqual([10, 11]);
-    s = applyLiveMessage(s, { t: 'notices', notices: [notice(1), notice(2)] }, 2);
+    s = applyLiveMessage(EMPTY_LIVE, { t: 'notices', notices: [notice(1), notice(2)] }, 2);
     expect(s.notices.map(n => n.id)).toEqual([1, 2]);
+    expect(s.noticesSynced).toBe(true);
   });
 
   it('보관 상한을 넘으면 오래된 줄부터 버린다', () => {
@@ -201,6 +204,30 @@ describe('채팅 상태', () => {
     s = applyLiveMessage(s, { t: 'chat', room: 'local', line: line(2, 'me') }, 3000);
     expect(s.chatError).toBeNull();
     expect(s.chatErrorRetryAfterMs).toBeNull();
+  });
+
+  it('전체 채팅 쿨다운은 본인 발신 global chat 확정 또는 chat-global-cooldown 오류로만 설정된다', () => {
+    let s = hello([]);
+    expect(s.globalCooldownUntil).toBe(0);
+
+    // 다른 사람의 전체 채팅은 내 쿨다운을 건드리지 않는다
+    s = applyLiveMessage(s, { t: 'chat', room: 'global', line: line(1, 'other') }, 1000);
+    expect(s.globalCooldownUntil).toBe(0);
+
+    // 내 지역·길드 채팅은 전체 쿨다운을 걸지 않는다
+    s = applyLiveMessage(s, { t: 'chat', room: 'local', line: line(2, 'me') }, 1500);
+    s = applyLiveMessage(s, { t: 'chat', room: 'guild', line: line(3, 'me') }, 1600);
+    expect(s.globalCooldownUntil).toBe(0);
+
+    // 중복·속도·길이·제한 오류는 전체 쿨다운을 걸지 않는다
+    for (const code of ['chat-duplicate', 'chat-rate', 'chat-length', 'chat-restricted'] as const) {
+      s = applyLiveMessage(s, { t: 'error', code }, 2000);
+      expect(s.globalCooldownUntil).toBe(0);
+    }
+
+    // 본인 계정의 전체 채팅이 서버에서 돌아오면 10초 쿨다운이 설정된다
+    s = applyLiveMessage(s, { t: 'chat', room: 'global', line: line(4, 'me') }, 3000);
+    expect(s.globalCooldownUntil).toBe(3000 + GLOBAL_CHAT_COOLDOWN_MS);
   });
 
   it('withoutAuthor는 그 사람의 줄을 세 방에서 모두 지운다', () => {

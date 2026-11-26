@@ -11,7 +11,6 @@ import {
   applyLiveMessage,
   bubbleOf,
   EMPTY_LIVE,
-  GLOBAL_CHAT_COOLDOWN_MS,
   idleLabel,
   isStale,
   matesInRegion,
@@ -234,10 +233,10 @@ export function useChat(): ChatView {
   };
 }
 
-/** 서버에서 받은 마감 전 공지 목록과 수신 시각을 구독한다 */
-export function useLiveNotices(): { notices: readonly NoticeItem[]; updatedAt: number } {
+/** 서버에서 받은 마감 전 공지 목록과 수신 시각·동기화 여부를 구독한다 */
+export function useLiveNotices(): { notices: readonly NoticeItem[]; updatedAt: number; noticesSynced: boolean } {
   const s = useSyncExternalStore(subscribe, getState, getState);
-  return { notices: s.notices, updatedAt: noticesUpdatedAt };
+  return { notices: s.notices, updatedAt: noticesUpdatedAt, noticesSynced: s.noticesSynced };
 }
 
 /** 현재 지역을 기억하고 연결 중이면 지역 채팅 동기화를 요청한다 */
@@ -253,17 +252,10 @@ export function sendTyping(on: boolean): void {
   myTypingAt = on ? performance.now() : null;
 }
 
-/** 그 방에 채팅을 보낸다. 전체 방 전송 시 10초 클라 낙관 쿨다운도 함께 시작한다 */
+/** 그 방에 채팅을 보낸다 */
 export function sendChat(text: string, room: ChatRoom = 'local'): void {
   if (!conn) return;
   conn.send({ t: 'chat', text, room });
-  if (room === 'global') {
-    const now = Date.now();
-    if (now >= state.globalCooldownUntil) {
-      state = { ...state, globalCooldownUntil: now + GLOBAL_CHAT_COOLDOWN_MS };
-      notify();
-    }
-  }
 }
 
 /** 보이고 있는 거부 이유를 지운다 */

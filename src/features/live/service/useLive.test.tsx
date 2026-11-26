@@ -128,7 +128,7 @@ describe('useLive 약관 수락 게이트 및 3방·공지 연동', () => {
     expect(liveMock.connections[0].send).toHaveBeenLastCalledWith({ t: 'region', region: 'seasia' });
   });
 
-  it('sendChat으로 global 방에 보내면 10초 클라 낙관 쿨다운을 시작하고, notices 수신 시 공지 구독자를 갱신한다', () => {
+  it('sendChat으로 global 방에 보낸 뒤 chat-duplicate 오류를 받으면 쿨다운이 걸리지 않고, 본인 발신 global chat 수신 시에만 10초 쿨다운이 걸린다', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-11-26T12:00:00.000Z'));
     const { result } = renderHook(() => {
@@ -136,8 +136,49 @@ describe('useLive 약관 수락 게이트 및 3방·공지 연동', () => {
       return { chat: useChat(), notices: useLiveNotices() };
     });
 
+    expect(result.current.notices.noticesSynced).toBe(false);
+
+    act(() => {
+      liveMock.connections[0].onMessage({
+        t: 'hello',
+        you: 'u1',
+        others: [],
+        recentChat: [],
+      });
+    });
+    expect(result.current.notices.noticesSynced).toBe(true);
+
     act(() => { sendChat('안녕 전체', 'global'); });
     expect(liveMock.connections[0].send).toHaveBeenCalledWith({ t: 'chat', text: '안녕 전체', room: 'global' });
+    expect(result.current.chat.globalCooldownUntil).toBe(0);
+
+    // 중복 문구 등 거부 오류를 받아도 전체 채팅 쿨다운이 잠기지 않는다
+    act(() => {
+      liveMock.connections[0].onMessage({ t: 'error', code: 'chat-duplicate' });
+    });
+    expect(result.current.chat.error).toBe('chat-duplicate');
+    expect(result.current.chat.globalCooldownUntil).toBe(0);
+
+    // 다른 문구로 바로 다시 보낼 수 있고, 다른 사람의 전체 채팅에는 쿨다운이 걸리지 않는다
+    act(() => { sendChat('다른 전체 말', 'global'); });
+    expect(liveMock.connections[0].send).toHaveBeenLastCalledWith({ t: 'chat', text: '다른 전체 말', room: 'global' });
+    act(() => {
+      liveMock.connections[0].onMessage({
+        t: 'chat',
+        room: 'global',
+        line: { id: 9, uid: 'u2', nick: '남', text: '남의 말', at: '2026-11-26T12:00:00.000Z' },
+      });
+    });
+    expect(result.current.chat.globalCooldownUntil).toBe(0);
+
+    // 본인 발신 전체 채팅이 서버에서 확정되어 돌아오면 10초 쿨다운을 설정한다
+    act(() => {
+      liveMock.connections[0].onMessage({
+        t: 'chat',
+        room: 'global',
+        line: { id: 10, uid: 'u1', nick: '나', text: '다른 전체 말', at: '2026-11-26T12:00:00.000Z' },
+      });
+    });
     expect(result.current.chat.globalCooldownUntil).toBe(Date.now() + GLOBAL_CHAT_COOLDOWN_MS);
 
     act(() => {
@@ -154,5 +195,10 @@ describe('useLive 약관 수락 게이트 및 3방·공지 연동', () => {
       });
     });
     expect(result.current.notices.notices.map(n => n.id)).toEqual([7]);
+
+    // 연결 해제(reset) 시 noticesSynced와 globalCooldownUntil이 초기화된다
+    act(() => { blockConsentGate(); });
+    expect(result.current.notices.noticesSynced).toBe(false);
+    expect(result.current.chat.globalCooldownUntil).toBe(0);
   });
 });

@@ -37,6 +37,8 @@ export interface LiveState {
   guildChat: readonly ChatLine[];
   /** 서버에서 받은 마감 전 공지 목록 */
   notices: readonly NoticeItem[];
+  /** 서버에서 공지 목록(hello 또는 notices)을 한 번 이상 받았는가 */
+  noticesSynced: boolean;
   /** 마지막으로 거부된 내 채팅의 이유. 내 채팅이 저장되면 지운다 */
   chatError: ChatError | null;
   /** 마지막 거부 응답에 담긴 남은 대기 시간(ms) */
@@ -52,6 +54,7 @@ export const EMPTY_LIVE: LiveState = {
   localChat: [],
   guildChat: [],
   notices: [],
+  noticesSynced: false,
   chatError: null,
   chatErrorRetryAfterMs: null,
   globalCooldownUntil: 0,
@@ -92,6 +95,7 @@ export function applyLiveMessage(state: LiveState, msg: ServerMessage, now: numb
         localChat: (msg.recentLocalChat ?? []).slice(-CHAT_KEEP),
         guildChat: (msg.recentGuildChat ?? []).slice(-CHAT_KEEP),
         notices: msg.notices ?? [],
+        noticesSynced: true,
         chatError: null,
         chatErrorRetryAfterMs: null,
         globalCooldownUntil: state.globalCooldownUntil,
@@ -105,16 +109,21 @@ export function applyLiveMessage(state: LiveState, msg: ServerMessage, now: numb
       return {
         ...state,
         notices: msg.notices,
+        noticesSynced: true,
       };
     case 'chat': {
       const key = roomStateKey(msg.room);
       if (state[key].some(l => l.id === msg.line.id)) return state;
       const isMine = msg.line.uid === state.you;
+      const nextCooldownUntil = isMine && msg.room === 'global'
+        ? Math.max(state.globalCooldownUntil, now + GLOBAL_CHAT_COOLDOWN_MS)
+        : state.globalCooldownUntil;
       return {
         ...state,
         [key]: [...state[key], msg.line].slice(-CHAT_KEEP),
         chatError: isMine ? null : state.chatError,
         chatErrorRetryAfterMs: isMine ? null : state.chatErrorRetryAfterMs,
+        globalCooldownUntil: nextCooldownUntil,
       };
     }
     case 'error': {
