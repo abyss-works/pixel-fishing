@@ -90,7 +90,7 @@ export function createHttpMetrics(options: HttpMetricsOptions): HttpMetricsColle
   }
 
   async function flush(): Promise<void> {
-    if (inFlight) {
+    while (inFlight) {
       await inFlight;
     }
     if (buffer.size === 0) return;
