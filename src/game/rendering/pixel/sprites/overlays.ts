@@ -17,11 +17,15 @@ const fishById = (id: string) => FISH.find(f => f.id === id);
 const JUMP_FISH_SCALE = 1;
 const TAKEOFF_SPLASH_S = 0.25;
 const LANDING_SPLASH_S = 0.22;
-const VARIANT_SPARK_COLOR = '#f472b6';
+const MIN_JUMP_TRAVEL_PX = 4;
+const TRAIL_STEP_S = 0.055;
+const TRAIL_COUNT = 5;
 
 export interface JumpFx {
   x: number;
   y: number;
+  toX?: number;
+  toY?: number;
   fishId: string;
   form?: FormId;
   /** 점프 시작 후 경과 초(0 이상 ~ JUMP_S 미만) */
@@ -88,68 +92,69 @@ function drawWaterSplash(ctx: Ctx, x: number, y: number, p: number, landing: boo
   }
 }
 
-function drawJumpSparks(
-  ctx: Ctx, x: number, cy: number, progress: number, rarity: RarityId, form: FormId,
-) {
-  const pulse = Math.sin(progress * Math.PI);
-  if (rarity === 'epic') {
-    const color = RARITY.epic.color;
-    const count = 6;
-    const baseRadius = 10 + pulse * 5;
-    for (let i = 0; i < count; i++) {
-      const a = (i / count) * Math.PI * 2 + progress * 2.4;
-      const r = baseRadius + (i % 2 === 0 ? 2 : -1);
-      const sx = Math.round(x + Math.cos(a) * r);
-      const sy = Math.round(cy + Math.sin(a) * r * 0.75);
-      const size = i % 2 === 0 ? 2 : 1;
-      R(ctx, sx, sy, size, size, color);
-    }
-  } else if (rarity === 'legendary') {
-    const color = RARITY.legendary.color;
-    const count = 8;
-    const baseRadius = 12 + pulse * 6;
-    for (let i = 0; i < count; i++) {
-      const a = (i / count) * Math.PI * 2 + progress * 3.0;
-      const r = baseRadius + (i % 2 === 0 ? 2 : -1);
-      const sx = Math.round(x + Math.cos(a) * r);
-      const sy = Math.round(cy + Math.sin(a) * r * 0.78);
-      if (i % 2 === 0) {
+/** 점프 시각 t에서의 포물선 좌표 — 목표가 있으면 선형 보간 위에 점프 높이를 더한다 */
+export function jumpPoint(
+  jump: Pick<JumpFx, 'x' | 'y' | 'toX' | 'toY'>, t: number,
+): { x: number; y: number } {
+  const clamped = Math.max(0, Math.min(JUMP_S, t));
+  const u = clamped / JUMP_S;
+  const tx = jump.toX ?? jump.x;
+  const ty = jump.toY ?? jump.y;
+  return {
+    x: Math.round(jump.x + (tx - jump.x) * u),
+    y: Math.round(jump.y + (ty - jump.y) * u) - jumpHeight(clamped),
+  };
+}
+
+function drawJumpSparks(ctx: Ctx, jump: JumpFx, rarity: RarityId) {
+  if ((rarity !== 'epic' && rarity !== 'legendary') || jump.t <= 0) return;
+  const color = RARITY[rarity].color;
+  for (let k = 1; k <= TRAIL_COUNT; k++) {
+    const sampleT = jump.t - TRAIL_STEP_S * k;
+    if (sampleT <= 0) break;
+    const pt = jumpPoint(jump, sampleT);
+    const next = jumpPoint(jump, Math.min(JUMP_S, sampleT + TRAIL_STEP_S));
+    const vx = next.x - pt.x;
+    const vy = next.y - pt.y;
+    const len = Math.hypot(vx, vy);
+    const nx = len > 0.001 ? -vy / len : 1;
+    const ny = len > 0.001 ? vx / len : 0;
+    const sign = k % 2 === 0 ? 1 : -1;
+    const offset = sign * (k <= 2 ? 1 : 2);
+    const sx = Math.round(pt.x + nx * offset);
+    const sy = Math.round(pt.y + ny * offset);
+
+    if (rarity === 'legendary') {
+      if (k <= 2) {
         R(ctx, sx - 1, sy, 3, 1, color);
         R(ctx, sx, sy - 1, 1, 3, color);
         R(ctx, sx, sy, 1, 1, '#fff8e1');
-      } else {
+      } else if (k === 3) {
         R(ctx, sx, sy, 2, 2, color);
-      }
-    }
-  }
-
-  if (form === 'variant') {
-    const count = 6;
-    const baseRadius = 9 + pulse * 4;
-    for (let i = 0; i < count; i++) {
-      const a = (i / count) * Math.PI * 2 - progress * 2.2 + Math.PI / 6;
-      const r = baseRadius + (i % 2 === 0 ? 2 : -1);
-      const sx = Math.round(x + Math.cos(a) * r);
-      const sy = Math.round(cy + Math.sin(a) * r * 0.72);
-      if (i % 2 === 0) {
-        R(ctx, sx - 1, sy, 3, 1, VARIANT_SPARK_COLOR);
-        R(ctx, sx, sy - 1, 1, 3, VARIANT_SPARK_COLOR);
       } else {
-        R(ctx, sx, sy, 2, 2, VARIANT_SPARK_COLOR);
+        R(ctx, sx, sy, 1, 1, color);
       }
+    } else if (k <= 2) {
+      R(ctx, sx, sy, 2, 2, color);
+    } else {
+      R(ctx, sx, sy, 1, 1, color);
     }
   }
 }
 
-/** 수면 물고기 점프 — 이륙·착수 물보라와 등급·변이 파티클을 포함한 단일 점프를 그린다 */
+/** 수면 물고기 점프 — 이륙 물보라와 목표 포물선 이동, 등급 꼬리 스파클을 포함한 단일 점프를 그린다 */
 export function drawFishJump(ctx: Ctx, jump: JumpFx, style: FishArtStyle = DEFAULT_FISH_ART_STYLE) {
   if (jump.t < 0 || jump.t >= JUMP_S) return;
   const fish = fishById(jump.fishId);
   if (!fish) return;
 
+  const hasTarget = jump.toX != null
+    && jump.toY != null
+    && Math.hypot(jump.toX - jump.x, jump.toY - jump.y) >= MIN_JUMP_TRAVEL_PX;
+
   if (jump.t < TAKEOFF_SPLASH_S) {
     drawWaterSplash(ctx, jump.x, jump.y, jump.t / TAKEOFF_SPLASH_S, false);
-  } else if (jump.t > JUMP_S - LANDING_SPLASH_S) {
+  } else if (!hasTarget && jump.t > JUMP_S - LANDING_SPLASH_S) {
     drawWaterSplash(ctx, jump.x, jump.y, (jump.t - (JUMP_S - LANDING_SPLASH_S)) / LANDING_SPLASH_S, true);
   }
 
@@ -157,23 +162,25 @@ export function drawFishJump(ctx: Ctx, jump: JumpFx, style: FishArtStyle = DEFAU
   if (h <= 0) return;
 
   const form = jump.form ?? 'normal';
-  const cy = jump.y - h;
+  const pt = jumpPoint(jump, jump.t);
+  const flip = hasTarget ? jump.toX! >= jump.x : jump.t > JUMP_S / 2;
+  drawJumpSparks(ctx, jump, fish.rarity);
   const art = fishArt(style);
-  // 정점을 지나면 뒤집혀 떨어진다 — 한 번 튀는 느낌
-  art.drawCentered(ctx, fish, jump.x, cy, {
+  art.drawCentered(ctx, fish, pt.x, pt.y, {
     scale: JUMP_FISH_SCALE,
     form,
-    flip: jump.t > JUMP_S / 2,
+    flip,
   });
-  drawJumpSparks(ctx, jump.x, cy, jump.t / JUMP_S, fish.rarity, form);
 }
 
-/** 훅 점프 — 잡은 물고기가 찌 자리에서 수면 위로 한 번 튀어오른다. 캔버스 연출은 필드만 담당한다 */
+/** 훅 점프 — 잡은 물고기가 어군에서 낚은 사람 쪽으로 포물선을 그리며 튀어오른다 */
 export function drawHookJump(ctx: Ctx, v: GearView) {
   if (v.phase !== 'catch' || !v.school || v.catchT == null || !v.catchFish) return;
   drawFishJump(ctx, {
     x: v.school.x,
     y: v.school.y,
+    toX: v.player.x,
+    toY: v.player.y - 6,
     fishId: v.catchFish.id,
     form: v.catchFish.form,
     t: v.catchT,

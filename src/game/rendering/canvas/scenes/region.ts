@@ -9,7 +9,7 @@ import { drawBoat, drawIdle, drawOtherShip, drawPerson, drawSpeech } from '../..
 import type { OtherShipView, Speech } from '../../pixel/sprites/actors.js';
 import { drawMaskTerrain } from '../../pixel/sprites/mask.js';
 import { drawDeck, drawLabel, drawLand, drawTree, drawWater } from '../../pixel/sprites/scenery.js';
-import { drawFishJump, drawFishingGear, drawHookJump, drawSchools, drawTimingBar } from '../../pixel/sprites/overlays.js';
+import { drawFishJump, drawFishingGear, drawHookJump, drawSchools, drawTimingBar, jumpPoint } from '../../pixel/sprites/overlays.js';
 import { cameraFor } from './camera.js';
 import type { RegionPack, School } from '../../../world/types';
 import { FIELD_VIEW } from '../../../world/fieldView.js';
@@ -103,8 +103,14 @@ export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
   const jumpMaxX = cam.x + view.w + 32;
   const jumpMinY = cam.y - 48;
   const jumpMaxY = cam.y + view.h + 48;
-  const inJumpView = (j: JumpFx) =>
-    j.x >= jumpMinX && j.x <= jumpMaxX && j.y >= jumpMinY && j.y <= jumpMaxY;
+  const inBox = (px: number, py: number) =>
+    px >= jumpMinX && px <= jumpMaxX && py >= jumpMinY && py <= jumpMaxY;
+  const inJumpView = (j: JumpFx) => {
+    if (inBox(j.x, j.y)) return true;
+    if (j.toX != null && j.toY != null && inBox(j.toX, j.toY)) return true;
+    const pt = jumpPoint(j, j.t);
+    return inBox(pt.x, pt.y);
+  };
   if (v.localJumps !== undefined) {
     for (const j of v.localJumps) {
       if (inJumpView(j)) drawFishJump(ctx, j, v.fishArt);
