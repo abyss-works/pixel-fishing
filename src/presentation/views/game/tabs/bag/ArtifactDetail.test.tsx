@@ -81,20 +81,27 @@ describe('ArtifactDetail - 상태별 화면', () => {
     expect(screen.queryByRole('button', { name: /강화|최고 레벨/ })).not.toBeInTheDocument();
   });
 
-  it('미보유 - 이름·등급·로어·Lv.1 효과만 보이고 비교 표·재료·강화 버튼은 없다', () => {
+  it('미보유 - 흐린 스프라이트·미보유 배지·로어·Lv.1 기준(pf-accent) 효과만 보이고 비교 표·재료·강화 버튼은 없다', () => {
     open(game());
     const dialog = screen.getByRole('dialog');
+    const headerCanvas = dialog.querySelector('header canvas');
+    expect(headerCanvas).toHaveClass('grayscale', 'brightness-75');
     expect(within(dialog).getByRole('heading', { name: /침선의 나침반\(희귀\)/ })).toBeInTheDocument();
+    expect(within(dialog).getByText('미보유')).toBeInTheDocument();
+    expect(within(dialog).getByText('Lv.1 기준')).toBeInTheDocument();
     expect(within(dialog).getByText(COMPASS.lore)).toBeInTheDocument();
     expect(within(dialog).getByText('항해 속도')).toBeInTheDocument();
-    expect(within(dialog).getByText('+10%')).toHaveClass('text-text-dim');
+    expect(within(dialog).getByText('+10%')).toHaveClass('pf-accent', 'text-text-dim');
     expect(screen.queryByText(/현재\(|강화 후|획득 시/)).not.toBeInTheDocument();
     expect(screen.queryByRole('group', { name: '필요한 재료' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /강화|최고 레벨/ })).not.toBeInTheDocument();
   });
 
-  it('미보유 전설 유물 - 보너스와 페널티를 흐린 글씨로 보이고 버튼은 없다', () => {
+  it('미보유 전설 유물 - 흐린 스프라이트·미보유 배지와 보너스·페널티를 흐린 글씨로 보이고 버튼은 없다', () => {
     open(game(), MIRROR);
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.querySelector('header canvas')).toHaveClass('grayscale', 'brightness-75');
+    expect(within(dialog).getByText('미보유')).toBeInTheDocument();
     expect(screen.getByText('네임드 토벌 하루 +1번')).toHaveClass('text-text-dim');
     expect(screen.getByText('네임드 토벌 골드 −30%')).toHaveClass('text-text-dim');
     expect(screen.queryByRole('button', { name: /강화|최고 레벨/ })).not.toBeInTheDocument();

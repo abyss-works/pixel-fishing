@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FISH, newState } from '../../../../../game/rules/logic';
 
@@ -47,12 +47,23 @@ describe('도감 상세의 크기 순위', () => {
     expect(screen.queryByText('크기 순위')).not.toBeInTheDocument();
   });
 
-  it('돌연변이만 발견한 어종은 initialForm 1로 열면 일반 미발견이 아닌 돌연변이 폼을 보인다', () => {
+  it('돌연변이만 발견한 어종은 initialForm 1로 열면 일반 미발견이 아닌 돌연변이 폼을 보이고 미확인 일반형은 미확인 어종으로 가린다', () => {
     const variantOnly = { ...newState(), dex: { [fish.id]: { variant: { count: 1, maxSize: 10, first: '2026-01-01' } } } };
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(<QueryClientProvider client={client}><DexDetail fish={fish} game={variantOnly} initialForm={1} onClose={() => {}} /></QueryClientProvider>);
     expect(screen.getByText(/^돌연변이 2\/\d+$/)).toBeInTheDocument();
     expect(screen.getByText('1마리')).toBeInTheDocument();
+    expect(screen.getByLabelText(fish.variant.name)).toBeInTheDocument();
+    expect(screen.queryByLabelText(fish.name)).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '이전 형태' }));
+    expect(screen.getByLabelText('미확인 어종')).toBeInTheDocument();
+    expect(screen.queryByLabelText(fish.name)).toBeNull();
+
+    cleanup();
+    render(<QueryClientProvider client={client}><DexDetail fish={fish} game={game} initialForm={0} onClose={() => {}} /></QueryClientProvider>);
+    fireEvent.click(screen.getByRole('button', { name: '다음 형태' }));
+    expect(screen.getByLabelText('미확인 변종')).toBeInTheDocument();
   });
 
   it('형태 전환 시 로어 문단 높이가 흔들리지 않도록 최소 높이를 유지한다', () => {
