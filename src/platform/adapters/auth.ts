@@ -3,7 +3,7 @@
 import { createAuthClient } from 'better-auth/client';
 import { anonymousClient } from 'better-auth/client/plugins';
 import type { AcceptConsentResult, AccountLookup, AuthResult, ConfirmGoogleSwitchResult, ConsentStatus } from '../api/types';
-import { networkError, rateLimitedError, requestFailure, serverError, unauthorizedError } from './requestFailure';
+import { isRateLimitedError, networkError, rateLimitedError, requestFailure, serverError, unauthorizedError } from './requestFailure';
 
 /** 서버(스테이징·운영)에 붙는 빌드인가 — 빌드 때 정해진다 */
 export const isCloud = import.meta.env.VITE_CLOUD === '1';
@@ -19,7 +19,12 @@ type SessionUser = { id: string; email: string; isAnonymous?: boolean | null };
 async function sessionUser(): Promise<SessionUser | null> {
   if (!authClient) return null;
   const { data, error } = await authClient.getSession();
-  if (error) throw new Error(`session check failed (${error.status})`);
+  if (error) {
+    if (error.status === 429) {
+      throw rateLimitedError('요청이 너무 잦아요. 잠시 뒤 다시 시도해 주세요.', { code: 'rate_limited' });
+    }
+    throw new Error(`session check failed (${error.status})`);
+  }
   return data?.user ?? null;
 }
 
@@ -30,7 +35,8 @@ export async function ensureSession(): Promise<string | null> {
   let user: SessionUser | null;
   try {
     user = await sessionUser();
-  } catch {
+  } catch (err) {
+    if (isRateLimitedError(err)) throw err;
     return null;
   }
   if (user) return user.id;
@@ -146,16 +152,24 @@ export async function confirmGoogleSwitch(tag: string): Promise<ConfirmGoogleSwi
       body: {},
     });
   } catch {
-    return { ok: false, fallback: false, msg: '서버에 연결하지 못했어요. 잠시 뒤 다시 시도해 주세요.' };
+    return { ok: false, fallback: false, msg: '서버에 연결하지 못했어요. 잠시 뒤 다시 시도해 주세요.', code: 'network' };
   }
   if (res.error) {
+    const status = res.error.status;
+    if (status === 429) {
+      return { ok: false, fallback: false, msg: '요청이 너무 잦아요. 잠시 뒤 다시 시도해 주세요.', code: 'rate-limited' };
+    }
     const base = authErr(res.error);
+    const msg = base.ok ? '계정 전환에 실패했어요.' : base.msg;
+    if (typeof status === 'number' && status >= 500) {
+      return { ok: false, fallback: false, msg, code: 'server' };
+    }
     const code = base.ok ? undefined : base.code;
-    const fallback = typeof code === 'string' && FALLBACK_SWITCH_CODES.has(code);
-    return { ok: false, fallback, msg: base.ok ? '계정 전환에 실패했어요.' : base.msg, ...(code ? { code } : {}) };
+    const fallback = status !== 403 && status !== 409 && typeof code === 'string' && FALLBACK_SWITCH_CODES.has(code);
+    return { ok: false, fallback, msg, ...(code ? { code } : {}) };
   }
   if (!res.data?.ok) {
-    return { ok: false, fallback: false, msg: '계정 전환을 확인하지 못했어요.' };
+    return { ok: false, fallback: false, msg: '계정 전환을 확인하지 못했어요.', code: 'server' };
   }
   try {
     sessionStorage.setItem(GOOGLE_FLOW_KEY, tag);

@@ -287,9 +287,13 @@ describe('우편 요청 해석 및 중복/상한 검증', () => {
     expect(await pSame).toMatchObject({ problems: [], sent: 0, idempotent: true });
   });
 
-  it('sendIdempotentMail은 입력·카탈로그·수량·금화 검증 후 삽입 행 유무를 boolean으로 반환한다', async () => {
+  it('sendIdempotentMail은 입력·카탈로그·수량·금화 검증 후 입력 순서를 보존하고 중복 id를 합산해 삽입한다', async () => {
+    const capturedQueries: string[] = [];
     const db = {
-      execute: vi.fn(async () => ({ rows: [{ id: 101 }] })),
+      execute: vi.fn(async (query: unknown) => {
+        capturedQueries.push(JSON.stringify(query));
+        return { rows: [{ id: 101 }] };
+      }),
     } as unknown as Executor;
 
     const valid = {
@@ -298,10 +302,28 @@ describe('우편 요청 해석 및 중복/상한 검증', () => {
       title: '출항 연결 선물',
       body: '선물을 보냈어요.',
       gold: 0,
-      items: [{ id: 'luck-small', qty: 1 }, { id: 'cook-lunch-bundle', qty: 1 }],
+      items: [
+        { id: 'luck-small', qty: 1 },
+        { id: 'cook-lunch-bundle', qty: 1 },
+        { id: 'cook-bait-legendary', qty: 3 },
+      ],
     };
     await expect(sendIdempotentMail(db, valid, NOW)).resolves.toBe(true);
     expect(db.execute).toHaveBeenCalledTimes(1);
+    expect(capturedQueries[0]).toContain(JSON.stringify(JSON.stringify(valid.items)));
+
+    await expect(sendIdempotentMail(db, {
+      ...valid,
+      items: [
+        { id: 'luck-small', qty: 1 },
+        { id: 'cook-lunch-bundle', qty: 1 },
+        { id: 'luck-small', qty: 2 },
+      ],
+    }, NOW)).resolves.toBe(true);
+    expect(capturedQueries[1]).toContain(JSON.stringify(JSON.stringify([
+      { id: 'luck-small', qty: 3 },
+      { id: 'cook-lunch-bundle', qty: 1 },
+    ])));
 
     const dupDb = {
       execute: vi.fn(async () => ({ rows: [] })),
@@ -318,7 +340,9 @@ describe('우편 요청 해석 및 중복/상한 검증', () => {
       { ...valid, gold: -1 },
       { ...valid, items: [{ id: 'unknown-item', qty: 1 }] },
       { ...valid, items: [{ id: 'luck-small', qty: 0 }] },
+      { ...valid, items: [{ id: 'luck-small', qty: 2 }, { id: 'luck-small', qty: -1 }] },
       { ...valid, items: [{ id: 'energy-common', qty: 100_001 }] },
+      { ...valid, items: [{ id: 'energy-common', qty: 60_000 }, { id: 'energy-common', qty: 40_001 }] },
       { ...valid, gold: 0, items: [] },
     ]) {
       await expect(sendIdempotentMail(badDb, bad, NOW)).rejects.toThrow();

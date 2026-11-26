@@ -215,6 +215,7 @@ export default function GameView(props: GameViewProps) {
   const invite = useGuildInviteLanding();
   const [accountOpen, setAccountOpen] = useState(false);
   const [accountSailIntent, setAccountSailIntent] = useState(false);
+  const [manageAccountOpen, setManageAccountOpen] = useState(false);
   const inviteReady = invite.code !== null && props.syncState === 'on' && !accountOpen && props.blocker == null;
   // 방치 결과 보고 — 돌아오면 메시지 창에 한 줄, 오래 비웠으면 알림 카드. 카드의 자세히가 결과 창을 연다
   const away = useAwayReport((s, hasCard) => sendNotice(props.setToast, {
@@ -278,6 +279,11 @@ export default function GameView(props: GameViewProps) {
   const openAccount = (sailIntent = false) => {
     setAccountSailIntent(sailIntent);
     setAccountOpen(true);
+  };
+  const reopenManageAccount = () => {
+    setActiveTab('settings');
+    if (mobile) setSheetOpen(true);
+    setManageAccountOpen(true);
   };
   const closeAccount = () => {
     setAccountOpen(false);
@@ -510,7 +516,8 @@ export default function GameView(props: GameViewProps) {
           <GuildInviteDialog code={invite.code} account={props.account} setToast={props.setToast}
                              onAccount={() => openAccount(false)} onClose={invite.clear} />
         )}
-        <GoogleReturn setToast={props.setToast} progress={progress} reopenAccount={() => openAccount(false)} />
+        <GoogleReturn setToast={props.setToast} progress={progress}
+                      reopenAccount={origin => (origin === 'manage' ? reopenManageAccount() : openAccount(false))} />
         {accountOpen && (
           <AccountModal layer="stage" mode="connect" setToast={props.setToast} onAuthChanged={props.onAuthChanged} account={props.account} accountFailed={props.accountFailed}
                         syncLabel={props.syncLabel} syncState={props.syncState} sailReturn={accountSailIntent} onClose={closeAccount} />
@@ -556,6 +563,7 @@ export default function GameView(props: GameViewProps) {
         region={region}
         activeTab={activeTab} setActiveTab={setActiveTab}
         sheetOpen={sheetOpen} onSheetOpenChange={setSheetOpen}
+        manageAccountOpen={manageAccountOpen} onManageAccountOpenChange={setManageAccountOpen}
         game={game} sellBonus={guildBonus?.effects.sell ?? 0} bagBonus={bagBonus} dispatch={props.dispatch} setToast={props.setToast}
         syncLabel={props.syncLabel} syncState={props.syncState}
         account={props.account} accountChecked={props.accountChecked} accountFailed={props.accountFailed} uid={props.uid} onAuthChanged={props.onAuthChanged}

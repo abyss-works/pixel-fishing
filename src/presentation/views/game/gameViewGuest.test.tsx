@@ -17,6 +17,7 @@ import { resetAlertPrompt } from '../../../features/alerts/service/alertPrompt';
 import {
   hasPendingSailReturn,
   resetSailReturnForTest,
+  setPendingGoogleOrigin,
 } from '../../../features/account/service/sailReturn';
 import GameView from './GameView';
 
@@ -134,5 +135,31 @@ describe('필드에 넘기는 확정된 게스트 여부', () => {
     renderGame([]);
     expect(await screen.findByRole('dialog', { name: '마을에 오신 걸 환영해요' })).toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: '브라우저 알림' })).toBeNull();
+  });
+
+  it('설정 계정 관리에서 시작해 충돌 후 되돌아가기를 누르면 출항 연결 창이 아닌 계정 관리 창으로 복귀한다', async () => {
+    setPendingGoogleOrigin('manage');
+    vi.spyOn(api.auth, 'takeGoogleLanding').mockReturnValue({
+      tag: 'link-guest',
+      error: 'account_already_linked_to_different_user',
+    });
+    vi.spyOn(api.auth, 'cancelGoogleSwitch').mockResolvedValue(undefined);
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}><GameView
+        game={{ ...newState(), tutorials: [...TUTORIAL_IDS] }} scene={{ kind: 'region', id: 'village' }} entryPos={null} placeSeq={0}
+        dispatch={() => { throw new Error('dispatch is not used'); }} setToast={() => {} } onScene={() => {}} onPlace={() => {} } onWarmup={() => {}}
+        log={[]} syncLabel={null} syncState="on" guestProgress="some"
+        account={null} accountChecked={true} accountFailed={false} uid={null} nickname={null}
+        onRename={async () => null} onAuthChanged={async () => {}} onResync={async () => {}}
+      /></QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole('dialog', { name: '구글 계정으로 로그인' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '되돌아가기' }));
+
+    expect(await screen.findByRole('dialog', { name: '계정 관리' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: '태평양 출항 준비' })).toBeNull();
   });
 });

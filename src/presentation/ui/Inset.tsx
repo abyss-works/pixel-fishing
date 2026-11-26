@@ -36,6 +36,7 @@ export default function Inset({
   title,
   divided,
   borderless,
+  hoverAccent,
   className,
   children,
   ...rest
@@ -46,6 +47,8 @@ export default function Inset({
   title?: string;
   divided?: boolean;
   borderless?: boolean;
+  /** 마우스 호버·바깥 group 포커스 시 테두리와 바탕을 강조한다(툴팁 카드 등) */
+  hoverAccent?: boolean;
   className?: string;
   children?: ReactNode;
 } & Omit<HTMLAttributes<HTMLElement>, 'title'>) {
@@ -53,7 +56,9 @@ export default function Inset({
     <Tag className={cx('pf-notch shadow-[inset_1px_1px_0_var(--bevel-hi),inset_-1px_-1px_0_var(--bevel-lo)]',
                        !borderless && 'border',
                        !borderless && BORDER[border],
-                       TONE[tone], divided && 'divide-y divide-line', className)} {...rest}>
+                       TONE[tone], divided && 'divide-y divide-line',
+                       hoverAccent && 'transition-colors hover:border-accent hover:bg-(--inset-light) group-focus-visible:border-accent group-focus-visible:bg-(--inset-light)',
+                       className)} {...rest}>
       {title && <h3 className="pf-accent text-base text-gold">{title}</h3>}
       {children}
     </Tag>

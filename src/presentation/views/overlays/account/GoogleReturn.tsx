@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useGoogleReturn } from '../../../../features/account/service/useGoogleReturn';
+import type { GoogleReturnOrigin } from '../../../../features/account/service/sailReturn';
 import type { GuestProgress } from '../../../../features/account/model/accountRules';
 import { useDialogs } from '../../../ui/useDialogs';
 import type { Notify } from '../../../ui/hud/messageFeed';
@@ -11,23 +12,35 @@ export default function GoogleReturn({ setToast, reopenAccount, progress }: {
   setToast: Notify;
   /** 이 기기의 게스트 진행. 버릴 진행이 없으면 충돌 확인 창 없이 그 계정으로 로그인한다 */
   progress: GuestProgress;
-  /** 덮어쓰기를 되돌아가면 게스트 그대로 계정 관리 창을 다시 연다 */
-  reopenAccount: () => void;
+  /** 덮어쓰기를 되돌아가면 게스트 그대로 시작 출처에 맞는 계정 창을 다시 연다 */
+  reopenAccount: (origin: GoogleReturnOrigin) => void;
 }) {
   const { notice, dialogs } = useDialogs();
   const [answer, setAnswer] = useState<((proceed: boolean) => void) | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useGoogleReturn({
     setToast, reopenAccount, progress,
     showNotice: (title, body) => notice({ layer: 'stage', title, body }),
-    askOverwrite: () => new Promise<boolean>(resolve => setAnswer(() => resolve)),
+    askOverwrite: () => new Promise<boolean>(resolve => {
+      setBusy(false);
+      setAnswer(() => resolve);
+    }),
+    onOverwriteClose: () => {
+      setBusy(false);
+      setAnswer(null);
+    },
   });
 
-  const reply = (proceed: boolean) => { answer?.(proceed); setAnswer(null); };
+  const reply = (proceed: boolean) => {
+    if (busy || !answer) return;
+    setBusy(true);
+    answer(proceed);
+  };
   return (
     <>
       {dialogs}
-      {answer && <GoogleOverwriteDialog onProceed={() => reply(true)} onBack={() => reply(false)} />}
+      {answer && <GoogleOverwriteDialog busy={busy} onProceed={() => reply(true)} onBack={() => reply(false)} />}
     </>
   );
 }

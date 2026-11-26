@@ -180,13 +180,31 @@ describe('1회용 구글 전환 티켓 확인 및 취소', () => {
     expect(assign).not.toHaveBeenCalled();
   });
 
-  it('429 또는 세션 불일치 등 다른 오류는 fallback: false를 돌려준다', async () => {
+  it('429·403·409·5xx·네트워크 오류는 fallback: false와 구분된 code를 돌려준다', async () => {
     const auth = await load();
     client.$fetch.mockResolvedValueOnce({ data: null, error: { status: 429, message: 'Too many requests' } });
-    expect(await auth.confirmGoogleSwitch('sign-in')).toMatchObject({ ok: false, fallback: false, code: 'rate_limited' });
+    expect(await auth.confirmGoogleSwitch('sign-in')).toMatchObject({ ok: false, fallback: false, code: 'rate-limited' });
 
     client.$fetch.mockResolvedValueOnce({ data: null, error: { status: 403, code: 'switch_session_mismatch', message: 'mismatch' } });
     expect(await auth.confirmGoogleSwitch('sign-in')).toMatchObject({ ok: false, fallback: false, code: 'switch_session_mismatch' });
+
+    client.$fetch.mockResolvedValueOnce({ data: null, error: { status: 403, code: 'INVALID_ORIGIN', message: 'origin' } });
+    expect(await auth.confirmGoogleSwitch('sign-in')).toMatchObject({ ok: false, fallback: false, code: 'INVALID_ORIGIN' });
+
+    client.$fetch.mockResolvedValueOnce({ data: null, error: { status: 409, code: 'switch_target_unavailable', message: 'unavailable' } });
+    expect(await auth.confirmGoogleSwitch('sign-in')).toMatchObject({ ok: false, fallback: false, code: 'switch_target_unavailable' });
+
+    client.$fetch.mockResolvedValueOnce({ data: null, error: { status: 500, code: 'switch_session_create_failed', message: 'boom' } });
+    expect(await auth.confirmGoogleSwitch('sign-in')).toMatchObject({ ok: false, fallback: false, code: 'server' });
+
+    client.$fetch.mockResolvedValueOnce({ data: null, error: { status: 502, message: 'Bad Gateway' } });
+    expect(await auth.confirmGoogleSwitch('sign-in')).toMatchObject({ ok: false, fallback: false, code: 'server' });
+
+    client.$fetch.mockRejectedValueOnce(new Error('network down'));
+    expect(await auth.confirmGoogleSwitch('sign-in')).toMatchObject({ ok: false, fallback: false, code: 'network' });
+
+    client.$fetch.mockResolvedValueOnce({ data: { ok: false }, error: null });
+    expect(await auth.confirmGoogleSwitch('sign-in')).toMatchObject({ ok: false, fallback: false, code: 'server' });
     expect(assign).not.toHaveBeenCalled();
   });
 

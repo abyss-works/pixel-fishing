@@ -62,6 +62,10 @@ export function rateLimitedError(message: string, context: Record<string, unknow
   return new AppError('rate-limited', message, { status: 429, ...context });
 }
 
+export function isRateLimitedError(e: unknown): e is AppError {
+  return e instanceof AppError && e.kind === 'rate-limited';
+}
+
 /** 응답이 요청 한도 초과인가 */
 export function isRateLimited(res: Response): boolean {
   return res.status === 429;
