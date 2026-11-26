@@ -251,6 +251,8 @@ export const eventChampionshipScores = pgTable('event_championship_scores', {
   bestFishId: text('best_fish_id'),
   bestFishScore: integer('best_fish_score').notNull().default(0),
   catches: integer('catches').notNull().default(0),
+  dex: jsonb('dex').$type<Record<string, { normal: number; variant: number }>>().notNull().default({}),
+  hatsGranted: jsonb('hats_granted').$type<string[]>().notNull().default([]),
   pendingGold: integer('pending_gold').notNull().default(0),
   pendingFame: integer('pending_fame').notNull().default(0),
   settledAt: at('settled_at'),
@@ -265,5 +267,8 @@ export const eventDraws = pgTable('event_draws', {
   rewardId: text('reward_id'),
   rewardQty: integer('reward_qty').notNull().default(0),
   gold: integer('gold').notNull().default(0),
+  rewardPin: text('reward_pin'),
+  rewardExpiresAt: text('reward_expires_at'),
+  mailId: bigint('mail_id', { mode: 'number' }),
   createdAt: at('created_at').notNull().defaultNow(),
 });

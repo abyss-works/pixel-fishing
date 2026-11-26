@@ -56,7 +56,7 @@ create table public.event_trio_progress (
 
 alter table public.event_trio_progress enable row level security;
 
--- 이벤트 2(챔피언십) 점수·미정산 보상 누적 (서버 전용)
+-- 이벤트 2(챔피언십) 점수·도감·모자 지급·미정산 보상 누적 (서버 전용)
 create table public.event_championship_scores (
   event_id text not null references public.live_events(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -64,6 +64,8 @@ create table public.event_championship_scores (
   best_fish_id text,
   best_fish_score integer not null default 0 check (best_fish_score >= 0),
   catches integer not null default 0 check (catches >= 0),
+  dex jsonb not null default '{}'::jsonb,
+  hats_granted jsonb not null default '[]'::jsonb,
   pending_gold integer not null default 0 check (pending_gold >= 0),
   pending_fame integer not null default 0 check (pending_fame >= 0),
   settled_at timestamptz,
@@ -85,6 +87,9 @@ create table public.event_draws (
   reward_id text,
   reward_qty integer not null default 0 check (reward_qty >= 0),
   gold integer not null default 0 check (gold >= 0),
+  reward_pin text,
+  reward_expires_at text,
+  mail_id bigint,
   created_at timestamptz not null default now()
 );
 

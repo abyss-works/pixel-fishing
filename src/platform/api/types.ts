@@ -762,16 +762,26 @@ export interface EventChampionshipState {
   bestFishId: string | null;
   bestFishScore: number;
   catches: number;
+  dex: Record<string, { normal: number; variant: number }>;
+  hatsGranted: readonly string[];
   pendingGold: number;
   pendingFame: number;
   rank: number | null;
   top: readonly EventLeaderboardRow[];
 }
 
+export interface EventLuckDayStamp {
+  day: string;
+  kind: FortuneKind | null;
+  index: 3 | 5 | null;
+  score: number | null;
+}
+
 export interface EventDrawState {
   eventId: string;
   totalScore: number;
   attendedDays: number;
+  days: readonly EventLuckDayStamp[];
   rank: number | null;
   top: readonly EventLeaderboardRow[];
   won: boolean;
@@ -824,6 +834,9 @@ export interface AdminEventDrawRow {
   rewardId: string | null;
   rewardQty: number;
   gold: number;
+  rewardPin: string | null;
+  rewardExpiresAt: string | null;
+  mailId: number | null;
   createdAt: string;
 }
 
