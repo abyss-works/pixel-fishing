@@ -19,6 +19,7 @@ import { questLabel, selectBountyPanelData } from '../../../../features/bounty/m
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import type { SystemEventKind, ToastTone } from '../../../../features/display/model/toastPolicy';
 import { useBounty } from '../../../../features/bounty/service/useBounty';
+import { ALERT_DENIED_TEXT, ALERT_DENIED_TOAST, PERMISSION_BLOCK_LINES, PERMISSION_LABEL } from '../../../../features/alerts/model/alerts';
 import { useEncounterAlertSetting } from '../../../../features/bounty/service/encounterAlert';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import { when } from '../../../../shared/lib/when';
@@ -26,6 +27,7 @@ import BountyCard from './BountyCard';
 import { ClearsLeft } from './boardParts';
 import NamedCard from './NamedCard';
 import RelicCard from './RelicCard';
+import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
 import CheckToggle from '../../../ui/CheckToggle';
 import { HighlightRarityText } from '../../../ui/fish/RarityTag';
@@ -35,7 +37,7 @@ import Inset from '../../../ui/Inset';
 import PixelIcon from '../../../ui/PixelIcon';
 import SectionTitle from '../../../ui/SectionTitle';
 import TabBar from '../../../ui/TabBar';
-import Tip, { TipBullets } from '../../../ui/Tip';
+import Tip, { TipBullets, TipCard } from '../../../ui/Tip';
 import ArtifactDetail from '../../game/tabs/bag/ArtifactDetail';
 import NamedDetail from '../../game/tabs/dex/NamedDetail';
 import { fmtGold, josa } from '../../../ui/format';
@@ -202,20 +204,27 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         </div>
         {/* 조우는 방치 중에도 일어난다 — 다른 화면을 보고 있으면 시스템 알림으로 알린다.
             권한 요청은 이 클릭 안에서 해야 브라우저가 묻는다. 체크가 없을 때도 줄 높이를 비워 둔다 */}
-        <div className="h-6 shrink-0 flex items-center">
+        <div className="h-6 shrink-0 flex items-center gap-2">
           {namedOpen && alertSetting.permission !== 'unsupported' && (
-            <CheckToggle label="조우하면 알림 받기"
-              checked={alertSetting.active}
-              onChange={on => {
-                if (!on) { alertSetting.disable(); return; }
-                void alertSetting.enable().then(ok => {
-                  if (!ok) sendNotice(setToast, {
-                    kind: 'system.modalRejected',
-                    text: '브라우저가 알림을 막았어요. 주소창의 사이트 설정에서 허용할 수 있어요.',
-                    toastText: '브라우저 알림이 막혀 있어요.',
+            <>
+              <CheckToggle label="조우하면 알림 받기"
+                checked={alertSetting.active}
+                disabled={alertSetting.permission === 'denied'}
+                onChange={on => {
+                  if (!on) { alertSetting.disable(); return; }
+                  void alertSetting.enable().then(ok => {
+                    if (!ok) sendNotice(setToast, { kind: 'system.modalRejected', text: ALERT_DENIED_TEXT, toastText: ALERT_DENIED_TOAST });
                   });
-                });
-              }} />
+                }} />
+              {alertSetting.permission === 'denied' && (
+                <Tip plain text={(
+                  <TipCard title="조우하면 알림 받기" badge={<Badge tone="danger" size="2xs">{PERMISSION_LABEL.denied}</Badge>}
+                           status={{ tone: 'warn', lines: PERMISSION_BLOCK_LINES.denied ?? [] }} />
+                )}>
+                  <Badge tone="danger" size="xs">{PERMISSION_LABEL.denied}</Badge>
+                </Tip>
+              )}
+            </>
           )}
         </div>
         </>

@@ -338,6 +338,9 @@ describe('UI 시스템 가드', () => {
     expect(cardsWithFragmentConfirm('<ModalCard title="가" confirm={<ButtonRow><Button>가</Button><Button>나</Button></ButtonRow>}>')).toEqual([]);
     expect(cardsWithFragmentConfirm('<ModalCard title="가" confirm={<Button full>확인</Button>}>')).toEqual([]);
   });
+  it('알림 종류의 문구를 쓰는 화면은 순서도 ALERT_ORDER로 정한다 - 세 알림을 직접 나열하지 않는다', () => {
+    expect(screens.filter(f => /\bALERT_COPY\b/.test(f.src) && !/\bALERT_ORDER\b/.test(f.src)).map(f => f.path)).toEqual([]);
+  });
   it('화면은 인라인 style 객체로도 overflow 스크롤을 걸지 않는다', () => {
     for (const code of [`style={{ overflow: 'auto' }}`, `{ overflowY: "scroll" }`, 'const s = { overflowX: `auto` }']) {
       expect(OVERFLOW_DIRECT.test(code), code).toBe(true);

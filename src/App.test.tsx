@@ -12,7 +12,8 @@ import { resetCanvasCover } from './presentation/layouts/game-stage/canvasCover'
 import { resetTimeOverride } from './features/gameplay/service/timeOverride';
 import { resetFishArtStyle } from './features/display/service/fishArtStyle';
 import { resetToastEnabled } from './features/display/service/toastEnabled';
-import { resetEncounterAlert, resetUpdateAlert } from './features/bounty/service/encounterAlert';
+import { resetAlerts } from './platform/api/attention';
+import { resetAlertPrompt } from './features/alerts/service/alertPrompt';
 import { resetWhatsNewSession } from './features/announcements/service/whatsNew';
 import { resetTutorialSession } from './features/tutorial/service/tutorial';
 import { resetFortuneModalSession } from './features/fortune/service/fortuneModal';
@@ -121,8 +122,8 @@ beforeEach(() => {
   resetTimeOverride(); // 시간대 고정도 모듈 전역 (남으면 밤/낮 캐치가 오염된다)
   resetFishArtStyle(); // 물고기 그래픽 선택도 모듈 전역
   resetToastEnabled(); // 플로팅 토스트 표시 설정도 모듈 전역
-  resetEncounterAlert(); // 조우 알림 선호도 모듈 전역
-  resetUpdateAlert();
+  resetAlerts(); // 알림 선호도 모듈 전역
+  resetAlertPrompt();
   // 업데이트 소식 창은 접속 시 자동으로 떠서 키를 막는다 — 소식 창 자체를 다루는 케이스 밖에서는 본 것으로 둔다
   resetWhatsNewSession();
   resetTutorialSession();
@@ -810,33 +811,58 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
     expect(pressed('설정')).toHaveAttribute('aria-pressed', 'false');
   });
 
-  it('알림을 지원하지 않는 브라우저에서는 두 알림 토글이 흐려져 켤 수 없다', () => {
+  it('알림을 지원하지 않는 브라우저에서는 세 알림 토글이 흐려져 켤 수 없고, 권한 줄이 지원 안 함을 알린다', () => {
     seed();
     render(<App />);
     clickTab('설정');
     fireEvent.click(openerButton('설정'));
-    expect(screen.getByRole('button', { name: '네임드 조우' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: '업데이트' })).toBeDisabled();
+    expect(screen.getByText('지원 안 함')).toBeInTheDocument();
+    for (const name of ['네임드 조우', '가방 가득 참', '업데이트']) {
+      expect(screen.getByRole('button', { name })).toBeDisabled();
+    }
   });
 
-  it('알림 켜기는 브라우저 권한을 묻고, 허용되면 그 알림만 켜짐으로 바뀐다', async () => {
-    const requestPermission = vi.fn(async () => 'granted' as NotificationPermission);
-    vi.stubGlobal('Notification', { permission: 'default', requestPermission });
+  it('권한이 허용 전이면 알림 토글은 흐리고, 허용 버튼으로 권한을 받으면 세 알림이 모두 켜진다', async () => {
+    const api = {
+      permission: 'default' as NotificationPermission,
+      requestPermission: vi.fn(async () => { api.permission = 'granted'; return api.permission; }),
+    };
+    vi.stubGlobal('Notification', api);
+    localStorage.setItem('pf-alert-prompt-seen', 'on'); // 안내 카드는 이 케이스의 관심사가 아니다
     seed();
     try {
       render(<App />);
       clickTab('설정');
       fireEvent.click(openerButton('설정'));
-      fireEvent.click(screen.getByRole('button', { name: '업데이트' }));
-      await waitFor(() => expect(screen.getByRole('button', { name: '업데이트' })).toHaveAttribute('aria-pressed', 'true'));
-      expect(requestPermission).toHaveBeenCalledTimes(1);
-      expect(screen.getByRole('button', { name: '네임드 조우' })).toHaveAttribute('aria-pressed', 'false');
-      expect(localStorage.getItem('pf-update-alert')).toBe('on');
-      fireEvent.click(screen.getByRole('button', { name: '업데이트' }));
-      expect(screen.getByRole('button', { name: '업데이트' })).toHaveAttribute('aria-pressed', 'false');
+      expect(screen.getByText('허용 전')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '가방 가득 참' })).toBeDisabled();
+      expect(api.requestPermission).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: '허용' }));
+      await waitFor(() => expect(screen.getByText('허용됨')).toBeInTheDocument());
+      expect(api.requestPermission).toHaveBeenCalledTimes(1);
+      for (const name of ['네임드 조우', '가방 가득 참', '업데이트']) {
+        expect(screen.getByRole('button', { name })).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByRole('button', { name })).toBeEnabled();
+      }
+      // 허용된 뒤에는 알림을 하나씩 끄고 켠다
+      fireEvent.click(screen.getByRole('button', { name: '가방 가득 참' }));
+      expect(screen.getByRole('button', { name: '가방 가득 참' })).toHaveAttribute('aria-pressed', 'false');
+      expect(localStorage.getItem('pf-bag-full-alert')).toBe('off');
+      expect(screen.getByRole('button', { name: '네임드 조우' })).toHaveAttribute('aria-pressed', 'true');
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it('설정의 알림 줄은 네임드 조우, 가방 가득 참, 업데이트 순이다', () => {
+    seed();
+    render(<App />);
+    clickTab('설정');
+    fireEvent.click(openerButton('설정'));
+    const names = screen.getAllByRole('button').map(b => b.getAttribute('aria-label')).filter(Boolean);
+    const order = ['네임드 조우', '가방 가득 참', '업데이트'].map(n => names.indexOf(n));
+    expect(order.every(i => i >= 0)).toBe(true);
+    expect(order).toEqual([...order].sort((x, y) => x - y));
   });
 
   it('설정 창에서 물고기 그래픽을 미리보기로 고른다 — 기본 v1, 선택은 기기에 남는다', () => {
