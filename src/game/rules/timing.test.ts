@@ -80,4 +80,19 @@ describe('timingPos', () => {
     expect(timingPos(Number.NaN, 1.4)).toBeNull();
     expect(timingPos(100, 0)).toBeNull();
   });
+
+  it('연속 시드에서 유도 위치가 구간 전체에 고르게 퍼진다', () => {
+    // 5등분 구간 비율이 0.2에 근사하는지 — 연속 버전 시드가 한쪽에 몰리는 회귀 방지
+    const centers: number[] = [];
+    for (let v = 1; v <= 500; v++) centers.push(redZoneCenter(`uid:${v}`, 0.8, 0.2));
+    const buckets = [0, 0, 0, 0, 0];
+    const min = 0.5 - Math.min(0.3 * 0.8, (0.8 - 0.2) / 2);
+    const max = 0.5 + Math.min(0.3 * 0.8, (0.8 - 0.2) / 2);
+    for (const c of centers) buckets[Math.min(4, Math.floor(((c - min) / (max - min)) * 5))]++;
+    for (const b of buckets) expect(Math.abs(b / 500 - 0.2)).toBeLessThan(0.07);
+    // 인접 시드 평균 이동 거리가 사실상 0에 수렴하지 않는지 — 서서히 기는 회귀 방지
+    let total = 0;
+    for (let i = 1; i < centers.length; i++) total += Math.abs(centers[i] - centers[i - 1]);
+    expect(total / (centers.length - 1)).toBeGreaterThan(0.05);
+  });
 });
