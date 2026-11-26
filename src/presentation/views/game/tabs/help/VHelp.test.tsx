@@ -43,7 +43,10 @@ describe('VHelp 금지 문자 및 구 정보 제거', () => {
 describe('VHelp 현행 시스템 안내', () => {
   it('단축키, 메뉴 5탭, 목록과 카드 전환, 보유 중만 보기 토글을 안내한다', () => {
     const t = renderText();
-    for (const text of ['1~5', 'Tab', 'Shift + Tab', 'Esc', 'Enter', '목록과 카드', '보유 중만 보기']) {
+    for (const text of [
+      '1~5', 'Tab', 'Shift + Tab', 'Esc', 'Enter', '목록과 카드', '보유 중만 보기',
+      'Esc 키를 누르면 열려 있는 메뉴와 창을 위에서부터 차례로 닫고, 열린 창이 없을 때 누르면 집에서는 마을로, 항구에서는 바다로 바로 나갈 수 있어요.',
+    ]) {
       expect(t, text).toContain(text);
     }
   });

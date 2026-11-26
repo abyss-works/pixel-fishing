@@ -20,6 +20,7 @@ import type { Notify } from '../../../ui/hud/messageFeed';
 import HudMenuButton from '../../../ui/hud/HudMenuButton';
 import MobileHudMenuButton from '../../../ui/hud/MobileHudMenuButton';
 import { useMobileLayout } from '../../../layouts/useMobileLayout';
+import { HOTKEY_TIER, hasModifier, useKeyScope } from '../../../ui/hotkeys';
 import PixelIcon from '../../../ui/PixelIcon';
 import type { GlyphId } from '../../../ui/PixelIcon';
 
@@ -44,6 +45,18 @@ interface Entry {
   /** 게스트 잠금 줄. 있으면 잠긴 줄이다 */
   lock: readonly string[] | null;
   onOpen: () => void;
+}
+
+function GameMenuEscScope({ onClose }: { onClose: () => void }) {
+  const closeRef = useRef(onClose);
+  useEffect(() => { closeRef.current = onClose; });
+  useKeyScope(e => {
+    if (e.key !== 'Escape' || hasModifier(e)) return;
+    e.preventDefault();
+    closeRef.current();
+    return true;
+  }, { tier: HOTKEY_TIER.POPOVER });
+  return null;
 }
 
 export default function GameMenu({ game, account, accountState, onQuests, onAchievements, onFortune, onGuild, onFriends, onMailbox, setToast }: {
@@ -81,18 +94,15 @@ export default function GameMenu({ game, account, accountState, onQuests, onAchi
     }
   }, [mails, takeLoginNotice, setToast, accountState]);
 
-  // 펼친 동안 메뉴 밖을 누르거나 Esc를 누르면 접는다
+  // 펼친 동안 메뉴 밖을 누르면 접는다 (Esc는 GameMenuEscScope가 키 스코프로 처리)
   useEffect(() => {
     if (!open) return;
     const onDown = (e: PointerEvent) => {
       if (root.current && !root.current.contains(e.target as Node)) setOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
     document.addEventListener('pointerdown', onDown);
-    document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('pointerdown', onDown);
-      document.removeEventListener('keydown', onKey);
     };
   }, [open]);
 
@@ -137,7 +147,9 @@ export default function GameMenu({ game, account, accountState, onQuests, onAchi
         <HudMenuButton open={open} alert={alert} onClick={toggle} aria-expanded={open} aria-haspopup="menu" aria-label={label} />
       )}
       {open && (
-        <MenuList className="absolute right-0 top-full mt-1 min-w-[150px] p-1" items={entries.map(e => ({
+        <>
+          <GameMenuEscScope onClose={() => setOpen(false)} />
+          <MenuList className="absolute right-0 top-full mt-1 min-w-[150px] p-1" items={entries.map(e => ({
           key: e.key,
           label: e.name,
           lock: e.lock ?? undefined,
@@ -152,6 +164,7 @@ export default function GameMenu({ game, account, accountState, onQuests, onAchi
             </span>
           ),
         }))} />
+        </>
       )}
     </div>
   );
