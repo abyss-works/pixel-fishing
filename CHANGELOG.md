@@ -2,6 +2,258 @@
 
 이 파일은 생성된다. 직접 고치지 않는다. 형식은 Keep a Changelog를 따른다.
 
+## [0.20.5] - 2026-11-26
+
+### 기능
+
+- 약관 시행일 이후 재동의 게이트 흐름을 플랫폼·서비스·화면 전반에 반영했다. 플랫폼 어댑터(auth, httpGameGateway, live, chat, me, player, position, ranking, mailbox, friends, guild, fortune, away, localApi)와 requestFailure 처리를 일원화해 403 약관 거부 오류를 전용 오류 정책으로 연결하고, 차단형 ConsentModal 및 consentGate.ts를 구현했다. useAccount·useGame·useLive·useMailbox·useFriends·useRanking·useFortuneHistory·useBounty·useGuild·useLastPosition 훅에 약관 게이트를 적용하고 k8s 스테이징·운영 매니페스트와 테스트를 추가했다.
+  - 이용약관 재동의 게이트 차단 모달 및 어댑터·조회 훅 일원화: 이전 시행일 기반 403 약관 거부 전용 오류 분기, 차단형 ConsentModal 및 조회 훅 게이트 부재, 이후 ConsentModal·consentGate·어댑터 403 일원화 및 우편함·친구·랭킹·운세·게임 조회 훅 게이트 적용
+  - 커밋: d5206fca, 56eb6556, 1066d0b6, 3bfe0773, 3fc6bf9d
+- 관리자 대시보드에 초반 6단계 온보딩 퍼널과 앱 서버 통과 요청 기준 HTTP 426·429·5xx 응답 지표를 추가했다. DB·서버 계층에서는 supabase/migrations/0045_http_metrics.sql 및 0045_http_metrics.down.sql로 일별 HTTP 지표 표(http_metrics_daily)를 신설하고 api/_db/schema.ts·api/_data/httpMetrics.ts·api/_server/httpMetrics.ts에서 Express 응답 완료 시 경로 묶음·상태 코드별 메모리 집계와 주기·SIGTERM 합산 upsert 플러시를 구현했다. api/_data/adminFunnel.ts와 api/admin.ts는 GET /api/admin?q=onboardingFunnel·httpMetrics로 게스트→구글 전환율·소요 시간 분포, 튜토리얼 4단계 완료·이탈, 초반 온보딩 6단계 도달률 단일 CTE 조회와 기간별 HTTP 응답 지표를 반환한다. 플랫폼(src/platform/api·adapters)과 관리자 화면(features/admin, OnboardingFunnelSection, HttpMetricsSection, ProgressionTab, OpsTab, OverviewTab)에서 7/30/90일 기간 전환, hybrid_7d 기준 안내, ingress-nginx 미포함 안내 및 개요 요약 카드를 연결하고 단위·실제 Postgres 통합 테스트를 추가했다.
+  - 관리자 대시보드 온보딩 퍼널 조회 API 및 화면(ProgressionTab): 이전 게스트→구글 전환, 튜토리얼 4단계 이탈, 초반 6단계 도달 퍼널 API와 화면 부재, 이후 GET /api/admin?q=onboardingFunnel 단일 CTE 조회와 OnboardingFunnelSection(hybrid_7d 기준, 게스트→구글 전환율·소요 시간 분포, 튜토리얼 4단계, 초반 6단계 퍼널) 추가
+  - 앱 서버 HTTP 426·429·5xx 응답 지표 수집 및 대시보드(OpsTab·OverviewTab): 이전 일별 HTTP 응답 코드 집계 표·미들웨어 및 관리자 조회 화면 부재, 이후 0045_http_metrics.sql(http_metrics_daily 표), Express 메모리 집계·주기/SIGTERM 플러시, GET /api/admin?q=httpMetrics 및 7/30/90일 경로별·일별 추이와 개요 요약 카드 추가
+  - 영향: 운영 DB에 supabase/migrations/0045_http_metrics.sql 마이그레이션 적용이 필요하며, 되돌릴 때는 0045_http_metrics.down.sql로 http_metrics_daily 표를 제거할 수 있다. 지표는 앱 서버(Express) 통과 요청 기준이며 ingress-nginx 앞단에서 차단된 429·5xx 응답은 포함하지 않는다.
+  - 커밋: 0de6154c, cd5909d9
+- 스테이지 메뉴에 운세 항목을 추가해 오늘의 운세를 언제든 다시 볼 수 있게 하고, 로그인 계정 전용 public.daily_fortunes(0042_daily_fortunes.sql, 0046_expand_daily_fortunes.sql) 적재·확장과 21종 운세(12종 kind, 내부 비노출 3등급 65/25/10 확률, 10개 보너스 채널 독립 곱연산) 및 GET /api/fortune/history?month=YYYY-MM 월별 달력·전체 이력 discovered 집계를 구현했다. FortuneCalendarModal에 달력|점괘첩 SubTabs(3열×7행 21종 무스크롤·게스트 잠금)를 배치하고 StatsModal 10채널·EnergyPanel·SaleWindow·DevTools fortune.set 명령을 연동했다.
+  - 스테이지 메뉴 운세 진입 및 월간 운세 이력·점괘첩 저장·조회(0042·0046·api/fortune·FortuneCalendarModal): 이전 첫 접속 팝업 이후 당일 운세 재열람 경로와 과거 일별 운세 이력·수집 조회 부재(3종 kind), 이후 메뉴 운세 창(달력|점괘첩 SubTabs, 3×7 21종 무스크롤, 게스트 잠금), public.daily_fortunes(0042·0046 12종 kind·3등급 index=5) 영구 적재 및 GET /api/fortune/history 월별 달력·discovered 집계 추가
+  - 오늘의 운세 21종 확장·내부 3등급 확률 및 10개 효과 채널 연동(fortune·effects·logic·cooking·actions·StatsModal·DevTools): 이전 3종(물고기·골드·그림자) 6개 점괘만 추첨·적용, 이후 12종 kind·21종 점괘(1등급 65%·2등급 25%·3등급 희귀 대길 10%), 10개 효과 채널(어획·판매·입질 대기·월척·명성·네임드·돌연변이·밤 어종·기운·전설) 독립 곱연산 및 개발 도구 fortune.set 지원
+  - 영향: 0042_daily_fortunes.sql 및 0046_expand_daily_fortunes.sql 마이그레이션 적용이 필요하며(0046 down SQL로 제약 복구 가능), 로그인 계정의 당일 운세 이력은 마이그레이션 적용 이후부터 기록된다.
+  - 커밋: c77b98d0, 36c767ad, b83e5cab, 88760e25, c82a2a8c, cf355110, ba5f3c47, 74dc3d6e, 3ba03fdc, 6d95d582, 1d24282a, 6830f3c2, 089e8f94
+- 범용 스택 아이템 카탈로그(itemCatalog.ts), 비약 정의(potions.ts, 첫 항목 luck-small: 게임 하루 동안 희귀 이상 출현 비중·판매가·네임드 조우 +0.05/×1.05, 당일 중복 사용 거부, 로그인 계정 전용·배 단계 무관 사용) 및 우편 아이템 첨부 수령(claimMail, GameState.items 스택 반영, MailboxModal ItemBadge 표시)을 추가했다.
+  - 비약 아이템 카탈로그·가방 묶음 및 우편 첨부 아이템 수령: 이전 범용 스택 아이템·비약 체계 및 우편 아이템 첨부·수령 불가(골드만 수령), 이후 itemCatalog·potions(luck-small: 게임 하루 KST 04:00 경계까지 행운 대상 +5%p→이후 ×1.05 표기 통일), 로그인 계정 가방 비약 묶음 즉시 사용(당일 중복 거부) 및 우편 아이템 첨부 수령 추가
+  - 커밋: bcddd64b, 2e7137e7, 2ef69a0f
+- 도시락 레시피에 등급별 제작 시간(일반 가루디야 0초 즉시, 희귀 민 몰리 3분, 영웅 생선 비리야니·암불 티얄 5분, 전설 생선 탈리 10분)과 고유 id 기반 멀티 조리 대기열(cookingQueue), 미완성분 100% 기운 환급 취소(cancelCook), 부엌 3번째 탭 기운 변환(transmuteEnergy: 일반→희귀→영웅→전설 정방향 10:1 비율)을 구현했다.
+  - 도시락 제작 시간 및 조리 대기열·취소(cooking·actions·KitchenPanel): 이전 도시락 1개 단일 슬롯 15분 고정 조리 및 취소 불가, 이후 일반 즉시·희귀 3분·영웅 5분·전설 10분 차등, 보관함 10칸 한도 내 멀티 대기열 및 cancelCook 100% 기운 환급 취소 지원
+  - 부엌 기운 변환 탭 및 정방향 변환 규칙(transmuteEnergy): 이전 하위 생명의 기운을 상위 등급으로 변환하는 기능 부재, 이후 부엌 3번째 탭 기운 변환 추가, 일반→희귀→영웅→전설 정방향 10:1 변환 지원
+  - 커밋: e0a6d5b8, 520f6822, a7908869
+- 랭킹 서버(api/_data/rank.ts, api/rank.ts)와 RankingModal을 5종 보드(명성, 도감(일반), 도감(돌연변이), 도감(네임드), 네임드 토벌)로 확장하고 일반 도감 집계에서 네임드를 분리해 지연 조회·캐싱하도록 구현했다.
+  - 랭킹 보드 종류 및 탭 구성(api/rank·RankingModal): 이전 명성 및 네임드 포함 통합 도감 위주 구성, 이후 명성·도감(일반)·도감(돌연변이)·도감(네임드)·네임드 토벌 5탭 분리 및 탭 전환 지연 조회 지원
+  - 커밋: f1f70e46, bc05b881
+- 돌연변이 억제 도시락 키리바트(cook-lunch-calm, 희귀, 조리 3분, 일반 기운 100·희귀 기운 20)와 돌연변이 억제 특수 미끼 백단향 미끼(cook-bait-calm, 특수, 즉시 조리, 희귀 기운 15·영웅 기운 2)를 추가했다. game/content/cooking.ts에 독립 배수 효과 mutationMult(0.5)를 신설하고, rules/cooking.ts(slotEffects)와 rules/logic.ts(mutationWeightsOf·drawCatch)·rules/actions.ts에서 도시락·미끼 증폭 업적 비적용 독립 곱연산(×0.5)으로 연결했으며, 2칸 미끼 슬롯에서 돌연변이 가중 미끼와 동시 장착 시 합연산 가산 결과에 ×0.5 곱연산을 적용하도록 맞췄다. 픽셀 스프라이트 원화(dishSprites.generated.ts·baitSprites.generated.ts)와 부엌·가방·관리자 카탈로그·단위 테스트를 추가했다.
+  - 돌연변이 억제 도시락(키리바트)·특수 미끼(백단향 미끼) 및 독립 곱연산 규칙 추가: 이전 돌연변이 폼 가중치를 낮추는 요리 레시피와 mutationMult 독립 배수 키 부재, 이후 키리바트(희귀 도시락)·백단향 미끼(특수 미끼) 추가 및 증폭 업적 비적용 ×0.5 독립 곱연산 적용
+  - 커밋: 228fcf3a, 848bb60f, baf7b497, 8d1f6206
+- itemSprites.ts에 artifact 분류와 유물 8종 16×16 픽셀 스프라이트를 등록하고 가방 유물 탭(BagTab), 유물 상세(ArtifactDetail), 수배판 유물 카드(RelicCard), 플레이어 정보(PlayerInfo)에 적용했다.
+  - 유물 8종 16×16 픽셀 스프라이트 및 UI 적용: 이전 유물을 텍스트·등급색으로만 표시, 이후 유물 8종 16×16 픽셀 아트 추가 및 가방·유물 상세·수배판·플레이어 정보 창 적용
+  - 커밋: 2b1d724b, da215194, 0e1dbd42
+- api/action.ts의 guildLogsOf에서 전설 돌연변이 포획 시 guild_logs.detail에 fishId|variant를 저장하고, features/guild/model/guild.ts와 GuildLogbookTab.tsx가 돌연변이명과 전용 강조 톤(variant, 초기 text-epic 적용 후 0.20.5-20에서 text-mutation으로 분리)으로 표시하도록 했다.
+  - 길드 항해일지 전설 돌연변이 저장·표시(guildLogsOf·GuildLogbookTab): 이전 전설 돌연변이 포획도 일반 전설 물고기명과 동일하게 기록·표시, 이후 detail에 |variant 접미사로 구분 저장하고 항해일지에 돌연변이명과 강조 색 적용
+  - 커밋: f2eb88ce, 686fb0ce
+- supabase/migrations/0043_mail_items.sql(및 .down.sql)로 mails.items jsonb 컬럼을 신설하고, api/_data/mailbox.ts·api/action.ts에서 공용 카탈로그(itemCatalog.ts) 검증과 claimMail 수령 지급을 구현했으며, mailDraft.ts·MailTab.tsx에 아이템 검색·수량 첨부 UI를 추가했다.
+  - 우편 아이템 첨부 DB 스키마·수령·관리자 선택 UI(0043·mailbox·MailTab): 이전 mails 골드 단독 첨부 및 관리자 우편 아이템 선택 UI 부재, 이후 mails.items jsonb(0043), 공용 카탈로그 전 항목 첨부·claimMail 원자 수령 및 MailTab 검색 첨부 UI 추가
+  - 영향: 운영 DB에 supabase/migrations/0043_mail_items.sql 적용이 필요하며, 0043_mail_items.down.sql로 mails.items 컬럼을 제거해 되돌릴 수 있다.
+  - 커밋: bcddd64b, 2e7137e7, 2ef69a0f
+- api/_server/securityHeaders.ts를 신설해 main.ts 최앞단에 등록(CSP, nosniff, DENY, strict-origin-when-cross-origin, Permissions-Policy, HTTPS 요청 시 Strict-Transport-Security: max-age=31536000; includeSubDomains)하고 stageGate.ts 인라인 스크립트 SHA-256 해시(GATE_SCRIPT_CSP_HASH)를 동적 추가했다. api/_auth/auth.ts에는 /sign-in/anonymous IP당 3600초 최대 10회 레이트리밋(ANONYMOUS_SIGN_IN_RATE_LIMIT)과 withRetryAfterHeader 429 표준 헤더 래퍼를 추가했다.
+  - 전역 HTTP 보안 헤더 5종·HSTS 및 익명 가입 IP 레이트리밋: 이전 애플리케이션 수준 전역 CSP·보안 헤더 미들웨어 및 익명 가입 전용 레이트리밋 부재, 이후 securityHeaders 미들웨어(5종+HTTPS HSTS+stageGate CSP 해시) 및 /sign-in/anonymous 1시간 10회 한도·Retry-After 추가
+  - 영향: 모든 HTTP 응답에 보안 헤더가 적용되며, 익명 가입이 시간당 10회를 초과하는 IP는 HTTP 429와 Retry-After 헤더로 차단된다.
+  - 커밋: 5579e817
+- api/_server/stageGate.ts로 DEPLOY_ENV=preview에서 게임·API·/api/live 진입 시 pixel-fishing-admin 세션과 public.admins 명부를 검사(GET /api/action 헬스체크·/api/admin*·/assets/* 예외)하고, api/devAccount.ts와 DevTools.tsx에 무패스코드 테스트 정식 계정 승격·새 게스트 세션·초기 상태 되돌리기를 구현했다. production에서는 gate.ts·App.tsx·devAccess.ts의 개발 도구·restricted 화면·?admin 쿼리를 완전히 제거했고, stageGate.ts HTML을 AdminGate 토큰·6px 노치 베벨·공식 Google 버튼·파비콘·403 로그아웃·해요체로 교정하고 정적 가드 테스트를 추가했다.
+  - 스테이징 진입 관리자 OAuth 게이트, stageGate HTML 및 운영 클라이언트 격리: 이전 ?admin 쿼리·패스코드 기반 테스트 로그인, 운영 클라이언트 내 restricted·DevTools 잔존, stageGate 비표준 파란 버튼·합쇼체, 이후 preview 관리자 OAuth 게이트 및 무패스코드 devAccount 도구 도입, production 개발 도구·제한 화면 제거, stageGate 디자인 토큰·공식 Google 버튼·해요체 정렬
+  - 영향: 스테이징은 관리자 OAuth 인증 후에만 접근 가능하며 ?admin 쿼리 및 패스코드 로그인은 폐기된다. 운영 게임 클라이언트에는 관리자/개발 도구 UI 분기가 포함되지 않는다.
+  - 커밋: 3a3b423e, 76ea794b, 698063c2, 6d97a2f6
+
+### UI
+
+- UI-UX.md의 정보 노출 3계층(L1 바깥 표면 필수 정보, L2 직접 모달 상세·설명, L3 소제목·열 헤더 호버 툴팁 통합) 원칙에 맞춰 전 화면을 정비했다. VRegion·BagTab·TraceCard·statusText·WardrobePanel·FerryModal·WorldMapModal·MyInfoModal의 과다 로어와 상시 안내문을 상세 창 또는 툴팁으로 옮기고, NamedCard·RelicCard·VRegion·BagCards·AwayReportModal·MailboxModal에서 상세 모달(NamedDetail·ArtifactDetail·DexDetail·ItemBadge 상세) 연결을 보강했다. ResourceBar 전체 칸 툴팁 추가, LetterModal 입력칸 툴팁 제거, SummaryTab·CodeModal 제약 본문 노출, GuildSkillsTab·BountyCard·SettingsModal 공통 주의문구의 섹션 헤더 툴팁 통합을 적용하고 미보유 유물 상세(ArtifactDetail)를 획득 시(Lv.1) 기준 표기로 맞췄다.
+  - 전 화면 L1 바깥 표면 과다 로어·상시 안내문·반복 주의문구 정리: 이전 바깥 카드·본문·25개 스킬 노드마다 로어·규칙·주의문구 상시 펼침 및 반복, 이후 로어·설명은 상세 창(L2), 공통 주의사항과 보조 맥락은 섹션 헤더·소제목 툴팁(L3)으로 통합
+  - 수배판·도감·가방·우편함 상세 모달 및 헤더 툴팁 연결: 이전 NamedCard·RelicCard·어종 카드·우편함 첨부 배지 클릭 상세 및 ResourceBar 툴팁 일부 누락, 이후 상세 모달·ItemBadge 호버·미보유 유물 획득 시(Lv.1) 표기 및 ResourceBar 5칸 전체 툴팁 연결
+  - 커밋: b308d6d4, 77e1de8f, 97bc9dc2, 96dceea0
+- 레거시 v1 어종 스프라이트에서도 필드 어군 물고기의 훅 점프와 좌우 반전 연출이 동작하도록 렌더링 계층을 확장했다. src/game/rendering/pixel/sprites/overlays.ts의 drawHookJump에서 art.motion 조기 반환 가드를 제거해 v1 스타일에서도 포획 중 정점 전후 훅 점프를 그리도록 바꿨고, fishArt/v1.ts의 drawCentered가 flip 옵션을 drawFishSprite로 전달하도록 연결했다(fishArtV1.motion은 false를 유지해 정적 화면 유영 애니메이션은 계속 비활성). fishArt/v1Shapes.ts의 drawFishSprite는 flip이 true일 때 RectCtx 호환 좌우 대칭 래퍼로 cx 기준 수평 반전((cx - x - w) | 0)을 적용하며, fishArt/port.ts 계약 주석 정리 및 fishArt.test.ts·overlays.test.ts 단위 테스트를 추가했다.
+  - v1 어종 스프라이트 훅 점프 렌더링 및 좌우 반전(flip) 지원: 이전 drawHookJump가 art.motion이 false인 v1을 조기 반환해 훅 점프를 그리지 않고, fishArtV1.drawCentered와 drawFishSprite가 flip 옵션을 무시, 이후 drawHookJump가 v1에서도 정점 전(flip: false)·정점 후(flip: true) 훅 점프를 렌더링하고, drawFishSprite가 cx 기준 좌우 대칭 래퍼로 수평 반전 지원(motion: false 정적 UI 유지)
+  - 커밋: 5201db98
+- 잡기 결과 카드(CatchCard)의 PC 스테이지 배치와 가독성 규격을 복원했다. HudLayout의 PC 획득 카드 슬롯을 좌측 세로 중앙(메시지 창 상단 여백 기준)으로 옮겼고, CatchCard의 폭·여백·글자 크기·어종 스프라이트 크기(card)를 원래 가독성 규격으로 복원했으며, index.css의 catch-pop 키프레임을 좌측 슬라이드 등장으로 전환하고 fx-orbit 궤도 반경을 조정했다.
+  - CatchCard PC 배치·크기·등장 애니메이션: 이전 축소된 가로 카드 크기와 팝 인 연출, 좌측 하단 밀착 슬롯, 이후 PC 좌측 세로 중앙 배치(채팅창 위 여백), card 스프라이트·원래 타이포 크기 복원 및 좌측 슬라이드 등장 애니메이션 적용
+  - 커밋: 15fda190
+- 이용약관 동의 창(ConsentModal)을 확정 시안 규격으로 재구현하고 부팅 전 불투명 진입 장막을 적용했다. presentation/ui/format.ts에 한국어 날짜 변환(fmtKoreanDate), PixelIcon에 새 탭 아이콘(external) 글리프, Modal에 불투명 진입 배경(opaque)과 상단 브랜드 슬롯(above)을 추가했다. App.tsx가 세이브 로드 전 동의 차단 시 불투명 진입 배경을 전달하도록 연결했고, ConsentModal을 좌측 1축 정렬·오목 법무 문서 실선 링크 카드·1줄 2열 주요 버튼·하단 통합 문의 링크와 계정 삭제·3단계 동일 최소 높이 구조로 개편하고 단위·통합 테스트를 추가했다.
+  - 이용약관 동의 창 진입 배경 및 레이아웃·표기: 이전 세이브 로드 전 반투명 배경 뒤 빈 초기 게임 화면 노출, 정렬 혼재, 문의 중복, 전폭 2단 버튼, 하이픈 날짜, 이후 불투명 전용 진입 배경(Modal opaque·above), 좌측 1축 정렬, 한국어 날짜(fmtKoreanDate), 실선 문서 카드, 1줄 2열 버튼, 단일 통합 문의 및 3단계 동일 최소 높이
+  - 커밋: 63d3e6ae
+- 조회·수정 겸용 입력의 1줄 인라인 편집 전환과 바깥 잠금 배지 정리를 반영했다. MyInfoModal의 2줄 닉네임 영역을 기본 비활성 입력 칸+변경 버튼에서 클릭 시 편집 활성화+확인·취소(Esc 취소)로 전환되는 1줄 인라인 편집으로 개편하고 외부 LockIcon을 제거했다. LetterModal과 PlayerInfo의 인라인·소형 버튼 바깥 잠금 배지를 비활성화하고 presentation/ui/guestLockGuard.test.ts 정적 가드와 화면 테스트를 추가했다.
+  - MyInfoModal 닉네임 입력 및 게스트 잠금 외부 배지: 이전 닉네임 조회·수정 2줄 분리 및 외부 LockIcon 노출, LetterModal·PlayerInfo 인라인 버튼 바깥 잠금 배지 노출, 이후 MyInfoModal 1줄 인라인 편집 전환(변경·확인·취소, Esc 취소) 및 외부 자물쇠 제거, LetterModal·PlayerInfo 바깥 잠금 배지 비활성화 및 guestLockGuard 가드 추가
+  - 커밋: 812a895f
+- 업적 카탈로그·보너스 채널·업적 창·스탯 보너스 탭을 전면 개편했다. content/achievements.ts와 rules/achievements.ts·effects.ts·cooking.ts·actions.ts에서 기본 카운터에 energy.spent와 catch.lunch를 추가(5종→7종)하고, 누적 보너스 계열을 26종에서 37종(전역 11·구역 6×3=18·개별 유물 증폭 8)으로 확장하며 밤 어종 출현 비중(nightWeight)·가방 용량(bagCap)·기운 획득량(energyYield)·미끼 증폭(baitAmplify)·도시락 증폭(lunchAmplify) 채널과 밤 항해 감속 곱연산 전환, 15해역 진행 업적 골드 보상 4배 상향(총 103,451,480G)을 반영했다. 월척 장부는 4단계 묶음 카드(big-10/25/50/100-hat)로 정비하고 신규 모자 2종(눈금 띠 챙모자·쇠바늘 낚시 모자)과 절차 픽셀 렌더링을 추가했다. AchievementsModal.tsx는 4탭(진행·전체 누적·구역과 유물·치장)과 미완료만 보기 필터·3열 단계 카드로 재구성했고, stats.ts·BonusTab.tsx는 동일 효과 단위 2열 표(받는 효과 | 적용)와 출처·배수 분해 고정 정렬 툴팁([업적]→[유물]→[길드]→[운세]→[비약]→[도시락]→[미끼]→최종 적용)으로 통합했다.
+  - 업적 창 4탭, 미완료만 보기 필터 및 월척 장부 4단계 묶음·신규 모자 2종: 이전 업적 창 3탭(진행·누적 보너스·치장), 월척 50/100 분리 및 진행 골드 25,862,870G, 이후 4탭(진행·전체 누적·구역과 유물·치장), 미완료 필터, 월척 10/25/50/100 묶음(눈금 띠 챙모자·쇠바늘 낚시 모자 추가), 진행 골드 4배(103,451,480G)
+  - 누적 보너스 37종 재편(기운 소모·도시락 방치·밤 전설·유물 증폭) 및 스탯 보너스 2열 표: 이전 누적 보너스 26종(5카운터), 보너스 탭 2열(받는 효과·출처) 개별 행 나열 및 밤 감속 기본속도 기준, 이후 누적 보너스 37종(7카운터, 밤 전설·가방·기운·미끼/도시락 증폭·유물 8종), 밤 감속 곱연산, 보너스 2열 통합 표(받는 효과·적용) 및 [출처] 툴팁 분해
+  - 커밋: 0ef6e047, 6d615b1b, 8a1d02c9, 77122a3c, 4e736225, 18558e8c, 8d1f6206
+- 길드 창(GuildModal)과 게임 메뉴(GameMenu)의 정보 구조·배지·서브탭·인라인 편집을 전면 개편했다. menuEntries.ts의 guildMenuBadges·guildMenuLabel과 GameMenu.tsx에서 길드장 대기 가입 신청(danger, 접힌 알림 점 점등)과 Lv.6 이상 남은 개인 강화 포인트(guild, 알림 점 미점등) 배지를 분리 연결했고, 공용 TabBar·SubTabs·SlotCell·CountBadge에 guild 톤을 추가했다. GuildModal.tsx는 탭 순서를 스킬(기본·남은 포인트 배지)·길드원·항해일지·관리(신청 수 배지)로 재정렬해 680×560 고정 높이를 유지하고, GuildSkillsTab.tsx는 [공통](금색 5열 수직 트리·모인 골드·기부)과 [개인](Lv.5 이하 잠금 안내, Lv.6+ 보라 5열 트리·남은 강화 포인트 5칸·강화 올리기·되돌리기) 서브탭으로 분리해 전환 시 높이 흔들림 없이 동작하도록 구성했다. [개인] 서브탭은 열별 +1 버튼을 제거하고 [공통]과 동일한 단일 단계 표시 푸터(N단계·Lv.6 해금)를 유지한 채 스킬 열 선택 후 하단 [강화 올리기] 버튼으로 강화하도록 통일했으며(uiGuard.test.ts 소형 +1 버튼 예외 제거), 되돌리기 확인 창의 누적 초기화 비용 단계표를 비용 줄 옆 물음표 IconButton TipCard로 옮겼다. GuildMembersTab.tsx와 GuildModal.tsx 확인 창(떠나기·해산·내보내기)에 20시간 모든 길드 재가입 제한 안내를 추가하고, GuildLogbookTab.tsx 아이콘 톤을 차분하게 정리했으며, GuildManageTab.tsx는 구획 순서를 길드 이름→가입 방식→권유 문구→고유 코드와 링크→가입 신청으로 배치하고 승인 가입 초대 링크 안내, 권유 문구 1줄 인라인 편집(Esc 시 편집만 취소·모달 유지), TableBox scroll="x" 기반 가입 신청 표(중첩 세로 스크롤 제거)를 반영해 단위·화면 테스트를 보강했다.
+  - 게임 메뉴 길드 줄 배지·알림 점 및 길드 창 상단 탭·배지(menuEntries·GameMenu·GuildModal·TabBar·CountBadge): 이전 길드 줄 배지·알림 점 부재, 길드원 기본 탭 및 스킬 탭 배지 미표시, 이후 길드 줄 danger(가입 신청, 알림 점 점등)·guild(남은 포인트) 배지 추가, 스킬(보라 배지)·길드원·항해일지·관리(금색 배지) 순 재정렬 및 680×560 고정 높이 유지
+  - 길드 스킬 [공통]/[개인] 서브탭 분리, 열 푸터 통일 및 되돌리기 비용 툴팁(GuildSkillsTab·SubTabs·SlotCell·guild): 이전 공용 기부와 개인 자유 강화가 단일 트리에 혼재, 되돌리기 창 인라인 회차 및 하단 누적 상자 노출, 이후 [공통](금색 트리·기부)과 [개인](Lv.6 해금·보라 트리·열별 +1 없는 단일 단계 푸터·열 선택 후 [강화 올리기]·되돌리기) 서브탭 분리(동일 높이) 및 초기화 비용 [?] TipCard 툴팁 이동
+  - 길드원·항해일지·관리 탭 정비(GuildMembersTab·GuildLogbookTab·GuildManageTab·TableBox): 이전 확인 창 재가입 제한 강조 부재, 권유 문구 비인라인, 관리 표 중첩 세로 스크롤 및 승인 가입 초대 링크 안내 부재, 이후 20시간 재가입 제한 강조 안내, 항해일지 차분한 아이콘, 관리 탭 5구획 순서(길드 이름→가입 방식→권유 문구→고유 코드와 링크→가입 신청)·승인 가입 초대 링크 안내·권유 문구 1줄 인라인 편집(Esc 유지)·TableBox scroll="x" 단일 세로 스크롤 적용
+  - 커밋: 673d0739, cfbfc3a8, ea60d8d9, b4d542e3, aec3287e, e9cbeb7a, 493c1f76
+- 가방 유물 탭(BagTab)과 아이템 탭(ItemSection)에서 미보유 항목·미해금/게스트 상태의 도시락·미끼·생명의 기운 플레이스홀더 카드를 비활성으로 표시하고 보유 중만 보기 토글(ToggleChip)을 추가했다. 또한 도시락·미끼·비약 상세 창(ItemDetail.tsx)을 신설해 바깥 카드 주의사항을 정리하고, 달빛 미끼의 nightUnlock 같은 비수치 효과를 키-값 쌍 대신 상세 설명 한 줄(낮에도 밤 어종이 함께 낚여요.)로 표시하도록 통일했다.
+  - 가방 아이템·유물 미보유 표시, 보유 필터 및 ItemDetail 신설(BagTab·ItemSection·ItemDetail): 이전 미보유 유물·아이템 비노출(미해금 시 빈 3칸), 바깥 카드 주의사항 중복, ItemDetail 부재 및 달빛 미끼 키-값 축약, 이후 미보유·미해금 플레이스홀더 카드 및 보유 중만 보기 토글 추가, ItemDetail 상세 창 신설, 비수치 효과 한 줄 설명 전환
+  - 커밋: 05b113cd, 4682656b, 8ec6d7ba, 1199c5fd, a1986d92, 6acae9ce, 382ed7d7
+- src/index.css에 `--c-mutation(#f472b6)`과 `--c-named(#ff7a59)` 토큰 및 `mutated-shimmer` 자홍빛 키프레임을 신설해 영웅 보라색(`--c-epic: #ba68c8`)을 영웅 등급 단독으로 분리했다. RarityTag(`HighlightRarityText`), Inset(`mutation`·`named` 테두리), CountBadge(`named`), FloatingToastLayer(`named`·`mutation` 톤), menuEntries·toastPolicy·catchNotice(최초 돌연변이 포획 토스트 `mutation` 톤, 네임드 흔적 `named` 톤)와 CatchCard·InstanceLine·BagCards·AwayReportModal·boardParts·NamedCard·TraceCard·VDexNamed·NamedDetail·GuildLogbookTab·TutorialCardVisual에 전용 색과 반짝이/표적 표식을 적용했다.
+  - 돌연변이·네임드 전용 색상 토큰 및 UI 표식 분리: 이전 영웅 등급 보라색(`--c-epic`)을 돌연변이와 네임드 강조·배지·토스트·카드·일지 아이콘에 공용 사용, 이후 돌연변이 `--c-mutation(#f472b6)`(반짝이·잔광)과 네임드 `--c-named(#ff7a59)`(표적·외곽선) 전용 토큰·톤 분리, 영웅 보라 단독 유지
+  - 커밋: 75208f9c, 4dbafa8d, d9c08fad, 5131a4fe
+- 스테이지 HUD 미니맵 위 보너스 통합 칩(SlotChips)과 전용 상세 창(ActiveEffectsModal)을 개편했다. features/fortune/model/fortune.ts와 features/kitchen/model/slots.ts에 효과 칩 4행 2열 최소 요약 모델과 적용 중인 효과 4구획(도시락·미끼·비약·오늘의 운세)·독립 곱연산 배수 모델을 추가했다. SlotChips는 데스크톱 호버 시에만 4행 2열 최소 요약(활성/비활성, 남은 슬롯 수, 운세 이름)을 표시하고 클릭·터치 시 툴팁 대신 ActiveEffectsModal(layer="stage")을 바로 열도록 연결했으며, HudLayout·GameView에서 가방 아이템 탭과 스탯 보너스 탭 이동 경로 및 단위·통합 테스트를 추가했다.
+  - HUD 보너스 통합 칩 호버 툴팁과 클릭 동작(SlotChips·ActiveEffectsModal): 이전 호버·터치 툴팁에 세부 효과와 남은 시간 목록을 길게 표시하고 전용 상세 창 부재, 이후 데스크톱 호버 시 도시락·미끼·비약·운세 4행 2열 최소 요약만 표시하고, 클릭·터치 시 적용 중인 효과 스테이지 창(세부 효과·남은 시간·가방 열기·전체 보너스 보기) 즉시 열기
+  - 커밋: a4c83c76, 26d22fb2
+- TutorialModal을 4종 17항목(마을 4·바다 5·수배 의뢰 3·네임드 5) 그림 포함 1페이지 1항목 카드(1/N, 이전·다음·완료, TutorialCardVisual.tsx)로 개편하고, VHelp.tsx에서 폐지된 이메일 로그인·이사 코드·옛 설명을 없애고 구글 단일 인증·운세·비약·길드·업적·우편함·랭킹 5탭·바운티 완화·여객선·새벽 4시 일일 초기화 기준으로 전면 개편했다.
+  - 튜토리얼 창 및 도움말 탭 구성(TutorialModal·VHelp): 이전 단일 텍스트 목록 튜토리얼 및 이메일 로그인·구버전 기준 도움말, 이후 그림 포함 1장씩 넘기는 카드형 튜토리얼(17장) 및 최신 시스템·간결 문구 기준 도움말 전면 개편
+  - 커밋: 7c7cd72e, 65271ac2, 8ec6d7ba
+- 스테이지 출항·기능 해금 경로에서 여는 연결 창(AccountModal layer="stage")을 설정 탭의 계정 관리 창과 분리해 계정 삭제·이메일·건조 요소를 뺐고, 포구 출항 차단 후 구글 OAuth 복귀 시 sailReturn(sessionStorage)으로 집 앞 대신 대양 출항 위치로 바로 이동하도록 연결했으며, 조선소·목공소(FacilityModal)에서 배 구매 후 창이 닫히지 않고 유지되도록 수정했다.
+  - 출항 전용 연결 창 분리, 포구 로그인 후 대양 즉시 이동, 배 구매 후 조선소 창 유지: 이전 출항 차단에 계정 관리 창 공용, OAuth 복귀 시 집 앞 스폰, 배 구매 시 창 자동 닫힘, 이후 출항 전용 연결 창 분리, 포구 로그인 완료 시 대양 출항 위치 직행(accountFailed 시 차단 방지), 배 구매 후 창 유지
+  - 커밋: 7704e97a, c0829a7f, aed5986e, ea68ebe7
+- 오늘의 운세 첫 접속 팝업(FortuneModal)의 중복 안내와 하단 버튼 열을 제거하고 통합 좌측 정렬 구조로 개편했다. fortuneParts.tsx에 지수·중복 숫자 없이 5칸 막대와 강도 등급만 보이는 FortuneStrength를 추가했고, FortuneModal.tsx를 통합 헤더 카드·로어·독립 곱연산 배수 요약·우상단 닫기(X) 단일 출구 구조로 정리했다. effectNotation.test.tsx의 효과 표기 가드를 독립 곱연산 배수 표기 허용 및 소문자 x 차단 유지 기준으로 보강하고 단위·화면 테스트를 갱신했다.
+  - 오늘의 운세 팝업 구성·강도 표기·닫기 구조(FortuneModal·fortuneParts): 이전 중복 상시 안내 3줄, 중앙·좌측 혼재, 지수 숫자 병기, 하단 버튼 열 배치, 이후 중복 안내 3줄과 하단 버튼 열 제거(우상단 X 단일 닫기), 좌측 정렬 통합 헤더 카드·5칸 강도 막대·독립 곱연산 배수 표기 적용
+  - 커밋: 6d880ab6, 26d22fb2, 58ab324e, 9f2100b7
+- 지역 탭(VRegion.tsx)에서 별도 구역 이야기 모달과 지역 안내 툴팁을 제거하고 최상단 고정 높이(148px) 인라인 이야기 상자 → 등급 분포 표 → 어군 정보(사거리 내 어군을 일반·희귀·영웅·전설 4등급 2열 격자로 분류, 미진입 시 가까운 어군 목록) 순으로 배치했다. 제거된 구역 이야기 모달과 안내 유틸 경계에 맞춰 layerOrder.test.ts·boundary.test.ts·VRegion.test.tsx를 갱신했다.
+  - 지역 탭 구역 이야기·배치 순서·어군 격자(VRegion): 이전 구역 머리(지역 안내 툴팁 + 구역 이야기 보기 모달 버튼) → 어군 슬롯 → 하단 등급 분포 표 순서, 이후 최상단 인라인 구역 이야기 상자(148px 고정) → 등급 분포 표 → 사거리 내 어군 4등급 2열 격자 순서(모달·지역 안내 툴팁 제거)
+  - 커밋: 37644bb6, 4dbafa8d
+- BagTab.tsx 유물 섹션의 보유·미보유 행 레이아웃과 높이를 통일하고 밝기·채도로만 구분하도록 정비했다. 왼쪽 제목을 공용 GradeName(`이름(등급)`)으로, 오른쪽 보조 정보를 출처 구역(및 보유 레벨)으로 분리했고, 미보유 유물은 효과 영역을 1행 `???`와 빈 보조 행 1줄로 마스킹해 효과 내용·줄 수 스포일러를 차단했으며 하단 상시 안내를 제거했다. ArtifactDetail.tsx와 RelicCard.tsx 제목도 `이름(등급)` 표기로 통일했다.
+  - 가방 유물 행 레이아웃·미보유 마스킹 및 유물 제목 표기(BagTab·ArtifactDetail·RelicCard): 이전 보유·미보유 행 구조 상이, 미보유 시 효과 줄 수 차이 노출, `이름` + `등급 유물` 분리 표기 및 하단 안내 상시 노출, 이후 보유·미보유 동일 틀·높이 통일, 미보유 `???`+빈 행 마스킹, `이름(등급)`(좌)·출처 구역(우) 분리 및 하단 안내 제거
+  - 커밋: efabaf65, 4dbafa8d
+- BagTab.tsx 물고기 섹션 헤더의 `목록 안내`·`개체 표시` 텍스트와 하단 판매 가능 금액 안내(`Note`)를 제거하고, 보기 전환 아이콘 버튼 옆에 작은 물음표 `IconButton`(hover/press `Tip`, `최대 크기`·`돌연변이` 2줄 범례)을 배치했다. BountyPanel.tsx의 `수주 안내`·`교환 재료 안내` 텍스트 링크도 동일한 물음표 아이콘 버튼 툴팁으로 교체하고 uiGuard.test.ts·BagTab.test.tsx·BountyPanel.test.tsx·App.test.tsx를 갱신했다.
+  - 가방 물고기 탭 범례·하단 금액 안내 및 수배판 안내 트리거(BagTab·BountyPanel): 이전 가방 물고기 상단 `목록 안내`·`개체 표시` 텍스트 및 하단 판매 가능 금액 `Note`, 수배판 `수주 안내`·`교환 재료 안내` 텍스트, 이후 가방 물고기 `?` 2줄 범례 아이콘(최대 크기·돌연변이)·하단 금액 안내 제거, 수배판 `?` 아이콘 버튼 툴팁 전환
+  - 커밋: 32ef82ea, 4dbafa8d
+- 게임·기능·표현 계층 전반에서 퍼센트포인트(%p) 표기를 폐지하고 합연산 보너스(+N%/−N%)·출처 증폭(×1.xx)·독립 곱연산 배수(운세·비약 ×1.xx, 억제 요리 ×0.5) 기준을 일관 적용했다. potions.ts·fortune.ts·guild.ts·coupons.ts·bagItems.ts·RecipeTab.tsx·ItemDetail.tsx·VHelp.tsx·MailTab.tsx·ui/format.ts에서 fmtPlusPoint와 %p 표기를 제거하고 UI 가드 테스트(uiGuard.test.ts)를 추가했으며, 작은 행운 물약을 작은 바다 영약(분류명 비약)으로, 운 배율·만날 확률·출현 확률을 행운 배수·네임드 조우 확률·출현 비중으로 통일하고 사용/완료 동사 및 도시락·미끼 2줄 비접속 지속 안내로 간소화했다. 길드 돌연변이 보너스도 +1%p(100bp)에서 돌연변이 폼 가중치 +4%(400bp)/단계로 전환했다.
+  - %p 표기 폐지·곱연산 배수 통일 및 길드 돌연변이 가중치 전환(statFormat·guild·potions·uiGuard): 이전 물약·운세·길드 돌연변이(+1%p/단계)에 %p 혼용 및 fmtPlusPoint 헬퍼 유지, 이후 %p·fmtPlusPoint 제거 및 UI 가드 추가, 비약·운세 ×1.03/×1.05 배수 표기 및 길드 돌연변이 폼 가중치 +4%/단계 전환
+  - 비약·확률 용어 통일 및 도시락·미끼 안내 간소화(recipes·bagItems·VHelp): 이전 작은 행운 물약·물약, 네임드 만날 확률·출현 확률, 먹기/쓰기 및 3줄 요리 지속 안내, 이후 작은 바다 영약·비약, 네임드 조우 확률·출현 비중, 사용 동사 통일 및 전용 낚시·비접속 지속 2줄 안내
+  - 커밋: 0ef6e047, baf7b497, 4e736225, a60dfb3c, 7629f61a, 8d1f6206
+- CatchCard.tsx를 340×160px 고정 2열 레이아웃(좌측 120px 어종 액자·우측 고정 행 격자)으로 개편했다. 돌연변이여도 액자 겉 테두리(PORTRAIT_BORDER)를 어종 등급 4색(일반·희귀·영웅·전설)으로 고정하고, 우상단 배지를 왕관(record)→돌연변이(variant)→NEW 순으로 우측 정렬했으며, 어종명 1줄 말줄임(28px), 비돌연변이 시에도 18px 빈 슬롯을 유지하는 변이 로어체 자리, 크기·판매가 2종 지표 칸(56px, tabular-nums)만 남겨 명성·판정·수동/방치·월척 문구를 제외하고 CatchCard.test.tsx를 갱신했다.
+  - 잡기 결과 카드 크기 고정, 액자 테두리, 배지 순서 및 지표 구성(CatchCard): 이전 가변 폭·높이, 변이 시 로어 줄 추가에 따른 세로 확장, 좌상단 NEW 노치 및 하단 월척 문구 노출, 이후 340×160 고정 크기, 어종 등급색 액자 겉 테두리 고정, 우상단 왕관→돌연변이→NEW 우측 정렬, 18px 변이 자리 예약 및 크기·판매가 2종 표시
+  - 커밋: 3d9cb6eb, 798215c3
+- AccountModal.tsx에서 로그인된 계정의 별도 클라우드 저장 행과 중복 안내 문구(`진행은 이 계정에 저장돼요.`)를 제거하고, 구글 로고와 이메일 1행 우측에 픽셀 구름 상태 아이콘(PixelIcon cloudOk·cloudSyncing·cloudError, boxed IconButton)과 기본 닫힘 2줄 공용 툴팁(TipCard: 클라우드 저장 켜짐·클라우드 저장 연결 중·클라우드 저장 연결 실패)을 통합했다. 로그아웃 버튼은 전폭(`full`)으로 맞추고 ExternalLink에 실선 밑줄(decoration-solid)과 새 탭 아이콘 옵션을 추가해 법무 문서 링크 3종에 적용했으며 AccountModal.test.tsx를 갱신했다.
+  - 계정 관리 창 클라우드 저장 상태 표시, 로그아웃 버튼 및 법무 링크(AccountModal·PixelIcon·IconButton·ExternalLink): 이전 별도 클라우드 저장 행·중복 안내 문구 노출, 점선 밑줄 법무 링크, 이후 1행 계정 카드 우측 구름 아이콘 2줄 상태 툴팁 통합, 중복 구획·안내 삭제, 전폭 로그아웃 및 실선 밑줄·새 탭 아이콘 법무 링크 적용
+  - 커밋: 15d9953e, c6f5e209
+- FortuneCalendarModal.tsx를 PC 좌우 2단(고정 높이 500px)·모바일 상하 분할(고정 높이 552px) 레이아웃(Modal height=500·mobileHeight=552·ModalCard fixed)으로 개편하고, 우측에 TodayMiniCard와 고정 높이 선택 상세 패널(PC 372px·모바일 202px), 좌측에 월 이동과 6행 고정 달력 격자(PC 3글자 요약 풍어운·재물운·그림자 비말줄임, 모바일 아이콘 단독)를 배치했다. features/fortune/model/fortune.ts·fortuneParts.tsx에서 월간 4항목 집계, 중복 안내문, 미기록 표기, 구 배너·점수·구형 확률 문구를 제거하고, 과거 미방문(75%)과 미래(35%) 비활성 구분, 5칸 강도 막대(FortuneStrength), 곱연산 배수(×1.03/×1.05), 그림자 운 산호 적동(`text-named`·target)을 적용했으며 uiGuard.test.ts·stageModalWrapper.test.tsx·FortuneCalendarModal.test.tsx를 갱신했다.
+  - 운세 메뉴 창 레이아웃, 고정 높이 및 구 표기 정리(FortuneCalendarModal·fortune·fortuneParts·Modal): 이전 단일 열 가변 높이 배치, 월간 4종 집계·상시 안내문·미기록 표기·구형 확률 문구 및 그림자 운 보라색 혼용, 이후 PC 2단(500px)·모바일 상하(552px) 고정 높이 및 중첩 스크롤 0건, 월간 집계·안내문·미기록 제거, 강도 막대·곱연산 배수·그림자 운 산호색 표적 및 최신 확률 용어 통일
+  - 커밋: 93e87baf, 4f5b407f
+- GameTabs.tsx의 가방·도감 탭 라벨에서 괄호 둘째 줄을 제거하고(재선택 순환 유지), BagTab.tsx 유물 행의 보유 유물 이름을 흰색 본문색으로 통일하고 레벨 표기를 이름 옆 좌측으로 옮겨 우측에 구역명만 배치했다. HudChip.tsx·TimeBadge.tsx의 칩 높이를 26px 단일 규격으로 통일하고, CatchCard.tsx 돌연변이 한 줄 문구를 보조 회색(text-text-dim)으로 정돈했으며, GuildSkillsTab.tsx 상단 바의 높이와 배지·단계 표시 구성을 공통·개인 트랙 모두 맞췄다.
+  - 사이드바 가방·도감 탭 라벨 및 가방 유물 행 배치(GameTabs·BagTab): 이전 가방·도감 탭에 괄호 2줄 라벨 노출, 보유 유물 행에 등급색 이름 및 우측 구역명·레벨 병치, 이후 단일 줄 라벨(가방·도감, 재선택 순환 유지) 및 보유 유물 흰색 본문색·좌측 이름 옆 Lv 표기·우측 구역명 단독 배치
+  - HUD 칩 높이, 잡기 카드 돌연변이 문구 및 길드 스킬 상단 바 구성(HudChip·TimeBadge·CatchCard·GuildSkillsTab): 이전 HudChip size 분기(24px/26px), CatchCard 돌연변이 문구 강조색, 길드 스킬 공통·개인 상단 바 높이·배지 구성 불일치, 이후 모든 HUD 칩 26px 단일 규격, CatchCard 돌연변이 문구 text-text-dim 회색 정리, 길드 스킬 상단 바 공통 높이·공용 기본 단계 5칸·개인 잠금 길드 레벨 배지 통일
+  - 커밋: 10bb1ec0, 199c6216
+- PlayersModal을 xl(920px) 고정 높이 좌우 2단(좌측 1열 접속자 목록·우측 상세, 모바일 상하 배치)으로 개편하고, PlayerInfo를 상단 컴팩트 기본 정보(스프라이트·닉네임·위치·스탯 4종·친구/차단) + 하단 3서브탭(업적 80종 3열 타일·필터·달성만 보기, 수집품 유물 8종·모자 55종 카드, 도감 진척도 7구역 일반/돌연변이 막대)으로 재구성했다.
+  - 플레이어 목록·정보 창 레이아웃 및 상세 탭(PlayersModal·PlayerInfo): 이전 680px 상단 3열 접속자 목록 + 세로 누적 상세, 이후 PC 920px 좌우 2단(모바일 상하) 및 업적·수집품·도감 진척도 3서브탭 구성
+  - 커밋: f5097fcc
+- 패치노트 스키마(patchnotes.ts)에 선택 필드 compact(표면 요약)와 important(상단 핵심 카드 강조)를 도입하고, WhatsNewModal·NewsStep이 표면에는 compact 키워드 요약을 노출하고 클릭 시 public 원문을 펼치도록 개편했다(PatchNotesModal은 전체 원문 유지).
+  - 업데이트 소식 창 요약 계층(NewsStep·WhatsNewModal·patchnotes): 이전 접속 시 업데이트 소식 창에 설정 탭 패치노트와 동일한 장문 원문 일괄 노출, 이후 상단 핵심 변경 강조 카드(important) 및 키워드 요약(compact) 표면 노출·클릭 펼침 지원
+  - 커밋: d44550a8, 7df3f642, fe2b3627
+- Vite 기본 번개 아이콘(public/favicon.svg)을 제거하고 16×16 픽셀 금붕어 실루엣 SVG·ICO·Apple Touch Icon(tools/generate-favicon.ts)으로 교체해 index.html에 연결했다.
+  - 브라우저 파비콘 및 터치 아이콘(index.html·public/favicon.*): 이전 Vite 기본 번개 로고 SVG 사용, 이후 16×16 픽셀 금붕어 실루엣 SVG·ICO·Apple Touch Icon 적용
+  - 커밋: 5b0e0f26, 3054274f
+- 구조형 툴팁 카드(TipCard 헤더→목록→구분선 잠금/보조 주석)와 ESC·스크롤 닫힘을 도입하고 HelpHint를 제거했으며, HUD 미니맵 위 개별 도시락·미끼 칩을 보너스 통합 칩(SlotChips, 이후 0.20.5-15에서 상세 창 연결로 보완)으로 통합했다. 또한 공용 툴팁과 UI 전반의 등급·네임드·돌연변이 낱말에 RarityTag/HighlightRarityText 등급색을 일관 적용하고, 랭킹·도감·업적·의뢰·길드·스탯 등 진척도/핵심 수치를 공용 ProgressCount(text-gold / 분모 text-text-dim)로 통일했다.
+  - 구조형 툴팁 위계, HUD 보너스 통합 칩, 등급색 및 진척도 골드 강조 통일: 이전 잠금 문장 선행·ESC/스크롤 미닫힘, 개별 HUD 슬롯 칩 나열, 툴팁 문자열 등급색 누락 및 진척도 색 혼용, 이후 3구역 구조형 TipCard·ESC/스크롤 닫힘, 보너스 통합 칩, RarityTag 등급색 일관 적용 및 ProgressCount 골드 강조 통일
+  - 커밋: 8f52cd9e, ff5bdee7, e2154d65, 883e644b, 03abbf00, 9eb223a2, 36f97c4f, 5b039d28
+- 게스트 기능 잠금 문구(menuLock.ts, errors.ts, guild.ts, rules.ts, AchievementsModal.tsx)를 태평양 항로 해금 인월드 패턴으로 통일하고, 진행 조건 배 단계가 게스트(1단계)보다 뒷단계인 기능은 가장 뒷단계 잠금 하나만 노출하도록 우선순위를 수정했다. 또한 StatsModal 초기 해역(selectInitialStatsSpotIndex)이 현재 파워·배 단계로 진입 가능한 최고 해역을 기본 선택하도록 고쳤다.
+  - 게스트 잠금 문구·잠금 우선순위 및 스탯창 초기 해역 선택: 이전 시스템 계정 문구 혼재, 5단계 잠금 기능에서도 1단계 게스트 잠금 우선, 진입 불가 해역 기본 선택 가능, 이후 인월드 태평양 항로 해금 문구 통일, 뒷단계 진행 잠금 단독 표시, 현재 진입 가능 최고 요구 파워 해역 기본 선택
+  - 커밋: 6614b5af, a5afda9d, 46d76e84, d0f9fd21, 263b2d76, a1d2387f, 3f4336a0
+- src/presentation/ui/Tip.tsx에 <span> 기반 공용 TipBullets(4px 사각 마커·HighlightRarityText)와 TipCard bullets 슬롯을 도입해 여러 문장·병렬 조건·주의사항 줄글 툴팁 35곳을 구조화하고(RecipeTab 수동 하이픈 루프 제거 포함), TipList 시그니처와 SettingsModal 경고 슬롯, 1줄 단문·키-값 표 툴팁은 유지했다.
+  - 공용 사각 불릿 툴팁 도입 및 여러 줄 툴팁 35곳 구조화(Tip·tipText·RecipeTab·주요 화면): 이전 여러 문장·병렬 조건·주의사항 툴팁이 줄글 줄바꿈이나 수동 하이픈으로 혼재, 이후 TipBullets(4px 사각 마커) 및 TipCard bullets 슬롯 도입, 35곳 목록 구조화 및 uiGuard 가드 추가
+  - 커밋: 7ca61b75
+- GoogleOverwriteDialog.tsx·googleFlow.ts·Badge.tsx·PixelIcon.tsx를 개편해 layer="stage" 400폭 창에 현재 게스트 진행[사라짐]에서 구글 공식 로고·구글 계정 진행[불러옴] 전환 다이어그램과 2줄 사각 불릿 경고(지금 게스트 진행은 되돌릴 수 없어요.), 1행 2열 되돌아가기/계정 전환 버튼을 적용했다.
+  - 게스트에서 구글 계정 전환 확인 창 다이어그램·요약·버튼 개편(GoogleOverwriteDialog·googleFlow·Badge·PixelIcon): 이전 중복 줄글 3문단, 세로 다단 버튼 및 되돌릴 수 없음 경고 산재, 이후 전환 다이어그램(현재 게스트 진행[사라짐]→구글 계정 진행[불러옴]), 2줄 사각 불릿 요약 및 1행 2열 균형 버튼(되돌아가기·계정 전환) 적용
+  - 커밋: e96b5892
+- CatchCard를 2열 2×2 격자와 HudLayout 채팅창 위 포털 슬롯으로 우선 개편하고(이후 0.20.5-10·0.20.5-25에서 좌측 중앙 고정 크기 340×160으로 최종 확정), ItemDetail·ArtifactDetail·FortuneCalendarModal의 정보 순서를 로어(설명) → 상세(효과·수치) → 주의사항으로 통일하며 BagTab 유물 행의 바깥 이탤릭 로어를 제거하고 uiGuard.test.ts 가드를 추가했다(이후 0.20.5-18·0.20.5-27에서 레이아웃을 최종 확정).
+  - CatchCard 2×2 선행 배치 및 상세 창 로어 우선 순서·유물 바깥 로어 제거: 이전 CatchCard 중앙 세로 1열 배치, 상세 창 효과 선행·로어 후행 및 유물 행 이탤릭 로어 노출, 이후 HudLayout 채팅창 위 슬롯 도입(이후 0.20.5-25로 최종 개편) 및 로어→상세→주의사항 순서 통일·유물 행 로어 제거
+  - 커밋: 1574237d, 6d74cd3d
+- 사이드바·전용 색상 개편 후속 정리 5건을 반영했다. src/index.css에 --color-special 토큰을 등록하고 --c-special·--c-mutation·--c-named 주석을 정렬했으며, uiGuard.test.ts의 시맨틱 색 중첩 가드 정규식에 mutation·named 토큰을 추가했다. PageTitle에 tone(gold·named·dim) prop을 분리해 NamedDetail에서 미토벌 네임드의 표적 아이콘과 강조색을 가리고, BagTab 물고기 도움말 버튼에 p-1 클릭 여백을 보강했으며, regionView.ts의 미사용 SpotTendency·selectSpotTendency·tendency를 제거했다.
+  - 전용 색상 가드·미발견 네임드 제목·가방 도움말 여백·미사용 헬퍼 정리(index.css·uiGuard·PageTitle·NamedDetail·BagTab·regionView): 이전 시맨틱 색 가드에 mutation/named 누락, 미토벌 네임드에 표적 아이콘·강조색 노출, BagTab ? 버튼 p-1 없음, 미사용 tendency 코드 잔존, 이후 --color-special 추가·주석 정렬, mutation/named 가드 확장, PageTitle tone 분리 및 미토벌 네임드 가림, BagTab p-1 적용, 미사용 tendency 제거
+  - 커밋: 122ebd09
+
+### 밸런스
+
+- 바다 6구역(태평양·동남아·인도양·마다가스카르·남대서양·북대서양)의 지역 누적 업적 18종을 수동 챔질 카운터(manual.legendary.*, manual.variant.<구역>)에서 state.dex 기반 수동+방치 합산 집계로 전환했다. src/game/content/achievements.ts에 dexLegendary/dexNightLegendary/dexVariant 소스 타입과 writer 검수 문안(<구역> 전설/밤 전설/돌연변이, 손맛 제거)을 반영하고, src/game/rules/achievements.ts와 api/action.ts(빠른 캐치 보너스 계산 시 도감 로드 보장)에서 낮/밤 전설(normal.count+variant.count) 및 돌연변이(variant.count) 도감 합산을 계산하도록 구현했다. src/features/admin/model/contentCatalog.ts의 집계 표기를 도감 포획 수로 갱신하고, tools/balance/flow/counterBonus.ts의 시뮬레이션 보너스 키를 맞췄다. 전역 3종(전체 전설/밤 전설/돌연변이 손맛)과 manual.* 카운터는 기존 수동 기준을 유지한다.
+  - 바다 6구역 지역 누적 보너스 18종 집계 기준 및 문안(전역 3종·manual.* 카운터 유지): 이전 수동 챔질 전용 카운터(manual.legendary.*, manual.variant.<구역>) 기반 집계 및 손맛·직접 챔질 문구, 이후 state.dex 수동+방치 합산 집계(낮/밤 전설 normal+variant, 돌연변이 variant) 및 <구역> 전설·밤 전설·돌연변이 문구(도감 소급 반영)
+  - 영향: 기존 플레이어를 포함해 보유 도감(state.dex) 수동+방치 누적 마릿수가 바다 6구역 지역 누적 보너스 18종 단계에 즉시 소급 반영되며, 전역 3종과 manual.* 카운터는 변경되지 않는다.
+  - 커밋: 921d1160, 619e25c4, b87a2ce2, 3706c0bd
+- firstCatch.ts의 마을 연못·강 하드코딩(5회차 영웅·10\~15회차 전설)을 재사용 가능한 해역별 횟수 상한 테이블(FIRST_CATCH_SPOT_CAPS: pond 20, river 30) 기반 미보유 일반 폼 전종 1회 이상 보장(구 세이브 비재활성화)으로 전환하고, DexGrid.tsx·toastPolicy.ts·useGame.ts에 해역 일반 도감 100% 완성 축하 알림과 완료 표시를 추가했다.
+  - 마을 해역 첫 경험 보장 방식(FIRST_CATCH_SPOT_CAPS): 이전 마을 연못·강 5번째 영웅, 10\~15번째 전설 고정 보장, 이후 해역별 횟수 상한(pond 20회·river 30회) 내 미보유 일반 폼 전종 보장(보장 캐치는 일반 폼 고정)
+  - 해역 일반 도감 완성 축하 알림 및 완료 표시: 이전 도감 완성 시 독립 축하 토스트·완료 표시 부재, 이후 해역 일반 폼 전종 달성 시 축하 알림과 도감 완료 표시 추가
+  - 영향: 마을 연못·마을 강 초반 플레이 시 정해진 상한 안에서 일반 폼 6종을 모두 확보할 수 있으며, 도감 완성 시 업적 해금 여부와 무관하게 축하 알림과 도감 완료 표시가 노출된다.
+  - 커밋: e96f1592, 8033fb44, 6379fa05, eb475087, 5d834d88
+- 길드 자유 강화 초기화 비용(guild.ts)을 고정 20,000,000G에서 계정 누적 초기화 횟수 기반 단계 비용으로 변경하고, saves_current.guild_enhance_reset_count(0041_guild_enhance_reset_count.sql)에 계정 단위로 영구 저장해 길드 이동·탈퇴로 우회되지 않게 했다.
+  - 길드 자유 강화 초기화 비용 및 횟수 누적 기준: 이전 20,000,000G 고정, 이후 계정 영구 누적 초기화 횟수(saves_current.guild_enhance_reset_count)에 따라 100,000G → 500,000G → 1,000,000G → 5,000,000G → 10,000,000G(4회차 이상 상한)
+  - 영향: 0041_guild_enhance_reset_count.sql 마이그레이션이 필요하며(0041_guild_enhance_reset_count.down.sql로 되돌림 가능), 기존 플레이어는 누적 횟수 0회차부터 100,000G로 시작해 길드 탈퇴 후에도 초기화 횟수가 유지된다.
+  - 커밋: c18ee0bd, c57de345, dd609d89
+- rules/logic.ts의 LICENSE_GRADES와 BountyPanel.tsx를 수정해 바다 6개 구역의 일반 의뢰(쉬움·보통·어려움)를 도감 선행 조건 없이 항구 진입 즉시 개방하고, 네임드 토벌 해금 조건에서 전설 등급을 제외(일반·희귀·영웅 일반 모습만 요구)했으며 밸런스 도구의 해역 업적 등급 표를 분리 보존했다.
+  - 바다 6구역 일반 의뢰 개방 조건(LICENSE_GRADES.basic): 이전 해당 구역 전설 제외 일반·희귀·영웅 어종 도감 완성, 이후 도감 조건 없음(항구 진입 시 즉시 개방)
+  - 바다 6구역 네임드 토벌 개방 조건(LICENSE_GRADES.named): 이전 해당 구역 전설 포함 일반·희귀·영웅·전설 일반 모습 도감 완성, 이후 전설 제외 일반·희귀·영웅 일반 모습 도감 완성
+  - 영향: 바다 6개 구역 항구 진입 직후 일반 의뢰를 수행할 수 있으며, 네임드 토벌 해금에 전설 어종 수집이 필요하지 않다. LICENSE_GRADES 상수로 즉시 되돌릴 수 있다.
+  - 커밋: 5dac4d62, 279c50a5, f5ee1b58, 70886ae3
+- schools.ts의 generateWorldSchools에서 일반 해역이 있는 항구 3곳(harbor→sea, colombo→indian, toamasina→mozstrait)에 대해 출항점 기준 HARBOR_NEARBY_RANGE(100\~220px) 근접 링의 자기 존 유효 후보 중 첫 어군 1개를 우선 배치하도록 수정했다.
+  - 일반 해역 항구 첫 어군 배치 거리(HARBOR_NEARBY_RANGE): 이전 날짜 시드 셔플로 출항점에서 최대 397\~882px 이격 가능, 이후 harbor·colombo·toamasina 출항점 반경 100\~220px 링 내 자기 존 유효 후보에 첫 어군 1개 우선 배치
+  - 영향: 일반 해역을 가진 항구 출항 직후 첫 어군까지의 항해 거리가 최대 397\~882px에서 100\~220px 이내로 줄어들며, 특수 해역 전용 항구(manila, walvisbay, lisbon)는 변경되지 않는다.
+  - 커밋: a0e47d22
+- guest.ts의 guestActionVerdict에서 redeemCoupon 중 정적 코드 출항준비에 한해 게스트 사용을 예외 허용하고, coupons.ts 보상을 300G + 작은 바다 영약(luck-small) 1개로 변경했으며, CodeModal.tsx·api/action.ts에 쿠폰 아이템 지급 및 안내 표시를 연결했다.
+  - 출항준비 정적 쿠폰 사용 대상 및 보상(coupons·guest·CodeModal): 이전 로그인 계정 전용(account-only), 125G 지급, 이후 게스트 예외 허용, 300G + 작은 바다 영약(luck-small) 1개 지급 및 쿠폰 결과 창 아이템 보상 표시
+  - 영향: 게스트가 계정 연결 전에도 출항준비 쿠폰으로 300G와 작은 바다 영약 1개를 받을 수 있으며, 다른 쿠폰의 로그인 계정 전용 제한은 유지된다.
+  - 커밋: 6a1041be, af10eb36, aa5ee723
+
+### 수정
+
+- trustedProxy.ts로 신뢰 프록시 대역 판별을 분리해 auth.ts와 securityHeaders.ts가 공용 참조하도록 맞추고, securityHeaders.ts의 HTTPS 판정 및 다중 Sentry DSN(서버·클라이언트) 오리진 허용과 main.ts 전달을 보강했다. admin/nginx.conf는 server_tokens를 끄고 모든 location 블록에 보안 헤더 5종을 always 플래그로 적용했으며, k8s/prod/ingress.yaml은 전체 Ingress에 ssl-redirect를 명시하고 익명 가입(/api/auth/sign-in/anonymous) 전용 Ingress 경로를 분리했다. 클라이언트에서는 openWindows·Modal·대화상자 컴포넌트에 devtools 레이어와 body 포털을 추가해 MigrationCode가 전용 레이어와 해요체 sendNotice 알림을 쓰도록 정비하고 정적 가드 테스트를 추가했다.
+  - 서버 HTTPS·Sentry CSP·신뢰 프록시 판정 및 admin/Ingress 보안 설정: 이전 auth.ts 내 프록시 대역 중복 정의, 단일 Sentry DSN 전달, admin nginx 일부 블록 헤더 누락 및 익명 가입 Ingress 미분리, 이후 trustedProxy 공용화, 서버·클라이언트 다중 Sentry DSN 허용, admin nginx 전 location always 헤더 및 Ingress ssl-redirect·익명 가입 경로 분리
+  - 개발 도구 대화상자 레이어 분리 및 이사 코드 안내 정비: 이전 MigrationCode 대화상자 레이어 미지정 및 문구 불일치, 이후 devtools 레이어(body 포털) 신설 및 MigrationCode 레이어 지정·해요체 sendNotice·정적 가드 테스트 추가
+  - 영향: admin/nginx.conf와 k8s/prod/ingress.yaml 반영 시 모든 /admin 및 게임 경로 응답에 보안 헤더와 HTTPS 리다이렉트가 적용되며 익명 가입 전용 Ingress 한도가 분리된다.
+  - 커밋: acf06368, 36224eaa
+- 사이드바 가방 탭에서 여는 기운 얻기 창(BagTab·GameView·FacilityModal·EnergyPanel)을 스테이지 창에서 앱 창(layer="app")으로 분리하고, 모바일 시트(sidebar/index.tsx)의 WindowSlot 쌓임 맥락을 정리해 앱 창이 시트·탭 메뉴 위에서 정상 동작하도록 수정했다. layerOrder.test.ts에 사이드바 창 layer="app" 정방향 가드와 태그 검사를 추가하고 modalSidebar.test.tsx 등 단위 테스트를 보강했다.
+  - 사이드바 기운 얻기 앱 창 분리, 모바일 시트 쌓임 맥락 수정 및 층 순서 정방향 가드: 이전 가방 탭 기운 얻기 진입이 stage 계층으로 고정, 모바일 시트 쌓임 맥락 간섭 및 정방향 가드 부재, 이후 가방 탭 기운 얻기 layer="app" 분리, 모바일 시트 WindowSlot 정비 및 layerOrder.test.ts 정방향 가드 추가
+  - 커밋: 766187f1, 11aff8b4
+- 설정·저장 상태·구글 계정 연결 안내의 과잉 치환 표기를 명세 기준으로 복구했다. src/features/announcements/model/whatsNew.ts의 물고기 그래픽 선택지를 v1(legacy, 기본)과 v2(beta, 실험)로 원복했고, src/features/gameplay/service/useGame.ts의 저장 상태 문구를 클라우드 연결 중·클라우드 저장 켜짐·클라우드 연결 실패 표현으로 복구했으며, src/features/account/model/googleFlow.ts의 문의 안내 대상을 실제 설정 탭 버튼명인 개발자에게로 되돌리고 단위·통합 테스트 기대치를 동기화했다.
+  - 설정·클라우드·계정 문의 문구 원복(whatsNew, useGame, googleFlow): 이전 기본 그림·새 픽셀 그림 치환, 진행 연결 중·저장에 연결하지 못했어요 비문, 편지로 문의해 주세요 불일치, 이후 v1(legacy)·v2(beta) 표기 원복, 클라우드 연결·저장 상태 복구, 개발자에게 문의해 주세요 복구
+  - 커밋: e397aacc
+- 운세 달력과 선택형·단계 전환 모달의 높이 뒤틀림을 수정하고 정적 가드를 보강했다. features/fortune/model/fortune.ts에서 기록이 있는 날짜만 기본·유지 선택되도록 보정하고, FortuneCalendarModal에 6주 고정 격자·상세 패널 고정 높이·미기록 과거 날짜 클릭 비활성화(disabled)를 적용했다. WhatsNewModal과 FortuneCalendarModal에 ModalCard fixed·SCROLL_Y 구조를, DexDetail에 형태 전환 최소 높이를 적용하고 uiGuard.test.ts의 고정 높이 안정성 가드를 추가했다.
+  - 운세 달력 미기록 날짜 선택 및 선택형 모달 높이 고정: 이전 미접속 과거 날짜 선택 가능 및 월 주 수·선택·단계 전환 시 모달 높이 변동, 고정 높이 정적 가드 부재, 이후 미기록 과거 날짜 disabled, 기록 날짜만 선택 허용, 6주 고정 격자 및 FortuneCalendarModal·WhatsNewModal·DexDetail 고정 높이와 uiGuard 가드 적용
+  - 커밋: 0f4c63cf, 02958acb
+- 하단 토스트 층 분리, 시맨틱 색 중첩 제거, 가방 아이템 순서와 공용 스크롤·토글 조작을 정비했다. FloatingToastLayer를 GameStageLayout 내부 스테이지 토스트 층(스테이지 창 위·탭 메뉴 아래)으로 옮겨 layerOrder.test.ts를 갱신했고, BagTab·BonusTab·ItemDetail·MailboxModal·FortuneModal·Tip에서 이미 시맨틱 색이 적용된 줄 안의 HighlightRarityText 중첩을 제거했다. bagItems·ItemSection은 생명의 기운을 최상단 1×4 1줄로 배치했고, ScrollRow 화살표를 조건부 렌더링으로 바꿔 hidden 충돌을 없앴으며, ToggleChip이 선택 상태(pressed=true)에서만 체크 아이콘을 그리도록 통일하고 AchievementsModal·MessageLog·PlayerInfo 중복 체크 아이콘 제거와 uiGuard.test.ts 가드를 보강했다.
+  - FloatingToastLayer 화면 층 소속: 이전 스테이지 바깥 루트 오버레이로 사이드바·앱 창 위까지 덮음, 이후 GameStageLayout 내부 스테이지 토스트 층(스테이지 창 위, 탭 메뉴·앱 창·시스템 차단기 아래)
+  - 시맨틱 색 중첩, 가방 아이템 순서, ScrollRow 화살표 및 ToggleChip 상태: 이전 시맨틱 강조 줄 안 HighlightRarityText 중첩, 생명의 기운 하단 배치, ScrollRow hidden 충돌, ToggleChip 미선택·호출부 체크 아이콘 중복, 이후 시맨틱 색 줄 중첩 제거, 생명의 기운 최상단 1×4 1줄(→도시락→미끼→비약), ScrollRow 조건부 화살표, ToggleChip pressed=true 전용 체크 및 uiGuard 가드 추가
+  - 커밋: 4b38fcba, 02958acb
+- GameView.tsx의 마을 튜토리얼 트리거를 집 거점(base: home) 제외 마을 야외 진입 시점으로 한정하고, useGame.ts에서 village 첫 진입 시 신규 해역 알림을 띄우지 않고 world 첫 출항 문구만 바다 맥락으로 교정했다. 또한 useGame.ts·httpGameGateway.ts·App.tsx·profileStatus.ts에서 부트 전 프로필 조회 경합을 막고 loading/loaded/empty/error 4상태를 구분해 게스트 첫 접속에서 불러오는 중 고착을 해소했다.
+  - 마을 튜토리얼·신규 해역 알림 및 게스트 닉네임 비동기 상태: 이전 집 거점서 마을 튜토리얼·신규 해역 [마을] 오출력, 부트 경합·null 폴백으로 닉네임 불러오는 중 고착, 이후 마을 야외 한정 튜토리얼·대양 첫 출항 알림만 노출, loading/loaded/empty/error 4상태 분리 및 profileStatus prop 전달
+  - 커밋: affa3f7c, 2820b802, 5541b01e, b7e68507, 75434138
+- features/kitchen/model/bagItems.ts에서 해금 전 1줄 안내(`unlockNotice`)와 `보유 중만 보기` 빈 상태(`empty`)를 분리하고, presentation/views/game/tabs/bag/ItemSection.tsx에서 전체 보기 상태일 때 상단 모순 빈 상태 문구를 노출하지 않도록 수정했다. ItemSection.tsx와 ItemDetail.tsx의 잠긴 카드·사용 버튼에는 `Locked badge={false}`를 적용해 바깥 자물쇠 배지 중첩을 제거하고 guestLockGuard.test.ts·bagItems.test.ts·ItemSection.test.tsx·App.test.tsx를 갱신했다.
+  - 가방 아이템 탭 전체 보기 빈 안내 조건, 해금 안내 및 잠금 배지(bagItems·ItemSection·ItemDetail): 이전 미보유 플레이스홀더 카드가 렌더링되는 전체 보기에서도 상단에 3줄 빈 상태·안내 문구 노출 및 잠금 카드·버튼 바깥 LockIcon 배지 중첩, 이후 전체 보기 빈 안내 미노출(`보유 중만 보기` 0건 시만 표시), 해금 전 1줄 `unlockNotice` 분리, `Locked badge={false}` 적용 및 가드 보강
+  - 커밋: 525a59bc, 4dbafa8d
+- 사이드바(sidebar/index.tsx) 고정 footer 슬롯과 BagTab.tsx 구조를 정비해 가방 물고기 탭 스크롤 시 하단 sticky 바 아래로 물고기 행이 비치던 현상을 수정했고, RankingModal·RankList 모바일 360px 폭 우측 % 잘림 여백, TransmuteTab 소비 수량 유니코드 마이너스(−) 기호, CatchCard·KitchenPanel 테스트 단언을 정리했다.
+  - 가방 물고기 하단 footer 분리 및 모바일 랭킹 폭·기호 정리: 이전 sticky 액션 바 하단 틈새로 물고기 행 비침, 모바일 360px 랭킹 % 우측 잘림, TransmuteTab ASCII 하이픈(-) 사용, 이후 사이드바 고정 footer 슬롯 분리, 모바일 랭킹 열 폭·여백 조정, 유니코드 마이너스(−) 및 시맨틱 테스트 정리
+  - 커밋: a31c76c8, 375771d9
+- GuildModal.tsx·GuildSkillsTab.tsx·GuildManageTab.tsx에서 중첩 스테이지 확인·기부·초대 대화상자를 카드 내부가 아닌 스테이지 루트 포털(dialogHost / createPortal)로 분리하고, layerOrder.test.ts 정적 가드가 JSX 속성 내 =>와 layer 생략 기본값을 놓치지 않도록 보강했다.
+  - 길드 하위 탭 중첩 모달 포털 및 layerOrder 정적 가드: 이전 GuildSkillsTab·GuildManageTab 내 stage 모달이 ModalCard 프레임 안에 갇히고 layerOrder 정규식이 => 속성에서 조기 종료, 이후 GuildModal 스테이지 포털 분리 및 layerOrder.test.ts JSX 속성·기본 layer 탐지 보강
+  - 커밋: 98430c2a
+- supabase/migrations/0044_drop_redundant_daily_fortunes_index.sql(및 .down.sql)을 추가해 (user_id, day) 기본 키와 중복되는 daily_fortunes_user_day_idx 인덱스를 제거하고, api/fortune.ts·api/_data/fortune.ts에서 9999-12 조회 시 toDay: null(day <= 9999-12-31) 분기를 적용해 5자리 연도 문자열 비교 오류를 방지했으며 주간 잔여 주석을 월별로 정리했다.
+  - daily_fortunes 중복 인덱스 및 9999-12 월 상한 경계(0044·api/fortune): 이전 PRIMARY KEY와 중복된 daily_fortunes_user_day_idx 유지 및 9999-12 다음 달 10000-01 문자열 생성, 이후 0044 마이그레이션으로 중복 인덱스 제거 및 9999-12 시 toDay=null(<= 9999-12-31) 상한 처리
+  - 영향: 운영 DB에 0044_drop_redundant_daily_fortunes_index.sql 적용 시 중복 인덱스만 제거되며 0044 down SQL로 복구할 수 있다.
+  - 커밋: 93b65655
+- api/_server/httpMetrics.ts의 flush() 대기 조건을 단일 if (inFlight)에서 while (inFlight) 루프로 보완해, 대기 중 다른 flush() 진입 및 추가 기록이 겹쳐도 persist 호출이 중첩되지 않고 순차 직렬화되도록 수정했다. api/_server/httpMetrics.test.ts에 동시 flush 중 추가 기록 직렬화 단위 테스트를 추가했다.
+  - httpMetrics flush() 동시 호출 직렬화 대기 조건: 이전 단일 if (inFlight) 대기 후 즉시 재진입해 동시 flush 경합 가능, 이후 while (inFlight) 루프로 진행 중인 flush 완료까지 직렬 대기 및 단위 테스트 검증
+  - 커밋: 2af67fde
+- CatchCard.tsx 루트 컨테이너에 max-w-full 클램프를 추가해 340px 미만 폭에서 가로 넘침을 방지하고, AccountModal.tsx의 로그아웃 동작을 run 비동기 래퍼로 감싸고 disabled={offline || busy}를 적용해 계정 작업 중 중복 클릭을 막았다. CatchCard.test.tsx와 AccountModal.test.tsx에 회귀 테스트를 추가했다.
+  - 잡기 카드 최대 폭 클램프 및 계정 관리 로그아웃 busy 비활성화(CatchCard·AccountModal): 이전 CatchCard w-[340px] 단독 고정, AccountModal 로그아웃 버튼 busy 비활성화 누락, 이후 CatchCard max-w-full 추가, AccountModal 로그아웃 run 래핑 및 disabled={offline || busy} 적용
+  - 커밋: 9eb114a6
+- 모바일(360×780) 운세 창(FortuneCalendarModal·FortuneCollectionTab·fortuneParts)에서 3효과 복합 대길(만선 대길) 선택 시 상세 패널 로어 3번째 줄이 잘리던 문제를 수정하고, Popover.tsx 상단 주석에서 문서명 참조를 일반 설명으로 정리했다. 달력·점괘첩 상세 패널의 외부·헤더·행 상하 여백과 아이콘 크기, 줄간격을 압축하고 점괘첩 모바일 수집 기록 상자를 2열 1행 가로 분할로 전환해 로어 가용 높이를 확보했으며 FortuneCalendarModal.test.tsx 회귀 단언을 추가했다.
+  - 모바일 운세 창(달력·점괘첩) 상세 패널 세로 여백·수집 기록 배치 및 Popover 주석: 이전 모바일 상세 패널 여백·아이콘·수집 기록 2행 세로 적층으로 만선 대길 로어 3번째 줄 잘림(달력 38px/점괘첩 27px vs 45px), Popover 주석에 문서명 포함, 이후 모바일 패딩·아이콘(24px)·행 여백·줄간격(1.35) 압축 및 점괘첩 수집 기록 2열 1행 전환으로 로어 3줄 무잘림 확보(달력 63px·점괘첩 75px), Popover 주석 일반 설명으로 정리
+  - 커밋: 9c8e0bb7, 0f22d425, af915f4d
+
+### 기타
+
+- 전설 유물 2종(mami-wata-mirror, sargasso-net)의 내부 레벨 반환 기준을 최고 레벨로 통일했다. src/game/rules/artifactLevel.ts의 artifactLevelOf는 보유 중인 전설 유물에 ARTIFACT_MAX_LEVEL(5)을 파생 반환하고 미보유 또는 미등록 유물 식별자에는 0을 반환한다. safeArtifactLevels는 전설 유물 키를 저장하지 않는 무이관 호환을 유지하고, artifactEffectsAt와 artifactExtraCookChanceAt의 전설 유물 계수 1 고정, canLevelUpArtifact의 강화 거부, 화면 Lv 숨김은 그대로 둔다. src/game/rules/achievements.ts의 maxArtifactCount는 artifactLevelOf 단일 판정으로 단순화했고, tools/balance/flow의 effects.ts·counterBonus.ts·report.ts는 공용 resolveArtifactLevel 함수로 all, max, all:N, 단독 id, id:5, 객체 스펙 모두 전설 유물을 Lv5 고정으로 해석하고 1에서 4 지정을 거부하도록 맞췄다.
+  - artifactLevelOf 보유 전설 유물 반환값 및 미등록 식별자 처리: 이전 보유 전설 유물 1 반환, 미등록 식별자도 보유 목록에 있으면 1 반환 가능, 이후 보유 전설 유물 ARTIFACT_MAX_LEVEL(5) 파생 반환, 미보유·미등록 식별자 0 반환(safeArtifactLevels 미저장·무이관 호환, 효과 계수 1 고정·강화 불가·UI Lv 숨김 유지)
+  - maxArtifactCount 최고 레벨 유물 집계 판정: 이전 유물 정의 조회와 artifactHasLevel 분기를 중복 검사, 이후 artifactLevelOf(state, id) >= ARTIFACT_MAX_LEVEL 단일 판정으로 통일
+  - tools/balance/flow 전설 유물 레벨 파싱 및 검증 기준: 이전 전설 유물 레벨을 1 고정으로 파싱·검증(2에서 5 거부), 이후 resolveArtifactLevel 공용 함수로 Lv5 고정 파싱·검증(all, max, all:N, 단독 id, id:5 허용, 1에서 4 지정 시 오류)
+  - 커밋: d7ee14a2, 6bcd2f3e
+- src/game/rules/artifactLevel.ts의 ArtifactLevelView.level JSDoc 주석을 보유 전설 유물에 대해 최고 레벨(5)을 파생 반환하고 화면 Lv 표시는 숨기는 실제 동작에 맞게 갱신했다.
+  - ArtifactLevelView.level JSDoc 주석 설명: 이전 전설 유물 레벨 반환 동작 설명이 실제 최고 레벨(5) 파생 반환 기준과 불일치, 이후 보유 전설 유물 최고 레벨 파생 반환 및 화면 Lv 표시 숨김 동작에 맞게 주석 갱신
+  - 커밋: 15e2caaa
+- 스테이징 프리뷰 전용 시안 HTML 동적 서빙 경로(/_mockups)와 500Mi 영구 볼륨(pixel-fishing-mockups)을 구성했다. api/_server/stageMockups.ts는 DEPLOY_ENV=preview이고 MOCKUPS_DIR이 설정된 경우에만 stageGate 뒤에서 /_mockups 목록·정적 서빙을 활성화하고, 경로 순회·널 바이트 거부 및 라우트 전용 CSP(인라인 스크립트·스타일 허용, 외부 폰트 도메인 미허용)를 적용한다. api/_server/main.ts에서 미들웨어를 연결했고, k8s/stage/pvc-mockups.yaml과 kustomization.yaml에 local-path 500Mi PVC, /data/mockups 마운트, MOCKUPS_DIR, Recreate 전략, fsGroup 1000을 추가했으며 단위·통합 테스트(stageMockups.test.ts)를 작성했다.
+  - 스테이징 전용 /_mockups 동적 서빙 경로, 경로 단위 CSP 및 PVC 마운트: 이전 시안 HTML 열람을 위한 스테이징 동적 서빙 경로·영구 볼륨 미구성, 이후 DEPLOY_ENV=preview·stageGate 뒤 /_mockups 서빙(외부 폰트 도메인 제외 CSP), 500Mi local-path PVC 및 /data/mockups 마운트 추가
+  - 영향: 스테이징(DEPLOY_ENV=preview) 환경에만 local-path 500Mi PVC와 /data/mockups 마운트 및 stageGate 보호 /_mockups 경로가 활성화되며, 운영(production) 환경에는 비활성이다.
+  - 커밋: c6902fd8, 181f7999
+- api/_auth/auth.ts에서 emailAndPassword와 mail.ts(Resend 의존성)를 제거하고 /sign-in/email, /sign-up/email, /request-password-reset, /reset-password 경로를 차단했으며, api/admin.ts의 resetLink 기능과 클라이언트 AccountModal·UserDetail·OpsTab·AdminDashboard 내 이메일·비밀번호·전송 한도 코드 잔존 흔적을 일괄 제거했다.
+  - 이메일·비밀번호 인증, resetLink 및 Resend 의존성 제거: 이전 Better Auth emailAndPassword, Resend mail.ts 및 관리자 resetLink 유지, 이후 이메일 인증 경로 차단, Resend·resetLink·AccountModal 이메일 UI 완전 제거(구글 OAuth 단일화)
+  - 영향: 배포 매니페스트(k8s/prod/deployment.yaml)에서 RESEND_API_KEY·MAIL_FROM 환경 변수가 제거되며, 로그인은 구글 OAuth(및 게스트)로 단일화된다.
+  - 커밋: 970d6b14, ec185154, bcc90640, c990abd2
+- api/_server/legalDocs/{terms,privacy,policy}.md에서 이메일·Resend·비법정 자기구속 조항을 정리하고 게스트 약관 적용·무료서비스 면책·잠정 정지·무통지 해지·동의 간주(약관법 제12조제1호 단서)를 반영했다. legalPages.ts에 LEGAL_DISPLAY_DATE(기본 2026-11-25)를 분리했고 consentPolicy.ts의 CONSENT_DOCUMENTS를 [terms] 단일 문서로 축소했으며, cold-archive.ts에서 letter 이벤트 제외 및 events·saves 행의 user_id·adminId 제거 비식별화를 적용했다.
+  - 법무 문서 3종·표시일 분리·수락 대상 및 R2 아카이브 비식별화: 이전 이메일·Resend 및 과도한 자기구속 조항 잔존, CONSENT_DOCUMENTS=[terms, privacy], 표시일=시행일, R2 원형 user_id·letter 적재, 이후 1인 운영·이메일 제거 반영, LEGAL_DISPLAY_DATE(기본 2026-11-25) 분리, CONSENT_DOCUMENTS=[terms], R2 user_id·adminId 제거 및 letter 제외
+  - 영향: CONSENT_EFFECTIVE_DATE를 2099-12-31로 유지한 상태에서도 /terms·/privacy·/policy 표시일이 2026-11-25로 노출되며, R2 콜드 아카이브에는 식별자(user_id·adminId)와 편지(letter) 원문이 적재되지 않는다.
+  - 커밋: ad5e0ca9
+- UI/UX 반복 지적 11건의 원인 조사(명세 동기화 부재·시안 위임 공백·uiGuard 사각지대·공용 컴포넌트 string 고정) 결과를 바탕으로 src/game/·src/features/·src/presentation/ 전역 노출 문구에서 기획·시간대·구현 직역 용어(한국 시간 새벽 4시, 운 배율, 일반 폼, 돌연변이 폼, 을(를), 클라우드 세이브, 친구 성사) 및 금지 부호를 정리하고, uiGuard.test.ts에 SLOP_COPY_RE 재유입 차단 가드(예외 목록 0건)를 추가했으며 GuildManageTab 복사 토스트 조사 누락·guild.ts 희귀 보너스 라벨 의미 반전·MyInfoModal 받침 조사를 보완했다.
+  - 전역 노출 문구 순화 및 uiGuard SLOP_COPY_RE 가드: 이전 게임·기능·화면 코드 전반에 기획·시간대 직역 용어 및 금지 부호 잔존, 정적 가드 부재, 이후 일상 표현으로 일괄 정리(길드 복사 토스트·희귀 스킬 라벨 포함) 및 uiGuard SLOP_COPY_RE 예외 0건 적용
+  - 커밋: bacb9a96, 75de62f7, 49f44ef0, e1ae94ed
+- src/presentation/ui/effectNotation.test.tsx의 기본 규칙 스탯 배수 가드 정규식(STAT_MULT)에 ratio, factor, rate 변수 키워드를 추가하고 관련 금지 사례 검증을 보강했다.
+  - 효과 표기 가드(STAT_MULT) 기본 규칙 배수 키워드 목록: 이전 idle, penalty, applied, mult, boost 위주 탐지, 이후 ratio, factor, rate 변수명 키워드 및 테스트 케이스 추가
+  - 커밋: 62cef8a4
+
 ## [0.20.4] - 2026-11-24
 
 ### 기능
@@ -2693,6 +2945,7 @@
   - 영향: 미확인
   - 커밋: 92257ad
 
+[0.20.5]: https://github.com/abyss-works/pixel-fishing/releases/tag/v0.20.5
 [0.20.4]: https://github.com/abyss-works/pixel-fishing/releases/tag/v0.20.4
 [0.20.3]: https://github.com/abyss-works/pixel-fishing/releases/tag/v0.20.3
 [0.20.2]: https://github.com/abyss-works/pixel-fishing/releases/tag/v0.20.2
