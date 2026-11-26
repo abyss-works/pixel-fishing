@@ -6,6 +6,7 @@ import App from './App';
 import Field from './presentation/layouts/game-stage/Field';
 import Base from './presentation/layouts/game-stage/Base';
 import FacilityModal from './presentation/views/overlays/facility/FacilityModal';
+import { fmtGold } from './presentation/ui/format';
 import { resetBagView } from './presentation/views/game/tabs/bag/bagView';
 import { resetCanvasCover } from './presentation/layouts/game-stage/canvasCover';
 import { resetTimeOverride } from './features/gameplay/service/timeOverride';
@@ -31,9 +32,10 @@ import { gameDayOf } from './game/rules/time';
 import type { GameAction } from './game/rules/actions';
 import { LocalGameGateway } from './platform/adapters/localGameGateway';
 import { when } from './platform/api';
-import { V_SPAWN, schoolsOf } from './game/world';
+import { V_SPAWN, HARBORS, resumePoint, schoolsOf } from './game/world';
 import type { Point, RegionId } from './game/world';
 import { setSchoolDay } from './features/gameplay/service/schoolDay';
+import { setSharedProfileStatus } from './features/gameplay/service/profileStatus';
 
 // 업데이트 소식 창은 현재 버전의 패치노트 항목이 있다고 가정해 검증한다. 실제 노트의 현재 버전 항목에 의존하지 않는다.
 // 판매 금액은 어종 데이터에서 유도한다(값이 바뀌어도 기대가 같이 움직인다)
@@ -139,14 +141,15 @@ afterEach(() => {
 // ---------- 집(마을 거점): 가구 클릭 → 정비 탭 인라인 패널 ----------
 
 describe('마을 랭킹 게시판', () => {
-  it('게시판 클릭 → 명성, 도감 탭의 랭킹 창이 열린다(로컬 모드는 온라인 안내)', async () => {
+  it('게시판 클릭 → 5탭(명성·도감 3종·네임드 토벌) 랭킹 창이 열린다(로컬 모드는 연결 안내)', async () => {
     seed({});
     render(<App />);
     clickFurniture('rank');
     const dialog = screen.getByRole('heading', { name: '랭킹' }).closest('[role="dialog"]') as HTMLElement;
-    expect(within(dialog).getByRole('button', { name: '명성' })).toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: '도감' })).toBeInTheDocument();
-    await waitFor(() => expect(within(dialog).getByText('랭킹은 온라인에서만 볼 수 있어요.')).toBeInTheDocument());
+    for (const label of ['명성', '도감(일반)', '도감(돌연변이)', '도감(네임드)', '네임드 토벌']) {
+      expect(within(dialog).getByRole('button', { name: label })).toBeInTheDocument();
+    }
+    await waitFor(() => expect(within(dialog).getByText('랭킹은 연결된 상태에서만 볼 수 있어요.')).toBeInTheDocument());
   });
 });
 
@@ -223,14 +226,15 @@ describe('부엌 창 - 집 거점의 부엌 카드가 연다', () => {
   });
 
   it('도시락 조리를 시작하면 기운이 줄고 정보 줄에 조리 중이 보인다', () => {
-    seed({ boat: 5, items: { [ENERGY_ITEM_IDS.common]: 9000 } });
+    seed({ boat: 5, items: { [ENERGY_ITEM_IDS.common]: 9000, [ENERGY_ITEM_IDS.rare]: 9000 } });
     render(<App />);
     clickFurniture('kitchen');
+    fireEvent.click(screen.getByRole('option', { name: /민 몰리/ }));
     fireEvent.click(screen.getByRole('button', { name: '조리 시작' }));
     const line = screen.getByText('조리 중').closest('div')!;
-    expect(within(line).getByText('가루디야')).toBeInTheDocument();
-    expect(within(line).getByText('0/1')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '조리 시작' })).toBeDisabled(); // 이미 조리 중
+    expect(within(line).getByText('민 몰리')).toBeInTheDocument();
+    expect(line).toHaveTextContent('0/1');
+    expect(screen.getByRole('button', { name: '대기열에 추가' })).toBeEnabled();
     expect(screen.getByText('보관함').closest('div')).toHaveTextContent('1/10');
   });
 });
@@ -247,7 +251,7 @@ describe('R1b 개체 단위 선택 — 같은 종에서 큰 놈만 남기기', (
     // 행이 기본 닫힘 — 펼친 뒤 개체가 보인다
     fireEvent.click(screen.getByLabelText('잉어 개체 펼치기'));
     expect(screen.getByText('42.0cm')).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: '이 형태 최대' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: '최대 크기' })).toBeInTheDocument();
 
     // 42cm 개체를 판매에서 제외 → 12cm 한 마리만 팔린다
     fireEvent.click(screen.getByText('42.0cm').closest('[role="button"]')!);
@@ -369,6 +373,32 @@ describe('R2b: 목공소/조선소(배 구매) 모달', () => {
     expect(screen.queryByText(/^구매 \(/)).not.toBeInTheDocument();
     expect(screen.getByText('모달 닫힘')).toBeInTheDocument();
   });
+
+  it('배를 구매해도 모달이 닫히지 않고 다음 배 상태로 유지되며, 닫기를 누를 때만 닫힌다', () => {
+    renderBoatPanel({
+      gold: BOATS[0].price + BOATS[1].price,
+      fame: BOATS[1].fameReq,
+    });
+    fireEvent.click(screen.getByRole('button', { name: `구매 (-${fmtGold(BOATS[0].price)})` }));
+    expect(lastGame.boat).toBe(1);
+    expect(screen.queryByText('모달 닫힘')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: `구매 (-${fmtGold(BOATS[1].price)})` })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole('button', { name: '닫기' }));
+    expect(screen.getByText('모달 닫힘')).toBeInTheDocument();
+  });
+
+  it('마지막 배를 구매해도 창이 닫히지 않고 최고 배 안내 상태로 바뀐다', () => {
+    const last = BOATS[MAX_BOAT - 1];
+    renderBoatPanel({ boat: MAX_BOAT - 1, gold: last.price, fame: last.fameReq });
+    fireEvent.click(screen.getByRole('button', { name: `구매 (-${fmtGold(last.price)})` }));
+    expect(lastGame.boat).toBe(MAX_BOAT);
+    expect(screen.queryByText('모달 닫힘')).not.toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`이미 가장 좋은 배\\(${last.name}\\)`))).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '닫기' }));
+    expect(screen.getByText('모달 닫힘')).toBeInTheDocument();
+  });
 });
 
 describe('시설 재클릭 시 패널 토글', () => {
@@ -416,7 +446,7 @@ describe('R3: 도감 탭 (지역 서브탭)', () => {
     seed({ dex: { crucian: { normal: rec(3) } } });
     render(<App />);
     clickTab(/^도감/);
-    expect(screen.getByRole('button', { name: /도감\s*\(일반\)/ })).toHaveClass('active');
+    expect(screen.getByRole('button', { name: '도감' })).toHaveClass('active');
     expect(screen.getByText('붕어')).toBeInTheDocument();
     expect(screen.getByText('3마리 잡음')).toBeInTheDocument();
     // 집 = 마을 지역 → 마을 어종 12종 중 붕어 1종만 공개
@@ -435,27 +465,27 @@ describe('R3: 도감 탭 (지역 서브탭)', () => {
   it('활성 도감 탭 재클릭 = 일반→돌연변이→네임드 보기 순환', () => {
     seed({ dex: { crucian: { normal: rec(3), variant: rec(1) } } });
     render(<App />);
-    clickTab(/^도감/);
-    clickTab(/도감\s*\(일반\)/); // 활성 상태에서 한 번 더 → 돌연변이 보기
-    expect(screen.getByRole('button', { name: /도감\s*\(돌연변이\)/ })).toHaveClass('active');
+    clickTab('도감');
+    clickTab('도감'); // 활성 상태에서 한 번 더 → 돌연변이 보기
+    expect(screen.getByRole('button', { name: '도감' })).toHaveClass('active');
     expect(screen.getByRole('heading', { name: /^돌연변이/ })).toBeInTheDocument();
     expect(screen.getByText('황금 붕어')).toBeInTheDocument(); // 발견한 변이는 변이 이름
     expect(screen.getByText('1마리 잡음')).toBeInTheDocument(); // 변이 폼 별도 마릿수 (v7)
     expect(screen.getAllByText('???').length).toBe(11); // 나머지 변이는 미확인
-    clickTab(/도감\s*\(돌연변이\)/);
+    clickTab('도감');
     expect(screen.getByRole('heading', { name: /^네임드/ })).toBeInTheDocument();
-    clickTab(/도감\s*\(네임드\)/); // 끝에서 처음으로
+    clickTab('도감'); // 끝에서 처음으로
     expect(screen.getByText('붕어')).toBeInTheDocument();
   });
 
   it('도감 재진입 시 마지막 서브탭 유지 — 씬 기본값으로 리셋하지 않는다', () => {
     seed({});
     render(<App />);
-    clickTab(/^도감/);
+    clickTab('도감');
     fireEvent.click(screen.getByRole('button', { name: /태평양/ })); // 마을 → 태평양
     expect(screen.getAllByText('???').length).toBe(13);
     clickTab('도움말');
-    clickTab(/도감/); // 재진입
+    clickTab('도감'); // 재진입
     // 태평양 유지 — 마을로 리셋됐으면 12종(연못 6+강 6)이 뜬다
     expect(screen.getAllByText('???').length).toBe(13);
   });
@@ -463,9 +493,9 @@ describe('R3: 도감 탭 (지역 서브탭)', () => {
   it('네임드 보기 — 수배가 있는 해역만 서브탭에 있고 마을은 없다', () => {
     seed({}); // 시작 씬 = 마을 → 도감 열람 존도 마을이지만 네임드는 첫 수배 존(태평양)을 대신 보인다
     render(<App />);
-    clickTab(/^도감/);
-    clickTab(/도감\s*\(일반\)/);
-    clickTab(/도감\s*\(돌연변이\)/);
+    clickTab('도감');
+    clickTab('도감');
+    clickTab('도감');
     expect(screen.getByRole('heading', { name: /^네임드/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^마을/ })).not.toBeInTheDocument();
     expect(screen.getByText('???')).toBeInTheDocument(); // 메갈로돈 미획득
@@ -814,25 +844,23 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
     expect(localStorage.getItem('pf-fish-art')).toBe('v2');
   });
 
-  it('이사 코드는 설정 탭에 없다 — 개발 도구 패널의 계정·스냅샷 묶음(관리자 명부 계정 전용)에 있다', () => {
-    window.history.replaceState({}, '', '/?admin=1');
+  it('이사 코드는 설정 탭에 없다 — 개발 도구 패널의 계정·스냅샷 묶음에 있다', async () => {
     render(<App />);
     clickTab('설정');
     expect(screen.queryByRole('button', { name: /이사 코드/ })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '개발 도구' }));
+    fireEvent.click(await screen.findByRole('button', { name: '개발 도구' }));
     fireEvent.click(screen.getByRole('button', { name: '계정·스냅샷' }));
     expect(screen.getByRole('button', { name: '이사 코드 내보내기' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '이사 코드 불러오기' })).toBeInTheDocument();
-    window.history.replaceState({}, '', '/');
   });
 
-  it('클라우드 미설정(개발 모드)이면 계정 관리 모달에 경고 표시 — 상태는 메모리에만 있음', () => {
+  it('저장 서버 미연결(오프라인)이면 계정 관리 모달에 경고 표시 — 상태는 메모리에만 있음', () => {
     seed();
     render(<App />);
     clickTab('설정');
-    expect(screen.queryByText(/클라우드가 설정되지 않았어요/)).not.toBeInTheDocument(); // 설정 화면에는 없다
+    expect(screen.queryByText(/저장 서버가 연결되지 않아/)).not.toBeInTheDocument(); // 설정 화면에는 없다
     clickTab(/계정 관리/);
-    expect(screen.getByText(/클라우드가 설정되지 않았어요/)).toBeInTheDocument();
+    expect(screen.getByText(/저장 서버가 연결되지 않아/)).toBeInTheDocument();
   });
 
   it('구버전 세이브는 조각배 증정 + 도감 소급 명성 + 환영 안내', () => {
@@ -890,7 +918,7 @@ describe('R22: 도움말 탭', () => {
     render(<App />);
     clickTab('도움말');
     const help = document.body.textContent ?? '';
-    for (const topic of ['키보드 단축키', 'Shift + Tab', '자물쇠', '목록 ↔ 카드', '계정 관리', '새로고침']) {
+    for (const topic of ['키보드 단축키', 'Shift + Tab', '자물쇠', '목록과 카드', '계정 관리', '새로고침']) {
       expect(help, topic).toContain(topic);
     }
   });
@@ -901,7 +929,7 @@ describe('R22: 도움말 탭', () => {
     clickTab('도움말');
     const help = document.body.textContent ?? '';
     for (const topic of ['바다와 항해', '세계지도', '낮과 밤', '바운티 헌팅', '완료를 눌러', '네임드 토벌', '흔적', '추적', '조우', '유물',
-      '미끼', 'Esc', '물고기 그래픽', '최근 소식 다시 보기', '닉네임', '도움말 마지막 갱신']) {
+      '미끼', 'Esc', '물고기 그래픽', '최근 소식 다시 보기', '닉네임', '오늘의 운세', '비약', '여객선']) {
       expect(help, topic).toContain(topic);
     }
     // 정본에서 쓰지 않는 말
@@ -979,11 +1007,14 @@ describe('설정 — 내 정보 (문의 대응용 uid 노출)', () => {
     // 로컬은 로그인 상태로 가정하므로 가짜 계정이 설정 탭 요약에 뜬다(배포 빌드에선 실제 이메일 또는 '게스트')
     expect(screen.getByText('dev@localhost')).toBeInTheDocument();
     fireEvent.click(openerButton('내 정보'));
-    expect(screen.getByRole('dialog', { name: '내 정보' })).toBeInTheDocument();
+    const dialog = screen.getByRole('dialog', { name: '내 정보' });
+    expect(dialog).toBeInTheDocument();
     // body에 user-select:none이 걸려 있어 드래그 복사가 안 된다 → 버튼이 유일한 경로.
     // 화면은 가운데를 가리지만 복사는 전체 값이라, 버튼이 없으면 문의 대응이 불가능해진다.
     expect(screen.getByRole('button', { name: '복사' })).toBeInTheDocument();
-    expect(document.body.textContent).toContain('전체가 복사돼요');
+    expect(document.body.textContent).not.toContain('전체가 복사돼요');
+    fireEvent.mouseEnter(within(dialog).getByRole('heading', { name: '내 정보', level: 4 }).firstElementChild!);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('전체가 복사돼요');
   });
 });
 
@@ -1129,7 +1160,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     expect(screen.getByRole('button', { name: '목록 보기' })).toBeInTheDocument();
   });
 
-  it('가방 유물 섹션 — 보유 유물의 등급·효과를 보이고, 없으면 얻는 곳을 안내한다', () => {
+  it('가방 유물 섹션 — 전체 유물을 보이고 보유는 등급·효과를, 보유 중만 보기 켜면 보유 유물만 보인다', () => {
     seed({ artifacts: ['varuna-scale'] });
     render(<App />);
     fireEvent.keyDown(document, { key: '2' });
@@ -1137,16 +1168,21 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     fireEvent.keyDown(document, { key: '2' }); // 유물
     expect(screen.getByRole('heading', { name: /^유물/ })).toBeInTheDocument();
     expect(screen.getByText('진주 상인의 저울')).toBeInTheDocument();
-    expect(screen.getByText('요리 추가 완성 +10%p')).toBeInTheDocument();
-    expect(screen.queryByText('해구의 이빨')).not.toBeInTheDocument(); // 미보유는 나열하지 않는다
+    expect(screen.getByText('요리 추가 완성 +10%')).toBeInTheDocument();
+    expect(screen.getByText('해구의 이빨')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '보유 중만 보기' }));
+    expect(screen.getByText('진주 상인의 저울')).toBeInTheDocument();
+    expect(screen.queryByText('해구의 이빨')).not.toBeInTheDocument();
   });
 
-  it('가방 유물 섹션 — 보유가 없으면 수배판 안내', () => {
+  it('가방 유물 섹션 — 기본 전체 보기에는 하단 안내가 없고 보유 중만 보기에서 보유가 없으면 수배판 안내를 보인다', () => {
     seed({});
     render(<App />);
     fireEvent.keyDown(document, { key: '2' });
     fireEvent.keyDown(document, { key: '2' });
     fireEvent.keyDown(document, { key: '2' });
+    expect(screen.queryByText(/수배판/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '보유 중만 보기' }));
     expect(screen.getByText(/수배판/)).toBeInTheDocument();
   });
 
@@ -1185,15 +1221,20 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     const active = () => (document.querySelector('.pf-tabbar button.active')?.textContent ?? '')
       .replace(/\s+/g, '');
     fireEvent.keyDown(document, { key: '2' });
-    expect(active()).toBe('가방(물고기)');
+    expect(active()).toBe('가방');
+    expect(screen.getByRole('button', { name: '물고기' })).toHaveAttribute('aria-pressed', 'true');
     fireEvent.keyDown(document, { key: '2' });
-    expect(active()).toBe('가방(아이템)');
+    expect(active()).toBe('가방');
+    expect(screen.getByRole('button', { name: '아이템' })).toHaveAttribute('aria-pressed', 'true');
     fireEvent.keyDown(document, { key: '2' });
-    expect(active()).toBe('가방(유물)');
+    expect(active()).toBe('가방');
+    expect(screen.getByRole('button', { name: '유물' })).toHaveAttribute('aria-pressed', 'true');
     fireEvent.keyDown(document, { key: '2' });
-    expect(active()).toBe('가방(물고기)');
+    expect(active()).toBe('가방');
+    expect(screen.getByRole('button', { name: '물고기' })).toHaveAttribute('aria-pressed', 'true');
     fireEvent.keyDown(document, { key: '3' });
-    expect(active()).toBe('도감(일반)');
+    expect(active()).toBe('도감');
+    expect(screen.getByRole('button', { name: '일반' })).toHaveAttribute('aria-pressed', 'true');
     fireEvent.keyDown(document, { key: '3' });
     expect(screen.getByRole('heading', { name: /^돌연변이/ })).toBeInTheDocument();
     fireEvent.keyDown(document, { key: '3' });
@@ -1278,7 +1319,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     render(<App />);
     clickTab(/^가방/);
     openRow('잉어');
-    expect(screen.getAllByRole('img', { name: '이 형태 최대' })).toHaveLength(2); // 일반 42 + 변이 30
+    expect(screen.getAllByRole('img', { name: '최대 크기' })).toHaveLength(2); // 일반 42 + 변이 30
   });
 
   it('변이는 별도 행이 아니라 같은 행의 배지 — 소계는 폼별 가격 합', () => {
@@ -1290,9 +1331,9 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     expect(screen.getByText('잉어')).toBeInTheDocument();
     expect(screen.queryByText('금빛 잉어')).not.toBeInTheDocument(); // 행이 갈리지 않는다
     expect(screen.getByText('×2')).toBeInTheDocument();
-    expect(screen.getAllByText(`${CARP * (1 + VARIANT_PRICE_MULT)}G`)).toHaveLength(2); // 행 소계 + 하단 판매 가능 합
+    expect(screen.getAllByText(`${CARP * (1 + VARIANT_PRICE_MULT)}G`)).toHaveLength(1); // 행 소계 (하단 판매 가능 금액 미노출)
     expect(screen.getByRole('img', { name: '돌연변이' })).toBeInTheDocument(); // 개체 줄의 아이콘
-    expect(screen.getAllByRole('img', { name: '이 형태 최대' })).toHaveLength(2); // 최대는 폼별 — 일반·변이 각각
+    expect(screen.getAllByRole('img', { name: '최대 크기' })).toHaveLength(2); // 최대는 폼별 — 일반·변이 각각
   });
 
   it('변이만 골라 파는 것도 개체 단위로 된다', () => {
@@ -1325,7 +1366,7 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     expect(normal.textContent).toBe('2');
     expect(normal.className).toContain('text-text');
     expect(variant.textContent).toBe('1');
-    expect(variant.className).toContain('text-epic');
+    expect(variant.className).toContain('text-mutation');
 
     // 안 들고 있는 종은 마릿수 줄 자체가 없다 — 가방은 보유 현황만 본다
     const empty = screen.getByLabelText('붕어 미보유');
@@ -1438,53 +1479,44 @@ describe('패치노트 (설정 탭)', () => {
 });
 
 describe('환경 배지', () => {
-  it('로컬 빌드(테스트)는 LOCAL DEV 배지를 띄운다 — 운영 가드는 envBadgeLabel이 맡는다', () => {
+  it('로컬 빌드(테스트)는 LOCAL DEV 배지를 띄운다 — 운영 가드는 envBadgeLabel이 맡는다', async () => {
     render(<App />);
-    expect(screen.getByRole('status', { name: 'LOCAL DEV 빌드 dev' })).toHaveTextContent('LOCAL DEVdev');
+    expect(await screen.findByRole('status', { name: 'LOCAL DEV 빌드 dev' })).toHaveTextContent('LOCAL DEVdev');
   });
 });
 
-// 개발 도구 — 게임 화면 위 플로팅 패널 (?admin 게이트). 사이드바는 항상 5탭이다.
-describe('개발 도구 패널 (?admin 게이트)', () => {
-  it('?admin이 없으면 패널 버튼이 없고 사이드바는 5탭이다', () => {
-    render(<App />);
-    expect(screen.queryByRole('button', { name: '개발 도구' })).not.toBeInTheDocument();
-    expect(document.querySelectorAll('.pf-tabbar button')).toHaveLength(TAB_ORDER.length);
-  });
-
-  it('?admin이면(로컬) 버튼과 F9로 패널을 열고 닫는다 — 사이드바 탭은 늘지 않는다', () => {
-    window.history.replaceState({}, '', '/?admin=1');
+// 개발 도구 — 게임 화면 위 플로팅 패널(비운영 빌드에서 로컬 오리진 또는 서버 판정). 사이드바는 항상 5탭이다.
+describe('개발 도구 패널', () => {
+  it('로컬 오리진에서는 ?admin 없이도 버튼과 F9로 패널을 열고 닫는다 — 사이드바 탭은 늘지 않는다', async () => {
     seed();
     render(<App />);
     expect(document.querySelectorAll('.pf-tabbar button')).toHaveLength(TAB_ORDER.length);
+    const toggle = await screen.findByRole('button', { name: '개발 도구' });
     fireEvent.keyDown(document, { key: 'F9' });
     expect(screen.getByText('개발 도구')).toBeInTheDocument();
     expect(screen.getByText('메갈로돈 네임드 직전')).toBeInTheDocument();
     fireEvent.keyDown(document, { key: 'F9' });
     expect(screen.queryByText('메갈로돈 네임드 직전')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '개발 도구' }));
+    fireEvent.click(toggle);
     fireEvent.click(screen.getByRole('button', { name: '계정·스냅샷' }));
     expect(screen.getByLabelText('대시보드 열기').getAttribute('href')).toBe('/admin/#/admin/overview');
-    window.history.replaceState({}, '', '/');
   });
 
   it('장비·아이템·업적 묶음의 스탯 설정은 debug 명령으로 상태를 바꾼다 (로컬 게이트웨이)', async () => {
-    window.history.replaceState({}, '', '/?admin=1');
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: '개발 도구' }));
+    fireEvent.click(await screen.findByRole('button', { name: '개발 도구' }));
     fireEvent.click(screen.getByRole('button', { name: '장비·아이템·업적' }));
     fireEvent.change(screen.getByLabelText('스탯 설정 골드'), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: '스탯 설정' }));
     expect(await screen.findByLabelText('실행 기록')).toHaveTextContent('스탯 설정');
     // 입력칸 placeholder는 현재 값이다 — 상태가 바뀌면 따라 바뀐다
     expect(screen.getByLabelText('스탯 설정 골드')).toHaveAttribute('placeholder', '123456');
-    window.history.replaceState({}, '', '/');
   });
 
-  it('패널은 머리줄을 끌어 옮기고 위치를 기억한다 — 묶음을 바꿔도 크기가 그대로다', () => {
-    window.history.replaceState({}, '', '/?admin=1');
+  it('패널은 머리줄을 끌어 옮기고 위치를 기억한다 — 묶음을 바꿔도 크기가 그대로다', async () => {
     seed();
     render(<App />);
+    await screen.findByRole('button', { name: '개발 도구' });
     fireEvent.keyDown(document, { key: 'F9' });
     const panel = screen.getByRole('dialog', { name: '개발 도구' });
     const box = () => ({ left: panel.style.left, top: panel.style.top, w: panel.style.width, h: panel.style.height });
@@ -1499,20 +1531,17 @@ describe('개발 도구 패널 (?admin 게이트)', () => {
       fireEvent.click(screen.getByRole('button', { name }));
       expect([box().w, box().h]).toEqual([before.w, before.h]);
     }
-    window.history.replaceState({}, '', '/');
   });
 
   it('네임드 직전 프리셋은 오프라인에서 DB 전용 수배 명령을 거부하고, QA 패키지 프리셋은 항구로 자동 이동한다', async () => {
-    window.history.replaceState({}, '', '/?admin=1');
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: '개발 도구' }));
+    fireEvent.click(await screen.findByRole('button', { name: '개발 도구' }));
     fireEvent.click(screen.getByRole('button', { name: '메갈로돈 네임드 직전' }));
     expect(await screen.findByLabelText('실행 기록')).toHaveTextContent('로컬 모드(DB 없음)에서는 수배 DB 도구를 쓸 수 없어요.');
 
     fireEvent.click(screen.getByRole('button', { name: 'v0.20.0 신콘텐츠 QA 패키지' }));
     await waitFor(() => expect(screen.getByLabelText('실행 기록')).toHaveTextContent('거점 이동 (lisbon)'));
     expect(screen.getByLabelText('항구')).toBeInTheDocument();
-    window.history.replaceState({}, '', '/');
   });
 });
 
@@ -1543,11 +1572,11 @@ describe('스탯창 — 자원 바 클릭 진입 (v0.6.1)', () => {
     render(<App />);
     fireEvent.click(screen.getByLabelText(/^스탯창 열기/));
     expect(screen.getByText('스탯')).toBeInTheDocument(); // Panel 프레임 제목
-    // 요약 — 명성·골드·도감·가방 타일과 기준 해역(마을에서는 요구 파워가 가장 높은 마을 강)
+    // 요약 — 명성·골드·도감·가방 타일과 기준 해역(마을 Lv.1에서는 진입 가능한 마을 연못)
     const dialog = within(statsDialog());
     expect(dialog.getByText('도감')).toBeInTheDocument();
     expect(dialog.getByText('이 지역 해역')).toBeInTheDocument();
-    expect(dialog.getAllByText(/마을 강/).length).toBeGreaterThan(0);
+    expect(dialog.getAllByText(/마을 연못/).length).toBeGreaterThan(0);
     expect(dialog.getByRole('meter', { name: '파워' })).toBeInTheDocument();
 
     openTab('배');
@@ -1556,12 +1585,12 @@ describe('스탯창 — 자원 바 클릭 진입 (v0.6.1)', () => {
 
     // 낚싯대 — 지역 서브탭과 해역 목록, 고른 해역의 상대 스탯 행
     openTab('낚싯대');
-    expect(dialog.getByText('바 시간')).toBeInTheDocument();
+    expect(dialog.getByText('왕복 속도')).toBeInTheDocument();
     expect(dialog.getByText('입질 최소 대기')).toBeInTheDocument();
-    expect(dialog.getByText('방치 낚시 페널티')).toBeInTheDocument();
-    expect(dialog.getByRole('row', { name: /마을 강/ })).toHaveAttribute('aria-selected', 'true');
-    fireEvent.click(dialog.getByRole('row', { name: /마을 연못/ }));
+    expect(dialog.getByText('방치 효율')).toBeInTheDocument();
     expect(dialog.getByRole('row', { name: /마을 연못/ })).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(dialog.getByRole('row', { name: /마을 강/ }));
+    expect(dialog.getByRole('row', { name: /마을 강/ })).toHaveAttribute('aria-selected', 'true');
     // 고정 정보 줄의 파워 툴팁 — 게임 스타일 버블(title 툴팁 아님)
     fireEvent.mouseEnter(dialog.getByText('파워', { selector: '[tabindex="0"]' }));
     expect(screen.getByRole('tooltip')).toHaveTextContent('요구하는 파워가 달라서');
@@ -1589,13 +1618,15 @@ describe('스탯창 — 자원 바 클릭 진입 (v0.6.1)', () => {
 });
 
 describe('아이템 — 가방 아이템 섹션', () => {
-  it('가방 아이템 섹션은 빈 안내를 보이고, 필드에 활성 미끼 오버레이가 없다', () => {
+  it('가방 아이템 섹션은 전체 보기에서 빈 안내 없이 항목 카드를 보이고 보유 중만 보기에서 빈 안내를 보이며 필드에 활성 미끼 오버레이가 없다', () => {
     seed({});
     render(<App />);
     fireEvent.keyDown(document, { key: '2' });
     fireEvent.keyDown(document, { key: '2' }); // 아이템
-    expect(screen.getByText('가진 아이템이 없어요.')).toBeInTheDocument();
+    expect(screen.queryByText('가진 아이템이 없어요.')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('활성 미끼')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '보유 중만 보기' }));
+    expect(screen.getByText('가진 아이템이 없어요.')).toBeInTheDocument();
   });
 });
 
@@ -1605,12 +1636,13 @@ describe('닉네임 (게스트명 표시·변경)', () => {
     render(<App />);
     clickTab(/설정/);
     fireEvent.click(openerButton('내 정보'));
-    const current = screen.getByLabelText('현재 닉네임');
-    await waitFor(() => expect(current.textContent).not.toContain('불러오는 중'));
-    expect(current.textContent).toContain('_');
-    fireEvent.change(screen.getByLabelText('새 닉네임'), { target: { value: '날치' } });
+    const current = screen.getByLabelText('현재 닉네임') as HTMLInputElement;
+    await waitFor(() => expect(current.value).not.toBe('불러오는 중'));
+    expect(current.value).toContain('_');
     fireEvent.click(screen.getByRole('button', { name: '변경' }));
-    await waitFor(() => expect(screen.getByLabelText('현재 닉네임')).toHaveTextContent('날치'));
+    fireEvent.change(screen.getByLabelText('새 닉네임'), { target: { value: '날치' } });
+    fireEvent.click(screen.getByRole('button', { name: '확인' }));
+    await waitFor(() => expect(screen.getByLabelText('현재 닉네임')).toHaveValue('날치'));
   });
 
   it('규칙에 어긋나는 이름은 보내지 않고 안내한다', async () => {
@@ -1618,20 +1650,47 @@ describe('닉네임 (게스트명 표시·변경)', () => {
     render(<App />);
     clickTab(/설정/);
     fireEvent.click(openerButton('내 정보'));
-    const current = screen.getByLabelText('현재 닉네임');
-    await waitFor(() => expect(current.textContent).not.toContain('불러오는 중'));
-    const before = current.textContent;
-    fireEvent.change(screen.getByLabelText('새 닉네임'), { target: { value: '__' } });
+    const current = screen.getByLabelText('현재 닉네임') as HTMLInputElement;
+    await waitFor(() => expect(current.value).not.toBe('불러오는 중'));
+    const before = current.value;
     fireEvent.click(screen.getByRole('button', { name: '변경' }));
-    await waitFor(() => expect(screen.getByLabelText('현재 닉네임')).toHaveTextContent(before!));
+    fireEvent.change(screen.getByLabelText('새 닉네임'), { target: { value: '__' } });
+    fireEvent.click(screen.getByRole('button', { name: '확인' }));
+    fireEvent.click(screen.getByRole('button', { name: '취소' }));
+    await waitFor(() => expect(screen.getByLabelText('현재 닉네임')).toHaveValue(before));
+  });
+
+  it('App은 GameView에 profileStatus prop을 직접 전달해 공용 저장소가 비워져도 불러오기 실패와 미설정을 구분한다', async () => {
+    seed({});
+    const spy = vi.spyOn(LocalGameGateway.prototype, 'getProfile').mockResolvedValueOnce({ ok: false });
+    render(<App />);
+    clickTab(/설정/);
+    await waitFor(() => expect(screen.getByText('불러오기 실패')).toBeInTheDocument());
+    act(() => setSharedProfileStatus(null));
+    expect(screen.getByText('불러오기 실패')).toBeInTheDocument();
+    expect(screen.queryByText('불러오는 중')).not.toBeInTheDocument();
+    cleanup();
+
+    spy.mockResolvedValue({ ok: true, nickname: null, devTools: false });
+    render(<App />);
+    clickTab(/설정/);
+    await waitFor(() => expect(screen.getByText('미설정')).toBeInTheDocument());
+    act(() => setSharedProfileStatus(null));
+    expect(screen.getByText('미설정')).toBeInTheDocument();
+    expect(screen.queryByText('불러오는 중')).not.toBeInTheDocument();
+    spy.mockRestore();
   });
 });
 
 describe('튜토리얼 창 — 트리거마다 한 번', () => {
-  it('처음 시작하면 마을 튜토리얼이 뜨고, 닫으면 본 것으로 남아 다시 뜨지 않는다', async () => {
+  it('집 거점에서는 뜨지 않고 마을 야외에 처음 나가면 뜨며, 닫으면 본 것으로 남아 다시 뜨지 않는다', async () => {
     seed({ tutorials: [] });
     const { unmount } = render(<App />);
+    expect(screen.queryByRole('dialog', { name: '마을에 오신 걸 환영해요' })).not.toBeInTheDocument();
+
+    fireEvent.click(document.querySelector('[data-facility="exit"]')!);
     const dialog = await screen.findByRole('dialog', { name: '마을에 오신 걸 환영해요' });
+    for (let i = 0; i < 3; i++) fireEvent.click(within(dialog).getByRole('button', { name: '다음' }));
     fireEvent.click(within(dialog).getByRole('button', { name: '알겠어요' }));
     expect(screen.queryByRole('dialog', { name: '마을에 오신 걸 환영해요' })).not.toBeInTheDocument();
     await waitFor(() => expect(JSON.parse(localStorage.getItem(SAVE_KEY) ?? '{}').tutorials).toEqual(['village']));
@@ -1644,7 +1703,7 @@ describe('튜토리얼 창 — 트리거마다 한 번', () => {
   it('업데이트 소식 창이 떠 있으면 그 창을 닫은 뒤에 뜬다', async () => {
     localStorage.removeItem('pf-announcements');
     resetAnnouncements();
-    seed({ fame: 120, tutorials: [] });
+    seed({ fame: 120, tutorials: [], location: { kind: 'region', id: 'village' } });
     render(<App />);
     expect(screen.getByRole('dialog', { name: '업데이트 소식' })).toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: '마을에 오신 걸 환영해요' })).not.toBeInTheDocument();
@@ -1713,5 +1772,210 @@ describe('업데이트 소식 창 — 접속 시 이번 버전 소식과 새 설
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '확인' }));
     expect(screen.queryByRole('dialog', { name: '업데이트 소식' })).not.toBeInTheDocument();
+  });
+});
+
+describe('운영 빌드 개발 도구 제거', () => {
+  it('DEPLOY_ENV가 production이면 ?admin이 있어도 개발 도구 버튼·환경 배지·제한 화면이 마운트되지 않는다', async () => {
+    window.history.replaceState({}, '', '/?admin=1');
+    vi.resetModules();
+    vi.doMock('./buildId', () => ({
+      BUILD_ID: 'prodsha1',
+      BUILD_LABEL: 'prodsha',
+      DEPLOY_ENV: 'production',
+    }));
+    try {
+      const { default: ProdApp } = await import('./App');
+      render(<ProdApp />);
+      await act(async () => { await Promise.resolve(); });
+      expect(screen.queryByRole('button', { name: '개발 도구' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      expect(screen.queryByText(/운영 서버다/)).not.toBeInTheDocument();
+      fireEvent.keyDown(document, { key: 'F9' });
+      expect(screen.queryByRole('dialog', { name: '개발 도구' })).not.toBeInTheDocument();
+    } finally {
+      vi.doUnmock('./buildId');
+      vi.resetModules();
+      window.history.replaceState({}, '', '/');
+    }
+  });
+});
+
+describe('포구 출항 차단 후 로그인 복귀', () => {
+  async function renderCloudReturn({
+    save,
+    landing,
+    lastPosition,
+    pendingSail,
+    accountLookup = { status: 'account', email: 'sailor@example.test' },
+  }: {
+    save: Partial<GameState>;
+    landing: { tag: string; error: string | null } | null;
+    lastPosition: { region: RegionId; x: number; y: number } | null;
+    pendingSail: boolean;
+    accountLookup?: { status: 'account'; email: string } | { status: 'guest' } | { status: 'failed' };
+  }) {
+    seed(save);
+    if (pendingSail) sessionStorage.setItem('pf-sail-return', 'world');
+    else sessionStorage.removeItem('pf-sail-return');
+
+    const seenField: { region?: RegionId; initialPos?: Point } = {};
+    vi.resetModules();
+    vi.doMock('./platform/api', async importActual => {
+      const actual = await importActual<typeof import('./platform/api')>();
+      const base = actual.createApi();
+      Object.defineProperties(base.auth, {
+        isConfigured: { value: true, configurable: true },
+        ensureSession: { value: async () => 'uid-sail-return', configurable: true },
+        currentAccount: { value: async () => accountLookup, configurable: true },
+        takeGoogleLanding: { value: () => landing, configurable: true },
+      });
+      return {
+        ...actual,
+        readLastPosition: async () => lastPosition,
+        api: base,
+      };
+    });
+    vi.doMock('./presentation/layouts/game-stage/Field', async importActual => {
+      const actual = await importActual<typeof import('./presentation/layouts/game-stage/Field')>();
+      const Wrapped = (props: Parameters<typeof actual.default>[0]) => {
+        seenField.region = props.region;
+        seenField.initialPos = props.initialPos;
+        return actual.default(props);
+      };
+      return { default: Wrapped };
+    });
+
+    try {
+      const { default: CloudApp } = await import('./App');
+      render(<CloudApp />);
+      await waitFor(() => {
+        expect(screen.queryByRole('status', { name: /불러오는 중/ })).not.toBeInTheDocument();
+        expect(seenField.region).toBeDefined();
+      });
+      return { seenField };
+    } finally {
+      vi.doUnmock('./platform/api');
+      vi.doUnmock('./presentation/layouts/game-stage/Field');
+    }
+  }
+
+  afterEach(() => {
+    sessionStorage.clear();
+    vi.resetModules();
+  });
+
+  it('link-guest 복귀 시 출항 대기가 있고 배를 보유하면 대양 출항 좌표로 바로 이동한다', async () => {
+    const { seenField } = await renderCloudReturn({
+      save: { boat: 1, location: { kind: 'region', id: 'village' } },
+      landing: { tag: 'link-guest', error: null },
+      lastPosition: { region: 'village', x: 100, y: 120 },
+      pendingSail: true,
+    });
+    await waitFor(() => expect(seenField.region).toBe('world'));
+    expect(seenField.initialPos).toEqual(HARBORS.harbor.departure);
+    expect(sessionStorage.getItem('pf-sail-return')).toBeNull();
+    await waitFor(() => {
+      const saved = JSON.parse(localStorage.getItem(SAVE_KEY)!) as GameState;
+      expect(saved.location).toEqual({ kind: 'region', id: 'world' });
+    });
+  });
+
+  it('sign-in 덮어쓰기 복귀 시에도 출항 대기가 있고 배를 보유하면 대양 출항 좌표로 바로 이동한다', async () => {
+    const { seenField } = await renderCloudReturn({
+      save: { boat: 2, location: { kind: 'region', id: 'village' } },
+      landing: { tag: 'sign-in', error: null },
+      lastPosition: { region: 'village', x: 100, y: 120 },
+      pendingSail: true,
+    });
+    await waitFor(() => expect(seenField.region).toBe('world'));
+    expect(seenField.initialPos).toEqual(HARBORS.harbor.departure);
+    expect(sessionStorage.getItem('pf-sail-return')).toBeNull();
+  });
+
+  it('다른 계정 로그인 후 배가 없으면 대양으로 이동하지 않고 대기 표지만 지운다', async () => {
+    const { seenField } = await renderCloudReturn({
+      save: { boat: 0, location: { kind: 'region', id: 'village' } },
+      landing: { tag: 'sign-in', error: null },
+      lastPosition: { region: 'village', x: 100, y: 120 },
+      pendingSail: true,
+    });
+    await waitFor(() => expect(sessionStorage.getItem('pf-sail-return')).toBeNull());
+    expect(seenField.region).toBe('village');
+  });
+
+  it('로그인한 계정이 이미 대양에 있으면 마지막 위치를 유지하고 대기 표지만 지운다', async () => {
+    const worldLast = { region: 'world' as const, x: 10128, y: 1851 };
+    const expectedResume = resumePoint('world', worldLast);
+    const { seenField } = await renderCloudReturn({
+      save: { boat: 1, location: { kind: 'region', id: 'world' } },
+      landing: { tag: 'sign-in', error: null },
+      lastPosition: worldLast,
+      pendingSail: true,
+    });
+    await waitFor(() => expect(sessionStorage.getItem('pf-sail-return')).toBeNull());
+    expect(seenField.region).toBe('world');
+    expect(seenField.initialPos).toEqual(expectedResume);
+  });
+
+  it('출항 대기 표지가 없는 일반 로그인은 기존 마지막 위치 복원을 따른다', async () => {
+    const villageLast = { region: 'village' as const, x: 100, y: 120 };
+    const expectedResume = resumePoint('village', villageLast);
+    const { seenField } = await renderCloudReturn({
+      save: { boat: 1, location: { kind: 'region', id: 'village' } },
+      landing: { tag: 'sign-in', error: null },
+      lastPosition: villageLast,
+      pendingSail: false,
+    });
+    await waitFor(() => expect(seenField.initialPos).toEqual(expectedResume));
+    expect(seenField.region).toBe('village');
+  });
+
+  it('계정 확인에 실패해도 출항 대기 표지를 소비하고 기존 마지막 위치 복원을 완료한다', async () => {
+    const villageLast = { region: 'village' as const, x: 100, y: 120 };
+    const expectedResume = resumePoint('village', villageLast);
+    const { seenField } = await renderCloudReturn({
+      save: { boat: 1, location: { kind: 'region', id: 'village' } },
+      landing: { tag: 'link-guest', error: null },
+      lastPosition: villageLast,
+      pendingSail: true,
+      accountLookup: { status: 'failed' },
+    });
+    await waitFor(() => expect(sessionStorage.getItem('pf-sail-return')).toBeNull());
+    await waitFor(() => expect(seenField.initialPos).toEqual(expectedResume));
+    expect(seenField.region).toBe('village');
+  });
+
+  it('초기 세이브 로드 전 이용약관 동의 차단 시 전용 불투명 진입 화면 위에 모달을 띄운다', async () => {
+    seed({});
+    vi.resetModules();
+    vi.doMock('./platform/api', async importActual => {
+      const actual = await importActual<typeof import('./platform/api')>();
+      const base = actual.createApi();
+      Object.defineProperties(base.auth, {
+        isConfigured: { value: true, configurable: true },
+        ensureSession: { value: async () => 'uid-consent-entry', configurable: true },
+        currentAccount: { value: async () => ({ status: 'account', email: 'me@example.com' }), configurable: true },
+        getAccountConsent: {
+          value: async () => ({ required: true, version: '2026-11-25', effectiveAt: '2026-11-25T00:00:00.000Z' }),
+          configurable: true,
+        },
+      });
+      return {
+        ...actual,
+        readLastPosition: async () => null,
+        api: base,
+      };
+    });
+
+    try {
+      const { default: CloudApp } = await import('./App');
+      render(<CloudApp />);
+      await waitFor(() => expect(screen.getByRole('dialog', { name: '이용약관 동의' })).toBeInTheDocument());
+      expect(screen.getByText('PIXEL FISHING')).toBeInTheDocument();
+      expect(screen.getByText('2026년 11월 25일부터 이용약관이 시행돼요.')).toBeInTheDocument();
+    } finally {
+      vi.doUnmock('./platform/api');
+    }
   });
 });

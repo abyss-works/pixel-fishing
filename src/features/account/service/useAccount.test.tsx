@@ -18,7 +18,6 @@ vi.mock('../../../platform/api', () => ({
       ensureSession: async () => state.sessionUid,
       currentAccount: async () => state.lookups.shift() ?? { status: 'guest' },
       getSession: async () => ({ uid: state.nextUid, email: null }),
-      takePasswordResetLanding: () => null,
       accountNudgedDay: () => null,
       markAccountNudged: () => {},
     },
@@ -36,11 +35,10 @@ function setup() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const wrapper = ({ children }: { children: ReactNode }) =>
     <QueryClientProvider client={client}>{children}</QueryClientProvider>;
-  const props = {
+    const props = {
     game: newState(),
     setToast: vi.fn(),
-    adoptAccount: vi.fn(async () => {}),
-    askNewPassword: vi.fn(async () => null),
+    adoptAccount: vi.fn(async () => true),
   };
   const hook = renderHook(() => ({ account: useAccount(props), session: useSession() }), { wrapper });
   return { hook, props };
@@ -67,6 +65,16 @@ describe('계정 교체', () => {
     await waitFor(() => expect(hook.result.current.session.ready).toBe(true));
     await act(() => hook.result.current.account.onAuthChanged());
     expect(props.adoptAccount).not.toHaveBeenCalled();
+  });
+
+  it('계정 교체 중 약관 차단이 걸려 adoptAccount가 false를 반환하면 저장된 진행 알림을 띄우지 않는다', async () => {
+    const { hook, props } = setup();
+    await waitFor(() => expect(hook.result.current.session.ready).toBe(true));
+    state.nextUid = 'unconsented-uid';
+    props.adoptAccount.mockResolvedValueOnce(false);
+    await act(() => hook.result.current.account.onAuthChanged());
+    expect(props.adoptAccount).toHaveBeenCalledTimes(1);
+    expect(props.setToast).not.toHaveBeenCalledWith('계정의 저장된 진행을 불러왔어요.');
   });
 });
 
@@ -152,7 +160,7 @@ describe('계정 확인 실패', () => {
     expect(props.setToast).toHaveBeenCalledTimes(1);
   });
 
-  it('이메일 로그인 직후의 조회가 실패해도 게스트가 아니라 실패 상태다', async () => {
+  it('다시 확인 조회가 실패해도 게스트가 아니라 실패 상태다', async () => {
     state.lookups = [{ status: 'guest' }, { status: 'failed' }];
     const { hook } = setup();
     await waitFor(() => expect(hook.result.current.account.accountChecked).toBe(true));

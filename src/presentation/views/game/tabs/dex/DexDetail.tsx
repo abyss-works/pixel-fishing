@@ -3,7 +3,7 @@ import type { Fish, GameState } from '../../../../../game/rules/logic';
 import { selectDexDetailData } from '../../../../../features/dex/model/catalog';
 import { selectSizeDistribution } from '../../../../../features/dex/model/sizeDistribution';
 import { useSpeciesRanking } from '../../../../../features/ranking/service/useRanking';
-import RankList from '../../../../ui/RankList';
+import RankList, { RankMeBar } from '../../../../ui/RankList';
 import RankingStatus from '../../../overlays/ranking/RankingStatus';
 import ArrowButton from '../../../../ui/ArrowButton';
 import Modal from '../../../../ui/Modal';
@@ -41,7 +41,7 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
         <PageTitle>{known ? form.name : '???'}</PageTitle>
         <span className="text-sm"><RarityText rarity={fish.rarity} /></span>
         <span className="pf-accent ml-auto text-2xs text-text-dim">
-          {form.form === 'variant' ? '돌연변이' : '기본형'} {i + 1}/{forms.length}
+          {form.form === 'variant' ? '돌연변이' : '일반'} {i + 1}/{forms.length}
         </span>
       </header>
     }>
@@ -61,8 +61,8 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
                            onClick={() => setI((i + 1) % forms.length)} />
             </div>
             {known
-              ? <LoreParagraph className="mt-auto px-3 pb-3 pt-2 text-sm leading-[1.8] text-text-dim">{form.lore}</LoreParagraph>
-              : <p className="mt-auto px-3 pb-3 pt-2 text-sm leading-[1.8] text-text-dim">…아직 만나지 못한 개체다. 어딘가에서 헤엄치고 있을 것이다.</p>}
+              ? <LoreParagraph className="mt-auto min-h-[6.5rem] px-3 pb-3 pt-2 text-sm leading-[1.8] text-text-dim">{form.lore}</LoreParagraph>
+              : <p className="mt-auto min-h-[6.5rem] px-3 pb-3 pt-2 text-sm leading-[1.8] text-text-dim">…아직 만나지 못한 개체다. 어딘가에서 헤엄치고 있을 것이다.</p>}
           </Inset>
         </TitledCell>
 
@@ -76,7 +76,7 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
           <Inset divided className="flex-1">
             <KeyValueRow label="가격" value={<span className="pf-accent">{known ? fmtGold(form.price) : '???'}</span>} />
             <KeyValueRow label="잡은 수" value={<span className="pf-accent">{known ? `${form.count}마리` : '???'}</span>} />
-            <KeyValueRow label="이 형태 최대" value={known
+            <KeyValueRow label="최대 크기" value={known
               ? <><span className="pf-accent text-gold">{fmtSize(form.maxSize)}</span>
                   <span className="ml-1.5 text-xs text-text-dim">상위 {form.sizePercentile}%</span></>
               : '???'} />
@@ -92,15 +92,10 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
                   {/* 표 머리(28px)와 순위 다섯 줄(28.5px씩)에 위 여백 4px을 더한 높이 — 그 아래는 칸 안에서 스크롤한다 */}
                   <div className={`${SCROLL_Y_ROWS} max-h-[min(174.5px,40dvh)]`}>
                     <div className="pl-1">
-                      <RankList rows={ranking.data.top} me={null} valueLabel="크기" format={fmtSize} />
+                      <RankList embedded rows={ranking.data.top} me={null} valueLabel="크기" format={fmtSize} />
                     </div>
                   </div>
-                  {meOutside && (
-                    <div className="mt-auto flex items-center justify-between gap-2 border-t border-line px-2 py-1.5 text-sm text-accent">
-                      <span>내 순위 {meOutside.rank}위</span>
-                      <span className="pf-accent text-xs">{fmtSize(meOutside.value)}</span>
-                    </div>
-                  )}
+                  {meOutside && <RankMeBar me={meOutside} compact format={fmtSize} />}
                 </>
               ) : (
                 <div className="flex flex-1 min-h-24 items-center justify-center px-3">

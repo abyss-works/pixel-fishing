@@ -47,9 +47,6 @@ export const writeAdminMail = (op: 'preview' | 'send', request: AdminMailRequest
 /** 계정 제재(true) 또는 해제(false) */
 export const writeAdminRestrict = (userId: string, restricted: boolean) => api.admin.restrict(userId, restricted);
 
-/** 가입 계정의 비밀번호 재설정 링크 발급 */
-export const writeAdminResetLink = (userId: string) => api.admin.resetLink(userId);
-
 /** 편지 처리 표시 또는 취소 */
 export const writeAdminLetterHandled = (letterId: number, handled: boolean) => api.admin.letterHandled(letterId, handled);
 
@@ -62,6 +59,12 @@ export const readAdminUserState = (uid: string) => api.admin.userState(uid);
 
 /** 바운티 퍼널 일계 — events 보관(7일) 안의 범위만 의미가 있다 */
 export const readAdminBountyFunnel = (days: number) => api.admin.bountyFunnel(days);
+
+/** 온보딩 퍼널(게스트→구글 전환·튜토리얼 4단계·초반 6단계 도달률) */
+export const readAdminOnboardingFunnel = () => api.admin.onboardingFunnel();
+
+/** 앱 서버 HTTP 오류율·429 지표 */
+export const readAdminHttpMetrics = (days = 30) => api.admin.httpMetrics(days);
 
 /** 밸런스 라이브 지표. 이벤트 지표는 보관 기간(7일) 안의 범위만 의미가 있다 */
 export const readAdminBalanceLive = (days?: number) => api.admin.balanceLive(days);

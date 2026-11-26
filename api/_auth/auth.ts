@@ -1,58 +1,37 @@
 // 인증 구성. Better Auth 인스턴스를 만든다.
-// 게임 코드에 의존하지 않는다. 다른 앱도 연결 풀, 메일 발송기, 구글 클라이언트만 넘겨 같은 구성으로 쓸 수 있다.
+// 게임 코드에 의존하지 않는다. 다른 앱도 연결 풀과 구글 클라이언트만 넘겨 같은 구성으로 쓸 수 있다.
 // 표는 auth 스키마의 users·sessions·accounts·verifications이고 열 이름은 snake_case다.
 import { betterAuth } from 'better-auth';
 import { anonymous } from 'better-auth/plugins';
-import { generateRandomString } from 'better-auth/crypto';
-import bcrypt from 'bcryptjs';
 import { createHmac, randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
-import type { MailSender } from './mail.js';
 import { accountLinking, dropOAuthTokens, finishGoogleLink, googleProvider, guardAuthRequests, validateGoogleLink } from './googleLink.js';
 import type { GoogleConfig, RecordLinkConsent } from './googleLink.js';
+import { TRUSTED_PROXY_CIDRS } from './trustedProxy.js';
 
 export interface AuthConfig {
   pool: Pool;
   secret: string;
   /** 앱의 공개 주소. 예: https://pixel-fishing.abyssworks.dev */
   baseURL: string;
-  mail: MailSender;
   google: GoogleConfig;
   /** 구글 연결이 끝난 계정의 약관 수락을 기록한다 */
   recordLinkConsent: RecordLinkConsent;
 }
 
-export const MIN_PASSWORD_LENGTH = 6;
-const MAX_PASSWORD_LENGTH = 128;
 // 게스트의 신원은 세션 하나뿐이라 세션이 끝나면 계정을 잃는다. 1년 동안 쓰지 않을 때만 끝나게 한다.
 const SESSION_EXPIRES_IN = 60 * 60 * 24 * 365;
 // 익명 계정의 자리표시 이메일 도메인. 예약된 최상위 도메인이라 실제 주소와 겹치지 않는다.
 export const ANONYMOUS_EMAIL_DOMAIN = 'anonymous.invalid';
+/** 익명 계정 생성 경로(/api/auth/sign-in/anonymous)의 IP당 생성 상한: 1시간(3600초)당 최대 10회 */
+export const ANONYMOUS_SIGN_IN_RATE_LIMIT = {
+  window: 60 * 60,
+  max: 10,
+} as const;
+// 이메일·비밀번호 로그인·가입·재설정 경로는 사용하지 않아 라우터 진입에서 차단한다.
+const DISABLED_EMAIL_PASSWORD_PATHS = ['/sign-in/email', '/sign-up/email', '/request-password-reset', '/reset-password'];
 
 const timestamps = { createdAt: 'created_at', updatedAt: 'updated_at' } as const;
-
-/** 비밀번호 재설정 토큰의 유효 시간(초) */
-export const RESET_PASSWORD_EXPIRES_IN = 60 * 60;
-
-/** 재설정 요청(request-password-reset)이 만드는 것과 같은 형식의 재설정 토큰. 영문 대소문자와 숫자 24자다 */
-export const newPasswordResetToken = (): string => generateRandomString(24, 'a-z', 'A-Z', '0-9');
-
-/**
- * 재설정 토큰으로 들어가는 게임의 재설정 착지 주소.
- * 게임은 재설정 요청의 redirectTo로 앱 루트를 넘기고, 재설정 콜백(/reset-password/:token)은 그 주소에 token 질의를 붙여 보낸다.
- * 콜백을 거친 뒤와 같은 주소다.
- */
-export function passwordResetLanding(baseURL: string, token: string): string {
-  const url = new URL('/', baseURL);
-  url.searchParams.set('token', token);
-  return url.href;
-}
-
-// 이전 인증 서버에서 옮긴 해시가 bcrypt라 새 해시도 bcrypt로 맞춘다.
-const bcryptPassword = {
-  hash: (password: string) => bcrypt.hash(password, 10),
-  verify: ({ hash, password }: { hash: string; password: string }) => bcrypt.compare(password, hash),
-};
 
 // 게임과 관리자 인증이 함께 쓰는 표 구성
 const userTable = {
@@ -83,45 +62,42 @@ const verificationTable = {
   fields: { expiresAt: 'expires_at', ...timestamps },
 };
 
-const TRUSTED_PROXY_CIDRS = [
-  '127.0.0.0/8',
-  '10.0.0.0/8',
-  '172.16.0.0/12',
-  '192.168.0.0/16',
-  '100.64.0.0/10',
-  '169.254.0.0/16',
-  '::1/128',
-  'fc00::/7',
-  'fe80::/10',
-];
-
 const ipAddressConfig = {
   ipAddressHeaders: ['x-forwarded-for', 'x-real-ip'],
-  trustedProxies: TRUSTED_PROXY_CIDRS,
+  trustedProxies: [...TRUSTED_PROXY_CIDRS],
 };
+
+/** 인증 라이브러리 429 응답의 X-Retry-After 값을 표준 Retry-After 헤더에도 함께 싣는다 */
+function withRetryAfterHeader<
+  T extends { handler: (req: Request) => Promise<Response>; fetch: (req: Request) => Promise<Response> },
+>(auth: T): T {
+  const original = auth.handler;
+  const wrapped = async (req: Request): Promise<Response> => {
+    const res = await original(req);
+    if (res.status !== 429 || res.headers.has('retry-after')) return res;
+    const retryAfter = res.headers.get('x-retry-after');
+    if (!retryAfter) return res;
+    const headers = new Headers(res.headers);
+    headers.set('retry-after', retryAfter);
+    const body = await res.arrayBuffer();
+    return new Response(body, {
+      status: res.status,
+      statusText: res.statusText,
+      headers,
+    });
+  };
+  return { ...auth, handler: wrapped, fetch: wrapped };
+}
 
 export function createAuth(config: AuthConfig) {
   const finishLink = finishGoogleLink(config.recordLinkConsent);
-  return betterAuth({
+  const auth = betterAuth({
     database: config.pool,
     secret: config.secret,
     baseURL: config.baseURL,
     basePath: '/api/auth',
-    emailAndPassword: {
-      enabled: true,
-      minPasswordLength: MIN_PASSWORD_LENGTH,
-      maxPasswordLength: MAX_PASSWORD_LENGTH,
-      password: bcryptPassword,
-      disableSignUp: true,
-      // 비밀번호 수단이 남은 계정에만 보낸다.
-      sendResetPassword: async ({ user, url }) => {
-        const { rowCount } = await config.pool.query(
-          `select 1 from auth.accounts where user_id = $1 and provider_id = 'credential'`, [user.id]);
-        if (rowCount) await config.mail.sendPasswordReset(user.email, url);
-      },
-      resetPasswordTokenExpiresIn: RESET_PASSWORD_EXPIRES_IN,
-      revokeSessionsOnPasswordReset: true,
-    },
+    disabledPaths: DISABLED_EMAIL_PASSWORD_PATHS,
+    emailAndPassword: { enabled: false },
     user: { ...userTable, validateUserInfo: validateGoogleLink },
     session: {
       ...sessionTable,
@@ -139,6 +115,11 @@ export function createAuth(config: AuthConfig) {
       },
     },
     hooks: { before: guardAuthRequests },
+    rateLimit: {
+      customRules: {
+        '/sign-in/anonymous': { ...ANONYMOUS_SIGN_IN_RATE_LIMIT },
+      },
+    },
     advanced: { database: { generateId: 'uuid' }, ipAddress: ipAddressConfig },
     plugins: [
       anonymous({
@@ -149,6 +130,7 @@ export function createAuth(config: AuthConfig) {
       }),
     ],
   });
+  return withRetryAfterHeader(auth);
 }
 
 /** 관리자 세션 쿠키 이름의 앞부분. 게임 세션 쿠키(better-auth)와 이름이 달라 서로의 로그인·로그아웃이 영향을 주지 않는다 */
@@ -163,14 +145,15 @@ export const adminSecret = (secret: string): string =>
 
 /**
  * 관리자 대시보드의 인증 인스턴스. 게임과 같은 계정 표의 구글 계정으로 로그인하고 별도 쿠키의 세션을 받는다.
- * 구글을 연결한 적 없는 계정은 로그인하지 못한다. 연결과 가입·익명 로그인·비밀번호 재설정은 게임 인증만 제공한다.
+ * 구글을 연결한 적 없는 계정은 로그인하지 못한다. 연결과 익명 로그인은 게임 인증만 제공한다.
  */
-export function createAdminAuth(config: Omit<AuthConfig, 'mail' | 'recordLinkConsent'>) {
-  return betterAuth({
+export function createAdminAuth(config: Omit<AuthConfig, 'recordLinkConsent'>) {
+  const auth = betterAuth({
     database: config.pool,
     secret: adminSecret(config.secret),
     baseURL: config.baseURL,
     basePath: '/api/admin/auth',
+    disabledPaths: DISABLED_EMAIL_PASSWORD_PATHS,
     user: userTable,
     session: sessionTable,
     socialProviders: { google: googleProvider(config.google) },
@@ -186,6 +169,7 @@ export function createAdminAuth(config: Omit<AuthConfig, 'mail' | 'recordLinkCon
     },
     advanced: { database: { generateId: 'uuid' }, cookiePrefix: ADMIN_COOKIE_PREFIX, ipAddress: ipAddressConfig },
   });
+  return withRetryAfterHeader(auth);
 }
 
 export type Auth = ReturnType<typeof createAuth>;

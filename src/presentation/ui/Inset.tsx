@@ -14,12 +14,15 @@ const TONE = {
 
 const BORDER = {
   line: 'border-line',
+  'line-dim': 'border-line-dim',
   gold: 'border-gold',
   accent: 'border-accent',
   common: 'border-common',
   rare: 'border-rare',
   epic: 'border-epic',
   legend: 'border-legend',
+  mutation: 'border-mutation',
+  named: 'border-named',
 } as const;
 
 export type InsetBorder = keyof typeof BORDER;

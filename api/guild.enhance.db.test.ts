@@ -1,7 +1,8 @@
-// 길드 10레벨 확장 및 개인 스킬 자유 강화 — 실제 Postgres에서 마이그레이션 0040 제약, 길드원별 독립 자유 강화·초기화(20,000,000G, 쿨다운 없음),
+// 길드 10레벨 확장 및 개인 스킬 자유 강화 — 실제 Postgres에서 마이그레이션 0040·0041 제약, 길드원별 독립 자유 강화·누적 횟수별 초기화(쿨다운 없음),
 // 항해일지 비기록(옛 기록 읽기 호환), 탈퇴·추방 시 개인 강화 정리, 그리고 액션 경로의 개인별 합산 효과(기본 + 개인 자유 강화, 최대 10단계)를 검사한다.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
+import { GUILD_ENHANCE_RESET_COSTS } from '../src/game/rules/guild.js';
 import { capOfBoat, mutationWeightsOf, newState, priceOfInstance, variantShare } from '../src/game/rules/logic.js';
 import { database } from './_db/client.js';
 import { loadContext } from './_data/load.js';
@@ -69,8 +70,8 @@ describe('길드 10레벨 및 자유 강화', () => {
   });
 
   it('길드원 각자가 독립 포인트로 다른 스킬에 투자하고, 본인 초기화·공용 항해일지 비기록을 지킨다', async () => {
-    const leader = await seedUser(env.client, { uid: testUid(nextUid++), email: `el${nextUid}@test.dev`, nickname: '선장', state: { gold: 1_000_000 } });
-    const member = await seedUser(env.client, { uid: testUid(nextUid++), email: `em${nextUid}@test.dev`, nickname: '선원', state: { gold: 45_000_000 } });
+    const leader = await seedUser(env.client, { uid: testUid(nextUid++), email: `el${nextUid}@test.dev`, nickname: '선장', state: { gold: 50_000 } });
+    const member = await seedUser(env.client, { uid: testUid(nextUid++), email: `em${nextUid}@test.dev`, nickname: '선원', state: { gold: 600_000 } });
     const outsider = await seedUser(env.client, { uid: testUid(nextUid++), email: `eo${nextUid}@test.dev`, nickname: '외부', state: { gold: 50_000_000 } });
     const guest = await seedUser(env.client, { uid: testUid(nextUid++), nickname: '손님', state: {} });
 
@@ -113,26 +114,26 @@ describe('길드 10레벨 및 자유 강화', () => {
         .toMatchObject({ status: 201, body: { enhanceRank: i, remainingPoints: 5 - i } });
     }
 
-    // 20,000,000G 미만이면 초기화 거부
+    // 첫 회차 비용(100,000G) 미만이면 초기화 거부
     expect(await call(resetPath, 'POST', leader, { params: { id: guildId } }))
       .toMatchObject({ status: 409, body: { error: 'not-enough-gold' } });
     expect(await call(resetPath, 'POST', outsider, { params: { id: guildId } }))
       .toMatchObject({ status: 404, body: { error: 'not-member' } });
 
-    // 선원이 20,000,000G로 초기화 -> 선원의 포인트만 회수되고 선장의 sell 5단계·기본 기부 rank/pool은 유지
+    // 선원이 1회차 비용(100,000G)으로 초기화 -> 선원의 포인트만 회수되고 선장의 sell 5단계·기본 기부 rank/pool은 유지
     expect(await call(resetPath, 'POST', member, { params: { id: guildId } }))
-      .toMatchObject({ status: 200, body: { gold: 25_000_000, recovered: 5 } });
-    expect(await goldOf(member)).toBe(25_000_000);
+      .toMatchObject({ status: 200, body: { gold: 500_000, recovered: 5, enhanceResetCount: 1 } });
+    expect(await goldOf(member)).toBe(500_000);
     expect(await call(resetPath, 'POST', member, { params: { id: guildId } }))
       .toMatchObject({ status: 409, body: { error: 'no-enhance-used' } });
 
-    // 쿨다운 없음 — 선원이 다시 bag에 1투자 후 즉시 두 번째 초기화
+    // 쿨다운 없음 — 선원이 다시 bag에 1투자 후 2회차 비용(500,000G)으로 즉시 두 번째 초기화
     expect(await call(enhancePath, 'POST', member, { params: { id: guildId, bonus: 'bag' } }))
       .toMatchObject({ status: 201, body: { enhanceRank: 1, remainingPoints: 4 } });
     expect(await call(resetPath, 'POST', member, { params: { id: guildId } }))
-      .toMatchObject({ status: 200, body: { gold: 5_000_000, recovered: 1 } });
+      .toMatchObject({ status: 200, body: { gold: 0, recovered: 1, enhanceResetCount: 2 } });
 
-    // 선원이 sell 2 + bag 1로 재투자한 뒤 GET /api/guilds/me는 각자의 투자 효과만 반환한다
+    // 선원이 sell 2 + bag 1로 재투자한 뒤 GET /api/guilds/me는 각자의 투자 효과와 누적 초기화 횟수를 반환한다
     await call(enhancePath, 'POST', member, { params: { id: guildId, bonus: 'sell' } });
     await call(enhancePath, 'POST', member, { params: { id: guildId, bonus: 'sell' } });
     await call(enhancePath, 'POST', member, { params: { id: guildId, bonus: 'bag' } });
@@ -141,18 +142,21 @@ describe('길드 10레벨 및 자유 강화', () => {
       guild: {
         growth: { level: number; next: number | null };
         effects: Record<string, number>;
+        enhanceResetCount: number;
         bonuses: { id: string; rank: number; enhanceRank: number; totalRank: number; pool: number; effect: number }[];
         logbook: { kind: string; detail: string | null; value: number | null }[];
       };
     }
     const memberView = ((await call('/api/guilds/me', 'GET', member)).body as GuildMe).guild;
     expect(memberView.growth).toMatchObject({ level: 10, next: null });
+    expect(memberView.enhanceResetCount).toBe(2);
     expect(memberView.bonuses[0]).toMatchObject({ id: 'sell', rank: 2, enhanceRank: 2, totalRank: 4, pool: 123_456, effect: 0.08 });
     expect(memberView.bonuses[1]).toMatchObject({ id: 'bag', rank: 1, enhanceRank: 1, totalRank: 2, effect: 0.08 });
     expect(memberView.effects.sell).toBe(0.08);
     expect(memberView.effects.bag).toBe(0.08);
 
     const leaderView = ((await call('/api/guilds/me', 'GET', leader)).body as GuildMe).guild;
+    expect(leaderView.enhanceResetCount).toBe(0);
     expect(leaderView.bonuses[0]).toMatchObject({ id: 'sell', rank: 2, enhanceRank: 5, totalRank: 7, pool: 123_456, effect: 0.14 });
     expect(leaderView.bonuses[1]).toMatchObject({ id: 'bag', rank: 1, enhanceRank: 0, totalRank: 1, effect: 0.04 });
     expect(leaderView.effects.sell).toBe(0.14);
@@ -199,8 +203,10 @@ describe('길드 10레벨 및 자유 강화', () => {
     expect((await callAction(userToken(u2), { type: 'sell', uids: bagB.map(i => i.uid) })).status).toBe(200);
     expect(await goldOf(u2)).toBe(baseSell + Math.round(baseSell * 0.1));
 
-    // u1은 돌연변이 10단계(+10%p) 적용
-    const r = variantShare(mutationWeightsOf(newState(), 'pond')) + 0.08;
+    // u1은 돌연변이 10단계(+40% 가중치 = 1.4/4.4 ≈ 0.318) 적용, 기본(0.25)과의 중간값으로 검증
+    const baseShare = variantShare(mutationWeightsOf(newState(), 'pond'));
+    const boostedShare = variantShare(mutationWeightsOf(newState(), 'pond', 0, 0, 1, 0.4));
+    const r = (baseShare + boostedShare) / 2;
     vi.spyOn(Math, 'random').mockReturnValue(r);
     vi.setSystemTime(Date.now() + 2_000);
     const caught = await callAction(userToken(u1), { type: 'catch', spot: 'pond', judgment: 'auto' });
@@ -261,5 +267,69 @@ describe('길드 10레벨 및 자유 강화', () => {
       [guildId],
     );
     expect(rows).toEqual([{ user_id: leader, bonus: 'sell', rank: 1 }]);
+  });
+
+  it('연속 초기화 시 계정 누적 횟수에 따라 10만→50만→100만→500만→1,000만 상한으로 비용이 오른다', async () => {
+    const steps = [...GUILD_ENHANCE_RESET_COSTS, GUILD_ENHANCE_RESET_COSTS[GUILD_ENHANCE_RESET_COSTS.length - 1]];
+    let remainingGold = steps.reduce((a, b) => a + b, 0);
+    const uid = await seedUser(env.client, { uid: testUid(nextUid++), email: `step${nextUid}@test.dev`, nickname: '단계선장', state: { gold: remainingGold } });
+    const guildId = ((await call('/api/guilds', 'POST', uid, { body: { name: '단계비용선단' } })).body as { id: string }).id;
+    await env.client.query(`insert into public.guild_contributions (guild_id, user_id, day, fame, clears) values ($1, null, '2030-01-01', 0, 1100000)`, [guildId]);
+
+    for (let i = 0; i < steps.length; i++) {
+      expect(await call(enhancePath, 'POST', uid, { params: { id: guildId, bonus: 'sell' } }))
+        .toMatchObject({ status: 201, body: { enhanceRank: 1, remainingPoints: 4 } });
+      remainingGold -= steps[i];
+      const expectedCount = i + 1;
+      expect(await call(resetPath, 'POST', uid, { params: { id: guildId } }))
+        .toMatchObject({ status: 200, body: { gold: remainingGold, recovered: 1, enhanceResetCount: expectedCount } });
+      expect(await goldOf(uid)).toBe(remainingGold);
+      const { rows: [saveRow] } = await env.client.query<{ guild_enhance_reset_count: number }>(
+        `select guild_enhance_reset_count from public.saves_current where user_id = $1`,
+        [uid],
+      );
+      expect(saveRow.guild_enhance_reset_count).toBe(expectedCount);
+      const me = (await call('/api/guilds/me', 'GET', uid)).body as { guild: { enhanceResetCount: number } };
+      expect(me.guild.enhanceResetCount).toBe(expectedCount);
+    }
+  });
+
+  it('길드 탈퇴 후 다른 길드에 가입해도 계정 누적 초기화 횟수가 유지되어 다음 비용이 이어진다', async () => {
+    const leaderA = await seedUser(env.client, { uid: testUid(nextUid++), email: `ma${nextUid}@test.dev`, nickname: '가선장', state: {} });
+    const leaderB = await seedUser(env.client, { uid: testUid(nextUid++), email: `mb${nextUid}@test.dev`, nickname: '나선장', state: {} });
+    const traveler = await seedUser(env.client, { uid: testUid(nextUid++), email: `tr${nextUid}@test.dev`, nickname: '이적선원', state: { gold: 500_000 } });
+
+    const guildA = ((await call('/api/guilds', 'POST', leaderA, { body: { name: '첫번째선단' } })).body as { id: string }).id;
+    await call('/api/guilds/:id', 'PATCH', leaderA, { params: { id: guildA }, body: { joinMode: 'open' } });
+    const codeA = ((await call('/api/guilds/me', 'GET', leaderA)).body as { guild: { code: string } }).guild.code;
+    await env.client.query(`insert into public.guild_contributions (guild_id, user_id, day, fame, clears) values ($1, null, '2030-01-01', 0, 1100000)`, [guildA]);
+
+    const guildB = ((await call('/api/guilds', 'POST', leaderB, { body: { name: '두번째선단' } })).body as { id: string }).id;
+    await call('/api/guilds/:id', 'PATCH', leaderB, { params: { id: guildB }, body: { joinMode: 'open' } });
+    const codeB = ((await call('/api/guilds/me', 'GET', leaderB)).body as { guild: { code: string } }).guild.code;
+    await env.client.query(`insert into public.guild_contributions (guild_id, user_id, day, fame, clears) values ($1, null, '2030-01-01', 0, 1100000)`, [guildB]);
+
+    // 길드 A에서 1회차 초기화(100,000G 차감, 잔액 400,000G, enhanceResetCount: 1) 후 탈퇴
+    await call('/api/guild-memberships', 'POST', traveler, { body: { code: codeA } });
+    await call(enhancePath, 'POST', traveler, { params: { id: guildA, bonus: 'sell' } });
+    expect(await call(resetPath, 'POST', traveler, { params: { id: guildA } }))
+      .toMatchObject({ status: 200, body: { gold: 400_000, recovered: 1, enhanceResetCount: 1 } });
+    expect(await call('/api/guilds/:id/members/:uid', 'DELETE', traveler, { params: { id: guildA, uid: traveler } }))
+      .toMatchObject({ status: 200, body: { result: 'left' } });
+
+    // 길드 B 가입 후에도 enhanceResetCount=1이 유지되며 2회차 비용(500,000G)이 적용된다
+    await call('/api/guild-memberships', 'POST', traveler, { body: { code: codeB } });
+    const meB = (await call('/api/guilds/me', 'GET', traveler)).body as { guild: { enhanceResetCount: number } };
+    expect(meB.guild.enhanceResetCount).toBe(1);
+
+    await call(enhancePath, 'POST', traveler, { params: { id: guildB, bonus: 'bag' } });
+    // 잔액 400,000G < 2회차 500,000G -> 거부
+    expect(await call(resetPath, 'POST', traveler, { params: { id: guildB } }))
+      .toMatchObject({ status: 409, body: { error: 'not-enough-gold' } });
+
+    // 100,000G 추가 지급 후 2회차(500,000G) 성공 -> 잔액 0G, enhanceResetCount: 2
+    await env.client.query(`update public.saves_current set gold = 500000 where user_id = $1`, [traveler]);
+    expect(await call(resetPath, 'POST', traveler, { params: { id: guildB } }))
+      .toMatchObject({ status: 200, body: { gold: 0, recovered: 1, enhanceResetCount: 2 } });
   });
 });

@@ -17,6 +17,8 @@ const TONE_STYLE: Record<ToastTone, { border: string; icon: GlyphId; iconColor: 
   danger: { border: 'border-danger', icon: 'warn', iconColor: 'text-danger' },
   guild: { border: 'border-guild', icon: 'flag', iconColor: 'text-guild' },
   epic: { border: 'border-epic', icon: 'sparkle', iconColor: 'text-epic' },
+  named: { border: 'border-named', icon: 'target', iconColor: 'text-named' },
+  mutation: { border: 'border-mutation', icon: 'sparkle', iconColor: 'text-mutation' },
   neutral: { border: 'border-line', icon: 'check', iconColor: 'text-text-dim' },
 };
 
@@ -26,8 +28,8 @@ function resolveTone(tone: ToastTone | MessageTone): ToastTone {
   return tone;
 }
 
-/** 화면 전체 오버레이 위(--z-toast)에 띄우는 비차단 1줄 주요 알림 배너.
- *  원격 이동·바로 착용 등 부가 행동 버튼은 두지 않고 닫기(X)만 둔다. */
+/** 게임 스테이지 안(--z-toast)에 띄우는 비차단 1줄 주요 알림 배너.
+ *  사이드바와 앱 창은 덮지 않으며 원격 이동·바로 착용 등 부가 행동 버튼은 두지 않고 닫기(X)만 둔다. */
 export default function FloatingToastLayer({
   toasts,
   maxVisible = 3,
@@ -42,7 +44,7 @@ export default function FloatingToastLayer({
   return (
     <div
       className={cx(
-        'pointer-events-none fixed bottom-3 mobile:bottom-16 left-1/2 -translate-x-1/2 z-(--z-toast)',
+        'pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 z-(--z-toast)',
         'flex w-[min(560px,calc(100%-24px))] flex-col gap-2 mobile:[&>*:nth-child(n+3)]:hidden',
       )}
     >

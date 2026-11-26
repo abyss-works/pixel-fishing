@@ -77,6 +77,11 @@ describe('새 설정 질문', () => {
       expect(p.options.length, p.id).toBeGreaterThanOrEqual(2);
       expect(p.options.filter(o => o.badge === '기본').length, p.id).toBe(1);
     }
+    const fishArt = SETTING_PROMPTS.find(p => p.id === 'fish-art')!;
+    expect(fishArt.options.map(o => ({ value: o.value, label: o.label, sub: o.sub, badge: o.badge }))).toEqual([
+      { value: 'v1', label: 'v1', sub: 'legacy', badge: '기본' },
+      { value: 'v2', label: 'v2', sub: 'beta', badge: '실험' },
+    ]);
   });
 
   it('답한 질문은 빠진다', () => {

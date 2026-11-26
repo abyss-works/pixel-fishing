@@ -8,46 +8,59 @@ import type { Artifact, ArtifactEffects } from '../../../game/content/artifacts'
 import { ZONE_IDS, topZoneOf, topZoneOfSpot, zoneById, zoneGroup } from '../../../game/content/zones';
 import type { ZoneId } from '../../../game/content/zones';
 import { commonWeightMultiplier } from '../../../game/rules/actions';
-import { achievementBonusesOf } from '../../../game/rules/achievements';
+import { achievementBonusContributions, achievementBonusesOf } from '../../../game/rules/achievements';
 import { artifactEffectsAt, artifactExtraCookChanceAt, artifactLevelOf } from '../../../game/rules/artifactLevel';
+import { MUTATION_WEIGHTS } from '../../../game/rules/balance';
 import { biteWaitOf, createPlayerContext, moveSpeedOf } from '../../../game/rules/effects';
-import { FISH, boatNameOf, formDiscovered } from '../../../game/rules/logic';
+import { FISH, RARITY, boatNameOf, formDiscovered } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { GUILD_BONUS_IDS, NO_GUILD_EFFECTS, bonusEffect } from '../../../game/rules/guild';
 import type { GuildBonusId, GuildEffects } from '../../../game/rules/guild';
-import { fortuneOf } from '../../../game/rules/fortune';
-import type { DailyFortune } from '../../../game/rules/fortune';
+import { activePotionsOf, fortuneEffectsOf, fortuneOf } from '../../../game/rules/fortune';
+import type { DailyFortune, FortuneTarget } from '../../../game/rules/fortune';
+import type { Potion } from '../../../game/content/potions';
 import type { GuildBonusItem } from '../../../platform/api/types';
 import {
   minLevelOfPower, powerZones, rodAxes, rodPower,
 } from '../../../game/rules/stats';
 import type { Movement } from '../../../game/rules/stats';
+import { FORTUNE_TARGET_BONUS_LABEL, fortuneName } from '../../fortune/model/fortune';
+import { GUILD_BONUS_NAME } from '../../guild/model/guild';
 import { selectBagStatus } from '../../inventory/model/selectors';
 import type { BagStatus } from '../../inventory/model/selectors';
-import { recipeEffectLines } from '../../kitchen/model/recipes';
+import { NIGHT_UNLOCK_EFFECT_TEXT, recipeEffectLines } from '../../kitchen/model/recipes';
 import type { RecipeEffectLine } from '../../kitchen/model/recipes';
 import { ALL_SLOT_KEYS, activeSlot } from '../../kitchen/model/slots';
 import type { SlotKey } from '../../kitchen/model/slots';
 
-/** 스탯 화면의 처음 수역 인덱스. 사거리 안의 어군 수역이 있으면 그 수역이고, 없으면 현재 구역(또는 지역)에서 요구 파워가 가장 높은 곳이다. */
+/** 스탯 화면의 처음 수역 인덱스. 사거리 안의 어군 수역이 있으면 그 수역이고, 없으면 현재 구역(또는 지역)에서 현재 파워와 배로 진입 가능한 수역 중 요구 파워가 가장 높은 곳을 고른다. 진입 가능한 곳이 없으면 범위 내 최저 요구 파워 수역으로 폴백한다. */
 export function selectInitialStatsSpotIndex(
   region: RegionId,
   current: SpotId | null = null,
   currentZone: ZoneId | null = null,
+  power = 0,
+  boat = 0,
 ): number {
   const here = current ? SPOTS.findIndex(spot => spot.id === current) : -1;
   if (here >= 0) return here;
   const targetTopZone = region === 'world' && currentZone && zoneById(currentZone) && zoneGroup(currentZone) === 'world'
     ? topZoneOf(currentZone)
     : null;
-  let best = -1;
+  let bestReachable = -1;
+  let lowestFallback = -1;
   SPOTS.forEach((spot, index) => {
     const inScope = targetTopZone
       ? topZoneOfSpot(spot.id) === targetTopZone
       : region === 'world' ? spot.region !== 'village' : spot.region === region;
-    if (inScope && (best < 0 || (spot.powerReq ?? 0) >= (SPOTS[best].powerReq ?? 0))) best = index;
+    if (!inScope) return;
+    const req = spot.powerReq ?? 0;
+    if (lowestFallback < 0 || req < (SPOTS[lowestFallback].powerReq ?? 0)) lowestFallback = index;
+    if (power >= req && boat >= spot.boatTier) {
+      if (bestReachable < 0 || req >= (SPOTS[bestReachable].powerReq ?? 0)) bestReachable = index;
+    }
   });
-  return best >= 0 ? best : 0;
+  if (bestReachable >= 0) return bestReachable;
+  return lowestFallback >= 0 ? lowestFallback : 0;
 }
 
 /** 선택 수역과 현재 세이브 상태에서 스탯 화면이 표시할 값을 조립한다. 입질 대기에는 now 기준으로 효과가 든 도시락의 단축을 싣는다. */
@@ -179,13 +192,24 @@ const GUILD_CATEGORY: Record<GuildBonusId, BonusCategory> = {
 
 /** 슬롯 효과의 갈래 - 네임드 조우는 결투, 나머지는 낚시 */
 const COOK_EFFECT_CATEGORY: Record<keyof CookEffects, BonusCategory> = {
-  biteWaitCut: 'fish', rarityWeight: 'fish', mutationWeight: 'fish', namedWeight: 'duel', nightUnlock: 'fish',
+  biteWaitCut: 'fish', rarityWeight: 'fish', mutationWeight: 'fish', mutationMult: 'fish', namedWeight: 'duel', nightUnlock: 'fish',
 };
 
-/** 운세 종류의 갈래 — 대상이 속한 갈래와 같다(희귀 가중치는 낚시, 판매가는 상점, 네임드 조우는 결투) */
-const FORTUNE_CATEGORY: Record<DailyFortune['kind'], BonusCategory> = {
-  fish: 'fish', gold: 'shop', shadow: 'duel',
+/** 운세·비약 10개 보너스 채널의 갈래·버킷 키·표시 이름 매핑 */
+const FORTUNE_TARGET_META: Record<FortuneTarget, readonly [BonusCategory, string, string]> = {
+  rarity: ['fish', 'rareWeight', FORTUNE_TARGET_BONUS_LABEL.rarity],
+  named: ['duel', 'namedWeight', FORTUNE_TARGET_BONUS_LABEL.named],
+  sell: ['shop', 'sellBonus', FORTUNE_TARGET_BONUS_LABEL.sell],
+  biteWait: ['fish', 'biteWaitCut', FORTUNE_TARGET_BONUS_LABEL.biteWait],
+  bigCatch: ['fish', 'bigCatch', FORTUNE_TARGET_BONUS_LABEL.bigCatch],
+  fame: ['fish', 'fame', FORTUNE_TARGET_BONUS_LABEL.fame],
+  mutation: ['fish', 'mutationWeight', FORTUNE_TARGET_BONUS_LABEL.mutation],
+  night: ['fish', 'nightWeight', FORTUNE_TARGET_BONUS_LABEL.night],
+  energy: ['fish', 'energyYield', FORTUNE_TARGET_BONUS_LABEL.energy],
+  legendary: ['fish', 'legendaryWeight', FORTUNE_TARGET_BONUS_LABEL.legendary],
 };
+
+const ALL_FORTUNE_TARGETS = Object.keys(FORTUNE_TARGET_META) as FortuneTarget[];
 
 export type BonusSource =
   /** 유물 보너스 - level은 보유 레벨, scale은 업적 보유 유물 효과 배율(1 + artifactBoost)이다 */
@@ -200,7 +224,9 @@ export type BonusSource =
   /** 업적 누적 보너스 — 단계 도달 즉시 자동 적용되는 합산 보너스 */
   | { kind: 'achievement'; label: string; value: string }
   /** 오늘의 운세 — 그 게임 날짜에 고정된 운 배율. 다른 보너스 다음의 최종 곱이다 */
-  | { kind: 'fortune'; fortune: DailyFortune };
+  | { kind: 'fortune'; fortune: DailyFortune }
+  /** 물약 — 그 게임 날짜에 쓴 물약의 운 배율. 오늘의 운세와 합산해 최종 곱한다 */
+  | { kind: 'potion'; potion: Potion; target: FortuneTarget; bonus: number };
 
 export interface BonusRow {
   category: BonusCategory;
@@ -277,44 +303,353 @@ export function selectActiveBonuses(
     return `${sign}${Number.isInteger(pct) ? pct : pct.toFixed(1)}%`;
   };
   if (ach.moveSpeed > 0) {
-    out.push({ category: 'move', source: { kind: 'achievement', label: '이동 속도', value: fmtPct(ach.moveSpeed, '+') }, manualOnly: false });
+    out.push({ category: 'move', source: { kind: 'achievement', label: '항해 속도', value: fmtPct(ach.moveSpeed, '+') }, manualOnly: false });
   }
   if (ach.biteWaitCut > 0) {
     out.push({ category: 'fish', source: { kind: 'achievement', label: '입질 대기', value: fmtPct(ach.biteWaitCut, '−') }, manualOnly: false });
   }
   if (ach.mutationWeight > 0) {
-    out.push({ category: 'fish', source: { kind: 'achievement', label: '돌연변이 가중치', value: fmtPct(ach.mutationWeight, '+') }, manualOnly: false });
+    out.push({ category: 'fish', source: { kind: 'achievement', label: '돌연변이 출현 비중', value: fmtPct(ach.mutationWeight, '+') }, manualOnly: false });
   }
   if (ach.rareWeight > 0) {
-    out.push({ category: 'fish', source: { kind: 'achievement', label: '희귀 이상 가중치', value: fmtPct(ach.rareWeight, '+') }, manualOnly: false });
+    out.push({ category: 'fish', source: { kind: 'achievement', label: '희귀 이상 출현 비중', value: fmtPct(ach.rareWeight, '+') }, manualOnly: false });
   }
   if (ach.epicWeight > 0) {
-    out.push({ category: 'fish', source: { kind: 'achievement', label: '영웅 이상 가중치', value: fmtPct(ach.epicWeight, '+') }, manualOnly: false });
+    out.push({ category: 'fish', source: { kind: 'achievement', label: '영웅 이상 출현 비중', value: fmtPct(ach.epicWeight, '+') }, manualOnly: false });
   }
   if (ach.legendaryWeight > 0) {
-    out.push({ category: 'fish', source: { kind: 'achievement', label: '전설 가중치', value: fmtPct(ach.legendaryWeight, '+') }, manualOnly: false });
+    out.push({ category: 'fish', source: { kind: 'achievement', label: '전설 출현 비중', value: fmtPct(ach.legendaryWeight, '+') }, manualOnly: false });
   }
-  for (const zone of ZONE_IDS) {
-    const zMut = ach.zoneMutation[zone] ?? 0;
-    const zLeg = ach.zoneLegendary[zone] ?? 0;
-    const zName = zoneById(zone)?.shortName ?? zone;
-    if (zMut > 0) {
-      out.push({ category: 'fish', source: { kind: 'achievement', label: `${zName} 돌연변이 가중치`, value: fmtPct(zMut, '+') }, manualOnly: false });
-    }
-    if (zLeg > 0) {
-      out.push({ category: 'fish', source: { kind: 'achievement', label: `${zName} 전설 가중치`, value: fmtPct(zLeg, '+') }, manualOnly: false });
-    }
+  if (ach.nightWeight > 0) {
+    out.push({ category: 'fish', source: { kind: 'achievement', label: '밤 어종 출현 비중', value: fmtPct(ach.nightWeight, '+') }, manualOnly: false });
+  }
+  if (ach.bagCap > 0) {
+    out.push({ category: 'fish', source: { kind: 'achievement', label: '가방 용량', value: fmtPct(ach.bagCap, '+') }, manualOnly: false });
+  }
+  if (ach.energyYield > 0) {
+    out.push({ category: 'fish', source: { kind: 'achievement', label: '기운 획득량', value: fmtPct(ach.energyYield, '+') }, manualOnly: false });
   }
   if (ach.namedWeight > 0) {
-    out.push({ category: 'duel', source: { kind: 'achievement', label: '네임드 조우 가중치', value: fmtPct(ach.namedWeight, '+') }, manualOnly: false });
+    out.push({ category: 'duel', source: { kind: 'achievement', label: '네임드 조우 확률', value: fmtPct(ach.namedWeight, '+') }, manualOnly: false });
   }
   if (ach.sellBonus > 0) {
     out.push({ category: 'shop', source: { kind: 'achievement', label: '판매가 보너스', value: fmtPct(ach.sellBonus, '+') }, manualOnly: false });
   }
-  // 오늘의 운세 — 그 게임 날짜의 운세가 고정돼 있을 때만. 운세 종류가 가리키는 대상의 갈래에 한 줄 든다
+  // 오늘의 운세 — 그 게임 날짜의 운세가 고정돼 있을 때만. 운세 효과가 가리키는 대상의 갈래별로 중복 없이 담는다
   const fortune = fortuneOf(game, now);
   if (fortune) {
-    out.push({ category: FORTUNE_CATEGORY[fortune.kind], source: { kind: 'fortune', fortune }, manualOnly: false });
+    const seenCategories = new Set<BonusCategory>();
+    for (const eff of fortuneEffectsOf(fortune)) {
+      const category = FORTUNE_TARGET_META[eff.target][0];
+      if (seenCategories.has(category)) continue;
+      seenCategories.add(category);
+      out.push({ category, source: { kind: 'fortune', fortune }, manualOnly: false });
+    }
+  }
+  // 활성 비약 — 그 게임 날짜에 사용한 비약의 운 배율 대상을 각 갈래에 한 줄씩 둔다
+  for (const potion of activePotionsOf(game.potions, now)) {
+    const luck = potion.effects.luck as Partial<Record<FortuneTarget, number>> | undefined;
+    for (const target of ALL_FORTUNE_TARGETS) {
+      const bonus = luck?.[target];
+      if (bonus && bonus > 0) {
+        out.push({
+          category: FORTUNE_TARGET_META[target][0],
+          source: { kind: 'potion', potion, target, bonus },
+          manualOnly: false,
+        });
+      }
+    }
+  }
+  return out;
+}
+
+export type BonusScope = 'all' | 'manual' | 'auto';
+
+export interface BonusTipRow {
+  label: string;
+  value: string;
+  divider?: boolean;
+}
+
+export interface BonusTableRow {
+  id: string;
+  category: BonusCategory;
+  effect: string;
+  scope: BonusScope;
+  totalText: string;
+  tipRows: BonusTipRow[];
+}
+
+const cleanNum = (n: number): number => Math.round(n * 1e9) / 1e9;
+const fmtBonusPct = (ratio: number, sign: '+' | '−'): string => {
+  const pct = Math.round(ratio * 10_000) / 100;
+  return `${sign}${Number(pct.toFixed(2))}%`;
+};
+const fmtMultNum = (mult: number): string => {
+  const rounded = Math.round(mult * 10_000) / 10_000;
+  if (rounded === 0.5 || Number.isInteger(rounded)) return String(rounded);
+  const two = Math.round(rounded * 100) / 100;
+  return Math.abs(rounded - two) < 1e-6 ? rounded.toFixed(2) : String(rounded);
+};
+
+interface BonusBucket {
+  id: string;
+  category: BonusCategory;
+  effect: string;
+  scope: BonusScope;
+  mode: 'add' | 'mult' | 'rule';
+  sign: '+' | '−';
+  addEntries: { label: string; delta: number; amplifiedDelta: number }[];
+  multEntries: { label: string; mult: number }[];
+  ruleSources: string[];
+}
+
+/** 보너스 탭 합산 행 — 동일 효과·범위·연산 계층을 1줄로 합치고, 툴팁은 [출처] 태그와 합연산→곱연산 내림차순·최종 적용 순으로 만든다 */
+export function selectBonusTableRows(
+  game: GameState,
+  guild: { level: number; effects: GuildEffects; bonuses?: readonly GuildBonusItem[] } | null = null,
+  now: string = new Date().toISOString(),
+): BonusTableRow[] {
+  const ach = achievementBonusesOf(game);
+  const buckets = new Map<string, BonusBucket>();
+
+  const getBucket = (
+    category: BonusCategory,
+    key: string,
+    effect: string,
+    scope: BonusScope,
+    mode: 'add' | 'mult' | 'rule',
+    sign: '+' | '−' = '+',
+  ): BonusBucket => {
+    const id = `${category}:${key}:${scope}:${mode}`;
+    let b = buckets.get(id);
+    if (!b) {
+      b = { id, category, effect, scope, mode, sign, addEntries: [], multEntries: [], ruleSources: [] };
+      buckets.set(id, b);
+    }
+    return b;
+  };
+
+  const addMultOnce = (bucket: BonusBucket, label: string, mult: number) => {
+    if (!bucket.multEntries.some(e => e.label === label)) {
+      bucket.multEntries.push({ label, mult });
+    }
+  };
+
+  const relicScale = cleanNum(1 + ach.artifactBoost);
+  const pushRelic = (category: BonusCategory, key: string, effect: string, sign: '+' | '−', relicName: string, raw: number) => {
+    if (raw <= 0) return;
+    const b = getBucket(category, key, effect, 'all', 'add', sign);
+    b.addEntries.push({
+      label: `[유물] ${relicName}`,
+      delta: raw,
+      amplifiedDelta: cleanNum(raw * relicScale),
+    });
+    if (ach.artifactBoost > 0) addMultOnce(b, '[업적] 유물 증폭', relicScale);
+  };
+
+  for (const artifact of ARTIFACTS) {
+    const level = artifactLevelOf(game, artifact.id);
+    if (level === 0) continue;
+    const e = artifactEffectsAt(artifact, level);
+    if (e.sail !== undefined) pushRelic('move', 'sail', '항해 속도', '+', artifact.name, e.sail);
+    if (e.duelSpeedupCut !== undefined) pushRelic('duel', 'duelSpeedupCut', '네임드 결투 가속', '−', artifact.name, e.duelSpeedupCut);
+    if (e.mutationWeight !== undefined) {
+      const ratio = cleanNum(e.mutationWeight.variant / MUTATION_WEIGHTS.variant - 1);
+      pushRelic('fish', 'mutationWeight', '돌연변이 출현 비중', '+', artifact.name, ratio);
+    }
+    if (e.biteWaitCut !== undefined) pushRelic('fish', 'biteWaitCut', '입질 대기', '−', artifact.name, e.biteWaitCut);
+    if (e.commonWeightCut !== undefined) pushRelic('fish', 'commonWeightCut', '일반 어종 출현 비중', '−', artifact.name, e.commonWeightCut);
+    if (e.bagCap !== undefined) pushRelic('fish', 'bagCap', '가방 용량', '+', artifact.name, e.bagCap);
+    const cookChance = artifactExtraCookChanceAt(artifact, level);
+    if (cookChance > 0) pushRelic('fish', 'extraCookChance', '요리 추가 완성', '+', artifact.name, cookChance);
+  }
+
+  if (guild) {
+    const guildMap: Record<GuildBonusId, [BonusCategory, string, string, '+' | '−']> = {
+      sell: ['shop', 'sellBonus', '판매가', '+'],
+      bag: ['fish', 'bagCap', '가방 용량', '+'],
+      named: ['duel', 'namedWeight', '네임드 조우 확률', '+'],
+      rare: ['fish', 'commonWeightCut', '일반 어종 출현 비중', '−'],
+      mutation: ['fish', 'mutationWeight', '돌연변이 출현 비중', '+'],
+    };
+    for (const bonus of GUILD_BONUS_IDS) {
+      const value = guild.effects[bonus];
+      if (value <= 0) continue;
+      const [category, key, effect, sign] = guildMap[bonus];
+      const item = guild.bonuses?.find(b => b.id === bonus);
+      const rankSuffix = item && item.enhanceRank > 0 ? ` (${item.rank + item.enhanceRank}단)` : '';
+      const b = getBucket(category, key, effect, 'all', 'add', sign);
+      b.addEntries.push({ label: `[길드] ${GUILD_BONUS_NAME[bonus]}${rankSuffix}`, delta: value, amplifiedDelta: value });
+    }
+  }
+
+  const zoneGroup = {
+    rareWeight: { count: 0, delta: 0, labelPrefix: '구역 전설', category: 'fish' as BonusCategory, key: 'rareWeight', effect: '희귀 이상 출현 비중' },
+    nightWeight: { count: 0, delta: 0, labelPrefix: '구역 밤 전설', category: 'fish' as BonusCategory, key: 'nightWeight', effect: '밤 어종 출현 비중' },
+    mutationWeight: { count: 0, delta: 0, labelPrefix: '구역 돌연변이', category: 'fish' as BonusCategory, key: 'mutationWeight', effect: '돌연변이 출현 비중' },
+  };
+  for (const contrib of achievementBonusContributions(game)) {
+    if (contrib.series.scope === 'zone') {
+      if (contrib.series.bonusKind === 'rareWeight' || contrib.series.bonusKind === 'nightWeight' || contrib.series.bonusKind === 'mutationWeight') {
+        const g = zoneGroup[contrib.series.bonusKind];
+        g.count += 1;
+        g.delta = cleanNum(g.delta + contrib.activeDelta);
+      }
+      continue;
+    }
+    if (contrib.series.scope !== 'global') continue;
+    const kind = contrib.series.bonusKind;
+    if (kind === 'baitAmplify' || kind === 'lunchAmplify' || kind === 'artifactBoost') continue;
+    const achMap: Partial<Record<typeof kind, [BonusCategory, string, string, '+' | '−']>> = {
+      moveSpeed: ['move', 'sail', '항해 속도', '+'],
+      biteWaitCut: ['fish', 'biteWaitCut', '입질 대기', '−'],
+      mutationWeight: ['fish', 'mutationWeight', '돌연변이 출현 비중', '+'],
+      rareWeight: ['fish', 'rareWeight', '희귀 이상 출현 비중', '+'],
+      epicWeight: ['fish', 'epicWeight', '영웅 이상 출현 비중', '+'],
+      legendaryWeight: ['fish', 'legendaryWeight', '전설 출현 비중', '+'],
+      nightWeight: ['fish', 'nightWeight', '밤 어종 출현 비중', '+'],
+      bagCap: ['fish', 'bagCap', '가방 용량', '+'],
+      energyYield: ['fish', 'energyYield', '기운 획득량', '+'],
+      namedWeight: ['duel', 'namedWeight', '네임드 조우 확률', '+'],
+      sellBonus: ['shop', 'sellBonus', '판매가', '+'],
+    };
+    const spec = achMap[kind];
+    if (!spec) continue;
+    const [category, key, effect, sign] = spec;
+    const b = getBucket(category, key, effect, 'all', 'add', sign);
+    b.addEntries.push({
+      label: `[업적] ${contrib.series.name}`,
+      delta: contrib.activeDelta,
+      amplifiedDelta: contrib.activeDelta,
+    });
+  }
+  for (const g of Object.values(zoneGroup)) {
+    if (g.count > 0 && g.delta > 0) {
+      const b = getBucket(g.category, g.key, g.effect, 'all', 'add', '+');
+      b.addEntries.push({
+        label: `[업적] ${g.labelPrefix} ${g.count}곳`,
+        delta: g.delta,
+        amplifiedDelta: g.delta,
+      });
+    }
+  }
+
+  const seenBaitIds = new Set<string>();
+  for (const slotKey of ALL_SLOT_KEYS) {
+    const slot = activeSlot(game, slotKey, now);
+    if (slot === null) continue;
+    if (slot.key === 'bait') {
+      if (seenBaitIds.has(slot.recipe.id)) continue;
+      seenBaitIds.add(slot.recipe.id);
+    }
+    const scope: BonusScope = slot.key === 'lunch' ? 'auto' : 'manual';
+    const tag = slot.key === 'lunch' ? '[도시락]' : '[미끼]';
+    const ampRatio = slot.key === 'lunch' ? ach.lunchAmplify : ach.baitAmplify;
+    const ampScale = cleanNum(1 + ampRatio);
+    const ampLabel = slot.key === 'lunch' ? '[업적] 도시락 방치 증폭' : '[업적] 미끼 손맛 증폭';
+    const e = slot.recipe.effects;
+
+    if (e.biteWaitCut !== undefined && e.biteWaitCut > 0) {
+      const b = getBucket('fish', 'biteWaitCut', '입질 대기', scope, 'add', '−');
+      b.addEntries.push({ label: `${tag} ${slot.recipe.name}`, delta: e.biteWaitCut, amplifiedDelta: cleanNum(e.biteWaitCut * ampScale) });
+      if (ampRatio > 0) addMultOnce(b, ampLabel, ampScale);
+    }
+    if (e.rarityWeight !== undefined && e.rarityWeight.bonus > 0) {
+      for (const grade of e.rarityWeight.grades) {
+        const b = getBucket('fish', `gradeWeight:${grade}`, `${RARITY[grade].name} 어종 출현 비중`, scope, 'add', '+');
+        b.addEntries.push({ label: `${tag} ${slot.recipe.name}`, delta: e.rarityWeight.bonus, amplifiedDelta: cleanNum(e.rarityWeight.bonus * ampScale) });
+        if (ampRatio > 0) addMultOnce(b, ampLabel, ampScale);
+      }
+    }
+    if (e.mutationWeight !== undefined && e.mutationWeight > 0) {
+      const b = getBucket('fish', 'mutationWeight', '돌연변이 출현 비중', scope, 'add', '+');
+      b.addEntries.push({ label: `${tag} ${slot.recipe.name}`, delta: e.mutationWeight, amplifiedDelta: cleanNum(e.mutationWeight * ampScale) });
+      if (ampRatio > 0) addMultOnce(b, ampLabel, ampScale);
+    }
+    if (e.mutationMult !== undefined) {
+      const b = getBucket('fish', 'mutationMult', '돌연변이 등장', scope, 'mult');
+      b.multEntries.push({ label: `${tag} ${slot.recipe.name}`, mult: e.mutationMult });
+    }
+    if (e.namedWeight !== undefined && e.namedWeight > 0) {
+      const b = getBucket('duel', 'namedWeight', '네임드 조우 확률', scope, 'add', '+');
+      b.addEntries.push({ label: `${tag} ${slot.recipe.name}`, delta: e.namedWeight, amplifiedDelta: cleanNum(e.namedWeight * ampScale) });
+      if (ampRatio > 0) addMultOnce(b, ampLabel, ampScale);
+    }
+    if (e.nightUnlock === true) {
+      const b = getBucket('fish', 'nightUnlock', NIGHT_UNLOCK_EFFECT_TEXT, scope, 'rule');
+      b.ruleSources.push(`${tag} ${slot.recipe.name}`);
+    }
+  }
+
+  const fortune = fortuneOf(game, now);
+  if (fortune) {
+    const label = `[운세] ${fortuneName(fortune)}`;
+    for (const eff of fortuneEffectsOf(fortune)) {
+      const [category, key, effect] = FORTUNE_TARGET_META[eff.target];
+      const b = getBucket(category, key, effect, 'all', 'mult');
+      b.multEntries.push({ label, mult: cleanNum(eff.mult) });
+    }
+  }
+
+  for (const potion of activePotionsOf(game.potions, now)) {
+    const luck = potion.effects.luck as Partial<Record<FortuneTarget, number>> | undefined;
+    for (const target of ALL_FORTUNE_TARGETS) {
+      const bonus = luck?.[target];
+      if (bonus && bonus > 0) {
+        const [category, key, effect] = FORTUNE_TARGET_META[target];
+        const b = getBucket(category, key, effect, 'all', 'mult');
+        b.multEntries.push({ label: `[비약] ${potion.name}`, mult: cleanNum(1 + bonus) });
+      }
+    }
+  }
+
+  const out: BonusTableRow[] = [];
+  for (const category of BONUS_CATEGORIES) {
+    for (const b of buckets.values()) {
+      if (b.category !== category) continue;
+      if (b.mode === 'add') {
+        const total = b.addEntries.reduce((sum, e) => cleanNum(sum + e.amplifiedDelta), 0);
+        const totalText = fmtBonusPct(total, b.sign);
+        const addSorted = [...b.addEntries]
+          .sort((a, z) => Math.abs(z.delta) - Math.abs(a.delta))
+          .map(e => ({ label: e.label, value: fmtBonusPct(e.delta, b.sign) }));
+        const multSorted = [...b.multEntries]
+          .sort((a, z) => z.mult - a.mult)
+          .map(e => ({ label: e.label, value: `×${fmtMultNum(e.mult)}` }));
+        out.push({
+          id: b.id,
+          category: b.category,
+          effect: b.effect,
+          scope: b.scope,
+          totalText,
+          tipRows: [...addSorted, ...multSorted, { label: '최종 적용', value: totalText, divider: true }],
+        });
+      } else if (b.mode === 'mult') {
+        const totalMult = b.multEntries.reduce((prod, e) => cleanNum(prod * e.mult), 1);
+        const totalText = `×${fmtMultNum(totalMult)}`;
+        const multSorted = [...b.multEntries]
+          .sort((a, z) => z.mult - a.mult)
+          .map(e => ({ label: e.label, value: `×${fmtMultNum(e.mult)}` }));
+        out.push({
+          id: b.id,
+          category: b.category,
+          effect: b.effect,
+          scope: b.scope,
+          totalText,
+          tipRows: [...multSorted, { label: '최종 적용', value: totalText, divider: true }],
+        });
+      } else {
+        out.push({
+          id: b.id,
+          category: b.category,
+          effect: b.effect,
+          scope: b.scope,
+          totalText: '적용 중',
+          tipRows: b.ruleSources.map(src => ({ label: src, value: '적용 중' })),
+        });
+      }
+    }
   }
   return out;
 }

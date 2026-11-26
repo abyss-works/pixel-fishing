@@ -11,13 +11,15 @@ import Button from '../../../../ui/Button';
 import CostBox from '../../../../ui/CostBox';
 import CostLine from '../../../../ui/CostLine';
 import Inset from '../../../../ui/Inset';
+import ItemSprite from '../../../../ui/ItemSprite';
 import KeyValueRow from '../../../../ui/KeyValueRow';
 import LoreParagraph from '../../../../ui/LoreParagraph';
 import Modal from '../../../../ui/Modal';
 import PageTitle from '../../../../ui/PageTitle';
 import Subheading from '../../../../ui/Subheading';
-import Tip from '../../../../ui/Tip';
-import { RarityText } from '../../../../ui/fish/RarityTag';
+import Tip, { TipBullets } from '../../../../ui/Tip';
+import { splitTipLines } from '../../../../ui/tipText';
+import { GradeName } from '../../../../ui/fish/RarityTag';
 import type { Notify } from '../../../../ui/hud/messageFeed';
 import { fmtNum } from '../../../../ui/format';
 import {
@@ -26,8 +28,8 @@ import {
 import { CompareTable, ConfirmButton } from '../../../overlays/facility/facilityParts';
 
 // 유물 상세 창 - 가방 탭의 유물 보기에서 보유 유물 줄을 누르면 열린다. 강화 버튼은 이 창 안에만 있다.
-// 위에서 아래로: 제목(이름과 등급), 지금 레벨과 강화 후 레벨의 비교 표, 로어, 그리고 아래 고정 영역의
-// 잔액 칸(필요한 재료의 보유 → 강화 후)과 강화 버튼. 최고 레벨은 현재 열만 보이고 잔액 칸 없이 꺼진 버튼이 서며,
+// 위에서 아래로: 제목(이름과 등급), 로어, 지금 레벨과 강화 후 레벨의 비교 표(또는 전설 유물 보너스와 페널티),
+// 그리고 아래 고정 영역의 잔액 칸(필요한 재료의 보유 → 강화 후)과 강화 버튼. 최고 레벨은 현재 열만 보이고 잔액 칸 없이 꺼진 버튼이 서며,
 // 레벨이 없는 전설 유물은 보너스와 페널티 두 줄뿐이고 버튼이 없다.
 export default function ArtifactDetail({ artifact, game, dispatch, setToast, onClose }: {
   artifact: Artifact;
@@ -39,6 +41,7 @@ export default function ArtifactDetail({ artifact, game, dispatch, setToast, onC
   const [busy, setBusy] = useState(false);
   const view = selectArtifactLevel(game, artifact);
   const { next } = view;
+  const displayLevel = view.status === 'unowned' ? 1 : view.level;
 
   const levelUp = async () => {
     setBusy(true);
@@ -58,25 +61,29 @@ export default function ArtifactDetail({ artifact, game, dispatch, setToast, onC
   return (
     <Modal layer="app" onClose={onClose}
            header={
-             <header className="mb-3 flex flex-wrap items-baseline gap-x-3 border-b border-line pb-2 pr-8">
-               <PageTitle>{artifact.name}</PageTitle>
-               <span className="text-sm"><RarityText rarity={artifact.grade} /> 유물</span>
+             <header className="mb-3 flex items-center gap-3 border-b border-line pb-2 pr-8">
+               <ItemSprite kind="artifact" id={artifact.id} preset="hero" className="shrink-0" />
+               <PageTitle className="min-w-0">
+                 <GradeName name={artifact.name} grade={artifact.grade} />
+               </PageTitle>
              </header>
            }
            footer={<Footer view={view} busy={busy} onLevelUp={levelUp} />}>
       <div className="flex flex-col gap-3">
+        <LoreParagraph className="text-xs leading-[1.8] text-text-dim">{artifact.lore}</LoreParagraph>
         {view.hasLevel ? (
           <CompareTable
-            heads={next
-              ? [`현재(${levelText(view.level)})`, `강화 후(${levelText(next.level)})`]
-              : [`현재(${levelText(view.level)})`]}
+            heads={view.status === 'unowned'
+              ? [`획득 시(${levelText(1)})`]
+              : next
+                ? [`현재(${levelText(view.level)})`, `강화 후(${levelText(next.level)})`]
+                : [`현재(${levelText(view.level)})`]}
             rows={artifactEffectKeys(artifact).map(effect => ({
               label: artifactEffectLabel(effect),
-              value: artifactEffectValue(artifact, effect, view.level),
+              value: artifactEffectValue(artifact, effect, displayLevel),
               next: next ? artifactEffectValue(artifact, effect, next.level) : undefined,
             }))} />
         ) : <SystemRows artifact={artifact} />}
-        <LoreParagraph className="text-xs leading-[1.8] text-text-dim">{artifact.lore}</LoreParagraph>
       </div>
     </Modal>
   );
@@ -110,7 +117,7 @@ function Footer({ view, busy, onLevelUp }: { view: ArtifactLevelView; busy: bool
         <Subheading>{LEVEL_UP_TEXT.materialLabel}</Subheading>
         <CostBox>
           <CostLine have={material.have} delta={-next!.cost} format={fmtNum}
-                    label={<Tip text={LEVEL_UP_TEXT.materialTip}>{material.name}</Tip>} />
+                    label={<Tip text={<TipBullets items={splitTipLines(LEVEL_UP_TEXT.materialTip)} />}>{material.name}</Tip>} />
         </CostBox>
       </div>
       <ConfirmButton reason={status === 'short' ? LEVEL_UP_TEXT.notice.short : null}

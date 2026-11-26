@@ -69,6 +69,25 @@ describe('게스트 액션 허용 목록', () => {
     expect(outcome(await send(uid, { type: 'travel', to: { kind: 'region', id: 'world' } }))).toEqual([403, 'guest-village-only']);
     expect(outcome(await send(uid, { type: 'boot' }))).toEqual([200, 'ok']);
   });
+
+  it('출항준비 정적 쿠폰은 게스트에게도 300G와 작은 바다 영약 1개를 지급하고 DB에 저장하며, 다른 쿠폰은 403 account-only로 거부한다', async () => {
+    await env.client.query(`insert into public.coupons (code, gold, description, active)
+      values ('DYN-GUEST-BLOCKED', 500, '동적 쿠폰', true) on conflict (code) do nothing`);
+    const uid = await guest({ state: { gold: 0 } });
+
+    expect(outcome(await send(uid, { type: 'redeemCoupon', code: 'DYN-GUEST-BLOCKED' }))).toEqual([403, 'account-only']);
+    expect(outcome(await send(uid, { type: 'redeemCoupon', code: '출항준비' }))).toEqual([200, 'ok']);
+
+    const { rows } = await env.client.query<{ gold: string; data: { coupons?: string[]; items?: Record<string, number> } }>(
+      `select gold, data from public.saves_current where user_id = $1`,
+      [uid],
+    );
+    expect(Number(rows[0].gold)).toBe(300);
+    expect(rows[0].data.coupons).toEqual(['출항준비']);
+    expect(rows[0].data.items).toEqual({ 'luck-small': 1 });
+
+    expect(outcome(await send(uid, { type: 'redeemCoupon', code: '출항준비' }))).toEqual([422, 'coupon-used']);
+  });
 });
 
 describe('랭킹의 게스트', () => {

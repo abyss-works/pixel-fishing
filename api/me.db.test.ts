@@ -1,7 +1,7 @@
 // 본인 읽기 함수 — 세션 사용자 자신의 저장 상태·수배·프로필만 돌려준다.
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { LICENSE_GRADES, newState, zoneDexMissing } from '../src/game/rules/logic.js';
-import { fish, seedUser, sessionHeaders, startActionEnv, testUid, userToken } from './_dbTest/actionHarness.js';
+import { newState, zoneDexMissing } from '../src/game/rules/logic.js';
+import { adminSessionHeaders, fish, seedUser, sessionHeaders, startActionEnv, testUid, userToken } from './_dbTest/actionHarness.js';
 import type { ActionEnv } from './_dbTest/actionHarness.js';
 
 let env: ActionEnv;
@@ -31,7 +31,7 @@ afterAll(async () => {
 });
 afterEach(() => { delete process.env.DEPLOY_ENV; });
 
-async function callMe(q: string, token: string | null): Promise<{ status: number; body: unknown }> {
+async function callMe(q: string, token: string | null, adminToken: string | null = null): Promise<{ status: number; body: unknown }> {
   const { default: handler } = await import('./me.js');
   const out: { status: number; body: unknown } = { status: 0, body: undefined };
   const res = {
@@ -39,7 +39,8 @@ async function callMe(q: string, token: string | null): Promise<{ status: number
     json(b: unknown) { out.body = b; },
     setHeader() {},
   };
-  await handler({ method: 'GET', query: { q }, headers: sessionHeaders(token) } as never, res as never);
+  const cookie = [sessionHeaders(token).cookie, adminSessionHeaders(adminToken).cookie].filter(Boolean).join('; ');
+  await handler({ method: 'GET', query: { q }, headers: cookie ? { cookie } : {} } as never, res as never);
   return out;
 }
 
@@ -62,7 +63,7 @@ describe('본인 읽기', () => {
   it('state: saves_current.data.achievements가 비어 있어도 DB 쓰기 없이 records·네임드 토벌 기반 업적을 claimable로 파생 평가한다', async () => {
     const DERIVED = testUid(7);
     const dex: Record<string, { normal: { count: number; maxSize: number; first: string } }> = {};
-    for (const id of zoneDexMissing(newState(), 'pacific', LICENSE_GRADES.basic)) {
+    for (const id of zoneDexMissing(newState(), 'pacific', ['common', 'rare', 'epic'])) {
       dex[id] = { normal: { count: 1, maxSize: 30, first: '2026-01-01' } };
     }
     await seedUser(env.client, { uid: DERIVED, nickname: '미부팅', state: { dex, achievements: {} }, version: 3 });
@@ -130,6 +131,21 @@ describe('본인 읽기', () => {
       expect(await devTools(ADMIN)).toBe(false);
       process.env.DEPLOY_ENV = 'development';
       expect(await devTools(ADMIN)).toBe(false);
+    });
+
+    it('스테이징에서 관리자 OAuth 쿠키를 동반한 게스트·일반 계정은 참이고, 운영·미설정에서는 거짓이다', async () => {
+      const devToolsWithAdmin = async (uid: string, adminUid: string) =>
+        ((await callMe('profile', userToken(uid), userToken(adminUid))).body as { devTools: boolean }).devTools;
+
+      process.env.DEPLOY_ENV = 'preview';
+      expect(await devToolsWithAdmin(LEGACY, ADMIN)).toBe(true);
+      expect(await devToolsWithAdmin(MEMBER, ADMIN)).toBe(true);
+      expect(await devToolsWithAdmin(LEGACY, MEMBER)).toBe(false);
+
+      process.env.DEPLOY_ENV = 'production';
+      expect(await devToolsWithAdmin(LEGACY, ADMIN)).toBe(false);
+      delete process.env.DEPLOY_ENV;
+      expect(await devToolsWithAdmin(LEGACY, ADMIN)).toBe(false);
     });
   });
 

@@ -4,6 +4,7 @@ import type { MailItem } from '../../../platform/api';
 import type { GameAction } from '../../../game/rules/actions';
 import { when } from '../../../shared/lib/when';
 import { useSession } from '../../account/service/session';
+import { useConsentReady } from '../../account/service/consentGate';
 import type { DispatchResult, MaybePromise } from '../../gameplay/service/types';
 import { pendingCount } from '../model/mailbox';
 
@@ -17,12 +18,13 @@ const noticeChecked = new Set<string>();
 
 export function useMailbox() {
   const { ready, uid } = useSession();
+  const consentReady = useConsentReady();
   const client = useQueryClient();
   const key = ['mailbox', uid];
   const q = useQuery({
     queryKey: key,
     queryFn: readMails,
-    enabled: ready,
+    enabled: ready && consentReady,
     staleTime: STALE,
     refetchInterval: REFRESH,
     retry: 1,

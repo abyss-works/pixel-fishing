@@ -1,12 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { newState } from '../../../../game/rules/logic';
+import { topZoneOfSpot } from '../../../../game/content/zones';
+import { FISH, newState } from '../../../../game/rules/logic';
 import type { GameState } from '../../../../game/rules/logic';
 import type { DispatchResult } from '../../../../features/gameplay/service/types';
 import { resetKeyScopes } from '../../../ui/hotkeys';
 import AchievementsModal from './AchievementsModal';
 
-afterEach(() => { cleanup(); resetKeyScopes(); });
+const originalMatchMedia = window.matchMedia;
+afterEach(() => { window.matchMedia = originalMatchMedia; cleanup(); resetKeyScopes(); });
 
 const seed = (over: Partial<GameState> = {}): GameState => ({ ...newState(), ...over });
 
@@ -63,19 +65,68 @@ describe('업적 창 카드 격자', () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
-  it('누적 보너스 탭에는 중복 요약 칸을 두지 않고 카드 목록만 보인다', () => {
+  it('전체 누적 탭과 구역과 유물 탭으로 나뉘며 중복 요약 칸·고정 안내 문구 없이 카드 목록만 보인다', () => {
     const boosted = seed({
+      artifacts: ['mami-wata-mirror'],
       achievementCounters: { 'manual.total': 100, 'sell.gold': 1_000_000 },
     });
     render(<AchievementsModal game={boosted} dispatch={vi.fn()} setToast={vi.fn()} onClose={() => {}} />);
     expect(screen.queryByText('적용 중인 누적 보너스')).toBeNull();
+    expect(screen.queryByText(/해역 일반 도감 15곳/)).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: '누적 보너스' }));
+    // 미완료만 보기 꺼짐일 때는 check 아이콘이 없다
+    const incompleteBtn = screen.getByRole('button', { name: '미완료만 보기' });
+    expect(incompleteBtn).toHaveAttribute('aria-pressed', 'false');
+    expect(incompleteBtn.querySelector('[data-glyph="check"]')).toBeNull();
+    fireEvent.click(incompleteBtn);
+    expect(incompleteBtn).toHaveAttribute('aria-pressed', 'true');
+    expect(incompleteBtn.querySelector('[data-glyph="check"]')).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '전체 누적' }));
     expect(screen.queryByText('적용 중인 누적 보너스')).toBeNull();
+    expect(screen.queryByText(/달성한 단계는 따로 받지 않아도/)).toBeNull();
+    expect(screen.getByText('전체 누적 보너스')).toBeInTheDocument();
     expect(screen.getByText('수동 손맛')).toBeInTheDocument();
-    expect(screen.getByText('입질 대기 −2%')).toBeInTheDocument();
+    expect(screen.getByText('입질 대기 −1.2%')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^받기,/ })).toBeNull();
     expect(screen.queryByText(/조건 단계에 닿으면/)).toBeNull();
+    expect(screen.queryByText(/완결/)).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '구역과 유물' }));
+    expect(screen.getByText('구역별 누적 보너스')).toBeInTheDocument();
+    expect(screen.getByText('유물 누적 보너스')).toBeInTheDocument();
+    expect(screen.getByText('마미 와타의 거울 증폭')).toBeInTheDocument();
+    expect(screen.queryByText(/완결/)).toBeNull();
+  });
+
+  it('구역과 유물 탭은 도감 포획 기록에 따라 지역 누적 18종 제목·설명·보너스를 손맛 문구 없이 표시한다', () => {
+    const pacDayLeg = FISH.find(f => topZoneOfSpot(f.spot) === 'pacific' && f.rarity === 'legendary' && !f.night)!;
+    const pacNightLeg = FISH.find(f => topZoneOfSpot(f.spot) === 'pacific' && f.rarity === 'legendary' && f.night === true)!;
+    const pacCommon = FISH.find(f => topZoneOfSpot(f.spot) === 'pacific' && f.rarity === 'common')!;
+    const dexBoosted = seed({
+      dex: {
+        [pacDayLeg.id]: { normal: { count: 2, maxSize: 10, first: null } },
+        [pacNightLeg.id]: { normal: { count: 1, maxSize: 10, first: null } },
+        [pacCommon.id]: { variant: { count: 50, maxSize: 10, first: null } },
+      },
+    });
+    render(<AchievementsModal game={dexBoosted} dispatch={vi.fn()} setToast={vi.fn()} onClose={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: '구역과 유물' }));
+
+    expect(screen.getByText('태평양 전설')).toBeInTheDocument();
+    expect(screen.getByText('태평양에서 낮에 나타나는 전설 어종을 낚아요.')).toBeInTheDocument();
+    expect(screen.getByText('희귀 이상 출현 비중 +0.3%')).toBeInTheDocument();
+
+    expect(screen.getByText('태평양 밤 전설')).toBeInTheDocument();
+    expect(screen.getByText('태평양에서 밤에만 나타나는 전설 어종을 낚아요.')).toBeInTheDocument();
+    expect(screen.getByText('밤 어종 출현 비중 +0.3%')).toBeInTheDocument();
+
+    expect(screen.getByText('태평양 돌연변이')).toBeInTheDocument();
+    expect(screen.getByText('태평양에서 돌연변이 물고기를 낚아요.')).toBeInTheDocument();
+    expect(screen.getByText('돌연변이 출현 비중 +0.3%')).toBeInTheDocument();
+
+    expect(screen.queryByText(/손맛/)).toBeNull();
+    expect(screen.queryByText(/직접 챔질로/)).toBeNull();
   });
 
   it('폐지된 옛 id만 claimable인 세이브에서는 받을 골드가 0G이고 모두 받기가 비활성이다', () => {
@@ -118,8 +169,35 @@ describe('업적 창 카드 격자', () => {
     render(
       <AchievementsModal game={seed()} dispatch={vi.fn()} setToast={vi.fn()} onOpenStatsBonus={onOpenStatsBonus} onClose={() => {}} />,
     );
-    fireEvent.click(screen.getByRole('button', { name: '누적 보너스' }));
+    fireEvent.click(screen.getByRole('button', { name: '전체 누적' }));
     fireEvent.click(screen.getByRole('button', { name: '스탯 창 보너스 탭에서 전체 합계 확인' }));
     expect(onOpenStatsBonus).toHaveBeenCalledTimes(1);
+  });
+
+  it('게스트 상태에서는 모두 받기 툴팁이 태평양 항로 해금 두 줄 안내를 보이고 거친 포인터에서 누르기로도 열린다', () => {
+    render(<AchievementsModal game={claimable} guest dispatch={vi.fn()} setToast={vi.fn()} onClose={() => {}} />);
+    const btn = screen.getByRole('button', { name: '모두 받기' });
+    expect(btn).toBeDisabled();
+    fireEvent.mouseEnter(btn.parentElement!);
+    const tooltip = screen.getByRole('tooltip');
+    expect(tooltip).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
+    expect(tooltip).toHaveTextContent('태평양 항로는 조각배(1단계)부터 열려요.');
+    cleanup();
+
+    window.matchMedia = ((query: string) => ({
+      matches: query === '(pointer: coarse)', media: query,
+      addEventListener: () => {}, removeEventListener: () => {},
+    })) as unknown as typeof window.matchMedia;
+    render(<AchievementsModal game={claimable} guest dispatch={vi.fn()} setToast={vi.fn()} onClose={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: '모두 받기' }));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
+  });
+
+  it('비게스트 상태에서 받을 수 있는 업적이 없으면 비활성 이유 툴팁을 보인다', () => {
+    render(<AchievementsModal game={seed()} dispatch={vi.fn()} setToast={vi.fn()} onClose={() => {}} />);
+    const btn = screen.getByRole('button', { name: '모두 받기' });
+    expect(btn).toBeDisabled();
+    fireEvent.mouseEnter(btn.parentElement!);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('지금 받을 수 있는 업적이 없어요.');
   });
 });

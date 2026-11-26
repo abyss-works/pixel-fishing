@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
-  GUILD_ERROR_TEXT, dailyContributionRows, leaveConfirm, memberActions, memberConfirm, memberRows, splitMembers,
+  GUILD_ERROR_TEXT, GUILD_LEAVE_COOLDOWN_NOTE, dailyContributionRows, leaveConfirm, memberActions, memberConfirm,
+  memberRows, splitMembers,
 } from '../../../../features/guild/model/guild';
 import type { MemberRow } from '../../../../features/guild/model/guild';
 import type { ArtifactHolder } from '../../../../game/rules/artifactLevel';
@@ -8,11 +9,11 @@ import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
 import { cx } from '../../../ui/cx';
-import { fmtNum } from '../../../ui/format';
 import { NOTCH_SM } from '../../../ui/notch';
+import ProgressCount from '../../../ui/ProgressCount';
 import TableBox from '../../../ui/TableBox';
 import DataTable from '../../../ui/DataTable';
-import Tip, { TipList } from '../../../ui/Tip';
+import Tip, { TipBullets, TipList } from '../../../ui/Tip';
 import type { GuildAsk, GuildPartProps } from './guildProps';
 
 // 길드원 탭: 길드원 표(접속 점, 이름, 오늘 기여, 누적 기여, 기부)와 맨 아래 한 줄(떠나기). 길드 코드와 초대 링크는 관리 탭에 있다.
@@ -37,7 +38,7 @@ export default function GuildMembersTab({ guild, me, busy, setToast, ask, artifa
             <tr className="sticky top-0 bg-[color-mix(in_oklab,var(--c-bg)_45%,var(--c-surface))] text-2xs text-text-dim">
               <th className="h-8 text-left font-normal border-b border-line">이름</th>
               <th className="h-8 px-2 text-right font-normal border-b border-line">
-                <Tip text={<TipList rows={dailyContributionRows(artifacts)} note={'하루 상한이에요.\n한국 시간 새벽 4시에 새로 세요.'} />}>오늘 기여</Tip>
+                <Tip text={<TipList rows={dailyContributionRows(artifacts)} note={<TipBullets items={['하루 상한이에요.', '매일 새로 세요.']} />} />}>오늘 기여</Tip>
               </th>
               <th className="h-8 px-2 text-right font-normal border-b border-line">누적 기여</th>
               <th className="h-8 px-2 text-right font-normal border-b border-line">기부</th>
@@ -59,7 +60,8 @@ export default function GuildMembersTab({ guild, me, busy, setToast, ask, artifa
           </tbody>
         </DataTable>
       </TableBox>
-      <div className="h-8 shrink-0 flex items-center justify-end">
+      <div className="min-h-8 shrink-0 pt-1.5 border-t border-line flex items-center justify-between gap-2 flex-wrap">
+        <span className="text-2xs text-text-dim">{GUILD_LEAVE_COOLDOWN_NOTE}</span>
         <Button size="sm" variant="ghost" disabled={busy} onClick={leave}>길드 떠나기</Button>
       </div>
     </div>
@@ -87,9 +89,9 @@ function MemberLine({ row, first, busy, open, onToggle, onHandover, onKick }: {
             {row.leader && <Badge>길드장</Badge>}
           </span>
         </td>
-        <td className={cx(line, 'px-2 text-right pf-accent text-xs')}>{fmtNum(row.today)}</td>
-        <td className={cx(line, 'px-2 text-right pf-accent text-xs')}>{fmtNum(row.total)}</td>
-        <td className={cx(line, 'px-2 text-right pf-accent text-xs')}>{fmtNum(row.gave)}</td>
+        <td className={cx(line, 'px-2 text-right text-xs')}><ProgressCount value={row.today} /></td>
+        <td className={cx(line, 'px-2 text-right text-xs')}><ProgressCount value={row.total} /></td>
+        <td className={cx(line, 'px-2 text-right text-xs')}><ProgressCount value={row.gave} /></td>
         <td className={cx(line, 'text-center')}>
           {onToggle && (
             <Button size="xs" pressed={open} aria-pressed={undefined} aria-expanded={open}

@@ -16,12 +16,12 @@ import type { Axis, Pool, Rates } from '../model';
 import { virtualZoneOf } from '../virtualSpots';
 import { BOUNTY_ZONES } from '../../../src/game/content/bounties';
 import type { BountyTier, BountyZone } from '../../../src/game/content/bounties';
-import { licenseFish, licenseHeld, licenseKey, planBounties, spotLicenseFish, spotLicenseHeld } from './bounty';
+import { licenseHeld, licenseKey, planBounties, spotLicenseFish, spotLicenseHeld, zoneAchievementFish, zoneAchievementHeld } from './bounty';
 import type { Activity, DexLog } from './bounty';
 import type { Reward, RewardUnit } from './achievement';
 import { createCounterBonusTracker } from './counterBonus';
 import type { CounterBonusConfig, CounterUnlock } from './counterBonus';
-import { NO_EFFECT, checkEffect, effectRates } from './effects';
+import { NO_EFFECT, checkEffect, effectRates, scaleSlotEffect } from './effects';
 import type { Effect } from './effects';
 import type { Sampler } from './sample';
 
@@ -238,7 +238,7 @@ export function simulate(opts: SimOptions): SimResult {
   const neededOf = (zone: BountyZone, tier: BountyTier): string[] => {
     const key = `zone:${zone}:${tier}`;
     let ids = needed.get(key);
-    if (!ids) { ids = licenseFish(zone, tier).map(f => f.id); needed.set(key, ids); }
+    if (!ids) { ids = zoneAchievementFish(zone, tier).map(f => f.id); needed.set(key, ids); }
     return ids;
   };
   const spotNeededOf = (spot: SpotId, tier: BountyTier): string[] => {
@@ -255,15 +255,16 @@ export function simulate(opts: SimOptions): SimResult {
   const hasAnyEffect = (e: Effect): boolean =>
     e.bite !== 0 || e.rare !== 0 || e.epic !== 0 || e.legendary !== 0 || e.variant !== 0
     || e.size !== 0 || e.move !== 0 || e.named !== 0 || e.night !== 0
-    || (e.sell ?? 0) !== 0 || (e.big ?? 0) !== 0;
+    || (e.sell ?? 0) !== 0 || (e.big ?? 0) !== 0 || (e.nightWeight ?? 0) !== 0;
   const mergeFx = (a: Effect, b: Effect): Effect => {
     const sell = (a.sell ?? 0) + (b.sell ?? 0);
     const big = (a.big ?? 0) + (b.big ?? 0);
+    const nightWeight = (a.nightWeight ?? 0) + (b.nightWeight ?? 0);
     const merged: Effect = {
       bite: a.bite + b.bite, rare: a.rare + b.rare, epic: a.epic + b.epic, legendary: a.legendary + b.legendary,
       variant: a.variant + b.variant, size: a.size + b.size, move: a.move + b.move, named: a.named + b.named,
       night: a.night > 0 || b.night > 0 ? 1 : 0,
-      ...(sell !== 0 ? { sell } : {}), ...(big !== 0 ? { big } : {}),
+      ...(sell !== 0 ? { sell } : {}), ...(big !== 0 ? { big } : {}), ...(nightWeight !== 0 ? { nightWeight } : {}),
     };
     checkEffect(merged);
     return merged;
@@ -273,10 +274,11 @@ export function simulate(opts: SimOptions): SimResult {
     let r = cache.get(key);
     if (!r) {
       if (tracker) {
-        const { effect } = tracker.activeFor(spot);
+        const { effect, baitAmplify, lunchAmplify } = tracker.activeFor(spot);
         const planFx = opts.plan?.effectAt?.(spot, level, boat) ?? null;
         if (planFx) {
-          r = effectRates(spot, level, axis, mergeFx(planFx, effect));
+          const amp = axis === 'idle' ? lunchAmplify : baitAmplify;
+          r = effectRates(spot, level, axis, mergeFx(scaleSlotEffect(planFx, amp), effect));
         } else if (hasAnyEffect(effect)) {
           r = effectRates(spot, level, axis, effect);
         } else {
@@ -315,6 +317,7 @@ export function simulate(opts: SimOptions): SimResult {
       const r = rateAt(spot, useAxis);
       const planFx = opts.plan?.effectAt?.(spot, level, boat) ?? null;
       const baitActive = useAxis !== 'idle' && planFx !== null && hasAnyEffect(planFx) && planFx !== NO_EFFECT;
+      const lunchActive = useAxis === 'idle' && planFx !== null && hasAnyEffect(planFx) && planFx !== NO_EFFECT;
       const bigProb = tracker ? tracker.activeFor(spot).bigProb : BIG_PROB;
       if (opts.plan) gold -= opts.plan.costPerHour(spot, level, useAxis, boat) * h;
       if (opts.sampler) {
@@ -335,7 +338,7 @@ export function simulate(opts: SimOptions): SimResult {
                   }
                 });
               }
-              if (tracker) tracker.recordCatch(spot, useAxis, c, baitActive, isBig);
+              if (tracker) tracker.recordCatch(spot, useAxis, c, baitActive, isBig, lunchActive);
             }
             : undefined,
         );
@@ -348,7 +351,7 @@ export function simulate(opts: SimOptions): SimResult {
         gold += spotGold; fame += r.famePerHour * h;
         stepCatches += spotCatches;
         track(spot, r, spotCatches);
-        if (tracker) tracker.recordStep(spot, useAxis, r, spotCatches, spotGold, baitActive);
+        if (tracker) tracker.recordStep(spot, useAxis, r, spotCatches, spotGold, baitActive, lunchActive);
       }
     }
     noteCatches(stepCatches, sec);
@@ -376,7 +379,7 @@ export function simulate(opts: SimOptions): SimResult {
     for (const zone of BOUNTY_ZONES) {
       for (const tier of ['basic', 'named'] as const) {
         if (achieved.some(x => x.zone === zone && x.tier === tier)) continue;
-        const done = opts.sampler ? neededOf(zone, tier).every(id => normalSeen.has(id)) : licenseHeld(dex, zone, tier);
+        const done = opts.sampler ? neededOf(zone, tier).every(id => normalSeen.has(id)) : zoneAchievementHeld(dex, zone, tier);
         if (!done) continue;
         const granted = a.reward(zone, tier);
         if (granted) gold += granted.gold;

@@ -32,13 +32,6 @@ export async function isAdmin(db: Executor, uid: string): Promise<boolean> {
   return rows[0].admin;
 }
 
-/** 사용자에게 비밀번호 로그인 수단(자격 계정)이 남아 있는가. 구글 연결을 마친 계정은 없다 */
-export async function hasPasswordAccount(db: Executor, uid: string): Promise<boolean> {
-  const { rows } = await db.execute<{ found: boolean }>(
-    sql`select exists (select 1 from auth.accounts where user_id = ${uid}::uuid and provider_id = 'credential') as found`);
-  return rows[0].found;
-}
-
 /** 조회문의 행을 order 순서의 JSON 배열로 읽는다. 행이 없으면 빈 배열이다 */
 async function jsonRows(db: Executor, query: SQL, order: SQL): Promise<unknown[]> {
   const { rows } = await db.execute<{ rows: unknown[] }>(
@@ -236,12 +229,23 @@ export async function userState(db: Executor, uid: string): Promise<unknown> {
   const rawCooking = asRecord(data.cooking);
   const inProgress = typeof rawCooking.recipe === 'string'
     ? {
+        id: typeof rawCooking.id === 'string' ? rawCooking.id : null,
         recipe: rawCooking.recipe,
         name: recipeById(rawCooking.recipe)?.name ?? rawCooking.recipe,
         count: asNum(rawCooking.count),
         startedAt: typeof rawCooking.startedAt === 'string' ? rawCooking.startedAt : '',
       }
     : null;
+  const queue = (Array.isArray(data.cookingQueue) ? data.cookingQueue : []).flatMap(entry => {
+    const q = asRecord(entry);
+    if (typeof q.recipe !== 'string') return [];
+    return [{
+      id: typeof q.id === 'string' ? q.id : null,
+      recipe: q.recipe,
+      name: recipeById(q.recipe)?.name ?? q.recipe,
+      count: asNum(q.count),
+    }];
+  });
   const rawSlots = asRecord(data.slots);
   const parseSlot = (slot: unknown): { id: string; name: string; endsAt: string } | null => {
     const s = asRecord(slot);
@@ -315,6 +319,7 @@ export async function userState(db: Executor, uid: string): Promise<unknown> {
       energy,
       cooked,
       inProgress,
+      queue,
       slots: {
         lunch: parseSlot(rawSlots.lunch),
         bait: parseSlot(rawSlots.bait),

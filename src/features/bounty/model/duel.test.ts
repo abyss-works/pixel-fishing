@@ -40,7 +40,7 @@ describe('결투 존', () => {
 });
 
 describe('결투 속도', () => {
-  it('바 시간의 80%로 시작해 맞힐 때마다 15%p씩, 세 번 줄어 35%에서 멈춘다', () => {
+  it('바 시간의 80%로 시작해 맞힐 때마다 15%씩, 세 번 줄어 35%에서 멈춘다', () => {
     expect(duelSweepMs(1000, 0)).toBe(800);
     expect(duelSweepMs(1000, 1)).toBe(650);
     expect(duelSweepMs(1000, 2)).toBe(500);

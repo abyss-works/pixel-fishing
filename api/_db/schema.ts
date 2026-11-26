@@ -1,7 +1,7 @@
 // 서버가 쓰는 표의 Drizzle 선언 — 쿼리 작성용이다. 표의 정본은 번호 SQL 마이그레이션이며,
 // 선언이 실제 표와 같은지는 스키마 테스트가 검사한다. RLS 정책·뷰·함수는 마이그레이션에만 있다.
 // 시각 열은 Date로 읽고 쓴다(timestamptz라 시간대와 무관하게 같은 시점이 저장된다).
-import { bigint, bigserial, boolean, date, integer, jsonb, pgTable, primaryKey, real, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { bigint, bigserial, boolean, date, integer, jsonb, pgTable, primaryKey, real, smallint, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 const at = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
@@ -17,6 +17,7 @@ export const savesCurrent = pgTable('saves_current', {
   restricted: boolean('restricted').notNull().default(false),
   lastCatchAt: at('last_catch_at'),
   activeClient: text('active_client'),
+  guildEnhanceResetCount: integer('guild_enhance_reset_count').notNull().default(0),
 });
 
 export const fishInstances = pgTable('fish_instances', {
@@ -113,6 +114,7 @@ export const mails = pgTable('mails', {
   title: text('title').notNull(),
   body: text('body').notNull(),
   gold: bigint('gold', { mode: 'number' }).notNull().default(0),
+  items: jsonb('items').$type<{ id: string; qty: number }[]>().notNull().default([]),
   createdAt: at('created_at').notNull().defaultNow(),
   readAt: at('read_at'),
   claimedAt: at('claimed_at'),
@@ -176,3 +178,21 @@ export const guildMemberEnhancements = pgTable('guild_member_enhancements', {
   rank: integer('rank').notNull().default(0),
   updatedAt: at('updated_at').notNull().defaultNow(),
 }, t => [primaryKey({ columns: [t.guildId, t.userId, t.bonus] })]);
+
+export const dailyFortunes = pgTable('daily_fortunes', {
+  userId: uuid('user_id').notNull(),
+  day: text('day').notNull(),
+  kind: text('kind').notNull(),
+  index: smallint('index').notNull(),
+  createdAt: at('created_at').notNull().defaultNow(),
+}, t => [primaryKey({ columns: [t.userId, t.day] })]);
+
+export const httpMetricsDaily = pgTable('http_metrics_daily', {
+  day: date('day', { mode: 'string' }).notNull(),
+  routeGroup: text('route_group').notNull(),
+  total: bigint('total', { mode: 'number' }).notNull().default(0),
+  status426: bigint('status_426', { mode: 'number' }).notNull().default(0),
+  status429: bigint('status_429', { mode: 'number' }).notNull().default(0),
+  status5xx: bigint('status_5xx', { mode: 'number' }).notNull().default(0),
+  updatedAt: at('updated_at').notNull().defaultNow(),
+}, t => [primaryKey({ columns: [t.day, t.routeGroup] })]);

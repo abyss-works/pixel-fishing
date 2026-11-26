@@ -70,8 +70,15 @@ export const fmtLevel = (n: number): string => `Lv.${n}`;
 /** 소수 둘째 자리까지 보이고 끝의 0은 뺀다(10, 12.5, 31.25). 효과 비율처럼 레벨마다 자리가 달라지는 값에 쓴다 */
 export const fmtDecimal2 = (n: number): string => String(Number(n.toFixed(2)));
 
-/** 확률에 직접 더하는 값 `+N%p` - 소수 둘째 자리까지, 끝의 0은 뺀다. 유물 효과와 부엌 창이 같은 표기를 쓴다 */
-export const fmtPlusPoint = (n: number): string => `+${fmtDecimal2(n)}%p`;
-
 /** 기본 규칙 배수 `N배` - 정수면 소수점 없이, 아니면 필요한 자리만 쓴다 */
 export const fmtMult = (n: number): string => `${fmtDecimal2(n)}배`;
+
+/** ISO 날짜(YYYY-MM-DD 또는 타임스탬프)를 한국어 날짜("YYYY년 M월 D일")로 바꾼다. 형식이 다르면 원문을 돌려준다 */
+export function fmtKoreanDate(value: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:$|[T\s])/.exec(value.trim());
+  if (!m) return value;
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return value;
+  return `${m[1]}년 ${month}월 ${day}일`;
+}

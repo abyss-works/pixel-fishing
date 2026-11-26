@@ -83,27 +83,65 @@ export interface SalePreview {
   total: Stat;
 }
 
+export interface SellLuckSources {
+  fortuneBonus: number;
+  potions: readonly { id: string; name: string; bonus: number }[];
+}
+
 /** 기본 판매액에 길드·업적 판매가 보너스를 더한 내역 — 서버 판매와 같은 증가분 규칙(saleBonusOf)을 쓴다.
- *  luck은 운 배율(돈 운) — 보너스를 다 적용한 합계에 마지막으로 곱하고, 반올림은 곱 뒤 한 번이다(sellSelected와 같은 순서). */
-export function saleProceeds(base: number, sellBonus: number, achSellBonus = 0, luck = 1): Stat {
+ *  luck은 운 배율(재물운·비약 독립 곱연산) — 보너스를 다 적용한 합계에 마지막으로 곱하고, 반올림은 곱 뒤 한 번이다(sellSelected와 같은 순서). */
+export function saleProceeds(
+  base: number,
+  sellBonus: number,
+  achSellBonus = 0,
+  luck = 1,
+  luckSources?: SellLuckSources,
+): Stat {
   const totalBonus = Math.round((sellBonus + achSellBonus) * 1e9) / 1e9;
   const totalDelta = saleBonusOf(base, totalBonus);
   const mods: Stat['mods'] = [];
   if (sellBonus > 0) {
     const d = saleBonusOf(base, sellBonus);
-    if (d > 0) mods.push({ id: 'guild-sell', label: GUILD_BONUS_NAME.sell, delta: d });
+    if (d > 0) mods.push({ id: 'guild-sell', label: GUILD_BONUS_NAME.sell, delta: d, source: { kind: 'guild', bonus: 'sell' } });
   }
   if (achSellBonus > 0) {
     const d = saleBonusOf(base, achSellBonus);
-    if (d > 0) mods.push({ id: 'achievement-sellBonus', label: '업적 누적', delta: d });
+    if (d > 0) mods.push({ id: 'achievement-sellBonus', label: '업적 누적', delta: d, source: { kind: 'achievement', id: 'sellBonus' } });
   }
   if (mods.length > 0) {
     const rest = mods.slice(0, -1).reduce((sum, mod) => sum + mod.delta, 0);
     mods[mods.length - 1].delta = totalDelta - rest;
   }
-  const value = Math.round((base + totalDelta) * luck);
-  const luckDelta = value - (base + totalDelta);
-  if (luckDelta !== 0) mods.push({ id: 'fortune-sell', label: FORTUNE_SOURCE_LABEL, delta: luckDelta });
+  const preLuck = base + totalDelta;
+  const value = Math.round(preLuck * luck);
+  const luckDelta = value - preLuck;
+  if (luckDelta !== 0) {
+    if (!luckSources) {
+      mods.push({ id: 'fortune-sell', label: FORTUNE_SOURCE_LABEL, delta: luckDelta, source: { kind: 'fortune' } });
+    } else {
+      const luckMods: Stat['mods'] = [];
+      let running = preLuck;
+      if (luckSources.fortuneBonus > 0) {
+        const d = Math.round(running * luckSources.fortuneBonus);
+        luckMods.push({ id: 'fortune-sell', label: FORTUNE_SOURCE_LABEL, delta: d, source: { kind: 'fortune' } });
+        running += d;
+      }
+      for (const potion of luckSources.potions) {
+        if (potion.bonus > 0) {
+          const d = Math.round(running * potion.bonus);
+          luckMods.push({ id: `potion-${potion.id}`, label: potion.name, delta: d, source: { kind: 'potion', id: potion.id } });
+          running += d;
+        }
+      }
+      if (luckMods.length > 0) {
+        const rest = luckMods.slice(0, -1).reduce((sum, mod) => sum + mod.delta, 0);
+        luckMods[luckMods.length - 1].delta = luckDelta - rest;
+        mods.push(...luckMods);
+      } else {
+        mods.push({ id: 'fortune-sell', label: FORTUNE_SOURCE_LABEL, delta: luckDelta, source: { kind: 'fortune' } });
+      }
+    }
+  }
   return {
     base,
     mods,
@@ -112,9 +150,10 @@ export function saleProceeds(base: number, sellBonus: number, achSellBonus = 0, 
 }
 
 /** 가방의 잠금·선택 제외 상태를 반영한 판매 대상과 합계를 만든다. sellBonus는 길드 판매가 보너스 비율이고,
- *  luck은 운 배율(돈 운)이다 — 돈 운의 날에는 미리보기 합계가 실제 수령액과 같아야 하므로 넘긴다. */
+ *  luck은 운 배율(재물운·비약 독립 곱연산)이다 — 미리보기 합계가 실제 수령액과 같아야 하므로 넘긴다. */
 export function selectSalePreview(
   bag: readonly FishInstance[], excluded: ReadonlySet<string>, sellBonus: number, achSellBonus = 0, luck = 1,
+  luckSources?: SellLuckSources,
 ): SalePreview {
   const rows = groupInstances(bag).map((row): SaleRow => {
     const sellable = row.items.filter(instance => !instance.locked);
@@ -143,6 +182,12 @@ export function selectSalePreview(
   return {
     rows,
     soldUids,
-    total: saleProceeds(rows.reduce((total, row) => total + row.selectedSubtotal, 0), sellBonus, achSellBonus, luck),
+    total: saleProceeds(
+      rows.reduce((total, row) => total + row.selectedSubtotal, 0),
+      sellBonus,
+      achSellBonus,
+      luck,
+      luckSources,
+    ),
   };
 }

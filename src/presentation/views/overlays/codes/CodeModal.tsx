@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import type { GameAction } from '../../../../game/rules/actions';
 import { REJECT_TEXT } from '../../../../game/rules/logic';
+import type { CouponItem } from '../../../../game/content/coupons';
+import { josa } from '../../../../shared/lib/josa';
 import { when } from '../../../../shared/lib/when';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
+import { formatItemQtyText } from '../../../../features/inventory/model/items';
 import Modal from '../../../ui/Modal';
 import Button from '../../../ui/Button';
 import Tip from '../../../ui/Tip';
@@ -13,6 +16,29 @@ import { fmtGold } from '../../../ui/format';
 import type { Notify } from '../../../ui/hud/messageFeed';
 
 type Dispatch = (a: GameAction) => MaybePromise<DispatchResult>;
+
+/** 쿠폰 보상 문구 조립 — 골드와 아이템을 조사에 맞춰 한 문장과 1줄 토스트로 정리한다 */
+function formatCouponNotice(gold: number, items?: readonly CouponItem[]): { text: string; toastText: string } {
+  const goldText = gold > 0 ? fmtGold(gold) : null;
+  const itemTexts = (items ?? []).filter(item => item.qty > 0).map(item => formatItemQtyText(item.id, item.qty));
+  const rewardParts = [
+    ...(goldText ? [goldText] : []),
+    ...(itemTexts.length > 0 ? [itemTexts.join(', ')] : []),
+  ];
+  if (rewardParts.length === 0) {
+    return { text: '쿠폰을 사용했어요!', toastText: '쿠폰 사용 완료!' };
+  }
+  const rewardText = rewardParts.length === 2
+    ? `${rewardParts[0]}${josa(rewardParts[0], '과/와')} ${rewardParts[1]}`
+    : rewardParts[0];
+  const toastReward = itemTexts.length > 1
+    ? `${goldText ? `${goldText} 외 ` : ''}아이템 ${itemTexts.length}종`
+    : rewardText;
+  return {
+    text: `쿠폰을 사용했어요! ${rewardText}${josa(rewardText, '을/를')} 받았어요.`,
+    toastText: `쿠폰 ${toastReward} 받음!`,
+  };
+}
 
 /** 코드 한 줄 — 입력칸 + 사용 버튼. 빈 칸이거나 처리 중이면 잠근다. 성공하면 칸을 비운다 */
 function CodeField({ label, placeholder, submit }: {
@@ -57,10 +83,11 @@ export default function CodeModal({ dispatch, setToast, onClose }: {
   const redeemCoupon = (code: string, done: (ok: boolean) => void) =>
     when(dispatch({ type: 'redeemCoupon', code }), r => {
       if (r.status === 'ok' && r.result.type === 'coupon') {
+        const { text, toastText } = formatCouponNotice(r.result.gold, r.result.items);
         sendNotice(setToast, {
           kind: 'social.modalAction',
-          text: `쿠폰을 사용했어요! ${fmtGold(r.result.gold)}를 받았어요. (${r.result.desc})`,
-          toastText: `쿠폰 ${fmtGold(r.result.gold)} 수령!`,
+          text,
+          toastText,
           tone: 'gold',
         });
         done(true);
@@ -88,12 +115,13 @@ export default function CodeModal({ dispatch, setToast, onClose }: {
   return (
     <Modal layer="app" title="코드 입력" narrow onClose={onClose}>
       <SectionTitle>
-        <Tip text={'공지나 이벤트로 받은 쿠폰 코드를 넣으면 골드를 받아요.\n코드마다 한 번만 쓸 수 있어요.'}>쿠폰</Tip>
+        <Tip text="공지나 이벤트로 받은 쿠폰 코드를 넣으면 골드나 아이템을 받아요.">쿠폰</Tip>
       </SectionTitle>
       <CodeField label="쿠폰 코드" placeholder="예) 출항준비" submit={redeemCoupon} />
 
-      <SectionTitle>
-        <Tip text={'운영자가 따로 보내 드린 지원 코드를 붙여 넣으면 그 자산이 이 계정에 더해져요.\n한 번만 쓸 수 있어요.'}>지원 코드</Tip>
+      <SectionTitle className="flex items-baseline justify-between gap-2">
+        <Tip text="운영자가 따로 보내 드린 지원 코드를 붙여 넣으면 그 자산이 이 계정에 더해져요.">지원 코드</Tip>
+        <span className="text-2xs font-normal text-text-dim">한 번만 쓸 수 있어요</span>
       </SectionTitle>
       <CodeField label="지원 코드" placeholder="받은 코드를 붙여 넣기" submit={claimRelief} />
     </Modal>

@@ -4,7 +4,8 @@ import { applyAction } from './actions';
 import type { ActionDeps } from './actions';
 import { newState, mutationWeightsOf, variantShare, migrate } from './logic';
 import type { GameState } from './logic';
-import { moveSpeed, effectiveBite } from './stats';
+import { biteWaitOf, createPlayerContext, moveSpeedOf, NO_ACHIEVEMENT_BONUSES } from './effects';
+import { NO_GUILD_EFFECTS } from './guild';
 import { canAcceptQuest, canLevelUpArtifact } from './rules';
 import type { BountyCtx } from './rules';
 import {
@@ -47,11 +48,20 @@ describe('artifactLevelOf', () => {
     expect(artifactLevelOf(seed({ artifactLevels: { 'wreck-compass': 3 } }), 'wreck-compass')).toBe(0);
   });
 
-  it('범위 밖 값은 1~5로 접고, 전설은 항상 1이다', () => {
+  it('범위 밖 값은 1~5로 접고, 보유 전설 유물은 항상 최고 레벨(5), 미보유·알 수 없는 id는 0이다', () => {
     const st = (lv: number) => seed({ artifacts: ['wreck-compass'], artifactLevels: { 'wreck-compass': lv } });
     expect(artifactLevelOf(st(9), 'wreck-compass')).toBe(5);
     expect(artifactLevelOf(st(0), 'wreck-compass')).toBe(1);
-    expect(artifactLevelOf(seed({ artifacts: ['mami-wata-mirror'], artifactLevels: { 'mami-wata-mirror': 4 } }), 'mami-wata-mirror')).toBe(1);
+
+    // 보유 전설 유물은 artifactLevels가 비어 있거나 다른 값이 들어 있어도 ARTIFACT_MAX_LEVEL(5)
+    expect(artifactLevelOf(seed({ artifacts: ['mami-wata-mirror'] }), 'mami-wata-mirror')).toBe(ARTIFACT_MAX_LEVEL);
+    expect(artifactLevelOf(seed({ artifacts: ['sargasso-net'], artifactLevels: {} }), 'sargasso-net')).toBe(ARTIFACT_MAX_LEVEL);
+    expect(artifactLevelOf(seed({ artifacts: ['mami-wata-mirror'], artifactLevels: { 'mami-wata-mirror': 1 } }), 'mami-wata-mirror')).toBe(ARTIFACT_MAX_LEVEL);
+
+    // 미보유 전설 및 알 수 없는 id는 0
+    expect(artifactLevelOf(seed(), 'mami-wata-mirror')).toBe(0);
+    expect(artifactLevelOf(seed(), 'sargasso-net')).toBe(0);
+    expect(artifactLevelOf(seed({ artifacts: ['unknown-relic'], artifactLevels: { 'unknown-relic': 3 } }), 'unknown-relic')).toBe(0);
   });
 });
 
@@ -89,6 +99,9 @@ describe('레벨별 효과', () => {
       .toEqual([0.1, 0.125, 0.15, 0.175, 0.2]);
     expect(artifactHasLevel(art('sargasso-net'))).toBe(false);
     expect(artifactEffectsAt(art('sargasso-net'), 5)).toEqual({});
+    const legendaryWithEffects = { ...art('mami-wata-mirror'), effects: { sail: 0.1 }, cook: { extraCookChance: 0.1 } };
+    expect(artifactEffectsAt(legendaryWithEffects, ARTIFACT_MAX_LEVEL).sail).toBe(0.1);
+    expect(artifactExtraCookChanceAt(legendaryWithEffects, ARTIFACT_MAX_LEVEL)).toBe(0.1);
     const bagRelic = { ...art('wreck-compass'), effects: { bagCap: 0.1 } };
     expect([1, 2, 3, 4, 5].map(l => artifactEffectsAt(bagRelic, l).bagCap))
       .toEqual([0.1, 0.125, 0.15, 0.175, 0.2]);
@@ -103,10 +116,13 @@ describe('레벨이 효과 함수에 반영된다', () => {
     expect(variantShare(lv5)).toBeCloseTo(1 / 3, 10);
   });
 
-  it('moveSpeed: 나침반 Lv5는 항해 +20%', () => {
-    const lv1 = moveSpeed(seed({ boat: 1, artifacts: ['wreck-compass'] }), 'sail').value;
-    const lv5 = moveSpeed(seed({ boat: 1, artifacts: ['wreck-compass'], artifactLevels: { 'wreck-compass': 5 } }), 'sail').value;
-    const none = moveSpeed(seed({ boat: 1 }), 'sail').value;
+  it('moveSpeedOf: 나침반 Lv5는 항해 +20%', () => {
+    const ctxOf = (state: GameState) => createPlayerContext({
+      state, guild: NO_GUILD_EFFECTS, now: '2026-08-22T03:00:00.000Z', achievements: NO_ACHIEVEMENT_BONUSES,
+    });
+    const lv1 = moveSpeedOf(ctxOf(seed({ boat: 1, artifacts: ['wreck-compass'] })), 'sail', false).value;
+    const lv5 = moveSpeedOf(ctxOf(seed({ boat: 1, artifacts: ['wreck-compass'], artifactLevels: { 'wreck-compass': 5 } })), 'sail', false).value;
+    const none = moveSpeedOf(ctxOf(seed({ boat: 1 })), 'sail', false).value;
     expect(lv1).toBeCloseTo(none * 1.1, 8);
     expect(lv5).toBeCloseTo(none * 1.2, 8);
   });
@@ -125,6 +141,7 @@ describe('canLevelUpArtifact', () => {
     expect(canLevelUpArtifact(seed({ items: { 'mat-wreck-compass': 9 } }), 'wreck-compass')).toEqual({ ok: false, reason: 'bad-request' });
     expect(canLevelUpArtifact(owned(1, 1), 'nope')).toEqual({ ok: false, reason: 'bad-request' });
     expect(canLevelUpArtifact(owned(1, 9, 'mami-wata-mirror', 'mat-clouded-mirror'), 'mami-wata-mirror')).toEqual({ ok: false, reason: 'bad-request' });
+    expect(canLevelUpArtifact(owned(1, 9, 'sargasso-net', 'mat-wet-sargasso-rope'), 'sargasso-net')).toEqual({ ok: false, reason: 'bad-request' });
     expect(canLevelUpArtifact(owned(5, 99), 'wreck-compass')).toEqual({ ok: false, reason: 'bad-request' });
   });
 
@@ -206,7 +223,9 @@ describe('세이브', () => {
       artifactLevels: {
         'wreck-compass': 3, 'mami-wata-mirror': 2, 'varuna-scale': 2.5, 'abyss-angler': 4, nope: 3,
       } };
-    expect(migrate(raw).artifactLevels).toEqual({ 'wreck-compass': 3 });
+    const sanitized = migrate(raw);
+    expect(sanitized.artifactLevels).toEqual({ 'wreck-compass': 3 });
+    expect(artifactLevelOf(sanitized, 'mami-wata-mirror')).toBe(ARTIFACT_MAX_LEVEL);
     const bad = migrate({ ...newState(), artifacts: ['wreck-compass'], artifactLevels: { 'wreck-compass': 9 } });
     expect(bad.artifactLevels).toEqual({ 'wreck-compass': 5 });
     expect(migrate({ ...newState(), artifacts: ['wreck-compass'], artifactLevels: 'x' }).artifactLevels).toBeUndefined();
@@ -295,8 +314,11 @@ describe('바깥섬의 봉돌, 입질 대기', () => {
   });
 
   it('유효 입질 대기는 최소와 최대 모두 감소율만큼 줄고 기여 내역에 유물이 남는다', () => {
-    const plain = effectiveBite(seed({ rod: 29 }), 'sthelena');
-    const withRelic = effectiveBite(seed({ rod: 29, artifacts: ['outer-isle-sinker'] }), 'sthelena');
+    const ctxOf = (state: GameState) => createPlayerContext({
+      state, guild: NO_GUILD_EFFECTS, now: '2026-08-22T03:00:00.000Z', achievements: NO_ACHIEVEMENT_BONUSES,
+    });
+    const plain = biteWaitOf(ctxOf(seed({ rod: 29 })), 'sthelena', 'manual');
+    const withRelic = biteWaitOf(ctxOf(seed({ rod: 29, artifacts: ['outer-isle-sinker'] })), 'sthelena', 'manual');
     expect(withRelic.min.value).toBeCloseTo(plain.min.value * 0.9, 10);
     expect(withRelic.max.value).toBeCloseTo(plain.max.value * 0.9, 10);
     expect(withRelic.min.mods.some(m => m.id === 'relic-outer-isle-sinker' && m.label === '바깥섬의 봉돌')).toBe(true);
@@ -304,8 +326,11 @@ describe('바깥섬의 봉돌, 입질 대기', () => {
   });
 
   it('파워 미달의 추가 대기에도 감소율이 걸린다', () => {
-    const plain = effectiveBite(seed({ rod: 1 }), 'sthelena');
-    const withRelic = effectiveBite(seed({ rod: 1, artifacts: ['outer-isle-sinker'] }), 'sthelena');
+    const ctxOf = (state: GameState) => createPlayerContext({
+      state, guild: NO_GUILD_EFFECTS, now: '2026-08-22T03:00:00.000Z', achievements: NO_ACHIEVEMENT_BONUSES,
+    });
+    const plain = biteWaitOf(ctxOf(seed({ rod: 1 })), 'sthelena', 'manual');
+    const withRelic = biteWaitOf(ctxOf(seed({ rod: 1, artifacts: ['outer-isle-sinker'] })), 'sthelena', 'manual');
     expect(plain.min.mods.some(m => m.id === 'power')).toBe(true);
     expect(withRelic.min.value).toBeCloseTo(plain.min.value * 0.9, 10);
   });

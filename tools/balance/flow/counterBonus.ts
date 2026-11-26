@@ -11,7 +11,7 @@ import { BIG_CATCH_PERCENTILE } from '../../../src/game/rules/balance';
 import { mutationWeightsOf, variantShare } from '../../../src/game/rules/logic';
 import { zoneOf } from '../model';
 import type { Axis, Pool, Rates } from '../model';
-import { NO_EFFECT, artifactSummaryOf, checkEffect, effectRates, parseArtifacts, resolveZoneSpots } from './effects';
+import { NO_EFFECT, artifactSummaryOf, checkEffect, effectRates, parseArtifacts, resolveArtifactLevel, resolveZoneSpots, scaleSlotEffect } from './effects';
 import type { ArtifactLevels, Effect, EffectRates } from './effects';
 import type { RatePlan } from './progress';
 import type { Catch } from './sample';
@@ -24,8 +24,10 @@ export const STATIC_COUNTER_KEYS = [
   'catch.auto',
   'catch.perfect',
   'catch.bait',
+  'catch.lunch',
   'named.flawless',
   'sell.gold',
+  'energy.spent',
   'bigSpecies',
   'maxArtifact',
 ] as const;
@@ -38,8 +40,13 @@ export interface CounterBonusEffect {
   rare?: number;
   epic?: number;
   legendary?: number;
+  nightWeight?: number;
   variant?: number;
   big?: number;
+  bagCap?: number;
+  energyYield?: number;
+  baitAmplify?: number;
+  lunchAmplify?: number;
   size?: number;
   move?: number;
   sell?: number;
@@ -75,11 +82,13 @@ export interface CounterUnlock {
 const ALLOWED_TOP_KEYS = new Set(['artifacts', 'rules']);
 const ALLOWED_RULE_KEYS = new Set(['counter', 'thresholds', 'effects']);
 const ALLOWED_EFFECT_KEYS = new Set([
-  'bite', 'rare', 'epic', 'legendary', 'variant', 'big', 'size', 'move', 'sell', 'named', 'artifactBoost', 'zone',
+  'bite', 'rare', 'epic', 'legendary', 'nightWeight', 'variant', 'big', 'bagCap', 'energyYield', 'baitAmplify', 'lunchAmplify',
+  'size', 'move', 'sell', 'named', 'artifactBoost', 'zone',
 ]);
 
 const LEGENDARY_IDS = new Set(FISH.filter(f => f.rarity === 'legendary').map(f => f.id));
 const ZONE_ID_SET = new Set<string>(ZONE_IDS);
+const SEA_ZONE_ID_SET = new Set<string>(ZONE_IDS.filter(z => z !== 'village'));
 const STATIC_KEY_SET = new Set<string>(STATIC_COUNTER_KEYS);
 const BIG_PROB_BASE = BIG_CATCH_PERCENTILE / 100;
 
@@ -91,7 +100,7 @@ const MAX_ARTIFACT_MATERIALS = 1 + Array.from(
 
 const clean = (x: number): number => Math.round(x * 1e9) / 1e9;
 
-/** 지원하는 카운터 키인지 판정한다 — 기본 키와 구역·전설 어종 수동 손맛 키 */
+/** 지원하는 카운터 키인지 판정한다 — 기본 키, 구역·전설 어종 수동 손맛 키, 바다 구역 도감(수동+방치) 키 */
 export function isValidCounterKey(key: string): boolean {
   if (STATIC_KEY_SET.has(key)) return true;
   if (key.startsWith('manual.total.')) return ZONE_ID_SET.has(key.slice('manual.total.'.length));
@@ -100,6 +109,9 @@ export function isValidCounterKey(key: string): boolean {
     const rest = key.slice('manual.legendary.'.length);
     return ZONE_ID_SET.has(rest) || LEGENDARY_IDS.has(rest);
   }
+  if (key.startsWith('dex.legendary.day.')) return SEA_ZONE_ID_SET.has(key.slice('dex.legendary.day.'.length));
+  if (key.startsWith('dex.legendary.night.')) return SEA_ZONE_ID_SET.has(key.slice('dex.legendary.night.'.length));
+  if (key.startsWith('dex.variant.')) return SEA_ZONE_ID_SET.has(key.slice('dex.variant.'.length));
   return false;
 }
 
@@ -114,11 +126,10 @@ function parseArtifactsField(raw: unknown): ArtifactLevels {
   for (const [id, lv] of Object.entries(raw)) {
     const art = artifactById(id);
     if (!art) throw new Error(`알 수 없는 유물입니다: ${id}`);
-    if (typeof lv !== 'number' || !Number.isInteger(lv) || lv < 1 || lv > ARTIFACT_MAX_LEVEL) {
+    if (typeof lv !== 'number') {
       throw new Error(`유물 레벨은 1에서 ${ARTIFACT_MAX_LEVEL} 사이의 정수여야 합니다: ${id}=${String(lv)}`);
     }
-    if (!artifactHasLevel(art) && lv > 1) throw new Error(`전설 유물은 레벨이 없습니다(Lv1 고정): ${id}`);
-    out[id] = lv;
+    out[id] = resolveArtifactLevel(art, lv, `${id}=${String(lv)}`);
   }
   return out;
 }
@@ -138,7 +149,11 @@ function parseEffect(raw: unknown, ctx: string): CounterBonusEffect {
     if (k === 'bite') {
       if (!(v >= 0 && v < 1)) throw new Error(`${ctx}: 입질 대기 단축(bite)은 0 이상 1 미만이어야 합니다`);
       out.bite = v;
-    } else if (k === 'rare' || k === 'epic' || k === 'legendary' || k === 'variant' || k === 'big' || k === 'named' || k === 'artifactBoost') {
+    } else if (
+      k === 'rare' || k === 'epic' || k === 'legendary' || k === 'nightWeight'
+      || k === 'variant' || k === 'big' || k === 'bagCap' || k === 'energyYield'
+      || k === 'baitAmplify' || k === 'lunchAmplify' || k === 'named' || k === 'artifactBoost'
+    ) {
       if (!(v >= 0)) throw new Error(`${ctx}: ${k}는 0 이상이어야 합니다`);
       out[k] = v;
     } else if (k === 'size' || k === 'move' || k === 'sell') {
@@ -232,14 +247,21 @@ export interface CounterBonusTracker {
   readonly needsBigTrack: boolean;
   /** 해금된 단계 목록(시간 순) */
   readonly unlocks: CounterUnlock[];
-  /** 특정 해역에서 현재 누적 활성화된 효과와 월척 확률 */
-  activeFor(spot: SpotId): { effect: Effect; bigProb: number };
+  /** 특정 해역에서 현재 누적 활성화된 효과·확률·보조 배율 */
+  activeFor(spot: SpotId): {
+    effect: Effect;
+    bigProb: number;
+    bagCap: number;
+    energyYield: number;
+    baitAmplify: number;
+    lunchAmplify: number;
+  };
   /** 현재 시점의 카운터 보너스를 고정한 RatePlan 스냅샷(정상 상태 계산용) */
   snapshotPlan(basePlan?: RatePlan): RatePlan;
   /** 표본 경로 캐치 1건 반영 */
-  recordCatch(spot: SpotId, axis: Axis, c: Catch, baitActive: boolean, isBig: boolean): void;
+  recordCatch(spot: SpotId, axis: Axis, c: Catch, baitActive: boolean, isBig: boolean, lunchActive?: boolean): void;
   /** 기댓값 경로 1스텝 반영 */
-  recordStep(spot: SpotId, axis: Axis, r: Rates, catches: number, goldEarned: number, baitActive: boolean): void;
+  recordStep(spot: SpotId, axis: Axis, r: Rates, catches: number, goldEarned: number, baitActive: boolean, lunchActive?: boolean): void;
   /** 네임드 토벌 1회 완료 반영(무결점 토벌 + 유물 재료 누적) */
   recordNamedClear(zone: BountyZone): void;
   /** 임계점 도달 여부를 검사해 새 보너스를 누적 활성화한다. 해금이 하나라도 있으면 true */
@@ -258,7 +280,7 @@ export function createCounterBonusTracker(config: CounterBonusConfig): CounterBo
   let analyticBig = false;
   let version = 0;
 
-  // 유물 보유 및 재료 추적 — 초기 보유 Lv5 유물과 전설 유물(고정 레벨)을 maxArtifact에 반영
+  // 유물 보유 및 재료 추적 — 초기 보유 Lv5 유물과 전설 유물(Lv5 고정)을 maxArtifact에 반영
   const baseArtifacts: ArtifactLevels = config.artifacts ? { ...config.artifacts } : {};
   const maxedArtifacts = new Set<string>(
     Object.entries(baseArtifacts)
@@ -285,7 +307,8 @@ export function createCounterBonusTracker(config: CounterBonusConfig): CounterBo
   );
   const activeCompiled: CompiledEffect[] = [];
   const unlocks: CounterUnlock[] = [];
-  const effectCache = new Map<string, { effect: Effect; bigProb: number }>();
+  type ActiveSnapshot = ReturnType<CounterBonusTracker['activeFor']>;
+  const effectCache = new Map<string, ActiveSnapshot>();
 
   const add = (key: string, delta: number) => {
     if (delta > 0) counters.set(key, (counters.get(key) ?? 0) + delta);
@@ -301,8 +324,10 @@ export function createCounterBonusTracker(config: CounterBonusConfig): CounterBo
   const valueOf = (counter: string): number =>
     counter === 'bigSpecies' ? currentBigSpecies() : (counters.get(counter) ?? 0);
 
-  const computeFor = (spot: SpotId, list: readonly CompiledEffect[]): { effect: Effect; bigProb: number } => {
-    let bite = 0, rare = 0, epic = 0, legendary = 0, variant = 0, big = 0, size = 0, move = 0, sell = 0, named = 0, artifactBoost = 0;
+  const computeFor = (spot: SpotId, list: readonly CompiledEffect[]): ActiveSnapshot => {
+    let bite = 0, rare = 0, epic = 0, legendary = 0, nightWeight = 0, variant = 0, big = 0;
+    let bagCap = 0, energyYield = 0, baitAmplify = 0, lunchAmplify = 0;
+    let size = 0, move = 0, sell = 0, named = 0, artifactBoost = 0;
     for (const item of list) {
       if (item.spots !== null && !item.spots.has(spot)) continue;
       const e = item.effect;
@@ -310,8 +335,13 @@ export function createCounterBonusTracker(config: CounterBonusConfig): CounterBo
       if (e.rare) rare = clean(rare + e.rare);
       if (e.epic) epic = clean(epic + e.epic);
       if (e.legendary) legendary = clean(legendary + e.legendary);
+      if (e.nightWeight) nightWeight = clean(nightWeight + e.nightWeight);
       if (e.variant) variant = clean(variant + e.variant);
       if (e.big) big = clean(big + e.big);
+      if (e.bagCap) bagCap = clean(bagCap + e.bagCap);
+      if (e.energyYield) energyYield = clean(energyYield + e.energyYield);
+      if (e.baitAmplify) baitAmplify = clean(baitAmplify + e.baitAmplify);
+      if (e.lunchAmplify) lunchAmplify = clean(lunchAmplify + e.lunchAmplify);
       if (e.size) size = clean(size + e.size);
       if (e.move) move = clean(move + e.move);
       if (e.sell) sell = clean(sell + e.sell);
@@ -330,13 +360,14 @@ export function createCounterBonusTracker(config: CounterBonusConfig): CounterBo
       bite, rare, epic, legendary, variant, size, move, named,
       ...(sell !== 0 ? { sell } : {}),
       ...(big !== 0 ? { big } : {}),
+      ...(nightWeight !== 0 ? { nightWeight } : {}),
     };
     checkEffect(effect);
     const bigProb = Math.min(1, BIG_PROB_BASE * (1 + big));
-    return { effect, bigProb };
+    return { effect, bigProb, bagCap, energyYield, baitAmplify, lunchAmplify };
   };
 
-  const activeFor = (spot: SpotId): { effect: Effect; bigProb: number } => {
+  const activeFor = (spot: SpotId): ActiveSnapshot => {
     const key = `${version}:${spot}`;
     let cached = effectCache.get(key);
     if (!cached) {
@@ -349,11 +380,12 @@ export function createCounterBonusTracker(config: CounterBonusConfig): CounterBo
   const hasEffect = (e: Effect): boolean =>
     e.bite !== 0 || e.rare !== 0 || e.epic !== 0 || e.legendary !== 0 || e.variant !== 0
     || e.size !== 0 || e.move !== 0 || e.named !== 0 || e.night !== 0
-    || (e.sell ?? 0) !== 0 || (e.big ?? 0) !== 0;
+    || (e.sell ?? 0) !== 0 || (e.big ?? 0) !== 0 || (e.nightWeight ?? 0) !== 0;
 
   const mergeEffects = (a: Effect, b: Effect): Effect => {
     const sell = clean((a.sell ?? 0) + (b.sell ?? 0));
     const big = clean((a.big ?? 0) + (b.big ?? 0));
+    const nightWeight = clean((a.nightWeight ?? 0) + (b.nightWeight ?? 0));
     const merged: Effect = {
       bite: clean(a.bite + b.bite),
       rare: clean(a.rare + b.rare),
@@ -366,6 +398,7 @@ export function createCounterBonusTracker(config: CounterBonusConfig): CounterBo
       night: a.night > 0 || b.night > 0 ? 1 : 0,
       ...(sell !== 0 ? { sell } : {}),
       ...(big !== 0 ? { big } : {}),
+      ...(nightWeight !== 0 ? { nightWeight } : {}),
     };
     checkEffect(merged);
     return merged;
@@ -380,21 +413,31 @@ export function createCounterBonusTracker(config: CounterBonusConfig): CounterBo
       const frozen = [...activeCompiled];
       return {
         rateFor: (spot: SpotId, level: number, axis: Axis, boat: number, pool: Pool = 'mixed'): Rates => {
-          const { effect } = computeFor(spot, frozen);
-          if (!basePlan) return hasEffect(effect) ? effectRates(spot, level, axis, effect, pool) : effectRates(spot, level, axis, NO_EFFECT, pool);
+          const snap = computeFor(spot, frozen);
+          if (!basePlan) return hasEffect(snap.effect) ? effectRates(spot, level, axis, snap.effect, pool) : effectRates(spot, level, axis, NO_EFFECT, pool);
           const baseEffect = (basePlan as RatePlan & { effectAt?: (s: SpotId, lv: number, b: number) => Effect | null }).effectAt?.(spot, level, boat);
-          if (baseEffect) return effectRates(spot, level, axis, mergeEffects(baseEffect, effect), pool);
-          return hasEffect(effect) ? effectRates(spot, level, axis, effect, pool) : basePlan.rateFor(spot, level, axis, boat, pool);
+          if (baseEffect) {
+            const amp = axis === 'idle' ? snap.lunchAmplify : snap.baitAmplify;
+            return effectRates(spot, level, axis, mergeEffects(scaleSlotEffect(baseEffect, amp), snap.effect), pool);
+          }
+          return hasEffect(snap.effect) ? effectRates(spot, level, axis, snap.effect, pool) : basePlan.rateFor(spot, level, axis, boat, pool);
         },
         costPerHour: (spot, level, axis, boat) => (basePlan ? basePlan.costPerHour(spot, level, axis, boat) : 0),
       };
     },
-    recordCatch(spot: SpotId, axis: Axis, c: Catch, baitActive: boolean, isBig: boolean) {
+    recordCatch(spot: SpotId, axis: Axis, c: Catch, baitActive: boolean, isBig: boolean, lunchActive = false) {
+      const z = zoneOf(spot);
       add('sell.gold', c.gold);
+      if (SEA_ZONE_ID_SET.has(z)) {
+        if (c.fish.rarity === 'legendary') {
+          add(c.fish.night ? `dex.legendary.night.${z}` : `dex.legendary.day.${z}`, 1);
+        }
+        if (c.variant) add(`dex.variant.${z}`, 1);
+      }
       if (axis === 'idle') {
         add('catch.auto', 1);
+        if (lunchActive) add('catch.lunch', 1);
       } else {
-        const z = zoneOf(spot);
         add('manual.total', 1);
         add(`manual.total.${z}`, 1);
         if (axis === 'perfect') add('catch.perfect', 1);
@@ -411,12 +454,27 @@ export function createCounterBonusTracker(config: CounterBonusConfig): CounterBo
       if (baitActive) add('catch.bait', 1);
       if (isBig) bigSeen.add(c.fish.id);
     },
-    recordStep(spot: SpotId, axis: Axis, r: Rates, catches: number, goldEarned: number, baitActive: boolean) {
+    recordStep(spot: SpotId, axis: Axis, r: Rates, catches: number, goldEarned: number, baitActive: boolean, lunchActive = false) {
+      const z = zoneOf(spot);
       add('sell.gold', goldEarned);
+      const vShare = (r as Partial<EffectRates>).variantShare ?? variantShare(mutationWeightsOf({ artifacts: [] }, spot));
+      if (SEA_ZONE_ID_SET.has(z)) {
+        let dayLegShare = 0;
+        let nightLegShare = 0;
+        for (const row of r.rows) {
+          if (row.fish.rarity === 'legendary') {
+            if (row.fish.night) nightLegShare += row.prob;
+            else dayLegShare += row.prob;
+          }
+        }
+        if (dayLegShare > 0) add(`dex.legendary.day.${z}`, catches * dayLegShare);
+        if (nightLegShare > 0) add(`dex.legendary.night.${z}`, catches * nightLegShare);
+        if (vShare > 0) add(`dex.variant.${z}`, catches * vShare);
+      }
       if (axis === 'idle') {
         add('catch.auto', catches);
+        if (lunchActive) add('catch.lunch', catches);
       } else {
-        const z = zoneOf(spot);
         add('manual.total', catches);
         add(`manual.total.${z}`, catches);
         if (axis === 'perfect') add('catch.perfect', catches);
@@ -428,7 +486,6 @@ export function createCounterBonusTracker(config: CounterBonusConfig): CounterBo
             if (row.fish.rarity === 'legendary') add(`manual.legendary.${row.fish.id}`, catches * row.prob);
           }
         }
-        const vShare = (r as Partial<EffectRates>).variantShare ?? variantShare(mutationWeightsOf({ artifacts: [] }, spot));
         if (vShare > 0) {
           add('manual.variant.total', catches * vShare);
           add(`manual.variant.${z}`, catches * vShare);

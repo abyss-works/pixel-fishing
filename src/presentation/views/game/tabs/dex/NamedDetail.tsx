@@ -2,6 +2,7 @@ import type { BountyQuest } from '../../../../../game/content/bounties';
 import { zoneById } from '../../../../../game/content/zones';
 import type { GameState } from '../../../../../game/rules/logic';
 import { selectNamedDetail } from '../../../../../features/dex/model/catalog';
+import { cx } from '../../../../ui/cx';
 import AdjustedAmount from '../../../../ui/AdjustedAmount';
 import Modal from '../../../../ui/Modal';
 import TitledCell from '../../../../ui/TitledCell';
@@ -9,6 +10,7 @@ import Inset from '../../../../ui/Inset';
 import LoreParagraph from '../../../../ui/LoreParagraph';
 import KeyValueRow from '../../../../ui/KeyValueRow';
 import PageTitle from '../../../../ui/PageTitle';
+import PixelIcon from '../../../../ui/PixelIcon';
 import FishSprite from '../../../../ui/fish/FishSprite';
 
 // 네임드 상세 — 일반 어종 상세와 같은 머리·메인 그리드·오목한 칸 언어. 오른쪽은 순위 대신 읽을거리(전승)이고
@@ -23,8 +25,11 @@ export default function NamedDetail({ quest, game, onClose }: {
   return (
     <Modal layer="app" xl onClose={onClose} header={
       <header className="mb-3 flex items-baseline gap-3 border-b border-line pb-2 pr-8">
-        <PageTitle>{d.name ?? '???'}</PageTitle>
-        <span className="pf-accent ml-auto text-2xs text-text-dim">{zone}의 네임드</span>
+        <PageTitle tone={d.found ? 'named' : 'dim'} className="inline-flex items-center gap-1.5">
+          {d.found && <PixelIcon glyph="target" size={15} className="shrink-0" />}
+          <span>{d.name ?? '???'}</span>
+        </PageTitle>
+        <span className={cx('pf-accent ml-auto text-2xs', d.found ? 'text-named' : 'text-text-dim')}>{zone}의 네임드</span>
       </header>
     }>
 

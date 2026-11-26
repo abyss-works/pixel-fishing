@@ -1,11 +1,12 @@
 // 가방 탭 — 전시대 선반(칸 3개)과 진열·회수 버튼이 exhibit 액션으로 이어지는지 고정한다.
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import BagTab, { EXHIBIT_UI_ENABLED } from './BagTab';
 import { resetBagView, setBagSection } from './bagView';
 import { AUTO_ENERGY_BOAT, COOKING_UNLOCK_BOAT } from '../../../../../game/content/cooking';
-import { newState, saleBonusOf, sellableValue } from '../../../../../game/rules/logic';
-import { fmtGold } from '../../../../ui/format';
+import { artifactById } from '../../../../../game/content/artifacts';
+import { newState } from '../../../../../game/rules/logic';
 import type { FishInstance, GameState } from '../../../../../game/rules/logic';
 import type { AccountLockState } from '../../../../../features/display/model/menuLock';
 
@@ -16,10 +17,10 @@ const inst = (uid: string): FishInstance =>
   ({ uid, fishId: 'carp', form: 'normal', size: 20, caughtAt: null, spot: null, judgment: null, locked: false });
 const game = (over: Partial<GameState> = {}): GameState => ({ ...newState(), ...over });
 
-function show(g: GameState, opts: { accountState?: AccountLockState; onOpenEnergy?: () => void } = {}) {
+function show(g: GameState, opts: { accountState?: AccountLockState } = {}) {
   const dispatch = vi.fn(() => ({ status: 'ok' as const, state: g, result: { type: 'none' as const } }));
   const setToast = vi.fn();
-  render(<BagTab sellBonus={0} game={g} accountState={opts.accountState} onOpenEnergy={opts.onOpenEnergy} dispatch={dispatch} setToast={setToast} />);
+  render(<BagTab sellBonus={0} game={g} accountState={opts.accountState} dispatch={dispatch} setToast={setToast} />);
   return { dispatch, setToast };
 }
 
@@ -67,23 +68,10 @@ describe('BagTab - 잠금 안내', () => {
   });
 });
 
-describe('BagTab - 판매 가능 금액', () => {
-  const owned = (): GameState => game({ bag: [inst('a'), inst('b')] });
-
-  it('길드 판매가 보너스가 없으면 금액 하나만 보인다', () => {
-    render(<BagTab sellBonus={0} game={owned()} dispatch={vi.fn()} setToast={vi.fn()} />);
-    const base = sellableValue(owned());
-    const note = within(screen.getByText(/판매 가능 금액은/));
-    expect(note.getByText(fmtGold(base))).toBeInTheDocument();
-    expect(note.queryByText(/판매가 보너스/)).not.toBeInTheDocument();
-  });
-
-  it('길드 판매가 보너스가 있으면 기본 금액, 증감, 합계 내역을 판매 화면과 같은 값으로 보인다', () => {
-    const g = owned();
-    const base = sellableValue(g);
-    const bonus = saleBonusOf(base, 0.5);
-    render(<BagTab sellBonus={0.5} game={g} dispatch={vi.fn()} setToast={vi.fn()} />);
-    expect(within(screen.getByText(/판매 가능 금액은/)).getByText(`기본 금액 ${fmtGold(base)}, 판매가 보너스 +${fmtGold(bonus)}, 합계 ${fmtGold(base + bonus)}`)).toBeInTheDocument();
+describe('BagTab - 판매 가능 금액 미노출', () => {
+  it('물고기 섹션 하단에 판매 가능 금액 안내를 두지 않는다', () => {
+    render(<BagTab sellBonus={0} game={game({ bag: [inst('a'), inst('b')] })} dispatch={vi.fn()} setToast={vi.fn()} />);
+    expect(screen.queryByText(/판매 가능 금액은/)).toBeNull();
   });
 });
 
@@ -105,14 +93,85 @@ describe('BagTab - 길드 가방 보너스', () => {
   });
 });
 
-describe('BagTab - 유물 섹션 시스템 효과', () => {
+describe('BagTab - 유물 섹션 전체 목록·미보유·보유 중만 보기', () => {
   it('전설 유물의 시스템 보너스와 페널티를 유물 목록에 함께 보인다', () => {
     setBagSection('artifacts');
     show(game({ artifacts: ['sargasso-net', 'mami-wata-mirror'] }));
-    expect(screen.getByText('미끼 슬롯 +1칸')).toHaveClass('text-accent');
-    expect(screen.getByText('미끼 지속 시간 −50%')).toHaveClass('text-danger');
-    expect(screen.getByText('네임드 토벌 하루 +1번')).toHaveClass('text-accent');
-    expect(screen.getByText('네임드 토벌 골드 −30%')).toHaveClass('text-danger');
+    const sargasso = within(screen.getByRole('button', { name: /사르가소의 그물망/ }));
+    expect(sargasso.getByText('미끼 칸 +1칸')).toBeInTheDocument();
+    expect(sargasso.getByText('미끼 지속 시간 −50%')).toBeInTheDocument();
+    const mirror = within(screen.getByRole('button', { name: /마미 와타의 거울/ }));
+    const bonusLine = mirror.getByText('네임드 토벌 하루 +1번');
+    const penaltyLine = mirror.getByText('네임드 토벌 골드 −30%');
+    expect(bonusLine).toHaveClass('text-accent');
+    expect(penaltyLine).toHaveClass('text-danger');
+    expect(bonusLine.querySelector('.text-epic')).toBeNull();
+    expect(penaltyLine.querySelector('.text-epic')).toBeNull();
+  });
+
+  it('기본 꺼짐 상태에서는 유물 8종 전체를 보이고 보유·미보유가 같은 3행 틀에 이름(등급)·구역을 보이며 미보유 효과는 ???와 빈 줄로 가린다', () => {
+    setBagSection('artifacts');
+    show(game({ artifacts: ['varuna-scale'] }));
+    expect(screen.getByRole('heading', { level: 3, name: /유물 1\/8/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '보유 중만 보기' })).toHaveAttribute('aria-pressed', 'false');
+
+    // 보유 유물은 버튼(PressRow)으로 상세 창을 열고 32px 스프라이트·흰색 이름(등급색 괄호)·Lv.를 왼쪽에, 구역만 오른쪽에 보이며 바깥 행에는 로어가 보이지 않는다
+    const varuna = artifactById('varuna-scale')!;
+    const ownedBtn = screen.getByRole('button', { name: /진주 상인의 저울/ });
+    expect(ownedBtn).toBeInTheDocument();
+    expect(ownedBtn.querySelector('canvas')).toHaveAttribute('width', '32');
+    const ownedNameEl = within(ownedBtn).getByText('진주 상인의 저울');
+    expect(ownedNameEl).not.toHaveClass('text-gold');
+    expect(ownedNameEl).not.toHaveClass('font-bold');
+    expect(within(ownedBtn).getByText('(희귀)')).toHaveAttribute('data-rarity', varuna.grade);
+    const levelEl = within(ownedBtn).getByText('Lv.1');
+    const zoneEl = within(ownedBtn).getByText('인도양');
+    expect(levelEl).toHaveClass('text-accent');
+    expect(levelEl.parentElement).toBe(ownedNameEl.closest('.truncate')!.parentElement);
+    expect(zoneEl).toHaveClass('text-xs', 'shrink-0', 'text-text-dim');
+    expect(zoneEl.previousElementSibling).toBe(levelEl.parentElement);
+    expect(within(ownedBtn).queryByText(varuna.lore)).not.toBeInTheDocument();
+
+    // 미보유 유물은 비활성 행(버튼 아님)으로 흐린 32px 스프라이트·이름(등급)·구역·??? + 높이 유지 빈 줄을 보인다
+    expect(screen.queryByRole('button', { name: /해구의 이빨/ })).not.toBeInTheDocument();
+    const unownedRow = screen.getByText('해구의 이빨').closest('[data-artifact-row]') as HTMLElement;
+    expect(unownedRow.tagName).not.toBe('BUTTON');
+    const unownedCanvas = unownedRow.querySelector('canvas');
+    expect(unownedCanvas).toHaveAttribute('width', '32');
+    expect(unownedCanvas).toHaveClass('grayscale');
+    expect(within(unownedRow).getByText('태평양')).toBeInTheDocument();
+    expect(within(unownedRow).getByText('(영웅)')).toHaveAttribute('data-rarity', 'epic');
+    expect(within(unownedRow).getByText('???')).toBeInTheDocument();
+    expect(unownedRow.querySelector('span[aria-hidden="true"]')?.textContent).toBe('\u00A0');
+
+    fireEvent.click(unownedRow);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    fireEvent.click(ownedBtn);
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toBeInTheDocument();
+    expect(within(dialog).getByText(varuna.lore)).toBeInTheDocument();
+  });
+
+  it('보유 중만 보기 토글을 켜면 보유 유물만 남기고, 보유 0개면 빈 상태 안내를 보인다. 하단 상시 유물 안내 Note는 두지 않는다', () => {
+    setBagSection('artifacts');
+    show(game({ artifacts: ['varuna-scale'] }));
+    expect(screen.queryByText(/유물은 가지고만 있어도/)).not.toBeInTheDocument();
+
+    const toggle = screen.getByRole('button', { name: '보유 중만 보기' });
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('진주 상인의 저울')).toBeInTheDocument();
+    expect(screen.queryByText('해구의 이빨')).not.toBeInTheDocument();
+    expect(screen.queryByText(/유물은 가지고만 있어도/)).not.toBeInTheDocument();
+
+    cleanup();
+    setBagSection('artifacts');
+    show(game());
+    expect(screen.getByText('해구의 이빨')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '보유 중만 보기' }));
+    expect(screen.getByText(/아직 유물이 없어요/)).toBeInTheDocument();
+    expect(screen.queryByText('해구의 이빨')).not.toBeInTheDocument();
   });
 });
 
@@ -136,57 +195,85 @@ describe('BagTab - 3서브탭, 보기 전환 아이콘, 하단 버튼', () => {
     expect(screen.queryByRole('button', { name: '기운 얻기' })).not.toBeInTheDocument();
   });
 
-  it('물고기 섹션 하단 액션 바는 스크롤 영역 아래에 sticky 고정되고 불투명 배경과 상단 경계선을 가진다', () => {
-    show(game({ boat: COOKING_UNLOCK_BOAT, location: { kind: 'base', id: 'home' } }));
-    const bar = screen.getByRole('button', { name: '자동 잠금' }).closest('div')!;
-    expect(bar.className).toContain('sticky');
-    expect(bar.className).toContain('bottom-0');
-    expect(bar.className).toContain('bg-surface');
-    expect(bar.className).toContain('border-t');
+  it('물고기 섹션 하단 액션 바에 자동 잠금과 기운 얻기 버튼이 함께 배치되고 가방이 비면 자동 잠금이 비활성이다', () => {
+    const { dispatch } = show(game({ boat: COOKING_UNLOCK_BOAT, location: { kind: 'base', id: 'home' } }));
+    const autoLock = screen.getByRole('button', { name: '자동 잠금' });
+    const bar = autoLock.closest('div')!;
+    expect(bar).toBe(bar.parentElement?.lastElementChild);
+    expect(within(bar).getAllByRole('button')).toHaveLength(2);
+    expect(within(bar).getByRole('button', { name: '자동 잠금' })).toBeDisabled();
+    expect(within(bar).getByRole('button', { name: '기운 얻기' })).toBeEnabled();
+    fireEvent.click(autoLock);
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('우상단 보기 전환 아이콘 버튼으로 목록과 카드 보기를 전환한다', () => {
-    show(game({
+  it('우상단 보기 전환 아이콘 버튼으로 목록과 카드 보기를 전환하고 발견 어종 카드를 누르면 도감 상세가 열린다', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const g = game({
       bag: [inst('a')],
       dex: { carp: { normal: { count: 1, maxSize: 20, first: null } } },
-    }));
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <BagTab sellBonus={0} game={g} dispatch={vi.fn()} setToast={vi.fn()} />
+      </QueryClientProvider>,
+    );
+    expect(screen.queryByText(/자물쇠는 개체마다 걸 수 있고/)).toBeNull();
+    expect(screen.queryByText('목록 안내')).toBeNull();
+
     const toCards = screen.getByRole('button', { name: '카드 보기' });
     fireEvent.click(toCards);
     expect(screen.getByRole('button', { name: '목록 보기' })).toBeInTheDocument();
-    expect(screen.getByLabelText('잉어 일반 1마리 돌연변이 0마리 보유')).toBeInTheDocument();
+    const card = screen.getByRole('button', { name: '잉어 일반 1마리 돌연변이 0마리 보유' });
+    fireEvent.click(card);
+    expect(screen.getByRole('dialog')).toHaveTextContent('잉어');
+    expect(screen.getByRole('dialog')).toHaveTextContent('표본');
   });
 
-  it('거점에서 요리 해금·계정이면 기운 얻기 버튼이 활성화되고 클릭 시 연결 콜백을 호출한다', () => {
-    const onOpenEnergy = vi.fn();
-    show(game({ boat: COOKING_UNLOCK_BOAT, location: { kind: 'base', id: 'home' } }), { onOpenEnergy });
+  it('거점에서 요리 해금·계정이면 기운 얻기 버튼이 활성화되고 클릭 시 앱 모달(layer="app")로 기운 얻기 창을 연다', () => {
+    show(game({ boat: COOKING_UNLOCK_BOAT, location: { kind: 'base', id: 'home' } }));
     const btn = screen.getByRole('button', { name: '기운 얻기' });
     expect(btn).toBeEnabled();
     fireEvent.click(btn);
-    expect(onOpenEnergy).toHaveBeenCalledTimes(1);
+    const dialog = screen.getByRole('dialog', { name: '기운 얻기' });
+    expect(dialog.parentElement!.className).toContain('fixed inset-0');
+    expect(dialog.parentElement!.className).toContain('z-(--z-app-modal)');
+    fireEvent.click(within(dialog).getByRole('button', { name: '닫기' }));
+    expect(screen.queryByRole('dialog', { name: '기운 얻기' })).toBeNull();
   });
 
-  it('바다에서는 가공 플랜트선 이상이면 활성, 미만이면 비활성 + 사유 툴팁이다', () => {
-    const onOpenEnergy = vi.fn();
-    show(game({ boat: AUTO_ENERGY_BOAT, location: { kind: 'region', id: 'world' } }), { onOpenEnergy });
+  it('바다에서는 가공 플랜트선 이상이면 활성(앱 모달로 열림), 미만이면 비활성 + 사유 툴팁이다', () => {
+    show(game({ boat: AUTO_ENERGY_BOAT, location: { kind: 'region', id: 'world' } }));
     const enabled = screen.getByRole('button', { name: '기운 얻기' });
     expect(enabled).toBeEnabled();
     fireEvent.click(enabled);
-    expect(onOpenEnergy).toHaveBeenCalledTimes(1);
+    const dialog = screen.getByRole('dialog', { name: '기운 얻기' });
+    expect(dialog.parentElement!.className).toContain('z-(--z-app-modal)');
 
     cleanup();
     show(game({ boat: AUTO_ENERGY_BOAT - 1, location: { kind: 'region', id: 'world' } }));
     const disabled = screen.getByRole('button', { name: '기운 얻기' });
     expect(disabled).toBeDisabled();
     fireEvent.mouseEnter(disabled.parentElement!);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('집이나 항구 또는 가공 플랜트선에서만 할 수 있어요.');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('집이나 항구에서만 할 수 있어요.');
   });
 
-  it('게스트와 확인 실패 상태에서는 가공 플랜트선이나 거점에서도 비활성 + 계정 잠금 툴팁이다', () => {
+  it('게스트가 해금 전(0~4단계)이면 인도양 잠금을, 해금 뒤와 확인 실패는 계정 잠금 툴팁을 보인다', () => {
+    show(game({ boat: COOKING_UNLOCK_BOAT - 1, location: { kind: 'region', id: 'village' } }), { accountState: 'guest' });
+    const preGuestBtn = screen.getByRole('button', { name: '기운 얻기' });
+    expect(preGuestBtn).toBeDisabled();
+    fireEvent.mouseEnter(preGuestBtn.parentElement!);
+    const preTip = screen.getByRole('tooltip');
+    expect(preTip).toHaveTextContent('인도양 항로가 열리면 기운 얻기를 할 수 있어요.');
+    expect(preTip).not.toHaveTextContent('태평양');
+
+    cleanup();
     show(game({ boat: AUTO_ENERGY_BOAT, location: { kind: 'base', id: 'home' } }), { accountState: 'guest' });
     const guestBtn = screen.getByRole('button', { name: '기운 얻기' });
     expect(guestBtn).toBeDisabled();
     fireEvent.mouseEnter(guestBtn.parentElement!);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
 
     cleanup();
     show(game({ boat: COOKING_UNLOCK_BOAT - 1, location: { kind: 'base', id: 'home' } }), { accountState: 'unverified' });
@@ -194,5 +281,33 @@ describe('BagTab - 3서브탭, 보기 전환 아이콘, 하단 버튼', () => {
     expect(unverifiedBtn).toBeDisabled();
     fireEvent.mouseEnter(unverifiedBtn.parentElement!);
     expect(screen.getByRole('tooltip')).toHaveTextContent('계정을 확인하면 쓸 수 있어요.');
+  });
+
+  it('목록 안내·개체 표시 풀 텍스트 없이 물음표 범례 아이콘으로 최대 크기·돌연변이 2줄 툴팁을 보이고, 잠긴 기운 얻기 툴팁에 제목·잠김·구분선을 둔다', () => {
+    show(game({ boat: COOKING_UNLOCK_BOAT - 1, location: { kind: 'base', id: 'home' }, bag: [inst('a')] }));
+    expect(screen.queryByText('목록 안내')).toBeNull();
+    expect(screen.queryByText('개체 표시')).toBeNull();
+
+    const legendBtn = screen.getByRole('button', { name: '개체 표시' });
+    fireEvent.focus(legendBtn);
+    const focusLegendTip = screen.getByRole('tooltip');
+    expect(focusLegendTip).toHaveTextContent('최대 크기');
+    expect(focusLegendTip).toHaveTextContent('돌연변이');
+    expect(focusLegendTip.querySelector('.text-gold[data-glyph="crown"]')).not.toBeNull();
+    expect(focusLegendTip.querySelector('.text-mutation[data-glyph="sparkle"]')).not.toBeNull();
+    fireEvent.blur(legendBtn);
+
+    fireEvent.mouseEnter(legendBtn.parentElement!);
+    const legendTip = screen.getByRole('tooltip');
+    expect(legendTip).toHaveTextContent('최대 크기');
+    expect(legendTip).toHaveTextContent('돌연변이');
+    fireEvent.mouseLeave(legendBtn.parentElement!);
+
+    const energyBtn = screen.getByRole('button', { name: '기운 얻기' });
+    fireEvent.mouseEnter(energyBtn.parentElement!);
+    const energyTip = screen.getByRole('tooltip');
+    expect(energyTip).toHaveTextContent('기운 얻기');
+    expect(energyTip).toHaveTextContent('잠김');
+    expect(energyTip.querySelector('.border-t')).not.toBeNull();
   });
 });

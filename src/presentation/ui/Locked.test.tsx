@@ -63,6 +63,20 @@ describe('Locked', () => {
     expect(document.getElementById(group.getAttribute('aria-describedby')!)).toHaveTextContent('첫째 둘째');
   });
 
+  it('title이나 label이 있으면 잠김 배지 헤더와 구분선 아래에 잠금 줄이 놓인다', () => {
+    render(<Locked lines={['계정을 연결하면 쓸 수 있어요.']} title="채팅" label="채팅" description="실시간 대화"><Button disabled>보내기</Button></Locked>);
+    const group = screen.getByRole('group', { name: '채팅' });
+    fireEvent.mouseEnter(group.parentElement!);
+    const tip = screen.getByRole('tooltip');
+    const title = tip.querySelector('b')!;
+    const reason = [...tip.querySelectorAll('.block')][0];
+    expect(title.textContent).toBe('채팅');
+    expect(tip.textContent).toContain('잠김');
+    expect(tip.textContent).toContain('실시간 대화');
+    expect(tip.querySelector('.border-t')).not.toBeNull();
+    expect(title.compareDocumentPosition(reason) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('메뉴 줄 역할로 쓰면 aria-disabled 메뉴 항목이 된다', () => {
     render(<Locked lines={['안내']} role="menuitem" label="길드"><span>길드</span></Locked>);
     const item = screen.getByRole('menuitem', { name: '길드' });

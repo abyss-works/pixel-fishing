@@ -27,10 +27,10 @@ describe('기본 상수 회귀', () => {
     expect(hours).toBeLessThan(85);
   });
 
-  it('스냅샷: 의뢰와 토벌을 수행하면 마지막 해역에 약 60시간에 닿는다(밸런스가 바뀌면 갱신)', () => {
+  it('스냅샷: 의뢰와 토벌을 수행하면 마지막 해역에 약 57시간에 닿는다(밸런스가 바뀌면 갱신)', () => {
     const hours = last(run({ bounty: true }).arrivals).hours;
-    expect(hours).toBeGreaterThan(58);
-    expect(hours).toBeLessThan(62);
+    expect(hours).toBeGreaterThan(55);
+    expect(hours).toBeLessThan(59);
   });
 });
 

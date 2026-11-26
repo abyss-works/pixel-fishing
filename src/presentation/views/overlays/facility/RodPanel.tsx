@@ -7,7 +7,7 @@ import GearSprite from '../../../ui/GearSprite';
 import HeroHeader from '../../../ui/HeroHeader';
 import PixelIcon from '../../../ui/PixelIcon';
 import ProgressLadder from '../../../ui/ProgressLadder';
-import Tip from '../../../ui/Tip';
+import Tip, { TipBullets } from '../../../ui/Tip';
 import { fmtGold, fmtNum } from '../../../ui/format';
 import FacilityCard from './FacilityCard';
 import { CompareTable, ConfirmButton } from './facilityParts';
@@ -51,11 +51,11 @@ export default function RodPanel({ game, onUpgrade, onClose, busy }: {
                        tags={[`지금 Lv.${game.rod}`, '입질 단축', '파워 상승']} />
           <CompareTable
             heads={[`현재(Lv.${game.rod})`,
-              <Tip key="next" text={<>강화에는 상한이 없어요.<br />레벨이 오를수록 오르는 폭은 줄어요.</>}>강화 후(Lv.{game.rod + 1})</Tip>]}
+              <Tip key="next" text={<TipBullets items={['강화에는 상한이 없어요.', '레벨이 오를수록 오르는 폭은 줄어요.']} />}>강화 후(Lv.{game.rod + 1})</Tip>]}
             rows={[
               { label: <Tip text="물고기가 미끼를 물기까지 기다리는 시간이에요.">입질 대기</Tip>,
                 value: bite(current), next: bite(next), delta: secDelta(next.biteMax - current.biteMax) },
-              { label: <Tip text={<>해역 요구 파워를 넘을수록 GOOD과 PERFECT 영역이 넓어져요.<br />해역별 충족은 스탯 창에서 볼 수 있어요.</>}>파워</Tip>,
+              { label: <Tip text={<TipBullets items={['해역 기준 파워를 넘을수록 GOOD과 PERFECT 영역이 넓어져요.', '해역별 충족은 스탯 창에서 볼 수 있어요.']} />}>파워</Tip>,
                 value: fmtNum(power.current), next: fmtNum(power.next), delta: `+${fmtNum(power.next - power.current)}` },
             ]} />
       </>} />

@@ -84,6 +84,13 @@ describe('parseAction', () => {
       .toEqual({ type: 'cook', recipe: 'cook-lunch-bite', count: 2 });
     expect(parseAction({ type: 'cook', recipe: 'cook-lunch-bite', count: 1.5 })).toBeNull();
     expect(parseAction({ type: 'cook', recipe: 7, count: 1 })).toBeNull();
+    expect(parseAction({ type: 'cancelCook', id: 'cook-1' })).toEqual({ type: 'cancelCook', id: 'cook-1' });
+    expect(parseAction({ type: 'cancelCook' })).toBeNull();
+    expect(parseAction({ type: 'cancelCook', id: 1 })).toBeNull();
+    expect(parseAction({ type: 'transmuteEnergy', from: 'common', count: 2 }))
+      .toEqual({ type: 'transmuteEnergy', from: 'common', count: 2 });
+    expect(parseAction({ type: 'transmuteEnergy', from: 'common', count: 1.5 })).toBeNull();
+    expect(parseAction({ type: 'transmuteEnergy', count: 1 })).toBeNull();
     expect(parseAction({ type: 'eat', item: 'cook-lunch-bite' })).toEqual({ type: 'eat', item: 'cook-lunch-bite' });
     expect(parseAction({ type: 'eat', item: 'cook-bait-rare', replaceSlot: 'bait' }))
       .toEqual({ type: 'eat', item: 'cook-bait-rare', replaceSlot: 'bait' });
@@ -117,5 +124,11 @@ describe('parseAction', () => {
     expect(parseAction({ type: 'claimAchievement' })).toBeNull();
     expect(parseAction({ type: 'claimAchievement', id: 1 })).toBeNull();
     expect(parseAction({ type: 'claimAllAchievements' })).toEqual({ type: 'claimAllAchievements' });
+  });
+
+  it('usePotion 액션의 형태를 검증한다', () => {
+    expect(parseAction({ type: 'usePotion', id: 'luck-small' })).toEqual({ type: 'usePotion', id: 'luck-small' });
+    expect(parseAction({ type: 'usePotion' })).toBeNull();
+    expect(parseAction({ type: 'usePotion', id: 1 })).toBeNull();
   });
 });

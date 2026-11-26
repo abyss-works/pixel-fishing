@@ -3,7 +3,8 @@
 // 호출부(리듀서, 서버, 화면)는 이 모듈이 돌려준 판정과 값을 쓴다 — 규칙을 다시 조립하지 않는다.
 // 상대경로 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버가 직접 불러온다.
 import {
-  AUTO_ENERGY_BOAT, COOK_KIND_RULES, COOK_STORAGE_CAP, COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, ENERGY_PER_INDIVIDUAL, RECIPES, recipeById, recipeCostStored,
+  AUTO_ENERGY_BOAT, COOK_KIND_RULES, COOK_STORAGE_CAP, COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, ENERGY_PER_INDIVIDUAL,
+  ENERGY_TRANSMUTE_RATIO, ENERGY_UNIT, RECIPES, recipeById, recipeCostStored, recipeWaitMs, transmuteTargetOf,
 } from '../content/cooking.js';
 import type { CookKind, Recipe } from '../content/cooking.js';
 import { ARTIFACTS } from '../content/artifacts.js';
@@ -12,8 +13,8 @@ import type { RarityId } from '../content/rarity.js';
 import { SALE_BASES } from '../content/places.js';
 import { SPOTS } from '../content/spots.js';
 import type { SpotId } from '../content/spots.js';
-import { addItem, instanceFish, release } from './logic.js';
-import type { GameState, Judgment, SlotEffect } from './logic.js';
+import { addItem, instanceFish, itemCapOf, release } from './logic.js';
+import type { CookingQueueItem, GameState, Judgment, SlotEffect } from './logic.js';
 import type { RejectReason, RuleCheck } from './rules.js';
 
 const OK: RuleCheck = { ok: true };
@@ -100,18 +101,31 @@ export interface EnergyGain {
 /** 개체 n마리에서 얻는 기운(저장 단위) — 개체 하나의 산출을 한 곳에서 정한다 */
 export const energyYield = (individuals: number): number => individuals * ENERGY_PER_INDIVIDUAL;
 
-/** 지목한 개체에서 얻는 기운 — 개체 하나에서 그 등급 기운 화면 단위 1(energyYield). 어종, 크기, 폼은 산출에 영향을 주지 않는다 */
-export function energyGain(state: Pick<GameState, 'bag'>, uids: readonly string[]): EnergyGain {
+/** 지목한 개체에서 얻는 기운 — 개체 하나에서 그 등급 기운 화면 단위 1(energyYield)에 기운 획득량 보너스와 행운 배수를 반영한다 */
+export function energyGain(
+  state: Pick<GameState, 'bag'>,
+  uids: readonly string[],
+  energyYieldBonus = 0,
+  energyLuck = 1,
+): EnergyGain {
   const bag = new Map(state.bag.map(i => [i.uid, i]));
-  const byGrade = Object.fromEntries(RARITY_ORDER.map(r => [r, 0])) as Record<RarityId, number>;
+  const counts = Object.fromEntries(RARITY_ORDER.map(r => [r, 0])) as Record<RarityId, number>;
   const taken: string[] = [];
   for (const uid of new Set(uids)) {
     const inst = bag.get(uid);
     const fish = inst ? instanceFish(inst) : undefined;
     if (!inst || inst.locked || !fish) continue;
-    byGrade[fish.rarity] += energyYield(1);
+    counts[fish.rarity] += 1;
     taken.push(uid);
   }
+  const scale = Math.max(0, 1 + energyYieldBonus) * Math.max(0, energyLuck);
+  const neutral = energyYieldBonus === 0 && energyLuck === 1;
+  const byGrade = Object.fromEntries(
+    RARITY_ORDER.map(r => [
+      r,
+      counts[r] === 0 ? 0 : neutral ? energyYield(counts[r]) : Math.round(energyYield(counts[r]) * scale),
+    ]),
+  ) as Record<RarityId, number>;
   return { uids: taken, byGrade };
 }
 
@@ -134,7 +148,11 @@ export interface OverflowPlan {
  *  내보낼 개체는 가방 상한 규칙이 이미 골랐으므로 여기서 다른 개체로 바꾸지 않는다.
  *  state.bag에는 내보낼 개체가 들어 있어야 한다 */
 export function planOverflow(
-  state: Pick<GameState, 'boat' | 'energyTargets' | 'bag'>, uids: readonly string[], guest: boolean,
+  state: Pick<GameState, 'boat' | 'energyTargets' | 'bag'>,
+  uids: readonly string[],
+  guest: boolean,
+  energyYieldBonus = 0,
+  energyLuck = 1,
 ): OverflowPlan {
   if (guest || state.boat < AUTO_ENERGY_BOAT) return { released: [...uids], gain: energyGain(state, []) };
   const bag = new Map(state.bag.map(i => [i.uid, i]));
@@ -143,7 +161,7 @@ export function planOverflow(
     const fish = inst ? instanceFish(inst) : undefined;
     return fish !== undefined && energyTargetOf(state, fish.spot);
   });
-  const gain = energyGain(state, extractable);
+  const gain = energyGain(state, extractable, energyYieldBonus, energyLuck);
   const taken = new Set(gain.uids);
   return { released: uids.filter(uid => !taken.has(uid)), gain };
 }
@@ -152,6 +170,7 @@ export function planOverflow(
 
 /** 조리 진행 — 완성 수는 시작 시각과 서버 시각에서 파생한다 */
 export interface CookingProgress {
+  id: string;
   recipe: Recipe;
   /** 넣은 수량 */
   count: number;
@@ -173,45 +192,79 @@ export function cookingProgress(state: Pick<GameState, 'cooking'>, now: string):
   const c = state.cooking;
   const recipe = c ? recipeById(c.recipe) : undefined;
   if (!c || !recipe) return null;
-  const waitMs = COOK_KIND_RULES[recipe.kind].waitMs;
+  const waitMs = recipeWaitMs(recipe);
   const start = Date.parse(c.startedAt);
   const elapsed = Math.max(0, Date.parse(now) - start);
-  // 대기가 0인 조리(미끼)는 시작과 동시에 전부 완성이다. 0으로 나누지 않게 따로 처리한다.
+  // 대기가 0인 조리(미끼 등)는 시작과 동시에 전부 완성이다. 0으로 나누지 않게 따로 처리한다.
   const completed = waitMs === 0
     ? c.count
     : Math.min(c.count, Number.isFinite(elapsed) ? Math.floor(elapsed / waitMs) : 0);
   const extra = c.bonus.slice(0, completed).filter(Boolean).length;
   return {
+    id: c.id,
     recipe, count: c.count, completed, ready: completed + extra, pending: c.count - completed,
     nextAt: completed < c.count ? iso(start + (completed + 1) * waitMs) : null,
     finishAt: iso(start + c.count * waitMs),
   };
 }
 
-/** 완성품을 보관함(items)으로 옮기고 남은 조리의 시작 시각을 이어 붙인다. 완성된 것이 없으면 같은 상태를 돌려준다 */
+/** 완성품을 보관함(items)으로 옮기고, 현재 조리가 모두 끝나면 앞 작업 완료 시각을 이어받아 대기열을 연쇄 정산한다 */
 export function settleCooking(state: GameState, now: string): GameState {
-  const p = cookingProgress(state, now);
-  const c = state.cooking;
-  if (!p || !c || p.completed === 0) return state;
-  const stored = addItem(state, p.recipe.id, p.ready);
-  if (p.pending === 0) return { ...stored, cooking: null };
-  const waitMs = COOK_KIND_RULES[p.recipe.kind].waitMs;
-  return {
-    ...stored,
-    cooking: {
-      recipe: c.recipe, count: p.pending, bonus: c.bonus.slice(p.completed),
-      startedAt: iso(Date.parse(c.startedAt) + p.completed * waitMs),
-    },
-  };
+  let cur = state;
+  while (cur.cooking) {
+    const c = cur.cooking;
+    const p = cookingProgress(cur, now);
+    if (!p || p.completed === 0) break;
+    const next = addItem(cur, p.recipe.id, p.ready);
+    const waitMs = recipeWaitMs(p.recipe);
+    if (p.pending > 0) {
+      cur = {
+        ...next,
+        cooking: {
+          id: c.id,
+          recipe: c.recipe,
+          count: p.pending,
+          bonus: c.bonus.slice(p.completed),
+          startedAt: iso(Date.parse(c.startedAt) + p.completed * waitMs),
+        },
+      };
+      break;
+    }
+    if (cur.cookingQueue.length > 0) {
+      const [head, ...restQueue] = cur.cookingQueue;
+      const finishedAt = iso(Date.parse(c.startedAt) + c.count * waitMs);
+      cur = {
+        ...next,
+        cooking: {
+          id: head.id,
+          recipe: head.recipe,
+          count: head.count,
+          bonus: [...head.bonus],
+          startedAt: finishedAt,
+        },
+        cookingQueue: restQueue,
+      };
+      continue;
+    }
+    cur = { ...next, cooking: null };
+    break;
+  }
+  return cur;
 }
 
-/** 보관함에 있는 수 — 완성 요리 아이템 수와 조리 중인 수량의 합 */
-export function cookStorageUsed(state: Pick<GameState, 'items' | 'cooking'>): number {
-  return RECIPES.reduce((sum, r) => sum + (state.items[r.id] ?? 0), 0) + (state.cooking?.count ?? 0);
+/** 보관함에 있는 수 — 완성 요리 아이템 수, 현재 조리 미완성 수량, 대기열 수량의 합 */
+export function cookStorageUsed(
+  state: Pick<GameState, 'items' | 'cooking'> & { cookingQueue?: readonly CookingQueueItem[] },
+): number {
+  const itemsCount = RECIPES.reduce((sum, r) => sum + (state.items[r.id] ?? 0), 0);
+  const cookingCount = state.cooking?.count ?? 0;
+  const queueCount = state.cookingQueue?.reduce((sum, q) => sum + q.count, 0) ?? 0;
+  return itemsCount + cookingCount + queueCount;
 }
 
 /** 조리 시작 판정. 조리가 끝난 완성품은 먼저 보관함으로 정산해서 본다 */
-export function canCook(state: GameState, recipeId: unknown, count: unknown, now: string): RuleCheck {
+export function canCook(state: GameState, recipeId: unknown, count: unknown, now: string, guest = false): RuleCheck {
+  if (guest) return no('account-only');
   if (!isAtHome(state)) return no('not-at-home');
   const unlocked = canUseCooking(state);
   if (!unlocked.ok) return unlocked;
@@ -219,10 +272,45 @@ export function canCook(state: GameState, recipeId: unknown, count: unknown, now
   if (!recipe || typeof count !== 'number' || !Number.isInteger(count) || count < 1) return no('bad-request');
   const settled = settleCooking(state, now);
   if (count > COOK_STORAGE_CAP - cookStorageUsed(settled)) return no('storage-full');
-  if (settled.cooking) return no('cooking-busy');
   for (const r of RARITY_ORDER) {
     if ((settled.items[ENERGY_ITEM_IDS[r]] ?? 0) < recipeCostStored(recipe, r) * count) return no('not-enough-energy');
   }
+  return OK;
+}
+
+/** 조리 취소 판정 — now까지 완성된 분량을 정산한 뒤 대상 작업 id가 현재 조리 또는 대기열에 남아 있는지 확인한다 */
+export function canCancelCook(state: GameState, id: unknown, now: string, guest = false): RuleCheck {
+  if (guest) return no('account-only');
+  if (!isAtHome(state)) return no('not-at-home');
+  const unlocked = canUseCooking(state);
+  if (!unlocked.ok) return unlocked;
+  if (typeof id !== 'string' || id.length === 0) return no('bad-request');
+  const settled = settleCooking(state, now);
+  const found = settled.cooking?.id === id || settled.cookingQueue.some(q => q.id === id);
+  return found ? OK : no('cooking-not-found');
+}
+
+/** 취소 수량에 해당하는 등급별 100% 환급 기운(저장 단위) */
+export function cookRefundOf(recipe: Recipe, count: number): Record<RarityId, number> {
+  return Object.fromEntries(
+    RARITY_ORDER.map(r => [r, recipeCostStored(recipe, r) * count]),
+  ) as Record<RarityId, number>;
+}
+
+/** 기운 정방향 10:1 변환 판정 — 게스트·집 거점·해금·유효 등급·양의 정수 수량·원본 기운 보유·대상 상한 확인 */
+export function canTransmuteEnergy(state: GameState, from: unknown, count: unknown, guest = false): RuleCheck {
+  if (guest) return no('account-only');
+  if (!isAtHome(state)) return no('not-at-home');
+  const unlocked = canUseCooking(state);
+  if (!unlocked.ok) return unlocked;
+  const to = transmuteTargetOf(from);
+  if (!to || typeof count !== 'number' || !Number.isInteger(count) || count < 1) return no('bad-request');
+  const fromId = ENERGY_ITEM_IDS[from as RarityId];
+  const toId = ENERGY_ITEM_IDS[to];
+  const cost = count * ENERGY_TRANSMUTE_RATIO * ENERGY_UNIT;
+  if (!Number.isSafeInteger(cost) || (state.items[fromId] ?? 0) < cost) return no('not-enough-energy');
+  const gain = count * ENERGY_UNIT;
+  if (!Number.isSafeInteger(gain) || (state.items[toId] ?? 0) + gain > itemCapOf(toId)) return no('energy-cap');
   return OK;
 }
 
@@ -278,6 +366,8 @@ export interface ActiveCookEffects {
   rarityWeight: Partial<Record<RarityId, number>>;
   /** 돌연변이 폼 가중치 증가율의 합 */
   mutationWeight: number;
+  /** 돌연변이 폼 가중치 독립 배수의 곱 (기본 1, 억제 요리 활성 시 ×0.5) */
+  mutationMult: number;
   /** 네임드 조우 가중치 증가율의 합 */
   namedWeight: number;
   /** 낮의 추첨 풀에 밤 전용 어종을 합류시키는 효과 — 미끼 슬롯이 켜져 있는 동안 참 */
@@ -285,7 +375,7 @@ export interface ActiveCookEffects {
 }
 
 export const NO_COOK_EFFECTS: ActiveCookEffects = {
-  biteWaitCut: 0, rarityWeight: {}, mutationWeight: 0, namedWeight: 0, nightUnlock: false,
+  biteWaitCut: 0, rarityWeight: {}, mutationWeight: 0, mutationMult: 1, namedWeight: 0, nightUnlock: false,
 };
 
 /** 그 캐치에 걸린 슬롯과 요리 id. 걸린 슬롯의 키만 둔다 */
@@ -317,20 +407,33 @@ export function appliedSlots(state: Pick<GameState, 'slots'>, now: string, judgm
     : { bait: activeBaits[0], bait2: activeBaits[1] };
 }
 
-/** 그 캐치에 적용하는 슬롯 효과 — 걸린 슬롯(appliedSlots)의 요리 효과를 합한다 */
-export function slotEffects(state: Pick<GameState, 'slots'>, now: string, judgment: Judgment): ActiveCookEffects {
+export interface SlotAmplify {
+  bait?: number;
+  lunch?: number;
+}
+
+/** 그 캐치에 적용하는 슬롯 효과 — 걸린 슬롯(appliedSlots)의 요리 효과에 출처별 증폭 배수를 곱한 뒤 합한다 */
+export function slotEffects(
+  state: Pick<GameState, 'slots'>,
+  now: string,
+  judgment: Judgment,
+  amplify?: SlotAmplify,
+): ActiveCookEffects {
   const active = Object.values(appliedSlots(state, now, judgment))
     .map(id => recipeById(id))
     .filter((r): r is Recipe => r !== undefined);
   const out: ActiveCookEffects = { ...NO_COOK_EFFECTS, rarityWeight: {} };
-  for (const { effects: e } of active) {
-    out.biteWaitCut = clean(out.biteWaitCut + (e.biteWaitCut ?? 0));
-    out.mutationWeight = clean(out.mutationWeight + (e.mutationWeight ?? 0));
-    out.namedWeight = clean(out.namedWeight + (e.namedWeight ?? 0));
+  for (const r of active) {
+    const e = r.effects;
+    const scale = 1 + (r.kind === 'bait' ? (amplify?.bait ?? 0) : (amplify?.lunch ?? 0));
+    out.biteWaitCut = clean(out.biteWaitCut + (e.biteWaitCut ?? 0) * scale);
+    out.mutationWeight = clean(out.mutationWeight + (e.mutationWeight ?? 0) * scale);
+    if (e.mutationMult !== undefined) out.mutationMult = clean(out.mutationMult * e.mutationMult);
+    out.namedWeight = clean(out.namedWeight + (e.namedWeight ?? 0) * scale);
     out.nightUnlock = out.nightUnlock || e.nightUnlock === true;
     if (e.rarityWeight) {
       for (const g of e.rarityWeight.grades) {
-        out.rarityWeight[g] = clean((out.rarityWeight[g] ?? 0) + e.rarityWeight.bonus);
+        out.rarityWeight[g] = clean((out.rarityWeight[g] ?? 0) + e.rarityWeight.bonus * scale);
       }
     }
   }

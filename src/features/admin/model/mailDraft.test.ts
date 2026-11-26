@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { AdminUserRow } from './types';
-import { addRecipient, parseRecipients, searchRecipients } from './mailDraft';
+import {
+  MAIL_PROBLEM_TEXT,
+  addRecipient,
+  parseRecipients,
+  removeMailAttachment,
+  searchAttachableItems,
+  searchRecipients,
+  upsertMailAttachment,
+} from './mailDraft';
 
 const A = '30e63c95-12de-4ba6-b397-e8b69ce0311c';
 const B = 'e747e6c9-f0c2-4192-a462-9cd26e8a812a';
@@ -60,5 +68,35 @@ describe('받는 사람 검색', () => {
 
   it('결과는 8명까지만 보인다', () => {
     expect(searchRecipients(users, 'friend')).toHaveLength(8);
+  });
+});
+
+describe('첨부 아이템 검색과 편집', () => {
+  it('빈 검색어는 아무것도 찾지 않고, 종류나 이름으로 찾는다', () => {
+    expect(searchAttachableItems('   ')).toEqual([]);
+    expect(searchAttachableItems('비약').map(i => i.id)).toContain('luck-small');
+    expect(searchAttachableItems('기운').map(i => i.kind)).toContain('energy');
+  });
+
+  it('유효한 수량만 첨부 목록에 추가하거나 갱신하고 상한 초과를 막는다', () => {
+    const first = upsertMailAttachment([], 'luck-small', 2);
+    expect(first).toEqual({ items: [{ id: 'luck-small', qty: 2 }], error: null });
+
+    const updated = upsertMailAttachment(first.items, 'luck-small', 5);
+    expect(updated).toEqual({ items: [{ id: 'luck-small', qty: 5 }], error: null });
+
+    const invalidQty = upsertMailAttachment(updated.items, 'luck-small', 0);
+    expect(invalidQty.error).toBeTruthy();
+
+    // 생명의 기운은 1개 = 저장 단위 10이라 100,001개는 ITEM_CAP(1,000,000) 초과다
+    const overEnergyCap = upsertMailAttachment([], 'energy-common', 100_001);
+    expect(overEnergyCap.error).toContain('100,000');
+
+    expect(removeMailAttachment(updated.items, 'luck-small')).toEqual([]);
+  });
+
+  it('items와 empty 문제 문구를 제공한다', () => {
+    expect(MAIL_PROBLEM_TEXT.items).toBeTruthy();
+    expect(MAIL_PROBLEM_TEXT.empty).toBeTruthy();
   });
 });

@@ -14,10 +14,11 @@ import { reportServerIssue } from '../observability.js';
  * - 인증: 인증 경로 전체. 게이트보다 먼저 등록돼 이 미들웨어를 거치지 않지만 목록에도 적어 둔다
  * - 관리자 대시보드: 게임 세션이 아니라 별도 관리자 세션으로 인증하는 경로
  * - 예약 작업: 서버 비밀값으로 인증하고 사용자 세션이 없는 경로
+ * - 개발 도구 계정 제어: 스테이징·로컬 전용으로 약관 수락 전에도 테스트 승격·초기화를 실행할 수 있는 경로
  * - 길드 초대 미리보기: 로그인 없이 열리는 읽기 경로. 가입 요청은 길드 가입 경로이므로 막힌다
  */
 export const CONSENT_EXEMPT_PATHS: readonly string[] = [
-  '/api/account', '/api/auth', '/api/admin', '/api/cron', '/api/guild-invites',
+  '/api/account', '/api/auth', '/api/admin', '/api/cron', '/api/dev', '/api/guild-invites',
 ];
 
 /** 이 경로가 확인이 필요한 계정에게도 열려 있는가 */

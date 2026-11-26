@@ -5,7 +5,7 @@ import { AUTO_ENERGY_BOAT, ENERGY_ITEM_IDS, toStoredEnergy } from '../../../../g
 import { FISH, REJECT_TEXT, newState } from '../../../../game/rules/logic';
 import type { FishInstance, GameState } from '../../../../game/rules/logic';
 import type { SpotId } from '../../../../game/content/spots';
-import FacilityModal from './FacilityModal';
+import EnergyPanel from './EnergyPanel';
 
 afterEach(cleanup);
 
@@ -17,7 +17,7 @@ const seed = (over: Partial<GameState> = {}): GameState =>
 
 function show(
   game: GameState,
-  opts: { base?: 'home' | 'harbor'; result?: { status: 'ok' | 'rejected'; [k: string]: unknown } } = {},
+  opts: { result?: { status: 'ok' | 'rejected'; [k: string]: unknown } } = {},
 ) {
   const dispatch = vi.fn(() => (opts.result ?? {
     status: 'ok' as const,
@@ -27,10 +27,7 @@ function show(
   const setToast = vi.fn();
   const onClose = vi.fn();
   render(
-    <FacilityModal
-      panel="energy"
-      base={opts.base}
-      sellBonus={0}
+    <EnergyPanel
       game={game}
       dispatch={dispatch}
       setToast={setToast}
@@ -41,10 +38,12 @@ function show(
 }
 
 describe('간소화 기운 얻기 창 (가방 하단 진입)', () => {
-  it('판매 탭이나 표 없이 480px 단열 창으로 열리고 제목은 기운 얻기다', () => {
+  it('판매 탭이나 표 없이 480px 앱 모달(layer="app")로 열리고 제목은 기운 얻기다', () => {
     show(seed({ bag: [inst('a', 'common'), inst('b', 'rare')] }));
     const dialog = screen.getByRole('dialog');
-    expect(dialog.className).toContain('w-[min(480px,calc(100%-32px))]');
+    expect(dialog.className).toContain('w-[480px]');
+    expect(dialog.parentElement!.className).toContain('fixed inset-0');
+    expect(dialog.parentElement!.className).toContain('z-(--z-app-modal)');
     expect(within(dialog).getByRole('heading', { level: 3, name: '기운 얻기' })).toBeInTheDocument();
     expect(within(dialog).queryByRole('button', { name: '판매' })).toBeNull();
     expect(within(dialog).queryByRole('table')).toBeNull();
@@ -67,6 +66,8 @@ describe('간소화 기운 얻기 창 (가방 하단 진입)', () => {
     expect(commonChip).toHaveAttribute('aria-pressed', 'true');
     expect(rareChip).toHaveAttribute('aria-pressed', 'true');
     expect(epicChip).toBeDisabled();
+    expect(commonChip.querySelector('[data-rarity="common"]')).not.toBeNull();
+    expect(epicChip.querySelector('[data-rarity]')).toBeNull();
     expect(screen.getByRole('button', { name: '기운 얻기 (2마리)' })).toBeEnabled();
     expect(screen.getByText(/잠근 물고기 1마리는 빠져요/)).toBeInTheDocument();
   });

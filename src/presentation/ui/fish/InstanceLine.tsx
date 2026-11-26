@@ -4,7 +4,7 @@ import type { Fish } from '../../../game/content/fish';
 import { cx } from '../cx';
 import { fmtSize } from '../format';
 import IconButton from '../IconButton';
-import Tip from '../Tip';
+import Tip, { TipBullets } from '../Tip';
 import PixelIcon from '../PixelIcon';
 import SizeBar from '../SizeBar';
 
@@ -33,13 +33,13 @@ function lineClass(hasCheck: boolean, interactive: boolean, dim: boolean) {
 
 function BestMark({ on }: { on: boolean | undefined }) {
   return on
-    ? <span className="text-gold leading-none" role="img" aria-label="이 형태 최대"><PixelIcon glyph="crown" size={12} /></span>
+    ? <span className="text-gold leading-none" role="img" aria-label="최대 크기"><PixelIcon glyph="crown" size={12} /></span>
     : <span />;
 }
 
 function VariantMark({ on }: { on: boolean }) {
   return on
-    ? <span className="text-epic leading-none" role="img" aria-label="돌연변이"><PixelIcon glyph="sparkle" size={12} /></span>
+    ? <span className="text-mutation leading-none" role="img" aria-label="돌연변이"><PixelIcon glyph="sparkle" size={12} /></span>
     : <span />;
 }
 
@@ -84,7 +84,7 @@ export default function InstanceLine({
       {(onExhibit || onLock) && (
         <span className="flex items-center justify-end gap-0.5">
           {onExhibit && (
-            <Tip wraps text={'전시대에 올려요.\n전시 중에는 팔리지 않아요'}>
+            <Tip wraps text={<TipBullets items={['전시대에 올려요.', '전시 중에는 팔리지 않아요']} />}>
               <IconButton
                 glyph="star" size={12} tone="dim" className="px-1"
                 aria-label={`${label} 진열`}

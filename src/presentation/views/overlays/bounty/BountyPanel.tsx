@@ -2,15 +2,16 @@
 // 네임드 도전은 여기서 치르지 않는다 — 바다 위 흔적 카드·조우 창이 맡고, 토벌 뒤 보상만 여기서 받는다.
 // 상태 변경은 dispatch(서버 권위)만, 표시용 조회는 useBounty 경유(RLS 본인 읽기)다.
 // 성공할 때마다 스냅샷을 다시 읽는다 — 진행도·오늘 남은 클리어는 서버(DB)가 진실이다.
-// 라이선스 취득 절차는 없다 — 조건 충족이면 본문이 바로 열린다. 미충족이면
-// 본문을 흐리게 하고 조건 리스트를 덮는다.
+// 일반 의뢰 탭은 해당 구역 항구 진입 시 도감 조건 없이 즉시 열리고, 네임드 토벌 탭만
+// 전설을 뺀 일반·희귀·영웅 도감 조건을 본다. 미충족이면 본문을 흐리게 하고 조건 리스트를 덮는다.
 // 창은 탭이 있어 높이가 고정이다. 구역과 오늘 남은 클리어는 어느 탭에서나 의미가 있어 탭 위 고정 정보 줄에 두고,
 // 초기화 시각과 클리어 기준은 그 줄의 툴팁이다. 수주를 막는 이유(오프라인, 한도 소진, 다른 구역 수주)는 수주 버튼의 툴팁이다.
 import { useEffect, useState } from 'react';
 import { useTutorialTrigger } from '../../../../features/tutorial/service/tutorial';
 import { REJECT_TEXT } from '../../../../game/rules/logic.js';
 import type { GameState } from '../../../../game/rules/logic.js';
-import type { BountyKind, BountyPort } from '../../../../game/content/bounties.js';
+import type { Artifact } from '../../../../game/content/artifacts.js';
+import type { BountyKind, BountyPort, BountyQuest } from '../../../../game/content/bounties.js';
 import { zoneById } from '../../../../game/content/zones.js';
 import type { GameAction } from '../../../../game/rules/actions.js';
 import { gameDay } from '../../../../features/bounty/service/queryKeys';
@@ -26,10 +27,16 @@ import { ClearsLeft } from './boardParts';
 import NamedCard from './NamedCard';
 import RelicCard from './RelicCard';
 import CheckToggle from '../../../ui/CheckToggle';
+import { HighlightRarityText } from '../../../ui/fish/RarityTag';
 import Gated from '../../../ui/Gated';
+import IconButton from '../../../ui/IconButton';
 import Inset from '../../../ui/Inset';
 import PixelIcon from '../../../ui/PixelIcon';
+import SectionTitle from '../../../ui/SectionTitle';
 import TabBar from '../../../ui/TabBar';
+import Tip, { TipBullets } from '../../../ui/Tip';
+import ArtifactDetail from '../../game/tabs/bag/ArtifactDetail';
+import NamedDetail from '../../game/tabs/dex/NamedDetail';
 import { fmtGold, josa } from '../../../ui/format';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import { SCROLL_Y } from '../../../ui/scrollArea';
@@ -53,13 +60,13 @@ function BoardStatus({ zoneName, leftAll, leftNamed, dailyCap, namedDailyCap }: 
   );
 }
 
-/** 라이선스 미달 조건 목록 — 닫힌 게이트 위에 덮는다 */
-function CondList({ conds }: { conds: ReturnType<typeof selectBountyPanelData>['basicConds'] }) {
+/** 라이선스 미달 조건 목록 — 닫힌 네임드 게이트 위에 덮는다 */
+function CondList({ conds }: { conds: ReturnType<typeof selectBountyPanelData>['namedConds'] }) {
   return (
     <ul>
       {conds.map(c => (
         <li key={c.key}>
-          <PixelIcon glyph="checkOff" size={11} /> {c.label}
+          <PixelIcon glyph="checkOff" size={11} /> <HighlightRarityText text={c.label} />
         </li>
       ))}
     </ul>
@@ -78,6 +85,8 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
   const alertSetting = useEncounterAlertSetting();
   const [busy, setBusy] = useState(false);
   const [screen, setScreen] = useState<BoardScreen>('quests');
+  const [namedDetail, setNamedDetail] = useState<BountyQuest | null>(null);
+  const [relicDetail, setRelicDetail] = useState<Artifact | null>(null);
   // 튜토리얼 트리거 — 일반 의뢰·네임드 토벌 탭을 처음 열었을 때
   useTutorialTrigger('bounty-quests', screen === 'quests');
   useTutorialTrigger('bounty-named', screen === 'named');
@@ -98,7 +107,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
   const day = gameDay();
   const data = selectBountyPanelData({ game, port, uid, day, nowMs, snapshot: snap });
   const {
-    zone, leftAll, leftNamed, dailyCap, namedDailyCap, offers, progressOf, isAccepted, basicConds, namedConds,
+    zone, leftAll, leftNamed, dailyCap, namedDailyCap, offers, progressOf, isAccepted, namedConds,
     basicOpen, namedOpen, canTake, canTakeNamed, notice, namedOffers, relics,
   } = data;
 
@@ -140,13 +149,19 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
       />
       <div className={`flex flex-col gap-2 flex-1 min-h-0 ${SCROLL_Y}`}>
       {screen === 'quests' ? (
-        <Gated open={basicOpen} overlay={<CondList conds={basicConds} />}>
+        <>
+          <SectionTitle className="flex items-center justify-between gap-2">
+            <span>오늘의 의뢰</span>
+            <Tip wraps pressOpens text={<TipBullets items={['수주한 뒤에 잡은 물고기부터 세요.', '물고기는 가방에 남아요.']} />}>
+              <IconButton type="button" glyph="question" size={12} tone="dim" aria-label="수주 안내" className="p-0.5" />
+            </Tip>
+          </SectionTitle>
           <div className="grid grid-cols-3 gap-2 items-stretch flex-1 min-h-0 mobile:grid-cols-1">
             {gradeCard('easy')}
             {gradeCard('normal')}
             {gradeCard('hard')}
           </div>
-        </Gated>
+        </>
       ) : screen === 'named' ? (
         <>
         <div className="flex-1 min-h-0 flex flex-col mobile:flex-none">
@@ -158,6 +173,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
                 progress={progressOf(quest.id)} accepted={isAccepted(quest.id)}
                 ticketMins={ticketMins}
                 materialName={relic?.materialName ?? null}
+                onOpenDetail={() => setNamedDetail(quest)}
                 onAccept={() => run(
                   { type: 'acceptQuest', questId: quest.id, port },
                   'bounty.questAccepted',
@@ -193,20 +209,31 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         </div>
         </>
       ) : (
-        <div className={CARD_ROW}>
-          {relics.map(({ artifact, owned, level, mats }) => (
-            <RelicCard key={artifact.id} artifact={artifact} owned={owned} level={level}
-              materialCount={mats} busy={busy}
-              onExchange={() => run(
-                { type: 'exchangeArtifact', artifact: artifact.id },
-                'artifact.exchanged',
-                `${josa(artifact.name, '을/를')} 손에 넣었어요!`,
-                `유물 [${artifact.name}] 획득!`,
-                'gold')} />
-          ))}
-        </div>
+        <>
+          <SectionTitle className="flex items-center justify-between gap-2">
+            <span>해역 유물</span>
+            <Tip wraps pressOpens text="교환 재료는 네임드 토벌 보상으로 받아요.">
+              <IconButton type="button" glyph="question" size={12} tone="dim" aria-label="교환 재료 안내" className="p-0.5" />
+            </Tip>
+          </SectionTitle>
+          <div className={CARD_ROW}>
+            {relics.map(({ artifact, owned, level, mats }) => (
+              <RelicCard key={artifact.id} artifact={artifact} owned={owned} level={level}
+                materialCount={mats} busy={busy}
+                onOpenDetail={() => setRelicDetail(artifact)}
+                onExchange={() => run(
+                  { type: 'exchangeArtifact', artifact: artifact.id },
+                  'artifact.exchanged',
+                  `${josa(artifact.name, '을/를')} 손에 넣었어요!`,
+                  `유물 [${artifact.name}] 획득!`,
+                  'gold')} />
+            ))}
+          </div>
+        </>
       )}
       </div>
+      {namedDetail && <NamedDetail quest={namedDetail} game={game} onClose={() => setNamedDetail(null)} />}
+      {relicDetail && <ArtifactDetail artifact={relicDetail} game={game} dispatch={dispatch} setToast={setToast} onClose={() => setRelicDetail(null)} />}
     </div>
   );
 }

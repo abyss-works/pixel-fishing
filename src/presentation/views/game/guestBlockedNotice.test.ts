@@ -10,15 +10,17 @@ afterEach(resetOpenWindows);
 function setup(accountOpen = false) {
   const setToast = vi.fn();
   const openAccount = vi.fn();
-  const notify = createGuestBlockedNotice({ accountOpen, openAccount, setToast });
-  return { setToast, openAccount, notify };
+  const onSailIntent = vi.fn();
+  const notify = createGuestBlockedNotice({ accountOpen, openAccount, onSailIntent, setToast });
+  return { setToast, openAccount, onSailIntent, notify };
 }
 
 describe('게스트 출항 차단 처리', () => {
-  it('안내 줄을 남기고 계정 관리 창을 연다', () => {
+  it('안내 줄을 남기고 출항 의도와 함께 계정 관리 창을 연다', () => {
     const p = setup();
     p.notify();
     expect(p.setToast).toHaveBeenCalledWith(GUEST_VILLAGE_ONLY_TEXT, 'warn');
+    expect(p.onSailIntent).toHaveBeenCalledTimes(1);
     expect(p.openAccount).toHaveBeenCalledTimes(1);
   });
 
@@ -26,6 +28,7 @@ describe('게스트 출항 차단 처리', () => {
     const p = setup(true);
     p.notify();
     expect(p.setToast).not.toHaveBeenCalled();
+    expect(p.onSailIntent).not.toHaveBeenCalled();
     expect(p.openAccount).not.toHaveBeenCalled();
   });
 
@@ -34,6 +37,7 @@ describe('게스트 출항 차단 처리', () => {
     const p = setup();
     p.notify();
     expect(p.setToast).not.toHaveBeenCalled();
+    expect(p.onSailIntent).not.toHaveBeenCalled();
     expect(p.openAccount).not.toHaveBeenCalled();
   });
 });

@@ -30,6 +30,7 @@ export type { LiveConnection };
 
 export { when } from '../../shared/lib/when';
 export { readBounty, kstDay, gameDay } from '../adapters/bounty';
+export { readFortuneHistory } from '../adapters/fortune';
 export { readRanking } from '../adapters/ranking';
 export { readMails, markMailRead } from '../adapters/mailbox';
 export { readBlocks, changeBlock, reportChat } from '../adapters/chat';
@@ -39,16 +40,21 @@ export { readGuild, readGuildInvite, guildAction, takeGuildInviteLanding } from 
 export { readPlayer, searchPlayers } from '../adapters/player';
 export { readAwayReport, watchAway } from '../adapters/away';
 export { readLastPosition } from '../adapters/position';
+export { ConsentRequiredError, isConsentRequiredError, subscribeConsentRequired } from '../adapters/requestFailure';
 export type { LastPosition } from '../adapters/position';
 export type { PublicProfile } from '../adapters/player';
 export type {
-  ApiClient, AuthApi, StorageApi, AdminApi, AdminAccessResult,
-  AccountLookup, AuthResult, GameGateway, GameProfile, MaybePromise, DispatchResult,
-  BountySnapshot, BountyProgressRow, BountyTicketRow,
-  RankingBoardId, RankingRow, RankingBoard, MailItem, FriendItem, FriendOp, FriendOpResult,
+  ApiClient, AuthApi, StorageApi, AdminApi, AdminAccessResult, DevApi, PromoteTestResult, ResetDevAccountResult,
+  AccountLookup, AuthResult, ConsentStatus, AcceptConsentError, AcceptConsentResult, GameGateway, GameProfile, MaybePromise, DispatchResult,
+  BountySnapshot, BountyProgressRow, BountyTicketRow, FortuneDiscoveredEntry, FortuneHistory,
+  RankingBoardId, RankingRow, RankingBoard, MailItem, MailItemAttachment, FriendItem, FriendOp, FriendOpResult,
   GuildBonusItem, GuildDonorItem, GuildInfo, GuildInvitePreview, GuildJoinRequestItem, GuildLogItem, GuildMemberItem, GuildMyRequest, GuildOp,
   GuildOpResult, GuildState,
   AdminUserRow, AdminUserState, AdminOverview, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
+  AdminHttpMetricRouteGroup, AdminHttpMetricCounts, AdminHttpMetricDayRow, AdminHttpMetricRouteRow, AdminHttpMetricRawRow, AdminHttpMetrics,
+  AdminConversionTimeBucketId, AdminConversionTimeBucket, AdminOnboardingConversion,
+  AdminTutorialStageId, AdminOnboardingTutorialStage, AdminOnboardingTutorials,
+  AdminOnboardingStepId, AdminOnboardingStepBasis, AdminOnboardingFunnelStep, AdminOnboardingFunnel,
   AdminLive, AdminLiveConnection, AdminDailyStatsRow, AdminSessionRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, AdminChangelogRow, AdminChatReportRow, BalanceLive,
-  AdminSentMailRow, AdminMailRequest, AdminMailPlan, AdminResetLink,
+  AdminSentMailRow, AdminMailRequest, AdminMailPlan,
 } from './types';

@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { SPOTS, powerReqOf } from '../content/spots';
 import { newState, rodStats } from './logic';
 import { catchDrawOptions } from './actions';
-import { effectiveBite, powerZones, rodPower } from './stats';
+import { powerZones, rodPower } from './stats';
+import { biteWaitOf, createPlayerContext, NO_ACHIEVEMENT_BONUSES } from './effects';
+import { NO_GUILD_EFFECTS } from './guild';
 import { JUDGMENT_MULT } from './balance';
 import { idleDialsOf, relativeIdleBoost } from './power';
 
@@ -70,7 +72,7 @@ describe('삭제된 보정은 판정에 영향이 없다', () => {
   it('파워 초과는 입질 대기를 줄이지 않는다', () => {
     for (const rod of [1, 10, 30, 80]) {
       const st = { ...newState(), rod };
-      const b = effectiveBite(st, 'pond');
+      const b = biteWaitOf(createPlayerContext({ state: st, guild: NO_GUILD_EFFECTS, now: '2026-01-01T00:00:00Z', achievements: NO_ACHIEVEMENT_BONUSES }), 'pond', 'manual');
       expect(b.min.value).toBe(rodStats(rod).biteMin);
       expect(b.max.value).toBe(rodStats(rod).biteMax);
       expect(b.min.mods).toEqual([]);
@@ -79,7 +81,7 @@ describe('삭제된 보정은 판정에 영향이 없다', () => {
 
   it('파워 미달은 입질 대기가 늘어난다(유지)', () => {
     const st = newState();
-    const b = effectiveBite(st, 'coron');
+    const b = biteWaitOf(createPlayerContext({ state: st, guild: NO_GUILD_EFFECTS, now: '2026-01-01T00:00:00Z', achievements: NO_ACHIEVEMENT_BONUSES }), 'coron', 'manual');
     expect(rodPower(st)).toBeLessThan(powerReqOf('coron'));
     expect(b.min.value).toBeCloseTo(rodStats(1).biteMin + powerZones(st, 'coron').biteExtra, 10);
   });

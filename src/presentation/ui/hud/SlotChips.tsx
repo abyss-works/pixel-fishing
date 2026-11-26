@@ -1,51 +1,63 @@
-// 슬롯 칩 - 미니맵 위 칩 줄의 도시락 칩과 미끼 칩. 칩 줄의 순서와 자리는 HUD 배치(HudLayout)가 정한다.
-// 요리를 쓸 수 없는 동안(해금 전, 게스트)은 두 슬롯 모두 잠금 칩이고 툴팁이 사유를 보인다.
-// 쓸 수 있으면 효과가 든 슬롯의 칩만 보이고, 칩은 아이콘과 남은 시간(큰 단위 하나, "8시간" 꼴)을 담는다. 효과가 없는 슬롯의 칩은 숨긴다.
-// 남은 시간은 게임 시계와 같은 주기로 갱신한다. 칩 자신만 포인터 이벤트를 받아 툴팁을 연다(HudChip).
+// 보너스 통합 칩 - 미니맵 위 칩 줄에서 적용 중인 도시락·미끼·비약·오늘의 운세를 한 칩으로 모은다.
+// 칩 줄의 순서와 자리는 HUD 배치(HudLayout)가 정한다.
+// 요리가 열리기 전이고 활성 효과도 없으면 잠금 칩 하나, 열린 뒤나 활성 효과가 하나라도 있으면 누를 수 있는 통합 칩(효과 N / 흐린 효과 0)을 둔다.
+// 호버 시에는 4행 2열 최소 표만 보이고(hoverOnly로 모바일 터치 이중 열림 방지), 누르면 적용 중인 효과 창을 연다.
 import type { GameState } from '../../../game/rules/logic';
 import type { AccountLockState } from '../../../features/display/model/menuLock';
 import { useNow } from '../../../features/gameplay/service/useGameTime';
-import { SLOT_NAME, selectSlotChips } from '../../../features/kitchen/model/slots';
-import type { ActiveSlot, SlotChip, SlotKey } from '../../../features/kitchen/model/slots';
-import Locked from '../Locked';
-import PixelIcon from '../PixelIcon';
-import type { GlyphId } from '../PixelIcon';
-import RecipeEffectTip from '../RecipeEffectTip';
-import Tip from '../Tip';
+import { selectBonusChip, selectBonusTipRows } from '../../../features/kitchen/model/slots';
+import Locked, { LockIcon } from '../Locked';
+import Tip, { TipList } from '../Tip';
 import HudChip from './HudChip';
 
-const SLOT_GLYPH: Record<SlotKey, GlyphId> = { lunch: 'lunch', bait: 'bait' };
-const SLOT_TONE: Record<SlotKey, string> = { lunch: 'text-gold', bait: 'text-accent' };
+const CHIP_TITLE = '활성 효과';
+const CHIP_SUBTITLE = '도시락, 미끼, 비약, 운세 현황';
 
-function ActiveChip({ slot }: { slot: ActiveSlot }) {
+export default function SlotChips({
+  game,
+  accountState,
+  onOpenEffects,
+}: {
+  game: GameState;
+  accountState: AccountLockState;
+  onOpenEffects?: () => void;
+}) {
+  const now = useNow();
+  const chip = selectBonusChip(game, now, accountState);
+
+  if (chip.state === 'locked') {
+    return (
+      <Locked lines={chip.lines} title={CHIP_TITLE} description={CHIP_SUBTITLE} label={CHIP_TITLE} badge={false} className="flex">
+        <HudChip className="text-text-dim">
+          <LockIcon size={11} className="text-text-dim" />
+          <span className="leading-none">효과</span>
+        </HudChip>
+      </Locked>
+    );
+  }
+
+  const tipRows = selectBonusTipRows(game, now);
+  const openEffects = onOpenEffects ?? (() => {});
+
+  if (chip.state === 'empty') {
+    return (
+      <Tip wraps hoverOnly className="flex" text={<TipList rows={tipRows} />}>
+        <HudChip onClick={openEffects} aria-label="활성 효과 없음" className="text-text-dim">
+          <span className="inline-block size-1.5 bg-text-dim" aria-hidden="true" />
+          <span className="leading-none">효과</span>
+          <span className="pf-accent leading-none">0</span>
+        </HudChip>
+      </Tip>
+    );
+  }
+
   return (
-    <Tip wraps pressOpens className="flex" text={<RecipeEffectTip label={slot.label} effects={slot.rows} note={slot.note} />}>
-      <HudChip tabIndex={0} role="group" aria-label={`${SLOT_NAME[slot.key]}, ${slot.label}, 남은 시간 ${slot.timeLeft}`}>
-        <PixelIcon glyph={SLOT_GLYPH[slot.key]} size={12} className={SLOT_TONE[slot.key]} />
-        <span className="pf-accent leading-none text-text">{slot.chipTime}</span>
+    <Tip wraps hoverOnly className="flex" text={<TipList rows={tipRows} />}>
+      <HudChip onClick={openEffects} aria-label={`활성 효과 ${chip.count}개`} className="border-accent text-accent">
+        <span className="inline-block size-1.5 bg-accent" aria-hidden="true" />
+        <span className="leading-none">효과</span>
+        <span className="pf-accent leading-none">{chip.count}</span>
       </HudChip>
     </Tip>
-  );
-}
-
-function LockedChip({ slotKey, lines }: { slotKey: SlotKey; lines: readonly string[] }) {
-  return (
-    <Locked lines={lines} label={SLOT_NAME[slotKey]} className="flex">
-      <HudChip>
-        <PixelIcon glyph={SLOT_GLYPH[slotKey]} size={12} />
-      </HudChip>
-    </Locked>
-  );
-}
-
-export default function SlotChips({ game, accountState }: { game: GameState; accountState: AccountLockState }) {
-  const now = useNow();
-  const chips: SlotChip[] = selectSlotChips(game, now, accountState);
-  return (
-    <>
-      {chips.map(chip => chip.state === 'locked'
-        ? <LockedChip key={chip.key} slotKey={chip.key} lines={chip.lines} />
-        : <ActiveChip key={chip.slotKey} slot={chip} />)}
-    </>
   );
 }

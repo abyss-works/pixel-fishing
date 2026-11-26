@@ -8,13 +8,14 @@ import type {
   AchievementCounters, AchievementMap, AchievementMetric, AchievementRule,
   CumulativeBonusMetric, CumulativeBonusSeries, CumulativeBonusStep,
 } from '../content/achievements.js';
-import { ARTIFACT_MAX_LEVEL, artifactById, artifactHasLevel } from '../content/artifacts.js';
+import { ENERGY_TRANSMUTE_RATIO, recipeById } from '../content/cooking.js';
 import { FISH, fishById } from '../content/fish.js';
+import { RARITY_ORDER } from '../content/rarity.js';
+import type { RarityId } from '../content/rarity.js';
 import { topZoneOfSpot } from '../content/zones.js';
 import type { ZoneId } from '../content/zones.js';
 import type { GameEvent } from './actions.js';
 import { artifactLevelOf } from './artifactLevel.js';
-import type { ArtifactHolder } from './artifactLevel.js';
 import type { AchievementBonuses } from './effects.js';
 import { formDiscovered, isBigSize } from './logic.js';
 import type { GameState } from './logic.js';
@@ -46,43 +47,65 @@ const clean = (x: number): number => Math.round(x * 1e9) / 1e9;
 const countersOf = (state: GameState): Partial<Record<string, number | undefined>> =>
   state.achievementCounters;
 
-/** 최고 레벨 유물 수 — Lv5 유물과 고정 레벨 전설 유물을 모두 포함한다 */
-export function maxArtifactCount(state: ArtifactHolder): number {
-  let count = 0;
-  for (const id of state.artifacts) {
-    const art = artifactById(id);
-    if (!art) continue;
-    if (!artifactHasLevel(art) || artifactLevelOf(state, id) >= ARTIFACT_MAX_LEVEL) {
-      count++;
-    }
-  }
-  return count;
-}
+const DAY_LEGENDARY_IDS: readonly string[] = FISH
+  .filter(f => f.rarity === 'legendary' && !f.night)
+  .map(f => f.id);
+const NIGHT_LEGENDARY_IDS: readonly string[] = FISH
+  .filter(f => f.rarity === 'legendary' && f.night === true)
+  .map(f => f.id);
 
-const LEGENDARY_IDS_BY_ZONE = new Map<ZoneId, readonly string[]>();
+const FISH_IDS_BY_ZONE = new Map<ZoneId, readonly string[]>();
+const DAY_LEGENDARY_IDS_BY_ZONE = new Map<ZoneId, readonly string[]>();
+const NIGHT_LEGENDARY_IDS_BY_ZONE = new Map<ZoneId, readonly string[]>();
 for (const fish of FISH) {
-  if (fish.rarity !== 'legendary') continue;
   const zone = topZoneOfSpot(fish.spot);
   if (!zone) continue;
-  const list = LEGENDARY_IDS_BY_ZONE.get(zone) as string[] | undefined;
+  const allList = FISH_IDS_BY_ZONE.get(zone) as string[] | undefined;
+  if (allList) allList.push(fish.id);
+  else FISH_IDS_BY_ZONE.set(zone, [fish.id]);
+  if (fish.rarity !== 'legendary') continue;
+  const targetMap = fish.night ? NIGHT_LEGENDARY_IDS_BY_ZONE : DAY_LEGENDARY_IDS_BY_ZONE;
+  const list = targetMap.get(zone) as string[] | undefined;
   if (list) list.push(fish.id);
-  else LEGENDARY_IDS_BY_ZONE.set(zone, [fish.id]);
+  else targetMap.set(zone, [fish.id]);
 }
+
+const sumLegendaryCounters = (counters: Partial<Record<string, number | undefined>>, ids: readonly string[]): number => {
+  let sum = 0;
+  for (const id of ids) sum += counters[`manual.legendary.${id}`] ?? 0;
+  return sum;
+};
+
+const sumDexCatchCounts = (state: GameState, ids: readonly string[], forms: 'all' | 'variant'): number => {
+  let sum = 0;
+  for (const id of ids) {
+    const rec = state.dex[id];
+    if (!rec) continue;
+    if (forms === 'all') sum += rec.normal?.count ?? 0;
+    sum += rec.variant?.count ?? 0;
+  }
+  return sum;
+};
 
 /** 누적 보너스 측정값 계산 */
 export function cumulativeBonusValueOf(state: GameState, metric: CumulativeBonusMetric): number {
   switch (metric.kind) {
     case 'counter':
       return countersOf(state)[metric.key] ?? 0;
+    case 'legendarySum':
+      return sumLegendaryCounters(countersOf(state), metric.night ? NIGHT_LEGENDARY_IDS : DAY_LEGENDARY_IDS);
     case 'zoneLegendarySum': {
-      const counters = countersOf(state);
-      const ids = LEGENDARY_IDS_BY_ZONE.get(metric.zone) ?? [];
-      let sum = 0;
-      for (const id of ids) sum += counters[`manual.legendary.${id}`] ?? 0;
-      return sum;
+      const ids = (metric.night ? NIGHT_LEGENDARY_IDS_BY_ZONE : DAY_LEGENDARY_IDS_BY_ZONE).get(metric.zone) ?? [];
+      return sumLegendaryCounters(countersOf(state), ids);
     }
-    case 'maxArtifact':
-      return maxArtifactCount(state);
+    case 'dexZoneLegendarySum': {
+      const ids = (metric.night ? NIGHT_LEGENDARY_IDS_BY_ZONE : DAY_LEGENDARY_IDS_BY_ZONE).get(metric.zone) ?? [];
+      return sumDexCatchCounts(state, ids, 'all');
+    }
+    case 'dexZoneVariantSum':
+      return sumDexCatchCounts(state, FISH_IDS_BY_ZONE.get(metric.zone) ?? [], 'variant');
+    case 'artifactLevel':
+      return artifactLevelOf(state, metric.artifactId);
   }
 }
 
@@ -132,12 +155,15 @@ export function achievementBonusesOf(state: GameState): AchievementBonuses {
   let rareWeight = 0;
   let epicWeight = 0;
   let legendaryWeight = 0;
+  let nightWeight = 0;
+  let bagCap = 0;
+  let energyYield = 0;
+  let baitAmplify = 0;
+  let lunchAmplify = 0;
   let sellBonus = 0;
   let namedWeight = 0;
   let moveSpeed = 0;
   let artifactBoost = 0;
-  const zoneLegendary: Partial<Record<ZoneId, number>> = {};
-  const zoneMutation: Partial<Record<ZoneId, number>> = {};
 
   for (const series of CUMULATIVE_BONUS_SERIES) {
     const { activeDelta } = cumulativeBonusProgress(state, series);
@@ -158,6 +184,21 @@ export function achievementBonusesOf(state: GameState): AchievementBonuses {
       case 'legendaryWeight':
         legendaryWeight = clean(legendaryWeight + activeDelta);
         break;
+      case 'nightWeight':
+        nightWeight = clean(nightWeight + activeDelta);
+        break;
+      case 'bagCap':
+        bagCap = clean(bagCap + activeDelta);
+        break;
+      case 'energyYield':
+        energyYield = clean(energyYield + activeDelta);
+        break;
+      case 'baitAmplify':
+        baitAmplify = clean(baitAmplify + activeDelta);
+        break;
+      case 'lunchAmplify':
+        lunchAmplify = clean(lunchAmplify + activeDelta);
+        break;
       case 'sellBonus':
         sellBonus = clean(sellBonus + activeDelta);
         break;
@@ -170,16 +211,6 @@ export function achievementBonusesOf(state: GameState): AchievementBonuses {
       case 'artifactBoost':
         artifactBoost = clean(artifactBoost + activeDelta);
         break;
-      case 'zoneLegendary':
-        if (series.zone) {
-          zoneLegendary[series.zone] = clean((zoneLegendary[series.zone] ?? 0) + activeDelta);
-        }
-        break;
-      case 'zoneMutation':
-        if (series.zone) {
-          zoneMutation[series.zone] = clean((zoneMutation[series.zone] ?? 0) + activeDelta);
-        }
-        break;
     }
   }
 
@@ -189,12 +220,15 @@ export function achievementBonusesOf(state: GameState): AchievementBonuses {
     rareWeight,
     epicWeight,
     legendaryWeight,
+    nightWeight,
+    bagCap,
+    energyYield,
+    baitAmplify,
+    lunchAmplify,
     sellBonus,
     namedWeight,
     moveSpeed,
     artifactBoost,
-    zoneLegendary,
-    zoneMutation,
   };
 }
 
@@ -272,7 +306,11 @@ export function evaluateAchievements(state: GameState): {
   return { achievements: next, newlyClaimable };
 }
 
-/** 확정된 이벤트 목록에서 업적 카운터 증분을 계산한다 — 기본 5종과 수동 집계 키를 함께 센다 */
+const ENERGY_COMMON_EQUIV = Object.fromEntries(
+  RARITY_ORDER.map((r, i) => [r, ENERGY_TRANSMUTE_RATIO ** i]),
+) as Record<RarityId, number>;
+
+/** 확정된 이벤트 목록에서 업적 카운터 증분을 계산한다 — 기본 7종과 수동 집계 키를 함께 센다 */
 export function counterIncrementsForEvents(events: readonly GameEvent[]): AchievementCounters {
   const inc: AchievementCounters = {};
   const add = (key: string, amount: number) => {
@@ -285,13 +323,30 @@ export function counterIncrementsForEvents(events: readonly GameEvent[]): Achiev
       if (typeof gold === 'number' && Number.isFinite(gold) && gold > 0) {
         add('sell.gold', gold);
       }
+    } else if (ev.type === 'cook') {
+      const recipe = recipeById(ev.payload.recipe);
+      const count = ev.payload.count;
+      if (recipe && typeof count === 'number' && Number.isInteger(count) && count > 0) {
+        let equiv = 0;
+        for (const r of RARITY_ORDER) {
+          const unitCost = recipe.cost[r];
+          if (typeof unitCost === 'number' && Number.isFinite(unitCost) && unitCost > 0) {
+            equiv += unitCost * ENERGY_COMMON_EQUIV[r];
+          }
+        }
+        add('energy.spent', Math.round(equiv * count));
+      }
     } else if (ev.type === 'catch') {
       const judgment = ev.payload.judgment;
       if (judgment === 'perfect') add('catch.perfect', 1);
       else if (judgment === 'auto') add('catch.auto', 1);
-      if ((typeof ev.payload.bait === 'string' && ev.payload.bait.length > 0)
-          || (typeof ev.payload.bait2 === 'string' && ev.payload.bait2.length > 0)) {
+      if (judgment !== 'auto'
+          && ((typeof ev.payload.bait === 'string' && ev.payload.bait.length > 0)
+            || (typeof ev.payload.bait2 === 'string' && ev.payload.bait2.length > 0))) {
         add('catch.bait', 1);
+      }
+      if (judgment === 'auto' && typeof ev.payload.lunch === 'string' && ev.payload.lunch.length > 0) {
+        add('catch.lunch', 1);
       }
       // 수동 집계는 방치가 아닌 캐치만 센다 — 대상 어종은 이벤트의 fishId에서 데이터로 찾는다
       if (judgment !== 'auto') {

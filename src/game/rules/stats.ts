@@ -9,13 +9,10 @@
 //
 // 순수 곡선(rodStats·boatSpeed)은 게임 규칙 계산에 둔다: AdminPanel 가상 레벨 표와
 // 시설 미리보기(rod+1)는 레벨만으로 계산한다.
-import { boatSpeed, rodStats } from './logic.js';
+import { rodStats } from './logic.js';
 import type { GameState } from './logic.js';
-import { WALK_SPEED } from './balance.js';
 import type { SpotId } from '../content/spots.js';
 import { powerReqOf } from '../content/spots.js';
-import { NO_COOK_EFFECTS } from './cooking.js';
-import type { ActiveCookEffects } from './cooking.js';
 import type { GuildBonusId } from './guild.js';
 
 export type StatModSource =
@@ -25,7 +22,8 @@ export type StatModSource =
   | { kind: 'achievement'; id: string }
   | { kind: 'rule'; id: 'night' | 'power' }
   /** "운" 출처 — 다른 보너스를 다 적용한 뒤 곱하는 최종 배율의 몫 */
-  | { kind: 'fortune' };
+  | { kind: 'fortune' }
+  | { kind: 'potion'; id: string };
 
 export interface StatMod {
   id: string;    // 기여 원 식별자 — 낚싯대/밤/아티팩트…
@@ -40,36 +38,11 @@ export interface Stat {
   value: number;
 }
 
-const stat = (base: number, mods: StatMod[] = []): Stat => ({
-  base, mods, value: mods.reduce((v, m) => v + m.delta, base),
-});
-
 export type Movement = 'walk' | 'sail';
 
 /** 밤 이동 감속 비율 — 밤이면 항해 속도가 이 비율만큼 줄어든다. 도보(마을)도 밤이면 같이 느리다.
  *  값은 "약간" 수준 — 어두우면 조심히 걷는 느낌만, 진행을 막지 않는다. */
 export const NIGHT_SPEED_FACTOR = 0.85;
-
-import { ARTIFACTS } from '../content/artifacts.js';
-import { artifactEffectsAt, artifactLevelOf } from './artifactLevel.js';
-
-// 이동 속도(px/s) — 씬 movement로 분기. 마을 도보는 배·유물과 무관한 고정값이고
-// 유물 속도 보너스는 항해에만 붙는다. 보너스는 레지스트리에서 파생된다 — 새 유물은 행만 추가하면 배선된다.
-export function moveSpeed(state: GameState, movement: Movement, night = false): Stat {
-  const base = movement === 'walk' ? WALK_SPEED : boatSpeed(state);
-  const mods: StatMod[] = [];
-  for (const a of ARTIFACTS) {
-    const level = artifactLevelOf(state, a.id);
-    if (level === 0) continue;
-    const bonus = movement === 'sail' ? (artifactEffectsAt(a, level).sail ?? 0) : 0;
-    if (bonus > 0) mods.push({ id: `relic-${a.id}`, label: a.name, delta: base * bonus });
-  }
-  if (night) mods.push({
-    id: 'night', label: '밤 — 어둠 속 이동 감속',
-    delta: base * (NIGHT_SPEED_FACTOR - 1),
-  });
-  return stat(base, mods);
-}
 
 // 낚싯대 축 — 파워(레벨) 하나에서 파생되는 어드밴티지 (roadmap 2.1).
 // 렌더(타이밍 바)가 쓴다; 스탯창에는 절대값을 나열하지 않는다(표시 원칙 주석).
@@ -80,38 +53,15 @@ export interface RodAxes {
   sweep: Stat;
 }
 
+const staticStat = (base: number): Stat => ({ base, mods: [], value: base });
+
 export function rodAxes(state: GameState): RodAxes {
   const st = rodStats(state.rod);
   return {
-    biteMin: stat(st.biteMin),
-    biteMax: stat(st.biteMax),
-    sweep: stat(st.sweep),
+    biteMin: staticStat(st.biteMin),
+    biteMax: staticStat(st.biteMax),
+    sweep: staticStat(st.sweep),
   };
-}
-
-/** 현재 해역 대비 유효 입질 대기. 파워가 요구치를 넘어도 대기는 줄지 않고(낚싯대 레벨 곡선 그대로),
- *  미달이면 powerZones의 biteExtra만큼 늘어난다. 보유 유물의 입질 대기 감소와 요리(도시락)의 입질 대기 감소는
- *  함께 더해져 그 합계에 비율로 걸린다. 요리 효과는 호출자가 slotEffects로 구해 넘긴다(방치 사이클에만 적용한다).
- *  스탯창에 보일 출처 이름(label)은 호출자가 정한다.
- */
-export function effectiveBite(
-  state: GameState, spotId: SpotId, cook: Pick<ActiveCookEffects, 'biteWaitCut'> & { label?: string } = NO_COOK_EFFECTS,
-): { min: Stat; max: Stat } {
-  const st = rodStats(state.rod);
-  const pz = powerZones(state, spotId);
-  const side = (base: number): Stat => {
-    const mods: StatMod[] = pz.biteExtra > 0 ? [{ id: 'power', label: '파워 부족', delta: pz.biteExtra }] : [];
-    const total = base + pz.biteExtra;
-    for (const a of ARTIFACTS) {
-      const level = artifactLevelOf(state, a.id);
-      if (level === 0) continue;
-      const cut = artifactEffectsAt(a, level).biteWaitCut ?? 0;
-      if (cut > 0) mods.push({ id: `relic-${a.id}`, label: a.name, delta: -total * cut });
-    }
-    if (cook.biteWaitCut > 0) mods.push({ id: 'cook-lunch', label: cook.label ?? '', delta: -total * cook.biteWaitCut });
-    return stat(base, mods);
-  };
-  return { min: side(st.biteMin), max: side(st.biteMax) };
 }
 
 // 파워 수치화 — 해역 게이트가 레벨 단위 하드코딩이 아니라 이 숫자 하나를 보게 한다
@@ -196,6 +146,6 @@ export function powerHelpText(): string {
 
 export function autoPenaltyHelpText(): string {
   return '방치로 낚을 때는 희귀한 어종이 잘 걸리지 않아요.\n'
-    + '낚싯대 파워가 이 해역 요구치를 넘을수록 그 차이가 줄어들어요.\n'
-    + '요구치에 못 미치면 그 차이가 더 커져요.';
+    + '낚싯대 파워가 이 해역 기준 파워를 넘을수록 그 차이가 줄어들어요.\n'
+    + '기준 파워에 못 미치면 그 차이가 더 커져요.';
 }

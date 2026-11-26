@@ -19,7 +19,7 @@ import SelectList from '../../../ui/SelectList';
 import Subheading from '../../../ui/Subheading';
 import TabBar from '../../../ui/TabBar';
 import TextInput from '../../../ui/TextInput';
-import Tip from '../../../ui/Tip';
+import Tip, { TipBullets } from '../../../ui/Tip';
 import BlockList from './BlockList';
 import { SOCIAL_CELL, SOCIAL_HEAD } from './socialTable';
 
@@ -29,7 +29,10 @@ import { SOCIAL_CELL, SOCIAL_HEAD } from './socialTable';
 // 닉네임을 치는 동안 앞부분이 같은 계정 유저를 입력 아래에 후보로 띄우고, 후보를 고르면 입력을 그 이름으로 채운다.
 // 창 전체에 공통인 상태가 없어 고정 정보 줄은 두지 않는다. 창 자체는 스크롤하지 않고, 넘치는 내용은 탭 본문 안에서 굴린다.
 const nameOf = (f: FriendItem) => f.nick ?? '이름 없음';
-const PLACE_HELP = '접속 중이면 지금 있는 해역이에요.\n접속하지 않았으면 마지막 접속에서 지난 시간이에요.';
+const PLACE_HELP = [
+  '접속 중이면 지금 있는 해역이에요.',
+  '접속하지 않았으면 마지막 접속에서 지난 시간이에요.',
+] as const;
 
 type SocialTab = 'friends' | 'requests' | 'blocks';
 type FriendOp = Parameters<ReturnType<typeof useFriends>['act']>[0];
@@ -56,7 +59,7 @@ export default function FriendsModal({ setToast, onClose }: { setToast: Notify; 
   };
   /** 목록을 아직 못 받았을 때 표 자리에 띄우는 안내 */
   const pending = loading ? <Note>친구 목록을 불러오는 중이에요.</Note>
-    : failed ? <Note tone="warn">친구 목록을 불러오지 못했어요.<br />잠시 뒤 다시 열어 주세요.</Note> : null;
+    : failed ? <Note tone="warn">친구 목록을 열지 못했어요.<br />잠시 뒤 다시 열어 주세요.</Note> : null;
 
   return (
     // 탭이 있는 창의 높이: 요청 탭(입력과 받은·보낸 요청 표 둘)이 들어가는 480px. 스테이지가 낮으면 위아래 16px을 남긴다
@@ -110,7 +113,7 @@ function FriendTable({ friends, pending, busy, onRemove }: {
           <thead>
             <tr className={SOCIAL_HEAD.row}>
               <th className={SOCIAL_HEAD.left}>이름</th>
-              <th className={SOCIAL_HEAD.right}><Tip text={PLACE_HELP}>있는 곳</Tip></th>
+              <th className={SOCIAL_HEAD.right}><Tip text={<TipBullets items={PLACE_HELP} />}>있는 곳</Tip></th>
               <th className={SOCIAL_HEAD.right} aria-label="끊기" />
             </tr>
           </thead>
@@ -170,7 +173,7 @@ function FriendRequests({ groups, pending, busy, act, run, setToast }: {
       kind: 'social.modalAction',
       text: r.result === 'accepted' ? `${name} 님과 친구가 됐어요.`
         : r.result === 'already' ? `${name} 님과는 이미 친구이거나 요청 중이에요.` : `${name} 님에게 친구 요청을 보냈어요.`,
-      toastText: r.result === 'accepted' ? `${name} 님과 친구 성사`
+      toastText: r.result === 'accepted' ? `${name} 님과 친구가 됐어요.`
         : r.result === 'already' ? '이미 친구이거나 요청 중' : `${name} 님 친구 요청 전송`,
     });
   };
@@ -203,7 +206,7 @@ function FriendRequests({ groups, pending, busy, act, run, setToast }: {
                                         void run({ op: 'accept', uid: f.uid }, () => sendNotice(setToast, {
                                           kind: 'social.modalAction',
                                           text: `${nameOf(f)} 님과 친구가 됐어요.`,
-                                          toastText: `${nameOf(f)} 님과 친구 성사`,
+                                          toastText: `${nameOf(f)} 님과 친구가 됐어요.`,
                                         }));
                                       }}>수락</Button>
                             </>

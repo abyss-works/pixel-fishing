@@ -224,8 +224,8 @@ export const GUILD_BONUS_IDS: readonly GuildBonusId[] = ['sell', 'bag', 'named',
 export const GUILD_BONUS_MAX_RANK = 5;
 /** 단계 2~5에 오르는 비용(골드). 1단계는 레벨 도달로 열려 비용이 없다 */
 const RANK_COSTS: Readonly<Record<number, number>> = { 2: 150_000, 3: 500_000, 4: 1_500_000, 5: 5_000_000 };
-/** 단계당 효과(만분율) — 판매가 +2%, 가방 칸 +4%, 네임드 조우 가중치 +5%, 일반 등급 가중치 −2%, 돌연변이 확률 +1%p */
-const EFFECT_BP_PER_RANK: Record<GuildBonusId, number> = { sell: 200, bag: 400, named: 500, rare: 200, mutation: 100 };
+/** 단계당 효과(만분율) — 판매가 +2%, 가방 칸 +4%, 네임드 조우 가중치 +5%, 일반 등급 가중치 −2%, 돌연변이 폼 가중치 +4% */
+const EFFECT_BP_PER_RANK: Record<GuildBonusId, number> = { sell: 200, bag: 400, named: 500, rare: 200, mutation: 400 };
 
 /** 보너스가 열리는 길드 레벨 */
 export function bonusUnlockLevel(id: GuildBonusId): number {
@@ -300,7 +300,7 @@ export function validDonationAmount(v: unknown): v is number {
 
 /**
  * 길드 보너스 효과 — 보너스마다 단계 효과를 더한 값 하나다. 판매가·가방·네임드는 늘어나는 비율, rare는 일반 등급 가중치가
- * 줄어드는 비율, mutation은 돌연변이 확률에 더하는 퍼센트포인트(0.01 = 1%p)다. 서버 액션 경로만 적용한다.
+ * 줄어드는 비율, mutation은 돌연변이 폼 가중치에 더하는 비율(0.04 = +4%)이다. 서버 액션 경로만 적용한다.
  */
 export interface GuildEffects {
   sell: number;
@@ -337,11 +337,20 @@ export function guildEffectsOf(
 // ── 자유 강화 ──────────────────────────────────────────────
 // Lv.6부터 레벨이 오를 때마다 자유 강화 포인트 1개를 얻는다(최대 5개).
 // 길드원 누구나 포인트를 원하는 열린 스킬에 무료로 투자해 최대 5단계까지 추가로 올릴 수 있다(기본 5 + 강화 5 = 최대 10단계).
-// 초기화는 길드원 누구나 개인 골드 20,000,000G를 내고 횟수 제한 없이 언제든 할 수 있으며, 기본 기부 단계와 풀은 건드리지 않는다.
+// 초기화는 길드원 누구나 개인 골드를 내고 횟수 제한 없이 언제든 할 수 있으며(계정 누적 초기화 횟수별 단계 비용), 기본 기부 단계와 풀은 건드리지 않는다.
 
 export const GUILD_ENHANCE_MIN_LEVEL = 6;
 export const GUILD_ENHANCE_MAX_RANK = 5;
-export const GUILD_ENHANCE_RESET_COST = 20_000_000;
+/** 자유 강화 초기화 단계별 비용(골드) — 누적 초기화 0회차부터 4회차 이상 상한까지 */
+export const GUILD_ENHANCE_RESET_COSTS = [100_000, 500_000, 1_000_000, 5_000_000, 10_000_000] as const;
+
+/** 누적 자유 강화 초기화 횟수에 따른 초기화 비용 — 음수·비유한수는 0회차로 보고, 4회차 이상은 상한으로 고정한다 */
+export function guildEnhanceResetCost(resetCount: number): number {
+  const idx = Number.isFinite(resetCount)
+    ? Math.min(GUILD_ENHANCE_RESET_COSTS.length - 1, Math.max(0, Math.floor(resetCount)))
+    : 0;
+  return GUILD_ENHANCE_RESET_COSTS[idx];
+}
 
 /** 길드 레벨에서 얻을 수 있는 총 자유 강화 포인트(0~5) */
 export function maxEnhancePoints(guildLevel: number): number {
@@ -383,14 +392,17 @@ export function enhanceOutcome(
 
 export type EnhanceResetError = 'no-enhance-used' | 'not-enough-gold';
 
-/** 자유 강화 초기화 판정 — 길드원 누구나, 투자한 포인트가 1개 이상 있어야 하고, 개인 골드 20,000,000G를 낸다 */
+/** 자유 강화 초기화 판정 — 길드원 누구나, 투자한 포인트가 1개 이상 있어야 하고, 누적 초기화 횟수별 개인 골드를 낸다 */
 export function enhanceResetOutcome(
   enhanceRanks: Partial<Record<GuildBonusId, number>>,
   gold: number,
-): { ok: true } | { ok: false; error: EnhanceResetError } {
-  if (usedEnhancePoints(enhanceRanks) <= 0) return { ok: false, error: 'no-enhance-used' };
-  if (gold < GUILD_ENHANCE_RESET_COST) return { ok: false, error: 'not-enough-gold' };
-  return { ok: true };
+  resetCount = 0,
+): { ok: true; recovered: number; cost: number } | { ok: false; error: EnhanceResetError; cost: number } {
+  const recovered = usedEnhancePoints(enhanceRanks);
+  const cost = guildEnhanceResetCost(resetCount);
+  if (recovered <= 0) return { ok: false, error: 'no-enhance-used', cost };
+  if (gold < cost) return { ok: false, error: 'not-enough-gold', cost };
+  return { ok: true, recovered, cost };
 }
 
 /** 기여를 세는 하루 — 의뢰 클리어 한도와 같은 게임 날짜(한국 시간 새벽 4시 경계)다 */

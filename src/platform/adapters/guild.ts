@@ -5,7 +5,9 @@ import { AppError } from '../../core/errors';
 import { GUILD_LINK_PREFIX, normalizeGuildCode } from '../../game/rules/guild';
 import { isCloud } from './auth';
 import type { GuildInvitePreview, GuildOp, GuildOpResult, GuildState } from '../api/types';
-import { isRateLimited, requestFailure } from './requestFailure';
+import {
+  CONSENT_REQUIRED_CODE, isRateLimited, requestFailure, throwConsentRequired, throwRequestFailure,
+} from './requestFailure';
 
 const NO_GUILD: GuildState = { guild: null, request: null };
 
@@ -14,7 +16,7 @@ export async function readGuild(): Promise<GuildState> {
   if (!isCloud) return NO_GUILD;
   const res = await fetch('/api/guilds/me');
   if (res.status === 401) throw new AppError('unauthorized', 'guild read before session');
-  if (!res.ok) throw requestFailure(res, 'guild read failed');
+  if (!res.ok) await throwRequestFailure(res, 'guild read failed');
   const body = await res.json() as Partial<GuildState>;
   return { guild: body.guild ?? null, request: body.request ?? null };
 }
@@ -24,7 +26,7 @@ export async function readGuildInvite(code: string): Promise<GuildInvitePreview 
   if (!isCloud) return null;
   const res = await fetch(`/api/guild-invites/${encodeURIComponent(code)}`);
   if (res.status === 404) return null;
-  if (!res.ok) throw requestFailure(res, 'guild invite read failed');
+  if (!res.ok) await throwRequestFailure(res, 'guild invite read failed');
   return (await res.json() as { invite: GuildInvitePreview }).invite;
 }
 
@@ -58,14 +60,19 @@ function request(op: GuildOp): [string, RequestInit] {
 export async function guildAction(op: GuildOp): Promise<GuildOpResult> {
   const res = await fetch(...request(op));
   if (res.status >= 500) throw requestFailure(res, 'guild action failed');
-  const body = await res.json().catch(() => ({})) as { error?: string; result?: string; recovered?: number };
+  const body = await res.json().catch(() => ({})) as {
+    error?: string; result?: string; gold?: number; recovered?: number; enhanceResetCount?: number;
+  };
   // 앱 서버의 429는 오류 코드를 싣는다(아래에서 거절로 돌려준다). 코드가 없는 429는 인그레스의 요청 한도다
   if (isRateLimited(res) && typeof body.error !== 'string') throw requestFailure(res, 'guild action failed');
+  if (res.status === 403 && body.error === CONSENT_REQUIRED_CODE) throwConsentRequired('guild action failed', { status: 403 });
   if (!res.ok) return { ok: false, error: body.error ?? 'unknown' };
   return {
     ok: true,
     ...(body.result === 'joined' || body.result === 'requested' ? { result: body.result } : {}),
+    ...(op.op === 'resetEnhancements' && typeof body.gold === 'number' ? { gold: body.gold } : {}),
     ...(typeof body.recovered === 'number' ? { recovered: body.recovered } : {}),
+    ...(typeof body.enhanceResetCount === 'number' ? { enhanceResetCount: body.enhanceResetCount } : {}),
   };
 }
 

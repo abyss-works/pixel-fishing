@@ -25,7 +25,7 @@ describe('테스트 데이터베이스', () => {
     const names = rows.map(r => r.name);
     for (const t of ['saves_current', 'fish_instances', 'records', 'saves', 'profiles', 'events', 'letters',
       'coupons', 'reliefs', 'bounty_accepts', 'bounty_progress', 'bounty_tickets', 'bounty_licenses',
-      'bounty_clears', 'mails', 'v_bounty_funnel_daily']) {
+      'bounty_clears', 'mails', 'daily_fortunes', 'v_bounty_funnel_daily']) {
       expect(names).toContain(t);
     }
   });
@@ -392,6 +392,268 @@ describe('테스트 데이터베이스', () => {
           `select to_regclass('public.guild_member_enhancements')::text as r`,
         );
         expect(reg.r).toBe('guild_member_enhancements');
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
+
+  describe('saves_current.guild_enhance_reset_count (0041)', () => {
+    const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
+
+    it('기본값 0과 0 이상 제약을 강제하고, 업/다운 적용으로 열이 추가·제거된다', async () => {
+      const uid = randomUUID();
+      await client.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, false)`, [uid, `${uid}@example.test`]);
+      const { rows: [row] } = await client.query<{ guild_enhance_reset_count: number }>(
+        `insert into public.saves_current (user_id, data) values ($1, '{}'::jsonb) returning guild_enhance_reset_count`,
+        [uid],
+      );
+      expect(row.guild_enhance_reset_count).toBe(0);
+      await expect(client.query(
+        `update public.saves_current set guild_enhance_reset_count = -1 where user_id = $1`,
+        [uid],
+      )).rejects.toMatchObject({ code: '23514' });
+
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        await other.query(migration('0041_guild_enhance_reset_count.down.sql'));
+        const { rows: afterDown } = await other.query(
+          `select 1 from information_schema.columns where table_schema = 'public' and table_name = 'saves_current' and column_name = 'guild_enhance_reset_count'`,
+        );
+        expect(afterDown).toHaveLength(0);
+        await other.query(migration('0041_guild_enhance_reset_count.sql'));
+        const { rows: afterUp } = await other.query<{ is_nullable: string; column_default: string | null }>(
+          `select is_nullable, column_default from information_schema.columns where table_schema = 'public' and table_name = 'saves_current' and column_name = 'guild_enhance_reset_count'`,
+        );
+        expect(afterUp).toHaveLength(1);
+        expect(afterUp[0].is_nullable).toBe('NO');
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
+
+  describe('daily_fortunes (0042, 0046)', () => {
+    const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
+    const user = async (c: Client): Promise<string> => {
+      const uid = randomUUID();
+      await c.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, false)`, [uid, `${uid}@example.test`]);
+      return uid;
+    };
+
+    it('복합 PK·check 제약(kind, index)·기본 created_at·cascade 삭제를 강제한다', async () => {
+      const uid = await user(client);
+      const { rows: [inserted] } = await client.query<{ created_at: Date }>(
+        `insert into public.daily_fortunes (user_id, day, kind, index) values ($1, '2030-03-04', 'fish', 3)
+         returning created_at`,
+        [uid],
+      );
+      expect(inserted.created_at).toBeInstanceOf(Date);
+
+      await expect(client.query(
+        `insert into public.daily_fortunes (user_id, day, kind, index) values ($1, '2030-03-04', 'gold', 5)`,
+        [uid],
+      )).rejects.toMatchObject({ code: '23505' });
+      await expect(client.query(
+        `insert into public.daily_fortunes (user_id, day, kind, index) values ($1, '2030-03-05', 'luck', 3)`,
+        [uid],
+      )).rejects.toMatchObject({ code: '23514' });
+      await expect(client.query(
+        `insert into public.daily_fortunes (user_id, day, kind, index) values ($1, '2030-03-05', 'gold', 4)`,
+        [uid],
+      )).rejects.toMatchObject({ code: '23514' });
+
+      // 0046: 1·2등급 9종은 index 3·5 허용, 3등급 3종은 index 5만 허용(3 거부)
+      let dayOffset = 10;
+      for (const kind of ['fish', 'gold', 'bite', 'big', 'fame', 'shadow', 'mutation', 'night', 'energy']) {
+        for (const index of [3, 5]) {
+          const day = `2030-04-${String(dayOffset++).padStart(2, '0')}`;
+          await client.query(
+            `insert into public.daily_fortunes (user_id, day, kind, index) values ($1, $2, $3, $4)`,
+            [uid, day, kind, index],
+          );
+        }
+      }
+      for (const kind of ['golden-scale', 'mirage', 'grand-catch']) {
+        const okDay = `2030-05-${String(dayOffset++).padStart(2, '0')}`;
+        await client.query(
+          `insert into public.daily_fortunes (user_id, day, kind, index) values ($1, $2, $3, 5)`,
+          [uid, okDay, kind],
+        );
+        const badDay = `2030-05-${String(dayOffset++).padStart(2, '0')}`;
+        await expect(client.query(
+          `insert into public.daily_fortunes (user_id, day, kind, index) values ($1, $2, $3, 3)`,
+          [uid, badDay, kind],
+        )).rejects.toMatchObject({ code: '23514' });
+      }
+
+      await client.query(`delete from auth.users where id = $1`, [uid]);
+      expect((await client.query(
+        `select 1 from public.daily_fortunes where user_id = $1`, [uid],
+      )).rows).toHaveLength(0);
+    });
+
+    it('0046 다운/업 마이그레이션 라운드트립이 제약과 행을 일관되게 전환한다', async () => {
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        const uid = await user(other);
+        await other.query(
+          `insert into public.daily_fortunes (user_id, day, kind, index) values ($1, '2030-03-04', 'mirage', 5)`,
+          [uid],
+        );
+        await other.query(migration('0046_expand_daily_fortunes.down.sql'));
+        await expect(other.query(
+          `insert into public.daily_fortunes (user_id, day, kind, index) values ($1, '2030-03-05', 'bite', 3)`,
+          [uid],
+        )).rejects.toMatchObject({ code: '23514' });
+        await other.query(migration('0046_expand_daily_fortunes.sql'));
+        await other.query(
+          `insert into public.daily_fortunes (user_id, day, kind, index) values ($1, '2030-03-05', 'bite', 3)`,
+          [uid],
+        );
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+
+    it('인증 사용자는 본인 운세 이력도 읽거나 쓰지 못한다 — 서버 전용', async () => {
+      const uid = await user(client);
+      await client.query(
+        `insert into public.daily_fortunes (user_id, day, kind, index) values ($1, '2030-03-04', 'shadow', 5)`,
+        [uid],
+      );
+      await client.query('begin');
+      try {
+        await client.query('set local role authenticated');
+        await client.query(`select set_config('request.jwt.claim.sub', $1, true)`, [uid]);
+        expect((await client.query('select day from public.daily_fortunes')).rows).toEqual([]);
+        await expect(client.query(
+          `insert into public.daily_fortunes (user_id, day, kind, index) values ($1, '2030-03-05', 'fish', 3)`,
+          [uid],
+        )).rejects.toMatchObject({ code: '42501' });
+      } finally {
+        await client.query('rollback');
+      }
+    });
+  });
+
+  describe('mails.items (0043)', () => {
+    const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
+
+    it('기본값 빈 배열([])과 NOT NULL을 강제하고, 업/다운 적용으로 열이 추가·제거된다', async () => {
+      const uid = randomUUID();
+      await client.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, true)`, [uid, `${uid}@anonymous.invalid`]);
+      const { rows: [row] } = await client.query<{ items: unknown }>(
+        `insert into public.mails (user_id, title, body) values ($1, '제목', '본문') returning items`,
+        [uid],
+      );
+      expect(row.items).toEqual([]);
+
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        await other.query(migration('0043_mail_items.down.sql'));
+        const { rows: afterDown } = await other.query(
+          `select 1 from information_schema.columns where table_schema = 'public' and table_name = 'mails' and column_name = 'items'`,
+        );
+        expect(afterDown).toHaveLength(0);
+        await other.query(migration('0043_mail_items.sql'));
+        const { rows: afterUp } = await other.query<{ is_nullable: string; column_default: string | null }>(
+          `select is_nullable, column_default from information_schema.columns where table_schema = 'public' and table_name = 'mails' and column_name = 'items'`,
+        );
+        expect(afterUp).toHaveLength(1);
+        expect(afterUp[0].is_nullable).toBe('NO');
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
+
+  describe('daily_fortunes 중복 인덱스 제거 (0044)', () => {
+    const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
+    const indexesOf = async (c: Client) => (await c.query<{ indexname: string }>(
+      `select indexname from pg_indexes where schemaname = 'public' and tablename = 'daily_fortunes' order by indexname`,
+    )).rows.map(r => r.indexname);
+
+    it('기본 키 인덱스는 유지하고 중복 daily_fortunes_user_day_idx만 제거하며, 다운/업이 동작한다', async () => {
+      expect(await indexesOf(client)).toEqual(['daily_fortunes_pkey']);
+
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        await other.query(migration('0044_drop_redundant_daily_fortunes_index.down.sql'));
+        expect(await indexesOf(other)).toEqual(['daily_fortunes_pkey', 'daily_fortunes_user_day_idx']);
+        await other.query(migration('0044_drop_redundant_daily_fortunes_index.sql'));
+        expect(await indexesOf(other)).toEqual(['daily_fortunes_pkey']);
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
+
+  describe('http_metrics_daily (0045)', () => {
+    const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
+
+    it('기본 키·허용 경로 묶음·음수 금지·기본값·서버 전용 RLS·다운/업 라운드트립을 검증한다', async () => {
+      const { rows: [inserted] } = await client.query<{ total: string; status_426: string; status_429: string; status_5xx: string }>(
+        `insert into public.http_metrics_daily (day, route_group) values ('2030-03-04', 'action')
+         returning total, status_426, status_429, status_5xx`,
+      );
+      expect(inserted).toEqual({ total: '0', status_426: '0', status_429: '0', status_5xx: '0' });
+
+      // 중복 (day, route_group) 거부
+      await expect(client.query(
+        `insert into public.http_metrics_daily (day, route_group, total) values ('2030-03-04', 'action', 1)`,
+      )).rejects.toMatchObject({ code: '23505' });
+
+      // 허용되지 않은 route_group 거부
+      await expect(client.query(
+        `insert into public.http_metrics_daily (day, route_group, total) values ('2030-03-04', 'unknown', 1)`,
+      )).rejects.toMatchObject({ code: '23514' });
+
+      // 음수 카운트 거부
+      await expect(client.query(
+        `insert into public.http_metrics_daily (day, route_group, total) values ('2030-03-04', 'api', -1)`,
+      )).rejects.toMatchObject({ code: '23514' });
+
+      // 인증 사용자는 읽거나 쓰지 못한다 — 서버 전용 RLS
+      await client.query('begin');
+      try {
+        await client.query('set local role authenticated');
+        expect((await client.query('select day from public.http_metrics_daily')).rows).toEqual([]);
+        await expect(client.query(
+          `insert into public.http_metrics_daily (day, route_group, total) values ('2030-03-05', 'web', 1)`,
+        )).rejects.toMatchObject({ code: '42501' });
+      } finally {
+        await client.query('rollback');
+      }
+
+      // 다운/업 라운드트립
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        await other.query(migration('0045_http_metrics.down.sql'));
+        const { rows: afterDown } = await other.query(
+          `select 1 from information_schema.tables where table_schema = 'public' and table_name = 'http_metrics_daily'`,
+        );
+        expect(afterDown).toHaveLength(0);
+        await other.query(migration('0045_http_metrics.sql'));
+        const { rows: afterUp } = await other.query(
+          `select 1 from information_schema.tables where table_schema = 'public' and table_name = 'http_metrics_daily'`,
+        );
+        expect(afterUp).toHaveLength(1);
       } finally {
         await other.end();
         await copy.drop();

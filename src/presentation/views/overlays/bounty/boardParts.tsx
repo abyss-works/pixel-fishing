@@ -2,9 +2,12 @@ import type { ReactNode } from 'react';
 import { GAME_DAY_RESET_TEXT } from '../../../../game/rules/time.js';
 import Button from '../../../ui/Button';
 import KeyValueRow from '../../../ui/KeyValueRow';
+import PixelIcon from '../../../ui/PixelIcon';
 import SharedProgressMeter from '../../../ui/ProgressMeter';
-import Tip from '../../../ui/Tip';
-import { fmtMinutes, fmtRatioTight } from '../../../ui/format';
+import ProgressCount from '../../../ui/ProgressCount';
+import Tip, { TipBullets } from '../../../ui/Tip';
+import { splitTipLines } from '../../../ui/tipText';
+import { fmtMinutes } from '../../../ui/format';
 
 // 수배판 카드(일반 의뢰, 네임드 토벌, 유물)가 함께 쓰는 조각.
 
@@ -19,13 +22,14 @@ export function BoardRows({ rows }: { rows: { key: string; label: ReactNode; val
   );
 }
 
-/** 수주 버튼 — 누를 수 없는 이유가 있으면 그 이유를, 없으면 수주 규칙 설명(있을 때)을 툴팁으로 보인다 */
-export function AcceptButton({ disabled, reason, help, onClick }: {
-  disabled: boolean; reason: string | null; help?: string; onClick: () => void;
+/** 수주 버튼 — 누를 수 없는 이유가 있으면 그 이유를 툴팁으로 보인다 */
+export function AcceptButton({ disabled, reason, onClick }: {
+  disabled: boolean; reason: string | null; onClick: () => void;
 }) {
   const button = <Button variant="primary" full disabled={disabled} onClick={onClick}>수주</Button>;
-  const tip = reason ?? help;
-  return tip ? <Tip wraps text={tip} className="block">{button}</Tip> : button;
+  if (!reason) return button;
+  const lines = splitTipLines(reason);
+  return <Tip wraps text={lines.length > 1 ? <TipBullets items={lines} /> : reason} className="block">{button}</Tip>;
 }
 
 /** 진행 막대와 "진행/목표" - 수배판 일반 의뢰 카드와 의뢰 창 카드가 함께 쓴다 */
@@ -38,7 +42,7 @@ export function ProgressMeter({ progress, count }: { progress: number; count: nu
       tone="accent"
       ariaLabel="진행"
       className="h-3.5"
-      rightLabel={`${shown}/${count}`}
+      rightLabel={<ProgressCount current={shown} target={count} tight />}
     />
   );
 }
@@ -52,19 +56,18 @@ export function ClearsLeft({ leftAll, leftNamed, dailyCap, namedDailyCap, shortL
   /** 값 이름을 메뉴 줄의 의뢰 배지처럼 "일반", "네임드"로 줄인다 */
   shortLabels?: boolean;
 }) {
-  const left = fmtRatioTight;
   return (
     <>
       <span className="text-text-dim whitespace-nowrap">
-        <Tip text={<>보상을 받으면 클리어 1번이에요.<br />조건을 채우지 못한 의뢰는 {GAME_DAY_RESET_TEXT}에 사라져요.</>}>오늘 남은 클리어</Tip>
+        <Tip text={<TipBullets items={['보상을 받으면 완료 1회예요.', `조건을 채우지 못한 의뢰는 ${GAME_DAY_RESET_TEXT}에 사라져요.`]} />}>오늘 남은 클리어</Tip>
       </span>
       <span className="flex items-baseline gap-1.5 whitespace-nowrap">
         <span className="text-text-dim">{shortLabels ? '일반' : '일반 의뢰'}</span>
-        <span className="pf-accent" aria-label="오늘 남은 일반 의뢰">{left(leftAll, dailyCap)}</span>
+        <span aria-label="오늘 남은 일반 의뢰"><ProgressCount current={leftAll} target={dailyCap} tight /></span>
       </span>
       <span className="flex items-baseline gap-1.5 whitespace-nowrap">
         <span className="text-text-dim">{shortLabels ? '네임드' : '네임드 토벌'}</span>
-        <span className="pf-accent" aria-label="오늘 남은 네임드 토벌">{left(leftNamed, namedDailyCap)}</span>
+        <span aria-label="오늘 남은 네임드 토벌"><ProgressCount current={leftNamed} target={namedDailyCap} tight /></span>
       </span>
     </>
   );
@@ -75,7 +78,7 @@ export function ClearsLeft({ leftAll, leftNamed, dailyCap, namedDailyCap, shortL
 export function TraceTime({ mins }: { mins: number }) {
   return (
     <span className="text-xs text-text-dim whitespace-nowrap">
-      <Tip text={'흔적이 남아 있어요.\n이 구역 바다로 나가 흔적 카드의 추적을 눌러 보세요.'}>흔적</Tip>
+      <Tip text={<TipBullets items={['흔적이 남아 있어요.', '이 구역 바다로 나가 흔적 카드의 추적을 눌러 보세요.']} />}>흔적</Tip>
       {' '}<span className="pf-accent text-text">{fmtMinutes(mins)}</span>
     </span>
   );
@@ -87,7 +90,10 @@ export function NamedCardHead({ title, titleTip, traceMins }: {
 }) {
   return (
     <div className="flex items-baseline justify-between gap-2 h-6">
-      <b className="text-base text-epic truncate">{titleTip ? <Tip text={titleTip}>{title}</Tip> : title}</b>
+      <b className="inline-flex items-center gap-1.5 text-base text-named truncate min-w-0">
+        <PixelIcon glyph="target" size={13} className="shrink-0" />
+        <span className="truncate">{titleTip ? <Tip text={titleTip}>{title}</Tip> : title}</span>
+      </b>
       {traceMins !== null && <TraceTime mins={traceMins} />}
     </div>
   );

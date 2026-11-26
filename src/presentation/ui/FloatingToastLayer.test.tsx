@@ -45,18 +45,20 @@ describe('FloatingToastLayer', () => {
     expect(onDismiss).toHaveBeenCalledWith(1);
   });
 
-  it('6종 톤(gold, accent, danger, guild, epic, neutral)을 각 톤 색 토큰으로 렌더링한다', () => {
+  it('8종 톤(gold, accent, danger, guild, epic, named, mutation, neutral)을 각 톤 색 토큰으로 렌더링한다', () => {
     const onDismiss = vi.fn();
     render(
       <FloatingToastLayer
-        maxVisible={6}
+        maxVisible={8}
         toasts={[
           { id: 1, text: '골드', tone: 'gold' },
           { id: 2, text: '강조', tone: 'accent' },
           { id: 3, text: '위험', tone: 'danger' },
           { id: 4, text: '길드', tone: 'guild' },
           { id: 5, text: '영웅', tone: 'epic' },
-          { id: 6, text: '중립', tone: 'neutral' },
+          { id: 6, text: '네임드', tone: 'named' },
+          { id: 7, text: '돌연변이', tone: 'mutation' },
+          { id: 8, text: '중립', tone: 'neutral' },
         ]}
         onDismiss={onDismiss}
       />,
@@ -67,7 +69,9 @@ describe('FloatingToastLayer', () => {
     expect(statuses[2].className).toContain('border-danger');
     expect(statuses[3].className).toContain('border-guild');
     expect(statuses[4].className).toContain('border-epic');
-    expect(statuses[5].className).toContain('border-line');
+    expect(statuses[5].className).toContain('border-named');
+    expect(statuses[6].className).toContain('border-mutation');
+    expect(statuses[7].className).toContain('border-line');
   });
 
   it('PC는 최대 3개, 모바일(maxVisible=2)은 최대 2개까지 표시한다', () => {
@@ -84,11 +88,11 @@ describe('FloatingToastLayer', () => {
     expect(screen.getAllByRole('status')).toHaveLength(2);
   });
 
-  it('앱 모달(layer="app")이 떠 있는 위에서도 닫기 버튼을 클릭할 수 있고 컨테이너는 pointer-events-none을 유지한다', () => {
+  it('스테이지 창(layer="stage") 위에서도 닫기 버튼을 클릭할 수 있고 컨테이너는 스테이지 내 absolute + pointer-events-none을 유지한다', () => {
     const onDismiss = vi.fn();
     render(
       <>
-        <Modal layer="app" title="테스트 창" onClose={vi.fn()}>내용</Modal>
+        <Modal layer="stage" onClose={vi.fn()}>내용</Modal>
         <FloatingToastLayer
           toasts={[{ id: 7, text: '요청이 거부됐어요.', tone: 'danger' }]}
           onDismiss={onDismiss}
@@ -97,7 +101,9 @@ describe('FloatingToastLayer', () => {
     );
     const toast = screen.getByRole('status');
     expect(toast.parentElement?.className).toContain('pointer-events-none');
-    expect(toast.parentElement?.className).toContain('fixed');
+    expect(toast.parentElement?.className).toContain('absolute');
+    expect(toast.parentElement?.className).toContain('z-(--z-toast)');
+    expect(toast.parentElement?.className).not.toMatch(/(?:^|\s)fixed(?:\s|$)/);
     fireEvent.click(screen.getByRole('button', { name: '알림 닫기' }));
     expect(onDismiss).toHaveBeenCalledWith(7);
   });
@@ -187,7 +193,7 @@ describe('useMessageLog — 시스템 로그 정본 +α 미러링 라우터', ()
       sendNotice(result.current.setToast, {
         kind: 'achievement.unlockable',
         text: '“업적 B” 업적을 받을 수 있어요.',
-        toastText: '업적 "업적 B" 달성 가능!',
+        toastText: '업적 “업적 B” 보상 도착!',
       });
     });
     // 150ms 배치 창 완료 전에는 대기 중
@@ -197,7 +203,7 @@ describe('useMessageLog — 시스템 로그 정본 +α 미러링 라우터', ()
     act(() => {
       vi.advanceTimersByTime(150);
     });
-    expect(result.current.toasts.map(t => t.text)).toEqual(['2개 업적 달성 가능!', '낚싯대 Lv.3 강화 완료!']);
+    expect(result.current.toasts.map(t => t.text)).toEqual(['업적 보상 2개 도착!', '낚싯대 Lv.3 강화 완료!']);
   });
 
   it('로딩 중 보류된 Tier A 알림은 로딩 해제 시 노출되고, 차단 모달 시에는 억제·초기화된다', () => {
@@ -207,7 +213,7 @@ describe('useMessageLog — 시스템 로그 정본 +α 미러링 라우터', ()
       sendNotice(result.current.setToast, {
         kind: 'achievement.unlockable',
         text: '2개 업적을 받을 수 있어요.',
-        toastText: '2개 업적 달성 가능!',
+        toastText: '업적 보상 2개 도착!',
       });
     });
     expect(result.current.log).toHaveLength(1);
@@ -218,7 +224,7 @@ describe('useMessageLog — 시스템 로그 정본 +α 미러링 라우터', ()
       result.current.setMirrorEnv({ loading: false });
       vi.advanceTimersByTime(150);
     });
-    expect(result.current.toasts.map(t => t.text)).toEqual(['2개 업적 달성 가능!']);
+    expect(result.current.toasts.map(t => t.text)).toEqual(['업적 보상 2개 도착!']);
 
     act(() => {
       result.current.setMirrorEnv({ blocked: true });

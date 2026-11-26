@@ -56,11 +56,34 @@ describe('v1 어댑터 — 스프라이트화 직전 렌더러 스냅샷', () =>
     expect(a.calls.some(c => c.startsWith('#000@') || c.startsWith('rgba('))).toBe(false);
   });
 
-  it('반전·시각을 넘겨도 무시한다 — 움직임이 없는 스냅샷이다', () => {
-    const a = recorder(), b = recorder();
-    fishArt('v1').drawCentered(a.ctx, carp, 40, 20, { scale: 3, flip: true, t: 1.3 });
+  it('시각(t)은 무시하고 반전(flip)은 cx 기준 좌우 대칭으로 그린다', () => {
+    const a = recorder(), b = recorder(), c = recorder();
+    fishArt('v1').drawCentered(a.ctx, carp, 40, 20, { scale: 3, t: 1.3 });
     fishArt('v1').drawCentered(b.ctx, carp, 40, 20, { scale: 3 });
     expect(a.calls).toEqual(b.calls);
+
+    fishArt('v1').drawCentered(c.ctx, carp, 40, 20, { scale: 3, flip: true, t: 1.3 });
+    const expected = b.calls.map(call => {
+      const [color, coords] = call.split('@');
+      const [x, y, w, h] = coords.split(',').map(Number);
+      return `${color}@${2 * 40 - x - w},${y},${w},${h}`;
+    });
+    expect(c.calls).toEqual(expected);
+    expect(c.calls).not.toEqual(b.calls);
+  });
+
+  it('모든 어종에 대해 flip 시에도 그릴 수 있고 y/크기/색을 보존한다', () => {
+    for (const f of FISH) {
+      const normal = recorder(), flipped = recorder();
+      fishArt('v1').drawCentered(normal.ctx, f, 16, 8, { scale: 1 });
+      fishArt('v1').drawCentered(flipped.ctx, f, 16, 8, { scale: 1, flip: true });
+      const expected = normal.calls.map(call => {
+        const [color, coords] = call.split('@');
+        const [x, y, w, h] = coords.split(',').map(Number);
+        return `${color}@${2 * 16 - x - w},${y},${w},${h}`;
+      });
+      expect(flipped.calls, f.id).toEqual(expected);
+    }
   });
 
   it('모든 어종의 형태를 그릴 수 있다', () => {

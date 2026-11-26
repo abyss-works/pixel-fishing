@@ -1,6 +1,6 @@
 // 관리자 함수. 대시보드가 보는 모든 조회를 서버가 대신 읽고, 관리자 쓰기(POST)를 받는다 (Node 런타임)
-// 쓰기는 우편 보내기(q=mail), 제재·해제(q=restrict), 비밀번호 재설정 링크 발급(q=resetLink), 편지 처리 표시(q=letterHandled)이다.
-// 제재·해제와 재설정 링크 발급은 조치한 관리자 id를 대상 사용자의 이벤트로 함께 남긴다.
+// 쓰기는 우편 보내기(q=mail), 제재·해제(q=restrict), 편지 처리 표시(q=letterHandled), 세션 강제 종료(q=revokeSessions)이다.
+// 제재·해제와 세션 강제 종료는 조치한 관리자 id를 대상 사용자의 이벤트로 함께 남긴다.
 // 브라우저는 관리자 뷰와 함수를 직접 읽지 않는다. 관리자 세션의 사용자가 관리자 명부(admins)에 있어야 읽을 수 있다.
 // 관리자 세션은 대시보드 로그인이 발급한 쿠키만 인정하고 게임 세션 쿠키는 받지 않는다.
 // 관리자 세션이 없거나 확인되지 않으면 401, 명부에 없으면 403이다. 접근 판정(access)만 명부에 없어도 denied로 답한다.
@@ -9,14 +9,15 @@
 //
 // 주의: 시그니처는 Node 스타일(req, res)만 쓴다. default export가 Node 시그니처다.
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { newPasswordResetToken, passwordResetLanding, RESET_PASSWORD_EXPIRES_IN } from './_auth/auth.js';
 import { adminSessionUid } from './_auth/session.js';
 import { database } from './_db/client.js';
 import type { Database, Executor } from './_db/client.js';
 import { onlineUsers } from './_server/livePresence.js';
-import { accountKind, insertPasswordResetToken, revokeUserSessions } from './_data/account.js';
+import { accountKind, revokeUserSessions } from './_data/account.js';
 import * as read from './_data/admin.js';
 import { balanceLive } from './_data/adminBalance.js';
+import { onboardingFunnel } from './_data/adminFunnel.js';
+import { readHttpMetrics } from './_data/httpMetrics.js';
 import { setLetterHandled } from './_data/mail.js';
 import { deliverMail, DuplicateMailError, parseMailRequest, planMail, recentSentMails } from './_data/mailbox.js';
 import { setRestricted } from './_data/save.js';
@@ -54,7 +55,6 @@ type Write = (database: Database, body: unknown, adminId: string) => Promise<unk
 const WRITES: Record<string, Write> = {
   mail: ({ db }, body) => mail(db, body),
   restrict,
-  resetLink,
   letterHandled,
   revokeSessions,
 };
@@ -143,6 +143,12 @@ function parse(name: string | undefined, req: Req): (db: Executor) => Promise<un
     case 'mails': return db => recentSentMails(db);
     case 'economy': { const days = daysOf(req); return db => read.economy(db, days); }
     case 'bountyFunnel': { const days = daysOf(req); return db => read.bountyFunnel(db, days); }
+    case 'onboardingFunnel': return onboardingFunnel;
+    case 'httpMetrics': {
+      const days = optionalDaysOf(req) ?? STATS_DEFAULT_DAYS;
+      if (days < 1 || days > MAX_DAYS) throw new ApiError(400, 'bad-days');
+      return db => readHttpMetrics(db, days);
+    }
     case 'balanceLive': { const days = optionalDaysOf(req); return db => balanceLive(db, days); }
     case 'userEvents': {
       const user = param(req, 'user');
@@ -193,32 +199,6 @@ async function restrict({ withTransaction }: Database, raw: unknown, adminId: st
   }));
   if (!changed) throw new ApiError(404, 'no-save');
   return { restricted };
-}
-
-/**
- * 비밀번호 재설정 링크 발급 — 가입 계정에 재설정 토큰을 만들고 게임의 재설정 착지 주소를 돌려준다. 메일은 보내지 않는다.
- * 게스트 계정은 비밀번호가 없어 409(anonymous-user), 구글 연결로 비밀번호 수단이 없어진 계정도 409(no-password)다. 인증 계정이 없으면 404다.
- */
-async function resetLink({ withTransaction }: Database, raw: unknown, adminId: string): Promise<{ url: string; expiresAt: string }> {
-  const { userId } = (raw ?? {}) as { userId?: unknown };
-  if (typeof userId !== 'string' || !UUID.test(userId)) throw new ApiError(400, 'bad-user');
-  const baseURL = process.env.BETTER_AUTH_URL;
-  if (!baseURL) throw new ApiError(500, 'server-config');
-  const token = newPasswordResetToken();
-  const expiresAt = new Date(Date.now() + RESET_PASSWORD_EXPIRES_IN * 1000).toISOString();
-  const kind = await dbWrite(() => withTransaction(async tx => {
-    const found = await accountKind(tx, userId);
-    if (found !== 'member') return found;
-    // 비밀번호 수단이 없는 계정에는 토큰을 만들지 않는다
-    if (!await read.hasPasswordAccount(tx, userId)) return 'no-password' as const;
-    await insertPasswordResetToken(tx, userId, token, expiresAt);
-    await recordAdminAction(tx, userId, 'adminResetLink', adminId, { expiresAt });
-    return found;
-  }));
-  if (kind === 'missing') throw new ApiError(404, 'no-user');
-  if (kind === 'anonymous') throw new ApiError(409, 'anonymous-user');
-  if (kind === 'no-password') throw new ApiError(409, 'no-password');
-  return { url: passwordResetLanding(baseURL, token), expiresAt };
 }
 
 /** 편지 처리 표시 — 처리하면 처리 시각을 남기고 취소하면 비운다. 편지가 없으면 404다 */

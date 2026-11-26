@@ -1,38 +1,63 @@
 import { useState } from 'react';
+import { nicknameLabel, uidPlaceholder } from '../../../../features/account/model/accountRules';
 import { accountLockState } from '../../../../features/account/service/accountActions';
+import { useProfileStatus } from '../../../../features/gameplay/service/profileStatus';
+import type { ProfileStatus } from '../../../../features/gameplay/service/types';
 import { guestLock } from '../../../../features/display/model/menuLock';
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import { REJECT_TEXT } from '../../../../game/rules/logic';
 import { checkNickname } from '../../../../game/rules/nickname';
 import type { RejectReason } from '../../../../game/rules/rules';
 import Button from '../../../ui/Button';
+import { useKeyScope } from '../../../ui/hotkeys';
 import Inset from '../../../ui/Inset';
 import KeyValueRow from '../../../ui/KeyValueRow';
-import Locked, { LockIcon } from '../../../ui/Locked';
+import Locked from '../../../ui/Locked';
 import Modal from '../../../ui/Modal';
-import Note from '../../../ui/Note';
 import SectionTitle from '../../../ui/SectionTitle';
 import TextInput from '../../../ui/TextInput';
+import Tip, { TipBullets } from '../../../ui/Tip';
 import { useDialogs } from '../../../ui/useDialogs';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import { maskUid } from './maskUid';
 
 const NICKNAME_RULE = '한글은 8자, 영문과 숫자는 16자까지 쓸 수 있어요.';
 
-// 내 정보 창 - 닉네임(현재, 변경)과 ID. 계정의 연결과 로그인 상태는 계정 관리 창이 맡는다.
-export default function MyInfoModal({ setToast, onClose, account, accountFailed = false, uid, nickname, onRename }: {
+// 내 정보 창 - 닉네임(1줄 인라인 편집)과 ID. 계정의 연결과 로그인 상태는 계정 관리 창이 맡는다.
+export default function MyInfoModal({ setToast, onClose, account, accountChecked = true, accountFailed = false, uid, nickname, profileStatus, onRename }: {
   setToast: Notify; onClose: () => void;
-  account: string | null; accountFailed?: boolean; uid: string | null;
-  nickname: string | null; onRename: (name: string) => Promise<null | RejectReason>;
+  account: string | null; accountChecked?: boolean; accountFailed?: boolean; uid: string | null;
+  nickname: string | null; profileStatus?: ProfileStatus; onRename: (name: string) => Promise<null | RejectReason>;
 }) {
+  const sharedProfileStatus = useProfileStatus();
+  const resolvedProfileStatus: ProfileStatus = profileStatus ?? sharedProfileStatus ?? (nickname !== null ? 'loaded' : 'loading');
+  const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [nickBusy, setNickBusy] = useState(false);
   const { notice, dialogs } = useDialogs();
 
   // 게스트나 확인 실패 상태에서는 닉네임을 바꿀 수 없다
   const nickLock = guestLock('nickname', accountLockState(account, accountFailed));
-  const submitNick = async () => {
+  const startEdit = () => {
     if (nickLock) return;
+    setDraft(nickname ?? '');
+    setEditing(true);
+  };
+  const cancelEdit = () => {
+    if (nickBusy) return;
+    setEditing(false);
+    setDraft('');
+  };
+  useKeyScope(e => {
+    if (editing && e.key === 'Escape') {
+      e.preventDefault();
+      cancelEdit();
+      return true;
+    }
+  });
+
+  const submitNick = async () => {
+    if (nickLock || !editing) return;
     if (!checkNickname(draft).ok) { sendNotice(setToast, { kind: 'system.modalRejected', text: NICKNAME_RULE }); return; }
     setNickBusy(true);
     try {
@@ -41,9 +66,10 @@ export default function MyInfoModal({ setToast, onClose, account, accountFailed 
       else {
         sendNotice(setToast, {
           kind: 'social.modalAction',
-          text: `닉네임을 ${draft}(으)로 바꿨어요.`,
+          text: `닉네임을 “${draft}” 이름으로 바꿨어요.`,
           toastText: '닉네임을 바꿨어요.',
         });
+        setEditing(false);
         setDraft('');
       }
     } finally {
@@ -66,41 +92,54 @@ export default function MyInfoModal({ setToast, onClose, account, accountFailed 
     }
   };
 
-  const nickRow = (
-    <div className="flex items-center gap-2 px-2 py-1">
-      <TextInput aria-label="새 닉네임" className="flex-1 min-w-0"
-                 value={draft} maxLength={16} disabled={nickBusy || nickLock !== null}
+  const changeButton = (
+    <Button size="sm" className="shrink-0" disabled={nickLock !== null} onClick={startEdit}>
+      변경
+    </Button>
+  );
+
+  const nickRow = editing ? (
+    <div className="flex items-center gap-2 px-2 py-1.5">
+      <TextInput key="edit" aria-label="새 닉네임" className="flex-1 min-w-0"
+                 value={draft} maxLength={16} disabled={nickBusy} autoFocus
                  onChange={e => setDraft(e.target.value)}
-                 onKeyDown={e => { if (e.key === 'Enter') void submitNick(); }}
+                 onKeyDown={e => {
+                   if (e.key === 'Enter') void submitNick();
+                   else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cancelEdit(); }
+                 }}
                  placeholder="새 닉네임" />
-      <Button size="sm" className="shrink-0" disabled={nickBusy || nickLock !== null || draft.length === 0}
-              onClick={() => void submitNick()}>변경</Button>
-      {nickLock && <LockIcon className="shrink-0" />}
+      <Button variant="primary" size="sm" className="shrink-0" disabled={nickBusy || draft.length === 0}
+              onClick={() => void submitNick()}>확인</Button>
+      <Button size="sm" className="shrink-0" disabled={nickBusy} onClick={cancelEdit}>취소</Button>
+    </div>
+  ) : (
+    <div className="flex items-center gap-2 px-2 py-1.5">
+      <TextInput key="view" aria-label="현재 닉네임" className="flex-1 min-w-0"
+                 value={nicknameLabel(nickname, resolvedProfileStatus)} disabled readOnly />
+      {nickLock ? <Locked lines={nickLock} label="닉네임 변경" badge={false} className="shrink-0">{changeButton}</Locked> : changeButton}
     </div>
   );
 
   return (
     <Modal layer="app" title="내 정보" narrow onClose={onClose}>
-      <SectionTitle>닉네임</SectionTitle>
-      <Inset divided className="mb-2">
-        <KeyValueRow className="py-1 text-xs"
-                     label="현재"
-                     value={<span aria-label="현재 닉네임">{nickname ?? '불러오는 중'}</span>} />
-        {nickLock ? <Locked lines={nickLock} label="닉네임 변경" badge={false}>{nickRow}</Locked> : nickRow}
+      <SectionTitle>
+        <Tip text={<TipBullets items={[NICKNAME_RULE, '나중에 랭킹에 표시될 이름이에요.']} />}>닉네임</Tip>
+      </SectionTitle>
+      <Inset className="mb-2">
+        {nickRow}
       </Inset>
-      <Note>{NICKNAME_RULE}<br />나중에 랭킹에 표시될 이름이에요.</Note>
 
       {/* 문의 대응용이다. 게스트는 이메일조차 없어 uid 말고는 식별할 방법이 없다.
           화면은 가운데를 가리지만 복사는 전체 값이라, 버튼이 없으면 문의 대응이 불가능해진다. */}
-      <SectionTitle>내 정보</SectionTitle>
+      <SectionTitle>
+        <Tip text={<TipBullets items={['문의하실 때 이 ID를 함께 알려 주시면 빠르게 해결할 수 있어요.', '가운데는 가려 두었지만 복사를 누르면 전체가 복사돼요.']} />}>내 정보</Tip>
+      </SectionTitle>
       <Inset divided className="mb-2">
         <KeyValueRow className="py-1 text-xs"
                      label="ID"
-                     value={<span className="pf-accent text-2xs select-text">{uid ? maskUid(uid) : '연결 중'}</span>}
+                     value={<span className="pf-accent text-2xs select-text">{uid ? maskUid(uid) : uidPlaceholder({ account, accountChecked, accountFailed })}</span>}
                      action={<Button size="sm" className="shrink-0" disabled={!uid} onClick={() => copyId(uid)}>복사</Button>} />
       </Inset>
-      <Note>문의하실 때 이 <b>ID</b>를 함께 알려 주시면 빠르게 해결할 수 있어요.<br />
-        가운데는 가려 두었지만 <b>복사</b>를 누르면 전체가 복사돼요.</Note>
       {dialogs}
     </Modal>
   );

@@ -1,8 +1,9 @@
 // 액션 경로의 요리 — 실제 Postgres에서 슬롯 효과가 캐치 경로(빠른 경로, 리듀서 경로)에 같게 걸리는지,
 // 기운 얻기, 해역별 덮어쓰기, 조리, 먹기가 서버 시각과 서버 난수로 저장되는지, 게스트가 거부되는지 검사한다.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AUTO_ENERGY_BOAT, COOKING_UNLOCK_BOAT, COOK_KIND_RULES, ENERGY_ITEM_IDS, recipeById, recipeCostStored } from '../src/game/content/cooking.js';
+import { AUTO_ENERGY_BOAT, COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, ENERGY_TRANSMUTE_RATIO, ENERGY_UNIT, recipeById, recipeCostStored, recipeWaitMs } from '../src/game/content/cooking.js';
 import { SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
+import { itemCapOf } from '../src/game/rules/logic.js';
 import type { GameState } from '../src/game/rules/logic.js';
 import { callAction, captureRealClock, dumpUser, fish, seedUser, seededRandom, startActionEnv, testUid, userToken } from './_dbTest/actionHarness.js';
 import type { ActionEnv, SeedOptions } from './_dbTest/actionHarness.js';
@@ -139,7 +140,11 @@ describe('요리 액션', () => {
 
     it('대상이 하나도 없으면 상태를 바꾸지 않고 성공한다', async () => {
       const kept = fish('crucian', { locked: true });
-      const uid = await cooker({ bag: [kept], items: { [ENERGY.common]: 3 } });
+      const uid = await cooker({
+        bag: [kept],
+        items: { [ENERGY.common]: 3 },
+        fortune: { day: '2030-03-04', kind: 'gold', index: 3 },
+      });
       const before = await stored(uid);
       const res = await callAction(userToken(uid), { type: 'extractEnergy', uids: [] });
       expect(res.status).toBe(200);
@@ -226,10 +231,10 @@ describe('요리 액션', () => {
   });
 
   describe('조리와 먹기', () => {
-    const LUNCH = 'cook-lunch-bite';
-    const LUNCH_WAIT = COOK_KIND_RULES.lunch.waitMs;
+    const LUNCH = 'cook-lunch-rare';
     const lunchRecipe = recipeById(LUNCH);
     if (!lunchRecipe) throw new Error('레시피를 찾을 수 없다');
+    const LUNCH_WAIT = recipeWaitMs(lunchRecipe);
     const lunchCost = (count: number) => Object.fromEntries(
       Object.keys(lunchRecipe.cost).map(grade => [
         ENERGY[grade as keyof typeof ENERGY], recipeCostStored(lunchRecipe, grade as keyof typeof ENERGY) * count,
@@ -237,14 +242,36 @@ describe('요리 액션', () => {
     );
 
     it('기운을 즉시 차감하고 서버 시각으로 시작한 조리 상태와 추첨을 저장한다', async () => {
-      const uid = await cooker({ items: { ...lunchCost(2), [ENERGY.rare]: 5 } });
+      const uid = await cooker({ items: { ...lunchCost(2), [ENERGY.epic]: 5 } });
       vi.spyOn(Math, 'random').mockReturnValue(0.99);
       const res = await callAction(userToken(uid), { type: 'cook', recipe: LUNCH, count: 2, startedAt: '1999-01-01T00:00:00.000Z' });
       expect(res.status).toBe(200);
       const { data } = await stored(uid);
-      expect(data.items).toEqual({ [ENERGY.rare]: 5 });
-      expect(data.cooking).toEqual({ recipe: LUNCH, count: 2, bonus: [false, false], startedAt: NOW });
+      expect(data.items).toEqual({ [ENERGY.epic]: 5 });
+      expect(data.cooking).toEqual({
+        id: expect.any(String), recipe: LUNCH, count: 2, bonus: [false, false], startedAt: NOW,
+      });
+      expect(data.cookingQueue).toEqual([]);
       expect((await eventsOf(uid)).map(e => e.type)).toEqual(['cook']);
+    });
+
+    it('즉시 완성 레시피는 대기열을 점유하지 않고 곧바로 보관함에 들어간다', async () => {
+      const instantId = 'cook-lunch-bite';
+      const instant = recipeById(instantId);
+      if (!instant) throw new Error('즉시 레시피를 찾을 수 없다');
+      const cost = Object.fromEntries(
+        Object.keys(instant.cost).map(grade => [
+          ENERGY[grade as keyof typeof ENERGY], recipeCostStored(instant, grade as keyof typeof ENERGY),
+        ]),
+      );
+      const uid = await cooker({ items: cost });
+      vi.spyOn(Math, 'random').mockReturnValue(0.99);
+      const res = await callAction(userToken(uid), { type: 'cook', recipe: instantId, count: 1 });
+      expect(res.status).toBe(200);
+      const { data } = await stored(uid);
+      expect(data.cooking).toBeNull();
+      expect(data.cookingQueue).toEqual([]);
+      expect(data.items).toEqual({ [instantId]: 1 });
     });
 
     it('진주 상인의 저울이 있으면 서버 난수로 추가 완성을 추첨해 저장한다', async () => {
@@ -273,7 +300,11 @@ describe('요리 액션', () => {
       expect(data.items).toEqual({ [LUNCH]: 1 });
       expect(data.slots.lunch).toEqual({ id: LUNCH, endsAt: new Date(eatAt + 9 * 3_600_000).toISOString() });
       expect(data.cooking).toEqual({
-        recipe: LUNCH, count: 1, bonus: [true], startedAt: new Date(Date.parse(NOW) + LUNCH_WAIT).toISOString(),
+        id: expect.any(String),
+        recipe: LUNCH,
+        count: 1,
+        bonus: [true],
+        startedAt: new Date(Date.parse(NOW) + LUNCH_WAIT).toISOString(),
       });
       expect((await eventsOf(uid)).map(e => e.type).sort()).toEqual(['cook', 'eat']);
     });
@@ -302,24 +333,129 @@ describe('요리 액션', () => {
         .toMatchObject({ status: 422, body: { error: 'not-at-home' } });
     });
 
-    it('조리 중에는 새 조리를 시작하지 않는다', async () => {
+    it('조리 중에 새 조리를 요청하면 대기열에 쌓이고 앞선 조리가 끝나면 다음 작업이 이어진다', async () => {
       const uid = await cooker({ items: lunchCost(2) });
+      vi.spyOn(Math, 'random').mockReturnValue(0.99);
       expect((await callAction(userToken(uid), { type: 'cook', recipe: LUNCH, count: 1 })).status).toBe(200);
       await rewind(uid);
-      expect(await callAction(userToken(uid), { type: 'cook', recipe: LUNCH, count: 1 }))
-        .toMatchObject({ status: 422, body: { error: 'cooking-busy' } });
+      expect((await callAction(userToken(uid), { type: 'cook', recipe: LUNCH, count: 1 })).status).toBe(200);
+      const queuedState = (await stored(uid)).data;
+      expect(queuedState.cooking?.id).toEqual(expect.any(String));
+      expect(queuedState.cookingQueue).toEqual([
+        { id: expect.any(String), recipe: LUNCH, count: 1, bonus: [false] },
+      ]);
+      const nextId = queuedState.cookingQueue[0].id;
+      await rewind(uid);
+      const eatAt = Date.parse(NOW) + LUNCH_WAIT + 30_000;
+      vi.setSystemTime(eatAt);
+      expect((await callAction(userToken(uid), { type: 'eat', item: LUNCH })).status).toBe(200);
+      const promoted = (await stored(uid)).data;
+      expect(promoted.cooking).toEqual({
+        id: nextId,
+        recipe: LUNCH,
+        count: 1,
+        bonus: [false],
+        startedAt: new Date(Date.parse(NOW) + LUNCH_WAIT).toISOString(),
+      });
+      expect(promoted.cookingQueue).toEqual([]);
+      expect(promoted.slots.lunch?.id).toBe(LUNCH);
+    });
+
+    it('진행 중인 조리를 취소하면 재료를 100% 돌려받고 대기열 첫 항목이 즉시 시작된다', async () => {
+      const uid = await cooker({ items: lunchCost(2) });
+      vi.spyOn(Math, 'random').mockReturnValue(0.99);
+      expect((await callAction(userToken(uid), { type: 'cook', recipe: LUNCH, count: 1 })).status).toBe(200);
+      await rewind(uid);
+      expect((await callAction(userToken(uid), { type: 'cook', recipe: LUNCH, count: 1 })).status).toBe(200);
+      const mid = (await stored(uid)).data;
+      const activeId = mid.cooking!.id;
+      const queuedId = mid.cookingQueue[0].id;
+      const cancelAt = Date.parse(NOW) + 10_000;
+      vi.setSystemTime(cancelAt);
+      await rewind(uid);
+      const res = await callAction(userToken(uid), { type: 'cancelCook', id: activeId });
+      expect(res.status).toBe(200);
+      const after = (await stored(uid)).data;
+      expect(after.items).toEqual(lunchCost(1));
+      expect(after.cooking).toEqual({
+        id: queuedId,
+        recipe: LUNCH,
+        count: 1,
+        bonus: [false],
+        startedAt: new Date(cancelAt).toISOString(),
+      });
+      expect(after.cookingQueue).toEqual([]);
+      expect((await eventsOf(uid)).map(e => e.type)).toContain('cancelCook');
+    });
+
+    it('대기열 조리를 취소하면 진행 중인 조리는 유지되고 재료를 돌려받는다', async () => {
+      const uid = await cooker({ items: lunchCost(2) });
+      vi.spyOn(Math, 'random').mockReturnValue(0.99);
+      expect((await callAction(userToken(uid), { type: 'cook', recipe: LUNCH, count: 1 })).status).toBe(200);
+      await rewind(uid);
+      expect((await callAction(userToken(uid), { type: 'cook', recipe: LUNCH, count: 1 })).status).toBe(200);
+      const mid = (await stored(uid)).data;
+      const queuedId = mid.cookingQueue[0].id;
+      await rewind(uid);
+      expect((await callAction(userToken(uid), { type: 'cancelCook', id: queuedId })).status).toBe(200);
+      const after = (await stored(uid)).data;
+      expect(after.cooking).toEqual(mid.cooking);
+      expect(after.cookingQueue).toEqual([]);
+      expect(after.items).toEqual(lunchCost(1));
+    });
+
+    it('없는 조리 id 취소는 cooking-not-found로 거부된다', async () => {
+      const uid = await cooker({});
+      expect(await callAction(userToken(uid), { type: 'cancelCook', id: 'missing-id' }))
+        .toMatchObject({ status: 422, body: { error: 'cooking-not-found' } });
+    });
+  });
+
+  describe('기운 변환', () => {
+    it('하위 기운 10배를 상위 기운으로 변환하고 감사 이벤트를 남긴다', async () => {
+      const spent = 2 * ENERGY_TRANSMUTE_RATIO * ENERGY_UNIT;
+      const gained = 2 * ENERGY_UNIT;
+      const uid = await cooker({ items: { [ENERGY.common]: spent + 5 } });
+      const res = await callAction(userToken(uid), { type: 'transmuteEnergy', from: 'common', count: 2 });
+      expect(res.status).toBe(200);
+      expect((res.body as { result: unknown }).result).toEqual({
+        type: 'transmuteEnergy', from: 'common', to: 'rare', count: 2, spent, gained,
+      });
+      const { data } = await stored(uid);
+      expect(data.items).toEqual({ [ENERGY.common]: 5, [ENERGY.rare]: gained });
+      expect((await eventsOf(uid)).map(e => e.type)).toEqual(['transmuteEnergy']);
+    });
+
+    it('변환 불가 등급·부족·상한 초과는 사유 코드로 거부한다', async () => {
+      const uid = await cooker({ items: { [ENERGY.common]: ENERGY_TRANSMUTE_RATIO * ENERGY_UNIT, [ENERGY.rare]: itemCapOf(ENERGY.rare) } });
+      const send = async (action: unknown) => { await rewind(uid); return callAction(userToken(uid), action); };
+      expect(await send({ type: 'transmuteEnergy', from: 'legendary', count: 1 }))
+        .toMatchObject({ status: 422, body: { error: 'bad-request' } });
+      expect(await send({ type: 'transmuteEnergy', from: 'common', count: 2 }))
+        .toMatchObject({ status: 422, body: { error: 'not-enough-energy' } });
+      expect(await send({ type: 'transmuteEnergy', from: 'common', count: 1 }))
+        .toMatchObject({ status: 422, body: { error: 'energy-cap' } });
     });
   });
 
   it('게스트는 요리 액션을 account-only로 거부당한다', async () => {
     const f = fish('crucian');
     const uid = await seed({
-      email: null, state: { boat: BOAT, location: HOME, bag: [f], items: { [ENERGY.common]: 400, 'cook-lunch-bite': 1 } },
+      email: null,
+      state: {
+        boat: BOAT,
+        location: HOME,
+        bag: [f],
+        items: { [ENERGY.common]: 400, 'cook-lunch-bite': 1 },
+        cooking: { id: 'cook-guest-1', recipe: 'cook-lunch-rare', count: 1, bonus: [false], startedAt: NOW },
+      },
     });
     const before = await stored(uid);
     for (const action of [
       { type: 'extractEnergy', uids: [f.uid] }, { type: 'setEnergyTarget', spot: 'pond', on: false },
-      { type: 'resetEnergyTargets' }, { type: 'cook', recipe: 'cook-lunch-bite', count: 1 }, { type: 'eat', item: 'cook-lunch-bite' },
+      { type: 'resetEnergyTargets' }, { type: 'cook', recipe: 'cook-lunch-bite', count: 1 },
+      { type: 'cancelCook', id: 'cook-guest-1' }, { type: 'transmuteEnergy', from: 'common', count: 1 },
+      { type: 'eat', item: 'cook-lunch-bite' },
     ]) {
       await rewind(uid);
       expect(await callAction(userToken(uid), action), JSON.stringify(action))

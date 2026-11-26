@@ -2,17 +2,18 @@ import { describe, expect, it } from 'vitest';
 import type { GuildBonusItem, GuildInfo, GuildInvitePreview, GuildMemberItem } from '../../../platform/api';
 import { NO_GUILD_EFFECTS } from '../../../game/rules/guild';
 import {
-  GUILD_BONUS_NAME, GUILD_JOIN_MODE_TEXT, GUILD_LEVEL_HELP, dailyContributionRows, GUILD_ERROR_TEXT, bonusEffectText, bonusEffectValue,
-  bonusRows, donateDisabledReason, enhanceInvestState, enhancePoolSummary, enhanceResetState, growthBar, growthTotalText,
-  guildAlertText, guildLinkUrl, inviteDialogView, inviteShareText, leaveConfirm, leaveOutcome, logbookDays, memberActions,
-  memberConfirm, memberName, memberRows, renameButtonState, requestRows, splitMembers,
+  GUILD_BONUS_NAME, GUILD_ENHANCE_LOCK_NOTE, GUILD_JOIN_MODE_TEXT, GUILD_LEAVE_COOLDOWN_NOTE, GUILD_LEVEL_HELP,
+  dailyContributionRows, GUILD_ERROR_TEXT, bonusEffectText, bonusEffectValue,
+  bonusRows, donateDisabledReason, enhanceInvestState, enhancePoolSummary, enhanceResetCostRows, enhanceResetState,
+  growthBar, growthTotalText, guildAlertText, guildLinkUrl, inviteDialogView, inviteShareText, leaveConfirm, leaveOutcome,
+  logbookDays, memberActions, memberConfirm, memberName, memberRows, personalNodes, renameButtonState, requestRows, splitMembers,
 } from './guild';
 
 const member = (uid: string, role: GuildMemberItem['role'], leftAt: string | null = null): GuildMemberItem =>
   ({ uid, nick: uid, role, joinedAt: '2026-11-05T00:00:00.000Z', leftAt, online: false, contribution: { total: 0, today: 0 } });
 const guild = (role: GuildInfo['role'], members: GuildMemberItem[]): GuildInfo =>
   ({ id: 'g', name: '심해', createdAt: '2026-11-05T00:00:00.000Z', role, members, code: 'K7QX2MAB', joinMode: 'approval', pitch: null,
-    requests: [], renamedAt: null,
+    requests: [], renamedAt: null, enhanceResetCount: 0,
     growth: { level: 1, total: 0, floor: 0, next: 10_000 }, bonuses: [], effects: NO_GUILD_EFFECTS, donors: [], logbook: [] });
 
 describe('길드 화면 모델', () => {
@@ -72,6 +73,7 @@ describe('길드 화면 모델', () => {
     expect(memberConfirm(g, members[1], 'kick')).toEqual({
       title: '길드원 내보내기', label: '내보내기', op: { op: 'remove', guildId: 'g', uid: 'A' },
       text: 'A 님을 길드에서 내보낼까요?\n쌓은 기여와 기록은 길드에 남아요.',
+      warn: '내보내기 처리 시 20시간 동안 모든 길드에 재가입할 수 없어요.',
       done: 'A 님을 내보냈어요.',
     });
   });
@@ -80,11 +82,13 @@ describe('길드 화면 모델', () => {
     expect(leaveConfirm(guild('member', members), 'A')).toEqual({
       title: '길드 떠나기', label: '떠나기', op: { op: 'remove', guildId: 'g', uid: 'A' },
       text: '심해 길드를 떠날까요?\n쌓은 기여와 기록은 길드에 남고, 다시 들어오려면 길드 코드가 필요해요.',
+      warn: GUILD_LEAVE_COOLDOWN_NOTE,
       done: '심해 길드를 떠났어요.',
     });
     expect(leaveConfirm(guild('leader', [members[0]]), 'L')).toEqual({
       title: '길드 해산', label: '해산', op: { op: 'remove', guildId: 'g', uid: 'L' },
       text: '혼자 남은 길드라 떠나면 심해 길드가 없어지고 길드 채팅도 지워져요.\n떠날까요?',
+      warn: GUILD_LEAVE_COOLDOWN_NOTE,
       done: '심해 길드를 해산했어요.',
     });
     expect(leaveConfirm(guild('leader', members), 'L')).toBeNull();
@@ -98,8 +102,8 @@ describe('길드 화면 모델', () => {
     }
   });
 
-  it('게스트 거부 안내는 계정 연결을 알린다', () => {
-    expect(GUILD_ERROR_TEXT['account-only']).toBe('길드는 계정을 연결하면 쓸 수 있어요.');
+  it('게스트 거부 안내는 태평양 항로 해금을 알린다', () => {
+    expect(GUILD_ERROR_TEXT['account-only']).toBe('길드는 태평양 항로가 열리면 쓸 수 있어요.');
   });
 });
 
@@ -186,6 +190,20 @@ describe('항해일지', () => {
       [{ text: '길드 스킬 ' }, { text: '희귀 어종 확률', tone: 'skill' }, { text: '이 ' }, { text: '2', tone: 'num' }, { text: '단계가 됐어요!' }],
     ]);
   });
+
+  it('전설 돌연변이 기록은 돌연변이명과 variant 톤으로, 미상 어종은 어종으로 폴백한다', () => {
+    const at = '2026-11-05T05:20:00.000Z';
+    const [day] = logbookDays([
+      log(2, 'legendary', at, 'goldcarp|variant', null, 'me', '나'),
+      log(1, 'legendary', at, 'unknown|variant', null, 'u', '가람'),
+    ], 'me');
+    expect(day.items[0].parts).toEqual([
+      { text: '나', tone: 'me' }, { text: ' 님이 ' }, { text: '전설 무지개 잉어', tone: 'variant' }, { text: '를 낚았어요!' },
+    ]);
+    expect(day.items[1].parts).toEqual([
+      { text: '가람', tone: 'nick' }, { text: ' 님이 ' }, { text: '전설 어종', tone: 'variant' }, { text: '을 낚았어요!' },
+    ]);
+  });
 });
 
 describe('길드 이름 바꾸기 화면 모델', () => {
@@ -198,7 +216,7 @@ describe('길드 이름 바꾸기 화면 모델', () => {
   it('오늘 이미 바꿨으면 막고 다시 바꿀 수 있는 시각을 알린다', () => {
     const s = renameButtonState(now, now, 5_000_000);
     expect(s.disabled).toBe(true);
-    expect(s.reason).toBe('오늘은 이미 이름을 바꿨어요.\n한국 시간 새벽 4시 이후에 다시 바꿀 수 있어요.');
+    expect(s.reason).toBe('오늘은 이미 이름을 바꿨어요.\n새벽 4시 이후에 다시 바꿀 수 있어요.');
   });
 
   it('골드가 모자라면 막고 필요한 골드를 알린다', () => {
@@ -230,18 +248,18 @@ describe('길드 보너스 화면 모델', () => {
     expect(Object.values(GUILD_BONUS_NAME)).toEqual(['판매가 보너스', '가방 용량 증가', '네임드 조우 확률', '희귀 어종 확률', '돌연변이 확률']);
   });
 
-  it('효과 값 — 비율은 %, 돌연변이는 %p, 희귀 어종은 줄이는 쪽이라 −', () => {
+  it('효과 값 — 모든 보너스는 %, 희귀 어종은 일반 어종을 줄이므로 −', () => {
     expect(bonusEffectValue('sell', 0.06)).toBe('+6%');
     expect(bonusEffectValue('rare', 0.04)).toBe('−4%');
-    expect(bonusEffectValue('mutation', 0.03)).toBe('+3%p');
+    expect(bonusEffectValue('mutation', 0.03)).toBe('+3%');
   });
 
-  it('효과 문장 — 비율은 %, 돌연변이는 %p, 희귀 어종은 일반 등급 가중치를 줄인다', () => {
+  it('효과 문장 — 출현 비중·조우 확률 용어를 쓰고 희귀 어종은 일반 어종 출현을 줄인다', () => {
     expect(bonusEffectText('sell', 0.06)).toBe('판매가 +6%');
     expect(bonusEffectText('bag', 0.2)).toBe('가방 용량 +20%');
-    expect(bonusEffectText('named', 0.05)).toBe('네임드 조우 +5%');
-    expect(bonusEffectText('rare', 0.04)).toBe('일반 등급 가중치 −4%');
-    expect(bonusEffectText('mutation', 0.03)).toBe('돌연변이 확률 +3%p');
+    expect(bonusEffectText('named', 0.05)).toBe('네임드 조우 확률 +5%');
+    expect(bonusEffectText('rare', 0.04)).toBe('일반 어종 출현 비중 −4%');
+    expect(bonusEffectText('mutation', 0.03)).toBe('돌연변이 출현 비중 +3%');
   });
 
   it('보너스 열 — 잠김, 지금→다음 효과, 다음 단계까지 모인 비율과 남은 골드, 기부 가능 여부', () => {
@@ -275,7 +293,7 @@ describe('길드 보너스 화면 모델', () => {
     ]);
   });
 
-  it('자유 강화 포인트와 투자·초기화 상태는 일반 길드원에게도 열리고 20,000,000G가 필요하다', () => {
+  it('자유 강화 포인트와 투자·초기화 상태는 일반 길드원에게도 열리고 누적 횟수별 단계 비용이 필요하다', () => {
     const g: GuildInfo = {
       ...guild('member', [member('M', 'member')]),
       growth: { level: 7, total: 350_000, floor: 350_000, next: 550_000 },
@@ -291,13 +309,30 @@ describe('길드 보너스 화면 모델', () => {
     expect(donateDisabledReason(bonusRows([item({ id: 'bag', unlock: 2, rank: 3, cap: 3 })])[0])).toBe(GUILD_ERROR_TEXT['rank-maxed']);
     expect(enhancePoolSummary(g)).toEqual({ max: 2, used: 1, remaining: 1, maxSlots: 5 });
     expect(enhanceInvestState(g, rows[1])).toEqual({ canInvest: true, reason: null });
-    expect(enhanceResetState(g, 19_999_999)).toEqual({
-      canReset: false,
-      reason: '골드가 모자라요.\n20,000,000G를 내고 내 자유 강화만 초기화할 수 있어요.',
-      used: 1,
-      cost: 20_000_000,
-    });
-    expect(enhanceResetState(g, 20_000_000)).toEqual({ canReset: true, reason: null, used: 1, cost: 20_000_000 });
+
+    const expectedCosts: [number, number][] = [
+      [0, 100_000],
+      [1, 500_000],
+      [2, 1_000_000],
+      [3, 5_000_000],
+      [4, 10_000_000],
+      [5, 10_000_000],
+    ];
+    for (const [enhanceResetCount, cost] of expectedCosts) {
+      const target = { ...g, enhanceResetCount };
+      expect(enhanceResetState(target, cost - 1), `count ${enhanceResetCount} 부족`).toEqual({
+        canReset: false,
+        reason: `골드가 모자라요.\n${cost.toLocaleString('ko-KR')}G를 내고 내 자유 강화만 되돌릴 수 있어요.`,
+        used: 1,
+        cost,
+      });
+      expect(enhanceResetState(target, cost), `count ${enhanceResetCount} 허용`).toEqual({
+        canReset: true,
+        reason: null,
+        used: 1,
+        cost,
+      });
+    }
   });
 
   it('자유 강화·초기화 항해일지 문장', () => {
@@ -306,8 +341,45 @@ describe('길드 보너스 화면 모델', () => {
       { id: 2, kind: 'enhance-reset', uid: 'u', nick: '가람', detail: null, value: 2, at },
       { id: 1, kind: 'enhance', uid: 'me', nick: '나', detail: 'rare', value: 3, at },
     ], 'me');
-    expect(day.items[0].parts.map(p => p.text).join('')).toBe('가람 님이 길드 스킬 강화를 초기화했어요.');
+    expect(day.items[0].parts.map(p => p.text).join('')).toBe('가람 님이 길드 스킬 강화를 되돌렸어요.');
     expect(day.items[1].parts.map(p => p.text).join('')).toBe('나 님이 희귀 어종 확률 스킬을 강화 3단계로 올렸어요.');
+  });
+
+  it('공통과 개인 트랙 효과, 개인 트리 노드, 초기화 비용 단계표, 잠금 안내 상수를 제공한다', () => {
+    const [sell, rare] = bonusRows([
+      item({ id: 'sell', rank: 4, enhanceRank: 1, totalRank: 5, cap: 5, effect: 0.1 }),
+      item({ id: 'rare', unlock: 4, rank: 0, enhanceRank: 0, totalRank: 0, cap: 0 }),
+    ]);
+    expect(sell).toMatchObject({
+      baseNow: '+8%',
+      baseAfter: '+10%',
+      enhanceNow: '+2%',
+      enhanceAfter: '+4%',
+      totalEffect: '+10%',
+    });
+    expect(rare).toMatchObject({
+      baseNow: null,
+      baseAfter: null,
+      enhanceNow: '0%',
+      enhanceAfter: '−2%',
+    });
+    expect(personalNodes(sell, true, 2)).toEqual([
+      { rank: 1, state: 'done' },
+      { rank: 2, state: 'next' },
+      { rank: 3, state: 'open' },
+      { rank: 4, state: 'open' },
+      { rank: 5, state: 'open' },
+    ]);
+    expect(personalNodes(sell, false, 0).every(n => n.state === 'locked')).toBe(true);
+    expect(personalNodes(rare, true, 2).every(n => n.state === 'locked')).toBe(true);
+    expect(enhanceResetCostRows()).toEqual([
+      { label: '1회', value: '10만G' },
+      { label: '2회', value: '50만G' },
+      { label: '3회', value: '100만G' },
+      { label: '4회', value: '500만G' },
+      { label: '5회 이상', value: '1,000만G' },
+    ]);
+    expect(GUILD_ENHANCE_LOCK_NOTE).toBe('길드 Lv.6부터 개인 무료 자유 강화가 열려요.');
   });
 });
 
@@ -320,9 +392,9 @@ describe('초대 확인 창', () => {
     expect(inviteDialogView(null, viewer, 'link')).toEqual({ state: 'bad', text: '초대 코드를 찾지 못했어요.\n링크가 맞는지 확인해 주세요.', action: null });
   });
 
-  it('게스트는 계정이 있어야 한다고 알린다', () => {
+  it('게스트는 태평양 항로가 열려야 들어갈 수 있다고 알린다', () => {
     expect(inviteDialogView(preview(), { account: false, guild: null }, 'link')).toMatchObject({ state: 'guest', action: null,
-      text: '길드는 계정을 연결하면 들어갈 수 있어요.\n계정을 연결하거나 로그인하면 이 창이 다시 떠요.' });
+      text: '길드는 태평양 항로가 열리면 들어갈 수 있어요.\n계정을 연결하거나 로그인해 항로를 열면 이 창이 다시 떠요.' });
   });
 
   it('다른 길드에 있으면 떠난 뒤에 들어갈 수 있다고 알리고, 같은 길드면 이미 있다고 알린다', () => {

@@ -17,7 +17,7 @@ export function useFriendAlerts(enabled: boolean, notify: NoticeSink): void {
       const text = friendAlertText(e);
       const toastText = e.kind === 'request'
         ? (e.nick ? `${e.nick} 님 친구 요청` : '새 친구 요청이 왔어요.')
-        : (e.nick ? `${e.nick} 님과 친구 성사` : '친구 요청이 수락됐어요.');
+        : (e.nick ? `${e.nick} 님과 친구가 됐어요.` : '친구 요청이 수락됐어요.');
       sendNotice(notify, { kind: 'friend.realtimeAlert', text, toastText });
     });
   }, [enabled, uid, client, notify]);

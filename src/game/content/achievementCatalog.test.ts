@@ -18,10 +18,10 @@ const fishInZone = (zone: string) => FISH.filter(f => topZoneOfSpot(f.spot) === 
 const fishInSpot = (spot: string) => FISH.filter(f => f.spot === spot);
 
 describe('업적 카탈로그', () => {
-  it('진행 30종과 치장 50종 총 80종이 규칙·카탈로그·정의로 1:1 대응한다', () => {
-    expect(ACHIEVEMENTS).toHaveLength(80);
-    expect(ACHIEVEMENT_RULES).toHaveLength(80);
-    expect(ACHIEVEMENT_CATALOG).toHaveLength(80);
+  it('진행 30종과 치장 52종 총 82종이 규칙·카탈로그·정의로 1:1 대응한다', () => {
+    expect(ACHIEVEMENTS).toHaveLength(82);
+    expect(ACHIEVEMENT_RULES).toHaveLength(82);
+    expect(ACHIEVEMENT_CATALOG).toHaveLength(82);
     expect(ACHIEVEMENTS.map(a => a.id)).toEqual(ACHIEVEMENT_RULES.map(r => r.id));
     expect(ACHIEVEMENT_CATALOG.map(e => e.rule.id)).toEqual(ACHIEVEMENT_RULES.map(r => r.id));
   });
@@ -62,6 +62,8 @@ describe('업적 카탈로그', () => {
       expect(target(`night-${zone}-normal`), zone).toBe(count);
       expect(target(`night-${zone}-variant`), zone).toBe(count);
     }
+    expect(target('big-10')).toBe(10);
+    expect(target('big-25')).toBe(25);
     expect(target('big-50')).toBe(50);
     expect(target('big-100-hat')).toBe(100);
     expect(target('catch-100000')).toBe(100_000);
@@ -109,7 +111,7 @@ describe('업적 카탈로그', () => {
     }
   });
 
-  it('모든 보상이 유효하다 — 골드는 양수(30종), 모자는 옷장의 업적 모자와 1:1(50종)', () => {
+  it('모든 보상이 유효하다 — 골드는 양수(30종), 모자는 옷장의 업적 모자와 1:1(52종)', () => {
     for (const rule of ACHIEVEMENT_RULES) {
       const reward = rule.reward;
       if (reward.kind === 'gold') {
@@ -123,7 +125,7 @@ describe('업적 카탈로그', () => {
       }
     }
     expect(ACHIEVEMENT_RULES.filter(r => r.reward.kind === 'gold')).toHaveLength(30);
-    expect(ACHIEVEMENT_RULES.filter(r => r.reward.kind === 'hat')).toHaveLength(50);
+    expect(ACHIEVEMENT_RULES.filter(r => r.reward.kind === 'hat')).toHaveLength(52);
   });
 
   it('카탈로그 정의가 규칙의 표시 필드를 그대로 옮긴다', () => {

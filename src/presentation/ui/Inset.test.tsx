@@ -6,6 +6,7 @@ import type { InsetBorder } from './Inset';
 afterEach(cleanup);
 
 const NON_DEFAULT_BORDERS: Exclude<InsetBorder, 'line'>[] = [
+  'line-dim',
   'gold',
   'accent',
   'common',

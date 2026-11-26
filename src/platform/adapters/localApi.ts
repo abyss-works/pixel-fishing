@@ -1,12 +1,21 @@
 // 로컬 API 구현 — 클라우드 미설정(dev·테스트) 전용
 // 게임은 LocalGameGateway(메모리 + localStorage), 인증은 가짜 계정으로 동작한다
 import { LocalGameGateway } from './localGameGateway';
-import type { AccountLookup, GameGateway, AuthApi, AuthResult } from '../api/types';
+import type {
+  AcceptConsentResult, AccountLookup, GameGateway, AuthApi, AuthResult, ConsentStatus, DevApi, PromoteTestResult, ResetDevAccountResult,
+} from '../api/types';
 import type { AdminApi } from '../api/types';
+import { newState } from '../../game/rules/logic';
 import type { GameState } from '../../game/rules/logic';
 
 const DEV_ACCOUNT = 'dev@localhost';
 const DEV_UID = '00000000-0000-4000-8000-000000000000';
+const LOCAL_SAVE_KEY = 'pixel-fishing-save';
+const LOCAL_CONSENT: ConsentStatus = {
+  required: false,
+  version: '2026-11-25',
+  effectiveAt: '2026-11-25T00:00:00.000Z',
+};
 
 class LocalAuth implements AuthApi {
   isConfigured = false;
@@ -20,8 +29,11 @@ class LocalAuth implements AuthApi {
   async getSession(): Promise<{ uid: string | null; email: string | null }> {
     return { uid: DEV_UID, email: DEV_ACCOUNT };
   }
-  takePasswordResetLanding(): 'ready' | 'invalid' | null {
-    return null;
+  async getAccountConsent(): Promise<ConsentStatus> {
+    return { ...LOCAL_CONSENT };
+  }
+  async acceptConsent(_version: string): Promise<AcceptConsentResult> {
+    return { ok: true, consent: { ...LOCAL_CONSENT } };
   }
   async startGoogle(): Promise<AuthResult> {
     return { ok: false, msg: '클라우드가 설정되지 않았어요.' };
@@ -29,19 +41,7 @@ class LocalAuth implements AuthApi {
   takeGoogleLanding(): { tag: string; error: string | null } | null {
     return null;
   }
-  async accountProviders(): Promise<string[] | null> {
-    return null;
-  }
-  async signIn(): Promise<AuthResult> {
-    return { ok: false, msg: '클라우드가 설정되지 않았어요.' };
-  }
   async signOut(): Promise<void> {}
-  async requestPasswordReset(): Promise<AuthResult> {
-    return { ok: false, msg: '클라우드가 설정되지 않았어요.' };
-  }
-  async applyNewPassword(): Promise<AuthResult> {
-    return { ok: false, msg: '클라우드가 설정되지 않았어요.' };
-  }
   async deleteAccount(): Promise<AuthResult> {
     return { ok: false, msg: '클라우드가 설정되지 않았어요.' };
   }
@@ -83,6 +83,8 @@ class LocalAdmin implements AdminApi {
   sessions(_userId?: string, _limit?: number): Promise<never[]> { return rejected(); }
   economy(_days: number): Promise<never[]> { return rejected(); }
   bountyFunnel(_days: number): Promise<never[]> { return rejected(); }
+  onboardingFunnel(): Promise<never> { return rejected(); }
+  httpMetrics(_days?: number): Promise<never> { return rejected(); }
   spamFlags(): Promise<never[]> { return rejected(); }
   recentEvents(): Promise<never[]> { return rejected(); }
   letters(): Promise<never[]> { return rejected(); }
@@ -91,7 +93,6 @@ class LocalAdmin implements AdminApi {
   sentMails(): Promise<never[]> { return rejected(); }
   mail(_op: 'preview' | 'send', _request: unknown): Promise<never> { return rejected(); }
   restrict(_userId: string, _restricted: boolean): Promise<never> { return rejected(); }
-  resetLink(_userId: string): Promise<never> { return rejected(); }
   letterHandled(_letterId: number, _handled: boolean): Promise<never> { return rejected(); }
   revokeSessions(_userId: string): Promise<never> { return rejected(); }
   userEvents(_userId: string, _limit?: number): Promise<never[]> { return rejected(); }
@@ -102,11 +103,28 @@ class LocalAdmin implements AdminApi {
   }
 }
 
+class LocalDev implements DevApi {
+  async promoteTestAccount(): Promise<PromoteTestResult> {
+    return { ok: true, email: DEV_ACCOUNT, isAnonymous: false };
+  }
+
+  async resetDevAccount(): Promise<ResetDevAccountResult> {
+    const initial = newState();
+    try {
+      localStorage.setItem(LOCAL_SAVE_KEY, JSON.stringify(initial));
+    } catch {
+      /* 저장소 쓰기 실패는 무시 — 초기 상태 반환은 유지한다 */
+    }
+    return { state: initial, version: 1 };
+  }
+}
+
 export function createLocalApi():
-{ createGameGateway(initial: GameState): GameGateway; auth: AuthApi; admin: AdminApi } {
+{ createGameGateway(initial: GameState): GameGateway; auth: AuthApi; admin: AdminApi; dev: DevApi } {
   return {
     createGameGateway: initial => new LocalGameGateway(initial),
     auth: new LocalAuth(),
     admin: new LocalAdmin(),
+    dev: new LocalDev(),
   };
 }

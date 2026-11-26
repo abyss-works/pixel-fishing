@@ -18,6 +18,7 @@ const featureSources = Object.entries(import.meta.glob('../../features/**/*.{ts,
 const GUEST_LOCK_SCREENS = [
   'views/game/base-menu/BaseMenu.tsx',     // 집 시설 카드(옷장, 부엌): MenuCard lock
   'views/overlays/account/MyInfoModal.tsx',  // 닉네임 입력
+  'views/overlays/fortune/FortuneCalendarModal.tsx', // 스테이지 메뉴 운세 창: 월별 달력 잠금
   'views/overlays/letter/LetterModal.tsx',   // 편지 입력 칸
   'views/overlays/live/ChatBar.tsx',         // 채팅 방 버튼과 입력 칸
   'views/overlays/live/PlayerInfo.tsx',      // 친구 요청과 차단
@@ -53,8 +54,24 @@ describe('게스트 잠금 가드', () => {
     expect(locked).not.toMatch(/\bonClick\b|\bonKeyDown\b|\bonSelect\b/);
   });
 
-  it('화면과 기능 모델에 옛 게스트 잠금 문구(계정을 만든 뒤)가 없다', () => {
-    const old = /계정을 만든 뒤|계정을 만든 후|계정이 있어야 들어갈/;
+  it('화면과 기능 모델에 옛 게스트 잠금 문구가 없다', () => {
+    const old = /계정을 만든 뒤|계정을 만든 후|계정이 있어야 들어갈|계정 관리에서 계정을 연결/;
     for (const f of [...sources, ...featureSources]) expect(f.src, f.path).not.toMatch(old);
+  });
+
+  it('인라인·소형 버튼·카드 잠금(내 정보, 개발자에게, 플레이어 정보, 가방 아이템)은 바깥 자물쇠 배지와 외부 LockIcon을 쓰지 않는다', () => {
+    for (const path of [
+      'views/overlays/account/MyInfoModal.tsx',
+      'views/overlays/letter/LetterModal.tsx',
+      'views/overlays/live/PlayerInfo.tsx',
+      'views/game/tabs/bag/ItemSection.tsx',
+      'views/game/tabs/bag/ItemDetail.tsx',
+    ]) {
+      const src = sources.find(f => f.path === path)!.src;
+      expect(src, path).not.toMatch(/<LockIcon\b/);
+      const lockedTags = [...src.matchAll(/<Locked\b[^>]*>/g)].map(m => m[0]);
+      expect(lockedTags.length, path).toBeGreaterThan(0);
+      for (const tag of lockedTags) expect(tag, `${path}: ${tag}`).toContain('badge={false}');
+    }
   });
 });

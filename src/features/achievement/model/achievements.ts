@@ -24,10 +24,20 @@ import {
 import type { GameState } from '../../../game/rules/logic';
 import { canClaimAchievement, canClaimAllAchievements } from '../../../game/rules/rules';
 
-/** 업적 창 3탭 — 진행, 누적 보너스, 치장 */
+/** 업적 창 3탭 — 프로필 호환 */
 export const ACHIEVEMENT_TABS: { key: AchievementTab; label: string }[] = [
   { key: 'progress', label: '진행' },
   { key: 'bonus', label: '누적 보너스' },
+  { key: 'cosmetic', label: '치장' },
+];
+
+/** 업적 창 4탭 — 진행, 전체 누적, 구역과 유물, 치장 */
+export type AchievementModalTab = 'progress' | 'global' | 'zoneArtifact' | 'cosmetic';
+
+export const ACHIEVEMENT_MODAL_TABS: readonly { key: AchievementModalTab; label: string }[] = [
+  { key: 'progress', label: '진행' },
+  { key: 'global', label: '전체 누적' },
+  { key: 'zoneArtifact', label: '구역과 유물' },
   { key: 'cosmetic', label: '치장' },
 ];
 
@@ -102,9 +112,24 @@ export interface NamedGroupCardModel {
   steps: NamedGroupStepView[];
 }
 
+export interface BigGroupCardModel {
+  kind: 'bigGroup';
+  groupId: string;
+  discovered: true;
+  title: string;
+  desc: string;
+  scopeLabel: string;
+  current: number;
+  target: number;
+  status: AchievementRowStatus;
+  activeRow: AchievementRow;
+  steps: NamedGroupStepView[];
+}
+
 export type CosmeticCardItem =
   | { kind: 'single'; row: AchievementRow; scopeLabel: string }
-  | NamedGroupCardModel;
+  | NamedGroupCardModel
+  | BigGroupCardModel;
 
 const fmtPct = (v: number, sign: '+' | '−'): string => {
   const pct = Math.round(v * 1000) / 10;
@@ -115,34 +140,39 @@ const bonusSignOf = (kind: CumulativeBonusKind): '+' | '−' =>
   kind === 'biteWaitCut' ? '−' : '+';
 
 const bonusEffectLabelOf = (series: CumulativeBonusSeries): string => {
-  const zoneName = series.zone ? (zoneById(series.zone)?.shortName ?? series.zone) : '';
   switch (series.bonusKind) {
     case 'biteWaitCut': return '입질 대기';
-    case 'mutationWeight': return '돌연변이 가중치';
-    case 'rareWeight': return '희귀 이상 가중치';
-    case 'epicWeight': return '영웅 이상 가중치';
-    case 'legendaryWeight': return '전설 가중치';
+    case 'mutationWeight': return '돌연변이 출현 비중';
+    case 'rareWeight': return '희귀 이상 출현 비중';
+    case 'epicWeight': return '영웅 이상 출현 비중';
+    case 'legendaryWeight': return '전설 출현 비중';
+    case 'nightWeight': return '밤 어종 출현 비중';
+    case 'bagCap': return '가방 용량';
+    case 'energyYield': return '기운 획득량';
+    case 'baitAmplify': return '미끼 증폭';
+    case 'lunchAmplify': return '도시락 증폭';
     case 'sellBonus': return '판매가 보너스';
-    case 'namedWeight': return '네임드 조우 가중치';
-    case 'moveSpeed': return '이동 속도';
-    case 'artifactBoost': return '보유 유물 효과';
-    case 'zoneLegendary': return `${zoneName} 전설 가중치`;
-    case 'zoneMutation': return `${zoneName} 돌연변이 가중치`;
+    case 'namedWeight': return '네임드 조우 확률';
+    case 'moveSpeed': return '항해 속도';
+    case 'artifactBoost': return '유물 증폭';
   }
 };
 
 const bonusIconOf = (series: CumulativeBonusSeries): CumulativeBonusIcon => {
+  if (series.scope === 'artifact') return 'gem';
   switch (series.id) {
     case 'bonus-manual-total': return 'rod';
-    case 'bonus-manual-legendary': return 'star';
-    case 'bonus-manual-variant': return 'sparkle';
+    case 'bonus-manual-legendary':
+    case 'bonus-night-legendary': return 'star';
+    case 'bonus-manual-variant':
+    case 'bonus-energy-spent': return 'sparkle';
     case 'bonus-catch-auto': return 'clock';
     case 'bonus-catch-perfect': return 'target';
-    case 'bonus-catch-bait': return 'bait';
+    case 'bonus-catch-bait':
+    case 'bonus-catch-lunch': return 'bait';
     case 'bonus-named-flawless': return 'crown';
     case 'bonus-sell-gold': return 'coin';
-    case 'bonus-max-artifact': return 'gem';
-    default: return series.bonusKind === 'zoneLegendary' ? 'star' : 'sparkle';
+    default: return series.bonusKind === 'rareWeight' || series.bonusKind === 'nightWeight' ? 'star' : 'sparkle';
   }
 };
 
@@ -179,6 +209,12 @@ export function achievementRows(game: GameState, tab: Exclude<AchievementTab, 'b
 export function tabClaimableCount(game: GameState, tab: AchievementTab): number {
   if (tab === 'bonus') return 0;
   return ACHIEVEMENTS.filter(a => a.tab === tab && game.achievements[a.id] === 'claimable').length;
+}
+
+/** 모달 4탭별 받을 수 있는 업적 수 */
+export function modalTabClaimableCount(game: GameState, tab: AchievementModalTab): number {
+  if (tab === 'progress' || tab === 'cosmetic') return tabClaimableCount(game, tab);
+  return 0;
 }
 
 /** 받을 수 있는 업적의 수 — 메뉴 줄 배지와 요약 줄·탭 목록이 같은 카탈로그를 쓴다 */
@@ -219,7 +255,7 @@ export function achievementSummary(game: GameState, guest = false): {
   };
 }
 
-/** 누적 보너스 탭의 다단계 카드 23장 */
+/** 누적 보너스 탭의 다단계 카드 37장 */
 export function cumulativeBonusCards(game: GameState): CumulativeBonusCardModel[] {
   return CUMULATIVE_BONUS_SERIES.map(series => {
     const p = cumulativeBonusProgress(game, series);
@@ -229,8 +265,10 @@ export function cumulativeBonusCards(game: GameState): CumulativeBonusCardModel[
     const nextThreshold = p.nextStep?.threshold ?? lastStep.threshold;
     const allDone = p.nextStep === null;
     const scopeLabel = series.scope === 'global'
-      ? '전역'
-      : (zoneById(series.zone!)?.shortName ?? series.zone!);
+      ? '전체'
+      : series.scope === 'artifact'
+        ? '유물'
+        : (zoneById(series.zone!)?.shortName ?? series.zone!);
 
     let nowAssigned = false;
     const steps: CumulativeBonusStepView[] = series.steps.map(step => {
@@ -252,8 +290,8 @@ export function cumulativeBonusCards(game: GameState): CumulativeBonusCardModel[
 
     const activeText = p.activeDelta > 0
       ? `${effectLabel} ${fmtPct(p.activeDelta, sign)}`
-      : `${effectLabel} 적용 전`;
-    const maxText = `최대 누적 ${fmtPct(p.maxDelta, sign)} (달성 즉시 자동 적용)`;
+      : `${effectLabel} 아직 없음`;
+    const maxText = `최대 누적 ${fmtPct(p.maxDelta, sign)} (달성하면 바로 붙어요)`;
     const nextDeltaText = p.nextStep ? fmtPct(p.nextStep.delta, sign) : null;
 
     return {
@@ -279,7 +317,7 @@ const COSMETIC_SCOPE_LABEL: Record<CosmeticKind, string> = {
   general: '수집',
 };
 
-/** 치장 탭 카드 목록 — 네임드 1·5·10회는 다단계 압축 카드로 묶고, 미토벌 네임드는 실명을 가린다 */
+/** 치장 탭 카드 목록 — 네임드 1·5·10회와 월척 장부 10·25·50·100종은 다단계 압축 카드로 묶고, 미토벌 네임드는 실명을 가린다 */
 export function cosmeticCards(game: GameState, filter: CosmeticFilter = 'all'): CosmeticCardItem[] {
   const cosmeticDefs = ACHIEVEMENTS.filter(a => a.tab === 'cosmetic');
   const filtered = filter === 'all'
@@ -287,13 +325,13 @@ export function cosmeticCards(game: GameState, filter: CosmeticFilter = 'all'): 
     : cosmeticDefs.filter(a => a.cosmeticKind === filter);
 
   const items: CosmeticCardItem[] = [];
-  const groupedNamed = new Map<string, AchievementDef[]>();
+  const grouped = new Map<string, AchievementDef[]>();
 
   for (const def of filtered) {
-    if (def.groupId && def.namedId) {
-      const list = groupedNamed.get(def.groupId);
+    if (def.groupId) {
+      const list = grouped.get(def.groupId);
       if (list) list.push(def);
-      else groupedNamed.set(def.groupId, [def]);
+      else grouped.set(def.groupId, [def]);
     } else {
       items.push({
         kind: 'single',
@@ -303,52 +341,78 @@ export function cosmeticCards(game: GameState, filter: CosmeticFilter = 'all'): 
     }
   }
 
-  for (const [groupId, defs] of groupedNamed.entries()) {
+  for (const [groupId, defs] of grouped.entries()) {
     const rows = defs.map(d => achievementRow(game, d));
     const first = defs[0];
-    const namedId = first.namedId!;
     const current = rows[0].progress.current;
-    const discovered = current > 0 || rows.some(r => r.status !== 'progress');
-    const place = namedSpoilerPlace(namedId);
-    const namedName = namedById(namedId)?.name ?? place;
-    const title = discovered ? `${namedName} 토벌` : `${place} 네임드 토벌`;
-    const desc = discovered
-      ? `${namedName} 토벌을 여러 번 마쳐 표식을 모아요.`
-      : `${place}의 숨은 존재를 토벌해요.`;
-
     const claimableRow = rows.find(r => r.status === 'claimable');
     const nextProgressRow = rows.find(r => r.status === 'progress');
     const allClaimed = rows.every(r => r.status === 'claimed');
     const status: AchievementRowStatus = claimableRow ? 'claimable' : allClaimed ? 'claimed' : 'progress';
     const activeRow = claimableRow ?? nextProgressRow ?? rows[rows.length - 1];
 
-    const steps: NamedGroupStepView[] = rows.map(r => {
-      const hatId = r.def.reward.kind === 'hat' ? r.def.reward.hatId : '';
-      const hatName = hatById(hatId)?.name ?? '모자';
-      return {
-        id: r.def.id,
-        threshold: r.progress.target,
-        hatId,
-        hatName,
-        status: r.status,
-        label: `${r.progress.target}회`,
-      };
-    });
-
-    items.push({
-      kind: 'namedGroup',
-      groupId,
-      namedId,
-      discovered,
-      title,
-      desc,
-      scopeLabel: '네임드',
-      current,
-      target: activeRow.progress.target,
-      status,
-      activeRow,
-      steps,
-    });
+    if (first.namedId) {
+      const namedId = first.namedId;
+      const discovered = current > 0 || rows.some(r => r.status !== 'progress');
+      const place = namedSpoilerPlace(namedId);
+      const namedName = namedById(namedId)?.name ?? place;
+      const title = discovered ? `${namedName} 토벌` : `${place} 네임드 토벌`;
+      const desc = discovered
+        ? `${namedName} 토벌을 여러 번 마쳐 표식을 모아요.`
+        : `${place}의 숨은 존재를 토벌해요.`;
+      const steps: NamedGroupStepView[] = rows.map(r => {
+        const hatId = r.def.reward.kind === 'hat' ? r.def.reward.hatId : '';
+        const hatName = hatById(hatId)?.name ?? '모자';
+        return {
+          id: r.def.id,
+          threshold: r.progress.target,
+          hatId,
+          hatName,
+          status: r.status,
+          label: `${r.progress.target}회`,
+        };
+      });
+      items.push({
+        kind: 'namedGroup',
+        groupId,
+        namedId,
+        discovered,
+        title,
+        desc,
+        scopeLabel: '네임드',
+        current,
+        target: activeRow.progress.target,
+        status,
+        activeRow,
+        steps,
+      });
+    } else {
+      const steps: NamedGroupStepView[] = rows.map(r => {
+        const hatId = r.def.reward.kind === 'hat' ? r.def.reward.hatId : '';
+        const hatName = hatById(hatId)?.name ?? '모자';
+        return {
+          id: r.def.id,
+          threshold: r.progress.target,
+          hatId,
+          hatName,
+          status: r.status,
+          label: `${r.progress.target}종`,
+        };
+      });
+      items.push({
+        kind: 'bigGroup',
+        groupId,
+        discovered: true,
+        title: '월척 장부',
+        desc: activeRow.def.desc,
+        scopeLabel: '월척',
+        current,
+        target: activeRow.progress.target,
+        status,
+        activeRow,
+        steps,
+      });
+    }
   }
 
   const statusOf = (item: CosmeticCardItem): AchievementRowStatus =>

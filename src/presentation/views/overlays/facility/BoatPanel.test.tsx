@@ -2,6 +2,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, within } from '@testing-library/react';
 import FacilityModal from './FacilityModal';
+import { registerNoticeSink } from '../../../../features/display/model/toastPolicy';
+import type { SystemNoticeInput } from '../../../../features/display/model/toastPolicy';
 import { BOATS, MAX_BOAT, newState } from '../../../../game/rules/logic';
 import { AUTO_ENERGY_BOAT } from '../../../../game/content/cooking';
 import { fmtGold, fmtNum } from '../../../ui/format';
@@ -65,5 +67,22 @@ describe('조선소', () => {
     expect(row).toHaveTextContent(`${fmtNum(next.bagCap)}마리`);
     expect(row).toHaveTextContent(`+${fmtNum(next.bagCap - cur.bagCap)}`);
     expect(row.textContent).not.toContain('+-');
+  });
+
+  it('배 구매에 성공해도 창을 닫지 않고 알림에 boat-buy 교체 키를 싣는다', () => {
+    const dispatch = vi.fn(() => ({ status: 'ok' as const, state: { ...newState(), boat: 1 }, result: { type: 'none' as const } }));
+    const onClose = vi.fn();
+    const structured = vi.fn<(input: SystemNoticeInput) => void>();
+    const setToast = registerNoticeSink(vi.fn(), structured);
+    render(
+      <FacilityModal sellBonus={0} panel="boat" game={{ ...newState(), gold: BOATS[0].price, fame: BOATS[0].fameReq }}
+                     dispatch={dispatch} setToast={setToast} onClose={onClose} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: `구매 (-${fmtGold(BOATS[0].price)})` }));
+    expect(onClose).not.toHaveBeenCalled();
+    expect(structured).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'facility.boatBought',
+      replaceKey: 'boat-buy',
+    }));
   });
 });

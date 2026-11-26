@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { COOKING_UNLOCK_BOAT } from '../../../game/content/cooking';
 import { REJECT_TEXT } from '../../../game/rules/rules';
-import { energyTabLock, facilityGuestAllowed, facilityProgress, GUEST_CHAT_NOTICE, GUEST_LOCK_TEXT, guestLock, menuLock, progressLines, progressNote, UNVERIFIED_LOCK_TEXT } from './menuLock';
+import { energyTabLock, facilityGuestAllowed, facilityProgress, GUEST_CHAT_NOTICE, GUEST_LOCK_DEFAULT_LINES, GUEST_LOCK_TEXT, guestLock, menuLock, progressLines, progressNote, UNVERIFIED_LOCK_TEXT } from './menuLock';
 import type { GuestFeature } from './menuLock';
 import { POLICY } from '../../../core/errors';
 
@@ -9,7 +9,7 @@ const base = { feature: '부엌', guestAllowed: true, progress: undefined };
 
 describe('메뉴 카드 잠금 사유', () => {
   it('게스트에게 닫힌 기능은 게스트 잠금이다', () => {
-    expect(menuLock({ ...base, account: 'guest', guestAllowed: false })).toEqual({ kind: 'guest', lines: [GUEST_LOCK_TEXT] });
+    expect(menuLock({ ...base, account: 'guest', guestAllowed: false })).toEqual({ kind: 'guest', lines: [...GUEST_LOCK_DEFAULT_LINES] });
   });
 
   it('확인 실패 상태에서 계정 전용 기능은 확인 실패 잠금이다', () => {
@@ -37,9 +37,24 @@ describe('메뉴 카드 잠금 사유', () => {
     expect(menuLock({ ...base, account: 'account', progress: { met: true, boat: 5 } })).toEqual({ kind: 'none' });
   });
 
-  it('게스트 잠금과 진행 조건 잠금이 둘 다 걸리면 게스트 잠금이 우선한다', () => {
+  it('게스트에게 진행 조건이 1단계보다 뒷단계이면 진행 조건 잠금만 반환한다', () => {
     const r = menuLock({ ...base, account: 'guest', guestAllowed: false, progress: { met: false, boat: 5 } });
-    expect(r.kind).toBe('guest');
+    expect(r).toEqual({
+      kind: 'progress',
+      lines: ['인도양 항로가 열리면 부엌을 쓸 수 있어요.', '인도양 항로는 증기선(5단계)부터 열려요.'],
+    });
+  });
+
+  it('게스트에게 진행 조건이 없거나 충족했거나 1단계 이하이면 게스트 잠금을 반환한다', () => {
+    expect(menuLock({ ...base, account: 'guest', guestAllowed: false, progress: undefined })).toEqual({
+      kind: 'guest', lines: [...GUEST_LOCK_DEFAULT_LINES],
+    });
+    expect(menuLock({ ...base, account: 'guest', guestAllowed: false, progress: { met: true, boat: 5 } })).toEqual({
+      kind: 'guest', lines: [...GUEST_LOCK_DEFAULT_LINES],
+    });
+    expect(menuLock({ ...base, account: 'guest', guestAllowed: false, progress: { met: false, boat: 1 } })).toEqual({
+      kind: 'guest', lines: [...GUEST_LOCK_DEFAULT_LINES],
+    });
   });
 
   it('확인 실패 잠금과 진행 조건 잠금이 둘 다 걸리면 확인 실패 잠금이 우선한다', () => {
@@ -109,7 +124,7 @@ describe('거점 카드의 진행 조건', () => {
     });
     expect(menuLock({ account: 'guest', guestAllowed: facilityGuestAllowed('ferry'), feature: '여객선', progress: facilityProgress('ferry', 0) })).toEqual({
       kind: 'guest',
-      lines: [GUEST_LOCK_TEXT],
+      lines: [...GUEST_LOCK_DEFAULT_LINES],
     });
   });
 
@@ -120,6 +135,12 @@ describe('거점 카드의 진행 조건', () => {
 
 describe('게스트에게 닫힌 화면 기능의 잠금 문안', () => {
   const closed: GuestFeature[] = ['quests', 'guild', 'friends', 'mailbox', 'chat', 'letter', 'nickname', 'player'];
+
+  it('운세 메뉴 줄은 게스트와 확인 실패 상태에서도 열려 있어 창을 열 수 있다', () => {
+    expect(guestLock('fortune', 'guest')).toBeNull();
+    expect(guestLock('fortune', 'unverified')).toBeNull();
+    expect(guestLock('fortune', 'account')).toBeNull();
+  });
 
   it('게스트에게는 닫힌 기능마다 잠금 줄이 있고 계정을 연결한 사용자에게는 없다', () => {
     for (const feature of closed) {
@@ -134,21 +155,23 @@ describe('게스트에게 닫힌 화면 기능의 잠금 문안', () => {
     }
   });
 
-  it('메뉴 줄, 플레이어 정보, 차단 목록, 닉네임은 공통 한 줄이다', () => {
+  it('메뉴 줄, 플레이어 정보, 차단 목록, 닉네임은 공통 두 줄이다', () => {
+    expect(GUEST_LOCK_DEFAULT_LINES).toEqual([
+      '태평양 항로가 열리면 쓸 수 있어요.', '태평양 항로는 조각배(1단계)부터 열려요.']);
     for (const feature of ['quests', 'guild', 'friends', 'mailbox', 'player', 'nickname'] as const) {
-      expect(guestLock(feature, 'guest'), feature).toEqual([GUEST_LOCK_TEXT]);
+      expect(guestLock(feature, 'guest'), feature).toEqual(GUEST_LOCK_DEFAULT_LINES);
     }
   });
 
-  it('채팅과 편지는 기능 이름과 이유를 둘째 줄에 더한다', () => {
+  it('채팅과 편지는 첫 줄에 기능 이름을 더하고 둘째 줄은 태평양 항로 배 단계를 알린다', () => {
     expect(guestLock('chat', 'guest')).toEqual([
-      '채팅은 계정을 연결하면 쓸 수 있어요.', '계정 관리에서 계정을 연결해 주세요.']);
+      '채팅은 태평양 항로가 열리면 쓸 수 있어요.', '태평양 항로는 조각배(1단계)부터 열려요.']);
     expect(guestLock('letter', 'guest')).toEqual([
-      '편지는 계정을 연결하면 쓸 수 있어요.', '답장을 계정 이메일로 드리기 때문이에요.']);
+      '편지는 태평양 항로가 열리면 쓸 수 있어요.', '태평양 항로는 조각배(1단계)부터 열려요.']);
   });
 
-  it('채팅 거부 안내는 채팅 잠금 줄을 한 줄로 잇는다', () => {
-    expect(GUEST_CHAT_NOTICE).toBe('채팅은 계정을 연결하면 쓸 수 있어요. 계정 관리에서 계정을 연결해 주세요.');
+  it('채팅 거부 안내는 채팅 잠금 첫 줄 문구다', () => {
+    expect(GUEST_CHAT_NOTICE).toBe('채팅은 태평양 항로가 열리면 쓸 수 있어요.');
   });
 
   it('계정 전용 거부 정책 문구는 공통 잠금 문장으로 시작한다', () => {
@@ -161,9 +184,12 @@ describe('게스트에게 닫힌 화면 기능의 잠금 문안', () => {
 });
 
 describe('판매 창의 기운 얻기 탭 잠금', () => {
-  it('게스트는 해금 여부와 상관없이 게스트 잠금이다', () => {
-    expect(energyTabLock('guest', COOKING_UNLOCK_BOAT)).toEqual({ kind: 'guest', lines: [GUEST_LOCK_TEXT] });
-    expect(energyTabLock('guest', COOKING_UNLOCK_BOAT - 1)).toEqual({ kind: 'guest', lines: [GUEST_LOCK_TEXT] });
+  it('게스트는 해금 전(5단계 미만)이면 진행 조건 잠금이고, 해금 뒤에는 게스트 잠금이다', () => {
+    expect(energyTabLock('guest', COOKING_UNLOCK_BOAT)).toEqual({ kind: 'guest', lines: [...GUEST_LOCK_DEFAULT_LINES] });
+    expect(energyTabLock('guest', COOKING_UNLOCK_BOAT - 1)).toEqual({
+      kind: 'progress',
+      lines: ['인도양 항로가 열리면 기운 얻기를 할 수 있어요.', '인도양 항로는 증기선(5단계)부터 열려요.'],
+    });
   });
 
   it('확인 실패 상태는 해금 여부와 상관없이 확인 실패 잠금이다', () => {

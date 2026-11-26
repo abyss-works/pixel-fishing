@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fmtCompact, fmtCompact3, fmtDecimal2, fmtFishCount, fmtLevel, fmtPlusPoint, fmtMinutes, fmtRatio, fmtRatioTight, fmtSize, josa } from './format';
+import { fmtCompact, fmtCompact3, fmtDecimal2, fmtFishCount, fmtKoreanDate, fmtLevel, fmtMinutes, fmtRatio, fmtRatioTight, fmtSize, josa } from './format';
 
 describe('fmtSize — 물고기 크기', () => {
   it('1m 미만은 cm 소수 한 자리, 1m 이상은 m 소수 두 자리', () => {
@@ -131,14 +131,6 @@ describe('fmtLevel — 레벨 표기', () => {
   });
 });
 
-describe('fmtPlusPoint - 확률에 더하는 값은 +N%p', () => {
-  it('앞에 +를 붙이고 둘째 자리까지만 보인다', () => {
-    expect(fmtPlusPoint(10)).toBe('+10%p');
-    expect(fmtPlusPoint(0.1125 * 100)).toBe('+11.25%p');
-    expect(fmtPlusPoint(12.345)).toBe('+12.35%p');
-  });
-});
-
 describe('fmtDecimal2 - 소수 둘째 자리까지, 끝의 0은 뺀다', () => {
   it('정수와 한 자리, 두 자리 값은 필요한 만큼만 보인다', () => {
     expect(fmtDecimal2(10)).toBe('10');
@@ -159,5 +151,14 @@ describe('fmtFishCount - 마릿수', () => {
     expect(fmtFishCount(0)).toBe('0마리');
     expect(fmtFishCount(999)).toBe('999마리');
     expect(fmtFishCount(1500)).toBe('1,500마리');
+  });
+});
+
+describe('fmtKoreanDate - 한국어 날짜', () => {
+  it('ISO 날짜 문자열을 YYYY년 M월 D일 형식으로 바꾼다', () => {
+    expect(fmtKoreanDate('2026-11-25')).toBe('2026년 11월 25일');
+    expect(fmtKoreanDate('2026-01-05')).toBe('2026년 1월 5일');
+    expect(fmtKoreanDate('2026-12-01T00:00:00.000Z')).toBe('2026년 12월 1일');
+    expect(fmtKoreanDate('v2')).toBe('v2');
   });
 });

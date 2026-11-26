@@ -12,12 +12,13 @@ import type { Stat, StatMod } from './stats.js';
 /** 유물 레벨을 읽는 데 필요한 상태 */
 export type ArtifactHolder = Pick<GameState, 'artifacts' | 'artifactLevels'>;
 
-/** 보유 유물의 현재 레벨 — 갖지 않았으면 0, 레벨이 없는 유물(전설)과 맵에 값이 없는 유물은 1.
+/** 보유 유물의 현재 레벨 — 갖지 않았거나 알 수 없는 id는 0, 레벨이 없는 유물(전설)은 최고 레벨(5), 맵에 값이 없는 유물은 1.
  *  저장된 값이 범위 밖이어도 1~최고 레벨로 접는다 */
 export function artifactLevelOf(state: ArtifactHolder, id: string): number {
   if (!state.artifacts.includes(id)) return 0;
   const art = artifactById(id);
-  if (!art || !artifactHasLevel(art)) return 1;
+  if (!art) return 0;
+  if (!artifactHasLevel(art)) return ARTIFACT_MAX_LEVEL;
   const stored = state.artifactLevels?.[id];
   if (typeof stored !== 'number' || !Number.isFinite(stored)) return 1;
   return Math.min(ARTIFACT_MAX_LEVEL, Math.max(1, Math.floor(stored)));

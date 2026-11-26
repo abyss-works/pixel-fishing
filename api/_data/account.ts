@@ -1,4 +1,4 @@
-// 인증 스키마(auth) 쓰기 소유 모듈. 미접속 익명 계정의 대상 선정과 계정 단위 삭제, 관리자가 발급하는 비밀번호 재설정 토큰을 맡는다.
+// 인증 스키마(auth) 쓰기 소유 모듈. 미접속 익명 계정의 대상 선정과 계정 단위 삭제, 세션 강제 종료를 맡는다.
 // 공개 표는 auth.users에 외래 키로 묶여 있지 않을 수 있어 인증 계정만 지우면 행이 고아로 남는다.
 // 그래서 한 계정의 삭제는 한 트랜잭션에서 표의 소유 저장 모듈이 공개 표 행을 지우고 마지막에 인증 계정을 지운다.
 import { sql } from 'drizzle-orm';
@@ -18,6 +18,7 @@ import { deleteUserGuild } from './guilds.js';
 import { deleteUserSaves } from './save.js';
 import { deleteUserEvents } from './telemetry.js';
 import { deleteUserCounters } from './achievements.js';
+import { deleteUserFortunes } from './fortune.js';
 
 /** 진행이 없는 게스트를 지우는 미접속 일수 */
 const IDLE_DAYS = 7;
@@ -140,11 +141,12 @@ async function deleteAccountRows(tx: Executor, uid: string): Promise<void> {
   await deleteUserPosition(tx, uid);
   await deleteUserConsents(tx, uid);
   await deleteUserCounters(tx, uid);
+  await deleteUserFortunes(tx, uid);
   await deleteUserSaves(tx, uid);
   await tx.execute(sql`delete from auth.users where id = ${uid}`);
 }
 
-/** 비밀번호 재설정 대상으로서의 계정 상태. member는 가입 계정, anonymous는 게스트 계정, missing은 인증 계정이 없다 */
+/** 대상 계정의 상태. member는 영구 계정, anonymous는 게스트 계정, missing은 인증 계정이 없다 */
 export type AccountKind = 'member' | 'anonymous' | 'missing';
 
 export async function accountKind(db: Executor, uid: string): Promise<AccountKind> {
@@ -153,17 +155,47 @@ export async function accountKind(db: Executor, uid: string): Promise<AccountKin
   return rows[0].is_anonymous ? 'anonymous' : 'member';
 }
 
-/**
- * 비밀번호 재설정 토큰을 Better Auth의 재설정 요청(request-password-reset)과 같은 행으로 넣는다.
- * identifier는 'reset-password:<토큰>', value는 사용자 id다. 재설정(reset-password)이 이 행을 찾아 쓰고 지운다.
- */
-export async function insertPasswordResetToken(db: Executor, uid: string, token: string, expiresAtISO: string): Promise<void> {
-  await db.execute(sql`insert into auth.verifications (identifier, value, expires_at)
-    values (${`reset-password:${token}`}, ${uid}, ${at(expiresAtISO)})`);
-}
-
 /** 사용자의 활성·만료 인증 세션(게임 및 관리자 세션)을 모두 삭제하고 지운 행 수를 돌려준다 */
 export async function revokeUserSessions(db: Executor, uid: string): Promise<number> {
   const result = await db.execute(sql`delete from auth.sessions where user_id = ${uid}::uuid`);
   return result.rowCount ?? 0;
+}
+
+export type PromoteTestOutcome =
+  | { status: 'promoted'; email: string }
+  | { status: 'already-test'; email: string }
+  | { status: 'not-guest' }
+  | { status: 'missing' };
+
+/** 스테이징 테스트 정식 계정의 자리표시 이메일을 만든다 */
+export function testAccountEmail(uid: string): string {
+  return `test-${uid.slice(0, 8)}@stage.invalid`;
+}
+
+/**
+ * 게스트(익명) 계정을 세이브와 uid를 그대로 유지한 채 스테이징 테스트 정식 계정으로 승격한다.
+ * 실제 이메일을 가진 계정은 덮어쓰지 않고 not-guest를 돌려준다.
+ */
+export async function promoteGuestToTestAccount(
+  withTransaction: Database['withTransaction'],
+  uid: string,
+): Promise<PromoteTestOutcome> {
+  const testEmail = testAccountEmail(uid);
+  return withTransaction(async tx => {
+    const { rows } = await tx.execute<{ email: string | null; is_anonymous: boolean | null }>(
+      sql`select email, is_anonymous from auth.users where id = ${uid}::uuid for update`,
+    );
+    if (rows.length === 0) return { status: 'missing' };
+    const row = rows[0];
+    if (!row.is_anonymous) {
+      if (row.email === testEmail) return { status: 'already-test', email: testEmail };
+      return { status: 'not-guest' };
+    }
+    await tx.execute(
+      sql`update auth.users
+        set is_anonymous = false, email = ${testEmail}, email_verified = true, updated_at = now()
+        where id = ${uid}::uuid and is_anonymous = true`,
+    );
+    return { status: 'promoted', email: testEmail };
+  });
 }

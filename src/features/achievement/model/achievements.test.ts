@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { newState } from '../../../game/rules/logic';
+import { topZoneOfSpot } from '../../../game/content/zones';
+import { FISH, newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import {
+  ACHIEVEMENT_MODAL_TABS,
   ACHIEVEMENT_TABS,
   achievementRowById,
   achievementRows,
@@ -10,6 +12,7 @@ import {
   claimableCount,
   cosmeticCards,
   cumulativeBonusCards,
+  modalTabClaimableCount,
   newlyClaimable,
   rowStatusOf,
   tabClaimableCount,
@@ -18,9 +21,11 @@ import {
 const seed = (over: Partial<GameState> = {}): GameState => ({ ...newState(), ...over });
 
 describe('탭', () => {
-  it('탭 순서는 진행, 누적 보너스, 치장 셋이다', () => {
+  it('프로필 호환 3탭과 모달 4탭 구성을 함께 제공한다', () => {
     expect(ACHIEVEMENT_TABS.map(t => t.key)).toEqual(['progress', 'bonus', 'cosmetic']);
     expect(ACHIEVEMENT_TABS.map(t => t.label)).toEqual(['진행', '누적 보너스', '치장']);
+    expect(ACHIEVEMENT_MODAL_TABS.map(t => t.key)).toEqual(['progress', 'global', 'zoneArtifact', 'cosmetic']);
+    expect(ACHIEVEMENT_MODAL_TABS.map(t => t.label)).toEqual(['진행', '전체 누적', '구역과 유물', '치장']);
   });
 });
 
@@ -74,10 +79,12 @@ describe('요약 줄', () => {
         'spot-full-sea': 'claimed',
       },
     });
-    expect(achievementSummary(state)).toEqual({ claimed: 1, total: 80, gold: 300, hats: 1, canClaimAll: true });
+    expect(achievementSummary(state)).toEqual({ claimed: 1, total: 82, gold: 1_200, hats: 1, canClaimAll: true });
     expect(tabClaimableCount(state, 'progress')).toBe(1);
     expect(tabClaimableCount(state, 'bonus')).toBe(0);
     expect(tabClaimableCount(state, 'cosmetic')).toBe(1);
+    expect(modalTabClaimableCount(state, 'global')).toBe(0);
+    expect(modalTabClaimableCount(state, 'zoneArtifact')).toBe(0);
   });
   it('받을 수 있는 업적이 없으면 모두 받기는 거짓이다', () => {
     expect(achievementSummary(seed())).toMatchObject({ gold: 0, hats: 0, canClaimAll: false });
@@ -130,23 +137,99 @@ describe('요약 줄', () => {
 });
 
 describe('누적 보너스 카드', () => {
-  it('23개 다단계 누적 보너스 카드를 생성한다', () => {
+  it('37개(전체 11 + 구역 18 + 유물 8) 다단계 누적 보너스 카드를 생성한다', () => {
     const boosted = seed({
+      artifacts: ['mami-wata-mirror'],
       achievementCounters: {
         'manual.total': 1_000,
         'sell.gold': 10_000_000,
         'named.flawless': 1,
+        'energy.spent': 10_000,
+        'catch.bait': 40,
+        'catch.lunch': 1_000,
       },
     });
     const cards = cumulativeBonusCards(boosted);
-    expect(cards).toHaveLength(23);
+    expect(cards).toHaveLength(37);
+    expect(cards.filter(c => c.series.scope === 'global')).toHaveLength(11);
+    expect(cards.filter(c => c.series.scope === 'zone')).toHaveLength(18);
+    expect(cards.filter(c => c.series.scope === 'artifact')).toHaveLength(8);
+
     const manual = cards.find(c => c.series.id === 'bonus-manual-total')!;
-    expect(manual.steps.map(s => s.state)).toEqual(['done', 'done', 'done', 'now']);
-    expect(manual.activeText).toBe('입질 대기 −3.5%');
+    expect(manual.steps.map(s => s.state)).toEqual(['done', 'done', 'done', 'done', 'now', 'todo']);
+    expect(manual.activeText).toBe('입질 대기 −4.8%');
+
+    const named = cards.find(c => c.series.id === 'bonus-named-flawless')!;
+    expect(named.activeText).toBe('네임드 조우 확률 +3%');
+
+    const energy = cards.find(c => c.series.id === 'bonus-energy-spent')!;
+    expect(energy.activeText).toBe('기운 획득량 +6%');
+
+    const relic = cards.find(c => c.series.id === 'bonus-artifact-mami-wata-mirror')!;
+    expect(relic.scopeLabel).toBe('유물');
+    expect(relic.allDone).toBe(true);
+    expect(relic.activeText).toBe('유물 증폭 +2.5%');
+  });
+
+  it('바다 6구역 지역 누적 18종은 도감 포획 수로 계산하고 손맛·직접 챔질 문구를 쓰지 않으며 전역 수동 3종은 유지한다', () => {
+    const pacDayLeg = FISH.find(f => topZoneOfSpot(f.spot) === 'pacific' && f.rarity === 'legendary' && !f.night)!;
+    const pacNightLeg = FISH.find(f => topZoneOfSpot(f.spot) === 'pacific' && f.rarity === 'legendary' && f.night === true)!;
+    const pacCommon = FISH.find(f => topZoneOfSpot(f.spot) === 'pacific' && f.rarity === 'common')!;
+    const state = seed({
+      dex: {
+        [pacDayLeg.id]: { normal: { count: 1, maxSize: 10, first: null }, variant: { count: 1, maxSize: 10, first: null } },
+        [pacNightLeg.id]: { normal: { count: 1, maxSize: 10, first: null } },
+        [pacCommon.id]: { variant: { count: 50, maxSize: 10, first: null } },
+      },
+    });
+    const cards = cumulativeBonusCards(state);
+    const zoneCards = cards.filter(c => c.series.scope === 'zone');
+    expect(zoneCards).toHaveLength(18);
+    for (const card of zoneCards) {
+      expect(card.series.name).not.toContain('손맛');
+      expect(card.series.desc).not.toContain('직접 챔질');
+      expect(card.series.desc).not.toContain('손맛');
+    }
+
+    const dayCard = zoneCards.find(c => c.series.id === 'bonus-zone-day-legendary-pacific')!;
+    expect(dayCard.series.name).toBe('태평양 전설');
+    expect(dayCard.series.desc).toBe('태평양에서 낮에 나타나는 전설 어종을 낚아요.');
+    expect(dayCard.current).toBe(2);
+    expect(dayCard.activeText).toBe('희귀 이상 출현 비중 +0.3%');
+
+    const nightCard = zoneCards.find(c => c.series.id === 'bonus-zone-night-legendary-pacific')!;
+    expect(nightCard.series.name).toBe('태평양 밤 전설');
+    expect(nightCard.series.desc).toBe('태평양에서 밤에만 나타나는 전설 어종을 낚아요.');
+    expect(nightCard.current).toBe(1);
+    expect(nightCard.activeText).toBe('밤 어종 출현 비중 +0.3%');
+
+    const variantCard = zoneCards.find(c => c.series.id === 'bonus-zone-variant-pacific')!;
+    expect(variantCard.series.name).toBe('태평양 돌연변이');
+    expect(variantCard.series.desc).toBe('태평양에서 돌연변이 물고기를 낚아요.');
+    expect(variantCard.current).toBe(51);
+    expect(variantCard.activeText).toBe('돌연변이 출현 비중 +0.3%');
+
+    // 전역 수동 3종은 수동 카운터 및 손맛 문구를 유지한다
+    expect(cards.find(c => c.series.id === 'bonus-day-legendary')?.series.name).toBe('전체 전설 손맛');
+    expect(cards.find(c => c.series.id === 'bonus-night-legendary')?.series.name).toBe('전체 밤 전설 손맛');
+    expect(cards.find(c => c.series.id === 'bonus-manual-variant')?.series.name).toBe('전체 돌연변이 손맛');
+    expect(cards.find(c => c.series.id === 'bonus-manual-variant')?.current).toBe(0);
   });
 });
 
 describe('치장 다단계 카드와 스포일러 가림', () => {
+  it('월척 4단계(10·25·50·100종)는 월척 장부 1장 다단계 카드로 압축한다', () => {
+    const cards = cosmeticCards(seed({ achievements: { 'big-10': 'claimable' } }), 'big');
+    expect(cards).toHaveLength(1);
+    const big = cards[0];
+    expect(big.kind).toBe('bigGroup');
+    if (big.kind === 'bigGroup') {
+      expect(big.title).toBe('월척 장부');
+      expect(big.status).toBe('claimable');
+      expect(big.activeRow.def.id).toBe('big-10');
+      expect(big.steps.map(s => s.label)).toEqual(['10종', '25종', '50종', '100종']);
+    }
+  });
   it('미토벌 네임드는 실명을 가리고 출현 해역·구역 이름으로 표기한다', () => {
     const namedCards = cosmeticCards(seed(), 'named');
     expect(namedCards).toHaveLength(8);

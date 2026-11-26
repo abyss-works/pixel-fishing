@@ -81,7 +81,7 @@ export function summarizeAway(events: readonly AwayEvent[], window: AwayWindow):
       const f = form(p.form);
       catches++;
       value += priceOf(fish, f);
-      fame += RARITY[fish.rarity].fame;
+      fame += typeof p.fame === 'number' && Number.isFinite(p.fame) ? p.fame : RARITY[fish.rarity].fame;
       if (f === 'variant') variants++;
       counts.set(fish.rarity, (counts.get(fish.rarity) ?? 0) + 1);
       const spot = str(p.spot);

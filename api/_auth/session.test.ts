@@ -1,7 +1,7 @@
 // 인증 인스턴스의 필수 환경 변수 검사 — 하나라도 없으면 기본값 없이 실패한다.
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const REQUIRED = ['BETTER_AUTH_SECRET', 'BETTER_AUTH_URL', 'RESEND_API_KEY', 'MAIL_FROM', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'CONSENT_EFFECTIVE_DATE'] as const;
+const REQUIRED = ['BETTER_AUTH_SECRET', 'BETTER_AUTH_URL', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'CONSENT_EFFECTIVE_DATE'] as const;
 const saved: Record<string, string | undefined> = {};
 
 // 인증 라이브러리를 처음 불러오는 비용(수 초)을 테스트 시간 밖에서 치른다. 이후 테스트의 동적 import는 변환된 모듈과 외부 패키지가 캐시에 있어 짧다
@@ -41,4 +41,12 @@ describe('appAuth', () => {
       expect(() => appAuth()).toThrowError(expect.objectContaining({ status: 500, code: 'server-config' }));
     });
   }
+
+  it('RESEND_API_KEY와 MAIL_FROM이 없어도 server-config로 실패하지 않는다', async () => {
+    delete process.env.RESEND_API_KEY;
+    delete process.env.MAIL_FROM;
+    delete process.env.DATABASE_URL;
+    const { appAuth } = await import('./session.js');
+    expect(() => appAuth()).toThrow('DATABASE_URL is not set');
+  });
 });

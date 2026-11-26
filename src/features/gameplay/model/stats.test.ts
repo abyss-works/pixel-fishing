@@ -1,10 +1,11 @@
 ﻿import { describe, expect, it } from 'vitest';
 import { SPOTS } from '../../../game/content/spots';
+import { topZoneOfSpot } from '../../../game/content/zones';
 import { commonWeightMultiplier } from '../../../game/rules/actions';
 import { FISH, newState } from '../../../game/rules/logic';
 import type { FishInstance, GameState } from '../../../game/rules/logic';
 import {
-  BONUS_CATEGORIES, selectActiveBonuses, selectInitialStatsSpotIndex, selectReachableZones,
+  BONUS_CATEGORIES, selectActiveBonuses, selectBonusTableRows, selectInitialStatsSpotIndex, selectReachableZones,
   selectStatsModalData, selectStatsSpotRows, selectStatsSummary, selectStatsZoneTabs,
 } from './stats';
 
@@ -13,27 +14,33 @@ const indexOf = (id: string) => SPOTS.findIndex(spot => spot.id === id);
 const rowOf = (g: GameState, id: string) => selectStatsSpotRows(g, 'sail').find(row => row.spot.id === id)!;
 
 describe('플레이 스탯 화면 데이터', () => {
-  it('현재 지역에서 요구 파워가 가장 높은 수역부터 시작한다', () => {
-    const index = selectInitialStatsSpotIndex('village');
-    const expected = SPOTS.map((spot, spotIndex) => ({ spot, spotIndex }))
-      .filter(({ spot }) => spot.region === 'village')
-      .sort((a, b) => (a.spot.powerReq ?? 0) - (b.spot.powerReq ?? 0))
-      .at(-1)!;
-
-    expect(index).toBe(expected.spotIndex);
+  it('마을 거점처럼 해역을 특정할 수 없으면 파워와 배 조건을 채운 해역 중 요구 파워가 가장 높은 곳을 고르고, 없으면 최저 요구 파워 해역으로 폴백한다', () => {
+    expect(selectInitialStatsSpotIndex('village', null, 'village', 10, 0)).toBe(indexOf('pond'));
+    expect(selectInitialStatsSpotIndex('village', null, 'village', 20, 0)).toBe(indexOf('river'));
+    expect(selectInitialStatsSpotIndex('village', null, 'village', 0, 0)).toBe(indexOf('pond'));
   });
 
-  it('사거리 안의 어군 수역이 있으면 그 수역부터 시작한다', () => {
-    expect(selectInitialStatsSpotIndex('world', 'deep')).toBe(indexOf('deep'));
-    expect(selectInitialStatsSpotIndex('world', null)).toBe(selectInitialStatsSpotIndex('world'));
+  it('사거리 안의 어군 수역이 있으면 파워나 배가 모자라도 그 수역부터 시작한다', () => {
+    expect(selectInitialStatsSpotIndex('world', 'deep', 'pacific', 10, 0)).toBe(indexOf('deep'));
+    expect(selectInitialStatsSpotIndex('world', null, null, 350, 9)).toBe(selectInitialStatsSpotIndex('world', null, undefined, 350, 9));
   });
 
-  it('바다에서 어군 사거리 밖이면 현재 구역의 해역 중 요구 파워가 가장 높은 곳부터 시작한다', () => {
-    expect(selectInitialStatsSpotIndex('world', null, 'indian')).toBe(indexOf('southindian'));
-    expect(selectInitialStatsSpotIndex('world', null, 'southindian')).toBe(indexOf('southindian'));
-    expect(selectInitialStatsSpotIndex('world', null, 'madagascar')).toBe(indexOf('comorodeep'));
-    expect(selectInitialStatsSpotIndex('world', null, 'pacific')).toBe(indexOf('deep'));
-    expect(selectInitialStatsSpotIndex('world', null, 'village')).toBe(selectInitialStatsSpotIndex('world', null, null));
+  it('바다에서 어군 사거리 밖이면 현재 구역(또는 바다 전체)에서 진입 가능한 최고 해역을 고르고, 없으면 최저 요구 파워 해역으로 폴백한다', () => {
+    expect(selectInitialStatsSpotIndex('world', null, 'indian', 135, 5)).toBe(indexOf('indian'));
+    expect(selectInitialStatsSpotIndex('world', null, 'indian', 200, 5)).toBe(indexOf('indian'));
+    expect(selectInitialStatsSpotIndex('world', null, 'indian', 150, 6)).toBe(indexOf('indian'));
+    expect(selectInitialStatsSpotIndex('world', null, 'indian', 160, 6)).toBe(indexOf('southindian'));
+    expect(selectInitialStatsSpotIndex('world', null, 'indian', 10, 0)).toBe(indexOf('indian'));
+
+    expect(selectInitialStatsSpotIndex('world', null, 'madagascar', 210, 7)).toBe(indexOf('comorodeep'));
+    expect(selectInitialStatsSpotIndex('world', null, 'madagascar', 185, 7)).toBe(indexOf('mozstrait'));
+    expect(selectInitialStatsSpotIndex('world', null, 'pacific', 55, 2)).toBe(indexOf('deep'));
+    expect(selectInitialStatsSpotIndex('world', null, 'pacific', 10, 0)).toBe(indexOf('sea'));
+
+    expect(selectInitialStatsSpotIndex('world', null, null, 315, 5)).toBe(indexOf('indian'));
+    expect(selectInitialStatsSpotIndex('world', null, null, 315, 9)).toBe(indexOf('bermuda'));
+    expect(selectInitialStatsSpotIndex('world', null, null, 10, 0)).toBe(indexOf('sea'));
+    expect(selectInitialStatsSpotIndex('world', null, 'village', 10, 0)).toBe(indexOf('sea'));
   });
 
   it('선택한 수역 기준 스탯과 파워 상태를 구성한다', () => {
@@ -195,23 +202,43 @@ describe('받는 보너스', () => {
     const at = (ms: number): string => new Date(Date.parse(T0) + ms).toISOString();
     const slotRows = (g: GameState, now = T0) => selectActiveBonuses(g, null, now).filter(b => b.source.kind === 'slot');
     const text = (b: ReturnType<typeof slotRows>[number]) =>
-      b.source.kind === 'slot' ? `${b.source.effect.label} ${b.source.effect.value}` : '';
+      b.source.kind === 'slot'
+        ? ('text' in b.source.effect ? b.source.effect.text : `${b.source.effect.label} ${b.source.effect.value}`)
+        : '';
 
     it('효과가 든 슬롯은 요리 이름을 출처로 효과마다 한 줄, 갈래를 붙여 모은다', () => {
       const g = game({ slots: { lunch: { id: 'cook-lunch-bundle', endsAt: at(3_600_000) }, bait: null } });
       const rows = slotRows(g);
       expect(rows.map(b => [b.category, text(b)])).toEqual([
-        ['fish', '입질 대기 −5%'], ['fish', '희귀 등급 가중치 +5%'], ['fish', '영웅 등급 가중치 +5%'], ['fish', '전설 등급 가중치 +5%'],
+        ['fish', '입질 대기 −5%'], ['fish', '희귀 어종 출현 비중 +5%'], ['fish', '영웅 어종 출현 비중 +5%'], ['fish', '전설 어종 출현 비중 +5%'],
       ]);
-      expect(rows.every(b => b.source.kind === 'slot' && b.source.label === '생선 탈리')).toBe(true);
+      expect(rows.every(b => b.source.kind === 'slot' && b.source.label === '생선 탈리(전설)')).toBe(true);
     });
 
-    it('네임드 조우 가중은 결투 갈래다', () => {
+    it('네임드 조우 확률은 결투 갈래다', () => {
       const g = game({ slots: { lunch: { id: 'cook-lunch-named', endsAt: at(3_600_000) }, bait: null } });
-      expect(slotRows(g).map(b => [b.category, text(b)])).toEqual([['duel', '네임드 조우 가중치 +50%']]);
+      expect(slotRows(g).map(b => [b.category, text(b)])).toEqual([['duel', '네임드 조우 확률 +50%']]);
     });
 
-    it('도시락은 방치로 낚을 때만, 미끼는 챔질해서 낚을 때만 붙는다고 표시한다', () => {
+    it('돌연변이 억제(키리바트·백단향 미끼)는 낚시 갈래의 ×0.5다', () => {
+      const g = game({
+        slots: {
+          lunch: { id: 'cook-lunch-calm', endsAt: at(3_600_000) },
+          bait: { id: 'cook-bait-calm', endsAt: at(300_000) },
+        },
+      });
+      expect(slotRows(g).map(b => [b.category, b.autoOnly, b.manualOnly, text(b)])).toEqual([
+        ['fish', true, false, '돌연변이 등장 ×0.5'],
+        ['fish', false, true, '돌연변이 등장 ×0.5'],
+      ]);
+    });
+
+    it('달빛 미끼의 비수치 효과는 낚시 갈래의 상세 설명 한 줄로 모은다', () => {
+      const g = game({ slots: { lunch: null, bait: { id: 'cook-bait-night', endsAt: at(3_600_000) } } });
+      expect(slotRows(g).map(b => [b.category, text(b)])).toEqual([['fish', '낮에도 밤 어종이 함께 낚여요.']]);
+    });
+
+    it('도시락은 방치로 낚을 때만, 미끼는 직접 챔질해 낚을 때만 붙는다고 표시한다', () => {
       const g = game({ slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(3_600_000) }, bait: { id: 'cook-bait-mutation', endsAt: at(60_000) } } });
       const [lunch, bait] = slotRows(g);
       expect([lunch.autoOnly, lunch.manualOnly]).toEqual([true, false]);
@@ -255,25 +282,25 @@ describe('받는 보너스', () => {
     });
     const bonuses = selectActiveBonuses(g);
     expect(bonuses.filter(b => b.source.kind === 'achievement').map(b => b.source)).toEqual([
-      { kind: 'achievement', label: '입질 대기', value: '−3.5%' },
-      { kind: 'achievement', label: '네임드 조우 가중치', value: '+3%' },
-      { kind: 'achievement', label: '판매가 보너스', value: '+2%' },
+      { kind: 'achievement', label: '입질 대기', value: '−4.8%' },
+      { kind: 'achievement', label: '네임드 조우 확률', value: '+3%' },
+      { kind: 'achievement', label: '판매가 보너스', value: '+1.2%' },
     ]);
     const data = selectStatsModalData(g, 'sail', 0);
     expect(data.effectiveBite.min.mods.some(m => m.id === 'achievement-biteWaitCut' && m.label === '업적 누적')).toBe(true);
   });
 
   it('보유 유물 효과 배율(artifactBoost)이 활성 유물 행 모두에 반영되고 낚시 갈래 단독 행으로 중복 분리하지 않는다', () => {
-    // 전설 유물 1개(mami-wata-mirror) → maxArtifactCount 1 → artifactBoost +3% (scale = 1.03)
+    // 전설 유물 1개(+2.5%) + 일반 유물 3개 Lv1(각 +0.5%) → artifactBoost +4% (scale = 1.04)
     const g = game({
       artifacts: ['mami-wata-mirror', 'wreck-compass', 'abyss-angler', 'outer-isle-sinker'],
     });
     const bonuses = selectActiveBonuses(g);
     const relics = bonuses.filter(b => b.source.kind === 'relic');
     expect(relics.map(b => [b.category, b.source.kind === 'relic' && b.source.artifact.id, b.source.kind === 'relic' && b.source.scale])).toEqual([
-      ['duel', 'abyss-angler', 1.03],
-      ['move', 'wreck-compass', 1.03],
-      ['fish', 'outer-isle-sinker', 1.03],
+      ['duel', 'abyss-angler', 1.04],
+      ['move', 'wreck-compass', 1.04],
+      ['fish', 'outer-isle-sinker', 1.04],
     ]);
     // 낚시 갈래에만 따로 '보유 유물 효과' 행을 두지 않는다
     expect(bonuses.some(b => b.source.kind === 'achievement' && b.source.label === '보유 유물 효과')).toBe(false);
@@ -297,11 +324,13 @@ describe('받는 보너스', () => {
       },
     });
     const rows = selectActiveBonuses(dual, null, now).filter(b => b.source.kind === 'slot');
-    expect(rows.map(b => b.source.kind === 'slot' ? `${b.source.label}:${b.source.effect.label}` : '')).toEqual([
-      '롱페퍼 미끼(희귀):희귀 등급 가중치',
-      '롱페퍼 미끼(희귀):영웅 등급 가중치',
-      '롱페퍼 미끼(희귀):전설 등급 가중치',
-      '사프란 미끼(특수):돌연변이 폼 가중치',
+    expect(rows.map(b => b.source.kind === 'slot'
+      ? `${b.source.label}:${'text' in b.source.effect ? b.source.effect.text : b.source.effect.label}`
+      : '')).toEqual([
+      '롱페퍼 미끼(희귀):희귀 어종 출현 비중',
+      '롱페퍼 미끼(희귀):영웅 어종 출현 비중',
+      '롱페퍼 미끼(희귀):전설 어종 출현 비중',
+      '사프란 미끼(특수):돌연변이 출현 비중',
     ]);
 
     const dup = game({
@@ -331,8 +360,139 @@ describe('받는 보너스', () => {
     const shadowRow = selectActiveBonuses(game({ fortune: { day: '2026-11-24', kind: 'shadow', index: 5 } }), null, now);
     expect(shadowRow.map(b => [b.category, b.source.kind])).toEqual([['duel', 'fortune']]);
 
+    const grandRow = selectActiveBonuses(game({ fortune: { day: '2026-11-24', kind: 'grand-catch', index: 5 } }), null, now);
+    expect(grandRow.map(b => [b.category, b.source.kind])).toEqual([['fish', 'fortune'], ['shop', 'fortune'], ['duel', 'fortune']]);
+
     // 날짜가 지난 운세는 보너스 내역에서 빠진다
     const stale = selectActiveBonuses(game({ fortune: { day: '2026-11-23', kind: 'gold', index: 5 } }), null, now);
     expect(stale).toEqual([]);
+  });
+
+  it('오늘 사용한 비약은 낚시·결투·상점 갈래에 각각 ×1.05 곱연산 보너스로 들어간다', () => {
+    const now = '2026-11-24T05:00:00.000Z';
+    const active = selectActiveBonuses(game({ potions: { 'luck-small': '2026-11-24' } }), null, now);
+    expect(active.map(b => [b.category, b.source.kind, b.source.kind === 'potion' ? b.source.target : null, b.source.kind === 'potion' ? b.source.bonus : null])).toEqual([
+      ['fish', 'potion', 'rarity', 0.05],
+      ['duel', 'potion', 'named', 0.05],
+      ['shop', 'potion', 'sell', 0.05],
+    ]);
+
+    const stale = selectActiveBonuses(game({ potions: { 'luck-small': '2026-11-23' } }), null, now);
+    expect(stale).toEqual([]);
+  });
+
+  describe('보너스 탭 통합 행 (selectBonusTableRows)', () => {
+    const T0 = '2026-11-24T05:00:00.000Z';
+    const at = (ms: number) => new Date(Date.parse(T0) + ms).toISOString();
+
+    it('동일 효과를 1줄로 합산하고 구역 누적은 구역별 이름 대신 N곳으로 묶으며 합연산→곱연산 내림차순·최종 적용 순으로 툴팁을 정렬한다', () => {
+      const pacFish = FISH.find(f => topZoneOfSpot(f.spot) === 'pacific')!;
+      const seaFish = FISH.find(f => topZoneOfSpot(f.spot) === 'seasia')!;
+      const g = game({
+        artifacts: ['mami-wata-mirror', 'elder-scale'], // 전설 유물 1개 -> artifactBoost +2.5% (×1.025), 코모로 Lv1 +25%
+        dex: {
+          [pacFish.id]: { variant: { count: 50, maxSize: 10, first: '2026-11-24' } }, // +0.3%
+          [seaFish.id]: { variant: { count: 50, maxSize: 10, first: '2026-11-24' } }, // +0.3%
+        },
+        achievementCounters: {
+          'manual.variant.total': 10_000, // +7.5%
+        },
+      });
+      const guild = {
+        level: 10,
+        effects: { sell: 0, bag: 0, named: 0, rare: 0, mutation: 0.4 },
+      };
+      const rows = selectBonusTableRows(g, guild, T0);
+      const mutRow = rows.find(r => r.category === 'fish' && r.effect === '돌연변이 출현 비중' && r.scope === 'all')!;
+      // 25% * 1.03 + 40% + 7.5% + 0.6% = 25.75 + 48.1 = 73.85%
+      expect(mutRow.totalText).toBe('+73.85%');
+      expect(mutRow.tipRows).toEqual([
+        { label: '[길드] 돌연변이 확률', value: '+40%' },
+        { label: '[유물] 코모로의 골판', value: '+25%' },
+        { label: '[업적] 전체 돌연변이 손맛', value: '+7.5%' },
+        { label: '[업적] 구역 돌연변이 2곳', value: '+0.6%' },
+        { label: '[업적] 유물 증폭', value: '×1.03' },
+        { label: '최종 적용', value: '+73.85%', divider: true },
+      ]);
+      // 구역 이름이 툴팁에 직접 나오지 않는다
+      expect(mutRow.tipRows.some(r => String(r.label).includes('태평양') || String(r.label).includes('동남아'))).toBe(false);
+    });
+
+    it('운세와 비약은 독립 곱연산(1.10 × 1.05 = ×1.155)으로 합산하고 수동·방치 요리는 각각의 범위 배지와 증폭을 붙이며 억제 요리는 ×0.5로 낸다', () => {
+      const g = game({
+        boat: 5,
+        artifacts: ['sargasso-net'],
+        achievementCounters: {
+          'catch.bait': 40,    // baitAmplify +6% (×1.06)
+          'catch.lunch': 1000, // lunchAmplify +3% (×1.03)
+          'energy.spent': 5000, // energyYield +3%
+          'catch.auto': 5000,  // bagCap +1.5%
+        },
+        slots: {
+          lunch: { id: 'cook-lunch-calm', endsAt: at(3_600_000) },
+          bait: { id: 'cook-bait-mutation', endsAt: at(300_000) },
+          bait2: { id: 'cook-bait-calm', endsAt: at(300_000) },
+        },
+        fortune: { day: '2026-11-24', kind: 'fish', index: 5 },
+        potions: { 'luck-small': '2026-11-24' },
+      });
+      const rows = selectBonusTableRows(g, null, T0);
+
+      const rareLuck = rows.find(r => r.effect === '희귀 이상 출현 비중' && r.totalText.startsWith('×'))!;
+      expect(rareLuck.scope).toBe('all');
+      expect(rareLuck.totalText).toBe('×1.155');
+      expect(rareLuck.tipRows).toEqual([
+        { label: '[운세] 만선 풍어운', value: '×1.10' },
+        { label: '[비약] 작은 바다 영약', value: '×1.05' },
+        { label: '최종 적용', value: '×1.155', divider: true },
+      ]);
+
+      const baitMut = rows.find(r => r.effect === '돌연변이 출현 비중' && r.scope === 'manual')!;
+      // +150% * 1.06 = +159%
+      expect(baitMut.totalText).toBe('+159%');
+      expect(baitMut.tipRows).toEqual([
+        { label: '[미끼] 사프란 미끼', value: '+150%' },
+        { label: '[업적] 미끼 손맛 증폭', value: '×1.06' },
+        { label: '최종 적용', value: '+159%', divider: true },
+      ]);
+
+      const calmBait = rows.find(r => r.effect === '돌연변이 등장' && r.scope === 'manual')!;
+      expect(calmBait.totalText).toBe('×0.5');
+      expect(calmBait.tipRows).toEqual([
+        { label: '[미끼] 백단향 미끼', value: '×0.5' },
+        { label: '최종 적용', value: '×0.5', divider: true },
+      ]);
+
+      const calmLunch = rows.find(r => r.effect === '돌연변이 등장' && r.scope === 'auto')!;
+      expect(calmLunch.totalText).toBe('×0.5');
+      expect(calmLunch.tipRows).toEqual([
+        { label: '[도시락] 키리바트', value: '×0.5' },
+        { label: '최종 적용', value: '×0.5', divider: true },
+      ]);
+
+      expect(rows.find(r => r.effect === '기운 획득량')?.totalText).toBe('+3%');
+      expect(rows.find(r => r.effect === '가방 용량')?.totalText).toBe('+1.5%');
+    });
+
+    it('신규 운세 10개 보너스 채널(입질 대기·월척·명성·돌연변이·밤·기운·전설·복합 대길)이 보너스 탭에 반영된다', () => {
+      const mirageRows = selectBonusTableRows(game({ fortune: { day: '2026-11-24', kind: 'mirage', index: 5 } }), null, T0);
+      expect(mirageRows.find(r => r.effect === '전설 출현 비중')?.tipRows[0]).toEqual({ label: '[운세] 신기루 운', value: '×1.08' });
+      expect(mirageRows.find(r => r.effect === '돌연변이 출현 비중')?.tipRows[0]).toEqual({ label: '[운세] 신기루 운', value: '×1.08' });
+
+      const biteRows = selectBonusTableRows(game({ fortune: { day: '2026-11-24', kind: 'bite', index: 3 } }), null, T0);
+      expect(biteRows.find(r => r.effect === '입질 대기')?.totalText).toBe('×0.95');
+
+      const bigRows = selectBonusTableRows(game({ fortune: { day: '2026-11-24', kind: 'big', index: 5 } }), null, T0);
+      expect(bigRows.find(r => r.effect === '월척 출현 확률')?.totalText).toBe('×2');
+
+      const fameRows = selectBonusTableRows(game({ fortune: { day: '2026-11-24', kind: 'fame', index: 3 } }), null, T0);
+      expect(fameRows.find(r => r.effect === '명성 획득')?.totalText).toBe('×1.50');
+
+      const nightRows = selectBonusTableRows(game({ fortune: { day: '2026-11-24', kind: 'night', index: 5 } }), null, T0);
+      expect(nightRows.find(r => r.effect === '밤 어종 출현 비중')?.totalText).toBe('×1.10');
+
+      const energyRows = selectBonusTableRows(game({ fortune: { day: '2026-11-24', kind: 'energy', index: 3 } }), null, T0);
+      expect(energyRows.find(r => r.effect === '생명의 기운 획득량')?.totalText).toBe('×1.50');
+    });
   });
 });

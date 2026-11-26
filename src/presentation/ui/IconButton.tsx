@@ -10,13 +10,16 @@ interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   tone?: 'gold' | 'dim';
   /** 전폭 블록 — 좌우로 채운다 */
   full?: boolean;
+  /** 평면 1px 테두리 박스 — 상태 아이콘 트리거 등에 쓴다 */
+  boxed?: boolean;
 }
 
-// 투명 아이콘 버튼 — 행 내 잠금/체크/펼침 토글 공용. 색·여백은 호출부가 정한다.
-export default function IconButton({ glyph, size = 12, tone, full, className, children, ...props }: IconButtonProps) {
+// 투명 또는 1px 평면 테두리 아이콘 버튼 — 행 내 잠금/체크/상태 아이콘 공용. 색·여백은 호출부가 정한다.
+export default function IconButton({ glyph, size = 12, tone, full, boxed, className, children, ...props }: IconButtonProps) {
   return (
     <button
-      className={cx('inline-flex items-center bg-transparent border-0 cursor-pointer',
+      className={cx('inline-flex items-center cursor-pointer',
+        boxed ? 'justify-center border bg-bg' : 'bg-transparent border-0',
         'disabled:opacity-40 disabled:cursor-not-allowed',
         tone === 'gold' ? 'text-gold' : tone === 'dim' ? 'text-text-dim hover:text-text' : '',
         full && 'w-full justify-center',

@@ -7,7 +7,8 @@ import {
 } from './logic';
 import type { GameState } from './logic';
 import { DEBUG_COMMAND_IDS, DEBUG_TABLE_COMMANDS } from './debug';
-import { artifactById } from '../content/artifacts';
+import { ARTIFACT_MAX_LEVEL, artifactById } from '../content/artifacts';
+import { artifactLevelOf } from './artifactLevel';
 import { FISH, fishById } from '../content/fish';
 import { NAMED } from '../content/named';
 import { HATS } from '../content/wardrobe';
@@ -61,10 +62,11 @@ describe('stats.set', () => {
 });
 
 describe('dex.completeZone', () => {
-  it('구역 도감을 채워 네임드 라이선스 도감 조건을 만족시킨다 — 판정 함수와 같은 기준', () => {
+  it('구역 도감을 채워 네임드 라이선스 도감 조건(전설 제외)을 만족시킨다 — 판정 함수와 같은 기준', () => {
     const out = debug(seed(), 'dex.completeZone', { zone: 'madagascar' });
     if (!out.ok) throw new Error(out.error);
-    expect(zoneDexMissing(out.state, 'madagascar', ['common', 'rare', 'epic', 'legendary'])).toEqual([]);
+    expect(zoneDexMissing(out.state, 'madagascar', ['common', 'rare', 'epic'])).toEqual([]);
+    expect(zoneDexMissing(out.state, 'madagascar', ['legendary']).length).toBeGreaterThan(0);
     expect(licenseConditions(out.state, 'madagascar', 'named').find(c => c.key === 'dex')?.ok).toBe(true);
   });
 
@@ -175,17 +177,24 @@ describe('items.grant / cooking.finish / artifact.set / hat.set', () => {
     if (!r.ok) throw new Error(r.error);
     expect(r.state.items['cook-bait-night']).toBe(3);
 
+    const p = debug(r.state, 'items.grant', { itemId: 'luck-small', count: 2 });
+    if (!p.ok) throw new Error(p.error);
+    expect(p.state.items['luck-small']).toBe(2);
+
     expect(debug(seed(), 'items.grant', { itemId: 'nope', count: 1 })).toEqual({ ok: false, error: 'bad-request' });
   });
 
-  it('cooking.finish는 진행 중인 조리를 즉시 완료해 보관함으로 옮긴다', () => {
+  it('cooking.finish는 진행 중인 조리와 대기열 전체를 즉시 완료해 보관함으로 옮긴다', () => {
     const cookingState = seed({
-      cooking: { recipe: 'cook-lunch-bite', count: 2, bonus: [true, false], startedAt: '2026-10-16T03:00:00.000Z' },
+      cooking: { id: 'c1', recipe: 'cook-lunch-rare', count: 2, bonus: [true, false], startedAt: '2026-10-16T03:00:00.000Z' },
+      cookingQueue: [{ id: 'q1', recipe: 'cook-lunch-mutation', count: 2, bonus: [false, true] }],
     });
     const out = debug(cookingState, 'cooking.finish', {});
     if (!out.ok) throw new Error(out.error);
     expect(out.state.cooking).toBeNull();
-    expect(out.state.items['cook-lunch-bite']).toBe(3);
+    expect(out.state.cookingQueue).toEqual([]);
+    expect(out.state.items['cook-lunch-rare']).toBe(3);
+    expect(out.state.items['cook-lunch-mutation']).toBe(3);
   });
 
   it('artifact.set은 보유·레벨(0=회수, 1..5=레벨)을 설정하고 전설 유물은 레벨 맵에 남기지 않는다', () => {
@@ -194,6 +203,8 @@ describe('items.grant / cooking.finish / artifact.set / hat.set', () => {
     expect(all.state.artifacts).toHaveLength(8);
     expect(all.state.artifactLevels?.['wreck-compass']).toBe(5);
     expect(all.state.artifactLevels?.['mami-wata-mirror']).toBeUndefined();
+    expect(artifactLevelOf(all.state, 'mami-wata-mirror')).toBe(ARTIFACT_MAX_LEVEL);
+    expect(artifactLevelOf(all.state, 'sargasso-net')).toBe(ARTIFACT_MAX_LEVEL);
 
     const removed = debug(all.state, 'artifact.set', { artifact: 'wreck-compass', level: 0 });
     if (!removed.ok) throw new Error(removed.error);
@@ -242,7 +253,7 @@ describe('achievement.setCounter / resetCounters / evaluate & bag.spawn & snapsh
   });
 
   it('achievement.evaluate reset은 도감 조건이 채워져 있어도 같은 턴에 다시 claimable로 덮어쓰지 않는다', () => {
-    const filled = debug(seed(), 'dex.completeZone', { zone: 'pacific' });
+    const filled = debug(seed(), 'dex.fill', { zone: 'pacific', form: 'normal' });
     if (!filled.ok) throw new Error(filled.error);
     expect(filled.state.achievements['spot-basic-sea']).toBe('claimable');
     expect(filled.state.achievements['spot-full-sea']).toBe('claimable');

@@ -8,8 +8,8 @@ import {
   GUILD_DAILY_FAME_CAP, GUILD_LEVEL_FLOORS, GUILD_MAX_LEVEL, contributionDayOf, contributionFor, guildLevelOf, guildProgress,
   GUILD_BONUS_IDS, NO_GUILD_EFFECTS, applyDonation, bonusEffect, bonusRank, bonusRankCost, bonusTotalRank, donationOutcome,
   guildBonusLevels, guildEffectsOf, validDonationAmount,
-  GUILD_ENHANCE_MAX_RANK, GUILD_ENHANCE_MIN_LEVEL, GUILD_ENHANCE_RESET_COST, enhanceOutcome, enhanceResetOutcome,
-  maxEnhancePoints, remainingEnhancePoints, usedEnhancePoints,
+  GUILD_ENHANCE_MAX_RANK, GUILD_ENHANCE_MIN_LEVEL, GUILD_ENHANCE_RESET_COSTS, enhanceOutcome, enhanceResetOutcome,
+  guildEnhanceResetCost, maxEnhancePoints, remainingEnhancePoints, usedEnhancePoints,
   GUILD_RENAME_COST, parseJoinVia, renameBlock, renameOutcome,
 } from './guild';
 
@@ -252,12 +252,12 @@ describe('길드 보너스 — 기부', () => {
 });
 
 describe('길드 보너스 — 효과(합연산)', () => {
-  it('단계당 효과 — 판매가 +2%, 가방 +4%, 네임드 조우 +5%, 일반 가중치 −2%, 돌연변이 +1%p', () => {
+  it('단계당 효과 — 판매가 +2%, 가방 +4%, 네임드 조우 +5%, 일반 가중치 −2%, 돌연변이 +4%', () => {
     expect([1, 5].map(r => bonusEffect('sell', r))).toEqual([0.02, 0.1]);
     expect([1, 5].map(r => bonusEffect('bag', r))).toEqual([0.04, 0.2]);
     expect([1, 5].map(r => bonusEffect('named', r))).toEqual([0.05, 0.25]);
     expect([1, 5].map(r => bonusEffect('rare', r))).toEqual([0.02, 0.1]);
-    expect([1, 5].map(r => bonusEffect('mutation', r))).toEqual([0.01, 0.05]);
+    expect([1, 5, 10].map(r => bonusEffect('mutation', r))).toEqual([0.04, 0.2, 0.4]);
   });
 
   it('효과는 단계 효과를 더한 값 하나다 — 단계마다 곱하지 않는다', () => {
@@ -269,9 +269,9 @@ describe('길드 보너스 — 효과(합연산)', () => {
   it('길드 효과는 레벨로 열린 1단계와 기부로 오른 단계 중 높은 단계에 자유 강화 단계를 더해 정한다', () => {
     expect(guildEffectsOf(3, { sell: 3, bag: 2 })).toEqual({ sell: 0.06, bag: 0.08, named: 0.05, rare: 0, mutation: 0 });
     expect(guildEffectsOf(1, {})).toEqual({ sell: 0.02, bag: 0, named: 0, rare: 0, mutation: 0 });
-    expect(guildEffectsOf(5, {})).toEqual({ sell: 0.02, bag: 0.04, named: 0.05, rare: 0.02, mutation: 0.01 });
+    expect(guildEffectsOf(5, {})).toEqual({ sell: 0.02, bag: 0.04, named: 0.05, rare: 0.02, mutation: 0.04 });
     expect(guildEffectsOf(10, { sell: 5, bag: 5, named: 5, rare: 5, mutation: 5 }, { sell: 5, bag: 1, mutation: 2 }))
-      .toEqual({ sell: 0.2, bag: 0.24, named: 0.25, rare: 0.1, mutation: 0.07 });
+      .toEqual({ sell: 0.2, bag: 0.24, named: 0.25, rare: 0.1, mutation: 0.28 });
     expect(bonusTotalRank('rare', 6, 1, 3)).toBe(4);
     expect(bonusTotalRank('sell', 10, 5, 5)).toBe(10);
   });
@@ -319,11 +319,38 @@ describe('길드 자유 강화', () => {
     expect(enhanceOutcome(10, { rare: 4 }, 'rare')).toEqual({ ok: true, enhanceRank: 5 });
   });
 
-  it('초기화는 투자한 포인트가 있고 20,000,000G 이상이면 횟수 제한 없이 허용한다', () => {
-    expect(GUILD_ENHANCE_RESET_COST).toBe(20_000_000);
-    expect(enhanceResetOutcome({}, 50_000_000)).toEqual({ ok: false, error: 'no-enhance-used' });
-    expect(enhanceResetOutcome({ sell: 1 }, 19_999_999)).toEqual({ ok: false, error: 'not-enough-gold' });
-    expect(enhanceResetOutcome({ sell: 1 }, 20_000_000)).toEqual({ ok: true });
+  it('초기화 비용은 누적 초기화 횟수에 따라 단계별로 오르고 5회차(인덱스 4)부터 10,000,000G로 상한을 둔다', () => {
+    expect(GUILD_ENHANCE_RESET_COSTS).toEqual([100_000, 500_000, 1_000_000, 5_000_000, 10_000_000]);
+    expect([0, 1, 2, 3, 4, 5, 6].map(guildEnhanceResetCost)).toEqual([
+      100_000, 500_000, 1_000_000, 5_000_000, 10_000_000, 10_000_000, 10_000_000,
+    ]);
+    expect(guildEnhanceResetCost(-1)).toBe(100_000);
+    expect(guildEnhanceResetCost(-0.5)).toBe(100_000);
+    expect(guildEnhanceResetCost(1.9)).toBe(500_000);
+    expect(guildEnhanceResetCost(Number.NaN)).toBe(100_000);
+    expect(guildEnhanceResetCost(Number.POSITIVE_INFINITY)).toBe(100_000);
+  });
+
+  it('초기화는 투자한 포인트가 있고 회차별 필요 골드 이상이면 허용하며 recovered와 cost를 돌려준다', () => {
+    expect(enhanceResetOutcome({}, 50_000_000)).toEqual({ ok: false, error: 'no-enhance-used', cost: 100_000 });
+    expect(enhanceResetOutcome({}, 50_000_000, 3)).toEqual({ ok: false, error: 'no-enhance-used', cost: 5_000_000 });
+
+    const cases: [number, number][] = [
+      [0, 100_000],
+      [1, 500_000],
+      [2, 1_000_000],
+      [3, 5_000_000],
+      [4, 10_000_000],
+      [5, 10_000_000],
+      [6, 10_000_000],
+    ];
+    for (const [resetCount, cost] of cases) {
+      expect(enhanceResetOutcome({ sell: 1, rare: 2 }, cost - 1, resetCount), `count ${resetCount} 부족`)
+        .toEqual({ ok: false, error: 'not-enough-gold', cost });
+      expect(enhanceResetOutcome({ sell: 1, rare: 2 }, cost, resetCount), `count ${resetCount} 허용`)
+        .toEqual({ ok: true, recovered: 3, cost });
+    }
+    expect(enhanceResetOutcome({ sell: 2 }, 100_000)).toEqual({ ok: true, recovered: 2, cost: 100_000 });
   });
 });
 

@@ -44,9 +44,7 @@ const RAW_INPUT = /<(?:input|textarea|select)\b/;
 /** 제목 태그 직접 사용 — 쪽 제목은 PageTitle, 구역은 SectionTitle, 묶음은 Subheading, 창·상자 제목은 Panel·ModalCard의
  *  title이 맡는다. 아래는 그 틀에 맞지 않는 자리라 직접 둔다(줄이기만 한다) */
 const RAW_HEADING = /<h[1-6][\s>]/;
-const RAW_HEADING_EXCEPTIONS = new Set([
-  'views/game/tabs/region/VRegion.tsx', // 지역 탭 로어 상자 — 고정 높이 상자 안 한 줄 제목
-]);
+const RAW_HEADING_EXCEPTIONS = new Set<string>([]);
 
 /** 화면(views·layouts)의 overflow 직접 지정 — 세로 스크롤은 공용 스크롤 방식(pf-vscroll + pf-scroll-panel)이나 TableBox가 맡는다.
  *  아래는 칸 안에서 표를 가로로 굴려야 하는 자리(관리자 표, 지역 탭 표)와 양방향 표 상자라 직접 둔다(줄이기만 한다) */
@@ -151,6 +149,25 @@ const nestedScrollCells = (src: string) => {
     .filter(tag => SCROLL_CELL_RE.test(tag) && !/SCROLL_Y_ROWS/.test(tag) && !HEIGHT_CLASS_RE.test(tag)));
 };
 
+/** 고정 높이 ModalCard(fixed) 안에서 바깥 스크롤 칸 안에 또 다른 스크롤 칸을 중첩한 호출부 */
+const FIXED_MODAL_SCROLL_RE = /\bSCROLL_Y(?:_ROWS)?\b|^<TableBox\b|pf-vscroll/;
+const nestedScrollInFixedModal = (src: string) =>
+  openingTagsAt(src, 'ModalCard')
+    .filter(t => /\bfixed\b/.test(t.tag))
+    .flatMap(card => {
+      const cardBody = childrenOf(src, card, 'ModalCard');
+      return openingTagsAt(cardBody, ANY_TAG)
+        .filter(t => FIXED_MODAL_SCROLL_RE.test(t.tag))
+        .filter(outer => !/\/>\s*$/.test(outer.tag))
+        .filter(outer => {
+          const name = outer.tag.match(/^<([A-Za-z][\w.]*)/)?.[1];
+          if (!name) return false;
+          const inner = childrenOf(cardBody, outer, name);
+          return openingTags(inner, ANY_TAG).some(tag => FIXED_MODAL_SCROLL_RE.test(tag));
+        })
+        .map(outer => outer.tag);
+    });
+
 /** 본문이 스크롤하는 ModalCard(fixed가 아닌 카드)의 본문 안에 있는 주 버튼(variant="primary", ConfirmButton) — 확정 버튼은 confirm 자리에 둔다.
  *  높이를 고정한 카드(fixed)는 본문이 스크롤하지 않고 탭 안의 동작 줄이 고정 영역에 있어 대상이 아니다 */
 const PRIMARY_BUTTON = /variant="primary"|^<ConfirmButton/;
@@ -181,7 +198,6 @@ const hasVscrollWithoutBar = (line: string) =>
  *  관리자와 개발 도구 화면은 이 규칙을 따로 정한다 */
 const VSCROLL_LITERAL_EXCEPTIONS = new Set([
   'layouts/sidebar/index.tsx',         // 막대를 숨기는 사이드바
-  'views/game/tabs/region/VRegion.tsx', // 사이드바 탭 안의 고정 높이 칸 — 막대 자리 규칙은 창에 적용한다
 ]);
 const isAdminOrDevtools = (path: string) => /^views\/(?:admin|devtools)\//.test(path);
 
@@ -191,7 +207,6 @@ const GUTTER = /\[scrollbar-gutter:stable/;
 const GUTTER_EXCEPTIONS = new Set([
   'ui/hud/MessageLog.tsx', // 캔버스 위 글줄 상자 — 호버 때만 보이는 HUD 막대
   'layouts/sidebar/index.tsx', // 사이드바는 창이 아니며 막대를 숨긴다
-  'views/game/tabs/region/VRegion.tsx', // 사이드바 탭은 창이 아니다(막대 자리 규칙은 창에 적용한다)
 ]);
 
 describe('UI 시스템 가드', () => {
@@ -281,11 +296,13 @@ describe('UI 시스템 가드', () => {
   it('본문이 스크롤하는 창 안에는 높이를 정하지 않은 스크롤 칸을 겹치지 않는다 — 앱 모달과 높이를 고정하지 않은 ModalCard', () => {
     expect(screens.filter(f => !NESTED_SCROLL_EXCEPTIONS.has(f.path)).flatMap(f => nestedScrollCells(f.src).map(tag => `${f.path}: ${tag}`))).toEqual([]);
     expect([...NESTED_SCROLL_EXCEPTIONS].filter(p => nestedScrollCells(screens.find(f => f.path === p)?.src ?? '').length === 0)).toEqual([]);
+    expect(screens.flatMap(f => nestedScrollInFixedModal(f.src).map(tag => `${f.path}: ${tag}`))).toEqual([]);
     const cell = '<div className={`${SCROLL_Y} flex-1`}>';
     expect(nestedScrollCells(`<Modal onClose={c}>${cell}</div></Modal>`)).toHaveLength(1);
     expect(nestedScrollCells(`<ModalCard title="가">${cell}</div></ModalCard>`)).toHaveLength(1);
     expect(nestedScrollCells(`<ModalCard title="가"><TableBox className="flex-1 min-h-0">x</TableBox></ModalCard>`)).toHaveLength(1);
     expect(nestedScrollCells(`<ModalCard title="가" fixed>${cell}</div></ModalCard>`)).toEqual([]);
+    expect(nestedScrollInFixedModal(`<ModalCard title="가" fixed><div className={SCROLL_Y}><div className={SCROLL_Y_ROWS}>x</div></div></ModalCard>`)).toHaveLength(1);
     expect(nestedScrollCells(`<Modal layer="stage" onClose={c}>${cell}</div></Modal>`)).toEqual([]);
     expect(nestedScrollCells(`<ModalCard title="가"><TableBox className="h-[138px] shrink">x</TableBox></ModalCard>`)).toEqual([]);
     expect(nestedScrollCells('<Modal onClose={c}><div className={`${SCROLL_Y_ROWS} max-h-[9px]`}></div></Modal>')).toEqual([]);
@@ -406,7 +423,6 @@ describe('UI 시스템 가드', () => {
     'views/overlays/bounty/NamedCard.tsx',
     'views/overlays/bounty/QuestInfoCards.tsx',
     'views/overlays/facility/SellTab.tsx',
-    'views/game/tabs/bag/BagTab.tsx',
   ];
   /** 허용 줄 - 파일마다 허용하는 줄의 모양과 사유. 파일 단위가 아니라 줄 단위로 가리고, 쓰이지 않는 허용은 지운다 */
   type Allowed = Map<string, { line: RegExp; why: string }[]>;
@@ -575,37 +591,48 @@ describe('UI 시스템 가드', () => {
       expect(src, path).not.toMatch(/\bendsAt\b|\bslotMs\b|\bwaitMs\b|COOK_KIND_RULES|\.slots\b/);
     }
   });
-  it('슬롯 칩은 칩 껍데기(HudChip)와 공용 잠금(Locked)으로 그리고, 칩 껍데기가 칩 자신만 포인터 이벤트를 받게 한다', () => {
+  it('슬롯 칩은 칩 껍데기(HudChip)와 공용 잠금(Locked)으로 그리고, 칩 껍데기는 26px 단일 높이와 포인터 이벤트 격리를 강제한다', () => {
     const chips = presentationFiles.find(f => f.path === 'ui/hud/SlotChips.tsx')!.src;
     expect(chips).toMatch(/<HudChip\b/);
     expect(chips).toMatch(/<Locked\b/);
-    expect(presentationFiles.find(f => f.path === 'ui/hud/HudChip.tsx')!.src).toContain('pointer-events-auto');
+    const hudChip = presentationFiles.find(f => f.path === 'ui/hud/HudChip.tsx')!.src;
+    expect(hudChip).toContain('pointer-events-auto');
+    expect(hudChip).toContain('h-[26px]');
+    expect(hudChip).not.toMatch(/\bsize\??\s*:/);
+    const timeBadge = presentationFiles.find(f => f.path === 'ui/hud/TimeBadge.tsx')!.src;
+    expect(timeBadge).not.toMatch(/<HudChip[^>]*\bsize\s*=/);
   });
 
-  // 하단 HUD 흐름 & 낚시 상태 띠 고정 슬롯 분리 — 오른쪽 아래 열과 메시지 창은 하단 단일 흐름 컨테이너 안에 두고,
-  // 낚시 상태 띠(statusSlot)는 하단 트렁크에서 분리해 스테이지 상단 고정 절대 좌표 슬롯(z-(--z-stage-status))에 둔다.
-  it('Field는 PC와 모바일 모두 공용 statusSlot 포털로 z-(--z-stage-status) 낚시 상태 띠를 공급하고 게임 프레임 하단에 따로 절대 배치하지 않는다', () => {
+  // 하단 HUD 흐름 & 낚시 상태 띠·획득 카드 고정 슬롯 분리 — 오른쪽 아래 열과 메시지 창은 하단 단일 흐름 컨테이너 안에 두고,
+  // 낚시 상태 띠(statusSlot)와 획득 카드(catchSlot)는 하단 트렁크에서 분리해 스테이지 고정 절대 좌표 슬롯에 둔다.
+  it('Field는 PC와 모바일 모두 공용 statusSlot·catchSlot 포털로 상태 띠와 획득 카드를 공급하고 게임 프레임 하단에 따로 절대 배치하지 않는다', () => {
     const field = presentationFiles.find(f => f.path === 'layouts/game-stage/Field.tsx')!.src;
     expect(field).toMatch(/createPortal\(\s*statusBand\s*,\s*statusSlot\s*\)/);
+    expect(field).toMatch(/createPortal\(\s*<CatchCard\b[\s\S]*?,\s*catchSlot\s*\)/);
     expect(field).toContain('z-(--z-stage-status)');
-    expect(field).not.toMatch(/mobile\s*&&\s*statusSlot|statusSlot\s*&&\s*mobile/);
+    expect(field).not.toMatch(/mobile\s*&&\s*(?:statusSlot|catchSlot)|(?:statusSlot|catchSlot)\s*&&\s*mobile/);
     expect(field).not.toMatch(/\bbottom-3\b|-translate-x-1\/2/);
   });
 
-  it('HudLayout은 statusSlot을 하단 flex-wrap 트렁크와 분리된 독립 absolute 슬롯(z-(--z-stage-status))에 두고, 오른쪽 아래 열과 메시지 창은 하단 단일 흐름에 둔다', () => {
+  it('HudLayout은 statusSlot·catchSlot을 하단 flex-wrap 트렁크와 분리된 독립 absolute 슬롯에 두고, catchSlot 래퍼는 z-index를 갖지 않으며, 오른쪽 아래 열과 메시지 창만 하단 단일 흐름에 둔다', () => {
     const hud = presentationFiles.find(f => f.path === 'layouts/hud/HudLayout.tsx')!.src;
     const log = presentationFiles.find(f => f.path === 'ui/hud/MessageLog.tsx')!.src;
     expect(hud).toMatch(/ref=\{onStatusSlot\}/);
+    expect(hud).toMatch(/ref=\{onCatchSlot\}/);
     expect(hud).toContain('z-(--z-stage-status)');
-    expect(hud).not.toMatch(/mobile\s*&&\s*<div\b[^>]*ref=\{onStatusSlot\}/);
+    expect(hud).not.toMatch(/mobile\s*&&\s*<div\b[^>]*ref=\{(?:onStatusSlot|onCatchSlot)\}/);
+    const catchSlotTag = openingTagsAt(hud, 'div').find(t => /ref=\{onCatchSlot\}/.test(t.tag))?.tag ?? '';
+    expect(catchSlotTag).not.toMatch(/\bz-/);
     expect(hud).not.toMatch(/['"`]contents\b/);
     expect(hud).not.toMatch(/\babsolute\s+right-3\s+bottom-3\b/);
     expect(log).not.toMatch(/\babsolute\s+left-3\s+bottom-3\b/);
-    // statusSlot은 하단 트렁크 div 바깥(앞)에 독립 배치된다
+    // statusSlot·catchSlot은 하단 트렁크 div 바깥(앞)에 독립 배치된다
     const slotAt = hud.indexOf('<div ref={onStatusSlot}');
+    const catchAt = hud.indexOf('<div ref={onCatchSlot}');
     const trunkAt = hud.lastIndexOf('STACK_TRUNK_CLASS');
     expect(slotAt).toBeGreaterThan(-1);
-    expect(trunkAt).toBeGreaterThan(slotAt);
+    expect(catchAt).toBeGreaterThan(slotAt);
+    expect(trunkAt).toBeGreaterThan(catchAt);
   });
 
   // 초록(ok) 상태색 금지 — 초록은 특수 등급에만 쓰고 상태(성공, 활성, 접속)에는 쓰지 않는다
@@ -677,7 +704,6 @@ describe('UI 시스템 가드', () => {
   });
 
   const TIER1_FLAT_PRIMITIVES = [
-    'ui/HelpHint.tsx',
     'ui/ArrowButton.tsx',
     'ui/ProgressMeter.tsx',
     'ui/SegmentedStepBar.tsx',
@@ -782,11 +808,6 @@ describe('UI 시스템 가드', () => {
     const stripped = withoutTags.replace(/\{[^}]*&&\s*\}/g, '').replace(/\s+/g, '');
     return stripped === '';
   };
-  const isStepperException = (path: string, tag: string, body: string) =>
-    path === 'views/overlays/guild/GuildSkillsTab.tsx'
-    && /\bsize="xs"/.test(tag)
-    && /\bh-5\b/.test(tag)
-    && body.trim() === '+1';
   const fixedHeightButtons = (src: string, path = '') =>
     openingTagsQuoted(src, '(?:Button|ConfirmButton)')
       .filter(t => BUTTON_FIXED_HEIGHT_RE.test(t.tag))
@@ -794,7 +815,7 @@ describe('UI 시스템 가드', () => {
         if (/\/>\s*$/.test(t.tag)) return true;
         const name = t.tag.startsWith('<ConfirmButton') ? 'ConfirmButton' : 'Button';
         const body = childrenOf(src, t, name);
-        return !isIconOnlySquareButton(t.tag, body) && !isStepperException(path, t.tag, body);
+        return !isIconOnlySquareButton(t.tag, body);
       })
       .map(t => `${path ? `${path}: ` : ''}${t.tag}`);
   const fixedHeightConfirmRows = (src: string, path = '') =>
@@ -802,11 +823,9 @@ describe('UI 시스템 가드', () => {
       .filter(t => /\bdata-confirm-row\b/.test(ownTagHead(t.tag)) && CONFIRM_ROW_FIXED_HEIGHT_RE.test(t.tag))
       .map(t => `${path ? `${path}: ` : ''}${t.tag}`);
 
-  it('텍스트·수치를 담는 Button과 data-confirm-row는 고정 높이를 쓰지 않는다 — 아이콘 전용 정사각형과 소형 +1 스테퍼만 예외', () => {
+  it('텍스트·수치를 담는 Button과 data-confirm-row는 고정 높이를 쓰지 않는다 — 아이콘 전용 정사각형만 예외', () => {
     expect(presentationFiles.flatMap(f => fixedHeightButtons(f.src, f.path))).toEqual([]);
     expect(presentationFiles.flatMap(f => fixedHeightConfirmRows(f.src, f.path))).toEqual([]);
-    const guildSkills = presentationFiles.find(f => f.path === 'views/overlays/guild/GuildSkillsTab.tsx')!.src;
-    expect(openingTagsQuoted(guildSkills, 'Button').some(t => isStepperException('views/overlays/guild/GuildSkillsTab.tsx', t.tag, childrenOf(guildSkills, t, 'Button')))).toBe(true);
 
     expect(fixedHeightButtons('<Button variant="primary" full className="h-11">판매 (10마리)</Button>')).toHaveLength(1);
     expect(fixedHeightButtons('<Button className="h-[44px]">확인</Button>')).toHaveLength(1);
@@ -816,7 +835,6 @@ describe('UI 시스템 가드', () => {
     expect(fixedHeightButtons('<Button variant="primary" full className="min-h-11">판매 (10마리)</Button>')).toEqual([]);
     expect(fixedHeightButtons('<Button className="size-11 shrink-0 p-0"><PixelIcon glyph="gear" size={14} /></Button>')).toEqual([]);
     expect(fixedHeightButtons('<Button className="size-11 shrink-0 p-0"><PixelIcon glyph="gear" />{flag && <span className="size-1.5" />}</Button>')).toEqual([]);
-    expect(fixedHeightButtons('<Button size="xs" className="h-5">+1</Button>', 'views/overlays/guild/GuildSkillsTab.tsx')).toEqual([]);
 
     expect(fixedHeightConfirmRows('<div data-confirm-row className="flex flex-col h-11 [&>*]:h-full">{actions}</div>')).toHaveLength(1);
     expect(fixedHeightConfirmRows('<div data-confirm-row className="flex flex-col [&>*]:h-full">{actions}</div>')).toHaveLength(1);
@@ -907,5 +925,273 @@ describe('UI 시스템 가드', () => {
     expect(insetBorderOverrides('<Inset border="accent" className="px-3 text-accent">x</Inset>')).toEqual([]);
     expect(insetBorderOverrides('<Inset border={s.grade ? "epic" : undefined} className="border-dashed text-text-dim">x</Inset>')).toEqual([]);
     expect(insetBorderOverrides('<Inset borderless tone="deep" className="flex flex-wrap gap-1">x</Inset>')).toEqual([]);
+  });
+
+  // 비동기 상태 구분 — null·미설정·오류를 '불러오는 중'이나 '연결 중' 같은 로딩 문구로 폴백하지 않는다
+  const NULLISH_LOADING_FALLBACK_RE = /(?:\?\?|\|\|)\s*(?:<[^>]+>)?\s*['"`][^'"`\r\n]*(?:불러오는 중|연결 중)/;
+  const NULL_EQ_LOADING_FALLBACK_RE = /(?:===?\s*null\b|!\s*(?:view|data|blocks|uid|nickname|guild|profile|preview)\b)\s*\?\s*(?:<[^>]+>)?\s*[^:\r\n]*(?:불러오는 중|연결 중)/;
+  const VALUE_TRUTHY_LOADING_FALLBACK_RE = /\b(?:uid|nickname|blocks|view|data|guild|profile|preview)\s*\?\s*[^:\r\n]+:\s*(?:<[^>]+>)?\s*['"`][^'"`\r\n]*(?:불러오는 중|연결 중)/;
+
+  const asyncLoadingFallbacks = (src: string, path = '') => {
+    const code = src.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+    const hits: string[] = [];
+    for (const [i, line] of code.split(/\r?\n/).entries()) {
+      if (NULLISH_LOADING_FALLBACK_RE.test(line)
+        || NULL_EQ_LOADING_FALLBACK_RE.test(line)
+        || VALUE_TRUTHY_LOADING_FALLBACK_RE.test(line)) {
+        hits.push(`${path ? `${path}:${i + 1}: ` : ''}${line.trim()}`);
+      }
+    }
+    return hits;
+  };
+
+  it('표현 계층은 nullish/null 폴백으로 로딩 문구(불러오는 중·연결 중)를 표시하지 않는다', () => {
+    expect(presentationFiles.flatMap(f => asyncLoadingFallbacks(f.src, f.path))).toEqual([]);
+
+    expect(asyncLoadingFallbacks('{nickname ?? "불러오는 중"}')).toHaveLength(1);
+    expect(asyncLoadingFallbacks('{uid || "연결 중"}')).toHaveLength(1);
+    expect(asyncLoadingFallbacks('{blocks === null ? <Note>차단 목록을 불러오는 중이에요.</Note> : null}')).toHaveLength(1);
+    expect(asyncLoadingFallbacks('{!view ? <Note>초대를 불러오는 중이에요.</Note> : null}')).toHaveLength(1);
+    expect(asyncLoadingFallbacks('{uid ? maskUid(uid) : "연결 중"}')).toHaveLength(1);
+    expect(asyncLoadingFallbacks('{loading ? <Note>목록을 불러오는 중이에요.</Note> : null}')).toEqual([]);
+    expect(asyncLoadingFallbacks('{status === "loading" ? "불러오는 중" : "미설정"}')).toEqual([]);
+  });
+
+  // 툴팁 해부학 가드 — HelpHint 은퇴, LockLines 외부 조립 금지, MenuCard·Locked의 TipCard 사용
+  it('게임 UI는 물음표 도움말 아이콘(HelpHint)을 쓰지 않고 공용 Tip을 쓴다', () => {
+    const targets = presentationFiles.filter(f => isGameUi(f.path));
+    expect(targets.filter(f => /\bHelpHint\b/.test(f.src)).map(f => f.path)).toEqual([]);
+    expect(presentationFiles.some(f => f.path === 'ui/HelpHint.tsx')).toBe(false);
+  });
+
+  it('잠금 툴팁 줄은 ui/Locked.tsx 외부에서 <LockLines로 직접 조립하지 않고 Locked·LockTip·TipCard를 쓴다', () => {
+    const targets = presentationFiles.filter(f => f.path !== 'ui/Locked.tsx');
+    expect(targets.filter(f => /<LockLines\b/.test(f.src)).map(f => f.path)).toEqual([]);
+  });
+
+  it('MenuCard와 Locked는 구조형 툴팁 TipCard로 잠금 헤더와 구분선 위계를 유지한다', () => {
+    const menuCard = presentationFiles.find(f => f.path === 'ui/MenuCard.tsx')!.src;
+    const locked = presentationFiles.find(f => f.path === 'ui/Locked.tsx')!.src;
+    expect(menuCard).toMatch(/<TipCard\b/);
+    expect(locked).toMatch(/<TipCard\b/);
+  });
+
+  // 기획·구현 내부 용어와 AI 슬롭 문구 재유입 가드 (테스트·admin·devtools·patchnotes·주석 제외)
+  const SLOP_COPY_RE = /한국 시간 새벽|운 배율|일반 폼|돌연변이 폼|클라우드 세이브|을\(를\)|친구 성사/;
+  it('게임·기능·화면 노출 코드 문자열은 기획·시간대·구현 직역 용어를 쓰지 않는다', () => {
+    const gameFiles = Object.entries(
+      import.meta.glob('../../game/**/*.{ts,tsx}', { query: '?raw', import: 'default', eager: true }) as Record<string, string>,
+    )
+      .map(([key, src]) => ({ path: key.replace(/^\.\.\/\.\.\//, ''), src }))
+      .filter(f => !isTestFile(f.path));
+
+    const targets = [...gameFiles, ...featureFiles, ...presentationFiles].filter(
+      f => !f.path.includes('/admin/') && !f.path.includes('/devtools/')
+        && !f.path.startsWith('views/admin/') && !f.path.startsWith('views/devtools/')
+        && !f.path.includes('patchnotes'),
+    );
+    const offenders = targets.filter(f => SLOP_COPY_RE.test(stripComments(f.src))).map(f => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  // 등급색 표기 및 공용 툴팁 등급색 구조 가드
+  const RAW_RARITY_NAME_RE = /\b(?:RARITY|DISPLAY_GRADE)\[[^\]]+\]\.name\b/;
+  it('게임 UI는 RarityTag 외부에서 RARITY[...].name을 민글자로 쓰지 않고 RarityText·GradeName을 쓴다', () => {
+    const targets = presentationFiles.filter(
+      f => isGameUi(f.path) && f.path !== 'ui/fish/RarityTag.tsx',
+    );
+    const offenders = targets.filter(f => RAW_RARITY_NAME_RE.test(stripComments(f.src))).map(f => f.path);
+    expect(offenders).toEqual([]);
+    expect(RAW_RARITY_NAME_RE.test('<th>{RARITY[r].name}</th>')).toBe(true);
+    expect(RAW_RARITY_NAME_RE.test('{DISPLAY_GRADE[g].name}')).toBe(true);
+    expect(RAW_RARITY_NAME_RE.test('<RarityText rarity={r} />')).toBe(false);
+  });
+
+  it('공용 툴팁(TipList·TipCard·RecipeEffectTip·Locked·MessageTip)은 ReactNode와 등급색 강조를 유지한다', () => {
+    const tipSrc = presentationFiles.find(f => f.path === 'ui/Tip.tsx')!.src;
+    const recipeTipSrc = presentationFiles.find(f => f.path === 'ui/RecipeEffectTip.tsx')!.src;
+    const lockedSrc = presentationFiles.find(f => f.path === 'ui/Locked.tsx')!.src;
+    const messageFeedSrc = presentationFiles.find(f => f.path === 'ui/hud/messageFeed.ts')!.src;
+
+    expect(tipSrc).toMatch(/HighlightRarityText/);
+    expect(tipSrc).toMatch(/function TipList\(\{ rows, note \}:\s*\{\s*rows:\s*readonly\s*\{\s*label:\s*ReactNode;\s*value:\s*ReactNode(?:;\s*divider\?:\s*boolean)?\s*\}\[\];\s*note\?:\s*ReactNode/);
+    expect(recipeTipSrc).toMatch(/HighlightRarityText/);
+    expect(recipeTipSrc).toMatch(/export type RecipeEffectTipRow\s*=\s*\|\s*\{\s*label:\s*ReactNode;\s*value:\s*ReactNode\s*\}\s*\|\s*\{\s*text:\s*ReactNode\s*\}/);
+    expect(recipeTipSrc).toMatch(/label:\s*ReactNode;\s*effects:\s*readonly\s*RecipeEffectTipRow\[\];\s*note:\s*ReactNode/);
+    expect(lockedSrc).toMatch(/title\?:\s*ReactNode/);
+    expect(lockedSrc).toMatch(/description\?:\s*ReactNode/);
+    expect(messageFeedSrc).toMatch(/rows:\s*readonly\s*\{\s*label:\s*ReactNode;\s*value:\s*ReactNode\s*\}\[\]/);
+  });
+
+  it('유물 목록 바깥 행은 로어를 노출하지 않고, ItemDetail·ArtifactDetail 상세 창 본문은 로어(설명)를 효과와 주의사항 앞에 둔다', () => {
+    const bagTabSrc = stripComments(presentationFiles.find(f => f.path === 'views/game/tabs/bag/BagTab.tsx')!.src);
+    const itemDetailSrc = stripComments(presentationFiles.find(f => f.path === 'views/game/tabs/bag/ItemDetail.tsx')!.src);
+    const artifactDetailSrc = stripComments(presentationFiles.find(f => f.path === 'views/game/tabs/bag/ArtifactDetail.tsx')!.src);
+
+    expect(bagTabSrc).not.toMatch(/\.lore\b/);
+
+    const itemLoreAt = itemDetailSrc.indexOf('<LoreParagraph');
+    const itemEffectsAt = itemDetailSrc.indexOf('effects.length');
+    const itemNoteAt = itemDetailSrc.indexOf('<Note');
+    expect(itemLoreAt).toBeGreaterThan(-1);
+    expect(itemEffectsAt).toBeGreaterThan(itemLoreAt);
+    expect(itemNoteAt).toBeGreaterThan(itemEffectsAt);
+
+    const artifactLoreAt = artifactDetailSrc.indexOf('<LoreParagraph');
+    const compareAt = artifactDetailSrc.indexOf('<CompareTable');
+    const systemAt = artifactDetailSrc.indexOf('<SystemRows');
+    expect(artifactLoreAt).toBeGreaterThan(-1);
+    expect(compareAt).toBeGreaterThan(artifactLoreAt);
+    expect(systemAt).toBeGreaterThan(artifactLoreAt);
+  });
+
+  it('화면과 기능 코드에서 %p 표기를 쓰지 않는다', () => {
+    const PCT_POINT_RE = /%p\b/;
+    const offenders = appSources
+      .filter(([key, src]) => !isTestFile(key) && PCT_POINT_RE.test(stripComments(src)))
+      .map(([key]) => key);
+    expect(offenders).toEqual([]);
+    expect(PCT_POINT_RE.test('판매가 +5%p')).toBe(true);
+    expect(PCT_POINT_RE.test('판매가 +5%')).toBe(false);
+    expect(PCT_POINT_RE.test('배수 ×1.05')).toBe(false);
+  });
+
+  const FONT_PIXEL_RE = /\bfont-pixel\b/;
+  it('표현 계층은 Tailwind font-pixel을 직접 쓰지 않고 .pf-accent와 공용 수치 컴포넌트를 쓴다', () => {
+    const offenders = presentationFiles.filter(f => FONT_PIXEL_RE.test(stripComments(f.src))).map(f => f.path);
+    expect(offenders).toEqual([]);
+    expect(FONT_PIXEL_RE.test('className="font-pixel text-gold"')).toBe(true);
+    expect(FONT_PIXEL_RE.test('className="pf-accent text-gold"')).toBe(false);
+  });
+
+  it('공용 ProgressCount는 .pf-accent 서체와 골드 현재값·보조색 기준 분모 계약을 유지한다', () => {
+    const src = stripComments(presentationFiles.find(f => f.path === 'ui/ProgressCount.tsx')!.src);
+    expect(src).toContain('pf-accent');
+    expect(src).toContain("gold: 'text-gold'");
+    expect(src).toContain("guild: 'text-guild'");
+    expect(src).toContain("accent: 'text-accent'");
+    expect(src).toContain("orange: 'text-orange'");
+    expect(src).toContain("danger: 'text-danger'");
+    expect(src).toContain('text-text-dim');
+    expect(src).toContain('data-progress-count');
+    expect(src).toContain('data-progress-current');
+    expect(src).toContain('data-progress-target');
+    expect(src).toContain('data-progress-percent');
+  });
+
+  it('랭킹 표(RankingModal·DexDetail)는 공용 RankList와 RankMeBar로 1~3위 골드·내 줄 하늘색·수치 열 골드 강조를 공유한다', () => {
+    const rankListSrc = stripComments(presentationFiles.find(f => f.path === 'ui/RankList.tsx')!.src);
+    const rankingModalSrc = stripComments(presentationFiles.find(f => f.path === 'views/overlays/ranking/RankingModal.tsx')!.src);
+    const dexDetailSrc = stripComments(presentationFiles.find(f => f.path === 'views/game/tabs/dex/DexDetail.tsx')!.src);
+
+    expect(rankListSrc).toContain('<ProgressCount');
+    expect(rankListSrc).toContain('r.rank <= 3');
+    expect(rankListSrc).toContain('text-gold');
+    expect(rankListSrc).toContain('bg-accent/10');
+    expect(rankListSrc).toContain('text-accent');
+    expect(rankingModalSrc).toMatch(/<RankList\b/);
+    expect(rankingModalSrc).toMatch(/<RankMeBar\b/);
+    expect(rankingModalSrc).not.toMatch(/<DataTable\b/);
+    expect(dexDetailSrc).toMatch(/<RankList\b/);
+    expect(dexDetailSrc).toMatch(/<RankMeBar\b/);
+  });
+
+  it('선택 가능 상세(운세 달력)와 다단계·형태 전환 창(소식·도감 상세)은 고정·최소 높이로 전환 시 레이아웃이 밀리지 않는다', () => {
+    const fortuneSrc = stripComments(presentationFiles.find(f => f.path === 'views/overlays/fortune/FortuneCalendarModal.tsx')!.src);
+    const fortuneCollectionSrc = stripComments(presentationFiles.find(f => f.path === 'views/overlays/fortune/FortuneCollectionTab.tsx')!.src);
+    const fortuneToneSrc = stripComments(presentationFiles.find(f => f.path === 'views/overlays/fortune/fortuneTone.ts')!.src);
+    const whatsNewSrc = stripComments(presentationFiles.find(f => f.path === 'views/overlays/whats-new/WhatsNewModal.tsx')!.src);
+    const dexDetailSrc = stripComments(presentationFiles.find(f => f.path === 'views/game/tabs/dex/DexDetail.tsx')!.src);
+
+    expect(fortuneSrc).toMatch(/<Modal\b[^>]*height=\{500\}/);
+    expect(fortuneSrc).toMatch(/<Modal\b[^>]*mobileHeight=\{552\}/);
+    expect(fortuneSrc).toMatch(/<ModalCard\b[^>]*fixed\b/);
+    expect(fortuneSrc).toContain('grid-rows-6');
+    expect(fortuneSrc).toMatch(/disabled=\{cell\.isFuture \|\| !f\}/);
+    expect(fortuneSrc).toMatch(/aria-label="선택한 날짜 운세 상세"/);
+    expect(fortuneSrc).toMatch(/h-\[\d+px\][^>]*aria-label="선택한 날짜 운세 상세"/);
+    expect(fortuneSrc).not.toMatch(/\bSCROLL_Y\b|\bSCROLL_Y_ROWS\b|overflow-y-auto/);
+    expect(fortuneSrc).not.toContain('월간 운세 집계');
+    expect(fortuneCollectionSrc).not.toMatch(/\bSCROLL_Y\b|\bSCROLL_Y_ROWS\b|overflow-y-auto/);
+    expect(fortuneCollectionSrc).toContain('grid-rows-7');
+    expect(fortuneToneSrc).toContain('text-named');
+
+    expect(whatsNewSrc).toMatch(/<Modal\b[^>]*height=\{/);
+    expect(whatsNewSrc).toMatch(/<ModalCard\b[\s\S]*?\bfixed\b/);
+    expect(whatsNewSrc).toMatch(/aria-hidden="true"/);
+
+    expect(dexDetailSrc).toMatch(/<LoreParagraph[^>]*min-h-/);
+    expect(dexDetailSrc).toMatch(/<p[^>]*min-h-/);
+  });
+
+  it('운세 UI는 구형 표기(지수·%p·만날 확률·보너스 대상·미기록·TodayFortuneBanner·FortuneIndexMeter)를 쓰지 않는다', () => {
+    const fortuneFiles = presentationFiles.filter(f => !isTestFile(f.path) && f.path.startsWith('views/overlays/fortune/'));
+    const BANNED_FORTUNE_RE = /지수|만날 확률|%p|%P|보너스 대상|미기록|기록 없음|\bTodayFortuneBanner\b|\bFortuneIndexMeter\b/;
+    const offenders = fortuneFiles.filter(f => BANNED_FORTUNE_RE.test(stripComments(f.src))).map(f => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  it('시맨틱 색이 걸린 줄 안에 HighlightRarityText를 중첩하지 않고 Tip 경고 첫 줄도 원문을 그대로 쓴다', () => {
+    const semanticLineWithHighlight = /className=\{?[^>\n]*\btext-(?:accent|danger|gold|guild|epic|mutation|named)\b[^>\n]*\}?[^>]*>[^<\n]*<HighlightRarityText\b/;
+    const semanticBlockWithHighlight = /className=\{?[^>\n]*\btext-(?:accent|danger|gold|guild|epic|mutation|named)\b[^>\n]*\}?[^>]*>[\s\S]{0,160}?<HighlightRarityText\b/;
+    const kvSemanticValueWithHighlight = /value=\{<HighlightRarityText\b[\s\S]{0,120}?valueClassName=\{?[^}\n]*\btext-(?:accent|danger|gold|guild|epic|mutation|named)\b/;
+    const offenders = presentationFiles
+      .filter(f => !isTestFile(f.path))
+      .filter(f => {
+        const clean = stripComments(f.src);
+        return semanticLineWithHighlight.test(clean)
+          || semanticBlockWithHighlight.test(clean)
+          || kvSemanticValueWithHighlight.test(clean);
+      })
+      .map(f => f.path);
+    expect(offenders).toEqual([]);
+
+    const tipSrc = stripComments(presentationFiles.find(f => f.path === 'ui/Tip.tsx')!.src);
+    expect(tipSrc).toMatch(/status\.tone === 'warn'\s*\?\s*line\s*:\s*highlightText\(line\)/);
+  });
+
+  it('ScrollRow는 hidden·inline-flex 충돌 없이 edge.prev·edge.next 조건부 렌더로 화살표를 표시한다', () => {
+    const scrollRowSrc = stripComments(presentationFiles.find(f => f.path === 'ui/ScrollRow.tsx')!.src);
+    expect(scrollRowSrc).toMatch(/\{edge\.prev\s*&&\s*\(?\s*<ArrowButton\b/);
+    expect(scrollRowSrc).toMatch(/\{edge\.next\s*&&\s*\(?\s*<ArrowButton\b/);
+    expect(scrollRowSrc).not.toMatch(/['"`][^'"`]*(?<![\w-])hidden(?![\w-])[^'"`]*['"`]/);
+  });
+
+  it('ToggleChip이 pressed일 때만 체크 아이콘을 직접 소유하고 호출부는 체크 아이콘을 중복 삽입하지 않는다', () => {
+    const toggleSrc = stripComments(presentationFiles.find(f => f.path === 'ui/ToggleChip.tsx')!.src);
+    expect(toggleSrc).toMatch(/\{pressed\s*&&\s*<PixelIcon\b[^>]*glyph="check"/);
+
+    const toggleBlock = /<ToggleChip\b[\s\S]*?<\/ToggleChip>/g;
+    const callers = presentationFiles
+      .filter(f => !isTestFile(f.path) && f.path !== 'ui/ToggleChip.tsx')
+      .filter(f => [...stripComments(f.src).matchAll(toggleBlock)].some(m => /glyph="check"/.test(m[0])))
+      .map(f => f.path);
+    expect(callers).toEqual([]);
+  });
+
+  // 툴팁 내 수동 불릿 조립 금지 — TipBullets·TipCard bullets 공용 컴포넌트만 쓴다
+  const MANUAL_TOOLTIP_BULLET_SPAN_RE = /<span[^>]*>\s*(?:-|•|\{['"](?:-|•)['"]\})\s*<\/span>/;
+  const MANUAL_TOOLTIP_BULLET_CHAR_RE = /(?:•|\\n\s*-\s+|['"`]\s*-\s+[^\d])/;
+  const manualTooltipBullets = (src: string, path = '') =>
+    openingTagsQuoted(src, '(?:Tip|TipCard|TipList)')
+      .filter(t => MANUAL_TOOLTIP_BULLET_SPAN_RE.test(t.tag) || MANUAL_TOOLTIP_BULLET_CHAR_RE.test(t.tag))
+      .map(t => `${path ? `${path}: ` : ''}${t.tag}`);
+
+  it('툴팁은 수동 - 또는 • 불릿 문자를 조립하지 않고 TipBullets와 TipCard bullets를 쓴다', () => {
+    const tipSrc = stripComments(presentationFiles.find(f => f.path === 'ui/Tip.tsx')!.src);
+    expect(tipSrc).toMatch(/export function TipBullets\b/);
+    expect(tipSrc).not.toMatch(/<(?:ul|li)\b/);
+    expect(tipSrc).toMatch(/bullets\?:\s*readonly\s+ReactNode\[\]/);
+
+    const offenders = presentationFiles
+      .filter(f => !isTestFile(f.path))
+      .flatMap(f => manualTooltipBullets(stripComments(f.src), f.path));
+    expect(offenders).toEqual([]);
+
+    expect(manualTooltipBullets('<Tip text={<span><span aria-hidden="true">-</span><span>안내</span></span>}>대상</Tip>')).toHaveLength(1);
+    expect(manualTooltipBullets('<Tip text={"- 첫째\\n- 둘째"}>대상</Tip>')).toHaveLength(1);
+    expect(manualTooltipBullets('<TipCard title="안내" description={"• 첫째\\n• 둘째"} />')).toHaveLength(1);
+    expect(manualTooltipBullets('<Tip text={<TipBullets items={["첫째", "둘째"]} />}>대상</Tip>')).toEqual([]);
+    expect(manualTooltipBullets('<TipCard title="안내" bullets={["첫째", "둘째"]} />')).toEqual([]);
   });
 });

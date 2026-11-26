@@ -25,12 +25,11 @@ const inst = (uid: string, fishId: string, over: Partial<FishInstance> = {}): Fi
   ({ uid, fishId, form: 'normal', size: 20, caughtAt: null, spot: null, judgment: null, locked: false, ...over });
 const inSpot = (uid: string, spot: SpotId, over: Partial<FishInstance> = {}): FishInstance => inst(uid, fishIn(spot).id, over);
 
-function show(game: GameState, opts: { panel?: 'sell' | 'energy'; base?: BaseId; accountState?: AccountLockState; sellBonus?: number; result?: { type: string; [k: string]: unknown } } = {}) {
+function show(game: GameState, opts: { base?: BaseId; accountState?: AccountLockState; sellBonus?: number; result?: { type: string; [k: string]: unknown } } = {}) {
   const dispatch = vi.fn(() => ({ status: 'ok' as const, state: game, result: (opts.result ?? { type: 'none' }) as never }));
   const setToast = vi.fn();
   const onClose = vi.fn();
-  const panel = opts.panel ?? 'sell';
-  render(<FacilityModal panel={panel} base={panel === 'energy' ? opts.base : (opts.base ?? 'home')} accountState={opts.accountState} sellBonus={opts.sellBonus ?? 0} game={game}
+  render(<FacilityModal panel="sell" base={opts.base ?? 'home'} accountState={opts.accountState} sellBonus={opts.sellBonus ?? 0} game={game}
                         dispatch={dispatch} setToast={setToast} onClose={onClose} />);
   return { dispatch, setToast, onClose };
 }
@@ -318,7 +317,7 @@ describe('기운 얻기 탭', () => {
     const button = screen.getByRole('button', { name: '기운 얻기 (3마리)' });
     expect(button).toBeDisabled();
     fireEvent.mouseEnter(button.parentElement!);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('집이나 항구 또는 가공 플랜트선에서만 할 수 있어요.');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('집이나 항구에서만 할 수 있어요.');
   });
 
   it('잠근 개체 안내 문단은 없고 잠긴 행의 자물쇠 툴팁이 알린다', () => {
@@ -410,14 +409,15 @@ describe('기운 얻기 탭의 잠금', () => {
   it('게스트에게는 게스트 잠금이다', () => {
     show(seed({ boat: COOKING_UNLOCK_BOAT }), { accountState: 'guest' });
     expect(tab('기운 얻기')).toHaveAttribute('aria-disabled', 'true');
-    expect(lines(tab('기운 얻기'))).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
+    expect(lines(tab('기운 얻기'))).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
   });
 
-  it('게스트이면서 해금 전이면 게스트 잠금이 먼저다', () => {
+  it('게스트이면서 해금 전이면 더 뒷단계인 진행 조건 잠금만 보인다', () => {
     show(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), { accountState: 'guest' });
     const tip = lines(tab('기운 얻기'));
-    expect(tip).toHaveTextContent('계정을 연결하면 쓸 수 있어요.');
-    expect(tip).not.toHaveTextContent('항로');
+    expect(tip).toHaveTextContent('인도양 항로가 열리면 기운 얻기를 할 수 있어요.');
+    expect(tip).toHaveTextContent('인도양 항로는 증기선(5단계)부터 열려요.');
+    expect(tip).not.toHaveTextContent('태평양');
   });
 
   it('확인 실패 상태에서는 확인 실패 잠금이다', () => {

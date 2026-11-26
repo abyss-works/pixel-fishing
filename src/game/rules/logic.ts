@@ -20,7 +20,7 @@ import { BOATS, MAX_BOAT, WALK_BAG_CAP, boatAt } from '../content/boats.js';
 import { topZoneOfSpot, zoneById } from '../content/zones.js';
 import { bountyById } from '../content/bounties.js';
 import type { BountyQuest, BountyTier, BountyZone } from '../content/bounties.js';
-import { COOK_STORAGE_CAP, ENERGY_UNIT, LEGACY_BAIT_REFUND, isEnergyItemId, recipeById } from '../content/cooking.js';
+import { COOK_STORAGE_CAP, ENERGY_UNIT, LEGACY_BAIT_REFUND, isEnergyItemId, recipeById, recipeWaitMs } from '../content/cooking.js';
 import { ARTIFACT_MAX_LEVEL, artifactById, artifactHasLevel } from '../content/artifacts.js';
 import { variantBoostOf } from './artifactLevel.js';
 import type { ArtifactHolder } from './artifactLevel.js';
@@ -35,10 +35,10 @@ import { canBuyBoat, canFish, canUpgradeRod } from './rules.js';
 import type { DayPhase } from './time.js';
 import type { NamedPity, SpeciesPity } from './pity.js';
 import {
-  FIRST_CATCH_LEGEND_MAX, FIRST_CATCH_LEGEND_MIN,
+  FIRST_CATCH_SPOT_CAPS, FIRST_CATCH_SPOTS,
   endedFirstCatch, endedFirstCatchSpot, firstCatchOfLegacy, newFirstCatch, newFirstCatchSpot,
 } from './firstCatch.js';
-import type { FirstCatch, FirstCatchSpot } from './firstCatch.js';
+import type { FirstCatch, FirstCatchSpot, FirstCatchSpotId } from './firstCatch.js';
 import { safeFortune } from './fortune.js';
 import type { DailyFortune } from './fortune.js';
 
@@ -53,7 +53,12 @@ export { FISH } from '../content/fish.js';
 export type { Fish, FormId } from '../content/fish.js';
 export { BOATS, MAX_BOAT, WALK_BAG_CAP, boatNameOf } from '../content/boats.js';
 export type { Boat } from '../content/boats.js';
+import { COUPONS } from '../content/coupons.js';
+import type { Coupon, CouponItem } from '../content/coupons.js';
+import { itemStorageAmount } from '../content/itemCatalog.js';
+
 export { COUPONS } from '../content/coupons.js';
+export type { Coupon, CouponItem } from '../content/coupons.js';
 export { canBuyBoat, canFish, canUpgradeRod, REJECT_TEXT } from './rules.js';
 export { canAcceptQuest, canDeliverBounty } from './rules.js';
 export type { RejectReason, RuleCheck, BountyCtx } from './rules.js';
@@ -82,10 +87,19 @@ export interface FormRecord {
 
 /** 조리 중인 것 — 완성 수는 startedAt과 서버 시각에서 파생하므로 저장하지 않는다 */
 export interface Cooking {
+  id: string;           // 조리 작업 고유 id
   recipe: string;       // 레시피 id
   count: number;        // 넣은 수량
   bonus: boolean[];     // 수량별 추가 완성 여부 — 조리를 시작할 때 서버가 정한다
   startedAt: string;    // 시작 시각(UTC ISO)
+}
+
+/** 조리 대기열 항목 — 현재 조리 뒤에 순서대로 이어질 대기 작업 */
+export interface CookingQueueItem {
+  id: string;           // 대기 작업 고유 id
+  recipe: string;       // 레시피 id(대기 시간이 있는 레시피만 허용)
+  count: number;        // 넣은 수량
+  bonus: boolean[];     // 수량별 추가 완성 여부
 }
 
 /** 슬롯에 들어간 요리 — 끝나는 시각(UTC ISO) 전까지 효과가 이어진다 */
@@ -128,6 +142,8 @@ export interface GameState {
   items: Record<string, number>;
   /** 조리 중인 것. 조리하지 않으면 null */
   cooking: Cooking | null;
+  /** 현재 조리 뒤에 대기 중인 조리 목록 */
+  cookingQueue: CookingQueueItem[];
   /** 도시락 슬롯과 미끼 슬롯 — 비어 있으면 null (bait2는 다중 미끼 유물 보유 시 사용, 없으면 생략) */
   slots: { lunch: SlotEffect | null; bait: SlotEffect | null; bait2?: SlotEffect | null };
   /** 기운 얻기 기본 선택의 해역별 덮어쓰기 — 해역 id → 기운 대상 여부. 덮어쓴 해역만 둔다.
@@ -159,6 +175,8 @@ export interface GameState {
   autoLockedIds: Record<string, string>;
   /** 오늘의 운세 — 굴린 게임 날짜에 고정된다. 첫 판정(catch·sell)에서 서버가 굴리고, 그날 안에서는 불변 */
   fortune: DailyFortune | null;
+  /** 사용 중인 비약 — 비약 id → 효과가 지속되는 게임 날짜(YYYY-MM-DD, KST 04:00 경계) */
+  potions: Record<string, string>;
 }
 
 export interface RodStats {
@@ -211,8 +229,16 @@ export interface DrawOptions {
   /** 등급 가중치에 걸리는 보너스 효과의 합(미끼 +, 길드 희귀 어종 보너스 −). 등급마다 (1 + 합)을 한 번 곱한다.
    *  효과는 addGradeEffect로 더하고, 다이얼(판정·방치·페널티)과는 곱한다 */
   weightEffects?: Partial<Record<RarityId, number>>;
-  /** 운 배율 — 희귀 이상 등급 가중치에 곱하는 최종 배수(물고기 운). 다른 보너스를 다 적용한 마지막 곱이다 */
+  /** 행운 배수 — 희귀 이상 등급 가중치에 곱하는 최종 배수(풍어운·만선 대길·비약). 다른 보너스를 다 적용한 마지막 곱이다 */
   rarityLuck?: number;
+  /** 행운 배수 — 전설 등급 가중치에만 추가로 곱하는 최종 배수(금비늘 운·신기루 운) */
+  legendaryLuck?: number;
+  /** 밤 어종 개체 가중치 보너스 합 — NIGHT_FISH_WEIGHT × nightDepth × (1 + 합) */
+  nightWeightBonus?: number;
+  /** 행운 배수 — 밤 전용 어종 개체 가중치에 곱하는 최종 배수(초승달 밤운·만월 밤바다 운) */
+  nightLuck?: number;
+  /** 행운 배수 — 돌연변이 폼 가중치에 곱하는 최종 배수(묘한/오색 물빛 운·신기루 운) */
+  mutationLuck?: number;
 }
 
 /** 등급 가중치 효과를 더한 옵션 — 같은 등급의 효과는 합쳐진다. 효과를 거는 유일한 길이다 */
@@ -245,7 +271,7 @@ export function pickWeighted<K>(entries: readonly (readonly [K, number])[], rng:
 /**
  * 해역의 네임드 조우 가중치 — 해역 오버라이드 → 전역 기본.
  * @param bonus 네임드 가중치에 더하는 비율(길드 네임드 조우 보너스). 네임드 가중치에 (1 + bonus)를 한 번 곱한다
- * @param luck 운 배율 — 보너스를 다 적용한 네임드 가중치에 곱하는 최종 배수(그림자 운)
+ * @param luck 행운 배수 — 보너스를 다 적용한 네임드 가중치에 곱하는 최종 배수(그림자 운)
  */
 export function namedWeightsOf(spot: SpotId, bonus = 0, luck = 1): { named: number; none: number } {
   const w = { ...NAMED_ENCOUNTER_WEIGHTS, ...spotById(spot)?.namedWeight };
@@ -275,7 +301,7 @@ export function namedEncounterCandidates(activeIds: readonly string[], spot: Spo
 // 진행하고, 호출부가 도전권 발급 이벤트만 덧붙인다.
 // rng 소비: 후보 없음 0회 · 빗나감 1회 · 명중 2회(게이트+후보 선택).
 // force는 테스트용 강제 조우다 — 확률 게이트만 건너뛰고 rng 소비 횟수는 같게 둔다.
-// bonus는 네임드 가중치에 더하는 비율이고 luck은 그 뒤에 곱하는 운 배율이다(namedWeightsOf).
+// bonus는 네임드 가중치에 더하는 비율이고 luck은 그 뒤에 곱하는 행운 배수다(namedWeightsOf).
 export function rollNamedEncounter(
   activeIds: readonly string[], spot: SpotId, rng: () => number = Math.random, force = false,
   bonus = 0, luck = 1,
@@ -304,26 +330,47 @@ export function zoneDexMissing(
     .map(f => f.id);
 }
 
+/** 해역 일반 폼 도감 진행도 — 해당 해역 전체 어종 중 일반 폼으로 잡힌 종 수와 완료 여부를 돌려준다 */
+export function spotNormalDexProgress(
+  dex: GameState['dex'], spot: SpotId,
+): { found: number; total: number; completed: boolean } {
+  const species = FISH.filter(f => f.spot === spot);
+  const found = species.filter(f => (dex[f.id]?.normal?.count ?? 0) > 0).length;
+  const total = species.length;
+  return { found, total, completed: total > 0 && found === total };
+}
+
+/** 해역 일반 폼 도감 100% 완성 여부 */
+export function isSpotNormalDexComplete(dex: GameState['dex'], spot: SpotId): boolean {
+  return spotNormalDexProgress(dex, spot).completed;
+}
+
+/** 이번 도감 변화로 해당 해역의 일반 폼 도감이 새로 100% 완성되었으면 그 해역 id, 아니면 null */
+export function newlyCompletedSpotDex(
+  prevDex: GameState['dex'], nextDex: GameState['dex'], spot: SpotId,
+): SpotId | null {
+  return !isSpotNormalDexComplete(prevDex, spot) && isSpotNormalDexComplete(nextDex, spot) ? spot : null;
+}
+
 /** 라이선스 조건 — 도감. UI 체크리스트와 리듀서 판정의 단일 근원 */
 export interface LicenseCondition { key: 'dex'; label: string; ok: boolean }
 /** 라이선스 단계별 도감 판정 등급 — 판정과 개발 도구(도감 채우기)가 같은 표를 본다.
- *  도감은 일반 폼(돌연변이 제외)만 센다. 기본 = 전설 제외 전부, 네임드 = 전설 포함 전부 */
+ *  도감은 일반 모습(돌연변이 제외)만 센다. 일반 의뢰(basic)는 도감 조건이 없고, 네임드 토벌(named)은 전설을 뺀 등급만 본다 */
 export const LICENSE_GRADES: Record<BountyTier, readonly RarityId[]> = {
-  basic: ['common', 'rare', 'epic'],
-  named: ['common', 'rare', 'epic', 'legendary'],
+  basic: [],
+  named: ['common', 'rare', 'epic'],
 };
 export function licenseConditions(
   state: GameState, zone: BountyZone, tier: BountyTier,
 ): LicenseCondition[] {
   const grades = LICENSE_GRADES[tier];
+  if (grades.length === 0) return [];
   const missing = zoneDexMissing(state, zone, grades).length;
   const area = zoneById(zone)?.shortName ?? zone;
   // 미달이면 남은 어종 수를 붙인다 — 어떤 어종인지는 밝히지 않는다(도감이 보여 준다)
   const left = missing > 0 ? ` (남은 ${missing}종)` : '';
   return [
-    { key: 'dex', label: (tier === 'named'
-      ? `${area} 모든 어종 수집(밤 어종 포함)`
-      : `${area} 모든 어종 수집(전설 제외, 밤 어종 포함)`) + left, ok: missing === 0 },
+    { key: 'dex', label: `${area} 전설을 뺀 모든 어종 모으기${left}`, ok: missing === 0 },
   ];
 }
 
@@ -352,18 +399,25 @@ function drawWeights(pool: Fish[], spotId: SpotId, o: DrawOptions): number[] {
  *  보너스 효과를 합쳐 적용하는 유일한 지점이다. rollFish와 drawWeights가 공유한다 */
 function rarityDrawWeights(pool: Fish[], spotId: SpotId, o: DrawOptions): [RarityId, number][] {
   const present = new Set(pool.map(f => f.rarity));
-  return RARITY_ORDER.filter(r => present.has(r)).map(r => [r,
-    (o.budgets?.[r] ?? rarityWeightOf(spotId, r))
-      * ((r === 'common' ? (o.commonMult ?? 1) / (o.rareMult ?? 1) : (o.rarityLuck ?? 1))
-        * Math.max(0, 1 + (o.weightEffects?.[r] ?? 0)))]);
+  return RARITY_ORDER.filter(r => present.has(r)).map(r => {
+    const luckMult = r === 'common'
+      ? (o.commonMult ?? 1) / (o.rareMult ?? 1)
+      : (o.rarityLuck ?? 1) * (r === 'legendary' ? (o.legendaryLuck ?? 1) : 1);
+    return [r,
+      (o.budgets?.[r] ?? rarityWeightOf(spotId, r))
+        * (luckMult * Math.max(0, 1 + (o.weightEffects?.[r] ?? 0)))];
+  });
 }
 
 /** 어종 단계의 가중치 — 다이얼(fishWeights)이 없으면 어종 데이터의 개체 가중치.
- *  기본은 1이고 밤 어종은 NIGHT_FISH_WEIGHT × nightDepth(미지정 시 1, 0~1 클램프) */
+ *  기본은 1이고 밤 어종은 NIGHT_FISH_WEIGHT × nightDepth × (1 + nightWeightBonus) × nightLuck */
 export const fishDrawWeight = (f: Fish, o: DrawOptions): number => {
+  if (o.fishWeights && Object.hasOwn(o.fishWeights, f.id)) return o.fishWeights[f.id]!;
+  if (!f.night) return f.weight ?? 1;
   const raw = o.nightDepth ?? 1;
   const depth = Number.isFinite(raw) ? Math.max(0, Math.min(1, raw)) : 1;
-  return o.fishWeights?.[f.id] ?? f.weight ?? (f.night ? NIGHT_FISH_WEIGHT * depth : 1);
+  const nightScale = Math.max(0, 1 + (o.nightWeightBonus ?? 0));
+  return (f.weight ?? NIGHT_FISH_WEIGHT * depth * nightScale) * Math.max(0, o.nightLuck ?? 1);
 };
 
 // 통상 추첨 — 등급을 가중치로 뽑고(rng 1회), 그 등급의 어종을 가중치로 뽑는다(rng 1회).
@@ -456,6 +510,7 @@ export function newState(): GameState {
     artifacts: [],
     items: {},
     cooking: null,
+    cookingQueue: [],
     slots: { lunch: null, bait: null },
     energyTargets: {},
     baitRefund: null,
@@ -471,6 +526,7 @@ export function newState(): GameState {
     autoLockOnCatch: false,
     autoLockedIds: {},
     fortune: null,
+    potions: {},
   };
 }
 
@@ -555,28 +611,26 @@ export function variantShare(weights: Record<FormId, number> = MUTATION_WEIGHTS)
   return weights.variant / (weights.variant + weights.normal);
 }
 
-/**
- * 돌연변이 확률에 퍼센트포인트를 더한 폼 가중치(길드 돌연변이 보너스). 확률은 1을 넘지 않는다.
- * 가중치를 곱하지 않고 최종 확률에 더한다 — 유물·해역이 정한 확률 위에 그대로 얹힌다. 더할 것이 없으면 그대로 돌려준다.
- */
-export function withVariantPoints(weights: Record<FormId, number>, points: number): Record<FormId, number> {
-  if (points <= 0) return weights;
-  const variant = Math.min(1, variantShare(weights) + points);
-  return { variant, normal: 1 - variant };
-}
-
-/** 폼 가중치 — 보너스 효과(유물 × 유물 배율 + 요리 슬롯 + 업적 누계의 합) → 해역 오버라이드 → 전역 기본 순. 리듀서와 서버 fast path가 같은 함수를 쓴다.
- *  slotBoost는 슬롯의 돌연변이 가중 증가율(slotEffects)이고 achievementBoost는 업적 누적(전역 + 구역) 증가율이다. 보너스 합이 0보다 크면 해역 오버라이드를 쓰지 않는다 */
+/** 폼 가중치 — 보너스 효과(유물 × 유물 배율 + 요리 슬롯 + 업적 누계 + 길드 돌연변이의 합) → 해역 오버라이드 → 전역 기본 순에 독립 배수(mutationMult)를 마지막에 곱한다.
+ *  slotBoost는 슬롯의 돌연변이 가중 증가율(slotEffects), achievementBoost는 업적 누적 증가율, guildMutation은 길드 돌연변이 보너스, mutationMult는 억제 요리 독립 배수다. 보너스 합이 0보다 크면 해역 오버라이드를 쓰지 않는다 */
 export function mutationWeightsOf(
   state: ArtifactHolder,
   spot: SpotId,
   slotBoost = 0,
   achievementBoost = 0,
   relicScale = 1,
+  guildMutation = 0,
+  mutationMult = 1,
 ): Record<FormId, number> {
-  const boost = Math.round((variantBoostOf(state) * relicScale + slotBoost + achievementBoost) * 1e9) / 1e9;
-  if (boost > 0) return { variant: MUTATION_WEIGHTS.variant * (1 + boost), normal: MUTATION_WEIGHTS.normal };
-  return { ...MUTATION_WEIGHTS, ...spotById(spot)?.mutationWeight };
+  const boost = Math.round((variantBoostOf(state) * relicScale + slotBoost + achievementBoost + guildMutation) * 1e9) / 1e9;
+  const base = boost > 0
+    ? { variant: MUTATION_WEIGHTS.variant * (1 + boost), normal: MUTATION_WEIGHTS.normal }
+    : { ...MUTATION_WEIGHTS, ...spotById(spot)?.mutationWeight };
+  if (mutationMult === 1) return base;
+  return {
+    variant: Math.round(base.variant * mutationMult * 1e9) / 1e9,
+    normal: base.normal,
+  };
 }
 
 // ---------- 개체 (세이브 v8) ----------
@@ -632,34 +686,47 @@ export interface CatchInfo extends CatchExtras {
   isNew: boolean;      // 이번 캐치 전까지 도감에 없던 어종
 }
 
-export const isBigSize = (fish: Fish, size: number): boolean =>
-  sizePercentile(fish, size) <= BIG_CATCH_PERCENTILE;
+export const isBigSize = (fish: Fish, size: number, bigCatchLuck = 1): boolean =>
+  sizePercentile(fish, size) <= Math.min(100, BIG_CATCH_PERCENTILE * Math.max(0, bigCatchLuck));
 
-export function buildCatchInfo(fish: Fish, extras: CatchExtras, isNew: boolean): CatchInfo {
+export function buildCatchInfo(
+  fish: Fish, extras: CatchExtras, isNew: boolean, bigCatchLuck = 1,
+): CatchInfo {
   const percentile = sizePercentile(fish, extras.size);
-  return { ...extras, percentile, isBig: percentile <= BIG_CATCH_PERCENTILE, isNew };
+  return {
+    ...extras,
+    percentile,
+    isBig: percentile <= Math.min(100, BIG_CATCH_PERCENTILE * Math.max(0, bigCatchLuck)),
+    isNew,
+  };
 }
 
 // 쿠폰 데이터는 게임 데이터에서 관리하고 검증·지급 규칙은 여기서 처리한다.
-import { COUPONS } from '../content/coupons.js';
-
 export type CouponResult =
-  | { ok: true; state: GameState; reward: { gold: number; desc: string } }
+  | { ok: true; state: GameState; reward: { gold: number; items: readonly CouponItem[]; desc: string } }
   | { ok: false; reason: 'invalid' | 'used' };
 
 // extra — DB(coupons 테이블)에서 조회한 동적 쿠폰. 정적 COUPONS와 병합해 판정한다.
 export function redeemCoupon(
   state: GameState, codeRaw: string,
-  extra: Record<string, { gold: number; desc: string }> = {},
+  extra: Record<string, Coupon> = {},
 ): CouponResult {
   const code = codeRaw.trim();
   const c = COUPONS[code] ?? extra[code];
   if (!c) return { ok: false, reason: 'invalid' };
   if (state.coupons.includes(code)) return { ok: false, reason: 'used' };
+  let next = { ...state, gold: state.gold + c.gold, coupons: [...state.coupons, code] };
+  const grantedItems: CouponItem[] = [];
+  for (const item of c.items ?? []) {
+    const amount = itemStorageAmount(item.id, item.qty);
+    if (amount < 1) continue;
+    next = addItem(next, item.id, amount);
+    grantedItems.push({ id: item.id, qty: item.qty });
+  }
   return {
     ok: true,
-    reward: c,
-    state: { ...state, gold: state.gold + c.gold, coupons: [...state.coupons, code] },
+    reward: { gold: c.gold, items: grantedItems, desc: c.desc },
+    state: next,
   };
 }
 
@@ -876,16 +943,30 @@ function safeArtifactLevels(v: unknown, owned: string[]): { artifactLevels?: Rec
 
 // 아이템 위생 — id → 개수 스택 맵. 정수 0~백만만 통과시킨다(기운은 저장 단위라 상한도 ENERGY_UNIT배).
 // **모르는 키는 버리지 않는다**(safeDex의 폼 키와 같은 원칙 — 미래 아이템 축 전방 호환). 값이 깨진 행만 탈락.
-const ITEM_CAP = 1_000_000;
+export const ITEM_CAP = 1_000_000;
+export const itemCapOf = (id: string): number => (isEnergyItemId(id) ? ITEM_CAP * ENERGY_UNIT : ITEM_CAP);
 
 function safeItems(v: unknown): Record<string, number> {
   const out: Record<string, number> = {};
   for (const [id, n] of Object.entries(safeRecord<number>(v))) {
-    const cap = isEnergyItemId(id) ? ITEM_CAP * ENERGY_UNIT : ITEM_CAP;
+    const cap = itemCapOf(id);
     if (typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= cap) out[id] = n;
   }
   // 개수 0인 행은 저장하지 않는다 — 보유 부재와 동일한 의미라 세이브가 쓰레기로 쌓이지 않는다
   for (const [id, n] of Object.entries(out)) if (n === 0) delete out[id];
+  return out;
+}
+
+/** 활성 비약 위생 — 비약 id → 게임 날짜(비어 있지 않은 문자열)만 살린다. 모르는 비약 id도 전방 호환으로 보존한다 */
+function safePotions(v: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return out;
+  for (const [id, day] of Object.entries(v as Record<string, unknown>)) {
+    if (id.length > 0 && id !== '__proto__' && id !== 'constructor' && id !== 'prototype'
+      && typeof day === 'string' && day.length > 0) {
+      out[id] = day;
+    }
+  }
   return out;
 }
 
@@ -909,29 +990,42 @@ function safeNamedPity(v: unknown): NamedPity {
   return { day: typeof r.day === 'string' ? r.day : '', misses: count(r.misses), fails: count(r.fails), wounds };
 }
 
-/** 첫 경험 보장 위생 — 새 해역별 구조는 보존, 구 단일 객체는 해역별로 이관, 없거나 손상되면 이전 세이브 규칙을 따른다 */
+/** 첫 경험 보장 위생 — 새 해역별 구조는 보존하고, 구 해역별/단일 객체는 안전하게 이관하며, 완료 계정은 재활성화하지 않는다 */
 function safeFirstCatch(v: unknown, dex: GameState['dex'], fame: number): FirstCatch {
   const r = safeRecord<unknown>(v);
   const int = (n: unknown) => typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= 1_000_000;
-  const parseSpot = (raw: unknown): FirstCatchSpot | null => {
+  const parseSpot = (raw: unknown, cap: number): FirstCatchSpot | null => {
     const o = safeRecord<unknown>(raw);
-    if (!int(o.n) || !int(o.legendAt) || typeof o.epic !== 'boolean' || typeof o.legend !== 'boolean') return null;
-    return o.epic || o.legend
-      ? { n: o.n as number, legendAt: o.legendAt as number, epic: o.epic, legend: o.legend }
-      : endedFirstCatchSpot();
+    if (int(o.n) && typeof o.active === 'boolean') {
+      return o.active && (o.n as number) < cap
+        ? { n: o.n as number, active: true }
+        : endedFirstCatchSpot();
+    }
+    if (int(o.n) && int(o.legendAt) && typeof o.epic === 'boolean' && typeof o.legend === 'boolean') {
+      return (o.epic || o.legend) && (o.n as number) < cap
+        ? { n: o.n as number, active: true }
+        : endedFirstCatchSpot();
+    }
+    return null;
   };
-  const pond = parseSpot(r.pond);
-  const river = parseSpot(r.river);
-  if (pond && river) return { pond, river };
+  const parsed = {} as Partial<Record<FirstCatchSpotId, FirstCatchSpot>>;
+  let allSpotsValid = true;
+  for (const s of FIRST_CATCH_SPOTS) {
+    const spotState = parseSpot(r[s], FIRST_CATCH_SPOT_CAPS[s] ?? 0);
+    if (!spotState) {
+      allSpotsValid = false;
+      break;
+    }
+    parsed[s] = spotState;
+  }
+  if (allSpotsValid) return parsed as FirstCatch;
   if (int(r.n) && int(r.legendAt) && typeof r.epic === 'boolean' && typeof r.legend === 'boolean') {
     if (!r.epic && !r.legend) return endedFirstCatch();
-    const rawLegendAt = r.legendAt as number;
-    const legendAt = rawLegendAt === 0 ? 0
-      : Math.min(FIRST_CATCH_LEGEND_MAX, Math.max(FIRST_CATCH_LEGEND_MIN, rawLegendAt));
+    const pondCap = FIRST_CATCH_SPOT_CAPS.pond ?? 0;
     const hasRiverCatch = FISH.some(f => f.spot === 'river'
       && Object.values(dex[f.id] ?? {}).some(rec => (rec?.count ?? 0) > 0));
     return {
-      pond: { n: r.n as number, legendAt, epic: r.epic, legend: r.legend },
+      pond: (r.n as number) < pondCap ? { n: r.n as number, active: true } : endedFirstCatchSpot(),
       river: hasRiverCatch ? endedFirstCatchSpot() : newFirstCatchSpot(),
     };
   }
@@ -942,15 +1036,39 @@ function safeFirstCatch(v: unknown, dex: GameState['dex'], fame: number): FirstC
 
 const isIsoTime = (v: unknown): v is string => typeof v === 'string' && !Number.isNaN(Date.parse(v));
 
-/** 조리 위생 — 레시피 id, 수량(1~보관함 상한), 수량과 같은 길이의 boolean 목록, ISO 시각이 모두 성립해야 살린다 */
-function safeCooking(v: unknown): Cooking | null {
+/** 조리 위생 — 대기 시간 있는 레시피 id, 수량(1~보관함 상한), 수량과 같은 길이의 boolean 목록, ISO 시각이 모두 성립해야 살린다 */
+function safeCooking(v: unknown, uidGen: () => string): Cooking | null {
   const r = v as Partial<Cooking> | null;
   if (typeof r !== 'object' || r === null || Array.isArray(r)) return null;
-  if (!recipeById(r.recipe)) return null;
+  const recipe = recipeById(r.recipe);
+  if (!recipe || recipeWaitMs(recipe) <= 0) return null;
   if (typeof r.count !== 'number' || !Number.isInteger(r.count) || r.count < 1 || r.count > COOK_STORAGE_CAP) return null;
   if (!Array.isArray(r.bonus) || r.bonus.length !== r.count || !r.bonus.every(b => typeof b === 'boolean')) return null;
   if (!isIsoTime(r.startedAt)) return null;
-  return { recipe: r.recipe as string, count: r.count, bonus: [...r.bonus], startedAt: r.startedAt };
+  const id = typeof r.id === 'string' && r.id.length > 0 ? r.id : uidGen();
+  return { id, recipe: recipe.id, count: r.count, bonus: [...r.bonus], startedAt: r.startedAt };
+}
+
+/** 조리 대기열 위생 — 현재 조리가 있을 때만 유효 대기 레시피·수량·bonus 항목을 보관함 상한까지 남긴다 */
+function safeCookingQueue(
+  v: unknown, cooking: Cooking | null, uidGen: () => string,
+): CookingQueueItem[] {
+  if (!cooking || !Array.isArray(v)) return [];
+  const out: CookingQueueItem[] = [];
+  let used = cooking.count;
+  for (const raw of v) {
+    const r = raw as Partial<CookingQueueItem> | null;
+    if (typeof r !== 'object' || r === null || Array.isArray(r)) continue;
+    const recipe = recipeById(r.recipe);
+    if (!recipe || recipeWaitMs(recipe) <= 0) continue;
+    if (typeof r.count !== 'number' || !Number.isInteger(r.count) || r.count < 1 || r.count > COOK_STORAGE_CAP) continue;
+    if (!Array.isArray(r.bonus) || r.bonus.length !== r.count || !r.bonus.every(b => typeof b === 'boolean')) continue;
+    if (used + r.count > COOK_STORAGE_CAP) break;
+    const id = typeof r.id === 'string' && r.id.length > 0 ? r.id : uidGen();
+    out.push({ id, recipe: recipe.id, count: r.count, bonus: [...r.bonus] });
+    used += r.count;
+  }
+  return out;
 }
 
 /** 슬롯 한 칸 위생 — 그 슬롯에 넣는 종류의 요리 id와 ISO 시각만 살린다 */
@@ -1088,6 +1206,7 @@ export function migrate(raw: unknown, uidGen: () => string = () => crypto.random
   const look = safeLook(s.look);
   const dex = safeDex(s.dex);
   const fame = typeof s.fame === 'number' ? s.fame : 0;
+  const cooking = safeCooking(s.cooking, uidGen);
   return {
     ...base,
     gold: typeof s.gold === 'number' ? s.gold : 0,
@@ -1103,7 +1222,8 @@ export function migrate(raw: unknown, uidGen: () => string = () => crypto.random
     artifacts: safeStrings(s.artifacts),
     ...safeArtifactLevels(s.artifactLevels, safeStrings(s.artifacts)),
     items: safeItems(s.items),
-    cooking: safeCooking(s.cooking),
+    cooking,
+    cookingQueue: safeCookingQueue(s.cookingQueue, cooking, uidGen),
     slots: safeSlots(s.slots),
     energyTargets: safeEnergyTargets(s.energyTargets),
     baitRefund: safeBaitRefund(s.baitRefund),
@@ -1119,6 +1239,7 @@ export function migrate(raw: unknown, uidGen: () => string = () => crypto.random
     autoLockOnCatch: s.autoLockOnCatch === true,
     autoLockedIds: safeAutoLockedIds(s.autoLockedIds),
     fortune: safeFortune(s.fortune),
+    potions: safePotions(s.potions),
   };
 }
 
@@ -1148,7 +1269,7 @@ function safeAchievements(raw: unknown): AchievementMap {
   return out;
 }
 
-/** 업적 카운터 위생 — 기본 5종과 수동 집계(manual.*) 키의 유한 비음수 정수만 보존한다 */
+/** 업적 카운터 위생 — 기본 7종과 수동 집계(manual.*) 키의 유한 비음수 정수만 보존한다 */
 function safeAchievementCounters(raw: unknown): AchievementCounters {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return {};
   const src = raw as Record<string, unknown>;
@@ -1170,11 +1291,13 @@ function safeHats(raw: unknown): string[] {
 
 // ---------- 아이템 (스택형 — 세이브 v8 접기) ----------
 
-/** 아이템 추가(구매·지급) — n은 1 이상 정수만. 음수 지원 안 함(차감은 takeItem 하나) */
+/** 아이템 추가(구매·지급) — n은 1 이상 정수만. 음수 지원 안 함(차감은 takeItem 하나). 상한(ITEM_CAP)을 넘지 않는다 */
 export function addItem(state: GameState, itemId: string, n: number): GameState {
   if (!Number.isInteger(n) || n < 1) return state;
   const cur = state.items[itemId] ?? 0;
-  return { ...state, items: { ...state.items, [itemId]: cur + n } };
+  const next = Math.min(itemCapOf(itemId), cur + n);
+  if (next === cur) return state;
+  return { ...state, items: { ...state.items, [itemId]: next } };
 }
 
 /** 아이템 차감 — 기본 1개, 유물 레벨업은 개수를 넘긴다. 모자라면 무변환(위 방어).
@@ -1214,15 +1337,20 @@ export function nextDexRec(
   };
 }
 
+/** 이번 캐치로 얻는 명성 — 등급 기본 명성에 행운 배수(fameLuck)를 곱해 반올림한다 */
+export function catchFameOf(fish: Fish, fameLuck = 1): number {
+  return Math.round(RARITY[fish.rarity].fame * Math.max(0, fameLuck));
+}
+
 export function addCatch(
-  state: GameState, inst: FishInstance, fish: Fish, today: string = localDate(),
+  state: GameState, inst: FishInstance, fish: Fish, today: string = localDate(), fameLuck = 1,
 ): GameState {
   const rec = nextDexRec(state.dex[inst.fishId]?.[inst.form], inst.size, today);
   return {
     ...state,
     bag: [...state.bag, inst],
     dex: { ...state.dex, [inst.fishId]: { ...state.dex[inst.fishId], [inst.form]: rec } },
-    fame: state.fame + RARITY[fish.rarity].fame,
+    fame: state.fame + catchFameOf(fish, fameLuck),
   };
 }
 
@@ -1353,7 +1481,7 @@ export function saleBonusOf(base: number, bonus: number): number {
 // 선택 판매 — uid로 개체를 지목한다 (판매의 원자 단위 = 개체).
 // 잠근 개체는 uid가 와도 팔리지 않는다(이중 방어)
 // bonus는 판매가에 더하는 비율(길드 판매가 보너스)이다. 판매 총액에 한 번 더하고 반올림한다.
-// luck은 보너스를 다 적용한 수령액에 곱하는 운 배율(돈 운)이다 — 반올림은 마지막 곱 뒤 한 번.
+// luck은 보너스를 다 적용한 수령액에 곱하는 행운 배수(재물운)다 — 반올림은 마지막 곱 뒤 한 번.
 export function sellSelected(state: GameState, uids: readonly string[], bonus = 0, luck = 1): GameState {
   const want = new Set(uids);
   const sold = state.bag.filter(i => want.has(i.uid) && !i.locked);

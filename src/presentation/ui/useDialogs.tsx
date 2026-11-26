@@ -4,11 +4,12 @@ import ConfirmDialog from './ConfirmDialog';
 import InputDialog from './InputDialog';
 import NoticeDialog from './NoticeDialog';
 import { TextNotice } from './NoticeBody';
+import type { WindowLayer } from './openWindows';
 
 type Pending =
-  | { kind: 'confirm'; layer?: 'app' | 'stage'; title: string; body: ReactNode; confirmLabel: string; resolve: (ok: boolean) => void }
-  | { kind: 'input'; layer?: 'app' | 'stage'; title: string; body?: ReactNode; label: string; placeholder?: string; secret?: boolean; confirmLabel: string; resolve: (v: string | null) => void }
-  | { kind: 'notice'; layer?: 'app' | 'stage'; title: string; body: ReactNode; value?: string; resolve: () => void };
+  | { kind: 'confirm'; layer?: WindowLayer; title: string; body: ReactNode; confirmLabel: string; resolve: (ok: boolean) => void }
+  | { kind: 'input'; layer?: WindowLayer; title: string; body?: ReactNode; label: string; placeholder?: string; confirmLabel: string; resolve: (v: string | null) => void }
+  | { kind: 'notice'; layer?: WindowLayer; title: string; body: ReactNode; value?: string; resolve: () => void };
 
 /** 문자열 본문은 안내문 위계로 그린다(첫 줄 핵심 · 괄호 줄 참고 · 나머지 설명). 노드는 그대로 둔다 */
 const bodyOf = (body: ReactNode) => (typeof body === 'string' ? <TextNotice text={body} /> : body);
@@ -19,11 +20,11 @@ const bodyOf = (body: ReactNode) => (typeof body === 'string' ? <TextNotice text
 export function useDialogs() {
   const [pending, setPending] = useState<Pending | null>(null);
   const close = () => setPending(null);
-  const confirm = (o: { layer?: 'app' | 'stage'; title: string; body: ReactNode; confirmLabel: string }) =>
+  const confirm = (o: { layer?: WindowLayer; title: string; body: ReactNode; confirmLabel: string }) =>
     new Promise<boolean>(resolve => setPending({ kind: 'confirm', ...o, resolve }));
-  const input = (o: { layer?: 'app' | 'stage'; title: string; body?: ReactNode; label: string; placeholder?: string; secret?: boolean; confirmLabel: string }) =>
+  const input = (o: { layer?: WindowLayer; title: string; body?: ReactNode; label: string; placeholder?: string; confirmLabel: string }) =>
     new Promise<string | null>(resolve => setPending({ kind: 'input', ...o, resolve }));
-  const notice = (o: { layer?: 'app' | 'stage'; title: string; body: ReactNode; value?: string }) =>
+  const notice = (o: { layer?: WindowLayer; title: string; body: ReactNode; value?: string }) =>
     new Promise<void>(resolve => setPending({ kind: 'notice', ...o, resolve }));
 
   const dialogs = !pending ? null
@@ -34,7 +35,7 @@ export function useDialogs() {
         {bodyOf(pending.body)}
       </ConfirmDialog>
     ) : pending.kind === 'input' ? (
-      <InputDialog layer={pending.layer} title={pending.title} body={pending.body === undefined ? undefined : bodyOf(pending.body)} label={pending.label} placeholder={pending.placeholder} secret={pending.secret}
+      <InputDialog layer={pending.layer} title={pending.title} body={pending.body === undefined ? undefined : bodyOf(pending.body)} label={pending.label} placeholder={pending.placeholder}
                    confirmLabel={pending.confirmLabel}
                    onSubmit={v => { close(); pending.resolve(v); }}
                    onCancel={() => { close(); pending.resolve(null); }} />

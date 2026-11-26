@@ -80,10 +80,15 @@ describe('판매 탭', () => {
       fortune: { day: '2026-11-24', kind: 'gold', index: 5 },
     });
     const v = selectSaleTab(g, new Set(), 0, now);
-    const expected = Math.round(bigFish.price * 1.05);
+    const expected = Math.round(bigFish.price * 1.1);
     expect(v.total.value).toBe(expected);
-    expect(v.total.mods).toEqual([{ id: 'fortune-sell', label: '오늘의 운세', delta: expected - bigFish.price }]);
+    expect(v.total.mods).toEqual([{ id: 'fortune-sell', label: '오늘의 운세', delta: expected - bigFish.price, source: { kind: 'fortune' } }]);
     expect(v.gold).toEqual({ current: 100, after: 100 + expected });
+
+    // 만선 대길도 판매가 ×1.10 배수가 미리보기에 반영된다
+    const grand = selectSaleTab({ ...g, fortune: { day: '2026-11-24', kind: 'grand-catch', index: 5 } }, new Set(), 0, now);
+    expect(grand.total.value).toBe(expected);
+    expect(grand.total.mods).toEqual([{ id: 'fortune-sell', label: '오늘의 운세', delta: expected - bigFish.price, source: { kind: 'fortune' } }]);
 
     // 날짜가 지난 재물운이나 다른 종류 운세는 반영하지 않는다
     const stale = selectSaleTab({ ...g, fortune: { day: '2026-11-23', kind: 'gold', index: 5 } }, new Set(), 0, now);
@@ -130,5 +135,23 @@ describe('등급 칩', () => {
 describe('잠긴 개체 툴팁', () => {
   it('두 줄이다', () => {
     expect(LOCKED_PICK_TIP).toBe('잠근 개체는 고를 수 없어요.\n잠금은 가방 탭에서 풀 수 있어요.');
+  });
+});
+
+describe('비약 판매가 합계', () => {
+  it('오늘 사용한 작은 바다 영약이 있으면 판매 창 합계에 운 배율을 반영하고 비약 이름으로 내역을 남긴다', () => {
+    const now = '2026-11-24T05:00:00.000Z';
+    const rare = FISH.find(f => f.id === 'carp')!;
+    const tab = selectSaleTab(
+      seed({ bag: [inst('a', { fishId: rare.id }), inst('b', { fishId: rare.id })], potions: { 'luck-small': '2026-11-24' } }),
+      new Set(),
+      0,
+      now,
+    );
+    const base = tab.total.base;
+    expect(tab.total.value).toBe(Math.round(base * 1.05));
+    expect(tab.total.mods).toEqual([
+      { id: 'potion-luck-small', label: '작은 바다 영약', delta: tab.total.value - base, source: { kind: 'potion', id: 'luck-small' } },
+    ]);
   });
 });

@@ -1,11 +1,22 @@
-import { useRef } from 'react';
+import { createContext, useContext, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import type { TabDef } from '../../ui/TabBar';
 import TabBar from '../../ui/TabBar';
 import { useMobileLayout } from '../useMobileLayout';
 import { hasAppWindows, useAnyAppWindow } from '../../ui/openWindows';
 import WindowSlot from '../../ui/WindowSlot';
 import { isSheetDragClose } from './sheet';
+
+const SidebarFooterContext = createContext<HTMLElement | null | undefined>(undefined);
+
+/** 사이드바 스크롤 영역 아래 고정 footer 슬롯에 자식을 포털한다. Sidebar 밖에서는 인라인으로 그린다. */
+export function SidebarFooter({ children }: { children: ReactNode }) {
+  const target = useContext(SidebarFooterContext);
+  if (target === undefined) return <>{children}</>;
+  if (!target) return null;
+  return createPortal(children, target);
+}
 
 interface SidebarProps<K extends string> {
   tabs: TabDef<K>[];
@@ -27,31 +38,34 @@ export default function Sidebar<K extends string>({ tabs, activeKey, onSelect, s
   const mobile = useMobileLayout();
   const blocked = useAnyAppWindow();
   const dragFrom = useRef<number | null>(null);
+  const [footerEl, setFooterEl] = useState<HTMLElement | null>(null);
   // 앱 전역 모달이 떠 있을 때만 탭 입력을 막는다. 스테이지 모달은 상호 비간섭이다
   const press = (key: K) => { if (hasAppWindows()) return; onSelect(key); };
 
   if (mobile) {
     return (
-      <>
+      <SidebarFooterContext.Provider value={footerEl}>
         {sheetOpen && (
-          <section aria-label="탭 내용"
-                   className="fixed inset-x-0 bottom-14 z-(--z-tabs) h-[50dvh] flex flex-col bg-surface border-t border-line shadow-panel">
-            {/* 시트 안에서 연 창은 창 층이 아니라 시트 바로 위에 쌓인다(WindowSlot) */}
+          <section aria-label="탭 내용" className="contents">
+            {/* 시트 안에서 연 창은 시트(z-(--z-tabs)) 쌓임 맥락 바깥의 같은 자리(WindowSlot)에 그려 탭 줄 위 앱 층에 놓인다 */}
             <WindowSlot>
-              {/* 시트 머리 — 아래로 끌면 닫힌다. 모달이 떠 있으면 배경이라 입력을 받지 않는다 */}
-              <div role="presentation" inert={blocked || undefined}
-                   className="shrink-0 h-6 flex items-center justify-center touch-none border-b border-line/60"
-                   onPointerDown={e => { dragFrom.current = e.clientY; e.currentTarget.setPointerCapture(e.pointerId); }}
-                   onPointerUp={e => {
-                     if (dragFrom.current !== null && isSheetDragClose(dragFrom.current, e.clientY)) onSheetClose?.();
-                     dragFrom.current = null;
-                   }}
-                   onPointerCancel={() => { dragFrom.current = null; }}>
-                <span className="block w-10 h-1 bg-text-dim" />
-              </div>
-              <div inert={blocked || undefined}
-                   className="pf-scroll flex-1 min-h-0 pf-vscroll p-3 flex flex-col gap-2">
-                {children}
+              <div className="fixed inset-x-0 bottom-14 z-(--z-tabs) h-[50dvh] flex flex-col bg-surface border-t border-line shadow-panel">
+                {/* 시트 머리 — 아래로 끌면 닫힌다. 모달이 떠 있으면 배경이라 입력을 받지 않는다 */}
+                <div role="presentation" inert={blocked || undefined}
+                     className="shrink-0 h-6 flex items-center justify-center touch-none border-b border-line/60"
+                     onPointerDown={e => { dragFrom.current = e.clientY; e.currentTarget.setPointerCapture(e.pointerId); }}
+                     onPointerUp={e => {
+                       if (dragFrom.current !== null && isSheetDragClose(dragFrom.current, e.clientY)) onSheetClose?.();
+                       dragFrom.current = null;
+                     }}
+                     onPointerCancel={() => { dragFrom.current = null; }}>
+                  <span className="block w-10 h-1 bg-text-dim" />
+                </div>
+                <div inert={blocked || undefined}
+                     className="pf-scroll flex-1 min-h-0 pf-vscroll p-3 flex flex-col gap-2">
+                  {children}
+                </div>
+                <div ref={setFooterEl} inert={blocked || undefined} className="shrink-0" />
               </div>
             </WindowSlot>
           </section>
@@ -59,16 +73,19 @@ export default function Sidebar<K extends string>({ tabs, activeKey, onSelect, s
         <aside inert={blocked || undefined} className="relative z-(--z-tabs) shrink-0 w-full h-14 bg-surface border-t border-line group-data-[keyboard]/root:invisible">
           <TabBar tabs={tabs} activeKey={sheetOpen ? activeKey : null} onSelect={press} className="h-full border-b-0" />
         </aside>
-      </>
+      </SidebarFooterContext.Provider>
     );
   }
 
   return (
-    <aside inert={blocked || undefined} className="w-(--sidebar-w) shrink-0 h-full flex flex-col bg-surface border-l border-line">
-      <TabBar tabs={tabs} activeKey={activeKey} onSelect={press} className="relative z-(--z-tabs)" />
-      <div className="pf-scroll flex-1 pf-vscroll p-3 flex flex-col gap-2">
-        {children}
-      </div>
-    </aside>
+    <SidebarFooterContext.Provider value={footerEl}>
+      <aside inert={blocked || undefined} className="w-(--sidebar-w) shrink-0 h-full flex flex-col bg-surface border-l border-line">
+        <TabBar tabs={tabs} activeKey={activeKey} onSelect={press} className="relative z-(--z-tabs)" />
+        <div className="pf-scroll flex-1 min-h-0 pf-vscroll p-3 flex flex-col gap-2">
+          {children}
+        </div>
+        <div ref={setFooterEl} inert={blocked || undefined} className="shrink-0" />
+      </aside>
+    </SidebarFooterContext.Provider>
   );
 }

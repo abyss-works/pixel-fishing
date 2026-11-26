@@ -377,4 +377,28 @@ describe('집 기운 얻기 공급', () => {
     expect(recipesCovered(supply, m)).toBeCloseTo(0.5, 12);
     expect(recipesCovered(supply, { ...q, cost: {} })).toBe(Number.POSITIVE_INFINITY);
   });
+
+  it('effectOfRecipe는 슬롯 증폭(amplify) 옵션을 slotEffects 경로로 반영하고 night는 그대로 둔다', () => {
+    const bait = COOK_RECIPES.find(x => x.id === 'cook-bait-rare')!;
+    const base = effectOfRecipe(bait);
+    const boosted = effectOfRecipe(bait, { bait: 0.25, lunch: 0.5 });
+    expect(boosted.rare).toBeCloseTo(base.rare * 1.25, 9);
+
+    const nightBait = COOK_RECIPES.find(x => x.id === 'cook-bait-night')!;
+    expect(effectOfRecipe(nightBait, { bait: 0.5 }).night).toBe(1);
+
+    const lunch = COOK_RECIPES.find(x => x.id === 'cook-lunch-bite')!;
+    const baseLunch = effectOfRecipe(lunch);
+    const boostedLunch = effectOfRecipe(lunch, { lunch: 0.2, bait: 0.5 });
+    expect(boostedLunch.bite).toBeCloseTo(baseLunch.bite * 1.2, 9);
+  });
+
+  it('bagSupplyRows는 기운 획득량 보너스(energyYield)를 반영하고 음수는 거부한다', () => {
+    expect(() => bagSupplyRows({ axis: 'idle', margin: 0, hours: 9, trials: 1, seed: 1, energyYield: -0.1 })).toThrow(/기운 획득량/);
+    const base = bagSupplyRows({ axis: 'idle', margin: 0, hours: 9, trials: 2, seed: 3 });
+    const boosted = bagSupplyRows({ axis: 'idle', margin: 0, hours: 9, trials: 2, seed: 3, energyYield: 0.2 });
+    const rowBase = base.find(r => !r.frontmost && sum(r.energy) > 0)!;
+    const rowBoosted = boosted.find(r => r.boat === rowBase.boat && r.spot === rowBase.spot)!;
+    expect(sum(rowBoosted.energy)).toBeGreaterThan(sum(rowBase.energy));
+  });
 });

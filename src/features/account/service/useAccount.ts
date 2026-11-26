@@ -7,21 +7,19 @@ import type { AccountLookup } from '../../../platform/api';
 import { sendNotice } from '../../display/model/toastPolicy';
 import type { NoticeSink } from '../../display/model/toastPolicy';
 import { setSessionUid, useSession } from './session';
-import { ACCOUNT_CHECK_FAILED_NOTICE, ACCOUNT_NUDGE_FAME, MIN_PASSWORD_LENGTH, passwordLongEnough, shouldNudgeAccount } from '../model/accountRules';
+import { ACCOUNT_CHECK_FAILED_NOTICE, ACCOUNT_NUDGE_FAME, shouldNudgeAccount } from '../model/accountRules';
 
-// 계정 상태 - 표시 이메일 · 이메일 계정 로그인(계정 교체) 처리 ·
-// 비밀번호 재설정 착지 · 계정 연결 넛지. 상태 로드/디스패치는 useGame 소관 (계층: service&state).
+// 계정 상태 - 표시 이메일 · 계정 재확인(계정 교체) 처리 · 계정 연결 넛지.
+// 상태 로드/디스패치는 useGame 소관 (계층: service&state).
 // uid는 세션 게이트가 정본이다 — 계정 교체 때 게이트를 갱신하면 uid 키를 쓰는 조회가 함께 다시 읽힌다.
 // api.auth가 http/local을 갈아끼운다 — 훅은 인증 구현을 직접 모른다.
 
-export function useAccount({ game, setToast, adoptAccount, askNewPassword }: {
+export function useAccount({ game, setToast, adoptAccount }: {
   game: GameState;
   /** 메시지 창에 남긴다 — 거부·실패는 tone 'warn'을 넘긴다 */
   setToast: NoticeSink;
   /** useGame의 계정 교체 — 그 계정의 서버 상태를 채택하고 이 창을 그 계정의 활성 창으로 접속시킨다 */
-  adoptAccount: () => Promise<void>;
-  /** 재설정 링크로 돌아왔을 때 새 비밀번호를 묻는다. 취소하면 null */
-  askNewPassword: (minLength: number) => Promise<string | null>;
+  adoptAccount: () => Promise<boolean | void>;
 }) {
   // 로컬 개발(클라우드 미설정)은 UI 확인 용도로 가짜 계정으로 시작한다
   const [account, setAccount] = useState<string | null>(api.auth.isConfigured ? null : 'dev@localhost');
@@ -60,10 +58,10 @@ export function useAccount({ game, setToast, adoptAccount, askNewPassword }: {
     identifyUser(session.uid); // uid만 — PII 미전송
   }, [session.ready, session.uid]);
 
-  // 이메일 계정으로 로그인한 직후 - 계정 표시 갱신 + (다른 계정이면) 그 계정의 서버 상태 채택과 접속 기록.
+  // 세션 확인 결과를 다시 반영하고 (다른 계정이면) 그 계정의 서버 상태 채택과 접속 기록.
   // 서버는 접속(boot)한 창을 계정의 활성 창으로 삼으므로, 교체한 계정에도 접속을 보내야 이 창의 액션이 거부되지 않는다.
   // uid가 그대로면(같은 계정의 표시 갱신) 서버 상태를 다시 읽지 않는다. 구글 연결과 구글 로그인은 인증 화면을 다녀오는 전체 페이지 이동이라
-  // 이 함수를 거치지 않고, 돌아온 부팅이 새 세션으로 계정과 진행을 읽는다.
+  // 돌아온 부팅이 새 세션으로 계정과 진행을 읽고, 이 함수는 계정 관리 창의 다시 확인 경로가 주로 쓴다.
   const onAuthChanged = async () => {
     applyLookup(await api.auth.currentAccount());
     const { uid: next } = await api.auth.getSession();
@@ -71,57 +69,15 @@ export function useAccount({ game, setToast, adoptAccount, askNewPassword }: {
     if (next) setSessionUid(client, next);
     if (next && next !== uidRef.current) { // 로그인(계정 교체)만 서버 상태 로드
       uidRef.current = next;
-      await adoptAccount();
-      sendNotice(setToast, {
-        kind: 'boot.cloudLoaded',
-        text: '계정의 클라우드 세이브를 불러왔어요.',
-      });
+      const adopted = await adoptAccount();
+      if (adopted !== false) {
+        sendNotice(setToast, {
+          kind: 'boot.cloudLoaded',
+          text: '계정의 저장된 진행을 불러왔어요.',
+        });
+      }
     }
   };
-
-  // 비밀번호 재설정 착지 — 메일 링크는 서버를 거쳐 재설정 토큰을 단 주소로 돌아온다. 부팅 때 한 번 확인한다
-  useEffect(() => {
-    if (!api.auth.isConfigured) return;
-    const landing = api.auth.takePasswordResetLanding();
-    if (!landing) return;
-    if (landing === 'invalid') {
-      sendNotice(setToast, {
-        kind: 'account.authMilestone',
-        text: '비밀번호를 바꾸지 못했어요. 재설정 링크가 만료됐거나 이미 쓰였어요. 재설정을 다시 요청해 주세요.',
-        toastText: '재설정 링크가 만료됐어요.',
-        tone: 'danger',
-      });
-      return;
-    }
-    void askNewPassword(MIN_PASSWORD_LENGTH).then(pw => {
-      if (!pw) return;
-      if (!passwordLongEnough(pw)) {
-        sendNotice(setToast, {
-          kind: 'account.authMilestone',
-          text: `비밀번호는 ${MIN_PASSWORD_LENGTH}자 이상이어야 해요.`,
-          tone: 'danger',
-        });
-        return;
-      }
-      return api.auth.applyNewPassword(pw).then(r => {
-        if (r.ok) {
-          sendNotice(setToast, {
-            kind: 'account.authMilestone',
-            text: '비밀번호를 바꿨어요. 새 비밀번호로 로그인해 주세요.',
-            toastText: '비밀번호 변경 완료!',
-          });
-        } else {
-          sendNotice(setToast, {
-            kind: 'account.authMilestone',
-            text: `비밀번호를 바꾸지 못했어요. ${r.msg}`,
-            toastText: '비밀번호 변경 실패',
-            tone: 'danger',
-          });
-        }
-      });
-    });
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회 확인, setToast는 항상 최신 클로저가 필요 없다
-  }, []);
 
   // 로그인 유도 넛지 — 명성 기준을 넘은 게스트에게 하루 한 번. 띄운 날짜는 세이브 대신 localStorage 1키에 둔다.
   useEffect(() => {
@@ -134,7 +90,7 @@ export function useAccount({ game, setToast, adoptAccount, askNewPassword }: {
     // oxlint-disable-next-line react/set-state-in-effect -- 조건이 처음 맞는 순간(그날 첫 접속·명성 도달)에 한 번 쏘는 알림이라 이벤트 지점이 따로 없다
     sendNotice(setToast, {
       kind: 'account.authMilestone',
-      text: `명성이 ${ACCOUNT_NUDGE_FAME.toLocaleString()}에 이르렀어요. 진행을 지키려면 설정 탭의 계정 관리에서 계정을 만들어 보세요.`,
+      text: `명성이 ${ACCOUNT_NUDGE_FAME.toLocaleString()}에 이르렀어요. 진행을 지키려면 설정 탭의 계정 관리에서 구글 계정을 연결해 보세요.`,
       toastText: '계정 연결을 추천해요.',
     });
     // oxlint-disable-next-line react-hooks/exhaustive-deps

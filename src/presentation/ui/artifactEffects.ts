@@ -2,16 +2,16 @@ import type { Artifact } from '../../game/content/artifacts';
 import { artifactEffectsAt, artifactExtraCookChanceAt } from '../../game/rules/artifactLevel';
 import { MUTATION_WEIGHTS } from '../../game/rules/balance';
 import type { ArtifactEffectKey } from '../../features/gameplay/model/stats';
-import { fmtDecimal2, fmtPlusPoint } from './format';
+import { fmtDecimal2 } from './format';
 
 const EFFECT_ORDER: readonly ArtifactEffectKey[] = ['sail', 'duelSpeedupCut', 'mutationWeight', 'biteWaitCut', 'commonWeightCut', 'bagCap', 'extraCookChance'];
 
 const EFFECT_LABEL: Record<ArtifactEffectKey, string> = {
   sail: '항해 속도',
   duelSpeedupCut: '네임드 결투 가속',
-  mutationWeight: '돌연변이 가중치',
+  mutationWeight: '돌연변이 출현 비중',
   biteWaitCut: '입질 대기',
-  commonWeightCut: '일반 등급 가중치',
+  commonWeightCut: '일반 어종 출현 비중',
   bagCap: '가방 용량',
   extraCookChance: '요리 추가 완성',
 };
@@ -36,7 +36,7 @@ export function artifactEffectValue(a: Artifact, effect: ArtifactEffectKey, leve
     case 'bagCap': return (e.bagCap ?? 0) > 0 ? `+${fmtDecimal2(clean(e.bagCap! * scale) * 100)}%` : null;
     case 'extraCookChance': {
       const chance = artifactExtraCookChanceAt(a, level);
-      return chance > 0 ? fmtPlusPoint(Math.min(1, clean(chance * scale)) * 100) : null; // 확률에 직접 더하는 효과는 %p
+      return chance > 0 ? `+${fmtDecimal2(Math.min(1, clean(chance * scale)) * 100)}%` : null;
     }
     case 'mutationWeight': return e.mutationWeight !== undefined
       ? `+${fmtDecimal2(clean((e.mutationWeight.variant / MUTATION_WEIGHTS.variant - 1) * scale) * 100)}%`
@@ -69,7 +69,7 @@ export function artifactSystemLines(a: Artifact): { bonus: string | null; penalt
   if (!sys) return { bonus: null, penalty: null };
   const bonuses: string[] = [];
   if ((sys.namedCapBonus ?? 0) > 0) bonuses.push(`네임드 토벌 하루 +${sys.namedCapBonus}번`);
-  if ((sys.extraBaitSlots ?? 0) > 0) bonuses.push(`미끼 슬롯 +${sys.extraBaitSlots}칸`);
+  if ((sys.extraBaitSlots ?? 0) > 0) bonuses.push(`미끼 칸 +${sys.extraBaitSlots}칸`);
   const penalties: string[] = [];
   if ((sys.namedRewardCut ?? 0) > 0) penalties.push(`네임드 토벌 골드 ${fmtCutPercent(sys.namedRewardCut!)}`);
   if ((sys.baitDurationCut ?? 0) > 0) penalties.push(`미끼 지속 시간 ${fmtCutPercent(sys.baitDurationCut!)}`);

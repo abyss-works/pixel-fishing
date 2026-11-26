@@ -6,13 +6,14 @@ import { autoLockPlan, sellableValue } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { achievementBonusesOf } from '../../../game/rules/achievements';
 import { bagCapacityOf, createPlayerContext } from '../../../game/rules/effects';
-import { fortuneOf, luckMultOf } from '../../../game/rules/fortune';
+import { selectSellLuck } from '../../fortune/model/fortune';
 import { NO_GUILD_EFFECTS } from '../../../game/rules/guild';
 import type { Stat } from '../../../game/rules/stats';
 import { saleProceeds } from './catalog';
 import { boatNameOf } from '../../../game/content/boats';
 import { ARTIFACTS } from '../../../game/content/artifacts';
 import type { Artifact } from '../../../game/content/artifacts';
+import { zoneById } from '../../../game/content/zones';
 
 /** 가방 채움 경고 단계 — 이 비율(%) 이상이면 warn·danger */
 export const BAG_WARN_PERCENT = 75;
@@ -52,11 +53,12 @@ export interface BagOverview extends BagStatus {
 export function selectBagOverview(
   game: GameState, sellBonus: number, bagBonus = 0, now: string = new Date().toISOString(),
 ): BagOverview {
+  const luck = selectSellLuck(game, now);
   return {
     ...selectBagStatus(game, bagBonus),
     sellable: saleProceeds(
       sellableValue(game), sellBonus, achievementBonusesOf(game).sellBonus,
-      luckMultOf(fortuneOf(game, now), 'sell'),
+      luck.mult, { fortuneBonus: luck.fortuneBonus, potions: luck.potions },
     ),
     autoLock: autoLockPlan(game.bag),
   };
@@ -66,6 +68,22 @@ export function selectBagOverview(
 export function selectOwnedArtifacts(game: Pick<GameState, 'artifacts'>): Artifact[] {
   const owned = new Set(game.artifacts);
   return ARTIFACTS.filter(a => owned.has(a.id));
+}
+
+export interface BagArtifactEntry {
+  artifact: Artifact;
+  owned: boolean;
+  zoneName: string;
+}
+
+/** 가방 유물 목록 — 전체 유물을 레지스트리 순서로 내고 보유 여부와 구역명을 함께 돌려준다 */
+export function selectBagArtifacts(game: Pick<GameState, 'artifacts'>): BagArtifactEntry[] {
+  const owned = new Set(game.artifacts);
+  return ARTIFACTS.map(artifact => ({
+    artifact,
+    owned: owned.has(artifact.id),
+    zoneName: zoneById(artifact.zone)?.shortName ?? artifact.zone,
+  }));
 }
 
 /** 헤더 자원 바의 배와 낚싯대 - 배는 티어와 이름(맨발은 티어 0, 없음), 낚싯대는 레벨 */

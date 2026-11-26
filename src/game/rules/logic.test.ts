@@ -18,6 +18,7 @@ import {
   formDiscovered, variantDiscovered, dexSpeciesCount,
   canBuyBoat, canUpgradeRod, canFish, REJECT_TEXT,
   licenseConditions, zoneDexMissing, LICENSE_GRADES,
+  isSpotNormalDexComplete, spotNormalDexProgress, newlyCompletedSpotDex,
 } from './logic';
 import { WALK_SPEED } from './balance';
 import type { CatchExtras, FishInstance, FormId } from './logic';
@@ -600,9 +601,14 @@ describe('월척(크기)·개체·폼 기록', () => {
     expect(at({ variant: 1, normal: 2 })).toBe('variant'); // 0.3×3 = 0.9 < 1
   });
 
-  it('mutationWeightsOf: 전역 가중치 일반 3 : 돌연변이 1, 코모로의 골판 Lv1이면 돌연변이 가중치 +25%', () => {
+  it('mutationWeightsOf: 전역 가중치 일반 3 : 돌연변이 1, 코모로의 골판 Lv1 +25%, 길드 돌연변이 보너스 가산', () => {
     expect(mutationWeightsOf(newState(), 'pond')).toEqual({ normal: 3, variant: 1 });
     expect(mutationWeightsOf({ ...newState(), artifacts: ['elder-scale'] }, 'pond')).toEqual({ normal: 3, variant: 1.25 });
+    expect(mutationWeightsOf({ ...newState(), artifacts: ['elder-scale'] }, 'pond', 0, 0, 1, 0.2)).toEqual({
+      normal: 3, variant: 1.45,
+    });
+    expect(mutationWeightsOf(newState(), 'pond', 0, 0, 1, 0, 0.5)).toEqual({ normal: 3, variant: 0.5 });
+    expect(mutationWeightsOf(newState(), 'pond', 1.5, 0, 1, 0, 0.5)).toEqual({ normal: 3, variant: 1.25 });
   });
 
   it('addCatch: 폼별로 마릿수/크기가 갈리고 종 합계는 폼 합산으로 파생 (v8)', () => {
@@ -923,17 +929,27 @@ describe('세이브 v9 — 미끼 환불과 요리 상태', () => {
 
   it('newState는 v10 기본 상태다', () => {
     const s = newState();
-    expect(s).toMatchObject({ v: 10, cooking: null, slots: { lunch: null, bait: null }, energyTargets: {}, baitRefund: null });
+    expect(s).toMatchObject({ v: 10, cooking: null, cookingQueue: [], slots: { lunch: null, bait: null }, energyTargets: {}, baitRefund: null });
     expect('activeBait' in s).toBe(false);
   });
 
-  it('cooking 위생 — 유효한 조리는 그대로 살린다', () => {
-    const cooking = { recipe: 'cook-lunch-bite', count: 2, bonus: [false, true], startedAt: START };
+  it('cooking 위생 — 대기 시간 있는 유효 조리만 살리고 id 누락 시 보정한다', () => {
+    const cooking = { id: 'cook-1', recipe: 'cook-lunch-rare', count: 2, bonus: [false, true], startedAt: START };
     expect(mig({ ...newState(), cooking }).cooking).toEqual(cooking);
+
+    const legacyNoId = { recipe: 'cook-lunch-rare', count: 1, bonus: [false], startedAt: START };
+    const migrated = mig({ ...newState(), cooking: legacyNoId });
+    expect(migrated.cooking).toMatchObject({ recipe: 'cook-lunch-rare', count: 1, bonus: [false], startedAt: START });
+    expect(typeof migrated.cooking?.id).toBe('string');
+    expect(migrated.cooking!.id.length).toBeGreaterThan(0);
+
+    // 대기 시간 0인 즉시 요리(가루디야, 미끼)는 cooking에 두지 않는다
+    expect(mig({ ...newState(), cooking: { id: 'c0', recipe: 'cook-lunch-bite', count: 1, bonus: [false], startedAt: START } }).cooking).toBeNull();
+    expect(mig({ ...newState(), cooking: { id: 'c0', recipe: 'cook-bait-rare', count: 1, bonus: [false], startedAt: START } }).cooking).toBeNull();
   });
 
   it('cooking 위생 — 없는 레시피, 범위 밖 수량, 길이가 다른 bonus, 시각이 아닌 값은 조리 없음으로 접는다', () => {
-    const ok = { recipe: 'cook-lunch-bite', count: 2, bonus: [false, true], startedAt: START };
+    const ok = { id: 'cook-1', recipe: 'cook-lunch-rare', count: 2, bonus: [false, true], startedAt: START };
     const bad: unknown[] = [
       { ...ok, recipe: 'nope' }, { ...ok, recipe: 3 },
       { ...ok, count: 0, bonus: [] }, { ...ok, count: 1.5 },
@@ -945,6 +961,30 @@ describe('세이브 v9 — 미끼 환불과 요리 상태', () => {
     for (const cooking of bad) expect(mig({ ...newState(), cooking }).cooking, JSON.stringify(cooking)).toBeNull();
     expect(mig({ ...newState(), cooking: { ...ok, count: COOK_STORAGE_CAP, bonus: new Array(COOK_STORAGE_CAP).fill(false) } }).cooking)
       .not.toBeNull();
+  });
+
+  it('cookingQueue 위생 — cooking이 null이면 비우고, 유효 대기 레시피만 보관함 상한(10)까지 남긴다', () => {
+    const active = { id: 'c1', recipe: 'cook-lunch-rare', count: 4, bonus: [false, false, false, false], startedAt: START };
+    expect(mig({
+      ...newState(),
+      cooking: null,
+      cookingQueue: [{ id: 'q1', recipe: 'cook-lunch-rare', count: 2, bonus: [false, false] }],
+    }).cookingQueue).toEqual([]);
+
+    const migrated = mig({
+      ...newState(),
+      cooking: active,
+      cookingQueue: [
+        { id: 'q-instant', recipe: 'cook-lunch-bite', count: 1, bonus: [false] }, // 즉시 요리는 탈락
+        { recipe: 'cook-lunch-mutation', count: 3, bonus: [false, true, false] }, // id 누락 보정
+        { id: 'q-fit', recipe: 'cook-lunch-bundle', count: 3, bonus: [false, false, false] }, // 합계 4+3+3=10까지 살림
+        { id: 'q-over', recipe: 'cook-lunch-rare', count: 1, bonus: [false] }, // 상한 초과로 잘림
+      ],
+    });
+    expect(migrated.cookingQueue).toHaveLength(2);
+    expect(migrated.cookingQueue[0]).toMatchObject({ recipe: 'cook-lunch-mutation', count: 3, bonus: [false, true, false] });
+    expect(migrated.cookingQueue[0].id.length).toBeGreaterThan(0);
+    expect(migrated.cookingQueue[1]).toEqual({ id: 'q-fit', recipe: 'cook-lunch-bundle', count: 3, bonus: [false, false, false] });
   });
 
   it('slots 위생 — 슬롯 종류에 맞는 요리 id와 시각만 살린다', () => {
@@ -1012,11 +1052,17 @@ describe('세이브 v9 — 미끼 환불과 요리 상태', () => {
 describe('쿠폰 (클라이언트 검증 — P1에서 서버 이관)', () => {
   const CODE = Object.keys(COUPONS)[0];
 
-  it('유효 코드: 골드 지급 + 사용 기록, 재사용 불가', () => {
+  it('유효 코드: 골드·아이템 지급 + 사용 기록, 재사용 불가', () => {
     const r1 = redeemCoupon(newState(), CODE);
     expect(r1.ok).toBe(true);
     if (!r1.ok) return;
-    expect(r1.state.gold).toBe(COUPONS[CODE].gold);
+    expect(r1.state.gold).toBe(300);
+    expect(r1.state.items['luck-small']).toBe(1);
+    expect(r1.reward).toEqual({
+      gold: 300,
+      items: [{ id: 'luck-small', qty: 1 }],
+      desc: COUPONS[CODE].desc,
+    });
     expect(r1.state.coupons).toContain(CODE);
     const r2 = redeemCoupon(r1.state, CODE);
     expect(r2).toEqual({ ok: false, reason: 'used' });
@@ -1027,8 +1073,20 @@ describe('쿠폰 (클라이언트 검증 — P1에서 서버 이관)', () => {
     expect(redeemCoupon(newState(), `  ${CODE}  `).ok).toBe(true);
   });
 
-  it('첫 쿠폰은 조각배 값을 지급한다', () => {
-    expect(COUPONS[CODE].gold).toBe(BOATS[0].price);
+  it('첫 쿠폰은 300G와 작은 바다 영약 1개를 지급한다', () => {
+    expect(COUPONS[CODE].gold).toBe(300);
+    expect(COUPONS[CODE].items).toEqual([{ id: 'luck-small', qty: 1 }]);
+    expect(COUPONS[CODE].desc).toContain('작은 바다 영약');
+  });
+
+  it('생명의 기운 등 unitSize가 1보다 큰 아이템도 저장 단위로 환산해 지급한다', () => {
+    const r = redeemCoupon(newState(), '기운쿠폰', {
+      기운쿠폰: { gold: 0, items: [{ id: 'energy-common', qty: 2 }], desc: '기운 지원' },
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.state.items['energy-common']).toBe(20);
+    expect(r.reward.items).toEqual([{ id: 'energy-common', qty: 2 }]);
   });
 });
 
@@ -1066,26 +1124,63 @@ describe('규칙 판정 (rules.ts)', () => {
 
 describe('라이선스 도감 조건 — 남은 어종 수', () => {
   const dexLabel = (state: ReturnType<typeof newState>) =>
-    licenseConditions(state, 'pacific', 'basic').find(c => c.key === 'dex')!;
+    licenseConditions(state, 'pacific', 'named').find(c => c.key === 'dex')!;
 
-  it('미달이면 판정과 같은 기준으로 센 남은 어종 수를 붙인다', () => {
+  it('일반 의뢰(basic)는 도감 조건이 없고 남은 어종도 0종이다', () => {
     const state = newState();
-    const missing = zoneDexMissing(state, 'pacific', LICENSE_GRADES.basic);
+    expect(LICENSE_GRADES.basic).toEqual([]);
+    expect(zoneDexMissing(state, 'pacific', LICENSE_GRADES.basic)).toEqual([]);
+    expect(licenseConditions(state, 'pacific', 'basic')).toEqual([]);
+  });
+
+  it('네임드 토벌(named)은 전설 제외 일반·희귀·영웅이 기준이고 미달이면 남은 어종 수를 붙인다', () => {
+    expect(LICENSE_GRADES.named).toEqual(['common', 'rare', 'epic']);
+    const state = newState();
+    const missing = zoneDexMissing(state, 'pacific', LICENSE_GRADES.named);
     expect(missing.length).toBeGreaterThan(1);
     expect(dexLabel(state)).toEqual({
-      key: 'dex', ok: false, label: `태평양 모든 어종 수집(전설 제외, 밤 어종 포함) (남은 ${missing.length}종)`,
+      key: 'dex', ok: false, label: `태평양 전설을 뺀 모든 어종 모으기 (남은 ${missing.length}종)`,
     });
     const caught = { count: 1, maxSize: 1, first: '2026-01-01' };
     const oneCaught = { ...state, dex: { [missing[0]]: { normal: caught } } };
     expect(dexLabel(oneCaught).label).toMatch(new RegExp(` \\(남은 ${missing.length - 1}종\\)$`));
   });
 
-  it('다 채우면 남은 수 없이 원래 문구다', () => {
+  it('전설 없이 일반·희귀·영웅만 다 채우면 남은 수 없이 통과한다', () => {
     const state = newState();
     const caught = { count: 1, maxSize: 1, first: '2026-01-01' };
     const full = { ...state, dex: Object.fromEntries(
-      zoneDexMissing(state, 'pacific', LICENSE_GRADES.basic).map(id => [id, { normal: caught }])) };
-    expect(dexLabel(full)).toEqual({ key: 'dex', ok: true, label: '태평양 모든 어종 수집(전설 제외, 밤 어종 포함)' });
+      zoneDexMissing(state, 'pacific', LICENSE_GRADES.named).map(id => [id, { normal: caught }])) };
+    expect(dexLabel(full)).toEqual({ key: 'dex', ok: true, label: '태평양 전설을 뺀 모든 어종 모으기' });
+  });
+});
+
+describe('해역 일반 폼 도감 완성 판정', () => {
+  const caught = { count: 1, maxSize: 10, first: '2026-01-01' };
+  const pondIds = FISH.filter(f => f.spot === 'pond').map(f => f.id);
+
+  it('빈 도감과 변이 폼만 있는 도감은 일반 폼 완성으로 세지 않는다', () => {
+    expect(spotNormalDexProgress({}, 'pond')).toEqual({ found: 0, total: pondIds.length, completed: false });
+    expect(isSpotNormalDexComplete({}, 'pond')).toBe(false);
+
+    const variantsOnly = Object.fromEntries(pondIds.map(id => [id, { variant: caught }]));
+    expect(spotNormalDexProgress(variantsOnly, 'pond')).toEqual({ found: 0, total: pondIds.length, completed: false });
+    expect(isSpotNormalDexComplete(variantsOnly, 'pond')).toBe(false);
+  });
+
+  it('모든 어종 일반 폼이 기록되면 완성과 새로 완성된 해역을 정확히 판정한다', () => {
+    const five = Object.fromEntries(pondIds.slice(0, -1).map(id => [id, { normal: caught }]));
+    const lastId = pondIds[pondIds.length - 1];
+    const fivePlusLastVariant = { ...five, [lastId]: { variant: caught } };
+    const six = { ...five, [lastId]: { normal: caught } };
+
+    expect(spotNormalDexProgress(five, 'pond')).toEqual({ found: pondIds.length - 1, total: pondIds.length, completed: false });
+    expect(spotNormalDexProgress(six, 'pond')).toEqual({ found: pondIds.length, total: pondIds.length, completed: true });
+    expect(isSpotNormalDexComplete(six, 'pond')).toBe(true);
+
+    expect(newlyCompletedSpotDex(five, fivePlusLastVariant, 'pond')).toBeNull();
+    expect(newlyCompletedSpotDex(five, six, 'pond')).toBe('pond');
+    expect(newlyCompletedSpotDex(six, six, 'pond')).toBeNull();
   });
 });
 
@@ -1142,7 +1237,7 @@ describe('아이템 (세이브 v8 접기 — 가산 필드 자가 치유)', () =
     expect(st.items).toEqual({ 'energy-common': 2, 'future-kept': 4 }); // future-item은 0이라 접힘
   });
 
-  it('addItem/takeItem — 적립·정확히 1개 차감·하한 방어', () => {
+  it('addItem/takeItem — 적립·정확히 1개 차감·하한 방어·상한 클램프', () => {
     let st = newState();
     st = addItem(st, 'energy-common', 3);
     expect(st.items['energy-common']).toBe(3);
@@ -1152,6 +1247,25 @@ describe('아이템 (세이브 v8 접기 — 가산 필드 자가 치유)', () =
     st = takeItem(st, 'energy-common');
     expect(st.items['energy-common']).toBeUndefined(); // 0은 아예 기록하지 않는다
     expect(takeItem(st, 'energy-common')).toBe(st);     // 더 떨어뜨리지 않는다
+
+    const cappedPotion = addItem(newState(), 'luck-small', 2_000_000);
+    expect(cappedPotion.items['luck-small']).toBe(1_000_000);
+    const cappedEnergy = addItem(newState(), 'energy-common', 20_000_000);
+    expect(cappedEnergy.items['energy-common']).toBe(10_000_000);
+  });
+
+  it('migrate: potions 누락 시 {} 보정하고 세이브 버전은 유지하며 깨진 항목만 버린다', () => {
+    const legacy = { ...newState() } as Record<string, unknown>;
+    delete legacy.potions;
+    const migrated = mig(legacy as never);
+    expect(migrated.v).toBe(newState().v);
+    expect(migrated.potions).toEqual({});
+
+    const sanitized = mig({
+      v: newState().v,
+      potions: { 'luck-small': '2026-08-22', broken: 123, empty: '', 'future-potion': '2026-08-23' },
+    } as never);
+    expect(sanitized.potions).toEqual({ 'luck-small': '2026-08-22', 'future-potion': '2026-08-23' });
   });
 
   it('등급 예산 ×2 — 등급 실질확률이 정확히 상승하고 타 등급은 비례 감소한다', () => {
@@ -1289,6 +1403,7 @@ describe('가중치 추첨', () => {
       pond.mutationWeight = { variant: 2 };
       pond.namedWeight = { named: 9 };
       expect(mutationWeightsOf(newState(), 'pond')).toEqual({ variant: 2, normal: 3 });
+      expect(mutationWeightsOf(newState(), 'pond', 0, 0, 1, 0, 0.5)).toEqual({ variant: 1, normal: 3 });
       expect(mutationWeightsOf({ ...newState(), artifacts: ['elder-scale'] }, 'pond')).toEqual({ variant: 1.25, normal: 3 });
       expect(namedWeightsOf('pond')).toEqual({ named: 9, none: 999 });
       expect(namedWeightsOf('river')).toEqual({ named: 1, none: 999 });

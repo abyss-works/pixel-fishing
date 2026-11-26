@@ -1,15 +1,10 @@
 // 서버 함수가 쓰는 외부 호출의 테스트 대역. test:db의 setupFiles에서만 쓴다.
 import { vi } from 'vitest';
 
-// 메일 발송(Resend) — 실제로 보내지 않고 받은 요청 본문을 쌓는다. 다른 외부 요청은 원래 fetch로 넘긴다.
-export const sentMails: { to: string[]; subject: string; text: string }[] = [];
+// 구글 토큰 교환 — 실제로 외부에 요청하지 않고 등록해 둔 신원의 서명 없는 ID 토큰을 돌려준다. 다른 외부 요청은 원래 fetch로 넘긴다.
 const realFetch = globalThis.fetch;
 globalThis.fetch = (async (input, init) => {
   const url = input instanceof Request ? input.url : String(input);
-  if (url === 'https://api.resend.com/emails') {
-    sentMails.push(JSON.parse(String(init?.body)) as { to: string[]; subject: string; text: string });
-    return new Response(JSON.stringify({ id: 'test-mail' }), { status: 200, headers: { 'content-type': 'application/json' } });
-  }
   if (url === 'https://oauth2.googleapis.com/token') return googleTokenResponse(init);
   return realFetch(input, init);
 }) as typeof fetch;

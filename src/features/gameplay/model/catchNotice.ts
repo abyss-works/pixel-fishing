@@ -1,6 +1,7 @@
 import type { ReleasedFish } from '../../../game/rules/actions';
 import { RARITY, formName } from '../../../game/rules/logic';
 import type { CatchInfo, Fish, FormRecord, Judgment } from '../../../game/rules/logic';
+import { josa } from '../../../shared/lib/josa';
 import type { SystemNoticeInput } from '../../display/model/toastPolicy';
 
 /** 가방이 차서 캐치 결과와 함께 내보낸 개체. extracted는 가공 플랜트선이 기운으로 바꾼 개체다 */
@@ -14,7 +15,7 @@ export function bagOverflowNotice({ released, extracted = [] }: BagOverflow): st
   if (extracted.length === 0) {
     if (released.length === 0) return null;
     const names = released.map(fish => fish.name).join(', ');
-    return `가방이 가득 차 [${names}]을(를) 놓아줬어요. 명성은 그대로 남아요.`;
+    return `가방이 가득 차 ${names}${josa(names, '을/를')} 놓아줬어요. 명성은 그대로 남아요.`;
   }
   const converted = `가방이 차서 ${extracted.length}마리를 생명의 기운으로`;
   return released.length === 0
@@ -63,7 +64,7 @@ export function classifyCatchNotice(
       kind: 'catch.legendaryOrFirstVariant',
       text,
       toastText: `첫 돌연변이 [${name}] 발견!`,
-      tone: 'epic',
+      tone: 'mutation',
     };
   }
   const manual = judgment !== 'auto';

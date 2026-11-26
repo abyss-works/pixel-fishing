@@ -1,12 +1,8 @@
 import { useEffect, useId, useRef } from 'react';
 import type { ReactNode } from 'react';
+import Badge from './Badge';
 import PixelIcon from './PixelIcon';
-import Tip from './Tip';
-
-/** 잠금 툴팁 내용 - 잠금 줄마다 따로 보인다 */
-export function LockLines({ lines }: { lines: readonly string[] }) {
-  return <>{lines.map((line, i) => <span key={`${i}-${line}`} className="block">{line}</span>)}</>;
-}
+import Tip, { TipCard } from './Tip';
 
 /** 잠금 표시의 자물쇠 */
 export function LockIcon({ size = 12, className }: { size?: number; className?: string }) {
@@ -14,13 +10,21 @@ export function LockIcon({ size = 12, className }: { size?: number; className?: 
 }
 
 /** 잠금 툴팁 - 마우스를 올리거나 포커스하거나 누르면 잠금 줄이 열린다. 감싼 요소의 배치는 className으로 정한다 */
-export function LockTip({ lines, className, onlyIf, children }: {
+export function LockTip({ title, description, lines, className, onlyIf, children }: {
+  title?: ReactNode;
+  description?: ReactNode;
   lines: readonly string[];
   className?: string;
   onlyIf?: () => boolean;
   children: ReactNode;
 }) {
-  return <Tip wraps pressOpens onlyIf={onlyIf} className={className} text={<LockLines lines={lines} />}>{children}</Tip>;
+  const badge = title || description ? <Badge tone="dim-plain" size="2xs">잠김</Badge> : undefined;
+  return (
+    <Tip wraps pressOpens onlyIf={onlyIf} className={className}
+         text={<TipCard title={title} description={description} badge={badge} status={{ tone: 'lock', lines }} />}>
+      {children}
+    </Tip>
+  );
 }
 
 /** 잠금 줄을 보조 기술에 설명으로 알리는 숨은 글 - 잠긴 요소의 aria-describedby가 가리키는 id를 받는다 */
@@ -40,7 +44,11 @@ export function LockBadge({ size = 12, outside = false }: { size?: number; outsi
 // 키보드는 이 요소가 대신 받는다. 게스트 잠금과 진행 조건 잠금이 같은 구조를 쓴다.
 // 툴팁 자리가 되는 바깥 칸의 배치는 className으로, 메뉴 줄 안에서는 role="menuitem"으로 쓴다.
 // 자물쇠는 오른쪽 위 모서리에 붙는다. 줄 안에 자기 자리가 있는 요소(메뉴 줄)는 badge를 끄고 LockIcon을 그 자리에 둔다.
-export default function Locked({ lines, role = 'group', label, badge = true, hoverAfterMove = false, className, children }: {
+export default function Locked({ title, description, lines, role = 'group', label, badge = true, hoverAfterMove = false, className, children }: {
+  /** 툴팁 헤더 제목 — 생략 시 label을 쓴다 */
+  title?: ReactNode;
+  /** 툴팁 본문 역할 설명 */
+  description?: ReactNode;
   /** 잠금 안내 줄들 */
   lines: readonly string[];
   /** 접근성 역할. 메뉴 항목 자리에서는 menuitem */
@@ -65,7 +73,8 @@ export default function Locked({ lines, role = 'group', label, badge = true, hov
     return () => { for (const e of events) document.removeEventListener(e, arm, { capture: true }); };
   }, [hoverAfterMove]);
   return (
-    <LockTip lines={lines} onlyIf={hoverAfterMove ? () => armed.current : undefined} className={className ?? 'block'}>
+    <LockTip title={title ?? label} description={description} lines={lines}
+             onlyIf={hoverAfterMove ? () => armed.current : undefined} className={className ?? 'block'}>
       <span role={role} tabIndex={0} aria-label={label} aria-disabled={role === 'menuitem' ? true : undefined}
             aria-describedby={reasonId}
             className="relative block w-full min-w-0 cursor-not-allowed focus-visible:outline-1 focus-visible:outline-gold">

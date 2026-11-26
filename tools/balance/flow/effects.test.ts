@@ -3,15 +3,16 @@ import { SPOTS } from '../../../src/game/content/spots';
 import type { SpotId } from '../../../src/game/content/spots';
 import { RARITY_ORDER } from '../../../src/game/content/rarity';
 import { BOUNTIES } from '../../../src/game/content/bounties';
+import { ARTIFACTS, ARTIFACT_MAX_LEVEL, artifactHasLevel } from '../../../src/game/content/artifacts';
 import { CATCH_MS, VARIANT_PRICE_MULT } from '../../../src/game/rules/balance';
-import { variantBoostOf } from '../../../src/game/rules/artifactLevel';
+import { artifactLevelOf, variantBoostOf } from '../../../src/game/rules/artifactLevel';
 import { addGradeEffect, mutationWeightsOf, namedEncounterCandidates, variantShare } from '../../../src/game/rules/logic';
 import { entryLevel, meanCycleSec, rates, rng } from '../model';
 import type { Row } from '../model';
 import { FISH } from '../../../src/game/content/fish';
 import { axisOf } from './progress';
 import {
-  DEFAULT_UNITS, NO_EFFECT, checkEffect, dexRows, dexTimes, earlyRows, effectRates, incomeRows, supplyRows, variantShareOf,
+  DEFAULT_UNITS, NO_EFFECT, checkEffect, dexRows, dexTimes, earlyRows, effectRates, incomeRows, parseArtifacts, supplyRows, variantShareOf,
 } from './effects';
 import type { Effect, TripTime } from './effects';
 
@@ -425,5 +426,41 @@ describe('PERFECT 축', () => {
   it('PERFECT 판정은 GOOD보다 같은 해역에서 시간당 골드가 크거나 같다', () => {
     const p = incomeRows({ axis: 'perfect', effect: NO_EFFECT, margin: 4 }), g = incomeRows({ axis: 'manual', effect: NO_EFFECT, margin: 4 });
     p.forEach((r, i) => expect(r.goldBase).toBeGreaterThanOrEqual(g[i].goldBase - 1e-9));
+  });
+});
+
+describe('밤 어종 가중치 증가', () => {
+  it('음수는 거부하고, 0 이상이면 제품의 nightWeightBonus 경로로 밤 어종 비율이 늘어난다', () => {
+    expect(() => checkEffect(fx({ nightWeight: -0.1 }))).toThrow(/밤 어종/);
+    const spot = SPOTS.find(s => FISH.some(f => f.spot === s.id && f.night))!.id;
+    const level = levelOf(spot);
+    const base = effectRates(spot, level, 'idle', NO_EFFECT);
+    const now = effectRates(spot, level, 'idle', fx({ nightWeight: 0.5 }));
+    const expected = rates(spot, level, 'idle', { nightWeightBonus: 0.5 });
+    const nightShare = (r: { rows: Row[] }) => r.rows.filter(x => x.fish.night).reduce((s, x) => s + x.prob, 0);
+    expect(now.goldPerHour).toBeCloseTo(expected.goldPerHour, 6);
+    expect(nightShare(now)).toBeCloseTo(nightShare(expected), 12);
+    expect(nightShare(now)).toBeGreaterThan(nightShare(base));
+  });
+});
+
+describe('전설 유물 고정 레벨 파싱과 제품 규칙 일치', () => {
+  it('all, max, all:N, 단독 지정은 전설 유물을 제품 규칙과 같은 최고 레벨(Lv5)로 반환한다', () => {
+    const legendaries = ARTIFACTS.filter(a => !artifactHasLevel(a));
+    expect(legendaries.length).toBeGreaterThan(0);
+
+    for (const spec of ['all', 'max', 'all:2'] as const) {
+      const parsed = parseArtifacts(spec);
+      for (const art of legendaries) {
+        expect(parsed[art.id]).toBe(ARTIFACT_MAX_LEVEL);
+        expect(parsed[art.id]).toBe(artifactLevelOf({ artifacts: [art.id], artifactLevels: parsed }, art.id));
+      }
+    }
+
+    for (const art of legendaries) {
+      expect(parseArtifacts(art.id)[art.id]).toBe(ARTIFACT_MAX_LEVEL);
+      expect(parseArtifacts(`${art.id}:${ARTIFACT_MAX_LEVEL}`)[art.id]).toBe(ARTIFACT_MAX_LEVEL);
+      expect(() => parseArtifacts(`${art.id}:1`)).toThrow(/Lv5 고정/);
+    }
   });
 });

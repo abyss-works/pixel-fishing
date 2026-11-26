@@ -11,7 +11,7 @@ const SCROLL_CLASS = new RegExp(`pf-vscroll|pf-scroll|${OVERFLOW_DIRECT.source}`
 describe('스테이지 모달 래퍼', () => {
   afterEach(cleanup);
   // 래퍼에 합쳐지는 클래스(높이 상수 포함)를 정규식으로 읽지 않고, 높이·폭 변형을 모두 렌더해 실제 class를 본다
-  const heights: (ModalHeight | undefined)[] = [undefined, 400, 480, 520, 560];
+  const heights: (ModalHeight | undefined)[] = [undefined, 400, 480, 500, 520, 560];
   const widths: Array<{ sm?: boolean; md?: boolean; xl?: boolean }> = [{}, { sm: true }, { md: true }, { xl: true }];
 
   it('모든 높이·폭 변형에서 스크롤 클래스를 갖지 않는다 — 스크롤은 카드 본문이 맡는다', () => {
@@ -34,7 +34,7 @@ describe('스테이지 모달 래퍼', () => {
   });
 
   it('모바일 고정 변형은 모바일 높이를 가용 높이로 정하고 내용 높이(mobile:h-auto)를 쓰지 않는다', () => {
-    for (const height of [480, 520, 560] as const) {
+    for (const height of [480, 500, 520, 560] as const) {
       render(
         <Modal layer="stage" height={height} mobileFixed onClose={() => {}}>
           <p>내용</p>
@@ -45,6 +45,18 @@ describe('스테이지 모달 래퍼', () => {
       expect(cls).toContain('mobile:h-[calc(100%-48px)]');
       expect(cls).not.toContain('mobile:h-auto');
     }
+
+    render(
+      <Modal layer="stage" md height={500} mobileHeight={552} mobileFixed onClose={() => {}}>
+        <p>내용</p>
+      </Modal>,
+    );
+    const dialogCls = screen.getByRole('dialog').className;
+    cleanup();
+    expect(dialogCls).toContain('h-[min(500px,calc(100%-32px))]');
+    expect(dialogCls).toContain('mobile:h-[min(552px,calc(100%-48px))]');
+    expect(dialogCls).not.toContain('mobile:h-auto');
+    expect(SCROLL_CLASS.test(dialogCls)).toBe(false);
   });
 
   it('감지: 높이 상수에 스크롤 클래스가 섞이면 잡는다', () => {

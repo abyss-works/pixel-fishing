@@ -8,6 +8,7 @@ import ColorSwatch from '../../../ui/ColorSwatch';
 import Inset from '../../../ui/Inset';
 import ModalCard from '../../../ui/ModalCard';
 import PersonSprite from '../../../ui/PersonSprite';
+import ProgressCount from '../../../ui/ProgressCount';
 import SlotCell from '../../../ui/SlotCell';
 import Subheading from '../../../ui/Subheading';
 import TabBar from '../../../ui/TabBar';
@@ -44,7 +45,6 @@ export default function WardrobePanel({ game, busy, onChangeClothes, onBuyHat, o
         <div className="flex flex-col gap-1 min-w-0">
           <span className="text-2xs text-text-dim">{caption}</span>
           <b className="text-base text-text truncate">{outfitName(pick)}, {hatById(hatOnPreview)?.name ?? '모자 없음'}</b>
-          <span className="text-2xs text-text-dim">다른 플레이어에게도 이렇게 보여요.</span>
         </div>
       </Inset>
       <TabBar
@@ -59,7 +59,7 @@ export default function WardrobePanel({ game, busy, onChangeClothes, onBuyHat, o
         <div className="flex flex-col gap-2 flex-1 min-h-0">
           <div className={`flex flex-col gap-3 flex-1 min-h-0 ${SCROLL_Y}`}>
             <div>
-              <Subheading>프리셋</Subheading>
+              <Subheading>기본 옷차림</Subheading>
               <div className="grid grid-cols-6 gap-2 mobile:grid-cols-3">
                 {LOOK_PRESETS.map(p => (
                   <SlotCell key={p.name} ariaLabel={`${p.name} 옷 고르기`}
@@ -141,7 +141,7 @@ function HatDetailBox({ game, hatId, busy, onBuy, onWear }: {
             <span className="text-xs text-text-dim break-keep break-words">해금 조건 {d.unlock.condition}</span>
           )}
           {d.unlock && (
-            <span className="text-xs text-text-dim">진척 <span className="pf-accent text-text">{d.unlock.current}/{d.unlock.target}</span></span>
+            <span className="text-xs text-text-dim">진척 <ProgressCount current={d.unlock.current} target={d.unlock.target} tight /></span>
           )}
         </div>
         <Tip wraps text={d.buyBlock ?? ''} className="block mobile:self-end">

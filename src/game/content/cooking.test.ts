@@ -2,7 +2,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   COOKING_UNLOCK_BOAT, COOK_EFFECT_KEYS, COOK_KIND_RULES, COOK_STORAGE_CAP, ENERGY_ITEM_IDS, ENERGY_PER_INDIVIDUAL,
-  ENERGY_UNIT, LEGACY_BAIT_REFUND, RECIPES, formatEnergy, isEnergyAmount, recipeById, recipeCostStored, toStoredEnergy,
+  ENERGY_TRANSMUTE_RATIO, ENERGY_TRANSMUTE_STEPS, ENERGY_UNIT, LEGACY_BAIT_REFUND, RECIPES, formatEnergy, isEnergyAmount,
+  recipeById, recipeCostStored, recipeWaitMs, toStoredEnergy, transmuteTargetOf,
 } from './cooking';
 import { ARTIFACTS } from './artifacts';
 import { RARITY_ORDER } from './rarity';
@@ -14,9 +15,9 @@ const byKind = (kind: 'lunch' | 'bait') => RECIPES.filter(r => r.kind === kind);
 const gradeBaits = RECIPES.filter(r => r.kind === 'bait' && r.effects.rarityWeight !== undefined);
 
 describe('레시피 표', () => {
-  it('도시락 5종과 미끼 요리 5종이다', () => {
-    expect(byKind('lunch')).toHaveLength(5);
-    expect(byKind('bait')).toHaveLength(5);
+  it('도시락 6종과 미끼 요리 6종이다', () => {
+    expect(byKind('lunch')).toHaveLength(6);
+    expect(byKind('bait')).toHaveLength(6);
   });
 
   it('레시피 id는 고유하고 recipeById가 찾아 준다', () => {
@@ -56,10 +57,12 @@ describe('레시피 표', () => {
     const cost = (id: string) => recipeById(id)!.cost;
     expect(cost('cook-lunch-bite')).toEqual({ common: 600 });
     expect(cost('cook-lunch-rare')).toEqual({ common: 100, rare: 20 });
+    expect(cost('cook-lunch-calm')).toEqual({ common: 100, rare: 20 });
     expect(cost('cook-lunch-mutation')).toEqual({ rare: 20, epic: 4 });
     expect(cost('cook-lunch-named')).toEqual({ epic: 8 });
     expect(cost('cook-lunch-bundle')).toEqual({ common: 50, rare: 5, epic: 1, legendary: 1 });
     expect(cost('cook-bait-mutation')).toEqual({ epic: 4, legendary: 1 });
+    expect(cost('cook-bait-calm')).toEqual({ rare: 15, epic: 2 });
     expect(cost('cook-bait-rare')).toEqual({ common: 50, rare: 15 });
     expect(cost('cook-bait-epic')).toEqual({ common: 50, epic: 5 });
     expect(cost('cook-bait-legendary')).toEqual({ common: 50, legendary: 3 });
@@ -70,12 +73,14 @@ describe('레시피 표', () => {
     const fx = (id: string) => recipeById(id)!.effects;
     expect(fx('cook-lunch-bite')).toEqual({ biteWaitCut: 0.1 });
     expect(fx('cook-lunch-rare')).toEqual({ rarityWeight: { grades: ['rare', 'epic', 'legendary'], bonus: 0.1 } });
+    expect(fx('cook-lunch-calm')).toEqual({ mutationMult: 0.5 });
     expect(fx('cook-lunch-mutation')).toEqual({ mutationWeight: 0.5 });
     expect(fx('cook-lunch-named')).toEqual({ namedWeight: 0.5 });
     expect(fx('cook-lunch-bundle')).toEqual({
       biteWaitCut: 0.05, rarityWeight: { grades: ['rare', 'epic', 'legendary'], bonus: 0.05 },
     });
     expect(fx('cook-bait-mutation')).toEqual({ mutationWeight: 1.5 });
+    expect(fx('cook-bait-calm')).toEqual({ mutationMult: 0.5 });
     expect(fx('cook-bait-rare')).toEqual({ rarityWeight: { grades: ['rare', 'epic', 'legendary'], bonus: 0.4 } });
     expect(fx('cook-bait-epic')).toEqual({ rarityWeight: { grades: ['epic', 'legendary'], bonus: 0.6 } });
     expect(fx('cook-bait-legendary')).toEqual({ rarityWeight: { grades: ['legendary'], bonus: 0.8 } });
@@ -140,11 +145,43 @@ describe('해금, 조리 대기, 보관함, 슬롯', () => {
     expect(COOKING_UNLOCK_BOAT).toBeLessThanOrEqual(MAX_BOAT);
   });
 
-  it('명세 4.3, 5.1 표의 값과 같다', () => {
+  it('명세 4.2, 4.3, 5.1 표의 등급과 조리 대기 시간·보관함·슬롯 값과 같다', () => {
     const MIN = 60_000;
-    expect(COOK_KIND_RULES.lunch).toEqual({ waitMs: 15 * MIN, slotMs: 9 * 60 * MIN });
+    expect(COOK_KIND_RULES.lunch.slotMs).toBe(9 * 60 * MIN);
     expect(COOK_KIND_RULES.bait).toEqual({ waitMs: 0, slotMs: 5 * MIN });
     expect(COOK_STORAGE_CAP).toBe(10);
+
+    const expectedMeta: Record<string, { grade: string; waitMs: number }> = {
+      'cook-lunch-bite': { grade: 'common', waitMs: 0 },
+      'cook-lunch-rare': { grade: 'rare', waitMs: 3 * MIN },
+      'cook-lunch-calm': { grade: 'rare', waitMs: 3 * MIN },
+      'cook-lunch-mutation': { grade: 'epic', waitMs: 5 * MIN },
+      'cook-lunch-named': { grade: 'epic', waitMs: 5 * MIN },
+      'cook-lunch-bundle': { grade: 'legendary', waitMs: 10 * MIN },
+      'cook-bait-mutation': { grade: 'special', waitMs: 0 },
+      'cook-bait-calm': { grade: 'special', waitMs: 0 },
+      'cook-bait-rare': { grade: 'rare', waitMs: 0 },
+      'cook-bait-epic': { grade: 'epic', waitMs: 0 },
+      'cook-bait-legendary': { grade: 'legendary', waitMs: 0 },
+      'cook-bait-night': { grade: 'special', waitMs: 0 },
+    };
+    for (const r of RECIPES) {
+      expect({ grade: r.grade, waitMs: recipeWaitMs(r) }, r.id).toEqual(expectedMeta[r.id]);
+    }
+  });
+
+  it('기운 정방향 10:1 변환 단계와 목표 등급을 정의한다', () => {
+    expect(ENERGY_TRANSMUTE_RATIO).toBe(10);
+    expect(ENERGY_TRANSMUTE_STEPS).toEqual([
+      { from: 'common', to: 'rare' },
+      { from: 'rare', to: 'epic' },
+      { from: 'epic', to: 'legendary' },
+    ]);
+    expect(transmuteTargetOf('common')).toBe('rare');
+    expect(transmuteTargetOf('rare')).toBe('epic');
+    expect(transmuteTargetOf('epic')).toBe('legendary');
+    expect(transmuteTargetOf('legendary')).toBeUndefined();
+    expect(transmuteTargetOf('nope')).toBeUndefined();
   });
 });
 
@@ -203,6 +240,7 @@ describe('요리 설명', () => {
   const DESCRIPTIONS: Record<string, string> = {
     'cook-lunch-bite': '소금물에 끓인 다랑어 국물에서 짠 김이 피어오른다. 그릇을 다 비우기도 전에 찌가 먼저 가라앉는다.',
     'cook-lunch-rare': '코코넛 밀크와 강황으로 끓인 국물에 생선 살이 잠긴다. 귀한 생선을 넣을수록 맛이 깊어진다.',
+    'cook-lunch-calm': '도톰하게 썬 흰 쌀밥에서 순한 코코넛 밀크 내음이 올라온다. 향신료를 전혀 넣지 않아 별난 고기를 거르고 싶은 어부가 뱃머리에 챙겨 탄다.',
     'cook-lunch-mutation': '솥을 봉한 반죽을 뜯어내면 향신료 냄새가 한꺼번에 퍼진다. 밝은 빛으로 따로 물들인 밥이 생선과 켜를 이룬다.',
     'cook-lunch-named': '고라카 열매의 신맛이 바짝 졸인 다랑어 살 속까지 밴다. 콜롬보항 뱃사람들은 큰 그림자를 쫓아 오래 나가는 날 이 요리를 싣는다.',
     'cook-lunch-bundle': '밥을 가운데 두고 생선 반찬을 작은 그릇에 나눠 둥근 쟁반에 차린 인도식 한 상이다. 그릇마다 양은 적어도 빠진 맛이 없다.',
@@ -210,6 +248,7 @@ describe('요리 설명', () => {
     'cook-bait-epic': '큐베브 열매에는 짧은 꼬리 같은 꼭지가 하나씩 달려 있다. 아린 맛이 오래 남는 열매 가루가 물에 풀리면 덩치 큰 것들이 먼저 줄을 당긴다.',
     'cook-bait-legendary': '해변에 밀려온 용연향 덩어리를 옛 중국 사람들은 용이 흘린 침이 굳은 것으로 여겼다. 이 냄새를 따라 이야기로만 듣던 물고기가 올라오기도 한다.',
     'cook-bait-mutation': '붉은 사프란 암술을 물에 담그면 금빛이 번져 나온다. 이 미끼를 문 물고기는 가끔 비늘 빛부터 남다르다.',
+    'cook-bait-calm': '흰 백단향 나무 가루를 맑은 물로 개어 반죽에 섞은 미끼다. 물에 풀려도 색이 번지지 않아 평범한 빛깔의 물고기가 찌를 주로 건드린다.',
     'cook-bait-night': '달빛이 스민 물고기의 비늘을 말려 반죽에 섞는다. 낮에 던진 미끼에서도 밤의 물결이 따라 올라온다.',
   };
 

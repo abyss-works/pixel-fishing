@@ -18,6 +18,7 @@ import type { SpotId } from '../../../src/game/content/spots';
 import { ZONE_IDS } from '../../../src/game/content/zones';
 import type { ZoneId } from '../../../src/game/content/zones';
 import { ARTIFACTS, ARTIFACT_MAX_LEVEL, artifactById, artifactHasLevel } from '../../../src/game/content/artifacts';
+import type { Artifact } from '../../../src/game/content/artifacts';
 import { RARITY_ORDER } from '../../../src/game/content/rarity';
 import type { RarityId } from '../../../src/game/content/rarity';
 import { BOUNTIES } from '../../../src/game/content/bounties';
@@ -44,6 +45,8 @@ export interface Effect {
   sell?: number;
   /** 대어/월척 확률 증가 비율(0 이상, 예: 0.1 = +10%). 생략하면 0 */
   big?: number;
+  /** 밤 어종 개체 가중치 증가 비율(0 이상, 예: 0.15 = +15%). 생략하면 0 */
+  nightWeight?: number;
 }
 
 export const NO_EFFECT: Effect = { bite: 0, rare: 0, epic: 0, legendary: 0, variant: 0, size: 0, move: 0, named: 0, night: 0 };
@@ -76,6 +79,22 @@ export function checkEffect(e: Effect): void {
   if (e.night !== 0 && e.night !== 1) bad('밤 어종 출현은 0 또는 1이어야 합니다');
   if (e.sell !== undefined && !(e.sell > -1)) bad('판매가 증가는 -100 초과(%)여야 합니다');
   if (e.big !== undefined && !(e.big >= 0)) bad('대어 확률 증가는 0 이상(%)이어야 합니다');
+  if (e.nightWeight !== undefined && !(e.nightWeight >= 0)) bad('밤 어종 가중치 증가는 0 이상(%)이어야 합니다');
+}
+
+/** 슬롯 증폭 배수를 활성 요리 효과에 반영한다 (야간 해금은 증폭하지 않음) */
+export function scaleSlotEffect(e: Effect, amplify: number): Effect {
+  if (amplify === 0) return e;
+  const scale = 1 + amplify;
+  return {
+    ...e,
+    bite: clean(e.bite * scale),
+    rare: clean(e.rare * scale),
+    epic: clean(e.epic * scale),
+    legendary: clean(e.legendary * scale),
+    variant: clean(e.variant * scale),
+    named: clean(e.named * scale),
+  };
 }
 
 /** 구역 id 또는 개별 해역 id를 대상 해역 목록으로 해석한다 */
@@ -89,18 +108,32 @@ export function resolveZoneSpots(id: string): SpotId[] {
   throw new Error(`알 수 없는 구역 또는 해역입니다: ${id} (구역: ${ZONE_IDS.join(', ')}, 해역: ${SPOTS.map(s => s.id).join(', ')})`);
 }
 
+/** 유물의 고정 레벨 규칙에 따라 단일 유물 레벨을 검증·해석한다 */
+export function resolveArtifactLevel(art: Pick<Artifact, 'id' | 'grade'>, lv: number | undefined, label: string): number {
+  if (lv === undefined) return artifactHasLevel(art) ? 1 : ARTIFACT_MAX_LEVEL;
+  if (!Number.isInteger(lv) || lv < 1 || lv > ARTIFACT_MAX_LEVEL) {
+    throw new Error(`유물 레벨은 1에서 ${ARTIFACT_MAX_LEVEL} 사이의 정수여야 합니다: ${label}`);
+  }
+  if (!artifactHasLevel(art) && lv !== ARTIFACT_MAX_LEVEL) {
+    throw new Error(`전설 유물은 레벨이 없습니다(Lv${ARTIFACT_MAX_LEVEL} 고정): ${art.id}`);
+  }
+  return lv;
+}
+
 /** 유물 보유 사양 문자열(all, max, all:N, id[:N],...)을 유물별 레벨 맵으로 파싱한다 */
 export function parseArtifacts(raw: string): ArtifactLevels {
   const trimmed = raw.trim();
   if (trimmed === '') throw new Error('유물 목록이 비어 있습니다 (all, max, all:레벨 또는 유물id[:레벨] 쉼표 구분)');
-  if (trimmed === 'all') return Object.fromEntries(ARTIFACTS.map(a => [a.id, 1]));
-  if (trimmed === 'max') return Object.fromEntries(ARTIFACTS.map(a => [a.id, artifactHasLevel(a) ? ARTIFACT_MAX_LEVEL : 1]));
+  if (trimmed === 'all') {
+    return Object.fromEntries(ARTIFACTS.map(a => [a.id, artifactHasLevel(a) ? 1 : ARTIFACT_MAX_LEVEL]));
+  }
+  if (trimmed === 'max') return Object.fromEntries(ARTIFACTS.map(a => [a.id, ARTIFACT_MAX_LEVEL]));
   const allLv = /^all:(.+)$/.exec(trimmed);
   if (allLv) {
     if (!/^\d+$/.test(allLv[1])) throw new Error(`유물 레벨은 1에서 ${ARTIFACT_MAX_LEVEL} 사이의 정수여야 합니다: ${allLv[1]}`);
     const lv = Number(allLv[1]);
     if (lv < 1 || lv > ARTIFACT_MAX_LEVEL) throw new Error(`유물 레벨은 1에서 ${ARTIFACT_MAX_LEVEL} 사이의 정수여야 합니다: ${lv}`);
-    return Object.fromEntries(ARTIFACTS.map(a => [a.id, artifactHasLevel(a) ? lv : 1]));
+    return Object.fromEntries(ARTIFACTS.map(a => [a.id, artifactHasLevel(a) ? lv : ARTIFACT_MAX_LEVEL]));
   }
   const out: ArtifactLevels = {};
   for (const token of trimmed.split(',')) {
@@ -112,14 +145,11 @@ export function parseArtifacts(raw: string): ArtifactLevels {
     if (!art) throw new Error(`알 수 없는 유물입니다: ${id} (${ARTIFACTS.map(a => a.id).join(', ')} 중 하나)`);
     if (Object.hasOwn(out, id)) throw new Error(`같은 유물이 두 번 있습니다: ${id}`);
     if (lvRaw === undefined) {
-      out[id] = 1;
+      out[id] = resolveArtifactLevel(art, undefined, part);
       continue;
     }
     if (!/^\d+$/.test(lvRaw)) throw new Error(`유물 레벨은 1에서 ${ARTIFACT_MAX_LEVEL} 사이의 정수여야 합니다: ${part}`);
-    const lv = Number(lvRaw);
-    if (lv < 1 || lv > ARTIFACT_MAX_LEVEL) throw new Error(`유물 레벨은 1에서 ${ARTIFACT_MAX_LEVEL} 사이의 정수여야 합니다: ${part}`);
-    if (!artifactHasLevel(art) && lv > 1) throw new Error(`전설 유물은 레벨이 없습니다(Lv1 고정): ${id}`);
-    out[id] = lv;
+    out[id] = resolveArtifactLevel(art, Number(lvRaw), part);
   }
   return out;
 }
@@ -193,6 +223,7 @@ export function effectRates(spot: SpotId, level: number, axis: Axis, e: Effect, 
   // 밤 어종 출현은 낮에 쓰든 밤에 쓰든 최대 밤 깊이(nightDepth: 1)의 밤 풀로 낚는다
   const usePool: Pool = e.night > 0 ? 'night' : pool;
   if (e.night > 0) extra = { ...extra, nightDepth: 1 };
+  if (e.nightWeight) extra = { ...extra, nightWeightBonus: e.nightWeight };
   const base = rates(spot, level, axis, extra, usePool);
   const cycle = {
     ...base.cycle,

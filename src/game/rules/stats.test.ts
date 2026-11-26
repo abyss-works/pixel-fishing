@@ -1,42 +1,11 @@
 // 스탯 서비스 — 파생 내역({base, mods, value})과 단일 출구 계약을 검증한다.
 import { describe, expect, it } from 'vitest';
-import { BOATS, newState } from './logic';
+import { newState } from './logic';
 import { SPOTS, powerReqOf } from '../content/spots';
-import { WALK_SPEED } from './balance';
-import { autoPenaltyHelpText, moveSpeed, powerZones, zonesFor, powerHelpText, rodAxes, rodPower } from './stats';
+import { autoPenaltyHelpText, powerZones, zonesFor, powerHelpText, rodAxes, rodPower } from './stats';
 
 type G = ReturnType<typeof newState>;
 const s = (over: Partial<G> = {}): G => ({ ...newState(), ...over });
-
-describe('이동 속도 — 씬 movement로 분기', () => {
-  it('도보는 배와 무관한 고정값', () => {
-    const st = moveSpeed(s({ boat: 3 }), 'walk');
-    expect(st.value).toBe(WALK_SPEED);
-    expect(st.mods).toEqual([]);
-  });
-
-  it('항해는 배별 속도 — boat 0은 조각배로 강등된다(logic.boatSpeed 계약)', () => {
-    expect(moveSpeed(s({ boat: 0 }), 'sail').value).toBe(BOATS[0].speed);
-    expect(moveSpeed(s({ boat: 3 }), 'sail').value).toBe(BOATS[2].speed);
-  });
-
-  it('밤이면 감속 mods 1행', () => {
-    const st = moveSpeed(s({ boat: 3 }), 'sail', true);
-    expect(st.mods.map(m => m.id)).toEqual(['night']);
-    expect(st.value).toBeCloseTo(BOATS[2].speed * 0.85, 10);
-  });
-
-  it('유물 — 해구의 이빨은 결투 유물이라 이동 속도를 바꾸지 않는다', () => {
-    const st = moveSpeed(s({ boat: 3, artifacts: ['abyss-angler'] }), 'sail', true);
-    expect(st.mods.map(m => m.id)).toEqual(['night']);
-  });
-
-  it('유물 — 침선의 나침반은 항해 +10%, 도보는 그대로', () => {
-    expect(moveSpeed(s({ artifacts: ['wreck-compass'] }), 'walk').value).toBe(WALK_SPEED);
-    expect(moveSpeed(s({ boat: 1, artifacts: ['wreck-compass'] }), 'sail').value)
-      .toBeCloseTo(BOATS[0].speed * 1.1, 10);
-  });
-});
 
 describe('낚싯대 축 — 파워(레벨) 단일 입력 (roadmap 2.1)', () => {
   it('곡선 값을 그대로 담고 mods는 비어 있다(환경 기여 미도입)', () => {

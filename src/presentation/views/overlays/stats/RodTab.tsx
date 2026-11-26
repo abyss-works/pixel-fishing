@@ -4,6 +4,7 @@ import { boatNameOf } from '../../../../game/content/boats';
 import type { StatsSpotRow, StatsZoneTab } from '../../../../features/gameplay/model/stats';
 import BoatSprite from '../../../ui/BoatSprite';
 import { cx } from '../../../ui/cx';
+import { josa } from '../../../ui/format';
 import Inset from '../../../ui/Inset';
 import TableBox from '../../../ui/TableBox';
 import DataTable from '../../../ui/DataTable';
@@ -36,7 +37,7 @@ export default function RodTab({ rows, zoneTabs, zone, selected, onZone, onSelec
           <thead>
             <tr className="sticky top-0 bg-[color-mix(in_oklab,var(--c-bg)_45%,var(--c-surface))] text-2xs text-text-dim">
               <th className={cx(HEAD, 'pl-0 text-left')}>해역</th>
-              <th className={cx(HEAD, 'text-right')}>요구 파워</th>
+              <th className={cx(HEAD, 'text-right')}>기준 파워</th>
               <th className={cx(HEAD, 'pr-0 text-right')}>적합</th>
             </tr>
           </thead>
@@ -63,7 +64,7 @@ export default function RodTab({ rows, zoneTabs, zone, selected, onZone, onSelec
             <BoatSprite tier={selected.spot.boatTier} preset="row" />
             <span className="text-sm">{selected.spot.name}</span>
             <Note size="xs" className="my-0">
-              {boatNameOf(selected.spot.boatTier)}({selected.spot.boatTier}단계)가 있어야 갈 수 있어요.
+              {josa(boatNameOf(selected.spot.boatTier), '이/가')} 있어야 갈 수 있어요.
             </Note>
           </div>
         ) : (

@@ -3,12 +3,12 @@
 // 기존 게임 규칙 함수의 "조합만" 한다 — 규칙을 여기 새로 쓰지 않는다 (이중 구현 금지 원칙).
 // 상대경로 .js 확장자 필수 — Node 순수 ESM 로더가 직접 import한다.
 import {
-  addCatch, buildCatchInfo, makeInstance, migrate,
+  addCatch, buildCatchInfo, catchFameOf, makeInstance, migrate,
   redeemCoupon, rollCatchExtras, sellSelected, setLocked, applyAutoLock, applyCatchAutoLock, tryBuyBoat, tryUpgrade,
   overflowUids, release, instanceFish, formName, travel, applyRelief, moveExhibit,
-  addItem, takeItem, nextDexRec, mutationWeightsOf, withVariantPoints,
+  addItem, takeItem, nextDexRec, mutationWeightsOf,
 } from './logic.js';
-import type { GameState, Judgment, CatchInfo, CatchExtras, DrawOptions, FishInstance, FormRecord, FormId, ReliefGrant, Fish } from './logic.js';
+import type { GameState, Judgment, CatchInfo, CatchExtras, DrawOptions, FishInstance, FormRecord, FormId, ReliefGrant, Fish, Coupon, CouponItem } from './logic.js';
 import { FISH } from '../content/fish.js';
 import { isKnownLocation } from '../content/places.js';
 import {
@@ -19,11 +19,15 @@ import { firstCatchTarget, settleFirstCatch } from './firstCatch.js';
 import type { FirstCatch } from './firstCatch.js';
 import { relativeIdleBoost } from './power.js';
 import {
-  applyEnergyGain, canCook, planOverflow, canEat, canExtractEnergy, canUseEnergy, energyGain, settleCooking,
+  applyEnergyGain, canCancelCook, canCook, canTransmuteEnergy, cookRefundOf, planOverflow, canEat, canExtractEnergy, canUseEnergy, energyGain, settleCooking,
   appliedSlots, isActiveSlot, maxBaitSlots, slotEffects, slotEndsAt, NO_COOK_EFFECTS,
 } from './cooking.js';
-import type { ActiveCookEffects } from './cooking.js';
-import { ENERGY_ITEM_IDS, recipeById, recipeCostStored } from '../content/cooking.js';
+import type { ActiveCookEffects, SlotAmplify } from './cooking.js';
+import {
+  ENERGY_ITEM_IDS, ENERGY_TRANSMUTE_RATIO, ENERGY_UNIT, recipeById, recipeCostStored, recipeWaitMs, transmuteTargetOf,
+} from '../content/cooking.js';
+import { itemStorageAmount } from '../content/itemCatalog.js';
+import { potionById } from '../content/potions.js';
 import { RARITY_ORDER } from '../content/rarity.js';
 import type { RarityId } from '../content/rarity.js';
 import { spotById } from '../content/spots.js';
@@ -33,10 +37,9 @@ import { artifactLevelOf, commonWeightCutOf, extraCookChance, namedRewardOf } fr
 import { isTutorialId } from '../content/tutorials.js';
 import type { SpotId } from '../content/spots.js';
 import type { LocationRef } from '../content/places.js';
-import { canBuyBoat, canBuyHat, canChangeClothes, canClaimAchievement, canClaimAllAchievements, canFish, canTravel, canUpgradeRod, canWearHat, encounterQuests } from './rules.js';
+import { canBuyBoat, canBuyHat, canChangeClothes, canClaimAchievement, canClaimAllAchievements, canFish, canTravel, canUpgradeRod, canUsePotion, canWearHat, encounterQuests } from './rules.js';
 import { hatById } from '../content/wardrobe.js';
 import { ACHIEVEMENTS, achievementById } from '../content/achievements.js';
-import { topZoneOfSpot } from '../content/zones.js';
 import { achievementBonusesOf, counterIncrementsForEvents, evaluateAchievements } from './achievements.js';
 import { NO_ACHIEVEMENT_BONUSES, bagCapacityOf, createPlayerContext } from './effects.js';
 import type { AchievementBonuses } from './effects.js';
@@ -55,7 +58,7 @@ import { gameDayOf, isNight, nightDepth } from './time.js';
 import type { DayPhase } from './time.js';
 import { NO_GUILD_EFFECTS } from './guild.js';
 import type { GuildEffects } from './guild.js';
-import { ensureFortune, luckMultOf } from './fortune.js';
+import { ensureFortune, totalLuckMultOf } from './fortune.js';
 
 export interface DebugStepInput {
   command: string;
@@ -83,7 +86,10 @@ export type GameAction =
   | { type: 'setEnergyTarget'; spot: SpotId; on: boolean }   // 기운 얻기 기본 선택의 해역별 덮어쓰기 — 고른 값은 기본값과 같아도 남는다
   | { type: 'resetEnergyTargets' }                           // 덮어쓰기를 모두 지워 기본값으로 되돌린다
   | { type: 'cook'; recipe: string; count: number }          // 조리 시작 — 집 거점, 기운 즉시 차감, 추가 완성은 서버가 추첨한다
+  | { type: 'cancelCook'; id: string }                       // 조리 취소 — 완성분 정산 뒤 미완성 수량 기운 100% 환급
+  | { type: 'transmuteEnergy'; from: RarityId; count: number } // 기운 변환 — 하위 기운 10개 → 상위 기운 1개 정방향 변환
   | { type: 'eat'; item: string; replaceSlot?: 'bait' | 'bait2' } // 먹기(쓰기) — 가방의 완성 요리 하나를 슬롯에 넣는다. 위치 제한 없음
+  | { type: 'usePotion'; id: string }                        // 비약 사용 — 가방의 비약 1개를 쓰고 오늘 게임 날짜 끝까지 지속한다
   | { type: 'boot'; buildId?: unknown }                      // 접속(부팅) 기록 — DAU 정본. 그날 첫 접속이면 운세를 굴려 고정한다
   | { type: 'setNickname'; nickname: unknown }     // 닉네임 변경 — 형태는 리듀서, 중복은 서버(DB)가 본다
   | { type: 'seeTutorial'; id: unknown }           // 튜토리얼 창을 봤다 — 같은 트리거에서 다시 뜨지 않게 남긴다
@@ -106,7 +112,7 @@ const ACTION_TYPE_MAP: Record<GameAction['type'], true> = {
   catch: true, sell: true, upgradeRod: true, buyBoat: true,
   setLocked: true, autoLock: true, setAutoLockOnCatch: true, travel: true, sendLetter: true, redeemCoupon: true,
   claimRelief: true, claimMail: true, debug: true, debugBatch: true, debugSnapshot: true, setNickname: true,
-  dismissBaitRefund: true, extractEnergy: true, setEnergyTarget: true, resetEnergyTargets: true, cook: true, eat: true,
+  dismissBaitRefund: true, extractEnergy: true, setEnergyTarget: true, resetEnergyTargets: true, cook: true, cancelCook: true, transmuteEnergy: true, eat: true, usePotion: true,
   boot: true, import: true,
   acceptQuest: true, deliverBounty: true, exchangeArtifact: true, levelUpArtifact: true, exhibit: true, resolveChallenge: true,
   seeTutorial: true, changeClothes: true, buyHat: true, wearHat: true,
@@ -120,14 +126,14 @@ export interface ActionDeps {
   today: string;         // YYYY-MM-DD, 유저 체감 날짜(KST) — 도감 첫 조우일
   now: string;           // ISO datetime — 개체의 caughtAt
   newUid: () => string;  // 개체 uid 생성기 (서버/로컬 = crypto.randomUUID, 테스트는 결정적 목)
-  dynamicCoupon?: { gold: number; desc: string } | null;
+  dynamicCoupon?: Coupon | null;
   /** 지원 코드 자산 — 서버가 코드를 조회해 지급분을 공급하고, 소비는 서버가 저장 확정과 함께 한다. 로컬 dev엔 항상 없다 */
   relief?: ReliefGrant | null;
   /** 수배 DB 진실 — 서버가 오늘 클리어 횟수·수주 중 의뢰·완료 목록을 조회해 공급한다 (relief 선례).
    *  로컬 dev(LocalGameGateway)엔 항상 없다 — 오프라인 수주·납품 불가가 의도다. */
   bounty?: BountyCtx | null;
-  /** 받을 우편 — 서버가 본인의 받지 않은 골드 우편을 조회해 공급한다. 로컬 dev엔 항상 없다 */
-  mail?: { id: number; gold: number } | null;
+  /** 받을 우편 — 서버가 본인의 받지 않은 우편(골드·아이템 첨부)을 조회해 공급한다. 로컬 dev엔 항상 없다 */
+  mail?: { id: number; gold: number; items?: readonly { id: string; qty: number }[] } | null;
   /** 길드 보너스 효과 — 서버가 소속 길드의 보너스 단계로 계산해 공급한다. 로컬 dev엔 길드가 없어 항상 없다 */
   guild?: GuildEffects | null;
   /** 계정을 연결하지 않은 익명 계정인가 - 서버가 공급한다. 게스트는 가방 초과 때 기운을 얻지 않고 놓아준다 */
@@ -141,10 +147,14 @@ export type ActionResult =
   | { type: 'catch'; fishId: string; uid: string; info: CatchInfo; released: ReleasedFish[]; extracted?: ReleasedFish[];
       energy?: Record<RarityId, number>; ticket?: string }
   | { type: 'sell'; gold: number }
-  | { type: 'coupon'; gold: number; desc: string }
-  | { type: 'mail'; gold: number }
+  | { type: 'coupon'; gold: number; items?: readonly CouponItem[]; desc: string }
+  | { type: 'mail'; gold: number; items?: readonly { id: string; qty: number }[] }
   /** energy = 이번 기운 얻기로 얻은 등급별 기운(저장 단위) */
   | { type: 'extract'; energy: Record<RarityId, number> }
+  /** 조리 취소 결과 — 취소된 레시피·수량과 등급별 환급 기운(저장 단위) */
+  | { type: 'cancelCook'; recipe: string; count: number; refund: Record<RarityId, number> }
+  /** 기운 변환 결과 — 소모·획득 기운(저장 단위) */
+  | { type: 'transmuteEnergy'; from: RarityId; to: RarityId; count: number; spent: number; gained: number }
   /** schoolDay = 이 세션의 대양 어군 배치 날짜(게임 날짜, KST 04:00 경계) — 시계의 정본은 서버다 */
   | { type: 'boot'; schoolDay: string }
   /** claimAllAchievements 확정 — 받은 골드 합계와 모자 id 목록. 클라가 이 값으로 수령 문구를 만든다
@@ -377,13 +387,14 @@ export interface CatchDraw {
 export function prepareCatchDraw(
   state: Pick<GameState, 'slots'>, claimed: Judgment, now: string, pz: PowerZone,
   forcePhase?: DayPhase,
+  amplify?: SlotAmplify,
 ): CatchDraw {
   // 파워 게이트 백스톱 — 클라 주장을 존이 허용하는 최고 등급으로 내린다: PERFECT→GOOD→NORMAL.
   let judgment = claimed;
   if (judgment === 'perfect' && pz.red <= 0) judgment = pz.yellow > 0 ? 'good' : 'normal';
   else if (judgment === 'good' && pz.yellow <= 0) judgment = 'normal';
   // 요리 슬롯 효과 — 서버 시각(now)으로 적용 여부를 정한다. 방치와 수동의 구분은 주장 판정으로 하며 강등으로 바뀌지 않는다.
-  const cook = slotEffects(state, now, claimed);
+  const cook = slotEffects(state, now, claimed, amplify);
   // 시간대 — 판정은 서버(액션 시각)라 클라가 시각을 주장할 수 없다 (게임 시계).
   // 개발 도구 forcePhase가 허용되면 요청 단위로 낮/밤을 전환한다. 밤 어종 출현 미끼는 낮에도 밤 풀을 쓴다.
   const nightNow = forcePhase ? forcePhase === 'night' : isNight(now);
@@ -397,7 +408,7 @@ export function prepareCatchDraw(
   return { judgment, phaseOpts, cook };
 }
 
-/** 네임드 조우 가중치에 더하는 비율 — 길드 보너스, 요리 슬롯(도시락), 업적 누적 보너스의 합. 리듀서와 서버 fast path가 같이 쓴다 */
+/** 네임드 조우 가중치에 더하는 비율 — 길드 보너스, 요리 슬롯(도시락 증폭 반영), 업적 누적 보너스의 합. 리듀서와 서버 fast path가 같이 쓴다 */
 export function namedWeightBonus(
   state: Pick<GameState, 'slots'>,
   judgment: Judgment,
@@ -405,7 +416,8 @@ export function namedWeightBonus(
   guild: GuildEffects = NO_GUILD_EFFECTS,
   achievements: AchievementBonuses = NO_ACHIEVEMENT_BONUSES,
 ): number {
-  return guild.named + slotEffects(state, now, judgment).namedWeight + achievements.namedWeight;
+  const cookNamed = slotEffects(state, now, judgment, { bait: achievements.baitAmplify, lunch: achievements.lunchAmplify }).namedWeight;
+  return guild.named + cookNamed + achievements.namedWeight;
 }
 
 /** 일반 등급 가중치에 걸리는 기본 규칙 배수 — 보너스 효과는 포함하지 않는다.
@@ -439,10 +451,10 @@ export function rollCatchFish(
   return rollFish(spot, o.rareMult, rng, o.commonMult, o);
 }
 
-/** 캐치의 어종 결정 — 첫 경험 보장 대상이 있으면 그 어종, 어종 천장이 확정한 대상이 있으면 그 어종(일반 폼),
- *  없으면 통상 추첨. 보장 캐치는 폼·크기 롤이 일반 캐치와 같고, 어종 천장의 누적과 정산도 그대로 거친다.
- *  보장 어종을 고르는 rng 한 번이 통상 추첨 자리를 대신한다(추첨 → 부가 롤 → 보장 번호 롤 순서).
- *  천장 대상도 크기는 정상 추첨하고 폼만 일반으로 고정한다(rng 소비 순서는 같다).
+/** 캐치의 어종 결정 — 첫 경험 보장 대상이 있으면 그 어종(일반 폼), 어종 천장이 확정한 대상이 있으면 그 어종(일반 폼),
+ *  없으면 통상 추첨. 보장 캐치와 천장 캐치는 크기는 정상 추첨하고 폼만 일반으로 고정하며,
+ *  어종 천장의 누적과 정산은 그대로 거친다.
+ *  보장 어종을 고르는 rng 한 번이 통상 추첨 자리를 대신한다(추첨 → 부가 롤 순서).
  *  리듀서 catch와 서버 fast path가 공유한다 — 소유 여부(ownsNormal)와 길드 효과만 호출자가 공급한다.
  *  요리 슬롯의 돌연변이 가중(cook)은 유물과 합산해 폼 가중치를 정한다(등급 가중은 prepareCatchDraw가 추첨 옵션에 얹는다).
  *  길드 효과는 여기서 한 번만 얹는다 — 일반 등급 가중치 효과(−합, 미끼 등 같은 등급 효과와 합산)와 돌연변이 확률 퍼센트포인트. 천장 누적도
@@ -453,7 +465,6 @@ export function drawCatch(
   ownsNormal: (fishId: string) => boolean, guild: GuildEffects = NO_GUILD_EFFECTS, cook: ActiveCookEffects = NO_COOK_EFFECTS,
   achievements: AchievementBonuses = NO_ACHIEVEMENT_BONUSES,
 ): { fish: Fish; extras: CatchExtras; pity: SpeciesPity; firstCatch: FirstCatch; byCeiling: boolean } {
-  const zone = topZoneOfSpot(spot);
   const commonCut = guild.rare + commonWeightCutOf(state, achievements.artifactBoost);
   let phaseOpts = commonCut > 0 ? addGradeEffect(basePhaseOpts, 'common', -commonCut) : basePhaseOpts;
   if (achievements.rareWeight > 0) {
@@ -469,25 +480,27 @@ export function drawCatch(
   if (achievements.legendaryWeight > 0) {
     phaseOpts = addGradeEffect(phaseOpts, 'legendary', achievements.legendaryWeight);
   }
-  const zoneLeg = zone ? (achievements.zoneLegendary[zone] ?? 0) : 0;
-  if (zoneLeg > 0) phaseOpts = addGradeEffect(phaseOpts, 'legendary', zoneLeg);
+  if (achievements.nightWeight > 0) {
+    phaseOpts = { ...phaseOpts, nightWeightBonus: (phaseOpts.nightWeightBonus ?? 0) + achievements.nightWeight };
+  }
   const candidates = speciesPityCandidates(state.pity, spot, phaseOpts);
   const resolved = resolveSpeciesPity(state.pity, candidates, ownsNormal);
   const target = resolved.target ? FISH.find(f => f.id === resolved.target) : undefined;
-  const guaranteed = firstCatchTarget(state.firstCatch, spot, phaseOpts.phase, rng);
+  const guaranteed = firstCatchTarget(state.firstCatch, spot, phaseOpts.phase, ownsNormal, rng);
   const fish = guaranteed ?? target ?? rollCatchFish(spot, judgment, power, pzMult, rng, phaseOpts);
   const pityFixed = !guaranteed && target !== undefined;
-  const achMut = achievements.mutationWeight + (zone ? (achievements.zoneMutation[zone] ?? 0) : 0);
-  const forms = withVariantPoints(
-    mutationWeightsOf(state, spot, cook.mutationWeight, achMut, 1 + achievements.artifactBoost),
-    guild.mutation,
+  const mutationMult = Math.round(cook.mutationMult * (basePhaseOpts.mutationLuck ?? 1) * 1e9) / 1e9;
+  const forms = mutationWeightsOf(
+    state, spot, cook.mutationWeight, achievements.mutationWeight, 1 + achievements.artifactBoost, guild.mutation,
+    mutationMult,
   );
-  const extras = rollCatchExtras(fish, rng, pityFixed ? { normal: 1, variant: 0 } : forms);
+  const extras = rollCatchExtras(fish, rng, (guaranteed !== null || pityFixed) ? { normal: 1, variant: 0 } : forms);
   const opts = catchDrawOptions(judgment, power, spot, pzMult, phaseOpts);
   const accrued = accrueSpeciesPity(resolved.pity, spot, opts, forms.normal / (forms.normal + forms.variant));
+  const ownsAfter = (id: string) => ownsNormal(id) || (id === fish.id && extras.form === 'normal');
   return {
     fish, extras, pity: settleSpeciesPity(accrued, fish.id, extras.form),
-    firstCatch: settleFirstCatch(state.firstCatch, spot, guaranteed, rng), byCeiling: pityFixed,
+    firstCatch: settleFirstCatch(state.firstCatch, spot, ownsAfter), byCeiling: pityFixed,
   };
 }
 
@@ -519,10 +532,13 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const achBonuses = achievementBonusesOf(state);
       // 파워 게이트(서버 권위 백스톱)·요리 슬롯 효과·시간대 — prepareCatchDraw가 단일 계산한다(rng를 쓰지 않는다).
       const pz = powerZones(state, action.spot);
-      const { judgment, phaseOpts, cook } = prepareCatchDraw(state, action.judgment, deps.now, pz, action.forcePhase);
+      const { judgment, phaseOpts, cook } = prepareCatchDraw(
+        state, action.judgment, deps.now, pz, action.forcePhase,
+        { bait: achBonuses.baitAmplify, lunch: achBonuses.lunchAmplify },
+      );
       const named = drawNamedEncounter(state.namedPity, encounterQuests(deps.bounty), action.spot, deps.now,
         deps.rng, action.forceEncounter === true, namedWeightBonus(state, action.judgment, deps.now, guild, achBonuses),
-        luckMultOf(state.fortune, 'named'));
+        totalLuckMultOf(state, deps.now, 'named'));
       const namedHit = named.quest;
       const ticketEvents: GameEvent[] = namedHit
         ? [{ type: 'ticket', payload: { questId: namedHit.id, ...(named.byCeiling ? { pity: true } : {}) } }]
@@ -531,12 +547,18 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       // 호출 순서 고정: 추첨 → 부가 롤 — 구 클라이언트(Field)와 동일한 rng 소비 순서.
       // 어종 천장의 소유 판정은 리듀서가 가진 도감으로 한다.
       const drawn = drawCatch(state, action.spot, judgment, rodPower(state), pz.mult, deps.rng,
-        { ...phaseOpts, rarityLuck: luckMultOf(state.fortune, 'rarity') },
+        {
+          ...phaseOpts,
+          rarityLuck: totalLuckMultOf(state, deps.now, 'rarity'),
+          legendaryLuck: totalLuckMultOf(state, deps.now, 'legendary'),
+          nightLuck: totalLuckMultOf(state, deps.now, 'night'),
+          mutationLuck: totalLuckMultOf(state, deps.now, 'mutation'),
+        },
         id => (state.dex[id]?.normal?.count ?? 0) > 0, guild, cook, achBonuses);
       const { fish, extras } = drawn;
       // NEW 판정은 폼별 — 변이는 별개 개체 (v0.3.3)
       const isNew = (state.dex[fish.id]?.[extras.form]?.count ?? 0) === 0;
-      const info = buildCatchInfo(fish, extras, isNew);
+      const info = buildCatchInfo(fish, extras, isNew, totalLuckMultOf(state, deps.now, 'bigCatch'));
       const rawInst = makeInstance(fish, extras, {
         uid: deps.newUid(), now: deps.now, spot: action.spot, judgment,
       });
@@ -544,14 +566,22 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       // 방금 잠금이 풀린 기존 자동 잠금 개체는 초과 후보에 들어간다.
       const autoLocked = applyCatchAutoLock(state, rawInst);
       const inst = autoLocked.inst;
-      const caught = addCatch(autoLocked.state, inst, fish, deps.today);
+      const fameLuck = totalLuckMultOf(state, deps.now, 'fame');
+      const gainedFame = catchFameOf(fish, fameLuck);
+      const caught = addCatch(autoLocked.state, inst, fish, deps.today, fameLuck);
       // 가방이 넘치면 가장 안 특별한 개체를 놓아준다. 방금 잡은 놈이 후보일 수도 있다
       // ("가방이 꽉 차서 그 자리에서 놓아줬다") — 명성·도감은 이미 확정됐으므로 남는다.
       // 상한은 **캐치 전** 가방으로 잰다(래칫). 그래야 이미 넘겨 든 유저도 한 번에 한 마리만 나간다.
       const ctx = createPlayerContext({ state, guild, now: deps.now, achievements: achBonuses });
       const overflow = overflowUids(caught.bag, bagCapacityOf(ctx, state.bag.length).value);
       // 가공 플랜트선은 내보낼 개체가 기운 대상이면 놓아주지 않고 기운으로 바꾼다
-      const plan = planOverflow({ ...caught, boat: state.boat, energyTargets: state.energyTargets }, overflow, deps.guest === true);
+      const plan = planOverflow(
+        { ...caught, boat: state.boat, energyTargets: state.energyTargets },
+        overflow,
+        deps.guest === true,
+        achBonuses.energyYield,
+        totalLuckMultOf(state, deps.now, 'energy'),
+      );
       const view = (uids: readonly string[]) => uids.map(uid => caught.bag.find(b => b.uid === uid)!);
       const gone = view(plan.released);
       const taken = view(plan.gain.uids);
@@ -565,7 +595,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         // uid를 남긴다 — 이벤트 스트림과 가방 개체를 잇는 유일한 연결고리 (감사·집계의 근거)
         // judgment는 강등 확정값 — 감사에서 "PERFECT 주장이 서버에서 살아남았나"를 보려면 이 값이다
         uid: inst.uid, fishId: fish.id, judgment, spot: action.spot,
-        size: info.size, form: info.form, isNew: info.isNew,
+        size: info.size, form: info.form, isNew: info.isNew, fame: gainedFame,
         ...(drawn.byCeiling ? { pity: true } : {}),
         // 걸린 슬롯(도시락=방치, 미끼=수동) — 집계가 읽는다. 적용 범위는 appliedSlots가 정한다
         ...appliedSlots(state, deps.now, action.judgment),
@@ -595,7 +625,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       // 오늘의 운세 — 하루 첫 판정에서 굴려 그 게임 날짜에 고정한다 (catch와 같은 규칙)
       state = ensureFortune(state, deps.now, deps.rng);
       const totalSellBonus = Math.round(((deps.guild ?? NO_GUILD_EFFECTS).sell + achievementBonusesOf(state).sellBonus) * 1e9) / 1e9;
-      const next = sellSelected(state, uids, totalSellBonus, luckMultOf(state.fortune, 'sell'));
+      const next = sellSelected(state, uids, totalSellBonus, totalLuckMultOf(state, deps.now, 'sell'));
       const gold = next.gold - state.gold;
       // 실제로 사라진 개체만 = 가방 차집합 (없는 uid·잠긴 개체는 자동 제외)
       const remaining = new Set(next.bag.map(i => i.uid));
@@ -675,10 +705,11 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const extra = deps.dynamicCoupon ? { [code]: deps.dynamicCoupon } : {};
       const res = redeemCoupon(state, code, extra);
       if (!res.ok) return { ok: false, error: res.reason === 'used' ? 'coupon-used' : 'coupon-invalid' };
+      const itemsField = res.reward.items.length > 0 ? { items: res.reward.items } : {};
       return {
         ok: true, state: res.state,
-        result: { type: 'coupon', gold: res.reward.gold, desc: res.reward.desc },
-        events: [{ type: 'coupon', payload: { code, gold: res.reward.gold } }],
+        result: { type: 'coupon', gold: res.reward.gold, ...itemsField, desc: res.reward.desc },
+        events: [{ type: 'coupon', payload: { code, gold: res.reward.gold, ...itemsField } }],
       };
     }
     case 'claimRelief': {
@@ -695,13 +726,22 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       };
     }
     case 'claimMail': {
-      // 우편 골드 받기 — 대상·금액 검증과 받은 기록은 서버(우편 표, 확정 문장)가 한다. 여기엔 금액만 주입된다.
+      // 우편 골드·아이템 받기 — 대상·금액·첨부 검증과 받은 기록은 서버(우편 표, 확정 문장)가 한다. 여기엔 지급분만 주입된다.
       if (!deps.mail || deps.mail.id !== action.id) return { ok: false, error: 'mail-unavailable' };
+      let next = state;
+      const claimedItems: { id: string; qty: number }[] = [];
+      for (const item of deps.mail.items ?? []) {
+        const amount = itemStorageAmount(item.id, item.qty);
+        if (amount < 1) continue;
+        next = addItem(next, item.id, amount);
+        claimedItems.push({ id: item.id, qty: item.qty });
+      }
+      const itemsField = claimedItems.length > 0 ? { items: claimedItems } : {};
       return {
         ok: true,
-        state: { ...state, gold: state.gold + deps.mail.gold },
-        result: { type: 'mail', gold: deps.mail.gold },
-        events: [{ type: 'claimMail', payload: { mailId: deps.mail.id, gold: deps.mail.gold } }],
+        state: { ...next, gold: next.gold + deps.mail.gold },
+        result: { type: 'mail', gold: deps.mail.gold, ...itemsField },
+        events: [{ type: 'claimMail', payload: { mailId: deps.mail.id, gold: deps.mail.gold, ...itemsField } }],
       };
     }
     case 'extractEnergy': {
@@ -710,7 +750,13 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       if (!Array.isArray(action.uids) || action.uids.some(u => typeof u !== 'string')) return { ok: false, error: 'bad-request' };
       const check = canExtractEnergy(state, deps.guest);
       if (!check.ok) return { ok: false, error: check.reason };
-      const gain = energyGain(state, action.uids);
+      state = ensureFortune(state, deps.now, deps.rng);
+      const gain = energyGain(
+        state,
+        action.uids,
+        achievementBonusesOf(state).energyYield,
+        totalLuckMultOf(state, deps.now, 'energy'),
+      );
       if (gain.uids.length === 0) return { ok: true, state, result: { type: 'extract', energy: gain.byGrade }, events: [] };
       return {
         ok: true, state: applyEnergyGain(state, gain),
@@ -736,20 +782,79 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       return { ok: true, state: { ...state, energyTargets: {} }, result: { type: 'none' }, events: [] };
     }
     case 'cook': {
-      const check = canCook(state, action.recipe, action.count, deps.now);
+      const check = canCook(state, action.recipe, action.count, deps.now, deps.guest);
       if (!check.ok) return { ok: false, error: check.reason };
       const recipe = recipeById(action.recipe)!;
-      // 조리가 끝난 앞 요리는 보관함으로 정산한 뒤 기운을 차감하고 새 조리를 시작한다. 시작 시각은 서버 시각이다
+      // 조리가 끝난 앞 요리는 보관함으로 정산한 뒤 기운을 차감한다. 대기 0이면 즉시 보관함으로, 아니면 대기열을 쓴다
       let next = settleCooking(state, deps.now);
       for (const r of RARITY_ORDER) next = takeItem(next, ENERGY_ITEM_IDS[r], recipeCostStored(recipe, r) * action.count);
       // 추가 완성은 시작할 때 수량마다 추첨해 저장한다 — 추가분은 기운을 차감하지 않는다
       const chance = extraCookChance(state, achievementBonusesOf(state).artifactBoost);
       const bonus = Array.from({ length: action.count }, () => deps.rng() < chance);
+      const bonusCount = bonus.filter(Boolean).length;
+      if (recipeWaitMs(recipe) === 0) {
+        next = addItem(next, recipe.id, action.count + bonusCount);
+      } else {
+        const id = deps.newUid();
+        next = next.cooking === null
+          ? { ...next, cooking: { id, recipe: recipe.id, count: action.count, bonus, startedAt: deps.now } }
+          : { ...next, cookingQueue: [...next.cookingQueue, { id, recipe: recipe.id, count: action.count, bonus }] };
+      }
       return {
         ok: true,
-        state: { ...next, cooking: { recipe: recipe.id, count: action.count, bonus, startedAt: deps.now } },
+        state: next,
         result: { type: 'none' },
-        events: [{ type: 'cook', payload: { recipe: recipe.id, count: action.count, bonus: bonus.filter(Boolean).length } }],
+        events: [{ type: 'cook', payload: { recipe: recipe.id, count: action.count, bonus: bonusCount } }],
+      };
+    }
+    case 'cancelCook': {
+      const check = canCancelCook(state, action.id, deps.now, deps.guest);
+      if (!check.ok) return { ok: false, error: check.reason };
+      let next = settleCooking(state, deps.now);
+      let recipeId: string;
+      let cancelCount: number;
+      if (next.cooking?.id === action.id) {
+        recipeId = next.cooking.recipe;
+        cancelCount = next.cooking.count;
+        if (next.cookingQueue.length > 0) {
+          const [head, ...rest] = next.cookingQueue;
+          next = {
+            ...next,
+            cooking: { id: head.id, recipe: head.recipe, count: head.count, bonus: [...head.bonus], startedAt: deps.now },
+            cookingQueue: rest,
+          };
+        } else {
+          next = { ...next, cooking: null, cookingQueue: [] };
+        }
+      } else {
+        const target = next.cookingQueue.find(q => q.id === action.id)!;
+        recipeId = target.recipe;
+        cancelCount = target.count;
+        next = { ...next, cookingQueue: next.cookingQueue.filter(q => q.id !== action.id) };
+      }
+      const recipe = recipeById(recipeId)!;
+      const refund = cookRefundOf(recipe, cancelCount);
+      for (const r of RARITY_ORDER) next = addItem(next, ENERGY_ITEM_IDS[r], refund[r]);
+      return {
+        ok: true,
+        state: next,
+        result: { type: 'cancelCook', recipe: recipe.id, count: cancelCount, refund },
+        events: [{ type: 'cancelCook', payload: { id: action.id, recipe: recipe.id, count: cancelCount, refund } }],
+      };
+    }
+    case 'transmuteEnergy': {
+      const check = canTransmuteEnergy(state, action.from, action.count, deps.guest);
+      if (!check.ok) return { ok: false, error: check.reason };
+      const to = transmuteTargetOf(action.from)!;
+      const spent = action.count * ENERGY_TRANSMUTE_RATIO * ENERGY_UNIT;
+      const gained = action.count * ENERGY_UNIT;
+      let next = takeItem(state, ENERGY_ITEM_IDS[action.from], spent);
+      next = addItem(next, ENERGY_ITEM_IDS[to], gained);
+      return {
+        ok: true,
+        state: next,
+        result: { type: 'transmuteEnergy', from: action.from, to, count: action.count, spent, gained },
+        events: [{ type: 'transmuteEnergy', payload: { from: action.from, to, count: action.count, spent, gained } }],
       };
     }
     case 'eat': {
@@ -821,6 +926,24 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         state: { ...settled, slots: nextSlots },
         result: { type: 'none' },
         events: [{ type: 'eat', payload: { item: recipe.id, endsAt, replaced: replacedId } }],
+      };
+    }
+    case 'usePotion': {
+      const check = canUsePotion(state, action.id, deps.now, deps.guest);
+      if (!check.ok) return { ok: false, error: check.reason };
+      const potion = potionById(action.id)!;
+      const day = gameDayOf(deps.now);
+      const taken = takeItem(state, potion.id, 1);
+      const nextPotions: Record<string, string> = {};
+      for (const [k, d] of Object.entries(taken.potions)) {
+        if (d === day) nextPotions[k] = d;
+      }
+      nextPotions[potion.id] = day;
+      return {
+        ok: true,
+        state: { ...taken, potions: nextPotions },
+        result: { type: 'none' },
+        events: [{ type: 'usePotion', payload: { id: potion.id, day } }],
       };
     }
     case 'dismissBaitRefund': {

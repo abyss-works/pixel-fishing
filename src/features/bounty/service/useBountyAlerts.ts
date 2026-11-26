@@ -25,7 +25,7 @@ export function useBountyAlerts(notify: NoticeSink): void {
         sendNotice(notify, {
           kind: 'bounty.questCompletable',
           text: `${questLabel(quest)} 목표를 달성했어요! 수배판에서 보상을 받아 보세요.`,
-          toastText: '의뢰 목표 달성! 보상 수령 가능',
+          toastText: '의뢰 목표를 달성했어요!',
         });
       }
     }

@@ -7,11 +7,13 @@ import { selectNamedBountyCardData } from '../../../../features/bounty/model/pan
 import AdjustedAmount from '../../../ui/AdjustedAmount';
 import Button from '../../../ui/Button';
 import Inset from '../../../ui/Inset';
+import PressRow from '../../../ui/PressRow';
+import ProgressCount from '../../../ui/ProgressCount';
 import Tip from '../../../ui/Tip';
 import { cx } from '../../../ui/cx';
 import { AcceptButton, BoardRows, NamedCardHead } from './boardParts';
 
-export default function NamedCard({ game, quest, canAccept, reason, busy, progress, accepted, ticketMins, materialName, onAccept, onDeliver }: {
+export default function NamedCard({ game, quest, canAccept, reason, busy, progress, accepted, ticketMins, materialName, onOpenDetail, onAccept, onDeliver }: {
   game: GameState; quest: BountyQuest; canAccept: boolean;
   /** 수주할 수 없는 이유 — 버튼의 툴팁으로 보인다 */
   reason: string | null;
@@ -21,17 +23,27 @@ export default function NamedCard({ game, quest, canAccept, reason, busy, progre
   ticketMins: number | null;
   /** 토벌 보상으로 받는 교환 재료 이름 */
   materialName: string | null;
+  onOpenDetail?: () => void;
   onAccept: () => void; onDeliver: () => void;
 }) {
-  const { name, poster, found, done, haunt, reward } = selectNamedBountyCardData(game, quest, progress);
+  const { name, found, done, haunt, reward } = selectNamedBountyCardData(game, quest, progress);
+  const title = found && name ? name : '???';
+  const head = <NamedCardHead title={title} traceMins={!done ? ticketMins : null} />;
   return (
-    <Inset tone={done ? 'light' : 'base'} border={done ? 'gold' : 'line'}
-           className={cx('p-3 flex flex-col gap-2 flex-1 min-h-0', done && 'bg-[color-mix(in_oklab,var(--c-gold)_8%,var(--inset-light))]')}>
-      <NamedCardHead title={found && name ? name : '???'} titleTip={poster} traceMins={!done ? ticketMins : null} />
+    <Inset tone={done ? 'light' : 'base'} border={done ? 'gold' : 'named'}
+           className={cx(
+             'p-3 flex flex-col gap-2 flex-1 min-h-0',
+             done
+               ? 'bg-[color-mix(in_oklab,var(--c-gold)_8%,var(--inset-light))]'
+               : 'bg-[color-mix(in_oklab,var(--c-named)_7%,var(--inset-base))]',
+           )}>
+      {onOpenDetail
+        ? <PressRow onPress={onOpenDetail} ariaLabel={`${title} 상세 보기`} className="px-1 -mx-1">{head}</PressRow>
+        : head}
       <BoardRows rows={[
         { key: 'haunt', label: '나타나는 곳', value: haunt },
         { key: 'progress', label: <Tip text={`${haunt}에서 낚시하면 아주 드물게 마주쳐요.`}>진행</Tip>,
-          value: <span className="pf-accent">{Math.min(progress, quest.count)}/{quest.count}</span> },
+          value: <ProgressCount current={Math.min(progress, quest.count)} target={quest.count} tight /> },
         { key: 'reward', label: '보상', value: <AdjustedAmount amount={reward} className="text-gold" /> },
         ...(materialName ? [{ key: 'material', label: '교환 재료', value: materialName }] : []),
       ]} />

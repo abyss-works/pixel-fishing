@@ -5,10 +5,11 @@ import { canClaim } from '../../../../features/achievement/model/achievements';
 import type {
   AchievementRow,
   AchievementRowStatus,
+  BigGroupCardModel,
   CumulativeBonusCardModel,
   NamedGroupCardModel,
 } from '../../../../features/achievement/model/achievements';
-import { fmtGold, fmtNum } from '../../../ui/format';
+import { fmtGold } from '../../../ui/format';
 import { cx } from '../../../ui/cx';
 import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
@@ -16,6 +17,7 @@ import Inset from '../../../ui/Inset';
 import type { InsetBorder } from '../../../ui/Inset';
 import PersonSprite from '../../../ui/PersonSprite';
 import PixelIcon from '../../../ui/PixelIcon';
+import ProgressCount from '../../../ui/ProgressCount';
 import ProgressMeter from '../../../ui/ProgressMeter';
 import SegmentedStepBar from '../../../ui/SegmentedStepBar';
 import Tip from '../../../ui/Tip';
@@ -43,7 +45,7 @@ const cardFrameClass = (status: AchievementRowStatus) => cx(
 
 function StatusBadge({ status }: { status: AchievementRowStatus }) {
   if (status === 'claimable') {
-    return <Badge tone="gold" size="xs">수령 가능</Badge>;
+    return <Badge tone="gold" size="xs">받기 가능</Badge>;
   }
   if (status === 'claimed') {
     return (
@@ -81,8 +83,8 @@ export default function AchievementCard({ row, game, guest = false, busy, onClai
           tone={row.status === 'claimable' ? 'gold' : row.status === 'claimed' ? 'dim' : 'accent'}
           ariaLabel={`진척, ${def.name}`}
           fillTestAttr="achievement"
-          leftLabel={<span className={cx('pf-accent', row.status === 'claimable' ? 'text-gold' : 'text-text-dim')}>{pct}%</span>}
-          rightLabel={<span className="pf-accent text-text">{fmtNum(progress.current)} / {fmtNum(progress.target)}</span>}
+          leftLabel={<ProgressCount value={`${pct}%`} />}
+          rightLabel={<ProgressCount current={progress.current} target={progress.target} />}
         />
       </div>
       <div className="flex min-w-0 items-center gap-2 border-t border-line px-2.5 py-1.5">
@@ -159,7 +161,7 @@ export function CumulativeBonusCard({ card }: { card: CumulativeBonusCardModel }
             <span className="pf-accent text-text-dim">
               {card.allDone ? '최대 도달' : `다음 ${doneCount + 1}단계 ${card.nextDeltaText ?? ''}`}
             </span>
-            <span className="pf-accent text-text whitespace-nowrap">{fmtNum(card.current)} / {fmtNum(card.nextThreshold)}</span>
+            <ProgressCount current={card.current} target={card.nextThreshold} className="whitespace-nowrap" />
           </div>
         </div>
       </div>
@@ -177,22 +179,23 @@ export function CumulativeBonusCard({ card }: { card: CumulativeBonusCardModel }
         </Tip>
       </div>
       <div className="flex h-9 shrink-0 items-center justify-end px-2.5">
-        <span className="text-xs text-text-dim">자동 적용</span>
+        <span className="text-xs text-text-dim">적용 중</span>
       </div>
     </Inset>
   );
 }
 
-/** 네임드 다회 토벌(1·5·10회) 치장 다단계 압축 카드 — 미토벌 시 스포일러 실명·모자 실루엣·툴팁까지 100% 가린다 */
+/** 다단계 치장 압축 카드(네임드 다회 토벌·월척 장부) — 미토벌 네임드는 스포일러 실명·모자 실루엣·툴팁까지 가린다 */
 export function NamedGroupCard({
   card, game, guest = false, busy, onClaim,
 }: {
-  card: NamedGroupCardModel;
+  card: NamedGroupCardModel | BigGroupCardModel;
   game: GameState;
   guest?: boolean;
   busy: boolean;
   onClaim: (row: AchievementRow) => void;
 }) {
+  const isBig = card.kind === 'bigGroup';
   const clamped = Math.min(card.current, card.target);
   const ratio = card.target > 0 ? clamped / card.target : 0;
   const pct = Math.min(100, Math.round(ratio * 100));
@@ -212,7 +215,7 @@ export function NamedGroupCard({
   const tipContent = (
     <span className="flex min-w-44 flex-col">
       {card.steps.map(step => {
-        const stateLabel = step.status === 'claimed' ? '완료' : step.status === 'claimable' ? '수령 가능' : '예정';
+        const stateLabel = step.status === 'claimed' ? '완료' : step.status === 'claimable' ? '받기 가능' : '예정';
         const stateTone = step.status === 'claimed' ? 'gold-plain' : step.status === 'claimable' ? 'accent' : 'dim-plain';
         return (
           <span key={step.id} className="flex items-center justify-between gap-4 py-0.5">
@@ -260,10 +263,10 @@ export function NamedGroupCard({
             fillTestAttr="achievement"
           />
           <div className="flex items-center justify-between gap-2 text-2xs">
-            <span className={cx('pf-accent', card.status === 'claimable' ? 'text-gold' : 'text-text-dim')}>
-              {card.discovered ? `목표 ${card.target}회` : `${pct}%`}
-            </span>
-            <span className="pf-accent text-text whitespace-nowrap">{fmtNum(card.current)} / {fmtNum(card.target)}</span>
+            {card.discovered
+              ? <span className={cx('pf-accent', card.status === 'claimable' ? 'text-gold' : 'text-text-dim')}>{`목표 ${card.target}${isBig ? '종' : '회'}`}</span>
+              : <ProgressCount value={`${pct}%`} />}
+            <ProgressCount current={card.current} target={card.target} className="whitespace-nowrap" />
           </div>
         </div>
       </div>
@@ -284,7 +287,7 @@ export function NamedGroupCard({
                 </b>
               </Tip>
               <span className="text-2xs text-text-dim">
-                {card.discovered ? `${card.target}회 토벌 보상` : '토벌하면 정체와 모자가 열려요'}
+                {card.discovered ? `${card.target}${isBig ? '종 달성 보상' : '회 토벌 보상'}` : '토벌하면 정체와 모자가 열려요'}
               </span>
             </div>
           </>
@@ -317,7 +320,7 @@ function Reward({ reward }: { reward: AchievementReward }) {
     return (
       <>
         <PixelIcon glyph="coin" className="shrink-0 text-gold" />
-        <b data-achievement-reward className="pf-accent text-2xs text-gold break-keep break-words">{fmtGold(reward.gold)}</b>
+        <ProgressCount data-achievement-reward="" value={fmtGold(reward.gold)} className="text-2xs font-bold break-keep break-words" />
       </>
     );
   }

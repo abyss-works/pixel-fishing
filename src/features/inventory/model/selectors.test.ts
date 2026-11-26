@@ -2,7 +2,7 @@
 // useGame이 통째 game을 내려주는 동안은 호출부(useMemo 등)가 이 함수들로 파생값을
 // 읽고, 나중에 외부 스토어로 옮기면 같은 함수가 구독 셀렉터가 된다.
 import { describe, it, expect } from 'vitest';
-import { selectBagOverview, selectBagStatus, selectOwnedArtifacts, selectGearSummary } from './selectors';
+import { selectBagArtifacts, selectBagOverview, selectBagStatus, selectOwnedArtifacts, selectGearSummary } from './selectors';
 import { newState, saleBonusOf, sellableValue } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 
@@ -94,6 +94,20 @@ describe('selectOwnedArtifacts', () => {
   });
 });
 
+describe('selectBagArtifacts', () => {
+  it('전체 유물을 레지스트리 순서로 내고 보유 여부와 구역명을 함께 돌려준다', () => {
+    const entries = selectBagArtifacts(seed({ artifacts: ['varuna-scale'] }));
+    expect(entries).toHaveLength(8);
+    expect(entries[0]).toMatchObject({
+      owned: false,
+      zoneName: '태평양',
+      artifact: { id: 'abyss-angler', name: '해구의 이빨' },
+    });
+    const owned = entries.find(e => e.artifact.id === 'varuna-scale');
+    expect(owned).toMatchObject({ owned: true, zoneName: '인도양' });
+  });
+});
+
 describe('selectGearSummary - 헤더 자원 바의 배와 낚싯대', () => {
   it('배는 티어와 이름, 낚싯대는 레벨을 돌려준다', () => {
     expect(selectGearSummary(seed({ boat: 2, rod: 7 }))).toEqual({ boatTier: 2, boatName: '돛단배', rodLevel: 7 });
@@ -115,7 +129,7 @@ describe('selectBagOverview - 판매 가능 금액', () => {
     const bonus = 0.3;
     const sellable = selectBagOverview(game, bonus).sellable;
     expect(sellable.value).toBe(base + saleBonusOf(base, bonus));
-    expect(sellable.mods).toEqual([{ id: 'guild-sell', label: '판매가 보너스', delta: saleBonusOf(base, bonus) }]);
+    expect(sellable.mods).toEqual([{ id: 'guild-sell', label: '판매가 보너스', delta: saleBonusOf(base, bonus), source: { kind: 'guild', bonus: 'sell' } }]);
   });
 
   it('오늘의 재물운이 켜져 있으면 판매 가능 금액에 운 배율을 반영하고 날짜가 지나면 반영하지 않는다', () => {
@@ -129,15 +143,36 @@ describe('selectBagOverview - 판매 가능 금액', () => {
       fortune: { day: '2026-11-24', kind: 'gold', index: 5 },
     };
     const base = sellableValue(game);
-    const expected = Math.round(base * 1.05);
+    const expected = Math.round(base * 1.1);
     const active = selectBagOverview(game, 0, 0, now).sellable;
     expect(active.value).toBe(expected);
-    expect(active.mods).toEqual([{ id: 'fortune-sell', label: '오늘의 운세', delta: expected - base }]);
+    expect(active.mods).toEqual([{ id: 'fortune-sell', label: '오늘의 운세', delta: expected - base, source: { kind: 'fortune' } }]);
 
     const expired = selectBagOverview(
       { ...game, fortune: { day: '2026-11-23', kind: 'gold', index: 5 } }, 0, 0, now,
     ).sellable;
     expect(expired).toEqual({ base, mods: [], value: base });
+  });
+
+  it('판매가 비약이 켜져 있으면 운세와 독립 곱연산해 판매 가능 금액에 반영하고 출처를 비약 이름으로 분리한다', () => {
+    const now = '2026-11-24T05:00:00.000Z';
+    const game: GameState = {
+      ...newState(),
+      bag: [
+        { uid: 'a', fishId: 'carp', form: 'normal', size: 20, caughtAt: null, spot: null, judgment: null, locked: false },
+        { uid: 'b', fishId: 'carp', form: 'normal', size: 20, caughtAt: null, spot: null, judgment: null, locked: false },
+      ],
+      fortune: { day: '2026-11-24', kind: 'gold', index: 5 },
+      potions: { 'luck-small': '2026-11-24' },
+    };
+    const base = sellableValue(game);
+    const active = selectBagOverview(game, 0, 0, now).sellable;
+    const fortuneDelta = Math.round(base * 0.1);
+    expect(active.value).toBe(Math.round(base * 1.1 * 1.05));
+    expect(active.mods).toEqual([
+      { id: 'fortune-sell', label: '오늘의 운세', delta: fortuneDelta, source: { kind: 'fortune' } },
+      { id: 'potion-luck-small', label: '작은 바다 영약', delta: active.value - base - fortuneDelta, source: { kind: 'potion', id: 'luck-small' } },
+    ]);
   });
 });
 

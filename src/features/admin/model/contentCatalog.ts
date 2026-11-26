@@ -10,6 +10,7 @@ import type {
   AchievementTab,
   CosmeticKind,
   CumulativeBonusKind,
+  CumulativeBonusMetric,
 } from '../../../game/content/achievements';
 import {
   ARTIFACT_LEVEL_COEF,
@@ -29,6 +30,7 @@ import {
   COOKING_UNLOCK_BOAT,
   ENERGY_ITEM_IDS,
   RECIPES,
+  recipeWaitMs,
 } from '../../../game/content/cooking';
 import type { CookKind, Recipe } from '../../../game/content/cooking';
 import { FISH } from '../../../game/content/fish';
@@ -248,7 +250,7 @@ export interface BonusSeriesCatalogItem {
   id: string;
   name: string;
   desc: string;
-  scope: 'global' | 'zone';
+  scope: 'global' | 'zone' | 'artifact';
   zoneId: ZoneId | null;
   zoneName: string | null;
   bonusKind: CumulativeBonusKind;
@@ -304,10 +306,9 @@ export interface RecipeCostItem {
   amount: number;
 }
 
-export interface RecipeEffectItem {
-  label: string;
-  value: string;
-}
+export type RecipeEffectItem =
+  | { label: string; value: string }
+  | { text: string };
 
 export interface RecipeCatalogItem {
   recipe: Recipe;
@@ -315,8 +316,8 @@ export interface RecipeCatalogItem {
   name: string;
   kind: CookKind;
   kindLabel: string;
-  grade: DisplayGradeId | null;
-  gradeLabel: string | null;
+  grade: DisplayGradeId;
+  gradeLabel: string;
   displayName: string;
   description: string;
   waitMin: number;
@@ -501,16 +502,19 @@ const COSMETIC_KIND_LABELS: Record<CosmeticKind, string> = {
 
 const BONUS_KIND_LABELS: Record<CumulativeBonusKind, string> = {
   biteWaitCut: '입질 대기 감소',
-  mutationWeight: '돌연변이 가중치',
-  rareWeight: '희귀 이상 가중치',
-  epicWeight: '영웅 이상 가중치',
-  legendaryWeight: '전설 가중치',
+  mutationWeight: '돌연변이 출현 비중',
+  rareWeight: '희귀 이상 출현 비중',
+  epicWeight: '영웅 이상 출현 비중',
+  legendaryWeight: '전설 출현 비중',
+  nightWeight: '밤 어종 출현 비중',
+  bagCap: '가방 용량',
+  energyYield: '기운 획득량',
+  baitAmplify: '미끼 증폭',
+  lunchAmplify: '도시락 증폭',
   sellBonus: '판매가 보너스',
-  namedWeight: '네임드 조우 가중치',
-  moveSpeed: '이동 속도',
-  artifactBoost: '유물 효과 배율',
-  zoneLegendary: '구역 전설 가중치',
-  zoneMutation: '구역 돌연변이 가중치',
+  namedWeight: '네임드 조우 확률',
+  moveSpeed: '항해 속도',
+  artifactBoost: '유물 증폭',
 };
 
 const DIFFICULTY_LABELS: Record<BountyDifficulty, string> = {
@@ -568,13 +572,13 @@ function formatArtifactEffects(art: Artifact, level: number): string[] {
   if ((e.duelSpeedupCut ?? 0) > 0) lines.push(`네임드 결투 가속 −${fmtDecimal(e.duelSpeedupCut! * 100)}%`);
   if (e.mutationWeight !== undefined) {
     const pct = (e.mutationWeight.variant / MUTATION_WEIGHTS.variant - 1) * 100;
-    lines.push(`돌연변이 가중치 +${fmtDecimal(pct)}%`);
+    lines.push(`돌연변이 출현 비중 +${fmtDecimal(pct)}%`);
   }
   if ((e.biteWaitCut ?? 0) > 0) lines.push(`입질 대기 −${fmtDecimal(e.biteWaitCut! * 100)}%`);
-  if ((e.commonWeightCut ?? 0) > 0) lines.push(`일반 등급 가중치 −${fmtDecimal(e.commonWeightCut! * 100)}%`);
+  if ((e.commonWeightCut ?? 0) > 0) lines.push(`일반 어종 출현 비중 −${fmtDecimal(e.commonWeightCut! * 100)}%`);
   if ((e.bagCap ?? 0) > 0) lines.push(`가방 용량 +${fmtDecimal(e.bagCap! * 100)}%`);
   const cookChance = artifactExtraCookChanceAt(art, level);
-  if (cookChance > 0) lines.push(`요리 추가 완성 +${fmtDecimal(cookChance * 100)}%p`);
+  if (cookChance > 0) lines.push(`요리 추가 완성 +${fmtDecimal(cookChance * 100)}%`);
   if (art.system) {
     if ((art.system.namedCapBonus ?? 0) > 0) lines.push(`네임드 토벌 하루 +${art.system.namedCapBonus}회`);
     if ((art.system.namedRewardCut ?? 0) > 0) lines.push(`네임드 토벌 골드 −${fmtDecimal(art.system.namedRewardCut! * 100)}%`);
@@ -584,11 +588,8 @@ function formatArtifactEffects(art: Artifact, level: number): string[] {
   return lines;
 }
 
-function recipeDisplayGrade(recipe: Recipe): DisplayGradeId | null {
-  if (recipe.kind !== 'bait') return null;
-  const weighted = recipe.effects.rarityWeight?.grades[0];
-  if (weighted !== undefined) return weighted;
-  return recipe.effects.mutationWeight !== undefined || recipe.effects.nightUnlock === true ? 'special' : null;
+function recipeDisplayGrade(recipe: Recipe): DisplayGradeId {
+  return recipe.grade;
 }
 
 function buildRecipeEffectItems(recipe: Recipe): RecipeEffectItem[] {
@@ -597,12 +598,13 @@ function buildRecipeEffectItems(recipe: Recipe): RecipeEffectItem[] {
   if (e.biteWaitCut !== undefined) items.push({ label: '입질 대기', value: `−${fmtDecimal(e.biteWaitCut * 100)}%` });
   if (e.rarityWeight !== undefined) {
     for (const g of e.rarityWeight.grades) {
-      items.push({ label: `${RARITY[g].name} 등급 가중치`, value: `+${fmtDecimal(e.rarityWeight.bonus * 100)}%` });
+      items.push({ label: `${RARITY[g].name} 어종 출현 비중`, value: `+${fmtDecimal(e.rarityWeight.bonus * 100)}%` });
     }
   }
-  if (e.mutationWeight !== undefined) items.push({ label: '돌연변이 폼 가중치', value: `+${fmtDecimal(e.mutationWeight * 100)}%` });
-  if (e.namedWeight !== undefined) items.push({ label: '네임드 조우 가중치', value: `+${fmtDecimal(e.namedWeight * 100)}%` });
-  if (e.nightUnlock === true) items.push({ label: '밤 어종 출현', value: '밤 전용 어종 합류' });
+  if (e.mutationWeight !== undefined) items.push({ label: '돌연변이 출현 비중', value: `+${fmtDecimal(e.mutationWeight * 100)}%` });
+  if (e.mutationMult !== undefined) items.push({ label: '돌연변이 등장', value: `×${e.mutationMult}` });
+  if (e.namedWeight !== undefined) items.push({ label: '네임드 조우 확률', value: `+${fmtDecimal(e.namedWeight * 100)}%` });
+  if (e.nightUnlock === true) items.push({ text: '낮에도 밤 어종이 함께 낚여요.' });
   return items;
 }
 
@@ -610,6 +612,23 @@ function formatBonusDelta(kind: CumulativeBonusKind, value: number): string {
   const pct = fmtDecimal(value * 100);
   if (kind === 'biteWaitCut') return `−${pct}%`;
   return `+${pct}%`;
+}
+
+function formatMetricSummary(metric: CumulativeBonusMetric, zoneName: string | null): string {
+  switch (metric.kind) {
+    case 'counter':
+      return metric.key;
+    case 'legendarySum':
+      return metric.night ? '전체 밤 전설 수동 합계' : '전체 낮 전설 수동 합계';
+    case 'zoneLegendarySum':
+      return `${zoneName ?? metric.zone} 수동 ${metric.night ? '밤 ' : ''}전설 합계`;
+    case 'dexZoneLegendarySum':
+      return `${zoneName ?? metric.zone} 도감 ${metric.night ? '밤' : '낮'} 전설 포획 수`;
+    case 'dexZoneVariantSum':
+      return `${zoneName ?? metric.zone} 도감 돌연변이 포획 수`;
+    case 'artifactLevel':
+      return `유물 레벨 (${metric.artifactId})`;
+  }
 }
 
 // ── 카탈로그 조립 ──
@@ -781,11 +800,7 @@ export function buildContentCatalog(): ContentCatalog {
       };
     });
     const zoneName = series.zone ? (zoneById(series.zone)?.name ?? series.zone) : null;
-    const metricSummary = series.metric.kind === 'counter'
-      ? series.metric.key
-      : series.metric.kind === 'zoneLegendarySum'
-        ? `${zoneName ?? series.zone} 수동 전설 합계`
-        : '최고 레벨·전설 유물 보유 수';
+    const metricSummary = formatMetricSummary(series.metric, zoneName);
     return {
       id: series.id,
       name: series.name,
@@ -835,13 +850,11 @@ export function buildContentCatalog(): ContentCatalog {
   const recipeItems: RecipeCatalogItem[] = [...RECIPES]
     .sort((a, b) => {
       if (a.kind !== b.kind) return a.kind === 'lunch' ? -1 : 1;
-      const ga = recipeDisplayGrade(a);
-      const gb = recipeDisplayGrade(b);
-      return (ga ? displayGradeRank(ga) : -1) - (gb ? displayGradeRank(gb) : -1);
+      return displayGradeRank(recipeDisplayGrade(a)) - displayGradeRank(recipeDisplayGrade(b));
     })
     .map(r => {
       const grade = recipeDisplayGrade(r);
-      const gradeLabel = grade ? DISPLAY_GRADE[grade].name : null;
+      const gradeLabel = DISPLAY_GRADE[grade].name;
       const costItems: RecipeCostItem[] = RARITY_ORDER
         .filter(g => (r.cost[g] ?? 0) > 0)
         .map(g => ({ grade: g, gradeName: RARITY[g].name, amount: r.cost[g]! }));
@@ -854,9 +867,9 @@ export function buildContentCatalog(): ContentCatalog {
         kindLabel: r.kind === 'lunch' ? '도시락' : '미끼',
         grade,
         gradeLabel,
-        displayName: gradeLabel ? gradeName(r.name, gradeLabel) : r.name,
+        displayName: gradeName(r.name, gradeLabel),
         description: r.description,
-        waitMin: rules.waitMs / 60_000,
+        waitMin: recipeWaitMs(r) / 60_000,
         slotMin: rules.slotMs / 60_000,
         costItems,
         costSummary: costItems.map(c => `${c.gradeName} ${c.amount}`).join(' · '),
@@ -1173,7 +1186,7 @@ export function filterRecipeCatalog(
     }
     return matchesQuery(q, [
       it.id, it.name, it.displayName, it.kindLabel, it.description, it.costSummary,
-      ...it.effectLines.map(e => `${e.label} ${e.value}`),
+      ...it.effectLines.map(e => ('text' in e ? e.text : `${e.label} ${e.value}`)),
     ]);
   });
 }

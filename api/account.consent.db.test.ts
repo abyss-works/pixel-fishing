@@ -113,7 +113,7 @@ describe('POST /api/account/consents', () => {
     expect(await records(uid)).toEqual([]);
   });
 
-  it('현재 판의 약관과 처리방침 수락을 확인 화면 경로와 만 14세 확인으로 기록하고 새 상태를 돌려준다', async () => {
+  it('현재 판의 이용약관 수락을 확인 화면 경로와 만 14세 확인으로 기록하고 새 상태를 돌려준다', async () => {
     const uid = await member('accepts');
     process.env.CONSENT_EFFECTIVE_DATE = dayOffset(-2);
     const res = await accept(userToken(uid), { version: dayOffset(-2), ageConfirmed: true });
@@ -121,12 +121,11 @@ describe('POST /api/account/consents', () => {
     expect(res.headers['cache-control']).toBe('private, no-store');
     expect(res.body).toEqual({ consent: { required: false, version: dayOffset(-2), effectiveAt: `${dayOffset(-2)}T00:00:00.000Z` } });
     expect((await records(uid)).map(r => [r.document, r.version, r.age_confirmed, r.channel])).toEqual([
-      ['privacy', dayOffset(-2), true, 'confirm-screen'],
       ['terms', dayOffset(-2), true, 'confirm-screen'],
     ]);
   });
 
-  it('같은 판을 두 번 요청해도 성공하고 기록은 처음 그대로 둘이다', async () => {
+  it('같은 판을 두 번 요청해도 성공하고 기록은 처음 그대로 하나다', async () => {
     const uid = await member('twice');
     process.env.CONSENT_EFFECTIVE_DATE = dayOffset(-2);
     const first = await accept(userToken(uid), { version: dayOffset(-2), ageConfirmed: true });
@@ -140,7 +139,7 @@ describe('POST /api/account/consents', () => {
     const uid = await member('early');
     process.env.CONSENT_EFFECTIVE_DATE = dayOffset(5);
     expect((await accept(userToken(uid), { version: dayOffset(5), ageConfirmed: true })).status).toBe(200);
-    expect(await records(uid)).toHaveLength(2);
+    expect(await records(uid)).toHaveLength(1);
   });
 
   it('판이 바뀐 뒤에는 새 판을 따로 수락하고 이전 판 기록은 남는다', async () => {
@@ -150,14 +149,14 @@ describe('POST /api/account/consents', () => {
     process.env.CONSENT_EFFECTIVE_DATE = dayOffset(-1);
     expect((await accept(userToken(uid), { version: dayOffset(-1), ageConfirmed: true })).status).toBe(200);
     expect((await records(uid)).map(r => `${r.version}/${r.document}`)).toEqual([
-      `${dayOffset(-5)}/privacy`, `${dayOffset(-5)}/terms`, `${dayOffset(-1)}/privacy`, `${dayOffset(-1)}/terms`,
+      `${dayOffset(-5)}/terms`, `${dayOffset(-1)}/terms`,
     ]);
   });
 
   it('탈퇴하면 수락 기록도 사라진다', async () => {
     const uid = await member('leaves');
     await accept(userToken(uid), { version: '2099-12-31', ageConfirmed: true });
-    expect(await records(uid)).toHaveLength(2);
+    expect(await records(uid)).toHaveLength(1);
     const { default: account } = await import('./account.js');
     expect(await call(account as Handler, 'POST', userToken(uid), { op: 'delete' })).toMatchObject({ status: 200 });
     expect(await records(uid)).toEqual([]);

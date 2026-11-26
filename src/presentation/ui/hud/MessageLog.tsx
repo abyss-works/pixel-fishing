@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { FILTER_CHANNELS, isChannelShown } from '../../../features/display/model/messageFilter';
 import type { MessageFilter } from '../../../features/display/model/messageFilter';
 import { cx } from '../cx';
+import { FormatGradeLabel } from '../fish/RarityTag';
 import ToggleChip from '../ToggleChip';
 import PixelIcon from '../PixelIcon';
 import Tip, { TipList } from '../Tip';
@@ -54,10 +55,14 @@ const GLASS_ALWAYS = cx(
 function LineText({ m }: { m: Msg }) {
   const at = m.tip ? m.text.indexOf(m.tip.target) : -1;
   if (!m.tip || at < 0) return <>{m.text}</>;
+  const rows = m.tip.rows.map(r => ({
+    label: typeof r.label === 'string' ? <FormatGradeLabel text={r.label} /> : r.label,
+    value: r.value,
+  }));
   return (
     <>
       {m.text.slice(0, at)}
-      <Tip text={<TipList rows={m.tip.rows} />}>{m.tip.target}</Tip>
+      <Tip text={<TipList rows={rows} />}>{m.tip.target}</Tip>
       {m.text.slice(at + m.tip.target.length)}
     </>
   );
@@ -146,7 +151,7 @@ export default function MessageLog({ log, onPick, footer, you, filter = FILTER_C
             return (
               <span key={c} className="inline-flex">
                 {/* 채널 토글은 모두 같은 폭이다. 새 글 점은 칩 오른쪽 위 모서리에 겹쳐 그려 폭을 바꾸지 않는다 */}
-                <ToggleChip pressed={on} disabled={disabled} className="relative w-[52px] justify-center"
+                <ToggleChip pressed={on} disabled={disabled} className="relative w-[66px] justify-center"
                             onClick={() => { setHiddenSince(Date.now()); onToggle?.(c, present); }}>
                   {CHANNEL_LABEL[c]}
                   {dot && !on && !disabled && <span className="absolute top-0.5 right-0.5 size-1.5 bg-gold" aria-hidden="true" />}

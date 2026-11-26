@@ -1,20 +1,20 @@
 // HTTP API 구현 — 스테이징·운영 (/api/auth 쿠키 세션 + /api/action, 관리자는 /api/admin/auth 쿠키 세션)
 import { HttpGameGateway } from './httpGameGateway';
+import { migrate } from '../../game/rules/logic';
 import type { GameGateway } from '../api/types';
 import type { GameState } from '../../game/rules/logic';
-import type { AccountLookup, AuthApi, AuthResult } from '../api/types';
+import type {
+  AcceptConsentResult, AccountLookup, AuthApi, AuthResult, ConsentStatus, DevApi, PromoteTestResult, ResetDevAccountResult,
+} from '../api/types';
 import {
   sessionUid,
   ensureSession,
   currentAccount,
-  signInWithEmail,
+  getAccountConsent,
+  acceptAccountConsent,
   startGoogleAuth,
   takeGoogleLanding,
-  accountProviders,
   signOutAccount,
-  requestPasswordReset,
-  applyNewPassword,
-  takePasswordResetLanding,
   deleteOwnAccount,
 } from './auth';
 
@@ -31,8 +31,11 @@ class HttpAuth implements AuthApi {
     const [uid, lookup] = await Promise.all([sessionUid(), currentAccount()]);
     return { uid, email: lookup.status === 'account' ? lookup.email : null };
   }
-  takePasswordResetLanding(): 'ready' | 'invalid' | null {
-    return takePasswordResetLanding();
+  getAccountConsent(): Promise<ConsentStatus> {
+    return getAccountConsent();
+  }
+  acceptConsent(version: string): Promise<AcceptConsentResult> {
+    return acceptAccountConsent(version);
   }
   startGoogle(start: 'link' | 'sign-in', tag: string): Promise<AuthResult> {
     return startGoogleAuth(start, tag);
@@ -40,20 +43,8 @@ class HttpAuth implements AuthApi {
   takeGoogleLanding(): { tag: string; error: string | null } | null {
     return takeGoogleLanding();
   }
-  accountProviders(): Promise<string[] | null> {
-    return accountProviders();
-  }
-  signIn(email: string, password: string): Promise<AuthResult> {
-    return signInWithEmail(email, password);
-  }
   signOut(): Promise<void> {
     return signOutAccount();
-  }
-  requestPasswordReset(email: string): Promise<AuthResult> {
-    return requestPasswordReset(email);
-  }
-  applyNewPassword(password: string): Promise<AuthResult> {
-    return applyNewPassword(password);
   }
   deleteAccount(): Promise<AuthResult> {
     return deleteOwnAccount();
@@ -75,8 +66,9 @@ class HttpAuth implements AuthApi {
 import type {
   AdminApi, AdminAccessResult,
   AdminUserRow, AdminUserState, AdminOverview, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
+  AdminOnboardingFunnel, AdminHttpMetrics,
   AdminLive, AdminDailyStatsRow, AdminSessionRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, AdminChangelogRow, AdminChatReportRow, BalanceLive,
-  AdminSentMailRow, AdminMailRequest, AdminMailPlan, AdminResetLink,
+  AdminSentMailRow, AdminMailRequest, AdminMailPlan,
 } from '../api/types';
 
 const RATE_LIMIT_MESSAGE = '요청이 너무 많아 잠시 기다렸다가 다시 시도해 주세요.';
@@ -296,6 +288,12 @@ class HttpAdmin implements AdminApi {
   bountyFunnel(days: number): Promise<AdminBountyFunnelRow[]> {
     return readAdmin('bountyFunnel', { days });
   }
+  onboardingFunnel(): Promise<AdminOnboardingFunnel> {
+    return readAdmin('onboardingFunnel');
+  }
+  httpMetrics(days?: number): Promise<AdminHttpMetrics> {
+    return readAdmin('httpMetrics', days === undefined ? {} : { days });
+  }
   spamFlags(): Promise<AdminSpamFlagRow[]> {
     return readAdmin('spamFlags');
   }
@@ -311,17 +309,15 @@ class HttpAdmin implements AdminApi {
   chatReports(): Promise<AdminChatReportRow[]> {
     return readAdmin('chatReports');
   }
-  sentMails(): Promise<AdminSentMailRow[]> {
-    return readAdmin('mails');
+  async sentMails(): Promise<AdminSentMailRow[]> {
+    const rows = await readAdmin<AdminSentMailRow[]>('mails');
+    return rows.map(r => ({ ...r, items: Array.isArray(r.items) ? r.items : [] }));
   }
   mail(op: 'preview' | 'send', request: AdminMailRequest): Promise<AdminMailPlan> {
     return writeAdmin('mail', { op, request }, `우편 ${op}`);
   }
   restrict(userId: string, restricted: boolean): Promise<{ restricted: boolean }> {
     return writeAdmin('restrict', { userId, restricted }, restricted ? '제재' : '제재 해제');
-  }
-  resetLink(userId: string): Promise<AdminResetLink> {
-    return writeAdmin('resetLink', { userId }, '재설정 링크 발급');
   }
   letterHandled(letterId: number, handled: boolean): Promise<{ handled: boolean }> {
     return writeAdmin('letterHandled', { letterId, handled }, '편지 처리 표시');
@@ -343,12 +339,81 @@ class HttpAdmin implements AdminApi {
   }
 }
 
+class DevHttpError extends Error {
+  readonly status: number;
+  readonly code?: string;
+
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = 'DevHttpError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
+function devAccountError(status: number, code?: string): { msg: string; code?: string } {
+  if (status === 429) return { msg: RATE_LIMIT_MESSAGE, code: 'rate-limited' };
+  if (status === 401) return { msg: '로그인 정보를 확인하지 못했어요. 새로고침한 뒤 다시 시도해 주세요.', code: code ?? 'unauthorized' };
+  if (status === 403) return { msg: '스테이징 관리자 권한이 필요해요. 관리자 Google 계정으로 로그인한 뒤 다시 시도해 주세요.', code: code ?? 'forbidden' };
+  if (status === 404) {
+    return code === 'account-missing'
+      ? { msg: '계정 정보를 찾을 수 없어요.', code }
+      : { msg: '이 환경에서는 사용할 수 없는 기능이에요.', code: code ?? 'not-found' };
+  }
+  if (status === 409) return { msg: '이미 정식 계정으로 연결되어 있어요.', code: code ?? 'not-guest' };
+  return { msg: '요청을 처리하지 못했어요. 잠시 뒤 다시 시도해 주세요.', code };
+}
+
+async function readErrorCode(res: Response): Promise<string | undefined> {
+  const code = await res.json().then((b: { error?: unknown }) => b?.error, () => undefined);
+  return typeof code === 'string' ? code : undefined;
+}
+
+class HttpDev implements DevApi {
+  async promoteTestAccount(): Promise<PromoteTestResult> {
+    let res: Response;
+    try {
+      res = await fetch('/api/dev/promote-test', { method: 'POST' });
+    } catch {
+      return { ok: false, msg: '서버에 연결하지 못했어요. 잠시 뒤 다시 시도해 주세요.', code: 'network' };
+    }
+    if (!res.ok) {
+      const mapped = devAccountError(res.status, await readErrorCode(res));
+      return { ok: false, msg: mapped.msg, ...(mapped.code ? { code: mapped.code } : {}) };
+    }
+    const data = await res.json().catch(() => null) as { ok?: unknown; email?: unknown; isAnonymous?: unknown } | null;
+    if (data?.ok !== true || typeof data.email !== 'string' || data.isAnonymous !== false) {
+      return { ok: false, msg: '서버 응답 형식이 올바르지 않아요.', code: 'bad-response' };
+    }
+    return { ok: true, email: data.email, isAnonymous: false };
+  }
+
+  async resetDevAccount(): Promise<ResetDevAccountResult> {
+    let res: Response;
+    try {
+      res = await fetch('/api/dev/reset-account', { method: 'POST' });
+    } catch {
+      throw new DevHttpError('서버에 연결하지 못했어요. 잠시 뒤 다시 시도해 주세요.', 0, 'network');
+    }
+    if (!res.ok) {
+      const mapped = devAccountError(res.status, await readErrorCode(res));
+      throw new DevHttpError(mapped.msg, res.status, mapped.code);
+    }
+    const data = await res.json().catch(() => null) as { state?: unknown; version?: unknown } | null;
+    if (!data || !data.state || typeof data.version !== 'number' || !Number.isFinite(data.version)) {
+      throw new DevHttpError('서버 응답 형식이 올바르지 않아요.', res.status, 'bad-response');
+    }
+    return { state: migrate(data.state), version: data.version };
+  }
+}
+
 export function createHttpApi():
-{ createGameGateway(initial?: GameState): GameGateway; auth: AuthApi; admin: AdminApi } {
+{ createGameGateway(initial?: GameState): GameGateway; auth: AuthApi; admin: AdminApi; dev: DevApi } {
   return {
     // 시드 전달 — 델타 캐시의 출발점. 없으면 첫 델타가 풀재동기로 나간다 (무해, 1회).
     createGameGateway: (initial?: GameState) => new HttpGameGateway(initial ?? null),
     auth: new HttpAuth(),
     admin: new HttpAdmin(),
+    dev: new HttpDev(),
   };
 }

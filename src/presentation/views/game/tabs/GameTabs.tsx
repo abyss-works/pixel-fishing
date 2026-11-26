@@ -2,11 +2,10 @@ import { useState } from 'react';
 import type { GameState } from '../../../../game/rules/logic';
 import type { GameAction } from '../../../../game/rules/actions';
 import type { RejectReason } from '../../../../game/rules/rules';
-import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
+import type { DispatchResult, MaybePromise, ProfileStatus } from '../../../../features/gameplay/service/types';
 import { ZONE_IDS, defaultZoneOfRegion } from '../../../../game/content/zones';
 import type { ZoneId } from '../../../../game/content/zones';
 import type { RegionId } from '../../../../game/content/places';
-import type { GuestProgress } from '../../../../features/account/model/accountRules';
 import { accountLockState } from '../../../../features/account/service/accountActions';
 import { DEX_VIEWS, TAB_ORDER, tabHasViews, type DexView, type TabKey } from './tabs';
 import { selectNamedDex } from '../../../../features/dex/model/catalog';
@@ -19,7 +18,6 @@ import BagTab from './bag/BagTab';
 import DexTab from './dex/DexTab';
 import SettingsTab from './settings/SettingsTab';
 import { BAG_SECTIONS, setBagSection, useBagView } from './bag/bagView';
-import type { BagSection } from './bag/bagView';
 import Sidebar from '../../../layouts/sidebar';
 import { pressSheetTab } from '../../../layouts/sidebar/sheet';
 import { useMobileLayout } from '../../../layouts/useMobileLayout';
@@ -38,23 +36,20 @@ interface GameTabsProps {
   setToast: Notify;
   syncLabel: string | null;
   syncState: string;
-  guestProgress: GuestProgress;
-  recheckGuestProgress: () => Promise<GuestProgress>;
   account: string | null;
+  /** 계정 확인이 끝났는가 */
+  accountChecked?: boolean;
   /** 세션 확인에 실패했는가 */
   accountFailed: boolean;
   nickname: string | null;
+  profileStatus?: ProfileStatus;
   onRename: (name: string) => Promise<null | RejectReason>;
   uid: string | null;
   onAuthChanged: () => Promise<void>;
   /** 모바일 시트가 열려 있는가와 그 변경 — 열림은 HUD 배치도 따르므로 화면 조립이 소유한다 */
   sheetOpen: boolean;
   onSheetOpenChange: (open: boolean) => void;
-  /** 가방 하단 기운 얻기 진입 버튼 */
-  onOpenEnergy?: () => void;
 }
-
-const BAG_SECTION_LABEL: Record<BagSection, string> = { fish: '물고기', items: '아이템', artifacts: '유물' };
 
 /** 탭 아이콘 — 지역 나침반, 가방 배낭, 도감 책, 도움말 물음표, 설정 톱니 */
 const TAB_GLYPH: Record<TabKey, GlyphId> = {
@@ -70,14 +65,14 @@ export default function GameTabs(props: GameTabsProps) {
 
   const tabs = [
     { key: 'region' as const, label: '지역' },
-    { key: 'bag' as const, label: `가방\n(${BAG_SECTION_LABEL[section]})` },
-    { key: 'dex' as const, label: dexView === 'base' ? '도감\n(일반)' : dexView === 'variant' ? '도감\n(돌연변이)' : '도감\n(네임드)' },
+    { key: 'bag' as const, label: '가방' },
+    { key: 'dex' as const, label: '도감' },
     { key: 'help' as const, label: '도움말' },
     { key: 'settings' as const, label: '설정' },
   ].map(tab => ({ ...tab, icon: <PixelIcon glyph={TAB_GLYPH[tab.key]} size={16} /> }));
 
   // 메뉴 탭 선택(클릭·숫자키). 이미 열린 탭을 다시 고르면 그 탭의 보기를 순환한다
-  // (가방: 물고기→아이템→유물 · 도감: 일반→돌연변이→네임드). 현재 보기는 탭 라벨 둘째 줄이 보여 준다.
+  // (가방: 물고기→아이템→유물 · 도감: 일반→돌연변이→네임드).
   const select = (tab: TabKey) => {
     if (tab === activeTab && tab === 'dex') {
       setDexView(DEX_VIEWS[(DEX_VIEWS.indexOf(dexView) + 1) % DEX_VIEWS.length]);
@@ -133,14 +128,14 @@ export default function GameTabs(props: GameTabsProps) {
     <Sidebar tabs={tabs} activeKey={activeTab} onSelect={onTab}
              sheetOpen={props.sheetOpen} onSheetClose={() => props.onSheetOpenChange(false)}>
       {activeTab === 'region' && <VRegion region={props.region} game={game} />}
-      {activeTab === 'bag' && <BagTab game={game} accountState={accountLockState(props.account, props.accountFailed)} sellBonus={props.sellBonus} bagBonus={props.bagBonus} dispatch={props.dispatch} setToast={props.setToast} onOpenEnergy={props.onOpenEnergy} />}
+      {activeTab === 'bag' && <BagTab game={game} accountState={accountLockState(props.account, props.accountFailed)} sellBonus={props.sellBonus} bagBonus={props.bagBonus} dispatch={props.dispatch} setToast={props.setToast} />}
       {activeTab === 'dex' && <DexTab game={game} view={dexView} onView={setDexView} sub={dexZone} onSub={setDexZone} />}
       {activeTab === 'help' && <VHelp />}
       {activeTab === 'settings' && (
         <SettingsTab autoLockOnCatch={game.autoLockOnCatch} dispatch={props.dispatch} setToast={props.setToast}
-                     syncLabel={props.syncLabel} syncState={props.syncState} guestProgress={props.guestProgress} recheckGuestProgress={props.recheckGuestProgress}
-                     account={props.account} accountFailed={props.accountFailed} uid={props.uid}
-                     nickname={props.nickname} onRename={props.onRename}
+                     syncLabel={props.syncLabel} syncState={props.syncState}
+                     account={props.account} accountChecked={props.accountChecked} accountFailed={props.accountFailed} uid={props.uid}
+                     nickname={props.nickname} profileStatus={props.profileStatus} onRename={props.onRename}
                      onAuthChanged={props.onAuthChanged} />
       )}
     </Sidebar>

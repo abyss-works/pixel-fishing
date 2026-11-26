@@ -13,6 +13,7 @@ export type FailureKind =
   | 'outdated'      // 426 — 배포 후 새로고침 안 한 낡은 탭
   | 'replaced'      // 423 — 같은 계정이 다른 창에서 접속해 이 창이 활성 창이 아니다
   | 'restricted'    // 403 — 제재 계정(0008) / 권한 없는 요청(import 게이트)
+  | 'consent-required' // 403 — 시행일 이후 이용약관 미수락 계정
   | 'guest-village-only' // 403 — 게스트가 마을 밖으로 나가려 함
   | 'account-only'  // 403 — 게스트에게 열리지 않은 기능
   | 'rate-limited'  // 429 — 매크로 페이싱 게이트(최소 액션 간격)나 인그레스의 요청 한도
@@ -37,8 +38,8 @@ export class AppError extends Error {
   }
 }
 
-/** 화면 전체를 덮어 진행을 막는 모달 — 새로고침만이 출구다 */
-export type BlockingModal = 'update' | 'replaced' | 'unsaved';
+/** 화면 전체를 덮어 진행을 막는 모달 — update·replaced·unsaved는 새로고침, consent는 약관 수락이 출구다 */
+export type BlockingModal = 'update' | 'replaced' | 'unsaved' | 'consent';
 
 /** 종류별 대응 — 새 실패 종류 = 여기 행 하나. UI 문구를 각 지점에 흩지 않는다 */
 export interface FailureResponse {
@@ -76,15 +77,20 @@ export const POLICY: Record<FailureKind, FailureResponse> = {
     level: 'warning', slot: true,
     message: '지금 이 계정으로는 이용할 수 없어요. 개발자에게 문의해 주세요.',
   },
+  'consent-required': {
+    // 시행일 이후 이용약관 미수락 계정 — 수락할 때까지 게임 진행을 막고 확인 창을 연다.
+    modal: 'consent', level: 'warning',
+    message: '이용약관에 동의해야 이어서 플레이할 수 있어요.',
+  },
   'guest-village-only': {
-    // 게스트의 바다 이동·낚시 거부 — 액션은 적용되지 않았다. 계정 연결을 안내한다.
+    // 게스트의 바다 이동·낚시 거부 — 액션은 적용되지 않았다. 태평양 항로 해금을 안내한다.
     level: 'warning',
-    message: '계정을 연결하면 바다로 나갈 수 있어요. 계정 관리에서 연결해 주세요.',
+    message: '바다로 나가려면 태평양 항로를 열어야 해요.',
   },
   'account-only': {
-    // 게스트에게 열리지 않은 기능 — 액션은 적용되지 않았다. 계정 연결을 안내한다.
+    // 게스트에게 열리지 않은 기능 — 액션은 적용되지 않았다. 태평양 항로 해금을 안내한다.
     level: 'warning',
-    message: '계정을 연결하면 쓸 수 있어요. 계정 관리에서 연결해 주세요.',
+    message: '태평양 항로가 열리면 쓸 수 있어요.',
   },
   'rate-limited': {
     // 429(매크로 페이싱, 인그레스 요청 한도) — 요청은 적용되지 않았으니 진행은 안전. 재시도 타이밍은 유저 몫.

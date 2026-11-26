@@ -6,7 +6,8 @@ import type { Bob, ServerMessage } from '../../../game/rules/live';
 import { glidePosition, LIVE_MOVE_MS, nextGlide } from '../../../game/rules/live';
 import type { Glide } from '../../../game/rules/live';
 import { useSession } from '../../account/service/session';
-import { applyLiveMessage, bubbleOf, EMPTY_LIVE, idleLabel, isStale, matesInRegion, nextPositionMessage, othersInRegion, withoutAuthor } from '../model/live';
+import { useConsentReady } from '../../account/service/consentGate';
+import { applyLiveMessage, bubbleOf, EMPTY_LIVE, idleLabel, isStale, matesInRegion, nextPositionMessage, othersInRegion, playerZoneLabel, withoutAuthor } from '../model/live';
 import type { Bubble, ChatError, ChatRoom, LiveState, MyPosition, SentPosition } from '../model/live';
 import type { ChatLine } from '../../../game/rules/live';
 
@@ -52,7 +53,8 @@ function receive(msg: ServerMessage): void {
   if (msg.t === 'guild') for (const listener of guildListeners) listener(msg);
   if (msg.t === 'move') glides.set(msg.uid, nextGlide(glides.get(msg.uid) ?? null, msg, performance.now()));
   const regionChanged = msg.t === 'move' && prev.others[msg.uid]?.presence.region !== msg.region;
-  if (msg.t === 'hello' || msg.t === 'join' || msg.t === 'leave' || msg.t === 'chat' || msg.t === 'error' || regionChanged) {
+  const zoneChanged = msg.t === 'move' && (prev.others[msg.uid]?.presence.zone ?? null) !== (msg.zone ?? null);
+  if (msg.t === 'hello' || msg.t === 'join' || msg.t === 'leave' || msg.t === 'chat' || msg.t === 'error' || regionChanged || zoneChanged) {
     notify();
   }
 }
@@ -78,17 +80,22 @@ const getState = () => state;
 /** 실시간 채널 연결을 게임 화면 수명에 묶는다 */
 export function useLive(): void {
   const { ready, uid } = useSession();
+  const consentReady = useConsentReady();
   useEffect(() => {
-    if (!ready || !uid) return;
+    if (!ready || !uid || !consentReady) return;
     conn = openLive(receive);
     return () => { conn?.close(); conn = null; reset(); };
-  }, [ready, uid]);
+  }, [ready, uid, consentReady]);
 }
 
 /** 그 바다에 있는 다른 플레이어 — 이름 순. 차단한 사람도 들어 있다(접속 상태는 차단과 무관하다) */
-export function usePlayersIn(region: string): { uid: string; nick: string }[] {
+export function usePlayersIn(region: string): { uid: string; nick: string; zoneLabel?: string | null }[] {
   const s = useSyncExternalStore(subscribe, getState, getState);
-  return othersInRegion(s, region).map(o => ({ uid: o.presence.uid, nick: o.presence.nick }));
+  return othersInRegion(s, region).map(o => ({
+    uid: o.presence.uid,
+    nick: o.presence.nick,
+    zoneLabel: playerZoneLabel(o.presence),
+  }));
 }
 
 /** 친구 알림(받은 요청·내 요청의 수락)을 받는다. 돌려준 함수로 구독을 끝낸다 */

@@ -23,7 +23,7 @@
 //   POST   /api/guilds/:id/bonuses/:bonus/enhancements
 //                                          → 201 { enhanceRank, remainingPoints }  자유 강화 1단계 올리기(길드원 누구나, 무료 포인트)
 //   POST   /api/guilds/:id/enhancements/reset
-//                                          → 200 { gold, recovered }  자유 강화 초기화(길드원 누구나, 개인 골드 20,000,000G, 횟수 제한 없음)
+//                                          → 200 { gold, recovered, enhanceResetCount }  자유 강화 초기화(길드원 누구나, 누적 횟수별 개인 골드 비용, 횟수 제한 없음)
 // 가입 신청이 들어오면 길드장에게, 신청을 처리하면 신청한 사람에게 접속 중일 때 실시간 알림을 보낸다.
 //
 // 주의: 시그니처는 Node 스타일(req, res)만 쓴다. 경로 변수는 Express가 req.params로 넘긴다.
@@ -238,7 +238,7 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
     const id = uuidParam(req, 'id');
     const r = await run('db-write', () => resetEnhancements(database().withTransaction, uid, id, new Date().toISOString()));
     if (!r.ok) throw refuse(r.error);
-    res.status(200).json({ gold: r.gold, recovered: r.recovered });
+    res.status(200).json({ gold: r.gold, recovered: r.recovered, enhanceResetCount: r.enhanceResetCount });
   });
 
   const reject = decide(false);

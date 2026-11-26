@@ -3,8 +3,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   bagCapacity, capOfBoat, fishDrawShares, makeInstance, mutationWeightsOf, namedWeightsOf, newState, saleBonusOf, sellSelected,
-  variantShare, withVariantPoints, FISH,
+  variantShare, FISH,
 } from './logic';
+import { MUTATION_WEIGHTS } from './balance';
 import type { FishInstance, GameState } from './logic';
 import { applyAction, catchDrawOptions } from './actions';
 import type { ActionDeps } from './actions';
@@ -51,11 +52,15 @@ describe('받는 규칙 — 효과 값 하나를 한 지점에서 더한다', ()
     expect(namedWeightsOf('river', 0.25)).toEqual({ named: w.named * 1.25, none: w.none });
   });
 
-  it('돌연변이는 유물·해역이 정한 확률 위에 퍼센트포인트를 더한다(가중치 배수가 아니다)', () => {
-    const forms = mutationWeightsOf(newState(), 'pond');
-    expect(variantShare(withVariantPoints(forms, 0.05))).toBeCloseTo(variantShare(forms) + 0.05, 10);
-    expect(withVariantPoints(forms, 0)).toBe(forms);
-    expect(withVariantPoints({ variant: 1, normal: 0 }, 0.05)).toEqual({ variant: 1, normal: 0 });
+  it('돌연변이 보너스는 돌연변이 폼 가중치에 가산으로 더해진다', () => {
+    expect(mutationWeightsOf(newState(), 'pond', 0, 0, 1, 0.2)).toEqual({
+      variant: MUTATION_WEIGHTS.variant * 1.2,
+      normal: MUTATION_WEIGHTS.normal,
+    });
+    expect(mutationWeightsOf({ ...newState(), artifacts: ['elder-scale'] }, 'pond', 0.5, 0.1, 1, 0.4)).toEqual({
+      variant: MUTATION_WEIGHTS.variant * (1 + 0.25 + 0.5 + 0.1 + 0.4),
+      normal: MUTATION_WEIGHTS.normal,
+    });
   });
 
   it('일반 등급 가중치에서 희귀 비율만큼 한 번 뺀다', () => {
@@ -107,7 +112,7 @@ describe('리듀서 — 주입된 길드 효과로 판정한다', () => {
   });
 
   it('희귀 어종 보너스는 방치 캐치에서도 일반 등급 가중치를 줄인다', () => {
-    const st = newState();
+    const st: GameState = { ...newState(), fortune: { day: '2027-01-01', kind: 'gold', index: 3 } };
     const o = catchDrawOptions('auto', rodPower(st), 'pond', powerZones(st, 'pond').mult, { phase: 'day' });
     const commonOf = (cut: number) => fishDrawShares('pond', { ...o, weightEffects: { common: -cut } })
       .filter(s => s.fish.rarity === 'common').reduce((a, s) => a + s.share, 0);
@@ -122,16 +127,17 @@ describe('리듀서 — 주입된 길드 효과로 판정한다', () => {
     expect(rarityOf(guildEffectsOf(5, { rare: 5 }))).not.toBe('common');
   });
 
-  it('돌연변이 보너스는 돌연변이 확률에 퍼센트포인트를 더한다', () => {
+  it('돌연변이 보너스는 돌연변이 폼 가중치에 합연산 가산된다', () => {
     const st = newState();
-    const share = variantShare(mutationWeightsOf(st, 'pond'));
-    const r = share + 0.02; // 길드 없이는 일반 폼, +5%p면 돌연변이
+    const baseShare = variantShare(mutationWeightsOf(st, 'pond'));
+    const boostedShare = variantShare(mutationWeightsOf(st, 'pond', 0, 0, 1, 0.2));
+    const r = (baseShare + boostedShare) / 2; // 길드 없이는 일반 폼, +20%(5단)면 돌연변이
     const formOf = (guild?: GuildEffects) => {
       const out = applyAction(st, { type: 'catch', spot: 'pond', judgment: 'auto' }, deps(() => r, guild));
       if (!out.ok || out.result.type !== 'catch') throw new Error('catch failed');
       return out.result.info.form;
     };
     expect(formOf()).toBe('normal');
-    expect(formOf(fx({ mutation: 0.05 }))).toBe('variant');
+    expect(formOf(fx({ mutation: 0.2 }))).toBe('variant');
   });
 });

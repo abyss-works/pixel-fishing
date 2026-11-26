@@ -16,13 +16,12 @@ import ModalCard from '../../../ui/ModalCard';
 import { fmtGold, josa } from '../../../ui/format';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import BoatPanel from './BoatPanel';
-import EnergyPanel from './EnergyPanel';
 import RodPanel from './RodPanel';
 import KitchenPanel from './KitchenPanel';
 import SaleWindow from './SaleWindow';
 import WardrobePanel from '../wardrobe/WardrobePanel';
-/** 열려 있는 정비 패널 — 거점의 시설 선택이나 가방 하단 기운 얻기가 연다. null = 닫힘 */
-export type ActionPanel = 'sell' | 'energy' | 'rod' | 'boat' | 'bounty' | 'wardrobe' | 'kitchen' | null;
+/** 열려 있는 정비 패널 — 거점의 시설 선택이 연다. null = 닫힘 */
+export type ActionPanel = 'sell' | 'rod' | 'boat' | 'bounty' | 'wardrobe' | 'kitchen' | null;
 
 interface Props {
   panel: Exclude<ActionPanel, null>;
@@ -63,9 +62,8 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
   return (
     // 높이: 수배판은 가장 긴 탭(일반 의뢰 카드 셋)이 스크롤 없이 들어가는 480px, 옷장은 미리보기 줄과 탭, 고정 높이의 아래 줄이 들어가는 560px,
     // 부엌과 판매 창은 (정보 줄과) 탭 아래 두 열이 들어가는 560px로 고정하고, 모바일 레이아웃에서도 탭과 상태에 상관없이 가용 높이로 고정한다.
-    // 가방 하단 기운 얻기(energy)는 480px 단일 열 대화상자로 내용 높이를 따른다.
     <Modal layer="stage" xl={panel === 'rod' || panel === 'boat' || panel === 'kitchen' || isSale}
-           md={panel === 'bounty' || panel === 'wardrobe'} sm={panel === 'energy'}
+           md={panel === 'bounty' || panel === 'wardrobe'}
            height={panel === 'bounty' ? 480 : panel === 'wardrobe' || panel === 'kitchen' || isSale ? 560 : undefined}
            mobileFixed={panel === 'kitchen' || isSale} onClose={onClose}>
       {panel === 'sell' && base !== undefined && (
@@ -78,9 +76,6 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
               logTone: 'gold',
             });
           })} />
-      )}
-      {panel === 'energy' && (
-        <EnergyPanel game={game} busy={busy} act={run} setToast={setToast} onClose={onClose} />
       )}
       {panel === 'rod' && (
         <RodPanel game={game} onClose={onClose} busy={busy}
@@ -97,13 +92,13 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
         <BoatPanel game={game} onClose={onClose} busy={busy}
           onBuy={() => run({ type: 'buyBoat' }, r => {
             const { boatName, openedSpots } = selectBoatPurchaseResult(r.state.boat);
-            onClose();
             sendNotice(setToast, {
               kind: 'facility.boatBought',
               text: r.state.boat === 1
                 ? `${josa(boatName, '을/를')} 구매했어요! 이제 포구에서 대양으로 나갈 수 있어요.`
                 : `${josa(boatName, '을/를')} 구매했어요! ${openedSpots.length > 0 ? `배가 더 빨라졌고 [${openedSpots.map(spot => spot.name).join(', ')}] 해역이 열렸어요.` : '배가 더 빠르고 튼튼해졌어요.'}`,
               toastText: r.state.boat === 1 || openedSpots.length > 0 ? `[${boatName}] 구매! 새 해역 개방` : `[${boatName}] 건조 완료!`,
+              replaceKey: 'boat-buy',
             });
           })} />
       )}

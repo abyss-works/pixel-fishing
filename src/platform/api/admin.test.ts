@@ -9,8 +9,9 @@ describe('admin 계층 규약', () => {
   it('싱글톤과 두 팩토리 모두 AdminApi 전면을 노출한다', () => {
     const local = createLocalApi().admin;
     for (const m of ['access', 'overview', 'users', 'live', 'dailyStats', 'retention', 'sessions', 'economy', 'bountyFunnel',
+      'onboardingFunnel', 'httpMetrics',
       'spamFlags',
-      'recentEvents', 'userEvents', 'userState', 'letters', 'changelog', 'chatReports', 'balanceLive', 'restrict', 'resetLink', 'letterHandled', 'revokeSessions', 'deployHost', 'signIn', 'takeSignInReturn', 'signOut'] as const) {
+      'recentEvents', 'userEvents', 'userState', 'letters', 'changelog', 'chatReports', 'balanceLive', 'restrict', 'letterHandled', 'revokeSessions', 'deployHost', 'signIn', 'takeSignInReturn', 'signOut'] as const) {
       expect(typeof api.admin[m]).toBe('function');
       expect(typeof local[m]).toBe('function');
     }
@@ -28,5 +29,8 @@ describe('admin 계층 규약', () => {
     await expect(admin.changelog()).rejects.toThrow(/클라우드/);
     await expect(admin.balanceLive()).rejects.toThrow(/클라우드/);
     await expect(admin.balanceLive(3)).rejects.toThrow(/클라우드/);
+    await expect(admin.onboardingFunnel()).rejects.toThrow(/클라우드/);
+    await expect(admin.httpMetrics()).rejects.toThrow(/클라우드/);
+    await expect(admin.httpMetrics(7)).rejects.toThrow(/클라우드/);
   });
 });

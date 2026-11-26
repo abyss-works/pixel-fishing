@@ -71,7 +71,7 @@ describe('업적 카드', () => {
     const { container } = show(game, 'spot-basic-sea');
     expect(screen.queryByRole('button')).toBeNull();
     expect(screen.getByText('받음')).toBeInTheDocument();
-    expect(screen.getByText('300G')).toBeInTheDocument();
+    expect(screen.getByText('1,200G')).toBeInTheDocument();
     expect(focusables(container)).toHaveLength(0);
   });
 
@@ -91,7 +91,7 @@ describe('업적 카드', () => {
     const amount = container.querySelector('[data-achievement-reward]') as HTMLElement;
     expect(name).toHaveTextContent(row.def.name);
     expect(desc).toHaveTextContent(row.def.desc);
-    expect(amount).toHaveTextContent('300G');
+    expect(amount).toHaveTextContent('1,200G');
     for (const element of [name, desc, amount]) {
       expectNoEllipsis(element);
       expect(element).not.toHaveClass('whitespace-nowrap');
@@ -114,14 +114,14 @@ describe('업적 카드', () => {
   it('진척은 천 단위 쉼표를 넣어 현재 / 목표를 쓰고 게이지 채움은 목표에 대한 비율이다', () => {
     const game = seed();
     const { row } = show(game, 'spot-basic-sea');
-    expect(screen.getByText(`${row.progress.current} / ${row.progress.target}`)).toBeInTheDocument();
+    expect(document.querySelector('[data-progress-count] + *') || screen.getByRole('meter').parentElement).toHaveTextContent(`${row.progress.current} / ${row.progress.target}`);
     const fill = document.querySelector('[data-achievement-gauge-fill]') as HTMLElement;
     expect(fill.style.width).toBe(`${Math.min(row.progress.current, row.progress.target) / row.progress.target * 100}%`);
 
     cleanup();
     const half: AchievementRow = { def: row.def, status: 'progress', progress: { current: 1250, target: 5000 } };
     show(game, 'spot-basic-sea', { row: half });
-    expect(screen.getByText('1,250 / 5,000')).toBeInTheDocument();
+    expect(screen.getByRole('meter').parentElement).toHaveTextContent('1,250 / 5,000');
     expect((document.querySelector('[data-achievement-gauge-fill]') as HTMLElement).style.width).toBe('25%');
   });
 
@@ -130,7 +130,7 @@ describe('업적 카드', () => {
     const { row } = show(game, 'spot-basic-sea');
     cleanup();
     show(game, 'spot-basic-sea', { row: { def: row.def, status: 'progress', progress: { current: 3, target: 0 } } });
-    expect(screen.getByText('3 / 0')).toBeInTheDocument();
+    expect(screen.getByRole('meter').parentElement).toHaveTextContent('3 / 0');
     expect((document.querySelector('[data-achievement-gauge-fill]') as HTMLElement).style.width).toBe('0%');
   });
 
@@ -195,7 +195,7 @@ describe('업적 카드', () => {
     expect(root).toHaveClass('bg-bg');
     expect(container.querySelector('[data-achievement-name]')).toHaveClass('text-text');
     expect(screen.getByText('완료')).not.toHaveClass('rounded-sm');
-    expect(reward.querySelector('[data-achievement-reward]')).toHaveTextContent('300G');
+    expect(reward.querySelector('[data-achievement-reward]')).toHaveTextContent('1,200G');
   });
 
   it('받을 수 있는 카드만 금색 테두리로 강조하고 일반 카드는 Frame을 겹치지 않는다', () => {
@@ -210,11 +210,11 @@ describe('업적 카드', () => {
 });
 
 describe('누적 보너스 카드', () => {
-  it('전역 카드는 범위 문구를 숨기고, 단일 분절 게이지(meter 1개)와 단계 수를 보인다', () => {
+  it('전체 카드는 범위 문구를 숨기고, 단일 분절 게이지(meter 1개)와 단계 수를 보인다', () => {
     const game = seed({ achievementCounters: { 'manual.total': 100 } });
     const card = cumulativeBonusCards(game).find(c => c.series.scope === 'global' && c.current === 100)!;
     render(<CumulativeBonusCard card={card} />);
-    expect(screen.queryByText('전역')).toBeNull();
+    expect(screen.queryByText('전체')).toBeNull();
     expect(screen.getAllByRole('meter')).toHaveLength(1);
     expect(screen.getByText(`${card.steps.filter(s => s.state === 'done').length} / ${card.steps.length}단계`)).toBeInTheDocument();
     expect(screen.queryByText(`${card.steps[0].label} (${card.steps[0].deltaText})`)).toBeNull();
@@ -287,6 +287,19 @@ describe('네임드 다회 토벌 카드', () => {
     )!;
     const onClaim = vi.fn();
     render(<NamedGroupCard card={card} game={game} busy={false} onClaim={onClaim} />);
+    const button = screen.getByRole('button', { name: `받기, ${card.activeRow.def.name}` });
+    fireEvent.click(button);
+    expect(onClaim).toHaveBeenCalledWith(card.activeRow);
+  });
+
+  it('월척 장부 다단계 압축 카드는 목표 N종·달성 보상과 4단계 툴팁을 보인다', () => {
+    const game = seed({ achievements: { 'big-10': 'claimable' } });
+    const card = cosmeticCards(game, 'big').find(item => item.kind === 'bigGroup')!;
+    const onClaim = vi.fn();
+    render(<NamedGroupCard card={card} game={game} busy={false} onClaim={onClaim} />);
+    expect(screen.getByText('월척 장부')).toBeInTheDocument();
+    expect(screen.getByText('목표 10종')).toBeInTheDocument();
+    expect(screen.getByText('10종 달성 보상')).toBeInTheDocument();
     const button = screen.getByRole('button', { name: `받기, ${card.activeRow.def.name}` });
     fireEvent.click(button);
     expect(onClaim).toHaveBeenCalledWith(card.activeRow);

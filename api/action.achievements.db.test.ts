@@ -3,10 +3,13 @@
 // 수령 액션이 서버 재평가로 멱등 지급하는지, 업적 모자 구매가 거절되는지 검사한다.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ACHIEVEMENTS, achievementById } from '../src/game/content/achievements.js';
+import { AUTO_ENERGY_BOAT, COOKING_UNLOCK_BOAT } from '../src/game/content/cooking.js';
 import { BOUNTIES } from '../src/game/content/bounties.js';
-import { LICENSE_GRADES, newState, zoneDexMissing } from '../src/game/rules/logic.js';
+import { LICENSE_GRADES, capOfBoat, newState, zoneDexMissing } from '../src/game/rules/logic.js';
 import type { GameState } from '../src/game/rules/logic.js';
+import { gameDayOf } from '../src/game/rules/time.js';
 import { hatById, isAchievementHat } from '../src/game/content/wardrobe.js';
+import { database } from './_db/client.js';
 import {
   callAction, captureRealClock, fish, seedUser, seededRandom, startActionEnv,
   testUid, userToken,
@@ -56,10 +59,11 @@ const stored = async (uid: string) =>
 const goldOf = async (uid: string) =>
   Number((await env.client.query<{ gold: string }>('select gold from public.saves_current where user_id = $1', [uid])).rows[0].gold);
 
-/** 해역 라이선스 도감 조건을 채운 도감 */
+/** 해역 비전설(일반~영웅) 또는 라이선스 도감 조건을 채운 도감 */
 function zoneDex(zone: 'pacific', tier: keyof typeof LICENSE_GRADES): GameState['dex'] {
+  const grades = tier === 'basic' ? (['common', 'rare', 'epic'] as const) : LICENSE_GRADES[tier];
   const dex: GameState['dex'] = {};
-  for (const id of zoneDexMissing(newState(), zone, LICENSE_GRADES[tier])) {
+  for (const id of zoneDexMissing(newState(), zone, grades)) {
     dex[id] = { normal: { count: 1, maxSize: 30, first: '2026-01-01' } };
   }
   return dex;
@@ -98,6 +102,33 @@ describe('카운터 upsert와 counted 플래그', () => {
     const res = await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'good' });
     expect(res.status).toBe(200);
     expect((await counters(uid))['catch.bait']).toBe(1);
+  });
+
+  it('도시락이 켜진 방치 캐치는 catch.lunch를 올리고 이벤트를 counted=true로 남긴다', async () => {
+    const uid = await seed({
+      state: {
+        slots: { lunch: { id: 'cook-lunch-bite', endsAt: '2030-03-04T09:00:00Z' }, bait: null },
+      },
+      version: 2,
+    });
+    const res = await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'auto' });
+    expect(res.status).toBe(200);
+    expect(await counters(uid)).toEqual({ 'catch.auto': 1, 'catch.lunch': 1 });
+    expect((await eventsOf(uid))[0].counted).toBe(true);
+  });
+
+  it('조리는 소모 기운을 일반 기운 등가로 환산해 energy.spent를 올리고 이벤트를 counted=true로 남긴다', async () => {
+    const uid = await seed({
+      state: {
+        boat: COOKING_UNLOCK_BOAT,
+        location: { kind: 'base', id: 'home' },
+        items: { 'energy-common': 6000 },
+      },
+    });
+    const res = await callAction(userToken(uid), { type: 'cook', recipe: 'cook-lunch-bite', count: 1 });
+    expect(res.status).toBe(200);
+    expect(await counters(uid)).toEqual({ 'energy.spent': 600 });
+    expect((await eventsOf(uid))[0].counted).toBe(true);
   });
 
   it('네임드 결투 무실패 성공은 named.flawless를 올린다', async () => {
@@ -247,5 +278,156 @@ describe('소급 판정 및 초기 파생 상태 직후 수령', () => {
       'named-megalodon-1': 'claimed',
     });
     expect((await stored(uid)).hats).toContain('megalodon-work-cap');
+  });
+});
+
+describe('빠른 캐치 경로 업적 누적 보너스 연동', () => {
+  it('fastCatch는 prepareCatchDraw에 도시락 증폭(lunchAmplify)을 전달한다', async () => {
+    // cook-lunch-mutation(+0.5) 단독 변이 점유율 = 1.5/4.5 = 0.3333..., +15% 증폭(catch.lunch=20_000) = 1.575/4.575 = 0.3442...
+    vi.spyOn(Math, 'random').mockReturnValue(0.338);
+    const lunchSlot = { id: 'cook-lunch-mutation', endsAt: '2030-03-04T09:00:00Z' };
+    const plainUid = await seed({ state: { slots: { lunch: lunchSlot, bait: null } }, version: 2 });
+    const plainRes = await callAction(userToken(plainUid), { type: 'catch', spot: 'pond', judgment: 'auto' });
+    expect(plainRes.status).toBe(200);
+    expect((plainRes.body as { result: { info: { form: string } } }).result.info.form).toBe('normal');
+
+    const boostedUid = await seed({ state: { slots: { lunch: lunchSlot, bait: null } }, version: 2 });
+    await env.client.query(
+      `insert into public.achievement_counters (user_id, key, value) values ($1, 'catch.lunch', 20000)`,
+      [boostedUid],
+    );
+    const boostedRes = await callAction(userToken(boostedUid), { type: 'catch', spot: 'pond', judgment: 'auto' });
+    expect(boostedRes.status).toBe(200);
+    expect((boostedRes.body as { result: { info: { form: string } } }).result.info.form).toBe('variant');
+  });
+
+  it('fastCatch는 가방 초과 자동 기운 추출(planOverflow)에 기운 획득량 보너스(energyYield)를 전달한다', async () => {
+    const fullBag = () => Array.from({ length: capOfBoat(AUTO_ENERGY_BOAT) }, () => fish('minnow'));
+    const uid = await seed({
+      state: {
+        boat: AUTO_ENERGY_BOAT,
+        energyTargets: { pond: true },
+        bag: fullBag(),
+      },
+      version: 2,
+    });
+    await env.client.query(
+      `insert into public.achievement_counters (user_id, key, value) values ($1, 'energy.spent', 100000)`,
+      [uid],
+    );
+    const res = await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'auto' });
+    expect(res.status).toBe(200);
+    expect((res.body as { result: { energy?: { common: number } } }).result.energy?.common).toBe(12);
+  });
+
+  it('fastCatch는 수동 카운터 없이 records만으로 지역 전설 보너스(rareWeight)를 drawCatch에 반영한다', async () => {
+    const dayNow = '2030-03-04T05:30:00.000Z';
+    vi.setSystemTime(new Date(dayNow));
+    const fortune = { day: gameDayOf(dayNow), kind: 'gold' as const, index: 3 as const };
+    const rolls = () => {
+      const seq = [0.738, 0.1, 0.5, 0.5];
+      let i = 0;
+      vi.spyOn(Math, 'random').mockImplementation(() => seq[i++] ?? 0.5);
+    };
+
+    const plainUid = await seed({ state: { boat: 1, rod: 6, fortune }, version: 2 });
+    rolls();
+    const plainRes = await callAction(userToken(plainUid), { type: 'catch', spot: 'sea', judgment: 'normal' });
+    expect(plainRes.status).toBe(200);
+    expect((plainRes.body as { result: { fishId: string } }).result.fishId).toBe('mackerel');
+
+    const boostedUid = await seed({
+      state: {
+        boat: 1,
+        rod: 6,
+        fortune,
+        dex: { shark: { normal: { count: 20, maxSize: 200, first: '2026-01-01' } } },
+      },
+      version: 2,
+    });
+    rolls();
+    const boostedRes = await callAction(userToken(boostedUid), { type: 'catch', spot: 'sea', judgment: 'normal' });
+    expect(boostedRes.status).toBe(200);
+    expect((boostedRes.body as { result: { fishId: string } }).result.fishId).toBe('seabream');
+  });
+
+  it('fastCatch는 수동 카운터 없이 records만으로 지역 밤 전설 보너스(nightWeight)를 drawCatch에 반영한다', async () => {
+    const nightPeak = '2030-03-04T05:05:00.000Z';
+    vi.setSystemTime(new Date(nightPeak));
+    const fortune = { day: gameDayOf(nightPeak), kind: 'gold' as const, index: 3 as const };
+    const rolls = () => {
+      const seq = [0.995, 0.331, 0.5, 0.5];
+      let i = 0;
+      vi.spyOn(Math, 'random').mockImplementation(() => seq[i++] ?? 0.5);
+    };
+
+    const plainUid = await seed({ state: { boat: 1, rod: 6, fortune }, version: 2 });
+    rolls();
+    const plainRes = await callAction(userToken(plainUid), { type: 'catch', spot: 'sea', judgment: 'normal' });
+    expect(plainRes.status).toBe(200);
+    expect((plainRes.body as { result: { fishId: string } }).result.fishId).toBe('shark');
+
+    const boostedUid = await seed({
+      state: {
+        boat: 1,
+        rod: 6,
+        fortune,
+        dex: { moonveil: { normal: { count: 10, maxSize: 100, first: '2026-01-01' } } },
+      },
+      version: 2,
+    });
+    rolls();
+    const boostedRes = await callAction(userToken(boostedUid), { type: 'catch', spot: 'sea', judgment: 'normal' });
+    expect(boostedRes.status).toBe(200);
+    expect((boostedRes.body as { result: { fishId: string } }).result.fishId).toBe('moonveil');
+  });
+
+  it('fastCatch는 수동 카운터 없이 변이 records만으로 지역 돌연변이 보너스(mutationWeight)를 drawCatch에 반영하고 중복 조회를 하지 않는다', async () => {
+    const dayNow = '2030-03-04T05:30:00.000Z';
+    vi.setSystemTime(new Date(dayNow));
+    const fortune = { day: gameDayOf(dayNow), kind: 'gold' as const, index: 3 as const };
+    const rolls = () => {
+      const seq = [0.1, 0.1, 0.5, 0.5, 0.251];
+      let i = 0;
+      vi.spyOn(Math, 'random').mockImplementation(() => seq[i++] ?? 0.5);
+    };
+
+    const allClaimed = Object.fromEntries(ACHIEVEMENTS.map(a => [a.id, 'claimed' as const]));
+    const decidedUid = await seed({
+      state: {
+        boat: 1,
+        rod: 6,
+        fortune,
+        achievements: allClaimed,
+        dex: { mackerel: { variant: { count: 500, maxSize: 40, first: '2026-01-01' } } },
+      },
+      version: 2,
+    });
+    const spy = vi.spyOn(database().db, 'execute');
+    spy.mockClear();
+    rolls();
+    const decidedRes = await callAction(userToken(decidedUid), { type: 'catch', spot: 'sea', judgment: 'normal' });
+    const decidedQueries = spy.mock.calls.length;
+    expect(decidedRes.status).toBe(200);
+    expect((decidedRes.body as { result: { info: { form: string } } }).result.info.form).toBe('variant');
+
+    const undecidedUid = await seed({
+      state: {
+        boat: 1,
+        rod: 6,
+        fortune,
+        achievements: {},
+        dex: { mackerel: { variant: { count: 500, maxSize: 40, first: '2026-01-01' } } },
+      },
+      version: 2,
+    });
+    spy.mockClear();
+    rolls();
+    const undecidedRes = await callAction(userToken(undecidedUid), { type: 'catch', spot: 'sea', judgment: 'normal' });
+    const undecidedQueries = spy.mock.calls.length;
+    spy.mockRestore();
+    expect(undecidedRes.status).toBe(200);
+    expect((undecidedRes.body as { result: { info: { form: string } } }).result.info.form).toBe('variant');
+    expect(undecidedQueries).toBe(decidedQueries);
   });
 });

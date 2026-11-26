@@ -16,6 +16,7 @@ import { BOUNTY_PORT_ZONE, bountyById, bountyKindOf, isBountyPort, LICENSE_TIER_
 import type { BountyKind, BountyPort, BountyZone } from '../content/bounties.js';
 import { ZONES, zoneById } from '../content/zones.js';
 import { COOKING_UNLOCK_BOAT } from '../content/cooking.js';
+import { potionById } from '../content/potions.js';
 import type { BaseId, LocationRef } from '../content/places.js';
 import { ARTIFACT_MAX_LEVEL, artifactById, artifactHasLevel, artifactLevelCost } from '../content/artifacts.js';
 import { artifactLevelOf, dailyClearCap } from './artifactLevel.js';
@@ -29,7 +30,7 @@ import {
   duelHpOf, ticketRemainingMs,
 } from './challenge.js';
 import { bagCapacity, licenseConditions } from './logic.js';
-import { GAME_DAY_RESET_TEXT } from './time.js';
+import { gameDayOf } from './time.js';
 import type { GameState } from './logic.js';
 import type { NamedPity } from './pity.js';
 
@@ -64,12 +65,15 @@ export type RejectReason =
   | 'slot-taken' // 전시 칸이 이미 차 있다 — 회수 후 진열한다
   | 'bag-full' // 가방이 상한이라 전시 개체를 회수할 수 없다
   | 'item-not-owned' // 먹으려는 요리가 가방에 없다
+  | 'potion-not-owned' // 사용하려는 비약이 가방에 없다
+  | 'potion-already-active' // 오늘 이미 같은 비약 효과가 적용 중이다
   | 'not-at-home' // 집 거점에서만 하는 동작(조리)을 집 밖에서 요청했다
   | 'not-at-sale-base' // 판매 시설이 있는 거점(집, 항구) 또는 가공 플랜트선에서 하는 동작(기운 얻기)을 그 밖에서 요청했다
   | 'cooking-locked' // 요리 해금 배 단계 미달 — 조리와 먹기
   | 'energy-locked' // 요리 해금 배 단계 미달 — 기운 얻기
   | 'not-enough-energy' // 조리에 필요한 기운이 모자란다
-  | 'cooking-busy' // 조리 중인 요리가 모두 완성되기 전에 새 조리를 시작하려 했다
+  | 'cooking-not-found' // 취소할 조리나 대기열 항목을 찾을 수 없다
+  | 'energy-cap' // 상위 기운이 저장 상한에 도달해 더 변환할 수 없다
   | 'storage-full' // 보관함 남은 칸이 넣으려는 수량보다 적다
   | 'debug-forbidden' // 개발 도구 명령 — 운영 서버이거나 소유자·로컬이 아니다
   | 'debug-db-required' // DB 전용 개발 도구를 로컬 모드(DB 없음)에서 호출했다
@@ -87,6 +91,8 @@ const COOKING_ZONE_NAME: string = (() => {
   return zone.shortName;
 })();
 
+const PACIFIC_ZONE_NAME: string = zoneById('pacific')?.shortName ?? '태평양';
+
 /** 유저에게 보일 문구의 단일 근원 — Record라 새 사유를 추가하면 누락이 컴파일 에러가 된다 */
 export const REJECT_TEXT: Record<RejectReason, string> = {
   'not-enough-gold': '골드가 부족해요.',
@@ -99,8 +105,8 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'relief-invalid': '지원 코드가 맞지 않아요. 이미 사용했거나 없는 코드예요.',
   'mail-unavailable': '이미 받았거나 받을 수 없는 우편이에요.',
   'nickname-taken': '이미 쓰이는 닉네임이에요.',
-  'no-license': '오프라인에서는 의뢰를 수주하거나 마칠 수 없어요. 서버에 연결된 뒤 다시 해 주세요.',
-  'daily-cleared': `오늘 이 종류의 의뢰는 이미 마쳤어요. ${GAME_DAY_RESET_TEXT}가 지나면 다시 수주할 수 있어요.`,
+  'no-license': '연결이 끊긴 상태에서는 의뢰를 받거나 마칠 수 없어요. 연결된 뒤 다시 해 주세요.',
+  'daily-cleared': '오늘 의뢰는 이미 마쳤어요. 내일 다시 받을 수 있어요.',
   'quest-incomplete': '아직 마칠 조건을 채우지 못했어요.',
   'quest-active': '이미 수주 중인 의뢰가 있어요. 먼저 마쳐 주세요.',
   'dex-incomplete': '그 구역 도감을 아직 다 채우지 못했어요. 수배판에서 남은 조건을 확인해 보세요.',
@@ -113,20 +119,23 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'achievement-already-claimed': '이미 받은 업적이에요.',
   'achievement-not-claimable': '아직 받을 수 없는 업적이에요.',
   'no-claimable-achievements': '받을 수 있는 업적이 없어요.',
-  'account-only': '계정을 연결하면 쓸 수 있어요.',
+  'account-only': `${PACIFIC_ZONE_NAME} 항로가 열리면 쓸 수 있어요.`,
   'slot-taken': '그 전시 칸은 이미 차 있어요. 먼저 회수해 주세요.',
   'bag-full': '가방이 가득 차서 회수할 수 없어요. 물고기를 팔거나 놓아준 뒤 다시 해 보세요.',
   'item-not-owned': '가방에 이 요리가 없어요.',
+  'potion-not-owned': '가방에 이 비약이 없어요.',
+  'potion-already-active': '오늘은 이미 같은 비약을 마셨어요.',
   'not-at-home': '집에서만 할 수 있어요.',
-  'not-at-sale-base': '집이나 항구 또는 가공 플랜트선에서만 할 수 있어요.',
+  'not-at-sale-base': '집이나 항구에서만 할 수 있어요.',
   'cooking-locked': `${COOKING_ZONE_NAME} 항로가 열리면 부엌을 쓸 수 있어요.`,
   'energy-locked': `${COOKING_ZONE_NAME} 항로가 열리면 기운 얻기를 할 수 있어요.`,
   'not-enough-energy': '생명의 기운이 부족해요.',
-  'cooking-busy': '이미 조리 중인 요리가 있어요. 모두 완성된 뒤에 시작할 수 있어요.',
+  'cooking-not-found': '취소할 조리가 없어요. 이미 완성되었을 수 있어요.',
+  'energy-cap': '상위 기운이 보관 상한에 닿아 더 바꿀 수 없어요.',
   'storage-full': '보관함이 가득 찼어요. 가방 탭에서 도시락을 먹거나 미끼를 쓰면 자리가 생겨요.',
   'debug-forbidden': '이 서버에서는 개발 도구 명령을 쓸 수 없어요. 운영 서버이거나 권한이 없는 계정이에요.',
   'debug-db-required': '로컬 모드(DB 없음)에서는 수배 DB 도구를 쓸 수 없어요.',
-  'bad-request': '처리할 수 없는 요청이에요.',
+  'bad-request': '요청을 처리하지 못했어요. 잠시 뒤 다시 해 주세요.',
 };
 
 /** 전시대 이동 — slot 번호면 가방 → 그 칸(비어 있어야 한다), null이면 전시대 → 가방(상한 검사).
@@ -331,5 +340,15 @@ export function canLevelUpArtifact(
   const level = artifactLevelOf(state, art.id);
   if (level === 0 || level >= ARTIFACT_MAX_LEVEL) return no('bad-request');
   if ((state.items[art.materialId] ?? 0) < artifactLevelCost(level + 1)) return no('material-missing');
+  return OK;
+}
+
+/** 비약 사용 — 로그인 계정(비게스트), 등록된 비약, 1개 이상 보유, 오늘 아직 미적용이어야 한다 */
+export function canUsePotion(state: GameState, id: unknown, now: string, guest = false): RuleCheck {
+  if (guest) return no('account-only');
+  const potion = potionById(id);
+  if (!potion) return no('bad-request');
+  if ((state.items[potion.id] ?? 0) < 1) return no('potion-not-owned');
+  if (state.potions[potion.id] === gameDayOf(now)) return no('potion-already-active');
   return OK;
 }

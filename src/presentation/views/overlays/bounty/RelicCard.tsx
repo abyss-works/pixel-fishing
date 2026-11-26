@@ -7,19 +7,23 @@ import type { Artifact } from '../../../../game/content/artifacts.js';
 import { levelText } from '../../../../features/inventory/model/artifactLevel';
 import Button from '../../../ui/Button';
 import Inset from '../../../ui/Inset';
+import ItemSprite from '../../../ui/ItemSprite';
+import PressRow from '../../../ui/PressRow';
+import ProgressCount from '../../../ui/ProgressCount';
 import Tip from '../../../ui/Tip';
 import { cx } from '../../../ui/cx';
-import { RarityText } from '../../../ui/fish/RarityTag';
+import { GradeName, RarityText } from '../../../ui/fish/RarityTag';
 import { artifactEffectLines, artifactSystemLines } from '../../../ui/artifactEffects';
 import { BoardRows } from './boardParts';
 
-export default function RelicCard({ artifact, owned, level, materialCount, busy, onExchange }: {
+export default function RelicCard({ artifact, owned, level, materialCount, busy, onOpenDetail, onExchange }: {
   artifact: Artifact;
   owned: boolean;
   /** 효과 문장에 쓸 레벨 - 갖지 않았으면 1 */
   level: number;
   materialCount: number;
   busy: boolean;
+  onOpenDetail?: () => void;
   onExchange: () => void;
 }) {
   const { bonus, penalty } = artifactSystemLines(artifact);
@@ -30,21 +34,29 @@ export default function RelicCard({ artifact, owned, level, materialCount, busy,
   ];
   const exchange = <Button variant="primary" full disabled={materialCount < 1 || busy} onClick={onExchange}>교환</Button>;
   const canExchange = !owned && materialCount >= 1;
+  const head = (
+    <div className="flex items-center gap-2 min-h-8">
+      <ItemSprite kind="artifact" id={artifact.id} preset="list" className="shrink-0" />
+      <div className="flex items-baseline gap-2 min-w-0 flex-1">
+        <b className="text-base truncate"><GradeName name={artifact.name} grade={artifact.grade} emphasized /></b>
+        {owned && artifactHasLevel(artifact) && <span className="text-xs text-text-dim shrink-0">{levelText(level)}</span>}
+      </div>
+    </div>
+  );
   return (
     <Inset tone={owned ? 'deep' : canExchange ? 'light' : 'base'}
            border={canExchange ? 'gold' : 'line'}
            className={cx('p-3 flex flex-col gap-2 flex-1 min-h-0', canExchange && 'bg-[color-mix(in_oklab,var(--c-gold)_8%,var(--inset-light))]')}>
-      <div className="flex items-baseline gap-2 h-6">
-        <b className="text-base text-gold truncate"><Tip text={artifact.lore}>{artifact.name}</Tip></b>
-        {owned && artifactHasLevel(artifact) && <span className="text-xs text-text-dim shrink-0">{levelText(level)}</span>}
-      </div>
+      {onOpenDetail
+        ? <PressRow onPress={onOpenDetail} ariaLabel={`${artifact.name} 상세 보기`} className="px-1 -mx-1">{head}</PressRow>
+        : head}
       <BoardRows rows={[
         { key: 'grade', label: '등급', value: <><RarityText rarity={artifact.grade} /> 유물</> },
         ...effects.map(({ line, tone }, i) => ({
           key: `effect-${i}`, label: i === 0 ? '효과' : '', value: <span className={tone}>{line}</span>,
         })),
-        { key: 'material', label: <Tip text="교환 재료는 네임드 토벌 보상으로 받아요.">교환 재료</Tip>,
-          value: <>{artifact.materialName} <span className="pf-accent">{materialCount}/1</span></> },
+        { key: 'material', label: '교환 재료',
+          value: <>{artifact.materialName} <ProgressCount current={materialCount} target={1} tight /></> },
       ]} />
       <div className="mt-auto">
         {owned

@@ -23,9 +23,17 @@ describe('에디터용 대상 정의 스크립트', () => {
     expect(data.silhouette).toBe(SILHOUETTE);
   });
 
-  it('격자가 미정인 대상은 layout이 null로 실린다', () => {
+  it('유물 대상도 아이템 공통 레이아웃(16×16, 여백 2)이 실린다', () => {
     const data = evalScript(targetsScript());
-    expect(data.targets.artifact.layout).toBeNull();
+    expect(data.targets.artifact.layout).toEqual({
+      grid: { w: 16, h: 16 },
+      margin: 2,
+      presets: {
+        row: { w: 16, h: 16, scale: 1 },
+        list: { w: 32, h: 32, scale: 2 },
+        hero: { w: 48, h: 48, scale: 3 },
+      },
+    });
   });
 
   it('저장소의 생성 파일이 정의와 같다', () => {

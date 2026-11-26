@@ -116,10 +116,10 @@ describe('SettingsModal — 가방 설정(낚을 때 자동 잠금)', () => {
   });
 });
 
-describe('SettingsModal — 주요 알림 플로팅 토스트 설정', () => {
+describe('SettingsModal — 주요 화면 알림 설정', () => {
   it('기본값 켜짐으로 표시되고 클릭 시 localStorage에 저장된다(브라우저 알림 권한과 무관)', () => {
     open();
-    const toggle = screen.getByRole('button', { name: '주요 알림 플로팅 토스트' });
+    const toggle = screen.getByRole('button', { name: '주요 화면 알림' });
     expect(toggle).toBeEnabled();
     expect(toggle).toHaveAttribute('aria-pressed', 'true');
     expect(toggle).toHaveTextContent('켜짐');
@@ -132,5 +132,21 @@ describe('SettingsModal — 주요 알림 플로팅 토스트 설정', () => {
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-pressed', 'true');
     expect(localStorage.getItem('pf-toast-enabled')).toBe('1');
+  });
+
+  it('브라우저 알림 공통 설명은 알림 소제목 툴팁 한 곳에 두고 각 행에 중복하지 않는다', () => {
+    open();
+    fireEvent.mouseEnter(screen.getByText('알림'));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('다른 화면을 보고 있을 때 브라우저 알림과 탭 제목 깜빡임으로 알려 줘요.');
+    fireEvent.mouseLeave(screen.getByText('알림'));
+
+    fireEvent.mouseEnter(screen.getByText('네임드 조우'));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('네임드의 흔적을 만나면 알려 줘요.');
+    expect(screen.getByRole('tooltip').textContent).not.toContain('다른 화면을 보고 있을 때');
+    fireEvent.mouseLeave(screen.getByText('네임드 조우'));
+
+    fireEvent.mouseEnter(screen.getByText('업데이트'));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('업데이트가 나와 진행이 멈추면 알려 줘요.');
+    expect(screen.getByRole('tooltip').textContent).not.toContain('다른 화면을 보고 있을 때');
   });
 });

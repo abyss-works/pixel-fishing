@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ARTIFACTS, ARTIFACT_MAX_LEVEL } from '../../../src/game/content/artifacts';
+import { ARTIFACTS, ARTIFACT_MAX_LEVEL, artifactHasLevel } from '../../../src/game/content/artifacts';
 import { MUTATION_WEIGHTS, VARIANT_PRICE_MULT } from '../../../src/game/rules/balance';
 import { variantShare } from '../../../src/game/rules/logic';
 import { entryLevel, meanCycleSec } from '../model';
@@ -79,17 +79,29 @@ describe('--artifacts 및 --artifact-boost 유물 보너스 합산(1±합 1회 �
   it('유물 목록 문자열과 레벨을 파싱하고 잘못된 입력을 거부한다', () => {
     const all1 = parseArtifacts('all');
     expect(Object.keys(all1)).toHaveLength(ARTIFACTS.length);
-    expect(Object.values(all1).every(lv => lv === 1)).toBe(true);
+    for (const a of ARTIFACTS) {
+      expect(all1[a.id]).toBe(artifactHasLevel(a) ? 1 : ARTIFACT_MAX_LEVEL);
+    }
 
     const max = parseArtifacts('max');
     expect(max['outer-isle-sinker']).toBe(ARTIFACT_MAX_LEVEL);
-    expect(max['mami-wata-mirror']).toBe(1);
+    expect(max['mami-wata-mirror']).toBe(ARTIFACT_MAX_LEVEL);
+
+    const all3 = parseArtifacts('all:3');
+    for (const a of ARTIFACTS) {
+      expect(all3[a.id]).toBe(artifactHasLevel(a) ? 3 : ARTIFACT_MAX_LEVEL);
+    }
+
+    expect(parseArtifacts('mami-wata-mirror')).toEqual({ 'mami-wata-mirror': ARTIFACT_MAX_LEVEL });
+    expect(parseArtifacts('mami-wata-mirror:5')).toEqual({ 'mami-wata-mirror': ARTIFACT_MAX_LEVEL });
+    expect(parseArtifacts('outer-isle-sinker')).toEqual({ 'outer-isle-sinker': 1 });
 
     const custom = parseArtifacts('outer-isle-sinker:5,elder-scale:3');
     expect(custom).toEqual({ 'outer-isle-sinker': 5, 'elder-scale': 3 });
 
     expect(() => parseArtifacts('unknown-relic')).toThrow(/유물/);
     expect(() => parseArtifacts('outer-isle-sinker:6')).toThrow(/레벨/);
+    expect(() => parseArtifacts('mami-wata-mirror:1')).toThrow(/Lv5 고정/);
     expect(() => parseArtifacts('mami-wata-mirror:2')).toThrow(/전설/);
   });
 

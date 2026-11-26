@@ -1,9 +1,9 @@
-// 약관과 개인정보 처리방침의 현재 판. 판은 시행일 날짜 문자열이고, 서버는 이 모듈이 정한 값만 쓴다.
+// 이용약관의 현재 판. 판은 시행일 날짜 문자열이고, 서버는 이 모듈이 정한 값만 쓴다.
 // 시행일은 서버 설정이며 기본값이 없다. 설정이 없거나 날짜가 아니면 서버가 기동하지 않는다.
 import { ApiError } from '../errors.js';
 
-/** 수락을 받는 문서. 한 번의 수락이 두 문서를 함께 기록한다 */
-export const CONSENT_DOCUMENTS = ['terms', 'privacy'] as const;
+/** 수락을 받는 문서. 이용약관만 수락 대상으로 기록한다 */
+export const CONSENT_DOCUMENTS = ['terms'] as const;
 export type ConsentDocument = (typeof CONSENT_DOCUMENTS)[number];
 
 /** 수락 경로. 구글 연결 화면의 고지, 시행 뒤 첫 접속의 확인 화면 */

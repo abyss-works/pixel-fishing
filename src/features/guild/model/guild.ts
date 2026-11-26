@@ -4,9 +4,9 @@ import type {
 import type { ServerMessage } from '../../../game/rules/live';
 import {
   DEFAULT_GUILD_PITCH, GUILD_BONUS_IDS, GUILD_BONUS_MAX_RANK, GUILD_ENHANCE_MAX_RANK, GUILD_ENHANCE_MIN_LEVEL,
-  GUILD_ENHANCE_RESET_COST, GUILD_JOIN_REQUEST_TTL_MS, GUILD_PITCH_MAX, GUILD_RENAME_COST,
-  guildDailyContributionCaps, guildLinkPath, handoverOutcome, joinOutcome, joinRequestDaysLeft,
-  maxEnhancePoints, removalOutcome, renameBlock,
+  GUILD_ENHANCE_RESET_COSTS, GUILD_JOIN_REQUEST_TTL_MS, GUILD_PITCH_MAX, GUILD_RENAME_COST,
+  bonusEffect, guildDailyContributionCaps, guildEnhanceResetCost, guildLinkPath, handoverOutcome, joinOutcome,
+  joinRequestDaysLeft, maxEnhancePoints, removalOutcome, renameBlock,
 } from '../../../game/rules/guild';
 import type { GuildBonusId, GuildJoinMode, GuildJoinVia } from '../../../game/rules/guild';
 import type { ArtifactHolder } from '../../../game/rules/artifactLevel';
@@ -49,8 +49,12 @@ export function leaveOutcome(guild: GuildInfo, me: string): 'leave' | 'dissolve'
   return outcome === 'dissolve' || outcome === 'handover-first' ? outcome : 'leave';
 }
 
-/** 확인 창 하나 — 제목, 확정 버튼 이름, 본문, 확정하면 보낼 요청, 성공 알림 */
-export interface GuildConfirm { title: string; label: string; text: string; op: GuildOp; done: string }
+/** 확인 창 하나 — 제목, 확정 버튼 이름, 본문, 재가입 제한 등 강조 안내, 확정하면 보낼 요청, 성공 알림 */
+export interface GuildConfirm { title: string; label: string; text: string; warn?: string; op: GuildOp; done: string }
+
+/** 길드 탈퇴·내보내기 공통 20시간 재가입 제한 안내 */
+export const GUILD_LEAVE_COOLDOWN_NOTE = '길드를 떠나면 20시간 동안 모든 길드에 재가입할 수 없어요.';
+export const GUILD_ENHANCE_LOCK_NOTE = '길드 Lv.6부터 개인 무료 자유 강화가 열려요.';
 
 /** 길드장이 다른 길드원에게 하는 넘기기·내보내기의 확인 창 */
 export function memberConfirm(guild: GuildInfo, target: GuildMemberItem, action: 'handover' | 'kick'): GuildConfirm {
@@ -61,6 +65,7 @@ export function memberConfirm(guild: GuildInfo, target: GuildMemberItem, action:
       done: `${name} 님에게 길드장을 넘겼어요.` }
     : { title: '길드원 내보내기', label: '내보내기', op: { op: 'remove', guildId: guild.id, uid: target.uid },
       text: `${name} 님을 길드에서 내보낼까요?\n쌓은 기여와 기록은 길드에 남아요.`,
+      warn: '내보내기 처리 시 20시간 동안 모든 길드에 재가입할 수 없어요.',
       done: `${name} 님을 내보냈어요.` };
 }
 
@@ -72,9 +77,11 @@ export function leaveConfirm(guild: GuildInfo, me: string): GuildConfirm | null 
   return outcome === 'dissolve'
     ? { title: '길드 해산', label: '해산', op,
       text: `혼자 남은 길드라 떠나면 ${guild.name} 길드가 없어지고 길드 채팅도 지워져요.\n떠날까요?`,
+      warn: GUILD_LEAVE_COOLDOWN_NOTE,
       done: `${guild.name} 길드를 해산했어요.` }
     : { title: '길드 떠나기', label: '떠나기', op,
       text: `${guild.name} 길드를 떠날까요?\n쌓은 기여와 기록은 길드에 남고, 다시 들어오려면 길드 코드가 필요해요.`,
+      warn: GUILD_LEAVE_COOLDOWN_NOTE,
       done: `${guild.name} 길드를 떠났어요.` };
 }
 
@@ -125,7 +132,7 @@ export function inviteDialogView(preview: GuildInvitePreview | null, viewer: { a
   via: GuildJoinVia): InviteDialogView {
   if (!preview) return { state: 'bad', text: '초대 코드를 찾지 못했어요.\n링크가 맞는지 확인해 주세요.', action: null };
   if (!viewer.account) {
-    return { state: 'guest', text: '길드는 계정을 연결하면 들어갈 수 있어요.\n계정을 연결하거나 로그인하면 이 창이 다시 떠요.', action: null };
+    return { state: 'guest', text: '길드는 태평양 항로가 열리면 들어갈 수 있어요.\n계정을 연결하거나 로그인해 항로를 열면 이 창이 다시 떠요.', action: null };
   }
   if (viewer.guild !== null) {
     return { state: 'member', action: null, text: viewer.guild === preview.name
@@ -162,18 +169,18 @@ export const GUILD_ERROR_TEXT: Record<string, string> = {
   'not-member': '길드원을 찾지 못했어요. 창을 다시 열어 주세요.',
   'handover-first': '다른 길드원이 있으면 길드장을 넘긴 뒤에 떠날 수 있어요.',
   self: '자기 자신에게는 넘길 수 없어요.',
-  'account-only': '길드는 계정을 연결하면 쓸 수 있어요.',
+  'account-only': '길드는 태평양 항로가 열리면 쓸 수 있어요.',
   'not-enough-gold': '골드가 모자라요.',
   'bonus-locked': '아직 열리지 않은 길드 스킬이에요. 길드 레벨이 오르면 열려요.',
   'rank-maxed': '지금 길드 레벨에서 올릴 수 있는 단계를 모두 채웠어요. 길드 레벨이 오르면 더 올릴 수 있어요.',
-  'bad-amount': '기부할 골드를 1 이상의 정수로 입력해 주세요.',
+  'bad-amount': '기부할 골드를 1G 이상으로 입력해 주세요.',
   restricted: '이용이 제한된 계정은 기부할 수 없어요.',
   'same-name': '지금 쓰는 이름과 같아요.',
   'renamed-today': '오늘은 이미 이름을 바꿨어요.',
   'enhance-locked': '길드 Lv.6부터 강화 포인트를 얻을 수 있어요.',
   'no-enhance-points': '남은 강화 포인트가 없어요.',
   'enhance-maxed': '이 스킬은 자유 강화를 모두 채웠어요.',
-  'no-enhance-used': '초기화할 자유 강화가 없어요.',
+  'no-enhance-used': '회수할 자유 강화가 없어요.',
 };
 
 // ── 이름 바꾸기 ──────────────────────────────────────────────
@@ -208,7 +215,7 @@ export function growthTotalText(growth: GuildInfo['growth']): string {
 }
 
 /** 진행 막대 도움말: 레벨이 오르는 조건과 길드 스킬의 관계. 하루 기여 상한은 오늘 기여 도움말이 맡는다 */
-export const GUILD_LEVEL_HELP = '길드원 모두가 쌓은 기여가 다음 문턱에 닿으면 길드 레벨이 올라요.\n'
+export const GUILD_LEVEL_HELP = '길드원 모두가 쌓은 기여가 다음 기준에 닿으면 길드 레벨이 올라요.\n'
   + 'Lv.5까지는 길드 스킬이 열리고, Lv.6부터는 개인 강화 포인트를 1개씩 얻어요.';
 
 /** 오늘 기여 도움말: 한 사람이 하루에 쌓을 수 있는 기여의 갈래별 상한. 네임드 토벌은 보유 유물의 가산을 반영한다 */
@@ -230,21 +237,20 @@ export const GUILD_BONUS_NAME: Record<GuildBonusId, string> = {
 export const GUILD_BONUS_TIP: Record<GuildBonusId, string> = {
   sell: '물고기를 팔 때 받는 골드가 늘어요.',
   bag: '배의 가방 칸이 늘어요.',
-  named: '네임드를 만날 확률이 올라가요.',
-  rare: '일반 등급 물고기가 걸릴 확률을 줄여요.',
-  mutation: '돌연변이가 나올 확률이 올라가요.',
+  named: '네임드 조우 확률이 올라가요.',
+  rare: '일반 등급 물고기가 걸릴 비중을 줄여요.',
+  mutation: '돌연변이가 나올 비중이 올라가요.',
 };
 
 const pct = (r: number) => `${Math.round(r * 1000) / 10}%`;
 
-/** 효과 값 하나: 비율은 %, 돌연변이는 확률에 더하는 %p, 희귀 어종은 일반 등급 가중치를 줄이므로 − */
+/** 효과 값 하나: 모든 보너스는 %, 희귀 어종은 일반 어종 출현을 줄이므로 − */
 export function bonusEffectValue(id: GuildBonusId, value: number): string {
-  if (id === 'rare') return `−${pct(value)}`;
-  return id === 'mutation' ? `+${pct(value)}p` : `+${pct(value)}`;
+  return id === 'rare' ? `−${pct(value)}` : `+${pct(value)}`;
 }
 
 const EFFECT_LABEL: Record<GuildBonusId, string> = {
-  sell: '판매가', bag: '가방 용량', named: '네임드 조우', rare: '일반 등급 가중치', mutation: '돌연변이 확률',
+  sell: '판매가', bag: '가방 용량', named: '네임드 조우 확률', rare: '일반 어종 출현 비중', mutation: '돌연변이 출현 비중',
 };
 
 /** 효과 문장: 무엇이 얼마나 바뀌는지 */
@@ -266,6 +272,14 @@ export interface BonusRow extends GuildBonusItem {
   /** 지금 효과(0단계면 null)와 다음 합산 단계 효과(10단계면 null) */
   now: string | null;
   after: string | null;
+  /** 공용 기본 단계만의 현재·다음 효과 */
+  baseNow: string | null;
+  baseAfter: string | null;
+  /** 개인 자유 강화만의 현재·다음 효과 */
+  enhanceNow: string;
+  enhanceAfter: string | null;
+  /** 기본 + 개인 합산 효과 문자열 */
+  totalEffect: string;
   /** 다음 기본 단계 비용 대비 모인 골드(0~1). 더 오를 수 없으면 0 */
   ratio: number;
   /** 다음 기본 단계까지 남은 골드. 기부할 수 없으면 null */
@@ -276,6 +290,7 @@ export interface BonusRow extends GuildBonusItem {
   nodes: BonusNode[];
 }
 
+export { GUILD_BONUS_MAX_RANK, GUILD_ENHANCE_MAX_RANK, GUILD_ENHANCE_MIN_LEVEL };
 export const GUILD_ENHANCE_MAX_TOTAL_RANK = GUILD_BONUS_MAX_RANK + GUILD_ENHANCE_MAX_RANK;
 
 /** 보너스 탭의 열 — 해금 순 */
@@ -296,9 +311,40 @@ export function bonusRows(bonuses: readonly GuildBonusItem[]): BonusRow[] {
       ...b, name: GUILD_BONUS_NAME[b.id], locked: b.cap === 0,
       now: b.totalRank > 0 ? bonusEffectValue(b.id, b.effect) : null,
       after: b.nextEffect === null ? null : bonusEffectValue(b.id, b.nextEffect),
+      baseNow: b.cap > 0 ? bonusEffectValue(b.id, bonusEffect(b.id, b.rank)) : null,
+      baseAfter: b.cap === 0 || b.rank >= GUILD_BONUS_MAX_RANK ? null : bonusEffectValue(b.id, bonusEffect(b.id, b.rank + 1)),
+      enhanceNow: b.enhanceRank > 0 ? bonusEffectValue(b.id, bonusEffect(b.id, b.enhanceRank)) : '0%',
+      enhanceAfter: b.enhanceRank >= GUILD_ENHANCE_MAX_RANK ? null : bonusEffectValue(b.id, bonusEffect(b.id, b.enhanceRank + 1)),
+      totalEffect: b.totalRank > 0 ? bonusEffectValue(b.id, b.effect) : '0%',
       ratio, need: canDonate && b.next !== null ? b.next - b.pool : null, canDonate, nodes,
     };
   });
+}
+
+export interface PersonalNode { rank: number; state: 'done' | 'next' | 'open' | 'locked' }
+
+/** [개인] 서브탭 5단계 노드 상태 */
+export function personalNodes(row: Pick<BonusRow, 'enhanceRank' | 'locked'>, unlocked: boolean, remaining: number): PersonalNode[] {
+  return GUILD_BONUS_IDS.map((_, i): PersonalNode => {
+    const rank = i + 1;
+    if (!unlocked || row.locked) return { rank, state: 'locked' };
+    if (rank <= row.enhanceRank) return { rank, state: 'done' };
+    if (rank === row.enhanceRank + 1 && row.enhanceRank < GUILD_ENHANCE_MAX_RANK && remaining > 0) {
+      return { rank, state: 'next' };
+    }
+    return { rank, state: 'open' };
+  });
+}
+
+const fmtResetCost = (cost: number) => (cost % 10_000 === 0 ? `${num(cost / 10_000)}만G` : `${num(cost)}G`);
+
+/** 누적 초기화 횟수별 비용 단계표 */
+export function enhanceResetCostRows(): { label: string; value: string }[] {
+  const last = GUILD_ENHANCE_RESET_COSTS.length - 1;
+  return GUILD_ENHANCE_RESET_COSTS.map((cost, idx) => ({
+    label: idx === last ? `${idx + 1}회 이상` : `${idx + 1}회`,
+    value: fmtResetCost(cost),
+  }));
 }
 
 /** 기부 버튼이 잠긴 이유 */
@@ -328,21 +374,22 @@ export function enhanceInvestState(guild: GuildInfo, row: BonusRow): { canInvest
 export function enhanceResetState(guild: GuildInfo, gold: number):
   { canReset: boolean; reason: string | null; used: number; cost: number } {
   const { used } = enhancePoolSummary(guild);
+  const cost = guildEnhanceResetCost(guild.enhanceResetCount);
   if (guild.growth.level < GUILD_ENHANCE_MIN_LEVEL) {
-    return { canReset: false, reason: 'Lv.6부터 강화 포인트를 얻어요.', used, cost: GUILD_ENHANCE_RESET_COST };
+    return { canReset: false, reason: 'Lv.6부터 강화 포인트를 얻어요.', used, cost };
   }
   if (used <= 0) {
-    return { canReset: false, reason: '초기화할 자유 강화가 없어요.', used, cost: GUILD_ENHANCE_RESET_COST };
+    return { canReset: false, reason: '회수할 자유 강화가 없어요.', used, cost };
   }
-  if (gold < GUILD_ENHANCE_RESET_COST) {
+  if (gold < cost) {
     return {
       canReset: false,
-      reason: `골드가 모자라요.\n${num(GUILD_ENHANCE_RESET_COST)}G를 내고 내 자유 강화만 초기화할 수 있어요.`,
+      reason: `골드가 모자라요.\n${num(cost)}G를 내고 내 자유 강화만 되돌릴 수 있어요.`,
       used,
-      cost: GUILD_ENHANCE_RESET_COST,
+      cost,
     };
   }
-  return { canReset: true, reason: null, used, cost: GUILD_ENHANCE_RESET_COST };
+  return { canReset: true, reason: null, used, cost };
 }
 
 /** 기부 입력의 빠른 금액 — 10만·50만 더하기와 다음 단계까지 남은 만큼 */
@@ -367,7 +414,7 @@ export function memberRows(guild: GuildInfo, me: string): MemberRow[] {
 }
 
 /** 항해일지 문장 조각. tone이 없으면 보통 글자다 */
-export interface LogPart { text: string; tone?: 'nick' | 'me' | 'legend' | 'named' | 'skill' | 'enhance' | 'num' }
+export interface LogPart { text: string; tone?: 'nick' | 'me' | 'legend' | 'variant' | 'named' | 'skill' | 'enhance' | 'num' }
 export interface LogEntry {
   id: number; kind: GuildLogItem['kind'];
   /** 한국 시각 HH:MM */
@@ -391,8 +438,12 @@ function logParts(log: GuildLogItem, me: string): LogPart[] {
     case 'leave': return [who, { text: ' 님이 길드를 떠났어요.' }];
     case 'kick': return [who, { text: ' 님이 길드에서 내보내졌어요.' }];
     case 'legendary': {
-      const fish = FISH.find(f => f.id === log.detail)?.name ?? '어종';
-      return [who, { text: ' 님이 ' }, { text: `전설 ${fish}`, tone: 'legend' }, { text: `${josa(fish, '을/를')} 낚았어요!` }];
+      const suffix = '|variant';
+      const isVariant = log.detail?.endsWith(suffix) ?? false;
+      const fishId = isVariant ? log.detail!.slice(0, -suffix.length) : log.detail;
+      const fish = fishId ? FISH.find(f => f.id === fishId) : undefined;
+      const name = isVariant ? (fish?.variant?.name ?? fish?.name ?? '어종') : (fish?.name ?? '어종');
+      return [who, { text: ' 님이 ' }, { text: `전설 ${name}`, tone: isVariant ? 'variant' : 'legend' }, { text: `${josa(name, '을/를')} 낚았어요!` }];
     }
     case 'named': {
       const quest = log.detail ? bountyById(log.detail) : undefined;
@@ -423,7 +474,7 @@ function logParts(log: GuildLogItem, me: string): LogPart[] {
       ];
     }
     case 'enhance-reset':
-      return [who, { text: ' 님이 길드 스킬 강화를 초기화했어요.' }];
+      return [who, { text: ' 님이 길드 스킬 강화를 되돌렸어요.' }];
   }
 }
 

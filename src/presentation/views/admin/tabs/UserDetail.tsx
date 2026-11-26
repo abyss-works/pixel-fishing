@@ -1,4 +1,4 @@
-// 유저 상세 모달 — 스냅샷, 관리 조치(우편, 제재, 재설정 링크, 세션 강제 종료), 세션 기록, 게임 상태 상세, 이벤트 타임라인.
+// 유저 상세 모달 — 스냅샷, 관리 조치(우편, 제재, 세션 강제 종료), 세션 기록, 게임 상태 상세, 이벤트 타임라인.
 import { useMemo, useState } from 'react';
 import Button from '../../../ui/Button';
 import DataTable from '../../../ui/DataTable';
@@ -7,7 +7,6 @@ import KpiTile from '../../../ui/KpiTile';
 import Modal from '../../../ui/Modal';
 import Note from '../../../ui/Note';
 import TableBox from '../../../ui/TableBox';
-import TextInput from '../../../ui/TextInput';
 import { cx } from '../../../ui/cx';
 import { useDialogs } from '../../../ui/useDialogs';
 import { adminGradeName, fmtNum, fmtDT, eventSummary, EVENT_LABELS, formatAdminEnergy, RISKY_EVENT_TYPES } from '../../../../features/admin/model/metrics';
@@ -228,8 +227,16 @@ function UserStateCell({ state, loading, error, onRetry }: {
               state.cooking.cooked.length > 0
                 ? state.cooking.cooked.map(c => `${c.name} ×${c.count}`).join(', ')
                 : '없음',
-              state.cooking.inProgress ? `조리 중: ${state.cooking.inProgress.name} ×${state.cooking.inProgress.count}` : null,
+              state.cooking.inProgress
+                ? `조리 중: ${state.cooking.inProgress.name} ×${state.cooking.inProgress.count}${state.cooking.inProgress.id ? ` (${state.cooking.inProgress.id})` : ''}`
+                : null,
             ].filter(Boolean).join(', ')}
+          />
+          <KeyValueRow
+            label={`조리 대기열 (${state.cooking.queue?.length ?? 0})`}
+            value={!state.cooking.queue || state.cooking.queue.length === 0 ? '없음' : (
+              state.cooking.queue.map(q => `${q.name} ×${q.count}${q.id ? ` (${q.id})` : ''}`).join(', ')
+            )}
           />
           <KeyValueRow
             label="활성 슬롯"
@@ -332,7 +339,7 @@ function UserSessions({ user }: { user: AdminUserRow }) {
 
 // ---------- 관리 조치 ----------
 
-/** 우편 보내기, 제재/해제, 가입 계정의 비밀번호 재설정 링크 발급, 활성 세션 강제 종료 */
+/** 우편 보내기, 제재/해제, 활성 세션 강제 종료 */
 function UserActions({ user, onCompose, confirm }: {
   user: AdminUserRow;
   onCompose?: (userId: string) => void;
@@ -342,10 +349,7 @@ function UserActions({ user, onCompose, confirm }: {
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [link, setLink] = useState<{ url: string; expiresAt: string } | null>(null);
-  const [copied, setCopied] = useState(false);
   const restricted = user.restricted === true;
-  const member = user.is_anonymous === false;
 
   const run = async (work: () => Promise<unknown>) => {
     setBusy(true);
@@ -384,46 +388,17 @@ function UserActions({ user, onCompose, confirm }: {
     }
   };
 
-  const issueLink = () => run(async () => {
-    setCopied(false);
-    setLink(await actions.resetLink(user.user_id));
-  });
-
-  const copy = async () => {
-    if (!link) return;
-    try {
-      await navigator.clipboard.writeText(link.url);
-      setCopied(true);
-    } catch {
-      setFailure('복사하지 못했어요. 주소 칸을 눌러 직접 복사해 주세요.');
-    }
-  };
-
   return (
     <Cell title="관리 조치">
       <div className="flex flex-wrap gap-2">
         {onCompose && <Button size="sm" onClick={() => onCompose(user.user_id)}>우편 보내기</Button>}
         <Button size="sm" disabled={busy || user.restricted === null}
                 onClick={() => void toggleRestrict()}>{restricted ? '제재 해제' : '제재'}</Button>
-        <Button size="sm" disabled={busy || !member} onClick={() => void issueLink()}>재설정 링크 만들기</Button>
         <Button size="sm" variant="ghost" disabled={busy} onClick={() => void revokeAllSessions()}>세션 강제 종료</Button>
       </div>
       {user.restricted === null && <Note size="2xs" className="my-0">저장 상태가 없는 계정은 제재할 수 없어요.</Note>}
-      {!member && <Note size="2xs" className="my-0">게스트 계정은 비밀번호가 없어서 재설정 링크를 만들 수 없어요.</Note>}
       {notice && <Note className="my-0">{notice}</Note>}
       {failure && <Note tone="warn" className="my-0">{failure}</Note>}
-      {link && (
-        <div className="flex flex-col gap-1">
-          <div className="flex gap-2">
-            <TextInput readOnly value={link.url} aria-label="재설정 링크" className="min-w-0 flex-1 font-mono text-xs"
-                       onFocus={e => e.currentTarget.select()} />
-            <Button size="sm" onClick={() => void copy()}>{copied ? '복사됨' : '복사'}</Button>
-          </div>
-          <Note size="2xs" className="my-0">
-            {`${fmtDT(link.expiresAt)}까지 한 번 쓸 수 있어요. 메일은 보내지 않았어요. 플레이어에게 직접 전해 주세요.`}
-          </Note>
-        </div>
-      )}
     </Cell>
   );
 }

@@ -45,6 +45,20 @@ vi.mock('../../../../platform/api', () => ({
         day: '2026-11-04', dau: 6, newUsers: 1, newAccounts: 0, sessions: 9, sessionMinutes: 90,
         medianSessionMinutes: 7, catches: 50, goldIn: 2000, goldOut: 500, actions: 120,
       }]),
+      httpMetrics: vi.fn(async (days = 30) => ({
+        days,
+        scope: 'app_server' as const,
+        summary: {
+          total: 1000, status426: 2, status429: 15, status5xx: 3,
+          rate426: 0.002, rate429: 0.015, rate5xx: 0.003,
+        },
+        daily: [{
+          day: '2026-11-04', total: 1000, status426: 2, status429: 15, status5xx: 3,
+          rate426: 0.002, rate429: 0.015, rate5xx: 0.003,
+        }],
+        byRoute: [],
+        rows: [],
+      })),
     },
   },
 }));
@@ -102,13 +116,22 @@ describe('개요 탭', () => {
     expect(within(risk).getByText('제재 계정').nextElementSibling).toHaveTextContent('1');
     expect(within(risk).getByText('연타 플래그 유저').nextElementSibling).toHaveTextContent('1');
     expect(within(risk).getByText(/이상탐지/)).toBeInTheDocument();
+
+    // 앱 서버 HTTP 오류율·429 요약
+    expect(vi.mocked(api.admin.httpMetrics)).toHaveBeenCalledWith(30);
+    expect(within(tile('앱 서버 총 요청')).getByText('1,000')).toBeInTheDocument();
+    expect(within(tile('5xx 서버 오류')).getByText('0.3%')).toBeInTheDocument();
+    expect(within(tile('429 레이트리밋')).getByText('1.5%')).toBeInTheDocument();
+    expect(within(tile('426 구버전 거부')).getByText('0.2%')).toBeInTheDocument();
+    expect(screen.getByText(/ingress-nginx/)).toBeInTheDocument();
   });
 
-  it('기간 전환은 그 기간의 일별 집계를 다시 읽는다', async () => {
+  it('기간 전환은 그 기간의 일별 집계와 HTTP 지표를 다시 읽는다', async () => {
     show('granted');
     await screen.findByText('낚시');
     fireEvent.click(screen.getByRole('button', { name: '7일' }));
     await waitFor(() => expect(vi.mocked(api.admin.dailyStats)).toHaveBeenCalledWith('2026-10-30', '2026-11-05'));
+    await waitFor(() => expect(vi.mocked(api.admin.httpMetrics)).toHaveBeenCalledWith(7));
     expect(screen.getByRole('img', { name: '최근 7일 일별 활성 사람 수' })).toBeInTheDocument();
   });
 
@@ -116,7 +139,9 @@ describe('개요 탭', () => {
     show('local');
     expect(within(tile('오늘 DAU')).getByText('—')).toBeInTheDocument();
     expect(within(tile('지금 접속')).getByText('—')).toBeInTheDocument();
+    expect(within(tile('앱 서버 총 요청')).getByText('—')).toBeInTheDocument();
     expect(screen.getAllByText('운영 DB에 연결하면 채워져요.').length).toBeGreaterThan(0);
     expect(vi.mocked(api.admin.overview)).not.toHaveBeenCalled();
+    expect(vi.mocked(api.admin.httpMetrics)).not.toHaveBeenCalled();
   });
 });

@@ -24,7 +24,7 @@ interface Props {
 // 판매/강화/배 상호작용 UI는 FacilityModal(스테이지 모달) 소관.
 export default function Base({ base, game, onFacility }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  // 캔버스 덮개(?admin 토글) — 캔버스 요소만 내리고 컴포넌트는 유지(Field와 같은 계약)
+  // 캔버스 덮개(개발 도구 토글) — 캔버스 요소만 내리고 컴포넌트는 유지(Field와 같은 계약)
   const covered = useCanvasCover();
 
   const boatName = boatNameOf(game.boat, '배 없음');

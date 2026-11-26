@@ -4,18 +4,18 @@ import { AppError } from '../../../core/errors';
 import { settleAction } from './useGame';
 
 describe('settleAction 게스트 거부', () => {
-  it('마을 밖 이동 거부(guest-village-only)는 바다로 나가려면 계정을 연결하라는 안내가 된다', async () => {
+  it('마을 밖 이동 거부(guest-village-only)는 바다로 나가려면 태평양 항로를 열어야 한다는 안내가 된다', async () => {
     const settled = await settleAction(() => { throw new AppError('guest-village-only', 'guest rejected'); });
-    expect(settled).toEqual({ ok: false, notice: '계정을 연결하면 바다로 나갈 수 있어요. 계정 관리에서 연결해 주세요.' });
+    expect(settled).toEqual({ ok: false, notice: '바다로 나가려면 태평양 항로를 열어야 해요.' });
   });
 
-  it('허용 목록 밖 기능 거부(account-only)는 계정 연결 안내가 된다', async () => {
+  it('허용 목록 밖 기능 거부(account-only)는 태평양 항로 해금 안내가 된다', async () => {
     const settled = await settleAction(() => { throw new AppError('account-only', 'guest rejected'); });
-    expect(settled).toEqual({ ok: false, notice: '계정을 연결하면 쓸 수 있어요. 계정 관리에서 연결해 주세요.' });
+    expect(settled).toEqual({ ok: false, notice: '태평양 항로가 열리면 쓸 수 있어요.' });
   });
 
-  it('메시지 창 오류 자리로 알리는 종류(restricted, rate-limited, bug)는 호출부에 따로 알릴 문구를 주지 않는다', async () => {
-    for (const kind of ['restricted', 'rate-limited', 'bug'] as const) {
+  it('메시지 창 오류 자리 또는 전체 모달로 알리는 종류(restricted, rate-limited, bug, consent-required)는 호출부에 따로 알릴 문구를 주지 않는다', async () => {
+    for (const kind of ['restricted', 'rate-limited', 'bug', 'consent-required'] as const) {
       const settled = await settleAction(() => { throw new AppError(kind, 'x'); });
       expect(settled, kind).toEqual({ ok: false, notice: null });
     }

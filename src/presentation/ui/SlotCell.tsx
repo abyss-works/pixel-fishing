@@ -8,13 +8,14 @@ import Frame from './Frame';
 const FORM = {
   raised: 'bg-surface-2',
   sunken: 'bg-bg text-text-dim border-line-dim shadow-[inset_1px_1px_0_var(--bevel-hi),inset_-1px_-1px_0_var(--bevel-lo)]',
-  pressed: 'bg-surface-2 border-gold translate-y-px shadow-[inset_-1px_-1px_0_var(--bevel-lo),inset_1px_1px_0_var(--bevel-hi)]',
+  pressed: 'bg-surface-2 translate-y-px shadow-[inset_-1px_-1px_0_var(--bevel-lo),inset_1px_1px_0_var(--bevel-hi)]',
 } as const;
 
 export default function SlotCell({
-  form = 'raised', picked, disabled, ariaDisabled, ariaPressed, role, onSelect, ariaLabel, className, children,
+  form = 'raised', tone = 'gold', picked, disabled, ariaDisabled, ariaPressed, role, onSelect, ariaLabel, className, children,
 }: {
   form?: keyof typeof FORM;
+  tone?: 'gold' | 'guild';
   picked?: boolean;
   disabled?: boolean;
   ariaDisabled?: boolean;
@@ -33,7 +34,7 @@ export default function SlotCell({
            aria-label={ariaLabel} {...checkedProps}
            onClick={disabled || ariaDisabled ? undefined : onSelect}
            className={cx(disabled || ariaDisabled ? 'cursor-default' : 'cursor-pointer',
-             FORM[form], picked && 'border-accent', className)}>
+             FORM[form], form === 'pressed' && (tone === 'guild' ? 'border-epic' : 'border-gold'), picked && 'border-accent', className)}>
       {children}
     </Frame>
   );

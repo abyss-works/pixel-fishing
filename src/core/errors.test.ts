@@ -20,17 +20,19 @@ describe('실패 분류', () => {
     expect(POLICY.outdated.modal).toBe('update');
     // replaced: 다른 창이 활성 창이 됐다 — 진행은 서버에 안전, 이 창을 막고 새로고침으로 되찾는다
     expect(POLICY.replaced.modal).toBe('replaced');
+    // consent-required: 약관 수락 전까지 진행을 막고 확인 창을 연다
+    expect(POLICY['consent-required'].modal).toBe('consent');
     // bug: 완료된 액션은 이미 서버에 있다 + ErrorBoundary 화면과 겹친다
     expect(POLICY.bug.modal).toBeUndefined();
     expect(POLICY.restricted.modal).toBeUndefined();
     expect(POLICY['rate-limited'].modal).toBeUndefined();
-    // 게스트 거부: 진행은 안전하고 모달 없이 계정 연결 안내만 보인다
+    // 게스트 거부: 진행은 안전하고 모달 없이 태평양 항로 해금 안내만 보인다
     for (const kind of ['guest-village-only', 'account-only'] as const) {
       expect(POLICY[kind].modal, kind).toBeUndefined();
-      expect(POLICY[kind].message, kind).toContain('계정');
+      expect(POLICY[kind].message, kind).toContain('태평양 항로');
     }
-    expect(POLICY['guest-village-only'].message).toBe('계정을 연결하면 바다로 나갈 수 있어요. 계정 관리에서 연결해 주세요.');
-    expect(POLICY['account-only'].message).toBe('계정을 연결하면 쓸 수 있어요. 계정 관리에서 연결해 주세요.');
+    expect(POLICY['guest-village-only'].message).toBe('바다로 나가려면 태평양 항로를 열어야 해요.');
+    expect(POLICY['account-only'].message).toBe('태평양 항로가 열리면 쓸 수 있어요.');
   });
 
   it('안내 창 없는 세 종류(restricted, rate-limited, bug)는 메시지 창 오류 자리에 정책 문구로 알린다', () => {

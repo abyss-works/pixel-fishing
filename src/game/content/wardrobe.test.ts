@@ -29,9 +29,9 @@ describe('옷장 콘텐츠', () => {
     }
   });
 
-  it('모자는 골드 5종과 업적 50종으로 총 55종이고 id가 겹치지 않는다', () => {
-    expect(HATS).toHaveLength(55);
-    expect(new Set(HATS.map(h => h.id)).size).toBe(55);
+  it('모자는 골드 5종과 업적 52종으로 총 57종이고 id가 겹치지 않는다', () => {
+    expect(HATS).toHaveLength(57);
+    expect(new Set(HATS.map(h => h.id)).size).toBe(57);
 
     const goldHats = HATS.slice(0, 5);
     expect(goldHats.map(h => h.id)).toEqual(['cap-red', 'cap-blue', 'cap-yellow', 'cap-green', 'cap-black']);
@@ -44,13 +44,14 @@ describe('옷장 콘텐츠', () => {
     }
 
     const achHats = HATS.slice(5);
-    expect(achHats).toHaveLength(50);
+    expect(achHats).toHaveLength(52);
     expect(achHats.map(h => h.id)).toEqual([
       'straw-hat', 'sou-wester', 'coral-bandana', 'saffron-turban', 'worn-tricorn', 'fog-beanie',
       'braid-captain-cap', 'anchor-beret', 'watch-sailor-cap', 'earflap-cap',
       'crescent-hood', 'ink-hood', 'polar-beret', 'polar-knit-cap',
       'strait-night-cap', 'inkglass-beanie', 'lookout-storm-hat', 'pitch-lookout-cap',
-      'lure-bucket-hat', 'gold-hook-hat', 'harpooner-pillbox', 'shipowner-bowler', 'salt-fisher-cap',
+      'measure-band-cap', 'iron-hook-hat', 'lure-bucket-hat', 'gold-hook-hat',
+      'harpooner-pillbox', 'shipowner-bowler', 'salt-fisher-cap',
       'megalodon-work-cap', 'megalodon-fin-cap', 'megalodon-silver-visor',
       'leviathan-dive-hood', 'leviathan-bell-cap', 'leviathan-serpent-hat',
       'ananta-lantern-hood', 'ananta-rope-cap', 'ananta-astrolabe-hat',

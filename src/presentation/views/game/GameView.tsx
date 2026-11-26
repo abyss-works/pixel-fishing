@@ -18,6 +18,7 @@ import type { FloatingToastItem } from '../../ui/FloatingToastLayer';
 import FloatingToastLayer from '../../ui/FloatingToastLayer';
 import type { MirrorContextPatch, Msg } from '../../layouts/hud/useMessageLog';
 import type { StatsTab } from '../overlays/stats/StatsModal';
+import type { ProfileStatus } from '../../../features/gameplay/service/types';
 import type { Notify } from '../../ui/hud/messageFeed';
 import GameStageLayout from '../../layouts/game-stage/GameStageLayout';
 import Field from '../../layouts/game-stage/Field';
@@ -60,6 +61,9 @@ import BaitRefundModal from '../overlays/bait-refund/BaitRefundModal';
 import { useBaitRefund } from '../../../features/inventory/service/baitRefund';
 import { useWhatsNewPending } from '../../../features/announcements/service/whatsNew';
 import FortuneModal from '../overlays/fortune/FortuneModal';
+import FortuneCalendarModal from '../overlays/fortune/FortuneCalendarModal';
+import ActiveEffectsModal from '../overlays/effects/ActiveEffectsModal';
+import { setBagSection } from './tabs/bag/bagView';
 import { useFortuneModal } from '../../../features/fortune/service/fortuneModal';
 import { useTutorialTrigger } from '../../../features/tutorial/service/tutorial';
 import { guildMatesIn, useChat, useLive } from '../../../features/live/service/useLive';
@@ -105,8 +109,6 @@ interface GameViewProps {
   syncState: string;
   /** 이 기기의 게스트 진행 — 계정을 바꿀 때 버려지는 것이 있는지 확인 창을 띄울지 가른다 */
   guestProgress: GuestProgress;
-  /** 계정을 바꾸기 직전에 서버 저장 상태를 다시 읽어 버려질 진행이 있는지 판정한다. 읽기에 실패하면 진행 있음이다 */
-  recheckGuestProgress: () => Promise<GuestProgress>;
   account: string | null;
   /** 계정 확인이 끝났는가 — 끝나기 전의 계정 없음은 게스트가 아니라 미확인이다 */
   accountChecked: boolean;
@@ -114,6 +116,7 @@ interface GameViewProps {
   accountFailed: boolean;
   uid: string | null;
   nickname: string | null;
+  profileStatus?: ProfileStatus;
   onRename: (name: string) => Promise<null | RejectReason>;
   onAuthChanged: () => Promise<void>;
   /** 액션 밖에서 서버가 바꾼 게임 상태를 다시 읽는다(길드 보너스 기부의 골드) */
@@ -138,11 +141,15 @@ export default function GameView(props: GameViewProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
   /** 모바일 낚시 상태 띠가 들어갈 HUD 자리 */
   const [statusSlot, setStatusSlot] = useState<HTMLElement | null>(null);
+  /** 획득 카드가 들어갈 HUD 자리 */
+  const [catchSlot, setCatchSlot] = useState<HTMLElement | null>(null);
   const [actionPanel, setActionPanel] = useState<ActionPanel>(null);
   const [statsOpen, setStatsOpen] = useState(false);
   const [statsInitialTab, setStatsInitialTab] = useState<StatsTab>('summary');
+  const [effectsOpen, setEffectsOpen] = useState(false);
   const [questsOpen, setQuestsOpen] = useState(false);
   const [achievementsOpen, setAchievementsOpen] = useState(false);
+  const [fortuneOpen, setFortuneOpen] = useState(false);
   const [rankingOpen, setRankingOpen] = useState(false);
   const [mailboxOpen, setMailboxOpen] = useState(false);
   const [friendsOpen, setFriendsOpen] = useState(false);
@@ -155,8 +162,8 @@ export default function GameView(props: GameViewProps) {
   const [tracking, setTracking] = useState<string | null>(null);
   const covered = useCanvasCover();
   const atSea = scene.kind === 'region' && scene.id !== 'village';
-  // 튜토리얼 트리거 — 마을(집 포함)과 바다에 처음 나왔을 때
-  useTutorialTrigger('village', scene.kind === 'region' ? scene.id === 'village' : scene.id === 'home');
+  // 튜토리얼 트리거 — 마을 야외와 바다에 처음 나왔을 때
+  useTutorialTrigger('village', scene.kind === 'region' && scene.id === 'village');
   useTutorialTrigger('sea', atSea);
   // 첫 화면의 안내 창 순서 - 업데이트 소식, 미끼 환불 안내, 오늘의 운세, 튜토리얼. 앞 창이 끝나야 다음 창이 뜬다
   const saveReady = props.syncState === 'on' || props.syncState === 'off';
@@ -184,6 +191,7 @@ export default function GameView(props: GameViewProps) {
   // 초대 링크로 열렸으면 게임 상태를 불러온 뒤 확인 창을 띄운다. 게스트가 계정 창을 여는 동안은 숨기고, 계정이 생기면 다시 띄운다
   const invite = useGuildInviteLanding();
   const [accountOpen, setAccountOpen] = useState(false);
+  const [accountSailIntent, setAccountSailIntent] = useState(false);
   const inviteReady = invite.code !== null && props.syncState === 'on' && !accountOpen && props.blocker == null;
   // 방치 결과 보고 — 돌아오면 메시지 창에 한 줄, 오래 비웠으면 알림 카드. 카드의 자세히가 결과 창을 연다
   const away = useAwayReport((s, hasCard) => sendNotice(props.setToast, {
@@ -215,9 +223,22 @@ export default function GameView(props: GameViewProps) {
     return ids.size > 0 ? () => guildMatesIn(region, ids) : undefined;
   }, [guild, region, chat.you]);
 
-  const onGuestBlocked = createGuestBlockedNotice({ accountOpen, openAccount: () => setAccountOpen(true), setToast: props.setToast });
+  const openAccount = (sailIntent = false) => {
+    setAccountSailIntent(sailIntent);
+    setAccountOpen(true);
+  };
+  const closeAccount = () => {
+    setAccountOpen(false);
+    setAccountSailIntent(false);
+  };
+  const onGuestBlocked = createGuestBlockedNotice({
+    accountOpen,
+    openAccount: () => openAccount(true),
+    onSailIntent: () => setAccountSailIntent(true),
+    setToast: props.setToast,
+  });
 
-  const resetPanels = () => { setActionPanel(null); setStatsOpen(false); setAchievementsOpen(false); setRankingOpen(false); setTracking(null); };
+  const resetPanels = () => { setActionPanel(null); setStatsOpen(false); setEffectsOpen(false); setAchievementsOpen(false); setFortuneOpen(false); setRankingOpen(false); setTracking(null); };
 
   const go = (nextScene: SceneRef, message: string, entryPos?: Point, returnPos?: Point) => {
     resetPanels();
@@ -325,7 +346,7 @@ export default function GameView(props: GameViewProps) {
         sendNotice(props.setToast, {
           kind: 'bounty.challengeResolved',
           text: `${josa(encounter.named.name, '을/를')} 토벌했어요! ${zoneName}의 수배판에서 보상 받기를 눌러 주세요.`,
-          toastText: `${encounter.named.name} 토벌 성공! 보상 수령`,
+          toastText: `${encounter.named.name} 토벌 성공!`,
         });
         setTracking(null);
       }
@@ -344,7 +365,7 @@ export default function GameView(props: GameViewProps) {
           <Field key={scene.id} region={scene.id} game={game} dispatch={props.dispatch} setToast={props.setToast}
                  onScene={go} onWarmup={props.onWarmup} guest={isConfirmedGuest(props.account, props.accountChecked)} onGuestBlocked={onGuestBlocked} paused={encounter !== null || props.blocker != null}
                  initialPos={props.entryPos ?? undefined} placeSeq={props.placeSeq}
-                 locked={trip !== null} statusSlot={statusSlot} />
+                 locked={trip !== null} statusSlot={statusSlot} catchSlot={catchSlot} />
         )}
 
         <HudLayout game={game} bagBonus={bagBonus} scene={scene} log={log} covered={covered}
@@ -355,6 +376,7 @@ export default function GameView(props: GameViewProps) {
                    filter={messageFilter.filter} onToggleFilter={messageFilter.toggle}
                    folded={folded} onFold={chat.enabled ? fold.toggle : undefined}
                    onStatusSlot={setStatusSlot}
+                   onCatchSlot={setCatchSlot}
                    onPickLine={chat.enabled ? m => {
                      if (!m.from) return;
                      setPlayer({ uid: m.from.uid, nick: m.author ?? '', chatId: m.from.uid === chat.you ? undefined : m.from.chatId });
@@ -363,7 +385,7 @@ export default function GameView(props: GameViewProps) {
                    guildMates={guildMates}
                    channels={chat.enabled ? FILTER_CHANNELS : undefined}
                    disabledChannels={guild === null ? GUILD_OFF : undefined}
-                   onOpenStats={openStats} onOpenMap={onOpenMap}
+                   onOpenStats={openStats} onOpenEffects={() => setEffectsOpen(open => !open)} onOpenMap={onOpenMap}
                    notice={atSea || (away.report && !awayOpen) ? (
                      <div className="flex flex-col gap-2">
                        {away.report && !awayOpen && (
@@ -377,6 +399,7 @@ export default function GameView(props: GameViewProps) {
                    menu={(
                      <GameMenu game={game} account={props.account} accountState={accountState} setToast={props.setToast} onQuests={openQuests}
                                onAchievements={() => setAchievementsOpen(true)}
+                               onFortune={() => setFortuneOpen(true)}
                                onGuild={() => setGuildOpen(true)} onFriends={() => setFriendsOpen(true)}
                                onMailbox={() => setMailboxOpen(true)} />
                    )} />
@@ -389,8 +412,25 @@ export default function GameView(props: GameViewProps) {
         {statsOpen && (
           <StatsModal game={game} guild={guildBonus} initialTab={statsInitialTab}
                       movement={scene.kind === 'region' ? REGION_PACKS[scene.id].movement : 'walk'}
-                      region={region} nickname={props.nickname}
+                      region={region} nickname={props.nickname} profileStatus={props.profileStatus}
                       onClose={() => setStatsOpen(false)} />
+        )}
+        {effectsOpen && (
+          <ActiveEffectsModal
+            game={game}
+            onClose={() => setEffectsOpen(false)}
+            onOpenBag={() => {
+              setEffectsOpen(false);
+              setBagSection('items');
+              setActiveTab('bag');
+              if (mobile) setSheetOpen(true);
+            }}
+            onOpenStatsBonus={() => {
+              setEffectsOpen(false);
+              setStatsInitialTab('bonus');
+              setStatsOpen(true);
+            }}
+          />
         )}
         {questsOpen && <QuestInfoModal game={game} onClose={() => setQuestsOpen(false)} />}
         {achievementsOpen && (
@@ -403,6 +443,9 @@ export default function GameView(props: GameViewProps) {
                              }}
                              onClose={() => setAchievementsOpen(false)} />
         )}
+        {fortuneOpen && (
+          <FortuneCalendarModal gameFortune={game.fortune} accountState={accountState} onClose={() => setFortuneOpen(false)} />
+        )}
         {rankingOpen && <RankingModal onClose={() => setRankingOpen(false)} />}
         {away.report && awayOpen && (
           <AwayReportModal report={away.report} game={game} onClose={closeAway}
@@ -412,12 +455,12 @@ export default function GameView(props: GameViewProps) {
         {guildOpen && <GuildModal gold={game.gold} artifacts={game} setToast={props.setToast} onGoldChanged={props.onResync} onClose={() => setGuildOpen(false)} />}
         {inviteReady && invite.code && (
           <GuildInviteDialog code={invite.code} account={props.account} setToast={props.setToast}
-                             onAccount={() => setAccountOpen(true)} onClose={invite.clear} />
+                             onAccount={() => openAccount(false)} onClose={invite.clear} />
         )}
-        <GoogleReturn setToast={props.setToast} progress={progress} reopenAccount={() => setAccountOpen(true)} />
+        <GoogleReturn setToast={props.setToast} progress={progress} reopenAccount={() => openAccount(false)} />
         {accountOpen && (
-          <AccountModal layer="stage" setToast={props.setToast} onAuthChanged={props.onAuthChanged} account={props.account} accountFailed={props.accountFailed} guestProgress={progress} recheckGuestProgress={props.recheckGuestProgress}
-                        syncLabel={props.syncLabel} syncState={props.syncState} onClose={() => setAccountOpen(false)} />
+          <AccountModal layer="stage" mode="connect" setToast={props.setToast} onAuthChanged={props.onAuthChanged} account={props.account} accountFailed={props.accountFailed}
+                        syncLabel={props.syncLabel} syncState={props.syncState} sailReturn={accountSailIntent} onClose={closeAccount} />
         )}
         {playersOpen && atSea && (
           <PlayersModal region={region} account={props.account} accountFailed={props.accountFailed} setToast={props.setToast} onClose={() => setPlayersOpen(false)} />
@@ -446,23 +489,22 @@ export default function GameView(props: GameViewProps) {
         {baitRefund.notice && <BaitRefundModal notice={baitRefund.notice} onClose={baitRefund.close} />}
         {fortune.fortune && <FortuneModal fortune={fortune.fortune} onClose={fortune.close} />}
         <TutorialModal seen={game.tutorials} ready={saveReady} after={baitRefund.pending || fortune.pending} dispatch={props.dispatch} />
+        {props.toasts && props.toasts.length > 0 && props.onDismissToast && (
+          <FloatingToastLayer toasts={props.toasts} maxVisible={mobile ? 2 : 3} onDismiss={props.onDismissToast} />
+        )}
       </GameStageLayout>
 
       <GameTabs
         region={region}
         activeTab={activeTab} setActiveTab={setActiveTab}
         sheetOpen={sheetOpen} onSheetOpenChange={setSheetOpen}
-        onOpenEnergy={() => { setSheetOpen(false); setActionPanel('energy'); }}
         game={game} sellBonus={guildBonus?.effects.sell ?? 0} bagBonus={bagBonus} dispatch={props.dispatch} setToast={props.setToast}
-        syncLabel={props.syncLabel} syncState={props.syncState} guestProgress={progress} recheckGuestProgress={props.recheckGuestProgress}
-        account={props.account} accountFailed={props.accountFailed} uid={props.uid} onAuthChanged={props.onAuthChanged}
-        nickname={props.nickname} onRename={props.onRename}
+        syncLabel={props.syncLabel} syncState={props.syncState}
+        account={props.account} accountChecked={props.accountChecked} accountFailed={props.accountFailed} uid={props.uid} onAuthChanged={props.onAuthChanged}
+        nickname={props.nickname} profileStatus={props.profileStatus} onRename={props.onRename}
       />
 
       {props.blocker}
-      {props.toasts && props.toasts.length > 0 && props.onDismissToast && (
-        <FloatingToastLayer toasts={props.toasts} maxVisible={mobile ? 2 : 3} onDismiss={props.onDismissToast} />
-      )}
     </div>
   );
 }
