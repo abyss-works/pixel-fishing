@@ -86,8 +86,19 @@ export const GAME_DAY_RESET_HOUR_KST = 4;
 export const GAME_DAY_RESET_TEXT = `새벽 ${GAME_DAY_RESET_HOUR_KST}시`;
 const KST_OFFSET_MS = 9 * 3600_000;
 const DAY_MS = 86_400_000;
+const WEEK_MS = 7 * DAY_MS;
 /** UTC 시각에 더하면 UTC 날짜가 곧 게임 날짜가 되는 이동량 — KST로 옮긴 뒤 경계 시각만큼 되돌린다 */
 const GAME_DAY_SHIFT_MS = KST_OFFSET_MS - GAME_DAY_RESET_HOUR_KST * 3600_000;
+
+function gameDayStartShiftedMs(nowIso: string): number {
+  return Math.floor((Date.parse(nowIso) + GAME_DAY_SHIFT_MS) / DAY_MS) * DAY_MS;
+}
+
+function gameWeekStartShiftedMs(nowIso: string): number {
+  const dayStartMs = gameDayStartShiftedMs(nowIso);
+  const daysSinceMonday = (new Date(dayStartMs).getUTCDay() + 6) % 7;
+  return dayStartMs - daysSinceMonday * DAY_MS;
+}
 
 /** 게임 날짜(YYYY-MM-DD) — KST 04:00 경계. 04:00 이전은 전날이다 */
 export function gameDayOf(nowIso: string): string {
@@ -96,13 +107,27 @@ export function gameDayOf(nowIso: string): string {
 
 /** 그 시각이 속한 게임 날짜가 시작된 순간(UTC ISO) — 그날의 KST 04:00. 하루 단위 집계와 만료의 경계다 */
 export function gameDayStartISO(nowIso: string): string {
-  const shifted = Date.parse(nowIso) + GAME_DAY_SHIFT_MS;
-  return new Date(Math.floor(shifted / DAY_MS) * DAY_MS - GAME_DAY_SHIFT_MS).toISOString();
+  return new Date(gameDayStartShiftedMs(nowIso) - GAME_DAY_SHIFT_MS).toISOString();
 }
 
 /** 직전 게임 날짜에 속하는 대표 시각(오늘 게임 날짜 시작 1분 전, UTC ISO). 오늘 일일 한도를 소모하지 않는 기록에 쓴다 */
 export function previousGameDayISO(nowIso: string): string {
   return new Date(Date.parse(gameDayStartISO(nowIso)) - 60_000).toISOString();
+}
+
+/** 게임 주간 시작일(월요일 YYYY-MM-DD) — 월요일 KST 04:00 경계. 04:00 이전은 지난주로 센다 */
+export function gameWeekStartDay(nowIso: string): string {
+  return new Date(gameWeekStartShiftedMs(nowIso)).toISOString().slice(0, 10);
+}
+
+/** 그 시각이 속한 게임 주간이 시작된 순간(UTC ISO) — 해당 주 월요일 KST 04:00(일요일 19:00 UTC) */
+export function gameWeekStartISO(nowIso: string): string {
+  return new Date(gameWeekStartShiftedMs(nowIso) - GAME_DAY_SHIFT_MS).toISOString();
+}
+
+/** 다음 게임 주간이 시작되는 순간(UTC ISO) — 다음 주 월요일 KST 04:00(일요일 19:00 UTC) */
+export function nextGameWeekResetISO(nowIso: string): string {
+  return new Date(gameWeekStartShiftedMs(nowIso) + WEEK_MS - GAME_DAY_SHIFT_MS).toISOString();
 }
 
 /** 밤 구간 내 스텝(0~47)의 밤 깊이(0~1). 24스텝(02:00)이 정점 1이고, 범위 밖은 0~1로 안전 처리한다 */
