@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppError, fail } from '../../../core/errors';
 import { newState } from '../../../game/rules/logic';
 import { FISH } from '../../../game/content/fish';
-import { CHAMPIONSHIP_SCHOOLS } from '../../../game/world';
+import { CHAMPIONSHIP_SCHOOLS, V_SCHOOLS } from '../../../game/world';
 import type { RegionId } from '../../../game/world';
 import { setSchoolDay } from '../../../features/gameplay/service/schoolDay';
 import * as soundEvents from '../../../features/sound/service/soundEvents';
@@ -252,6 +252,57 @@ describe('Field 이벤트 구역 호환과 낚시 효과음 전달', () => {
     act(() => { vi.advanceTimersByTime(4000); });
     act(() => { vi.advanceTimersByTime(15000); });
     expect(catchSpy).toHaveBeenLastCalledWith(expect.objectContaining({ manual: false }));
+  });
+
+  it('방치 어획 직후 이어진 입질에서 수동 챔질로 줄이 끊기면(line-cut) 수동 효과음으로 전달한다', () => {
+    const snapSpy = vi.spyOn(soundEvents, 'emitLineSnapSound').mockReturnValue(true);
+    const riverSchool = V_SCHOOLS.find(s => s.spot === 'river')!;
+    const fish = FISH[0];
+
+    const { container } = render(
+      <Field
+        region="village"
+        game={newState()}
+        dispatch={() => ({
+          status: 'ok',
+          state: newState(),
+          result: {
+            type: 'catch',
+            fishId: fish.id,
+            uid: 'f1',
+            info: { form: 'normal', size: 30, percentile: 50, isBig: false, isNew: false },
+            released: [],
+          },
+        })}
+        setToast={() => {}}
+        onScene={() => {}}
+        initialPos={{ x: riverSchool.x, y: riverSchool.y }}
+      />,
+    );
+
+    const advanceUntilPhase = (phase: string) => {
+      for (let i = 0; i < 40; i++) {
+        if (container.querySelector(`[data-phase="${phase}"]`)) return;
+        act(() => { vi.advanceTimersByTime(500); });
+      }
+    };
+
+    // 첫 던짐: 방치 타임아웃으로 auto 어획 완료 -> 다음 cycle은 auto 모드
+    fireEvent.keyDown(document, { code: 'Space' });
+    advanceUntilPhase('bite');
+    expect(container.querySelector('[data-phase="bite"]')).not.toBeNull();
+    advanceUntilPhase('catch');
+    expect(container.querySelector('[data-phase="catch"]')).not.toBeNull();
+
+    // 획득 카드 종료 후 다음 입질 대기 -> 입질 진입
+    advanceUntilPhase('wait');
+    advanceUntilPhase('bite');
+    expect(container.querySelector('[data-phase="bite"]')).not.toBeNull();
+    snapSpy.mockClear();
+
+    // 방치 입질 중 사용자가 수동으로 챔질(파워 부족 수역) -> line-cut은 manual: true여야 한다
+    fireEvent.keyDown(document, { code: 'Space' });
+    expect(snapSpy).toHaveBeenCalledWith({ manual: true, underpowered: true });
   });
 });
 

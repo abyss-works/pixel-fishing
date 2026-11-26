@@ -3,8 +3,11 @@ import { EVENT2_SETTLEMENT_RATES, EVENT_FISH } from '../../../game/content/event
 import { newState } from '../../../game/rules/logic';
 import type { EventsSnapshot, LiveEventSummary } from '../../../platform/api';
 import {
+  eventLifecycleStatus,
   formatEventExpiryText,
+  hasActiveEvents,
   hasEventsAlert,
+  isEventLiveNow,
   remainingDaysText,
   selectEventChampionshipView,
   selectEventDrawView,
@@ -107,7 +110,7 @@ describe('events 모델 셀렉터', () => {
     expect(formatEventExpiryText('2026-12-31T14:59:59.000Z')).toBe('2026년 12월 31일까지');
   });
 
-  it('hasEventsAlert는 계정 회원의 미수령 당첨이나 정산 가능 보상이 있을 때만 true다', () => {
+  it('hasEventsAlert는 계정 회원의 미수령 당첨(교환권 확정)이나 정산 가능 보상이 있을 때만 true다', () => {
     expect(hasEventsAlert(SNAP, 'account')).toBe(true);
     expect(hasEventsAlert(SNAP, 'guest')).toBe(false);
     const settledSnap: EventsSnapshot = {
@@ -115,10 +118,66 @@ describe('events 모델 셀렉터', () => {
       championship: { ...SNAP.championship!, pendingGold: 0, pendingFame: 0 },
     };
     expect(hasEventsAlert(settledSnap, 'account')).toBe(false);
+    // 트리오 3종 달성 후 추첨 대기 상태(won만 true이고 rewardPin이 없음)는 빨간 점을 켜지 않는다
+    expect(hasEventsAlert({
+      ...settledSnap,
+      trio: { ...SNAP.trio!, completedAt: NOW, won: true, claimedAt: null, rewardPin: null },
+    }, 'account')).toBe(false);
+    // 실제 추첨 당첨(rewardPin 발급) + 미수령 상태만 true다
     expect(hasEventsAlert({
       ...settledSnap,
       trio: { ...SNAP.trio!, won: true, claimedAt: null, rewardPin: '123456789012' },
     }, 'account')).toBe(true);
+    // 행운왕은 참여·당첨 상태만으로 알림점을 켜지 않는다
+    expect(hasEventsAlert({
+      ...settledSnap,
+      draw: { ...SNAP.draw!, won: true },
+    }, 'account')).toBe(false);
+  });
+
+  it('isEventLiveNow와 hasActiveEvents는 active와 시작·종료 시각 구간을 함께 판정한다', () => {
+    const nowMs = Date.parse(NOW);
+    const upcoming: LiveEventSummary = {
+      ...EV_TRIO,
+      id: 'ev-upcoming',
+      startsAt: '2026-12-02T00:00:00.000Z',
+      endsAt: '2026-12-08T00:00:00.000Z',
+      active: true,
+    };
+    const endedByTime: LiveEventSummary = {
+      ...EV_CHAMP,
+      id: 'ev-ended',
+      startsAt: '2026-11-20T00:00:00.000Z',
+      endsAt: NOW,
+      active: true,
+    };
+    const inactive: LiveEventSummary = { ...EV_DRAW, id: 'ev-inactive', active: false };
+
+    expect(isEventLiveNow(EV_TRIO, nowMs)).toBe(true);
+    expect(isEventLiveNow(upcoming, nowMs)).toBe(false);
+    expect(isEventLiveNow(endedByTime, nowMs)).toBe(false);
+    expect(isEventLiveNow(inactive, nowMs)).toBe(false);
+
+    expect(eventLifecycleStatus(upcoming, nowMs)).toBe('upcoming');
+    expect(eventLifecycleStatus(EV_TRIO, nowMs)).toBe('active');
+    expect(eventLifecycleStatus(endedByTime, nowMs)).toBe('ended');
+    expect(eventLifecycleStatus(inactive, nowMs)).toBe('ended');
+
+    const nonLiveSnap: EventsSnapshot = {
+      now: NOW,
+      events: [upcoming, endedByTime, inactive],
+      trio: null,
+      championship: null,
+      draw: null,
+    };
+    expect(hasActiveEvents(null)).toBe(false);
+    expect(hasActiveEvents(nonLiveSnap)).toBe(false);
+    expect(hasActiveEvents(SNAP)).toBe(true);
+
+    const list = selectEventList(nonLiveSnap, 'account');
+    expect(list[0].badges).toEqual([{ label: '진행 예정', tone: 'dim' }]);
+    expect(list[1].badges).toEqual([{ label: '종료', tone: 'dim' }]);
+    expect(list[2].badges).toEqual([{ label: '종료', tone: 'dim' }]);
   });
 
   it('selectEventList는 목록 카드 배지와 남은 일수, 알림점을 만든다', () => {

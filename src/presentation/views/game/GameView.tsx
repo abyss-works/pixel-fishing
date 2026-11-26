@@ -46,7 +46,7 @@ import GameMenu from '../overlays/menu/GameMenu';
 import EventHudButton from '../overlays/events/EventHudButton';
 import MobileEventHudButton from '../overlays/events/MobileEventHudButton';
 import EventsModal from '../overlays/events/EventsModal';
-import { hasEventsAlert } from '../../../features/events/model/events';
+import { hasActiveEvents, hasEventsAlert } from '../../../features/events/model/events';
 import { useEvents } from '../../../features/events/service/useEvents';
 import MailboxModal from '../overlays/mailbox/MailboxModal';
 import FriendsModal from '../overlays/friends/FriendsModal';
@@ -216,7 +216,7 @@ export default function GameView(props: GameViewProps) {
   const { guild } = useGuild(props.account !== null);
   const accountState = accountLockState(props.account, props.accountFailed);
   const { snap: eventsSnap } = useEvents({ enabled: true });
-  const hasActiveEvents = Boolean(eventsSnap?.events.some(ev => ev.active));
+  const activeEvents = hasActiveEvents(eventsSnap ?? null);
   const eventsAlert = hasEventsAlert(eventsSnap, accountState);
   const progress = props.guestProgress;
   // 길드 보너스는 서버가 적용한다. 화면은 서버가 알려 준 레벨과 효과를 보이기만 한다(스탯 창 보너스 탭, 가방 칸)
@@ -579,7 +579,7 @@ export default function GameView(props: GameViewProps) {
                    ) : null}
                    chips={showPresence ? <PresenceChip region={region} onOpen={() => setPlayersOpen(true)} /> : null}
                    badge={props.badge} accountState={accountState}
-                   eventButton={hasActiveEvents ? (
+                   eventButton={activeEvents ? (
                      mobile ? (
                        <MobileEventHudButton
                          open={eventsOpen}

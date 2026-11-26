@@ -229,7 +229,10 @@ export default function Field({
         } else if (event.type === 'line-cut') {
           emitLineSnapSound({ manual: manualCycleRef.current, underpowered: true });
         } else if (event.type === 'catch') {
-          manualCycleRef.current = event.manual;
+          // 취소 뒤 새로 던진 사이클을 직전 방치 응답이 덮어쓰지 않도록 현재 잡기 단계일 때만 갱신한다
+          if (engine.getSnapshot().phase === 'catch') {
+            manualCycleRef.current = event.manual;
+          }
           const caught = FISH.find(candidate => candidate.id === event.result.fishId)
             ?? eventFishSubjectById(event.result.fishId);
           emitCatchSound({
@@ -284,7 +287,19 @@ export default function Field({
   useEffect(() => { if (paused) engine.cancelFishing(); }, [engine, paused]);
   useEffect(() => () => { observer.current?.disconnect(); engine.dispose(); }, [engine]);
 
-  useKeyScope(event => engine.handleKeyDown(event.code, () => event.preventDefault()));
+  const triggerManualAction = useCallback(() => {
+    if (!locked && engine.getSnapshot().phase === 'bite') {
+      manualCycleRef.current = true;
+    }
+    engine.action();
+  }, [engine, locked]);
+
+  useKeyScope(event => {
+    if (!locked && event.code === 'Space' && engine.getSnapshot().phase === 'bite') {
+      manualCycleRef.current = true;
+    }
+    return engine.handleKeyDown(event.code, () => event.preventDefault());
+  });
 
   // 모바일 스테이지 입력 — 누른 자리에서 10px를 넘게 끌면 원 패드로 이동, 그 안에서 떼면 짧게 누르기(클릭과 같은 상호작용)
   const [pad, setPad] = useState<Pad | null>(null);
@@ -313,7 +328,7 @@ export default function Field({
     gesture.current = null;
     engine.setMoveDirection(null);
     setPad(null);
-    if (e.type === 'pointerup' && isTap(g.pad)) engine.action();
+    if (e.type === 'pointerup' && isTap(g.pad)) triggerManualAction();
   };
 
   const status = snapshot.phase === 'idle' ? null : statusParts(snapshot.phase, mobile);
@@ -334,7 +349,7 @@ export default function Field({
                 className="block w-full h-full [image-rendering:pixelated] cursor-pointer bg-bg
                            [filter:contrast(1.05)_saturate(1.07)_brightness(0.98)]"
                 aria-label={REGION_PACKS[region].info.shortName}
-                onClick={mobile ? undefined : () => engine.action()}
+                onClick={mobile ? undefined : triggerManualAction}
                 onPointerDown={mobile ? onPadDown : undefined} onPointerMove={mobile ? onPadMove : undefined}
                 onPointerUp={mobile ? onPadEnd : undefined} onPointerCancel={mobile ? onPadEnd : undefined} />
       )}

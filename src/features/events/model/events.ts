@@ -246,12 +246,56 @@ function formatShortDay(day: string): string {
   return `${Number(m[1])}/${Number(m[2])}`;
 }
 
-/** HUD 이벤트 버튼 빨간 점 표시 여부 — 미수령 당첨이나 정산할 보상이 있으면 true */
-export function hasEventsAlert(snap: EventsSnapshot | null, account: AccountLockState): boolean {
+export type EventLifecycleStatus = 'active' | 'upcoming' | 'ended';
+
+/** 이벤트 활성 여부와 시작·종료 시각 구간을 함께 판정한다 */
+export function eventLifecycleStatus(
+  ev: Pick<LiveEventSummary, 'active' | 'startsAt' | 'endsAt'>,
+  nowMs: number = Date.now(),
+): EventLifecycleStatus {
+  if (!ev.active) return 'ended';
+  const startMs = Date.parse(ev.startsAt);
+  const endMs = Date.parse(ev.endsAt);
+  if (Number.isNaN(startMs) || Number.isNaN(endMs)) return 'ended';
+  if (nowMs < startMs) return 'upcoming';
+  if (nowMs >= endMs) return 'ended';
+  return 'active';
+}
+
+export function isEventLiveNow(
+  ev: Pick<LiveEventSummary, 'active' | 'startsAt' | 'endsAt'>,
+  nowMs: number = Date.now(),
+): boolean {
+  return eventLifecycleStatus(ev, nowMs) === 'active';
+}
+
+function resolveNowMs(snap: Pick<EventsSnapshot, 'now'> | null | undefined, nowMs?: number): number {
+  if (nowMs !== undefined) return nowMs;
+  const parsed = snap?.now ? Date.parse(snap.now) : Number.NaN;
+  return Number.isNaN(parsed) ? Date.now() : parsed;
+}
+
+export function hasActiveEvents(snap: EventsSnapshot | null, nowMs?: number): boolean {
+  if (!snap) return false;
+  const resolved = resolveNowMs(snap, nowMs);
+  return snap.events.some(ev => isEventLiveNow(ev, resolved));
+}
+
+function upcomingStartsText(startsAt: string, nowMs: number): string {
+  const startMs = Date.parse(startsAt);
+  if (Number.isNaN(startMs) || startMs <= nowMs) return '시작 전';
+  const days = Math.ceil((startMs - nowMs) / 86_400_000);
+  return `${days}일 후 시작`;
+}
+
+/** HUD 이벤트 버튼 빨간 점 표시 여부 — 미수령 당첨(교환권 확정)이나 정산할 보상이 있으면 true */
+export function hasEventsAlert(
+  snap: EventsSnapshot | null,
+  account: AccountLockState,
+  nowMs?: number,
+): boolean {
   if (account !== 'account' || !snap) return false;
-  const trioReady = Boolean(snap.trio?.won && !snap.trio.claimedAt);
-  const champReady = (snap.championship?.pendingGold ?? 0) > 0 || (snap.championship?.pendingFame ?? 0) > 0;
-  return trioReady || champReady;
+  return selectEventList(snap, account, nowMs).some(item => item.hasAlert);
 }
 
 const KIND_GLYPH: Record<LiveEventKind, EventListItemView['glyph']> = {
@@ -266,43 +310,85 @@ const KIND_DEFAULT_SUMMARY: Record<LiveEventKind, string> = {
   draw: '매일의 운세 점수를 쌓아 행운왕 순위에 도전하세요.',
 };
 
-export function selectEventList(snap: EventsSnapshot, account: AccountLockState): EventListItemView[] {
+export function selectEventList(
+  snap: EventsSnapshot,
+  account: AccountLockState,
+  nowMs?: number,
+): EventListItemView[] {
+  const resolvedNow = resolveNowMs(snap, nowMs);
+  const nowIso = new Date(resolvedNow).toISOString();
   return snap.events.map(ev => {
+    const status = eventLifecycleStatus(ev, resolvedNow);
     const badges: EventBadgeView[] = [];
     let hasAlert = false;
-    if (ev.kind === 'trio') {
-      const s = snap.trio;
-      if (s?.won) {
-        badges.push({ label: '당첨 확정', tone: 'gold' });
-        hasAlert = account === 'account' && !s.claimedAt;
-      } else if (s?.completedAt) {
-        badges.push({ label: '응모 완료', tone: 'accent' });
+    let remainingText = '';
+
+    if (status === 'upcoming') {
+      badges.push({ label: '진행 예정', tone: 'dim' });
+      remainingText = upcomingStartsText(ev.startsAt, resolvedNow);
+    } else if (status === 'ended') {
+      badges.push({ label: '종료', tone: 'dim' });
+      remainingText = '';
+      if (ev.kind === 'trio') {
+        const s = snap.trio;
+        if (s?.won && s.rewardPin) {
+          badges.push({ label: '당첨 확정', tone: 'gold' });
+          hasAlert = account === 'account' && !s.claimedAt;
+        } else if (s?.completedAt) {
+          badges.push({ label: '응모 완료', tone: 'accent' });
+        }
+      } else if (ev.kind === 'championship') {
+        const s = snap.championship;
+        if (s?.rank) badges.push({ label: `${s.rank}위`, tone: 'accent' });
+        if ((s?.pendingGold ?? 0) > 0 || (s?.pendingFame ?? 0) > 0) {
+          badges.push({ label: '정산 가능', tone: 'gold' });
+          hasAlert = account === 'account';
+        }
       } else {
-        const done = s ? s.slots.filter(slot => slot.completed).length : 0;
-        const total = s ? s.slots.length : EVENT1_TRIO_TARGETS.length;
-        badges.push({ label: `${done} / ${total}`, tone: 'gold' });
-        badges.push({ label: '진행 중', tone: 'accent' });
-      }
-    } else if (ev.kind === 'championship') {
-      const s = snap.championship;
-      badges.push({ label: s?.rank ? `${s.rank}위` : '진행 중', tone: 'accent' });
-      if ((s?.pendingGold ?? 0) > 0 || (s?.pendingFame ?? 0) > 0) {
-        badges.push({ label: '정산 가능', tone: 'gold' });
-        hasAlert = account === 'account';
+        const s = snap.draw;
+        if (s?.won) badges.push({ label: '당첨 확정', tone: 'gold' });
+        else if (s?.rank) badges.push({ label: `${s.rank}위`, tone: 'accent' });
+        if (s && s.attendedDays > 0) {
+          badges.push({ label: `${s.attendedDays}일 출석`, tone: 'gold' });
+        }
       }
     } else {
-      const s = snap.draw;
-      badges.push({ label: s?.rank ? `${s.rank}위` : '진행 중', tone: 'accent' });
-      if (s && s.attendedDays > 0) {
-        badges.push({ label: `${s.attendedDays}일 출석`, tone: 'gold' });
+      remainingText = remainingDaysText(ev.endsAt, nowIso);
+      if (ev.kind === 'trio') {
+        const s = snap.trio;
+        if (s?.won && s.rewardPin) {
+          badges.push({ label: '당첨 확정', tone: 'gold' });
+          hasAlert = account === 'account' && !s.claimedAt;
+        } else if (s?.completedAt) {
+          badges.push({ label: '응모 완료', tone: 'accent' });
+        } else {
+          const done = s ? s.slots.filter(slot => slot.completed).length : 0;
+          const total = s ? s.slots.length : EVENT1_TRIO_TARGETS.length;
+          badges.push({ label: `${done} / ${total}`, tone: 'gold' });
+          badges.push({ label: '진행 중', tone: 'accent' });
+        }
+      } else if (ev.kind === 'championship') {
+        const s = snap.championship;
+        badges.push({ label: s?.rank ? `${s.rank}위` : '진행 중', tone: 'accent' });
+        if ((s?.pendingGold ?? 0) > 0 || (s?.pendingFame ?? 0) > 0) {
+          badges.push({ label: '정산 가능', tone: 'gold' });
+          hasAlert = account === 'account';
+        }
+      } else {
+        const s = snap.draw;
+        badges.push({ label: s?.rank ? `${s.rank}위` : '진행 중', tone: 'accent' });
+        if (s && s.attendedDays > 0) {
+          badges.push({ label: `${s.attendedDays}일 출석`, tone: 'gold' });
+        }
       }
     }
+
     return {
       id: ev.id,
       kind: ev.kind,
       title: ev.title,
       summary: ev.description || KIND_DEFAULT_SUMMARY[ev.kind],
-      remainingText: remainingDaysText(ev.endsAt, snap.now),
+      remainingText,
       badges,
       hasAlert,
       glyph: KIND_GLYPH[ev.kind],

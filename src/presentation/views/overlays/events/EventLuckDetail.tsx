@@ -16,7 +16,7 @@ function LuckRankTab({ view }: { view: EventDrawView }) {
   return (
     <div className="flex flex-col gap-2.5">
       <EventPodium podium={view.podium} scoreIcon="clover" />
-      <EventRankRows rows={view.rows} myRow={view.myRow} />
+      <EventRankRows rows={view.rows} myRow={view.myRow} scoreIcon="clover" />
     </div>
   );
 }

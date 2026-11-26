@@ -36,7 +36,7 @@ function TourneyRankTab({ view }: { view: EventChampionshipView }) {
           <Badge size="2xs">낚싯대 Lv.{EVENT2_STANDARD_SPEC_VIEW.rodLevel}</Badge>
           <Badge size="2xs">파워 {EVENT2_STANDARD_SPEC_VIEW.power}</Badge>
           <Badge size="2xs">입질 {EVENT2_STANDARD_SPEC_VIEW.biteRangeText}</Badge>
-          <Badge size="2xs">방치 +{EVENT2_STANDARD_SPEC_VIEW.idleBoost}%</Badge>
+          <Badge size="2xs">방치 {EVENT2_STANDARD_SPEC_VIEW.idleBoost}배</Badge>
           <Badge size="2xs" tone="accent">돌연변이 {EVENT2_STANDARD_SPEC_VIEW.variantEv}배</Badge>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs">

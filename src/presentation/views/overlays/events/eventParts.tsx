@@ -7,6 +7,7 @@ import Inset from '../../../ui/Inset';
 import PageTitle from '../../../ui/PageTitle';
 import PersonSprite from '../../../ui/PersonSprite';
 import PixelIcon from '../../../ui/PixelIcon';
+import ProgressCount from '../../../ui/ProgressCount';
 import { RankMeBar } from '../../../ui/RankList';
 import { fmtNum } from '../../../ui/format';
 
@@ -63,33 +64,37 @@ export function EventPodium({
   }
   const heightOf = (place: 1 | 2 | 3) => (
     place === 1
-      ? 'min-h-[126px] mobile:min-h-[112px]'
+      ? 'min-h-[98px] mobile:min-h-[90px]'
       : place === 2
-        ? 'min-h-[112px] mobile:min-h-[100px]'
-        : 'min-h-[100px] mobile:min-h-[88px]'
+        ? 'min-h-[86px] mobile:min-h-[80px]'
+        : 'min-h-[76px] mobile:min-h-[72px]'
   );
   return (
     <div className="grid grid-cols-3 gap-2 items-end" aria-label="순위 시상대">
       {podium.map(entry => (
-        <Inset
-          key={entry.place}
-          tone={entry.place === 1 ? 'light' : 'base'}
-          border={entry.me ? 'accent' : entry.place === 1 ? 'gold' : 'line'}
-          data-place={entry.place}
-          className={cx('p-2 flex flex-col items-center justify-end gap-1 text-center min-w-0', heightOf(entry.place))}
-        >
-          <Badge tone={entry.place === 1 ? 'gold' : entry.me ? 'accent' : 'dim'} size="2xs">
-            {entry.place}위
-          </Badge>
+        <div key={entry.place} className="flex flex-col items-center justify-end gap-1.5 min-w-0">
           <PersonSprite look={entry.look} scale={2} ariaLabel={`${entry.place}위 ${entry.nickname}`} />
-          <span className={cx('text-xs font-bold truncate max-w-full', entry.me ? 'text-accent' : 'text-text')}>
-            {entry.nickname}
-          </span>
-          <span className="inline-flex items-center gap-1 pf-accent text-xs font-bold text-gold whitespace-nowrap">
-            {scoreIcon === 'clover' && <PixelIcon glyph="clover" size={11} className="text-gold shrink-0" />}
-            {fmtNum(entry.score)}점
-          </span>
-        </Inset>
+          <Inset
+            tone={entry.place === 1 ? 'light' : 'base'}
+            border={entry.me ? 'accent' : entry.place === 1 ? 'gold' : 'line'}
+            data-place={entry.place}
+            className={cx(
+              'w-full px-2 py-1.5 flex flex-col items-center justify-center gap-0.5 text-center min-w-0',
+              heightOf(entry.place),
+            )}
+          >
+            <Badge tone={entry.place === 1 ? 'gold' : entry.me ? 'accent' : 'dim'} size="2xs">
+              {entry.place}위
+            </Badge>
+            <span className={cx('text-xs font-bold truncate max-w-full', entry.me ? 'text-accent' : 'text-text')}>
+              {entry.nickname}
+            </span>
+            <span className="inline-flex items-center gap-1 pf-accent text-xs font-bold text-gold whitespace-nowrap">
+              {scoreIcon === 'clover' && <PixelIcon glyph="clover" size={11} className="text-gold shrink-0" />}
+              {fmtNum(entry.score)}점
+            </span>
+          </Inset>
+        </div>
       ))}
     </div>
   );
@@ -99,9 +104,11 @@ export function EventPodium({
 export function EventRankRows({
   rows,
   myRow,
+  scoreIcon = 'none',
 }: {
   rows: readonly EventRankRowView[];
   myRow: EventRankMeView | null;
+  scoreIcon?: 'none' | 'clover';
 }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -119,14 +126,24 @@ export function EventRankRows({
               <span className={cx('truncate font-bold', row.me ? 'text-accent' : 'text-text')}>
                 {row.nickname}
               </span>
-              <span className="pf-accent text-gold whitespace-nowrap">{fmtNum(row.score)}점</span>
+              <span className="inline-flex items-center justify-end gap-1 pf-accent text-gold whitespace-nowrap">
+                {scoreIcon === 'clover' && <PixelIcon glyph="clover" size={11} className="text-gold shrink-0" />}
+                {fmtNum(row.score)}점
+              </span>
             </div>
           ))}
         </Inset>
       )}
       <RankMeBar
         me={myRow ? { rank: myRow.rank, value: myRow.score } : null}
-        format={v => `${fmtNum(v)}점`}
+        format={v => (
+          scoreIcon === 'clover' ? (
+            <span className="inline-flex items-center justify-end gap-1">
+              <PixelIcon glyph="clover" size={11} className="text-gold shrink-0" />
+              <ProgressCount value={`${fmtNum(v)}점`} />
+            </span>
+          ) : `${fmtNum(v)}점`
+        )}
       />
     </div>
   );

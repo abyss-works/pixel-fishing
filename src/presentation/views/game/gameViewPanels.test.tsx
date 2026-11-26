@@ -425,6 +425,90 @@ describe('GameView 패널 초기화', () => {
     expect(accountBtn.querySelector('[data-alert="true"]')).not.toBeNull();
   });
 
+  it('진행 예정이거나 종료 시각이 지난 이벤트만 있으면 HUD 이벤트 버튼을 숨기고, 진행 중인 이벤트가 있을 때만 보인다', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const renderView = () =>
+      render(
+        <QueryClientProvider client={client}>
+          <GameView
+            game={{ ...newState(), tutorials: [...TUTORIAL_IDS] }}
+            scene={{ kind: 'base', id: 'home' }}
+            entryPos={null}
+            placeSeq={0}
+            dispatch={() => ({ status: 'ok', state: newState(), result: { type: 'none' } })}
+            setToast={() => {}}
+            onScene={() => {}}
+            onPlace={() => {}}
+            log={[]}
+            syncLabel={null}
+            syncState="off"
+            guestProgress="nothing"
+            account="dev@localhost"
+            accountChecked={true}
+            accountFailed={false}
+            uid="u1"
+            nickname="테스터"
+            onRename={async () => null}
+            onAuthChanged={async () => {}}
+            onResync={async () => {}}
+          />
+        </QueryClientProvider>,
+      );
+
+    eventMock.snap = {
+      now: '2026-12-01T12:00:00.000Z',
+      events: [
+        {
+          id: 'ev-upcoming',
+          kind: 'trio',
+          title: '다가오는 대회',
+          description: '',
+          startsAt: '2026-12-02T00:00:00.000Z',
+          endsAt: '2026-12-05T00:00:00.000Z',
+          active: true,
+          config: {},
+        },
+        {
+          id: 'ev-ended',
+          kind: 'draw',
+          title: '이미 끝난 행사',
+          description: '',
+          startsAt: '2026-11-20T00:00:00.000Z',
+          endsAt: '2026-12-01T12:00:00.000Z',
+          active: true,
+          config: {},
+        },
+      ],
+      trio: null,
+      championship: null,
+      draw: null,
+    };
+
+    renderView();
+    expect(screen.queryByRole('button', { name: '이벤트' })).not.toBeInTheDocument();
+    cleanup();
+
+    eventMock.snap = {
+      ...eventMock.snap,
+      events: [
+        ...eventMock.snap.events,
+        {
+          id: 'ev-live',
+          kind: 'championship',
+          title: '강태공 선수권 대회',
+          description: '분지 호수 대회',
+          startsAt: '2026-12-01T00:00:00.000Z',
+          endsAt: '2026-12-11T12:00:00.000Z',
+          active: true,
+          config: {},
+        },
+      ],
+    };
+
+    renderView();
+    expect(screen.getByRole('button', { name: '이벤트' })).toBeInTheDocument();
+  });
+
   it('championship 구역에서는 바다 튜토리얼 없이 PresenceChip으로 접속 인원을 표시한다', () => {
     eventMock.players = [
       { uid: 'p2', nick: '선원2', boat: 1, fame: 10, look: { shirt: 1, pants: 1, hat: null } },

@@ -195,10 +195,18 @@ describe('EventsModal', () => {
     await waitFor(() => expect(screen.getByText('강태공 선수권 대회')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /강태공 선수권 대회/ }));
 
-    // 순위 탭 + 입장하기
+    // 순위 탭 + 입장하기 + 표준 장비 배지 + 시상대 높이 규격
     const podium = screen.getByLabelText('순위 시상대');
     const places = [...podium.querySelectorAll('[data-place]')].map(el => el.getAttribute('data-place'));
     expect(places).toEqual(['2', '1', '3']);
+    expect(podium.querySelector('[data-place="1"]')?.className).toContain('min-h-[98px]');
+    expect(podium.querySelector('[data-place="1"]')?.className).toContain('mobile:min-h-[90px]');
+    expect(podium.querySelector('[data-place="2"]')?.className).toContain('min-h-[86px]');
+    expect(podium.querySelector('[data-place="2"]')?.className).toContain('mobile:min-h-[80px]');
+    expect(podium.querySelector('[data-place="3"]')?.className).toContain('min-h-[76px]');
+    expect(podium.querySelector('[data-place="3"]')?.className).toContain('mobile:min-h-[72px]');
+    expect(screen.getByText('방치 5배')).toBeInTheDocument();
+    expect(screen.queryByText('방치 +5%')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '입장하기' }));
     expect(onEnterEventZone).toHaveBeenCalledWith('ev-champ');
 
@@ -220,8 +228,18 @@ describe('EventsModal', () => {
     expect(screen.getAllByText('거북복').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('이벤트 3 행운왕 상세에서 금빛 네잎클로버 순위 시상대와 5일 점괘판을 표시한다', async () => {
-    apiMock.readEvents.mockResolvedValue(SAMPLE_SNAP);
+  it('이벤트 3 행운왕 상세에서 금빛 네잎클로버 순위 시상대와 순위표·내 순위 바, 5일 점괘판을 표시한다', async () => {
+    apiMock.readEvents.mockResolvedValue({
+      ...SAMPLE_SNAP,
+      draw: {
+        ...SAMPLE_SNAP.draw!,
+        rank: 4,
+        top: [
+          ...SAMPLE_SNAP.draw!.top,
+          { rank: 4, userId: 'me', nickname: '내캐릭터', score: 150, look: null, me: true },
+        ],
+      },
+    });
     renderModal();
 
     await waitFor(() => expect(screen.getByText('천하제일 행운왕')).toBeInTheDocument());
@@ -229,11 +247,54 @@ describe('EventsModal', () => {
 
     const podium = screen.getByLabelText('순위 시상대');
     expect(podium.querySelector('[data-glyph="clover"]')).not.toBeNull();
+    const fourthRow = screen.getByText('4위').parentElement!;
+    expect(fourthRow.querySelector('[data-glyph="clover"]')).not.toBeNull();
+    const myBar = screen.getByLabelText('내 순위');
+    expect(myBar.querySelector('[data-glyph="clover"]')).not.toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: '점괘판' }));
     const board = screen.getByLabelText('행운 출석 점괘판');
     expect(within(board).getByText('12/1')).toBeInTheDocument();
     expect(within(board).getByText('97')).toBeInTheDocument();
     expect(screen.getByText('동점이면 출석 일수가 많은 쪽이 앞서요.')).toBeInTheDocument();
+  });
+
+  it('진행 예정·종료 이벤트는 진행 중 배지를 달지 않고, 트리오 추첨 대기(rewardPin 없음)에서는 알림점을 띄우지 않는다', async () => {
+    apiMock.readEvents.mockResolvedValue({
+      ...SAMPLE_SNAP,
+      events: [
+        { ...SAMPLE_SNAP.events[0] },
+        {
+          ...SAMPLE_SNAP.events[1],
+          startsAt: '2026-12-03T00:00:00.000Z',
+          endsAt: '2026-12-10T00:00:00.000Z',
+          active: true,
+        },
+        {
+          ...SAMPLE_SNAP.events[2],
+          startsAt: '2026-11-20T00:00:00.000Z',
+          endsAt: '2026-11-30T00:00:00.000Z',
+          active: true,
+        },
+      ],
+      trio: {
+        ...SAMPLE_SNAP.trio!,
+        won: true,
+        claimedAt: null,
+        rewardPin: null,
+      },
+      championship: {
+        ...SAMPLE_SNAP.championship!,
+        pendingGold: 0,
+        pendingFame: 0,
+      },
+    });
+    renderModal();
+
+    await waitFor(() => expect(screen.getByLabelText('진행 중인 이벤트 목록')).toBeInTheDocument());
+    expect(document.querySelector('[data-alert="true"]')).toBeNull();
+    expect(screen.getByText('진행 예정')).toBeInTheDocument();
+    expect(screen.getByText('종료')).toBeInTheDocument();
+    expect(screen.queryByText('진행 중')).toBeNull();
   });
 });
