@@ -80,9 +80,76 @@ describe('익명 가입 IP 레이트리밋', () => {
       body: '{}',
     });
 
-  it('상한 설정은 1시간(3600초)당 IP별 10회다', () => {
+  it('기본 상한 설정은 1시간(3600초)당 IP별 200회다', () => {
     expect(limitWindow).toBe(3600);
-    expect(limitMax).toBe(10);
+    expect(limitMax).toBe(200);
+  });
+
+  it('환경변수 파서는 빈 문자열·0 이하·비정수 입력 시 기본값으로 폴백하고 양의 정수는 반영한다', async () => {
+    const { anonymousSignInRateLimit, parsePositiveIntEnv } = await import('./auth.js');
+
+    expect(parsePositiveIntEnv(undefined, 200)).toBe(200);
+    for (const invalid of ['', '   ', '0', '-1', '-200', '1.5', 'abc', '200ms', '1e2', 'Infinity', 'NaN', '99999999999999999999']) {
+      expect(parsePositiveIntEnv(invalid, 200), `invalid=${invalid}`).toBe(200);
+    }
+    expect(parsePositiveIntEnv('1', 200)).toBe(1);
+    expect(parsePositiveIntEnv(' 300 ', 200)).toBe(300);
+
+    expect(anonymousSignInRateLimit({})).toEqual({ window: 3600, max: 200 });
+    expect(anonymousSignInRateLimit({
+      ANON_SIGN_IN_RATE_MAX: '0',
+      ANON_SIGN_IN_RATE_WINDOW_SEC: 'bad',
+    })).toEqual({ window: 3600, max: 200 });
+    expect(anonymousSignInRateLimit({
+      ANON_SIGN_IN_RATE_MAX: '45',
+      ANON_SIGN_IN_RATE_WINDOW_SEC: '120',
+    })).toEqual({ window: 120, max: 45 });
+  });
+
+  it('환경변수 ANON_SIGN_IN_RATE_MAX·ANON_SIGN_IN_RATE_WINDOW_SEC 재정의가 실제 레이트리밋에 적용된다', async () => {
+    const prevMax = process.env.ANON_SIGN_IN_RATE_MAX;
+    const prevWindow = process.env.ANON_SIGN_IN_RATE_WINDOW_SEC;
+    process.env.ANON_SIGN_IN_RATE_MAX = '2';
+    process.env.ANON_SIGN_IN_RATE_WINDOW_SEC = '120';
+    let customServer: Server | undefined;
+    try {
+      const { createAuth } = await import('./auth.js');
+      const app = express();
+      let authHandler: ReturnType<typeof toNodeHandler> | null = null;
+      app.all('/api/auth/*splat', (req, res) => {
+        if (!authHandler) { res.status(500).end(); return; }
+        return authHandler(req, res);
+      });
+      customServer = app.listen(0);
+      await new Promise<void>(resolve => customServer!.once('listening', resolve));
+      const customOrigin = `http://127.0.0.1:${(customServer.address() as AddressInfo).port}`;
+      authHandler = toNodeHandler(createAuth({
+        pool: createInMemoryAuthPool(),
+        secret: 'unit-test-secret-key-for-custom-anonymous-rate-limit',
+        baseURL: customOrigin,
+        google: { clientId: 'test-client', clientSecret: 'test-secret' },
+        recordLinkConsent: async () => {},
+      }));
+      const postAnon = () => fetch(`${customOrigin}/api/auth/sign-in/anonymous`, {
+        method: 'POST',
+        headers: { origin: customOrigin, 'content-type': 'application/json', 'x-real-ip': '198.51.100.88' },
+        body: '{}',
+      });
+
+      expect((await postAnon()).status).toBe(200);
+      expect((await postAnon()).status).toBe(200);
+      const blocked = await postAnon();
+      expect(blocked.status).toBe(429);
+      const retryAfter = Number(blocked.headers.get('retry-after'));
+      expect(retryAfter).toBeGreaterThan(0);
+      expect(retryAfter).toBeLessThanOrEqual(120);
+    } finally {
+      if (prevMax === undefined) delete process.env.ANON_SIGN_IN_RATE_MAX;
+      else process.env.ANON_SIGN_IN_RATE_MAX = prevMax;
+      if (prevWindow === undefined) delete process.env.ANON_SIGN_IN_RATE_WINDOW_SEC;
+      else process.env.ANON_SIGN_IN_RATE_WINDOW_SEC = prevWindow;
+      if (customServer) await new Promise<void>(resolve => customServer!.close(() => resolve()));
+    }
   });
 
   it('같은 IP에서 상한까지는 통과하고 초과 요청은 429와 Retry-After·보안 헤더로 차단하며 다른 IP는 허용한다', async () => {
