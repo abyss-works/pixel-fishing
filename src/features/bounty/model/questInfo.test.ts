@@ -29,14 +29,38 @@ describe('현재 의뢰 정보', () => {
     expect(data.boardPorts).toEqual(['부산항', '마닐라항', '콜롬보항', '투아마시나항', '월비스베이항', '리스본항']);
   });
 
-  it('수주한 일반 의뢰는 이름, 목표, 진행도, 보상, 마치는 곳을 가진다', () => {
+  it('수주한 일반 의뢰는 이름, 대상 구역, 대상 해역 요약, 목표, 진행도, 완료/포기 여부, 보상, 마치는 곳을 가진다', () => {
     const quest = bountyById('pacific-easy-common')!;
     const data = info(snap({ progress: [{ questId: quest.id, progress: 3 }] }));
     expect(data.general).toMatchObject({
-      title: '태평양 쉬움 의뢰', grade: 'common', count: quest.count, progress: 3, reward: quest.reward,
+      title: '태평양 쉬움 의뢰',
+      zoneName: '태평양',
+      watersSummary: '태평양 연안, 마리아나 해구',
+      grade: 'common',
+      count: quest.count,
+      progress: 3,
+      done: false,
+      canAbandon: true,
+      reward: quest.reward,
       finishAt: '부산항 수배판',
     });
     expect(data.named).toBeNull();
+  });
+
+  it('동남아 일반 의뢰는 소속 하위 해역을 쉼표로 요약한다', () => {
+    const quest = bountyById('seasia-easy-common')!;
+    const data = info(snap({ progress: [{ questId: quest.id, progress: 0 }] }));
+    expect(data.general).toMatchObject({
+      zoneName: '동남아',
+      watersSummary: '드래곤 홀, 코론 침선 지대, 그레이트 배리어 리프',
+    });
+  });
+
+  it('목표를 다 채운 일반 의뢰는 done이고 포기할 수 없다', () => {
+    const quest = bountyById('pacific-easy-common')!;
+    const data = info(snap({ progress: [{ questId: quest.id, progress: quest.count }] }));
+    expect(data.general?.done).toBe(true);
+    expect(data.general?.canAbandon).toBe(false);
   });
 
   it('진행도는 목표 마릿수를 넘겨 보이지 않고, 진행도 0인 수주도 의뢰로 본다', () => {
@@ -55,8 +79,23 @@ describe('현재 의뢰 정보', () => {
     const snapshot = snap({ progress: [{ questId: quest.id, progress: 0 }] });
     const hidden = info(snapshot).named!;
     expect(hidden.title).toBe('???');
-    expect(hidden).toMatchObject({ haunt: expect.any(String), reward: { base: quest.reward, mods: [], value: quest.reward }, materialName: '돌이 된 이빨',
-      finishAt: '부산항 수배판', done: false, count: quest.count, progress: 0 });
+    expect(hidden).toMatchObject({
+      zoneName: '태평양',
+      haunt: '태평양 전체',
+      reward: { base: quest.reward, mods: [], value: quest.reward },
+      materialName: '돌이 된 이빨',
+      finishAt: '부산항 수배판',
+      done: false,
+      canAbandon: true,
+      hasTicket: false,
+      count: quest.count,
+      progress: 0,
+    });
+
+    const spotNamed = bountyById('southatlantic-named-jasconius')!;
+    const spotInfo = info(snap({ progress: [{ questId: spotNamed.id, progress: 0 }] })).named!;
+    expect(spotInfo.zoneName).toBe('남대서양');
+    expect(spotInfo.haunt).toBe('남대서양 (세인트헬레나)');
 
     const game = newState();
     game.dex[quest.targetFish!] = { normal: { count: 1, maxSize: 10, first: null } };
@@ -71,6 +110,8 @@ describe('현재 의뢰 정보', () => {
     })).named!;
     expect(withTicket.traceMins).toBe(Math.ceil(ticketRemainingMs(issuedAt, NOW) / 60_000));
     expect(withTicket.traceMins).toBeGreaterThan(0);
+    expect(withTicket.hasTicket).toBe(true);
+    expect(info(snap({ progress: [{ questId: quest.id, progress: 0 }] })).named!.hasTicket).toBe(false);
     expect(info(snap({ progress: [{ questId: quest.id, progress: 0 }] })).named!.traceMins).toBeNull();
   });
 
@@ -91,6 +132,8 @@ describe('현재 의뢰 정보', () => {
       tickets: [{ questId: quest.id, issuedAt: '2026-10-13T00:00:00.000Z' }],
     })).named!;
     expect(data.done).toBe(true);
+    expect(data.canAbandon).toBe(false);
+    expect(data.hasTicket).toBe(false);
     expect(data.traceMins).toBeNull();
   });
 });

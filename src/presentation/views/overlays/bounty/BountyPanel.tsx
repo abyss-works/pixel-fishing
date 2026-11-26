@@ -25,6 +25,8 @@ import { useEncounterAlertSetting } from '../../../../features/bounty/service/en
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import { when } from '../../../../shared/lib/when';
 import BountyCard from './BountyCard';
+import { confirmAndAbandonQuest } from './abandonQuest';
+import type { ConfirmDialogFn } from './abandonQuest';
 import { ClearsLeft } from './boardParts';
 import NamedCard from './NamedCard';
 import RelicCard from './RelicCard';
@@ -86,13 +88,14 @@ function CondList({ conds }: { conds: ReturnType<typeof selectBountyPanelData>['
   );
 }
 
-export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
+export default function BountyPanel({ game, port, uid, dispatch, setToast, confirm }: {
   game: GameState;
   port: BountyPort;
   /** 표시 대상 — 일일 의뢰 해시에 쓴다. 없으면 로컬 고정값 (서버 검증은 uid 기준) */
   uid: string | null;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
+  confirm?: ConfirmDialogFn;
 }) {
   const { snap, loaded, failed, offline, refresh } = useBounty({ refetchOnMount: 'always' });
   const alertSetting = useEncounterAlertSetting();
@@ -120,9 +123,13 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
   const day = gameDay();
   const data = selectBountyPanelData({ game, port, uid, day, nowMs, snapshot: snap });
   const {
-    zone, leftAll, leftNamed, dailyCap, namedDailyCap, offers, progressOf, isAccepted, namedConds,
+    zone, leftAll, leftNamed, dailyCap, namedDailyCap, offers, progressOf, isAccepted, canAbandon, namedConds,
     basicOpen, namedOpen, canTake, canTakeNamed, notice, namedOffers, relics,
   } = data;
+
+  const abandon = (quest: BountyQuest, hasTicket: boolean) => {
+    void confirmAndAbandonQuest({ quest, hasTicket, busy, setBusy, confirm, dispatch, setToast });
+  };
 
   /** 수주를 막는 이유 — 오프라인이면 그것, 아니면 갈래의 한도 소진·다른 구역 수주 */
   const reasonOf = (kind: BountyKind): string | null =>
@@ -134,7 +141,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
     const prog = progressOf(q.id);
     return (
       <BountyCard key={q.id} quest={q} progress={prog} accepted={isAccepted(q.id)}
-        canAccept={basicOpen && canTake} reason={reasonOf('general')} busy={busy}
+        canAccept={basicOpen && canTake} canAbandon={canAbandon(q.id)} reason={reasonOf('general')} busy={busy}
         onAccept={() => run({ type: 'acceptQuest', questId: q.id, port },
           'bounty.questAccepted',
           `${josa(questLabel(q), '을/를')} 수주했어요. 지금부터 잡는 물고기를 세요.`,
@@ -143,7 +150,8 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
           'bounty.questDelivered',
           `의뢰를 완료했어요! ${fmtGold(q.reward)}를 받았어요. 잡은 물고기는 가방에 그대로 있어요.`,
           '의뢰 보상 수령 완료!',
-          'gold')} />
+          'gold')}
+        onAbandon={() => abandon(q, false)} />
     );
   };
 
@@ -181,9 +189,9 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         <div className="flex-1 min-h-0 flex flex-col mobile:flex-none">
         <Gated open={namedOpen} overlay={<CondList conds={namedConds} />}>
           <div className={CARD_ROW}>
-            {namedOffers.map(({ quest, reward, ticketMins, relic }) => (
+            {namedOffers.map(({ quest, reward, ticketMins, hasTicket, canAbandon: canAbandonNamed, relic }) => (
               <NamedCard key={quest.id} game={game} quest={quest}
-                canAccept={namedOpen && canTakeNamed} reason={reasonOf('named')} busy={busy}
+                canAccept={namedOpen && canTakeNamed} canAbandon={canAbandonNamed} reason={reasonOf('named')} busy={busy}
                 progress={progressOf(quest.id)} accepted={isAccepted(quest.id)}
                 ticketMins={ticketMins}
                 materialName={relic?.materialName ?? null}
@@ -198,7 +206,8 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
                   'bounty.questDelivered',
                   `토벌 보상으로 ${fmtGold(reward.value)}와 교환 재료를 받았어요!`,
                   '토벌 보상 수령 완료!',
-                  'gold')} />
+                  'gold')}
+                onAbandon={() => abandon(quest, hasTicket)} />
             ))}
           </div>
         </Gated>
