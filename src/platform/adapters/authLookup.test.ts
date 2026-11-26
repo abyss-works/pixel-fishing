@@ -105,4 +105,25 @@ describe('계정 조회 (currentAccount)', () => {
     expect(await mod.currentAccount()).toEqual({ status: 'account', email: 'third@example.com' });
     expect(getSession).toHaveBeenCalledTimes(4);
   });
+
+  it('ensureSession의 signIn.anonymous 진행 중 세션 무효화가 일어나면 완료 후 캐시를 쓰지 않는다', async () => {
+    let resolveAnon!: (v: { data: { user: { id: string; email: string; isAnonymous: boolean } } | null; error: null }) => void;
+    const anonPromise = new Promise<{ data: { user: { id: string; email: string; isAnonymous: boolean } } | null; error: null }>(r => {
+      resolveAnon = r;
+    });
+    const getSession = vi.fn<() => Promise<Session>>()
+      .mockResolvedValueOnce({ data: null, error: null })
+      .mockResolvedValueOnce({ data: { user: { id: 'u-fresh', email: 'fresh@example.com', isAnonymous: false } }, error: null });
+    const anonymous = vi.fn(() => anonPromise);
+    const mod = await loadWith(getSession, { signIn: { anonymous } });
+
+    const pending = mod.ensureSession();
+    await vi.waitFor(() => expect(anonymous).toHaveBeenCalledTimes(1));
+    mod.invalidateSessionCache();
+    resolveAnon({ data: { user: { id: 'u-stale', email: 'stale@anonymous.invalid', isAnonymous: true } }, error: null });
+    await pending;
+
+    expect(await mod.currentAccount()).toEqual({ status: 'account', email: 'fresh@example.com' });
+    expect(getSession).toHaveBeenCalledTimes(2);
+  });
 });

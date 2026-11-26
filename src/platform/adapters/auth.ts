@@ -21,7 +21,7 @@ let cachedSession: { user: SessionUser; expiresAt: number } | null = null;
 let sessionGeneration = 0;
 
 /** 세션 캐시와 진행 중 요청 참조를 비워 다음 조회가 서버에서 최신 세션을 읽게 한다 */
-function invalidateSessionCache(): void {
+export function invalidateSessionCache(): void {
   sessionGeneration += 1;
   cachedSession = null;
   inFlightSession = null;
@@ -66,6 +66,7 @@ export async function ensureSession(): Promise<string | null> {
   }
   if (user) return user.id;
   invalidateSessionCache();
+  const gen = sessionGeneration;
   const { data, error } = await authClient.signIn.anonymous();
   if (error) {
     if (error.status === 429) {
@@ -74,7 +75,7 @@ export async function ensureSession(): Promise<string | null> {
     return null;
   }
   const created = data?.user as Partial<SessionUser> | undefined;
-  if (created?.id && typeof created.email === 'string') {
+  if (created?.id && typeof created.email === 'string' && gen === sessionGeneration) {
     cachedSession = {
       user: { id: created.id, email: created.email, isAnonymous: created.isAnonymous ?? true },
       expiresAt: Date.now() + SESSION_CACHE_TTL_MS,

@@ -18,6 +18,7 @@ import {
   takeGoogleLanding,
   signOutAccount,
   deleteOwnAccount,
+  invalidateSessionCache,
 } from './auth';
 import { parseRetryAfterMs } from './requestFailure';
 
@@ -386,6 +387,7 @@ class HttpDev implements DevApi {
     if (data?.ok !== true || typeof data.email !== 'string' || data.isAnonymous !== false) {
       return { ok: false, msg: '서버 응답 형식이 올바르지 않아요.', code: 'bad-response' };
     }
+    invalidateSessionCache();
     return { ok: true, email: data.email, isAnonymous: false };
   }
 
