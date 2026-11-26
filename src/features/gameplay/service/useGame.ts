@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api, isConsentRequiredError, subscribeConsentRequired, when } from '../../../platform/api';
 import type { ConsentStatus, GameGateway, GameProfile, DispatchResult, MaybePromise } from '../../../platform/api';
@@ -89,6 +89,7 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
     gameGatewayRef.current = api.createGameGateway(init.game);
   }
   const [game, setGameState] = useState<GameState>(init.game);
+  const saveVersion = useCallback(() => gameGatewayRef.current.saveVersion?.() ?? null, []);
   // 마지막으로 채택한 상태 — 새로 받을 수 있게 된 업적을 가리는 비교 기준이다.
   // 렌더를 기다리지 않고 채택과 함께 바꿔, 연달아 온 확정과 로드 직후의 접속이 낡은 상태와 비교하지 않게 한다
   const gameRef = useRef(game);
@@ -556,7 +557,7 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
   };
 
   return {
-    game, dispatch, nickname, profileStatus, devTools, sync, syncLabel: SYNC_LABEL[sync], blocker, loading,
+    game, dispatch, nickname, profileStatus, devTools, sync, syncLabel: SYNC_LABEL[sync], blocker, loading, saveVersion,
     consentPrompt, acceptConsent, retryLoadConsent: () => openConsentGate(),
     /** 이 기기의 게스트 진행 — 계정을 바꿀 때 버려지는 것이 있는지 확인 창을 띄울지 가르는 근거 */
     guestProgress: guestProgress({ sync, loading, blocked: blocker !== null, game }),

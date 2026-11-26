@@ -22,6 +22,8 @@ export type GameProfile = { ok: true; nickname: string | null; devTools: boolean
 export interface GameGateway {
   load(): MaybePromise<GameState | null>;
   dispatch(action: GameAction): MaybePromise<DispatchResult>;
+  /** 게이트웨이가 확정해 둔 현재 저장 버전 — 모르면 null */
+  saveVersion?(): number | null;
   getProfile(): MaybePromise<GameProfile>;
   warmup?(): void;
 }

@@ -192,25 +192,25 @@ describe('아이템 섹션 목록', () => {
     expect(within(filteredBtn.parentElement!).getByText('사용 중')).toBeInTheDocument();
   });
 
-  it('게스트는 보유한 비약 카드 사용 버튼과 상세 창 안의 사용 버튼이 모두 열려 있고, 확인 실패는 잠겨 있다', () => {
-    const { dispatch } = show(game({ boat: 0, items: { 'luck-small': 2 } }), 'guest');
+  it('게스트와 배 0단계에서도 보유한 비약은 카드와 상세 창에서 잠금 없이 바로 사용할 수 있고, 미보유 비약은 잠금 없이 비활성이다', () => {
+    const { dispatch, setToast } = show(game({ boat: 0, items: { 'luck-small': 2 } }), 'guest');
     expect(screen.queryByRole('group', { name: '작은 바다 영약 잠김' })).toBeNull();
     const cardBtn = screen.getByRole('button', { name: '작은 바다 영약 사용' });
     expect(cardBtn).toBeEnabled();
 
     fireEvent.click(screen.getByRole('button', { name: '작은 바다 영약 상세 보기' }));
     const dialog = screen.getByRole('dialog');
-    expect(within(dialog).queryByRole('group', { name: '작은 바다 영약 사용 잠김' })).toBeNull();
+    expect(within(dialog).queryByRole('group', { name: '작은 바다 영약 잠김' })).toBeNull();
     const detailBtn = within(dialog).getByRole('button', { name: '사용' });
     expect(detailBtn).toBeEnabled();
     fireEvent.click(detailBtn);
     expect(dispatch).toHaveBeenCalledWith({ type: 'usePotion', id: 'luck-small' });
-    cleanup();
+    expect(setToast).toHaveBeenCalledWith('작은 바다 영약을 사용했어요. 하루 동안 이어져요.');
 
-    show(game({ items: { 'luck-small': 2 } }), 'unverified');
-    const lockGroup = screen.getByRole('group', { name: '작은 바다 영약 잠김' });
-    expect(lockGroup).toHaveTextContent('계정을 확인하면 쓸 수 있어요.');
-    expect(within(lockGroup).getByRole('button', { name: '작은 바다 영약 사용' })).toBeDisabled();
+    cleanup();
+    show(game({ boat: 0, items: {} }), 'guest');
+    expect(screen.queryByRole('group', { name: '작은 바다 영약 잠김' })).toBeNull();
+    expect(screen.getByRole('button', { name: '작은 바다 영약 사용' })).toBeDisabled();
   });
 });
 
@@ -336,11 +336,11 @@ describe('해금 전과 게스트', () => {
   it('해금 전 계정 사용자는 전체 보기에서 1줄 안내만 보이고 보유 중만 보기에서 빈 안내를 보며, 보유한 도시락·미끼는 잠금 없이 즉시 사용할 수 있다', () => {
     show(game({ boat: COOKING_UNLOCK_BOAT - 1 }));
     expect(screen.queryByText('가진 아이템이 없어요.')).not.toBeInTheDocument();
-    expect(screen.getByText('인도양 항로가 열리면 부엌을 쓸 수 있어요.')).toBeInTheDocument();
+    expect(screen.getByText('인도양 항로가 열리면 부엌에서 도시락과 미끼를 만들 수 있어요.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '보유 중만 보기' })).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getAllByRole('button', { name: /\)\s사용$/ })).toHaveLength(12);
     expect(screen.getByRole('button', { name: '가루디야(일반) 사용' })).toBeDisabled();
-    expect(screen.getByRole('group', { name: '생명의 기운 잠김' })).toHaveTextContent('인도양 항로가 열리면 부엌을 쓸 수 있어요.');
+    expect(screen.getByRole('group', { name: '생명의 기운 잠김' })).toHaveTextContent('인도양 항로가 열리면 부엌에서 도시락과 미끼를 만들 수 있어요.');
 
     // 보유 중만 보기를 켜면 미보유 플레이스홀더를 숨기고 빈 안내만 남긴다
     fireEvent.click(screen.getByRole('button', { name: '보유 중만 보기' }));
@@ -364,27 +364,27 @@ describe('해금 전과 게스트', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '용연향 미끼(전설) 상세 보기' }));
     const dialog = screen.getByRole('dialog');
-    expect(within(dialog).queryByRole('group', { name: '용연향 미끼(전설) 사용 잠김' })).toBeNull();
+    expect(within(dialog).queryByRole('group', { name: '용연향 미끼(전설) 잠김' })).toBeNull();
     expect(within(dialog).getByRole('button', { name: '사용' })).toBeEnabled();
   });
 
-  it('게스트는 해금 전에는 미보유 항목만 진행 조건 잠금이고 보유한 도시락·미끼는 상세와 카드 모두에서 사용할 수 있다', () => {
-    const { dispatch } = show(game({ boat: COOKING_UNLOCK_BOAT - 1, items: { 'cook-lunch-bundle': 1 } }), 'guest');
+  it('게스트도 보유한 도시락·미끼는 해금 전후 모두 잠금 없이 즉시 사용할 수 있고, 미보유 제작 항목만 해금 전 진행 조건·해금 뒤 게스트 잠금 툴팁을 본다', () => {
+    const { dispatch } = show(game({ boat: 0, items: { 'cook-lunch-bundle': 1, 'cook-bait-legendary': 1 } }), 'guest');
     expect(screen.queryByText('가진 아이템이 없어요.')).not.toBeInTheDocument();
-    expect(screen.getByText('인도양 항로가 열리면 부엌을 쓸 수 있어요.')).toBeInTheDocument();
+    expect(screen.getByText('인도양 항로가 열리면 부엌에서 도시락과 미끼를 만들 수 있어요.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '보유 중만 보기' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '가루디야(일반) 사용' })).toBeDisabled();
-    expect(screen.getByRole('group', { name: '생명의 기운 잠김' })).toHaveTextContent('인도양 항로가 열리면 부엌을 쓸 수 있어요.');
+    expect(screen.getByRole('group', { name: '가루디야(일반) 잠김' })).toHaveTextContent('인도양 항로가 열리면 부엌에서 도시락과 미끼를 만들 수 있어요.');
+    expect(screen.getByRole('group', { name: '생명의 기운 잠김' })).toHaveTextContent('인도양 항로가 열리면 부엌에서 도시락과 미끼를 만들 수 있어요.');
+
     expect(screen.queryByRole('group', { name: '생선 탈리(전설) 잠김' })).toBeNull();
-    const ownedLunchBtn = screen.getByRole('button', { name: '생선 탈리(전설) 사용' });
-    expect(ownedLunchBtn).toBeEnabled();
-    fireEvent.click(ownedLunchBtn);
+    const guestLunchBtn = screen.getByRole('button', { name: '생선 탈리(전설) 사용' });
+    expect(guestLunchBtn).toBeEnabled();
+    fireEvent.click(guestLunchBtn);
     expect(dispatch).toHaveBeenCalledWith({ type: 'eat', item: 'cook-lunch-bundle' });
 
-    fireEvent.click(screen.getByRole('button', { name: '생선 탈리(전설) 상세 보기' }));
-    const dialog = screen.getByRole('dialog');
-    expect(within(dialog).queryByRole('group', { name: '생선 탈리(전설) 사용 잠김' })).toBeNull();
-    expect(within(dialog).getByRole('button', { name: '사용' })).toBeEnabled();
+    expect(screen.queryByRole('group', { name: '용연향 미끼(전설) 잠김' })).toBeNull();
+    expect(screen.getByRole('button', { name: '용연향 미끼(전설) 사용' })).toBeEnabled();
     cleanup();
 
     show(game({ items: { 'cook-lunch-bundle': 1 } }), 'guest');
@@ -392,6 +392,7 @@ describe('해금 전과 게스트', () => {
     expect(screen.getByRole('group', { name: '생명의 기운 잠김' })).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
     expect(screen.getByRole('group', { name: '가루디야(일반) 잠김' })).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
     expect(screen.queryByRole('group', { name: '생선 탈리(전설) 잠김' })).toBeNull();
+    expect(screen.getByRole('button', { name: '생선 탈리(전설) 사용' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: '보유 중만 보기' }));
     expect(screen.getByRole('button', { name: '생선 탈리(전설) 사용' })).toBeEnabled();
   });

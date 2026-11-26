@@ -23,7 +23,7 @@ describe('SlotChips (보너스 통합 칩)', () => {
     fireEvent.mouseEnter(group.parentElement!);
     const tip = screen.getByRole('tooltip');
     expect(tip).toHaveTextContent('잠김');
-    expect(tip).toHaveTextContent('인도양 항로가 열리면 도시락과 미끼를 쓸 수 있어요.');
+    expect(tip).toHaveTextContent('인도양 항로가 열리면 부엌에서 도시락과 미끼를 만들 수 있어요.');
   });
 
   it('요리가 열린 뒤 활성 효과가 없으면 네모 점과 흐린 효과 0 버튼을 보이고, 호버 시 4행 2열 최소 표를 연다', () => {

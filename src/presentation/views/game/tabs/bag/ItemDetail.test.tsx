@@ -118,13 +118,14 @@ describe('ItemDetail', () => {
     expect(within(dialog).getByRole('button', { name: '사용' })).toBeEnabled();
   });
 
-  it('비약 상세는 등급색 이름, 행운 효과, 하루 동안 지속, 게스트 사용 가능과 확인 실패 잠금 상태를 정확히 보인다', () => {
-    const view = selectItemSection(seed({ items: { 'luck-small': 2 } }), NOW, 'guest');
+  it('비약 상세는 게스트 여부와 무관하게 잠금 없이 등급색 이름, 행운 효과, 하루 동안 지속, 사용 버튼을 보인다', () => {
+    const view = selectItemSection(seed({ boat: 0, items: { 'luck-small': 2 } }), NOW, 'guest');
     const potionRow = view.potions[0];
+    const onUse = vi.fn();
 
     render(
       <ItemDetail
-        target={{ kind: 'potion', row: potionRow, lockLines: view.potionLock, onUse: vi.fn() }}
+        target={{ kind: 'potion', row: potionRow, lockLines: null, onUse }}
         busy={false}
         onClose={vi.fn()}
       />,
@@ -138,28 +139,18 @@ describe('ItemDetail', () => {
     expect(within(dialog).getByText('×1.05')).toBeInTheDocument();
     expect(within(dialog).getByText('하루 동안')).toBeInTheDocument();
     expect(within(dialog).getByText('2개')).toBeInTheDocument();
-    expect(within(dialog).queryByRole('group', { name: '작은 바다 영약 사용 잠김' })).toBeNull();
-    expect(within(dialog).getByRole('button', { name: '사용' })).toBeEnabled();
 
-    cleanup();
-    const unverifiedView = selectItemSection(seed({ items: { 'luck-small': 2 } }), NOW, 'unverified');
-    render(
-      <ItemDetail
-        target={{ kind: 'potion', row: unverifiedView.potions[0], lockLines: unverifiedView.potionLock, onUse: vi.fn() }}
-        busy={false}
-        onClose={vi.fn()}
-      />,
-    );
-    const unverifiedDialog = screen.getByRole('dialog');
-    const lockGroup = within(unverifiedDialog).getByRole('group', { name: '작은 바다 영약 사용 잠김' });
-    expect(lockGroup).toHaveTextContent('계정을 확인하면 쓸 수 있어요.');
-    expect(within(lockGroup).getByRole('button', { name: '사용' })).toBeDisabled();
+    expect(within(dialog).queryByRole('group', { name: /잠김/ })).toBeNull();
+    const useBtn = within(dialog).getByRole('button', { name: '사용' });
+    expect(useBtn).toBeEnabled();
+    fireEvent.click(useBtn);
+    expect(onUse).toHaveBeenCalledWith(potionRow);
 
     cleanup();
     const activeView = selectItemSection(seed({ items: { 'luck-small': 1 }, potions: { 'luck-small': '2026-11-12' } }), NOW, 'account');
     render(
       <ItemDetail
-        target={{ kind: 'potion', row: activeView.potions[0], lockLines: activeView.potionLock, onUse: vi.fn() }}
+        target={{ kind: 'potion', row: activeView.potions[0], lockLines: null, onUse: vi.fn() }}
         busy={false}
         onClose={vi.fn()}
       />,
@@ -167,5 +158,24 @@ describe('ItemDetail', () => {
     const activeDialog = screen.getByRole('dialog');
     expect(within(activeDialog).getByText('사용 중')).toBeInTheDocument();
     expect(within(activeDialog).getByRole('button', { name: '사용' })).toBeDisabled();
+  });
+
+  it('잠긴 요리 상세의 하단 버튼 잠금 그룹 이름은 `${label} 잠김`이고 제작 해금 문구를 보인다', () => {
+    const lockedView = selectItemSection(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), NOW, 'account');
+    if (lockedView.state !== 'locked') throw new Error('locked이어야 해요');
+    const row = lockedView.lunch[0];
+
+    render(
+      <ItemDetail
+        target={{ kind: 'recipe', row, lockLines: row.lockLines, onUse: vi.fn() }}
+        busy={false}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const dialog = screen.getByRole('dialog');
+    const lockGroup = within(dialog).getByRole('group', { name: `${row.label} 잠김` });
+    expect(lockGroup).toHaveTextContent('인도양 항로가 열리면 부엌에서 도시락과 미끼를 만들 수 있어요.');
+    expect(within(lockGroup).getByRole('button', { name: '사용' })).toBeDisabled();
   });
 });

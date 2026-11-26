@@ -348,7 +348,7 @@ export function canLevelUpArtifact(
   return OK;
 }
 
-/** 비약 사용 — 등록된 비약, 1개 이상 보유, 오늘 아직 미적용이어야 한다(게스트 포함 허용) */
+/** 비약 사용 — 게스트 여부 및 배 단계와 무관하게 등록된 비약, 1개 이상 보유, 오늘 아직 미적용이어야 한다 */
 export function canUsePotion(state: GameState, id: unknown, now: string, _guest = false): RuleCheck {
   const potion = potionById(id);
   if (!potion) return no('bad-request');

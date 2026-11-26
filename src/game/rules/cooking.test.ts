@@ -531,33 +531,29 @@ describe('eat', () => {
     const s = seed({ items: { [lunch.id]: 1 }, location: { kind: 'region', id: 'world' } });
     expect(ok(s, { type: 'eat', item: lunch.id }).state.slots.lunch).not.toBeNull();
   });
-  it('보유하지 않았으면 item-not-owned, 먹을 수 없는 아이템은 bad-request이며, 게스트도 보유한 도시락·미끼를 사용할 수 있다', () => {
+  it('보유하지 않았으면 item-not-owned, 먹을 수 없는 아이템은 bad-request다', () => {
     expect(rejected(seed(), { type: 'eat', item: lunch.id })).toBe('item-not-owned');
-    expect(canEat(seed({ items: { [lunch.id]: 1 } }), lunch.id, T0, true)).toEqual({ ok: true });
-    const guestLunch = ok(seed({ boat: 0, items: { [lunch.id]: 1 } }), { type: 'eat', item: lunch.id }, deps({ guest: true }));
-    expect(guestLunch.state.slots.lunch).toEqual({ id: lunch.id, endsAt: at(T0, 9 * 60 * MIN) });
-    expect(guestLunch.state.items[lunch.id]).toBeUndefined();
-    const guestBait = ok(seed({ boat: 1, items: { [bait.id]: 1 } }), { type: 'eat', item: bait.id }, deps({ guest: true }));
-    expect(guestBait.state.slots.bait).toEqual({ id: bait.id, endsAt: at(T0, 5 * MIN) });
-    expect(guestBait.state.items[bait.id]).toBeUndefined();
+    expect(rejected(seed(), { type: 'eat', item: lunch.id }, deps({ guest: true }))).toBe('item-not-owned');
     expect(rejected(seed({ items: energy(5) }), { type: 'eat', item: ENERGY_ITEM_IDS.common })).toBe('bad-request');
     expect(rejected(seed(), { type: 'eat', item: 7 as never })).toBe('bad-request');
   });
-  it('요리 제작 해금 전(boat 1, 4)이라도 로그인 계정이 보유한 도시락·미끼는 정상 사용할 수 있다', () => {
+  it('요리 제작 해금 전(boat 0~4)과 게스트 계정도 보유한 도시락·미끼는 정상 사용할 수 있다', () => {
     const bundleId = 'cook-lunch-bundle';
     const legBaitId = 'cook-bait-legendary';
-    for (const boat of [1, 4]) {
-      const s = seed({ boat, items: { [bundleId]: 1, [legBaitId]: 3 } });
-      expect(canEat(s, bundleId, T0, false)).toEqual({ ok: true });
-      expect(canEat(s, legBaitId, T0, false)).toEqual({ ok: true });
+    for (const guest of [false, true]) {
+      for (const boat of [0, 1, 4]) {
+        const s = seed({ boat, items: { [bundleId]: 1, [legBaitId]: 3 } });
+        expect(canEat(s, bundleId, T0, guest)).toEqual({ ok: true });
+        expect(canEat(s, legBaitId, T0, guest)).toEqual({ ok: true });
 
-      const afterLunch = ok(s, { type: 'eat', item: bundleId }, deps({ guest: false }));
-      expect(afterLunch.state.slots.lunch).toEqual({ id: bundleId, endsAt: at(T0, 9 * 60 * MIN) });
-      expect(afterLunch.state.items[bundleId]).toBeUndefined();
+        const afterLunch = ok(s, { type: 'eat', item: bundleId }, deps({ guest }));
+        expect(afterLunch.state.slots.lunch).toEqual({ id: bundleId, endsAt: at(T0, 9 * 60 * MIN) });
+        expect(afterLunch.state.items[bundleId]).toBeUndefined();
 
-      const afterBait = ok(afterLunch.state, { type: 'eat', item: legBaitId }, deps({ guest: false }));
-      expect(afterBait.state.slots.bait).toEqual({ id: legBaitId, endsAt: at(T0, 5 * MIN) });
-      expect(afterBait.state.items[legBaitId]).toBe(2);
+        const afterBait = ok(afterLunch.state, { type: 'eat', item: legBaitId }, deps({ guest }));
+        expect(afterBait.state.slots.bait).toEqual({ id: legBaitId, endsAt: at(T0, 5 * MIN) });
+        expect(afterBait.state.items[legBaitId]).toBe(2);
+      }
     }
   });
 });

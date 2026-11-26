@@ -9,6 +9,7 @@ import { AUTO_ENERGY_BOAT, ENERGY_ITEM_IDS, ENERGY_UNIT } from '../content/cooki
 import { BOATS, COUPONS, FISH, ITEM_CAP, WALK_BAG_CAP, newState } from './logic';
 import { REJECT_TEXT } from './rules';
 import { gameDayOf } from './time';
+import { rodAxes } from './stats';
 import type { FishInstance, FormId, GameState } from './logic';
 
 // newUid는 결정적 목 — 개체 uid가 매 실행 달라지면 재현성 검증이 불가능하다
@@ -128,6 +129,34 @@ describe('catch', () => {
     if (!out.ok) throw new Error(out.error);
     expect(out.state.bag[0].judgment).toBe('perfect');
     expect(out.events[0]).toMatchObject({ type: 'catch', payload: { judgment: 'perfect' } });
+  });
+
+  it('챔질 경과가 있으면 커서 위치를 catch 이벤트에만 싣는다', () => {
+    const state = seed({ rod: 10 });
+    const biteElapsed = 700;
+    const out = applyAction(
+      state,
+      { type: 'catch', spot: 'pond', judgment: 'perfect', biteElapsed },
+      deps(),
+    );
+    if (!out.ok) throw new Error(out.error);
+    expect(out.events[0]).toMatchObject({
+      type: 'catch',
+      payload: { pos: expect.any(Number) },
+    });
+    const payload = out.events[0].payload as { pos: number };
+    expect(payload.pos).toBeCloseTo(biteElapsed / 1000 / rodAxes(state).sweep.value, 8);
+    expect(out.result).not.toHaveProperty('pos');
+  });
+
+  it('챔질 경과가 없으면 커서 위치를 싣지 않는다', () => {
+    const out = applyAction(
+      seed({ rod: 10 }),
+      { type: 'catch', spot: 'pond', judgment: 'perfect' },
+      deps(),
+    );
+    if (!out.ok) throw new Error(out.error);
+    expect(out.events[0].payload).not.toHaveProperty('pos');
   });
 
   it('NEW 판정은 폼별 — 일반을 잡았어도 변이 첫 캐치는 신규 (v0.3.3)', () => {
@@ -650,13 +679,12 @@ describe('usePotion — 비약 사용', () => {
   const nextNow = '2026-08-22T19:00:00.000Z'; // KST 다음날 04:00
   const nextDay = gameDayOf(nextNow);
 
-  it('게스트도 보유한 비약을 사용할 수 있고, 모르는 id, 미보유, 오늘 이미 적용 중이면 거부한다', () => {
-    const guestOut = applyAction(seed({ items: { 'luck-small': 1 } }), { type: 'usePotion', id: 'luck-small' }, deps({ now, guest: true }));
-    expect(guestOut.ok).toBe(true);
-    if (guestOut.ok) expect(guestOut.state.potions).toEqual({ 'luck-small': day });
+  it('모르는 id, 미보유, 오늘 이미 적용 중이면 거부한다', () => {
     expect(applyAction(seed({ items: { 'luck-small': 1 } }), { type: 'usePotion', id: 'nope' }, deps()))
       .toEqual({ ok: false, error: 'bad-request' });
     expect(applyAction(seed(), { type: 'usePotion', id: 'luck-small' }, deps()))
+      .toEqual({ ok: false, error: 'potion-not-owned' });
+    expect(applyAction(seed(), { type: 'usePotion', id: 'luck-small' }, deps({ guest: true })))
       .toEqual({ ok: false, error: 'potion-not-owned' });
     expect(applyAction(
       seed({ items: { 'luck-small': 2 }, potions: { 'luck-small': day } }),
@@ -665,6 +693,21 @@ describe('usePotion — 비약 사용', () => {
     )).toEqual({ ok: false, error: 'potion-already-active' });
     expect(REJECT_TEXT['potion-not-owned']).toMatch(/비약/);
     expect(REJECT_TEXT['potion-already-active']).toMatch(/이미.*비약/);
+  });
+
+  it('게스트와 배 0~4단계도 보유한 비약을 사용하면 1개 차감하고 오늘 게임 날짜를 기록한다', () => {
+    for (const guest of [false, true]) {
+      for (const boat of [0, 4]) {
+        const out = applyAction(
+          seed({ boat, items: { 'luck-small': 1 } }),
+          { type: 'usePotion', id: 'luck-small' },
+          deps({ now, guest }),
+        );
+        if (!out.ok) throw new Error(out.error);
+        expect(out.state.items['luck-small']).toBeUndefined();
+        expect(out.state.potions).toEqual({ 'luck-small': day });
+      }
+    }
   });
 
   it('보유한 비약을 사용하면 1개 차감하고 오늘 게임 날짜를 기록한다', () => {

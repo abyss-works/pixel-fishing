@@ -20,7 +20,7 @@ import { migrate, newState } from '../src/game/rules/logic.js';
 import type { FishInstance, FormRecord, GameState, Judgment } from '../src/game/rules/logic.js';
 import {
   autoLockKey, buildCatchInfo, canFish, catchFameOf, decideCatchAutoLock, FISH, fishPool, formName, instanceFish,
-  evictionPriceRows, makeInstance, nextDexRec, pickEvict, pruneAutoLockedIds, RARITY_ORDER,
+  evictionPriceRows, makeInstance, nextDexRec, pickEvict, pruneAutoLockedIds, RARITY_ORDER, timingPos,
   matchBountyCatch, rollCatchExtras,
 } from '../src/game/rules/logic.js';
 import type { Fish } from '../src/game/rules/logic.js';
@@ -56,7 +56,7 @@ import type { QuestRow } from '../src/game/rules/bountyRows.js';
 import { gameDayOf, gameDayStartISO, previousGameDayISO } from '../src/game/rules/time.js';
 import type { DayPhase } from '../src/game/rules/time.js';
 import { checkNickname, pickGuestName } from '../src/game/rules/nickname.js';
-import { powerZones, rodPower, zonesFor } from '../src/game/rules/stats.js';
+import { powerZones, rodAxes, rodPower, zonesFor } from '../src/game/rules/stats.js';
 import { MIN_ACTION_GAP_MS, SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
 import { catchWaitMs } from '../src/game/rules/pacing.js';
 import { APP_VERSION } from '../src/version.js';
@@ -494,7 +494,10 @@ async function route(req: Req, res: Res): Promise<void> {
   if (action.type === 'catch' && (action.forceEncounter || action.forcePhase)) {
     forceCatchAllowed = await debugAllowed();
     if (!forceCatchAllowed) {
-      action = { type: 'catch', spot: action.spot, judgment: action.judgment };
+      action = {
+        type: 'catch', spot: action.spot, judgment: action.judgment,
+        ...(action.biteElapsed !== undefined ? { biteElapsed: action.biteElapsed } : {}),
+      };
     }
   }
 
@@ -733,7 +736,7 @@ async function route(req: Req, res: Res): Promise<void> {
     if (out.ok) prevFortune = champStateBase.fortune;
   } else if (action.type === 'catch' && skipDetail) {
     out = await fastCatch(db, uid, row, action.spot, action.judgment, now, guildEffects, user.email === null,
-      loaded.counters, loaded.clearedNamed, action.forcePhase);
+      loaded.counters, loaded.clearedNamed, action.forcePhase, action.biteElapsed);
     if (out.ok) {
       catchBase = scalarState(row, loaded.counters, loaded.clearedNamed);
       prevFortune = catchBase.fortune;
@@ -1136,7 +1139,7 @@ export function catchProgressQuests(events: readonly GameEvent[], activeIds: rea
  */
 export async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId, judgmentIn: Judgment, now: string,
   guild: GuildEffects, guest: boolean, counters: Record<string, number>, clearedNamed: string[],
-  forcePhase?: DayPhase): Promise<ApplyOutcome> {
+  forcePhase?: DayPhase, biteElapsed?: number): Promise<ApplyOutcome> {
   const initialBase = migrate({ ...blobInput(row.data), gold: Number(row.gold),
     fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {},
     achievementCounters: counters, clearedNamed });
@@ -1254,10 +1257,12 @@ export async function fastCatch(db: Executor, uid: string, row: StateRow, spot: 
   const takenFish = view(plan.gain.uids);
   const released = goneFish.map(toReleased);
   const extracted = takenFish.map(toReleased);
+  const pos = timingPos(biteElapsed, rodAxes(base).sweep.value);
   const events: GameEvent[] = [{ type: 'catch', payload: {
     uid: inst.uid, fishId: fish.id, judgment, spot,
     size: info.size, form: info.form, isNew: info.isNew, fame: gainedFame,
     ...(drawn.byCeiling ? { pity: true } : {}),
+    ...(pos !== null ? { pos } : {}),
     ...appliedSlots(base, now, judgmentIn),
   } }];
   if (goneFish.length > 0) {

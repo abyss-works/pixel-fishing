@@ -20,6 +20,8 @@ export interface GearView {
   zone: number;
   /** 빨간 존(PERFECT) 폭 — 파워 게이트 초과 보너스. 없으면 그리지 않는다 */
   red?: number;
+  /** 빨간 존 중심의 바 비율(0~1). 없으면 중앙 */
+  redCenter?: number;
   t: number;
   /** catch 전이 후 경과 초 — 훅 점프 연출. catch가 아니면 null */
   catchT?: number | null;
@@ -92,7 +94,7 @@ export function drawTimingBar(ctx: Ctx, v: GearView) {
   }
   if (v.red && v.red > 0.02) {
     const rw = bw * v.red;
-    R(ctx, bx + (bw - rw) / 2, by, rw, bh, 'rgba(239,83,80,0.9)');
+    R(ctx, bx + (v.redCenter ?? 0.5) * bw - rw / 2, by, rw, bh, 'rgba(239,83,80,0.9)');
   }
   const cx = bx + Math.min(v.biteT, 1) * bw;
   R(ctx, cx - 1, by - 2, 2, bh + 4, '#fff');

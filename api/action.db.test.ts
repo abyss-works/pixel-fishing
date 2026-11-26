@@ -2612,3 +2612,35 @@ describe('편지 독립 쿨다운과 닉네임 변경 원자성', () => {
     }
   });
 });
+
+describe('게스트·배 0단계 보유 소비 아이템 사용', () => {
+  it('게스트와 배 0단계 계정도 보유한 비약(usePotion)과 도시락·미끼(eat)를 사용하고 DB에 커밋된다', async () => {
+    const uid = await seed({
+      email: null,
+      state: {
+        boat: 0,
+        location: at('home'),
+        items: { 'luck-small': 1, 'cook-lunch-bite': 1, 'cook-bait-rare': 1 },
+      },
+    });
+
+    const potionRes = await callAction(userToken(uid), { type: 'usePotion', id: 'luck-small' });
+    expect(potionRes.status).toBe(200);
+
+    vi.setSystemTime(Date.parse(NOW) + 2000);
+    const eatLunchRes = await callAction(userToken(uid), { type: 'eat', item: 'cook-lunch-bite' });
+    expect(eatLunchRes.status).toBe(200);
+
+    vi.setSystemTime(Date.parse(NOW) + 4000);
+    const eatBaitRes = await callAction(userToken(uid), { type: 'eat', item: 'cook-bait-rare' });
+    expect(eatBaitRes.status).toBe(200);
+
+    const db = await dumpUser(env.client, uid);
+    const save = db.saves_current[0] as { data: GameState };
+    expect(save.data.items).toEqual({});
+    expect(save.data.potions).toEqual({ 'luck-small': TODAY_KST });
+    expect(save.data.slots.lunch?.id).toBe('cook-lunch-bite');
+    expect(save.data.slots.bait?.id).toBe('cook-bait-rare');
+    expect((db.events as { type: string }[]).map(e => e.type).sort()).toEqual(['eat', 'eat', 'usePotion']);
+  });
+});

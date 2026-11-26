@@ -47,7 +47,7 @@ import {
   canAcceptQuest, canDeliverBounty, canExchangeArtifact, canLevelUpArtifact, canExhibit, canResolveChallenge,
 } from './rules.js';
 import type { RejectReason, BountyCtx } from './rules.js';
-import { powerZones, rodPower } from './stats.js';
+import { powerZones, rodAxes, rodPower } from './stats.js';
 import type { PowerZone } from './stats.js';
 import { checkNickname } from './nickname.js';
 import { reduceDebug } from './debug.js';
@@ -59,6 +59,7 @@ import type { DayPhase } from './time.js';
 import { NO_GUILD_EFFECTS } from './guild.js';
 import type { GuildEffects } from './guild.js';
 import { ensureFortune, totalLuckMultOf } from './fortune.js';
+import { timingPos } from './timing.js';
 
 export interface DebugStepInput {
   command: string;
@@ -66,7 +67,7 @@ export interface DebugStepInput {
 }
 
 export type GameAction =
-  | { type: 'catch'; spot: SpotId; judgment: Judgment; forceEncounter?: true; forcePhase?: DayPhase } // forceEncounter/forcePhase: 테스트용(서버가 비허용 시 떼어 낸다)
+  | { type: 'catch'; spot: SpotId; judgment: Judgment; biteElapsed?: number; forceEncounter?: true; forcePhase?: DayPhase } // forceEncounter/forcePhase: 테스트용(서버가 비허용 시 떼어 낸다)
   | { type: 'sell'; uids: string[] }            // 판매 원자 단위 = 개체 (세이브 v8)
   | { type: 'upgradeRod' }
   | { type: 'buyBoat' }
@@ -608,12 +609,14 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       };
       const released: ReleasedFish[] = gone.map(toReleased);
       const extracted: ReleasedFish[] = taken.map(toReleased);
+      const pos = timingPos(action.biteElapsed, rodAxes(state).sweep.value);
       const events: GameEvent[] = [{ type: 'catch', payload: {
         // uid를 남긴다 — 이벤트 스트림과 가방 개체를 잇는 유일한 연결고리 (감사·집계의 근거)
         // judgment는 강등 확정값 — 감사에서 "PERFECT 주장이 서버에서 살아남았나"를 보려면 이 값이다
         uid: inst.uid, fishId: fish.id, judgment, spot: action.spot,
         size: info.size, form: info.form, isNew: info.isNew, fame: gainedFame,
         ...(drawn.byCeiling ? { pity: true } : {}),
+        ...(pos !== null ? { pos } : {}),
         // 걸린 슬롯(도시락=방치, 미끼=수동) — 집계가 읽는다. 적용 범위는 appliedSlots가 정한다
         ...appliedSlots(state, deps.now, action.judgment),
       } }];
@@ -878,7 +881,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       if (action.replaceSlot !== undefined && action.replaceSlot !== 'bait' && action.replaceSlot !== 'bait2') {
         return { ok: false, error: 'bad-request' };
       }
-      const check = canEat(state, action.item, deps.now, deps.guest);
+      const check = canEat(state, action.item, deps.now);
       if (!check.ok) return { ok: false, error: check.reason };
       const recipe = recipeById(action.item)!;
       // 완성품을 먼저 정산한 뒤 하나를 꺼내 슬롯에 넣는다. 든 것이 있으면 이전 효과는 즉시 끝난다
@@ -946,7 +949,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       };
     }
     case 'usePotion': {
-      const check = canUsePotion(state, action.id, deps.now, deps.guest);
+      const check = canUsePotion(state, action.id, deps.now);
       if (!check.ok) return { ok: false, error: check.reason };
       const potion = potionById(action.id)!;
       const day = gameDayOf(deps.now);
