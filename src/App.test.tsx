@@ -446,7 +446,7 @@ describe('R3: 도감 탭 (지역 서브탭)', () => {
     seed({ dex: { crucian: { normal: rec(3) } } });
     render(<App />);
     clickTab(/^도감/);
-    expect(screen.getByRole('button', { name: /도감\s*\(일반\)/ })).toHaveClass('active');
+    expect(screen.getByRole('button', { name: '도감' })).toHaveClass('active');
     expect(screen.getByText('붕어')).toBeInTheDocument();
     expect(screen.getByText('3마리 잡음')).toBeInTheDocument();
     // 집 = 마을 지역 → 마을 어종 12종 중 붕어 1종만 공개
@@ -465,27 +465,27 @@ describe('R3: 도감 탭 (지역 서브탭)', () => {
   it('활성 도감 탭 재클릭 = 일반→돌연변이→네임드 보기 순환', () => {
     seed({ dex: { crucian: { normal: rec(3), variant: rec(1) } } });
     render(<App />);
-    clickTab(/^도감/);
-    clickTab(/도감\s*\(일반\)/); // 활성 상태에서 한 번 더 → 돌연변이 보기
-    expect(screen.getByRole('button', { name: /도감\s*\(돌연변이\)/ })).toHaveClass('active');
+    clickTab('도감');
+    clickTab('도감'); // 활성 상태에서 한 번 더 → 돌연변이 보기
+    expect(screen.getByRole('button', { name: '도감' })).toHaveClass('active');
     expect(screen.getByRole('heading', { name: /^돌연변이/ })).toBeInTheDocument();
     expect(screen.getByText('황금 붕어')).toBeInTheDocument(); // 발견한 변이는 변이 이름
     expect(screen.getByText('1마리 잡음')).toBeInTheDocument(); // 변이 폼 별도 마릿수 (v7)
     expect(screen.getAllByText('???').length).toBe(11); // 나머지 변이는 미확인
-    clickTab(/도감\s*\(돌연변이\)/);
+    clickTab('도감');
     expect(screen.getByRole('heading', { name: /^네임드/ })).toBeInTheDocument();
-    clickTab(/도감\s*\(네임드\)/); // 끝에서 처음으로
+    clickTab('도감'); // 끝에서 처음으로
     expect(screen.getByText('붕어')).toBeInTheDocument();
   });
 
   it('도감 재진입 시 마지막 서브탭 유지 — 씬 기본값으로 리셋하지 않는다', () => {
     seed({});
     render(<App />);
-    clickTab(/^도감/);
+    clickTab('도감');
     fireEvent.click(screen.getByRole('button', { name: /태평양/ })); // 마을 → 태평양
     expect(screen.getAllByText('???').length).toBe(13);
     clickTab('도움말');
-    clickTab(/도감/); // 재진입
+    clickTab('도감'); // 재진입
     // 태평양 유지 — 마을로 리셋됐으면 12종(연못 6+강 6)이 뜬다
     expect(screen.getAllByText('???').length).toBe(13);
   });
@@ -493,9 +493,9 @@ describe('R3: 도감 탭 (지역 서브탭)', () => {
   it('네임드 보기 — 수배가 있는 해역만 서브탭에 있고 마을은 없다', () => {
     seed({}); // 시작 씬 = 마을 → 도감 열람 존도 마을이지만 네임드는 첫 수배 존(태평양)을 대신 보인다
     render(<App />);
-    clickTab(/^도감/);
-    clickTab(/도감\s*\(일반\)/);
-    clickTab(/도감\s*\(돌연변이\)/);
+    clickTab('도감');
+    clickTab('도감');
+    clickTab('도감');
     expect(screen.getByRole('heading', { name: /^네임드/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^마을/ })).not.toBeInTheDocument();
     expect(screen.getByText('???')).toBeInTheDocument(); // 메갈로돈 미획득
@@ -1221,15 +1221,20 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     const active = () => (document.querySelector('.pf-tabbar button.active')?.textContent ?? '')
       .replace(/\s+/g, '');
     fireEvent.keyDown(document, { key: '2' });
-    expect(active()).toBe('가방(물고기)');
+    expect(active()).toBe('가방');
+    expect(screen.getByRole('button', { name: '물고기' })).toHaveAttribute('aria-pressed', 'true');
     fireEvent.keyDown(document, { key: '2' });
-    expect(active()).toBe('가방(아이템)');
+    expect(active()).toBe('가방');
+    expect(screen.getByRole('button', { name: '아이템' })).toHaveAttribute('aria-pressed', 'true');
     fireEvent.keyDown(document, { key: '2' });
-    expect(active()).toBe('가방(유물)');
+    expect(active()).toBe('가방');
+    expect(screen.getByRole('button', { name: '유물' })).toHaveAttribute('aria-pressed', 'true');
     fireEvent.keyDown(document, { key: '2' });
-    expect(active()).toBe('가방(물고기)');
+    expect(active()).toBe('가방');
+    expect(screen.getByRole('button', { name: '물고기' })).toHaveAttribute('aria-pressed', 'true');
     fireEvent.keyDown(document, { key: '3' });
-    expect(active()).toBe('도감(일반)');
+    expect(active()).toBe('도감');
+    expect(screen.getByRole('button', { name: '일반' })).toHaveAttribute('aria-pressed', 'true');
     fireEvent.keyDown(document, { key: '3' });
     expect(screen.getByRole('heading', { name: /^돌연변이/ })).toBeInTheDocument();
     fireEvent.keyDown(document, { key: '3' });

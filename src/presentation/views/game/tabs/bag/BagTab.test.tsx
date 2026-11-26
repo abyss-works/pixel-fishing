@@ -115,13 +115,21 @@ describe('BagTab - 유물 섹션 전체 목록·미보유·보유 중만 보기'
     expect(screen.getByRole('heading', { level: 3, name: /유물 1\/8/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '보유 중만 보기' })).toHaveAttribute('aria-pressed', 'false');
 
-    // 보유 유물은 버튼(PressRow)으로 상세 창을 열고 32px 스프라이트·이름(등급)·구역을 보이며, 바깥 행에는 로어가 보이지 않는다
+    // 보유 유물은 버튼(PressRow)으로 상세 창을 열고 32px 스프라이트·흰색 이름(등급색 괄호)·Lv.를 왼쪽에, 구역만 오른쪽에 보이며 바깥 행에는 로어가 보이지 않는다
     const varuna = artifactById('varuna-scale')!;
     const ownedBtn = screen.getByRole('button', { name: /진주 상인의 저울/ });
     expect(ownedBtn).toBeInTheDocument();
     expect(ownedBtn.querySelector('canvas')).toHaveAttribute('width', '32');
+    const ownedNameEl = within(ownedBtn).getByText('진주 상인의 저울');
+    expect(ownedNameEl).not.toHaveClass('text-gold');
+    expect(ownedNameEl).not.toHaveClass('font-bold');
     expect(within(ownedBtn).getByText('(희귀)')).toHaveAttribute('data-rarity', varuna.grade);
-    expect(within(ownedBtn).getByText('인도양')).toBeInTheDocument();
+    const levelEl = within(ownedBtn).getByText('Lv.1');
+    const zoneEl = within(ownedBtn).getByText('인도양');
+    expect(levelEl).toHaveClass('text-accent');
+    expect(levelEl.parentElement).toBe(ownedNameEl.closest('.truncate')!.parentElement);
+    expect(zoneEl).toHaveClass('text-xs', 'shrink-0', 'text-text-dim');
+    expect(zoneEl.previousElementSibling).toBe(levelEl.parentElement);
     expect(within(ownedBtn).queryByText(varuna.lore)).not.toBeInTheDocument();
 
     // 미보유 유물은 비활성 행(버튼 아님)으로 흐린 32px 스프라이트·이름(등급)·구역·??? + 높이 유지 빈 줄을 보인다

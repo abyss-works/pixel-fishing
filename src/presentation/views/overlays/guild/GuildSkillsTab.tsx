@@ -53,6 +53,7 @@ export default function GuildSkillsTab({ guild, gold, busy, run, dialogHost, onR
 
   const sel = rows.find(r => r.id === picked) ?? rows[0];
   const unlocked = guild.growth.level >= GUILD_ENHANCE_MIN_LEVEL;
+  const sharedCap = Math.min(guild.growth.level, GUILD_BONUS_MAX_RANK);
   const pool = enhancePoolSummary(guild);
   const resetState = enhanceResetState(guild, gold);
 
@@ -180,14 +181,33 @@ export default function GuildSkillsTab({ guild, gold, busy, run, dialogHost, onR
 
       <div className={`flex flex-col gap-2 flex-1 min-h-0 ${SCROLL_Y}`}>
         <Inset className="shrink-0 flex flex-col gap-2 px-3 py-2.5 mobile:px-2 mobile:py-2">
-          <div className="min-h-8 flex items-center justify-between gap-2 pb-1.5 border-b border-line flex-wrap">
+          <div className="h-9 mobile:h-auto mobile:min-h-9 flex items-center justify-between gap-2 pb-1.5 border-b border-line">
             {track === 'shared' ? (
               <>
                 <div className="flex items-center gap-2 flex-wrap min-w-0">
-                  <Badge tone="gold" size="xs" pixel>길드 Lv.{guild.growth.level}</Badge>
-                  <span className="text-2xs text-text">공용 골드를 모아 길드원 모두의 기본 1~5단계를 올려요.</span>
+                  <Tip
+                    text="기부한 골드를 모아 길드원 모두에게 적용되는 공용 기본 단계를 올려요."
+                    className="text-xs font-bold text-gold"
+                  >
+                    공용 기본 단계
+                  </Tip>
+                  <div className="inline-flex items-center gap-1" aria-hidden="true">
+                    {Array.from({ length: GUILD_BONUS_MAX_RANK }, (_, idx) => (
+                      <span
+                        key={idx}
+                        className={cx(
+                          'size-2.5 border',
+                          NOTCH_SM,
+                          idx < sharedCap ? 'bg-gold border-gold-dark' : 'bg-bg border-line-dim',
+                        )}
+                      />
+                    ))}
+                  </div>
+                  <span className="pf-accent text-xs text-gold">
+                    {sharedCap} / {GUILD_BONUS_MAX_RANK}
+                  </span>
                 </div>
-                <span className="text-2xs text-text-dim shrink-0">기본 상한 {GUILD_BONUS_MAX_RANK}단계</span>
+                <Badge tone="gold" size="xs" pixel>길드 Lv.{guild.growth.level}</Badge>
               </>
             ) : unlocked ? (
               <>
@@ -236,11 +256,11 @@ export default function GuildSkillsTab({ guild, gold, busy, run, dialogHost, onR
               </>
             ) : (
               <>
-                <span className="inline-flex items-center gap-1.5 text-xs text-text-dim">
+                <span className="inline-flex items-center gap-1.5 text-xs text-text-dim min-w-0">
                   <PixelIcon glyph="lock" size={12} className="shrink-0" />
                   <span>{GUILD_ENHANCE_LOCK_NOTE}</span>
                 </span>
-                <span className="text-2xs text-text-dim shrink-0">현재 Lv.{guild.growth.level}</span>
+                <Badge tone="gold" size="xs" pixel>길드 Lv.{guild.growth.level}</Badge>
               </>
             )}
           </div>

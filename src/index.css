@@ -338,11 +338,11 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
   }
   .pf-tabbar button {
     flex: 1;
-    min-width: 0;          /* 긴 라벨(가방(카드)·도감(돌연변이))이 탭바를 밀어내지 않게 */
+    min-width: 0;          /* 긴 라벨이 탭바를 밀어내지 않게 */
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center; /* 두 줄 라벨(도감) 옆의 한 줄 탭도 상하 중앙 정렬 */
+    justify-content: center; /* 두 줄 라벨 옆의 한 줄 탭도 상하 중앙 정렬 */
     gap: 3px;
     background: none;
     border: none;
@@ -354,7 +354,7 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
     cursor: pointer;
   }
   .pf-tabbar button:hover:not(:disabled, [aria-disabled='true']) { color: var(--c-text); }
-  /* 도감(일반)/(돌연변이)처럼 두 줄 라벨 허용 — 라벨의 \n에서만 줄바꿈 */
+  /* 두 줄 라벨 허용 — 라벨의 \n에서만 줄바꿈 */
   .pf-tabbar button span {
     white-space: pre-line;
     text-align: center;

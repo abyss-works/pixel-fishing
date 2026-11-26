@@ -115,7 +115,7 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
               {formName(fish, info?.form ?? 'normal')}
             </b>
             {isVariant ? (
-              <span data-catch-variant className="block h-[18px] leading-[18px] text-xs text-mutation truncate">{variantLine}</span>
+              <span data-catch-variant className="block h-[18px] leading-[18px] text-xs text-text-dim truncate">{variantLine}</span>
             ) : (
               <span aria-hidden="true" data-catch-variant-slot className="block h-[18px]" />
             )}

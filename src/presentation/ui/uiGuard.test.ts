@@ -591,11 +591,16 @@ describe('UI 시스템 가드', () => {
       expect(src, path).not.toMatch(/\bendsAt\b|\bslotMs\b|\bwaitMs\b|COOK_KIND_RULES|\.slots\b/);
     }
   });
-  it('슬롯 칩은 칩 껍데기(HudChip)와 공용 잠금(Locked)으로 그리고, 칩 껍데기가 칩 자신만 포인터 이벤트를 받게 한다', () => {
+  it('슬롯 칩은 칩 껍데기(HudChip)와 공용 잠금(Locked)으로 그리고, 칩 껍데기는 26px 단일 높이와 포인터 이벤트 격리를 강제한다', () => {
     const chips = presentationFiles.find(f => f.path === 'ui/hud/SlotChips.tsx')!.src;
     expect(chips).toMatch(/<HudChip\b/);
     expect(chips).toMatch(/<Locked\b/);
-    expect(presentationFiles.find(f => f.path === 'ui/hud/HudChip.tsx')!.src).toContain('pointer-events-auto');
+    const hudChip = presentationFiles.find(f => f.path === 'ui/hud/HudChip.tsx')!.src;
+    expect(hudChip).toContain('pointer-events-auto');
+    expect(hudChip).toContain('h-[26px]');
+    expect(hudChip).not.toMatch(/\bsize\??\s*:/);
+    const timeBadge = presentationFiles.find(f => f.path === 'ui/hud/TimeBadge.tsx')!.src;
+    expect(timeBadge).not.toMatch(/<HudChip[^>]*\bsize\s*=/);
   });
 
   // 하단 HUD 흐름 & 낚시 상태 띠·획득 카드 고정 슬롯 분리 — 오른쪽 아래 열과 메시지 창은 하단 단일 흐름 컨테이너 안에 두고,

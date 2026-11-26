@@ -94,25 +94,43 @@ function StatefulTabs() {
   );
 }
 
-describe('GameTabs - 도감 1단 보기 서브탭과 기존 순환 동기화', () => {
+describe('GameTabs - 도감·가방 괄호 없는 탭 라벨과 서브탭 순환 동기화', () => {
   it('1단 보기 서브탭 클릭, 도감 탭 재클릭, 숫자 3 재입력, Tab 구역 순환이 모두 동기화된다', () => {
     render(<StatefulTabs />);
-    expect(screen.getByRole('button', { name: /도감\s*\(일반\)/ })).toHaveClass('active');
+    expect(screen.getByRole('button', { name: '도감' })).toHaveClass('active');
 
     fireEvent.click(screen.getByRole('button', { name: '돌연변이' }));
-    expect(screen.getByRole('button', { name: /도감\s*\(돌연변이\)/ })).toHaveClass('active');
+    expect(screen.getByRole('button', { name: '도감' })).toHaveClass('active');
     expect(screen.getByRole('heading', { level: 3, name: /^돌연변이/ })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /도감\s*\(돌연변이\)/ }));
-    expect(screen.getByRole('button', { name: /도감\s*\(네임드\)/ })).toHaveClass('active');
+    fireEvent.click(screen.getByRole('button', { name: '도감' }));
+    expect(screen.getByRole('button', { name: '도감' })).toHaveClass('active');
     expect(screen.getByRole('button', { name: '네임드' })).toHaveAttribute('aria-pressed', 'true');
 
     fireEvent.keyDown(document, { key: '3' });
-    expect(screen.getByRole('button', { name: /도감\s*\(일반\)/ })).toHaveClass('active');
+    expect(screen.getByRole('button', { name: '도감' })).toHaveClass('active');
     expect(screen.getByRole('button', { name: '일반' })).toHaveAttribute('aria-pressed', 'true');
 
     expect(screen.getByRole('button', { name: /^마을/ })).toHaveAttribute('aria-pressed', 'true');
     fireEvent.keyDown(document, { key: 'Tab' });
     expect(screen.getByRole('button', { name: /^태평양/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('가방 탭 라벨은 괄호 없이 가방만 보이고 재클릭·숫자 2 재입력 시 물고기→아이템→유물이 순환한다', () => {
+    render(<StatefulTabs />);
+    const bagTab = screen.getByRole('button', { name: '가방' });
+    fireEvent.click(bagTab);
+    expect(bagTab).toHaveClass('active');
+    expect(screen.getByRole('button', { name: '물고기' })).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(bagTab);
+    expect(screen.getByRole('button', { name: '가방' })).toHaveClass('active');
+    expect(screen.getByRole('button', { name: '아이템' })).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.keyDown(document, { key: '2' });
+    expect(screen.getByRole('button', { name: '유물' })).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.keyDown(document, { key: '2' });
+    expect(screen.getByRole('button', { name: '물고기' })).toHaveAttribute('aria-pressed', 'true');
   });
 });

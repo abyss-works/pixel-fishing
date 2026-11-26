@@ -72,6 +72,8 @@ describe('획득 카드', () => {
       expect(variantTitle).toHaveClass('text-mutation');
       const variantLine = container.querySelector('[data-catch-variant]');
       expect(variantLine).not.toBeNull();
+      expect(variantLine).toHaveClass('text-text-dim');
+      expect(variantLine).not.toHaveClass('text-mutation');
       expect(variantLine!.textContent?.trim().length).toBeGreaterThan(0);
       expect(container.querySelector('[data-catch-variant-slot]')).toBeNull();
       expect(container.querySelector('[data-catch-fx]')!.children.length).toBeGreaterThanOrEqual(8);
