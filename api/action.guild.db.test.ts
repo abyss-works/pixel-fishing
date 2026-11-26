@@ -28,6 +28,8 @@ vi.mock('./_data/guilds.js', async importOriginal => {
 
 import { reportServerIssue } from './observability.js';
 import { notifyGuild } from './_server/livePresence.js';
+import { myGuild } from './_data/guilds.js';
+import { database } from './_db/client.js';
 
 const NOW = '2030-03-04T05:06:07.000Z'; // KST 14:06 — 게임 날짜 2030-03-04
 const TODAY = '2030-03-04';
@@ -189,6 +191,23 @@ describe('응답 전 반영과 갱신 알림', () => {
     expect(await logs(guild)).toEqual([{ kind: 'legendary', user_id: uid, detail: 'goldcarp' }]);
     expect(await contributions(uid)).toEqual([{ day: TODAY, fame: RARITY.legendary.fame, clears: 0 }]);
     expect(notifyGuild).toHaveBeenCalledWith(guild, updatedMsg);
+  });
+
+  it('전설 돌연변이 포획 시 guild_logs에 fishId|variant가 저장되고 myGuild logbook으로 반환된다', async () => {
+    const { uid, guild } = await member({ state: { fortune: { day: TODAY, kind: 'gold', index: 5 } } });
+    const rolls = [0.999999, 0.1, 0.5, 0.5, 0.0001];
+    let i = 0;
+    vi.spyOn(Math, 'random').mockImplementation(() => rolls[i++] ?? 0.5);
+
+    const res = await callAction(userToken(uid), catchPond);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      result: { type: 'catch', fishId: 'goldcarp', info: { form: 'variant' }, guildUpdated: true },
+    });
+    expect(await logs(guild)).toEqual([{ kind: 'legendary', user_id: uid, detail: 'goldcarp|variant' }]);
+
+    const view = await myGuild(database().db, uid, NOW);
+    expect(view?.logbook[0]).toMatchObject({ kind: 'legendary', uid, detail: 'goldcarp|variant' });
   });
 
   it('하루 명성 상한에 닿아 바뀐 것이 없으면 guildUpdated를 싣지 않고 알리지 않는다', async () => {
