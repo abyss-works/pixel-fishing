@@ -16,7 +16,7 @@ export default function FirstLinkRewardSection({
   return (
     <section aria-label="최초 연결 선물" className={cx('flex flex-col gap-2 pt-2 border-t border-line/40', className)}>
       <div className="flex items-baseline justify-between gap-2 flex-wrap">
-        <span className="text-[13px] font-bold text-gold">최초 연결 선물</span>
+        <span className="text-sm font-bold text-gold">최초 연결 선물</span>
         <span className="text-xs text-text-dim">우편함 지급</span>
       </div>
       <div className="grid grid-cols-1 gap-1.5">
@@ -24,7 +24,6 @@ export default function FirstLinkRewardSection({
           <Tip
             key={item.id}
             plain
-            hoverOnly
             className="block group"
             text={(
               <TipCard
@@ -46,7 +45,7 @@ export default function FirstLinkRewardSection({
                 <ItemSprite kind={item.spriteKind} id={item.id} preset="list" />
               </span>
               <div className="min-w-0 flex-1 flex flex-col gap-0.5">
-                <div className="text-[13px] font-bold leading-[1.3] text-text">
+                <div className="text-sm font-bold leading-[1.3] text-text">
                   <GradeName name={item.name} grade={item.grade} />
                 </div>
                 <p className="text-xs leading-[1.35] text-text-dim">{item.summaryLine}</p>

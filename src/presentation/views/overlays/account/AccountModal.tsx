@@ -252,7 +252,7 @@ export default function AccountModal({
   const perksAside = connectMode && guest && showPerks ? (
     <Frame className="w-[220px] p-3 flex flex-col gap-2 shadow-panel">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[13px] font-bold text-accent leading-[1.3]">연결하면 열리는 것</span>
+        <span className="text-sm font-bold text-accent leading-[1.3]">연결하면 열리는 것</span>
         <IconButton
           type="button"
           glyph="close"
@@ -272,7 +272,7 @@ export default function AccountModal({
       <Inset tone="light" className="p-2.5 flex items-center gap-3">
         <BoatSprite tier={1} preset="row" className="shrink-0" />
         <div className="flex flex-col gap-0.5 min-w-0">
-          <p className="text-[13px] font-bold text-text">태평양 너머 넓은 바다로 나갈 준비가 되었어요.</p>
+          <p className="text-sm font-bold text-text">태평양 너머 넓은 바다로 나갈 준비가 되었어요.</p>
           <p className="text-xs text-text-dim">지금까지의 마을 진행을 계정에 이어 두고 바다 항로를 열어요.</p>
         </div>
       </Inset>

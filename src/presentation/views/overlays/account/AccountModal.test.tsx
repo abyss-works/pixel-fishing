@@ -371,7 +371,7 @@ describe('출항 전용 연결 창 (mode="connect")', () => {
     expect(tip).not.toHaveTextContent('입질 대기 −5%, 희귀 이상 +5%');
   });
 
-  it('터치(coarse pointer)에서 연결 창 보상 행을 눌러도 hoverOnly 툴팁이 열리지 않는다', () => {
+  it('터치(coarse pointer)에서 연결 창 보상 행을 누르면 툴팁이 열리고 다시 누르면 닫힌다', () => {
     const origMatchMedia = window.matchMedia;
     window.matchMedia = ((query: string) => ({
       matches: query === '(pointer: coarse)',
@@ -382,6 +382,10 @@ describe('출항 전용 연결 창 (mode="connect")', () => {
     try {
       open(null, false, true, 'connect');
       const target = screen.getByText('작은 바다 영약');
+      fireEvent.click(target);
+      const tip = screen.getByRole('tooltip');
+      expect(tip).toHaveTextContent('작은 바다 영약(특수)');
+      expect(tip).toHaveTextContent('모든 행운 효과 ×1.05');
       fireEvent.click(target);
       expect(screen.queryByRole('tooltip')).toBeNull();
     } finally {
