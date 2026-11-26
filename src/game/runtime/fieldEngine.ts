@@ -29,6 +29,7 @@ import { renderRegion } from '../rendering/canvas/scenes/region.js';
 import type { OtherShipView, Speech } from '../rendering/pixel/sprites/actors.js';
 import { DEFAULT_FISH_ART_STYLE } from '../rendering/pixel/fishArt/index.js';
 import type { FishArtStyle } from '../rendering/pixel/fishArt/index.js';
+import { effectiveLookForRegion } from '../content/wardrobe.js';
 import type { MaybePromise } from '../../shared/lib/when';
 
 type CatchAction = Extract<GameAction, { type: 'catch' }>;
@@ -477,7 +478,7 @@ export class GameFieldEngine {
       phase: this.snapshot.phase,
       school: this.school,
       boat: this.game.boat,
-      look: this.game.look,
+      look: effectiveLookForRegion(this.game.look, this.def.id),
       biteT: this.snapshot.phase === 'bite'
         ? (Date.now() - this.biteStart) / 1000 / axes.sweep.value : null,
       zone: zones ? zones.yellow / 100 : 0,

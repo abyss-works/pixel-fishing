@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  DEFAULT_LOOK, HATS, LOOK_PRESETS, PANTS_COLORS, SHIRT_COLORS, hatById, isAchievementHat, safeLook,
+  DEFAULT_LOOK, FORCED_REGION_HAT, HATS, LOOK_PRESETS, PANTS_COLORS, SHIRT_COLORS,
+  effectiveLookForRegion, forcedHatForRegion, hatById, isAchievementHat, isEventHat, safeLook,
 } from './wardrobe';
 
 const HEX = /^#[0-9a-f]{6}$/;
@@ -29,9 +30,9 @@ describe('옷장 콘텐츠', () => {
     }
   });
 
-  it('모자는 골드 5종과 업적 52종으로 총 57종이고 id가 겹치지 않는다', () => {
-    expect(HATS).toHaveLength(57);
-    expect(new Set(HATS.map(h => h.id)).size).toBe(57);
+  it('모자는 골드 5종, 업적 52종, 이벤트 1종으로 총 58종이고 id가 겹치지 않는다', () => {
+    expect(HATS).toHaveLength(58);
+    expect(new Set(HATS.map(h => h.id)).size).toBe(58);
 
     const goldHats = HATS.slice(0, 5);
     expect(goldHats.map(h => h.id)).toEqual(['cap-red', 'cap-blue', 'cap-yellow', 'cap-green', 'cap-black']);
@@ -39,11 +40,12 @@ describe('옷장 콘텐츠', () => {
     for (const h of goldHats) {
       expect(h.source).toBe('gold');
       expect(isAchievementHat(h)).toBe(false);
+      expect(isEventHat(h)).toBe(false);
       expect(h.color).toMatch(HEX);
       expect(Number.isInteger(h.price) && h.price > 0).toBe(true);
     }
 
-    const achHats = HATS.slice(5);
+    const achHats = HATS.slice(5, 57);
     expect(achHats).toHaveLength(52);
     expect(achHats.map(h => h.id)).toEqual([
       'straw-hat', 'sou-wester', 'coral-bandana', 'saffron-turban', 'worn-tricorn', 'fog-beanie',
@@ -65,11 +67,26 @@ describe('옷장 콘텐츠', () => {
     for (const h of achHats) {
       expect(h.source).toBe('achievement');
       expect(isAchievementHat(h)).toBe(true);
+      expect(isEventHat(h)).toBe(false);
       expect(h.achievementId).toBeTruthy();
       expect(h.price).toBe(0);
       expect(h.color).toMatch(HEX);
       if (h.accentColor !== undefined) expect(h.accentColor).toMatch(HEX);
     }
+
+    const eventHats = HATS.slice(57);
+    expect(eventHats).toHaveLength(1);
+    const santa = eventHats[0];
+    expect(santa).toEqual({
+      id: 'santa-hat',
+      name: '산타모자',
+      color: '#c62828',
+      accentColor: '#eceff1',
+      price: 0,
+      source: 'event',
+    });
+    expect(isEventHat(santa)).toBe(true);
+    expect(isAchievementHat(santa)).toBe(false);
   });
 
   it('hatById는 있는 id만 돌려준다', () => {
@@ -105,5 +122,26 @@ describe('safeLook', () => {
 
   it('필요한 필드만 남긴다', () => {
     expect(safeLook({ shirt: 1, pants: 2, hat: null, extra: 1 })).toEqual({ shirt: 1, pants: 2, hat: null });
+  });
+});
+
+describe('구역 강제 모자 도우미', () => {
+  it('FORCED_REGION_HAT과 forcedHatForRegion은 championship에만 santa-hat을 돌려준다', () => {
+    expect(FORCED_REGION_HAT).toEqual({ championship: 'santa-hat' });
+    expect(forcedHatForRegion('championship')).toBe('santa-hat');
+    expect(forcedHatForRegion('world')).toBeNull();
+    expect(forcedHatForRegion('village')).toBeNull();
+  });
+
+  it('effectiveLookForRegion은 원본 look을 바꾸지 않고 강제 구역에서만 모자를 덮어쓴다', () => {
+    const base = { shirt: 3, pants: 4, hat: 'cap-red' };
+    const overridden = effectiveLookForRegion(base, 'championship');
+    expect(overridden).toEqual({ shirt: 3, pants: 4, hat: 'santa-hat' });
+    expect(overridden).not.toBe(base);
+    expect(base).toEqual({ shirt: 3, pants: 4, hat: 'cap-red' });
+
+    const already = { shirt: 1, pants: 2, hat: 'santa-hat' };
+    expect(effectiveLookForRegion(already, 'championship')).toBe(already);
+    expect(effectiveLookForRegion(base, 'world')).toBe(base);
   });
 });

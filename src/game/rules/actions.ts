@@ -133,8 +133,8 @@ export interface ActionDeps {
   /** 수배 DB 진실 — 서버가 오늘 클리어 횟수·수주 중 의뢰·완료 목록을 조회해 공급한다 (relief 선례).
    *  로컬 dev(LocalGameGateway)엔 항상 없다 — 오프라인 수주·납품 불가가 의도다. */
   bounty?: BountyCtx | null;
-  /** 받을 우편 — 서버가 본인의 받지 않은 우편(골드·아이템 첨부)을 조회해 공급한다. 로컬 dev엔 항상 없다 */
-  mail?: { id: number; gold: number; items?: readonly { id: string; qty: number }[] } | null;
+  /** 받을 우편 — 서버가 본인의 받지 않은 우편(골드·아이템·모자 첨부)을 조회해 공급한다. 로컬 dev엔 항상 없다 */
+  mail?: { id: number; gold: number; items?: readonly { id: string; qty: number }[]; hats?: readonly string[] } | null;
   /** 길드 보너스 효과 — 서버가 소속 길드의 보너스 단계로 계산해 공급한다. 로컬 dev엔 길드가 없어 항상 없다 */
   guild?: GuildEffects | null;
   /** 계정을 연결하지 않은 익명 계정인가 - 서버가 공급한다. 게스트는 가방 초과 때 기운을 얻지 않고 놓아준다 */
@@ -151,7 +151,7 @@ export type ActionResult =
       energy?: Record<RarityId, number>; ticket?: string; bountyProgressed?: true; guildUpdated?: true }
   | { type: 'sell'; gold: number; guildUpdated?: true }
   | { type: 'coupon'; gold: number; items?: readonly CouponItem[]; desc: string }
-  | { type: 'mail'; gold: number; items?: readonly { id: string; qty: number }[] }
+  | { type: 'mail'; gold: number; items?: readonly { id: string; qty: number }[]; hats?: readonly string[] }
   /** energy = 이번 기운 얻기로 얻은 등급별 기운(저장 단위) */
   | { type: 'extract'; energy: Record<RarityId, number> }
   /** 조리 취소 결과 — 취소된 레시피·수량과 등급별 환급 기운(저장 단위) */
@@ -731,7 +731,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       };
     }
     case 'claimMail': {
-      // 우편 골드·아이템 받기 — 대상·금액·첨부 검증과 받은 기록은 서버(우편 표, 확정 문장)가 한다. 여기엔 지급분만 주입된다.
+      // 우편 골드·아이템·모자 받기 — 대상·금액·첨부 검증과 받은 기록은 서버(우편 표, 확정 문장)가 한다. 여기엔 지급분만 주입된다.
       if (!deps.mail || deps.mail.id !== action.id) return { ok: false, error: 'mail-unavailable' };
       let next = state;
       const claimedItems: { id: string; qty: number }[] = [];
@@ -741,12 +741,25 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         next = addItem(next, item.id, amount);
         claimedItems.push({ id: item.id, qty: item.qty });
       }
+      const nextHats = [...state.hats];
+      const claimedHats: string[] = [];
+      for (const rawHatId of deps.mail.hats ?? []) {
+        const hat = hatById(rawHatId);
+        if (!hat || nextHats.includes(hat.id)) continue;
+        nextHats.push(hat.id);
+        claimedHats.push(hat.id);
+      }
       const itemsField = claimedItems.length > 0 ? { items: claimedItems } : {};
+      const hatsField = claimedHats.length > 0 ? { hats: claimedHats } : {};
       return {
         ok: true,
-        state: { ...next, gold: next.gold + deps.mail.gold },
-        result: { type: 'mail', gold: deps.mail.gold, ...itemsField },
-        events: [{ type: 'claimMail', payload: { mailId: deps.mail.id, gold: deps.mail.gold, ...itemsField } }],
+        state: {
+          ...next,
+          gold: next.gold + deps.mail.gold,
+          hats: claimedHats.length > 0 ? nextHats : next.hats,
+        },
+        result: { type: 'mail', gold: deps.mail.gold, ...itemsField, ...hatsField },
+        events: [{ type: 'claimMail', payload: { mailId: deps.mail.id, gold: deps.mail.gold, ...itemsField, ...hatsField } }],
       };
     }
     case 'extractEnergy': {

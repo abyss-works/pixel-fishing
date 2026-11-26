@@ -15,6 +15,7 @@ import type { RegionPack, School } from '../../../world/types';
 import { FIELD_VIEW } from '../../../world/fieldView.js';
 import type { ViewSize } from '../../../world/fieldView.js';
 import type { GearView } from '../../pixel/sprites/overlays.js';
+import { DEFAULT_LOOK, effectiveLookForRegion } from '../../../content/wardrobe.js';
 import type { Look } from '../../../content/wardrobe.js';
 
 /** React 상태 → 캔버스 경계 뷰모델 — 게임 필드가 프레임마다 채워 보낸다.
@@ -95,9 +96,15 @@ export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
   drawSchools(ctx, v.schools, v.boat, v.t, true, 1, v);
   drawFishingGear(ctx, v);
   drawHookJump(ctx, v);
-  if (pack.movement === 'sail') for (const o of v.others ?? []) drawOtherShip(ctx, o, v.t);
-  if (pack.movement === 'sail') drawBoat(ctx, v.player.x, v.player.y, v.t, v.look);
-  else drawPerson(ctx, v.player.x, v.player.y, v.look);
+  const look = effectiveLookForRegion(v.look ?? DEFAULT_LOOK, pack.id);
+  if (pack.movement === 'sail') {
+    for (const o of v.others ?? []) {
+      drawOtherShip(ctx, { ...o, look: effectiveLookForRegion(o.look ?? DEFAULT_LOOK, pack.id) }, v.t);
+    }
+    drawBoat(ctx, v.player.x, v.player.y, v.t, look);
+  } else {
+    drawPerson(ctx, v.player.x, v.player.y, look);
+  }
   drawSpeech(ctx, v.player.x, v.player.y - 24, v.bubble ?? null);
   drawIdle(ctx, v.player.x, v.player.y - 24, v.idle ?? null);
   drawTimingBar(ctx, v);
