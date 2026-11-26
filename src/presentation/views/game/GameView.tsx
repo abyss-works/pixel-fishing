@@ -69,7 +69,10 @@ import { useFortuneModal } from '../../../features/fortune/service/fortuneModal'
 import { useTutorialPending, useTutorialTrigger } from '../../../features/tutorial/service/tutorial';
 import { useBagFullAlert } from '../../../features/alerts/service/bagFullAlert';
 import { selectBagStatus } from '../../../features/inventory/model/selectors';
-import { guildMatesIn, useChat, useLive } from '../../../features/live/service/useLive';
+import { resolveLiveRegion } from '../../../features/live/model/live';
+import { guildMatesIn, sendRegion, useChat, useLive } from '../../../features/live/service/useLive';
+import { useNotices } from '../../../features/live/service/useNotices';
+import { useSpotState } from '../../../features/travel/service/useSpotState';
 import TraceCard from '../overlays/bounty/TraceCard';
 import AwayCard from '../overlays/away/AwayCard';
 import AwayReportModal from '../overlays/away/AwayReportModal';
@@ -77,6 +80,8 @@ import { awayLineText } from '../overlays/away/awayText';
 import { useAwayReport } from '../../../features/away/service/useAwayReport';
 import PresenceChip from '../overlays/live/PresenceChip';
 import ChatBar from '../overlays/live/ChatBar';
+import NoticeModal from '../overlays/live/NoticeModal';
+import NoticeStack from '../overlays/live/NoticeStack';
 import PlayersModal from '../overlays/live/PlayersModal';
 import PlayerModal from '../overlays/live/PlayerInfo';
 import type { PlayerTarget } from '../overlays/live/PlayerInfo';
@@ -84,6 +89,9 @@ import { chatMessages } from '../overlays/live/chatFeed';
 import { mergeMessages } from '../../ui/hud/messageFeed';
 import EncounterModal from '../overlays/bounty/EncounterModal';
 import type { EncounterResult } from '../overlays/bounty/EncounterModal';
+import Button from '../../ui/Button';
+import Frame from '../../ui/Frame';
+import Tip from '../../ui/Tip';
 import { fmtNum, josa } from '../../ui/format';
 import { cx } from '../../ui/cx';
 import { useCanvasCover } from '../../layouts/game-stage/canvasCover';
@@ -178,6 +186,13 @@ export default function GameView(props: GameViewProps) {
   const tutorialPending = useTutorialPending(game.tutorials);
   useLive();
   const chat = useChat();
+  const spot = useSpotState();
+  const liveRegion = resolveLiveRegion(scene, spot.zone);
+  useEffect(() => {
+    if (chat.enabled) sendRegion(liveRegion);
+  }, [chat.enabled, liveRegion]);
+  const { activeNotices, stackNotices, dismissNotice } = useNotices();
+  const [noticeModalOpen, setNoticeModalOpen] = useState(false);
   /** 같은 바다 접속 목록 창 */
   const [playersOpen, setPlayersOpen] = useState(false);
   /** 채팅 이름에서 연 플레이어 정보 — 다른 사람의 글줄이면 그 글줄을 신고할 수 있다 */
@@ -208,8 +223,37 @@ export default function GameView(props: GameViewProps) {
   const [awayOpen, setAwayOpen] = useState(false);
   const closeAway = () => { setAwayOpen(false); away.dismiss(); };
   const log = chat.enabled
-    ? mergeMessages(mergeMessages(props.log, chatMessages(chat.lines)), chatMessages(chat.guildLines, 'guild'))
+    ? mergeMessages(
+        mergeMessages(
+          mergeMessages(props.log, chatMessages(chat.globalLines, 'global')),
+          chatMessages(chat.localLines, 'local'),
+        ),
+        chatMessages(chat.guildLines, 'guild'),
+      )
     : props.log;
+  const noticeStrip = activeNotices.length > 0 ? (
+    <Frame className="flex items-center gap-1.5 px-2 py-1 text-xs border-gold bg-[color-mix(in_oklab,var(--c-bg)_88%,transparent)]">
+      <Tip wraps text="누르면 공지사항을 자세히 볼 수 있어요." className="min-w-0 flex-1 flex">
+        <Button
+          variant="ghost"
+          size="xs"
+          aria-label="공지사항 열기"
+          className="min-w-0 flex-1 justify-start text-left text-gold px-1!"
+          onClick={() => setNoticeModalOpen(true)}
+        >
+          <span className="truncate">{activeNotices[0].title}</span>
+        </Button>
+      </Tip>
+      <Button
+        size="xs"
+        variant="accent"
+        className="shrink-0"
+        onClick={() => setNoticeModalOpen(true)}
+      >
+        공지
+      </Button>
+    </Frame>
+  ) : null;
   const messageFilter = useMessageFilter();
   // 메시지 창 접기 — 채팅을 쓰지 않는 환경에서는 입력 줄이 없어 펼칠 수 없으므로 접지 않는다
   const fold = useMessageFold(scene.kind === 'base', log, messageFilter.filter);
@@ -374,6 +418,7 @@ export default function GameView(props: GameViewProps) {
         )}
 
         <HudLayout game={game} bagBonus={bagBonus} scene={scene} log={log} covered={covered}
+                   logTopSlot={noticeStrip}
                    logFooter={chat.enabled ? (
                      <ChatBar inGuild={guild !== null} accountState={accountState}
                               folded={folded} unread={fold.unread} onUnfold={fold.toggle} onTyping={fold.setTyping} />
@@ -495,6 +540,8 @@ export default function GameView(props: GameViewProps) {
         {fortune.fortune && <FortuneModal fortune={fortune.fortune} onClose={fortune.close} />}
         <TutorialModal seen={game.tutorials} ready={saveReady} after={baitRefund.pending || fortune.pending} dispatch={props.dispatch} />
         <AlertPromptModal ready={saveReady} after={whatsNewPending || baitRefund.pending || fortune.pending || tutorialPending} setToast={props.setToast} />
+        <NoticeModal open={noticeModalOpen} notices={activeNotices} onClose={() => setNoticeModalOpen(false)} />
+        <NoticeStack notices={stackNotices} onDismiss={dismissNotice} />
         {props.toasts && props.toasts.length > 0 && props.onDismissToast && (
           <FloatingToastLayer toasts={props.toasts} maxVisible={mobile ? 2 : 3} onDismiss={props.onDismissToast} />
         )}

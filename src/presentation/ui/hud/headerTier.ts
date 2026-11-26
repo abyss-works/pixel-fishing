@@ -15,3 +15,6 @@ export const HEADER_TIER_CLASS = [
 
 // 헤더가 두 행 단계인 스테이지 폭(640 미만)에서 숨기는 글자의 클래스다. PC 레이아웃에만 적용한다. 숨기는 글자는 입력을 받지 않는 표시의 생략 글자(낚시 상태 띠의 판정 영역 설명)다.
 export const HEADER_ROWS_OMIT_CLASS = 'pc:@max-[640px]:hidden';
+
+// PC 레이아웃 헤더 바로 아래 상단 오프셋(기본/축소 단계 76px, 두 행 단계 64px) — 상단 공지 카드 등에서 헤더와 겹치지 않게 둔다.
+export const HEADER_BELOW_TOP_CLASS = 'pc:top-[76px] pc:@max-[640px]:top-16';

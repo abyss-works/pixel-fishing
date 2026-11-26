@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ChatLine, Presence } from '../../../game/rules/live';
 import { LIVE_STALE_MS } from '../../../game/rules/live';
 import { DEFAULT_LOOK } from '../../../game/content/wardrobe';
-import { applyLiveMessage, BUBBLE_MS, bubbleOf, CHAT_KEEP, EMPTY_LIVE, idleLabel, isStale, matesInRegion, nextPositionMessage, othersInRegion, playerZoneLabel, TYPING_MS, withoutAuthor } from './live';
+import { applyLiveMessage, BUBBLE_MS, bubbleOf, CHAT_KEEP, EMPTY_LIVE, idleLabel, isStale, matesInRegion, nextPositionMessage, othersInRegion, playerZoneLabel, resolveLiveRegion, TYPING_MS, withoutAuthor } from './live';
 
 const p = (uid: string, nick: string, region = 'sea'): Presence =>
   ({ uid, nick, boat: 1, region, x: 0, y: 0, dir: 0, line: false });
@@ -53,22 +53,25 @@ describe('applyLiveMessage', () => {
     expect(playerZoneLabel({ region: 'unknown', zone: null })).toBeNull();
   });
 
-  it('nick 알림을 받으면 접속자 목록과 월드·길드 채팅 발신자의 닉네임을 즉시 갱신한다', () => {
-    const worldLine: ChatLine = { id: 1, uid: 'a', nick: '가', text: '안녕', at: '2030-01-01T00:00:00.000Z' };
+  it('nick 알림을 받으면 접속자 목록과 전체·지역·길드 채팅 발신자의 닉네임을 즉시 갱신한다', () => {
+    const globalLine: ChatLine = { id: 1, uid: 'a', nick: '가', text: '안녕', at: '2030-01-01T00:00:00.000Z' };
+    const localLine: ChatLine = { id: 4, uid: 'a', nick: '가', text: '지역안녕', at: '2030-01-01T00:00:00.500Z' };
     const guildLine: ChatLine = { id: 2, uid: 'a', nick: '가', text: '길드안녕', at: '2030-01-01T00:00:01.000Z' };
     const otherLine: ChatLine = { id: 3, uid: 'b', nick: '나', text: '반가워', at: '2030-01-01T00:00:02.000Z' };
     let s = applyLiveMessage(EMPTY_LIVE, {
       t: 'hello',
       you: 'me',
       others: [p('a', '가'), p('b', '나')],
-      recentChat: [worldLine, otherLine],
+      recentChat: [globalLine, otherLine],
+      recentLocalChat: [localLine],
       recentGuildChat: [guildLine],
     }, 0);
 
     s = applyLiveMessage(s, { t: 'nick', uid: 'a', nick: '새이름' }, 1);
     expect(s.others.a.presence.nick).toBe('새이름');
     expect(s.others.b.presence.nick).toBe('나');
-    expect(s.chat.map(l => l.nick)).toEqual(['새이름', '나']);
+    expect(s.globalChat.map(l => l.nick)).toEqual(['새이름', '나']);
+    expect(s.localChat.map(l => l.nick)).toEqual(['새이름']);
     expect(s.guildChat.map(l => l.nick)).toEqual(['새이름']);
     expect(othersInRegion(s, 'sea').map(o => o.presence.nick)).toEqual(['나', '새이름']);
 
@@ -132,51 +135,113 @@ describe('외형 송신과 반영', () => {
 
 describe('채팅 상태', () => {
   const line = (id: number, uid = 'a'): ChatLine => ({ id, uid, nick: `n-${uid}`, text: `t${id}`, at: '2030-01-01T00:00:00.000Z' });
+  const notice = (id: number) => ({
+    id,
+    title: `공지 ${id}`,
+    body: `내용 ${id}`,
+    startsAt: '2030-01-01T00:00:00.000Z',
+    endsAt: '2030-01-02T00:00:00.000Z',
+    createdAt: '2030-01-01T00:00:00.000Z',
+  });
   const hello = (recentChat: ChatLine[]) => applyLiveMessage(EMPTY_LIVE, { t: 'hello', you: 'me', others: [], recentChat }, 0);
 
-  it('hello의 최근 대화로 시작하고, 새 줄은 뒤에 붙이며 같은 id는 한 번만 둔다', () => {
-    let s = hello([line(1), line(2)]);
-    s = applyLiveMessage(s, { t: 'chat', line: line(3) }, 1);
-    expect(applyLiveMessage(s, { t: 'chat', line: line(3) }, 2)).toBe(s);
-    expect(s.chat.map(l => l.id)).toEqual([1, 2, 3]);
+  it('hello의 전체·지역·길드 최근 대화와 공지로 시작하고, 새 줄은 room ?? local에 따라 분배한다', () => {
+    let s = applyLiveMessage(EMPTY_LIVE, {
+      t: 'hello',
+      you: 'me',
+      others: [],
+      recentChat: [line(1)],
+      recentLocalChat: [line(2)],
+      recentGuildChat: [line(3)],
+      notices: [notice(10)],
+    }, 0);
+    expect(s.globalChat.map(l => l.id)).toEqual([1]);
+    expect(s.localChat.map(l => l.id)).toEqual([2]);
+    expect(s.guildChat.map(l => l.id)).toEqual([3]);
+    expect(s.notices.map(n => n.id)).toEqual([10]);
+
+    // room 생략 시 local에 들어간다
+    s = applyLiveMessage(s, { t: 'chat', line: line(4) }, 1);
+    expect(applyLiveMessage(s, { t: 'chat', line: line(4) }, 2)).toBe(s);
+    expect(s.localChat.map(l => l.id)).toEqual([2, 4]);
+
+    s = applyLiveMessage(s, { t: 'chat', room: 'global', line: line(5) }, 3);
+    expect(s.globalChat.map(l => l.id)).toEqual([1, 5]);
+
     // 재연결의 hello는 목록을 서버 기준으로 바꾼다
-    expect(applyLiveMessage(s, { t: 'hello', you: 'me', others: [], recentChat: [line(3)] }, 3).chat.map(l => l.id)).toEqual([3]);
+    const reset = applyLiveMessage(s, { t: 'hello', you: 'me', others: [], recentChat: [line(9)] }, 4);
+    expect(reset.globalChat.map(l => l.id)).toEqual([9]);
+    expect(reset.localChat).toEqual([]);
+    expect(reset.guildChat).toEqual([]);
+    expect(reset.notices).toEqual([]);
+  });
+
+  it('localHistory와 notices를 받으면 해당 목록을 교체한다', () => {
+    let s = hello([line(1)]);
+    s = applyLiveMessage(s, { t: 'localHistory', region: 'seasia', lines: [line(10), line(11)] }, 1);
+    expect(s.localChat.map(l => l.id)).toEqual([10, 11]);
+    s = applyLiveMessage(s, { t: 'notices', notices: [notice(1), notice(2)] }, 2);
+    expect(s.notices.map(n => n.id)).toEqual([1, 2]);
   });
 
   it('보관 상한을 넘으면 오래된 줄부터 버린다', () => {
     let s = hello([]);
-    for (let i = 1; i <= CHAT_KEEP + 2; i++) s = applyLiveMessage(s, { t: 'chat', line: line(i) }, i);
-    expect(s.chat).toHaveLength(CHAT_KEEP);
-    expect(s.chat[0].id).toBe(3);
+    for (let i = 1; i <= CHAT_KEEP + 2; i++) s = applyLiveMessage(s, { t: 'chat', room: 'global', line: line(i) }, i);
+    expect(s.globalChat).toHaveLength(CHAT_KEEP);
+    expect(s.globalChat[0].id).toBe(3);
   });
 
-  it('오류는 마지막 하나만 남고, 내 채팅이 저장되면 지운다', () => {
-    let s = applyLiveMessage(hello([]), { t: 'error', code: 'chat-rate' }, 1);
-    expect(s.chatError).toBe('chat-rate');
-    s = applyLiveMessage(s, { t: 'chat', line: line(1, 'other') }, 2);
-    expect(s.chatError).toBe('chat-rate');
-    s = applyLiveMessage(s, { t: 'chat', line: line(2, 'me') }, 3);
+  it('오류는 마지막 하나만 남고, chat-global-cooldown이면 retryAfterMs로 쿨다운을 동기화하며, 내 채팅이 저장되면 지운다', () => {
+    let s = applyLiveMessage(hello([]), { t: 'error', code: 'chat-global-cooldown', retryAfterMs: 7500 }, 1000);
+    expect(s.chatError).toBe('chat-global-cooldown');
+    expect(s.chatErrorRetryAfterMs).toBe(7500);
+    expect(s.globalCooldownUntil).toBe(8500);
+    s = applyLiveMessage(s, { t: 'chat', room: 'local', line: line(1, 'other') }, 2000);
+    expect(s.chatError).toBe('chat-global-cooldown');
+    s = applyLiveMessage(s, { t: 'chat', room: 'local', line: line(2, 'me') }, 3000);
     expect(s.chatError).toBeNull();
+    expect(s.chatErrorRetryAfterMs).toBeNull();
   });
 
-  it('withoutAuthor는 그 사람의 줄을 두 방에서 모두 지운다', () => {
-    let s = hello([line(1, 'a'), line(2, 'b'), line(3, 'a')]);
-    s = applyLiveMessage(s, { t: 'chat', room: 'guild', line: line(4, 'a') }, 1);
-    expect(withoutAuthor(s, 'a').chat.map(l => l.id)).toEqual([2]);
-    expect(withoutAuthor(s, 'a').guildChat).toEqual([]);
+  it('withoutAuthor는 그 사람의 줄을 세 방에서 모두 지운다', () => {
+    let s = applyLiveMessage(EMPTY_LIVE, {
+      t: 'hello',
+      you: 'me',
+      others: [],
+      recentChat: [line(1, 'a'), line(2, 'b')],
+      recentLocalChat: [line(3, 'a'), line(4, 'b')],
+      recentGuildChat: [line(5, 'a')],
+    }, 0);
+    const cleaned = withoutAuthor(s, 'a');
+    expect(cleaned.globalChat.map(l => l.id)).toEqual([2]);
+    expect(cleaned.localChat.map(l => l.id)).toEqual([4]);
+    expect(cleaned.guildChat).toEqual([]);
   });
 
-  it('길드 채팅은 월드 채팅과 따로 쌓고, hello의 길드 최근 대화로 시작한다', () => {
+  it('길드 채팅은 전체·지역 채팅과 따로 쌓고, hello의 길드 최근 대화로 시작한다', () => {
     let s = applyLiveMessage(EMPTY_LIVE, { t: 'hello', you: 'me', others: [], recentChat: [line(1)], recentGuildChat: [line(2)] }, 0);
     expect(s.guildChat.map(l => l.id)).toEqual([2]);
     s = applyLiveMessage(s, { t: 'error', code: 'chat-no-guild' }, 1);
     s = applyLiveMessage(s, { t: 'chat', room: 'guild', line: line(3, 'me') }, 2);
     expect(applyLiveMessage(s, { t: 'chat', room: 'guild', line: line(3, 'me') }, 3)).toBe(s);
-    expect(s.chat.map(l => l.id)).toEqual([1]);
+    expect(s.globalChat.map(l => l.id)).toEqual([1]);
     expect(s.guildChat.map(l => l.id)).toEqual([2, 3]);
     expect(s.chatError).toBeNull();
     // 길드가 없는 연결의 hello는 길드 대화를 비운다
     expect(applyLiveMessage(s, { t: 'hello', you: 'me', others: [], recentChat: [] }, 4).guildChat).toEqual([]);
+  });
+});
+
+describe('resolveLiveRegion', () => {
+  it('거점과 바다 하위 존을 최상위 지역 ID로 정규화한다', () => {
+    expect(resolveLiveRegion({ kind: 'region', id: 'village' }, null)).toBe('village');
+    expect(resolveLiveRegion({ kind: 'base', id: 'home' }, null)).toBe('village');
+    expect(resolveLiveRegion({ kind: 'base', id: 'harbor' }, null)).toBe('pacific');
+    expect(resolveLiveRegion({ kind: 'base', id: 'manila' }, null)).toBe('seasia');
+    expect(resolveLiveRegion({ kind: 'base', id: 'lisbon' }, null)).toBe('northatlantic');
+    expect(resolveLiveRegion({ kind: 'region', id: 'world' }, 'deep')).toBe('pacific');
+    expect(resolveLiveRegion({ kind: 'region', id: 'world' }, 'dragonhole')).toBe('seasia');
+    expect(resolveLiveRegion({ kind: 'region', id: 'world' }, null)).toBe('pacific');
   });
 });
 

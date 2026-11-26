@@ -2,25 +2,39 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { liveAvailable, openLive } from '../../../platform/api';
 import type { LiveConnection } from '../../../platform/api';
 import type { Look } from '../../../game/content/wardrobe';
-import type { Bob, ServerMessage } from '../../../game/rules/live';
+import type { Bob, ChatLine, NoticeItem, ServerMessage } from '../../../game/rules/live';
 import { glidePosition, LIVE_MOVE_MS, nextGlide } from '../../../game/rules/live';
 import type { Glide } from '../../../game/rules/live';
 import { useSession } from '../../account/service/session';
 import { useConsentReady } from '../../account/service/consentGate';
-import { applyLiveMessage, bubbleOf, EMPTY_LIVE, idleLabel, isStale, matesInRegion, nextPositionMessage, othersInRegion, playerZoneLabel, withoutAuthor } from '../model/live';
+import {
+  applyLiveMessage,
+  bubbleOf,
+  EMPTY_LIVE,
+  GLOBAL_CHAT_COOLDOWN_MS,
+  idleLabel,
+  isStale,
+  matesInRegion,
+  nextPositionMessage,
+  othersInRegion,
+  playerZoneLabel,
+  withoutAuthor,
+} from '../model/live';
 import type { Bubble, ChatError, ChatRoom, LiveState, MyPosition, SentPosition } from '../model/live';
-import type { ChatLine } from '../../../game/rules/live';
 
 // 실시간 채널 연결과 다른 플레이어 상태 — 게임 화면이 떠 있는 동안 연결을 유지한다.
 // 연결은 로그인 쿠키로 인증되므로 세션이 선 뒤 열고, 계정이 바뀌면 새 쿠키로 다시 연다.
-// 상태는 모듈 하나에만 있다(창 하나에 연결 하나). 화면 구독은 접속·퇴장·바다 이동·채팅 때만 알린다.
+// 상태는 모듈 하나에만 있다(창 하나에 연결 하나). 화면 구독은 접속·퇴장·바다 이동·채팅·공지 때만 알린다.
 
 let state: LiveState = EMPTY_LIVE;
 let conn: LiveConnection | null = null;
+/** 현재 플레이어가 속한 최상위 지역 — 연결/재연결 시 지역 채팅 동기화에 쓴다 */
+let currentRegion: string | null = null;
+/** 마지막 공지 목록을 받은 시각(epoch ms) */
+let noticesUpdatedAt = 0;
 /** hello를 받을 때마다 늘어난다 — 재연결 뒤 내 위치를 다시 보내는 기준 */
 let helloCount = 0;
 const listeners = new Set<() => void>();
-/** 화면에 그리는 위치 — 받은 좌표를 향해 프레임마다 다가간다 */
 /** 다른 플레이어의 화면 이동 — 좌표를 받을 때마다 지금 위치에서 새 위치까지 송신 주기 동안 일정 속도로 간다.
     시각은 화면 프레임과 같은 performance.now 기준이다 */
 const glides = new Map<string, Glide>();
@@ -39,11 +53,20 @@ type GuildEvent = Extract<ServerMessage, { t: 'guild' }>;
 const guildListeners = new Set<(e: GuildEvent) => void>();
 
 function receive(msg: ServerMessage): void {
+  const now = Date.now();
   const prev = state;
-  state = applyLiveMessage(state, msg, Date.now());
-  if (msg.t === 'hello') { helloCount++; glides.clear(); said.clear(); typingAt.clear(); }
+  state = applyLiveMessage(state, msg, now);
+  if (msg.t === 'hello') {
+    helloCount++;
+    noticesUpdatedAt = now;
+    glides.clear();
+    said.clear();
+    typingAt.clear();
+    if (currentRegion) conn?.send({ t: 'region', region: currentRegion });
+  }
+  if (msg.t === 'notices') noticesUpdatedAt = now;
   if (msg.t === 'leave') { glides.delete(msg.uid); said.delete(msg.uid); typingAt.delete(msg.uid); }
-  // 머리 위 말풍선은 월드 채팅만 띄운다 — 길드 채팅은 길드원끼리만 보는 대화다
+  // 머리 위 말풍선은 전체·지역 채팅만 띄운다 — 길드 채팅은 길드원끼리만 보는 대화다
   if (msg.t === 'chat' && msg.room !== 'guild') { said.set(msg.line.uid, { text: msg.line.text, at: performance.now() }); typingAt.delete(msg.line.uid); }
   if (msg.t === 'typing') {
     if (msg.on) typingAt.set(msg.uid, performance.now());
@@ -55,7 +78,18 @@ function receive(msg: ServerMessage): void {
   const regionChanged = msg.t === 'move' && prev.others[msg.uid]?.presence.region !== msg.region;
   const zoneChanged = msg.t === 'move' && (prev.others[msg.uid]?.presence.zone ?? null) !== (msg.zone ?? null);
   const nickChanged = msg.t === 'nick' && state !== prev;
-  if (msg.t === 'hello' || msg.t === 'join' || msg.t === 'leave' || msg.t === 'chat' || msg.t === 'error' || regionChanged || zoneChanged || nickChanged) {
+  if (
+    msg.t === 'hello'
+    || msg.t === 'join'
+    || msg.t === 'leave'
+    || msg.t === 'chat'
+    || msg.t === 'localHistory'
+    || msg.t === 'notices'
+    || msg.t === 'error'
+    || regionChanged
+    || zoneChanged
+    || nickChanged
+  ) {
     notify();
   }
 }
@@ -66,6 +100,7 @@ function notify(): void {
 
 function reset(): void {
   state = EMPTY_LIVE;
+  noticesUpdatedAt = 0;
   glides.clear();
   myTypingAt = null;
   myIdleSince = null;
@@ -122,7 +157,7 @@ const speechOf = (b: Bubble | null): Speech => b ? (b.kind === 'chat' ? b.text :
 
 /**
  * 프레임마다 부른다 — 그 바다의 다른 플레이어를 보간한 위치로 돌려주고, 내 머리 위 말풍선을 함께 돌려준다.
- * 내 말풍선은 서버가 돌려준 내 월드 채팅과 내 입력 중 표시로, 다른 플레이어에게 보이는 것과 같다.
+ * 내 말풍선은 서버가 돌려준 내 전체·지역 채팅과 내 입력 중 표시로, 다른 플레이어에게 보이는 것과 같다.
  */
 export function liveFrame(region: string, now: number): {
   others: { x: number; y: number; nick: string; line: boolean; bob: Bob | null; stale: boolean; bubble: Speech; idle: string | null; look?: Look }[];
@@ -175,16 +210,40 @@ export interface ChatView {
   enabled: boolean;
   /** 내 id. 연결 전에는 null */
   you: string | null;
-  lines: readonly ChatLine[];
+  globalLines: readonly ChatLine[];
+  localLines: readonly ChatLine[];
   /** 내 길드의 채팅 줄 */
   guildLines: readonly ChatLine[];
   error: ChatError | null;
+  errorRetryAfterMs: number | null;
+  globalCooldownUntil: number;
 }
 
 /** 채팅 목록과 마지막 거부 이유 */
 export function useChat(): ChatView {
   const s = useSyncExternalStore(subscribe, getState, getState);
-  return { enabled: liveAvailable, you: s.you, lines: s.chat, guildLines: s.guildChat, error: s.chatError };
+  return {
+    enabled: liveAvailable,
+    you: s.you,
+    globalLines: s.globalChat,
+    localLines: s.localChat,
+    guildLines: s.guildChat,
+    error: s.chatError,
+    errorRetryAfterMs: s.chatErrorRetryAfterMs,
+    globalCooldownUntil: s.globalCooldownUntil,
+  };
+}
+
+/** 서버에서 받은 마감 전 공지 목록과 수신 시각을 구독한다 */
+export function useLiveNotices(): { notices: readonly NoticeItem[]; updatedAt: number } {
+  const s = useSyncExternalStore(subscribe, getState, getState);
+  return { notices: s.notices, updatedAt: noticesUpdatedAt };
+}
+
+/** 현재 지역을 기억하고 연결 중이면 지역 채팅 동기화를 요청한다 */
+export function sendRegion(region: string): void {
+  currentRegion = region;
+  conn?.send({ t: 'region', region });
 }
 
 /** 입력 중 표시를 켜고 끈다. 연결이 끊긴 동안에는 버린다 */
@@ -194,15 +253,23 @@ export function sendTyping(on: boolean): void {
   myTypingAt = on ? performance.now() : null;
 }
 
-/** 그 방에 채팅을 보낸다. 연결이 끊긴 동안에는 버린다 */
-export function sendChat(text: string, room: ChatRoom = 'world'): void {
-  conn?.send(room === 'guild' ? { t: 'chat', text, room: 'guild' } : { t: 'chat', text });
+/** 그 방에 채팅을 보낸다. 전체 방 전송 시 10초 클라 낙관 쿨다운도 함께 시작한다 */
+export function sendChat(text: string, room: ChatRoom = 'local'): void {
+  if (!conn) return;
+  conn.send({ t: 'chat', text, room });
+  if (room === 'global') {
+    const now = Date.now();
+    if (now >= state.globalCooldownUntil) {
+      state = { ...state, globalCooldownUntil: now + GLOBAL_CHAT_COOLDOWN_MS };
+      notify();
+    }
+  }
 }
 
 /** 보이고 있는 거부 이유를 지운다 */
 export function clearChatError(): void {
-  if (state.chatError === null) return;
-  state = { ...state, chatError: null };
+  if (state.chatError === null && state.chatErrorRetryAfterMs === null) return;
+  state = { ...state, chatError: null, chatErrorRetryAfterMs: null };
   notify();
 }
 

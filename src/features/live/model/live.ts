@@ -1,10 +1,14 @@
 import type { Look } from '../../../game/content/wardrobe';
-import { zoneById } from '../../../game/content/zones';
+import { zoneOfPort } from '../../../game/content/bounties';
+import { defaultZoneOfRegion, topZoneOf, zoneById } from '../../../game/content/zones';
 import type { ZoneId } from '../../../game/content/zones';
-import type { Bob, ChatLine, ClientMessage, Dir, Presence, ServerMessage } from '../../../game/rules/live';
-import { formatIdle, LIVE_STALE_MS } from '../../../game/rules/live';
+import type { Bob, ChatLine, ChatRoom, ClientMessage, Dir, NoticeItem, Presence, ServerMessage } from '../../../game/rules/live';
+import { CHAT_MAX_LENGTH, formatIdle, GLOBAL_CHAT_COOLDOWN_MS, LIVE_STALE_MS } from '../../../game/rules/live';
 
 // 실시간 채널의 다른 플레이어 상태와 내 위치 송신 판정 — 표시용이라 게임 상태와 섞지 않는다.
+
+export type { ChatRoom };
+export { CHAT_MAX_LENGTH, GLOBAL_CHAT_COOLDOWN_MS };
 
 export interface OtherPlayer {
   presence: Presence;
@@ -25,21 +29,57 @@ export type ChatError = Extract<ServerMessage, { t: 'error' }>['code'];
 export interface LiveState {
   you: string | null;
   others: Readonly<Record<string, OtherPlayer>>;
-  /** 받은 채팅(오래된 순). 보관 상한을 넘으면 오래된 줄부터 버린다 */
-  chat: readonly ChatLine[];
-  /** 받은 길드 채팅(오래된 순). 보관 상한은 월드 채팅과 같다 */
+  /** 받은 전체 채팅(오래된 순). 보관 상한을 넘으면 오래된 줄부터 버린다 */
+  globalChat: readonly ChatLine[];
+  /** 받은 지역 채팅(오래된 순). 보관 상한을 넘으면 오래된 줄부터 버린다 */
+  localChat: readonly ChatLine[];
+  /** 받은 길드 채팅(오래된 순). 보관 상한을 넘으면 오래된 줄부터 버린다 */
   guildChat: readonly ChatLine[];
+  /** 서버에서 받은 마감 전 공지 목록 */
+  notices: readonly NoticeItem[];
   /** 마지막으로 거부된 내 채팅의 이유. 내 채팅이 저장되면 지운다 */
   chatError: ChatError | null;
+  /** 마지막 거부 응답에 담긴 남은 대기 시간(ms) */
+  chatErrorRetryAfterMs: number | null;
+  /** 전체 채팅 재전송 가능 시각(epoch ms) */
+  globalCooldownUntil: number;
 }
 
-export const EMPTY_LIVE: LiveState = { you: null, others: {}, chat: [], guildChat: [], chatError: null };
-
-/** 채팅 방 — 월드(전체)와 내 길드 */
-export type ChatRoom = 'world' | 'guild';
+export const EMPTY_LIVE: LiveState = {
+  you: null,
+  others: {},
+  globalChat: [],
+  localChat: [],
+  guildChat: [],
+  notices: [],
+  chatError: null,
+  chatErrorRetryAfterMs: null,
+  globalCooldownUntil: 0,
+};
 
 /** 화면에 남기는 채팅 줄 수 */
 export const CHAT_KEEP = 200;
+
+/** 씬과 현재 해역에서 실시간 지역 채팅용 최상위 지역 ID를 도출한다. */
+export function resolveLiveRegion(
+  scene: { kind: 'region' | 'base'; id: string },
+  spotZone: string | null | undefined,
+): string {
+  if (scene.kind === 'base') {
+    if (scene.id === 'home') return 'village';
+    return zoneOfPort(scene.id) ?? defaultZoneOfRegion('world');
+  }
+  if (scene.id === 'village') return 'village';
+  if (spotZone && zoneById(spotZone as ZoneId)) return topZoneOf(spotZone as ZoneId);
+  return defaultZoneOfRegion('world');
+}
+
+const roomStateKey = (room: ChatRoom | undefined): 'globalChat' | 'localChat' | 'guildChat' => {
+  const resolved = room ?? 'local';
+  if (resolved === 'global') return 'globalChat';
+  if (resolved === 'guild') return 'guildChat';
+  return 'localChat';
+};
 
 /** 서버 메시지 하나를 반영한 새 상태. 상태가 그대로면 같은 객체를 돌려준다 */
 export function applyLiveMessage(state: LiveState, msg: ServerMessage, now: number): LiveState {
@@ -48,21 +88,47 @@ export function applyLiveMessage(state: LiveState, msg: ServerMessage, now: numb
       return {
         you: msg.you,
         others: Object.fromEntries(msg.others.map(p => [p.uid, { presence: p, moving: false, lastAt: now, idleSince: idleSinceFrom(p.idleMs, now) }])),
-        chat: msg.recentChat.slice(-CHAT_KEEP),
+        globalChat: msg.recentChat.slice(-CHAT_KEEP),
+        localChat: (msg.recentLocalChat ?? []).slice(-CHAT_KEEP),
         guildChat: (msg.recentGuildChat ?? []).slice(-CHAT_KEEP),
+        notices: msg.notices ?? [],
         chatError: null,
+        chatErrorRetryAfterMs: null,
+        globalCooldownUntil: state.globalCooldownUntil,
+      };
+    case 'localHistory':
+      return {
+        ...state,
+        localChat: msg.lines.slice(-CHAT_KEEP),
+      };
+    case 'notices':
+      return {
+        ...state,
+        notices: msg.notices,
       };
     case 'chat': {
-      const key = msg.room === 'guild' ? 'guildChat' : 'chat';
+      const key = roomStateKey(msg.room);
       if (state[key].some(l => l.id === msg.line.id)) return state;
+      const isMine = msg.line.uid === state.you;
       return {
         ...state,
         [key]: [...state[key], msg.line].slice(-CHAT_KEEP),
-        chatError: msg.line.uid === state.you ? null : state.chatError,
+        chatError: isMine ? null : state.chatError,
+        chatErrorRetryAfterMs: isMine ? null : state.chatErrorRetryAfterMs,
       };
     }
-    case 'error':
-      return { ...state, chatError: msg.code };
+    case 'error': {
+      const nextCooldownUntil =
+        msg.code === 'chat-global-cooldown' && typeof msg.retryAfterMs === 'number' && Number.isFinite(msg.retryAfterMs)
+          ? now + Math.max(0, msg.retryAfterMs)
+          : state.globalCooldownUntil;
+      return {
+        ...state,
+        chatError: msg.code,
+        chatErrorRetryAfterMs: msg.retryAfterMs ?? null,
+        globalCooldownUntil: nextCooldownUntil,
+      };
+    }
     case 'join':
       if (msg.presence.uid === state.you) return state;
       return { ...state, others: { ...state.others, [msg.presence.uid]: { presence: msg.presence, moving: false, lastAt: now, idleSince: idleSinceFrom(msg.presence.idleMs, now) } } };
@@ -89,13 +155,15 @@ export function applyLiveMessage(state: LiveState, msg: ServerMessage, now: numb
       const nextOther = prev && prev.presence.nick !== msg.nick
         ? { ...prev, presence: { ...prev.presence, nick: msg.nick } }
         : null;
-      const chatChanged = state.chat.some(l => l.uid === msg.uid && l.nick !== msg.nick);
+      const globalChanged = state.globalChat.some(l => l.uid === msg.uid && l.nick !== msg.nick);
+      const localChanged = state.localChat.some(l => l.uid === msg.uid && l.nick !== msg.nick);
       const guildChanged = state.guildChat.some(l => l.uid === msg.uid && l.nick !== msg.nick);
-      if (!nextOther && !chatChanged && !guildChanged) return state;
+      if (!nextOther && !globalChanged && !localChanged && !guildChanged) return state;
       return {
         ...state,
         ...(nextOther ? { others: { ...state.others, [msg.uid]: nextOther } } : {}),
-        ...(chatChanged ? { chat: state.chat.map(l => l.uid === msg.uid ? { ...l, nick: msg.nick } : l) } : {}),
+        ...(globalChanged ? { globalChat: state.globalChat.map(l => l.uid === msg.uid ? { ...l, nick: msg.nick } : l) } : {}),
+        ...(localChanged ? { localChat: state.localChat.map(l => l.uid === msg.uid ? { ...l, nick: msg.nick } : l) } : {}),
         ...(guildChanged ? { guildChat: state.guildChat.map(l => l.uid === msg.uid ? { ...l, nick: msg.nick } : l) } : {}),
       };
     }
@@ -104,9 +172,14 @@ export function applyLiveMessage(state: LiveState, msg: ServerMessage, now: numb
   }
 }
 
-/** 차단한 사람의 채팅 줄을 두 방에서 지운 상태. 이후 줄은 서버가 보내지 않는다 */
+/** 차단한 사람의 채팅 줄을 세 방에서 지운 상태. 이후 줄은 서버가 보내지 않는다 */
 export function withoutAuthor(state: LiveState, uid: string): LiveState {
-  return { ...state, chat: state.chat.filter(l => l.uid !== uid), guildChat: state.guildChat.filter(l => l.uid !== uid) };
+  return {
+    ...state,
+    globalChat: state.globalChat.filter(l => l.uid !== uid),
+    localChat: state.localChat.filter(l => l.uid !== uid),
+    guildChat: state.guildChat.filter(l => l.uid !== uid),
+  };
 }
 
 /** 이동 중인데 오래 소식이 없는 플레이어 — 반투명으로 그린다 */

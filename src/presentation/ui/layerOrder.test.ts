@@ -409,6 +409,7 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
     ['ui/Modal.tsx', '--z-app-modal'],
     ['ui/Modal.tsx', '--z-blocker'],
     ['ui/FloatingToastLayer.tsx', '--z-toast'],
+    ['views/overlays/live/NoticeStack.tsx', '--z-toast'],
     ['layouts/game-stage/FerryVeil.tsx', '--z-veil'],
     ['layouts/sidebar/index.tsx', '--z-tabs'],
     ['views/overlays/update/LoadingOverlay.tsx', '--z-veil'],

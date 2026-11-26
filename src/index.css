@@ -59,6 +59,10 @@
   --color-orange: var(--c-orange);
   --color-accent: var(--c-accent);
   --color-guild: var(--c-guild);
+  --color-chat-global: var(--c-chat-global);
+  --color-chat-local: var(--c-chat-local);
+  --color-chat-guild: var(--c-chat-guild);
+  --color-chat-system: var(--c-chat-system);
   --color-danger: var(--c-danger);
   --color-common: var(--c-common);
   --color-rare: var(--c-rare);
@@ -132,6 +136,10 @@
   --c-danger: #ff8a80;
   --c-orange: #fb923c; /* 어려움 머리색 — 보상 골드와 겹치지 않게 주황 계열로 분리 */
   --c-guild: #d9b3ff; /* 메시지 창 길드 채팅 본문 — 하늘색(다른 사람 이름)과 겹치지 않는 밝은 보라. 영웅 등급색(#ba68c8)보다 밝다 */
+  --c-chat-global: #f0c451; /* 메시지 창 전체 채널 색선·토글 견본 */
+  --c-chat-local: #56d39c; /* 메시지 창 지역 채널 색선·토글 견본 */
+  --c-chat-guild: #c08cff; /* 메시지 창 길드 채널 색선·토글 견본 */
+  --c-chat-system: #93a8c4; /* 메시지 창 시스템 채널 색선·토글 견본 */
 
   /* 등급색 — 게임 로직 RARITY와 동일 값 */
   --c-common: #b8c2cc;

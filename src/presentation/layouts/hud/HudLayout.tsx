@@ -37,6 +37,8 @@ interface HudLayoutProps {
   chips?: ReactNode;
   /** 스테이지 아래 가운데 표식(비운영 빌드의 환경 배지) — 위치는 표식이 정한다 */
   badge?: ReactNode;
+  /** 메시지 창 펼침 상태에서 기록 상자 위에 고정할 슬롯(채팅 공지 띠 등) */
+  logTopSlot?: ReactNode;
   /** 메시지 창 아래 줄(채팅 입력) */
   logFooter?: ReactNode;
   /** 메시지 창에서 채팅 글줄의 보낸 사람을 골랐다 */
@@ -80,7 +82,7 @@ interface HudLayoutProps {
 // 헤더의 펼친 메뉴 줄이 메시지 창과 상태 띠 위에 오는 것은 DOM 순서가 아니라 층 토큰(menu-row)이 보장하고, 탭 이동 순서는 헤더, 채팅 순이다.
 // 화면 키보드가 올라오면 줄기만 키보드 위로 올라가고(--keyboard-h, 탭 줄 높이 56px는 이미 비어 있다) 스테이지 크기는 그대로다.
 // 시트가 열려도 이 줄기는 자리를 지키고 시트가 그 위를 덮는다.
-export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onOpenStats, onOpenEffects, onOpenMap, notice, chips, badge, logFooter, onPickLine, you, channels, disabledChannels, guildMates, filter, onToggleFilter, folded, onFold, onStatusSlot, onCatchSlot, menu, accountState = 'account' }: HudLayoutProps) {
+export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onOpenStats, onOpenEffects, onOpenMap, notice, chips, badge, logTopSlot, logFooter, onPickLine, you, channels, disabledChannels, guildMates, filter, onToggleFilter, folded, onFold, onStatusSlot, onCatchSlot, menu, accountState = 'account' }: HudLayoutProps) {
   const mobile = useMobileLayout();
   const minimapVisible = useMinimapVisible();
   const hasMinimap = scene.kind === 'region';
@@ -122,7 +124,7 @@ export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onO
             </div>
           )}
         </div>
-        <MessageLog log={log} footer={logFooter} onPick={onPickLine} you={you}
+        <MessageLog log={log} topSlot={logTopSlot} footer={logFooter} onPick={onPickLine} you={you}
                     filter={filter} onToggle={onToggleFilter} folded={folded} onFold={onFold}
                     channels={channels} disabledChannels={disabledChannels}
                     lines={mobile ? 5 : undefined} />

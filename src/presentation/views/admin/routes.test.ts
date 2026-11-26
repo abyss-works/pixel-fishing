@@ -18,6 +18,7 @@ describe('관리자 해시 경로', () => {
     expect(adminHash(parseAdminHash('#/admin/players/nope'))).toBe('#/admin/players/roster');
     expect(adminHash(parseAdminHash('#/admin/players/mail'))).toBe('#/admin/players/roster');
     expect(adminHash(parseAdminHash('#/admin/comms'))).toBe('#/admin/comms/letters');
+    expect(adminHash(parseAdminHash('#/admin/comms/notices'))).toBe('#/admin/comms/notices');
     expect(adminHash(parseAdminHash('#/admin/analysis/'))).toBe('#/admin/analysis/economy');
   });
 
