@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { newState } from '../../../game/rules/logic';
+import { topZoneOfSpot } from '../../../game/content/zones';
+import { FISH, newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import {
   ACHIEVEMENT_MODAL_TABS,
@@ -168,6 +169,51 @@ describe('누적 보너스 카드', () => {
     expect(relic.scopeLabel).toBe('유물');
     expect(relic.allDone).toBe(true);
     expect(relic.activeText).toBe('유물 증폭 +2.5%');
+  });
+
+  it('바다 6구역 지역 누적 18종은 도감 포획 수로 계산하고 손맛·직접 챔질 문구를 쓰지 않으며 전역 수동 3종은 유지한다', () => {
+    const pacDayLeg = FISH.find(f => topZoneOfSpot(f.spot) === 'pacific' && f.rarity === 'legendary' && !f.night)!;
+    const pacNightLeg = FISH.find(f => topZoneOfSpot(f.spot) === 'pacific' && f.rarity === 'legendary' && f.night === true)!;
+    const pacCommon = FISH.find(f => topZoneOfSpot(f.spot) === 'pacific' && f.rarity === 'common')!;
+    const state = seed({
+      dex: {
+        [pacDayLeg.id]: { normal: { count: 1, maxSize: 10, first: null }, variant: { count: 1, maxSize: 10, first: null } },
+        [pacNightLeg.id]: { normal: { count: 1, maxSize: 10, first: null } },
+        [pacCommon.id]: { variant: { count: 50, maxSize: 10, first: null } },
+      },
+    });
+    const cards = cumulativeBonusCards(state);
+    const zoneCards = cards.filter(c => c.series.scope === 'zone');
+    expect(zoneCards).toHaveLength(18);
+    for (const card of zoneCards) {
+      expect(card.series.name).not.toContain('손맛');
+      expect(card.series.desc).not.toContain('직접 챔질');
+      expect(card.series.desc).not.toContain('손맛');
+    }
+
+    const dayCard = zoneCards.find(c => c.series.id === 'bonus-zone-day-legendary-pacific')!;
+    expect(dayCard.series.name).toBe('태평양 전설');
+    expect(dayCard.series.desc).toBe('태평양에서 낮에 나타나는 전설 어종을 낚아요.');
+    expect(dayCard.current).toBe(2);
+    expect(dayCard.activeText).toBe('희귀 이상 출현 비중 +0.3%');
+
+    const nightCard = zoneCards.find(c => c.series.id === 'bonus-zone-night-legendary-pacific')!;
+    expect(nightCard.series.name).toBe('태평양 밤 전설');
+    expect(nightCard.series.desc).toBe('태평양에서 밤에만 나타나는 전설 어종을 낚아요.');
+    expect(nightCard.current).toBe(1);
+    expect(nightCard.activeText).toBe('밤 어종 출현 비중 +0.3%');
+
+    const variantCard = zoneCards.find(c => c.series.id === 'bonus-zone-variant-pacific')!;
+    expect(variantCard.series.name).toBe('태평양 돌연변이');
+    expect(variantCard.series.desc).toBe('태평양에서 돌연변이 물고기를 낚아요.');
+    expect(variantCard.current).toBe(51);
+    expect(variantCard.activeText).toBe('돌연변이 출현 비중 +0.3%');
+
+    // 전역 수동 3종은 수동 카운터 및 손맛 문구를 유지한다
+    expect(cards.find(c => c.series.id === 'bonus-day-legendary')?.series.name).toBe('전체 전설 손맛');
+    expect(cards.find(c => c.series.id === 'bonus-night-legendary')?.series.name).toBe('전체 밤 전설 손맛');
+    expect(cards.find(c => c.series.id === 'bonus-manual-variant')?.series.name).toBe('전체 돌연변이 손맛');
+    expect(cards.find(c => c.series.id === 'bonus-manual-variant')?.current).toBe(0);
   });
 });
 

@@ -1,5 +1,6 @@
 ﻿import { describe, expect, it } from 'vitest';
 import { SPOTS } from '../../../game/content/spots';
+import { topZoneOfSpot } from '../../../game/content/zones';
 import { commonWeightMultiplier } from '../../../game/rules/actions';
 import { FISH, newState } from '../../../game/rules/logic';
 import type { FishInstance, GameState } from '../../../game/rules/logic';
@@ -382,12 +383,16 @@ describe('받는 보너스', () => {
     const at = (ms: number) => new Date(Date.parse(T0) + ms).toISOString();
 
     it('동일 효과를 1줄로 합산하고 구역 누적은 구역별 이름 대신 N곳으로 묶으며 합연산→곱연산 내림차순·최종 적용 순으로 툴팁을 정렬한다', () => {
+      const pacFish = FISH.find(f => topZoneOfSpot(f.spot) === 'pacific')!;
+      const seaFish = FISH.find(f => topZoneOfSpot(f.spot) === 'seasia')!;
       const g = game({
         artifacts: ['mami-wata-mirror', 'elder-scale'], // 전설 유물 1개 -> artifactBoost +2.5% (×1.025), 코모로 Lv1 +25%
+        dex: {
+          [pacFish.id]: { variant: { count: 50, maxSize: 10, first: '2026-11-24' } }, // +0.3%
+          [seaFish.id]: { variant: { count: 50, maxSize: 10, first: '2026-11-24' } }, // +0.3%
+        },
         achievementCounters: {
           'manual.variant.total': 10_000, // +7.5%
-          'manual.variant.pacific': 50,   // +0.3%
-          'manual.variant.seasia': 50,    // +0.3%
         },
       });
       const guild = {

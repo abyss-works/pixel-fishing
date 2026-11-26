@@ -129,6 +129,16 @@ export function debugTablePlan(
 // 달력 날짜다. 바운티 헌팅의 하루(의뢰 배정·만료·클리어 한도)는 04:00 경계의 게임 날짜를 쓴다(gameDayOf).
 const todayKST = (): string => new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
 
+/** 도감 기록 행 → GameState['dex'] 변환 */
+export function recordsToDex(records: readonly RecordRow[]): GameState['dex'] {
+  const dex: GameState['dex'] = {};
+  for (const r of records) {
+    (dex[r.fish_id] ??= {})[r.form as keyof GameState['dex'][string]] =
+      { count: Number(r.count), maxSize: r.max_size, first: r.first_caught?.slice(0, 10) ?? null };
+  }
+  return dex;
+}
+
 /** 3소스 + 런타임 업적 근거 → GameState 조립. 카운터·토벌 기록은 표에 있고 저장 blob에는 넣지 않는다 */
 function assemble(row: StateRow, instances: InstanceRow[], records: RecordRow[],
   counters: Record<string, number>, clearedNamed: string[]): GameState {
@@ -144,11 +154,7 @@ function assemble(row: StateRow, instances: InstanceRow[], records: RecordRow[],
     if (r.slot === null || r.slot === undefined) bag.push(inst);
     else exhibit[r.slot] = inst;
   }
-  const dex: GameState['dex'] = {};
-  for (const r of records) {
-    (dex[r.fish_id] ??= {})[r.form as keyof GameState['dex'][string]] =
-      { count: Number(r.count), maxSize: r.max_size, first: r.first_caught?.slice(0, 10) ?? null };
-  }
+  const dex = recordsToDex(records);
   // blob에 남은 나머지(coupons·locked 등)를 얹고 migrate로 위생 처리.
   // 카운터·토벌 기록은 표에서 읽은 런타임 값으로 덮어 저장 blob과 무관하게 판정한다
   return migrate({ ...blobInput(row.data), gold: Number(row.gold), fame: Number(row.fame),
@@ -840,18 +846,24 @@ export function catchProgressQuests(events: readonly GameEvent[], activeIds: rea
 }
 
 /**
- * catch fast path — 풀가방 조회 없이 도감 1행 + 가방 수, 가방이 가득 차면 등급별 방생 후보 1마리씩.
- * 추첨(prepareCatchDraw·rollCatchFish)은 리듀서와 같은 헬퍼를 호출한다 — 규칙이 여기 새로 생기지 않는다.
+ * catch fast path — 풀가방 조회 없이 도감(records) + 캐치 대상 도감 1행 + 가방 수, 가방이 가득 차면 등급별 방생 후보 1마리씩.
+ * 지역 누적 업적 보너스가 도감 포획 수를 보므로 추첨 전에 도감을 1회 읽고, 확정 후 업적 판정에도 같은 도감을 재사용한다.
+ * 추첨(prepareCatchDraw·drawCatch)은 리듀서와 같은 헬퍼를 호출한다 — 규칙이 여기 새로 생기지 않는다.
  * 스냅샷 경계 버전은 풀 경로(아카이브용 풀 상태).
  */
-async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId, judgmentIn: Judgment, now: string,
+export async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId, judgmentIn: Judgment, now: string,
   guild: GuildEffects, guest: boolean, counters: Record<string, number>, clearedNamed: string[],
   forcePhase?: DayPhase): Promise<ApplyOutcome> {
-  let base = migrate({ ...blobInput(row.data), gold: Number(row.gold),
+  const initialBase = migrate({ ...blobInput(row.data), gold: Number(row.gold),
     fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {},
     achievementCounters: counters, clearedNamed });
-  const gate = canFish(base, spot);
+  const gate = canFish(initialBase, spot);
   if (!gate.ok) return { ok: false, error: gate.reason };
+  const recordRows = await step('db-read', { uid, action: 'catch' }, () => loadRecords(db, uid));
+  const dex = recordsToDex(recordRows);
+  let base = migrate({ ...blobInput(row.data), gold: Number(row.gold),
+    fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex,
+    achievementCounters: counters, clearedNamed });
   // 오늘의 운세 — 리듀서 catch와 같은 규칙. 첫 판정에서 굴려 게임 날짜에 고정하고,
   // 이미 그날의 운세면 그대로 쓴다(불변 — rng를 쓰지 않는다)
   base = ensureFortune(base, now, Math.random);
@@ -862,7 +874,7 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
     { bait: achBonuses.baitAmplify, lunch: achBonuses.lunchAmplify },
   );
   const today = todayKST();
-  // 어종 천장·첫 경험 보장 — 후보가 있을 때만 그 어종들의 일반 폼 소유를 조회한다(fast path는 도감을 들고 있지 않다)
+  // 어종 천장·첫 경험 보장 — 후보가 있을 때만 그 어종들의 일반 폼 소유를 조회한다
   const pityCandidates = speciesPityCandidates(base.pity, spot, phaseOpts);
   const firstCatchActive = isFirstCatchSpot(spot) && base.firstCatch[spot].active;
   const candidates = firstCatchActive
@@ -959,23 +971,14 @@ async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId,
     events.push({ type: 'autoExtractEnergy', payload: { uids: plan.gain.uids, reason: 'bag-full', energy: plan.gain.byGrade,
       fish: takenFish.map(i => ({ uid: i.uid, fishId: i.fishId, form: i.form })) } });
   }
-  // 업적 판정 — 매 확정마다 이루어진다(명세 §6, 빠른 경로 포함). 도감이 없으니 판정 전에 읽어서,
-  // 방금 잡은 폼의 새 도감까지 합친 상태로 판정한다. 알려진 업적이 모두 확정(claimable·claimed)이면 읽지 않는다.
+  // 업적 판정 — 매 확정마다 이루어진다(명세 §6, 빠른 경로 포함). 추첨 전에 읽은 도감에
+  // 방금 잡은 폼의 새 도감까지 합친 상태로 판정한다. 알려진 업적이 모두 확정(claimable·claimed)이면 재평가를 건너뛴다.
   const allDecided = achievementsDecided(base.achievements);
-  const dex = allDecided ? {} : await step('db-read', { uid, action: 'catch' }, async () => {
-    const rows = await loadRecords(db, uid);
-    const d: GameState['dex'] = {};
-    for (const r of rows) {
-      (d[r.fish_id] ??= {})[r.form as keyof GameState['dex'][string]] =
-        { count: Number(r.count), maxSize: r.max_size, first: r.first_caught?.slice(0, 10) ?? null };
-    }
-    return d;
-  });
   const inc = counterIncrementsForEvents(events);
   const counters2: Record<string, number> = {};
   for (const [k, v] of Object.entries(base.achievementCounters)) if (typeof v === 'number') counters2[k] = v;
   for (const [k, v] of Object.entries(inc)) if (v !== undefined) counters2[k] = (counters2[k] ?? 0) + v;
-  const evalDex = allDecided ? undefined : { ...dex, [fish.id]: { ...dex[fish.id], [inst.form]: rec } };
+  const evalDex = allDecided ? undefined : { ...base.dex, [fish.id]: { ...base.dex[fish.id], [inst.form]: rec } };
   let evalState: GameState = { ...base, achievementCounters: counters2 };
   if (evalDex) evalState = { ...evalState, dex: evalDex };
   const evaluated = allDecided ? { achievements: base.achievements, newlyClaimable: [] as string[] }
