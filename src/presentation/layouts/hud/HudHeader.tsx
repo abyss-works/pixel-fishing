@@ -16,10 +16,12 @@ import { useMobileLayout } from '../useMobileLayout';
 // 화면 키보드 때문에 보이는 영역이 위로 밀리면(--keyboard-top) 두 틀이 그만큼 아래로 비켜서 보이는 영역 안에 남는다. 위치 변환이 아니라 상대 위치 오프셋이라 창의 기준 상자를 만들지 않는다.
 // 자원 바를 누르면 스탯 창이 열린다.
 // 헤더는 채팅과 같은 층(chrome)이라 스테이지 위 HUD(카드 묶음 포함) 위에 놓이고, 창의 바탕이 헤더까지 덮는다. 메뉴 버튼 자리(펼친 줄 포함)는 한 단 높은 층(menu-row)이라 DOM 순서와 무관하게 채팅 위에 놓인다.
-export default function HudHeader({ game, bagBonus = 0, onOpenStats, menu }: {
+export default function HudHeader({ game, bagBonus = 0, onOpenStats, eventButton, menu }: {
   game: GameState;
   bagBonus?: number;
   onOpenStats: () => void;
+  /** 메뉴 버튼 왼쪽에 놓이는 이벤트 버튼 */
+  eventButton?: ReactNode;
   /** 메뉴 버튼(펼친 줄 포함) */
   menu: ReactNode;
 }) {
@@ -28,8 +30,9 @@ export default function HudHeader({ game, bagBonus = 0, onOpenStats, menu }: {
     return (
       <>
         <MobileResourceBar game={game} bagBonus={bagBonus} onOpen={onOpenStats} />
-        <div className="z-(--z-menu-row)
+        <div className="z-(--z-menu-row) flex items-center gap-1
                         mobile:relative mobile:top-[var(--keyboard-top,0px)] mobile:col-start-2 mobile:row-start-1 mobile:mx-1 mobile:my-1 mobile:self-center">
+          {eventButton}
           {menu}
         </div>
       </>
@@ -40,7 +43,8 @@ export default function HudHeader({ game, bagBonus = 0, onOpenStats, menu }: {
       <div className="relative z-(--z-chrome) col-start-2 pointer-events-auto">
         <ResourceBar game={game} bagBonus={bagBonus} onOpen={onOpenStats} />
       </div>
-      <div className="relative z-(--z-menu-row) col-start-3 ml-(--hdr-inset) justify-self-end pointer-events-auto">
+      <div className="relative z-(--z-menu-row) col-start-3 ml-(--hdr-inset) justify-self-end flex items-center gap-2 pointer-events-auto">
+        {eventButton}
         {menu}
       </div>
     </div>

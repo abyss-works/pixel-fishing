@@ -131,4 +131,13 @@ describe('parseAction', () => {
     expect(parseAction({ type: 'usePotion' })).toBeNull();
     expect(parseAction({ type: 'usePotion', id: 1 })).toBeNull();
   });
+
+  it('라이브 이벤트 액션의 형태를 검증한다', () => {
+    expect(parseAction({ type: 'enterEventZone' })).toEqual({ type: 'enterEventZone' });
+    expect(parseAction({ type: 'enterEventZone', eventId: 'evt-2' })).toEqual({ type: 'enterEventZone', eventId: 'evt-2' });
+    expect(parseAction({ type: 'enterEventZone', eventId: 1 })).toBeNull();
+    expect(parseAction({ type: 'leaveEventZone' })).toEqual({ type: 'leaveEventZone' });
+    expect(parseAction({ type: 'settleEventReward' })).toEqual({ type: 'settleEventReward' });
+    expect(parseAction({ type: 'settleEventReward', eventId: 'evt-2' })).toEqual({ type: 'settleEventReward', eventId: 'evt-2' });
+  });
 });

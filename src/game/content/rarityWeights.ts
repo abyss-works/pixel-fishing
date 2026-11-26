@@ -1,7 +1,7 @@
 // 등급 가중치 — 만분율(합 10000). 데이터에는 희귀·영웅·전설만 적고 일반은 나머지로 계산한다.
 // 덮어쓰기가 없는 해역은 소속 지역이 가장 최근 지역에서 몇 단계 전인지에 따라 프리셋을 쓴다.
 import type { RarityId } from './rarity.js';
-import { SPOTS } from './spots.js';
+import { spotById } from './spots.js';
 import type { SpotId } from './spots.js';
 import { ZONE_IDS, topZoneOfSpot } from './zones.js';
 
@@ -36,7 +36,7 @@ function presetOfSpot(spotId: SpotId): RarityPermyriad {
 
 /** 수역의 등급 가중치 전체(합 10000) — 덮어쓰기 → 지역 단계 프리셋 순 */
 export function rarityWeightsOf(spotId: SpotId): Record<RarityId, number> {
-  const spot = SPOTS.find(s => s.id === spotId);
+  const spot = spotById(spotId);
   if (!spot) throw new Error(`알 수 없는 수역: ${spotId}`);
   return fillCommon(spot.rarityWeight ?? presetOfSpot(spotId));
 }

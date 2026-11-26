@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  DEFAULT_LOOK, HATS, LOOK_PRESETS, PANTS_COLORS, SHIRT_COLORS, hatById, isAchievementHat, safeLook,
+  DEFAULT_LOOK, HATS, LOOK_PRESETS, PANTS_COLORS, SHIRT_COLORS, hatById, isAchievementHat, isEventHat, safeLook,
 } from './wardrobe';
 
 const HEX = /^#[0-9a-f]{6}$/;
@@ -29,9 +29,9 @@ describe('옷장 콘텐츠', () => {
     }
   });
 
-  it('모자는 골드 5종과 업적 52종으로 총 57종이고 id가 겹치지 않는다', () => {
-    expect(HATS).toHaveLength(57);
-    expect(new Set(HATS.map(h => h.id)).size).toBe(57);
+  it('모자는 골드 5종, 업적 52종, 이벤트 2종으로 총 59종이고 id가 겹치지 않는다', () => {
+    expect(HATS).toHaveLength(59);
+    expect(new Set(HATS.map(h => h.id)).size).toBe(59);
 
     const goldHats = HATS.slice(0, 5);
     expect(goldHats.map(h => h.id)).toEqual(['cap-red', 'cap-blue', 'cap-yellow', 'cap-green', 'cap-black']);
@@ -39,11 +39,12 @@ describe('옷장 콘텐츠', () => {
     for (const h of goldHats) {
       expect(h.source).toBe('gold');
       expect(isAchievementHat(h)).toBe(false);
+      expect(isEventHat(h)).toBe(false);
       expect(h.color).toMatch(HEX);
       expect(Number.isInteger(h.price) && h.price > 0).toBe(true);
     }
 
-    const achHats = HATS.slice(5);
+    const achHats = HATS.slice(5, 57);
     expect(achHats).toHaveLength(52);
     expect(achHats.map(h => h.id)).toEqual([
       'straw-hat', 'sou-wester', 'coral-bandana', 'saffron-turban', 'worn-tricorn', 'fog-beanie',
@@ -65,7 +66,19 @@ describe('옷장 콘텐츠', () => {
     for (const h of achHats) {
       expect(h.source).toBe('achievement');
       expect(isAchievementHat(h)).toBe(true);
+      expect(isEventHat(h)).toBe(false);
       expect(h.achievementId).toBeTruthy();
+      expect(h.price).toBe(0);
+      expect(h.color).toMatch(HEX);
+      if (h.accentColor !== undefined) expect(h.accentColor).toMatch(HEX);
+    }
+
+    const eventHats = HATS.slice(57);
+    expect(eventHats.map(h => h.id)).toEqual(['event-hat-basin-conical', 'event-hat-abyss-crown']);
+    for (const h of eventHats) {
+      expect(h.source).toBe('event');
+      expect(isEventHat(h)).toBe(true);
+      expect(isAchievementHat(h)).toBe(false);
       expect(h.price).toBe(0);
       expect(h.color).toMatch(HEX);
       if (h.accentColor !== undefined) expect(h.accentColor).toMatch(HEX);

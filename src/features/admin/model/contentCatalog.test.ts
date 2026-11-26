@@ -119,10 +119,10 @@ describe('관리자 콘텐츠 카탈로그 모델', () => {
     expect(summaryOf('bonus-zone-variant-pacific')).toBe('태평양 도감 돌연변이 포획 수');
   });
 
-  it('5) 모자 57종(상점 5 + 업적 52)과 의상 팔레트·프리셋 6종이 정본과 일치한다', () => {
+  it('5) 모자 59종(상점 5 + 업적 52 + 이벤트 2)과 의상 팔레트·프리셋 6종이 정본과 일치한다', () => {
     const w = CONTENT_CATALOG.wardrobe;
     expect(w.hats).toHaveLength(HATS.length);
-    expect(w.hats).toHaveLength(57);
+    expect(w.hats).toHaveLength(59);
     expect(w.shopHatCount).toBe(5);
     expect(w.achievementHatCount).toBe(52);
     expect(w.shirtColors).toHaveLength(SHIRT_COLORS.length);

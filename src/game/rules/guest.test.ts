@@ -59,7 +59,7 @@ describe('게스트 액션 판정 (guestActionVerdict)', () => {
       { type: 'resolveChallenge', questId: 'q', success: true, hits: 1, misses: 0 },
       { type: 'redeemCoupon', code: 'x' }, { type: 'claimRelief', code: 'x' }, { type: 'claimMail', id: 1 },
       { type: 'exhibit', uid: 'u', slot: 0 }, { type: 'exchangeArtifact', artifact: 'a' }, { type: 'levelUpArtifact', artifact: 'a' },
-      { type: 'usePotion', id: 'luck-small' },
+      { type: 'enterEventZone' }, { type: 'settleEventReward' },
     ];
     for (const action of rejected) expect(guestActionVerdict(action), action.type).toBe('account-only');
   });
@@ -83,7 +83,7 @@ describe('게스트 액션 판정 (guestActionVerdict)', () => {
 
   it('모든 액션 종류가 분류돼 있고, 새 액션은 이 표에 넣어야 통과한다', () => {
     const open = [
-      'boot', 'sell', 'upgradeRod', 'buyBoat', 'seeTutorial', 'setLocked', 'autoLock', 'setAutoLockOnCatch', 'dismissBaitRefund', 'debug', 'debugBatch', 'debugSnapshot', 'import',
+      'boot', 'sell', 'upgradeRod', 'buyBoat', 'seeTutorial', 'setLocked', 'autoLock', 'setAutoLockOnCatch', 'dismissBaitRefund', 'usePotion', 'debug', 'debugBatch', 'debugSnapshot', 'import',
     ];
     const villageOnly = ['travel', 'catch'];
     for (const type of ACTION_TYPES) {

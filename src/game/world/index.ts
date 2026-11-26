@@ -11,6 +11,7 @@ import type { BaseId, BasePack, Furniture, Point, RegionId, RegionPack } from '.
 import { canMove, inRect } from './engine';
 import { VILLAGE } from './regions/village';
 import { WORLD } from './regions/world';
+import { CHAMPIONSHIP } from './regions/championship';
 import { HOME } from './bases/home';
 import { HARBOR_BASE } from './bases/harbor';
 import { MANILA_BASE } from './bases/manila';
@@ -31,6 +32,7 @@ export { schoolsOf, generateWorldSchools, SCHOOL_MIN_GAP } from './schools';
 export const REGION_PACKS: Record<RegionId, RegionPack> = {
   village: VILLAGE,
   world: WORLD,
+  championship: CHAMPIONSHIP,
 };
 
 /** 씬 지역 id 순서의 단일 출처(등록 순서). UI 순환은 ZONE_IDS(구역 데이터)를 쓴다. */

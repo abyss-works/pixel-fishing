@@ -333,7 +333,10 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
     const s = seed({ gold: 42 });
     const out = applyAction(s, { type: 'boot', buildId: 'a'.repeat(100) }, deps({ rng: () => 0.5 }));
     if (!out.ok) throw new Error(out.error);
-    expect(out.state).toEqual({ ...s, fortune: { day: '2026-08-22', kind: 'bite', index: 5 } });
+    expect(out.state.fortune).toMatchObject({ day: '2026-08-22', kind: 'bite', index: 5 });
+    expect(out.state.fortune?.score).toBeGreaterThanOrEqual(85);
+    expect(out.state.fortune?.score).toBeLessThanOrEqual(88);
+    expect({ ...out.state, fortune: null }).toEqual({ ...s, fortune: null });
     // 결과에는 어군 배치 날짜가 실린다 — deps.now(KST 12:00) 기준 당일
     expect(out.result).toEqual({ type: 'boot', schoolDay: '2026-08-22' });
     expect(out.events).toEqual([{ type: 'boot', payload: { buildId: 'a'.repeat(64) } }]);
@@ -370,7 +373,9 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
       rng: () => 0.9,
     }));
     if (!after.ok) throw new Error(after.error);
-    expect(after.state.fortune).toEqual({ day: '2026-08-22', kind: 'grand-catch', index: 5 });
+    expect(after.state.fortune).toMatchObject({ day: '2026-08-22', kind: 'grand-catch', index: 5 });
+    expect(after.state.fortune?.score).toBeGreaterThanOrEqual(97);
+    expect(after.state.fortune?.score).toBeLessThanOrEqual(100);
     // 같은 날 재접속에서는 방금 고정한 운세를 유지한다
     const revisit = applyAction(after.state, { type: 'boot' }, deps({
       now: '2026-08-22T03:00:00.000Z',
@@ -645,9 +650,10 @@ describe('usePotion — 비약 사용', () => {
   const nextNow = '2026-08-22T19:00:00.000Z'; // KST 다음날 04:00
   const nextDay = gameDayOf(nextNow);
 
-  it('게스트, 모르는 id, 미보유, 오늘 이미 적용 중이면 거부한다', () => {
-    expect(applyAction(seed({ items: { 'luck-small': 1 } }), { type: 'usePotion', id: 'luck-small' }, deps({ guest: true })))
-      .toEqual({ ok: false, error: 'account-only' });
+  it('게스트도 보유한 비약을 사용할 수 있고, 모르는 id, 미보유, 오늘 이미 적용 중이면 거부한다', () => {
+    const guestOut = applyAction(seed({ items: { 'luck-small': 1 } }), { type: 'usePotion', id: 'luck-small' }, deps({ now, guest: true }));
+    expect(guestOut.ok).toBe(true);
+    if (guestOut.ok) expect(guestOut.state.potions).toEqual({ 'luck-small': day });
     expect(applyAction(seed({ items: { 'luck-small': 1 } }), { type: 'usePotion', id: 'nope' }, deps()))
       .toEqual({ ok: false, error: 'bad-request' });
     expect(applyAction(seed(), { type: 'usePotion', id: 'luck-small' }, deps()))
@@ -993,5 +999,44 @@ describe('토글식 자동 잠금 — 액션·포획·가방 초과 연동', () 
     if (!out.ok) throw new Error(out.error);
     expect(out.state.bag).toEqual([]);
     expect(out.state.items[ENERGY_ITEM_IDS.common]).toBe(10);
+  });
+});
+
+describe('라이브 이벤트 구역 전환 및 정산 액션', () => {
+  it('enterEventZone은 게스트와 비활성 이벤트를 거부하고 활성 시 championship 구역으로 이동한다', () => {
+    expect(applyAction(seed(), { type: 'enterEventZone' }, deps({ guest: true })))
+      .toEqual({ ok: false, error: 'account-only' });
+    expect(applyAction(seed(), { type: 'enterEventZone' }, deps()))
+      .toEqual({ ok: false, error: 'event-inactive' });
+
+    const entered = applyAction(
+      seed({ boat: 0 }),
+      { type: 'enterEventZone', eventId: 'evt-2' },
+      deps({ event: { championshipActive: true } }),
+    );
+    if (!entered.ok) throw new Error(entered.error);
+    expect(entered.state.location).toEqual({ kind: 'region', id: 'championship' });
+    expect(entered.events).toEqual([{ type: 'enterEventZone', payload: { eventId: 'evt-2' } }]);
+
+    const left = applyAction(entered.state, { type: 'leaveEventZone' }, deps());
+    if (!left.ok) throw new Error(left.error);
+    expect(left.state.location).toEqual({ kind: 'base', id: 'home' });
+  });
+
+  it('settleEventReward는 미정산 보상이 없으면 거부하고, 주입된 골드·명성을 더한다', () => {
+    expect(applyAction(seed(), { type: 'settleEventReward' }, deps({ guest: true })))
+      .toEqual({ ok: false, error: 'account-only' });
+    expect(applyAction(seed(), { type: 'settleEventReward' }, deps()))
+      .toEqual({ ok: false, error: 'event-nothing-to-settle' });
+
+    const out = applyAction(
+      seed({ gold: 100, fame: 10 }),
+      { type: 'settleEventReward', eventId: 'evt-2' },
+      deps({ event: { championshipActive: true, settle: { eventId: 'evt-2', gold: 250, fame: 12 } } }),
+    );
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.gold).toBe(350);
+    expect(out.state.fame).toBe(22);
+    expect(out.result).toEqual({ type: 'eventSettle', eventId: 'evt-2', gold: 250, fame: 12 });
   });
 });

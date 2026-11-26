@@ -1,7 +1,7 @@
 // 배우 스프라이트 — 플레이어(도보)/배(항해). 자기 좌표계만 알고 상태를 모른다 (계층: 단위 스프라이트)
 import { label, R, UI } from '../common.js';
 import type { Ctx } from '../common.js';
-import { DEFAULT_LOOK, PANTS_COLORS, SHIRT_COLORS, hatById, isAchievementHat } from '../../../content/wardrobe.js';
+import { DEFAULT_LOOK, PANTS_COLORS, SHIRT_COLORS, hatById, isAchievementHat, isEventHat } from '../../../content/wardrobe.js';
 import type { Hat, Look } from '../../../content/wardrobe.js';
 
 function drawAchievementHat(ctx: Ctx, x: number, y: number, hat: Hat) {
@@ -305,15 +305,31 @@ function drawAchievementHat(ctx: Ctx, x: number, y: number, hat: Hat) {
       R(ctx, x + 4, y - 20, 1, 2, a);
       R(ctx, x - 2, y - 18, 4, 1, a);
       return;
+    case 'event-hat-basin-conical':
+      R(ctx, x - 2, y - 20, 4, 1, c);
+      R(ctx, x - 3, y - 19, 6, 1, c);
+      R(ctx, x - 5, y - 18, 10, 1, c);
+      R(ctx, x - 6, y - 17, 12, 1, c);
+      R(ctx, x - 2, y - 16, 1, 2, a);
+      R(ctx, x + 1, y - 16, 1, 2, a);
+      return;
+    case 'event-hat-abyss-crown':
+      R(ctx, x - 5, y - 20, 2, 2, a);
+      R(ctx, x - 1, y - 20, 2, 2, c);
+      R(ctx, x + 3, y - 20, 2, 2, a);
+      R(ctx, x - 4, y - 18, 8, 2, c);
+      R(ctx, x - 2, y - 18, 4, 1, a);
+      R(ctx, x - 5, y - 17, 10, 1, c);
+      return;
     default:
       R(ctx, x - 4, y - 19, 8, 3, c);
       R(ctx, x + 3, y - 16, 3, 1, c);
   }
 }
 
-/** 모자 — (x, y)는 사람의 발 아래 가운데다(모자 좌표계는 사람 그림과 같다). 업적 모자는 도형별로, 그 밖의 모자는 덮개와 챙을 한 가지 색으로 그린다 */
+/** 모자 — (x, y)는 사람의 발 아래 가운데다(모자 좌표계는 사람 그림과 같다). 업적·이벤트 모자는 도형별로, 그 밖의 모자는 덮개와 챙을 한 가지 색으로 그린다 */
 export function drawHat(ctx: Ctx, x: number, y: number, hat: Hat) {
-  if (isAchievementHat(hat)) {
+  if (isAchievementHat(hat) || isEventHat(hat)) {
     drawAchievementHat(ctx, x, y, hat);
     return;
   }

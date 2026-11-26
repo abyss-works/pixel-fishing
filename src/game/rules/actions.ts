@@ -104,6 +104,9 @@ export type GameAction =
   | { type: 'resolveChallenge'; questId: string; success: boolean; hits: number; misses: number }
   | { type: 'claimAchievement'; id: string }
   | { type: 'claimAllAchievements' }
+  | { type: 'enterEventZone'; eventId?: string }
+  | { type: 'leaveEventZone' }
+  | { type: 'settleEventReward'; eventId?: string }
   | { type: 'import'; save: unknown };          // 이사 코드 불러오기 — 검증 없이 수입, 흔적만 남김
 
 // 서버와 공유하는 화이트리스트 — Record가 유니온과의 완전 일치를 강제한다
@@ -117,8 +120,15 @@ const ACTION_TYPE_MAP: Record<GameAction['type'], true> = {
   acceptQuest: true, deliverBounty: true, exchangeArtifact: true, levelUpArtifact: true, exhibit: true, resolveChallenge: true,
   seeTutorial: true, changeClothes: true, buyHat: true, wearHat: true,
   claimAchievement: true, claimAllAchievements: true,
+  enterEventZone: true, leaveEventZone: true, settleEventReward: true,
 };
 export const ACTION_TYPES = Object.keys(ACTION_TYPE_MAP) as GameAction['type'][];
+
+export interface EventSettleGrant {
+  eventId: string;
+  gold: number;
+  fame: number;
+}
 
 /** 주입 의존성 — 서버는 실난수/서버시각, 테스트는 목킹, 동적 쿠폰은 호출자가 DB에서 조회해 공급 */
 export interface ActionDeps {
@@ -136,6 +146,8 @@ export interface ActionDeps {
   mail?: { id: number; gold: number; items?: readonly { id: string; qty: number }[] } | null;
   /** 길드 보너스 효과 — 서버가 소속 길드의 보너스 단계로 계산해 공급한다. 로컬 dev엔 길드가 없어 항상 없다 */
   guild?: GuildEffects | null;
+  /** 라이브 이벤트 활성·정산 진실 — 서버가 DB에서 조회해 공급한다. 로컬 dev엔 없다 */
+  event?: { championshipActive: boolean; settle?: EventSettleGrant | null } | null;
   /** 계정을 연결하지 않은 익명 계정인가 - 서버가 공급한다. 게스트는 가방 초과 때 기운을 얻지 않고 놓아준다 */
   guest?: boolean;
 }
@@ -162,6 +174,7 @@ export type ActionResult =
   /** claimAllAchievements 확정 — 받은 골드 합계와 모자 id 목록. 클라가 이 값으로 수령 문구를 만든다
    *  (단건 claimAchievement는 로컬 업적 정의(def.reward)로 만들 수 있어 결과를 싣지 않는다) */
   | { type: 'claimAllAchievements'; gold: number; hats: string[] }
+  | { type: 'eventSettle'; eventId: string; gold: number; fame: number }
   | { type: 'debugSnapshot'; bounty: DevBountySnapshot }
   | { type: 'none'; guildUpdated?: true };
 
@@ -520,6 +533,8 @@ function debugEventPayload(command: string, args: Record<string, unknown>, next:
 function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceOutcome {
   switch (action.type) {
     case 'catch': {
+      // 이벤트 전용 구역 어획은 이벤트 전용 경로가 처리한다
+      if (action.spot === 'championship') return { ok: false, error: 'event-inactive' };
       // 서버가 게이트를 재검증한다 — 클라 사전 체크(UX용)와 별개 (R5b)
       const gate = canFish(state, action.spot);
       if (!gate.ok) return { ok: false, error: gate.reason };
@@ -1226,6 +1241,48 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         ok: true, state: { ...spent, artifactLevels: { ...spent.artifactLevels, [art.id]: level } },
         result: { type: 'none' },
         events: [{ type: 'levelUpArtifact', payload: { artifact: art.id, level } }],
+      };
+    }
+    case 'enterEventZone': {
+      if (deps.guest) return { ok: false, error: 'account-only' };
+      if (!deps.event?.championshipActive) return { ok: false, error: 'event-inactive' };
+      if (state.location.kind === 'region' && state.location.id === 'championship') {
+        return { ok: true, state, result: { type: 'none' }, events: [] };
+      }
+      return {
+        ok: true,
+        state: { ...state, location: { kind: 'region', id: 'championship' } },
+        result: { type: 'none' },
+        events: [{ type: 'enterEventZone', payload: { eventId: action.eventId ?? null } }],
+      };
+    }
+    case 'leaveEventZone': {
+      if (state.location.kind !== 'region' || state.location.id !== 'championship') {
+        return { ok: true, state, result: { type: 'none' }, events: [] };
+      }
+      const to = { kind: 'base', id: state.boat >= 1 ? 'harbor' : 'home' } as const;
+      return {
+        ok: true,
+        state: { ...state, location: to },
+        result: { type: 'none' },
+        events: [{ type: 'leaveEventZone', payload: { to: to.id } }],
+      };
+    }
+    case 'settleEventReward': {
+      if (deps.guest) return { ok: false, error: 'account-only' };
+      const grant = deps.event?.settle;
+      if (!grant || (grant.gold <= 0 && grant.fame <= 0)) {
+        return { ok: false, error: 'event-nothing-to-settle' };
+      }
+      return {
+        ok: true,
+        state: {
+          ...state,
+          gold: state.gold + grant.gold,
+          fame: state.fame + grant.fame,
+        },
+        result: { type: 'eventSettle', eventId: grant.eventId, gold: grant.gold, fame: grant.fame },
+        events: [{ type: 'settleEventReward', payload: { eventId: grant.eventId, gold: grant.gold, fame: grant.fame } }],
       };
     }
     default:

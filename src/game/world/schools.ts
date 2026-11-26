@@ -31,7 +31,9 @@ const NEARBY_HARBOR: Partial<Record<SpotId, Point>> = {
 };
 
 export function schoolsOf(region: RegionId, day: string): School[] {
-  return region === 'village' ? V_SCHOOLS : worldSchools(day);
+  if (region === 'village') return V_SCHOOLS;
+  if (region === 'championship') return [];
+  return worldSchools(day);
 }
 
 // ---------- 시드 난수 — 문자열 해시(FNV-1a) → mulberry32 ----------

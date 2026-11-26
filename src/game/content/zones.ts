@@ -8,7 +8,7 @@
 // spot 자체(수역 데이터 — id·fish.spot 소속)는 절대 불변. zone은 그 위의 조회 뷰다.
 // entryBoat = 이 존으로 진입할 때 필요한 배 tier — **최상위 경계 3곳만** 존재한다.
 // 하위 존(해구 등)은 항해 가능, 캐스팅만 스팟의 배 레벨을 서버가 검증한다.
-import { SPOTS } from './spots.js';
+import { EVENT_SPOTS, SPOTS } from './spots.js';
 import type { SpotId, Spot } from './spots.js';
 import type { RegionId } from './places.js';
 import { boatGateText } from './boats.js';
@@ -16,10 +16,11 @@ import { boatGateText } from './boats.js';
 export type ZoneId =
   | 'village' | 'pacific' | 'seasia' | 'indian' | 'madagascar' | 'southatlantic' | 'northatlantic'  // 최상위 존
   | 'deep' | 'dragonhole' | 'coron' | 'barrierreef' | 'southindian' | 'comorodeep' // 하위 존 (id = 스팟 id)
-  | 'benguela' | 'sthelena' | 'azores' | 'bermuda';
+  | 'benguela' | 'sthelena' | 'azores' | 'bermuda'
+  | 'championship';
 
 /** 씬 지역 — 최상위 존만 명시한다. 하위 존은 부모 체인으로 파생(zoneGroup). */
-type TopGroup = Extract<RegionId, 'village' | 'world'>;
+type TopGroup = RegionId;
 
 export interface Zone {
   id: ZoneId;
@@ -291,6 +292,27 @@ const DATA: Zone[] = [
 
 export const ZONES: readonly Zone[] = DATA;
 
+export const CHAMPIONSHIP_ZONE: Zone = {
+  id: 'championship',
+  name: '강태공 분지 호수',
+  shortName: '분지 호수',
+  group: 'championship',
+  tagline: '이벤트 기간에만 열리는 고요한 분지 호수',
+  lore: '화산 분지 한가운데 맑은 물이 고인 호수다. 대회 기간에만 들어설 수 있으며, 각지에서 모여든 희귀한 어종들이 수면 아래를 맴돈다.',
+  tips: [
+    '이벤트 창에서 언제든 분지 호수로 들어오고 나갈 수 있어요.',
+    '분지 호수에서는 표준 낚싯대가 적용되어 보유 배와 무관하게 공정하게 겨룰 수 있어요.',
+  ],
+  controls: [
+    '이동: 방향키 또는 WASD',
+    '낚시: 어군 옆에서 스페이스(또는 화면 누르기)',
+  ],
+  spots: ['championship'],
+};
+
+export const EVENT_ZONES: readonly Zone[] = [CHAMPIONSHIP_ZONE];
+const ALL_ZONES: readonly Zone[] = [...DATA, ...EVENT_ZONES];
+
 /** 아직 열지 않은 바다에 들어서려 할 때의 안내문 — 구역 게이트 안내와 같은 토스트로 나간다 */
 export const CLOSED_SEA_MSG = '아직 열리지 않은 바다라 들어설 수 없어요.';
 
@@ -298,7 +320,7 @@ export const CLOSED_SEA_MSG = '아직 열리지 않은 바다라 들어설 수 �
  *  하위 존은 순환 대상이 아니다 — 로어는 셀 구역(하위 존)으로 자연 승격된다. */
 export const ZONE_IDS: ZoneId[] = DATA.filter(z => !z.parent).map(z => z.id);
 
-const ZONE_BY_ID = new Map(DATA.map(z => [z.id, z]));
+const ZONE_BY_ID = new Map(ALL_ZONES.map(z => [z.id, z]));
 
 /** id → 존. 없는 id는 undefined (호출부 계약상 정상 클라이언트에선 나오지 않는다) */
 export const zoneById = (id: ZoneId): Zone | undefined => ZONE_BY_ID.get(id);
@@ -339,7 +361,7 @@ export function zoneControls(id: ZoneId): string[] {
 
 // spot → 존 역색인 — 스팟이 배치된 존(하위 존 포함). 수역 데이터의 region 열(legacy)과 별개다.
 const ZONE_OF_SPOT = new Map<SpotId, ZoneId>(
-  DATA.flatMap(z => z.spots.map(s => [s, z.id] as const)),
+  ALL_ZONES.flatMap(z => z.spots.map(s => [s, z.id] as const)),
 );
 
 /** 어군의 소속 존 — 미소속 어군은 undefined(발생하면 zones.test가 잡는다) */
@@ -354,18 +376,18 @@ export const topZoneOfSpot = (spotId: SpotId): ZoneId | undefined => {
 /** 씬 지역의 기본 존 — 위치를 못 읽을 때(부팅 직후 등) 지역 탭이 띄울 존.
  *  병합 바다는 고향 항구가 태평양에 있으니 pacific이 기본값이다. */
 export const defaultZoneOfRegion = (region: RegionId): ZoneId =>
-  region === 'village' ? 'village' : 'pacific';
+  region === 'village' ? 'village' : region === 'championship' ? 'championship' : 'pacific';
 
 /** 씬 지역에 속한 어군 목록 — 최상위 존 서브트리의 스팟 전부(지역 탭 가까운 어군 목록).
  *  병합 바다 = 3존 서브트리 전부(하위 존 스팟 포함). */
 export const spotsOfRegion = (region: RegionId): Spot[] =>
-  SPOTS.filter(s => {
+  (region === 'championship' ? EVENT_SPOTS : SPOTS).filter(s => {
     const z = ZONE_OF_SPOT.get(s.id);
     return z !== undefined && zoneGroup(z) === region;
   });
 
 /** 존 서브트리의 어군 — 자기 존 + 모든 하위 존의 스팟(등급 분포 표 단위: 최상위 존 기준) */
 export function subtreeSpots(id: ZoneId): Spot[] {
-  const ids = DATA.filter(z => topZoneOf(z.id) === id).flatMap(z => z.spots);
-  return SPOTS.filter(s => ids.includes(s.id));
+  const ids = ALL_ZONES.filter(z => topZoneOf(z.id) === id).flatMap(z => z.spots);
+  return [...SPOTS, ...EVENT_SPOTS].filter(s => ids.includes(s.id));
 }

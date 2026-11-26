@@ -375,7 +375,7 @@ export interface ZoneCatalogItem {
   topZoneId: ZoneId;
   topZoneName: string;
   isTopLevel: boolean;
-  group: Extract<RegionId, 'village' | 'world'>;
+  group: RegionId;
   groupLabel: string;
   tagline: string;
   lore: string;
@@ -827,7 +827,7 @@ export function buildContentCatalog(): ContentCatalog {
       id: h.id,
       name: h.name,
       source: h.source,
-      sourceLabel: h.source === 'gold' ? '상점' : '업적',
+      sourceLabel: h.source === 'gold' ? '상점' : h.source === 'event' ? '이벤트' : '업적',
       price: h.price,
       color: h.color,
       accentColor: h.accentColor ?? null,
@@ -953,7 +953,7 @@ export function buildContentCatalog(): ContentCatalog {
       topZoneName: topZone.name,
       isTopLevel,
       group,
-      groupLabel: group === 'village' ? '마을' : '대양',
+      groupLabel: group === 'village' ? '마을' : group === 'championship' ? '이벤트' : '대양',
       tagline: z.tagline,
       lore: z.lore,
       tips: zoneTips(z.id),

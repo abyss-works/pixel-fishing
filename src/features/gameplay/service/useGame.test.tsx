@@ -28,7 +28,7 @@ const gw = vi.hoisted(() => ({
   loadFortune: null as null | { day: string; kind: 'fish' | 'gold' | 'shadow'; index: 3 | 5 },
   dispatchFortune: null as null | { day: string; kind: 'fish' | 'gold' | 'shadow'; index: 3 | 5 },
   loadLocation: null as null | { kind: 'region' | 'base'; id: string },
-  visited: [] as ('village' | 'world')[],
+  visited: [] as ('village' | 'world' | 'championship')[],
   loadFame: 0,
   dispatchResult: null as null | Record<string, unknown>,
   devTools: false,
