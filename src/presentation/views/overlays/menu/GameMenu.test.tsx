@@ -184,7 +184,7 @@ describe('게임 메뉴', () => {
       bounty.snap = { clearsToday: { general: 0, named: 0 } };
       wrap(<GameMenu account={null} {...handlers()} />);
       const button = await screen.findByRole('button', { name: '메뉴 열기' });
-      expect(button.textContent).toBe('');
+      expect(button.textContent).toBe('메뉴');
       expect(button.querySelector('.bg-danger')).toBeNull();
       expect(screen.queryByRole('button', { name: /새 알림/ })).not.toBeInTheDocument();
     });
