@@ -42,9 +42,7 @@ const LazyDevTools = DEV_TOOLS_BUILD ? lazy(() => import('./presentation/views/d
 const LazyEnvBadge = DEV_TOOLS_BUILD ? lazy(() => import('./presentation/views/devtools/EnvBadge')) : null;
 
 function AppContent() {
-  const { log, setToast, toasts, dismissToast, setMirrorEnv } = useMessageLog([
-    '마을 연못 어군에서 낚시하고, 집에 들어가 정비해 보세요.',
-  ]);
+  const { log, setToast, toasts, dismissToast, setMirrorEnv } = useMessageLog([]);
   const {
     game, dispatch, nickname, profileStatus, devTools, rename, sync, syncLabel,
     blocker, loading, consentPrompt, acceptConsent, retryLoadConsent,
