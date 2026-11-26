@@ -2,9 +2,12 @@ import { ALERT_COPY, ALERT_DENIED_TEXT, ALERT_DENIED_TOAST, ALERT_ORDER } from '
 import type { AlertKind } from '../../../../features/alerts/model/alerts';
 import { useAlertPrompt } from '../../../../features/alerts/service/alertPrompt';
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
+import { SOUND_COPY } from '../../../../features/sound/model/sound';
+import { useSoundSettings } from '../../../../features/sound/service/useSound';
 import Button from '../../../ui/Button';
 import ButtonRow from '../../../ui/ButtonRow';
 import { cx } from '../../../ui/cx';
+import Divider from '../../../ui/Divider';
 import Inset from '../../../ui/Inset';
 import KeyValueRow from '../../../ui/KeyValueRow';
 import type { Notify } from '../../../ui/hud/messageFeed';
@@ -32,6 +35,7 @@ export default function AlertPromptModal({ ready, after, setToast }: {
   setToast: Notify;
 }) {
   const prompt = useAlertPrompt({ ready, suspended: after });
+  const sound = useSoundSettings();
   if (!prompt.open) return null;
 
   const onAllow = () => {
@@ -76,6 +80,29 @@ export default function AlertPromptModal({ ready, after, setToast }: {
           })}
         </Inset>
         <Note size="xs" className="my-0">{'허용을 누르면 브라우저가 물어봐요.\n설정에서 종류별로 끌 수 있어요.'}</Note>
+        <Divider className="my-1" />
+        <strong className="text-base text-text">{SOUND_COPY.title}</strong>
+        <Note size="xs" className="my-0">{SOUND_COPY.promptDescription}</Note>
+        <Inset divided>
+          <KeyValueRow
+            label={SOUND_COPY.bgmLabel}
+            value=""
+            action={(
+              <ToggleChip pressed={sound.bgmEnabled} aria-label={SOUND_COPY.bgmLabel} onClick={sound.toggleBgm}>
+                {sound.bgmEnabled ? SOUND_COPY.onLabel : SOUND_COPY.offLabel}
+              </ToggleChip>
+            )}
+          />
+          <KeyValueRow
+            label={SOUND_COPY.sfxLabel}
+            value=""
+            action={(
+              <ToggleChip pressed={sound.sfxEnabled} aria-label={SOUND_COPY.sfxLabel} onClick={sound.toggleSfx}>
+                {sound.sfxEnabled ? SOUND_COPY.onLabel : SOUND_COPY.offLabel}
+              </ToggleChip>
+            )}
+          />
+        </Inset>
       </ModalCard>
     </Modal>
   );
