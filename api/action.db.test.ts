@@ -11,7 +11,8 @@ import type { ServerMessage } from '../src/game/rules/live.js';
 import { saveChat } from './_data/chat.js';
 import { liveIdentity } from './_data/profile.js';
 import { attachLive } from './_server/live.js';
-import { provideSetFame, provideSetNick } from './_server/livePresence.js';
+import { provideBroadcastCatchFx, provideSetFame, provideSetNick } from './_server/livePresence.js';
+import type { CatchFxPayload } from './_server/livePresence.js';
 import { achievementById } from '../src/game/content/achievements.js';
 import { artifactById, artifactLevelCost } from '../src/game/content/artifacts.js';
 import { BOATS } from '../src/game/content/boats.js';
@@ -21,7 +22,7 @@ import {
   COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, ENERGY_PER_INDIVIDUAL, recipeById, recipeCostStored,
 } from '../src/game/content/cooking.js';
 import { hatById } from '../src/game/content/wardrobe.js';
-import { upgradeCost } from '../src/game/rules/balance.js';
+import { SNAPSHOT_EVERY, upgradeCost } from '../src/game/rules/balance.js';
 import { endedFirstCatch, newFirstCatch } from '../src/game/rules/firstCatch.js';
 import { FORTUNE_CATALOG, luckMultOf } from '../src/game/rules/fortune.js';
 import type { DailyFortune } from '../src/game/rules/fortune.js';
@@ -2638,6 +2639,58 @@ describe('게스트·배 0단계 보유 소비 아이템 사용', () => {
   });
 });
 
+describe('서버 확정 어획 점프 브로드캐스트', () => {
+  it('정식 계정의 빠른 경로·일반 경로 캐치가 커밋되면 broadcastCatchFx를 호출하고, 규칙 거부·버전 충돌·게스트 캐치에는 호출하지 않는다', async () => {
+    const calls: Array<[string, CatchFxPayload]> = [];
+    provideBroadcastCatchFx((u, payload) => { calls.push([u, payload]); });
+    try {
+      // 1. 정식 계정 빠른 경로(fastCatch) 확정
+      const uid = await seed({ state: { boat: 1 } });
+      const fastRes = await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good' });
+      expect(fastRes.status).toBe(200);
+      const fastResult = (fastRes.body as { result: { type: string; fishId: string; info: { form: string } } }).result;
+      expect(fastResult.type).toBe('catch');
+      expect(calls).toEqual([[uid, { fishId: fastResult.fishId, form: fastResult.info.form }]]);
+
+      // 2. 정식 계정 일반 경로(스냅샷 경계 SNAPSHOT_EVERY - 1) 확정
+      const fullUid = await seed({ state: { boat: 1 }, version: SNAPSHOT_EVERY - 1 });
+      const fullRes = await callAction(userToken(fullUid), { type: 'catch', spot: 'pond', judgment: 'good' });
+      expect(fullRes.status).toBe(200);
+      const fullResult = (fullRes.body as { result: { type: string; fishId: string; info: { form: string } } }).result;
+      expect(calls).toEqual([
+        [uid, { fishId: fastResult.fishId, form: fastResult.info.form }],
+        [fullUid, { fishId: fullResult.fishId, form: fullResult.info.form }],
+      ]);
+
+      // 3. 규칙 거부(422) 캐치는 호출하지 않는다
+      vi.setSystemTime(Date.parse(NOW) + 60_000);
+      const rejectedRes = await callAction(userToken(uid), { type: 'catch', spot: 'deep', judgment: 'good' });
+      expect(rejectedRes.status).toBe(422);
+      expect(calls).toHaveLength(2);
+
+      // 4. DB 커밋 실패(409 버전 충돌) 시 호출하지 않는다
+      const commitMod = await import('./_data/commit.js');
+      const origCommit = commitMod.commitAction;
+      vi.spyOn(commitMod, 'commitAction').mockImplementationOnce(async (db, versionUpdate, fragments) => {
+        await env.client.query('update public.saves_current set version = version + 1 where user_id = $1', [uid]);
+        return origCommit(db, versionUpdate, fragments);
+      });
+      vi.setSystemTime(Date.parse(NOW) + 120_000);
+      const conflictRes = await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good' });
+      expect(conflictRes.status).toBe(409);
+      expect(calls).toHaveLength(2);
+
+      // 5. 게스트 계정의 확정 캐치는 호출하지 않는다
+      const guestUid = await seed({ email: null, state: { boat: 0, location: at('home') } });
+      const guestRes = await callAction(userToken(guestUid), { type: 'catch', spot: 'pond', judgment: 'good' });
+      expect(guestRes.status).toBe(200);
+      expect(calls).toHaveLength(2);
+    } finally {
+      provideBroadcastCatchFx(() => {});
+    }
+  });
+});
+
 describe('주간 명성 집계', () => {
   it('fastCatch와 일반 확정(스냅샷 경계) 캐치 모두 ranking_weekly_fame을 원자적으로 누적한다', async () => {
     const { SNAPSHOT_EVERY } = await import('../src/game/rules/balance.js');
@@ -2754,4 +2807,3 @@ describe('주간 명성 집계', () => {
     expect(rows.every(r => Number(r.fame_gained) > 0)).toBe(true);
   });
 });
-
