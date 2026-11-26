@@ -1,4 +1,4 @@
--- 0047 되돌림 — 공지 표와 채팅 채널·지역 열 및 인덱스를 제거한다.
+-- 0048 되돌림 — 공지 표와 채팅 채널·지역 열 및 인덱스를 제거한다.
 drop index if exists public.notices_window_idx;
 drop table if exists public.notices;
 

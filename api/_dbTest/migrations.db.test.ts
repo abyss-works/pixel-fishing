@@ -710,7 +710,7 @@ describe('테스트 데이터베이스', () => {
     });
   });
 
-  describe('chat_messages 채널·지역 확장 및 notices (0047)', () => {
+  describe('chat_messages 채널·지역 확장 및 notices (0048)', () => {
     const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
 
     it('chat_messages 채널 제약·인덱스와 notices 제약·RLS 차단·다운/업 라운드트립을 검증한다', async () => {
@@ -778,7 +778,7 @@ describe('테스트 데이터베이스', () => {
           [`g${u2.slice(0, 6)}`],
         );
 
-        await other.query(migration('0047_chat_channels_and_notices.down.sql'));
+        await other.query(migration('0048_chat_channels_and_notices.down.sql'));
         expect((await other.query(
           `select 1 from information_schema.tables where table_schema = 'public' and table_name = 'notices'`,
         )).rows).toHaveLength(0);
@@ -789,7 +789,7 @@ describe('테스트 데이터베이스', () => {
         await other.query(`insert into public.chat_messages (user_id, nick, text, guild_id) values ($1, '가', '전체', null)`, [u2]);
         await other.query(`insert into public.chat_messages (user_id, nick, text, guild_id) values ($1, '가', '길드', $2)`, [u2, g.id]);
 
-        await other.query(migration('0047_chat_channels_and_notices.sql'));
+        await other.query(migration('0048_chat_channels_and_notices.sql'));
         expect((await other.query(
           `select 1 from information_schema.tables where table_schema = 'public' and table_name = 'notices'`,
         )).rows).toHaveLength(1);
