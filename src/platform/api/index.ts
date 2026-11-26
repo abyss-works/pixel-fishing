@@ -42,6 +42,10 @@ export { readPlayer, searchPlayers } from '../adapters/player';
 export { readAwayReport, watchAway } from '../adapters/away';
 export { readLastPosition } from '../adapters/position';
 export { ConsentRequiredError, isConsentRequiredError, subscribeConsentRequired } from '../adapters/requestFailure';
+export {
+  soundApi, playSfx, ensureSoundEngineSync, getSoundSettings, subscribeSoundSettings,
+} from './sound';
+export type { SfxKey, SoundEngineState } from './sound';
 export type { LastPosition } from '../adapters/position';
 export type { PublicProfile } from '../adapters/player';
 export type {
