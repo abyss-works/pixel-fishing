@@ -72,6 +72,8 @@ export interface LiveOptions {
    * 마지막으로 남긴 뒤 움직였으면 한 번 부른다. 기다리지 않으므로 오류와 완료 추적은 호출된 쪽이 맡는다
    */
   savePosition: (uid: string, pos: { region: string; x: number; y: number }) => void;
+  /** 사용자의 마지막 실시간 연결이 끊겨 오프라인이 됐을 때 호출된다(교체 연결·서버 종료 제외) */
+  onUserDisconnect?: (uid: string) => void;
   /** 움직이는 동안 마지막 위치를 남기는 최소 간격. 기본값은 1분이다 */
   positionSaveMs?: number;
 }
@@ -90,6 +92,8 @@ export interface LiveOnline {
 export interface LiveServer {
   /** 그 사용자의 접속 상태. 연결돼 있지 않거나 아직 위치를 보내지 않았으면 null */
   presenceOf(uid: string): Presence | null;
+  /** 그 사용자가 현재 실시간 WebSocket 연결을 가지고 있는지 */
+  isOnline(uid: string): boolean;
   /** 지금 연결된 사용자 전부(연결한 순서) */
   online(): LiveOnline[];
   /** 그 사용자의 차단 목록이 바뀌었다. 이후 채팅부터 바뀐 목록으로 거른다 */
@@ -264,11 +268,14 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
     opts.recordSession(conn.user.uid, new Date(conn.connectedAt).toISOString(), new Date().toISOString());
   };
   // 연결을 목록에서 빼 세션으로 기록하고, 이미 알린 사람이면 떠났다고 알린다
-  const drop = (ws: WebSocket, conn: Conn) => {
+  const drop = (ws: WebSocket, conn: Conn, notifyOffline = true) => {
     if (conns.get(ws) !== conn) return;
     conns.delete(ws);
     recordEnd(conn);
     if (conn.presence) broadcast(ws, conn.user, { t: 'leave', uid: conn.user.uid });
+    if (notifyOffline && ![...conns.values()].some(c => c.user.uid === conn.user.uid)) {
+      opts.onUserDisconnect?.(conn.user.uid);
+    }
   };
 
   server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
@@ -301,7 +308,7 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
           // 계정 하나에 연결 하나다. 새 연결이 오면 같은 계정의 이전 연결을 닫는다.
           for (const [other, c] of conns) {
             if (c.user.uid !== user.uid) continue;
-            drop(other, c);
+            drop(other, c, false);
             other.close(LIVE_CLOSE_REPLACED);
           }
           const now = Date.now();
@@ -420,6 +427,10 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
     presenceOf(uid) {
       for (const c of conns.values()) if (c.user.uid === uid) return c.user.guest ? null : c.presence;
       return null;
+    },
+    isOnline(uid) {
+      for (const c of conns.values()) if (c.user.uid === uid) return true;
+      return false;
     },
     online() {
       return [...conns.values()].map(c => ({

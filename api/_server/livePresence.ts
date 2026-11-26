@@ -4,6 +4,7 @@ import type { Presence, ServerMessage } from '../../src/game/rules/live.js';
 import type { LiveOnline } from './live.js';
 
 let lookup: (uid: string) => Presence | null = () => null;
+let onlineCheck: (uid: string) => boolean = () => false;
 let list: () => LiveOnline[] = () => [];
 let notify: (uid: string, msg: ServerMessage) => void = () => {};
 let nickUpdater: (uid: string, nick: string) => void = () => {};
@@ -18,6 +19,15 @@ export function providePresence(fn: (uid: string) => Presence | null): void {
 /** 그 사용자의 접속 상태. 연결돼 있지 않거나 아직 위치를 보내지 않았으면 null */
 export function presenceOf(uid: string): Presence | null {
   return lookup(uid);
+}
+
+export function provideIsUserOnline(fn: (uid: string) => boolean): void {
+  onlineCheck = fn;
+}
+
+/** 대상 사용자가 현재 실시간 WebSocket 채널에 연결되어 있는지 확인한다 */
+export function isUserOnline(uid: string): boolean {
+  return onlineCheck(uid);
 }
 
 export function provideOnline(fn: () => LiveOnline[]): void {

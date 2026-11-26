@@ -39,6 +39,8 @@ describe('경로 등록부와 허용 목록', () => {
       '/api/cron/archive', '/api/cron/purge-anon',
       '/api/dev/promote-test', '/api/dev/reset-account',
       '/api/guild-invites/:code',
+      '/api/widget/auth/exchange', '/api/widget/auth/logout', '/api/widget/auth/start',
+      '/api/widget/stream', '/api/widget/summary',
     ]);
   });
 
@@ -52,8 +54,7 @@ describe('경로 등록부와 허용 목록', () => {
   });
 
   it('허용 목록의 항목은 모두 등록된 경로의 앞부분이다', () => {
-    // /api/widget/* 경로 등록은 Wave 1C(main.ts)에서 합쳐진다.
-    for (const prefix of CONSENT_EXEMPT_PATHS.filter(p => p !== '/api/widget')) {
+    for (const prefix of CONSENT_EXEMPT_PATHS) {
       expect(registered.some(p => p === prefix || p.startsWith(`${prefix}/`)), prefix).toBe(true);
     }
   });

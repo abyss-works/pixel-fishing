@@ -15,14 +15,17 @@ import type { SQL } from 'drizzle-orm';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { afterResponse } from './_server/afterResponse.js';
 import { notifyGuild, setFame, setNick } from './_server/livePresence.js';
+import { widgetHub } from './_server/widgetHub.js';
 // 확장자(.js) 필수 — Node 순수 ESM 로더가 src 모듈을 그대로 import한다
 import { migrate, newState } from '../src/game/rules/logic.js';
-import type { FishInstance, FormRecord, GameState, Judgment } from '../src/game/rules/logic.js';
+import type { FishInstance, FormId, FormRecord, GameState, Judgment } from '../src/game/rules/logic.js';
 import {
   autoLockKey, buildCatchInfo, canFish, catchFameOf, decideCatchAutoLock, FISH, fishPool, formName, instanceFish,
-  evictionPriceRows, makeInstance, nextDexRec, pickEvict, pruneAutoLockedIds, RARITY_ORDER,
+  evictionPriceRows, makeInstance, nextDexRec, pickEvict, priceOf, pruneAutoLockedIds, RARITY_ORDER,
   matchBountyCatch,
 } from '../src/game/rules/logic.js';
+import { buildWidgetBagSummary, buildWidgetCatchItem, resolveSpotSeaTheme } from '../src/game/rules/widget.js';
+import type { WidgetBagSummary } from '../src/game/rules/widget.js';
 import { appliedSlots, applyEnergyGain, planOverflow } from '../src/game/rules/cooking.js';
 import { isFirstCatchSpot, needsLegacyFirstCatchMigration } from '../src/game/rules/firstCatch.js';
 import { drawNamedEncounter, speciesPityCandidates } from '../src/game/rules/pity.js';
@@ -30,6 +33,7 @@ import { ensureFortune, fortuneEntryOf, totalLuckMultOf } from '../src/game/rule
 import type { DailyFortune, FortuneKind } from '../src/game/rules/fortune.js';
 import { bountyById, isQuestOffered } from '../src/game/content/bounties.js';
 import type { BountyKind, BountyQuest } from '../src/game/content/bounties.js';
+import { SPOTS } from '../src/game/content/spots.js';
 import type { SpotId } from '../src/game/content/spots.js';
 import { applyAction, drawCatch, namedWeightBonus, pickScalars, prepareCatchDraw } from '../src/game/rules/actions.js';
 import type { ActionDeps, ApplyOutcome, DebugStepInput, GameAction, GameEvent, ReleasedFish, StatePatch, StateWrites } from '../src/game/rules/actions.js';
@@ -79,6 +83,7 @@ import { eventsInsert } from './_data/telemetry.js';
 import { activeDayUpsert } from './_data/activity.js';
 import { recordDailyFortuneFragment, upsertDailyFortuneFragment } from './_data/fortune.js';
 import { guildTotalOf, recordGuildActivity } from './_data/guilds.js';
+import { loadWidgetSummary } from './_data/widget.js';
 import {
   GUILD_LEVEL_FLOORS, GUILD_MAX_LEVEL, NO_GUILD_EFFECTS, contributionFor, guildEffectsOf, guildLevelOf,
 } from '../src/game/rules/guild.js';
@@ -661,10 +666,11 @@ async function route(req: Req, res: Res): Promise<void> {
   let initialState: GameState | null = null;
   // fast path의 조립 상태 — 네임드 교체 블록이 재사용한다 (아래 out 교체 참조)
   let catchBase: GameState | null = null;
+  let catchBagSummary: WidgetBagSummary | null = null;
   let prevFortune: GameState['fortune'] = null;
   if (action.type === 'catch' && skipDetail) {
     out = await fastCatch(db, uid, row, action.spot, action.judgment, now, guildEffects, user.email === null,
-      loaded.counters, loaded.clearedNamed, action.forcePhase);
+      loaded.counters, loaded.clearedNamed, action.forcePhase, bag => { catchBagSummary = bag; });
     if (out.ok) {
       catchBase = scalarState(row, loaded.counters, loaded.clearedNamed);
       prevFortune = catchBase.fortune;
@@ -847,7 +853,7 @@ async function route(req: Req, res: Res): Promise<void> {
   const nextVersion = readVersion + 1;
   // 유저 입장에서는 "행동이 저장되지 않음" — 가장 아픈 실패. 500이라 자동 보고된다
   const versionWrite = versionUpdate(uid, out.state, readVersion, nowISO, {
-    ...(action.type === 'catch' ? { lastCatchAt: nowISO } : {}),
+    ...(action.type === 'catch' ? { lastCatchAt: nowISO, lastSpot: action.spot } : {}),
     ...(action.type === 'boot' ? { activeClient: clientId } : {}),
   }, deliveryRow?.gate ?? null);
   if (consumeCode) {
@@ -925,11 +931,84 @@ async function route(req: Req, res: Res): Promise<void> {
   afterResponse(runFollowUps(db, followUps).catch(e =>
     reportServerIssue('후속 쓰기 실패 — events/스냅샷 유실', e, { uid, action: actionType, version: nextVersion })));
 
+  const emitWidgetEvents = (): void => {
+    const hub = widgetHub();
+    if (!hub.hasSubscribers(uid)) return;
+    try {
+      const serverTimeMs = Date.parse(nowISO);
+      if (action.type === 'catch') {
+        const catchEvt = out.events.find(e => e.type === 'catch');
+        const p = catchEvt?.payload as {
+          uid?: unknown; fishId?: unknown; form?: unknown; size?: unknown; isBig?: unknown;
+        } | undefined;
+        const fishDef = typeof p?.fishId === 'string' ? FISH.find(f => f.id === p.fishId) : undefined;
+        if (!fishDef) return;
+        const form: FormId = p?.form === 'variant' ? 'variant' : 'normal';
+        const bag = catchBagSummary ?? (() => {
+          const ach = achievementBonusesOf(out.state);
+          const ctx = createPlayerContext({ state: out.state, guild: guildEffects, now, achievements: ach });
+          return buildWidgetBagSummary(out.state.bag.length, bagCapacityOf(ctx, out.state.bag.length).value);
+        })();
+        const spotDef = SPOTS.find(s => s.id === action.spot);
+        hub.publishCatch(uid, {
+          catchItem: buildWidgetCatchItem({
+            eventId: typeof p?.uid === 'string' ? p.uid : crypto.randomUUID(),
+            fish: fishDef,
+            form,
+            sizeCm: typeof p?.size === 'number' ? p.size : 0,
+            priceGold: priceOf(fishDef, form),
+            isBig: Boolean(p?.isBig),
+            caughtAtMs: serverTimeMs,
+          }),
+          bag,
+          fishingState: 'active',
+          spotId: action.spot,
+          spotName: spotDef?.name ?? action.spot,
+          seaTheme: resolveSpotSeaTheme(action.spot),
+          serverTimeMs,
+        });
+        return;
+      }
+
+      if (action.type === 'travel' && (action.to.kind === 'base' || action.to.id === 'village')) {
+        hub.publishStatusChanged(uid, 'idle', serverTimeMs);
+        return;
+      }
+
+      const bagChanged =
+        out.writes.instancesAdded.length > 0 ||
+        out.writes.instancesRemoved.length > 0 ||
+        out.writes.instancesMoved.length > 0 ||
+        action.type === 'buyBoat' ||
+        action.type === 'exchangeArtifact' ||
+        action.type === 'levelUpArtifact' ||
+        action.type === 'import';
+      if (!bagChanged) return;
+
+      if (action.type === 'sell' || action.type === 'exhibit') {
+        const ach = achievementBonusesOf(out.state);
+        const ctx = createPlayerContext({ state: out.state, guild: guildEffects, now, achievements: ach });
+        const bag = buildWidgetBagSummary(out.state.bag.length, bagCapacityOf(ctx, out.state.bag.length).value);
+        hub.publishBagSync(uid, bag, serverTimeMs);
+        return;
+      }
+
+      afterResponse(
+        loadWidgetSummary(db, uid, { isOnline: false, nowMs: serverTimeMs })
+          .then(summary => { hub.publishBagSync(uid, summary.bag, serverTimeMs); })
+          .catch(e => reportServerIssue('후속 쓰기 실패 — 위젯 가방 동기화 실패', e, { uid, action: actionType })),
+      );
+    } catch (e) {
+      void reportServerIssue('위젯 SSE 이벤트 발행 실패', e, { uid, action: actionType });
+    }
+  };
+
   // 응답은 델타가 기본 — 풀가방 왕복이 egress 주범이라 초기 로드 이후에는 변경분만
   // 보낸다. import는 통째 교체라 풀 유지 (빈도 극저, 예외).
   // 클라(HttpGameGateway)는 델타를 캐시에 적용해 풀을 복원하므로 UI 계약은 불변이다.
   if (action.type === 'import') {
     res.status(200).json({ state: out.state, result: out.result, version: nextVersion });
+    emitWidgetEvents();
     return;
   }
   const patch: StatePatch = {
@@ -937,6 +1016,7 @@ async function route(req: Req, res: Res): Promise<void> {
     scalars: pickScalars(out.state), writes: out.writes,
   };
   res.status(200).json({ patch, result: out.result });
+  emitWidgetEvents();
 }
 
 function debugStepDbFragments(
@@ -1039,7 +1119,7 @@ export function catchProgressQuests(events: readonly GameEvent[], activeIds: rea
  */
 export async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId, judgmentIn: Judgment, now: string,
   guild: GuildEffects, guest: boolean, counters: Record<string, number>, clearedNamed: string[],
-  forcePhase?: DayPhase): Promise<ApplyOutcome> {
+  forcePhase?: DayPhase, onBagSummary?: (bag: WidgetBagSummary) => void): Promise<ApplyOutcome> {
   const initialBase = migrate({ ...blobInput(row.data), gold: Number(row.gold),
     fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {},
     achievementCounters: counters, clearedNamed });
@@ -1159,7 +1239,7 @@ export async function fastCatch(db: Executor, uid: string, row: StateRow, spot: 
   const extracted = takenFish.map(toReleased);
   const events: GameEvent[] = [{ type: 'catch', payload: {
     uid: inst.uid, fishId: fish.id, judgment, spot,
-    size: info.size, form: info.form, isNew: info.isNew, fame: gainedFame,
+    size: info.size, form: info.form, isNew: info.isNew, isBig: info.isBig, fame: gainedFame,
     ...(drawn.byCeiling ? { pity: true } : {}),
     ...appliedSlots(base, now, judgmentIn),
   } }];
@@ -1184,13 +1264,24 @@ export async function fastCatch(db: Executor, uid: string, row: StateRow, spot: 
   const evaluated = allDecided ? { achievements: base.achievements, newlyClaimable: [] as string[] }
     : evaluateAchievements(evalState);
   const claimableEvents = evaluated.newlyClaimable.map(id => ({ type: 'unlockAchievement', payload: { id } }));
+  const nextState: GameState = { ...applyEnergyGain({ ...evalState,
+    achievements: evaluated.achievements,
+    achievementCounters: counters2,
+    autoLockedIds: nextAutoLockedIds,
+    fame: base.fame + gainedFame, pity: drawn.pity, firstCatch: drawn.firstCatch }, plan.gain) };
+  if (onBagSummary) {
+    const nextBagCount = bagCount + added.length - removed.length;
+    const nextCtx = createPlayerContext({
+      state: nextState,
+      guild,
+      now,
+      achievements: achievementBonusesOf(nextState),
+    });
+    onBagSummary(buildWidgetBagSummary(nextBagCount, bagCapacityOf(nextCtx, nextBagCount).value));
+  }
   return {
     ok: true,
-    state: { ...applyEnergyGain({ ...evalState,
-      achievements: evaluated.achievements,
-      achievementCounters: counters2,
-      autoLockedIds: nextAutoLockedIds,
-      fame: base.fame + gainedFame, pity: drawn.pity, firstCatch: drawn.firstCatch }, plan.gain) },
+    state: nextState,
     result: { type: 'catch', fishId: fish.id, uid: inst.uid, info, released,
       ...(takenFish.length > 0 ? { extracted, energy: plan.gain.byGrade } : {}) },
     events: [...events, ...claimableEvents],
