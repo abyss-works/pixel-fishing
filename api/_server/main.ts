@@ -30,7 +30,7 @@ import purgeAnon from '../cron/purge-anon.js';
 import { adminAuth, appAuth, sessionOf } from '../_auth/session.js';
 import { afterResponse, settleAfterResponse } from './afterResponse.js';
 import { attachLive } from './live.js';
-import { provideIsUserOnline, provideNotify, provideNotifyAll, provideNotifyGuild, provideOnline, providePresence, provideSetFame, provideSetNick } from './livePresence.js';
+import { provideBroadcastCatchFx, provideIsUserOnline, provideNotify, provideNotifyAll, provideNotifyGuild, provideOnline, providePresence, provideSetFame, provideSetNick } from './livePresence.js';
 import { widgetHub } from './widgetHub.js';
 import { database } from '../_db/client.js';
 import { liveIdentity } from '../_data/profile.js';
@@ -203,6 +203,7 @@ provideNotifyAll(msg => live.sendToAll(msg));
 provideSetNick((uid, nick) => live.setNick(uid, nick));
 provideSetFame((uid, fame) => live.setFame(uid, fame));
 provideWidgetDisconnect(uid => widgetHub().disconnectUser(uid));
+provideBroadcastCatchFx((uid, payload) => live.broadcastCatchFx(uid, payload));
 
 process.on('SIGTERM', () => {
   live.close();

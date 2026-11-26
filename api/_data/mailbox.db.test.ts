@@ -205,17 +205,18 @@ describe('플레이어 쪽', () => {
     const gold = list.find(m => m.title === '골드')!;
     const itemOnly = list.find(m => m.title === '아이템만')!;
     const text = list.find(m => m.title === '글')!;
-    expect(await claimableMail(database.db, me, gold.id)).toEqual({ gold: 300, items: [] });
+    expect(await claimableMail(database.db, me, gold.id)).toEqual({ gold: 300, items: [], hats: [] });
     expect(await claimableMail(database.db, me, itemOnly.id)).toEqual({
       gold: 0,
       items: [{ id: 'energy-common', qty: 3 }, { id: 'luck-small', qty: 2 }],
+      hats: [],
     });
     expect(await claimableMail(database.db, me, text.id)).toBeNull();
     expect(await claimableMail(database.db, other, gold.id)).toBeNull();
 
     // 확정 조건이 거짓이면 쓰지 않는다
     await database.db.execute(claimMailFragment(sql`false`, me, gold.id, NOW));
-    expect(await claimableMail(database.db, me, gold.id)).toEqual({ gold: 300, items: [] });
+    expect(await claimableMail(database.db, me, gold.id)).toEqual({ gold: 300, items: [], hats: [] });
 
     await database.db.execute(claimMailFragment(sql`true`, me, gold.id, NOW));
     await database.db.execute(claimMailFragment(sql`true`, me, gold.id, LATER));
@@ -313,5 +314,35 @@ describe('플레이어 쪽', () => {
       { id: 'luck-small', qty: 3 },
       { id: 'cook-lunch-bundle', qty: 1 },
     ]);
+  });
+
+  it('모자 첨부(hats) 우편은 발송 시 중복 제거·정규화되고, 골드·아이템 없이도 수령 가능하며 목록 상한 밖으로 밀리지 않는다', async () => {
+    clearMailIdempotencyCache();
+    const me = await user();
+    const sent = await deliverMail(database.db, {
+      title: '모자 선물',
+      body: '본문',
+      target: { kind: 'users', recipients: [{ userId: me, gold: 0, hats: ['santa-hat', 'cap-red', 'santa-hat'] }] },
+      idempotencyKey: randomUUID(),
+    }, NOW);
+    expect(sent.sent).toBe(1);
+
+    const [mail] = await listMails(database.db, me);
+    expect(mail.hats).toEqual(['cap-red', 'santa-hat']);
+    expect(await claimableMail(database.db, me, mail.id)).toEqual({
+      gold: 0,
+      items: [],
+      hats: ['cap-red', 'santa-hat'],
+    });
+
+    const recent = await recentSentMails(database.db);
+    expect(recent.find(m => m.id === mail.id)?.hats).toEqual(['cap-red', 'santa-hat']);
+
+    await markMailRead(database.db, me, mail.id, LATER);
+    await client.query(`insert into public.mails (user_id, title, body, gold, created_at, read_at)
+      select $1, '읽은 글 ' || g, 'b', 0, '2026-11-01T00:00:00Z'::timestamptz + g * interval '1 minute', '2026-11-01T00:00:00Z'::timestamptz
+      from generate_series(1, ${MAIL_LIST_LIMIT + 5}) g`, [me]);
+    const list = await listMails(database.db, me);
+    expect(list.some(m => m.id === mail.id)).toBe(true);
   });
 });

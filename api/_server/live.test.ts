@@ -982,4 +982,121 @@ describe('실시간 채팅 3방·지역 격리·쿨다운·중복 차단·공지
     expect(await a.next()).toEqual({ t: 'notices', notices: reversed });
     expect(await g.next()).toEqual({ t: 'notices', notices: reversed });
   });
+
+  it('강제 모자 구역(championship)에서는 산타모자를 강제 브로드캐스트하고, 구역을 벗어나면 실제 모자를 복원한다', async () => {
+    const { url, live } = await start();
+    const a = connect(url, 'u1');
+    const b = connect(url, 'u2');
+    await a.next();
+    await b.next();
+
+    const actualLook = { shirt: 3, pants: 4, hat: 'cap-red' };
+    a.ws.send(JSON.stringify({ t: 'move', region: 'championship', x: 1, y: 2, dir: 1, line: false, look: actualLook }));
+    expect(await b.next()).toMatchObject({
+      t: 'join',
+      presence: { uid: 'u1', region: 'championship', look: { shirt: 3, pants: 4, hat: 'santa-hat' } },
+    });
+    expect(live.presenceOf('u1')?.look).toEqual({ shirt: 3, pants: 4, hat: 'santa-hat' });
+
+    // 구역 안에서 외형을 바꿔 보내도 모자는 산타모자로 고정되고, 벗어날 때 실제 외형이 복원된다
+    const updatedLook = { shirt: 5, pants: 1, hat: null };
+    a.ws.send(JSON.stringify({ t: 'move', region: 'championship', x: 2, y: 2, dir: 1, line: false, look: updatedLook }));
+    expect(await b.next()).toMatchObject({
+      t: 'move',
+      uid: 'u1',
+      region: 'championship',
+      look: { shirt: 5, pants: 1, hat: 'santa-hat' },
+    });
+
+    // look 없이 일반 구역으로 나가도 직전에 기록한 실제 외형으로 복원된다
+    a.ws.send(JSON.stringify({ t: 'move', region: 'world', x: 3, y: 2, dir: 2, line: false }));
+    expect(await b.next()).toMatchObject({
+      t: 'move',
+      uid: 'u1',
+      region: 'world',
+      look: updatedLook,
+    });
+    expect(live.presenceOf('u1')?.look).toEqual(updatedLook);
+
+    // 일반 구역에서 look 없이 강제 모자 구역으로 다시 들어가면 산타모자가 적용된다
+    a.ws.send(JSON.stringify({ t: 'move', region: 'championship', x: 4, y: 2, dir: 0, line: false }));
+    expect(await b.next()).toMatchObject({
+      t: 'move',
+      uid: 'u1',
+      region: 'championship',
+      look: { shirt: 5, pants: 1, hat: 'santa-hat' },
+    });
+    expect(live.presenceOf('u1')?.look).toEqual({ shirt: 5, pants: 1, hat: 'santa-hat' });
+  });
+});
+
+describe('실시간 어획 점프 브로드캐스트(broadcastCatchFx)', () => {
+  it('모든 등급과 폼의 어획을 같은 지역 다른 접속자에게만 보내고 본인·다른 지역·게스트 발신자는 제외하며 bob 좌표를 우선한다', async () => {
+    const { url, live } = await start();
+    const a = connect(url, 'u1'); // world (bob 있음)
+    const b = connect(url, 'u2'); // world (수신자)
+    const c = connect(url, 'u3'); // village (다른 지역)
+    const d = connect(url, 'u4'); // 위치 미전송 (presence null)
+    const g = connect(url, 'guest:g1'); // guest (수신 가능, 발신 제외)
+    await a.next(); await b.next(); await c.next(); await d.next(); await g.next();
+
+    // u1: world, 플레이어 (100, 200), bob (140, 260)
+    a.ws.send(JSON.stringify({ t: 'move', region: 'world', x: 100, y: 200, dir: 1, line: true, bob: { x: 140, y: 260 } }));
+    await b.next(); await c.next(); await d.next(); await g.next(); // join u1
+
+    // u2: world
+    b.ws.send(JSON.stringify({ t: 'move', region: 'world', x: 300, y: 400, dir: 0, line: false }));
+    await a.next(); await c.next(); await d.next(); await g.next(); // join u2
+
+    // u3: village
+    c.ws.send(JSON.stringify({ t: 'move', region: 'village', x: 10, y: 20, dir: 2, line: false }));
+    await a.next(); await b.next(); await d.next(); await g.next(); // join u3
+
+    // g1: world로 이동 (게스트지만 presence가 world에 있으므로 u1의 연출은 받는다)
+    g.ws.send(JSON.stringify({ t: 'move', region: 'world', x: 200, y: 220, dir: 0, line: true, bob: { x: 210, y: 230 } }));
+    // 게스트의 move는 전파되지 않으므로 본인 채팅 오류 응답으로 처리 완료를 동기화한다
+    g.ws.send(JSON.stringify({ t: 'chat', text: '동기화' }));
+    expect(await g.next()).toEqual({ t: 'error', code: 'chat-guest' });
+
+    // common, uncommon(또는 rare), epic, legendary 및 form(normal/variant/생략) 모두 전파된다
+    live.broadcastCatchFx('u1', { fishId: 'anchovy', form: 'normal' });
+    live.broadcastCatchFx('u1', { fishId: 'tuna', form: 'variant' });
+    live.broadcastCatchFx('u1', { fishId: 'oarfish' });
+
+    expect(await b.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 140, y: 260, fishId: 'anchovy', form: 'normal' });
+    expect(await b.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 140, y: 260, fishId: 'tuna', form: 'variant' });
+    expect(await b.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 140, y: 260, fishId: 'oarfish' });
+
+    expect(await g.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 140, y: 260, fishId: 'anchovy', form: 'normal' });
+    expect(await g.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 140, y: 260, fishId: 'tuna', form: 'variant' });
+    expect(await g.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 140, y: 260, fishId: 'oarfish' });
+
+    // bob이 없으면 플레이어 x, y를 사용한다
+    a.ws.send(JSON.stringify({ t: 'move', region: 'world', x: 155, y: 275, dir: 1, line: false }));
+    await b.next(); // move u1
+    await g.next(); // move u1
+    await c.next(); // move u1
+    await d.next(); // move u1
+
+    live.broadcastCatchFx('u1', { fishId: 'mackerel', form: 'normal' });
+    expect(await b.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 155, y: 275, fishId: 'mackerel', form: 'normal' });
+    expect(await g.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 155, y: 275, fishId: 'mackerel', form: 'normal' });
+
+    // 게스트 발신자·미접속·presence 없는 접속자는 전파하지 않는다
+    live.broadcastCatchFx('g1', { fishId: 'crucian', form: 'normal' });
+    live.broadcastCatchFx('u4', { fishId: 'crucian', form: 'normal' });
+    live.broadcastCatchFx('unknown-uid', { fishId: 'crucian', form: 'normal' });
+
+    // 발신자 본인(a), 다른 지역(c), 위치 미전송(d)에는 catchFx가 가지 않았다
+    expect(a.messages.filter(m => m.t === 'catchFx')).toEqual([]);
+    expect(c.messages.filter(m => m.t === 'catchFx')).toEqual([]);
+    expect(d.messages.filter(m => m.t === 'catchFx')).toEqual([]);
+    expect(b.messages.filter(m => m.t === 'catchFx')).toEqual([]);
+
+    // village 지역에서도 같은 지역 피어에게 전파된다
+    a.ws.send(JSON.stringify({ t: 'move', region: 'village', x: 30, y: 40, dir: 0, line: true, bob: { x: 45, y: 55 } }));
+    await c.next(); // move u1
+    live.broadcastCatchFx('u1', { fishId: 'crucian', form: 'normal' });
+    expect(await c.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'village', x: 45, y: 55, fishId: 'crucian', form: 'normal' });
+  });
 });

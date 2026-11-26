@@ -118,7 +118,10 @@ const itemOptions = (): DevOption[] => [
 
 const hatOptions = (): DevOption[] => [
   { value: 'all', label: `전체 모자 (${HATS.length}종)` },
-  ...HATS.map(h => ({ value: h.id, label: `${h.name} (${h.source === 'gold' ? '상점' : '업적'})` })),
+  ...HATS.map(h => ({
+    value: h.id,
+    label: `${h.name} (${h.source === 'gold' ? '상점' : h.source === 'event' ? '이벤트' : '업적'})`,
+  })),
 ];
 
 const counterKeyOptions = (): DevOption[] => {
@@ -248,7 +251,7 @@ export const DEV_COMMANDS: readonly DevCommand[] = [
   },
   {
     id: 'hat.set', group: 'gear', label: '모자 해금·회수',
-    hint: '모자 46종 또는 전체를 해금하거나 회수한다.',
+    hint: `모자 ${HATS.length}종 또는 전체를 해금하거나 회수한다.`,
     params: [
       { key: 'hat', label: '모자', kind: 'select', options: hatOptions, defaultValue: 'all', required: true },
       {

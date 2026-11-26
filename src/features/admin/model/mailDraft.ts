@@ -2,6 +2,7 @@
 // 한 줄에 한 사람이고 "계정 id 골드"(공백 또는 쉼표 구분)다. 골드를 생략하면 0이다. 빈 줄은 건너뛴다.
 // 검색으로 고른 계정도 같은 입력에 한 줄로 더해진다.
 import type { MailItemAttachment } from '../../../platform/api';
+import { HATS, hatById, type Hat, type HatSource } from '../../../game/content/wardrobe';
 import {
   STACKABLE_ITEMS,
   STACKABLE_ITEM_KIND_LABEL,
@@ -10,11 +11,18 @@ import {
   maxAttachableQty,
   type StackableItem,
 } from '../../inventory/model/items';
+import { resolveHatDisplay } from '../../wardrobe/model/wardrobe';
 import { filterAdminUsers } from './adminViews';
 import type { AdminUserRow } from './types';
 
-export { STACKABLE_ITEM_KIND_LABEL, findStackableItem, formatItemQtyText };
-export type { MailItemAttachment };
+export { STACKABLE_ITEM_KIND_LABEL, findStackableItem, formatItemQtyText, resolveHatDisplay };
+export type { Hat, HatSource, MailItemAttachment };
+
+export const HAT_SOURCE_LABEL: Record<HatSource, string> = {
+  gold: '상점',
+  achievement: '업적',
+  event: '이벤트',
+};
 
 /** 한 번의 우편 보내기로 지급할 수 있는 총 골드 상한 */
 export const MAX_MAIL_BATCH_TOTAL_GOLD = 500_000_000;
@@ -126,13 +134,53 @@ export function formatMailItemsSummary(items: readonly MailItemAttachment[]): st
   return items.map(att => formatItemQtyText(att.id, att.qty)).join(', ');
 }
 
+const HAT_SEARCH_LIMIT = 10;
+
+/** 이름·출처·id의 부분 일치로 첨부할 모자를 찾는다. 빈 검색어는 아무것도 찾지 않는다 */
+export function searchAttachableHats(query: string): Hat[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return [];
+  return HATS.filter(hat => {
+    const sourceLabel = HAT_SOURCE_LABEL[hat.source].toLowerCase();
+    return hat.name.toLowerCase().includes(needle)
+      || hat.id.toLowerCase().includes(needle)
+      || sourceLabel.includes(needle);
+  }).slice(0, HAT_SEARCH_LIMIT);
+}
+
+/** 첨부 목록에 모자를 넣는다. 잘못된 id나 중복은 오류 문구를 돌려준다 */
+export function addMailHat(
+  list: readonly string[],
+  id: string,
+): { hats: string[]; error: string | null } {
+  const hat = hatById(id);
+  if (!hat) {
+    return { hats: [...list], error: '첨부할 수 없는 모자예요.' };
+  }
+  if (list.includes(id)) {
+    return { hats: [...list], error: '이미 첨부된 모자예요.' };
+  }
+  return { hats: [...list, id], error: null };
+}
+
+/** 첨부 목록에서 특정 모자를 뺀다 */
+export function removeMailHat(list: readonly string[], id: string): string[] {
+  return list.filter(entry => entry !== id);
+}
+
+/** 첨부 모자 목록 요약 문구 */
+export function formatMailHatsSummary(hats: readonly string[]): string {
+  return hats.map(id => hatById(id)?.name ?? id).join(', ');
+}
+
 /** 미리보기·보내기에서 서버가 돌려준 형태 문제를 안내 문장으로 바꾼다 */
 export const MAIL_PROBLEM_TEXT: Record<string, string> = {
   title: '제목은 1~60자여야 해요.',
   body: '본문은 1~2,000자여야 해요.',
   gold: '골드는 0 이상 10억 이하의 정수여야 해요.',
   items: '첨부 아이템 종류나 수량(상한 초과 포함)이 올바르지 않아요.',
-  empty: '골드나 아이템 중 하나 이상을 보내야 해요.',
+  hats: '첨부 모자 정보가 올바르지 않아요.',
+  empty: '골드, 아이템, 모자 중 하나 이상을 보내야 해요.',
   recipients: '받는 사람이 없거나 계정 id 형식이 틀렸어요.',
   duplicate: '같은 계정이 두 번 이상 들어 있어요.',
   totalGold: '총 지급 골드가 일괄 발송 상한(5억 G)을 초과했어요.',

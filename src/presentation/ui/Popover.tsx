@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import Frame from './Frame';
-import { useKeyScope } from './hotkeys';
+import { HOTKEY_TIER, hasModifier, useKeyScope } from './hotkeys';
 
 // 팝오버 — 버튼에 붙어 뜨는 작은 칸. 창이 아니다(화면 깊이 규칙 예외).
 // 제목 줄과 바탕 덮개가 없고, 연 버튼 곁에 붙으며, 바깥을 누르거나 Esc를 누르면 닫힌다.
@@ -30,12 +30,12 @@ function PopoverBody({ onClose, anchorRef, label, children }: {
   useEffect(() => { closeRef.current = onClose; });
 
   useKeyScope(e => {
-    if (e.key !== 'Escape') return;
+    if (e.key !== 'Escape' || hasModifier(e)) return;
     e.preventDefault();
     closeRef.current();
     anchorRef.current?.focus();
     return true;
-  });
+  }, { tier: HOTKEY_TIER.POPOVER });
 
   useEffect(() => {
     const onDown = (e: Event) => {

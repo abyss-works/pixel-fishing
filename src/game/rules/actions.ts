@@ -44,10 +44,10 @@ import { achievementBonusesOf, counterIncrementsForEvents, evaluateAchievements 
 import { NO_ACHIEVEMENT_BONUSES, bagCapacityOf, createPlayerContext } from './effects.js';
 import type { AchievementBonuses } from './effects.js';
 import {
-  canAcceptQuest, canDeliverBounty, canExchangeArtifact, canLevelUpArtifact, canExhibit, canResolveChallenge,
+  canAbandonQuest, canAcceptQuest, canDeliverBounty, canExchangeArtifact, canLevelUpArtifact, canExhibit, canResolveChallenge,
 } from './rules.js';
 import type { RejectReason, BountyCtx } from './rules.js';
-import { powerZones, rodPower } from './stats.js';
+import { powerZones, rodAxes, rodPower } from './stats.js';
 import type { PowerZone } from './stats.js';
 import { checkNickname } from './nickname.js';
 import { reduceDebug } from './debug.js';
@@ -59,6 +59,7 @@ import type { DayPhase } from './time.js';
 import { NO_GUILD_EFFECTS } from './guild.js';
 import type { GuildEffects } from './guild.js';
 import { ensureFortune, totalLuckMultOf } from './fortune.js';
+import { timingPos } from './timing.js';
 
 export interface DebugStepInput {
   command: string;
@@ -66,7 +67,7 @@ export interface DebugStepInput {
 }
 
 export type GameAction =
-  | { type: 'catch'; spot: SpotId; judgment: Judgment; forceEncounter?: true; forcePhase?: DayPhase } // forceEncounter/forcePhase: 테스트용(서버가 비허용 시 떼어 낸다)
+  | { type: 'catch'; spot: SpotId; judgment: Judgment; biteElapsed?: number; forceEncounter?: true; forcePhase?: DayPhase } // forceEncounter/forcePhase: 테스트용(서버가 비허용 시 떼어 낸다)
   | { type: 'sell'; uids: string[] }            // 판매 원자 단위 = 개체 (세이브 v8)
   | { type: 'upgradeRod' }
   | { type: 'buyBoat' }
@@ -98,6 +99,7 @@ export type GameAction =
   | { type: 'wearHat'; hat: unknown }               // 모자 쓰기 — null이면 벗는다
   | { type: 'acceptQuest'; questId: string; port: string } // 의뢰 수주 — 조건은 상태, 하루 한도와 수주 중 여부는 서버 주입 진실로
   | { type: 'deliverBounty'; questId: string }     // 의뢰 납품 — 완료 여부는 서버 주입, 보상은 리듀서가
+  | { type: 'abandonQuest'; questId: string }      // 의뢰 포기 — 진행 중인 미완료 의뢰를 포기한다
   | { type: 'exchangeArtifact'; artifact: string } // 유물 교환 — 재료 1개 소모, 유물 영구 소유
   | { type: 'levelUpArtifact'; artifact: string } // 유물 레벨업 — 그 유물의 교환 재료를 레벨별 수만큼 쓰고 레벨을 하나 올린다
   | { type: 'exhibit'; uid: string; slot: number | null } // 전시대 — slot 번호면 진열, null이면 회수
@@ -114,7 +116,7 @@ const ACTION_TYPE_MAP: Record<GameAction['type'], true> = {
   claimRelief: true, claimMail: true, debug: true, debugBatch: true, debugSnapshot: true, setNickname: true,
   dismissBaitRefund: true, extractEnergy: true, setEnergyTarget: true, resetEnergyTargets: true, cook: true, cancelCook: true, transmuteEnergy: true, eat: true, usePotion: true,
   boot: true, import: true,
-  acceptQuest: true, deliverBounty: true, exchangeArtifact: true, levelUpArtifact: true, exhibit: true, resolveChallenge: true,
+  acceptQuest: true, deliverBounty: true, abandonQuest: true, exchangeArtifact: true, levelUpArtifact: true, exhibit: true, resolveChallenge: true,
   seeTutorial: true, changeClothes: true, buyHat: true, wearHat: true,
   claimAchievement: true, claimAllAchievements: true,
 };
@@ -132,8 +134,8 @@ export interface ActionDeps {
   /** 수배 DB 진실 — 서버가 오늘 클리어 횟수·수주 중 의뢰·완료 목록을 조회해 공급한다 (relief 선례).
    *  로컬 dev(LocalGameGateway)엔 항상 없다 — 오프라인 수주·납품 불가가 의도다. */
   bounty?: BountyCtx | null;
-  /** 받을 우편 — 서버가 본인의 받지 않은 우편(골드·아이템 첨부)을 조회해 공급한다. 로컬 dev엔 항상 없다 */
-  mail?: { id: number; gold: number; items?: readonly { id: string; qty: number }[] } | null;
+  /** 받을 우편 — 서버가 본인의 받지 않은 우편(골드·아이템·모자 첨부)을 조회해 공급한다. 로컬 dev엔 항상 없다 */
+  mail?: { id: number; gold: number; items?: readonly { id: string; qty: number }[]; hats?: readonly string[] } | null;
   /** 길드 보너스 효과 — 서버가 소속 길드의 보너스 단계로 계산해 공급한다. 로컬 dev엔 길드가 없어 항상 없다 */
   guild?: GuildEffects | null;
   /** 계정을 연결하지 않은 익명 계정인가 - 서버가 공급한다. 게스트는 가방 초과 때 기운을 얻지 않고 놓아준다 */
@@ -150,7 +152,7 @@ export type ActionResult =
       energy?: Record<RarityId, number>; ticket?: string; bountyProgressed?: true; guildUpdated?: true }
   | { type: 'sell'; gold: number; guildUpdated?: true }
   | { type: 'coupon'; gold: number; items?: readonly CouponItem[]; desc: string }
-  | { type: 'mail'; gold: number; items?: readonly { id: string; qty: number }[] }
+  | { type: 'mail'; gold: number; items?: readonly { id: string; qty: number }[]; hats?: readonly string[] }
   /** energy = 이번 기운 얻기로 얻은 등급별 기운(저장 단위) */
   | { type: 'extract'; energy: Record<RarityId, number> }
   /** 조리 취소 결과 — 취소된 레시피·수량과 등급별 환급 기운(저장 단위) */
@@ -593,12 +595,14 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       };
       const released: ReleasedFish[] = gone.map(toReleased);
       const extracted: ReleasedFish[] = taken.map(toReleased);
+      const pos = timingPos(action.biteElapsed, rodAxes(state).sweep.value);
       const events: GameEvent[] = [{ type: 'catch', payload: {
         // uid를 남긴다 — 이벤트 스트림과 가방 개체를 잇는 유일한 연결고리 (감사·집계의 근거)
         // judgment는 강등 확정값 — 감사에서 "PERFECT 주장이 서버에서 살아남았나"를 보려면 이 값이다
         uid: inst.uid, fishId: fish.id, judgment, spot: action.spot,
         size: info.size, form: info.form, isNew: info.isNew, isBig: info.isBig, fame: gainedFame,
         ...(drawn.byCeiling ? { pity: true } : {}),
+        ...(pos !== null ? { pos } : {}),
         // 걸린 슬롯(도시락=방치, 미끼=수동) — 집계가 읽는다. 적용 범위는 appliedSlots가 정한다
         ...appliedSlots(state, deps.now, action.judgment),
       } }];
@@ -728,7 +732,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       };
     }
     case 'claimMail': {
-      // 우편 골드·아이템 받기 — 대상·금액·첨부 검증과 받은 기록은 서버(우편 표, 확정 문장)가 한다. 여기엔 지급분만 주입된다.
+      // 우편 골드·아이템·모자 받기 — 대상·금액·첨부 검증과 받은 기록은 서버(우편 표, 확정 문장)가 한다. 여기엔 지급분만 주입된다.
       if (!deps.mail || deps.mail.id !== action.id) return { ok: false, error: 'mail-unavailable' };
       let next = state;
       const claimedItems: { id: string; qty: number }[] = [];
@@ -738,12 +742,25 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         next = addItem(next, item.id, amount);
         claimedItems.push({ id: item.id, qty: item.qty });
       }
+      const nextHats = [...state.hats];
+      const claimedHats: string[] = [];
+      for (const rawHatId of deps.mail.hats ?? []) {
+        const hat = hatById(rawHatId);
+        if (!hat || nextHats.includes(hat.id)) continue;
+        nextHats.push(hat.id);
+        claimedHats.push(hat.id);
+      }
       const itemsField = claimedItems.length > 0 ? { items: claimedItems } : {};
+      const hatsField = claimedHats.length > 0 ? { hats: claimedHats } : {};
       return {
         ok: true,
-        state: { ...next, gold: next.gold + deps.mail.gold },
-        result: { type: 'mail', gold: deps.mail.gold, ...itemsField },
-        events: [{ type: 'claimMail', payload: { mailId: deps.mail.id, gold: deps.mail.gold, ...itemsField } }],
+        state: {
+          ...next,
+          gold: next.gold + deps.mail.gold,
+          hats: claimedHats.length > 0 ? nextHats : next.hats,
+        },
+        result: { type: 'mail', gold: deps.mail.gold, ...itemsField, ...hatsField },
+        events: [{ type: 'claimMail', payload: { mailId: deps.mail.id, gold: deps.mail.gold, ...itemsField, ...hatsField } }],
       };
     }
     case 'extractEnergy': {
@@ -1090,6 +1107,17 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         ok: true, state: { ...rich, gold: rich.gold + reward },
         result: { type: 'none' },
         events: [{ type: 'deliverBounty', payload: { questId: quest.id, reward } }],
+      };
+    }
+    case 'abandonQuest': {
+      // 의뢰 포기도 상태가 아니다 — 수주·진행·도전권 행 정리는 서버가 맡고,
+      // 네임드에게 입힌 상처(namedPity.wounds)와 오늘 클리어 횟수는 그대로 유지한다.
+      if (typeof action.questId !== 'string') return { ok: false, error: 'bad-request' };
+      const check = canAbandonQuest(state, action.questId, deps.bounty ?? undefined);
+      if (!check.ok) return { ok: false, error: check.reason };
+      return {
+        ok: true, state, result: { type: 'none' },
+        events: [{ type: 'abandonQuest', payload: { questId: action.questId } }],
       };
     }
     case 'resolveChallenge': {

@@ -9,6 +9,7 @@ import { AUTO_ENERGY_BOAT, ENERGY_ITEM_IDS, ENERGY_UNIT } from '../content/cooki
 import { BOATS, COUPONS, FISH, ITEM_CAP, WALK_BAG_CAP, newState } from './logic';
 import { REJECT_TEXT } from './rules';
 import { gameDayOf } from './time';
+import { rodAxes } from './stats';
 import type { FishInstance, FormId, GameState } from './logic';
 
 // newUid는 결정적 목 — 개체 uid가 매 실행 달라지면 재현성 검증이 불가능하다
@@ -128,6 +129,34 @@ describe('catch', () => {
     if (!out.ok) throw new Error(out.error);
     expect(out.state.bag[0].judgment).toBe('perfect');
     expect(out.events[0]).toMatchObject({ type: 'catch', payload: { judgment: 'perfect' } });
+  });
+
+  it('챔질 경과가 있으면 커서 위치를 catch 이벤트에만 싣는다', () => {
+    const state = seed({ rod: 10 });
+    const biteElapsed = 700;
+    const out = applyAction(
+      state,
+      { type: 'catch', spot: 'pond', judgment: 'perfect', biteElapsed },
+      deps(),
+    );
+    if (!out.ok) throw new Error(out.error);
+    expect(out.events[0]).toMatchObject({
+      type: 'catch',
+      payload: { pos: expect.any(Number) },
+    });
+    const payload = out.events[0].payload as { pos: number };
+    expect(payload.pos).toBeCloseTo(biteElapsed / 1000 / rodAxes(state).sweep.value, 8);
+    expect(out.result).not.toHaveProperty('pos');
+  });
+
+  it('챔질 경과가 없으면 커서 위치를 싣지 않는다', () => {
+    const out = applyAction(
+      seed({ rod: 10 }),
+      { type: 'catch', spot: 'pond', judgment: 'perfect' },
+      deps(),
+    );
+    if (!out.ok) throw new Error(out.error);
+    expect(out.events[0].payload).not.toHaveProperty('pos');
   });
 
   it('NEW 판정은 폼별 — 일반을 잡았어도 변이 첫 캐치는 신규 (v0.3.3)', () => {
@@ -674,6 +703,32 @@ describe('claimMail — 우편 골드 받기', () => {
     if (!capped.ok) throw new Error(capped.error);
     expect(capped.state.items['luck-small']).toBe(ITEM_CAP);
     expect(capped.state.items[ENERGY_ITEM_IDS.common]).toBe(ITEM_CAP * ENERGY_UNIT);
+  });
+
+  it('골드 0·아이템 없음에 모자만 첨부된 우편도 가방 용량과 무관하게 멱등 수령한다', () => {
+    const bag = Array.from({ length: 50 }, (_, i) => mkInst(`b${i}`, 'crucian'));
+    const out = applyAction(
+      seed({ gold: 250, hats: ['cap-red'], bag }),
+      { type: 'claimMail', id: 11 },
+      deps({ mail: { id: 11, gold: 0, hats: ['santa-hat', 'santa-hat', 'unknown-hat'] } }),
+    );
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.gold).toBe(250);
+    expect(out.state.bag).toHaveLength(50);
+    expect(out.state.hats).toEqual(['cap-red', 'santa-hat']);
+    expect(out.result).toEqual({ type: 'mail', gold: 0, hats: ['santa-hat'] });
+    expect(out.events).toEqual([{ type: 'claimMail', payload: { mailId: 11, gold: 0, hats: ['santa-hat'] } }]);
+
+    // 이미 보유한 모자가 우편에 다시 오면 중복 없이 기존 순서를 유지한다
+    const again = applyAction(
+      seed({ hats: ['cap-blue', 'santa-hat'] }),
+      { type: 'claimMail', id: 12 },
+      deps({ mail: { id: 12, gold: 0, hats: ['santa-hat'] } }),
+    );
+    if (!again.ok) throw new Error(again.error);
+    expect(again.state.hats).toEqual(['cap-blue', 'santa-hat']);
+    expect(again.result).toEqual({ type: 'mail', gold: 0 });
+    expect(again.events).toEqual([{ type: 'claimMail', payload: { mailId: 12, gold: 0 } }]);
   });
 });
 

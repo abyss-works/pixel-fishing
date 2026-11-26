@@ -100,6 +100,7 @@ import { useCanvasCover } from '../../layouts/game-stage/canvasCover';
 import { useMobileLayout } from '../../layouts/useMobileLayout';
 import { useBlockZoom } from '../../layouts/useBlockZoom';
 import { keyboardStyle, useVisibleBox } from '../../layouts/visibleBox';
+import { HOTKEY_TIER, hasModifier, useKeyScope } from '../../ui/hotkeys';
 import { windowHostRef } from '../../ui/windowLayer';
 
 interface GameViewProps {
@@ -133,6 +134,8 @@ interface GameViewProps {
   onAuthChanged: () => Promise<void>;
   /** 액션 밖에서 서버가 바꾼 게임 상태를 다시 읽는다(길드 보너스 기부의 골드) */
   onResync: () => Promise<void>;
+  /** 현재 저장 버전을 읽는다 — 모르면 null */
+  saveVersion?: () => number | null;
   /** 진행을 막는 앱 모달(새 버전, 다른 창 접속) — 앱 최상위가 실패 정책에 따라 공급한다 */
   blocker?: ReactNode;
   /** 스테이지 아래 가운데에 놓을 환경 배지 — 앱 최상위가 개발 환경과 함께 공급한다 */
@@ -407,6 +410,14 @@ export default function GameView(props: GameViewProps) {
   };
   const onOpenMap = () => setWorldMapOpen(true);
 
+  useKeyScope(e => {
+    if (scene.kind !== 'base' || trip !== null || encounter !== null || props.blocker != null) return false;
+    if (e.key !== 'Escape' || hasModifier(e)) return false;
+    e.preventDefault();
+    onFacility('exit');
+    return true;
+  }, { tier: HOTKEY_TIER.BASE });
+
   return (
     <div ref={windowHostRef} className={cx('group/root fixed inset-0 flex overflow-hidden overscroll-none', mobile && 'flex-col')}
          style={keyboardStyle(visible)}
@@ -418,7 +429,7 @@ export default function GameView(props: GameViewProps) {
           <Field key={scene.id} region={scene.id} game={game} dispatch={props.dispatch} setToast={props.setToast}
                  onScene={go} guest={isConfirmedGuest(props.account, props.accountChecked)} onGuestBlocked={onGuestBlocked} paused={encounter !== null || props.blocker != null}
                  initialPos={props.entryPos ?? undefined} placeSeq={props.placeSeq}
-                 locked={trip !== null} statusSlot={statusSlot} catchSlot={catchSlot} />
+                 locked={trip !== null} statusSlot={statusSlot} catchSlot={catchSlot} uid={props.uid} saveVersion={props.saveVersion} />
         )}
 
         <HudLayout game={game} bagBonus={bagBonus} scene={scene} log={log} covered={covered}
@@ -486,7 +497,10 @@ export default function GameView(props: GameViewProps) {
             }}
           />
         )}
-        {questsOpen && <QuestInfoModal game={game} onClose={() => setQuestsOpen(false)} />}
+        {questsOpen && (
+          <QuestInfoModal game={game} dispatch={props.dispatch} setToast={props.setToast} confirm={confirm}
+                          onClose={() => setQuestsOpen(false)} />
+        )}
         {achievementsOpen && (
           <AchievementsModal game={game} guest={accountState !== 'account'} dispatch={props.dispatch}
                              setToast={props.setToast}
@@ -500,7 +514,13 @@ export default function GameView(props: GameViewProps) {
         {fortuneOpen && (
           <FortuneCalendarModal gameFortune={game.fortune} accountState={accountState} onClose={() => setFortuneOpen(false)} />
         )}
-        {rankingOpen && <RankingModal onClose={() => setRankingOpen(false)} />}
+        {rankingOpen && (
+          <RankingModal
+            guest={accountState === 'guest'}
+            nickname={props.nickname}
+            onClose={() => setRankingOpen(false)}
+          />
+        )}
         {away.report && awayOpen && (
           <AwayReportModal report={away.report} game={game} onClose={closeAway}
                            onOpenBag={() => { closeAway(); setActiveTab('bag'); }} />
@@ -536,7 +556,7 @@ export default function GameView(props: GameViewProps) {
           <FacilityModal panel={actionPanel} game={game} dispatch={props.dispatch}
                          base={scene.kind === 'base' ? scene.id : undefined} uid={props.uid}
                          sellBonus={guildBonus?.effects.sell ?? 0} accountState={accountState}
-                         setToast={props.setToast} onClose={() => setActionPanel(null)} />
+                         setToast={props.setToast} confirm={confirm} onClose={() => setActionPanel(null)} />
         )}
         {worldMapOpen && <WorldMapModal world={worldScene} onClose={() => setWorldMapOpen(false)} />}
         {/* 세이브가 준비된 뒤(서버 연결 또는 로컬)에만 소식 창을 계획한다 */}

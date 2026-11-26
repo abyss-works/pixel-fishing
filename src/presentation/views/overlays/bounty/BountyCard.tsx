@@ -10,17 +10,19 @@ import { RarityText } from '../../../ui/fish/RarityTag';
 import { fmtGold, fmtNum } from '../../../ui/format';
 import { AcceptButton, ProgressMeter } from './boardParts';
 
-export default function BountyCard({ quest, progress, accepted, canAccept, reason, busy, onAccept, onDeliver }: {
+export default function BountyCard({ quest, progress, accepted, canAccept, canAbandon = false, reason, busy, onAccept, onDeliver, onAbandon }: {
   quest: BountyQuest;
   progress: number;
   /** 수주 중 — 진행도가 0이어도 진행 중으로 보인다 */
   accepted: boolean;
   canAccept: boolean;
+  canAbandon?: boolean;
   /** 수주할 수 없는 이유 — 버튼의 툴팁으로 보인다 */
   reason: string | null;
   busy: boolean;
   onAccept: () => void;
   onDeliver: () => void;
+  onAbandon?: () => void;
 }) {
   const done = progress >= quest.count;
   return (
@@ -37,7 +39,7 @@ export default function BountyCard({ quest, progress, accepted, canAccept, reaso
         {done
           ? <Button variant="primary" full disabled={busy} onClick={onDeliver}>완료</Button>
           : accepted
-            ? <Button full disabled>진행 중</Button>
+            ? <Button variant="danger" full disabled={busy || !canAbandon} onClick={onAbandon}>의뢰 포기</Button>
             : <AcceptButton disabled={!canAccept || busy} reason={reason} onClick={onAccept} />}
       </div>
     </Inset>

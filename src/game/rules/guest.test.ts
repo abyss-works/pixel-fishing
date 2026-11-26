@@ -58,6 +58,7 @@ describe('게스트 액션 판정 (guestActionVerdict)', () => {
       { type: 'setNickname', nickname: 'x' }, { type: 'sendLetter', text: 'x' },
       { type: 'changeClothes', shirt: 0, pants: 0 }, { type: 'buyHat', hat: 'a' }, { type: 'wearHat', hat: null },
       { type: 'acceptQuest', questId: 'q', port: 'harbor' }, { type: 'deliverBounty', questId: 'q' },
+      { type: 'abandonQuest', questId: 'q' },
       { type: 'resolveChallenge', questId: 'q', success: true, hits: 1, misses: 0 },
       { type: 'redeemCoupon', code: 'x' }, { type: 'claimRelief', code: 'x' }, { type: 'claimMail', id: 1 },
       { type: 'exhibit', uid: 'u', slot: 0 }, { type: 'exchangeArtifact', artifact: 'a' }, { type: 'levelUpArtifact', artifact: 'a' },

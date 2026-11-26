@@ -8,9 +8,14 @@ describe('궤도와 점프', () => {
     expect(near).toBeLessThan(far);
   });
 
-  it('점프는 0에서 시작해 중간에 최고, JUMP_S 뒤에는 0', () => {
+  it('점프는 0.9초 동안 최대 24px 포물선을 그리고, 범위 밖에서는 0이다', () => {
+    expect(JUMP_S).toBe(0.9);
+    expect(JUMP_PX).toBe(24);
     expect(jumpHeight(0)).toBe(0);
+    expect(jumpHeight(JUMP_S / 4)).toBeGreaterThan(0);
+    expect(jumpHeight(JUMP_S / 4)).toBeLessThan(JUMP_PX);
     expect(jumpHeight(JUMP_S / 2)).toBe(JUMP_PX);
+    expect(jumpHeight(JUMP_S - 0.01)).toBeGreaterThan(0);
     expect(jumpHeight(JUMP_S)).toBe(0);
     expect(jumpHeight(-1)).toBe(0);
     expect(jumpHeight(5)).toBe(0);

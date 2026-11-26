@@ -6,6 +6,7 @@ import type { DailyFortune, FortuneKind } from '../../game/rules/fortune';
 import type { ChatLine, NoticeItem } from '../../game/rules/live';
 import type { GuildBonusId, GuildEffects, GuildJoinMode, GuildLogKind, GuildRole } from '../../game/rules/guild';
 import type { BountyKind } from '../../game/content/bounties';
+import type { HatSource } from '../../game/content/wardrobe';
 import type { MaybePromise } from '../../shared/lib/when';
 
 export type { MaybePromise } from '../../shared/lib/when';
@@ -21,6 +22,8 @@ export type GameProfile = { ok: true; nickname: string | null; devTools: boolean
 export interface GameGateway {
   load(): MaybePromise<GameState | null>;
   dispatch(action: GameAction): MaybePromise<DispatchResult>;
+  /** 게이트웨이가 확정해 둔 현재 저장 버전 — 모르면 null */
+  saveVersion?(): number | null;
   getProfile(): MaybePromise<GameProfile>;
   warmup?(): void;
 }
@@ -93,10 +96,11 @@ export interface MailItemAttachment {
   qty: number;
 }
 
-/** 우편 한 통 — 골드와 첨부 아이템이 모두 없으면 글만 있는 우편이다. 시각은 ISO 문자열 */
+/** 우편 한 통 — 골드·첨부 아이템·모자가 모두 없으면 글만 있는 우편이다. 시각은 ISO 문자열 */
 export interface MailItem {
   id: number; title: string; body: string; gold: number;
   items: MailItemAttachment[];
+  hats?: string[];
   createdAt: string; readAt: string | null; claimedAt: string | null;
 }
 
@@ -187,10 +191,19 @@ export type GuildOpResult =
   | { ok: true; result?: 'joined' | 'requested'; gold?: number; recovered?: number; enhanceResetCount?: number }
   | { ok: false; error: string };
 
+export type RankingWindow = 'weekly' | 'all';
 export type RankingBoardId = 'fame' | 'dex' | 'variant' | 'named' | 'namedClears' | 'species';
 export interface RankingRow { rank: number; nickname: string | null; value: number; me: boolean }
 /** species 표는 fishId 어종의 사람별 최대 크기(cm) 순위다 */
-export interface RankingBoard { board: RankingBoardId; fishId?: string; top: RankingRow[]; me: { rank: number; value: number } | null }
+export interface RankingBoard {
+  board: RankingBoardId;
+  fishId?: string;
+  window: RankingWindow;
+  periodSupported: boolean;
+  resetAt: string | null;
+  top: RankingRow[];
+  me: { rank: number; value: number } | null;
+}
 
 export interface BountyProgressRow { questId: string; progress: number }
 export interface BountyTicketRow { questId: string; issuedAt: string }
@@ -386,14 +399,15 @@ export interface AdminSentMailRow extends MailItem { userId: string }
 export interface AdminMailRequest {
   title: string; body: string;
   target:
-    | { kind: 'users'; recipients: { userId: string; gold?: number; items?: MailItemAttachment[] }[] }
-    | { kind: 'all'; gold?: number; items?: MailItemAttachment[] };
+    | { kind: 'users'; recipients: { userId: string; gold?: number; items?: MailItemAttachment[]; hats?: string[] }[] }
+    | { kind: 'all'; gold?: number; items?: MailItemAttachment[]; hats?: string[] };
   items?: MailItemAttachment[];
+  hats?: string[];
   idempotencyKey?: string;
 }
 /** 관리자 — 우편 미리보기·보내기 결과. problems가 있으면 미리보기가 없고 보내지 않는다 */
 export interface AdminMailPlan {
-  problems: ('title' | 'body' | 'gold' | 'items' | 'empty' | 'recipients' | 'duplicate' | 'totalGold')[];
+  problems: ('title' | 'body' | 'gold' | 'items' | 'hats' | 'empty' | 'recipients' | 'duplicate' | 'totalGold')[];
   duplicates?: string[];
   preview: {
     count: number;
@@ -428,7 +442,7 @@ export interface AdminUserState {
   hats: {
     owned: number;
     total: number;
-    items: { id: string; name: string; source: 'gold' | 'achievement' }[];
+    items: { id: string; name: string; source: HatSource }[];
     equipped: { id: string; name: string } | null;
   };
   achievements: {

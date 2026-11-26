@@ -3,7 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppError, fail } from '../../../core/errors';
 import { newState } from '../../../game/rules/logic';
 import { FISH } from '../../../game/content/fish';
+import { REGION_PACKS } from '../../../game/world';
+import type { RegionId } from '../../../game/world';
 import { setSchoolDay } from '../../../features/gameplay/service/schoolDay';
+import * as liveService from '../../../features/live/service/useLive';
 import { resetKeyScopes } from '../../ui/hotkeys';
 
 const layout = vi.hoisted(() => ({ mobile: false }));
@@ -164,6 +167,41 @@ describe('Field 일시적 429(rate-limited) 낚시 세션 유지', () => {
       expect(container.querySelector('[data-phase="wait"]')).toBeNull();
     } finally {
       slot.remove();
+    }
+  });
+});
+
+describe('Field 구역 강제 모자 실시간 송신', () => {
+  it('championship 구역에서는 readPosition이 santa-hat을 송신하고, 구역을 벗어나면 game.look으로 복원한다', () => {
+    const spy = vi.spyOn(liveService, 'useLivePosition');
+    const packs = REGION_PACKS as Record<string, typeof REGION_PACKS.world>;
+    packs.championship = REGION_PACKS.world;
+    const game = { ...newState(), look: { shirt: 2, pants: 3, hat: 'cap-red' } };
+    try {
+      const { rerender } = render(
+        <Field
+          region={'championship' as RegionId}
+          game={game}
+          dispatch={() => ({ status: 'ok', result: {} as never, state: game })}
+          setToast={() => {}}
+          onScene={() => {}}
+        />,
+      );
+      expect(spy.mock.calls.at(-1)?.[0]().look).toEqual({ shirt: 2, pants: 3, hat: 'santa-hat' });
+
+      rerender(
+        <Field
+          region="village"
+          game={game}
+          dispatch={() => ({ status: 'ok', result: {} as never, state: game })}
+          setToast={() => {}}
+          onScene={() => {}}
+        />,
+      );
+      expect(spy.mock.calls.at(-1)?.[0]().look).toEqual({ shirt: 2, pants: 3, hat: 'cap-red' });
+    } finally {
+      delete packs.championship;
+      spy.mockRestore();
     }
   });
 });

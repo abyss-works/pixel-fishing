@@ -31,7 +31,7 @@ vi.mock('../../../platform/api', async () => {
     markMailRead: vi.fn(async () => {}),
     readFriends: () => apiState.readFriends(),
     friendAction: vi.fn(async () => ({ ok: true, result: 'ok' })),
-    readRanking: (board: string, fishId?: string) => apiState.readRanking(board, fishId),
+    readRanking: (board: string, fishId?: string, window?: string) => apiState.readRanking(board, fishId, window),
     readFortuneHistory: (month?: string) => apiState.readFortuneHistory(month),
     gameDay: () => '2026-11-25',
     api: {
@@ -91,7 +91,14 @@ describe('조회 훅 약관 수락 게이트 연동', () => {
     apiState.consentListeners.clear();
     apiState.readMails.mockReset().mockResolvedValue([]);
     apiState.readFriends.mockReset().mockResolvedValue([]);
-    apiState.readRanking.mockReset().mockResolvedValue({ board: 'fame', top: [], me: null });
+    apiState.readRanking.mockReset().mockResolvedValue({
+      board: 'fame',
+      window: 'weekly',
+      periodSupported: true,
+      resetAt: null,
+      top: [],
+      me: null,
+    });
     apiState.readFortuneHistory.mockReset().mockResolvedValue({
       month: '2026-11',
       firstMonth: '2026-11',
@@ -132,7 +139,8 @@ describe('조회 훅 약관 수락 게이트 연동', () => {
     await act(async () => { apiState.bootResolve!(); });
 
     await waitFor(() => {
-      expect(apiState.readMails).toHaveBeenCalledTimes(1);
+      // 동의 직후 1회 조회 뒤, boot 완료 시 서버 접속 선물 반영을 위해 우편함을 1회 더 무효화·재조회한다
+      expect(apiState.readMails).toHaveBeenCalledTimes(2);
       expect(apiState.readFriends).toHaveBeenCalledTimes(1);
     });
     expect(result.current.mailbox.failed).toBe(false);
@@ -155,7 +163,7 @@ describe('조회 훅 약관 수락 게이트 연동', () => {
     await waitFor(() => expect(apiState.bootResolve).not.toBeNull());
     await act(async () => { apiState.bootResolve!(); });
     await waitFor(() => {
-      expect(apiState.readMails).toHaveBeenCalledTimes(1);
+      expect(apiState.readMails).toHaveBeenCalledTimes(2);
       expect(apiState.readFriends).toHaveBeenCalledTimes(1);
     });
 
@@ -180,7 +188,7 @@ describe('조회 훅 약관 수락 게이트 연동', () => {
       expect(result.current.mailbox.failed).toBe(false);
       expect(result.current.friends.failed).toBe(false);
     });
-    expect(apiState.readMails).toHaveBeenCalledTimes(3);
+    expect(apiState.readMails).toHaveBeenCalledTimes(4);
     expect(apiState.readFriends).toHaveBeenCalledTimes(3);
   });
 

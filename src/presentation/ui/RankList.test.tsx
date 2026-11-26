@@ -31,10 +31,31 @@ describe('RankList(공용 랭킹 표)', () => {
     const mine = screen.getByLabelText('내 순위');
     expect(mine).toHaveAttribute('data-me', 'true');
     expect(mine).toHaveAttribute('data-rank', '15');
-    expect(mine.querySelector('[data-rank-tone]')).toHaveAttribute('data-rank-tone', 'accent');
+    expect(within(mine).getByText('#15')).toHaveAttribute('data-rank-tone', 'accent');
+    expect(within(mine).getByText('나')).toBeInTheDocument();
     expect(mine.querySelector('[data-progress-count]')).toHaveAttribute('data-tone', 'gold');
     expect(mine.querySelector('[data-progress-current]')?.textContent).toBe('100');
     expect(mine.querySelector('[data-progress-target]')?.textContent).toBe(' / 200');
     expect(mine.querySelector('[data-progress-percent]')?.textContent).toBe('(50%)');
+  });
+
+  it('RankMeBar는 빈 상태 문구를 같은 높이 슬롯에 표시하고, 비임베드 RankList는 목록 내 내 행 여부와 무관하게 하단 바를 유지한다', () => {
+    const rows = [
+      { rank: 1, nickname: '가', value: 1200, me: false },
+      { rank: 2, nickname: '나', value: 900, me: true },
+    ];
+    render(
+      <div>
+        <RankList rows={rows} me={{ rank: 2, value: 900 }} valueLabel="명성" format={v => v.toLocaleString('ko-KR')} />
+        <RankMeBar me={null} emptyMessage="이번 주 순위 기록이 아직 없어요." format={v => String(v)} />
+      </div>,
+    );
+
+    const bars = screen.getAllByLabelText('내 순위');
+    expect(bars).toHaveLength(2);
+    expect(bars[0]).toHaveAttribute('data-me', 'true');
+    expect(bars[0]).toHaveAttribute('data-rank', '2');
+    expect(bars[1]).toHaveAttribute('data-me', 'false');
+    expect(bars[1]).toHaveTextContent('이번 주 순위 기록이 아직 없어요.');
   });
 });

@@ -96,6 +96,8 @@ export interface ProfileView {
       goldTotal: number;
       achievementOwned: number;
       achievementTotal: number;
+      eventOwned: number;
+      eventTotal: number;
       slots: ProfileHatSlot[];
     };
     artifacts: { owned: number; total: number; slots: ProfileArtifactSlot[] };
@@ -171,8 +173,10 @@ export function selectProfileView(profile: PublicProfile): ProfileView {
 
   const goldHats = HATS.filter(h => h.source === 'gold');
   const achievementHats = HATS.filter(h => h.source === 'achievement');
+  const eventHats = HATS.filter(h => h.source === 'event');
   const goldOwned = goldHats.filter(h => ownedHats.has(h.id)).length;
   const achievementOwned = achievementHats.filter(h => ownedHats.has(h.id)).length;
+  const eventOwned = eventHats.filter(h => ownedHats.has(h.id)).length;
   const hatLookBase = profile.look ?? DEFAULT_LOOK;
   const hatSlots: ProfileHatSlot[] = HATS.map(h => ({
     id: h.id,
@@ -182,7 +186,9 @@ export function selectProfileView(profile: PublicProfile): ProfileView {
     look: { shirt: hatLookBase.shirt, pants: hatLookBase.pants, hat: h.id },
     conditionText: h.source === 'gold'
       ? `${h.price.toLocaleString('ko-KR')}G 구매`
-      : (achievementById(h.achievementId)?.desc ?? '업적 보상'),
+      : h.source === 'event'
+        ? '겨울 이벤트 기간에 접속하면 우편함으로 받을 수 있어요.'
+        : (achievementById(h.achievementId)?.desc ?? '업적 보상'),
   }));
 
   const slots: ProfileArtifactSlot[] = ARTIFACTS.map(a => {
@@ -224,12 +230,14 @@ export function selectProfileView(profile: PublicProfile): ProfileView {
     },
     collectibles: {
       hats: {
-        owned: goldOwned + achievementOwned,
+        owned: goldOwned + achievementOwned + eventOwned,
         total: HATS.length,
         goldOwned,
         goldTotal: goldHats.length,
         achievementOwned,
         achievementTotal: achievementHats.length,
+        eventOwned,
+        eventTotal: eventHats.length,
         slots: hatSlots,
       },
       artifacts: {

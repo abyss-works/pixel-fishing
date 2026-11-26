@@ -344,9 +344,78 @@ describe('우편 요청 해석 및 중복/상한 검증', () => {
       { ...valid, items: [{ id: 'energy-common', qty: 100_001 }] },
       { ...valid, items: [{ id: 'energy-common', qty: 60_000 }, { id: 'energy-common', qty: 40_001 }] },
       { ...valid, gold: 0, items: [] },
+      { ...valid, gold: 0, items: [], hats: ['unknown-hat'] },
     ]) {
       await expect(sendIdempotentMail(badDb, bad, NOW)).rejects.toThrow();
     }
     expect(badDb.execute).not.toHaveBeenCalled();
+
+    // 모자 첨부만 있는 멱등 우편은 중복 모자를 제거해 삽입한다
+    const hatQueries: string[] = [];
+    const hatDb = {
+      execute: vi.fn(async (query: unknown) => {
+        hatQueries.push(JSON.stringify(query));
+        return { rows: [{ id: 102 }] };
+      }),
+    } as unknown as Executor;
+    await expect(sendIdempotentMail(hatDb, {
+      userId: A,
+      idempotencyKey: 'hat-gift',
+      title: '산타모자 선물',
+      body: '본문',
+      gold: 0,
+      items: [],
+      hats: ['santa-hat', 'santa-hat'],
+    }, NOW)).resolves.toBe(true);
+    expect(hatQueries[0]).toContain(JSON.stringify(JSON.stringify(['santa-hat'])));
+  });
+
+  it('parseMailRequest·draftProblems·deliverMail은 모자 첨부(hats)를 검증하고 중복을 제거한다', async () => {
+    expect(parseMailRequest({
+      title: 't', body: 'b',
+      target: { kind: 'all', hats: ['santa-hat'] },
+    })).toEqual({
+      title: 't', body: 'b',
+      target: { kind: 'all', gold: 0, hats: ['santa-hat'] },
+    });
+    expect(parseMailRequest({
+      title: 't', body: 'b',
+      hats: ['santa-hat'],
+      target: { kind: 'users', recipients: [{ userId: A }] },
+    })).toEqual({
+      title: 't', body: 'b',
+      hats: ['santa-hat'],
+      target: { kind: 'users', recipients: [{ userId: A, gold: 0 }] },
+    });
+    expect(parseMailRequest({
+      title: 't', body: 'b',
+      hats: [123],
+      target: { kind: 'all', gold: 0 },
+    })).toBeNull();
+
+    expect(draftProblems({
+      title: '제목', body: '본문',
+      recipients: [{ userId: A, gold: 0, hats: ['santa-hat'] }],
+    })).toEqual([]);
+    expect(draftProblems({
+      title: '제목', body: '본문',
+      recipients: [{ userId: A, gold: 0, hats: ['unknown-hat'] }],
+    })).toContain('hats');
+
+    const db = mockExecutor({ foundIds: [A], sentCount: 1 });
+    const first = await deliverMail(db, {
+      title: '모자', body: '본문',
+      target: { kind: 'users', recipients: [{ userId: A, gold: 0, hats: ['santa-hat', 'cap-red', 'santa-hat'] }] },
+      idempotencyKey: 'hats-idem-1',
+    }, NOW);
+    expect(first).toMatchObject({ problems: [], sent: 1 });
+
+    // 정렬·중복 제거 후 같은 지문이면 멱등으로 통과한다
+    const replay = await deliverMail(db, {
+      title: '모자', body: '본문',
+      target: { kind: 'users', recipients: [{ userId: A, gold: 0, hats: ['cap-red', 'santa-hat'] }] },
+      idempotencyKey: 'hats-idem-1',
+    }, NOW);
+    expect(replay).toMatchObject({ problems: [], sent: 0, idempotent: true });
   });
 });

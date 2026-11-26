@@ -20,7 +20,7 @@ import { potionById } from '../content/potions.js';
 import type { BaseId, LocationRef } from '../content/places.js';
 import { ARTIFACT_MAX_LEVEL, artifactById, artifactHasLevel, artifactLevelCost } from '../content/artifacts.js';
 import { artifactLevelOf, dailyClearCap } from './artifactLevel.js';
-import { PANTS_COLORS, SHIRT_COLORS, hatById, isAchievementHat } from '../content/wardrobe.js';
+import { PANTS_COLORS, SHIRT_COLORS, hatById } from '../content/wardrobe.js';
 import { ACHIEVEMENTS, achievementById } from '../content/achievements.js';
 import {
   upgradeCost, CHALLENGE_MISS_LIMIT,
@@ -51,6 +51,8 @@ export type RejectReason =
   | 'daily-cleared' // 그 갈래의 하루 클리어 한도 소진 — 클리어(보상 수령)를 센다
   | 'quest-incomplete' // 납품 조건 미달성
   | 'quest-active' // 같은 갈래의 의뢰가 이미 수주 중 — 갈래마다 한 번에 하나만 수주한다
+  | 'quest-not-active' // 진행 중인 의뢰가 아니어서 포기할 수 없다
+  | 'quest-already-complete' // 이미 목표를 달성한 의뢰는 포기할 수 없다
   | 'dex-incomplete' // 라이선스 도감 조건 미달성
   | 'material-missing' // 유물 교환 재료 미보유 — 네임드 토벌로 1개씩 모은다
   | 'ticket-missing' // 도전권 없음 — 수주 중인 해역에서 낚으면 조우로 받는다
@@ -109,6 +111,8 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'daily-cleared': '오늘 의뢰는 이미 마쳤어요. 내일 다시 받을 수 있어요.',
   'quest-incomplete': '아직 마칠 조건을 채우지 못했어요.',
   'quest-active': '이미 수주 중인 의뢰가 있어요. 먼저 마쳐 주세요.',
+  'quest-not-active': '진행 중인 의뢰가 아니에요.',
+  'quest-already-complete': '이미 목표를 달성한 의뢰는 포기할 수 없어요.',
   'dex-incomplete': '그 구역 도감을 아직 다 채우지 못했어요. 수배판에서 남은 조건을 확인해 보세요.',
   'material-missing': '교환 재료가 없어요. 네임드를 토벌해 보세요.',
   'ticket-missing': '흔적이 없어요. 수주 중인 구역에서 낚시하다 조우하면 흔적이 남아요.',
@@ -161,7 +165,7 @@ export function canChangeClothes(shirt: unknown, pants: unknown): RuleCheck {
 export function canBuyHat(state: GameState, hat: unknown): RuleCheck {
   const h = hatById(hat);
   if (!h) return no('bad-request');
-  if (isAchievementHat(h)) return no('achievement-hat-only');
+  if (h.source !== 'gold') return no('achievement-hat-only');
   if (state.hats.includes(h.id)) return no('hat-owned');
   return state.gold >= h.price ? OK : no('not-enough-gold');
 }
@@ -289,6 +293,18 @@ export function canDeliverBounty(questId: string, ctx: BountyCtx | undefined): R
   const q = bountyById(questId);
   if (!q) return no('bad-request');
   return ctx && ctx.complete.includes(questId) ? OK : no('quest-incomplete');
+}
+
+/** 의뢰 포기 — 진행 중이고 아직 목표를 채우지 않은 의뢰만 포기할 수 있다. 위치와 무관하다 */
+export function canAbandonQuest(
+  _state: GameState, questId: string, ctx: BountyCtx | undefined,
+): RuleCheck {
+  const q = bountyById(questId);
+  if (!q) return no('bad-request');
+  if (!ctx) return no('no-license');
+  if (!ctx.active.includes(questId)) return no('quest-not-active');
+  if (ctx.complete.includes(questId)) return no('quest-already-complete');
+  return OK;
 }
 
 /** 도전 결과 확정 — 시도 자체는 클라 주장(PERFECT 선례)이라 서버는

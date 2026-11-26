@@ -4,6 +4,8 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useDialogs } from './useDialogs';
 import { useEffect } from 'react';
 import type { ReactNode } from 'react';
+import { vi } from 'vitest';
+import Modal from './Modal';
 import { resetKeyScopes } from './hotkeys';
 
 afterEach(() => { cleanup(); resetKeyScopes(); });
@@ -52,5 +54,40 @@ describe('useDialogs', () => {
     expect(screen.getByLabelText('복사할 값')).toHaveAttribute('readonly');
     fireEvent.click(screen.getByRole('button', { name: '확인' }));
     await expect(done!).resolves.toBeUndefined();
+  });
+
+  it('부모 모달이 나중에 마운트되어도 stage/app 확인 창이 먼저 Esc를 받아 닫힌다', async () => {
+    const onParentClose = vi.fn();
+    function Case({ layer, showParent }: { layer: 'stage' | 'app'; showParent: boolean }) {
+      const dialogs = useDialogs();
+      useEffect(() => { holder.api = dialogs; });
+      return (
+        <>
+          {dialogs.dialogs}
+          {showParent && <Modal layer={layer} title="부모" onClose={onParentClose}>본문</Modal>}
+        </>
+      );
+    }
+
+    const { rerender, unmount } = render(<Case layer="stage" showParent={false} />);
+    let answer: Promise<boolean>;
+    act(() => { answer = api.confirm({ layer: 'stage', title: '확인', body: '진행할까요?', confirmLabel: '확인' }); });
+    rerender(<Case layer="stage" showParent={true} />);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await expect(answer!).resolves.toBe(false);
+    expect(onParentClose).not.toHaveBeenCalled();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onParentClose).toHaveBeenCalledTimes(1);
+    unmount();
+
+    onParentClose.mockClear();
+    const appView = render(<Case layer="app" showParent={false} />);
+    act(() => { answer = api.confirm({ layer: 'app', title: '확인', body: '진행할까요?', confirmLabel: '확인' }); });
+    appView.rerender(<Case layer="app" showParent={true} />);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await expect(answer!).resolves.toBe(false);
+    expect(onParentClose).not.toHaveBeenCalled();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onParentClose).toHaveBeenCalledTimes(1);
   });
 });

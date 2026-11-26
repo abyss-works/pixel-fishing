@@ -14,8 +14,12 @@ import {
   idleSinceOf, parseClientMessage,
 } from '../../src/game/rules/live.js';
 import type { ChatLine, ChatRoom, NoticeItem, Presence, ServerMessage } from '../../src/game/rules/live.js';
+import { DEFAULT_LOOK, effectiveLookForRegion, forcedHatForRegion } from '../../src/game/content/wardrobe.js';
+import type { Look } from '../../src/game/content/wardrobe.js';
+import type { RegionId } from '../../src/game/content/places.js';
 import { topZoneOf, zoneById } from '../../src/game/content/zones.js';
 import type { ZoneId } from '../../src/game/content/zones.js';
+import type { CatchFxPayload } from './livePresence.js';
 
 /** 연결한 사용자 — 표시 이름·배·명성은 서버가 DB에서 읽는다. 클라이언트가 보낸 값을 믿지 않는다. guest는 이메일이 없는 계정이다 */
 export interface LiveUser { uid: string; nick: string; boat: number; fame: number; guest: boolean }
@@ -104,6 +108,8 @@ export interface LiveServer {
   setNick(uid: string, nick: string): void;
   /** 그 사용자의 명성이 바뀌었다. 활성 연결의 캐시를 즉시 갱신해 이후 합류·접속 상태에 반영한다 */
   setFame(uid: string, fame: number): void;
+  /** 서버가 확정한 어획 점프 연출을 같은 지역의 다른 접속자에게 보낸다(게스트 발신 제외) */
+  broadcastCatchFx(uid: string, payload: CatchFxPayload): void;
   /** 그 사용자의 연결에만 메시지를 보낸다. 연결돼 있지 않으면 아무것도 하지 않는다 */
   sendTo(uid: string, msg: ServerMessage): void;
   /** 그 길드에 속한 접속자의 연결에만 메시지를 보낸다 */
@@ -116,6 +122,7 @@ export interface LiveServer {
 
 /** 방치 시간을 세는 중일 때만 싣는 선택 필드 */
 const idleField = (since: number | null, at: number): { idleMs?: number } => since === null ? {} : { idleMs: at - since };
+const isRegionId = (region: string): region is RegionId => region === 'village' || region === 'world';
 
 /** 지역·해역 식별자를 최상위 존 id로 정규화한다. 알 수 없는 지역(씬 이름 등)은 원문을 유지한다 */
 function normalizeRegion(region: string | null | undefined, zone?: string | null): string | null {
@@ -128,6 +135,8 @@ interface Conn {
   user: LiveUser;
   /** 첫 위치를 받기 전에는 null — 다른 사람에게 알리지 않는다 */
   presence: Presence | null;
+  /** 클라이언트가 마지막으로 보낸 실제 외형(강제 모자 구역 덮어쓰기 전 원본) */
+  baseLook?: Look;
   /** 지역 채팅 격리 기준이 되는 정규화 지역 id */
   region: string | null;
   /** 이번 던짐의 첫 결과를 알려 온 서버 시각 기준 시작 시각. 세지 않는 동안은 null이다 */
@@ -325,12 +334,23 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
               conn.region = normalizeRegion(region, zone);
               conn.idleSince = idleSinceOf(conn.presence && { spot: conn.presence, since: conn.idleSince }, { region, x, y }, line, msg.idleMs, at);
               const idle = idleField(conn.idleSince, at);
+              if (look !== undefined) conn.baseLook = look;
+              const baseLook = conn.baseLook ?? (forcedHatForRegion(region) || conn.presence?.look ? DEFAULT_LOOK : undefined);
+              const nextLook = baseLook ? effectiveLookForRegion(baseLook, region) : undefined;
+              const prevLook = conn.presence?.look;
+              const lookChanged = nextLook !== undefined && (
+                prevLook === undefined
+                || prevLook.shirt !== nextLook.shirt
+                || prevLook.pants !== nextLook.pants
+                || prevLook.hat !== nextLook.hat
+              );
+              const broadcastLook = nextLook && (look !== undefined || lookChanged) ? nextLook : undefined;
               if (!conn.presence) {
-                conn.presence = { uid: user.uid, nick: user.nick, boat: user.boat, fame: user.fame, region, zone, x, y, dir, line, ...(bob ? { bob } : {}), ...(look ? { look } : {}) };
+                conn.presence = { uid: user.uid, nick: user.nick, boat: user.boat, fame: user.fame, region, zone, x, y, dir, line, ...(bob ? { bob } : {}), ...(nextLook ? { look: nextLook } : {}) };
                 broadcast(ws, user, { t: 'join', presence: { ...conn.presence, ...idle } });
               } else {
-                Object.assign(conn.presence, { region, zone, x, y, dir, line, bob, ...(look ? { look } : {}) });
-                broadcast(ws, user, { t: 'move', uid: user.uid, region, zone, x, y, dir, line, ...idle, ...(bob ? { bob } : {}), ...(look ? { look } : {}) });
+                Object.assign(conn.presence, { region, zone, x, y, dir, line, bob, ...(broadcastLook ? { look: broadcastLook } : {}) });
+                broadcast(ws, user, { t: 'move', uid: user.uid, region, zone, x, y, dir, line, ...idle, ...(bob ? { bob } : {}), ...(broadcastLook ? { look: broadcastLook } : {}) });
               }
               // 게스트의 위치는 마지막 위치로 저장하지 않는다
               if (!user.guest) {
@@ -463,6 +483,35 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
         if (c.user.uid !== uid) continue;
         c.user.fame = fame;
         if (c.presence) c.presence.fame = fame;
+      }
+    },
+    broadcastCatchFx(uid, payload) {
+      let senderWs: WebSocket | null = null;
+      let sender: Conn | null = null;
+      for (const [ws, c] of conns) {
+        if (c.user.uid !== uid) continue;
+        senderWs = ws;
+        sender = c;
+        break;
+      }
+      if (!sender || !senderWs || sender.user.guest || !sender.presence) return;
+      const { region } = sender.presence;
+      if (!isRegionId(region)) return;
+      const pos = sender.presence.bob ?? { x: sender.presence.x, y: sender.presence.y };
+      const msg: ServerMessage = {
+        t: 'catchFx',
+        uid,
+        region,
+        x: pos.x,
+        y: pos.y,
+        fishId: payload.fishId,
+        ...(payload.form ? { form: payload.form } : {}),
+      };
+      const data = JSON.stringify(msg);
+      for (const [ws, c] of conns) {
+        if (ws === senderWs || ws.readyState !== WebSocket.OPEN) continue;
+        if (c.presence?.region !== region) continue;
+        ws.send(data);
       }
     },
     sendTo(uid, msg) {

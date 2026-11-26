@@ -44,7 +44,43 @@ describe('의뢰 화면 데이터', () => {
     });
     expect(data.isAccepted(quest.id)).toBe(true);
     expect(data.progressOf(quest.id)).toBe(0);
+    expect(data.canAbandon(quest.id)).toBe(true);
     expect(data.isAccepted(other.id)).toBe(false);
+    expect(data.canAbandon(other.id)).toBe(false);
+  });
+
+  it('목표를 채운 의뢰는 수주 중이어도 포기할 수 없다', () => {
+    const game = newState();
+    const day = '2026-10-13';
+    const uid = 'player-1';
+    const quest = dailyQuestFor('pacific', 'easy', uid, day)!;
+    const namedQuest = offeredQuestsFor('pacific', 'named', uid, day)[0];
+    const data = selectBountyPanelData({
+      game, port: 'harbor', uid, day, nowMs: Date.parse('2026-10-13T00:01:00.000Z'),
+      snapshot: {
+        clearsToday: clears(0),
+        progress: [{ questId: quest.id, progress: quest.count }, { questId: namedQuest.id, progress: namedQuest.count }],
+        tickets: [{ questId: namedQuest.id, issuedAt: '2026-10-13T00:00:00.000Z' }],
+      },
+    });
+    expect(data.canAbandon(quest.id)).toBe(false);
+    expect(data.canAbandon(namedQuest.id)).toBe(false);
+    expect(data.namedOffers[0].canAbandon).toBe(false);
+    expect(data.namedOffers[0].hasTicket).toBe(true);
+  });
+
+  it('네임드 카드의 나타나는 곳은 최상위 구역과 출현 해역을 통일된 형식으로 낸다', () => {
+    const game = newState();
+    const megalodon = bountyById('pacific-named-megalodon')!;
+    const jasconius = bountyById('southatlantic-named-jasconius')!;
+    expect(selectNamedBountyCardData(game, megalodon, 0)).toMatchObject({
+      zoneName: '태평양',
+      haunt: '태평양 전체',
+    });
+    expect(selectNamedBountyCardData(game, jasconius, 0)).toMatchObject({
+      zoneName: '남대서양',
+      haunt: '남대서양 (세인트헬레나)',
+    });
   });
 
   it('네임드 카드의 발견 공개와 완료 여부를 계산한다', () => {

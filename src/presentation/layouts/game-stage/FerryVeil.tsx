@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FERRY_MOVE_AT_MS, ferryFrame } from '../../../game/runtime/ferryTransition';
+import { HOTKEY_TIER, useKeyScope } from '../../ui/hotkeys';
 import { useWindowHost } from '../../ui/windowLayer';
 
 interface FerryVeilProps {
@@ -12,9 +13,14 @@ interface FerryVeilProps {
 }
 
 // 여객선 빠른 이동의 화면 전환 덮개 — 검은 막의 농도만 그린다. 게임 화면 전체(PC는 사이드바, 모바일은 탭 줄과 시트까지)를 덮으려고
-// 스테이지 바깥의 창 층 자리에 fixed로 그린다. 스테이지는 자체 쌓임 맥락이라 안에서는 탭 줄을 덮을 수 없다. 키와 포인터 입력은 막지 않으며 게임 조작은 필드 엔진의 잠금이 멈춘다.
+// 스테이지 바깥의 창 층 자리에 fixed로 그린다. 스테이지는 자체 쌓임 맥락이라 안에서는 탭 줄을 덮을 수 없다. 포인터·일반 키 입력은 막지 않되 전환 중 Esc는 차단한다.
 // 모션 줄이기 설정이면 덮개 없이 바로 옮긴다.
 export default function FerryVeil(props: FerryVeilProps) {
+  useKeyScope(e => {
+    if (e.key !== 'Escape') return;
+    e.preventDefault();
+    return true;
+  }, { tier: HOTKEY_TIER.BLOCKER });
   const [veil, setVeil] = useState(0);
   const windowHost = useWindowHost();
   const latest = useRef(props);

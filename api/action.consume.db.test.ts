@@ -255,3 +255,57 @@ describe('납품', () => {
     expect(await versionOf(uid)).toBe(2);
   });
 });
+
+describe('의뢰 포기 경합', () => {
+  const named = BOUNTIES.find(b => b.zone === 'pacific' && b.difficulty === 'named')!;
+  const abandon = (uid: string, questId = quest.id) => callAction(userToken(uid), { type: 'abandonQuest', questId });
+  const ticketRows = (uid: string) => rows('select quest_id from public.bounty_tickets where user_id = $1', [uid]);
+
+  it('확정이 버전 충돌로 끝나면 진행 행과 도전권이 남고, 다시 보내면 포기된다', async () => {
+    const uid = await seed();
+    await env.client.query(
+      'insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
+      [uid, named.zone, named.id, NOW],
+    );
+    await env.client.query(
+      'insert into public.bounty_tickets (user_id, quest_id, issued_at) values ($1, $2, $3)',
+      [uid, named.id, NOW],
+    );
+
+    hook.beforeCommit = () => bumpVersion(uid);
+    expect(await abandon(uid, named.id)).toMatchObject({ status: 409, body: { error: 'version-conflict' } });
+    expect(await progressRows(uid)).toHaveLength(1);
+    expect(await ticketRows(uid)).toHaveLength(1);
+
+    expect((await abandon(uid, named.id)).status).toBe(200);
+    expect(await progressRows(uid)).toEqual([]);
+    expect(await ticketRows(uid)).toEqual([]);
+  });
+
+  it('읽기와 확정 사이에 진행도가 목표를 채우면 422 quest-already-complete로 거부되고 진행 행이 남는다', async () => {
+    const uid = await seed();
+    await insertProgress(uid, quest.count - 1);
+    hook.beforeCommit = async () => {
+      await env.client.query(
+        'update public.bounty_progress set progress = $2 where user_id = $1 and quest_id = $3',
+        [uid, quest.count, quest.id],
+      );
+    };
+
+    expect(await abandon(uid)).toMatchObject({ status: 422, body: { error: 'quest-already-complete' } });
+    expect(await progressRows(uid)).toHaveLength(1);
+    expect(await versionOf(uid)).toBe(2);
+  });
+
+  it('읽기와 확정 사이에 이미 포기됐으면 늦은 요청은 422 quest-not-active로 거부된다', async () => {
+    const uid = await seed();
+    await insertProgress(uid, 0);
+    let other: Awaited<ReturnType<typeof abandon>> | null = null;
+    hook.beforeCommit = async () => { other = await abandon(uid); };
+
+    const late = await abandon(uid);
+    expect(other).toMatchObject({ status: 200 });
+    expect(late).toMatchObject({ status: 422, body: { error: 'quest-not-active' } });
+    expect(await progressRows(uid)).toEqual([]);
+  });
+});
