@@ -15,6 +15,7 @@ const gw = vi.hoisted(() => ({
   loads: 0,
   loadGold: 0,
   legacy: false,
+  legacyFame: 0,
   cloudEmpty: false,
   importError: null as unknown,
   loadError: null as unknown,
@@ -26,6 +27,7 @@ const gw = vi.hoisted(() => ({
   dispatchAchievements: {} as Record<string, string>,
   loadFortune: null as null | { day: string; kind: 'fish' | 'gold' | 'shadow'; index: 3 | 5 },
   dispatchFortune: null as null | { day: string; kind: 'fish' | 'gold' | 'shadow'; index: 3 | 5 },
+  loadLocation: null as null | { kind: 'region' | 'base'; id: string },
   visited: [] as ('village' | 'world')[],
   loadFame: 0,
   dispatchResult: null as null | Record<string, unknown>,
@@ -79,9 +81,9 @@ vi.mock('../../../platform/api', async () => {
           return gw.acceptQueue.shift() ?? { ok: true as const, consent: { required: false, version, effectiveAt: '2026-11-25T00:00:00.000Z' } };
         },
       },
-      storage: { clearLegacySave: () => { gw.actions.push('clearLegacy'); }, loadLegacy: () => ({ game: fresh(), notice: null, legacy: gw.legacy }), saveCode: () => '' },
+      storage: { clearLegacySave: () => { gw.actions.push('clearLegacy'); }, loadLegacy: () => ({ game: { ...fresh(), fame: gw.legacyFame }, notice: null, legacy: gw.legacy }), saveCode: () => '' },
       createGameGateway: () => ({
-        load: async () => { gw.loads++; if (gw.loadErrors.length) throw gw.loadErrors.shift(); if (gw.loadError) throw gw.loadError; return gw.cloudEmpty ? null : { ...fresh(), gold: gw.loadGold, fame: gw.loadFame, dex: gw.loadDex as ReturnType<typeof fresh>['dex'], achievements: gw.loadAchievements, fortune: gw.loadFortune, visited: gw.visited }; },
+        load: async () => { gw.loads++; if (gw.loadErrors.length) throw gw.loadErrors.shift(); if (gw.loadError) throw gw.loadError; return gw.cloudEmpty ? null : { ...fresh(), ...(gw.loadLocation ? { location: gw.loadLocation as ReturnType<typeof fresh>['location'] } : {}), gold: gw.loadGold, fame: gw.loadFame, dex: gw.loadDex as ReturnType<typeof fresh>['dex'], achievements: gw.loadAchievements, fortune: gw.loadFortune, visited: gw.visited }; },
         getProfile: async () => {
           gw.profileCalls++;
           return gw.profileReplies.shift() ?? { ok: true as const, nickname: 'nick', devTools: gw.devTools };
@@ -116,9 +118,9 @@ function setup(setToast: (m: string, tone?: 'info' | 'gold' | 'warn') => void = 
 afterEach(() => {
   cleanup(); clearFailureNotice(); resetFortuneModalSession(); resetConsentGate();
   gw.bootResolve = null; gw.sessionReply = 'uid-1'; gw.sessionError = null; gw.actions = []; gw.loads = 0; gw.loadGold = 0;
-  gw.legacy = false; gw.cloudEmpty = false; gw.importError = null; gw.loadError = null; gw.loadErrors = []; gw.bootErrors = []; gw.loadDex = {}; gw.dispatchDex = {}; gw.devTools = false;
+  gw.legacy = false; gw.legacyFame = 0; gw.cloudEmpty = false; gw.importError = null; gw.loadError = null; gw.loadErrors = []; gw.bootErrors = []; gw.loadDex = {}; gw.dispatchDex = {}; gw.devTools = false;
   gw.profileReplies = []; gw.profileCalls = 0;
-  gw.loadAchievements = {}; gw.dispatchAchievements = {}; gw.loadFortune = null; gw.dispatchFortune = null;
+  gw.loadAchievements = {}; gw.dispatchAchievements = {}; gw.loadFortune = null; gw.dispatchFortune = null; gw.loadLocation = null;
   gw.visited = []; gw.loadFame = 0; gw.dispatchResult = null;
   gw.account = { status: 'account', email: 'u@example.com' };
   gw.consentQueue = []; gw.consentCalls = 0; gw.acceptCalls = []; gw.acceptQueue = []; gw.consentListeners.clear();
@@ -1051,8 +1053,22 @@ describe('신규 진입 초기 인사 메시지(boot.greeting)', () => {
     expect(greetings[0].text).toBe('마을 연못 어군에서 낚시하고, 집에 들어가 정비해 보세요.');
   });
 
-  it('저장된 클라우드 진행이 있는 복귀 유저에게는 boot.greeting을 출력하지 않는다', async () => {
+  it('초기 서버 세이브가 있는 신규 마을 첫 시작 상태에도 boot.greeting을 1회 출력한다', async () => {
     gw.cloudEmpty = false;
+    const events: SystemNoticeInput[] = [];
+    const sink: NoticeSink = registerNoticeSink(vi.fn(), e => events.push(e));
+    setup(sink);
+
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+    expect(events.filter(e => e.kind === 'boot.greeting')).toHaveLength(1);
+  });
+
+  it('바다 위치이거나 명성·운세·도감 진행이 있는 복귀 유저에게는 boot.greeting을 출력하지 않는다', async () => {
+    gw.cloudEmpty = false;
+    gw.loadLocation = { kind: 'region', id: 'pacific' };
+    gw.loadFame = 20;
+    gw.loadFortune = { day: '2026-11-26', kind: 'shadow', index: 3 };
     const events: SystemNoticeInput[] = [];
     const sink: NoticeSink = registerNoticeSink(vi.fn(), e => events.push(e));
     setup(sink);
@@ -1063,9 +1079,22 @@ describe('신규 진입 초기 인사 메시지(boot.greeting)', () => {
     expect(events.some(e => e.kind === 'boot.cloudLoaded')).toBe(true);
   });
 
-  it('클라우드 세이브가 비어 있어도 레거시 이관 진행이 있으면 boot.greeting을 출력하지 않는다', async () => {
+  it('마을이더라도 명성·도감 진행이 있는 복귀 유저에게는 boot.greeting을 출력하지 않는다', async () => {
+    gw.cloudEmpty = false;
+    gw.loadFame = 5;
+    const events: SystemNoticeInput[] = [];
+    const sink: NoticeSink = registerNoticeSink(vi.fn(), e => events.push(e));
+    setup(sink);
+
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+    expect(events.some(e => e.kind === 'boot.greeting')).toBe(false);
+  });
+
+  it('클라우드 세이브가 비어 있어도 레거시 이관 진행이 있는 기존 플레이어에게는 boot.greeting을 출력하지 않는다', async () => {
     gw.cloudEmpty = true;
     gw.legacy = true;
+    gw.legacyFame = 10;
     const events: SystemNoticeInput[] = [];
     const sink: NoticeSink = registerNoticeSink(vi.fn(), e => events.push(e));
     setup(sink);

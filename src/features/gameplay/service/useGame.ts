@@ -43,6 +43,14 @@ export const GUEST_VILLAGE_ONLY_TEXT = POLICY['guest-village-only'].message;
 
 const VILLAGE_GREETING_TEXT = '마을 연못 어군에서 낚시하고, 집에 들어가 정비해 보세요.';
 
+function isInitialVillageEntry(game: Pick<GameState, 'location' | 'fortune' | 'fame' | 'dex'>): boolean {
+  return game.location.kind === 'region'
+    && game.location.id === 'village'
+    && game.fortune === null
+    && game.fame === 0
+    && Object.keys(game.dex).length === 0;
+}
+
 export type ActionSettled = { ok: true } | { ok: false; notice: string | null };
 
 export interface ConsentPromptState {
@@ -346,11 +354,7 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
         : initialProfile;
       adoptProfile(profile);
       bootedRef.current = true;
-      const g = init.game;
-      if (!init.legacy && g.location.kind === 'region' && g.location.id === 'village'
-          && g.fame === 0 && Object.keys(g.dex).length === 0) {
-        emitGreetingOnce();
-      }
+      if (isInitialVillageEntry(init.game)) emitGreetingOnce();
       return;
     }
     activeFlowRef.current = 'boot';
@@ -407,7 +411,7 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
       await boot(signal);
       if (signal.aborted) return;
       bootedRef.current = true;
-      if (cloud === null && !init.legacy) emitGreetingOnce();
+      if (isInitialVillageEntry(cloud ?? init.game)) emitGreetingOnce();
       const profile = initialProfile.ok && initialProfile.nickname === null
         ? await readProfile()
         : initialProfile;
