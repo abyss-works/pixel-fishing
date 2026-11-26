@@ -44,6 +44,8 @@ const mocks = vi.hoisted(() => ({
   endNoticeNow: vi.fn(),
   deleteNotice: vi.fn(),
   notifyAll: vi.fn(),
+  notifyUser: vi.fn(),
+  onlineUsers: vi.fn((): { uid: string; guest: boolean }[] => []),
   db: { execute: vi.fn() },
   withTransaction: vi.fn(async (run: (tx: unknown) => Promise<unknown>) => run(mocks.db)),
 }));
@@ -98,6 +100,8 @@ vi.mock('./_server/livePresence.js', async () => {
   return {
     ...actual,
     notifyAll: mocks.notifyAll,
+    notifyUser: mocks.notifyUser,
+    onlineUsers: mocks.onlineUsers,
   };
 });
 
@@ -188,11 +192,15 @@ describe('api/admin 핸들러 단위 테스트', () => {
       .mockResolvedValueOnce({ rows: [{ id: TARGET_UID }] }) // previewMails
       .mockResolvedValueOnce({ rows: [{ found: false }] })   // hasRecentDuplicateMail
       .mockResolvedValueOnce({ rows: [{ n: 1 }] });          // sendMails
+    mocks.notifyUser.mockClear();
     const first = await call('POST', { q: 'mail' }, { op: 'send', request: mailReq, idempotencyKey: key });
     expect(first).toMatchObject({ status: 200, body: { sent: 1, problems: [] } });
+    expect(mocks.notifyUser).toHaveBeenCalledTimes(1);
+    expect(mocks.notifyUser).toHaveBeenCalledWith(TARGET_UID, { t: 'mail' });
 
     const replay = await call('POST', { q: 'mail' }, { op: 'send', request: mailReq, idempotencyKey: key });
     expect(replay).toMatchObject({ status: 200, body: { sent: 0, idempotent: true } });
+    expect(mocks.notifyUser).toHaveBeenCalledTimes(1);
 
     // 다른 키로 10분 내 동일 우편 재시도 시 DB 중복 창이 409 duplicate-mail로 차단
     mocks.db.execute
@@ -203,6 +211,26 @@ describe('api/admin 핸들러 단위 테스트', () => {
       request: { ...mailReq, idempotencyKey: '22222222-2222-4222-8222-222222222222' },
     });
     expect(dupWindow).toMatchObject({ status: 409, body: { error: 'duplicate-mail' } });
+    expect(mocks.notifyUser).toHaveBeenCalledTimes(1);
+
+    // 전체 대상 발송 시 게스트를 제외한 접속 유저에게만 { t: 'mail' } 알림을 푸시한다
+    mocks.notifyUser.mockClear();
+    mocks.onlineUsers.mockReturnValueOnce([
+      { uid: TARGET_UID, guest: false },
+      { uid: '00000000-0000-4000-8000-000000000999', guest: true },
+    ]);
+    mocks.db.execute
+      .mockResolvedValueOnce({ rows: [{ id: TARGET_UID }] }) // allPlayerIds
+      .mockResolvedValueOnce({ rows: [{ id: TARGET_UID }] }) // previewMails
+      .mockResolvedValueOnce({ rows: [{ found: false }] })   // hasRecentDuplicateMail
+      .mockResolvedValueOnce({ rows: [{ n: 1 }] });          // sendMails
+    const allRes = await call('POST', { q: 'mail' }, {
+      op: 'send',
+      request: { title: '전체공지우편', body: '전체본문', target: { kind: 'all', gold: 50 } },
+    });
+    expect(allRes).toMatchObject({ status: 200, body: { sent: 1, problems: [] } });
+    expect(mocks.notifyUser).toHaveBeenCalledTimes(1);
+    expect(mocks.notifyUser).toHaveBeenCalledWith(TARGET_UID, { t: 'mail' });
   });
 
   it('GET ?q=overview는 기본 30일 또는 지정 기간으로 통합 요약 데이터를 돌려주고 잘못된 기간은 400이다', async () => {

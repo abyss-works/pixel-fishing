@@ -1,5 +1,6 @@
 // 프로필(profiles) 쓰기 소유 모듈 — 첫 액션의 게스트명 보장과 닉네임 변경.
 import { sql } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
 import { achievementById } from '../../src/game/content/achievements.js';
 import { ARTIFACT_MAX_LEVEL, artifactById, artifactHasLevel } from '../../src/game/content/artifacts.js';
 import { isKnownLocation } from '../../src/game/content/places.js';
@@ -39,6 +40,13 @@ export async function setNickname(db: Executor, uid: string, nickname: string, n
   await db.execute(sql`insert into public.profiles (user_id, nickname, updated_at)
     values (${uid}, ${nickname}, ${at(nowISO)})
     on conflict (user_id) do update set nickname = excluded.nickname, updated_at = excluded.updated_at`);
+}
+
+/** 액션 확정 문장(낙관 락)과 같은 원자 단위로 프로필 닉네임을 바꾼다 */
+export function setNicknameFragment(guard: SQL, uid: string, nickname: string, nowISO: string): SQL {
+  return sql`insert into public.profiles (user_id, nickname, updated_at)
+    select ${uid}, ${nickname}, ${at(nowISO)} where ${guard}
+    on conflict (user_id) do update set nickname = excluded.nickname, updated_at = excluded.updated_at`;
 }
 
 /** 계정 정리에서 사용자의 프로필 행을 지운다 */

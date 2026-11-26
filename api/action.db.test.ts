@@ -129,12 +129,14 @@ describe('요청 경계', () => {
     expect(await run({ state: {}, restricted: true }, { type: 'boot' })).toMatchSnapshot();
   });
 
-  it('느림 창 대상이 아니면 짧은 간격도 받고, 느림 창 대상은 429와 Retry-After 헤더로 응답한다', async () => {
+  it('일반 액션 직후 sendLetter는 saves_current.updated_at에 막히지 않고, 연속 sendLetter만 429와 Retry-After로 제한한다', async () => {
     const recent = new Date(Date.parse(NOW) - 100).toISOString();
     const uid = await seed({ state: { gold: 1_000 }, version: 3, updatedAt: recent });
     expect(await callAction(userToken(uid), { type: 'upgradeRod' })).toMatchObject({ status: 200 });
-    // 직전 성공 액션 직후의 sendLetter는 느림 창에 걸려 거부된다
-    const letterRes = await callAction(userToken(uid), { type: 'sendLetter', text: '안녕하세요' });
+    // 직전 일반 액션(upgradeRod) 직후에도 첫 sendLetter는 즉시 통과한다
+    expect(await callAction(userToken(uid), { type: 'sendLetter', text: '안녕하세요' })).toMatchObject({ status: 200 });
+    // 연속 sendLetter는 독립 1초 쿨다운에 걸려 429와 Retry-After로 거부된다
+    const letterRes = await callAction(userToken(uid), { type: 'sendLetter', text: '연속 발송' });
     expect(letterRes).toMatchObject({
       status: 429,
       body: { error: 'too-fast' },
@@ -2440,6 +2442,7 @@ describe('실시간 닉네임 즉시 동기화', () => {
       const res = await callAction(userToken(uidA), { type: 'setNickname', nickname: '바뀐선장' });
       expect(res.status).toBe(200);
 
+      expect(await a.next()).toEqual({ t: 'nick', uid: uidA, nick: '바뀐선장' });
       expect(await b.next()).toEqual({ t: 'nick', uid: uidA, nick: '바뀐선장' });
       expect(live.online().find(o => o.uid === uidA)?.nick).toBe('바뀐선장');
       expect(live.presenceOf(uidA)?.nick).toBe('바뀐선장');
@@ -2514,6 +2517,62 @@ describe('일반 의뢰 진행도 동기 반영', () => {
     } finally {
       await env.client.query('drop trigger if exists test_block_bounty_progress_update on public.bounty_progress');
       await env.client.query('drop function if exists public.test_block_bounty_progress_update()');
+    }
+  });
+});
+
+describe('PF-764 편지 독립 쿨다운과 PF-720 닉네임 원자성', () => {
+  it('catch와 sell 직후 1초 이내에도 sendLetter는 성공하고, 연속 sendLetter만 429로 제한되며 1초 뒤 다시 성공한다', async () => {
+    const uid = await seed({
+      state: { bag: [fish('crucian')] },
+      lastCatchAt: new Date(Date.parse(NOW) - 60_000).toISOString(),
+    });
+    expect(await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'good' })).toMatchObject({ status: 200 });
+    vi.setSystemTime(Date.parse(NOW) + 100);
+    expect(await callAction(userToken(uid), { type: 'sendLetter', text: '캐치 직후 편지' })).toMatchObject({ status: 200 });
+
+    vi.setSystemTime(Date.parse(NOW) + 1_200);
+    const bagIds = (await env.client.query<{ uid: string }>('select uid from public.fish_instances where user_id = $1 and slot is null', [uid]))
+      .rows.map(r => r.uid);
+    expect(await callAction(userToken(uid), { type: 'sell', uids: bagIds })).toMatchObject({ status: 200 });
+    vi.setSystemTime(Date.parse(NOW) + 1_300);
+    expect(await callAction(userToken(uid), { type: 'sendLetter', text: '판매 직후 편지' })).toMatchObject({ status: 200 });
+
+    vi.setSystemTime(Date.parse(NOW) + 1_500);
+    expect(await callAction(userToken(uid), { type: 'sendLetter', text: '연속 발송 차단' })).toMatchObject({
+      status: 429,
+      body: { error: 'too-fast' },
+      headers: { 'retry-after': '1' },
+    });
+
+    vi.setSystemTime(Date.parse(NOW) + 2_300);
+    expect(await callAction(userToken(uid), { type: 'sendLetter', text: '1초 뒤 재발송' })).toMatchObject({ status: 200 });
+  });
+
+  it('setNickname 확정 시 409 버전 충돌이 나면 profiles 테이블 닉네임도 바뀌지 않는다', async () => {
+    const uid = await seed({ state: {}, nickname: '원래선장' });
+    const setNickSpy = vi.fn();
+    provideSetNick(setNickSpy);
+    try {
+      // loadContext 직후 다른 요청이 saves_current.version을 올린 경합 상황을 재현한다
+      const commitMod = await import('./_data/commit.js');
+      const origCommit = commitMod.commitAction;
+      vi.spyOn(commitMod, 'commitAction').mockImplementationOnce(async (db, versionUpdate, fragments) => {
+        await env.client.query('update public.saves_current set version = version + 1 where user_id = $1', [uid]);
+        return origCommit(db, versionUpdate, fragments);
+      });
+
+      const res = await callAction(userToken(uid), { type: 'setNickname', nickname: '충돌선장' });
+      expect(res).toMatchObject({ status: 409, body: { error: 'version-conflict' } });
+      expect(setNickSpy).not.toHaveBeenCalled();
+
+      const { rows } = await env.client.query<{ nickname: string }>(
+        'select nickname from public.profiles where user_id = $1',
+        [uid],
+      );
+      expect(rows[0].nickname).toBe('원래선장');
+    } finally {
+      provideSetNick(() => {});
     }
   });
 });

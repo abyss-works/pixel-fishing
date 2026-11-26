@@ -45,10 +45,12 @@ export async function acceptFriend(db: Executor, me: string, from: string, nowIS
   return rows.length > 0;
 }
 
-/** 두 사람 사이의 관계(친구, 보낸 요청, 받은 요청)를 지운다 — 거절·취소·친구 끊기가 모두 이것이다 */
-export async function removeFriend(db: Executor, me: string, other: string): Promise<void> {
-  await db.execute(sql`delete from public.friends
-    where (requester_id = ${me} and addressee_id = ${other}) or (requester_id = ${other} and addressee_id = ${me})`);
+/** 두 사람 사이의 관계(친구, 보낸 요청, 받은 요청)를 지운다 — 거절·취소·친구 끊기가 모두 이것이다. 지운 행이 있으면 true */
+export async function removeFriend(db: Executor, me: string, other: string): Promise<boolean> {
+  const { rows } = await db.execute(sql`delete from public.friends
+    where (requester_id = ${me} and addressee_id = ${other}) or (requester_id = ${other} and addressee_id = ${me})
+    returning 1`);
+  return rows.length > 0;
 }
 
 export interface FriendRow {

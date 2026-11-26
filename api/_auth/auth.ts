@@ -26,8 +26,8 @@ export interface AuthConfig {
 const SESSION_EXPIRES_IN = 60 * 60 * 24 * 365;
 // 익명 계정의 자리표시 이메일 도메인. 예약된 최상위 도메인이라 실제 주소와 겹치지 않는다.
 export const ANONYMOUS_EMAIL_DOMAIN = 'anonymous.invalid';
-const DEFAULT_ANON_SIGN_IN_RATE_MAX = 200;
-const DEFAULT_ANON_SIGN_IN_RATE_WINDOW_SEC = 60 * 60;
+const DEFAULT_ANON_SIGN_IN_RATE_MAX = 150;
+const DEFAULT_ANON_SIGN_IN_RATE_WINDOW_SEC = 10 * 60;
 
 /** 양의 정수 환경변수를 파싱한다. 비어 있거나 양의 정수가 아니면 기본값으로 폴백한다 */
 export function parsePositiveIntEnv(raw: string | undefined, fallback: number): number {
@@ -46,10 +46,12 @@ export function anonymousSignInRateLimit(env: NodeJS.ProcessEnv = process.env): 
   };
 }
 
-/** 익명 계정 생성 경로(/api/auth/sign-in/anonymous)의 IP당 생성 상한(기본 3600초당 최대 200회) */
+/** 익명 계정 생성 경로(/api/auth/sign-in/anonymous)의 IP당 생성 상한(기본 600초당 최대 150회) */
 export const ANONYMOUS_SIGN_IN_RATE_LIMIT = anonymousSignInRateLimit();
-/** 공유 NAT 환경에서 여러 사용자가 동시에 구글 로그인을 시작할 수 있도록 기본 특수 규칙(10초 3회) 대신 10초당 30회를 허용한다 */
-const SOCIAL_SIGN_IN_RATE_LIMIT = { window: 10, max: 30 };
+/** 공유 NAT 환경에서 /get-session, /callback/google 등의 누적 잠금을 막기 위한 전역 기본 한도 */
+const GLOBAL_RATE_LIMIT = { window: 10, max: 300 };
+/** 공유 NAT 환경에서 여러 사용자가 동시에 구글 로그인을 시작할 수 있도록 기본 특수 규칙(10초 3회) 대신 10초당 60회를 허용한다 */
+const SOCIAL_SIGN_IN_RATE_LIMIT = { window: 10, max: 60 };
 // 이메일·비밀번호 로그인·가입·재설정 경로는 사용하지 않아 라우터 진입에서 차단한다.
 const DISABLED_EMAIL_PASSWORD_PATHS = ['/sign-in/email', '/sign-up/email', '/request-password-reset', '/reset-password'];
 
@@ -138,6 +140,7 @@ export function createAuth(config: AuthConfig) {
     },
     hooks: { before: guardAuthRequests },
     rateLimit: {
+      ...GLOBAL_RATE_LIMIT,
       customRules: {
         '/sign-in/anonymous': anonymousSignInRateLimit(),
         '/sign-in/social': SOCIAL_SIGN_IN_RATE_LIMIT,
@@ -187,6 +190,7 @@ export function createAdminAuth(config: Omit<AuthConfig, 'recordLinkConsent'>) {
     databaseHooks: { session: sessionHooks, account: dropOAuthTokens },
     hooks: { before: guardAuthRequests },
     rateLimit: {
+      ...GLOBAL_RATE_LIMIT,
       customRules: {
         '/sign-in/social': { window: 10, max: 20 },
       },

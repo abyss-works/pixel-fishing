@@ -160,19 +160,45 @@ const resultOf = (r: { body: unknown }) => (r.body as { result: { type: string; 
 const updatedMsg = { t: 'guild', kind: 'updated', guild: '', nick: null };
 
 describe('응답 전 반영과 갱신 알림', () => {
-  it('납품 응답 직후 기여가 이미 쌓여 있고, guildUpdated와 길드 갱신 알림이 나간다', async () => {
+  it('일반 의뢰 납품 직후 기여가 쌓이고 행위자 guildUpdated는 true지만, 길드 전체 브로드캐스트는 보내지 않는다', async () => {
     const quest = BOUNTIES.find(b => b.zone === 'pacific' && b.difficulty === 'easy')!;
-    const { uid, guild } = await member();
+    const { uid } = await member();
     await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, $4, $5)',
       [uid, quest.zone, quest.id, quest.count, NOW]);
     const res = await callBeforeFollowUps(userToken(uid), { type: 'deliverBounty', questId: quest.id });
     expect(res.status).toBe(200);
     expect(resultOf(res)).toEqual({ type: 'none', guildUpdated: true });
     expect(await contributions(uid)).toEqual([{ day: TODAY, fame: 0, clears: 1000 }]);
+    expect(notifyGuild).not.toHaveBeenCalled();
+  });
+
+  it('일반 어획 직후 행위자 guildUpdated는 true지만, 길드 레벨업이나 전설/네임드 일지가 없으면 notifyGuild를 보내지 않는다', async () => {
+    const { uid } = await member();
+    const res = await callBeforeFollowUps(userToken(uid), catchPond);
+    expect(res.status).toBe(200);
+    expect(resultOf(res)).toMatchObject({ type: 'catch', guildUpdated: true });
+    expect(notifyGuild).not.toHaveBeenCalled();
+  });
+
+  it('일반 어획이나 납품으로 길드 레벨이 오르면 길드 전체에 notifyGuild를 보낸다', async () => {
+    const { uid, guild } = await member({}, 9_999);
+    const res = await callBeforeFollowUps(userToken(uid), catchPond);
+    expect(res.status).toBe(200);
+    expect(resultOf(res)).toMatchObject({ type: 'catch', guildUpdated: true });
     expect(notifyGuild).toHaveBeenCalledWith(guild, updatedMsg);
   });
 
-  it('네임드 납품 응답 직후 항해일지에 토벌이 남는다', async () => {
+  it('하루 명성 상한으로 실제 기여 증가분이 잘려 레벨업하지 못하면 notifyGuild를 보내지 않는다', async () => {
+    const { uid, guild } = await member({}, 9_998);
+    await env.client.query(`insert into public.guild_contributions (guild_id, user_id, day, fame, clears) values ($1, $2, $3, 2499, 0)`,
+      [guild, uid, TODAY]);
+    const res = await callBeforeFollowUps(userToken(uid), catchPond);
+    expect(res.status).toBe(200);
+    expect(resultOf(res)).toMatchObject({ type: 'catch', guildUpdated: true });
+    expect(notifyGuild).not.toHaveBeenCalled();
+  });
+
+  it('네임드 납품 응답 직후 항해일지에 토벌이 남고 길드 전체에 notifyGuild를 보낸다', async () => {
     const named = BOUNTIES.find(b => b.zone === 'pacific' && b.difficulty === 'named')!;
     const { uid, guild } = await member();
     await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, $4, $5)',
@@ -181,6 +207,7 @@ describe('응답 전 반영과 갱신 알림', () => {
     expect(res.status).toBe(200);
     expect(resultOf(res).guildUpdated).toBe(true);
     expect(await logs(guild)).toEqual([{ kind: 'named', user_id: uid, detail: named.id }]);
+    expect(notifyGuild).toHaveBeenCalledWith(guild, updatedMsg);
   });
 
   it('전설 캐치 응답 직후 항해일지와 기여가 이미 반영돼 있다', async () => {

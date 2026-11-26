@@ -96,7 +96,7 @@ export interface LiveServer {
   setBlocked(uid: string, ids: readonly string[]): void;
   /** 그 사용자의 소속 길드가 바뀌었다(null은 길드 없음). 이후 길드 채팅부터 바뀐 길드로 주고받는다 */
   setGuild(uid: string, guild: string | null): void;
-  /** 그 사용자의 닉네임이 바뀌었다. 활성 연결의 캐시를 즉시 갱신하고 다른 접속자에게 알린다(게스트 제외) */
+  /** 그 사용자의 닉네임이 바뀌었다. 활성 연결의 캐시를 즉시 갱신하고 본인 포함 접속자에게 알린다(게스트 제외) */
   setNick(uid: string, nick: string): void;
   /** 그 사용자의 연결에만 메시지를 보낸다. 연결돼 있지 않으면 아무것도 하지 않는다 */
   sendTo(uid: string, msg: ServerMessage): void;
@@ -439,7 +439,11 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
         if (c.presence) c.presence.nick = nick;
         sender = { ws, user: c.user };
       }
-      if (sender) broadcast(sender.ws, sender.user, { t: 'nick', uid, nick });
+      if (sender && !sender.user.guest) {
+        const msg: ServerMessage = { t: 'nick', uid, nick };
+        send(sender.ws, msg);
+        broadcast(sender.ws, sender.user, msg);
+      }
     },
     sendTo(uid, msg) {
       for (const [ws, c] of conns) if (c.user.uid === uid) send(ws, msg);
