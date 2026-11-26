@@ -16,7 +16,7 @@ import { FISH, RARITY, boatNameOf, formDiscovered } from '../../../game/rules/lo
 import type { GameState } from '../../../game/rules/logic';
 import { GUILD_BONUS_IDS, NO_GUILD_EFFECTS, bonusEffect } from '../../../game/rules/guild';
 import type { GuildBonusId, GuildEffects } from '../../../game/rules/guild';
-import { activePotionsOf, fortuneOf } from '../../../game/rules/fortune';
+import { activePotionsOf, fortuneEffectsOf, fortuneOf } from '../../../game/rules/fortune';
 import type { DailyFortune, FortuneTarget } from '../../../game/rules/fortune';
 import type { Potion } from '../../../game/content/potions';
 import type { GuildBonusItem } from '../../../platform/api/types';
@@ -24,7 +24,7 @@ import {
   minLevelOfPower, powerZones, rodAxes, rodPower,
 } from '../../../game/rules/stats';
 import type { Movement } from '../../../game/rules/stats';
-import { FORTUNE_KIND } from '../../fortune/model/fortune';
+import { FORTUNE_TARGET_BONUS_LABEL, fortuneName } from '../../fortune/model/fortune';
 import { GUILD_BONUS_NAME } from '../../guild/model/guild';
 import { selectBagStatus } from '../../inventory/model/selectors';
 import type { BagStatus } from '../../inventory/model/selectors';
@@ -195,13 +195,21 @@ const COOK_EFFECT_CATEGORY: Record<keyof CookEffects, BonusCategory> = {
   biteWaitCut: 'fish', rarityWeight: 'fish', mutationWeight: 'fish', mutationMult: 'fish', namedWeight: 'duel', nightUnlock: 'fish',
 };
 
-/** 운세 종류의 갈래 — 대상이 속한 갈래와 같다(희귀 가중치는 낚시, 판매가는 상점, 네임드 조우는 결투) */
-const FORTUNE_CATEGORY: Record<DailyFortune['kind'], BonusCategory> = {
-  fish: 'fish', gold: 'shop', shadow: 'duel',
+/** 운세·비약 10개 보너스 채널의 갈래·버킷 키·표시 이름 매핑 */
+const FORTUNE_TARGET_META: Record<FortuneTarget, readonly [BonusCategory, string, string]> = {
+  rarity: ['fish', 'rareWeight', FORTUNE_TARGET_BONUS_LABEL.rarity],
+  named: ['duel', 'namedWeight', FORTUNE_TARGET_BONUS_LABEL.named],
+  sell: ['shop', 'sellBonus', FORTUNE_TARGET_BONUS_LABEL.sell],
+  biteWait: ['fish', 'biteWaitCut', FORTUNE_TARGET_BONUS_LABEL.biteWait],
+  bigCatch: ['fish', 'bigCatch', FORTUNE_TARGET_BONUS_LABEL.bigCatch],
+  fame: ['fish', 'fame', FORTUNE_TARGET_BONUS_LABEL.fame],
+  mutation: ['fish', 'mutationWeight', FORTUNE_TARGET_BONUS_LABEL.mutation],
+  night: ['fish', 'nightWeight', FORTUNE_TARGET_BONUS_LABEL.night],
+  energy: ['fish', 'energyYield', FORTUNE_TARGET_BONUS_LABEL.energy],
+  legendary: ['fish', 'legendaryWeight', FORTUNE_TARGET_BONUS_LABEL.legendary],
 };
-const POTION_TARGET_CATEGORY: Record<FortuneTarget, BonusCategory> = {
-  rarity: 'fish', named: 'duel', sell: 'shop',
-};
+
+const ALL_FORTUNE_TARGETS = Object.keys(FORTUNE_TARGET_META) as FortuneTarget[];
 
 export type BonusSource =
   /** 유물 보너스 - level은 보유 레벨, scale은 업적 보유 유물 효과 배율(1 + artifactBoost)이다 */
@@ -327,18 +335,25 @@ export function selectActiveBonuses(
   if (ach.sellBonus > 0) {
     out.push({ category: 'shop', source: { kind: 'achievement', label: '판매가 보너스', value: fmtPct(ach.sellBonus, '+') }, manualOnly: false });
   }
-  // 오늘의 운세 — 그 게임 날짜의 운세가 고정돼 있을 때만. 운세 종류가 가리키는 대상의 갈래에 한 줄 든다
+  // 오늘의 운세 — 그 게임 날짜의 운세가 고정돼 있을 때만. 운세 효과가 가리키는 대상의 갈래별로 중복 없이 담는다
   const fortune = fortuneOf(game, now);
   if (fortune) {
-    out.push({ category: FORTUNE_CATEGORY[fortune.kind], source: { kind: 'fortune', fortune }, manualOnly: false });
+    const seenCategories = new Set<BonusCategory>();
+    for (const eff of fortuneEffectsOf(fortune)) {
+      const category = FORTUNE_TARGET_META[eff.target][0];
+      if (seenCategories.has(category)) continue;
+      seenCategories.add(category);
+      out.push({ category, source: { kind: 'fortune', fortune }, manualOnly: false });
+    }
   }
   // 활성 비약 — 그 게임 날짜에 사용한 비약의 운 배율 대상을 각 갈래에 한 줄씩 둔다
   for (const potion of activePotionsOf(game.potions, now)) {
-    for (const target of ['rarity', 'named', 'sell'] as const) {
-      const bonus = potion.effects.luck?.[target];
+    const luck = potion.effects.luck as Partial<Record<FortuneTarget, number>> | undefined;
+    for (const target of ALL_FORTUNE_TARGETS) {
+      const bonus = luck?.[target];
       if (bonus && bonus > 0) {
         out.push({
-          category: POTION_TARGET_CATEGORY[target],
+          category: FORTUNE_TARGET_META[target][0],
           source: { kind: 'potion', potion, target, bonus },
           manualOnly: false,
         });
@@ -569,26 +584,20 @@ export function selectBonusTableRows(
 
   const fortune = fortuneOf(game, now);
   if (fortune) {
-    const fMap: Record<DailyFortune['kind'], [BonusCategory, string, string]> = {
-      fish: ['fish', 'rareWeight', '희귀 이상 출현 비중'],
-      gold: ['shop', 'sellBonus', '판매가'],
-      shadow: ['duel', 'namedWeight', '네임드 조우 확률'],
-    };
-    const [category, key, effect] = fMap[fortune.kind];
-    const b = getBucket(category, key, effect, 'all', 'mult');
-    b.multEntries.push({ label: `[운세] ${FORTUNE_KIND[fortune.kind].name}`, mult: cleanNum(1 + fortune.index / 100) });
+    const label = `[운세] ${fortuneName(fortune)}`;
+    for (const eff of fortuneEffectsOf(fortune)) {
+      const [category, key, effect] = FORTUNE_TARGET_META[eff.target];
+      const b = getBucket(category, key, effect, 'all', 'mult');
+      b.multEntries.push({ label, mult: cleanNum(eff.mult) });
+    }
   }
 
   for (const potion of activePotionsOf(game.potions, now)) {
-    const pMap: Record<FortuneTarget, [BonusCategory, string, string]> = {
-      rarity: ['fish', 'rareWeight', '희귀 이상 출현 비중'],
-      named: ['duel', 'namedWeight', '네임드 조우 확률'],
-      sell: ['shop', 'sellBonus', '판매가'],
-    };
-    for (const target of ['rarity', 'named', 'sell'] as const) {
-      const bonus = potion.effects.luck?.[target];
+    const luck = potion.effects.luck as Partial<Record<FortuneTarget, number>> | undefined;
+    for (const target of ALL_FORTUNE_TARGETS) {
+      const bonus = luck?.[target];
       if (bonus && bonus > 0) {
-        const [category, key, effect] = pMap[target];
+        const [category, key, effect] = FORTUNE_TARGET_META[target];
         const b = getBucket(category, key, effect, 'all', 'mult');
         b.multEntries.push({ label: `[비약] ${potion.name}`, mult: cleanNum(1 + bonus) });
       }

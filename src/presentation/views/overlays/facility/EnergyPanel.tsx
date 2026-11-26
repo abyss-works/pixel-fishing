@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { GameAction } from '../../../../game/rules/actions';
 import { REJECT_TEXT } from '../../../../game/rules/logic';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
+import { useNow } from '../../../../features/gameplay/service/useGameTime';
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import {
   ENERGY_NAME, buildEnergyExtractNotice, defaultQuickEnergyGrades, selectQuickEnergyView,
@@ -29,9 +30,10 @@ export default function EnergyPanel({ game, dispatch, setToast, onClose }: {
   setToast: Notify;
   onClose: () => void;
 }) {
+  const now = useNow();
   const [selected, setSelected] = useState<Set<EnergyGrade>>(defaultQuickEnergyGrades);
   const [busy, setBusy] = useState(false);
-  const view = useMemo(() => selectQuickEnergyView(game, selected), [game, selected]);
+  const view = useMemo(() => selectQuickEnergyView(game, selected, now), [game, selected, now]);
 
   const toggleGrade = (grade: EnergyGrade) => {
     setSelected(prev => {

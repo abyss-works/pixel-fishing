@@ -1,6 +1,6 @@
 // 계정 관리 창의 동작 계약 - 게스트의 구글 연결 시작, 계정 사용자 구성, 계정 확인 실패 처리.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 const actions = vi.hoisted(() => ({
   connectGoogle: vi.fn(),
@@ -155,6 +155,21 @@ describe('로그인 상태별 구성', () => {
     expect(screen.getByText(/오프라인 상태에서는 계정 기능이 동작하지 않아요/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '로그아웃' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '계정 삭제' })).toBeDisabled();
+  });
+
+  it('계정 삭제 진행 중(busy)에는 로그아웃 버튼도 비활성이다', async () => {
+    open('me@gmail.test');
+    const logoutBtn = screen.getByRole('button', { name: '로그아웃' });
+    const deleteBtn = screen.getByRole('button', { name: '계정 삭제' });
+    expect(logoutBtn).toBeEnabled();
+
+    fireEvent.click(deleteBtn);
+    const deleteDialog = await screen.findByRole('dialog', { name: '계정 삭제' });
+    expect(logoutBtn).toBeDisabled();
+    expect(deleteBtn).toBeDisabled();
+
+    fireEvent.click(within(deleteDialog).getAllByRole('button', { name: '닫기' })[0]);
+    await waitFor(() => expect(logoutBtn).toBeEnabled());
   });
 });
 

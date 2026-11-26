@@ -10,6 +10,7 @@ import {
 } from '../../../features/devtools/model/commands';
 import type { DevCommand, DevGroup } from '../../../features/devtools/model/commands';
 import { DEV_PRESETS, filterPresets } from '../../../features/devtools/model/presets';
+import { fortuneName, selectFortuneCatalogOptions } from '../../../features/fortune/model/fortune';
 import { useDevTools } from '../../../features/devtools/service/useDevTools';
 import {
   armForceEncounter, disarmForceEncounter, useForceEncounterArmed,
@@ -102,6 +103,8 @@ export default function DevTools({
   const bases = useMemo(() => devBaseTargets(), []);
   const spots = useMemo(() => devSpotTargets(), []);
   const namedLocs = useMemo(() => devNamedLocations(), []);
+  const fortuneOptions = useMemo(() => selectFortuneCatalogOptions(), []);
+  const [fortunePick, setFortunePick] = useState(() => fortuneOptions[0]?.key ?? 'fish:3');
 
   useKeyScope(e => {
     if (!visible || e.key !== 'F9') return;
@@ -270,11 +273,40 @@ export default function DevTools({
                                  onRun={args => void tools.runCommand(command.id, args)} />
                   ))}
 
-                  {section === 'gear' && commandsOf('gear').map(command => (
-                    <CommandForm key={command.id} command={command} busy={tools.busy}
-                                 placeholders={command.id === 'stats.set' ? statPlaceholders : undefined}
-                                 onRun={args => void tools.runCommand(command.id, args)} />
-                  ))}
+                  {section === 'gear' && (
+                    <>
+                      {(!q || matchQuery('운세 fortune')) && (
+                        <Panel title="오늘의 운세 (21종)" className="gap-1.5">
+                          <div className="flex items-center justify-between gap-2 text-xs text-text-dim">
+                            <span>현재: <b className="text-text">{game.fortune ? fortuneName(game.fortune) : '없음'}</b></span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <Select value={fortunePick} aria-label="운세 전환 선택" className="flex-1 min-w-0"
+                                    onChange={e => setFortunePick(e.target.value)}>
+                              {fortuneOptions.map(o => (
+                                <option key={o.key} value={o.key}>{o.name} ({o.summary})</option>
+                              ))}
+                            </Select>
+                            <Button
+                              size="sm"
+                              disabled={tools.busy}
+                              onClick={() => {
+                                const opt = fortuneOptions.find(o => o.key === fortunePick);
+                                if (opt) void tools.setFortune(opt.kind, opt.index, `운세 전환 (${opt.name})`);
+                              }}
+                            >
+                              운세 적용
+                            </Button>
+                          </div>
+                        </Panel>
+                      )}
+                      {commandsOf('gear').map(command => (
+                        <CommandForm key={command.id} command={command} busy={tools.busy}
+                                     placeholders={command.id === 'stats.set' ? statPlaceholders : undefined}
+                                     onRun={args => void tools.runCommand(command.id, args)} />
+                      ))}
+                    </>
+                  )}
 
                   {section === 'bounty' && (
                     <>

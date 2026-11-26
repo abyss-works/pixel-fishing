@@ -21,9 +21,9 @@ describe('효과 표기 가드', () => {
   afterEach(cleanup);
 
   it('기본 규칙 스탯 배수를 ×N 또는 xN으로 쓰지 않는다 - 기본 규칙 배수는 N배다(운세·비약·증폭·억제의 ×1.xx/×0.5 곱연산과 개수 ×{count}는 대상이 아니다)', () => {
-    // 기본 규칙 배수(idle, penalty, applied 등)를 × 바로 뒤에 붙이는 표기, 소문자 x 배수 표기 전체, prefix="×", ×/x숫자배
-    const STAT_MULT = /prefix="×"|(?<![\w])×\s*\$?\{[^}]*(?:[Ii]dle|[Pp]enalty|applied)[^}]*\}|(?<![\w])x\s*\$?\{[^}]*(?:toFixed|[Mm]ult|[Bb]oost|[Ii]dle|[Pp]enalty|applied)[^}]*\}|[×x]\s*\d+(?:\.\d+)?\s*배/;
-    for (const bad of ['prefix="×"', '`×${idleMult}`', '`x${mult.toFixed(2)}`', '`x${boost}`', '×1.5배', 'x2배']) {
+    // 기본 규칙 배수(idle, penalty, applied, ratio, factor, rate 등)를 × 바로 뒤에 붙이는 표기, 소문자 x 배수 표기 전체, prefix="×", ×/x숫자배
+    const STAT_MULT = /prefix="×"|(?<![\w])×\s*\$?\{[^}]*(?:[Ii]dle|[Pp]enalty|applied|[Rr]atio|[Ff]actor|[Rr]ate)[^}]*\}|(?<![\w])x\s*\$?\{[^}]*(?:toFixed|[Mm]ult|[Bb]oost|[Ii]dle|[Pp]enalty|applied|[Rr]atio|[Ff]actor|[Rr]ate)[^}]*\}|[×x]\s*\d+(?:\.\d+)?\s*배/;
+    for (const bad of ['prefix="×"', '`×${idleMult}`', '`×${catchRatio}`', '`×${powerFactor}`', '`×${dropRate}`', '`x${mult.toFixed(2)}`', '`x${boost}`', '`x${rate}`', '×1.5배', 'x2배']) {
       expect(STAT_MULT.test(bad), bad).toBe(true);
     }
     for (const ok of ['`×${Number(mult.toFixed(4))}`', '×{count}', '0x1a']) {

@@ -12,7 +12,11 @@ const named = namedById(quest.targetFish!)!;
 describe('네임드 상세', () => {
   it('토벌 전에는 이름과 전승을 가리고 잠금 안내를 보인다', () => {
     render(<NamedDetail quest={quest} game={newState()} onClose={() => {}} />);
-    expect(screen.getByText('???')).toBeInTheDocument();
+    const heading = screen.getByRole('heading', { name: '???' });
+    expect(heading).toHaveClass('text-text-dim');
+    expect(heading).not.toHaveClass('text-named');
+    expect(heading).not.toHaveClass('text-gold');
+    expect(heading.querySelector('svg')).toBeNull();
     expect(screen.getByText(/토벌한 뒤에 읽을 수 있어요/)).toBeInTheDocument();
     expect(screen.queryByText(named.chronicle[0])).not.toBeInTheDocument();
   });
@@ -21,7 +25,10 @@ describe('네임드 상세', () => {
     const game = newState();
     game.dex[named.id] = { normal: { count: 1, maxSize: null, first: '2026-10-18' } };
     render(<NamedDetail quest={quest} game={game} onClose={() => {}} />);
-    expect(screen.getByRole('heading', { name: named.name })).toBeInTheDocument();
+    const heading = screen.getByRole('heading', { name: named.name });
+    expect(heading).toHaveClass('text-named');
+    expect(heading).not.toHaveClass('text-gold');
+    expect(heading.querySelector('svg')).not.toBeNull();
     for (const p of named.chronicle) expect(screen.getByText(p)).toBeInTheDocument();
     expect(screen.getByText('2026-10-18')).toBeInTheDocument();
   });

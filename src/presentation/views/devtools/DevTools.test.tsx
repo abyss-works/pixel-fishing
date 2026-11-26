@@ -120,6 +120,20 @@ describe('6개 묶음과 기능 UI', () => {
     expect(screen.getByText(/구아반세스\(북대서양 · 버뮤다 삼각지대 전용\)/)).toBeInTheDocument();
   });
 
+  it('장비·아이템·업적 묶음의 운세 전환 UI가 21종을 제공하고 fortune.set 명령을 보낸다', async () => {
+    const { dispatch } = show('preview');
+    fireEvent.click(screen.getByRole('button', { name: '장비·아이템·업적' }));
+    const select = screen.getByLabelText('운세 전환 선택') as HTMLSelectElement;
+    expect(select.options).toHaveLength(21);
+    fireEvent.change(select, { target: { value: 'grand-catch:5' } });
+    fireEvent.click(screen.getByRole('button', { name: '운세 적용' }));
+    await waitFor(() => expect(dispatch).toHaveBeenCalledWith({
+      type: 'debug',
+      command: 'fortune.set',
+      args: { kind: 'grand-catch', index: 5 },
+    }));
+  });
+
   it('계정·스냅샷 묶음에서 스냅샷 저장·복원과 관리자 전용 문구를 확인한다', () => {
     const { dispatch } = show('local');
     fireEvent.click(screen.getByRole('button', { name: '계정·스냅샷' }));

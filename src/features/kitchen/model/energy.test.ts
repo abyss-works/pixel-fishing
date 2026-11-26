@@ -66,7 +66,32 @@ describe('등급별 얻는 기운', () => {
     expect(energyTotal({ common: 0, rare: 0, epic: 0, legendary: 0 })).toBe(0);
     const bag = [inst('c1', 'pond', false, 'common'), inst('c2', 'pond', false, 'common')];
     const view = selectEnergyView(seed({ bag }), {});
-    expect(view.rows.map(energyRowValue)).toEqual([20]);
+    expect(view.rows.map(r => energyRowValue(r))).toEqual([20]);
+  });
+
+  it('기운 획득량 운세(맑은 기운 ×1.50, 넘치는 기운 ×2.00)가 기운 얻기 미리보기와 간편 기운 얻기 미리보기에 반영된다', () => {
+    const now = '2026-11-24T05:00:00.000Z';
+    const day = '2026-11-24';
+    const bag = [inst('c1', 'pond', false, 'common'), inst('r1', 'pond', false, 'rare')];
+
+    const mild = selectEnergyView(seed({ bag, fortune: { day, kind: 'energy', index: 3 } }), {}, now);
+    expect(mild.energyLuck).toBe(1.5);
+    expect(mild.byGrade).toEqual({ common: 15, rare: 15, epic: 0, legendary: 0 });
+    expect(mild.energyTotal).toBe(30);
+    expect(mild.rows.map(r => energyRowValue(r, mild.energyYieldBonus, mild.energyLuck))).toEqual([15, 15]);
+
+    const full = selectEnergyView(seed({ bag, fortune: { day, kind: 'energy', index: 5 } }), {}, now);
+    expect(full.energyLuck).toBe(2);
+    expect(full.byGrade).toEqual({ common: 20, rare: 20, epic: 0, legendary: 0 });
+    expect(full.energyTotal).toBe(40);
+
+    const quick = selectQuickEnergyView(
+      seed({ bag, fortune: { day, kind: 'energy', index: 5 } }),
+      defaultQuickEnergyGrades(),
+      now,
+    );
+    expect(quick.byGrade).toEqual({ common: 20, rare: 20, epic: 0, legendary: 0 });
+    expect(quick.energyTotal).toBe(40);
   });
 
   it('결과 줄은 얻은 등급만 등급 순서로 낸다', () => {
