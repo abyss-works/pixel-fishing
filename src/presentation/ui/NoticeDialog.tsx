@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import Button from './Button';
+import { HOTKEY_TIER } from './hotkeys';
 import Modal from './Modal';
 import ModalCard from './ModalCard';
 import TextArea from './TextArea';
@@ -25,7 +26,7 @@ export default function NoticeDialog({ layer = 'app', title, body, value, onClos
       )}
     </ModalCard>
   );
-  if (layer === 'stage') return <Modal layer="stage" onClose={onClose}>{card}</Modal>;
-  if (layer === 'devtools') return <Modal layer="devtools" bare onClose={onClose}>{card}</Modal>;
-  return <Modal layer="app" bare onClose={onClose}>{card}</Modal>;
+  if (layer === 'stage') return <Modal layer="stage" hotkeyTier={HOTKEY_TIER.STAGE_CONFIRM} onClose={onClose}>{card}</Modal>;
+  if (layer === 'devtools') return <Modal layer="devtools" hotkeyTier={HOTKEY_TIER.BLOCKER} bare onClose={onClose}>{card}</Modal>;
+  return <Modal layer="app" hotkeyTier={HOTKEY_TIER.APP_CONFIRM} bare onClose={onClose}>{card}</Modal>;
 }

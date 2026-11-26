@@ -137,6 +137,18 @@ describe('모달과 사이드 메뉴 상호 비간섭 및 계층 분리', () => 
     fireEvent.click(screen.getByRole('button', { name: '도움말' }));
     expect(screen.queryByRole('region', { name: '탭 내용' })).not.toBeInTheDocument();
     expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '도움말' }));
+    expect(screen.getByRole('region', { name: '탭 내용' })).toBeInTheDocument();
+
+    // Esc는 위층인 모바일 시트부터 닫고 아래 스테이지 모달은 유지한다
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('region', { name: '탭 내용' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    // 시트가 닫힌 뒤 다시 Esc를 누르면 아래 스테이지 모달이 닫힌다
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('바다 미니맵에서 여는 세계지도 창도 스테이지 안에 머무르고 사이드바를 막지 않는다', async () => {

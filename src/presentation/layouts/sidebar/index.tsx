@@ -1,12 +1,25 @@
-import { createContext, useContext, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { TabDef } from '../../ui/TabBar';
 import TabBar from '../../ui/TabBar';
 import { useMobileLayout } from '../useMobileLayout';
+import { HOTKEY_TIER, hasModifier, useKeyScope } from '../../ui/hotkeys';
 import { hasAppWindows, useAnyAppWindow } from '../../ui/openWindows';
 import WindowSlot from '../../ui/WindowSlot';
 import { isSheetDragClose } from './sheet';
+
+function SheetEscScope({ onClose }: { onClose: () => void }) {
+  const closeRef = useRef(onClose);
+  useEffect(() => { closeRef.current = onClose; });
+  useKeyScope(e => {
+    if (e.key !== 'Escape' || hasModifier(e)) return;
+    e.preventDefault();
+    closeRef.current();
+    return true;
+  }, { tier: HOTKEY_TIER.SIDEBAR_SHEET });
+  return null;
+}
 
 const SidebarFooterContext = createContext<HTMLElement | null | undefined>(undefined);
 
@@ -45,6 +58,7 @@ export default function Sidebar<K extends string>({ tabs, activeKey, onSelect, s
   if (mobile) {
     return (
       <SidebarFooterContext.Provider value={footerEl}>
+        {sheetOpen && onSheetClose && <SheetEscScope onClose={onSheetClose} />}
         {sheetOpen && (
           <section aria-label="탭 내용" className="contents">
             {/* 시트 안에서 연 창은 시트(z-(--z-tabs)) 쌓임 맥락 바깥의 같은 자리(WindowSlot)에 그려 탭 줄 위 앱 층에 놓인다 */}
