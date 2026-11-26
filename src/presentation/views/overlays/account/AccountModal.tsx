@@ -278,13 +278,12 @@ export default function AccountModal({
           <Tip
             key={item.id}
             plain
-            hoverOnly
             className="block"
             text={(
               <TipList
                 rows={[
                   { label: '지속', value: item.durationLabel },
-                  { label: '효과', value: item.effectLabel },
+                  ...item.effects.map((effect, i) => ({ label: i === 0 ? '효과' : '', value: effect })),
                 ]}
               />
             )}

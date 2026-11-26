@@ -19,7 +19,7 @@ export interface FirstLinkRewardViewItem {
   qty: number;
   summaryLine: string;
   durationLabel: string;
-  effectLabel: string;
+  effects: readonly string[];
 }
 
 const SUMMARY_LINES: Readonly<Record<string, string>> = {
@@ -30,7 +30,7 @@ const SUMMARY_LINES: Readonly<Record<string, string>> = {
 
 const pct = (x: number): string => String(Number((x * 100).toFixed(2)));
 
-function summarizeRecipeEffect(recipe: Recipe): string {
+function summarizeRecipeEffects(recipe: Recipe): string[] {
   const e = recipe.effects;
   const parts: string[] = [];
   if (e.biteWaitCut !== undefined) parts.push(`입질 대기 −${pct(e.biteWaitCut)}%`);
@@ -45,8 +45,8 @@ function summarizeRecipeEffect(recipe: Recipe): string {
       }
     }
   }
-  if (parts.length > 0) return parts.join(', ');
-  return recipeEffectLines(recipe).map(recipeEffectText).join(', ');
+  if (parts.length > 0) return parts;
+  return recipeEffectLines(recipe).map(recipeEffectText);
 }
 
 /** 출항 연결 창과 설정 계정 관리 창에서 보이는 최초 구글 연결 선물 목록 */
@@ -63,7 +63,7 @@ export function selectFirstLinkRewardItems(): FirstLinkRewardViewItem[] {
         qty,
         summaryLine,
         durationLabel: '하루 동안',
-        effectLabel: potionEffectLines(potion).map(recipeEffectText).join(', '),
+        effects: potionEffectLines(potion).map(recipeEffectText),
       };
     }
     const recipe = recipeById(id);
@@ -78,7 +78,7 @@ export function selectFirstLinkRewardItems(): FirstLinkRewardViewItem[] {
       qty,
       summaryLine,
       durationLabel: fmtEffectDuration(COOK_KIND_RULES[recipe.kind].slotMs / MIN_MS),
-      effectLabel: summarizeRecipeEffect(recipe),
+      effects: summarizeRecipeEffects(recipe),
     };
   });
 }

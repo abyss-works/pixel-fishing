@@ -299,13 +299,43 @@ describe('출항 전용 연결 창 (mode="connect")', () => {
   it('연결 창 보상 행에 호버하면 지속과 효과 툴팁이 열린다', () => {
     open(null, false, true, 'connect');
     fireEvent.mouseEnter(screen.getByText('작은 바다 영약'));
-    const tip = screen.getByRole('tooltip');
+    let tip = screen.getByRole('tooltip');
     expect(tip).toHaveTextContent('지속');
     expect(tip).toHaveTextContent('하루 동안');
     expect(tip).toHaveTextContent('효과');
     expect(tip).toHaveTextContent('모든 행운 효과 ×1.05');
     fireEvent.mouseLeave(screen.getByText('작은 바다 영약'));
     expect(screen.queryByRole('tooltip')).toBeNull();
+
+    fireEvent.mouseEnter(screen.getByText('생선 탈리'));
+    tip = screen.getByRole('tooltip');
+    const rows = tip.querySelectorAll('.justify-between');
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toHaveTextContent('지속9시간');
+    expect(rows[1]).toHaveTextContent('효과입질 대기 −5%');
+    expect(rows[2]).toHaveTextContent('희귀 이상 +5%');
+    expect(within(tip).getByText('희귀')).toHaveAttribute('data-rarity', 'rare');
+    expect(tip).not.toHaveTextContent('입질 대기 −5%, 희귀 이상 +5%');
+  });
+
+  it('터치(coarse pointer)에서 연결 창 보상 행을 누르면 툴팁이 열리고 다시 누르면 닫힌다', () => {
+    const origMatchMedia = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query === '(pointer: coarse)',
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })) as unknown as typeof window.matchMedia;
+    try {
+      open(null, false, true, 'connect');
+      const target = screen.getByText('작은 바다 영약');
+      fireEvent.click(target);
+      expect(screen.getByRole('tooltip')).toHaveTextContent('모든 행운 효과 ×1.05');
+      fireEvent.click(target);
+      expect(screen.queryByRole('tooltip')).toBeNull();
+    } finally {
+      window.matchMedia = origMatchMedia;
+    }
   });
 
   it('연결 창의 우측 애드온 패널 닫기를 누르면 메인 창은 유지되고 애드온만 닫힌다', () => {

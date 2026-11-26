@@ -16,7 +16,7 @@ describe('최초 구글 연결 선물 표시 모델', () => {
         qty: 1,
         summaryLine: '하루 동안 희귀 이상, 판매가, 네임드 조우가 조금 올라요.',
         durationLabel: '하루 동안',
-        effectLabel: '모든 행운 효과 ×1.05',
+        effects: ['모든 행운 효과 ×1.05'],
       },
       {
         id: 'cook-lunch-bundle',
@@ -26,7 +26,7 @@ describe('최초 구글 연결 선물 표시 모델', () => {
         qty: 1,
         summaryLine: '방치 낚시 중 입질 대기가 줄고 희귀 이상 출현이 늘어요.',
         durationLabel: '9시간',
-        effectLabel: '입질 대기 −5%, 희귀 이상 +5%',
+        effects: ['입질 대기 −5%', '희귀 이상 +5%'],
       },
       {
         id: 'cook-bait-legendary',
@@ -36,7 +36,7 @@ describe('최초 구글 연결 선물 표시 모델', () => {
         qty: 3,
         summaryLine: '수동 낚시에서 전설 어종이 훨씬 잘 낚여요.',
         durationLabel: '5분',
-        effectLabel: '전설 어종 출현 비중 +80%',
+        effects: ['전설 어종 출현 비중 +80%'],
       },
     ]);
   });

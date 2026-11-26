@@ -198,6 +198,7 @@ describe('스테이지 모달 aside 슬롯', () => {
     expect(dialog.contains(aside)).toBe(false);
     expect(aside.parentElement).toBe(wrapper.children[1]);
     expect(aside.parentElement!.className).toContain('hidden');
+    expect(aside.parentElement!.className).toContain('@min-[996px]:block');
     expect(aside.parentElement!.className).toContain('absolute');
     expect(aside.parentElement!.className).toContain('left-[calc(100%+10px)]');
 

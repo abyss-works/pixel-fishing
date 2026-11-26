@@ -155,7 +155,7 @@ export default function Modal({ layer, title, wide, xl, md, sm, narrow, worldmap
           <div className={cx('relative', stageBounds)}>
             {dialogNode}
             <ModalTitleContext.Provider value={null}>
-              <div className="hidden @min-[960px]:block absolute top-0 left-[calc(100%+10px)]"
+              <div className="hidden @min-[996px]:block absolute top-0 left-[calc(100%+10px)]"
                    onClick={e => e.stopPropagation()}>
                 {aside}
               </div>
