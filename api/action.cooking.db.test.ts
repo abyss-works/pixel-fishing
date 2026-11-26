@@ -4,6 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { AUTO_ENERGY_BOAT, COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, ENERGY_TRANSMUTE_RATIO, ENERGY_UNIT, recipeById, recipeCostStored, recipeWaitMs } from '../src/game/content/cooking.js';
 import { FIRST_LINK_REWARD_ITEMS, FIRST_LINK_REWARD_KEY, FIRST_LINK_REWARD_MAIL } from '../src/game/content/firstLinkReward.js';
 import { SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
+import { fortuneScoreOf } from '../src/game/rules/fortune.js';
 import { itemCapOf } from '../src/game/rules/logic.js';
 import type { GameState } from '../src/game/rules/logic.js';
 import { callAction, captureRealClock, dumpUser, fish, seedUser, seededRandom, startActionEnv, testUid, userToken } from './_dbTest/actionHarness.js';
@@ -144,7 +145,12 @@ describe('요리 액션', () => {
       const uid = await cooker({
         bag: [kept],
         items: { [ENERGY.common]: 3 },
-        fortune: { day: '2030-03-04', kind: 'gold', index: 3 },
+        fortune: {
+          day: '2030-03-04',
+          kind: 'gold',
+          index: 3,
+          score: fortuneScoreOf({ day: '2030-03-04', kind: 'gold', index: 3 }),
+        },
       });
       const before = await stored(uid);
       const res = await callAction(userToken(uid), { type: 'extractEnergy', uids: [] });

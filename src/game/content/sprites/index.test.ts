@@ -7,6 +7,7 @@ import { OUTLINE_DARK, SILHOUETTE } from './common';
 import { validateSprite, cellIndex, TRANSPARENT } from './types';
 import { FISH } from '../fish';
 import { NAMED } from '../named';
+import { EVENT_FISH } from '../eventFish';
 
 const NATIVE = [32, 16];
 
@@ -75,7 +76,7 @@ describe('형태 격자 (초안 생성기)', () => {
 
 describe('종별 수정 격자', () => {
   it('등록된 수정 격자는 모두 실제 키이고 무결성 오류가 없다', () => {
-    const ids = new Set([...FISH.map(f => f.id), ...NAMED.map(n => n.id)]);
+    const ids = new Set([...FISH.map(f => f.id), ...NAMED.map(n => n.id), ...EVENT_FISH.map(f => f.id)]);
     for (const [key, s] of Object.entries(FISH_SPRITES)) {
       expect(ids.has(key.replace(/\.variant$/, '')), key).toBe(true);
       expect(validateSprite(s!), key).toEqual([]);
