@@ -25,15 +25,17 @@ import { upgradeCost } from '../src/game/rules/balance.js';
 import { endedFirstCatch, newFirstCatch } from '../src/game/rules/firstCatch.js';
 import { FORTUNE_CATALOG, luckMultOf } from '../src/game/rules/fortune.js';
 import type { DailyFortune } from '../src/game/rules/fortune.js';
-import { LICENSE_GRADES, WALK_BAG_CAP, newState, sellSelected, zoneDexMissing } from '../src/game/rules/logic.js';
+import { FISH, LICENSE_GRADES, WALK_BAG_CAP, newState, sellSelected, zoneDexMissing } from '../src/game/rules/logic.js';
 import type { GameState } from '../src/game/rules/logic.js';
 import { NAMED_PITY_CATCHES, PITY_DONE, SPECIES_PITY_K } from '../src/game/rules/pity.js';
+import { APP_VERSION } from '../src/version.js';
 import { database } from './_db/client.js';
 import {
   LOCAL_ORIGIN, callAction, captureRealClock, dumpUser, fish, normalize, seedUser, seededRandom,
-  startActionEnv, testUid, userToken,
+  sessionHeaders, startActionEnv, testUid, userToken,
 } from './_dbTest/actionHarness.js';
-import type { ActionEnv, SeedOptions } from './_dbTest/actionHarness.js';
+import type { ActionEnv, ActionResponse, SeedOptions } from './_dbTest/actionHarness.js';
+import { pendingAfterResponse } from './_dbTest/serverShim.js';
 
 const NOW = '2030-03-04T05:06:07.000Z';
 const TODAY_KST = '2030-03-04';
@@ -70,6 +72,23 @@ async function snapshotOf(uid: string, res: unknown) {
 async function run(opts: SeedOptions, action: unknown, call: { origin?: string } = {}) {
   const uid = await seed(opts);
   return snapshotOf(uid, await callAction(userToken(uid), action, call));
+}
+
+/** 응답 시점을 그대로 보는 호출 — afterResponse에 모인 후속 쓰기는 호출자가 끝내기 전까지 기다리지 않는다 */
+async function callActionBeforeFollowUps(token: string, body: unknown): Promise<ActionResponse> {
+  const { default: handler } = await import('./action.js');
+  const out: ActionResponse = { status: 0, body: undefined };
+  const res = {
+    status(code: number) { out.status = code; return res; },
+    json(b: unknown) { out.body = b; },
+    end() {},
+  };
+  await handler({
+    method: 'POST',
+    headers: { 'x-build-id': 'dev', 'x-client-version': APP_VERSION, ...sessionHeaders(token) },
+    body,
+  } as never, res as never);
+  return out;
 }
 
 /** 해역 라이선스 도감 조건을 채운 도감 */
@@ -268,16 +287,29 @@ describe('낚시', () => {
     expect(await run({ state: {} }, { type: 'catch', spot: 'sea', judgment: 'good' })).toMatchSnapshot();
   });
 
-  it('진행 중인 일반 의뢰가 캐치에 맞으면 진행도가 오른다', async () => {
+  it('진행 중인 일반 의뢰가 캐치에 맞으면 응답 전에 진행도가 오르고 신호를 반환한다', async () => {
     const uid = await seed({ state: { boat: 1 } });
-    for (const q of BOUNTIES.filter(b => b.zone === 'pacific' && b.difficulty === 'easy')) {
+    const quests = BOUNTIES.filter(b => b.zone === 'pacific' && b.difficulty !== 'named');
+    for (const q of quests) {
       await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
         [uid, q.zone, q.id, NOW]);
     }
-    const out = await snapshotOf(uid, await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good' }));
-    expect((out.res as { status: number }).status).toBe(200);
-    const progressed = (out.db.bounty_progress as { progress: number }[]).filter(r => r.progress > 0);
-    expect(progressed.length).toBeGreaterThanOrEqual(1);
+    const res = await callActionBeforeFollowUps(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good' });
+    try {
+      expect(res.status).toBe(200);
+      const result = (res.body as { result: { type: string; fishId: string; bountyProgressed?: true } }).result;
+      expect(result.type).toBe('catch');
+      expect(result.bountyProgressed).toBe(true);
+      const rarity = FISH.find(f => f.id === result.fishId)!.rarity;
+      const expected = quests.filter(q => q.grade === rarity).map(q => q.id).sort();
+      const { rows } = await env.client.query<{ quest_id: string; progress: number }>(
+        'select quest_id, progress from public.bounty_progress where user_id = $1 and progress > 0', [uid]);
+      expect(rows.map(r => r.quest_id).sort()).toEqual(expected);
+      expect(rows.every(r => r.progress === 1)).toBe(true);
+    } finally {
+      await Promise.all(pendingAfterResponse.splice(0));
+    }
+    const out = await snapshotOf(uid, res);
     expect((out.db.saves_current[0] as { data: GameState }).data.firstCatch).toEqual(newFirstCatch());
   });
 
@@ -2410,6 +2442,59 @@ describe('실시간 닉네임 즉시 동기화', () => {
       live.close();
       server.closeAllConnections();
       await new Promise<void>(resolve => server.close(() => resolve()));
+    }
+  });
+});
+
+describe('일반 의뢰 진행도 동기 반영', () => {
+  it('캐치가 수주 중인 의뢰 조건에 맞지 않으면 신호를 붙이지 않는다', async () => {
+    const uid = await seed({ state: { boat: 1 } });
+    const quest = BOUNTIES.find(b => b.zone === 'seasia' && b.difficulty === 'easy')!;
+    await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
+      [uid, quest.zone, quest.id, NOW]);
+    const res = await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good' });
+    expect(res.status).toBe(200);
+    const result = (res.body as { result: { type: string; bountyProgressed?: true } }).result;
+    expect(result.type).toBe('catch');
+    expect('bountyProgressed' in result).toBe(false);
+    expect(await env.client.query('select 1 from public.bounty_progress where user_id = $1 and progress > 0', [uid]))
+      .toMatchObject({ rowCount: 0 });
+  });
+
+  it('의뢰 진행도 갱신이 실패해도 캐치 확정과 200 응답은 보존한다', async () => {
+    const uid = await seed({ state: { boat: 1 } });
+    for (const q of BOUNTIES.filter(b => b.zone === 'pacific' && b.difficulty !== 'named')) {
+      await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
+        [uid, q.zone, q.id, NOW]);
+    }
+    await env.client.query(`
+      create or replace function public.test_block_bounty_progress_update() returns trigger language plpgsql as $$
+      begin
+        raise exception 'bounty progress test failure';
+      end;
+      $$;
+    `);
+    await env.client.query(`
+      create trigger test_block_bounty_progress_update
+      before update on public.bounty_progress
+      for each row execute function public.test_block_bounty_progress_update()
+    `);
+    try {
+      const res = await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good' });
+      expect(res.status).toBe(200);
+      const result = (res.body as { result: { type: string; bountyProgressed?: true } }).result;
+      expect(result.type).toBe('catch');
+      expect('bountyProgressed' in result).toBe(false);
+      const db = await dumpUser(env.client, uid);
+      const save = db.saves_current[0] as { version: string; fame: string };
+      expect(save.version).toBe('3');
+      expect(Number(save.fame)).toBeGreaterThan(0);
+      expect(db.fish_instances).toHaveLength(1);
+      expect(db.records).toHaveLength(1);
+      expect((db.bounty_progress as { progress: number }[]).every(r => r.progress === 0)).toBe(true);
+    } finally {
+      await env.client.query('drop trigger if exists test_block_bounty_progress_update on public.bounty_progress');
+      await env.client.query('drop function if exists public.test_block_bounty_progress_update()');
     }
   });
 });

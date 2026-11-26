@@ -64,6 +64,8 @@ const SAVE_KEY = 'pixel-fishing-save';
 
 // 튜토리얼 창도 접속 시 떠서 키를 막는다 — 튜토리얼 자체를 다루는 케이스 밖에서는 모두 본 것으로 시작한다
 const SEEN_TUTORIALS = { tutorials: [...TUTORIAL_IDS] };
+// 신규 세이브의 시작 위치는 바뀔 수 있으므로 집을 전제한 테스트는 위치를 명시한다
+const HOME = { kind: 'base', id: 'home' } as const;
 
 function seed(over: Partial<GameState> = {}) {
   localStorage.setItem(SAVE_KEY, JSON.stringify({
@@ -72,6 +74,7 @@ function seed(over: Partial<GameState> = {}) {
     // 흔들리지 않게 오늘 날짜의 그림자 운세를 박는다. 그림자 운은 활성 네임드 의뢰가 없는
     // 이 테스트들에서는 아무 판정에도 걸리지 않는다. 운세를 다루는 테스트는 seed 인자로 덮어쓴다
     fortune: { day: gameDayOf(new Date().toISOString()), kind: 'shadow', index: 3 },
+    location: HOME,
     ...over,
   }));
 }
@@ -189,6 +192,7 @@ describe('R1: 판매 궤짝 → 사이드바 인라인 패널 (어종별 체크 
   });
 
   it('가방이 비면 안내만 (판매 버튼 없음)', () => {
+    seed({ location: HOME });
     render(<App />);
     clickFurniture('sell');
     expect(screen.getByText(/가방이 비어 있어요/)).toBeInTheDocument();
@@ -517,12 +521,14 @@ describe('현상금 — 항구 수배판 진입', () => {
 
 describe('R3b: 문(마을로) + 항구 여객선', () => {
   it('문 클릭 시 마을 필드로 전환', () => {
+    seed({ location: HOME });
     render(<App />);
     clickFurniture('exit');
     expect(screen.getByLabelText('마을')).toBeInTheDocument();
   });
 
   it('가구가 아닌 곳 클릭은 아무 일 없음', () => {
+    seed({ location: HOME });
     render(<App />);
     fireEvent.click(screen.getByLabelText('집'), { clientX: 160, clientY: 40 });
     expect(screen.getByLabelText('집')).toBeInTheDocument();
@@ -1028,8 +1034,19 @@ describe('위치 복원 — 새로고침하면 있던 곳에서 재개', () => {
 
   it('기본은 집 — 위치가 없던 구세이브도 안전하다', () => {
     seed({});
+    const { location: _location, ...legacy } = JSON.parse(localStorage.getItem(SAVE_KEY)!);
+    localStorage.setItem(SAVE_KEY, JSON.stringify(legacy));
     render(<App />);
     expect(screen.getByLabelText('집')).toBeInTheDocument();
+  });
+
+  it('신규 플레이어가 마을에서 시작하면 안내 문구와 마을 튜토리얼이 먼저 뜨고 운세 창은 뜨지 않는다', async () => {
+    seed({ location: { kind: 'region', id: 'village' }, fortune: null, fame: 0, dex: {}, tutorials: [] });
+    render(<App />);
+    expect(screen.getByLabelText('마을')).toBeInTheDocument();
+    expect(screen.getByRole('log')).toHaveTextContent('마을 연못 어군에서 낚시하고, 집에 들어가 정비해 보세요.');
+    expect(await screen.findByRole('dialog', { name: '마을에 오신 걸 환영해요' })).toBeInTheDocument();
+    expect(screen.queryByText('오늘의 운세')).not.toBeInTheDocument();
   });
 });
 
@@ -1057,6 +1074,7 @@ describe('R23b: 미니맵 클릭 = 세계지도 모달 (M 키 트리거는 폐�
 
 describe('탭은 씬과 무관하게 5개 고정', () => {
   it('거점에도 정비 탭이 없고, 기본 탭은 지역, 씬을 옮겨도 탭 구성 동일', () => {
+    seed({ location: HOME });
     render(<App />);
     expect(screen.queryByRole('button', { name: /정비/ })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /지역/ })).toHaveClass('active');
@@ -1607,6 +1625,7 @@ describe('스탯창 — 자원 바 클릭 진입 (v0.6.1)', () => {
   });
 
   it('씬이 바뀌면 스탯창도 닫힌다', () => {
+    seed({ location: HOME });
     render(<App />);
     fireEvent.click(screen.getByLabelText(/^스탯창 열기/));
     expect(screen.getByText('스탯')).toBeInTheDocument();

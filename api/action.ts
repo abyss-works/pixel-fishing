@@ -6,7 +6,7 @@
 // 이 파일은 읽기 → 규칙 실행 → 확정 → 응답의 순서만 조율한다. 요청 사용자는 로그인 세션으로 정한다.
 //
 // 왕복 순서: 상태 읽기 1회 → (캐치면 도감·가방 수 1회, 가방이 가득 차면 방생 후보 1회) → 확정 1회 → 응답.
-// 이벤트·주기 스냅샷·의뢰 진행도처럼 유실을 허용하는 쓰기는 응답 뒤에 한 번에 실행한다.
+// 이벤트·주기 스냅샷처럼 유실을 허용하는 쓰기는 응답 뒤에 한 번에 실행하고, 캐치의 의뢰 진행도는 응답 전에 반영한다.
 //
 // ⚠️ 시그니처는 Node 스타일(req, res)만 쓴다 — Web 표준 시그니처로 배포했다가 전부 500이 났던
 // 사고의 재발을 막기 위해서다. default export = Node 시그니처.
@@ -59,9 +59,9 @@ import { sessionOf } from './_auth/session.js';
 import { database } from './_db/client.js';
 import type { Executor } from './_db/client.js';
 import {
-  acceptFragments, advanceProgress, bountyRestoreFragments, challengeFragments, clearFragment,
+  acceptFragments, bountyRestoreFragments, challengeFragments, clearFragment,
   consumeDeliveryFragment, debugFragment, deliveryGate, expiredCleanup, namedClearDeleteFragment,
-  namedClearInsertFragment, namedClearReplaceFragments, readSnapshotBounty, ticketFragment,
+  namedClearInsertFragment, namedClearReplaceFragments, readSnapshotBounty, runAdvanceProgress, ticketFragment,
 } from './_data/bounty.js';
 import { consumeRelief, findCoupon, findRelief } from './_data/codes.js';
 import { claimMailFragment, claimableMail } from './_data/mailbox.js';
@@ -855,11 +855,23 @@ async function route(req: Req, res: Res): Promise<void> {
       () => commitAction(db, versionWrite, fragments));
     if (!committed) throw new ApiError(409, 'version-conflict');
   }
+
+  // 캐치의 일반 의뢰 진행도는 증분이라 자가 치유가 없다. 응답 전에 반영하되, 실패가 확정된 캐치를 되돌리지는 않게 보고만 한다.
+  if (action.type === 'catch' && bounty) {
+    const questIds = catchProgressQuests(out.events, bounty.active);
+    if (questIds.length > 0) {
+      try {
+        const rowCount = await runAdvanceProgress(db, uid, questIds, nowISO);
+        if (rowCount > 0 && out.result.type === 'catch') out.result.bountyProgressed = true;
+      } catch (e) {
+        await reportServerIssue('후속 쓰기 실패 — 의뢰 진행도 반영 실패', e, { uid, action: action.type, version: nextVersion });
+      }
+    }
+  }
   if (committedNickname !== null) setNick(uid, committedNickname);
 
-  // 후속 쓰기 — 이벤트 append, 활동일, 주기 스냅샷, 캐치의 의뢰 진행, 만료 의뢰 정리. 유실 허용 묶음이라 응답 뒤에 실행하고
+  // 후속 쓰기 — 이벤트 append, 활동일, 주기 스냅샷, 만료 의뢰 정리. 유실 허용 묶음이라 응답 뒤에 실행하고
   // 실패해도 상태는 되돌리지 않는다. 다만 조용히 잃지 않도록 보고한다.
-  // 의뢰 진행은 증분이라 자가 치유가 없다 — 유실분은 사용자가 다시 잡아야 메운다.
   // 만료 정리는 읽을 때 이미 판정이 끝나 있어 늦거나 유실돼도 판정은 같다. 다음 수배 액션이 다시 정리한다.
   // 활동일은 DAU·리텐션의 장기 정본이다. 이 쓰기가 유실되면 예약 작업이 남아 있는 events로 다시 채운다
   const followUps: (SQL | null)[] = [
@@ -867,13 +879,10 @@ async function route(req: Req, res: Res): Promise<void> {
     activeDayUpsert(uid, eventNow),
   ];
   if (nextVersion % SNAPSHOT_EVERY === 0) followUps.push(snapshotInsert(uid, out.state, nowISO));
-  if (action.type === 'catch' && bounty) {
-    followUps.push(advanceProgress(uid, catchProgressQuests(out.events, bounty.active), nowISO));
-  }
   followUps.push(...expiredCleanup(uid, expired, dayStart));
   const actionType = action.type;
   afterResponse(runFollowUps(db, followUps).catch(e =>
-    reportServerIssue('후속 쓰기 실패 — events/스냅샷/의뢰 진행 유실', e, { uid, action: actionType, version: nextVersion })));
+    reportServerIssue('후속 쓰기 실패 — events/스냅샷 유실', e, { uid, action: actionType, version: nextVersion })));
   // 일일 운세 이력 — 로그인 계정의 첫 접속(boot)과 당일 운세 확정(catch·sell·extractEnergy 백스톱 포함)만 멱등 기록한다. 게스트는 저장하지 않는다
   if (user.email !== null && out.state.fortune
       && (action.type === 'boot' || ((action.type === 'catch' || action.type === 'sell' || action.type === 'extractEnergy') && prevFortune?.day !== out.state.fortune.day))) {

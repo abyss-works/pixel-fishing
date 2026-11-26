@@ -2,9 +2,12 @@
 // 테스트 환경은 클라우드 빌드가 아니라 readBounty가 null이다 — 티켓·진행은 빈 값으로,
 // 조건 게이팅(순수 판정)과 화면 구조를 여기서 고정한다.
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/react';
+import { render, renderHook, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import BountyPanel from './BountyPanel';
+import { useBounty } from '../../../../features/bounty/service/useBounty';
+import { useQuestInfo } from '../../../../features/bounty/service/useQuestInfo';
 import { gameDay } from '../../../../features/bounty/service/queryKeys';
 import { BOUNTIES, dailyQuestFor } from '../../../../game/content/bounties';
 import { artifactById } from '../../../../game/content/artifacts';
@@ -13,13 +16,14 @@ import { newState } from '../../../../game/rules/logic';
 import type { GameState } from '../../../../game/rules/logic';
 import type { BountySnapshot } from '../../../../features/bounty/model/types';
 
-afterEach(() => { cleanup(); mockSnap = null; });
+afterEach(() => { cleanup(); mockSnap = null; readBountySpy.mockClear(); });
 
 let mockSnap: BountySnapshot | null = null;
 vi.mock('../../../../platform/api', async (importOriginal) => {
   const mod = await importOriginal<typeof import('../../../../platform/api')>();
-  return { ...mod, readBounty: () => Promise.resolve(mockSnap) };
+  return { ...mod, readBounty: () => readBountySpy() };
 });
+const readBountySpy = vi.fn(() => Promise.resolve(mockSnap));
 
 const game = (over: Partial<GameState> = {}): GameState => ({ ...newState(), ...over });
 const okDispatch = (g: GameState) => () => ({ status: 'ok' as const, state: g, result: { type: 'none' as const } });
@@ -300,5 +304,59 @@ describe('BountyPanel', () => {
     const accept = screen.getByRole('button', { name: '수주' });
     expect(accept).toBeDisabled();
     expect(tipOfButton(accept)).toBe('오늘 네임드 토벌은 이미 마쳤어요.새벽 4시가 지나면 다시 수주할 수 있어요.');
+  });
+});
+
+describe('수배 스냅샷 조회 — fresh 캐시가 있을 때의 마운트', () => {
+  const sharedClient = () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    return { client, wrapper };
+  };
+  /** 같은 클라이언트에서 두 번 마운트해, 두 번째 마운트가 읽기를 다시 부르는지 센다 */
+  async function mountTwice<T>(use: () => T, loaded: (v: T) => boolean) {
+    const { wrapper } = sharedClient();
+    const first = renderHook(use, { wrapper });
+    await waitFor(() => expect(loaded(first.result.current)).toBe(true));
+    expect(readBountySpy).toHaveBeenCalledTimes(1);
+    first.unmount();
+    const second = renderHook(use, { wrapper });
+    await waitFor(() => expect(loaded(second.result.current)).toBe(true));
+    return readBountySpy.mock.calls.length;
+  }
+
+  it('기본 호출은 60초 안의 fresh 캐시를 다시 읽지 않는다', async () => {
+    expect(await mountTwice(() => useBounty(), v => v.loaded)).toBe(1);
+  });
+
+  it("refetchOnMount: 'always'는 fresh 캐시가 있어도 마운트마다 다시 읽는다", async () => {
+    expect(await mountTwice(() => useBounty({ refetchOnMount: 'always' }), v => v.loaded)).toBe(2);
+  });
+
+  it('의뢰 정보(useQuestInfo)는 열 때마다 최신 스냅샷을 다시 읽는다', async () => {
+    mockSnap = { clearsToday: { general: 0, named: 0 }, progress: [], tickets: [] };
+    expect(await mountTwice(() => useQuestInfo(game()), v => v.status === 'ready')).toBe(2);
+  });
+
+  it('수배판은 fresh 캐시가 있어도 열 때 스냅샷을 다시 읽어 바뀐 진행도를 보인다', async () => {
+    const quest = dailyQuestFor('pacific', 'easy', 'test-uid', gameDay())!;
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const panel = (
+      <QueryClientProvider client={client}>
+        <BountyPanel game={game({ dex: fullDex })} port="harbor" uid="test-uid"
+                     dispatch={okDispatch(game())} setToast={vi.fn()} />
+      </QueryClientProvider>
+    );
+    mockSnap = { clearsToday: { general: 0, named: 0 }, progress: [{ questId: quest.id, progress: 0 }], tickets: [] };
+    const first = render(panel);
+    const progressOf = async () =>
+      (await screen.findByRole('button', { name: '진행 중' })).closest('div')?.parentElement;
+    expect(await progressOf()).toHaveTextContent(`0/${quest.count}`);
+    first.unmount();
+    mockSnap = { clearsToday: { general: 0, named: 0 }, progress: [{ questId: quest.id, progress: 1 }], tickets: [] };
+    render(panel);
+    await waitFor(async () => expect(await progressOf()).toHaveTextContent(`1/${quest.count}`));
+    expect(readBountySpy).toHaveBeenCalledTimes(2);
   });
 });
