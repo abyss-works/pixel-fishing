@@ -24,10 +24,15 @@ export type GoogleOutcome =
 /** 게스트가 고른 구글 계정이 이미 다른 계정에 연결돼 있을 때 뜨는 확인 창의 문구. 그 구글 계정에 진행이 있는지는 가리지 않는다 */
 export const OVERWRITE_COPY = {
   title: '구글 계정으로 로그인',
-  body: '이 구글 계정은 다른 계정에서 쓰고 있어요.',
-  warn: '로그인을 누르면 그 계정의 진행으로 바뀌어요.\n지금 게스트 진행은 사라져요.',
-  back: '되돌아가기를 누르면 게스트로 남고, 다른 구글 계정으로 연결할 수 있어요.',
-  confirm: '로그인',
+  summaryLabel: '진행 전환 요약',
+  fromLabel: '현재 게스트 진행',
+  fromStatus: '사라짐',
+  toLabel: '구글 계정 진행',
+  toStatus: '불러옴',
+  body: '이미 다른 계정에 연결된 구글 계정이에요.',
+  warnPrefix: '전환하면',
+  warnAnchor: '지금 게스트 진행은 되돌릴 수 없어요.',
+  confirm: '계정 전환',
   cancel: '되돌아가기',
 } as const;
 

@@ -14,7 +14,7 @@ export type GlyphId =
   | 'plus' | 'minus'
   | 'compass' | 'backpack' | 'book' | 'question' | 'gear' | 'people' | 'flag'
   | 'crown' | 'sparkle' | 'warn' | 'menu' | 'grid' | 'lunch' | 'bait'
-  | 'clock' | 'target' | 'gem' | 'external'
+  | 'clock' | 'target' | 'gem' | 'external' | 'arrowRight'
   | 'cloudOk' | 'cloudSyncing' | 'cloudError';
 
 const CLOUD_CELLS: Cell[] = [[4, 2, 3, 1], [3, 3, 5, 1], [2, 4, 8, 1], [1, 5, 10, 1], [0, 6, 12, 3], [1, 9, 10, 1]];
@@ -216,6 +216,10 @@ const GLYPHS: Record<GlyphId, { cells: Cell[]; holes?: Cell[] }> = {
       [7, 1, 4, 1], [10, 1, 1, 4],
       [8, 3, 2, 1], [7, 4, 2, 1], [6, 5, 2, 1], [5, 6, 2, 1],
     ],
+  },
+  // 오른쪽 화살표 — 전환·흐름 연결
+  arrowRight: {
+    cells: [[1, 5, 8, 2], [7, 3, 2, 2], [9, 4, 1, 4], [7, 7, 2, 2], [10, 5, 1, 2]],
   },
   // 클라우드 저장 상태 — 구름 바탕 + 체크/세 점/느낌표 구멍
   cloudOk: {
