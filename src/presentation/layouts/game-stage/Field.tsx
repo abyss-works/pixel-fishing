@@ -59,6 +59,9 @@ interface Props {
   statusSlot?: HTMLElement | null;
   /** 획득 카드를 넣을 HUD 자리 */
   catchSlot?: HTMLElement | null;
+  uid?: string | null;
+  /** 현재 저장 버전을 읽는다 — 모르면 null */
+  saveVersion?: () => number | null;
 }
 
 function presentEvent(event: FieldEvent, setToast: Props['setToast'], game: GameState, region: RegionId): void {
@@ -145,7 +148,7 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast'], game: Game
 }
 
 export default function Field({
-  region, game, dispatch, setToast, onScene, guest, onGuestBlocked, initialPos, placeSeq, locked, paused, statusSlot, catchSlot,
+  region, game, dispatch, setToast, onScene, guest, onGuestBlocked, initialPos, placeSeq, locked, paused, statusSlot, catchSlot, uid, saveVersion,
 }: Props) {
   const mobile = useMobileLayout();
   // 현재 어군 — 세션의 배치 날짜가 정한다. 부트 결과로 날짜가 바뀌면 엔진에 교체해 준다.
@@ -202,9 +205,13 @@ export default function Field({
       },
       onScene,
       guest,
+      seedContext: () => {
+        const version = saveVersion?.() ?? null;
+        return uid && version !== null ? { uid, saveVersion: version } : null;
+      },
     };
     engine.updateContext(game, dayPhaseNow === 'night', callbacks);
-  }, [engine, region, game, dayPhaseNow, dispatch, setToast, onScene, guest, onGuestBlocked]);
+  }, [engine, region, game, dayPhaseNow, dispatch, setToast, onScene, guest, onGuestBlocked, uid, saveVersion]);
 
   useEffect(() => { engine.setSchools(schools); }, [engine, schools]);
 

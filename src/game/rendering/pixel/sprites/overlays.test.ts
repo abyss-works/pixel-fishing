@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { drawHookJump } from './overlays';
+import { drawHookJump, drawTimingBar } from './overlays';
 import type { GearView } from './overlays';
 import { JUMP_S, jumpHeight } from './schoolView';
 import { fishArt } from '../fishArt/index';
@@ -84,5 +84,22 @@ describe('drawHookJump', () => {
     expect(a.calls).toEqual([]);
     expect(b.calls).toEqual([]);
     expect(c.calls).toEqual([]);
+  });
+});
+
+
+describe('drawTimingBar', () => {
+  it('빨간 존 중심이 주어지면 중앙이 아니라 그 비율 위치에 그린다', () => {
+    const actual = recorder();
+    drawTimingBar(actual.ctx, view({ phase: 'bite', biteT: 0.5, catchT: null, zone: 0.4, red: 0.1, redCenter: 0.6 }));
+    const red = actual.calls.find(call => call.startsWith('rgba(239,83,80,0.9)@'));
+    expect(red).toBe('rgba(239,83,80,0.9)@82,92,4.4,5');
+  });
+
+  it('빨간 존 중심이 없으면 기존처럼 바 중앙에 그린다', () => {
+    const actual = recorder();
+    drawTimingBar(actual.ctx, view({ phase: 'bite', biteT: 0.5, catchT: null, zone: 0.4, red: 0.1 }));
+    const red = actual.calls.find(call => call.startsWith('rgba(239,83,80,0.9)@'));
+    expect(red).toBe('rgba(239,83,80,0.9)@77,92,4.4,5');
   });
 });

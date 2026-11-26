@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { newState, rodStats } from '../rules/logic';
+import { newState, rodStats, redZoneCenter } from '../rules/logic';
+import { powerZones, rodAxes } from '../rules/stats';
 import { catchTooSoon } from '../rules/pacing';
 import { HARBORS, WORLD, WORLD_LEGEND, WORLD_SPAWN } from '../world/regions/world';
 import { V_PORT } from '../world/regions/village';
@@ -863,6 +864,52 @@ describe('GameFieldEngine 이동 취소 후 즉시 재캐스팅 및 429 복구',
 
     expect(rejectedErrors).toEqual([]);
     expect(callCount).toBe(2);
+    engine.dispose();
+  });
+});
+
+
+describe('GameFieldEngine 빨간 존 위치와 챔질 경과', () => {
+  afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+
+  it('캐스트 시드의 빨간 존 중심으로 판정하고 챔질 경과를 요청에 담는다', () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    vi.setSystemTime(Date.parse('2026-11-26T00:00:00.000Z'));
+    const game = { ...newState(), boat: 5, rod: 20 };
+    const school = { id: 's', spot: 'pond' as const, x: WORLD_SPAWN.x, y: WORLD_SPAWN.y };
+    const engine = new GameFieldEngine('world', game, [school], WORLD_SPAWN);
+    const sent: unknown[] = [];
+    engine.updateContext(game, false, {
+      dispatch: action => {
+        sent.push(action);
+        return {
+          status: 'ok',
+          result: { type: 'catch', fishId: 'crucian', uid: 'u', info: { form: 'normal' }, released: [] },
+        } as never;
+      },
+      onEvent: noop,
+      onScene: noop,
+      seedContext: () => ({ uid: 'user-1', saveVersion: 7 }),
+    });
+
+    const zones = powerZones(game, 'pond');
+    expect(zones.red).toBeGreaterThan(0);
+    const center = redZoneCenter('user-1:7', zones.yellow / 100, zones.red / 100);
+    engine.action();
+    let guard = 0;
+    while (engine.getSnapshot().phase !== 'bite' && guard++ < 2000) vi.advanceTimersByTime(10);
+    expect(engine.getSnapshot().phase).toBe('bite');
+    const raw = engine as unknown as { biteStart: number };
+    const sweepMs = rodAxes(game).sweep.value * 1000;
+    const targetAt = raw.biteStart + center * sweepMs;
+    vi.advanceTimersByTime(Math.max(0, targetAt - Date.now()));
+    engine.action();
+
+    expect(sent).toHaveLength(1);
+    const action = sent[0] as { judgment?: string; biteElapsed?: number };
+    expect(action.judgment).toBe('perfect');
+    expect(action.biteElapsed).toBeCloseTo(center * sweepMs, 0);
     engine.dispose();
   });
 });

@@ -9,6 +9,7 @@ import { AUTO_ENERGY_BOAT, ENERGY_ITEM_IDS, ENERGY_UNIT } from '../content/cooki
 import { BOATS, COUPONS, FISH, ITEM_CAP, WALK_BAG_CAP, newState } from './logic';
 import { REJECT_TEXT } from './rules';
 import { gameDayOf } from './time';
+import { rodAxes } from './stats';
 import type { FishInstance, FormId, GameState } from './logic';
 
 // newUid는 결정적 목 — 개체 uid가 매 실행 달라지면 재현성 검증이 불가능하다
@@ -128,6 +129,34 @@ describe('catch', () => {
     if (!out.ok) throw new Error(out.error);
     expect(out.state.bag[0].judgment).toBe('perfect');
     expect(out.events[0]).toMatchObject({ type: 'catch', payload: { judgment: 'perfect' } });
+  });
+
+  it('챔질 경과가 있으면 커서 위치를 catch 이벤트에만 싣는다', () => {
+    const state = seed({ rod: 10 });
+    const biteElapsed = 700;
+    const out = applyAction(
+      state,
+      { type: 'catch', spot: 'pond', judgment: 'perfect', biteElapsed },
+      deps(),
+    );
+    if (!out.ok) throw new Error(out.error);
+    expect(out.events[0]).toMatchObject({
+      type: 'catch',
+      payload: { pos: expect.any(Number) },
+    });
+    const payload = out.events[0].payload as { pos: number };
+    expect(payload.pos).toBeCloseTo(biteElapsed / 1000 / rodAxes(state).sweep.value, 8);
+    expect(out.result).not.toHaveProperty('pos');
+  });
+
+  it('챔질 경과가 없으면 커서 위치를 싣지 않는다', () => {
+    const out = applyAction(
+      seed({ rod: 10 }),
+      { type: 'catch', spot: 'pond', judgment: 'perfect' },
+      deps(),
+    );
+    if (!out.ok) throw new Error(out.error);
+    expect(out.events[0].payload).not.toHaveProperty('pos');
   });
 
   it('NEW 판정은 폼별 — 일반을 잡았어도 변이 첫 캐치는 신규 (v0.3.3)', () => {

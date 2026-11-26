@@ -27,6 +27,7 @@ const DebugStepSchema = z.object({
 const schemas = {
   catch: z.object({
     type: z.literal('catch'), spot: z.string(), judgment: Judgment,
+    biteElapsed: z.number().finite().nonnegative().optional(),
     forceEncounter: z.literal(true).optional(),
     forcePhase: z.enum(['day', 'night']).optional(),
   }),
