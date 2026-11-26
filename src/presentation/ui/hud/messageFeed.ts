@@ -8,6 +8,7 @@ import type { NoticeSink } from '../../../features/display/model/toastPolicy';
 
 export type MessageChannel = FilterChannel;
 export type MessageTone = 'info' | 'gold' | 'warn';
+export type StaffBadgeRole = 'admin' | 'maintainer';
 
 /** 글줄의 한 대목에 다는 툴팁 — target은 글줄 문구 안의 대목이고, rows는 이름 왼쪽 값 오른쪽 목록이다 */
 export interface MessageTip {
@@ -33,6 +34,8 @@ export interface Msg {
   at: number;
   /** 채팅 글줄의 원본 — 보낸 사람 id와 채팅 id(신고·차단 대상) */
   from?: { uid: string; chatId: number };
+  /** 운영진 채팅 배지 — 노출 설정이 켜진 운영진 메시지에서만 온다 */
+  staffBadge?: StaffBadgeRole;
   /** 문구의 한 대목에 단 툴팁 */
   tip?: MessageTip;
 }
@@ -63,7 +66,7 @@ const hhmm = (d: Date) =>
   `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 
 export function createMessage(id: number, text: string, opts: {
-  tone?: MessageTone; channel?: MessageChannel; author?: string; now?: Date; from?: Msg['from']; tip?: MessageTip;
+  tone?: MessageTone; channel?: MessageChannel; author?: string; now?: Date; from?: Msg['from']; staffBadge?: StaffBadgeRole; tip?: MessageTip;
 } = {}): Msg {
   const now = opts.now ?? new Date();
   return {
@@ -72,6 +75,7 @@ export function createMessage(id: number, text: string, opts: {
     channel: opts.channel ?? 'system',
     ...(opts.author ? { author: opts.author } : {}),
     ...(opts.from ? { from: opts.from } : {}),
+    ...(opts.staffBadge ? { staffBadge: opts.staffBadge } : {}),
     ...(opts.tip ? { tip: opts.tip } : {}),
   };
 }

@@ -245,4 +245,38 @@ describe('메시지 창', () => {
     expect(cls).toContain('hover:bg-');
     expect(cls).toContain('group-has-[input:focus]:bg-');
   });
+
+  it('staffBadge가 있는 운영진 메시지는 닉네임 왼쪽에 해당 크기의 5각 픽셀 별을 그리고 닉네임 색상을 유지하며, 없으면 일반 플레이어와 DOM이 같다', () => {
+    const at = new Date();
+    const adminMsg = createMessage(1, '공지 확인', {
+      channel: 'local', author: '관리자', now: at, from: { uid: 'me', chatId: 1 }, staffBadge: 'admin',
+    });
+    const maintainerMsg = createMessage(2, '도와드릴게요', {
+      channel: 'local', author: '운영자', now: at, from: { uid: 'mod', chatId: 2 }, staffBadge: 'maintainer',
+    });
+    const normalMsg = createMessage(3, '안녕하세요', {
+      channel: 'local', author: '일반어부', now: at, from: { uid: 'user', chatId: 3 },
+    });
+
+    render(<MessageLog log={[adminMsg, maintainerMsg, normalMsg]} you="me" onPick={() => {}} />);
+    const lines = [...screen.getByRole('log').children];
+
+    // 관리자: 큰 별이 닉네임 버튼 바로 앞에 오고 본인 색(text-gold) 유지
+    const adminBtn = within(lines[0] as HTMLElement).getByRole('button', { name: '관리자' });
+    const adminIcon = lines[0].querySelector('svg[data-glyph="staffStarLarge"]');
+    expect(adminIcon).not.toBeNull();
+    expect(adminIcon?.nextElementSibling).toBe(adminBtn);
+    expect(adminBtn).toHaveClass('text-gold');
+
+    // 운영자: 작은 별이 닉네임 버튼 바로 앞에 오고 타인 색(text-accent) 유지
+    const modBtn = within(lines[1] as HTMLElement).getByRole('button', { name: '운영자' });
+    const modIcon = lines[1].querySelector('svg[data-glyph="staffStarSmall"]');
+    expect(modIcon).not.toBeNull();
+    expect(modIcon?.nextElementSibling).toBe(modBtn);
+    expect(modBtn).toHaveClass('text-accent');
+
+    // 일반 플레이어: 별 아이콘·유니코드 별 모두 없음
+    expect(lines[2].querySelector('svg')).toBeNull();
+    expect(lines[2].textContent).not.toMatch(/[★☆]/);
+  });
 });

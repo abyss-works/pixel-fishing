@@ -55,4 +55,15 @@ describe('메시지 피드', () => {
     expect(mergeMessages(system, chat).map(m => m.text)).toEqual(['가', '나', '다', '라']);
     expect(mergeMessages(system, [])).toEqual(system);
   });
+
+  it('staffBadge가 지정된 메시지만 배지 역할을 보존하고 미지정 시 키를 생략한다', () => {
+    const admin = createMessage(1, '안내', { channel: 'local', author: '운영진', staffBadge: 'admin' });
+    const maintainer = createMessage(2, '안내', { channel: 'local', author: '보조', staffBadge: 'maintainer' });
+    const plain = createMessage(3, '안녕', { channel: 'local', author: '어부' });
+
+    expect(admin.staffBadge).toBe('admin');
+    expect(maintainer.staffBadge).toBe('maintainer');
+    expect(plain.staffBadge).toBeUndefined();
+    expect('staffBadge' in plain).toBe(false);
+  });
 });

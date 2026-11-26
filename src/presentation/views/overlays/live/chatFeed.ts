@@ -5,4 +5,10 @@ import { createMessage } from '../../../ui/hud/messageFeed';
 import type { Msg } from '../../../ui/hud/messageFeed';
 
 export const chatMessages = (lines: readonly ChatLine[], channel: ChatRoom = 'local'): Msg[] => lines.map(l =>
-  createMessage(l.id, l.text, { channel, author: l.nick, now: new Date(l.at), from: { uid: l.uid, chatId: l.id } }));
+  createMessage(l.id, l.text, {
+    channel,
+    author: l.nick,
+    now: new Date(l.at),
+    from: { uid: l.uid, chatId: l.id },
+    ...(l.staffBadge ? { staffBadge: l.staffBadge } : {}),
+  }));
