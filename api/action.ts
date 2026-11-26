@@ -13,6 +13,7 @@
 import type { SQL } from 'drizzle-orm';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { afterResponse } from './_server/afterResponse.js';
+import { setNick } from './_server/livePresence.js';
 // 확장자(.js) 필수 — Node 순수 ESM 로더가 src 모듈을 그대로 import한다
 import { migrate, newState } from '../src/game/rules/logic.js';
 import type { FishInstance, FormRecord, GameState, Judgment } from '../src/game/rules/logic.js';
@@ -607,6 +608,7 @@ async function route(req: Req, res: Res): Promise<void> {
   }
 
   // 닉네임 변경 — 형태는 리듀서가 재검증한다. 여기서 할 일은 중복 검사 + 반영뿐.
+  let committedNickname: string | null = null;
   if (action.type === 'setNickname' && typeof action.nickname === 'string'
       && checkNickname(action.nickname).ok) {
     const wanted = action.nickname;
@@ -614,6 +616,7 @@ async function route(req: Req, res: Res): Promise<void> {
       throw new ApiError(422, 'nickname-taken');
     }
     await step('db-write', { uid, action: 'setNickname' }, () => setNickname(db, uid, wanted, new Date().toISOString()));
+    committedNickname = wanted;
   }
 
   // 현상금 — DB가 진실의 원천인 데이터에 대한 서버 담당분.
@@ -852,6 +855,7 @@ async function route(req: Req, res: Res): Promise<void> {
       () => commitAction(db, versionWrite, fragments));
     if (!committed) throw new ApiError(409, 'version-conflict');
   }
+  if (committedNickname !== null) setNick(uid, committedNickname);
 
   // 후속 쓰기 — 이벤트 append, 활동일, 주기 스냅샷, 캐치의 의뢰 진행, 만료 의뢰 정리. 유실 허용 묶음이라 응답 뒤에 실행하고
   // 실패해도 상태는 되돌리지 않는다. 다만 조용히 잃지 않도록 보고한다.

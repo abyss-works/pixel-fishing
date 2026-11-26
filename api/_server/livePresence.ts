@@ -6,6 +6,7 @@ import type { LiveOnline } from './live.js';
 let lookup: (uid: string) => Presence | null = () => null;
 let list: () => LiveOnline[] = () => [];
 let notify: (uid: string, msg: ServerMessage) => void = () => {};
+let nickUpdater: (uid: string, nick: string) => void = () => {};
 
 export function providePresence(fn: (uid: string) => Presence | null): void {
   lookup = fn;
@@ -32,4 +33,13 @@ export function provideNotify(fn: (uid: string, msg: ServerMessage) => void): vo
 /** 그 사용자의 연결(창 하나)에 메시지를 보낸다. 연결돼 있지 않으면 버린다 */
 export function notifyUser(uid: string, msg: ServerMessage): void {
   notify(uid, msg);
+}
+
+export function provideSetNick(fn: (uid: string, nick: string) => void): void {
+  nickUpdater = fn;
+}
+
+/** 활성 실시간 연결의 닉네임을 즉시 갱신하고 다른 접속자에게 알린다 */
+export function setNick(uid: string, nick: string): void {
+  nickUpdater(uid, nick);
 }
