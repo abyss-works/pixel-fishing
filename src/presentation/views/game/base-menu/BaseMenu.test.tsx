@@ -23,6 +23,23 @@ describe('거점 카드 메뉴', () => {
       '어시장 판매', '마을 집으로', '여객선 빠른 이동', '승선 바다로']);
   });
 
+  it('이동 구역의 나가기 카드(문·승선)에만 PC 전용 ESC 단축키 표식을 붙이고 다른 카드에는 붙이지 않는다', () => {
+    const { unmount } = render(<BaseMenu base="home" game={newState()} />);
+    const homeKbds = [...document.querySelectorAll('[data-facility] kbd')];
+    expect(homeKbds).toHaveLength(1);
+    expect(homeKbds[0]).toHaveTextContent('ESC');
+    expect(homeKbds[0]).toHaveAttribute('aria-hidden', 'true');
+    expect(homeKbds[0]).toHaveClass('mobile:hidden');
+    expect(document.querySelector('[data-facility="exit"] kbd')).toBe(homeKbds[0]);
+    unmount();
+
+    render(<BaseMenu base="harbor" game={newState()} />);
+    const harborKbds = [...document.querySelectorAll('[data-facility] kbd')];
+    expect(harborKbds).toHaveLength(1);
+    expect(harborKbds[0]).toHaveTextContent('ESC');
+    expect(document.querySelector('[data-facility="exit"] kbd')).toBe(harborKbds[0]);
+  });
+
   it('항구의 승선 카드는 내 배를, 마을 카드는 집을, 빠른 이동 카드는 여객선을 아이콘으로 쓴다', () => {
     render(<BaseMenu base="harbor" game={{ ...newState(), boat: 2 }} />);
     expect(document.querySelector('[data-facility="exit"] [data-icon="boat"]')).not.toBeNull();

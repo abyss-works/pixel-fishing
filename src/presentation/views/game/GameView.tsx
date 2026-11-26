@@ -100,6 +100,7 @@ import { useCanvasCover } from '../../layouts/game-stage/canvasCover';
 import { useMobileLayout } from '../../layouts/useMobileLayout';
 import { useBlockZoom } from '../../layouts/useBlockZoom';
 import { keyboardStyle, useVisibleBox } from '../../layouts/visibleBox';
+import { HOTKEY_TIER, hasModifier, useKeyScope } from '../../ui/hotkeys';
 import { windowHostRef } from '../../ui/windowLayer';
 
 interface GameViewProps {
@@ -409,6 +410,14 @@ export default function GameView(props: GameViewProps) {
   };
   const onOpenMap = () => setWorldMapOpen(true);
 
+  useKeyScope(e => {
+    if (scene.kind !== 'base' || trip !== null || encounter !== null || props.blocker != null) return false;
+    if (e.key !== 'Escape' || hasModifier(e)) return false;
+    e.preventDefault();
+    onFacility('exit');
+    return true;
+  }, { tier: HOTKEY_TIER.BASE });
+
   return (
     <div ref={windowHostRef} className={cx('group/root fixed inset-0 flex overflow-hidden overscroll-none', mobile && 'flex-col')}
          style={keyboardStyle(visible)}
@@ -505,7 +514,13 @@ export default function GameView(props: GameViewProps) {
         {fortuneOpen && (
           <FortuneCalendarModal gameFortune={game.fortune} accountState={accountState} onClose={() => setFortuneOpen(false)} />
         )}
-        {rankingOpen && <RankingModal onClose={() => setRankingOpen(false)} />}
+        {rankingOpen && (
+          <RankingModal
+            guest={accountState === 'guest'}
+            nickname={props.nickname}
+            onClose={() => setRankingOpen(false)}
+          />
+        )}
         {away.report && awayOpen && (
           <AwayReportModal report={away.report} game={game} onClose={closeAway}
                            onOpenBag={() => { closeAway(); setActiveTab('bag'); }} />

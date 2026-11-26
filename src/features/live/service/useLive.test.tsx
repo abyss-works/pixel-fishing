@@ -24,9 +24,11 @@ vi.mock('../../account/service/session', () => ({
 }));
 
 import { allowConsentGate, blockConsentGate, holdConsentGate, resetConsentGate } from '../../account/service/consentGate';
+import { JUMP_S } from '../../../game/rendering/pixel/sprites/schoolView';
 import { GLOBAL_CHAT_COOLDOWN_MS } from '../model/live';
 import {
   applyLocalNick,
+  liveFrame,
   onMailEvent,
   onNickEvent,
   sendChat,
@@ -268,5 +270,76 @@ describe('useLive 약관 수락 게이트 및 3방·공지 연동', () => {
       offNick();
       offMail();
     }
+  });
+
+  it('catchFx는 React 재렌더 없이 큐에 쌓이고 지역 필터·12개 상한·JUMP_S 만료·연결 해제를 처리한다', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-26T12:00:00.000Z'));
+
+    let renderCount = 0;
+    renderHook(() => {
+      renderCount++;
+      useLive();
+      return usePlayersIn('world');
+    });
+    const rendersBeforeCatchFx = renderCount;
+
+    // 13개 전송 시 가장 오래된 1개를 버리고 12개만 유지한다 (world 11개 + village 1개)
+    act(() => {
+      for (let i = 0; i < 12; i++) {
+        liveMock.connections[0].onMessage({
+          t: 'catchFx',
+          uid: `u-${i}`,
+          region: 'world',
+          x: 100 + i,
+          y: 200 + i,
+          fishId: 'carp',
+          ...(i % 2 === 1 ? { form: 'variant' as const } : {}),
+        });
+      }
+      liveMock.connections[0].onMessage({
+        t: 'catchFx',
+        uid: 'u-village',
+        region: 'village',
+        x: 50,
+        y: 60,
+        fishId: 'goldfish',
+      });
+    });
+
+    // catchFx 수신만으로는 React 구독자에게 알리지 않는다
+    expect(renderCount).toBe(rendersBeforeCatchFx);
+
+    // rAF 기준 now(performance.now)가 Date.now와 다르더라도 wall clock 기준으로 경과 시간을 계산한다
+    vi.advanceTimersByTime(300);
+    const worldFrame = liveFrame('world', 123);
+    expect(worldFrame.peerJumps).toHaveLength(11);
+    expect(worldFrame.peerJumps?.[0]).toEqual({ x: 101, y: 201, fishId: 'carp', form: 'variant', t: 0.3 });
+    expect(worldFrame.peerJumps?.[10]).toEqual({ x: 111, y: 211, fishId: 'carp', form: 'variant', t: 0.3 });
+
+    const villageFrame = liveFrame('village', 123);
+    expect(villageFrame.peerJumps).toEqual([
+      { x: 50, y: 60, fishId: 'goldfish', t: 0.3 },
+    ]);
+
+    // JUMP_S * 1000 이상 경과하면 만료 제거된다
+    vi.advanceTimersByTime(JUMP_S * 1000 - 300);
+    expect(liveFrame('world', 123 + JUMP_S * 1000).peerJumps).toEqual([]);
+    expect(liveFrame('village', 123 + JUMP_S * 1000).peerJumps).toEqual([]);
+
+    // 연결 해제(reset) 시 대기 중인 피어 점프도 비운다
+    act(() => {
+      liveMock.connections[0].onMessage({
+        t: 'catchFx',
+        uid: 'u-reset',
+        region: 'world',
+        x: 10,
+        y: 20,
+        fishId: 'carp',
+      });
+    });
+    expect(liveFrame('world', 1500).peerJumps).toHaveLength(1);
+    act(() => { blockConsentGate(); });
+    expect(liveFrame('world', 1500).peerJumps).toEqual([]);
   });
 });

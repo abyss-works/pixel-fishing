@@ -16,7 +16,7 @@ import {
   armForceEncounter, disarmForceEncounter, useForceEncounterArmed,
 } from '../../../features/bounty/service/forceEncounter';
 import { setCanvasCover, useCanvasCover } from '../../layouts/game-stage/canvasCover';
-import { useKeyScope } from '../../ui/hotkeys';
+import { HOTKEY_TIER, useKeyScope } from '../../ui/hotkeys';
 import { cx } from '../../ui/cx';
 import Button from '../../ui/Button';
 import IconButton from '../../ui/IconButton';
@@ -111,7 +111,7 @@ export default function DevTools({
     e.preventDefault();
     setOpen(o => !o);
     return true;
-  });
+  }, { tier: HOTKEY_TIER.BLOCKER });
 
   // 창 크기가 바뀌면 패널 크기와 위치를 다시 가둔다
   useEffect(() => {

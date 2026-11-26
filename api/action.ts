@@ -14,7 +14,7 @@
 import type { SQL } from 'drizzle-orm';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { afterResponse } from './_server/afterResponse.js';
-import { notifyGuild, setFame, setNick } from './_server/livePresence.js';
+import { broadcastCatchFx, notifyGuild, setFame, setNick } from './_server/livePresence.js';
 // 확장자(.js) 필수 — Node 순수 ESM 로더가 src 모듈을 그대로 import한다
 import { migrate, newState } from '../src/game/rules/logic.js';
 import type { FishInstance, FormRecord, GameState, Judgment } from '../src/game/rules/logic.js';
@@ -80,6 +80,7 @@ import { eventsInsert } from './_data/telemetry.js';
 import { activeDayUpsert } from './_data/activity.js';
 import { recordDailyFortuneFragment, upsertDailyFortuneFragment } from './_data/fortune.js';
 import { guildTotalOf, recordGuildActivity } from './_data/guilds.js';
+import { weeklyFameFragment } from './_data/rank.js';
 import {
   GUILD_LEVEL_FLOORS, GUILD_MAX_LEVEL, NO_GUILD_EFFECTS, contributionFor, guildEffectsOf, guildLevelOf,
 } from '../src/game/rules/guild.js';
@@ -222,6 +223,9 @@ const BOUNTY_ACTIONS = new Set(['acceptQuest', 'deliverBounty', 'abandonQuest', 
  *  의뢰 클리어). 이사 코드와 개발 도구는 플레이로 얻은 명성이 아니라 기여로 세지 않는다.
  *  네임드 결투 성공(resolveChallenge)은 명성을 주지 않고 납품을 열 뿐이라, 토벌 기여와 항해일지는 뒤이은 납품(deliverBounty)이 한 번만 쓴다 */
 const GUILD_ACTIONS = new Set(['catch', 'sell', 'exhibit', 'deliverBounty', 'claimRelief']);
+
+/** 주간 명성 집계 제외 액션 — 비게임플레이 주입(이사·개발 명령·지원 코드)은 주간 순위에 넣지 않는다 */
+const WEEKLY_FAME_EXCLUDED = new Set(['import', 'debug', 'debugBatch', 'claimRelief']);
 
 // 액션 페이싱 게이트 — 서버 추첨으로 가치를 생성하는 catch(last_catch_at 기준)와
 // 쓰기 비용이 큰 sendLetter(letters 최근 발송 시각 기준)만 각각 독립 간격을 검사한다.
@@ -853,6 +857,11 @@ async function route(req: Req, res: Res): Promise<void> {
       && (action.type === 'boot' || ((action.type === 'catch' || action.type === 'sell' || action.type === 'extractEnergy') && prevFortune?.day !== out.state.fortune.day))) {
     fragments.push(recordDailyFortuneFragment(guard, uid, out.state.fortune));
   }
+  // 주간 명성 집계 — 빠른 캐치와 일반 확정 경로 모두에서 플레이로 얻은 명성 증가분을 원자적으로 누적한다.
+  const fameDelta = out.state.fame - Number(row.fame);
+  if (!WEEKLY_FAME_EXCLUDED.has(action.type) && fameDelta > 0) {
+    fragments.push(weeklyFameFragment(guard, uid, fameDelta, nowISO));
+  }
 
   const readVersion = Number(row.version);
   const nextVersion = readVersion + 1;
@@ -933,6 +942,9 @@ async function route(req: Req, res: Res): Promise<void> {
   }
   if (pendingNickname !== null) setNick(uid, pendingNickname);
   if (out.state.fame !== Number(row.fame)) setFame(uid, out.state.fame);
+  if (user.email !== null && action.type === 'catch' && out.result.type === 'catch') {
+    broadcastCatchFx(uid, { fishId: out.result.fishId, form: out.result.info.form });
+  }
 
   // 후속 쓰기 — 이벤트 append, 활동일, 주기 스냅샷, 만료 의뢰 정리. 유실 허용 묶음이라 응답 뒤에 실행하고
   // 실패해도 상태는 되돌리지 않는다. 다만 조용히 잃지 않도록 보고한다.

@@ -5,6 +5,8 @@
 
 import { safeLook } from '../content/wardrobe.js';
 import type { Look } from '../content/wardrobe.js';
+import type { FormId } from '../content/fish.js';
+import type { RegionId } from '../content/places.js';
 
 export type Dir = 0 | 1 | 2 | 3;
 /** 찌가 떠 있는 자리(어군 위치) — 낚싯줄을 드리웠을 때만 보낸다 */
@@ -39,6 +41,7 @@ export type ServerMessage =
   // 길드 가입 신청의 도착(길드장에게, nick은 신청한 사람), 처리 결과, 길드원 상태 갱신(레벨업·스킬·일지 등)
   | { t: 'guild'; kind: 'request' | 'approved' | 'rejected' | 'updated'; guild: string; nick: string | null }
   | { t: 'mail' } // 새 우편 도착 알림. 받는 사람에게만 간다
+  | { t: 'catchFx'; uid: string; region: RegionId; x: number; y: number; fishId: string; form?: FormId } // 다른 플레이어가 물고기를 낚았을 때 수면 튀어오르기 연출
   | { t: 'error'; code: 'chat-guest' | 'chat-rate' | 'chat-length' | 'chat-restricted' | 'chat-no-guild' | 'chat-global-cooldown' | 'chat-duplicate'; retryAfterMs?: number };
 
 /** WebSocket 경로. 게임 서버와 같은 오리진이다 */

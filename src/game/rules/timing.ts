@@ -9,6 +9,12 @@ export function hashToUnit(input: string): number {
     hash ^= input.charCodeAt(i);
     hash = Math.imul(hash, 0x01000193);
   }
+  // 최종 혼합 — 비슷한 입력(연속 버전)도 출력이 고르게 흩어지게 한다
+  hash ^= hash >>> 16;
+  hash = Math.imul(hash, 0x85ebca6b);
+  hash ^= hash >>> 13;
+  hash = Math.imul(hash, 0xc2b2ae35);
+  hash ^= hash >>> 16;
   return (hash >>> 0) / 0x100000000;
 }
 
