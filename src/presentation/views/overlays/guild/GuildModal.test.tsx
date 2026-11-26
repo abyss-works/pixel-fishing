@@ -11,6 +11,7 @@ const s = vi.hoisted(() => ({
   you: 'L' as string | null,
   loading: false,
   failed: false,
+  refresh: vi.fn(),
   act: vi.fn(async (_op: unknown): Promise<{ ok: true; result?: 'joined' | 'requested'; recovered?: number } | { ok: false; error: string }> => ({ ok: true })),
   request: null as { code: string; name: string; requestedAt: string } | null,
   preview: null as unknown,
@@ -20,7 +21,7 @@ const s = vi.hoisted(() => ({
   publicRefresh: vi.fn(),
 }));
 vi.mock('../../../../features/guild/service/useGuild', () => ({
-  useGuild: () => ({ available: true, guild: s.guild, request: s.request, loading: s.loading, failed: s.failed, you: s.you, act: s.act }),
+  useGuild: () => ({ available: true, guild: s.guild, request: s.request, loading: s.loading, failed: s.failed, you: s.you, refresh: s.refresh, act: s.act }),
 }));
 vi.mock('../../../../features/guild/service/useGuildInvite', () => ({
   useGuildInvite: (code: string | null) => ({ preview: code ? s.preview : null, settled: code !== null, failed: false, refresh: vi.fn() }),
@@ -640,6 +641,8 @@ describe('GuildModal', () => {
     rerender(<GuildModal gold={0} artifacts={{ artifacts: [] }} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
     expect(screen.getByText('길드 정보를 열지 못했어요.')).toBeTruthy();
     expect(screen.queryByText('길드 정보를 불러오는 중이에요.')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(s.refresh).toHaveBeenCalledTimes(1);
 
     s.failed = false;
     s.guild = GUILD;

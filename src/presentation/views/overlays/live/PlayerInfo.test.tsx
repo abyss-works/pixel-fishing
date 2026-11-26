@@ -12,9 +12,13 @@ const s = vi.hoisted(() => ({
   relation: null as null | 'friend' | 'incoming' | 'outgoing',
   blocked: false as boolean | null,
   modFailed: false,
+  friendsFailed: false,
+  friendsRefresh: vi.fn(),
   reload: vi.fn(),
   loading: false,
   failed: false,
+  unavailable: false,
+  profileRetry: vi.fn(),
   profile: {
     nickname: '갈치',
     boat: 2,
@@ -45,10 +49,22 @@ vi.mock('../../../../features/account/service/accountActions', () => ({
     accountFailed ? 'unverified' : account === null ? 'guest' : 'account',
 }));
 vi.mock('../../../../features/live/service/usePlayerProfile', () => ({
-  usePlayerProfile: () => ({ profile: s.loading || s.failed ? null : s.profile, loading: s.loading, failed: s.failed }),
+  usePlayerProfile: () => ({
+    profile: s.loading || s.failed || s.unavailable ? null : s.profile,
+    loading: s.loading,
+    failed: s.failed,
+    unavailable: s.unavailable,
+    retry: s.profileRetry,
+  }),
 }));
 vi.mock('../../../../features/friends/service/useFriends', () => ({
-  useFriends: () => ({ groups: { friends: [], incoming: [], outgoing: [] }, offline: false, act: s.act }),
+  useFriends: () => ({
+    groups: s.friendsFailed ? null : { friends: [], incoming: [], outgoing: [] },
+    failed: s.friendsFailed,
+    offline: false,
+    refresh: s.friendsRefresh,
+    act: s.act,
+  }),
 }));
 vi.mock('../../../../features/friends/model/friends', async importOriginal => ({
   ...await importOriginal<object>(),
@@ -70,8 +86,10 @@ describe('PlayerInfo', () => {
     s.relation = null;
     s.blocked = false;
     s.modFailed = false;
+    s.friendsFailed = false;
     s.loading = false;
     s.failed = false;
+    s.unavailable = false;
     s.profile = {
       nickname: '갈치',
       boat: 2,
@@ -263,7 +281,7 @@ describe('PlayerInfo', () => {
     expect(emptyCards[0]).not.toHaveClass('border-epic', 'border-legend', 'border-rare');
   });
 
-  it('불러오기 중과 불러오기 실패 상태를 구분해 표시한다', () => {
+  it('불러오기 중과 불러오기 실패 상태를 구분해 표시하고 실패 시 다시 시도 버튼을 제공한다', () => {
     s.loading = true;
     const { rerender } = show();
     expect(screen.getByText('정보를 불러오는 중이에요.')).toBeTruthy();
@@ -272,6 +290,8 @@ describe('PlayerInfo', () => {
     s.failed = true;
     rerender(<PlayerInfo target={target} self={false} account="me@example.com" setToast={vi.fn()} />);
     expect(screen.getByText(/정보를 불러오지 못했어요/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(s.profileRetry).toHaveBeenCalledTimes(1);
   });
 
   it('차단 정보를 읽지 못하면 차단 버튼 자리에 안내와 다시 확인 버튼을 보인다', () => {
@@ -282,6 +302,15 @@ describe('PlayerInfo', () => {
     expect(screen.getByText('차단 정보를 불러오지 못했어요.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '다시 확인' }));
     expect(s.reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('친구 정보를 읽지 못하면 친구 버튼 자리에 안내와 다시 확인 버튼을 보인다', () => {
+    s.friendsFailed = true;
+    show();
+    expect(screen.queryByRole('button', { name: '친구 요청' })).toBeNull();
+    expect(screen.getByText('친구 정보를 불러오지 못했어요.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '다시 확인' }));
+    expect(s.friendsRefresh).toHaveBeenCalledTimes(1);
   });
 
   it('달성한 업적이 없을 때 달성만 보기 토글은 빈 상태 안내를 보인다', () => {

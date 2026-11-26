@@ -7,6 +7,7 @@ import {
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import type { GuildConfirm, GuildInfo, GuildOp } from '../../../../features/guild/model/guild';
 import { useGuild } from '../../../../features/guild/service/useGuild';
+import Button from '../../../ui/Button';
 import ConfirmDialog from '../../../ui/ConfirmDialog';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import Inset from '../../../ui/Inset';
@@ -43,7 +44,7 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
   onGoldChanged: () => Promise<void> | void;
   onClose: () => void;
 }) {
-  const { guild, request, loading, failed, you, act } = useGuild(true, true);
+  const { guild, request, loading, failed, you, act, refresh } = useGuild(true, true);
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<GuildConfirm | null>(null);
   const [dialogHost, setDialogHost] = useState<HTMLDivElement | null>(null);
@@ -84,8 +85,9 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
     )
     : failed || (guild !== null && !you)
       ? (
-        <div className="flex h-40 items-center justify-center">
-          <Note tone="warn">길드 정보를 열지 못했어요.</Note>
+        <div className="flex h-40 flex-col items-center justify-center gap-2 text-center">
+          <Note tone="warn" className="my-0">길드 정보를 열지 못했어요.</Note>
+          <Button size="sm" onClick={refresh}>다시 시도</Button>
         </div>
       )
       : guild && you

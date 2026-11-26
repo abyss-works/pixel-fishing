@@ -16,12 +16,8 @@ export function useChatModeration(listOpen: boolean) {
   const key = ['chat-blocks', uid];
   const q = useQuery({
     queryKey: key,
-    // 통신·서버 오류는 성공 값으로 삼키지 않고 실패로 올려 화면이 조회 실패를 구분하게 한다
-    queryFn: async () => {
-      const result = await readBlocks();
-      if ('error' in result && result.error === 'failed') throw new Error('chat-blocks-failed');
-      return result;
-    },
+    // readBlocks가 던지는 AppError를 감싸지 않고 그대로 전파해 QueryProvider의 5xx/429 재시도 정책이 동작하게 한다
+    queryFn: readBlocks,
     enabled: ready && consentReady && uid !== null && listOpen,
   });
   const unavailable = ready && uid === null;

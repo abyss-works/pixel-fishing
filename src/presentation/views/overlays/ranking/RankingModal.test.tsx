@@ -114,13 +114,18 @@ describe('랭킹 창', () => {
     expect(screen.getByRole('status', { name: '불러오는 중' })).toBeInTheDocument();
   });
 
-  it('조회 실패 시 오류 안내를 보이고, 빈 목록이면 빈 상태 안내를 보인다', async () => {
+  it('조회 실패 시 오류 안내와 다시 시도 버튼을 보이고, 빈 목록이면 빈 상태 안내를 보인다', async () => {
     state.errors.add('fame');
     state.results = {
+      fame: { board: 'fame', top: [{ rank: 1, nickname: '가', value: 1200, me: false }], me: null },
       namedClears: { board: 'namedClears', top: [], me: null },
     };
     show();
     expect(await screen.findByText(/랭킹을 열지 못했어요/)).toBeInTheDocument();
+
+    state.errors.delete('fame');
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(await screen.findByText('1,200')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '네임드 토벌' }));
     expect(await screen.findByText('아직 기록이 없어요.')).toBeInTheDocument();

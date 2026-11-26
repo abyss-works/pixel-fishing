@@ -36,6 +36,7 @@ export function useFriends(enabled: boolean, poll = false) {
     loading: q.isPending,
     failed: q.isError,
     offline: q.isSuccess && q.data === null,
+    refresh: () => { void q.refetch(); },
     act,
   };
 }

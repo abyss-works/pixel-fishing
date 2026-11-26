@@ -100,7 +100,7 @@ export default function DexDetail({ fish, game, initialForm = 0, onClose }: {
               ) : (
                 <div className="flex flex-1 min-h-24 items-center justify-center px-3">
                   <RankingStatus loading={ranking.loading} failed={ranking.failed} offline={false}
-                                 empty={!!ranking.data && ranking.data.top.length === 0} />
+                                 empty={!!ranking.data && ranking.data.top.length === 0} onRetry={ranking.retry} />
                 </div>
               )}
             </Inset>

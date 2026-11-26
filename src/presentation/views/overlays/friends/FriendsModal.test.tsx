@@ -5,16 +5,19 @@ import type { FriendItem } from '../../../../features/friends/model/friends';
 import FriendsModal from './FriendsModal';
 
 const s = vi.hoisted(() => ({
-  groups: { friends: [], incoming: [], outgoing: [] } as { friends: FriendItem[]; incoming: FriendItem[]; outgoing: FriendItem[] },
+  groups: { friends: [], incoming: [], outgoing: [] } as { friends: FriendItem[]; incoming: FriendItem[]; outgoing: FriendItem[] } | null,
+  failed: false,
+  refresh: vi.fn(),
   act: vi.fn(async () => ({ ok: true, result: 'accepted' })),
 }));
 vi.mock('../../../../features/friends/service/useFriends', () => ({
-  useFriends: () => ({ groups: s.groups, loading: false, failed: false, act: s.act }),
+  useFriends: () => ({ groups: s.groups, loading: false, failed: s.failed, refresh: s.refresh, act: s.act }),
 }));
 const moderation = vi.hoisted(() => ({
   blocks: [{ uid: 'b1', nick: '무례' }] as Array<{ uid: string; nick: string | null }> | string | null,
   loading: false,
   failed: false,
+  reload: vi.fn(),
   unblock: vi.fn(async () => null),
 }));
 vi.mock('../../../../features/live/service/useChatModeration', () => ({
@@ -22,6 +25,7 @@ vi.mock('../../../../features/live/service/useChatModeration', () => ({
     blocks: moderation.blocks,
     loading: moderation.loading,
     failed: moderation.failed,
+    reload: moderation.reload,
     unblock: moderation.unblock,
   }),
 }));
@@ -39,6 +43,7 @@ describe('FriendsModal(소셜 창)', () => {
   afterEach(() => {
     cleanup();
     s.groups = { friends: [], incoming: [], outgoing: [] };
+    s.failed = false;
     moderation.blocks = [{ uid: 'b1', nick: '무례' }];
     moderation.loading = false;
     moderation.failed = false;
@@ -112,6 +117,8 @@ describe('FriendsModal(소셜 창)', () => {
     fireEvent.click(screen.getByRole('button', { name: '차단' }));
     expect(screen.getByText('차단 목록을 열지 못했어요.')).toBeTruthy();
     expect(screen.queryByText('차단 목록을 불러오는 중이에요.')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(moderation.reload).toHaveBeenCalledTimes(1);
     cleanup();
 
     moderation.blocks = [];
@@ -120,5 +127,14 @@ describe('FriendsModal(소셜 창)', () => {
     render(<FriendsModal setToast={vi.fn()} onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: '차단' }));
     expect(screen.getByText(/차단한 사람이 없어요\./)).toBeTruthy();
+  });
+
+  it('친구 목록 조회 실패 시 다시 시도 버튼으로 재조회를 요청한다', () => {
+    s.groups = null;
+    s.failed = true;
+    render(<FriendsModal setToast={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByText(/친구 목록을 열지 못했어요/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(s.refresh).toHaveBeenCalledTimes(1);
   });
 });
