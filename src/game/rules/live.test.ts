@@ -185,6 +185,16 @@ describe('ServerMessage nick', () => {
   });
 });
 
+describe('ServerMessage mail', () => {
+  it('mail 메시지는 추가 필드 없이 t: mail만 가진다', () => {
+    type MailMessage = Extract<ServerMessage, { t: 'mail' }>;
+    expectTypeOf<MailMessage>().toEqualTypeOf<{ t: 'mail' }>();
+
+    const msg: ServerMessage = { t: 'mail' };
+    expect(JSON.parse(JSON.stringify(msg))).toEqual({ t: 'mail' });
+  });
+});
+
 describe('globalChatCooldown', () => {
   it('직전 전체 채팅 시각이 없거나 10초 이상 지나면 허용한다', () => {
     expect(GLOBAL_CHAT_COOLDOWN_MS).toBe(10_000);
