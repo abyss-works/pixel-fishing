@@ -89,16 +89,18 @@ describe('메시지 창', () => {
     }
   });
 
-  it('켜진 채널 칩은 일반 켜짐 단계라 골드로 세우지 않고, 꺼진 칩은 보조색이며 스워치도 흐려진다', () => {
+  it('켜진 채널 칩은 채널색 테두리·채운 사각형·밝은 글자이고, 꺼진 칩은 어두운 테두리·속이 빈 1px 채널색 사각형·흐린 글자이며 체크 아이콘이 없다', () => {
     render(<MessageLog log={logOf(1)} filter={['global', 'local', 'system']} onToggle={() => {}} channels={FILTER_CHANNELS} />);
     const globalChip = screen.getByRole('button', { name: '전체', pressed: true });
-    expect(globalChip).toHaveClass('border-line', 'text-text');
+    expect(globalChip).toHaveClass('border-chat-global!', 'text-text');
     expect(globalChip).not.toHaveClass('text-gold');
-    expect(globalChip.querySelector('.bg-chat-global')).toHaveClass('size-2', 'shrink-0');
+    expect(globalChip.querySelector('[data-glyph="check"]')).toBeNull();
+    expect(globalChip.querySelector('.bg-chat-global')).toHaveClass('size-2', 'shrink-0', 'border', 'border-chat-global');
 
     const guildChip = screen.getByRole('button', { name: '길드', pressed: false });
-    expect(guildChip).toHaveClass('border-transparent', 'text-text-dim');
-    expect(guildChip.querySelector('.bg-chat-guild\\/35')).toHaveClass('size-2', 'shrink-0');
+    expect(guildChip).toHaveClass('border-line-dim!', 'text-text-dim');
+    expect(guildChip.querySelector('[data-glyph="check"]')).toBeNull();
+    expect(guildChip.querySelector('.bg-transparent')).toHaveClass('size-2', 'shrink-0', 'border', 'border-chat-guild');
   });
 
   it('꺼 둔 채널의 새 글 점은 네모 골드 점이다', () => {
