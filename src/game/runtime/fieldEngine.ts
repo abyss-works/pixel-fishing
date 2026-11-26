@@ -1,4 +1,4 @@
-import { FISH, canFishSpot, judgeTiming } from '../rules/logic';
+import { FISH, canFishSpot, judgeTiming, redZoneCenter } from '../rules/logic';
 import type { CatchInfo, GameState, Judgment } from '../rules/logic';
 import type { SpotId } from '../content/spots';
 import { zoneOfSpot, topZoneOf } from '../content/zones';
@@ -70,6 +70,8 @@ export interface FieldCallbacks {
   onWarmup?: () => void;
   /** 지금 계정이 게스트인가. 게스트는 규칙 판정이 허용하지 않는 장소로 가는 트리거에서 되밀린다 */
   guest?: boolean;
+  /** 캐스트 시드의 현재 값 — 없으면 클라이언트가 그 캐스트의 시드를 고른다 */
+  seedContext?: () => { uid: string; saveVersion: number } | null;
 }
 
 /**
@@ -114,6 +116,8 @@ export class GameFieldEngine {
   /** 잠금 중에는 이동, 트리거 판정, 낚시 시작 같은 게임 조작이 멈춘다 */
   private controlLocked = false;
   private biteStart = 0;
+  /** 이번 대기 단계의 빨간 존 중심(바 비율) */
+  private redCenter = 0.5;
   /** 챔질 요청의 세대 번호. 챔질을 보내거나 낚시를 접을 때마다 올라, 이전 요청의 응답이 지금 던짐에 적용되지 않게 한다 */
   private hookSeq = 0;
   /** 이번 던짐에서 마지막으로 낸 캐치의 판정 — 입질 대기가 방치(auto) 사이클인지 가른다. 줄을 거두거나 새로 던지면 null */
@@ -294,6 +298,7 @@ export class GameFieldEngine {
     this.hookSeq += 1;
     this.school = null;
     this.lastJudgment = null;
+    this.redCenter = 0.5;
     this.transition('idle', null, null);
   }
 
@@ -310,10 +315,11 @@ export class GameFieldEngine {
     if (this.snapshot.phase === 'bite') {
       const school = this.school;
       if (!school) return;
-      const elapsed = (Date.now() - this.biteStart) / 1000 / rodAxes(this.game).sweep.value;
+      const biteElapsed = Date.now() - this.biteStart;
+      const elapsed = biteElapsed / 1000 / rodAxes(this.game).sweep.value;
       const zones = powerZones(this.game, school.spot);
       if (zones.yellow === 0) this.callbacks.onEvent({ type: 'line-cut' });
-      this.hookFish(judgeTiming(elapsed, zones.yellow / 100, zones.red / 100));
+      this.hookFish(judgeTiming(elapsed, zones.yellow / 100, zones.red / 100, this.redCenter), biteElapsed);
       return;
     }
     if (this.snapshot.phase === 'idle') this.tryCast(false);
@@ -476,6 +482,7 @@ export class GameFieldEngine {
         ? (Date.now() - this.biteStart) / 1000 / axes.sweep.value : null,
       zone: zones ? zones.yellow / 100 : 0,
       red: zones ? zones.red / 100 : 0,
+      redCenter: this.redCenter,
       t: now / 1000,
       catchT: this.snapshot.phase === 'catch' ? (Date.now() - this.catchStart) / 1000 : null,
       catchFish: this.snapshot.fishId
@@ -504,14 +511,16 @@ export class GameFieldEngine {
     if (!silent) this.callbacks.onEvent({ type: 'cast', spot: nearby.spot });
   }
 
-  private hookFish(judgment: Judgment): void {
+  private hookFish(judgment: Judgment, biteElapsed?: number): void {
     const school = this.school;
     if (!school || this.snapshot.phase !== 'bite') return;
     this.lastJudgment = judgment;
     this.hookSeq += 1;
     const seq = this.hookSeq;
     this.transition('catch');
-    when(this.callbacks.dispatch({ type: 'catch', spot: school.spot, judgment }), result => {
+    const action: CatchAction = { type: 'catch', spot: school.spot, judgment };
+    if (biteElapsed !== undefined) action.biteElapsed = biteElapsed;
+    when(this.callbacks.dispatch(action), result => {
       // 낚시를 접은 뒤 도착한 응답은 낚시 단계에 적용하지 않는다. 포획이 확정된 응답의 획득 안내만 낸다
       if (seq !== this.hookSeq) {
         if (result.status === 'ok' && result.result.type === 'catch') {
@@ -574,6 +583,7 @@ export class GameFieldEngine {
 
     const school = this.school;
     if (phase === 'wait' && school) {
+      this.renewRedCenter(school);
       // 도시락 입질 단축은 방치 사이클(직전 캐치가 auto)의 대기에만 넣는다. 수동 낚시와 첫 대기에는 넣지 않는다
       const bite = biteWaitOf(
         createPlayerContext({
@@ -605,6 +615,15 @@ export class GameFieldEngine {
       : undefined;
     const ms = phaseDurationMs(phase, this.game.rod, undefined, fish?.rarity);
     this.armPhaseTimer(this.phaseStartAt + ms, phase);
+  }
+
+  private renewRedCenter(school: School): void {
+    const zones = powerZones(this.game, school.spot);
+    const context = this.callbacks.seedContext?.() ?? null;
+    const seed = context
+      ? `${context.uid}:${context.saveVersion}`
+      : `local:${Math.random()}`;
+    this.redCenter = redZoneCenter(seed, zones.yellow / 100, zones.red / 100);
   }
 
   private scheduleWaitTimer(biteMs: number): void {

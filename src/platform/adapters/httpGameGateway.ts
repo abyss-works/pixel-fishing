@@ -91,6 +91,10 @@ export class HttpGameGateway implements GameGateway {
     return s;
   }
 
+  saveVersion(): number | null {
+    return this.lastVersion;
+  }
+
   // 실패는 전부 AppError로 던진다 — 여기서 UX를 정하지 않는다 (에러 처리 정책 소관)
   // 표시용 프로필 읽기 — 정상 응답(빈 닉네임 포함)과 읽기 실패를 구분해 돌려준다.
   async getProfile(): Promise<GameProfile> {

@@ -46,7 +46,7 @@ function AppContent() {
   const {
     game, dispatch, nickname, profileStatus, devTools, rename, sync, syncLabel,
     blocker, loading, consentPrompt, acceptConsent, retryLoadConsent,
-    guestProgress, adoptAccount, resync, applyDevReset, refreshAccountStatus,
+    guestProgress, adoptAccount, resync, applyDevReset, refreshAccountStatus, saveVersion,
   } = useGame({ setToast });
   useEffect(() => {
     setMirrorEnv({ blocked: blocker !== null, loading });
@@ -176,7 +176,7 @@ function AppContent() {
         dispatch={dispatch} setToast={setToast} toasts={toasts} onDismissToast={dismissToast} onMirrorEnv={setMirrorEnv} onScene={go} onPlace={place}
         log={log} syncLabel={syncLabel} syncState={sync} guestProgress={guestProgress}
         account={account} accountChecked={accountChecked} accountFailed={accountFailed} uid={uid} nickname={nickname} profileStatus={profileStatus}
-        onRename={rename} onAuthChanged={onAuthChanged} onResync={resync}
+        onRename={rename} onAuthChanged={onAuthChanged} onResync={resync} saveVersion={saveVersion}
         blocker={
           blocker === 'consent' ? (
             <ConsentModal

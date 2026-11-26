@@ -133,6 +133,8 @@ interface GameViewProps {
   onAuthChanged: () => Promise<void>;
   /** 액션 밖에서 서버가 바꾼 게임 상태를 다시 읽는다(길드 보너스 기부의 골드) */
   onResync: () => Promise<void>;
+  /** 현재 저장 버전을 읽는다 — 모르면 null */
+  saveVersion?: () => number | null;
   /** 진행을 막는 앱 모달(새 버전, 다른 창 접속) — 앱 최상위가 실패 정책에 따라 공급한다 */
   blocker?: ReactNode;
   /** 스테이지 아래 가운데에 놓을 환경 배지 — 앱 최상위가 개발 환경과 함께 공급한다 */
@@ -418,7 +420,7 @@ export default function GameView(props: GameViewProps) {
           <Field key={scene.id} region={scene.id} game={game} dispatch={props.dispatch} setToast={props.setToast}
                  onScene={go} guest={isConfirmedGuest(props.account, props.accountChecked)} onGuestBlocked={onGuestBlocked} paused={encounter !== null || props.blocker != null}
                  initialPos={props.entryPos ?? undefined} placeSeq={props.placeSeq}
-                 locked={trip !== null} statusSlot={statusSlot} catchSlot={catchSlot} />
+                 locked={trip !== null} statusSlot={statusSlot} catchSlot={catchSlot} uid={props.uid} saveVersion={props.saveVersion} />
         )}
 
         <HudLayout game={game} bagBonus={bagBonus} scene={scene} log={log} covered={covered}
