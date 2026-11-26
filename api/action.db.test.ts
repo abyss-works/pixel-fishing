@@ -2521,7 +2521,7 @@ describe('일반 의뢰 진행도 동기 반영', () => {
   });
 });
 
-describe('PF-764 편지 독립 쿨다운과 PF-720 닉네임 원자성', () => {
+describe('편지 독립 쿨다운과 닉네임 변경 원자성', () => {
   it('catch와 sell 직후 1초 이내에도 sendLetter는 성공하고, 연속 sendLetter만 429로 제한되며 1초 뒤 다시 성공한다', async () => {
     const uid = await seed({
       state: { bag: [fish('crucian')] },
