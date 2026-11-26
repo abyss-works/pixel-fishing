@@ -2637,3 +2637,121 @@ describe('게스트·배 0단계 보유 소비 아이템 사용', () => {
     expect((db.events as { type: string }[]).map(e => e.type).sort()).toEqual(['eat', 'eat', 'usePotion']);
   });
 });
+
+describe('주간 명성 집계', () => {
+  it('fastCatch와 일반 확정(스냅샷 경계) 캐치 모두 ranking_weekly_fame을 원자적으로 누적한다', async () => {
+    const { SNAPSHOT_EVERY } = await import('../src/game/rules/balance.js');
+    const { gameWeekStartDay } = await import('../src/game/rules/time.js');
+    // NOW = 2030-03-04T05:06:07Z (월요일 KST 14:06) -> week_start = 2030-03-04
+    const weekStart = gameWeekStartDay(NOW);
+
+    // 1. fastCatch 경로 (version 2)
+    const fastUid = await seed({ state: { firstCatch: endedFirstCatch(), fame: 10 }, version: 2 });
+    const fast1 = await callAction(userToken(fastUid), { type: 'catch', spot: 'pond', judgment: 'good' });
+    expect(fast1.status).toBe(200);
+    const fameAfter1 = Number((await env.client.query<{ fame: string }>(
+      'select fame from public.saves_current where user_id = $1', [fastUid],
+    )).rows[0].fame);
+    const delta1 = fameAfter1 - 10;
+    expect(delta1).toBeGreaterThan(0);
+
+    // 2차 fastCatch — 같은 주에 합산된다
+    vi.setSystemTime(Date.parse(NOW) + 20_000);
+    const fast2 = await callAction(userToken(fastUid), { type: 'catch', spot: 'pond', judgment: 'good' });
+    expect(fast2.status).toBe(200);
+    const fameAfter2 = Number((await env.client.query<{ fame: string }>(
+      'select fame from public.saves_current where user_id = $1', [fastUid],
+    )).rows[0].fame);
+    const totalFastDelta = fameAfter2 - 10;
+    expect(totalFastDelta).toBeGreaterThan(delta1);
+
+    const { rows: fastRows } = await env.client.query<{ week_start: string; fame_gained: string; reached_at: Date }>(
+      `select week_start::text as week_start, fame_gained, reached_at from public.ranking_weekly_fame where user_id = $1`,
+      [fastUid],
+    );
+    expect(fastRows).toHaveLength(1);
+    expect(fastRows[0].week_start).toBe(weekStart);
+    expect(Number(fastRows[0].fame_gained)).toBe(totalFastDelta);
+    expect(fastRows[0].reached_at.toISOString()).toBe(new Date(Date.parse(NOW) + 20_000).toISOString());
+
+    // 2. 일반 commitAction 경로 (snapshotDue: version = SNAPSHOT_EVERY - 1 -> skipDetail = false)
+    const fullUid = await seed({ state: { firstCatch: endedFirstCatch(), fame: 10 }, version: SNAPSHOT_EVERY - 1 });
+    const fullRes = await callAction(userToken(fullUid), { type: 'catch', spot: 'pond', judgment: 'good' });
+    expect(fullRes.status).toBe(200);
+    const fullFame = Number((await env.client.query<{ fame: string }>(
+      'select fame from public.saves_current where user_id = $1', [fullUid],
+    )).rows[0].fame);
+    const { rows: fullRows } = await env.client.query<{ week_start: string; fame_gained: string }>(
+      `select week_start::text as week_start, fame_gained from public.ranking_weekly_fame where user_id = $1`,
+      [fullUid],
+    );
+    expect(fullRows).toEqual([{ week_start: weekStart, fame_gained: String(fullFame - 10) }]);
+  });
+
+  it('import·debug·debugBatch·claimRelief와 409 버전 충돌은 주간 명성을 올리지 않는다', async () => {
+    // 1. import
+    const importer = await seed({ state: {}, admin: true });
+    const importRes = await callAction(userToken(importer), {
+      type: 'import',
+      save: { ...newState(), fame: 500 },
+    });
+    expect(importRes.status).toBe(200);
+
+    // 2. debug (stats.set) & debugBatch
+    const debuggerUid = await seed({ state: {} });
+    const dbgRes = await callAction(userToken(debuggerUid), { type: 'debug', command: 'stats.set', args: { fame: 300 } });
+    expect(dbgRes.status).toBe(200);
+    const dbgBatchRes = await callAction(userToken(debuggerUid), {
+      type: 'debugBatch',
+      steps: [{ command: 'stats.set', args: { fame: 700 } }],
+    });
+    expect(dbgBatchRes.status).toBe(200);
+
+    // 3. claimRelief
+    const reliefUid = await seed({ state: {} });
+    await env.client.query(
+      `insert into public.reliefs (code, gold, fame, rod, boat, dex) values ('WEEKLY-RELIEF', 0, 400, 1, 0, '{}'::jsonb)`,
+    );
+    const reliefRes = await callAction(userToken(reliefUid), { type: 'claimRelief', code: 'WEEKLY-RELIEF' });
+    expect(reliefRes.status).toBe(200);
+
+    for (const uid of [importer, debuggerUid, reliefUid]) {
+      const { rows } = await env.client.query(
+        'select 1 from public.ranking_weekly_fame where user_id = $1',
+        [uid],
+      );
+      expect(rows).toHaveLength(0);
+    }
+
+    // 4. 409 버전 충돌 시 ranking_weekly_fame 미반영
+    const conflictUid = await seed({ state: { firstCatch: endedFirstCatch(), fame: 0 } });
+    const commitMod = await import('./_data/commit.js');
+    const origCommit = commitMod.commitAction;
+    vi.spyOn(commitMod, 'commitAction').mockImplementationOnce(async (db, versionUpdate, fragments) => {
+      await env.client.query('update public.saves_current set version = version + 1 where user_id = $1', [conflictUid]);
+      return origCommit(db, versionUpdate, fragments);
+    });
+    const conflictRes = await callAction(userToken(conflictUid), { type: 'catch', spot: 'pond', judgment: 'good' });
+    expect(conflictRes.status).toBe(409);
+    expect((await env.client.query('select 1 from public.ranking_weekly_fame where user_id = $1', [conflictUid])).rows).toHaveLength(0);
+  });
+
+  it('월요일 KST 04:00 경계를 지나면 새 week_start 행으로 분리 집계된다', async () => {
+    const uid = await seed({ state: { firstCatch: endedFirstCatch(), fame: 0 } });
+    // 일요일 밤 ~ 월요일 KST 03:59:59 = 2030-03-10T18:59:59Z -> week_start = 2030-03-04
+    vi.setSystemTime(Date.parse('2030-03-10T18:59:59.000Z'));
+    expect((await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'good' })).status).toBe(200);
+
+    // 월요일 KST 04:00:15 = 2030-03-10T19:00:15Z (캐치 간격 충족) -> week_start = 2030-03-11
+    vi.setSystemTime(Date.parse('2030-03-10T19:00:15.000Z'));
+    expect((await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'good' })).status).toBe(200);
+
+    const { rows } = await env.client.query<{ week_start: string; fame_gained: string }>(
+      `select week_start::text as week_start, fame_gained from public.ranking_weekly_fame where user_id = $1 order by week_start`,
+      [uid],
+    );
+    expect(rows.map(r => r.week_start)).toEqual(['2030-03-04', '2030-03-11']);
+    expect(rows.every(r => Number(r.fame_gained) > 0)).toBe(true);
+  });
+});
+
