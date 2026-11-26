@@ -134,6 +134,8 @@ export type CumulativeBonusMetric =
   | { kind: 'counter'; key: string }
   | { kind: 'legendarySum'; night: boolean }
   | { kind: 'zoneLegendarySum'; zone: ZoneId; night: boolean }
+  | { kind: 'dexZoneLegendarySum'; zone: ZoneId; night: boolean }
+  | { kind: 'dexZoneVariantSum'; zone: ZoneId }
   | { kind: 'artifactLevel'; artifactId: string };
 
 /** 누적 보너스 단계 하나 */
@@ -841,11 +843,11 @@ const ZONE_BONUS_SERIES: readonly CumulativeBonusSeries[] = ZONE_IDS
     return [
       {
         id: `bonus-zone-day-legendary-${zone}`,
-        name: `${zoneName} 전설 손맛`,
-        desc: `${zoneName}에서 직접 챔질로 낮에 나타나는 전설 어종을 낚아요.`,
+        name: `${zoneName} 전설`,
+        desc: `${zoneName}에서 낮에 나타나는 전설 어종을 낚아요.`,
         scope: 'zone',
         zone,
-        metric: { kind: 'zoneLegendarySum', zone, night: false },
+        metric: { kind: 'dexZoneLegendarySum', zone, night: false },
         bonusKind: 'rareWeight',
         unit: '마리',
         tierCount: 1,
@@ -853,11 +855,11 @@ const ZONE_BONUS_SERIES: readonly CumulativeBonusSeries[] = ZONE_IDS
       },
       {
         id: `bonus-zone-night-legendary-${zone}`,
-        name: `${zoneName} 밤 전설 손맛`,
-        desc: `${zoneName}에서 직접 챔질로 밤에만 나타나는 전설 어종을 낚아요.`,
+        name: `${zoneName} 밤 전설`,
+        desc: `${zoneName}에서 밤에만 나타나는 전설 어종을 낚아요.`,
         scope: 'zone',
         zone,
-        metric: { kind: 'zoneLegendarySum', zone, night: true },
+        metric: { kind: 'dexZoneLegendarySum', zone, night: true },
         bonusKind: 'nightWeight',
         unit: '마리',
         tierCount: 1,
@@ -865,11 +867,11 @@ const ZONE_BONUS_SERIES: readonly CumulativeBonusSeries[] = ZONE_IDS
       },
       {
         id: `bonus-zone-variant-${zone}`,
-        name: `${zoneName} 돌연변이 손맛`,
-        desc: `${zoneName}에서 직접 챔질로 돌연변이 물고기를 낚아요.`,
+        name: `${zoneName} 돌연변이`,
+        desc: `${zoneName}에서 돌연변이 물고기를 낚아요.`,
         scope: 'zone',
         zone,
-        metric: { kind: 'counter', key: `manual.variant.${zone}` },
+        metric: { kind: 'dexZoneVariantSum', zone },
         bonusKind: 'mutationWeight',
         unit: '마리',
         tierCount: 1,

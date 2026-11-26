@@ -5,6 +5,7 @@ import {
   achievementProgress,
   counterIncrementsForEvents,
   cumulativeBonusProgress,
+  cumulativeBonusValueOf,
   evaluateAchievements,
 } from './achievements';
 import {
@@ -202,13 +203,17 @@ describe('누적 보너스 계산 (achievementBonusesOf)', () => {
     };
     let dayLegSum = 0;
     let nightLegSum = 0;
+    const dex: GameState['dex'] = {};
     for (const z of seaZones) {
       const dayLeg = FISH.find(f => topZoneOfSpot(f.spot) === z && f.rarity === 'legendary' && !f.night)!;
       const nightLeg = FISH.find(f => topZoneOfSpot(f.spot) === z && f.rarity === 'legendary' && f.night === true)!;
+      const ordinary = FISH.find(f => topZoneOfSpot(f.spot) === z && f.rarity === 'common')!;
       // 최대 구역 배수 3 × 2 × 10 = 60, 3 × 1 × 10 = 30; 전역 400 / 200 충족하도록 충분한 값 부여
       counters[`manual.legendary.${dayLeg.id}`] = 100;
       counters[`manual.legendary.${nightLeg.id}`] = 50;
-      counters[`manual.variant.${z}`] = 1_500;
+      dex[dayLeg.id] = { normal: { count: 40, maxSize: 10, first: '2026-11-15' }, variant: { count: 20, maxSize: 10, first: '2026-11-15' } };
+      dex[nightLeg.id] = { normal: { count: 30, maxSize: 10, first: '2026-11-15' } };
+      dex[ordinary.id] = { variant: { count: 1_500, maxSize: 10, first: '2026-11-15' } };
       dayLegSum += 100;
       nightLegSum += 50;
     }
@@ -217,6 +222,7 @@ describe('누적 보너스 계산 (achievementBonusesOf)', () => {
 
     const levelable = ARTIFACTS.filter(a => artifactHasLevel(a));
     const s = seed({
+      dex,
       artifacts: ARTIFACTS.map(a => a.id),
       artifactLevels: Object.fromEntries(levelable.map(a => [a.id, ARTIFACT_MAX_LEVEL])),
       achievementCounters: counters,
@@ -249,6 +255,102 @@ describe('누적 보너스 계산 (achievementBonusesOf)', () => {
     expect(p.activeDelta).toBe(0.048);
     expect(p.maxDelta).toBe(0.08);
     expect(p.nextStep?.threshold).toBe(2_000);
+  });
+
+  it('dexZoneLegendarySum과 dexZoneVariantSum은 구역별 도감 포획 수만 합산하고 네임드를 제외한다', () => {
+    const pacDayLeg = FISH.find(f => topZoneOfSpot(f.spot) === 'pacific' && f.rarity === 'legendary' && !f.night)!;
+    const pacNightLeg = FISH.find(f => topZoneOfSpot(f.spot) === 'pacific' && f.rarity === 'legendary' && f.night === true)!;
+    const pacCommon = FISH.find(f => topZoneOfSpot(f.spot) === 'pacific' && f.rarity === 'common')!;
+    const seaDayLeg = FISH.find(f => topZoneOfSpot(f.spot) === 'seasia' && f.rarity === 'legendary' && !f.night)!;
+
+    const s = seed({
+      dex: {
+        [pacDayLeg.id]: {
+          normal: { count: 2, maxSize: 10, first: '2026-11-15' },
+          variant: { count: 1, maxSize: 10, first: '2026-11-15' },
+        },
+        [pacNightLeg.id]: {
+          normal: { count: 3, maxSize: 10, first: '2026-11-15' },
+        },
+        [pacCommon.id]: {
+          normal: { count: 10, maxSize: 10, first: '2026-11-15' },
+          variant: { count: 4, maxSize: 10, first: '2026-11-15' },
+        },
+        [seaDayLeg.id]: {
+          normal: { count: 7, maxSize: 10, first: '2026-11-15' },
+          variant: { count: 2, maxSize: 10, first: '2026-11-15' },
+        },
+        [NAMED[0].id]: {
+          normal: { count: 99, maxSize: null, first: '2026-11-15' },
+          variant: { count: 99, maxSize: null, first: '2026-11-15' },
+        },
+      },
+    });
+
+    expect(cumulativeBonusValueOf(s, { kind: 'dexZoneLegendarySum', zone: 'pacific', night: false })).toBe(3);
+    expect(cumulativeBonusValueOf(s, { kind: 'dexZoneLegendarySum', zone: 'pacific', night: true })).toBe(3);
+    expect(cumulativeBonusValueOf(s, { kind: 'dexZoneVariantSum', zone: 'pacific' })).toBe(5);
+    expect(cumulativeBonusValueOf(s, { kind: 'dexZoneLegendarySum', zone: 'seasia', night: false })).toBe(7 + 2);
+  });
+
+  it('방치(auto) 캐치도 도감을 갱신해 지역 누적 업적 3종을 올리지만 전역 수동 3종은 올리지 않는다', () => {
+    const pacDayLeg = FISH.find(f => f.spot === 'sea' && f.rarity === 'legendary' && !f.night)!;
+    const pacNightLeg = FISH.find(f => f.spot === 'sea' && f.rarity === 'legendary' && f.night === true)!;
+    const seriesById = (id: string) => CUMULATIVE_BONUS_SERIES.find(s => s.id === id)!;
+
+    // firstCatch와 fortune RNG 간섭을 피하도록 태평양 1해역 시드 + 낮/밤 강제 지정
+    const baseState = seed({
+      boat: 1,
+      rod: 10,
+      fortune: { day: '2026-11-15', kind: 'fish', index: 5 },
+      firstCatch: { pond: { n: 20, active: false }, river: { n: 30, active: false } },
+    });
+
+    const seqRng = (values: number[]) => {
+      let i = 0;
+      return () => values[Math.min(i++, values.length - 1)];
+    };
+
+    // 1) 방치 낮 전설(변이): rarity(0.9999), fish(0.9999), size u1/u2(0.5, 0.5), form(0.001)
+    const autoDayVar = applyAction(
+      baseState,
+      { type: 'catch', spot: 'sea', judgment: 'auto', forcePhase: 'day' },
+      deps({ rng: seqRng([0.9999, 0.9999, 0.5, 0.5, 0.001]) }),
+    );
+    expect(autoDayVar.ok).toBe(true);
+    if (!autoDayVar.ok) return;
+    expect(autoDayVar.state.dex[pacDayLeg.id]?.variant?.count).toBe(1);
+    expect(cumulativeBonusProgress(autoDayVar.state, seriesById('bonus-zone-day-legendary-pacific')).current).toBe(1);
+    expect(cumulativeBonusProgress(autoDayVar.state, seriesById('bonus-zone-variant-pacific')).current).toBe(1);
+    expect(cumulativeBonusProgress(autoDayVar.state, seriesById('bonus-day-legendary')).current).toBe(0);
+    expect(cumulativeBonusProgress(autoDayVar.state, seriesById('bonus-manual-variant')).current).toBe(0);
+
+    // 2) 방치 밤 전설(일반): rarity(0.9999), fish(0.9999=달무리), size u1/u2(0.5, 0.5), form(0.5=normal)
+    const autoNight = applyAction(
+      autoDayVar.state,
+      { type: 'catch', spot: 'sea', judgment: 'auto', forcePhase: 'night' },
+      deps({ rng: seqRng([0.9999, 0.9999, 0.5, 0.5, 0.5]) }),
+    );
+    expect(autoNight.ok).toBe(true);
+    if (!autoNight.ok) return;
+    expect(autoNight.state.dex[pacNightLeg.id]?.normal?.count).toBe(1);
+    expect(cumulativeBonusProgress(autoNight.state, seriesById('bonus-zone-night-legendary-pacific')).current).toBe(1);
+    expect(cumulativeBonusProgress(autoNight.state, seriesById('bonus-night-legendary')).current).toBe(0);
+    expect(cumulativeBonusProgress(autoNight.state, seriesById('bonus-day-legendary')).current).toBe(0);
+    expect(cumulativeBonusProgress(autoNight.state, seriesById('bonus-manual-variant')).current).toBe(0);
+
+    // 3) 직접 챔질(perfect) 낮 전설(변이): 지역 누적과 전역 수동 누적 모두 증가한다
+    const manualDayVar = applyAction(
+      autoNight.state,
+      { type: 'catch', spot: 'sea', judgment: 'perfect', forcePhase: 'day' },
+      deps({ rng: seqRng([0.9999, 0.9999, 0.5, 0.5, 0.001]) }),
+    );
+    expect(manualDayVar.ok).toBe(true);
+    if (!manualDayVar.ok) return;
+    expect(cumulativeBonusProgress(manualDayVar.state, seriesById('bonus-zone-day-legendary-pacific')).current).toBe(2);
+    expect(cumulativeBonusProgress(manualDayVar.state, seriesById('bonus-zone-variant-pacific')).current).toBe(2);
+    expect(cumulativeBonusProgress(manualDayVar.state, seriesById('bonus-day-legendary')).current).toBe(1);
+    expect(cumulativeBonusProgress(manualDayVar.state, seriesById('bonus-manual-variant')).current).toBe(1);
   });
 
   it('catchTooSoon은 누적 입질 대기 단축과 유물 배율을 반영해 정상 빠른 캐치를 429 오탐하지 않는다', () => {

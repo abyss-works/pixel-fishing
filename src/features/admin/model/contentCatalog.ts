@@ -10,6 +10,7 @@ import type {
   AchievementTab,
   CosmeticKind,
   CumulativeBonusKind,
+  CumulativeBonusMetric,
 } from '../../../game/content/achievements';
 import {
   ARTIFACT_LEVEL_COEF,
@@ -613,6 +614,23 @@ function formatBonusDelta(kind: CumulativeBonusKind, value: number): string {
   return `+${pct}%`;
 }
 
+function formatMetricSummary(metric: CumulativeBonusMetric, zoneName: string | null): string {
+  switch (metric.kind) {
+    case 'counter':
+      return metric.key;
+    case 'legendarySum':
+      return metric.night ? '전체 밤 전설 수동 합계' : '전체 낮 전설 수동 합계';
+    case 'zoneLegendarySum':
+      return `${zoneName ?? metric.zone} 수동 ${metric.night ? '밤 ' : ''}전설 합계`;
+    case 'dexZoneLegendarySum':
+      return `${zoneName ?? metric.zone} 도감 ${metric.night ? '밤' : '낮'} 전설 포획 수`;
+    case 'dexZoneVariantSum':
+      return `${zoneName ?? metric.zone} 도감 돌연변이 포획 수`;
+    case 'artifactLevel':
+      return `유물 레벨 (${metric.artifactId})`;
+  }
+}
+
 // ── 카탈로그 조립 ──
 
 export function buildContentCatalog(): ContentCatalog {
@@ -782,13 +800,7 @@ export function buildContentCatalog(): ContentCatalog {
       };
     });
     const zoneName = series.zone ? (zoneById(series.zone)?.name ?? series.zone) : null;
-    const metricSummary = series.metric.kind === 'counter'
-      ? series.metric.key
-      : series.metric.kind === 'legendarySum'
-        ? (series.metric.night ? '전체 밤 전설 수동 합계' : '전체 낮 전설 수동 합계')
-        : series.metric.kind === 'zoneLegendarySum'
-          ? `${zoneName ?? series.zone} 수동 ${series.metric.night ? '밤 ' : ''}전설 합계`
-          : `유물 레벨 (${series.metric.artifactId})`;
+    const metricSummary = formatMetricSummary(series.metric, zoneName);
     return {
       id: series.id,
       name: series.name,

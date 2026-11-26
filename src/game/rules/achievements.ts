@@ -54,12 +54,16 @@ const NIGHT_LEGENDARY_IDS: readonly string[] = FISH
   .filter(f => f.rarity === 'legendary' && f.night === true)
   .map(f => f.id);
 
+const FISH_IDS_BY_ZONE = new Map<ZoneId, readonly string[]>();
 const DAY_LEGENDARY_IDS_BY_ZONE = new Map<ZoneId, readonly string[]>();
 const NIGHT_LEGENDARY_IDS_BY_ZONE = new Map<ZoneId, readonly string[]>();
 for (const fish of FISH) {
-  if (fish.rarity !== 'legendary') continue;
   const zone = topZoneOfSpot(fish.spot);
   if (!zone) continue;
+  const allList = FISH_IDS_BY_ZONE.get(zone) as string[] | undefined;
+  if (allList) allList.push(fish.id);
+  else FISH_IDS_BY_ZONE.set(zone, [fish.id]);
+  if (fish.rarity !== 'legendary') continue;
   const targetMap = fish.night ? NIGHT_LEGENDARY_IDS_BY_ZONE : DAY_LEGENDARY_IDS_BY_ZONE;
   const list = targetMap.get(zone) as string[] | undefined;
   if (list) list.push(fish.id);
@@ -69,6 +73,17 @@ for (const fish of FISH) {
 const sumLegendaryCounters = (counters: Partial<Record<string, number | undefined>>, ids: readonly string[]): number => {
   let sum = 0;
   for (const id of ids) sum += counters[`manual.legendary.${id}`] ?? 0;
+  return sum;
+};
+
+const sumDexCatchCounts = (state: GameState, ids: readonly string[], forms: 'all' | 'variant'): number => {
+  let sum = 0;
+  for (const id of ids) {
+    const rec = state.dex[id];
+    if (!rec) continue;
+    if (forms === 'all') sum += rec.normal?.count ?? 0;
+    sum += rec.variant?.count ?? 0;
+  }
   return sum;
 };
 
@@ -83,6 +98,12 @@ export function cumulativeBonusValueOf(state: GameState, metric: CumulativeBonus
       const ids = (metric.night ? NIGHT_LEGENDARY_IDS_BY_ZONE : DAY_LEGENDARY_IDS_BY_ZONE).get(metric.zone) ?? [];
       return sumLegendaryCounters(countersOf(state), ids);
     }
+    case 'dexZoneLegendarySum': {
+      const ids = (metric.night ? NIGHT_LEGENDARY_IDS_BY_ZONE : DAY_LEGENDARY_IDS_BY_ZONE).get(metric.zone) ?? [];
+      return sumDexCatchCounts(state, ids, 'all');
+    }
+    case 'dexZoneVariantSum':
+      return sumDexCatchCounts(state, FISH_IDS_BY_ZONE.get(metric.zone) ?? [], 'variant');
     case 'artifactLevel':
       return artifactLevelOf(state, metric.artifactId);
   }

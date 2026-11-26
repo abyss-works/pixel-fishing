@@ -7,7 +7,9 @@ import { AUTO_ENERGY_BOAT, COOKING_UNLOCK_BOAT } from '../src/game/content/cooki
 import { BOUNTIES } from '../src/game/content/bounties.js';
 import { LICENSE_GRADES, capOfBoat, newState, zoneDexMissing } from '../src/game/rules/logic.js';
 import type { GameState } from '../src/game/rules/logic.js';
+import { gameDayOf } from '../src/game/rules/time.js';
 import { hatById, isAchievementHat } from '../src/game/content/wardrobe.js';
+import { database } from './_db/client.js';
 import {
   callAction, captureRealClock, fish, seedUser, seededRandom, startActionEnv,
   testUid, userToken,
@@ -316,5 +318,116 @@ describe('빠른 캐치 경로 업적 누적 보너스 연동', () => {
     const res = await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'auto' });
     expect(res.status).toBe(200);
     expect((res.body as { result: { energy?: { common: number } } }).result.energy?.common).toBe(12);
+  });
+
+  it('fastCatch는 수동 카운터 없이 records만으로 지역 전설 보너스(rareWeight)를 drawCatch에 반영한다', async () => {
+    const dayNow = '2030-03-04T05:30:00.000Z';
+    vi.setSystemTime(new Date(dayNow));
+    const fortune = { day: gameDayOf(dayNow), kind: 'gold' as const, index: 3 as const };
+    const rolls = () => {
+      const seq = [0.738, 0.1, 0.5, 0.5];
+      let i = 0;
+      vi.spyOn(Math, 'random').mockImplementation(() => seq[i++] ?? 0.5);
+    };
+
+    const plainUid = await seed({ state: { boat: 1, rod: 6, fortune }, version: 2 });
+    rolls();
+    const plainRes = await callAction(userToken(plainUid), { type: 'catch', spot: 'sea', judgment: 'normal' });
+    expect(plainRes.status).toBe(200);
+    expect((plainRes.body as { result: { fishId: string } }).result.fishId).toBe('mackerel');
+
+    const boostedUid = await seed({
+      state: {
+        boat: 1,
+        rod: 6,
+        fortune,
+        dex: { shark: { normal: { count: 20, maxSize: 200, first: '2026-01-01' } } },
+      },
+      version: 2,
+    });
+    rolls();
+    const boostedRes = await callAction(userToken(boostedUid), { type: 'catch', spot: 'sea', judgment: 'normal' });
+    expect(boostedRes.status).toBe(200);
+    expect((boostedRes.body as { result: { fishId: string } }).result.fishId).toBe('seabream');
+  });
+
+  it('fastCatch는 수동 카운터 없이 records만으로 지역 밤 전설 보너스(nightWeight)를 drawCatch에 반영한다', async () => {
+    const nightPeak = '2030-03-04T05:05:00.000Z';
+    vi.setSystemTime(new Date(nightPeak));
+    const fortune = { day: gameDayOf(nightPeak), kind: 'gold' as const, index: 3 as const };
+    const rolls = () => {
+      const seq = [0.995, 0.331, 0.5, 0.5];
+      let i = 0;
+      vi.spyOn(Math, 'random').mockImplementation(() => seq[i++] ?? 0.5);
+    };
+
+    const plainUid = await seed({ state: { boat: 1, rod: 6, fortune }, version: 2 });
+    rolls();
+    const plainRes = await callAction(userToken(plainUid), { type: 'catch', spot: 'sea', judgment: 'normal' });
+    expect(plainRes.status).toBe(200);
+    expect((plainRes.body as { result: { fishId: string } }).result.fishId).toBe('shark');
+
+    const boostedUid = await seed({
+      state: {
+        boat: 1,
+        rod: 6,
+        fortune,
+        dex: { moonveil: { normal: { count: 10, maxSize: 100, first: '2026-01-01' } } },
+      },
+      version: 2,
+    });
+    rolls();
+    const boostedRes = await callAction(userToken(boostedUid), { type: 'catch', spot: 'sea', judgment: 'normal' });
+    expect(boostedRes.status).toBe(200);
+    expect((boostedRes.body as { result: { fishId: string } }).result.fishId).toBe('moonveil');
+  });
+
+  it('fastCatch는 수동 카운터 없이 변이 records만으로 지역 돌연변이 보너스(mutationWeight)를 drawCatch에 반영하고 중복 조회를 하지 않는다', async () => {
+    const dayNow = '2030-03-04T05:30:00.000Z';
+    vi.setSystemTime(new Date(dayNow));
+    const fortune = { day: gameDayOf(dayNow), kind: 'gold' as const, index: 3 as const };
+    const rolls = () => {
+      const seq = [0.1, 0.1, 0.5, 0.5, 0.251];
+      let i = 0;
+      vi.spyOn(Math, 'random').mockImplementation(() => seq[i++] ?? 0.5);
+    };
+
+    const allClaimed = Object.fromEntries(ACHIEVEMENTS.map(a => [a.id, 'claimed' as const]));
+    const decidedUid = await seed({
+      state: {
+        boat: 1,
+        rod: 6,
+        fortune,
+        achievements: allClaimed,
+        dex: { mackerel: { variant: { count: 500, maxSize: 40, first: '2026-01-01' } } },
+      },
+      version: 2,
+    });
+    const spy = vi.spyOn(database().db, 'execute');
+    spy.mockClear();
+    rolls();
+    const decidedRes = await callAction(userToken(decidedUid), { type: 'catch', spot: 'sea', judgment: 'normal' });
+    const decidedQueries = spy.mock.calls.length;
+    expect(decidedRes.status).toBe(200);
+    expect((decidedRes.body as { result: { info: { form: string } } }).result.info.form).toBe('variant');
+
+    const undecidedUid = await seed({
+      state: {
+        boat: 1,
+        rod: 6,
+        fortune,
+        achievements: {},
+        dex: { mackerel: { variant: { count: 500, maxSize: 40, first: '2026-01-01' } } },
+      },
+      version: 2,
+    });
+    spy.mockClear();
+    rolls();
+    const undecidedRes = await callAction(userToken(undecidedUid), { type: 'catch', spot: 'sea', judgment: 'normal' });
+    const undecidedQueries = spy.mock.calls.length;
+    spy.mockRestore();
+    expect(undecidedRes.status).toBe(200);
+    expect((undecidedRes.body as { result: { info: { form: string } } }).result.info.form).toBe('variant');
+    expect(undecidedQueries).toBe(decidedQueries);
   });
 });

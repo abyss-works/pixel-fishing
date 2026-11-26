@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { newState } from '../../../../game/rules/logic';
+import { topZoneOfSpot } from '../../../../game/content/zones';
+import { FISH, newState } from '../../../../game/rules/logic';
 import type { GameState } from '../../../../game/rules/logic';
 import type { DispatchResult } from '../../../../features/gameplay/service/types';
 import { resetKeyScopes } from '../../../ui/hotkeys';
@@ -96,6 +97,36 @@ describe('업적 창 카드 격자', () => {
     expect(screen.getByText('유물 누적 보너스')).toBeInTheDocument();
     expect(screen.getByText('마미 와타의 거울 증폭')).toBeInTheDocument();
     expect(screen.queryByText(/완결/)).toBeNull();
+  });
+
+  it('구역과 유물 탭은 도감 포획 기록에 따라 지역 누적 18종 제목·설명·보너스를 손맛 문구 없이 표시한다', () => {
+    const pacDayLeg = FISH.find(f => topZoneOfSpot(f.spot) === 'pacific' && f.rarity === 'legendary' && !f.night)!;
+    const pacNightLeg = FISH.find(f => topZoneOfSpot(f.spot) === 'pacific' && f.rarity === 'legendary' && f.night === true)!;
+    const pacCommon = FISH.find(f => topZoneOfSpot(f.spot) === 'pacific' && f.rarity === 'common')!;
+    const dexBoosted = seed({
+      dex: {
+        [pacDayLeg.id]: { normal: { count: 2, maxSize: 10, first: null } },
+        [pacNightLeg.id]: { normal: { count: 1, maxSize: 10, first: null } },
+        [pacCommon.id]: { variant: { count: 50, maxSize: 10, first: null } },
+      },
+    });
+    render(<AchievementsModal game={dexBoosted} dispatch={vi.fn()} setToast={vi.fn()} onClose={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: '구역과 유물' }));
+
+    expect(screen.getByText('태평양 전설')).toBeInTheDocument();
+    expect(screen.getByText('태평양에서 낮에 나타나는 전설 어종을 낚아요.')).toBeInTheDocument();
+    expect(screen.getByText('희귀 이상 출현 비중 +0.3%')).toBeInTheDocument();
+
+    expect(screen.getByText('태평양 밤 전설')).toBeInTheDocument();
+    expect(screen.getByText('태평양에서 밤에만 나타나는 전설 어종을 낚아요.')).toBeInTheDocument();
+    expect(screen.getByText('밤 어종 출현 비중 +0.3%')).toBeInTheDocument();
+
+    expect(screen.getByText('태평양 돌연변이')).toBeInTheDocument();
+    expect(screen.getByText('태평양에서 돌연변이 물고기를 낚아요.')).toBeInTheDocument();
+    expect(screen.getByText('돌연변이 출현 비중 +0.3%')).toBeInTheDocument();
+
+    expect(screen.queryByText(/손맛/)).toBeNull();
+    expect(screen.queryByText(/직접 챔질로/)).toBeNull();
   });
 
   it('폐지된 옛 id만 claimable인 세이브에서는 받을 골드가 0G이고 모두 받기가 비활성이다', () => {

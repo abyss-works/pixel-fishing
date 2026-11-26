@@ -109,6 +109,14 @@ describe('관리자 콘텐츠 카탈로그 모델', () => {
     expect(CONTENT_CATALOG.bonusSeries).toHaveLength(CUMULATIVE_BONUS_SERIES.length);
     expect(CONTENT_CATALOG.cumulativeBonusCount).toBe(CUMULATIVE_BONUS_COUNT);
     expect(CONTENT_CATALOG.cumulativeBonusCount).toBe(37);
+
+    const summaryOf = (id: string) => CONTENT_CATALOG.bonusSeries.find(s => s.id === id)?.metricSummary;
+    expect(summaryOf('bonus-day-legendary')).toBe('전체 낮 전설 수동 합계');
+    expect(summaryOf('bonus-night-legendary')).toBe('전체 밤 전설 수동 합계');
+    expect(summaryOf('bonus-manual-variant')).toBe('manual.variant.total');
+    expect(summaryOf('bonus-zone-day-legendary-pacific')).toBe('태평양 도감 낮 전설 포획 수');
+    expect(summaryOf('bonus-zone-night-legendary-pacific')).toBe('태평양 도감 밤 전설 포획 수');
+    expect(summaryOf('bonus-zone-variant-pacific')).toBe('태평양 도감 돌연변이 포획 수');
   });
 
   it('5) 모자 57종(상점 5 + 업적 52)과 의상 팔레트·프리셋 6종이 정본과 일치한다', () => {

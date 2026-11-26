@@ -9,6 +9,7 @@ import {
   achievementForHatId,
 } from './achievements';
 import { hatById, HATS } from './wardrobe';
+import { ZONE_IDS, zoneById } from './zones';
 
 describe('업적 콘텐츠', () => {
   it('카운터 키 7종이 정의되어 있다', () => {
@@ -123,6 +124,44 @@ describe('업적 콘텐츠', () => {
       expect(s.desc).not.toMatch(/[·—–]/);
       expect(s.name).not.toMatch(/전역|일반 폼|완결|일반 기운 기준|수동 낚시/);
       expect(s.desc).not.toMatch(/전역|일반 폼|완결|일반 기운 기준|수동 낚시/);
+    }
+  });
+
+  it('바다 6구역 지역 누적 업적 18종만 도감 포획 수 기준 이름·문구·metric을 쓰고 전역/수동 6종은 유지한다', () => {
+    const seaZones = ZONE_IDS.filter(z => z !== 'village');
+    expect(seaZones).toHaveLength(6);
+
+    for (const zone of seaZones) {
+      const zoneName = zoneById(zone)!.shortName;
+      const dayLeg = CUMULATIVE_BONUS_SERIES.find(s => s.id === `bonus-zone-day-legendary-${zone}`)!;
+      const nightLeg = CUMULATIVE_BONUS_SERIES.find(s => s.id === `bonus-zone-night-legendary-${zone}`)!;
+      const variant = CUMULATIVE_BONUS_SERIES.find(s => s.id === `bonus-zone-variant-${zone}`)!;
+
+      expect(dayLeg.name).toBe(`${zoneName} 전설`);
+      expect(dayLeg.desc).toBe(`${zoneName}에서 낮에 나타나는 전설 어종을 낚아요.`);
+      expect(dayLeg.metric).toEqual({ kind: 'dexZoneLegendarySum', zone, night: false });
+
+      expect(nightLeg.name).toBe(`${zoneName} 밤 전설`);
+      expect(nightLeg.desc).toBe(`${zoneName}에서 밤에만 나타나는 전설 어종을 낚아요.`);
+      expect(nightLeg.metric).toEqual({ kind: 'dexZoneLegendarySum', zone, night: true });
+
+      expect(variant.name).toBe(`${zoneName} 돌연변이`);
+      expect(variant.desc).toBe(`${zoneName}에서 돌연변이 물고기를 낚아요.`);
+      expect(variant.metric).toEqual({ kind: 'dexZoneVariantSum', zone });
+    }
+
+    const globalIntact: Array<[string, string, unknown]> = [
+      ['bonus-day-legendary', '전체 전설 손맛', { kind: 'legendarySum', night: false }],
+      ['bonus-night-legendary', '전체 밤 전설 손맛', { kind: 'legendarySum', night: true }],
+      ['bonus-manual-variant', '전체 돌연변이 손맛', { kind: 'counter', key: 'manual.variant.total' }],
+      ['bonus-manual-total', '수동 손맛', { kind: 'counter', key: 'manual.total' }],
+      ['bonus-catch-perfect', 'PERFECT 챔질', { kind: 'counter', key: 'catch.perfect' }],
+      ['bonus-catch-bait', '미끼 손맛', { kind: 'counter', key: 'catch.bait' }],
+    ];
+    for (const [id, name, metric] of globalIntact) {
+      const s = CUMULATIVE_BONUS_SERIES.find(entry => entry.id === id)!;
+      expect(s.name).toBe(name);
+      expect(s.metric).toEqual(metric);
     }
   });
 });
