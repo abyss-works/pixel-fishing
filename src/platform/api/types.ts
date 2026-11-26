@@ -156,9 +156,14 @@ export interface GuildMyRequest { code: string; name: string; requestedAt: strin
 export interface GuildState { guild: GuildInfo | null; request: GuildMyRequest | null }
 /** 초대 링크 미리보기 — 로그인 없이 읽는 길드 요약 */
 export interface GuildInvitePreview { code: string; name: string; level: number; members: number; cap: number; joinMode: GuildJoinMode }
+/** 공개 길드 목록 한 줄 — 자유 가입·비만석 길드 요약(고유 코드 비노출) */
+export interface PublicGuildItem {
+  guildId: string; name: string; level: number; members: number; cap: number; pitch: string; lastActivityAt: string;
+}
 export type GuildOp =
   | { op: 'create'; name: string }
   | { op: 'join'; code: string; via?: 'link' }
+  | { op: 'joinPublic'; guildId: string }
   | { op: 'rename'; guildId: string; name: string }
   | { op: 'settings'; guildId: string; joinMode?: GuildJoinMode; pitch?: string | null }
   | { op: 'approve'; guildId: string; uid: string }

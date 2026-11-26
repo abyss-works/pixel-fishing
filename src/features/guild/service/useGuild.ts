@@ -42,6 +42,9 @@ export function useGuild(account: boolean, poll = false) {
         });
       }
       await client.invalidateQueries({ queryKey: key });
+      if (op.op === 'join' || op.op === 'joinPublic' || op.op === 'create') {
+        await client.invalidateQueries({ queryKey: ['publicGuilds'] });
+      }
     }
     return result;
   };

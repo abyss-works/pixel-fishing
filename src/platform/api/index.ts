@@ -36,7 +36,7 @@ export { readMails, markMailRead } from '../adapters/mailbox';
 export { readBlocks, changeBlock, reportChat } from '../adapters/chat';
 export type { BlockedUser, ChatActionError } from '../adapters/chat';
 export { readFriends, friendAction } from '../adapters/friends';
-export { readGuild, readGuildInvite, guildAction, takeGuildInviteLanding } from '../adapters/guild';
+export { readGuild, readGuildInvite, readPublicGuilds, guildAction, takeGuildInviteLanding } from '../adapters/guild';
 export { readPlayer, searchPlayers } from '../adapters/player';
 export { readAwayReport, watchAway } from '../adapters/away';
 export { readLastPosition } from '../adapters/position';
@@ -49,7 +49,7 @@ export type {
   BountySnapshot, BountyProgressRow, BountyTicketRow, FortuneDiscoveredEntry, FortuneHistory,
   RankingBoardId, RankingRow, RankingBoard, MailItem, MailItemAttachment, FriendItem, FriendOp, FriendOpResult,
   GuildBonusItem, GuildDonorItem, GuildInfo, GuildInvitePreview, GuildJoinRequestItem, GuildLogItem, GuildMemberItem, GuildMyRequest, GuildOp,
-  GuildOpResult, GuildState,
+  GuildOpResult, GuildState, PublicGuildItem,
   AdminUserRow, AdminUserState, AdminOverview, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
   AdminHttpMetricRouteGroup, AdminHttpMetricCounts, AdminHttpMetricDayRow, AdminHttpMetricRouteRow, AdminHttpMetricRawRow, AdminHttpMetrics,
   AdminConversionTimeBucketId, AdminConversionTimeBucket, AdminOnboardingConversion,
