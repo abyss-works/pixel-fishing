@@ -22,7 +22,7 @@ import { readHttpMetrics } from './_data/httpMetrics.js';
 import { setLetterHandled } from './_data/mail.js';
 import { deliverMail, DuplicateMailError, parseMailRequest, planMail, recentSentMails } from './_data/mailbox.js';
 import {
-  createNotice, deleteNotice, endNoticeNow, listAllAdminNotices, listUpcomingAndActiveNotices, updateNotice,
+  createNotice, deleteNotice, endNoticeNow, listAllAdminNotices, listLiveNotices, updateNotice,
 } from './_data/notices.js';
 import { setRestricted } from './_data/save.js';
 import { recordAdminAction } from './_data/telemetry.js';
@@ -242,7 +242,7 @@ async function revokeSessions({ withTransaction }: Database, raw: unknown, admin
   return { revoked };
 }
 
-/** 기간제 상시 공지 작성·수정·즉시 마감·삭제 후 실시간 전체 연결에 활성·예정 목록을 즉시 전파한다 */
+/** 기간제 상시 공지 작성·수정·즉시 마감·삭제 후 실시간 전체 연결에 마감 전·최근 마감 공지 목록을 즉시 전파한다 */
 async function notices(db: Executor, raw: unknown, adminId: string): Promise<unknown> {
   const body = (raw !== null && typeof raw === 'object' ? raw : {}) as {
     op?: unknown; id?: unknown; title?: unknown; body?: unknown; startsAt?: unknown; endsAt?: unknown;
@@ -252,8 +252,8 @@ async function notices(db: Executor, raw: unknown, adminId: string): Promise<unk
     return body.id as number;
   };
   const sync = async () => {
-    const active = await dbRead(() => listUpcomingAndActiveNotices(db));
-    notifyAll({ t: 'notices', notices: active });
+    const current = await dbRead(() => listLiveNotices(db));
+    notifyAll({ t: 'notices', notices: current });
   };
 
   switch (body.op) {

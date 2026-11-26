@@ -38,7 +38,7 @@ const mocks = vi.hoisted(() => ({
   planMail: vi.fn(),
   deliverMail: vi.fn(),
   listAllAdminNotices: vi.fn(async (): Promise<unknown[]> => []),
-  listUpcomingAndActiveNotices: vi.fn(async (): Promise<unknown[]> => []),
+  listLiveNotices: vi.fn(async (): Promise<unknown[]> => []),
   createNotice: vi.fn(),
   updateNotice: vi.fn(),
   endNoticeNow: vi.fn(),
@@ -89,7 +89,7 @@ vi.mock('./_data/telemetry.js', async () => {
 });
 vi.mock('./_data/notices.js', () => ({
   listAllAdminNotices: mocks.listAllAdminNotices,
-  listUpcomingAndActiveNotices: mocks.listUpcomingAndActiveNotices,
+  listLiveNotices: mocks.listLiveNotices,
   createNotice: mocks.createNotice,
   updateNotice: mocks.updateNotice,
   endNoticeNow: mocks.endNoticeNow,
@@ -349,7 +349,7 @@ describe('api/admin 핸들러 단위 테스트', () => {
       createdAt: '2029-12-31T00:00:00.000Z',
     }];
     mocks.createNotice.mockResolvedValueOnce(created);
-    mocks.listUpcomingAndActiveNotices.mockResolvedValueOnce(activeList);
+    mocks.listLiveNotices.mockResolvedValueOnce(activeList);
 
     const createRes = await call('POST', { q: 'notices' }, {
       op: 'create', title: '  공지 ', body: ' 내용 ',
@@ -374,26 +374,28 @@ describe('api/admin 핸들러 단위 테스트', () => {
 
     const updated = { ...created, title: '수정' };
     mocks.updateNotice.mockResolvedValueOnce(updated);
-    mocks.listUpcomingAndActiveNotices.mockResolvedValueOnce([{ ...activeList[0], title: '수정' }]);
+    mocks.listLiveNotices.mockResolvedValueOnce([{ ...activeList[0], title: '수정' }]);
     expect(await call('POST', { q: 'notices' }, {
       op: 'update', id: 10, title: '수정', body: '내용',
       startsAt: '2030-01-01T00:00:00.000Z', endsAt: '2030-01-02T00:00:00.000Z',
     })).toMatchObject({ status: 200, body: { notice: updated } });
     expect(mocks.notifyAll).toHaveBeenLastCalledWith({ t: 'notices', notices: [{ ...activeList[0], title: '수정' }] });
 
-    // end
+    // end — 마감된 공지도 최근 마감 목록으로 함께 전파된다
+    const endedNotice = { ...activeList[0], endsAt: '2029-12-31T01:00:00.000Z' };
     mocks.endNoticeNow.mockResolvedValueOnce(created);
-    mocks.listUpcomingAndActiveNotices.mockResolvedValueOnce([]);
+    mocks.listLiveNotices.mockResolvedValueOnce([endedNotice]);
     expect(await call('POST', { q: 'notices' }, { op: 'end', id: 10 })).toMatchObject({ status: 200, body: { notice: created } });
-    expect(mocks.notifyAll).toHaveBeenLastCalledWith({ t: 'notices', notices: [] });
+    expect(mocks.notifyAll).toHaveBeenLastCalledWith({ t: 'notices', notices: [endedNotice] });
 
     // delete
     mocks.deleteNotice.mockResolvedValueOnce(false);
     expect(await call('POST', { q: 'notices' }, { op: 'delete', id: 10 })).toMatchObject({ status: 404, body: { error: 'no-notice' } });
 
     mocks.deleteNotice.mockResolvedValueOnce(true);
-    mocks.listUpcomingAndActiveNotices.mockResolvedValueOnce([]);
+    mocks.listLiveNotices.mockResolvedValueOnce([]);
     expect(await call('POST', { q: 'notices' }, { op: 'delete', id: 10 })).toMatchObject({ status: 200, body: { deleted: true, id: 10 } });
+    expect(mocks.notifyAll).toHaveBeenLastCalledWith({ t: 'notices', notices: [] });
     expect(mocks.notifyAll).toHaveBeenCalledTimes(4);
   });
 });

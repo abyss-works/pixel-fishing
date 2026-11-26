@@ -10,6 +10,7 @@ import type { LiveOptions, LiveServer } from './live.js';
 import {
   CHAT_DUPLICATE_WINDOW_MS, CHAT_RATE_MAX, CHAT_RECENT, GLOBAL_CHAT_COOLDOWN_MS,
   LIVE_CLOSE_OUTDATED, LIVE_CLOSE_REPLACED, LIVE_CLOSE_RESTART, LIVE_MAX_PER_SEC, LIVE_PATH,
+  MAX_NOTICES,
 } from '../../src/game/rules/live.js';
 import type { ChatLine, ChatRoom, NoticeItem, ServerMessage } from '../../src/game/rules/live.js';
 
@@ -958,5 +959,27 @@ describe('실시간 채팅 3방·지역 격리·쿨다운·중복 차단·공지
     live.sendToAll({ t: 'notices', notices: updated });
     expect(await a.next()).toEqual({ t: 'notices', notices: updated });
     expect(await g.next()).toEqual({ t: 'notices', notices: updated });
+  });
+
+  it('hello와 sendToAll은 마감 전(예약+활성)과 최근 마감 공지를 합쳐 최대 MAX_NOTICES(40건)까지 그대로 전달한다', async () => {
+    const mixedNotices: NoticeItem[] = Array.from({ length: MAX_NOTICES }, (_, i) => ({
+      id: i + 1,
+      title: i < 20 ? `진행-예약-${i}` : `마감-${i}`,
+      body: `본문-${i}`,
+      startsAt: i < 10 ? '2030-05-12T00:00:00.000Z' : '2030-05-01T00:00:00.000Z',
+      endsAt: i < 20 ? '2030-05-20T00:00:00.000Z' : '2030-05-05T00:00:00.000Z',
+      createdAt: '2030-05-01T00:00:00.000Z',
+    }));
+    const { url, live } = await start({ activeNotices: async () => mixedNotices });
+    const a = connect(url, 'u1');
+    const g = connect(url, 'guest:g1');
+
+    expect(await a.next()).toMatchObject({ t: 'hello', notices: mixedNotices });
+    expect(await g.next()).toMatchObject({ t: 'hello', notices: mixedNotices });
+
+    const reversed = [...mixedNotices].reverse();
+    live.sendToAll({ t: 'notices', notices: reversed });
+    expect(await a.next()).toEqual({ t: 'notices', notices: reversed });
+    expect(await g.next()).toEqual({ t: 'notices', notices: reversed });
   });
 });

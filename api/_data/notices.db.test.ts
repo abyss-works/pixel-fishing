@@ -7,11 +7,14 @@ import type { Database } from '../_db/client.js';
 import { seedUser } from '../_dbTest/actionHarness.js';
 import { createTestDatabase } from '../_dbTest/testDatabase.js';
 import type { TestDatabase } from '../_dbTest/testDatabase.js';
+import { MAX_NOTICES } from '../../src/game/rules/live.js';
 import {
   createNotice,
   deleteNotice,
   endNoticeNow,
   listAllAdminNotices,
+  listEndedNotices,
+  listLiveNotices,
   listUpcomingAndActiveNotices,
   updateNotice,
 } from './notices.js';
@@ -141,5 +144,66 @@ describe('notices', () => {
     expect(await deleteNotice(database.db, created.id)).toBe(true);
     expect(await deleteNotice(database.db, created.id)).toBe(false);
     expect(await listAllAdminNotices(database.db)).toEqual([]);
+  });
+
+  it('실시간 공지 조회(listLiveNotices)는 예약+활성(starts_at desc, id desc)과 마감(ends_at desc, id desc)을 각각 최대 20건·합계 40건 반환한다', async () => {
+    const admin = randomUUID();
+    await seedUser(client, { uid: admin, email: `${admin}@example.test`, nickname: null });
+    const now = new Date('2030-05-10T12:00:00.000Z');
+
+    // 마감 전 25건(예약 5 + 활성 20) — ends_at > now
+    const beforeEndIds: { id: number; startsAt: string }[] = [];
+    for (let i = 0; i < 25; i++) {
+      const hour = String(i % 24).padStart(2, '0');
+      const day = i < 20 ? '09' : '11'; // i>=20은 예약 공지(05-11 이후)
+      const startsAt = `2030-05-${day}T${hour}:00:00.000Z`;
+      const created = await createNotice(database.db, {
+        title: `마감전-${i}`,
+        body: `본문-${i}`,
+        startsAt,
+        endsAt: '2030-05-20T00:00:00.000Z',
+        createdBy: admin,
+      }, new Date('2030-05-01T00:00:00.000Z'));
+      beforeEndIds.push({ id: created.id, startsAt });
+    }
+
+    // 마감 25건 — ends_at <= now (ends_at === now 경계 및 동일 ends_at 타이브레이크 포함)
+    const endedIds: { id: number; endsAt: string }[] = [];
+    for (let i = 0; i < 25; i++) {
+      const endsAt = i >= 23
+        ? '2030-05-10T12:00:00.000Z' // ends_at === now 경계 2건 (id 내림차순 검증)
+        : `2030-05-08T${String(i).padStart(2, '0')}:00:00.000Z`;
+      const created = await createNotice(database.db, {
+        title: `마감-${i}`,
+        body: `종료-${i}`,
+        startsAt: '2030-05-01T00:00:00.000Z',
+        endsAt,
+        createdBy: admin,
+      }, new Date('2030-05-01T00:00:00.000Z'));
+      endedIds.push({ id: created.id, endsAt });
+    }
+
+    const expectedBefore = [...beforeEndIds]
+      .sort((a, b) => Date.parse(b.startsAt) - Date.parse(a.startsAt) || b.id - a.id)
+      .slice(0, 20)
+      .map(n => n.id);
+    const expectedEnded = [...endedIds]
+      .sort((a, b) => Date.parse(b.endsAt) - Date.parse(a.endsAt) || b.id - a.id)
+      .slice(0, 20)
+      .map(n => n.id);
+
+    const endedOnly = await listEndedNotices(database.db, now);
+    expect(endedOnly).toHaveLength(20);
+    expect(endedOnly.map(n => n.id)).toEqual(expectedEnded);
+
+    const live = await listLiveNotices(database.db, now);
+    expect(live).toHaveLength(MAX_NOTICES);
+    expect(live.slice(0, 20).map(n => n.id)).toEqual(expectedBefore);
+    expect(live.slice(20).map(n => n.id)).toEqual(expectedEnded);
+    // 예약 공지가 앞쪽(마감전 묶음)에 포함되는지 확인
+    expect(live.slice(0, 5).every(n => n.title.startsWith('마감전-2'))).toBe(true);
+    // ends_at === now 경계 2건은 마감 묶음 맨 앞(id 내림차순)에 온다
+    expect(live[20].id).toBe(endedIds[24].id);
+    expect(live[21].id).toBe(endedIds[23].id);
   });
 });

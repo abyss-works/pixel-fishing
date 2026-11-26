@@ -31,7 +31,7 @@ import { database } from '../_db/client.js';
 import { liveIdentity } from '../_data/profile.js';
 import { blockedIds } from '../_data/blocks.js';
 import { recentChat, recentGuildChat, recentLocalChat, saveChat } from '../_data/chat.js';
-import { listUpcomingAndActiveNotices } from '../_data/notices.js';
+import { listLiveNotices } from '../_data/notices.js';
 import { guildIdOf } from '../_data/guilds.js';
 import { recordSession } from '../_data/activity.js';
 import { flushHttpMetrics } from '../_data/httpMetrics.js';
@@ -166,7 +166,7 @@ const live = attachLive(server, {
     blocked: (uid) => blockedIds(database().db, uid),
     guildOf: (uid) => guildIdOf(database().db, uid),
   },
-  activeNotices: () => listUpcomingAndActiveNotices(database().db),
+  activeNotices: () => listLiveNotices(database().db),
   // 종료 신호 때도 남은 기록이 끝날 때까지 기다리도록 응답 뒤 작업으로 추적한다
   recordSession: (uid, startedAt, endedAt) => {
     afterResponse(recordSession(database().db, uid, startedAt, endedAt).catch(e =>

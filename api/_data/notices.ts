@@ -1,6 +1,7 @@
 // 기간제 상시 공지(notices) 소유 모듈 — 활성·예정 공지 조회, 관리자 전체 목록 조회, 작성·수정·즉시 마감·삭제.
 import { sql } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
+import { MAX_NOTICES } from '../../src/game/rules/live.js';
 import type { NoticeItem } from '../../src/game/rules/live.js';
 import { at } from './json.js';
 
@@ -48,11 +49,13 @@ const toAdminNoticeRow = (r: RawAdminNoticeRow): AdminNoticeRow => ({
   updatedAt: r.updatedAt,
 });
 
+const LIVE_NOTICE_GROUP_LIMIT = Math.floor(MAX_NOTICES / 2);
+
 /** 아직 마감되지 않은 공지(활성·예정)를 시작 시각 내림차순으로 최대 limit건 돌려준다 */
 export async function listUpcomingAndActiveNotices(
   db: Executor,
   now: Date = new Date(),
-  limit = 20,
+  limit = LIVE_NOTICE_GROUP_LIMIT,
 ): Promise<NoticeItem[]> {
   const { rows } = await db.execute<RawNoticeItem>(sql`select
       id,
@@ -65,6 +68,78 @@ export async function listUpcomingAndActiveNotices(
     where ends_at > ${at(now.toISOString())}
     order by starts_at desc, id desc
     limit ${limit}`);
+  return rows.map(toNoticeItem);
+}
+
+/** 최근 마감된 공지를 종료 시각 내림차순으로 최대 limit건 돌려준다 */
+export async function listEndedNotices(
+  db: Executor,
+  now: Date = new Date(),
+  limit = LIVE_NOTICE_GROUP_LIMIT,
+): Promise<NoticeItem[]> {
+  const { rows } = await db.execute<RawNoticeItem>(sql`select
+      id,
+      title,
+      body,
+      ${isoOf('starts_at')} as "startsAt",
+      ${isoOf('ends_at')} as "endsAt",
+      ${isoOf('created_at')} as "createdAt"
+    from public.notices
+    where ends_at <= ${at(now.toISOString())}
+    order by ends_at desc, id desc
+    limit ${limit}`);
+  return rows.map(toNoticeItem);
+}
+
+/** 실시간 전달용 공지 목록 — 마감 전(starts_at desc)과 최근 마감(ends_at desc)을 각 상한만큼 함께 돌려준다 */
+export async function listLiveNotices(
+  db: Executor,
+  now: Date = new Date(),
+  upcomingLimit = LIVE_NOTICE_GROUP_LIMIT,
+  endedLimit = LIVE_NOTICE_GROUP_LIMIT,
+): Promise<NoticeItem[]> {
+  const nowSql = at(now.toISOString());
+  const { rows } = await db.execute<RawNoticeItem>(sql`select
+      id,
+      title,
+      body,
+      "startsAt",
+      "endsAt",
+      "createdAt"
+    from (
+      (
+        select
+          0 as grp,
+          row_number() over (order by starts_at desc, id desc) as rn,
+          id,
+          title,
+          body,
+          ${isoOf('starts_at')} as "startsAt",
+          ${isoOf('ends_at')} as "endsAt",
+          ${isoOf('created_at')} as "createdAt"
+        from public.notices
+        where ends_at > ${nowSql}
+        order by starts_at desc, id desc
+        limit ${upcomingLimit}
+      )
+      union all
+      (
+        select
+          1 as grp,
+          row_number() over (order by ends_at desc, id desc) as rn,
+          id,
+          title,
+          body,
+          ${isoOf('starts_at')} as "startsAt",
+          ${isoOf('ends_at')} as "endsAt",
+          ${isoOf('created_at')} as "createdAt"
+        from public.notices
+        where ends_at <= ${nowSql}
+        order by ends_at desc, id desc
+        limit ${endedLimit}
+      )
+    ) t
+    order by grp asc, rn asc`);
   return rows.map(toNoticeItem);
 }
 

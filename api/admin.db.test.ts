@@ -11,6 +11,8 @@ import { HATS } from '../src/game/content/wardrobe.js';
 import { newState, zoneDexMissing } from '../src/game/rules/logic.js';
 import { adminSessionHeaders, seedUser, startActionEnv, testUid, sessionHeaders, userToken } from './_dbTest/actionHarness.js';
 import type { ActionEnv } from './_dbTest/actionHarness.js';
+import { provideNotifyAll } from './_server/livePresence.js';
+import type { ServerMessage } from '../src/game/rules/live.js';
 
 const ADMIN = testUid(901);  // 관리자 명부에 있는 사용자
 const PLAYER = testUid(902); // 명부에 없는 일반 사용자
@@ -747,12 +749,23 @@ describe('관리자 조치', () => {
     });
     expect(updatedRes).toMatchObject({ status: 200, body: { notice: { id: created.id, title: '수정 공지' } } });
 
-    const endedRes = await post('notices', { op: 'end', id: created.id });
-    expect(endedRes.status).toBe(200);
-    expect(await post('notices', { op: 'delete', id: created.id })).toMatchObject({
-      status: 200,
-      body: { deleted: true, id: created.id },
-    });
+    const broadcasted: ServerMessage[] = [];
+    provideNotifyAll(msg => { broadcasted.push(msg); });
+    try {
+      const endedRes = await post('notices', { op: 'end', id: created.id });
+      expect(endedRes.status).toBe(200);
+      expect(broadcasted.at(-1)).toMatchObject({
+        t: 'notices',
+        notices: [expect.objectContaining({ id: created.id, title: '수정 공지' })],
+      });
+      expect(await post('notices', { op: 'delete', id: created.id })).toMatchObject({
+        status: 200,
+        body: { deleted: true, id: created.id },
+      });
+      expect(broadcasted.at(-1)).toEqual({ t: 'notices', notices: [] });
+    } finally {
+      provideNotifyAll(() => {});
+    }
     expect(await post('notices', { op: 'delete', id: created.id })).toMatchObject({
       status: 404,
       body: { error: 'no-notice' },
