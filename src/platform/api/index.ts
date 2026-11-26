@@ -55,6 +55,6 @@ export type {
   AdminConversionTimeBucketId, AdminConversionTimeBucket, AdminOnboardingConversion,
   AdminTutorialStageId, AdminOnboardingTutorialStage, AdminOnboardingTutorials,
   AdminOnboardingStepId, AdminOnboardingStepBasis, AdminOnboardingFunnelStep, AdminOnboardingFunnel,
-  AdminLive, AdminLiveConnection, AdminDailyStatsRow, AdminSessionRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, AdminChangelogRow, AdminChatReportRow, BalanceLive,
+  AdminLive, AdminLiveConnection, AdminDailyStatsRow, AdminSessionRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, AdminChangelogRow, AdminChatReportRow, AdminNoticeRow, AdminNoticeRequest, AdminNoticeMutationResult, BalanceLive,
   AdminSentMailRow, AdminMailRequest, AdminMailPlan,
 } from './types';

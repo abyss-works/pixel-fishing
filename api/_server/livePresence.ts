@@ -8,6 +8,7 @@ let list: () => LiveOnline[] = () => [];
 let notify: (uid: string, msg: ServerMessage) => void = () => {};
 let nickUpdater: (uid: string, nick: string) => void = () => {};
 let guildNotify: (guildId: string, msg: ServerMessage) => void = () => {};
+let allNotify: (msg: ServerMessage) => void = () => {};
 
 export function providePresence(fn: (uid: string) => Presence | null): void {
   lookup = fn;
@@ -43,6 +44,15 @@ export function provideNotifyGuild(fn: (guildId: string, msg: ServerMessage) => 
 /** 그 길드에 속한 접속자 모두에게 메시지를 보낸다. 접속한 길드원이 없으면 버린다 */
 export function notifyGuild(guildId: string, msg: ServerMessage): void {
   guildNotify(guildId, msg);
+}
+
+export function provideNotifyAll(fn: (msg: ServerMessage) => void): void {
+  allNotify = fn;
+}
+
+/** 게스트를 포함한 모든 활성 실시간 연결에 메시지를 보낸다 */
+export function notifyAll(msg: ServerMessage): void {
+  allNotify(msg);
 }
 
 export function provideSetNick(fn: (uid: string, nick: string) => void): void {

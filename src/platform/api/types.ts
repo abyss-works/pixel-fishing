@@ -3,7 +3,7 @@ import type { GameAction, ActionResult } from '../../game/rules/actions';
 import type { RejectReason } from '../../game/rules/rules';
 import type { GameState } from '../../game/rules/logic';
 import type { DailyFortune, FortuneKind } from '../../game/rules/fortune';
-import type { ChatLine } from '../../game/rules/live';
+import type { ChatLine, NoticeItem } from '../../game/rules/live';
 import type { GuildBonusId, GuildEffects, GuildJoinMode, GuildLogKind, GuildRole } from '../../game/rules/guild';
 import type { BountyKind } from '../../game/content/bounties';
 import type { MaybePromise } from '../../shared/lib/when';
@@ -318,6 +318,21 @@ export interface AdminChatReportRow {
   lines: ChatLine[];
   created_at: string;
 }
+/** 기간제 상시 공지 한 건(관리자 목록용) */
+export interface AdminNoticeRow extends NoticeItem {
+  createdBy: string | null;
+  updatedAt: string;
+}
+/** 기간제 상시 공지 쓰기 요청 */
+export type AdminNoticeRequest =
+  | { op: 'create'; title: string; body: string; startsAt: string; endsAt: string }
+  | { op: 'update'; id: number; title: string; body: string; startsAt: string; endsAt: string }
+  | { op: 'end'; id: number }
+  | { op: 'delete'; id: number };
+/** 기간제 상시 공지 쓰기 결과 */
+export type AdminNoticeMutationResult =
+  | { notice: AdminNoticeRow }
+  | { deleted: true; id: number };
 
 /**
  * 밸런스 라이브 지표. 서버가 한 번의 읽기로 모은 한 시점의 집계이고, 키 이름이 곧 계약이다.
@@ -642,6 +657,10 @@ export interface AdminApi {
   changelog(): Promise<AdminChangelogRow[]>;
   /** 채팅 신고 목록(최근 순) */
   chatReports(): Promise<AdminChatReportRow[]>;
+  /** 기간제 상시 공지 목록(최신순) */
+  notices(): Promise<AdminNoticeRow[]>;
+  /** 기간제 상시 공지 작성·수정·즉시 마감·삭제 */
+  writeNotice(request: AdminNoticeRequest): Promise<AdminNoticeMutationResult>;
   /** 최근 보낸 우편 */
   sentMails(): Promise<AdminSentMailRow[]>;
   /** 우편 미리보기(preview, 쓰지 않음) 또는 보내기(send) */

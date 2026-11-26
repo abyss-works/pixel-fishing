@@ -2,27 +2,42 @@
 // 채널은 전체 하나이고 상태는 이 프로세스 메모리에만 있다. 서버 파드가 하나라는 전제다.
 // 게스트(계정을 연결하지 않은 익명 계정)는 다른 접속자와 격리한다. 게스트의 위치와 닉네임은 어떤 연결에도 보내지 않고, 접속 상태 조회에도 내놓지 않는다.
 // 표시용 채널이라 게임 상태를 바꾸지 않는다. 채팅은 저장한 뒤 보내고, 수신자가 차단한 사람의 채팅은 그 수신자에게 보내지 않는다.
-// 채팅 방은 월드(전체)와 길드 둘이다. 길드 채팅은 같은 길드의 접속한 길드원에게만 가고, 길이·도배·제재·차단 규칙은 월드와 같다.
+// 채팅 방은 전체(global)·지역(local)·길드(guild) 세 가지다. 전체 방은 10초 쿨다운, 모든 방은 10초 25건 합산 창과 직전 동일 문구 10초 차단을 강제한다.
 // 연결이 끝나면(정상 종료, 무응답 정리, 같은 계정의 새 연결로 교체, 서버 종료) 그 연결을 접속 세션으로 기록한다.
 import type { IncomingMessage, Server } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { WebSocket, WebSocketServer } from 'ws';
 import {
-  CHAT_RATE_WINDOW_MS, CHAT_RECENT, chatRate, chatText,
+  CHAT_DUPLICATE_WINDOW_MS, CHAT_RATE_WINDOW_MS, CHAT_RECENT, GLOBAL_CHAT_COOLDOWN_MS,
+  chatRate, chatText, globalChatCooldown, isDuplicateChat,
   LIVE_CLOSE_OUTDATED, LIVE_CLOSE_REPLACED, LIVE_CLOSE_RESTART, LIVE_IDLE_MS, LIVE_MAX_PER_SEC, LIVE_PATH, LIVE_PING_MS,
   idleSinceOf, parseClientMessage,
 } from '../../src/game/rules/live.js';
-import type { ChatLine, Presence, ServerMessage } from '../../src/game/rules/live.js';
+import type { ChatLine, ChatRoom, NoticeItem, Presence, ServerMessage } from '../../src/game/rules/live.js';
+import { topZoneOf, zoneById } from '../../src/game/content/zones.js';
+import type { ZoneId } from '../../src/game/content/zones.js';
 
 /** 연결한 사용자 — 표시 이름과 배는 서버가 DB에서 읽는다. 클라이언트가 보낸 값을 믿지 않는다. guest는 이메일이 없는 계정이다 */
 export interface LiveUser { uid: string; nick: string; boat: number; guest: boolean }
 
-/** 채팅 저장소. guild가 null이면 월드 채팅, 아니면 그 길드의 채팅이다 */
+export type LiveChatSaveResult =
+  | { ok: true; line: ChatLine; room: ChatRoom; region: string | null; guild: string | null }
+  | { ok: false; code: 'chat-restricted' | 'chat-no-guild' };
+
+/** 채팅 저장소. 전체·지역·길드 3방 저장 및 최근 대화·차단·길드 조회를 맡는다 */
 export interface LiveChat {
-  /** 메시지를 저장하고 보낼 줄을 돌려준다. 제재된 계정이거나 길드원이 아니면 저장하지 않고 null이다 */
-  save(user: LiveUser, text: string, guild: string | null): Promise<ChatLine | null>;
-  /** 연결 직후 보낼 최근 대화(오래된 순). 그 사용자가 차단한 사람의 메시지는 뺀다 */
+  /** 메시지를 저장하고 결과(또는 기존 호환 줄)를 돌려준다 */
+  save(
+    user: LiveUser,
+    text: string,
+    guild: string | null,
+    room?: ChatRoom,
+    region?: string | null,
+  ): Promise<LiveChatSaveResult | ChatLine | null>;
+  /** 연결 직후 보낼 전체(guild=null) 또는 길드 최근 대화(오래된 순). 차단한 사람의 메시지는 뺀다 */
   recent(uid: string, limit: number, guild: string | null): Promise<ChatLine[]>;
+  /** 지역 방의 최근 대화(오래된 순). 차단한 사람의 메시지는 뺀다 */
+  recentLocal?(uid: string, region: string, limit: number): Promise<ChatLine[]>;
   /** 그 사용자가 차단한 사람의 id */
   blocked(uid: string): Promise<string[]>;
   /** 그 사용자가 지금 속한 길드의 id. 없으면 null */
@@ -48,6 +63,8 @@ export interface LiveOptions {
   /** 받은 메시지가 없을 때 연결을 끊기까지의 시간 */
   idleMs?: number;
   chat: LiveChat;
+  /** 접속 hello에 실을 마감 전 기간제 공지 목록 조회 */
+  activeNotices?: () => Promise<NoticeItem[]>;
   /** 끝난 연결 하나를 접속 세션으로 기록한다. 기다리지 않으므로 오류와 완료 추적은 호출된 쪽이 맡는다 */
   recordSession: (uid: string, startedAt: string, endedAt: string) => void;
   /**
@@ -85,6 +102,8 @@ export interface LiveServer {
   sendTo(uid: string, msg: ServerMessage): void;
   /** 그 길드에 속한 접속자의 연결에만 메시지를 보낸다 */
   sendToGuild(guildId: string, msg: ServerMessage): void;
+  /** 게스트를 포함한 모든 열린 연결에 메시지를 보낸다 */
+  sendToAll(msg: ServerMessage): void;
   /** 열린 연결을 세션으로 기록하고 재시작 코드로 닫은 뒤 정리 주기를 멈춘다 */
   close(): void;
 }
@@ -92,10 +111,19 @@ export interface LiveServer {
 /** 방치 시간을 세는 중일 때만 싣는 선택 필드 */
 const idleField = (since: number | null, at: number): { idleMs?: number } => since === null ? {} : { idleMs: at - since };
 
+/** 지역·해역 식별자를 최상위 존 id로 정규화한다. 알 수 없는 지역(씬 이름 등)은 원문을 유지한다 */
+function normalizeRegion(region: string | null | undefined, zone?: string | null): string | null {
+  if (zone && zoneById(zone as ZoneId)) return topZoneOf(zone as ZoneId);
+  if (region && zoneById(region as ZoneId)) return topZoneOf(region as ZoneId);
+  return region ?? null;
+}
+
 interface Conn {
   user: LiveUser;
   /** 첫 위치를 받기 전에는 null — 다른 사람에게 알리지 않는다 */
   presence: Presence | null;
+  /** 지역 채팅 격리 기준이 되는 정규화 지역 id */
+  region: string | null;
   /** 이번 던짐의 첫 결과를 알려 온 서버 시각 기준 시작 시각. 세지 않는 동안은 null이다 */
   idleSince: number | null;
   /** 이 사용자가 차단한 사람 — 그 사람의 채팅을 이 연결에 보내지 않는다 */
@@ -133,8 +161,11 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
   const positionSaveMs = opts.positionSaveMs ?? POSITION_SAVE_MS;
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_PAYLOAD });
   const conns = new Map<WebSocket, Conn>();
-  // 계정별 최근 채팅 시각. 다시 연결해도 창이 이어지도록 연결이 아니라 계정에 둔다
+  // 계정별 최근 채팅 시각·직전 문구·전체 방 쿨다운 시각. 재연결해도 유지되도록 연결이 아니라 계정에 둔다
   const chatTimes = new Map<string, number[]>();
+  const lastChatByUid = new Map<string, { text: string; at: number }>();
+  const lastGlobalAt = new Map<string, number>();
+  const chatQueues = new Map<string, Promise<void>>();
 
   // 업그레이드를 받아 소켓을 연다. 잘못된 프레임 같은 소켓 오류가 서버를 죽이지 않도록 모든 연결에 같은 오류 처리를 단다
   const accept = (req: IncomingMessage, socket: Duplex, head: Buffer, onOpen: (ws: WebSocket) => void) => {
@@ -150,28 +181,74 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
     const data = JSON.stringify(msg);
     for (const ws of conns.keys()) if (ws !== from && ws.readyState === WebSocket.OPEN) ws.send(data);
   };
-  // 월드 채팅은 모두에게, 길드 채팅은 그 길드원에게만 보낸다
-  const sendChat = (line: ChatLine, guild: string | null) => {
-    const msg: ServerMessage = guild === null ? { t: 'chat', line } : { t: 'chat', line, room: 'guild' };
+  // 방별 중계: global은 전체, local은 같은 정규화 지역, guild는 같은 길드원에게 보낸다(수신자 차단 제외)
+  const sendChat = (line: ChatLine, room: ChatRoom, region: string | null, guild: string | null, sender: Conn) => {
+    const msg: ServerMessage = { t: 'chat', line, room };
     const data = JSON.stringify(msg);
     for (const [ws, c] of conns) {
-      if ((guild === null || c.guild === guild) && !c.blocked.has(line.uid) && ws.readyState === WebSocket.OPEN) ws.send(data);
+      if (ws.readyState !== WebSocket.OPEN || c.blocked.has(line.uid)) continue;
+      if (room === 'global') {
+        ws.send(data);
+      } else if (room === 'guild') {
+        if (guild !== null && c.guild === guild) ws.send(data);
+      } else if (region !== null ? c.region === region : c === sender) {
+        ws.send(data);
+      }
     }
   };
-  // 채팅 한 줄 — 권한·길이·도배를 판정하고, 저장한 뒤 보낸다. 거부는 보낸 사람에게만 알린다. 도배 판정은 두 방을 합쳐 센다
-  const onChat = async (ws: WebSocket, conn: Conn, raw: string, room: 'guild' | undefined) => {
+  // 채팅 한 줄 — 권한·길이·도배·중복·전체 쿨다운을 판정하고 저장한 뒤 방에 맞게 보낸다
+  const runChat = async (ws: WebSocket, conn: Conn, raw: string, rawRoom: ChatRoom | undefined) => {
     const { user } = conn;
     if (user.guest) { send(ws, { t: 'error', code: 'chat-guest' }); return; }
+    const room: ChatRoom = rawRoom ?? 'local';
     const guild = room === 'guild' ? conn.guild : null;
     if (room === 'guild' && guild === null) { send(ws, { t: 'error', code: 'chat-no-guild' }); return; }
+    const targetRegion = room === 'local' ? conn.region : null;
     const text = chatText(raw);
     if (text === null) { send(ws, { t: 'error', code: 'chat-length' }); return; }
-    const rate = chatRate(chatTimes.get(user.uid) ?? [], Date.now());
+    const now = Date.now();
+    const rate = chatRate(chatTimes.get(user.uid) ?? [], now);
     chatTimes.set(user.uid, rate.window);
     if (!rate.ok) { send(ws, { t: 'error', code: 'chat-rate' }); return; }
-    const line = await opts.chat.save(user, text, guild);
-    if (!line) { send(ws, { t: 'error', code: 'chat-restricted' }); return; }
-    sendChat(line, guild);
+    if (isDuplicateChat(lastChatByUid.get(user.uid), text, now)) {
+      send(ws, { t: 'error', code: 'chat-duplicate' });
+      return;
+    }
+    if (room === 'global') {
+      const cooldown = globalChatCooldown(lastGlobalAt.get(user.uid), now);
+      if (!cooldown.ok) {
+        send(ws, { t: 'error', code: 'chat-global-cooldown', retryAfterMs: cooldown.retryAfterMs });
+        return;
+      }
+    }
+    const saved = await opts.chat.save(user, text, guild, room, targetRegion);
+    if (!saved) { send(ws, { t: 'error', code: 'chat-restricted' }); return; }
+    let line: ChatLine;
+    let outRoom: ChatRoom = room;
+    let outRegion: string | null = targetRegion;
+    let outGuild: string | null = guild;
+    if ('ok' in saved) {
+      if (!saved.ok) { send(ws, { t: 'error', code: saved.code }); return; }
+      line = saved.line;
+      outRoom = saved.room;
+      outRegion = saved.region;
+      outGuild = saved.guild;
+    } else {
+      line = saved;
+    }
+    const savedAt = Date.now();
+    lastChatByUid.set(user.uid, { text, at: savedAt });
+    if (outRoom === 'global') lastGlobalAt.set(user.uid, savedAt);
+    sendChat(line, outRoom, outRegion, outGuild, conn);
+  };
+  const onChat = (ws: WebSocket, conn: Conn, raw: string, rawRoom: ChatRoom | undefined) => {
+    const uid = conn.user.uid;
+    const prev = chatQueues.get(uid) ?? Promise.resolve();
+    const next = prev
+      .then(() => runChat(ws, conn, raw, rawRoom))
+      .catch((err: unknown) => { console.error('[live] chat save failed', err); })
+      .finally(() => { if (chatQueues.get(uid) === next) chatQueues.delete(uid); });
+    chatQueues.set(uid, next);
   };
   const savePosition = (conn: Conn, at: number) => {
     if (!conn.presence) return;
@@ -203,11 +280,19 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
         accept(req, socket, head, (ws) => { ws.close(LIVE_CLOSE_OUTDATED); });
         return;
       }
+      const rawRegion = query.get('region');
+      const initRegion = rawRegion && /^[a-z0-9-]{1,32}$/.test(rawRegion) ? normalizeRegion(rawRegion) : null;
       opts.authenticate(req).then(async (user) => {
         if (!user) { reject(socket, 401); return; }
         if (opts.admit && !await opts.admit(user)) { reject(socket, 403); return; }
-        const [recentChat, blocked, guild] = await Promise.all([
-          opts.chat.recent(user.uid, CHAT_RECENT, null), opts.chat.blocked(user.uid), opts.chat.guildOf(user.uid),
+        const [recentChat, recentLocalChat, blocked, guild, notices] = await Promise.all([
+          opts.chat.recent(user.uid, CHAT_RECENT, null),
+          initRegion !== null && opts.chat.recentLocal
+            ? opts.chat.recentLocal(user.uid, initRegion, CHAT_RECENT)
+            : Promise.resolve(undefined),
+          opts.chat.blocked(user.uid),
+          opts.chat.guildOf(user.uid),
+          opts.activeNotices ? opts.activeNotices() : Promise.resolve(undefined),
         ]);
         const recentGuildChat = guild === null ? null : await opts.chat.recent(user.uid, CHAT_RECENT, guild);
         accept(req, socket, head, (ws) => {
@@ -219,7 +304,8 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
           }
           const now = Date.now();
           const conn: Conn = {
-            user, presence: null, idleSince: null, blocked: new Set(blocked), guild, connectedAt: now, lastSeen: now, windowStart: now, windowCount: 0,
+            user, presence: null, region: initRegion, idleSince: null, blocked: new Set(blocked), guild,
+            connectedAt: now, lastSeen: now, windowStart: now, windowCount: 0,
             positionSavedAt: null, positionDirty: false, pending: Promise.resolve(),
           };
           conns.set(ws, conn);
@@ -227,6 +313,7 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
             if (msg.t === 'move') {
               const { region, x, y, dir, line, bob, look } = msg;
               const zone = msg.zone ?? null;
+              conn.region = normalizeRegion(region, zone);
               conn.idleSince = idleSinceOf(conn.presence && { spot: conn.presence, since: conn.idleSince }, { region, x, y }, line, msg.idleMs, at);
               const idle = idleField(conn.idleSince, at);
               if (!conn.presence) {
@@ -241,10 +328,24 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
                 conn.positionDirty = true;
                 if (conn.positionSavedAt === null || at - conn.positionSavedAt >= positionSaveMs) savePosition(conn, at);
               }
+            } else if (msg.t === 'region') {
+              const nextRegion = normalizeRegion(msg.region);
+              conn.region = nextRegion;
+              if (nextRegion !== null && opts.chat.recentLocal) {
+                opts.chat.recentLocal(user.uid, nextRegion, CHAT_RECENT).then((lines) => {
+                  if (ws.readyState === WebSocket.OPEN && conn.region === nextRegion) {
+                    send(ws, { t: 'localHistory', region: nextRegion, lines });
+                  }
+                }).catch((err: unknown) => {
+                  console.error('[live] local history failed', err);
+                });
+              } else if (nextRegion !== null) {
+                send(ws, { t: 'localHistory', region: nextRegion, lines: [] });
+              }
             } else if (msg.t === 'stop' && conn.presence) {
               broadcast(ws, user, { t: 'stop', uid: user.uid });
             } else if (msg.t === 'chat') {
-              onChat(ws, conn, msg.text, msg.room).catch((err: unknown) => { console.error('[live] chat save failed', err); });
+              onChat(ws, conn, msg.text, msg.room);
             } else if (msg.t === 'typing') {
               // 입력 중 표시 — 저장하지 않는다
               broadcast(ws, user, { t: 'typing', uid: user.uid, on: msg.on });
@@ -272,7 +373,15 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
           ws.on('close', () => drop(ws, conn));
           const sentAt = Date.now();
           const others = [...conns.values()].flatMap(c => (c !== conn && c.presence && !c.user.guest ? [{ ...c.presence, ...idleField(c.idleSince, sentAt) }] : []));
-          send(ws, { t: 'hello', you: user.uid, others, recentChat, ...(recentGuildChat ? { recentGuildChat } : {}) });
+          send(ws, {
+            t: 'hello',
+            you: user.uid,
+            others,
+            recentChat,
+            ...(recentLocalChat !== undefined ? { recentLocalChat } : {}),
+            ...(recentGuildChat ? { recentGuildChat } : {}),
+            ...(notices !== undefined ? { notices } : {}),
+          });
         });
       }).catch((err: unknown) => {
         console.error('[live] upgrade authentication or chat load failed', err);
@@ -300,6 +409,8 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
       else ws.ping();
     }
     for (const [uid, times] of chatTimes) if (now - (times.at(-1) ?? 0) >= CHAT_RATE_WINDOW_MS) chatTimes.delete(uid);
+    for (const [uid, prev] of lastChatByUid) if (now - prev.at >= CHAT_DUPLICATE_WINDOW_MS) lastChatByUid.delete(uid);
+    for (const [uid, at] of lastGlobalAt) if (now - at >= GLOBAL_CHAT_COOLDOWN_MS) lastGlobalAt.delete(uid);
   }, opts.sweepMs ?? LIVE_PING_MS);
   timer.unref();
 
@@ -335,6 +446,10 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
     },
     sendToGuild(guildId, msg) {
       for (const [ws, c] of conns) if (c.guild === guildId) send(ws, msg);
+    },
+    sendToAll(msg) {
+      const data = JSON.stringify(msg);
+      for (const ws of conns.keys()) if (ws.readyState === WebSocket.OPEN) ws.send(data);
     },
     close() {
       clearInterval(timer);

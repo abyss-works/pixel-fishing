@@ -1,5 +1,5 @@
 // 관리자 함수. 대시보드가 보는 모든 조회를 서버가 대신 읽고, 관리자 쓰기(POST)를 받는다 (Node 런타임)
-// 쓰기는 우편 보내기(q=mail), 제재·해제(q=restrict), 편지 처리 표시(q=letterHandled), 세션 강제 종료(q=revokeSessions)이다.
+// 쓰기는 우편 보내기(q=mail), 제재·해제(q=restrict), 편지 처리 표시(q=letterHandled), 세션 강제 종료(q=revokeSessions), 공지 관리(q=notices)이다.
 // 제재·해제와 세션 강제 종료는 조치한 관리자 id를 대상 사용자의 이벤트로 함께 남긴다.
 // 브라우저는 관리자 뷰와 함수를 직접 읽지 않는다. 관리자 세션의 사용자가 관리자 명부(admins)에 있어야 읽을 수 있다.
 // 관리자 세션은 대시보드 로그인이 발급한 쿠키만 인정하고 게임 세션 쿠키는 받지 않는다.
@@ -12,7 +12,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { adminSessionUid } from './_auth/session.js';
 import { database } from './_db/client.js';
 import type { Database, Executor } from './_db/client.js';
-import { onlineUsers } from './_server/livePresence.js';
+import { notifyAll, onlineUsers } from './_server/livePresence.js';
+import { normalizeNoticeDraft } from '../src/game/rules/live.js';
 import { accountKind, revokeUserSessions } from './_data/account.js';
 import * as read from './_data/admin.js';
 import { balanceLive } from './_data/adminBalance.js';
@@ -20,6 +21,9 @@ import { onboardingFunnel } from './_data/adminFunnel.js';
 import { readHttpMetrics } from './_data/httpMetrics.js';
 import { setLetterHandled } from './_data/mail.js';
 import { deliverMail, DuplicateMailError, parseMailRequest, planMail, recentSentMails } from './_data/mailbox.js';
+import {
+  createNotice, deleteNotice, endNoticeNow, listAllAdminNotices, listUpcomingAndActiveNotices, updateNotice,
+} from './_data/notices.js';
 import { setRestricted } from './_data/save.js';
 import { recordAdminAction } from './_data/telemetry.js';
 import { ApiError, toApiError } from './errors.js';
@@ -57,6 +61,7 @@ const WRITES: Record<string, Write> = {
   restrict,
   letterHandled,
   revokeSessions,
+  notices: ({ db }, body, adminId) => notices(db, body, adminId),
 };
 
 /** 리소스 경로 조회. 요청의 필터를 검사해 실행할 읽기를 돌려준다. 틀리면 400이다 */
@@ -140,6 +145,7 @@ function parse(name: string | undefined, req: Req): (db: Executor) => Promise<un
     case 'letters': return read.letters;
     case 'changelog': return read.changelog;
     case 'chatReports': return read.chatReports;
+    case 'notices': return listAllAdminNotices;
     case 'mails': return db => recentSentMails(db);
     case 'economy': { const days = daysOf(req); return db => read.economy(db, days); }
     case 'bountyFunnel': { const days = daysOf(req); return db => read.bountyFunnel(db, days); }
@@ -222,6 +228,60 @@ async function revokeSessions({ withTransaction }: Database, raw: unknown, admin
   }));
   if (revoked === null) throw new ApiError(404, 'no-user');
   return { revoked };
+}
+
+/** 기간제 상시 공지 작성·수정·즉시 마감·삭제 후 실시간 전체 연결에 활성·예정 목록을 즉시 전파한다 */
+async function notices(db: Executor, raw: unknown, adminId: string): Promise<unknown> {
+  const body = (raw !== null && typeof raw === 'object' ? raw : {}) as {
+    op?: unknown; id?: unknown; title?: unknown; body?: unknown; startsAt?: unknown; endsAt?: unknown;
+  };
+  const parseId = (): number => {
+    if (!Number.isSafeInteger(body.id) || (body.id as number) < 1) throw new ApiError(400, 'bad-notice');
+    return body.id as number;
+  };
+  const sync = async () => {
+    const active = await dbRead(() => listUpcomingAndActiveNotices(db));
+    notifyAll({ t: 'notices', notices: active });
+  };
+
+  switch (body.op) {
+    case 'create': {
+      const parsed = normalizeNoticeDraft({
+        title: body.title, body: body.body, startsAt: body.startsAt, endsAt: body.endsAt,
+      });
+      if (!parsed.ok) throw new ApiError(400, parsed.code);
+      const notice = await dbWrite(() => createNotice(db, { ...parsed.draft, createdBy: adminId }));
+      await sync();
+      return { notice };
+    }
+    case 'update': {
+      const id = parseId();
+      const parsed = normalizeNoticeDraft({
+        title: body.title, body: body.body, startsAt: body.startsAt, endsAt: body.endsAt,
+      });
+      if (!parsed.ok) throw new ApiError(400, parsed.code);
+      const notice = await dbWrite(() => updateNotice(db, id, parsed.draft));
+      if (!notice) throw new ApiError(404, 'no-notice');
+      await sync();
+      return { notice };
+    }
+    case 'end': {
+      const id = parseId();
+      const notice = await dbWrite(() => endNoticeNow(db, id));
+      if (!notice) throw new ApiError(404, 'no-notice');
+      await sync();
+      return { notice };
+    }
+    case 'delete': {
+      const id = parseId();
+      const removed = await dbWrite(() => deleteNotice(db, id));
+      if (!removed) throw new ApiError(404, 'no-notice');
+      await sync();
+      return { deleted: true, id };
+    }
+    default:
+      throw new ApiError(400, 'bad-notice');
+  }
 }
 
 const param = (req: Req, key: string): string | undefined => {

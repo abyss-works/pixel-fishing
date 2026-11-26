@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { CHAT_INPUT_INITIAL, chatInputReducer, chatRoomOf, formatStatusNotice } from './chatInput';
 import type { ChatInputState } from './chatInput';
 
-const typing = (room: ChatInputState['room'] = 'world'): ChatInputState => ({ mode: 'typing', room });
+const typing = (room: ChatInputState['room'] = 'local'): ChatInputState => ({ mode: 'typing', room });
 
 describe('채팅 입력 상태머신', () => {
-  it('처음에는 닫혀 있고 월드로 보낸다', () => {
-    expect(CHAT_INPUT_INITIAL).toEqual({ mode: 'closed', room: 'world' });
+  it('처음에는 닫혀 있고 지역 방으로 보낸다', () => {
+    expect(CHAT_INPUT_INITIAL).toEqual({ mode: 'closed', room: 'local' });
   });
 
   it('열기와 닫기는 입력 상태만 바꾸고 고른 방은 유지한다', () => {
@@ -15,32 +15,42 @@ describe('채팅 입력 상태머신', () => {
     expect(chatInputReducer(opened, { type: 'close' })).toEqual({ mode: 'closed', room: 'guild' });
   });
 
-  it('입력 중 Tab은 길드원이면 월드와 길드를 번갈아 바꾼다', () => {
-    const guild = chatInputReducer(typing('world'), { type: 'tab', inGuild: true });
+  it('입력 중 Tab은 길드원이면 전체 -> 지역 -> 길드 순으로 바꾼다', () => {
+    const local = chatInputReducer(typing('global'), { type: 'tab', inGuild: true });
+    expect(local).toEqual(typing('local'));
+    const guild = chatInputReducer(local, { type: 'tab', inGuild: true });
     expect(guild).toEqual(typing('guild'));
-    expect(chatInputReducer(guild, { type: 'tab', inGuild: true })).toEqual(typing('world'));
+    expect(chatInputReducer(guild, { type: 'tab', inGuild: true })).toEqual(typing('global'));
   });
 
-  it('길드가 없으면 Tab을 눌러도 월드에 머문다', () => {
-    const s = typing('world');
-    expect(chatInputReducer(s, { type: 'tab', inGuild: false })).toBe(s);
+  it('길드가 없으면 입력 중 Tab으로 전체와 지역 사이만 오간다', () => {
+    const global = chatInputReducer(typing('local'), { type: 'tab', inGuild: false });
+    expect(global).toEqual(typing('global'));
+    expect(chatInputReducer(global, { type: 'tab', inGuild: false })).toEqual(typing('local'));
   });
 
   it('닫힌 상태의 Tab은 아무것도 바꾸지 않는다', () => {
-    const s: ChatInputState = { mode: 'closed', room: 'world' };
+    const s: ChatInputState = { mode: 'closed', room: 'local' };
     expect(chatInputReducer(s, { type: 'tab', inGuild: true })).toBe(s);
   });
 
-  it('방 버튼은 입력 상태와 무관하게 길드원일 때만 방을 바꾼다', () => {
-    expect(chatInputReducer({ mode: 'closed', room: 'world' }, { type: 'toggleRoom', inGuild: true }))
-      .toEqual({ mode: 'closed', room: 'guild' });
-    const s = typing('world');
-    expect(chatInputReducer(s, { type: 'toggleRoom', inGuild: false })).toBe(s);
+  it('방 버튼은 입력 상태와 무관하게 길드 소속에 맞춰 방을 순환한다', () => {
+    const s1 = chatInputReducer({ mode: 'closed', room: 'global' }, { type: 'toggleRoom', inGuild: true });
+    expect(s1).toEqual({ mode: 'closed', room: 'local' });
+    const s2 = chatInputReducer(s1, { type: 'toggleRoom', inGuild: true });
+    expect(s2).toEqual({ mode: 'closed', room: 'guild' });
+    expect(chatInputReducer(s2, { type: 'toggleRoom', inGuild: true })).toEqual({ mode: 'closed', room: 'global' });
+
+    const ng1 = chatInputReducer({ mode: 'closed', room: 'local' }, { type: 'toggleRoom', inGuild: false });
+    expect(ng1).toEqual({ mode: 'closed', room: 'global' });
+    expect(chatInputReducer(ng1, { type: 'toggleRoom', inGuild: false })).toEqual({ mode: 'closed', room: 'local' });
   });
 
-  it('보낼 방은 길드를 떠나면 고른 방과 무관하게 월드다', () => {
+  it('보낼 방은 길드를 떠나면 길드 선택만 지역으로 폴백하고 전체·지역은 유지한다', () => {
     expect(chatRoomOf(typing('guild'), true)).toBe('guild');
-    expect(chatRoomOf(typing('guild'), false)).toBe('world');
+    expect(chatRoomOf(typing('guild'), false)).toBe('local');
+    expect(chatRoomOf(typing('global'), false)).toBe('global');
+    expect(chatRoomOf(typing('local'), false)).toBe('local');
   });
 });
 

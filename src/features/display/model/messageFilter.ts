@@ -1,10 +1,10 @@
-// 메시지 창 채널 표시 — 채팅·길드·시스템 토글. 켜진 채널의 목록이다.
+// 메시지 창 채널 표시 — 전체·지역·길드·시스템 토글. 켜진 채널의 목록이다.
 // 기록에 나온 채널 가운데 마지막으로 켜져 있는 하나는 끌 수 없다(창이 비지 않게).
-export type FilterChannel = 'chat' | 'guild' | 'system';
+export type FilterChannel = 'global' | 'local' | 'guild' | 'system';
 export type MessageFilter = readonly FilterChannel[];
 
 /** 토글 순서이자 모두 켠 상태 */
-export const FILTER_CHANNELS: MessageFilter = ['chat', 'guild', 'system'];
+export const FILTER_CHANNELS: MessageFilter = ['global', 'local', 'guild', 'system'];
 
 export const isChannelShown = (filter: MessageFilter, channel: FilterChannel): boolean => filter.includes(channel);
 
@@ -21,9 +21,12 @@ export function toggleChannel(filter: MessageFilter, channel: FilterChannel, pre
 /** 저장값 — 켜진 채널을 쉼표로 잇는다 */
 export const serializeMessageFilter = (filter: MessageFilter): string => filter.join(',');
 
-/** 저장값 해석 — 없거나 알 수 없으면 전체다. 이전 형식(all, chat, system)도 읽는다 */
+/** 저장값 해석 — 없거나 알 수 없으면 전체다. 기존 저장값 'chat'은 'global'과 'local'을 함께 켠 상태로 읽는다 */
 export function parseMessageFilter(raw: string | null): MessageFilter {
-  const parts = (raw ?? '').split(',');
-  const filter = FILTER_CHANNELS.filter(c => parts.includes(c));
+  const parts = (raw ?? '').split(',').map(s => s.trim()).filter(Boolean);
+  const hasLegacyChat = parts.includes('chat');
+  const filter = FILTER_CHANNELS.filter(
+    c => parts.includes(c) || (hasLegacyChat && (c === 'global' || c === 'local')),
+  );
   return filter.length > 0 ? filter : FILTER_CHANNELS;
 }

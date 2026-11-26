@@ -24,6 +24,7 @@ export const ADMIN_SECTIONS = {
   comms: [
     { key: 'letters', label: '편지' },
     { key: 'mail', label: '우편' },
+    { key: 'notices', label: '공지' },
   ],
   analysis: [
     { key: 'economy', label: '경제' },

@@ -712,4 +712,50 @@ describe('관리자 조치', () => {
       payload: { adminId: ADMIN, revoked: before.rows.length },
     });
   });
+
+  it('notices: 관리자만 조회·작성·수정·즉시 마감·삭제할 수 있고 잘못된 입력은 400이다', async () => {
+    expect(await callAdmin({ q: 'notices' }, userToken(PLAYER))).toMatchObject({ status: 403 });
+    expect(await callAdmin({ q: 'notices' })).toMatchObject({ status: 401 });
+    expect(await post('notices', { op: 'end', id: 1 }, userToken(PLAYER))).toMatchObject({ status: 403 });
+    expect(await post('notices', {
+      op: 'create', title: '', body: '본문',
+      startsAt: '2030-01-01T00:00:00.000Z', endsAt: '2030-01-02T00:00:00.000Z',
+    })).toMatchObject({ status: 400, body: { error: 'bad-title' } });
+
+    const createdRes = await post('notices', {
+      op: 'create',
+      title: '  점검 공지  ',
+      body: '  내용입니다.  ',
+      startsAt: '2030-06-01T00:00:00.000Z',
+      endsAt: '2030-06-02T00:00:00.000Z',
+    });
+    expect(createdRes.status).toBe(200);
+    const created = (createdRes.body as { notice: { id: number; title: string; body: string; createdBy: string | null } }).notice;
+    expect(created).toMatchObject({ title: '점검 공지', body: '내용입니다.', createdBy: ADMIN });
+
+    const listed = await callAdmin({ q: 'notices' }, userToken(ADMIN));
+    expect(listed.status).toBe(200);
+    expect((listed.body as { id: number }[]).map(n => n.id)).toContain(created.id);
+
+    const updatedRes = await post('notices', {
+      op: 'update',
+      id: created.id,
+      title: '수정 공지',
+      body: '수정 내용',
+      startsAt: '2030-06-03T00:00:00.000Z',
+      endsAt: '2030-06-04T00:00:00.000Z',
+    });
+    expect(updatedRes).toMatchObject({ status: 200, body: { notice: { id: created.id, title: '수정 공지' } } });
+
+    const endedRes = await post('notices', { op: 'end', id: created.id });
+    expect(endedRes.status).toBe(200);
+    expect(await post('notices', { op: 'delete', id: created.id })).toMatchObject({
+      status: 200,
+      body: { deleted: true, id: created.id },
+    });
+    expect(await post('notices', { op: 'delete', id: created.id })).toMatchObject({
+      status: 404,
+      body: { error: 'no-notice' },
+    });
+  });
 });

@@ -99,17 +99,17 @@ describe('바다 접힘 저장값', () => {
 describe('새 글 판정', () => {
   const log = [
     { at: 100, channel: 'system' as const },
-    { at: 200, channel: 'chat' as const },
+    { at: 200, channel: 'local' as const },
     { at: 300, channel: 'guild' as const },
   ];
   it('기준 시각 뒤에 켜 둔 채널에 온 글이 있으면 새 글이다', () => {
-    expect(scanPosts(log, ['chat', 'guild', 'system'], 250)).toEqual({ fresh: true, since: 300 });
+    expect(scanPosts(log, ['global', 'local', 'guild', 'system'], 250)).toEqual({ fresh: true, since: 300 });
   });
   it('꺼 둔 채널의 글은 새 글이 아니지만 기준 시각은 넘어간다', () => {
-    expect(scanPosts(log, ['chat', 'system'], 250)).toEqual({ fresh: false, since: 300 });
+    expect(scanPosts(log, ['global', 'local', 'system'], 250)).toEqual({ fresh: false, since: 300 });
   });
   it('기록이 비었거나 모두 이전 글이면 새 글이 아니고 기준 시각은 그대로다', () => {
-    expect(scanPosts([], ['chat'], 50)).toEqual({ fresh: false, since: 50 });
-    expect(scanPosts(log, ['chat', 'guild', 'system'], 300)).toEqual({ fresh: false, since: 300 });
+    expect(scanPosts([], ['local'], 50)).toEqual({ fresh: false, since: 50 });
+    expect(scanPosts(log, ['global', 'local', 'guild', 'system'], 300)).toEqual({ fresh: false, since: 300 });
   });
 });

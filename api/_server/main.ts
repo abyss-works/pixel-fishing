@@ -26,11 +26,12 @@ import purgeAnon from '../cron/purge-anon.js';
 import { adminAuth, appAuth, sessionOf } from '../_auth/session.js';
 import { afterResponse, settleAfterResponse } from './afterResponse.js';
 import { attachLive } from './live.js';
-import { provideNotify, provideNotifyGuild, provideOnline, providePresence, provideSetNick } from './livePresence.js';
+import { provideNotify, provideNotifyAll, provideNotifyGuild, provideOnline, providePresence, provideSetNick } from './livePresence.js';
 import { database } from '../_db/client.js';
 import { liveIdentity } from '../_data/profile.js';
 import { blockedIds } from '../_data/blocks.js';
-import { recentChat, saveChat } from '../_data/chat.js';
+import { recentChat, recentGuildChat, recentLocalChat, saveChat } from '../_data/chat.js';
+import { listUpcomingAndActiveNotices } from '../_data/notices.js';
 import { guildIdOf } from '../_data/guilds.js';
 import { recordSession } from '../_data/activity.js';
 import { flushHttpMetrics } from '../_data/httpMetrics.js';
@@ -153,11 +154,19 @@ const live = attachLive(server, {
     return { uid: session.id, nick: nick ?? '낚시꾼', boat, guest: session.email === null };
   },
   chat: {
-    save: (user, text, guild) => saveChat(database().db, user.uid, user.nick, text, guild),
-    recent: (uid, limit, guild) => recentChat(database().db, uid, limit, guild),
+    save: (user, text, guild, room, region) => saveChat(database().db, {
+      uid: user.uid, nick: user.nick, text, room, region, guildId: guild,
+    }),
+    recent: (uid, limit, guild) => (
+      guild === null
+        ? recentChat(database().db, uid, limit)
+        : recentGuildChat(database().db, guild, uid, limit)
+    ),
+    recentLocal: (uid, region, limit) => recentLocalChat(database().db, region, uid, limit),
     blocked: (uid) => blockedIds(database().db, uid),
     guildOf: (uid) => guildIdOf(database().db, uid),
   },
+  activeNotices: () => listUpcomingAndActiveNotices(database().db),
   // 종료 신호 때도 남은 기록이 끝날 때까지 기다리도록 응답 뒤 작업으로 추적한다
   recordSession: (uid, startedAt, endedAt) => {
     afterResponse(recordSession(database().db, uid, startedAt, endedAt).catch(e =>
@@ -174,6 +183,7 @@ providePresence(uid => live.presenceOf(uid));
 provideOnline(() => live.online());
 provideNotify((uid, msg) => live.sendTo(uid, msg));
 provideNotifyGuild((guildId, msg) => live.sendToGuild(guildId, msg));
+provideNotifyAll(msg => live.sendToAll(msg));
 provideSetNick((uid, nick) => live.setNick(uid, nick));
 
 process.on('SIGTERM', () => {
