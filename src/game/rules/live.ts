@@ -24,7 +24,7 @@ export interface Presence { uid: string; nick: string; boat: number; fame: numbe
 export interface ChatLine { id: number; uid: string; nick: string; text: string; at: string }
 
 export type ServerMessage =
-  | { t: 'hello'; you: string; others: Presence[]; recentChat: ChatLine[]; recentLocalChat?: ChatLine[]; recentGuildChat?: ChatLine[]; notices?: NoticeItem[] } // recentGuildChat: 길드원일 때만, notices: 마감 전 공지
+  | { t: 'hello'; you: string; others: Presence[]; recentChat: ChatLine[]; recentLocalChat?: ChatLine[]; recentGuildChat?: ChatLine[]; notices?: NoticeItem[] } // recentGuildChat: 길드원일 때만, notices: 마감 전·최근 마감 공지
   | { t: 'move'; uid: string; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean; bob?: Bob; look?: Look; idleMs?: number }
   | { t: 'stop'; uid: string }
   | { t: 'join'; presence: Presence }
@@ -116,6 +116,8 @@ export const CHAT_RECENT = 50;
 export const NOTICE_TITLE_MAX = 80;
 /** 기간제 공지 본문 최대 길이(코드 포인트 수) */
 export const NOTICE_BODY_MAX = 600;
+/** 실시간 채널로 전달하는 공지 최대 건수 */
+export const MAX_NOTICES = 40;
 
 /** 보낼 채팅 본문. 앞뒤 공백을 지운 뒤 1~100자가 아니면 null이다 */
 export function chatText(raw: string): string | null {
@@ -167,6 +169,15 @@ export function isNoticeActive(notice: Pick<NoticeItem, 'startsAt' | 'endsAt'>, 
   const endsAtMs = Date.parse(notice.endsAt);
   if (!Number.isFinite(startsAtMs) || !Number.isFinite(endsAtMs)) return false;
   return startsAtMs <= now && now < endsAtMs;
+}
+
+/** 공지가 현재 시각 기준 마감 구간(시작 이후 ~ 종료 이상)에 있는지 판정한다. */
+export function isNoticeEnded(notice: Pick<NoticeItem, 'startsAt' | 'endsAt'>, nowMs: number = Date.now()): boolean {
+  const startsAtMs = Date.parse(notice.startsAt);
+  const endsAtMs = Date.parse(notice.endsAt);
+  if (!Number.isFinite(startsAtMs) || !Number.isFinite(endsAtMs) || !Number.isFinite(nowMs)) return false;
+  if (startsAtMs >= endsAtMs) return false;
+  return startsAtMs <= nowMs && endsAtMs <= nowMs;
 }
 
 /** 공지 입력값을 검증하고 제목·본문 트림 및 ISO 날짜 문자열로 정규화한다. */
