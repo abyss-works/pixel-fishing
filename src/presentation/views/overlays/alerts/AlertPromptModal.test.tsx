@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { resetAlerts } from '../../../../platform/api/attention';
 import { resetAlertPrompt } from '../../../../features/alerts/service/alertPrompt';
+import { resetSoundSettings } from '../../../../features/sound/service/useSound';
 import AlertPromptModal from './AlertPromptModal';
 
 const api = {
@@ -18,13 +19,14 @@ beforeEach(() => {
   localStorage.clear();
   resetAlerts();
   resetAlertPrompt();
+  resetSoundSettings();
   api.permission = 'default';
   api.answer = 'granted';
   api.requestPermission.mockClear();
   setToast.mockClear();
   vi.stubGlobal('Notification', api);
 });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); resetSoundSettings(); vi.unstubAllGlobals(); });
 
 describe('AlertPromptModal', () => {
   it('세 알림을 네임드, 가방, 업데이트 순으로 두고 처음에는 모두 켜 둔다', () => {
@@ -85,5 +87,33 @@ describe('AlertPromptModal', () => {
   it('앞 차례 안내 창이 남아 있으면 뜨지 않는다', () => {
     render(<AlertPromptModal ready after setToast={setToast} />);
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('소리 구획은 배경음·효과음을 기본 꺼짐으로 두고, 나중에·닫기 X를 눌러도 소리 선택을 초기화하지 않는다', () => {
+    mount();
+    const bgmBtn = screen.getByRole('button', { name: '배경음' });
+    const sfxBtn = screen.getByRole('button', { name: '효과음' });
+    expect(bgmBtn).toHaveAttribute('aria-pressed', 'false');
+    expect(bgmBtn).toHaveTextContent('꺼짐');
+    expect(sfxBtn).toHaveAttribute('aria-pressed', 'false');
+    expect(sfxBtn).toHaveTextContent('꺼짐');
+
+    fireEvent.click(bgmBtn);
+    expect(bgmBtn).toHaveAttribute('aria-pressed', 'true');
+    expect(bgmBtn).toHaveTextContent('켜짐');
+    expect(localStorage.getItem('pf-sound-bgm')).toBe('on');
+
+    fireEvent.click(screen.getByRole('button', { name: '나중에' }));
+    expect(stored()).toEqual(['off', 'off', 'off']);
+    expect(localStorage.getItem('pf-sound-bgm')).toBe('on');
+    expect(localStorage.getItem('pf-sound-sfx')).toBeNull();
+  });
+
+  it('소리 토글은 닫기 X를 눌러도 독립적으로 저장소에 남는다', () => {
+    mount();
+    fireEvent.click(screen.getByRole('button', { name: '효과음' }));
+    fireEvent.click(screen.getByRole('button', { name: /닫기/ }));
+    expect(stored()).toEqual(['off', 'off', 'off']);
+    expect(localStorage.getItem('pf-sound-sfx')).toBe('on');
   });
 });
