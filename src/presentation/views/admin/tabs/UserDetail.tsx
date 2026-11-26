@@ -196,7 +196,7 @@ function UserStateCell({ state, loading, error, onRetry }: {
                     equippedHatId === h.id ? 'border-gold text-gold' : 'border-line')}>
                     {h.name}
                     <span className="text-text-dim ml-1">
-                      ({h.source === 'gold' ? '골드' : '업적'}{equippedHatId === h.id ? ', 착용 중' : ''})
+                      ({h.source === 'gold' ? '골드' : h.source === 'event' ? '이벤트' : '업적'}{equippedHatId === h.id ? ', 착용 중' : ''})
                     </span>
                   </span>
                 ))}

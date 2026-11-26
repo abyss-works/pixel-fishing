@@ -167,6 +167,66 @@ describe('우편함 창', () => {
     expect(detailDialog).toHaveTextContent('하루 동안');
   });
 
+  it('모자만 첨부된 우편도 목록 요약과 모자 칩, 받기 버튼을 보이고 받으면 전용 안내를 알린다', async () => {
+    state.mails = [
+      mail({
+        id: 14,
+        title: '겨울 이벤트 선물',
+        body: '산타모자를 보내드려요.',
+        gold: 0,
+        items: [],
+        hats: ['santa-hat'],
+      }),
+    ];
+    const dispatch = vi.fn(() => {
+      state.mails = state.mails!.map(m => ({ ...m, claimedAt: '2026-10-23T02:00:00.000Z' }));
+      return { status: 'ok', state: {}, result: { type: 'mail', gold: 0, hats: ['santa-hat'] } } as never;
+    });
+    const toast = vi.fn();
+    wrap(<MailboxModal dispatch={dispatch} setToast={toast} onClose={() => {}} />);
+    const row = await screen.findByRole('row', { name: /겨울 이벤트 선물/ });
+    expect(row).toHaveTextContent('산타모자');
+    fireEvent.click(row);
+    expect(screen.getByText('모자 산타모자')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '받기' }));
+    expect(dispatch).toHaveBeenCalledWith({ type: 'claimMail', id: 14 });
+    await waitFor(() => expect(toast).toHaveBeenCalledWith(
+      '산타모자 선물을 받았어요! 집의 옷장에서 쓸 수 있어요.',
+      'gold',
+    ));
+    expect(screen.queryByRole('button', { name: '받기' })).not.toBeInTheDocument();
+    expect(screen.getByText('받음')).toBeInTheDocument();
+  });
+
+  it('골드·아이템·모자가 함께 첨부된 우편은 모두 보이고 한 번에 받는다', async () => {
+    state.mails = [
+      mail({
+        id: 15,
+        title: '겨울 종합 선물',
+        body: '선물 꾸러미예요.',
+        gold: 500,
+        items: [{ id: 'luck-small', qty: 1 }],
+        hats: ['santa-hat'],
+      }),
+    ];
+    const dispatch = vi.fn(() => {
+      state.mails = state.mails!.map(m => ({ ...m, claimedAt: '2026-10-23T02:00:00.000Z' }));
+      return { status: 'ok', state: {}, result: { type: 'mail', gold: 500, items: { 'luck-small': 1 }, hats: ['santa-hat'] } } as never;
+    });
+    const toast = vi.fn();
+    wrap(<MailboxModal dispatch={dispatch} setToast={toast} onClose={() => {}} />);
+    fireEvent.click(await screen.findByRole('row', { name: /겨울 종합 선물/ }));
+    expect(screen.getByText('500G')).toBeInTheDocument();
+    expect(screen.getByText('작은 바다 영약')).toBeInTheDocument();
+    expect(screen.getByText('모자 산타모자')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '받기' }));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith(
+      '우편에서 500G, 작은 바다 영약 1개, 산타모자를 받았어요! 집의 옷장에서 쓸 수 있어요.',
+      'gold',
+    ));
+  });
+
   it('우편이 없으면 빈 상태를 안내한다', async () => {
     state.mails = [];
     wrap(<MailboxModal dispatch={vi.fn() as never} setToast={vi.fn()} onClose={() => {}} />);

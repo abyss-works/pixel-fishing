@@ -22,6 +22,7 @@ import { cx } from '../../../ui/cx';
 import { GradeName, HighlightRarityText } from '../../../ui/fish/RarityTag';
 import { fmtGold, fmtMinutes, fmtNum } from '../../../ui/format';
 import type { Notify } from '../../../ui/hud/messageFeed';
+import HatBadge from '../../../ui/HatBadge';
 import Inset from '../../../ui/Inset';
 import ItemBadge from '../../../ui/ItemBadge';
 import ItemSprite from '../../../ui/ItemSprite';
@@ -233,6 +234,9 @@ export default function MailboxModal({ dispatch, setToast, onClose }: {
                             <span key={att.id}>{badge}</span>
                           );
                         })}
+                        {(selected.hats ?? []).map(hatId => (
+                          <HatBadge key={hatId} id={hatId} />
+                        ))}
                       </div>
                       <div className="shrink-0">
                         {isClaimable(selected) ? (

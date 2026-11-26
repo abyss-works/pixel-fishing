@@ -7,6 +7,7 @@ import Button from '../../../ui/Button';
 import DataTable from '../../../ui/DataTable';
 import Field from '../../../ui/Field';
 import { fmtGold } from '../../../ui/format';
+import HatBadge from '../../../ui/HatBadge';
 import ItemBadge from '../../../ui/ItemBadge';
 import Note from '../../../ui/Note';
 import SelectList from '../../../ui/SelectList';
@@ -17,14 +18,20 @@ import TextInput from '../../../ui/TextInput';
 import { useDialogs } from '../../../ui/useDialogs';
 import { fmtDT } from '../../../../features/admin/model/metrics';
 import {
+  HAT_SOURCE_LABEL,
   MAIL_PROBLEM_TEXT,
   MAX_MAIL_BATCH_TOTAL_GOLD,
   STACKABLE_ITEM_KIND_LABEL,
+  addMailHat,
   addRecipient,
   findStackableItem,
+  formatMailHatsSummary,
   formatMailItemsSummary,
   parseRecipients,
   removeMailAttachment,
+  removeMailHat,
+  resolveHatDisplay,
+  searchAttachableHats,
   searchAttachableItems,
   searchRecipients,
   upsertMailAttachment,
@@ -76,6 +83,9 @@ export default function MailTab({ to = null }: {
   const [itemQuery, setItemQuery] = useState('');
   const [itemQty, setItemQty] = useState('1');
   const [itemError, setItemError] = useState<string | undefined>(undefined);
+  const [hatAttachments, setHatAttachments] = useState<string[]>([]);
+  const [hatQuery, setHatQuery] = useState('');
+  const [hatError, setHatError] = useState<string | undefined>(undefined);
   const [idempotencyKey, setIdempotencyKey] = useState(newDraftKey);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [busy, setBusy] = useState(false);
@@ -88,11 +98,13 @@ export default function MailTab({ to = null }: {
     title, body,
     target: kind === 'all' ? { kind: 'all' as const, gold } : { kind: 'users' as const, recipients: parsed.recipients },
     ...(attachments.length > 0 ? { items: attachments } : {}),
+    ...(hatAttachments.length > 0 ? { hats: hatAttachments } : {}),
     idempotencyKey,
   };
   const clientTotalGold = kind === 'users' ? parsed.recipients.reduce((sum, r) => sum + r.gold, 0) : null;
   const clientCapExceeded = clientTotalGold !== null && clientTotalGold > MAX_MAIL_BATCH_TOTAL_GOLD;
   const hasEmptyReward = attachments.length === 0
+    && hatAttachments.length === 0
     && (kind === 'users' ? parsed.recipients.every(r => r.gold === 0) : gold === 0);
   const inputBad = kind === 'users'
     ? parsed.badLines.length > 0 || parsed.duplicates.length > 0
@@ -111,6 +123,7 @@ export default function MailTab({ to = null }: {
     setFailure(null);
     setDone(null);
     const itemsSummary = attachments.length > 0 ? formatMailItemsSummary(attachments) : '';
+    const hatsSummary = hatAttachments.length > 0 ? formatMailHatsSummary(hatAttachments) : '';
     try {
       const result = await writeMail(op, request);
       setPlan(op === 'send' ? null : result);
@@ -124,9 +137,11 @@ export default function MailTab({ to = null }: {
         } else {
           setTitle(''); setBody(''); setRecipientText(''); setAllGold('0');
           setAttachments([]); setItemQuery(''); setItemQty('1'); setItemError(undefined);
+          setHatAttachments([]); setHatQuery(''); setHatError(undefined);
           setIdempotencyKey(newDraftKey());
           const itemSuffix = itemsSummary ? `, 첨부 아이템 ${itemsSummary}` : '';
-          setDone(`${result.sent ?? 0}통을 보냈어요. 골드 합계 ${fmtGold(result.preview?.totalGold ?? 0)}${itemSuffix}.`);
+          const hatSuffix = hatsSummary ? `, 첨부 모자 ${hatsSummary}` : '';
+          setDone(`${result.sent ?? 0}통을 보냈어요. 골드 합계 ${fmtGold(result.preview?.totalGold ?? 0)}${itemSuffix}${hatSuffix}.`);
         }
       }
     } catch (e) {
@@ -142,9 +157,10 @@ export default function MailTab({ to = null }: {
   const send = async () => {
     if (!plan?.preview || plan.preview.capExceeded || clientCapExceeded) return;
     const itemSuffix = attachments.length > 0 ? `, 첨부 아이템 ${formatMailItemsSummary(attachments)}` : '';
+    const hatSuffix = hatAttachments.length > 0 ? `, 첨부 모자 ${formatMailHatsSummary(hatAttachments)}` : '';
     const ok = await confirm({
       layer: 'app', title: '우편 보내기', confirmLabel: '보내기',
-      body: `${plan.preview.count}명에게 보내요. 골드 합계 ${fmtGold(plan.preview.totalGold)}${itemSuffix}. 보낸 우편은 되돌릴 수 없어요.`,
+      body: `${plan.preview.count}명에게 보내요. 골드 합계 ${fmtGold(plan.preview.totalGold)}${itemSuffix}${hatSuffix}. 보낸 우편은 되돌릴 수 없어요.`,
     });
     if (ok) await run('send');
   };
@@ -167,6 +183,21 @@ export default function MailTab({ to = null }: {
   const removeItem = (id: string) => {
     setItemError(undefined);
     edit(setAttachments)(removeMailAttachment(attachments, id));
+  };
+  const foundHats = searchAttachableHats(hatQuery);
+  const pickHat = (id: string) => {
+    const next = addMailHat(hatAttachments, id);
+    if (next.error) {
+      setHatError(next.error);
+      return;
+    }
+    setHatError(undefined);
+    edit(setHatAttachments)(next.hats);
+    setHatQuery('');
+  };
+  const removeHat = (id: string) => {
+    setHatError(undefined);
+    edit(setHatAttachments)(removeMailHat(hatAttachments, id));
   };
   const recipientError = [
     parsed.badLines.length > 0 ? `형식이 틀린 줄: ${parsed.badLines.join(', ')}` : null,
@@ -195,6 +226,7 @@ export default function MailTab({ to = null }: {
               <tbody>
                 {mails.map(m => {
                   const items = m.items ?? [];
+                  const hats = m.hats ?? [];
                   return (
                     <tr key={m.id}>
                       <td className="text-2xs text-text-dim whitespace-nowrap">{fmtDT(m.createdAt)}</td>
@@ -202,9 +234,10 @@ export default function MailTab({ to = null }: {
                       <td className="text-xs">{m.title}</td>
                       <td className="text-xs text-right">{m.gold > 0 ? fmtGold(m.gold) : '-'}</td>
                       <td className="text-xs">
-                        {items.length > 0 ? (
+                        {items.length > 0 || hats.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
                             {items.map(att => <ItemBadge key={att.id} id={att.id} qty={att.qty} />)}
+                            {hats.map(hatId => <HatBadge key={hatId} id={hatId} />)}
                           </div>
                         ) : <span className="text-text-dim">-</span>}
                       </td>
@@ -288,6 +321,33 @@ export default function MailTab({ to = null }: {
                 ))}
               </div>
             )}
+            <Field label="첨부 모자 찾기" hint="모자 이름, 출처(상점, 업적, 이벤트), id 일부를 입력해 고르세요." error={hatError}>
+              <TextInput value={hatQuery} onChange={e => { setHatQuery(e.target.value); setHatError(undefined); }} placeholder="모자 이름 또는 출처" />
+            </Field>
+            {foundHats.length > 0 && (
+              <SelectList label="모자 검색 결과" items={foundHats} keyOf={hat => hat.id} selectedKey="" onSelect={pickHat}
+                          renderItem={hat => (
+                            <span className="flex items-center gap-2 min-w-0">
+                              <Badge size="2xs">{HAT_SOURCE_LABEL[hat.source]}</Badge>
+                              <HatBadge id={hat.id} />
+                              <span className="text-2xs text-text-dim truncate">{hat.id}</span>
+                            </span>
+                          )} />
+            )}
+            {hatQuery.trim() !== '' && foundHats.length === 0 && (
+              <Note size="xs" className="my-0">찾는 모자가 없어요.</Note>
+            )}
+            {hatAttachments.length > 0 && (
+              <div className="flex flex-wrap gap-1.5" aria-label="첨부된 모자">
+                {hatAttachments.map(hatId => (
+                  <span key={hatId} className="inline-flex items-center gap-1">
+                    <HatBadge id={hatId} />
+                    <Button size="sm" onClick={() => removeHat(hatId)}
+                            aria-label={`${resolveHatDisplay(hatId).name} 첨부 빼기`}>삭제</Button>
+                  </span>
+                ))}
+              </div>
+            )}
             {visibleProblems.length > 0 && (
               <Note tone="warn" className="my-0">
                 {visibleProblems.map(p => MAIL_PROBLEM_TEXT[p] ?? p).join(' ')}
@@ -296,7 +356,7 @@ export default function MailTab({ to = null }: {
             )}
             {plan?.preview && (
               <Note className="my-0">
-                {`대상 ${plan.preview.recipientCount ?? plan.preview.count}명, 골드 합계 ${fmtGold(plan.preview.totalGold)}${attachments.length > 0 ? `, 1인당 첨부 아이템 ${formatMailItemsSummary(attachments)}` : ''}.`}
+                {`대상 ${plan.preview.recipientCount ?? plan.preview.count}명, 골드 합계 ${fmtGold(plan.preview.totalGold)}${attachments.length > 0 ? `, 1인당 첨부 아이템 ${formatMailItemsSummary(attachments)}` : ''}${hatAttachments.length > 0 ? `, 1인당 첨부 모자 ${formatMailHatsSummary(hatAttachments)}` : ''}.`}
                 {plan.preview.missing.length > 0 && ` 계정이 없어 빠지는 대상 ${plan.preview.missing.length}명.`}
               </Note>
             )}

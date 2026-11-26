@@ -2,9 +2,13 @@ import { describe, expect, it } from 'vitest';
 import type { AdminUserRow } from './types';
 import {
   MAIL_PROBLEM_TEXT,
+  addMailHat,
   addRecipient,
+  formatMailHatsSummary,
   parseRecipients,
   removeMailAttachment,
+  removeMailHat,
+  searchAttachableHats,
   searchAttachableItems,
   searchRecipients,
   upsertMailAttachment,
@@ -95,8 +99,33 @@ describe('첨부 아이템 검색과 편집', () => {
     expect(removeMailAttachment(updated.items, 'luck-small')).toEqual([]);
   });
 
-  it('items와 empty 문제 문구를 제공한다', () => {
+  it('items, hats, empty 문제 문구를 제공한다', () => {
     expect(MAIL_PROBLEM_TEXT.items).toBeTruthy();
+    expect(MAIL_PROBLEM_TEXT.hats).toBeTruthy();
     expect(MAIL_PROBLEM_TEXT.empty).toBeTruthy();
+  });
+});
+
+describe('첨부 모자 검색과 편집', () => {
+  it('빈 검색어는 아무것도 찾지 않고, 이름·출처·id로 찾는다', () => {
+    expect(searchAttachableHats('   ')).toEqual([]);
+    expect(searchAttachableHats('산타').map(h => h.id)).toEqual(['santa-hat']);
+    expect(searchAttachableHats('이벤트').map(h => h.id)).toContain('santa-hat');
+  });
+
+  it('유효한 모자만 중복 없이 첨부 목록에 넣고 뺀다', () => {
+    const first = addMailHat([], 'santa-hat');
+    expect(first).toEqual({ hats: ['santa-hat'], error: null });
+
+    const duplicate = addMailHat(first.hats, 'santa-hat');
+    expect(duplicate.hats).toEqual(['santa-hat']);
+    expect(duplicate.error).toBeTruthy();
+
+    const invalid = addMailHat(first.hats, 'no-such-hat');
+    expect(invalid.hats).toEqual(['santa-hat']);
+    expect(invalid.error).toBeTruthy();
+
+    expect(formatMailHatsSummary(['santa-hat'])).toBe('산타모자');
+    expect(removeMailHat(['santa-hat', 'cap-red'], 'santa-hat')).toEqual(['cap-red']);
   });
 });

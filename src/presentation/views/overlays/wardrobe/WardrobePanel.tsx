@@ -132,20 +132,29 @@ function HatDetailBox({ game, hatId, busy, onBuy, onWear }: {
 }) {
   const d = hatDetail(game, hatId);
   const state = d.worn ? '쓰고 있어요.' : d.owned ? '가지고 있어요.' : '아직 없어요.';
-  if (d.action === 'achievement') {
+  if (d.action === 'achievement' || d.action === 'event') {
     return (
       <Inset className="flex items-center justify-between gap-3 min-h-[84px] py-2 px-3 shrink-0 mobile:flex-col mobile:items-stretch">
         <div className="flex flex-col gap-1 min-w-0">
           <b className="pf-accent text-base text-gold">{d.name}</b>
-          {d.unlock && (
-            <span className="text-xs text-text-dim break-keep break-words">해금 조건 {d.unlock.condition}</span>
-          )}
-          {d.unlock && (
-            <span className="text-xs text-text-dim">진척 <ProgressCount current={d.unlock.current} target={d.unlock.target} tight /></span>
+          {d.action === 'achievement' ? (
+            <>
+              {d.unlock && (
+                <span className="text-xs text-text-dim break-keep break-words">해금 조건 {d.unlock.condition}</span>
+              )}
+              {d.unlock && (
+                <span className="text-xs text-text-dim">진척 <ProgressCount current={d.unlock.current} target={d.unlock.target} tight /></span>
+              )}
+            </>
+          ) : (
+            <>
+              <span className="text-xs text-text-dim break-keep break-words">{d.eventHint}</span>
+              <span className="text-xs text-text-dim">{state}</span>
+            </>
           )}
         </div>
         <Tip wraps text={d.buyBlock ?? ''} className="block mobile:self-end">
-          <Button disabled>업적 모자</Button>
+          <Button disabled>{d.action === 'event' ? '이벤트 한정' : '업적 모자'}</Button>
         </Tip>
       </Inset>
     );
@@ -162,6 +171,10 @@ function HatDetailBox({ game, hatId, busy, onBuy, onWear }: {
         {d.source === 'achievement' ? (
           <span className="text-xs text-text-dim break-keep break-words">
             업적 보상 {d.unlock && <span className="text-text">{d.unlock.achievementName}</span>}
+          </span>
+        ) : d.source === 'event' ? (
+          <span className="text-xs text-text-dim break-keep break-words">
+            이벤트 한정 {d.eventHint && <span className="text-text">{d.eventHint}</span>}
           </span>
         ) : (
           <span className="text-xs text-text-dim">가격 <span className="pf-accent text-text">{fmtGold(d.price)}</span></span>

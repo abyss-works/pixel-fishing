@@ -446,6 +446,7 @@ function CollectiblesSubtab({ collectibles }: { collectibles: ProfileView['colle
                     rows={[
                       { label: '구매', value: `${hats.goldOwned} / ${hats.goldTotal}` },
                       { label: '업적', value: `${hats.achievementOwned} / ${hats.achievementTotal}` },
+                      { label: '이벤트', value: `${hats.eventOwned} / ${hats.eventTotal}` },
                     ]}
                   />
                 )}
@@ -473,7 +474,7 @@ function CollectiblesSubtab({ collectibles }: { collectibles: ProfileView['colle
                   text={(
                     <TipCard
                       title={h.name}
-                      subtitle={h.source === 'gold' ? '골드 구매' : '업적 보상'}
+                      subtitle={h.source === 'gold' ? '골드 구매' : h.source === 'event' ? '이벤트 한정' : '업적 보상'}
                       badge={<Badge tone={h.owned ? 'gold' : 'dim-plain'} size="xs">{h.owned ? '보유' : '미보유'}</Badge>}
                       description={h.conditionText}
                     />
