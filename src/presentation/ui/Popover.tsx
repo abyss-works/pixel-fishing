@@ -3,7 +3,7 @@ import type { ReactNode, RefObject } from 'react';
 import Frame from './Frame';
 import { useKeyScope } from './hotkeys';
 
-// 팝오버 — 버튼에 붙어 뜨는 작은 칸. 창이 아니다(`UI-UX.md` 화면 깊이 규칙의 팝오버 예외).
+// 팝오버 — 버튼에 붙어 뜨는 작은 칸. 창이 아니다(화면 깊이 규칙 예외).
 // 제목 줄과 바탕 덮개가 없고, 연 버튼 곁에 붙으며, 바깥을 누르거나 Esc를 누르면 닫힌다.
 // 창 안의 한 동작에 딸린 설정처럼 작은 선택만 담는다.
 // 자리: 가까운 position 조상의 위쪽에 그 조상 폭만큼 붙는다. 호출부가 연 버튼과 함께 relative 칸에 둔다.
