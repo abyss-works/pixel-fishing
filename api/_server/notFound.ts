@@ -17,7 +17,9 @@ const PAGE = `<!doctype html>
 `;
 
 export function notFound(req: Request, res: Response): void {
-  if (req.path === '/api' || req.path.startsWith('/api/')) {
+  // '/api'에 붙여 등록하면 Express가 req.path에서 마운트 경로를 떼므로 baseUrl을 합쳐 판정한다
+  const path = `${req.baseUrl}${req.path}`;
+  if (path === '/api' || path.startsWith('/api/')) {
     res.status(404).json({ error: 'not-found' });
     return;
   }
