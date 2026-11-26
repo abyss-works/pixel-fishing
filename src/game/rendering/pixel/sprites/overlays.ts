@@ -2,15 +2,16 @@
 // 상태는 파라미터(FieldView 조각)로만 받는다 — React/게임 규칙 직접 의존 금지 (계층: 단위 스프라이트)
 import { R, label, UI } from '../common.js';
 import type { Ctx } from '../common.js';
-import { SPOTS } from '../../../content/spots';
+import { spotById } from '../../../content/spots';
 import type { School } from '../../../world/types';
 import { FISH } from '../../../content/fish';
 import type { FormId } from '../../../content/fish';
+import { eventFishById } from '../../../content/eventFish';
 import { DEFAULT_FISH_ART_STYLE, fishArt } from '../fishArt/index.js';
 import type { FishArtStyle } from '../fishArt/index.js';
 import { JUMP_S, jumpHeight, orbit } from './schoolView.js';
 
-const fishById = (id: string) => FISH.find(f => f.id === id);
+const fishById = (id: string) => FISH.find(f => f.id === id) ?? eventFishById(id);
 
 export interface GearView {
   player: { x: number; y: number };
@@ -37,8 +38,8 @@ export interface GearView {
 export function drawSchools(ctx: Ctx, schools: School[], boat: number, t: number,
                             lockLabel = true, zoom = 1, view?: GearView) {
   for (const s of schools) {
-    const req = SPOTS.find(sp => sp.id === s.spot)!;
-    const locked = boat < req.boatTier;
+    const req = spotById(s.spot);
+    const locked = req ? boat < req.boatTier : false;
     R(ctx, s.x - 12 * zoom, s.y - 8 * zoom, 24 * zoom, 16 * zoom, 'rgba(255,255,255,0.05)');
     const bite = view?.school?.id === s.id && view.phase === 'bite';
     for (let i = 0; i < 3; i++) {
@@ -48,7 +49,7 @@ export function drawSchools(ctx: Ctx, schools: School[], boat: number, t: number
       R(ctx, fx - 3 * zoom, fy - 1 * zoom, 6 * zoom, 2 * zoom, c);
       R(ctx, fx + 3 * zoom, fy - 2 * zoom, 2 * zoom, 4 * zoom, c);
     }
-    if (locked && lockLabel) label(ctx, `배 ${req.boatTier}단계`, s.x, s.y - 11, UI.danger, 8);
+    if (req && locked && lockLabel) label(ctx, `배 ${req.boatTier}단계`, s.x, s.y - 11, UI.danger, 8);
   }
 }
 
