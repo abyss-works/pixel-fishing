@@ -25,7 +25,7 @@ describe('테스트 데이터베이스', () => {
     const names = rows.map(r => r.name);
     for (const t of ['saves_current', 'fish_instances', 'records', 'saves', 'profiles', 'events', 'letters',
       'coupons', 'reliefs', 'bounty_accepts', 'bounty_progress', 'bounty_tickets', 'bounty_licenses',
-      'bounty_clears', 'mails', 'daily_fortunes', 'notices', 'ranking_weekly_fame', 'v_bounty_funnel_daily']) {
+      'bounty_clears', 'mails', 'daily_fortunes', 'notices', 'ranking_weekly_fame', 'widget_auth_codes', 'widget_tokens', 'v_bounty_funnel_daily']) {
       expect(names).toContain(t);
     }
   });
@@ -918,6 +918,84 @@ describe('테스트 데이터베이스', () => {
           `select is_nullable from information_schema.columns where table_schema = 'public' and table_name = 'mails' and column_name = 'hats'`,
         );
         expect(afterUpCol).toEqual([{ is_nullable: 'NO' }]);
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
+
+  describe('widget_auth_codes · widget_tokens · saves_current.last_spot (0052)', () => {
+    const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
+
+    it('last_spot 널 허용, 위젯 코드·토큰 표 제약·연쇄 삭제·RLS 차단·다운/업 라운드트립을 검증한다', async () => {
+      const uid = randomUUID();
+      await client.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, false)`, [uid, `${uid}@example.test`]);
+
+      const { rows: [saveRow] } = await client.query<{ last_spot: string | null }>(
+        `insert into public.saves_current (user_id, data) values ($1, '{}'::jsonb) returning last_spot`,
+        [uid],
+      );
+      expect(saveRow.last_spot).toBeNull();
+
+      const { rows: [codeRow] } = await client.query<{ created_at: Date }>(
+        `insert into public.widget_auth_codes (code_hash, user_id, code_challenge, redirect_uri, expires_at)
+         values ('hash-code-1', $1, 'challenge-1', 'http://127.0.0.1:4100/callback', '2099-01-01T00:00:00Z')
+         returning created_at`,
+        [uid],
+      );
+      expect(codeRow.created_at).toBeInstanceOf(Date);
+
+      const { rows: [tokenRow] } = await client.query<{ created_at: Date; last_seen_at: Date }>(
+        `insert into public.widget_tokens (token_hash, user_id, client_version, expires_at)
+         values ('hash-token-1', $1, '0.1.0', '2099-01-01T00:00:00Z')
+         returning created_at, last_seen_at`,
+        [uid],
+      );
+      expect(tokenRow.created_at).toBeInstanceOf(Date);
+      expect(tokenRow.last_seen_at).toBeInstanceOf(Date);
+
+      // 인증 사용자는 위젯 코드·토큰 표를 읽거나 쓰지 못한다 — 서버 전용 RLS
+      await client.query('begin');
+      try {
+        await client.query('set local role authenticated');
+        await client.query(`select set_config('request.jwt.claim.sub', $1, true)`, [uid]);
+        expect((await client.query('select code_hash from public.widget_auth_codes')).rows).toEqual([]);
+        expect((await client.query('select token_hash from public.widget_tokens')).rows).toEqual([]);
+        await expect(client.query(
+          `insert into public.widget_tokens (token_hash, user_id, client_version, expires_at)
+           values ('forged', $1, '0.1.0', '2099-01-01T00:00:00Z')`,
+          [uid],
+        )).rejects.toMatchObject({ code: '42501' });
+      } finally {
+        await client.query('rollback');
+      }
+
+      // auth.users 삭제 시 연쇄 삭제
+      await client.query(`delete from auth.users where id = $1`, [uid]);
+      expect((await client.query(`select 1 from public.widget_auth_codes where user_id = $1`, [uid])).rows).toHaveLength(0);
+      expect((await client.query(`select 1 from public.widget_tokens where user_id = $1`, [uid])).rows).toHaveLength(0);
+
+      // 다운/업 라운드트립
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        await other.query(migration('0052_desktop_widget.down.sql'));
+        expect((await other.query(
+          `select 1 from information_schema.tables where table_schema = 'public' and table_name in ('widget_auth_codes', 'widget_tokens')`,
+        )).rows).toHaveLength(0);
+        expect((await other.query(
+          `select 1 from information_schema.columns where table_schema = 'public' and table_name = 'saves_current' and column_name = 'last_spot'`,
+        )).rows).toHaveLength(0);
+
+        await other.query(migration('0052_desktop_widget.sql'));
+        expect((await other.query(
+          `select 1 from information_schema.tables where table_schema = 'public' and table_name in ('widget_auth_codes', 'widget_tokens')`,
+        )).rows).toHaveLength(2);
+        expect((await other.query(
+          `select is_nullable from information_schema.columns where table_schema = 'public' and table_name = 'saves_current' and column_name = 'last_spot'`,
+        )).rows).toEqual([{ is_nullable: 'YES' }]);
       } finally {
         await other.end();
         await copy.drop();

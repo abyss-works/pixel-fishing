@@ -75,10 +75,11 @@ function upsertRecords(guard: SQL, uid: string, records: StateWrites['records'],
       first_caught = excluded.first_caught, updated_at = excluded.updated_at`;
 }
 
-/** 확정과 함께 남기는 접속 표시 — catch는 캐치 시각을, boot는 활성 창을 바꾼다. 없으면 그대로 둔다 */
+/** 확정과 함께 남기는 접속 표시 — catch는 캐치 시각과 해역을, boot는 활성 창을 바꾼다. 없으면 그대로 둔다 */
 export interface CommitMarks {
   lastCatchAt?: string;
   activeClient?: string | null;
+  lastSpot?: string | null;
 }
 
 /**
@@ -104,9 +105,10 @@ export function versionUpdate(uid: string, state: GameState, readVersion: number
   const r = stateRow(state);
   const lastCatch = marks.lastCatchAt === undefined ? sql`` : sql`, last_catch_at = ${at(marks.lastCatchAt)}`;
   const client = marks.activeClient === undefined ? sql`` : sql`, active_client = ${marks.activeClient}`;
+  const lastSpot = marks.lastSpot === undefined ? sql`` : sql`, last_spot = ${marks.lastSpot}`;
   const required = gate ? sql` and exists (${gate})` : sql``;
   return sql`update public.saves_current set gold = ${r.gold}, fame = ${r.fame}, boat = ${r.boat}, rod = ${r.rod},
-    data = ${JSON.stringify(r.data)}::jsonb, version = ${readVersion + 1}, updated_at = ${at(nowISO)}${lastCatch}${client}
+    data = ${JSON.stringify(r.data)}::jsonb, version = ${readVersion + 1}, updated_at = ${at(nowISO)}${lastCatch}${client}${lastSpot}
     where user_id = ${uid} and version = ${readVersion}${required} returning user_id`;
 }
 
@@ -210,8 +212,8 @@ export function resetAccountSaveFragments(uid: string, initial: GameState, nowIS
 } {
   const r = stateRow(initial);
   return {
-    upsertSave: sql`insert into public.saves_current (user_id, version, gold, fame, boat, rod, data, updated_at, last_catch_at, active_client)
-      values (${uid}, 1, ${r.gold}, ${r.fame}, ${r.boat}, ${r.rod}, ${JSON.stringify(r.data)}::jsonb, ${at(nowISO)}, null, null)
+    upsertSave: sql`insert into public.saves_current (user_id, version, gold, fame, boat, rod, data, updated_at, last_catch_at, active_client, last_spot)
+      values (${uid}, 1, ${r.gold}, ${r.fame}, ${r.boat}, ${r.rod}, ${JSON.stringify(r.data)}::jsonb, ${at(nowISO)}, null, null, null)
       on conflict (user_id) do update set
         gold = excluded.gold,
         fame = excluded.fame,
@@ -221,7 +223,8 @@ export function resetAccountSaveFragments(uid: string, initial: GameState, nowIS
         version = saves_current.version + 1,
         updated_at = excluded.updated_at,
         last_catch_at = null,
-        active_client = null
+        active_client = null,
+        last_spot = null
       returning version`,
     clears: [
       sql`delete from public.fish_instances where user_id = ${uid}`,
@@ -259,4 +262,9 @@ const idArray = (ids: readonly number[]) => sql`${`{${ids.map(Number).join(',')}
 export async function setRestricted(db: Executor, uid: string, restricted: boolean): Promise<boolean> {
   const result = await db.execute(sql`update public.saves_current set restricted = ${restricted} where user_id = ${uid}`);
   return (result.rowCount ?? 0) > 0;
+}
+
+/** 마지막 낚시 해역을 저장 상태에 기록한다. 위젯 재접속·대기 시 마지막 해역 표시에 쓴다 */
+export async function updateLastSpot(db: Executor, uid: string, spotId: string): Promise<void> {
+  await db.execute(sql`update public.saves_current set last_spot = ${spotId} where user_id = ${uid}`);
 }

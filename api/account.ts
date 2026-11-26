@@ -12,6 +12,7 @@ import { deleteOwnAccount } from './_data/account.js';
 import { consentStatus } from './_data/consent.js';
 import { ApiError, toApiError } from './errors.js';
 import { reportServerIssue } from './observability.js';
+import { disconnectWidgetUser } from './widget/guard.js';
 
 type Req = IncomingMessage & { body?: unknown };
 type Res = ServerResponse & { status: (code: number) => Res; json: (body: unknown) => void };
@@ -56,5 +57,6 @@ async function route(req: Req, res: Res): Promise<void> {
   }
   if (outcome === 'admin') throw new ApiError(403, 'admin-account');
   if (outcome === 'missing') throw new ApiError(404, 'account-missing');
+  disconnectWidgetUser(uid);
   res.status(200).json({ deleted: true });
 }

@@ -19,10 +19,11 @@ export interface StageGateOptions {
 
 const isApiPath = (path: string): boolean => path === '/api' || path.startsWith('/api/');
 
-/** 스테이징 게이트를 우회할 수 있는 경로인지 판정한다(헬스 핑, 관리자 인증·API·페이지, 정적 에셋·아이콘) */
+/** 스테이징 게이트를 우회할 수 있는 경로인지 판정한다(헬스 핑, 관리자 인증·API·페이지, 위젯 API·인증, 정적 에셋·아이콘) */
 export function isStageGateExempt(method: string, path: string): boolean {
   if ((method === 'GET' || method === 'HEAD') && path === '/api/action') return true;
   if (path === '/api/admin' || path.startsWith('/api/admin/')) return true;
+  if (path === '/api/widget' || path.startsWith('/api/widget/')) return true;
   if (path === '/admin' || path.startsWith('/admin/') || path === '/admin.html') return true;
   if (path.startsWith('/assets/')) return true;
   if (path.startsWith('/favicon')) return true;

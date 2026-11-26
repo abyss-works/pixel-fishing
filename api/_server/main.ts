@@ -22,12 +22,17 @@ import position from '../position.js';
 import { guildInviteRoutes, readIndexHtml } from '../guildInvites.js';
 import { defaultMeta, withMeta } from './ogMeta.js';
 import rank from '../rank.js';
+import { widgetAuthExchangeHandler, widgetAuthLogoutHandler, widgetAuthStartHandler } from '../widget/auth.js';
+import { provideWidgetDisconnect } from '../widget/guard.js';
+import widgetStreamHandler from '../widget/stream.js';
+import widgetSummaryHandler from '../widget/summary.js';
 import archive from '../cron/archive.js';
 import purgeAnon from '../cron/purge-anon.js';
 import { adminAuth, appAuth, sessionOf } from '../_auth/session.js';
 import { afterResponse, settleAfterResponse } from './afterResponse.js';
 import { attachLive } from './live.js';
-import { provideBroadcastCatchFx, provideNotify, provideNotifyAll, provideNotifyGuild, provideOnline, providePresence, provideSetFame, provideSetNick } from './livePresence.js';
+import { provideBroadcastCatchFx, provideIsUserOnline, provideNotify, provideNotifyAll, provideNotifyGuild, provideOnline, providePresence, provideSetFame, provideSetNick } from './livePresence.js';
+import { widgetHub } from './widgetHub.js';
 import { database } from '../_db/client.js';
 import { liveIdentity } from '../_data/profile.js';
 import { blockedIds } from '../_data/blocks.js';
@@ -88,6 +93,11 @@ const routes: Record<string, NodeHandler> = {
   '/api/players': players,
   '/api/players/:uid': players,
   '/api/rank': rank,
+  '/api/widget/auth/start': widgetAuthStartHandler,
+  '/api/widget/auth/exchange': widgetAuthExchangeHandler,
+  '/api/widget/auth/logout': widgetAuthLogoutHandler,
+  '/api/widget/summary': widgetSummaryHandler,
+  '/api/widget/stream': widgetStreamHandler,
   '/api/cron/archive': archive,
   '/api/cron/purge-anon': purgeAnon,
 };
@@ -179,19 +189,27 @@ const live = attachLive(server, {
     afterResponse(saveLastPosition(database().db, uid, pos).catch(e =>
       reportServerIssue('마지막 위치 기록 실패', e, { uid, region: pos.region })));
   },
+  onUserDisconnect: (uid) => {
+    if (widgetHub().hasSubscribers(uid)) {
+      widgetHub().publishStatusChanged(uid, 'idle');
+    }
+  },
 });
 
 providePresence(uid => live.presenceOf(uid));
+provideIsUserOnline(uid => live.isOnline(uid));
 provideOnline(() => live.online());
 provideNotify((uid, msg) => live.sendTo(uid, msg));
 provideNotifyGuild((guildId, msg) => live.sendToGuild(guildId, msg));
 provideNotifyAll(msg => live.sendToAll(msg));
 provideSetNick((uid, nick) => live.setNick(uid, nick));
 provideSetFame((uid, fame) => live.setFame(uid, fame));
+provideWidgetDisconnect(uid => widgetHub().disconnectUser(uid));
 provideBroadcastCatchFx((uid, payload) => live.broadcastCatchFx(uid, payload));
 
 process.on('SIGTERM', () => {
   live.close();
+  widgetHub().close();
   server.close(() => {
     void settleAfterResponse()
       .then(() => httpMetrics.stop())
