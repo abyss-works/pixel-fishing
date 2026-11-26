@@ -256,6 +256,43 @@ export async function sendMails(db: Executor, draft: MailDraft, nowISO: string):
   return rows[0].n;
 }
 
+export interface IdempotentMailRequest {
+  userId: string;
+  idempotencyKey: string;
+  title: string;
+  body: string;
+  gold: number;
+  items: readonly MailItemAttachment[];
+}
+
+/** 멱등 키 기준으로 단건 우편을 발송한다. 이미 같은 (user_id, idempotency_key)가 있으면 건너뛰고 실제 삽입 여부를 반환한다 */
+export async function sendIdempotentMail(
+  db: Executor,
+  req: IdempotentMailRequest,
+  nowISO: string,
+): Promise<boolean> {
+  const idempotencyKey = typeof req.idempotencyKey === 'string' ? req.idempotencyKey.trim() : '';
+  if (idempotencyKey.length === 0 || idempotencyKey.length > 128) {
+    throw new Error('invalid idempotencyKey');
+  }
+  const problems = draftProblems({
+    title: req.title,
+    body: req.body,
+    recipients: [{ userId: req.userId, gold: req.gold, items: req.items }],
+  });
+  if (problems.length > 0) {
+    throw new Error(`invalid idempotent mail: ${problems.join(', ')}`);
+  }
+  const items = normalizeMailItems(req.items);
+  const { rows } = await db.execute<{ id: string | number }>(sql`
+    insert into public.mails (user_id, idempotency_key, title, body, gold, items, created_at)
+    values (${req.userId}::uuid, ${idempotencyKey}, ${req.title.trim()}, ${req.body.trim()}, ${req.gold}, ${JSON.stringify(items)}::jsonb, ${at(nowISO)})
+    on conflict (user_id, idempotency_key) where idempotency_key is not null do nothing
+    returning id
+  `);
+  return rows.length > 0;
+}
+
 /** 최근 중복 발송 창(10분) 안에 같은 제목·본문·골드·첨부·수신자가 이미 발송됐는지 확인한다 */
 export async function hasRecentDuplicateMail(db: Executor, draft: MailDraft, nowISO: string): Promise<boolean> {
   const payload = recipientRows(draft);

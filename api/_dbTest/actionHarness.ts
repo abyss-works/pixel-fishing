@@ -65,7 +65,7 @@ export async function startActionEnv(): Promise<ActionEnv> {
   };
 }
 
-export interface ActionResponse { status: number; body: unknown }
+export interface ActionResponse { status: number; body: unknown; headers?: Record<string, string> }
 
 /** 요청 처리 함수를 한 번 호출한다. 배포 식별자는 테스트 프로세스의 기본값('dev'), 버전은 현재 APP_VERSION이다 */
 export async function callAction(token: string | null, body: unknown, opts: {
@@ -88,6 +88,9 @@ export async function callAction(token: string | null, body: unknown, opts: {
   const res = {
     status(code: number) { out.status = code; return res; },
     json(b: unknown) { out.body = b; },
+    setHeader(name: string, value: string | number | readonly string[]) {
+      (out.headers ??= {})[name.toLowerCase()] = Array.isArray(value) ? value.join(', ') : String(value);
+    },
     end() {},
   };
   await handler({ method: opts.method ?? 'POST', headers, body } as never, res as never);

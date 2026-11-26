@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('./auth', () => ({ isCloud: true }));
 
-import { guildAction } from './guild';
+import { guildAction, readPublicGuilds } from './guild';
 
 describe('guildAction — 보너스 기부', () => {
   const fetchMock = vi.fn();
@@ -52,5 +52,20 @@ describe('guildAction — 보너스 기부', () => {
     await expect(guildAction({ op: 'resetEnhancements', guildId: 'g1' }))
       .resolves.toEqual({ ok: true, gold: 400_000, recovered: 3, enhanceResetCount: 2 });
     expect(fetchMock).toHaveBeenCalledWith('/api/guilds/g1/enhancements/reset', { method: 'POST' });
+  });
+
+  it('GET /api/guilds/public은 검색어와 정렬을 쿼리로 싣고 목록을 돌려준다', async () => {
+    const guilds = [{ guildId: 'g1', name: '파도쉼터', level: 4, members: 3, cap: 10, pitch: '같이 낚시해요!', lastActivityAt: '2026-11-26T00:00:00.000Z' }];
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ guilds }), { status: 200 }));
+    await expect(readPublicGuilds({ q: ' 파도 ', sort: 'level' })).resolves.toEqual(guilds);
+    expect(fetchMock).toHaveBeenCalledWith('/api/guilds/public?q=%ED%8C%8C%EB%8F%84&sort=level');
+  });
+
+  it('POST /api/guild-memberships { guildId }로 공개 길드에 바로 가입한다', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ id: 'g1', result: 'joined' }), { status: 201 }));
+    await expect(guildAction({ op: 'joinPublic', guildId: 'g1' })).resolves.toEqual({ ok: true, result: 'joined' });
+    expect(fetchMock).toHaveBeenCalledWith('/api/guild-memberships', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ guildId: 'g1' }),
+    });
   });
 });

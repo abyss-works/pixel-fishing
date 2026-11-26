@@ -2,6 +2,7 @@
 // 기운 얻기, 해역별 덮어쓰기, 조리, 먹기가 서버 시각과 서버 난수로 저장되는지, 게스트가 거부되는지 검사한다.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AUTO_ENERGY_BOAT, COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, ENERGY_TRANSMUTE_RATIO, ENERGY_UNIT, recipeById, recipeCostStored, recipeWaitMs } from '../src/game/content/cooking.js';
+import { FIRST_LINK_REWARD_ITEMS, FIRST_LINK_REWARD_KEY, FIRST_LINK_REWARD_MAIL } from '../src/game/content/firstLinkReward.js';
 import { SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
 import { itemCapOf } from '../src/game/rules/logic.js';
 import type { GameState } from '../src/game/rules/logic.js';
@@ -476,5 +477,39 @@ describe('요리 액션', () => {
     expect((await stored(uid)).data).toEqual(before.data);
     expect(await bagUids(uid)).toEqual([f.uid]);
     expect(await eventsOf(uid)).toEqual([]);
+  });
+
+  it('배 1단계 로그인 계정은 환영 우편 수령 후 cook-lunch-bundle과 cook-bait-legendary를 즉시 eat 할 수 있고, 게스트는 403으로 거부된다', async () => {
+    const uid = await seed({ state: { boat: 1, location: HOME } });
+    const { rows: [mailRow] } = await env.client.query<{ id: string }>(
+      `insert into public.mails (user_id, idempotency_key, title, body, gold, items)
+       values ($1, $2, $3, $4, 0, $5::jsonb) returning id`,
+      [uid, FIRST_LINK_REWARD_KEY, FIRST_LINK_REWARD_MAIL.title, FIRST_LINK_REWARD_MAIL.body, JSON.stringify(FIRST_LINK_REWARD_ITEMS)],
+    );
+    const claimRes = await callAction(userToken(uid), { type: 'claimMail', id: Number(mailRow.id) });
+    expect(claimRes.status).toBe(200);
+
+    await rewind(uid);
+    const eatLunch = await callAction(userToken(uid), { type: 'eat', item: 'cook-lunch-bundle' });
+    expect(eatLunch.status).toBe(200);
+
+    await rewind(uid);
+    const eatBait = await callAction(userToken(uid), { type: 'eat', item: 'cook-bait-legendary' });
+    expect(eatBait.status).toBe(200);
+
+    const { data } = await stored(uid);
+    expect(data.items).toEqual({ 'luck-small': 1, 'cook-bait-legendary': 2 });
+    expect(data.slots.lunch?.id).toBe('cook-lunch-bundle');
+    expect(data.slots.bait?.id).toBe('cook-bait-legendary');
+
+    const guestUid = await seed({
+      email: null,
+      state: { boat: 1, location: HOME, items: { 'cook-lunch-bundle': 1, 'cook-bait-legendary': 1 } },
+    });
+    for (const item of ['cook-lunch-bundle', 'cook-bait-legendary'] as const) {
+      await rewind(guestUid);
+      expect(await callAction(userToken(guestUid), { type: 'eat', item }))
+        .toMatchObject({ status: 403, body: { error: 'account-only' } });
+    }
   });
 });

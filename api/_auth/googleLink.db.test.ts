@@ -1,6 +1,7 @@
 // 구글 연결 — 게스트와 레거시 이메일 계정의 연결, 충돌 판별, 로그인 전환, 비밀번호 수단 정리를 실제 Postgres에서 확인한다.
 // 구글 토큰 교환은 서버 대역이 인가 코드별 신원으로 대신한다. 콜백 경로는 운영과 같다.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { FIRST_LINK_REWARD_ITEMS, FIRST_LINK_REWARD_KEY, FIRST_LINK_REWARD_MAIL } from '../../src/game/content/firstLinkReward.js';
 import { seedCredentialAccount, sessionHeaders, startActionEnv } from '../_dbTest/actionHarness.js';
 import type { ActionEnv } from '../_dbTest/actionHarness.js';
 import { googleCode } from '../_dbTest/serverShim.js';
@@ -459,5 +460,92 @@ describe('구글 연결의 약관 수락 기록', () => {
     const r = await signIn((await guest()).cookie, who);
     expect(r.ok).toBe(true);
     expect(await consentRows(owner.uid)).toEqual([]);
+  });
+});
+
+describe('게스트 최초 구글 연결 환영 우편', () => {
+  const mailRows = async (uid: string) => (await env.client.query<{
+    idempotency_key: string | null;
+    title: string;
+    body: string;
+    gold: string | number;
+    items: { id: string; qty: number }[];
+  }>(
+    'select idempotency_key, title, body, gold, items from public.mails where user_id = $1 order by id',
+    [uid],
+  )).rows;
+
+  const expectedItems = [...FIRST_LINK_REWARD_ITEMS].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+
+  it('게스트가 최초 신규 구글 계정을 연결하면 0액션 게스트라도 환영 우편 1건을 자동 지급한다', async () => {
+    const { uid, cookie } = await guest();
+    expect((await env.client.query('select 1 from public.saves_current where user_id = $1', [uid])).rows).toHaveLength(0);
+    expect(await mailRows(uid)).toEqual([]);
+
+    const r = await link(cookie, { sub: nextSub(), email: 'reward-first@gmail.test' });
+    expect(r.ok).toBe(true);
+
+    const rows = await mailRows(uid);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      idempotency_key: FIRST_LINK_REWARD_KEY,
+      title: FIRST_LINK_REWARD_MAIL.title,
+      body: FIRST_LINK_REWARD_MAIL.body,
+      items: expectedItems,
+    });
+    expect(Number(rows[0].gold)).toBe(0);
+  });
+
+  it('같은 계정 재연결이나 동일 키 중복에서는 추가 우편을 지급하지 않는다', async () => {
+    const who = { sub: nextSub(), email: 'reward-again@gmail.test' };
+    const { uid, cookie } = await guest();
+    const first = await link(cookie, who);
+    expect(first.ok).toBe(true);
+    expect(await mailRows(uid)).toHaveLength(1);
+
+    const again = await link(first.cookie, who);
+    expect(again.ok).toBe(true);
+    expect(await mailRows(uid)).toHaveLength(1);
+  });
+
+  it('이미 연결된 구글 계정으로 전환 로그인하거나 비익명 레거시 계정이 연결할 때는 지급하지 않는다', async () => {
+    const who = { sub: nextSub(), email: 'reward-existing@gmail.test' };
+    const owner = await guest();
+    await link(owner.cookie, who);
+    expect(await mailRows(owner.uid)).toHaveLength(1);
+
+    // 다른 게스트가 기존 구글 계정으로 sign-in 전환해도 양쪽 계정 모두 추가 우편이 없다
+    const switcher = await guest();
+    const switched = await signIn(switcher.cookie, who);
+    expect(switched.ok).toBe(true);
+    expect(await mailRows(owner.uid)).toHaveLength(1);
+    expect(await mailRows(switcher.uid)).toEqual([]);
+
+    // 비익명(credential) 계정이 구글을 연결할 때는 지급하지 않는다
+    const legacyUid = await seedCredentialAccount(env.client, 'reward-legacy@example.test');
+    const legacyCookie = await seedSession(legacyUid);
+    const linkedLegacy = await link(legacyCookie, { sub: nextSub(), email: 'reward-legacy-google@gmail.test' });
+    expect(linkedLegacy.ok).toBe(true);
+    expect(await mailRows(legacyUid)).toEqual([]);
+  });
+
+  it('보상 우편 발송이 실패해도 구글 연결과 약관 수락은 정상 완료되고 오류 로그만 남긴다', async () => {
+    const who = { sub: nextSub(), email: 'reward-isolated@gmail.test' };
+    const { uid, cookie } = await guest();
+    const logged: unknown[][] = [];
+    const spy = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => { logged.push(args); });
+    await env.client.query('alter table public.mails rename to mails_off');
+    let done;
+    try {
+      done = await link(cookie, who);
+    } finally {
+      await env.client.query('alter table public.mails_off rename to mails');
+      spy.mockRestore();
+    }
+    expect(done.ok).toBe(true);
+    expect(await userRow(uid)).toEqual({ email: 'reward-isolated@gmail.test', email_verified: true, is_anonymous: false });
+    expect(await mailRows(uid)).toEqual([]);
+    const error = logged.flat().find((a): a is Error => a instanceof Error);
+    expect(error?.stack).toBeTruthy();
   });
 });

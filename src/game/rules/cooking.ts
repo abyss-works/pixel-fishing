@@ -28,7 +28,7 @@ const clean = (x: number): number => Math.round(x * 1e9) / 1e9;
 /** 요리(기운 얻기, 부엌, 두 슬롯)가 열렸는가 — 배 단계에서 파생하며 저장하지 않는다 */
 export const cookingUnlocked = (boat: number): boolean => boat >= COOKING_UNLOCK_BOAT;
 
-/** 요리를 쓸 수 있는가 — 위치를 보지 않는 동작(덮어쓰기, 먹기)의 해금 판정 */
+/** 조리·기운 변환을 쓸 수 있는가 — 부엌 해금(배 단계) 판정 */
 export function canUseCooking(state: Pick<GameState, 'boat'>): RuleCheck {
   return cookingUnlocked(state.boat) ? OK : no('cooking-locked');
 }
@@ -314,10 +314,9 @@ export function canTransmuteEnergy(state: GameState, from: unknown, count: unkno
   return OK;
 }
 
-/** 먹기(쓰기) 판정. 조리가 끝난 완성품은 먼저 보관함으로 정산해서 본다. 위치 제한은 없다 */
-export function canEat(state: GameState, item: unknown, now: string): RuleCheck {
-  const unlocked = canUseCooking(state);
-  if (!unlocked.ok) return unlocked;
+/** 먹기(쓰기) 판정 — 게스트는 거부하고, 배 단계와 무관하게 보유 여부를 확인한다. 조리가 끝난 완성품은 먼저 보관함으로 정산해서 본다. 위치 제한은 없다 */
+export function canEat(state: GameState, item: unknown, now: string, guest = false): RuleCheck {
+  if (guest) return no('account-only');
   const recipe = recipeById(item);
   if (!recipe) return no('bad-request');
   return (settleCooking(state, now).items[recipe.id] ?? 0) >= 1 ? OK : no('item-not-owned');

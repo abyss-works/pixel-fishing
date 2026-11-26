@@ -114,14 +114,18 @@ type AccountAfter = (account: { userId: string; providerId: string }, ctx: Gener
 /** 연결이 끝난 계정의 약관과 처리방침 수락을 현재 판으로 기록하는 함수. 이미 같은 판의 기록이 있으면 새로 쓰지 않는다 */
 export type RecordLinkConsent = (userId: string) => Promise<void>;
 
+/** 게스트가 처음 구글 계정을 연결해 정식 계정으로 승격될 때 실행하는 후속 처리 함수 */
+export type GuestLinkedReward = (userId: string) => Promise<void>;
+
 /** 같은 상태에서 몇 번을 돌려도 같은 결과가 되는 연결 마무리 */
-const finishLink = (recordConsent: RecordLinkConsent): AccountAfter => async (account, ctx) => {
+const finishLink = (recordConsent: RecordLinkConsent, onGuestLinked?: GuestLinkedReward): AccountAfter => async (account, ctx) => {
   if (!ctx || account.providerId !== 'google') return;
   const email = verifiedEmail.get(ctx);
   if (!email) return;
   const adapter = ctx.context.internalAdapter;
   const user = await adapter.findUserById(account.userId) as (LinkedUser & { email: string; emailVerified: boolean }) | null;
   if (!user) return;
+  const wasAnonymous = Boolean(user.isAnonymous);
   const passwords = (await adapter.findAccounts(account.userId)).filter(a => a.providerId === 'credential');
   // 마무리가 바꿀 것이 없으면 다른 세션을 끊지 않는다
   if (user.isAnonymous || user.email !== email || !user.emailVerified || passwords.length > 0) {
@@ -129,6 +133,7 @@ const finishLink = (recordConsent: RecordLinkConsent): AccountAfter => async (ac
   }
   // 수락 기록은 마무리 끝에 쓴다. 기록 함수는 실패를 삼키고 오류를 남기므로 기록이 실패해도 연결은 성공으로 답한다. 빠진 기록은 시행일 뒤 확인 화면이 채운다
   await recordConsent(account.userId);
+  if (wasAnonymous && onGuestLinked) await onGuestLinked(account.userId);
 };
 
 /** 사용자 행의 이메일과 게스트 표시를 바꾸고, 비밀번호 수단·다른 세션·재설정 토큰을 정리한다 */
@@ -154,9 +159,12 @@ async function finishUser(userId: string, email: string, passwords: { id: string
  * 마지막에 현재 판의 약관과 처리방침 수락을 기록한다. 연결이 취소되거나 실패하면 이 마무리가 돌지 않아 기록도 없다.
  * 같은 구글을 다시 연결하는 요청(계정 갱신 경로)에서도 돌아, 마무리가 끝나지 않은 계정을 마저 마무리한다.
  */
-export const finishGoogleLink = (recordConsent: RecordLinkConsent): NonNullable<Hooks['account']> => ({
-  create: { after: finishLink(recordConsent) },
-  update: { after: finishLink(recordConsent) },
+export const finishGoogleLink = (
+  recordConsent: RecordLinkConsent,
+  onGuestLinked?: GuestLinkedReward,
+): NonNullable<Hooks['account']> => ({
+  create: { after: finishLink(recordConsent, onGuestLinked) },
+  update: { after: finishLink(recordConsent, onGuestLinked) },
 });
 
 const OAUTH_START_PATHS = ['/link-social', '/sign-in/social'];

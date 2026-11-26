@@ -718,3 +718,132 @@ describe('GameFieldEngine 이전 던짐의 응답', () => {
     engine.dispose();
   });
 });
+
+describe('GameFieldEngine 이동 취소 후 즉시 재캐스팅 및 429 복구', () => {
+  afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+
+  it('획득 카드를 이동으로 취소하고 바로 다시 던져도 최소 캐치 간격을 채워 catchTooSoon 429가 나지 않는다', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const t0 = Date.parse('2026-11-26T00:00:00.000Z');
+    vi.setSystemTime(t0);
+    const game = { ...newState(), boat: 5, rod: 10 };
+    const school = { id: 's', spot: 'pond' as const, x: WORLD_SPAWN.x, y: WORLD_SPAWN.y };
+    const engine = new GameFieldEngine('world', game, [school], WORLD_SPAWN);
+    let lastServerCatchAt: string | null = null;
+    const rejectedErrors: string[] = [];
+    let catches = 0;
+    engine.updateContext(game, false, {
+      dispatch: action => {
+        const nowIso = new Date(Date.now()).toISOString();
+        if (catchTooSoon(game, action.spot, lastServerCatchAt, nowIso)) {
+          rejectedErrors.push('too-fast');
+          return { status: 'rejected', error: 'too-fast' as never };
+        }
+        lastServerCatchAt = nowIso;
+        catches += 1;
+        return {
+          status: 'ok',
+          result: { type: 'catch', fishId: 'crucian', uid: `u-${catches}`, info: { form: 'normal' }, released: [] },
+        } as never;
+      },
+      onEvent: noop,
+      onScene: noop,
+    });
+
+    // 1차 캐스팅 → 입질 → 즉시 챔질 → 획득 카드 진입
+    engine.action();
+    let g = 0;
+    while (engine.getSnapshot().phase !== 'bite' && g++ < 2000) vi.advanceTimersByTime(10);
+    expect(engine.getSnapshot().phase).toBe('bite');
+    engine.action();
+    await Promise.resolve();
+    expect(engine.getSnapshot().phase).toBe('catch');
+
+    // 획득 카드 2초를 채우지 않고 100ms 만에 이동으로 취소하고 즉시 재캐스팅
+    vi.advanceTimersByTime(100);
+    engine.handleKeyDown('ArrowLeft', noop);
+    engine.releaseKey('ArrowLeft');
+    expect(engine.getSnapshot().phase).toBe('idle');
+
+    engine.action();
+    expect(engine.getSnapshot().phase).toBe('wait');
+
+    // 최소 입질 대기를 지나 bite가 뜰 때까지 진행 후 즉시 챔질
+    g = 0;
+    while (engine.getSnapshot().phase !== 'bite' && g++ < 5000) vi.advanceTimersByTime(10);
+    expect(engine.getSnapshot().phase).toBe('bite');
+    engine.action();
+    await Promise.resolve();
+
+    expect(rejectedErrors).toEqual([]);
+    expect(catches).toBe(2);
+    engine.dispose();
+  });
+
+  it('첫 챔질 응답이 오기 전에 이동으로 취소하고 다시 던져도 이전 캐치 확정 뒤 하한을 지킨다', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const t0 = Date.parse('2026-11-26T00:00:00.000Z');
+    vi.setSystemTime(t0);
+    const game = { ...newState(), boat: 5, rod: 10 };
+    const school = { id: 's', spot: 'pond' as const, x: WORLD_SPAWN.x, y: WORLD_SPAWN.y };
+    const engine = new GameFieldEngine('world', game, [school], WORLD_SPAWN);
+    let lastServerCatchAt: string | null = null;
+    const rejectedErrors: string[] = [];
+    let resolveFirst: ((v: unknown) => void) | null = null;
+    let callCount = 0;
+    engine.updateContext(game, false, {
+      dispatch: action => {
+        callCount += 1;
+        if (callCount === 1) {
+          return new Promise(resolve => { resolveFirst = resolve as (v: unknown) => void; }) as never;
+        }
+        const nowIso = new Date(Date.now()).toISOString();
+        if (catchTooSoon(game, action.spot, lastServerCatchAt, nowIso)) {
+          rejectedErrors.push('too-fast');
+          return { status: 'rejected', error: 'too-fast' as never };
+        }
+        lastServerCatchAt = nowIso;
+        return {
+          status: 'ok',
+          result: { type: 'catch', fishId: 'crucian', uid: 'u-2', info: { form: 'normal' }, released: [] },
+        } as never;
+      },
+      onEvent: noop,
+      onScene: noop,
+    });
+
+    engine.action();
+    let g = 0;
+    while (engine.getSnapshot().phase !== 'bite' && g++ < 2000) vi.advanceTimersByTime(10);
+    engine.action();
+    expect(engine.getSnapshot().phase).toBe('catch');
+
+    // 응답 전에 취소하고 바로 재캐스팅
+    vi.advanceTimersByTime(50);
+    engine.handleKeyDown('ArrowLeft', noop);
+    engine.releaseKey('ArrowLeft');
+    engine.action();
+    expect(engine.getSnapshot().phase).toBe('wait');
+
+    // 이제 첫 번째 응답이 뒤늦게 도착해 서버가 last_catch_at을 찍는다
+    vi.advanceTimersByTime(100);
+    lastServerCatchAt = new Date(Date.now()).toISOString();
+    resolveFirst!({
+      status: 'ok',
+      result: { type: 'catch', fishId: 'crucian', uid: 'u-1', info: { form: 'normal' }, released: [] },
+    });
+    await Promise.resolve();
+
+    g = 0;
+    while (engine.getSnapshot().phase !== 'bite' && g++ < 5000) vi.advanceTimersByTime(10);
+    expect(engine.getSnapshot().phase).toBe('bite');
+    engine.action();
+    await Promise.resolve();
+
+    expect(rejectedErrors).toEqual([]);
+    expect(callCount).toBe(2);
+    engine.dispose();
+  });
+});

@@ -9,7 +9,7 @@ import { createTestDatabase } from '../_dbTest/testDatabase.js';
 import type { TestDatabase } from '../_dbTest/testDatabase.js';
 import {
   allPlayerIds, claimMailFragment, claimableMail, clearMailIdempotencyCache, deliverMail, draftProblems, DuplicateMailError, listMails, markMailRead,
-  MAIL_LIST_LIMIT, MAX_MAIL_BATCH_TOTAL_GOLD, parseMailRequest, planMail, previewMails, recentSentMails, sendMails,
+  MAIL_LIST_LIMIT, MAX_MAIL_BATCH_TOTAL_GOLD, parseMailRequest, planMail, previewMails, recentSentMails, sendIdempotentMail, sendMails,
 } from './mailbox.js';
 
 let testDb: TestDatabase;
@@ -261,5 +261,38 @@ describe('플레이어 쪽', () => {
     expect(list.some(m => m.id === itemMail.id)).toBe(true);
     const recent = await recentSentMails(database.db);
     expect(recent.find(m => m.id === itemMail.id)?.items).toEqual([{ id: 'luck-small', qty: 3 }]);
+  });
+
+  it('sendIdempotentMail은 (user_id, idempotency_key) 기준으로 최초 1회만 삽입하고 중복은 무시한다', async () => {
+    const a = await user(false);
+    const b = await user(false);
+    const base = {
+      idempotencyKey: 'google-first-link-reward',
+      title: '출항 연결 선물',
+      body: '선물을 보냈어요.',
+      gold: 0,
+      items: [{ id: 'luck-small', qty: 1 }, { id: 'cook-lunch-bundle', qty: 1 }, { id: 'cook-bait-legendary', qty: 3 }],
+    };
+
+    expect(await sendIdempotentMail(database.db, { ...base, userId: a }, NOW)).toBe(true);
+    expect(await sendIdempotentMail(database.db, { ...base, userId: a }, LATER)).toBe(false);
+    expect(await sendIdempotentMail(database.db, { ...base, userId: b }, NOW)).toBe(true);
+    expect(await sendIdempotentMail(database.db, { ...base, userId: a, idempotencyKey: 'other-key' }, LATER)).toBe(true);
+
+    // sendMails(idempotency_key = null)는 같은 계정에도 계속 발송 가능하다
+    expect(await sendMails(database.db, { title: '일반1', body: 'b', recipients: [{ userId: a, gold: 10 }] }, NOW)).toBe(1);
+    expect(await sendMails(database.db, { title: '일반2', body: 'b', recipients: [{ userId: a, gold: 10 }] }, LATER)).toBe(1);
+
+    const aMails = await listMails(database.db, a);
+    expect(aMails.filter(m => m.title === '출항 연결 선물')).toHaveLength(2);
+    const firstReward = aMails.find(m => m.title === '출항 연결 선물' && m.createdAt === NOW);
+    expect(firstReward).toMatchObject({
+      gold: 0,
+      items: [
+        { id: 'cook-bait-legendary', qty: 3 },
+        { id: 'cook-lunch-bundle', qty: 1 },
+        { id: 'luck-small', qty: 1 },
+      ],
+    });
   });
 });

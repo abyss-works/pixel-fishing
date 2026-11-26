@@ -313,7 +313,7 @@ describe('아이템 사용과 교체', () => {
 });
 
 describe('해금 전과 게스트', () => {
-  it('해금 전 계정 사용자는 전체 보기에서 1줄 안내만 보이고 보유 중만 보기에서 빈 안내를 본다', () => {
+  it('해금 전 계정 사용자는 전체 보기에서 1줄 안내만 보이고 보유 중만 보기에서 빈 안내를 보며, 보유한 도시락·미끼는 잠금 없이 즉시 사용할 수 있다', () => {
     show(game({ boat: COOKING_UNLOCK_BOAT - 1 }));
     expect(screen.queryByText('가진 아이템이 없어요.')).not.toBeInTheDocument();
     expect(screen.getByText('인도양 항로가 열리면 부엌을 쓸 수 있어요.')).toBeInTheDocument();
@@ -326,21 +326,44 @@ describe('해금 전과 게스트', () => {
     fireEvent.click(screen.getByRole('button', { name: '보유 중만 보기' }));
     expect(screen.getByText('가진 아이템이 없어요.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /\)\s사용$/ })).not.toBeInTheDocument();
+
+    cleanup();
+    const { dispatch } = show(game({
+      boat: COOKING_UNLOCK_BOAT - 1,
+      items: { 'cook-lunch-bundle': 1, 'cook-bait-legendary': 3 },
+    }));
+    expect(screen.getByRole('group', { name: '생명의 기운 잠김' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: '가루디야(일반) 잠김' })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: '생선 탈리(전설) 잠김' })).toBeNull();
+    expect(screen.queryByRole('group', { name: '용연향 미끼(전설) 잠김' })).toBeNull();
+
+    const lunchBtn = screen.getByRole('button', { name: '생선 탈리(전설) 사용' });
+    expect(lunchBtn).toBeEnabled();
+    fireEvent.click(lunchBtn);
+    expect(dispatch).toHaveBeenCalledWith({ type: 'eat', item: 'cook-lunch-bundle' });
+
+    fireEvent.click(screen.getByRole('button', { name: '용연향 미끼(전설) 상세 보기' }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).queryByRole('group', { name: '용연향 미끼(전설) 사용 잠김' })).toBeNull();
+    expect(within(dialog).getByRole('button', { name: '사용' })).toBeEnabled();
   });
 
-  it('게스트는 해금 전에는 1줄 진행 조건 안내·잠금 툴팁을, 해금 뒤 전체 보기에서는 빈 안내 없이 카드·게스트 잠금 툴팁만 본다', () => {
-    show(game({ boat: COOKING_UNLOCK_BOAT - 1 }), 'guest');
+  it('게스트는 해금 전에는 보유 여부와 무관하게 진행 조건 잠금 툴팁을, 해금 뒤 전체 보기에서는 게스트 잠금 툴팁만 본다', () => {
+    show(game({ boat: COOKING_UNLOCK_BOAT - 1, items: { 'cook-lunch-bundle': 1 } }), 'guest');
     expect(screen.queryByText('가진 아이템이 없어요.')).not.toBeInTheDocument();
     expect(screen.getByText('인도양 항로가 열리면 부엌을 쓸 수 있어요.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '보유 중만 보기' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '가루디야(일반) 사용' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '생선 탈리(전설) 사용' })).toBeDisabled();
+    expect(screen.getByRole('group', { name: '생선 탈리(전설) 잠김' })).toHaveTextContent('인도양 항로가 열리면 부엌을 쓸 수 있어요.');
     expect(screen.getByRole('group', { name: '생명의 기운 잠김' })).toHaveTextContent('인도양 항로가 열리면 부엌을 쓸 수 있어요.');
     cleanup();
 
-    show(game(), 'guest');
+    show(game({ items: { 'cook-lunch-bundle': 1 } }), 'guest');
     expect(screen.queryByText('가진 아이템이 없어요.')).not.toBeInTheDocument();
     expect(screen.getByRole('group', { name: '생명의 기운 잠김' })).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
+    expect(screen.getByRole('group', { name: '생선 탈리(전설) 잠김' })).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
     fireEvent.click(screen.getByRole('button', { name: '보유 중만 보기' }));
-    expect(screen.getByText('가진 아이템이 없어요.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '생선 탈리(전설) 사용' })).toBeDisabled();
   });
 });

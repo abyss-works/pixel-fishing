@@ -53,7 +53,7 @@ import type { DayPhase } from '../src/game/rules/time.js';
 import { checkNickname, pickGuestName } from '../src/game/rules/nickname.js';
 import { powerZones, rodPower } from '../src/game/rules/stats.js';
 import { MIN_ACTION_GAP_MS, PACING_SLOW_TYPES, SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
-import { catchTooSoon } from '../src/game/rules/pacing.js';
+import { catchWaitMs } from '../src/game/rules/pacing.js';
 import { APP_VERSION } from '../src/version.js';
 import { staleClient } from './_server/clientBuild.js';
 import { sessionOf } from './_auth/session.js';
@@ -366,6 +366,7 @@ export default async function handler(req: Req, res: Res): Promise<void> {
   } catch (e) {
     const err = toApiError(e);
     if (err.status >= 500) await reportServerIssue(err.code, err.cause ?? err, err.context);
+    if (typeof err.context.retryAfter === 'string') res.setHeader?.('Retry-After', err.context.retryAfter);
     res.status(err.status).json({ error: err.code, ...err.context.body as object });
   }
 }
@@ -535,28 +536,33 @@ async function route(req: Req, res: Res): Promise<void> {
     throw new ApiError(423, 'session-replaced');
   }
 
-  // 매크로 페이싱 검사 — 느림 창 대상에만 직전 성공 액션과의 최소 간격(서버 시각 기준)을 검사한다.
-  // updated_at은 성공 커밋마다 이미 갱신되므로 읽기·쓰기 추가가 0이다. 거절될 요청이 쿠폰·지원코드
-  // 조회까지 가지 않도록 그 조회보다 먼저 검사한다. 시딩 행(v1)과 첫 액션은 제외.
-  // 개발 도구 명령(debug/debugBatch/debugSnapshot)과 승인된 강제 조우·시간대 테스트 캐치는 페이싱을 면제한다.
+  // 매크로 페이싱 검사 — 비어획 느림 창 대상(sendLetter)만 직전 성공 액션(updated_at)과의 최소 간격을 검사하고,
+  // catch는 전용 last_catch_at 기반 낚시 한 사이클 검사만 적용해 비어획 직후 정상 어획과 409 재시도를 막지 않는다.
+  // 시딩 행(v1)과 첫 액션은 제외하며, 개발 도구 명령과 승인된 강제 조우·시간대 테스트 캐치는 면제한다.
   const pacingExempt = action.type === 'debug'
     || action.type === 'debugBatch'
     || action.type === 'debugSnapshot'
     || forceCatchAllowed;
   if (!pacingExempt) {
     const lastActionMs = Date.parse(String(row.updated_at ?? ''));
-    if (PACING_SLOW.has(action.type) && Number.isFinite(lastActionMs) && Number(row.version) > 1
-        && Date.now() - lastActionMs < MIN_ACTION_GAP_MS) {
-      throw new ApiError(429, 'too-fast');
+    const gapElapsedMs = Date.now() - lastActionMs;
+    if (action.type !== 'catch' && PACING_SLOW.has(action.type)
+        && Number.isFinite(lastActionMs) && Number(row.version) > 1
+        && gapElapsedMs < MIN_ACTION_GAP_MS) {
+      const retryAfter = String(Math.max(1, Math.ceil((MIN_ACTION_GAP_MS - gapElapsedMs) / 1000)));
+      throw new ApiError(429, 'too-fast', { retryAfter });
     }
     // 캐치 간격 검사 — 직전 캐치로부터 낚시 한 사이클(획득 표시 + 최소 입질 대기)이 지나야 다음 캐치를 받는다.
-    if (action.type === 'catch' && catchTooSoon(
-      scalarState(row, loaded.counters, loaded.clearedNamed),
-      action.spot,
-      row.last_catch_at ?? null,
-      new Date().toISOString(),
-    )) {
-      throw new ApiError(429, 'too-fast');
+    if (action.type === 'catch') {
+      const waitMs = catchWaitMs(
+        scalarState(row, loaded.counters, loaded.clearedNamed),
+        action.spot,
+        row.last_catch_at ?? null,
+        new Date().toISOString(),
+      );
+      if (waitMs > 0) {
+        throw new ApiError(429, 'too-fast', { retryAfter: String(Math.max(1, Math.ceil(waitMs / 1000))) });
+      }
     }
   }
 

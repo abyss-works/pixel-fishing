@@ -1,7 +1,9 @@
 // 요청의 로그인 세션 — 서버 함수가 요청한 사용자를 정한다. 게임과 관리자 대시보드의 인증 인스턴스를 환경 변수로 조립한다.
 import type { IncomingHttpHeaders } from 'node:http';
 import { fromNodeHeaders } from 'better-auth/node';
+import { FIRST_LINK_REWARD_ITEMS, FIRST_LINK_REWARD_KEY, FIRST_LINK_REWARD_MAIL } from '../../src/game/content/firstLinkReward.js';
 import { recordConsent } from '../_data/consent.js';
+import { sendIdempotentMail } from '../_data/mailbox.js';
 import { database } from '../_db/client.js';
 import { ApiError } from '../errors.js';
 import { reportServerIssue } from '../observability.js';
@@ -37,6 +39,26 @@ export function appAuth(): Auth {
       } catch (e) {
         console.error('약관 수락 기록에 실패했습니다', e);
         await reportServerIssue('consent-record', e, { uid });
+      }
+    },
+    // 최초 연결 보상 지급이 실패해도 구글 계정 연결·승격의 성공 흐름은 되돌리지 않는다
+    onGuestLinked: async uid => {
+      try {
+        await sendIdempotentMail(
+          database().db,
+          {
+            userId: uid,
+            idempotencyKey: FIRST_LINK_REWARD_KEY,
+            title: FIRST_LINK_REWARD_MAIL.title,
+            body: FIRST_LINK_REWARD_MAIL.body,
+            gold: 0,
+            items: FIRST_LINK_REWARD_ITEMS,
+          },
+          new Date().toISOString(),
+        );
+      } catch (e) {
+        console.error('최초 연결 보상 우편 발송에 실패했습니다', e);
+        await reportServerIssue('first-link-reward', e, { uid });
       }
     },
   });
