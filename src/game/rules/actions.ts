@@ -863,7 +863,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       if (action.replaceSlot !== undefined && action.replaceSlot !== 'bait' && action.replaceSlot !== 'bait2') {
         return { ok: false, error: 'bad-request' };
       }
-      const check = canEat(state, action.item, deps.now);
+      const check = canEat(state, action.item, deps.now, deps.guest);
       if (!check.ok) return { ok: false, error: check.reason };
       const recipe = recipeById(action.item)!;
       // 완성품을 먼저 정산한 뒤 하나를 꺼내 슬롯에 넣는다. 든 것이 있으면 이전 효과는 즉시 끝난다

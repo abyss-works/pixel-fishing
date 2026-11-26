@@ -6,7 +6,7 @@ import { anonymous } from 'better-auth/plugins';
 import { createHmac, randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { accountLinking, dropOAuthTokens, finishGoogleLink, googleProvider, guardAuthRequests, validateGoogleLink } from './googleLink.js';
-import type { GoogleConfig, RecordLinkConsent } from './googleLink.js';
+import type { GoogleConfig, GuestLinkedReward, RecordLinkConsent } from './googleLink.js';
 import { TRUSTED_PROXY_CIDRS } from './trustedProxy.js';
 
 export interface AuthConfig {
@@ -17,6 +17,8 @@ export interface AuthConfig {
   google: GoogleConfig;
   /** 구글 연결이 끝난 계정의 약관 수락을 기록한다 */
   recordLinkConsent: RecordLinkConsent;
+  /** 게스트가 처음 구글 계정을 연결해 정식 계정으로 승격될 때 실행한다 */
+  onGuestLinked?: GuestLinkedReward;
 }
 
 // 게스트의 신원은 세션 하나뿐이라 세션이 끝나면 계정을 잃는다. 1년 동안 쓰지 않을 때만 끝나게 한다.
@@ -107,7 +109,7 @@ function withRetryAfterHeader<
 }
 
 export function createAuth(config: AuthConfig) {
-  const finishLink = finishGoogleLink(config.recordLinkConsent);
+  const finishLink = finishGoogleLink(config.recordLinkConsent, config.onGuestLinked);
   const auth = betterAuth({
     database: config.pool,
     secret: config.secret,
