@@ -475,8 +475,6 @@ describe('게스트 최초 구글 연결 환영 우편', () => {
     [uid],
   )).rows;
 
-  const expectedItems = [...FIRST_LINK_REWARD_ITEMS].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-
   it('게스트가 최초 신규 구글 계정을 연결하면 0액션 게스트라도 환영 우편 1건을 자동 지급한다', async () => {
     const { uid, cookie } = await guest();
     expect((await env.client.query('select 1 from public.saves_current where user_id = $1', [uid])).rows).toHaveLength(0);
@@ -491,7 +489,7 @@ describe('게스트 최초 구글 연결 환영 우편', () => {
       idempotency_key: FIRST_LINK_REWARD_KEY,
       title: FIRST_LINK_REWARD_MAIL.title,
       body: FIRST_LINK_REWARD_MAIL.body,
-      items: expectedItems,
+      items: [...FIRST_LINK_REWARD_ITEMS],
     });
     expect(Number(rows[0].gold)).toBe(0);
   });
