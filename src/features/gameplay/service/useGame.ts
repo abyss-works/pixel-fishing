@@ -510,6 +510,10 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
         const next = await readProfile();
         if (next.ok) adoptProfile(next);
         else { setNickname(name); setProfileStatus('loaded'); }
+        void client.invalidateQueries({ queryKey: ['ranking'] });
+        void client.invalidateQueries({ queryKey: ['guild'] });
+        void client.invalidateQueries({ queryKey: ['friends'] });
+        void client.invalidateQueries({ queryKey: ['player'] });
         return null;
       }
       return r.error;

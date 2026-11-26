@@ -829,3 +829,38 @@ describe('이용약관 수락 게이트', () => {
     expect(gw.actions).toEqual(['boot', 'boot']);
   });
 });
+
+describe('닉네임 변경 시 프로필 및 조회 캐시 무효화', () => {
+  it('rename 성공 후 프로필을 채택하고 ranking·guild·friends·player 쿼리 캐시를 즉시 무효화한다', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const spy = vi.spyOn(client, 'invalidateQueries');
+    client.setQueryData(['ranking', 'fame', null, 'uid-1'], { board: 'fame', top: [], me: null });
+    client.setQueryData(['guild', 'uid-1'], { guild: null, request: null });
+    client.setQueryData(['friends', 'uid-1'], []);
+    client.setQueryData(['player', 'uid-1'], { nickname: '옛이름' });
+    client.setQueryData(['bounty', '2026-11-26', 'uid-1'], { clearsToday: {} });
+
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    const hook = renderHook(() => useGame({ setToast: () => {} }), { wrapper });
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+
+    gw.profileReplies = [{ ok: true, nickname: '새이름', devTools: false }];
+    spy.mockClear();
+    let err: unknown = 'pending';
+    await act(async () => { err = await hook.result.current.rename('새이름'); });
+
+    expect(err).toBeNull();
+    expect(hook.result.current.nickname).toBe('새이름');
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['ranking'] });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['guild'] });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['friends'] });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['player'] });
+    expect(client.getQueryState(['ranking', 'fame', null, 'uid-1'])?.isInvalidated).toBe(true);
+    expect(client.getQueryState(['guild', 'uid-1'])?.isInvalidated).toBe(true);
+    expect(client.getQueryState(['friends', 'uid-1'])?.isInvalidated).toBe(true);
+    expect(client.getQueryState(['player', 'uid-1'])?.isInvalidated).toBe(true);
+    expect(client.getQueryState(['bounty', '2026-11-26', 'uid-1'])?.isInvalidated).toBe(false);
+  });
+});

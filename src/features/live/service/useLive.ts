@@ -54,7 +54,8 @@ function receive(msg: ServerMessage): void {
   if (msg.t === 'move') glides.set(msg.uid, nextGlide(glides.get(msg.uid) ?? null, msg, performance.now()));
   const regionChanged = msg.t === 'move' && prev.others[msg.uid]?.presence.region !== msg.region;
   const zoneChanged = msg.t === 'move' && (prev.others[msg.uid]?.presence.zone ?? null) !== (msg.zone ?? null);
-  if (msg.t === 'hello' || msg.t === 'join' || msg.t === 'leave' || msg.t === 'chat' || msg.t === 'error' || regionChanged || zoneChanged) {
+  const nickChanged = msg.t === 'nick' && state !== prev;
+  if (msg.t === 'hello' || msg.t === 'join' || msg.t === 'leave' || msg.t === 'chat' || msg.t === 'error' || regionChanged || zoneChanged || nickChanged) {
     notify();
   }
 }

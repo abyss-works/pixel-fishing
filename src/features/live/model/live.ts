@@ -84,6 +84,21 @@ export function applyLiveMessage(state: LiveState, msg: ServerMessage, now: numb
       delete others[msg.uid];
       return { ...state, others };
     }
+    case 'nick': {
+      const prev = state.others[msg.uid];
+      const nextOther = prev && prev.presence.nick !== msg.nick
+        ? { ...prev, presence: { ...prev.presence, nick: msg.nick } }
+        : null;
+      const chatChanged = state.chat.some(l => l.uid === msg.uid && l.nick !== msg.nick);
+      const guildChanged = state.guildChat.some(l => l.uid === msg.uid && l.nick !== msg.nick);
+      if (!nextOther && !chatChanged && !guildChanged) return state;
+      return {
+        ...state,
+        ...(nextOther ? { others: { ...state.others, [msg.uid]: nextOther } } : {}),
+        ...(chatChanged ? { chat: state.chat.map(l => l.uid === msg.uid ? { ...l, nick: msg.nick } : l) } : {}),
+        ...(guildChanged ? { guildChat: state.guildChat.map(l => l.uid === msg.uid ? { ...l, nick: msg.nick } : l) } : {}),
+      };
+    }
     default:
       return state;
   }
