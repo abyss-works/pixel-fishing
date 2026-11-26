@@ -67,20 +67,29 @@ export function useGoogleReturn({ setToast, askOverwrite, showNotice, reopenAcco
     void (progress === 'nothing' ? Promise.resolve(true) : askOverwrite()).then(async proceed => {
       if (!proceed) {
         clearPendingSailReturn();
+        await api.auth.cancelGoogleSwitch().catch(() => {});
         sendNotice(setToast, { kind: 'account.authMilestone', text: overwriteCanceledText, tone: 'accent', logTone: 'info' });
         reopenAccount();
         return;
       }
-      const started = await api.auth.startGoogle('sign-in', GOOGLE_TAG.signIn).then(r => r.ok, () => false);
-      if (!started) {
-        clearPendingSailReturn();
-        sendNotice(setToast, {
-          kind: 'account.authMilestone',
-          text: googleStartFailedText,
-          toastText: '구글 인증 시작 실패',
-          tone: 'danger',
-        });
+      const switched = await api.auth.confirmGoogleSwitch(GOOGLE_TAG.signIn).catch(() => ({
+        ok: false as const,
+        fallback: false as const,
+        msg: googleStartFailedText,
+        code: undefined as string | undefined,
+      }));
+      if (switched.ok) return;
+      if (switched.fallback) {
+        const started = await api.auth.startGoogle('sign-in', GOOGLE_TAG.signIn).then(r => r.ok, () => false);
+        if (started) return;
       }
+      clearPendingSailReturn();
+      sendNotice(setToast, {
+        kind: 'account.authMilestone',
+        text: switched.code === 'rate_limited' ? switched.msg : googleStartFailedText,
+        toastText: '구글 인증 시작 실패',
+        tone: 'danger',
+      });
     });
     // 콜백은 읽는 시점의 값이면 충분하다
     // oxlint-disable-next-line react-hooks/exhaustive-deps

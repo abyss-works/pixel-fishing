@@ -1,8 +1,9 @@
 // 구글 로그인과 계정 연결의 구성. 공급자 옵션, 연결 전 검증, 연결 뒤 마무리, 토큰 비움 훅을 모아 인증 구성이 조립만 하게 한다.
-import { APIError, createAuthMiddleware, getSessionFromCtx } from 'better-auth/api';
+import { APIError, createAuthMiddleware, getOAuthState, getSessionFromCtx } from 'better-auth/api';
 import type { GenericEndpointContext } from 'better-auth';
 import { setSessionCookie } from 'better-auth/cookies';
 import type { BetterAuthOptions } from 'better-auth';
+import { recordGoogleSwitchCandidate } from './googleSwitch.js';
 
 export interface GoogleConfig {
   clientId: string;
@@ -77,9 +78,18 @@ export const validateGoogleLink: ValidateUserInfo = async ({ user, source }, ctx
   const sub = typeof profile?.sub === 'string' ? profile.sub : '';
   const userId = String(user.id);
 
-  // 구글 계정을 다른 사용자가 가졌으면 라이브러리가 연결 충돌로 알린다
+  // 구글 계정을 다른 사용자가 가졌으면 라이브러리가 연결 충돌로 알린다. 게스트 연결 시도면 전환 티켓 발급 후보로 남긴다.
   const owner = await adapter.findAccountByKey({ providerId: 'google', accountId: sub });
-  if (owner && owner.userId !== userId) return;
+  if (owner && owner.userId !== userId) {
+    const [self, oauthState] = await Promise.all([
+      adapter.findUserById(userId) as Promise<LinkedUser | null>,
+      getOAuthState(),
+    ]);
+    if (self?.isAnonymous && sub && oauthState?.link?.userId === userId) {
+      recordGoogleSwitchCandidate(oauthState, { guestUserId: userId, targetUserId: owner.userId, accountId: sub });
+    }
+    return;
+  }
   // 같은 구글을 이 사용자가 이미 가졌으면 마무리를 다시 하는 연결이다
   if (!owner) {
     const mine = await adapter.findAccounts(userId);
