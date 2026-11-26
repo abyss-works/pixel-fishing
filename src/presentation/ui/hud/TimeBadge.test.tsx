@@ -35,4 +35,11 @@ describe('TimeBadge 낮/밤 아이콘', () => {
     expect(container.querySelector('[data-glyph="sun"]')).not.toBeNull();
     expect(container.querySelector('[data-glyph="moon"]')).toBeNull();
   });
+
+  it('다른 HUD 칩과 같은 26px 높이(h-[26px])와 text-xs로 렌더된다', () => {
+    const { container } = render(<TimeBadge />);
+    const chip = container.firstElementChild as HTMLElement;
+    expect(chip).toHaveClass('h-[26px]', 'text-xs');
+    expect(chip).not.toHaveClass('h-6');
+  });
 });
