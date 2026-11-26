@@ -227,7 +227,15 @@ export default function Field({
   }, [engine, placeSeq, initialPos, region]);
   useEffect(() => { engine.setControlLocked(locked === true); }, [engine, locked]);
 
-  useEffect(() => subscribeFailure(() => engine.cancelFishing()), [engine]);
+  useEffect(() => subscribeFailure(err => {
+    if (err.kind === 'rate-limited') {
+      if (err.context.action === undefined || err.context.action === 'catch') {
+        engine.recoverFromRateLimit();
+      }
+      return;
+    }
+    engine.cancelFishing();
+  }), [engine]);
   useEffect(() => { if (paused) engine.cancelFishing(); }, [engine, paused]);
   useEffect(() => () => { observer.current?.disconnect(); engine.dispose(); }, [engine]);
 

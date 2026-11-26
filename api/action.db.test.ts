@@ -129,13 +129,17 @@ describe('요청 경계', () => {
     expect(await run({ state: {}, restricted: true }, { type: 'boot' })).toMatchSnapshot();
   });
 
-  it('느림 창 대상이 아니면 짧은 간격도 받고, 느림 창 대상은 429다', async () => {
+  it('느림 창 대상이 아니면 짧은 간격도 받고, 느림 창 대상은 429와 Retry-After 헤더로 응답한다', async () => {
     const recent = new Date(Date.parse(NOW) - 100).toISOString();
     const uid = await seed({ state: { gold: 1_000 }, version: 3, updatedAt: recent });
     expect(await callAction(userToken(uid), { type: 'upgradeRod' })).toMatchObject({ status: 200 });
     // 직전 성공 액션 직후의 sendLetter는 느림 창에 걸려 거부된다
-    expect(await callAction(userToken(uid), { type: 'sendLetter', text: '안녕하세요' }))
-      .toMatchObject({ status: 429, body: { error: 'too-fast' } });
+    const letterRes = await callAction(userToken(uid), { type: 'sendLetter', text: '안녕하세요' });
+    expect(letterRes).toMatchObject({
+      status: 429,
+      body: { error: 'too-fast' },
+      headers: { 'retry-after': '1' },
+    });
   });
 });
 
@@ -1049,10 +1053,19 @@ describe('캐치 간격과 활성 창', () => {
   const column = async (uid: string, name: 'last_catch_at' | 'active_client') =>
     (await env.client.query(`select ${name} as v from public.saves_current where user_id = $1`, [uid])).rows[0].v as unknown;
 
-  it('직전 캐치로부터 낚시 한 사이클이 지나지 않은 catch는 429다', async () => {
+  it('직전 캐치로부터 낚시 한 사이클이 지나지 않은 catch는 429와 Retry-After 헤더로 응답한다', async () => {
     const uid = await seed({ state: {}, lastCatchAt: ago(2_000) });
-    expect(await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'good' }))
-      .toMatchObject({ status: 429, body: { error: 'too-fast' } });
+    const res = await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'good' });
+    expect(res).toMatchObject({ status: 429, body: { error: 'too-fast' } });
+    expect(Number(res.headers?.['retry-after'])).toBeGreaterThanOrEqual(1);
+  });
+
+  it('비어획 액션 커밋 직후 1초 이내에 도착한 catch와 409 충돌 직후 재시도는 updated_at에 막히지 않는다', async () => {
+    const uid = await seed({ state: { gold: 1_000 }, version: 3, updatedAt: NOW, lastCatchAt: ago(60_000) });
+    // 비어획 액션 커밋 직후 15ms 만에 도착한 catch도 정상 통과한다
+    expect(await callAction(userToken(uid), { type: 'upgradeRod' })).toMatchObject({ status: 200 });
+    vi.setSystemTime(Date.parse(NOW) + 15);
+    expect(await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'good' })).toMatchObject({ status: 200 });
   });
 
   it('한 사이클이 지난 catch는 받고 캐치 시각을 남긴다', async () => {
