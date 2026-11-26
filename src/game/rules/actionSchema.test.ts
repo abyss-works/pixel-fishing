@@ -19,6 +19,17 @@ describe('parseAction', () => {
     }
   });
 
+  it('catch의 챔질 경과는 0 이상의 유한한 숫자일 때만 통과한다', () => {
+    expect(parseAction({ type: 'catch', spot: 'pond', judgment: 'good', biteElapsed: 730 }))
+      .toEqual({ type: 'catch', spot: 'pond', judgment: 'good', biteElapsed: 730 });
+    expect(parseAction({ type: 'catch', spot: 'pond', judgment: 'good', biteElapsed: 0 }))
+      .toEqual({ type: 'catch', spot: 'pond', judgment: 'good', biteElapsed: 0 });
+    expect(parseAction({ type: 'catch', spot: 'pond', judgment: 'good', biteElapsed: -1 })).toBeNull();
+    expect(parseAction({ type: 'catch', spot: 'pond', judgment: 'good', biteElapsed: Number.NaN })).toBeNull();
+    expect(parseAction({ type: 'catch', spot: 'pond', judgment: 'good', biteElapsed: Number.POSITIVE_INFINITY })).toBeNull();
+    expect(parseAction({ type: 'catch', spot: 'pond', judgment: 'good', biteElapsed: '730' })).toBeNull();
+  });
+
   it('catch의 강제 조우·시간대 표시는 유효 값만 통과한다 — 허용 여부는 서버가 따로 판정한다', () => {
     expect(parseAction({ type: 'catch', spot: 'sea', judgment: 'auto', forceEncounter: true }))
       .toEqual({ type: 'catch', spot: 'sea', judgment: 'auto', forceEncounter: true });
