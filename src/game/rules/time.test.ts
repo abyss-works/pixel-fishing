@@ -9,6 +9,7 @@ import {
   cycleStep, cycleMinute, isNight, dayPhase, gameHour, formatGameClock,
   nightDepthOfStep, nightDepth, darkness,
   gameDayOf, gameDayStartISO,
+  gameWeekStartDay, gameWeekStartISO, nextGameWeekResetISO,
 } from './time';
 
 const iso = (min: number, sec = 0): string => {
@@ -169,6 +170,78 @@ describe('gameDayStartISO — 게임 날짜가 시작된 순간(그날의 KST 04
       const start = gameDayStartISO(now);
       expect(gameDayOf(start)).toBe(gameDayOf(now));
       expect(gameDayOf(new Date(Date.parse(start) - 1).toISOString())).not.toBe(gameDayOf(now));
+    }
+  });
+});
+
+describe('gameWeekStartDay / gameWeekStartISO / nextGameWeekResetISO — 월요일 KST 04:00 주간 경계', () => {
+  it('월요일 KST 03:59:59(일요일 18:59:59Z)는 직전 주간에 속한다', () => {
+    const prevWeekEnd = '2026-10-18T18:59:59.000Z';
+    expect(gameWeekStartDay(prevWeekEnd)).toBe('2026-10-12');
+    expect(gameWeekStartISO(prevWeekEnd)).toBe('2026-10-11T19:00:00.000Z');
+    expect(nextGameWeekResetISO(prevWeekEnd)).toBe('2026-10-18T19:00:00.000Z');
+
+    const prevWeekLastMs = '2026-10-18T18:59:59.999Z';
+    expect(gameWeekStartDay(prevWeekLastMs)).toBe('2026-10-12');
+    expect(gameWeekStartISO(prevWeekLastMs)).toBe('2026-10-11T19:00:00.000Z');
+    expect(nextGameWeekResetISO(prevWeekLastMs)).toBe('2026-10-18T19:00:00.000Z');
+  });
+
+  it('월요일 KST 04:00:00(일요일 19:00:00Z)부터 새 주간이 시작된다', () => {
+    const weekStart = '2026-10-18T19:00:00.000Z';
+    expect(gameWeekStartDay(weekStart)).toBe('2026-10-19');
+    expect(gameWeekStartISO(weekStart)).toBe('2026-10-18T19:00:00.000Z');
+    expect(nextGameWeekResetISO(weekStart)).toBe('2026-10-25T19:00:00.000Z');
+  });
+
+  it('일요일 KST 23:59:59(일요일 14:59:59Z)는 직전 월요일 KST 04:00과 같은 주간이다', () => {
+    const sundayNightKst = '2026-10-25T14:59:59.000Z';
+    expect(gameWeekStartDay(sundayNightKst)).toBe('2026-10-19');
+    expect(gameWeekStartISO(sundayNightKst)).toBe('2026-10-18T19:00:00.000Z');
+    expect(nextGameWeekResetISO(sundayNightKst)).toBe('2026-10-25T19:00:00.000Z');
+  });
+
+  it('연도 경계(2025→2026)와 윤년 경계(2024-02-29)를 넘어도 주간 경계가 정확하다', () => {
+    // 2026-01-01(목) 12:00 KST → 주 시작은 2025-12-29(월) 04:00 KST, 다음 리셋은 2026-01-05(월) 04:00 KST
+    const newYearDay = '2026-01-01T03:00:00.000Z';
+    expect(gameWeekStartDay(newYearDay)).toBe('2025-12-29');
+    expect(gameWeekStartISO(newYearDay)).toBe('2025-12-28T19:00:00.000Z');
+    expect(nextGameWeekResetISO(newYearDay)).toBe('2026-01-04T19:00:00.000Z');
+
+    // 2024-02-29(목, 윤일) 12:00 KST → 주 시작은 2024-02-26(월) 04:00 KST, 다음 리셋은 2024-03-04(월) 04:00 KST
+    const leapDay = '2024-02-29T03:00:00.000Z';
+    expect(gameWeekStartDay(leapDay)).toBe('2024-02-26');
+    expect(gameWeekStartISO(leapDay)).toBe('2024-02-25T19:00:00.000Z');
+    expect(nextGameWeekResetISO(leapDay)).toBe('2024-03-03T19:00:00.000Z');
+
+    // 평년 2월 말(2026-03-01 일요일 23:59:59 KST) → 2026-02-23(월) ~ 2026-03-02(월)
+    const nonLeapEnd = '2026-03-01T14:59:59.000Z';
+    expect(gameWeekStartDay(nonLeapEnd)).toBe('2026-02-23');
+    expect(gameWeekStartISO(nonLeapEnd)).toBe('2026-02-22T19:00:00.000Z');
+    expect(nextGameWeekResetISO(nonLeapEnd)).toBe('2026-03-01T19:00:00.000Z');
+  });
+
+  it('주간 시작/다음 리셋 불변식을 만족한다', () => {
+    const samples = [
+      '2025-12-28T18:59:59.999Z',
+      '2025-12-28T19:00:00.000Z',
+      '2026-01-01T03:00:00.000Z',
+      '2024-02-29T03:00:00.000Z',
+      '2026-10-18T18:59:59.999Z',
+      '2026-10-18T19:00:00.000Z',
+      '2026-10-21T12:34:56.789Z',
+      '2026-10-25T14:59:59.000Z',
+    ];
+    for (const now of samples) {
+      const startDay = gameWeekStartDay(now);
+      const startIso = gameWeekStartISO(now);
+      const nextIso = nextGameWeekResetISO(now);
+      expect(gameDayOf(startIso)).toBe(startDay);
+      expect(gameWeekStartDay(startIso)).toBe(startDay);
+      expect(gameWeekStartDay(new Date(Date.parse(startIso) - 1).toISOString())).not.toBe(startDay);
+      expect(gameWeekStartDay(nextIso)).not.toBe(startDay);
+      expect(gameWeekStartISO(nextIso)).toBe(nextIso);
+      expect(Date.parse(nextIso) - Date.parse(startIso)).toBe(7 * 86_400_000);
     }
   });
 });

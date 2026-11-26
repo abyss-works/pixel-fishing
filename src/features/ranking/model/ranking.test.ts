@@ -1,18 +1,39 @@
 import { describe, expect, it } from 'vitest';
 import { FISH } from '../../../game/content/fish';
 import { NAMED } from '../../../game/content/named';
-import { formatRankingValue, pinnedMyRank, RANKING_TABS, rankingTabMeta } from './ranking';
+import {
+  defaultRankingWindow,
+  formatRankingValue,
+  isPeriodRankingBoard,
+  pinnedMyRank,
+  RANKING_TABS,
+  rankingTabMeta,
+} from './ranking';
 
 const row = (rank: number, me = false) => ({ rank, nickname: `p${rank}`, value: 100 - rank, me });
 
 describe('pinnedMyRank', () => {
-  it('내가 상위 목록 밖이면 내 순위를 돌려준다', () => {
+  it('내가 상위 목록 안에 있든 밖에 있든 me가 있으면 항상 돌려준다', () => {
     expect(pinnedMyRank({ top: [row(1), row(2)], me: { rank: 57, value: 10 } })).toEqual({ rank: 57, value: 10 });
+    expect(pinnedMyRank({ top: [row(1), row(2, true)], me: { rank: 2, value: 98 } })).toEqual({ rank: 2, value: 98 });
   });
 
-  it('내가 상위 목록 안에 있거나 순위가 없으면 null이다', () => {
-    expect(pinnedMyRank({ top: [row(1), row(2, true)], me: { rank: 2, value: 98 } })).toBeNull();
+  it('순위가 없으면 null이다', () => {
     expect(pinnedMyRank({ top: [row(1)], me: null })).toBeNull();
+  });
+});
+
+describe('isPeriodRankingBoard & defaultRankingWindow', () => {
+  it('명성과 네임드 토벌만 주간 기간을 지원하고 기본값은 weekly다', () => {
+    expect(isPeriodRankingBoard('fame')).toBe(true);
+    expect(isPeriodRankingBoard('namedClears')).toBe(true);
+    expect(defaultRankingWindow('fame')).toBe('weekly');
+    expect(defaultRankingWindow('namedClears')).toBe('weekly');
+
+    for (const board of ['dex', 'variant', 'named', 'species'] as const) {
+      expect(isPeriodRankingBoard(board)).toBe(false);
+      expect(defaultRankingWindow(board)).toBe('all');
+    }
   });
 });
 

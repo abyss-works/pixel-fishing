@@ -1,10 +1,20 @@
 import { FISH } from '../../../game/content/fish';
 import { NAMED } from '../../../game/content/named';
-import type { RankingBoard, RankingBoardId } from '../../../platform/api';
+import type { RankingBoard, RankingBoardId, RankingWindow } from '../../../platform/api';
+
+export type { RankingWindow } from '../../../platform/api';
 
 // 순위표 파생 값·보드 메타.
 
 export type MainRankingBoardId = Exclude<RankingBoardId, 'species'>;
+
+/** 주간·전체 누적 기간 전환을 지원하는 순위 표인지 판별한다 */
+export const isPeriodRankingBoard = (board: RankingBoardId): boolean =>
+  board === 'fame' || board === 'namedClears';
+
+/** 보드별 기본 조회 기간 — 기간 지원 보드는 이번 주, 그 외는 전체 누적 */
+export const defaultRankingWindow = (board: RankingBoardId): RankingWindow =>
+  (isPeriodRankingBoard(board) ? 'weekly' : 'all');
 
 export interface RankingTabMeta {
   key: MainRankingBoardId;
@@ -41,7 +51,7 @@ export const RANKING_TABS: readonly RankingTabMeta[] = [
     key: 'namedClears',
     label: '네임드 토벌',
     valueLabel: '토벌 횟수',
-    help: '네임드 토벌 누적 성공 횟수예요.',
+    help: '네임드 토벌에 성공한 횟수예요.',
     total: null,
   },
 ];
@@ -78,8 +88,7 @@ export function formatRankingValue(board: MainRankingBoardId, value: number): st
   return num;
 }
 
-/** 표 아래에 따로 고정할 내 순위. 내가 상위 목록 안에 있거나 순위가 없으면 null이다 */
+/** 표 아래에 항상 고정할 내 순위. 순위가 없으면 null이다 */
 export function pinnedMyRank(board: Pick<RankingBoard, 'top' | 'me'>): { rank: number; value: number } | null {
-  if (!board.me || board.top.some(row => row.me)) return null;
-  return board.me;
+  return board.me ?? null;
 }

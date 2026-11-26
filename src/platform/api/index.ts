@@ -47,7 +47,7 @@ export type {
   ApiClient, AuthApi, StorageApi, AdminApi, AdminAccessResult, DevApi, PromoteTestResult, ResetDevAccountResult,
   AccountLookup, AuthResult, ConfirmGoogleSwitchResult, ConsentStatus, AcceptConsentError, AcceptConsentResult, GameGateway, GameProfile, MaybePromise, DispatchResult,
   BountySnapshot, BountyProgressRow, BountyTicketRow, FortuneDiscoveredEntry, FortuneHistory,
-  RankingBoardId, RankingRow, RankingBoard, MailItem, MailItemAttachment, FriendItem, FriendOp, FriendOpResult,
+  RankingBoardId, RankingWindow, RankingRow, RankingBoard, MailItem, MailItemAttachment, FriendItem, FriendOp, FriendOpResult,
   GuildBonusItem, GuildDonorItem, GuildInfo, GuildInvitePreview, GuildJoinRequestItem, GuildLogItem, GuildMemberItem, GuildMyRequest, GuildOp,
   GuildOpResult, GuildState, PublicGuildItem,
   AdminUserRow, AdminUserState, AdminOverview, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
