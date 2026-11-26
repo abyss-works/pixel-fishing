@@ -41,6 +41,7 @@ import { staleClient } from './clientBuild.js';
 import { consentGate, liveConsentAdmit } from './consentGate.js';
 import { createHttpMetrics } from './httpMetrics.js';
 import { legalPages } from './legalPages.js';
+import { notFound } from './notFound.js';
 import { securityHeaders } from './securityHeaders.js';
 import { checkStageLiveUpgrade, stageGate } from './stageGate.js';
 import { stageMockups } from './stageMockups.js';
@@ -112,7 +113,7 @@ app.use('/api', consentGate());
 for (const [path, handler] of Object.entries(routes)) {
   app.all(path, (req: Request, res: Response) => handler(req as never, res as never));
 }
-app.use('/api', (_req, res) => { res.status(404).json({ error: 'not-found' }); });
+app.use('/api', notFound);
 
 // 스테이징 전용 시안 HTML 동적 서빙 — preview 환경과 MOCKUPS_DIR 설정이 모두 있을 때만 게이트 뒤에 등록한다.
 if (process.env.DEPLOY_ENV === 'preview' && Boolean(process.env.MOCKUPS_DIR)) {
@@ -132,6 +133,8 @@ app.get(['/', '/index.html'], (_req: Request, res: Response, next) => {
 // 공개 문서(소개, 약관, 처리방침, 운영정책)는 로그인 없이 열리고 쿠키를 만들지 않는다
 app.use(legalPages());
 app.use(express.static(staticDir));
+// 어느 경로에도 해당하지 않으면 Express 기본 응답 대신 정돈된 404를 낸다
+app.use(notFound);
 
 const port = Number(process.env.PORT ?? 3000);
 const server = app.listen(port, () => { console.info(`Server listening on port ${port}`); });

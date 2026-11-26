@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /$
+Allow: /about
+Allow: /terms
+Allow: /privacy
+Allow: /policy
+Disallow: /api
+Disallow: /g/
+
+Sitemap: https://pixel-fishing.abyssworks.dev/sitemap.xml
