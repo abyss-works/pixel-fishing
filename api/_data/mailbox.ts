@@ -135,16 +135,18 @@ export type DraftProblem = 'title' | 'body' | 'gold' | 'items' | 'empty' | 'reci
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** 첨부 아이템 배열을 id 오름차순으로 정규화한다(중복 id는 합산). */
-export function normalizeMailItems(items: readonly MailItemAttachment[] | undefined): MailItemAttachment[] {
+function mergeMailItems(items: readonly MailItemAttachment[] | undefined): MailItemAttachment[] {
   if (!items || items.length === 0) return [];
   const merged = new Map<string, number>();
   for (const item of items) {
     merged.set(item.id, (merged.get(item.id) ?? 0) + item.qty);
   }
-  return [...merged.entries()]
-    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .map(([id, qty]) => ({ id, qty }));
+  return [...merged.entries()].map(([id, qty]) => ({ id, qty }));
+}
+
+/** 첨부 아이템 배열을 id 오름차순으로 정규화한다(중복 id는 합산). */
+export function normalizeMailItems(items: readonly MailItemAttachment[] | undefined): MailItemAttachment[] {
+  return mergeMailItems(items).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
 function itemsValid(items: readonly MailItemAttachment[]): boolean {
@@ -275,15 +277,21 @@ export async function sendIdempotentMail(
   if (idempotencyKey.length === 0 || idempotencyKey.length > 128) {
     throw new Error('invalid idempotencyKey');
   }
+  const hasInvalidRawItem = req.items.some(
+    item => typeof item.id !== 'string'
+      || !isAttachableItemId(item.id)
+      || !Number.isSafeInteger(item.qty)
+      || item.qty < 1,
+  );
+  const items = hasInvalidRawItem ? [] : mergeMailItems(req.items);
   const problems = draftProblems({
     title: req.title,
     body: req.body,
-    recipients: [{ userId: req.userId, gold: req.gold, items: req.items }],
+    recipients: [{ userId: req.userId, gold: req.gold, items: hasInvalidRawItem ? req.items : items }],
   });
   if (problems.length > 0) {
     throw new Error(`invalid idempotent mail: ${problems.join(', ')}`);
   }
-  const items = normalizeMailItems(req.items);
   const { rows } = await db.execute<{ id: string | number }>(sql`
     insert into public.mails (user_id, idempotency_key, title, body, gold, items, created_at)
     values (${req.userId}::uuid, ${idempotencyKey}, ${req.title.trim()}, ${req.body.trim()}, ${req.gold}, ${JSON.stringify(items)}::jsonb, ${at(nowISO)})
