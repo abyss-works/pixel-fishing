@@ -20,7 +20,7 @@ export type ClientMessage =
   | { t: 'typing'; on: boolean } // 채팅 입력 중 표시 켜기·끄기
   | { t: 'ping' };
 
-export interface Presence { uid: string; nick: string; boat: number; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean; bob?: Bob; look?: Look; idleMs?: number } // idleMs: 낚시 중인 사람의 첫 결과 뒤 지난 시간(서버가 보내는 시점 기준, 선택 필드. 없으면 세지 않는다)
+export interface Presence { uid: string; nick: string; boat: number; fame: number; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean; bob?: Bob; look?: Look; idleMs?: number } // idleMs: 낚시 중인 사람의 첫 결과 뒤 지난 시간(서버가 보내는 시점 기준, 선택 필드. 없으면 세지 않는다)
 export interface ChatLine { id: number; uid: string; nick: string; text: string; at: string }
 
 export type ServerMessage =
