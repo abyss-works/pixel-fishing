@@ -186,11 +186,18 @@ export function bountyRestoreFragments(guard: SQL, uid: string, bounty: DevBount
   return out;
 }
 
-/** 캐치가 진전시킨 일반 의뢰의 진행도 +1 — 응답 뒤 후속 쓰기다 */
+/** 캐치가 진전시킨 일반 의뢰의 진행도 +1 — 대상이 없으면 문장을 만들지 않는다 */
 export function advanceProgress(uid: string, questIds: readonly string[], nowISO: string): SQL | null {
   if (questIds.length === 0) return null;
   return sql`update public.bounty_progress set progress = progress + 1, updated_at = ${at(nowISO)}
     where user_id = ${uid} and quest_id = any(${textArray(questIds)})`;
+}
+
+/** 캐치 확정 직후 의뢰 진행도를 반영하고 실제로 바뀐 행 수를 돌려준다. 대상이 없으면 DB를 호출하지 않는다 */
+export async function runAdvanceProgress(db: Executor, uid: string, questIds: readonly string[], nowISO: string): Promise<number> {
+  const stmt = advanceProgress(uid, questIds, nowISO);
+  if (!stmt) return 0;
+  return (await db.execute(stmt)).rowCount ?? 0;
 }
 
 /** 사용자의 수배 관련 표(도전권·진행·수주·클리어·라이선스) 전체 삭제 SQL 조각을 돌려준다 */
