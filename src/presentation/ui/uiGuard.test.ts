@@ -1128,9 +1128,9 @@ describe('UI 시스템 가드', () => {
   });
 
   it('시맨틱 색이 걸린 줄 안에 HighlightRarityText를 중첩하지 않고 Tip 경고 첫 줄도 원문을 그대로 쓴다', () => {
-    const semanticLineWithHighlight = /className=\{?[^>\n]*\btext-(?:accent|danger|gold|guild|epic)\b[^>\n]*\}?[^>]*>[^<\n]*<HighlightRarityText\b/;
-    const semanticBlockWithHighlight = /className=\{?[^>\n]*\btext-(?:accent|danger|gold|guild|epic)\b[^>\n]*\}?[^>]*>[\s\S]{0,160}?<HighlightRarityText\b/;
-    const kvSemanticValueWithHighlight = /value=\{<HighlightRarityText\b[\s\S]{0,120}?valueClassName=\{?[^}\n]*\btext-(?:accent|danger|gold|guild|epic)\b/;
+    const semanticLineWithHighlight = /className=\{?[^>\n]*\btext-(?:accent|danger|gold|guild|epic|mutation|named)\b[^>\n]*\}?[^>]*>[^<\n]*<HighlightRarityText\b/;
+    const semanticBlockWithHighlight = /className=\{?[^>\n]*\btext-(?:accent|danger|gold|guild|epic|mutation|named)\b[^>\n]*\}?[^>]*>[\s\S]{0,160}?<HighlightRarityText\b/;
+    const kvSemanticValueWithHighlight = /value=\{<HighlightRarityText\b[\s\S]{0,120}?valueClassName=\{?[^}\n]*\btext-(?:accent|danger|gold|guild|epic|mutation|named)\b/;
     const offenders = presentationFiles
       .filter(f => !isTestFile(f.path))
       .filter(f => {

@@ -333,7 +333,7 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
                     />
                   )}
                 >
-                  <IconButton type="button" glyph="question" size={12} tone="dim" aria-label="개체 표시" />
+                  <IconButton type="button" glyph="question" size={12} tone="dim" className="p-1" aria-label="개체 표시" />
                 </Tip>
               )}
               <Tip wraps text={layout === 'list' ? '카드 보기' : '목록 보기'}>
