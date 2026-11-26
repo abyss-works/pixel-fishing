@@ -2,7 +2,7 @@
 // VITE_CLOUD가 '1'이 아니면 authClient = null → 게임은 로컬 저장만으로 정상 동작 (오프라인 모드).
 import { createAuthClient } from 'better-auth/client';
 import { anonymousClient } from 'better-auth/client/plugins';
-import type { AcceptConsentResult, AccountLookup, AuthResult, ConsentStatus } from '../api/types';
+import type { AcceptConsentResult, AccountLookup, AuthResult, ConfirmGoogleSwitchResult, ConsentStatus } from '../api/types';
 import { networkError, rateLimitedError, requestFailure, serverError, unauthorizedError } from './requestFailure';
 
 /** 서버(스테이징·운영)에 붙는 빌드인가 — 빌드 때 정해진다 */
@@ -67,10 +67,12 @@ const authErr = (e: AuthError): AuthResult => {
   return {
     ok: false,
     msg: `${e?.message ?? '알 수 없는 오류'}${e?.status ? ` (${e.status})` : ''}`,
+    ...(e?.code ? { code: e.code } : {}),
   };
 };
 
-const NOT_CLOUD: AuthResult = { ok: false, msg: '클라우드가 설정되지 않았어요.' };
+const NOT_CLOUD_MSG = '클라우드가 설정되지 않았어요.';
+const NOT_CLOUD: AuthResult = { ok: false, msg: NOT_CLOUD_MSG };
 
 // 로그인된 영구 계정 확인. 게스트(미설정 포함)와 확인 실패를 구분한다. 게스트의 이메일은 서버가 만든 자리표시라 보이지 않는다
 export async function currentAccount(): Promise<AccountLookup> {
@@ -92,6 +94,7 @@ export const GOOGLE_RETURN_PARAM = 'google';
 /** 이 기기의 이 탭에서 구글 인증을 시작했다는 표지를 담는 세션 저장소 키. 다른 곳에서 만든 복귀 주소를 처리하지 않기 위해서다 */
 const GOOGLE_FLOW_KEY = 'pf-google-flow';
 const GOOGLE_ENDPOINT = { link: '/link-social', 'sign-in': '/sign-in/social' } as const;
+const FALLBACK_SWITCH_CODES = new Set(['switch_ticket_missing', 'switch_ticket_expired']);
 
 /** 연결(link) 또는 확인 뒤 로그인(sign-in). 표지(tag)는 돌아온 주소에 실려 돌아온다 */
 export type GoogleStart = keyof typeof GOOGLE_ENDPOINT;
@@ -131,6 +134,46 @@ export async function startGoogleAuth(start: GoogleStart, tag: string): Promise<
   }
   window.location.assign(data.url);
   return { ok: true };
+}
+
+/** 1회용 전환 티켓으로 2차 구글 인증 없이 기존 계정에 로그인한다. 티켓이 만료되거나 없는 경우에만 fallback: true를 돌려준다 */
+export async function confirmGoogleSwitch(tag: string): Promise<ConfirmGoogleSwitchResult> {
+  if (!authClient) return { ok: false, fallback: false, msg: NOT_CLOUD_MSG };
+  let res: { data?: { ok?: boolean } | null; error?: AuthError };
+  try {
+    res = await authClient.$fetch<{ ok?: boolean }>('/confirm-google-switch', {
+      method: 'POST',
+      body: {},
+    });
+  } catch {
+    return { ok: false, fallback: false, msg: '서버에 연결하지 못했어요. 잠시 뒤 다시 시도해 주세요.' };
+  }
+  if (res.error) {
+    const base = authErr(res.error);
+    const code = base.ok ? undefined : base.code;
+    const fallback = typeof code === 'string' && FALLBACK_SWITCH_CODES.has(code);
+    return { ok: false, fallback, msg: base.ok ? '계정 전환에 실패했어요.' : base.msg, ...(code ? { code } : {}) };
+  }
+  if (!res.data?.ok) {
+    return { ok: false, fallback: false, msg: '계정 전환을 확인하지 못했어요.' };
+  }
+  try {
+    sessionStorage.setItem(GOOGLE_FLOW_KEY, tag);
+    window.location.assign(googleReturnUrl(window.location.origin, tag));
+  } catch {
+    window.location.reload();
+  }
+  return { ok: true };
+}
+
+/** 보류 중인 게스트→기존 구글 계정 전환 티켓과 쿠키를 폐기한다 */
+export async function cancelGoogleSwitch(): Promise<void> {
+  if (!authClient) return;
+  try {
+    await authClient.$fetch('/cancel-google-switch', { method: 'POST', body: {} });
+  } catch {
+    // 취소 정리 실패는 게스트 상태 복귀를 막지 않는다
+  }
 }
 
 /**

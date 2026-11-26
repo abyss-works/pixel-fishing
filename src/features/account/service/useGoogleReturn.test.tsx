@@ -6,6 +6,8 @@ const auth = vi.hoisted(() => ({
   isConfigured: true,
   landing: null as { tag: string; error: string | null } | null,
   startGoogle: vi.fn(),
+  confirmGoogleSwitch: vi.fn(),
+  cancelGoogleSwitch: vi.fn(),
 }));
 
 vi.mock('../../../platform/api', () => ({
@@ -14,6 +16,8 @@ vi.mock('../../../platform/api', () => ({
       get isConfigured() { return auth.isConfigured; },
       takeGoogleLanding: () => auth.landing,
       startGoogle: auth.startGoogle,
+      confirmGoogleSwitch: auth.confirmGoogleSwitch,
+      cancelGoogleSwitch: auth.cancelGoogleSwitch,
     },
   },
 }));
@@ -46,6 +50,10 @@ describe('구글 인증 복귀 처리', () => {
     auth.landing = null;
     auth.startGoogle.mockReset();
     auth.startGoogle.mockResolvedValue({ ok: true });
+    auth.confirmGoogleSwitch.mockReset();
+    auth.confirmGoogleSwitch.mockResolvedValue({ ok: true });
+    auth.cancelGoogleSwitch.mockReset();
+    auth.cancelGoogleSwitch.mockResolvedValue(undefined);
     sessionStorage.clear();
     resetSailReturnForTest();
   });
@@ -84,28 +92,50 @@ describe('구글 인증 복귀 처리', () => {
     expect(p.askOverwrite).not.toHaveBeenCalled();
   });
 
-  it('게스트의 연결 충돌은 확인을 묻고 진행하면 구글 로그인을 시작한다', async () => {
+  it('게스트의 연결 충돌은 확인을 묻고 진행하면 1회용 전환 티켓으로 바로 전환하고 2차 구글 인증으로 보내지 않는다', async () => {
     auth.landing = { tag: 'link-guest', error: 'account_already_linked_to_different_user' };
     const p = setup(true);
-    await waitFor(() => expect(auth.startGoogle).toHaveBeenCalledTimes(1));
-    expect(auth.startGoogle).toHaveBeenCalledWith('sign-in', 'sign-in');
+    await waitFor(() => expect(auth.confirmGoogleSwitch).toHaveBeenCalledTimes(1));
+    expect(auth.confirmGoogleSwitch).toHaveBeenCalledWith('sign-in');
+    expect(auth.startGoogle).not.toHaveBeenCalled();
     expect(p.reopenAccount).not.toHaveBeenCalled();
     expect(p.setToast).not.toHaveBeenCalled();
   });
 
-  it('확인에서 되돌아가면 구글 로그인을 시작하지 않고 계정 관리 창을 다시 연다', async () => {
+  it('전환 티켓이 만료·누락(fallback: true)이면 기존 2차 구글 로그인으로 폴백한다', async () => {
+    auth.landing = { tag: 'link-guest', error: 'account_already_linked_to_different_user' };
+    auth.confirmGoogleSwitch.mockResolvedValue({ ok: false, fallback: true, msg: 'expired', code: 'switch_ticket_expired' });
+    const p = setup(true);
+    await waitFor(() => expect(auth.startGoogle).toHaveBeenCalledTimes(1));
+    expect(auth.startGoogle).toHaveBeenCalledWith('sign-in', 'sign-in');
+    expect(p.setToast).not.toHaveBeenCalled();
+  });
+
+  it('확인에서 되돌아가면 전환 티켓을 취소하고 구글 로그인을 시작하지 않으며 계정 관리 창을 다시 연다', async () => {
     auth.landing = { tag: 'link-guest', error: 'account_already_linked_to_different_user' };
     const p = setup(false);
     await waitFor(() => expect(p.reopenAccount).toHaveBeenCalledTimes(1));
+    expect(auth.cancelGoogleSwitch).toHaveBeenCalledTimes(1);
     expect(p.setToast).toHaveBeenCalledWith('연결하지 않았어요. 다른 구글 계정으로 연결해 보세요.', 'info');
+    expect(auth.confirmGoogleSwitch).not.toHaveBeenCalled();
     expect(auth.startGoogle).not.toHaveBeenCalled();
   });
 
-  it('진행했는데 구글 인증 화면을 열지 못하면 경고한다', async () => {
+  it('진행했는데 폴백 구글 인증 화면을 열지 못하면 경고한다', async () => {
     auth.landing = { tag: 'link-guest', error: 'account_already_linked_to_different_user' };
+    auth.confirmGoogleSwitch.mockResolvedValue({ ok: false, fallback: true, msg: 'missing', code: 'switch_ticket_missing' });
     auth.startGoogle.mockResolvedValue({ ok: false, msg: '실패' });
     const p = setup(true);
     await waitFor(() => expect(p.setToast).toHaveBeenCalledTimes(1));
+    expect(p.setToast).toHaveBeenCalledWith('구글 계정 선택 화면을 열지 못했어요. 잠시 뒤 다시 시도해 주세요.', 'warn');
+  });
+
+  it('전환 티켓 확인이 폴백 불가 오류로 실패하면 2차 구글 인증으로 보내지 않고 경고한다', async () => {
+    auth.landing = { tag: 'link-guest', error: 'account_already_linked_to_different_user' };
+    auth.confirmGoogleSwitch.mockResolvedValue({ ok: false, fallback: false, msg: '실패', code: 'switch_session_mismatch' });
+    const p = setup(true);
+    await waitFor(() => expect(p.setToast).toHaveBeenCalledTimes(1));
+    expect(auth.startGoogle).not.toHaveBeenCalled();
     expect(p.setToast).toHaveBeenCalledWith('구글 계정 선택 화면을 열지 못했어요. 잠시 뒤 다시 시도해 주세요.', 'warn');
   });
 
@@ -143,14 +173,26 @@ describe('버릴 진행이 없는 게스트의 구글 로그인', () => {
     auth.landing = { tag: 'link-guest', error: 'account_already_linked_to_different_user' };
     auth.startGoogle.mockReset();
     auth.startGoogle.mockResolvedValue({ ok: true });
+    auth.confirmGoogleSwitch.mockReset();
+    auth.confirmGoogleSwitch.mockResolvedValue({ ok: true });
+    auth.cancelGoogleSwitch.mockReset();
+    auth.cancelGoogleSwitch.mockResolvedValue(undefined);
   });
   afterEach(cleanup);
 
-  it('진행이 없으면 확인 없이 바로 구글 로그인을 시작한다', async () => {
+  it('진행이 없으면 확인 없이 바로 1회용 전환 티켓으로 로그인한다', async () => {
+    const p = setup(false, 'nothing');
+    await waitFor(() => expect(auth.confirmGoogleSwitch).toHaveBeenCalledWith('sign-in'));
+    expect(auth.startGoogle).not.toHaveBeenCalled();
+    expect(p.askOverwrite).not.toHaveBeenCalled();
+    expect(p.reopenAccount).not.toHaveBeenCalled();
+  });
+
+  it('진행이 없으면 티켓 만료 시에만 2차 구글 로그인으로 폴백한다', async () => {
+    auth.confirmGoogleSwitch.mockResolvedValue({ ok: false, fallback: true, msg: 'expired', code: 'switch_ticket_expired' });
     const p = setup(false, 'nothing');
     await waitFor(() => expect(auth.startGoogle).toHaveBeenCalledWith('sign-in', 'sign-in'));
     expect(p.askOverwrite).not.toHaveBeenCalled();
-    expect(p.reopenAccount).not.toHaveBeenCalled();
   });
 
   it('진행이 있으면 확인을 묻는다', async () => {
@@ -162,9 +204,10 @@ describe('버릴 진행이 없는 게스트의 구글 로그인', () => {
     const p = setup(false, 'reading');
     await new Promise(r => setTimeout(r, 20));
     expect(p.askOverwrite).not.toHaveBeenCalled();
+    expect(auth.confirmGoogleSwitch).not.toHaveBeenCalled();
     expect(auth.startGoogle).not.toHaveBeenCalled();
     p.rerender('nothing');
-    await waitFor(() => expect(auth.startGoogle).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(auth.confirmGoogleSwitch).toHaveBeenCalledTimes(1));
     expect(p.askOverwrite).not.toHaveBeenCalled();
   });
 
@@ -176,29 +219,30 @@ describe('버릴 진행이 없는 게스트의 구글 로그인', () => {
 
   it('판정이 바뀌어도 한 번만 처리한다', async () => {
     const p = setup(true, 'nothing');
-    await waitFor(() => expect(auth.startGoogle).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(auth.confirmGoogleSwitch).toHaveBeenCalledTimes(1));
     p.rerender('some');
     p.rerender('nothing');
     await new Promise(r => setTimeout(r, 20));
-    expect(auth.startGoogle).toHaveBeenCalledTimes(1);
+    expect(auth.confirmGoogleSwitch).toHaveBeenCalledTimes(1);
     expect(p.askOverwrite).not.toHaveBeenCalled();
   });
 
-  it('확인을 건너뛴 로그인을 시작하지 못하면 구글 화면을 열지 못했다는 안내를 보인다', async () => {
+  it('확인을 건너뛴 로그인에서 폴백 구글 시작이 실패하면 구글 화면을 열지 못했다는 안내를 보인다', async () => {
+    auth.confirmGoogleSwitch.mockResolvedValue({ ok: false, fallback: true, msg: 'expired', code: 'switch_ticket_expired' });
     auth.startGoogle.mockResolvedValue({ ok: false, msg: '실패' });
     const p = setup(false, 'nothing');
     await waitFor(() => expect(p.setToast).toHaveBeenCalledWith('구글 계정 선택 화면을 열지 못했어요. 잠시 뒤 다시 시도해 주세요.', 'warn'));
   });
 
   it('확인을 건너뛴 로그인을 시작하다 던져도 구글 화면을 열지 못했다는 안내를 보인다', async () => {
-    auth.startGoogle.mockRejectedValue(new Error('network'));
+    auth.confirmGoogleSwitch.mockRejectedValue(new Error('network'));
     const p = setup(false, 'nothing');
     await waitFor(() => expect(p.setToast).toHaveBeenCalledWith('구글 계정 선택 화면을 열지 못했어요. 잠시 뒤 다시 시도해 주세요.', 'warn'));
     expect(p.setToast).toHaveBeenCalledTimes(1);
   });
 
   it('확인에서 진행한 로그인을 시작하다 던져도 구글 화면을 열지 못했다는 안내를 보인다', async () => {
-    auth.startGoogle.mockRejectedValue(new Error('network'));
+    auth.confirmGoogleSwitch.mockRejectedValue(new Error('network'));
     const p = setup(true, 'some');
     await waitFor(() => expect(p.setToast).toHaveBeenCalledWith('구글 계정 선택 화면을 열지 못했어요. 잠시 뒤 다시 시도해 주세요.', 'warn'));
   });
@@ -207,6 +251,7 @@ describe('버릴 진행이 없는 게스트의 구글 로그인', () => {
     auth.landing = { tag: 'sign-in', error: 'account_already_linked_to_different_user' };
     const p = setup(false, 'nothing');
     await waitFor(() => expect(p.showNotice).toHaveBeenCalledTimes(1));
+    expect(auth.confirmGoogleSwitch).not.toHaveBeenCalled();
     expect(auth.startGoogle).not.toHaveBeenCalled();
   });
 });
@@ -217,6 +262,10 @@ describe('출항 복귀 표지 처리', () => {
     auth.landing = null;
     auth.startGoogle.mockReset();
     auth.startGoogle.mockResolvedValue({ ok: true });
+    auth.confirmGoogleSwitch.mockReset();
+    auth.confirmGoogleSwitch.mockResolvedValue({ ok: true });
+    auth.cancelGoogleSwitch.mockReset();
+    auth.cancelGoogleSwitch.mockResolvedValue(undefined);
     sessionStorage.clear();
     resetSailReturnForTest();
   });
@@ -256,11 +305,11 @@ describe('출항 복귀 표지 처리', () => {
     expect(isSailReturnReady()).toBe(false);
   });
 
-  it('덮어쓰기 확인을 진행해 sign-in 재인증이 시작되면 출항 대기를 유지한다', async () => {
+  it('덮어쓰기 확인을 진행해 전환 티켓 확인이 시작되면 출항 대기를 유지한다', async () => {
     setPendingSailReturn();
     auth.landing = { tag: 'link-guest', error: 'account_already_linked_to_different_user' };
     setup(true, 'some');
-    await waitFor(() => expect(auth.startGoogle).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(auth.confirmGoogleSwitch).toHaveBeenCalledTimes(1));
     expect(hasPendingSailReturn()).toBe(true);
     expect(isSailReturnReady()).toBe(false);
   });
@@ -273,9 +322,10 @@ describe('출항 복귀 표지 처리', () => {
     expect(hasPendingSailReturn()).toBe(false);
   });
 
-  it('덮어쓰기 확인 후 sign-in 재인증 시작이 실패하면 출항 대기를 지운다', async () => {
+  it('덮어쓰기 확인 후 폴백 sign-in 재인증 시작이 실패하면 출항 대기를 지운다', async () => {
     setPendingSailReturn();
     auth.landing = { tag: 'link-guest', error: 'account_already_linked_to_different_user' };
+    auth.confirmGoogleSwitch.mockResolvedValue({ ok: false, fallback: true, msg: 'expired', code: 'switch_ticket_expired' });
     auth.startGoogle.mockResolvedValue({ ok: false, msg: '실패' });
     const p = setup(true, 'some');
     await waitFor(() => expect(p.setToast).toHaveBeenCalledTimes(1));

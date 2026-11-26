@@ -7,6 +7,7 @@ import { createHmac, randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { accountLinking, dropOAuthTokens, finishGoogleLink, googleProvider, guardAuthRequests, validateGoogleLink } from './googleLink.js';
 import type { GoogleConfig, RecordLinkConsent } from './googleLink.js';
+import { googleSwitchPlugin } from './googleSwitch.js';
 import { TRUSTED_PROXY_CIDRS } from './trustedProxy.js';
 
 export interface AuthConfig {
@@ -145,6 +146,7 @@ export function createAuth(config: AuthConfig) {
         generateRandomEmail: () => `${randomUUID()}@${ANONYMOUS_EMAIL_DOMAIN}`,
         schema: { user: { fields: { isAnonymous: 'is_anonymous' } } },
       }),
+      googleSwitchPlugin(),
     ],
   });
   return withRetryAfterHeader(auth);
