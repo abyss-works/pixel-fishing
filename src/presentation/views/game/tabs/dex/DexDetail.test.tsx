@@ -23,14 +23,22 @@ describe('도감 상세의 크기 순위', () => {
   afterEach(() => { cleanup(); state.result = null; state.asked = []; });
 
   it('그 어종의 크기 순위를 보여 주고 내 행을 강조한다', async () => {
-    state.result = { board: 'species', fishId: fish.id, top: [
-      { rank: 1, nickname: '가', value: 33.25, me: false },
-      { rank: 2, nickname: '나', value: 20, me: true },
-    ], me: { rank: 2, value: 20 } };
+    state.result = {
+      board: 'species',
+      fishId: fish.id,
+      window: 'all',
+      periodSupported: false,
+      resetAt: null,
+      top: [
+        { rank: 1, nickname: '가', value: 33.25, me: false },
+        { rank: 2, nickname: '나', value: 20, me: true },
+      ],
+      me: { rank: 2, value: 20 },
+    };
     show();
     expect(await screen.findByText('33.3cm')).toBeInTheDocument();
     expect(screen.getByText('나').closest('tr')).toHaveAttribute('aria-current', 'true');
-    expect(state.asked).toEqual([['species', fish.id]]);
+    expect(state.asked).toEqual([['species', fish.id, 'all']]);
   });
 
   it('크기 분포에 내 최대 기록의 상위 백분율을 표시한다', async () => {

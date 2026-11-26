@@ -511,7 +511,13 @@ export default function GameView(props: GameViewProps) {
         {fortuneOpen && (
           <FortuneCalendarModal gameFortune={game.fortune} accountState={accountState} onClose={() => setFortuneOpen(false)} />
         )}
-        {rankingOpen && <RankingModal onClose={() => setRankingOpen(false)} />}
+        {rankingOpen && (
+          <RankingModal
+            guest={accountState === 'guest'}
+            nickname={props.nickname}
+            onClose={() => setRankingOpen(false)}
+          />
+        )}
         {away.report && awayOpen && (
           <AwayReportModal report={away.report} game={game} onClose={closeAway}
                            onOpenBag={() => { closeAway(); setActiveTab('bag'); }} />
