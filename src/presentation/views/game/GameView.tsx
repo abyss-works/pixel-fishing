@@ -168,6 +168,9 @@ export default function GameView(props: GameViewProps) {
   // 튜토리얼 트리거 — 마을 야외와 바다에 처음 나왔을 때
   useTutorialTrigger('village', scene.kind === 'region' && scene.id === 'village');
   useTutorialTrigger('sea', atSea);
+  // 트리거 등록 효과가 끝나기 전에는 뒤 차례 알림 카드를 만들지 않는다 — 자식 효과가 부모보다 먼저 실행될 수 있기 때문이다
+  const [tutorialTriggersReady, setTutorialTriggersReady] = useState(false);
+  useEffect(() => { setTutorialTriggersReady(true); }, []);
   // 첫 화면의 안내 창 순서 - 업데이트 소식, 미끼 환불 안내, 오늘의 운세, 튜토리얼, 브라우저 알림 안내. 앞 창이 끝나야 다음 창이 뜬다
   const saveReady = props.syncState === 'on' || props.syncState === 'off';
   const whatsNewPending = useWhatsNewPending();
@@ -494,7 +497,9 @@ export default function GameView(props: GameViewProps) {
         {baitRefund.notice && <BaitRefundModal notice={baitRefund.notice} onClose={baitRefund.close} />}
         {fortune.fortune && <FortuneModal fortune={fortune.fortune} onClose={fortune.close} />}
         <TutorialModal seen={game.tutorials} ready={saveReady} after={baitRefund.pending || fortune.pending} dispatch={props.dispatch} />
-        <AlertPromptModal ready={saveReady} after={whatsNewPending || baitRefund.pending || fortune.pending || tutorialPending} setToast={props.setToast} />
+        {tutorialTriggersReady && (
+          <AlertPromptModal ready={saveReady} after={whatsNewPending || baitRefund.pending || fortune.pending || tutorialPending} setToast={props.setToast} />
+        )}
         {props.toasts && props.toasts.length > 0 && props.onDismissToast && (
           <FloatingToastLayer toasts={props.toasts} maxVisible={mobile ? 2 : 3} onDismiss={props.onDismissToast} />
         )}

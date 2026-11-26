@@ -18,8 +18,13 @@ export const PERMISSION_TIP = '브라우저에서 알림을 허용했는지 보�
 export const PERMISSION_LABEL: Record<NotificationPermissionState, string> = {
   granted: '허용됨', default: '허용 전', denied: '차단됨', unsupported: '지원 안 함',
 };
-/** 권한이 막혀 알림을 켜고 끌 수 없을 때의 이유 — 문장마다 한 줄이다. 허용 전은 허용 버튼이 길이라 이유를 두지 않는다 */
+/** 권한이 막혀 알림을 켜고 끌 수 없을 때의 이유 — 문장마다 한 줄이다 */
 export const PERMISSION_BLOCK_LINES: Partial<Record<NotificationPermissionState, readonly string[]>> = {
+  default: [
+    '브라우저 알림을 아직 허용하지 않았어요.',
+    '위 허용 버튼으로 허용하면 알림을 켤 수 있어요.',
+    '그동안은 탭 제목 깜빡임으로 알려 줘요.',
+  ],
   denied: [
     '브라우저가 이 사이트의 알림을 막았어요.',
     '주소창 왼쪽의 사이트 설정에서 알림을 허용하면 켤 수 있어요.',
