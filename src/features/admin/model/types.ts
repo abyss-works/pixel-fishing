@@ -33,6 +33,7 @@ export type {
   AdminSessionRow,
   AdminSpamFlagRow,
   AdminTutorialStageId,
+  AdminUserAggregates,
   AdminUserRow,
   AdminUserState,
   BalanceLive,

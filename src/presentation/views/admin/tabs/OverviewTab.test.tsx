@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
 import { QueryProvider } from '../../../../core/QueryProvider';
 import { AdminAuthCtx } from '../../../../features/admin/service/accessContext';
+import type { AdminRole } from '../../../../features/admin/model/types';
 import { api } from '../../../../platform/api';
 import OverviewTab from './OverviewTab';
 
@@ -74,10 +75,10 @@ afterEach(() => { vi.useRealTimers(); cleanup(); vi.clearAllMocks(); });
 const tile = (label: string) => screen.getAllByText(label)
   .map(el => el.parentElement as HTMLElement).find(el => el.classList.contains('pf-notch'))!;
 
-function show(access: 'granted' | 'local') {
+function show(access: 'granted' | 'local', role: AdminRole = 'admin') {
   render(
     <QueryProvider>
-      <AdminAuthCtx.Provider value={{ access, uid: access === 'granted' ? 'admin' : null, role: 'admin', showStaffBadge: false, setStaffBadge: async () => {} }}>
+      <AdminAuthCtx.Provider value={{ access, uid: access === 'granted' ? 'admin' : null, role, showStaffBadge: false, setStaffBadge: async () => {} }}>
         <OverviewTab />
       </AdminAuthCtx.Provider>
     </QueryProvider>,
@@ -143,5 +144,39 @@ describe('개요 탭', () => {
     expect(screen.getAllByText('운영 DB에 연결하면 채워져요.').length).toBeGreaterThan(0);
     expect(vi.mocked(api.admin.overview)).not.toHaveBeenCalled();
     expect(vi.mocked(api.admin.httpMetrics)).not.toHaveBeenCalled();
+  });
+
+  it('maintainer 역할에서 명부 시각·수치가 null이어도 userAggregates로 DAU·WAU·MAU·신규·등록 수를 표시한다', async () => {
+    vi.mocked(api.admin.overview).mockResolvedValueOnce({
+      ...sampleOverview(),
+      users: [
+        {
+          user_id: 'op-1', opHandle: 'op-1', email: null, nickname: '어부', is_anonymous: false,
+          signed_up_at: null, last_sign_in_at: null, gold: null, fame: null, boat: null, rod: null,
+          location_kind: null, location_id: null, visited: [], restricted: false,
+          save_version: null, last_action_at: null, last_session_at: null, total_session_sec: 0,
+        },
+      ],
+      userAggregates: {
+        totalUsers: 50,
+        activePlayers: 32,
+        asOf: '2026-11-05T03:00:00Z',
+        activeUsers: { today: 8, week: 19, month: 29 },
+        newToday: { users: 4, accounts: 2 },
+        gold: { count: 32, sum: 10000, median: 200, p75: 500, max: 3000 },
+        progression: {
+          boats: [], rods: [], regionReach: [], zoneUnlocks: [],
+          fameGateStalled: { total: 0, byNextTier: [] },
+        },
+      },
+    } as never);
+
+    show('granted', 'maintainer');
+    await waitFor(() => expect(within(tile('오늘 DAU')).getByText('8')).toBeInTheDocument());
+    expect(within(tile('WAU')).getByText('19')).toBeInTheDocument();
+    expect(within(tile('MAU')).getByText('29')).toBeInTheDocument();
+    expect(within(tile('MAU')).getByText(/등록 50명/)).toBeInTheDocument();
+    expect(within(tile('오늘 신규')).getByText('4')).toBeInTheDocument();
+    expect(within(tile('오늘 신규')).getByText('그중 가입 계정 2')).toBeInTheDocument();
   });
 });

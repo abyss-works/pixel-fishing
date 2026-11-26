@@ -4,6 +4,7 @@ import { render, screen, cleanup, within, fireEvent } from '@testing-library/rea
 import { QueryProvider } from '../../../../core/QueryProvider';
 import { AdminAuthCtx } from '../../../../features/admin/service/accessContext';
 import type { AdminAccess } from '../../../../features/admin/service/accessContext';
+import type { AdminRole } from '../../../../features/admin/model/types';
 import ChangelogSection from './ChangelogSection';
 
 const ROWS = [
@@ -15,9 +16,9 @@ const ROWS = [
 const changelog = vi.hoisted(() => vi.fn());
 vi.mock('../../../../platform/api', () => ({ api: { admin: { changelog } } }));
 
-const show = (access: AdminAccess) => render(
+const show = (access: AdminAccess, role: AdminRole = 'admin') => render(
   <QueryProvider>
-    <AdminAuthCtx.Provider value={{ access, uid: 'u', role: 'admin', showStaffBadge: false, setStaffBadge: async () => {} }}><ChangelogSection /></AdminAuthCtx.Provider>
+    <AdminAuthCtx.Provider value={{ access, uid: 'u', role, showStaffBadge: false, setStaffBadge: async () => {} }}><ChangelogSection /></AdminAuthCtx.Provider>
   </QueryProvider>,
 );
 
@@ -56,5 +57,16 @@ describe('ChangelogSection', () => {
     show('local');
     expect(changelog).not.toHaveBeenCalled();
     expect(screen.getByText(/admins에 등록하면 채워져요/)).toBeInTheDocument();
+  });
+
+  it('maintainer 역할에서는 공개(public) 변경 기록만 보임을 안내하고 admin 등급 언급을 빼며, admin 역할에서는 기존 안내를 유지한다', () => {
+    changelog.mockResolvedValue([]);
+    show('granted', 'maintainer');
+    expect(screen.getByText(/공개\(public\) 변경 기록만 보여줘요/)).toBeInTheDocument();
+    expect(screen.queryByText(/admin은 관리자만 보는 변경/)).toBeNull();
+    cleanup();
+
+    show('granted', 'admin');
+    expect(screen.getByText('public은 플레이어에게도 보이는 변경이고, admin은 관리자만 보는 변경이에요.')).toBeInTheDocument();
   });
 });

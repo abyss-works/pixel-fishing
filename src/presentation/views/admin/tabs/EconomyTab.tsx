@@ -5,38 +5,38 @@ import { useMemo } from 'react';
 import KeyValueRow from '../../../ui/KeyValueRow';
 import KpiTile from '../../../ui/KpiTile';
 import Note from '../../../ui/Note';
-import { fmtNum, lastNDays, fillSeries, percentile } from '../../../../features/admin/model/metrics';
+import { fmtNum, lastNDays, fillSeries } from '../../../../features/admin/model/metrics';
 import { selectEconomyMetrics } from '../../../../features/admin/model/adminViews';
-import { readAdminEconomy, readAdminUsers } from '../../../../features/admin/service/queries';
+import { readAdminEconomy } from '../../../../features/admin/service/queries';
 import { adminKeys } from '../../../../features/admin/service/queryKeys';
 import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
-import type { AdminEconomyRow, AdminUserRow } from '../../../../features/admin/model/types';
+import { useAdminAggregateUsers } from '../../../../features/admin/service/useAdminStats';
+import type { AdminEconomyRow } from '../../../../features/admin/model/types';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { BarsChart } from '../charts';
 import { Cell, CellGrid, KpiRow, TabState } from '../layout';
 
 const EVENT_RETENTION_DAYS = 7;
 const NO_ECONOMY: AdminEconomyRow[] = [];
-const NO_USERS: AdminUserRow[] = [];
 
 export default function EconomyTab() {
   const { access } = useAdminAuth();
   const granted = access === 'granted';
-  // 유저 명부는 전역 정규 키를 공유해 탭 전환 시 중복 풀스캔을 없앤다
+  // 유저 명부와 사전 집계는 공유 훅으로 조회해 탭 전환 시 중복 풀스캔을 없앤다
   const economyQuery = useAdminQuery(
     adminKeys.economy(EVENT_RETENTION_DAYS),
     () => readAdminEconomy(EVENT_RETENTION_DAYS),
     granted,
   );
-  const usersQuery = useAdminQuery(adminKeys.users, readAdminUsers, granted);
+  const { users, userAggregates, loading: usersLoading, error: usersError, refresh: refreshUsers } =
+    useAdminAggregateUsers();
 
   const economyRows = economyQuery.data ?? NO_ECONOMY;
-  const users = usersQuery.data ?? NO_USERS;
-  const loading = economyQuery.loading || usersQuery.loading;
-  const error = economyQuery.error ?? usersQuery.error;
+  const loading = economyQuery.loading || usersLoading;
+  const error = economyQuery.error ?? usersError;
   const refresh = () => {
     economyQuery.refresh();
-    usersQuery.refresh();
+    refreshUsers();
   };
 
   // 조회 결과는 최신순(desc)으로 온다 — 차트는 과거→오름차순 축이 읽기 쉽다
@@ -46,8 +46,8 @@ export default function EconomyTab() {
   const dayLabels = days.map(d => d.slice(5));
   const series = (f: (r: AdminEconomyRow) => number) =>
     fillSeries(economy, days, r => r.day, f);
-  const { goldStats, goldSum, inflowTotal, outflowTotal } = useMemo(
-    () => selectEconomyMetrics(users, economy), [users, economy],
+  const { goldCount, goldSum, goldMedian, goldP75, goldMax, inflowTotal, outflowTotal } = useMemo(
+    () => selectEconomyMetrics(users, economy, userAggregates), [users, economy, userAggregates],
   );
 
   return (
@@ -55,10 +55,11 @@ export default function EconomyTab() {
       <TabState loading={loading && granted} error={error} onRetry={refresh} />
 
       <KpiRow>
-        <KpiTile label="잔고 합" value={fmtNum(goldSum)} hint="저장된 골드 총합" />
-        <KpiTile label="중앙값" value={fmtNum(percentile(goldStats, 50))} />
-        <KpiTile label="상위 25% 이상" value={fmtNum(percentile(goldStats, 75))} />
-        <KpiTile label="최대" value={fmtNum(goldStats[goldStats.length - 1] ?? NaN)} />
+        <KpiTile label="잔고 합" value={fmtNum(goldSum)}
+                 hint={goldCount > 0 ? `저장된 골드 총합, 대상 ${fmtNum(goldCount)}명` : '저장된 골드 총합'} />
+        <KpiTile label="중앙값" value={fmtNum(goldMedian)} />
+        <KpiTile label="상위 25% 이상" value={fmtNum(goldP75)} />
+        <KpiTile label="최대" value={fmtNum(goldMax)} />
       </KpiRow>
 
       <CellGrid>

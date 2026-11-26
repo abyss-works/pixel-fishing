@@ -73,6 +73,17 @@ describe('운영 탭', () => {
     expect(within(contract).getByText(/세션 강제 종료/)).toBeInTheDocument();
   });
 
+  it('maintainer 역할의 데이터 계약은 기간제 공지·채팅 별 표기 토글·비식별 지표 열람과 감사 로그 기록만 안내한다', () => {
+    show('granted', 'maintainer');
+    const contract = screen.getByText('데이터 계약').closest('section')!;
+    expect(within(contract).getByText(/비식별 운영 지표/)).toBeInTheDocument();
+    expect(within(contract).getByText(/기간제 공지/)).toBeInTheDocument();
+    expect(within(contract).getByText(/채팅 운영진 별 표기 토글/)).toBeInTheDocument();
+    expect(within(contract).getByText(/감사 로그/)).toBeInTheDocument();
+    expect(within(contract).queryByText(/우편 보내기/)).toBeNull();
+    expect(within(contract).queryByText(/세션 강제 종료/)).toBeNull();
+  });
+
   it('HTTP 오류율·429 섹션은 앱 서버 기준 안내·경로 묶음 표·일별 추이와 기간 전환(7/30/90일)을 제공한다', async () => {
     show('granted');
     expect(await screen.findByText('게임 액션')).toBeInTheDocument();

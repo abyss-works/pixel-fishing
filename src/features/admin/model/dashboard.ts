@@ -5,7 +5,7 @@ import type { ZoneId } from '../../../game/content/zones';
 import { REGION_NAMES } from './regions';
 import type { AdminIdentity } from './adminViews';
 import type {
-  AdminDailyStatsRow, AdminLive, AdminRetentionRow, AdminSessionRow, AdminUserRow,
+  AdminDailyStatsRow, AdminLive, AdminRetentionRow, AdminSessionRow, AdminUserAggregates, AdminUserRow,
 } from './types';
 
 const DAY_MS = 86_400_000;
@@ -90,10 +90,21 @@ export interface ActiveUsers {
 }
 
 /**
- * 고유 활성 사용자 수를 명부에서 센다. 일별 집계에는 고유 사용자 합집합이 없어서 WAU·MAU를 만들 수 없지만,
- * 명부의 마지막 활동 시각은 사람마다 하나라 "기간 안에 한 번이라도 보인 사람"을 정확히 센다.
+ * 고유 활성 사용자 수를 센다. 사전 집계(userAggregates)가 있으면 비식별화된 명부 대신 집계값을 우선 쓰고,
+ * 없을 때는 명부의 마지막 활동 시각으로 기간 안에 한 번이라도 보인 사람을 센다.
  */
-export function selectActiveUsers(users: readonly AdminUserRow[], nowMs: number): ActiveUsers {
+export function selectActiveUsers(
+  users: readonly AdminUserRow[],
+  nowMs: number,
+  aggregates?: AdminUserAggregates | null,
+): ActiveUsers {
+  if (aggregates) {
+    return {
+      today: aggregates.activeUsers.today,
+      week: aggregates.activeUsers.week,
+      month: aggregates.activeUsers.month,
+    };
+  }
   const today = kstDayOfMs(nowMs);
   let todayCount = 0, week = 0, month = 0;
   for (const user of users) {
@@ -106,8 +117,18 @@ export function selectActiveUsers(users: readonly AdminUserRow[], nowMs: number)
   return { today: todayCount, week, month };
 }
 
-/** 오늘(KST) 처음 들어온 사람과 그중 가입 계정 수 — 명부의 최초 생성 시각 기준이다 */
-export function selectNewToday(users: readonly AdminUserRow[], nowMs: number): { users: number; accounts: number } {
+/** 오늘(KST) 처음 들어온 사람과 그중 가입 계정 수 — 사전 집계가 있으면 우선 쓰고, 없으면 명부의 최초 생성 시각을 본다 */
+export function selectNewToday(
+  users: readonly AdminUserRow[],
+  nowMs: number,
+  aggregates?: AdminUserAggregates | null,
+): { users: number; accounts: number } {
+  if (aggregates) {
+    return {
+      users: aggregates.newToday.users,
+      accounts: aggregates.newToday.accounts,
+    };
+  }
   const today = kstDayOfMs(nowMs);
   const fresh = users.filter(user => {
     const at = msOf(user.signed_up_at);
@@ -115,6 +136,12 @@ export function selectNewToday(users: readonly AdminUserRow[], nowMs: number): {
   });
   return { users: fresh.length, accounts: fresh.filter(user => user.is_anonymous === false).length };
 }
+
+/** 전체 등록 계정 수 — 사전 집계가 있으면 집계값을 우선 쓴다 */
+export const selectTotalUsersCount = (
+  users: readonly AdminUserRow[],
+  aggregates?: AdminUserAggregates | null,
+): number => (aggregates ? aggregates.totalUsers : users.length);
 
 /** 오늘(KST) 시작해 끝난 세션의 수와 평균 길이(초). 세션이 없으면 평균은 null */
 export function selectTodaySessions(sessions: readonly AdminSessionRow[], nowMs: number): { count: number; avgSec: number | null } {
