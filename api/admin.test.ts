@@ -37,6 +37,13 @@ const mocks = vi.hoisted(() => ({
   recordAdminAction: vi.fn(async () => {}),
   planMail: vi.fn(),
   deliverMail: vi.fn(),
+  listAllAdminNotices: vi.fn(async (): Promise<unknown[]> => []),
+  listUpcomingAndActiveNotices: vi.fn(async (): Promise<unknown[]> => []),
+  createNotice: vi.fn(),
+  updateNotice: vi.fn(),
+  endNoticeNow: vi.fn(),
+  deleteNotice: vi.fn(),
+  notifyAll: vi.fn(),
   db: { execute: vi.fn() },
   withTransaction: vi.fn(async (run: (tx: unknown) => Promise<unknown>) => run(mocks.db)),
 }));
@@ -76,6 +83,21 @@ vi.mock('./_data/telemetry.js', async () => {
   return {
     ...actual,
     recordAdminAction: mocks.recordAdminAction,
+  };
+});
+vi.mock('./_data/notices.js', () => ({
+  listAllAdminNotices: mocks.listAllAdminNotices,
+  listUpcomingAndActiveNotices: mocks.listUpcomingAndActiveNotices,
+  createNotice: mocks.createNotice,
+  updateNotice: mocks.updateNotice,
+  endNoticeNow: mocks.endNoticeNow,
+  deleteNotice: mocks.deleteNotice,
+}));
+vi.mock('./_server/livePresence.js', async () => {
+  const actual = await vi.importActual<typeof import('./_server/livePresence.js')>('./_server/livePresence.js');
+  return {
+    ...actual,
+    notifyAll: mocks.notifyAll,
   };
 });
 
@@ -255,5 +277,95 @@ describe('api/admin 핸들러 단위 테스트', () => {
     mocks.readHttpMetrics.mockResolvedValueOnce(sample);
     expect(await call('GET', { q: 'httpMetrics', days: '7' })).toMatchObject({ status: 200, body: sample });
     expect(mocks.readHttpMetrics).toHaveBeenLastCalledWith(mocks.db, 7);
+  });
+
+  it('GET ?q=notices는 공지 전체 목록 조회를 호출한다', async () => {
+    const sample = [{
+      id: 1, title: '점검', body: '본문',
+      startsAt: '2030-01-01T00:00:00.000Z', endsAt: '2030-01-02T00:00:00.000Z',
+      createdBy: ADMIN_UID, createdAt: '2029-12-31T00:00:00.000Z', updatedAt: '2029-12-31T00:00:00.000Z',
+    }];
+    mocks.listAllAdminNotices.mockResolvedValueOnce(sample);
+    const res = await call('GET', { q: 'notices' });
+    expect(res).toMatchObject({ status: 200, body: sample });
+    expect(mocks.listAllAdminNotices).toHaveBeenCalledWith(mocks.db);
+  });
+
+  it('POST ?q=notices는 op별 검증·저장·실시간 전체 전파(notifyAll)를 수행한다', async () => {
+    // 잘못된 op / id / draft 검증
+    expect(await call('POST', { q: 'notices' }, { op: 'unknown' })).toMatchObject({ status: 400, body: { error: 'bad-notice' } });
+    expect(await call('POST', { q: 'notices' }, {
+      op: 'create', title: '  ', body: '본문',
+      startsAt: '2030-01-01T00:00:00.000Z', endsAt: '2030-01-02T00:00:00.000Z',
+    })).toMatchObject({ status: 400, body: { error: 'bad-title' } });
+    expect(await call('POST', { q: 'notices' }, {
+      op: 'create', title: '제목', body: '',
+      startsAt: '2030-01-01T00:00:00.000Z', endsAt: '2030-01-02T00:00:00.000Z',
+    })).toMatchObject({ status: 400, body: { error: 'bad-body' } });
+    expect(await call('POST', { q: 'notices' }, {
+      op: 'create', title: '제목', body: '본문',
+      startsAt: '2030-01-02T00:00:00.000Z', endsAt: '2030-01-01T00:00:00.000Z',
+    })).toMatchObject({ status: 400, body: { error: 'bad-window' } });
+    expect(await call('POST', { q: 'notices' }, { op: 'end', id: 0 })).toMatchObject({ status: 400, body: { error: 'bad-notice' } });
+    expect(await call('POST', { q: 'notices' }, { op: 'delete', id: '1' })).toMatchObject({ status: 400, body: { error: 'bad-notice' } });
+    expect(mocks.notifyAll).not.toHaveBeenCalled();
+
+    const created = {
+      id: 10, title: '공지', body: '내용',
+      startsAt: '2030-01-01T00:00:00.000Z', endsAt: '2030-01-02T00:00:00.000Z',
+      createdBy: ADMIN_UID, createdAt: '2029-12-31T00:00:00.000Z', updatedAt: '2029-12-31T00:00:00.000Z',
+    };
+    const activeList = [{
+      id: 10, title: '공지', body: '내용',
+      startsAt: '2030-01-01T00:00:00.000Z', endsAt: '2030-01-02T00:00:00.000Z',
+      createdAt: '2029-12-31T00:00:00.000Z',
+    }];
+    mocks.createNotice.mockResolvedValueOnce(created);
+    mocks.listUpcomingAndActiveNotices.mockResolvedValueOnce(activeList);
+
+    const createRes = await call('POST', { q: 'notices' }, {
+      op: 'create', title: '  공지 ', body: ' 내용 ',
+      startsAt: '2030-01-01T00:00:00Z', endsAt: '2030-01-02T00:00:00Z',
+    });
+    expect(createRes).toMatchObject({ status: 200, body: { notice: created } });
+    expect(mocks.createNotice).toHaveBeenCalledWith(mocks.db, {
+      title: '공지',
+      body: '내용',
+      startsAt: '2030-01-01T00:00:00.000Z',
+      endsAt: '2030-01-02T00:00:00.000Z',
+      createdBy: ADMIN_UID,
+    });
+    expect(mocks.notifyAll).toHaveBeenLastCalledWith({ t: 'notices', notices: activeList });
+
+    // update 미존재 404 및 성공
+    mocks.updateNotice.mockResolvedValueOnce(null);
+    expect(await call('POST', { q: 'notices' }, {
+      op: 'update', id: 99, title: '수정', body: '내용',
+      startsAt: '2030-01-01T00:00:00.000Z', endsAt: '2030-01-03T00:00:00.000Z',
+    })).toMatchObject({ status: 404, body: { error: 'no-notice' } });
+
+    const updated = { ...created, title: '수정' };
+    mocks.updateNotice.mockResolvedValueOnce(updated);
+    mocks.listUpcomingAndActiveNotices.mockResolvedValueOnce([{ ...activeList[0], title: '수정' }]);
+    expect(await call('POST', { q: 'notices' }, {
+      op: 'update', id: 10, title: '수정', body: '내용',
+      startsAt: '2030-01-01T00:00:00.000Z', endsAt: '2030-01-02T00:00:00.000Z',
+    })).toMatchObject({ status: 200, body: { notice: updated } });
+    expect(mocks.notifyAll).toHaveBeenLastCalledWith({ t: 'notices', notices: [{ ...activeList[0], title: '수정' }] });
+
+    // end
+    mocks.endNoticeNow.mockResolvedValueOnce(created);
+    mocks.listUpcomingAndActiveNotices.mockResolvedValueOnce([]);
+    expect(await call('POST', { q: 'notices' }, { op: 'end', id: 10 })).toMatchObject({ status: 200, body: { notice: created } });
+    expect(mocks.notifyAll).toHaveBeenLastCalledWith({ t: 'notices', notices: [] });
+
+    // delete
+    mocks.deleteNotice.mockResolvedValueOnce(false);
+    expect(await call('POST', { q: 'notices' }, { op: 'delete', id: 10 })).toMatchObject({ status: 404, body: { error: 'no-notice' } });
+
+    mocks.deleteNotice.mockResolvedValueOnce(true);
+    mocks.listUpcomingAndActiveNotices.mockResolvedValueOnce([]);
+    expect(await call('POST', { q: 'notices' }, { op: 'delete', id: 10 })).toMatchObject({ status: 200, body: { deleted: true, id: 10 } });
+    expect(mocks.notifyAll).toHaveBeenCalledTimes(4);
   });
 });

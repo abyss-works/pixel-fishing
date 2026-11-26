@@ -196,3 +196,14 @@ export const httpMetricsDaily = pgTable('http_metrics_daily', {
   status5xx: bigint('status_5xx', { mode: 'number' }).notNull().default(0),
   updatedAt: at('updated_at').notNull().defaultNow(),
 }, t => [primaryKey({ columns: [t.day, t.routeGroup] })]);
+
+export const notices = pgTable('notices', {
+  id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+  title: text('title').notNull(),
+  body: text('body').notNull(),
+  startsAt: at('starts_at').notNull(),
+  endsAt: at('ends_at').notNull(),
+  createdBy: uuid('created_by'),
+  createdAt: at('created_at').notNull().defaultNow(),
+  updatedAt: at('updated_at').notNull().defaultNow(),
+});

@@ -25,7 +25,7 @@ describe('테스트 데이터베이스', () => {
     const names = rows.map(r => r.name);
     for (const t of ['saves_current', 'fish_instances', 'records', 'saves', 'profiles', 'events', 'letters',
       'coupons', 'reliefs', 'bounty_accepts', 'bounty_progress', 'bounty_tickets', 'bounty_licenses',
-      'bounty_clears', 'mails', 'daily_fortunes', 'v_bounty_funnel_daily']) {
+      'bounty_clears', 'mails', 'daily_fortunes', 'notices', 'v_bounty_funnel_daily']) {
       expect(names).toContain(t);
     }
   });
@@ -654,6 +654,104 @@ describe('테스트 데이터베이스', () => {
           `select 1 from information_schema.tables where table_schema = 'public' and table_name = 'http_metrics_daily'`,
         );
         expect(afterUp).toHaveLength(1);
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
+
+  describe('chat_messages 채널·지역 확장 및 notices (0047)', () => {
+    const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
+
+    it('chat_messages 채널 제약·인덱스와 notices 제약·RLS 차단·다운/업 라운드트립을 검증한다', async () => {
+      const uid = randomUUID();
+      await client.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, false)`, [uid, `${uid}@example.test`]);
+
+      // chat_messages 채널 기본값('local') 및 허용값 제약
+      const { rows: [chatRow] } = await client.query<{ channel: string; region: string | null }>(
+        `insert into public.chat_messages (user_id, nick, text) values ($1, '낚시꾼', '기본') returning channel, region`,
+        [uid],
+      );
+      expect(chatRow).toEqual({ channel: 'local', region: null });
+      await expect(client.query(
+        `insert into public.chat_messages (user_id, nick, text, channel) values ($1, '낚시꾼', '오류', 'dm')`,
+        [uid],
+      )).rejects.toMatchObject({ code: '23514' });
+
+      // notices 제약(제목 1..80, 본문 1..600, ends_at > starts_at) 및 created_by on delete set null
+      const { rows: [noticeRow] } = await client.query<{ id: string; created_at: Date; updated_at: Date }>(
+        `insert into public.notices (title, body, starts_at, ends_at, created_by)
+         values ('점검 안내', '서버 점검이 예정되어 있어요.', '2030-01-01T00:00:00Z', '2030-01-02T00:00:00Z', $1)
+         returning id, created_at, updated_at`,
+        [uid],
+      );
+      expect(noticeRow.created_at).toBeInstanceOf(Date);
+      expect(noticeRow.updated_at).toBeInstanceOf(Date);
+
+      await expect(client.query(
+        `insert into public.notices (title, body, starts_at, ends_at) values ('', '본문', '2030-01-01T00:00:00Z', '2030-01-02T00:00:00Z')`,
+      )).rejects.toMatchObject({ code: '23514' });
+      await expect(client.query(
+        `insert into public.notices (title, body, starts_at, ends_at) values ($1, '본문', '2030-01-01T00:00:00Z', '2030-01-02T00:00:00Z')`,
+        ['가'.repeat(81)],
+      )).rejects.toMatchObject({ code: '23514' });
+      await expect(client.query(
+        `insert into public.notices (title, body, starts_at, ends_at) values ('제목', $1, '2030-01-01T00:00:00Z', '2030-01-02T00:00:00Z')`,
+        ['나'.repeat(601)],
+      )).rejects.toMatchObject({ code: '23514' });
+      await expect(client.query(
+        `insert into public.notices (title, body, starts_at, ends_at) values ('제목', '본문', '2030-01-02T00:00:00Z', '2030-01-01T00:00:00Z')`,
+      )).rejects.toMatchObject({ code: '23514' });
+
+      // 인증 사용자는 공지를 읽거나 쓰지 못한다 — 서버 전용 RLS
+      await client.query('begin');
+      try {
+        await client.query('set local role authenticated');
+        await client.query(`select set_config('request.jwt.claim.sub', $1, true)`, [uid]);
+        expect((await client.query('select id from public.notices')).rows).toEqual([]);
+        await expect(client.query(
+          `insert into public.notices (title, body, starts_at, ends_at) values ('차단', '본문', '2030-01-01T00:00:00Z', '2030-01-02T00:00:00Z')`,
+        )).rejects.toMatchObject({ code: '42501' });
+      } finally {
+        await client.query('rollback');
+      }
+
+      // 다운/업 라운드트립 및 기존 행 channel 백필 검증
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        const u2 = randomUUID();
+        await other.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, false)`, [u2, `${u2}@example.test`]);
+        const { rows: [g] } = await other.query<{ id: string }>(
+          `insert into public.guilds (name, code) values ($1, upper(substr(md5(random()::text), 1, 8))) returning id`,
+          [`g${u2.slice(0, 6)}`],
+        );
+
+        await other.query(migration('0047_chat_channels_and_notices.down.sql'));
+        expect((await other.query(
+          `select 1 from information_schema.tables where table_schema = 'public' and table_name = 'notices'`,
+        )).rows).toHaveLength(0);
+        expect((await other.query(
+          `select 1 from information_schema.columns where table_schema = 'public' and table_name = 'chat_messages' and column_name in ('channel', 'region')`,
+        )).rows).toHaveLength(0);
+
+        await other.query(`insert into public.chat_messages (user_id, nick, text, guild_id) values ($1, '가', '전체', null)`, [u2]);
+        await other.query(`insert into public.chat_messages (user_id, nick, text, guild_id) values ($1, '가', '길드', $2)`, [u2, g.id]);
+
+        await other.query(migration('0047_chat_channels_and_notices.sql'));
+        expect((await other.query(
+          `select 1 from information_schema.tables where table_schema = 'public' and table_name = 'notices'`,
+        )).rows).toHaveLength(1);
+        const { rows: backfilled } = await other.query<{ text: string; channel: string; region: string | null }>(
+          `select text, channel, region from public.chat_messages where user_id = $1 order by id`,
+          [u2],
+        );
+        expect(backfilled).toEqual([
+          { text: '전체', channel: 'global', region: null },
+          { text: '길드', channel: 'guild', region: null },
+        ]);
       } finally {
         await other.end();
         await copy.drop();

@@ -8,7 +8,7 @@ import { seedUser } from '../_dbTest/actionHarness.js';
 import { createTestDatabase } from '../_dbTest/testDatabase.js';
 import type { TestDatabase } from '../_dbTest/testDatabase.js';
 import { block } from './blocks.js';
-import { deleteExpiredChat, recentChat, reportChat, saveChat } from './chat.js';
+import { deleteExpiredChat, recentChat, recentGuildChat, recentLocalChat, reportChat, saveChat } from './chat.js';
 
 let testDb: TestDatabase;
 let client: Client;
@@ -36,10 +36,16 @@ async function user(restricted = false): Promise<string> {
 }
 
 /** 시각을 지정해 메시지를 넣는다 */
-async function message(uid: string, text: string, createdAt = new Date().toISOString()): Promise<number> {
+async function message(
+  uid: string,
+  text: string,
+  createdAt = new Date().toISOString(),
+  channel: 'global' | 'local' | 'guild' = 'global',
+  region: string | null = null,
+): Promise<number> {
   const { rows } = await client.query<{ id: string }>(
-    'insert into public.chat_messages (user_id, nick, text, created_at) values ($1, $2, $3, $4) returning id',
-    [uid, `n-${uid.slice(0, 4)}`, text, createdAt]);
+    'insert into public.chat_messages (user_id, nick, text, channel, region, created_at) values ($1, $2, $3, $4, $5, $6) returning id',
+    [uid, `n-${uid.slice(0, 4)}`, text, channel, region, createdAt]);
   return Number(rows[0].id);
 }
 
@@ -117,5 +123,49 @@ describe('chat', () => {
     expect(await deleteExpiredChat(database.db, now)).toEqual({ messages: 1, reports: 1 });
     expect((await client.query('select text from public.chat_messages')).rows).toEqual([{ text: '최근' }]);
     expect((await client.query('select count(*)::int as n from public.chat_reports')).rows[0].n).toBe(1);
+  });
+
+  it('3방(전체·지역·길드) 저장·조회와 신고 앞뒤 5줄 방 격리를 검증한다', async () => {
+    const [a, b, rude, banned] = [await user(), await user(), await user(), await user(true)];
+    const { rows: [g] } = await client.query<{ id: string }>(
+      `insert into public.guilds (name, code) values ($1, upper(substr(md5(random()::text), 1, 8))) returning id`,
+      [`g${a.slice(0, 6)}`],
+    );
+    await client.query(`insert into public.guild_members (guild_id, user_id, role) values ($1, $2, 'leader')`, [g.id, a]);
+
+    // 전체·지역·길드 저장 및 제재/비길드원 거부 구분
+    expect(await saveChat(database.db, { uid: banned, nick: '제재', text: '차단', room: 'global' }))
+      .toEqual({ ok: false, code: 'chat-restricted' });
+    expect(await saveChat(database.db, { uid: b, nick: '비회원', text: '길드침입', room: 'guild', guildId: g.id }))
+      .toEqual({ ok: false, code: 'chat-no-guild' });
+
+    const g1 = await saveChat(database.db, { uid: a, nick: '선장', text: '전체1', room: 'global' });
+    const p1 = await saveChat(database.db, { uid: a, nick: '선장', text: '태평양1', room: 'local', region: 'pacific' });
+    const v1 = await saveChat(database.db, { uid: b, nick: '마을', text: '마을1', room: 'local', region: 'village' });
+    const p2 = await saveChat(database.db, { uid: rude, nick: '거친', text: '태평양욕설', room: 'local', region: 'pacific' });
+    const gd1 = await saveChat(database.db, { uid: a, nick: '선장', text: '길드1', room: 'guild', guildId: g.id });
+    const p3 = await saveChat(database.db, { uid: b, nick: '선원', text: '태평양2', room: 'local', region: 'pacific' });
+
+    expect(g1).toMatchObject({ ok: true, room: 'global', region: null, guild: null, line: { text: '전체1' } });
+    expect(p1).toMatchObject({ ok: true, room: 'local', region: 'pacific', guild: null, line: { text: '태평양1' } });
+    expect(v1).toMatchObject({ ok: true, room: 'local', region: 'village', guild: null, line: { text: '마을1' } });
+    expect(gd1).toMatchObject({ ok: true, room: 'guild', region: null, guild: g.id, line: { text: '길드1' } });
+
+    // 방별 조회와 blocked 배열 기반 필터링
+    expect((await recentChat(database.db, [])).map(l => l.text)).toEqual(['전체1']);
+    expect((await recentLocalChat(database.db, 'pacific', [])).map(l => l.text)).toEqual(['태평양1', '태평양욕설', '태평양2']);
+    expect((await recentLocalChat(database.db, 'pacific', [rude])).map(l => l.text)).toEqual(['태평양1', '태평양2']);
+    expect((await recentLocalChat(database.db, 'village', [])).map(l => l.text)).toEqual(['마을1']);
+    expect((await recentGuildChat(database.db, g.id, [])).map(l => l.text)).toEqual(['길드1']);
+
+    // 지역 메시지 신고 시 같은 최상위 지역(pacific) 대화만 복사된다(전체·마을·길드 제외)
+    const targetId = p2.ok ? p2.line.id : 0;
+    expect(await reportChat(database.db, a, targetId, '2030-01-01T00:00:00.000Z')).toBe(true);
+    const { rows } = await client.query<{ lines: { text: string }[] }>('select lines from public.chat_reports where message_id = $1', [targetId]);
+    expect(rows[0].lines.map(l => l.text)).toEqual([
+      p1.ok ? p1.line.text : '',
+      p2.ok ? p2.line.text : '',
+      p3.ok ? p3.line.text : '',
+    ]);
   });
 });

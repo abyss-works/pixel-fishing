@@ -25,6 +25,7 @@ const CALLS: [method: string, call: () => Promise<unknown>, url: string][] = [
   ['letters', () => admin.letters(), '/api/admin?q=letters'],
   ['changelog', () => admin.changelog(), '/api/admin?q=changelog'],
   ['chatReports', () => admin.chatReports(), '/api/admin?q=chatReports'],
+  ['notices', () => admin.notices(), '/api/admin?q=notices'],
   ['balanceLive', () => admin.balanceLive(3), '/api/admin?q=balanceLive&days=3'],
   ['sentMails', () => admin.sentMails(), '/api/admin?q=mails'],
 ];
@@ -50,8 +51,8 @@ describe('HttpAdmin', () => {
     }
   });
 
-  it('AdminApi의 모든 조회가 위 표에 있다. 서버 조회가 아닌 것은 deployHost, 쓰기(mail·restrict·letterHandled·revokeSessions), 관리자 로그인·로그아웃·로그인 복귀뿐이다', () => {
-    const writes = ['constructor', 'deployHost', 'mail', 'restrict', 'letterHandled', 'revokeSessions', 'signIn', 'signOut', 'takeSignInReturn'];
+  it('AdminApi의 모든 조회가 위 표에 있다. 서버 조회가 아닌 것은 deployHost, 쓰기(mail·restrict·letterHandled·revokeSessions·writeNotice), 관리자 로그인·로그아웃·로그인 복귀뿐이다', () => {
+    const writes = ['constructor', 'deployHost', 'mail', 'restrict', 'letterHandled', 'revokeSessions', 'writeNotice', 'signIn', 'signOut', 'takeSignInReturn'];
     const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(admin))
       .filter(m => !writes.includes(m));
     expect(methods.sort()).toEqual(CALLS.map(([method]) => method).sort());
@@ -104,6 +105,17 @@ describe('HttpAdmin', () => {
     expect(fetchMock).toHaveBeenLastCalledWith('/api/admin?q=revokeSessions', post({ userId: 'u-1' }));
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: 'no-user' }), { status: 404 }));
     await expect(admin.revokeSessions('u-1')).rejects.toThrow('세션 강제 종료 실패: 404 no-user');
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ notice: { id: 7 } }), { status: 200 }));
+    await expect(admin.writeNotice({
+      op: 'create', title: '공지', body: '내용',
+      startsAt: '2026-11-26T00:00:00.000Z', endsAt: '2026-11-27T00:00:00.000Z',
+    })).resolves.toEqual({ notice: { id: 7 } });
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/admin?q=notices', post({
+      op: 'create', title: '공지', body: '내용',
+      startsAt: '2026-11-26T00:00:00.000Z', endsAt: '2026-11-27T00:00:00.000Z',
+    }));
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: 'bad-window' }), { status: 400 }));
+    await expect(admin.writeNotice({ op: 'end', id: 7 })).rejects.toThrow('공지 end 실패: 400 bad-window');
   });
 
   it('sessions는 생략한 인자를 보내지 않는다', async () => {
