@@ -31,7 +31,7 @@ vi.mock('../../../platform/api', async () => {
     markMailRead: vi.fn(async () => {}),
     readFriends: () => apiState.readFriends(),
     friendAction: vi.fn(async () => ({ ok: true, result: 'ok' })),
-    readRanking: (board: string, fishId?: string) => apiState.readRanking(board, fishId),
+    readRanking: (board: string, fishId?: string, window?: string) => apiState.readRanking(board, fishId, window),
     readFortuneHistory: (month?: string) => apiState.readFortuneHistory(month),
     gameDay: () => '2026-11-25',
     api: {
@@ -91,7 +91,14 @@ describe('조회 훅 약관 수락 게이트 연동', () => {
     apiState.consentListeners.clear();
     apiState.readMails.mockReset().mockResolvedValue([]);
     apiState.readFriends.mockReset().mockResolvedValue([]);
-    apiState.readRanking.mockReset().mockResolvedValue({ board: 'fame', top: [], me: null });
+    apiState.readRanking.mockReset().mockResolvedValue({
+      board: 'fame',
+      window: 'weekly',
+      periodSupported: true,
+      resetAt: null,
+      top: [],
+      me: null,
+    });
     apiState.readFortuneHistory.mockReset().mockResolvedValue({
       month: '2026-11',
       firstMonth: '2026-11',
