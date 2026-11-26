@@ -144,4 +144,26 @@ describe('Field 일시적 429(rate-limited) 낚시 세션 유지', () => {
       slot.remove();
     }
   });
+
+  it('catch 대기 중 action이 지정되지 않은(undefined) rate-limited 오류는 wait로 되돌리지 않는다', () => {
+    const slot = document.createElement('div');
+    document.body.appendChild(slot);
+    try {
+      const { container } = render(
+        <Field region="village" game={newState()}
+               dispatch={() => new Promise(() => {}) as never}
+               setToast={() => {}} onScene={() => {}} initialPos={POND_SHORE} statusSlot={slot} />,
+      );
+      fireEvent.keyDown(document, { code: 'Space' });
+      act(() => { vi.advanceTimersByTime(4000); });
+      fireEvent.keyDown(document, { code: 'Space' });
+      expect(container.querySelector('[data-phase="catch"]')).not.toBeNull();
+
+      act(() => { fail(new AppError('rate-limited', 'too-fast')); });
+      expect(container.querySelector('[data-phase="catch"]')).not.toBeNull();
+      expect(container.querySelector('[data-phase="wait"]')).toBeNull();
+    } finally {
+      slot.remove();
+    }
+  });
 });

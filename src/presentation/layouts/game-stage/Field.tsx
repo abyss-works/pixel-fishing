@@ -44,7 +44,6 @@ interface Props {
   dispatch: (action: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
   onScene: (scene: SceneRef, message: string, entryPos?: Point, returnPos?: Point) => void;
-  onWarmup?: () => void;
   /** 지금 계정이 게스트인가 — 게스트는 마을 밖으로 나가는 트리거에서 장소를 바꾸지 못하고 되밀린다 */
   guest?: boolean;
   /** 게스트가 마을 밖으로 나가려다 되밀렸을 때 */
@@ -146,7 +145,7 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast'], game: Game
 }
 
 export default function Field({
-  region, game, dispatch, setToast, onScene, onWarmup, guest, onGuestBlocked, initialPos, placeSeq, locked, paused, statusSlot, catchSlot,
+  region, game, dispatch, setToast, onScene, guest, onGuestBlocked, initialPos, placeSeq, locked, paused, statusSlot, catchSlot,
 }: Props) {
   const mobile = useMobileLayout();
   // 현재 어군 — 세션의 배치 날짜가 정한다. 부트 결과로 날짜가 바뀌면 엔진에 교체해 준다.
@@ -202,11 +201,10 @@ export default function Field({
         else presentEvent(event, setToast, game, region);
       },
       onScene,
-      onWarmup,
       guest,
     };
     engine.updateContext(game, dayPhaseNow === 'night', callbacks);
-  }, [engine, region, game, dayPhaseNow, dispatch, setToast, onScene, onWarmup, guest, onGuestBlocked]);
+  }, [engine, region, game, dayPhaseNow, dispatch, setToast, onScene, guest, onGuestBlocked]);
 
   useEffect(() => { engine.setSchools(schools); }, [engine, schools]);
 
@@ -229,7 +227,7 @@ export default function Field({
 
   useEffect(() => subscribeFailure(err => {
     if (err.kind === 'rate-limited') {
-      if (err.context.action === undefined || err.context.action === 'catch') {
+      if (err.context.action === 'catch') {
         engine.recoverFromRateLimit();
       }
       return;
