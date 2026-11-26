@@ -224,10 +224,9 @@ function EnergyCards({ energy, lockLines }: {
   );
 }
 
-/** 비약 카드 격자 — 계정 회원은 배 단계와 무관하게 쓸 수 있고, 게스트·확인 실패는 잠금 상태다 */
-function PotionCards({ rows, potionLock, busy, selectedId, onSelect, onUse }: {
+/** 비약 카드 격자 — 보유한 비약은 게스트 여부와 배 단계에 관계없이 쓸 수 있고, 미보유는 수량 0 비활성 카드로 둔다 */
+function PotionCards({ rows, busy, selectedId, onSelect, onUse }: {
   rows: readonly PotionRow[];
-  potionLock: readonly string[] | null;
   busy: boolean;
   selectedId: string | null;
   onSelect: (id: string) => void;
@@ -239,14 +238,13 @@ function PotionCards({ rows, potionLock, busy, selectedId, onSelect, onUse }: {
       <Subheading><Tip text={ITEM_GROUP_HINT.potion}>비약</Tip></Subheading>
       <div className="grid grid-cols-2 gap-2">
         {rows.map(row => {
-          const locked = potionLock !== null;
-          const dimmed = locked || (!row.usable && !row.active);
+          const dimmed = !row.usable && !row.active;
           const selected = selectedId === row.potion.id;
           const button = (
             <Button
               size="sm"
               aria-label={`${row.potion.name} 사용`}
-              disabled={busy || locked || !row.usable}
+              disabled={busy || !row.usable}
               onClick={() => onUse(row)}
             >
               사용
@@ -282,11 +280,7 @@ function PotionCards({ rows, potionLock, busy, selectedId, onSelect, onUse }: {
                   <span className="pf-accent text-xs text-text-dim whitespace-nowrap">×{row.count}</span>
                   <span className="flex items-center justify-end gap-1 min-w-0">
                     {row.active && <Badge tone="accent" size="2xs">사용 중</Badge>}
-                    {potionLock ? (
-                      <Locked badge={false} lines={potionLock} title={<GradeName name={row.potion.name} grade={row.potion.grade} />} label={`${row.potion.name} 잠김`} className="inline-block">
-                        {button}
-                      </Locked>
-                    ) : button}
+                    {button}
                   </span>
                 </div>
               </Inset>
@@ -336,7 +330,7 @@ export default function ItemSection({ game, accountState, dispatch, setToast }: 
     });
   };
   const press = (row: ItemRow) => {
-    const plan = planEat(game, row.recipe.id, now, accountState !== 'account');
+    const plan = planEat(game, row.recipe.id, now);
     if (plan.confirm) setPending({ row, confirm: plan.confirm });
     else eat(row);
   };
@@ -368,7 +362,7 @@ export default function ItemSection({ game, accountState, dispatch, setToast }: 
   const detailTarget: ItemDetailTarget | null = detailRecipe
     ? { kind: 'recipe', row: detailRecipe, lockLines: detailRecipe.lockLines, onUse: press }
     : detailPotion
-      ? { kind: 'potion', row: detailPotion, lockLines: view.potionLock, onUse: usePotion }
+      ? { kind: 'potion', row: detailPotion, lockLines: null, onUse: usePotion }
       : null;
 
   return (
@@ -401,7 +395,7 @@ export default function ItemSection({ game, accountState, dispatch, setToast }: 
                      busy={busy} selectedId={detailId} onSelect={setDetailId} onEat={press} />
           <ItemCards title={ITEM_GROUPS[2].title} hint={ITEM_GROUP_HINT.bait} rows={shown.bait}
                      busy={busy} selectedId={detailId} onSelect={setDetailId} onEat={press} />
-          <PotionCards rows={shown.potions} potionLock={view.potionLock} busy={busy}
+          <PotionCards rows={shown.potions} busy={busy}
                        selectedId={detailId} onSelect={setDetailId} onUse={usePotion} />
         </>
       )}

@@ -439,7 +439,7 @@ describe('요리 액션', () => {
     });
   });
 
-  it('게스트는 요리 액션을 account-only로 거부당한다', async () => {
+  it('게스트는 조리·기운 추출/변환 액션을 account-only로 거부당한다', async () => {
     const f = fish('crucian');
     const uid = await seed({
       email: null,
@@ -447,7 +447,7 @@ describe('요리 액션', () => {
         boat: BOAT,
         location: HOME,
         bag: [f],
-        items: { [ENERGY.common]: 400, 'cook-lunch-bite': 1 },
+        items: { [ENERGY.common]: 400 },
         cooking: { id: 'cook-guest-1', recipe: 'cook-lunch-rare', count: 1, bonus: [false], startedAt: NOW },
       },
     });
@@ -456,7 +456,6 @@ describe('요리 액션', () => {
       { type: 'extractEnergy', uids: [f.uid] }, { type: 'setEnergyTarget', spot: 'pond', on: false },
       { type: 'resetEnergyTargets' }, { type: 'cook', recipe: 'cook-lunch-bite', count: 1 },
       { type: 'cancelCook', id: 'cook-guest-1' }, { type: 'transmuteEnergy', from: 'common', count: 1 },
-      { type: 'eat', item: 'cook-lunch-bite' },
     ]) {
       await rewind(uid);
       expect(await callAction(userToken(uid), action), JSON.stringify(action))
@@ -479,7 +478,7 @@ describe('요리 액션', () => {
     expect(await eventsOf(uid)).toEqual([]);
   });
 
-  it('배 1단계 로그인 계정은 환영 우편 수령 후 cook-lunch-bundle과 cook-bait-legendary를 즉시 eat 할 수 있고, 게스트는 403으로 거부된다', async () => {
+  it('배 1단계 로그인 계정은 환영 우편 수령 후, 배 0단계 게스트는 보유한 도시락과 미끼를 즉시 eat 할 수 있다', async () => {
     const uid = await seed({ state: { boat: 1, location: HOME } });
     const { rows: [mailRow] } = await env.client.query<{ id: string }>(
       `insert into public.mails (user_id, idempotency_key, title, body, gold, items)
@@ -504,12 +503,16 @@ describe('요리 액션', () => {
 
     const guestUid = await seed({
       email: null,
-      state: { boat: 1, location: HOME, items: { 'cook-lunch-bundle': 1, 'cook-bait-legendary': 1 } },
+      state: { boat: 0, location: HOME, items: { 'cook-lunch-bundle': 1, 'cook-bait-legendary': 1 } },
     });
     for (const item of ['cook-lunch-bundle', 'cook-bait-legendary'] as const) {
       await rewind(guestUid);
-      expect(await callAction(userToken(guestUid), { type: 'eat', item }))
-        .toMatchObject({ status: 403, body: { error: 'account-only' } });
+      expect((await callAction(userToken(guestUid), { type: 'eat', item })).status).toBe(200);
     }
+    const guestStored = await stored(guestUid);
+    expect(guestStored.data.items).toEqual({});
+    expect(guestStored.data.slots.lunch?.id).toBe('cook-lunch-bundle');
+    expect(guestStored.data.slots.bait?.id).toBe('cook-bait-legendary');
+    expect((await eventsOf(guestUid)).map(e => e.type)).toEqual(['eat', 'eat']);
   });
 });

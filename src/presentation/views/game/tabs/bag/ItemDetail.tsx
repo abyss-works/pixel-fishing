@@ -158,7 +158,7 @@ function ItemDetailFooter({ title, label, lockLines, busy, usable, actionLabel, 
   return (
     <div className="mt-3 border-t border-line pt-2">
       {lockLines ? (
-        <Locked badge={false} lines={lockLines} title={<GradeName name={title.name} grade={title.grade} />} label={`${label} 사용 잠김`} className="block">
+        <Locked badge={false} lines={lockLines} title={<GradeName name={title.name} grade={title.grade} />} label={`${label} 잠김`} className="block">
           <Button variant="primary" full disabled>{actionLabel}</Button>
         </Locked>
       ) : (
