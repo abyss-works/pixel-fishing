@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { HATS, isAchievementHat } from '../../../game/content/wardrobe';
+import { HATS, isAchievementHat, isEventHat } from '../../../game/content/wardrobe';
 import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
-import { clothesChanged, hatCountText, hatDetail, outfitName } from './wardrobe';
+import { clothesChanged, hatCountText, hatDetail, outfitName, visibleHats } from './wardrobe';
 
 const seed = (over: Partial<GameState> = {}): GameState => ({ ...newState(), ...over });
 
@@ -26,10 +26,17 @@ describe('outfitName', () => {
   });
 });
 
-describe('hatCountText', () => {
-  it('가진 수와 전체 수를 보인다', () => {
-    expect(hatCountText(seed())).toBe(`0/${HATS.length}`);
-    expect(hatCountText(seed({ hats: ['cap-red', 'cap-blue'] }))).toBe(`2/${HATS.length}`);
+describe('hatCountText와 visibleHats', () => {
+  const permanentCount = HATS.filter(h => !isEventHat(h)).length;
+
+  it('미보유 이벤트 한정 모자는 목록과 전체 수에서 빠지고, 보유하면 더해진다', () => {
+    const eventHat = HATS.find(isEventHat)!;
+    expect(visibleHats(seed()).some(h => isEventHat(h))).toBe(false);
+    expect(hatCountText(seed())).toBe(`0/${permanentCount}`);
+    expect(hatCountText(seed({ hats: ['cap-red', 'cap-blue'] }))).toBe(`2/${permanentCount}`);
+
+    expect(visibleHats(seed({ hats: [eventHat.id] })).some(h => h.id === eventHat.id)).toBe(true);
+    expect(hatCountText(seed({ hats: [eventHat.id] }))).toBe(`1/${permanentCount + 1}`);
   });
 });
 
@@ -82,9 +89,18 @@ describe('hatDetail', () => {
     expect(hatDetail(seed(), 'cap-red')).toMatchObject({ source: 'gold', unlock: null });
     expect(hatDetail(seed({ hats: ['cap-red'] }), 'cap-red')).toMatchObject({ owned: true, source: 'gold', unlock: null });
   });
-  it('업적 모자가 아닌 모자는 업적 잠금 상태가 아니다', () => {
-    const hat = HATS.find(h => !isAchievementHat(h))!;
+  it('골드·업적 모자가 아닌 모자는 업적 잠금 상태가 아니다', () => {
+    const hat = HATS.find(h => !isAchievementHat(h) && !isEventHat(h))!;
     expect(hatDetail(seed(), hat.id).action).toBe('buy');
+  });
+  it('이벤트 모자는 보유 여부에 따라 착용 또는 이벤트 한정 안내를 돌려준다', () => {
+    const eventHat = HATS.find(isEventHat)!;
+    expect(hatDetail(seed(), eventHat.id)).toMatchObject({
+      owned: false, source: 'event', action: 'event', unlock: null,
+    });
+    expect(hatDetail(seed({ hats: [eventHat.id] }), eventHat.id)).toMatchObject({
+      owned: true, source: 'event', action: 'wear', unlock: null,
+    });
   });
   it('미토벌 네임드 업적 모자는 상세의 업적 이름과 조건에서 네임드 실명을 가린다', () => {
     const locked = hatDetail(seed(), 'megalodon-fin-cap');

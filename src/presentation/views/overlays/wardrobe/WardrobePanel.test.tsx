@@ -49,4 +49,16 @@ describe('WardrobePanel(옷장 창) 모자 상세', () => {
     expect(screen.getByText(/진척/)).toBeTruthy();
     expect(screen.getByRole('button', { name: '업적 모자' })).toBeTruthy();
   });
+
+  it('미보유 이벤트 모자는 숨기고 보유한 이벤트 모자는 이벤트 한정 출처와 쓰기 버튼을 보인다', () => {
+    openHatsTab(seed());
+    expect(screen.queryByRole('button', { name: /천지 강태공 삿갓/ })).toBeNull();
+    cleanup();
+
+    openHatsTab(seed({ hats: ['event-hat-basin-conical'] }));
+    fireEvent.click(screen.getByRole('button', { name: '천지 강태공 삿갓' }));
+    expect(screen.queryByText(/0G/)).toBeNull();
+    expect(screen.getByText('이벤트 한정 모자')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '쓰기' })).toBeTruthy();
+  });
 });

@@ -118,7 +118,7 @@ describe('ItemDetail', () => {
     expect(within(dialog).getByRole('button', { name: '사용' })).toBeEnabled();
   });
 
-  it('비약 상세는 등급색 이름, 행운 효과, 하루 동안 지속, 게스트 잠금 상태를 정확히 보인다', () => {
+  it('비약 상세는 등급색 이름, 행운 효과, 하루 동안 지속, 게스트 사용 가능과 확인 실패 잠금 상태를 정확히 보인다', () => {
     const view = selectItemSection(seed({ items: { 'luck-small': 2 } }), NOW, 'guest');
     const potionRow = view.potions[0];
 
@@ -138,9 +138,21 @@ describe('ItemDetail', () => {
     expect(within(dialog).getByText('×1.05')).toBeInTheDocument();
     expect(within(dialog).getByText('하루 동안')).toBeInTheDocument();
     expect(within(dialog).getByText('2개')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('group', { name: '작은 바다 영약 사용 잠김' })).toBeNull();
+    expect(within(dialog).getByRole('button', { name: '사용' })).toBeEnabled();
 
-    const lockGroup = within(dialog).getByRole('group', { name: '작은 바다 영약 사용 잠김' });
-    expect(lockGroup).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
+    cleanup();
+    const unverifiedView = selectItemSection(seed({ items: { 'luck-small': 2 } }), NOW, 'unverified');
+    render(
+      <ItemDetail
+        target={{ kind: 'potion', row: unverifiedView.potions[0], lockLines: unverifiedView.potionLock, onUse: vi.fn() }}
+        busy={false}
+        onClose={vi.fn()}
+      />,
+    );
+    const unverifiedDialog = screen.getByRole('dialog');
+    const lockGroup = within(unverifiedDialog).getByRole('group', { name: '작은 바다 영약 사용 잠김' });
+    expect(lockGroup).toHaveTextContent('계정을 확인하면 쓸 수 있어요.');
     expect(within(lockGroup).getByRole('button', { name: '사용' })).toBeDisabled();
 
     cleanup();

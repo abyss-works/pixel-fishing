@@ -47,7 +47,7 @@ describe('아이템 섹션: 해금 전과 게스트', () => {
     expect(filtered.bait.map(r => r.recipe.id)).toEqual(['cook-bait-legendary']);
   });
 
-  it('게스트는 보유 여부와 무관하게 해금 전이면 진행 조건 잠금 줄이고, 해금 뒤에는 게스트 잠금 줄이다', () => {
+  it('게스트는 보유한 도시락과 미끼는 잠금 없이 쓸 수 있고, 미보유 항목과 부엌 자리는 해금 전 진행 조건, 해금 뒤 게스트 잠금 줄이다', () => {
     const locked = selectItemSection(seed({
       boat: COOKING_UNLOCK_BOAT - 1,
       items: { 'cook-lunch-bundle': 1 },
@@ -57,7 +57,8 @@ describe('아이템 섹션: 해금 전과 게스트', () => {
       expect(locked.unlockNotice).toBe('인도양 항로가 열리면 부엌을 쓸 수 있어요.');
       expect(locked.empty).toEqual(['가진 아이템이 없어요.']);
       expect(locked.lines).toEqual(['인도양 항로가 열리면 부엌을 쓸 수 있어요.', '인도양 항로는 증기선(5단계)부터 열려요.']);
-      expect(locked.lunch.every(r => r.lockLines !== null)).toBe(true);
+      expect(locked.lunch.find(r => r.recipe.id === 'cook-lunch-bundle')?.lockLines).toBeNull();
+      expect(locked.lunch.filter(r => r.recipe.id !== 'cook-lunch-bundle').every(r => r.lockLines !== null)).toBe(true);
     }
 
     const postUnlock = selectItemSection(seed({
@@ -69,7 +70,8 @@ describe('아이템 섹션: 해금 전과 게스트', () => {
       expect(postUnlock.unlockNotice).toBeNull();
       expect(postUnlock.empty).toEqual(['가진 아이템이 없어요.']);
       expect(postUnlock.lines).toEqual(GUEST_LOCK_DEFAULT_LINES);
-      expect(postUnlock.lunch.every(r => r.lockLines !== null)).toBe(true);
+      expect(postUnlock.lunch.find(r => r.recipe.id === 'cook-lunch-bundle')?.lockLines).toBeNull();
+      expect(postUnlock.lunch.filter(r => r.recipe.id !== 'cook-lunch-bundle').every(r => r.lockLines !== null)).toBe(true);
     }
   });
 
@@ -375,10 +377,10 @@ describe('비약 묶음', () => {
     expect(active.potions[0]).toMatchObject({ count: 2, active: true, usable: false });
   });
 
-  it('게스트와 확인 실패는 물약 잠금 줄을 받고 사용할 수 없다', () => {
-    const guest = selectItemSection(seed({ items: { 'luck-small': 2 } }), T0, 'guest');
-    expect(guest.potionLock).toEqual(GUEST_LOCK_DEFAULT_LINES);
-    expect(guest.potions[0].usable).toBe(false);
+  it('게스트는 비약 잠금 줄이 없고 보유 중이면 사용할 수 있으며, 확인 실패만 잠금 줄을 받는다', () => {
+    const guest = selectItemSection(seed({ boat: 0, items: { 'luck-small': 2 } }), T0, 'guest');
+    expect(guest.potionLock).toBeNull();
+    expect(guest.potions[0].usable).toBe(true);
 
     const unverified = selectItemSection(seed({ items: { 'luck-small': 2 } }), T0, 'unverified');
     expect(unverified.potionLock).toEqual([UNVERIFIED_LOCK_TEXT]);

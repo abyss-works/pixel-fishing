@@ -14,7 +14,7 @@ import { canUsePotion } from '../../../game/rules/rules';
 import type { RuleCheck } from '../../../game/rules/rules';
 import { GAME_DAY_RESET_TEXT } from '../../../game/rules/time';
 import { josa } from '../../../shared/lib/josa';
-import { facilityGuestAllowed, facilityProgress, menuLock } from '../../display/model/menuLock';
+import { facilityGuestAllowed, facilityProgress, menuLock, UNVERIFIED_LOCK_TEXT } from '../../display/model/menuLock';
 import type { AccountLockState } from '../../display/model/menuLock';
 import { FORTUNE_TARGET_BONUS_LABEL } from '../../fortune/model/fortune';
 import { energyLabel } from './energy';
@@ -126,13 +126,12 @@ export type ItemSectionView =
 
 export function selectItemSection(game: GameState, now: string, account: AccountLockState): ItemSectionView {
   const activePotionIds = new Set(activePotionsOf(game.potions, now).map(p => p.id));
-  const potionLockResult = menuLock({ account, guestAllowed: false, feature: '비약' });
-  const potionLock = potionLockResult.kind === 'none' ? null : potionLockResult.lines;
+  const potionLock = account === 'unverified' ? [UNVERIFIED_LOCK_TEXT] : null;
   const potions: PotionRow[] = POTIONS.map(potion => ({
     potion,
     count: game.items[potion.id] ?? 0,
     active: activePotionIds.has(potion.id),
-    usable: canUsePotion(game, potion.id, now, account !== 'account').ok,
+    usable: account !== 'unverified' && canUsePotion(game, potion.id, now, account === 'guest').ok,
     effects: potionEffectLines(potion),
     note: POTION_DETAIL_NOTE,
   }));
@@ -154,8 +153,8 @@ export function selectItemSection(game: GameState, now: string, account: Account
       const remMs = activeRemainingMs.get(recipe.id);
       const active = remMs !== undefined;
       const count = items[recipe.id] ?? 0;
-      // 로그인 계정이 이미 보유하거나 슬롯에 활성화한 도시락·미끼는 요리 해금 전에도 잠금 없이 사용할 수 있다
-      const rowLock = kitchenLock && !(account === 'account' && (count > 0 || active)) ? kitchenLock : null;
+      // 확인된 계정과 게스트가 이미 보유하거나 슬롯에 활성화한 도시락·미끼는 요리 해금 전에도 잠금 없이 사용할 수 있다
+      const rowLock = kitchenLock && !(account !== 'unverified' && (count > 0 || active)) ? kitchenLock : null;
       return {
         recipe, label: recipeLabel(recipe), title: recipeTitle(recipe), count, slot, verb: SLOT_TEXT[slot].verb,
         effects: recipeEffectLines(recipe),

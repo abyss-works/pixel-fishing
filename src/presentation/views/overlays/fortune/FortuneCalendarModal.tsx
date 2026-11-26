@@ -15,6 +15,7 @@ import {
   fortuneModalRows,
   fortuneName,
   fortunePhrase,
+  fortuneScore,
   fortuneShortName,
   resolveSelectedFortuneDay,
   selectFortuneDayDetail,
@@ -37,7 +38,7 @@ import Skeleton from '../../../ui/Skeleton';
 import SubTabs from '../../../ui/SubTabs';
 import { HighlightRarityText } from '../../../ui/fish/RarityTag';
 import FortuneCollectionTab from './FortuneCollectionTab';
-import { FortuneMotifIcon, FortuneStrength } from './fortuneParts';
+import { FortuneMotifIcon, FortuneScore, FortuneStrength } from './fortuneParts';
 import { fortuneToneOf } from './fortuneTone';
 
 type FortuneTab = 'calendar' | 'collection';
@@ -68,9 +69,12 @@ function TodayMiniCard({ fortune }: { fortune: DailyFortune | null }) {
               </span>
             </div>
           </div>
-          <div className="flex flex-col items-end mobile:flex-row mobile:items-center mobile:gap-1.5 shrink-0">
-            <span className="text-2xs text-gold font-bold leading-none">{FORTUNE_INDEX_LABEL[fortune.index]}</span>
-            <span className="pf-accent text-xs text-accent leading-tight">{fortuneLuckMultText(fortune)}</span>
+          <div className="flex items-center gap-2.5 shrink-0">
+            <FortuneScore score={fortuneScore(fortune)} compact />
+            <div className="flex flex-col items-end mobile:flex-row mobile:items-center mobile:gap-1.5 shrink-0">
+              <span className="text-2xs text-gold font-bold leading-none">{FORTUNE_INDEX_LABEL[fortune.index]}</span>
+              <span className="pf-accent text-xs text-accent leading-tight">{fortuneLuckMultText(fortune)}</span>
+            </div>
           </div>
         </>
       ) : (
@@ -106,12 +110,13 @@ function FortuneDetailPanel({
             <Inset tone="deep" className="size-9 mobile:size-6 shrink-0 flex items-center justify-center">
               <FortuneMotifIcon kind={fortune.kind} index={fortune.index} size={20} className="mobile:size-4" />
             </Inset>
-            <div className="flex flex-col gap-0.5 mobile:gap-0 min-w-0">
+            <div className="flex flex-col gap-0.5 mobile:gap-0 min-w-0 flex-1">
               <span className={cx('text-sm mobile:text-xs font-bold leading-tight truncate', fortuneToneOf(fortune.kind))}>
                 {fortuneName(fortune)}
               </span>
               <FortuneStrength index={fortune.index} compact />
             </div>
+            <FortuneScore score={fortuneScore(fortune)} compact className="ml-auto" />
           </Inset>
           <p className="m-0 text-xs mobile:text-2xs text-text-dim leading-[1.55] mobile:leading-[1.35] flex-1 min-h-0">
             {fortunePhrase(fortune)}

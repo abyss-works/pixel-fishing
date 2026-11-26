@@ -68,3 +68,26 @@ export function FortuneStrength({ index, compact = false }: { index: DailyFortun
     </span>
   );
 }
+
+/** 오늘의 운세 점수 — 테두리 없는 금빛 네잎클로버와 숫자만 간결히 둔다 */
+export function FortuneScore({
+  score,
+  compact = false,
+  className,
+}: {
+  score: number;
+  compact?: boolean;
+  className?: string;
+}) {
+  return (
+    <span
+      aria-label={`운세 점수 ${score}점`}
+      className={cx('inline-flex items-center gap-1 shrink-0', className)}
+    >
+      <PixelIcon glyph="clover" size={compact ? 11 : 14} className="text-gold shrink-0" />
+      <span className={cx('pf-accent font-bold text-gold leading-none', compact ? 'text-xs' : 'text-base mobile:text-sm')}>
+        {score}
+      </span>
+    </span>
+  );
+}

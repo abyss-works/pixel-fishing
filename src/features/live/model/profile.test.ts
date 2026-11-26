@@ -78,8 +78,9 @@ describe('플레이어 정보 화면 데이터', () => {
     // 온라인 liveZone (하위 존 / 최상위 존)
     expect(selectProfileView(profile({ online: true, liveRegion: 'world', liveZone: 'deep' })).placeLabel).toBe('마리아나 해구');
     expect(selectProfileView(profile({ online: true, liveRegion: 'world', liveZone: 'pacific' })).placeLabel).toBe('태평양');
-    // 온라인 마을 및 해역 미상 바다
+    // 온라인 마을 및 이벤트 호수 및 해역 미상 바다
     expect(selectProfileView(profile({ online: true, liveRegion: 'village', liveZone: null })).placeLabel).toBe('마을');
+    expect(selectProfileView(profile({ online: true, liveRegion: 'championship', liveZone: null })).placeLabel).toBe('강태공 분지 호수');
     expect(selectProfileView(profile({ online: true, liveRegion: 'world', liveZone: null })).placeLabel).toBe('바다');
     // 오프라인 거점 (집, 항구)
     expect(selectProfileView(profile({ online: false, location: { kind: 'base', id: 'home' } })).placeLabel).toBe('집');
@@ -146,15 +147,16 @@ describe('플레이어 정보 화면 데이터', () => {
       artifactLevels: { [rare.id]: 4, [legend.id]: 3 },
     }));
 
+    const permanentHats = HATS.filter(h => h.source !== 'event');
     expect(view.collectibles.hats).toMatchObject({
       owned: 2,
-      total: HATS.length,
+      total: permanentHats.length,
       goldOwned: 1,
       goldTotal: HATS.filter(h => h.source === 'gold').length,
       achievementOwned: 1,
       achievementTotal: HATS.filter(h => h.source === 'achievement').length,
     });
-    expect(view.collectibles.hats.slots).toHaveLength(HATS.length);
+    expect(view.collectibles.hats.slots).toHaveLength(permanentHats.length);
     expect(view.collectibles.hats.slots.find(h => h.id === goldHat.id)).toMatchObject({
       owned: true,
       name: goldHat.name,

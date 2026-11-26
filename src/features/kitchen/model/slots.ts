@@ -177,7 +177,7 @@ export function selectBonusChip(game: GameState, now: string, account: AccountLo
   if (locked) {
     const lock = menuLock({ account, guestAllowed: facilityGuestAllowed('kitchen'), feature: '활성 효과', progress });
     if (lock.kind === 'progress') {
-      return { state: 'locked', lines: progressNote(COOKING_UNLOCK_BOAT, '도시락과 미끼를 쓸 수 있어요.') };
+      return { state: 'locked', lines: progressNote(COOKING_UNLOCK_BOAT, '부엌에서 도시락과 미끼를 만들 수 있어요.') };
     }
     if (lock.kind !== 'none') {
       return { state: 'locked', lines: lock.lines };
