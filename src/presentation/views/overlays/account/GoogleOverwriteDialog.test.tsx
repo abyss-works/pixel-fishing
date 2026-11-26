@@ -68,4 +68,20 @@ describe('GoogleOverwriteDialog', () => {
     fireEvent.click(dialog.parentElement as HTMLElement);
     expect(onBack).toHaveBeenCalledTimes(4);
   });
+
+  it('busy=true이면 버튼과 닫기 동작을 모두 잠근다', () => {
+    const onProceed = vi.fn();
+    const onBack = vi.fn();
+    render(<GoogleOverwriteDialog busy onProceed={onProceed} onBack={onBack} />);
+
+    expect(screen.getByRole('button', { name: '되돌아가기' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '계정 전환' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: '닫기' })).toBeNull();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    const dialog = screen.getByRole('dialog', { name: '구글 계정으로 로그인' });
+    fireEvent.click(dialog.parentElement as HTMLElement);
+    expect(onBack).not.toHaveBeenCalled();
+    expect(onProceed).not.toHaveBeenCalled();
+  });
 });

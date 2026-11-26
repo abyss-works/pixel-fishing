@@ -23,10 +23,14 @@ vi.mock('../../../platform/api', () => ({
 }));
 
 import { useGoogleReturn } from './useGoogleReturn';
+import { registerNoticeSink } from '../../display/model/toastPolicy';
+import type { SystemNoticeInput } from '../../display/model/toastPolicy';
 import {
+  consumeGoogleOrigin,
   hasPendingSailReturn,
   isSailReturnReady,
   resetSailReturnForTest,
+  setPendingGoogleOrigin,
   setPendingSailReturn,
 } from './sailReturn';
 
@@ -130,13 +134,50 @@ describe('구글 인증 복귀 처리', () => {
     expect(p.setToast).toHaveBeenCalledWith('구글 계정 선택 화면을 열지 못했어요. 잠시 뒤 다시 시도해 주세요.', 'warn');
   });
 
-  it('전환 티켓 확인이 폴백 불가 오류로 실패하면 2차 구글 인증으로 보내지 않고 경고한다', async () => {
+  it('전환 티켓 확인이 폴백 불가 오류로 실패하면 2차 구글 인증으로 보내지 않고 전환 실패 문구를 알린다', async () => {
     auth.landing = { tag: 'link-guest', error: 'account_already_linked_to_different_user' };
     auth.confirmGoogleSwitch.mockResolvedValue({ ok: false, fallback: false, msg: '실패', code: 'switch_session_mismatch' });
-    const p = setup(true);
-    await waitFor(() => expect(p.setToast).toHaveBeenCalledTimes(1));
+    const notices: SystemNoticeInput[] = [];
+    const setToast = registerNoticeSink(vi.fn(), input => notices.push(input));
+    const props = {
+      progress: 'some' as GuestProgress,
+      setToast,
+      askOverwrite: vi.fn(async () => true),
+      showNotice: vi.fn<(title: string, body: string) => Promise<void>>(async () => {}),
+      reopenAccount: vi.fn(),
+    };
+    renderHook(() => useGoogleReturn(props));
+    await waitFor(() => expect(notices).toHaveLength(1));
     expect(auth.startGoogle).not.toHaveBeenCalled();
-    expect(p.setToast).toHaveBeenCalledWith('구글 계정 선택 화면을 열지 못했어요. 잠시 뒤 다시 시도해 주세요.', 'warn');
+    expect(notices[0]).toMatchObject({
+      text: '선택한 구글 계정으로 전환하지 못했어요.\n잠시 뒤 다시 시도해 주세요.',
+      toastText: '구글 계정 전환 실패',
+      tone: 'danger',
+    });
+  });
+
+  it('전환 티켓 확인이 rate-limited 오류로 실패하면 기존 속도 제한 안내를 유지한다', async () => {
+    auth.landing = { tag: 'link-guest', error: 'account_already_linked_to_different_user' };
+    auth.confirmGoogleSwitch.mockResolvedValue({
+      ok: false,
+      fallback: false,
+      msg: '요청이 너무 잦아요. 잠시 뒤 다시 시도해 주세요.',
+      code: 'rate-limited',
+    });
+    const notices: SystemNoticeInput[] = [];
+    const setToast = registerNoticeSink(vi.fn(), input => notices.push(input));
+    const props = {
+      progress: 'some' as GuestProgress,
+      setToast,
+      askOverwrite: vi.fn(async () => true),
+      showNotice: vi.fn<(title: string, body: string) => Promise<void>>(async () => {}),
+      reopenAccount: vi.fn(),
+    };
+    renderHook(() => useGoogleReturn(props));
+    await waitFor(() => expect(notices).toHaveLength(1));
+    expect(auth.startGoogle).not.toHaveBeenCalled();
+    expect(notices[0].text).toBe('요청이 너무 잦아요. 잠시 뒤 다시 시도해 주세요.');
+    expect(notices[0].toastText).toBeUndefined();
   });
 
   it('sign-in 표지가 같은 코드를 받으면 확인 없이 안내 창이다', async () => {
@@ -234,17 +275,17 @@ describe('버릴 진행이 없는 게스트의 구글 로그인', () => {
     await waitFor(() => expect(p.setToast).toHaveBeenCalledWith('구글 계정 선택 화면을 열지 못했어요. 잠시 뒤 다시 시도해 주세요.', 'warn'));
   });
 
-  it('확인을 건너뛴 로그인을 시작하다 던져도 구글 화면을 열지 못했다는 안내를 보인다', async () => {
+  it('확인을 건너뛴 로그인을 시작하다 던져도 구글 계정 전환 실패 안내를 보인다', async () => {
     auth.confirmGoogleSwitch.mockRejectedValue(new Error('network'));
     const p = setup(false, 'nothing');
-    await waitFor(() => expect(p.setToast).toHaveBeenCalledWith('구글 계정 선택 화면을 열지 못했어요. 잠시 뒤 다시 시도해 주세요.', 'warn'));
+    await waitFor(() => expect(p.setToast).toHaveBeenCalledWith('선택한 구글 계정으로 전환하지 못했어요.\n잠시 뒤 다시 시도해 주세요.', 'warn'));
     expect(p.setToast).toHaveBeenCalledTimes(1);
   });
 
-  it('확인에서 진행한 로그인을 시작하다 던져도 구글 화면을 열지 못했다는 안내를 보인다', async () => {
+  it('확인에서 진행한 로그인을 시작하다 던져도 구글 계정 전환 실패 안내를 보인다', async () => {
     auth.confirmGoogleSwitch.mockRejectedValue(new Error('network'));
     const p = setup(true, 'some');
-    await waitFor(() => expect(p.setToast).toHaveBeenCalledWith('구글 계정 선택 화면을 열지 못했어요. 잠시 뒤 다시 시도해 주세요.', 'warn'));
+    await waitFor(() => expect(p.setToast).toHaveBeenCalledWith('선택한 구글 계정으로 전환하지 못했어요.\n잠시 뒤 다시 시도해 주세요.', 'warn'));
   });
 
   it('다른 오류 코드는 진행 판정과 관계없이 복귀 안내를 보이고 로그인을 시작하지 않는다', async () => {
@@ -330,5 +371,21 @@ describe('출항 복귀 표지 처리', () => {
     const p = setup(true, 'some');
     await waitFor(() => expect(p.setToast).toHaveBeenCalledTimes(1));
     expect(hasPendingSailReturn()).toBe(false);
+  });
+
+  it('설정 계정 관리에서 시작해 충돌 후 되돌아가면 manage 출처로 복귀한다', async () => {
+    setPendingGoogleOrigin('manage');
+    auth.landing = { tag: 'link-guest', error: 'account_already_linked_to_different_user' };
+    const p = setup(false, 'some');
+    await waitFor(() => expect(p.reopenAccount).toHaveBeenCalledWith('manage'));
+    expect(consumeGoogleOrigin()).toBeNull();
+  });
+
+  it('출항 연결 창에서 시작해 충돌 후 되돌아가면 connect 출처로 복귀한다', async () => {
+    setPendingGoogleOrigin('connect');
+    auth.landing = { tag: 'link-guest', error: 'account_already_linked_to_different_user' };
+    const p = setup(false, 'some');
+    await waitFor(() => expect(p.reopenAccount).toHaveBeenCalledWith('connect'));
+    expect(consumeGoogleOrigin()).toBeNull();
   });
 });

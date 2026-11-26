@@ -9,16 +9,20 @@ import PixelIcon from '../../../ui/PixelIcon';
 
 // 충돌 확인 창 - 연결하려는 구글 계정이 이미 다른 계정에 연결돼 있을 때(그 구글 계정의 진행 유무와는 관계없다), 구글에서 돌아온 직후 한 번 뜨는 스테이지 모달이다. 계정 관리 창 위에 쌓는 창이 아니다.
 // 계정 전환은 그 계정으로 로그인해 그 계정의 진행을 채택하고 이 기기의 게스트 진행을 버린다. 닫기(X, 바깥 누르기, Esc)는 되돌아가기와 같다.
-export default function GoogleOverwriteDialog({ onProceed, onBack }: { onProceed: () => void; onBack: () => void }) {
+export default function GoogleOverwriteDialog({ busy = false, onProceed, onBack }: {
+  busy?: boolean;
+  onProceed: () => void;
+  onBack: () => void;
+}) {
   return (
-    <Modal layer="stage" onClose={onBack}>
+    <Modal layer="stage" closable={!busy} onClose={onBack}>
       <ModalCard
         title={OVERWRITE_COPY.title}
-        onClose={onBack}
+        onClose={busy ? undefined : onBack}
         confirm={(
           <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] gap-2">
-            <Button full className="px-2.5 text-sm whitespace-nowrap" onClick={onBack}>{OVERWRITE_COPY.cancel}</Button>
-            <Button variant="primary" full className="px-2.5 text-sm whitespace-nowrap" onClick={onProceed}>{OVERWRITE_COPY.confirm}</Button>
+            <Button full disabled={busy} className="px-2.5 text-sm whitespace-nowrap" onClick={onBack}>{OVERWRITE_COPY.cancel}</Button>
+            <Button variant="primary" full disabled={busy} className="px-2.5 text-sm whitespace-nowrap" onClick={onProceed}>{OVERWRITE_COPY.confirm}</Button>
           </div>
         )}
       >
