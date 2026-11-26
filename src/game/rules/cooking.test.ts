@@ -531,11 +531,15 @@ describe('eat', () => {
     const s = seed({ items: { [lunch.id]: 1 }, location: { kind: 'region', id: 'world' } });
     expect(ok(s, { type: 'eat', item: lunch.id }).state.slots.lunch).not.toBeNull();
   });
-  it('보유하지 않았으면 item-not-owned, 게스트는 account-only, 먹을 수 없는 아이템은 bad-request다', () => {
+  it('보유하지 않았으면 item-not-owned, 먹을 수 없는 아이템은 bad-request이며, 게스트도 보유한 도시락·미끼를 사용할 수 있다', () => {
     expect(rejected(seed(), { type: 'eat', item: lunch.id })).toBe('item-not-owned');
-    expect(canEat(seed({ items: { [lunch.id]: 1 } }), lunch.id, T0, true)).toEqual({ ok: false, reason: 'account-only' });
-    expect(rejected(seed({ items: { [lunch.id]: 1 } }), { type: 'eat', item: lunch.id }, deps({ guest: true }))).toBe('account-only');
-    expect(rejected(seed({ boat: 1, items: { [lunch.id]: 1 } }), { type: 'eat', item: lunch.id }, deps({ guest: true }))).toBe('account-only');
+    expect(canEat(seed({ items: { [lunch.id]: 1 } }), lunch.id, T0, true)).toEqual({ ok: true });
+    const guestLunch = ok(seed({ boat: 0, items: { [lunch.id]: 1 } }), { type: 'eat', item: lunch.id }, deps({ guest: true }));
+    expect(guestLunch.state.slots.lunch).toEqual({ id: lunch.id, endsAt: at(T0, 9 * 60 * MIN) });
+    expect(guestLunch.state.items[lunch.id]).toBeUndefined();
+    const guestBait = ok(seed({ boat: 1, items: { [bait.id]: 1 } }), { type: 'eat', item: bait.id }, deps({ guest: true }));
+    expect(guestBait.state.slots.bait).toEqual({ id: bait.id, endsAt: at(T0, 5 * MIN) });
+    expect(guestBait.state.items[bait.id]).toBeUndefined();
     expect(rejected(seed({ items: energy(5) }), { type: 'eat', item: ENERGY_ITEM_IDS.common })).toBe('bad-request');
     expect(rejected(seed(), { type: 'eat', item: 7 as never })).toBe('bad-request');
   });

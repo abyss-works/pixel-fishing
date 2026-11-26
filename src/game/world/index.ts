@@ -27,6 +27,9 @@ export {
 export { VILLAGE, V_SPAWN, V_POND, V_HOUSE, V_DOOR, V_BRIDGE, V_PIER, V_PORT, V_PORT_FRONT,
   V_SCHOOLS, VILLAGE_W, VILLAGE_H } from './regions/village';
 export { WORLD, WORLD_MAP, WORLD_SPAWN, WORLD_BOUNDS, HARBORS } from './regions/world';
+export {
+  CHAMPIONSHIP, CHAMPIONSHIP_W, CHAMPIONSHIP_H, CHAMPIONSHIP_CABIN, CHAMPIONSHIP_SPAWN, CHAMPIONSHIP_SCHOOLS,
+} from './regions/championship';
 export { schoolsOf, generateWorldSchools, SCHOOL_MIN_GAP } from './schools';
 
 export const REGION_PACKS: Record<RegionId, RegionPack> = {

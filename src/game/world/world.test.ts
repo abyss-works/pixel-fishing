@@ -1,7 +1,7 @@
 // R4, R4b: 지역 충돌·군집 배치·경로 무결성과 존 계층을 검증한다.
 // 공통 무결성은 REGION_PACKS를 순회한다 — 새 지역을 등록하면 자동으로 검증 대상이 된다.
 import { describe, it, expect } from 'vitest';
-import { SPOTS } from '../content/spots';
+import { spotById } from '../content/spots';
 import { SALE_BASES } from '../content/places';
 import { ZONES, topZoneOf, zoneById, zoneOfSpot } from '../content/zones';
 import { zoneOfPort } from '../content/bounties';
@@ -130,7 +130,7 @@ describe('대양 어군 — 날짜가 바뀌어도 시작점에서 바다로 닿
 describe.each(Object.values(REGION_PACKS))('$id 마스크 정합성', pack => {
   it('군집 spot은 실제 수역 데이터에 있다', () => {
     for (const s of schoolsFor(pack)) {
-      expect(SPOTS.some(sp => sp.id === s.spot), `${pack.id}/${s.id} 알 수 없는 수역`).toBe(true);
+      expect(spotById(s.spot), `${pack.id}/${s.id} 알 수 없는 수역`).toBeDefined();
     }
   });
 
@@ -794,5 +794,62 @@ describe('판매 시설이 있는 거점 표', () => {
     for (const pack of Object.values(BASE_PACKS)) {
       expect(SALE_BASES[pack.id], pack.id).toBe(pack.furniture.some(f => f.id === 'sell'));
     }
+  });
+});
+
+describe('이벤트 2: 강태공 분지 호수(championship)', () => {
+  it('도보 구역이며 showOthers가 켜져 있고 zoneOf가 championship을 반환한다', () => {
+    const champ = REGION_PACKS.championship;
+    expect(champ.movement).toBe('walk');
+    expect(champ.showOthers).toBe(true);
+    expect(zoneOf(champ, champ.spawn.x, champ.spawn.y)).toBe('championship');
+  });
+
+  it('분지 호수 어군 6곳이 배치되고 모든 데크·호안에서 도달 가능하며 겨울·산타 동산 장식을 가진다', () => {
+    const champ = REGION_PACKS.championship;
+    const schools = schoolsOf('championship', TEST_DAY);
+    expect(schools).toHaveLength(6);
+    for (const s of schools) {
+      expect(s.spot).toBe('championship');
+      expect(canMove(champ, s.x, s.y), `${s.id} 호수 위`).toBe(false);
+    }
+    const decks = (champ.terrain ?? []).filter(t => t.kind === 'deck');
+    expect(decks.length).toBeGreaterThanOrEqual(3);
+    for (const d of decks) {
+      expect(canMove(champ, d.rect.x + d.rect.w / 2, d.rect.y + d.rect.h / 2)).toBe(true);
+    }
+    const kinds = new Set(champ.decorations.map(d => d.kind));
+    for (const expected of ['xmasTree', 'snowPine', 'snowman', 'giftBox', 'candyCane', 'lantern'] as const) {
+      expect(kinds.has(expected), expected).toBe(true);
+    }
+    expect(champ.buildings.length).toBeGreaterThanOrEqual(1);
+    const cabin = champ.buildings[0];
+    expect(canMove(champ, cabin.rect.x + cabin.rect.w / 2, cabin.rect.y + cabin.rect.h / 2)).toBe(false);
+  });
+
+  it('canMove는 도보(walk) 지역의 map 지형에서 물을 막고 데크를 허용한다', () => {
+    const map = compileMap(16, 16, {
+      '.': { water: false, zone: 'championship' },
+      '~': { water: true, style: 'river', zone: 'championship' },
+    }, [
+      '....',
+      '.~~.',
+      '.~~.',
+      '....',
+    ]);
+    const walkMapPack: RegionPack = {
+      ...REGION_PACKS.championship,
+      bounds: mapBounds(map),
+      map,
+      terrain: undefined,
+      decks: [{ rect: { x: 16, y: 16, w: 16, h: 16 }, style: 'pier' }],
+      buildings: [],
+      triggers: [],
+      spawn: { x: 8, y: 8 },
+    };
+    expect(canMove(walkMapPack, 8, 8)).toBe(true);
+    expect(canMove(walkMapPack, 40, 24)).toBe(false);
+    expect(canMove(walkMapPack, 24, 24)).toBe(true);
+    expect(zoneOf(walkMapPack, 8, 8)).toBe('championship');
   });
 });

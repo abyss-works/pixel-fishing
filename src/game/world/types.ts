@@ -63,7 +63,11 @@ export interface MapLabel {
   size?: number;
 }
 
-export type Decoration = { kind: 'tree'; x: number; y: number };
+export type Decoration = {
+  kind: 'tree' | 'xmasTree' | 'snowPine' | 'snowman' | 'giftBox' | 'candyCane' | 'lantern';
+  x: number;
+  y: number;
+};
 
 /** 지형 마스크 셀 정의 — legend 문자 하나가 한 칸(cellW×cellH)의 성질 */
 export interface MapCellDef {
@@ -118,6 +122,10 @@ export interface RegionPack {
    *  이 값으로 px↔m 스케일을 파생한다(1° 위도 ≈ 111,320m). walk 지역(마을)은 없음. */
   geoWindow?: { lonMin: number; lonMax: number; latMin: number; latMax: number };
   movement: 'walk' | 'sail';
+  /** 구역 id 단일 지정 — walk 지역이 기본 'village' 대신 다른 구역(championship 등)일 때 쓴다 */
+  zone?: ZoneId;
+  /** 다른 플레이어(실시간 접속자)를 이 지역에서도 그릴지 여부 — sail이 아닌 이벤트 도보 구역용 */
+  showOthers?: boolean;
   /** 바탕 (walk 지역/village) — 지반색. mask 지역은 생략(전체가 바다) */
   ground?: { kind: 'grass'; color: string; dot: string; mapColor: string };
   /** 지형 마스크 (항해 지역) — ASCII rows를 compileMap으로 컴파일한 격자.
