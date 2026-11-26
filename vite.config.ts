@@ -7,6 +7,9 @@ const COMMON_TEST_EXCLUDE = [...configDefaults.exclude, '**/*.db.test.ts', '**/.
 
 // 브라우저 전역(window·document·location·Notification·localStorage·sessionStorage) 또는 React 렌더링에 의존하는 .test.ts 예외 목록
 const DOM_ONLY_TS_TESTS = [
+  'src/features/alerts/service/alertPrompt.test.ts',
+  'src/features/alerts/service/alertSettings.test.ts',
+  'src/features/alerts/service/bagFullAlert.test.ts',
   'src/features/announcements/service/whatsNew.test.ts',
   'src/features/bounty/service/encounterAlert.test.ts',
   'src/features/inventory/service/baitRefund.test.ts',

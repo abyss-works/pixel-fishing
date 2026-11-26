@@ -57,6 +57,7 @@ import { useFriendAlerts } from '../../../features/friends/service/useFriendAler
 import WorldMapModal from '../overlays/world-map/WorldMapModal';
 import WhatsNewModal from '../overlays/whats-new/WhatsNewModal';
 import TutorialModal from '../overlays/tutorial/TutorialModal';
+import AlertPromptModal from '../overlays/alerts/AlertPromptModal';
 import BaitRefundModal from '../overlays/bait-refund/BaitRefundModal';
 import { useBaitRefund } from '../../../features/inventory/service/baitRefund';
 import { useWhatsNewPending } from '../../../features/announcements/service/whatsNew';
@@ -65,7 +66,9 @@ import FortuneCalendarModal from '../overlays/fortune/FortuneCalendarModal';
 import ActiveEffectsModal from '../overlays/effects/ActiveEffectsModal';
 import { setBagSection } from './tabs/bag/bagView';
 import { useFortuneModal } from '../../../features/fortune/service/fortuneModal';
-import { useTutorialTrigger } from '../../../features/tutorial/service/tutorial';
+import { useTutorialPending, useTutorialTrigger } from '../../../features/tutorial/service/tutorial';
+import { useBagFullAlert } from '../../../features/alerts/service/bagFullAlert';
+import { selectBagStatus } from '../../../features/inventory/model/selectors';
 import { guildMatesIn, useChat, useLive } from '../../../features/live/service/useLive';
 import TraceCard from '../overlays/bounty/TraceCard';
 import AwayCard from '../overlays/away/AwayCard';
@@ -165,13 +168,14 @@ export default function GameView(props: GameViewProps) {
   // 튜토리얼 트리거 — 마을 야외와 바다에 처음 나왔을 때
   useTutorialTrigger('village', scene.kind === 'region' && scene.id === 'village');
   useTutorialTrigger('sea', atSea);
-  // 첫 화면의 안내 창 순서 - 업데이트 소식, 미끼 환불 안내, 오늘의 운세, 튜토리얼. 앞 창이 끝나야 다음 창이 뜬다
+  // 첫 화면의 안내 창 순서 - 업데이트 소식, 미끼 환불 안내, 오늘의 운세, 튜토리얼, 브라우저 알림 안내. 앞 창이 끝나야 다음 창이 뜬다
   const saveReady = props.syncState === 'on' || props.syncState === 'off';
   const whatsNewPending = useWhatsNewPending();
   const baitRefund = useBaitRefund({
     refund: game.baitRefund, boat: game.boat, ready: saveReady, suspended: whatsNewPending, dispatch: props.dispatch,
   });
   const fortune = useFortuneModal({ ready: saveReady, suspended: whatsNewPending || baitRefund.pending });
+  const tutorialPending = useTutorialPending(game.tutorials);
   useLive();
   const chat = useChat();
   /** 같은 바다 접속 목록 창 */
@@ -184,6 +188,7 @@ export default function GameView(props: GameViewProps) {
   // 길드 보너스는 서버가 적용한다. 화면은 서버가 알려 준 레벨과 효과를 보이기만 한다(스탯 창 보너스 탭, 가방 칸)
   const guildBonus = guild ? { level: guild.growth.level, effects: guild.effects, bonuses: guild.bonuses } : null;
   const bagBonus = guildBonus?.effects.bag ?? 0;
+  useBagFullAlert(selectBagStatus(game, bagBonus).full);
   useFriendAlerts(props.account !== null, props.setToast);
   useGuildAlerts(props.account !== null, props.setToast, guild);
   useBountyAlerts(props.setToast);
@@ -489,6 +494,7 @@ export default function GameView(props: GameViewProps) {
         {baitRefund.notice && <BaitRefundModal notice={baitRefund.notice} onClose={baitRefund.close} />}
         {fortune.fortune && <FortuneModal fortune={fortune.fortune} onClose={fortune.close} />}
         <TutorialModal seen={game.tutorials} ready={saveReady} after={baitRefund.pending || fortune.pending} dispatch={props.dispatch} />
+        <AlertPromptModal ready={saveReady} after={whatsNewPending || baitRefund.pending || fortune.pending || tutorialPending} setToast={props.setToast} />
         {props.toasts && props.toasts.length > 0 && props.onDismissToast && (
           <FloatingToastLayer toasts={props.toasts} maxVisible={mobile ? 2 : 3} onDismiss={props.onDismissToast} />
         )}

@@ -36,6 +36,12 @@ export function useTutorialTrigger(id: TutorialId, on: boolean): void {
   }, [id, on]);
 }
 
+/** 아직 보지 않은 튜토리얼이 켜져 있는지 - 뒤에 뜰 안내 창이 튜토리얼 뒤로 차례를 미루는 데 쓴다 */
+export function useTutorialPending(seen: readonly string[]): boolean {
+  const s = useSyncExternalStore(subscribe, getStore, getStore);
+  return pendingTutorial(s.active, [...seen, ...s.closed]) !== null;
+}
+
 /**
  * 지금 띄울 튜토리얼과 닫기.
  * @param seen 게임 상태의 본 튜토리얼

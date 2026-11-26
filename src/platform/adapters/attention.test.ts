@@ -1,10 +1,9 @@
 // 주의 끌기 어댑터 — 시스템 알림(Notification API)·탭 제목 깜빡임·알림 선호(localStorage).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  ENCOUNTER_ALERT_KEY, UPDATE_ALERT_KEY, flashTitle, getEncounterAlertEnabled, getUpdateAlertEnabled, isPageHidden,
-  loadEncounterAlertEnabled, loadUpdateAlertEnabled, notificationPermission, requestNotificationPermission,
-  resetEncounterAlert, resetUpdateAlert, setEncounterAlertEnabled, setUpdateAlertEnabled,
-  showNotification, subscribeEncounterAlert, subscribeUpdateAlert,
+  ALERT_KEYS, ALERT_PROMPT_SEEN_KEY, flashTitle, getAlertEnabled, isAlertPromptSeen, isPageHidden, loadAlertEnabled,
+  markAlertPromptSeen, notificationPermission, requestNotificationPermission, resetAlerts, setAlertEnabled,
+  showNotification, subscribeAlert, subscribePermission,
 } from './attention';
 
 class FakeNotification {
@@ -29,84 +28,96 @@ const setHidden = (hidden: boolean) => {
 describe('알림 선호 저장소', () => {
   beforeEach(() => {
     localStorage.clear();
-    resetEncounterAlert();
+    resetAlerts();
   });
 
-  it('저장값이 없으면 꺼져 있다 — 권한을 묻기 전에는 알리지 않는다', () => {
-    expect(loadEncounterAlertEnabled()).toBe(false);
-    expect(getEncounterAlertEnabled()).toBe(false);
+  it('저장값이 없으면 세 알림 모두 켜져 있다', () => {
+    for (const kind of ['encounter', 'bag', 'update'] as const) {
+      expect(loadAlertEnabled(kind)).toBe(true);
+      expect(getAlertEnabled(kind)).toBe(true);
+    }
   });
 
-  it('켜면 기기에 남고 구독자에게 알린다', () => {
+  it('off로 저장된 알림만 꺼짐이다 — 알 수 없는 값은 켜짐으로 본다', () => {
+    localStorage.setItem(ALERT_KEYS.bag, 'off');
+    localStorage.setItem(ALERT_KEYS.encounter, 'garbage');
+    expect(loadAlertEnabled('bag')).toBe(false);
+    expect(loadAlertEnabled('encounter')).toBe(true);
+  });
+
+  it('끄면 기기에 남고 구독자에게 알린다 — 같은 값으로 다시 바꿔도 알리지 않는다', () => {
     let calls = 0;
-    const off = subscribeEncounterAlert(() => { calls++; });
-    setEncounterAlertEnabled(true);
-    expect(localStorage.getItem(ENCOUNTER_ALERT_KEY)).toBe('on');
-    expect(loadEncounterAlertEnabled()).toBe(true);
-    setEncounterAlertEnabled(true);
+    const off = subscribeAlert('bag', () => { calls++; });
+    setAlertEnabled('bag', false);
+    expect(localStorage.getItem(ALERT_KEYS.bag)).toBe('off');
+    expect(loadAlertEnabled('bag')).toBe(false);
+    setAlertEnabled('bag', false);
     expect(calls).toBe(1);
+    setAlertEnabled('bag', true);
+    expect(localStorage.getItem(ALERT_KEYS.bag)).toBe('on');
     off();
+  });
+
+  it('한 알림을 바꿔도 다른 알림은 그대로다', () => {
+    setAlertEnabled('bag', false);
+    expect(getAlertEnabled('encounter')).toBe(true);
+    expect(getAlertEnabled('update')).toBe(true);
   });
 });
 
 describe('업데이트 알림 선호', () => {
   beforeEach(() => {
     localStorage.clear();
-    resetEncounterAlert();
-    resetUpdateAlert();
+    resetAlerts();
   });
 
-  it('저장값이 없으면 꺼져 있다', () => {
-    expect(loadUpdateAlertEnabled()).toBe(false);
-  });
-
-  it('업데이트 키가 없으면 네임드 키 값을 따른다', () => {
-    localStorage.setItem(ENCOUNTER_ALERT_KEY, 'on');
-    expect(loadUpdateAlertEnabled()).toBe(true);
-    localStorage.setItem(ENCOUNTER_ALERT_KEY, 'off');
-    expect(loadUpdateAlertEnabled()).toBe(false);
+  it('업데이트 키가 없으면 네임드 키 값을 따른다 — 키가 둘 다 없으면 켜짐', () => {
+    expect(loadAlertEnabled('update')).toBe(true);
+    localStorage.setItem(ALERT_KEYS.encounter, 'off');
+    expect(loadAlertEnabled('update')).toBe(false);
+    localStorage.setItem(ALERT_KEYS.encounter, 'on');
+    expect(loadAlertEnabled('update')).toBe(true);
   });
 
   it('업데이트 키가 있으면 네임드 키와 무관하게 그 값을 쓴다', () => {
-    localStorage.setItem(ENCOUNTER_ALERT_KEY, 'on');
-    localStorage.setItem(UPDATE_ALERT_KEY, 'off');
-    expect(loadUpdateAlertEnabled()).toBe(false);
-    localStorage.setItem(ENCOUNTER_ALERT_KEY, 'off');
-    localStorage.setItem(UPDATE_ALERT_KEY, 'on');
-    expect(loadUpdateAlertEnabled()).toBe(true);
+    localStorage.setItem(ALERT_KEYS.encounter, 'on');
+    localStorage.setItem(ALERT_KEYS.update, 'off');
+    expect(loadAlertEnabled('update')).toBe(false);
+    localStorage.setItem(ALERT_KEYS.encounter, 'off');
+    localStorage.setItem(ALERT_KEYS.update, 'on');
+    expect(loadAlertEnabled('update')).toBe(true);
   });
 
   it('업데이트 알림을 바꿔도 네임드 알림은 그대로다', () => {
-    setEncounterAlertEnabled(true);
-    setUpdateAlertEnabled(false);
-    expect(getEncounterAlertEnabled()).toBe(true);
-    expect(getUpdateAlertEnabled()).toBe(false);
-    expect(localStorage.getItem(UPDATE_ALERT_KEY)).toBe('off');
-    expect(localStorage.getItem(ENCOUNTER_ALERT_KEY)).toBe('on');
+    setAlertEnabled('update', false);
+    expect(getAlertEnabled('encounter')).toBe(true);
+    expect(localStorage.getItem(ALERT_KEYS.update)).toBe('off');
+    expect(localStorage.getItem(ALERT_KEYS.encounter)).toBeNull();
   });
 
   it('네임드 알림을 바꿔도 업데이트 알림은 그대로다', () => {
-    setUpdateAlertEnabled(true);
-    setEncounterAlertEnabled(true);
-    setEncounterAlertEnabled(false);
-    expect(getUpdateAlertEnabled()).toBe(true);
-    expect(loadUpdateAlertEnabled()).toBe(true);
+    setAlertEnabled('encounter', false);
+    setAlertEnabled('encounter', true);
+    expect(getAlertEnabled('update')).toBe(true);
+    expect(loadAlertEnabled('update')).toBe(true);
   });
 
   it('업데이트 키가 없는 채로 네임드 알림을 바꾸면, 업데이트의 현재 값을 먼저 저장해 이후 로드에서 끌려가지 않는다', () => {
-    expect(localStorage.getItem(UPDATE_ALERT_KEY)).toBeNull();
-    setEncounterAlertEnabled(true);
-    expect(localStorage.getItem(UPDATE_ALERT_KEY)).toBe('off');
-    expect(loadUpdateAlertEnabled()).toBe(false);
+    expect(localStorage.getItem(ALERT_KEYS.update)).toBeNull();
+    setAlertEnabled('encounter', false);
+    expect(localStorage.getItem(ALERT_KEYS.update)).toBe('on');
+    expect(loadAlertEnabled('update')).toBe(true);
   });
+});
 
-  it('구독자에게 알린다', () => {
-    let calls = 0;
-    const off = subscribeUpdateAlert(() => { calls++; });
-    setUpdateAlertEnabled(true);
-    setUpdateAlertEnabled(true);
-    expect(calls).toBe(1);
-    off();
+describe('안내 카드를 본 기록', () => {
+  beforeEach(() => { localStorage.clear(); });
+
+  it('기록이 없으면 본 적이 없고, 남기면 본 것으로 읽힌다', () => {
+    expect(isAlertPromptSeen()).toBe(false);
+    markAlertPromptSeen();
+    expect(localStorage.getItem(ALERT_PROMPT_SEEN_KEY)).toBe('on');
+    expect(isAlertPromptSeen()).toBe(true);
   });
 });
 
@@ -129,6 +140,29 @@ describe('시스템 알림', () => {
     FakeNotification.permission = 'granted';
     expect(await requestNotificationPermission()).toBe('granted');
     expect(FakeNotification.requestPermission).toHaveBeenCalledTimes(1);
+  });
+
+  it('권한을 요청하면 구독자에게 알린다', async () => {
+    let calls = 0;
+    const off = subscribePermission(() => { calls++; });
+    FakeNotification.permission = 'granted';
+    await requestNotificationPermission();
+    expect(calls).toBe(1);
+    off();
+  });
+
+  it('게임 화면으로 돌아오면 권한 상태를 다시 읽도록 구독자에게 알린다 — 숨겨지는 때는 알리지 않는다', () => {
+    let calls = 0;
+    const off = subscribePermission(() => { calls++; });
+    setHidden(true);
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(calls).toBe(0);
+    setHidden(false);
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(calls).toBe(1);
+    off();
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(calls).toBe(1);
   });
 
   it('허용된 경우에만 띄우고, 누르면 게임 창으로 돌아온다', () => {
