@@ -470,6 +470,8 @@ export function memberRows(guild: GuildInfo, me: string): MemberRow[] {
 export interface LogPart { text: string; tone?: 'nick' | 'me' | 'legend' | 'variant' | 'named' | 'skill' | 'enhance' | 'num' }
 export interface LogEntry {
   id: number; kind: GuildLogItem['kind'];
+  /** 전설 어종 돌연변이 여부 */
+  variant?: boolean;
   /** 한국 시각 HH:MM */
   time: string;
   parts: LogPart[];
@@ -538,8 +540,10 @@ export function logbookDays(logbook: readonly GuildLogItem[], me: string): { day
   for (const log of logbook) {
     const d = kst(log.at);
     const day = `${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일`;
+    const variant = log.kind === 'legendary' && (log.detail?.endsWith('|variant') ?? false);
     const entry: LogEntry = {
-      id: log.id, kind: log.kind, time: `${two(d.getUTCHours())}:${two(d.getUTCMinutes())}`,
+      id: log.id, kind: log.kind, ...(variant && { variant: true }),
+      time: `${two(d.getUTCHours())}:${two(d.getUTCMinutes())}`,
       parts: logParts(log, me), quiet: log.kind === 'leave' || log.kind === 'kick',
     };
     const last = days.at(-1);

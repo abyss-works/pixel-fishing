@@ -19,7 +19,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 export default function Button({ variant = 'default', size = 'md', full, pressed, className, ...props }: ButtonProps) {
   return (
     <button
-      className={cx('pf-btn', variant !== 'default' && variant, size !== 'md' && size, full && 'full', pressed && 'pressed', className)}
+      className={cx('pf-btn gap-[5px]', variant !== 'default' && variant, size !== 'md' && size, full && 'full', pressed && 'pressed', className)}
       aria-pressed={pressed}
       {...props}
     />

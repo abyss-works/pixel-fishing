@@ -17,6 +17,7 @@ const BORDER = {
   'line-dim': 'border-line-dim',
   gold: 'border-gold',
   accent: 'border-accent',
+  danger: 'border-danger/65',
   common: 'border-common',
   rare: 'border-rare',
   epic: 'border-epic',

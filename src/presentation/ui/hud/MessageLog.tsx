@@ -42,17 +42,24 @@ const CHANNEL_BAR_CLS: Record<MessageChannel, string> = {
 };
 
 const SWATCH_ON: Record<MessageChannel, string> = {
-  global: 'bg-chat-global',
-  local: 'bg-chat-local',
-  guild: 'bg-chat-guild',
-  system: 'bg-chat-system',
+  global: 'bg-chat-global border border-chat-global',
+  local: 'bg-chat-local border border-chat-local',
+  guild: 'bg-chat-guild border border-chat-guild',
+  system: 'bg-chat-system border border-chat-system',
 };
 
 const SWATCH_OFF: Record<MessageChannel, string> = {
-  global: 'bg-chat-global/35',
-  local: 'bg-chat-local/35',
-  guild: 'bg-chat-guild/35',
-  system: 'bg-chat-system/35',
+  global: 'bg-transparent border border-chat-global',
+  local: 'bg-transparent border border-chat-local',
+  guild: 'bg-transparent border border-chat-guild',
+  system: 'bg-transparent border border-chat-system',
+};
+
+const CHIP_ON: Record<MessageChannel, string> = {
+  global: 'border-chat-global!',
+  local: 'border-chat-local!',
+  guild: 'border-chat-guild!',
+  system: 'border-chat-system!',
 };
 
 /** 한 줄 높이(em) — 창 높이를 줄 수로 정한다 */
@@ -178,7 +185,8 @@ export default function MessageLog({ log, onPick, topSlot, footer, you, filter =
             return (
               <span key={c} className="inline-flex">
                 {/* 좁은 폭에서도 가로 넘침이 없도록 컴팩트 폭을 쓰고, 새 글 점은 칩 오른쪽 위 모서리에 겹쳐 그린다 */}
-                <ToggleChip pressed={on} disabled={disabled} className="relative px-1.5! gap-1!"
+                <ToggleChip pressed={on} disabled={disabled}
+                            className={cx('relative px-1.5! gap-1!', on && !disabled ? CHIP_ON[c] : 'border-line-dim!')}
                             onClick={() => { setHiddenSince(Date.now()); onToggle?.(c, present); }}>
                   <span className={cx('size-2 shrink-0', on && !disabled ? SWATCH_ON[c] : SWATCH_OFF[c])} aria-hidden="true" />
                   {CHANNEL_LABEL[c]}

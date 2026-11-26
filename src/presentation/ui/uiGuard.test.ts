@@ -1169,9 +1169,9 @@ describe('UI 시스템 가드', () => {
     expect(scrollRowSrc).not.toMatch(/['"`][^'"`]*(?<![\w-])hidden(?![\w-])[^'"`]*['"`]/);
   });
 
-  it('ToggleChip이 pressed일 때만 체크 아이콘을 직접 소유하고 호출부는 체크 아이콘을 중복 삽입하지 않는다', () => {
+  it('ToggleChip은 체크 아이콘을 렌더링하지 않고 호출부도 체크 아이콘을 삽입하지 않는다', () => {
     const toggleSrc = stripComments(presentationFiles.find(f => f.path === 'ui/ToggleChip.tsx')!.src);
-    expect(toggleSrc).toMatch(/\{pressed\s*&&\s*<PixelIcon\b[^>]*glyph="check"/);
+    expect(toggleSrc).not.toMatch(/glyph="check"/);
 
     const toggleBlock = /<ToggleChip\b[\s\S]*?<\/ToggleChip>/g;
     const callers = presentationFiles

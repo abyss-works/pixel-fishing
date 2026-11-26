@@ -74,13 +74,15 @@ describe('업적 창 카드 격자', () => {
     expect(screen.queryByText('적용 중인 누적 보너스')).toBeNull();
     expect(screen.queryByText(/해역 일반 도감 15곳/)).toBeNull();
 
-    // 미완료만 보기 꺼짐일 때는 check 아이콘이 없다
+    // 미완료만 보기는 체크 아이콘 없이 테두리·배경 대비로 켜짐/꺼짐을 구분한다
     const incompleteBtn = screen.getByRole('button', { name: '미완료만 보기' });
     expect(incompleteBtn).toHaveAttribute('aria-pressed', 'false');
+    expect(incompleteBtn).toHaveAttribute('data-tier', 'off');
     expect(incompleteBtn.querySelector('[data-glyph="check"]')).toBeNull();
     fireEvent.click(incompleteBtn);
     expect(incompleteBtn).toHaveAttribute('aria-pressed', 'true');
-    expect(incompleteBtn.querySelector('[data-glyph="check"]')).not.toBeNull();
+    expect(incompleteBtn).toHaveAttribute('data-tier', 'emphasis');
+    expect(incompleteBtn.querySelector('[data-glyph="check"]')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: '전체 누적' }));
     expect(screen.queryByText('적용 중인 누적 보너스')).toBeNull();

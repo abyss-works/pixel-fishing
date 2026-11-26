@@ -7,6 +7,7 @@ import {
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import type { GuildConfirm, GuildInfo, GuildOp } from '../../../../features/guild/model/guild';
 import { useGuild } from '../../../../features/guild/service/useGuild';
+import Button from '../../../ui/Button';
 import ConfirmDialog from '../../../ui/ConfirmDialog';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import Inset from '../../../ui/Inset';
@@ -33,7 +34,7 @@ import type { GuildAsk, GuildPartProps } from './guildProps';
 // 창 자체는 스크롤하지 않는다. 넘치는 내용은 탭 본문 안에서만 굴린다.
 const FAILED = '요청을 처리하지 못했어요. 잠시 뒤 다시 해 주세요.';
 
-export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, onClose }: {
+export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, onClose, onRetry }: {
   /** 내 골드 — 이름 바꾸기 비용을 낼 수 있는지 보인다 */
   gold: number;
   /** 보유 유물 - 오늘 기여 상한이 네임드 토벌 하루 횟수 가산을 반영한다 */
@@ -42,8 +43,14 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
   /** 기부로 골드가 바뀐 뒤 게임 상태를 다시 읽는다 */
   onGoldChanged: () => Promise<void> | void;
   onClose: () => void;
+  /** 조회 실패 시 다시 시도 콜백 */
+  onRetry?: () => void;
 }) {
-  const { guild, request, loading, failed, you, act } = useGuild(true, true);
+  const guildState = useGuild(true, true);
+  const { guild, request, loading, failed, you, act } = guildState;
+  const retryGuild = onRetry
+    ?? (guildState as { retry?: () => unknown; refresh?: () => unknown }).retry
+    ?? (guildState as { refresh?: () => unknown }).refresh;
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<GuildConfirm | null>(null);
   const [dialogHost, setDialogHost] = useState<HTMLDivElement | null>(null);
@@ -84,8 +91,9 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
     )
     : failed || (guild !== null && !you)
       ? (
-        <div className="flex h-40 items-center justify-center">
+        <div className="flex h-40 flex-col items-center justify-center gap-2">
           <Note tone="warn">길드 정보를 열지 못했어요.</Note>
+          {retryGuild && <Button size="sm" onClick={() => { void retryGuild(); }}>다시 시도</Button>}
         </div>
       )
       : guild && you
@@ -94,7 +102,7 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
                      onResetEnhancements={() => runOp({ op: 'resetEnhancements', guildId: guild.id })}
                      setToast={setToast} ask={setConfirm} dialogHost={dialogHost} gold={gold} artifacts={artifacts} onGoldChanged={onGoldChanged} />
         )
-        : <NoGuild busy={busy} run={run} join={join} request={request} setToast={setToast} />;
+        : <NoGuild busy={busy} run={run} join={join} request={request} dialogHost={dialogHost} setToast={setToast} />;
 
   return (
     // 길드 유무와 무관하게 창 크기를 680px 폭, 560px 높이(스테이지가 더 낮으면 가용 높이)로 고정해 가입 전후 크기 급변을 막는다.
@@ -115,7 +123,7 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
                        }}>
           <p className="text-sm whitespace-pre-line">{confirm.text}</p>
           {confirm.warn && (
-            <Inset tone="deep" className="mt-2.5 p-2.5 flex flex-col gap-0.5 text-2xs text-text-dim">
+            <Inset tone="deep" border="danger" className="mt-2.5 p-2.5 flex flex-col gap-0.5 text-2xs text-text-dim">
               <strong className="text-danger">재가입 제한 안내</strong>
               <span>{confirm.warn}</span>
             </Inset>

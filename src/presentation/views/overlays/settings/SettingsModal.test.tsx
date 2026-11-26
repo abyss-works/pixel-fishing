@@ -149,4 +149,38 @@ describe('SettingsModal — 주요 화면 알림 설정', () => {
     expect(screen.getByRole('tooltip')).toHaveTextContent('업데이트가 나와 진행이 멈추면 알려 줘요.');
     expect(screen.getByRole('tooltip').textContent).not.toContain('다른 화면을 보고 있을 때');
   });
+
+  it('브라우저 알림 권한이 default일 때 꼬리표 툴팁을 열지 않고, 알림 행 툴팁 배지는 현재 권한 라벨을 쓴다', () => {
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission: vi.fn() });
+    open();
+    fireEvent.mouseEnter(screen.getByText('허용 전'));
+    expect(screen.queryByRole('tooltip')).toBeNull();
+
+    const toggle = screen.getByRole('button', { name: '네임드 조우' });
+    fireEvent.mouseEnter(toggle);
+    const tip = screen.getByRole('tooltip');
+    expect(tip).toHaveTextContent('허용 전');
+    expect(tip.textContent).not.toContain('차단');
+    vi.unstubAllGlobals();
+  });
+
+  it('브라우저 알림 권한이 denied일 때만 꼬리표 툴팁을 연결하고 알림 행 툴팁 배지도 차단됨으로 맞춘다', () => {
+    vi.stubGlobal('Notification', { permission: 'denied', requestPermission: vi.fn() });
+    open();
+    const badge = screen.getByText('차단됨');
+    fireEvent.mouseEnter(badge);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('이 사이트의 알림을 막았어요');
+    fireEvent.mouseLeave(badge);
+
+    fireEvent.mouseEnter(screen.getByText('네임드 조우').closest('div')!.querySelector('button[aria-label="네임드 조우"]')!);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('차단됨');
+    vi.unstubAllGlobals();
+  });
+
+  it('설정 창 물고기 그래픽 선택 카드는 모바일에서도 1열로 길게 쌓이지 않고 2열 균등 배치를 유지한다', () => {
+    open();
+    const group = screen.getByRole('radiogroup', { name: '물고기 그래픽' });
+    expect(group.className).toContain('grid-cols-[minmax(0,1fr)_minmax(0,1fr)]');
+    expect(group.className).not.toContain('mobile:grid-cols-1');
+  });
 });

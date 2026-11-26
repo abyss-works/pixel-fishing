@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { liveAvailable, readPublicGuilds } from '../../../platform/api';
 import type { PublicGuildSort } from '../../../game/rules/guild';
 import { useSession } from '../../account/service/session';
@@ -16,6 +16,7 @@ export function usePublicGuilds(q: string, sort: PublicGuildSort, enabled = true
     queryFn: () => readPublicGuilds({ q: q.trim() || undefined, sort }),
     enabled: enabled && ready && consentReady && liveAvailable,
     staleTime: 15_000,
+    placeholderData: keepPreviousData,
   });
   return {
     guilds: query.data ?? [],

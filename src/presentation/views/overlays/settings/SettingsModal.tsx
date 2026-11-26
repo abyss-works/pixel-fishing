@@ -34,9 +34,10 @@ const FLOATING_TOAST_HINT = [
   '꺼도 메시지 창 기록은 그대로 남아요.',
 ] as const;
 
-function AlertRow({ kind, toggle, blocked, blockedLines }: {
+function AlertRow({ kind, toggle, permission, blocked, blockedLines }: {
   kind: AlertKind;
   toggle: AlertToggle;
+  permission: NotificationPermissionState;
   /** 권한이 없으면 토글을 흐리게 둔다 */
   blocked: boolean;
   /** 권한 때문에 켜고 끌 수 없을 때의 이유 줄. 있으면 이유를 툴팁으로 보인다 */
@@ -56,7 +57,7 @@ function AlertRow({ kind, toggle, blocked, blockedLines }: {
                      <Tip wraps text={(
                        <TipCard
                          title={label}
-                         badge={<Badge tone="dim-plain" size="2xs">차단</Badge>}
+                         badge={<Badge tone={PERMISSION_TONE[permission]} size="2xs">{PERMISSION_LABEL[permission]}</Badge>}
                          status={{ tone: 'warn', lines: blockedLines }}
                        />
                      )}>
@@ -70,7 +71,7 @@ function AlertRow({ kind, toggle, blocked, blockedLines }: {
 /** 브라우저 알림 권한 줄 - 상태를 꼬리표로 보이고, 허용 전이면 허용 버튼을 둔다. 차단됨과 지원 안 함은 꼬리표가 이유를 툴팁으로 연다 */
 function PermissionRow({ permission, onAllow }: { permission: NotificationPermissionState; onAllow: () => void }) {
   const tag = <Badge tone={PERMISSION_TONE[permission]} size="xs">{PERMISSION_LABEL[permission]}</Badge>;
-  const lines = PERMISSION_BLOCK_LINES[permission];
+  const lines = permission === 'denied' || permission === 'unsupported' ? PERMISSION_BLOCK_LINES[permission] : undefined;
   return (
     <KeyValueRow label={<Tip text={PERMISSION_TIP}>브라우저 알림</Tip>} value=""
                  action={(
@@ -158,7 +159,7 @@ export default function SettingsModal({ autoLockOnCatch, dispatch, setToast, onC
         />
         <PermissionRow permission={permission} onAllow={allowAll} />
         {ALERT_ORDER.map(kind => (
-          <AlertRow key={kind} kind={kind} toggle={alerts[kind]} blocked={blocked} blockedLines={PERMISSION_BLOCK_LINES[permission]} />
+          <AlertRow key={kind} kind={kind} toggle={alerts[kind]} permission={permission} blocked={blocked} blockedLines={PERMISSION_BLOCK_LINES[permission]} />
         ))}
       </Inset>
     </Modal>

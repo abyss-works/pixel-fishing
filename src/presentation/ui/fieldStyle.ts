@@ -6,7 +6,11 @@ import { cx } from './cx';
 export const FIELD_BOX = 'bg-bg border border-line';
 
 /** 글자를 받는 입력 요소 — 바탕 + 글자색 + 포커스 테두리. compact = 표 셀용(픽셀 액센트, 작은 글자) */
-export function fieldClass(compact?: boolean): string {
-  return cx(FIELD_BOX, 'text-text outline-none focus:border-accent',
-            compact ? 'pf-accent text-xs px-1 py-0.5' : 'text-sm px-3 py-2');
+export function fieldClass(compact?: boolean | 'sm'): string {
+  const size = compact === 'sm'
+    ? 'min-h-[30px] text-xs px-2.5 py-1'
+    : compact
+      ? 'pf-accent text-xs px-1 py-0.5'
+      : 'text-sm px-3 py-2';
+  return cx(FIELD_BOX, 'text-text outline-none focus:border-accent', size);
 }

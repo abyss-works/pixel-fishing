@@ -4,6 +4,7 @@ import { useAlertPrompt } from '../../../../features/alerts/service/alertPrompt'
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import Button from '../../../ui/Button';
 import ButtonRow from '../../../ui/ButtonRow';
+import { cx } from '../../../ui/cx';
 import Inset from '../../../ui/Inset';
 import KeyValueRow from '../../../ui/KeyValueRow';
 import type { Notify } from '../../../ui/hud/messageFeed';
@@ -53,23 +54,26 @@ export default function AlertPromptModal({ ready, after, setToast }: {
       >
         <p className="text-sm">다른 화면을 보고 있어도 브라우저 알림으로 알려 줘요.</p>
         <Inset divided>
-          {ALERT_ORDER.map(kind => (
-            <KeyValueRow
-              key={kind}
-              label={(
-                <span className="flex items-center gap-2 text-text">
-                  <PixelIcon glyph={KIND_VISUAL[kind].glyph} size={14} className={KIND_VISUAL[kind].tone} />
-                  {ALERT_COPY[kind].prompt}
-                </span>
-              )}
-              value=""
-              action={(
-                <ToggleChip pressed={prompt.picks[kind]} aria-label={ALERT_COPY[kind].prompt} onClick={() => prompt.toggle(kind)}>
-                  {prompt.picks[kind] ? '켜짐' : '꺼짐'}
-                </ToggleChip>
-              )}
-            />
-          ))}
+          {ALERT_ORDER.map(kind => {
+            const on = prompt.picks[kind];
+            return (
+              <KeyValueRow
+                key={kind}
+                label={(
+                  <span className={cx('flex items-center gap-2', on ? 'text-text' : 'text-text-dim grayscale brightness-75')}>
+                    <PixelIcon glyph={KIND_VISUAL[kind].glyph} size={14} className={on ? KIND_VISUAL[kind].tone : undefined} />
+                    {ALERT_COPY[kind].prompt}
+                  </span>
+                )}
+                value=""
+                action={(
+                  <ToggleChip pressed={on} aria-label={ALERT_COPY[kind].prompt} onClick={() => prompt.toggle(kind)}>
+                    {on ? '켜짐' : '꺼짐'}
+                  </ToggleChip>
+                )}
+              />
+            );
+          })}
         </Inset>
         <Note size="xs" className="my-0">{'허용을 누르면 브라우저가 물어봐요.\n설정에서 종류별로 끌 수 있어요.'}</Note>
       </ModalCard>

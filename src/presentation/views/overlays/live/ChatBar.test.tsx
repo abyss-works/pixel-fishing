@@ -81,19 +81,24 @@ describe('ChatBar', () => {
     const input = screen.getByLabelText('채팅 입력');
 
     fireEvent.click(screen.getByRole('button', { name: '보낼 곳: 지역' }));
-    expect(screen.getByRole('button', { name: '보낼 곳: 길드' })).toHaveClass('text-chat-guild', 'border-gold');
+    const guildBtn = screen.getByRole('button', { name: '보낼 곳: 길드' });
+    expect(guildBtn).toHaveClass('text-chat-guild', 'border-chat-guild!');
+    expect(guildBtn).not.toHaveClass('border-gold');
+    expect(document.activeElement).toBe(input);
     fireEvent.change(input, { target: { value: '길드 안녕' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(live.sendChat).toHaveBeenLastCalledWith('길드 안녕', 'guild');
 
     fireEvent.click(screen.getByRole('button', { name: '보낼 곳: 길드' }));
-    expect(screen.getByRole('button', { name: '보낼 곳: 전체' })).toHaveClass('text-chat-global');
+    expect(screen.getByRole('button', { name: '보낼 곳: 전체' })).toHaveClass('text-chat-global', 'border-chat-global!');
+    expect(document.activeElement).toBe(input);
     fireEvent.change(input, { target: { value: '전체 안녕' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(live.sendChat).toHaveBeenLastCalledWith('전체 안녕', 'global');
 
     fireEvent.click(screen.getByRole('button', { name: '보낼 곳: 전체' }));
-    expect(screen.getByRole('button', { name: '보낼 곳: 지역' })).toHaveClass('text-chat-local');
+    expect(screen.getByRole('button', { name: '보낼 곳: 지역' })).toHaveClass('text-chat-local', 'border-chat-local!');
+    expect(document.activeElement).toBe(input);
   });
 
   it('입력 중 Tab은 길드원이면 전체 -> 지역 -> 길드 순으로, 길드가 없으면 전체와 지역 사이만 오간다', () => {
