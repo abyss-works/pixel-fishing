@@ -93,20 +93,20 @@ function FortuneDetailPanel({
 }) {
   return (
     <Inset
-      className="h-[340px] mobile:h-[192px] shrink-0 p-2.5 mobile:p-2 flex flex-col justify-between gap-2 mobile:gap-1 text-left"
+      className="h-[340px] mobile:h-[192px] shrink-0 p-2.5 mobile:p-1.5 flex flex-col justify-between gap-2 mobile:gap-1 text-left"
       aria-label="선택한 날짜 운세 상세"
     >
       {fortune ? (
         <>
           <div className="flex items-center justify-between gap-2 shrink-0">
-            <span className="text-xs font-bold text-text">{dateLabel ?? formatFortuneDay(fortune.day)}</span>
-            {isToday && <Badge tone="accent" size="2xs">오늘</Badge>}
+            <span className="text-xs mobile:text-2xs font-bold text-text leading-tight">{dateLabel ?? formatFortuneDay(fortune.day)}</span>
+            {isToday && <Badge tone="accent" size="2xs" className="mobile:leading-tight">오늘</Badge>}
           </div>
-          <Inset tone="light" className="px-2.5 py-1.5 mobile:px-2 mobile:py-1 flex items-center gap-2.5 mobile:gap-2 shrink-0">
-            <Inset tone="deep" className="size-9 mobile:size-7 shrink-0 flex items-center justify-center">
-              <FortuneMotifIcon kind={fortune.kind} index={fortune.index} size={20} />
+          <Inset tone="light" className="px-2.5 py-1.5 mobile:px-2 mobile:py-0.5 flex items-center gap-2.5 mobile:gap-2 shrink-0">
+            <Inset tone="deep" className="size-9 mobile:size-6 shrink-0 flex items-center justify-center">
+              <FortuneMotifIcon kind={fortune.kind} index={fortune.index} size={20} className="mobile:size-4" />
             </Inset>
-            <div className="flex flex-col gap-0.5 min-w-0">
+            <div className="flex flex-col gap-0.5 mobile:gap-0 min-w-0">
               <span className={cx('text-sm mobile:text-xs font-bold leading-tight truncate', fortuneToneOf(fortune.kind))}>
                 {fortuneName(fortune)}
               </span>
@@ -123,7 +123,7 @@ function FortuneDetailPanel({
                 label={<HighlightRarityText text={row.label} />}
                 value={row.accent ? row.value : <HighlightRarityText text={row.value} />}
                 valueEnd
-                className="text-xs py-1 mobile:py-0.5"
+                className="text-xs py-1 mobile:py-0 mobile:px-1.5 mobile:leading-[1.35]"
                 valueClassName={row.accent ? 'pf-accent text-accent' : undefined}
               />
             ))}
@@ -285,7 +285,7 @@ export default function FortuneCalendarModal({
                     aria-label={ariaLabel}
                     aria-pressed={isSelected}
                     className={cx(
-                      'min-h-0 min-w-0 flex flex-col items-stretch justify-between gap-0.5 px-0.5 py-1 mobile:py-0.5 text-left font-normal',
+                      'min-h-0 min-w-0 flex flex-col items-stretch justify-between gap-0.5 mobile:gap-0 px-0.5 py-1 mobile:py-px text-left font-normal',
                       isSelected && 'border-gold bg-(--inset-light)',
                       !isSelected && cell.isToday && 'border-accent',
                       dayState === 'unvisited' && 'bg-(--inset-base) border-line-dim text-text-dim disabled:opacity-75',

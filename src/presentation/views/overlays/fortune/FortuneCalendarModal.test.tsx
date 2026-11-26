@@ -139,10 +139,13 @@ describe('운세 월간 달력 창 (FortuneCalendarModal)', () => {
     expect(detail.querySelector('[data-glyph="target"]')).not.toBeNull();
     expect(within(detail).getByText('네임드')).toHaveClass('text-named');
 
-    // 복합 대길(만선 대길 3행) 달력 상세 확인
+    // 복합 대길(만선 대길 3행) 달력 상세 확인 + 모바일 3줄 로어 여유를 위한 상·하단 압축 클래스
     fireEvent.click(screen.getByRole('button', { name: /2026년 11월 24일/ }));
     expect(within(detail).getByText('만선 대길')).toBeInTheDocument();
     expect(within(detail).getAllByText('×1.10')).toHaveLength(3);
+    expect(detail.className).toContain('mobile:p-1.5');
+    expect(detail.querySelector('[data-glyph="treasure"]')?.parentElement?.className).toContain('mobile:size-6');
+    expect(within(detail).getByText('판매가').parentElement?.className).toContain('mobile:py-0');
 
     // 과거 미방문 비활성 날짜와 미래 비활성 날짜 구분
     const unvisitedPast = screen.getByRole('button', { name: /2026년 11월 23일/ });
@@ -205,12 +208,20 @@ describe('운세 월간 달력 창 (FortuneCalendarModal)', () => {
     expect(within(detail).getByText('???')).toBeInTheDocument();
     expect(within(detail).getByText('0회')).toBeInTheDocument();
 
-    // 발견된 복합 대길(만선 대길) 선택 시 상세 패널 확인
+    // 발견된 복합 대길(만선 대길) 선택 시 상세 패널 확인 + 모바일 수집 2열 1행 압축
     fireEvent.click(within(listbox).getByRole('option', { name: /만선 대길, 좋은 운/ }));
     expect(within(detail).getByText('만선 대길')).toHaveClass('text-gold');
     expect(within(detail).getByText('1회')).toBeInTheDocument();
     expect(within(detail).getByText('2026년 11월 24일')).toBeInTheDocument();
     expect(within(detail).getAllByText('×1.10')).toHaveLength(3);
+    expect(detail.className).toContain('mobile:p-1.5');
+    expect(detail.querySelector('[data-glyph="treasure"]')?.parentElement?.className).toContain('mobile:size-6');
+    expect(within(detail).getByText('판매가').parentElement?.className).toContain('mobile:py-0');
+    const statsBox = within(detail).getByText('모은 횟수').parentElement!.parentElement!;
+    expect(statsBox.className).toContain('mobile:grid');
+    expect(statsBox.className).toContain('mobile:grid-cols-[auto_minmax(0,1fr)]');
+    expect(statsBox.className).toContain('mobile:divide-y-0');
+    expect(statsBox.className).toContain('mobile:divide-x');
 
     // 모은 것만 보기 토글 시 발견한 5종만 남는다
     const filterChip = screen.getByRole('button', { name: '모은 것만 보기' });

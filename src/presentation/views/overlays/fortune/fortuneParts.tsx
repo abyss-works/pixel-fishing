@@ -13,15 +13,17 @@ export function FortuneMotifIcon({
   index,
   size = 28,
   dimmed = false,
+  className,
 }: {
   kind: FortuneKind;
   index?: DailyFortune['index'];
   size?: number;
   dimmed?: boolean;
+  className?: string;
 }) {
   const glyph = fortuneGlyphOf(kind, index);
   const tone = dimmed ? 'text-text-dim grayscale brightness-75' : FORTUNE_TONE[kind];
-  return <PixelIcon glyph={glyph} size={size} className={cx(tone, 'shrink-0')} />;
+  return <PixelIcon glyph={glyph} size={size} className={cx(tone, 'shrink-0', className)} />;
 }
 
 /** 강도 칸: 최댓값만큼 칸을 그리고 강도만큼 채운다 */
@@ -62,7 +64,7 @@ export function FortuneStrength({ index, compact = false }: { index: DailyFortun
   return (
     <span className="inline-flex items-center gap-1.5" aria-label={`강도 ${label}`}>
       <IndexPips index={index} compact={compact} />
-      <span className="text-xs mobile:text-2xs font-bold text-gold">{label}</span>
+      <span className="text-xs mobile:text-2xs mobile:leading-tight font-bold text-gold">{label}</span>
     </span>
   );
 }

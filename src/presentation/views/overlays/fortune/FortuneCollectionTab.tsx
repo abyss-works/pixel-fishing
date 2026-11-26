@@ -31,20 +31,20 @@ function CollectionDetailPanel({ item }: { item: FortuneCollectionItem }) {
   const rows = item.discovered ? fortuneModalRows(item) : [];
   return (
     <Inset
-      className="h-full p-2.5 mobile:p-2 flex flex-col justify-between gap-2 mobile:gap-1 min-w-0 text-left"
+      className="h-full p-2.5 mobile:p-1.5 flex flex-col justify-between gap-2 mobile:gap-1 min-w-0 text-left"
       aria-label="점괘 상세"
     >
-      <Inset tone="light" className="px-2.5 py-2 mobile:px-2 mobile:py-1 flex items-center gap-2.5 mobile:gap-2 shrink-0">
+      <Inset tone="light" className="px-2.5 py-2 mobile:px-2 mobile:py-0.5 flex items-center gap-2.5 mobile:gap-2 shrink-0">
         <Inset
           tone="deep"
           className={cx(
-            'size-9 mobile:size-7 shrink-0 flex items-center justify-center',
+            'size-9 mobile:size-6 shrink-0 flex items-center justify-center',
             !item.discovered && 'grayscale brightness-75',
           )}
         >
-          <FortuneMotifIcon kind={item.kind} index={item.index} size={20} dimmed={!item.discovered} />
+          <FortuneMotifIcon kind={item.kind} index={item.index} size={20} dimmed={!item.discovered} className="mobile:size-4" />
         </Inset>
-        <div className="flex flex-col gap-0.5 min-w-0">
+        <div className="flex flex-col gap-0.5 mobile:gap-0 min-w-0">
           <span
             className={cx(
               'text-sm mobile:text-xs font-bold leading-tight truncate',
@@ -56,7 +56,7 @@ function CollectionDetailPanel({ item }: { item: FortuneCollectionItem }) {
           {item.discovered ? (
             <FortuneStrength index={item.index} compact />
           ) : (
-            <span className="text-2xs text-text-dim leading-none">미발견</span>
+            <span className="text-2xs mobile:leading-tight text-text-dim leading-none">미발견</span>
           )}
         </div>
       </Inset>
@@ -74,7 +74,7 @@ function CollectionDetailPanel({ item }: { item: FortuneCollectionItem }) {
                 label={<HighlightRarityText text={row.label} />}
                 value={row.accent ? row.value : <HighlightRarityText text={row.value} />}
                 valueEnd
-                className="text-xs py-1 mobile:py-0.5"
+                className="text-xs py-1 mobile:py-0 mobile:px-1.5 mobile:leading-[1.35]"
                 valueClassName={row.accent ? 'pf-accent text-accent' : undefined}
               />
             ))
@@ -83,25 +83,29 @@ function CollectionDetailPanel({ item }: { item: FortuneCollectionItem }) {
               label="효과"
               value="???"
               valueEnd
-              className="text-xs py-1 mobile:py-0.5"
+              className="text-xs py-1 mobile:py-0 mobile:px-1.5 mobile:leading-[1.35]"
               valueClassName="text-text-dim"
             />
           )}
         </Inset>
 
-        <Inset tone="deep" divided className="w-full text-left">
+        <Inset
+          tone="deep"
+          divided
+          className="w-full text-left mobile:grid mobile:grid-cols-[auto_minmax(0,1fr)] mobile:divide-y-0 mobile:divide-x"
+        >
           <KeyValueRow
             label="모은 횟수"
             value={item.discovered ? `${item.count}회` : '0회'}
             valueEnd
-            className="text-xs py-1 mobile:py-0.5"
+            className="text-xs py-1 mobile:py-0 mobile:px-1.5 mobile:gap-1.5 mobile:leading-[1.35]"
             valueClassName={item.discovered ? 'pf-accent text-gold' : 'text-text-dim'}
           />
           <KeyValueRow
             label="처음 만난 날"
             value={item.discovered && item.firstDay ? formatFortuneDay(item.firstDay) : '미발견'}
             valueEnd
-            className="text-xs py-1 mobile:py-0.5"
+            className="text-xs py-1 mobile:py-0 mobile:px-1.5 mobile:gap-1.5 mobile:leading-[1.35]"
             valueClassName={!item.discovered ? 'text-text-dim' : undefined}
           />
         </Inset>
