@@ -49,7 +49,7 @@ const adminSocialSignInRes = (ip: string): Promise<Response> => adminHandle(new 
 const adminSocialSignIn = async (ip: string): Promise<number> => (await adminSocialSignInRes(ip)).status;
 
 describe('인증 요청 수 제한', () => {
-  it('세션에 IP를 저장하지 않아도 익명 가입을 IP당 1시간 10회로 제한하고 Retry-After를 응답한다', async () => {
+  it('세션에 IP를 저장하지 않아도 익명 가입을 IP당 1시간 200회로 제한하고 Retry-After를 응답한다', async () => {
     const batch: number[] = [];
     for (let i = 0; i < ANONYMOUS_SIGN_IN_RATE_LIMIT.max; i++) batch.push(await signIn('198.51.100.1'));
     expect(batch).not.toContain(429);

@@ -22,6 +22,10 @@ describe('실패 분류', () => {
     expect(POLICY.replaced.modal).toBe('replaced');
     // consent-required: 약관 수락 전까지 진행을 막고 확인 창을 연다
     expect(POLICY['consent-required'].modal).toBe('consent');
+    // auth-rate-limited: 익명 가입 등 인증 한도 초과 시 혼잡 안내 차단 창을 연다
+    expect(POLICY['auth-rate-limited'].modal).toBe('rate-limited');
+    expect(POLICY['auth-rate-limited'].slot).toBeUndefined();
+    expect(POLICY['auth-rate-limited'].message).toBe('같은 네트워크에서 접속이 잠시 몰려 있어요. 잠시 뒤 다시 시도해 주세요.');
     // bug: 완료된 액션은 이미 서버에 있다 + ErrorBoundary 화면과 겹친다
     expect(POLICY.bug.modal).toBeUndefined();
     expect(POLICY.restricted.modal).toBeUndefined();

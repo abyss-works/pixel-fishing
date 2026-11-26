@@ -23,11 +23,28 @@ export interface AuthConfig {
 const SESSION_EXPIRES_IN = 60 * 60 * 24 * 365;
 // 익명 계정의 자리표시 이메일 도메인. 예약된 최상위 도메인이라 실제 주소와 겹치지 않는다.
 export const ANONYMOUS_EMAIL_DOMAIN = 'anonymous.invalid';
-/** 익명 계정 생성 경로(/api/auth/sign-in/anonymous)의 IP당 생성 상한: 1시간(3600초)당 최대 10회 */
-export const ANONYMOUS_SIGN_IN_RATE_LIMIT = {
-  window: 60 * 60,
-  max: 10,
-} as const;
+const DEFAULT_ANON_SIGN_IN_RATE_MAX = 200;
+const DEFAULT_ANON_SIGN_IN_RATE_WINDOW_SEC = 60 * 60;
+
+/** 양의 정수 환경변수를 파싱한다. 비어 있거나 양의 정수가 아니면 기본값으로 폴백한다 */
+export function parsePositiveIntEnv(raw: string | undefined, fallback: number): number {
+  if (raw === undefined) return fallback;
+  const trimmed = raw.trim();
+  if (!/^\d+$/.test(trimmed)) return fallback;
+  const parsed = Number(trimmed);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+/** 익명 계정 생성 경로의 IP당 생성 상한을 환경변수에서 읽는다 */
+export function anonymousSignInRateLimit(env: NodeJS.ProcessEnv = process.env): { window: number; max: number } {
+  return {
+    window: parsePositiveIntEnv(env.ANON_SIGN_IN_RATE_WINDOW_SEC, DEFAULT_ANON_SIGN_IN_RATE_WINDOW_SEC),
+    max: parsePositiveIntEnv(env.ANON_SIGN_IN_RATE_MAX, DEFAULT_ANON_SIGN_IN_RATE_MAX),
+  };
+}
+
+/** 익명 계정 생성 경로(/api/auth/sign-in/anonymous)의 IP당 생성 상한(기본 3600초당 최대 200회) */
+export const ANONYMOUS_SIGN_IN_RATE_LIMIT = anonymousSignInRateLimit();
 // 이메일·비밀번호 로그인·가입·재설정 경로는 사용하지 않아 라우터 진입에서 차단한다.
 const DISABLED_EMAIL_PASSWORD_PATHS = ['/sign-in/email', '/sign-up/email', '/request-password-reset', '/reset-password'];
 
@@ -117,7 +134,7 @@ export function createAuth(config: AuthConfig) {
     hooks: { before: guardAuthRequests },
     rateLimit: {
       customRules: {
-        '/sign-in/anonymous': { ...ANONYMOUS_SIGN_IN_RATE_LIMIT },
+        '/sign-in/anonymous': anonymousSignInRateLimit(),
       },
     },
     advanced: { database: { generateId: 'uuid' }, ipAddress: ipAddressConfig },

@@ -654,3 +654,79 @@ describe('실시간 채널 길드 채팅', () => {
     expect(hello).toMatchObject({ t: 'hello', you: 'u1', others: [] });
   });
 });
+
+describe('실시간 닉네임 즉시 동기화', () => {
+  it('setNick은 활성 연결의 닉네임·프레즌스·접속자 목록·후속 채팅을 즉시 갱신하고 피어에 nick 메시지를 전파한다', async () => {
+    const { url, live, chat: store } = await start();
+    store.guilds.set('u1', 'g1').set('u2', 'g1');
+    const a = connect(url, 'u1');
+    const b = connect(url, 'u2');
+    await a.next(); await b.next();
+
+    a.ws.send(JSON.stringify({ t: 'move', region: 'sea', x: 10, y: 20, dir: 2, line: false }));
+    expect(await b.next()).toMatchObject({ t: 'join', presence: { uid: 'u1', nick: 'n-u1' } });
+
+    live.setNick('u1', '새선장');
+
+    expect(await b.next()).toEqual({ t: 'nick', uid: 'u1', nick: '새선장' });
+    expect(a.messages).toEqual([]);
+    expect(live.online().find(o => o.uid === 'u1')?.nick).toBe('새선장');
+    expect(live.presenceOf('u1')?.nick).toBe('새선장');
+
+    // 재연결 없이 월드·길드 채팅 모두 새 닉네임으로 저장 및 전파된다
+    a.ws.send(JSON.stringify({ t: 'chat', text: '바뀐 이름으로 인사' }));
+    expect(await a.next()).toEqual({
+      t: 'chat',
+      line: { id: 1, uid: 'u1', nick: '새선장', text: '바뀐 이름으로 인사', at: '2030-01-01T00:00:00.000Z' },
+    });
+    expect(await b.next()).toEqual({
+      t: 'chat',
+      line: { id: 1, uid: 'u1', nick: '새선장', text: '바뀐 이름으로 인사', at: '2030-01-01T00:00:00.000Z' },
+    });
+
+    a.ws.send(JSON.stringify({ t: 'chat', text: '길드에도 인사', room: 'guild' }));
+    expect(await a.next()).toEqual({
+      t: 'chat',
+      room: 'guild',
+      line: { id: 2, uid: 'u1', nick: '새선장', text: '길드에도 인사', at: '2030-01-01T00:00:00.000Z' },
+    });
+    expect(await b.next()).toEqual({
+      t: 'chat',
+      room: 'guild',
+      line: { id: 2, uid: 'u1', nick: '새선장', text: '길드에도 인사', at: '2030-01-01T00:00:00.000Z' },
+    });
+
+    // 이후 새로 접속한 피어도 hello.others에서 새 닉네임을 받는다
+    const c = connect(url, 'u3');
+    const hello = await c.next();
+    expect(hello).toMatchObject({
+      t: 'hello',
+      you: 'u3',
+      others: [expect.objectContaining({ uid: 'u1', nick: '새선장' })],
+    });
+  });
+
+  it('첫 move 전 setNick 호출 뒤 첫 move를 보내도 join에 새 닉네임이 실리고, 게스트는 피어에게 전파하지 않는다', async () => {
+    const { url, live } = await start();
+    const a = connect(url, 'u1');
+    const b = connect(url, 'u2');
+    const g = connect(url, 'guest:g1');
+    await a.next(); await b.next(); await g.next();
+
+    live.setNick('u1', '이동전변경');
+    expect(await b.next()).toEqual({ t: 'nick', uid: 'u1', nick: '이동전변경' });
+    expect(await g.next()).toEqual({ t: 'nick', uid: 'u1', nick: '이동전변경' });
+
+    a.ws.send(JSON.stringify({ t: 'move', region: 'sea', x: 1, y: 2, dir: 0, line: false }));
+    expect(await b.next()).toMatchObject({ t: 'join', presence: { uid: 'u1', nick: '이동전변경' } });
+    expect(await g.next()).toMatchObject({ t: 'join', presence: { uid: 'u1', nick: '이동전변경' } });
+
+    // 게스트와 미접속 uid는 다른 연결에 nick 메시지를 보내지 않는다
+    live.setNick('guest:g1', '게스트변경');
+    live.setNick('g1', '게스트변경');
+    live.setNick('not-online', '아무개');
+    expect(live.online().find(o => o.uid === 'g1')?.nick).toBe('게스트변경');
+    expect(a.messages).toEqual([]);
+    expect(b.messages).toEqual([]);
+  });
+});

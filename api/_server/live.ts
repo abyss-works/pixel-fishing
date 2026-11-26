@@ -79,6 +79,8 @@ export interface LiveServer {
   setBlocked(uid: string, ids: readonly string[]): void;
   /** 그 사용자의 소속 길드가 바뀌었다(null은 길드 없음). 이후 길드 채팅부터 바뀐 길드로 주고받는다 */
   setGuild(uid: string, guild: string | null): void;
+  /** 그 사용자의 닉네임이 바뀌었다. 활성 연결의 캐시를 즉시 갱신하고 다른 접속자에게 알린다(게스트 제외) */
+  setNick(uid: string, nick: string): void;
   /** 그 사용자의 연결에만 메시지를 보낸다. 연결돼 있지 않으면 아무것도 하지 않는다 */
   sendTo(uid: string, msg: ServerMessage): void;
   /** 열린 연결을 세션으로 기록하고 재시작 코드로 닫은 뒤 정리 주기를 멈춘다 */
@@ -315,6 +317,16 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
     },
     setGuild(uid, guild) {
       for (const c of conns.values()) if (c.user.uid === uid) c.guild = guild;
+    },
+    setNick(uid, nick) {
+      let sender: { ws: WebSocket; user: LiveUser } | null = null;
+      for (const [ws, c] of conns) {
+        if (c.user.uid !== uid) continue;
+        c.user.nick = nick;
+        if (c.presence) c.presence.nick = nick;
+        sender = { ws, user: c.user };
+      }
+      if (sender) broadcast(sender.ws, sender.user, { t: 'nick', uid, nick });
     },
     sendTo(uid, msg) {
       for (const [ws, c] of conns) if (c.user.uid === uid) send(ws, msg);

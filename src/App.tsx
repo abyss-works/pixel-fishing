@@ -18,6 +18,7 @@ import GameView from './presentation/views/game/GameView';
 import UpdateModal from './presentation/views/overlays/update/UpdateModal';
 import SessionReplacedModal from './presentation/views/overlays/update/SessionReplacedModal';
 import UnsavedModal from './presentation/views/overlays/update/UnsavedModal';
+import RateLimitModal from './presentation/views/overlays/update/RateLimitModal';
 import ConsentModal from './presentation/views/overlays/account/ConsentModal';
 import LoadingOverlay from './presentation/views/overlays/update/LoadingOverlay';
 import { DevEnvContext, devEnvOf } from './presentation/views/devtools/devEnv';
@@ -189,7 +190,7 @@ function AppContent() {
               onAccept={acceptConsent}
               onRetryLoad={retryLoadConsent}
             />
-          ) : blocker === 'update' ? <UpdateModal /> : blocker === 'replaced' ? <SessionReplacedModal /> : blocker === 'unsaved' ? <UnsavedModal /> : loading ? <LoadingOverlay /> : null
+          ) : blocker === 'update' ? <UpdateModal /> : blocker === 'replaced' ? <SessionReplacedModal /> : blocker === 'rate-limited' ? <RateLimitModal /> : blocker === 'unsaved' ? <UnsavedModal /> : loading ? <LoadingOverlay /> : null
         }
         badge={DEV_ENV && LazyEnvBadge ? (
           <Suspense fallback={null}>

@@ -24,7 +24,7 @@ vi.mock('../../account/service/session', () => ({
 }));
 
 import { allowConsentGate, blockConsentGate, holdConsentGate, resetConsentGate } from '../../account/service/consentGate';
-import { useChat, useLive } from './useLive';
+import { useChat, useLive, usePlayersIn } from './useLive';
 
 describe('useLive 약관 수락 게이트 연동', () => {
   beforeEach(() => {
@@ -75,5 +75,32 @@ describe('useLive 약관 수락 게이트 연동', () => {
 
     act(() => { allowConsentGate(); });
     expect(liveMock.openCalls).toBe(2);
+  });
+
+  it('nick 메시지를 받으면 usePlayersIn과 useChat 구독자에게 즉시 새 닉네임을 반영한다', () => {
+    const { result } = renderHook(() => {
+      useLive();
+      return {
+        players: usePlayersIn('world'),
+        chat: useChat(),
+      };
+    });
+    act(() => {
+      liveMock.connections[0].onMessage({
+        t: 'hello',
+        you: 'u1',
+        others: [{ uid: 'u2', nick: '옛닉', boat: 1, region: 'world', x: 0, y: 0, dir: 0, line: false }],
+        recentChat: [{ id: 1, uid: 'u2', nick: '옛닉', text: '안녕', at: '2026-11-26T00:00:00.000Z' }],
+        recentGuildChat: [],
+      });
+    });
+    expect(result.current.players.map(p => p.nick)).toEqual(['옛닉']);
+    expect(result.current.chat.lines.map(l => l.nick)).toEqual(['옛닉']);
+
+    act(() => {
+      liveMock.connections[0].onMessage({ t: 'nick', uid: 'u2', nick: '새닉' });
+    });
+    expect(result.current.players.map(p => p.nick)).toEqual(['새닉']);
+    expect(result.current.chat.lines.map(l => l.nick)).toEqual(['새닉']);
   });
 });
