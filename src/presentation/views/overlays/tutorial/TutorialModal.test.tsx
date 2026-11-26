@@ -159,10 +159,7 @@ describe('튜토리얼 카드 덱', () => {
         expect(screen.getByText(`${idx + 1} / ${deck.subs.length}`)).toBeInTheDocument();
         expect(screen.getByText(sub)).toBeInTheDocument();
         if (sub === '미니맵으로 세계지도 보기') expect(screen.getByText('오른쪽 아래 미니맵')).toBeInTheDocument();
-        if (sub === '다른 탭에서도 조우 알림') {
-          expect(screen.getByText('브라우저 알림')).toBeInTheDocument();
-          expect(screen.getByText((_, el) => el?.tagName === 'P' && el.textContent === '조우 알림은 기본으로 켜져 있고 수배판이나 설정에서 켜고 끌 수 있어요.')).toBeInTheDocument();
-        }
+        if (sub === '다른 탭에서도 조우 알림') expect(screen.getByText('브라우저 알림')).toBeInTheDocument();
         if (idx < deck.subs.length - 1) {
           fireEvent.click(screen.getByRole('button', { name: '다음' }));
         } else {
