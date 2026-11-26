@@ -1070,7 +1070,9 @@ describe('위치 복원 — 새로고침하면 있던 곳에서 재개', () => {
     seed({ location: { kind: 'region', id: 'village' }, fortune: null, fame: 0, dex: {}, tutorials: [] });
     render(<App />);
     expect(screen.getByLabelText('마을')).toBeInTheDocument();
-    expect(screen.getByRole('log')).toHaveTextContent('마을 연못 어군에서 낚시하고, 집에 들어가 정비해 보세요.');
+    await waitFor(() => {
+      expect(screen.getByRole('log')).toHaveTextContent('마을 연못 어군에서 낚시하고, 집에 들어가 정비해 보세요.');
+    });
     expect(await screen.findByRole('dialog', { name: '마을에 오신 걸 환영해요' })).toBeInTheDocument();
     expect(screen.queryByText('오늘의 운세')).not.toBeInTheDocument();
   });

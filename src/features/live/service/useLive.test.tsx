@@ -25,7 +25,17 @@ vi.mock('../../account/service/session', () => ({
 
 import { allowConsentGate, blockConsentGate, holdConsentGate, resetConsentGate } from '../../account/service/consentGate';
 import { GLOBAL_CHAT_COOLDOWN_MS } from '../model/live';
-import { sendChat, sendRegion, useChat, useLive, useLiveNotices, usePlayersIn } from './useLive';
+import {
+  applyLocalNick,
+  onMailEvent,
+  onNickEvent,
+  sendChat,
+  sendRegion,
+  useChat,
+  useLive,
+  useLiveNotices,
+  usePlayersIn,
+} from './useLive';
 
 describe('useLive 약관 수락 게이트 및 3방·공지 연동', () => {
   beforeEach(() => {
@@ -214,5 +224,49 @@ describe('useLive 약관 수락 게이트 및 3방·공지 연동', () => {
     act(() => { blockConsentGate(); });
     expect(result.current.notices.noticesSynced).toBe(false);
     expect(result.current.chat.globalCooldownUntil).toBe(0);
+  });
+
+  it('onNickEvent는 others에 없는 피어 닉네임 변경도 전달하고, applyLocalNick은 3방 채팅 본인 줄을 즉시 갱신한다', () => {
+    const nickEvents: Array<{ uid: string; nick: string }> = [];
+    const offNick = onNickEvent(e => { nickEvents.push({ uid: e.uid, nick: e.nick }); });
+    const mailListener = vi.fn();
+    const offMail = onMailEvent(mailListener);
+    try {
+      const { result } = renderHook(() => {
+        useLive();
+        return useChat();
+      });
+
+      act(() => {
+        liveMock.connections[0].onMessage({
+          t: 'hello',
+          you: 'u1',
+          others: [],
+          recentChat: [{ id: 1, uid: 'u1', nick: '옛나', text: '전체', at: '2026-11-26T00:00:00.000Z' }],
+          recentLocalChat: [{ id: 2, uid: 'u1', nick: '옛나', text: '지역', at: '2026-11-26T00:00:01.000Z' }],
+          recentGuildChat: [{ id: 3, uid: 'u1', nick: '옛나', text: '길드', at: '2026-11-26T00:00:02.000Z' }],
+        });
+      });
+
+      act(() => {
+        liveMock.connections[0].onMessage({ t: 'nick', uid: 'u9', nick: '바뀐피어' });
+      });
+      expect(nickEvents).toEqual([{ uid: 'u9', nick: '바뀐피어' }]);
+
+      act(() => {
+        applyLocalNick('u1', '새나');
+      });
+      expect(result.current.globalLines.map(l => l.nick)).toEqual(['새나']);
+      expect(result.current.localLines.map(l => l.nick)).toEqual(['새나']);
+      expect(result.current.guildLines.map(l => l.nick)).toEqual(['새나']);
+
+      act(() => {
+        liveMock.connections[0].onMessage({ t: 'mail' });
+      });
+      expect(mailListener).toHaveBeenCalledTimes(1);
+    } finally {
+      offNick();
+      offMail();
+    }
   });
 });

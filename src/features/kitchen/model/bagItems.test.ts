@@ -193,11 +193,12 @@ describe('아이템 섹션: 열린 뒤', () => {
     ]);
   });
 
-  it('행은 효과 툴팁에 쓸 효과 줄만 갖고 공통 주의사항은 묶음 소제목에만 둔다', () => {
-    const v = selectItemSection(seed({ items: { 'cook-lunch-bite': 1 } }), T0, 'account');
+  it('행은 효과 툴팁에 쓸 효과 줄과 상세 창 주의사항을 갖는다', () => {
+    const v = selectItemSection(seed({ items: { 'cook-lunch-bite': 1, 'cook-bait-rare': 1 } }), T0, 'account');
     if (v.state !== 'open') throw new Error('open이어야 해요');
     expect(v.lunch[0].effects).toEqual([{ label: '입질 대기', value: '−10%' }]);
-    expect('note' in v.lunch[0]).toBe(false);
+    expect(v.lunch[0].note).toBe(ITEM_GROUP_HINT.lunch);
+    expect(v.bait[0].note).toBe(ITEM_GROUP_HINT.bait);
   });
 
   it('조리가 끝났지만 보관함으로 옮겨지지 않은 완성분도 행에 센다', () => {

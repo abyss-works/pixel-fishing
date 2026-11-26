@@ -14,6 +14,8 @@ export function useFriendAlerts(enabled: boolean, notify: NoticeSink): void {
     if (!enabled) return;
     return onFriendEvent(e => {
       void client.invalidateQueries({ queryKey: ['friends', uid] });
+      // 친구 목록 갱신(삭제 등)은 조용히 다시 읽기만 한다
+      if (e.kind === 'updated') return;
       const text = friendAlertText(e);
       const toastText = e.kind === 'request'
         ? (e.nick ? `${e.nick} 님 친구 요청` : '새 친구 요청이 왔어요.')

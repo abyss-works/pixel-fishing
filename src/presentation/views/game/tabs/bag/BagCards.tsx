@@ -27,8 +27,8 @@ export default function BagCards({ bag, game }: { bag: readonly FishInstance[]; 
       {catalog.map(({ fish: f, name, shown, normalCount, variantCount, discovered: known }) => {
         const n = normalCount + variantCount;
         const label = !known ? '미확인 어종'
-          : n === 0 ? `${f.name} 미보유`
-          : `${f.name} 일반 ${normalCount}마리 돌연변이 ${variantCount}마리 보유`;
+          : n === 0 ? `${name} 미보유`
+          : `${name} 일반 ${normalCount}마리 돌연변이 ${variantCount}마리 보유`;
         const body = (
           <>
             <NightMark fish={f} discovered={known} />
@@ -64,7 +64,10 @@ export default function BagCards({ bag, game }: { bag: readonly FishInstance[]; 
         );
       })}
     </div>
-    {detail && <DexDetail fish={detail.fish} game={game} initialForm={detail.initialForm} onClose={() => setDetail(null)} />}
+    {detail && (
+      <DexDetail key={`${detail.fish.id}-${detail.initialForm}`} fish={detail.fish} game={game}
+                 initialForm={detail.initialForm} onClose={() => setDetail(null)} />
+    )}
     </>
   );
 }

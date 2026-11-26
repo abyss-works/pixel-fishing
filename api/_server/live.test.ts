@@ -701,8 +701,8 @@ describe('실시간 닉네임 즉시 동기화', () => {
 
     live.setNick('u1', '새선장');
 
+    expect(await a.next()).toEqual({ t: 'nick', uid: 'u1', nick: '새선장' });
     expect(await b.next()).toEqual({ t: 'nick', uid: 'u1', nick: '새선장' });
-    expect(a.messages).toEqual([]);
     expect(live.online().find(o => o.uid === 'u1')?.nick).toBe('새선장');
     expect(live.presenceOf('u1')?.nick).toBe('새선장');
 
@@ -749,6 +749,7 @@ describe('실시간 닉네임 즉시 동기화', () => {
     await a.next(); await b.next(); await g.next();
 
     live.setNick('u1', '이동전변경');
+    expect(await a.next()).toEqual({ t: 'nick', uid: 'u1', nick: '이동전변경' });
     expect(await b.next()).toEqual({ t: 'nick', uid: 'u1', nick: '이동전변경' });
     expect(await g.next()).toEqual({ t: 'nick', uid: 'u1', nick: '이동전변경' });
 

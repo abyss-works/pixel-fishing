@@ -66,6 +66,7 @@ export interface FieldCallbacks {
   onEvent: (event: FieldEvent) => void;
   /** returnPos는 거점 진입 트리거에 닿기 직전의 자리 — 장소 이동이 거부되면 이 자리(트리거 밖)로 돌아온다 */
   onScene: (scene: SceneRef, message: string, entryPos?: Point, returnPos?: Point) => void;
+  /** @deprecated 캐스팅 시 호출하지 않는다 — 기존 호출부 호환을 위해 선택 필드로 유지한다 */
   onWarmup?: () => void;
   /** 지금 계정이 게스트인가. 게스트는 규칙 판정이 허용하지 않는 장소로 가는 트리거에서 되밀린다 */
   guest?: boolean;
@@ -500,7 +501,6 @@ export class GameFieldEngine {
     this.school = nearby;
     this.lastJudgment = null;
     this.transition('wait', null, null);
-    this.callbacks.onWarmup?.();
     if (!silent) this.callbacks.onEvent({ type: 'cast', spot: nearby.spot });
   }
 

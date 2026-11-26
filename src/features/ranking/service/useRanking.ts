@@ -19,7 +19,13 @@ function useBoard(board: RankingBoardId, fishId?: string) {
     enabled: ready && consentReady,
     staleTime: STALE,
   });
-  return { data: (q.data ?? null) as RankingBoard | null, loading: q.isPending, failed: q.isError, offline: q.isSuccess && q.data === null };
+  return {
+    data: (q.data ?? null) as RankingBoard | null,
+    loading: q.isPending,
+    failed: q.isError,
+    offline: q.isSuccess && q.data === null,
+    retry: () => { void q.refetch(); },
+  };
 }
 
 /** 명성·도감(일반/돌연변이/네임드)·네임드 토벌 순위 */

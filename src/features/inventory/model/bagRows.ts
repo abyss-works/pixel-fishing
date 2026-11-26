@@ -4,14 +4,16 @@
 // 폼(변이)으로 행을 가르지 않는다. 스키마상 변이는 별개 기록이지만(`dex[id][form]`), 가방은
 // "지금 뭘 들고 있나"를 보는 화면이고 종마다 행이 둘로 갈리면 목록이 두 배가 된다.
 // 변이는 개체 줄의 배지로 구분한다 — 최대 배지와 같은 방식.
-import { instanceFish, priceOfInstance } from '../../../game/rules/logic';
-import type { FishInstance } from '../../../game/rules/logic';
+import { formDiscovered, formName, instanceFish, priceOfInstance } from '../../../game/rules/logic';
+import type { FishInstance, GameState } from '../../../game/rules/logic';
 import type { Fish, FormId } from '../../../game/content/fish';
 import { rarityRank } from '../../../game/content/rarity';
 
 export interface BagRow {
   key: string;           // fishId — 행 식별자
   fish: Fish;
+  /** 행 머리에 보일 대표 폼 — 일반 미발견 + 돌연변이만 보유 시 돌연변이 */
+  form: FormId;
   name: string;
   items: FishInstance[]; // 이 행 개체 전부 (폼 섞임) — 판매 시 uid 목록의 출처
   /** 행 판매가 합계 — 정렬 기준(등급 다음 축)이자 행 머리 표시값 */
@@ -31,13 +33,13 @@ export interface BagRow {
 export const sumPrice = (items: readonly FishInstance[]): number =>
   items.reduce((s, i) => s + priceOfInstance(i), 0);
 
-export function groupInstances(bag: readonly FishInstance[]): BagRow[] {
+export function groupInstances(bag: readonly FishInstance[], game?: Pick<GameState, 'dex'>): BagRow[] {
   const rows = new Map<string, BagRow>();
   for (const inst of bag) {
     const fish = instanceFish(inst);
     if (!fish) continue; // 삭제된 어종 id — 표시에서 제외 (판매 대상에서도 빠진다)
     const row = rows.get(inst.fishId)
-      ?? { key: inst.fishId, fish, name: fish.name, items: [], subtotal: 0, sized: [],
+      ?? { key: inst.fishId, fish, form: 'normal', name: fish.name, items: [], subtotal: 0, sized: [],
            unsized: [], maxByForm: {} };
     row.items.push(inst);
     if (inst.size !== null) {
@@ -68,6 +70,10 @@ export function groupInstances(bag: readonly FishInstance[]): BagRow[] {
       .map(([form, items]) => ({ form, items }))
       .sort((a, b) => (a.form === 'variant' ? 0 : 1) - (b.form === 'variant' ? 0 : 1));
     row.subtotal = sumPrice(row.items);
+    const normalKnown = game ? formDiscovered(game as GameState, row.key, 'normal') : false;
+    const onlyVariantHeld = row.items.every(i => i.form === 'variant');
+    row.form = !normalKnown && onlyVariantHeld ? 'variant' : 'normal';
+    row.name = formName(row.fish, row.form);
   }
   // 행 순서 — **등급 내림차순이 최상위 축**(가격이 아니라 등급을 큰 축으로 둔다),
   // 동률이면 소계(가치 합) 내림, 그다음 id로 안정화. 도감의 오름차순과 일부러 다르다 —

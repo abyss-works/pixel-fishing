@@ -49,6 +49,9 @@ interface GameTabsProps {
   /** 모바일 시트가 열려 있는가와 그 변경 — 열림은 HUD 배치도 따르므로 화면 조립이 소유한다 */
   sheetOpen: boolean;
   onSheetOpenChange: (open: boolean) => void;
+  /** 설정 탭 계정 관리 창 제어 — 구글 전환 되돌아가기 복귀에 쓴다 */
+  manageAccountOpen?: boolean;
+  onManageAccountOpenChange?: (open: boolean) => void;
 }
 
 /** 탭 아이콘 — 지역 나침반, 가방 배낭, 도감 책, 도움말 물음표, 설정 톱니 */
@@ -136,7 +139,9 @@ export default function GameTabs(props: GameTabsProps) {
                      syncLabel={props.syncLabel} syncState={props.syncState}
                      account={props.account} accountChecked={props.accountChecked} accountFailed={props.accountFailed} uid={props.uid}
                      nickname={props.nickname} profileStatus={props.profileStatus} onRename={props.onRename}
-                     onAuthChanged={props.onAuthChanged} />
+                     onAuthChanged={props.onAuthChanged}
+                     manageAccountOpen={props.manageAccountOpen}
+                     onManageAccountOpenChange={props.onManageAccountOpenChange} />
       )}
     </Sidebar>
   );

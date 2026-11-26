@@ -54,6 +54,7 @@ import { useGuildAlerts } from '../../../features/guild/service/useGuildAlerts';
 import { useGuildInviteLanding } from '../../../features/guild/service/useGuildInvite';
 import { useGuild } from '../../../features/guild/service/useGuild';
 import { useFriendAlerts } from '../../../features/friends/service/useFriendAlerts';
+import { useMailAlerts } from '../../../features/mailbox/service/useMailAlerts';
 import WorldMapModal from '../overlays/world-map/WorldMapModal';
 import WhatsNewModal from '../overlays/whats-new/WhatsNewModal';
 import TutorialModal from '../overlays/tutorial/TutorialModal';
@@ -71,6 +72,7 @@ import { useBagFullAlert } from '../../../features/alerts/service/bagFullAlert';
 import { selectBagStatus } from '../../../features/inventory/model/selectors';
 import { resolveLiveRegion } from '../../../features/live/model/live';
 import { guildMatesIn, sendRegion, useChat, useLive } from '../../../features/live/service/useLive';
+import { useLiveNickSync } from '../../../features/live/service/useLiveNickSync';
 import { useNotices } from '../../../features/live/service/useNotices';
 import { useSpotState } from '../../../features/travel/service/useSpotState';
 import TraceCard from '../overlays/bounty/TraceCard';
@@ -111,7 +113,6 @@ interface GameViewProps {
   onScene: (scene: SceneRef, message: string, entryPos?: Point, returnPos?: Point) => void;
   /** 서버에 알리지 않고 화면의 장소만 바꾼다 */
   onPlace: (scene: SceneRef, entryPos?: Point) => void;
-  onWarmup: () => void;
   log: Msg[];
   toasts?: readonly FloatingToastItem[];
   onDismissToast?: (id: number) => void;
@@ -188,6 +189,7 @@ export default function GameView(props: GameViewProps) {
   const fortune = useFortuneModal({ ready: saveReady, suspended: whatsNewPending || baitRefund.pending });
   const tutorialPending = useTutorialPending(game.tutorials);
   useLive();
+  useLiveNickSync();
   const chat = useChat();
   const spot = useSpotState();
   const liveRegion = resolveLiveRegion(scene, spot.zone);
@@ -209,12 +211,14 @@ export default function GameView(props: GameViewProps) {
   useBagFullAlert(selectBagStatus(game, bagBonus).full);
   useFriendAlerts(props.account !== null, props.setToast);
   useGuildAlerts(props.account !== null, props.setToast, guild);
+  useMailAlerts();
   useBountyAlerts(props.setToast);
   useSlotExpiryAlerts(game, props.setToast);
   // 초대 링크로 열렸으면 게임 상태를 불러온 뒤 확인 창을 띄운다. 게스트가 계정 창을 여는 동안은 숨기고, 계정이 생기면 다시 띄운다
   const invite = useGuildInviteLanding();
   const [accountOpen, setAccountOpen] = useState(false);
   const [accountSailIntent, setAccountSailIntent] = useState(false);
+  const [manageAccountOpen, setManageAccountOpen] = useState(false);
   const inviteReady = invite.code !== null && props.syncState === 'on' && !accountOpen && props.blocker == null;
   // 방치 결과 보고 — 돌아오면 메시지 창에 한 줄, 오래 비웠으면 알림 카드. 카드의 자세히가 결과 창을 연다
   const away = useAwayReport((s, hasCard) => sendNotice(props.setToast, {
@@ -278,6 +282,11 @@ export default function GameView(props: GameViewProps) {
   const openAccount = (sailIntent = false) => {
     setAccountSailIntent(sailIntent);
     setAccountOpen(true);
+  };
+  const reopenManageAccount = () => {
+    setActiveTab('settings');
+    if (mobile) setSheetOpen(true);
+    setManageAccountOpen(true);
   };
   const closeAccount = () => {
     setAccountOpen(false);
@@ -415,7 +424,7 @@ export default function GameView(props: GameViewProps) {
           <BaseMenu key={scene.id} base={scene.id} game={game} onFacility={onFacility} locked={trip !== null} accountState={accountState} />
         ) : (
           <Field key={scene.id} region={scene.id} game={game} dispatch={props.dispatch} setToast={props.setToast}
-                 onScene={go} onWarmup={props.onWarmup} guest={isConfirmedGuest(props.account, props.accountChecked)} onGuestBlocked={onGuestBlocked} paused={encounter !== null || props.blocker != null}
+                 onScene={go} guest={isConfirmedGuest(props.account, props.accountChecked)} onGuestBlocked={onGuestBlocked} paused={encounter !== null || props.blocker != null}
                  initialPos={props.entryPos ?? undefined} placeSeq={props.placeSeq}
                  locked={trip !== null} statusSlot={statusSlot} catchSlot={catchSlot} />
         )}
@@ -510,7 +519,8 @@ export default function GameView(props: GameViewProps) {
           <GuildInviteDialog code={invite.code} account={props.account} setToast={props.setToast}
                              onAccount={() => openAccount(false)} onClose={invite.clear} />
         )}
-        <GoogleReturn setToast={props.setToast} progress={progress} reopenAccount={() => openAccount(false)} />
+        <GoogleReturn setToast={props.setToast} progress={progress}
+                      reopenAccount={origin => (origin === 'manage' ? reopenManageAccount() : openAccount(false))} />
         {accountOpen && (
           <AccountModal layer="stage" mode="connect" setToast={props.setToast} onAuthChanged={props.onAuthChanged} account={props.account} accountFailed={props.accountFailed}
                         syncLabel={props.syncLabel} syncState={props.syncState} sailReturn={accountSailIntent} onClose={closeAccount} />
@@ -543,7 +553,7 @@ export default function GameView(props: GameViewProps) {
         {fortune.fortune && <FortuneModal fortune={fortune.fortune} onClose={fortune.close} />}
         <TutorialModal seen={game.tutorials} ready={saveReady} after={baitRefund.pending || fortune.pending} dispatch={props.dispatch} />
         {tutorialTriggersReady && (
-          <AlertPromptModal ready={saveReady} after={whatsNewPending || baitRefund.pending || fortune.pending || tutorialPending} setToast={props.setToast} />
+          <AlertPromptModal ready={saveReady} after={whatsNewPending || baitRefund.pending || fortune.pending || tutorialPending || inviteReady || accountOpen} setToast={props.setToast} />
         )}
         <NoticeModal open={noticeModalOpen} notices={activeNotices} onClose={() => setNoticeModalOpen(false)} />
         <NoticeStack notices={stackNotices} onDismiss={dismissNotice} />
@@ -556,6 +566,7 @@ export default function GameView(props: GameViewProps) {
         region={region}
         activeTab={activeTab} setActiveTab={setActiveTab}
         sheetOpen={sheetOpen} onSheetOpenChange={setSheetOpen}
+        manageAccountOpen={manageAccountOpen} onManageAccountOpenChange={setManageAccountOpen}
         game={game} sellBonus={guildBonus?.effects.sell ?? 0} bagBonus={bagBonus} dispatch={props.dispatch} setToast={props.setToast}
         syncLabel={props.syncLabel} syncState={props.syncState}
         account={props.account} accountChecked={props.accountChecked} accountFailed={props.accountFailed} uid={props.uid} onAuthChanged={props.onAuthChanged}

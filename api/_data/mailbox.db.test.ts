@@ -289,10 +289,29 @@ describe('플레이어 쪽', () => {
     expect(firstReward).toMatchObject({
       gold: 0,
       items: [
-        { id: 'cook-bait-legendary', qty: 3 },
-        { id: 'cook-lunch-bundle', qty: 1 },
         { id: 'luck-small', qty: 1 },
+        { id: 'cook-lunch-bundle', qty: 1 },
+        { id: 'cook-bait-legendary', qty: 3 },
       ],
     });
+
+    // 중복 id가 섞여 들어와도 수량은 합산하고 첫 등장 순서를 유지한다
+    expect(await sendIdempotentMail(database.db, {
+      userId: a,
+      idempotencyKey: 'first-appearance-order',
+      title: '중복 합산 순서',
+      body: '순서 확인',
+      gold: 0,
+      items: [
+        { id: 'luck-small', qty: 1 },
+        { id: 'cook-lunch-bundle', qty: 1 },
+        { id: 'luck-small', qty: 2 },
+      ],
+    }, NOW)).toBe(true);
+    const mergedMail = (await listMails(database.db, a)).find(m => m.title === '중복 합산 순서');
+    expect(mergedMail?.items).toEqual([
+      { id: 'luck-small', qty: 3 },
+      { id: 'cook-lunch-bundle', qty: 1 },
+    ]);
   });
 });

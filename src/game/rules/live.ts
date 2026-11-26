@@ -35,8 +35,10 @@ export type ServerMessage =
   | { t: 'notices'; notices: NoticeItem[] } // 공지 변경 시 전체 연결에 즉시 동기화
   | { t: 'typing'; uid: string; on: boolean }
   | { t: 'friend'; kind: 'request' | 'accepted'; uid: string; nick: string | null } // 받은 친구 요청·내 요청의 수락. 그 사람에게만 간다
+  | { t: 'friend'; kind: 'updated' } // 친구 삭제·요청 거절·요청 취소로 목록 갱신. 상대방에게만 간다
   // 길드 가입 신청의 도착(길드장에게, nick은 신청한 사람), 처리 결과, 길드원 상태 갱신(레벨업·스킬·일지 등)
   | { t: 'guild'; kind: 'request' | 'approved' | 'rejected' | 'updated'; guild: string; nick: string | null }
+  | { t: 'mail' } // 새 우편 도착 알림. 받는 사람에게만 간다
   | { t: 'error'; code: 'chat-guest' | 'chat-rate' | 'chat-length' | 'chat-restricted' | 'chat-no-guild' | 'chat-global-cooldown' | 'chat-duplicate'; retryAfterMs?: number };
 
 /** WebSocket 경로. 게임 서버와 같은 오리진이다 */

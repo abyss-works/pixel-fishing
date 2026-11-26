@@ -40,6 +40,18 @@ describe('useFriends 동작', () => {
     await act(async () => { await result.current.act({ op: 'request', nickname: 'a' }); });
     expect(spy).toHaveBeenCalledWith({ queryKey: ['player-search'] });
   });
+
+  it('refresh 호출 시 친구 목록을 다시 읽는다', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const shared = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    const { result } = renderHook(() => useFriends(true), { wrapper: shared });
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(readFriends).toHaveBeenCalledTimes(1);
+
+    act(() => { result.current.refresh(); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(readFriends).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('useFriends 폴링', () => {

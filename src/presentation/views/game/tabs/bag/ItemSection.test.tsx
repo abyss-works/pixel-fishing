@@ -54,9 +54,11 @@ describe('아이템 섹션 목록', () => {
     expect(screen.getAllByText('사용 중')).toHaveLength(2);
     const useButton = screen.getByRole('button', { name: '가루디야(일반) 사용' });
     expect(within(useButton.parentElement!).getByText('사용 중')).toBeInTheDocument();
-    expect(within(useButton.parentElement!).getByText('남음 8시간 42분')).toBeInTheDocument();
+    expect(within(useButton.parentElement!).queryByText(/남음/)).toBeNull();
+    const card = useButton.closest('.pf-notch') as HTMLElement;
+    expect(within(card).getByText('남음 8시간 42분')).toBeInTheDocument();
     expect(document.body.textContent).toContain('지속 9시간');
-    expect(document.body.textContent).toContain('지속 2분');
+    expect(document.body.textContent).toContain('지속 2분 30초');
     expect(document.body.textContent).toContain('남음 4분');
   });
 
@@ -128,17 +130,18 @@ describe('아이템 섹션 목록', () => {
     expect(baitTip).toHaveTextContent('접속하지 않아도 지속 시간이 흘러요.');
     fireEvent.mouseLeave(screen.getByText('미끼'));
 
-    // 카드 본문을 누르면 상세 창이 열린다
+    // 카드 본문을 누르면 상세 창이 열린다 (상세 창에는 주의사항이 보인다)
     fireEvent.click(screen.getByRole('button', { name: '가루디야(일반) 상세 보기' }));
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText('입질 대기')).toBeInTheDocument();
     expect(within(dialog).getByText('−10%')).toBeInTheDocument();
-    expect(within(dialog).queryByText(/방치로 낚을 때만 효과가 있어요/)).toBeNull();
+    expect(within(dialog).getByText('방치로 낚을 때만 효과가 있어요.')).toBeInTheDocument();
+    expect(within(dialog).getByText('접속하지 않아도 지속 시간이 흘러요.')).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('button', { name: '닫기' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('비약은 배 해금 전 계정에서도 열려 있고, 카드 클릭으로 상세를 보며 사용하면 usePotion 액션과 안내를 보낸다', () => {
+  it('비약은 배 해금 전 계정에서도 열려 있고, 카드 호버 시 효과 툴팁·클릭 시 상세를 보며 사용하면 usePotion 액션과 안내를 보낸다', () => {
     const { dispatch, setToast } = show(game({ boat: 0, items: { 'luck-small': 2 } }));
     const potionName = screen.getByText('작은 바다 영약');
     expect(potionName).toBeInTheDocument();
@@ -147,7 +150,10 @@ describe('아이템 섹션 목록', () => {
     expect(screen.getByText('×2')).toBeInTheDocument();
 
     fireEvent.mouseEnter(potionName);
-    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    const potionTip = screen.getByRole('tooltip');
+    expect(potionTip).toHaveTextContent('모든 행운 효과');
+    expect(potionTip).toHaveTextContent('×1.05');
+    fireEvent.mouseLeave(potionName);
 
     fireEvent.click(screen.getByRole('button', { name: '작은 바다 영약 상세 보기' }));
     const dialog = screen.getByRole('dialog');
@@ -164,22 +170,26 @@ describe('아이템 섹션 목록', () => {
     expect(setToast).toHaveBeenCalledWith('작은 바다 영약을 사용했어요. 하루 동안 이어져요.');
   });
 
-  it('비약은 이미 사용 중이면 사용 중 비활성 버튼이고, 미보유면 사용 버튼이 비활성이다', () => {
+  it('비약은 이미 사용 중이면 사용 중 배지와 비활성 사용 버튼이 분리되고, 미보유면 사용 버튼이 비활성이다', () => {
     show(game({ items: { 'luck-small': 1 }, potions: { 'luck-small': '2026-11-12' } }));
-    const activeBtn = screen.getByRole('button', { name: '작은 바다 영약 사용 중' });
+    const activeBtn = screen.getByRole('button', { name: '작은 바다 영약 사용' });
     expect(activeBtn).toBeDisabled();
-    expect(activeBtn).toHaveTextContent('사용 중');
+    expect(activeBtn).toHaveTextContent(/^사용$/);
+    expect(within(activeBtn.parentElement!).getByText('사용 중')).toBeInTheDocument();
 
     cleanup();
     show(game({ items: {} }));
     const emptyBtn = screen.getByRole('button', { name: '작은 바다 영약 사용' });
     expect(emptyBtn).toBeDisabled();
+    expect(screen.queryByText('사용 중')).toBeNull();
 
     // 보유 중만 보기에서 수량 0이어도 오늘 사용 중이면 남는다
     cleanup();
     show(game({ items: {}, potions: { 'luck-small': '2026-11-12' } }));
     fireEvent.click(screen.getByRole('button', { name: '보유 중만 보기' }));
-    expect(screen.getByRole('button', { name: '작은 바다 영약 사용 중' })).toBeDisabled();
+    const filteredBtn = screen.getByRole('button', { name: '작은 바다 영약 사용' });
+    expect(filteredBtn).toBeDisabled();
+    expect(within(filteredBtn.parentElement!).getByText('사용 중')).toBeInTheDocument();
   });
 
   it('게스트는 비약 카드 사용 버튼과 상세 창 안의 사용 버튼이 모두 잠겨 있다', () => {
@@ -278,10 +288,11 @@ describe('아이템 사용과 교체', () => {
     expect(d1).toHaveBeenCalledWith({ type: 'eat', item: 'cook-bait-epic' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
-    // 중복 미끼는 확인 창을 띄우고 새로 지속 시간을 분까지만 보인다
+    // 중복 미끼는 확인 창을 띄우고 현재 남은 시간은 분까지만, 새로 넣을 지속 시간은 2분 30초로 보인다
     fireEvent.click(screen.getByRole('button', { name: '롱페퍼 미끼(희귀) 사용' }));
     const dupDialog = screen.getByRole('dialog');
-    expect(within(dupDialog).getAllByText('2분').length).toBeGreaterThan(0);
+    expect(within(dupDialog).getByText('2분')).toBeInTheDocument();
+    expect(within(dupDialog).getByText('2분 30초')).toBeInTheDocument();
     fireEvent.click(within(dupDialog).getByRole('button', { name: '사용' }));
     expect(d1).toHaveBeenCalledWith({ type: 'eat', item: 'cook-bait-rare' });
 
@@ -306,7 +317,8 @@ describe('아이템 사용과 교체', () => {
     // 첫 번째 미끼(bait)로 바꿔 선택하고 확정
     fireEvent.click(radios[0]);
     expect(radios[0]).toHaveAttribute('aria-checked', 'true');
-    expect(within(dialog).getAllByText('2분').length).toBeGreaterThan(0);
+    expect(within(dialog).getByText('2분')).toBeInTheDocument();
+    expect(within(dialog).getByText('2분 30초')).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('button', { name: '사용' }));
     expect(d2).toHaveBeenCalledWith({ type: 'eat', item: 'cook-bait-legendary', replaceSlot: 'bait' });
   });

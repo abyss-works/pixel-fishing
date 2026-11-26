@@ -43,5 +43,34 @@ describe('NoticeStack & NoticeModal', () => {
     expect(screen.getByText('공지 제목 3')).toBeInTheDocument();
     expect(screen.getByText('공지 본문 3')).toBeInTheDocument();
     expect(screen.getByText('공지 제목 1')).toBeInTheDocument();
+
+    // 시작~마감 기간 범위 표기 (다른 날짜 / 같은 날짜)
+    const sameDay: NoticeItem = {
+      id: 10,
+      title: '당일 점검',
+      body: '본문',
+      startsAt: '2026-11-26T11:00:00.000Z',
+      endsAt: '2026-11-26T14:00:00.000Z',
+      createdAt: '2026-11-26T10:00:00.000Z',
+    };
+    const crossDay: NoticeItem = {
+      id: 11,
+      title: '기간 공지',
+      body: '본문',
+      startsAt: '2026-11-26T09:00:00.000Z',
+      endsAt: '2026-11-27T09:00:00.000Z',
+      createdAt: '2026-11-26T08:00:00.000Z',
+    };
+    const fmtTime = (iso: string) => {
+      const d = new Date(Date.parse(iso));
+      return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    };
+    const fmtDate = (iso: string) => {
+      const d = new Date(Date.parse(iso));
+      return `${d.getMonth() + 1}월 ${d.getDate()}일 ${fmtTime(iso)}`;
+    };
+    rerender(<NoticeModal open notices={[sameDay, crossDay]} onClose={() => {}} />);
+    expect(screen.getByText(`${fmtDate(sameDay.startsAt)} - ${fmtTime(sameDay.endsAt)}`)).toBeInTheDocument();
+    expect(screen.getByText(`${fmtDate(crossDay.startsAt)} - ${fmtDate(crossDay.endsAt)}`)).toBeInTheDocument();
   });
 });

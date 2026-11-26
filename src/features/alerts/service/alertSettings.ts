@@ -22,6 +22,11 @@ export type AlertSettings = Record<AlertKind, AlertToggle> & {
   allowAll: () => Promise<NotificationPermissionState>;
 };
 
+/** 현재 브라우저 알림 권한을 즉시 읽는다 (비동기 요청 뒤 거절 여부 확인용) */
+export function currentAlertPermission(): NotificationPermissionState {
+  return notificationPermission();
+}
+
 /** 허용돼 있으면 그대로, 아니면 묻는다. 묻는 호출은 첫 await 앞에서 일어나 클릭 동작 안에 남는다 */
 async function ensurePermission(): Promise<NotificationPermissionState> {
   const current = notificationPermission();

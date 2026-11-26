@@ -33,7 +33,7 @@ export default function TransmuteTab({ game, busy, act, setToast }: {
   const view = selectTransmuteView(game, picks);
 
   return (
-    <div className={cx(SCROLL_Y, '-mr-2 flex-1 min-h-0 flex flex-col justify-between gap-3')}>
+    <div className={cx(SCROLL_Y, 'flex-1 min-h-0 flex flex-col justify-between gap-3')}>
       <div className="grid grid-cols-3 mobile:grid-cols-1 gap-3">
         {view.cards.map(card => {
           const reason = card.check.ok ? null : REJECT_TEXT[card.check.reason];

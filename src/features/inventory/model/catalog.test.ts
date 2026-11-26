@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FISH, newState, saleBonusOf, sellSelected } from '../../../game/rules/logic';
 import type { FishInstance } from '../../../game/rules/logic';
 import { selectBagCatalog, selectSalePreview } from './catalog';
+import { groupInstances } from './bagRows';
 
 const instance = (uid: string, fishId: string, form: FishInstance['form'] = 'normal', locked = false): FishInstance => ({
   uid, fishId, form, size: 20, caughtAt: null, spot: null, judgment: null, locked,
@@ -33,6 +34,25 @@ describe('가방 파생 데이터', () => {
     const row = selectBagCatalog([], game).find(r => r.fish.id === fish.id);
 
     expect(row).toMatchObject({ name: fish.variant.name, shown: { form: 'variant', index: 1 }, discovered: true });
+  });
+
+  it('일반 미발견 + 돌연변이만 보유 시 목록 행은 돌연변이 이름·폼을 쓰고, 일반 발견 후에는 일반 이름·폼을 쓴다', () => {
+    const fish = FISH[0];
+    const variantBag = [instance('v1', fish.id, 'variant')];
+
+    const variantOnlyGame = newState();
+    variantOnlyGame.dex[fish.id] = { variant: { count: 1, maxSize: 20, first: null } };
+    const [variantRow] = groupInstances(variantBag, variantOnlyGame);
+    expect(variantRow.form).toBe('variant');
+    expect(variantRow.name).toBe(fish.variant.name);
+    const previewVariant = selectSalePreview(variantBag, new Set(), 0, 0, 1, undefined, variantOnlyGame);
+    expect(previewVariant.rows[0].name).toBe(fish.variant.name);
+
+    const normalKnownGame = newState();
+    normalKnownGame.dex[fish.id] = { normal: { count: 1, maxSize: 20, first: null }, variant: { count: 1, maxSize: 20, first: null } };
+    const [normalRow] = groupInstances(variantBag, normalKnownGame);
+    expect(normalRow.form).toBe('normal');
+    expect(normalRow.name).toBe(fish.name);
   });
 
   it('판매 미리보기에 잠금·선택 제외·합계를 반영한다', () => {

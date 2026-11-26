@@ -1,12 +1,20 @@
+import Button from '../../../ui/Button';
 import Note from '../../../ui/Note';
 
 // 랭킹 조회 상태 안내 — 로컬 모드·불러오는 중·실패·기록 없음. 정상이면 아무것도 그리지 않는다.
-export default function RankingStatus({ loading, failed, offline, empty }: {
-  loading: boolean; failed: boolean; offline: boolean; empty: boolean;
+export default function RankingStatus({ loading, failed, offline, empty, onRetry }: {
+  loading: boolean; failed: boolean; offline: boolean; empty: boolean; onRetry?: () => void;
 }) {
   if (offline) return <Note>랭킹은 연결된 상태에서만 볼 수 있어요.</Note>;
   if (loading) return <Loading />;
-  if (failed) return <Note tone="warn">랭킹을 열지 못했어요.<br />잠시 뒤 다시 열어 주세요.</Note>;
+  if (failed) {
+    return (
+      <div className="flex flex-col items-center gap-2 text-center">
+        <Note tone="warn" className="my-0">랭킹을 열지 못했어요.<br />잠시 뒤 다시 시도해 주세요.</Note>
+        {onRetry && <Button size="sm" onClick={onRetry}>다시 시도</Button>}
+      </div>
+    );
+  }
   if (empty) return <Note>아직 기록이 없어요.</Note>;
   return null;
 }

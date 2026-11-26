@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
+import { createPortal } from 'react-dom';
 import {
   GUILD_CREATE_RULES, PUBLIC_GUILD_SORT_OPTIONS, guildActivityText, inviteDialogView, joinRequestDaysLeft,
   normalizeGuildCode, publicJoinConfirm,
@@ -25,6 +26,7 @@ import Skeleton from '../../../ui/Skeleton';
 import Subheading from '../../../ui/Subheading';
 import TabBar from '../../../ui/TabBar';
 import TextInput from '../../../ui/TextInput';
+import Tip from '../../../ui/Tip';
 import ToggleChip from '../../../ui/ToggleChip';
 import { SCROLL_Y } from '../../../ui/scrollArea';
 import GuildInviteSummary from './GuildInviteSummary';
@@ -38,23 +40,52 @@ type NoGuildTab = 'open' | 'code' | 'create';
 /** 찾기와 만들기 버튼의 너비를 맞춘다 */
 const ACTION_WIDTH = 'w-16 shrink-0';
 
+function GuildPitch({ pitch }: { pitch: string }) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  return (
+    <Tip
+      hoverOnly
+      plain
+      className="block min-w-0"
+      onlyIf={() => {
+        const el = ref.current;
+        return Boolean(el && (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1));
+      }}
+      text={pitch}
+    >
+      <p ref={ref} className="m-0 text-xs text-text-dim truncate mobile:whitespace-normal mobile:line-clamp-2">{pitch}</p>
+    </Tip>
+  );
+}
+
 // 길드가 없을 때 — 가입 후 창과 같은 680x560 고정 크기 안에 3탭(공개 길드, 코드로 가입, 길드 만들기)으로 나눈다.
 // 넣어 둔 가입 신청이 있으면 탭 아래 상단 배너로 남은 기간과 신청 취소, 바로 가입 시 기존 신청 자동 취소 안내를 보인다.
-export default function NoGuild({ busy, run, join, request, setToast }: {
+export default function NoGuild({ busy, run, join, request, dialogHost, setToast }: {
   busy: boolean;
   run: GuildRun;
   join: GuildJoin;
   /** 넣어 둔 가입 신청 */
   request: GuildMyRequest | null;
+  dialogHost?: HTMLElement | null;
   setToast: Notify;
 }) {
   const nowISO = useNow();
   const nowMs = Date.parse(nowISO);
   const [tab, setTab] = useState<NoGuildTab>('open');
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [sort, setSort] = useState<PublicGuildSort>('activity');
   const [joinTarget, setJoinTarget] = useState<PublicGuildItem | null>(null);
-  const publicGuilds = usePublicGuilds(search, sort, tab === 'open');
+  const updateSearch = (next: string) => {
+    setSearch(next);
+    if (next.trim() === '') setDebouncedSearch('');
+  };
+  useEffect(() => {
+    if (search.trim() === '') return;
+    const timer = setTimeout(() => setDebouncedSearch(search), 250);
+    return () => clearTimeout(timer);
+  }, [search]);
+  const publicGuilds = usePublicGuilds(debouncedSearch, sort, tab === 'open');
 
   const [name, setName] = useState('');
   const [input, setInput] = useState('');
@@ -116,10 +147,31 @@ export default function NoGuild({ busy, run, join, request, setToast }: {
   };
 
   const confirmData = joinTarget ? publicJoinConfirm(joinTarget, request) : null;
+  const confirmDialog = confirmData && (
+    <ConfirmDialog layer="stage" title={confirmData.title} confirmLabel={confirmData.label}
+                   onCancel={() => setJoinTarget(null)}
+                   onConfirm={() => { void confirmPublicJoin(); }}>
+      <p className="m-0 text-sm"><b>{confirmData.guild.name}</b> 길드에 바로 들어갈까요?</p>
+      <Inset className="mt-2.5 px-3 py-2 flex flex-col gap-1 text-sm">
+        <ul className="m-0 p-0 list-none flex flex-col">
+          <KeyValueRow as="li" compact className="h-auto py-0.5 text-sm border-t-0" label="길드" value={confirmData.guild.name} valueClassName="font-bold" />
+          <KeyValueRow as="li" compact className="h-auto py-0.5 text-sm border-t-0" label="레벨" value={`Lv.${confirmData.guild.level}`} valueClassName="pf-accent text-gold" />
+          <KeyValueRow as="li" compact className="h-auto py-0.5 text-sm border-t-0" label="인원" value={`${confirmData.guild.members}/${confirmData.guild.cap}`} valueClassName="pf-accent" />
+        </ul>
+        <p className="m-0 pt-1.5 border-t border-line/60 text-xs text-text-dim">"{confirmData.guild.pitch}"</p>
+      </Inset>
+      {confirmData.pendingCancelWarn && (
+        <Inset tone="deep" border="danger" className="mt-2.5 p-2.5 flex flex-col gap-0.5 text-2xs text-text-dim">
+          <strong className="text-danger">기존 가입 신청 자동 취소</strong>
+          <span>{confirmData.pendingCancelWarn}</span>
+        </Inset>
+      )}
+    </ConfirmDialog>
+  );
 
   return (
     <div className="flex flex-col gap-2.5 flex-1 min-h-0">
-      <TabBar<NoGuildTab> activeKey={tab} onSelect={setTab} tabs={[
+      <TabBar<NoGuildTab> inline activeKey={tab} onSelect={setTab} tabs={[
         { key: 'open', label: '공개 길드', icon: <PixelIcon glyph="compass" size={12} /> },
         { key: 'code', label: '코드로 가입', icon: <PixelIcon glyph="key" size={12} /> },
         { key: 'create', label: '길드 만들기', icon: <PixelIcon glyph="plus" size={12} /> },
@@ -140,11 +192,11 @@ export default function NoGuild({ busy, run, join, request, setToast }: {
           <div className="flex flex-col gap-1.5 shrink-0">
             <div className="flex items-center gap-1.5">
               <div className="relative flex-1 min-w-0 flex items-center">
-                <TextInput compact value={search} maxLength={20} onChange={e => setSearch(e.target.value)}
-                           aria-label="길드명 검색" placeholder="길드명 검색" className="pr-8" />
+                <TextInput compact="sm" value={search} maxLength={20} onChange={e => updateSearch(e.target.value)}
+                           aria-label="길드명 검색" placeholder="길드명 검색" className="w-full min-w-0 pr-8" />
                 {search.trim() !== '' && (
                   <IconButton type="button" glyph="close" size={10} tone="dim" aria-label="검색어 지우기"
-                              onClick={() => setSearch('')} className="absolute right-1.5 size-6 justify-center" />
+                              onClick={() => updateSearch('')} className="absolute right-1.5 size-6 justify-center" />
                 )}
               </div>
               <Button size="sm" disabled={busy || publicGuilds.fetching} onClick={() => { void publicGuilds.refresh(); }}>
@@ -156,7 +208,7 @@ export default function NoGuild({ busy, run, join, request, setToast }: {
               <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="목록 정렬">
                 <span className="text-2xs text-text-dim mr-0.5">정렬</span>
                 {PUBLIC_GUILD_SORT_OPTIONS.map(opt => (
-                  <ToggleChip key={opt.value} size="sm" pressed={sort === opt.value} emphasis={sort === opt.value}
+                  <ToggleChip key={opt.value} variant="choice" size="sm" pressed={sort === opt.value} emphasis={sort === opt.value}
                               onClick={() => setSort(opt.value)}>
                     {opt.label}
                   </ToggleChip>
@@ -184,7 +236,7 @@ export default function NoGuild({ busy, run, join, request, setToast }: {
                 ))}
               </div>
             ) : publicGuilds.failed ? (
-              <EmptyState className="flex-1" glyph="warn"
+              <EmptyState framed={false} iconTone="danger" className="flex-1" glyph="warn"
                           message={(
                             <div className="flex flex-col gap-1">
                               <b className="text-text text-sm">공개 길드 목록을 불러오지 못했어요.</b>
@@ -194,16 +246,16 @@ export default function NoGuild({ busy, run, join, request, setToast }: {
                           action={<Button size="sm" onClick={() => { void publicGuilds.refresh(); }}>다시 시도</Button>} />
             ) : publicGuilds.guilds.length === 0 ? (
               search.trim() !== '' ? (
-                <EmptyState className="flex-1" glyph="compass"
+                <EmptyState framed={false} className="flex-1" glyph="compass"
                             message={(
                               <div className="flex flex-col gap-1">
                                 <b className="text-text text-sm">검색어와 맞는 공개 길드가 없어요.</b>
                                 <span>다른 길드 이름으로 검색하거나 검색어를 지워 전체 목록을 확인해 보세요.</span>
                               </div>
                             )}
-                            action={<Button size="sm" onClick={() => setSearch('')}>검색 초기화</Button>} />
+                            action={<Button size="sm" onClick={() => updateSearch('')}>검색 초기화</Button>} />
               ) : (
-                <EmptyState className="flex-1" glyph="compass"
+                <EmptyState framed={false} className="flex-1" glyph="compass"
                             message={(
                               <div className="flex flex-col gap-1">
                                 <b className="text-text text-sm">지금 바로 들어갈 수 있는 공개 길드가 없어요.</b>
@@ -235,9 +287,9 @@ export default function NoGuild({ busy, run, join, request, setToast }: {
                           <span>{guildActivityText(g.lastActivityAt, nowMs)}</span>
                         </span>
                       </div>
-                      <p className="m-0 text-xs text-text-dim truncate mobile:whitespace-normal mobile:line-clamp-2">{g.pitch}</p>
+                      <GuildPitch pitch={g.pitch} />
                     </div>
-                    <Button size="sm" variant="primary" disabled={busy} aria-label={`${g.name} 길드 가입`}
+                    <Button size="sm" variant="primary" disabled={busy} className="min-w-[62px]" aria-label={`${g.name} 길드 가입`}
                             onClick={() => setJoinTarget(g)}>
                       가입
                     </Button>
@@ -254,7 +306,7 @@ export default function NoGuild({ busy, run, join, request, setToast }: {
           <form className="flex flex-col gap-1.5" onSubmit={onFind}>
             <Subheading className="mb-0 text-xs">초대 코드로 들어가기</Subheading>
             <div className="flex gap-2">
-              <TextInput compact className="flex-1 min-w-0 uppercase pf-accent tracking-widest" value={input} maxLength={16}
+              <TextInput compact="sm" className="flex-1 min-w-0 w-full uppercase pf-accent tracking-widest" value={input} maxLength={16}
                          onChange={e => setInput(e.target.value)} aria-label="길드 코드" placeholder="길드 코드 8자리" />
               <Button type="submit" size="sm" disabled={busy} className={ACTION_WIDTH}>찾기</Button>
             </div>
@@ -278,7 +330,7 @@ export default function NoGuild({ busy, run, join, request, setToast }: {
             ))}
           </Inset>
           <form className="flex gap-2" onSubmit={e => { void onCreate(e); }}>
-            <TextInput compact className="flex-1 min-w-0" value={name} maxLength={16}
+            <TextInput compact="sm" className="flex-1 min-w-0 w-full" value={name} maxLength={16}
                        onChange={e => setName(e.target.value)} aria-label="길드 이름" placeholder="길드 이름" />
             <Button type="submit" size="sm" variant="primary" disabled={busy} className={ACTION_WIDTH}>만들기</Button>
           </form>
@@ -286,27 +338,7 @@ export default function NoGuild({ busy, run, join, request, setToast }: {
         </div>
       )}
 
-      {confirmData && (
-        <ConfirmDialog layer="stage" title={confirmData.title} confirmLabel={confirmData.label}
-                       onCancel={() => setJoinTarget(null)}
-                       onConfirm={() => { void confirmPublicJoin(); }}>
-          <p className="m-0 text-sm"><b>{confirmData.guild.name}</b> 길드에 바로 들어갈까요?</p>
-          <Inset className="mt-2.5 px-3 py-2 flex flex-col gap-1 text-sm">
-            <ul className="m-0 p-0 list-none flex flex-col">
-              <KeyValueRow as="li" compact className="h-auto py-0.5 text-sm border-t-0" label="길드" value={confirmData.guild.name} valueClassName="font-bold" />
-              <KeyValueRow as="li" compact className="h-auto py-0.5 text-sm border-t-0" label="레벨" value={`Lv.${confirmData.guild.level}`} valueClassName="pf-accent text-gold" />
-              <KeyValueRow as="li" compact className="h-auto py-0.5 text-sm border-t-0" label="인원" value={`${confirmData.guild.members}/${confirmData.guild.cap}`} valueClassName="pf-accent" />
-            </ul>
-            <p className="m-0 pt-1.5 border-t border-line/60 text-xs text-text-dim">"{confirmData.guild.pitch}"</p>
-          </Inset>
-          {confirmData.pendingCancelWarn && (
-            <Inset tone="deep" className="mt-2.5 p-2.5 flex flex-col gap-0.5 text-2xs text-text-dim">
-              <strong className="text-danger">기존 가입 신청 자동 취소</strong>
-              <span>{confirmData.pendingCancelWarn}</span>
-            </Inset>
-          )}
-        </ConfirmDialog>
-      )}
+      {confirmDialog && (dialogHost ? createPortal(confirmDialog, dialogHost) : confirmDialog)}
     </div>
   );
 }

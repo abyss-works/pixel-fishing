@@ -1,7 +1,7 @@
 // 길드 창: 길드가 없으면 코드로 찾아 들어가기와 만들기. 길드가 있으면 제목 아래 고정 정보 줄(레벨, 진행, 인원)이 탭을 바꿔도 남고,
 // 길드원 탭(표, 떠나기), 길드 스킬 탭(트리, 고른 스킬, 기부 창), 항해일지 탭(날짜별 기록), 길드장의 관리 탭(가입 방식, 코드와 링크, 신청)이 있다.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { registerNoticeSink } from '../../../../features/display/model/toastPolicy';
 import type { GuildInfo, PublicGuildItem } from '../../../../features/guild/model/guild';
 import GuildModal from './GuildModal';
@@ -11,6 +11,7 @@ const s = vi.hoisted(() => ({
   you: 'L' as string | null,
   loading: false,
   failed: false,
+  refresh: vi.fn(),
   act: vi.fn(async (_op: unknown): Promise<{ ok: true; result?: 'joined' | 'requested'; recovered?: number } | { ok: false; error: string }> => ({ ok: true })),
   request: null as { code: string; name: string; requestedAt: string } | null,
   preview: null as unknown,
@@ -18,17 +19,31 @@ const s = vi.hoisted(() => ({
   publicLoading: false,
   publicFailed: false,
   publicRefresh: vi.fn(),
+  guildRefresh: vi.fn(),
+  publicQueries: [] as Array<{ q: string; sort: string; enabled: boolean }>,
 }));
 vi.mock('../../../../features/guild/service/useGuild', () => ({
-  useGuild: () => ({ available: true, guild: s.guild, request: s.request, loading: s.loading, failed: s.failed, you: s.you, act: s.act }),
+  useGuild: () => ({
+    available: true,
+    guild: s.guild,
+    request: s.request,
+    loading: s.loading,
+    failed: s.failed,
+    you: s.you,
+    act: s.act,
+    refresh: () => { s.refresh(); s.guildRefresh(); },
+  }),
 }));
 vi.mock('../../../../features/guild/service/useGuildInvite', () => ({
   useGuildInvite: (code: string | null) => ({ preview: code ? s.preview : null, settled: code !== null, failed: false, refresh: vi.fn() }),
 }));
 vi.mock('../../../../features/guild/service/usePublicGuilds', () => ({
-  usePublicGuilds: () => ({
-    guilds: s.publicGuilds, loading: s.publicLoading, fetching: false, failed: s.publicFailed, refresh: s.publicRefresh,
-  }),
+  usePublicGuilds: (q: string, sort: string, enabled: boolean) => {
+    s.publicQueries.push({ q, sort, enabled });
+    return {
+      guilds: s.publicGuilds, loading: s.publicLoading, fetching: false, failed: s.publicFailed, refresh: s.publicRefresh,
+    };
+  },
 }));
 
 const at = '2026-11-05T00:00:00.000Z';
@@ -60,6 +75,7 @@ const GUILD: GuildInfo = {
 
 describe('GuildModal', () => {
   afterEach(() => {
+    vi.useRealTimers();
     cleanup();
     s.guild = null;
     s.you = 'L';
@@ -70,7 +86,10 @@ describe('GuildModal', () => {
     s.publicGuilds = [];
     s.publicLoading = false;
     s.publicFailed = false;
+    s.publicQueries = [];
     s.publicRefresh.mockReset();
+    s.refresh.mockReset();
+    s.guildRefresh.mockReset();
     s.act.mockReset();
     s.act.mockImplementation(async () => ({ ok: true }));
     vi.clearAllMocks();
@@ -461,6 +480,11 @@ describe('GuildModal', () => {
     const day = within(screen.getByRole('region', { name: '11월 5일' }));
     expect(day.getByText('전설 황금 잉어').className).toContain('text-legend');
     expect(day.getByText('전설 돌연변이 무지개 잉어').className).toContain('text-mutation');
+    const normalLi = day.getByText('전설 황금 잉어').closest('li')!;
+    const variantLi = day.getByText('전설 돌연변이 무지개 잉어').closest('li')!;
+    expect(normalLi.querySelector('[data-glyph="star"]')).not.toBeNull();
+    expect(variantLi.querySelector('[data-glyph="sparkle"]')).not.toBeNull();
+    expect(variantLi.querySelector('[data-glyph="sparkle"]')?.parentElement?.className).toContain('text-gold');
   });
 
   it('Lv.6 이상 길드에서는 [개인] 서브탭에서 스킬을 고른 뒤 강화 올리기와 초기화(? 툴팁 포함)를 할 수 있다', async () => {
@@ -640,6 +664,8 @@ describe('GuildModal', () => {
     rerender(<GuildModal gold={0} artifacts={{ artifacts: [] }} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
     expect(screen.getByText('길드 정보를 열지 못했어요.')).toBeTruthy();
     expect(screen.queryByText('길드 정보를 불러오는 중이에요.')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(s.refresh).toHaveBeenCalledTimes(1);
 
     s.failed = false;
     s.guild = GUILD;
@@ -691,5 +717,111 @@ describe('GuildModal', () => {
     fireEvent.click(renameDialog.parentElement as HTMLElement);
     expect(screen.queryByText('길드 이름 바꾸기')).toBeNull();
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('공개 길드 UI 시안: 3탭 4면 테두리, 입력 칸 폭·폰트 분리, 중첩 없는 빈/오류 칸, 정렬 칩, 가입 확인 창 포털, 250ms 디바운스, 재시도를 지킨다', () => {
+    vi.useFakeTimers();
+    const onClose = vi.fn();
+    const onRetry = vi.fn();
+    s.request = { code: 'OLD12345', name: '은빛항구', requestedAt: new Date().toISOString() };
+    s.publicGuilds = [
+      {
+        guildId: 'pub-1', name: '파도쉼터', level: 7, members: 8, cap: 10,
+        pitch: '아주 긴 길드 소개 문구여서 한 줄에서 잘리는 경우 툴팁으로 전체 내용을 보여 줍니다.', lastActivityAt: new Date().toISOString(),
+      },
+    ];
+    const { rerender } = render(
+      <GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={onClose} onRetry={onRetry} />,
+    );
+
+    // 1. 상단 3탭 4면 테두리 + 가로 배치
+    const tabBar = screen.getByRole('button', { name: '공개 길드' }).parentElement as HTMLElement;
+    expect(tabBar.className).toContain('border-line');
+    expect(tabBar.className).toContain('[&_button]:flex-row');
+
+    // 2. 검색 입력: 본문 폰트(pf-accent 없음), min-h-[30px], w-full min-w-0
+    const searchInput = screen.getByLabelText('길드명 검색');
+    expect(searchInput.className).toContain('w-full');
+    expect(searchInput.className).toContain('min-w-0');
+    expect(searchInput.className).toContain('min-h-[30px]');
+    expect(searchInput.className).not.toContain('pf-accent');
+
+    // 3. 정렬 칩: 체크 아이콘 없고 비활성은 테두리·바탕 유지, 활성은 font-bold 없이 테두리·글자 대비만 사용
+    const activeChip = screen.getByRole('button', { name: '최근 활동순' });
+    const inactiveChip = screen.getByRole('button', { name: '레벨순' });
+    expect(activeChip.querySelector('[data-glyph="check"]')).toBeNull();
+    expect(activeChip.className).toContain('border-gold');
+    expect(activeChip.className).toContain('text-gold');
+    expect(activeChip.className).not.toContain('font-bold');
+    expect(inactiveChip.className).toContain('border-line');
+    expect(inactiveChip.className).toContain('bg-surface-2');
+
+    // 4. 가입 버튼 min-w-[62px], 말줄임 pitch 툴팁
+    const joinBtn = screen.getByRole('button', { name: '파도쉼터 길드 가입' });
+    expect(joinBtn.className).toContain('min-w-[62px]');
+    const pitchEl = screen.getByText(/아주 긴 길드 소개/);
+    Object.defineProperty(pitchEl, 'scrollWidth', { configurable: true, value: 300 });
+    Object.defineProperty(pitchEl, 'clientWidth', { configurable: true, value: 120 });
+    fireEvent.mouseEnter(pitchEl);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('아주 긴 길드 소개');
+    fireEvent.mouseLeave(pitchEl);
+
+    // 5. 검색어 250ms 디바운스 및 비움 뒤 재입력 시 옛 검색어 잔류 방지
+    s.publicQueries = [];
+    fireEvent.change(searchInput, { target: { value: '파도' } });
+    expect(s.publicQueries.at(-1)?.q).toBe('');
+    act(() => { vi.advanceTimersByTime(249); });
+    expect(s.publicQueries.at(-1)?.q).toBe('');
+    act(() => { vi.advanceTimersByTime(1); });
+    expect(s.publicQueries.at(-1)?.q).toBe('파도');
+    // 검색어 지우기 후 새 검색어 입력 시 이전 디바운스 값('파도')으로 돌아가지 않아야 한다
+    fireEvent.click(screen.getByRole('button', { name: '검색어 지우기' }));
+    expect(s.publicQueries.at(-1)?.q).toBe('');
+    fireEvent.change(searchInput, { target: { value: '새' } });
+    expect(s.publicQueries.at(-1)?.q).toBe('');
+    act(() => { vi.advanceTimersByTime(250); });
+    expect(s.publicQueries.at(-1)?.q).toBe('새');
+
+    // 6. 바로 가입 ConfirmDialog가 dialogHost 포털로 ModalCard 밖에 뜨며 바깥 클릭 시 부모 모달이 닫히지 않는다
+    fireEvent.click(joinBtn);
+    const joinDialog = screen.getAllByRole('dialog').at(-1) as HTMLElement;
+    expect(joinDialog.closest('.pf-frame')).toBeNull();
+    expect(within(joinDialog).getByText('기존 가입 신청 자동 취소').parentElement?.className).toContain('border-danger');
+    fireEvent.click(joinDialog.parentElement as HTMLElement);
+    expect(screen.queryByText('길드 가입 확인')).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+
+    // 7. 실패 EmptyState 이중 Inset 중첩 없음 + warn 아이콘 text-danger
+    s.publicFailed = true;
+    rerender(<GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={onClose} onRetry={onRetry} />);
+    const listSection = screen.getByLabelText('공개 길드 목록');
+    expect(listSection.querySelector('.pf-notch')).toBeNull();
+    expect(listSection.querySelector('[data-glyph="warn"]')?.getAttribute('class')).toContain('text-danger');
+    s.publicFailed = false;
+    rerender(<GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={onClose} onRetry={onRetry} />);
+
+    // 8. 코드로 가입 입력 칸(pf-accent 유지) & 요약 Lv.N text-gold, 길드 만들기 입력 칸(본문 폰트)
+    fireEvent.click(screen.getAllByRole('button', { name: '코드로 가입' })[0]);
+    expect(screen.getByLabelText('길드 코드').className).toContain('pf-accent');
+    s.preview = { name: '새벽선단', level: 4, members: 3, cap: 10, joinMode: 'open', pitch: null };
+    fireEvent.change(screen.getByLabelText('길드 코드'), { target: { value: 'ABCD2345' } });
+    fireEvent.click(screen.getByRole('button', { name: '찾기' }));
+    expect(screen.getByText('Lv.4').className).toContain('text-gold');
+
+    fireEvent.click(screen.getAllByRole('button', { name: '길드 만들기' })[0]);
+    expect(screen.getByLabelText('길드 이름').className).not.toContain('pf-accent');
+    expect(screen.getByLabelText('길드 이름').className).toContain('min-h-[30px]');
+
+    // 9. 길드 정보 조회 실패 시 onRetry 없이도 useGuild().refresh()로 다시 시도하고, onRetry 주입 시 우선 사용한다
+    s.failed = true;
+    rerender(<GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={onClose} />);
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(s.guildRefresh).toHaveBeenCalledTimes(1);
+
+    rerender(<GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={onClose} onRetry={onRetry} />);
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+
+    vi.useRealTimers();
   });
 });

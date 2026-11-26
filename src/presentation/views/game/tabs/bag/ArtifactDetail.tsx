@@ -7,9 +7,11 @@ import { LEVEL_UP_TEXT, levelText, selectArtifactLevel } from '../../../../../fe
 import { sendNotice } from '../../../../../features/display/model/toastPolicy';
 import type { ArtifactLevelView } from '../../../../../features/inventory/model/artifactLevel';
 import { levelUpArtifact } from '../../../../../features/inventory/service/levelUpArtifact';
+import Badge from '../../../../ui/Badge';
 import Button from '../../../../ui/Button';
 import CostBox from '../../../../ui/CostBox';
 import CostLine from '../../../../ui/CostLine';
+import { cx } from '../../../../ui/cx';
 import Inset from '../../../../ui/Inset';
 import ItemSprite from '../../../../ui/ItemSprite';
 import KeyValueRow from '../../../../ui/KeyValueRow';
@@ -42,6 +44,7 @@ export default function ArtifactDetail({ artifact, game, dispatch, setToast, onC
   const [busy, setBusy] = useState(false);
   const view = selectArtifactLevel(game, artifact);
   const { next } = view;
+  const unowned = view.status === 'unowned';
 
   const levelUp = async () => {
     setBusy(true);
@@ -62,22 +65,29 @@ export default function ArtifactDetail({ artifact, game, dispatch, setToast, onC
     <Modal layer="app" onClose={onClose}
            header={
              <header className="mb-3 flex items-center gap-3 border-b border-line pb-2 pr-8">
-               <ItemSprite kind="artifact" id={artifact.id} preset="hero" className="shrink-0" />
-               <PageTitle className="min-w-0">
-                 <GradeName name={artifact.name} grade={artifact.grade} />
-               </PageTitle>
+               <ItemSprite kind="artifact" id={artifact.id} preset="hero"
+                           className={cx('shrink-0', unowned && 'grayscale brightness-75')} />
+               <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 min-w-0">
+                 <PageTitle className="min-w-0">
+                   <GradeName name={artifact.name} grade={artifact.grade} />
+                 </PageTitle>
+                 {unowned && <Badge>미보유</Badge>}
+               </div>
              </header>
            }
            footer={<Footer view={view} busy={busy} onLevelUp={levelUp} />}>
       <div className="flex flex-col gap-3">
         <LoreParagraph className="text-xs leading-[1.8] text-text-dim">{artifact.lore}</LoreParagraph>
-        {view.status === 'unowned' && view.hasLevel ? (
-          <Inset divided>
-            {artifactEffectKeys(artifact).map(effect => (
-              <KeyValueRow key={effect} label={artifactEffectLabel(effect)}
-                           value={<span className="block text-right text-text-dim">{artifactEffectValue(artifact, effect, 1)}</span>} />
-            ))}
-          </Inset>
+        {unowned && view.hasLevel ? (
+          <div className="flex flex-col gap-1">
+            <Subheading>Lv.1 기준</Subheading>
+            <Inset divided>
+              {artifactEffectKeys(artifact).map(effect => (
+                <KeyValueRow key={effect} label={artifactEffectLabel(effect)}
+                             value={<span className="pf-accent block text-right text-text-dim">{artifactEffectValue(artifact, effect, 1)}</span>} />
+              ))}
+            </Inset>
+          </div>
         ) : view.hasLevel ? (
           <CompareTable
             heads={next

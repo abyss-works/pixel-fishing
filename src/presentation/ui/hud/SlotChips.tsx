@@ -22,7 +22,7 @@ export default function SlotChips({
   accountState: AccountLockState;
   onOpenEffects?: () => void;
 }) {
-  const now = useNow(1_000);
+  const now = useNow();
   const chip = selectBonusChip(game, now, accountState);
 
   if (chip.state === 'locked') {

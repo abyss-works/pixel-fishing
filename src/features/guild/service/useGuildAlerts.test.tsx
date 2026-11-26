@@ -103,17 +103,29 @@ describe('useGuildAlerts — 실시간 길드 이벤트', () => {
     return { invalidate, notify };
   }
 
-  it('updated는 길드만 다시 읽고 알림을 띄우지 않는다', () => {
+  it('updated는 길드·공개 길드·초대 미리보기를 무효화하고 알림을 띄우지 않는다', () => {
     const { invalidate, notify } = setup();
     live.emit({ t: 'guild', kind: 'updated', guild: '심해', nick: null });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['guild', 'u1'] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['publicGuilds'] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['guildInvite'] });
     expect(notify).not.toHaveBeenCalled();
   });
 
-  it('rejected는 거절 알림을 띄운다', () => {
+  it('rejected는 거절 알림을 띄우고 publicGuilds·guildInvite도 무효화한다', () => {
     const { invalidate, notify } = setup();
     live.emit({ t: 'guild', kind: 'rejected', guild: '심해', nick: null });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['guild', 'u1'] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['publicGuilds'] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['guildInvite'] });
     expect(notify).toHaveBeenCalledWith('심해 길드 가입 신청이 거절됐어요.', 'warn');
+  });
+
+  it('request는 내 길드만 무효화하고 publicGuilds는 건드리지 않는다', () => {
+    const { invalidate, notify } = setup();
+    live.emit({ t: 'guild', kind: 'request', guild: '심해', nick: '바다거북' });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['guild', 'u1'] });
+    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: ['publicGuilds'] });
+    expect(notify).toHaveBeenCalledWith('바다거북 님이 심해 길드에 가입을 신청했어요.');
   });
 });

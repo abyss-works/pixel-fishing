@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { GuildInvitePreview } from '../../../../features/guild/model/guild';
 import GuildInviteDialog from './GuildInviteDialog';
 
@@ -8,9 +8,11 @@ const state = vi.hoisted(() => ({
   settled: false,
   failed: false,
   loading: false,
+  inviteRefresh: vi.fn(),
   guild: null as { name: string } | null,
   guildLoading: false,
   guildFailed: false,
+  guildRefresh: vi.fn(),
   act: vi.fn(async () => ({ ok: true as const })),
 }));
 
@@ -20,7 +22,7 @@ vi.mock('../../../../features/guild/service/useGuildInvite', () => ({
     settled: state.settled,
     failed: state.failed,
     loading: state.loading,
-    refresh: vi.fn(),
+    refresh: state.inviteRefresh,
   }),
 }));
 
@@ -29,6 +31,7 @@ vi.mock('../../../../features/guild/service/useGuild', () => ({
     guild: state.guild,
     loading: state.guildLoading,
     failed: state.guildFailed,
+    refresh: state.guildRefresh,
     act: state.act,
   }),
 }));
@@ -58,6 +61,8 @@ describe('GuildInviteDialog 비동기 상태 구분', () => {
     rerender(<GuildInviteDialog code="K7QX2MAB" account="u@example.com" onAccount={vi.fn()} onClose={vi.fn()} setToast={vi.fn()} />);
     expect(screen.getByText('길드 초대 정보를 열지 못했어요.')).toBeTruthy();
     expect(screen.queryByText('초대를 불러오는 중이에요.')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(state.inviteRefresh).toHaveBeenCalledTimes(1);
 
     state.failed = false;
     state.settled = true;
@@ -66,5 +71,7 @@ describe('GuildInviteDialog 비동기 상태 구분', () => {
     rerender(<GuildInviteDialog code="K7QX2MAB" account="u@example.com" onAccount={vi.fn()} onClose={vi.fn()} setToast={vi.fn()} />);
     expect(screen.getByText('길드 초대 정보를 열지 못했어요.')).toBeTruthy();
     expect(screen.queryByText('초대를 불러오는 중이에요.')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(state.guildRefresh).toHaveBeenCalledTimes(1);
   });
 });

@@ -184,7 +184,7 @@ describe('스테이지 모달 aside 슬롯', () => {
   it('aside가 있으면 relative 래퍼 안에 dialog와 aside를 나란히 두고 aside 클릭은 백드롭으로 전파되지 않는다', () => {
     const onClose = vi.fn();
     render(
-      <Modal layer="stage" sm onClose={onClose} aside={<div data-testid="stage-aside">보조 패널</div>}>
+      <Modal layer="stage" width={420} onClose={onClose} aside={<div data-testid="stage-aside">보조 패널</div>}>
         본문
       </Modal>,
     );
@@ -194,11 +194,12 @@ describe('스테이지 모달 aside 슬롯', () => {
     const backdrop = wrapper.parentElement!;
 
     expect(wrapper.className).toContain('relative');
+    expect(wrapper.className).toContain('w-[min(420px,calc(100%-32px))]');
     expect(backdrop.className).toContain('absolute inset-0');
     expect(dialog.contains(aside)).toBe(false);
     expect(aside.parentElement).toBe(wrapper.children[1]);
     expect(aside.parentElement!.className).toContain('hidden');
-    expect(aside.parentElement!.className).toContain('@min-[996px]:block');
+    expect(aside.parentElement!.className).toContain('@min-[880px]:block');
     expect(aside.parentElement!.className).toContain('absolute');
     expect(aside.parentElement!.className).toContain('left-[calc(100%+10px)]');
 

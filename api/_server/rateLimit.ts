@@ -5,6 +5,8 @@ import type { IncomingMessage } from 'node:http';
 export interface RateLimiter {
   /** 이번 요청을 받아도 되는가. 받으면 센다 */
   take(key: string, now: number): boolean;
+  /** 거부 시 남은 창 시간(초 올림, 최소 1초) */
+  retryAfterSec(key: string, now: number): number;
 }
 
 export function createRateLimiter(opts: { windowMs: number; max: number }): RateLimiter {
@@ -21,6 +23,11 @@ export function createRateLimiter(opts: { windowMs: number; max: number }): Rate
       if (w.count >= opts.max) return false;
       w.count += 1;
       return true;
+    },
+    retryAfterSec(key, now) {
+      const w = windows.get(key);
+      if (!w || now - w.start >= opts.windowMs) return 1;
+      return Math.max(1, Math.ceil((opts.windowMs - (now - w.start)) / 1000));
     },
   };
 }

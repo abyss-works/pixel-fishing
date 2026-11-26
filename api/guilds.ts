@@ -54,6 +54,8 @@ type NodeHandler = (req: Req, res: Res) => Promise<void>;
 export type GuildChanged = (uid: string, guildId: string | null) => void;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** 공개 길드 목록 검색어 최대 길이(문자 수) */
+const PUBLIC_GUILD_QUERY_MAX = 50;
 
 /** 거부 코드의 응답 상태 */
 const STATUS: Record<string, number> = {
@@ -130,7 +132,7 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
 
   const publicList = handle(['GET'], async (req, res) => {
     const rawQ = queryParam(req, 'q');
-    const q = typeof rawQ === 'string' ? rawQ.trim() : '';
+    const q = typeof rawQ === 'string' ? [...rawQ.trim()].slice(0, PUBLIC_GUILD_QUERY_MAX).join('') : '';
     const rawSort = queryParam(req, 'sort');
     let sort: PublicGuildSort = 'activity';
     if (rawSort !== undefined && rawSort !== '') {
@@ -176,6 +178,7 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
     if (change.joinMode === undefined && change.pitch === undefined) throw new ApiError(400, 'bad-settings');
     const r = await run('db-write', () => setJoinSettings(database().db, uid, id, change));
     if (!r.ok) throw refuse(r.error);
+    guildUpdated(id);
     res.status(200).json({ joinMode: r.joinMode, pitch: r.pitch });
   });
 
@@ -222,7 +225,8 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
   });
 
   const cancel = handle(['DELETE'], async (_req, res, uid) => {
-    await run('db-write', () => cancelJoinRequest(database().db, uid));
+    const cancelled = await run('db-write', () => cancelJoinRequest(database().db, uid));
+    if (cancelled?.leaderId) notifyUser(cancelled.leaderId, { t: 'guild', kind: 'updated', guild: '', nick: null });
     res.status(200).json({ result: 'cancelled' });
   });
 
@@ -244,6 +248,7 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
     const r = await run('db-write', () => removeMember(database().withTransaction, uid, id, target, new Date().toISOString()));
     if (!r.ok) throw refuse(r.error);
     changed(target, null);
+    if (r.result === 'kicked') notifyUser(target, { t: 'guild', kind: 'updated', guild: '', nick: null });
     if (r.result !== 'dissolved') guildUpdated(id);
     res.status(200).json({ result: r.result });
   });
@@ -254,6 +259,7 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
     if (typeof raw !== 'string' || !UUID.test(raw)) throw new ApiError(400, 'bad-user');
     const r = await run('db-write', () => handOver(database().withTransaction, uid, id, raw.toLowerCase()));
     if (!r.ok) throw refuse(r.error);
+    guildUpdated(id);
     res.status(200).json({ result: 'handed-over' });
   });
 

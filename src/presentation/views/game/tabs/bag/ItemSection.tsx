@@ -16,6 +16,7 @@ import {
   selectItemSection,
 } from '../../../../../features/kitchen/model/bagItems';
 import type { EnergyCell, ItemRow, PotionRow, SwapConfirm } from '../../../../../features/kitchen/model/bagItems';
+import { slotPollIntervalMs } from '../../../../../features/kitchen/model/slots';
 import { formatEnergy } from '../../../../../game/content/cooking';
 import { fmtEffectDuration } from '../../../../../shared/lib/effectDuration';
 import { when } from '../../../../../shared/lib/when';
@@ -24,7 +25,7 @@ import Badge from '../../../../ui/Badge';
 import Button from '../../../../ui/Button';
 import { cx } from '../../../../ui/cx';
 import { GradeName, RarityText } from '../../../../ui/fish/RarityTag';
-import { josa } from '../../../../ui/format';
+import { fmtMinutes, josa } from '../../../../ui/format';
 import RecipeEffectTip from '../../../../ui/RecipeEffectTip';
 import Inset from '../../../../ui/Inset';
 import ItemSprite from '../../../../ui/ItemSprite';
@@ -89,7 +90,7 @@ function SwapDialog({ confirm, onConfirm, onCancel }: {
             <div className="grid grid-cols-[2.5rem_1fr_auto] items-center gap-2 py-2 text-sm">
               <span className="text-text-dim">새로</span>
               <span className="truncate"><GradeName name={confirm.next.title.name} grade={confirm.next.title.grade} /></span>
-              <span className="pf-accent text-xs text-accent">{fmtEffectDuration(confirm.next.minutes)}</span>
+              <span className="pf-accent text-xs text-accent">{fmtMinutes(confirm.next.minutes)}</span>
             </div>
           </Inset>
         </>
@@ -99,7 +100,9 @@ function SwapDialog({ confirm, onConfirm, onCancel }: {
             <div key={r.key} className="grid grid-cols-[2.5rem_1fr_auto] items-center gap-2 py-2 text-sm">
               <span className="text-text-dim">{r.head}</span>
               <span className="truncate"><GradeName name={r.title.name} grade={r.title.grade} /></span>
-              <span className={`pf-accent text-xs ${r.tone}`}>{fmtEffectDuration(r.minutes)}</span>
+              <span className={`pf-accent text-xs ${r.tone}`}>
+                {r.key === 'next' ? fmtMinutes(r.minutes) : fmtEffectDuration(r.minutes)}
+              </span>
             </div>
           ))}
         </Inset>
@@ -132,15 +135,16 @@ function ItemCards({ title, hint, rows, busy, selectedId, onSelect, onEat }: {
             </Button>
           );
           return (
-            <Inset key={row.recipe.id} tone={dimmed ? 'deep' : 'base'}
-                   border={selected ? 'gold' : row.active ? 'accent' : 'line'}
-                   className={cx('p-2 flex flex-col gap-1.5 min-w-0', dimmed && 'text-text-dim')}>
-              <Tip
-                wraps
-                hoverOnly
-                className="block"
-                text={<RecipeEffectTip label={<GradeName name={row.title.name} grade={row.title.grade} />} effects={row.effects} note={null} />}
-              >
+            <Tip
+              key={row.recipe.id}
+              wraps
+              hoverOnly
+              className="flex flex-col min-w-0"
+              text={<RecipeEffectTip label={<GradeName name={row.title.name} grade={row.title.grade} />} effects={row.effects} note={null} />}
+            >
+              <Inset tone={dimmed ? 'deep' : 'base'}
+                     border={selected ? 'gold' : row.active ? 'accent' : 'line'}
+                     className={cx('flex-1 p-2 flex flex-col gap-1.5 min-w-0', dimmed && 'text-text-dim')}>
                 <PressRow
                   ariaLabel={`${row.label} 상세 보기`}
                   onPress={() => onSelect(row.recipe.id)}
@@ -152,26 +156,28 @@ function ItemCards({ title, hint, rows, busy, selectedId, onSelect, onEat }: {
                       <GradeName name={row.title.name} grade={row.title.grade} />
                     </div>
                     <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-2xs text-text-dim">
-                      <span>지속 <span className={cx('pf-accent', !dimmed && 'text-text')}>{fmtEffectDuration(row.durationMinutes)}</span></span>
+                      <span>지속 <span className={cx('pf-accent', !dimmed && 'text-text')}>{fmtMinutes(row.durationMinutes)}</span></span>
                     </div>
+                    {row.active && row.remainingMinutes !== null && (
+                      <div className="pf-accent text-2xs text-accent leading-tight">
+                        남음 {fmtEffectDuration(row.remainingMinutes)}
+                      </div>
+                    )}
                   </div>
                 </PressRow>
-              </Tip>
-              <div className="mt-auto pt-1.5 border-t border-line-dim flex items-center justify-between gap-2">
-                <span className="pf-accent text-xs text-text-dim whitespace-nowrap">×{row.count}</span>
-                <span className="flex items-center justify-end gap-1.5 min-w-0">
-                  {row.active && <Badge tone="accent" size="2xs">사용 중</Badge>}
-                  {row.active && row.remainingMinutes !== null && (
-                    <span className="pf-accent text-2xs text-accent whitespace-nowrap">남음 {fmtEffectDuration(row.remainingMinutes)}</span>
-                  )}
-                  {rowLock ? (
-                    <Locked badge={false} lines={rowLock} title={<GradeName name={row.title.name} grade={row.title.grade} />} label={`${row.label} 잠김`} className="inline-block">
-                      {button}
-                    </Locked>
-                  ) : button}
-                </span>
-              </div>
-            </Inset>
+                <div className="mt-auto pt-1.5 border-t border-line-dim flex items-center justify-between gap-1">
+                  <span className="pf-accent text-xs text-text-dim whitespace-nowrap">×{row.count}</span>
+                  <span className="flex items-center justify-end gap-1 min-w-0">
+                    {row.active && <Badge tone="accent" size="2xs">사용 중</Badge>}
+                    {rowLock ? (
+                      <Locked badge={false} lines={rowLock} title={<GradeName name={row.title.name} grade={row.title.grade} />} label={`${row.label} 잠김`} className="inline-block">
+                        {button}
+                      </Locked>
+                    ) : button}
+                  </span>
+                </div>
+              </Inset>
+            </Tip>
           );
         })}
       </div>
@@ -236,45 +242,55 @@ function PotionCards({ rows, potionLock, busy, selectedId, onSelect, onUse }: {
           const locked = potionLock !== null;
           const dimmed = locked || (!row.usable && !row.active);
           const selected = selectedId === row.potion.id;
-          const btnLabel = row.active ? '사용 중' : '사용';
           const button = (
             <Button
               size="sm"
-              aria-label={`${row.potion.name} ${btnLabel}`}
+              aria-label={`${row.potion.name} 사용`}
               disabled={busy || locked || !row.usable}
               onClick={() => onUse(row)}
             >
-              {btnLabel}
+              사용
             </Button>
           );
           return (
-            <Inset key={row.potion.id} tone={dimmed ? 'deep' : 'base'}
-                   border={selected ? 'gold' : row.active ? 'accent' : 'line'}
-                   className={cx('p-2 flex flex-col gap-1.5 min-w-0', dimmed && 'text-text-dim')}>
-              <PressRow
-                ariaLabel={`${row.potion.name} 상세 보기`}
-                onPress={() => onSelect(row.potion.id)}
-                className="flex items-start gap-2 min-w-0 -m-1 p-1"
-              >
-                <ItemSprite kind="potion" id={row.potion.id} preset="list" className="shrink-0" />
-                <div className="min-w-0 flex-1 flex flex-col gap-0.5">
-                  <div className="text-xs leading-snug break-keep">
-                    <GradeName name={row.potion.name} grade={row.potion.grade} />
+            <Tip
+              key={row.potion.id}
+              wraps
+              hoverOnly
+              className="flex flex-col min-w-0"
+              text={<RecipeEffectTip label={<GradeName name={row.potion.name} grade={row.potion.grade} />} effects={row.effects} note={null} />}
+            >
+              <Inset tone={dimmed ? 'deep' : 'base'}
+                     border={selected ? 'gold' : row.active ? 'accent' : 'line'}
+                     className={cx('flex-1 p-2 flex flex-col gap-1.5 min-w-0', dimmed && 'text-text-dim')}>
+                <PressRow
+                  ariaLabel={`${row.potion.name} 상세 보기`}
+                  onPress={() => onSelect(row.potion.id)}
+                  className="flex items-start gap-2 min-w-0 -m-1 p-1"
+                >
+                  <ItemSprite kind="potion" id={row.potion.id} preset="list" className="shrink-0" />
+                  <div className="min-w-0 flex-1 flex flex-col gap-0.5">
+                    <div className="text-xs leading-snug break-keep">
+                      <GradeName name={row.potion.name} grade={row.potion.grade} />
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-2xs text-text-dim">
+                      <span>하루 동안</span>
+                    </div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-2xs text-text-dim">
-                    <span>하루 동안</span>
-                  </div>
+                </PressRow>
+                <div className="mt-auto pt-1.5 border-t border-line-dim flex items-center justify-between gap-1">
+                  <span className="pf-accent text-xs text-text-dim whitespace-nowrap">×{row.count}</span>
+                  <span className="flex items-center justify-end gap-1 min-w-0">
+                    {row.active && <Badge tone="accent" size="2xs">사용 중</Badge>}
+                    {potionLock ? (
+                      <Locked badge={false} lines={potionLock} title={<GradeName name={row.potion.name} grade={row.potion.grade} />} label={`${row.potion.name} 잠김`} className="inline-block">
+                        {button}
+                      </Locked>
+                    ) : button}
+                  </span>
                 </div>
-              </PressRow>
-              <div className="mt-auto pt-1.5 border-t border-line-dim flex items-center justify-between gap-2">
-                <span className="pf-accent text-xs text-text-dim whitespace-nowrap">×{row.count}</span>
-                {potionLock ? (
-                  <Locked badge={false} lines={potionLock} title={<GradeName name={row.potion.name} grade={row.potion.grade} />} label={`${row.potion.name} 잠김`} className="inline-block">
-                    {button}
-                  </Locked>
-                ) : button}
-              </div>
-            </Inset>
+              </Inset>
+            </Tip>
           );
         })}
       </div>
@@ -293,7 +309,7 @@ export default function ItemSection({ game, accountState, dispatch, setToast }: 
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
 }) {
-  const now = useNow(1_000);
+  const now = useNow(current => slotPollIntervalMs(game, current));
   const view = selectItemSection(game, now, accountState);
   const [busy, setBusy] = useState(false);
   const [ownedOnly, setOwnedOnly] = useState(false);

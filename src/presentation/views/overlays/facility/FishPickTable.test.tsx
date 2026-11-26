@@ -1,7 +1,7 @@
 // 어종 선택 표 — 판매 창의 판매 탭과 기운 얻기 탭이 함께 쓰는 표. 행 구성과 체크 동작은 이 표 하나가 맡는다.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { FISH } from '../../../../game/rules/logic';
+import { FISH, newState } from '../../../../game/rules/logic';
 import type { FishInstance } from '../../../../game/rules/logic';
 import { selectSalePreview } from '../../../../features/inventory/model/catalog';
 import FishPickTable from './FishPickTable';
@@ -103,6 +103,20 @@ describe('어종 선택 표', () => {
     expect(button).toHaveAttribute('aria-expanded', 'false');
     fireEvent.click(button);
     expect(h.onToggleExpand).toHaveBeenCalledWith(fish.id);
+  });
+
+  it('일반 미발견 + 돌연변이만 보유 시 어종 표 행과 버튼 접근성 이름이 미발견 일반형 대신 돌연변이 이름을 쓴다', () => {
+    const game = { ...newState(), dex: { [rare.id]: { variant: { count: 1, maxSize: 20, first: null } } } };
+    const rows = selectSalePreview([inst('v1', { fishId: rare.id, form: 'variant' })], new Set(), 0, 0, 1, undefined, game).rows;
+    render(
+      <FishPickTable rows={rows} expanded={new Set()} action="판매"
+                     heads={{ check: '판매', value: '소계' }} valueOf={() => '100G'} emptyValue="0G"
+                     onToggleExpand={vi.fn()} onToggleRow={vi.fn()} onToggleOne={vi.fn()} />,
+    );
+    expect(screen.getByText(rare.variant.name)).toBeInTheDocument();
+    expect(screen.queryByText(rare.name)).toBeNull();
+    expect(screen.getByRole('button', { name: `${rare.variant.name} 판매 해제` })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: `${rare.variant.name} 개체 펼치기` })).toBeInTheDocument();
   });
 
   it('크기를 모르는 개체는 묶음 하나로 고른다', () => {

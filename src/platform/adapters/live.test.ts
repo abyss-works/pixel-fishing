@@ -27,7 +27,7 @@ const connect = (onMessage = vi.fn()) =>
   connectLive(onMessage, FakeSocket as unknown as new (url: string) => WebSocket, 'ws://test/api/live');
 
 beforeEach(() => { vi.useFakeTimers(); FakeSocket.all = []; });
-afterEach(() => { vi.useRealTimers(); });
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe('connectLive', () => {
   it('서버 메시지를 넘기고 깨진 메시지는 버린다', () => {
@@ -48,6 +48,7 @@ describe('connectLive', () => {
   });
 
   it('끊기면 대기 시간을 두 배씩 늘려 상한까지 다시 연결하고, 연결되면 처음 값으로 돌아간다', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
     connect();
     const waits: number[] = [];
     for (let i = 0; i < 7; i++) {
@@ -62,6 +63,16 @@ describe('connectLive', () => {
     last().drop();
     vi.advanceTimersByTime(LIVE_RETRY_MIN_MS);
     expect(FakeSocket.all).toHaveLength(9);
+  });
+
+  it('재연결 대기 시간에 0~1999ms 랜덤 지터를 더해 동시 재접속을 분산한다', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    connect();
+    last().drop(1012);
+    vi.advanceTimersByTime(LIVE_RETRY_MIN_MS + 999);
+    expect(FakeSocket.all).toHaveLength(1);
+    vi.advanceTimersByTime(1);
+    expect(FakeSocket.all).toHaveLength(2);
   });
 
   it('다른 창에 연결을 넘겼거나 직접 닫으면 다시 연결하지 않는다', () => {
@@ -104,6 +115,7 @@ describe('connectLive', () => {
   });
 
   it('사유가 consent-required가 아닌 1008 종료는 기존처럼 재연결한다', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
     const onConsent = vi.fn();
     const off = subscribeConsentRequired(onConsent);
     connect();

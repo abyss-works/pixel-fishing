@@ -202,13 +202,32 @@ describe('BountyPanel', () => {
     expect(document.querySelector('.blur-sm.pointer-events-none')).toBeNull();
   });
 
-  it('네임드 알림 체크는 권한을 받기 전에도 저장된 켜짐을 보인다', async () => {
+  it('네임드 알림 체크는 권한 허용 전에는 꺼진 상태를 보이고, 클릭 시 권한을 요청하며 거절(denied)일 때만 안내를 띄운다', async () => {
     localStorage.clear();
     resetAlerts();
-    vi.stubGlobal('Notification', { permission: 'default', requestPermission: vi.fn(async () => 'granted') });
-    show(game({ dex: fullDex }));
+    const requestPermission = vi.fn(async () => 'default' as NotificationPermission);
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission });
+    const { setToast } = show(game({ dex: fullDex }));
     fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
-    expect(await screen.findByRole('checkbox', { name: '조우하면 알림 받기' })).toHaveAttribute('aria-checked', 'true');
+    const checkbox = await screen.findByRole('checkbox', { name: '조우하면 알림 받기' });
+    expect(checkbox).toHaveAttribute('aria-checked', 'false');
+    expect(checkbox.querySelector('[data-glyph="checkOff"]')).not.toBeNull();
+
+    // 허용 전 창을 닫아 default로 남으면 거절 안내를 띄우지 않는다
+    fireEvent.click(checkbox);
+    await waitFor(() => expect(requestPermission).toHaveBeenCalledTimes(1));
+    expect(setToast).not.toHaveBeenCalled();
+
+    // 실제 권한이 denied가 되면 거절 안내를 띄운다
+    requestPermission.mockImplementationOnce(async () => {
+      vi.stubGlobal('Notification', { permission: 'denied', requestPermission });
+      return 'denied';
+    });
+    fireEvent.click(checkbox);
+    await waitFor(() => expect(setToast).toHaveBeenCalledWith(
+      expect.stringContaining('브라우저가 알림을 막았어요'),
+      'warn',
+    ));
   });
 
   it('수주 버튼을 누르면 acceptQuest를 보낸다', async () => {

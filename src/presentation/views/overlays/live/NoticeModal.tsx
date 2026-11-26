@@ -4,13 +4,29 @@ import Inset from '../../../ui/Inset';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 
-function formatNoticeDate(iso: string): string {
-  const ms = Date.parse(iso);
-  if (!Number.isFinite(ms)) return '';
-  const d = new Date(ms);
+function formatNoticeTime(d: Date): string {
   const hh = String(d.getHours()).padStart(2, '0');
   const mm = String(d.getMinutes()).padStart(2, '0');
-  return `${d.getMonth() + 1}월 ${d.getDate()}일 ${hh}:${mm}`;
+  return `${hh}:${mm}`;
+}
+
+function formatNoticeDate(d: Date): string {
+  return `${d.getMonth() + 1}월 ${d.getDate()}일 ${formatNoticeTime(d)}`;
+}
+
+function formatNoticeRange(startsAt: string, endsAt: string): string {
+  const startMs = Date.parse(startsAt);
+  if (!Number.isFinite(startMs)) return '';
+  const start = new Date(startMs);
+  const endMs = Date.parse(endsAt);
+  if (!Number.isFinite(endMs)) return formatNoticeDate(start);
+  const end = new Date(endMs);
+  const sameDay = start.getFullYear() === end.getFullYear()
+    && start.getMonth() === end.getMonth()
+    && start.getDate() === end.getDate();
+  return sameDay
+    ? `${formatNoticeDate(start)} - ${formatNoticeTime(end)}`
+    : `${formatNoticeDate(start)} - ${formatNoticeDate(end)}`;
 }
 
 /** 활성 기간제 공지를 최신순 단일 목록으로 보여 주는 스테이지 창. */
@@ -39,7 +55,7 @@ export default function NoticeModal({
                     {notice.title}
                   </span>
                   <span className="pf-accent shrink-0 text-2xs text-text-dim tabular-nums">
-                    {formatNoticeDate(notice.startsAt)}
+                    {formatNoticeRange(notice.startsAt, notice.endsAt)}
                   </span>
                 </div>
                 <p className="m-0 text-xs leading-relaxed text-text whitespace-pre-wrap break-words">

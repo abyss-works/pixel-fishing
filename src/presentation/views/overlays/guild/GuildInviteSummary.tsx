@@ -21,7 +21,7 @@ export default function GuildInviteSummary({ preview, view, busy, onConfirm, act
         {preview ? (
           <ul className="m-0 p-0 list-none flex flex-col">
             <KeyValueRow as="li" compact className="h-auto py-0.5 text-sm border-t-0" label="길드" value={preview.name} valueClassName="font-bold" />
-            <KeyValueRow as="li" compact className="h-auto py-0.5 text-sm border-t-0" label="레벨" value={`Lv.${preview.level}`} valueClassName="pf-accent" />
+            <KeyValueRow as="li" compact className="h-auto py-0.5 text-sm border-t-0" label="레벨" value={`Lv.${preview.level}`} valueClassName="pf-accent text-gold" />
             <KeyValueRow as="li" compact className="h-auto py-0.5 text-sm border-t-0" label="인원" value={`${preview.members}/${preview.cap}`} valueClassName="pf-accent" />
             <KeyValueRow as="li" compact className="h-auto py-0.5 text-sm border-t-0" label="가입 방식" value={GUILD_JOIN_MODE_TEXT[preview.joinMode].name} />
           </ul>

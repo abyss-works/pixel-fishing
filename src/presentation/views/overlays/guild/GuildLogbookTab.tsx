@@ -59,7 +59,9 @@ export default function GuildLogbookTab({ logbook, me }: { logbook: readonly Gui
 }
 
 function LogLine({ item }: { item: LogEntry }) {
-  const mark = MARK[item.kind];
+  const mark = item.kind === 'legendary' && item.variant
+    ? { glyph: 'sparkle' as const, tone: 'text-gold border-gold-dark' }
+    : MARK[item.kind];
   return (
     <li className="relative grid grid-cols-[minmax(0,1fr)_44px] items-start gap-3 py-[7px] text-sm leading-relaxed">
       <span className={cx('absolute -left-[35px] top-1.5 size-6 flex items-center justify-center border border-line bg-surface-2',

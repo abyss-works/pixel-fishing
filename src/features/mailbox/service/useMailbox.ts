@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { isUnauthorizedFailure } from '../../../core/retryPolicy';
 import { markMailRead, readMails } from '../../../platform/api';
 import type { MailItem } from '../../../platform/api';
 import type { GameAction } from '../../../game/rules/actions';
@@ -26,7 +27,7 @@ export function useMailbox() {
     queryFn: readMails,
     enabled: ready && consentReady,
     staleTime: STALE,
-    refetchInterval: REFRESH,
+    refetchInterval: query => (!isUnauthorizedFailure(query.state.error) ? REFRESH : false),
     // 우편함 창을 열 때마다 최신 우편을 읽는다
     refetchOnMount: 'always',
   });
@@ -74,6 +75,7 @@ export function useMailbox() {
     loading: q.isPending,
     failed: q.isError,
     offline: q.isSuccess && q.data === null,
+    refresh: () => { void q.refetch(); },
     markRead,
     claim,
     takeLoginNotice,

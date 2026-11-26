@@ -50,6 +50,11 @@ const friendListeners = new Set<(e: FriendEvent) => void>();
 /** 길드 알림 구독자 — 가입 신청 도착, 승인, 거절. 친구 알림과 같이 상태에 넣지 않고 바로 넘긴다 */
 type GuildEvent = Extract<ServerMessage, { t: 'guild' }>;
 const guildListeners = new Set<(e: GuildEvent) => void>();
+/** 닉네임 변경 알림 구독자 — 닉네임 관련 조회 캐시 무효화에 쓴다 */
+type NickEvent = Extract<ServerMessage, { t: 'nick' }>;
+const nickListeners = new Set<(e: NickEvent) => void>();
+/** 새 우편 도착 알림 구독자 — 우편함 캐시 즉시 무효화에 쓴다 */
+const mailListeners = new Set<() => void>();
 
 function receive(msg: ServerMessage): void {
   const now = Date.now();
@@ -73,6 +78,8 @@ function receive(msg: ServerMessage): void {
   }
   if (msg.t === 'friend') for (const listener of friendListeners) listener(msg);
   if (msg.t === 'guild') for (const listener of guildListeners) listener(msg);
+  if (msg.t === 'nick') for (const listener of nickListeners) listener(msg);
+  if (msg.t === 'mail') for (const listener of mailListeners) listener();
   if (msg.t === 'move') glides.set(msg.uid, nextGlide(glides.get(msg.uid) ?? null, msg, performance.now()));
   const regionChanged = msg.t === 'move' && prev.others[msg.uid]?.presence.region !== msg.region;
   const zoneChanged = msg.t === 'move' && (prev.others[msg.uid]?.presence.zone ?? null) !== (msg.zone ?? null);
@@ -143,6 +150,27 @@ export function onFriendEvent(listener: (e: FriendEvent) => void): () => void {
 export function onGuildEvent(listener: (e: GuildEvent) => void): () => void {
   guildListeners.add(listener);
   return () => { guildListeners.delete(listener); };
+}
+
+/** 닉네임 변경 알림을 받는다. 돌려준 함수로 구독을 끝낸다 */
+export function onNickEvent(listener: (e: NickEvent) => void): () => void {
+  nickListeners.add(listener);
+  return () => { nickListeners.delete(listener); };
+}
+
+/** 새 우편 도착 알림을 받는다. 돌려준 함수로 구독을 끝낸다 */
+export function onMailEvent(listener: () => void): () => void {
+  mailListeners.add(listener);
+  return () => { mailListeners.delete(listener); };
+}
+
+/** 내 닉네임 변경 직후 서버 브로드캐스트 전에도 3방 채팅·접속 목록 닉네임을 즉시 갱신한다 */
+export function applyLocalNick(uid: string | null, nick: string): void {
+  const targetUid = uid ?? state.you;
+  if (!targetUid) return;
+  const prev = state;
+  state = applyLiveMessage(state, { t: 'nick', uid: targetUid, nick }, Date.now());
+  if (state !== prev) notify();
 }
 
 /** 그 플레이어가 지금 실시간 채널에 접속해 있는가 — 위치를 한 번이라도 보낸 연결만 접속으로 본다 */

@@ -59,10 +59,15 @@ describe('길드 초대 링크', () => {
       .toEqual({ title: '새벽선단 길드 초대', description: '픽셀 낚시 길드 Lv.3, 길드원 6/10명' });
   });
 
-  it('접속 주소 하나가 1분에 30번을 넘게 열면 API는 429, 링크 HTML은 미리보기 없이 기본 HTML을 낸다', async () => {
+  it('접속 주소 하나가 1분에 120번을 넘게 열면 API는 429와 Retry-After 헤더, 링크 HTML은 미리보기 없이 기본 HTML을 낸다', async () => {
     const { api, page } = guildInviteRoutes('https://pf.test', async () => HTML);
-    for (let i = 0; i < 30; i++) await call(api, 'ZZZZ2222', '9.9.9.9');
-    expect(await call(api, CODE, '9.9.9.9')).toMatchObject({ status: 429, body: { error: 'rate-limited' } });
+    for (let i = 0; i < 120; i++) await call(api, 'ZZZZ2222', '9.9.9.9');
+    const blocked = await call(api, CODE, '9.9.9.9');
+    expect(blocked).toMatchObject({ status: 429, body: { error: 'rate-limited' } });
+    const retryAfter = Number(blocked.headers['retry-after']);
+    expect(Number.isInteger(retryAfter)).toBe(true);
+    expect(retryAfter).toBeGreaterThanOrEqual(1);
+    expect(retryAfter).toBeLessThanOrEqual(60);
     expect(await call(page, CODE, '9.9.9.9')).toMatchObject({ status: 200, body: HTML });
     expect(await call(api, CODE, '8.8.8.8')).toMatchObject({ status: 200 });
   });

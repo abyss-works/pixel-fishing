@@ -6,6 +6,13 @@ import type { Executor } from '../_db/client.js';
 import type { GameEvent } from '../../src/game/rules/actions.js';
 import { at, textArray } from './json.js';
 
+/** 그 사용자가 마지막으로 편지를 보낸 시각(ISO). 보낸 적 없으면 null */
+export async function lastLetterAt(db: Executor, uid: string): Promise<string | null> {
+  const { rows } = await db.execute<{ at: string | Date }>(sql`select created_at as at from public.letters
+    where user_id = ${uid} order by created_at desc limit 1`);
+  return rows[0] ? new Date(rows[0].at).toISOString() : null;
+}
+
 /** letter 이벤트의 본문을 events와 같은 created_at으로 남긴다(복사 INSERT의 중복 제거가 이 시각으로 성립한다) */
 export function letterFragment(guard: SQL, uid: string, events: readonly GameEvent[], createdAtISO: string): SQL | null {
   const texts = events.flatMap(e => {

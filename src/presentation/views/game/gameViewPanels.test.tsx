@@ -73,7 +73,6 @@ describe('GameView 패널 초기화', () => {
           setToast={() => {}}
           onScene={onScene}
           onPlace={() => {}}
-          onWarmup={() => {}}
           log={[]}
           syncLabel={null}
           syncState="off"
@@ -114,7 +113,6 @@ describe('GameView 패널 초기화', () => {
           setToast={() => {}}
           onScene={onScene}
           onPlace={() => {}}
-          onWarmup={() => {}}
           log={[]}
           syncLabel={null}
           syncState="off"
@@ -156,7 +154,6 @@ describe('GameView 패널 초기화', () => {
           setToast={() => {}}
           onScene={() => {}}
           onPlace={() => {}}
-          onWarmup={() => {}}
           log={[]}
           toasts={[{ id: 99, text: '골드가 모자라요.', tone: 'danger' }]}
           onDismissToast={onDismissToast}
@@ -199,7 +196,6 @@ describe('GameView 패널 초기화', () => {
           setToast={() => {}}
           onScene={() => {}}
           onPlace={() => {}}
-          onWarmup={() => {}}
           log={[]}
           syncLabel={null}
           syncState="off"

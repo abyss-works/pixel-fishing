@@ -10,6 +10,7 @@ export type { PublicProfile };
 export function usePlayerProfile(uid: string) {
   const { ready, uid: me } = useSession();
   const consentReady = useConsentReady();
+  const unavailable = ready && me === null;
   const q = useQuery({
     queryKey: ['player', uid],
     queryFn: () => readPlayer(uid),
@@ -18,7 +19,9 @@ export function usePlayerProfile(uid: string) {
   return {
     /** 공개 프로필. 로컬 모드(서버 없음)면 null */
     profile: q.data,
-    loading: q.isPending,
+    loading: !unavailable && q.isPending && !q.isError,
     failed: q.isError,
+    unavailable,
+    retry: () => { void q.refetch(); },
   };
 }

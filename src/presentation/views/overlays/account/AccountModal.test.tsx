@@ -15,7 +15,12 @@ vi.mock('../../../../features/account/service/accountActions', async importOrigi
 
 import AccountModal from './AccountModal';
 import { ACCOUNT_CHECK_FAILED_COPY } from '../../../../features/account/model/accountRules';
-import { hasPendingSailReturn, resetSailReturnForTest, setPendingSailReturn } from '../../../../features/account/service/sailReturn';
+import {
+  consumeGoogleOrigin,
+  hasPendingSailReturn,
+  resetSailReturnForTest,
+  setPendingSailReturn,
+} from '../../../../features/account/service/sailReturn';
 
 beforeEach(() => {
   actions.connectGoogle.mockReset();
@@ -67,24 +72,55 @@ describe('게스트의 구글 연결', () => {
     await waitFor(() => expect(button).toBeEnabled());
   });
 
-  it('고지 한 줄에 이용약관과 개인정보 처리방침 링크가 있다', () => {
+  it('고지 한 줄에 이용약관과 개인정보 처리방침 링크가 새 탭 아이콘과 함께 있다', () => {
     open(null);
-    expect(screen.getByRole('link', { name: '이용약관' })).toHaveAttribute('target', '_blank');
-    expect(screen.getByRole('link', { name: '개인정보 처리방침' })).toHaveAttribute('target', '_blank');
+    for (const name of ['이용약관', '개인정보 처리방침']) {
+      const link = screen.getByRole('link', { name });
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link.querySelector('[data-glyph="external"]')).not.toBeNull();
+    }
   });
 
-  it('설정 계정 관리 창에서 게스트에게는 최초 연결 선물 미니 칩이 보이고, 로그인 계정에는 보이지 않는다', () => {
+  it('설정 계정 관리 창에서 게스트에게는 공용 최초 연결 선물 카드 3종과 우측 정렬 게스트 행이 보이고, 로그인 계정에는 보이지 않는다', () => {
     open(null);
-    expect(screen.getByText('최초 연결 선물')).toBeInTheDocument();
-    expect(screen.getByText('우편함 지급')).toBeInTheDocument();
+    expect(screen.getByText('게스트')).toHaveClass('text-right');
+    const giftTitle = screen.getByText('최초 연결 선물');
+    expect(giftTitle).toHaveClass('text-gold');
+    const mailTag = screen.getByText('우편함 지급');
+    expect(mailTag).toHaveClass('text-text-dim');
+    expect(mailTag.className).not.toContain('border');
     expect(screen.getByText('작은 바다 영약')).toBeInTheDocument();
+    expect(screen.getByText('(특수)')).toHaveAttribute('data-rarity', 'special');
     expect(screen.getByText('생선 탈리')).toBeInTheDocument();
     expect(screen.getByText('용연향 미끼')).toBeInTheDocument();
+    expect(screen.getAllByText('(전설)')).toHaveLength(2);
+    expect(screen.getByText('하루 동안 희귀 이상, 판매가, 네임드 조우가 조금 올라요.')).toHaveClass('text-xs');
+
+    fireEvent.mouseEnter(screen.getByText('용연향 미끼'));
+    const tip = screen.getByRole('tooltip');
+    expect(tip).toHaveTextContent('용연향 미끼(전설)');
+    expect(tip).toHaveTextContent('미끼');
+    expect(tip).toHaveTextContent('지속');
+    expect(tip).toHaveTextContent('수동 5분');
 
     cleanup();
     open('me@gmail.test');
     expect(screen.queryByText('최초 연결 선물')).toBeNull();
     expect(screen.queryByText('우편함 지급')).toBeNull();
+  });
+
+  it('설정 계정 관리 창과 출항 연결 창에서 구글 로그인 시작 시 각각의 출처를 저장하고 실패·취소 시 비운다', async () => {
+    open(null, false, false, 'manage');
+    fireEvent.click(screen.getByRole('button', { name: 'Google로 계속하기' }));
+    await waitFor(() => expect(actions.connectGoogle).toHaveBeenCalledTimes(1));
+    expect(consumeGoogleOrigin()).toBe('manage');
+
+    cleanup();
+    actions.connectGoogle.mockResolvedValueOnce({ ok: false, msg: '실패' });
+    open(null, false, false, 'connect');
+    fireEvent.click(screen.getByRole('button', { name: 'Google로 계속하기' }));
+    await waitFor(() => expect(actions.connectGoogle).toHaveBeenCalledTimes(2));
+    expect(consumeGoogleOrigin()).toBeNull();
   });
 });
 
@@ -268,23 +304,36 @@ describe('출항 차단 후 로그인 의도 표지', () => {
 });
 
 describe('출항 전용 연결 창 (mode="connect")', () => {
-  it('게스트 상태에서는 출항 안내와 최초 연결 선물 3종, 구글 버튼, 약관 고지, 나중에 하기와 바깥 애드온 패널이 보이고 계정 삭제·상태 박스는 없다', () => {
+  it('게스트 상태에서는 420px 메인 창과 우측 220px 애드온(하늘색 제목, @min-[880px]), 최초 연결 선물 3종, 약관 아이콘 링크를 보인다', () => {
     open(null, false, true, 'connect');
     const dialog = screen.getByRole('dialog', { name: '태평양 출항 준비' });
     expect(dialog).toBeInTheDocument();
-    expect(within(dialog).getByText('태평양 너머 넓은 바다로 나갈 준비가 되었어요.')).toBeInTheDocument();
-    expect(within(dialog).getByText('최초 연결 선물')).toBeInTheDocument();
-    expect(within(dialog).getByText('우편함 지급')).toBeInTheDocument();
+    expect(dialog.parentElement!.className).toContain('w-[min(420px,calc(100%-32px))]');
+
+    const heroTitle = within(dialog).getByText('태평양 너머 넓은 바다로 나갈 준비가 되었어요.');
+    const heroCard = heroTitle.closest('.pf-notch');
+    expect(heroCard).toHaveClass('bg-(--inset-light)');
+
+    expect(within(dialog).getByText('최초 연결 선물')).toHaveClass('text-gold');
+    expect(within(dialog).getByText('우편함 지급').className).not.toContain('border');
     expect(within(dialog).getByText('작은 바다 영약')).toBeInTheDocument();
     expect(within(dialog).getByText('생선 탈리')).toBeInTheDocument();
     expect(within(dialog).getByText('용연향 미끼')).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Google로 계속하기' })).toBeInTheDocument();
-    expect(within(dialog).getByRole('link', { name: '이용약관' })).toHaveAttribute('target', '_blank');
-    expect(within(dialog).getByRole('link', { name: '개인정보 처리방침' })).toHaveAttribute('target', '_blank');
+    for (const name of ['이용약관', '개인정보 처리방침']) {
+      const link = within(dialog).getByRole('link', { name });
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link.querySelector('[data-glyph="external"]')).not.toBeNull();
+    }
     expect(within(dialog).getByRole('button', { name: '나중에 하기' })).toBeInTheDocument();
 
     const asideHeading = screen.getByText('연결하면 열리는 것');
+    expect(asideHeading).toHaveClass('text-accent', 'font-bold');
     expect(dialog.contains(asideHeading)).toBe(false);
+    const asideFrame = asideHeading.closest('.pf-frame')!;
+    expect(asideFrame).toHaveClass('w-[220px]');
+    expect(asideFrame.parentElement!.className).toContain('@min-[880px]:block');
+    expect(asideFrame.querySelectorAll('.pf-notch')).toHaveLength(0);
     expect(screen.getByText('태평양과 세계 해역 개방')).toBeInTheDocument();
     expect(screen.getByText('업적 보상과 소셜 기능 해금')).toBeInTheDocument();
     expect(screen.getByText('현재 마을 진행 그대로 유지')).toBeInTheDocument();
@@ -296,24 +345,28 @@ describe('출항 전용 연결 창 (mode="connect")', () => {
     expect(screen.queryByRole('link', { name: '운영정책' })).toBeNull();
   });
 
-  it('연결 창 보상 행에 호버하면 지속과 효과 툴팁이 열린다', () => {
+  it('연결 창 보상 행에 호버하면 TipCard 제목줄(등급·종류)과 지속·효과 목록 툴팁이 열리고 빈 라벨이 없다', () => {
     open(null, false, true, 'connect');
-    fireEvent.mouseEnter(screen.getByText('작은 바다 영약'));
+    const potion = screen.getByText('작은 바다 영약');
+    fireEvent.mouseEnter(potion);
     let tip = screen.getByRole('tooltip');
+    expect(tip).toHaveTextContent('작은 바다 영약(특수)');
+    expect(tip).toHaveTextContent('비약');
     expect(tip).toHaveTextContent('지속');
     expect(tip).toHaveTextContent('하루 동안');
     expect(tip).toHaveTextContent('효과');
     expect(tip).toHaveTextContent('모든 행운 효과 ×1.05');
-    fireEvent.mouseLeave(screen.getByText('작은 바다 영약'));
+    fireEvent.mouseLeave(potion);
     expect(screen.queryByRole('tooltip')).toBeNull();
 
     fireEvent.mouseEnter(screen.getByText('생선 탈리'));
     tip = screen.getByRole('tooltip');
     const rows = tip.querySelectorAll('.justify-between');
-    expect(rows).toHaveLength(3);
-    expect(rows[0]).toHaveTextContent('지속9시간');
-    expect(rows[1]).toHaveTextContent('효과입질 대기 −5%');
-    expect(rows[2]).toHaveTextContent('희귀 이상 +5%');
+    expect(rows).toHaveLength(4);
+    expect(rows[0]).toHaveTextContent('생선 탈리(전설)도시락');
+    expect(rows[1]).toHaveTextContent('지속방치 9시간');
+    expect(rows[2]).toHaveTextContent('효과입질 대기 −5%');
+    expect(rows[3]).toHaveTextContent('효과희귀 이상 +5%');
     expect(within(tip).getByText('희귀')).toHaveAttribute('data-rarity', 'rare');
     expect(tip).not.toHaveTextContent('입질 대기 −5%, 희귀 이상 +5%');
   });
@@ -330,7 +383,9 @@ describe('출항 전용 연결 창 (mode="connect")', () => {
       open(null, false, true, 'connect');
       const target = screen.getByText('작은 바다 영약');
       fireEvent.click(target);
-      expect(screen.getByRole('tooltip')).toHaveTextContent('모든 행운 효과 ×1.05');
+      const tip = screen.getByRole('tooltip');
+      expect(tip).toHaveTextContent('작은 바다 영약(특수)');
+      expect(tip).toHaveTextContent('모든 행운 효과 ×1.05');
       fireEvent.click(target);
       expect(screen.queryByRole('tooltip')).toBeNull();
     } finally {
@@ -338,13 +393,40 @@ describe('출항 전용 연결 창 (mode="connect")', () => {
     }
   });
 
-  it('연결 창의 우측 애드온 패널 닫기를 누르면 메인 창은 유지되고 애드온만 닫힌다', () => {
+  it('연결 창의 우측 애드온 패널을 닫았다가 연결 혜택 보기 버튼으로 다시 열 수 있다', () => {
     const { onClose } = open(null, false, true, 'connect');
     expect(screen.getByText('연결하면 열리는 것')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '연결 안내 닫기' }));
     expect(screen.queryByText('연결하면 열리는 것')).toBeNull();
-    expect(screen.getByRole('dialog', { name: '태평양 출항 준비' })).toBeInTheDocument();
+    const dialog = screen.getByRole('dialog', { name: '태평양 출항 준비' });
+    expect(dialog).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
+
+    const reopenBtn = within(dialog)
+      .getAllByRole('button', { name: '연결 혜택 보기' })
+      .find(btn => !btn.hasAttribute('aria-expanded'));
+    expect(reopenBtn).toBeDefined();
+    fireEvent.click(reopenBtn!);
+    expect(screen.getByText('연결하면 열리는 것')).toBeInTheDocument();
+  });
+
+  it('좁은 화면/모바일용 연결 혜택 보기 버튼으로 메인 창 내부 혜택 드로어를 접고 펼 수 있다', () => {
+    open(null, false, true, 'connect');
+    const dialog = screen.getByRole('dialog', { name: '태평양 출항 준비' });
+    const drawerToggle = within(dialog)
+      .getAllByRole('button', { name: '연결 혜택 보기' })
+      .find(btn => btn.getAttribute('aria-expanded') === 'false');
+    expect(drawerToggle).toBeDefined();
+    expect(within(dialog).queryByText('태평양과 세계 해역 개방')).toBeNull();
+
+    fireEvent.click(drawerToggle!);
+    expect(drawerToggle).toHaveAttribute('aria-expanded', 'true');
+    expect(drawerToggle).toHaveTextContent('연결 혜택 접기');
+    expect(within(dialog).getByText('태평양과 세계 해역 개방')).toBeInTheDocument();
+
+    fireEvent.click(drawerToggle!);
+    expect(drawerToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(within(dialog).queryByText('태평양과 세계 해역 개방')).toBeNull();
   });
 
   it('나중에 하기를 누르면 출항 대기를 지우고 창을 닫는다', () => {

@@ -4,6 +4,7 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NO_GUILD_EFFECTS } from '../../../game/rules/guild';
+import { AppError } from '../../../core/errors';
 import type { GuildInfo, GuildOp, GuildOpResult, GuildState } from '../../../platform/api';
 
 const api = vi.hoisted(() => ({
@@ -51,6 +52,7 @@ function makeGuild(over: Partial<GuildInfo> = {}): GuildInfo {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.clearAllMocks();
 });
 
@@ -94,5 +96,85 @@ describe('useGuild', () => {
     });
     expect(api.readGuild).toHaveBeenCalledTimes(2);
     expect(result.current.guild?.enhanceResetCount).toBe(1);
+  });
+
+  it.each<GuildOp>([
+    { op: 'create', name: '새길드' },
+    { op: 'join', code: 'ABCD2345' },
+    { op: 'joinPublic', guildId: 'g1' },
+    { op: 'remove', guildId: 'g1', uid: 'u2' },
+    { op: 'settings', guildId: 'g1', joinMode: 'open' },
+    { op: 'rename', guildId: 'g1', name: '개명길드' },
+    { op: 'approve', guildId: 'g1', uid: 'u3' },
+  ])('$op 성공 시 publicGuilds와 guildInvite 쿼리를 모두 무효화한다', async op => {
+    api.readGuild.mockResolvedValue({ guild: makeGuild(), request: null });
+    api.guildAction.mockResolvedValueOnce({ ok: true });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const spy = vi.spyOn(client, 'invalidateQueries');
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useGuild(true), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    spy.mockClear();
+    await act(async () => { await result.current.act(op); });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['guild', 'u1'] });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['publicGuilds'] });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['guildInvite'] });
+  });
+
+  it('poll이 참이면 401 오류 시 폴링을 멈추고 일시 오류에서는 폴링을 이어 간다', async () => {
+    vi.useFakeTimers();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    api.readGuild.mockRejectedValue(new AppError('unauthorized', 'guild read 401'));
+    renderHook(() => useGuild(true, true), { wrapper });
+    await act(async () => { await vi.advanceTimersByTimeAsync(125_000); });
+    expect(api.readGuild).toHaveBeenCalledTimes(1);
+
+    cleanup();
+    api.readGuild.mockReset();
+    api.readGuild.mockRejectedValue(new AppError('network', 'guild read 503', { status: 503 }));
+    const client2 = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper2 = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client2}>{children}</QueryClientProvider>
+    );
+    renderHook(() => useGuild(true, true), { wrapper: wrapper2 });
+    await act(async () => { await vi.advanceTimersByTimeAsync(61_000); });
+    expect(api.readGuild).toHaveBeenCalledTimes(3);
+  });
+
+  it('refresh 호출 시 길드 정보를 다시 읽는다', async () => {
+    api.readGuild.mockResolvedValue({ guild: makeGuild(), request: null });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useGuild(true), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(api.readGuild).toHaveBeenCalledTimes(1);
+
+    act(() => { result.current.refresh(); });
+    await waitFor(() => expect(api.readGuild).toHaveBeenCalledTimes(2));
+  });
+
+  it('refresh 호출 시 실패 후 readGuild를 다시 조회해 복구한다', async () => {
+    api.readGuild
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValueOnce({ guild: makeGuild(), request: null });
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useGuild(true), { wrapper });
+
+    await waitFor(() => expect(result.current.failed).toBe(true));
+    act(() => { result.current.refresh(); });
+    await waitFor(() => expect(result.current.guild?.id).toBe('g1'));
+    expect(api.readGuild).toHaveBeenCalledTimes(2);
   });
 });
