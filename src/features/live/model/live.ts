@@ -1,4 +1,4 @@
-import { DEFAULT_LOOK } from '../../../game/content/wardrobe';
+import { DEFAULT_LOOK, effectiveLookForRegion } from '../../../game/content/wardrobe';
 import type { Look } from '../../../game/content/wardrobe';
 import { zoneOfPort } from '../../../game/content/bounties';
 import { defaultZoneOfRegion, topZoneOf, zoneById } from '../../../game/content/zones';
@@ -9,7 +9,7 @@ import { CHAT_MAX_LENGTH, formatIdle, GLOBAL_CHAT_COOLDOWN_MS, LIVE_STALE_MS } f
 // 실시간 채널의 다른 플레이어 상태와 내 위치 송신 판정 — 표시용이라 게임 상태와 섞지 않는다.
 
 export type { ChatRoom };
-export { CHAT_MAX_LENGTH, GLOBAL_CHAT_COOLDOWN_MS };
+export { CHAT_MAX_LENGTH, GLOBAL_CHAT_COOLDOWN_MS, effectiveLookForRegion };
 
 export interface OtherPlayer {
   presence: Presence;

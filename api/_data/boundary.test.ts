@@ -28,6 +28,7 @@ const WRITE_OWNERS: Record<string, readonly string[]> = {
   '_data/fortune.ts': ['daily_fortunes'],
   '_data/httpMetrics.ts': ['http_metrics_daily'],
   '_data/notices.ts': ['notices'],
+  '_data/rank.ts': ['ranking_weekly_fame'],
 };
 
 function sources(dir: string): string[] {

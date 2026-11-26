@@ -2,7 +2,7 @@ import { useCallback, useId, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { cx } from './cx';
-import { useKeyBlocker } from './hotkeys';
+import { HOTKEY_TIER, useKeyBlocker } from './hotkeys';
 import { useOpenWindow } from './openWindows';
 import PageTitle from './PageTitle';
 import CloseButton from './CloseButton';
@@ -57,6 +57,8 @@ interface ModalBase {
   onClose: () => void;
   /** false면 닫기 X와 백드롭 닫기를 모두 막는다 (새 버전 안내처럼 출구가 하나뿐인 모달) */
   closable?: boolean;
+  /** 키 스코프 우선순위 단계 — 생략 시 레이어 기본 단계 */
+  hotkeyTier?: number;
   children: ReactNode;
 }
 
@@ -77,12 +79,19 @@ type ModalProps = ModalBase & (
 // 스테이지 모달의 투명 래퍼는 배치만 맡고 스크롤은 ModalCard의 본문이 맡는다.
 // bare는 앱 모달 안에 ModalCard를 직접 두는 대화상자용이다. 본문 칸을 만들지 않아 스크롤은 카드 본문 한 곳뿐이다.
 // 앱 모달에서 제목 줄이 문자열 title로 안 되면 header로, 하단 고정 영역(버튼 줄)은 footer로 넘긴다. 둘 다 스크롤 칸 밖이다.
-export default function Modal({ layer, title, wide, xl, md, sm, narrow, width, worldmap, aside, onClose, closable = true, children, className, height, mobileHeight, mobileFixed, header, footer, fill, bare, opaque, above }: ModalProps) {
+export default function Modal({ layer, title, wide, xl, md, sm, narrow, width, worldmap, aside, onClose, closable = true, hotkeyTier, children, className, height, mobileHeight, mobileFixed, header, footer, fill, bare, opaque, above }: ModalProps) {
   // 모달이 떠 있는 동안 아래 레이어(필드 이동·사이드바 단축키)는 키를 못 받는다.
   // 예전엔 각자 `isTyping`으로 막았는데 그건 텍스트 포커스만 걸러서, 모달 버튼에 포커스가
   // 있으면 뒤에서 캐릭터가 움직이고 탭이 바뀌었다 (로그인 모달 키 탈취 사고).
   // Esc는 닫을 수 있는 창에서만 X와 같은 출구다.
-  useKeyBlocker(closable ? onClose : undefined);
+  const defaultTier = !closable && layer === 'app'
+    ? HOTKEY_TIER.BLOCKER
+    : layer === 'app'
+      ? HOTKEY_TIER.APP_MODAL
+      : layer === 'devtools'
+        ? HOTKEY_TIER.BLOCKER
+        : HOTKEY_TIER.STAGE_MODAL;
+  useKeyBlocker(closable ? onClose : undefined, { tier: hotkeyTier ?? defaultTier });
   // 모달이 떠 있는 동안 열린 창 등록부에 레이어와 함께 기록한다(사이드바는 app 모달일 때만 불활성).
   useOpenWindow(layer);
   // 스테이지 창은 닫을 수 없는 동안에도 스테이지 안에 머물며(--z-stage-modal), 탭 줄(--z-tabs)보다 아래다.

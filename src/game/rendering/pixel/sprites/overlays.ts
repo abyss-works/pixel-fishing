@@ -7,11 +7,27 @@ import type { School } from '../../../world/types';
 import { FISH } from '../../../content/fish';
 import type { FormId } from '../../../content/fish';
 import { eventFishById } from '../../../content/eventFish';
+import { RARITY } from '../../../content/rarity';
+import type { RarityId } from '../../../content/rarity';
 import { DEFAULT_FISH_ART_STYLE, fishArt } from '../fishArt/index.js';
 import type { FishArtStyle } from '../fishArt/index.js';
 import { JUMP_S, jumpHeight, orbit } from './schoolView.js';
 
 const fishById = (id: string) => FISH.find(f => f.id === id) ?? eventFishById(id);
+
+const JUMP_FISH_SCALE = 2;
+const TAKEOFF_SPLASH_S = 0.25;
+const LANDING_SPLASH_S = 0.22;
+const VARIANT_SPARK_COLOR = '#f472b6';
+
+export interface JumpFx {
+  x: number;
+  y: number;
+  fishId: string;
+  form?: FormId;
+  /** 점프 시작 후 경과 초(0 이상 ~ JUMP_S 미만) */
+  t: number;
+}
 
 export interface GearView {
   player: { x: number; y: number };
@@ -53,17 +69,116 @@ export function drawSchools(ctx: Ctx, schools: School[], boat: number, t: number
   }
 }
 
+function drawWaterSplash(ctx: Ctx, x: number, y: number, p: number, landing: boolean) {
+  const arc = Math.sin(p * Math.PI);
+  const rippleW = Math.round((landing ? 10 : 6) + p * (landing ? 14 : 10));
+  R(ctx, x - rippleW / 2, y, rippleW, 1, '#b2ebf2');
+  if (landing) {
+    R(ctx, x - rippleW / 2 + 2, y + 2, Math.max(4, rippleW - 4), 1, 'rgba(178,235,242,0.65)');
+  }
+  const outerSpread = landing ? 4 + p * 13 : 3 + p * 10;
+  const outerHeight = arc * (landing ? 8 : 7);
+  const innerSpread = landing ? 2 + p * 7 : 1 + p * 5;
+  const innerHeight = arc * (landing ? 12 : 11);
+  for (const sign of [-1, 1] as const) {
+    R(ctx, x + sign * outerSpread, y - outerHeight, 2, 2, '#e0f7fa');
+    R(ctx, x + sign * innerSpread, y - innerHeight, landing ? 2 : 1, landing ? 1 : 2, '#80deea');
+  }
+  if (!landing) {
+    R(ctx, x + (p < 0.5 ? -1 : 1), y - arc * 9, 1, 1, '#e0f7fa');
+  }
+}
+
+function drawJumpSparks(
+  ctx: Ctx, x: number, cy: number, progress: number, rarity: RarityId, form: FormId,
+) {
+  const pulse = Math.sin(progress * Math.PI);
+  if (rarity === 'epic') {
+    const color = RARITY.epic.color;
+    const count = 6;
+    const baseRadius = 15 + pulse * 7;
+    for (let i = 0; i < count; i++) {
+      const a = (i / count) * Math.PI * 2 + progress * 2.4;
+      const r = baseRadius + (i % 2 === 0 ? 3 : -2);
+      const sx = Math.round(x + Math.cos(a) * r);
+      const sy = Math.round(cy + Math.sin(a) * r * 0.75);
+      const size = i % 2 === 0 ? 2 : 1;
+      R(ctx, sx, sy, size, size, color);
+    }
+  } else if (rarity === 'legendary') {
+    const color = RARITY.legendary.color;
+    const count = 8;
+    const baseRadius = 17 + pulse * 9;
+    for (let i = 0; i < count; i++) {
+      const a = (i / count) * Math.PI * 2 + progress * 3.0;
+      const r = baseRadius + (i % 2 === 0 ? 4 : -2);
+      const sx = Math.round(x + Math.cos(a) * r);
+      const sy = Math.round(cy + Math.sin(a) * r * 0.78);
+      if (i % 2 === 0) {
+        R(ctx, sx - 1, sy, 3, 1, color);
+        R(ctx, sx, sy - 1, 1, 3, color);
+        R(ctx, sx, sy, 1, 1, '#fff8e1');
+      } else {
+        R(ctx, sx, sy, 2, 2, color);
+      }
+    }
+  }
+
+  if (form === 'variant') {
+    const count = 6;
+    const baseRadius = 13 + pulse * 6;
+    for (let i = 0; i < count; i++) {
+      const a = (i / count) * Math.PI * 2 - progress * 2.2 + Math.PI / 6;
+      const r = baseRadius + (i % 2 === 0 ? 2 : -1);
+      const sx = Math.round(x + Math.cos(a) * r);
+      const sy = Math.round(cy + Math.sin(a) * r * 0.72);
+      if (i % 2 === 0) {
+        R(ctx, sx - 1, sy, 3, 1, VARIANT_SPARK_COLOR);
+        R(ctx, sx, sy - 1, 1, 3, VARIANT_SPARK_COLOR);
+      } else {
+        R(ctx, sx, sy, 2, 2, VARIANT_SPARK_COLOR);
+      }
+    }
+  }
+}
+
+/** 수면 물고기 점프 — 이륙·착수 물보라와 등급·변이 파티클을 포함한 단일 점프를 그린다 */
+export function drawFishJump(ctx: Ctx, jump: JumpFx, style: FishArtStyle = DEFAULT_FISH_ART_STYLE) {
+  if (jump.t < 0 || jump.t >= JUMP_S) return;
+  const fish = fishById(jump.fishId);
+  if (!fish) return;
+
+  if (jump.t < TAKEOFF_SPLASH_S) {
+    drawWaterSplash(ctx, jump.x, jump.y, jump.t / TAKEOFF_SPLASH_S, false);
+  } else if (jump.t > JUMP_S - LANDING_SPLASH_S) {
+    drawWaterSplash(ctx, jump.x, jump.y, (jump.t - (JUMP_S - LANDING_SPLASH_S)) / LANDING_SPLASH_S, true);
+  }
+
+  const h = jumpHeight(jump.t);
+  if (h <= 0) return;
+
+  const form = jump.form ?? 'normal';
+  const cy = jump.y - h;
+  const art = fishArt(style);
+  // 정점을 지나면 뒤집혀 떨어진다 — 한 번 튀는 느낌
+  art.drawCentered(ctx, fish, jump.x, cy, {
+    scale: JUMP_FISH_SCALE,
+    form,
+    flip: jump.t > JUMP_S / 2,
+  });
+  drawJumpSparks(ctx, jump.x, cy, jump.t / JUMP_S, fish.rarity, form);
+}
+
 /** 훅 점프 — 잡은 물고기가 찌 자리에서 수면 위로 한 번 튀어오른다. 캔버스 연출은 필드만 담당한다 */
 export function drawHookJump(ctx: Ctx, v: GearView) {
   if (v.phase !== 'catch' || !v.school || v.catchT == null || !v.catchFish) return;
-  const h = jumpHeight(v.catchT);
-  if (h <= 0) return;
-  const fish = fishById(v.catchFish.id);
-  if (!fish) return;
-  const art = fishArt(v.fishArt ?? DEFAULT_FISH_ART_STYLE);
-  // 정점을 지나면 뒤집혀 떨어진다 — 한 번 튀는 느낌
-  art.drawCentered(ctx, fish, v.school.x, v.school.y - h,
-                   { scale: 1, form: v.catchFish.form, flip: v.catchT > JUMP_S / 2 });
+  drawFishJump(ctx, {
+    x: v.school.x,
+    y: v.school.y,
+    fishId: v.catchFish.id,
+    form: v.catchFish.form,
+    t: v.catchT,
+  }, v.fishArt);
 }
 
 export function drawFishingGear(ctx: Ctx, v: GearView) {

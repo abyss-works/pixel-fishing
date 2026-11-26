@@ -671,6 +671,32 @@ describe('claimMail — 우편 골드 받기', () => {
     expect(capped.state.items['luck-small']).toBe(ITEM_CAP);
     expect(capped.state.items[ENERGY_ITEM_IDS.common]).toBe(ITEM_CAP * ENERGY_UNIT);
   });
+
+  it('골드 0·아이템 없음에 모자만 첨부된 우편도 가방 용량과 무관하게 멱등 수령한다', () => {
+    const bag = Array.from({ length: 50 }, (_, i) => mkInst(`b${i}`, 'crucian'));
+    const out = applyAction(
+      seed({ gold: 250, hats: ['cap-red'], bag }),
+      { type: 'claimMail', id: 11 },
+      deps({ mail: { id: 11, gold: 0, hats: ['santa-hat', 'santa-hat', 'unknown-hat'] } }),
+    );
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state.gold).toBe(250);
+    expect(out.state.bag).toHaveLength(50);
+    expect(out.state.hats).toEqual(['cap-red', 'santa-hat']);
+    expect(out.result).toEqual({ type: 'mail', gold: 0, hats: ['santa-hat'] });
+    expect(out.events).toEqual([{ type: 'claimMail', payload: { mailId: 11, gold: 0, hats: ['santa-hat'] } }]);
+
+    // 이미 보유한 모자가 우편에 다시 오면 중복 없이 기존 순서를 유지한다
+    const again = applyAction(
+      seed({ hats: ['cap-blue', 'santa-hat'] }),
+      { type: 'claimMail', id: 12 },
+      deps({ mail: { id: 12, gold: 0, hats: ['santa-hat'] } }),
+    );
+    if (!again.ok) throw new Error(again.error);
+    expect(again.state.hats).toEqual(['cap-blue', 'santa-hat']);
+    expect(again.result).toEqual({ type: 'mail', gold: 0 });
+    expect(again.events).toEqual([{ type: 'claimMail', payload: { mailId: 12, gold: 0 } }]);
+  });
 });
 
 describe('usePotion — 비약 사용', () => {

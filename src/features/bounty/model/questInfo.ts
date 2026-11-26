@@ -2,9 +2,11 @@ import { artifactOfNamed } from '../../../game/content/artifacts';
 import { BOUNTY_PORT_ZONE, portOfZone } from '../../../game/content/bounties';
 import type { BountyKind, BountyPort, BountyQuest, BountyZone } from '../../../game/content/bounties';
 import type { RarityId } from '../../../game/content/rarity';
+import { subtreeSpots, zoneById } from '../../../game/content/zones';
 import type { GameState } from '../../../game/rules/logic';
 import type { Stat } from '../../../game/rules/stats';
 import { BASE_PACKS } from '../../../game/world';
+import { canAbandonQuestInSnapshot } from './abandon';
 import { clearsStatus, heldQuests, questLabel, selectNamedBountyCardData } from './panel';
 import { ticketMinsOf } from './ticket';
 import type { BountySnapshot } from './types';
@@ -15,10 +17,15 @@ import type { BountySnapshot } from './types';
 export interface QuestInfoGeneral {
   quest: BountyQuest;
   title: string;
+  zoneName: string;
+  watersSummary: string;
   grade: RarityId;
   count: number;
   /** 목표를 넘겨 보이지 않는다 */
   progress: number;
+  /** 목표를 채웠고 수배판 보상 수령만 남았다 */
+  done: boolean;
+  canAbandon: boolean;
   reward: number;
   /** 의뢰를 마치러 갈 곳 - 의뢰 구역의 항구 수배판 */
   finishAt: string;
@@ -28,12 +35,15 @@ export interface QuestInfoNamed {
   quest: BountyQuest;
   /** 발견하기 전에는 ??? */
   title: string;
+  zoneName: string;
   /** 나타나는 곳 */
   haunt: string;
   count: number;
   progress: number;
   /** 토벌을 마쳤고 보상만 남았다 */
   done: boolean;
+  canAbandon: boolean;
+  hasTicket: boolean;
   /** 보상 감소를 적용한 내역 */
   reward: Stat;
   /** 구역 유물의 교환 재료 이름 */
@@ -71,26 +81,45 @@ export function selectQuestInfo({ game, snapshot, nowMs }: {
   };
 
   const g = held.general;
-  const general: QuestInfoGeneral | null = g && g.grade ? {
-    quest: g, title: questLabel(g), grade: g.grade, count: g.count, progress: progressOf(g),
-    reward: g.reward, finishAt: finishAtOf(g.zone),
-  } : null;
+  let general: QuestInfoGeneral | null = null;
+  if (g && g.grade) {
+    const progress = progressOf(g);
+    const zoneName = zoneById(g.zone)?.shortName ?? g.zone;
+    const watersSummary = subtreeSpots(g.zone).map(spot => spot.name).join(', ');
+    general = {
+      quest: g,
+      title: questLabel(g),
+      zoneName,
+      watersSummary,
+      grade: g.grade,
+      count: g.count,
+      progress,
+      done: progress >= g.count,
+      canAbandon: canAbandonQuestInSnapshot(game, g.id, snapshot),
+      reward: g.reward,
+      finishAt: finishAtOf(g.zone),
+    };
+  }
 
   const n = held.named;
   let named: QuestInfoNamed | null = null;
   if (n) {
     const progress = progressOf(n);
     const card = selectNamedBountyCardData(game, n, progress);
+    const traceMins = card.done ? null : ticketMinsOf(snapshot, n.id, nowMs);
     named = {
       quest: n,
       title: card.found && card.name ? card.name : '???',
+      zoneName: card.zoneName,
       haunt: card.haunt,
       count: n.count,
       progress,
       done: card.done,
+      canAbandon: canAbandonQuestInSnapshot(game, n.id, snapshot),
+      hasTicket: traceMins !== null,
       reward: card.reward,
       materialName: artifactOfNamed(n.targetFish ?? '')?.materialName ?? null,
-      traceMins: card.done ? null : ticketMinsOf(snapshot, n.id, nowMs),
+      traceMins,
       finishAt: finishAtOf(n.zone),
     };
   }

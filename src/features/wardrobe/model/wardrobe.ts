@@ -1,4 +1,4 @@
-import { HATS, LOOK_PRESETS, hatById, isAchievementHat, isEventHat } from '../../../game/content/wardrobe';
+import { DEFAULT_LOOK, HATS, LOOK_PRESETS, hatById, isAchievementHat, isEventHat } from '../../../game/content/wardrobe';
 import type { Hat, HatSource, Look } from '../../../game/content/wardrobe';
 import { achievementForHatId, namedSpoilerPlace } from '../../../game/content/achievements';
 import { achievementProgress } from '../../../game/rules/achievements';
@@ -6,6 +6,30 @@ import { REJECT_TEXT, canBuyHat } from '../../../game/rules/rules';
 import type { GameState } from '../../../game/rules/logic';
 
 // 옷장 창의 파생 모델 — 판정은 게임 규칙(canBuyHat)을 그대로 쓰고, 여기서는 화면이 읽을 값으로 묶는다.
+
+const EVENT_HAT_UNOWNED_HINT: Readonly<Record<string, string>> = {
+  'santa-hat': '겨울 이벤트 기간에 접속하면 우편함으로 받을 수 있어요.',
+};
+const EVENT_HAT_OWNED_HINT: Readonly<Record<string, string>> = {
+  'santa-hat': '겨울 이벤트 접속 선물',
+};
+const DEFAULT_EVENT_HAT_UNOWNED_HINT = '이벤트에서 얻을 수 있는 한정 모자예요.';
+
+export interface HatDisplayInfo {
+  id: string;
+  name: string;
+  look: Look | null;
+}
+
+/** 모자 id를 이름과 머리 미리보기용 외형으로 풀어낸다. 미등록 id는 외형이 null이다 */
+export function resolveHatDisplay(id: string): HatDisplayInfo {
+  const hat = hatById(id);
+  return {
+    id,
+    name: hat?.name ?? id,
+    look: hat ? { ...DEFAULT_LOOK, hat: hat.id } : null,
+  };
+}
 
 /** 고른 옷이 지금 입은 옷과 다른가 — [입기]·[되돌리기] 활성 기준 */
 export function clothesChanged(worn: Look, pick: { shirt: number; pants: number }): boolean {
@@ -41,8 +65,10 @@ export interface HatDetail {
   action: HatActionKind;
   /** 사기를 막는 이유 문구. 살 수 있거나 사기 버튼이 아니면 null */
   buyBlock: string | null;
-  /** 업적 모자의 해금 업적과 진척. 골드 모자면 null */
+  /** 업적 모자의 해금 업적과 진척. 골드·이벤트 모자면 null */
   unlock: { achievementName: string; condition: string; current: number; target: number } | null;
+  /** 이벤트 모자의 획득 안내 문구. 골드·업적 모자면 null */
+  eventHint: string | null;
 }
 
 function resolveHatUnlock(game: GameState, hat: Hat): HatDetail['unlock'] {
@@ -67,29 +93,34 @@ export function hatDetail(game: GameState, hatId: string): HatDetail {
   const owned = game.hats.includes(hat.id);
   const worn = game.look.hat === hat.id;
   const unlock = isAchievementHat(hat) ? resolveHatUnlock(game, hat) : null;
+  const eventHint = isEventHat(hat)
+    ? (owned ? (EVENT_HAT_OWNED_HINT[hat.id] ?? null) : (EVENT_HAT_UNOWNED_HINT[hat.id] ?? DEFAULT_EVENT_HAT_UNOWNED_HINT))
+    : null;
   if (!owned) {
-    if (isEventHat(hat)) {
-      return {
-        name: hat.name, price: hat.price, source: hat.source, owned, worn, action: 'event',
-        buyBlock: '이벤트에서 얻을 수 있는 한정 모자예요.',
-        unlock: null,
-      };
-    }
     if (isAchievementHat(hat)) {
       return {
         name: hat.name, price: hat.price, source: hat.source, owned, worn, action: 'achievement',
         buyBlock: REJECT_TEXT['achievement-hat-only'],
         unlock,
+        eventHint: null,
+      };
+    }
+    if (isEventHat(hat)) {
+      return {
+        name: hat.name, price: hat.price, source: hat.source, owned, worn, action: 'event',
+        buyBlock: eventHint ?? DEFAULT_EVENT_HAT_UNOWNED_HINT,
+        unlock: null,
+        eventHint,
       };
     }
     const check = canBuyHat(game, hat.id);
     return {
       name: hat.name, price: hat.price, source: hat.source, owned, worn, action: 'buy',
-      buyBlock: check.ok ? null : REJECT_TEXT[check.reason], unlock: null,
+      buyBlock: check.ok ? null : REJECT_TEXT[check.reason], unlock: null, eventHint: null,
     };
   }
   return {
     name: hat.name, price: hat.price, source: hat.source, owned, worn,
-    action: worn ? 'unwear' : 'wear', buyBlock: null, unlock,
+    action: worn ? 'unwear' : 'wear', buyBlock: null, unlock, eventHint,
   };
 }

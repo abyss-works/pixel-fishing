@@ -292,6 +292,7 @@ export interface WardrobeCatalog {
   hats: readonly HatCatalogItem[];
   shopHatCount: number;
   achievementHatCount: number;
+  eventHatCount: number;
   shirtColors: readonly string[];
   pantsColors: readonly string[];
   presets: readonly LookPresetItem[];
@@ -1019,6 +1020,7 @@ export function buildContentCatalog(): ContentCatalog {
       hats: hatItems,
       shopHatCount: hatItems.filter(h => h.source === 'gold').length,
       achievementHatCount: hatItems.filter(h => h.source === 'achievement').length,
+      eventHatCount: hatItems.filter(h => h.source === 'event').length,
       shirtColors: [...SHIRT_COLORS],
       pantsColors: [...PANTS_COLORS],
       presets,
@@ -1055,7 +1057,7 @@ export const CONTENT_AXES: readonly ContentAxisMeta[] = [
   { id: 'named', label: '네임드', count: CONTENT_CATALOG.named.length, summary: '수배서·바다 위 흔적·전승 4문단·결투 체력' },
   { id: 'artifacts', label: '유물', count: CONTENT_CATALOG.artifacts.length, summary: 'Lv1~5 효과 수치·교환 재료·전설 시스템 효과' },
   { id: 'achievements', label: '업적·보너스', count: CONTENT_CATALOG.achievements.length + CONTENT_CATALOG.cumulativeBonusCount, summary: '진행 30 + 치장 41 + 누적 보너스 23계열(25종)' },
-  { id: 'wardrobe', label: '모자·의상', count: CONTENT_CATALOG.wardrobe.hats.length, summary: '모자 46종(상점 5·업적 41)·팔레트·프리셋 6종' },
+  { id: 'wardrobe', label: '모자·의상', count: CONTENT_CATALOG.wardrobe.hats.length, summary: `모자 ${CONTENT_CATALOG.wardrobe.hats.length}종(상점 ${CONTENT_CATALOG.wardrobe.shopHatCount}·업적 ${CONTENT_CATALOG.wardrobe.achievementHatCount}·이벤트 ${CONTENT_CATALOG.wardrobe.eventHatCount})·팔레트·프리셋 6종` },
   { id: 'cooking', label: '요리·기운', count: CONTENT_CATALOG.cooking.recipes.length + CONTENT_CATALOG.cooking.energies.length, summary: '도시락 5·미끼 5·생명의 기운 4종' },
   { id: 'boats', label: '배', count: CONTENT_CATALOG.boats.length, summary: '9단계 배 가격·명성·속도·가방·자동 추출' },
   { id: 'zones', label: '구역·해역', count: CONTENT_CATALOG.zones.zones.length, summary: '17개 구역 계층·15개 해역·7개 거점 항구' },

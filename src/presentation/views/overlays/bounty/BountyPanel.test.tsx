@@ -6,6 +6,7 @@ import { render, renderHook, screen, fireEvent, waitFor, cleanup, within } from 
 import type { ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import BountyPanel from './BountyPanel';
+import type { ConfirmDialogFn } from './abandonQuest';
 import { useBounty } from '../../../../features/bounty/service/useBounty';
 import { useQuestInfo } from '../../../../features/bounty/service/useQuestInfo';
 import { gameDay } from '../../../../features/bounty/service/queryKeys';
@@ -49,7 +50,7 @@ const tipOf = (el: HTMLElement): string => {
 /** 버튼을 감싼 툴팁 자리 */
 const tipOfButton = (button: HTMLElement): string => tipOf(button.parentElement!);
 
-function show(g: GameState, dispatch?: ReturnType<typeof okDispatch>) {
+function show(g: GameState, dispatch?: ReturnType<typeof okDispatch>, confirm?: ConfirmDialogFn) {
   const setToast = vi.fn();
   // useBounty(useQuery)용 격리 클라이언트 — 테스트마다 새로 만든다 (캐시 공유 금지).
   const client = new QueryClient({
@@ -58,7 +59,7 @@ function show(g: GameState, dispatch?: ReturnType<typeof okDispatch>) {
   render(
     <QueryClientProvider client={client}>
       <BountyPanel game={g} port="harbor" uid="test-uid"
-                   dispatch={dispatch ?? okDispatch(g)} setToast={setToast} />
+                   dispatch={dispatch ?? okDispatch(g)} setToast={setToast} confirm={confirm} />
     </QueryClientProvider>,
   );
   return { setToast };
@@ -73,18 +74,76 @@ describe('BountyPanel', () => {
     expect(screen.getAllByRole('button', { name: '수주' })).toHaveLength(3);
   });
 
-  it('수주한 일반 의뢰는 진행도 0이어도 진행 중과 진행 상황을 보이고 다시 수주할 수 없다', async () => {
+  it('수주한 일반 의뢰는 진행도 0이어도 의뢰 포기 버튼과 진행 상황을 보이고 다시 수주할 수 없다', async () => {
     const quest = dailyQuestFor('pacific', 'easy', 'test-uid', gameDay())!;
     mockSnap = { clearsToday: { general: 0, named: 0 },
       progress: [{ questId: quest.id, progress: 0 }], tickets: [] };
     show(game({ dex: fullDex }));
-    const button = await screen.findByRole('button', { name: '진행 중' });
-    expect(button).toBeDisabled();
+    const button = await screen.findByRole('button', { name: '의뢰 포기' });
+    expect(button).not.toBeDisabled();
     expect(button.closest('div')?.parentElement).toHaveTextContent(`0/${quest.count}`);
     // 일반 의뢰는 한 번에 하나 — 나머지 두 난이도는 보이지만 누를 수 없다
     const others = screen.getAllByRole('button', { name: '수주' });
     expect(others).toHaveLength(2);
     for (const button of others) expect(button).toBeDisabled();
+  });
+
+  it('수배판에서 미완료 일반 의뢰를 포기하면 확인 창을 거쳐 abandonQuest를 보낸다', async () => {
+    const quest = dailyQuestFor('pacific', 'easy', 'test-uid', gameDay())!;
+    mockSnap = { clearsToday: { general: 0, named: 0 },
+      progress: [{ questId: quest.id, progress: 1 }], tickets: [] };
+    const g = game({ dex: fullDex });
+    const dispatch = vi.fn(okDispatch(g));
+    const confirm = vi.fn().mockResolvedValue(true);
+    const { setToast } = show(g, dispatch, confirm as ConfirmDialogFn);
+    fireEvent.click(await screen.findByRole('button', { name: '의뢰 포기' }));
+    await waitFor(() => expect(confirm).toHaveBeenCalledWith({
+      layer: 'stage',
+      title: '의뢰 포기',
+      body: '지금 진행 중인 의뢰를 포기할까요?\n지금까지 쌓은 진행도는 사라지며 되돌릴 수 없어요.',
+      confirmLabel: '포기',
+    }));
+    await waitFor(() => expect(dispatch).toHaveBeenCalledWith({ type: 'abandonQuest', questId: quest.id }));
+    expect(setToast).toHaveBeenCalledWith('의뢰를 포기했어요.');
+  });
+
+  it('수배판에서 미완료 네임드 토벌 포기 시 흔적 유무에 맞는 확인 창을 거쳐 abandonQuest를 보낸다', async () => {
+    const namedQuest = BOUNTIES.find(q => q.zone === 'pacific' && q.difficulty === 'named')!;
+    mockSnap = {
+      clearsToday: { general: 0, named: 0 },
+      progress: [{ questId: namedQuest.id, progress: 0 }],
+      tickets: [{ questId: namedQuest.id, issuedAt: new Date(Date.now() - 60_000).toISOString() }],
+    };
+    const g = game({ dex: fullDex });
+    const dispatch = vi.fn(okDispatch(g));
+    const confirm = vi.fn().mockResolvedValue(true);
+    show(g, dispatch, confirm as ConfirmDialogFn);
+    fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
+    await screen.findByText('흔적');
+    fireEvent.click(screen.getByRole('button', { name: '의뢰 포기' }));
+    await waitFor(() => expect(confirm).toHaveBeenCalledWith({
+      layer: 'stage',
+      title: '의뢰 포기',
+      body: '진행 중인 네임드 토벌을 포기하면 남아 있는 흔적이 함께 사라져요.\n이미 입힌 네임드의 상처는 그대로 유지돼요.',
+      confirmLabel: '포기',
+    }));
+    await waitFor(() => expect(dispatch).toHaveBeenCalledWith({ type: 'abandonQuest', questId: namedQuest.id }));
+  });
+
+  it('목표를 채운 의뢰는 수배판에서 보상 수령 버튼만 보이고 포기 버튼을 보이지 않는다', async () => {
+    const quest = dailyQuestFor('pacific', 'easy', 'test-uid', gameDay())!;
+    const namedQuest = BOUNTIES.find(q => q.zone === 'pacific' && q.difficulty === 'named')!;
+    mockSnap = {
+      clearsToday: { general: 0, named: 0 },
+      progress: [{ questId: quest.id, progress: quest.count }, { questId: namedQuest.id, progress: namedQuest.count }],
+      tickets: [],
+    };
+    show(game({ dex: fullDex }));
+    expect(await screen.findByRole('button', { name: '완료' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '의뢰 포기' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '네임드 토벌' }));
+    expect(screen.getByRole('button', { name: '보상 받기' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '의뢰 포기' })).not.toBeInTheDocument();
   });
 
   it('고정 정보 줄 — 구역과 오늘 남은 클리어. 수주만으로는 남은 클리어가 줄지 않는다', async () => {
@@ -396,7 +455,7 @@ describe('수배 스냅샷 조회 — fresh 캐시가 있을 때의 마운트', 
     mockSnap = { clearsToday: { general: 0, named: 0 }, progress: [{ questId: quest.id, progress: 0 }], tickets: [] };
     const first = render(panel);
     const progressOf = async () =>
-      (await screen.findByRole('button', { name: '진행 중' })).closest('div')?.parentElement;
+      (await screen.findByRole('button', { name: '의뢰 포기' })).closest('div')?.parentElement;
     expect(await progressOf()).toHaveTextContent(`0/${quest.count}`);
     first.unmount();
     mockSnap = { clearsToday: { general: 0, named: 0 }, progress: [{ questId: quest.id, progress: 1 }], tickets: [] };

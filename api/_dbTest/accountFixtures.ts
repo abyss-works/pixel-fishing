@@ -8,7 +8,7 @@ export const USER_TABLES = [
   'bounty_licenses', 'bounty_accepts', 'bounty_clears', 'bounty_progress', 'bounty_tickets', 'blocks',
   'chat_messages', 'chat_reports', 'play_sessions', 'user_active_days', 'guild_members', 'guild_contributions', 'guild_logs',
   'guild_bonus_donations', 'guild_member_enhancements', 'last_positions', 'guild_join_requests', 'consent_records',
-  'achievement_counters', 'daily_fortunes',
+  'achievement_counters', 'daily_fortunes', 'ranking_weekly_fame',
   'coupon_redemptions', 'event_trio_progress', 'event_championship_scores', 'event_draws',
 ] as const;
 /** 저장 상태에 딸린 표. 저장이 없는 계정은 이 표에 행이 없다 */
@@ -107,6 +107,7 @@ export async function seedFullAccount(client: Client, spec: AccountSpec & { nick
   await client.query(`insert into public.event_trio_progress (event_id, user_id) values ('account-fixture-evt', $1)`, [uid]);
   await client.query(`insert into public.event_championship_scores (event_id, user_id) values ('account-fixture-evt', $1)`, [uid]);
   await client.query(`insert into public.event_draws (event_id, user_id, reward_kind) values ('account-fixture-evt', $1, 'none')`, [uid]);
+  await client.query(`insert into public.ranking_weekly_fame (week_start, user_id, fame_gained) values ('2030-01-07', $1, 10)`, [uid]);
   if (spec.save) {
     await client.query(`insert into public.fish_instances (uid, user_id, fish_id, form) values ($1, $2, 'crucian', 'normal')`,
       [fish('crucian').uid, uid]);

@@ -42,7 +42,7 @@ function makeFakeCtx(): { ctx: Ctx; rects: RectCall[]; texts: { text: string; x:
 }
 
 describe('drawPerson 모자 픽셀 경계', () => {
-  it('57종 모든 모자의 fillRect 좌표가 person(16x22, 원점 7,21) 경계 안에 들어간다', () => {
+  it('60종 모든 모자의 fillRect 좌표가 person(16x22, 원점 7,21) 경계 안에 들어간다', () => {
     const px = 7;
     const py = 21;
     // drawPerson 호출 시 머리, 몸통, 바지 외에 모자가 그리는 rect만 추출
@@ -74,6 +74,12 @@ describe('drawPerson 모자 픽셀 경계', () => {
     }
 
     expect(achSignatures.size).toBe(52);
+
+    const santa = makeFakeCtx();
+    drawPerson(santa.ctx, px, py, { shirt: 0, pants: 0, hat: 'santa-hat' });
+    const santaRects = santa.rects.slice(1, -2);
+    expect(santaRects.some(r => r.color === '#c62828')).toBe(true);
+    expect(santaRects.some(r => r.color === '#eceff1')).toBe(true);
   });
 });
 

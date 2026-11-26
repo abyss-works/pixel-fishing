@@ -18,6 +18,8 @@ interface MenuCardProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 't
   subRole?: TextRole;
   /** 잠금 안내 줄들. 주어지면 카드는 흐려지고 오른쪽 위에 자물쇠가 붙는다. 누르거나 호버하거나 포커스하면 이 줄들이 공용 툴팁으로 열리고 onClick은 실행되지 않는다 */
   lock?: readonly string[];
+  /** PC 레이아웃 전용 단축키 배지(예: 'ESC') */
+  shortcut?: string;
 }
 
 // 메뉴 영역 카드 — 이름 붙은 size 컨테이너(basemenu) 안에서 쓴다. 폭과 아이콘 높이는 화면이 아니라 그 컨테이너 크기에서 정한다.
@@ -42,7 +44,7 @@ const CARD_WIDTH = [
   'menu-compact:[--card:clamp(54px,max(min(calc(14.6cqw-15px),calc((100cqh-240px)/0.88)),min(calc(22cqw-14px),calc((100cqh-345px)/1.32))),128px)]',
 ].join(' ');
 
-export default function MenuCard({ icon, title, sub, subRole = 'required', lock, className, onClick, ...rest }: MenuCardProps) {
+export default function MenuCard({ icon, title, sub, subRole = 'required', lock, shortcut, className, onClick, ...rest }: MenuCardProps) {
   const { ref: subRef, isOmitted } = useOmitted<HTMLSpanElement>();
   const omittable = !!sub && subRole === 'omittable';
   const lockReasonId = useId();
@@ -52,6 +54,12 @@ export default function MenuCard({ icon, title, sub, subRole = 'required', lock,
             aria-describedby={lock ? lockReasonId : undefined}
             className={`relative flex w-(--card) flex-col items-center gap-1 px-1 py-2 ${CARD_WIDTH} ${lock ? 'bg-bg border-line-dim text-text-dim shadow-[inset_1px_1px_0_var(--bevel-hi),inset_-1px_-1px_0_var(--bevel-lo)] cursor-not-allowed' : ''} ${className ?? ''}`}>
       {lock && <LockBadge size={14} />}
+      {shortcut && !lock && (
+        <kbd aria-hidden="true"
+             className="pointer-events-none absolute top-1 right-1 inline-flex mobile:hidden items-center border border-line bg-bg/90 px-1 py-px pf-accent text-2xs leading-none text-text-dim">
+          {shortcut}
+        </kbd>
+      )}
       <span className="h-[clamp(24px,calc(var(--card)*0.44),56px)] w-full">{icon}</span>
       <span className={`pf-accent text-sm ${lock ? 'text-text-dim' : 'text-gold'}`}>{title}</span>
       {sub && (omittable

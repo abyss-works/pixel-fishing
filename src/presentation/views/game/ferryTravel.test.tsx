@@ -167,6 +167,8 @@ describe('여객선 빠른 이동: 입력은 덮개를 통과한다', () => {
       await advance(reduce ? 0 : 200);
       press('Enter');
       expect(onKey).toHaveBeenCalledWith('Enter');
+      fireEvent.keyDown(document, { key: 'Escape' });
+      expect(onKey).not.toHaveBeenCalledWith('Escape');
       const blockers = [...document.querySelectorAll('.fixed.inset-0')].filter(
         el => el.getAttribute('aria-hidden') === 'true' && !el.classList.contains('pointer-events-none'));
       expect(blockers).toEqual([]);

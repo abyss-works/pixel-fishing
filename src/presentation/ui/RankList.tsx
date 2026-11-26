@@ -19,20 +19,40 @@ function renderRankValue(value: number, format: (value: number) => ReactNode): R
     : formatted;
 }
 
-/** 목록 밖에 있는 내 순위를 표 아래에 고정하는 바 */
+/** 내 순위를 표 아래에 고정하는 바 — 순위가 없을 때는 안내 문구(emptyMessage) 또는 고정 높이 빈 자리를 둔다 */
 export function RankMeBar({
   me,
+  label = '나',
+  emptyMessage = null,
   format,
   compact = false,
   reserveSpace = false,
 }: {
   me: { rank: number; value: number } | null;
+  label?: string | null;
+  emptyMessage?: string | null;
   format: (value: number) => ReactNode;
   compact?: boolean;
   reserveSpace?: boolean;
 }) {
-  if (!me) return reserveSpace ? <div className="h-9 shrink-0" aria-hidden="true" /> : null;
+  if (!me) {
+    if (!compact && emptyMessage) {
+      return (
+        <Inset
+          tone="base"
+          border="line"
+          className="h-9 shrink-0 flex items-center px-3 mobile:px-2.5 text-xs text-text-dim"
+          data-me="false"
+          aria-label="내 순위"
+        >
+          <span className="truncate">{emptyMessage}</span>
+        </Inset>
+      );
+    }
+    return reserveSpace ? <div className="h-9 shrink-0" aria-hidden="true" /> : null;
+  }
 
+  const displayLabel = label?.trim() || '나';
   const rankTone = me.rank <= 3 ? 'gold' : 'accent';
   const rankClass = cx('pf-accent text-xs', rankTone === 'gold' ? 'text-gold' : 'text-accent');
   if (compact) {
@@ -60,9 +80,9 @@ export function RankMeBar({
       data-rank={me.rank}
       aria-label="내 순위"
     >
-      <span className={rankClass} data-rank-tone={rankTone}>{me.rank}</span>
+      <span className={rankClass} data-rank-tone={rankTone}>{`#${me.rank}`}</span>
       {/* 표의 닉네임 칸과 같은 왼쪽 여백 */}
-      <b className="pl-2 truncate text-accent">나</b>
+      <b className="pl-2 truncate text-accent">{displayLabel}</b>
       <span className="text-right text-xs whitespace-nowrap">{renderRankValue(me.value, format)}</span>
     </Inset>
   );
@@ -92,7 +112,6 @@ export default function RankList({
   embedded?: boolean;
   className?: string;
 }) {
-  const meInList = rows.some(r => r.me);
   const table = (
     <DataTable cols={cols} nameMin={nameMin}>
       <thead>
@@ -140,7 +159,7 @@ export default function RankList({
   return (
     <div className={cx('pf-scroll-panel overflow-x-auto', className)}>
       {table}
-      {me && !meInList && <RankMeBar me={me} compact format={format} />}
+      {me && <RankMeBar me={me} compact format={format} />}
     </div>
   );
 }

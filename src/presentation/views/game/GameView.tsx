@@ -105,6 +105,7 @@ import { useCanvasCover } from '../../layouts/game-stage/canvasCover';
 import { useMobileLayout } from '../../layouts/useMobileLayout';
 import { useBlockZoom } from '../../layouts/useBlockZoom';
 import { keyboardStyle, useVisibleBox } from '../../layouts/visibleBox';
+import { HOTKEY_TIER, hasModifier, useKeyScope } from '../../ui/hotkeys';
 import { windowHostRef } from '../../ui/windowLayer';
 
 interface GameViewProps {
@@ -527,6 +528,14 @@ export default function GameView(props: GameViewProps) {
     }
   };
 
+  useKeyScope(e => {
+    if (scene.kind !== 'base' || trip !== null || encounter !== null || props.blocker != null) return false;
+    if (e.key !== 'Escape' || hasModifier(e)) return false;
+    e.preventDefault();
+    onFacility('exit');
+    return true;
+  }, { tier: HOTKEY_TIER.BASE });
+
   return (
     <div ref={windowHostRef} className={cx('group/root fixed inset-0 flex overflow-hidden overscroll-none', mobile && 'flex-col')}
          style={keyboardStyle(visible)}
@@ -621,7 +630,10 @@ export default function GameView(props: GameViewProps) {
             }}
           />
         )}
-        {questsOpen && <QuestInfoModal game={game} onClose={() => setQuestsOpen(false)} />}
+        {questsOpen && (
+          <QuestInfoModal game={game} dispatch={props.dispatch} setToast={props.setToast} confirm={confirm}
+                          onClose={() => setQuestsOpen(false)} />
+        )}
         {achievementsOpen && (
           <AchievementsModal game={game} guest={accountState !== 'account'} dispatch={props.dispatch}
                              setToast={props.setToast}
@@ -635,7 +647,13 @@ export default function GameView(props: GameViewProps) {
         {fortuneOpen && (
           <FortuneCalendarModal gameFortune={game.fortune} accountState={accountState} onClose={() => setFortuneOpen(false)} />
         )}
-        {rankingOpen && <RankingModal onClose={() => setRankingOpen(false)} />}
+        {rankingOpen && (
+          <RankingModal
+            guest={accountState === 'guest'}
+            nickname={props.nickname}
+            onClose={() => setRankingOpen(false)}
+          />
+        )}
         {away.report && awayOpen && (
           <AwayReportModal report={away.report} game={game} onClose={closeAway}
                            onOpenBag={() => { closeAway(); setActiveTab('bag'); }} />
@@ -687,7 +705,7 @@ export default function GameView(props: GameViewProps) {
           <FacilityModal panel={actionPanel} game={game} dispatch={props.dispatch}
                          base={scene.kind === 'base' ? scene.id : undefined} uid={props.uid}
                          sellBonus={guildBonus?.effects.sell ?? 0} accountState={accountState}
-                         setToast={props.setToast} onClose={() => setActionPanel(null)} />
+                         setToast={props.setToast} confirm={confirm} onClose={() => setActionPanel(null)} />
         )}
         {worldMapOpen && <WorldMapModal world={worldScene} onClose={() => setWorldMapOpen(false)} />}
         {/* 세이브가 준비된 뒤(서버 연결 또는 로컬)에만 소식 창을 계획한다 */}

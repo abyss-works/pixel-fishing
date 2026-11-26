@@ -22,7 +22,7 @@ import {
   emitNamedMissSound,
   emitNamedSpawnSound,
 } from '../../../../features/sound/service/soundEvents';
-import { useKeyScope } from '../../../ui/hotkeys';
+import { HOTKEY_TIER, hasModifier, useKeyScope } from '../../../ui/hotkeys';
 import { cx } from '../../../ui/cx';
 import Button from '../../../ui/Button';
 import FishSprite from '../../../ui/fish/FishSprite';
@@ -120,8 +120,8 @@ export default function EncounterModal({ data, onResolve, onClose }: {
   useKeyScope(e => {
     if (e.code === 'Space') { e.preventDefault(); strikeRef.current(); return true; }
     // 모달 자체의 Esc는 이 exclusive 스코프 아래라 닿지 않는다 — 여기서 같은 출구를 연다
-    if (e.key === 'Escape') { e.preventDefault(); if (closableRef.current) onClose(); return true; }
-  }, { exclusive: true });
+    if (e.key === 'Escape' && !hasModifier(e)) { e.preventDefault(); if (closableRef.current) onClose(); return true; }
+  }, { exclusive: true, tier: HOTKEY_TIER.STAGE_MODAL });
 
   useEffect(() => {
     if (phase !== 'run') return;

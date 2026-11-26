@@ -325,7 +325,7 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
         // 수배 스냅샷을 바꾸는 액션만 무효화한다. catch는 티켓 발급·의뢰 진행분만 해당하고
         // 나머지는 스냅샷과 무관이라 건드리지 않는다 (폭풍 방지).
         const devAction = action.type === 'debug' || action.type === 'debugBatch';
-        if (action.type === 'acceptQuest' || action.type === 'deliverBounty' || action.type === 'resolveChallenge' || devAction
+        if (action.type === 'acceptQuest' || action.type === 'abandonQuest' || action.type === 'deliverBounty' || action.type === 'resolveChallenge' || devAction
             || (action.type === 'catch' && r.result.type === 'catch' && (r.result.ticket || r.result.bountyProgressed))) {
           void client.invalidateQueries({ queryKey: ['bounty'] });
         }
@@ -333,6 +333,9 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
         // 랭킹은 열려 있을 때만 다시 읽도록 낡음 표시만 한다
         if (devAction || action.type === 'catch' || action.type === 'resolveChallenge' || action.type === 'claimRelief' || action.type === 'import') {
           void client.invalidateQueries({ queryKey: ['ranking'], refetchType: 'none' });
+        }
+        if (action.type === 'boot') {
+          void client.invalidateQueries({ queryKey: ['mailbox'] });
         }
         if ('guildUpdated' in r.result && r.result.guildUpdated) void client.invalidateQueries({ queryKey: ['guild'] });
         const uid = client.getQueryData<string | null>(sessionKey) ?? null;

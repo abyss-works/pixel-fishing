@@ -151,4 +151,11 @@ describe('parseAction', () => {
     expect(parseAction({ type: 'settleEventReward' })).toEqual({ type: 'settleEventReward' });
     expect(parseAction({ type: 'settleEventReward', eventId: 'evt-2' })).toEqual({ type: 'settleEventReward', eventId: 'evt-2' });
   });
+
+  it('abandonQuest 액션의 형태를 검증한다', () => {
+    expect(parseAction({ type: 'abandonQuest', questId: 'pacific-easy-common' }))
+      .toEqual({ type: 'abandonQuest', questId: 'pacific-easy-common' });
+    expect(parseAction({ type: 'abandonQuest' })).toBeNull();
+    expect(parseAction({ type: 'abandonQuest', questId: 1 })).toBeNull();
+  });
 });

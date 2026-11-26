@@ -96,6 +96,8 @@ export interface ProfileView {
       goldTotal: number;
       achievementOwned: number;
       achievementTotal: number;
+      eventOwned: number;
+      eventTotal: number;
       slots: ProfileHatSlot[];
     };
     artifacts: { owned: number; total: number; slots: ProfileArtifactSlot[] };
@@ -193,7 +195,7 @@ export function selectProfileView(profile: PublicProfile): ProfileView {
     conditionText: h.source === 'gold'
       ? `${h.price.toLocaleString('ko-KR')}G 구매`
       : h.source === 'event'
-        ? '이벤트 한정 모자'
+        ? (h.id === 'santa-hat' ? '겨울 이벤트 기간에 접속하면 우편함으로 받을 수 있어요.' : '이벤트 한정 모자')
         : (achievementById(h.achievementId)?.desc ?? '업적 보상'),
   }));
 
@@ -242,6 +244,8 @@ export function selectProfileView(profile: PublicProfile): ProfileView {
         goldTotal: goldHats.length,
         achievementOwned,
         achievementTotal: achievementHats.length,
+        eventOwned,
+        eventTotal: eventOwned,
         slots: hatSlots,
       },
       artifacts: {

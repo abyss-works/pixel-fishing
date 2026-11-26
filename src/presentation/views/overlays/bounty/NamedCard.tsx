@@ -13,8 +13,8 @@ import Tip from '../../../ui/Tip';
 import { cx } from '../../../ui/cx';
 import { AcceptButton, BoardRows, NamedCardHead } from './boardParts';
 
-export default function NamedCard({ game, quest, canAccept, reason, busy, progress, accepted, ticketMins, materialName, onOpenDetail, onAccept, onDeliver }: {
-  game: GameState; quest: BountyQuest; canAccept: boolean;
+export default function NamedCard({ game, quest, canAccept, canAbandon = false, reason, busy, progress, accepted, ticketMins, materialName, onOpenDetail, onAccept, onDeliver, onAbandon }: {
+  game: GameState; quest: BountyQuest; canAccept: boolean; canAbandon?: boolean;
   /** 수주할 수 없는 이유 — 버튼의 툴팁으로 보인다 */
   reason: string | null;
   busy: boolean;
@@ -24,7 +24,7 @@ export default function NamedCard({ game, quest, canAccept, reason, busy, progre
   /** 토벌 보상으로 받는 교환 재료 이름 */
   materialName: string | null;
   onOpenDetail?: () => void;
-  onAccept: () => void; onDeliver: () => void;
+  onAccept: () => void; onDeliver: () => void; onAbandon?: () => void;
 }) {
   const { name, found, done, haunt, reward } = selectNamedBountyCardData(game, quest, progress);
   const title = found && name ? name : '???';
@@ -41,7 +41,7 @@ export default function NamedCard({ game, quest, canAccept, reason, busy, progre
         ? <PressRow onPress={onOpenDetail} ariaLabel={`${title} 상세 보기`} className="px-1 -mx-1">{head}</PressRow>
         : head}
       <BoardRows rows={[
-        { key: 'haunt', label: '나타나는 곳', value: haunt },
+        { key: 'haunt', label: '나타나는 곳', value: haunt, wrap: true },
         { key: 'progress', label: <Tip text={`${haunt}에서 낚시하면 아주 드물게 마주쳐요.`}>진행</Tip>,
           value: <ProgressCount current={Math.min(progress, quest.count)} target={quest.count} tight /> },
         { key: 'reward', label: '보상', value: <AdjustedAmount amount={reward} className="text-gold" /> },
@@ -51,7 +51,7 @@ export default function NamedCard({ game, quest, canAccept, reason, busy, progre
         {done
           ? <Button variant="primary" full disabled={busy} onClick={onDeliver}>보상 받기</Button>
           : accepted
-            ? <Button full disabled>진행 중</Button>
+            ? <Button variant="danger" full disabled={busy || !canAbandon} onClick={onAbandon}>의뢰 포기</Button>
             : <AcceptButton disabled={!canAccept || busy} reason={reason} onClick={onAccept} />}
       </div>
     </Inset>

@@ -22,6 +22,7 @@ import { useGameTime } from '../../../features/gameplay/service/useGameTime';
 import { useSchools } from '../../../features/gameplay/service/schoolDay';
 import { useFishArtStyle } from '../../../features/display/service/fishArtStyle';
 import { alertEncounter } from '../../../features/bounty/service/encounterAlert';
+import { effectiveLookForRegion } from '../../../features/live/model/live';
 import { liveFrame, useLivePosition } from '../../../features/live/service/useLive';
 import type { DispatchResult, MaybePromise } from '../../../features/gameplay/service/types';
 import type { FieldCallbacks, FieldEvent } from '../../../game/runtime/fieldEngine';
@@ -177,7 +178,7 @@ export default function Field({
     return {
       region, zone: getSpotState().zone, x: Math.round(pos.x), y: Math.round(pos.y),
       line: engine.getSnapshot().phase !== 'idle', bob: bob ? { x: Math.round(bob.x), y: Math.round(bob.y) } : null,
-      look: game.look, ...(resultAt === null ? {} : { idleMs: Date.now() - resultAt }),
+      look: effectiveLookForRegion(game.look, region), ...(resultAt === null ? {} : { idleMs: Date.now() - resultAt }),
     };
   }, [engine, region, game.look]);
   useLivePosition(readPosition);

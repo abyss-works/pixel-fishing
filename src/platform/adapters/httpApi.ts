@@ -313,7 +313,11 @@ class HttpAdmin implements AdminApi {
   }
   async sentMails(): Promise<AdminSentMailRow[]> {
     const rows = await readAdmin<AdminSentMailRow[]>('mails');
-    return rows.map(r => ({ ...r, items: Array.isArray(r.items) ? r.items : [] }));
+    return rows.map(r => ({
+      ...r,
+      items: Array.isArray(r.items) ? r.items : [],
+      hats: Array.isArray(r.hats) ? r.hats : [],
+    }));
   }
   mail(op: 'preview' | 'send', request: AdminMailRequest): Promise<AdminMailPlan> {
     return writeAdmin('mail', { op, request }, `우편 ${op}`);

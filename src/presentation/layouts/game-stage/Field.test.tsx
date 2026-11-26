@@ -4,8 +4,10 @@ import { AppError, fail } from '../../../core/errors';
 import { newState } from '../../../game/rules/logic';
 import { FISH } from '../../../game/content/fish';
 import { CHAMPIONSHIP_SCHOOLS } from '../../../game/world';
+import type { RegionId } from '../../../game/world';
 import { setSchoolDay } from '../../../features/gameplay/service/schoolDay';
 import * as soundEvents from '../../../features/sound/service/soundEvents';
+import * as liveService from '../../../features/live/service/useLive';
 import { resetKeyScopes } from '../../ui/hotkeys';
 
 const layout = vi.hoisted(() => ({ mobile: false }));
@@ -250,5 +252,37 @@ describe('Field 이벤트 구역 호환과 낚시 효과음 전달', () => {
     act(() => { vi.advanceTimersByTime(4000); });
     act(() => { vi.advanceTimersByTime(15000); });
     expect(catchSpy).toHaveBeenLastCalledWith(expect.objectContaining({ manual: false }));
+  });
+});
+
+describe('Field 구역 강제 모자 실시간 송신', () => {
+  it('championship 구역에서는 readPosition이 santa-hat을 송신하고, 구역을 벗어나면 game.look으로 복원한다', () => {
+    const spy = vi.spyOn(liveService, 'useLivePosition');
+    const game = { ...newState(), look: { shirt: 2, pants: 3, hat: 'cap-red' } };
+    try {
+      const { rerender } = render(
+        <Field
+          region={'championship' as RegionId}
+          game={game}
+          dispatch={() => ({ status: 'ok', result: {} as never, state: game })}
+          setToast={() => {}}
+          onScene={() => {}}
+        />,
+      );
+      expect(spy.mock.calls.at(-1)?.[0]().look).toEqual({ shirt: 2, pants: 3, hat: 'santa-hat' });
+
+      rerender(
+        <Field
+          region="village"
+          game={game}
+          dispatch={() => ({ status: 'ok', result: {} as never, state: game })}
+          setToast={() => {}}
+          onScene={() => {}}
+        />,
+      );
+      expect(spy.mock.calls.at(-1)?.[0]().look).toEqual({ shirt: 2, pants: 3, hat: 'cap-red' });
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

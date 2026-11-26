@@ -15,12 +15,13 @@ describe('우편함 HTTP 어댑터', () => {
     vi.unstubAllGlobals();
   });
 
-  it('readMails는 첨부 items를 배열로 매핑하고 누락된 경우 빈 배열로 채운다', async () => {
+  it('readMails는 첨부 items와 hats를 배열로 매핑하고 누락된 경우 빈 배열로 채운다', async () => {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
       mails: [
         {
           id: 1, title: '물약 선물', body: '본문', gold: 0,
           items: [{ id: 'luck-small', qty: 2 }],
+          hats: ['santa-hat'],
           createdAt: '2026-11-25T00:00:00.000Z', readAt: null, claimedAt: null,
         },
         {
@@ -34,11 +35,13 @@ describe('우편함 HTTP 어댑터', () => {
       {
         id: 1, title: '물약 선물', body: '본문', gold: 0,
         items: [{ id: 'luck-small', qty: 2 }],
+        hats: ['santa-hat'],
         createdAt: '2026-11-25T00:00:00.000Z', readAt: null, claimedAt: null,
       },
       {
         id: 2, title: '골드만', body: '본문', gold: 100,
         items: [],
+        hats: [],
         createdAt: '2026-11-24T00:00:00.000Z', readAt: null, claimedAt: null,
       },
     ]);

@@ -321,6 +321,13 @@ function drawAchievementHat(ctx: Ctx, x: number, y: number, hat: Hat) {
       R(ctx, x - 2, y - 18, 4, 1, a);
       R(ctx, x - 5, y - 17, 10, 1, c);
       return;
+    case 'santa-hat':
+      R(ctx, x + 1, y - 20, 2, 2, a);
+      R(ctx, x - 2, y - 19, 3, 1, c);
+      R(ctx, x - 3, y - 18, 6, 1, c);
+      R(ctx, x - 4, y - 17, 8, 1, c);
+      R(ctx, x - 4, y - 16, 8, 2, a);
+      return;
     default:
       R(ctx, x - 4, y - 19, 8, 3, c);
       R(ctx, x + 3, y - 16, 3, 1, c);

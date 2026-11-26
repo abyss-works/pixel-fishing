@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { HATS, isAchievementHat, isEventHat } from '../../../game/content/wardrobe';
 import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
-import { clothesChanged, hatCountText, hatDetail, outfitName, visibleHats } from './wardrobe';
+import { clothesChanged, hatCountText, hatDetail, outfitName, resolveHatDisplay, visibleHats } from './wardrobe';
 
 const seed = (over: Partial<GameState> = {}): GameState => ({ ...newState(), ...over });
 
@@ -120,6 +120,60 @@ describe('hatDetail', () => {
       condition: '메갈로돈 토벌을 5회 마쳐요.',
       current: 1,
       target: 5,
+    });
+  });
+
+  it('미보유 이벤트 모자는 사기(0G)가 아니라 이벤트 잠금 상태와 접속 선물 안내를 돌려준다', () => {
+    const locked = hatDetail(seed({ gold: 1_000_000 }), 'santa-hat');
+    expect(locked).toEqual({
+      name: '산타모자',
+      price: 0,
+      source: 'event',
+      owned: false,
+      worn: false,
+      action: 'event',
+      buyBlock: '겨울 이벤트 기간에 접속하면 우편함으로 받을 수 있어요.',
+      unlock: null,
+      eventHint: '겨울 이벤트 기간에 접속하면 우편함으로 받을 수 있어요.',
+    });
+  });
+
+  it('보유한 이벤트 모자는 쓰기·벗기 상태와 이벤트 출처 안내를 돌려준다', () => {
+    const owned = hatDetail(seed({ hats: ['santa-hat'] }), 'santa-hat');
+    expect(owned).toEqual({
+      name: '산타모자',
+      price: 0,
+      source: 'event',
+      owned: true,
+      worn: false,
+      action: 'wear',
+      buyBlock: null,
+      unlock: null,
+      eventHint: '겨울 이벤트 접속 선물',
+    });
+
+    const worn = hatDetail(seed({ hats: ['santa-hat'], look: { shirt: 0, pants: 0, hat: 'santa-hat' } }), 'santa-hat');
+    expect(worn).toMatchObject({
+      owned: true,
+      worn: true,
+      source: 'event',
+      action: 'unwear',
+      eventHint: '겨울 이벤트 접속 선물',
+    });
+  });
+});
+
+describe('resolveHatDisplay', () => {
+  it('등록된 모자는 이름과 외형을 돌려주고, 알 수 없는 id는 id와 null 외형을 돌려준다', () => {
+    expect(resolveHatDisplay('santa-hat')).toEqual({
+      id: 'santa-hat',
+      name: '산타모자',
+      look: { shirt: 0, pants: 0, hat: 'santa-hat' },
+    });
+    expect(resolveHatDisplay('unknown-hat')).toEqual({
+      id: 'unknown-hat',
+      name: 'unknown-hat',
+      look: null,
     });
   });
 });

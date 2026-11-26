@@ -655,6 +655,20 @@ describe('수배 스냅샷 무효화', () => {
   const doCatch = (hook: Awaited<ReturnType<typeof bootedWithSpy>>['hook']) =>
     act(async () => { await hook.result.current.dispatch({ type: 'catch', spot: 'pond', judgment: 'good' }); });
 
+  it('acceptQuest·abandonQuest·deliverBounty·resolveChallenge는 수배 스냅샷을 즉시 무효화한다', async () => {
+    const { hook, spy } = await bootedWithSpy();
+    for (const action of [
+      { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
+      { type: 'abandonQuest', questId: 'pacific-easy-common' },
+      { type: 'deliverBounty', questId: 'pacific-easy-common' },
+      { type: 'resolveChallenge', questId: 'pacific-named-megalodon', success: true, hits: 5, misses: 0 },
+    ] as const) {
+      spy.mockClear();
+      await act(async () => { await hook.result.current.dispatch(action); });
+      expect(spy).toHaveBeenCalledWith({ queryKey: ['bounty'] });
+    }
+  });
+
   it('의뢰 진행도가 오른 catch는 수배 스냅샷을 즉시 무효화한다', async () => {
     const { hook, spy } = await bootedWithSpy();
     gw.dispatchResult = catchResult({ bountyProgressed: true });
@@ -730,6 +744,19 @@ describe('수배 스냅샷 무효화', () => {
     gw.dispatchResult = catchResult({});
     await doCatch(hook);
     expect(spy).not.toHaveBeenCalledWith({ queryKey: ['guild'] });
+  });
+
+  it('boot 성공 시 우편함 캐시를 무효화한다', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const spy = vi.spyOn(client, 'invalidateQueries');
+    client.setQueryData(['mailbox', 'uid-1'], []);
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    renderHook(() => useGame({ setToast: () => {} }), { wrapper });
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['mailbox'] });
+    expect(client.getQueryState(['mailbox', 'uid-1'])?.isInvalidated).toBe(true);
   });
 
   it('applyDevReset과 refreshAccountStatus는 세션 쿼리를 제외하고 무효화한다', async () => {

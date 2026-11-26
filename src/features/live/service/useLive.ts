@@ -2,6 +2,9 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { liveAvailable, openLive } from '../../../platform/api';
 import type { LiveConnection } from '../../../platform/api';
 import type { Look } from '../../../game/content/wardrobe';
+import type { FormId } from '../../../game/content/fish';
+import type { JumpFx } from '../../../game/rendering/pixel/sprites/overlays';
+import { JUMP_S } from '../../../game/rendering/pixel/sprites/schoolView';
 import type { Bob, ChatLine, NoticeItem, ServerMessage } from '../../../game/rules/live';
 import { glidePosition, LIVE_MOVE_MS, nextGlide } from '../../../game/rules/live';
 import type { Glide } from '../../../game/rules/live';
@@ -40,6 +43,18 @@ const glides = new Map<string, Glide>();
 /** 다른 플레이어가 마지막으로 보낸 채팅과 받은 시각, 입력 중 표시를 켠 시각 — 머리 위 말풍선용(performance.now 기준) */
 const said = new Map<string, { text: string; at: number }>();
 const typingAt = new Map<string, number>();
+/** 다른 플레이어가 물고기를 낚았을 때 수면에 띄울 점프 연출 대기열(Date.now 기준) — React 구독을 깨우지 않는다 */
+const MAX_PEER_JUMPS = 12;
+interface PeerJumpEntry {
+  uid: string;
+  region: string;
+  x: number;
+  y: number;
+  fishId: string;
+  form?: FormId;
+  at: number;
+}
+const peerJumps: PeerJumpEntry[] = [];
 /** 내가 입력 중 표시를 켠 시각 — 서버는 내 입력 중 소식을 나에게 돌려주지 않으므로 보낼 때 기록한다 */
 let myTypingAt: number | null = null;
 /** 내 방치 시간을 세기 시작한 시각 — 위치를 읽는 송신 주기마다 갱신한다(Date.now 기준). 세지 않으면 null */
@@ -66,10 +81,25 @@ function receive(msg: ServerMessage): void {
     glides.clear();
     said.clear();
     typingAt.clear();
+    peerJumps.length = 0;
     if (currentRegion) conn?.send({ t: 'region', region: currentRegion });
   }
   if (msg.t === 'notices') noticesUpdatedAt = now;
   if (msg.t === 'leave') { glides.delete(msg.uid); said.delete(msg.uid); typingAt.delete(msg.uid); }
+  if (msg.t === 'catchFx') {
+    peerJumps.push({
+      uid: msg.uid,
+      region: msg.region,
+      x: msg.x,
+      y: msg.y,
+      fishId: msg.fishId,
+      ...(msg.form !== undefined ? { form: msg.form } : {}),
+      at: now,
+    });
+    if (peerJumps.length > MAX_PEER_JUMPS) {
+      peerJumps.splice(0, peerJumps.length - MAX_PEER_JUMPS);
+    }
+  }
   // 머리 위 말풍선은 전체·지역 채팅만 띄운다 — 길드 채팅은 길드원끼리만 보는 대화다
   if (msg.t === 'chat' && msg.room !== 'guild') { said.set(msg.line.uid, { text: msg.line.text, at: performance.now() }); typingAt.delete(msg.line.uid); }
   if (msg.t === 'typing') {
@@ -112,6 +142,7 @@ function reset(): void {
   state = EMPTY_LIVE;
   noticesUpdatedAt = 0;
   glides.clear();
+  peerJumps.length = 0;
   myTypingAt = null;
   myIdleSince = null;
   notify();
@@ -191,6 +222,7 @@ export function liveFrame(region: string, now: number): {
   bubble: Speech;
   /** 내 머리 위에 그릴 방치 시간. 말풍선이 떠 있거나 낚시 중이 아니거나 첫 결과 전이면 null */
   idle: string | null;
+  peerJumps: JumpFx[];
 } {
   const wall = Date.now();
   const others = othersInRegion(state, region).map(o => {
@@ -201,9 +233,28 @@ export function liveFrame(region: string, now: number): {
     const idle = bubble === null ? idleLabel(o.idleSince, wall) : null;
     return { x: pos.x, y: pos.y, nick, line, bob: bob ?? null, stale: isStale(o, wall), bubble, idle, ...(look ? { look } : {}) };
   });
+  const maxAgeMs = JUMP_S * 1000;
+  const activePeerJumps: JumpFx[] = [];
+  let write = 0;
+  for (let i = 0; i < peerJumps.length; i++) {
+    const entry = peerJumps[i];
+    const elapsed = wall - entry.at;
+    if (elapsed >= maxAgeMs) continue;
+    peerJumps[write++] = entry;
+    if (entry.region === region && elapsed >= 0) {
+      activePeerJumps.push({
+        x: entry.x,
+        y: entry.y,
+        fishId: entry.fishId,
+        ...(entry.form !== undefined ? { form: entry.form } : {}),
+        t: elapsed / 1000,
+      });
+    }
+  }
+  peerJumps.length = write;
   const mine = state.you === null ? null : said.get(state.you) ?? null;
   const bubble = speechOf(bubbleOf(mine, myTypingAt, now));
-  return { others, bubble, idle: bubble === null ? idleLabel(myIdleSince, wall) : null };
+  return { others, bubble, idle: bubble === null ? idleLabel(myIdleSince, wall) : null, peerJumps: activePeerJumps };
 }
 
 /** 그 바다에 접속한 길드원의 위치 — 미니맵이 그릴 때마다 부른다 */

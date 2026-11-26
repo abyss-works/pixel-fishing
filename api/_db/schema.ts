@@ -128,6 +128,7 @@ export const mails = pgTable('mails', {
   body: text('body').notNull(),
   gold: bigint('gold', { mode: 'number' }).notNull().default(0),
   items: jsonb('items').$type<{ id: string; qty: number }[]>().notNull().default([]),
+  hats: jsonb('hats').$type<string[]>().notNull().default([]),
   createdAt: at('created_at').notNull().defaultNow(),
   readAt: at('read_at'),
   claimedAt: at('claimed_at'),
@@ -272,3 +273,11 @@ export const eventDraws = pgTable('event_draws', {
   mailId: bigint('mail_id', { mode: 'number' }),
   createdAt: at('created_at').notNull().defaultNow(),
 });
+
+export const rankingWeeklyFame = pgTable('ranking_weekly_fame', {
+  weekStart: date('week_start', { mode: 'string' }).notNull(),
+  userId: uuid('user_id').notNull(),
+  fameGained: bigint('fame_gained', { mode: 'number' }).notNull().default(0),
+  reachedAt: at('reached_at').notNull().defaultNow(),
+  updatedAt: at('updated_at').notNull().defaultNow(),
+}, t => [primaryKey({ columns: [t.weekStart, t.userId] })]);

@@ -115,7 +115,18 @@ describe('랭킹의 게스트', () => {
     await env.client.query('update public.records set max_size = 99 where user_id = $1', [g]);
     const m = await member({ nickname: '계정하수', state: { fame: 5, dex: dexOf('crucian') } });
     await env.client.query('update public.records set max_size = 10 where user_id = $1', [m]);
-    const queries: Record<string, string>[] = [{ board: 'fame' }, { board: 'dex' }, { board: 'species', fish: 'crucian' }];
+    const { gameWeekStartDay } = await import('../src/game/rules/time.js');
+    const weekStart = gameWeekStartDay(new Date().toISOString());
+    await env.client.query(
+      `insert into public.ranking_weekly_fame (week_start, user_id, fame_gained) values ($1::date, $2, 900), ($1::date, $3, 5)`,
+      [weekStart, g, m],
+    );
+    const queries: Record<string, string>[] = [
+      { board: 'fame' },
+      { board: 'fame', window: 'all' },
+      { board: 'dex' },
+      { board: 'species', fish: 'crucian' },
+    ];
     for (const query of queries) {
       const asGuest = (await rank(query, userToken(g))).body as { top: { nickname: string }[]; me: unknown };
       expect(asGuest.top.map(r => r.nickname), query.board).toEqual(['계정하수']);
