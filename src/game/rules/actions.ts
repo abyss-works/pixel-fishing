@@ -143,9 +143,10 @@ export interface ActionDeps {
 // 클라 연출용 부가 결과 — HTTP 경계를 넘으므로 직렬화 가능해야 한다 (Fish 객체 대신 id)
 export type ActionResult =
   /** released = 이 캐치로 가방이 넘쳐 놓아준 개체들. 유저에게 반드시 알려야 한다.
-   *  extracted·energy = 가공 플랜트선이 넘친 개체를 기운으로 바꾼 개체들과 얻은 등급별 기운(저장 단위). 없으면 생략한다 */
+   *  extracted·energy = 가공 플랜트선이 넘친 개체를 기운으로 바꾼 개체들과 얻은 등급별 기운(저장 단위). 없으면 생략한다
+   *  bountyProgressed = 서버에서 일반 의뢰 진행도가 실제로 올랐을 때만 true. 없으면 생략한다 */
   | { type: 'catch'; fishId: string; uid: string; info: CatchInfo; released: ReleasedFish[]; extracted?: ReleasedFish[];
-      energy?: Record<RarityId, number>; ticket?: string }
+      energy?: Record<RarityId, number>; ticket?: string; bountyProgressed?: true }
   | { type: 'sell'; gold: number }
   | { type: 'coupon'; gold: number; items?: readonly CouponItem[]; desc: string }
   | { type: 'mail'; gold: number; items?: readonly { id: string; qty: number }[] }
