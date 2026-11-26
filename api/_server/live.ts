@@ -493,6 +493,8 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
         region,
         x: pos.x,
         y: pos.y,
+        toX: sender.presence.x,
+        toY: sender.presence.y - 6,
         fishId: payload.fishId,
         ...(payload.form ? { form: payload.form } : {}),
       };
