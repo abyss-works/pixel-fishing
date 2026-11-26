@@ -5,7 +5,11 @@ import { cx } from './cx';
 export default function CloseButton({ onClose, className }: { onClose: () => void; className?: string }) {
   return (
     <IconButton glyph="close" size={12} tone="dim" aria-label="닫기"
-                className={cx('absolute top-1.5 right-1.5 p-1 hover:text-text', className)}
+                className={cx(
+                  'absolute top-1.5 right-1.5 p-1 hover:text-text',
+                  '[@media(pointer:coarse)]:after:left-auto [@media(pointer:coarse)]:after:right-0 [@media(pointer:coarse)]:after:top-0 [@media(pointer:coarse)]:after:transform-none',
+                  className,
+                )}
                 onClick={onClose} />
   );
 }

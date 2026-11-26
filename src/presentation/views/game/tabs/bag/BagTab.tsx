@@ -116,7 +116,7 @@ function ArtifactSection({ game, dispatch, setToast }: {
                 <span className="flex flex-col gap-0.5 min-w-0 flex-1">
                   <span className="flex items-baseline justify-between gap-2">
                     <span className="flex items-baseline gap-1.5 min-w-0">
-                      <span className="truncate min-w-0">
+                      <span className="truncate min-w-0 text-text">
                         <GradeName name={a.name} grade={a.grade} />
                       </span>
                       {owned && hasLevel && <span className="pf-accent text-accent text-xs shrink-0">{levelText(level)}</span>}
@@ -201,7 +201,7 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
   setToast: Notify;
 }) {
   const now = useNow();
-  const rows = useMemo(() => groupInstances(game.bag), [game.bag]);
+  const rows = useMemo(() => groupInstances(game.bag, { dex: game.dex }), [game.bag, game.dex]);
   const {
     count: bagCount, cap, full: bagFull,
     autoLock: autoLockPlan,
@@ -295,37 +295,44 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
               <span className="text-text-dim">/{fmtNum(cap)}</span>마리)
             </PageTitle>
             <div className="flex items-center gap-1.5">
-              {layout === 'list' && (
-                <Tip
-                  wraps
-                  pressOpens
-                  text={(
-                    <TipCard
-                      title="개체 표시"
-                      rows={[
-                        {
-                          text: (
-                            <span className="inline-flex items-center gap-1.5">
-                              <PixelIcon glyph="crown" size={11} className="text-gold shrink-0" />
-                              <span>최대 크기</span>
-                            </span>
-                          ),
-                        },
-                        {
-                          text: (
-                            <span className="inline-flex items-center gap-1.5">
-                              <PixelIcon glyph="sparkle" size={11} className="text-mutation shrink-0" />
-                              <span className="text-mutation">돌연변이</span>
-                            </span>
-                          ),
-                        },
-                      ]}
-                    />
-                  )}
-                >
-                  <IconButton type="button" glyph="question" size={12} tone="dim" className="p-1" aria-label="개체 표시" />
-                </Tip>
-              )}
+              <Tip
+                wraps
+                pressOpens
+                text={(
+                  <TipCard
+                    title="개체 표시"
+                    rows={[
+                      {
+                        text: (
+                          <span className="inline-flex items-center gap-1.5">
+                            <PixelIcon glyph="crown" size={11} className="text-gold shrink-0" />
+                            <span>최대 크기</span>
+                          </span>
+                        ),
+                      },
+                      {
+                        text: (
+                          <span className="inline-flex items-center gap-1.5">
+                            <PixelIcon glyph="sparkle" size={11} className="text-mutation shrink-0" />
+                            <span className="text-mutation">돌연변이</span>
+                          </span>
+                        ),
+                      },
+                      ...(layout === 'cards' ? [{
+                        text: (
+                          <span className="inline-flex items-center gap-1.5">
+                            <PixelIcon glyph="moon" size={11} className="text-accent shrink-0" />
+                            <span>밤 전용 어종</span>
+                          </span>
+                        ),
+                      }] : []),
+                    ]}
+                    note={layout === 'cards' ? '밤(게임 22:00~06:00)에만 낚여요.' : undefined}
+                  />
+                )}
+              >
+                <IconButton type="button" glyph="question" size={12} tone="dim" className="p-1" aria-label="개체 표시" />
+              </Tip>
               <Tip wraps text={layout === 'list' ? '카드 보기' : '목록 보기'}>
                 <IconButton
                   glyph={layout === 'list' ? 'grid' : 'menu'}
@@ -363,7 +370,7 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
           ) : (
             <>
               <Inset divided>
-                {rows.map(({ key, fish, name, items, subtotal, sized, unsized, maxByForm }) => {
+                {rows.map(({ key, fish, form, name, items, subtotal, sized, unsized, maxByForm }) => {
                   const expanded = opened.has(key);
                   const uids = items.map(i => i.uid);
                   // 하나라도 안 잠겼으면 머리 버튼은 "전부 잠금" — 부분 상태에서 눌러도 결과가 하나다
@@ -378,7 +385,7 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
                            aria-label={`${name} 개체 ${expanded ? '접기' : '펼치기'}`}>
                         <PixelIcon glyph={expanded ? 'caretDown' : 'caretRight'} size={10}
                                    className="text-text-dim" />
-                        <FishSprite fish={fish} preset="thumb" form="normal" />
+                        <FishSprite fish={fish} preset="thumb" form={form} />
                         <span className="truncate">
                           <RarityDot rarity={fish.rarity} />{name}
                         </span>

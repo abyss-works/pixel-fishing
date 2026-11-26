@@ -87,4 +87,12 @@ describe('ModalCard', () => {
     render(<Modal layer="stage" height={480} onClose={() => {}}><p>나</p></Modal>);
     expect(screen.getAllByRole('dialog').at(-1)?.className).toMatch(/h-\[min\(480px/);
   });
+
+  it('닫기 버튼은 거친 포인터 터치 영역(::after)이 오른쪽과 위쪽 프레임 밖으로 넘치지 않게 고정한다', () => {
+    render(<ModalCard title="창" onClose={() => {}}><p>본문</p></ModalCard>);
+    const closeBtn = screen.getByRole('button', { name: '닫기' });
+    expect(closeBtn.className).toContain('[@media(pointer:coarse)]:after:right-0');
+    expect(closeBtn.className).toContain('[@media(pointer:coarse)]:after:top-0');
+    expect(closeBtn.className).toContain('[@media(pointer:coarse)]:after:transform-none');
+  });
 });

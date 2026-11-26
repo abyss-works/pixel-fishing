@@ -99,7 +99,43 @@ describe('게임 세션 로그아웃 격리', () => {
   });
 });
 
-describe('익명 세션 확보(signIn.anonymous) 429 구분', () => {
+describe('익명 세션 확보(getSession · signIn.anonymous) 429 구분', () => {
+  it('초기 getSession()이 HTTP 429 응답을 받으면 null로 삼키지 않고 rate-limited AppError를 재전파한다', async () => {
+    vi.stubEnv('VITE_CLOUD', '1');
+    vi.resetModules();
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ message: 'Too many requests' }), {
+        status: 429,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const mod = await import('./auth');
+
+    await expect(mod.ensureSession()).rejects.toMatchObject({
+      name: 'AppError',
+      kind: 'rate-limited',
+      context: { status: 429, code: 'rate_limited' },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('초기 getSession()이 429 외 오류 응답을 받으면 기존처럼 null을 돌려준다', async () => {
+    vi.stubEnv('VITE_CLOUD', '1');
+    vi.resetModules();
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ message: 'Server error' }), {
+        status: 500,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const mod = await import('./auth');
+
+    await expect(mod.ensureSession()).resolves.toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('signIn.anonymous가 HTTP 429 응답을 받으면 null로 삼키지 않고 rate-limited AppError를 던진다', async () => {
     vi.stubEnv('VITE_CLOUD', '1');
     vi.resetModules();

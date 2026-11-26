@@ -66,9 +66,9 @@ interface ModalBase {
 // 스테이지 모달의 투명 래퍼는 배치만 맡는다. 그래서 스테이지는 className을 받지 않고(타입으로 막는다),
 // 필요한 높이·폭만 명시 prop으로 고른다. 스크롤은 ModalCard의 본문이 맡는다.
 type ModalProps = ModalBase & (
-  | { layer: 'stage'; height?: ModalHeight; mobileHeight?: ModalMobileHeight; mobileFixed?: boolean; worldmap?: boolean; aside?: ReactNode; className?: never; header?: never; footer?: never; fill?: never; bare?: never; opaque?: never; above?: never }
-  | { layer: 'app'; className?: string; height?: never; mobileHeight?: never; mobileFixed?: never; worldmap?: never; aside?: never; header?: ReactNode; footer?: ReactNode; fill?: boolean; bare?: boolean; opaque?: boolean; above?: ReactNode }
-  | { layer: 'devtools'; className?: string; height?: never; mobileHeight?: never; mobileFixed?: never; worldmap?: never; aside?: never; header?: ReactNode; footer?: ReactNode; fill?: boolean; bare?: boolean; opaque?: never; above?: never }
+  | { layer: 'stage'; width?: 420; height?: ModalHeight; mobileHeight?: ModalMobileHeight; mobileFixed?: boolean; worldmap?: boolean; aside?: ReactNode; className?: never; header?: never; footer?: never; fill?: never; bare?: never; opaque?: never; above?: never }
+  | { layer: 'app'; width?: never; className?: string; height?: never; mobileHeight?: never; mobileFixed?: never; worldmap?: never; aside?: never; header?: ReactNode; footer?: ReactNode; fill?: boolean; bare?: boolean; opaque?: boolean; above?: ReactNode }
+  | { layer: 'devtools'; width?: never; className?: string; height?: never; mobileHeight?: never; mobileFixed?: never; worldmap?: never; aside?: never; header?: ReactNode; footer?: ReactNode; fill?: boolean; bare?: boolean; opaque?: never; above?: never }
 );
 
 // 공통 모달 — 백드롭 클릭으로 닫히고, 내용 클릭은 전파를 막는다.
@@ -77,7 +77,7 @@ type ModalProps = ModalBase & (
 // 스테이지 모달의 투명 래퍼는 배치만 맡고 스크롤은 ModalCard의 본문이 맡는다.
 // bare는 앱 모달 안에 ModalCard를 직접 두는 대화상자용이다. 본문 칸을 만들지 않아 스크롤은 카드 본문 한 곳뿐이다.
 // 앱 모달에서 제목 줄이 문자열 title로 안 되면 header로, 하단 고정 영역(버튼 줄)은 footer로 넘긴다. 둘 다 스크롤 칸 밖이다.
-export default function Modal({ layer, title, wide, xl, md, sm, narrow, worldmap, aside, onClose, closable = true, children, className, height, mobileHeight, mobileFixed, header, footer, fill, bare, opaque, above }: ModalProps) {
+export default function Modal({ layer, title, wide, xl, md, sm, narrow, width, worldmap, aside, onClose, closable = true, children, className, height, mobileHeight, mobileFixed, header, footer, fill, bare, opaque, above }: ModalProps) {
   // 모달이 떠 있는 동안 아래 레이어(필드 이동·사이드바 단축키)는 키를 못 받는다.
   // 예전엔 각자 `isTyping`으로 막았는데 그건 텍스트 포커스만 걸러서, 모달 버튼에 포커스가
   // 있으면 뒤에서 캐릭터가 움직이고 탭이 바뀌었다 (로그인 모달 키 탈취 사고).
@@ -104,7 +104,17 @@ export default function Modal({ layer, title, wide, xl, md, sm, narrow, worldmap
     : undefined;
   const stageBounds = cx(
     'max-h-[calc(100%-32px)] flex flex-col',
-    worldmap ? 'pf-modal-worldmap' : xl ? 'w-[min(920px,calc(100%-32px))]' : md ? 'w-[min(680px,calc(100%-32px))]' : sm ? 'w-[min(480px,calc(100%-32px))]' : 'w-[min(400px,calc(100%-32px))]',
+    worldmap
+      ? 'pf-modal-worldmap'
+      : xl
+        ? 'w-[min(920px,calc(100%-32px))]'
+        : md
+          ? 'w-[min(680px,calc(100%-32px))]'
+          : sm
+            ? 'w-[min(480px,calc(100%-32px))]'
+            : width === 420
+              ? 'w-[min(420px,calc(100%-32px))]'
+              : 'w-[min(400px,calc(100%-32px))]',
     'mobile:w-[calc(100%-48px)] mobile:max-h-[calc(100%-48px)]',
     heightCls,
   );
@@ -155,7 +165,7 @@ export default function Modal({ layer, title, wide, xl, md, sm, narrow, worldmap
           <div className={cx('relative', stageBounds)}>
             {dialogNode}
             <ModalTitleContext.Provider value={null}>
-              <div className="hidden @min-[996px]:block absolute top-0 left-[calc(100%+10px)]"
+              <div className="hidden @min-[880px]:block absolute top-0 left-[calc(100%+10px)]"
                    onClick={e => e.stopPropagation()}>
                 {aside}
               </div>

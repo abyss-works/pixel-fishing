@@ -160,4 +160,21 @@ describe('useGuild', () => {
     act(() => { result.current.refresh(); });
     await waitFor(() => expect(api.readGuild).toHaveBeenCalledTimes(2));
   });
+
+  it('refresh 호출 시 실패 후 readGuild를 다시 조회해 복구한다', async () => {
+    api.readGuild
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValueOnce({ guild: makeGuild(), request: null });
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useGuild(true), { wrapper });
+
+    await waitFor(() => expect(result.current.failed).toBe(true));
+    act(() => { result.current.refresh(); });
+    await waitFor(() => expect(result.current.guild?.id).toBe('g1'));
+    expect(api.readGuild).toHaveBeenCalledTimes(2);
+  });
 });

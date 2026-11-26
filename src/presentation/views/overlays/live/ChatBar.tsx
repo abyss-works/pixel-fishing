@@ -62,9 +62,9 @@ const ROOM_LABEL: Record<ChatRoom, string> = {
 };
 
 const ROOM_COLOR_CLS: Record<ChatRoom, string> = {
-  global: 'text-chat-global',
-  local: 'text-chat-local',
-  guild: 'text-chat-guild',
+  global: 'border-chat-global! text-chat-global font-bold',
+  local: 'border-chat-local! text-chat-local font-bold',
+  guild: 'border-chat-guild! text-chat-guild font-bold',
 };
 
 const ROOM_TIP_GUILD = '누르거나 Tab 키로 전체, 지역, 길드를 오가요.';
@@ -192,11 +192,12 @@ export default function ChatBar({ inGuild = false, accountState = 'account', fol
           </Locked>
         ) : (<>
           <Tip wraps text={inGuild ? ROOM_TIP_GUILD : ROOM_TIP_NO_GUILD} className="flex">
-            <HudButton active={room === 'guild'} aria-label={`보낼 곳: ${ROOM_LABEL[room]}`}
+            <HudButton aria-label={`보낼 곳: ${ROOM_LABEL[room]}`}
                        className={ROOM_COLOR_CLS[room]}
                        onClick={() => {
                          setLocalCooldownNotice(false);
                          dispatch({ type: 'toggleRoom', inGuild });
+                         inputRef.current?.focus();
                        }}>{ROOM_LABEL[room]}</HudButton>
           </Tip>
           <div className="relative min-w-0 flex-1 flex items-center">

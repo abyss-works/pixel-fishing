@@ -58,4 +58,14 @@ describe('TabBar 잠긴 탭', () => {
     fireEvent.click(screen.getByRole('button', { name: '가' }));
     expect(onSelect).toHaveBeenCalledWith('a');
   });
+
+  it('inline 변형은 4면 테두리와 1줄 가로 배치를 적용한다', () => {
+    const { container } = render(
+      <TabBar inline tabs={[{ key: 'a', label: '공개 길드' }, { key: 'b', label: '코드로 가입' }]} activeKey="a" onSelect={() => {}} />,
+    );
+    const bar = container.firstElementChild as HTMLElement;
+    expect(bar.className).toContain('border');
+    expect(bar.className).toContain('border-line');
+    expect(bar.className).toContain('[&_button]:flex-row');
+  });
 });

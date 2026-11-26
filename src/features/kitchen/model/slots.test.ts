@@ -6,7 +6,7 @@ import type { GameState } from '../../../game/rules/logic';
 import { gameDayOf } from '../../../game/rules/time';
 import { GUEST_LOCK_DEFAULT_LINES, UNVERIFIED_LOCK_TEXT } from '../../display/model/menuLock';
 import {
-  activeSlot, fmtSlotTimeLeft, selectActiveEffectsView, selectBonusChip, selectBonusTipRows,
+  activeSlot, DEFAULT_POLL_MS, fmtSlotTimeLeft, selectActiveEffectsView, selectBonusChip, selectBonusTipRows, slotPollIntervalMs, SUB_MINUTE_POLL_MS,
 } from './slots';
 
 const T0 = '2026-11-12T00:00:00.000Z';
@@ -263,5 +263,15 @@ describe('HUD 칩 4행 요약 및 적용 중인 효과 창 모델', () => {
         { label: '네임드 조우 확률', value: '×1.10' },
       ],
     });
+  });
+});
+
+describe('조건부 슬롯 갱신 주기(slotPollIntervalMs)', () => {
+  it('1분 미만 활성 슬롯이 있으면 1초, 없으면 5초를 돌려준다', () => {
+    expect(slotPollIntervalMs(seed(), T0)).toBe(DEFAULT_POLL_MS);
+    expect(slotPollIntervalMs(seed({ slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(60_000) }, bait: null } }), T0)).toBe(DEFAULT_POLL_MS);
+    expect(slotPollIntervalMs(seed({ slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(59_000) }, bait: null } }), T0)).toBe(SUB_MINUTE_POLL_MS);
+    expect(slotPollIntervalMs(seed({ slots: { lunch: null, bait: { id: 'cook-bait-rare', endsAt: at(-1) }, bait2: { id: 'cook-bait-epic', endsAt: at(30_000) } } }), T0)).toBe(SUB_MINUTE_POLL_MS);
+    expect(slotPollIntervalMs(seed({ slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(-1_000) }, bait: null } }), T0)).toBe(DEFAULT_POLL_MS);
   });
 });

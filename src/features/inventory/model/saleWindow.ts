@@ -76,7 +76,7 @@ export interface SaleTabView extends SalePreview {
 }
 
 export function selectSaleTab(
-  game: Pick<GameState, 'bag' | 'gold' | 'fortune'> & Partial<Pick<GameState, 'achievementCounters' | 'potions'>>,
+  game: Pick<GameState, 'bag' | 'gold' | 'fortune'> & Partial<Pick<GameState, 'achievementCounters' | 'potions' | 'dex'>>,
   excluded: ReadonlySet<string>,
   sellBonus: number,
   now: string = new Date().toISOString(),
@@ -89,6 +89,7 @@ export function selectSaleTab(
   const preview = selectSalePreview(
     game.bag, excluded, sellBonus, achSellBonus,
     luck.mult, { fortuneBonus: luck.fortuneBonus, potions: luck.potions },
+    game.dex ? { dex: game.dex } : undefined,
   );
   const count = preview.soldUids.length;
   return {

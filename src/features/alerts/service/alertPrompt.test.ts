@@ -1,3 +1,4 @@
+import { StrictMode, createElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { resetAlerts, setAlertEnabled } from '../../../platform/api/attention';
@@ -77,6 +78,15 @@ describe('안내 카드를 띄우는 때', () => {
     resetAlertPrompt(); // 새로 접속한 것과 같다 - 본 기록은 기기에 남아 있다
     expect(mount().result.current.open).toBe(false);
   });
+
+  it('React StrictMode 이중 마운트에서도 두 번째 실행이 open을 done으로 덮어쓰지 않는다', () => {
+    const { result } = renderHook(p => useAlertPrompt(p), {
+      initialProps: { ready: true, suspended: false },
+      wrapper: ({ children }) => createElement(StrictMode, null, children),
+    });
+    expect(result.current.open).toBe(true);
+    expect(localStorage.getItem('pf-alert-prompt-seen')).toBe('on');
+  });
 });
 
 describe('안내 카드 동작', () => {
@@ -121,11 +131,12 @@ describe('안내 카드 동작', () => {
     expect(result.current.open).toBe(true);
   });
 
-  it('권한이 거절되면 거절 상태를 돌려준다', async () => {
+  it('권한이 거절되면 거절 상태를 돌려주고 localStorage 알림 설정을 off로 맞춘다', async () => {
     const { result } = mount();
     FakeNotification.answer = 'denied';
     let permission;
     await act(async () => { permission = await result.current.allow(); });
     expect(permission).toBe('denied');
+    expect(stored()).toEqual(['off', 'off', 'off']);
   });
 });

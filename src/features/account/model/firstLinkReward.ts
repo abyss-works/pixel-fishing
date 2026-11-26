@@ -14,6 +14,7 @@ const MIN_MS = 60_000;
 export interface FirstLinkRewardViewItem {
   id: string;
   spriteKind: 'potion' | 'lunch' | 'bait';
+  kindLabel: string;
   name: string;
   grade: DisplayGradeId;
   qty: number;
@@ -58,6 +59,7 @@ export function selectFirstLinkRewardItems(): FirstLinkRewardViewItem[] {
       return {
         id: potion.id,
         spriteKind: 'potion',
+        kindLabel: '비약',
         name: potion.name,
         grade: potion.grade,
         qty,
@@ -70,14 +72,17 @@ export function selectFirstLinkRewardItems(): FirstLinkRewardViewItem[] {
     if (!recipe) {
       throw new Error(`알 수 없는 최초 연결 선물 품목: ${id}`);
     }
+    const kindLabel = recipe.kind === 'lunch' ? '도시락' : '미끼';
+    const scopeLabel = recipe.kind === 'lunch' ? '방치' : '수동';
     return {
       id: recipe.id,
       spriteKind: recipe.kind,
+      kindLabel,
       name: recipe.name,
       grade: recipe.grade,
       qty,
       summaryLine,
-      durationLabel: fmtEffectDuration(COOK_KIND_RULES[recipe.kind].slotMs / MIN_MS),
+      durationLabel: `${scopeLabel} ${fmtEffectDuration(COOK_KIND_RULES[recipe.kind].slotMs / MIN_MS)}`,
       effects: summarizeRecipeEffects(recipe),
     };
   });

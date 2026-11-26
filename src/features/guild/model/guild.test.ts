@@ -207,6 +207,9 @@ describe('항해일지', () => {
     expect(day.items[2].parts).toEqual([
       { text: '가람', tone: 'nick' }, { text: ' 님이 ' }, { text: '전설 돌연변이 어종', tone: 'variant' }, { text: '을 낚았어요!' },
     ]);
+    expect(day.items[0].variant).toBeFalsy();
+    expect(day.items[1].variant).toBe(true);
+    expect(day.items[2].variant).toBe(true);
   });
 });
 

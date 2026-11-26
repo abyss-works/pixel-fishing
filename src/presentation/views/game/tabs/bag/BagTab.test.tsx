@@ -133,12 +133,13 @@ describe('BagTab - 유물 섹션 전체 목록·미보유·보유 중만 보기'
     expect(zoneEl.previousElementSibling).toBe(levelEl.parentElement);
     expect(within(ownedBtn).queryByText(varuna.lore)).not.toBeInTheDocument();
 
-    // 미보유 유물도 같은 틀의 버튼 행 — 흐린 32px 스프라이트·이름(등급)·구역·Lv.1 효과(흐린 글씨), 레벨 배지와 ???는 없다
+    // 미보유 유물도 같은 틀의 버튼 행 — 흐린 32px 스프라이트·흰색 이름(등급색 괄호)·구역·Lv.1 효과(흐린 글씨), 레벨 배지와 ???는 없다
     const trench = artifactById('abyss-angler')!;
     const unownedRow = screen.getByRole('button', { name: /해구의 이빨/ });
     const unownedCanvas = unownedRow.querySelector('canvas');
     expect(unownedCanvas).toHaveAttribute('width', '32');
     expect(unownedCanvas).toHaveClass('grayscale');
+    expect(within(unownedRow).getByText('해구의 이빨').closest('.text-text')).not.toBeNull();
     expect(within(unownedRow).getByText('태평양')).toBeInTheDocument();
     expect(within(unownedRow).getByText('(영웅)')).toHaveAttribute('data-rarity', 'epic');
     expect(within(unownedRow).queryByText('???')).not.toBeInTheDocument();
@@ -248,18 +249,26 @@ describe('BagTab - 3서브탭, 보기 전환 아이콘, 하단 버튼', () => {
     expect(screen.getByRole('dialog')).toHaveTextContent('표본');
   });
 
-  it('돌연변이만 발견한 어종 카드는 돌연변이 이름으로 보이고 상세가 돌연변이 폼으로 열린다', () => {
+  it('돌연변이만 발견한 어종 카드는 돌연변이 이름으로 보이고 상세가 돌연변이 폼으로 열리며, 목록뷰에서도 미발견 일반형 이름을 노출하지 않는다', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const carp = FISH.find(f => f.id === 'carp')!;
-    const g = game({ dex: { carp: { variant: { count: 1, maxSize: 20, first: null } } } });
+    const g = game({
+      bag: [{ ...inst('v1'), fishId: carp.id, form: 'variant' }],
+      dex: { carp: { variant: { count: 1, maxSize: 20, first: null } } },
+    });
     render(
       <QueryClientProvider client={client}>
         <BagTab sellBonus={0} game={g} dispatch={vi.fn()} setToast={vi.fn()} />
       </QueryClientProvider>,
     );
+    expect(screen.getByText(carp.variant.name)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: new RegExp(`^${carp.name} `) })).toBeNull();
+    expect(screen.getByRole('button', { name: `${carp.variant.name} 개체 펼치기` })).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole('button', { name: '카드 보기' }));
     expect(screen.getByText(carp.variant.name)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${carp.name} 미보유`) }));
+    const cardBtn = screen.getByRole('button', { name: `${carp.variant.name} 일반 0마리 돌연변이 1마리 보유` });
+    fireEvent.click(cardBtn);
     const dialog = screen.getByRole('dialog');
     expect(dialog).toHaveTextContent(carp.variant.name);
     expect(dialog).toHaveTextContent('돌연변이 2/');

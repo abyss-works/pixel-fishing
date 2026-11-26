@@ -86,6 +86,8 @@ export interface ItemRow {
   active: boolean;
   /** 활성 중일 때 남은 시간(분). 비활성이면 null */
   remainingMinutes: number | null;
+  /** 상세 창 주의사항에 쓰는 안내 줄 */
+  note: string;
   /** 이 행의 사용 버튼·상세 창 잠금 줄. 잠기지 않았으면 null */
   lockLines: readonly string[] | null;
 }
@@ -160,6 +162,7 @@ export function selectItemSection(game: GameState, now: string, account: Account
         durationMinutes: slotDurationMs(recipe, game) / MIN_MS,
         active,
         remainingMinutes: active ? remMs / MIN_MS : null,
+        note: recipeEffectNote(slot),
         lockLines: rowLock,
       };
     });
