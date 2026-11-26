@@ -29,7 +29,7 @@ vi.mock('../../../../platform/api', () => ({
 function show() {
   render(
     <QueryProvider>
-      <AdminAuthCtx.Provider value={{ access: 'granted', uid: 'u' }}>
+      <AdminAuthCtx.Provider value={{ access: 'granted', uid: 'u', role: 'admin', showStaffBadge: false, setStaffBadge: async () => {} }}>
         <LettersTab onCompose={mocks.compose} />
       </AdminAuthCtx.Provider>
     </QueryProvider>,

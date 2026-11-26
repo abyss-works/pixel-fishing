@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
 import { AdminAuthCtx } from '../../../../features/admin/service/accessContext';
 import type { AdminAccess } from '../../../../features/admin/service/accessContext';
+import type { AdminRole } from '../../../../features/admin/model/types';
 import { EVENT_LABELS, todayKST } from '../../../../features/admin/model/metrics';
 import { QueryProvider } from '../../../../core/QueryProvider';
 import { api } from '../../../../platform/api';
@@ -29,8 +30,8 @@ vi.mock('../../../../platform/api', () => ({
 
 afterEach(cleanup);
 
-const show = (access: AdminAccess) => render(
-  <QueryProvider><AdminAuthCtx.Provider value={{ access, uid: null }}><OpsTab /></AdminAuthCtx.Provider></QueryProvider>,
+const show = (access: AdminAccess, role: AdminRole = 'admin') => render(
+  <QueryProvider><AdminAuthCtx.Provider value={{ access, uid: null, role, showStaffBadge: false, setStaffBadge: async () => {} }}><OpsTab /></AdminAuthCtx.Provider></QueryProvider>,
 );
 
 describe('운영 탭', () => {
@@ -44,9 +45,12 @@ describe('운영 탭', () => {
     expect(within(auth).getByText(/로컬 모드에서는 관리자 데이터가 없어요/)).toBeInTheDocument();
   });
 
-  it('관리자 세션이면 로컬 모드와 다른 문구를 보인다', () => {
-    show('granted');
+  it('관리자 세션과 운영자 세션의 권한 문구를 역할별로 보인다', () => {
+    show('granted', 'admin');
     expect(screen.getByText('관리자 세션')).toBeInTheDocument();
+    cleanup();
+    show('granted', 'maintainer');
+    expect(screen.getByText('운영자 세션')).toBeInTheDocument();
   });
 
   it('변경 기록 칸이 있다', () => {
@@ -67,6 +71,17 @@ describe('운영 탭', () => {
     }
     const contract = screen.getByText('데이터 계약').closest('section')!;
     expect(within(contract).getByText(/세션 강제 종료/)).toBeInTheDocument();
+  });
+
+  it('maintainer 역할의 데이터 계약은 기간제 공지·채팅 별 표기 토글·비식별 지표 열람과 감사 로그 기록만 안내한다', () => {
+    show('granted', 'maintainer');
+    const contract = screen.getByText('데이터 계약').closest('section')!;
+    expect(within(contract).getByText(/비식별 운영 지표/)).toBeInTheDocument();
+    expect(within(contract).getByText(/기간제 공지/)).toBeInTheDocument();
+    expect(within(contract).getByText(/채팅 운영진 별 표기 토글/)).toBeInTheDocument();
+    expect(within(contract).getByText(/감사 로그/)).toBeInTheDocument();
+    expect(within(contract).queryByText(/우편 보내기/)).toBeNull();
+    expect(within(contract).queryByText(/세션 강제 종료/)).toBeNull();
   });
 
   it('HTTP 오류율·429 섹션은 앱 서버 기준 안내·경로 묶음 표·일별 추이와 기간 전환(7/30/90일)을 제공한다', async () => {

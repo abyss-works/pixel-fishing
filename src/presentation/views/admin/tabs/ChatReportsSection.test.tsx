@@ -52,7 +52,7 @@ describe('ChatReportsSection', () => {
   it('granted — 신고한 메시지와 앞뒤 대화, 신고한 사람과 보낸 사람의 계정 식별 표기를 그린다', async () => {
     render(
       <QueryProvider>
-        <AdminAuthCtx.Provider value={{ access: 'granted', uid: 'u' }}>
+        <AdminAuthCtx.Provider value={{ access: 'granted', uid: 'u', role: 'admin', showStaffBadge: false, setStaffBadge: async () => {} }}>
           <ChatReportsSection onCompose={mocks.compose} />
         </AdminAuthCtx.Provider>
       </QueryProvider>,
@@ -80,7 +80,7 @@ describe('ChatReportsSection', () => {
 
     render(
       <QueryProvider>
-        <AdminAuthCtx.Provider value={{ access: 'granted', uid: 'u' }}>
+        <AdminAuthCtx.Provider value={{ access: 'granted', uid: 'u', role: 'admin', showStaffBadge: false, setStaffBadge: async () => {} }}>
           <ChatReportsSection onCompose={mocks.compose} />
         </AdminAuthCtx.Provider>
       </QueryProvider>,
@@ -93,5 +93,37 @@ describe('ChatReportsSection', () => {
 
     fireEvent.click(within(row).getByRole('button', { name: '상세 보기' }));
     expect(await screen.findByRole('dialog', { name: '유저 상세: 무례유저(rude@example.com)' })).toBeInTheDocument();
+  });
+
+  it('maintainer — 신고자 신원을 숨기고 opHandle로 피신고자를 표시하며 상세 보기·제재 버튼을 숨긴다', async () => {
+    vi.mocked(api.admin.chatReports).mockResolvedValueOnce([{
+      id: 2, user_id: '', message_id: 21, target_id: 'op-target01', opHandle: 'op-target01', created_at: '2026-11-05T00:00:00Z',
+      lines: [
+        { id: 21, uid: 'op-target01', nick: '도배꾼', text: '도배글', at: '2026-11-05T00:00:01.000Z' },
+      ],
+    }]);
+    vi.mocked(api.admin.users).mockResolvedValueOnce([
+      { user_id: 'op-target01', opHandle: 'op-target01', email: null, nickname: '도배꾼', is_anonymous: false, restricted: false, total_session_sec: 0 } as never,
+    ]);
+
+    render(
+      <QueryProvider>
+        <AdminAuthCtx.Provider value={{ access: 'granted', uid: 'm', role: 'maintainer', showStaffBadge: false, setStaffBadge: async () => {} }}>
+          <ChatReportsSection />
+        </AdminAuthCtx.Provider>
+      </QueryProvider>,
+    );
+
+    expect(await screen.findByText('도배글')).toBeInTheDocument();
+    expect(screen.getByText('비공개')).toBeInTheDocument();
+    expect(screen.getByText('도배꾼')).toBeInTheDocument();
+    expect(screen.getByText('op-target01')).toBeInTheDocument();
+    expect(screen.queryByText(/—/)).toBeNull();
+    expect(screen.queryByRole('button', { name: '상세 보기' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '제재' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '제재 해제' })).toBeNull();
+    expect(vi.mocked(api.admin.userState)).not.toHaveBeenCalled();
+    expect(vi.mocked(api.admin.userEvents)).not.toHaveBeenCalled();
+    expect(vi.mocked(api.admin.sessions)).not.toHaveBeenCalled();
   });
 });

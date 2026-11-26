@@ -99,10 +99,18 @@ function LineText({ m }: { m: Msg }) {
 
 function Line({ m, mine, onPick }: { m: Msg; mine: boolean; onPick?: (m: Msg) => void }) {
   const nameCls = cx('font-bold', mine ? 'text-gold' : 'text-accent');
+  const badgeGlyph = m.staffBadge === 'admin'
+    ? 'staffStarLarge'
+    : m.staffBadge === 'maintainer'
+      ? 'staffStarSmall'
+      : null;
   return (
     <div className={cx('flex items-start gap-1.5 leading-[1.45] text-shadow-hud', m.channel === 'guild' ? 'text-guild' : TONE_CLS[m.tone])}>
       <span className={cx('w-0.5 shrink-0 self-stretch my-0.5', CHANNEL_BAR_CLS[m.channel])} aria-hidden="true" />
       <div className="min-w-0 flex-1 break-words">
+        {m.author && badgeGlyph && (
+          <PixelIcon glyph={badgeGlyph} size={12} className="mr-1 text-gold align-[-2px]" />
+        )}
         {m.author && (m.from && onPick
           ? <button type="button" className={cx(nameCls, 'hover:underline cursor-pointer')} onClick={() => onPick(m)}>{m.author}</button>
           : <b className={nameCls}>{m.author}</b>)}

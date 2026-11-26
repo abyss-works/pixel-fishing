@@ -14,7 +14,7 @@ import ChangelogSection from './ChangelogSection';
 import { HttpMetricsOpsSection } from './HttpMetricsSection';
 
 export default function OpsTab() {
-  const { access } = useAdminAuth();
+  const { access, role } = useAdminAuth();
 
   return (
     <TabPage title="운영" context="이 대시보드가 어느 배포를 보고 있는지 확인해요.">
@@ -36,8 +36,12 @@ export default function OpsTab() {
 
         <Cell title="권한">
           {access === 'local' && <Note className="my-0">클라우드가 설정되지 않아서 로컬 모드에서는 관리자 데이터가 없어요.</Note>}
-          {access === 'granted' &&
-            <Note className="my-0"><span className="pf-accent text-gold">관리자 세션</span>이에요. 모든 뷰를 볼 수 있어요.</Note>}
+          {access === 'granted' && (
+            <Note className="my-0">
+              <span className="pf-accent text-gold">{role === 'maintainer' ? '운영자 세션' : '관리자 세션'}</span>이에요.
+              {role === 'maintainer' ? ' 비식별 운영 화면과 공지·지표 뷰를 볼 수 있어요.' : ' 모든 뷰를 볼 수 있어요.'}
+            </Note>
+          )}
         </Cell>
 
         <Cell title="관측">
@@ -49,10 +53,20 @@ export default function OpsTab() {
 
         <Cell title="데이터 계약">
           <Note className="my-0 leading-relaxed">
-            쓰기는 우편 보내기, 편지 처리 표시, 관리 조치(제재와 해제, 세션 강제 종료)뿐이에요.
-            관리 조치는 조치한 관리자 id(adminId)와 함께 대상 사용자의 events에 남아요.
-            권한 방어선은 서버 읽기 함수가 <code className="pf-accent">admins</code> 명부로 하는 판정이에요.
-            데이터 접근은 features/admin/service가 유일한 경로이고, 전송 상세(요청 이름과 인자)는 그 안에서만 다뤄요.
+            {role === 'maintainer' ? (
+              <>
+                운영자 세션은 비식별 운영 지표와 공개 변경 기록만 열람하고, 쓰기는 기간제 공지 관리(등록, 수정, 종료, 삭제)와 본인 채팅 운영진 별 표기 토글뿐이에요.
+                공지 관리와 별 표기 변경은 행위자 식별자와 함께 서버 감사 로그에 기록돼요.
+                권한 방어선은 서버가 발급한 역할 판정과 비식별 투영이고, 데이터 접근은 features/admin/service가 유일한 경로예요.
+              </>
+            ) : (
+              <>
+                쓰기는 우편 보내기, 편지 처리 표시, 관리 조치(제재와 해제, 세션 강제 종료)뿐이에요.
+                관리 조치는 조치한 관리자 id(adminId)와 함께 대상 사용자의 events에 남아요.
+                권한 방어선은 서버 읽기 함수가 <code className="pf-accent">admins</code> 명부로 하는 판정이에요.
+                데이터 접근은 features/admin/service가 유일한 경로이고, 전송 상세(요청 이름과 인자)는 그 안에서만 다뤄요.
+              </>
+            )}
           </Note>
         </Cell>
 

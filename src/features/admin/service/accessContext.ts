@@ -2,6 +2,7 @@
 // Provider·게이트 UI는 화면 컴포넌트가 담당한다 — fast refresh 규약상 컴포넌트와 비컴포넌트
 // export를 한 파일에 섞지 않는다(oxlint only-export-components).
 import { createContext, useContext } from 'react';
+import type { AdminRole } from '../model/types';
 
 export type AdminAccess =
   | 'checking'   // 판정 중
@@ -14,9 +15,20 @@ export interface AdminAuth {
   access: AdminAccess;
   /** 관리자 세션 uid — denied일 때 권한 없음 안내에 보인다 */
   uid: string | null;
+  role: AdminRole;
+  showStaffBadge: boolean;
+  setStaffBadge: (show: boolean) => Promise<void>;
 }
 
-export const AdminAuthCtx = createContext<AdminAuth>({ access: 'checking', uid: null });
+const NOOP_SET_STAFF_BADGE = async () => {};
+
+export const AdminAuthCtx = createContext<AdminAuth>({
+  access: 'checking',
+  uid: null,
+  role: 'admin',
+  showStaffBadge: false,
+  setStaffBadge: NOOP_SET_STAFF_BADGE,
+});
 
 export function useAdminAuth(): AdminAuth {
   return useContext(AdminAuthCtx);

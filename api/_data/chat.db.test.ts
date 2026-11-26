@@ -168,4 +168,48 @@ describe('chat', () => {
       p3.ok ? p3.line.text : '',
     ]);
   });
+
+  it('show_staff_badge가 켜진 운영진(admin·maintainer)만 채팅 줄에 staffBadge를 싣고, 꺼짐·일반 유저는 키 자체를 생략한다', async () => {
+    const [adminUid, maintUid, hiddenAdminUid, normalUid] = [await user(), await user(), await user(), await user()];
+    await client.query(`insert into public.admins (user_id, role, show_staff_badge) values
+      ($1, 'admin', true), ($2, 'maintainer', true), ($3, 'admin', false)`,
+    [adminUid, maintUid, hiddenAdminUid]);
+    const { rows: [g] } = await client.query<{ id: string }>(
+      `insert into public.guilds (name, code) values ($1, upper(substr(md5(random()::text), 1, 8))) returning id`,
+      [`g${adminUid.slice(0, 6)}`],
+    );
+    await client.query(`insert into public.guild_members (guild_id, user_id, role) values ($1, $2, 'leader'), ($1, $3, 'member')`,
+      [g.id, adminUid, normalUid]);
+
+    const savedAdmin = await saveChat(database.db, { uid: adminUid, nick: '운영자', text: '공지확인', room: 'global' });
+    const savedMaint = await saveChat(database.db, { uid: maintUid, nick: '보조', text: '지역안녕', room: 'local', region: 'pacific' });
+    const savedHidden = await saveChat(database.db, { uid: hiddenAdminUid, nick: '숨김', text: '비밀', room: 'global' });
+    const savedNormal = await saveChat(database.db, { uid: normalUid, nick: '유저', text: '일반', room: 'global' });
+    const savedGuild = await saveChat(database.db, { uid: adminUid, nick: '운영자', text: '길드대화', room: 'guild', guildId: g.id });
+
+    expect(savedAdmin.ok && savedAdmin.line.staffBadge).toBe('admin');
+    expect(savedMaint.ok && savedMaint.line.staffBadge).toBe('maintainer');
+    expect(savedGuild.ok && savedGuild.line.staffBadge).toBe('admin');
+    expect(savedHidden.ok && Object.hasOwn(savedHidden.line, 'staffBadge')).toBe(false);
+    expect(savedNormal.ok && Object.hasOwn(savedNormal.line, 'staffBadge')).toBe(false);
+
+    const globalLines = await recentChat(database.db, []);
+    expect(globalLines).toHaveLength(3);
+    expect(globalLines[0].staffBadge).toBe('admin');
+    expect(Object.hasOwn(globalLines[1], 'staffBadge')).toBe(false);
+    expect(Object.hasOwn(globalLines[2], 'staffBadge')).toBe(false);
+
+    const localLines = await recentLocalChat(database.db, 'pacific', []);
+    expect(localLines).toHaveLength(1);
+    expect(localLines[0].staffBadge).toBe('maintainer');
+
+    const guildLines = await recentGuildChat(database.db, g.id, []);
+    expect(guildLines).toHaveLength(1);
+    expect(guildLines[0].staffBadge).toBe('admin');
+
+    // 배지를 끄면 최근 대화 조회에서도 즉시 사라진다
+    await client.query(`update public.admins set show_staff_badge = false where user_id = $1`, [adminUid]);
+    const afterOff = await recentChat(database.db, []);
+    expect(Object.hasOwn(afterOff[0], 'staffBadge')).toBe(false);
+  });
 });

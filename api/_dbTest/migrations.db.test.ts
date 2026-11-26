@@ -1002,4 +1002,85 @@ describe('테스트 데이터베이스', () => {
       }
     });
   });
+
+  describe('admins 역할·배지 및 admin_audit_logs (0054)', () => {
+    const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
+
+    it('기본값·역할 제약·감사 로그 RLS·actor_id set null·다운/업 라운드트립을 검증한다', async () => {
+      const uid = randomUUID();
+      await client.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, false)`, [uid, `${uid}@example.test`]);
+
+      const { rows: [adminRow] } = await client.query<{ role: string; show_staff_badge: boolean }>(
+        `insert into public.admins (user_id) values ($1) returning role, show_staff_badge`,
+        [uid],
+      );
+      expect(adminRow).toEqual({ role: 'admin', show_staff_badge: false });
+
+      await client.query(`update public.admins set role = 'maintainer', show_staff_badge = true where user_id = $1`, [uid]);
+      await expect(client.query(`update public.admins set role = 'tester' where user_id = $1`, [uid]))
+        .rejects.toMatchObject({ code: '23514' });
+
+      const { rows: [logRow] } = await client.query<{ actor_id: string; actor_role: string; reason: string; detail: Record<string, unknown>; created_at: Date }>(
+        `insert into public.admin_audit_logs (actor_id, actor_role, action) values ($1, 'maintainer', 'staffBadge')
+         returning actor_id, actor_role, reason, detail, created_at`,
+        [uid],
+      );
+      expect(logRow.actor_id).toBe(uid);
+      expect(logRow.actor_role).toBe('maintainer');
+      expect(logRow.reason).toBe('');
+      expect(logRow.detail).toEqual({});
+      expect(logRow.created_at).toBeInstanceOf(Date);
+
+      await expect(client.query(
+        `insert into public.admin_audit_logs (actor_id, actor_role, action) values ($1, 'guest', 'staffBadge')`,
+        [uid],
+      )).rejects.toMatchObject({ code: '23514' });
+
+      // 인증 사용자는 감사 로그를 읽거나 쓰지 못한다 — 서버 전용 RLS
+      await client.query('begin');
+      try {
+        await client.query('set local role authenticated');
+        await client.query(`select set_config('request.jwt.claim.sub', $1, true)`, [uid]);
+        expect((await client.query('select id from public.admin_audit_logs')).rows).toEqual([]);
+        await expect(client.query(
+          `insert into public.admin_audit_logs (actor_id, actor_role, action) values ($1, 'admin', 'forged')`,
+          [uid],
+        )).rejects.toMatchObject({ code: '42501' });
+      } finally {
+        await client.query('rollback');
+      }
+
+      // 행위자 계정 삭제 시 감사 로그는 보존되고 actor_id만 null이 된다
+      await client.query(`delete from auth.users where id = $1`, [uid]);
+      const { rows: afterDelete } = await client.query<{ actor_id: string | null }>(
+        `select actor_id from public.admin_audit_logs where action = 'staffBadge'`,
+      );
+      expect(afterDelete).toEqual([{ actor_id: null }]);
+
+      // 다운/업 라운드트립
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        await other.query(migration('0054_admin_roles_and_staff_badge.down.sql'));
+        expect((await other.query(
+          `select 1 from information_schema.tables where table_schema = 'public' and table_name = 'admin_audit_logs'`,
+        )).rows).toHaveLength(0);
+        expect((await other.query(
+          `select 1 from information_schema.columns where table_schema = 'public' and table_name = 'admins' and column_name in ('role', 'show_staff_badge')`,
+        )).rows).toHaveLength(0);
+
+        await other.query(migration('0054_admin_roles_and_staff_badge.sql'));
+        expect((await other.query(
+          `select 1 from information_schema.tables where table_schema = 'public' and table_name = 'admin_audit_logs'`,
+        )).rows).toHaveLength(1);
+        expect((await other.query(
+          `select column_name from information_schema.columns where table_schema = 'public' and table_name = 'admins' and column_name in ('role', 'show_staff_badge') order by column_name`,
+        )).rows.map(r => r.column_name)).toEqual(['role', 'show_staff_badge']);
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
 });

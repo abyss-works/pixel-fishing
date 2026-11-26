@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   fmtDuration, kstDayOfMs, latestRetention, placeName, ratioPct, selectActiveUsers, selectDailySeries,
   selectRetentionTable,
-  selectLiveBoard, selectNewToday, selectTodaySessions,
+  selectLiveBoard, selectNewToday, selectTodaySessions, selectTotalUsersCount,
 } from './dashboard';
-import type { AdminDailyStatsRow, AdminSessionRow, AdminUserRow } from './types';
+import type { AdminDailyStatsRow, AdminSessionRow, AdminUserAggregates, AdminUserRow } from './types';
 
 const user = (overrides: Partial<AdminUserRow> = {}): AdminUserRow => ({
   user_id: 'user-1', email: null, nickname: null, is_anonymous: true, signed_up_at: null,
@@ -121,6 +121,28 @@ describe('개요 지표', () => {
       { day: '2026-11-01', size: 2, d1: 50, d7: null, d30: null },
     ]);
   });
+
+  it('사전 집계(userAggregates)가 주어지면 비식별 명부 대신 사전 집계의 활성·신규·총계를 우선 사용한다', () => {
+    const maskedUsers = [
+      user({ user_id: 'op-1', opHandle: 'op-1', signed_up_at: null, last_action_at: null, last_session_at: null }),
+    ];
+    const aggregates: AdminUserAggregates = {
+      totalUsers: 42,
+      activePlayers: 30,
+      asOf: '2026-11-05T03:00:00Z',
+      activeUsers: { today: 7, week: 15, month: 28 },
+      newToday: { users: 5, accounts: 2 },
+      gold: { count: 30, sum: 1000, median: 20, p75: 50, max: 200 },
+      progression: {
+        boats: [], rods: [], regionReach: [], zoneUnlocks: [],
+        fameGateStalled: { total: 0, byNextTier: [] },
+      },
+    };
+    expect(selectActiveUsers(maskedUsers, NOW, aggregates)).toEqual({ today: 7, week: 15, month: 28 });
+    expect(selectNewToday(maskedUsers, NOW, aggregates)).toEqual({ users: 5, accounts: 2 });
+    expect(selectTotalUsersCount(maskedUsers, aggregates)).toBe(42);
+    expect(selectTotalUsersCount(maskedUsers, null)).toBe(1);
+  });
 });
 
 describe('실시간 접속', () => {
@@ -149,5 +171,21 @@ describe('실시간 접속', () => {
     ]);
     expect(board).toMatchObject({ members: 2, guests: 1, places: { labels: ['마을', '인도양'], values: [2, 1] } });
     expect(selectLiveBoard(null, NOW)).toMatchObject({ rows: [], members: 0, guests: 0 });
+  });
+
+  it('maintainer 비식별 투영에서 email 생략과 opHandle을 안전하게 수용한다', () => {
+    const board = selectLiveBoard({
+      count: 1,
+      online: [
+        { uid: 'op-1', opHandle: 'op-1', nick: '운영자', nickname: '운영자', region: 'village', zone: null, connectedAt: '2026-11-05T02:55:00Z', guest: false } as never,
+      ],
+    }, NOW);
+    expect(board.rows[0].identity).toEqual({
+      user_id: 'op-1',
+      opHandle: 'op-1',
+      nickname: '운영자',
+      email: null,
+      is_anonymous: false,
+    });
   });
 });

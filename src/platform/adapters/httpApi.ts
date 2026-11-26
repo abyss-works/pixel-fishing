@@ -331,6 +331,9 @@ class HttpAdmin implements AdminApi {
   revokeSessions(userId: string): Promise<{ revoked: number }> {
     return writeAdmin('revokeSessions', { userId }, '세션 강제 종료');
   }
+  setStaffBadge(show: boolean): Promise<{ showStaffBadge: boolean }> {
+    return writeAdmin('staffBadge', { show }, '운영진 표시 설정');
+  }
   userEvents(userId: string, limit = 500): Promise<AdminEventRow[]> {
     return readAdmin('userEvents', { user: userId, limit });
   }

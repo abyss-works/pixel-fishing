@@ -173,7 +173,7 @@ export async function findWidgetTokenWithUser(
       ) as has_google,
       exists (
         select 1 from public.admins ad
-        where ad.user_id = t.user_id
+        where ad.user_id = t.user_id and ad.role in ('admin', 'maintainer')
       ) as is_admin,
       (s.user_id is not null) as has_save,
       coalesce(s.restricted, false) as restricted,
@@ -276,7 +276,7 @@ export async function getWidgetUserEligibility(db: Executor, uid: string): Promi
       ) as has_google,
       exists (
         select 1 from public.admins ad
-        where ad.user_id = u.id
+        where ad.user_id = u.id and ad.role in ('admin', 'maintainer')
       ) as is_admin,
       coalesce(s.restricted, false) as restricted
     from auth.users u

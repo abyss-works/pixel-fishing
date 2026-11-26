@@ -58,6 +58,9 @@ export const writeAdminLetterHandled = (letterId: number, handled: boolean) => a
 /** 대상 계정의 활성 인증 세션 강제 종료 */
 export const writeAdminRevokeSessions = (userId: string) => api.admin.revokeSessions(userId);
 
+/** 호출자 본인의 채팅 운영진 배지 노출 설정을 켜거나 끈다 */
+export const writeAdminStaffBadge = (show: boolean) => api.admin.setStaffBadge(show);
+
 export const readAdminUserEvents = (uid: string) => api.admin.userEvents(uid, 300);
 
 export const readAdminUserState = (uid: string) => api.admin.userState(uid);

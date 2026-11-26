@@ -1,15 +1,51 @@
-import { useQuery } from '@tanstack/react-query';
+import { useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type { AdminAccessResult } from '../../../platform/api';
 import { adminKeys } from './queryKeys';
-import { adminSignInRequired, readAdminAccess } from './queries';
+import { adminSignInRequired, readAdminAccess, writeAdminStaffBadge } from './queries';
 import type { AdminAuth } from './accessContext';
 
-const LOCAL: AdminAuth = { access: 'local', uid: null };
+const NOOP_SET_STAFF_BADGE = async () => {};
+const LOCAL: AdminAuth = {
+  access: 'local',
+  uid: null,
+  role: 'admin',
+  showStaffBadge: false,
+  setStaffBadge: NOOP_SET_STAFF_BADGE,
+};
 
 // 접근 판정 — 관리자 앱이 마운트 때 한 번만 해석한다(탭은 context만 소비한다).
 // 로컬 모드는 조회 없이 바로 local이다. 판정 전에는 checking, 왕복 실패는 uid 없는 denied로 수렴한다.
 export function useAdminAccess(): AdminAuth {
+  const client = useQueryClient();
   const q = useQuery({ queryKey: adminKeys.access, queryFn: readAdminAccess, enabled: adminSignInRequired });
+  const setStaffBadge = useCallback(async (show: boolean) => {
+    const res = await writeAdminStaffBadge(show);
+    client.setQueryData<AdminAccessResult>(adminKeys.access, prev =>
+      prev?.kind === 'granted' ? { ...prev, showStaffBadge: res.showStaffBadge } : prev,
+    );
+  }, [client]);
+
   if (!adminSignInRequired) return LOCAL;
-  if (q.data) return { access: q.data.kind, uid: q.data.uid };
-  return q.error ? { access: 'denied', uid: null } : { access: 'checking', uid: null };
+  if (q.data) {
+    if (q.data.kind === 'granted') {
+      return {
+        access: 'granted',
+        uid: q.data.uid,
+        role: q.data.role ?? 'admin',
+        showStaffBadge: q.data.showStaffBadge ?? false,
+        setStaffBadge,
+      };
+    }
+    return {
+      access: q.data.kind,
+      uid: q.data.uid,
+      role: 'admin',
+      showStaffBadge: false,
+      setStaffBadge: NOOP_SET_STAFF_BADGE,
+    };
+  }
+  return q.error
+    ? { access: 'denied', uid: null, role: 'admin', showStaffBadge: false, setStaffBadge: NOOP_SET_STAFF_BADGE }
+    : { access: 'checking', uid: null, role: 'admin', showStaffBadge: false, setStaffBadge: NOOP_SET_STAFF_BADGE };
 }

@@ -49,13 +49,13 @@ export type { SfxKey, SoundEngineState } from './sound';
 export type { LastPosition } from '../adapters/position';
 export type { PublicProfile } from '../adapters/player';
 export type {
-  ApiClient, AuthApi, StorageApi, AdminApi, AdminAccessResult, DevApi, PromoteTestResult, ResetDevAccountResult,
+  ApiClient, AuthApi, StorageApi, AdminApi, AdminRole, AdminAccessResult, DevApi, PromoteTestResult, ResetDevAccountResult,
   AccountLookup, AuthResult, ConfirmGoogleSwitchResult, ConsentStatus, AcceptConsentError, AcceptConsentResult, GameGateway, GameProfile, MaybePromise, DispatchResult,
   BountySnapshot, BountyProgressRow, BountyTicketRow, FortuneDiscoveredEntry, FortuneHistory,
   RankingBoardId, RankingWindow, RankingRow, RankingBoard, MailItem, MailItemAttachment, FriendItem, FriendOp, FriendOpResult,
   GuildBonusItem, GuildDonorItem, GuildInfo, GuildInvitePreview, GuildJoinRequestItem, GuildLogItem, GuildMemberItem, GuildMyRequest, GuildOp,
   GuildOpResult, GuildState, PublicGuildItem,
-  AdminUserRow, AdminUserState, AdminOverview, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
+  AdminUserRow, AdminUserState, AdminUserAggregates, AdminOverview, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
   AdminHttpMetricRouteGroup, AdminHttpMetricCounts, AdminHttpMetricDayRow, AdminHttpMetricRouteRow, AdminHttpMetricRawRow, AdminHttpMetrics,
   AdminConversionTimeBucketId, AdminConversionTimeBucket, AdminOnboardingConversion,
   AdminTutorialStageId, AdminOnboardingTutorialStage, AdminOnboardingTutorials,

@@ -3,6 +3,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
 import { QueryProvider } from '../../../../core/QueryProvider';
 import { AdminAuthCtx } from '../../../../features/admin/service/accessContext';
+import type { AdminRole } from '../../../../features/admin/model/types';
 import { todayKST } from '../../../../features/admin/model/metrics';
 import { api } from '../../../../platform/api';
 import AnalysisTab from './AnalysisTab';
@@ -11,6 +12,7 @@ import type { AnalysisSection } from '../routes';
 vi.mock('../../../../platform/api', () => ({
   api: {
     admin: {
+      overview: vi.fn(),
       users: vi.fn(async () => [
         { user_id: 'u1', email: 'a@example.com', nickname: '갈치', is_anonymous: false, gold: 100, fame: 100, boat: 1, rod: 1,
           visited: ['village'], restricted: false, last_action_at: null },
@@ -72,10 +74,10 @@ vi.mock('../../../../platform/api', () => ({
 
 afterEach(cleanup);
 
-function show(section: AnalysisSection) {
+function show(section: AnalysisSection, role: AdminRole = 'admin') {
   render(
     <QueryProvider>
-      <AdminAuthCtx.Provider value={{ access: 'granted', uid: 'admin' }}>
+      <AdminAuthCtx.Provider value={{ access: 'granted', uid: role, role, showStaffBadge: false, setStaffBadge: async () => {} }}>
         <AnalysisTab section={section} onSection={() => {}} />
       </AdminAuthCtx.Provider>
     </QueryProvider>,
@@ -148,5 +150,107 @@ describe('경제·진행 탭', () => {
     expect(screen.getAllByRole('group', { name: '기간 선택' })).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: '90일' }));
     await waitFor(() => expect(vi.mocked(api.admin.dailyStats)).toHaveBeenCalledTimes(2));
+  });
+
+  it('maintainer 역할의 경제 구역은 명부 골드가 null이어도 userAggregates로 합계·대상 수·중앙값·상위 25%·최대를 표시한다', async () => {
+    vi.mocked(api.admin.overview).mockResolvedValueOnce({
+      users: [{
+        user_id: 'op-1', opHandle: 'op-1', email: null, nickname: '어부', is_anonymous: false,
+        signed_up_at: null, last_sign_in_at: null, gold: null, fame: null, boat: null, rod: null,
+        location_kind: null, location_id: null, visited: [], restricted: false,
+        save_version: null, last_action_at: null, last_session_at: null, total_session_sec: 0,
+      }],
+      userAggregates: {
+        totalUsers: 20,
+        activePlayers: 12,
+        asOf: '2026-11-05T03:00:00Z',
+        activeUsers: { today: 3, week: 7, month: 12 },
+        newToday: { users: 2, accounts: 1 },
+        gold: { count: 15, sum: 45000, median: 1500, p75: 5000, max: 20000 },
+        progression: {
+          boats: [], rods: [], regionReach: [], zoneUnlocks: [],
+          fameGateStalled: { total: 0, byNextTier: [] },
+        },
+      },
+      recentEvents: [], spamFlags: [], dailyStats: [], retention: [], sessions: [],
+      live: { count: 0, online: [] },
+    } as never);
+
+    show('economy', 'maintainer');
+    expect(await screen.findByText('4.5만')).toBeInTheDocument();
+    expect(screen.getByText('저장된 골드 총합, 대상 15명')).toBeInTheDocument();
+    expect(screen.getByText('1,500')).toBeInTheDocument();
+    expect(screen.getByText('5,000')).toBeInTheDocument();
+    expect(screen.getByText('2만')).toBeInTheDocument();
+    expect(screen.getByText('4.5만G')).toBeInTheDocument();
+  });
+
+  it('maintainer 역할의 진행 구역은 명부 진행 필드가 null이어도 userAggregates로 분포·도달·존 해금·명성 게이트 내역을 표시한다', async () => {
+    vi.mocked(api.admin.overview).mockResolvedValueOnce({
+      users: [{
+        user_id: 'op-1', opHandle: 'op-1', email: null, nickname: '어부', is_anonymous: false,
+        signed_up_at: null, last_sign_in_at: null, gold: null, fame: null, boat: null, rod: null,
+        location_kind: null, location_id: null, visited: [], restricted: false,
+        save_version: null, last_action_at: null, last_session_at: null, total_session_sec: 0,
+      }],
+      userAggregates: {
+        totalUsers: 10,
+        activePlayers: 4,
+        asOf: '2026-11-05T03:00:00Z',
+        activeUsers: { today: 2, week: 3, month: 4 },
+        newToday: { users: 1, accounts: 1 },
+        gold: { count: 4, sum: 1000, median: 200, p75: 300, max: 500 },
+        progression: {
+          boats: [{ tier: 0, count: 1 }, { tier: 1, count: 2 }, { tier: 3, count: 1 }],
+          rods: [{ level: 1, count: 2 }, { level: 4, count: 2 }],
+          regionReach: [{ id: 'village', count: 4 }, { id: 'world', count: 3 }],
+          zoneUnlocks: [{ id: 'village', count: 4 }, { id: 'pacific', count: 3 }, { id: 'seasia', count: 1 }],
+          fameGateStalled: {
+            total: 3,
+            byNextTier: [{ nextTier: 2, count: 2 }, { nextTier: 4, count: 1 }],
+          },
+        },
+      },
+      recentEvents: [], spamFlags: [], dailyStats: [], retention: [], sessions: [],
+      live: { count: 0, online: [] },
+    } as never);
+
+    show('progression', 'maintainer');
+    expect(await screen.findByText(/전체 10명 중 휴면 게스트 6명을 제외한 활성 플레이어 4명/)).toBeInTheDocument();
+    expect(screen.getByText(/맨발 1, 1 조각배 2, 3 정크선 1/)).toBeInTheDocument();
+    expect(screen.getByText('Lv1 ~ Lv4')).toBeInTheDocument();
+    expect(screen.getByText(/마을 4\/4, 태평양 3\/4\(수배\), 동남아 1\/4\(수배\)/)).toBeInTheDocument();
+    expect(screen.getByText(/visited 기준 현행 지역 도달: 마을 4\/4, 대양 3\/4/)).toBeInTheDocument();
+    expect(screen.getByText('총 3명이 다음 배 명성 조건에 막혀 있어요.')).toBeInTheDocument();
+    expect(screen.getByText('돛단배(T2)')).toBeInTheDocument();
+    expect(screen.getByText('2명')).toBeInTheDocument();
+    expect(screen.getByText('범선(T4)')).toBeInTheDocument();
+    expect(screen.getByText('1명')).toBeInTheDocument();
+  });
+
+  it('maintainer 역할의 진행 구역에서 명성 게이트 정체 인원이 0명일 때만 완료 안내를 표시한다', async () => {
+    vi.mocked(api.admin.overview).mockResolvedValueOnce({
+      users: [],
+      userAggregates: {
+        totalUsers: 5,
+        activePlayers: 3,
+        asOf: '2026-11-05T03:00:00Z',
+        activeUsers: { today: 1, week: 2, month: 3 },
+        newToday: { users: 0, accounts: 0 },
+        gold: { count: 3, sum: 300, median: 100, p75: 150, max: 200 },
+        progression: {
+          boats: [{ tier: 9, count: 3 }],
+          rods: [{ level: 10, count: 3 }],
+          regionReach: [{ id: 'village', count: 3 }, { id: 'world', count: 3 }],
+          zoneUnlocks: [{ id: 'village', count: 3 }],
+          fameGateStalled: { total: 0, byNextTier: [] },
+        },
+      },
+      recentEvents: [], spamFlags: [], dailyStats: [], retention: [], sessions: [],
+      live: { count: 0, online: [] },
+    } as never);
+
+    show('progression', 'maintainer');
+    expect(await screen.findByText('모두 다음 배의 명성 하한을 넘었어요.')).toBeInTheDocument();
   });
 });

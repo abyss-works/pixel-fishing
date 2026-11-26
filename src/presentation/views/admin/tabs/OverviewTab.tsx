@@ -11,6 +11,7 @@ import { fmtNum, fmtDT, lastNDays, EVENT_LABELS, eventSummary, RISKY_EVENT_TYPES
 import { adminIdentityLookup, selectRiskSignals } from '../../../../features/admin/model/adminViews';
 import {
   fmtDuration, latestRetention, selectActiveUsers, selectDailySeries, selectNewToday, selectTodaySessions,
+  selectTotalUsersCount,
 } from '../../../../features/admin/model/dashboard';
 import type { RetentionPoint } from '../../../../features/admin/model/dashboard';
 import { useAdminDailyStats, useAdminHttpMetrics, useAdminOverview } from '../../../../features/admin/service/useAdminStats';
@@ -38,6 +39,7 @@ export default function OverviewTab() {
   const queries = days === DEFAULT_RANGE_DAYS ? [overview, httpMetrics] : [overview, extraStats, httpMetrics];
 
   const users = overview.data?.users ?? [];
+  const aggregates = overview.data?.userAggregates ?? null;
   const recent = overview.data?.recentEvents ?? [];
   const flags = overview.data?.spamFlags ?? [];
   const liveData = overview.data?.live ?? null;
@@ -48,8 +50,9 @@ export default function OverviewTab() {
   const risk = selectRiskSignals(users, flags);
   const identityOf = adminIdentityLookup(users);
   // 오늘·7일·30일 경계는 조회가 도착한 시각 기준이다 — 다시 읽으면 함께 다시 센다
-  const active = overview.data && selectActiveUsers(users, overview.updatedAt);
-  const fresh = overview.data && selectNewToday(users, overview.updatedAt);
+  const active = overview.data && selectActiveUsers(users, overview.updatedAt, aggregates);
+  const fresh = overview.data && selectNewToday(users, overview.updatedAt, aggregates);
+  const totalUsers = selectTotalUsersCount(users, aggregates);
   const today = sessionRows && selectTodaySessions(sessionRows, overview.updatedAt);
   const d1 = retentionRows && latestRetention(retentionRows, 'd1');
   const d7 = retentionRows && latestRetention(retentionRows, 'd7');
@@ -75,7 +78,7 @@ export default function OverviewTab() {
         <KpiTile label="오늘 DAU" value={count(active?.today)} hint="오늘(KST) 활동한 사람" />
         <KpiTile label="WAU" value={count(active?.week)} hint="최근 7일 안에 활동한 사람" />
         <KpiTile label="MAU" value={count(active?.month)}
-                 hint={overview.data ? `최근 30일 안에 활동한 사람, 등록 ${fmtNum(users.length)}명` : '최근 30일 안에 활동한 사람'} />
+                 hint={overview.data ? `최근 30일 안에 활동한 사람, 등록 ${fmtNum(totalUsers)}명` : '최근 30일 안에 활동한 사람'} />
       </KpiRow>
       <KpiRow>
         <KpiTile label="오늘 신규" value={count(fresh?.users)} hint={`그중 가입 계정 ${count(fresh?.accounts)}`} />

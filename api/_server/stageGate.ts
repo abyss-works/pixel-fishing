@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import type { RequestHandler } from 'express';
 import type { IncomingHttpHeaders, IncomingMessage } from 'node:http';
 import { adminSessionUid } from '../_auth/session.js';
-import { isAdmin } from '../_data/admin.js';
+import { isStaff } from '../_data/admin.js';
 import { database } from '../_db/client.js';
 import { toApiError } from '../errors.js';
 import { reportServerIssue } from '../observability.js';
@@ -35,7 +35,7 @@ export function isStageGateExempt(method: string, path: string): boolean {
 export async function verifyStageAdmin(headers: IncomingHttpHeaders): Promise<StageAdminCheckResult> {
   const uid = await adminSessionUid(headers);
   if (!uid) return { ok: false, status: 401 };
-  const admin = await isAdmin(database().db, uid);
+  const admin = await isStaff(database().db, uid);
   if (!admin) return { ok: false, status: 403 };
   return { ok: true, uid };
 }

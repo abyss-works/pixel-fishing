@@ -6,7 +6,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { consentPolicy } from '../_auth/consentPolicy.js';
 import { adminSessionUid, sessionOf } from '../_auth/session.js';
-import { isAdmin } from '../_data/admin.js';
+import { isStaff } from '../_data/admin.js';
 import { consentRequiredFor } from '../_data/consent.js';
 import {
   consumeWidgetAuthCode,
@@ -271,7 +271,7 @@ async function handleAuthStart(req: WidgetAuthReq, res: WidgetAuthRes): Promise<
   const isPreview = process.env.DEPLOY_ENV === 'preview';
   const session = await sessionOf(req.headers);
   let candidateUid: string | null = session && session.email !== null ? session.id : null;
-  if (isPreview && (!candidateUid || !(await isAdmin(db, candidateUid)))) {
+  if (isPreview && (!candidateUid || !(await isStaff(db, candidateUid)))) {
     const adminUid = await adminSessionUid(req.headers);
     if (adminUid) candidateUid = adminUid;
   }

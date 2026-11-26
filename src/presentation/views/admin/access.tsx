@@ -10,6 +10,8 @@ import Button from '../../ui/Button';
 import GoogleButton from '../../ui/GoogleButton';
 import Inset from '../../ui/Inset';
 import Note from '../../ui/Note';
+import PixelIcon from '../../ui/PixelIcon';
+import ToggleChip from '../../ui/ToggleChip';
 import { GOOGLE_BUTTON_LABEL } from '../../../features/account/model/googleFlow';
 import { useAdminAccess } from '../../../features/admin/service/useAdminAccess';
 import { useAdminSession } from '../../../features/admin/service/useAdminSession';
@@ -109,4 +111,40 @@ export function AdminSignOutButton() {
   const { signOut } = useAdminSession();
   if (access !== 'granted') return null;
   return <Button variant="ghost" size="sm" onClick={() => void signOut()}>로그아웃</Button>;
+}
+
+/** 대시보드 머리의 계정별 채팅 운영진 별 표기 토글 — 관리자·운영자 세션일 때만 보인다 */
+export function AdminStaffBadgeToggle() {
+  const { access, role, showStaffBadge, setStaffBadge } = useAdminAuth();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (access !== 'granted') return null;
+
+  const toggle = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await setStaffBadge(!showStaffBadge);
+    } catch (e) {
+      setError(String((e as { message?: unknown }).message ?? e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-end gap-0.5">
+      <ToggleChip
+        pressed={showStaffBadge}
+        emphasis={showStaffBadge}
+        size="sm"
+        disabled={busy}
+        onClick={() => void toggle()}
+      >
+        <PixelIcon glyph={role === 'maintainer' ? 'staffStarSmall' : 'staffStarLarge'} size={12} />
+        <span>채팅 운영진 별 표기</span>
+      </ToggleChip>
+      {error && <span role="alert" className="text-2xs text-danger">{error}</span>}
+    </div>
+  );
 }

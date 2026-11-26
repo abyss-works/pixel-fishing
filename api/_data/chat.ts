@@ -14,7 +14,8 @@ const REPORT_KEEP_DAYS = 365;
 /** 신고할 때 함께 복사하는 앞뒤 대화 수(한쪽) */
 const REPORT_CONTEXT = 5;
 
-type RawLine = { id: string | number; uid: string; nick: string; text: string; at: string };
+type StaffBadge = 'admin' | 'maintainer';
+type RawLine = { id: string | number; uid: string; nick: string; text: string; at: string; staff_badge: string | null };
 
 export interface SaveChatInput {
   uid: string;
@@ -29,7 +30,20 @@ export type SaveChatResult =
   | { ok: true; line: ChatLine; room: ChatRoom; region: string | null; guild: string | null }
   | { ok: false; code: 'chat-restricted' | 'chat-no-guild' };
 
-const toLine = (r: RawLine): ChatLine => ({ id: Number(r.id), uid: r.uid, nick: r.nick, text: r.text, at: r.at });
+const toStaffBadge = (raw: string | null | undefined): StaffBadge | undefined =>
+  raw === 'admin' || raw === 'maintainer' ? raw : undefined;
+
+const toLine = (r: RawLine): ChatLine => {
+  const staffBadge = toStaffBadge(r.staff_badge);
+  return {
+    id: Number(r.id),
+    uid: r.uid,
+    nick: r.nick,
+    text: r.text,
+    at: r.at,
+    ...(staffBadge ? { staffBadge } : {}),
+  };
+};
 
 // ChatLine의 at 형식(밀리초까지의 UTC ISO 문자열)
 const isoOf = (column: string) =>
@@ -44,8 +58,10 @@ const blockedFilter = (blockedOrUid: string | readonly string[]): SQL => {
 
 async function queryRecent(db: Executor, roomFilter: SQL, blockedOrUid: string | readonly string[], limit: number): Promise<ChatLine[]> {
   const { rows } = await db.execute<RawLine>(sql`select * from (
-      select m.id, m.user_id::text as uid, m.nick, m.text, ${isoOf('m.created_at')} as at
+      select m.id, m.user_id::text as uid, m.nick, m.text, ${isoOf('m.created_at')} as at,
+        a.role as staff_badge
       from public.chat_messages m
+      left join public.admins a on a.user_id = m.user_id and a.show_staff_badge = true
       where ${roomFilter} and ${blockedFilter(blockedOrUid)}
       order by m.id desc
       limit ${limit}
@@ -98,6 +114,7 @@ export async function saveChat(
     nick: string | null;
     text: string | null;
     at: string | null;
+    staff_badge: string | null;
   };
 
   const { rows } = await db.execute<SaveRow>(sql`with check_user as (
@@ -114,9 +131,11 @@ export async function saveChat(
     select
       (select restricted from check_user) as restricted,
       (select member from check_user) as member,
-      i.id, i.uid, i.nick, i.text, i.at
+      i.id, i.uid, i.nick, i.text, i.at,
+      a.role as staff_badge
     from (select 1) dummy
-    left join inserted i on true`);
+    left join inserted i on true
+    left join public.admins a on a.user_id = i.uid::uuid and a.show_staff_badge = true`);
 
   const row = rows[0];
   let result: SaveChatResult;
@@ -127,7 +146,7 @@ export async function saveChat(
   } else {
     result = {
       ok: true,
-      line: toLine({ id: row.id, uid: row.uid, nick: row.nick, text: row.text, at: row.at }),
+      line: toLine({ id: row.id, uid: row.uid, nick: row.nick, text: row.text, at: row.at, staff_badge: row.staff_badge }),
       room,
       region: dbRegion,
       guild: dbGuildId,
