@@ -73,7 +73,7 @@ describe('SlotChips (보너스 통합 칩)', () => {
     expect(tip).toHaveTextContent('도시락활성');
     expect(tip).toHaveTextContent('미끼2/2');
     expect(tip).toHaveTextContent('비약활성');
-    expect(tip).toHaveTextContent('운세그림자');
+    expect(tip).toHaveTextContent('운세큰그림자');
     expect(within(tip).queryByText('5개 적용 중')).toBeNull();
     expect(within(tip).queryByText('가루디야')).toBeNull();
     expect(within(tip).queryByText('1시간 남음')).toBeNull();
