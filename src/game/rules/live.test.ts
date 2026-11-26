@@ -455,3 +455,31 @@ describe('Presence fame 필드 계약', () => {
     });
   });
 });
+
+describe('ChatLine staffBadge 필드 계약', () => {
+  it('ChatLine은 선택적 staffBadge 필드를 가지고 Presence에는 포함되지 않는다', () => {
+    expectTypeOf<ChatLine>().toEqualTypeOf<{
+      id: number;
+      uid: string;
+      nick: string;
+      text: string;
+      at: string;
+      staffBadge?: 'admin' | 'maintainer';
+    }>();
+    expectTypeOf<'staffBadge' extends keyof Presence ? true : false>().toEqualTypeOf<false>();
+
+    const normal: ChatLine = { id: 1, uid: 'u-1', nick: '어부', text: '안녕', at: '2026-11-27T00:00:00.000Z' };
+    const admin: ChatLine = { ...normal, id: 2, staffBadge: 'admin' };
+    const maintainer: ChatLine = { ...normal, id: 3, staffBadge: 'maintainer' };
+
+    expect(JSON.parse(JSON.stringify(normal))).toEqual({
+      id: 1, uid: 'u-1', nick: '어부', text: '안녕', at: '2026-11-27T00:00:00.000Z',
+    });
+    expect(JSON.parse(JSON.stringify(admin))).toEqual({
+      id: 2, uid: 'u-1', nick: '어부', text: '안녕', at: '2026-11-27T00:00:00.000Z', staffBadge: 'admin',
+    });
+    expect(JSON.parse(JSON.stringify(maintainer))).toEqual({
+      id: 3, uid: 'u-1', nick: '어부', text: '안녕', at: '2026-11-27T00:00:00.000Z', staffBadge: 'maintainer',
+    });
+  });
+});
