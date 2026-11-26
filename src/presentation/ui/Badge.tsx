@@ -6,8 +6,10 @@ const TONE = {
   dim: 'border-line text-text-dim bg-bg',
   gold: 'border-gold text-gold bg-[color-mix(in_oklab,var(--c-gold)_12%,transparent)]',
   'gold-plain': 'border-gold text-gold',
+  'gold-deep': 'border-gold-dark text-gold bg-bg',
   accent: 'border-accent text-accent',
   orange: 'border-orange text-orange',
+  danger: 'border-danger/55 text-danger bg-bg',
   'dim-plain': 'border-line text-text-dim',
 } as const;
 

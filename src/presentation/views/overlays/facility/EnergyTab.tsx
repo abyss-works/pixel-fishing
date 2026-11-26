@@ -26,7 +26,7 @@ const POPOVER_TIP = [
   '처음에는 지금 배로 갈 수 있는 가장 먼 해역만 꺼져 있어요.',
   '켜거나 끈 해역은 배 단계가 올라도 고른 대로 남아요.',
   '잠근 개체는 켜진 해역이어도 고르지 않아요.',
-].join('\n');
+] as const;
 
 /** 얻는 기운을 등급마다 한 줄로 — 합계 툴팁과 결과 메시지 툴팁이 같은 목록을 쓴다 */
 const energyRows = (byGrade: Parameters<typeof energyResultRows>[0]) =>
@@ -119,7 +119,7 @@ export default function EnergyTab({ game, busy, act, setToast, picks, setPicks }
             </Button>
           </Tip>
           <Popover open={popOpen} onClose={() => setPopOpen(false)} anchorRef={gearRef} label="해역별 기운 대상">
-            <Tip text={<TipCard title="해역별 기운 대상" description={POPOVER_TIP} />} className="self-start text-sm">해역별 기운 대상</Tip>
+            <Tip text={<TipCard title="해역별 기운 대상" bullets={POPOVER_TIP} />} className="self-start text-sm">해역별 기운 대상</Tip>
             <div className={`${SCROLL_Y_ROWS} max-h-[216px] flex flex-col`}>
               {view.spots.map(s => (
                 <div key={s.id} className="grid grid-cols-[10px_minmax(0,1fr)_auto] items-center gap-2 py-1.5 text-sm">

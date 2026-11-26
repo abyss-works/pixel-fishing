@@ -72,7 +72,9 @@ describe('어종 선택 표', () => {
                      onToggleExpand={vi.fn()} onToggleRow={vi.fn()} onToggleOne={vi.fn()} />,
     );
     fireEvent.mouseEnter(container.querySelector('[data-glyph="lock"]')!.parentElement!);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('잠근 개체는 고를 수 없어요. 잠금은 가방 탭에서 풀 수 있어요.');
+    const tip = screen.getByRole('tooltip');
+    expect(tip).toHaveTextContent('잠근 개체는 고를 수 없어요.');
+    expect(tip).toHaveTextContent('잠금은 가방 탭에서 풀 수 있어요.');
   });
 
   it('일부만 잠긴 행을 펼치면 잠긴 개체 줄의 자물쇠에도 같은 툴팁이 붙는다', () => {
@@ -84,7 +86,9 @@ describe('어종 선택 표', () => {
     const locks = container.querySelectorAll('[data-glyph="lock"]');
     expect(locks).toHaveLength(1); // 행 체크는 잠그지 않은 개체가 있어 체크 모양이고, 자물쇠는 잠긴 개체 줄 하나뿐이다
     fireEvent.mouseEnter(locks[0].parentElement!);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('잠근 개체는 고를 수 없어요. 잠금은 가방 탭에서 풀 수 있어요.');
+    const tip = screen.getByRole('tooltip');
+    expect(tip).toHaveTextContent('잠근 개체는 고를 수 없어요.');
+    expect(tip).toHaveTextContent('잠금은 가방 탭에서 풀 수 있어요.');
   });
 
   it('펼치면 개체 줄이 보이고 줄의 체크가 그 개체 하나를 넘긴다', () => {

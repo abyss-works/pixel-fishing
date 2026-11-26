@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import Badge from './Badge';
 import { resetKeyScopes } from './hotkeys';
-import Tip, { TipCard, TipList } from './Tip';
+import Tip, { TipBullets, TipCard, TipList } from './Tip';
 import RecipeEffectTip from './RecipeEffectTip';
 import { GradeName } from './fish/RarityTag';
 
@@ -237,5 +237,86 @@ describe('TipCard: 구조형 툴팁 위계', () => {
     const textRow = within(tip).getByText('낮에도 밤 어종이 함께 낚여요.');
     expect(textRow.className).not.toContain('justify-between');
     expect(within(tip).getByText('남은 시간').closest('.justify-between')).not.toBeNull();
+  });
+});
+
+describe('TipBullets & TipCard bullets: 픽셀 사각 불릿 목록', () => {
+  it('빈 배열은 아무것도 그리지 않고, 단일 항목도 span 전용 계층과 4px 하늘색 사각 마커로 안전하게 렌더한다', () => {
+    const empty = render(<TipBullets items={[]} />);
+    expect(empty.container.firstChild).toBeNull();
+    empty.unmount();
+
+    const single = render(<TipBullets items={['한 줄 안내']} />);
+    const root = single.container.firstElementChild as HTMLElement;
+    expect(root.tagName).toBe('SPAN');
+    expect(root.querySelectorAll('ul, li, div, p')).toHaveLength(0);
+    const marker = root.querySelector('[aria-hidden="true"]') as HTMLElement;
+    expect(marker.tagName).toBe('SPAN');
+    expect(marker).toHaveClass('size-1', 'bg-accent', 'shrink-0');
+    expect(root).toHaveTextContent('한 줄 안내');
+  });
+
+  it('문자열 항목의 등급·돌연변이·네임드 색칠을 자동 적용하고 ReactNode 항목도 함께 렌더한다', () => {
+    render(
+      <Tip
+        text={(
+          <TipBullets
+            items={[
+              '희귀 등급과 돌연변이, 네임드 강조를 유지해요.',
+              <GradeName key="node" name="달빛 미끼" grade="special" />,
+            ]}
+          />
+        )}
+      >
+        불릿
+      </Tip>,
+    );
+    fireEvent.mouseEnter(screen.getByText('불릿'));
+    const tip = screen.getByRole('tooltip');
+    expect(within(tip).getByText('희귀')).toHaveAttribute('data-rarity', 'rare');
+    expect(within(tip).getByText('돌연변이')).toHaveClass('text-mutation');
+    expect(within(tip).getByText('네임드')).toHaveClass('text-named');
+    expect(within(tip).getByText('(특수)')).toHaveAttribute('data-rarity', 'special');
+    expect(tip.querySelectorAll('ul, li, div, p')).toHaveLength(0);
+  });
+
+  it('TipCard의 bullets는 헤더 구분선 아래, status·note 위에 픽셀 사각 불릿으로 자리잡는다', () => {
+    render(
+      <Tip
+        text={(
+          <TipCard
+            title="해역별 기운 대상"
+            bullets={['첫 번째 조건이에요.', '두 번째 조건이에요.']}
+            status={{ tone: 'warn', lines: ['경고 첫 줄', '보조 설명'] }}
+            note="하단 주석"
+          />
+        )}
+      >
+        카드
+      </Tip>,
+    );
+    fireEvent.mouseEnter(screen.getByText('카드'));
+    const tip = screen.getByRole('tooltip');
+    const title = within(tip).getByText('해역별 기운 대상');
+    const b1 = within(tip).getByText('첫 번째 조건이에요.');
+    const b2 = within(tip).getByText('두 번째 조건이에요.');
+    const warn = within(tip).getByText('경고 첫 줄');
+    const note = within(tip).getByText('하단 주석');
+
+    expect(title.compareDocumentPosition(b1) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(b1.compareDocumentPosition(b2) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(b2.compareDocumentPosition(warn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(warn.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(tip.querySelectorAll('.bg-accent.size-1')).toHaveLength(2);
+    expect(tip.querySelectorAll('.border-t')).toHaveLength(3);
+  });
+
+  it('TipCard에 빈 bullets만 주어지면 본문 구분선을 만들지 않는다', () => {
+    render(
+      <Tip text={<TipCard title="제목" bullets={[]} />}>빈 불릿</Tip>,
+    );
+    fireEvent.mouseEnter(screen.getByText('빈 불릿'));
+    const tip = screen.getByRole('tooltip');
+    expect(tip.querySelectorAll('.border-t')).toHaveLength(0);
   });
 });

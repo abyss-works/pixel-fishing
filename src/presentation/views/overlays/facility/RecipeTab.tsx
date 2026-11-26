@@ -14,7 +14,8 @@ import ItemSprite from '../../../ui/ItemSprite';
 import KeyValueRow from '../../../ui/KeyValueRow';
 import NumberStepper from '../../../ui/NumberStepper';
 import SelectList from '../../../ui/SelectList';
-import Tip from '../../../ui/Tip';
+import Tip, { TipBullets } from '../../../ui/Tip';
+import { splitTipLines } from '../../../ui/tipText';
 import { artifactEffectLabel } from '../../../ui/artifactEffects';
 import { fmtDecimal2, fmtMinutes } from '../../../ui/format';
 import type { Notify } from '../../../ui/hud/messageFeed';
@@ -78,16 +79,7 @@ export default function RecipeTab({ kind, game, now, busy, act, setToast }: {
                   description={view.recipe.description} />
       <Inset className="px-3 py-2.5 flex flex-col gap-1.5">
         <Tip
-          text={(
-            <span className="flex flex-col gap-0.5">
-              {recipeEffectNote(kind).split('\n').map(line => (
-                <span key={line} className="flex items-baseline gap-1.5">
-                  <span aria-hidden="true">-</span>
-                  <span>{line}</span>
-                </span>
-              ))}
-            </span>
-          )}
+          text={<TipBullets items={splitTipLines(recipeEffectNote(kind))} />}
           className="self-start text-xs text-text-dim"
         >
           {EFFECT_TITLE[kind]}

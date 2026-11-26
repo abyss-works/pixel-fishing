@@ -4,7 +4,7 @@ import type { Fish } from '../../../game/content/fish';
 import { cx } from '../cx';
 import { fmtSize } from '../format';
 import IconButton from '../IconButton';
-import Tip from '../Tip';
+import Tip, { TipBullets } from '../Tip';
 import PixelIcon from '../PixelIcon';
 import SizeBar from '../SizeBar';
 
@@ -84,7 +84,7 @@ export default function InstanceLine({
       {(onExhibit || onLock) && (
         <span className="flex items-center justify-end gap-0.5">
           {onExhibit && (
-            <Tip wraps text={'전시대에 올려요.\n전시 중에는 팔리지 않아요'}>
+            <Tip wraps text={<TipBullets items={['전시대에 올려요.', '전시 중에는 팔리지 않아요']} />}>
               <IconButton
                 glyph="star" size={12} tone="dim" className="px-1"
                 aria-label={`${label} 진열`}

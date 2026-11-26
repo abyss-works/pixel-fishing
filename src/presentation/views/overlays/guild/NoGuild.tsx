@@ -101,7 +101,11 @@ export default function NoGuild({ busy, run, join, request, setToast }: {
           <Tip text={(
             <TipCard
               title="길드 만들기"
-              description={`만든 사람이 길드장이 돼요.\n이름은 닉네임과 같은 규칙(한글 1~8자, 영문 2~16자)이에요.\n최대 ${GUILD_MAX_MEMBERS}명까지 함께해요.`}
+              bullets={[
+                '만든 사람이 길드장이 돼요.',
+                '이름은 닉네임과 같은 규칙(한글 1~8자, 영문 2~16자)이에요.',
+                `최대 ${GUILD_MAX_MEMBERS}명까지 함께해요.`,
+              ]}
             />
           )}>
             길드 만들기

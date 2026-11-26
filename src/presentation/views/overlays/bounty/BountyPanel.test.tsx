@@ -111,7 +111,7 @@ describe('BountyPanel', () => {
     expect(screen.getByLabelText('오늘 남은 네임드 토벌')).toHaveTextContent('1/1');
     const buttons = screen.getAllByRole('button', { name: '수주' });
     for (const button of buttons) expect(button).toBeDisabled();
-    expect(tipOfButton(buttons[0])).toBe('오늘 일반 의뢰는 이미 마쳤어요. 새벽 4시가 지나면 다시 수주할 수 있어요.');
+    expect(tipOfButton(buttons[0])).toBe('오늘 일반 의뢰는 이미 마쳤어요.새벽 4시가 지나면 다시 수주할 수 있어요.');
   });
 
   it('다른 구역에서 수주한 일반 의뢰가 진행 중이면 이 판의 수주가 막히고 이유를 버튼 툴팁으로 안내한다', async () => {
@@ -121,7 +121,7 @@ describe('BountyPanel', () => {
     await waitFor(() => expect(screen.getByLabelText('오늘 남은 일반 의뢰')).toHaveTextContent('1/1'));
     const buttons = screen.getAllByRole('button', { name: '수주' });
     for (const button of buttons) expect(button).toBeDisabled();
-    expect(tipOfButton(buttons[0])).toBe('동남아에서 수주한 일반 의뢰가 있어요.\n그 구역의 수배판에서 먼저 마쳐 주세요.');
+    expect(tipOfButton(buttons[0])).toBe('동남아에서 수주한 일반 의뢰가 있어요.그 구역의 수배판에서 먼저 마쳐 주세요.');
   });
 
   it('수주할 수 있으면 수주 버튼에 중복 안내를 달지 않고, 일반 의뢰 머리글 툴팁 한 곳에 세는 기준을 알린다', async () => {
@@ -132,7 +132,7 @@ describe('BountyPanel', () => {
     fireEvent.mouseEnter(buttons[0].parentElement!);
     expect(screen.queryByRole('tooltip')).toBeNull();
     expect(screen.queryByText('수주 안내')).toBeNull();
-    expect(tipOfButton(screen.getByRole('button', { name: '수주 안내' }))).toBe('수주한 뒤에 잡은 물고기부터 세요.\n물고기는 가방에 남아요.');
+    expect(tipOfButton(screen.getByRole('button', { name: '수주 안내' }))).toBe('수주한 뒤에 잡은 물고기부터 세요.물고기는 가방에 남아요.');
   });
 
   it('날이 바뀐 뒤에도 마친 의뢰는 오늘의 의뢰와 달라도 그 칸에 보이고 완료할 수 있다', async () => {
@@ -278,7 +278,7 @@ describe('BountyPanel', () => {
     fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
     // 스냅샷은 세션 게이트가 선 뒤 도착한다
     const trace = tipOf(await screen.findByText('흔적'));
-    expect(trace).toMatch(/흔적이 남아 있어요.\n이 구역 바다로 나가 흔적 카드의 추적을 눌러 보세요/);
+    expect(trace).toMatch(/흔적이 남아 있어요\.이 구역 바다로 나가 흔적 카드의 추적을 눌러 보세요/);
     // 도전권은 규칙 용어라 화면 문구에 쓰지 않는다 - 카드 본문과 툴팁(흔적, 이름) 모두
     expect(trace).not.toContain('도전권');
     expect(screen.queryByText('도전권')).toBeNull();
@@ -299,6 +299,6 @@ describe('BountyPanel', () => {
     await waitFor(() => expect(screen.getByLabelText('오늘 남은 네임드 토벌')).toHaveTextContent('0/1'));
     const accept = screen.getByRole('button', { name: '수주' });
     expect(accept).toBeDisabled();
-    expect(tipOfButton(accept)).toBe('오늘 네임드 토벌은 이미 마쳤어요. 새벽 4시가 지나면 다시 수주할 수 있어요.');
+    expect(tipOfButton(accept)).toBe('오늘 네임드 토벌은 이미 마쳤어요.새벽 4시가 지나면 다시 수주할 수 있어요.');
   });
 });

@@ -21,7 +21,8 @@ import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Subheading from '../../../ui/Subheading';
 import TextInput from '../../../ui/TextInput';
-import Tip from '../../../ui/Tip';
+import Tip, { TipBullets } from '../../../ui/Tip';
+import { splitTipLines } from '../../../ui/tipText';
 import { SCROLL_Y } from '../../../ui/scrollArea';
 import type { GuildPartProps, GuildRun } from './guildProps';
 
@@ -106,7 +107,7 @@ export default function GuildManageTab({ guild, busy, run, dialogHost, setToast,
           {rename.reason === null ? (
             <Button size="sm" disabled={busy} onClick={() => setRenaming(true)}>이름 바꾸기</Button>
           ) : (
-            <Tip wraps text={rename.reason}>
+            <Tip wraps text={<TipBullets items={splitTipLines(rename.reason)} />}>
               <Button size="sm" disabled>이름 바꾸기</Button>
             </Tip>
           )}
@@ -172,7 +173,7 @@ export default function GuildManageTab({ guild, busy, run, dialogHost, setToast,
           <span className="truncate text-xs text-text-dim flex-1 min-w-0">{url.replace(/^https?:\/\//, '')}</span>
           <div className="flex items-center gap-2 shrink-0 ml-auto">
             <Button size="sm" onClick={() => { void copy(guild.code, '길드 코드'); }}>코드 복사</Button>
-            <Tip wraps text={'권유 문구와 링크를 함께 복사해요.\n메신저에 붙이면 길드 미리보기가 떠요.'}>
+            <Tip wraps text={<TipBullets items={['권유 문구와 링크를 함께 복사해요.', '메신저에 붙이면 길드 미리보기가 떠요.']} />}>
               <Button size="sm" onClick={() => { void copy(inviteShareText(guild.pitch, url), '초대 링크'); }}>링크 복사</Button>
             </Tip>
           </div>

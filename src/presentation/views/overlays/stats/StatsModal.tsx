@@ -21,7 +21,8 @@ import ModalCard from '../../../ui/ModalCard';
 import ProgressCount from '../../../ui/ProgressCount';
 import TabBar from '../../../ui/TabBar';
 import type { TabDef } from '../../../ui/TabBar';
-import Tip from '../../../ui/Tip';
+import Tip, { TipBullets } from '../../../ui/Tip';
+import { splitTipLines } from '../../../ui/tipText';
 import BoatTab from './BoatTab';
 import BonusTab from './BonusTab';
 import RodTab from './RodTab';
@@ -91,7 +92,7 @@ export default function StatsModal({ game, movement, region, nickname, profileSt
               <span className="text-xs text-text-dim">낚싯대</span><ProgressCount value={`Lv.${game.rod}`} className="text-xs" />
             </span>
             <span className="flex items-baseline gap-1.5 whitespace-nowrap">
-              <span className="text-xs text-text-dim"><Tip text={powerHelpText()}>파워</Tip></span>
+              <span className="text-xs text-text-dim"><Tip text={<TipBullets items={splitTipLines(powerHelpText())} />}>파워</Tip></span>
               <ProgressCount value={selected.data.currentPower} className="text-xs" />
             </span>
           </Inset>

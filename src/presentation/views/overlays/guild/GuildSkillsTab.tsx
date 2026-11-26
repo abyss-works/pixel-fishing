@@ -30,9 +30,15 @@ import ProgressMeter from '../../../ui/ProgressMeter';
 import SlotCell from '../../../ui/SlotCell';
 import SubTabs from '../../../ui/SubTabs';
 import TextInput from '../../../ui/TextInput';
-import Tip, { TipCard } from '../../../ui/Tip';
+import Tip, { TipBullets, TipCard } from '../../../ui/Tip';
+import { splitTipLines } from '../../../ui/tipText';
 import type { GuildPartProps, GuildRun } from './guildProps';
 import { SCROLL_Y } from '../../../ui/scrollArea';
+
+const reasonTipText = (reason: string) => {
+  const lines = splitTipLines(reason);
+  return lines.length > 1 ? <TipBullets items={lines} /> : reason;
+};
 
 type SkillTrack = 'shared' | 'personal';
 
@@ -216,7 +222,10 @@ export default function GuildSkillsTab({ guild, gold, busy, run, dialogHost, onR
                     text={(
                       <TipCard
                         title="길드 스킬 강화 규칙"
-                        description={'자유 강화 포인트와 효과는 길드원마다 따로 적용돼요.\n기부로 올리는 기본 단계는 모든 길드원이 함께 받고, 내 포인트로 올리는 개인 자유 강화는 나에게만 추가로 적용돼요.'}
+                        bullets={[
+                          '자유 강화 포인트와 효과는 길드원마다 따로 적용돼요.',
+                          '기부로 올리는 기본 단계는 모든 길드원이 함께 받고, 내 포인트로 올리는 개인 자유 강화는 나에게만 추가로 적용돼요.',
+                        ]}
                       />
                     )}
                     className="text-xs font-bold text-guild"
@@ -249,7 +258,7 @@ export default function GuildSkillsTab({ guild, gold, busy, run, dialogHost, onR
                     <Button size="sm" disabled={busy} onClick={() => setResetting(true)}>되돌리기</Button>
                   </Tip>
                 ) : (
-                  <Tip wraps text={resetState.reason ?? ''}>
+                  <Tip wraps text={reasonTipText(resetState.reason ?? '')}>
                     <Button size="sm" disabled className="pointer-events-none">되돌리기</Button>
                   </Tip>
                 )}
@@ -342,7 +351,7 @@ export default function GuildSkillsTab({ guild, gold, busy, run, dialogHost, onR
                     {sel.canDonate ? (
                       <Button variant="primary" size="sm" full disabled={busy} onClick={() => setDonating(true)}>기부</Button>
                     ) : (
-                      <Tip wraps text={donateDisabledReason(sel)} className="block">
+                      <Tip wraps text={reasonTipText(donateDisabledReason(sel))} className="block">
                         <Button variant="primary" size="sm" full disabled className="pointer-events-none">기부</Button>
                       </Tip>
                     )}

@@ -5,7 +5,8 @@ import KeyValueRow from '../../../ui/KeyValueRow';
 import PixelIcon from '../../../ui/PixelIcon';
 import SharedProgressMeter from '../../../ui/ProgressMeter';
 import ProgressCount from '../../../ui/ProgressCount';
-import Tip from '../../../ui/Tip';
+import Tip, { TipBullets } from '../../../ui/Tip';
+import { splitTipLines } from '../../../ui/tipText';
 import { fmtMinutes } from '../../../ui/format';
 
 // 수배판 카드(일반 의뢰, 네임드 토벌, 유물)가 함께 쓰는 조각.
@@ -26,7 +27,9 @@ export function AcceptButton({ disabled, reason, onClick }: {
   disabled: boolean; reason: string | null; onClick: () => void;
 }) {
   const button = <Button variant="primary" full disabled={disabled} onClick={onClick}>수주</Button>;
-  return reason ? <Tip wraps text={reason} className="block">{button}</Tip> : button;
+  if (!reason) return button;
+  const lines = splitTipLines(reason);
+  return <Tip wraps text={lines.length > 1 ? <TipBullets items={lines} /> : reason} className="block">{button}</Tip>;
 }
 
 /** 진행 막대와 "진행/목표" - 수배판 일반 의뢰 카드와 의뢰 창 카드가 함께 쓴다 */
@@ -56,7 +59,7 @@ export function ClearsLeft({ leftAll, leftNamed, dailyCap, namedDailyCap, shortL
   return (
     <>
       <span className="text-text-dim whitespace-nowrap">
-        <Tip text={<>보상을 받으면 완료 1회예요.<br />조건을 채우지 못한 의뢰는 {GAME_DAY_RESET_TEXT}에 사라져요.</>}>오늘 남은 클리어</Tip>
+        <Tip text={<TipBullets items={['보상을 받으면 완료 1회예요.', `조건을 채우지 못한 의뢰는 ${GAME_DAY_RESET_TEXT}에 사라져요.`]} />}>오늘 남은 클리어</Tip>
       </span>
       <span className="flex items-baseline gap-1.5 whitespace-nowrap">
         <span className="text-text-dim">{shortLabels ? '일반' : '일반 의뢰'}</span>
@@ -75,7 +78,7 @@ export function ClearsLeft({ leftAll, leftNamed, dailyCap, namedDailyCap, shortL
 export function TraceTime({ mins }: { mins: number }) {
   return (
     <span className="text-xs text-text-dim whitespace-nowrap">
-      <Tip text={'흔적이 남아 있어요.\n이 구역 바다로 나가 흔적 카드의 추적을 눌러 보세요.'}>흔적</Tip>
+      <Tip text={<TipBullets items={['흔적이 남아 있어요.', '이 구역 바다로 나가 흔적 카드의 추적을 눌러 보세요.']} />}>흔적</Tip>
       {' '}<span className="pf-accent text-text">{fmtMinutes(mins)}</span>
     </span>
   );

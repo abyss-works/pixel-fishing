@@ -97,22 +97,39 @@ export default function Tip({ text, plain, wraps, pressOpens, hoverOnly, onlyIf,
   );
 }
 
+/** 툴팁 안의 픽셀 사각 불릿 목록 — 인라인·버튼·문단 안에서도 안전하도록 <span> 계층만 쓴다 */
+export function TipBullets({ items, className }: { items: readonly ReactNode[]; className?: string }) {
+  if (items.length === 0) return null;
+  return (
+    <span className={cx('flex flex-col gap-1 text-xs leading-[1.6]', className)}>
+      {items.map((item, i) => (
+        <span key={typeof item === 'string' ? `${i}-${item}` : i} className="flex items-start gap-1.5">
+          <span aria-hidden="true" className="mt-[0.6em] size-1 bg-accent shrink-0" />
+          <span className="min-w-0">{highlightText(item)}</span>
+        </span>
+      ))}
+    </span>
+  );
+}
+
 export type TipRow =
   | { label: ReactNode; value: ReactNode; badge?: ReactNode }
   | { text: ReactNode };
 
-/** 구조형 툴팁 카드 — 헤더(제목·배지·부제) → 본문/목록 → 구분선 아래 상태/잠금 → 하단 주석 순서를 고정한다 */
-export function TipCard({ title, subtitle, badge, description, rows, status, note }: {
+/** 구조형 툴팁 카드 — 헤더(제목·배지·부제) → 본문/불릿/목록 → 구분선 아래 상태/잠금 → 하단 주석 순서를 고정한다 */
+export function TipCard({ title, subtitle, badge, description, bullets, rows, status, note }: {
   title?: ReactNode;
   subtitle?: ReactNode;
   badge?: ReactNode;
   description?: ReactNode;
+  bullets?: readonly ReactNode[];
   rows?: readonly TipRow[];
   status?: { tone: 'lock' | 'warn' | 'info'; lines: readonly ReactNode[] };
   note?: ReactNode;
 }) {
   const hasHeader = Boolean(title || subtitle || badge);
-  const hasBody = Boolean(description) || (rows !== undefined && rows.length > 0);
+  const hasBullets = Boolean(bullets && bullets.length > 0);
+  const hasBody = Boolean(description) || hasBullets || (rows !== undefined && rows.length > 0);
   const hasStatus = Boolean(status && status.lines.length > 0);
   return (
     <span className="flex flex-col gap-1.5 min-w-40">
@@ -130,6 +147,7 @@ export function TipCard({ title, subtitle, badge, description, rows, status, not
       {hasBody && (
         <span className={cx('flex flex-col gap-1', hasHeader && 'pt-1.5 border-t border-line')}>
           {description && <span className="text-text leading-snug">{highlightText(description)}</span>}
+          {hasBullets && bullets && <TipBullets items={bullets} />}
           {rows && rows.length > 0 && (
             <span className="flex flex-col">
               {rows.map((r, i) => 'text' in r ? (
