@@ -7,6 +7,7 @@ let lookup: (uid: string) => Presence | null = () => null;
 let list: () => LiveOnline[] = () => [];
 let notify: (uid: string, msg: ServerMessage) => void = () => {};
 let nickUpdater: (uid: string, nick: string) => void = () => {};
+let fameUpdater: (uid: string, fame: number) => void = () => {};
 let guildNotify: (guildId: string, msg: ServerMessage) => void = () => {};
 let allNotify: (msg: ServerMessage) => void = () => {};
 
@@ -62,4 +63,13 @@ export function provideSetNick(fn: (uid: string, nick: string) => void): void {
 /** 활성 실시간 연결의 닉네임을 즉시 갱신하고 다른 접속자에게 알린다 */
 export function setNick(uid: string, nick: string): void {
   nickUpdater(uid, nick);
+}
+
+export function provideSetFame(fn: (uid: string, fame: number) => void): void {
+  fameUpdater = fn;
+}
+
+/** 활성 실시간 연결의 명성을 즉시 갱신한다 */
+export function setFame(uid: string, fame: number): void {
+  fameUpdater(uid, fame);
 }

@@ -14,7 +14,7 @@
 import type { SQL } from 'drizzle-orm';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { afterResponse } from './_server/afterResponse.js';
-import { notifyGuild, setNick } from './_server/livePresence.js';
+import { notifyGuild, setFame, setNick } from './_server/livePresence.js';
 // 확장자(.js) 필수 — Node 순수 ESM 로더가 src 모듈을 그대로 import한다
 import { migrate, newState } from '../src/game/rules/logic.js';
 import type { FishInstance, FormRecord, GameState, Judgment } from '../src/game/rules/logic.js';
@@ -899,6 +899,7 @@ async function route(req: Req, res: Res): Promise<void> {
     }
   }
   if (committedNickname !== null) setNick(uid, committedNickname);
+  if (out.state.fame !== Number(row.fame)) setFame(uid, out.state.fame);
 
   // 후속 쓰기 — 이벤트 append, 활동일, 주기 스냅샷, 만료 의뢰 정리. 유실 허용 묶음이라 응답 뒤에 실행하고
   // 실패해도 상태는 되돌리지 않는다. 다만 조용히 잃지 않도록 보고한다.

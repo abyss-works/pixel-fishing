@@ -91,7 +91,7 @@ describe('길드 함수', () => {
     expect(await call('/api/guilds/:id', 'PATCH', B, { params: { id }, body: { joinMode: 'closed' } }))
       .toMatchObject({ status: 403, body: { error: 'not-leader' } });
 
-    providePresence(uid => (uid === B ? { uid: B, nick: '나루', boat: 1, region: 'deep', x: 0, y: 0, dir: 0, line: false } : null));
+    providePresence(uid => (uid === B ? { uid: B, nick: '나루', boat: 1, fame: 0, region: 'deep', x: 0, y: 0, dir: 0, line: false } : null));
     const view = await mine(A);
     expect(view.guild).toMatchObject({ id, name: '심해선단', role: 'leader', code, joinMode: 'open', pitch: '같이 낚시해요', requests: [] });
     expect(view.guild?.members.map(m => [m.nick, m.role, m.online])).toEqual(

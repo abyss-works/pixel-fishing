@@ -26,7 +26,7 @@ import purgeAnon from '../cron/purge-anon.js';
 import { adminAuth, appAuth, sessionOf } from '../_auth/session.js';
 import { afterResponse, settleAfterResponse } from './afterResponse.js';
 import { attachLive } from './live.js';
-import { provideNotify, provideNotifyAll, provideNotifyGuild, provideOnline, providePresence, provideSetNick } from './livePresence.js';
+import { provideNotify, provideNotifyAll, provideNotifyGuild, provideOnline, providePresence, provideSetFame, provideSetNick } from './livePresence.js';
 import { database } from '../_db/client.js';
 import { liveIdentity } from '../_data/profile.js';
 import { blockedIds } from '../_data/blocks.js';
@@ -149,9 +149,9 @@ const live = attachLive(server, {
   authenticate: async (req) => {
     const session = await sessionOf(req.headers);
     if (!session) return null;
-    const { nick, boat } = await liveIdentity(database().db, session.id);
+    const { nick, boat, fame } = await liveIdentity(database().db, session.id);
     // 프로필은 첫 액션에서 생긴다. 그 전에 연결한 게스트는 기본 이름으로 보인다
-    return { uid: session.id, nick: nick ?? '낚시꾼', boat, guest: session.email === null };
+    return { uid: session.id, nick: nick ?? '낚시꾼', boat, fame, guest: session.email === null };
   },
   chat: {
     save: (user, text, guild, room, region) => saveChat(database().db, {
@@ -185,6 +185,7 @@ provideNotify((uid, msg) => live.sendTo(uid, msg));
 provideNotifyGuild((guildId, msg) => live.sendToGuild(guildId, msg));
 provideNotifyAll(msg => live.sendToAll(msg));
 provideSetNick((uid, nick) => live.setNick(uid, nick));
+provideSetFame((uid, fame) => live.setFame(uid, fame));
 
 process.on('SIGTERM', () => {
   live.close();
