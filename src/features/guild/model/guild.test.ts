@@ -191,17 +191,21 @@ describe('항해일지', () => {
     ]);
   });
 
-  it('전설 돌연변이 기록은 돌연변이명과 variant 톤으로, 미상 어종은 어종으로 폴백한다', () => {
+  it('전설 돌연변이 기록은 전설 돌연변이 문구·돌연변이명·variant 톤으로 일반 전설과 구분하고, 미상 어종은 어종으로 폴백한다', () => {
     const at = '2026-11-05T05:20:00.000Z';
     const [day] = logbookDays([
+      log(3, 'legendary', at, 'goldcarp', null, 'me', '나'),
       log(2, 'legendary', at, 'goldcarp|variant', null, 'me', '나'),
       log(1, 'legendary', at, 'unknown|variant', null, 'u', '가람'),
     ], 'me');
     expect(day.items[0].parts).toEqual([
-      { text: '나', tone: 'me' }, { text: ' 님이 ' }, { text: '전설 무지개 잉어', tone: 'variant' }, { text: '를 낚았어요!' },
+      { text: '나', tone: 'me' }, { text: ' 님이 ' }, { text: '전설 황금 잉어', tone: 'legend' }, { text: '를 낚았어요!' },
     ]);
     expect(day.items[1].parts).toEqual([
-      { text: '가람', tone: 'nick' }, { text: ' 님이 ' }, { text: '전설 어종', tone: 'variant' }, { text: '을 낚았어요!' },
+      { text: '나', tone: 'me' }, { text: ' 님이 ' }, { text: '전설 돌연변이 무지개 잉어', tone: 'variant' }, { text: '를 낚았어요!' },
+    ]);
+    expect(day.items[2].parts).toEqual([
+      { text: '가람', tone: 'nick' }, { text: ' 님이 ' }, { text: '전설 돌연변이 어종', tone: 'variant' }, { text: '을 낚았어요!' },
     ]);
   });
 });

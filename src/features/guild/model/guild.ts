@@ -443,7 +443,8 @@ function logParts(log: GuildLogItem, me: string): LogPart[] {
       const fishId = isVariant ? log.detail!.slice(0, -suffix.length) : log.detail;
       const fish = fishId ? FISH.find(f => f.id === fishId) : undefined;
       const name = isVariant ? (fish?.variant?.name ?? fish?.name ?? '어종') : (fish?.name ?? '어종');
-      return [who, { text: ' 님이 ' }, { text: `전설 ${name}`, tone: isVariant ? 'variant' : 'legend' }, { text: `${josa(name, '을/를')} 낚았어요!` }];
+      const label = isVariant ? `전설 돌연변이 ${name}` : `전설 ${name}`;
+      return [who, { text: ' 님이 ' }, { text: label, tone: isVariant ? 'variant' : 'legend' }, { text: `${josa(name, '을/를')} 낚았어요!` }];
     }
     case 'named': {
       const quest = log.detail ? bountyById(log.detail) : undefined;

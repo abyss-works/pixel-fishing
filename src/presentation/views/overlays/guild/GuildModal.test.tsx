@@ -368,7 +368,7 @@ describe('GuildModal', () => {
     expect(day.getByText('나루')).toBeTruthy();
   });
 
-  it('항해일지의 전설 돌연변이는 돌연변이명과 자홍 강조(text-mutation)로 보인다', () => {
+  it('항해일지의 전설 돌연변이는 전설 돌연변이 문구·돌연변이명과 자홍 강조(text-mutation)로 일반 전설(text-legend)과 구분된다', () => {
     const at = '2026-11-05T00:00:00.000Z';
     s.guild = {
       ...GUILD,
@@ -381,7 +381,7 @@ describe('GuildModal', () => {
     fireEvent.click(screen.getByRole('button', { name: '항해일지' }));
     const day = within(screen.getByRole('region', { name: '11월 5일' }));
     expect(day.getByText('전설 황금 잉어').className).toContain('text-legend');
-    expect(day.getByText('전설 무지개 잉어').className).toContain('text-mutation');
+    expect(day.getByText('전설 돌연변이 무지개 잉어').className).toContain('text-mutation');
   });
 
   it('Lv.6 이상 길드에서는 [개인] 서브탭에서 스킬을 고른 뒤 강화 올리기와 초기화(? 툴팁 포함)를 할 수 있다', async () => {
