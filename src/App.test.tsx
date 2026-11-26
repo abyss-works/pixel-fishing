@@ -1978,4 +1978,43 @@ describe('포구 출항 차단 후 로그인 복귀', () => {
       vi.doUnmock('./platform/api');
     }
   });
+
+  it('익명 세션 확보가 429로 실패하면 혼잡 안내 차단 모달을 띄우고 저장 실패 모달은 띄우지 않는다', async () => {
+    seed({});
+    vi.resetModules();
+    vi.doMock('./platform/api', async importActual => {
+      const actual = await importActual<typeof import('./platform/api')>();
+      const { AppError } = await import('./core/errors');
+      const base = actual.createApi();
+      Object.defineProperties(base.auth, {
+        isConfigured: { value: true, configurable: true },
+        ensureSession: {
+          value: async () => {
+            throw new AppError('rate-limited', '요청이 너무 잦아요. 잠시 뒤 다시 시도해 주세요.', {
+              status: 429,
+              code: 'rate_limited',
+            });
+          },
+          configurable: true,
+        },
+      });
+      return {
+        ...actual,
+        readLastPosition: async () => null,
+        api: base,
+      };
+    });
+
+    try {
+      const { default: CloudApp } = await import('./App');
+      render(<CloudApp />);
+      await waitFor(() =>
+        expect(screen.getByText('같은 네트워크에서 접속이 잠시 몰려 있어요. 잠시 뒤 다시 시도해 주세요.')).toBeInTheDocument(),
+      );
+      expect(screen.getByRole('dialog', { name: '접속이 몰려 있어요' })).toBeInTheDocument();
+      expect(screen.queryByText('서버에 연결하지 못해 이번 행동이 저장되지 않았어요.')).not.toBeInTheDocument();
+    } finally {
+      vi.doUnmock('./platform/api');
+    }
+  });
 });
