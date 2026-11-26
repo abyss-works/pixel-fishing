@@ -42,7 +42,9 @@ describe('토글 칩', () => {
     for (const name of ['가', '나', '다', '라', '선택됨', '미선택']) {
       expect(chip(name).querySelector('[data-glyph="check"]')).toBeNull();
     }
-    expect(chip('선택됨')).toHaveClass('font-bold', 'border-gold', 'text-gold');
+    expect(chip('선택됨')).toHaveClass('border-gold', 'text-gold');
+    expect(chip('선택됨')).not.toHaveClass('font-bold');
     expect(chip('미선택')).toHaveClass('border-line', 'bg-surface-2', 'text-text-dim');
+    expect(chip('미선택')).not.toHaveClass('font-bold');
   });
 });
