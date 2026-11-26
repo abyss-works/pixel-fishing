@@ -70,6 +70,7 @@ async function loadRealDashboard() {
   const [{ QueryProvider }, { default: AdminApp }] = await Promise.all([
     import('../../../core/QueryProvider'),
     import('./AdminDashboard'),
+    import('./AdminWorkspace'),
   ]);
   return { QueryProvider, AdminApp };
 }
@@ -134,7 +135,7 @@ describe('관리자 대시보드 비-목킹 요청 횟수 및 429 통합 테스�
     render(<QueryProvider><AdminApp /></QueryProvider>);
 
     // 1. OverviewTab 초기 로드 완료 대기
-    expect(await screen.findByText('테스트어부(angler@example.com)')).toBeInTheDocument();
+    expect(await screen.findByText('테스트어부(angler@example.com)', {}, { timeout: 5000 })).toBeInTheDocument();
     await waitFor(() => expect(fetchCalls.some(u => u.startsWith('/api/admin?q=httpMetrics'))).toBe(true));
     const initialDataCalls = fetchCalls.filter(u => u !== '/api/admin?q=access');
     expect(initialDataCalls.length).toBeLessThanOrEqual(3);
@@ -212,7 +213,7 @@ describe('관리자 대시보드 비-목킹 요청 횟수 및 429 통합 테스�
 
     render(<QueryProvider><AdminApp /></QueryProvider>);
 
-    expect(await screen.findByText('테스트어부(angler@example.com)')).toBeInTheDocument();
+    expect(await screen.findByText('테스트어부(angler@example.com)', {}, { timeout: 5000 })).toBeInTheDocument();
     expect(overviewAttempts).toBe(2);
 
     fireEvent.click(screen.getByRole('button', { name: '경제·진행' }));

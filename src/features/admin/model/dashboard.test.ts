@@ -150,4 +150,20 @@ describe('실시간 접속', () => {
     expect(board).toMatchObject({ members: 2, guests: 1, places: { labels: ['마을', '인도양'], values: [2, 1] } });
     expect(selectLiveBoard(null, NOW)).toMatchObject({ rows: [], members: 0, guests: 0 });
   });
+
+  it('maintainer 비식별 투영에서 email 생략과 opHandle을 안전하게 수용한다', () => {
+    const board = selectLiveBoard({
+      count: 1,
+      online: [
+        { uid: 'op-1', opHandle: 'op-1', nick: '운영자', nickname: '운영자', region: 'village', zone: null, connectedAt: '2026-11-05T02:55:00Z', guest: false } as never,
+      ],
+    }, NOW);
+    expect(board.rows[0].identity).toEqual({
+      user_id: 'op-1',
+      opHandle: 'op-1',
+      nickname: '운영자',
+      email: null,
+      is_anonymous: false,
+    });
+  });
 });

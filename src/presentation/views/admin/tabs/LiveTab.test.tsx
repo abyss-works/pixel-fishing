@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup, within } from '@testing-library/react';
 import { QueryProvider } from '../../../../core/QueryProvider';
 import { AdminAuthCtx } from '../../../../features/admin/service/accessContext';
+import { api } from '../../../../platform/api';
 import LiveTab from './LiveTab';
 
 vi.mock('../../../../platform/api', () => ({
@@ -32,7 +33,7 @@ describe('실시간 탭', () => {
   it('접속 목록·위치 분포·지표 줄을 실시간 접속으로 채운다', async () => {
     render(
       <QueryProvider>
-        <AdminAuthCtx.Provider value={{ access: 'granted', uid: 'admin' }}>
+        <AdminAuthCtx.Provider value={{ access: 'granted', uid: 'admin', role: 'admin', showStaffBadge: false, setStaffBadge: async () => {} }}>
           <LiveTab />
         </AdminAuthCtx.Provider>
       </QueryProvider>,
@@ -57,5 +58,28 @@ describe('실시간 탭', () => {
     expect(within(tile('게스트')).getByText('1')).toBeInTheDocument();
     expect(within(tile('가장 오래 접속')).getByText('1시간 23분')).toBeInTheDocument();
     expect(within(tile('가장 오래 접속')).getByText('고참(old@example.com)')).toBeInTheDocument();
+  });
+
+  it('maintainer 비식별 투영에서는 opHandle과 닉네임을 표시하고 이메일 빈칸(—)을 출력하지 않는다', async () => {
+    vi.mocked(api.admin.live).mockResolvedValueOnce({
+      count: 1,
+      online: [
+        { uid: 'op-live01', opHandle: 'op-live01', nick: '선장', nickname: '선장', region: 'world', zone: 'indian', connectedAt: '2026-11-05T02:00:00Z', guest: false } as never,
+      ],
+    });
+
+    render(
+      <QueryProvider>
+        <AdminAuthCtx.Provider value={{ access: 'granted', uid: 'maintainer', role: 'maintainer', showStaffBadge: false, setStaffBadge: async () => {} }}>
+          <LiveTab />
+        </AdminAuthCtx.Provider>
+      </QueryProvider>,
+    );
+
+    await screen.findAllByText('선장');
+    const rows = screen.getAllByRole('row');
+    expect(within(rows[1]).getByText('선장')).toBeInTheDocument();
+    expect(within(rows[1]).getByText('op-live01')).toBeInTheDocument();
+    expect(screen.queryByText(/—/)).toBeNull();
   });
 });

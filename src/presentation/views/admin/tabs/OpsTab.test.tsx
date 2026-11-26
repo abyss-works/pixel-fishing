@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
 import { AdminAuthCtx } from '../../../../features/admin/service/accessContext';
 import type { AdminAccess } from '../../../../features/admin/service/accessContext';
+import type { AdminRole } from '../../../../features/admin/model/types';
 import { EVENT_LABELS, todayKST } from '../../../../features/admin/model/metrics';
 import { QueryProvider } from '../../../../core/QueryProvider';
 import { api } from '../../../../platform/api';
@@ -29,8 +30,8 @@ vi.mock('../../../../platform/api', () => ({
 
 afterEach(cleanup);
 
-const show = (access: AdminAccess) => render(
-  <QueryProvider><AdminAuthCtx.Provider value={{ access, uid: null }}><OpsTab /></AdminAuthCtx.Provider></QueryProvider>,
+const show = (access: AdminAccess, role: AdminRole = 'admin') => render(
+  <QueryProvider><AdminAuthCtx.Provider value={{ access, uid: null, role, showStaffBadge: false, setStaffBadge: async () => {} }}><OpsTab /></AdminAuthCtx.Provider></QueryProvider>,
 );
 
 describe('운영 탭', () => {
@@ -44,9 +45,12 @@ describe('운영 탭', () => {
     expect(within(auth).getByText(/로컬 모드에서는 관리자 데이터가 없어요/)).toBeInTheDocument();
   });
 
-  it('관리자 세션이면 로컬 모드와 다른 문구를 보인다', () => {
-    show('granted');
+  it('관리자 세션과 운영자 세션의 권한 문구를 역할별로 보인다', () => {
+    show('granted', 'admin');
     expect(screen.getByText('관리자 세션')).toBeInTheDocument();
+    cleanup();
+    show('granted', 'maintainer');
+    expect(screen.getByText('운영자 세션')).toBeInTheDocument();
   });
 
   it('변경 기록 칸이 있다', () => {

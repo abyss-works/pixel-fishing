@@ -1,6 +1,6 @@
 // 채팅 신고 구역 — 플레이어가 신고한 채팅 메시지와 앞뒤 대화(신고 시점의 복사본) 목록.
 // 신고한 메시지 줄을 강조하고, 각 신고 행에서 대상 유저 상세(UserDetail)를 열거나 원클릭으로 제재/해제를 실행한다.
-import { useState } from 'react';
+import { Suspense, lazy, useState } from 'react';
 import Button from '../../../ui/Button';
 import DataTable from '../../../ui/DataTable';
 import Note from '../../../ui/Note';
@@ -15,7 +15,8 @@ import type { AdminChatReportRow, AdminUserRow } from '../../../../features/admi
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { Cell, TabState } from '../layout';
 import UserIdentity from '../UserIdentity';
-import UserDetail from './UserDetail';
+
+const UserDetail = lazy(() => import('./UserDetail'));
 
 const NO_REPORTS: AdminChatReportRow[] = [];
 const NO_USERS: AdminUserRow[] = [];
@@ -44,8 +45,9 @@ const fallbackUserRow = (userId: string): AdminUserRow => ({
 export default function ChatReportsSection({ onCompose }: {
   onCompose?: (userId: string) => void;
 }) {
-  const { access } = useAdminAuth();
+  const { access, role } = useAdminAuth();
   const granted = access === 'granted';
+  const isAdmin = role === 'admin';
   const reportsQuery = useAdminQuery(adminKeys.chatReports, readAdminChatReports, granted);
   const usersQuery = useAdminQuery(adminKeys.users, readAdminUsers, granted);
   const actions = useAdminUserActions();
@@ -79,7 +81,7 @@ export default function ChatReportsSection({ onCompose }: {
     }
   };
 
-  const detailUser = selectedUid
+  const detailUser = isAdmin && selectedUid
     ? (targetUserOf(selectedUid) ?? fallbackUserRow(selectedUid))
     : null;
 
@@ -97,7 +99,7 @@ export default function ChatReportsSection({ onCompose }: {
                 <th className="text-left">신고한 사람</th>
                 <th className="text-left">보낸 사람</th>
                 <th className="text-left">대화</th>
-                <th className="text-left">조치</th>
+                {isAdmin && <th className="text-left">조치</th>}
               </tr>
             </thead>
             <tbody>
@@ -106,13 +108,21 @@ export default function ChatReportsSection({ onCompose }: {
                 const restricted = target?.restricted === true;
                 const canRestrict = target !== null && target.restricted !== null;
                 const busy = busyUid === r.target_id;
+                const baseTarget = identityOf(r.target_id);
+                const targetIdentity = r.opHandle && !baseTarget.opHandle
+                  ? { ...baseTarget, opHandle: r.opHandle }
+                  : baseTarget;
                 return (
                   <tr key={r.id}>
                     <td className="text-2xs text-text-dim whitespace-nowrap align-top">{fmtDT(r.created_at)}</td>
-                    <td className="align-top"><UserIdentity user={identityOf(r.user_id)} /></td>
+                    <td className="align-top">
+                      {isAdmin && r.user_id
+                        ? <UserIdentity user={identityOf(r.user_id)} />
+                        : <span className="text-2xs text-text-dim">비공개</span>}
+                    </td>
                     <td className="align-top">
                       <div className="flex flex-col gap-1">
-                        <UserIdentity user={identityOf(r.target_id)} />
+                        <UserIdentity user={targetIdentity} />
                         {restricted && <span className="text-danger text-2xs pf-accent">제재됨</span>}
                       </div>
                     </td>
@@ -123,31 +133,35 @@ export default function ChatReportsSection({ onCompose }: {
                         </div>
                       ))}
                     </td>
-                    <td className="align-top whitespace-nowrap">
-                      <div className="flex flex-col items-start gap-1">
-                        <Button size="sm" variant="ghost" onClick={() => setSelectedUid(r.target_id)}>
-                          상세 보기
-                        </Button>
-                        <Button size="sm" variant={restricted ? 'ghost' : 'primary'}
-                                disabled={!granted || busy || !canRestrict}
-                                onClick={() => target && void toggleRestrict(target)}>
-                          {restricted ? '제재 해제' : '제재'}
-                        </Button>
-                      </div>
-                    </td>
+                    {isAdmin && (
+                      <td className="align-top whitespace-nowrap">
+                        <div className="flex flex-col items-start gap-1">
+                          <Button size="sm" variant="ghost" onClick={() => setSelectedUid(r.target_id)}>
+                            상세 보기
+                          </Button>
+                          <Button size="sm" variant={restricted ? 'ghost' : 'primary'}
+                                  disabled={!granted || busy || !canRestrict}
+                                  onClick={() => target && void toggleRestrict(target)}>
+                            {restricted ? '제재 해제' : '제재'}
+                          </Button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
               {reports.length === 0 && (
-                <tr><td colSpan={5} className="text-text-dim text-center py-3">신고가 없어요.</td></tr>
+                <tr><td colSpan={isAdmin ? 5 : 4} className="text-text-dim text-center py-3">신고가 없어요.</td></tr>
               )}
             </tbody>
           </DataTable>
         </div>
       </Cell>
       {detailUser && (
-        <UserDetail key={detailUser.user_id} user={detailUser}
-                    onClose={() => setSelectedUid(null)} onCompose={onCompose} />
+        <Suspense fallback={null}>
+          <UserDetail key={detailUser.user_id} user={detailUser}
+                      onClose={() => setSelectedUid(null)} onCompose={onCompose} />
+        </Suspense>
       )}
     </>
   );

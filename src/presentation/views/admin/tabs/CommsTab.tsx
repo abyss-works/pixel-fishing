@@ -1,12 +1,15 @@
 // 소통 탭 — 플레이어와 주고받는 세 구역(편지 · 우편 · 공지)을 한 탭에 모은다.
-// 구역은 구역 탭(SubTabs)으로 바꾸고, 어느 구역인지는 해시에 담긴다(화면 셸이 소유).
+// maintainer 역할에서는 편지·우편 청크를 불러오지 않고 공지 구역만 노출한다.
+import { Suspense, lazy } from 'react';
 import SubTabs from '../../../ui/SubTabs';
+import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { TabPage } from '../layout';
-import { ADMIN_SECTIONS } from '../routes';
+import { sectionsForRole } from '../routes';
 import type { CommsSection } from '../routes';
-import LettersTab from './LettersTab';
-import MailTab from './MailTab';
 import NoticesTab from './NoticesTab';
+
+const LettersTab = lazy(() => import('./LettersTab'));
+const MailTab = lazy(() => import('./MailTab'));
 
 const CONTEXT: Record<CommsSection, string> = {
   letters: '유저가 보낸 편지를 모두 볼 수 있어요. 우편으로 답장하고, 마친 편지는 처리 표시를 남겨요.',
@@ -21,15 +24,28 @@ export default function CommsTab({ section, onSection, mailTo, onCompose }: {
   /** 우편 쓰기에 미리 넣을 받는 사람(계정 id). 다른 화면의 우편 보내기에서 넘어올 때만 있다 */
   mailTo: string | null;
 }) {
+  const { role } = useAdminAuth();
+  const isAdmin = role === 'admin';
+  const sections = sectionsForRole('comms', role);
+  const activeSection: CommsSection = isAdmin ? section : 'notices';
+
   return (
-    <TabPage title="소통" context={CONTEXT[section]}>
+    <TabPage title="소통" context={CONTEXT[activeSection]}>
       <div className="max-w-[520px]">
-        <SubTabs items={ADMIN_SECTIONS.comms.map(s => ({ key: s.key, label: s.label }))}
-                 activeKey={section} onSelect={onSection} />
+        <SubTabs items={sections.map(s => ({ key: s.key, label: s.label }))}
+                 activeKey={activeSection} onSelect={onSection} />
       </div>
-      {section === 'letters' && <LettersTab onCompose={onCompose} />}
-      {section === 'mail' && <MailTab key={mailTo ?? ''} to={mailTo} />}
-      {section === 'notices' && <NoticesTab />}
+      {isAdmin && activeSection === 'letters' && (
+        <Suspense fallback={null}>
+          <LettersTab onCompose={onCompose} />
+        </Suspense>
+      )}
+      {isAdmin && activeSection === 'mail' && (
+        <Suspense fallback={null}>
+          <MailTab key={mailTo ?? ''} to={mailTo} />
+        </Suspense>
+      )}
+      {activeSection === 'notices' && <NoticesTab />}
     </TabPage>
   );
 }

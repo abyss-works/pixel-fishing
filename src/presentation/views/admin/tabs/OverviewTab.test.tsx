@@ -77,7 +77,7 @@ const tile = (label: string) => screen.getAllByText(label)
 function show(access: 'granted' | 'local') {
   render(
     <QueryProvider>
-      <AdminAuthCtx.Provider value={{ access, uid: access === 'granted' ? 'admin' : null }}>
+      <AdminAuthCtx.Provider value={{ access, uid: access === 'granted' ? 'admin' : null, role: 'admin', showStaffBadge: false, setStaffBadge: async () => {} }}>
         <OverviewTab />
       </AdminAuthCtx.Provider>
     </QueryProvider>,

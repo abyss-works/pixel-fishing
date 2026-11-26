@@ -14,7 +14,7 @@ import ChangelogSection from './ChangelogSection';
 import { HttpMetricsOpsSection } from './HttpMetricsSection';
 
 export default function OpsTab() {
-  const { access } = useAdminAuth();
+  const { access, role } = useAdminAuth();
 
   return (
     <TabPage title="운영" context="이 대시보드가 어느 배포를 보고 있는지 확인해요.">
@@ -36,8 +36,12 @@ export default function OpsTab() {
 
         <Cell title="권한">
           {access === 'local' && <Note className="my-0">클라우드가 설정되지 않아서 로컬 모드에서는 관리자 데이터가 없어요.</Note>}
-          {access === 'granted' &&
-            <Note className="my-0"><span className="pf-accent text-gold">관리자 세션</span>이에요. 모든 뷰를 볼 수 있어요.</Note>}
+          {access === 'granted' && (
+            <Note className="my-0">
+              <span className="pf-accent text-gold">{role === 'maintainer' ? '운영자 세션' : '관리자 세션'}</span>이에요.
+              {role === 'maintainer' ? ' 비식별 운영 화면과 공지·지표 뷰를 볼 수 있어요.' : ' 모든 뷰를 볼 수 있어요.'}
+            </Note>
+          )}
         </Cell>
 
         <Cell title="관측">

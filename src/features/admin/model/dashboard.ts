@@ -174,7 +174,13 @@ export interface LiveBoard {
 export function selectLiveBoard(live: AdminLive | null, nowMs: number): LiveBoard {
   const rows: LiveRow[] = (live?.online ?? []).map(entry => ({
     uid: entry.uid,
-    identity: { user_id: entry.uid, nickname: entry.nickname, email: entry.email, is_anonymous: entry.guest },
+    identity: {
+      user_id: entry.uid,
+      ...(entry.opHandle ? { opHandle: entry.opHandle } : {}),
+      nickname: entry.nickname,
+      email: entry.email ?? null,
+      is_anonymous: entry.guest,
+    },
     guest: entry.guest,
     place: placeName(entry.region, entry.zone),
     connectedAt: entry.connectedAt,

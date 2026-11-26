@@ -1,11 +1,14 @@
 // 플레이어 탭 — 유저 단위로 보는 두 구역(명부 · 이상탐지)을 한 탭에 모은다.
-// 구역은 구역 탭(SubTabs)으로 바꾸고, 어느 구역인지는 해시에 담긴다(화면 셸이 소유).
+// maintainer 역할에서는 명부(UsersTab) 청크를 불러오지 않고 이상탐지 구역만 노출한다.
+import { Suspense, lazy } from 'react';
 import SubTabs from '../../../ui/SubTabs';
+import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { TabPage } from '../layout';
-import { ADMIN_SECTIONS } from '../routes';
+import { sectionsForRole } from '../routes';
 import type { PlayersSection } from '../routes';
 import AntiAbuseTab from './AntiAbuseTab';
-import UsersTab from './UsersTab';
+
+const UsersTab = lazy(() => import('./UsersTab'));
 
 const CONTEXT: Record<PlayersSection, string> = {
   roster: '유저를 누르면 최근 이벤트와 연타·판정 기록을 볼 수 있어요.',
@@ -17,14 +20,23 @@ export default function PlayersTab({ section, onSection, onCompose }: {
   /** 이 계정을 받는 사람으로 넣고 우편 쓰기를 연다 */
   onCompose: (userId: string) => void;
 }) {
+  const { role } = useAdminAuth();
+  const isAdmin = role === 'admin';
+  const sections = sectionsForRole('players', role);
+  const activeSection: PlayersSection = isAdmin ? section : 'abuse';
+
   return (
-    <TabPage title="플레이어" context={CONTEXT[section]}>
+    <TabPage title="플레이어" context={CONTEXT[activeSection]}>
       <div className="max-w-[520px]">
-        <SubTabs items={ADMIN_SECTIONS.players.map(s => ({ key: s.key, label: s.label }))}
-                 activeKey={section} onSelect={onSection} />
+        <SubTabs items={sections.map(s => ({ key: s.key, label: s.label }))}
+                 activeKey={activeSection} onSelect={onSection} />
       </div>
-      {section === 'roster' && <UsersTab onCompose={onCompose} />}
-      {section === 'abuse' && <AntiAbuseTab />}
+      {isAdmin && activeSection === 'roster' && (
+        <Suspense fallback={null}>
+          <UsersTab onCompose={onCompose} />
+        </Suspense>
+      )}
+      {activeSection === 'abuse' && <AntiAbuseTab />}
     </TabPage>
   );
 }

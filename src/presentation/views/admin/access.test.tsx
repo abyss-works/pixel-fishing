@@ -3,9 +3,9 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../../../platform/api';
 import { QueryProvider } from '../../../core/QueryProvider';
-import { AdminAuthCtx } from '../../../features/admin/service/accessContext';
+import { AdminAuthCtx, useAdminAuth } from '../../../features/admin/service/accessContext';
 import type { AdminAuth } from '../../../features/admin/service/accessContext';
-import { AdminAuthProvider, AdminGate } from './access';
+import { AdminAuthProvider, AdminGate, AdminStaffBadgeToggle } from './access';
 
 // 테스트 빌드는 로컬 모드라 관리자 로그인이 꺼져 있다. 클라우드 빌드처럼 로그인 복귀 읽기를 켠다
 vi.mock('../../../features/admin/service/queries', async importOriginal => ({
@@ -20,7 +20,13 @@ afterEach(() => {
 
 const UID = '00000000-0000-4000-8000-000000000001';
 
-function renderGate(auth: AdminAuth) {
+function renderGate(partial: Pick<AdminAuth, 'access' | 'uid'> & Partial<AdminAuth>) {
+  const auth: AdminAuth = {
+    role: 'admin',
+    showStaffBadge: false,
+    setStaffBadge: async () => {},
+    ...partial,
+  };
   render(
     <QueryProvider>
       <AdminAuthCtx.Provider value={auth}>
@@ -163,5 +169,63 @@ describe('AdminAuthProvider', () => {
     );
     expect(await screen.findByText('대시보드 본문')).toBeInTheDocument();
     expect(take).toHaveBeenCalledTimes(1);
+  });
+
+  it('access 응답의 role과 showStaffBadge를 컨텍스트로 노출하고 토글로 변경한다', async () => {
+    vi.spyOn(api.admin, 'takeSignInReturn').mockReturnValue(null);
+    vi.spyOn(api.admin, 'access').mockResolvedValue({
+      kind: 'granted',
+      uid: UID,
+      role: 'maintainer',
+      showStaffBadge: false,
+    });
+    const setBadge = vi.spyOn(api.admin, 'setStaffBadge').mockResolvedValue({ showStaffBadge: true });
+
+    function Probe() {
+      const { role, showStaffBadge } = useAdminAuth();
+      return (
+        <div>
+          <span data-testid="role">{role}</span>
+          <span data-testid="badge">{String(showStaffBadge)}</span>
+          <AdminStaffBadgeToggle />
+        </div>
+      );
+    }
+
+    render(
+      <QueryProvider>
+        <AdminAuthProvider>
+          <AdminGate><Probe /></AdminGate>
+        </AdminAuthProvider>
+      </QueryProvider>,
+    );
+
+    expect(await screen.findByTestId('role')).toHaveTextContent('maintainer');
+    expect(screen.getByTestId('badge')).toHaveTextContent('false');
+    const toggle = screen.getByRole('button', { name: '채팅 운영진 별 표기' });
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    expect(toggle.querySelector('[data-glyph="staffStarSmall"]')).not.toBeNull();
+
+    fireEvent.click(toggle);
+    await waitFor(() => expect(setBadge).toHaveBeenCalledWith(true));
+    await waitFor(() => expect(screen.getByTestId('badge')).toHaveTextContent('true'));
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('채팅 운영진 별 표기 변경이 실패하면 오류를 표시하고 상태를 유지한다', async () => {
+    const setStaffBadge = vi.fn().mockRejectedValue(new Error('설정 저장 실패'));
+    render(
+      <QueryProvider>
+        <AdminAuthCtx.Provider value={{ access: 'granted', uid: UID, role: 'admin', showStaffBadge: false, setStaffBadge }}>
+          <AdminStaffBadgeToggle />
+        </AdminAuthCtx.Provider>
+      </QueryProvider>,
+    );
+
+    const toggle = screen.getByRole('button', { name: '채팅 운영진 별 표기' });
+    expect(toggle.querySelector('[data-glyph="staffStarLarge"]')).not.toBeNull();
+    fireEvent.click(toggle);
+    expect(await screen.findByRole('alert')).toHaveTextContent('설정 저장 실패');
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
   });
 });

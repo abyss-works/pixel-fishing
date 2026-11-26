@@ -28,6 +28,7 @@ export type {
   AdminOnboardingTutorials,
   AdminOverview,
   AdminRetentionRow,
+  AdminRole,
   AdminSentMailRow,
   AdminSessionRow,
   AdminSpamFlagRow,

@@ -39,7 +39,7 @@ describe('UserDetail 조리 상태 표시', () => {
   it('inProgress id와 cookingQueue 항목을 표시한다', async () => {
     render(
       <QueryProvider>
-        <AdminAuthCtx.Provider value={{ access: 'granted', uid: UID }}>
+        <AdminAuthCtx.Provider value={{ access: 'granted', uid: UID, role: 'admin', showStaffBadge: false, setStaffBadge: async () => {} }}>
           <UserDetail
             user={{
               user_id: UID,

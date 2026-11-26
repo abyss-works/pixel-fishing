@@ -38,4 +38,18 @@ describe('관리자 해시 경로', () => {
   it('탭은 여덟 개이고 이름이 정해져 있다', () => {
     expect(ADMIN_TABS.map(t => t.label)).toEqual(['개요', '실시간', '플레이어', '소통', '경제·진행', '밸런스', '콘텐츠', '운영']);
   });
+
+  it('maintainer 역할은 금지된 구역과 해시를 허용 기본 경로로 정규화한다', () => {
+    expect(adminHash(parseAdminHash('#/admin/players/roster', 'maintainer'))).toBe('#/admin/players/abuse');
+    expect(adminHash(parseAdminHash('#/admin/players', 'maintainer'))).toBe('#/admin/players/abuse');
+    expect(adminHash(parseAdminHash('#/admin/comms/letters', 'maintainer'))).toBe('#/admin/comms/notices');
+    expect(adminHash(parseAdminHash('#/admin/comms/mail', 'maintainer'))).toBe('#/admin/comms/notices');
+    expect(adminHash(parseAdminHash('#/admin/comms', 'maintainer'))).toBe('#/admin/comms/notices');
+    expect(adminHash(parseAdminHash('#/admin/users', 'maintainer'))).toBe('#/admin/overview');
+    expect(adminHash(parseAdminHash('#/admin/user/123', 'maintainer'))).toBe('#/admin/overview');
+    expect(adminHash(parseAdminHash('#/admin/mail', 'maintainer'))).toBe('#/admin/overview');
+    expect(adminHash(parseAdminHash('#/admin/letters', 'maintainer'))).toBe('#/admin/overview');
+    expect(adminHash(adminRouteOf('players', 'maintainer'))).toBe('#/admin/players/abuse');
+    expect(adminHash(adminRouteOf('comms', 'maintainer'))).toBe('#/admin/comms/notices');
+  });
 });

@@ -31,7 +31,7 @@ vi.mock('../../../../platform/api', () => ({
 function show() {
   render(
     <QueryProvider>
-      <AdminAuthCtx.Provider value={{ access: 'granted', uid: 'u' }}>
+      <AdminAuthCtx.Provider value={{ access: 'granted', uid: 'u', role: 'admin', showStaffBadge: false, setStaffBadge: async () => {} }}>
         <MailTab />
       </AdminAuthCtx.Provider>
     </QueryProvider>,
@@ -136,7 +136,7 @@ describe('MailTab', () => {
   it('다른 화면의 우편 보내기로 열리면 그 계정을 받는 사람으로 넣어 둔다', async () => {
     render(
       <QueryProvider>
-        <AdminAuthCtx.Provider value={{ access: 'granted', uid: 'u' }}>
+        <AdminAuthCtx.Provider value={{ access: 'granted', uid: 'u', role: 'admin', showStaffBadge: false, setStaffBadge: async () => {} }}>
           <MailTab to={USER} />
         </AdminAuthCtx.Provider>
       </QueryProvider>,

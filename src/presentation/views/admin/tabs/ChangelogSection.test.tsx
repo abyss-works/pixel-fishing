@@ -17,7 +17,7 @@ vi.mock('../../../../platform/api', () => ({ api: { admin: { changelog } } }));
 
 const show = (access: AdminAccess) => render(
   <QueryProvider>
-    <AdminAuthCtx.Provider value={{ access, uid: 'u' }}><ChangelogSection /></AdminAuthCtx.Provider>
+    <AdminAuthCtx.Provider value={{ access, uid: 'u', role: 'admin', showStaffBadge: false, setStaffBadge: async () => {} }}><ChangelogSection /></AdminAuthCtx.Provider>
   </QueryProvider>,
 );
 

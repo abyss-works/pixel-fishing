@@ -3,6 +3,8 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
 import { QueryProvider } from '../../../../core/QueryProvider';
 import { AdminAuthCtx } from '../../../../features/admin/service/accessContext';
+import { api } from '../../../../platform/api';
+import type { AdminRole } from '../../../../features/admin/model/types';
 import PlayersTab from './PlayersTab';
 
 const UID = 'aaaaaaaa-0000-0000-0000-000000000000';
@@ -77,10 +79,10 @@ vi.mock('../../../../platform/api', () => ({
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
-function show(section: 'roster' | 'abuse') {
+function show(section: 'roster' | 'abuse', role: AdminRole = 'admin') {
   render(
     <QueryProvider>
-      <AdminAuthCtx.Provider value={{ access: 'granted', uid: UID }}>
+      <AdminAuthCtx.Provider value={{ access: 'granted', uid: UID, role, showStaffBadge: false, setStaffBadge: async () => {} }}>
         <PlayersTab section={section} onSection={() => {}} onCompose={mocks.compose} />
       </AdminAuthCtx.Provider>
     </QueryProvider>,
@@ -157,5 +159,28 @@ describe('플레이어 탭', () => {
     fireEvent.click(await screen.findByRole('button', { name: '종료하기' }));
     await waitFor(() => expect(mocks.revokeSessions).toHaveBeenCalledWith(UID));
     expect(await within(dialog).findByText('활성 세션 2건을 종료했어요.')).toBeInTheDocument();
+  });
+
+  it('maintainer 역할은 roster가 들어와도 이상탐지만 보이고 명부·상세 모달 API를 호출하지 않는다', async () => {
+    vi.mocked(api.admin.users).mockResolvedValueOnce([{
+      user_id: 'op-user01', opHandle: 'op-user01', email: null, nickname: '원양어부', is_anonymous: false,
+      signed_up_at: null, last_sign_in_at: null, gold: null, fame: null, boat: 1, rod: 2,
+      location_kind: null, location_id: null, visited: null, restricted: true, save_version: null,
+      last_action_at: null, last_session_at: null, total_session_sec: 0,
+    }]);
+    vi.mocked(api.admin.spamFlags).mockResolvedValueOnce([{
+      user_id: 'op-user01', opHandle: 'op-user01', catches_7d: 40, fast_gap_7d: 12,
+      perfect_pct: 90, perfect_pct_global: 30,
+    }]);
+
+    show('roster', 'maintainer');
+    expect(screen.queryByRole('button', { name: '명부' })).toBeNull();
+    expect(screen.getByRole('button', { name: '이상탐지', pressed: true })).toBeInTheDocument();
+    expect(await screen.findAllByText('원양어부')).not.toHaveLength(0);
+    expect(screen.getAllByText('op-user01').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/—/)).toBeNull();
+    expect(vi.mocked(api.admin.userState)).not.toHaveBeenCalled();
+    expect(vi.mocked(api.admin.userEvents)).not.toHaveBeenCalled();
+    expect(vi.mocked(api.admin.sessions)).not.toHaveBeenCalled();
   });
 });

@@ -110,6 +110,15 @@ describe('계정 식별 표기', () => {
     expect(lookup('abcdef01-0000')).toBe(known);
     expect(lookup('ffff0000-0000')).toEqual({ user_id: 'ffff0000-0000', nickname: null, email: null, is_anonymous: null });
   });
+
+  it('opHandle 비식별 투영에서는 이메일 빈칸(—) 없이 닉네임만 보이고 opHandle로도 찾을 수 있다', () => {
+    const masked = user({ user_id: 'op-1234', opHandle: 'op-1234', nickname: '갈치', email: null, is_anonymous: false });
+    expect(adminUserLabel(masked)).toBe('갈치');
+    expect(adminUserLabel(user({ user_id: 'op-9', opHandle: 'op-9', nickname: null, email: null, is_anonymous: null }))).toBe('이름 없음');
+    expect(adminUserLabel(user({ user_id: 'op-g', opHandle: 'op-g', nickname: '초보', email: null, is_anonymous: true }))).toBe('초보(게스트)');
+    const lookup = adminIdentityLookup([masked]);
+    expect(lookup('OP-1234')).toBe(masked);
+  });
 });
 
 describe('휴면 게스트', () => {

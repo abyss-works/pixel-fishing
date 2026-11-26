@@ -75,7 +75,7 @@ afterEach(cleanup);
 function show(section: AnalysisSection) {
   render(
     <QueryProvider>
-      <AdminAuthCtx.Provider value={{ access: 'granted', uid: 'admin' }}>
+      <AdminAuthCtx.Provider value={{ access: 'granted', uid: 'admin', role: 'admin', showStaffBadge: false, setStaffBadge: async () => {} }}>
         <AnalysisTab section={section} onSection={() => {}} />
       </AdminAuthCtx.Provider>
     </QueryProvider>,

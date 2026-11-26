@@ -24,4 +24,22 @@ describe('계정 식별 표기', () => {
     expect(screen.getByText('이름 없음(galchi@example.com)')).toBeInTheDocument();
     expect(screen.getAllByText('abcdef01')).toHaveLength(2);
   });
+
+  it('opHandle 비식별 투영에서는 원본 user_id와 이메일 빈칸(—)을 노출하지 않는다', () => {
+    render(
+      <>
+        <UserIdentity user={{ user_id: UID, opHandle: 'op-11223344', nickname: '갈치', email: null, is_anonymous: false }} />
+        <UserIdentity user={{ user_id: 'raw-secret-uid', opHandle: 'op-99887766', nickname: null, email: null, is_anonymous: null }} />
+      </>,
+    );
+    expect(screen.getByText('갈치')).toBeInTheDocument();
+    expect(screen.getByText('op-11223344')).toBeInTheDocument();
+    expect(screen.getByText('이름 없음')).toBeInTheDocument();
+    expect(screen.getByText('op-99887766')).toBeInTheDocument();
+    expect(screen.queryByTitle(UID)).toBeNull();
+    expect(screen.queryByTitle('raw-secret-uid')).toBeNull();
+    expect(screen.queryByText(/—/)).toBeNull();
+    expect(document.body.textContent).not.toContain(UID);
+    expect(document.body.textContent).not.toContain('raw-secret-uid');
+  });
 });
