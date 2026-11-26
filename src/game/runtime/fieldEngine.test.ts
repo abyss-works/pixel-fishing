@@ -89,6 +89,25 @@ describe('GameFieldEngine 이동 잠금', () => {
     expect(events).toEqual([]);
   });
 
+  it('캐스팅 시 onWarmup 콜백을 호출하지 않는다', () => {
+    const game = { ...newState(), boat: 5, rod: 10 };
+    const school = { id: 's', spot: 'pond' as const, x: WORLD_SPAWN.x, y: WORLD_SPAWN.y };
+    const engine = new GameFieldEngine('world', game, [school], WORLD_SPAWN);
+    const onWarmup = vi.fn();
+    const events: FieldEvent[] = [];
+    engine.updateContext(game, false, {
+      dispatch: () => ({ status: 'rejected', error: 'bad-request' }),
+      onEvent: event => { events.push(event); },
+      onScene: noop,
+      onWarmup,
+    });
+    engine.action();
+    expect(engine.getSnapshot().phase).toBe('wait');
+    expect(events).toEqual([{ type: 'cast', spot: 'pond' }]);
+    expect(onWarmup).not.toHaveBeenCalled();
+    engine.dispose();
+  });
+
   it('잠금 중에도 프레임은 계속 돈다', () => {
     const { engine, frame } = setup();
     engine.setControlLocked(true);
