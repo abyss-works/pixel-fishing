@@ -1,6 +1,6 @@
 import type { GameState } from '../../../../game/rules/logic';
 import { useNow } from '../../../../features/gameplay/service/useGameTime';
-import { selectActiveEffectsView } from '../../../../features/kitchen/model/slots';
+import { selectActiveEffectsView, slotPollIntervalMs } from '../../../../features/kitchen/model/slots';
 import type { ActiveEffectEntry } from '../../../../features/kitchen/model/slots';
 import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
@@ -91,7 +91,7 @@ export default function ActiveEffectsModal({
   onOpenBag: () => void;
   onOpenStatsBonus: () => void;
 }) {
-  const now = useNow(1_000);
+  const now = useNow(current => slotPollIntervalMs(game, current));
   const view = selectActiveEffectsView(game, now);
 
   return (
@@ -107,7 +107,7 @@ export default function ActiveEffectsModal({
           </div>
         )}
       >
-        <div className={cx('flex flex-col gap-2.5 flex-1 min-h-0 pr-2 -mr-2', SCROLL_Y)}>
+        <div className={cx('flex flex-col gap-2.5 flex-1 min-h-0', SCROLL_Y)}>
           {!view.hasAny ? (
             <Inset className="p-4 flex flex-col gap-2 items-start text-left">
               <div className="inline-flex items-center gap-2">
