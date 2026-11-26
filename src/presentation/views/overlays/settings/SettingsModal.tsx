@@ -3,9 +3,9 @@ import { SETTING_PROMPTS } from '../../../../features/announcements/model/whatsN
 import {
   ALERT_COPY, ALERT_DENIED_TEXT, ALERT_DENIED_TOAST, ALERT_ORDER, PERMISSION_BLOCK_LINES, PERMISSION_LABEL, PERMISSION_TIP,
 } from '../../../../features/alerts/model/alerts';
+import type { AlertKind, NotificationPermissionState } from '../../../../features/alerts/model/alerts';
 import { useAlertSettings } from '../../../../features/alerts/service/alertSettings';
 import type { AlertToggle } from '../../../../features/alerts/service/alertSettings';
-import type { AlertKind, NotificationPermissionState } from '../../../../platform/api/attention';
 import { setToastEnabled, useToastEnabled } from '../../../../features/display/service/toastEnabled';
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
