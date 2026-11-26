@@ -91,7 +91,7 @@ export default function ActiveEffectsModal({
   onOpenBag: () => void;
   onOpenStatsBonus: () => void;
 }) {
-  const now = useNow();
+  const now = useNow(1_000);
   const view = selectActiveEffectsView(game, now);
 
   return (

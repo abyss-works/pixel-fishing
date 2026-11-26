@@ -17,13 +17,15 @@ import {
 } from '../../../../../features/kitchen/model/bagItems';
 import type { EnergyCell, ItemRow, PotionRow, SwapConfirm } from '../../../../../features/kitchen/model/bagItems';
 import { formatEnergy } from '../../../../../game/content/cooking';
+import { fmtEffectDuration } from '../../../../../shared/lib/effectDuration';
 import { when } from '../../../../../shared/lib/when';
 import ConfirmDialog from '../../../../ui/ConfirmDialog';
 import Badge from '../../../../ui/Badge';
 import Button from '../../../../ui/Button';
 import { cx } from '../../../../ui/cx';
 import { GradeName, RarityText } from '../../../../ui/fish/RarityTag';
-import { fmtMinutes, josa } from '../../../../ui/format';
+import { josa } from '../../../../ui/format';
+import RecipeEffectTip from '../../../../ui/RecipeEffectTip';
 import Inset from '../../../../ui/Inset';
 import ItemSprite from '../../../../ui/ItemSprite';
 import Locked from '../../../../ui/Locked';
@@ -68,7 +70,7 @@ function SwapDialog({ confirm, onConfirm, onCancel }: {
                   role="radio"
                   form={selected ? 'pressed' : 'raised'}
                   onSelect={() => setReplaceSlot(c.slotKey)}
-                  ariaLabel={`${c.label}, 남은 시간 ${fmtMinutes(c.minutes)}`}
+                  ariaLabel={`${c.label}, 남은 시간 ${fmtEffectDuration(c.minutes)}`}
                   className="flex flex-col items-start gap-1 px-2.5 py-2 text-left"
                 >
                   <span className="flex items-center gap-1.5 w-full min-w-0">
@@ -78,7 +80,7 @@ function SwapDialog({ confirm, onConfirm, onCancel }: {
                       <GradeName name={c.title.name} grade={c.title.grade} emphasized={selected} />
                     </span>
                   </span>
-                  <span className="pf-accent text-xs text-danger pl-4">{fmtMinutes(c.minutes)}</span>
+                  <span className="pf-accent text-xs text-danger pl-4">{fmtEffectDuration(c.minutes)}</span>
                 </SlotCell>
               );
             })}
@@ -87,7 +89,7 @@ function SwapDialog({ confirm, onConfirm, onCancel }: {
             <div className="grid grid-cols-[2.5rem_1fr_auto] items-center gap-2 py-2 text-sm">
               <span className="text-text-dim">새로</span>
               <span className="truncate"><GradeName name={confirm.next.title.name} grade={confirm.next.title.grade} /></span>
-              <span className="pf-accent text-xs text-accent">{fmtMinutes(confirm.next.minutes)}</span>
+              <span className="pf-accent text-xs text-accent">{fmtEffectDuration(confirm.next.minutes)}</span>
             </div>
           </Inset>
         </>
@@ -97,7 +99,7 @@ function SwapDialog({ confirm, onConfirm, onCancel }: {
             <div key={r.key} className="grid grid-cols-[2.5rem_1fr_auto] items-center gap-2 py-2 text-sm">
               <span className="text-text-dim">{r.head}</span>
               <span className="truncate"><GradeName name={r.title.name} grade={r.title.grade} /></span>
-              <span className={`pf-accent text-xs ${r.tone}`}>{fmtMinutes(r.minutes)}</span>
+              <span className={`pf-accent text-xs ${r.tone}`}>{fmtEffectDuration(r.minutes)}</span>
             </div>
           ))}
         </Inset>
@@ -132,32 +134,41 @@ function ItemCards({ title, hint, rows, lockLines, busy, selectedId, onSelect, o
             <Inset key={row.recipe.id} tone={dimmed ? 'deep' : 'base'}
                    border={selected ? 'gold' : row.active ? 'accent' : 'line'}
                    className={cx('p-2 flex flex-col gap-1.5 min-w-0', dimmed && 'text-text-dim')}>
-              <PressRow
-                ariaLabel={`${row.label} 상세 보기`}
-                onPress={() => onSelect(row.recipe.id)}
-                className="flex items-start gap-2 min-w-0 -m-1 p-1"
+              <Tip
+                wraps
+                hoverOnly
+                className="block"
+                text={<RecipeEffectTip label={<GradeName name={row.title.name} grade={row.title.grade} />} effects={row.effects} note={null} />}
               >
-                <ItemSprite kind={row.slot} id={row.recipe.id} preset="list" className="shrink-0" />
-                <div className="min-w-0 flex-1 flex flex-col gap-0.5">
-                  <div className="text-xs leading-snug break-keep">
-                    <GradeName name={row.title.name} grade={row.title.grade} />
+                <PressRow
+                  ariaLabel={`${row.label} 상세 보기`}
+                  onPress={() => onSelect(row.recipe.id)}
+                  className="flex items-start gap-2 min-w-0 -m-1 p-1"
+                >
+                  <ItemSprite kind={row.slot} id={row.recipe.id} preset="list" className="shrink-0" />
+                  <div className="min-w-0 flex-1 flex flex-col gap-0.5">
+                    <div className="text-xs leading-snug break-keep">
+                      <GradeName name={row.title.name} grade={row.title.grade} />
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-2xs text-text-dim">
+                      <span>지속 <span className={cx('pf-accent', !dimmed && 'text-text')}>{fmtEffectDuration(row.durationMinutes)}</span></span>
+                    </div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-2xs text-text-dim">
-                    <span>지속 <span className={cx('pf-accent', !dimmed && 'text-text')}>{fmtMinutes(row.durationMinutes)}</span></span>
-                    {row.active && <Badge tone="accent" size="2xs">사용 중</Badge>}
-                  </div>
-                  {row.active && row.remainingMinutes !== null && (
-                    <div className="text-2xs text-accent pf-accent">남음 {fmtMinutes(row.remainingMinutes)}</div>
-                  )}
-                </div>
-              </PressRow>
+                </PressRow>
+              </Tip>
               <div className="mt-auto pt-1.5 border-t border-line-dim flex items-center justify-between gap-2">
                 <span className="pf-accent text-xs text-text-dim whitespace-nowrap">×{row.count}</span>
-                {lockLines ? (
-                  <Locked badge={false} lines={lockLines} title={<GradeName name={row.title.name} grade={row.title.grade} />} label={`${row.label} 잠김`} className="inline-block">
-                    {button}
-                  </Locked>
-                ) : button}
+                <span className="flex items-center justify-end gap-1.5 min-w-0">
+                  {row.active && <Badge tone="accent" size="2xs">사용 중</Badge>}
+                  {row.active && row.remainingMinutes !== null && (
+                    <span className="pf-accent text-2xs text-accent whitespace-nowrap">남음 {fmtEffectDuration(row.remainingMinutes)}</span>
+                  )}
+                  {lockLines ? (
+                    <Locked badge={false} lines={lockLines} title={<GradeName name={row.title.name} grade={row.title.grade} />} label={`${row.label} 잠김`} className="inline-block">
+                      {button}
+                    </Locked>
+                  ) : button}
+                </span>
               </div>
             </Inset>
           );
@@ -281,7 +292,7 @@ export default function ItemSection({ game, accountState, dispatch, setToast }: 
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
 }) {
-  const now = useNow();
+  const now = useNow(1_000);
   const view = selectItemSection(game, now, accountState);
   const [busy, setBusy] = useState(false);
   const [ownedOnly, setOwnedOnly] = useState(false);

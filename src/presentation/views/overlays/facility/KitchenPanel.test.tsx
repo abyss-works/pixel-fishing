@@ -256,7 +256,7 @@ describe('도시락 탭과 미끼 탭', () => {
   });
 
   it('지속 시간은 효과 칸의 마지막 줄이고 조리 시간은 수량 칸에 보인다', () => {
-    show(seed({ items: energy(1000, 100) }));
+    show(seed({ artifacts: ['sargasso-net'], items: energy(1000, 100) }));
     fireEvent.click(screen.getByRole('option', { name: /민 몰리/ }));
     const effect = screen.getByText('도시락 효과').parentElement!;
     const lines = [...effect.children].slice(1).map(l => l.textContent);
@@ -265,6 +265,12 @@ describe('도시락 탭과 미끼 탭', () => {
     expect(within(cookTime).getByText(`${RARE_WAIT_MIN}분`)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '민 몰리(희귀) 수량 증가' }));
     expect(within(cookTime).getByText(`${2 * RARE_WAIT_MIN}분`)).toBeInTheDocument();
+
+    fireEvent.click(tab('미끼'));
+    fireEvent.click(screen.getByRole('option', { name: /롱페퍼 미끼/ }));
+    expect(within(screen.getByText('미끼 효과').parentElement!).getByText('지속 시간')).toBeInTheDocument();
+    expect(screen.getByText('미끼 효과').parentElement!).toHaveTextContent('지속 시간2분');
+    expect(screen.getByText('미끼 효과').parentElement!).not.toHaveTextContent('2분 30초');
   });
 
   it('달빛 미끼의 비수치 효과는 키-값으로 쪼개지 않고 상세 설명 한 줄로 보인다', () => {

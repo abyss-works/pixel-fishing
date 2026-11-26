@@ -166,11 +166,11 @@ describe('아이템 섹션: 열린 뒤', () => {
     ]);
   });
 
-  it('행은 이름의 툴팁에 쓸 효과 줄과 적용 낚시 안내를 갖는다', () => {
+  it('행은 효과 툴팁에 쓸 효과 줄만 갖고 공통 주의사항은 묶음 소제목에만 둔다', () => {
     const v = selectItemSection(seed({ items: { 'cook-lunch-bite': 1 } }), T0, 'account');
     if (v.state !== 'open') throw new Error('open이어야 해요');
     expect(v.lunch[0].effects).toEqual([{ label: '입질 대기', value: '−10%' }]);
-    expect(v.lunch[0].note).toContain('방치로 낚을 때만 효과가 있어요.');
+    expect('note' in v.lunch[0]).toBe(false);
   });
 
   it('조리가 끝났지만 보관함으로 옮겨지지 않은 완성분도 행에 센다', () => {
@@ -255,9 +255,9 @@ describe('먹기 계획과 교체 확인', () => {
     expect(planEat(seed({ items: own, slots: { lunch: ended, bait: null } }), 'cook-lunch-rare', T0).confirm).toBeNull();
   });
 
-  it('남은 시간은 올림한 분이다', () => {
+  it('남은 시간은 초 단위를 버리지 않는 실제 분 값이다', () => {
     const game = seed({ items: own, slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(30_000) }, bait: null } });
-    expect(planEat(game, 'cook-lunch-rare', T0).confirm?.current.minutes).toBe(1);
+    expect(planEat(game, 'cook-lunch-rare', T0).confirm?.current.minutes).toBe(0.5);
   });
 
   it('가방에 없는 아이템은 게임 규칙의 거부 사유를 그대로 낸다', () => {
@@ -311,7 +311,7 @@ describe('먹기 계획과 교체 확인', () => {
       next: { label: '용연향 미끼(전설)', title: { name: '용연향 미끼', grade: 'legendary' }, minutes: 2.5 },
       warning: '지금 효과의 남은 시간은 사라져요.',
       choices: [
-        { slotKey: 'bait', label: '롱페퍼 미끼(희귀)', title: { name: '롱페퍼 미끼', grade: 'rare' }, minutes: 3 },
+        { slotKey: 'bait', label: '롱페퍼 미끼(희귀)', title: { name: '롱페퍼 미끼', grade: 'rare' }, minutes: 2.5 },
         { slotKey: 'bait2', label: '큐베브 미끼(영웅)', title: { name: '큐베브 미끼', grade: 'epic' }, minutes: 1 },
       ],
       defaultChoice: 'bait2',

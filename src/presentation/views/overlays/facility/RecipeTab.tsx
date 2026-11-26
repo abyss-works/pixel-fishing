@@ -18,6 +18,7 @@ import Tip, { TipBullets } from '../../../ui/Tip';
 import { splitTipLines } from '../../../ui/tipText';
 import { artifactEffectLabel } from '../../../ui/artifactEffects';
 import { fmtDecimal2, fmtMinutes } from '../../../ui/format';
+import { fmtEffectDuration } from '../../../../shared/lib/effectDuration';
 import type { Notify } from '../../../ui/hud/messageFeed';
 import { CompareTable, ConfirmButton, FacilityTabBody } from './facilityParts';
 import type { FacilityAct } from './facilityParts';
@@ -95,7 +96,7 @@ export default function RecipeTab({ kind, game, now, busy, act, setToast }: {
         ))}
         <KeyValueRow compact className="h-auto border-t-0"
                      label={<span className="text-text">지속 시간</span>}
-                     value={fmtMinutes(view.slotMs / MIN_MS)} valueClassName="pf-accent" />
+                     value={fmtEffectDuration(view.slotMs / MIN_MS)} valueClassName="pf-accent" />
       </Inset>
       <CompareTable heads={['조리에 필요', '보유']}
                     rows={[
