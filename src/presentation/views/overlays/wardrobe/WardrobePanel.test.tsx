@@ -50,19 +50,22 @@ describe('WardrobePanel(옷장 창) 모자 상세', () => {
     expect(screen.getByRole('button', { name: '업적 모자' })).toBeTruthy();
   });
 
-  it('미보유 이벤트 모자를 고르면 0G 사기 대신 접속 선물 안내와 이벤트 한정 버튼을 보인다', () => {
+  it('미보유 이벤트 모자는 숨기고 보유한 이벤트 모자는 이벤트 한정 출처와 쓰기 버튼을 보인다', () => {
     openHatsTab(seed({ gold: 1_000_000 }));
-    fireEvent.click(screen.getByRole('button', { name: '산타모자, 아직 없음' }));
+    expect(screen.queryByRole('button', { name: /천지 강태공 삿갓/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /천년 비늘 왕관/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /산타모자/ })).toBeNull();
+    cleanup();
 
+    openHatsTab(seed({ hats: ['event-hat-basin-conical'] }));
+    fireEvent.click(screen.getByRole('button', { name: '천지 강태공 삿갓' }));
     expect(screen.queryByText(/0G/)).toBeNull();
-    expect(screen.getByText('겨울 이벤트 기간에 접속하면 우편함으로 받을 수 있어요.')).toBeTruthy();
-    expect(screen.getByRole('button', { name: '이벤트 한정' })).toBeDisabled();
-  });
+    expect(screen.getByText('이벤트 한정 모자')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '쓰기' })).toBeTruthy();
+    cleanup();
 
-  it('보유한 이벤트 모자를 고르면 가격 0G 대신 이벤트 한정 출처와 쓰기 버튼을 보인다', () => {
     openHatsTab(seed({ hats: ['santa-hat'] }));
     fireEvent.click(screen.getByRole('button', { name: '산타모자' }));
-
     expect(screen.queryByText(/0G/)).toBeNull();
     expect(screen.getByText(/이벤트 한정/)).toBeTruthy();
     expect(screen.getByText('겨울 이벤트 접속 선물')).toBeTruthy();

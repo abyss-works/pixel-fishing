@@ -9,8 +9,8 @@ vi.mock('../useMobileLayout', () => ({ useMobileLayout: () => layout.mobile }));
 import HudHeader from './HudHeader';
 
 const menu = <button type="button" aria-label="메뉴 열기">m</button>;
-const header = (onOpenStats = () => {}) =>
-  render(<HudHeader game={newState()} onOpenStats={onOpenStats} menu={menu} />);
+const header = (onOpenStats = () => {}, eventButton?: React.ReactNode) =>
+  render(<HudHeader game={newState()} onOpenStats={onOpenStats} eventButton={eventButton} menu={menu} />);
 
 const bar = () => screen.getByRole('button', { name: /^스탯창 열기/ }).closest('div')!;
 const menuSlot = () => screen.getByRole('button', { name: '메뉴 열기' }).parentElement!;
@@ -143,5 +143,13 @@ describe('HudHeader PC 레이아웃 - 자원 바 | 메뉴 버튼 두 틀', () =>
     header();
     expect(menuSlot().className).toContain('z-(--z-menu-row)');
     expect(barSlot().className).toContain('z-(--z-chrome)');
+  });
+
+  it('eventButton 슬롯을 넘기면 메뉴 버튼 왼쪽에 나란히 배치한다', () => {
+    header(() => {}, <button type="button" aria-label="이벤트 열기">e</button>);
+    const evt = screen.getByRole('button', { name: '이벤트 열기' });
+    const menuBtn = screen.getByRole('button', { name: '메뉴 열기' });
+    expect(evt.parentElement).toBe(menuSlot());
+    expect(evt.nextElementSibling).toBe(menuBtn);
   });
 });

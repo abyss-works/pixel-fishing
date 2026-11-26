@@ -40,7 +40,7 @@ export interface Hat {
   achievementId?: string;
 }
 
-/** 모자 목록 — 골드로 사는 모자 5종 뒤에 업적 보상 모자 52종과 이벤트 모자 1종을 둔다 */
+/** 모자 목록 — 골드 모자 5종, 업적 보상 모자 52종, 이벤트 한정 모자 3종을 둔다 */
 export const HATS: readonly Hat[] = [
   { id: 'cap-red', name: '빨간 모자', color: '#c62828', price: 50_000, source: 'gold' },
   { id: 'cap-blue', name: '파란 모자', color: '#1565c0', price: 50_000, source: 'gold' },
@@ -99,6 +99,8 @@ export const HATS: readonly Hat[] = [
   { id: 'guabancex-sargasso-hood', name: '모자반 매듭 두건', color: '#3a4b66', accentColor: '#8fa3bf', price: 0, source: 'achievement', achievementId: 'named-guabancex-1' },
   { id: 'guabancex-eye-hat', name: '폭풍눈 방수모', color: '#2c3a54', accentColor: '#81d4fa', price: 0, source: 'achievement', achievementId: 'named-guabancex-5' },
   { id: 'guabancex-fin-crown', name: '소용돌이 지느러미 모자', color: '#232f47', accentColor: '#ffd54f', price: 0, source: 'achievement', achievementId: 'named-guabancex-10' },
+  { id: 'event-hat-basin-conical', name: '천지 강태공 삿갓', color: '#d9b45a', accentColor: '#4fc3f7', price: 0, source: 'event' },
+  { id: 'event-hat-abyss-crown', name: '천년 비늘 왕관', color: '#ffd54f', accentColor: '#f472b6', price: 0, source: 'event' },
   { id: 'santa-hat', name: '산타모자', color: '#c62828', accentColor: '#eceff1', price: 0, source: 'event' },
 ];
 

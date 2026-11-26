@@ -15,7 +15,7 @@ const SOURCE_ROOTS = new Set([
 ]);
 const CONCERN_DIRS: Record<string, ReadonlySet<string>> = {
   game: new Set(['content', 'rendering', 'rules', 'runtime', 'world']),
-  platform: new Set(['adapters', 'api']),
+  platform: new Set(['adapters', 'api', 'audio']),
   presentation: new Set(['layouts', 'ui', 'views']),
   shared: new Set(['lib']),
 };
@@ -226,7 +226,7 @@ describe('src 구조 경계', () => {
     const offenders = importedPaths()
       .filter(({ path, target }) => {
         const isAdapter = target === 'platform/adapters' || target.startsWith('platform/adapters/');
-        const isPlatform = path.startsWith('platform/api/') || path.startsWith('platform/adapters/');
+        const isPlatform = path.startsWith('platform/api/') || path.startsWith('platform/adapters/') || path.startsWith('platform/audio/');
         return !isTestFile(path) && isAdapter && !isPlatform;
       })
       .map(({ path, target }) => `${path} -> ${target}`);

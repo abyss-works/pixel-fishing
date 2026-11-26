@@ -1,19 +1,26 @@
 import { describe, it, expect } from 'vitest';
-import { drawFishJump, drawHookJump, drawTimingBar } from './overlays';
+import { drawFishJump, drawHookJump, drawSchools, drawTimingBar, jumpPoint } from './overlays';
 import type { GearView, JumpFx } from './overlays';
 import { JUMP_PX, JUMP_S, jumpHeight } from './schoolView';
 import { fishArt } from '../fishArt/index';
 import { FISH } from '../../../content/fish';
+import { eventFishById } from '../../../content/eventFish';
+import type { SpotId } from '../../../content/spots';
 import type { Ctx } from '../common';
 
 function recorder() {
   const calls: string[] = [];
   let fillStyle = '';
   const ctx = {
+    font: '',
+    textAlign: 'left',
     get fillStyle() { return fillStyle; },
     set fillStyle(v: string) { fillStyle = v; },
     fillRect(x: number, y: number, w: number, h: number) {
       calls.push(`${fillStyle}@${x},${y},${w},${h}`);
+    },
+    fillText(text: string, x: number, y: number) {
+      calls.push(`text:${fillStyle}@${x},${y}:${text}`);
     },
   };
   return { ctx: ctx as unknown as Ctx, calls };
@@ -23,6 +30,7 @@ const crucian = FISH.find(f => f.id === 'crucian')!; // common
 const carp = FISH.find(f => f.id === 'carp')!;       // rare
 const goldfish = FISH.find(f => f.id === 'goldfish')!; // epic
 const goldcarp = FISH.find(f => f.id === 'goldcarp')!; // legendary
+const glaaki = eventFishById('event-glaaki')!;
 
 function view(overrides: Partial<GearView> = {}): GearView {
   return {
@@ -86,6 +94,22 @@ describe('drawHookJump', () => {
     expect(actual.calls.some(call => call.startsWith('#ffd54f@'))).toBe(false);
   });
 
+  it('이벤트 어종(event-glaaki)도 1배 크기와 전설 스파클로 포물선 훅 점프에 그린다', () => {
+    const catchT = JUMP_S / 2 - 0.1;
+    const pt = jumpPoint({ x: 152, y: 140, toX: 80, toY: 74 }, catchT);
+    const actual = recorder(), fishOnly = recorder();
+    drawHookJump(actual.ctx, view({
+      school: { id: 'ch-1', spot: 'championship', x: 152, y: 140 },
+      catchT,
+      catchFish: { id: 'event-glaaki', form: 'normal' },
+      fishArt: 'v1',
+    }));
+    fishArt('v1').drawCentered(fishOnly.ctx, glaaki, pt.x, pt.y, { scale: 1, form: 'normal', flip: false });
+
+    for (const call of fishOnly.calls) expect(actual.calls).toContain(call);
+    expect(actual.calls.some(call => call.startsWith('#ffd54f@'))).toBe(true);
+  });
+
   it('catch 단계가 아니거나 점프 시간 범위 밖이면 그리지 않는다', () => {
     const a = recorder(), b = recorder(), c = recorder();
     drawHookJump(a.ctx, view({ phase: 'bite' }));
@@ -95,6 +119,24 @@ describe('drawHookJump', () => {
     expect(a.calls).toEqual([]);
     expect(b.calls).toEqual([]);
     expect(c.calls).toEqual([]);
+  });
+});
+
+describe('drawSchools', () => {
+  it('championship 이벤트 수역 어군도 spotById로 조회해 오류 없이 그린다', () => {
+    const actual = recorder();
+    expect(() => drawSchools(actual.ctx, [{ id: 'ch-1', spot: 'championship', x: 152, y: 140 }], 0, 0)).not.toThrow();
+    expect(actual.calls.length).toBeGreaterThan(0);
+    expect(actual.calls.some(call => call.startsWith('text:'))).toBe(false);
+    expect(actual.calls.some(call => call.startsWith('rgba(8,25,38,0.55)@'))).toBe(true);
+  });
+
+  it('알 수 없는 수역 id가 와도 크래시 없이 기본 열린 상태로 그린다', () => {
+    const actual = recorder();
+    const unknownSpot = 'unknown-spot' as SpotId;
+    expect(() => drawSchools(actual.ctx, [{ id: 'u-1', spot: unknownSpot, x: 100, y: 100 }], 0, 0)).not.toThrow();
+    expect(actual.calls.some(call => call.startsWith('text:'))).toBe(false);
+    expect(actual.calls.some(call => call.startsWith('rgba(8,25,38,0.55)@'))).toBe(true);
   });
 });
 

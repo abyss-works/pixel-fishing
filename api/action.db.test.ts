@@ -180,6 +180,7 @@ describe('첫 액션', () => {
       day: TODAY_KST,
       kind: expect.toBeOneOf(ALL_FORTUNE_KINDS),
       index: expect.toBeOneOf([3, 5]),
+      score: expect.any(Number),
     });
     expect(res.body.patch.scalars.fortune).toEqual(save.data.fortune);
     expect(out.db.events).toEqual([
@@ -212,6 +213,7 @@ describe('첫 액션', () => {
       day: TODAY_KST,
       kind: expect.toBeOneOf(ALL_FORTUNE_KINDS),
       index: expect.toBeOneOf([3, 5]),
+      score: expect.any(Number),
     });
     expect(res.body.patch.scalars.fortune).toEqual(save.data.fortune);
     expect(out.db.fish_instances).toMatchObject([
@@ -363,6 +365,7 @@ describe('가방', () => {
       day: TODAY_KST,
       kind: expect.toBeOneOf(ALL_FORTUNE_KINDS),
       index: expect.toBeOneOf([3, 5]),
+      score: expect.any(Number),
     });
     expect(res.body.patch.scalars.fortune).toEqual(save.data.fortune);
     const expectedGold = sellSelected(
@@ -2135,6 +2138,7 @@ describe('오늘의 운세', () => {
       day: TODAY_KST,
       kind: expect.toBeOneOf(ALL_FORTUNE_KINDS),
       index: expect.toBeOneOf([3, 5]),
+      score: expect.any(Number),
     });
     expect(firstScalars.fortune).toEqual(firstSaved.fortune);
 
@@ -2163,6 +2167,7 @@ describe('오늘의 운세', () => {
       day: '2030-03-05',
       kind: expect.toBeOneOf(ALL_FORTUNE_KINDS),
       index: expect.toBeOneOf([3, 5]),
+      score: expect.any(Number),
     });
     expect(nextDayScalars.fortune).toEqual(nextDaySaved.fortune);
   });
@@ -2179,6 +2184,7 @@ describe('오늘의 운세', () => {
       day: TODAY_KST,
       kind: expect.toBeOneOf(ALL_FORTUNE_KINDS),
       index: expect.toBeOneOf([3, 5]),
+      score: expect.any(Number),
     });
     expect(scalars.fortune).toEqual(saved.fortune);
   });
@@ -2196,6 +2202,7 @@ describe('오늘의 운세', () => {
       day: TODAY_KST,
       kind: expect.toBeOneOf(ALL_FORTUNE_KINDS),
       index: expect.toBeOneOf([3, 5]),
+      score: expect.any(Number),
     });
     expect(noBootScalars.fortune).toEqual(noBootSaved.fortune);
 
@@ -2215,7 +2222,7 @@ describe('오늘의 운세', () => {
     const goldDaySaved = await storedFortune(uidGoldDay);
     expect(goldDaySaved.version).toBe(3);
     expect(goldDaySaved.gold).toBe(expectedGold);
-    expect(goldDaySaved.fortune).toEqual(goldFortune);
+    expect(goldDaySaved.fortune).toEqual({ ...goldFortune, score: expect.any(Number) });
   });
 });
 

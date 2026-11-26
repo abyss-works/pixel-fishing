@@ -9,6 +9,7 @@ import {
   fortuneEntryOf,
   fortuneKeyOf,
   fortuneOf,
+  fortuneScoreOf,
   luckMultOf,
 } from '../../../game/rules/fortune';
 import type {
@@ -602,6 +603,14 @@ export function selectFortuneCatalogOptions(): readonly FortuneCatalogOption[] {
       summary: fortuneBonusText(entry),
     };
   });
+}
+
+/** 오늘의 운세 점수(81~100). 저장된 점수가 있으면 그대로 쓰고, 없으면 결정적 기본값을 돌려준다 */
+export function fortuneScore(
+  fortune: Pick<DailyFortune, 'day' | 'kind' | 'index' | 'score'>,
+  accountKey = '',
+): number {
+  return fortuneScoreOf(fortune, accountKey);
 }
 
 export interface SellLuckBreakdown {

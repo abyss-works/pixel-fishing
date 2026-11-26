@@ -11,7 +11,7 @@ import { HATS } from '../src/game/content/wardrobe.js';
 import { newState, zoneDexMissing } from '../src/game/rules/logic.js';
 import { adminSessionHeaders, seedUser, startActionEnv, testUid, sessionHeaders, userToken } from './_dbTest/actionHarness.js';
 import type { ActionEnv } from './_dbTest/actionHarness.js';
-import { provideNotifyAll } from './_server/livePresence.js';
+import { provideNotify, provideNotifyAll } from './_server/livePresence.js';
 import type { ServerMessage } from '../src/game/rules/live.js';
 
 const ADMIN = testUid(901);  // 관리자 명부에 있는 사용자
@@ -769,6 +769,193 @@ describe('관리자 조치', () => {
     expect(await post('notices', { op: 'delete', id: created.id })).toMatchObject({
       status: 404,
       body: { error: 'no-notice' },
+    });
+  });
+
+  it('라이브 이벤트 CRUD, 당첨자 추첨(우편·PIN·실시간 알림), 당첨 이력 조회를 검증한다', async () => {
+    const post = (q: string, body: unknown) => callAdmin({ q }, userToken(ADMIN), 'POST', body);
+
+    expect(await post('events', { op: 'create', id: 'bad id' })).toMatchObject({
+      status: 400, body: { error: 'bad-event' },
+    });
+
+    const createdRes = await post('events', {
+      op: 'create',
+      id: 'evt-admin-trio',
+      kind: 'trio',
+      title: '관리자 삼총사',
+      description: '설명',
+      startsAt: '2030-07-01T00:00:00.000Z',
+      endsAt: '2030-07-10T00:00:00.000Z',
+      active: true,
+    });
+    expect(createdRes).toMatchObject({
+      status: 200,
+      body: { event: { id: 'evt-admin-trio', kind: 'trio', title: '관리자 삼총사', active: true } },
+    });
+
+    expect(await post('events', {
+      op: 'create',
+      id: 'evt-admin-trio',
+      kind: 'trio',
+      title: '중복',
+      description: '중복',
+      startsAt: '2030-07-01T00:00:00.000Z',
+      endsAt: '2030-07-10T00:00:00.000Z',
+      active: true,
+    })).toMatchObject({ status: 409, body: { error: 'duplicate-event' } });
+
+    expect(await post('events', {
+      op: 'update',
+      id: 'evt-admin-trio',
+      title: '수정된 삼총사',
+      description: '수정 설명',
+      startsAt: '2030-07-01T00:00:00.000Z',
+      endsAt: '2030-07-11T00:00:00.000Z',
+      active: true,
+      config: {},
+    })).toMatchObject({
+      status: 200,
+      body: { event: { id: 'evt-admin-trio', title: '수정된 삼총사' } },
+    });
+
+    const listRes = await callAdmin({ q: 'events' }, userToken(ADMIN));
+    expect(listRes.status).toBe(200);
+    expect((listRes.body as { id: string }[]).map(e => e.id)).toContain('evt-admin-trio');
+
+    // 완료자 시드 후 추첨 → event_draws + public.mails + notifyUser({ t: 'mail' })
+    await env.client.query(
+      `insert into public.event_trio_progress (event_id, user_id, counts, completed_at)
+       values ('evt-admin-trio', $1, '{"crucian:normal":1}'::jsonb, '2030-07-02T00:00:00.000Z')`,
+      [PLAYER],
+    );
+    const notified: Array<{ uid: string; msg: ServerMessage }> = [];
+    provideNotify((uid, msg) => { notified.push({ uid, msg }); });
+    try {
+      const drawRes = await post('events', {
+        op: 'draw',
+        id: 'evt-admin-trio',
+        count: 1,
+        rewardPin: 'PIN-ADMIN-9999',
+        rewardExpiresAt: '2030-08-01T00:00:00.000Z',
+      });
+      expect(drawRes).toMatchObject({
+        status: 200,
+        body: {
+          event: { id: 'evt-admin-trio' },
+          seed: expect.any(String),
+          eligibleCount: 1,
+          draws: [expect.objectContaining({
+            userId: PLAYER,
+            rewardPin: 'PIN-ADMIN-9999',
+            drawnBy: ADMIN,
+          })],
+        },
+      });
+      expect((drawRes.body as { seed: string }).seed.length).toBeGreaterThan(0);
+      expect(notified).toEqual([{ uid: PLAYER, msg: { t: 'mail' } }]);
+    } finally {
+      provideNotify(() => {});
+    }
+
+    const drawsRes = await callAdmin({ q: 'eventDraws', eventId: 'evt-admin-trio' }, userToken(ADMIN));
+    expect(drawsRes.status).toBe(200);
+    expect(drawsRes.body).toEqual([
+      expect.objectContaining({
+        eventId: 'evt-admin-trio',
+        userId: PLAYER,
+        rewardPin: 'PIN-ADMIN-9999',
+        drawnBy: ADMIN,
+      }),
+    ]);
+
+    const drawMailId = (drawsRes.body as { mailId: number | null }[])[0].mailId;
+    expect(drawMailId).toBeGreaterThan(0);
+    const mailRes = await env.client.query<{ user_id: string; title: string; body: string }>(
+      `select user_id::text, title, body from public.mails where id = $1`,
+      [drawMailId],
+    );
+    expect(mailRes.rows).toHaveLength(1);
+    expect(mailRes.rows[0].user_id).toBe(PLAYER);
+    expect(mailRes.rows[0].body).toContain('PIN-ADMIN-9999');
+
+    const endedRes = await post('events', { op: 'end', id: 'evt-admin-trio' });
+    expect(endedRes.status).toBe(200);
+    expect(Date.parse((endedRes.body as { event: { endsAt: string } }).event.endsAt))
+      .toBeLessThan(Date.parse('2030-07-11T00:00:00.000Z'));
+    expect(await post('events', { op: 'delete', id: 'evt-admin-trio' })).toMatchObject({
+      status: 200, body: { deleted: true, id: 'evt-admin-trio' },
+    });
+    expect(await post('events', { op: 'delete', id: 'evt-admin-trio' })).toMatchObject({
+      status: 404, body: { error: 'no-event' },
+    });
+  });
+
+  it('동적 쿠폰 CRUD(아이템·기간·수량 제한)와 정적 쿠폰 보호를 검증한다', async () => {
+    const post = (q: string, body: unknown) => callAdmin({ q }, userToken(ADMIN), 'POST', body);
+
+    expect(await post('coupons', { op: 'create', code: '출항준비', gold: 100, description: '정적' })).toMatchObject({
+      status: 400, body: { error: 'bad-coupon' },
+    });
+
+    const createdRes = await post('coupons', {
+      op: 'create',
+      code: 'ADMIN-EVENT-COUPON',
+      gold: 500,
+      description: '관리자 발급 쿠폰',
+      items: [{ id: 'luck-small', qty: 2 }],
+      startsAt: '2030-07-01T00:00:00.000Z',
+      endsAt: '2030-07-31T00:00:00.000Z',
+      maxRedemptions: 100,
+      perAccountLimit: 1,
+      active: true,
+    });
+    expect(createdRes).toMatchObject({
+      status: 200,
+      body: {
+        coupon: {
+          code: 'ADMIN-EVENT-COUPON',
+          gold: 500,
+          items: [{ id: 'luck-small', qty: 2 }],
+          maxRedemptions: 100,
+          perAccountLimit: 1,
+          active: true,
+        },
+      },
+    });
+
+    expect(await post('coupons', {
+      op: 'create',
+      code: 'ADMIN-EVENT-COUPON',
+      gold: 100,
+      description: '중복',
+    })).toMatchObject({ status: 409, body: { error: 'duplicate-coupon' } });
+
+    expect(await post('coupons', {
+      op: 'update',
+      code: 'ADMIN-EVENT-COUPON',
+      gold: 750,
+      items: [{ id: 'luck-small', qty: 2 }],
+      description: '수정된 설명',
+      startsAt: '2030-07-01T00:00:00.000Z',
+      endsAt: '2030-07-31T00:00:00.000Z',
+      maxRedemptions: 100,
+      perAccountLimit: 1,
+      active: false,
+    })).toMatchObject({
+      status: 200,
+      body: { coupon: { code: 'ADMIN-EVENT-COUPON', gold: 750, active: false } },
+    });
+
+    const listed = await callAdmin({ q: 'coupons' }, userToken(ADMIN));
+    expect(listed.status).toBe(200);
+    expect((listed.body as { code: string }[]).map(c => c.code)).toContain('ADMIN-EVENT-COUPON');
+
+    expect(await post('coupons', { op: 'delete', code: 'ADMIN-EVENT-COUPON' })).toMatchObject({
+      status: 200, body: { deleted: true, code: 'ADMIN-EVENT-COUPON' },
+    });
+    expect(await post('coupons', { op: 'delete', code: 'ADMIN-EVENT-COUPON' })).toMatchObject({
+      status: 404, body: { error: 'no-coupon' },
     });
   });
 });

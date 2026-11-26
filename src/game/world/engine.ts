@@ -19,7 +19,12 @@ export function canMove(pack: RegionPack, x: number, y: number): boolean {
   const b = pack.bounds;
   if (x < b.x + MARGIN || y < b.y + MARGIN || x >= b.x + b.w - MARGIN || y >= b.y + b.h - MARGIN) return false;
   for (const b of pack.buildings) if (inRect(x, y, b.rect)) return false;
-  if (pack.map) { // 마스크 지형(항해) — 육지만 장애물
+  if (pack.map) {
+    if (pack.movement === 'walk') {
+      for (const d of pack.decks ?? []) if (inRect(x, y, d.rect)) return true;
+      const def = cellDefAt(pack.map, x, y);
+      return !def?.water && !def?.closed;
+    }
     const def = cellDefAt(pack.map, x, y);
     return !def?.land && !def?.closed;
   }
@@ -55,6 +60,7 @@ export function closedSeaBlock(
 // 로어 표시 규칙("가장 구체적인 존 우선")의 근원.
 export function zoneOf(pack: RegionPack, x: number, y: number): ZoneId | undefined {
   if (pack.map) return cellDefAt(pack.map, x, y)?.zone;
+  if (pack.zone) return pack.zone;
   return pack.movement === 'walk' ? 'village' : undefined;
 }
 

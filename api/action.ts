@@ -22,20 +22,25 @@ import type { FishInstance, FormId, FormRecord, GameState, Judgment } from '../s
 import {
   autoLockKey, buildCatchInfo, canFish, catchFameOf, decideCatchAutoLock, FISH, fishPool, formName, instanceFish,
   evictionPriceRows, makeInstance, nextDexRec, pickEvict, priceOf, pruneAutoLockedIds, RARITY_ORDER, timingPos,
-  matchBountyCatch,
+  matchBountyCatch, rollCatchExtras,
 } from '../src/game/rules/logic.js';
+import type { Fish } from '../src/game/rules/logic.js';
 import { buildWidgetBagSummary, buildWidgetCatchItem, resolveSpotSeaTheme } from '../src/game/rules/widget.js';
 import type { WidgetBagSummary } from '../src/game/rules/widget.js';
 import { appliedSlots, applyEnergyGain, planOverflow } from '../src/game/rules/cooking.js';
 import { isFirstCatchSpot, needsLegacyFirstCatchMigration } from '../src/game/rules/firstCatch.js';
 import { drawNamedEncounter, speciesPityCandidates } from '../src/game/rules/pity.js';
-import { ensureFortune, fortuneEntryOf, totalLuckMultOf } from '../src/game/rules/fortune.js';
+import { ensureFortune, fortuneEntryOf, fortuneScoreOf, fortuneScoreRange, totalLuckMultOf } from '../src/game/rules/fortune.js';
 import type { DailyFortune, FortuneKind } from '../src/game/rules/fortune.js';
 import { bountyById, isQuestOffered } from '../src/game/content/bounties.js';
 import type { BountyKind, BountyQuest } from '../src/game/content/bounties.js';
 import { SPOTS } from '../src/game/content/spots.js';
 import type { SpotId } from '../src/game/content/spots.js';
-import { applyAction, drawCatch, namedWeightBonus, pickScalars, prepareCatchDraw } from '../src/game/rules/actions.js';
+import { EVENT_FISH, EVENT2_SETTLEMENT_RATES, EVENT2_STANDARD_SPEC, EVENT_HAT_IDS } from '../src/game/content/eventFish.js';
+import type { EventFish } from '../src/game/content/eventFish.js';
+import type { Coupon } from '../src/game/content/coupons.js';
+import { COUPONS } from '../src/game/content/coupons.js';
+import { applyAction, commonWeightMultiplier, drawCatch, namedWeightBonus, pickScalars, prepareCatchDraw } from '../src/game/rules/actions.js';
 import type { ActionDeps, ApplyOutcome, DebugStepInput, GameAction, GameEvent, ReleasedFish, StatePatch, StateWrites } from '../src/game/rules/actions.js';
 import { achievementBonusesOf, counterIncrementsForEvents, evaluateAchievements } from '../src/game/rules/achievements.js';
 import { bagCapacityOf, createPlayerContext } from '../src/game/rules/effects.js';
@@ -55,7 +60,7 @@ import type { QuestRow } from '../src/game/rules/bountyRows.js';
 import { gameDayOf, gameDayStartISO, previousGameDayISO } from '../src/game/rules/time.js';
 import type { DayPhase } from '../src/game/rules/time.js';
 import { checkNickname, pickGuestName } from '../src/game/rules/nickname.js';
-import { powerZones, rodAxes, rodPower } from '../src/game/rules/stats.js';
+import { powerZones, rodAxes, rodPower, zonesFor } from '../src/game/rules/stats.js';
 import { MIN_ACTION_GAP_MS, SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
 import { catchWaitMs } from '../src/game/rules/pacing.js';
 import { APP_VERSION } from '../src/version.js';
@@ -69,7 +74,8 @@ import {
   namedClearDeleteFragment, namedClearInsertFragment, namedClearReplaceFragments, readSnapshotBounty,
   runAdvanceProgress, ticketFragment,
 } from './_data/bounty.js';
-import { consumeRelief, findCoupon, findRelief } from './_data/codes.js';
+import { consumeCoupon, consumeRelief, findCouponForUser, findRelief } from './_data/codes.js';
+import type { DynamicCouponForUser } from './_data/codes.js';
 import { claimMailFragment, claimableMail, sendIdempotentMail } from './_data/mailbox.js';
 import { COMMIT_GUARD, commitAction, commitConsumingCode, commitGated, runFollowUps } from './_data/commit.js';
 import {
@@ -83,6 +89,11 @@ import { ALWAYS_GUARD, blobInput, commitDebugBatch, instRow, seedState, snapshot
 import { eventsInsert } from './_data/telemetry.js';
 import { activeDayUpsert } from './_data/activity.js';
 import { recordDailyFortuneFragment, upsertDailyFortuneFragment } from './_data/fortune.js';
+import {
+  activeEventOfKind, activeEventsOfKind, championshipSettleGate, findSettleableChampionshipRow,
+  readChampionshipRow, settleChampionshipFragment, trioTargetsOf, upsertChampionshipCatchFragment,
+  upsertTrioProgressFragment,
+} from './_data/events.js';
 import { guildTotalOf, recordGuildActivity } from './_data/guilds.js';
 import { loadWidgetSummary } from './_data/widget.js';
 import { weeklyFameFragment } from './_data/rank.js';
@@ -231,6 +242,7 @@ export const SKIP_DETAIL = new Set([
   'setNickname', 'deliverBounty', 'abandonQuest', 'exchangeArtifact', 'levelUpArtifact', 'claimMail', 'seeTutorial',
   'changeClothes', 'buyHat', 'wearHat',
   'cook', 'cancelCook', 'eat', 'transmuteEnergy', 'usePotion', 'setEnergyTarget', 'resetEnergyTargets', 'dismissBaitRefund', 'setAutoLockOnCatch',
+  'enterEventZone', 'leaveEventZone', 'settleEventReward',
   'debugSnapshot',
 ]);
 
@@ -252,17 +264,26 @@ const WEEKLY_FAME_EXCLUDED = new Set(['import', 'debug', 'debugBatch', 'claimRel
 const isPlainRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
 
-/** 개발 도구 fortune.set 인자 검증 — 12종 kind, 3등급은 index 생략 시 5 허용(3 거부), 1·2등급은 3|5 필수 */
-export function parseFortuneSetArgs(args: unknown): { kind: FortuneKind; index: 3 | 5 } | null {
+/** 개발 도구 fortune.set 인자 검증 — 12종 kind, 3등급은 index 생략 시 5 허용(3 거부), 1·2등급은 3|5 필수, 선택 score는 해당 강도 구간 정수만 허용 */
+export function parseFortuneSetArgs(args: unknown): { kind: FortuneKind; index: 3 | 5; score?: number } | null {
   if (!isPlainRecord(args) || typeof args.kind !== 'string') return null;
   const tier5 = fortuneEntryOf(args.kind as FortuneKind, 5);
   if (!tier5) return null;
+  let index: 3 | 5 | null = null;
   if (tier5.tier === 3) {
-    if (args.index === undefined || args.index === 5) return { kind: tier5.kind, index: 5 };
-    return null;
+    if (args.index === undefined || args.index === 5) index = 5;
+  } else if (args.index === 3 || args.index === 5) {
+    index = args.index;
   }
-  if (args.index === 3 || args.index === 5) return { kind: tier5.kind, index: args.index };
-  return null;
+  if (!index) return null;
+  if (args.score !== undefined) {
+    const [min, max] = fortuneScoreRange(tier5.kind, index);
+    if (typeof args.score !== 'number' || !Number.isInteger(args.score) || args.score < min || args.score > max) {
+      return null;
+    }
+    return { kind: tier5.kind, index, score: args.score };
+  }
+  return { kind: tier5.kind, index };
 }
 
 /** 게임 규칙 스키마(parseAction) 외 서버 전용 debug 명령(fortune.set 및 이를 포함한 debugBatch) 파싱 */
@@ -298,7 +319,9 @@ export function parseServerAction(body: unknown): GameAction | null {
 function applyFortuneSet(state: GameState, args: unknown, now: string): ApplyOutcome {
   const parsed = parseFortuneSetArgs(args);
   if (!parsed) return { ok: false, error: 'bad-request' };
-  const fortune: DailyFortune = { day: gameDayOf(now), ...parsed };
+  const day = gameDayOf(now);
+  const score = parsed.score ?? fortuneScoreOf({ day, kind: parsed.kind, index: parsed.index });
+  const fortune: DailyFortune = { day, kind: parsed.kind, index: parsed.index, score };
   return {
     ok: true,
     state: { ...state, fortune },
@@ -454,13 +477,15 @@ async function route(req: Req, res: Res): Promise<void> {
   // 둘 다 개체·도감을 건드리지 않아 조회가 불필요하고, 응답 델타도 빈 writes다. 스냅샷 경계 버전에서는
   // 풀 조회로 돌아간다 (saves 아카이브는 풀 스냅샷이 계약이라 빈 가방 스냅샷을 남기면 안 된다).
   const wantsBounty = BOUNTY_ACTIONS.has(action.type)
-    && (action.type === 'catch' || typeof (action as { questId?: unknown }).questId === 'string');
+    && (action.type === 'catch' ? action.spot !== 'championship' : typeof (action as { questId?: unknown }).questId === 'string');
+  const wantsGuild = GUILD_ACTIONS.has(action.type)
+    && !(action.type === 'catch' && action.spot === 'championship');
   // 하루의 경계 — 의뢰 배정·만료·클리어 한도가 모두 이 게임 날짜(KST 04:00)를 쓴다. 한 요청 안에서는 한 시각으로 정한다
   const requestISO = new Date().toISOString();
   const dayStart = gameDayStartISO(requestISO);
   const loaded = await step('db-read', { uid, action: action.type }, () => loadContext(db, uid, {
     skipDetailType: SKIP_DETAIL.has(action.type), snapshotEvery: SNAPSHOT_EVERY,
-    bountyDayStart: wantsBounty ? dayStart : null, guild: GUILD_ACTIONS.has(action.type),
+    bountyDayStart: wantsBounty ? dayStart : null, guild: wantsGuild,
   }));
   // 길드 보너스 효과 — 서버가 소속 길드의 레벨(레벨로 열린 1단계), 기부로 오른 단계, 자유 강화 단계에서 정한다. 클라이언트가 보낸 값은 받지 않는다
   const guildEffects = loaded.guild
@@ -581,9 +606,13 @@ async function route(req: Req, res: Res): Promise<void> {
       }
     }
     // 캐치 간격 검사 — 직전 캐치로부터 낚시 한 사이클(획득 표시 + 최소 입질 대기)이 지나야 다음 캐치를 받는다.
+    // 이벤트 전용 구역은 보유 낚싯대·외부 버프와 무관한 Lv20 표준 스펙 기준으로 페이싱을 판정한다.
     if (action.type === 'catch') {
+      const pacingState = action.spot === 'championship'
+        ? { ...newState(), rod: EVENT2_STANDARD_SPEC.rodLevel }
+        : scalarState(row, loaded.counters, loaded.clearedNamed);
       const waitMs = catchWaitMs(
-        scalarState(row, loaded.counters, loaded.clearedNamed),
+        pacingState,
         action.spot,
         row.last_catch_at ?? null,
         new Date().toISOString(),
@@ -609,16 +638,32 @@ async function route(req: Req, res: Res): Promise<void> {
     return;
   }
 
-  // 동적 쿠폰(coupons 테이블) — 정식 계정의 쿠폰 액션일 때만 서버가 직접 조회 (active=false는 신규 사용 차단, 게스트는 정적 쿠폰만 허용)
-  let dynamicCoupon: { gold: number; desc: string } | null = null;
+  // 동적 쿠폰(coupons 테이블) — 정식 계정의 비정적 쿠폰 액션일 때만 서버가 직접 조회 (게스트는 정적 쿠폰만 허용)
+  let dynamicCoupon: Coupon | null = null;
+  let dynamicCouponMeta: DynamicCouponForUser | null = null;
+  let consumeCode: ((tx: Executor) => Promise<boolean>) | null = null;
+  let consumeUnavailableReason: 'relief-invalid' | 'coupon-used' | 'coupon-invalid' = 'relief-invalid';
+
   if (action.type === 'redeemCoupon' && typeof action.code === 'string' && user.email !== null) {
     const code = action.code.trim();
-    dynamicCoupon = await step('db-read', { uid, action: action.type }, () => findCoupon(db, code));
+    if (!Object.hasOwn(COUPONS, code)) {
+      const found = await step('db-read', { uid, action: action.type }, () => findCouponForUser(db, code, uid, requestISO));
+      if (found) {
+        if (found.userRedemptions >= found.perAccountLimit) throw new ApiError(422, 'coupon-used');
+        if (found.maxRedemptions !== null && found.totalRedemptions >= found.maxRedemptions) {
+          throw new ApiError(422, 'coupon-invalid');
+        }
+        dynamicCoupon = { gold: found.gold, items: found.items, desc: found.desc };
+        dynamicCouponMeta = found;
+        consumeCode = async tx => {
+          const verdict = await consumeCoupon(tx, code, uid, requestISO);
+          if (verdict === 'used') { consumeUnavailableReason = 'coupon-used'; return false; }
+          if (verdict === 'invalid') { consumeUnavailableReason = 'coupon-invalid'; return false; }
+          return true;
+        };
+      }
+    }
   }
-
-  // 지원 코드 소비 — 다른 계정과 같은 행을 다투므로 읽기와 규칙 실행 뒤, 확정과 같은 트랜잭션에서 한다.
-  // 확정이 경합으로 실패하면 소비도 되돌려지고, 읽은 뒤 다른 요청이 먼저 소비했으면 확정하지 않고 거부한다.
-  let consumeCode: ((tx: Executor) => Promise<boolean>) | null = null;
 
   // 지원 코드(reliefs 테이블) — 여기서는 지급분을 읽기만 한다. 활성 코드를 조건부로 비활성화한 요청 하나만
   // 확정되므로(코드당 1행) 동시 수령은 한 번만 지급된다.
@@ -688,6 +733,21 @@ async function route(req: Req, res: Res): Promise<void> {
     }
   }
 
+  // 라이브 이벤트 — 구역 입장·정산 요청 시 DB에서 활성 여부 및 미정산 저금통 잔액을 읽어 주입한다.
+  let eventDeps: ActionDeps['event'] = null;
+  let championshipSettleTarget: { eventId: string; gold: number; fame: number; gate: SQL } | null = null;
+  if (action.type === 'enterEventZone' && user.email !== null) {
+    const activeChamp = await step('db-read', { uid, action: action.type }, () => activeEventOfKind(db, 'championship', requestISO));
+    eventDeps = { championshipActive: activeChamp !== null };
+  } else if (action.type === 'settleEventReward' && user.email !== null) {
+    const settleRow = await step('db-read', { uid, action: action.type },
+      () => findSettleableChampionshipRow(db, uid, action.eventId));
+    if (settleRow) {
+      eventDeps = { championshipActive: true, settle: settleRow };
+      championshipSettleTarget = { ...settleRow, gate: championshipSettleGate(uid, settleRow.eventId) };
+    }
+  }
+
   // 액션 시각 — 서버 시각(UTC)이다. 슬롯 효과의 활성 여부, 조리와 먹기의 시각이 모두 이 값 하나로 정해진다.
   const now = new Date().toISOString();
   const today = todayKST();
@@ -697,7 +757,16 @@ async function route(req: Req, res: Res): Promise<void> {
   let catchBase: GameState | null = null;
   let catchBagSummary: WidgetBagSummary | null = null;
   let prevFortune: GameState['fortune'] = null;
-  if (action.type === 'catch' && skipDetail) {
+  let champCatchCommit: ChampionshipCatchCommit | null = null;
+  if (action.type === 'catch' && action.spot === 'championship') {
+    const champStateBase = skipDetail
+      ? scalarState(row, loaded.counters, loaded.clearedNamed)
+      : assemble(row, instances, records, loaded.counters, loaded.clearedNamed);
+    const champRes = await championshipCatch(db, uid, row, champStateBase, action.judgment, now);
+    out = champRes.outcome;
+    champCatchCommit = champRes.commit;
+    if (out.ok) prevFortune = champStateBase.fortune;
+  } else if (action.type === 'catch' && skipDetail) {
     out = await fastCatch(db, uid, row, action.spot, action.judgment, now, guildEffects, user.email === null,
       loaded.counters, loaded.clearedNamed, action.forcePhase, action.biteElapsed, bag => { catchBagSummary = bag; });
     if (out.ok) {
@@ -721,14 +790,19 @@ async function route(req: Req, res: Res): Promise<void> {
       bounty,
       mail,
       guild: guildEffects,
+      event: eventDeps,
       guest: user.email === null,
     };
+    const actionState = action.type === 'redeemCoupon' && dynamicCouponMeta && dynamicCouponMeta.perAccountLimit > 1
+      && dynamicCouponMeta.userRedemptions < dynamicCouponMeta.perAccountLimit
+      ? { ...state, coupons: state.coupons.filter(c => c !== action.code.trim()) }
+      : state;
     if (action.type === 'debug' && action.command === 'fortune.set') {
-      out = applyFortuneSet(state, action.args ?? {}, now);
+      out = applyFortuneSet(actionState, action.args ?? {}, now);
     } else if (action.type === 'debugBatch' && action.steps.some(s => s.command === 'fortune.set')) {
-      out = applyServerDebugBatch(state, action.steps, deps);
+      out = applyServerDebugBatch(actionState, action.steps, deps);
     } else {
-      out = applyAction(state, action, deps);
+      out = applyAction(actionState, action, deps);
     }
   }
   if (!out.ok) throw new ApiError(422, out.error); // 규칙 거부 — 정상 응답이라 보고하지 않는다
@@ -870,12 +944,30 @@ async function route(req: Req, res: Res): Promise<void> {
   fragments.push(letterFragment(guard, uid, out.events, eventNow));
   if (pendingNickname !== null) fragments.push(setNicknameFragment(guard, uid, pendingNickname, nowISO));
   if (action.type === 'claimMail' && mail) fragments.push(claimMailFragment(guard, uid, mail.id, nowISO));
+  if (champCatchCommit) {
+    fragments.push(upsertChampionshipCatchFragment(guard, uid, champCatchCommit.eventId, champCatchCommit.catchData, nowISO));
+  }
+  if (championshipSettleTarget) {
+    fragments.push(settleChampionshipFragment(guard, uid, championshipSettleTarget.eventId, nowISO));
+  }
+  if (action.type === 'catch' && action.spot !== 'championship' && user.email !== null && out.ok) {
+    const catchEvent = out.events.find(e => e.type === 'catch');
+    const caughtFishId = (catchEvent?.payload as { fishId?: unknown } | undefined)?.fishId;
+    const caughtForm = (catchEvent?.payload as { form?: unknown } | undefined)?.form;
+    if (typeof caughtFishId === 'string' && (caughtForm === 'normal' || caughtForm === 'variant')) {
+      const trioEvents = await step('db-read', { uid, action: action.type }, () => activeEventsOfKind(db, 'trio', now));
+      for (const ev of trioEvents) {
+        const frag = upsertTrioProgressFragment(guard, uid, ev.id, trioTargetsOf(ev.config), caughtFishId, caughtForm, nowISO);
+        if (frag) fragments.push(frag);
+      }
+    }
+  }
   // 업적 카운터 — 확정 문장 안에서 상태 변경과 같은 원자 단위로 오른다. 클라이언트 주장으로 올리지 않는다.
   fragments.push(counterUpsertFragment(guard, uid, counterIncrementsForEvents(out.events)));
   // 일일 운세 이력 — 로그인 계정의 첫 접속(boot)과 당일 운세 확정(catch·sell·extractEnergy 백스톱 포함)만 멱등 기록한다. 게스트는 저장하지 않는다.
   // 응답 직후의 운세 조회가 오늘 운세를 보도록 확정 문장 안에서 쓴다
   if (user.email !== null && out.state.fortune
-      && (action.type === 'boot' || ((action.type === 'catch' || action.type === 'sell' || action.type === 'extractEnergy') && prevFortune?.day !== out.state.fortune.day))) {
+      && (action.type === 'boot' || ((action.type === 'catch' && action.spot !== 'championship' || action.type === 'sell' || action.type === 'extractEnergy') && prevFortune?.day !== out.state.fortune.day))) {
     fragments.push(recordDailyFortuneFragment(guard, uid, out.state.fortune));
   }
   // 주간 명성 집계 — 빠른 캐치와 일반 확정 경로 모두에서 플레이로 얻은 명성 증가분을 원자적으로 누적한다.
@@ -886,23 +978,29 @@ async function route(req: Req, res: Res): Promise<void> {
 
   const readVersion = Number(row.version);
   const nextVersion = readVersion + 1;
+  const gated = deliveryRow
+    ? { gate: deliveryRow.gate, unavailable: 'quest-incomplete' as const }
+    : championshipSettleTarget
+      ? { gate: championshipSettleTarget.gate, unavailable: 'event-nothing-to-settle' as const }
+      : null;
   // 유저 입장에서는 "행동이 저장되지 않음" — 가장 아픈 실패. 500이라 자동 보고된다
-  const gatedRow = deliveryRow ?? abandonRow;
   const versionWrite = versionUpdate(uid, out.state, readVersion, nowISO, {
-    ...(action.type === 'catch' ? { lastCatchAt: nowISO, lastSpot: action.spot } : {}),
+    ...(action.type === 'catch'
+      ? { lastCatchAt: nowISO, ...(action.spot !== 'championship' ? { lastSpot: action.spot } : {}) }
+      : {}),
     ...(action.type === 'boot' ? { activeClient: clientId } : {}),
-  }, gatedRow?.gate ?? null);
+  }, gated?.gate ?? abandonRow?.gate ?? null);
   if (consumeCode) {
     const consuming = consumeCode;
     const result = await step('db-write', { uid, action: action.type },
       () => commitConsumingCode(withTransaction, consuming, versionWrite, fragments));
-    if (result === 'unavailable') throw new ApiError(422, 'relief-invalid');
+    if (result === 'unavailable') throw new ApiError(422, consumeUnavailableReason);
     if (result === 'conflict') throw new ApiError(409, 'version-conflict');
-  } else if (deliveryRow) {
-    const gate = deliveryRow.gate;
+  } else if (gated) {
+    const { gate, unavailable } = gated;
     const result = await step('db-write', { uid, action: action.type },
       () => commitGated(db, versionWrite, fragments, gate));
-    if (result === 'unavailable') throw new ApiError(422, 'quest-incomplete');
+    if (result === 'unavailable') throw new ApiError(422, unavailable);
     if (result === 'conflict') throw new ApiError(409, 'version-conflict');
   } else if (abandonRow) {
     const rowToAbandon = abandonRow;
@@ -956,7 +1054,7 @@ async function route(req: Req, res: Res): Promise<void> {
   }
   // 길드 기여와 항해일지 — 확정된 액션마다 한 번 쓴다(낙관 락을 통과한 요청만 여기 온다). 응답 직후의 길드 조회가 보도록 응답 전에 쓰되,
   // 실패가 확정된 액션을 되돌리지 않게 보고만 한다. 전체 길드원 브로드캐스트는 길드 레벨업이나 전설/네임드 항해일지가 생긴 때만 보낸다.
-  if (loaded.guild && GUILD_ACTIONS.has(action.type)) {
+  if (loaded.guild && wantsGuild) {
     const guildId = loaded.guild.id;
     const prevTotal = loaded.guild.total;
     const prevLevel = guildLevelOf(prevTotal);
@@ -1037,7 +1135,8 @@ async function route(req: Req, res: Res): Promise<void> {
         return;
       }
 
-      if (action.type === 'travel' && action.to.kind === 'base') {
+      if ((action.type === 'travel' && action.to.kind === 'base')
+          || (action.type === 'leaveEventZone' && out.state.location.kind === 'base')) {
         hub.publishStatusChanged(uid, 'idle', serverTimeMs);
         return;
       }
@@ -1358,6 +1457,147 @@ export async function fastCatch(db: Executor, uid: string, row: StateRow, spot: 
       instancesAdded: added, instancesRemoved: removed,
       instancesMoved: [], instancesLocked,
       records: [{ fishId: fish.id, form: inst.form, rec }],
+    },
+  };
+}
+
+interface ChampionshipCatchCommit {
+  eventId: string;
+  catchData: {
+    fishId: string;
+    form: 'normal' | 'variant';
+    score: number;
+    pendingGold: number;
+    pendingFame: number;
+    hatsToGrant: string[];
+  };
+}
+
+function pickWeightedEvent<T>(entries: readonly (readonly [T, number])[], rng: () => number): T {
+  const total = entries.reduce((sum, [, w]) => sum + Math.max(0, w), 0);
+  if (total <= 0) return entries[0][0];
+  let r = rng() * total;
+  for (const [item, w] of entries) {
+    const weight = Math.max(0, w);
+    if (r < weight) return item;
+    r -= weight;
+  }
+  return entries[entries.length - 1][0];
+}
+
+function toEventFishLike(ef: EventFish): Fish {
+  return {
+    id: ef.id,
+    name: ef.name,
+    spot: 'championship',
+    rarity: ef.rarity,
+    price: ef.score,
+    color: ef.color,
+    shape: ef.shape,
+    lore: ef.lore,
+    variant: { name: ef.variant.name, color: ef.variant.color, lore: ef.variant.lore },
+  };
+}
+
+async function championshipCatch(
+  db: Executor,
+  uid: string,
+  row: StateRow,
+  baseState: GameState,
+  claimedJudgment: Judgment,
+  nowISO: string,
+): Promise<{ outcome: ApplyOutcome; commit: ChampionshipCatchCommit | null }> {
+  const activeChamp = await step('db-read', { uid, action: 'catch' }, () => activeEventOfKind(db, 'championship', nowISO));
+  if (!activeChamp) {
+    return { outcome: { ok: false, error: 'event-inactive' }, commit: null };
+  }
+  const prev = await step('db-read', { uid, action: 'catch' }, () => readChampionshipRow(db, uid, activeChamp.id));
+
+  const pz = zonesFor(EVENT2_STANDARD_SPEC.power, EVENT2_STANDARD_SPEC.powerReq);
+  let judgment: Judgment = claimedJudgment;
+  if (judgment === 'perfect' && pz.red <= 0) judgment = pz.yellow > 0 ? 'good' : 'normal';
+  else if (judgment === 'good' && pz.yellow <= 0) judgment = 'normal';
+
+  const m = commonWeightMultiplier(judgment, EVENT2_STANDARD_SPEC.power, 'championship', pz.mult);
+  const [wCommon, wRare, wEpic, wLegendary] = EVENT2_STANDARD_SPEC.weights;
+  const rarity = pickWeightedEvent([
+    ['common', wCommon * m.total],
+    ['rare', wRare],
+    ['epic', wEpic],
+    ['legendary', wLegendary],
+  ] as const, Math.random);
+
+  const pool = EVENT_FISH.filter(f => f.rarity === rarity);
+  const ef = pool[Math.min(pool.length - 1, Math.floor(Math.random() * pool.length))] ?? EVENT_FISH[0];
+  const fishLike = toEventFishLike(ef);
+  const extras = rollCatchExtras(fishLike, Math.random, { normal: 75, variant: 25 });
+  const prevDex = prev?.dex ?? {};
+  const prevFormCount = prevDex[ef.id]?.[extras.form] ?? 0;
+  const isNew = prevFormCount === 0;
+  const info = buildCatchInfo(fishLike, extras, isNew, 1);
+
+  const catchScore = extras.form === 'variant' ? ef.variant.score : ef.score;
+  const boatIdx = Math.max(0, Math.min(EVENT2_SETTLEMENT_RATES.idle.length - 1, row.boat));
+  const goldRate = judgment === 'auto'
+    ? EVENT2_SETTLEMENT_RATES.idle[boatIdx]
+    : EVENT2_SETTLEMENT_RATES.manual[boatIdx];
+  const pendingGold = Math.floor((catchScore * goldRate) / 10);
+  const pendingFame = Math.floor((catchScore * EVENT2_SETTLEMENT_RATES.fame) / 10);
+
+  const nextDex: Record<string, { normal: number; variant: number }> = { ...prevDex };
+  const prevEntry = nextDex[ef.id] ?? { normal: 0, variant: 0 };
+  nextDex[ef.id] = {
+    normal: prevEntry.normal + (extras.form === 'normal' ? 1 : 0),
+    variant: prevEntry.variant + (extras.form === 'variant' ? 1 : 0),
+  };
+
+  const normalComplete = EVENT_FISH.every(f => (nextDex[f.id]?.normal ?? 0) > 0);
+  const variantComplete = EVENT_FISH.every(f => (nextDex[f.id]?.variant ?? 0) > 0);
+  const prevGranted = new Set(prev?.hatsGranted ?? []);
+  const hatsToGrant: string[] = [];
+  const nextHats = [...baseState.hats];
+  if (normalComplete) {
+    if (!prevGranted.has(EVENT_HAT_IDS.normal)) hatsToGrant.push(EVENT_HAT_IDS.normal);
+    if (!nextHats.includes(EVENT_HAT_IDS.normal)) nextHats.push(EVENT_HAT_IDS.normal);
+  }
+  if (variantComplete) {
+    if (!prevGranted.has(EVENT_HAT_IDS.variant)) hatsToGrant.push(EVENT_HAT_IDS.variant);
+    if (!nextHats.includes(EVENT_HAT_IDS.variant)) nextHats.push(EVENT_HAT_IDS.variant);
+  }
+
+  const nextState: GameState = nextHats.length === baseState.hats.length ? baseState : { ...baseState, hats: nextHats };
+  const catchUid = crypto.randomUUID();
+  return {
+    outcome: {
+      ok: true,
+      state: nextState,
+      result: { type: 'catch', fishId: ef.id, uid: catchUid, info, released: [] },
+      events: [{
+        type: 'eventCatch',
+        payload: {
+          eventId: activeChamp.id,
+          fishId: ef.id,
+          form: extras.form,
+          score: catchScore,
+          size: info.size,
+          judgment,
+          pendingGold,
+          pendingFame,
+          ...(hatsToGrant.length > 0 ? { hatsGranted: hatsToGrant } : {}),
+        },
+      }],
+      writes: { instancesAdded: [], instancesRemoved: [], instancesMoved: [], instancesLocked: [], records: [] },
+    },
+    commit: {
+      eventId: activeChamp.id,
+      catchData: {
+        fishId: ef.id,
+        form: extras.form,
+        score: catchScore,
+        pendingGold,
+        pendingFame,
+        hatsToGrant,
+      },
     },
   };
 }

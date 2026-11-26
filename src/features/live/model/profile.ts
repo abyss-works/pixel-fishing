@@ -111,6 +111,7 @@ function resolvePlaceLabel(profile: PublicProfile): string | null {
       if (z) return z.name;
     }
     if (profile.liveRegion === 'village') return '마을';
+    if (profile.liveRegion === 'championship') return zoneById('championship')?.name ?? '강태공 분지 호수';
     if (profile.liveRegion === 'world') return '바다';
   }
   if (profile.location?.kind === 'base') {
@@ -118,6 +119,12 @@ function resolvePlaceLabel(profile: PublicProfile): string | null {
   }
   if (profile.location?.kind === 'region' && profile.location.id === 'village') {
     return '마을';
+  }
+  if (profile.location?.kind === 'region' && profile.location.id === 'championship') {
+    return zoneById('championship')?.name ?? '강태공 분지 호수';
+  }
+  if (profile.lastPos?.region === 'championship') {
+    return zoneById('championship')?.name ?? '강태공 분지 호수';
   }
   if (profile.lastPos?.region === 'world') {
     const z = zoneOf(WORLD, profile.lastPos.x, profile.lastPos.y);
@@ -173,12 +180,13 @@ export function selectProfileView(profile: PublicProfile): ProfileView {
 
   const goldHats = HATS.filter(h => h.source === 'gold');
   const achievementHats = HATS.filter(h => h.source === 'achievement');
-  const eventHats = HATS.filter(h => h.source === 'event');
+  const eventOwnedHats = HATS.filter(h => h.source === 'event' && ownedHats.has(h.id));
+  const visibleHats = HATS.filter(h => h.source !== 'event' || ownedHats.has(h.id));
   const goldOwned = goldHats.filter(h => ownedHats.has(h.id)).length;
   const achievementOwned = achievementHats.filter(h => ownedHats.has(h.id)).length;
-  const eventOwned = eventHats.filter(h => ownedHats.has(h.id)).length;
+  const eventOwned = eventOwnedHats.length;
   const hatLookBase = profile.look ?? DEFAULT_LOOK;
-  const hatSlots: ProfileHatSlot[] = HATS.map(h => ({
+  const hatSlots: ProfileHatSlot[] = visibleHats.map(h => ({
     id: h.id,
     name: h.name,
     source: h.source,
@@ -187,7 +195,7 @@ export function selectProfileView(profile: PublicProfile): ProfileView {
     conditionText: h.source === 'gold'
       ? `${h.price.toLocaleString('ko-KR')}G 구매`
       : h.source === 'event'
-        ? '겨울 이벤트 기간에 접속하면 우편함으로 받을 수 있어요.'
+        ? (h.id === 'santa-hat' ? '겨울 이벤트 기간에 접속하면 우편함으로 받을 수 있어요.' : '이벤트 한정 모자')
         : (achievementById(h.achievementId)?.desc ?? '업적 보상'),
   }));
 
@@ -231,13 +239,13 @@ export function selectProfileView(profile: PublicProfile): ProfileView {
     collectibles: {
       hats: {
         owned: goldOwned + achievementOwned + eventOwned,
-        total: HATS.length,
+        total: goldHats.length + achievementHats.length + eventOwned,
         goldOwned,
         goldTotal: goldHats.length,
         achievementOwned,
         achievementTotal: achievementHats.length,
         eventOwned,
-        eventTotal: eventHats.length,
+        eventTotal: eventOwned,
         slots: hatSlots,
       },
       artifacts: {

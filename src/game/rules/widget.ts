@@ -4,7 +4,7 @@
 import type { Fish, FormId } from '../content/fish.js';
 import { RARITY } from '../content/rarity.js';
 import type { RarityId } from '../content/rarity.js';
-import type { SpotId } from '../content/spots.js';
+import type { EVENT_SPOTS, SpotId } from '../content/spots.js';
 import { fmtGold, fmtSize } from '../../shared/lib/format.js';
 
 /** 위젯 네이티브 클라이언트 식별 HTTP 헤더 이름 */
@@ -27,8 +27,10 @@ export const WIDGET_RECENT_CATCH_LIMIT = 4;
 export type WidgetSeaTheme = 'deep';
 export const DEFAULT_WIDGET_SEA_THEME: WidgetSeaTheme = 'deep';
 
-/** 전체 15개 해역(SpotId)과 위젯 바다 테마 1:1 매핑 */
-export const SPOT_SEA_THEME: Record<SpotId, WidgetSeaTheme> = {
+type RegularSpotId = Exclude<SpotId, (typeof EVENT_SPOTS)[number]['id']>;
+
+/** 전체 15개 정규 해역(이벤트 수역 제외)과 위젯 바다 테마 1:1 매핑 */
+export const SPOT_SEA_THEME: Record<RegularSpotId, WidgetSeaTheme> = {
   pond: 'deep',
   river: 'deep',
   sea: 'deep',
@@ -49,7 +51,7 @@ export const SPOT_SEA_THEME: Record<SpotId, WidgetSeaTheme> = {
 /** 해역 id로 위젯 바다 테마를 고른다. 모르거나 비어 있으면 'deep'으로 폴백한다 */
 export function resolveSpotSeaTheme(spotId?: string | null): WidgetSeaTheme {
   if (spotId && Object.hasOwn(SPOT_SEA_THEME, spotId)) {
-    return SPOT_SEA_THEME[spotId as SpotId];
+    return SPOT_SEA_THEME[spotId as RegularSpotId];
   }
   return DEFAULT_WIDGET_SEA_THEME;
 }

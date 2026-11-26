@@ -8,6 +8,8 @@ import { useAlertSettings } from '../../../../features/alerts/service/alertSetti
 import type { AlertToggle } from '../../../../features/alerts/service/alertSettings';
 import { setToastEnabled, useToastEnabled } from '../../../../features/display/service/toastEnabled';
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
+import { percentToVolume, SOUND_COPY, volumeToPercent } from '../../../../features/sound/model/sound';
+import { useSoundSettings } from '../../../../features/sound/service/useSound';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import type { GameAction } from '../../../../game/rules/actions';
 import { REJECT_TEXT } from '../../../../game/rules/rules';
@@ -17,6 +19,7 @@ import Inset from '../../../ui/Inset';
 import KeyValueRow from '../../../ui/KeyValueRow';
 import Modal from '../../../ui/Modal';
 import SectionTitle from '../../../ui/SectionTitle';
+import Slider from '../../../ui/Slider';
 import Tip, { TipCard } from '../../../ui/Tip';
 import ToggleChip from '../../../ui/ToggleChip';
 import type { Notify } from '../../../ui/hud/messageFeed';
@@ -92,7 +95,48 @@ function PermissionRow({ permission, onAllow }: { permission: NotificationPermis
   );
 }
 
-// 설정 창 — 화면(물고기 그래픽), 가방(낚을 때 자동 잠금), 알림. 값은 창 안에서 바로 고르고 고르는 즉시 적용된다.
+/** 배경음·효과음 채널별 켜기/끄기와 음량 조절 줄 */
+function SoundChannelRow({
+  label,
+  volumeLabel,
+  enabled,
+  volume,
+  onToggle,
+  onVolumeChange,
+}: {
+  label: string;
+  volumeLabel: string;
+  enabled: boolean;
+  volume: number;
+  onToggle: () => void;
+  onVolumeChange: (nextVolume: number) => void;
+}) {
+  const pct = volumeToPercent(volume);
+  return (
+    <div className="px-2.5 py-2 flex flex-col gap-1.5">
+      <div className="flex items-center justify-between gap-2 text-sm">
+        <span className="text-text">{label}</span>
+        <ToggleChip pressed={enabled} aria-label={label} onClick={onToggle}>
+          {enabled ? SOUND_COPY.onLabel : SOUND_COPY.offLabel}
+        </ToggleChip>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-text-dim whitespace-nowrap shrink-0">{volumeLabel}</span>
+        <Slider
+          min={0}
+          max={100}
+          value={pct}
+          aria-label={volumeLabel}
+          className="flex-1 min-w-0"
+          onChange={e => onVolumeChange(percentToVolume(Number(e.target.value)))}
+        />
+        <span className="pf-accent text-xs text-text min-w-[38px] text-right tabular-nums shrink-0">{pct}%</span>
+      </div>
+    </div>
+  );
+}
+
+// 설정 창 — 화면(물고기 그래픽), 소리(배경음·효과음), 가방(낚을 때 자동 잠금), 알림. 값은 창 안에서 바로 고르고 고르는 즉시 적용된다.
 // 물고기 그래픽 질문 정의는 소식 창의 새 설정과 같은 것을 써서 문구, 선택지, 미리보기가 어긋나지 않는다.
 export default function SettingsModal({ autoLockOnCatch, dispatch, setToast, onClose }: {
   autoLockOnCatch: boolean;
@@ -103,6 +147,7 @@ export default function SettingsModal({ autoLockOnCatch, dispatch, setToast, onC
   const alerts = useAlertSettings();
   const { permission } = alerts;
   const toastEnabled = useToastEnabled();
+  const sound = useSoundSettings();
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const blocked = permission !== 'granted';
@@ -132,6 +177,27 @@ export default function SettingsModal({ autoLockOnCatch, dispatch, setToast, onC
   return (
     <Modal layer="app" title="설정" narrow onClose={onClose}>
       <PromptChoices prompt={FISH_ART} describeInTip />
+      <SectionTitle>
+        <Tip text={SOUND_COPY.backgroundMuteTip}>{SOUND_COPY.title}</Tip>
+      </SectionTitle>
+      <Inset divided>
+        <SoundChannelRow
+          label={SOUND_COPY.bgmLabel}
+          volumeLabel={SOUND_COPY.bgmVolumeLabel}
+          enabled={sound.bgmEnabled}
+          volume={sound.bgmVolume}
+          onToggle={sound.toggleBgm}
+          onVolumeChange={sound.setBgmVolume}
+        />
+        <SoundChannelRow
+          label={SOUND_COPY.sfxLabel}
+          volumeLabel={SOUND_COPY.sfxVolumeLabel}
+          enabled={sound.sfxEnabled}
+          volume={sound.sfxVolume}
+          onToggle={sound.toggleSfx}
+          onVolumeChange={sound.setSfxVolume}
+        />
+      </Inset>
       <SectionTitle>가방</SectionTitle>
       <Inset divided>
         <KeyValueRow

@@ -376,7 +376,7 @@ export interface ZoneCatalogItem {
   topZoneId: ZoneId;
   topZoneName: string;
   isTopLevel: boolean;
-  group: Extract<RegionId, 'village' | 'world'>;
+  group: RegionId;
   groupLabel: string;
   tagline: string;
   lore: string;
@@ -954,7 +954,7 @@ export function buildContentCatalog(): ContentCatalog {
       topZoneName: topZone.name,
       isTopLevel,
       group,
-      groupLabel: group === 'village' ? '마을' : '대양',
+      groupLabel: group === 'village' ? '마을' : group === 'championship' ? '이벤트' : '대양',
       tagline: z.tagline,
       lore: z.lore,
       tips: zoneTips(z.id),

@@ -80,6 +80,9 @@ const schemas = {
   }),
   claimAchievement: z.object({ type: z.literal('claimAchievement'), id: z.string() }),
   claimAllAchievements: z.object({ type: z.literal('claimAllAchievements') }),
+  enterEventZone: z.object({ type: z.literal('enterEventZone'), eventId: z.string().optional() }),
+  leaveEventZone: z.object({ type: z.literal('leaveEventZone') }),
+  settleEventReward: z.object({ type: z.literal('settleEventReward'), eventId: z.string().optional() }),
   import: z.object({ type: z.literal('import'), save: z.unknown() }),
 };
 
@@ -94,6 +97,7 @@ const ActionSchema = z.discriminatedUnion('type', [
   schemas.boot, schemas.setNickname, schemas.acceptQuest,
   schemas.deliverBounty, schemas.abandonQuest, schemas.exchangeArtifact, schemas.levelUpArtifact, schemas.exhibit, schemas.resolveChallenge,
   schemas.claimAchievement, schemas.claimAllAchievements,
+  schemas.enterEventZone, schemas.leaveEventZone, schemas.settleEventReward,
   schemas.import, schemas.seeTutorial, schemas.changeClothes, schemas.buyHat, schemas.wearHat,
 ]);
 

@@ -9,9 +9,9 @@ import { NO_ACHIEVEMENT_BONUSES, biteWaitOf, createPlayerContext, saleProceedsOf
 import { NO_GUILD_EFFECTS } from './guild';
 import {
   FORTUNE_CATALOG, FORTUNE_TIER_WEIGHTS,
-  activePotionsOf, ensureFortune, fortuneEffectMultOf, fortuneEffectsOf,
-  fortuneEntryOf, fortuneKeyOf, fortuneOf, luckMultOf, potionLuckMultOf,
-  rollFortune, safeFortune, totalLuckMultOf,
+  activePotionsOf, computeFortuneScore, ensureFortune, fortuneEffectMultOf, fortuneEffectsOf,
+  fortuneEntryOf, fortuneKeyOf, fortuneOf, fortuneScoreOf, fortuneScoreRange,
+  luckMultOf, potionLuckMultOf, rollFortune, safeFortune, totalLuckMultOf,
 } from './fortune';
 import type { DailyFortune, FortuneKind, FortuneTarget } from './fortune';
 import { energyGain, planOverflow } from './cooking';
@@ -143,24 +143,38 @@ describe('FORTUNE_CATALOG — 21종 운세 카탈로그와 효과 매핑', () =>
 });
 
 describe('rollFortune — 내부 3등급 다중 계층 추첨', () => {
-  it('1단계 등급(65/25/10), 2단계 등급 내 균등 종류, 3단계 강도(40/60, 3등급은 5 고정)', () => {
+  it('1단계 등급(65/25/10), 2단계 등급 내 균등 종류, 3단계 강도(40/60, 3등급은 5 고정) 및 5단계 점수 배분', () => {
     // 1등급 (tierRoll < 0.65)
-    expect(rollFortune(DAY, rngOf(0.0, 0.0, 0.39))).toEqual({ day: DAY, kind: 'fish', index: 3 });
-    expect(rollFortune(DAY, rngOf(0.64, 0.25, 0.4))).toEqual({ day: DAY, kind: 'gold', index: 5 });
-    expect(rollFortune(DAY, rngOf(0.5, 0.5, 0.5))).toEqual({ day: DAY, kind: 'bite', index: 5 });
-    expect(rollFortune(DAY, rngOf(0.1, 0.7, 0.1))).toEqual({ day: DAY, kind: 'big', index: 3 });
-    expect(rollFortune(DAY, rngOf(0.1, 0.99, 0.9))).toEqual({ day: DAY, kind: 'fame', index: 5 });
+    expect(rollFortune(DAY, rngOf(0.0, 0.0, 0.39))).toMatchObject({ day: DAY, kind: 'fish', index: 3 });
+    expect(rollFortune(DAY, rngOf(0.64, 0.25, 0.4))).toMatchObject({ day: DAY, kind: 'gold', index: 5 });
+    expect(rollFortune(DAY, rngOf(0.5, 0.5, 0.5))).toMatchObject({ day: DAY, kind: 'bite', index: 5 });
+    expect(rollFortune(DAY, rngOf(0.1, 0.7, 0.1))).toMatchObject({ day: DAY, kind: 'big', index: 3 });
+    expect(rollFortune(DAY, rngOf(0.1, 0.99, 0.9))).toMatchObject({ day: DAY, kind: 'fame', index: 5 });
 
     // 2등급 (0.65 <= tierRoll < 0.90)
-    expect(rollFortune(DAY, rngOf(0.65, 0.0, 0.2))).toEqual({ day: DAY, kind: 'shadow', index: 3 });
-    expect(rollFortune(DAY, rngOf(0.75, 0.3, 0.5))).toEqual({ day: DAY, kind: 'mutation', index: 5 });
-    expect(rollFortune(DAY, rngOf(0.80, 0.6, 0.1))).toEqual({ day: DAY, kind: 'night', index: 3 });
-    expect(rollFortune(DAY, rngOf(0.89, 0.99, 0.9))).toEqual({ day: DAY, kind: 'energy', index: 5 });
+    expect(rollFortune(DAY, rngOf(0.65, 0.0, 0.2))).toMatchObject({ day: DAY, kind: 'shadow', index: 3 });
+    expect(rollFortune(DAY, rngOf(0.75, 0.3, 0.5))).toMatchObject({ day: DAY, kind: 'mutation', index: 5 });
+    expect(rollFortune(DAY, rngOf(0.80, 0.6, 0.1))).toMatchObject({ day: DAY, kind: 'night', index: 3 });
+    expect(rollFortune(DAY, rngOf(0.89, 0.99, 0.9))).toMatchObject({ day: DAY, kind: 'energy', index: 5 });
 
     // 3등급 (tierRoll >= 0.90) — 강도 분기 없이 항상 index: 5
-    expect(rollFortune(DAY, rngOf(0.90, 0.0, 0.0))).toEqual({ day: DAY, kind: 'golden-scale', index: 5 });
-    expect(rollFortune(DAY, rngOf(0.95, 0.5, 0.0))).toEqual({ day: DAY, kind: 'mirage', index: 5 });
-    expect(rollFortune(DAY, rngOf(0.99, 0.99, 0.0))).toEqual({ day: DAY, kind: 'grand-catch', index: 5 });
+    expect(rollFortune(DAY, rngOf(0.90, 0.0, 0.0))).toMatchObject({ day: DAY, kind: 'golden-scale', index: 5 });
+    expect(rollFortune(DAY, rngOf(0.95, 0.5, 0.0))).toMatchObject({ day: DAY, kind: 'mirage', index: 5 });
+    expect(rollFortune(DAY, rngOf(0.99, 0.99, 0.0))).toMatchObject({ day: DAY, kind: 'grand-catch', index: 5 });
+
+    expect(fortuneScoreRange('fish', 3)).toEqual([81, 84]);
+    expect(fortuneScoreRange('fish', 5)).toEqual([85, 88]);
+    expect(fortuneScoreRange('shadow', 3)).toEqual([89, 92]);
+    expect(fortuneScoreRange('shadow', 5)).toEqual([93, 96]);
+    expect(fortuneScoreRange('grand-catch', 5)).toEqual([97, 100]);
+
+    for (const entry of FORTUNE_CATALOG) {
+      const [min, max] = fortuneScoreRange(entry.kind, entry.index);
+      const s = computeFortuneScore(DAY, entry.kind, entry.index, 'user-1');
+      expect(s).toBeGreaterThanOrEqual(min);
+      expect(s).toBeLessThanOrEqual(max);
+      expect(fortuneScoreOf({ day: DAY, kind: entry.kind, index: entry.index, score: s })).toBe(s);
+    }
   });
 
   it('분포 — 고정 시드 100,000회에서 등급 65/25/10, 등급 내 균등, 강도 40/60을 만족한다', () => {
@@ -209,7 +223,9 @@ describe('rollFortune — 내부 3등급 다중 계층 추첨', () => {
 describe('ensureFortune · fortuneOf — 게임 날짜 키로 고정', () => {
   it('운세가 없으면 굴려 그날의 운세로 고정하고, 같은 날엔 rng를 소모하지 않는다', () => {
     const st = ensureFortune(seed(), NOW, rngOf(0.0, 0.25, 0.5));
-    expect(st.fortune).toEqual({ day: DAY, kind: 'gold', index: 5 });
+    expect(st.fortune).toMatchObject({ day: DAY, kind: 'gold', index: 5 });
+    expect(st.fortune?.score).toBeGreaterThanOrEqual(85);
+    expect(st.fortune?.score).toBeLessThanOrEqual(88);
     expect(ensureFortune(st, NOW, () => { throw new Error('rng 호출 금지'); })).toBe(st);
   });
 
@@ -217,7 +233,9 @@ describe('ensureFortune · fortuneOf — 게임 날짜 키로 고정', () => {
     const st = ensureFortune(
       seed({ fortune: { day: DAY, kind: 'fish', index: 3 } }), NEXT_NOW, rngOf(0.7, 0.0, 0.9),
     );
-    expect(st.fortune).toEqual({ day: NEXT_DAY, kind: 'shadow', index: 5 });
+    expect(st.fortune).toMatchObject({ day: NEXT_DAY, kind: 'shadow', index: 5 });
+    expect(st.fortune?.score).toBeGreaterThanOrEqual(93);
+    expect(st.fortune?.score).toBeLessThanOrEqual(96);
   });
 
   it('fortuneOf는 당일 운세만 반환한다', () => {
@@ -293,16 +311,25 @@ describe('safeFortune — 세이브 위생 및 하위 호환', () => {
 
     for (const entry of FORTUNE_CATALOG) {
       const f = { day: '2026-08-22', kind: entry.kind, index: entry.index };
-      expect(migrate({ ...newState(), fortune: f }).fortune).toEqual(f);
+      const migrated = migrate({ ...newState(), fortune: f }).fortune;
+      expect(migrated).toMatchObject(f);
+      const [min, max] = fortuneScoreRange(entry.kind, entry.index);
+      expect(migrated?.score).toBeGreaterThanOrEqual(min);
+      expect(migrated?.score).toBeLessThanOrEqual(max);
     }
   });
 
-  it('3등급 운세의 index가 잘못(3) 저장돼도 5로 정규화한다', () => {
+  it('3등급 운세의 index가 잘못(3) 저장돼도 5로 정규화하고 score가 범위 밖이면 폴백한다', () => {
     for (const kind of ['golden-scale', 'mirage', 'grand-catch'] as const) {
-      expect(safeFortune({ day: '2026-08-22', kind, index: 3 })).toEqual({
+      const normalized = safeFortune({ day: '2026-08-22', kind, index: 3 });
+      expect(normalized).toMatchObject({
         day: '2026-08-22', kind, index: 5,
       });
+      expect(normalized?.score).toBeGreaterThanOrEqual(97);
+      expect(normalized?.score).toBeLessThanOrEqual(100);
     }
+    expect(safeFortune({ day: '2026-08-22', kind: 'fish', index: 3, score: 83 })?.score).toBe(83);
+    expect(safeFortune({ day: '2026-08-22', kind: 'fish', index: 3, score: 100 })?.score).toBeLessThanOrEqual(84);
   });
 
   it('형태가 틀리면 버린다', () => {
@@ -685,7 +712,9 @@ describe('채널 9: energy — 기운 획득량(수동·자동 초과) 및 extra
       deps({ rng: rngOf(0.7, 0.9, 0.5) }),
     );
     if (!out.ok) throw new Error(out.error);
-    expect(out.state.fortune).toEqual({ day: DAY, kind: 'energy', index: 5 });
+    expect(out.state.fortune).toMatchObject({ day: DAY, kind: 'energy', index: 5 });
+    expect(out.state.fortune?.score).toBeGreaterThanOrEqual(93);
+    expect(out.state.fortune?.score).toBeLessThanOrEqual(96);
     expect(out.state.items[ENERGY_ITEM_IDS.common]).toBe(ENERGY_PER_INDIVIDUAL * 2);
     if (out.result.type !== 'extract') throw new Error('bad result');
     expect(out.result.energy.common).toBe(ENERGY_PER_INDIVIDUAL * 2);

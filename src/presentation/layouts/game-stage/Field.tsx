@@ -9,7 +9,15 @@ import { when } from '../../../shared/lib/when';
 import { subscribeFailure } from '../../../core/errors';
 import { useKeyScope } from '../../ui/hotkeys';
 import { sendNotice } from '../../../features/display/model/toastPolicy';
+import { eventFishSubjectById, eventSpotById } from '../../../features/events/model/events';
 import { bagOverflowNoticeInput, classifyCatchNotice } from '../../../features/gameplay/model/catchNotice';
+import {
+  emitBiteSound,
+  emitCastSound,
+  emitCatchSound,
+  emitHitSound,
+  emitLineSnapSound,
+} from '../../../features/sound/service/soundEvents';
 import { useGameTime } from '../../../features/gameplay/service/useGameTime';
 import { useSchools } from '../../../features/gameplay/service/schoolDay';
 import { useFishArtStyle } from '../../../features/display/service/fishArtStyle';
@@ -68,10 +76,11 @@ interface Props {
 function presentEvent(event: FieldEvent, setToast: Props['setToast'], game: GameState, region: RegionId): void {
   switch (event.type) {
     case 'cast': {
-      const spot = SPOTS.find(candidate => candidate.id === event.spot)!;
+      const spot = SPOTS.find(candidate => candidate.id === event.spot) ?? eventSpotById(event.spot);
+      const spotName = spot?.name ?? REGION_PACKS[region].info.shortName;
       sendNotice(setToast, {
         kind: 'catch.cast',
-        text: `${spot.name} 어군에 찌를 던졌어요.`,
+        text: `${spotName} 어군에 찌를 던졌어요.`,
       });
       return;
     }
@@ -84,7 +93,8 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast'], game: Game
           cooldownKey: 'cast-denied:range',
         });
       } else {
-        const spot = SPOTS.find(candidate => candidate.id === event.spot)!;
+        const spot = SPOTS.find(candidate => candidate.id === event.spot) ?? eventSpotById(event.spot);
+        if (!spot) return;
         sendNotice(setToast, {
           kind: 'catch.castDenied',
           text: `${spot.name}에서 낚시하려면 배가 ${boatGateText(spot.boatTier)} 이상이어야 해요. ${nextBoatText(game.boat)}`,
@@ -124,9 +134,12 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast'], game: Game
         });
         alertEncounter(event.result.ticket);
       }
-      const caught = FISH.find(candidate => candidate.id === event.result.fishId)!;
-      const prevDexEntry = game.dex[caught.id]?.[event.result.info.form];
-      sendNotice(setToast, classifyCatchNotice(caught, event.result.info, event.judgment, prevDexEntry));
+      const caught = FISH.find(candidate => candidate.id === event.result.fishId)
+        ?? eventFishSubjectById(event.result.fishId);
+      if (caught) {
+        const prevDexEntry = game.dex[caught.id]?.[event.result.info.form];
+        sendNotice(setToast, classifyCatchNotice(caught, event.result.info, event.judgment, prevDexEntry));
+      }
       const overflow = bagOverflowNoticeInput(event.result);
       if (overflow) sendNotice(setToast, overflow);
       return;
@@ -175,8 +188,11 @@ export default function Field({
   }, [engine, region]);
   const covered = useCanvasCover();
   const { phase: dayPhaseNow } = useGameTime();
+  const manualCycleRef = useRef(false);
   const fish: Fish | null = snapshot.fishId
-    ? FISH.find(candidate => candidate.id === snapshot.fishId) ?? null
+    ? (FISH.find(candidate => candidate.id === snapshot.fishId)
+      ?? eventFishSubjectById(snapshot.fishId)
+      ?? null)
     : null;
   // 모바일 시야 — 캔버스가 차지한 스테이지 크기에서 정한다. PC는 늘 PC 시야다
   const [stageSize, setStageSize] = useState<{ w: number; h: number } | null>(null);
@@ -196,11 +212,37 @@ export default function Field({
   useEffect(() => {
     const callbacks: FieldCallbacks = {
       dispatch: action => {
+        if (action.type === 'catch' && action.judgment !== 'auto') {
+          manualCycleRef.current = true;
+          emitHitSound(action.judgment);
+        }
         return when(dispatch(action), result => result.status === 'ok'
           ? { status: 'ok', result: result.result }
           : result);
       },
       onEvent: event => {
+        if (event.type === 'cast') {
+          manualCycleRef.current = true;
+          emitCastSound(true);
+        } else if (event.type === 'bite') {
+          emitBiteSound(manualCycleRef.current);
+        } else if (event.type === 'line-cut') {
+          emitLineSnapSound({ manual: manualCycleRef.current, underpowered: true });
+        } else if (event.type === 'catch') {
+          // 취소 뒤 새로 던진 사이클을 직전 방치 응답이 덮어쓰지 않도록 현재 잡기 단계일 때만 갱신한다
+          if (engine.getSnapshot().phase === 'catch') {
+            manualCycleRef.current = event.manual;
+          }
+          const caught = FISH.find(candidate => candidate.id === event.result.fishId)
+            ?? eventFishSubjectById(event.result.fishId);
+          emitCatchSound({
+            manual: event.manual,
+            rarity: event.rarity ?? caught?.rarity ?? 'common',
+            isMutation: event.variant,
+          });
+        } else if (event.type === 'movement-cancelled' || event.type === 'catch-rejected') {
+          manualCycleRef.current = false;
+        }
         if (event.type === 'guest-blocked') onGuestBlocked?.();
         else presentEvent(event, setToast, game, region);
       },
@@ -245,7 +287,19 @@ export default function Field({
   useEffect(() => { if (paused) engine.cancelFishing(); }, [engine, paused]);
   useEffect(() => () => { observer.current?.disconnect(); engine.dispose(); }, [engine]);
 
-  useKeyScope(event => engine.handleKeyDown(event.code, () => event.preventDefault()));
+  const triggerManualAction = useCallback(() => {
+    if (!locked && engine.getSnapshot().phase === 'bite') {
+      manualCycleRef.current = true;
+    }
+    engine.action();
+  }, [engine, locked]);
+
+  useKeyScope(event => {
+    if (!locked && event.code === 'Space' && engine.getSnapshot().phase === 'bite') {
+      manualCycleRef.current = true;
+    }
+    return engine.handleKeyDown(event.code, () => event.preventDefault());
+  });
 
   // 모바일 스테이지 입력 — 누른 자리에서 10px를 넘게 끌면 원 패드로 이동, 그 안에서 떼면 짧게 누르기(클릭과 같은 상호작용)
   const [pad, setPad] = useState<Pad | null>(null);
@@ -274,7 +328,7 @@ export default function Field({
     gesture.current = null;
     engine.setMoveDirection(null);
     setPad(null);
-    if (e.type === 'pointerup' && isTap(g.pad)) engine.action();
+    if (e.type === 'pointerup' && isTap(g.pad)) triggerManualAction();
   };
 
   const status = snapshot.phase === 'idle' ? null : statusParts(snapshot.phase, mobile);
@@ -294,8 +348,8 @@ export default function Field({
         <canvas ref={attachCanvas} width={view.w * SCALE} height={view.h * SCALE}
                 className="block w-full h-full [image-rendering:pixelated] cursor-pointer bg-bg
                            [filter:contrast(1.05)_saturate(1.07)_brightness(0.98)]"
-                aria-label={region === 'village' ? '마을' : '바다'}
-                onClick={mobile ? undefined : () => engine.action()}
+                aria-label={REGION_PACKS[region].info.shortName}
+                onClick={mobile ? undefined : triggerManualAction}
                 onPointerDown={mobile ? onPadDown : undefined} onPointerMove={mobile ? onPadMove : undefined}
                 onPointerUp={mobile ? onPadEnd : undefined} onPointerCancel={mobile ? onPadEnd : undefined} />
       )}

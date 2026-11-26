@@ -1,5 +1,6 @@
 import { FISH, canFishSpot, judgeTiming, redZoneCenter } from '../rules/logic';
-import type { CatchInfo, FormId, GameState, Judgment } from '../rules/logic';
+import type { CatchInfo, FormId, GameState, Judgment, RarityId } from '../rules/logic';
+import { EVENT2_STANDARD_SPEC, eventFishById } from '../content/eventFish';
 import type { SpotId } from '../content/spots';
 import { zoneOfSpot, topZoneOf } from '../content/zones';
 import type { ZoneId } from '../content/zones';
@@ -7,7 +8,7 @@ import type { ActionResult, GameAction } from '../rules/actions';
 import type { RejectReason } from '../rules/rules';
 import { nextPhase, phaseDurationMs, resultAtOf } from '../rules/fishing';
 import type { FishingPhase } from '../rules/fishing';
-import { rodAxes, powerZones, POWER_RULES } from '../rules/stats';
+import { rodAxes, powerZones, zonesFor, POWER_RULES } from '../rules/stats';
 import { achievementBonusesOf } from '../rules/achievements';
 import { biteWaitOf, createPlayerContext, moveSpeedOf } from '../rules/effects';
 import { NO_GUILD_EFFECTS } from '../rules/guild';
@@ -67,17 +68,29 @@ export interface FieldSnapshot {
 
 export type FieldEvent =
   | { type: 'cast'; spot: SpotId }
+  | { type: 'bite'; spot: SpotId }
   | { type: 'cast-denied'; reason: 'range' }
   | { type: 'cast-denied'; reason: 'boat'; spot: SpotId }
   | { type: 'line-cut' }
   | { type: 'movement-cancelled' }
   | { type: 'catch-rejected'; reason: RejectReason }
-  | { type: 'catch'; judgment: Judgment; result: CatchResult }
+  | {
+    type: 'catch';
+    judgment: Judgment;
+    result: CatchResult;
+    manual: boolean;
+    rarity?: RarityId;
+    variant: boolean;
+    named: boolean;
+  }
   | { type: 'zone-blocked'; message: string }
   | { type: 'zone-entered'; zone: ZoneId }
   | { type: 'trigger-blocked'; message: string }
   /** 게스트가 마을 밖으로 나가는 트리거에 닿아 장소를 바꾸지 못하고 되밀렸다 */
   | { type: 'guest-blocked' };
+
+const findAnyFish = (id: string) =>
+  FISH.find(candidate => candidate.id === id) ?? eventFishById(id);
 
 export interface FieldCallbacks {
   dispatch: (action: CatchAction) => MaybePromise<FieldDispatchResult>;
@@ -335,14 +348,22 @@ export class GameFieldEngine {
     if (this.snapshot.phase === 'bite') {
       const school = this.school;
       if (!school) return;
+      const isEvent2 = this.isEvent2(school.spot);
       const biteElapsed = Date.now() - this.biteStart;
-      const elapsed = biteElapsed / 1000 / rodAxes(this.game).sweep.value;
-      const zones = powerZones(this.game, school.spot);
+      const sweep = rodAxes(isEvent2 ? { ...this.game, rod: EVENT2_STANDARD_SPEC.rodLevel } : this.game).sweep.value;
+      const elapsed = biteElapsed / 1000 / sweep;
+      const zones = isEvent2
+        ? zonesFor(EVENT2_STANDARD_SPEC.power, EVENT2_STANDARD_SPEC.powerReq)
+        : powerZones(this.game, school.spot);
       if (zones.yellow === 0) this.callbacks.onEvent({ type: 'line-cut' });
       this.hookFish(judgeTiming(elapsed, zones.yellow / 100, zones.red / 100, this.redCenter), biteElapsed);
       return;
     }
     if (this.snapshot.phase === 'idle') this.tryCast(false);
+  }
+
+  private isEvent2(spot: SpotId | undefined = this.school?.spot): boolean {
+    return this.def.id === 'championship' || spot === 'championship';
   }
 
   dispose(): void {
@@ -491,8 +512,13 @@ export class GameFieldEngine {
 
   private renderFrame(ctx: CanvasRenderingContext2D, now: number): boolean {
     const wallNow = Date.now();
-    const axes = rodAxes(this.game);
-    const zones = this.school ? powerZones(this.game, this.school.spot) : null;
+    const isEvent2 = this.isEvent2();
+    const axes = rodAxes(isEvent2 ? { ...this.game, rod: EVENT2_STANDARD_SPEC.rodLevel } : this.game);
+    const zones = this.school
+      ? (isEvent2
+        ? zonesFor(EVENT2_STANDARD_SPEC.power, EVENT2_STANDARD_SPEC.powerReq)
+        : powerZones(this.game, this.school.spot))
+      : null;
     renderRegion(ctx, this.def, {
       player: this.pos,
       schools: this.schools,
@@ -549,7 +575,7 @@ export class GameFieldEngine {
         if (result.status === 'ok' && result.result.type === 'catch') {
           this.recordConfirmedCatch();
           this.pushLocalJump(school, result.result);
-          this.callbacks.onEvent({ type: 'catch', judgment, result: result.result });
+          this.emitCatch(judgment, result.result);
         }
         return;
       }
@@ -562,7 +588,20 @@ export class GameFieldEngine {
       this.recordConfirmedCatch();
       this.pushLocalJump(school, result.result);
       this.transition('catch', result.result.fishId, result.result.info);
-      this.callbacks.onEvent({ type: 'catch', judgment, result: result.result });
+      this.emitCatch(judgment, result.result);
+    });
+  }
+
+  private emitCatch(judgment: Judgment, result: CatchResult): void {
+    const fish = findAnyFish(result.fishId);
+    this.callbacks.onEvent({
+      type: 'catch',
+      judgment,
+      result,
+      manual: judgment !== 'auto',
+      rarity: fish?.rarity,
+      variant: result.info.form === 'variant',
+      named: Boolean(result.ticket),
     });
   }
 
@@ -643,6 +682,14 @@ export class GameFieldEngine {
 
     const school = this.school;
     if (phase === 'wait' && school) {
+      if (this.isEvent2(school.spot)) {
+        this.redCenter = 0.5;
+        const random = Math.random();
+        const biteMs = (EVENT2_STANDARD_SPEC.biteMinSec + random * (EVENT2_STANDARD_SPEC.biteMaxSec - EVENT2_STANDARD_SPEC.biteMinSec)) * 1000;
+        this.waitBiteMs = biteMs;
+        this.scheduleWaitTimer(biteMs);
+        return;
+      }
       this.renewRedCenter(school);
       // 도시락 입질 단축은 방치 사이클(직전 캐치가 auto)의 대기에만 넣는다. 수동 낚시와 첫 대기에는 넣지 않는다
       const bite = biteWaitOf(
@@ -670,10 +717,9 @@ export class GameFieldEngine {
     }
 
     this.waitBiteMs = null;
-    const fish = this.snapshot.fishId
-      ? FISH.find(candidate => candidate.id === this.snapshot.fishId)
-      : undefined;
-    const ms = phaseDurationMs(phase, this.game.rod, undefined, fish?.rarity);
+    const fish = this.snapshot.fishId ? findAnyFish(this.snapshot.fishId) : undefined;
+    const rodLevel = this.isEvent2() ? EVENT2_STANDARD_SPEC.rodLevel : this.game.rod;
+    const ms = phaseDurationMs(phase, rodLevel, undefined, fish?.rarity);
     this.armPhaseTimer(this.phaseStartAt + ms, phase);
   }
 
@@ -708,7 +754,11 @@ export class GameFieldEngine {
         this.transition(nextPhase(phase), null, null);
         return;
       }
-      this.transition(nextPhase(phase));
+      const next = nextPhase(phase);
+      this.transition(next);
+      if (next === 'bite' && this.school) {
+        this.callbacks.onEvent({ type: 'bite', spot: this.school.spot });
+      }
     }, Math.max(0, dueAt - Date.now()));
   }
 

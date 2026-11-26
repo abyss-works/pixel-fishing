@@ -15,6 +15,13 @@ import type { EncounterData } from '../../../../features/bounty/model/challenge'
 import {
   DUEL_IDLE_SWEEPS, duelCursor, duelHit, duelSweepMs, duelZoneCenter,
 } from '../../../../features/bounty/model/duel';
+import {
+  emitNamedClearSound,
+  emitNamedEscapeSound,
+  emitNamedHitSound,
+  emitNamedMissSound,
+  emitNamedSpawnSound,
+} from '../../../../features/sound/service/soundEvents';
 import { HOTKEY_TIER, hasModifier, useKeyScope } from '../../../ui/hotkeys';
 import { cx } from '../../../ui/cx';
 import Button from '../../../ui/Button';
@@ -65,6 +72,7 @@ export default function EncounterModal({ data, onResolve, onClose }: {
   const resolveRef = useRef(onResolve);
   // ref 대입은 이펙트에서만 — 렌더 중 ref를 읽거나 쓰지 않는다 (Field 선례)
   useEffect(() => { resolveRef.current = onResolve; });
+  useEffect(() => { emitNamedSpawnSound(); }, []);
 
   /** 지금 시각까지 진행량을 적분해 커서 위치를 돌려준다 */
   const sample = useCallback((now: number): number => {
@@ -82,9 +90,15 @@ export default function EncounterModal({ data, onResolve, onClose }: {
     if (!hit) setLostBy(escape);
     lastStrikeRef.current = now;
     sweepRef.current = duelSweepMs(sweepMs, next.hits, speedupScale);
-    if (!next.done) return;
+    if (!next.done) {
+      if (hit) emitNamedHitSound(next.hits);
+      else emitNamedMissSound();
+      return;
+    }
     doneRef.current = true;
     setPhase(next.success ? 'won' : 'lost');
+    if (next.success) emitNamedClearSound();
+    else emitNamedEscapeSound();
     // 실패는 확정 버튼 없이 바로 보낸다 — 서버가 도전권을 지우고 흔적이 사라진다
     if (!next.success) resolveRef.current({ hits: next.hits, misses: next.misses, success: false });
   }, [sweepMs, hp, speedupScale]);

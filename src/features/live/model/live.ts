@@ -74,6 +74,7 @@ export function resolveLiveRegion(
     return zoneOfPort(scene.id) ?? defaultZoneOfRegion('world');
   }
   if (scene.id === 'village') return 'village';
+  if (scene.id === 'championship') return 'championship';
   if (spotZone && zoneById(spotZone as ZoneId)) return topZoneOf(spotZone as ZoneId);
   return defaultZoneOfRegion('world');
 }
@@ -291,6 +292,7 @@ export function playerZoneLabel(presence: Pick<Presence, 'region' | 'zone'>): st
     if (z) return z.shortName;
   }
   if (presence.region === 'village') return '마을';
+  if (presence.region === 'championship') return zoneById('championship')?.shortName ?? '분지 호수';
   if (presence.region === 'world') return '바다';
   return null;
 }

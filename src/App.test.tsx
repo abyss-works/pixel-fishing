@@ -1054,7 +1054,7 @@ describe('위치 복원 — 새로고침하면 있던 곳에서 재개', () => {
   it('세이브에 대양이 적혀 있으면 대양에서 시작한다', () => {
     seed({ boat: 1, location: { kind: 'region', id: 'world' } });
     render(<App />);
-    expect(screen.getByLabelText('바다')).toBeInTheDocument();   // 필드 캔버스
+    expect(screen.getByLabelText('대양')).toBeInTheDocument();   // 필드 캔버스
     expect(screen.queryByLabelText('집')).not.toBeInTheDocument();
   });
 

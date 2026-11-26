@@ -3,10 +3,10 @@ import type { GameAction, ActionResult } from '../../game/rules/actions';
 import type { RejectReason } from '../../game/rules/rules';
 import type { GameState } from '../../game/rules/logic';
 import type { DailyFortune, FortuneKind } from '../../game/rules/fortune';
+import type { HatSource } from '../../game/content/wardrobe';
 import type { ChatLine, NoticeItem } from '../../game/rules/live';
 import type { GuildBonusId, GuildEffects, GuildJoinMode, GuildLogKind, GuildRole } from '../../game/rules/guild';
 import type { BountyKind } from '../../game/content/bounties';
-import type { HatSource } from '../../game/content/wardrobe';
 import type { MaybePromise } from '../../shared/lib/when';
 
 export type { MaybePromise } from '../../shared/lib/when';
@@ -716,3 +716,183 @@ export interface ApiClient {
   admin: AdminApi;
   dev: DevApi;
 }
+
+// ---------- 소리 설정 계약 ----------
+
+/** 기기별 소리 설정(localStorage) — 배경음·효과음 켜기와 음량(0~1) */
+export interface SoundSettings {
+  bgmEnabled: boolean;
+  sfxEnabled: boolean;
+  bgmVolume: number;
+  sfxVolume: number;
+}
+
+// ---------- 라이브 이벤트 · 관리자 이벤트 · 쿠폰 계약 ----------
+
+export type LiveEventKind = 'trio' | 'championship' | 'draw';
+
+export interface LiveEventSummary {
+  id: string;
+  kind: LiveEventKind;
+  title: string;
+  description: string;
+  startsAt: string;
+  endsAt: string;
+  active: boolean;
+  config: Record<string, unknown>;
+}
+
+export interface EventTrioSlotStatus {
+  fishId: string;
+  form: 'normal' | 'variant';
+  completed: boolean;
+  completedAt: string | null;
+}
+
+export interface EventTrioState {
+  eventId: string;
+  slots: readonly EventTrioSlotStatus[];
+  completedAt: string | null;
+  claimedAt: string | null;
+  won: boolean;
+  rewardPin: string | null;
+  rewardExpiresAt: string | null;
+}
+
+export interface EventLeaderboardRow {
+  rank: number;
+  userId: string;
+  nickname: string | null;
+  score: number;
+  catches?: number;
+  look?: { shirt: number; pants: number; hat: string | null } | null;
+  me: boolean;
+}
+
+export interface EventChampionshipState {
+  eventId: string;
+  score: number;
+  bestFishId: string | null;
+  bestFishScore: number;
+  catches: number;
+  dex: Record<string, { normal: number; variant: number }>;
+  hatsGranted: readonly string[];
+  pendingGold: number;
+  pendingFame: number;
+  rank: number | null;
+  top: readonly EventLeaderboardRow[];
+}
+
+export interface EventLuckDayStamp {
+  day: string;
+  kind: FortuneKind | null;
+  index: 3 | 5 | null;
+  score: number | null;
+}
+
+export interface EventDrawState {
+  eventId: string;
+  totalScore: number;
+  attendedDays: number;
+  days: readonly EventLuckDayStamp[];
+  rank: number | null;
+  top: readonly EventLeaderboardRow[];
+  won: boolean;
+}
+
+export interface EventsSnapshot {
+  now: string;
+  events: readonly LiveEventSummary[];
+  trio: EventTrioState | null;
+  championship: EventChampionshipState | null;
+  draw: EventDrawState | null;
+}
+
+export interface AdminLiveEventRow extends LiveEventSummary {
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AdminLiveEventRequest =
+  | {
+    op: 'create';
+    id: string;
+    kind: LiveEventKind;
+    title: string;
+    description: string;
+    startsAt: string;
+    endsAt: string;
+    active?: boolean;
+    config?: Record<string, unknown>;
+  }
+  | {
+    op: 'update';
+    id: string;
+    title: string;
+    description: string;
+    startsAt: string;
+    endsAt: string;
+    active: boolean;
+    config: Record<string, unknown>;
+  }
+  | { op: 'end'; id: string }
+  | { op: 'delete'; id: string };
+
+export interface AdminEventDrawRow {
+  id: number;
+  eventId: string;
+  userId: string;
+  nickname: string | null;
+  rewardKind: 'gold' | 'item' | 'hat' | 'none';
+  rewardId: string | null;
+  rewardQty: number;
+  gold: number;
+  rewardPin: string | null;
+  rewardExpiresAt: string | null;
+  mailId: number | null;
+  seed: string;
+  drawnBy: string | null;
+  createdAt: string;
+}
+
+export interface AdminCouponRow {
+  code: string;
+  gold: number;
+  items: readonly MailItemAttachment[];
+  description: string;
+  active: boolean;
+  startsAt: string | null;
+  endsAt: string | null;
+  maxRedemptions: number | null;
+  perAccountLimit: number;
+  redeemedCount: number;
+  createdAt: string;
+}
+
+export type AdminCouponRequest =
+  | {
+    op: 'create';
+    code: string;
+    gold: number;
+    items: readonly MailItemAttachment[];
+    description: string;
+    active?: boolean;
+    startsAt?: string | null;
+    endsAt?: string | null;
+    maxRedemptions?: number | null;
+    perAccountLimit?: number;
+  }
+  | {
+    op: 'update';
+    code: string;
+    gold: number;
+    items: readonly MailItemAttachment[];
+    description: string;
+    active: boolean;
+    startsAt: string | null;
+    endsAt: string | null;
+    maxRedemptions: number | null;
+    perAccountLimit: number;
+  }
+  | { op: 'delete'; code: string };
+

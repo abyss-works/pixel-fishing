@@ -12,6 +12,7 @@ import { settleAction, useGame } from './features/gameplay/service/useGame';
 import { consumeSailReturn, isSailReturnReady } from './features/account/service/sailReturn';
 import { useAccount } from './features/account/service/useAccount';
 import { useLastPosition } from './features/gameplay/service/useLastPosition';
+import { useSoundSettings } from './features/sound/service/useSound';
 import { useMessageLog } from './presentation/layouts/hud/useMessageLog';
 import { sendNotice } from './features/display/model/toastPolicy';
 import GameView from './presentation/views/game/GameView';
@@ -25,10 +26,15 @@ import { DevEnvContext, devEnvOf } from './presentation/views/devtools/devEnv';
 import { BUILD_LABEL, DEPLOY_ENV } from './buildId';
 import { QueryProvider } from './core/QueryProvider';
 
-// 장소 복원 규칙: 지금 열린 바다 지역이면 그 지역에서, 닫힌 지역이면 고향 항구에서 시작하고,
+// 장소 복원 규칙: 지금 열린 바다 지역이면 그 지역에서, 닫힌·알 수 없는 지역이면 배 1단계 미만은 마을·이상은 고향 항구에서 시작하고,
 // 거점(집·항구)은 그대로 재개한다. 바다 지역 안의 좌표는 마지막 위치(resumePoint)가 정한다.
-function sceneOf(location: LocationRef): SceneRef {
-  if (location.kind === 'region' && !LIVE_REGIONS.includes(location.id)) return { kind: 'base', id: 'harbor' };
+function sceneOf(location: LocationRef, boat: number): SceneRef {
+  if (
+    (location.kind === 'region' && !LIVE_REGIONS.includes(location.id))
+    || (location.kind === 'base' && !Object.hasOwn(BASE_PACKS, location.id))
+  ) {
+    return boat < 1 ? { kind: 'region', id: 'village' } : { kind: 'base', id: 'harbor' };
+  }
   return location;
 }
 
@@ -42,6 +48,7 @@ const LazyDevTools = DEV_TOOLS_BUILD ? lazy(() => import('./presentation/views/d
 const LazyEnvBadge = DEV_TOOLS_BUILD ? lazy(() => import('./presentation/views/devtools/EnvBadge')) : null;
 
 function AppContent() {
+  useSoundSettings();
   const { log, setToast, toasts, dismissToast, setMirrorEnv } = useMessageLog([]);
   const {
     game, dispatch, nickname, profileStatus, devTools, rename, sync, syncLabel,
@@ -55,7 +62,7 @@ function AppContent() {
     game, setToast, adoptAccount,
   });
 
-  const [scene, setScene] = useState<SceneRef>(() => sceneOf(game.location));
+  const [scene, setScene] = useState<SceneRef>(() => sceneOf(game.location, game.boat));
   const [entryPos, setEntryPos] = useState<Point | null>(null);
   // 장소를 지정할 때마다 늘어나는 순번 — 같은 지역 안에서 같은 좌표로 다시 옮기는 경우도 Field가 알아챈다
   const [placeSeq, setPlaceSeq] = useState(0);
@@ -67,7 +74,7 @@ function AppContent() {
     if (restored.current || sync !== 'on' || !last.settled) return;
     if (isSailReturnReady() && (loading || (!accountChecked && !accountFailed))) return;
 
-    const next = sceneOf(game.location);
+    const next = sceneOf(game.location, game.boat);
     restored.current = true;
 
     if (consumeSailReturn() && account !== null && game.boat >= 1 && next.id !== 'world') {

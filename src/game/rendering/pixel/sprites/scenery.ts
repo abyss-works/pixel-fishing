@@ -44,6 +44,76 @@ export function drawTree(ctx: Ctx, tx: number, ty: number) {
   R(ctx, tx - 2, ty, 14, 12, '#2d6a4f');
 }
 
+export function drawXmasTree(ctx: Ctx, tx: number, ty: number) {
+  R(ctx, tx + 4, ty + 14, 4, 5, '#5d4037');
+  R(ctx, tx - 2, ty + 10, 16, 4, '#1b4332');
+  R(ctx, tx, ty + 6, 12, 4, '#2d6a4f');
+  R(ctx, tx + 2, ty + 2, 8, 4, '#2d6a4f');
+  R(ctx, tx + 4, ty - 1, 4, 3, '#40916c');
+  R(ctx, tx + 5, ty - 3, 2, 2, '#ffd54f');
+  // 눈 끝과 장식 방울
+  R(ctx, tx - 1, ty + 10, 3, 1, '#edf5fc');
+  R(ctx, tx + 10, ty + 10, 3, 1, '#edf5fc');
+  R(ctx, tx + 2, ty + 8, 2, 2, '#e53935');
+  R(ctx, tx + 8, ty + 7, 2, 2, '#ffd54f');
+  R(ctx, tx + 5, ty + 4, 2, 2, '#4fc3f7');
+  R(ctx, tx + 1, ty + 12, 2, 2, '#ffd54f');
+  R(ctx, tx + 9, ty + 12, 2, 2, '#e53935');
+}
+
+export function drawSnowPine(ctx: Ctx, tx: number, ty: number) {
+  R(ctx, tx + 4, ty + 13, 4, 5, '#5d4037');
+  R(ctx, tx - 1, ty + 9, 14, 4, '#1b4332');
+  R(ctx, tx + 1, ty + 5, 10, 4, '#2d6a4f');
+  R(ctx, tx + 3, ty + 1, 6, 4, '#2d6a4f');
+  R(ctx, tx + 3, ty + 1, 6, 2, '#edf5fc');
+  R(ctx, tx + 1, ty + 5, 4, 1, '#edf5fc');
+  R(ctx, tx + 7, ty + 5, 4, 1, '#cfe2f5');
+  R(ctx, tx - 1, ty + 9, 4, 1, '#edf5fc');
+  R(ctx, tx + 9, ty + 9, 4, 1, '#cfe2f5');
+}
+
+export function drawSnowman(ctx: Ctx, tx: number, ty: number) {
+  R(ctx, tx + 1, ty + 10, 10, 7, '#edf5fc');
+  R(ctx, tx + 2, ty + 15, 8, 2, '#cfe2f5');
+  R(ctx, tx + 2, ty + 4, 8, 6, '#edf5fc');
+  R(ctx, tx + 1, ty + 9, 10, 2, '#e53935');
+  R(ctx, tx + 7, ty + 11, 2, 3, '#e53935');
+  // 모자·눈·당근 코·단추
+  R(ctx, tx + 1, ty + 3, 10, 1, '#182540');
+  R(ctx, tx + 3, ty, 6, 3, '#263238');
+  R(ctx, tx + 4, ty + 6, 1, 1, '#182540');
+  R(ctx, tx + 7, ty + 6, 1, 1, '#182540');
+  R(ctx, tx + 6, ty + 7, 2, 1, '#ff7043');
+  R(ctx, tx + 5, ty + 12, 1, 1, '#182540');
+  R(ctx, tx + 5, ty + 14, 1, 1, '#182540');
+}
+
+export function drawGiftBox(ctx: Ctx, tx: number, ty: number) {
+  R(ctx, tx, ty + 2, 8, 7, '#c62828');
+  R(ctx, tx + 3, ty + 2, 2, 7, '#ffd54f');
+  R(ctx, tx, ty + 5, 8, 2, '#ffd54f');
+  R(ctx, tx + 1, ty, 2, 2, '#ffd54f');
+  R(ctx, tx + 5, ty, 2, 2, '#ffd54f');
+}
+
+export function drawCandyCane(ctx: Ctx, tx: number, ty: number) {
+  R(ctx, tx + 2, ty + 2, 2, 10, '#edf5fc');
+  R(ctx, tx + 2, ty + 1, 4, 2, '#e53935');
+  R(ctx, tx + 5, ty + 2, 2, 3, '#edf5fc');
+  R(ctx, tx + 2, ty + 4, 2, 2, '#e53935');
+  R(ctx, tx + 2, ty + 8, 2, 2, '#e53935');
+}
+
+export function drawWinterLantern(ctx: Ctx, tx: number, ty: number) {
+  R(ctx, tx + 2, ty + 6, 2, 11, '#37474f');
+  R(ctx, tx + 1, ty + 16, 4, 2, '#263238');
+  R(ctx, tx, ty + 1, 6, 2, '#37474f');
+  R(ctx, tx + 1, ty, 4, 1, '#edf5fc');
+  R(ctx, tx + 1, ty + 3, 4, 4, '#ffd54f');
+  R(ctx, tx + 2, ty + 4, 2, 2, '#fff8e1');
+}
+
 // 지명/시설 라벨 — 필드 팔레트
 export function drawLabel(ctx: Ctx, l: MapLabel) {
   label(ctx, l.text, l.x, l.y, FIELD_LABEL[l.color ?? 'text'], l.size ?? 9);

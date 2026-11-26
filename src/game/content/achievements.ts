@@ -201,7 +201,7 @@ export function selectorTargetCount(selector: AchievementSelector): number {
 
 // ── 1. 진행 업적 30종 (15개 낚시 해역 × 기초/숙련, 총 103,451,480G) ──
 
-const SPOT_PROGRESS_REWARDS: Record<SpotId, { basic: number; full: number }> = {
+const SPOT_PROGRESS_REWARDS: Record<Exclude<SpotId, 'championship'>, { basic: number; full: number }> = {
   pond: { basic: 140, full: 140 },
   river: { basic: 400, full: 400 },
   sea: { basic: 1_200, full: 1_200 },
@@ -220,7 +220,7 @@ const SPOT_PROGRESS_REWARDS: Record<SpotId, { basic: number; full: number }> = {
 };
 
 const SPOT_PROGRESS_RULES: AchievementRule[] = SPOTS.flatMap(spot => {
-  const rewards = SPOT_PROGRESS_REWARDS[spot.id];
+  const rewards = SPOT_PROGRESS_REWARDS[spot.id as Exclude<SpotId, 'championship'>];
   const zone = topZoneOfSpot(spot.id);
   return [
     {

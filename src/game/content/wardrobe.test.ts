@@ -30,9 +30,9 @@ describe('옷장 콘텐츠', () => {
     }
   });
 
-  it('모자는 골드 5종, 업적 52종, 이벤트 1종으로 총 58종이고 id가 겹치지 않는다', () => {
-    expect(HATS).toHaveLength(58);
-    expect(new Set(HATS.map(h => h.id)).size).toBe(58);
+  it('모자는 골드 5종, 업적 52종, 이벤트 3종으로 총 60종이고 id가 겹치지 않는다', () => {
+    expect(HATS).toHaveLength(60);
+    expect(new Set(HATS.map(h => h.id)).size).toBe(60);
 
     const goldHats = HATS.slice(0, 5);
     expect(goldHats.map(h => h.id)).toEqual(['cap-red', 'cap-blue', 'cap-yellow', 'cap-green', 'cap-black']);
@@ -75,9 +75,17 @@ describe('옷장 콘텐츠', () => {
     }
 
     const eventHats = HATS.slice(57);
-    expect(eventHats).toHaveLength(1);
-    const santa = eventHats[0];
-    expect(santa).toEqual({
+    expect(eventHats).toHaveLength(3);
+    expect(eventHats.map(h => h.id)).toEqual(['event-hat-basin-conical', 'event-hat-abyss-crown', 'santa-hat']);
+    for (const h of eventHats) {
+      expect(h.source).toBe('event');
+      expect(isEventHat(h)).toBe(true);
+      expect(isAchievementHat(h)).toBe(false);
+      expect(h.price).toBe(0);
+      expect(h.color).toMatch(HEX);
+      if (h.accentColor !== undefined) expect(h.accentColor).toMatch(HEX);
+    }
+    expect(eventHats[2]).toEqual({
       id: 'santa-hat',
       name: '산타모자',
       color: '#c62828',
@@ -85,8 +93,6 @@ describe('옷장 콘텐츠', () => {
       price: 0,
       source: 'event',
     });
-    expect(isEventHat(santa)).toBe(true);
-    expect(isAchievementHat(santa)).toBe(false);
   });
 
   it('hatById는 있는 id만 돌려준다', () => {

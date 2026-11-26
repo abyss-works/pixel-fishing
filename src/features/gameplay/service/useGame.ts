@@ -26,6 +26,13 @@ import { setSharedProfileStatus } from './profileStatus';
 import type { ProfileStatus, SyncState } from './types';
 import { alertUpdate } from './updateAlert';
 import { isRetryExhausted, retryOnRateLimit } from './rateLimitRetry';
+import { eventsKey } from '../../events/service/useEvents';
+import {
+  emitEventSettleSound,
+  emitGearUpgradeSound,
+  emitRewardClaimSound,
+  emitShopSellSound,
+} from '../../sound/service/soundEvents';
 
 // 게임 상태 소유와 액션 흐름 조율 (계층: 서비스 — 서버 권위 v0.5.0)
 // 모든 상태 변경은 API가 제공한 게임 게이트웨이의 dispatch 하나로 흐른다 — http/local 구현은
@@ -331,6 +338,34 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
           void client.invalidateQueries({ queryKey: ['mailbox'] });
         }
         if ('guildUpdated' in r.result && r.result.guildUpdated) void client.invalidateQueries({ queryKey: ['guild'] });
+        const uid = client.getQueryData<string | null>(sessionKey) ?? null;
+        if (
+          devAction
+          || action.type === 'catch'
+          || action.type === 'enterEventZone'
+          || action.type === 'leaveEventZone'
+          || action.type === 'settleEventReward'
+          || action.type === 'redeemCoupon'
+          || prev.fortune?.day !== r.state.fortune?.day
+        ) {
+          void client.invalidateQueries({ queryKey: eventsKey(uid) });
+        }
+        if (action.type === 'sell' && r.result.type === 'sell' && r.result.gold > 0) {
+          emitShopSellSound();
+        } else if (action.type === 'upgradeRod' || action.type === 'buyBoat') {
+          emitGearUpgradeSound();
+        } else if (
+          action.type === 'claimAchievement'
+          || action.type === 'claimAllAchievements'
+          || action.type === 'claimMail'
+          || action.type === 'redeemCoupon'
+          || action.type === 'deliverBounty'
+          || action.type === 'claimRelief'
+        ) {
+          emitRewardClaimSound();
+        } else if (action.type === 'settleEventReward') {
+          emitEventSettleSound();
+        }
       }
       // rejected는 규칙 거부 — 호출자가 사유 토스트를 띄운다 (연결은 정상이므로 sync 유지)
       return r;

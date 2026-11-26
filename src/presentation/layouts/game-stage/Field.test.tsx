@@ -3,9 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppError, fail } from '../../../core/errors';
 import { newState } from '../../../game/rules/logic';
 import { FISH } from '../../../game/content/fish';
-import { REGION_PACKS } from '../../../game/world';
+import { CHAMPIONSHIP_SCHOOLS, V_SCHOOLS } from '../../../game/world';
 import type { RegionId } from '../../../game/world';
 import { setSchoolDay } from '../../../features/gameplay/service/schoolDay';
+import * as soundEvents from '../../../features/sound/service/soundEvents';
 import * as liveService from '../../../features/live/service/useLive';
 import { resetKeyScopes } from '../../ui/hotkeys';
 
@@ -171,11 +172,143 @@ describe('Field 일시적 429(rate-limited) 낚시 세션 유지', () => {
   });
 });
 
+describe('Field 이벤트 구역 호환과 낚시 효과음 전달', () => {
+  it('region의 shortName을 캔버스 aria-label로 쓰고 championship 어종 획득 카드를 오류 없이 그린다', () => {
+    const catchSlot = document.createElement('div');
+    document.body.appendChild(catchSlot);
+    const school = CHAMPIONSHIP_SCHOOLS[0];
+    try {
+      const { getByLabelText } = render(
+        <Field
+          region="championship"
+          game={{ ...newState(), location: { kind: 'region', id: 'championship' } }}
+          dispatch={() => ({
+            status: 'ok',
+            state: newState(),
+            result: {
+              type: 'catch',
+              fishId: 'event-glaaki',
+              uid: 'ev-1',
+              info: { form: 'normal', size: 120, percentile: 50, isBig: false, isNew: true },
+              released: [],
+            },
+          })}
+          setToast={() => {}}
+          onScene={() => {}}
+          initialPos={{ x: school.x, y: school.y }}
+          catchSlot={catchSlot}
+        />,
+      );
+      expect(getByLabelText('분지 호수')).toBeInTheDocument();
+      fireEvent.keyDown(document, { code: 'Space' });
+      act(() => { vi.advanceTimersByTime(4500); });
+      fireEvent.keyDown(document, { code: 'Space' });
+      expect(catchSlot.textContent).toContain('글라키');
+    } finally {
+      catchSlot.remove();
+    }
+  });
+
+  it('수동 낚시 효과음(cast·bite·hit·catch)과 방치 전환 후 무음 규칙을 soundEvents로 전달한다', () => {
+    const castSpy = vi.spyOn(soundEvents, 'emitCastSound').mockReturnValue(true);
+    const biteSpy = vi.spyOn(soundEvents, 'emitBiteSound').mockReturnValue(true);
+    const hitSpy = vi.spyOn(soundEvents, 'emitHitSound').mockReturnValue(true);
+    const catchSpy = vi.spyOn(soundEvents, 'emitCatchSound').mockReturnValue(true);
+    const fish = FISH[0];
+
+    render(
+      <Field
+        region="village"
+        game={newState()}
+        dispatch={() => ({
+          status: 'ok',
+          state: newState(),
+          result: {
+            type: 'catch',
+            fishId: fish.id,
+            uid: 'f1',
+            info: { form: 'normal', size: 30, percentile: 50, isBig: false, isNew: false },
+            released: [],
+          },
+        })}
+        setToast={() => {}}
+        onScene={() => {}}
+        initialPos={POND_SHORE}
+      />,
+    );
+
+    fireEvent.keyDown(document, { code: 'Space' });
+    expect(castSpy).toHaveBeenCalledWith(true);
+
+    act(() => { vi.advanceTimersByTime(4000); });
+    expect(biteSpy).toHaveBeenCalledWith(true);
+
+    fireEvent.keyDown(document, { code: 'Space' });
+    expect(hitSpy).toHaveBeenCalledTimes(1);
+    expect(catchSpy).toHaveBeenCalledWith(expect.objectContaining({ manual: true, rarity: fish.rarity, isMutation: false }));
+
+    // 다음 획득 대기 후 입질 타임아웃(auto) 시 다음 cycle의 bite·catch는 manual=false로 전달된다
+    act(() => { vi.advanceTimersByTime(2500); });
+    act(() => { vi.advanceTimersByTime(4000); });
+    act(() => { vi.advanceTimersByTime(15000); });
+    expect(catchSpy).toHaveBeenLastCalledWith(expect.objectContaining({ manual: false }));
+  });
+
+  it('방치 어획 직후 이어진 입질에서 수동 챔질로 줄이 끊기면(line-cut) 수동 효과음으로 전달한다', () => {
+    const snapSpy = vi.spyOn(soundEvents, 'emitLineSnapSound').mockReturnValue(true);
+    const riverSchool = V_SCHOOLS.find(s => s.spot === 'river')!;
+    const fish = FISH[0];
+
+    const { container } = render(
+      <Field
+        region="village"
+        game={newState()}
+        dispatch={() => ({
+          status: 'ok',
+          state: newState(),
+          result: {
+            type: 'catch',
+            fishId: fish.id,
+            uid: 'f1',
+            info: { form: 'normal', size: 30, percentile: 50, isBig: false, isNew: false },
+            released: [],
+          },
+        })}
+        setToast={() => {}}
+        onScene={() => {}}
+        initialPos={{ x: riverSchool.x, y: riverSchool.y }}
+      />,
+    );
+
+    const advanceUntilPhase = (phase: string) => {
+      for (let i = 0; i < 40; i++) {
+        if (container.querySelector(`[data-phase="${phase}"]`)) return;
+        act(() => { vi.advanceTimersByTime(500); });
+      }
+    };
+
+    // 첫 던짐: 방치 타임아웃으로 auto 어획 완료 -> 다음 cycle은 auto 모드
+    fireEvent.keyDown(document, { code: 'Space' });
+    advanceUntilPhase('bite');
+    expect(container.querySelector('[data-phase="bite"]')).not.toBeNull();
+    advanceUntilPhase('catch');
+    expect(container.querySelector('[data-phase="catch"]')).not.toBeNull();
+
+    // 획득 카드 종료 후 다음 입질 대기 -> 입질 진입
+    advanceUntilPhase('wait');
+    advanceUntilPhase('bite');
+    expect(container.querySelector('[data-phase="bite"]')).not.toBeNull();
+    snapSpy.mockClear();
+
+    // 방치 입질 중 사용자가 수동으로 챔질(파워 부족 수역) -> line-cut은 manual: true여야 한다
+    fireEvent.keyDown(document, { code: 'Space' });
+    expect(snapSpy).toHaveBeenCalledWith({ manual: true, underpowered: true });
+  });
+});
+
 describe('Field 구역 강제 모자 실시간 송신', () => {
   it('championship 구역에서는 readPosition이 santa-hat을 송신하고, 구역을 벗어나면 game.look으로 복원한다', () => {
     const spy = vi.spyOn(liveService, 'useLivePosition');
-    const packs = REGION_PACKS as Record<string, typeof REGION_PACKS.world>;
-    packs.championship = REGION_PACKS.world;
     const game = { ...newState(), look: { shirt: 2, pants: 3, hat: 'cap-red' } };
     try {
       const { rerender } = render(
@@ -200,7 +333,6 @@ describe('Field 구역 강제 모자 실시간 송신', () => {
       );
       expect(spy.mock.calls.at(-1)?.[0]().look).toEqual({ shirt: 2, pants: 3, hat: 'cap-red' });
     } finally {
-      delete packs.championship;
       spy.mockRestore();
     }
   });

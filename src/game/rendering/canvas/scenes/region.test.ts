@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderRegion, vignette } from './region';
 import type { FieldView } from './region';
-import { drawBoat, drawOtherShip, drawPerson } from '../../pixel/sprites/actors.js';
+import { drawBoat, drawOtherPerson, drawOtherShip, drawPerson } from '../../pixel/sprites/actors.js';
 import type { RegionPack } from '../../../world/types';
 import type { RegionId } from '../../../content/places';
 import { JUMP_S } from '../../pixel/sprites/schoolView';
@@ -9,6 +9,7 @@ import { JUMP_S } from '../../pixel/sprites/schoolView';
 vi.mock('../../pixel/sprites/actors.js', () => ({
   drawBoat: vi.fn(),
   drawIdle: vi.fn(),
+  drawOtherPerson: vi.fn(),
   drawOtherShip: vi.fn(),
   drawPerson: vi.fn(),
   drawSpeech: vi.fn(),
@@ -129,7 +130,7 @@ describe('renderRegion 구역 강제 모자 덮어쓰기', () => {
     expect(myLook.hat).toBe('cap-red');
     expect(peerLook.hat).toBeNull();
 
-    renderRegion(renderCtx(), basePack('championship', 'walk'), {
+    renderRegion(renderCtx(), { ...basePack('championship', 'walk'), showOthers: true }, {
       boat: 1,
       schools: [],
       player: { x: 20, y: 20 },
@@ -143,8 +144,14 @@ describe('renderRegion 구역 강제 모자 덮어쓰기', () => {
       catchT: null,
       catchFish: null,
       look: myLook,
+      others: [peer],
     });
     expect(drawPerson).toHaveBeenCalledWith(expect.anything(), 20, 20, { shirt: 2, pants: 3, hat: 'santa-hat' });
+    expect(drawOtherPerson).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ look: { shirt: 4, pants: 5, hat: 'santa-hat' } }),
+      0,
+    );
   });
 
   it('일반 구역에서는 look의 모자를 유지한다', () => {

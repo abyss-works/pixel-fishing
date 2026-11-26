@@ -870,6 +870,140 @@ describe('GameFieldEngine 이동 취소 후 즉시 재캐스팅 및 429 복구',
   });
 });
 
+describe('GameFieldEngine 이벤트 2 표준 스펙 및 사운드 훅', () => {
+  afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+
+  it('이벤트 2 구역에서는 개인 낚싯대·유물·도시락 보정을 무시하고 Lv20 표준 입질 대기와 존(노란 10%, 빨간 0%)을 쓴다', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const t0 = Date.parse('2026-11-26T00:00:00.000Z');
+    vi.setSystemTime(t0);
+    // Lv1 낚싯대(일반 해역이면 power 부족 + 4~8초 대기)라도 이벤트 2에서는 Lv20 표준 2.3~4.3초, 줄 끊어짐 없음
+    const lowRodGame = { ...newState(), boat: 0, rod: 1, slots: { lunch: { id: 'cook-lunch-bite', endsAt: '2099-01-01T00:00:00.000Z' }, bait: null } };
+    const school = { id: 'ch-1', spot: 'championship' as const, x: 152, y: 140 };
+    const engine = new GameFieldEngine('championship', lowRodGame, [school], { x: 152, y: 120 });
+    const events: FieldEvent[] = [];
+    engine.updateContext(lowRodGame, false, {
+      dispatch: () => ({
+        status: 'ok',
+        result: {
+          type: 'catch',
+          fishId: 'event-glaaki',
+          uid: 'u-ev1',
+          info: { form: 'variant', size: 100, percentile: 10, isBig: true, isNew: true },
+          released: [],
+        },
+      } as never),
+      onEvent: event => { events.push(event); },
+      onScene: noop,
+    });
+
+    engine.action();
+    // 2.29초에는 아직 wait, 2.30초에는 bite 진입 + bite 이벤트 발화
+    vi.advanceTimersByTime(2290);
+    expect(engine.getSnapshot().phase).toBe('wait');
+    vi.advanceTimersByTime(10);
+    expect(engine.getSnapshot().phase).toBe('bite');
+    expect(events).toContainEqual({ type: 'bite', spot: 'championship' });
+    expect(events.some(e => e.type === 'line-cut')).toBe(false);
+
+    // Lv60 낚싯대라도 이벤트 2에서는 빨간 존이 0%이므로 중앙 챔질도 good까지만 판정된다
+    const highRodGame = { ...newState(), boat: 9, rod: 60 };
+    engine.updateContext(highRodGame, false, {
+      dispatch: () => ({
+        status: 'ok',
+        result: {
+          type: 'catch',
+          fishId: 'event-glaaki',
+          uid: 'u-ev2',
+          info: { form: 'variant', size: 100, percentile: 10, isBig: true, isNew: true },
+          released: [],
+        },
+      } as never),
+      onEvent: event => { events.push(event); },
+      onScene: noop,
+    });
+    vi.advanceTimersByTime(700); // sweep 1.4s 중앙(0.5)
+    engine.action();
+    await Promise.resolve();
+
+    const catchEvent = events.find(e => e.type === 'catch');
+    expect(catchEvent).toMatchObject({
+      type: 'catch',
+      judgment: 'good',
+      manual: true,
+      rarity: 'legendary',
+      variant: true,
+      named: false,
+    });
+    // 전설 이벤트 어종(글라키)은 전설 획득 홀드 시간(2700ms) 동안 catch 상태를 유지한다
+    vi.advanceTimersByTime(2600);
+    expect(engine.getSnapshot().phase).toBe('catch');
+    vi.advanceTimersByTime(150);
+    expect(engine.getSnapshot().phase).toBe('wait');
+
+    engine.dispose();
+  });
+
+  it('catch 이벤트가 수동/방치, good/perfect, 등급, 변이, 네임드 상태를 사운드 훅으로 구분해 알린다', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const t0 = Date.parse('2026-11-26T00:00:00.000Z');
+    vi.setSystemTime(t0);
+    const game = { ...newState(), boat: 5, rod: 30 };
+    const school = { id: 's', spot: 'pond' as const, x: WORLD_SPAWN.x, y: WORLD_SPAWN.y };
+    const engine = new GameFieldEngine('world', game, [school], WORLD_SPAWN);
+    const events: FieldEvent[] = [];
+    let call = 0;
+    engine.updateContext(game, false, {
+      dispatch: () => {
+        call += 1;
+        return {
+          status: 'ok',
+          result: call === 1
+            ? { type: 'catch', fishId: 'crucian', uid: 'u1', info: { form: 'normal', size: 20, percentile: 50, isBig: false, isNew: false }, released: [], ticket: 'q-named' }
+            : { type: 'catch', fishId: 'carp', uid: 'u2', info: { form: 'variant', size: 40, percentile: 5, isBig: true, isNew: true }, released: [] },
+        } as never;
+      },
+      onEvent: event => { events.push(event); },
+      onScene: noop,
+    });
+
+    // 1) 수동 perfect + 네임드 티켓
+    const raw = engine as unknown as { school: unknown; transition(p: string): void };
+    raw.school = school;
+    raw.transition('wait');
+    raw.transition('bite');
+    vi.advanceTimersByTime(700); // exact center -> perfect (rod 30 over pond)
+    engine.action();
+    await Promise.resolve();
+
+    // 2) 방치(auto) + 변이
+    raw.transition('wait');
+    raw.transition('bite');
+    vi.advanceTimersByTime(1500); // timeout -> auto
+    await Promise.resolve();
+
+    const catches = events.filter(e => e.type === 'catch');
+    expect(catches).toHaveLength(2);
+    expect(catches[0]).toMatchObject({
+      type: 'catch',
+      judgment: 'perfect',
+      manual: true,
+      rarity: 'common',
+      variant: false,
+      named: true,
+    });
+    expect(catches[1]).toMatchObject({
+      type: 'catch',
+      judgment: 'auto',
+      manual: false,
+      variant: true,
+      named: false,
+    });
+    engine.dispose();
+  });
+});
 
 describe('GameFieldEngine 빨간 존 위치와 챔질 경과', () => {
   afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });

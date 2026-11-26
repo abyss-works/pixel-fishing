@@ -35,6 +35,7 @@ export function friendRelation(groups: FriendGroups, uid: string): FriendItem['s
 export function friendPlaceText(f: FriendItem, nowMs: number): string {
   if (f.online) {
     if (f.region === 'village') return '마을';
+    if (f.region === 'championship') return zoneById('championship')?.name ?? '강태공 분지 호수';
     const zone = f.zone ? zoneById(f.zone as ZoneId)?.name : undefined;
     return zone ?? '바다';
   }

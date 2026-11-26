@@ -9,7 +9,7 @@
 // 이제 셋이 같은 함수를 부른다.
 //
 // 상대경로 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버가 이 체인을 직접 불러온다.
-import { SPOTS } from '../content/spots.js';
+import { spotById } from '../content/spots.js';
 import type { SpotId } from '../content/spots.js';
 import { BOATS, MAX_BOAT, boatGateText } from '../content/boats.js';
 import { BOUNTY_PORT_ZONE, bountyById, bountyKindOf, isBountyPort, LICENSE_TIER_OF, zoneOfPort } from '../content/bounties.js';
@@ -77,6 +77,8 @@ export type RejectReason =
   | 'cooking-not-found' // 취소할 조리나 대기열 항목을 찾을 수 없다
   | 'energy-cap' // 상위 기운이 저장 상한에 도달해 더 변환할 수 없다
   | 'storage-full' // 보관함 남은 칸이 넣으려는 수량보다 적다
+  | 'event-inactive' // 진행 중인 이벤트가 없거나 기간이 지났다
+  | 'event-nothing-to-settle' // 정산할 이벤트 보상이 없다
   | 'debug-forbidden' // 개발 도구 명령 — 운영 서버이거나 소유자·로컬이 아니다
   | 'debug-db-required' // DB 전용 개발 도구를 로컬 모드(DB 없음)에서 호출했다
   | 'bad-request'; // 형식 오류 — 정상 클라이언트에서는 나오지 않는다
@@ -137,6 +139,8 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'cooking-not-found': '취소할 조리가 없어요. 이미 완성되었을 수 있어요.',
   'energy-cap': '상위 기운이 보관 상한에 닿아 더 바꿀 수 없어요.',
   'storage-full': '보관함이 가득 찼어요. 가방 탭에서 도시락을 먹거나 미끼를 쓰면 자리가 생겨요.',
+  'event-inactive': '지금은 진행 중인 이벤트가 없어요.',
+  'event-nothing-to-settle': '정산할 이벤트 보상이 없어요.',
   'debug-forbidden': '이 서버에서는 개발 도구 명령을 쓸 수 없어요. 운영 서버이거나 권한이 없는 계정이에요.',
   'debug-db-required': '로컬 모드(DB 없음)에서는 수배 DB 도구를 쓸 수 없어요.',
   'bad-request': '요청을 처리하지 못했어요. 잠시 뒤 다시 해 주세요.',
@@ -211,7 +215,7 @@ export function canBuyBoat(state: GameState): RuleCheck {
 
 /** 수역 게이트 — 클라(즉시 안내)와 서버(권위 재검증)가 같은 함수를 부른다 */
 export function canFish(state: GameState, spotId: SpotId): RuleCheck {
-  const spot = SPOTS.find(s => s.id === spotId);
+  const spot = spotById(spotId);
   if (!spot) return no('bad-request');
   return state.boat >= spot.boatTier ? OK : no('spot-locked');
 }
@@ -227,9 +231,10 @@ export function canEnterBase(state: GameState, base: string): RuleCheck {
   return state.boat >= portGate(base) ? OK : no('zone-locked');
 }
 
-/** 이동 가능 판정 — 거점은 canEnterBase를 따르고, 바다(world) 출항은 최소 배 1단계가 필요하다 */
+/** 이동 가능 판정 — 거점은 canEnterBase를 따르고, 바다(world) 출항은 최소 배 1단계가 필요하다. 이벤트 구역은 전용 액션으로만 진입한다 */
 export function canTravel(state: GameState, to: LocationRef): RuleCheck {
   if (to.kind === 'base') return canEnterBase(state, to.id);
+  if (to.id === 'championship') return no('bad-request');
   return to.id === 'world' && state.boat < 1 ? no('zone-locked') : OK;
 }
 

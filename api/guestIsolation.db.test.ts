@@ -87,6 +87,16 @@ describe('게스트 액션 허용 목록', () => {
     expect(rows[0].data.items).toEqual({ 'luck-small': 1 });
 
     expect(outcome(await send(uid, { type: 'redeemCoupon', code: '출항준비' }))).toEqual([422, 'coupon-used']);
+
+    // 게스트도 소모성 물약 사용(usePotion)은 허용되지만 가공(cook)은 계속 차단된다
+    expect(outcome(await send(uid, { type: 'usePotion', id: 'luck-small' }))).toEqual([200, 'ok']);
+    const afterPotion = await env.client.query<{ data: { items?: Record<string, number>; potions?: Record<string, unknown> } }>(
+      `select data from public.saves_current where user_id = $1`,
+      [uid],
+    );
+    expect(afterPotion.rows[0].data.items?.['luck-small'] ?? 0).toBe(0);
+    expect(afterPotion.rows[0].data.potions?.['luck-small']).toBeTruthy();
+    expect(outcome(await send(uid, { type: 'cook', recipe: 'anchovy-soup', count: 1 }))).toEqual([403, 'account-only']);
   });
 });
 

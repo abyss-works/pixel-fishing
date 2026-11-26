@@ -32,9 +32,11 @@ describe('canBuyHat', () => {
     expect(canBuyHat(seed({ gold: 1e9, hats: ['cap-red'] }), 'cap-red')).toEqual({ ok: false, reason: 'hat-owned' });
   });
 
-  it('없는 모자 id는 bad-request다', () => {
+  it('없는 모자 id는 bad-request, 업적·이벤트 한정 모자는 골드 구매를 거부한다', () => {
     expect(canBuyHat(seed({ gold: 1e9 }), 'cap-pink')).toEqual({ ok: false, reason: 'bad-request' });
     expect(canBuyHat(seed({ gold: 1e9 }), null)).toEqual({ ok: false, reason: 'bad-request' });
+    expect(canBuyHat(seed({ gold: 1e9 }), 'event-hat-basin-conical')).toEqual({ ok: false, reason: 'achievement-hat-only' });
+    expect(canBuyHat(seed({ gold: 1e9 }), 'event-hat-abyss-crown')).toEqual({ ok: false, reason: 'achievement-hat-only' });
   });
 
   it('이벤트 모자(santa-hat)는 가격이 0이어도 골드로 살 수 없다', () => {

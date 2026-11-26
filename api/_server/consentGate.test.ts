@@ -47,7 +47,7 @@ describe('경로 등록부와 허용 목록', () => {
   it('게임 요청 경로는 모두 거부 대상이다', () => {
     for (const path of ['/api/action', '/api/me', '/api/me/position', '/api/mail', '/api/friends', '/api/friends/:uid', '/api/players',
       '/api/players/:uid', '/api/rank', '/api/blocks', '/api/blocks/:uid', '/api/chat/messages/:id/reports', '/api/away-report',
-      '/api/guilds', '/api/guild-memberships']) {
+      '/api/guilds', '/api/guild-memberships', '/api/events']) {
       expect(registered, path).toContain(path);
       expect(isConsentExempt(path), path).toBe(false);
     }

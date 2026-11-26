@@ -14,14 +14,14 @@ export const SALE_BASES: Record<BaseId, boolean> = {
   home: true, harbor: true, manila: true, colombo: true, toamasina: true, walvisbay: true, lisbon: true,
 };
 
-/** 씬 지역 id — 오픈월드에서 도달 가능한 지역은 마을과 병합 바다뿐이다.
+/** 씬 지역 id — 오픈월드에서 도달 가능한 지역은 마을, 병합 바다, 이벤트 전용 분지 호수다.
  *  구세이브 location에 남은 구 지역 id(ocean/seasia/indian 등)는 **런타임 문자열**로만
  *  존재한다 — safeLocation이 무검증 통과시키고 App.sceneOf가 고향 항구로 접는다.
  *  구 지역 이름은 관리자 화면에서 리터럴 미러로 표시한다. */
-export type RegionId = 'village' | 'world';
+export type RegionId = 'village' | 'world' | 'championship';
 
 /** 존재하는 지역 — Record라 새 지역을 더하면 여기도 채워야 컴파일된다 */
-const REGION_EXISTS: Record<RegionId, true> = { village: true, world: true };
+const REGION_EXISTS: Record<RegionId, true> = { village: true, world: true, championship: true };
 
 /** 이동 목적지가 실제로 있는 지역·거점인지 — 형태가 맞아도 콘텐츠에 없는 id는 거짓이다 */
 export function isKnownLocation(to: { kind: string; id: string }): boolean {

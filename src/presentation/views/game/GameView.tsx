@@ -43,6 +43,11 @@ import { createGuestBlockedNotice } from './guestBlockedNotice';
 import { accountLockState, isConfirmedGuest } from '../../../features/account/service/accountActions';
 import type { GuestProgress } from '../../../features/account/model/accountRules';
 import GameMenu from '../overlays/menu/GameMenu';
+import EventHudButton from '../overlays/events/EventHudButton';
+import MobileEventHudButton from '../overlays/events/MobileEventHudButton';
+import EventsModal from '../overlays/events/EventsModal';
+import { hasActiveEvents, hasEventsAlert } from '../../../features/events/model/events';
+import { useEvents } from '../../../features/events/service/useEvents';
 import MailboxModal from '../overlays/mailbox/MailboxModal';
 import FriendsModal from '../overlays/friends/FriendsModal';
 import GuildModal from '../overlays/guild/GuildModal';
@@ -167,6 +172,8 @@ export default function GameView(props: GameViewProps) {
   const [fortuneOpen, setFortuneOpen] = useState(false);
   const [rankingOpen, setRankingOpen] = useState(false);
   const [mailboxOpen, setMailboxOpen] = useState(false);
+  const [eventsOpen, setEventsOpen] = useState(false);
+  const [eventBusy, setEventBusy] = useState(false);
   const [friendsOpen, setFriendsOpen] = useState(false);
   const [guildOpen, setGuildOpen] = useState(false);
   const [worldMapOpen, setWorldMapOpen] = useState(false);
@@ -176,7 +183,8 @@ export default function GameView(props: GameViewProps) {
   /** 추적 중인 네임드 의뢰 — 흔적 카드의 추적 버튼이 열고, 토벌·돌아가기·닫기가 닫는다 */
   const [tracking, setTracking] = useState<string | null>(null);
   const covered = useCanvasCover();
-  const atSea = scene.kind === 'region' && scene.id !== 'village';
+  const atSea = scene.kind === 'region' && scene.id === 'world';
+  const showPresence = scene.kind === 'region' && (scene.id === 'world' || REGION_PACKS[scene.id].showOthers === true);
   // 튜토리얼 트리거 — 마을 야외와 바다에 처음 나왔을 때
   useTutorialTrigger('village', scene.kind === 'region' && scene.id === 'village');
   useTutorialTrigger('sea', atSea);
@@ -207,6 +215,9 @@ export default function GameView(props: GameViewProps) {
   const [player, setPlayer] = useState<PlayerTarget | null>(null);
   const { guild } = useGuild(props.account !== null);
   const accountState = accountLockState(props.account, props.accountFailed);
+  const { snap: eventsSnap } = useEvents({ enabled: true });
+  const activeEvents = hasActiveEvents(eventsSnap ?? null);
+  const eventsAlert = hasEventsAlert(eventsSnap, accountState);
   const progress = props.guestProgress;
   // 길드 보너스는 서버가 적용한다. 화면은 서버가 알려 준 레벨과 효과를 보이기만 한다(스탯 창 보너스 탭, 가방 칸)
   const guildBonus = guild ? { level: guild.growth.level, effects: guild.effects, bonuses: guild.bonuses } : null;
@@ -294,7 +305,16 @@ export default function GameView(props: GameViewProps) {
     setToast: props.setToast,
   });
 
-  const resetPanels = () => { setActionPanel(null); setStatsOpen(false); setEffectsOpen(false); setAchievementsOpen(false); setFortuneOpen(false); setRankingOpen(false); setTracking(null); };
+  const resetPanels = () => {
+    setActionPanel(null);
+    setStatsOpen(false);
+    setEffectsOpen(false);
+    setAchievementsOpen(false);
+    setFortuneOpen(false);
+    setRankingOpen(false);
+    setEventsOpen(false);
+    setTracking(null);
+  };
 
   const go = (nextScene: SceneRef, message: string, entryPos?: Point, returnPos?: Point) => {
     resetPanels();
@@ -410,6 +430,104 @@ export default function GameView(props: GameViewProps) {
   };
   const onOpenMap = () => setWorldMapOpen(true);
 
+  const enterEventZone = async (eventId: string) => {
+    if (eventBusy) return;
+    setEventBusy(true);
+    try {
+      const settled = await settleAction(() => props.dispatch({ type: 'enterEventZone', eventId }));
+      if (settled.ok) {
+        resetPanels();
+        props.onPlace({ kind: 'region', id: 'championship' }, REGION_PACKS.championship.spawn);
+        sendNotice(props.setToast, {
+          kind: 'travel.routineMove',
+          text: `${REGION_PACKS.championship.name}에 입장했어요.`,
+        });
+        return;
+      }
+      if (settled.notice) {
+        sendNotice(props.setToast, {
+          kind: 'travel.blocked',
+          text: settled.notice,
+          cooldownKey: 'event.enter',
+        });
+      }
+    } finally {
+      setEventBusy(false);
+    }
+  };
+
+  const leaveEventZone = async () => {
+    if (eventBusy) return;
+    setEventBusy(true);
+    try {
+      let nextLocation: GameState['location'] | null = null;
+      const settled = await settleAction(async () => {
+        const res = await props.dispatch({ type: 'leaveEventZone' });
+        if (res.status === 'ok') nextLocation = res.state.location;
+        return res;
+      });
+      if (settled.ok) {
+        resetPanels();
+        const fallbackDest = game.boat < 1
+          ? ({ kind: 'region', id: 'village' } as const)
+          : ({ kind: 'base', id: 'harbor' } as const);
+        const dest = nextLocation ?? fallbackDest;
+        props.onPlace(dest);
+        const destName = dest.kind === 'base'
+          ? BASE_PACKS[dest.id].name
+          : REGION_PACKS[dest.id].info.shortName;
+        sendNotice(props.setToast, {
+          kind: 'travel.routineMove',
+          text: `${destName}에 도착했어요.`,
+        });
+        return;
+      }
+      if (settled.notice) {
+        sendNotice(props.setToast, {
+          kind: 'travel.blocked',
+          text: settled.notice,
+          cooldownKey: 'event.leave',
+        });
+      }
+    } finally {
+      setEventBusy(false);
+    }
+  };
+
+  const settleEventReward = async (eventId: string) => {
+    if (eventBusy) return;
+    setEventBusy(true);
+    try {
+      let settledGrant: { gold: number; fame: number } | null = null;
+      const settled = await settleAction(async () => {
+        const res = await props.dispatch({ type: 'settleEventReward', eventId });
+        if (res.status === 'ok' && res.result.type === 'eventSettle') {
+          settledGrant = { gold: res.result.gold, fame: res.result.fame };
+        }
+        return res;
+      });
+      if (settled.ok) {
+        if (settledGrant) {
+          const { gold, fame } = settledGrant;
+          sendNotice(props.setToast, {
+            kind: 'achievement.claimed',
+            text: `대회 보상을 정산해 골드 ${fmtNum(gold)}G와 명성 ${fmtNum(fame)}을 받았어요.`,
+            toastText: `대회 보상 ${fmtNum(gold)}G 정산!`,
+          });
+        }
+        return;
+      }
+      if (settled.notice) {
+        sendNotice(props.setToast, {
+          kind: 'system.modalRejected',
+          text: settled.notice,
+        });
+      }
+    } finally {
+      setEventBusy(false);
+    }
+  };
+
   useKeyScope(e => {
     if (scene.kind !== 'base' || trip !== null || encounter !== null || props.blocker != null) return false;
     if (e.key !== 'Escape' || hasModifier(e)) return false;
@@ -459,8 +577,23 @@ export default function GameView(props: GameViewProps) {
                        {atSea && <TraceCard onTrack={setTracking} />}
                      </div>
                    ) : null}
-                   chips={atSea ? <PresenceChip region={region} onOpen={() => setPlayersOpen(true)} /> : null}
+                   chips={showPresence ? <PresenceChip region={region} onOpen={() => setPlayersOpen(true)} /> : null}
                    badge={props.badge} accountState={accountState}
+                   eventButton={activeEvents ? (
+                     mobile ? (
+                       <MobileEventHudButton
+                         open={eventsOpen}
+                         alert={eventsAlert}
+                         onClick={() => setEventsOpen(open => !open)}
+                       />
+                     ) : (
+                       <EventHudButton
+                         open={eventsOpen}
+                         alert={eventsAlert}
+                         onClick={() => setEventsOpen(open => !open)}
+                       />
+                     )
+                   ) : null}
                    menu={(
                      <GameMenu game={game} account={props.account} accountState={accountState} setToast={props.setToast} onQuests={openQuests}
                                onAchievements={() => setAchievementsOpen(true)}
@@ -536,7 +669,7 @@ export default function GameView(props: GameViewProps) {
           <AccountModal layer="stage" mode="connect" setToast={props.setToast} onAuthChanged={props.onAuthChanged} account={props.account} accountFailed={props.accountFailed}
                         syncLabel={props.syncLabel} syncState={props.syncState} sailReturn={accountSailIntent} onClose={closeAccount} />
         )}
-        {playersOpen && atSea && (
+        {playersOpen && showPresence && (
           <PlayersModal region={region} account={props.account} accountFailed={props.accountFailed} setToast={props.setToast} onClose={() => setPlayersOpen(false)} />
         )}
         {player && (
@@ -545,6 +678,22 @@ export default function GameView(props: GameViewProps) {
         )}
         {mailboxOpen && (
           <MailboxModal dispatch={props.dispatch} setToast={props.setToast} onClose={() => setMailboxOpen(false)} />
+        )}
+        {eventsOpen && (
+          <EventsModal
+            accountState={accountState}
+            game={game}
+            nickname={props.nickname}
+            busy={eventBusy}
+            onEnterEventZone={enterEventZone}
+            onLeaveEventZone={leaveEventZone}
+            onSettleEventReward={settleEventReward}
+            onConnectGoogle={() => {
+              setEventsOpen(false);
+              openAccount(false);
+            }}
+            onClose={() => setEventsOpen(false)}
+          />
         )}
 
         {trip && <FerryVeil onSurface={ferrySurface} onMove={ferryMove} onDone={() => setTrip(null)} />}

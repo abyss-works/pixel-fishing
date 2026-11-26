@@ -40,9 +40,10 @@ describe('widget shared contract — 해역 테마 매핑', () => {
     expect(SPOTS).toHaveLength(15);
     expect(Object.keys(SPOT_SEA_THEME).sort()).toEqual(SPOTS.map(s => s.id).sort());
     for (const spot of SPOTS) {
-      expect(SPOT_SEA_THEME[spot.id]).toBe('deep');
+      expect(SPOT_SEA_THEME[spot.id as keyof typeof SPOT_SEA_THEME]).toBe('deep');
       expect(resolveSpotSeaTheme(spot.id)).toBe('deep');
     }
+    expect(resolveSpotSeaTheme('championship')).toBe(DEFAULT_WIDGET_SEA_THEME);
     expect(resolveSpotSeaTheme(undefined)).toBe(DEFAULT_WIDGET_SEA_THEME);
     expect(resolveSpotSeaTheme(null)).toBe(DEFAULT_WIDGET_SEA_THEME);
     expect(resolveSpotSeaTheme('')).toBe(DEFAULT_WIDGET_SEA_THEME);

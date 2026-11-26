@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { HATS, LOOK_PRESETS, PANTS_COLORS, SHIRT_COLORS, hatById } from '../../../../game/content/wardrobe';
 import type { Look } from '../../../../game/content/wardrobe';
 import type { GameState } from '../../../../game/rules/logic';
-import { clothesChanged, hatCountText, hatDetail, outfitName } from '../../../../features/wardrobe/model/wardrobe';
+import { clothesChanged, hatCountText, hatDetail, outfitName, visibleHats } from '../../../../features/wardrobe/model/wardrobe';
 import Button from '../../../ui/Button';
 import ColorSwatch from '../../../ui/ColorSwatch';
 import Inset from '../../../ui/Inset';
@@ -29,6 +29,7 @@ export default function WardrobePanel({ game, busy, onChangeClothes, onBuyHat, o
   onWearHat: (hatId: string | null) => void;
   onClose: () => void;
 }) {
+  const hats = visibleHats(game);
   const [screen, setScreen] = useState<Screen>('clothes');
   const [pick, setPick] = useState({ shirt: game.look.shirt, pants: game.look.pants });
   const [hatId, setHatId] = useState(game.look.hat ?? HATS[0].id);
@@ -85,7 +86,7 @@ export default function WardrobePanel({ game, busy, onChangeClothes, onBuyHat, o
       ) : (
         <div className="flex flex-col gap-2 flex-1 min-h-0">
           <div className={`grid grid-cols-5 gap-2 flex-1 min-h-0 content-start mobile:grid-cols-3 ${SCROLL_Y}`}>
-            {HATS.map(h => {
+            {hats.map(h => {
               const owned = game.hats.includes(h.id);
               const worn = game.look.hat === h.id;
               return (
@@ -174,7 +175,7 @@ function HatDetailBox({ game, hatId, busy, onBuy, onWear }: {
           </span>
         ) : d.source === 'event' ? (
           <span className="text-xs text-text-dim break-keep break-words">
-            이벤트 한정 {d.eventHint && <span className="text-text">{d.eventHint}</span>}
+            {d.eventHint ? <>이벤트 한정 <span className="text-text">{d.eventHint}</span></> : '이벤트 한정 모자'}
           </span>
         ) : (
           <span className="text-xs text-text-dim">가격 <span className="pf-accent text-text">{fmtGold(d.price)}</span></span>

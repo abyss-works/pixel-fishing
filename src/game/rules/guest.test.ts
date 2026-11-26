@@ -62,6 +62,7 @@ describe('게스트 액션 판정 (guestActionVerdict)', () => {
       { type: 'resolveChallenge', questId: 'q', success: true, hits: 1, misses: 0 },
       { type: 'redeemCoupon', code: 'x' }, { type: 'claimRelief', code: 'x' }, { type: 'claimMail', id: 1 },
       { type: 'exhibit', uid: 'u', slot: 0 }, { type: 'exchangeArtifact', artifact: 'a' }, { type: 'levelUpArtifact', artifact: 'a' },
+      { type: 'enterEventZone' }, { type: 'leaveEventZone' }, { type: 'settleEventReward' },
     ];
     for (const action of rejected) expect(guestActionVerdict(action), action.type).toBe('account-only');
   });

@@ -30,6 +30,7 @@ export type { LiveConnection };
 
 export { when } from '../../shared/lib/when';
 export { readBounty, kstDay, gameDay } from '../adapters/bounty';
+export { readEvents } from '../adapters/events';
 export { readFortuneHistory } from '../adapters/fortune';
 export { readRanking } from '../adapters/ranking';
 export { readMails, markMailRead } from '../adapters/mailbox';
@@ -41,6 +42,10 @@ export { readPlayer, searchPlayers } from '../adapters/player';
 export { readAwayReport, watchAway } from '../adapters/away';
 export { readLastPosition } from '../adapters/position';
 export { ConsentRequiredError, isConsentRequiredError, subscribeConsentRequired } from '../adapters/requestFailure';
+export {
+  soundApi, playSfx, ensureSoundEngineSync, getSoundSettings, subscribeSoundSettings,
+} from './sound';
+export type { SfxKey, SoundEngineState } from './sound';
 export type { LastPosition } from '../adapters/position';
 export type { PublicProfile } from '../adapters/player';
 export type {
@@ -57,4 +62,7 @@ export type {
   AdminOnboardingStepId, AdminOnboardingStepBasis, AdminOnboardingFunnelStep, AdminOnboardingFunnel,
   AdminLive, AdminLiveConnection, AdminDailyStatsRow, AdminSessionRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, AdminChangelogRow, AdminChatReportRow, AdminNoticeRow, AdminNoticeRequest, AdminNoticeMutationResult, BalanceLive,
   AdminSentMailRow, AdminMailRequest, AdminMailPlan,
+  SoundSettings,
+  LiveEventKind, LiveEventSummary, EventTrioSlotStatus, EventTrioState, EventLeaderboardRow, EventChampionshipState, EventLuckDayStamp, EventDrawState, EventsSnapshot,
+  AdminLiveEventRow, AdminLiveEventRequest, AdminEventDrawRow, AdminCouponRow, AdminCouponRequest,
 } from './types';

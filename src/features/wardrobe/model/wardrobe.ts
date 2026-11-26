@@ -7,8 +7,13 @@ import type { GameState } from '../../../game/rules/logic';
 
 // 옷장 창의 파생 모델 — 판정은 게임 규칙(canBuyHat)을 그대로 쓰고, 여기서는 화면이 읽을 값으로 묶는다.
 
-const EVENT_HAT_UNOWNED_HINT = '겨울 이벤트 기간에 접속하면 우편함으로 받을 수 있어요.';
-const EVENT_HAT_OWNED_HINT = '겨울 이벤트 접속 선물';
+const EVENT_HAT_UNOWNED_HINT: Readonly<Record<string, string>> = {
+  'santa-hat': '겨울 이벤트 기간에 접속하면 우편함으로 받을 수 있어요.',
+};
+const EVENT_HAT_OWNED_HINT: Readonly<Record<string, string>> = {
+  'santa-hat': '겨울 이벤트 접속 선물',
+};
+const DEFAULT_EVENT_HAT_UNOWNED_HINT = '이벤트에서 얻을 수 있는 한정 모자예요.';
 
 export interface HatDisplayInfo {
   id: string;
@@ -37,9 +42,16 @@ export function outfitName(pick: { shirt: number; pants: number }): string {
   return preset ? `${preset.name} 옷` : '직접 고른 옷';
 }
 
+/** 옷장 모자 목록에 보이는 모자 — 보유하지 않은 이벤트 한정 모자는 목록과 전체 수에서 뺀다 */
+export function visibleHats(game: Pick<GameState, 'hats'>): readonly Hat[] {
+  return HATS.filter(h => !isEventHat(h) || game.hats.includes(h.id));
+}
+
 /** 모자 탭 라벨의 가진 수/전체 */
 export function hatCountText(game: GameState): string {
-  return `${game.hats.length}/${HATS.length}`;
+  const hats = visibleHats(game);
+  const owned = hats.filter(h => game.hats.includes(h.id)).length;
+  return `${owned}/${hats.length}`;
 }
 
 export type HatActionKind = 'wear' | 'unwear' | 'buy' | 'achievement' | 'event';
@@ -81,7 +93,9 @@ export function hatDetail(game: GameState, hatId: string): HatDetail {
   const owned = game.hats.includes(hat.id);
   const worn = game.look.hat === hat.id;
   const unlock = isAchievementHat(hat) ? resolveHatUnlock(game, hat) : null;
-  const eventHint = isEventHat(hat) ? (owned ? EVENT_HAT_OWNED_HINT : EVENT_HAT_UNOWNED_HINT) : null;
+  const eventHint = isEventHat(hat)
+    ? (owned ? (EVENT_HAT_OWNED_HINT[hat.id] ?? null) : (EVENT_HAT_UNOWNED_HINT[hat.id] ?? DEFAULT_EVENT_HAT_UNOWNED_HINT))
+    : null;
   if (!owned) {
     if (isAchievementHat(hat)) {
       return {
@@ -94,7 +108,7 @@ export function hatDetail(game: GameState, hatId: string): HatDetail {
     if (isEventHat(hat)) {
       return {
         name: hat.name, price: hat.price, source: hat.source, owned, worn, action: 'event',
-        buyBlock: EVENT_HAT_UNOWNED_HINT,
+        buyBlock: eventHint ?? DEFAULT_EVENT_HAT_UNOWNED_HINT,
         unlock: null,
         eventHint,
       };

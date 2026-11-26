@@ -44,8 +44,8 @@ const tables: PgTable[] = Object.values(schema);
 describe('Drizzle 스키마', () => {
   it('서버가 쓰는 표를 모두 선언한다', () => {
     expect(tables.map(t => getTableConfig(t).name).sort()).toEqual([
-      'achievement_counters', 'bounty_accepts', 'bounty_clears', 'bounty_progress', 'bounty_tickets', 'changelog_entries', 'coupons', 'daily_fortunes', 'event_consumer_cutoffs', 'events', 'fish_instances',
-      'guild_member_enhancements', 'http_metrics_daily', 'letters', 'mails', 'notices', 'profiles', 'ranking_weekly_fame', 'records', 'reliefs', 'saves', 'saves_current',
+      'achievement_counters', 'bounty_accepts', 'bounty_clears', 'bounty_progress', 'bounty_tickets', 'changelog_entries', 'coupon_redemptions', 'coupons', 'daily_fortunes', 'event_championship_scores', 'event_consumer_cutoffs', 'event_draws', 'event_trio_progress', 'events', 'fish_instances',
+      'guild_member_enhancements', 'http_metrics_daily', 'letters', 'live_events', 'mails', 'notices', 'profiles', 'ranking_weekly_fame', 'records', 'reliefs', 'saves', 'saves_current',
       'widget_auth_codes', 'widget_tokens',
     ]);
   });
