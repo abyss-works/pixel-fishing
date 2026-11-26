@@ -5,6 +5,7 @@ import { cx } from '../../../../ui/cx';
 import Divider from '../../../../ui/Divider';
 import Frame from '../../../../ui/Frame';
 import FishSprite from '../../../../ui/fish/FishSprite';
+import NightMark from '../../../../ui/fish/NightMark';
 import { RARITY_CARD, DIM_CARD } from '../../../../ui/fish/RarityTag';
 import DexDetail from '../dex/DexDetail';
 
@@ -30,6 +31,7 @@ export default function BagCards({ bag, game }: { bag: readonly FishInstance[]; 
           : `${f.name} 일반 ${normalCount}마리 돌연변이 ${variantCount}마리 보유`;
         const body = (
           <>
+            <NightMark fish={f} discovered={known} />
             <FishSprite fish={f} preset="icon" form={shown.form} discovered={known}
                         ariaLabel="" className="block mx-auto mb-1" />
             {/* 가방은 "내가 지금 뭘 들고 있나"만 본다 — 등급은 테두리가, 미발견은 ???가 말한다.
