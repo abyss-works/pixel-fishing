@@ -2,8 +2,13 @@
 // 서버 진입점은 default export를 Node 스타일 (req, res)로 호출한다 — 이 테스트는
 // 그 계약(시그니처·res.status().json() 체인·메서드/설정 가드)이 커밋 전에 깨지면 CI에서 즉사시킨다.
 // NodeNext 설정이 서버 모듈의 해상도를 정적으로 검사하므로 여기서는 중복하지 않는다.
-import { afterEach, describe, it, expect } from 'vitest';
-import handler, { guildLogsOf, SKIP_DETAIL } from './action.js';
+import { afterEach, describe, it, expect, vi } from 'vitest';
+import handler, { fastCatch, guildLogsOf, recordsToDex, SKIP_DETAIL } from './action.js';
+import type { RecordRow, StateRow } from './_data/load.js';
+import type { Executor } from './_db/client.js';
+import { NO_GUILD_EFFECTS } from '../src/game/rules/guild.js';
+import { newState } from '../src/game/rules/logic.js';
+import { gameDayOf } from '../src/game/rules/time.js';
 import { APP_VERSION } from '../src/version.js';
 
 function mkRes() {
@@ -125,5 +130,104 @@ describe('guildLogsOf', () => {
     expect(guildLogsOf([
       { type: 'catch', payload: { fishId: 'crucian', form: 'variant' } },
     ])).toEqual([]);
+  });
+});
+
+describe('fastCatch 지역 누적 보너스 도감 로드', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function makeDb(records: RecordRow[]) {
+    const execute = vi.fn(async () => {
+      if (execute.mock.calls.length === 1) {
+        return { rows: [{ records }] };
+      }
+      return {
+        rows: [{ dex: null, bag: 0, max_locked_size: null, prev_auto: null }],
+      };
+    });
+    return { db: { execute } as unknown as Executor, execute };
+  }
+
+  function makeStateRow(now: string): StateRow {
+    const base = {
+      ...newState(),
+      boat: 1,
+      rod: 6,
+      fortune: { day: gameDayOf(now), kind: 'gold' as const, index: 3 as const },
+    };
+    const { bag: _b, exhibit: _e, dex: _d, gold, fame, boat, rod, achievementCounters: _ac, clearedNamed: _cn, ...data } = base;
+    return { data, version: 2, gold, fame, boat, rod };
+  }
+
+  function mockRolls(seq: number[]) {
+    let i = 0;
+    vi.spyOn(Math, 'random').mockImplementation(() => seq[i++] ?? 0.5);
+  }
+
+  it('recordsToDex는 일반·변이 행을 GameState.dex 형태로 변환한다', () => {
+    expect(recordsToDex([
+      { fish_id: 'shark', form: 'normal', count: 20, max_size: 210, first_caught: '2026-01-01T00:00:00Z' },
+      { fish_id: 'mackerel', form: 'variant', count: 500, max_size: null, first_caught: null },
+    ])).toEqual({
+      shark: { normal: { count: 20, maxSize: 210, first: '2026-01-01' } },
+      mackerel: { variant: { count: 500, maxSize: null, first: null } },
+    });
+  });
+
+  it('fastCatch는 수동 카운터 없이도 records(normal)에서 rareWeight를 계산해 drawCatch에 반영하고 loadRecords를 1회만 호출한다', async () => {
+    const now = '2030-03-04T05:30:00.000Z';
+    const row = makeStateRow(now);
+
+    const empty = makeDb([]);
+    mockRolls([0.738, 0.1, 0.5, 0.5]);
+    const plain = await fastCatch(empty.db, 'u1', row, 'sea', 'normal', now, NO_GUILD_EFFECTS, false, {}, []);
+    expect(plain.ok && plain.result.type === 'catch' && plain.result.fishId).toBe('mackerel');
+    expect(empty.execute).toHaveBeenCalledTimes(2);
+
+    const filled = makeDb([
+      { fish_id: 'shark', form: 'normal', count: 20, max_size: 200, first_caught: '2026-01-01' },
+    ]);
+    mockRolls([0.738, 0.1, 0.5, 0.5]);
+    const boosted = await fastCatch(filled.db, 'u1', row, 'sea', 'normal', now, NO_GUILD_EFFECTS, false, {}, []);
+    expect(boosted.ok && boosted.result.type === 'catch' && boosted.result.fishId).toBe('seabream');
+    expect(filled.execute).toHaveBeenCalledTimes(2);
+  });
+
+  it('fastCatch는 records(normal)의 밤 전설 포획 수로 nightWeight를 계산해 drawCatch에 반영한다', async () => {
+    const now = '2030-03-04T05:05:00.000Z';
+    const row = makeStateRow(now);
+
+    const empty = makeDb([]);
+    mockRolls([0.995, 0.331, 0.5, 0.5]);
+    const plain = await fastCatch(empty.db, 'u1', row, 'sea', 'normal', now, NO_GUILD_EFFECTS, false, {}, []);
+    expect(plain.ok && plain.result.type === 'catch' && plain.result.fishId).toBe('shark');
+
+    const filled = makeDb([
+      { fish_id: 'moonveil', form: 'normal', count: 10, max_size: 100, first_caught: '2026-01-01' },
+    ]);
+    mockRolls([0.995, 0.331, 0.5, 0.5]);
+    const boosted = await fastCatch(filled.db, 'u1', row, 'sea', 'normal', now, NO_GUILD_EFFECTS, false, {}, []);
+    expect(boosted.ok && boosted.result.type === 'catch' && boosted.result.fishId).toBe('moonveil');
+    expect(filled.execute).toHaveBeenCalledTimes(2);
+  });
+
+  it('fastCatch는 records(variant)의 변이 포획 수로 mutationWeight를 계산해 drawCatch에 반영한다', async () => {
+    const now = '2030-03-04T05:30:00.000Z';
+    const row = makeStateRow(now);
+
+    const empty = makeDb([]);
+    mockRolls([0.1, 0.1, 0.5, 0.5, 0.251]);
+    const plain = await fastCatch(empty.db, 'u1', row, 'sea', 'normal', now, NO_GUILD_EFFECTS, false, {}, []);
+    expect(plain.ok && plain.result.type === 'catch' && plain.result.info.form).toBe('normal');
+
+    const filled = makeDb([
+      { fish_id: 'mackerel', form: 'variant', count: 500, max_size: 40, first_caught: '2026-01-01' },
+    ]);
+    mockRolls([0.1, 0.1, 0.5, 0.5, 0.251]);
+    const boosted = await fastCatch(filled.db, 'u1', row, 'sea', 'normal', now, NO_GUILD_EFFECTS, false, {}, []);
+    expect(boosted.ok && boosted.result.type === 'catch' && boosted.result.info.form).toBe('variant');
+    expect(filled.execute).toHaveBeenCalledTimes(2);
   });
 });
