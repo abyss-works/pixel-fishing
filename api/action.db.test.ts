@@ -2377,8 +2377,11 @@ describe('실시간 닉네임 즉시 동기화', () => {
         return { uid, nick: nick ?? '낚시꾼', boat, guest: false };
       },
       chat: {
-        save: (user, text, guild) => saveChat(db, user.uid, user.nick, text, guild),
+        save: (user, text, guild, room, region) => saveChat(db, {
+          uid: user.uid, nick: user.nick, text, room, region, guildId: guild,
+        }),
         recent: async () => [],
+        recentLocal: async () => [],
         blocked: async () => [],
         guildOf: async () => null,
       },
@@ -2414,6 +2417,9 @@ describe('실시간 닉네임 즉시 동기화', () => {
       const b = connectWs(uidB);
       await a.next();
       await b.next();
+
+      b.ws.send(JSON.stringify({ t: 'region', region: 'sea' }));
+      expect(await b.next()).toMatchObject({ t: 'localHistory', region: 'sea', lines: [] });
 
       a.ws.send(JSON.stringify({ t: 'move', region: 'sea', x: 10, y: 20, dir: 1, line: false }));
       expect(await b.next()).toMatchObject({ t: 'join', presence: { uid: uidA, nick: '처음선장' } });
