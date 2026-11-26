@@ -97,7 +97,6 @@ const TEST_PACK: RegionPack = {
   labels: [],
   triggers: [],
   spawn: { x: 500, y: 500 },
-  schools: [],
 };
 
 function baseFieldView(overrides: Partial<FieldView> = {}): FieldView {
