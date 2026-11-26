@@ -224,7 +224,7 @@ function EnergyCards({ energy, lockLines }: {
   );
 }
 
-/** 비약 카드 격자 — 계정 회원은 배 단계와 무관하게 쓸 수 있고, 게스트·확인 실패는 잠금 상태다 */
+/** 비약 카드 격자 — 확인된 계정과 게스트는 배 단계와 무관하게 쓸 수 있고, 확인 실패만 잠금 상태다 */
 function PotionCards({ rows, potionLock, busy, selectedId, onSelect, onUse }: {
   rows: readonly PotionRow[];
   potionLock: readonly string[] | null;

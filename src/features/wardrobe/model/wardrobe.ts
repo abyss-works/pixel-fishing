@@ -1,4 +1,4 @@
-import { HATS, LOOK_PRESETS, hatById, isAchievementHat } from '../../../game/content/wardrobe';
+import { HATS, LOOK_PRESETS, hatById, isAchievementHat, isEventHat } from '../../../game/content/wardrobe';
 import type { Hat, HatSource, Look } from '../../../game/content/wardrobe';
 import { achievementForHatId, namedSpoilerPlace } from '../../../game/content/achievements';
 import { achievementProgress } from '../../../game/rules/achievements';
@@ -18,12 +18,19 @@ export function outfitName(pick: { shirt: number; pants: number }): string {
   return preset ? `${preset.name} 옷` : '직접 고른 옷';
 }
 
-/** 모자 탭 라벨의 가진 수/전체 */
-export function hatCountText(game: GameState): string {
-  return `${game.hats.length}/${HATS.length}`;
+/** 옷장 모자 목록에 보이는 모자 — 보유하지 않은 이벤트 한정 모자는 목록과 전체 수에서 뺀다 */
+export function visibleHats(game: Pick<GameState, 'hats'>): readonly Hat[] {
+  return HATS.filter(h => !isEventHat(h) || game.hats.includes(h.id));
 }
 
-export type HatActionKind = 'wear' | 'unwear' | 'buy' | 'achievement';
+/** 모자 탭 라벨의 가진 수/전체 */
+export function hatCountText(game: GameState): string {
+  const hats = visibleHats(game);
+  const owned = hats.filter(h => game.hats.includes(h.id)).length;
+  return `${owned}/${hats.length}`;
+}
+
+export type HatActionKind = 'wear' | 'unwear' | 'buy' | 'achievement' | 'event';
 
 export interface HatDetail {
   name: string;
@@ -61,6 +68,13 @@ export function hatDetail(game: GameState, hatId: string): HatDetail {
   const worn = game.look.hat === hat.id;
   const unlock = isAchievementHat(hat) ? resolveHatUnlock(game, hat) : null;
   if (!owned) {
+    if (isEventHat(hat)) {
+      return {
+        name: hat.name, price: hat.price, source: hat.source, owned, worn, action: 'event',
+        buyBlock: '이벤트에서 얻을 수 있는 한정 모자예요.',
+        unlock: null,
+      };
+    }
     if (isAchievementHat(hat)) {
       return {
         name: hat.name, price: hat.price, source: hat.source, owned, worn, action: 'achievement',

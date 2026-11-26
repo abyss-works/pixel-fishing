@@ -14,13 +14,15 @@ const sample = (kind: DailyFortune['kind'], index: DailyFortune['index']): Daily
 describe('오늘의 운세 팝업 (FortuneModal)', () => {
   it('통합 헤더 카드, 로어, 단일 곱연산 배수 요약을 보이고 중복 지수·안내 3줄·하단 버튼 없이 닫기 X로만 닫힌다', () => {
     const onClose = vi.fn();
-    render(<FortuneModal fortune={sample('fish', 5)} onClose={onClose} />);
+    render(<FortuneModal fortune={{ ...sample('fish', 5), score: 86 }} onClose={onClose} />);
 
     const dialog = screen.getByRole('dialog');
     expect(dialog).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '오늘의 운세' })).toBeInTheDocument();
     expect(screen.getByText('만선 풍어운')).toBeInTheDocument();
     expect(screen.getByLabelText('강도 좋은 운')).toBeInTheDocument();
+    expect(screen.getByLabelText('운세 점수 86점')).toHaveTextContent('86');
+    expect(dialog.querySelector('[data-glyph="clover"]')).not.toBeNull();
     expect(screen.getByText('좋은 운')).toBeInTheDocument();
     expect(screen.getByText('×1.10')).toBeInTheDocument();
 

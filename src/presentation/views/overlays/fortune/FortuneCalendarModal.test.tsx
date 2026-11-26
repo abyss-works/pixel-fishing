@@ -101,6 +101,8 @@ describe('운세 월간 달력 창 (FortuneCalendarModal)', () => {
     expect(within(todayCard).getByText('만선 풍어운')).toBeInTheDocument();
     expect(within(todayCard).getByText('좋은 운')).toBeInTheDocument();
     expect(within(todayCard).getByText('×1.10')).toBeInTheDocument();
+    expect(within(todayCard).getByLabelText(/운세 점수 \d+점/)).toBeInTheDocument();
+    expect(todayCard.querySelector('[data-glyph="clover"]')).not.toBeNull();
 
     // 제거 항목 검증
     expect(screen.queryByLabelText('월간 운세 집계')).toBeNull();
@@ -111,6 +113,8 @@ describe('운세 월간 달력 창 (FortuneCalendarModal)', () => {
     const detail = screen.getByLabelText('선택한 날짜 운세 상세');
     expect(within(detail).getByText('2026년 11월 25일')).toBeInTheDocument();
     expect(within(detail).getByText('좋은 운')).toBeInTheDocument();
+    expect(within(detail).getByLabelText(/운세 점수 \d+점/)).toBeInTheDocument();
+    expect(detail.querySelector('[data-glyph="clover"]')).not.toBeNull();
     expect(within(detail).getByText('희귀')).toHaveAttribute('data-rarity', 'rare');
     expect(within(detail).getByText('×1.10')).toBeInTheDocument();
 
