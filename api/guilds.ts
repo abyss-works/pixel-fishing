@@ -25,6 +25,7 @@
 //   POST   /api/guilds/:id/enhancements/reset
 //                                          → 200 { gold, recovered, enhanceResetCount }  자유 강화 초기화(길드원 누구나, 누적 횟수별 개인 골드 비용, 횟수 제한 없음)
 // 가입 신청이 들어오면 길드장에게, 신청을 처리하면 신청한 사람에게 접속 중일 때 실시간 알림을 보낸다.
+// 기부·자유 강화·초기화·이름 바꾸기·들어오기·승인·떠나기·내보내기로 길드 상태가 바뀌면 접속한 길드원에게 갱신 알림을 보낸다.
 //
 // 주의: 시그니처는 Node 스타일(req, res)만 쓴다. 경로 변수는 Express가 req.params로 넘긴다.
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -35,7 +36,7 @@ import {
   cancelJoinRequest, createGuild, decideJoinRequest, donateToBonus, enhanceBonus, handOver, joinByCode, myGuild, myJoinRequest,
   removeMember, renameGuild, resetEnhancements, setJoinSettings,
 } from './_data/guilds.js';
-import { notifyUser, presenceOf } from './_server/livePresence.js';
+import { notifyGuild, notifyUser, presenceOf } from './_server/livePresence.js';
 import {
   GUILD_BONUS_IDS, checkGuildName, guildCode, normalizeGuildCode, normalizeGuildPitch, parseJoinMode, parseJoinVia, validDonationAmount,
 } from '../src/game/rules/guild.js';
@@ -60,6 +61,9 @@ const STATUS: Record<string, number> = {
   'enhance-locked': 409, 'no-enhance-points': 409, 'enhance-maxed': 409, 'no-enhance-used': 409,
 };
 const refuse = (error: string) => new ApiError(STATUS[error] ?? 400, error);
+
+/** 길드 상태가 바뀌었음을 접속한 길드원에게 알린다. 받은 쪽이 길드를 다시 읽는 신호라 이름은 싣지 않는다 */
+const guildUpdated = (guildId: string) => notifyGuild(guildId, { t: 'guild', kind: 'updated', guild: '', nick: null });
 
 /** 같은 코드가 이미 있을 때 새 코드로 다시 만드는 횟수. 코드 공간이 31^8이라 한 번에 겹칠 일은 드물다 */
 const CODE_RETRIES = 3;
@@ -158,6 +162,7 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
     if (!checkGuildName(name).ok) throw new ApiError(400, 'bad-name');
     const r = await run('db-write', () => renameGuild(database().withTransaction, uid, id, name as string, new Date().toISOString()));
     if (!r.ok) throw refuse(r.error);
+    guildUpdated(id);
     res.status(200).json({ name: r.name, gold: r.gold });
   });
 
@@ -171,6 +176,7 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
     if (!r.ok) throw refuse(r.error);
     if (r.result === 'joined') {
       changed(uid, r.id);
+      guildUpdated(r.id);
       res.status(201).json({ id: r.id, result: 'joined' });
       return;
     }
@@ -189,8 +195,9 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
     const r = await run('db-write', () => decideJoinRequest(database().withTransaction, uid, id, target, approve,
       new Date().toISOString()));
     if (!r.ok) throw refuse(r.error);
-    if (approve) changed(target, id);
     notifyUser(target, { t: 'guild', kind: approve ? 'approved' : 'rejected', guild: r.guild, nick: null });
+    // 승인된 사람은 approved 알림만 받도록, 소속을 바꾸기 전에 기존 길드원에게 갱신을 보낸다
+    if (approve) { guildUpdated(id); changed(target, id); }
     res.status(approve ? 201 : 200).json({ result: approve ? 'approved' : 'rejected' });
   });
 
@@ -200,6 +207,7 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
     const r = await run('db-write', () => removeMember(database().withTransaction, uid, id, target, new Date().toISOString()));
     if (!r.ok) throw refuse(r.error);
     changed(target, null);
+    if (r.result !== 'dissolved') guildUpdated(id);
     res.status(200).json({ result: r.result });
   });
 
@@ -221,6 +229,7 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
     const r = await run('db-write', () => donateToBonus(database().withTransaction, uid, id, bonus as GuildBonusId, amount,
       new Date().toISOString()));
     if (!r.ok) throw refuse(r.error);
+    guildUpdated(id);
     res.status(201).json({ rank: r.rank, pool: r.pool, accepted: r.accepted, gold: r.gold });
   });
 
@@ -231,6 +240,7 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
     const r = await run('db-write', () => enhanceBonus(database().withTransaction, uid, id, bonus as GuildBonusId,
       new Date().toISOString()));
     if (!r.ok) throw refuse(r.error);
+    guildUpdated(id);
     res.status(201).json({ enhanceRank: r.enhanceRank, remainingPoints: r.remainingPoints });
   });
 
@@ -238,6 +248,7 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
     const id = uuidParam(req, 'id');
     const r = await run('db-write', () => resetEnhancements(database().withTransaction, uid, id, new Date().toISOString()));
     if (!r.ok) throw refuse(r.error);
+    guildUpdated(id);
     res.status(200).json({ gold: r.gold, recovered: r.recovered, enhanceResetCount: r.enhanceResetCount });
   });
 

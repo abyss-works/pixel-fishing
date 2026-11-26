@@ -1,5 +1,5 @@
 // 일일 운세 이력 — 실제 Postgres에서 로그인 계정의 접속·판정 기록, 멱등성, 월별 범위 조회(오름차순),
-// 게스트 미기록·403 거부, 비로그인 401 거부, 후속 쓰기 실패 보고를 검증한다.
+// 게스트 미기록·403 거부, 비로그인 401 거부, 응답 직후 조회에 오늘 운세가 보이는지를 검증한다.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DailyFortune } from '../src/game/rules/fortune.js';
 import type { GameState } from '../src/game/rules/logic.js';
@@ -10,25 +10,11 @@ import {
 } from './_dbTest/actionHarness.js';
 import type { ActionEnv, SeedOptions } from './_dbTest/actionHarness.js';
 
-const hook = { failRecord: false };
-
 vi.mock('./observability.js', () => ({ reportServerIssue: vi.fn(async () => undefined) }));
-vi.mock('./_data/fortune.js', async importOriginal => {
-  const actual = await importOriginal<typeof import('./_data/fortune.js')>();
-  return {
-    ...actual,
-    recordDailyFortune: async (...args: Parameters<typeof actual.recordDailyFortune>) => {
-      if (hook.failRecord) {
-        hook.failRecord = false;
-        throw new Error('simulated-fortune-write-error');
-      }
-      return actual.recordDailyFortune(...args);
-    },
-  };
-});
 
 import { reportServerIssue } from './observability.js';
 import fortuneHandler from './fortune.js';
+import { APP_VERSION } from '../src/version.js';
 
 const NOW = '2030-03-06T05:00:00.000Z'; // KST 2030-03-06 14:00 (수요일)
 let env: ActionEnv;
@@ -41,7 +27,6 @@ afterAll(async () => {
   await env?.stop();
 });
 beforeEach(() => {
-  hook.failRecord = false;
   vi.mocked(reportServerIssue).mockClear();
   captureRealClock(() => performance.timeOrigin + performance.now());
   vi.useFakeTimers({ toFake: ['Date'], now: new Date(NOW) });
@@ -69,6 +54,23 @@ async function callHistory(
   };
   const query = opts.month !== undefined ? { month: opts.month } : {};
   await fortuneHandler({ method: opts.method ?? 'GET', query, headers: { ...sessionHeaders(token) } } as never, res as never);
+  return out;
+}
+
+/** 응답 시점을 그대로 보는 호출 — 응답 뒤 후속 쓰기가 끝나기를 기다리지 않는다 */
+async function callActionBeforeFollowUps(token: string, body: unknown): Promise<{ status: number; body: unknown }> {
+  const { default: handler } = await import('./action.js');
+  const out = { status: 0, body: undefined as unknown };
+  const res = {
+    status(code: number) { out.status = code; return res; },
+    json(b: unknown) { out.body = b; },
+    end() {},
+  };
+  await handler({
+    method: 'POST',
+    headers: { 'x-build-id': 'dev', 'x-client-version': APP_VERSION, ...sessionHeaders(token) },
+    body,
+  } as never, res as never);
   return out;
 }
 
@@ -341,18 +343,24 @@ describe('일일 운세 이력 기록 및 조회', () => {
     expect(await callHistory(null)).toEqual({ status: 401, body: { error: 'unauthorized' } });
   });
 
-  it('일일 운세 이력 후속 쓰기가 실패해도 boot 응답은 성공하고 오류를 보고한다', async () => {
+  it('boot 응답 직후 후속 쓰기를 기다리지 않아도 운세 조회에 오늘 운세가 보인다', async () => {
     const uid = await seed({ state: {} });
-    hook.failRecord = true;
-    const res = await callAction(userToken(uid), { type: 'boot' });
+    const res = await callActionBeforeFollowUps(userToken(uid), { type: 'boot' });
     expect(res.status).toBe(200);
-    expect(await fortuneRows(uid)).toEqual([]);
-    expect(reportServerIssue).toHaveBeenCalledTimes(1);
-    expect(reportServerIssue).toHaveBeenCalledWith(
-      '후속 쓰기 실패 — 일일 운세 이력 유실',
-      expect.any(Error),
-      expect.objectContaining({ uid, action: 'boot' }),
-    );
+    const today = (await storedFortune(uid))!;
+    expect(today).toMatchObject({ day: '2030-03-06' });
+    expect(await callHistory(userToken(uid))).toMatchObject({ status: 200, body: { currentDay: '2030-03-06', today } });
+    expect(reportServerIssue).not.toHaveBeenCalled();
+  });
+
+  it('게임 날짜가 바뀐 뒤 첫 catch 응답 직후에도 운세 조회에 새 날짜 운세가 보인다', async () => {
+    const uid = await seed({ state: { fortune: { day: '2030-03-05', kind: 'fish', index: 3 } }, version: 2 });
+    const res = await callActionBeforeFollowUps(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'good' });
+    expect(res.status).toBe(200);
+    const today = (await storedFortune(uid))!;
+    expect(today.day).toBe('2030-03-06');
+    expect(await fortuneRows(uid)).toEqual([today]);
+    expect(await callHistory(userToken(uid))).toMatchObject({ status: 200, body: { today } });
   });
 
   it('extractEnergy에서 당일 운세가 없으면 ensureFortune으로 먼저 확정하고 기운 배수 및 daily_fortunes를 즉시 반영한다', async () => {
