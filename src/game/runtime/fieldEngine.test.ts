@@ -993,6 +993,8 @@ describe('GameFieldEngine 로컬·피어 점프 연출', () => {
     expect(active![0]).toMatchObject({
       x: school.x,
       y: school.y,
+      toX: WORLD_SPAWN.x,
+      toY: WORLD_SPAWN.y - 6,
       fishId: 'goldfish',
       form: 'variant',
     });

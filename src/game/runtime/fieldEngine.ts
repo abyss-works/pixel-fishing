@@ -52,6 +52,8 @@ export interface LiveFrame {
 interface LocalJump {
   x: number;
   y: number;
+  toX: number;
+  toY: number;
   fishId: string;
   form: FormId;
   startAt: number;
@@ -568,6 +570,8 @@ export class GameFieldEngine {
     this.localJumps.push({
       x: school.x,
       y: school.y,
+      toX: this.pos.x,
+      toY: this.pos.y - 6,
       fishId: result.fishId,
       form: result.info.form,
       startAt: Date.now(),
@@ -582,7 +586,15 @@ export class GameFieldEngine {
       const t = (nowMs - entry.startAt) / 1000;
       if (t >= 0 && t < JUMP_S) {
         this.localJumps[write++] = entry;
-        out.push({ x: entry.x, y: entry.y, fishId: entry.fishId, form: entry.form, t });
+        out.push({
+          x: entry.x,
+          y: entry.y,
+          toX: entry.toX,
+          toY: entry.toY,
+          fishId: entry.fishId,
+          form: entry.form,
+          t,
+        });
       }
     }
     this.localJumps.length = write;
