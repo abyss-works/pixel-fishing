@@ -1,5 +1,5 @@
 // 게스트(계정을 연결하지 않은 익명 계정)가 할 수 있는 액션의 판정.
-// 게스트는 마을 안의 이동, 낚시, 판매, 낚싯대 강화, 배 구매, 출항준비 쿠폰만 한다. 서버가 이 판정으로 그 밖의 액션을 거부한다.
+// 게스트는 마을 안의 이동, 낚시, 판매, 낚싯대 강화, 배 구매, 출항준비 쿠폰, 보유 소비 아이템(먹기·비약)만 한다. 서버가 이 판정으로 그 밖의 액션을 거부한다.
 // 거부 사유는 코드로 돌려준다. 화면은 코드로 안내를 고른다.
 import type { GameAction } from './actions.js';
 import type { GameState } from './logic.js';
@@ -16,7 +16,8 @@ export type GuestVerdict = 'ok' | 'account-only' | 'guest-village-only';
 // 조건 없이 통과하는 액션. 접속 기록(boot)은 게임에 들어오는 데 필요하고, 튜토리얼 기록과 잠금은 낚시와 판매 흐름의 일부다.
 // 미끼 환불 안내 닫기는 이관이 게스트의 골드에도 환불을 더했으므로 게스트도 영수증을 지울 수 있어야 한다
 const OPEN = new Set<GameAction['type']>([
-  'boot', 'sell', 'upgradeRod', 'buyBoat', 'seeTutorial', 'setLocked', 'autoLock', 'setAutoLockOnCatch', 'dismissBaitRefund',
+  'boot', 'sell', 'upgradeRod', 'buyBoat', 'seeTutorial', 'setLocked', 'autoLock', 'setAutoLockOnCatch',
+  'dismissBaitRefund', 'eat', 'usePotion',
 ]);
 // 개발 명령과 이사 코드는 서버의 환경과 소유자 판정이 따로 정한다
 const GATED_ELSEWHERE = new Set<GameAction['type']>(['debug', 'debugBatch', 'debugSnapshot', 'import']);

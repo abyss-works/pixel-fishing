@@ -645,12 +645,12 @@ describe('usePotion — 비약 사용', () => {
   const nextNow = '2026-08-22T19:00:00.000Z'; // KST 다음날 04:00
   const nextDay = gameDayOf(nextNow);
 
-  it('게스트, 모르는 id, 미보유, 오늘 이미 적용 중이면 거부한다', () => {
-    expect(applyAction(seed({ items: { 'luck-small': 1 } }), { type: 'usePotion', id: 'luck-small' }, deps({ guest: true })))
-      .toEqual({ ok: false, error: 'account-only' });
+  it('모르는 id, 미보유, 오늘 이미 적용 중이면 거부한다', () => {
     expect(applyAction(seed({ items: { 'luck-small': 1 } }), { type: 'usePotion', id: 'nope' }, deps()))
       .toEqual({ ok: false, error: 'bad-request' });
     expect(applyAction(seed(), { type: 'usePotion', id: 'luck-small' }, deps()))
+      .toEqual({ ok: false, error: 'potion-not-owned' });
+    expect(applyAction(seed(), { type: 'usePotion', id: 'luck-small' }, deps({ guest: true })))
       .toEqual({ ok: false, error: 'potion-not-owned' });
     expect(applyAction(
       seed({ items: { 'luck-small': 2 }, potions: { 'luck-small': day } }),
@@ -659,6 +659,21 @@ describe('usePotion — 비약 사용', () => {
     )).toEqual({ ok: false, error: 'potion-already-active' });
     expect(REJECT_TEXT['potion-not-owned']).toMatch(/비약/);
     expect(REJECT_TEXT['potion-already-active']).toMatch(/이미.*비약/);
+  });
+
+  it('게스트와 배 0~4단계도 보유한 비약을 사용하면 1개 차감하고 오늘 게임 날짜를 기록한다', () => {
+    for (const guest of [false, true]) {
+      for (const boat of [0, 4]) {
+        const out = applyAction(
+          seed({ boat, items: { 'luck-small': 1 } }),
+          { type: 'usePotion', id: 'luck-small' },
+          deps({ now, guest }),
+        );
+        if (!out.ok) throw new Error(out.error);
+        expect(out.state.items['luck-small']).toBeUndefined();
+        expect(out.state.potions).toEqual({ 'luck-small': day });
+      }
+    }
   });
 
   it('보유한 비약을 사용하면 1개 차감하고 오늘 게임 날짜를 기록한다', () => {
