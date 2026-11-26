@@ -8,6 +8,8 @@ import { AppError, POLICY, fail } from '../../../core/errors';
 
 const gw = vi.hoisted(() => ({
   bootResolve: null as null | (() => void),
+  sessionReply: 'uid-1' as string | null,
+  sessionError: null as unknown,
   actions: [] as string[],
   loads: 0,
   loadGold: 0,
@@ -60,7 +62,10 @@ vi.mock('../../../platform/api', async () => {
     api: {
       auth: {
         isConfigured: true,
-        ensureSession: async () => 'uid-1',
+        ensureSession: async () => {
+          if (gw.sessionError) throw gw.sessionError;
+          return gw.sessionReply;
+        },
         currentAccount: async () => gw.account,
         getAccountConsent: async () => {
           gw.consentCalls++;
@@ -107,7 +112,7 @@ function setup(setToast: (m: string, tone?: 'info' | 'gold' | 'warn') => void = 
 
 afterEach(() => {
   cleanup(); clearFailureNotice(); resetFortuneModalSession(); resetConsentGate();
-  gw.bootResolve = null; gw.actions = []; gw.loads = 0; gw.loadGold = 0;
+  gw.bootResolve = null; gw.sessionReply = 'uid-1'; gw.sessionError = null; gw.actions = []; gw.loads = 0; gw.loadGold = 0;
   gw.legacy = false; gw.cloudEmpty = false; gw.importError = null; gw.loadError = null; gw.loadErrors = []; gw.bootErrors = []; gw.loadDex = {}; gw.dispatchDex = {}; gw.devTools = false;
   gw.profileReplies = []; gw.profileCalls = 0;
   gw.loadAchievements = {}; gw.dispatchAchievements = {}; gw.loadFortune = null; gw.dispatchFortune = null;
@@ -862,5 +867,38 @@ describe('닉네임 변경 시 프로필 및 조회 캐시 무효화', () => {
     expect(client.getQueryState(['friends', 'uid-1'])?.isInvalidated).toBe(true);
     expect(client.getQueryState(['player', 'uid-1'])?.isInvalidated).toBe(true);
     expect(client.getQueryState(['bounty', '2026-11-26', 'uid-1'])?.isInvalidated).toBe(false);
+  });
+});
+
+describe('게스트 부트스트랩 429 한도 초과 구분', () => {
+  it('ensureSession이 rate_limited(429) 오류로 실패하면 unauthorized(unsaved)와 구분해 rate-limited 차단기와 혼잡 안내 정책으로 처리한다', async () => {
+    gw.sessionError = Object.assign(new Error('too many anonymous sign-ins'), { code: 'rate_limited', status: 429 });
+    const hook = setup();
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+
+    expect(hook.result.current.blocker).toBe('rate-limited');
+    expect(POLICY['auth-rate-limited'].message).toBe('같은 네트워크에서 접속이 잠시 몰려 있어요. 잠시 뒤 다시 시도해 주세요.');
+    expect(gw.loads).toBe(0);
+    expect(gw.actions).toEqual([]);
+  });
+
+  it('ensureSession이 AppError rate-limited로 실패해도 rate-limited 차단기와 혼잡 안내 정책으로 구분한다', async () => {
+    gw.sessionError = new AppError('rate-limited', 'too many requests', { status: 429 });
+    const hook = setup();
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+
+    expect(hook.result.current.blocker).toBe('rate-limited');
+    expect(gw.loads).toBe(0);
+    expect(gw.actions).toEqual([]);
+  });
+
+  it('ensureSession이 null을 반환한 일반 인증 실패는 기존처럼 unsaved 차단기로 처리한다', async () => {
+    gw.sessionReply = null;
+    const hook = setup();
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+
+    expect(hook.result.current.blocker).toBe('unsaved');
+    expect(gw.loads).toBe(0);
+    expect(gw.actions).toEqual([]);
   });
 });

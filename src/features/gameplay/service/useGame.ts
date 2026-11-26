@@ -15,7 +15,7 @@ import { clearFailureNotice, showFailureNotice } from './failureNotice';
 import { BUILD_ID } from '../../../buildId';
 import { settleForcedEncounter, withForcedEncounter } from '../../bounty/service/forceEncounter';
 import { getPhaseOverride } from './timeOverride';
-import { fetchSession } from '../../account/service/session';
+import { fetchSession, isSessionRateLimited } from '../../account/service/session';
 import { allowConsentGate, blockConsentGate, holdConsentGate, resetConsentGate } from '../../account/service/consentGate';
 import { guestProgress } from '../../account/model/accountRules';
 import { newlyClaimable } from '../../achievement/model/achievements';
@@ -330,7 +330,15 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
     setLoading(true);
     const signal = newRetryScope();
     try {
-      const uid = await fetchSession(client);
+      let uid: string | null;
+      try {
+        uid = await fetchSession(client);
+      } catch (e) {
+        if (signal.aborted) return;
+        throw isSessionRateLimited(e)
+          ? new AppError('auth-rate-limited', 'anonymous session rate limited', { status: 429 }, { cause: e })
+          : e;
+      }
       if (signal.aborted) return;
       if (!uid) throw new AppError('unauthorized', 'anonymous session failed');
       if (!skipConsent) {
