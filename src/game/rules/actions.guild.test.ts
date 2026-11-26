@@ -112,7 +112,7 @@ describe('리듀서 — 주입된 길드 효과로 판정한다', () => {
   });
 
   it('희귀 어종 보너스는 방치 캐치에서도 일반 등급 가중치를 줄인다', () => {
-    const st = newState();
+    const st: GameState = { ...newState(), fortune: { day: '2027-01-01', kind: 'gold', index: 3 } };
     const o = catchDrawOptions('auto', rodPower(st), 'pond', powerZones(st, 'pond').mult, { phase: 'day' });
     const commonOf = (cut: number) => fishDrawShares('pond', { ...o, weightEffects: { common: -cut } })
       .filter(s => s.fish.rarity === 'common').reduce((a, s) => a + s.share, 0);
