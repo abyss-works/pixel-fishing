@@ -91,8 +91,8 @@ import { chatMessages } from '../overlays/live/chatFeed';
 import { mergeMessages } from '../../ui/hud/messageFeed';
 import EncounterModal from '../overlays/bounty/EncounterModal';
 import type { EncounterResult } from '../overlays/bounty/EncounterModal';
-import Button from '../../ui/Button';
 import Frame from '../../ui/Frame';
+import PixelIcon from '../../ui/PixelIcon';
 import Tip from '../../ui/Tip';
 import { fmtNum, josa } from '../../ui/format';
 import { cx } from '../../ui/cx';
@@ -196,7 +196,7 @@ export default function GameView(props: GameViewProps) {
   useEffect(() => {
     if (chat.enabled) sendRegion(liveRegion);
   }, [chat.enabled, liveRegion]);
-  const { activeNotices, stackNotices, dismissNotice } = useNotices();
+  const { activeNotices, endedNotices, stackNotices, dismissNotice } = useNotices();
   const [noticeModalOpen, setNoticeModalOpen] = useState(false);
   /** 같은 바다 접속 목록 창 */
   const [playersOpen, setPlayersOpen] = useState(false);
@@ -239,27 +239,19 @@ export default function GameView(props: GameViewProps) {
       )
     : props.log;
   const noticeStrip = activeNotices.length > 0 ? (
-    <Frame className="flex items-center gap-1.5 px-2 py-1 text-xs border-gold bg-[color-mix(in_oklab,var(--c-bg)_88%,transparent)]">
-      <Tip wraps text="누르면 공지사항을 자세히 볼 수 있어요." className="min-w-0 flex-1 flex">
-        <Button
-          variant="ghost"
-          size="xs"
-          aria-label="공지사항 열기"
-          className="min-w-0 flex-1 justify-start text-left text-gold px-1!"
-          onClick={() => setNoticeModalOpen(true)}
-        >
-          <span className="truncate">{activeNotices[0].title}</span>
-        </Button>
-      </Tip>
-      <Button
-        size="xs"
-        variant="accent"
-        className="shrink-0"
+    <Tip wraps hoverOnly text="누르면 공지사항 창이 열려요." className="flex w-full min-w-0">
+      <Frame
+        as="button"
+        type="button"
+        aria-label="공지사항 열기"
         onClick={() => setNoticeModalOpen(true)}
+        className="w-full min-w-0 flex items-center gap-1.5 px-2 py-1 text-xs text-left cursor-pointer border-gold bg-[color-mix(in_oklab,var(--c-bg)_88%,transparent)] hover:bg-[color-mix(in_oklab,var(--c-surface-2)_88%,transparent)] transition-colors"
       >
-        공지
-      </Button>
-    </Frame>
+        <span className="pf-accent shrink-0 bg-gold px-1 py-0.5 text-2xs leading-none font-bold text-bg">공지</span>
+        <PixelIcon glyph="megaphone" size={12} className="shrink-0 text-gold" />
+        <span className="min-w-0 flex-1 truncate text-left text-text">{activeNotices[0].title}</span>
+      </Frame>
+    </Tip>
   ) : null;
   const messageFilter = useMessageFilter();
   // 메시지 창 접기 — 채팅을 쓰지 않는 환경에서는 입력 줄이 없어 펼칠 수 없으므로 접지 않는다
@@ -555,7 +547,7 @@ export default function GameView(props: GameViewProps) {
         {tutorialTriggersReady && (
           <AlertPromptModal ready={saveReady} after={whatsNewPending || baitRefund.pending || fortune.pending || tutorialPending || inviteReady || accountOpen} setToast={props.setToast} />
         )}
-        <NoticeModal open={noticeModalOpen} notices={activeNotices} onClose={() => setNoticeModalOpen(false)} />
+        <NoticeModal open={noticeModalOpen} activeNotices={activeNotices} endedNotices={endedNotices} onClose={() => setNoticeModalOpen(false)} />
         <NoticeStack notices={stackNotices} onDismiss={dismissNotice} />
         {props.toasts && props.toasts.length > 0 && props.onDismissToast && (
           <FloatingToastLayer toasts={props.toasts} maxVisible={mobile ? 2 : 3} onDismiss={props.onDismissToast} />

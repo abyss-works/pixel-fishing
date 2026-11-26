@@ -1,9 +1,9 @@
 import { describe, it, expect, expectTypeOf } from 'vitest';
 import {
   CHAT_DUPLICATE_WINDOW_MS, CHAT_MAX_LENGTH, CHAT_RATE_MAX, CHAT_RATE_WINDOW_MS,
-  GLOBAL_CHAT_COOLDOWN_MS, LIVE_MAX_LENGTH, LIVE_MOVE_MS, NOTICE_BODY_MAX, NOTICE_TITLE_MAX,
+  GLOBAL_CHAT_COOLDOWN_MS, LIVE_MAX_LENGTH, LIVE_MOVE_MS, MAX_NOTICES, NOTICE_BODY_MAX, NOTICE_TITLE_MAX,
   chatRate, chatText, formatIdle, glidePosition, globalChatCooldown, idleSinceOf,
-  isDuplicateChat, isNoticeActive, nextGlide, normalizeNoticeDraft, parseClientMessage,
+  isDuplicateChat, isNoticeActive, isNoticeEnded, nextGlide, normalizeNoticeDraft, parseClientMessage,
   type ChatLine, type ChatRoom, type ClientMessage, type NoticeItem, type Presence, type ServerMessage,
 } from './live';
 
@@ -259,6 +259,43 @@ describe('isNoticeActive', () => {
   it('유효하지 않은 타임스탬프는 비활성이다', () => {
     expect(isNoticeActive({ startsAt: 'invalid', endsAt: '2026-11-26T12:00:00.000Z' }, Date.now())).toBe(false);
     expect(isNoticeActive({ startsAt: '2026-11-26T10:00:00.000Z', endsAt: '' }, Date.now())).toBe(false);
+  });
+});
+
+describe('isNoticeEnded', () => {
+  it('예약 공지와 진행 중 공지는 false, 종료 시각 이상인 마감 공지만 true다', () => {
+    expect(MAX_NOTICES).toBe(40);
+    const notice = { startsAt: '2026-11-26T10:00:00.000Z', endsAt: '2026-11-26T12:00:00.000Z' };
+    const start = Date.parse(notice.startsAt);
+    const end = Date.parse(notice.endsAt);
+
+    // 예약 공지 (now < startsAt): active도 ended도 false
+    expect(isNoticeActive(notice, start - 1)).toBe(false);
+    expect(isNoticeEnded(notice, start - 1)).toBe(false);
+
+    // 진행 중 공지 (startsAt <= now < endsAt): active true, ended false
+    expect(isNoticeActive(notice, start)).toBe(true);
+    expect(isNoticeEnded(notice, start)).toBe(false);
+    expect(isNoticeActive(notice, end - 1)).toBe(true);
+    expect(isNoticeEnded(notice, end - 1)).toBe(false);
+
+    // 마감 경계 (endsAt === now): active false, ended true
+    expect(isNoticeActive(notice, end)).toBe(false);
+    expect(isNoticeEnded(notice, end)).toBe(true);
+    expect(isNoticeActive(notice, end + 1)).toBe(false);
+    expect(isNoticeEnded(notice, end + 1)).toBe(true);
+  });
+
+  it('유효하지 않은 타임스탬프, 역전된 기간, 비유한 시각은 false다', () => {
+    expect(isNoticeEnded({ startsAt: 'invalid', endsAt: '2026-11-26T12:00:00.000Z' }, Date.now())).toBe(false);
+    expect(isNoticeEnded({ startsAt: '2026-11-26T10:00:00.000Z', endsAt: '' }, Date.now())).toBe(false);
+    expect(isNoticeEnded({ startsAt: '2026-11-26T12:00:00.000Z', endsAt: '2026-11-26T10:00:00.000Z' }, Date.parse('2026-11-26T13:00:00.000Z'))).toBe(false);
+    expect(isNoticeEnded({ startsAt: '2026-11-26T10:00:00.000Z', endsAt: '2026-11-26T12:00:00.000Z' }, Number.NaN)).toBe(false);
+  });
+
+  it('시각을 생략하면 현재 시각 기준으로 판정한다', () => {
+    expect(isNoticeEnded({ startsAt: '2000-01-01T00:00:00.000Z', endsAt: '2000-01-02T00:00:00.000Z' })).toBe(true);
+    expect(isNoticeEnded({ startsAt: '2099-01-01T00:00:00.000Z', endsAt: '2099-01-02T00:00:00.000Z' })).toBe(false);
   });
 });
 

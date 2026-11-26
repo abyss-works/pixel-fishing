@@ -63,7 +63,7 @@ export interface LiveOptions {
   /** 받은 메시지가 없을 때 연결을 끊기까지의 시간 */
   idleMs?: number;
   chat: LiveChat;
-  /** 접속 hello에 실을 마감 전 기간제 공지 목록 조회 */
+  /** 접속 hello에 실을 마감 전·최근 마감 기간제 공지 목록 조회 */
   activeNotices?: () => Promise<NoticeItem[]>;
   /** 끝난 연결 하나를 접속 세션으로 기록한다. 기다리지 않으므로 오류와 완료 추적은 호출된 쪽이 맡는다 */
   recordSession: (uid: string, startedAt: string, endedAt: string) => void;

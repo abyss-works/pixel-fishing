@@ -4,6 +4,7 @@ import {
   nextNoticeBoundaryMs,
   parseDismissedNotices,
   pruneDismissedIds,
+  selectEndedNotices,
   serializeDismissedNotices,
   stackableNotices,
   visibleActiveNotices,
@@ -73,13 +74,30 @@ describe('기간제 공지 모델', () => {
     expect(nextNoticeBoundaryMs([], t0)).toBeNull();
   });
 
-  it('pruneDismissedIds는 공지 목록에서 사라진 id를 정리한다', () => {
+  it('pruneDismissedIds는 공지 목록에서 사라졌거나 마감된 공지 id를 정리한다', () => {
     const notices = [
       n(2, new Date(t0).toISOString(), new Date(t3).toISOString()),
       n(5, new Date(t1).toISOString(), new Date(t3).toISOString()),
+      n(7, new Date(t0).toISOString(), new Date(t1).toISOString()), // t1에 마감
     ];
     expect(pruneDismissedIds([1, 2, 3, 5, 2], notices)).toEqual([2, 5]);
+    expect(pruneDismissedIds([1, 2, 5, 7], notices, t1)).toEqual([2, 5]);
+    expect(pruneDismissedIds([2, 5, 7], notices, t3)).toEqual([]);
     expect(pruneDismissedIds([1, 3], [])).toEqual([]);
+  });
+
+  it('selectEndedNotices는 마감된 공지만 endsAt 내림차순, id 내림차순으로 추리고 예약·활성 공지는 제외한다', () => {
+    const list = [
+      n(1, new Date(t0).toISOString(), new Date(t1).toISOString()), // t1 마감
+      n(2, new Date(t0).toISOString(), new Date(t2).toISOString()), // t2 마감
+      n(3, new Date(t1).toISOString(), new Date(t2).toISOString()), // t2 마감(id 3 > 2)
+      n(4, new Date(t1).toISOString(), new Date(t3).toISOString()), // t2 기준 활성
+      n(5, new Date(t3).toISOString(), new Date(t3 + 60_000).toISOString()), // 예약
+    ];
+
+    expect(selectEndedNotices(list, t1).map(item => item.id)).toEqual([1]);
+    expect(selectEndedNotices(list, t2).map(item => item.id)).toEqual([3, 2, 1]);
+    expect(selectEndedNotices(list, t2, 2).map(item => item.id)).toEqual([3, 2]);
   });
 
   it('parseDismissedNotices·serializeDismissedNotices는 잘못된 저장값을 안전하게 걸러낸다', () => {

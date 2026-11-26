@@ -1,4 +1,4 @@
-import { isNoticeActive, NOTICE_BODY_MAX, NOTICE_TITLE_MAX, normalizeNoticeDraft } from '../../../game/rules/live';
+import { isNoticeActive, isNoticeEnded, NOTICE_BODY_MAX, NOTICE_TITLE_MAX, normalizeNoticeDraft } from '../../../game/rules/live';
 import type { NoticeItem } from '../../../game/rules/live';
 
 export { NOTICE_BODY_MAX, NOTICE_TITLE_MAX, normalizeNoticeDraft };
@@ -18,6 +18,23 @@ export function visibleActiveNotices(notices: readonly NoticeItem[], now: number
   return notices
     .filter(item => isNoticeActive(item, now))
     .sort(noticeOrderCompare);
+}
+
+/** 현재 시각 기준 마감(endsAt <= nowMs)된 지난 공지만 최근 마감순(endsAt desc, id desc)으로 추린다. */
+export function selectEndedNotices(
+  notices: readonly NoticeItem[],
+  nowMs: number,
+  limit = 20,
+): NoticeItem[] {
+  if (limit <= 0) return [];
+  return notices
+    .filter(item => isNoticeEnded(item, nowMs))
+    .sort((a, b) => {
+      const endDiff = Date.parse(b.endsAt) - Date.parse(a.endsAt);
+      if (Number.isFinite(endDiff) && endDiff !== 0) return endDiff;
+      return b.id - a.id;
+    })
+    .slice(0, limit);
 }
 
 /** 활성 공지 중 사용자가 닫지 않은 공지만 순서대로 남긴다. */
@@ -42,9 +59,17 @@ export function nextNoticeBoundaryMs(notices: readonly NoticeItem[], now: number
   return nextBoundary === null ? null : nextBoundary - now;
 }
 
-/** 공지 목록에서 사라진 id를 닫은 목록에서 정리한다. */
-export function pruneDismissedIds(dismissed: readonly number[], notices: readonly NoticeItem[]): number[] {
-  const existing = new Set(notices.map(item => item.id));
+/** 공지 목록에서 사라졌거나 마감된 공지 id를 닫은 목록에서 정리한다. */
+export function pruneDismissedIds(
+  dismissed: readonly number[],
+  notices: readonly NoticeItem[],
+  nowMs?: number,
+): number[] {
+  const existing = new Set(
+    notices
+      .filter(item => nowMs === undefined || !isNoticeEnded(item, nowMs))
+      .map(item => item.id),
+  );
   const out: number[] = [];
   const seen = new Set<number>();
   for (const id of dismissed) {
