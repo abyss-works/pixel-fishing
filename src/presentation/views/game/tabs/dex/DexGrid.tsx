@@ -10,7 +10,7 @@ import PixelIcon from '../../../../ui/PixelIcon';
 import ProgressCount from '../../../../ui/ProgressCount';
 import SubTabs from '../../../../ui/SubTabs';
 import FishSprite from '../../../../ui/fish/FishSprite';
-import NightMark from '../../../../ui/fish/NightMark';
+import NightMark, { NightMarkLegend } from '../../../../ui/fish/NightMark';
 import { RarityDot, RARITY_CARD, DIM_CARD } from '../../../../ui/fish/RarityTag';
 import PageTitle from '../../../../ui/PageTitle';
 import Subheading from '../../../../ui/Subheading';
@@ -34,10 +34,13 @@ export default function DexGrid({ game, view, sub, onSub }: {
 
   return (
     <div>
-      <PageTitle className="mb-1">
-        {view === 'base' ? '일반 어종' : '돌연변이'}
-        {' ('}{data.foundCount}/{data.fishCount}{')'}
-      </PageTitle>
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <PageTitle>
+          {view === 'base' ? '일반 어종' : '돌연변이'}
+          {' ('}{data.foundCount}/{data.fishCount}{')'}
+        </PageTitle>
+        <NightMarkLegend />
+      </div>
       <SubTabs
         items={data.zones.map(({ id, foundCount, fishCount }) => ({
           key: id, label: zoneById(id)!.shortName, sub: `${foundCount}/${fishCount}`,

@@ -160,8 +160,9 @@ export function saleProceeds(
 export function selectSalePreview(
   bag: readonly FishInstance[], excluded: ReadonlySet<string>, sellBonus: number, achSellBonus = 0, luck = 1,
   luckSources?: SellLuckSources,
+  game?: Pick<GameState, 'dex'>,
 ): SalePreview {
-  const rows = groupInstances(bag).map((row): SaleRow => {
+  const rows = groupInstances(bag, game).map((row): SaleRow => {
     const sellable = row.items.filter(instance => !instance.locked);
     const selected = sellable.filter(instance => !excluded.has(instance.uid));
     const unsized = row.unsized.map(group => {

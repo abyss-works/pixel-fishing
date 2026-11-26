@@ -269,8 +269,7 @@ describe('도시락 탭과 미끼 탭', () => {
     fireEvent.click(tab('미끼'));
     fireEvent.click(screen.getByRole('option', { name: /롱페퍼 미끼/ }));
     expect(within(screen.getByText('미끼 효과').parentElement!).getByText('지속 시간')).toBeInTheDocument();
-    expect(screen.getByText('미끼 효과').parentElement!).toHaveTextContent('지속 시간2분');
-    expect(screen.getByText('미끼 효과').parentElement!).not.toHaveTextContent('2분 30초');
+    expect(screen.getByText('미끼 효과').parentElement!).toHaveTextContent('지속 시간2분 30초');
   });
 
   it('달빛 미끼의 비수치 효과는 키-값으로 쪼개지 않고 상세 설명 한 줄로 보인다', () => {

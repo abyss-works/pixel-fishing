@@ -25,6 +25,18 @@ import type { RecipeEffectLine, RecipeTitle } from './recipes';
 
 const MIN_MS = 60_000;
 
+export const SUB_MINUTE_POLL_MS = 1_000;
+export const DEFAULT_POLL_MS = 5_000;
+
+/** 1분 미만 활성 슬롯이 하나라도 있으면 1초, 없으면 5초 갱신 주기를 돌려준다 */
+export function slotPollIntervalMs(game: Pick<GameState, 'slots'>, now: string): number {
+  for (const key of ALL_SLOT_KEYS) {
+    const slot = activeSlot(game, key, now);
+    if (slot && slot.remainingMs < MIN_MS) return SUB_MINUTE_POLL_MS;
+  }
+  return DEFAULT_POLL_MS;
+}
+
 /** 슬롯 키 — 슬롯 종류와 그 슬롯에 넣는 요리 종류가 같은 이름이다 */
 export type SlotKey = CookKind;
 

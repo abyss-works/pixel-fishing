@@ -14,6 +14,7 @@ import PixelIcon from '../../../../ui/PixelIcon';
 import ProgressCount from '../../../../ui/ProgressCount';
 import SectionTitle from '../../../../ui/SectionTitle';
 import FishSprite from '../../../../ui/fish/FishSprite';
+import NightMark, { NightMarkLegend } from '../../../../ui/fish/NightMark';
 import { DIM_CARD, RARITY_CARD, RarityText } from '../../../../ui/fish/RarityTag';
 import { RARITY_ORDER } from '../../../../../game/content/rarity';
 import DataTable from '../../../../ui/DataTable';
@@ -120,11 +121,18 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
 
       {/* 수역 정보 — 등급 분포 표 아래에 두고, 사거리 내 어군(4등급 2열 격자) ⇄ 가까운 어군 목록 배타 교체 */}
       <div className="shrink-0">
-        <SectionTitle className="flex items-baseline justify-between">
-          {focused ? '어군 정보' : '가까운 어군'}
-          {focusedDex && (
-            <span className="text-2xs text-text-dim">도감 <ProgressCount current={focusedDex.caught} target={focusedDex.total} tight /></span>
-          )}
+        <SectionTitle className="flex items-center justify-between gap-2">
+          {focused ? (
+            <>
+              <span>어군 정보</span>
+              <span className="inline-flex items-center gap-1.5">
+                {focusedDex && (
+                  <span className="text-2xs text-text-dim">도감 <ProgressCount current={focusedDex.caught} target={focusedDex.total} tight /></span>
+                )}
+                <NightMarkLegend />
+              </span>
+            </>
+          ) : '가까운 어군'}
         </SectionTitle>
         {focused ? (
           <Inset className="p-0 flex flex-col">
@@ -147,6 +155,7 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
                       {group.map(({ fish: f, discovered: caught, shown, name }) => {
                         const body = (
                           <>
+                            <NightMark fish={f} discovered={caught} />
                             <FishSprite fish={f} preset="thumb" form={shown.form} discovered={caught}
                                         ariaLabel={caught ? name : '미확인 어종'}
                                         className={cx('block mx-auto', !caught && 'grayscale brightness-75')} />
@@ -205,7 +214,7 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
           </span>
         </Inset>
       )}
-      {fishDetail && <DexDetail fish={fishDetail.fish} game={game} initialForm={fishDetail.initialForm} onClose={() => setFishDetail(null)} />}
+      {fishDetail && <DexDetail key={`${fishDetail.fish.id}-${fishDetail.initialForm}`} fish={fishDetail.fish} game={game} initialForm={fishDetail.initialForm} onClose={() => setFishDetail(null)} />}
     </div>
   );
 }

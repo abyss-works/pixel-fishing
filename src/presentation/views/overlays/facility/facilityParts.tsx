@@ -86,7 +86,7 @@ export function FacilityColumns({ list, detail, foot }: { list: ReactNode; detai
     <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-[18px] flex-1 min-h-0">
       <div className={`${SCROLL_Y} -mr-3.5 min-h-0`}>{list}</div>
       <div className="flex flex-col gap-3 min-w-0 min-h-0">
-        <div className={`${SCROLL_Y} -mr-2 flex-1 min-h-0 flex flex-col gap-3 [&>*]:shrink-0`}>{detail}</div>
+        <div className={`${SCROLL_Y} flex-1 min-h-0 flex flex-col gap-3 [&>*]:shrink-0`}>{detail}</div>
         <div className="flex flex-col gap-3 shrink-0 mr-1.5 [&>button]:w-full">{foot}</div>
       </div>
     </div>
@@ -100,7 +100,7 @@ export function FacilityTabBody({ list, detail, foot }: { list: ReactNode; detai
   if (!mobile) return <FacilityColumns list={list} detail={detail} foot={foot} />;
   return (
     <>
-      <div className={`${SCROLL_Y} -mr-2 flex-1 min-h-0 flex flex-col gap-4 [&>*]:shrink-0`}>
+      <div className={`${SCROLL_Y} flex-1 min-h-0 flex flex-col gap-4 [&>*]:shrink-0`}>
         {list}
         <div className="flex flex-col gap-3 min-w-0">{detail}</div>
       </div>
