@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { CHAT_MAX_LENGTH, CHAT_RATE_MAX, CHAT_RATE_WINDOW_MS, chatRate, chatText, formatIdle, glidePosition, LIVE_MAX_LENGTH, idleSinceOf, LIVE_MOVE_MS, nextGlide, parseClientMessage } from './live';
+import { describe, it, expect, expectTypeOf } from 'vitest';
+import { CHAT_MAX_LENGTH, CHAT_RATE_MAX, CHAT_RATE_WINDOW_MS, chatRate, chatText, formatIdle, glidePosition, LIVE_MAX_LENGTH, idleSinceOf, LIVE_MOVE_MS, nextGlide, parseClientMessage, type ServerMessage } from './live';
 
 describe('parseClientMessage', () => {
   it('낚싯줄을 드리웠으면 찌 위치를 함께 받고, 형식이 틀린 찌 위치는 메시지째 버린다', () => {
@@ -158,5 +158,15 @@ describe('방치 시간 필드', () => {
     expect(parseClientMessage(`${base},"idleMs":-1}`)).toBeNull();
     expect(parseClientMessage(`${base},"idleMs":"5"}`)).toBeNull();
     expect(parseClientMessage(`${base}}`)).toEqual({ t: 'move', region: 'sea', x: 1, y: 2, dir: 1, line: true });
+  });
+});
+
+describe('ServerMessage nick', () => {
+  it('nick 메시지는 uid와 nick 문자열 필드를 가진다', () => {
+    type NickMessage = Extract<ServerMessage, { t: 'nick' }>;
+    expectTypeOf<NickMessage>().toEqualTypeOf<{ t: 'nick'; uid: string; nick: string }>();
+
+    const msg: ServerMessage = { t: 'nick', uid: 'u-1', nick: '새닉네임' };
+    expect(JSON.parse(JSON.stringify(msg))).toEqual({ t: 'nick', uid: 'u-1', nick: '새닉네임' });
   });
 });

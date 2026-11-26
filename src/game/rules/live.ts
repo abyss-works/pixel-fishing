@@ -26,6 +26,7 @@ export type ServerMessage =
   | { t: 'stop'; uid: string }
   | { t: 'join'; presence: Presence }
   | { t: 'leave'; uid: string }
+  | { t: 'nick'; uid: string; nick: string } // 닉네임 변경 시 다른 접속자에게 전파
   | { t: 'chat'; line: ChatLine; room?: 'guild' } // 길드 채팅은 그 길드의 접속한 길드원에게만 간다
   | { t: 'typing'; uid: string; on: boolean }
   | { t: 'friend'; kind: 'request' | 'accepted'; uid: string; nick: string | null } // 받은 친구 요청·내 요청의 수락. 그 사람에게만 간다
