@@ -41,6 +41,8 @@ const SYNC_LABEL: Record<SyncState, string | null> = {
 /** 게스트가 마을 밖으로 나가려 할 때의 안내. 서버가 거부할 때와 같은 문구다 */
 export const GUEST_VILLAGE_ONLY_TEXT = POLICY['guest-village-only'].message;
 
+const VILLAGE_GREETING_TEXT = '마을 연못 어군에서 낚시하고, 집에 들어가 정비해 보세요.';
+
 export type ActionSettled = { ok: true } | { ok: false; notice: string | null };
 
 export interface ConsentPromptState {
@@ -126,6 +128,12 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
   const consentPromptRef = useRef(consentPrompt);
   consentPromptRef.current = consentPrompt;
   const bootedRef = useRef(false);
+  const greetedRef = useRef(false);
+  const emitGreetingOnce = () => {
+    if (greetedRef.current) return;
+    greetedRef.current = true;
+    sendNotice(setToast, { kind: 'boot.greeting', text: VILLAGE_GREETING_TEXT });
+  };
   const activeFlowRef = useRef<'boot' | 'adopt'>('boot');
   const pendingResumeRef = useRef<'boot' | 'adopt' | null>(null);
   const consentFetchingRef = useRef(false);
@@ -338,6 +346,11 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
         : initialProfile;
       adoptProfile(profile);
       bootedRef.current = true;
+      const g = init.game;
+      if (!init.legacy && g.location.kind === 'region' && g.location.id === 'village'
+          && g.fame === 0 && Object.keys(g.dex).length === 0) {
+        emitGreetingOnce();
+      }
       return;
     }
     activeFlowRef.current = 'boot';
@@ -394,6 +407,7 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
       await boot(signal);
       if (signal.aborted) return;
       bootedRef.current = true;
+      if (cloud === null && !init.legacy) emitGreetingOnce();
       const profile = initialProfile.ok && initialProfile.nickname === null
         ? await readProfile()
         : initialProfile;

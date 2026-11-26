@@ -1034,3 +1034,44 @@ describe('게스트 부트스트랩 429 한도 초과 구분', () => {
     expect(gw.actions).toEqual([]);
   });
 });
+
+describe('신규 진입 초기 인사 메시지(boot.greeting)', () => {
+  it('클라우드 세이브가 없는 신규 진입(cloud === null)이면 부팅 완료 후 boot.greeting을 1회 출력한다(StrictMode 포함)', async () => {
+    gw.cloudEmpty = true;
+    const events: SystemNoticeInput[] = [];
+    const sink: NoticeSink = registerNoticeSink(vi.fn(), e => events.push(e));
+    setup(sink, true);
+
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    expect(events.some(e => e.kind === 'boot.greeting')).toBe(false);
+
+    await act(async () => { gw.bootResolve!(); });
+    const greetings = events.filter(e => e.kind === 'boot.greeting');
+    expect(greetings).toHaveLength(1);
+    expect(greetings[0].text).toBe('마을 연못 어군에서 낚시하고, 집에 들어가 정비해 보세요.');
+  });
+
+  it('저장된 클라우드 진행이 있는 복귀 유저에게는 boot.greeting을 출력하지 않는다', async () => {
+    gw.cloudEmpty = false;
+    const events: SystemNoticeInput[] = [];
+    const sink: NoticeSink = registerNoticeSink(vi.fn(), e => events.push(e));
+    setup(sink);
+
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+    expect(events.some(e => e.kind === 'boot.greeting')).toBe(false);
+    expect(events.some(e => e.kind === 'boot.cloudLoaded')).toBe(true);
+  });
+
+  it('클라우드 세이브가 비어 있어도 레거시 이관 진행이 있으면 boot.greeting을 출력하지 않는다', async () => {
+    gw.cloudEmpty = true;
+    gw.legacy = true;
+    const events: SystemNoticeInput[] = [];
+    const sink: NoticeSink = registerNoticeSink(vi.fn(), e => events.push(e));
+    setup(sink);
+
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+    expect(events.some(e => e.kind === 'boot.greeting')).toBe(false);
+  });
+});
