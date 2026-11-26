@@ -4,6 +4,7 @@ import {
   NOTICE_DISMISSED_STORAGE_KEY,
   parseDismissedNotices,
   pruneDismissedIds,
+  selectEndedNotices,
   serializeDismissedNotices,
   stackableNotices,
   visibleActiveNotices,
@@ -43,8 +44,8 @@ export function useNotices() {
   }, [notices, now]);
 
   const activeDismissed = useMemo(
-    () => (noticesSynced ? pruneDismissedIds(dismissedIds, notices) : dismissedIds),
-    [dismissedIds, notices, noticesSynced],
+    () => (noticesSynced ? pruneDismissedIds(dismissedIds, notices, now) : dismissedIds),
+    [dismissedIds, notices, noticesSynced, now],
   );
 
   useEffect(() => {
@@ -53,17 +54,18 @@ export function useNotices() {
   }, [activeDismissed, noticesSynced]);
 
   const activeNotices = useMemo(() => visibleActiveNotices(notices, now), [notices, now]);
+  const endedNotices = useMemo(() => selectEndedNotices(notices, now), [notices, now]);
   const stackNotices = useMemo(() => stackableNotices(activeNotices, activeDismissed), [activeNotices, activeDismissed]);
 
   const dismissNotice = useCallback((id: number) => {
     setDismissedIds(prev => {
-      const base = noticesSynced ? pruneDismissedIds(prev, notices) : prev;
+      const base = noticesSynced ? pruneDismissedIds(prev, notices, now) : prev;
       if (base.includes(id)) return base;
       const next = [...base, id];
       writeDismissedToStorage(next);
       return next;
     });
-  }, [notices, noticesSynced]);
+  }, [notices, noticesSynced, now]);
 
-  return { activeNotices, stackNotices, dismissNotice };
+  return { activeNotices, endedNotices, stackNotices, dismissNotice };
 }

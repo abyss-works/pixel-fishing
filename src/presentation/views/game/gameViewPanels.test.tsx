@@ -12,10 +12,21 @@ import { resetWhatsNewSession } from '../../../features/announcements/service/wh
 import { resetTutorialSession } from '../../../features/tutorial/service/tutorial';
 import { resetFortuneModalSession } from '../../../features/fortune/service/fortuneModal';
 import { resetCanvasCover } from '../../layouts/game-stage/canvasCover';
+import type { NoticeItem } from '../../../game/rules/live';
 import { resetKeyScopes } from '../../ui/hotkeys';
 import { resetOpenWindows } from '../../ui/openWindows';
 import GameView from './GameView';
 
+const noticeMock = vi.hoisted(() => ({
+  activeNotices: [] as NoticeItem[],
+  endedNotices: [] as NoticeItem[],
+  stackNotices: [] as NoticeItem[],
+  dismissNotice: vi.fn(),
+}));
+
+vi.mock('../../../features/live/service/useNotices', () => ({
+  useNotices: () => noticeMock,
+}));
 vi.mock('../../layouts/game-stage/Field', () => ({ default: () => null }));
 
 const originalConfigured = api.auth.isConfigured;
@@ -43,6 +54,10 @@ beforeEach(() => {
   markPromptsAnswered(['fish-art']);
   resetKeyScopes();
   resetOpenWindows();
+  noticeMock.activeNotices = [];
+  noticeMock.endedNotices = [];
+  noticeMock.stackNotices = [];
+  noticeMock.dismissNotice.mockReset();
   api.auth.isConfigured = false;
   window.matchMedia = ((query: string) => ({
     matches: false, media: query, addEventListener: () => {}, removeEventListener: () => {},
@@ -224,5 +239,72 @@ describe('GameView 패널 초기화', () => {
     fireEvent.click(screen.getByRole('button', { name: '가방 열기' }));
     expect(screen.queryByRole('dialog', { name: '적용 중인 효과' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '아이템' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('메시지 창 공지 띠는 별도 공지 버튼 없이 띠 전체가 단일 버튼이며 누르면 현재·지난 공지 탭이 있는 공지사항 창을 연다', () => {
+    noticeMock.activeNotices = [
+      {
+        id: 1,
+        title: '정기 등대 점검 안내',
+        body: '등대 점검 본문입니다.',
+        startsAt: '2026-11-26T01:00:00.000Z',
+        endsAt: '2026-11-26T04:00:00.000Z',
+        createdAt: '2026-11-26T00:00:00.000Z',
+      },
+    ];
+    noticeMock.endedNotices = [
+      {
+        id: 2,
+        title: '지난 항구 보수 안내',
+        body: '지난 본문입니다.',
+        startsAt: '2026-11-25T01:00:00.000Z',
+        endsAt: '2026-11-25T03:00:00.000Z',
+        createdAt: '2026-11-25T00:00:00.000Z',
+      },
+    ];
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <GameView
+          game={{ ...newState(), tutorials: [...TUTORIAL_IDS] }}
+          scene={{ kind: 'region', id: 'world' }}
+          entryPos={null}
+          placeSeq={0}
+          dispatch={() => ({ status: 'ok', state: newState(), result: { type: 'none' } })}
+          setToast={() => {}}
+          onScene={() => {}}
+          onPlace={() => {}}
+          log={[]}
+          syncLabel={null}
+          syncState="off"
+          guestProgress="nothing"
+          account="dev@localhost"
+          accountChecked={true}
+          accountFailed={false}
+          uid="u1"
+          nickname="테스터"
+          onRename={async () => null}
+          onAuthChanged={async () => {}}
+          onResync={async () => {}}
+        />
+      </QueryClientProvider>,
+    );
+
+    const stripBtn = screen.getByRole('button', { name: '공지사항 열기' });
+    expect(stripBtn).toHaveTextContent('공지');
+    expect(stripBtn).toHaveTextContent('정기 등대 점검 안내');
+    expect(stripBtn.querySelector('[data-glyph="megaphone"]')).not.toBeNull();
+    expect(screen.queryByRole('button', { name: '공지' })).not.toBeInTheDocument();
+
+    fireEvent.mouseEnter(stripBtn);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('누르면 공지사항 창이 열려요.');
+    fireEvent.mouseLeave(stripBtn);
+
+    fireEvent.click(screen.getByText('정기 등대 점검 안내'));
+    const dialog = screen.getByRole('dialog', { name: '공지사항' });
+    expect(dialog).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /현재 공지/ })).toHaveTextContent('1');
+    expect(screen.getByRole('button', { name: /지난 공지/ })).toHaveTextContent('1');
   });
 });

@@ -40,7 +40,7 @@ describe('useNotices', () => {
     localStorage.clear();
   });
 
-  it('시작·마감 경계 타이머에 맞춰 activeNotices와 stackNotices를 자동 갱신한다', () => {
+  it('시작·마감 경계 타이머에 맞춰 activeNotices, endedNotices, stackNotices와 닫힌 공지 저장소를 자동 갱신한다', () => {
     mockNotices.notices = [
       {
         id: 1,
@@ -53,15 +53,22 @@ describe('useNotices', () => {
     ];
     const { result } = renderHook(() => useNotices());
     expect(result.current.activeNotices).toEqual([]);
+    expect(result.current.endedNotices).toEqual([]);
     expect(result.current.stackNotices).toEqual([]);
 
     act(() => { vi.advanceTimersByTime(t1 - t0); });
     expect(result.current.activeNotices.map(n => n.id)).toEqual([1]);
+    expect(result.current.endedNotices).toEqual([]);
     expect(result.current.stackNotices.map(n => n.id)).toEqual([1]);
+
+    act(() => { result.current.dismissNotice(1); });
+    expect(JSON.parse(localStorage.getItem(NOTICE_DISMISSED_STORAGE_KEY) ?? '[]')).toEqual([1]);
 
     act(() => { vi.advanceTimersByTime(t2 - t1); });
     expect(result.current.activeNotices).toEqual([]);
+    expect(result.current.endedNotices.map(n => n.id)).toEqual([1]);
     expect(result.current.stackNotices).toEqual([]);
+    expect(JSON.parse(localStorage.getItem(NOTICE_DISMISSED_STORAGE_KEY) ?? '[]')).toEqual([]);
   });
 
   it('dismissNotice로 한 겹씩 닫고 localStorage에 보관하며 사라진 id는 정리한다', () => {
