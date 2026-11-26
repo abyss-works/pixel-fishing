@@ -4,7 +4,6 @@ import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DailyFortune } from '../../../../game/rules/fortune';
 import type { FortuneHistory } from '../../../../platform/api';
-import type { FortuneDiscoveredItem } from '../../../../features/fortune/model/fortune';
 import { currentGameDay, fortunePhrase } from '../../../../features/fortune/model/fortune';
 import { sessionKey } from '../../../../features/account/service/session';
 
@@ -31,9 +30,7 @@ vi.mock('../../../../platform/api', async importOriginal => {
 
 import FortuneCalendarModal from './FortuneCalendarModal';
 
-type ExtendedHistory = FortuneHistory & { discovered?: FortuneDiscoveredItem[] };
-
-const NOV_HISTORY: ExtendedHistory = {
+const NOV_HISTORY: FortuneHistory = {
   month: '2026-11',
   firstMonth: '2026-10',
   currentDay: '2026-11-25',
@@ -55,7 +52,7 @@ const NOV_HISTORY: ExtendedHistory = {
   ],
 };
 
-const OCT_HISTORY: ExtendedHistory = {
+const OCT_HISTORY: FortuneHistory = {
   month: '2026-10',
   firstMonth: '2026-10',
   currentDay: '2026-11-25',
@@ -255,7 +252,7 @@ describe('운세 월간 달력 창 (FortuneCalendarModal)', () => {
   });
 
   it('빈 달, 로딩, 오류 재시도, 오프라인 상태가 모두 동일한 바깥 고정 창 안에서 구분되어 표시된다', async () => {
-    let resolveLoad!: (v: ExtendedHistory | null) => void;
+    let resolveLoad!: (v: FortuneHistory | null) => void;
     apiMock.readFortuneHistory.mockImplementationOnce(() => new Promise(res => { resolveLoad = res; }));
     renderWithQuery(
       <FortuneCalendarModal gameFortune={NOV_HISTORY.today} accountState="account" onClose={vi.fn()} />,

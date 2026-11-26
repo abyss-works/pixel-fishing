@@ -19,7 +19,7 @@ import type {
 } from '../../../game/rules/fortune';
 import type { GameState } from '../../../game/rules/logic';
 import { gameDayOf } from '../../../game/rules/time';
-import type { FortuneHistory } from '../../../platform/api';
+import type { FortuneDiscoveredEntry, FortuneHistory } from '../../../platform/api';
 
 /** 운세 대상별 보너스 표시 이름 (10개 보너스 채널) */
 export const FORTUNE_TARGET_BONUS_LABEL: Record<FortuneTarget, string> = {
@@ -389,12 +389,7 @@ export interface FortuneDayDetail {
   fortune: DailyFortune | null;
 }
 
-export interface FortuneDiscoveredItem {
-  kind: FortuneKind;
-  index: 3 | 5;
-  count: number;
-  firstDay: string;
-}
+export type FortuneDiscoveredItem = FortuneDiscoveredEntry;
 
 export interface FortuneCollectionItem {
   key: string;
@@ -546,11 +541,9 @@ export function selectFortuneDayDetail(
   };
 }
 
-/** 서버 운세 이력 응답에서 누적 발견 점괘 목록을 타입 안전하게 읽는다 */
-export function fortuneHistoryDiscovered(history: FortuneHistory | null): readonly FortuneDiscoveredItem[] {
-  if (!history) return [];
-  const extended = history as FortuneHistory & { discovered?: readonly FortuneDiscoveredItem[] };
-  return Array.isArray(extended.discovered) ? extended.discovered : [];
+/** 서버 운세 이력 응답에서 누적 발견 점괘 목록을 읽는다 */
+export function fortuneHistoryDiscovered(history: FortuneHistory | null): readonly FortuneDiscoveredEntry[] {
+  return Array.isArray(history?.discovered) ? history.discovered : [];
 }
 
 /** 21종 운세 카탈로그와 계정 누적 발견 기록을 결합해 점괘첩 수집 모델을 만든다 */

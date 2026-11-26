@@ -182,7 +182,7 @@ describe('오늘의 운세 화면 모델 (21종 확장)', () => {
   });
 
   it('점괘첩 수집 모델(selectFortuneCollection)과 개발 도구 카탈로그 선택지(21종)를 만든다', () => {
-    const history: FortuneHistory & { discovered: { kind: DailyFortune['kind']; index: 3 | 5; count: number; firstDay: string }[] } = {
+    const history: FortuneHistory = {
       month: '2026-11',
       firstMonth: '2026-11',
       currentDay: '2026-11-25',

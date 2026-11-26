@@ -51,6 +51,7 @@ describe('useFortuneHistory', () => {
       currentDay: '2026-11-25',
       today: { day: '2026-11-25', kind: 'fish', index: 5 },
       days: [{ day: '2026-11-25', kind: 'fish', index: 5 }],
+      discovered: [],
     };
     apiMock.readFortuneHistory.mockResolvedValue(payload);
 
@@ -88,6 +89,7 @@ describe('useFortuneHistory', () => {
         currentDay: '2026-11-25',
         today: null,
         days: [],
+        discovered: [],
       });
 
     const { result } = renderHook(() => useFortuneHistory('2026-10', true), { wrapper: makeWrapper() });
@@ -107,6 +109,7 @@ describe('useFortuneHistory', () => {
       currentDay: '2026-11-25',
       today: null,
       days: [],
+      discovered: [],
     });
 
     const { result } = renderHook(() => useFortuneHistory('2026-11', true), { wrapper: makeWrapper() });
