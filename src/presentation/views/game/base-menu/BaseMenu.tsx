@@ -92,6 +92,7 @@ export default function BaseMenu({ base, game, onFacility, locked, accountState 
                       return (
                         <MenuCard key={f.id} data-facility={f.id} onClick={() => onFacility?.(f.id)}
                                   disabled={locked === true && section === '이동'}
+                                  shortcut={f.id === 'exit' ? 'ESC' : undefined}
                                   icon={<CardIcon base={base} facility={f} boat={game.boat} />}
                                   lock={lock.kind === 'none' ? undefined : lock.lines}
                                   title={title} sub={sub} subRole="omittable" />

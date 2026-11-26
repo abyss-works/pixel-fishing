@@ -13,6 +13,7 @@ import { resetTutorialSession } from '../../../features/tutorial/service/tutoria
 import { resetFortuneModalSession } from '../../../features/fortune/service/fortuneModal';
 import { resetCanvasCover } from '../../layouts/game-stage/canvasCover';
 import type { NoticeItem } from '../../../game/rules/live';
+import { boardingOf } from '../../../game/world';
 import { resetKeyScopes } from '../../ui/hotkeys';
 import { resetOpenWindows } from '../../ui/openWindows';
 import GameView from './GameView';
@@ -306,5 +307,133 @@ describe('GameView 패널 초기화', () => {
     expect(dialog).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /현재 공지/ })).toHaveTextContent('1');
     expect(screen.getByRole('button', { name: /지난 공지/ })).toHaveTextContent('1');
+  });
+
+  it('거점에서는 열린 창이나 메뉴가 없을 때 Esc로 마을이나 바다로 나가고, 열려 있으면 위에서부터 차례로 닫는다', () => {
+    const onScene = vi.fn();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <GameView
+          game={{ ...newState(), tutorials: [...TUTORIAL_IDS] }}
+          scene={{ kind: 'base', id: 'home' }}
+          entryPos={null}
+          placeSeq={0}
+          dispatch={() => ({ status: 'ok', state: newState(), result: { type: 'none' } })}
+          setToast={() => {}}
+          onScene={onScene}
+          onPlace={() => {}}
+          log={[]}
+          syncLabel={null}
+          syncState="off"
+          guestProgress="nothing"
+          account="dev@localhost"
+          accountChecked={true}
+          accountFailed={false}
+          uid="u1"
+          nickname="테스터"
+          onRename={async () => null}
+          onAuthChanged={async () => {}}
+          onResync={async () => {}}
+        />
+      </QueryClientProvider>,
+    );
+
+    // 1) 업적 모달 + 게임 메뉴를 연 상태에서 Esc 연타(repeat)는 무시된다
+    fireEvent.click(screen.getByRole('button', { name: /^메뉴 열기/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /^업적/ }));
+    expect(screen.getByRole('dialog', { name: '업적' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^메뉴 열기/ }));
+    expect(screen.getAllByRole('menuitem').length).toBeGreaterThan(0);
+
+    fireEvent.keyDown(document, { key: 'Escape', repeat: true });
+    expect(screen.getAllByRole('menuitem').length).toBeGreaterThan(0);
+    expect(screen.getByRole('dialog', { name: '업적' })).toBeInTheDocument();
+    expect(onScene).not.toHaveBeenCalled();
+
+    // 2) 첫 번째 Esc -> 위층 게임 메뉴만 닫힌다
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('menuitem')).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: '업적' })).toBeInTheDocument();
+    expect(onScene).not.toHaveBeenCalled();
+
+    // 3) 두 번째 Esc -> 업적 모달이 닫힌다
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: '업적' })).not.toBeInTheDocument();
+    expect(onScene).not.toHaveBeenCalled();
+
+    // 4) 세 번째 Esc -> 열린 창이 없으면 집에서 마을로 나간다
+    fireEvent.keyDown(document, { key: 'Escape' });
+    const expected = boardingOf('home');
+    expect(onScene).toHaveBeenCalledWith({ kind: 'region', id: expected.region }, expected.msg, expected.at, undefined);
+  });
+
+  it('항구 거점에서는 열린 창이 없을 때 Esc로 바다로 나간다', () => {
+    const onScene = vi.fn();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <GameView
+          game={{ ...newState(), boat: 1, tutorials: [...TUTORIAL_IDS] }}
+          scene={{ kind: 'base', id: 'harbor' }}
+          entryPos={null}
+          placeSeq={0}
+          dispatch={() => ({ status: 'ok', state: newState(), result: { type: 'none' } })}
+          setToast={() => {}}
+          onScene={onScene}
+          onPlace={() => {}}
+          log={[]}
+          syncLabel={null}
+          syncState="off"
+          guestProgress="nothing"
+          account="dev@localhost"
+          accountChecked={true}
+          accountFailed={false}
+          uid="u1"
+          nickname="테스터"
+          onRename={async () => null}
+          onAuthChanged={async () => {}}
+          onResync={async () => {}}
+        />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    const expected = boardingOf('harbor');
+    expect(onScene).toHaveBeenCalledWith({ kind: 'region', id: expected.region }, expected.msg, expected.at, undefined);
+  });
+
+  it('바다(region) 화면에서는 열린 창이 없을 때 Esc를 눌러도 장면 이동이 일어나지 않는다', () => {
+    const onScene = vi.fn();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <GameView
+          game={{ ...newState(), tutorials: [...TUTORIAL_IDS] }}
+          scene={{ kind: 'region', id: 'village' }}
+          entryPos={null}
+          placeSeq={0}
+          dispatch={() => ({ status: 'ok', state: newState(), result: { type: 'none' } })}
+          setToast={() => {}}
+          onScene={onScene}
+          onPlace={() => {}}
+          log={[]}
+          syncLabel={null}
+          syncState="off"
+          guestProgress="nothing"
+          account="dev@localhost"
+          accountChecked={true}
+          accountFailed={false}
+          uid="u1"
+          nickname="테스터"
+          onRename={async () => null}
+          onAuthChanged={async () => {}}
+          onResync={async () => {}}
+        />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onScene).not.toHaveBeenCalled();
   });
 });

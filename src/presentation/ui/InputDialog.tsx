@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import Button from './Button';
+import { HOTKEY_TIER } from './hotkeys';
 import Modal from './Modal';
 import ModalCard from './ModalCard';
 import TextArea from './TextArea';
@@ -29,7 +30,7 @@ export default function InputDialog({ layer = 'app', title, body, label, placeho
                 onChange={e => setValue(e.target.value)} autoFocus />
     </ModalCard>
   );
-  if (layer === 'stage') return <Modal layer="stage" onClose={onCancel}>{card}</Modal>;
-  if (layer === 'devtools') return <Modal layer="devtools" bare onClose={onCancel}>{card}</Modal>;
-  return <Modal layer="app" bare onClose={onCancel}>{card}</Modal>;
+  if (layer === 'stage') return <Modal layer="stage" hotkeyTier={HOTKEY_TIER.STAGE_CONFIRM} onClose={onCancel}>{card}</Modal>;
+  if (layer === 'devtools') return <Modal layer="devtools" hotkeyTier={HOTKEY_TIER.BLOCKER} bare onClose={onCancel}>{card}</Modal>;
+  return <Modal layer="app" hotkeyTier={HOTKEY_TIER.APP_CONFIRM} bare onClose={onCancel}>{card}</Modal>;
 }
