@@ -9,7 +9,7 @@ import { BOATS, MAX_BOAT, nextBoatText } from '../content/boats';
 import { WATER_STYLE } from '../rendering/pixel/styles';
 import type { MapCellDef, RegionPack, School } from './index';
 import {
-  REGION_PACKS, BASE_PACKS, ZoneTracker, canMove, zoneOf, closedSeaBlock, movePlayer, inTrigger, nearestSchoolInRange,
+  REGION_PACKS, BASE_PACKS, LIVE_REGIONS, ZoneTracker, canMove, zoneOf, closedSeaBlock, movePlayer, inTrigger, nearestSchoolInRange,
   entryPoint, furnitureAt, inClosedSea, HOME_FURNITURE, HARBOR_FURNITURE, MANILA_FURNITURE, COLOMBO_FURNITURE,
   TOAMASINA_FURNITURE, WALVISBAY_FURNITURE,
   VILLAGE, VILLAGE_W, V_POND, V_HOUSE, V_DOOR, V_SPAWN, V_BRIDGE, V_PIER, V_PORT, V_SCHOOLS,
@@ -798,6 +798,10 @@ describe('판매 시설이 있는 거점 표', () => {
 });
 
 describe('이벤트 2: 강태공 분지 호수(championship)', () => {
+  it('LIVE_REGIONS에 championship이 포함된다', () => {
+    expect(LIVE_REGIONS).toContain('championship');
+  });
+
   it('도보 구역이며 showOthers가 켜져 있고 zoneOf가 championship을 반환한다', () => {
     const champ = REGION_PACKS.championship;
     expect(champ.movement).toBe('walk');
