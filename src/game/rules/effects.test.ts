@@ -356,14 +356,13 @@ describe('saleProceedsOf', () => {
     expect(resGA.mods.map(m => m.id)).toEqual(['guild-sell', 'achievement-sellBonus']);
   });
 
-  it('재물운(gold) 활성 시 판매 예상 금액에 행운 배수(×1.03/×1.05)를 마지막에 곱하고 오늘의 운세 mod를 남긴다', () => {
+  it('재물운(gold) 활성 시 판매 예상 금액에 행운 배수(×1.05/×1.10)를 마지막에 곱하고 오늘의 운세 mod를 남긴다', () => {
     // NOW = 2026-11-21T05:00:00.000Z (KST 14:00) → 게임 날짜 2026-11-21
     const bag = Array.from({ length: 10 }, (_, i) => sampleFish(`g${i}`, 'crucian', 'variant'));
     const baseSum = bag.reduce((s, i) => s + priceOfInstance(i), 0);
     const guild = guildEffectsOf(1, { sell: 3 }); // +6%
 
-    for (const index of [3, 5] as const) {
-      const luck = 1 + index / 100;
+    for (const [index, luck] of [[3, 1.05], [5, 1.10]] as const) {
       const plainCtx = makeCtx({
         state: { bag, fortune: { day: '2026-11-21', kind: 'gold', index } },
       });
@@ -413,7 +412,7 @@ describe('saleProceedsOf', () => {
       state: { bag, fortune },
       now: '2026-11-21T18:59:59.000Z',
     }), bag);
-    expect(active.value).toBe(Math.round(baseSum * 1.05));
+    expect(active.value).toBe(Math.round(baseSum * 1.10));
     expect(active.mods.map(m => m.id)).toEqual(['fortune-sell']);
 
     const expired = saleProceedsOf(makeCtx({
@@ -453,11 +452,11 @@ describe('saleProceedsOf', () => {
       },
     ]);
 
-    // 재물운(×1.05) × 작은 바다 영약(×1.05) = ×1.1025
+    // 재물운(×1.10) × 작은 바다 영약(×1.05) = ×1.155
     const combined = saleProceedsOf(makeCtx({
       state: { bag, potions, fortune: { day: '2026-11-21', kind: 'gold', index: 5 } },
     }), bag);
-    expect(combined.value).toBe(Math.round(baseSum * 1.1025));
+    expect(combined.value).toBe(Math.round(baseSum * 1.155));
     expect(combined.mods.map(m => m.id)).toEqual(['fortune-sell', 'potion-luck-small']);
     expect(combined.mods.reduce((s, m) => s + m.delta, combined.base)).toBe(combined.value);
 
@@ -468,5 +467,32 @@ describe('saleProceedsOf', () => {
     }), bag);
     expect(expired.value).toBe(baseSum);
     expect(expired.mods).toEqual([]);
+  });
+});
+
+describe('biteWaitOf 운세(biteWait)', () => {
+  it('입질 대기 단축 운세(×0.95/×0.90)가 합연산 보너스 뒤 마지막 곱연산으로 적용된다', () => {
+    const base = biteWaitOf(makeCtx({ state: { rod: 1 } }), 'pond', 'manual');
+    const withAch = biteWaitOf(makeCtx({
+      state: { rod: 1 },
+      achievements: { biteWaitCut: 0.1 },
+    }), 'pond', 'manual');
+    const withBite3 = biteWaitOf(makeCtx({
+      state: { rod: 1, fortune: { day: '2026-11-21', kind: 'bite', index: 3 } },
+      achievements: { biteWaitCut: 0.1 },
+    }), 'pond', 'manual');
+    const withBite5 = biteWaitOf(makeCtx({
+      state: { rod: 1, fortune: { day: '2026-11-21', kind: 'bite', index: 5 } },
+    }), 'pond', 'idle');
+
+    expect(withBite3.min.value).toBeCloseTo(withAch.min.value * 0.95, 9);
+    expect(withBite3.max.value).toBeCloseTo(withAch.max.value * 0.95, 9);
+    expect(withBite3.min.mods.at(-1)).toMatchObject({
+      id: 'fortune-biteWait',
+      label: '오늘의 운세',
+      source: { kind: 'fortune' },
+    });
+    expect(withBite5.min.value).toBeCloseTo(base.min.value * 0.90, 9);
+    expect(withBite5.max.value).toBeCloseTo(base.max.value * 0.90, 9);
   });
 });

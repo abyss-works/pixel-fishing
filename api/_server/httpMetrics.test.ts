@@ -128,6 +128,56 @@ describe('createHttpMetrics 미들웨어', () => {
     await metrics.stop();
     expect(persist).not.toHaveBeenCalled();
   });
+
+  it('동시 flush 호출이 대기 중 추가 기록과 겹쳐도 persist를 중첩 실행하지 않고 완료 시점까지 기다린다', async () => {
+    const deferreds: Array<() => void> = [];
+    let inFlightPersists = 0;
+    let maxConcurrentPersists = 0;
+    const batches: HttpMetricIncrement[][] = [];
+
+    const metrics = createHttpMetrics({
+      flushIntervalMs: 60_000,
+      now: () => Date.parse('2026-11-25T05:00:00.000Z'),
+      persist: async rows => {
+        inFlightPersists += 1;
+        maxConcurrentPersists = Math.max(maxConcurrentPersists, inFlightPersists);
+        batches.push(rows);
+        await new Promise<void>(resolve => { deferreds.push(resolve); });
+        inFlightPersists -= 1;
+      },
+    });
+
+    metrics.record('/api/action', 200);
+    const flush1 = metrics.flush();
+    expect(deferreds).toHaveLength(1);
+
+    metrics.record('/api/action', 500);
+    let flush2Settled = false;
+    let flush3Settled = false;
+    const flush2 = metrics.flush().then(() => { flush2Settled = true; });
+    const flush3 = metrics.flush().then(() => { flush3Settled = true; });
+
+    deferreds[0]();
+    await flush1;
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(deferreds).toHaveLength(2);
+    expect(flush2Settled).toBe(false);
+    expect(flush3Settled).toBe(false);
+    expect(maxConcurrentPersists).toBe(1);
+
+    deferreds[1]();
+    await Promise.all([flush2, flush3]);
+
+    expect(flush2Settled).toBe(true);
+    expect(flush3Settled).toBe(true);
+    expect(maxConcurrentPersists).toBe(1);
+    expect(batches).toEqual([
+      [{ day: '2026-11-25', routeGroup: 'action', total: 1, status426: 0, status429: 0, status5xx: 0 }],
+      [{ day: '2026-11-25', routeGroup: 'action', total: 1, status426: 0, status429: 0, status5xx: 1 }],
+    ]);
+  });
 });
 
 describe('서버 진입점 HTTP 지표 등록', () => {

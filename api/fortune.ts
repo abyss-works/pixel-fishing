@@ -63,8 +63,8 @@ export default async function handler(req: Req, res: Res): Promise<void> {
 
     const { db } = database();
     const { fromDay, toDay } = fortuneMonthRange(month);
-    const { firstMonth, today, days } = await run('db-read', () => loadFortuneMonth(db, session.id, fromDay, toDay, currentDay));
-    res.status(200).json({ month, firstMonth, currentDay, today, days });
+    const { firstMonth, today, days, discovered } = await run('db-read', () => loadFortuneMonth(db, session.id, fromDay, toDay, currentDay));
+    res.status(200).json({ month, firstMonth, currentDay, today, days, discovered });
   } catch (e) {
     const err = toApiError(e);
     if (err.status >= 500) await reportServerIssue(err.code, err.cause ?? err, err.context);

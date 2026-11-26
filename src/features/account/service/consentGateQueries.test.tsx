@@ -97,6 +97,7 @@ describe('조회 훅 약관 수락 게이트 연동', () => {
       currentDay: '2026-11-25',
       today: null,
       days: [],
+      discovered: [],
     });
     resetConsentGate();
   });

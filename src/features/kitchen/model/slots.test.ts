@@ -131,7 +131,7 @@ describe('보너스 통합 칩 표시 조건과 내역', () => {
     expect(chip.count).toBe(2);
     expect(chip.items.map(i => [i.id, i.kindLabel, i.title, i.summary, i.durationText])).toEqual([
       ['potion:luck-small', '비약', { name: '작은 바다 영약', grade: 'special' }, '모든 행운 효과 ×1.05', '하루 동안'],
-      ['fortune', '풍어운', { name: '오늘의 운세', grade: null }, '희귀 이상 출현 비중 ×1.05', '하루 동안'],
+      ['fortune', '만선 풍어운', { name: '오늘의 운세', grade: null }, '희귀 이상 출현 비중 ×1.10', '하루 동안'],
     ]);
   });
 
@@ -209,7 +209,7 @@ describe('HUD 칩 4행 요약 및 적용 중인 효과 창 모델', () => {
       { label: '도시락', value: '없음' },
       { label: '미끼', value: '2/2' },
       { label: '비약', value: '없음' },
-      { label: '운세', value: '풍어운' },
+      { label: '운세', value: '만선풍어' },
     ]);
 
     expect(selectBonusTipRows(seed({
@@ -220,7 +220,7 @@ describe('HUD 칩 4행 요약 및 적용 중인 효과 창 모델', () => {
       { label: '도시락', value: '없음' },
       { label: '미끼', value: '1/2' },
       { label: '비약', value: '없음' },
-      { label: '운세', value: '재물운' },
+      { label: '운세', value: '잔돈운' },
     ]);
   });
 
@@ -259,9 +259,21 @@ describe('HUD 칩 4행 요약 및 적용 중인 효과 창 모델', () => {
     }]);
     expect(view.fortune).toEqual({
       id: 'fortune',
-      title: { name: '재물운', grade: null },
+      title: { name: '잔돈 재물운', grade: null },
       durationText: '하루 동안',
-      stats: [{ label: '판매가', value: '×1.03' }],
+      stats: [{ label: '판매가', value: '×1.05' }],
+    });
+
+    const grandView = selectActiveEffectsView(seed({ fortune: { day, kind: 'grand-catch', index: 5 } }), T0);
+    expect(grandView.fortune).toEqual({
+      id: 'fortune',
+      title: { name: '만선 대길', grade: null },
+      durationText: '하루 동안',
+      stats: [
+        { label: '희귀 이상 출현 비중', value: '×1.10' },
+        { label: '판매가', value: '×1.10' },
+        { label: '네임드 조우 확률', value: '×1.10' },
+      ],
     });
   });
 });

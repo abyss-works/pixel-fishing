@@ -1098,6 +1098,8 @@ describe('UI 시스템 가드', () => {
 
   it('선택 가능 상세(운세 달력)와 다단계·형태 전환 창(소식·도감 상세)은 고정·최소 높이로 전환 시 레이아웃이 밀리지 않는다', () => {
     const fortuneSrc = stripComments(presentationFiles.find(f => f.path === 'views/overlays/fortune/FortuneCalendarModal.tsx')!.src);
+    const fortuneCollectionSrc = stripComments(presentationFiles.find(f => f.path === 'views/overlays/fortune/FortuneCollectionTab.tsx')!.src);
+    const fortuneToneSrc = stripComments(presentationFiles.find(f => f.path === 'views/overlays/fortune/fortuneTone.ts')!.src);
     const whatsNewSrc = stripComments(presentationFiles.find(f => f.path === 'views/overlays/whats-new/WhatsNewModal.tsx')!.src);
     const dexDetailSrc = stripComments(presentationFiles.find(f => f.path === 'views/game/tabs/dex/DexDetail.tsx')!.src);
 
@@ -1110,7 +1112,9 @@ describe('UI 시스템 가드', () => {
     expect(fortuneSrc).toMatch(/h-\[\d+px\][^>]*aria-label="선택한 날짜 운세 상세"/);
     expect(fortuneSrc).not.toMatch(/\bSCROLL_Y\b|\bSCROLL_Y_ROWS\b|overflow-y-auto/);
     expect(fortuneSrc).not.toContain('월간 운세 집계');
-    expect(fortuneSrc).toContain('text-named');
+    expect(fortuneCollectionSrc).not.toMatch(/\bSCROLL_Y\b|\bSCROLL_Y_ROWS\b|overflow-y-auto/);
+    expect(fortuneCollectionSrc).toContain('grid-rows-7');
+    expect(fortuneToneSrc).toContain('text-named');
 
     expect(whatsNewSrc).toMatch(/<Modal\b[^>]*height=\{/);
     expect(whatsNewSrc).toMatch(/<ModalCard\b[\s\S]*?\bfixed\b/);
@@ -1128,9 +1132,9 @@ describe('UI 시스템 가드', () => {
   });
 
   it('시맨틱 색이 걸린 줄 안에 HighlightRarityText를 중첩하지 않고 Tip 경고 첫 줄도 원문을 그대로 쓴다', () => {
-    const semanticLineWithHighlight = /className=\{?[^>\n]*\btext-(?:accent|danger|gold|guild|epic)\b[^>\n]*\}?[^>]*>[^<\n]*<HighlightRarityText\b/;
-    const semanticBlockWithHighlight = /className=\{?[^>\n]*\btext-(?:accent|danger|gold|guild|epic)\b[^>\n]*\}?[^>]*>[\s\S]{0,160}?<HighlightRarityText\b/;
-    const kvSemanticValueWithHighlight = /value=\{<HighlightRarityText\b[\s\S]{0,120}?valueClassName=\{?[^}\n]*\btext-(?:accent|danger|gold|guild|epic)\b/;
+    const semanticLineWithHighlight = /className=\{?[^>\n]*\btext-(?:accent|danger|gold|guild|epic|mutation|named)\b[^>\n]*\}?[^>]*>[^<\n]*<HighlightRarityText\b/;
+    const semanticBlockWithHighlight = /className=\{?[^>\n]*\btext-(?:accent|danger|gold|guild|epic|mutation|named)\b[^>\n]*\}?[^>]*>[\s\S]{0,160}?<HighlightRarityText\b/;
+    const kvSemanticValueWithHighlight = /value=\{<HighlightRarityText\b[\s\S]{0,120}?valueClassName=\{?[^}\n]*\btext-(?:accent|danger|gold|guild|epic|mutation|named)\b/;
     const offenders = presentationFiles
       .filter(f => !isTestFile(f.path))
       .filter(f => {

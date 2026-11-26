@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api } from '../../../platform/api';
 import type { DebugStepInput, GameAction } from '../../../game/rules/actions';
 import type { GameState } from '../../../game/rules/logic';
+import type { FortuneKind } from '../../../game/rules/fortune';
 import type { BaseId } from '../../../game/content/places';
 import type { SpotId } from '../../../game/content/spots';
 import { REJECT_TEXT } from '../../../game/rules/rules';
@@ -141,6 +142,10 @@ export function useDevTools(
     runCommand: (command: DebugCommandId, args: Record<string, unknown>, customLabel?: string) =>
       guard(async () => {
         await send({ type: 'debug', command, args }, customLabel ?? labelOf(command));
+      }),
+    setFortune: (kind: FortuneKind, index: 3 | 5, label?: string) =>
+      guard(async () => {
+        await send({ type: 'debug', command: 'fortune.set', args: { kind, index } }, label ?? `운세 전환 (${kind}:${index})`);
       }),
     runPreset: (preset: DevPreset, ctx: PresetContext) =>
       guard(async () => {

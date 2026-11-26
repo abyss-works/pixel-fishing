@@ -24,13 +24,14 @@ describe('readFortuneHistory', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('month 미지정과 지정 호출 모두 응답을 그대로 돌려준다', async () => {
+  it('month 미지정과 지정 호출 모두 응답(discovered 포함)을 그대로 돌려준다', async () => {
     const payload = {
       month: '2030-03',
       firstMonth: '2030-02',
       currentDay: '2030-03-04',
       today: { day: '2030-03-04', kind: 'fish', index: 5 },
       days: [{ day: '2030-03-04', kind: 'fish', index: 5 }],
+      discovered: [{ kind: 'fish', index: 5, count: 2, firstDay: '2030-02-14' }],
     };
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(payload), { status: 200 }));
     await expect(readFortuneHistory()).resolves.toEqual(payload);
@@ -39,6 +40,18 @@ describe('readFortuneHistory', () => {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(payload), { status: 200 }));
     await expect(readFortuneHistory('2030-02')).resolves.toEqual(payload);
     expect(fetchMock).toHaveBeenLastCalledWith('/api/fortune/history?month=2030-02');
+  });
+
+  it('discovered가 누락된 응답은 빈 배열로 정규화한다', async () => {
+    const legacyPayload = {
+      month: '2030-03',
+      firstMonth: '2030-02',
+      currentDay: '2030-03-04',
+      today: null,
+      days: [],
+    };
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(legacyPayload), { status: 200 }));
+    await expect(readFortuneHistory()).resolves.toEqual({ ...legacyPayload, discovered: [] });
   });
 
   it('실패 응답은 AppError로 던진다', async () => {

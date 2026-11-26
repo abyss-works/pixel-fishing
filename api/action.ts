@@ -17,19 +17,20 @@ import { afterResponse } from './_server/afterResponse.js';
 import { migrate, newState } from '../src/game/rules/logic.js';
 import type { FishInstance, FormRecord, GameState, Judgment } from '../src/game/rules/logic.js';
 import {
-  autoLockKey, buildCatchInfo, canFish, decideCatchAutoLock, FISH, fishPool, formName, instanceFish,
-  evictionPriceRows, makeInstance, nextDexRec, pickEvict, pruneAutoLockedIds, RARITY, RARITY_ORDER,
+  autoLockKey, buildCatchInfo, canFish, catchFameOf, decideCatchAutoLock, FISH, fishPool, formName, instanceFish,
+  evictionPriceRows, makeInstance, nextDexRec, pickEvict, pruneAutoLockedIds, RARITY_ORDER,
   matchBountyCatch,
 } from '../src/game/rules/logic.js';
 import { appliedSlots, applyEnergyGain, planOverflow } from '../src/game/rules/cooking.js';
 import { isFirstCatchSpot, needsLegacyFirstCatchMigration } from '../src/game/rules/firstCatch.js';
 import { drawNamedEncounter, speciesPityCandidates } from '../src/game/rules/pity.js';
-import { ensureFortune, totalLuckMultOf } from '../src/game/rules/fortune.js';
+import { ensureFortune, fortuneEntryOf, totalLuckMultOf } from '../src/game/rules/fortune.js';
+import type { DailyFortune, FortuneKind } from '../src/game/rules/fortune.js';
 import { bountyById, isQuestOffered } from '../src/game/content/bounties.js';
 import type { BountyKind, BountyQuest } from '../src/game/content/bounties.js';
 import type { SpotId } from '../src/game/content/spots.js';
 import { applyAction, drawCatch, namedWeightBonus, pickScalars, prepareCatchDraw } from '../src/game/rules/actions.js';
-import type { ActionDeps, ApplyOutcome, GameAction, GameEvent, ReleasedFish, StatePatch, StateWrites } from '../src/game/rules/actions.js';
+import type { ActionDeps, ApplyOutcome, DebugStepInput, GameAction, GameEvent, ReleasedFish, StatePatch, StateWrites } from '../src/game/rules/actions.js';
 import { achievementBonusesOf, counterIncrementsForEvents, evaluateAchievements } from '../src/game/rules/achievements.js';
 import { bagCapacityOf, createPlayerContext } from '../src/game/rules/effects.js';
 import type { AchievementCounters } from '../src/game/content/achievements.js';
@@ -74,7 +75,7 @@ import { ensureProfile, nicknameTaken, profileExists, setNickname } from './_dat
 import { ALWAYS_GUARD, blobInput, commitDebugBatch, instRow, seedState, snapshotInsert, stateRow, versionUpdate, writeFragments } from './_data/save.js';
 import { eventsInsert } from './_data/telemetry.js';
 import { activeDayUpsert } from './_data/activity.js';
-import { recordDailyFortune } from './_data/fortune.js';
+import { recordDailyFortune, upsertDailyFortuneFragment } from './_data/fortune.js';
 import { contributionUpsert, logbookInsert } from './_data/guilds.js';
 import { NO_GUILD_EFFECTS, contributionFor, guildEffectsOf, guildLevelOf } from '../src/game/rules/guild.js';
 import type { GuildEffects, GuildLogKind } from '../src/game/rules/guild.js';
@@ -221,6 +222,131 @@ const GUILD_ACTIONS = new Set(['catch', 'sell', 'exhibit', 'deliverBounty', 'cla
 // 밸런스 상수와 액션 목록은 각 정의를 단일 출처로 삼는다.
 const PACING_SLOW = new Set<string>(PACING_SLOW_TYPES);
 
+const isPlainRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/** 개발 도구 fortune.set 인자 검증 — 12종 kind, 3등급은 index 생략 시 5 허용(3 거부), 1·2등급은 3|5 필수 */
+export function parseFortuneSetArgs(args: unknown): { kind: FortuneKind; index: 3 | 5 } | null {
+  if (!isPlainRecord(args) || typeof args.kind !== 'string') return null;
+  const tier5 = fortuneEntryOf(args.kind as FortuneKind, 5);
+  if (!tier5) return null;
+  if (tier5.tier === 3) {
+    if (args.index === undefined || args.index === 5) return { kind: tier5.kind, index: 5 };
+    return null;
+  }
+  if (args.index === 3 || args.index === 5) return { kind: tier5.kind, index: args.index };
+  return null;
+}
+
+/** 게임 규칙 스키마(parseAction) 외 서버 전용 debug 명령(fortune.set 및 이를 포함한 debugBatch) 파싱 */
+export function parseServerAction(body: unknown): GameAction | null {
+  const standard = parseAction(body);
+  if (standard) return standard;
+  if (!isPlainRecord(body)) return null;
+  if (body.type === 'debug' && body.command === 'fortune.set') {
+    if (body.args !== undefined && !isPlainRecord(body.args)) return null;
+    return {
+      type: 'debug',
+      command: 'fortune.set',
+      ...(body.args !== undefined ? { args: body.args } : {}),
+    };
+  }
+  if (body.type === 'debugBatch' && Array.isArray(body.steps) && body.steps.length > 0 && body.steps.length <= 50) {
+    const steps: DebugStepInput[] = [];
+    for (const step of body.steps) {
+      if (!isPlainRecord(step) || typeof step.command !== 'string') return null;
+      if (step.args !== undefined && !isPlainRecord(step.args)) return null;
+      if (step.command !== 'fortune.set' && !parseAction({
+        type: 'debug', command: step.command, ...(step.args !== undefined ? { args: step.args } : {}),
+      })) {
+        return null;
+      }
+      steps.push({ command: step.command, ...(step.args !== undefined ? { args: step.args } : {}) });
+    }
+    return { type: 'debugBatch', steps };
+  }
+  return null;
+}
+
+function applyFortuneSet(state: GameState, args: unknown, now: string): ApplyOutcome {
+  const parsed = parseFortuneSetArgs(args);
+  if (!parsed) return { ok: false, error: 'bad-request' };
+  const fortune: DailyFortune = { day: gameDayOf(now), ...parsed };
+  return {
+    ok: true,
+    state: { ...state, fortune },
+    result: { type: 'none' },
+    events: [{ type: 'debug', payload: { command: 'fortune.set', args: parsed } }],
+    writes: { instancesAdded: [], instancesRemoved: [], instancesMoved: [], instancesLocked: [], records: [] },
+  };
+}
+
+function mergeWrites(prev: StateWrites, next: StateWrites): StateWrites {
+  const removedNow = new Set(next.instancesRemoved);
+  const addedNow = new Set(next.instancesAdded.map(a => a.inst.uid));
+  const instancesAdded = [
+    ...prev.instancesAdded.filter(a => !removedNow.has(a.inst.uid) && !addedNow.has(a.inst.uid)),
+    ...next.instancesAdded,
+  ];
+  const instancesRemoved = [
+    ...new Set([...prev.instancesRemoved.filter(u => !addedNow.has(u)), ...next.instancesRemoved]),
+  ];
+  const movedMap = new Map(prev.instancesMoved.map(m => [m.uid, m.slot]));
+  for (const m of next.instancesMoved) movedMap.set(m.uid, m.slot);
+  for (const u of removedNow) movedMap.delete(u);
+  const lockedMap = new Map(prev.instancesLocked.map(l => [l.uid, l.locked]));
+  for (const l of next.instancesLocked) lockedMap.set(l.uid, l.locked);
+  for (const u of removedNow) lockedMap.delete(u);
+  const recKey = (r: { fishId: string; form: string }) => `${r.fishId}\0${r.form}`;
+  const removedRecKeys = new Set((next.recordsRemoved ?? []).map(recKey));
+  const recMap = new Map(prev.records.filter(r => !removedRecKeys.has(recKey(r))).map(r => [recKey(r), r]));
+  for (const r of next.records) recMap.set(recKey(r), r);
+  const nextRemovedRecs = new Map((prev.recordsRemoved ?? []).filter(r => !recMap.has(recKey(r))).map(r => [recKey(r), r]));
+  for (const r of next.recordsRemoved ?? []) nextRemovedRecs.set(recKey(r), r);
+  return {
+    instancesAdded,
+    instancesRemoved,
+    instancesMoved: [...movedMap.entries()].map(([uid, slot]) => ({ uid, slot })),
+    instancesLocked: [...lockedMap.entries()].map(([uid, locked]) => ({ uid, locked })),
+    records: [...recMap.values()],
+    ...(nextRemovedRecs.size > 0 ? { recordsRemoved: [...nextRemovedRecs.values()] } : {}),
+  };
+}
+
+function applyServerDebugBatch(state: GameState, steps: readonly DebugStepInput[], deps: ActionDeps): ApplyOutcome {
+  let cur = state;
+  const events: GameEvent[] = [];
+  let writes: StateWrites = { instancesAdded: [], instancesRemoved: [], instancesMoved: [], instancesLocked: [], records: [] };
+  let chunk: DebugStepInput[] = [];
+
+  const flushChunk = (): ApplyOutcome | null => {
+    if (chunk.length === 0) return null;
+    const out = applyAction(cur, { type: 'debugBatch', steps: chunk }, deps);
+    chunk = [];
+    if (!out.ok) return out;
+    cur = out.state;
+    events.push(...out.events);
+    writes = mergeWrites(writes, out.writes);
+    return null;
+  };
+
+  for (const s of steps) {
+    if (s.command === 'fortune.set') {
+      const failed = flushChunk();
+      if (failed) return failed;
+      const out = applyFortuneSet(cur, s.args ?? {}, deps.now);
+      if (!out.ok) return out;
+      cur = out.state;
+      events.push(...out.events);
+    } else {
+      chunk.push(s);
+    }
+  }
+  const failed = flushChunk();
+  if (failed) return failed;
+  return { ok: true, state: cur, result: { type: 'none' }, events, writes };
+}
+
 /** DB 단계 실행 — 실패는 그 단계의 오류 코드로 500을 던진다 */
 async function step<T>(code: 'db-read' | 'db-write' | 'db-seed', context: Record<string, unknown>, run: () => Promise<T>): Promise<T> {
   try {
@@ -282,7 +408,7 @@ async function route(req: Req, res: Res): Promise<void> {
   // 잠그지 않으면 미지 문자열이 NaN 가중합 → 풀末尾 전설 확정으로 이어진다.
   let body: unknown = req.body ?? null;
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = null; } }
-  const parsed = parseAction(body);
+  const parsed = parseServerAction(body);
   if (!parsed) {
     if (!await step('db-read', { uid }, () => profileExists(db, uid))) await ensureGuestName();
     throw new ApiError(400, 'bad-action');
@@ -540,7 +666,7 @@ async function route(req: Req, res: Res): Promise<void> {
     }
     initialState = state;
     prevFortune = state.fortune;
-    out = applyAction(state, action, {
+    const deps: ActionDeps = {
       rng: Math.random, today,
       now, newUid: () => crypto.randomUUID(),
       dynamicCoupon,
@@ -549,7 +675,14 @@ async function route(req: Req, res: Res): Promise<void> {
       mail,
       guild: guildEffects,
       guest: user.email === null,
-    });
+    };
+    if (action.type === 'debug' && action.command === 'fortune.set') {
+      out = applyFortuneSet(state, action.args ?? {}, now);
+    } else if (action.type === 'debugBatch' && action.steps.some(s => s.command === 'fortune.set')) {
+      out = applyServerDebugBatch(state, action.steps, deps);
+    } else {
+      out = applyAction(state, action, deps);
+    }
   }
   if (!out.ok) throw new ApiError(422, out.error); // 규칙 거부 — 정상 응답이라 보고하지 않는다
 
@@ -601,24 +734,30 @@ async function route(req: Req, res: Res): Promise<void> {
   const dayStartMs = Date.parse(dayStart);
   const batchStepFragments: (SQL | null)[] = [];
   if (action.type === 'debug') {
-    if (action.command === 'bounty.resetToday') {
-      const kind = parseBountyResetKind(action.args ?? {}) ?? 'all';
-      if (kind !== 'general') {
-        const snapBounty = await step('db-read', { uid, action: action.type }, () => readSnapshotBounty(db, uid));
-        const remaining = snapBounty.clears
-          .filter(c => c.kind === 'named' && Date.parse(c.clearedAt) < dayStartMs)
-          .map(c => c.questId);
-        if (remaining.length !== out.state.clearedNamed.length) {
-          out = { ...out, state: revokeUnmetClaimableAchievements({ ...out.state, clearedNamed: remaining }) };
+    if (action.command === 'fortune.set') {
+      if (user.email !== null && out.state.fortune) {
+        fragments.push(upsertDailyFortuneFragment(guard, uid, out.state.fortune));
+      }
+    } else {
+      if (action.command === 'bounty.resetToday') {
+        const kind = parseBountyResetKind(action.args ?? {}) ?? 'all';
+        if (kind !== 'general') {
+          const snapBounty = await step('db-read', { uid, action: action.type }, () => readSnapshotBounty(db, uid));
+          const remaining = snapBounty.clears
+            .filter(c => c.kind === 'named' && Date.parse(c.clearedAt) < dayStartMs)
+            .map(c => c.questId);
+          if (remaining.length !== out.state.clearedNamed.length) {
+            out = { ...out, state: revokeUnmetClaimableAchievements({ ...out.state, clearedNamed: remaining }) };
+          }
         }
       }
+      fragments.push(...debugStepDbFragments(
+        guard, uid, action.command, action.args ?? {},
+        loaded.clearedNamed, out.state.clearedNamed,
+        loaded.counters, out.state.achievementCounters,
+        nowMs, nowISO,
+      ));
     }
-    fragments.push(...debugStepDbFragments(
-      guard, uid, action.command, action.args ?? {},
-      loaded.clearedNamed, out.state.clearedNamed,
-      loaded.counters, out.state.achievementCounters,
-      nowMs, nowISO,
-    ));
   } else if (action.type === 'debugBatch' && initialState) {
     const needsBountyRead = action.steps.some(
       s => s.command === 'bounty.resetToday' && (parseBountyResetKind(s.args ?? {}) ?? 'all') !== 'general',
@@ -633,6 +772,15 @@ async function route(req: Req, res: Res): Promise<void> {
     let resetTodayDeletedNamed = false;
     for (const s of action.steps) {
       const args = s.args ?? {};
+      if (s.command === 'fortune.set') {
+        const res = applyFortuneSet(curState, args, now);
+        if (!res.ok) throw new ApiError(422, res.error);
+        curState = res.state;
+        if (user.email !== null && curState.fortune) {
+          batchStepFragments.push(upsertDailyFortuneFragment(ALWAYS_GUARD, uid, curState.fortune));
+        }
+        continue;
+      }
       const nextStepState = reduceDebug(curState, s.command, args, today, now, () => crypto.randomUUID());
       if (!nextStepState) throw new ApiError(422, 'bad-request');
       let reconciled = nextStepState;
@@ -722,9 +870,9 @@ async function route(req: Req, res: Res): Promise<void> {
   const actionType = action.type;
   afterResponse(runFollowUps(db, followUps).catch(e =>
     reportServerIssue('후속 쓰기 실패 — events/스냅샷/의뢰 진행 유실', e, { uid, action: actionType, version: nextVersion })));
-  // 일일 운세 이력 — 로그인 계정의 첫 접속(boot)과 당일 운세 확정(catch·sell 백스톱 포함)만 멱등 기록한다. 게스트는 저장하지 않는다
+  // 일일 운세 이력 — 로그인 계정의 첫 접속(boot)과 당일 운세 확정(catch·sell·extractEnergy 백스톱 포함)만 멱등 기록한다. 게스트는 저장하지 않는다
   if (user.email !== null && out.state.fortune
-      && (action.type === 'boot' || ((action.type === 'catch' || action.type === 'sell') && prevFortune?.day !== out.state.fortune.day))) {
+      && (action.type === 'boot' || ((action.type === 'catch' || action.type === 'sell' || action.type === 'extractEnergy') && prevFortune?.day !== out.state.fortune.day))) {
     afterResponse(recordDailyFortune(db, uid, out.state.fortune).catch(e =>
       reportServerIssue('후속 쓰기 실패 — 일일 운세 이력 유실', e, { uid, action: actionType, version: nextVersion })));
   }
@@ -884,7 +1032,13 @@ export async function fastCatch(db: Executor, uid: string, row: StateRow, spot: 
     : await step('db-read', { uid, action: 'catch' }, () => ownedNormalForms(db, uid, candidates));
   const drawn = drawCatch(
     base, spot, judgment, rodPower(base), pz.mult, Math.random,
-    { ...phaseOpts, rarityLuck: totalLuckMultOf(base, now, 'rarity') },
+    {
+      ...phaseOpts,
+      rarityLuck: totalLuckMultOf(base, now, 'rarity'),
+      legendaryLuck: totalLuckMultOf(base, now, 'legendary'),
+      nightLuck: totalLuckMultOf(base, now, 'night'),
+      mutationLuck: totalLuckMultOf(base, now, 'mutation'),
+    },
     id => owned.has(id), guild, cook, achBonuses,
   );
   const { fish, extras } = drawn;
@@ -898,7 +1052,7 @@ export async function fastCatch(db: Executor, uid: string, row: StateRow, spot: 
     ? { count: Number(d.count), maxSize: d.max_size, first: d.first_caught?.slice(0, 10) ?? null }
     : undefined;
   const isNew = (prev?.count ?? 0) === 0;
-  const info = buildCatchInfo(fish, extras, isNew);
+  const info = buildCatchInfo(fish, extras, isNew, totalLuckMultOf(base, now, 'bigCatch'));
   const rawInst = makeInstance(fish, extras, { uid: crypto.randomUUID(), now, spot, judgment });
   const prevAutoInst: FishInstance | null = prevAuto
     ? {
@@ -947,7 +1101,15 @@ export async function fastCatch(db: Executor, uid: string, row: StateRow, spot: 
     : lockDecision.autoLockedIds;
   const overflow = removed.length > 0 ? removed : (added.length === 0 ? [inst.uid] : []);
   // 내보낼 개체를 놓아줄 것과 기운으로 바꿀 것으로 나누는 판정은 게임 규칙이 한다
-  const plan = planOverflow({ boat: base.boat, energyTargets: base.energyTargets, bag: evictBag }, overflow, guest, achBonuses.energyYield);
+  const plan = planOverflow(
+    { boat: base.boat, energyTargets: base.energyTargets, bag: evictBag },
+    overflow,
+    guest,
+    achBonuses.energyYield,
+    totalLuckMultOf(base, now, 'energy'),
+  );
+  const fameLuck = totalLuckMultOf(base, now, 'fame');
+  const gainedFame = catchFameOf(fish, fameLuck);
   const view = (uids: readonly string[]) => uids.map(uid => evictBag.find(i => i.uid === uid)!);
   const toReleased = (i: FishInstance): ReleasedFish => {
     const f = instanceFish(i);
@@ -959,7 +1121,7 @@ export async function fastCatch(db: Executor, uid: string, row: StateRow, spot: 
   const extracted = takenFish.map(toReleased);
   const events: GameEvent[] = [{ type: 'catch', payload: {
     uid: inst.uid, fishId: fish.id, judgment, spot,
-    size: info.size, form: info.form, isNew: info.isNew,
+    size: info.size, form: info.form, isNew: info.isNew, fame: gainedFame,
     ...(drawn.byCeiling ? { pity: true } : {}),
     ...appliedSlots(base, now, judgmentIn),
   } }];
@@ -990,7 +1152,7 @@ export async function fastCatch(db: Executor, uid: string, row: StateRow, spot: 
       achievements: evaluated.achievements,
       achievementCounters: counters2,
       autoLockedIds: nextAutoLockedIds,
-      fame: base.fame + RARITY[fish.rarity].fame, pity: drawn.pity, firstCatch: drawn.firstCatch }, plan.gain) },
+      fame: base.fame + gainedFame, pity: drawn.pity, firstCatch: drawn.firstCatch }, plan.gain) },
     result: { type: 'catch', fishId: fish.id, uid: inst.uid, info, released,
       ...(takenFish.length > 0 ? { extracted, energy: plan.gain.byGrade } : {}) },
     events: [...events, ...claimableEvents],

@@ -333,7 +333,7 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
     const s = seed({ gold: 42 });
     const out = applyAction(s, { type: 'boot', buildId: 'a'.repeat(100) }, deps({ rng: () => 0.5 }));
     if (!out.ok) throw new Error(out.error);
-    expect(out.state).toEqual({ ...s, fortune: { day: '2026-08-22', kind: 'gold', index: 5 } });
+    expect(out.state).toEqual({ ...s, fortune: { day: '2026-08-22', kind: 'bite', index: 5 } });
     // 결과에는 어군 배치 날짜가 실린다 — deps.now(KST 12:00) 기준 당일
     expect(out.result).toEqual({ type: 'boot', schoolDay: '2026-08-22' });
     expect(out.events).toEqual([{ type: 'boot', payload: { buildId: 'a'.repeat(64) } }]);
@@ -370,7 +370,7 @@ describe('sell / upgradeRod / buyBoat / toggleLock', () => {
       rng: () => 0.9,
     }));
     if (!after.ok) throw new Error(after.error);
-    expect(after.state.fortune).toEqual({ day: '2026-08-22', kind: 'shadow', index: 5 });
+    expect(after.state.fortune).toEqual({ day: '2026-08-22', kind: 'grand-catch', index: 5 });
     // 같은 날 재접속에서는 방금 고정한 운세를 유지한다
     const revisit = applyAction(after.state, { type: 'boot' }, deps({
       now: '2026-08-22T03:00:00.000Z',

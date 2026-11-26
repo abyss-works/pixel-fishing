@@ -18,6 +18,7 @@ describe('획득 카드', () => {
     const card = container.firstElementChild as HTMLElement;
     expect(card).toHaveAttribute('data-rarity', fish.rarity);
     expect(card.className).toContain('w-[340px]');
+    expect(card.className).toContain('max-w-full');
     expect(card.className).toContain('h-[160px]');
 
     const canvas = container.querySelector('canvas')!;

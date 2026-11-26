@@ -229,10 +229,16 @@ export interface DrawOptions {
   /** 등급 가중치에 걸리는 보너스 효과의 합(미끼 +, 길드 희귀 어종 보너스 −). 등급마다 (1 + 합)을 한 번 곱한다.
    *  효과는 addGradeEffect로 더하고, 다이얼(판정·방치·페널티)과는 곱한다 */
   weightEffects?: Partial<Record<RarityId, number>>;
-  /** 행운 배수 — 희귀 이상 등급 가중치에 곱하는 최종 배수(풍어운). 다른 보너스를 다 적용한 마지막 곱이다 */
+  /** 행운 배수 — 희귀 이상 등급 가중치에 곱하는 최종 배수(풍어운·만선 대길·비약). 다른 보너스를 다 적용한 마지막 곱이다 */
   rarityLuck?: number;
+  /** 행운 배수 — 전설 등급 가중치에만 추가로 곱하는 최종 배수(금비늘 운·신기루 운) */
+  legendaryLuck?: number;
   /** 밤 어종 개체 가중치 보너스 합 — NIGHT_FISH_WEIGHT × nightDepth × (1 + 합) */
   nightWeightBonus?: number;
+  /** 행운 배수 — 밤 전용 어종 개체 가중치에 곱하는 최종 배수(초승달 밤운·만월 밤바다 운) */
+  nightLuck?: number;
+  /** 행운 배수 — 돌연변이 폼 가중치에 곱하는 최종 배수(묘한/오색 물빛 운·신기루 운) */
+  mutationLuck?: number;
 }
 
 /** 등급 가중치 효과를 더한 옵션 — 같은 등급의 효과는 합쳐진다. 효과를 거는 유일한 길이다 */
@@ -393,19 +399,25 @@ function drawWeights(pool: Fish[], spotId: SpotId, o: DrawOptions): number[] {
  *  보너스 효과를 합쳐 적용하는 유일한 지점이다. rollFish와 drawWeights가 공유한다 */
 function rarityDrawWeights(pool: Fish[], spotId: SpotId, o: DrawOptions): [RarityId, number][] {
   const present = new Set(pool.map(f => f.rarity));
-  return RARITY_ORDER.filter(r => present.has(r)).map(r => [r,
-    (o.budgets?.[r] ?? rarityWeightOf(spotId, r))
-      * ((r === 'common' ? (o.commonMult ?? 1) / (o.rareMult ?? 1) : (o.rarityLuck ?? 1))
-        * Math.max(0, 1 + (o.weightEffects?.[r] ?? 0)))]);
+  return RARITY_ORDER.filter(r => present.has(r)).map(r => {
+    const luckMult = r === 'common'
+      ? (o.commonMult ?? 1) / (o.rareMult ?? 1)
+      : (o.rarityLuck ?? 1) * (r === 'legendary' ? (o.legendaryLuck ?? 1) : 1);
+    return [r,
+      (o.budgets?.[r] ?? rarityWeightOf(spotId, r))
+        * (luckMult * Math.max(0, 1 + (o.weightEffects?.[r] ?? 0)))];
+  });
 }
 
 /** 어종 단계의 가중치 — 다이얼(fishWeights)이 없으면 어종 데이터의 개체 가중치.
- *  기본은 1이고 밤 어종은 NIGHT_FISH_WEIGHT × nightDepth × (1 + nightWeightBonus)(미지정 시 1, 0~1 클램프) */
+ *  기본은 1이고 밤 어종은 NIGHT_FISH_WEIGHT × nightDepth × (1 + nightWeightBonus) × nightLuck */
 export const fishDrawWeight = (f: Fish, o: DrawOptions): number => {
+  if (o.fishWeights && Object.hasOwn(o.fishWeights, f.id)) return o.fishWeights[f.id]!;
+  if (!f.night) return f.weight ?? 1;
   const raw = o.nightDepth ?? 1;
   const depth = Number.isFinite(raw) ? Math.max(0, Math.min(1, raw)) : 1;
   const nightScale = Math.max(0, 1 + (o.nightWeightBonus ?? 0));
-  return o.fishWeights?.[f.id] ?? f.weight ?? (f.night ? NIGHT_FISH_WEIGHT * depth * nightScale : 1);
+  return (f.weight ?? NIGHT_FISH_WEIGHT * depth * nightScale) * Math.max(0, o.nightLuck ?? 1);
 };
 
 // 통상 추첨 — 등급을 가중치로 뽑고(rng 1회), 그 등급의 어종을 가중치로 뽑는다(rng 1회).
@@ -674,12 +686,19 @@ export interface CatchInfo extends CatchExtras {
   isNew: boolean;      // 이번 캐치 전까지 도감에 없던 어종
 }
 
-export const isBigSize = (fish: Fish, size: number): boolean =>
-  sizePercentile(fish, size) <= BIG_CATCH_PERCENTILE;
+export const isBigSize = (fish: Fish, size: number, bigCatchLuck = 1): boolean =>
+  sizePercentile(fish, size) <= Math.min(100, BIG_CATCH_PERCENTILE * Math.max(0, bigCatchLuck));
 
-export function buildCatchInfo(fish: Fish, extras: CatchExtras, isNew: boolean): CatchInfo {
+export function buildCatchInfo(
+  fish: Fish, extras: CatchExtras, isNew: boolean, bigCatchLuck = 1,
+): CatchInfo {
   const percentile = sizePercentile(fish, extras.size);
-  return { ...extras, percentile, isBig: percentile <= BIG_CATCH_PERCENTILE, isNew };
+  return {
+    ...extras,
+    percentile,
+    isBig: percentile <= Math.min(100, BIG_CATCH_PERCENTILE * Math.max(0, bigCatchLuck)),
+    isNew,
+  };
 }
 
 // 쿠폰 데이터는 게임 데이터에서 관리하고 검증·지급 규칙은 여기서 처리한다.
@@ -1318,15 +1337,20 @@ export function nextDexRec(
   };
 }
 
+/** 이번 캐치로 얻는 명성 — 등급 기본 명성에 행운 배수(fameLuck)를 곱해 반올림한다 */
+export function catchFameOf(fish: Fish, fameLuck = 1): number {
+  return Math.round(RARITY[fish.rarity].fame * Math.max(0, fameLuck));
+}
+
 export function addCatch(
-  state: GameState, inst: FishInstance, fish: Fish, today: string = localDate(),
+  state: GameState, inst: FishInstance, fish: Fish, today: string = localDate(), fameLuck = 1,
 ): GameState {
   const rec = nextDexRec(state.dex[inst.fishId]?.[inst.form], inst.size, today);
   return {
     ...state,
     bag: [...state.bag, inst],
     dex: { ...state.dex, [inst.fishId]: { ...state.dex[inst.fishId], [inst.form]: rec } },
-    fame: state.fame + RARITY[fish.rarity].fame,
+    fame: state.fame + catchFameOf(fish, fameLuck),
   };
 }
 

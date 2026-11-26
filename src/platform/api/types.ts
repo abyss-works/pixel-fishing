@@ -2,7 +2,7 @@
 import type { GameAction, ActionResult } from '../../game/rules/actions';
 import type { RejectReason } from '../../game/rules/rules';
 import type { GameState } from '../../game/rules/logic';
-import type { DailyFortune } from '../../game/rules/fortune';
+import type { DailyFortune, FortuneKind } from '../../game/rules/fortune';
 import type { ChatLine } from '../../game/rules/live';
 import type { GuildBonusId, GuildEffects, GuildJoinMode, GuildLogKind, GuildRole } from '../../game/rules/guild';
 import type { BountyKind } from '../../game/content/bounties';
@@ -190,13 +190,22 @@ export interface BountySnapshot {
   tickets: BountyTicketRow[];
 }
 
-/** 월별 운세 이력 — 조회 월(YYYY-MM), 최초 기록 월, 서버 기준 오늘 게임 날짜, 오늘의 운세, 해당 월의 일별 운세 목록(오름차순) */
+/** 점괘첩 누적 발견 점괘 한 종의 집계 — kind, 강도(3|5), 누적 횟수, 처음 만난 날(YYYY-MM-DD) */
+export interface FortuneDiscoveredEntry {
+  kind: FortuneKind;
+  index: 3 | 5;
+  count: number;
+  firstDay: string;
+}
+
+/** 월별 운세 이력 — 조회 월(YYYY-MM), 최초 기록 월, 서버 기준 오늘 게임 날짜, 오늘의 운세, 해당 월의 일별 운세 목록(오름차순), 누적 발견 점괘 목록 */
 export interface FortuneHistory {
   month: string;
   firstMonth: string | null;
   currentDay: string;
   today: DailyFortune | null;
   days: DailyFortune[];
+  discovered: FortuneDiscoveredEntry[];
 }
 
 // ---------- 관리자 읽기 API (서버 읽기 함수, 읽기 전용) ----------

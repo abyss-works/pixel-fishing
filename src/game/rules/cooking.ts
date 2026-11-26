@@ -101,11 +101,12 @@ export interface EnergyGain {
 /** 개체 n마리에서 얻는 기운(저장 단위) — 개체 하나의 산출을 한 곳에서 정한다 */
 export const energyYield = (individuals: number): number => individuals * ENERGY_PER_INDIVIDUAL;
 
-/** 지목한 개체에서 얻는 기운 — 개체 하나에서 그 등급 기운 화면 단위 1(energyYield)에 기운 획득량 보너스를 반영한다 */
+/** 지목한 개체에서 얻는 기운 — 개체 하나에서 그 등급 기운 화면 단위 1(energyYield)에 기운 획득량 보너스와 행운 배수를 반영한다 */
 export function energyGain(
   state: Pick<GameState, 'bag'>,
   uids: readonly string[],
   energyYieldBonus = 0,
+  energyLuck = 1,
 ): EnergyGain {
   const bag = new Map(state.bag.map(i => [i.uid, i]));
   const counts = Object.fromEntries(RARITY_ORDER.map(r => [r, 0])) as Record<RarityId, number>;
@@ -117,11 +118,12 @@ export function energyGain(
     counts[fish.rarity] += 1;
     taken.push(uid);
   }
-  const scale = Math.max(0, 1 + energyYieldBonus);
+  const scale = Math.max(0, 1 + energyYieldBonus) * Math.max(0, energyLuck);
+  const neutral = energyYieldBonus === 0 && energyLuck === 1;
   const byGrade = Object.fromEntries(
     RARITY_ORDER.map(r => [
       r,
-      counts[r] === 0 ? 0 : energyYieldBonus === 0 ? energyYield(counts[r]) : Math.round(energyYield(counts[r]) * scale),
+      counts[r] === 0 ? 0 : neutral ? energyYield(counts[r]) : Math.round(energyYield(counts[r]) * scale),
     ]),
   ) as Record<RarityId, number>;
   return { uids: taken, byGrade };
@@ -150,6 +152,7 @@ export function planOverflow(
   uids: readonly string[],
   guest: boolean,
   energyYieldBonus = 0,
+  energyLuck = 1,
 ): OverflowPlan {
   if (guest || state.boat < AUTO_ENERGY_BOAT) return { released: [...uids], gain: energyGain(state, []) };
   const bag = new Map(state.bag.map(i => [i.uid, i]));
@@ -158,7 +161,7 @@ export function planOverflow(
     const fish = inst ? instanceFish(inst) : undefined;
     return fish !== undefined && energyTargetOf(state, fish.spot);
   });
-  const gain = energyGain(state, extractable, energyYieldBonus);
+  const gain = energyGain(state, extractable, energyYieldBonus, energyLuck);
   const taken = new Set(gain.uids);
   return { released: uids.filter(uid => !taken.has(uid)), gain };
 }

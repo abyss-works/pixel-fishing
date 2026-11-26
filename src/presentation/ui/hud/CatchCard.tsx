@@ -39,7 +39,7 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
   // 연출 파라미터는 등급 데이터 소관 — 등급 리터럴 하드코딩 금지
   const { sparks, sparkDist, halo } = r;
   return (
-    <div data-rarity={fish.rarity} className="relative w-[340px] h-[160px] shrink-0 pointer-events-none">
+    <div data-rarity={fish.rarity} className="relative w-[340px] max-w-full h-[160px] shrink-0 pointer-events-none">
       {/* 이펙트 레이어 — 카드의 쌓임 맥락 안에 두면 카드 층에 갇혀 채팅과 헤더 뒤로 가려지므로
           카드와 형제로 두고 이펙트 층(catch-fx)에 놓는다. 패널의 노치가 잘라 내지 않도록 패널 바깥 층이다 */}
       <div data-catch-fx className="absolute inset-0 z-(--z-catch-fx) pointer-events-none" aria-hidden="true">

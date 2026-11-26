@@ -6,7 +6,8 @@ import { recipeById } from '../content/cooking.js';
 import type { SpotId } from '../content/spots.js';
 import { artifactEffectsAt, artifactLevelOf } from './artifactLevel.js';
 import { WALK_SPEED } from './balance.js';
-import { FORTUNE_TARGET_OF, activePotionsOf, fortuneOf, luckMultOf } from './fortune.js';
+import { activePotionsOf, fortuneEffectMultOf, fortuneOf, luckMultOf } from './fortune.js';
+import type { FortuneTarget } from './fortune.js';
 import { gameDayOf } from './time.js';
 import { appliedSlots, slotEffects } from './cooking.js';
 import type { GuildEffects } from './guild.js';
@@ -187,6 +188,9 @@ export function biteWaitOf(ctx: PlayerContext, spot: SpotId, mode: 'idle' | 'man
   const cook = mode === 'idle' ? slotEffects(ctx.state, ctx.now, 'auto', { lunch: ctx.achievements.lunchAmplify }) : null;
   const lunchId = activeSlots.lunch;
   const lunchRecipe = lunchId ? recipeById(lunchId) : undefined;
+  const fortune = fortuneOf(ctx.state, ctx.now);
+  const fortuneRatio = clean(fortuneEffectMultOf(fortune, 'biteWait') - 1);
+  const activePotions = activePotionsOf(ctx.state.potions, ctx.now);
 
   const side = (base: number): Stat => {
     const mods: StatMod[] = pz.biteExtra > 0
@@ -223,6 +227,32 @@ export function biteWaitOf(ctx: PlayerContext, spot: SpotId, mode: 'idle' | 'man
         source: { kind: 'slot', recipe: lunchId },
       });
     }
+    if (fortuneRatio !== 0) {
+      const preLuck = buildStat(base, mods).value;
+      if (preLuck > 0) {
+        mods.push({
+          id: 'fortune-biteWait',
+          label: '오늘의 운세',
+          delta: clean(preLuck * fortuneRatio),
+          source: { kind: 'fortune' },
+        });
+      }
+    }
+    for (const potion of activePotions) {
+      const luck = potion.effects.luck as Partial<Record<FortuneTarget, number>> | undefined;
+      const bonus = luck?.biteWait ?? 0;
+      if (bonus !== 0) {
+        const cur = buildStat(base, mods).value;
+        if (cur > 0) {
+          mods.push({
+            id: `potion-${potion.id}`,
+            label: potion.name,
+            delta: clean(cur * bonus),
+            source: { kind: 'potion', id: potion.id },
+          });
+        }
+      }
+    }
     return buildStat(base, mods);
   };
   return { min: side(st.biteMin), max: side(st.biteMax) };
@@ -257,7 +287,7 @@ export function saleProceedsOf(ctx: PlayerContext, instances: readonly FishInsta
   if (luckDelta !== 0) {
     const luckMods: StatMod[] = [];
     let running = preLuck;
-    const fortuneBonus = fortune !== null && FORTUNE_TARGET_OF[fortune.kind] === 'sell' ? fortune.index / 100 : 0;
+    const fortuneBonus = clean(fortuneEffectMultOf(fortune, 'sell') - 1);
     if (fortuneBonus > 0) {
       const d = Math.round(running * fortuneBonus);
       luckMods.push({ id: 'fortune-sell', label: '오늘의 운세', delta: d, source: { kind: 'fortune' } });

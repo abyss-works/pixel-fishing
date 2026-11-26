@@ -1,4 +1,4 @@
-import { canFishSpot, drawRows, FISH, globalRarityShare, rarityShareOf, speciesDiscovered } from '../../../game/rules/logic';
+import { canFishSpot, FISH, globalRarityShare, rarityShareOf, speciesDiscovered } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import type { Point, School } from '../../../game/world/types';
 import type { RegionId } from '../../../game/world';
@@ -52,7 +52,6 @@ export interface RegionViewData {
   focusedFishes: ReturnType<typeof selectFishAtSpot>;
   focusedStatus: SpotStatus | null;
   focusedDex: { caught: number; total: number } | null;
-  tendency: SpotTendency | null;
   /** 지금 배의 다음 단계. 마지막 배를 가졌으면 null */
   nextBoat: Boat | null;
 }
@@ -99,11 +98,10 @@ export function selectRegionViewData(
   const focusedDex = focused
     ? { caught: focusedFishes.filter(row => row.discovered).length, total: focusedFishes.length }
     : null;
-  const tendency = focused ? selectSpotTendency(focused.id) : null;
   const nextBoat = BOATS[game.boat] ?? null;
   return {
     spots, focused, contextZone, zone, parentZone, tableZone, tableSpots, nearby,
-    focusedFishes, focusedStatus, focusedDex, tendency, nextBoat,
+    focusedFishes, focusedStatus, focusedDex, nextBoat,
   };
 }
 
@@ -112,24 +110,6 @@ export function selectFishAtSpot(spot: SpotId, game: GameState) {
   return FISH.filter(fish => fish.spot === spot)
     .sort((a, b) => rarityRank(a.rarity) - rarityRank(b.rarity))
     .map(fish => ({ fish, discovered: speciesDiscovered(game, fish.id) }));
-}
-
-export type SpotTendency = 'legendary' | 'high' | 'ordinary';
-
-/** 추첨 비중을 지역 화면 서술에 필요한 세 단계 데이터로 분류한다. */
-export function selectSpotTendency(spot: SpotId): SpotTendency {
-  const rows = drawRows(spot);
-  const grade = new Map(rows.map(row => [row.fish.rarity, row.gradePct] as const));
-  const legendary = grade.get('legendary') ?? 0;
-  const epic = grade.get('epic') ?? 0;
-  const rare = grade.get('rare') ?? 0;
-  if (legendary >= 2.5) {
-    return 'legendary';
-  }
-  if (epic >= 7 || rare >= 25) {
-    return 'high';
-  }
-  return 'ordinary';
 }
 
 export type GradeLevel = 'high' | 'mid' | 'low' | 'none';

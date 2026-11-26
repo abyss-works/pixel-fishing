@@ -3,7 +3,7 @@
 // 기존 게임 규칙 함수의 "조합만" 한다 — 규칙을 여기 새로 쓰지 않는다 (이중 구현 금지 원칙).
 // 상대경로 .js 확장자 필수 — Node 순수 ESM 로더가 직접 import한다.
 import {
-  addCatch, buildCatchInfo, makeInstance, migrate,
+  addCatch, buildCatchInfo, catchFameOf, makeInstance, migrate,
   redeemCoupon, rollCatchExtras, sellSelected, setLocked, applyAutoLock, applyCatchAutoLock, tryBuyBoat, tryUpgrade,
   overflowUids, release, instanceFish, formName, travel, applyRelief, moveExhibit,
   addItem, takeItem, nextDexRec, mutationWeightsOf,
@@ -489,9 +489,10 @@ export function drawCatch(
   const guaranteed = firstCatchTarget(state.firstCatch, spot, phaseOpts.phase, ownsNormal, rng);
   const fish = guaranteed ?? target ?? rollCatchFish(spot, judgment, power, pzMult, rng, phaseOpts);
   const pityFixed = !guaranteed && target !== undefined;
+  const mutationMult = Math.round(cook.mutationMult * (basePhaseOpts.mutationLuck ?? 1) * 1e9) / 1e9;
   const forms = mutationWeightsOf(
     state, spot, cook.mutationWeight, achievements.mutationWeight, 1 + achievements.artifactBoost, guild.mutation,
-    cook.mutationMult,
+    mutationMult,
   );
   const extras = rollCatchExtras(fish, rng, (guaranteed !== null || pityFixed) ? { normal: 1, variant: 0 } : forms);
   const opts = catchDrawOptions(judgment, power, spot, pzMult, phaseOpts);
@@ -546,12 +547,18 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       // 호출 순서 고정: 추첨 → 부가 롤 — 구 클라이언트(Field)와 동일한 rng 소비 순서.
       // 어종 천장의 소유 판정은 리듀서가 가진 도감으로 한다.
       const drawn = drawCatch(state, action.spot, judgment, rodPower(state), pz.mult, deps.rng,
-        { ...phaseOpts, rarityLuck: totalLuckMultOf(state, deps.now, 'rarity') },
+        {
+          ...phaseOpts,
+          rarityLuck: totalLuckMultOf(state, deps.now, 'rarity'),
+          legendaryLuck: totalLuckMultOf(state, deps.now, 'legendary'),
+          nightLuck: totalLuckMultOf(state, deps.now, 'night'),
+          mutationLuck: totalLuckMultOf(state, deps.now, 'mutation'),
+        },
         id => (state.dex[id]?.normal?.count ?? 0) > 0, guild, cook, achBonuses);
       const { fish, extras } = drawn;
       // NEW 판정은 폼별 — 변이는 별개 개체 (v0.3.3)
       const isNew = (state.dex[fish.id]?.[extras.form]?.count ?? 0) === 0;
-      const info = buildCatchInfo(fish, extras, isNew);
+      const info = buildCatchInfo(fish, extras, isNew, totalLuckMultOf(state, deps.now, 'bigCatch'));
       const rawInst = makeInstance(fish, extras, {
         uid: deps.newUid(), now: deps.now, spot: action.spot, judgment,
       });
@@ -559,14 +566,22 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       // 방금 잠금이 풀린 기존 자동 잠금 개체는 초과 후보에 들어간다.
       const autoLocked = applyCatchAutoLock(state, rawInst);
       const inst = autoLocked.inst;
-      const caught = addCatch(autoLocked.state, inst, fish, deps.today);
+      const fameLuck = totalLuckMultOf(state, deps.now, 'fame');
+      const gainedFame = catchFameOf(fish, fameLuck);
+      const caught = addCatch(autoLocked.state, inst, fish, deps.today, fameLuck);
       // 가방이 넘치면 가장 안 특별한 개체를 놓아준다. 방금 잡은 놈이 후보일 수도 있다
       // ("가방이 꽉 차서 그 자리에서 놓아줬다") — 명성·도감은 이미 확정됐으므로 남는다.
       // 상한은 **캐치 전** 가방으로 잰다(래칫). 그래야 이미 넘겨 든 유저도 한 번에 한 마리만 나간다.
       const ctx = createPlayerContext({ state, guild, now: deps.now, achievements: achBonuses });
       const overflow = overflowUids(caught.bag, bagCapacityOf(ctx, state.bag.length).value);
       // 가공 플랜트선은 내보낼 개체가 기운 대상이면 놓아주지 않고 기운으로 바꾼다
-      const plan = planOverflow({ ...caught, boat: state.boat, energyTargets: state.energyTargets }, overflow, deps.guest === true, achBonuses.energyYield);
+      const plan = planOverflow(
+        { ...caught, boat: state.boat, energyTargets: state.energyTargets },
+        overflow,
+        deps.guest === true,
+        achBonuses.energyYield,
+        totalLuckMultOf(state, deps.now, 'energy'),
+      );
       const view = (uids: readonly string[]) => uids.map(uid => caught.bag.find(b => b.uid === uid)!);
       const gone = view(plan.released);
       const taken = view(plan.gain.uids);
@@ -580,7 +595,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         // uid를 남긴다 — 이벤트 스트림과 가방 개체를 잇는 유일한 연결고리 (감사·집계의 근거)
         // judgment는 강등 확정값 — 감사에서 "PERFECT 주장이 서버에서 살아남았나"를 보려면 이 값이다
         uid: inst.uid, fishId: fish.id, judgment, spot: action.spot,
-        size: info.size, form: info.form, isNew: info.isNew,
+        size: info.size, form: info.form, isNew: info.isNew, fame: gainedFame,
         ...(drawn.byCeiling ? { pity: true } : {}),
         // 걸린 슬롯(도시락=방치, 미끼=수동) — 집계가 읽는다. 적용 범위는 appliedSlots가 정한다
         ...appliedSlots(state, deps.now, action.judgment),
@@ -735,7 +750,13 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       if (!Array.isArray(action.uids) || action.uids.some(u => typeof u !== 'string')) return { ok: false, error: 'bad-request' };
       const check = canExtractEnergy(state, deps.guest);
       if (!check.ok) return { ok: false, error: check.reason };
-      const gain = energyGain(state, action.uids, achievementBonusesOf(state).energyYield);
+      state = ensureFortune(state, deps.now, deps.rng);
+      const gain = energyGain(
+        state,
+        action.uids,
+        achievementBonusesOf(state).energyYield,
+        totalLuckMultOf(state, deps.now, 'energy'),
+      );
       if (gain.uids.length === 0) return { ok: true, state, result: { type: 'extract', energy: gain.byGrade }, events: [] };
       return {
         ok: true, state: applyEnergyGain(state, gain),

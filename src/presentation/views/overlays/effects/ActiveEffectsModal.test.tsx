@@ -83,12 +83,11 @@ describe('적용 중인 효과 창 (ActiveEffectsModal)', () => {
 
     expect(within(dialog).getByText('비약')).toBeInTheDocument();
     expect(within(dialog).getByText('작은 바다 영약')).toBeInTheDocument();
-    expect(within(dialog).getByText('×1.05')).toBeInTheDocument();
 
     expect(within(dialog).getByText('오늘의 운세')).toBeInTheDocument();
-    expect(within(dialog).getByText('재물운')).toBeInTheDocument();
+    expect(within(dialog).getByText('잔돈 재물운')).toBeInTheDocument();
     expect(within(dialog).getByText('판매가')).toBeInTheDocument();
-    expect(within(dialog).getByText('×1.03')).toBeInTheDocument();
+    expect(within(dialog).getAllByText('×1.05')).toHaveLength(2);
     expect(within(dialog).getAllByText('하루 동안')).toHaveLength(2);
     expect(within(dialog).queryByText(/%p/i)).toBeNull();
   });

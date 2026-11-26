@@ -14,7 +14,7 @@ import {
 import { hatById } from '../src/game/content/wardrobe.js';
 import { upgradeCost } from '../src/game/rules/balance.js';
 import { endedFirstCatch, newFirstCatch } from '../src/game/rules/firstCatch.js';
-import { luckMultOf } from '../src/game/rules/fortune.js';
+import { FORTUNE_CATALOG, luckMultOf } from '../src/game/rules/fortune.js';
 import type { DailyFortune } from '../src/game/rules/fortune.js';
 import { LICENSE_GRADES, WALK_BAG_CAP, newState, sellSelected, zoneDexMissing } from '../src/game/rules/logic.js';
 import type { GameState } from '../src/game/rules/logic.js';
@@ -72,6 +72,7 @@ function zoneDex(zone: BountyZone, tier: keyof typeof LICENSE_GRADES): GameState
   return dex;
 }
 
+const ALL_FORTUNE_KINDS = [...new Set(FORTUNE_CATALOG.map(e => e.kind))];
 const at = (id: 'home' | 'harbor' | 'colombo' | 'walvisbay'): GameState['location'] => ({ kind: 'base', id });
 
 describe('요청 경계', () => {
@@ -142,7 +143,7 @@ describe('첫 액션', () => {
     expect(save.data.v).toBe(10);
     expect(save.data.fortune).toEqual({
       day: TODAY_KST,
-      kind: expect.toBeOneOf(['fish', 'gold', 'shadow']),
+      kind: expect.toBeOneOf(ALL_FORTUNE_KINDS),
       index: expect.toBeOneOf([3, 5]),
     });
     expect(res.body.patch.scalars.fortune).toEqual(save.data.fortune);
@@ -174,7 +175,7 @@ describe('첫 액션', () => {
     expect(save.data.v).toBe(10);
     expect(save.data.fortune).toEqual({
       day: TODAY_KST,
-      kind: expect.toBeOneOf(['fish', 'gold', 'shadow']),
+      kind: expect.toBeOneOf(ALL_FORTUNE_KINDS),
       index: expect.toBeOneOf([3, 5]),
     });
     expect(res.body.patch.scalars.fortune).toEqual(save.data.fortune);
@@ -312,7 +313,7 @@ describe('가방', () => {
     expect(save.version).toBe('3');
     expect(save.data.fortune).toEqual({
       day: TODAY_KST,
-      kind: expect.toBeOneOf(['fish', 'gold', 'shadow']),
+      kind: expect.toBeOneOf(ALL_FORTUNE_KINDS),
       index: expect.toBeOneOf([3, 5]),
     });
     expect(res.body.patch.scalars.fortune).toEqual(save.data.fortune);
@@ -2075,7 +2076,7 @@ describe('오늘의 운세', () => {
     expect(firstSaved.version).toBe(3);
     expect(firstSaved.fortune).toEqual({
       day: TODAY_KST,
-      kind: expect.toBeOneOf(['fish', 'gold', 'shadow']),
+      kind: expect.toBeOneOf(ALL_FORTUNE_KINDS),
       index: expect.toBeOneOf([3, 5]),
     });
     expect(firstScalars.fortune).toEqual(firstSaved.fortune);
@@ -2103,7 +2104,7 @@ describe('오늘의 운세', () => {
     expect(nextDaySaved.version).toBe(3);
     expect(nextDaySaved.fortune).toEqual({
       day: '2030-03-05',
-      kind: expect.toBeOneOf(['fish', 'gold', 'shadow']),
+      kind: expect.toBeOneOf(ALL_FORTUNE_KINDS),
       index: expect.toBeOneOf([3, 5]),
     });
     expect(nextDayScalars.fortune).toEqual(nextDaySaved.fortune);
@@ -2119,7 +2120,7 @@ describe('오늘의 운세', () => {
     expect(saved.version).toBe(3);
     expect(saved.fortune).toEqual({
       day: TODAY_KST,
-      kind: expect.toBeOneOf(['fish', 'gold', 'shadow']),
+      kind: expect.toBeOneOf(ALL_FORTUNE_KINDS),
       index: expect.toBeOneOf([3, 5]),
     });
     expect(scalars.fortune).toEqual(saved.fortune);
@@ -2136,7 +2137,7 @@ describe('오늘의 운세', () => {
     expect(noBootSaved.version).toBe(3);
     expect(noBootSaved.fortune).toEqual({
       day: TODAY_KST,
-      kind: expect.toBeOneOf(['fish', 'gold', 'shadow']),
+      kind: expect.toBeOneOf(ALL_FORTUNE_KINDS),
       index: expect.toBeOneOf([3, 5]),
     });
     expect(noBootScalars.fortune).toEqual(noBootSaved.fortune);
@@ -2256,15 +2257,15 @@ describe('우편 아이템 첨부와 물약 사용', () => {
     const dup = await callAction(userToken(uid), { type: 'usePotion', id: 'luck-small' });
     expect(dup).toMatchObject({ status: 422, body: { error: 'potion-already-active' } });
 
-    // 재물운 ×1.05 × 작은 바다 영약 ×1.05 = ×1.1025 독립 곱연산 배율이 판매가에 적용된다 (단순 합산 880과 구분되는 882)
+    // 황금 저울운 ×1.10 × 작은 바다 영약 ×1.05 = ×1.155 독립 곱연산 배율이 판매가에 적용된다
     vi.setSystemTime(Date.parse(NOW) + 4000);
     const expectedGold = sellSelected(
       { ...newState(), bag: [sold], fortune: { day: TODAY_KST, kind: 'gold', index: 5 }, potions: { 'luck-small': TODAY_KST } },
       [sold.uid],
       0,
-      1.05 * 1.05,
+      1.10 * 1.05,
     ).gold;
-    expect(expectedGold).toBe(882);
+    expect(expectedGold).toBe(924);
     const sellRes = await callAction(userToken(uid), { type: 'sell', uids: [sold.uid] });
     expect(sellRes.status).toBe(200);
     const saveAfterSell = (await dumpUser(env.client, uid)).saves_current[0] as { gold: number };
