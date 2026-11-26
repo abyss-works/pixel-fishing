@@ -143,7 +143,7 @@ describe('selectBagOverview - 판매 가능 금액', () => {
       fortune: { day: '2026-11-24', kind: 'gold', index: 5 },
     };
     const base = sellableValue(game);
-    const expected = Math.round(base * 1.05);
+    const expected = Math.round(base * 1.1);
     const active = selectBagOverview(game, 0, 0, now).sellable;
     expect(active.value).toBe(expected);
     expect(active.mods).toEqual([{ id: 'fortune-sell', label: '오늘의 운세', delta: expected - base, source: { kind: 'fortune' } }]);
@@ -167,8 +167,8 @@ describe('selectBagOverview - 판매 가능 금액', () => {
     };
     const base = sellableValue(game);
     const active = selectBagOverview(game, 0, 0, now).sellable;
-    const fortuneDelta = Math.round(base * 0.05);
-    expect(active.value).toBe(Math.round(base * 1.05 * 1.05));
+    const fortuneDelta = Math.round(base * 0.1);
+    expect(active.value).toBe(Math.round(base * 1.1 * 1.05));
     expect(active.mods).toEqual([
       { id: 'fortune-sell', label: '오늘의 운세', delta: fortuneDelta, source: { kind: 'fortune' } },
       { id: 'potion-luck-small', label: '작은 바다 영약', delta: active.value - base - fortuneDelta, source: { kind: 'potion', id: 'luck-small' } },

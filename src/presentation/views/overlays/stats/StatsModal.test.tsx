@@ -160,18 +160,18 @@ describe('StatsModal(스탯창)', () => {
     expect(tip).toHaveTextContent('최종 적용+20%');
   });
 
-  it('보너스 탭은 오늘의 운세와 비약을 독립 곱연산(×1.1025)으로 합치고 [운세]·[비약] 툴팁으로 보인다', () => {
+  it('보너스 탭은 오늘의 운세와 비약을 독립 곱연산(×1.155)으로 합치고 [운세]·[비약] 툴팁으로 보인다', () => {
     const today = gameDayOf(new Date().toISOString());
     show(game({ fortune: { day: today, kind: 'fish', index: 5 }, potions: { 'luck-small': today } }));
     fireEvent.click(screen.getByRole('button', { name: '보너스' }));
     const rareRow = screen.getByText((_, el) => el?.tagName === 'TR' && (el.textContent ?? '').includes('희귀 이상 출현 비중'))!;
     expect(within(rareRow).getByText('희귀')).toHaveAttribute('data-rarity', 'rare');
-    expect(rareRow).toHaveTextContent('×1.1025');
+    expect(rareRow).toHaveTextContent('×1.155');
     fireEvent.mouseEnter(within(rareRow).getByText('희귀'));
     const tip = screen.getByRole('tooltip');
-    expect(tip).toHaveTextContent('[운세] 풍어운×1.05');
+    expect(tip).toHaveTextContent('[운세] 만선 풍어운×1.10');
     expect(tip).toHaveTextContent('[비약] 작은 바다 영약×1.05');
-    expect(tip).toHaveTextContent('최종 적용×1.1025');
+    expect(tip).toHaveTextContent('최종 적용×1.155');
 
     const namedRow = screen.getByText((_, el) => el?.tagName === 'TR' && (el.textContent ?? '').includes('네임드 조우 확률'))!;
     expect(namedRow).toHaveTextContent('×1.05');

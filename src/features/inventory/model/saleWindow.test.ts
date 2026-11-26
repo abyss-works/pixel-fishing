@@ -80,10 +80,15 @@ describe('판매 탭', () => {
       fortune: { day: '2026-11-24', kind: 'gold', index: 5 },
     });
     const v = selectSaleTab(g, new Set(), 0, now);
-    const expected = Math.round(bigFish.price * 1.05);
+    const expected = Math.round(bigFish.price * 1.1);
     expect(v.total.value).toBe(expected);
     expect(v.total.mods).toEqual([{ id: 'fortune-sell', label: '오늘의 운세', delta: expected - bigFish.price, source: { kind: 'fortune' } }]);
     expect(v.gold).toEqual({ current: 100, after: 100 + expected });
+
+    // 만선 대길도 판매가 ×1.10 배수가 미리보기에 반영된다
+    const grand = selectSaleTab({ ...g, fortune: { day: '2026-11-24', kind: 'grand-catch', index: 5 } }, new Set(), 0, now);
+    expect(grand.total.value).toBe(expected);
+    expect(grand.total.mods).toEqual([{ id: 'fortune-sell', label: '오늘의 운세', delta: expected - bigFish.price, source: { kind: 'fortune' } }]);
 
     // 날짜가 지난 재물운이나 다른 종류 운세는 반영하지 않는다
     const stale = selectSaleTab({ ...g, fortune: { day: '2026-11-23', kind: 'gold', index: 5 } }, new Set(), 0, now);

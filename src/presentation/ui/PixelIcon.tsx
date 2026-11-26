@@ -15,6 +15,7 @@ export type GlyphId =
   | 'compass' | 'backpack' | 'book' | 'question' | 'gear' | 'people' | 'flag'
   | 'crown' | 'sparkle' | 'warn' | 'menu' | 'grid' | 'lunch' | 'bait'
   | 'clock' | 'target' | 'gem' | 'external' | 'arrowRight'
+  | 'wave' | 'fullmoon' | 'scale' | 'mirage' | 'treasure'
   | 'cloudOk' | 'cloudSyncing' | 'cloudError';
 
 const CLOUD_CELLS: Cell[] = [[4, 2, 3, 1], [3, 3, 5, 1], [2, 4, 8, 1], [1, 5, 10, 1], [0, 6, 12, 3], [1, 9, 10, 1]];
@@ -233,6 +234,33 @@ const GLYPHS: Record<GlyphId, { cells: Cell[]; holes?: Cell[] }> = {
   cloudError: {
     cells: CLOUD_CELLS,
     holes: [[5, 4, 2, 3], [5, 8, 2, 1]],
+  },
+  // 물결 — 풍어운 모티프 (어류 실루엣 + 수면 물결)
+  wave: {
+    cells: [
+      [1, 5, 1, 2], [2, 4, 6, 4], [8, 3, 2, 2], [8, 7, 2, 2], [8, 5, 1, 2],
+      [0, 10, 3, 1], [4, 10, 4, 1], [9, 10, 3, 1],
+    ],
+  },
+  // 보름달 — 만월 밤바다 운 모티프
+  fullmoon: {
+    cells: [[4, 1, 4, 1], [2, 2, 8, 2], [1, 4, 10, 4], [2, 8, 8, 2], [4, 10, 4, 1]],
+    holes: [[3, 4, 2, 2], [7, 6, 2, 2]],
+  },
+  // 비늘 — 금비늘 운 모티프
+  scale: {
+    cells: [[4, 1, 4, 1], [3, 2, 6, 2], [2, 4, 8, 4], [3, 8, 6, 2], [5, 10, 2, 1]],
+    holes: [[4, 4, 1, 2], [7, 4, 1, 2], [5, 6, 2, 1]],
+  },
+  // 신기루 — 아지랑이 빛살 모티프
+  mirage: {
+    cells: [[5, 1, 2, 2], [3, 3, 6, 2], [1, 5, 10, 2], [3, 7, 6, 2], [5, 9, 2, 2]],
+    holes: [[5, 5, 2, 2]],
+  },
+  // 보물함 — 만선 대길 모티프
+  treasure: {
+    cells: [[2, 2, 8, 2], [1, 4, 10, 2], [1, 7, 10, 4], [5, 5, 2, 3]],
+    holes: [[3, 8, 2, 1], [7, 8, 2, 1]],
   },
 };
 

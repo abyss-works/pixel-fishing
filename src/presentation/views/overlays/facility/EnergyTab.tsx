@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { formatEnergy } from '../../../../game/content/cooking';
 import { REJECT_TEXT } from '../../../../game/rules/logic';
 import type { GameState } from '../../../../game/rules/logic';
+import { useNow } from '../../../../features/gameplay/service/useGameTime';
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import {
   ENERGY_NAME, clearSpotPicks, energyLabel, energyResultRows, energyRowValue, energyTotal, pickEnergyUids, selectEnergyView,
@@ -49,11 +50,12 @@ export default function EnergyTab({ game, busy, act, setToast, picks, setPicks }
   picks: EnergyPicks;
   setPicks: (update: (prev: EnergyPicks) => EnergyPicks) => void;
 }) {
+  const now = useNow();
   const [popOpen, setPopOpen] = useState(false);
   const gearRef = useRef<HTMLButtonElement>(null);
   const { collapsed } = useSellView(); // 어종 행 펼침 — 판매 창과 같은 표라 같은 저장소를 쓴다
   // 가방이 수천 마리여도 다시 그릴 때마다 행을 새로 묶지 않는다
-  const view = useMemo(() => selectEnergyView(game, picks), [game, picks]);
+  const view = useMemo(() => selectEnergyView(game, picks, now), [game, picks, now]);
   const reason = view.allowed.ok ? null : REJECT_TEXT[view.allowed.reason];
 
   const toggleRow = (uids: string[], allOn: boolean) => setPicks(p => pickEnergyUids(p, uids, !allOn));
@@ -82,7 +84,7 @@ export default function EnergyTab({ game, busy, act, setToast, picks, setPicks }
     <FishPickTable rows={view.rows} expanded={collapsed} onToggleExpand={toggleSellRow}
                    onToggleRow={toggleRow} onToggleOne={toggleOne}
                    action="기운 얻기" heads={{ check: '선택', value: ENERGY_NAME }}
-                   valueOf={row => `+${formatEnergy(energyRowValue(row, view.energyYieldBonus))}`} emptyValue="0" />
+                   valueOf={row => `+${formatEnergy(energyRowValue(row, view.energyYieldBonus, view.energyLuck))}`} emptyValue="0" />
   );
 
   const confirm = (

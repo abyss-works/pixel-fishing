@@ -360,6 +360,9 @@ describe('받는 보너스', () => {
     const shadowRow = selectActiveBonuses(game({ fortune: { day: '2026-11-24', kind: 'shadow', index: 5 } }), null, now);
     expect(shadowRow.map(b => [b.category, b.source.kind])).toEqual([['duel', 'fortune']]);
 
+    const grandRow = selectActiveBonuses(game({ fortune: { day: '2026-11-24', kind: 'grand-catch', index: 5 } }), null, now);
+    expect(grandRow.map(b => [b.category, b.source.kind])).toEqual([['fish', 'fortune'], ['shop', 'fortune'], ['duel', 'fortune']]);
+
     // 날짜가 지난 운세는 보너스 내역에서 빠진다
     const stale = selectActiveBonuses(game({ fortune: { day: '2026-11-23', kind: 'gold', index: 5 } }), null, now);
     expect(stale).toEqual([]);
@@ -415,7 +418,7 @@ describe('받는 보너스', () => {
       expect(mutRow.tipRows.some(r => String(r.label).includes('태평양') || String(r.label).includes('동남아'))).toBe(false);
     });
 
-    it('운세와 비약은 독립 곱연산(1.05 × 1.05 = ×1.1025)으로 합산하고 수동·방치 요리는 각각의 범위 배지와 증폭을 붙이며 억제 요리는 ×0.5로 낸다', () => {
+    it('운세와 비약은 독립 곱연산(1.10 × 1.05 = ×1.155)으로 합산하고 수동·방치 요리는 각각의 범위 배지와 증폭을 붙이며 억제 요리는 ×0.5로 낸다', () => {
       const g = game({
         boat: 5,
         artifacts: ['sargasso-net'],
@@ -437,11 +440,11 @@ describe('받는 보너스', () => {
 
       const rareLuck = rows.find(r => r.effect === '희귀 이상 출현 비중' && r.totalText.startsWith('×'))!;
       expect(rareLuck.scope).toBe('all');
-      expect(rareLuck.totalText).toBe('×1.1025');
+      expect(rareLuck.totalText).toBe('×1.155');
       expect(rareLuck.tipRows).toEqual([
-        { label: '[운세] 풍어운', value: '×1.05' },
+        { label: '[운세] 만선 풍어운', value: '×1.10' },
         { label: '[비약] 작은 바다 영약', value: '×1.05' },
-        { label: '최종 적용', value: '×1.1025', divider: true },
+        { label: '최종 적용', value: '×1.155', divider: true },
       ]);
 
       const baitMut = rows.find(r => r.effect === '돌연변이 출현 비중' && r.scope === 'manual')!;
@@ -469,6 +472,27 @@ describe('받는 보너스', () => {
 
       expect(rows.find(r => r.effect === '기운 획득량')?.totalText).toBe('+3%');
       expect(rows.find(r => r.effect === '가방 용량')?.totalText).toBe('+1.5%');
+    });
+
+    it('신규 운세 10개 보너스 채널(입질 대기·월척·명성·돌연변이·밤·기운·전설·복합 대길)이 보너스 탭에 반영된다', () => {
+      const mirageRows = selectBonusTableRows(game({ fortune: { day: '2026-11-24', kind: 'mirage', index: 5 } }), null, T0);
+      expect(mirageRows.find(r => r.effect === '전설 출현 비중')?.tipRows[0]).toEqual({ label: '[운세] 신기루 운', value: '×1.08' });
+      expect(mirageRows.find(r => r.effect === '돌연변이 출현 비중')?.tipRows[0]).toEqual({ label: '[운세] 신기루 운', value: '×1.08' });
+
+      const biteRows = selectBonusTableRows(game({ fortune: { day: '2026-11-24', kind: 'bite', index: 3 } }), null, T0);
+      expect(biteRows.find(r => r.effect === '입질 대기')?.totalText).toBe('×0.95');
+
+      const bigRows = selectBonusTableRows(game({ fortune: { day: '2026-11-24', kind: 'big', index: 5 } }), null, T0);
+      expect(bigRows.find(r => r.effect === '월척 출현 확률')?.totalText).toBe('×2');
+
+      const fameRows = selectBonusTableRows(game({ fortune: { day: '2026-11-24', kind: 'fame', index: 3 } }), null, T0);
+      expect(fameRows.find(r => r.effect === '명성 획득')?.totalText).toBe('×1.50');
+
+      const nightRows = selectBonusTableRows(game({ fortune: { day: '2026-11-24', kind: 'night', index: 5 } }), null, T0);
+      expect(nightRows.find(r => r.effect === '밤 어종 출현 비중')?.totalText).toBe('×1.10');
+
+      const energyRows = selectBonusTableRows(game({ fortune: { day: '2026-11-24', kind: 'energy', index: 3 } }), null, T0);
+      expect(energyRows.find(r => r.effect === '생명의 기운 획득량')?.totalText).toBe('×1.50');
     });
   });
 });

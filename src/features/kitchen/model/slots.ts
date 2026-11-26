@@ -11,14 +11,13 @@ import type { GameState } from '../../../game/rules/logic';
 import { facilityGuestAllowed, facilityProgress, menuLock, progressNote } from '../../display/model/menuLock';
 import type { AccountLockState } from '../../display/model/menuLock';
 import {
-  FORTUNE_EFFECT_TARGET_LABEL,
-  FORTUNE_KIND,
-  FORTUNE_SHORT_NAME,
   FORTUNE_SOURCE_LABEL,
   FORTUNE_TARGET_BONUS_LABEL,
   formatLuckMult,
   fortuneBonusText,
-  fortuneLuckMultText,
+  fortuneEffectRows,
+  fortuneName,
+  fortuneShortName,
 } from '../../fortune/model/fortune';
 import { SLOT_SCOPE, recipeEffectLines, recipeEffectNote, recipeEffectText, recipeLabel, recipeTitle } from './recipes';
 import type { RecipeEffectLine, RecipeTitle } from './recipes';
@@ -114,12 +113,17 @@ export type BonusChip =
 
 const POTION_TARGETS: readonly FortuneTarget[] = ['rarity', 'sell', 'named'];
 
-function potionEffectSummary(potion: Potion): string {
-  const entries = POTION_TARGETS
-    .map(target => [target, potion.effects.luck?.[target]] as const)
+const potionLuckEntries = (potion: Potion): readonly (readonly [FortuneTarget, number])[] => {
+  const luck = potion.effects.luck as Partial<Record<FortuneTarget, number>> | undefined;
+  return POTION_TARGETS
+    .map(target => [target, luck?.[target]] as const)
     .filter((entry): entry is readonly [FortuneTarget, number] => typeof entry[1] === 'number' && entry[1] > 0);
+};
+
+function potionEffectSummary(potion: Potion): string {
+  const entries = potionLuckEntries(potion);
   if (entries.length === 0) return potion.description;
-  const mult = (n: number) => `×${(1 + n).toFixed(2)}`;
+  const mult = (n: number) => formatLuckMult(1 + n);
   if (entries.length === POTION_TARGETS.length && entries.every(([, v]) => v === entries[0][1])) {
     return `모든 행운 효과 ${mult(entries[0][1])}`;
   }
@@ -159,7 +163,7 @@ export function selectBonusChip(game: GameState, now: string, account: AccountLo
   const fortuneItems: BonusChipItem[] = fortune ? [{
     id: 'fortune',
     kind: 'fortune',
-    kindLabel: FORTUNE_KIND[fortune.kind].name,
+    kindLabel: fortuneName(fortune),
     title: { name: FORTUNE_SOURCE_LABEL, grade: null },
     summary: fortuneBonusText(fortune),
     durationText: '하루 동안',
@@ -201,7 +205,7 @@ export function selectBonusTipRows(game: GameState, now: string): BonusTipRow[] 
     { label: '도시락', value: lunchActive ? '활성' : '없음' },
     { label: '미끼', value: baitCount === 0 ? '없음' : baitMax > 1 ? `${baitCount}/${baitMax}` : '활성' },
     { label: '비약', value: potionActive ? '활성' : '없음' },
-    { label: '운세', value: fortune ? FORTUNE_SHORT_NAME[fortune.kind] : '없음' },
+    { label: '운세', value: fortune ? fortuneShortName(fortune) : '없음' },
   ];
 }
 
@@ -225,9 +229,7 @@ export interface ActiveEffectsView {
 }
 
 function potionEffectMultiplierRows(potion: Potion): RecipeEffectLine[] {
-  const entries = POTION_TARGETS
-    .map(target => [target, potion.effects.luck?.[target]] as const)
-    .filter((entry): entry is readonly [FortuneTarget, number] => typeof entry[1] === 'number' && entry[1] > 0);
+  const entries = potionLuckEntries(potion);
   if (entries.length === 0) return [{ text: potion.description }];
   if (entries.length === POTION_TARGETS.length && entries.every(([, v]) => v === entries[0][1])) {
     return [{ label: '모든 행운 효과', value: formatLuckMult(1 + entries[0][1]) }];
@@ -267,9 +269,9 @@ export function selectActiveEffectsView(game: GameState, now: string): ActiveEff
   const dailyFortune = fortuneOf(game, now);
   const fortune: ActiveEffectEntry | null = dailyFortune ? {
     id: 'fortune',
-    title: { name: FORTUNE_KIND[dailyFortune.kind].name, grade: null },
+    title: { name: fortuneName(dailyFortune), grade: null },
     durationText: '하루 동안',
-    stats: [{ label: FORTUNE_EFFECT_TARGET_LABEL[dailyFortune.kind], value: fortuneLuckMultText(dailyFortune) }],
+    stats: fortuneEffectRows(dailyFortune).map(r => ({ label: r.label, value: r.value })),
   } : null;
 
   return {

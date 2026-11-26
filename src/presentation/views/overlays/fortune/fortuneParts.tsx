@@ -5,19 +5,23 @@ import {
 } from '../../../../features/fortune/model/fortune';
 import { cx } from '../../../ui/cx';
 import PixelIcon from '../../../ui/PixelIcon';
-import type { GlyphId } from '../../../ui/PixelIcon';
+import { FORTUNE_TONE, fortuneGlyphOf } from './fortuneTone';
 
-/** 종류별 모티프와 강조 색 — 풍어운은 하늘, 재물운은 골드, 그림자 운은 네임드 코랄 */
-const MOTIF: Record<FortuneKind, { glyph: GlyphId; tone: string }> = {
-  fish: { glyph: 'fish', tone: 'text-accent' },
-  gold: { glyph: 'coin', tone: 'text-gold' },
-  shadow: { glyph: 'target', tone: 'text-named' },
-};
-
-/** 종류별 아이콘 */
-export function FortuneMotifIcon({ kind, size = 28 }: { kind: FortuneKind; size?: number }) {
-  const motif = MOTIF[kind];
-  return <PixelIcon glyph={motif.glyph} size={size} className={cx(motif.tone, 'shrink-0')} />;
+/** 종류·강도별 운세 모티프 아이콘 */
+export function FortuneMotifIcon({
+  kind,
+  index,
+  size = 28,
+  dimmed = false,
+}: {
+  kind: FortuneKind;
+  index?: DailyFortune['index'];
+  size?: number;
+  dimmed?: boolean;
+}) {
+  const glyph = fortuneGlyphOf(kind, index);
+  const tone = dimmed ? 'text-text-dim grayscale brightness-75' : FORTUNE_TONE[kind];
+  return <PixelIcon glyph={glyph} size={size} className={cx(tone, 'shrink-0')} />;
 }
 
 /** 강도 칸: 최댓값만큼 칸을 그리고 강도만큼 채운다 */
@@ -38,7 +42,21 @@ export function IndexPips({ index, compact = false }: { index: DailyFortune['ind
   );
 }
 
-/** 운세 강도 핍과 등급 라벨 — 중복 숫자·지수 표현 없이 강도를 전한다 */
+/** 점괘첩 타일용 4px 미니 5칸 강도 막대 */
+export function MiniIndexPips({ index }: { index: DailyFortune['index'] }) {
+  return (
+    <span className="inline-flex items-center gap-px shrink-0" aria-hidden="true">
+      {Array.from({ length: FORTUNE_PIPS }, (_, i) => (
+        <span
+          key={i}
+          className={cx('inline-block size-1', i < index ? 'bg-gold' : 'bg-line')}
+        />
+      ))}
+    </span>
+  );
+}
+
+/** 운세 강도 핍과 등급 라벨 — 중복 숫자 표현 없이 강도를 전한다 */
 export function FortuneStrength({ index, compact = false }: { index: DailyFortune['index']; compact?: boolean }) {
   const label = FORTUNE_INDEX_LABEL[index];
   return (
