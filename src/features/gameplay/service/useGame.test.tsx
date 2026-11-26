@@ -26,6 +26,8 @@ const gw = vi.hoisted(() => ({
   loadFortune: null as null | { day: string; kind: 'fish' | 'gold' | 'shadow'; index: 3 | 5 },
   dispatchFortune: null as null | { day: string; kind: 'fish' | 'gold' | 'shadow'; index: 3 | 5 },
   visited: [] as ('village' | 'world')[],
+  loadFame: 0,
+  dispatchResult: null as null | Record<string, unknown>,
   devTools: false,
   profileReplies: [] as Array<{ ok: true; nickname: string | null; devTools: boolean } | { ok: false }>,
   profileCalls: 0,
@@ -48,7 +50,7 @@ vi.mock('../../../platform/api', async () => {
     return {
       status: 'ok' as const,
       state: { ...fresh(), dex: gw.dispatchDex as ReturnType<typeof fresh>['dex'], achievements: gw.dispatchAchievements, fortune: gw.dispatchFortune, visited: gw.visited },
-      result: action.type === 'boot' ? { type: 'boot', schoolDay: '2026-11-05' } : { type: action.type },
+      result: action.type === 'boot' ? { type: 'boot', schoolDay: '2026-11-05' } : (gw.dispatchResult ?? { type: action.type }),
     };
   };
   return {
@@ -78,7 +80,7 @@ vi.mock('../../../platform/api', async () => {
       },
       storage: { clearLegacySave: () => { gw.actions.push('clearLegacy'); }, loadLegacy: () => ({ game: fresh(), notice: null, legacy: gw.legacy }), saveCode: () => '' },
       createGameGateway: () => ({
-        load: async () => { gw.loads++; if (gw.loadErrors.length) throw gw.loadErrors.shift(); if (gw.loadError) throw gw.loadError; return gw.cloudEmpty ? null : { ...fresh(), gold: gw.loadGold, dex: gw.loadDex as ReturnType<typeof fresh>['dex'], achievements: gw.loadAchievements, fortune: gw.loadFortune, visited: gw.visited }; },
+        load: async () => { gw.loads++; if (gw.loadErrors.length) throw gw.loadErrors.shift(); if (gw.loadError) throw gw.loadError; return gw.cloudEmpty ? null : { ...fresh(), gold: gw.loadGold, fame: gw.loadFame, dex: gw.loadDex as ReturnType<typeof fresh>['dex'], achievements: gw.loadAchievements, fortune: gw.loadFortune, visited: gw.visited }; },
         getProfile: async () => {
           gw.profileCalls++;
           return gw.profileReplies.shift() ?? { ok: true as const, nickname: 'nick', devTools: gw.devTools };
@@ -116,7 +118,7 @@ afterEach(() => {
   gw.legacy = false; gw.cloudEmpty = false; gw.importError = null; gw.loadError = null; gw.loadErrors = []; gw.bootErrors = []; gw.loadDex = {}; gw.dispatchDex = {}; gw.devTools = false;
   gw.profileReplies = []; gw.profileCalls = 0;
   gw.loadAchievements = {}; gw.dispatchAchievements = {}; gw.loadFortune = null; gw.dispatchFortune = null;
-  gw.visited = [];
+  gw.visited = []; gw.loadFame = 0; gw.dispatchResult = null;
   gw.account = { status: 'account', email: 'u@example.com' };
   gw.consentQueue = []; gw.consentCalls = 0; gw.acceptCalls = []; gw.acceptQueue = []; gw.consentListeners.clear();
 });
@@ -572,6 +574,31 @@ describe('오늘의 운세 접속 모달 큐잉', () => {
     expect(readFortuneModal({ ready: true, suspended: false })).toEqual({ fortune: null, pending: false });
   });
 
+  it('신규 첫 진입(운세·명성·도감 이력 없음)이면 마을 튜토리얼과 겹치지 않게 접속 모달을 건너뛴다', async () => {
+    gw.dispatchFortune = { day: '2026-11-24', kind: 'fish', index: 5 };
+    setup();
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+    expect(readFortuneModal({ ready: true, suspended: false })).toEqual({ fortune: null, pending: false });
+  });
+
+  it('운세가 없어도 명성이나 도감 이력이 있는 플레이어는 접속 모달을 큐에 넣는다', async () => {
+    const today = { day: '2026-11-24', kind: 'fish' as const, index: 5 as const };
+    gw.dispatchFortune = today;
+    gw.loadFame = 10;
+    setup();
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+    expect(readFortuneModal({ ready: true, suspended: false })).toEqual({ fortune: today, pending: true });
+    cleanup(); resetFortuneModalSession();
+    gw.bootResolve = null; gw.loadFame = 0;
+    gw.loadDex = { carp: { normal: { count: 1, maxSize: 10, first: null } } };
+    setup();
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+    expect(readFortuneModal({ ready: true, suspended: false })).toEqual({ fortune: today, pending: true });
+  });
+
   it('catch 등 boot가 아닌 액션에서 운세가 채워져도 접속 모달을 큐에 넣지 않는다', async () => {
     const today = { day: '2026-11-24', kind: 'gold' as const, index: 5 as const };
     const hook = setup();
@@ -581,6 +608,45 @@ describe('오늘의 운세 접속 모달 큐잉', () => {
     gw.dispatchFortune = today;
     await act(async () => { await hook.result.current.dispatch({ type: 'sell', uids: [] }); });
     expect(readFortuneModal({ ready: true, suspended: false })).toEqual({ fortune: null, pending: false });
+  });
+});
+
+describe('수배 스냅샷 무효화', () => {
+  async function bootedWithSpy() {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const spy = vi.spyOn(client, 'invalidateQueries');
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    const hook = renderHook(() => useGame({ setToast: () => {} }), { wrapper });
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+    spy.mockClear();
+    return { hook, spy };
+  }
+  const catchResult = (extra: Record<string, unknown>) => ({ type: 'catch', ...extra });
+  const doCatch = (hook: Awaited<ReturnType<typeof bootedWithSpy>>['hook']) =>
+    act(async () => { await hook.result.current.dispatch({ type: 'catch', spot: 'pond', judgment: 'good' }); });
+
+  it('의뢰 진행도가 오른 catch는 수배 스냅샷을 즉시 무효화한다', async () => {
+    const { hook, spy } = await bootedWithSpy();
+    gw.dispatchResult = catchResult({ bountyProgressed: true });
+    await doCatch(hook);
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['bounty'] });
+  });
+
+  it('티켓이 발급된 catch도 수배 스냅샷을 무효화한다', async () => {
+    const { hook, spy } = await bootedWithSpy();
+    gw.dispatchResult = catchResult({ ticket: 't1' });
+    await doCatch(hook);
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['bounty'] });
+  });
+
+  it('티켓도 의뢰 진행도도 없는 catch와 무관한 액션은 수배 스냅샷을 건드리지 않는다', async () => {
+    const { hook, spy } = await bootedWithSpy();
+    gw.dispatchResult = catchResult({});
+    await doCatch(hook);
+    await act(async () => { await hook.result.current.dispatch({ type: 'sell', uids: [] }); });
+    expect(spy).not.toHaveBeenCalledWith({ queryKey: ['bounty'] });
   });
 });
 

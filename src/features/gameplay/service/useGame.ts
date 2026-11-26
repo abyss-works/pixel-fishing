@@ -266,15 +266,17 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
         // 어군 배치 날짜 — 리듀서(서버 시계, 로컬은 클라 시계)가 정한 값으로 세션을 고정한다
         if (r.result.type === 'boot') setSchoolDay(r.result.schoolDay);
         // 그 게임 날짜의 첫 접속 — 부팅이 운세를 새로 고정했을 때만 접속 모달을 띄운다(같은 날 재접속은 띄우지 않는다)
-        if (action.type === 'boot' && r.state.fortune && r.state.fortune.day !== prev.fortune?.day) {
+        // 신규 첫 진입(운세·명성·도감 이력 없음)은 마을 튜토리얼과 겹치지 않게 건너뛴다
+        const firstEntry = prev.fortune === null && prev.fame === 0 && Object.keys(prev.dex).length === 0;
+        if (action.type === 'boot' && r.state.fortune && r.state.fortune.day !== prev.fortune?.day && !firstEntry) {
           queueFortuneModal(r.state.fortune);
         }
         if (api.auth.isConfigured) setSync('on');
-        // 수배 스냅샷을 바꾸는 액션만 무효화한다. catch는 티켓 발급분만 해당하고
+        // 수배 스냅샷을 바꾸는 액션만 무효화한다. catch는 티켓 발급·의뢰 진행분만 해당하고
         // 나머지는 스냅샷과 무관이라 건드리지 않는다 (폭풍 방지).
         if (action.type === 'acceptQuest' || action.type === 'deliverBounty'
             || action.type === 'resolveChallenge' || action.type === 'debug'
-            || (action.type === 'catch' && r.result.type === 'catch' && r.result.ticket)) {
+            || (action.type === 'catch' && r.result.type === 'catch' && (r.result.ticket || r.result.bountyProgressed))) {
           void client.invalidateQueries({ queryKey: ['bounty'] });
         }
       }

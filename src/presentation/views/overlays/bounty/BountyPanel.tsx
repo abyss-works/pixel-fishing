@@ -81,7 +81,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
 }) {
-  const { snap, loaded, refresh } = useBounty();
+  const { snap, loaded, refresh } = useBounty({ refetchOnMount: 'always' });
   const alertSetting = useEncounterAlertSetting();
   const [busy, setBusy] = useState(false);
   const [screen, setScreen] = useState<BoardScreen>('quests');
