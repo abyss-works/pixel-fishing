@@ -18,7 +18,9 @@ export function useGuildAlerts(enabled: boolean, notify: NoticeSink, guild: Guil
     if (!enabled) return;
     return onGuildEvent(e => {
       void client.invalidateQueries({ queryKey: guildQueryKey(uid) });
-      const text = guildAlertText(e);
+      // 길드 갱신은 조용히 다시 읽기만 한다 — 신청 처리 알림이 아니다
+      if (e.kind === 'updated') return;
+      const text = guildAlertText({ ...e, kind: e.kind });
       const toastText = e.kind === 'request'
         ? `${e.nick ?? '이름 없음'} 님 길드 가입 신청`
         : e.kind === 'approved' ? '길드 가입이 승인됐어요.' : '길드 가입이 거절됐어요.';

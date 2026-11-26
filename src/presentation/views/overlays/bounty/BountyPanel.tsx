@@ -1,7 +1,7 @@
 // 수배판 — 바운티 헌팅의 수주·의뢰 완료·보상 UI (항구 전용, 마을의 집 제외).
 // 네임드 도전은 여기서 치르지 않는다 — 바다 위 흔적 카드·조우 창이 맡고, 토벌 뒤 보상만 여기서 받는다.
 // 상태 변경은 dispatch(서버 권위)만, 표시용 조회는 useBounty 경유(RLS 본인 읽기)다.
-// 성공할 때마다 스냅샷을 다시 읽는다 — 진행도·오늘 남은 클리어는 서버(DB)가 진실이다.
+// 성공한 액션은 useGame이 스냅샷을 무효화해 다시 읽는다 — 진행도·오늘 남은 클리어는 서버(DB)가 진실이다.
 // 일반 의뢰 탭은 해당 구역 항구 진입 시 도감 조건 없이 즉시 열리고, 네임드 토벌 탭만
 // 전설을 뺀 일반·희귀·영웅 도감 조건을 본다. 미충족이면 본문을 흐리게 하고 조건 리스트를 덮는다.
 // 창은 탭이 있어 높이가 고정이다. 구역과 오늘 남은 클리어는 어느 탭에서나 의미가 있어 탭 위 고정 정보 줄에 두고,
@@ -26,6 +26,7 @@ import BountyCard from './BountyCard';
 import { ClearsLeft } from './boardParts';
 import NamedCard from './NamedCard';
 import RelicCard from './RelicCard';
+import Button from '../../../ui/Button';
 import CheckToggle from '../../../ui/CheckToggle';
 import { HighlightRarityText } from '../../../ui/fish/RarityTag';
 import Gated from '../../../ui/Gated';
@@ -47,15 +48,24 @@ type BoardScreen = 'quests' | 'named' | 'relic';
 const CARD_ROW = 'grid grid-flow-col auto-cols-fr gap-2 flex-1 min-h-0 mobile:grid-flow-row mobile:auto-cols-auto mobile:flex-none';
 
 const OFFLINE_TEXT = '오프라인에서는 의뢰를 수주하거나 마칠 수 없어요.\n서버에 연결된 뒤 다시 해 주세요.';
+const FAILED_TEXT = '의뢰를 불러오지 못했어요.\n다시 시도해 주세요.';
 
 /** 고정 정보 줄: 구역, 오늘 남은 클리어(일반 의뢰, 네임드 토벌). 스냅샷이 오기 전에는 값 자리에 -를 둔다 */
-function BoardStatus({ zoneName, leftAll, leftNamed, dailyCap, namedDailyCap }: {
+function BoardStatus({ zoneName, leftAll, leftNamed, dailyCap, namedDailyCap, onRetry }: {
   zoneName: string; leftAll: number | null; leftNamed: number | null; dailyCap: number; namedDailyCap: number;
+  /** 조회 실패일 때만 준다 — 다시 읽기 버튼을 둔다 */
+  onRetry?: () => void;
 }) {
   return (
     <Inset className="flex flex-wrap items-center gap-x-3 gap-y-1 min-h-10 px-3 py-1.5 shrink-0 text-xs">
       <b className="text-sm text-text">{zoneName}</b>
       <ClearsLeft leftAll={leftAll} leftNamed={leftNamed} dailyCap={dailyCap} namedDailyCap={namedDailyCap} />
+      {onRetry && (
+        <>
+          <span className="text-text-dim">의뢰를 불러오지 못했어요.</span>
+          <Button size="sm" onClick={onRetry}>다시 시도</Button>
+        </>
+      )}
     </Inset>
   );
 }
@@ -81,7 +91,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
 }) {
-  const { snap, loaded, refresh } = useBounty({ refetchOnMount: 'always' });
+  const { snap, loaded, failed, offline, refresh } = useBounty({ refetchOnMount: 'always' });
   const alertSetting = useEncounterAlertSetting();
   const [busy, setBusy] = useState(false);
   const [screen, setScreen] = useState<BoardScreen>('quests');
@@ -99,7 +109,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
     setBusy(true);
     when(dispatch(action), r => {
       setBusy(false);
-      if (r.status === 'ok') { sendNotice(setToast, { kind, text: done, toastText, tone }); refresh(); }
+      if (r.status === 'ok') { sendNotice(setToast, { kind, text: done, toastText, tone }); }
       else if (r.status === 'rejected') sendNotice(setToast, { kind: 'system.modalRejected', text: REJECT_TEXT[r.error] });
     });
   };
@@ -113,7 +123,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
 
   /** 수주를 막는 이유 — 오프라인이면 그것, 아니면 갈래의 한도 소진·다른 구역 수주 */
   const reasonOf = (kind: BountyKind): string | null =>
-    loaded && snap === null ? OFFLINE_TEXT : notice[kind];
+    failed && snap === null ? FAILED_TEXT : offline ? OFFLINE_TEXT : notice[kind];
 
   const gradeCard = (d: 'easy' | 'normal' | 'hard') => {
     const q = offers[d];
@@ -137,7 +147,8 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
   return (
     <div className="flex flex-col gap-3 flex-1 min-h-0">
       <BoardStatus zoneName={zoneById(zone)?.shortName ?? zone} leftAll={leftAll} leftNamed={leftNamed}
-                   dailyCap={dailyCap} namedDailyCap={namedDailyCap} />
+                   dailyCap={dailyCap} namedDailyCap={namedDailyCap}
+                   onRetry={failed && snap === null ? refresh : undefined} />
       <TabBar
         tabs={[
           { key: 'quests' as BoardScreen, label: '일반 의뢰' },

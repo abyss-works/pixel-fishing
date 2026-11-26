@@ -281,7 +281,6 @@ describe('운세 월간 달력 창 (FortuneCalendarModal)', () => {
 
     apiMock.readFortuneHistory
       .mockRejectedValueOnce(new Error('fail'))
-      .mockRejectedValueOnce(new Error('fail'))
       .mockResolvedValueOnce(NOV_HISTORY);
     renderWithQuery(
       <FortuneCalendarModal gameFortune={NOV_HISTORY.today} accountState="account" onClose={vi.fn()} />,

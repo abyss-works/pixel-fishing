@@ -11,6 +11,8 @@ import PlayerModal, { PlayerInfo } from './PlayerInfo';
 const s = vi.hoisted(() => ({
   relation: null as null | 'friend' | 'incoming' | 'outgoing',
   blocked: false as boolean | null,
+  modFailed: false,
+  reload: vi.fn(),
   loading: false,
   failed: false,
   profile: {
@@ -53,7 +55,9 @@ vi.mock('../../../../features/friends/model/friends', async importOriginal => ({
   friendRelation: () => s.relation,
 }));
 vi.mock('../../../../features/live/service/useChatModeration', () => ({
-  useChatModeration: () => ({ isBlocked: () => s.blocked, block: s.block, unblock: vi.fn(), report: s.report }),
+  useChatModeration: () => ({
+    isBlocked: () => s.blocked, failed: s.modFailed, reload: s.reload, block: s.block, unblock: vi.fn(), report: s.report,
+  }),
 }));
 
 const target = { uid: 'u1', nick: '갈치', chatId: 9 };
@@ -65,6 +69,7 @@ describe('PlayerInfo', () => {
     cleanup();
     s.relation = null;
     s.blocked = false;
+    s.modFailed = false;
     s.loading = false;
     s.failed = false;
     s.profile = {
@@ -267,6 +272,16 @@ describe('PlayerInfo', () => {
     s.failed = true;
     rerender(<PlayerInfo target={target} self={false} account="me@example.com" setToast={vi.fn()} />);
     expect(screen.getByText(/정보를 불러오지 못했어요/)).toBeTruthy();
+  });
+
+  it('차단 정보를 읽지 못하면 차단 버튼 자리에 안내와 다시 확인 버튼을 보인다', () => {
+    s.blocked = null;
+    s.modFailed = true;
+    show();
+    expect(screen.queryByRole('button', { name: '차단' })).toBeNull();
+    expect(screen.getByText('차단 정보를 불러오지 못했어요.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '다시 확인' }));
+    expect(s.reload).toHaveBeenCalledTimes(1);
   });
 
   it('달성한 업적이 없을 때 달성만 보기 토글은 빈 상태 안내를 보인다', () => {

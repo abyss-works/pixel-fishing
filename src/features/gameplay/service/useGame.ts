@@ -81,7 +81,16 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
   // 마지막으로 채택한 상태 — 새로 받을 수 있게 된 업적을 가리는 비교 기준이다.
   // 렌더를 기다리지 않고 채택과 함께 바꿔, 연달아 온 확정과 로드 직후의 접속이 낡은 상태와 비교하지 않게 한다
   const gameRef = useRef(game);
-  const setGame = (next: GameState) => { gameRef.current = next; setGameState(next); };
+  const client = useQueryClient();
+  const setGame = (next: GameState) => {
+    const prevFortune = gameRef.current.fortune;
+    gameRef.current = next;
+    setGameState(next);
+    // 운세가 바뀌면 월간 운세 이력도 낡는다 — 날짜 경계 직후의 어제 캐시가 남지 않게 한다
+    if (prevFortune?.day !== next.fortune?.day || prevFortune?.kind !== next.fortune?.kind || prevFortune?.index !== next.fortune?.index) {
+      void client.invalidateQueries({ queryKey: ['fortune'] });
+    }
+  };
   // 게스트는 업적이 잠겨 있으므로 새로 받을 수 있는 업적 알림을 띄우지 않는다
   const guestRef = useRef(api.auth.isConfigured);
   const [nickname, setNickname] = useState<string | null>(null);
@@ -209,7 +218,6 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
   /** 모든 상태 변경의 단일 진입점 — 성공/규칙거부만 돌아온다.
       인프라 실패는 AppError로 던져져 위 정책 구독으로 흐른다 (호출자에 방어 분기 없음).
       결과에 따라 화면을 되돌려야 하는 호출부만 settleAction으로 감싸 쓴다 */
-  const client = useQueryClient();
   const withDevFlags = (action: GameAction): GameAction => {
     const next = withForcedEncounter(action);
     const phase = getPhaseOverride();
@@ -274,11 +282,17 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
         if (api.auth.isConfigured) setSync('on');
         // 수배 스냅샷을 바꾸는 액션만 무효화한다. catch는 티켓 발급·의뢰 진행분만 해당하고
         // 나머지는 스냅샷과 무관이라 건드리지 않는다 (폭풍 방지).
-        if (action.type === 'acceptQuest' || action.type === 'deliverBounty'
-            || action.type === 'resolveChallenge' || action.type === 'debug'
+        const devAction = action.type === 'debug' || action.type === 'debugBatch';
+        if (action.type === 'acceptQuest' || action.type === 'deliverBounty' || action.type === 'resolveChallenge' || devAction
             || (action.type === 'catch' && r.result.type === 'catch' && (r.result.ticket || r.result.bountyProgressed))) {
           void client.invalidateQueries({ queryKey: ['bounty'] });
         }
+        if (devAction) void client.invalidateQueries({ queryKey: ['fortune'] });
+        // 랭킹은 열려 있을 때만 다시 읽도록 낡음 표시만 한다
+        if (devAction || action.type === 'catch' || action.type === 'resolveChallenge' || action.type === 'claimRelief') {
+          void client.invalidateQueries({ queryKey: ['ranking'], refetchType: 'none' });
+        }
+        if ('guildUpdated' in r.result && r.result.guildUpdated) void client.invalidateQueries({ queryKey: ['guild'] });
       }
       // rejected는 규칙 거부 — 호출자가 사유 토스트를 띄운다 (연결은 정상이므로 sync 유지)
       return r;
@@ -524,6 +538,7 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
         void client.invalidateQueries({ queryKey: ['guild'] });
         void client.invalidateQueries({ queryKey: ['friends'] });
         void client.invalidateQueries({ queryKey: ['player'] });
+        void client.invalidateQueries({ queryKey: ['player-search'] });
         return null;
       }
       return r.error;
@@ -551,7 +566,7 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
       }
       const next = await readProfile();
       adoptProfile(next);
-      await client.invalidateQueries();
+      await client.invalidateQueries({ predicate: q => q.queryKey[0] !== 'session' });
     },
     /** 테스트 정식 계정 승격 직후 게스트 판정과 프로필·조회 캐시를 갱신한다 */
     refreshAccountStatus: async (): Promise<void> => {
@@ -561,7 +576,7 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
       }
       const next = await readProfile();
       adoptProfile(next);
-      await client.invalidateQueries();
+      await client.invalidateQueries({ predicate: q => q.queryKey[0] !== 'session' });
     },
     /** 캐스팅 순간 서버 함수 워밍 — 콜드 스타트를 wait 구간에 흡수 */
     warmup: () => gameGatewayRef.current.warmup?.(),

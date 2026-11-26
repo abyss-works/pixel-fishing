@@ -1,5 +1,6 @@
-import { canFishSpot, FISH, globalRarityShare, rarityShareOf, speciesDiscovered } from '../../../game/rules/logic';
+import { canFishSpot, FISH, formName, globalRarityShare, rarityShareOf, speciesDiscovered } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
+import { shownFormOf } from '../../dex/model/shownForm';
 import type { Point, School } from '../../../game/world/types';
 import type { RegionId } from '../../../game/world';
 import { BOATS } from '../../../game/content/boats';
@@ -109,7 +110,10 @@ export function selectRegionViewData(
 export function selectFishAtSpot(spot: SpotId, game: GameState) {
   return FISH.filter(fish => fish.spot === spot)
     .sort((a, b) => rarityRank(a.rarity) - rarityRank(b.rarity))
-    .map(fish => ({ fish, discovered: speciesDiscovered(game, fish.id) }));
+    .map(fish => {
+      const shown = shownFormOf(game, fish.id);
+      return { fish, discovered: speciesDiscovered(game, fish.id), shown, name: formName(fish, shown.form) };
+    });
 }
 
 export type GradeLevel = 'high' | 'mid' | 'low' | 'none';

@@ -21,7 +21,6 @@ export function useGuild(account: boolean, poll = false) {
     queryFn: readGuild,
     enabled: ready && consentReady && account && liveAvailable,
     refetchInterval: poll ? REFRESH : false,
-    retry: 1,
   });
   /** 길드 요청 하나 — 자유 강화 초기화는 응답 값을 캐시에 먼저 반영한 뒤 서버 상태로 재조회한다 */
   const act = async (op: GuildOp): Promise<GuildOpResult> => {

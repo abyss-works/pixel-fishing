@@ -148,7 +148,7 @@ export function inviteDialogView(preview: GuildInvitePreview | null, viewer: { a
 }
 
 /** 실시간 길드 알림 한 줄 — 가입 신청 도착(길드장), 승인과 거절(신청한 사람) */
-export function guildAlertText(e: Extract<ServerMessage, { t: 'guild' }>): string {
+export function guildAlertText(e: Extract<ServerMessage, { t: 'guild' }> & { kind: 'request' | 'approved' | 'rejected' }): string {
   if (e.kind === 'request') return `${e.nick ?? '이름 없음'} 님이 ${e.guild} 길드에 가입을 신청했어요.`;
   return e.kind === 'approved' ? `${e.guild} 길드 가입이 승인됐어요.` : `${e.guild} 길드 가입 신청이 거절됐어요.`;
 }

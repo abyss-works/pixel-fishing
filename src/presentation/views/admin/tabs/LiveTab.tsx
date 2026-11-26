@@ -42,7 +42,7 @@ export default function LiveTab({ onCompose }: { onCompose?: (userId: string) =>
                  hint={board.rows[0] && adminUserLabel(board.rows[0].identity)} />
       </KpiRow>
 
-      <TabState loading={loading && granted} error={error} onRetry={refresh} />
+      <TabState loading={loading && granted && data === null} error={error} onRetry={refresh} />
 
       {/* 접속 목록(좌)과 위치 분포(우) — xl 이상 좌우 분할 */}
       <CellGrid side>

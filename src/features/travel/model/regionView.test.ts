@@ -35,6 +35,16 @@ describe('지역 탭 파생 데이터', () => {
     expect(ranks).toEqual([...ranks].sort((a, b) => a - b));
   });
 
+  it('돌연변이만 발견한 어종은 돌연변이 이름과 폼으로 보인다', () => {
+    const game = newState();
+    const target = selectFishAtSpot(SPOTS[0].id, game)[0].fish;
+    game.dex[target.id] = { variant: { count: 1, maxSize: 20, first: null } };
+
+    const row = selectFishAtSpot(SPOTS[0].id, game).find(r => r.fish.id === target.id);
+
+    expect(row).toMatchObject({ discovered: true, name: target.variant.name, shown: { form: 'variant', index: 1 } });
+  });
+
   it('하위 존(특수 해역)에 있으면 그 존을 문맥으로 쓰고 표는 최상위 존을 쓴다', () => {
     const view = selectRegionViewData(newState(), 'world', [], 'coron', null, null);
     expect(view.contextZone).toBe('coron');

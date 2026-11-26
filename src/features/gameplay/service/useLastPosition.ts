@@ -16,7 +16,6 @@ export function useLastPosition(): { settled: boolean; position: LastPosition | 
     queryFn: readLastPosition,
     enabled: ready && consentReady,
     staleTime: Infinity,
-    retry: 1,
   });
   return { settled: q.isSuccess || q.isError, position: q.data ?? null };
 }

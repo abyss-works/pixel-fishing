@@ -15,6 +15,7 @@ import { fmtDuration } from '../../../../features/admin/model/dashboard';
 import { REGION_NAMES, formatAdminLocation } from '../../../../features/admin/model/regions';
 import { readAdminSpamFlags, readAdminUserEvents, readAdminUserState } from '../../../../features/admin/service/queries';
 import { adminKeys } from '../../../../features/admin/service/queryKeys';
+import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
 import { useAdminUserActions } from '../../../../features/admin/service/useAdminUserActions';
 import { useAdminSessions } from '../../../../features/admin/service/useAdminStats';
@@ -34,16 +35,17 @@ export default function UserDetail({ user, onClose, onCompose }: {
   onCompose?: (userId: string) => void;
 }) {
   // 이벤트는 uid별 키, 스팸 플래그는 전역 공유 키를 사용해 중복 풀스캔을 피한다
+  const granted = useAdminAuth().access === 'granted';
   const eventsQuery = useAdminQuery(
     adminKeys.userEvents(user.user_id),
     () => readAdminUserEvents(user.user_id),
-    true,
+    granted,
   );
-  const flagsQuery = useAdminQuery(adminKeys.spamFlags, readAdminSpamFlags, true);
+  const flagsQuery = useAdminQuery(adminKeys.spamFlags, readAdminSpamFlags, granted);
   const stateQuery = useAdminQuery(
     adminKeys.userState(user.user_id),
     () => readAdminUserState(user.user_id),
-    true,
+    granted,
   );
   const events = eventsQuery.data ?? EMPTY_EVENTS;
   const flags = flagsQuery.data ?? EMPTY_FLAGS;

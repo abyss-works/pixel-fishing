@@ -7,6 +7,7 @@ import {
   ConsentRequiredError,
   isConsentRequiredError,
   isRateLimited,
+  parseRetryAfterMs,
   readRequestFailure,
   requestFailure,
   subscribeConsentRequired,
@@ -31,7 +32,20 @@ describe('requestFailure', () => {
     const err = requestFailure(tooMany(), 'x failed');
     expect(err).toBeInstanceOf(AppError);
     expect(err.kind).toBe('rate-limited');
-    expect(err.context).toEqual({ status: 429 });
+    expect(err.context).toEqual({ status: 429, retryAfterMs: 1000 });
+  });
+
+  it('429에 Retry-After가 없거나 읽을 수 없으면 retryAfterMs를 싣지 않는다', () => {
+    expect(requestFailure(new Response('x', { status: 429 }), 'x').context).toEqual({ status: 429 });
+    expect(requestFailure(new Response('x', { status: 429, headers: { 'retry-after': 'soon' } }), 'x').context)
+      .toEqual({ status: 429 });
+  });
+
+  it('parseRetryAfterMs는 초·날짜를 읽고 상한으로 자른다', () => {
+    expect(parseRetryAfterMs('2')).toBe(2000);
+    expect(parseRetryAfterMs('999')).toBe(10_000);
+    expect(parseRetryAfterMs(null)).toBeNull();
+    expect(parseRetryAfterMs(new Date(Date.now() - 5000).toUTCString())).toBe(0);
   });
 
   it.each([500, 502, 503, 404])('%i는 network로 남는다', status => {

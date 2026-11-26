@@ -16,7 +16,7 @@ const useGranted = () => useAdminAuth().access === 'granted';
 export function useAdminOverview(days = 30): AdminQuery<AdminOverview> {
   const client = useQueryClient();
   return useAdminQuery(
-    adminKeys.overview,
+    adminKeys.overview(days),
     async () => {
       const data = await readAdminOverview(days);
       client.setQueryData(adminKeys.users, data.users);

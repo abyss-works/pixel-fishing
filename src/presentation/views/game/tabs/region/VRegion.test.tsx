@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { newState } from '../../../../../game/rules/logic';
+import { FISH, newState } from '../../../../../game/rules/logic';
 import { setCurrentSpot } from '../../../../../game/world/currentSpot';
 import VRegion from './VRegion';
 
@@ -54,5 +54,15 @@ describe('VRegion', () => {
     const dialog = screen.getByRole('dialog');
     expect(dialog).toHaveTextContent('붕어');
     expect(dialog).toHaveTextContent('표본');
+  });
+
+  it('돌연변이만 발견한 어종은 돌연변이 이름으로 보이고 상세가 돌연변이 폼으로 열린다', () => {
+    const crucian = FISH.find(f => f.id === 'crucian')!;
+    act(() => setCurrentSpot('pond'));
+    show({ dex: { crucian: { variant: { count: 1, maxSize: 18, first: null } } } });
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(crucian.variant.name) }));
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveTextContent(crucian.variant.name);
+    expect(dialog).toHaveTextContent('돌연변이 2/');
   });
 });

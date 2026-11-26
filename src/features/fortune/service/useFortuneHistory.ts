@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { readFortuneHistory } from '../../../platform/api';
+import { gameDay, readFortuneHistory } from '../../../platform/api';
 import type { FortuneHistory } from '../../../platform/api';
 import { useSession } from '../../account/service/session';
 import { useConsentReady } from '../../account/service/consentGate';
@@ -12,11 +12,10 @@ export function useFortuneHistory(month: string | null, enabled: boolean) {
   const { ready, uid } = useSession();
   const consentReady = useConsentReady();
   const q = useQuery({
-    queryKey: ['fortune', 'history', month ?? 'current', uid],
+    queryKey: ['fortune', 'history', month ?? 'current', uid, gameDay()],
     queryFn: () => readFortuneHistory(month ?? undefined),
     enabled: ready && consentReady && enabled,
     staleTime: STALE,
-    retry: 1,
   });
   return {
     data: (q.data ?? null) as FortuneHistory | null,

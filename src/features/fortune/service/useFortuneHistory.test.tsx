@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FortuneHistory } from '../../../platform/api';
 import { sessionKey } from '../../account/service/session';
 
@@ -44,6 +44,8 @@ describe('useFortuneHistory', () => {
     resetConsentGate();
   });
 
+  afterEach(cleanup);
+
   it('활성화되면 지정 월의 운세 이력을 불러온다', async () => {
     const payload: FortuneHistory = {
       month: '2026-11',
@@ -81,7 +83,6 @@ describe('useFortuneHistory', () => {
 
   it('요청 실패 시 failed를 켜고 retry로 다시 불러온다', async () => {
     apiMock.readFortuneHistory
-      .mockRejectedValueOnce(new Error('network'))
       .mockRejectedValueOnce(new Error('network'))
       .mockResolvedValueOnce({
         month: '2026-10',

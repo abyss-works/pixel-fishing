@@ -8,8 +8,10 @@ import { fmtGold } from '../../../ui/format';
 
 let snap: BountySnapshot | null = null;
 let loaded = true;
+let failed = false;
+const refresh = vi.fn();
 vi.mock('../../../../features/bounty/service/useBounty', () => ({
-  useBounty: () => ({ snap, loaded, refresh: () => {} }),
+  useBounty: () => ({ snap, loaded, failed, offline: loaded && !failed && snap === null, refresh }),
 }));
 
 import QuestInfoModal from './QuestInfoModal';
@@ -27,6 +29,8 @@ beforeEach(() => {
   vi.setSystemTime(new Date('2026-10-13T00:01:00.000Z'));
   snap = snapshot();
   loaded = true;
+  failed = false;
+  refresh.mockClear();
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
@@ -147,6 +151,16 @@ describe('의뢰 창', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(dialog()).toHaveTextContent('오프라인에서는 의뢰를 볼 수 없어요.');
     expect(screen.getByLabelText('오늘 남은 일반 의뢰')).toHaveTextContent('-');
+  });
+
+  it('조회에 실패하면 오프라인이 아니라 실패 안내와 다시 시도 버튼을 보인다', () => {
+    snap = null;
+    failed = true;
+    open();
+    expect(dialog()).toHaveTextContent('의뢰를 불러오지 못했어요.');
+    expect(dialog()).not.toHaveTextContent('오프라인');
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   describe('처음 보이는 탭', () => {
