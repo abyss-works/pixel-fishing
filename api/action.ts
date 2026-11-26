@@ -14,7 +14,7 @@
 import type { SQL } from 'drizzle-orm';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { afterResponse } from './_server/afterResponse.js';
-import { notifyGuild, setFame, setNick } from './_server/livePresence.js';
+import { broadcastCatchFx, notifyGuild, setFame, setNick } from './_server/livePresence.js';
 // 확장자(.js) 필수 — Node 순수 ESM 로더가 src 모듈을 그대로 import한다
 import { migrate, newState } from '../src/game/rules/logic.js';
 import type { FishInstance, FormRecord, GameState, Judgment } from '../src/game/rules/logic.js';
@@ -60,9 +60,10 @@ import { sessionOf } from './_auth/session.js';
 import { database } from './_db/client.js';
 import type { Executor } from './_db/client.js';
 import {
-  acceptFragments, bountyRestoreFragments, challengeFragments, clearFragment,
-  consumeDeliveryFragment, debugFragment, deliveryGate, expiredCleanup, namedClearDeleteFragment,
-  namedClearInsertFragment, namedClearReplaceFragments, readSnapshotBounty, runAdvanceProgress, ticketFragment,
+  abandonFragments, abandonGate, acceptFragments, bountyRestoreFragments, challengeFragments, clearFragment,
+  consumeDeliveryFragment, debugFragment, deliveryGate, expiredCleanup, isQuestProgressComplete,
+  namedClearDeleteFragment, namedClearInsertFragment, namedClearReplaceFragments, readSnapshotBounty,
+  runAdvanceProgress, ticketFragment,
 } from './_data/bounty.js';
 import { consumeRelief, findCoupon, findRelief } from './_data/codes.js';
 import { claimMailFragment, claimableMail, sendIdempotentMail } from './_data/mailbox.js';
@@ -79,6 +80,7 @@ import { eventsInsert } from './_data/telemetry.js';
 import { activeDayUpsert } from './_data/activity.js';
 import { recordDailyFortuneFragment, upsertDailyFortuneFragment } from './_data/fortune.js';
 import { guildTotalOf, recordGuildActivity } from './_data/guilds.js';
+import { weeklyFameFragment } from './_data/rank.js';
 import {
   GUILD_LEVEL_FLOORS, GUILD_MAX_LEVEL, NO_GUILD_EFFECTS, contributionFor, guildEffectsOf, guildLevelOf,
 } from '../src/game/rules/guild.js';
@@ -212,7 +214,7 @@ export function expiredQuests(rows: BountyRows, dayStartISO: string): { id: stri
 /** 개체·도감 스킵 — 이 액션들의 리듀서는 스칼라/blob만 건드린다(가방·도감 무접촉 검증됨):
  * sendLetter/setNickname(상태불변) · boot(그날 첫 접속이면 운세 스칼라만 고정) · upgradeRod/buyBoat/travel(스칼라만) · redeemCoupon/seeTutorial/changeClothes/buyHat/wearHat(골드·blob만).
  * debug는 도감 명령(dex.completeZone)이 있어 스킵하지 않는다.
- * deliverBounty는 서버 주입 완료 여부만 보니 스킵 유지.
+ * deliverBounty·abandonQuest는 서버 주입 완료 여부만 보니 스킵 유지.
  * exchangeArtifact·levelUpArtifact는 재료(items)와 유물·레벨 맵이 모두 blob이라 스킵한다.
  * 요리(cook·cancelCook·eat·transmuteEnergy)는 아이템 수량·조리 상태·대기열·슬롯이 모두 blob이라 가방 개체를 쓰지 않고, 기운 대상 설정과 환불 안내 닫기는 blob 스칼라만 바꾼다.
  * extractEnergy는 가방 개체를 소비하므로 스킵하지 않는다.
@@ -221,19 +223,22 @@ export function expiredQuests(rows: BountyRows, dayStartISO: string): { id: stri
  * 회귀 가드는 acceptQuest가 이 경로에 포함되지 않음을 검증한다. */
 export const SKIP_DETAIL = new Set([
   'boot', 'sendLetter', 'upgradeRod', 'buyBoat', 'travel', 'redeemCoupon', 'catch',
-  'setNickname', 'deliverBounty', 'exchangeArtifact', 'levelUpArtifact', 'claimMail', 'seeTutorial',
+  'setNickname', 'deliverBounty', 'abandonQuest', 'exchangeArtifact', 'levelUpArtifact', 'claimMail', 'seeTutorial',
   'changeClothes', 'buyHat', 'wearHat',
   'cook', 'cancelCook', 'eat', 'transmuteEnergy', 'usePotion', 'setEnergyTarget', 'resetEnergyTargets', 'dismissBaitRefund', 'setAutoLockOnCatch',
   'debugSnapshot',
 ]);
 
 /** 수배 진실이 필요한 액션 — 라이선스·일일 카운트·진행도·도전권은 전용 표에 있다 */
-const BOUNTY_ACTIONS = new Set(['acceptQuest', 'deliverBounty', 'resolveChallenge', 'catch']);
+const BOUNTY_ACTIONS = new Set(['acceptQuest', 'deliverBounty', 'abandonQuest', 'resolveChallenge', 'catch']);
 
 /** 길드가 필요한 액션 — 보너스 효과를 쓰거나(캐치, 판매, 전시대 회수의 가방 상한) 기여를 쌓는다(명성을 얻는 캐치·지원 코드,
  *  의뢰 클리어). 이사 코드와 개발 도구는 플레이로 얻은 명성이 아니라 기여로 세지 않는다.
  *  네임드 결투 성공(resolveChallenge)은 명성을 주지 않고 납품을 열 뿐이라, 토벌 기여와 항해일지는 뒤이은 납품(deliverBounty)이 한 번만 쓴다 */
 const GUILD_ACTIONS = new Set(['catch', 'sell', 'exhibit', 'deliverBounty', 'claimRelief']);
+
+/** 주간 명성 집계 제외 액션 — 비게임플레이 주입(이사·개발 명령·지원 코드)은 주간 순위에 넣지 않는다 */
+const WEEKLY_FAME_EXCLUDED = new Set(['import', 'debug', 'debugBatch', 'claimRelief']);
 
 // 액션 페이싱 게이트 — 서버 추첨으로 가치를 생성하는 catch(last_catch_at 기준)와
 // 쓰기 비용이 큰 sendLetter(letters 최근 발송 시각 기준)만 각각 독립 간격을 검사한다.
@@ -651,6 +656,7 @@ async function route(req: Req, res: Res): Promise<void> {
   // 리듀서는 검증+감사 이벤트(+납품 골드)만 맡고, 행 기록·주입은 여기서 한다.
   let bounty: ActionDeps['bounty'] = null;
   let deliveryRow: { gate: SQL; questId: string } | null = null; // 납품이 소비할 진행 행
+  let abandonRow: { gate: SQL; questId: string } | null = null; // 포기가 지울 미완료 진행 행
   let expired: ReturnType<typeof expiredQuests> = []; // 이번 읽기에서 만료로 판정한 의뢰 — 응답 뒤에 정리한다
   if (wantsBounty) {
     const rows = loaded.bounty ?? { clears: [], progress: [], tickets: [] };
@@ -669,6 +675,11 @@ async function route(req: Req, res: Res): Promise<void> {
     // 납품 — 완료한 진행 행이 있어야 확정하고, 진행 행은 확정 문장 안에서 지운다.
     if (action.type === 'deliverBounty' && bounty.complete.includes(action.questId)) {
       deliveryRow = { gate: deliveryGate(uid, action.questId), questId: action.questId };
+    }
+
+    // 포기 — 수주 중이며 아직 미완료인 진행 행이 있어야 확정하고, 진행 행과 도전권을 확정 문장 안에서 지운다.
+    if (action.type === 'abandonQuest' && bounty.active.includes(action.questId) && !bounty.complete.includes(action.questId)) {
+      abandonRow = { gate: abandonGate(uid, action.questId, dayStart), questId: action.questId };
     }
   }
 
@@ -748,6 +759,7 @@ async function route(req: Req, res: Res): Promise<void> {
   const clearQuest = clearQuestForAction(action);
   if (clearQuest) fragments.push(clearFragment(guard, uid, clearQuest, nowISO));
   if (deliveryRow) fragments.push(consumeDeliveryFragment(guard, uid, deliveryRow.questId));
+  if (abandonRow) fragments.push(...abandonFragments(guard, uid, abandonRow.questId));
   // 도전권 발급 — catch의 ticket 이벤트를 행으로 확정한다.
   const ticketQuests = out.events.flatMap(e => {
     if (e.type !== 'ticket') return [];
@@ -860,14 +872,20 @@ async function route(req: Req, res: Res): Promise<void> {
       && (action.type === 'boot' || ((action.type === 'catch' || action.type === 'sell' || action.type === 'extractEnergy') && prevFortune?.day !== out.state.fortune.day))) {
     fragments.push(recordDailyFortuneFragment(guard, uid, out.state.fortune));
   }
+  // 주간 명성 집계 — 빠른 캐치와 일반 확정 경로 모두에서 플레이로 얻은 명성 증가분을 원자적으로 누적한다.
+  const fameDelta = out.state.fame - Number(row.fame);
+  if (!WEEKLY_FAME_EXCLUDED.has(action.type) && fameDelta > 0) {
+    fragments.push(weeklyFameFragment(guard, uid, fameDelta, nowISO));
+  }
 
   const readVersion = Number(row.version);
   const nextVersion = readVersion + 1;
   // 유저 입장에서는 "행동이 저장되지 않음" — 가장 아픈 실패. 500이라 자동 보고된다
+  const gatedRow = deliveryRow ?? abandonRow;
   const versionWrite = versionUpdate(uid, out.state, readVersion, nowISO, {
     ...(action.type === 'catch' ? { lastCatchAt: nowISO } : {}),
     ...(action.type === 'boot' ? { activeClient: clientId } : {}),
-  }, deliveryRow?.gate ?? null);
+  }, gatedRow?.gate ?? null);
   if (consumeCode) {
     const consuming = consumeCode;
     const result = await step('db-write', { uid, action: action.type },
@@ -879,6 +897,17 @@ async function route(req: Req, res: Res): Promise<void> {
     const result = await step('db-write', { uid, action: action.type },
       () => commitGated(db, versionWrite, fragments, gate));
     if (result === 'unavailable') throw new ApiError(422, 'quest-incomplete');
+    if (result === 'conflict') throw new ApiError(409, 'version-conflict');
+  } else if (abandonRow) {
+    const rowToAbandon = abandonRow;
+    const result = await step('db-write', { uid, action: action.type },
+      () => commitGated(db, versionWrite, fragments, rowToAbandon.gate));
+    if (result === 'unavailable') {
+      const quest = bountyById(rowToAbandon.questId);
+      const completed = quest !== undefined && await step('db-read', { uid, action: action.type },
+        () => isQuestProgressComplete(db, uid, rowToAbandon.questId, quest.count));
+      throw new ApiError(422, completed ? 'quest-already-complete' : 'quest-not-active');
+    }
     if (result === 'conflict') throw new ApiError(409, 'version-conflict');
   } else if (action.type === 'debugBatch') {
     const committed = await step('db-write', { uid, action: action.type },
@@ -945,6 +974,9 @@ async function route(req: Req, res: Res): Promise<void> {
   }
   if (pendingNickname !== null) setNick(uid, pendingNickname);
   if (out.state.fame !== Number(row.fame)) setFame(uid, out.state.fame);
+  if (user.email !== null && action.type === 'catch' && out.result.type === 'catch') {
+    broadcastCatchFx(uid, { fishId: out.result.fishId, form: out.result.info.form });
+  }
 
   // 후속 쓰기 — 이벤트 append, 활동일, 주기 스냅샷, 만료 의뢰 정리. 유실 허용 묶음이라 응답 뒤에 실행하고
   // 실패해도 상태는 되돌리지 않는다. 다만 조용히 잃지 않도록 보고한다.

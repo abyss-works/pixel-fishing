@@ -644,6 +644,20 @@ describe('수배 스냅샷 무효화', () => {
   const doCatch = (hook: Awaited<ReturnType<typeof bootedWithSpy>>['hook']) =>
     act(async () => { await hook.result.current.dispatch({ type: 'catch', spot: 'pond', judgment: 'good' }); });
 
+  it('acceptQuest·abandonQuest·deliverBounty·resolveChallenge는 수배 스냅샷을 즉시 무효화한다', async () => {
+    const { hook, spy } = await bootedWithSpy();
+    for (const action of [
+      { type: 'acceptQuest', questId: 'pacific-easy-common', port: 'harbor' },
+      { type: 'abandonQuest', questId: 'pacific-easy-common' },
+      { type: 'deliverBounty', questId: 'pacific-easy-common' },
+      { type: 'resolveChallenge', questId: 'pacific-named-megalodon', success: true, hits: 5, misses: 0 },
+    ] as const) {
+      spy.mockClear();
+      await act(async () => { await hook.result.current.dispatch(action); });
+      expect(spy).toHaveBeenCalledWith({ queryKey: ['bounty'] });
+    }
+  });
+
   it('의뢰 진행도가 오른 catch는 수배 스냅샷을 즉시 무효화한다', async () => {
     const { hook, spy } = await bootedWithSpy();
     gw.dispatchResult = catchResult({ bountyProgressed: true });

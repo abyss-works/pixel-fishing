@@ -1,4 +1,4 @@
-// 랭킹 읽기 — 공개해도 되는 값(닉네임·순위·값)만 돌려준다. uid와 이메일은 응답에 넣지 않는다.
+// 랭킹 읽기·주간 집계 — 공개해도 되는 값(닉네임·순위·값)만 돌려준다. uid와 이메일은 응답에 넣지 않는다.
 // 같은 값은 같은 순위(rank)이고, 같은 순위 안에서는 그 값에 먼저 도달한 사람이 위다.
 // 제재 계정과 게스트(익명 계정)는 모든 표에서 뺀다.
 import { sql } from 'drizzle-orm';
@@ -6,7 +6,8 @@ import type { SQL } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
 import { FISH } from '../../src/game/content/fish.js';
 import { NAMED } from '../../src/game/content/named.js';
-import { textArray } from './json.js';
+import { gameWeekStartDay, gameWeekStartISO, nextGameWeekResetISO } from '../../src/game/rules/time.js';
+import { at, textArray } from './json.js';
 
 const FISH_IDS = FISH.map(f => f.id);
 const NAMED_IDS = NAMED.map(n => n.id);
@@ -15,13 +16,42 @@ export const RANK_TOP = 50;
 /** 어종 순위는 도감 상세에 붙어 짧게 보여 준다 */
 export const SPECIES_TOP = 10;
 
+export type RankWindow = 'weekly' | 'all';
 export interface RankRow { rank: number; nickname: string | null; value: number; me: boolean }
-export interface RankBoard { top: RankRow[]; me: { rank: number; value: number } | null }
+export interface RankBoard {
+  top: RankRow[];
+  me: { rank: number; value: number } | null;
+  window: RankWindow;
+  periodSupported: boolean;
+  resetAt: string | null;
+}
+
+interface BoardMeta {
+  window: RankWindow;
+  periodSupported: boolean;
+  resetAt: string | null;
+}
+
+const ALL_ONLY_META: BoardMeta = { window: 'all', periodSupported: false, resetAt: null };
+
+function periodMeta(window: RankWindow, nowIso: string): BoardMeta {
+  return {
+    window,
+    periodSupported: true,
+    resetAt: window === 'weekly' ? nextGameWeekResetISO(nowIso) : null,
+  };
+}
 
 /** eligible(user_id, value, reached)에서 순위를 매겨 상위 목록과 내 순위를 만든다 */
-async function rankBoard(db: Executor, eligible: SQL, uid: string | null, limit = RANK_TOP): Promise<RankBoard> {
+async function rankBoard(
+  db: Executor,
+  eligible: SQL,
+  uid: string | null,
+  meta: BoardMeta,
+  limit = RANK_TOP,
+): Promise<RankBoard> {
   const me = sql`${uid}::uuid`;
-  const { rows } = await db.execute<{ board: RankBoard }>(sql`with eligible as (${eligible}),
+  const { rows } = await db.execute<{ board: Pick<RankBoard, 'top' | 'me'> }>(sql`with eligible as (${eligible}),
     ranked as (
       select e.user_id, e.value, p.nickname,
         rank() over (order by e.value desc)::int as rank,
@@ -33,14 +63,28 @@ async function rankBoard(db: Executor, eligible: SQL, uid: string | null, limit 
         'me', coalesce(user_id = ${me}, false)) order by ord), '[]') from ranked where ord <= ${limit}),
       'me', (select json_build_object('rank', rank, 'value', value) from ranked where user_id = ${me})
     ) as board`);
-  return rows[0].board;
+  return { ...rows[0].board, ...meta };
 }
 
-/** 명성 순위 — 같은 명성이면 마지막 저장 시각이 이른 사람이 위 */
-export function fameBoard(db: Executor, uid: string | null): Promise<RankBoard> {
+/** 명성 순위 — 주간(월요일 KST 04:00 시작) 또는 누적. 같은 명성이면 도달 시각이 이른 사람이 위 */
+export function fameBoard(
+  db: Executor,
+  uid: string | null,
+  window: RankWindow = 'weekly',
+  nowIso = new Date().toISOString(),
+): Promise<RankBoard> {
+  const meta = periodMeta(window, nowIso);
+  if (window === 'weekly') {
+    const weekStart = gameWeekStartDay(nowIso);
+    return rankBoard(db, sql`select r.user_id, r.fame_gained::bigint as value, r.reached_at as reached
+      from public.ranking_weekly_fame r
+      join public.saves_current s on s.user_id = r.user_id and not s.restricted
+      join auth.users u on u.id = r.user_id and not u.is_anonymous
+      where r.week_start = ${weekStart}::date and r.fame_gained > 0`, uid, meta);
+  }
   return rankBoard(db, sql`select s.user_id, s.fame::bigint as value, s.updated_at as reached
     from public.saves_current s join auth.users u on u.id = s.user_id
-    where not s.restricted and not u.is_anonymous and s.fame > 0`, uid);
+    where not s.restricted and not u.is_anonymous and s.fame > 0`, uid, meta);
 }
 
 /** 도감 종목 수 순위 공통 — 지정 어종 목록·폼의 기록 수, 동순위 시 마지막 새 어종 도달 시각이 이른 사람이 위 */
@@ -54,7 +98,7 @@ function recordsCountBoard(
     from public.records r join public.saves_current s on s.user_id = r.user_id and not s.restricted
     join auth.users u on u.id = r.user_id and not u.is_anonymous
     where r.form = ${form} and r.count > 0 and r.fish_id = any(${textArray(ids)})
-    group by r.user_id`, uid);
+    group by r.user_id`, uid, ALL_ONLY_META);
 }
 
 /** 일반 도감 완성도 순위 — 일반 어종의 일반 폼 발견 종 수(네임드 제외) */
@@ -72,13 +116,27 @@ export function namedBoard(db: Executor, uid: string | null): Promise<RankBoard>
   return recordsCountBoard(db, uid, 'normal', NAMED_IDS);
 }
 
-/** 네임드 토벌 누적 순위 — 네임드 토벌 성공 횟수. 같은 수면 마지막 토벌 시각이 이른 사람이 위 */
-export function namedClearsBoard(db: Executor, uid: string | null): Promise<RankBoard> {
+/** 네임드 토벌 순위 — 주간(월요일 KST 04:00 시작) 또는 누적. 같은 수면 마지막 토벌 시각이 이른 사람이 위 */
+export function namedClearsBoard(
+  db: Executor,
+  uid: string | null,
+  window: RankWindow = 'weekly',
+  nowIso = new Date().toISOString(),
+): Promise<RankBoard> {
+  const meta = periodMeta(window, nowIso);
+  if (window === 'weekly') {
+    const weekStartIso = gameWeekStartISO(nowIso);
+    return rankBoard(db, sql`select bc.user_id, count(*)::bigint as value, max(bc.cleared_at) as reached
+      from public.bounty_clears bc join public.saves_current s on s.user_id = bc.user_id and not s.restricted
+      join auth.users u on u.id = bc.user_id and not u.is_anonymous
+      where bc.kind = 'named' and bc.cleared_at >= ${at(weekStartIso)}
+      group by bc.user_id`, uid, meta);
+  }
   return rankBoard(db, sql`select bc.user_id, count(*)::int as value, max(bc.cleared_at) as reached
     from public.bounty_clears bc join public.saves_current s on s.user_id = bc.user_id and not s.restricted
     join auth.users u on u.id = bc.user_id and not u.is_anonymous
     where bc.kind = 'named'
-    group by bc.user_id`, uid);
+    group by bc.user_id`, uid, meta);
 }
 
 /** 어종 순위 — 그 어종을 사람별로 가장 크게 낚은 크기(폼 무관). 같은 크기면 기록을 먼저 남긴 사람이 위 */
@@ -87,5 +145,25 @@ export function speciesBoard(db: Executor, fishId: string, uid: string | null): 
     from public.records r join public.saves_current s on s.user_id = r.user_id and not s.restricted
     join auth.users u on u.id = r.user_id and not u.is_anonymous
     where r.fish_id = ${fishId} and r.max_size is not null
-    group by r.user_id`, uid, SPECIES_TOP);
+    group by r.user_id`, uid, ALL_ONLY_META, SPECIES_TOP);
+}
+
+/** 주간 명성 합산 조각 — 낙관 락(guard)이 통과했을 때만 해당 게임 주간의 획득 명성을 올린다 */
+export function weeklyFameFragment(guard: SQL, uid: string, delta: number, nowIso: string): SQL | null {
+  if (!Number.isFinite(delta) || delta <= 0) return null;
+  const gained = Math.trunc(delta);
+  if (gained <= 0) return null;
+  const weekStart = gameWeekStartDay(nowIso);
+  return sql`insert into public.ranking_weekly_fame (week_start, user_id, fame_gained, reached_at, updated_at)
+    select ${weekStart}::date, ${uid}, ${gained}, ${at(nowIso)}, ${at(nowIso)}
+    where ${guard}
+    on conflict (week_start, user_id) do update
+      set fame_gained = ranking_weekly_fame.fame_gained + excluded.fame_gained,
+          reached_at = excluded.reached_at,
+          updated_at = excluded.updated_at`;
+}
+
+/** 계정 정리에서 사용자의 주간 명성 집계 행을 모두 지운다 */
+export async function deleteUserWeeklyFame(db: Executor, uid: string): Promise<void> {
+  await db.execute(sql`delete from public.ranking_weekly_fame where user_id = ${uid}`);
 }

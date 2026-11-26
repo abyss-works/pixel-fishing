@@ -12,7 +12,7 @@ import { useNow } from '../../../../features/gameplay/service/useGameTime';
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import Button from '../../../ui/Button';
 import { cx } from '../../../ui/cx';
-import { useKeyScope } from '../../../ui/hotkeys';
+import { HOTKEY_TIER, useKeyScope } from '../../../ui/hotkeys';
 import Inset from '../../../ui/Inset';
 import SlotCell from '../../../ui/SlotCell';
 import TableBox from '../../../ui/TableBox';
@@ -71,7 +71,7 @@ export default function GuildManageTab({ guild, busy, run, dialogHost, setToast,
       cancelPitchEdit();
       return true;
     }
-  });
+  }, { tier: HOTKEY_TIER.STAGE_CONFIRM });
   const submitPitch = async () => {
     if (pitchBusy || !editingPitch) return;
     const next = pitchDraft.trim() === '' ? null : pitchDraft.trim();

@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import type { CSSProperties, MouseEvent, ReactNode } from 'react';
 import { cx } from './cx';
 import { HighlightRarityText } from './fish/RarityTag';
-import { useKeyScope } from './hotkeys';
+import { HOTKEY_TIER, hasModifier, useKeyScope } from './hotkeys';
 import PixelIcon from './PixelIcon';
 import TooltipBubble from './TooltipBubble';
 import { anchorOf } from './tooltipPlacement';
@@ -31,11 +31,11 @@ function TipClose({ onClose }: { onClose: () => void }) {
   useEffect(() => { closeRef.current = onClose; });
 
   useKeyScope(e => {
-    if (e.key !== 'Escape') return;
+    if (e.key !== 'Escape' || hasModifier(e)) return;
     e.preventDefault();
     closeRef.current();
     return true;
-  });
+  }, { tier: HOTKEY_TIER.POPOVER });
 
   useEffect(() => {
     const onScroll = () => closeRef.current();

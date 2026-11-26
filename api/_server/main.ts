@@ -26,7 +26,7 @@ import purgeAnon from '../cron/purge-anon.js';
 import { adminAuth, appAuth, sessionOf } from '../_auth/session.js';
 import { afterResponse, settleAfterResponse } from './afterResponse.js';
 import { attachLive } from './live.js';
-import { provideNotify, provideNotifyAll, provideNotifyGuild, provideOnline, providePresence, provideSetFame, provideSetNick } from './livePresence.js';
+import { provideBroadcastCatchFx, provideNotify, provideNotifyAll, provideNotifyGuild, provideOnline, providePresence, provideSetFame, provideSetNick } from './livePresence.js';
 import { database } from '../_db/client.js';
 import { liveIdentity } from '../_data/profile.js';
 import { blockedIds } from '../_data/blocks.js';
@@ -186,6 +186,7 @@ provideNotifyGuild((guildId, msg) => live.sendToGuild(guildId, msg));
 provideNotifyAll(msg => live.sendToAll(msg));
 provideSetNick((uid, nick) => live.setNick(uid, nick));
 provideSetFame((uid, fame) => live.setFame(uid, fame));
+provideBroadcastCatchFx((uid, payload) => live.broadcastCatchFx(uid, payload));
 
 process.on('SIGTERM', () => {
   live.close();

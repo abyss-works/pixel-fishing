@@ -318,7 +318,7 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
         // 수배 스냅샷을 바꾸는 액션만 무효화한다. catch는 티켓 발급·의뢰 진행분만 해당하고
         // 나머지는 스냅샷과 무관이라 건드리지 않는다 (폭풍 방지).
         const devAction = action.type === 'debug' || action.type === 'debugBatch';
-        if (action.type === 'acceptQuest' || action.type === 'deliverBounty' || action.type === 'resolveChallenge' || devAction
+        if (action.type === 'acceptQuest' || action.type === 'abandonQuest' || action.type === 'deliverBounty' || action.type === 'resolveChallenge' || devAction
             || (action.type === 'catch' && r.result.type === 'catch' && (r.result.ticket || r.result.bountyProgressed))) {
           void client.invalidateQueries({ queryKey: ['bounty'] });
         }

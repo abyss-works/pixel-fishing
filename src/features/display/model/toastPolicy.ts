@@ -34,6 +34,7 @@ export type SystemEventKind =
   | 'achievement.claimed'
   | 'bounty.questDelivered'
   | 'bounty.questAccepted'
+  | 'bounty.questAbandoned'
   | 'artifact.levelUp'
   | 'facility.rodUpgraded'
   | 'facility.energyExtracted'
@@ -122,6 +123,7 @@ export const TOAST_POLICY: Record<SystemEventKind, ToastRule> = {
   },
   'bounty.questDelivered': { tier: 'B', defaultTone: 'gold', priority: 2, ttlMs: TTL_BY_PRIORITY[2], requireOpenWindow: true },
   'bounty.questAccepted': { tier: 'B', defaultTone: 'neutral', priority: 3, ttlMs: TTL_BY_PRIORITY[3], requireOpenWindow: true },
+  'bounty.questAbandoned': { tier: 'B', defaultTone: 'neutral', priority: 3, ttlMs: TTL_BY_PRIORITY[3], requireOpenWindow: true },
   'artifact.levelUp': { tier: 'B', defaultTone: 'gold', priority: 2, ttlMs: TTL_BY_PRIORITY[2], requireOpenWindow: true },
   'facility.rodUpgraded': {
     tier: 'B', defaultTone: 'gold', priority: 2, ttlMs: TTL_BY_PRIORITY[2],

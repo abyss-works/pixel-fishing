@@ -8,10 +8,10 @@ import { REGION_PACKS } from '../world';
 import type { RegionPack } from '../world';
 import { compileMap, mapBounds } from '../world/mask';
 import { CLOSED_SEA_MSG } from '../content/zones';
+import { renderRegion } from '../rendering/canvas/scenes/region.js';
+import { JUMP_S } from '../rendering/pixel/sprites/schoolView.js';
 import { GameFieldEngine } from './fieldEngine';
 import type { FieldEvent } from './fieldEngine';
-
-import { renderRegion } from '../rendering/canvas/scenes/region.js';
 
 vi.mock('../rendering/canvas/scenes/region.js', () => ({ renderRegion: vi.fn() }));
 
@@ -927,6 +927,83 @@ describe('GameFieldEngine 빨간 존 위치와 챔질 경과', () => {
       expect.objectContaining({ look: { shirt: 2, pants: 3, hat: 'santa-hat' } }),
     );
     expect(game.look.hat).toBe('cap-red');
+    engine.dispose();
+  });
+});
+
+describe('GameFieldEngine 로컬·피어 점프 연출', () => {
+  afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+
+  it('포획이 확정되면 localJumps 1건을 만들고, 바로 이동해도 0.9초 동안 유지한 뒤 만료한다', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    vi.setSystemTime(Date.parse('2026-11-26T00:00:00.000Z'));
+
+    const game = { ...newState(), boat: 5, rod: 10 };
+    const school = { id: 's1', spot: 'pond' as const, x: WORLD_SPAWN.x + 12, y: WORLD_SPAWN.y - 8 };
+    const engine = new GameFieldEngine('world', game, [school], WORLD_SPAWN);
+    let resolveCatch: ((v: unknown) => void) | null = null;
+    engine.updateContext(game, false, {
+      dispatch: () => new Promise(resolve => { resolveCatch = resolve as (v: unknown) => void; }) as never,
+      onEvent: noop,
+      onScene: noop,
+    });
+    engine.setLiveSource(() => ({
+      others: [],
+      bubble: null,
+      idle: null,
+      peerJumps: [{ x: 300, y: 400, fishId: 'goldcarp', form: 'variant', t: 0.25 }],
+    }));
+
+    const frame = (now: number, last: number) =>
+      (engine as unknown as { updateFrame(c: unknown, n: number, l: number): boolean }).updateFrame(ctx, now, last);
+
+    engine.action();
+    let g = 0;
+    while (engine.getSnapshot().phase !== 'bite' && g++ < 2000) vi.advanceTimersByTime(10);
+    expect(engine.getSnapshot().phase).toBe('bite');
+
+    // 챔질 직후(응답 도착 전)에는 localJumps가 아직 생기지 않는다
+    engine.action();
+    const renderMock = vi.mocked(renderRegion);
+    renderMock.mockClear();
+    frame(1000, 950);
+    expect(renderMock.mock.calls[0][2].localJumps).toEqual([]);
+    expect(renderMock.mock.calls[0][2].peerJumps).toEqual([
+      { x: 300, y: 400, fishId: 'goldcarp', form: 'variant', t: 0.25 },
+    ]);
+
+    // 서버 응답 도착 시 1건의 localJumps 생성
+    resolveCatch!({
+      status: 'ok',
+      result: { type: 'catch', fishId: 'goldfish', uid: 'u-1', info: { form: 'variant' }, released: [] },
+    });
+    await Promise.resolve();
+
+    // 곧바로 이동해 낚시를 취소해도 0.9초 동안은 유지된다
+    vi.advanceTimersByTime(200);
+    engine.handleKeyDown('ArrowLeft', noop);
+    engine.releaseKey('ArrowLeft');
+    expect(engine.getSnapshot().phase).toBe('idle');
+
+    renderMock.mockClear();
+    frame(1200, 1150);
+    const active = renderMock.mock.calls[0][2].localJumps;
+    expect(active).toHaveLength(1);
+    expect(active![0]).toMatchObject({
+      x: school.x,
+      y: school.y,
+      fishId: 'goldfish',
+      form: 'variant',
+    });
+    expect(active![0].t).toBeCloseTo(0.2, 3);
+
+    // JUMP_S(0.9초) 경과 후 만료
+    vi.advanceTimersByTime(Math.round(JUMP_S * 1000));
+    renderMock.mockClear();
+    frame(2100, 2050);
+    expect(renderMock.mock.calls[0][2].localJumps).toEqual([]);
+
     engine.dispose();
   });
 });

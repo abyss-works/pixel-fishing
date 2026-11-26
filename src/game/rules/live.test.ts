@@ -175,6 +175,9 @@ describe('방치 시간 필드', () => {
   });
 });
 
+import type { FormId } from '../content/fish';
+import type { RegionId } from '../content/places';
+
 describe('ServerMessage nick', () => {
   it('nick 메시지는 uid와 nick 문자열 필드를 가진다', () => {
     type NickMessage = Extract<ServerMessage, { t: 'nick' }>;
@@ -182,6 +185,26 @@ describe('ServerMessage nick', () => {
 
     const msg: ServerMessage = { t: 'nick', uid: 'u-1', nick: '새닉네임' };
     expect(JSON.parse(JSON.stringify(msg))).toEqual({ t: 'nick', uid: 'u-1', nick: '새닉네임' });
+  });
+});
+
+describe('ServerMessage catchFx', () => {
+  it('catchFx 메시지는 uid, region, 좌표, fishId와 선택적 form을 가진다', () => {
+    type CatchFxMessage = Extract<ServerMessage, { t: 'catchFx' }>;
+    expectTypeOf<CatchFxMessage>().toEqualTypeOf<{
+      t: 'catchFx';
+      uid: string;
+      region: RegionId;
+      x: number;
+      y: number;
+      fishId: string;
+      form?: FormId;
+    }>();
+
+    const plain: ServerMessage = { t: 'catchFx', uid: 'u-1', region: 'world', x: 120, y: 240, fishId: 'carp' };
+    const variant: ServerMessage = { t: 'catchFx', uid: 'u-2', region: 'village', x: 100, y: 120, fishId: 'crucian', form: 'variant' };
+    expect(JSON.parse(JSON.stringify(plain))).toEqual({ t: 'catchFx', uid: 'u-1', region: 'world', x: 120, y: 240, fishId: 'carp' });
+    expect(JSON.parse(JSON.stringify(variant))).toEqual({ t: 'catchFx', uid: 'u-2', region: 'village', x: 100, y: 120, fishId: 'crucian', form: 'variant' });
   });
 });
 

@@ -9,12 +9,12 @@ import { drawBoat, drawIdle, drawOtherShip, drawPerson, drawSpeech } from '../..
 import type { OtherShipView, Speech } from '../../pixel/sprites/actors.js';
 import { drawMaskTerrain } from '../../pixel/sprites/mask.js';
 import { drawDeck, drawLabel, drawLand, drawTree, drawWater } from '../../pixel/sprites/scenery.js';
-import { drawFishingGear, drawHookJump, drawSchools, drawTimingBar } from '../../pixel/sprites/overlays.js';
+import { drawFishJump, drawFishingGear, drawHookJump, drawSchools, drawTimingBar } from '../../pixel/sprites/overlays.js';
 import { cameraFor } from './camera.js';
 import type { RegionPack, School } from '../../../world/types';
 import { FIELD_VIEW } from '../../../world/fieldView.js';
 import type { ViewSize } from '../../../world/fieldView.js';
-import type { GearView } from '../../pixel/sprites/overlays.js';
+import type { GearView, JumpFx } from '../../pixel/sprites/overlays.js';
 import { DEFAULT_LOOK, effectiveLookForRegion } from '../../../content/wardrobe.js';
 import type { Look } from '../../../content/wardrobe.js';
 
@@ -26,6 +26,10 @@ export interface FieldView extends GearView {
   schools: School[];
   /** 같은 바다의 다른 플레이어 — 항해 지역에서만 그린다 */
   others?: OtherShipView[];
+  /** 같은 바다 다른 플레이어의 물고기 점프 연출 */
+  peerJumps?: readonly JumpFx[];
+  /** 내 물고기 점프 연출 — 전달되면 drawHookJump 대신 이 목록을 그려 이동 직후에도 끊기지 않는다 */
+  localJumps?: readonly JumpFx[];
   /** 내 머리 위 말풍선 — 내가 보낸 월드 채팅과 입력 중 표시. 다른 플레이어에게 보이는 것과 같다 */
   bubble?: Speech;
   /** 내 머리 위 방치 시간 문자열 — 없으면 그리지 않는다 */
@@ -92,10 +96,25 @@ export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
   for (const l of pack.labels) drawLabel(ctx, l);
   pack.flavor?.(ctx, v.t);
 
-  // 동적: 어군/낚싯줄/플레이어/타이밍 바
+  // 동적: 어군/낚싯줄/점프 연출/플레이어/타이밍 바
   drawSchools(ctx, v.schools, v.boat, v.t, true, 1, v);
   drawFishingGear(ctx, v);
-  drawHookJump(ctx, v);
+  const jumpMinX = cam.x - 32;
+  const jumpMaxX = cam.x + view.w + 32;
+  const jumpMinY = cam.y - 48;
+  const jumpMaxY = cam.y + view.h + 48;
+  const inJumpView = (j: JumpFx) =>
+    j.x >= jumpMinX && j.x <= jumpMaxX && j.y >= jumpMinY && j.y <= jumpMaxY;
+  if (v.localJumps !== undefined) {
+    for (const j of v.localJumps) {
+      if (inJumpView(j)) drawFishJump(ctx, j, v.fishArt);
+    }
+  } else {
+    drawHookJump(ctx, v);
+  }
+  for (const j of v.peerJumps ?? []) {
+    if (inJumpView(j)) drawFishJump(ctx, j, v.fishArt);
+  }
   const look = effectiveLookForRegion(v.look ?? DEFAULT_LOOK, pack.id);
   if (pack.movement === 'sail') {
     for (const o of v.others ?? []) {

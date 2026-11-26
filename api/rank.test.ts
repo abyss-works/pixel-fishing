@@ -1,18 +1,39 @@
-// 랭킹 핸들러 단위 테스트 — 5개 일반 보드·어종 보드 라우팅, 캐시 헤더, 입력 검증을 검증한다.
+// 랭킹 핸들러 단위 테스트 — 보드별 기간 지원 여부·기본 window·캐시 헤더·입력 검증을 검증한다.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = {
   session: null as { id: string; email: string | null } | null,
 };
 
-const boardResult = { top: [], me: null };
+const weeklyBoardResult = {
+  top: [],
+  me: null,
+  window: 'weekly' as const,
+  periodSupported: true,
+  resetAt: '2026-11-29T19:00:00.000Z',
+};
+const allBoardResult = {
+  top: [],
+  me: null,
+  window: 'all' as const,
+  periodSupported: false,
+  resetAt: null,
+};
 const readers = vi.hoisted(() => ({
-  fameBoard: vi.fn(async () => boardResult),
-  dexBoard: vi.fn(async () => boardResult),
-  variantBoard: vi.fn(async () => boardResult),
-  namedBoard: vi.fn(async () => boardResult),
-  namedClearsBoard: vi.fn(async () => boardResult),
-  speciesBoard: vi.fn(async () => boardResult),
+  fameBoard: vi.fn(async (_db: unknown, _uid: unknown, window = 'weekly') => ({
+    ...weeklyBoardResult,
+    window,
+    resetAt: window === 'weekly' ? '2026-11-29T19:00:00.000Z' : null,
+  })),
+  dexBoard: vi.fn(async () => allBoardResult),
+  variantBoard: vi.fn(async () => allBoardResult),
+  namedBoard: vi.fn(async () => allBoardResult),
+  namedClearsBoard: vi.fn(async (_db: unknown, _uid: unknown, window = 'weekly') => ({
+    ...weeklyBoardResult,
+    window,
+    resetAt: window === 'weekly' ? '2026-11-29T19:00:00.000Z' : null,
+  })),
+  speciesBoard: vi.fn(async () => allBoardResult),
 }));
 
 vi.mock('./_auth/session.js', () => ({ sessionOf: vi.fn(async () => state.session) }));
@@ -44,18 +65,31 @@ describe('api/rank 핸들러', () => {
     else process.env.DATABASE_URL = prevUrl;
   });
 
-  it('5개 일반 보드를 각 데이터 조회 함수로 연결하고 비로그인 시 60초 공유 캐시 헤더를 둔다', async () => {
+  it('기간 지원 보드(fame, namedClears)는 window 생략 시 weekly로 조회하고 all 요청도 전달한다', async () => {
+    for (const [board, fn] of [['fame', readers.fameBoard], ['namedClears', readers.namedClearsBoard]] as const) {
+      const def = await callRank({ board });
+      expect(def.status).toBe(200);
+      expect(def.body).toEqual({ board, ...weeklyBoardResult });
+      expect(fn).toHaveBeenLastCalledWith('DB', null, 'weekly');
+      expect(def.headers['cache-control']).toContain('s-maxage=60');
+
+      const all = await callRank({ board, window: 'all' });
+      expect(all.status).toBe(200);
+      expect(all.body).toEqual({ board, top: [], me: null, window: 'all', periodSupported: true, resetAt: null });
+      expect(fn).toHaveBeenLastCalledWith('DB', null, 'all');
+    }
+  });
+
+  it('비기간 보드(dex, variant, named)는 window=weekly가 와도 누적 전용(all)으로 정규화한다', async () => {
     const cases = [
-      ['fame', readers.fameBoard],
       ['dex', readers.dexBoard],
       ['variant', readers.variantBoard],
       ['named', readers.namedBoard],
-      ['namedClears', readers.namedClearsBoard],
     ] as const;
     for (const [board, fn] of cases) {
-      const res = await callRank({ board });
+      const res = await callRank({ board, window: 'weekly' });
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ board, ...boardResult });
+      expect(res.body).toEqual({ board, ...allBoardResult });
       expect(fn).toHaveBeenCalledWith('DB', null);
       expect(res.headers['cache-control']).toContain('s-maxage=60');
     }
@@ -65,22 +99,23 @@ describe('api/rank 핸들러', () => {
     state.session = { id: 'u1', email: 'a@example.test' };
     const res = await callRank({ board: 'namedClears' });
     expect(res.status).toBe(200);
-    expect(readers.namedClearsBoard).toHaveBeenCalledWith('DB', 'u1');
+    expect(readers.namedClearsBoard).toHaveBeenCalledWith('DB', 'u1', 'weekly');
     expect(res.headers['cache-control']).toBe('private, no-store');
   });
 
-  it('species 보드는 유효한 어종만 받고 speciesBoard로 연결한다', async () => {
+  it('species 보드는 유효한 어종만 받고 window=weekly 요청에도 누적 전용으로 응답한다', async () => {
     expect((await callRank({ board: 'species' })).status).toBe(400);
     expect((await callRank({ board: 'species', fish: 'unknown' })).status).toBe(400);
-    const res = await callRank({ board: 'species', fish: 'crucian' });
+    const res = await callRank({ board: 'species', fish: 'crucian', window: 'weekly' });
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ board: 'species', fishId: 'crucian', ...boardResult });
+    expect(res.body).toEqual({ board: 'species', fishId: 'crucian', ...allBoardResult });
     expect(readers.speciesBoard).toHaveBeenCalledWith('DB', 'crucian', null);
   });
 
-  it('메서드, 보드 이름, DB 환경 변수 오류를 거부한다', async () => {
+  it('메서드, 보드 이름, window, DB 환경 변수 오류를 거부한다', async () => {
     expect((await callRank({ board: 'fame' }, 'POST')).status).toBe(405);
     expect((await callRank({ board: 'invalid' })).status).toBe(400);
+    expect((await callRank({ board: 'fame', window: 'monthly' })).status).toBe(400);
     delete process.env.DATABASE_URL;
     expect((await callRank({ board: 'fame' })).status).toBe(500);
   });

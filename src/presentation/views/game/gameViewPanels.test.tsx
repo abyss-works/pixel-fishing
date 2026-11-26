@@ -1,8 +1,10 @@
 // 게임 화면 패널 초기화 — 거점을 떠날 때 업적 모달을 포함한 열린 패널을 모두 닫는다.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { COOKING_UNLOCK_BOAT } from '../../../game/content/cooking';
+import { bountyById } from '../../../game/content/bounties';
+import type { BountySnapshot } from '../../../features/bounty/model/types';
 import { api } from '../../../platform/api';
 import { newState } from '../../../game/rules/logic';
 import { TUTORIAL_IDS } from '../../../game/content/tutorials';
@@ -13,6 +15,7 @@ import { resetTutorialSession } from '../../../features/tutorial/service/tutoria
 import { resetFortuneModalSession } from '../../../features/fortune/service/fortuneModal';
 import { resetCanvasCover } from '../../layouts/game-stage/canvasCover';
 import type { NoticeItem } from '../../../game/rules/live';
+import { boardingOf } from '../../../game/world';
 import { resetKeyScopes } from '../../ui/hotkeys';
 import { resetOpenWindows } from '../../ui/openWindows';
 import GameView from './GameView';
@@ -24,8 +27,15 @@ const noticeMock = vi.hoisted(() => ({
   dismissNotice: vi.fn(),
 }));
 
+const bountyMock = vi.hoisted(() => ({
+  snap: null as BountySnapshot | null,
+}));
+
 vi.mock('../../../features/live/service/useNotices', () => ({
   useNotices: () => noticeMock,
+}));
+vi.mock('../../../features/bounty/service/useBounty', () => ({
+  useBounty: () => ({ snap: bountyMock.snap, loaded: true, failed: false, offline: bountyMock.snap === null, refresh: vi.fn() }),
 }));
 vi.mock('../../layouts/game-stage/Field', () => ({ default: () => null }));
 
@@ -58,6 +68,7 @@ beforeEach(() => {
   noticeMock.endedNotices = [];
   noticeMock.stackNotices = [];
   noticeMock.dismissNotice.mockReset();
+  bountyMock.snap = null;
   api.auth.isConfigured = false;
   window.matchMedia = ((query: string) => ({
     matches: false, media: query, addEventListener: () => {}, removeEventListener: () => {},
@@ -306,5 +317,183 @@ describe('GameView 패널 초기화', () => {
     expect(dialog).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /현재 공지/ })).toHaveTextContent('1');
     expect(screen.getByRole('button', { name: /지난 공지/ })).toHaveTextContent('1');
+  });
+
+  it('의뢰 창에서 의뢰 포기를 누르면 스테이지 확인 창을 거쳐 abandonQuest를 보낸다', async () => {
+    const quest = bountyById('pacific-easy-common')!;
+    bountyMock.snap = {
+      clearsToday: { general: 0, named: 0 },
+      progress: [{ questId: quest.id, progress: 1 }],
+      tickets: [],
+    };
+    const dispatch = vi.fn(() => ({ status: 'ok' as const, state: newState(), result: { type: 'none' as const } }));
+    const setToast = vi.fn();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <GameView
+          game={{ ...newState(), tutorials: [...TUTORIAL_IDS] }}
+          scene={{ kind: 'base', id: 'home' }}
+          entryPos={null}
+          placeSeq={0}
+          dispatch={dispatch}
+          setToast={setToast}
+          onScene={() => {}}
+          onPlace={() => {}}
+          log={[]}
+          syncLabel={null}
+          syncState="off"
+          guestProgress="nothing"
+          account="dev@localhost"
+          accountChecked={true}
+          accountFailed={false}
+          uid="u1"
+          nickname="테스터"
+          onRename={async () => null}
+          onAuthChanged={async () => {}}
+          onResync={async () => {}}
+        />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /^메뉴 열기/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /^의뢰/ }));
+    expect(screen.getByRole('dialog', { name: '의뢰' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '의뢰 포기' }));
+    const confirmDialog = await screen.findByRole('dialog', { name: '의뢰 포기' });
+    expect(document.querySelector('[data-game-stage]')!).toContainElement(confirmDialog);
+
+    fireEvent.click(screen.getByRole('button', { name: '포기' }));
+    await waitFor(() => expect(dispatch).toHaveBeenCalledWith({ type: 'abandonQuest', questId: quest.id }));
+    expect(setToast).toHaveBeenCalledWith('의뢰를 포기했어요.');
+  });
+
+  it('거점에서는 열린 창이나 메뉴가 없을 때 Esc로 마을이나 바다로 나가고, 열려 있으면 위에서부터 차례로 닫는다', () => {
+    const onScene = vi.fn();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <GameView
+          game={{ ...newState(), tutorials: [...TUTORIAL_IDS] }}
+          scene={{ kind: 'base', id: 'home' }}
+          entryPos={null}
+          placeSeq={0}
+          dispatch={() => ({ status: 'ok', state: newState(), result: { type: 'none' } })}
+          setToast={() => {}}
+          onScene={onScene}
+          onPlace={() => {}}
+          log={[]}
+          syncLabel={null}
+          syncState="off"
+          guestProgress="nothing"
+          account="dev@localhost"
+          accountChecked={true}
+          accountFailed={false}
+          uid="u1"
+          nickname="테스터"
+          onRename={async () => null}
+          onAuthChanged={async () => {}}
+          onResync={async () => {}}
+        />
+      </QueryClientProvider>,
+    );
+
+    // 1) 업적 모달 + 게임 메뉴를 연 상태에서 Esc 연타(repeat)는 무시된다
+    fireEvent.click(screen.getByRole('button', { name: /^메뉴 열기/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /^업적/ }));
+    expect(screen.getByRole('dialog', { name: '업적' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^메뉴 열기/ }));
+    expect(screen.getAllByRole('menuitem').length).toBeGreaterThan(0);
+
+    fireEvent.keyDown(document, { key: 'Escape', repeat: true });
+    expect(screen.getAllByRole('menuitem').length).toBeGreaterThan(0);
+    expect(screen.getByRole('dialog', { name: '업적' })).toBeInTheDocument();
+    expect(onScene).not.toHaveBeenCalled();
+
+    // 2) 첫 번째 Esc -> 위층 게임 메뉴만 닫힌다
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('menuitem')).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: '업적' })).toBeInTheDocument();
+    expect(onScene).not.toHaveBeenCalled();
+
+    // 3) 두 번째 Esc -> 업적 모달이 닫힌다
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: '업적' })).not.toBeInTheDocument();
+    expect(onScene).not.toHaveBeenCalled();
+
+    // 4) 세 번째 Esc -> 열린 창이 없으면 집에서 마을로 나간다
+    fireEvent.keyDown(document, { key: 'Escape' });
+    const expected = boardingOf('home');
+    expect(onScene).toHaveBeenCalledWith({ kind: 'region', id: expected.region }, expected.msg, expected.at, undefined);
+  });
+
+  it('항구 거점에서는 열린 창이 없을 때 Esc로 바다로 나간다', () => {
+    const onScene = vi.fn();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <GameView
+          game={{ ...newState(), boat: 1, tutorials: [...TUTORIAL_IDS] }}
+          scene={{ kind: 'base', id: 'harbor' }}
+          entryPos={null}
+          placeSeq={0}
+          dispatch={() => ({ status: 'ok', state: newState(), result: { type: 'none' } })}
+          setToast={() => {}}
+          onScene={onScene}
+          onPlace={() => {}}
+          log={[]}
+          syncLabel={null}
+          syncState="off"
+          guestProgress="nothing"
+          account="dev@localhost"
+          accountChecked={true}
+          accountFailed={false}
+          uid="u1"
+          nickname="테스터"
+          onRename={async () => null}
+          onAuthChanged={async () => {}}
+          onResync={async () => {}}
+        />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    const expected = boardingOf('harbor');
+    expect(onScene).toHaveBeenCalledWith({ kind: 'region', id: expected.region }, expected.msg, expected.at, undefined);
+  });
+
+  it('바다(region) 화면에서는 열린 창이 없을 때 Esc를 눌러도 장면 이동이 일어나지 않는다', () => {
+    const onScene = vi.fn();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <GameView
+          game={{ ...newState(), tutorials: [...TUTORIAL_IDS] }}
+          scene={{ kind: 'region', id: 'village' }}
+          entryPos={null}
+          placeSeq={0}
+          dispatch={() => ({ status: 'ok', state: newState(), result: { type: 'none' } })}
+          setToast={() => {}}
+          onScene={onScene}
+          onPlace={() => {}}
+          log={[]}
+          syncLabel={null}
+          syncState="off"
+          guestProgress="nothing"
+          account="dev@localhost"
+          accountChecked={true}
+          accountFailed={false}
+          uid="u1"
+          nickname="테스터"
+          onRename={async () => null}
+          onAuthChanged={async () => {}}
+          onResync={async () => {}}
+        />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onScene).not.toHaveBeenCalled();
   });
 });
