@@ -76,7 +76,7 @@ describe('보너스 통합 칩 표시 조건과 내역', () => {
     expect(chip).toEqual({
       state: 'locked',
       lines: [
-        '인도양 항로가 열리면 도시락과 미끼를 쓸 수 있어요.',
+        '인도양 항로가 열리면 부엌에서 도시락과 미끼를 만들 수 있어요.',
         '인도양 항로는 증기선(5단계)부터 열려요.',
       ],
     });
@@ -86,7 +86,7 @@ describe('보너스 통합 칩 표시 조건과 내역', () => {
     expect(selectBonusChip(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), T0, 'guest')).toEqual({
       state: 'locked',
       lines: [
-        '인도양 항로가 열리면 도시락과 미끼를 쓸 수 있어요.',
+        '인도양 항로가 열리면 부엌에서 도시락과 미끼를 만들 수 있어요.',
         '인도양 항로는 증기선(5단계)부터 열려요.',
       ],
     });
