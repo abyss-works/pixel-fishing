@@ -64,49 +64,54 @@ export default async function handler(req: Req, res: Res): Promise<void> {
   }
 }
 
-/** 관리자 쓰기. 요청 본문과 조치한 관리자 id를 받는다 */
-type Write = (database: Database, body: unknown, adminId: string) => Promise<unknown>;
+/** 관리자 쓰기. 요청 본문과 조치한 관리자 id·역할을 받는다 */
+type Write = (database: Database, body: unknown, adminId: string, role: read.AdminRole) => Promise<unknown>;
 const WRITES: Record<string, Write> = {
-  mail: ({ db }, body) => mail(db, body),
+  mail: ({ db }, body, adminId, role) => mail(db, body, adminId, role),
   restrict,
   letterHandled,
   revokeSessions,
-  notices: ({ db }, body, adminId) => notices(db, body, adminId),
+  notices: ({ db }, body, adminId, role) => notices(db, body, adminId, role),
   events: (store, body, adminId) => eventsWrite(store, body, adminId),
   coupons: ({ db }, body) => couponsWrite(db, body),
+  staffBadge,
 };
 
-/** 리소스 경로 조회. 요청의 필터를 검사해 실행할 읽기를 돌려준다. 틀리면 400이다 */
-const RESOURCES: Record<string, (req: Req) => (db: Executor) => Promise<unknown>> = {
-  '/api/admin/live': () => async db => {
-    const online = onlineUsers();
-    const known = await read.identities(db, online.map(entry => entry.uid));
-    return {
-      count: online.length,
-      online: online.map(entry => ({ ...entry, nickname: null, email: null, ...known.get(entry.uid) })),
-    };
-  },
+/** 1계층 관리자(admin) 전용 조회 — maintainer는 403 차단 */
+const ADMIN_ONLY_READ_QUERIES = new Set([
+  'userState', 'userEvents', 'letters', 'mails', 'events', 'eventDraws', 'coupons',
+]);
+
+/** 1계층 관리자(admin) 전용 쓰기 — maintainer는 403 차단 */
+const ADMIN_ONLY_WRITES = new Set([
+  'mail', 'restrict', 'letterHandled', 'revokeSessions', 'events', 'coupons',
+]);
+
+/** 리소스 경로 조회. 요청의 필터와 역할을 검사해 실행할 읽기를 돌려준다. 틀리면 400, 권한 밖이면 403이다 */
+const RESOURCES: Record<string, (req: Req, role: read.AdminRole) => (db: Executor) => Promise<unknown>> = {
+  '/api/admin/live': (_req, role) => db => read.liveSnapshot(db, onlineUsers(), role),
   '/api/admin/stats/daily': req => {
     const { from, to } = rangeOf(req);
     return db => read.dailyStats(db, from, to);
   },
   '/api/admin/retention': () => read.signupRetention,
-  '/api/admin/sessions': req => {
+  '/api/admin/sessions': (req, role) => {
     const user = param(req, 'user');
+    if (role === 'maintainer' && user !== undefined) throw new ApiError(403, 'forbidden');
     if (user !== undefined && !UUID.test(user)) throw new ApiError(400, 'bad-user');
     const limit = limitOf(req);
-    return db => read.sessions(db, user ?? null, limit);
+    return db => read.sessions(db, user ?? null, limit, role);
   },
 };
 
-/** 관리자 세션의 사용자와 관리자 여부. 관리자 세션이 없으면 401이다 */
-async function caller(req: Req): Promise<{ uid: string; admin: boolean; store: Database }> {
+/** 관리자 세션의 사용자와 명부 정보. 관리자 세션이 없으면 401이다 */
+async function caller(req: Req): Promise<{ uid: string; member: read.AdminMember | null; store: Database }> {
   if (!process.env.DATABASE_URL) throw new ApiError(500, 'server-config');
   const uid = await adminSessionUid(req.headers);
   if (!uid) throw new ApiError(401, 'unauthorized');
   const store = database();
-  const admin = await dbRead(() => read.isAdmin(store.db, uid));
-  return { uid, admin, store };
+  const member = await dbRead(() => read.adminMember(store.db, uid));
+  return { uid, member, store };
 }
 
 async function route(req: Req, res: Res): Promise<void> {
@@ -115,9 +120,9 @@ async function route(req: Req, res: Res): Promise<void> {
     const resource = Object.hasOwn(RESOURCES, path) ? RESOURCES[path] : null;
     if (!resource) throw new ApiError(404, 'not-found');
     if (req.method !== 'GET') throw new ApiError(405, 'method-not-allowed');
-    const { admin, store } = await caller(req);
-    if (!admin) throw new ApiError(403, 'forbidden');
-    const query = resource(req);
+    const { member, store } = await caller(req);
+    if (!member) throw new ApiError(403, 'forbidden');
+    const query = resource(req, member.role);
     res.status(200).json(await dbRead(() => query(store.db)));
     return;
   }
@@ -125,38 +130,48 @@ async function route(req: Req, res: Res): Promise<void> {
   const q = param(req, 'q');
   const write = req.method === 'POST' && q !== undefined && Object.hasOwn(WRITES, q) ? WRITES[q] : null;
   if (req.method !== 'GET' && !write) throw new ApiError(405, 'method-not-allowed');
-  const { uid, admin, store } = await caller(req);
+  const { uid, member, store } = await caller(req);
   const { db } = store;
   const name = param(req, 'q');
   if (name === 'access') {
-    res.status(200).json({ kind: admin ? 'granted' : 'denied', uid });
+    res.status(200).json(
+      member
+        ? { kind: 'granted', uid, role: member.role, showStaffBadge: member.showStaffBadge }
+        : { kind: 'denied', uid },
+    );
     return;
   }
-  if (!admin) throw new ApiError(403, 'forbidden');
+  if (!member) throw new ApiError(403, 'forbidden');
 
   if (write) {
-    res.status(200).json(await write(store, req.body, uid));
+    if (member.role === 'maintainer' && q !== undefined && ADMIN_ONLY_WRITES.has(q)) {
+      throw new ApiError(403, 'forbidden');
+    }
+    res.status(200).json(await write(store, req.body, uid, member.role));
     return;
   }
-  const query = parse(name, req);
+  if (member.role === 'maintainer' && name !== undefined && ADMIN_ONLY_READ_QUERIES.has(name)) {
+    throw new ApiError(403, 'forbidden');
+  }
+  const query = parse(name, req, member.role);
   res.status(200).json(await dbRead(() => query(db)));
 }
 
 /** 조회 이름과 인자를 검사해 실행할 읽기를 돌려준다. 틀리면 400이다 */
-function parse(name: string | undefined, req: Req): (db: Executor) => Promise<unknown> {
+function parse(name: string | undefined, req: Req, role: read.AdminRole): (db: Executor) => Promise<unknown> {
   switch (name) {
     case 'overview': {
       const days = optionalDaysOf(req) ?? STATS_DEFAULT_DAYS;
       if (days < 1 || days > STATS_MAX_DAYS) throw new ApiError(400, 'bad-days');
       const online = onlineUsers();
-      return db => read.overview(db, days, online);
+      return db => read.overview(db, days, online, role);
     }
-    case 'users': return read.users;
-    case 'spamFlags': return read.spamFlags;
-    case 'recentEvents': return read.recentEvents;
+    case 'users': return db => read.users(db, role);
+    case 'spamFlags': return db => read.spamFlags(db, role);
+    case 'recentEvents': return db => read.recentEvents(db, role);
     case 'letters': return read.letters;
-    case 'changelog': return read.changelog;
-    case 'chatReports': return read.chatReports;
+    case 'changelog': return db => read.changelog(db, role);
+    case 'chatReports': return db => read.chatReports(db, role);
     case 'notices': return listAllAdminNotices;
     case 'events': return listAdminEvents;
     case 'eventDraws': {
@@ -191,7 +206,7 @@ function parse(name: string | undefined, req: Req): (db: Executor) => Promise<un
 }
 
 /** 우편 보내기 — op가 preview면 미리보기만, send면 보낸다. 같은 데이터 모듈을 운영 스크립트도 쓴다 */
-async function mail(db: Executor, raw: unknown): Promise<unknown> {
+async function mail(db: Executor, raw: unknown, adminId: string, role: read.AdminRole): Promise<unknown> {
   const bodyObj = raw as { op?: unknown; request?: unknown; idempotencyKey?: unknown } | null;
   const op = bodyObj?.op;
   const request = parseMailRequest(bodyObj?.request);
@@ -207,6 +222,15 @@ async function mail(db: Executor, raw: unknown): Promise<unknown> {
   try {
     const result = await deliverMail(db, merged, new Date().toISOString());
     if (result.problems.length === 0 && result.sent > 0 && !result.idempotent) {
+      await read.insertAdminAuditLog(db, {
+        actorId: adminId,
+        actorRole: role,
+        action: 'mail.send',
+        targetId: merged.target.kind === 'users' && merged.target.recipients.length === 1
+          ? merged.target.recipients[0].userId.trim().toLowerCase()
+          : null,
+        detail: { targetKind: merged.target.kind, sent: result.sent },
+      });
       if (merged.target.kind === 'all') {
         for (const online of onlineUsers()) {
           if (!online.guest) notifyUser(online.uid, { t: 'mail' });
@@ -225,14 +249,21 @@ async function mail(db: Executor, raw: unknown): Promise<unknown> {
   }
 }
 
-/** 제재·해제 — 저장 상태의 restricted를 바꾸고 조치 이벤트를 같은 트랜잭션에 남긴다. 저장 상태가 없으면 404다 */
-async function restrict({ withTransaction }: Database, raw: unknown, adminId: string): Promise<{ restricted: boolean }> {
+/** 제재·해제 — 저장 상태의 restricted를 바꾸고 조치 이벤트와 감사 로그를 같은 트랜잭션에 남긴다. 저장 상태가 없으면 404다 */
+async function restrict({ withTransaction }: Database, raw: unknown, adminId: string, role: read.AdminRole): Promise<{ restricted: boolean }> {
   const { userId, restricted } = (raw ?? {}) as { userId?: unknown; restricted?: unknown };
   if (typeof userId !== 'string' || !UUID.test(userId) || typeof restricted !== 'boolean') throw new ApiError(400, 'bad-restrict');
   const changed = await dbWrite(() => withTransaction(async tx => {
     if (!await setRestricted(tx, userId, restricted)) return false;
     if (restricted) await deleteWidgetTokensForUser(tx, userId);
     await recordAdminAction(tx, userId, restricted ? 'adminRestrict' : 'adminUnrestrict', adminId);
+    await read.insertAdminAuditLog(tx, {
+      actorId: adminId,
+      actorRole: role,
+      action: restricted ? 'restrict' : 'unrestrict',
+      targetId: userId,
+      detail: { restricted },
+    });
     return true;
   }));
   if (!changed) throw new ApiError(404, 'no-save');
@@ -249,14 +280,21 @@ async function letterHandled({ db }: Database, raw: unknown): Promise<{ handled:
   return { handled };
 }
 
-/** 세션 강제 종료 — 대상 계정의 모든 인증 세션 행을 지우고 관리자 조치 이벤트를 남긴다. 계정이 없으면 404다 */
-async function revokeSessions({ withTransaction }: Database, raw: unknown, adminId: string): Promise<{ revoked: number }> {
+/** 세션 강제 종료 — 대상 계정의 모든 인증 세션 행을 지우고 관리자 조치 이벤트와 감사 로그를 남긴다. 계정이 없으면 404다 */
+async function revokeSessions({ withTransaction }: Database, raw: unknown, adminId: string, role: read.AdminRole): Promise<{ revoked: number }> {
   const { userId } = (raw ?? {}) as { userId?: unknown };
   if (typeof userId !== 'string' || !UUID.test(userId)) throw new ApiError(400, 'bad-user');
   const revoked = await dbWrite(() => withTransaction(async tx => {
     if (await accountKind(tx, userId) === 'missing') return null;
     const count = await revokeUserSessions(tx, userId);
     await recordAdminAction(tx, userId, 'adminRevokeSessions', adminId, { revoked: count });
+    await read.insertAdminAuditLog(tx, {
+      actorId: adminId,
+      actorRole: role,
+      action: 'revokeSessions',
+      targetId: userId,
+      detail: { revoked: count },
+    });
     return count;
   }));
   if (revoked === null) throw new ApiError(404, 'no-user');
@@ -264,8 +302,27 @@ async function revokeSessions({ withTransaction }: Database, raw: unknown, admin
   return { revoked };
 }
 
+/** 호출자 본인의 채팅 운영진 배지 노출 설정을 바꾸고 감사 로그를 남긴다 */
+async function staffBadge({ withTransaction }: Database, raw: unknown, actorId: string, actorRole: read.AdminRole): Promise<{ showStaffBadge: boolean }> {
+  const { show } = (raw !== null && typeof raw === 'object' ? raw : {}) as { show?: unknown };
+  if (typeof show !== 'boolean') throw new ApiError(400, 'bad-staff-badge');
+  const updated = await dbWrite(() => withTransaction(async tx => {
+    if (!await read.setAdminStaffBadge(tx, actorId, show)) return false;
+    await read.insertAdminAuditLog(tx, {
+      actorId,
+      actorRole,
+      action: 'staffBadge',
+      targetId: actorId,
+      detail: { showStaffBadge: show },
+    });
+    return true;
+  }));
+  if (!updated) throw new ApiError(403, 'forbidden');
+  return { showStaffBadge: show };
+}
+
 /** 기간제 상시 공지 작성·수정·즉시 마감·삭제 후 실시간 전체 연결에 마감 전·최근 마감 공지 목록을 즉시 전파한다 */
-async function notices(db: Executor, raw: unknown, adminId: string): Promise<unknown> {
+async function notices(db: Executor, raw: unknown, adminId: string, role: read.AdminRole): Promise<unknown> {
   const body = (raw !== null && typeof raw === 'object' ? raw : {}) as {
     op?: unknown; id?: unknown; title?: unknown; body?: unknown; startsAt?: unknown; endsAt?: unknown;
   };
@@ -285,6 +342,12 @@ async function notices(db: Executor, raw: unknown, adminId: string): Promise<unk
       });
       if (!parsed.ok) throw new ApiError(400, parsed.code);
       const notice = await dbWrite(() => createNotice(db, { ...parsed.draft, createdBy: adminId }));
+      await dbWrite(() => read.insertAdminAuditLog(db, {
+        actorId: adminId,
+        actorRole: role,
+        action: 'notices.create',
+        detail: { noticeId: notice.id },
+      }));
       await sync();
       return { notice };
     }
@@ -296,6 +359,12 @@ async function notices(db: Executor, raw: unknown, adminId: string): Promise<unk
       if (!parsed.ok) throw new ApiError(400, parsed.code);
       const notice = await dbWrite(() => updateNotice(db, id, parsed.draft));
       if (!notice) throw new ApiError(404, 'no-notice');
+      await dbWrite(() => read.insertAdminAuditLog(db, {
+        actorId: adminId,
+        actorRole: role,
+        action: 'notices.update',
+        detail: { noticeId: notice.id },
+      }));
       await sync();
       return { notice };
     }
@@ -303,6 +372,12 @@ async function notices(db: Executor, raw: unknown, adminId: string): Promise<unk
       const id = parseId();
       const notice = await dbWrite(() => endNoticeNow(db, id));
       if (!notice) throw new ApiError(404, 'no-notice');
+      await dbWrite(() => read.insertAdminAuditLog(db, {
+        actorId: adminId,
+        actorRole: role,
+        action: 'notices.end',
+        detail: { noticeId: notice.id },
+      }));
       await sync();
       return { notice };
     }
@@ -310,6 +385,12 @@ async function notices(db: Executor, raw: unknown, adminId: string): Promise<unk
       const id = parseId();
       const removed = await dbWrite(() => deleteNotice(db, id));
       if (!removed) throw new ApiError(404, 'no-notice');
+      await dbWrite(() => read.insertAdminAuditLog(db, {
+        actorId: adminId,
+        actorRole: role,
+        action: 'notices.delete',
+        detail: { noticeId: id },
+      }));
       await sync();
       return { deleted: true, id };
     }

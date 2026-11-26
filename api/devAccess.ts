@@ -4,7 +4,7 @@
 // local은 모두 허용하고, 설정이 없거나 모르는 값은 거부한다.
 import type { IncomingHttpHeaders } from 'node:http';
 import type { Executor } from './_db/client.js';
-import { isAdmin } from './_data/admin.js';
+import { isStaff } from './_data/admin.js';
 import { adminSessionUid } from './_auth/session.js';
 import type { SessionUser } from './_auth/session.js';
 
@@ -40,10 +40,10 @@ export async function isListedAdmin(
   headers?: IncomingHttpHeaders,
 ): Promise<boolean> {
   if (deployEnv !== 'preview') return false;
-  if (user.email !== null && await isAdmin(db, user.id)) return true;
+  if (user.email !== null && await isStaff(db, user.id)) return true;
   if (!headers?.cookie) return false;
   const adminUid = await adminSessionUid(headers);
-  return adminUid !== null && await isAdmin(db, adminUid);
+  return adminUid !== null && await isStaff(db, adminUid);
 }
 
 /** 호출자가 개발 도구를 쓸 수 있는가 — 프로필 응답의 판정이다 */

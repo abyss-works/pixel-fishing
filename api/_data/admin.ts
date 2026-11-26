@@ -1,8 +1,8 @@
-// 관리자 읽기. 관리자 대시보드가 보는 조회이며 읽기만 한다.
-// 관리자 뷰(v_admin_users·v_economy_daily·v_spam_flags·v_events_recent·v_admin_letters·v_bounty_funnel_daily)와
-// 사용자 이벤트 함수(fn_user_events)의 본문을 따른다. 뷰 본문의 관리자 판정(is_admin)은 호출하는 쪽이 isAdmin으로 먼저 한다.
+// 관리자 읽기·명부 조회·감사 로그·비식별 투영 모듈.
+// 뷰 본문의 관리자 판정(is_admin)은 호출하는 쪽이 adminMember/isAdmin/isStaff로 먼저 한다.
 // 행은 Postgres JSON 직렬화 그대로다. 시각은 '2030-01-01T00:00:00+00:00' 형식의 문자열, 날짜는 'yyyy-mm-dd', 수는 수다.
 // 뷰가 순서를 정하지 않는 조회에는 같은 요청이 같은 순서를 받도록 정렬을 둔다.
+import { createHmac } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
@@ -25,11 +25,77 @@ const FISH_IDS = new Set(FISH.map(f => f.id));
 const NAMED_IDS = new Set(NAMED.map(n => n.id));
 const ACHIEVEMENT_IDS = new Set(ACHIEVEMENTS.map(a => a.id));
 
-/** 사용자가 관리자 명부(admins)에 있는가. is_admin()과 같은 명부를 세션의 uid로 직접 조회한다 */
+export type AdminRole = 'admin' | 'maintainer';
+
+export interface AdminMember {
+  role: AdminRole;
+  showStaffBadge: boolean;
+}
+
+/** 서버 비밀키 기반 결정적 불투명 운영 핸들(`op_` + HMAC-SHA256 10자리 hex)을 생성한다 */
+export function opHandle(uid: string): string {
+  const secret = process.env.BETTER_AUTH_SECRET || process.env.ADMIN_HANDLE_SECRET || 'dev-op-handle-secret';
+  const digest = createHmac('sha256', secret).update(uid, 'utf8').digest('hex');
+  return `op_${digest.slice(0, 10)}`;
+}
+
+/** 관리자 명부(admins)에서 역할과 채팅 배지 노출 설정을 조회한다. 알 수 없는 역할은 fail-closed로 null을 돌려준다 */
+export async function adminMember(db: Executor, uid: string): Promise<AdminMember | null> {
+  const { rows } = await db.execute<{ role: string; show_staff_badge: boolean }>(
+    sql`select role, show_staff_badge from public.admins where user_id = ${uid}::uuid`);
+  const row = rows[0];
+  if (!row) return null;
+  if (row.role !== 'admin' && row.role !== 'maintainer') return null;
+  return { role: row.role, showStaffBadge: Boolean(row.show_staff_badge) };
+}
+
+/** 사용자가 관리자 명부(admins)에 등록된 운영진('admin' 또는 'maintainer')인가 */
+export async function isStaff(db: Executor, uid: string): Promise<boolean> {
+  const { rows } = await db.execute<{ staff: boolean }>(
+    sql`select exists (select 1 from public.admins where user_id = ${uid}::uuid and role in ('admin', 'maintainer')) as staff`);
+  return rows[0].staff;
+}
+
+/** 사용자가 1계층 관리자(role = 'admin')인가. 'maintainer'는 항상 false다 */
 export async function isAdmin(db: Executor, uid: string): Promise<boolean> {
   const { rows } = await db.execute<{ admin: boolean }>(
-    sql`select exists (select 1 from public.admins where user_id = ${uid}::uuid) as admin`);
+    sql`select exists (select 1 from public.admins where user_id = ${uid}::uuid and role = 'admin') as admin`);
   return rows[0].admin;
+}
+
+/** 호출자 본인의 채팅 운영진 배지 노출 설정을 갱신한다. 명부에 없으면 false를 돌려준다 */
+export async function setAdminStaffBadge(db: Executor, uid: string, show: boolean): Promise<boolean> {
+  const { rows } = await db.execute<{ user_id: string }>(sql`
+    update public.admins
+    set show_staff_badge = ${show}
+    where user_id = ${uid}::uuid
+    returning user_id::text as user_id`);
+  return rows.length > 0;
+}
+
+/** 불변 감사 로그(admin_audit_logs)에 관리자·메인테이너 조치 기록을 남긴다 */
+export async function insertAdminAuditLog(
+  db: Executor,
+  entry: {
+    actorId: string;
+    actorRole: AdminRole;
+    action: string;
+    targetId?: string | null;
+    reason?: string;
+    detail?: Record<string, unknown>;
+  },
+): Promise<void> {
+  const targetExpr = entry.targetId ? sql`${entry.targetId}::uuid` : sql`null`;
+  await db.execute(sql`
+    insert into public.admin_audit_logs (actor_id, actor_role, action, target_id, reason, detail)
+    values (
+      ${entry.actorId}::uuid,
+      ${entry.actorRole},
+      ${entry.action},
+      ${targetExpr},
+      ${entry.reason ?? ''},
+      ${JSON.stringify(entry.detail ?? {})}::jsonb
+    )`);
 }
 
 /** 조회문의 행을 order 순서의 JSON 배열로 읽는다. 행이 없으면 빈 배열이다 */
@@ -48,8 +114,48 @@ function lastDays(db: Executor, days: number, body: SQL): Promise<unknown[]> {
 /**
  * 사용자 명부. 인증 계정과 닉네임, 현재 저장 상태를 잇고(마지막 로그인은 세션의 마지막 사용 시각이다), 최근 행동순으로 정렬하며 행동이 없는 계정은 뒤에 둔다.
  * 마지막 세션(last_session_at)은 접속 세션이 가장 늦게 끝난 시각, 누적 세션(total_session_sec)은 접속 세션 길이의 합(초)이다.
+ * maintainer 역할에는 이메일·원본 uid·가입/로그인 시각·재화 등 개인정보를 조회·노출하지 않는 비식별 투영을 돌려준다.
  */
-export function users(db: Executor): Promise<unknown[]> {
+export async function users(db: Executor, role: AdminRole = 'admin'): Promise<unknown[]> {
+  if (role === 'maintainer') {
+    const rows = await jsonRows(db, sql`select u.id::text as user_id,
+        p.nickname,
+        c.boat,
+        c.restricted,
+        c.updated_at as last_action_at
+      from auth.users u
+      left join public.profiles p on p.user_id = u.id
+      left join public.saves_current c on c.user_id = u.id`, sql`t.last_action_at desc nulls last, t.user_id`) as {
+      user_id: string;
+      nickname: string | null;
+      boat: number | null;
+      restricted: boolean | null;
+    }[];
+    return rows.map(row => {
+      const handle = opHandle(row.user_id);
+      return {
+        user_id: handle,
+        opHandle: handle,
+        email: null,
+        nickname: row.nickname,
+        is_anonymous: null,
+        signed_up_at: null,
+        last_sign_in_at: null,
+        gold: null,
+        fame: null,
+        boat: row.boat,
+        rod: null,
+        location_kind: null,
+        location_id: null,
+        visited: null,
+        restricted: row.restricted,
+        save_version: null,
+        last_action_at: null,
+        last_session_at: null,
+        total_session_sec: 0,
+      };
+    });
+  }
   return jsonRows(db, sql`select u.id as user_id, case when u.is_anonymous then null else u.email end as email, u.is_anonymous,
       p.nickname,
       u.created_at as signed_up_at,
@@ -75,6 +181,46 @@ export async function identities(db: Executor, uids: readonly string[]): Promise
     left join public.profiles p on p.user_id = u.id
     where u.id = any(${uuidArray(uids)})`);
   return new Map(rows.map(({ user_id, ...identity }) => [user_id, identity]));
+}
+
+/** 닉네임만 조회한다(이메일 미조회 — maintainer 비식별 실시간 접속 투영용) */
+async function nicknames(db: Executor, uids: readonly string[]): Promise<Map<string, string | null>> {
+  const { rows } = await db.execute<{ user_id: string; nickname: string | null }>(sql`select user_id::text as user_id, nickname
+    from public.profiles
+    where user_id = any(${uuidArray(uids)})`);
+  return new Map(rows.map(row => [row.user_id, row.nickname]));
+}
+
+/** 실시간 접속 목록을 역할에 맞춰 투영한다(maintainer는 이메일 생략·opHandle 치환) */
+export async function liveSnapshot(
+  db: Executor,
+  online: readonly LiveOnline[],
+  role: AdminRole = 'admin',
+): Promise<{ count: number; online: unknown[] }> {
+  if (role === 'maintainer') {
+    const nickMap = online.length > 0 ? await nicknames(db, online.map(entry => entry.uid)) : new Map<string, string | null>();
+    return {
+      count: online.length,
+      online: online.map(entry => {
+        const handle = opHandle(entry.uid);
+        return {
+          uid: handle,
+          opHandle: handle,
+          nick: entry.nick,
+          nickname: nickMap.get(entry.uid) ?? null,
+          region: entry.region,
+          zone: entry.zone,
+          connectedAt: entry.connectedAt,
+          guest: entry.guest,
+        };
+      }),
+    };
+  }
+  const known = online.length > 0 ? await identities(db, online.map(entry => entry.uid)) : new Map();
+  return {
+    count: online.length,
+    online: online.map(entry => ({ ...entry, nickname: null, email: null, ...known.get(entry.uid) })),
+  };
 }
 
 /** 경제 일계. 골드 유입(sell·coupon·claimMail·deliverBounty·claimAchievement·claimAllAchievements)과 유출(upgradeRod·buyBoat·buyHat) 원장 */
@@ -342,8 +488,8 @@ export async function userState(db: Executor, uid: string): Promise<unknown> {
 }
 
 /** 연타·판정 플래그. 최근 7일 사용자별 캐치 수, 간격 2초 미만 캐치 수, PERFECT 비율과 30일 전체 평균 */
-export function spamFlags(db: Executor): Promise<unknown[]> {
-  return jsonRows(db, sql`with c as (
+export async function spamFlags(db: Executor, role: AdminRole = 'admin'): Promise<unknown[]> {
+  const rows = await jsonRows(db, sql`with c as (
       select id, user_id, created_at, payload,
              lag(created_at) over (partition by user_id order by id) as prev_at
       from public.events
@@ -366,15 +512,47 @@ export function spamFlags(db: Executor): Promise<unknown[]> {
       where created_at > now() - interval '30 day'
     )
     select p.user_id, p.catches_7d, p.fast_gap_7d, p.perfect_pct, g.perfect_pct_global
-    from per_user p cross join glob g`, sql`t.user_id`);
+    from per_user p cross join glob g`, sql`t.user_id`) as {
+    user_id: string;
+    catches_7d: number;
+    fast_gap_7d: number;
+    perfect_pct: number | null;
+    perfect_pct_global: number | null;
+  }[];
+  if (role !== 'maintainer') return rows;
+  return rows.map(row => {
+    const handle = opHandle(row.user_id);
+    return { ...row, user_id: handle, opHandle: handle };
+  });
+}
+
+function sanitizeEventPayloadForMaintainer(type: string, payload: unknown): Record<string, unknown> {
+  if (type === 'letter') return {};
+  const obj = asRecord(payload);
+  if (typeof obj.adminId === 'string') {
+    return { ...obj, adminId: opHandle(obj.adminId) };
+  }
+  return obj;
 }
 
 /** 최근 이벤트 피드. 최신 80행, id 내림차순 */
-export function recentEvents(db: Executor): Promise<unknown[]> {
-  return jsonRows(db, sql`select id, user_id, type, payload, created_at
+export async function recentEvents(db: Executor, role: AdminRole = 'admin'): Promise<unknown[]> {
+  const rows = await jsonRows(db, sql`select id, user_id, type, payload, created_at
     from public.events
     order by id desc
-    limit 80`, sql`t.id desc`);
+    limit 80`, sql`t.id desc`) as {
+    id: number;
+    user_id: string;
+    type: string;
+    payload: unknown;
+    created_at: string;
+  }[];
+  if (role !== 'maintainer') return rows;
+  return rows.map(row => ({
+    ...row,
+    user_id: opHandle(row.user_id),
+    payload: sanitizeEventPayloadForMaintainer(row.type, row.payload),
+  }));
 }
 
 /** 사용자 한 명의 최신 이벤트 limit건을 id 오름차순으로 읽는다. 건수는 1~2000으로 맞추고 없으면 500이다 */
@@ -393,17 +571,41 @@ export function letters(db: Executor): Promise<unknown[]> {
 }
 
 /** 변경 기록. 최신 버전부터, 버전 안에서는 순번 순서다. 철회된 항목도 withdrawnAt을 달아 함께 준다 */
-export function changelog(db: Executor): Promise<unknown[]> {
+export function changelog(db: Executor, role: AdminRole = 'admin'): Promise<unknown[]> {
+  const filter = role === 'maintainer' ? sql`where c.tier = 'public'` : sql``;
   return jsonRows(db, sql`select c.id, c.version, c.date, c.seq, c.tier, c.tag, c.text, c.withdrawn_at as "withdrawnAt"
-    from public.changelog_entries c`, sql`string_to_array(t.version, '.')::int[] desc, t.seq, t.id`);
+    from public.changelog_entries c ${filter}`, sql`string_to_array(t.version, '.')::int[] desc, t.seq, t.id`);
 }
 
 /** 채팅 신고 목록. 최근 신고 200건, 최신순. lines는 신고한 메시지와 앞뒤 대화의 복사본이다 */
-export function chatReports(db: Executor): Promise<unknown[]> {
-  return jsonRows(db, sql`select r.id, r.user_id, r.message_id, r.target_id, r.lines, r.created_at
+export async function chatReports(db: Executor, role: AdminRole = 'admin'): Promise<unknown[]> {
+  const rows = await jsonRows(db, sql`select r.id, r.user_id, r.message_id, r.target_id, r.lines, r.created_at
     from public.chat_reports r
     order by r.created_at desc, r.id desc
-    limit 200`, sql`t.created_at desc, t.id desc`);
+    limit 200`, sql`t.created_at desc, t.id desc`) as {
+    id: number;
+    user_id: string;
+    message_id: number;
+    target_id: string;
+    lines: { id?: unknown; uid?: unknown; nick?: unknown; text?: unknown; at?: unknown }[];
+    created_at: string;
+  }[];
+  if (role !== 'maintainer') return rows;
+  return rows.map(row => {
+    const targetHandle = opHandle(row.target_id);
+    return {
+      ...row,
+      user_id: '',
+      target_id: targetHandle,
+      opHandle: targetHandle,
+      lines: Array.isArray(row.lines)
+        ? row.lines.map(line => ({
+            ...line,
+            uid: typeof line.uid === 'string' ? opHandle(line.uid) : '',
+          }))
+        : [],
+    };
+  });
 }
 
 /** 일별 집계 행을 from부터 to까지(KST 날짜, 양끝 포함) 날짜 오름차순으로 준다. 집계되지 않은 날은 행이 없다 */
@@ -436,29 +638,52 @@ export function signupRetention(db: Executor): Promise<unknown[]> {
 }
 
 /** 접속 세션 목록. 시작이 늦은 순으로 limit건(1~500, 기본 100)이고, 사용자를 주면 그 사람의 세션만 준다 */
-export function sessions(db: Executor, userId: string | null, limit: number | null): Promise<unknown[]> {
-  return jsonRows(db, sql`select s.id, s.user_id as "userId", p.nickname as nick,
+export async function sessions(
+  db: Executor,
+  userId: string | null,
+  limit: number | null,
+  role: AdminRole = 'admin',
+): Promise<unknown[]> {
+  const effectiveUserId = role === 'maintainer' ? null : userId;
+  const rows = await jsonRows(db, sql`select s.id, s.user_id as "userId", p.nickname as nick,
       s.started_at as "startedAt", s.ended_at as "endedAt", s.duration_sec as "durationSec"
     from public.play_sessions s
     left join public.profiles p on p.user_id = s.user_id
-    where ${userId}::uuid is null or s.user_id = ${userId}::uuid
+    where ${effectiveUserId}::uuid is null or s.user_id = ${effectiveUserId}::uuid
     order by s.started_at desc, s.id desc
-    limit least(greatest(coalesce(${limit}::int, 100), 1), 500)`, sql`t."startedAt" desc, t.id desc`);
+    limit least(greatest(coalesce(${limit}::int, 100), 1), 500)`, sql`t."startedAt" desc, t.id desc`) as {
+    id: number;
+    userId: string;
+    nick: string | null;
+    startedAt: string;
+    endedAt: string;
+    durationSec: number;
+  }[];
+  if (role !== 'maintainer') return rows;
+  return rows.map(row => {
+    const handle = opHandle(row.userId);
+    return { ...row, userId: handle, opHandle: handle };
+  });
 }
 
 /** 개요 탭 통합 조회 — 명부, 최근 이벤트, 스팸 플래그, 일별 집계, 리텐션, 최근 세션, 실시간 접속을 한 요청에 모은다 */
-export async function overview(db: Executor, days: number, online: readonly LiveOnline[]): Promise<unknown> {
+export async function overview(
+  db: Executor,
+  days: number,
+  online: readonly LiveOnline[],
+  role: AdminRole = 'admin',
+): Promise<unknown> {
   const kstToday = Date.parse(new Date(Date.now() + 9 * 3_600_000).toISOString().slice(0, 10));
   const to = new Date(kstToday).toISOString().slice(0, 10);
   const from = new Date(kstToday - (days - 1) * 86_400_000).toISOString().slice(0, 10);
-  const [userRows, recentEventRows, spamFlagRows, dailyStatRows, retentionRows, sessionRows, known] = await Promise.all([
-    users(db),
-    recentEvents(db),
-    spamFlags(db),
+  const [userRows, recentEventRows, spamFlagRows, dailyStatRows, retentionRows, sessionRows, live] = await Promise.all([
+    users(db, role),
+    recentEvents(db, role),
+    spamFlags(db, role),
     dailyStats(db, from, to),
     signupRetention(db),
-    sessions(db, null, 500),
-    online.length > 0 ? identities(db, online.map(entry => entry.uid)) : Promise.resolve(new Map()),
+    sessions(db, null, 500, role),
+    liveSnapshot(db, online, role),
   ]);
   return {
     users: userRows,
@@ -467,9 +692,6 @@ export async function overview(db: Executor, days: number, online: readonly Live
     dailyStats: dailyStatRows,
     retention: retentionRows,
     sessions: sessionRows,
-    live: {
-      count: online.length,
-      online: online.map(entry => ({ ...entry, nickname: null, email: null, ...known.get(entry.uid) })),
-    },
+    live,
   };
 }

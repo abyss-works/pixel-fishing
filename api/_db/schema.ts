@@ -301,3 +301,21 @@ export const rankingWeeklyFame = pgTable('ranking_weekly_fame', {
   reachedAt: at('reached_at').notNull().defaultNow(),
   updatedAt: at('updated_at').notNull().defaultNow(),
 }, t => [primaryKey({ columns: [t.weekStart, t.userId] })]);
+
+export const admins = pgTable('admins', {
+  userId: uuid('user_id').primaryKey(),
+  role: text('role').notNull().default('admin'),
+  showStaffBadge: boolean('show_staff_badge').notNull().default(false),
+  createdAt: at('created_at').notNull().defaultNow(),
+});
+
+export const adminAuditLogs = pgTable('admin_audit_logs', {
+  id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+  actorId: uuid('actor_id'),
+  actorRole: text('actor_role').notNull(),
+  action: text('action').notNull(),
+  targetId: uuid('target_id'),
+  reason: text('reason').notNull().default(''),
+  detail: jsonb('detail').$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: at('created_at').notNull().defaultNow(),
+});

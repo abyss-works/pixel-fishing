@@ -242,6 +242,7 @@ export interface FortuneHistory {
 
 export interface AdminUserRow {
   user_id: string;
+  opHandle?: string;
   email: string | null;
   /** 닉네임(profiles). 정하지 않았으면 null */
   nickname: string | null;
@@ -267,10 +268,10 @@ export interface AdminUserRow {
 
 /**
  * 지금 실시간 채널에 연결된 사람 한 명. nick은 채팅 이름, nickname은 프로필 닉네임(정하지 않았으면 null)이고,
- * email은 게스트이거나 인증 계정이 없으면 null이다. region·zone은 마지막으로 알린 위치이고, connectedAt은 연결 시각(ISO)이다
+ * email은 게스트·인증 계정이 없거나 maintainer 비식별 투영일 때 null 또는 생략된다. region·zone은 마지막으로 알린 위치이고, connectedAt은 연결 시각(ISO)이다
  */
 export interface AdminLiveConnection {
-  uid: string; nick: string; nickname: string | null; email: string | null;
+  uid: string; opHandle?: string; nick: string; nickname: string | null; email: string | null;
   region: string | null; zone: string | null; connectedAt: string; guest: boolean;
 }
 /** 지금 실시간 채널에 연결된 수와 목록 */
@@ -290,7 +291,7 @@ export interface AdminRetentionRow {
 }
 /** 끝난 접속 세션 한 건. 시각은 ISO 문자열이다 */
 export interface AdminSessionRow {
-  id: number; userId: string; nick: string | null;
+  id: number; userId: string; opHandle?: string; nick: string | null;
   startedAt: string; endedAt: string; durationSec: number;
 }
 export interface AdminEconomyRow {
@@ -304,7 +305,7 @@ export interface AdminBountyFunnelRow {
   named_rewards: number; general_accepts: number; general_rewards: number;
 }
 export interface AdminSpamFlagRow {
-  user_id: string; catches_7d: number; fast_gap_7d: number;
+  user_id: string; opHandle?: string; catches_7d: number; fast_gap_7d: number;
   perfect_pct: number | null; perfect_pct_global: number | null;
 }
 export interface AdminEventRow {
@@ -324,9 +325,9 @@ export interface AdminChangelogRow {
   /** 체인지로그에서 사라지거나 다른 항목에 대체돼 철회로 표시된 시각. 평소 null */
   withdrawnAt: string | null;
 }
-/** 채팅 신고 한 건. user_id는 신고한 사람, target_id는 신고당한 메시지의 보낸 사람이다 */
+/** 채팅 신고 한 건. user_id는 신고한 사람(비식별 투영에서는 빈 문자열), target_id는 신고당한 메시지의 보낸 사람이다 */
 export interface AdminChatReportRow {
-  id: number; user_id: string; message_id: number; target_id: string;
+  id: number; user_id: string; message_id: number; target_id: string; opHandle?: string;
   /** 신고한 메시지와 앞뒤 대화의 복사본(오래된 순) */
   lines: ChatLine[];
   created_at: string;
@@ -386,12 +387,12 @@ export interface BalanceLive {
   fameGateStuck: { nextBoat: number; users: number }[];
 }
 
+export type AdminRole = 'admin' | 'maintainer';
+
 /** 관리자 판정 — local은 "클라우드 미설정"(권한 실패 아님), signedOut은 관리자 세션 없음, denied는 DB admins 비등록 */
-export interface AdminAccessResult {
-  kind: 'granted' | 'denied' | 'signedOut' | 'local';
-  /** 서버가 확인한 세션 uid. denied 안내("이 uid를 등록하라")에 쓴다 */
-  uid: string | null;
-}
+export type AdminAccessResult =
+  | { kind: 'granted'; uid: string | null; role?: AdminRole; showStaffBadge?: boolean }
+  | { kind: 'denied' | 'signedOut' | 'local'; uid: string | null };
 
 /** 관리자 — 보낸 우편 한 통(받는 사람 포함) */
 export interface AdminSentMailRow extends MailItem { userId: string }
@@ -685,6 +686,8 @@ export interface AdminApi {
   letterHandled(letterId: number, handled: boolean): Promise<{ handled: boolean }>;
   /** 대상 계정의 활성 인증 세션을 모두 강제 종료한다 */
   revokeSessions(userId: string): Promise<{ revoked: number }>;
+  /** 호출자 본인의 채팅 운영진 배지 노출 설정을 켜거나 끈다 */
+  setStaffBadge(show: boolean): Promise<{ showStaffBadge: boolean }>;
   /** 밸런스 라이브 지표. days는 이벤트 지표의 기간(1~7일)이고, 생략하면 서버 기본값인 7일이다 */
   balanceLive(days?: number): Promise<BalanceLive>;
   /** 이 화면이 붙은 배포 주소의 호스트 — 운영/스테이징 착오 방지 표시값(Ops 탭). 로컬 모드는 null */

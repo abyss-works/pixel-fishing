@@ -6,7 +6,9 @@ const TARGET_UID = '00000000-0000-4000-8000-000000000902';
 
 const mocks = vi.hoisted(() => ({
   adminSessionUid: vi.fn(async () => ADMIN_UID),
-  isAdmin: vi.fn(async () => true),
+  adminMember: vi.fn(async () => ({ role: 'admin' as 'admin' | 'maintainer', showStaffBadge: false })),
+  setAdminStaffBadge: vi.fn(async () => true),
+  insertAdminAuditLog: vi.fn(async () => {}),
   userState: vi.fn(async () => ({ hasSave: true })),
   overview: vi.fn(async (): Promise<unknown> => ({
     users: [],
@@ -71,7 +73,9 @@ vi.mock('./_data/admin.js', async () => {
   const actual = await vi.importActual<typeof import('./_data/admin.js')>('./_data/admin.js');
   return {
     ...actual,
-    isAdmin: mocks.isAdmin,
+    adminMember: mocks.adminMember,
+    setAdminStaffBadge: mocks.setAdminStaffBadge,
+    insertAdminAuditLog: mocks.insertAdminAuditLog,
     userState: mocks.userState,
     overview: mocks.overview,
     economy: mocks.economy,
@@ -159,7 +163,8 @@ describe('api/admin 핸들러 단위 테스트', () => {
     process.env.DATABASE_URL = 'postgres://unit-test';
     vi.clearAllMocks();
     mocks.adminSessionUid.mockResolvedValue(ADMIN_UID);
-    mocks.isAdmin.mockResolvedValue(true);
+    mocks.adminMember.mockResolvedValue({ role: 'admin', showStaffBadge: false });
+    mocks.setAdminStaffBadge.mockResolvedValue(true);
   });
   afterEach(() => {
     if (prevDbUrl === undefined) delete process.env.DATABASE_URL;
@@ -285,10 +290,10 @@ describe('api/admin 핸들러 단위 테스트', () => {
 
     const defRes = await call('GET', { q: 'overview' });
     expect(defRes).toMatchObject({ status: 200, body: payload });
-    expect(mocks.overview).toHaveBeenCalledWith(mocks.db, 30, expect.any(Array));
+    expect(mocks.overview).toHaveBeenCalledWith(mocks.db, 30, expect.any(Array), 'admin');
 
     await call('GET', { q: 'overview', days: '7' });
-    expect(mocks.overview).toHaveBeenLastCalledWith(mocks.db, 7, expect.any(Array));
+    expect(mocks.overview).toHaveBeenLastCalledWith(mocks.db, 7, expect.any(Array), 'admin');
   });
 
   it('POST ?q=revokeSessions는 대상 계정의 세션을 삭제하고 감사 이벤트를 남기며 없는 계정은 404다', async () => {
@@ -469,5 +474,45 @@ describe('api/admin 핸들러 단위 테스트', () => {
       gold: 100,
       description: '중복',
     })).toMatchObject({ status: 409, body: { error: 'duplicate-coupon' } });
+  });
+
+  it('access는 role과 showStaffBadge를 함께 돌려주고 maintainer 권한 밖 읽기·쓰기는 403으로 차단한다', async () => {
+    mocks.adminMember.mockResolvedValue({ role: 'maintainer', showStaffBadge: true });
+
+    expect(await call('GET', { q: 'access' })).toMatchObject({
+      status: 200,
+      body: { kind: 'granted', uid: ADMIN_UID, role: 'maintainer', showStaffBadge: true },
+    });
+
+    for (const [q, extra] of [
+      ['userState', { uid: TARGET_UID }],
+      ['userEvents', { user: TARGET_UID }],
+      ['letters', {}],
+      ['mails', {}],
+      ['events', {}],
+      ['eventDraws', { eventId: 'evt-1' }],
+      ['coupons', {}],
+    ] as const) {
+      expect(await call('GET', { q, ...extra }), `GET ${q}`).toMatchObject({ status: 403, body: { error: 'forbidden' } });
+    }
+
+    for (const q of ['mail', 'restrict', 'letterHandled', 'revokeSessions', 'events', 'coupons']) {
+      expect(await call('POST', { q }, {})).toMatchObject({ status: 403, body: { error: 'forbidden' } });
+    }
+
+    expect(await call('POST', { q: 'staffBadge' }, { show: 'yes' })).toMatchObject({
+      status: 400, body: { error: 'bad-staff-badge' },
+    });
+    expect(await call('POST', { q: 'staffBadge' }, { show: false })).toMatchObject({
+      status: 200, body: { showStaffBadge: false },
+    });
+    expect(mocks.setAdminStaffBadge).toHaveBeenCalledWith(mocks.db, ADMIN_UID, false);
+    expect(mocks.insertAdminAuditLog).toHaveBeenCalledWith(mocks.db, {
+      actorId: ADMIN_UID,
+      actorRole: 'maintainer',
+      action: 'staffBadge',
+      targetId: ADMIN_UID,
+      detail: { showStaffBadge: false },
+    });
   });
 });

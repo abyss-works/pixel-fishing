@@ -51,8 +51,8 @@ describe('HttpAdmin', () => {
     }
   });
 
-  it('AdminApi의 모든 조회가 위 표에 있다. 서버 조회가 아닌 것은 deployHost, 쓰기(mail·restrict·letterHandled·revokeSessions·writeNotice), 관리자 로그인·로그아웃·로그인 복귀뿐이다', () => {
-    const writes = ['constructor', 'deployHost', 'mail', 'restrict', 'letterHandled', 'revokeSessions', 'writeNotice', 'signIn', 'signOut', 'takeSignInReturn'];
+  it('AdminApi의 모든 조회가 위 표에 있다. 서버 조회가 아닌 것은 deployHost, 쓰기(mail·restrict·letterHandled·revokeSessions·writeNotice·setStaffBadge), 관리자 로그인·로그아웃·로그인 복귀뿐이다', () => {
+    const writes = ['constructor', 'deployHost', 'mail', 'restrict', 'letterHandled', 'revokeSessions', 'writeNotice', 'setStaffBadge', 'signIn', 'signOut', 'takeSignInReturn'];
     const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(admin))
       .filter(m => !writes.includes(m));
     expect(methods.sort()).toEqual(CALLS.map(([method]) => method).sort());
@@ -119,6 +119,11 @@ describe('HttpAdmin', () => {
     }));
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: 'bad-window' }), { status: 400 }));
     await expect(admin.writeNotice({ op: 'end', id: 7 })).rejects.toThrow('공지 end 실패: 400 bad-window');
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ showStaffBadge: true }), { status: 200 }));
+    await expect(admin.setStaffBadge(true)).resolves.toEqual({ showStaffBadge: true });
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/admin?q=staffBadge', post({ show: true }));
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: 'forbidden' }), { status: 403 }));
+    await expect(admin.setStaffBadge(false)).rejects.toThrow('운영진 표시 설정 실패: 403 forbidden');
   });
 
   it('sessions는 생략한 인자를 보내지 않는다', async () => {
@@ -152,6 +157,8 @@ describe('HttpAdmin', () => {
     await expect(admin.retention()).resolves.toEqual(rows);
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ kind: 'denied', uid: 'u-1' }), { status: 200 }));
     await expect(admin.access()).resolves.toEqual({ kind: 'denied', uid: 'u-1' });
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ kind: 'granted', uid: 'u-2', role: 'maintainer', showStaffBadge: true }), { status: 200 }));
+    await expect(admin.access()).resolves.toEqual({ kind: 'granted', uid: 'u-2', role: 'maintainer', showStaffBadge: true });
     const live = { boats: [{ boat: 0, users: 2 }], gold: { p25: null, max: null }, anomalies: { fastGaps: 0, fastUsers: 0, perfectPct: null } };
     fetchMock.mockResolvedValue(new Response(JSON.stringify(live), { status: 200 }));
     await expect(admin.balanceLive(7)).resolves.toEqual(live);
