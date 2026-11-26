@@ -25,12 +25,12 @@ describe('권한 문안', () => {
     expect(PERMISSION_LABEL).toEqual({ granted: '허용됨', default: '허용 전', denied: '차단됨', unsupported: '지원 안 함' });
   });
 
-  it('차단 안내는 문장마다 한 줄이고 탭 제목 깜빡임을 알린다 - 허용됨과 허용 전에는 이유가 없다', () => {
+  it('차단 안내는 문장마다 한 줄이고 탭 제목 깜빡임을 알린다 - 허용됨에는 이유가 없다', () => {
     expect(PERMISSION_BLOCK_LINES.denied).toHaveLength(3);
     expect(PERMISSION_BLOCK_LINES.denied?.[2]).toBe('그동안은 탭 제목 깜빡임으로 알려 줘요.');
     expect(PERMISSION_BLOCK_LINES.unsupported).toEqual(['이 브라우저는 알림을 지원하지 않아요.', '대신 탭 제목 깜빡임으로 알려 줘요.']);
     expect(PERMISSION_BLOCK_LINES.granted).toBeUndefined();
-    expect(PERMISSION_BLOCK_LINES.default).toBeUndefined();
+    expect(PERMISSION_BLOCK_LINES.default).toEqual(['브라우저 알림을 아직 허용하지 않았어요.', '위 허용 버튼으로 허용하면 알림을 켤 수 있어요.', '그동안은 탭 제목 깜빡임으로 알려 줘요.']);
   });
 });
 
