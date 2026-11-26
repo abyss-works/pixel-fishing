@@ -808,7 +808,7 @@ describe('테스트 데이터베이스', () => {
     });
   });
 
-  describe('widget_auth_codes · widget_tokens · saves_current.last_spot (0049)', () => {
+  describe('widget_auth_codes · widget_tokens · saves_current.last_spot (0052)', () => {
     const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
 
     it('last_spot 널 허용, 위젯 코드·토큰 표 제약·연쇄 삭제·RLS 차단·다운/업 라운드트립을 검증한다', async () => {
@@ -864,7 +864,7 @@ describe('테스트 데이터베이스', () => {
       const other = new Client({ connectionString: copy.url });
       await other.connect();
       try {
-        await other.query(migration('0049_desktop_widget.down.sql'));
+        await other.query(migration('0052_desktop_widget.down.sql'));
         expect((await other.query(
           `select 1 from information_schema.tables where table_schema = 'public' and table_name in ('widget_auth_codes', 'widget_tokens')`,
         )).rows).toHaveLength(0);
@@ -872,7 +872,7 @@ describe('테스트 데이터베이스', () => {
           `select 1 from information_schema.columns where table_schema = 'public' and table_name = 'saves_current' and column_name = 'last_spot'`,
         )).rows).toHaveLength(0);
 
-        await other.query(migration('0049_desktop_widget.sql'));
+        await other.query(migration('0052_desktop_widget.sql'));
         expect((await other.query(
           `select 1 from information_schema.tables where table_schema = 'public' and table_name in ('widget_auth_codes', 'widget_tokens')`,
         )).rows).toHaveLength(2);
