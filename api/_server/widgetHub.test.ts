@@ -120,6 +120,29 @@ describe('widgetHub', () => {
     hub.close();
   });
 
+  it('maxPerUser가 1일 때 기존 연결을 축출해도 새 연결이 구독자 맵에 남아 이벤트를 받는다', () => {
+    const hub = createWidgetHub({ maxPerUser: 1 });
+    const first = mockSseRes();
+    const second = mockSseRes();
+
+    hub.addClient('user-1', first.res);
+    hub.addClient('user-1', second.res);
+
+    expect(first.res.writableEnded).toBe(true);
+    expect(second.res.writableEnded).toBe(false);
+    expect(hub.hasSubscribers('user-1')).toBe(true);
+    expect(hub.subscriberCount('user-1')).toBe(1);
+
+    const statusId = hub.publishStatusChanged('user-1', 'idle');
+    expect(statusId).not.toBeNull();
+    expect(second.chunks[1]).toContain('event: status_changed');
+
+    hub.disconnectUser('user-1');
+    expect(second.res.writableEnded).toBe(true);
+    expect(hub.hasSubscribers('user-1')).toBe(false);
+    hub.close();
+  });
+
   it('단조 증가 이벤트 ID와 표준 SSE 프레임을 생성한다(catch, bag_sync, spot_changed, status_changed)', () => {
     let clock = 1_700_000_000_000;
     const hub = createWidgetHub({ now: () => clock });

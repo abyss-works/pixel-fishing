@@ -11,15 +11,14 @@ import type { WidgetRes } from './guard.js';
 
 /** GET /api/widget/stream 핸들러 */
 export async function widgetStreamHandler(req: IncomingMessage, res: WidgetRes): Promise<void> {
+  res.setHeader('Cache-Control', 'no-store');
   try {
     if (rejectIfWidgetApiDisabled(res)) return;
     if (req.method !== 'GET') {
-      res.setHeader('Cache-Control', 'no-store');
       res.status(405).json({ error: 'method-not-allowed' });
       return;
     }
     if (!process.env.DATABASE_URL) {
-      res.setHeader('Cache-Control', 'no-store');
       res.status(500).json({ error: 'server-config' });
       return;
     }
@@ -41,7 +40,6 @@ export async function widgetStreamHandler(req: IncomingMessage, res: WidgetRes):
     const err = toApiError(e);
     if (err.status >= 500) await reportServerIssue(err.code, err.cause ?? err, err.context);
     if (!res.headersSent && !res.writableEnded && !res.destroyed) {
-      res.setHeader('Cache-Control', 'no-store');
       res.status(err.status).json({ error: err.code });
     }
   }

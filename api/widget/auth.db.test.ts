@@ -129,14 +129,25 @@ describe('위젯 PKCE 인증·교환·Bearer 가드·로그아웃', () => {
     const startUrl = `/api/widget/auth/start?code_challenge=${pkce.challenge}&code_challenge_method=S256&state=${pkce.state}&redirect_uri=${encodeURIComponent(redirectUri)}`;
 
     expect((await runHandler(widgetAuthStartHandler, { method: 'GET', url: startUrl })).status).toBe(404);
+    expect((await runHandler(widgetAuthStartHandler, { method: 'POST', url: startUrl })).status).toBe(404);
     expect((await runHandler(widgetAuthExchangeHandler, {
       method: 'POST',
       url: '/api/widget/auth/exchange',
       headers: widgetHeaders(),
       body: { code: 'x', codeVerifier: pkce.verifier, redirectUri },
     })).status).toBe(404);
+    expect((await runHandler(widgetAuthExchangeHandler, {
+      method: 'GET',
+      url: '/api/widget/auth/exchange',
+      headers: widgetHeaders(),
+    })).status).toBe(404);
     expect((await runHandler(createWidgetAuthLogoutHandler(), {
       method: 'POST',
+      url: '/api/widget/auth/logout',
+      headers: widgetHeaders('tok'),
+    })).status).toBe(404);
+    expect((await runHandler(createWidgetAuthLogoutHandler(), {
+      method: 'GET',
       url: '/api/widget/auth/logout',
       headers: widgetHeaders('tok'),
     })).status).toBe(404);
@@ -319,6 +330,30 @@ describe('위젯 PKCE 인증·교환·Bearer 가드·로그아웃', () => {
     });
     expect(adminStart.status).toBe(302);
     const code = new URL(adminStart.headers.location).searchParams.get('code')!;
+
+    // 비관리자 게임 세션 쿠키가 남아 있어도 유효한 관리자 세션 쿠키가 함께 있으면 관리자 코드를 발급한다
+    const mixedCookie = [
+      sessionHeaders(userToken(memberUid)).cookie,
+      adminSessionHeaders(userToken(adminUid)).cookie,
+    ].join('; ');
+    const mixedStart = await runHandler(widgetAuthStartHandler, {
+      method: 'GET',
+      url,
+      headers: { cookie: mixedCookie },
+    });
+    expect(mixedStart.status).toBe(302);
+    const mixedCode = new URL(mixedStart.headers.location).searchParams.get('code')!;
+    const mixedEx = await runHandler(widgetAuthExchangeHandler, {
+      method: 'POST',
+      headers: widgetHeaders(),
+      body: { code: mixedCode, codeVerifier: pkce.verifier, redirectUri },
+    });
+    expect(mixedEx.status).toBe(200);
+    const mixedToken = (mixedEx.body as { token: string }).token;
+    expect(await runGuardCheck(widgetHeaders(mixedToken))).toMatchObject({
+      status: 200,
+      body: { uid: adminUid },
+    });
 
     const exRes = await runHandler(widgetAuthExchangeHandler, {
       method: 'POST',

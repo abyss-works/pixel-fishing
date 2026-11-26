@@ -413,6 +413,15 @@ describe('GET /api/widget/summary & GET /api/widget/stream', () => {
           bag: { count: 1, cap: 300 },
         });
 
+        const sseCatchEventId = (catchFrame.data as { catchItem: { eventId: string } }).catchItem.eventId;
+        const summaryAfterCatchRes = await fetch(`${srv.baseUrl}/api/widget/summary`, {
+          headers: widgetHeaders(token),
+        });
+        expect(summaryAfterCatchRes.status).toBe(200);
+        const summaryAfterCatch = (await summaryAfterCatchRes.json()) as WidgetSummary;
+        expect(summaryAfterCatch.recentCatches[0]?.eventId).toBe(sseCatchEventId);
+        expect(summaryAfterCatch.lastEventId).toBe(sseCatchEventId);
+
         const { rows: [saveAfterCatch] } = await env.client.query<{ last_spot: string | null }>(
           'select last_spot from public.saves_current where user_id = $1',
           [uid],

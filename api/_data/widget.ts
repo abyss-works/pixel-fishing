@@ -388,6 +388,7 @@ export async function loadWidgetSummaryData(db: Executor, uid: string): Promise<
 function toCatchItem(ev: WidgetSummaryEventRow, fallbackMs: number): WidgetCatchItem | null {
   if (!ev.payload || typeof ev.payload !== 'object') return null;
   const p = ev.payload as {
+    uid?: unknown;
     fishId?: unknown;
     form?: unknown;
     size?: unknown;
@@ -399,8 +400,9 @@ function toCatchItem(ev: WidgetSummaryEventRow, fallbackMs: number): WidgetCatch
   const form: FormId = p.form === 'variant' ? 'variant' : 'normal';
   const sizeCm = typeof p.size === 'number' && Number.isFinite(p.size) ? p.size : 0;
   const parsedAt = Date.parse(ev.createdAt);
+  const eventId = typeof p.uid === 'string' && p.uid.length > 0 ? p.uid : ev.id;
   return buildWidgetCatchItem({
-    eventId: ev.id,
+    eventId,
     fish,
     form,
     sizeCm,

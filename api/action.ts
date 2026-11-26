@@ -970,7 +970,7 @@ async function route(req: Req, res: Res): Promise<void> {
         return;
       }
 
-      if (action.type === 'travel' && (action.to.kind === 'base' || action.to.id === 'village')) {
+      if (action.type === 'travel' && action.to.kind === 'base') {
         hub.publishStatusChanged(uid, 'idle', serverTimeMs);
         return;
       }

@@ -6,6 +6,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { consentPolicy } from '../_auth/consentPolicy.js';
 import { adminSessionUid, sessionOf } from '../_auth/session.js';
+import { isAdmin } from '../_data/admin.js';
 import { consentRequiredFor } from '../_data/consent.js';
 import {
   consumeWidgetAuthCode,
@@ -247,8 +248,8 @@ function sendHtml(res: WidgetAuthRes, status: number, html: string, scriptHashTo
 async function handleAuthStart(req: WidgetAuthReq, res: WidgetAuthRes): Promise<void> {
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Referrer-Policy', 'no-referrer');
-  if (req.method !== 'GET') throw new ApiError(405, 'method-not-allowed');
   if (rejectIfWidgetApiDisabled(res)) return;
+  if (req.method !== 'GET') throw new ApiError(405, 'method-not-allowed');
   if (!process.env.DATABASE_URL) throw new ApiError(500, 'server-config');
 
   const redirectUri = queryParam(req, 'redirect_uri');
@@ -266,10 +267,14 @@ async function handleAuthStart(req: WidgetAuthReq, res: WidgetAuthRes): Promise<
     return;
   }
 
+  const { db } = database();
   const isPreview = process.env.DEPLOY_ENV === 'preview';
   const session = await sessionOf(req.headers);
-  const adminUid = isPreview && (!session || session.email === null) ? await adminSessionUid(req.headers) : null;
-  const candidateUid = session && session.email !== null ? session.id : adminUid;
+  let candidateUid: string | null = session && session.email !== null ? session.id : null;
+  if (isPreview && (!candidateUid || !(await isAdmin(db, candidateUid)))) {
+    const adminUid = await adminSessionUid(req.headers);
+    if (adminUid) candidateUid = adminUid;
+  }
 
   if (!candidateUid) {
     const { html, scriptHash: hash } = widgetAuthLoginHtml(isPreview);
@@ -277,7 +282,6 @@ async function handleAuthStart(req: WidgetAuthReq, res: WidgetAuthRes): Promise<
     return;
   }
 
-  const { db } = database();
   const eligibility = await getWidgetUserEligibility(db, candidateUid);
   if (!eligibility || eligibility.isGuest || !eligibility.hasGoogle || (isPreview && !eligibility.isAdmin)) {
     sendRedirect(res, `${redirectUri}?error=unsupported-account&state=${encodeURIComponent(state)}`);
@@ -310,8 +314,8 @@ async function handleAuthStart(req: WidgetAuthReq, res: WidgetAuthRes): Promise<
 
 async function handleAuthExchange(req: WidgetAuthReq, res: WidgetAuthRes): Promise<void> {
   res.setHeader('Cache-Control', 'no-store');
-  if (req.method !== 'POST') throw new ApiError(405, 'method-not-allowed');
   if (rejectIfWidgetApiDisabled(res)) return;
+  if (req.method !== 'POST') throw new ApiError(405, 'method-not-allowed');
   if (!process.env.DATABASE_URL) throw new ApiError(500, 'server-config');
 
   const ver = validateWidgetClientVersion(req.headers);
@@ -384,8 +388,8 @@ async function handleAuthLogout(
   opts: WidgetLogoutOptions = {},
 ): Promise<void> {
   res.setHeader('Cache-Control', 'no-store');
-  if (req.method !== 'POST') throw new ApiError(405, 'method-not-allowed');
   if (rejectIfWidgetApiDisabled(res)) return;
+  if (req.method !== 'POST') throw new ApiError(405, 'method-not-allowed');
   if (!process.env.DATABASE_URL) throw new ApiError(500, 'server-config');
 
   const ver = validateWidgetClientVersion(req.headers);

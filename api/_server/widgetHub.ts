@@ -143,6 +143,7 @@ export function createWidgetHub(options: WidgetHubOptions = {}): WidgetHub {
         if (!oldest) break;
         cleanupClient(oldest, true);
       }
+      if (!subscribers.has(uid)) subscribers.set(uid, set);
 
       res.statusCode = 200;
       res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
