@@ -505,7 +505,7 @@ export function newState(): GameState {
     v: 10, gold: 0, fame: 0, boat: 0, rod: 1,
     bag: [], exhibit: [], dex: {},
     coupons: [],
-    location: { kind: 'base', id: 'home' },
+    location: { kind: 'region', id: 'village' },
     visited: [],
     artifacts: [],
     items: {},

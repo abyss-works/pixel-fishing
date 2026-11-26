@@ -74,8 +74,8 @@ exports[`가방 > 잠금은 개체의 잠금 열만 바꾼다 1`] = `
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -133,8 +133,8 @@ exports[`가방 > 잠금은 개체의 잠금 열만 바꾼다 1`] = `
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -199,8 +199,8 @@ exports[`가방 > 잠금은 개체의 잠금 열만 바꾼다 1`] = `
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -307,8 +307,8 @@ exports[`가방 > 전시는 개체를 칸으로 옮긴다 1`] = `
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -366,8 +366,8 @@ exports[`가방 > 전시는 개체를 칸으로 옮긴다 1`] = `
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -473,8 +473,8 @@ exports[`개발 명령 > 로컬 환경의 상태 명령은 허용된다 1`] = `
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -532,8 +532,8 @@ exports[`개발 명령 > 로컬 환경의 상태 명령은 허용된다 1`] = `
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -622,8 +622,8 @@ exports[`개발 명령 > 스테이징에서 소유자가 아니면 거부한다 
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -716,8 +716,8 @@ exports[`개발 명령 > 운영 배포는 거부한다 1`] = `
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -845,8 +845,8 @@ exports[`개발 명령 > 표 명령은 본인 행만 바꾼다 1`] = `
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -904,8 +904,8 @@ exports[`개발 명령 > 표 명령은 본인 행만 바꾼다 1`] = `
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -1008,8 +1008,8 @@ exports[`개발 명령 > 표 명령은 본인 행만 바꾼다 1`] = `
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -1067,8 +1067,8 @@ exports[`개발 명령 > 표 명령은 본인 행만 바꾼다 1`] = `
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -1128,8 +1128,8 @@ exports[`개발 명령 > 표 명령은 본인 행만 바꾼다 1`] = `
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -1218,8 +1218,8 @@ exports[`낚시 > 잠긴 수역은 거부한다 1`] = `
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -1312,8 +1312,8 @@ exports[`닉네임 > 다른 사용자가 쓰는 이름은 거부한다(대소문
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -1415,8 +1415,8 @@ exports[`닉네임 > 바꾸기 1`] = `
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -1474,8 +1474,8 @@ exports[`닉네임 > 바꾸기 1`] = `
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -1564,8 +1564,8 @@ exports[`닉네임 > 형식이 틀린 이름은 리듀서가 거부한다 1`] = 
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -1658,8 +1658,8 @@ exports[`상점·이동 > 골드가 모자란 강화는 거부한다 1`] = `
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -1762,8 +1762,8 @@ exports[`상점·이동 > 낚싯대 강화 1`] = `
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -1821,8 +1821,8 @@ exports[`상점·이동 > 낚싯대 강화 1`] = `
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -1921,8 +1921,8 @@ exports[`상점·이동 > 배 구매 1`] = `
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -1980,8 +1980,8 @@ exports[`상점·이동 > 배 구매 1`] = `
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -2232,8 +2232,8 @@ exports[`요청 경계 > 제재 계정은 403이다 1`] = `
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -2326,8 +2326,8 @@ exports[`요청 경계 > 형식이 틀린 액션은 400이다 1`] = `
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -2420,8 +2420,8 @@ exports[`이사 코드 가져오기 > 소유자가 아니면 403이다 1`] = `
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -2547,8 +2547,8 @@ exports[`이사 코드 가져오기 > 소유자는 상태를 통째로 바꾸고
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -2639,8 +2639,8 @@ exports[`이사 코드 가져오기 > 소유자는 상태를 통째로 바꾸고
         "hats": [],
         "items": {},
         "location": {
-          "id": "home",
-          "kind": "base",
+          "id": "village",
+          "kind": "region",
         },
         "look": {
           "hat": null,
@@ -2732,8 +2732,8 @@ exports[`쿠폰·지원 코드·편지 > 동적 쿠폰과 비활성 쿠폰 1`] =
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -2793,8 +2793,8 @@ exports[`쿠폰·지원 코드·편지 > 동적 쿠폰과 비활성 쿠폰 1`] =
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -2911,8 +2911,8 @@ exports[`쿠폰·지원 코드·편지 > 정적 쿠폰 1`] = `
             "luck-small": 1,
           },
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -2974,8 +2974,8 @@ exports[`쿠폰·지원 코드·편지 > 정적 쿠폰 1`] = `
             "luck-small": 1,
           },
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -3112,8 +3112,8 @@ exports[`쿠폰·지원 코드·편지 > 지원 코드는 한 번만 받을 수 
             "hats": [],
             "items": {},
             "location": {
-              "id": "home",
-              "kind": "base",
+              "id": "village",
+              "kind": "region",
             },
             "look": {
               "hat": null,
@@ -3171,8 +3171,8 @@ exports[`쿠폰·지원 코드·편지 > 지원 코드는 한 번만 받을 수 
             "hats": [],
             "items": {},
             "location": {
-              "id": "home",
-              "kind": "base",
+              "id": "village",
+              "kind": "region",
             },
             "look": {
               "hat": null,
@@ -3268,8 +3268,8 @@ exports[`쿠폰·지원 코드·편지 > 지원 코드는 한 번만 받을 수 
             "hats": [],
             "items": {},
             "location": {
-              "id": "home",
-              "kind": "base",
+              "id": "village",
+              "kind": "region",
             },
             "look": {
               "hat": null,
@@ -3379,8 +3379,8 @@ exports[`쿠폰·지원 코드·편지 > 편지는 letters와 events에 같은 �
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -3438,8 +3438,8 @@ exports[`쿠폰·지원 코드·편지 > 편지는 letters와 events에 같은 �
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -3549,8 +3549,8 @@ exports[`현상금 > 결투 패배는 도전권만 지운다 1`] = `
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -3610,8 +3610,8 @@ exports[`현상금 > 결투 패배는 도전권만 지운다 1`] = `
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -3717,8 +3717,8 @@ exports[`현상금 > 만료된 도전권은 거부한다 1`] = `
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -4179,8 +4179,8 @@ exports[`현상금 > 완료하지 않은 의뢰 납품은 거부하고 진행 �
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -4290,8 +4290,8 @@ exports[`현상금 > 완료한 의뢰 납품은 진행 행을 지우고 보상�
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -4349,8 +4349,8 @@ exports[`현상금 > 완료한 의뢰 납품은 진행 행을 지우고 보상�
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -4450,8 +4450,8 @@ exports[`현상금 > 재료가 있으면 유물을 교환한다 1`] = `
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
@@ -4511,8 +4511,8 @@ exports[`현상금 > 재료가 있으면 유물을 교환한다 1`] = `
           "hats": [],
           "items": {},
           "location": {
-            "id": "home",
-            "kind": "base",
+            "id": "village",
+            "kind": "region",
           },
           "look": {
             "hat": null,
