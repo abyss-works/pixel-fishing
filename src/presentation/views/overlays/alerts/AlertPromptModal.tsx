@@ -1,5 +1,5 @@
-import type { AlertKind } from '../../../../platform/api/attention';
 import { ALERT_COPY, ALERT_DENIED_TEXT, ALERT_DENIED_TOAST, ALERT_ORDER } from '../../../../features/alerts/model/alerts';
+import type { AlertKind } from '../../../../features/alerts/model/alerts';
 import { useAlertPrompt } from '../../../../features/alerts/service/alertPrompt';
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import Button from '../../../ui/Button';

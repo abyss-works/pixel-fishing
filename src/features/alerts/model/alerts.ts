@@ -1,5 +1,7 @@
 import type { AlertKind, NotificationPermissionState } from '../../../platform/api/attention';
 
+export type { AlertKind, NotificationPermissionState } from '../../../platform/api/attention';
+
 /** 세 알림의 순서 — 게임 안 요소에서 바깥 요소 순이다. 안내 카드, 설정 창, 어디서든 세 알림을 나열할 때 이 순서를 쓴다 */
 export const ALERT_ORDER: readonly AlertKind[] = ['encounter', 'bag', 'update'];
 
