@@ -20,6 +20,7 @@ import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import type { SystemEventKind, ToastTone } from '../../../../features/display/model/toastPolicy';
 import { useBounty } from '../../../../features/bounty/service/useBounty';
 import { ALERT_DENIED_TEXT, ALERT_DENIED_TOAST, PERMISSION_BLOCK_LINES, PERMISSION_LABEL } from '../../../../features/alerts/model/alerts';
+import { currentAlertPermission } from '../../../../features/alerts/service/alertSettings';
 import { useEncounterAlertSetting } from '../../../../features/bounty/service/encounterAlert';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import { when } from '../../../../shared/lib/when';
@@ -208,12 +209,14 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
           {namedOpen && alertSetting.permission !== 'unsupported' && (
             <>
               <CheckToggle label="조우하면 알림 받기"
-                checked={alertSetting.on}
+                checked={alertSetting.active}
                 disabled={alertSetting.permission === 'denied'}
                 onChange={on => {
                   if (!on) { alertSetting.disable(); return; }
                   void alertSetting.enable().then(ok => {
-                    if (!ok) sendNotice(setToast, { kind: 'system.modalRejected', text: ALERT_DENIED_TEXT, toastText: ALERT_DENIED_TOAST });
+                    if (!ok && currentAlertPermission() === 'denied') {
+                      sendNotice(setToast, { kind: 'system.modalRejected', text: ALERT_DENIED_TEXT, toastText: ALERT_DENIED_TOAST });
+                    }
                   });
                 }} />
               {alertSetting.permission === 'denied' && (

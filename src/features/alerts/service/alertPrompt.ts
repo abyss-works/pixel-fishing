@@ -26,6 +26,7 @@ const subscribe = (listener: () => void) => {
 const getSession = () => session;
 
 function evaluate() {
+  if (session.phase !== 'waiting') return;
   const show = shouldShowAlertPrompt({
     permission: notificationPermission(),
     seen: isAlertPromptSeen(),
@@ -47,7 +48,12 @@ function allow(): Promise<NotificationPermissionState> {
   for (const kind of ALERT_ORDER) setAlertEnabled(kind, session.picks[kind]);
   const result = requestNotificationPermission();
   update({ ...session, phase: 'done' });
-  return result;
+  return result.then(next => {
+    if (next === 'denied') {
+      for (const kind of ALERT_ORDER) setAlertEnabled(kind, false);
+    }
+    return next;
+  });
 }
 
 function toggle(kind: AlertKind) {

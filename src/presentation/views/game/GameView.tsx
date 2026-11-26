@@ -543,7 +543,7 @@ export default function GameView(props: GameViewProps) {
         {fortune.fortune && <FortuneModal fortune={fortune.fortune} onClose={fortune.close} />}
         <TutorialModal seen={game.tutorials} ready={saveReady} after={baitRefund.pending || fortune.pending} dispatch={props.dispatch} />
         {tutorialTriggersReady && (
-          <AlertPromptModal ready={saveReady} after={whatsNewPending || baitRefund.pending || fortune.pending || tutorialPending} setToast={props.setToast} />
+          <AlertPromptModal ready={saveReady} after={whatsNewPending || baitRefund.pending || fortune.pending || tutorialPending || inviteReady || accountOpen} setToast={props.setToast} />
         )}
         <NoticeModal open={noticeModalOpen} notices={activeNotices} onClose={() => setNoticeModalOpen(false)} />
         <NoticeStack notices={stackNotices} onDismiss={dismissNotice} />

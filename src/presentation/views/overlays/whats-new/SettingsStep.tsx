@@ -26,7 +26,7 @@ export function PromptChoices({ prompt, describeInTip = false }: { prompt: Setti
       <SectionTitle>{describeInTip ? <Tip text={tipLines.length > 1 ? <TipBullets items={tipLines} /> : prompt.description}>{prompt.title}</Tip> : prompt.title}</SectionTitle>
       {!describeInTip && <Note size="xs" className="my-0">{prompt.description}</Note>}
       <div role="radiogroup" aria-label={prompt.title}
-           className="grid grid-cols-2 gap-2 mobile:grid-cols-1">
+           className={describeInTip ? 'grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2' : 'grid grid-cols-2 gap-2 mobile:grid-cols-1'}>
         {prompt.options.map(o => (
           <ChoiceCard key={o.value} selected={value === o.value} onSelect={() => setValue(o.value)}
                       preview={previewOf(prompt, o.value)}

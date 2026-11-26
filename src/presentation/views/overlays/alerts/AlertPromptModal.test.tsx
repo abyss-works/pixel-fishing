@@ -71,6 +71,17 @@ describe('AlertPromptModal', () => {
     await waitFor(() => expect(setToast).toHaveBeenCalledTimes(1));
   });
 
+  it('항목을 끄면 아이콘과 라벨을 흐린 비활성 색으로 표시한다', () => {
+    mount();
+    const labelText = screen.getByText('가방이 가득 찼을 때');
+    expect(labelText).toHaveClass('text-text');
+    expect(labelText).not.toHaveClass('text-text-dim');
+
+    fireEvent.click(screen.getByRole('button', { name: '가방이 가득 찼을 때' }));
+    expect(labelText).toHaveClass('text-text-dim', 'grayscale', 'brightness-75');
+    expect(labelText.querySelector('[data-glyph="backpack"]')).not.toHaveClass('text-gold');
+  });
+
   it('앞 차례 안내 창이 남아 있으면 뜨지 않는다', () => {
     render(<AlertPromptModal ready after setToast={setToast} />);
     expect(screen.queryByRole('dialog')).toBeNull();
