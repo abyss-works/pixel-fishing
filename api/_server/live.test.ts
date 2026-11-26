@@ -982,4 +982,50 @@ describe('실시간 채팅 3방·지역 격리·쿨다운·중복 차단·공지
     expect(await a.next()).toEqual({ t: 'notices', notices: reversed });
     expect(await g.next()).toEqual({ t: 'notices', notices: reversed });
   });
+
+  it('강제 모자 구역(championship)에서는 산타모자를 강제 브로드캐스트하고, 구역을 벗어나면 실제 모자를 복원한다', async () => {
+    const { url, live } = await start();
+    const a = connect(url, 'u1');
+    const b = connect(url, 'u2');
+    await a.next();
+    await b.next();
+
+    const actualLook = { shirt: 3, pants: 4, hat: 'cap-red' };
+    a.ws.send(JSON.stringify({ t: 'move', region: 'championship', x: 1, y: 2, dir: 1, line: false, look: actualLook }));
+    expect(await b.next()).toMatchObject({
+      t: 'join',
+      presence: { uid: 'u1', region: 'championship', look: { shirt: 3, pants: 4, hat: 'santa-hat' } },
+    });
+    expect(live.presenceOf('u1')?.look).toEqual({ shirt: 3, pants: 4, hat: 'santa-hat' });
+
+    // 구역 안에서 외형을 바꿔 보내도 모자는 산타모자로 고정되고, 벗어날 때 실제 외형이 복원된다
+    const updatedLook = { shirt: 5, pants: 1, hat: null };
+    a.ws.send(JSON.stringify({ t: 'move', region: 'championship', x: 2, y: 2, dir: 1, line: false, look: updatedLook }));
+    expect(await b.next()).toMatchObject({
+      t: 'move',
+      uid: 'u1',
+      region: 'championship',
+      look: { shirt: 5, pants: 1, hat: 'santa-hat' },
+    });
+
+    // look 없이 일반 구역으로 나가도 직전에 기록한 실제 외형으로 복원된다
+    a.ws.send(JSON.stringify({ t: 'move', region: 'world', x: 3, y: 2, dir: 2, line: false }));
+    expect(await b.next()).toMatchObject({
+      t: 'move',
+      uid: 'u1',
+      region: 'world',
+      look: updatedLook,
+    });
+    expect(live.presenceOf('u1')?.look).toEqual(updatedLook);
+
+    // 일반 구역에서 look 없이 강제 모자 구역으로 다시 들어가면 산타모자가 적용된다
+    a.ws.send(JSON.stringify({ t: 'move', region: 'championship', x: 4, y: 2, dir: 0, line: false }));
+    expect(await b.next()).toMatchObject({
+      t: 'move',
+      uid: 'u1',
+      region: 'championship',
+      look: { shirt: 5, pants: 1, hat: 'santa-hat' },
+    });
+    expect(live.presenceOf('u1')?.look).toEqual({ shirt: 5, pants: 1, hat: 'santa-hat' });
+  });
 });

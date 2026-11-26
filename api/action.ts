@@ -65,7 +65,7 @@ import {
   namedClearInsertFragment, namedClearReplaceFragments, readSnapshotBounty, runAdvanceProgress, ticketFragment,
 } from './_data/bounty.js';
 import { consumeRelief, findCoupon, findRelief } from './_data/codes.js';
-import { claimMailFragment, claimableMail } from './_data/mailbox.js';
+import { claimMailFragment, claimableMail, sendIdempotentMail } from './_data/mailbox.js';
 import { COMMIT_GUARD, commitAction, commitConsumingCode, commitGated, runFollowUps } from './_data/commit.js';
 import {
   counterClearFragment, counterRestoreFragments, counterSetFragment, counterUpsertFragment,
@@ -85,6 +85,19 @@ import {
 import type { GuildEffects, GuildLogKind } from '../src/game/rules/guild.js';
 
 export type { BountyRows } from './_data/load.js';
+
+export const SANTA_HAT_GIFT_KEY = 'santa-hat-2026-gift';
+const SANTA_HAT_GIFT_START_MS = Date.parse('2026-11-26T15:00:00.000Z');
+const SANTA_HAT_GIFT_END_EXCLUSIVE_MS = Date.parse('2026-12-31T15:00:00.000Z');
+
+/** 겨울맞이 산타모자 기간 접속 선물 활성 여부를 판정한다 (KST 2026-11-27 00:00 ~ 2026-12-31 23:59:59) */
+export function isSantaHatGiftActive(nowIso: string): boolean {
+  if (process.env.SANTA_HAT_GIFT_ENABLED === '0' || process.env.SANTA_HAT_GIFT_ENABLED === 'false') {
+    return false;
+  }
+  const ms = Date.parse(nowIso);
+  return Number.isFinite(ms) && ms >= SANTA_HAT_GIFT_START_MS && ms < SANTA_HAT_GIFT_END_EXCLUSIVE_MS;
+}
 
 // 창 식별자 형식 — 클라이언트는 crypto.randomUUID()를 쓴다
 const CLIENT_ID_PATTERN = /^[0-9a-f-]{36}$/;
@@ -611,13 +624,15 @@ async function route(req: Req, res: Res): Promise<void> {
     }
   }
 
-  // 우편 보상 — 본인의 받지 않은 우편이면 골드·첨부 아이템을 주입한다. 받은 기록은 아래 확정 문장에서 함께 쓰므로
+  // 우편 보상 — 본인의 받지 않은 우편이면 골드·첨부 아이템·첨부 모자를 주입한다. 받은 기록은 아래 확정 문장에서 함께 쓰므로
   // 낙관 락을 통과한 요청 하나만 받고, 그 뒤의 요청은 여기서 받을 수 있는 보상이 없어 거부된다.
   let mail: ActionDeps['mail'] = null;
   if (action.type === 'claimMail') {
     const mailId = action.id;
     const claimable = await step('db-read', { uid, action: action.type }, () => claimableMail(db, uid, mailId));
-    if (claimable !== null) mail = { id: mailId, gold: claimable.gold, items: claimable.items };
+    if (claimable !== null) {
+      mail = { id: mailId, gold: claimable.gold, items: claimable.items, hats: claimable.hats };
+    }
   }
 
   // 닉네임 변경 — 형태는 리듀서가 재검증한다. 여기서는 중복만 먼저 거르고, 실제 쓰기는 확정 문장에서 낙관 락과 함께 원자 실행한다.
@@ -873,6 +888,23 @@ async function route(req: Req, res: Res): Promise<void> {
     const committed = await step('db-write', { uid, action: action.type },
       () => commitAction(db, versionWrite, fragments));
     if (!committed) throw new ApiError(409, 'version-conflict');
+  }
+
+  // 겨울맞이 산타모자 기간 접속 선물 — 게스트·정식 계정 구분 없이 첫 접속 시 1회 멱등 지급한다(응답 전에 커밋 완료).
+  if (action.type === 'boot' && isSantaHatGiftActive(now)) {
+    try {
+      await sendIdempotentMail(db, {
+        userId: uid,
+        idempotencyKey: SANTA_HAT_GIFT_KEY,
+        title: '겨울맞이 산타모자 선물',
+        body: '차가운 바닷바람이 부는 겨울을 맞아 작은 선물을 보냈어요. 산타모자를 받아 집의 옷장에서 써 보세요.',
+        gold: 0,
+        items: [],
+        hats: ['santa-hat'],
+      }, nowISO);
+    } catch (e) {
+      await reportServerIssue('후속 쓰기 실패 — 산타모자 선물 우편 발송 실패', e, { uid, action: action.type, version: nextVersion });
+    }
   }
 
   // 캐치의 일반 의뢰 진행도는 증분이라 자가 치유가 없다. 응답 전에 반영하되, 실패가 확정된 캐치를 되돌리지는 않게 보고만 한다.

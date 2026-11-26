@@ -2637,3 +2637,84 @@ describe('게스트·배 0단계 보유 소비 아이템 사용', () => {
     expect((db.events as { type: string }[]).map(e => e.type).sort()).toEqual(['eat', 'eat', 'usePotion']);
   });
 });
+
+describe('산타모자 기간 접속 선물과 우편 수령', () => {
+  it('기간 안 boot는 정식 계정과 게스트 모두에게 산타모자 선물을 1회만 발송하고, 기간 밖 boot는 발송하지 않는다', async () => {
+    const memberUid = await seed({ state: {} });
+    const guestUid = await seed({ email: null, state: {} });
+    const outsideBeforeUid = await seed({ state: {} });
+    const outsideAfterUid = await seed({ state: {} });
+
+    vi.setSystemTime(Date.parse('2026-11-26T14:59:59.000Z'));
+    expect((await callAction(userToken(outsideBeforeUid), { type: 'boot' })).status).toBe(200);
+    expect((await env.client.query('select 1 from public.mails where user_id = $1', [outsideBeforeUid])).rows).toHaveLength(0);
+
+    vi.setSystemTime(Date.parse('2026-12-31T15:00:00.000Z'));
+    expect((await callAction(userToken(outsideAfterUid), { type: 'boot' })).status).toBe(200);
+    expect((await env.client.query('select 1 from public.mails where user_id = $1', [outsideAfterUid])).rows).toHaveLength(0);
+
+    vi.setSystemTime(Date.parse('2026-12-01T00:00:00.000Z'));
+    expect((await callAction(userToken(memberUid), { type: 'boot' })).status).toBe(200);
+    vi.setSystemTime(Date.parse('2026-12-01T00:00:05.000Z'));
+    expect((await callAction(userToken(memberUid), { type: 'boot' })).status).toBe(200);
+    expect((await callAction(userToken(guestUid), { type: 'boot' })).status).toBe(200);
+
+    const memberMails = await env.client.query<{ idempotency_key: string; title: string; gold: string; items: unknown; hats: unknown }>(
+      `select idempotency_key, title, gold, items, hats from public.mails where user_id = $1`,
+      [memberUid],
+    );
+    expect(memberMails.rows).toHaveLength(1);
+    expect(memberMails.rows[0]).toMatchObject({
+      idempotency_key: 'santa-hat-2026-gift',
+      title: '겨울맞이 산타모자 선물',
+      items: [],
+      hats: ['santa-hat'],
+    });
+    expect(Number(memberMails.rows[0].gold)).toBe(0);
+
+    const guestMails = await env.client.query<{ idempotency_key: string; hats: unknown }>(
+      `select idempotency_key, hats from public.mails where user_id = $1`,
+      [guestUid],
+    );
+    expect(guestMails.rows).toEqual([{ idempotency_key: 'santa-hat-2026-gift', hats: ['santa-hat'] }]);
+  });
+
+  it('claimMail은 첨부 모자(santa-hat)를 보유 목록에 멱등 추가하고 수령 시각과 이벤트를 기록한다', async () => {
+    const uid = await seed({ state: { hats: [] } });
+    const alreadyUid = await seed({ state: { hats: ['santa-hat'] } });
+
+    vi.setSystemTime(Date.parse('2026-12-01T00:00:00.000Z'));
+    expect((await callAction(userToken(uid), { type: 'boot' })).status).toBe(200);
+    const { rows: [mailRow] } = await env.client.query<{ id: string }>(
+      `select id from public.mails where user_id = $1 and idempotency_key = 'santa-hat-2026-gift'`,
+      [uid],
+    );
+    const mailId = Number(mailRow.id);
+
+    vi.setSystemTime(Date.parse('2026-12-01T00:00:05.000Z'));
+    const claimRes = await callAction(userToken(uid), { type: 'claimMail', id: mailId });
+    expect(claimRes.status).toBe(200);
+    expect((claimRes.body as { result: unknown }).result).toEqual({ type: 'mail', gold: 0, hats: ['santa-hat'] });
+
+    const db = await dumpUser(env.client, uid);
+    expect((db.saves_current[0] as { data: GameState }).data.hats).toEqual(['santa-hat']);
+    expect((db.events as { type: string; payload: unknown }[]).filter(e => e.type === 'claimMail').map(e => e.payload)).toEqual([
+      { mailId, gold: 0, hats: ['santa-hat'] },
+    ]);
+
+    vi.setSystemTime(Date.parse('2026-12-01T00:00:10.000Z'));
+    const again = await callAction(userToken(uid), { type: 'claimMail', id: mailId });
+    expect(again).toMatchObject({ status: 422, body: { error: 'mail-unavailable' } });
+
+    // 이미 산타모자를 가진 계정이 수령해도 중복 추가하지 않고 우편만 수령 완료 처리한다
+    const { rows: [alreadyMail] } = await env.client.query<{ id: string }>(
+      `insert into public.mails (user_id, title, body, gold, hats) values ($1, '중복', '본문', 0, '["santa-hat"]'::jsonb) returning id`,
+      [alreadyUid],
+    );
+    const alreadyRes = await callAction(userToken(alreadyUid), { type: 'claimMail', id: Number(alreadyMail.id) });
+    expect(alreadyRes.status).toBe(200);
+    expect((alreadyRes.body as { result: unknown }).result).toEqual({ type: 'mail', gold: 0 });
+    const alreadyDb = await dumpUser(env.client, alreadyUid);
+    expect((alreadyDb.saves_current[0] as { data: GameState }).data.hats).toEqual(['santa-hat']);
+  });
+});

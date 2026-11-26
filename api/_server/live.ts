@@ -14,6 +14,8 @@ import {
   idleSinceOf, parseClientMessage,
 } from '../../src/game/rules/live.js';
 import type { ChatLine, ChatRoom, NoticeItem, Presence, ServerMessage } from '../../src/game/rules/live.js';
+import { DEFAULT_LOOK, effectiveLookForRegion, forcedHatForRegion } from '../../src/game/content/wardrobe.js';
+import type { Look } from '../../src/game/content/wardrobe.js';
 import { topZoneOf, zoneById } from '../../src/game/content/zones.js';
 import type { ZoneId } from '../../src/game/content/zones.js';
 
@@ -124,6 +126,8 @@ interface Conn {
   user: LiveUser;
   /** 첫 위치를 받기 전에는 null — 다른 사람에게 알리지 않는다 */
   presence: Presence | null;
+  /** 클라이언트가 마지막으로 보낸 실제 외형(강제 모자 구역 덮어쓰기 전 원본) */
+  baseLook?: Look;
   /** 지역 채팅 격리 기준이 되는 정규화 지역 id */
   region: string | null;
   /** 이번 던짐의 첫 결과를 알려 온 서버 시각 기준 시작 시각. 세지 않는 동안은 null이다 */
@@ -318,12 +322,23 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
               conn.region = normalizeRegion(region, zone);
               conn.idleSince = idleSinceOf(conn.presence && { spot: conn.presence, since: conn.idleSince }, { region, x, y }, line, msg.idleMs, at);
               const idle = idleField(conn.idleSince, at);
+              if (look !== undefined) conn.baseLook = look;
+              const baseLook = conn.baseLook ?? (forcedHatForRegion(region) || conn.presence?.look ? DEFAULT_LOOK : undefined);
+              const nextLook = baseLook ? effectiveLookForRegion(baseLook, region) : undefined;
+              const prevLook = conn.presence?.look;
+              const lookChanged = nextLook !== undefined && (
+                prevLook === undefined
+                || prevLook.shirt !== nextLook.shirt
+                || prevLook.pants !== nextLook.pants
+                || prevLook.hat !== nextLook.hat
+              );
+              const broadcastLook = nextLook && (look !== undefined || lookChanged) ? nextLook : undefined;
               if (!conn.presence) {
-                conn.presence = { uid: user.uid, nick: user.nick, boat: user.boat, fame: user.fame, region, zone, x, y, dir, line, ...(bob ? { bob } : {}), ...(look ? { look } : {}) };
+                conn.presence = { uid: user.uid, nick: user.nick, boat: user.boat, fame: user.fame, region, zone, x, y, dir, line, ...(bob ? { bob } : {}), ...(nextLook ? { look: nextLook } : {}) };
                 broadcast(ws, user, { t: 'join', presence: { ...conn.presence, ...idle } });
               } else {
-                Object.assign(conn.presence, { region, zone, x, y, dir, line, bob, ...(look ? { look } : {}) });
-                broadcast(ws, user, { t: 'move', uid: user.uid, region, zone, x, y, dir, line, ...idle, ...(bob ? { bob } : {}), ...(look ? { look } : {}) });
+                Object.assign(conn.presence, { region, zone, x, y, dir, line, bob, ...(broadcastLook ? { look: broadcastLook } : {}) });
+                broadcast(ws, user, { t: 'move', uid: user.uid, region, zone, x, y, dir, line, ...idle, ...(bob ? { bob } : {}), ...(broadcastLook ? { look: broadcastLook } : {}) });
               }
               // 게스트의 위치는 마지막 위치로 저장하지 않는다
               if (!user.guest) {

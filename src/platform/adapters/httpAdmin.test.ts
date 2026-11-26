@@ -73,11 +73,12 @@ describe('HttpAdmin', () => {
     });
   });
 
-  it('sentMails는 응답의 items 배열을 정규화해 매핑한다', async () => {
+  it('sentMails는 응답의 items·hats 배열을 정규화해 매핑한다', async () => {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify([
       {
         id: 1, userId: 'u-1', title: '선물', body: 'b', gold: 0,
         items: [{ id: 'luck-small', qty: 3 }],
+        hats: ['santa-hat'],
         createdAt: '2026-11-25T00:00:00.000Z', readAt: null, claimedAt: null,
       },
       {
@@ -87,7 +88,9 @@ describe('HttpAdmin', () => {
     ]), { status: 200 }));
     const rows = await admin.sentMails();
     expect(rows[0].items).toEqual([{ id: 'luck-small', qty: 3 }]);
+    expect(rows[0].hats).toEqual(['santa-hat']);
     expect(rows[1].items).toEqual([]);
+    expect(rows[1].hats).toEqual([]);
   });
 
   it('제재·편지 처리·세션 강제 종료는 POST로 인자를 보내고, 실패하면 작업 이름과 서버 오류 코드를 담아 던진다', async () => {

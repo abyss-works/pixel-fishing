@@ -12,7 +12,11 @@ export async function readMails(): Promise<MailItem[] | null> {
   if (res.status === 401) throw new AppError('unauthorized', 'mail read before session');
   if (!res.ok) await throwRequestFailure(res, 'mail read failed');
   const { mails } = await res.json() as { mails: MailItem[] };
-  return mails.map(m => ({ ...m, items: Array.isArray(m.items) ? m.items : [] }));
+  return mails.map(m => ({
+    ...m,
+    items: Array.isArray(m.items) ? m.items : [],
+    hats: Array.isArray(m.hats) ? m.hats : [],
+  }));
 }
 
 /** 처음 열어 본 시각을 남긴다 */
