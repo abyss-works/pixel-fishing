@@ -26,8 +26,10 @@ import {
 } from './_data/notices.js';
 import { setRestricted } from './_data/save.js';
 import { recordAdminAction } from './_data/telemetry.js';
+import { deleteWidgetTokensForUser } from './_data/widget.js';
 import { ApiError, toApiError } from './errors.js';
 import { reportServerIssue } from './observability.js';
+import { disconnectWidgetUser } from './widget/guard.js';
 
 type Req = IncomingMessage & { query?: Record<string, string | string[] | undefined>; body?: unknown };
 type Res = ServerResponse & { status: (code: number) => Res; json: (body: unknown) => void };
@@ -212,10 +214,12 @@ async function restrict({ withTransaction }: Database, raw: unknown, adminId: st
   if (typeof userId !== 'string' || !UUID.test(userId) || typeof restricted !== 'boolean') throw new ApiError(400, 'bad-restrict');
   const changed = await dbWrite(() => withTransaction(async tx => {
     if (!await setRestricted(tx, userId, restricted)) return false;
+    if (restricted) await deleteWidgetTokensForUser(tx, userId);
     await recordAdminAction(tx, userId, restricted ? 'adminRestrict' : 'adminUnrestrict', adminId);
     return true;
   }));
   if (!changed) throw new ApiError(404, 'no-save');
+  if (restricted) disconnectWidgetUser(userId);
   return { restricted };
 }
 
@@ -239,6 +243,7 @@ async function revokeSessions({ withTransaction }: Database, raw: unknown, admin
     return count;
   }));
   if (revoked === null) throw new ApiError(404, 'no-user');
+  disconnectWidgetUser(userId);
   return { revoked };
 }
 

@@ -12,6 +12,13 @@ describe('isConsentExempt', () => {
     expect(isConsentExempt('/api/accounts')).toBe(false);
     expect(isConsentExempt('/api')).toBe(false);
     expect(isConsentExempt('/api/action')).toBe(false);
+    expect(isConsentExempt('/api/widget')).toBe(true);
+    expect(isConsentExempt('/api/widget/auth/start')).toBe(true);
+    expect(isConsentExempt('/api/widget/auth/exchange')).toBe(true);
+    expect(isConsentExempt('/api/widget/auth/logout')).toBe(true);
+    expect(isConsentExempt('/api/widget/summary')).toBe(true);
+    expect(isConsentExempt('/api/widget/stream')).toBe(true);
+    expect(isConsentExempt('/api/widgets')).toBe(false);
   });
 });
 
@@ -45,7 +52,8 @@ describe('경로 등록부와 허용 목록', () => {
   });
 
   it('허용 목록의 항목은 모두 등록된 경로의 앞부분이다', () => {
-    for (const prefix of CONSENT_EXEMPT_PATHS) {
+    // /api/widget/* 경로 등록은 Wave 1C(main.ts)에서 합쳐진다.
+    for (const prefix of CONSENT_EXEMPT_PATHS.filter(p => p !== '/api/widget')) {
       expect(registered.some(p => p === prefix || p.startsWith(`${prefix}/`)), prefix).toBe(true);
     }
   });

@@ -46,6 +46,7 @@ describe('Drizzle 스키마', () => {
     expect(tables.map(t => getTableConfig(t).name).sort()).toEqual([
       'achievement_counters', 'bounty_accepts', 'bounty_clears', 'bounty_progress', 'bounty_tickets', 'changelog_entries', 'coupons', 'daily_fortunes', 'event_consumer_cutoffs', 'events', 'fish_instances',
       'guild_member_enhancements', 'http_metrics_daily', 'letters', 'mails', 'notices', 'profiles', 'records', 'reliefs', 'saves', 'saves_current',
+      'widget_auth_codes', 'widget_tokens',
     ]);
   });
 

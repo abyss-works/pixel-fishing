@@ -210,8 +210,8 @@ export function resetAccountSaveFragments(uid: string, initial: GameState, nowIS
 } {
   const r = stateRow(initial);
   return {
-    upsertSave: sql`insert into public.saves_current (user_id, version, gold, fame, boat, rod, data, updated_at, last_catch_at, active_client)
-      values (${uid}, 1, ${r.gold}, ${r.fame}, ${r.boat}, ${r.rod}, ${JSON.stringify(r.data)}::jsonb, ${at(nowISO)}, null, null)
+    upsertSave: sql`insert into public.saves_current (user_id, version, gold, fame, boat, rod, data, updated_at, last_catch_at, active_client, last_spot)
+      values (${uid}, 1, ${r.gold}, ${r.fame}, ${r.boat}, ${r.rod}, ${JSON.stringify(r.data)}::jsonb, ${at(nowISO)}, null, null, null)
       on conflict (user_id) do update set
         gold = excluded.gold,
         fame = excluded.fame,
@@ -221,7 +221,8 @@ export function resetAccountSaveFragments(uid: string, initial: GameState, nowIS
         version = saves_current.version + 1,
         updated_at = excluded.updated_at,
         last_catch_at = null,
-        active_client = null
+        active_client = null,
+        last_spot = null
       returning version`,
     clears: [
       sql`delete from public.fish_instances where user_id = ${uid}`,
@@ -259,4 +260,9 @@ const idArray = (ids: readonly number[]) => sql`${`{${ids.map(Number).join(',')}
 export async function setRestricted(db: Executor, uid: string, restricted: boolean): Promise<boolean> {
   const result = await db.execute(sql`update public.saves_current set restricted = ${restricted} where user_id = ${uid}`);
   return (result.rowCount ?? 0) > 0;
+}
+
+/** 마지막 낚시 해역을 저장 상태에 기록한다. 위젯 재접속·대기 시 마지막 해역 표시에 쓴다 */
+export async function updateLastSpot(db: Executor, uid: string, spotId: string): Promise<void> {
+  await db.execute(sql`update public.saves_current set last_spot = ${spotId} where user_id = ${uid}`);
 }
