@@ -43,7 +43,7 @@ const LazyEnvBadge = DEV_TOOLS_BUILD ? lazy(() => import('./presentation/views/d
 
 function AppContent() {
   const { log, setToast, toasts, dismissToast, setMirrorEnv } = useMessageLog([
-    '집이에요. 가구를 눌러 정비하고, 문으로 나가 마을 물가에서 낚시해 보세요.',
+    '마을 연못 어군에서 낚시하고, 집에 들어가 정비해 보세요.',
   ]);
   const {
     game, dispatch, nickname, profileStatus, devTools, rename, sync, syncLabel,
