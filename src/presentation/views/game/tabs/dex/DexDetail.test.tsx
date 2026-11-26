@@ -47,6 +47,14 @@ describe('도감 상세의 크기 순위', () => {
     expect(screen.queryByText('크기 순위')).not.toBeInTheDocument();
   });
 
+  it('돌연변이만 발견한 어종은 initialForm 1로 열면 일반 미발견이 아닌 돌연변이 폼을 보인다', () => {
+    const variantOnly = { ...newState(), dex: { [fish.id]: { variant: { count: 1, maxSize: 10, first: '2026-01-01' } } } };
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={client}><DexDetail fish={fish} game={variantOnly} initialForm={1} onClose={() => {}} /></QueryClientProvider>);
+    expect(screen.getByText(/^돌연변이 2\/\d+$/)).toBeInTheDocument();
+    expect(screen.getByText('1마리')).toBeInTheDocument();
+  });
+
   it('형태 전환 시 로어 문단 높이가 흔들리지 않도록 최소 높이를 유지한다', () => {
     const { container } = render(
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>

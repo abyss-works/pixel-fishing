@@ -3,7 +3,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { seedUser, startActionEnv, testUid, sessionHeaders, userToken } from './_dbTest/actionHarness.js';
 import type { ActionEnv } from './_dbTest/actionHarness.js';
-import { provideNotify, providePresence } from './_server/livePresence.js';
+import { provideNotify, provideNotifyGuild, providePresence } from './_server/livePresence.js';
 import type { ServerMessage } from '../src/game/rules/live.js';
 import { guildRoutes } from './guilds.js';
 
@@ -18,6 +18,8 @@ const E = testUid(976);
 const changes: [string, string | null][] = [];
 const notes: [string, ServerMessage][] = [];
 provideNotify((uid, msg) => { notes.push([uid, msg]); });
+const guildNotes: [string, ServerMessage][] = [];
+provideNotifyGuild((guildId, msg) => { guildNotes.push([guildId, msg]); });
 const routes = guildRoutes((uid, guild) => { changes.push([uid, guild]); });
 
 beforeAll(async () => {
@@ -265,5 +267,67 @@ describe('길드 이름 바꾸기 함수', () => {
     expect(await rename(H, id, '모자람')).toMatchObject({ status: 409, body: { error: 'not-enough-gold' } });
     expect(await goldOf(H)).toBe(99_999);
     expect(await goldOf(I)).toBe(500_000);
+  });
+});
+
+describe('길드 갱신 실시간 알림', () => {
+  const J = testUid(981);
+  const K = testUid(982);
+  const L = testUid(983);
+  const updated: ServerMessage = { t: 'guild', kind: 'updated', guild: '', nick: null };
+
+  it('들어오기·승인·기부·자유강화·초기화·이름 바꾸기·떠나기·내보내기는 그 길드에 갱신을 알리고, 거부와 해산은 알리지 않는다', async () => {
+    await seedUser(env.client, { uid: J, email: 'gj@test.dev', nickname: '하늘', state: { gold: 400_000 } });
+    await seedUser(env.client, { uid: K, email: 'gk@test.dev', nickname: '구름', state: {} });
+    await seedUser(env.client, { uid: L, email: 'gl@test.dev', nickname: '별빛', state: {} });
+    const id = ((await call('/api/guilds', 'POST', J, { body: { name: '갱신선단' } })).body as { id: string }).id;
+    const code = (await mine(J)).guild!.code;
+    guildNotes.length = 0;
+    notes.length = 0;
+
+    // 승인 가입 신청은 길드장 개인 알림만, 거부는 신청한 사람 rejected 알림만 보내고 길드 갱신은 보내지 않는다
+    expect(await call('/api/guild-memberships', 'POST', K, { body: { code } })).toMatchObject({ status: 202 });
+    expect(await call('/api/guilds/:id/requests/:uid', 'DELETE', J, { params: { id, uid: K } })).toMatchObject({ status: 200 });
+    expect(notes.at(-1)).toEqual([K, { t: 'guild', kind: 'rejected', guild: '갱신선단', nick: null }]);
+    expect(guildNotes).toEqual([]);
+
+    // 승인은 신청한 사람의 approved와 길드 갱신 하나씩이다
+    expect(await call('/api/guild-memberships', 'POST', L, { body: { code } })).toMatchObject({ status: 202 });
+    expect(guildNotes).toEqual([]);
+    expect(await call('/api/guilds/:id/requests/:uid/approval', 'POST', J, { params: { id, uid: L } })).toMatchObject({ status: 201 });
+    expect(notes.at(-1)).toEqual([L, { t: 'guild', kind: 'approved', guild: '갱신선단', nick: null }]);
+    expect(guildNotes).toEqual([[id, updated]]);
+
+    await call('/api/guilds/:id', 'PATCH', J, { params: { id }, body: { joinMode: 'open' } });
+    expect(await call('/api/guild-memberships', 'POST', K, { body: { code } })).toMatchObject({ status: 201 });
+    expect(guildNotes).toHaveLength(2);
+
+    await env.client.query(`insert into public.guild_contributions (guild_id, user_id, day, fame, clears)
+      values ($1, null, '2030-01-01', 0, 10000)`, [id]);
+    expect(await call('/api/guilds/:id/bonuses/:bonus/donations', 'POST', J, { params: { id, bonus: 'sell' }, body: { amount: 150_000 } }))
+      .toMatchObject({ status: 201 });
+    expect(guildNotes).toHaveLength(3);
+    expect(await call('/api/guilds/:id/bonuses/:bonus/donations', 'POST', J, { params: { id, bonus: 'sell' }, body: { amount: 1_000 } }))
+      .toMatchObject({ status: 409 });
+    expect(guildNotes).toHaveLength(3);
+
+    await env.client.query(`insert into public.guild_contributions (guild_id, user_id, day, fame, clears)
+      values ($1, null, '2030-01-02', 0, 190000)`, [id]);
+    expect(await call('/api/guilds/:id/bonuses/:bonus/enhancements', 'POST', J, { params: { id, bonus: 'sell' } }))
+      .toMatchObject({ status: 201 });
+    expect(guildNotes).toHaveLength(4);
+    expect(await call('/api/guilds/:id/enhancements/reset', 'POST', J, { params: { id } }))
+      .toMatchObject({ status: 200 });
+    expect(guildNotes).toHaveLength(5);
+
+    expect(await call('/api/guilds/:id/name', 'PUT', J, { params: { id }, body: { name: '새갱신선단' } })).toMatchObject({ status: 200 });
+    expect(guildNotes).toHaveLength(6);
+
+    expect(await call('/api/guilds/:id/members/:uid', 'DELETE', L, { params: { id, uid: L } })).toMatchObject({ body: { result: 'left' } });
+    expect(await call('/api/guilds/:id/members/:uid', 'DELETE', J, { params: { id, uid: K } })).toMatchObject({ body: { result: 'kicked' } });
+    expect(guildNotes).toHaveLength(8);
+    expect(await call('/api/guilds/:id/members/:uid', 'DELETE', J, { params: { id, uid: J } })).toMatchObject({ body: { result: 'dissolved' } });
+    expect(guildNotes).toHaveLength(8);
+    expect(guildNotes.every(([g, m]) => g === id && JSON.stringify(m) === JSON.stringify(updated))).toBe(true);
   });
 });

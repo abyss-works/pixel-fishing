@@ -4,6 +4,8 @@ import { FISH, SPOTS } from '../../../game/rules/logic';
 import { rarityRank } from '../../../game/content/rarity';
 import type { Stat } from '../../../game/rules/stats';
 import { GUILD_BONUS_NAME } from '../../guild/model/guild';
+import { shownFormOf } from '../../dex/model/shownForm';
+import type { ShownForm } from '../../dex/model/shownForm';
 import { FORTUNE_SOURCE_LABEL } from '../../fortune/model/fortune';
 import type { BagRow } from './bagRows';
 import { groupInstances, sumPrice } from './bagRows';
@@ -11,6 +13,8 @@ import { groupInstances, sumPrice } from './bagRows';
 export interface BagCatalogEntry {
   fish: (typeof FISH)[number];
   name: string;
+  /** 카드에 대표로 보일 폼 — 이름·스프라이트·상세 창 시작 폼의 기준 */
+  shown: ShownForm;
   normalCount: number;
   variantCount: number;
   discovered: boolean;
@@ -45,9 +49,11 @@ export function selectBagCatalog(
 
   return FISH.map(fish => {
     const count = held.get(fish.id) ?? { normal: 0, variant: 0 };
+    const shown = shownFormOf(game, fish.id);
     return {
       fish,
-      name: formName(fish, 'normal'),
+      name: formName(fish, shown.form),
+      shown,
       normalCount: count.normal,
       variantCount: count.variant,
       discovered: speciesDiscovered(game, fish.id),

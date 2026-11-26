@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { GameAction } from '../../../game/rules/actions';
 import { AppError, POLICY, fail } from '../../../core/errors';
+import { newState } from '../../../game/rules/logic';
 
 const gw = vi.hoisted(() => ({
   bootResolve: null as null | (() => void),
@@ -648,6 +649,70 @@ describe('수배 스냅샷 무효화', () => {
     await act(async () => { await hook.result.current.dispatch({ type: 'sell', uids: [] }); });
     expect(spy).not.toHaveBeenCalledWith({ queryKey: ['bounty'] });
   });
+
+  it('debug와 debugBatch는 수배·운세·랭킹을 함께 무효화한다(랭킹은 재조회 없이)', async () => {
+    const { hook, spy } = await bootedWithSpy();
+    const actions: GameAction[] = [
+      { type: 'debug', command: 'x' },
+      { type: 'debugBatch', steps: [] },
+    ];
+    for (const action of actions) {
+      spy.mockClear();
+      await act(async () => { await hook.result.current.dispatch(action); });
+      expect(spy).toHaveBeenCalledWith({ queryKey: ['bounty'] });
+      expect(spy).toHaveBeenCalledWith({ queryKey: ['fortune'] });
+      expect(spy).toHaveBeenCalledWith({ queryKey: ['ranking'], refetchType: 'none' });
+    }
+  });
+
+  it('catch·resolveChallenge·claimRelief는 랭킹을 재조회 없이 무효화하고 다른 액션은 건드리지 않는다', async () => {
+    const { hook, spy } = await bootedWithSpy();
+    const ranking = { queryKey: ['ranking'], refetchType: 'none' };
+    await doCatch(hook);
+    expect(spy).toHaveBeenCalledWith(ranking);
+    spy.mockClear();
+    await act(async () => { await hook.result.current.dispatch({ type: 'resolveChallenge', questId: 'q', success: true, hits: 1, misses: 0 }); });
+    expect(spy).toHaveBeenCalledWith(ranking);
+    spy.mockClear();
+    await act(async () => { await hook.result.current.dispatch({ type: 'claimRelief', code: 'c' }); });
+    expect(spy).toHaveBeenCalledWith(ranking);
+    spy.mockClear();
+    await act(async () => { await hook.result.current.dispatch({ type: 'sell', uids: [] }); });
+    expect(spy).not.toHaveBeenCalledWith(ranking);
+  });
+
+  it('운세가 바뀐 상태 전환은 운세 쿼리를 무효화한다', async () => {
+    const { hook, spy } = await bootedWithSpy();
+    gw.dispatchFortune = { day: '2026-11-26', kind: 'fish', index: 3 };
+    await act(async () => { await hook.result.current.dispatch({ type: 'sell', uids: [] }); });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['fortune'] });
+    spy.mockClear();
+    await act(async () => { await hook.result.current.dispatch({ type: 'sell', uids: [] }); });
+    expect(spy).not.toHaveBeenCalledWith({ queryKey: ['fortune'] });
+  });
+
+  it('길드 갱신 표시가 있는 결과는 길드 쿼리를 무효화한다', async () => {
+    const { hook, spy } = await bootedWithSpy();
+    gw.dispatchResult = catchResult({ guildUpdated: true });
+    await doCatch(hook);
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['guild'] });
+    spy.mockClear();
+    gw.dispatchResult = catchResult({});
+    await doCatch(hook);
+    expect(spy).not.toHaveBeenCalledWith({ queryKey: ['guild'] });
+  });
+
+  it('applyDevReset과 refreshAccountStatus는 세션 쿼리를 제외하고 무효화한다', async () => {
+    const { hook, spy } = await bootedWithSpy();
+    await act(async () => { await hook.result.current.applyDevReset(newState()); });
+    await act(async () => { await hook.result.current.refreshAccountStatus(); });
+    const calls = spy.mock.calls.map(c => c[0] as { predicate?: (q: { queryKey: unknown[] }) => boolean });
+    expect(calls).toHaveLength(2);
+    for (const c of calls) {
+      expect(c.predicate?.({ queryKey: ['session'] })).toBe(false);
+      expect(c.predicate?.({ queryKey: ['guild', 'uid-1'] })).toBe(true);
+    }
+  });
 });
 
 describe('프로필 상태와 부트스트랩 닉네임 동기화', () => {
@@ -909,7 +974,7 @@ describe('닉네임 변경 시 프로필 및 조회 캐시 무효화', () => {
     client.setQueryData(['guild', 'uid-1'], { guild: null, request: null });
     client.setQueryData(['friends', 'uid-1'], []);
     client.setQueryData(['player', 'uid-1'], { nickname: '옛이름' });
-    client.setQueryData(['bounty', '2026-11-26', 'uid-1'], { clearsToday: {} });
+    client.setQueryData(['bounty', 'uid-1', '2026-11-26'], { clearsToday: {} });
 
     const wrapper = ({ children }: { children: ReactNode }) =>
       <QueryClientProvider client={client}>{children}</QueryClientProvider>;
@@ -928,11 +993,12 @@ describe('닉네임 변경 시 프로필 및 조회 캐시 무효화', () => {
     expect(spy).toHaveBeenCalledWith({ queryKey: ['guild'] });
     expect(spy).toHaveBeenCalledWith({ queryKey: ['friends'] });
     expect(spy).toHaveBeenCalledWith({ queryKey: ['player'] });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['player-search'] });
     expect(client.getQueryState(['ranking', 'fame', null, 'uid-1'])?.isInvalidated).toBe(true);
     expect(client.getQueryState(['guild', 'uid-1'])?.isInvalidated).toBe(true);
     expect(client.getQueryState(['friends', 'uid-1'])?.isInvalidated).toBe(true);
     expect(client.getQueryState(['player', 'uid-1'])?.isInvalidated).toBe(true);
-    expect(client.getQueryState(['bounty', '2026-11-26', 'uid-1'])?.isInvalidated).toBe(false);
+    expect(client.getQueryState(['bounty', 'uid-1', '2026-11-26'])?.isInvalidated).toBe(false);
   });
 });
 

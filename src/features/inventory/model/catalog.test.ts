@@ -25,6 +25,16 @@ describe('가방 파생 데이터', () => {
     expect(catalog.find(row => row.fish.id === unseenFish.id)?.discovered).toBe(false);
   });
 
+  it('돌연변이만 발견한 어종은 돌연변이 이름과 폼으로 보인다', () => {
+    const game = newState();
+    const fish = FISH[0];
+    game.dex[fish.id] = { variant: { count: 1, maxSize: 20, first: null } };
+
+    const row = selectBagCatalog([], game).find(r => r.fish.id === fish.id);
+
+    expect(row).toMatchObject({ name: fish.variant.name, shown: { form: 'variant', index: 1 }, discovered: true });
+  });
+
   it('판매 미리보기에 잠금·선택 제외·합계를 반영한다', () => {
     const [fish, other] = FISH;
     const bag = [

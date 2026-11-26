@@ -144,10 +144,11 @@ export interface ActionDeps {
 export type ActionResult =
   /** released = 이 캐치로 가방이 넘쳐 놓아준 개체들. 유저에게 반드시 알려야 한다.
    *  extracted·energy = 가공 플랜트선이 넘친 개체를 기운으로 바꾼 개체들과 얻은 등급별 기운(저장 단위). 없으면 생략한다
-   *  bountyProgressed = 서버에서 일반 의뢰 진행도가 실제로 올랐을 때만 true. 없으면 생략한다 */
+   *  bountyProgressed = 서버에서 일반 의뢰 진행도가 실제로 올랐을 때만 true. 없으면 생략한다
+   *  guildUpdated = 서버에서 길드 기여도·항해일지 등 길드 상태가 실제로 갱신됐을 때만 true. 없으면 생략한다 */
   | { type: 'catch'; fishId: string; uid: string; info: CatchInfo; released: ReleasedFish[]; extracted?: ReleasedFish[];
-      energy?: Record<RarityId, number>; ticket?: string; bountyProgressed?: true }
-  | { type: 'sell'; gold: number }
+      energy?: Record<RarityId, number>; ticket?: string; bountyProgressed?: true; guildUpdated?: true }
+  | { type: 'sell'; gold: number; guildUpdated?: true }
   | { type: 'coupon'; gold: number; items?: readonly CouponItem[]; desc: string }
   | { type: 'mail'; gold: number; items?: readonly { id: string; qty: number }[] }
   /** energy = 이번 기운 얻기로 얻은 등급별 기운(저장 단위) */
@@ -162,7 +163,7 @@ export type ActionResult =
    *  (단건 claimAchievement는 로컬 업적 정의(def.reward)로 만들 수 있어 결과를 싣지 않는다) */
   | { type: 'claimAllAchievements'; gold: number; hats: string[] }
   | { type: 'debugSnapshot'; bounty: DevBountySnapshot }
-  | { type: 'none' };
+  | { type: 'none'; guildUpdated?: true };
 
 /** 와이어 델타 — 서버가 계산한 상태 변화의 베껴적기.
  *  규칙 판단은 포함하지 않는다: 클라는 이 값을 "적용"만 하고, 다음 액션의 판정은

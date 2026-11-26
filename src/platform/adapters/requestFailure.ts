@@ -34,6 +34,18 @@ export function notifyConsentRequired(): void {
   }
 }
 
+const MAX_RETRY_AFTER_MS = 10_000;
+
+/** Retry-After 헤더(초 또는 날짜)를 대기 ms로 바꾼다. 읽을 수 없으면 null, 길어도 상한으로 자른다 */
+export function parseRetryAfterMs(raw: string | null): number | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (/^\d+$/.test(trimmed)) return Math.min(Number(trimmed) * 1000, MAX_RETRY_AFTER_MS);
+  const ts = Date.parse(trimmed);
+  if (!Number.isNaN(ts)) return Math.min(Math.max(0, ts - Date.now()), MAX_RETRY_AFTER_MS);
+  return null;
+}
+
 export function unauthorizedError(message: string): AppError {
   return new AppError('unauthorized', message);
 }
@@ -60,7 +72,11 @@ export function requestFailure(res: Response, message: string, code?: string): A
   if (res.status === 403 && code === CONSENT_REQUIRED_CODE) {
     return new ConsentRequiredError(message, { status: res.status });
   }
-  return new AppError(isRateLimited(res) ? 'rate-limited' : 'network', message, { status: res.status });
+  if (isRateLimited(res)) {
+    const retryAfterMs = parseRetryAfterMs(res.headers.get('retry-after'));
+    return new AppError('rate-limited', message, retryAfterMs === null ? { status: res.status } : { status: res.status, retryAfterMs });
+  }
+  return new AppError('network', message, { status: res.status });
 }
 
 /** 403 응답 본문의 error 코드가 consent-required인지 확인한다 */

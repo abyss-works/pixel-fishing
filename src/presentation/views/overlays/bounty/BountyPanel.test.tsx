@@ -255,7 +255,8 @@ describe('BountyPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: '해구의 이빨 상세 보기' }));
     const dialog = screen.getByRole('dialog');
     expect(dialog).toHaveTextContent('해구의 이빨');
-    expect(dialog).toHaveTextContent('획득 시(Lv.1)');
+    expect(dialog).not.toHaveTextContent('획득 시');
+    expect(within(dialog).queryByRole('button', { name: /강화|최고 레벨/ })).toBeNull();
     expect(dialog).toHaveTextContent('네임드 결투 가속');
     expect(dialog).toHaveTextContent(artifactEffectValue(artifactById('abyss-angler')!, 'duelSpeedupCut', 1)!);
     expect(dialog.textContent).not.toContain('Lv.0');
@@ -304,6 +305,21 @@ describe('BountyPanel', () => {
     const accept = screen.getByRole('button', { name: '수주' });
     expect(accept).toBeDisabled();
     expect(tipOfButton(accept)).toBe('오늘 네임드 토벌은 이미 마쳤어요.새벽 4시가 지나면 다시 수주할 수 있어요.');
+  });
+});
+
+describe('수배 스냅샷 조회 실패', () => {
+  it('오프라인이 아니라 조회 실패로 안내하고, 다시 시도하면 스냅샷을 다시 읽는다', async () => {
+    readBountySpy.mockRejectedValueOnce(new Error('network'));
+    show(game({ dex: fullDex }));
+    const retry = await screen.findByRole('button', { name: '다시 시도' });
+    expect(screen.getByText('의뢰를 불러오지 못했어요.')).toBeInTheDocument();
+    const accept = screen.getAllByRole('button', { name: '수주' })[0];
+    expect(tipOfButton(accept)).toContain('의뢰를 불러오지 못했어요.');
+    expect(tipOfButton(accept)).not.toContain('오프라인');
+    fireEvent.click(retry);
+    await waitFor(() => expect(readBountySpy).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole('button', { name: '다시 시도' })).not.toBeInTheDocument());
   });
 });
 

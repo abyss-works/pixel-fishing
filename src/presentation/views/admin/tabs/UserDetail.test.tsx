@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { QueryProvider } from '../../../../core/QueryProvider';
+import { AdminAuthCtx } from '../../../../features/admin/service/accessContext';
 import UserDetail from './UserDetail';
 
 const UID = 'aaaaaaaa-0000-0000-0000-000000000000';
@@ -38,29 +39,31 @@ describe('UserDetail 조리 상태 표시', () => {
   it('inProgress id와 cookingQueue 항목을 표시한다', async () => {
     render(
       <QueryProvider>
-        <UserDetail
-          user={{
-            user_id: UID,
-            email: 'u@example.com',
-            nickname: '유저',
-            is_anonymous: false,
-            signed_up_at: null,
-            last_sign_in_at: null,
-            gold: 0,
-            fame: 0,
-            boat: 5,
-            rod: 1,
-            location_kind: 'base',
-            location_id: 'home',
-            visited: ['village'],
-            restricted: false,
-            save_version: 10,
-            last_action_at: null,
-            last_session_at: null,
-            total_session_sec: 0,
-          }}
-          onClose={vi.fn()}
-        />
+        <AdminAuthCtx.Provider value={{ access: 'granted', uid: UID }}>
+          <UserDetail
+            user={{
+              user_id: UID,
+              email: 'u@example.com',
+              nickname: '유저',
+              is_anonymous: false,
+              signed_up_at: null,
+              last_sign_in_at: null,
+              gold: 0,
+              fame: 0,
+              boat: 5,
+              rod: 1,
+              location_kind: 'base',
+              location_id: 'home',
+              visited: ['village'],
+              restricted: false,
+              save_version: 10,
+              last_action_at: null,
+              last_session_at: null,
+              total_session_sec: 0,
+            }}
+            onClose={vi.fn()}
+          />
+        </AdminAuthCtx.Provider>
       </QueryProvider>,
     );
 

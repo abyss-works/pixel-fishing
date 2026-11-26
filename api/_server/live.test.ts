@@ -606,6 +606,22 @@ describe('실시간 채널 길드 채팅', () => {
     expect(await b.next()).toEqual({ t: 'error', code: 'chat-no-guild' });
   });
 
+  it('sendToGuild는 그 길드의 접속한 길드원에게만 보낸다', async () => {
+    const { url, live, chat: store } = await start();
+    store.guilds.set('u1', 'g1').set('u2', 'g1').set('u3', 'g2');
+    const [a, b, c, d] = ['u1', 'u2', 'u3', 'u4'].map(uid => connect(url, uid));
+    for (const x of [a, b, c, d]) await x.next();
+    const msg: ServerMessage = { t: 'guild', kind: 'updated', guild: '', nick: null };
+    live.sendToGuild('g1', msg);
+    expect(await a.next()).toEqual(msg);
+    expect(await b.next()).toEqual(msg);
+    // 다른 연결에 보낸 뒤 확인용 메시지가 먼저 도착하면 앞선 길드 알림은 오지 않은 것이다
+    live.sendTo('u3', { t: 'guild', kind: 'approved', guild: 'x', nick: null });
+    live.sendTo('u4', { t: 'guild', kind: 'approved', guild: 'x', nick: null });
+    expect(await c.next()).toMatchObject({ kind: 'approved' });
+    expect(await d.next()).toMatchObject({ kind: 'approved' });
+  });
+
   it('hello는 길드원에게만 그 길드의 최근 대화를 싣고, 내가 차단한 사람의 줄은 뺀다', async () => {
     const { url, chat: store } = await start();
     const line = (id: number, uid: string) => ({ id, uid, nick: `n-${uid}`, text: `줄${id}`, at: 'x' });
