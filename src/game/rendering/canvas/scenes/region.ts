@@ -5,10 +5,13 @@
 import { R, SCALE } from '../../pixel/common.js';
 import type { Ctx } from '../../pixel/common.js';
 import { BUILDING_SPRITES } from '../../pixel/sprites/buildings.js';
-import { drawBoat, drawIdle, drawOtherShip, drawPerson, drawSpeech } from '../../pixel/sprites/actors.js';
+import { drawBoat, drawIdle, drawOtherPerson, drawOtherShip, drawPerson, drawSpeech } from '../../pixel/sprites/actors.js';
 import type { OtherShipView, Speech } from '../../pixel/sprites/actors.js';
 import { drawMaskTerrain } from '../../pixel/sprites/mask.js';
-import { drawDeck, drawLabel, drawLand, drawTree, drawWater } from '../../pixel/sprites/scenery.js';
+import {
+  drawCandyCane, drawDeck, drawGiftBox, drawLabel, drawLand, drawSnowman, drawSnowPine, drawTree, drawWater,
+  drawWinterLantern, drawXmasTree,
+} from '../../pixel/sprites/scenery.js';
 import { drawFishingGear, drawHookJump, drawSchools, drawTimingBar } from '../../pixel/sprites/overlays.js';
 import { cameraFor } from './camera.js';
 import type { RegionPack, School } from '../../../world/types';
@@ -87,7 +90,17 @@ export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
 
   // 건물 → 장식 → 라벨 → 지역 연출
   for (const b of pack.buildings) BUILDING_SPRITES[b.sprite].draw(ctx, b.rect, b.flip);
-  for (const d of pack.decorations) drawTree(ctx, d.x, d.y);
+  for (const d of pack.decorations) {
+    switch (d.kind) {
+      case 'tree': drawTree(ctx, d.x, d.y); break;
+      case 'xmasTree': drawXmasTree(ctx, d.x, d.y); break;
+      case 'snowPine': drawSnowPine(ctx, d.x, d.y); break;
+      case 'snowman': drawSnowman(ctx, d.x, d.y); break;
+      case 'giftBox': drawGiftBox(ctx, d.x, d.y); break;
+      case 'candyCane': drawCandyCane(ctx, d.x, d.y); break;
+      case 'lantern': drawWinterLantern(ctx, d.x, d.y); break;
+    }
+  }
   for (const l of pack.labels) drawLabel(ctx, l);
   pack.flavor?.(ctx, v.t);
 
@@ -95,7 +108,12 @@ export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
   drawSchools(ctx, v.schools, v.boat, v.t, true, 1, v);
   drawFishingGear(ctx, v);
   drawHookJump(ctx, v);
-  if (pack.movement === 'sail') for (const o of v.others ?? []) drawOtherShip(ctx, o, v.t);
+  if (pack.movement === 'sail' || pack.showOthers) {
+    for (const o of v.others ?? []) {
+      if (pack.movement === 'sail') drawOtherShip(ctx, o, v.t);
+      else drawOtherPerson(ctx, o, v.t);
+    }
+  }
   if (pack.movement === 'sail') drawBoat(ctx, v.player.x, v.player.y, v.t, v.look);
   else drawPerson(ctx, v.player.x, v.player.y, v.look);
   drawSpeech(ctx, v.player.x, v.player.y - 24, v.bubble ?? null);

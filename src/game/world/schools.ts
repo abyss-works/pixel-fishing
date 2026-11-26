@@ -8,6 +8,7 @@ import type { ZoneId } from '../content/zones';
 import type { Point, RegionId, Rect, School } from './types';
 import { HARBORS, WORLD, WORLD_MAP } from './regions/world';
 import { V_SCHOOLS } from './regions/village';
+import { CHAMPIONSHIP_SCHOOLS } from './regions/championship';
 import { cellIndex, indexCenter, localCell } from './mask';
 import { canMove } from './engine';
 
@@ -32,7 +33,7 @@ const NEARBY_HARBOR: Partial<Record<SpotId, Point>> = {
 
 export function schoolsOf(region: RegionId, day: string): School[] {
   if (region === 'village') return V_SCHOOLS;
-  if (region === 'championship') return [];
+  if (region === 'championship') return CHAMPIONSHIP_SCHOOLS;
   return worldSchools(day);
 }
 

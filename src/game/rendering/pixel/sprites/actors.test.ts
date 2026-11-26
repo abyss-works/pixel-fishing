@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { drawHead, drawPerson } from './actors';
+import { drawHead, drawOtherPerson, drawPerson } from './actors';
 import { HATS } from '../../../content/wardrobe';
 import type { Ctx } from '../common';
 
@@ -11,17 +11,34 @@ interface RectCall {
   color: string;
 }
 
-function makeFakeCtx(): { ctx: Ctx; rects: RectCall[] } {
+function makeFakeCtx(): { ctx: Ctx; rects: RectCall[]; texts: { text: string; x: number; y: number }[]; alphas: number[] } {
   const rects: RectCall[] = [];
+  const texts: { text: string; x: number; y: number }[] = [];
+  const alphas: number[] = [];
   let fillStyle = '';
+  let globalAlpha = 1;
   const ctx = {
     get fillStyle() { return fillStyle; },
     set fillStyle(v: string) { fillStyle = v; },
+    get globalAlpha() { return globalAlpha; },
+    set globalAlpha(v: number) { globalAlpha = v; alphas.push(v); },
+    font: '',
+    textAlign: 'left',
+    strokeStyle: '',
+    lineWidth: 1,
+    save() {},
+    restore() { globalAlpha = 1; },
+    beginPath() {},
+    moveTo() {},
+    lineTo() {},
+    stroke() {},
+    measureText(str: string) { return { width: str.length * 6 }; },
+    fillText(text: string, x: number, y: number) { texts.push({ text, x, y }); },
     fillRect(x: number, y: number, w: number, h: number) {
       rects.push({ x, y, w, h, color: fillStyle });
     },
   } as unknown as Ctx;
-  return { ctx, rects };
+  return { ctx, rects, texts, alphas };
 }
 
 describe('drawPerson 모자 픽셀 경계', () => {
@@ -78,5 +95,26 @@ describe('drawHead 모자 픽셀 경계 (headOnly 12x10)', () => {
         expect(r.y + r.h, `${hatId ?? 'none'} y+h`).toBeLessThanOrEqual(h);
       }
     }
+  });
+});
+
+describe('drawOtherPerson 도보 타 플레이어 렌더링', () => {
+  it('발 아래 그림자, 사람, 어두운 이름표 알약 배경, 낚싯줄·찌, 방치 표시를 그린다', () => {
+    const active = makeFakeCtx();
+    drawOtherPerson(active.ctx, {
+      x: 100, y: 120, nick: '강태공', line: true, stale: false,
+      bob: { x: 124, y: 132 }, idle: '5분',
+    }, 1.0);
+    expect(active.rects.length).toBeGreaterThan(5);
+    expect(active.texts.some(t => t.text === '강태공')).toBe(true);
+    expect(active.texts.some(t => t.text === '5분')).toBe(true);
+    expect(active.rects.some(r => r.color === '#e53935')).toBe(true);
+
+    const stale = makeFakeCtx();
+    drawOtherPerson(stale.ctx, {
+      x: 100, y: 120, nick: '자리비움', line: false, stale: true,
+    }, 1.0);
+    expect(stale.alphas[0]).toBeLessThan(0.5);
+    expect(stale.rects.some(r => r.color === '#e53935')).toBe(false);
   });
 });

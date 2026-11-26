@@ -8,6 +8,8 @@ import {
   EVENT_HAT_IDS,
   eventFishById,
 } from './eventFish';
+import { FISH_SPRITES } from './sprites/fishSprites';
+import { validateSprite } from './sprites/types';
 import { isKnownLocation } from './places';
 import { powerReqOf, spotById } from './spots';
 import { hatById } from './wardrobe';
@@ -54,5 +56,17 @@ describe('이벤트 2 어종 및 표준 스펙 계약', () => {
     expect(zoneById('championship')?.shortName).toBe('분지 호수');
     expect(defaultZoneOfRegion('championship')).toBe('championship');
     expect(spotsOfRegion('championship').map(s => s.id)).toEqual(['championship']);
+  });
+
+  it('전용 어종 9종의 일반·돌연변이 18개 픽셀 스프라이트가 모두 32×16으로 등록되어 있다', () => {
+    for (const fish of EVENT_FISH) {
+      for (const key of [fish.id, `${fish.id}.variant`]) {
+        const sprite = FISH_SPRITES[key];
+        expect(sprite, `${key} 스프라이트 누락`).toBeDefined();
+        expect(sprite!.w, `${key} w`).toBe(32);
+        expect(sprite!.h, `${key} h`).toBe(16);
+        expect(validateSprite(sprite!), `${key} 무결성`).toEqual([]);
+      }
+    }
   });
 });
