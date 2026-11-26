@@ -1,4 +1,4 @@
--- 0052 되돌림 — 라이브 이벤트 표·쿠폰 사용 이력 표와 추가 열을 제거한다.
+-- 0053 되돌림 — 라이브 이벤트 표·쿠폰 사용 이력 표와 추가 열을 제거한다.
 drop index if exists public.event_draws_event_user_idx;
 drop table if exists public.event_draws;
 
