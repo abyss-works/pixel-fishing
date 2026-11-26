@@ -19,11 +19,12 @@ export interface FortuneMonthData {
   discovered: FortuneDiscoveredEntry[];
 }
 
-/** 로그인 계정의 당일 운세를 기록한다. 같은 계정·날짜가 이미 있으면 덮어쓰지 않는다 */
-export async function recordDailyFortune(db: Executor, uid: string, fortune: DailyFortune): Promise<void> {
-  await db.execute(sql`insert into public.daily_fortunes (user_id, day, kind, index)
-    values (${uid}, ${fortune.day}, ${fortune.kind}, ${fortune.index})
-    on conflict (user_id, day) do nothing`);
+/** 확정 가드와 함께 로그인 계정의 당일 운세를 기록한다. 같은 계정·날짜가 이미 있으면 덮어쓰지 않는다 */
+export function recordDailyFortuneFragment(guard: SQL, uid: string, fortune: DailyFortune): SQL {
+  return sql`insert into public.daily_fortunes (user_id, day, kind, index)
+    select ${uid}, ${fortune.day}, ${fortune.kind}, ${fortune.index}
+    where ${guard}
+    on conflict (user_id, day) do nothing`;
 }
 
 /** 개발 도구 fortune.set 전용 — 확정 가드와 함께 로그인 계정의 당일 운세 이력을 덮어써서 저장한다 */

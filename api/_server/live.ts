@@ -83,6 +83,8 @@ export interface LiveServer {
   setNick(uid: string, nick: string): void;
   /** 그 사용자의 연결에만 메시지를 보낸다. 연결돼 있지 않으면 아무것도 하지 않는다 */
   sendTo(uid: string, msg: ServerMessage): void;
+  /** 그 길드에 속한 접속자의 연결에만 메시지를 보낸다 */
+  sendToGuild(guildId: string, msg: ServerMessage): void;
   /** 열린 연결을 세션으로 기록하고 재시작 코드로 닫은 뒤 정리 주기를 멈춘다 */
   close(): void;
 }
@@ -330,6 +332,9 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
     },
     sendTo(uid, msg) {
       for (const [ws, c] of conns) if (c.user.uid === uid) send(ws, msg);
+    },
+    sendToGuild(guildId, msg) {
+      for (const [ws, c] of conns) if (c.guild === guildId) send(ws, msg);
     },
     close() {
       clearInterval(timer);

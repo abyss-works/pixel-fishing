@@ -323,11 +323,11 @@ const logInsert = (guildId: string, uid: string, kind: GuildLogKind, nowISO: str
   sql`insert into public.guild_logs (guild_id, user_id, kind, created_at) values (${guildId}, ${uid}, ${kind}, ${at(nowISO)})`;
 
 /**
- * 액션 하나가 쌓은 기여를 그날(게임 날짜) 그 길드원의 행에 더하는 후속 쓰기. 쌓을 것이 없으면 null.
+ * 액션 하나가 쌓은 기여를 그날(게임 날짜) 그 길드원의 행에 더하는 쓰기. 쌓을 것이 없으면 null.
  * 명성 기여는 그날 이미 쌓은 것과 합쳐 하루 상한(GUILD_DAILY_FAME_CAP)에서 멈춘다. 한 행의 갱신이라 동시에 써도 상한을 넘지 않는다.
- * 그 사이 길드가 없어졌으면 쓰지 않는다.
+ * 상한에 닿아 바뀔 것이 없으면 행을 건드리지 않는다. 그 사이 길드가 없어졌으면 쓰지 않는다.
  */
-export function contributionUpsert(guildId: string, uid: string, nowISO: string,
+function contributionUpsert(guildId: string, uid: string, nowISO: string,
   add: { fame: number; clears: number }): SQL | null {
   if (add.fame <= 0 && add.clears <= 0) return null;
   return sql`insert into public.guild_contributions (guild_id, user_id, day, fame, clears)
@@ -335,17 +335,36 @@ export function contributionUpsert(guildId: string, uid: string, nowISO: string,
     from public.guilds g where g.id = ${guildId}
     on conflict (guild_id, user_id, day) do update set
       fame = least(${GUILD_DAILY_FAME_CAP}::int, public.guild_contributions.fame + excluded.fame),
-      clears = public.guild_contributions.clears + excluded.clears`;
+      clears = public.guild_contributions.clears + excluded.clears
+    where public.guild_contributions.fame < ${GUILD_DAILY_FAME_CAP}::int or excluded.clears > 0
+    returning 1`;
 }
 
-/** 액션이 남긴 항해일지 줄(전설 획득·네임드 토벌)을 쓰는 후속 쓰기. 없으면 null. 그 사이 길드가 없어졌으면 쓰지 않는다 */
-export function logbookInsert(guildId: string, uid: string, entries: readonly { kind: GuildLogKind; detail: string }[],
+/** 액션이 남긴 항해일지 줄(전설 획득·네임드 토벌)을 쓰는 쓰기. 없으면 null. 그 사이 길드가 없어졌으면 쓰지 않는다 */
+function logbookInsert(guildId: string, uid: string, entries: readonly { kind: GuildLogKind; detail: string }[],
   nowISO: string): SQL | null {
   if (entries.length === 0) return null;
   const values = sql.join(entries.map(e => sql`(${e.kind}::text, ${e.detail}::text)`), sql`, `);
   return sql`insert into public.guild_logs (guild_id, user_id, kind, detail, created_at)
     select g.id, ${uid}::uuid, v.kind, v.detail, ${at(nowISO)} from public.guilds g, (values ${values}) as v(kind, detail)
-    where g.id = ${guildId}`;
+    where g.id = ${guildId}
+    returning 1`;
+}
+
+/**
+ * 확정된 액션 하나의 기여와 항해일지를 한 문장으로 쓰고, 실제로 쓰인 행 수를 돌려준다(0이면 길드 상태가 그대로다).
+ * 액션 확정과 따로 실행한다 — 실패해도 이미 확정된 액션을 되돌리지 않도록 호출자가 오류를 격리한다.
+ */
+export async function recordGuildActivity(db: Executor, guildId: string, uid: string, nowISO: string,
+  add: { fame: number; clears: number }, entries: readonly { kind: GuildLogKind; detail: string }[]): Promise<number> {
+  const parts = [contributionUpsert(guildId, uid, nowISO, add), logbookInsert(guildId, uid, entries, nowISO)]
+    .filter((s): s is SQL => s !== null);
+  if (parts.length === 0) return 0;
+  const ctes = parts.map((s, i) => sql`${sql.raw(`g${i}`)} as (${s})`);
+  const counts = parts.map((_, i) => sql`(select count(*) from ${sql.raw(`g${i}`)})`);
+  const { rows: [r] } = await db.execute<{ n: number | string }>(
+    sql`with ${sql.join(ctes, sql`, `)} select (${sql.join(counts, sql` + `)})::int as n`);
+  return Number(r.n);
 }
 
 export type CreateOutcome = { ok: true; id: string } | { ok: false; error: 'already-in-guild' | 'name-taken' | 'code-taken' };

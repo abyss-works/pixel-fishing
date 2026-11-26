@@ -6,14 +6,15 @@
 // 이 파일은 읽기 → 규칙 실행 → 확정 → 응답의 순서만 조율한다. 요청 사용자는 로그인 세션으로 정한다.
 //
 // 왕복 순서: 상태 읽기 1회 → (캐치면 도감·가방 수 1회, 가방이 가득 차면 방생 후보 1회) → 확정 1회 → 응답.
-// 이벤트·주기 스냅샷처럼 유실을 허용하는 쓰기는 응답 뒤에 한 번에 실행하고, 캐치의 의뢰 진행도는 응답 전에 반영한다.
+// 이벤트·주기 스냅샷처럼 유실을 허용하는 쓰기는 응답 뒤에 한 번에 실행하고, 캐치의 의뢰 진행도와 길드 기여·항해일지는 응답 전에 반영한다.
+// 일일 운세 이력은 확정 문장 안에서 쓴다.
 //
 // ⚠️ 시그니처는 Node 스타일(req, res)만 쓴다 — Web 표준 시그니처로 배포했다가 전부 500이 났던
 // 사고의 재발을 막기 위해서다. default export = Node 시그니처.
 import type { SQL } from 'drizzle-orm';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { afterResponse } from './_server/afterResponse.js';
-import { setNick } from './_server/livePresence.js';
+import { notifyGuild, setNick } from './_server/livePresence.js';
 // 확장자(.js) 필수 — Node 순수 ESM 로더가 src 모듈을 그대로 import한다
 import { migrate, newState } from '../src/game/rules/logic.js';
 import type { FishInstance, FormRecord, GameState, Judgment } from '../src/game/rules/logic.js';
@@ -76,8 +77,8 @@ import { ensureProfile, nicknameTaken, profileExists, setNickname } from './_dat
 import { ALWAYS_GUARD, blobInput, commitDebugBatch, instRow, seedState, snapshotInsert, stateRow, versionUpdate, writeFragments } from './_data/save.js';
 import { eventsInsert } from './_data/telemetry.js';
 import { activeDayUpsert } from './_data/activity.js';
-import { recordDailyFortune, upsertDailyFortuneFragment } from './_data/fortune.js';
-import { contributionUpsert, logbookInsert } from './_data/guilds.js';
+import { recordDailyFortuneFragment, upsertDailyFortuneFragment } from './_data/fortune.js';
+import { recordGuildActivity } from './_data/guilds.js';
 import { NO_GUILD_EFFECTS, contributionFor, guildEffectsOf, guildLevelOf } from '../src/game/rules/guild.js';
 import type { GuildEffects, GuildLogKind } from '../src/game/rules/guild.js';
 
@@ -215,7 +216,8 @@ export const SKIP_DETAIL = new Set([
 const BOUNTY_ACTIONS = new Set(['acceptQuest', 'deliverBounty', 'resolveChallenge', 'catch']);
 
 /** 길드가 필요한 액션 — 보너스 효과를 쓰거나(캐치, 판매, 전시대 회수의 가방 상한) 기여를 쌓는다(명성을 얻는 캐치·지원 코드,
- *  의뢰 클리어). 이사 코드와 개발 도구는 플레이로 얻은 명성이 아니라 기여로 세지 않는다 */
+ *  의뢰 클리어). 이사 코드와 개발 도구는 플레이로 얻은 명성이 아니라 기여로 세지 않는다.
+ *  네임드 결투 성공(resolveChallenge)은 명성을 주지 않고 납품을 열 뿐이라, 토벌 기여와 항해일지는 뒤이은 납품(deliverBounty)이 한 번만 쓴다 */
 const GUILD_ACTIONS = new Set(['catch', 'sell', 'exhibit', 'deliverBounty', 'claimRelief']);
 
 // 액션 페이싱 게이트 — 서버 추첨으로 가치를 생성하는 catch와 쓰기 비용이 큰 sendLetter에만
@@ -826,6 +828,12 @@ async function route(req: Req, res: Res): Promise<void> {
   if (action.type === 'claimMail' && mail) fragments.push(claimMailFragment(guard, uid, mail.id, nowISO));
   // 업적 카운터 — 확정 문장 안에서 상태 변경과 같은 원자 단위로 오른다. 클라이언트 주장으로 올리지 않는다.
   fragments.push(counterUpsertFragment(guard, uid, counterIncrementsForEvents(out.events)));
+  // 일일 운세 이력 — 로그인 계정의 첫 접속(boot)과 당일 운세 확정(catch·sell·extractEnergy 백스톱 포함)만 멱등 기록한다. 게스트는 저장하지 않는다.
+  // 응답 직후의 운세 조회가 오늘 운세를 보도록 확정 문장 안에서 쓴다
+  if (user.email !== null && out.state.fortune
+      && (action.type === 'boot' || ((action.type === 'catch' || action.type === 'sell' || action.type === 'extractEnergy') && prevFortune?.day !== out.state.fortune.day))) {
+    fragments.push(recordDailyFortuneFragment(guard, uid, out.state.fortune));
+  }
 
   const readVersion = Number(row.version);
   const nextVersion = readVersion + 1;
@@ -868,6 +876,22 @@ async function route(req: Req, res: Res): Promise<void> {
       }
     }
   }
+  // 길드 기여와 항해일지 — 확정된 액션마다 한 번 쓴다(낙관 락을 통과한 요청만 여기 온다). 응답 직후의 길드 조회가 보도록 응답 전에 쓰되,
+  // 실패가 확정된 액션을 되돌리지 않게 보고만 한다
+  if (loaded.guild && GUILD_ACTIONS.has(action.type)) {
+    const guildId = loaded.guild.id;
+    const cleared = action.type === 'deliverBounty' ? bountyById(action.questId) ?? null : null;
+    const add = contributionFor(out.state.fame - Number(row.fame), cleared);
+    try {
+      if (await recordGuildActivity(db, guildId, uid, nowISO, add, guildLogsOf(out.events)) > 0) {
+        const r = out.result;
+        if (r.type === 'catch' || r.type === 'sell' || r.type === 'none') r.guildUpdated = true;
+        notifyGuild(guildId, { t: 'guild', kind: 'updated', guild: '', nick: null });
+      }
+    } catch (e) {
+      await reportServerIssue('후속 쓰기 실패 — 길드 기여/항해일지 반영 실패', e, { uid, action: action.type, version: nextVersion });
+    }
+  }
   if (committedNickname !== null) setNick(uid, committedNickname);
 
   // 후속 쓰기 — 이벤트 append, 활동일, 주기 스냅샷, 만료 의뢰 정리. 유실 허용 묶음이라 응답 뒤에 실행하고
@@ -883,22 +907,6 @@ async function route(req: Req, res: Res): Promise<void> {
   const actionType = action.type;
   afterResponse(runFollowUps(db, followUps).catch(e =>
     reportServerIssue('후속 쓰기 실패 — events/스냅샷 유실', e, { uid, action: actionType, version: nextVersion })));
-  // 일일 운세 이력 — 로그인 계정의 첫 접속(boot)과 당일 운세 확정(catch·sell·extractEnergy 백스톱 포함)만 멱등 기록한다. 게스트는 저장하지 않는다
-  if (user.email !== null && out.state.fortune
-      && (action.type === 'boot' || ((action.type === 'catch' || action.type === 'sell' || action.type === 'extractEnergy') && prevFortune?.day !== out.state.fortune.day))) {
-    afterResponse(recordDailyFortune(db, uid, out.state.fortune).catch(e =>
-      reportServerIssue('후속 쓰기 실패 — 일일 운세 이력 유실', e, { uid, action: actionType, version: nextVersion })));
-  }
-  // 길드 기여와 항해일지 — 확정된 액션마다 한 번 쓴다(낙관 락을 통과한 요청만 여기 온다). 실패가 이벤트 쓰기를 막지 않게 따로 실행한다
-  if (loaded.guild && GUILD_ACTIONS.has(action.type)) {
-    const guildId = loaded.guild.id;
-    const cleared = action.type === 'deliverBounty' ? bountyById(action.questId) ?? null : null;
-    const add = contributionFor(out.state.fame - Number(row.fame), cleared);
-    afterResponse(runFollowUps(db, [
-      contributionUpsert(guildId, uid, nowISO, add),
-      logbookInsert(guildId, uid, guildLogsOf(out.events), nowISO),
-    ]).catch(e => reportServerIssue('후속 쓰기 실패 — 길드 기여/항해일지 유실', e, { uid, action: actionType, version: nextVersion })));
-  }
 
   // 응답은 델타가 기본 — 풀가방 왕복이 egress 주범이라 초기 로드 이후에는 변경분만
   // 보낸다. import는 통째 교체라 풀 유지 (빈도 극저, 예외).
