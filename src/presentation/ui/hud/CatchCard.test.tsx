@@ -100,7 +100,7 @@ describe('획득 카드', () => {
     expect(fx.parentElement).toBe(container.querySelector('.animate-catch-pop')!.parentElement);
   });
 
-  it('일반·희귀 비돌연변이는 모서리 브래킷과 액자 발광을 두지 않고, 영웅·전설·돌연변이만 Option B 연출을 표시한다', () => {
+  it('일반·희귀 비돌연변이는 모서리 브래킷과 액자 발광을 두지 않고, 영웅·전설·돌연변이만 모서리·액자 발광 연출을 표시한다', () => {
     for (const rarity of ['common', 'rare'] as const) {
       const targetFish = FISH.find(f => f.rarity === rarity)!;
       const { container } = render(<CatchCard fish={targetFish} info={info({ form: 'normal' })} />);
