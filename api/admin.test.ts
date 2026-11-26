@@ -144,6 +144,7 @@ vi.mock('./_server/livePresence.js', async () => {
 });
 
 import handler from './admin.js';
+import { computeUserAggregates, opHandle } from './_data/admin.js';
 import { clearMailIdempotencyCache, MAX_MAIL_BATCH_TOTAL_GOLD } from './_data/mailbox.js';
 
 async function call(method: string, query: Record<string, string>, body?: unknown) {
@@ -513,6 +514,158 @@ describe('api/admin 핸들러 단위 테스트', () => {
       action: 'staffBadge',
       targetId: ADMIN_UID,
       detail: { showStaffBadge: false },
+    });
+  });
+
+  it('maintainer의 GET/POST ?q=notices는 createdBy를 opHandle로 마스킹하고 admin은 원본 UUID를 유지한다', async () => {
+    const maintUid = '00000000-0000-4000-8000-000000000909';
+    const expectedAdminHandle = opHandle(ADMIN_UID);
+    const expectedMaintHandle = opHandle(maintUid);
+    const noticeByAdmin = {
+      id: 1, title: '공지1', body: '본문1',
+      startsAt: '2030-01-01T00:00:00.000Z', endsAt: '2030-01-02T00:00:00.000Z',
+      createdBy: ADMIN_UID, createdAt: '2029-12-31T00:00:00.000Z', updatedAt: '2029-12-31T00:00:00.000Z',
+    };
+    const noticeByNull = { ...noticeByAdmin, id: 2, createdBy: null };
+
+    mocks.adminMember.mockResolvedValue({ role: 'maintainer', showStaffBadge: false });
+    mocks.listAllAdminNotices.mockResolvedValueOnce([noticeByAdmin, noticeByNull]);
+    const listMaint = await call('GET', { q: 'notices' });
+    expect(listMaint.status).toBe(200);
+    expect(listMaint.body).toEqual([
+      { ...noticeByAdmin, createdBy: expectedAdminHandle },
+      noticeByNull,
+    ]);
+    expect(JSON.stringify(listMaint.body)).not.toContain(ADMIN_UID);
+
+    mocks.listLiveNotices.mockResolvedValue([]);
+    mocks.createNotice.mockResolvedValueOnce({ ...noticeByAdmin, id: 11, createdBy: maintUid });
+    const createMaint = await call('POST', { q: 'notices' }, {
+      op: 'create', title: '작성', body: '내용',
+      startsAt: '2030-01-01T00:00:00.000Z', endsAt: '2030-01-02T00:00:00.000Z',
+    });
+    expect(createMaint).toMatchObject({
+      status: 200,
+      body: { notice: { id: 11, createdBy: expectedMaintHandle } },
+    });
+    expect(JSON.stringify(createMaint.body)).not.toContain(maintUid);
+
+    mocks.updateNotice.mockResolvedValueOnce({ ...noticeByAdmin, id: 1, title: '수정' });
+    const updateMaint = await call('POST', { q: 'notices' }, {
+      op: 'update', id: 1, title: '수정', body: '내용',
+      startsAt: '2030-01-01T00:00:00.000Z', endsAt: '2030-01-02T00:00:00.000Z',
+    });
+    expect(updateMaint).toMatchObject({
+      status: 200,
+      body: { notice: { id: 1, createdBy: expectedAdminHandle } },
+    });
+    expect(JSON.stringify(updateMaint.body)).not.toContain(ADMIN_UID);
+
+    mocks.endNoticeNow.mockResolvedValueOnce({ ...noticeByAdmin, id: 1 });
+    const endMaint = await call('POST', { q: 'notices' }, { op: 'end', id: 1 });
+    expect(endMaint).toMatchObject({
+      status: 200,
+      body: { notice: { id: 1, createdBy: expectedAdminHandle } },
+    });
+    expect(JSON.stringify(endMaint.body)).not.toContain(ADMIN_UID);
+
+    // admin은 원본 UUID 유지
+    mocks.adminMember.mockResolvedValue({ role: 'admin', showStaffBadge: false });
+    mocks.listAllAdminNotices.mockResolvedValueOnce([noticeByAdmin]);
+    expect(await call('GET', { q: 'notices' })).toMatchObject({
+      status: 200,
+      body: [{ id: 1, createdBy: ADMIN_UID }],
+    });
+    mocks.createNotice.mockResolvedValueOnce({ ...noticeByAdmin, id: 12 });
+    expect(await call('POST', { q: 'notices' }, {
+      op: 'create', title: '관리자공지', body: '내용',
+      startsAt: '2030-01-01T00:00:00.000Z', endsAt: '2030-01-02T00:00:00.000Z',
+    })).toMatchObject({
+      status: 200,
+      body: { notice: { id: 12, createdBy: ADMIN_UID } },
+    });
+  });
+
+  it('opHandle은 production에서 비밀키 미설정 시 오류를 던지고 비운영 환경에서는 폴백을 허용한다', () => {
+    const prevDeploy = process.env.DEPLOY_ENV;
+    const prevBetter = process.env.BETTER_AUTH_SECRET;
+    const prevHandle = process.env.ADMIN_HANDLE_SECRET;
+    try {
+      delete process.env.BETTER_AUTH_SECRET;
+      delete process.env.ADMIN_HANDLE_SECRET;
+      process.env.DEPLOY_ENV = 'local';
+      expect(opHandle(ADMIN_UID)).toMatch(/^op_[0-9a-f]{10}$/);
+
+      process.env.DEPLOY_ENV = 'production';
+      expect(() => opHandle(ADMIN_UID)).toThrow();
+
+      process.env.ADMIN_HANDLE_SECRET = 'prod-handle-secret';
+      expect(opHandle(ADMIN_UID)).toMatch(/^op_[0-9a-f]{10}$/);
+    } finally {
+      if (prevDeploy === undefined) delete process.env.DEPLOY_ENV; else process.env.DEPLOY_ENV = prevDeploy;
+      if (prevBetter === undefined) delete process.env.BETTER_AUTH_SECRET; else process.env.BETTER_AUTH_SECRET = prevBetter;
+      if (prevHandle === undefined) delete process.env.ADMIN_HANDLE_SECRET; else process.env.ADMIN_HANDLE_SECRET = prevHandle;
+    }
+  });
+
+  it('computeUserAggregates는 클라이언트와 동일한 기준으로 활성·신규·골드·진행 분포를 집계한다', () => {
+    const nowMs = Date.parse('2026-11-27T01:00:00.000Z'); // KST 2026-11-27 10:00:00
+    const agg = computeUserAggregates([
+      // 오늘 가입 정식 계정, 최근 활동, boat 1, fame 100 (< T2 250 정체)
+      {
+        user_id: 'u1', is_anonymous: false, signed_up_at: '2026-11-26T16:00:00.000Z', // KST 11-27 01:00
+        gold: 1000, fame: 100, boat: 1, rod: 4, visited: ['village', 'world'],
+        restricted: false, last_action_at: '2026-11-27T00:30:00.000Z', last_session_at: null,
+      },
+      // 3일 전 세션, boat 0, fame 0 (정식 계정이라 휴면 아님)
+      {
+        user_id: 'u2', is_anonymous: false, signed_up_at: '2026-11-20T00:00:00.000Z',
+        gold: 200, fame: 0, boat: 0, rod: 2, visited: ['village'],
+        restricted: false, last_action_at: null, last_session_at: '2026-11-24T01:00:00.000Z',
+      },
+      // 20일 전 활동, 제재 게스트 (제재돼서 휴면 게스트 제외 대상 아님), boat 2, fame 500 (< T3 1500 정체)
+      {
+        user_id: 'u3', is_anonymous: true, signed_up_at: '2026-11-01T00:00:00.000Z',
+        gold: 0, fame: 0, boat: 2, rod: 3, visited: [],
+        restricted: true, last_action_at: '2026-11-07T02:00:00.000Z', last_session_at: null,
+      },
+      // 오늘 가입 휴면 게스트(gold=0, fame=0, 비제재 익명) -> activePlayers에서 제외, gold 집계엔 포함
+      {
+        user_id: 'u4', is_anonymous: true, signed_up_at: '2026-11-26T18:00:00.000Z',
+        gold: 0, fame: 0, boat: 0, rod: 1, visited: ['village'],
+        restricted: false, last_action_at: '2026-11-26T18:00:00.000Z', last_session_at: null,
+      },
+      // 저장 없는 휴면 게스트 -> activePlayers 제외, gold 제외
+      {
+        user_id: 'u5', is_anonymous: true, signed_up_at: '2026-10-01T00:00:00.000Z',
+        gold: null, fame: null, boat: null, rod: null, visited: null,
+        restricted: null, last_action_at: null, last_session_at: null,
+      },
+    ], nowMs);
+
+    expect(agg.totalUsers).toBe(5);
+    expect(agg.activePlayers).toBe(3);
+    expect(agg.activeUsers).toEqual({ today: 2, week: 3, month: 4 });
+    expect(agg.newToday).toEqual({ users: 2, accounts: 1 });
+    // goldValues = [0, 0, 200, 1000] -> sum 1200, p50 idx=1 -> 0, p75 idx=2 -> 200, max 1000
+    expect(agg.gold).toEqual({ count: 4, sum: 1200, median: 0, p75: 200, max: 1000 });
+    expect(agg.progression.boats).toEqual([
+      { tier: 0, count: 1 }, { tier: 1, count: 1 }, { tier: 2, count: 1 },
+      { tier: 3, count: 0 }, { tier: 4, count: 0 }, { tier: 5, count: 0 },
+      { tier: 6, count: 0 }, { tier: 7, count: 0 }, { tier: 8, count: 0 }, { tier: 9, count: 0 },
+    ]);
+    expect(agg.progression.rods).toEqual([
+      { level: 2, count: 1 }, { level: 3, count: 1 }, { level: 4, count: 1 },
+    ]);
+    expect(agg.progression.regionReach).toEqual([
+      { id: 'village', count: 2 },
+      { id: 'world', count: 1 },
+    ]);
+    expect(agg.progression.zoneUnlocks).toContainEqual({ id: 'village', count: 3 });
+    expect(agg.progression.zoneUnlocks).toContainEqual({ id: 'pacific', count: 2 });
+    expect(agg.progression.fameGateStalled).toEqual({
+      total: 2,
+      byNextTier: [{ nextTier: 2, count: 1 }, { nextTier: 3, count: 1 }],
     });
   });
 });

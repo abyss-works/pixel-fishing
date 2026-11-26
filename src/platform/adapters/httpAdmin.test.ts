@@ -162,6 +162,32 @@ describe('HttpAdmin', () => {
     const live = { boats: [{ boat: 0, users: 2 }], gold: { p25: null, max: null }, anomalies: { fastGaps: 0, fastUsers: 0, perfectPct: null } };
     fetchMock.mockResolvedValue(new Response(JSON.stringify(live), { status: 200 }));
     await expect(admin.balanceLive(7)).resolves.toEqual(live);
+    const overview = {
+      users: [],
+      userAggregates: {
+        totalUsers: 5,
+        activePlayers: 3,
+        asOf: '2026-11-27T01:00:00.000Z',
+        activeUsers: { today: 1, week: 2, month: 3 },
+        newToday: { users: 1, accounts: 1 },
+        gold: { count: 4, sum: 1500, median: 300, p75: 500, max: 1000 },
+        progression: {
+          boats: [{ tier: 0, count: 1 }, { tier: 1, count: 2 }],
+          rods: [{ level: 2, count: 1 }, { level: 4, count: 2 }],
+          regionReach: [{ id: 'village', count: 3 }, { id: 'world', count: 2 }],
+          zoneUnlocks: [{ id: 'village', count: 3 }, { id: 'pacific', count: 2 }],
+          fameGateStalled: { total: 1, byNextTier: [{ nextTier: 2, count: 1 }] },
+        },
+      },
+      recentEvents: [],
+      spamFlags: [],
+      dailyStats: [],
+      retention: [],
+      sessions: [],
+      live: { count: 0, online: [] },
+    };
+    fetchMock.mockResolvedValue(new Response(JSON.stringify(overview), { status: 200 }));
+    await expect(admin.overview(30)).resolves.toEqual(overview);
   });
 
   it('관리자 세션이 없어 서버가 거절하면(401) 접근 판정은 signedOut이고 나머지 조회는 실패한다', async () => {

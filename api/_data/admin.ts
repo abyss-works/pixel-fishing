@@ -8,6 +8,7 @@ import type { SQL } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
 import { ACHIEVEMENTS } from '../../src/game/content/achievements.js';
 import { ARTIFACTS, artifactById, artifactHasLevel } from '../../src/game/content/artifacts.js';
+import { BOATS } from '../../src/game/content/boats.js';
 import { bountyById } from '../../src/game/content/bounties.js';
 import { ENERGY_ITEM_IDS, RECIPES, recipeById } from '../../src/game/content/cooking.js';
 import { FISH, fishById } from '../../src/game/content/fish.js';
@@ -15,7 +16,7 @@ import { NAMED } from '../../src/game/content/named.js';
 import { spotById } from '../../src/game/content/spots.js';
 import type { SpotId } from '../../src/game/content/spots.js';
 import { HATS, hatById } from '../../src/game/content/wardrobe.js';
-import { zoneById } from '../../src/game/content/zones.js';
+import { ZONES, zoneById } from '../../src/game/content/zones.js';
 import type { ZoneId } from '../../src/game/content/zones.js';
 import type { LiveOnline } from '../_server/live.js';
 import { deriveAchievements } from './achievements.js';
@@ -34,7 +35,9 @@ export interface AdminMember {
 
 /** 서버 비밀키 기반 결정적 불투명 운영 핸들(`op_` + HMAC-SHA256 10자리 hex)을 생성한다 */
 export function opHandle(uid: string): string {
-  const secret = process.env.BETTER_AUTH_SECRET || process.env.ADMIN_HANDLE_SECRET || 'dev-op-handle-secret';
+  const configured = process.env.BETTER_AUTH_SECRET || process.env.ADMIN_HANDLE_SECRET;
+  if (!configured && process.env.DEPLOY_ENV === 'production') throw new Error('ADMIN_HANDLE_SECRET missing in production');
+  const secret = configured || 'dev-op-handle-secret';
   const digest = createHmac('sha256', secret).update(uid, 'utf8').digest('hex');
   return `op_${digest.slice(0, 10)}`;
 }
@@ -111,6 +114,38 @@ function lastDays(db: Executor, days: number, body: SQL): Promise<unknown[]> {
     where v.day >= (now() at time zone 'Asia/Seoul')::date - ${days - 1}::int`, sql`t.day desc`);
 }
 
+interface MaintainerUserSourceRow {
+  user_id: string;
+  nickname: string | null;
+  boat: number | null;
+  restricted: boolean | null;
+}
+
+function projectMaintainerUser(row: MaintainerUserSourceRow) {
+  const handle = opHandle(row.user_id);
+  return {
+    user_id: handle,
+    opHandle: handle,
+    email: null,
+    nickname: row.nickname,
+    is_anonymous: null,
+    signed_up_at: null,
+    last_sign_in_at: null,
+    gold: null,
+    fame: null,
+    boat: row.boat,
+    rod: null,
+    location_kind: null,
+    location_id: null,
+    visited: null,
+    restricted: row.restricted,
+    save_version: null,
+    last_action_at: null,
+    last_session_at: null,
+    total_session_sec: 0,
+  };
+}
+
 /**
  * 사용자 명부. 인증 계정과 닉네임, 현재 저장 상태를 잇고(마지막 로그인은 세션의 마지막 사용 시각이다), 최근 행동순으로 정렬하며 행동이 없는 계정은 뒤에 둔다.
  * 마지막 세션(last_session_at)은 접속 세션이 가장 늦게 끝난 시각, 누적 세션(total_session_sec)은 접속 세션 길이의 합(초)이다.
@@ -125,36 +160,8 @@ export async function users(db: Executor, role: AdminRole = 'admin'): Promise<un
         c.updated_at as last_action_at
       from auth.users u
       left join public.profiles p on p.user_id = u.id
-      left join public.saves_current c on c.user_id = u.id`, sql`t.last_action_at desc nulls last, t.user_id`) as {
-      user_id: string;
-      nickname: string | null;
-      boat: number | null;
-      restricted: boolean | null;
-    }[];
-    return rows.map(row => {
-      const handle = opHandle(row.user_id);
-      return {
-        user_id: handle,
-        opHandle: handle,
-        email: null,
-        nickname: row.nickname,
-        is_anonymous: null,
-        signed_up_at: null,
-        last_sign_in_at: null,
-        gold: null,
-        fame: null,
-        boat: row.boat,
-        rod: null,
-        location_kind: null,
-        location_id: null,
-        visited: null,
-        restricted: row.restricted,
-        save_version: null,
-        last_action_at: null,
-        last_session_at: null,
-        total_session_sec: 0,
-      };
-    });
+      left join public.saves_current c on c.user_id = u.id`, sql`t.last_action_at desc nulls last, t.user_id`) as MaintainerUserSourceRow[];
+    return rows.map(projectMaintainerUser);
   }
   return jsonRows(db, sql`select u.id as user_id, case when u.is_anonymous then null else u.email end as email, u.is_anonymous,
       p.nickname,
@@ -666,18 +673,218 @@ export async function sessions(
   });
 }
 
-/** 개요 탭 통합 조회 — 명부, 최근 이벤트, 스팸 플래그, 일별 집계, 리텐션, 최근 세션, 실시간 접속을 한 요청에 모은다 */
+const AGGREGATE_DAY_MS = 86_400_000;
+const AGGREGATE_KST_OFFSET_MS = 9 * 3_600_000;
+const OPEN_WORLD_REGIONS = ['village', 'world'] as const;
+const OPEN_WORLD_ZONE_UNLOCKS = ZONES.filter(z => !z.parent).map(z => ({
+  id: z.id,
+  entryBoat: z.entryBoat ?? (z.id === 'village' ? 0 : 1),
+}));
+
+export interface AdminUserAggregates {
+  totalUsers: number;
+  activePlayers: number;
+  asOf: string;
+  activeUsers: { today: number; week: number; month: number };
+  newToday: { users: number; accounts: number };
+  gold: { count: number; sum: number; median: number | null; p75: number | null; max: number | null };
+  progression: {
+    boats: { tier: number; count: number }[];
+    rods: { level: number; count: number }[];
+    regionReach: { id: string; count: number }[];
+    zoneUnlocks: { id: string; count: number }[];
+    fameGateStalled: { total: number; byNextTier: { nextTier: number; count: number }[] };
+  };
+}
+
+export interface AggregateUserRow {
+  user_id: string;
+  is_anonymous: boolean | null;
+  signed_up_at: string | null;
+  gold: number | string | null;
+  fame: number | string | null;
+  boat: number | null;
+  rod: number | null;
+  visited: unknown;
+  restricted: boolean | null;
+  last_action_at: string | null;
+  last_session_at: string | null;
+}
+
+const kstDayOfMs = (ms: number): string =>
+  new Date(ms + AGGREGATE_KST_OFFSET_MS).toISOString().slice(0, 10);
+
+const msOf = (iso: string | null | undefined): number =>
+  (iso ? Date.parse(iso) : NaN);
+
+const numOrNaN = (value: number | string | null): number =>
+  (value === null ? NaN : Number(value));
+
+const percentileOf = (sorted: readonly number[], p: number): number | null => {
+  if (sorted.length === 0) return null;
+  const idx = Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1));
+  return sorted[idx];
+};
+
+function isDormantGuestRow(row: AggregateUserRow): boolean {
+  if (row.is_anonymous !== true || row.restricted === true) return false;
+  return (row.gold === null || numOrNaN(row.gold) === 0)
+    && (row.fame === null || numOrNaN(row.fame) === 0);
+}
+
+/** 원시 사용자 명부 행으로부터 개요·경제·진행 대시보드용 비식별 순수 수치 집계를 계산한다 */
+export function computeUserAggregates(
+  rows: readonly AggregateUserRow[],
+  nowMs: number = Date.now(),
+): AdminUserAggregates {
+  const todayKst = kstDayOfMs(nowMs);
+  let activeToday = 0;
+  let activeWeek = 0;
+  let activeMonth = 0;
+  let newUsersToday = 0;
+  let newAccountsToday = 0;
+
+  for (const row of rows) {
+    const seenCandidates = [msOf(row.last_action_at), msOf(row.last_session_at)].filter(Number.isFinite);
+    if (seenCandidates.length > 0) {
+      const seen = Math.max(...seenCandidates);
+      if (kstDayOfMs(seen) === todayKst) activeToday++;
+      if (nowMs - seen < 7 * AGGREGATE_DAY_MS) activeWeek++;
+      if (nowMs - seen < 30 * AGGREGATE_DAY_MS) activeMonth++;
+    }
+    const signedUp = msOf(row.signed_up_at);
+    if (Number.isFinite(signedUp) && kstDayOfMs(signedUp) === todayKst) {
+      newUsersToday++;
+      if (row.is_anonymous === false) newAccountsToday++;
+    }
+  }
+
+  const goldValues = rows
+    .map(row => numOrNaN(row.gold))
+    .filter(Number.isFinite)
+    .sort((a, b) => a - b);
+  const goldSum = goldValues.reduce((sum, value) => sum + value, 0);
+
+  const activeRows = rows.filter(row => !isDormantGuestRow(row));
+  const boatCounts = Array.from({ length: BOATS.length + 1 }, () => 0);
+  const rodCounts = new Map<number, number>();
+  const regionCounts = new Map<string, number>(OPEN_WORLD_REGIONS.map(id => [id, 0]));
+  const zoneCounts = new Map<string, number>(OPEN_WORLD_ZONE_UNLOCKS.map(z => [z.id, 0]));
+  const stalledCounts = new Map<number, number>();
+  let stalledTotal = 0;
+
+  for (const row of activeRows) {
+    const boatTier = row.boat ?? 0;
+    if (boatTier >= 0 && boatTier <= BOATS.length) {
+      boatCounts[boatTier]++;
+    }
+
+    const rodLevel = row.rod ?? 1;
+    if (rodLevel >= 1) {
+      rodCounts.set(rodLevel, (rodCounts.get(rodLevel) ?? 0) + 1);
+    }
+
+    const visited = Array.isArray(row.visited) ? row.visited : [];
+    for (const id of OPEN_WORLD_REGIONS) {
+      if (visited.includes(id)) {
+        regionCounts.set(id, (regionCounts.get(id) ?? 0) + 1);
+      }
+    }
+
+    for (const zone of OPEN_WORLD_ZONE_UNLOCKS) {
+      if (boatTier >= zone.entryBoat) {
+        zoneCounts.set(zone.id, (zoneCounts.get(zone.id) ?? 0) + 1);
+      }
+    }
+
+    const nextBoat = BOATS.find(boat => boat.tier === boatTier + 1);
+    if (nextBoat) {
+      const fame = numOrNaN(row.fame);
+      if (fame < nextBoat.fameReq) {
+        stalledTotal++;
+        stalledCounts.set(nextBoat.tier, (stalledCounts.get(nextBoat.tier) ?? 0) + 1);
+      }
+    }
+  }
+
+  return {
+    totalUsers: rows.length,
+    activePlayers: activeRows.length,
+    asOf: new Date(nowMs).toISOString(),
+    activeUsers: {
+      today: activeToday,
+      week: activeWeek,
+      month: activeMonth,
+    },
+    newToday: {
+      users: newUsersToday,
+      accounts: newAccountsToday,
+    },
+    gold: {
+      count: goldValues.length,
+      sum: goldSum,
+      median: percentileOf(goldValues, 50),
+      p75: percentileOf(goldValues, 75),
+      max: goldValues.length > 0 ? goldValues[goldValues.length - 1] : null,
+    },
+    progression: {
+      boats: boatCounts.map((count, tier) => ({ tier, count })),
+      rods: [...rodCounts.entries()].sort(([a], [b]) => a - b).map(([level, count]) => ({ level, count })),
+      regionReach: OPEN_WORLD_REGIONS.map(id => ({ id, count: regionCounts.get(id) ?? 0 })),
+      zoneUnlocks: OPEN_WORLD_ZONE_UNLOCKS.map(z => ({ id: z.id, count: zoneCounts.get(z.id) ?? 0 })),
+      fameGateStalled: {
+        total: stalledTotal,
+        byNextTier: [...stalledCounts.entries()].sort(([a], [b]) => a - b).map(([nextTier, count]) => ({ nextTier, count })),
+      },
+    },
+  };
+}
+
+async function overviewUsers(
+  db: Executor,
+  role: AdminRole,
+  nowMs: number,
+): Promise<{ userRows: unknown[]; userAggregates: AdminUserAggregates }> {
+  if (role !== 'maintainer') {
+    const rawRows = await users(db, 'admin') as AggregateUserRow[];
+    return {
+      userRows: rawRows,
+      userAggregates: computeUserAggregates(rawRows, nowMs),
+    };
+  }
+  const rawRows = await jsonRows(db, sql`select u.id::text as user_id,
+      p.nickname,
+      u.is_anonymous,
+      u.created_at as signed_up_at,
+      c.gold, c.fame, c.boat, c.rod,
+      c.data -> 'visited' as visited,
+      c.restricted,
+      c.updated_at as last_action_at,
+      ps.last_session_at
+    from auth.users u
+    left join (select user_id, max(ended_at) as last_session_at
+      from public.play_sessions group by user_id) ps on ps.user_id = u.id
+    left join public.profiles p on p.user_id = u.id
+    left join public.saves_current c on c.user_id = u.id`, sql`t.last_action_at desc nulls last, t.user_id`) as (AggregateUserRow & MaintainerUserSourceRow)[];
+  return {
+    userRows: rawRows.map(projectMaintainerUser),
+    userAggregates: computeUserAggregates(rawRows, nowMs),
+  };
+}
+
+/** 개요 탭 통합 조회 — 명부, 비식별 사전 집계, 최근 이벤트, 스팸 플래그, 일별 집계, 리텐션, 최근 세션, 실시간 접속을 한 요청에 모은다 */
 export async function overview(
   db: Executor,
   days: number,
   online: readonly LiveOnline[],
   role: AdminRole = 'admin',
 ): Promise<unknown> {
-  const kstToday = Date.parse(new Date(Date.now() + 9 * 3_600_000).toISOString().slice(0, 10));
+  const nowMs = Date.now();
+  const kstToday = Date.parse(new Date(nowMs + AGGREGATE_KST_OFFSET_MS).toISOString().slice(0, 10));
   const to = new Date(kstToday).toISOString().slice(0, 10);
-  const from = new Date(kstToday - (days - 1) * 86_400_000).toISOString().slice(0, 10);
-  const [userRows, recentEventRows, spamFlagRows, dailyStatRows, retentionRows, sessionRows, live] = await Promise.all([
-    users(db, role),
+  const from = new Date(kstToday - (days - 1) * AGGREGATE_DAY_MS).toISOString().slice(0, 10);
+  const [{ userRows, userAggregates }, recentEventRows, spamFlagRows, dailyStatRows, retentionRows, sessionRows, live] = await Promise.all([
+    overviewUsers(db, role, nowMs),
     recentEvents(db, role),
     spamFlags(db, role),
     dailyStats(db, from, to),
@@ -687,6 +894,7 @@ export async function overview(
   ]);
   return {
     users: userRows,
+    userAggregates,
     recentEvents: recentEventRows,
     spamFlags: spamFlagRows,
     dailyStats: dailyStatRows,

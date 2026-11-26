@@ -32,6 +32,7 @@ import { deliverMail, DuplicateMailError, parseMailRequest, planMail, recentSent
 import {
   createNotice, deleteNotice, endNoticeNow, listAllAdminNotices, listLiveNotices, updateNotice,
 } from './_data/notices.js';
+import type { AdminNoticeRow } from './_data/notices.js';
 import { setRestricted } from './_data/save.js';
 import { recordAdminAction } from './_data/telemetry.js';
 import { deleteWidgetTokensForUser } from './_data/widget.js';
@@ -172,7 +173,10 @@ function parse(name: string | undefined, req: Req, role: read.AdminRole): (db: E
     case 'letters': return read.letters;
     case 'changelog': return db => read.changelog(db, role);
     case 'chatReports': return db => read.chatReports(db, role);
-    case 'notices': return listAllAdminNotices;
+    case 'notices': return async db => {
+      const rows = await listAllAdminNotices(db);
+      return role === 'maintainer' ? rows.map(row => projectNotice(row, role)) : rows;
+    };
     case 'events': return listAdminEvents;
     case 'eventDraws': {
       const eventId = param(req, 'eventId');
@@ -321,6 +325,12 @@ async function staffBadge({ withTransaction }: Database, raw: unknown, actorId: 
   return { showStaffBadge: show };
 }
 
+/** 기간제 상시 공지 작성자 id를 역할에 맞춰 투영한다(maintainer는 불투명 운영 핸들) */
+const projectNotice = (notice: AdminNoticeRow, role: read.AdminRole): AdminNoticeRow =>
+  role === 'maintainer'
+    ? { ...notice, createdBy: notice.createdBy ? read.opHandle(notice.createdBy) : null }
+    : notice;
+
 /** 기간제 상시 공지 작성·수정·즉시 마감·삭제 후 실시간 전체 연결에 마감 전·최근 마감 공지 목록을 즉시 전파한다 */
 async function notices(db: Executor, raw: unknown, adminId: string, role: read.AdminRole): Promise<unknown> {
   const body = (raw !== null && typeof raw === 'object' ? raw : {}) as {
@@ -349,7 +359,7 @@ async function notices(db: Executor, raw: unknown, adminId: string, role: read.A
         detail: { noticeId: notice.id },
       }));
       await sync();
-      return { notice };
+      return { notice: projectNotice(notice, role) };
     }
     case 'update': {
       const id = parseId();
@@ -366,7 +376,7 @@ async function notices(db: Executor, raw: unknown, adminId: string, role: read.A
         detail: { noticeId: notice.id },
       }));
       await sync();
-      return { notice };
+      return { notice: projectNotice(notice, role) };
     }
     case 'end': {
       const id = parseId();
@@ -379,7 +389,7 @@ async function notices(db: Executor, raw: unknown, adminId: string, role: read.A
         detail: { noticeId: notice.id },
       }));
       await sync();
-      return { notice };
+      return { notice: projectNotice(notice, role) };
     }
     case 'delete': {
       const id = parseId();

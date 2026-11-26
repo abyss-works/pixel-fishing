@@ -55,7 +55,7 @@ export type {
   RankingBoardId, RankingWindow, RankingRow, RankingBoard, MailItem, MailItemAttachment, FriendItem, FriendOp, FriendOpResult,
   GuildBonusItem, GuildDonorItem, GuildInfo, GuildInvitePreview, GuildJoinRequestItem, GuildLogItem, GuildMemberItem, GuildMyRequest, GuildOp,
   GuildOpResult, GuildState, PublicGuildItem,
-  AdminUserRow, AdminUserState, AdminOverview, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
+  AdminUserRow, AdminUserState, AdminUserAggregates, AdminOverview, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
   AdminHttpMetricRouteGroup, AdminHttpMetricCounts, AdminHttpMetricDayRow, AdminHttpMetricRouteRow, AdminHttpMetricRawRow, AdminHttpMetrics,
   AdminConversionTimeBucketId, AdminConversionTimeBucket, AdminOnboardingConversion,
   AdminTutorialStageId, AdminOnboardingTutorialStage, AdminOnboardingTutorials,

@@ -1185,4 +1185,162 @@ describe('역할 분리(admin·maintainer) · Zero-PII 투영 · 배지 토글 �
       { actor_id: ADMIN, actor_role: 'admin', action: 'mail.send', target_id: PLAYER },
     ]);
   });
+
+  it('maintainer의 GET/POST ?q=notices는 createdBy를 opHandle로 마스킹하고 admin은 원본 UUID를 유지한다', async () => {
+    const { opHandle } = await import('./_data/admin.js');
+    const adminCreate = await callAdmin({ q: 'notices' }, userToken(ADMIN), 'POST', {
+      op: 'create',
+      title: '관리자 공지',
+      body: '관리자 공지 본문',
+      startsAt: '2030-01-01T00:00:00.000Z',
+      endsAt: '2030-01-02T00:00:00.000Z',
+    });
+    expect(adminCreate.status).toBe(200);
+    const adminNotice = (adminCreate.body as { notice: { id: number; createdBy: string } }).notice;
+    expect(adminNotice.createdBy).toBe(ADMIN);
+
+    const maintCreate = await callAdmin({ q: 'notices' }, userToken(MAINT), 'POST', {
+      op: 'create',
+      title: '메인테이너 작성 공지',
+      body: '메인테이너 공지 본문',
+      startsAt: '2030-01-03T00:00:00.000Z',
+      endsAt: '2030-01-04T00:00:00.000Z',
+    });
+    expect(maintCreate.status).toBe(200);
+    const maintNotice = (maintCreate.body as { notice: { id: number; createdBy: string } }).notice;
+    expect(maintNotice.createdBy).toBe(opHandle(MAINT));
+    expect(JSON.stringify(maintCreate.body)).not.toContain(MAINT);
+
+    try {
+      const maintList = await callAdmin({ q: 'notices' }, userToken(MAINT));
+      expect(maintList.status).toBe(200);
+      const maintListJson = JSON.stringify(maintList.body);
+      expect(maintListJson).not.toContain(ADMIN);
+      expect(maintListJson).not.toContain(MAINT);
+      const maintRows = maintList.body as { id: number; createdBy: string | null }[];
+      expect(maintRows.find(r => r.id === adminNotice.id)?.createdBy).toBe(opHandle(ADMIN));
+      expect(maintRows.find(r => r.id === maintNotice.id)?.createdBy).toBe(opHandle(MAINT));
+
+      const adminList = await callAdmin({ q: 'notices' }, userToken(ADMIN));
+      expect(adminList.status).toBe(200);
+      const adminRows = adminList.body as { id: number; createdBy: string | null }[];
+      expect(adminRows.find(r => r.id === adminNotice.id)?.createdBy).toBe(ADMIN);
+      expect(adminRows.find(r => r.id === maintNotice.id)?.createdBy).toBe(MAINT);
+
+      const maintUpdate = await callAdmin({ q: 'notices' }, userToken(MAINT), 'POST', {
+        op: 'update',
+        id: adminNotice.id,
+        title: '수정된 관리자 공지',
+        body: '수정 본문',
+        startsAt: '2030-01-01T00:00:00.000Z',
+        endsAt: '2030-01-02T00:00:00.000Z',
+      });
+      expect(maintUpdate.status).toBe(200);
+      expect((maintUpdate.body as { notice: { createdBy: string } }).notice.createdBy).toBe(opHandle(ADMIN));
+      expect(JSON.stringify(maintUpdate.body)).not.toContain(ADMIN);
+
+      const maintEnd = await callAdmin({ q: 'notices' }, userToken(MAINT), 'POST', {
+        op: 'end',
+        id: adminNotice.id,
+      });
+      expect(maintEnd.status).toBe(200);
+      expect((maintEnd.body as { notice: { createdBy: string } }).notice.createdBy).toBe(opHandle(ADMIN));
+      expect(JSON.stringify(maintEnd.body)).not.toContain(ADMIN);
+    } finally {
+      await callAdmin({ q: 'notices' }, userToken(ADMIN), 'POST', { op: 'delete', id: adminNotice.id });
+      await callAdmin({ q: 'notices' }, userToken(ADMIN), 'POST', { op: 'delete', id: maintNotice.id });
+    }
+  });
+
+  it('maintainer의 GET ?q=overview는 비식별 redacted users와 함께 정확한 비영 userAggregates를 반환하고 PII가 없다', async () => {
+    await env.client.query(`update public.saves_current set updated_at = now() where user_id = $1`, [MAINT]);
+    const adminRes = await callAdmin({ q: 'overview', days: '7' }, userToken(ADMIN));
+    const maintRes = await callAdmin({ q: 'overview', days: '7' }, userToken(MAINT));
+    expect(adminRes.status).toBe(200);
+    expect(maintRes.status).toBe(200);
+
+    const adminOv = adminRes.body as {
+      users: {
+        user_id: string;
+        email: string | null;
+        nickname: string | null;
+        is_anonymous: boolean | null;
+        signed_up_at: string | null;
+        gold: number | string | null;
+        fame: number | string | null;
+        boat: number | null;
+        rod: number | null;
+        visited: string[] | null;
+        restricted: boolean | null;
+        last_action_at: string | null;
+        last_session_at: string | null;
+      }[];
+      userAggregates: {
+        totalUsers: number;
+        activePlayers: number;
+        asOf: string;
+        activeUsers: { today: number; week: number; month: number };
+        newToday: { users: number; accounts: number };
+        gold: { count: number; sum: number; median: number | null; p75: number | null; max: number | null };
+        progression: {
+          boats: { tier: number; count: number }[];
+          rods: { level: number; count: number }[];
+          regionReach: { id: string; count: number }[];
+          zoneUnlocks: { id: string; count: number }[];
+          fameGateStalled: { total: number; byNextTier: { nextTier: number; count: number }[] };
+        };
+      };
+    };
+    const maintOv = maintRes.body as typeof adminOv;
+
+    // maintainer의 users는 계속 비식별 redaction 상태여야 한다
+    const maintPlayer = maintOv.users.find(u => u.nickname === '플레이어')!;
+    expect(maintPlayer).toMatchObject({
+      email: null,
+      signed_up_at: null,
+      gold: null,
+      fame: null,
+      rod: null,
+      visited: null,
+      last_action_at: null,
+      last_session_at: null,
+    });
+
+    // userAggregates는 비어 있지 않고 admin/maintainer 간 산식이 동일하다
+    const agg = maintOv.userAggregates;
+    expect(agg).toBeDefined();
+    expect(agg.totalUsers).toBe(adminOv.users.length);
+    expect(agg.activePlayers).toBeGreaterThan(0);
+    expect(agg.activePlayers).toBeLessThan(agg.totalUsers); // IDLE_A·IDLE_B 휴면 게스트 제외
+    expect(agg.activeUsers.today).toBeGreaterThan(0);
+    expect(agg.activeUsers.week).toBeGreaterThanOrEqual(agg.activeUsers.today);
+    expect(agg.activeUsers.month).toBeGreaterThanOrEqual(agg.activeUsers.week);
+    expect(agg.newToday.users).toBeGreaterThan(0);
+    expect(agg.newToday.accounts).toBeGreaterThan(0);
+    expect(agg.gold.count).toBeGreaterThan(0);
+    expect(agg.gold.sum).toBeGreaterThan(0);
+    expect(agg.gold.median).not.toBeNull();
+    expect(agg.gold.p75).not.toBeNull();
+    expect(agg.gold.max).toBe(1200);
+    expect(agg.progression.rods.length).toBeGreaterThan(0);
+    expect(agg.progression.regionReach.find(r => r.id === 'village')?.count).toBeGreaterThan(0);
+    expect(agg.progression.regionReach.find(r => r.id === 'world')?.count).toBeGreaterThan(0);
+    expect(agg.progression.fameGateStalled.total).toBeGreaterThan(0);
+    expect(agg.progression.fameGateStalled.byNextTier.length).toBeGreaterThan(0);
+
+    // admin과 maintainer 집계 결과 일치(시각 경계 제외 동일 데이터)
+    expect({ ...agg, asOf: '' }).toEqual({ ...adminOv.userAggregates, asOf: '' });
+
+    // PII/식별자 필드가 userAggregates에 일체 포함되지 않음을 검증
+    const aggJson = JSON.stringify(agg);
+    for (const u of adminOv.users) {
+      expect(aggJson).not.toContain(u.user_id);
+      if (u.email) expect(aggJson).not.toContain(u.email);
+      if (u.nickname) expect(aggJson).not.toContain(u.nickname);
+    }
+    expect(aggJson).not.toMatch(/op_[0-9a-f]{10}/);
+    for (const forbiddenKey of ['"user_id"', '"opHandle"', '"nickname"', '"email"']) {
+      expect(aggJson).not.toContain(forbiddenKey);
+    }
+  });
 });

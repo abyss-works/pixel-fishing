@@ -487,9 +487,60 @@ export interface AdminUserState {
   };
 }
 
+/**
+ * 관리자 개요 비식별 사전 집계.
+ * 비식별 투영에서 개별 사용자 행의 시각·재화·장비·방문기록이 비워지더라도
+ * 개요·경제·진행 대시보드가 동일한 수치로 동작하도록 원시 행에서 계산한 순수 수치·분포 집계다.
+ * 개인 식별자(계정 식별자·핸들·닉네임·이메일)를 일체 포함하지 않는다.
+ */
+export interface AdminUserAggregates {
+  /** 전체 등록 계정 수 */
+  totalUsers: number;
+  /** 휴면 게스트(비제재 익명 + 저장 없음 또는 골드·명성 모두 0)를 제외한 활성 플레이어 수 */
+  activePlayers: number;
+  /** KST·기간 경계 판정에 사용한 서버 시각(ISO) */
+  asOf: string;
+  /** 고유 활성 사용자 수(마지막 행동과 마지막 세션 종료 중 늦은 시각 기준) */
+  activeUsers: {
+    today: number;
+    week: number;
+    month: number;
+  };
+  /** 오늘(KST) 가입 시각 기준 신규 사용자·정식 계정 수 */
+  newToday: {
+    users: number;
+    accounts: number;
+  };
+  /** 저장 상태가 있는 전체 사용자의 골드 잔고 집계(저장 없음 제외, 휴면 게스트 포함) */
+  gold: {
+    count: number;
+    sum: number;
+    median: number | null;
+    p75: number | null;
+    max: number | null;
+  };
+  /** 활성 플레이어(휴면 게스트 제외) 기준 진행 분포 */
+  progression: {
+    /** 배 단계별 인원 수(0단계부터 최고 단계까지) */
+    boats: { tier: number; count: number }[];
+    /** 낚싯대 레벨별(1 이상, 미저장 계정은 1 취급, 0명 제외) 인원 수(레벨 오름차순) */
+    rods: { level: number; count: number }[];
+    /** 현행 오픈월드 지역 도달 인원 수(방문 기록 기준) */
+    regionReach: { id: string; count: number }[];
+    /** 오픈월드 최상위 존별 해금 인원 수(배 단계 기준) */
+    zoneUnlocks: { id: string; count: number }[];
+    /** 다음 배 명성 게이트에 막힌 활성 플레이어 수(총합 및 다음 배 단계별) */
+    fameGateStalled: {
+      total: number;
+      byNextTier: { nextTier: number; count: number }[];
+    };
+  };
+}
+
 /** 관리자 — 개요 탭 통합 응답 */
 export interface AdminOverview {
   users: AdminUserRow[];
+  userAggregates?: AdminUserAggregates;
   recentEvents: AdminEventRow[];
   spamFlags: AdminSpamFlagRow[];
   dailyStats: AdminDailyStatsRow[];
