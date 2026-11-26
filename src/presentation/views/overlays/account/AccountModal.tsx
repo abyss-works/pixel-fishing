@@ -132,11 +132,11 @@ export default function AccountModal({
     onClose();
   };
 
-  const signOut = async () => {
+  const signOut = () => run(async () => {
     if (!(await confirm({ layer, title: '로그아웃', body: '로그아웃할까요?\n이 기기는 새 게스트로 다시 시작해요.', confirmLabel: '로그아웃' }))) return;
     await signOutAccount();
     window.location.reload(); // 재부팅 = 새 익명 세션으로 깔끔하게 시작
-  };
+  });
 
   // 되돌릴 수 없는 동작이라 확인 문구를 직접 입력해야 지운다
   const removeAccount = () => run(async () => {
@@ -278,7 +278,7 @@ export default function AccountModal({
           <Note className="text-center">구글 계정을 연결하면 지금까지의 진행이 그 계정에 이어져요.</Note>
         </>
       ) : (
-        <Button full disabled={offline} onClick={signOut}>로그아웃</Button>
+        <Button full disabled={offline || busy} onClick={signOut}>로그아웃</Button>
       )}
 
       {!accountFailed && (
