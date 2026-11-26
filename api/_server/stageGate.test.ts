@@ -46,6 +46,14 @@ describe('isStageGateExempt', () => {
     expect(isStageGateExempt('GET', '/api/admin')).toBe(true);
     expect(isStageGateExempt('GET', '/api/admin/live')).toBe(true);
 
+    expect(isStageGateExempt('GET', '/api/widget')).toBe(true);
+    expect(isStageGateExempt('GET', '/api/widget/auth/start')).toBe(true);
+    expect(isStageGateExempt('POST', '/api/widget/auth/exchange')).toBe(true);
+    expect(isStageGateExempt('POST', '/api/widget/auth/logout')).toBe(true);
+    expect(isStageGateExempt('GET', '/api/widget/summary')).toBe(true);
+    expect(isStageGateExempt('GET', '/api/widget/stream')).toBe(true);
+    expect(isStageGateExempt('GET', '/api/widgets')).toBe(false);
+
     expect(isStageGateExempt('GET', '/admin')).toBe(true);
     expect(isStageGateExempt('GET', '/admin/')).toBe(true);
     expect(isStageGateExempt('GET', '/admin/index.html')).toBe(true);
@@ -106,6 +114,10 @@ describe('stageGate 미들웨어', () => {
       ['GET', '/api/action'],
       ['POST', '/api/admin/auth/sign-in/social'],
       ['GET', '/api/admin'],
+      ['GET', '/api/widget/auth/start'],
+      ['POST', '/api/widget/auth/exchange'],
+      ['GET', '/api/widget/summary'],
+      ['GET', '/api/widget/stream'],
       ['GET', '/admin/'],
       ['GET', '/assets/main.js'],
       ['GET', '/favicon.ico'],

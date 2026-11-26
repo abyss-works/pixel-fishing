@@ -17,6 +17,7 @@ export const savesCurrent = pgTable('saves_current', {
   restricted: boolean('restricted').notNull().default(false),
   lastCatchAt: at('last_catch_at'),
   activeClient: text('active_client'),
+  lastSpot: text('last_spot'),
   guildEnhanceResetCount: integer('guild_enhance_reset_count').notNull().default(0),
 });
 
@@ -208,6 +209,24 @@ export const notices = pgTable('notices', {
   createdBy: uuid('created_by'),
   createdAt: at('created_at').notNull().defaultNow(),
   updatedAt: at('updated_at').notNull().defaultNow(),
+});
+
+export const widgetAuthCodes = pgTable('widget_auth_codes', {
+  codeHash: text('code_hash').primaryKey(),
+  userId: uuid('user_id').notNull(),
+  codeChallenge: text('code_challenge').notNull(),
+  redirectUri: text('redirect_uri').notNull(),
+  expiresAt: at('expires_at').notNull(),
+  createdAt: at('created_at').notNull().defaultNow(),
+});
+
+export const widgetTokens = pgTable('widget_tokens', {
+  tokenHash: text('token_hash').primaryKey(),
+  userId: uuid('user_id').notNull(),
+  clientVersion: text('client_version').notNull(),
+  createdAt: at('created_at').notNull().defaultNow(),
+  lastSeenAt: at('last_seen_at').notNull().defaultNow(),
+  expiresAt: at('expires_at').notNull(),
 });
 
 export const rankingWeeklyFame = pgTable('ranking_weekly_fame', {

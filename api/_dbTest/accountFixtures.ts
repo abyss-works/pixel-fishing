@@ -8,7 +8,7 @@ export const USER_TABLES = [
   'bounty_licenses', 'bounty_accepts', 'bounty_clears', 'bounty_progress', 'bounty_tickets', 'blocks',
   'chat_messages', 'chat_reports', 'play_sessions', 'user_active_days', 'guild_members', 'guild_contributions', 'guild_logs',
   'guild_bonus_donations', 'guild_member_enhancements', 'last_positions', 'guild_join_requests', 'consent_records',
-  'achievement_counters', 'daily_fortunes', 'ranking_weekly_fame',
+  'achievement_counters', 'daily_fortunes', 'ranking_weekly_fame', 'widget_auth_codes', 'widget_tokens',
 ] as const;
 /** 저장 상태에 딸린 표. 저장이 없는 계정은 이 표에 행이 없다 */
 const SAVE_TABLES: readonly string[] = ['saves_current', 'fish_instances', 'records', 'saves'];
@@ -101,6 +101,16 @@ export async function seedFullAccount(client: Client, spec: AccountSpec & { nick
   await client.query(`insert into public.achievement_counters (user_id, key, value) values ($1, 'sell.gold', 0)`, [uid]);
   await client.query(`insert into public.daily_fortunes (user_id, day, kind, index) values ($1, '2030-01-01', 'fish', 3)`, [uid]);
   await client.query(`insert into public.ranking_weekly_fame (week_start, user_id, fame_gained) values ('2030-01-07', $1, 10)`, [uid]);
+  await client.query(
+    `insert into public.widget_auth_codes (code_hash, user_id, code_challenge, redirect_uri, expires_at)
+     values ($1, $2, 'challenge-fixture', 'http://127.0.0.1:4100/callback', '2099-01-01T00:00:00Z')`,
+    [`code-hash-${uid}`, uid],
+  );
+  await client.query(
+    `insert into public.widget_tokens (token_hash, user_id, client_version, expires_at)
+     values ($1, $2, '0.1.0', '2099-01-01T00:00:00Z')`,
+    [`token-hash-${uid}`, uid],
+  );
   if (spec.save) {
     await client.query(`insert into public.fish_instances (uid, user_id, fish_id, form) values ($1, $2, 'crucian', 'normal')`,
       [fish('crucian').uid, uid]);

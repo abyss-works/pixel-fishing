@@ -166,6 +166,44 @@ describe('catch', () => {
     expect(out.result.info.form).toBe('variant'); // rng=0 → 변이
     expect(out.result.info.isNew).toBe(true);     // 변이 폼은 처음
   });
+
+  it('catch 이벤트 payload에 월척 여부(isBig) true/false가 보존된다', () => {
+    const mkSeq = (values: number[]) => {
+      let i = 0;
+      return () => values[Math.min(i++, values.length - 1)];
+    };
+    const baseState = seed({
+      firstCatch: endedFirstCatch(),
+      fortune: { day: '2026-08-22', kind: 'gold', index: 5 },
+    });
+
+    // z = 0 (평균 크기) -> isBig: false
+    const normalOut = applyAction(
+      baseState,
+      { type: 'catch', spot: 'pond', judgment: 'normal' },
+      deps({ rng: mkSeq([0.5, 0.5, 0.5, 0.5, 0.5]) }),
+    );
+    if (!normalOut.ok || normalOut.result.type !== 'catch') throw new Error('unexpected');
+    expect(normalOut.result.info.isBig).toBe(false);
+    expect(normalOut.events[0]).toMatchObject({
+      type: 'catch',
+      payload: { isBig: false },
+    });
+
+    // u1 = exp(-2^2 / 2), u2 = 0 -> z = 2.0 (상위 약 2.3%) -> isBig: true
+    const bigU1 = Math.exp(-2);
+    const bigOut = applyAction(
+      baseState,
+      { type: 'catch', spot: 'pond', judgment: 'normal' },
+      deps({ rng: mkSeq([0.5, 0.5, bigU1, 0, 0.5]) }),
+    );
+    if (!bigOut.ok || bigOut.result.type !== 'catch') throw new Error('unexpected');
+    expect(bigOut.result.info.isBig).toBe(true);
+    expect(bigOut.events[0]).toMatchObject({
+      type: 'catch',
+      payload: { isBig: true },
+    });
+  });
 });
 
 describe('sell / upgradeRod / buyBoat / toggleLock', () => {

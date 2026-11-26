@@ -16,9 +16,10 @@ import { reportServerIssue } from '../observability.js';
  * - 예약 작업: 서버 비밀값으로 인증하고 사용자 세션이 없는 경로
  * - 개발 도구 계정 제어: 스테이징·로컬 전용으로 약관 수락 전에도 테스트 승격·초기화를 실행할 수 있는 경로
  * - 길드 초대 미리보기: 로그인 없이 열리는 읽기 경로. 가입 요청은 길드 가입 경로이므로 막힌다
+ * - 데스크톱 위젯: 위젯 전용 핸들러가 Bearer 토큰·세션과 약관 수락 여부를 직접 판정한다
  */
 export const CONSENT_EXEMPT_PATHS: readonly string[] = [
-  '/api/account', '/api/auth', '/api/admin', '/api/cron', '/api/dev', '/api/guild-invites',
+  '/api/account', '/api/auth', '/api/admin', '/api/cron', '/api/dev', '/api/guild-invites', '/api/widget',
 ];
 
 /** 이 경로가 확인이 필요한 계정에게도 열려 있는가 */

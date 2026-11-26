@@ -27,6 +27,7 @@ const WRITE_OWNERS: Record<string, readonly string[]> = {
   '_data/fortune.ts': ['daily_fortunes'],
   '_data/httpMetrics.ts': ['http_metrics_daily'],
   '_data/notices.ts': ['notices'],
+  '_data/widget.ts': ['widget_auth_codes', 'widget_tokens'],
   '_data/rank.ts': ['ranking_weekly_fame'],
 };
 
