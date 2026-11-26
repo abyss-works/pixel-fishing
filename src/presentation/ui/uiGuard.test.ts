@@ -329,6 +329,15 @@ describe('UI 시스템 가드', () => {
     expect(cardsWithClassName(`<ModalCard title="가" className="overflow-auto">`)).toHaveLength(1);
     expect(cardsWithClassName(`<ModalCard title="가" centered onClose={() => go(1 > 0)}>`)).toEqual([]);
   });
+  /** confirm을 조각(<>)으로 넘기는 ModalCard 호출부. 카드는 confirm 바로 아래의 버튼을 전폭으로 늘리므로 버튼 둘 이상은 행 요소로 감싼다 */
+  const cardsWithFragmentConfirm = (src: string) => openingTags(src, 'ModalCard').filter(tag => /\bconfirm=\{\s*\(?\s*<>/.test(tag));
+  it('ModalCard의 confirm은 조각으로 넘기지 않는다 - 버튼이 둘 이상이면 ButtonRow 같은 행 요소로 감싼다', () => {
+    expect(screens.flatMap(f => cardsWithFragmentConfirm(f.src).map(tag => `${f.path}: ${tag}`))).toEqual([]);
+    expect(cardsWithFragmentConfirm('<ModalCard title="가" confirm={<><Button>가</Button><Button>나</Button></>}>')).toHaveLength(1);
+    expect(cardsWithFragmentConfirm('<ModalCard title="가" confirm={(\n<>\n<Button>가</Button></>\n)}>')).toHaveLength(1);
+    expect(cardsWithFragmentConfirm('<ModalCard title="가" confirm={<ButtonRow><Button>가</Button><Button>나</Button></ButtonRow>}>')).toEqual([]);
+    expect(cardsWithFragmentConfirm('<ModalCard title="가" confirm={<Button full>확인</Button>}>')).toEqual([]);
+  });
   it('화면은 인라인 style 객체로도 overflow 스크롤을 걸지 않는다', () => {
     for (const code of [`style={{ overflow: 'auto' }}`, `{ overflowY: "scroll" }`, 'const s = { overflowX: `auto` }']) {
       expect(OVERFLOW_DIRECT.test(code), code).toBe(true);
