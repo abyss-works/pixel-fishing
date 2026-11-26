@@ -14,7 +14,7 @@ export type GlyphId =
   | 'plus' | 'minus'
   | 'compass' | 'backpack' | 'book' | 'question' | 'gear' | 'people' | 'flag'
   | 'crown' | 'sparkle' | 'warn' | 'menu' | 'grid' | 'lunch' | 'bait'
-  | 'clock' | 'target' | 'gem' | 'external' | 'arrowRight'
+  | 'clock' | 'target' | 'gem' | 'external' | 'arrowRight' | 'refresh'
   | 'wave' | 'fullmoon' | 'scale' | 'mirage' | 'treasure'
   | 'cloudOk' | 'cloudSyncing' | 'cloudError';
 
@@ -261,6 +261,13 @@ const GLYPHS: Record<GlyphId, { cells: Cell[]; holes?: Cell[] }> = {
   treasure: {
     cells: [[2, 2, 8, 2], [1, 4, 10, 2], [1, 7, 10, 4], [5, 5, 2, 3]],
     holes: [[3, 8, 2, 1], [7, 8, 2, 1]],
+  },
+  // 새로고침 — 순환 화살표
+  refresh: {
+    cells: [
+      [3, 1, 6, 1], [2, 2, 2, 1], [8, 2, 2, 1], [10, 1, 1, 3], [7, 3, 3, 1],
+      [1, 3, 1, 5], [2, 9, 2, 1], [3, 10, 6, 1], [8, 9, 2, 1], [10, 7, 1, 2],
+    ],
   },
 };
 

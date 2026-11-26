@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { registerNoticeSink } from '../../../../features/display/model/toastPolicy';
-import type { GuildInfo } from '../../../../features/guild/model/guild';
+import type { GuildInfo, PublicGuildItem } from '../../../../features/guild/model/guild';
 import GuildModal from './GuildModal';
 
 const s = vi.hoisted(() => ({
@@ -14,12 +14,21 @@ const s = vi.hoisted(() => ({
   act: vi.fn(async (_op: unknown): Promise<{ ok: true; result?: 'joined' | 'requested'; recovered?: number } | { ok: false; error: string }> => ({ ok: true })),
   request: null as { code: string; name: string; requestedAt: string } | null,
   preview: null as unknown,
+  publicGuilds: [] as PublicGuildItem[],
+  publicLoading: false,
+  publicFailed: false,
+  publicRefresh: vi.fn(),
 }));
 vi.mock('../../../../features/guild/service/useGuild', () => ({
   useGuild: () => ({ available: true, guild: s.guild, request: s.request, loading: s.loading, failed: s.failed, you: s.you, act: s.act }),
 }));
 vi.mock('../../../../features/guild/service/useGuildInvite', () => ({
   useGuildInvite: (code: string | null) => ({ preview: code ? s.preview : null, settled: code !== null, failed: false, refresh: vi.fn() }),
+}));
+vi.mock('../../../../features/guild/service/usePublicGuilds', () => ({
+  usePublicGuilds: () => ({
+    guilds: s.publicGuilds, loading: s.publicLoading, fetching: false, failed: s.publicFailed, refresh: s.publicRefresh,
+  }),
 }));
 
 const at = '2026-11-05T00:00:00.000Z';
@@ -58,23 +67,31 @@ describe('GuildModal', () => {
     s.failed = false;
     s.request = null;
     s.preview = null;
+    s.publicGuilds = [];
+    s.publicLoading = false;
+    s.publicFailed = false;
+    s.publicRefresh.mockReset();
     s.act.mockReset();
     s.act.mockImplementation(async () => ({ ok: true }));
     vi.clearAllMocks();
   });
 
-  it('길드가 없으면 이름으로 만든다', async () => {
+  it('길드가 없으면 3탭(공개 길드, 코드로 가입, 길드 만들기) 구조이고 길드 만들기 탭에서 이름으로 만든다', async () => {
     const toast = vi.fn();
     render(<GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={toast} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByRole('button', { name: '공개 길드' })).toHaveClass('active');
+    expect(screen.getAllByRole('button', { name: '코드로 가입' })[0]).toBeTruthy();
+    fireEvent.click(screen.getAllByRole('button', { name: '길드 만들기' })[0]);
     fireEvent.change(screen.getByLabelText('길드 이름'), { target: { value: ' 심해선단 ' } });
     fireEvent.click(screen.getByRole('button', { name: '만들기' }));
     await waitFor(() => expect(toast).toHaveBeenCalledWith('심해선단 길드를 만들었어요.'));
     expect(s.act).toHaveBeenCalledWith({ op: 'create', name: '심해선단' });
   });
 
-  it('길드 코드로 찾으면 요약과 가입 방식에 맞는 버튼이 뜨고, 승인 가입이면 가입 신청을 보낸다. 없는 코드는 찾지 못했다고 알린다', async () => {
+  it('코드로 가입 탭: 길드 코드로 찾으면 요약과 가입 방식에 맞는 버튼이 뜨고, 승인 가입이면 가입 신청을 보낸다. 없는 코드는 찾지 못했다고 알린다', async () => {
     const toast = vi.fn();
     render(<GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={toast} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+    fireEvent.click(screen.getAllByRole('button', { name: '코드로 가입' })[0]);
     fireEvent.change(screen.getByLabelText('길드 코드'), { target: { value: 'abc' } });
     fireEvent.click(screen.getByRole('button', { name: '찾기' }));
     expect(await screen.findByText('길드 코드는 8자리예요.')).toBeTruthy();
@@ -87,6 +104,68 @@ describe('GuildModal', () => {
     fireEvent.click(screen.getByRole('button', { name: '가입 신청' }));
     await waitFor(() => expect(toast).toHaveBeenCalledWith('가입 신청을 보냈어요. 길드장이 승인하면 들어가요.'));
     expect(s.act).toHaveBeenLastCalledWith({ op: 'join', code: 'K7QX2MAB' });
+  });
+
+  it('공개 길드 탭: 목록·로딩·실패·빈 상태를 분리하고, 검색·정렬·새로고침과 확인 창 바로 가입(기존 대기 신청 취소 경고 포함)을 처리한다', async () => {
+    const toast = vi.fn();
+    // 1. 불러오는 중 스켈레톤
+    s.publicLoading = true;
+    const { rerender } = render(
+      <GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={toast} onGoldChanged={vi.fn()} onClose={vi.fn()} />,
+    );
+    expect(screen.getByRole('status', { name: '공개 길드 목록을 불러오는 중이에요' })).toBeTruthy();
+
+    // 2. 불러오기 실패 + 다시 시도
+    s.publicLoading = false;
+    s.publicFailed = true;
+    rerender(<GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={toast} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByText('공개 길드 목록을 불러오지 못했어요.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(s.publicRefresh).toHaveBeenCalledTimes(1);
+
+    // 3. 빈 상태 + 탭 전환 버튼
+    s.publicFailed = false;
+    s.publicGuilds = [];
+    rerender(<GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={toast} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByText('지금 바로 들어갈 수 있는 공개 길드가 없어요.')).toBeTruthy();
+    fireEvent.click(within(screen.getByLabelText('공개 길드 목록')).getByRole('button', { name: '코드로 가입' }));
+    expect(screen.getByRole('button', { name: '코드로 가입' })).toHaveClass('active');
+    fireEvent.click(screen.getByRole('button', { name: '공개 길드' }));
+
+    // 4. 목록 표시(코드 비노출), 정렬·검색, 기존 대기 신청 경고 포함 확인 창 -> 바로 가입
+    s.request = { code: 'OLD12345', name: '은빛항구', requestedAt: new Date().toISOString() };
+    s.publicGuilds = [
+      {
+        guildId: 'pub-1', name: '파도쉼터', level: 7, members: 8, cap: 10,
+        pitch: '다 같이 대어 노려요.', lastActivityAt: new Date().toISOString(),
+      },
+    ];
+    rerender(<GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={toast} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByText('파도쉼터')).toBeTruthy();
+    expect(screen.getByText('Lv.7')).toBeTruthy();
+    expect(screen.getByText('다 같이 대어 노려요.')).toBeTruthy();
+    expect(screen.getByText(/바로 가입 가능/)).toHaveTextContent('바로 가입 가능 1개');
+    expect(screen.queryByText(/OLD12345/)).toBeNull();
+
+    fireEvent.change(screen.getByLabelText('길드명 검색'), { target: { value: '파도' } });
+    fireEvent.click(screen.getByRole('button', { name: '검색어 지우기' }));
+    expect((screen.getByLabelText('길드명 검색') as HTMLInputElement).value).toBe('');
+
+    fireEvent.click(screen.getByRole('button', { name: '레벨순' }));
+    expect(screen.getByRole('button', { name: '레벨순' })).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: '새로고침' }));
+    expect(s.publicRefresh).toHaveBeenCalledTimes(2);
+
+    fireEvent.click(screen.getByRole('button', { name: '파도쉼터 길드 가입' }));
+    const confirmDialog = within(screen.getAllByRole('dialog').at(-1) as HTMLElement);
+    expect(confirmDialog.getByText('길드 가입 확인')).toBeTruthy();
+    expect(confirmDialog.getByText('기존 가입 신청 자동 취소')).toBeTruthy();
+    expect(confirmDialog.getByText(/은빛항구 길드에 보낸 승인 대기 신청은 바로 가입하면 자동으로 취소돼요/)).toBeTruthy();
+    s.act.mockResolvedValueOnce({ ok: true, result: 'joined' });
+    fireEvent.click(confirmDialog.getByRole('button', { name: '확인' }));
+    await waitFor(() => expect(s.act).toHaveBeenCalledWith({ op: 'joinPublic', guildId: 'pub-1' }));
+    expect(toast).toHaveBeenCalledWith('파도쉼터 길드에 들어갔어요.');
   });
 
   it('넣어 둔 가입 신청이 있으면 맨 위에 보이고 거둘 수 있다', async () => {
