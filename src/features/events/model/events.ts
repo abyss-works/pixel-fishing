@@ -5,11 +5,12 @@ import {
   EVENT2_STANDARD_SPEC,
   EVENT_FISH,
   EVENT_HAT_IDS,
+  eventFishById,
   type EventFish,
 } from '../../../game/content/eventFish';
 import { fishById, type Fish, type FormId } from '../../../game/content/fish';
 import type { RarityId } from '../../../game/content/rarity';
-import type { SpotId } from '../../../game/content/spots';
+import { spotById, type Spot, type SpotId } from '../../../game/content/spots';
 import { DEFAULT_LOOK, hatById, type Look } from '../../../game/content/wardrobe';
 import type { GameState } from '../../../game/rules/logic';
 import type {
@@ -209,6 +210,15 @@ const EVENT_FISH_SUBJECTS: readonly { raw: EventFish; sprite: Fish }[] = EVENT_F
   raw,
   sprite: toEventFishSpriteSubject(raw),
 }));
+
+export function eventSpotById(id: SpotId): Spot | undefined {
+  return spotById(id);
+}
+
+export function eventFishSubjectById(id: string): Fish | undefined {
+  const ef = eventFishById(id);
+  return ef ? toEventFishSpriteSubject(ef) : undefined;
+}
 
 /** KST 기준 남은 일수를 계산한다 */
 export function remainingDaysText(endsAt: string, now: string): string {

@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppError, fail } from '../../../core/errors';
 import { newState } from '../../../game/rules/logic';
 import { FISH } from '../../../game/content/fish';
+import { CHAMPIONSHIP_SCHOOLS } from '../../../game/world';
 import { setSchoolDay } from '../../../features/gameplay/service/schoolDay';
+import * as soundEvents from '../../../features/sound/service/soundEvents';
 import { resetKeyScopes } from '../../ui/hotkeys';
 
 const layout = vi.hoisted(() => ({ mobile: false }));
@@ -165,5 +167,88 @@ describe('Field 일시적 429(rate-limited) 낚시 세션 유지', () => {
     } finally {
       slot.remove();
     }
+  });
+});
+
+describe('Field 이벤트 구역 호환과 낚시 효과음 전달', () => {
+  it('region의 shortName을 캔버스 aria-label로 쓰고 championship 어종 획득 카드를 오류 없이 그린다', () => {
+    const catchSlot = document.createElement('div');
+    document.body.appendChild(catchSlot);
+    const school = CHAMPIONSHIP_SCHOOLS[0];
+    try {
+      const { getByLabelText } = render(
+        <Field
+          region="championship"
+          game={{ ...newState(), location: { kind: 'region', id: 'championship' } }}
+          dispatch={() => ({
+            status: 'ok',
+            state: newState(),
+            result: {
+              type: 'catch',
+              fishId: 'event-glaaki',
+              uid: 'ev-1',
+              info: { form: 'normal', size: 120, percentile: 50, isBig: false, isNew: true },
+              released: [],
+            },
+          })}
+          setToast={() => {}}
+          onScene={() => {}}
+          initialPos={{ x: school.x, y: school.y }}
+          catchSlot={catchSlot}
+        />,
+      );
+      expect(getByLabelText('분지 호수')).toBeInTheDocument();
+      fireEvent.keyDown(document, { code: 'Space' });
+      act(() => { vi.advanceTimersByTime(4500); });
+      fireEvent.keyDown(document, { code: 'Space' });
+      expect(catchSlot.textContent).toContain('글라키');
+    } finally {
+      catchSlot.remove();
+    }
+  });
+
+  it('수동 낚시 효과음(cast·bite·hit·catch)과 방치 전환 후 무음 규칙을 soundEvents로 전달한다', () => {
+    const castSpy = vi.spyOn(soundEvents, 'emitCastSound').mockReturnValue(true);
+    const biteSpy = vi.spyOn(soundEvents, 'emitBiteSound').mockReturnValue(true);
+    const hitSpy = vi.spyOn(soundEvents, 'emitHitSound').mockReturnValue(true);
+    const catchSpy = vi.spyOn(soundEvents, 'emitCatchSound').mockReturnValue(true);
+    const fish = FISH[0];
+
+    render(
+      <Field
+        region="village"
+        game={newState()}
+        dispatch={() => ({
+          status: 'ok',
+          state: newState(),
+          result: {
+            type: 'catch',
+            fishId: fish.id,
+            uid: 'f1',
+            info: { form: 'normal', size: 30, percentile: 50, isBig: false, isNew: false },
+            released: [],
+          },
+        })}
+        setToast={() => {}}
+        onScene={() => {}}
+        initialPos={POND_SHORE}
+      />,
+    );
+
+    fireEvent.keyDown(document, { code: 'Space' });
+    expect(castSpy).toHaveBeenCalledWith(true);
+
+    act(() => { vi.advanceTimersByTime(4000); });
+    expect(biteSpy).toHaveBeenCalledWith(true);
+
+    fireEvent.keyDown(document, { code: 'Space' });
+    expect(hitSpy).toHaveBeenCalledTimes(1);
+    expect(catchSpy).toHaveBeenCalledWith(expect.objectContaining({ manual: true, rarity: fish.rarity, isMutation: false }));
+
+    // 다음 획득 대기 후 입질 타임아웃(auto) 시 다음 cycle의 bite·catch는 manual=false로 전달된다
+    act(() => { vi.advanceTimersByTime(2500); });
+    act(() => { vi.advanceTimersByTime(4000); });
+    act(() => { vi.advanceTimersByTime(15000); });
+    expect(catchSpy).toHaveBeenLastCalledWith(expect.objectContaining({ manual: false }));
   });
 });

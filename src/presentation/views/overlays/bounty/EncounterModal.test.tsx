@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
 import EncounterModal from './EncounterModal';
 import { selectEncounter } from '../../../../features/bounty/model/challenge';
+import * as soundEvents from '../../../../features/sound/service/soundEvents';
 import { newState } from '../../../../game/rules/logic';
 import { resetKeyScopes } from '../../../ui/hotkeys';
 import { resetOpenWindows } from '../../../ui/openWindows';
@@ -201,5 +202,37 @@ describe('EncounterModal', () => {
     fireEvent.click(screen.getByRole('button', { name: '닫기' }));
     fireEvent.keyDown(document.body, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(2);
+  });
+
+  it('네임드 결투 단계마다 출현·타격(단계별)·빗나감·토벌·놓침 효과음을 재생한다', () => {
+    const spawnSpy = vi.spyOn(soundEvents, 'emitNamedSpawnSound').mockReturnValue(true);
+    const hitSpy = vi.spyOn(soundEvents, 'emitNamedHitSound').mockReturnValue(true);
+    const missSpy = vi.spyOn(soundEvents, 'emitNamedMissSound').mockReturnValue(true);
+    const clearSpy = vi.spyOn(soundEvents, 'emitNamedClearSound').mockReturnValue(true);
+    const escapeSpy = vi.spyOn(soundEvents, 'emitNamedEscapeSound').mockReturnValue(true);
+
+    show();
+    expect(spawnSpy).toHaveBeenCalledTimes(1);
+    enter();
+
+    waitForZone(false);
+    fireEvent.click(screen.getByRole('button', { name: '챔질' }));
+    expect(missSpy).toHaveBeenCalledTimes(1);
+
+    for (let i = 0; i < 4; i++) {
+      waitForZone();
+      fireEvent.click(screen.getByRole('button', { name: '챔질' }));
+    }
+    expect(hitSpy.mock.calls.map(c => c[0])).toEqual([1, 2, 3, 4]);
+
+    waitForZone();
+    fireEvent.click(screen.getByRole('button', { name: '챔질' }));
+    expect(clearSpy).toHaveBeenCalledTimes(1);
+    cleanup();
+
+    show();
+    enter();
+    act(() => { vi.advanceTimersByTime(8000); });
+    expect(escapeSpy).toHaveBeenCalledTimes(1);
   });
 });

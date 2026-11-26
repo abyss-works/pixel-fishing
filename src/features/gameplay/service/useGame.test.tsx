@@ -31,6 +31,7 @@ const gw = vi.hoisted(() => ({
   visited: [] as ('village' | 'world' | 'championship')[],
   loadFame: 0,
   dispatchResult: null as null | Record<string, unknown>,
+  dispatchReject: null as null | string,
   devTools: false,
   profileReplies: [] as Array<{ ok: true; nickname: string | null; devTools: boolean } | { ok: false }>,
   profileCalls: 0,
@@ -91,7 +92,10 @@ vi.mock('../../../platform/api', async () => {
         dispatch: (action: GameAction) => {
           gw.actions.push(action.type);
           if (action.type === 'import' && gw.importError) throw gw.importError;
-          if (action.type !== 'boot') return ok(action);
+          if (action.type !== 'boot') {
+            if (gw.dispatchReject) return { status: 'rejected' as const, error: gw.dispatchReject };
+            return ok(action);
+          }
           if (gw.bootErrors.length) return Promise.reject(gw.bootErrors.shift());
           return new Promise(resolve => { gw.bootResolve = () => resolve(ok(action)); });
         },
@@ -108,12 +112,18 @@ import { readFortuneModal, resetFortuneModalSession } from '../../fortune/servic
 import { registerNoticeSink } from '../../display/model/toastPolicy';
 import type { NoticeSink, SystemNoticeInput } from '../../display/model/toastPolicy';
 import * as liveService from '../../live/service/useLive';
+import * as soundEvents from '../../sound/service/soundEvents';
+import { eventsKey } from '../../events/service/useEvents';
 
-function setup(setToast: (m: string, tone?: 'info' | 'gold' | 'warn') => void = () => {}, reactStrictMode = false) {
+function setupWithClient(setToast: (m: string, tone?: 'info' | 'gold' | 'warn') => void = () => {}, reactStrictMode = false) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const wrapper = ({ children }: { children: ReactNode }) =>
     <QueryClientProvider client={client}>{children}</QueryClientProvider>;
-  return renderHook(() => useGame({ setToast }), { wrapper, reactStrictMode });
+  return { client, hook: renderHook(() => useGame({ setToast }), { wrapper, reactStrictMode }) };
+}
+
+function setup(setToast: (m: string, tone?: 'info' | 'gold' | 'warn') => void = () => {}, reactStrictMode = false) {
+  return setupWithClient(setToast, reactStrictMode).hook;
 }
 
 afterEach(() => {
@@ -122,7 +132,8 @@ afterEach(() => {
   gw.legacy = false; gw.legacyFame = 0; gw.cloudEmpty = false; gw.importError = null; gw.loadError = null; gw.loadErrors = []; gw.bootErrors = []; gw.loadDex = {}; gw.dispatchDex = {}; gw.devTools = false;
   gw.profileReplies = []; gw.profileCalls = 0;
   gw.loadAchievements = {}; gw.dispatchAchievements = {}; gw.loadFortune = null; gw.dispatchFortune = null; gw.loadLocation = null;
-  gw.visited = []; gw.loadFame = 0; gw.dispatchResult = null;
+  gw.visited = []; gw.loadFame = 0; gw.dispatchResult = null; gw.dispatchReject = null;
+  vi.restoreAllMocks();
   gw.account = { status: 'account', email: 'u@example.com' };
   gw.consentQueue = []; gw.consentCalls = 0; gw.acceptCalls = []; gw.acceptQueue = []; gw.consentListeners.clear();
 });
@@ -1144,5 +1155,89 @@ describe('신규 진입 초기 인사 메시지(boot.greeting)', () => {
     await waitFor(() => expect(gw.bootResolve).not.toBeNull());
     await act(async () => { gw.bootResolve!(); });
     expect(events.some(e => e.kind === 'boot.greeting')).toBe(false);
+  });
+});
+
+describe('이벤트 캐시 무효화와 경제·보상 효과음 연동', () => {
+  it('catch, enterEventZone, leaveEventZone, settleEventReward, fortune.set, redeemCoupon 성공 시 eventsKey(uid)를 무효화한다', async () => {
+    const { client, hook } = setupWithClient();
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+    const spy = vi.spyOn(client, 'invalidateQueries');
+
+    gw.dispatchResult = {
+      type: 'catch',
+      fishId: 'crucian',
+      uid: 'f1',
+      info: { form: 'normal', size: 15, percentile: 50, isBig: false, isNew: false },
+      released: [],
+    };
+    await act(async () => { await hook.result.current.dispatch({ type: 'catch', spot: 'pond', judgment: 'good' }); });
+    expect(spy).toHaveBeenCalledWith({ queryKey: eventsKey('uid-1') });
+
+    const actions: GameAction[] = [
+      { type: 'enterEventZone', eventId: 'ev-champ' },
+      { type: 'leaveEventZone' },
+      { type: 'settleEventReward', eventId: 'ev-champ' },
+      { type: 'debug', command: 'fortune.set', args: { kind: 'fish', index: 5 } },
+      { type: 'redeemCoupon', code: 'OPEN500' },
+    ];
+    for (const action of actions) {
+      spy.mockClear();
+      gw.dispatchResult = action.type === 'settleEventReward'
+        ? { type: 'eventSettle', eventId: 'ev-champ', gold: 100, fame: 4 }
+        : { type: 'none' };
+      await act(async () => { await hook.result.current.dispatch(action); });
+      expect(spy, action.type).toHaveBeenCalledWith({ queryKey: eventsKey('uid-1') });
+    }
+  });
+
+  it('판매·장비 강화·보상 수령·이벤트 정산 성공 시 대응 효과음을 재생하고, 거부 시에는 재생하지 않는다', async () => {
+    const { hook } = setupWithClient();
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+
+    const sellSpy = vi.spyOn(soundEvents, 'emitShopSellSound').mockReturnValue(true);
+    const gearSpy = vi.spyOn(soundEvents, 'emitGearUpgradeSound').mockReturnValue(true);
+    const rewardSpy = vi.spyOn(soundEvents, 'emitRewardClaimSound').mockReturnValue(true);
+    const settleSpy = vi.spyOn(soundEvents, 'emitEventSettleSound').mockReturnValue(true);
+
+    gw.dispatchResult = { type: 'sell', gold: 120 };
+    await act(async () => { await hook.result.current.dispatch({ type: 'sell', uids: ['f1'] }); });
+    expect(sellSpy).toHaveBeenCalledTimes(1);
+
+    gw.dispatchResult = { type: 'none' };
+    await act(async () => { await hook.result.current.dispatch({ type: 'upgradeRod' }); });
+    await act(async () => { await hook.result.current.dispatch({ type: 'buyBoat' }); });
+    expect(gearSpy).toHaveBeenCalledTimes(2);
+
+    gw.dispatchResult = { type: 'none' };
+    await act(async () => { await hook.result.current.dispatch({ type: 'claimAchievement', id: 'a1' }); });
+    gw.dispatchResult = { type: 'claimAllAchievements', gold: 500, hats: [] };
+    await act(async () => { await hook.result.current.dispatch({ type: 'claimAllAchievements' }); });
+    gw.dispatchResult = { type: 'mail', gold: 300 };
+    await act(async () => { await hook.result.current.dispatch({ type: 'claimMail', id: 1 }); });
+    gw.dispatchResult = { type: 'coupon', gold: 500, desc: '쿠폰' };
+    await act(async () => { await hook.result.current.dispatch({ type: 'redeemCoupon', code: 'OPEN500' }); });
+    await act(async () => { await hook.result.current.dispatch({ type: 'deliverBounty', questId: 'q1' }); });
+    expect(rewardSpy).toHaveBeenCalledTimes(5);
+
+    gw.dispatchResult = { type: 'eventSettle', eventId: 'ev-champ', gold: 200, fame: 4 };
+    await act(async () => { await hook.result.current.dispatch({ type: 'settleEventReward', eventId: 'ev-champ' }); });
+    expect(settleSpy).toHaveBeenCalledTimes(1);
+
+    sellSpy.mockClear();
+    gearSpy.mockClear();
+    rewardSpy.mockClear();
+    settleSpy.mockClear();
+    gw.dispatchReject = 'not-enough-gold';
+    await act(async () => { await hook.result.current.dispatch({ type: 'sell', uids: ['f1'] }); });
+    await act(async () => { await hook.result.current.dispatch({ type: 'upgradeRod' }); });
+    await act(async () => { await hook.result.current.dispatch({ type: 'claimMail', id: 1 }); });
+    await act(async () => { await hook.result.current.dispatch({ type: 'settleEventReward', eventId: 'ev-champ' }); });
+    expect(sellSpy).not.toHaveBeenCalled();
+    expect(gearSpy).not.toHaveBeenCalled();
+    expect(rewardSpy).not.toHaveBeenCalled();
+    expect(settleSpy).not.toHaveBeenCalled();
   });
 });

@@ -13,6 +13,7 @@ import { resetTutorialSession } from '../../../features/tutorial/service/tutoria
 import { resetFortuneModalSession } from '../../../features/fortune/service/fortuneModal';
 import { resetCanvasCover } from '../../layouts/game-stage/canvasCover';
 import type { NoticeItem } from '../../../game/rules/live';
+import type { EventsSnapshot } from '../../../platform/api';
 import { resetKeyScopes } from '../../ui/hotkeys';
 import { resetOpenWindows } from '../../ui/openWindows';
 import GameView from './GameView';
@@ -23,10 +24,34 @@ const noticeMock = vi.hoisted(() => ({
   stackNotices: [] as NoticeItem[],
   dismissNotice: vi.fn(),
 }));
+const eventMock = vi.hoisted(() => ({
+  snap: null as EventsSnapshot | null,
+  players: [] as Array<{ uid: string; nick: string; boat: number; fame: number; look: { shirt: number; pants: number; hat: string | null } }>,
+}));
 
 vi.mock('../../../features/live/service/useNotices', () => ({
   useNotices: () => noticeMock,
 }));
+vi.mock('../../../features/events/service/useEvents', async importOriginal => {
+  const mod = await importOriginal<typeof import('../../../features/events/service/useEvents')>();
+  return {
+    ...mod,
+    useEvents: () => ({
+      snap: eventMock.snap,
+      loaded: true,
+      failed: false,
+      offline: eventMock.snap === null,
+      refresh: vi.fn(),
+    }),
+  };
+});
+vi.mock('../../../features/live/service/useLive', async importOriginal => {
+  const mod = await importOriginal<typeof import('../../../features/live/service/useLive')>();
+  return {
+    ...mod,
+    usePlayersIn: () => eventMock.players,
+  };
+});
 vi.mock('../../layouts/game-stage/Field', () => ({ default: () => null }));
 
 const originalConfigured = api.auth.isConfigured;
@@ -58,6 +83,8 @@ beforeEach(() => {
   noticeMock.endedNotices = [];
   noticeMock.stackNotices = [];
   noticeMock.dismissNotice.mockReset();
+  eventMock.snap = null;
+  eventMock.players = [];
   api.auth.isConfigured = false;
   window.matchMedia = ((query: string) => ({
     matches: false, media: query, addEventListener: () => {}, removeEventListener: () => {},
@@ -306,5 +333,120 @@ describe('GameView 패널 초기화', () => {
     expect(dialog).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /현재 공지/ })).toHaveTextContent('1');
     expect(screen.getByRole('button', { name: /지난 공지/ })).toHaveTextContent('1');
+  });
+
+  it('활성 이벤트가 있을 때만 HUD 이벤트 버튼을 보이고, 정식 계정의 미수령·정산 보상에서만 알림 점을 켠다', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const renderView = (account: string | null) =>
+      render(
+        <QueryClientProvider client={client}>
+          <GameView
+            game={{ ...newState(), tutorials: [...TUTORIAL_IDS] }}
+            scene={{ kind: 'base', id: 'home' }}
+            entryPos={null}
+            placeSeq={0}
+            dispatch={() => ({ status: 'ok', state: newState(), result: { type: 'none' } })}
+            setToast={() => {}}
+            onScene={() => {}}
+            onPlace={() => {}}
+            log={[]}
+            syncLabel={null}
+            syncState="off"
+            guestProgress="nothing"
+            account={account}
+            accountChecked={true}
+            accountFailed={false}
+            uid="u1"
+            nickname="테스터"
+            onRename={async () => null}
+            onAuthChanged={async () => {}}
+            onResync={async () => {}}
+          />
+        </QueryClientProvider>,
+      );
+
+    renderView('dev@localhost');
+    expect(screen.queryByRole('button', { name: '이벤트' })).not.toBeInTheDocument();
+    cleanup();
+
+    eventMock.snap = {
+      now: '2026-12-01T12:00:00.000Z',
+      events: [{
+        id: 'ev-champ',
+        kind: 'championship',
+        title: '강태공 선수권 대회',
+        description: '분지 호수 대회',
+        startsAt: '2026-12-01T00:00:00.000Z',
+        endsAt: '2026-12-11T12:00:00.000Z',
+        active: true,
+        config: {},
+      }],
+      trio: null,
+      championship: {
+        eventId: 'ev-champ',
+        score: 100,
+        bestFishId: null,
+        bestFishScore: 0,
+        catches: 1,
+        dex: {},
+        hatsGranted: [],
+        pendingGold: 500,
+        pendingFame: 4,
+        rank: 1,
+        top: [],
+      },
+      draw: null,
+    };
+
+    // 게스트는 활성 이벤트 버튼을 보지만 알림 점은 끄고, 클릭 시 계정 연결 안내를 본다
+    api.auth.isConfigured = true;
+    renderView(null);
+    const guestBtn = screen.getByRole('button', { name: '이벤트' });
+    expect(guestBtn.querySelector('[data-alert="true"]')).toBeNull();
+    fireEvent.click(guestBtn);
+    expect(screen.getByRole('dialog', { name: '이벤트' })).toBeInTheDocument();
+    expect(screen.getByText('계정 연결 필요')).toBeInTheDocument();
+    cleanup();
+
+    // 정식 계정은 정산 가능한 보상이 있으면 알림 점을 켠다
+    renderView('dev@localhost');
+    const accountBtn = screen.getByRole('button', { name: '이벤트' });
+    expect(accountBtn.querySelector('[data-alert="true"]')).not.toBeNull();
+  });
+
+  it('championship 구역에서는 바다 튜토리얼 없이 PresenceChip으로 접속 인원을 표시한다', () => {
+    eventMock.players = [
+      { uid: 'p2', nick: '선원2', boat: 1, fame: 10, look: { shirt: 1, pants: 1, hat: null } },
+    ];
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <GameView
+          game={{ ...newState(), tutorials: [], location: { kind: 'region', id: 'championship' } }}
+          scene={{ kind: 'region', id: 'championship' }}
+          entryPos={null}
+          placeSeq={0}
+          dispatch={() => ({ status: 'ok', state: newState(), result: { type: 'none' } })}
+          setToast={() => {}}
+          onScene={() => {}}
+          onPlace={() => {}}
+          log={[]}
+          syncLabel={null}
+          syncState="on"
+          guestProgress="nothing"
+          account="dev@localhost"
+          accountChecked={true}
+          accountFailed={false}
+          uid="u1"
+          nickname="테스터"
+          onRename={async () => null}
+          onAuthChanged={async () => {}}
+          onResync={async () => {}}
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByRole('button', { name: '이 바다의 플레이어 1명, 목록 열기' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: '바다 항해 안내' })).not.toBeInTheDocument();
   });
 });
