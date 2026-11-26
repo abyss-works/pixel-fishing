@@ -601,7 +601,6 @@ export default function GameView(props: GameViewProps) {
                                onGuild={() => setGuildOpen(true)} onFriends={() => setFriendsOpen(true)}
                                onMailbox={() => setMailboxOpen(true)} />
                    )} />
-        {dialogs}
         {encounter && (
           <EncounterModal key={encounter.quest.id} data={encounter}
                           onResolve={resolveEncounter} onClose={() => setTracking(null)} />
@@ -717,6 +716,7 @@ export default function GameView(props: GameViewProps) {
           <AlertPromptModal ready={saveReady} after={whatsNewPending || baitRefund.pending || fortune.pending || tutorialPending || inviteReady || accountOpen} setToast={props.setToast} />
         )}
         <NoticeModal open={noticeModalOpen} activeNotices={activeNotices} endedNotices={endedNotices} onClose={() => setNoticeModalOpen(false)} />
+        {dialogs}
         <NoticeStack notices={stackNotices} onDismiss={dismissNotice} />
         {props.toasts && props.toasts.length > 0 && props.onDismissToast && (
           <FloatingToastLayer toasts={props.toasts} maxVisible={mobile ? 2 : 3} onDismiss={props.onDismissToast} />

@@ -44,21 +44,20 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
   const isVariant = info?.form === 'variant';
   const variantLine = VARIANT_LINES[info ? Math.floor(info.size * 997) % VARIANT_LINES.length : 0];
   const isLegendary = fish.rarity === 'legendary' || r.halo;
-  const showCornerGlow = fish.rarity === 'epic' || isLegendary || isVariant;
-  const fxColor = isVariant && !isLegendary ? 'var(--c-mutation)' : 'var(--rarity-color)';
+  const showCornerGlow = fish.rarity === 'epic' || isLegendary;
   return (
     <div data-rarity={fish.rarity} className="relative w-[340px] max-w-full h-[160px] shrink-0 pointer-events-none">
       {/* 이펙트 레이어 — 카드의 쌓임 맥락 안에 두면 카드 층에 갇혀 채팅과 헤더 뒤로 가려지므로
           카드와 형제로 두고 이펙트 층(catch-fx)에 놓는다. 패널의 노치가 잘라 내지 않도록 패널 바깥 층이다 */}
       <div data-catch-fx className="absolute inset-0 z-(--z-catch-fx) pointer-events-none" aria-hidden="true">
-        {/* 영웅·전설·돌연변이 네 모서리 발광 L-브래킷(10×10px, 2px 테두리) */}
+        {/* 영웅·전설 네 모서리 발광 L-브래킷(10×10px, 2px 테두리) */}
         {showCornerGlow && CORNER_BRACKETS.map((posClass, i) => (
           <span key={`c${i}`}
                 data-catch-corner
                 className={cx('absolute size-[10px] border-solid', posClass)}
                 style={{
-                  borderColor: fxColor,
-                  filter: `drop-shadow(0 0 4px ${fxColor})`,
+                  borderColor: 'var(--rarity-color)',
+                  filter: 'drop-shadow(0 0 4px var(--rarity-color))',
                 }} />
         ))}
         {/* 변이 — 신비로운 잔광: 카드 곁에서 피어올라 흩어지는 자홍빛.
@@ -89,7 +88,7 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
                 <div data-portrait-glow
                      aria-hidden="true"
                      className="absolute inset-0 pointer-events-none catch-portrait-glow"
-                     style={{ '--fx-color': fxColor } as CSSProperties} />
+                     style={{ '--fx-color': 'var(--rarity-color)' } as CSSProperties} />
               )}
               <FishSprite fish={fish} preset="card" form={info?.form ?? 'normal'} animate className="relative w-full h-auto max-h-full object-contain" />
             </Inset>

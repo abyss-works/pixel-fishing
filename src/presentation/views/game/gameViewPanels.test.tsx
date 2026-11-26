@@ -584,10 +584,14 @@ describe('GameView 패널 초기화', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^메뉴 열기/ }));
     fireEvent.click(screen.getByRole('menuitem', { name: /^의뢰/ }));
-    expect(screen.getByRole('dialog', { name: '의뢰' })).toBeInTheDocument();
+    const parentModal = screen.getByRole('dialog', { name: '의뢰' });
+    expect(parentModal).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '의뢰 포기' }));
     const confirmDialog = await screen.findByRole('dialog', { name: '의뢰 포기' });
+    expect(parentModal).toBeInTheDocument();
+    expect(screen.getAllByRole('dialog')).toHaveLength(2);
+    expect(parentModal.compareDocumentPosition(confirmDialog) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
     expect(document.querySelector('[data-game-stage]')!).toContainElement(confirmDialog);
 
     fireEvent.click(screen.getByRole('button', { name: '포기' }));

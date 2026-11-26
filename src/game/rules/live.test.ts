@@ -189,7 +189,7 @@ describe('ServerMessage nick', () => {
 });
 
 describe('ServerMessage catchFx', () => {
-  it('catchFx 메시지는 uid, region, 좌표, fishId와 선택적 form을 가진다', () => {
+  it('catchFx 메시지는 uid, region, 좌표, fishId와 선택적 toX·toY·form을 가진다', () => {
     type CatchFxMessage = Extract<ServerMessage, { t: 'catchFx' }>;
     expectTypeOf<CatchFxMessage>().toEqualTypeOf<{
       t: 'catchFx';
@@ -197,14 +197,20 @@ describe('ServerMessage catchFx', () => {
       region: RegionId;
       x: number;
       y: number;
+      toX?: number;
+      toY?: number;
       fishId: string;
       form?: FormId;
     }>();
 
     const plain: ServerMessage = { t: 'catchFx', uid: 'u-1', region: 'world', x: 120, y: 240, fishId: 'carp' };
-    const variant: ServerMessage = { t: 'catchFx', uid: 'u-2', region: 'village', x: 100, y: 120, fishId: 'crucian', form: 'variant' };
+    const targeted: ServerMessage = {
+      t: 'catchFx', uid: 'u-2', region: 'village', x: 100, y: 120, toX: 80, toY: 114, fishId: 'crucian', form: 'variant',
+    };
     expect(JSON.parse(JSON.stringify(plain))).toEqual({ t: 'catchFx', uid: 'u-1', region: 'world', x: 120, y: 240, fishId: 'carp' });
-    expect(JSON.parse(JSON.stringify(variant))).toEqual({ t: 'catchFx', uid: 'u-2', region: 'village', x: 100, y: 120, fishId: 'crucian', form: 'variant' });
+    expect(JSON.parse(JSON.stringify(targeted))).toEqual({
+      t: 'catchFx', uid: 'u-2', region: 'village', x: 100, y: 120, toX: 80, toY: 114, fishId: 'crucian', form: 'variant',
+    });
   });
 });
 

@@ -1063,13 +1063,13 @@ describe('실시간 어획 점프 브로드캐스트(broadcastCatchFx)', () => {
     live.broadcastCatchFx('u1', { fishId: 'tuna', form: 'variant' });
     live.broadcastCatchFx('u1', { fishId: 'oarfish' });
 
-    expect(await b.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 140, y: 260, fishId: 'anchovy', form: 'normal' });
-    expect(await b.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 140, y: 260, fishId: 'tuna', form: 'variant' });
-    expect(await b.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 140, y: 260, fishId: 'oarfish' });
+    expect(await b.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 140, y: 260, toX: 100, toY: 194, fishId: 'anchovy', form: 'normal' });
+    expect(await b.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 140, y: 260, toX: 100, toY: 194, fishId: 'tuna', form: 'variant' });
+    expect(await b.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 140, y: 260, toX: 100, toY: 194, fishId: 'oarfish' });
 
-    expect(await g.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 140, y: 260, fishId: 'anchovy', form: 'normal' });
-    expect(await g.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 140, y: 260, fishId: 'tuna', form: 'variant' });
-    expect(await g.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 140, y: 260, fishId: 'oarfish' });
+    expect(await g.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 140, y: 260, toX: 100, toY: 194, fishId: 'anchovy', form: 'normal' });
+    expect(await g.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 140, y: 260, toX: 100, toY: 194, fishId: 'tuna', form: 'variant' });
+    expect(await g.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 140, y: 260, toX: 100, toY: 194, fishId: 'oarfish' });
 
     // bob이 없으면 플레이어 x, y를 사용한다
     a.ws.send(JSON.stringify({ t: 'move', region: 'world', x: 155, y: 275, dir: 1, line: false }));
@@ -1079,8 +1079,8 @@ describe('실시간 어획 점프 브로드캐스트(broadcastCatchFx)', () => {
     await d.next(); // move u1
 
     live.broadcastCatchFx('u1', { fishId: 'mackerel', form: 'normal' });
-    expect(await b.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 155, y: 275, fishId: 'mackerel', form: 'normal' });
-    expect(await g.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 155, y: 275, fishId: 'mackerel', form: 'normal' });
+    expect(await b.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 155, y: 275, toX: 155, toY: 269, fishId: 'mackerel', form: 'normal' });
+    expect(await g.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 155, y: 275, toX: 155, toY: 269, fishId: 'mackerel', form: 'normal' });
 
     // 게스트 발신자·미접속·presence 없는 접속자는 전파하지 않는다
     live.broadcastCatchFx('g1', { fishId: 'crucian', form: 'normal' });
@@ -1097,6 +1097,6 @@ describe('실시간 어획 점프 브로드캐스트(broadcastCatchFx)', () => {
     a.ws.send(JSON.stringify({ t: 'move', region: 'village', x: 30, y: 40, dir: 0, line: true, bob: { x: 45, y: 55 } }));
     await c.next(); // move u1
     live.broadcastCatchFx('u1', { fishId: 'crucian', form: 'normal' });
-    expect(await c.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'village', x: 45, y: 55, fishId: 'crucian', form: 'normal' });
+    expect(await c.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'village', x: 45, y: 55, toX: 30, toY: 34, fishId: 'crucian', form: 'normal' });
   });
 });
