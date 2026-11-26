@@ -850,6 +850,8 @@ export interface AdminEventDrawRow {
   rewardPin: string | null;
   rewardExpiresAt: string | null;
   mailId: number | null;
+  seed: string;
+  drawnBy: string | null;
   createdAt: string;
 }
 

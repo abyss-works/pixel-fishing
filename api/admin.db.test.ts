@@ -843,13 +843,16 @@ describe('관리자 조치', () => {
         status: 200,
         body: {
           event: { id: 'evt-admin-trio' },
+          seed: expect.any(String),
           eligibleCount: 1,
           draws: [expect.objectContaining({
             userId: PLAYER,
             rewardPin: 'PIN-ADMIN-9999',
+            drawnBy: ADMIN,
           })],
         },
       });
+      expect((drawRes.body as { seed: string }).seed.length).toBeGreaterThan(0);
       expect(notified).toEqual([{ uid: PLAYER, msg: { t: 'mail' } }]);
     } finally {
       provideNotify(() => {});
@@ -858,7 +861,12 @@ describe('관리자 조치', () => {
     const drawsRes = await callAdmin({ q: 'eventDraws', eventId: 'evt-admin-trio' }, userToken(ADMIN));
     expect(drawsRes.status).toBe(200);
     expect(drawsRes.body).toEqual([
-      expect.objectContaining({ eventId: 'evt-admin-trio', userId: PLAYER, rewardPin: 'PIN-ADMIN-9999' }),
+      expect.objectContaining({
+        eventId: 'evt-admin-trio',
+        userId: PLAYER,
+        rewardPin: 'PIN-ADMIN-9999',
+        drawnBy: ADMIN,
+      }),
     ]);
 
     const drawMailId = (drawsRes.body as { mailId: number | null }[])[0].mailId;

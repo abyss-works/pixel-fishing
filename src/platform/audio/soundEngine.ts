@@ -230,8 +230,11 @@ export class SoundEngine {
 
     if (ctxState === 'running') {
       this.state = this.isHidden() ? 'bg-muted' : 'running';
+    } else if (this.isHidden()) {
+      this.state = 'bg-muted';
     } else {
-      this.handleInterruptedOrSuspended(ctx);
+      this.state = 'suspended-awaiting-gesture';
+      this.attachGestureListeners();
     }
     return this.ctx;
   }

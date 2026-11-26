@@ -90,6 +90,8 @@ create table public.event_draws (
   reward_pin text,
   reward_expires_at text,
   mail_id bigint,
+  seed text not null default '',
+  drawn_by uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now()
 );
 

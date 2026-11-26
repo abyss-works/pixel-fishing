@@ -1,5 +1,5 @@
 // 라이브 이벤트(live_events·event_trio_progress·event_championship_scores·event_draws) 소유 모듈.
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { EVENT1_TRIO_TARGETS } from '../../src/game/content/eventFish.js';
@@ -112,6 +112,8 @@ export interface AdminEventDrawRow {
   rewardPin: string | null;
   rewardExpiresAt: string | null;
   mailId: number | null;
+  seed: string;
+  drawnBy: string | null;
   createdAt: string;
 }
 
@@ -211,6 +213,16 @@ const EVENT_COLS = sql`id,
   ${isoOf('created_at')} as created_at,
   ${isoOf('updated_at')} as updated_at`;
 
+const toSummaryAt = (r: RawLiveEventRow, nowMs: number): LiveEventSummary => {
+  const summary = toSummary(r);
+  const startMs = Date.parse(summary.startsAt);
+  const endMs = Date.parse(summary.endsAt);
+  return {
+    ...summary,
+    active: summary.active && Number.isFinite(nowMs) && startMs <= nowMs && nowMs < endMs,
+  };
+};
+
 /** 현재 시각에 진행 중인 특정 종류의 라이브 이벤트를 모두 조회한다 */
 export async function activeEventsOfKind(
   db: Executor,
@@ -224,7 +236,8 @@ export async function activeEventsOfKind(
       and starts_at <= ${at(nowISO)}
       and ends_at > ${at(nowISO)}
     order by starts_at desc, created_at desc`);
-  return rows.map(toSummary);
+  const nowMs = Date.parse(nowISO);
+  return rows.map(r => toSummaryAt(r, nowMs));
 }
 
 /** 현재 시각에 진행 중인 특정 종류의 대표 이벤트 1건을 조회한다 */
@@ -255,7 +268,8 @@ export async function listVisibleLiveEvents(
       end asc,
       starts_at desc,
       created_at desc`);
-  return rows.map(toSummary);
+  const nowMs = Date.parse(nowISO);
+  return rows.map(r => toSummaryAt(r, nowMs));
 }
 
 // ---------- 이벤트 1: 삼총사를 낚아라 ----------
@@ -312,7 +326,18 @@ async function loadTrioState(db: Executor, uid: string, event: LiveEventSummary)
   }>(sql`select
       p.counts,
       ${nullableIsoOf('p.completed_at')} as completed_at,
-      ${nullableIsoOf('p.claimed_at')} as claimed_at,
+      ${nullableIsoOf(`coalesce(
+        p.claimed_at,
+        m.claimed_at,
+        case
+          when m.id is not null
+            and m.gold = 0
+            and jsonb_array_length(m.items) = 0
+            and jsonb_array_length(m.hats) = 0
+          then m.read_at
+          else null
+        end
+      )`)} as claimed_at,
       ${nullableIsoOf('p.updated_at')} as updated_at,
       d.reward_pin,
       d.reward_expires_at,
@@ -320,12 +345,13 @@ async function loadTrioState(db: Executor, uid: string, event: LiveEventSummary)
     from (select 1) dummy
     left join public.event_trio_progress p on p.event_id = ${event.id} and p.user_id = ${uid}::uuid
     left join lateral (
-      select id, reward_pin, reward_expires_at
+      select id, mail_id, reward_pin, reward_expires_at
       from public.event_draws
       where event_id = ${event.id} and user_id = ${uid}::uuid
       order by created_at desc, id desc
       limit 1
-    ) d on true`);
+    ) d on true
+    left join public.mails m on m.id = d.mail_id`);
   const r = rows[0];
   const counts = r?.counts && typeof r.counts === 'object' ? r.counts : {};
   const targets = trioTargetsOf(event.config);
@@ -720,10 +746,11 @@ async function loadDrawState(
 }
 
 function pickEventForKind(events: readonly LiveEventSummary[], kind: LiveEventKind, nowISO: string): LiveEventSummary | null {
+  const nowMs = Date.parse(nowISO);
   const ofKind = events.filter(e => e.kind === kind);
-  const active = ofKind.find(e => e.startsAt <= nowISO && nowISO < e.endsAt);
+  const active = ofKind.find(e => e.active && Date.parse(e.startsAt) <= nowMs && nowMs < Date.parse(e.endsAt));
   if (active) return active;
-  const ended = ofKind.find(e => e.endsAt <= nowISO);
+  const ended = ofKind.find(e => Date.parse(e.endsAt) <= nowMs);
   return ended ?? null;
 }
 
@@ -938,6 +965,8 @@ type RawDrawRow = {
   reward_pin: string | null;
   reward_expires_at: string | null;
   mail_id: number | null;
+  seed: string;
+  drawn_by: string | null;
   created_at: string;
 };
 
@@ -953,6 +982,8 @@ const toAdminDrawRow = (r: RawDrawRow): AdminEventDrawRow => ({
   rewardPin: r.reward_pin,
   rewardExpiresAt: r.reward_expires_at,
   mailId: r.mail_id === null ? null : Number(r.mail_id),
+  seed: r.seed ?? '',
+  drawnBy: r.drawn_by ?? null,
   createdAt: r.created_at,
 });
 
@@ -970,6 +1001,8 @@ export async function listEventDraws(db: Executor, eventId: string): Promise<Adm
       d.reward_pin,
       d.reward_expires_at,
       d.mail_id,
+      d.seed,
+      d.drawn_by::text as drawn_by,
       ${isoOf('d.created_at')} as created_at
     from public.event_draws d
     left join public.profiles p on p.user_id = d.user_id
@@ -990,6 +1023,7 @@ export interface EventDrawInput {
   mailTitle?: string;
   mailBody?: string;
   seed?: string;
+  drawnBy?: string | null;
 }
 
 export function parseEventDrawInput(raw: unknown): EventDrawInput | null {
@@ -1087,6 +1121,15 @@ export interface EventDrawOutcome {
   draws: AdminEventDrawRow[];
 }
 
+function shuffleWithRng<T>(items: readonly T[], rng: () => number): T[] {
+  const pool = [...items];
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool;
+}
+
 /**
  * 이벤트 당첨자 무작위 추첨을 실행하고 event_draws 기록 및 인게임 우편(public.mails) 발송을 한 트랜잭션으로 확정한다.
  */
@@ -1104,7 +1147,13 @@ export async function drawEventWinners(
     if (!evRaw) return 'no-event';
     const event = toAdminRow(evRaw);
 
-    let candidates: Array<{ userId: string; nickname: string | null }> = [];
+    const trimmedSeed = typeof input.seed === 'string' ? input.seed.trim() : '';
+    const seed = trimmedSeed.length > 0 ? trimmedSeed : randomBytes(8).toString('hex');
+    const drawnBy = typeof input.drawnBy === 'string' && input.drawnBy.trim().length > 0 ? input.drawnBy.trim() : null;
+    const rng = seededPrng(seed);
+
+    let eligibleCount = 0;
+    let winners: Array<{ userId: string; nickname: string | null }> = [];
     if (event.kind === 'trio') {
       const { rows } = await tx.execute<{ user_id: string; nickname: string | null }>(sql`select
           p.user_id::text as user_id,
@@ -1121,7 +1170,9 @@ export async function drawEventWinners(
             where d.event_id = ${input.eventId} and d.user_id = p.user_id
           )
         order by p.completed_at asc, p.user_id asc`);
-      candidates = rows.map(r => ({ userId: r.user_id, nickname: r.nickname }));
+      const candidates = rows.map(r => ({ userId: r.user_id, nickname: r.nickname }));
+      eligibleCount = candidates.length;
+      winners = shuffleWithRng(candidates, rng).slice(0, Math.min(input.count, candidates.length));
     } else if (event.kind === 'draw') {
       const allDays = eventDaysInRange(event.startsAt, event.endsAt, event.config);
       const rankings = await computeLuckRankings(tx, allDays);
@@ -1129,12 +1180,27 @@ export async function drawEventWinners(
         from public.event_draws where event_id = ${input.eventId}`);
       const already = new Set(alreadyRows.map(r => r.user_id));
       const remaining = rankings.filter(r => !already.has(r.userId) && r.totalScore > 0);
-      if (remaining.length > 0) {
-        const topScore = remaining[0].totalScore;
-        const topDays = remaining[0].attendedDays;
-        const tiedTop = remaining.filter(r => r.totalScore === topScore && r.attendedDays === topDays);
-        const pool = tiedTop.length >= input.count ? tiedTop : remaining;
-        candidates = pool.map(r => ({ userId: r.userId, nickname: r.nickname }));
+      eligibleCount = remaining.length;
+
+      // 동점(totalScore) 티어별로 높은 점수부터 순서대로 채우고, 남은 정원보다 큰 티어에서만 시드 PRNG 추첨한다.
+      const groups: Array<Array<{ userId: string; nickname: string | null }>> = [];
+      let currentScore: number | null = null;
+      for (const r of remaining) {
+        if (currentScore === null || r.totalScore !== currentScore) {
+          currentScore = r.totalScore;
+          groups.push([]);
+        }
+        groups[groups.length - 1].push({ userId: r.userId, nickname: r.nickname });
+      }
+      for (const group of groups) {
+        if (winners.length >= input.count) break;
+        const rem = input.count - winners.length;
+        if (group.length <= rem) {
+          winners.push(...group);
+        } else {
+          winners.push(...shuffleWithRng(group, rng).slice(0, rem));
+          break;
+        }
       }
     } else {
       const { rows } = await tx.execute<{ user_id: string; nickname: string | null }>(sql`select
@@ -1152,17 +1218,11 @@ export async function drawEventWinners(
             where d.event_id = ${input.eventId} and d.user_id = s.user_id
           )
         order by s.score desc, s.updated_at asc, s.user_id asc`);
-      candidates = rows.map(r => ({ userId: r.user_id, nickname: r.nickname }));
+      const candidates = rows.map(r => ({ userId: r.user_id, nickname: r.nickname }));
+      eligibleCount = candidates.length;
+      winners = shuffleWithRng(candidates, rng).slice(0, Math.min(input.count, candidates.length));
     }
 
-    const seed = input.seed ?? randomUUID();
-    const rng = seededPrng(seed);
-    const pool = [...candidates];
-    for (let i = pool.length - 1; i > 0; i--) {
-      const j = Math.floor(rng() * (i + 1));
-      [pool[i], pool[j]] = [pool[j], pool[i]];
-    }
-    const winners = pool.slice(0, Math.min(input.count, pool.length));
     const draws: AdminEventDrawRow[] = [];
 
     for (let i = 0; i < winners.length; i++) {
@@ -1196,7 +1256,7 @@ export async function drawEventWinners(
       }
 
       const { rows: insRows } = await tx.execute<RawDrawRow>(sql`insert into public.event_draws (
-          event_id, user_id, reward_kind, reward_id, reward_qty, gold, reward_pin, reward_expires_at, mail_id, created_at
+          event_id, user_id, reward_kind, reward_id, reward_qty, gold, reward_pin, reward_expires_at, mail_id, seed, drawn_by, created_at
         )
         values (
           ${input.eventId},
@@ -1208,6 +1268,8 @@ export async function drawEventWinners(
           ${rewardPin},
           ${rewardExpiresAt},
           ${mailId},
+          ${seed},
+          ${drawnBy}::uuid,
           ${at(nowISO)}
         )
         returning
@@ -1222,10 +1284,12 @@ export async function drawEventWinners(
           reward_pin,
           reward_expires_at,
           mail_id,
+          seed,
+          drawn_by::text as drawn_by,
           ${isoOf('created_at')} as created_at`);
       draws.push(toAdminDrawRow(insRows[0]));
     }
 
-    return { event, seed, eligibleCount: candidates.length, draws };
+    return { event, seed, eligibleCount, draws };
   });
 }

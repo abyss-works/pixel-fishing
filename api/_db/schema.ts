@@ -272,6 +272,8 @@ export const eventDraws = pgTable('event_draws', {
   rewardPin: text('reward_pin'),
   rewardExpiresAt: text('reward_expires_at'),
   mailId: bigint('mail_id', { mode: 'number' }),
+  seed: text('seed').notNull().default(''),
+  drawnBy: uuid('drawn_by'),
   createdAt: at('created_at').notNull().defaultNow(),
 });
 

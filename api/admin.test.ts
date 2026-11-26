@@ -451,6 +451,11 @@ describe('api/admin 핸들러 단위 테스트', () => {
       status: 200,
       body: { eventId: 'evt-1', draws: [{ userId: TARGET_UID, rewardPin: 'PIN-1' }] },
     });
+    expect(mocks.drawEventWinners).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ eventId: 'evt-1', count: 1, drawnBy: ADMIN_UID }),
+      expect.any(String),
+    );
     expect(mocks.notifyUser).toHaveBeenCalledWith(TARGET_UID, { t: 'mail' });
 
     expect(await call('POST', { q: 'coupons' }, { op: 'create', code: '출항준비', gold: 100, description: '차단' })).toMatchObject({

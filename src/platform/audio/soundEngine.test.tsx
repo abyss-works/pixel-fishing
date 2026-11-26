@@ -458,12 +458,17 @@ describe('SoundEngine 오디오 생명주기 및 합성 검증', () => {
     flakyEngine.playSfx('cast'); // 1회 실패
     await flushMicrotasks();
     expect(flakyEngine.getState()).toBe('suspended-awaiting-gesture');
+    expect(created[0].resumeCalls).toBe(1);
 
     window.dispatchEvent(new Event('pointerdown')); // 2회 실패
     await flushMicrotasks();
+    expect(flakyEngine.getState()).toBe('suspended-awaiting-gesture');
+    expect(created[0].resumeCalls).toBe(2);
+
     window.dispatchEvent(new Event('keydown')); // 3회 실패 -> closed
     await flushMicrotasks();
 
+    expect(created[0].resumeCalls).toBe(3);
     expect(flakyEngine.getState()).toBe('closed');
     expect(created).toHaveLength(1);
 
@@ -471,6 +476,42 @@ describe('SoundEngine 오디오 생명주기 및 합성 검증', () => {
     flakyEngine.playSfx('cast');
     expect(created).toHaveLength(2);
     flakyEngine.dispose();
+  });
+
+  it('ensureAndPlayBgm은 suspended 컨텍스트에서 attemptResume을 중복 호출하지 않고 실패 횟수를 1회씩만 올린다', async () => {
+    const created: FakeAudioContext[] = [];
+    const bgmEngine = new SoundEngine({
+      createAudioContext: () => {
+        const c = new FakeAudioContext();
+        c.state = 'suspended';
+        c.resumeBehavior = 'reject';
+        created.push(c);
+        return c as unknown as AudioContext;
+      },
+      fetchImpl: fetchSpy as unknown as typeof fetch,
+      now: () => nowMs,
+      isHidden: () => false,
+      initialSettings: { bgmEnabled: false, sfxEnabled: false, bgmVolume: 0.5, sfxVolume: 0.5 },
+    });
+
+    bgmEngine.syncSettings({ bgmEnabled: true, sfxEnabled: false, bgmVolume: 0.5, sfxVolume: 0.5 });
+    await flushMicrotasks();
+
+    expect(created).toHaveLength(1);
+    expect(created[0].resumeCalls).toBe(1);
+    expect(bgmEngine.getState()).toBe('suspended-awaiting-gesture');
+
+    window.dispatchEvent(new Event('pointerdown')); // 2회 실패
+    await flushMicrotasks();
+    expect(created[0].resumeCalls).toBe(2);
+    expect(bgmEngine.getState()).toBe('suspended-awaiting-gesture');
+
+    window.dispatchEvent(new Event('keydown')); // 3회 실패 -> closed
+    await flushMicrotasks();
+    expect(created[0].resumeCalls).toBe(3);
+    expect(bgmEngine.getState()).toBe('closed');
+
+    bgmEngine.dispose();
   });
 
   it('동일 효과음 짧은 연타는 쿨다운(80~150ms)으로 중복 클리핑을 막는다', () => {

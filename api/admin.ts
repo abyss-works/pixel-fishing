@@ -72,7 +72,7 @@ const WRITES: Record<string, Write> = {
   letterHandled,
   revokeSessions,
   notices: ({ db }, body, adminId) => notices(db, body, adminId),
-  events: (store, body) => eventsWrite(store, body),
+  events: (store, body, adminId) => eventsWrite(store, body, adminId),
   coupons: ({ db }, body) => couponsWrite(db, body),
 };
 
@@ -319,7 +319,7 @@ async function notices(db: Executor, raw: unknown, adminId: string): Promise<unk
 }
 
 /** 라이브 이벤트 생성·수정·조기 종료·삭제·당첨 추첨(당첨자 우편 발송 포함) */
-async function eventsWrite({ db, withTransaction }: Database, raw: unknown): Promise<unknown> {
+async function eventsWrite({ db, withTransaction }: Database, raw: unknown, adminId: string): Promise<unknown> {
   const body = (raw !== null && typeof raw === 'object' ? raw : {}) as { op?: unknown; id?: unknown };
   const parseId = (): string => {
     if (typeof body.id !== 'string' || !EVENT_ID_PATTERN.test(body.id.trim())) throw new ApiError(400, 'bad-event');
@@ -356,7 +356,7 @@ async function eventsWrite({ db, withTransaction }: Database, raw: unknown): Pro
     case 'draw': {
       const input = parseEventDrawInput(body);
       if (!input) throw new ApiError(400, 'bad-event');
-      const outcome = await dbWrite(() => drawEventWinners(withTransaction, input, new Date().toISOString()));
+      const outcome = await dbWrite(() => drawEventWinners(withTransaction, { ...input, drawnBy: adminId }, new Date().toISOString()));
       if (outcome === 'no-event') throw new ApiError(404, 'no-event');
       for (const draw of outcome.draws) {
         notifyUser(draw.userId, { t: 'mail' });

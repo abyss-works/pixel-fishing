@@ -246,4 +246,179 @@ describe('live_events CRUD 및 진행·순위·추첨', () => {
     expect(snapB.draw?.top[0]).toMatchObject({ userId: b, rank: 1, score: legacyScoreB + 95 });
     expect(snapB.draw?.rank).toBe(1);
   });
+
+  it('행운왕 다수 당첨 추첨 시 1등이 탈락하지 않고 동점 티어 내에서만 잔여 인원을 추첨하며 seed와 drawn_by를 저장한다', async () => {
+    const admin = await seedMember('운영자');
+    const first = await seedMember('단독일등');
+    const tieA = await seedMember('공동이등A');
+    const tieB = await seedMember('공동이등B');
+    const tieC = await seedMember('공동이등C');
+    const fourth = await seedMember('오등참가자');
+
+    await createAdminEvent(database.db, {
+      id: 'luck-tie-2',
+      kind: 'draw',
+      title: '행운왕 동점 티어 테스트',
+      description: '티어별 추첨',
+      startsAt: '2030-03-07T19:00:00.000Z',
+      endsAt: '2030-03-09T19:00:00.000Z',
+      active: true,
+      config: {},
+    });
+
+    await env.client.query(
+      `insert into public.daily_fortunes (user_id, day, kind, index, score, created_at) values
+       ($1, '2030-03-08', 'fish', 5, 100, '2030-03-08T05:00:00Z'),
+       ($1, '2030-03-09', 'fish', 5, 100, '2030-03-09T05:00:00Z'),
+       ($2, '2030-03-08', 'fish', 3, 90, '2030-03-08T05:00:00Z'),
+       ($2, '2030-03-09', 'fish', 3, 90, '2030-03-09T05:00:00Z'),
+       ($3, '2030-03-08', 'fish', 3, 90, '2030-03-08T05:01:00Z'),
+       ($3, '2030-03-09', 'fish', 3, 90, '2030-03-09T05:01:00Z'),
+       ($4, '2030-03-08', 'fish', 3, 90, '2030-03-08T05:02:00Z'),
+       ($4, '2030-03-09', 'fish', 3, 90, '2030-03-09T05:02:00Z'),
+       ($5, '2030-03-08', 'fish', 3, 81, '2030-03-08T04:30:00Z'),
+       ($5, '2030-03-09', 'fish', 3, 81, '2030-03-09T04:30:00Z')`,
+      [first, tieA, tieB, tieC, fourth],
+    );
+
+    // seed 생략 시에도 비어 있지 않은 hex 감사 시드를 자동 생성해 event_draws에 저장한다
+    const outcome = await drawEventWinners(database.withTransaction, {
+      eventId: 'luck-tie-2',
+      count: 2,
+      rewardKind: 'gold',
+      rewardId: null,
+      rewardQty: 0,
+      gold: 500,
+      drawnBy: admin,
+    }, NOW);
+
+    expect(outcome).not.toBe('no-event');
+    if (outcome !== 'no-event') {
+      expect(outcome.seed).toMatch(/^[0-9a-f]{16}$/);
+      expect(outcome.eligibleCount).toBe(5);
+      expect(outcome.draws).toHaveLength(2);
+      const winnerIds = outcome.draws.map(d => d.userId);
+      expect(winnerIds).toContain(first);
+      const secondWinner = winnerIds.find(id => id !== first)!;
+      expect([tieA, tieB, tieC]).toContain(secondWinner);
+      expect(winnerIds).not.toContain(fourth);
+
+      for (const row of outcome.draws) {
+        expect(row.seed).toBe(outcome.seed);
+        expect(row.drawnBy).toBe(admin);
+      }
+
+      const dbRows = await env.client.query<{ user_id: string; seed: string; drawn_by: string | null }>(
+        `select user_id::text, seed, drawn_by::text from public.event_draws where event_id = 'luck-tie-2' order by id asc`,
+      );
+      expect(dbRows.rows).toHaveLength(2);
+      for (const r of dbRows.rows) {
+        expect(r.seed).toBe(outcome.seed);
+        expect(r.drawn_by).toBe(admin);
+      }
+    }
+  });
+
+  it('listVisibleLiveEvents는 예정·종료 이벤트의 active를 false로 내리고, trio claimedAt은 당첨 우편 수령/열람 여부를 반영한다', async () => {
+    const winner = await seedMember('트리오당첨자');
+
+    await createAdminEvent(database.db, {
+      id: 'evt-window-live',
+      kind: 'championship',
+      title: '진행 중 대회',
+      description: 'live',
+      startsAt: '2030-03-05T00:00:00.000Z',
+      endsAt: '2030-03-10T00:00:00.000Z',
+      active: true,
+      config: {},
+    });
+    await createAdminEvent(database.db, {
+      id: 'evt-window-upcoming',
+      kind: 'draw',
+      title: '예정 이벤트',
+      description: 'upcoming',
+      startsAt: '2030-03-08T00:00:00.000Z',
+      endsAt: '2030-03-12T00:00:00.000Z',
+      active: true,
+      config: {},
+    });
+    await createAdminEvent(database.db, {
+      id: 'evt-window-ended',
+      kind: 'trio',
+      title: '최근 종료 트리오',
+      description: 'ended',
+      startsAt: '2030-03-01T00:00:00.000Z',
+      endsAt: '2030-03-05T12:00:00.000Z',
+      active: true,
+      config: {},
+    });
+
+    await env.client.query(
+      `insert into public.event_trio_progress (event_id, user_id, counts, completed_at)
+       values ('evt-window-ended', $1, '{"mackerel:normal":1,"squid:normal":1,"sailfish:normal":1}'::jsonb, '2030-03-04T00:00:00.000Z')`,
+      [winner],
+    );
+
+    const drawGold = await drawEventWinners(database.withTransaction, {
+      eventId: 'evt-window-ended',
+      count: 1,
+      rewardKind: 'gold',
+      rewardId: null,
+      rewardQty: 0,
+      gold: 300,
+      seed: 'seed-claim-check',
+    }, NOW);
+    expect(drawGold).not.toBe('no-event');
+
+    const beforeClaim = await loadEventsSnapshot(database.db, winner, false, NOW);
+    const byId = new Map(beforeClaim.events.map(e => [e.id, e]));
+    expect(byId.get('evt-window-live')?.active).toBe(true);
+    expect(byId.get('evt-window-upcoming')?.active).toBe(false);
+    expect(byId.get('evt-window-ended')?.active).toBe(false);
+    expect(beforeClaim.trio?.won).toBe(true);
+    expect(beforeClaim.trio?.claimedAt).toBeNull();
+
+    // 당첨 우편 수령 시 trio.claimedAt이 채워진다
+    if (drawGold !== 'no-event') {
+      const mailId = drawGold.draws[0].mailId!;
+      await env.client.query(
+        `update public.mails set claimed_at = '2030-03-06T06:00:00.000Z', read_at = '2030-03-06T06:00:00.000Z' where id = $1`,
+        [mailId],
+      );
+    }
+    const afterClaim = await loadEventsSnapshot(database.db, winner, false, NOW);
+    expect(afterClaim.trio?.won).toBe(true);
+    expect(afterClaim.trio?.claimedAt).toBe('2030-03-06T06:00:00.000Z');
+
+    // PIN 전용(첨부 없음) 당첨 우편은 열람 시각(read_at)이 trio.claimedAt에 반영된다
+    const pinWinner = await seedMember('핀열람당첨자');
+    await env.client.query(
+      `insert into public.event_trio_progress (event_id, user_id, counts, completed_at)
+       values ('evt-window-ended', $1, '{"mackerel:normal":1,"squid:normal":1,"sailfish:normal":1}'::jsonb, '2030-03-04T00:00:00.000Z')`,
+      [pinWinner],
+    );
+    const drawPin = await drawEventWinners(database.withTransaction, {
+      eventId: 'evt-window-ended',
+      count: 1,
+      rewardKind: 'none',
+      rewardId: null,
+      rewardQty: 0,
+      gold: 0,
+      rewardPins: ['PIN-READ-CHECK'],
+      seed: 'seed-pin-read-check',
+    }, NOW);
+    expect(drawPin).not.toBe('no-event');
+    const beforeRead = await loadEventsSnapshot(database.db, pinWinner, false, NOW);
+    expect(beforeRead.trio?.won).toBe(true);
+    expect(beforeRead.trio?.claimedAt).toBeNull();
+    if (drawPin !== 'no-event') {
+      await env.client.query(
+        `update public.mails set read_at = '2030-03-06T07:00:00.000Z' where id = $1`,
+        [drawPin.draws[0].mailId!],
+      );
+    }
+    const afterRead = await loadEventsSnapshot(database.db, pinWinner, false, NOW);
+    expect(afterRead.trio?.won).toBe(true);
+    expect(afterRead.trio?.claimedAt).toBe('2030-03-06T07:00:00.000Z');
+  });
 });
