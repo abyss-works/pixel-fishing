@@ -293,6 +293,7 @@ describe('useLive 약관 수락 게이트 및 3방·공지 연동', () => {
           region: 'world',
           x: 100 + i,
           y: 200 + i,
+          ...(i === 11 ? { toX: 300, toY: 400 } : {}),
           fishId: 'carp',
           ...(i % 2 === 1 ? { form: 'variant' as const } : {}),
         });
@@ -315,7 +316,7 @@ describe('useLive 약관 수락 게이트 및 3방·공지 연동', () => {
     const worldFrame = liveFrame('world', 123);
     expect(worldFrame.peerJumps).toHaveLength(11);
     expect(worldFrame.peerJumps?.[0]).toEqual({ x: 101, y: 201, fishId: 'carp', form: 'variant', t: 0.3 });
-    expect(worldFrame.peerJumps?.[10]).toEqual({ x: 111, y: 211, fishId: 'carp', form: 'variant', t: 0.3 });
+    expect(worldFrame.peerJumps?.[10]).toEqual({ x: 111, y: 211, toX: 300, toY: 400, fishId: 'carp', form: 'variant', t: 0.3 });
 
     const villageFrame = liveFrame('village', 123);
     expect(villageFrame.peerJumps).toEqual([

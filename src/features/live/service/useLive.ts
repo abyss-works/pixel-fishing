@@ -50,6 +50,8 @@ interface PeerJumpEntry {
   region: string;
   x: number;
   y: number;
+  toX?: number;
+  toY?: number;
   fishId: string;
   form?: FormId;
   at: number;
@@ -92,6 +94,7 @@ function receive(msg: ServerMessage): void {
       region: msg.region,
       x: msg.x,
       y: msg.y,
+      ...(msg.toX != null && msg.toY != null ? { toX: msg.toX, toY: msg.toY } : {}),
       fishId: msg.fishId,
       ...(msg.form !== undefined ? { form: msg.form } : {}),
       at: now,
@@ -245,6 +248,7 @@ export function liveFrame(region: string, now: number): {
       activePeerJumps.push({
         x: entry.x,
         y: entry.y,
+        ...(entry.toX != null && entry.toY != null ? { toX: entry.toX, toY: entry.toY } : {}),
         fishId: entry.fishId,
         ...(entry.form !== undefined ? { form: entry.form } : {}),
         t: elapsed / 1000,

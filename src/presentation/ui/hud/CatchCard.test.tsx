@@ -100,29 +100,33 @@ describe('획득 카드', () => {
     expect(fx.parentElement).toBe(container.querySelector('.animate-catch-pop')!.parentElement);
   });
 
-  it('일반·희귀 비돌연변이는 모서리 브래킷과 액자 발광을 두지 않고, 영웅·전설·돌연변이만 모서리·액자 발광 연출을 표시한다', () => {
-    for (const rarity of ['common', 'rare'] as const) {
-      const targetFish = FISH.find(f => f.rarity === rarity)!;
-      const { container } = render(<CatchCard fish={targetFish} info={info({ form: 'normal' })} />);
-      expect(container.querySelectorAll('[data-catch-corner]')).toHaveLength(0);
-      expect(container.querySelector('[data-portrait-glow]')).toBeNull();
-      expect(container.querySelector('.animate-fx-orbit')).toBeNull();
-      expect(container.querySelector('.animate-fx-spark')).toBeNull();
-      cleanup();
-    }
-
-    const epicFish = FISH.find(f => f.rarity === 'epic')!;
-    const legendaryFish = FISH.find(f => f.rarity === 'legendary')!;
+  it('일반·희귀와 일반/희귀 돌연변이는 모서리 브래킷과 액자 발광을 두지 않고, 영웅·전설만 모서리·액자 발광 연출을 표시한다', () => {
     const commonFish = FISH.find(f => f.rarity === 'common')!;
     const rareFish = FISH.find(f => f.rarity === 'rare')!;
+    const epicFish = FISH.find(f => f.rarity === 'epic')!;
+    const legendaryFish = FISH.find(f => f.rarity === 'legendary')!;
 
     for (const [targetFish, form] of [
-      [epicFish, 'normal'],
-      [legendaryFish, 'normal'],
+      [commonFish, 'normal'],
+      [rareFish, 'normal'],
       [commonFish, 'variant'],
       [rareFish, 'variant'],
     ] as const) {
       const { container } = render(<CatchCard fish={targetFish} info={info({ form })} />);
+      expect(container.querySelectorAll('[data-catch-corner]')).toHaveLength(0);
+      expect(container.querySelector('[data-portrait-glow]')).toBeNull();
+      expect(container.querySelector('.animate-fx-orbit')).toBeNull();
+      expect(container.querySelector('.animate-fx-spark')).toBeNull();
+      if (form === 'variant') {
+        expect(container.querySelectorAll('.animate-fx-wisp')).toHaveLength(8);
+        expect(container.querySelector('.animate-mutated-shimmer')).not.toBeNull();
+        expect(container.querySelector('[data-catch-variant]')).not.toBeNull();
+      }
+      cleanup();
+    }
+
+    for (const targetFish of [epicFish, legendaryFish]) {
+      const { container } = render(<CatchCard fish={targetFish} info={info({ form: 'normal' })} />);
       const fx = container.querySelector('[data-catch-fx]')!;
       expect(fx.querySelectorAll('[data-catch-corner]')).toHaveLength(4);
       expect(container.querySelector('[data-portrait-glow]')).not.toBeNull();
@@ -132,7 +136,7 @@ describe('획득 카드', () => {
     }
   });
 
-  it('전설 등급에서만 외곽 맥동 발광(animate-glow-legend)과 내부 빛줄기(.catch-card-sweep)를 표시한다', () => {
+  it('영웅은 모서리·액자 발광만, 전설은 외곽 맥동 발광(animate-glow-legend)과 내부 빛줄기(.catch-card-sweep)까지 표시한다', () => {
     const legendaryFish = FISH.find(f => f.rarity === 'legendary')!;
     const epicFish = FISH.find(f => f.rarity === 'epic')!;
     const rareFish = FISH.find(f => f.rarity === 'rare')!;
@@ -143,6 +147,8 @@ describe('획득 카드', () => {
     // pf-notch 클리핑 바깥 래퍼에 걸리고, 그 안에 HudPanel과 sweep 오버레이가 놓인다
     expect(glowWrapper!.className).not.toContain('pf-notch');
     expect(glowWrapper!.querySelector('.catch-card-sweep')).not.toBeNull();
+    expect(legRender.container.querySelectorAll('[data-catch-corner]')).toHaveLength(4);
+    expect(legRender.container.querySelector('[data-portrait-glow]')).not.toBeNull();
     expect(legRender.container.querySelector('.animate-mutated-shimmer')).toBeNull();
     cleanup();
 
@@ -154,6 +160,10 @@ describe('획득 카드', () => {
       const { container } = render(<CatchCard fish={targetFish} info={info({ form })} />);
       expect(container.querySelector('.animate-glow-legend')).toBeNull();
       expect(container.querySelector('.catch-card-sweep')).toBeNull();
+      if (targetFish === epicFish) {
+        expect(container.querySelectorAll('[data-catch-corner]')).toHaveLength(4);
+        expect(container.querySelector('[data-portrait-glow]')).not.toBeNull();
+      }
       if (form === 'variant') {
         expect(container.querySelector('.animate-mutated-shimmer')).not.toBeNull();
         expect(container.querySelectorAll('.animate-fx-wisp')).toHaveLength(8);
