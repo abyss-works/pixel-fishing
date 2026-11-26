@@ -11,6 +11,7 @@ import {
   GUILD_ENHANCE_MAX_RANK, GUILD_ENHANCE_MIN_LEVEL, GUILD_ENHANCE_RESET_COSTS, enhanceOutcome, enhanceResetOutcome,
   guildEnhanceResetCost, maxEnhancePoints, remainingEnhancePoints, usedEnhancePoints,
   GUILD_RENAME_COST, parseJoinVia, renameBlock, renameOutcome,
+  PUBLIC_GUILD_SORTS, parsePublicGuildSort,
 } from './guild';
 
 describe('길드 이름', () => {
@@ -404,5 +405,17 @@ describe('길드 이름 바꾸기', () => {
     expect(renameBlock({ lastRenamedAt: null, nowISO, gold: 0 })).toBe('not-enough-gold');
     expect(renameBlock({ lastRenamedAt: nowISO, nowISO, gold: 0 })).toBe('renamed-today');
     expect(renameBlock({ lastRenamedAt: null, nowISO, gold: 100_000 })).toBeNull();
+  });
+});
+
+describe('공개 길드 목록 정렬', () => {
+  it('activity, level, slots만 허용하고 그 외는 null이다', () => {
+    expect(PUBLIC_GUILD_SORTS).toEqual(['activity', 'level', 'slots']);
+    expect(parsePublicGuildSort('activity')).toBe('activity');
+    expect(parsePublicGuildSort('level')).toBe('level');
+    expect(parsePublicGuildSort('slots')).toBe('slots');
+    expect(parsePublicGuildSort('unknown')).toBeNull();
+    expect(parsePublicGuildSort('')).toBeNull();
+    expect(parsePublicGuildSort(null)).toBeNull();
   });
 });

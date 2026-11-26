@@ -208,7 +208,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
           {namedOpen && alertSetting.permission !== 'unsupported' && (
             <>
               <CheckToggle label="조우하면 알림 받기"
-                checked={alertSetting.active}
+                checked={alertSetting.on}
                 disabled={alertSetting.permission === 'denied'}
                 onChange={on => {
                   if (!on) { alertSetting.disable(); return; }

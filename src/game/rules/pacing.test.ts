@@ -1,6 +1,6 @@
 // 캐치 간격 판정 — 계정 하나의 캐치 속도가 낚시 한 사이클의 최소 시간을 넘지 못한다
 import { describe, it, expect } from 'vitest';
-import { catchTooSoon } from './pacing';
+import { catchTooSoon, catchWaitMs } from './pacing';
 import { newState } from './logic';
 import { biteWaitOf, createPlayerContext, NO_ACHIEVEMENT_BONUSES } from './effects';
 import { NO_GUILD_EFFECTS } from './guild';
@@ -46,5 +46,12 @@ describe('catchTooSoon', () => {
 
   it('시각을 읽을 수 없으면 막지 않는다', () => {
     expect(catchTooSoon(s(), 'pond', 'not-a-date', T0)).toBe(false);
+    expect(catchWaitMs(s(), 'pond', 'not-a-date', T0)).toBe(0);
+  });
+
+  it('catchWaitMs는 다음 캐치 허용까지 남은 밀리초를 반환하고 허용 시점 이후에는 0이다', () => {
+    const cycle = CATCH_MS + minBite(s()) * 1000;
+    expect(catchWaitMs(s(), 'pond', T0, at(T0, 1000))).toBe(cycle - 500 - 1000);
+    expect(catchWaitMs(s(), 'pond', T0, at(T0, cycle))).toBe(0);
   });
 });

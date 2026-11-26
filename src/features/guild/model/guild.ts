@@ -1,14 +1,15 @@
 import type {
   GuildBonusItem, GuildInfo, GuildInvitePreview, GuildJoinRequestItem, GuildLogItem, GuildMemberItem, GuildMyRequest, GuildOp,
+  PublicGuildItem,
 } from '../../../platform/api';
 import type { ServerMessage } from '../../../game/rules/live';
 import {
   DEFAULT_GUILD_PITCH, GUILD_BONUS_IDS, GUILD_BONUS_MAX_RANK, GUILD_ENHANCE_MAX_RANK, GUILD_ENHANCE_MIN_LEVEL,
-  GUILD_ENHANCE_RESET_COSTS, GUILD_JOIN_REQUEST_TTL_MS, GUILD_PITCH_MAX, GUILD_RENAME_COST,
+  GUILD_ENHANCE_RESET_COSTS, GUILD_JOIN_REQUEST_TTL_MS, GUILD_MAX_MEMBERS, GUILD_PITCH_MAX, GUILD_RENAME_COST,
   bonusEffect, guildDailyContributionCaps, guildEnhanceResetCost, guildLinkPath, handoverOutcome, joinOutcome,
-  joinRequestDaysLeft, maxEnhancePoints, removalOutcome, renameBlock,
+  joinRequestDaysLeft, maxEnhancePoints, normalizeGuildCode, removalOutcome, renameBlock,
 } from '../../../game/rules/guild';
-import type { GuildBonusId, GuildJoinMode, GuildJoinVia } from '../../../game/rules/guild';
+import type { GuildBonusId, GuildJoinMode, GuildJoinVia, PublicGuildSort } from '../../../game/rules/guild';
 import type { ArtifactHolder } from '../../../game/rules/artifactLevel';
 import { GAME_DAY_RESET_TEXT } from '../../../game/rules/time';
 import { FISH } from '../../../game/content/fish';
@@ -16,7 +17,11 @@ import { bountyById } from '../../../game/content/bounties';
 import { namedById } from '../../../game/content/named';
 import { josa } from '../../../shared/lib/josa';
 
-export type { GuildBonusItem, GuildInfo, GuildInvitePreview, GuildLogItem, GuildMemberItem, GuildMyRequest, GuildOp };
+export type {
+  GuildBonusItem, GuildInfo, GuildInvitePreview, GuildLogItem, GuildMemberItem, GuildMyRequest, GuildOp, PublicGuildItem,
+  PublicGuildSort,
+};
+export { GUILD_MAX_MEMBERS, joinRequestDaysLeft, normalizeGuildCode };
 
 // 길드 화면 모델: 길드원 표, 길드원별로 열리는 관리 동작과 확인 문장, 가입 방식과 초대 링크, 가입 신청 줄, 초대 확인 창 상태,
 // 실시간 길드 알림 문장, 거부 안내 문장,
@@ -181,7 +186,55 @@ export const GUILD_ERROR_TEXT: Record<string, string> = {
   'no-enhance-points': '남은 강화 포인트가 없어요.',
   'enhance-maxed': '이 스킬은 자유 강화를 모두 채웠어요.',
   'no-enhance-used': '회수할 자유 강화가 없어요.',
+  'not-found': '길드를 찾지 못했어요. 목록을 새로고침해 주세요.',
+  'bad-guild': '길드 정보가 올바르지 않아요.',
+  'bad-sort': '목록 정렬 기준이 올바르지 않아요.',
 };
+
+// ── 공개 길드 목록과 바로 가입 ──────────────────────────────────────────
+
+export const PUBLIC_GUILD_SORT_OPTIONS: readonly { value: PublicGuildSort; label: string }[] = [
+  { value: 'activity', label: '최근 활동순' },
+  { value: 'level', label: '레벨순' },
+  { value: 'slots', label: '여유 인원순' },
+];
+
+export const GUILD_CREATE_RULES: readonly string[] = [
+  '만든 사람이 길드장이 돼요.',
+  '이름은 한글 1~8자 또는 영문 2~16자(한글, 영문, 숫자와 - _)만 쓸 수 있어요.',
+  `최대 ${GUILD_MAX_MEMBERS}명까지 함께할 수 있어요.`,
+  '만든 뒤 관리 탭에서 자유 가입으로 열거나 권유 문구를 바꿀 수 있어요.',
+];
+
+/** 공개 길드 최근 활동 시각을 상대 시간으로 바꾼다 */
+export function guildActivityText(lastActivityAtISO: string, nowMs: number): string {
+  const diffMs = Math.max(0, nowMs - Date.parse(lastActivityAtISO));
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 1) return '방금 전';
+  if (mins < 60) return `${mins}분 전`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}시간 전`;
+  return `${Math.floor(hours / 24)}일 전`;
+}
+
+export interface PublicJoinConfirm {
+  title: string;
+  label: string;
+  guild: PublicGuildItem;
+  pendingCancelWarn: string | null;
+}
+
+/** 공개 길드 바로 가입 확인 창 데이터 — 승인 대기 중인 다른 길드 신청이 있으면 자동 취소 경고를 붙인다 */
+export function publicJoinConfirm(guild: PublicGuildItem, pendingRequest: GuildMyRequest | null): PublicJoinConfirm {
+  return {
+    title: '길드 가입 확인',
+    label: '확인',
+    guild,
+    pendingCancelWarn: pendingRequest
+      ? `${pendingRequest.name} 길드에 보낸 승인 대기 신청은 바로 가입하면 자동으로 취소돼요.`
+      : null,
+  };
+}
 
 // ── 이름 바꾸기 ──────────────────────────────────────────────
 

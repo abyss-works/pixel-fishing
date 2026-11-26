@@ -66,6 +66,14 @@ export function parseJoinMode(raw: unknown): GuildJoinMode | null {
   return (GUILD_JOIN_MODES as readonly unknown[]).includes(raw) ? raw as GuildJoinMode : null;
 }
 
+/** 공개 길드 목록 정렬 기준 — 최근 활동순(기본), 레벨순, 여유 인원순 */
+export const PUBLIC_GUILD_SORTS = ['activity', 'level', 'slots'] as const;
+export type PublicGuildSort = typeof PUBLIC_GUILD_SORTS[number];
+
+export function parsePublicGuildSort(raw: unknown): PublicGuildSort | null {
+  return (PUBLIC_GUILD_SORTS as readonly unknown[]).includes(raw) ? raw as PublicGuildSort : null;
+}
+
 /** 들어오는 경로 — 코드를 직접 넣었는가(code), 초대 링크의 확인 창에서 왔는가(link) */
 export type GuildJoinVia = 'code' | 'link';
 

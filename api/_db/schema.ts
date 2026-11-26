@@ -111,6 +111,7 @@ export const reliefs = pgTable('reliefs', {
 export const mails = pgTable('mails', {
   id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
   userId: uuid('user_id').notNull(),
+  idempotencyKey: text('idempotency_key'),
   title: text('title').notNull(),
   body: text('body').notNull(),
   gold: bigint('gold', { mode: 'number' }).notNull().default(0),

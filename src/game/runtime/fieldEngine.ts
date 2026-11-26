@@ -12,6 +12,7 @@ import { achievementBonusesOf } from '../rules/achievements';
 import { biteWaitOf, createPlayerContext, moveSpeedOf } from '../rules/effects';
 import { NO_GUILD_EFFECTS } from '../rules/guild';
 import { CAST_RANGE } from '../rules/balance';
+import { MIN_CATCH_SHOW_MS } from '../rules/pacing';
 import { guestActionVerdict } from '../rules/guest';
 import { BLOCK_RENEW_DISTANCE, BlockNotice } from './blockNotice';
 import { when } from '../../shared/lib/when';
@@ -126,6 +127,10 @@ export class GameFieldEngine {
   private chainStartAt: number | null = null;
   /** 이번 던짐의 첫 결과가 나온 시각(Date.now). 결과 전이거나 줄을 거두었으면 null */
   private resultAt: number | null = null;
+  /** 마지막으로 서버가 확정한 캐치 시각(Date.now). 이동 취소 후 재캐스팅에도 유지해 최소 캐치 간격과 맞춘다 */
+  private lastCatchAt: number | null = null;
+  /** 현재 대기 단계에서 굴린 입질 대기 길이(ms). 대기 중 뒤늦은 캐치 응답이 오면 타이머를 재정렬할 때 쓴다 */
+  private waitBiteMs: number | null = null;
   /** catch 전이 시각 — 훅 점프 연출의 기준 */
   private catchStart = 0;
   /** 도감에 있는 어종 id — 어군 스프라이트의 색/실루엣 판정. game이 바뀔 때만 다시 만든다 */
@@ -291,6 +296,14 @@ export class GameFieldEngine {
     this.transition('idle', null, null);
   }
 
+  /** 일시적 429로 대기 중인 챔질 요청이 실패했을 때 낚시를 접지 않고 대기 단계로 복구한다 */
+  recoverFromRateLimit(): void {
+    if (this.snapshot.phase !== 'catch' || this.snapshot.fishId !== null) return;
+    this.hookSeq += 1;
+    this.lastCatchAt = Math.max(this.lastCatchAt ?? 0, Date.now());
+    this.transition('wait', null, null);
+  }
+
   action(): void {
     if (this.controlLocked) return;
     if (this.snapshot.phase === 'bite') {
@@ -308,6 +321,7 @@ export class GameFieldEngine {
   dispose(): void {
     this.stopFrame();
     this.clearPhaseTimers();
+    this.waitBiteMs = null;
     this.keys.clear();
     this.padDir = null;
     this.latchedBase = null;
@@ -501,6 +515,7 @@ export class GameFieldEngine {
       // 낚시를 접은 뒤 도착한 응답은 낚시 단계에 적용하지 않는다. 포획이 확정된 응답의 획득 안내만 낸다
       if (seq !== this.hookSeq) {
         if (result.status === 'ok' && result.result.type === 'catch') {
+          this.recordConfirmedCatch();
           this.callbacks.onEvent({ type: 'catch', judgment, result: result.result });
         }
         return;
@@ -511,9 +526,17 @@ export class GameFieldEngine {
         return;
       }
       if (result.result.type !== 'catch') return;
+      this.recordConfirmedCatch();
       this.transition('catch', result.result.fishId, result.result.info);
       this.callbacks.onEvent({ type: 'catch', judgment, result: result.result });
     });
+  }
+
+  private recordConfirmedCatch(): void {
+    this.lastCatchAt = Date.now();
+    if (this.snapshot.phase === 'wait' && this.waitBiteMs !== null) {
+      this.scheduleWaitTimer(this.waitBiteMs);
+    }
   }
 
   private transition(
@@ -543,11 +566,13 @@ export class GameFieldEngine {
   private schedulePhaseTimers(): void {
     this.clearPhaseTimers();
     const phase = this.snapshot.phase;
-    if (phase === 'idle' || (phase === 'catch' && !this.snapshot.fishId)) return;
+    if (phase === 'idle' || (phase === 'catch' && !this.snapshot.fishId)) {
+      this.waitBiteMs = null;
+      return;
+    }
     if (phase === 'bite') this.biteStart = this.phaseStartAt;
 
     const school = this.school;
-    let ms: number;
     if (phase === 'wait' && school) {
       // 도시락 입질 단축은 방치 사이클(직전 캐치가 auto)의 대기에만 넣는다. 수동 낚시와 첫 대기에는 넣지 않는다
       const bite = biteWaitOf(
@@ -561,16 +586,41 @@ export class GameFieldEngine {
         this.lastJudgment === 'auto' ? 'idle' : 'manual',
       );
       const random = Math.random();
-      ms = (bite.min.value + random * (bite.max.value - bite.min.value)) * 1000;
-    } else {
-      const fish = this.snapshot.fishId
-        ? FISH.find(candidate => candidate.id === this.snapshot.fishId)
-        : undefined;
-      ms = phaseDurationMs(phase, this.game.rod, undefined, fish?.rarity);
+      const biteMs = (bite.min.value + random * (bite.max.value - bite.min.value)) * 1000;
+      this.waitBiteMs = biteMs;
+      this.scheduleWaitTimer(biteMs);
+
+      if (powerZones(this.game, school.spot).mult > 1) {
+        this.lineCutTimer = setTimeout(() => {
+          this.lineCutTimer = null;
+          this.callbacks.onEvent({ type: 'line-cut' });
+        }, POWER_RULES.lineCutMs);
+      }
+      return;
     }
 
+    this.waitBiteMs = null;
+    const fish = this.snapshot.fishId
+      ? FISH.find(candidate => candidate.id === this.snapshot.fishId)
+      : undefined;
+    const ms = phaseDurationMs(phase, this.game.rod, undefined, fish?.rarity);
+    this.armPhaseTimer(this.phaseStartAt + ms, phase);
+  }
+
+  private scheduleWaitTimer(biteMs: number): void {
+    if (this.phaseTimer !== null) {
+      clearTimeout(this.phaseTimer);
+      this.phaseTimer = null;
+    }
+    // 획득 카드를 이동으로 접고 바로 다시 던져도 서버 최소 캐치 간격(획득 표시 + 최소 입질 대기)을 채운다
+    const waitStart = this.lastCatchAt !== null
+      ? Math.max(this.phaseStartAt, this.lastCatchAt + MIN_CATCH_SHOW_MS)
+      : this.phaseStartAt;
+    this.armPhaseTimer(waitStart + biteMs, 'wait');
+  }
+
+  private armPhaseTimer(dueAt: number, phase: Exclude<FishingPhase, 'idle'>): void {
     // 숨은 탭은 타이머를 늦게 깨우므로, 단계 길이는 시작 기준 절대 시각에서 남은 만큼으로 잡는다
-    const dueAt = this.phaseStartAt + ms;
     this.phaseTimer = setTimeout(() => {
       this.phaseTimer = null;
       this.chainStartAt = Math.max(dueAt, Date.now() - MAX_CATCH_UP_MS);
@@ -581,13 +631,6 @@ export class GameFieldEngine {
       }
       this.transition(nextPhase(phase));
     }, Math.max(0, dueAt - Date.now()));
-
-    if (phase === 'wait' && school && powerZones(this.game, school.spot).mult > 1) {
-      this.lineCutTimer = setTimeout(() => {
-        this.lineCutTimer = null;
-        this.callbacks.onEvent({ type: 'line-cut' });
-      }, POWER_RULES.lineCutMs);
-    }
   }
 
   private clearPhaseTimers(): void {

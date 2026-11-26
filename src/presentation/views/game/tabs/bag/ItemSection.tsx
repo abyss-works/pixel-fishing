@@ -110,18 +110,19 @@ function SwapDialog({ confirm, onConfirm, onCancel }: {
 }
 
 /** 도시락 또는 미끼 카드 격자 - 카드 본문을 누르면 상세 창이 열리고, 공통 주의사항은 소제목 툴팁 한 곳에 모은다 */
-function ItemCards({ title, hint, rows, lockLines, busy, selectedId, onSelect, onEat }: {
-  title: string; hint: string; rows: readonly ItemRow[]; lockLines?: readonly string[] | null;
+function ItemCards({ title, hint, rows, busy, selectedId, onSelect, onEat }: {
+  title: string; hint: string; rows: readonly ItemRow[];
   busy: boolean; selectedId: string | null; onSelect: (id: string) => void; onEat: (row: ItemRow) => void;
 }) {
   if (rows.length === 0) return null;
-  const locked = Boolean(lockLines);
   const hintLines = splitTipLines(hint);
   return (
     <div className="mb-2">
       <Subheading><Tip text={hintLines.length > 1 ? <TipBullets items={hintLines} /> : hint}>{title}</Tip></Subheading>
       <div className="grid grid-cols-2 gap-2">
         {rows.map(row => {
+          const rowLock = row.lockLines;
+          const locked = Boolean(rowLock);
           const usable = !locked && row.count > 0;
           const dimmed = locked || (!usable && !row.active);
           const selected = selectedId === row.recipe.id;
@@ -163,8 +164,8 @@ function ItemCards({ title, hint, rows, lockLines, busy, selectedId, onSelect, o
                   {row.active && row.remainingMinutes !== null && (
                     <span className="pf-accent text-2xs text-accent whitespace-nowrap">남음 {fmtEffectDuration(row.remainingMinutes)}</span>
                   )}
-                  {lockLines ? (
-                    <Locked badge={false} lines={lockLines} title={<GradeName name={row.title.name} grade={row.title.grade} />} label={`${row.label} 잠김`} className="inline-block">
+                  {rowLock ? (
+                    <Locked badge={false} lines={rowLock} title={<GradeName name={row.title.name} grade={row.title.grade} />} label={`${row.label} 잠김`} className="inline-block">
                       {button}
                     </Locked>
                   ) : button}
@@ -319,7 +320,7 @@ export default function ItemSection({ game, accountState, dispatch, setToast }: 
     });
   };
   const press = (row: ItemRow) => {
-    const plan = planEat(game, row.recipe.id, now);
+    const plan = planEat(game, row.recipe.id, now, accountState !== 'account');
     if (plan.confirm) setPending({ row, confirm: plan.confirm });
     else eat(row);
   };
@@ -349,7 +350,7 @@ export default function ItemSection({ game, accountState, dispatch, setToast }: 
     ? view.potions.find(p => p.potion.id === detailId) ?? null
     : null;
   const detailTarget: ItemDetailTarget | null = detailRecipe
-    ? { kind: 'recipe', row: detailRecipe, lockLines: kitchenLock, onUse: press }
+    ? { kind: 'recipe', row: detailRecipe, lockLines: detailRecipe.lockLines, onUse: press }
     : detailPotion
       ? { kind: 'potion', row: detailPotion, lockLines: view.potionLock, onUse: usePotion }
       : null;
@@ -380,9 +381,9 @@ export default function ItemSection({ game, accountState, dispatch, setToast }: 
       {!shown.empty && (
         <>
           <EnergyCards energy={shown.energy} lockLines={kitchenLock} />
-          <ItemCards title={ITEM_GROUPS[1].title} hint={ITEM_GROUP_HINT.lunch} rows={shown.lunch} lockLines={kitchenLock}
+          <ItemCards title={ITEM_GROUPS[1].title} hint={ITEM_GROUP_HINT.lunch} rows={shown.lunch}
                      busy={busy} selectedId={detailId} onSelect={setDetailId} onEat={press} />
-          <ItemCards title={ITEM_GROUPS[2].title} hint={ITEM_GROUP_HINT.bait} rows={shown.bait} lockLines={kitchenLock}
+          <ItemCards title={ITEM_GROUPS[2].title} hint={ITEM_GROUP_HINT.bait} rows={shown.bait}
                      busy={busy} selectedId={detailId} onSelect={setDetailId} onEat={press} />
           <PotionCards rows={shown.potions} potionLock={view.potionLock} busy={busy}
                        selectedId={detailId} onSelect={setDetailId} onUse={usePotion} />

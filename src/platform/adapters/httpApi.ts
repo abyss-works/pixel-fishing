@@ -4,7 +4,7 @@ import { migrate } from '../../game/rules/logic';
 import type { GameGateway } from '../api/types';
 import type { GameState } from '../../game/rules/logic';
 import type {
-  AcceptConsentResult, AccountLookup, AuthApi, AuthResult, ConsentStatus, DevApi, PromoteTestResult, ResetDevAccountResult,
+  AcceptConsentResult, AccountLookup, AuthApi, AuthResult, ConfirmGoogleSwitchResult, ConsentStatus, DevApi, PromoteTestResult, ResetDevAccountResult,
 } from '../api/types';
 import {
   sessionUid,
@@ -13,6 +13,8 @@ import {
   getAccountConsent,
   acceptAccountConsent,
   startGoogleAuth,
+  confirmGoogleSwitch,
+  cancelGoogleSwitch,
   takeGoogleLanding,
   signOutAccount,
   deleteOwnAccount,
@@ -40,6 +42,12 @@ class HttpAuth implements AuthApi {
   }
   startGoogle(start: 'link' | 'sign-in', tag: string): Promise<AuthResult> {
     return startGoogleAuth(start, tag);
+  }
+  confirmGoogleSwitch(tag: string): Promise<ConfirmGoogleSwitchResult> {
+    return confirmGoogleSwitch(tag);
+  }
+  cancelGoogleSwitch(): Promise<void> {
+    return cancelGoogleSwitch();
   }
   takeGoogleLanding(): { tag: string; error: string | null } | null {
     return takeGoogleLanding();

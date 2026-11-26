@@ -12,11 +12,12 @@ import { gameDay } from '../../../../features/bounty/service/queryKeys';
 import { BOUNTIES, dailyQuestFor } from '../../../../game/content/bounties';
 import { artifactById } from '../../../../game/content/artifacts';
 import { artifactEffectValue } from '../../../ui/artifactEffects';
+import { resetAlerts } from '../../../../platform/api/attention';
 import { newState } from '../../../../game/rules/logic';
 import type { GameState } from '../../../../game/rules/logic';
 import type { BountySnapshot } from '../../../../features/bounty/model/types';
 
-afterEach(() => { cleanup(); mockSnap = null; readBountySpy.mockClear(); });
+afterEach(() => { cleanup(); mockSnap = null; readBountySpy.mockClear(); vi.unstubAllGlobals(); });
 
 let mockSnap: BountySnapshot | null = null;
 vi.mock('../../../../platform/api', async (importOriginal) => {
@@ -199,6 +200,15 @@ describe('BountyPanel', () => {
     expect(await screen.findByRole('button', { name: '수주' })).toBeInTheDocument();
     expect(screen.queryByText(/모든 어종/)).toBeNull();
     expect(document.querySelector('.blur-sm.pointer-events-none')).toBeNull();
+  });
+
+  it('네임드 알림 체크는 권한을 받기 전에도 저장된 켜짐을 보인다', async () => {
+    localStorage.clear();
+    resetAlerts();
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission: vi.fn(async () => 'granted') });
+    show(game({ dex: fullDex }));
+    fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
+    expect(await screen.findByRole('checkbox', { name: '조우하면 알림 받기' })).toHaveAttribute('aria-checked', 'true');
   });
 
   it('수주 버튼을 누르면 acceptQuest를 보낸다', async () => {

@@ -113,7 +113,6 @@ const INITIAL_PRESENTATION_GAME_VALUE_IMPORTS: Record<string, readonly string[]>
   'presentation/views/overlays/guild/GuildManageTab.tsx': ['GUILD_JOIN_MODES', 'checkGuildName'],
   'presentation/views/overlays/guild/GuildModal.tsx': ['GUILD_MAX_MEMBERS'],
   'presentation/views/overlays/guild/GuildSkillsTab.tsx': ['applyDonation'],
-  'presentation/views/overlays/guild/NoGuild.tsx': ['GUILD_MAX_MEMBERS', 'joinRequestDaysLeft', 'normalizeGuildCode'],
   'presentation/views/overlays/letter/LetterModal.tsx': ['LETTER_MAX'],
   'presentation/views/overlays/live/ChatBar.tsx': ['CHAT_MAX_LENGTH'],
   'presentation/views/overlays/patchnotes/PatchNotesModal.tsx': ['PATCH_NOTES'],

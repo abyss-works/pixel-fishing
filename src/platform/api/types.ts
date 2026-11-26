@@ -30,6 +30,10 @@ export type AccountLookup = { status: 'account'; email: string } | { status: 'gu
 
 export type AuthResult = { ok: true } | { ok: false; msg: string; code?: string };
 
+export type ConfirmGoogleSwitchResult =
+  | { ok: true }
+  | { ok: false; fallback: boolean; msg: string; code?: string };
+
 /** 계정의 이용약관 수락 상태. 확인이 필요한 계정이면 required가 true다 */
 export interface ConsentStatus {
   required: boolean;
@@ -63,6 +67,10 @@ export interface AuthApi {
   acceptConsent(version: string): Promise<AcceptConsentResult>;
   /** 구글 인증 화면으로 이동한다. 연결(link)은 지금 계정에 구글을 붙이고, 로그인(sign-in)은 이미 연결된 구글 계정으로 들어간다. 표지(tag)는 돌아온 주소에 실린다 */
   startGoogle(start: 'link' | 'sign-in', tag: string): Promise<AuthResult>;
+  /** 1차 연결 충돌 시 발급된 1회용 전환 티켓으로 2차 구글 인증 없이 기존 계정에 로그인한다 */
+  confirmGoogleSwitch(tag: string): Promise<ConfirmGoogleSwitchResult>;
+  /** 보류 중인 1회용 구글 계정 전환 티켓을 폐기한다 */
+  cancelGoogleSwitch(): Promise<void>;
   /** 구글 인증에서 돌아왔는가. 표지와 오류 코드를 돌려준다. 부팅 때 한 번 읽는다 */
   takeGoogleLanding(): { tag: string; error: string | null } | null;
   signOut(): Promise<void>;
@@ -156,9 +164,14 @@ export interface GuildMyRequest { code: string; name: string; requestedAt: strin
 export interface GuildState { guild: GuildInfo | null; request: GuildMyRequest | null }
 /** 초대 링크 미리보기 — 로그인 없이 읽는 길드 요약 */
 export interface GuildInvitePreview { code: string; name: string; level: number; members: number; cap: number; joinMode: GuildJoinMode }
+/** 공개 길드 목록 한 줄 — 자유 가입·비만석 길드 요약(고유 코드 비노출) */
+export interface PublicGuildItem {
+  guildId: string; name: string; level: number; members: number; cap: number; pitch: string; lastActivityAt: string;
+}
 export type GuildOp =
   | { op: 'create'; name: string }
   | { op: 'join'; code: string; via?: 'link' }
+  | { op: 'joinPublic'; guildId: string }
   | { op: 'rename'; guildId: string; name: string }
   | { op: 'settings'; guildId: string; joinMode?: GuildJoinMode; pitch?: string | null }
   | { op: 'approve'; guildId: string; uid: string }

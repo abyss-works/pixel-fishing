@@ -86,6 +86,8 @@ export interface ItemRow {
   active: boolean;
   /** 활성 중일 때 남은 시간(분). 비활성이면 null */
   remainingMinutes: number | null;
+  /** 이 행의 사용 버튼·상세 창 잠금 줄. 잠기지 않았으면 null */
+  lockLines: readonly string[] | null;
 }
 
 export interface PotionRow {
@@ -133,6 +135,10 @@ export function selectItemSection(game: GameState, now: string, account: Account
     note: POTION_DETAIL_NOTE,
   }));
 
+  const progress = facilityProgress('kitchen', game.boat);
+  const lock = menuLock({ account, guestAllowed: facilityGuestAllowed('kitchen'), feature: '부엌', progress });
+  const kitchenLock = lock.kind === 'none' ? null : lock.lines;
+
   const items = settleCooking(game, now).items;
   const activeRemainingMs = new Map<string, number>();
   for (const k of ['lunch', 'bait', 'bait2'] as const) {
@@ -145,12 +151,16 @@ export function selectItemSection(game: GameState, now: string, account: Account
     .map(recipe => {
       const remMs = activeRemainingMs.get(recipe.id);
       const active = remMs !== undefined;
+      const count = items[recipe.id] ?? 0;
+      // 로그인 계정이 이미 보유하거나 슬롯에 활성화한 도시락·미끼는 요리 해금 전에도 잠금 없이 사용할 수 있다
+      const rowLock = kitchenLock && !(account === 'account' && (count > 0 || active)) ? kitchenLock : null;
       return {
-        recipe, label: recipeLabel(recipe), title: recipeTitle(recipe), count: items[recipe.id] ?? 0, slot, verb: SLOT_TEXT[slot].verb,
+        recipe, label: recipeLabel(recipe), title: recipeTitle(recipe), count, slot, verb: SLOT_TEXT[slot].verb,
         effects: recipeEffectLines(recipe),
         durationMinutes: slotDurationMs(recipe, game) / MIN_MS,
         active,
         remainingMinutes: active ? remMs / MIN_MS : null,
+        lockLines: rowLock,
       };
     });
   const energy = RARITY_ORDER.map((grade): EnergyCell => (
@@ -158,8 +168,6 @@ export function selectItemSection(game: GameState, now: string, account: Account
   const lunch = rows('lunch');
   const bait = rows('bait');
 
-  const progress = facilityProgress('kitchen', game.boat);
-  const lock = menuLock({ account, guestAllowed: facilityGuestAllowed('kitchen'), feature: '부엌', progress });
   if (lock.kind !== 'none') {
     const unlockNotice = lock.kind === 'progress' ? lock.lines[0] ?? null : null;
     const empty = [NO_ITEMS_TEXT];
@@ -237,12 +245,12 @@ export interface EatPlan {
   confirm: SwapConfirm | null;
 }
 
-export function planEat(game: GameState, item: string, now: string): EatPlan {
+export function planEat(game: GameState, item: string, now: string, guest = false): EatPlan {
   const recipe = recipeById(item);
-  if (recipe === undefined) return { slot: 'lunch', check: canEat(game, item, now), confirm: null };
+  if (recipe === undefined) return { slot: 'lunch', check: canEat(game, item, now, guest), confirm: null };
   const slot = recipe.kind;
   const text = SLOT_TEXT[slot];
-  const check = canEat(game, item, now);
+  const check = canEat(game, item, now, guest);
   const nextMinutes = slotDurationMs(recipe, game) / MIN_MS;
 
   const nextTitle = recipeTitle(recipe);

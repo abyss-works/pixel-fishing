@@ -6,7 +6,8 @@ import { anonymous } from 'better-auth/plugins';
 import { createHmac, randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { accountLinking, dropOAuthTokens, finishGoogleLink, googleProvider, guardAuthRequests, validateGoogleLink } from './googleLink.js';
-import type { GoogleConfig, RecordLinkConsent } from './googleLink.js';
+import type { GoogleConfig, GuestLinkedReward, RecordLinkConsent } from './googleLink.js';
+import { googleSwitchPlugin } from './googleSwitch.js';
 import { TRUSTED_PROXY_CIDRS } from './trustedProxy.js';
 
 export interface AuthConfig {
@@ -17,6 +18,8 @@ export interface AuthConfig {
   google: GoogleConfig;
   /** 구글 연결이 끝난 계정의 약관 수락을 기록한다 */
   recordLinkConsent: RecordLinkConsent;
+  /** 게스트가 처음 구글 계정을 연결해 정식 계정으로 승격될 때 실행한다 */
+  onGuestLinked?: GuestLinkedReward;
 }
 
 // 게스트의 신원은 세션 하나뿐이라 세션이 끝나면 계정을 잃는다. 1년 동안 쓰지 않을 때만 끝나게 한다.
@@ -45,6 +48,8 @@ export function anonymousSignInRateLimit(env: NodeJS.ProcessEnv = process.env): 
 
 /** 익명 계정 생성 경로(/api/auth/sign-in/anonymous)의 IP당 생성 상한(기본 3600초당 최대 200회) */
 export const ANONYMOUS_SIGN_IN_RATE_LIMIT = anonymousSignInRateLimit();
+/** 공유 NAT 환경에서 여러 사용자가 동시에 구글 로그인을 시작할 수 있도록 기본 특수 규칙(10초 3회) 대신 10초당 30회를 허용한다 */
+const SOCIAL_SIGN_IN_RATE_LIMIT = { window: 10, max: 30 };
 // 이메일·비밀번호 로그인·가입·재설정 경로는 사용하지 않아 라우터 진입에서 차단한다.
 const DISABLED_EMAIL_PASSWORD_PATHS = ['/sign-in/email', '/sign-up/email', '/request-password-reset', '/reset-password'];
 
@@ -107,7 +112,7 @@ function withRetryAfterHeader<
 }
 
 export function createAuth(config: AuthConfig) {
-  const finishLink = finishGoogleLink(config.recordLinkConsent);
+  const finishLink = finishGoogleLink(config.recordLinkConsent, config.onGuestLinked);
   const auth = betterAuth({
     database: config.pool,
     secret: config.secret,
@@ -135,6 +140,7 @@ export function createAuth(config: AuthConfig) {
     rateLimit: {
       customRules: {
         '/sign-in/anonymous': anonymousSignInRateLimit(),
+        '/sign-in/social': SOCIAL_SIGN_IN_RATE_LIMIT,
       },
     },
     advanced: { database: { generateId: 'uuid' }, ipAddress: ipAddressConfig },
@@ -145,6 +151,7 @@ export function createAuth(config: AuthConfig) {
         generateRandomEmail: () => `${randomUUID()}@${ANONYMOUS_EMAIL_DOMAIN}`,
         schema: { user: { fields: { isAnonymous: 'is_anonymous' } } },
       }),
+      googleSwitchPlugin(),
     ],
   });
   return withRetryAfterHeader(auth);
