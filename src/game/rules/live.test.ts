@@ -195,6 +195,19 @@ describe('ServerMessage mail', () => {
   });
 });
 
+describe('ServerMessage friend', () => {
+  it('friend 메시지는 request/accepted 분기와 추가 필드 없는 updated 단독 분기를 가진다', () => {
+    type FriendMessage = Extract<ServerMessage, { t: 'friend' }>;
+    expectTypeOf<FriendMessage>().toEqualTypeOf<
+      | { t: 'friend'; kind: 'request' | 'accepted'; uid: string; nick: string | null }
+      | { t: 'friend'; kind: 'updated' }
+    >();
+
+    const msg: ServerMessage = { t: 'friend', kind: 'updated' };
+    expect(JSON.parse(JSON.stringify(msg))).toEqual({ t: 'friend', kind: 'updated' });
+  });
+});
+
 describe('globalChatCooldown', () => {
   it('직전 전체 채팅 시각이 없거나 10초 이상 지나면 허용한다', () => {
     expect(GLOBAL_CHAT_COOLDOWN_MS).toBe(10_000);
