@@ -1,5 +1,5 @@
 import { FISH, canFishSpot, judgeTiming, redZoneCenter } from '../rules/logic';
-import type { CatchInfo, GameState, Judgment } from '../rules/logic';
+import type { CatchInfo, FormId, GameState, Judgment } from '../rules/logic';
 import type { SpotId } from '../content/spots';
 import { zoneOfSpot, topZoneOf } from '../content/zones';
 import type { ZoneId } from '../content/zones';
@@ -27,6 +27,8 @@ import { FIELD_VIEW } from '../world/fieldView.js';
 import type { ViewSize } from '../world/fieldView.js';
 import { renderRegion } from '../rendering/canvas/scenes/region.js';
 import type { OtherShipView, Speech } from '../rendering/pixel/sprites/actors.js';
+import type { JumpFx } from '../rendering/pixel/sprites/overlays.js';
+import { JUMP_S } from '../rendering/pixel/sprites/schoolView.js';
 import { DEFAULT_FISH_ART_STYLE } from '../rendering/pixel/fishArt/index.js';
 import type { FishArtStyle } from '../rendering/pixel/fishArt/index.js';
 import type { MaybePromise } from '../../shared/lib/when';
@@ -38,8 +40,21 @@ export type FieldDispatchResult =
   | { status: 'ok'; result: ActionResult }
   | { status: 'rejected'; error: RejectReason };
 
-/** 실시간 채널이 프레임마다 넘기는 것 — 같은 바다의 다른 플레이어와 내 머리 위 말풍선 */
-export interface LiveFrame { others: OtherShipView[]; bubble: Speech; idle: string | null }
+/** 실시간 채널이 프레임마다 넘기는 것 — 같은 바다의 다른 플레이어, 내 머리 위 말풍선, 피어 점프 연출 */
+export interface LiveFrame {
+  others: OtherShipView[];
+  bubble: Speech;
+  idle: string | null;
+  peerJumps?: readonly JumpFx[];
+}
+
+interface LocalJump {
+  x: number;
+  y: number;
+  fishId: string;
+  form: FormId;
+  startAt: number;
+}
 
 export interface FieldSnapshot {
   phase: FishingPhase;
@@ -138,6 +153,8 @@ export class GameFieldEngine {
   private waitBiteMs: number | null = null;
   /** catch 전이 시각 — 훅 점프 연출의 기준 */
   private catchStart = 0;
+  /** 확정된 내 포획의 수면 점프 연출 목록 — 이동 직후에도 0.9초를 채워 그린다 */
+  private readonly localJumps: LocalJump[] = [];
   /** 도감에 있는 어종 id — 어군 스프라이트의 색/실루엣 판정. game이 바뀔 때만 다시 만든다 */
   private phaseTimer: ReturnType<typeof setTimeout> | null = null;
   private lineCutTimer: ReturnType<typeof setTimeout> | null = null;
@@ -329,6 +346,7 @@ export class GameFieldEngine {
     this.stopFrame();
     this.clearPhaseTimers();
     this.waitBiteMs = null;
+    this.localJumps.length = 0;
     this.keys.clear();
     this.padDir = null;
     this.latchedBase = null;
@@ -469,6 +487,7 @@ export class GameFieldEngine {
   }
 
   private renderFrame(ctx: CanvasRenderingContext2D, now: number): boolean {
+    const wallNow = Date.now();
     const axes = rodAxes(this.game);
     const zones = this.school ? powerZones(this.game, this.school.spot) : null;
     renderRegion(ctx, this.def, {
@@ -479,14 +498,15 @@ export class GameFieldEngine {
       boat: this.game.boat,
       look: this.game.look,
       biteT: this.snapshot.phase === 'bite'
-        ? (Date.now() - this.biteStart) / 1000 / axes.sweep.value : null,
+        ? (wallNow - this.biteStart) / 1000 / axes.sweep.value : null,
       zone: zones ? zones.yellow / 100 : 0,
       red: zones ? zones.red / 100 : 0,
       redCenter: this.redCenter,
       t: now / 1000,
-      catchT: this.snapshot.phase === 'catch' ? (Date.now() - this.catchStart) / 1000 : null,
+      catchT: this.snapshot.phase === 'catch' ? (wallNow - this.catchStart) / 1000 : null,
       catchFish: this.snapshot.fishId
         ? { id: this.snapshot.fishId, form: this.snapshot.catchInfo?.form ?? 'normal' } : null,
+      localJumps: this.activeLocalJumps(wallNow),
       fishArt: this.fishArt,
       view: this.view,
       ...(this.liveSource?.(now) ?? { others: [], bubble: null, idle: null }),
@@ -525,6 +545,7 @@ export class GameFieldEngine {
       if (seq !== this.hookSeq) {
         if (result.status === 'ok' && result.result.type === 'catch') {
           this.recordConfirmedCatch();
+          this.pushLocalJump(school, result.result);
           this.callbacks.onEvent({ type: 'catch', judgment, result: result.result });
         }
         return;
@@ -536,9 +557,35 @@ export class GameFieldEngine {
       }
       if (result.result.type !== 'catch') return;
       this.recordConfirmedCatch();
+      this.pushLocalJump(school, result.result);
       this.transition('catch', result.result.fishId, result.result.info);
       this.callbacks.onEvent({ type: 'catch', judgment, result: result.result });
     });
+  }
+
+  private pushLocalJump(school: School, result: CatchResult): void {
+    this.localJumps.push({
+      x: school.x,
+      y: school.y,
+      fishId: result.fishId,
+      form: result.info.form,
+      startAt: Date.now(),
+    });
+  }
+
+  private activeLocalJumps(nowMs: number): JumpFx[] {
+    const out: JumpFx[] = [];
+    let write = 0;
+    for (let i = 0; i < this.localJumps.length; i++) {
+      const entry = this.localJumps[i];
+      const t = (nowMs - entry.startAt) / 1000;
+      if (t >= 0 && t < JUMP_S) {
+        this.localJumps[write++] = entry;
+        out.push({ x: entry.x, y: entry.y, fishId: entry.fishId, form: entry.form, t });
+      }
+    }
+    this.localJumps.length = write;
+    return out;
   }
 
   private recordConfirmedCatch(): void {
