@@ -3,9 +3,10 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DailyFortune } from '../src/game/rules/fortune.js';
 import type { GameState } from '../src/game/rules/logic.js';
+import { ENERGY_ITEM_IDS, ENERGY_PER_INDIVIDUAL } from '../src/game/content/cooking.js';
 import { SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
 import {
-  callAction, captureRealClock, fish, seedUser, seededRandom, sessionHeaders, startActionEnv, testUid, userToken,
+  adminSessionHeaders, callAction, captureRealClock, fish, seedUser, seededRandom, sessionHeaders, startActionEnv, testUid, userToken,
 } from './_dbTest/actionHarness.js';
 import type { ActionEnv, SeedOptions } from './_dbTest/actionHarness.js';
 
@@ -140,7 +141,7 @@ describe('일일 운세 이력 기록 및 조회', () => {
     expect(await fortuneRows(uidSell)).toEqual([fSell!]);
   });
 
-  it('GET /api/fortune/history는 월별 일일 운세(오름차순), 최초 기록 월, 오늘 운세를 돌려준다', async () => {
+  it('GET /api/fortune/history는 월별 일일 운세(오름차순), 최초 기록 월, 오늘 운세, 전체 누적 discovered를 돌려준다', async () => {
     const emptyUid = await seed({ state: {} });
     expect(await callHistory(userToken(emptyUid))).toEqual({
       status: 200,
@@ -150,6 +151,7 @@ describe('일일 운세 이력 기록 및 조회', () => {
         currentDay: '2030-03-06',
         today: null,
         days: [],
+        discovered: [],
       },
     });
 
@@ -158,7 +160,8 @@ describe('일일 운세 이력 기록 및 조회', () => {
       { day: '2030-02-14', kind: 'shadow', index: 3 },
       { day: '2030-02-28', kind: 'gold', index: 5 },
       { day: '2030-03-01', kind: 'fish', index: 3 },
-      { day: '2030-03-04', kind: 'fish', index: 5 },
+      { day: '2030-03-03', kind: 'shadow', index: 3 },
+      { day: '2030-03-04', kind: 'mirage', index: 5 },
     ];
     for (const r of rows) {
       await env.client.query(
@@ -167,7 +170,14 @@ describe('일일 운세 이력 기록 및 조회', () => {
       );
     }
 
-    // month 미지정 시 이번 달(2030-03)과 firstMonth(2030-02)를 돌려주며, 오늘 접속 전이면 today는 null이다
+    const expectedDiscovered = [
+      { kind: 'shadow', index: 3, count: 2, firstDay: '2030-02-14' },
+      { kind: 'gold', index: 5, count: 1, firstDay: '2030-02-28' },
+      { kind: 'fish', index: 3, count: 1, firstDay: '2030-03-01' },
+      { kind: 'mirage', index: 5, count: 1, firstDay: '2030-03-04' },
+    ];
+
+    // month 미지정 시 이번 달(2030-03)과 firstMonth(2030-02) 및 전체 이력 discovered를 돌려주며, 오늘 접속 전이면 today는 null이다
     expect(await callHistory(userToken(uid))).toEqual({
       status: 200,
       body: {
@@ -177,30 +187,34 @@ describe('일일 운세 이력 기록 및 조회', () => {
         today: null,
         days: [
           { day: '2030-03-01', kind: 'fish', index: 3 },
-          { day: '2030-03-04', kind: 'fish', index: 5 },
+          { day: '2030-03-03', kind: 'shadow', index: 3 },
+          { day: '2030-03-04', kind: 'mirage', index: 5 },
         ],
+        discovered: expectedDiscovered,
       },
     });
 
-    // 오늘 boot 후 이전 달(2030-02)을 조회해도 today는 오늘(2030-03-06) 운세를 유지한다
+    // 오늘 boot 후 이전 달(2030-02)을 조회해도 today는 오늘(2030-03-06) 운세를 유지하고 discovered에도 반영된다
     await callAction(userToken(uid), { type: 'boot' });
     const todayFortune = (await storedFortune(uid))!;
-    expect(await callHistory(userToken(uid), { month: '2030-02' })).toEqual({
-      status: 200,
-      body: {
-        month: '2030-02',
-        firstMonth: '2030-02',
-        currentDay: '2030-03-06',
-        today: todayFortune,
-        days: [
-          { day: '2030-02-14', kind: 'shadow', index: 3 },
-          { day: '2030-02-28', kind: 'gold', index: 5 },
-        ],
-      },
+    const afterBootRes = await callHistory(userToken(uid), { month: '2030-02' });
+    expect(afterBootRes.status).toBe(200);
+    expect(afterBootRes.body).toMatchObject({
+      month: '2030-02',
+      firstMonth: '2030-02',
+      currentDay: '2030-03-06',
+      today: todayFortune,
+      days: [
+        { day: '2030-02-14', kind: 'shadow', index: 3 },
+        { day: '2030-02-28', kind: 'gold', index: 5 },
+      ],
     });
+    const afterDiscovered = (afterBootRes.body as { discovered: Array<{ kind: string; index: number; count: number; firstDay: string }> }).discovered;
+    expect(afterDiscovered.find(d => d.kind === todayFortune.kind && d.index === todayFortune.index)).toBeDefined();
 
-    // 기록이 없는 달 조회 시 days는 빈 배열이지만 firstMonth와 today는 유지된다
-    expect(await callHistory(userToken(uid), { month: '2030-01' })).toEqual({
+    // 기록이 없는 달 조회 시 days는 빈 배열이지만 firstMonth, today, discovered는 유지된다
+    const emptyMonthRes = await callHistory(userToken(uid), { month: '2030-01' });
+    expect(emptyMonthRes).toEqual({
       status: 200,
       body: {
         month: '2030-01',
@@ -208,6 +222,7 @@ describe('일일 운세 이력 기록 및 조회', () => {
         currentDay: '2030-03-06',
         today: todayFortune,
         days: [],
+        discovered: afterDiscovered,
       },
     });
   });
@@ -235,6 +250,11 @@ describe('일일 운세 이력 기록 및 조회', () => {
         days: [
           { day: '2030-12-01', kind: 'fish', index: 3 },
           { day: '2030-12-31', kind: 'gold', index: 5 },
+        ],
+        discovered: [
+          { kind: 'fish', index: 3, count: 1, firstDay: '2030-12-01' },
+          { kind: 'gold', index: 5, count: 1, firstDay: '2030-12-31' },
+          { kind: 'shadow', index: 3, count: 1, firstDay: '2031-01-01' },
         ],
       },
     });
@@ -267,6 +287,11 @@ describe('일일 운세 이력 기록 및 조회', () => {
         days: [
           { day: '9999-12-01', kind: 'fish', index: 3 },
           { day: '9999-12-31', kind: 'gold', index: 5 },
+        ],
+        discovered: [
+          { kind: 'shadow', index: 3, count: 1, firstDay: '9999-11-30' },
+          { kind: 'fish', index: 3, count: 1, firstDay: '9999-12-01' },
+          { kind: 'gold', index: 5, count: 1, firstDay: '9999-12-31' },
         ],
       },
     });
@@ -328,5 +353,87 @@ describe('일일 운세 이력 기록 및 조회', () => {
       expect.any(Error),
       expect.objectContaining({ uid, action: 'boot' }),
     );
+  });
+
+  it('extractEnergy에서 당일 운세가 없으면 ensureFortune으로 먼저 확정하고 기운 배수 및 daily_fortunes를 즉시 반영한다', async () => {
+    // seededRandom이 energy(tier 2, kind index 3, strength index 5 -> ×2.00)를 뽑도록 결정적 난수 시퀀스 제공
+    vi.spyOn(Math, 'random').mockReset();
+    const seq = [0.7, 0.9, 0.5];
+    let i = 0;
+    vi.spyOn(Math, 'random').mockImplementation(() => seq[i++] ?? 0.5);
+
+    const f = fish('crucian');
+    const uid = await seed({
+      state: {
+        boat: 5,
+        location: { kind: 'base', id: 'home' },
+        bag: [f],
+        fortune: { day: '2030-03-05', kind: 'fish', index: 3 },
+      },
+    });
+    const res = await callAction(userToken(uid), { type: 'extractEnergy', uids: [f.uid] });
+    expect(res.status).toBe(200);
+    expect((res.body as { result: { type: string; energy: Record<string, number> } }).result).toEqual({
+      type: 'extract',
+      energy: { common: ENERGY_PER_INDIVIDUAL * 2, rare: 0, epic: 0, legendary: 0 },
+    });
+    expect(await storedFortune(uid)).toEqual({ day: '2030-03-06', kind: 'energy', index: 5 });
+    expect(await fortuneRows(uid)).toEqual([{ day: '2030-03-06', kind: 'energy', index: 5 }]);
+
+    const { rows } = await env.client.query<{ data: GameState }>('select data from public.saves_current where user_id = $1', [uid]);
+    expect(rows[0].data.items[ENERGY_ITEM_IDS.common]).toBe(ENERGY_PER_INDIVIDUAL * 2);
+  });
+
+  it('fortune.set은 preview/local에서 오늘 세이브와 로그인 계정 daily_fortunes를 덮어쓰고, production·비관리자·3등급 3 강도는 거부한다', async () => {
+    const adminUid = await seedUser(env.client, { uid: testUid(nextUid++), email: 'fortune-admin@example.test', admin: true, state: {} });
+    const memberUid = await seed({ state: {} });
+    const guestUid = await seedUser(env.client, { uid: testUid(nextUid++), state: {} });
+
+    // boot로 기존 daily_fortunes(2030-03-06) 행을 만든 뒤 fortune.set으로 교체(upsert)
+    expect((await callAction(userToken(memberUid), { type: 'boot' })).status).toBe(200);
+
+    process.env.DEPLOY_ENV = 'preview';
+    const adminHeaders = adminSessionHeaders(userToken(adminUid));
+
+    // 비관리자는 preview에서 차단
+    expect(await callAction(userToken(memberUid), {
+      type: 'debug', command: 'fortune.set', args: { kind: 'golden-scale' },
+    })).toMatchObject({ status: 422, body: { error: 'debug-forbidden' } });
+
+    // 3등급 index: 3 거부
+    expect(await callAction(userToken(memberUid), {
+      type: 'debug', command: 'fortune.set', args: { kind: 'golden-scale', index: 3 },
+    }, { headers: adminHeaders })).toMatchObject({ status: 422, body: { error: 'bad-request' } });
+
+    // 3등급 index 생략 → index: 5로 세이브 + daily_fortunes upsert
+    const tier3Res = await callAction(userToken(memberUid), {
+      type: 'debug', command: 'fortune.set', args: { kind: 'grand-catch' },
+    }, { headers: adminHeaders });
+    expect(tier3Res.status).toBe(200);
+    expect((tier3Res.body as { patch: { scalars: { fortune: DailyFortune } } }).patch.scalars.fortune).toEqual({
+      day: '2030-03-06', kind: 'grand-catch', index: 5,
+    });
+    expect(await storedFortune(memberUid)).toEqual({ day: '2030-03-06', kind: 'grand-catch', index: 5 });
+    expect(await fortuneRows(memberUid)).toEqual([{ day: '2030-03-06', kind: 'grand-catch', index: 5 }]);
+
+    // 다시 다른 운세로 교체해도 daily_fortunes 행은 1건으로 덮어써진다
+    expect((await callAction(userToken(memberUid), {
+      type: 'debug', command: 'fortune.set', args: { kind: 'energy', index: 3 },
+    }, { headers: adminHeaders })).status).toBe(200);
+    expect(await fortuneRows(memberUid)).toEqual([{ day: '2030-03-06', kind: 'energy', index: 3 }]);
+
+    // 관리자 쿠키를 동반한 게스트는 세이브만 바꾸고 daily_fortunes는 저장하지 않는다
+    expect((await callAction(userToken(guestUid), {
+      type: 'debug', command: 'fortune.set', args: { kind: 'mirage' },
+    }, { headers: adminHeaders })).status).toBe(200);
+    expect(await storedFortune(guestUid)).toEqual({ day: '2030-03-06', kind: 'mirage', index: 5 });
+    expect(await fortuneRows(guestUid)).toEqual([]);
+
+    // production에서는 관리자여도 차단
+    process.env.DEPLOY_ENV = 'production';
+    expect(await callAction(userToken(adminUid), {
+      type: 'debug', command: 'fortune.set', args: { kind: 'fish', index: 5 },
+    }, { headers: adminHeaders })).toMatchObject({ status: 422, body: { error: 'debug-forbidden' } });
+    process.env.DEPLOY_ENV = 'local';
   });
 });

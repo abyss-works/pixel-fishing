@@ -140,7 +140,11 @@ describe('요리 액션', () => {
 
     it('대상이 하나도 없으면 상태를 바꾸지 않고 성공한다', async () => {
       const kept = fish('crucian', { locked: true });
-      const uid = await cooker({ bag: [kept], items: { [ENERGY.common]: 3 } });
+      const uid = await cooker({
+        bag: [kept],
+        items: { [ENERGY.common]: 3 },
+        fortune: { day: '2030-03-04', kind: 'gold', index: 3 },
+      });
       const before = await stored(uid);
       const res = await callAction(userToken(uid), { type: 'extractEnergy', uids: [] });
       expect(res.status).toBe(200);

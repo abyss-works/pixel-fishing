@@ -437,7 +437,8 @@ describe('테스트 데이터베이스', () => {
     });
   });
 
-  describe('daily_fortunes (0042)', () => {
+  describe('daily_fortunes (0042, 0046)', () => {
+    const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
     const user = async (c: Client): Promise<string> => {
       const uid = randomUUID();
       await c.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, false)`, [uid, `${uid}@example.test`]);
@@ -466,10 +467,60 @@ describe('테스트 데이터베이스', () => {
         [uid],
       )).rejects.toMatchObject({ code: '23514' });
 
+      // 0046: 1·2등급 9종은 index 3·5 허용, 3등급 3종은 index 5만 허용(3 거부)
+      let dayOffset = 10;
+      for (const kind of ['fish', 'gold', 'bite', 'big', 'fame', 'shadow', 'mutation', 'night', 'energy']) {
+        for (const index of [3, 5]) {
+          const day = `2030-04-${String(dayOffset++).padStart(2, '0')}`;
+          await client.query(
+            `insert into public.daily_fortunes (user_id, day, kind, index) values ($1, $2, $3, $4)`,
+            [uid, day, kind, index],
+          );
+        }
+      }
+      for (const kind of ['golden-scale', 'mirage', 'grand-catch']) {
+        const okDay = `2030-05-${String(dayOffset++).padStart(2, '0')}`;
+        await client.query(
+          `insert into public.daily_fortunes (user_id, day, kind, index) values ($1, $2, $3, 5)`,
+          [uid, okDay, kind],
+        );
+        const badDay = `2030-05-${String(dayOffset++).padStart(2, '0')}`;
+        await expect(client.query(
+          `insert into public.daily_fortunes (user_id, day, kind, index) values ($1, $2, $3, 3)`,
+          [uid, badDay, kind],
+        )).rejects.toMatchObject({ code: '23514' });
+      }
+
       await client.query(`delete from auth.users where id = $1`, [uid]);
       expect((await client.query(
         `select 1 from public.daily_fortunes where user_id = $1`, [uid],
       )).rows).toHaveLength(0);
+    });
+
+    it('0046 다운/업 마이그레이션 라운드트립이 제약과 행을 일관되게 전환한다', async () => {
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        const uid = await user(other);
+        await other.query(
+          `insert into public.daily_fortunes (user_id, day, kind, index) values ($1, '2030-03-04', 'mirage', 5)`,
+          [uid],
+        );
+        await other.query(migration('0046_expand_daily_fortunes.down.sql'));
+        await expect(other.query(
+          `insert into public.daily_fortunes (user_id, day, kind, index) values ($1, '2030-03-05', 'bite', 3)`,
+          [uid],
+        )).rejects.toMatchObject({ code: '23514' });
+        await other.query(migration('0046_expand_daily_fortunes.sql'));
+        await other.query(
+          `insert into public.daily_fortunes (user_id, day, kind, index) values ($1, '2030-03-05', 'bite', 3)`,
+          [uid],
+        );
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
     });
 
     it('인증 사용자는 본인 운세 이력도 읽거나 쓰지 못한다 — 서버 전용', async () => {
