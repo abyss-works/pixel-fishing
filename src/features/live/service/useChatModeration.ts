@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { changeBlock, readBlocks, reportChat } from '../../../platform/api';
 import type { BlockedUser, ChatActionError } from '../../../platform/api';
 import { useSession } from '../../account/service/session';
+import { useConsentReady } from '../../account/service/consentGate';
 import { hideAuthor } from './useLive';
 
 // 채팅 신고와 개인 차단 — 서버 함수로 보낸다. 차단하면 그 사람의 채팅 줄을 화면에서 바로 지우고,
@@ -10,9 +11,19 @@ export type { BlockedUser, ChatActionError };
 
 export function useChatModeration(listOpen: boolean) {
   const { ready, uid } = useSession();
+  const consentReady = useConsentReady();
   const client = useQueryClient();
   const key = ['chat-blocks', uid];
-  const q = useQuery({ queryKey: key, queryFn: readBlocks, enabled: ready && uid !== null && listOpen, retry: false });
+  const q = useQuery({
+    queryKey: key,
+    // 통신·서버 오류는 성공 값으로 삼키지 않고 실패로 올려 화면이 조회 실패를 구분하게 한다
+    queryFn: async () => {
+      const result = await readBlocks();
+      if ('error' in result && result.error === 'failed') throw new Error('chat-blocks-failed');
+      return result;
+    },
+    enabled: ready && consentReady && uid !== null && listOpen,
+  });
   const unavailable = ready && uid === null;
   const loading = listOpen && !unavailable && q.isPending && !q.isError;
   const failed = q.isError || (listOpen && unavailable);
@@ -21,6 +32,7 @@ export function useChatModeration(listOpen: boolean) {
     const result = await changeBlock(op, target);
     if ('error' in result) return result.error;
     client.setQueryData(key, result);
+    void client.invalidateQueries({ queryKey: ['player-search'] });
     // 차단하면 서버가 친구 관계도 끊는다
     if (op === 'block') { hideAuthor(target); void client.invalidateQueries({ queryKey: ['friends'] }); }
     return null;
@@ -31,6 +43,8 @@ export function useChatModeration(listOpen: boolean) {
     blocks: q.data === undefined ? null : 'error' in q.data ? q.data.error : q.data.blocks,
     loading,
     failed,
+    /** 차단 목록 다시 읽기 */
+    reload: () => { void q.refetch(); },
     /** 그 사람을 차단했는가. 목록을 아직 못 읽었으면 null */
     isBlocked: (target: string): boolean | null =>
       q.data === undefined || 'error' in q.data ? null : q.data.blocks.some(b => b.uid === target),

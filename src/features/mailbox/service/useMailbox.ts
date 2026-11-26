@@ -27,7 +27,8 @@ export function useMailbox() {
     enabled: ready && consentReady,
     staleTime: STALE,
     refetchInterval: REFRESH,
-    retry: 1,
+    // 우편함 창을 열 때마다 최신 우편을 읽는다
+    refetchOnMount: 'always',
   });
   const mails = q.data ?? null;
   const refresh = () => client.invalidateQueries({ queryKey: key });

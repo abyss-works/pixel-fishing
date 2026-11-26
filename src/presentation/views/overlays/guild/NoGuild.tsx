@@ -46,6 +46,8 @@ export default function NoGuild({ busy, run, join, request, setToast }: {
     e.preventDefault();
     const c = normalizeGuildCode(input);
     setCodeError(c ? null : '길드 코드는 8자리예요.');
+    // 같은 코드는 쿼리 키가 그대로라 다시 읽히지 않는다 — 찾기를 누르면 최신 상태를 읽는다
+    if (c && c === code) void invite.refresh();
     setCode(c);
   };
   const onJoin = async () => {
@@ -94,6 +96,8 @@ export default function NoGuild({ busy, run, join, request, setToast }: {
         </div>
       </form>
       <GuildInviteSummary preview={invite.preview} view={view} busy={busy} onConfirm={() => { void onJoin(); }} />
+      {invite.loading && <Note>길드를 찾는 중이에요.</Note>}
+      {invite.failed && <Note tone="warn">길드를 불러오지 못했어요. 찾기를 눌러 다시 시도해 주세요.</Note>}
       {codeError && <Note tone="warn">{codeError}</Note>}
 
       <form className="flex flex-col gap-1.5 pt-3 border-t border-line" onSubmit={e => { void onCreate(e); }}>

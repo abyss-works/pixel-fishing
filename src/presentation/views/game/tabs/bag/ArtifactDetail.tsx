@@ -27,8 +27,9 @@ import {
 } from '../../../../ui/artifactEffects';
 import { CompareTable, ConfirmButton } from '../../../overlays/facility/facilityParts';
 
-// 유물 상세 창 - 가방 탭의 유물 보기에서 보유 유물 줄을 누르면 열린다. 강화 버튼은 이 창 안에만 있다.
+// 유물 상세 창 - 가방 탭의 유물 보기에서 유물 줄을 누르면 열린다. 강화 버튼은 이 창 안에만 있다.
 // 위에서 아래로: 제목(이름과 등급), 로어, 지금 레벨과 강화 후 레벨의 비교 표(또는 전설 유물 보너스와 페널티),
+// 미보유 유물은 비교 표와 강화 영역 없이 Lv.1 기준 효과만 흐리게 보인다.
 // 그리고 아래 고정 영역의 잔액 칸(필요한 재료의 보유 → 강화 후)과 강화 버튼. 최고 레벨은 현재 열만 보이고 잔액 칸 없이 꺼진 버튼이 서며,
 // 레벨이 없는 전설 유물은 보너스와 페널티 두 줄뿐이고 버튼이 없다.
 export default function ArtifactDetail({ artifact, game, dispatch, setToast, onClose }: {
@@ -41,7 +42,6 @@ export default function ArtifactDetail({ artifact, game, dispatch, setToast, onC
   const [busy, setBusy] = useState(false);
   const view = selectArtifactLevel(game, artifact);
   const { next } = view;
-  const displayLevel = view.status === 'unowned' ? 1 : view.level;
 
   const levelUp = async () => {
     setBusy(true);
@@ -71,31 +71,36 @@ export default function ArtifactDetail({ artifact, game, dispatch, setToast, onC
            footer={<Footer view={view} busy={busy} onLevelUp={levelUp} />}>
       <div className="flex flex-col gap-3">
         <LoreParagraph className="text-xs leading-[1.8] text-text-dim">{artifact.lore}</LoreParagraph>
-        {view.hasLevel ? (
+        {view.status === 'unowned' && view.hasLevel ? (
+          <Inset divided>
+            {artifactEffectKeys(artifact).map(effect => (
+              <KeyValueRow key={effect} label={artifactEffectLabel(effect)}
+                           value={<span className="block text-right text-text-dim">{artifactEffectValue(artifact, effect, 1)}</span>} />
+            ))}
+          </Inset>
+        ) : view.hasLevel ? (
           <CompareTable
-            heads={view.status === 'unowned'
-              ? [`획득 시(${levelText(1)})`]
-              : next
-                ? [`현재(${levelText(view.level)})`, `강화 후(${levelText(next.level)})`]
-                : [`현재(${levelText(view.level)})`]}
+            heads={next
+              ? [`현재(${levelText(view.level)})`, `강화 후(${levelText(next.level)})`]
+              : [`현재(${levelText(view.level)})`]}
             rows={artifactEffectKeys(artifact).map(effect => ({
               label: artifactEffectLabel(effect),
-              value: artifactEffectValue(artifact, effect, displayLevel),
+              value: artifactEffectValue(artifact, effect, view.level),
               next: next ? artifactEffectValue(artifact, effect, next.level) : undefined,
             }))} />
-        ) : <SystemRows artifact={artifact} />}
+        ) : <SystemRows artifact={artifact} dim={view.status === 'unowned'} />}
       </div>
     </Modal>
   );
 }
 
 /** 전설 유물의 효과 - 레벨 줄 없이 보너스와 페널티 두 줄 */
-function SystemRows({ artifact }: { artifact: Artifact }) {
+function SystemRows({ artifact, dim }: { artifact: Artifact; dim: boolean }) {
   const { bonus, penalty } = artifactSystemLines(artifact);
   return (
     <Inset divided>
-      {bonus && <KeyValueRow label="보너스" value={<span className="block text-right text-accent">{bonus}</span>} />}
-      {penalty && <KeyValueRow label="페널티" value={<span className="block text-right text-danger">{penalty}</span>} />}
+      {bonus && <KeyValueRow label="보너스" value={<span className={`block text-right ${dim ? 'text-text-dim' : 'text-accent'}`}>{bonus}</span>} />}
+      {penalty && <KeyValueRow label="페널티" value={<span className={`block text-right ${dim ? 'text-text-dim' : 'text-danger'}`}>{penalty}</span>} />}
     </Inset>
   );
 }

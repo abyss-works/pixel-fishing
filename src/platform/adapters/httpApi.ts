@@ -17,6 +17,7 @@ import {
   signOutAccount,
   deleteOwnAccount,
 } from './auth';
+import { parseRetryAfterMs } from './requestFailure';
 
 class HttpAuth implements AuthApi {
   isConfigured = true;
@@ -73,7 +74,6 @@ import type {
 
 const RATE_LIMIT_MESSAGE = '요청이 너무 많아 잠시 기다렸다가 다시 시도해 주세요.';
 const MAX_RATE_LIMIT_RETRIES = 2;
-const MAX_RETRY_AFTER_MS = 10_000;
 
 class AdminHttpError extends Error {
   readonly status: number;
@@ -89,19 +89,6 @@ class AdminHttpError extends Error {
     this.retryAfterMs = retryAfterMs;
     this.retried = retried;
   }
-}
-
-function parseRetryAfterMs(raw: string | null): number | null {
-  if (!raw) return null;
-  const trimmed = raw.trim();
-  if (/^\d+$/.test(trimmed)) {
-    return Math.min(Number(trimmed) * 1000, MAX_RETRY_AFTER_MS);
-  }
-  const ts = Date.parse(trimmed);
-  if (!Number.isNaN(ts)) {
-    return Math.min(Math.max(0, ts - Date.now()), MAX_RETRY_AFTER_MS);
-  }
-  return null;
 }
 
 const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));

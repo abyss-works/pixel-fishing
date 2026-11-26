@@ -38,7 +38,7 @@ type SocialTab = 'friends' | 'requests' | 'blocks';
 type FriendOp = Parameters<ReturnType<typeof useFriends>['act']>[0];
 
 export default function FriendsModal({ setToast, onClose }: { setToast: Notify; onClose: () => void }) {
-  const { groups, loading, failed, act } = useFriends(true);
+  const { groups, loading, failed, act } = useFriends(true, true);
   const [tab, setTab] = useState<SocialTab>('friends');
   const [busy, setBusy] = useState(false);
   const [removing, setRemoving] = useState<FriendItem | null>(null);

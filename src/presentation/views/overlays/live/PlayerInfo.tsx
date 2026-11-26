@@ -169,6 +169,12 @@ export function PlayerInfo({ target, self, account, accountFailed = false, setTo
           {blocked ? '차단 해제' : '차단'}
         </Button>
       )}
+      {blocked === null && moderation.failed && (
+        <>
+          <span className="text-xs text-text-dim">차단 정보를 불러오지 못했어요.</span>
+          <Button size="sm" onClick={moderation.reload}>다시 확인</Button>
+        </>
+      )}
       {chatId !== undefined && (
         <Button size="sm" disabled={busy || reported} onClick={() => void report(chatId)}>
           {reported ? '신고함' : '이 채팅 신고'}

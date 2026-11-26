@@ -8,7 +8,11 @@ import { writeAdminRestrict, writeAdminRevokeSessions } from './queries';
  */
 export function useAdminUserActions() {
   const client = useQueryClient();
-  const refresh = () => client.invalidateQueries({ queryKey: ['admin'], predicate: q => q.queryKey[1] !== 'access' });
+  const refresh = () => client.invalidateQueries({
+    queryKey: ['admin'],
+    // 로그인 복귀 값은 한 번 읽으면 사라지므로 다시 읽지 않는다
+    predicate: q => q.queryKey[1] !== 'access' && q.queryKey[1] !== 'signInReturn',
+  });
   return {
     restrict: async (userId: string, restricted: boolean) => {
       const result = await writeAdminRestrict(userId, restricted);

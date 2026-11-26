@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { QuestInfoData } from '../../../../features/bounty/model/questInfo';
 import type { QuestInfoStatus } from '../../../../features/bounty/service/useQuestInfo';
+import Button from '../../../ui/Button';
 import Inset from '../../../ui/Inset';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
@@ -26,9 +27,10 @@ const TABS: TabDef<InfoTab>[] = [
 ];
 const EMPTY_SUBJECT: Record<InfoTab, string> = { general: '일반 의뢰가', named: '네임드 토벌이' };
 const OFFLINE_TEXT = '오프라인에서는 의뢰를 볼 수 없어요.\n서버에 연결된 뒤 다시 열어 주세요.';
+const FAILED_TEXT = '의뢰를 불러오지 못했어요.\n잠시 뒤 다시 시도해 주세요.';
 
 export default function QuestInfoWindow({ info, onClose }: {
-  info: QuestInfoData & { status: QuestInfoStatus };
+  info: QuestInfoData & { status: QuestInfoStatus; retry: () => void };
   onClose: () => void;
 }) {
   // 사용자가 고른 탭. 고르기 전에는 받은 의뢰를 보고 정한다
@@ -43,6 +45,14 @@ export default function QuestInfoWindow({ info, onClose }: {
           <Skeleton className="h-6 w-1/2" />
           {[0, 1, 2, 3].map(i => <Skeleton key={i} className="h-[26px]" />)}
         </Inset>
+      );
+    }
+    if (info.status === 'failed') {
+      return (
+        <EmptyInfoCard>
+          <span className="whitespace-pre-line">{FAILED_TEXT}</span>
+          <Button size="sm" onClick={info.retry}>다시 시도</Button>
+        </EmptyInfoCard>
       );
     }
     if (info.status === 'offline') return <EmptyInfoCard><span className="whitespace-pre-line">{OFFLINE_TEXT}</span></EmptyInfoCard>;

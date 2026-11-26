@@ -18,7 +18,6 @@ function useBoard(board: RankingBoardId, fishId?: string) {
     queryFn: () => readRanking(board, fishId),
     enabled: ready && consentReady,
     staleTime: STALE,
-    retry: 1,
   });
   return { data: (q.data ?? null) as RankingBoard | null, loading: q.isPending, failed: q.isError, offline: q.isSuccess && q.data === null };
 }
