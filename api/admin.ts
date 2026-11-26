@@ -13,11 +13,19 @@ import { adminSessionUid } from './_auth/session.js';
 import { database } from './_db/client.js';
 import type { Database, Executor } from './_db/client.js';
 import { notifyAll, notifyUser, onlineUsers } from './_server/livePresence.js';
+import { COUPONS } from '../src/game/content/coupons.js';
 import { normalizeNoticeDraft } from '../src/game/rules/live.js';
 import { accountKind, revokeUserSessions } from './_data/account.js';
 import * as read from './_data/admin.js';
 import { balanceLive } from './_data/adminBalance.js';
 import { onboardingFunnel } from './_data/adminFunnel.js';
+import {
+  COUPON_CODE_MAX, createAdminCoupon, deleteAdminCoupon, listAdminCoupons, parseCouponDraft, updateAdminCoupon,
+} from './_data/codes.js';
+import {
+  EVENT_ID_PATTERN, createAdminEvent, deleteAdminEvent, drawEventWinners, endAdminEventNow,
+  listAdminEvents, listEventDraws, parseEventCreateDraft, parseEventDrawInput, parseEventUpdateDraft, updateAdminEvent,
+} from './_data/events.js';
 import { readHttpMetrics } from './_data/httpMetrics.js';
 import { setLetterHandled } from './_data/mail.js';
 import { deliverMail, DuplicateMailError, parseMailRequest, planMail, recentSentMails } from './_data/mailbox.js';
@@ -62,6 +70,8 @@ const WRITES: Record<string, Write> = {
   letterHandled,
   revokeSessions,
   notices: ({ db }, body, adminId) => notices(db, body, adminId),
+  events: (store, body) => eventsWrite(store, body),
+  coupons: ({ db }, body) => couponsWrite(db, body),
 };
 
 /** 리소스 경로 조회. 요청의 필터를 검사해 실행할 읽기를 돌려준다. 틀리면 400이다 */
@@ -146,6 +156,13 @@ function parse(name: string | undefined, req: Req): (db: Executor) => Promise<un
     case 'changelog': return read.changelog;
     case 'chatReports': return read.chatReports;
     case 'notices': return listAllAdminNotices;
+    case 'events': return listAdminEvents;
+    case 'eventDraws': {
+      const eventId = param(req, 'eventId');
+      if (eventId === undefined || !EVENT_ID_PATTERN.test(eventId)) throw new ApiError(400, 'bad-event');
+      return db => listEventDraws(db, eventId);
+    }
+    case 'coupons': return listAdminCoupons;
     case 'mails': return db => recentSentMails(db);
     case 'economy': { const days = daysOf(req); return db => read.economy(db, days); }
     case 'bountyFunnel': { const days = daysOf(req); return db => read.bountyFunnel(db, days); }
@@ -293,6 +310,87 @@ async function notices(db: Executor, raw: unknown, adminId: string): Promise<unk
     }
     default:
       throw new ApiError(400, 'bad-notice');
+  }
+}
+
+/** 라이브 이벤트 생성·수정·조기 종료·삭제·당첨 추첨(당첨자 우편 발송 포함) */
+async function eventsWrite({ db, withTransaction }: Database, raw: unknown): Promise<unknown> {
+  const body = (raw !== null && typeof raw === 'object' ? raw : {}) as { op?: unknown; id?: unknown };
+  const parseId = (): string => {
+    if (typeof body.id !== 'string' || !EVENT_ID_PATTERN.test(body.id.trim())) throw new ApiError(400, 'bad-event');
+    return body.id.trim();
+  };
+
+  switch (body.op) {
+    case 'create': {
+      const draft = parseEventCreateDraft(body);
+      if (!draft) throw new ApiError(400, 'bad-event');
+      const event = await dbWrite(() => createAdminEvent(db, draft));
+      if (event === 'duplicate') throw new ApiError(409, 'duplicate-event');
+      return { event };
+    }
+    case 'update': {
+      const draft = parseEventUpdateDraft(body);
+      if (!draft) throw new ApiError(400, 'bad-event');
+      const event = await dbWrite(() => updateAdminEvent(db, draft));
+      if (!event) throw new ApiError(404, 'no-event');
+      return { event };
+    }
+    case 'end': {
+      const id = parseId();
+      const event = await dbWrite(() => endAdminEventNow(db, id));
+      if (!event) throw new ApiError(404, 'no-event');
+      return { event };
+    }
+    case 'delete': {
+      const id = parseId();
+      const deleted = await dbWrite(() => deleteAdminEvent(db, id));
+      if (!deleted) throw new ApiError(404, 'no-event');
+      return { deleted: true, id };
+    }
+    case 'draw': {
+      const input = parseEventDrawInput(body);
+      if (!input) throw new ApiError(400, 'bad-event');
+      const outcome = await dbWrite(() => drawEventWinners(withTransaction, input, new Date().toISOString()));
+      if (outcome === 'no-event') throw new ApiError(404, 'no-event');
+      for (const draw of outcome.draws) {
+        notifyUser(draw.userId, { t: 'mail' });
+      }
+      return outcome;
+    }
+    default:
+      throw new ApiError(400, 'bad-event');
+  }
+}
+
+/** 동적 쿠폰 생성·수정·삭제 */
+async function couponsWrite(db: Executor, raw: unknown): Promise<unknown> {
+  const body = (raw !== null && typeof raw === 'object' ? raw : {}) as { op?: unknown; code?: unknown };
+
+  switch (body.op) {
+    case 'create': {
+      const draft = parseCouponDraft(body, 'create');
+      if (!draft || Object.hasOwn(COUPONS, draft.code)) throw new ApiError(400, 'bad-coupon');
+      const coupon = await dbWrite(() => createAdminCoupon(db, draft));
+      if (coupon === 'duplicate') throw new ApiError(409, 'duplicate-coupon');
+      return { coupon };
+    }
+    case 'update': {
+      const draft = parseCouponDraft(body, 'update');
+      if (!draft || Object.hasOwn(COUPONS, draft.code)) throw new ApiError(400, 'bad-coupon');
+      const coupon = await dbWrite(() => updateAdminCoupon(db, draft));
+      if (!coupon) throw new ApiError(404, 'no-coupon');
+      return { coupon };
+    }
+    case 'delete': {
+      const code = typeof body.code === 'string' ? body.code.trim() : '';
+      if (code.length === 0 || code.length > COUPON_CODE_MAX) throw new ApiError(400, 'bad-coupon');
+      const deleted = await dbWrite(() => deleteAdminCoupon(db, code));
+      if (!deleted) throw new ApiError(404, 'no-coupon');
+      return { deleted: true, code };
+    }
+    default:
+      throw new ApiError(400, 'bad-coupon');
   }
 }
 

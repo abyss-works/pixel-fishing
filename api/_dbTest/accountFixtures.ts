@@ -9,6 +9,7 @@ export const USER_TABLES = [
   'chat_messages', 'chat_reports', 'play_sessions', 'user_active_days', 'guild_members', 'guild_contributions', 'guild_logs',
   'guild_bonus_donations', 'guild_member_enhancements', 'last_positions', 'guild_join_requests', 'consent_records',
   'achievement_counters', 'daily_fortunes',
+  'coupon_redemptions', 'event_trio_progress', 'event_championship_scores', 'event_draws',
 ] as const;
 /** 저장 상태에 딸린 표. 저장이 없는 계정은 이 표에 행이 없다 */
 const SAVE_TABLES: readonly string[] = ['saves_current', 'fish_instances', 'records', 'saves'];
@@ -100,6 +101,12 @@ export async function seedFullAccount(client: Client, spec: AccountSpec & { nick
   await client.query(`insert into public.consent_records (user_id, document, version, age_confirmed, channel) values ($1, 'terms', '2030-01-01', true, 'google-link')`, [uid]);
   await client.query(`insert into public.achievement_counters (user_id, key, value) values ($1, 'sell.gold', 0)`, [uid]);
   await client.query(`insert into public.daily_fortunes (user_id, day, kind, index) values ($1, '2030-01-01', 'fish', 3)`, [uid]);
+  await client.query(`insert into public.coupons (code, gold, description, active) values ('ACCOUNT-FIXTURE', 100, '계정 삭제 테스트', true) on conflict do nothing`);
+  await client.query(`insert into public.coupon_redemptions (code, user_id) values ('ACCOUNT-FIXTURE', $1)`, [uid]);
+  await client.query(`insert into public.live_events (id, kind, title, starts_at, ends_at) values ('account-fixture-evt', 'trio', '테스트', '2030-01-01T00:00:00Z', '2030-01-02T00:00:00Z') on conflict do nothing`);
+  await client.query(`insert into public.event_trio_progress (event_id, user_id) values ('account-fixture-evt', $1)`, [uid]);
+  await client.query(`insert into public.event_championship_scores (event_id, user_id) values ('account-fixture-evt', $1)`, [uid]);
+  await client.query(`insert into public.event_draws (event_id, user_id, reward_kind) values ('account-fixture-evt', $1, 'none')`, [uid]);
   if (spec.save) {
     await client.query(`insert into public.fish_instances (uid, user_id, fish_id, form) values ($1, $2, 'crucian', 'normal')`,
       [fish('crucian').uid, uid]);

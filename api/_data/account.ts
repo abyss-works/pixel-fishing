@@ -5,6 +5,8 @@ import { sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { Database, Executor } from '../_db/client.js';
 import { deleteUserBounty } from './bounty.js';
+import { deleteUserCouponRedemptions } from './codes.js';
+import { deleteUserEventRows } from './events.js';
 import { at } from './json.js';
 import { deleteUserMails } from './mailbox.js';
 import { deleteUserProfile } from './profile.js';
@@ -142,6 +144,8 @@ async function deleteAccountRows(tx: Executor, uid: string): Promise<void> {
   await deleteUserConsents(tx, uid);
   await deleteUserCounters(tx, uid);
   await deleteUserFortunes(tx, uid);
+  await deleteUserCouponRedemptions(tx, uid);
+  await deleteUserEventRows(tx, uid);
   await deleteUserSaves(tx, uid);
   await tx.execute(sql`delete from auth.users where id = ${uid}`);
 }

@@ -43,6 +43,17 @@ const mocks = vi.hoisted(() => ({
   updateNotice: vi.fn(),
   endNoticeNow: vi.fn(),
   deleteNotice: vi.fn(),
+  listAdminEvents: vi.fn(async (): Promise<unknown[]> => []),
+  createAdminEvent: vi.fn(),
+  updateAdminEvent: vi.fn(),
+  endAdminEventNow: vi.fn(),
+  deleteAdminEvent: vi.fn(),
+  listEventDraws: vi.fn(async (): Promise<unknown[]> => []),
+  drawEventWinners: vi.fn(),
+  listAdminCoupons: vi.fn(async (): Promise<unknown[]> => []),
+  createAdminCoupon: vi.fn(),
+  updateAdminCoupon: vi.fn(),
+  deleteAdminCoupon: vi.fn(),
   notifyAll: vi.fn(),
   notifyUser: vi.fn(),
   onlineUsers: vi.fn((): { uid: string; guest: boolean }[] => []),
@@ -95,6 +106,29 @@ vi.mock('./_data/notices.js', () => ({
   endNoticeNow: mocks.endNoticeNow,
   deleteNotice: mocks.deleteNotice,
 }));
+vi.mock('./_data/events.js', async () => {
+  const actual = await vi.importActual<typeof import('./_data/events.js')>('./_data/events.js');
+  return {
+    ...actual,
+    listAdminEvents: mocks.listAdminEvents,
+    createAdminEvent: mocks.createAdminEvent,
+    updateAdminEvent: mocks.updateAdminEvent,
+    endAdminEventNow: mocks.endAdminEventNow,
+    deleteAdminEvent: mocks.deleteAdminEvent,
+    listEventDraws: mocks.listEventDraws,
+    drawEventWinners: mocks.drawEventWinners,
+  };
+});
+vi.mock('./_data/codes.js', async () => {
+  const actual = await vi.importActual<typeof import('./_data/codes.js')>('./_data/codes.js');
+  return {
+    ...actual,
+    listAdminCoupons: mocks.listAdminCoupons,
+    createAdminCoupon: mocks.createAdminCoupon,
+    updateAdminCoupon: mocks.updateAdminCoupon,
+    deleteAdminCoupon: mocks.deleteAdminCoupon,
+  };
+});
 vi.mock('./_server/livePresence.js', async () => {
   const actual = await vi.importActual<typeof import('./_server/livePresence.js')>('./_server/livePresence.js');
   return {
@@ -397,5 +431,38 @@ describe('api/admin 핸들러 단위 테스트', () => {
     expect(await call('POST', { q: 'notices' }, { op: 'delete', id: 10 })).toMatchObject({ status: 200, body: { deleted: true, id: 10 } });
     expect(mocks.notifyAll).toHaveBeenLastCalledWith({ t: 'notices', notices: [] });
     expect(mocks.notifyAll).toHaveBeenCalledTimes(4);
+  });
+
+  it('GET/POST ?q=events, ?q=eventDraws, ?q=coupons 검증 및 draw 실시간 우편 알림을 확인한다', async () => {
+    expect(await call('GET', { q: 'eventDraws', eventId: 'bad id' })).toMatchObject({ status: 400, body: { error: 'bad-event' } });
+    mocks.listEventDraws.mockResolvedValueOnce([{ id: 1, eventId: 'evt-1', userId: TARGET_UID }]);
+    expect(await call('GET', { q: 'eventDraws', eventId: 'evt-1' })).toMatchObject({
+      status: 200,
+      body: [{ id: 1, eventId: 'evt-1', userId: TARGET_UID }],
+    });
+    expect(mocks.listEventDraws).toHaveBeenCalledWith(mocks.db, 'evt-1');
+
+    expect(await call('POST', { q: 'events' }, { op: 'unknown' })).toMatchObject({ status: 400, body: { error: 'bad-event' } });
+    mocks.drawEventWinners.mockResolvedValueOnce({
+      eventId: 'evt-1',
+      draws: [{ userId: TARGET_UID, rewardPin: 'PIN-1' }],
+    });
+    expect(await call('POST', { q: 'events' }, { op: 'draw', id: 'evt-1', count: 1 })).toMatchObject({
+      status: 200,
+      body: { eventId: 'evt-1', draws: [{ userId: TARGET_UID, rewardPin: 'PIN-1' }] },
+    });
+    expect(mocks.notifyUser).toHaveBeenCalledWith(TARGET_UID, { t: 'mail' });
+
+    expect(await call('POST', { q: 'coupons' }, { op: 'create', code: '출항준비', gold: 100, description: '차단' })).toMatchObject({
+      status: 400,
+      body: { error: 'bad-coupon' },
+    });
+    mocks.createAdminCoupon.mockResolvedValueOnce('duplicate');
+    expect(await call('POST', { q: 'coupons' }, {
+      op: 'create',
+      code: 'DUP-CODE',
+      gold: 100,
+      description: '중복',
+    })).toMatchObject({ status: 409, body: { error: 'duplicate-coupon' } });
   });
 });
