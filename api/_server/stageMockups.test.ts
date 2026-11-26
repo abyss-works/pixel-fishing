@@ -12,7 +12,7 @@ import { stageGate } from './stageGate.js';
 import { MOCKUPS_CSP, stageMockups } from './stageMockups.js';
 
 const EXPECTED_CSP =
-  "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'none'; frame-ancestors 'none'; base-uri 'none'";
+  "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; connect-src 'none'; frame-ancestors 'none'; base-uri 'none'";
 
 async function startTestServer(options: { checkAdmin?: 'allow' | '401' | '403' } = {}) {
   const app = express();
@@ -152,6 +152,7 @@ describe('stageMockups 미들웨어', () => {
         '/_mockups/script.js',
         '/_mockups/valid.html.bak',
         '/_mockups/bad%20name.html',
+        '/_mockups/valid%00.html',
         '/_mockups/sub/valid-v0.20.4_1.html',
       ]) {
         const res = await fetch(`${srv.base}${badPath}`);
