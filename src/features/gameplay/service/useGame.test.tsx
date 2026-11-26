@@ -735,6 +735,19 @@ describe('수배 스냅샷 무효화', () => {
     expect(spy).not.toHaveBeenCalledWith({ queryKey: ['guild'] });
   });
 
+  it('boot 성공 시 우편함 캐시를 무효화한다', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const spy = vi.spyOn(client, 'invalidateQueries');
+    client.setQueryData(['mailbox', 'uid-1'], []);
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    renderHook(() => useGame({ setToast: () => {} }), { wrapper });
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['mailbox'] });
+    expect(client.getQueryState(['mailbox', 'uid-1'])?.isInvalidated).toBe(true);
+  });
+
   it('applyDevReset과 refreshAccountStatus는 세션 쿼리를 제외하고 무효화한다', async () => {
     const { hook, spy } = await bootedWithSpy();
     await act(async () => { await hook.result.current.applyDevReset(newState()); });

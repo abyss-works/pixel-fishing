@@ -20,7 +20,7 @@ import { potionById } from '../content/potions.js';
 import type { BaseId, LocationRef } from '../content/places.js';
 import { ARTIFACT_MAX_LEVEL, artifactById, artifactHasLevel, artifactLevelCost } from '../content/artifacts.js';
 import { artifactLevelOf, dailyClearCap } from './artifactLevel.js';
-import { PANTS_COLORS, SHIRT_COLORS, hatById, isAchievementHat } from '../content/wardrobe.js';
+import { PANTS_COLORS, SHIRT_COLORS, hatById } from '../content/wardrobe.js';
 import { ACHIEVEMENTS, achievementById } from '../content/achievements.js';
 import {
   upgradeCost, CHALLENGE_MISS_LIMIT,
@@ -165,7 +165,7 @@ export function canChangeClothes(shirt: unknown, pants: unknown): RuleCheck {
 export function canBuyHat(state: GameState, hat: unknown): RuleCheck {
   const h = hatById(hat);
   if (!h) return no('bad-request');
-  if (isAchievementHat(h)) return no('achievement-hat-only');
+  if (h.source !== 'gold') return no('achievement-hat-only');
   if (state.hats.includes(h.id)) return no('hat-owned');
   return state.gold >= h.price ? OK : no('not-enough-gold');
 }

@@ -319,4 +319,25 @@ describe('PlayerInfo', () => {
     fireEvent.click(screen.getByRole('button', { name: '달성만 보기' }));
     expect(screen.getByText('달성한 업적이 없어요.')).toBeTruthy();
   });
+
+  it('수집품 모자 툴팁과 카드가 이벤트 모자를 이벤트 한정으로 분류하고 총 보유 수에 포함한다', () => {
+    s.profile = { ...s.profile, hats: ['cap-red', 'straw-hat', 'santa-hat'] };
+    show();
+    fireEvent.click(screen.getByRole('button', { name: /수집품/ }));
+
+    expect(screen.getByText('모자').closest('div')).toHaveTextContent(`3 / ${HATS.length}`);
+    fireEvent.mouseEnter(screen.getByText('모자'));
+    const hatTip = screen.getByRole('tooltip');
+    expect(hatTip).toHaveTextContent('이벤트');
+    expect(hatTip).toHaveTextContent('1 / 1');
+    fireEvent.mouseLeave(screen.getByText('모자'));
+
+    const santaCard = screen.getByLabelText('모자 산타모자 보유');
+    expect(santaCard).toHaveTextContent('보유');
+    const santaTrigger = santaCard.firstElementChild!;
+    fireEvent.mouseEnter(santaTrigger);
+    const tip = screen.getByRole('tooltip');
+    expect(tip).toHaveTextContent('이벤트 한정');
+    expect(tip).not.toHaveTextContent('업적 보상');
+  });
 });

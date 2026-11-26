@@ -914,6 +914,21 @@ describe('GameFieldEngine 빨간 존 위치와 챔질 경과', () => {
     expect(action.biteElapsed).toBeCloseTo(center * sweepMs, 0);
     engine.dispose();
   });
+
+  it('renderFrame은 현재 구역에 맞는 effectiveLookForRegion 결과를 renderRegion에 넘긴다', () => {
+    const game = { ...newState(), look: { shirt: 2, pants: 3, hat: 'cap-red' } };
+    const engine = new GameFieldEngine('world', game, [], WORLD_SPAWN);
+    (engine as unknown as { def: RegionPack }).def = { ...WORLD, id: 'championship' as never };
+    (engine as unknown as { updateFrame(c: unknown, n: number, l: number): boolean }).updateFrame(ctx, 1000, 950);
+
+    expect(renderRegion).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({ id: 'championship' }),
+      expect.objectContaining({ look: { shirt: 2, pants: 3, hat: 'santa-hat' } }),
+    );
+    expect(game.look.hat).toBe('cap-red');
+    engine.dispose();
+  });
 });
 
 describe('GameFieldEngine 로컬·피어 점프 연출', () => {

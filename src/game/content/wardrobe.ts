@@ -28,7 +28,7 @@ export const LOOK_PRESETS: readonly { name: string; shirt: number; pants: number
   { name: '밤바다', shirt: 7, pants: 3 },
 ];
 
-export type HatSource = 'gold' | 'achievement';
+export type HatSource = 'gold' | 'achievement' | 'event';
 
 export interface Hat {
   id: string;
@@ -40,7 +40,7 @@ export interface Hat {
   achievementId?: string;
 }
 
-/** 모자 목록 — 골드로 사는 모자 5종 뒤에 업적 보상 모자 52종을 둔다 */
+/** 모자 목록 — 골드로 사는 모자 5종 뒤에 업적 보상 모자 52종과 이벤트 모자 1종을 둔다 */
 export const HATS: readonly Hat[] = [
   { id: 'cap-red', name: '빨간 모자', color: '#c62828', price: 50_000, source: 'gold' },
   { id: 'cap-blue', name: '파란 모자', color: '#1565c0', price: 50_000, source: 'gold' },
@@ -99,9 +99,25 @@ export const HATS: readonly Hat[] = [
   { id: 'guabancex-sargasso-hood', name: '모자반 매듭 두건', color: '#3a4b66', accentColor: '#8fa3bf', price: 0, source: 'achievement', achievementId: 'named-guabancex-1' },
   { id: 'guabancex-eye-hat', name: '폭풍눈 방수모', color: '#2c3a54', accentColor: '#81d4fa', price: 0, source: 'achievement', achievementId: 'named-guabancex-5' },
   { id: 'guabancex-fin-crown', name: '소용돌이 지느러미 모자', color: '#232f47', accentColor: '#ffd54f', price: 0, source: 'achievement', achievementId: 'named-guabancex-10' },
+  { id: 'santa-hat', name: '산타모자', color: '#c62828', accentColor: '#eceff1', price: 0, source: 'event' },
 ];
 
 export const isAchievementHat = (hat: Hat): boolean => hat.source === 'achievement';
+export const isEventHat = (hat: Hat): boolean => hat.source === 'event';
+
+export const FORCED_REGION_HAT: Readonly<Record<string, string>> = {
+  championship: 'santa-hat',
+};
+
+export function forcedHatForRegion(region: string): string | null {
+  return FORCED_REGION_HAT[region] ?? null;
+}
+
+export function effectiveLookForRegion(look: Look, region: string): Look {
+  const forced = forcedHatForRegion(region);
+  if (!forced || look.hat === forced) return look;
+  return { ...look, hat: forced };
+}
 
 export function hatById(id: unknown): Hat | undefined {
   return typeof id === 'string' ? HATS.find(h => h.id === id) : undefined;

@@ -327,6 +327,9 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
         if (devAction || action.type === 'catch' || action.type === 'resolveChallenge' || action.type === 'claimRelief' || action.type === 'import') {
           void client.invalidateQueries({ queryKey: ['ranking'], refetchType: 'none' });
         }
+        if (action.type === 'boot') {
+          void client.invalidateQueries({ queryKey: ['mailbox'] });
+        }
         if ('guildUpdated' in r.result && r.result.guildUpdated) void client.invalidateQueries({ queryKey: ['guild'] });
       }
       // rejected는 규칙 거부 — 호출자가 사유 토스트를 띄운다 (연결은 정상이므로 sync 유지)

@@ -884,4 +884,44 @@ describe('테스트 데이터베이스', () => {
       }
     });
   });
+
+  describe('mails.hats (0051)', () => {
+    const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
+
+    it('hats 열 기본값은 빈 배열이고 배열을 저장할 수 있으며, 다운/업 라운드트립이 동작한다', async () => {
+      const uid = randomUUID();
+      await client.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, true)`, [uid, `${uid}@anonymous.invalid`]);
+      const { rows: [defRow] } = await client.query<{ hats: unknown }>(
+        `insert into public.mails (user_id, title, body) values ($1, '기본', '본문') returning hats`,
+        [uid],
+      );
+      expect(defRow.hats).toEqual([]);
+
+      const { rows: [hatRow] } = await client.query<{ hats: unknown }>(
+        `insert into public.mails (user_id, title, body, hats) values ($1, '산타', '본문', '["santa-hat"]'::jsonb) returning hats`,
+        [uid],
+      );
+      expect(hatRow.hats).toEqual(['santa-hat']);
+
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        await other.query(migration('0051_mail_hats.down.sql'));
+        const { rows: afterDownCol } = await other.query(
+          `select 1 from information_schema.columns where table_schema = 'public' and table_name = 'mails' and column_name = 'hats'`,
+        );
+        expect(afterDownCol).toHaveLength(0);
+
+        await other.query(migration('0051_mail_hats.sql'));
+        const { rows: afterUpCol } = await other.query<{ is_nullable: string }>(
+          `select is_nullable from information_schema.columns where table_schema = 'public' and table_name = 'mails' and column_name = 'hats'`,
+        );
+        expect(afterUpCol).toEqual([{ is_nullable: 'NO' }]);
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
 });

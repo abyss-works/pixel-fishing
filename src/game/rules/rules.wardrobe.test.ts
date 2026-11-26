@@ -36,16 +36,22 @@ describe('canBuyHat', () => {
     expect(canBuyHat(seed({ gold: 1e9 }), 'cap-pink')).toEqual({ ok: false, reason: 'bad-request' });
     expect(canBuyHat(seed({ gold: 1e9 }), null)).toEqual({ ok: false, reason: 'bad-request' });
   });
+
+  it('이벤트 모자(santa-hat)는 가격이 0이어도 골드로 살 수 없다', () => {
+    expect(canBuyHat(seed({ gold: 1e9 }), 'santa-hat')).toEqual({ ok: false, reason: 'achievement-hat-only' });
+  });
 });
 
 describe('canWearHat', () => {
   it('가진 모자는 쓸 수 있고 없음(벗기)은 언제나 된다', () => {
     expect(canWearHat(seed({ hats: ['cap-blue'] }), 'cap-blue')).toEqual({ ok: true });
+    expect(canWearHat(seed({ hats: ['santa-hat'] }), 'santa-hat')).toEqual({ ok: true });
     expect(canWearHat(seed(), null)).toEqual({ ok: true });
   });
 
   it('갖지 않은 모자는 hat-not-owned, 없는 id는 bad-request다', () => {
     expect(canWearHat(seed(), 'cap-blue')).toEqual({ ok: false, reason: 'hat-not-owned' });
+    expect(canWearHat(seed(), 'santa-hat')).toEqual({ ok: false, reason: 'hat-not-owned' });
     expect(canWearHat(seed({ hats: ['cap-blue'] }), 'nope')).toEqual({ ok: false, reason: 'bad-request' });
     expect(canWearHat(seed(), 5)).toEqual({ ok: false, reason: 'bad-request' });
   });

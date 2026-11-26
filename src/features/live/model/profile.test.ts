@@ -134,31 +134,40 @@ describe('플레이어 정보 화면 데이터', () => {
     expect(firstItem.rewardText.length).toBeGreaterThan(0);
   });
 
-  it('수집품은 모자(골드와 업적 분류, 카드 목록)와 유물(희귀·영웅 Lv1~5, 전설 레벨 없음)을 집계한다', () => {
+  it('수집품은 모자(골드·업적·이벤트 분류, 카드 목록)와 유물(희귀·영웅 Lv1~5, 전설 레벨 없음)을 집계한다', () => {
     const goldHat = HATS.find(h => h.source === 'gold')!;
     const achHat = HATS.find(h => h.source === 'achievement')!;
+    const eventHat = HATS.find(h => h.source === 'event')!;
     const rare = ARTIFACTS.find(a => a.grade === 'rare')!;
     const epic = ARTIFACTS.find(a => a.grade === 'epic')!;
     const legend = ARTIFACTS.find(a => a.grade === 'legendary')!;
     const view = selectProfileView(profile({
-      hats: [goldHat.id, achHat.id, goldHat.id, 'no-such-hat'],
+      hats: [goldHat.id, achHat.id, eventHat.id, goldHat.id, 'no-such-hat'],
       artifacts: [rare.id, epic.id, legend.id, 'no-such-relic'],
       artifactLevels: { [rare.id]: 4, [legend.id]: 3 },
     }));
 
     expect(view.collectibles.hats).toMatchObject({
-      owned: 2,
+      owned: 3,
       total: HATS.length,
       goldOwned: 1,
       goldTotal: HATS.filter(h => h.source === 'gold').length,
       achievementOwned: 1,
       achievementTotal: HATS.filter(h => h.source === 'achievement').length,
+      eventOwned: 1,
+      eventTotal: HATS.filter(h => h.source === 'event').length,
     });
     expect(view.collectibles.hats.slots).toHaveLength(HATS.length);
     expect(view.collectibles.hats.slots.find(h => h.id === goldHat.id)).toMatchObject({
       owned: true,
       name: goldHat.name,
       source: 'gold',
+    });
+    expect(view.collectibles.hats.slots.find(h => h.id === eventHat.id)).toMatchObject({
+      owned: true,
+      name: eventHat.name,
+      source: 'event',
+      conditionText: '겨울 이벤트 기간에 접속하면 우편함으로 받을 수 있어요.',
     });
     const unownedHat = view.collectibles.hats.slots.find(h => !h.owned)!;
     expect(unownedHat.conditionText.length).toBeGreaterThan(0);

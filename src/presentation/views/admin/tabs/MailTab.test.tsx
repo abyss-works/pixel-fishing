@@ -178,7 +178,7 @@ describe('MailTab', () => {
     })));
   });
 
-  it('골드도 아이템도 없는 우편은 empty 안내를 보이고 보내기를 막는다', async () => {
+  it('골드·아이템·모자가 모두 없는 우편은 empty 안내를 보이고 보내기를 막는다', async () => {
     mocks.mail.mockResolvedValueOnce({
       problems: ['empty'],
       preview: { count: 1, recipientCount: 1, totalGold: 0, capExceeded: false, maxTotalGold: 500_000_000, missing: [] },
@@ -188,7 +188,38 @@ describe('MailTab', () => {
     fireEvent.change(screen.getByLabelText('본문'), { target: { value: '본문' } });
     fireEvent.change(screen.getByLabelText(/받는 사람/), { target: { value: `${USER} 0` } });
     fireEvent.click(screen.getByRole('button', { name: '미리보기' }));
-    expect(await screen.findByText('골드나 아이템 중 하나 이상을 보내야 해요.')).toBeTruthy();
+    expect(await screen.findByText('골드, 아이템, 모자 중 하나 이상을 보내야 해요.')).toBeTruthy();
     expect(screen.getByRole('button', { name: '보내기' })).toBeDisabled();
+  });
+
+  it('모자를 찾아 첨부하고 빼며, hats 포함 요청으로 미리보기와 보내기를 실행한다', async () => {
+    mocks.mail.mockImplementation(async (op: string) => (op === 'preview'
+      ? { problems: [], preview: { count: 1, recipientCount: 1, totalGold: 0, capExceeded: false, maxTotalGold: 500_000_000, missing: [] } }
+      : { problems: [], preview: { count: 1, recipientCount: 1, totalGold: 0, capExceeded: false, maxTotalGold: 500_000_000, missing: [] }, sent: 1 }));
+    show();
+    fireEvent.change(screen.getByLabelText('제목'), { target: { value: '산타 선물' } });
+    fireEvent.change(screen.getByLabelText('본문'), { target: { value: '산타모자를 드려요.' } });
+    fireEvent.change(screen.getByLabelText(/받는 사람/), { target: { value: `${USER} 0` } });
+
+    fireEvent.change(screen.getByLabelText(/첨부 모자 찾기/), { target: { value: '산타' } });
+    fireEvent.click(screen.getByRole('option', { name: /산타모자/ }));
+    expect(screen.getByLabelText('첨부된 모자')).toHaveTextContent('모자 산타모자');
+
+    fireEvent.click(screen.getByRole('button', { name: '미리보기' }));
+    expect(await screen.findByText(/1인당 첨부 모자 산타모자/)).toBeTruthy();
+    expect(mocks.mail).toHaveBeenLastCalledWith('preview', {
+      title: '산타 선물',
+      body: '산타모자를 드려요.',
+      target: { kind: 'users', recipients: [{ userId: USER, gold: 0 }] },
+      hats: ['santa-hat'],
+      idempotencyKey: expect.any(String),
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '보내기' }));
+    const sendButtons = await screen.findAllByRole('button', { name: '보내기' });
+    fireEvent.click(sendButtons[sendButtons.length - 1]);
+    await waitFor(() => expect(mocks.mail).toHaveBeenLastCalledWith('send', expect.objectContaining({
+      hats: ['santa-hat'],
+    })));
   });
 });

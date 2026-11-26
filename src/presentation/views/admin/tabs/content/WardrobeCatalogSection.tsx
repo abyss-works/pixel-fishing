@@ -45,7 +45,7 @@ export default function WardrobeCatalogSection({
   const [shirt, setShirt] = useState(wardrobe.defaultLook.shirt);
   const [pants, setPants] = useState(wardrobe.defaultLook.pants);
   const [selectedHatId, setSelectedHatId] = useState<string | null>(wardrobe.hats[0]?.id ?? null);
-  const [sourceFilter, setSourceFilter] = useState<'all' | 'gold' | 'achievement'>('all');
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'gold' | 'achievement' | 'event'>('all');
 
   const previewLook = { shirt, pants, hat: selectedHatId };
   const selectedHat = wardrobe.hats.find(h => h.id === selectedHatId) ?? null;
@@ -72,7 +72,9 @@ export default function WardrobeCatalogSection({
               <span className="text-text-dim">
                 {selectedHat.source === 'gold'
                   ? `상점 구매 · ${fmtGold(selectedHat.price)}`
-                  : `업적 획득 · ${selectedHat.achievementName ?? ''} — ${selectedHat.achievementDesc ?? ''}`}
+                  : selectedHat.source === 'event'
+                    ? '이벤트 한정 · 겨울 이벤트 접속 선물'
+                    : `업적 획득 · ${selectedHat.achievementName ?? ''} — ${selectedHat.achievementDesc ?? ''}`}
               </span>
             )}
           </div>
@@ -116,6 +118,9 @@ export default function WardrobeCatalogSection({
             <PillButton type="button" active={sourceFilter === 'achievement'} onClick={() => setSourceFilter('achievement')}>
               업적 ({hats.filter(h => h.source === 'achievement').length})
             </PillButton>
+            <PillButton type="button" active={sourceFilter === 'event'} onClick={() => setSourceFilter('event')}>
+              이벤트 ({hats.filter(h => h.source === 'event').length})
+            </PillButton>
           </div>
         </div>
 
@@ -132,7 +137,7 @@ export default function WardrobeCatalogSection({
                   <PersonSprite look={{ shirt, pants, hat: h.id }} scale={3} headOnly />
                   <span className="text-xs text-center leading-tight">{h.name}</span>
                   <span className="text-2xs text-text-dim">
-                    {h.source === 'gold' ? fmtGold(h.price) : (h.zoneName ?? '업적')}
+                    {h.source === 'gold' ? fmtGold(h.price) : h.source === 'event' ? '이벤트 한정' : (h.zoneName ?? '업적')}
                   </span>
                 </SlotCell>
               ))}
@@ -165,10 +170,12 @@ export default function WardrobeCatalogSection({
                       <td className="whitespace-nowrap text-xs">
                         {h.source === 'gold'
                           ? <span className="pf-accent text-gold">{fmtGold(h.price)}</span>
-                          : (h.achievementName ?? '업적')}
+                          : h.source === 'event'
+                            ? '이벤트 한정'
+                            : (h.achievementName ?? '업적')}
                       </td>
                       <td className="text-xs text-text-dim">
-                        {h.source === 'gold' ? '상점 구매' : (h.achievementDesc ?? '—')}
+                        {h.source === 'gold' ? '상점 구매' : h.source === 'event' ? '겨울 이벤트 기간 접속 선물' : (h.achievementDesc ?? '—')}
                       </td>
                     </tr>
                   ))}
