@@ -56,5 +56,6 @@ export function useGuild(account: boolean, poll = false) {
     failed: q.isError,
     you: uid,
     act,
+    refresh: () => { void q.refetch(); },
   };
 }

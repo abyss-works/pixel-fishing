@@ -76,13 +76,16 @@ export default function NoGuild({ busy, run, join, request, dialogHost, setToast
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [sort, setSort] = useState<PublicGuildSort>('activity');
   const [joinTarget, setJoinTarget] = useState<PublicGuildItem | null>(null);
+  const updateSearch = (next: string) => {
+    setSearch(next);
+    if (next.trim() === '') setDebouncedSearch('');
+  };
   useEffect(() => {
     if (search.trim() === '') return;
     const timer = setTimeout(() => setDebouncedSearch(search), 250);
     return () => clearTimeout(timer);
   }, [search]);
-  const effectiveSearch = search.trim() === '' ? '' : debouncedSearch;
-  const publicGuilds = usePublicGuilds(effectiveSearch, sort, tab === 'open');
+  const publicGuilds = usePublicGuilds(debouncedSearch, sort, tab === 'open');
 
   const [name, setName] = useState('');
   const [input, setInput] = useState('');
@@ -189,11 +192,11 @@ export default function NoGuild({ busy, run, join, request, dialogHost, setToast
           <div className="flex flex-col gap-1.5 shrink-0">
             <div className="flex items-center gap-1.5">
               <div className="relative flex-1 min-w-0 flex items-center">
-                <TextInput compact="sm" value={search} maxLength={20} onChange={e => setSearch(e.target.value)}
+                <TextInput compact="sm" value={search} maxLength={20} onChange={e => updateSearch(e.target.value)}
                            aria-label="길드명 검색" placeholder="길드명 검색" className="w-full min-w-0 pr-8" />
                 {search.trim() !== '' && (
                   <IconButton type="button" glyph="close" size={10} tone="dim" aria-label="검색어 지우기"
-                              onClick={() => setSearch('')} className="absolute right-1.5 size-6 justify-center" />
+                              onClick={() => updateSearch('')} className="absolute right-1.5 size-6 justify-center" />
                 )}
               </div>
               <Button size="sm" disabled={busy || publicGuilds.fetching} onClick={() => { void publicGuilds.refresh(); }}>
@@ -250,7 +253,7 @@ export default function NoGuild({ busy, run, join, request, dialogHost, setToast
                                 <span>다른 길드 이름으로 검색하거나 검색어를 지워 전체 목록을 확인해 보세요.</span>
                               </div>
                             )}
-                            action={<Button size="sm" onClick={() => setSearch('')}>검색 초기화</Button>} />
+                            action={<Button size="sm" onClick={() => updateSearch('')}>검색 초기화</Button>} />
               ) : (
                 <EmptyState framed={false} className="flex-1" glyph="compass"
                             message={(

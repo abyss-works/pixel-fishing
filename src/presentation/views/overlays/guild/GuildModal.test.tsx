@@ -18,10 +18,20 @@ const s = vi.hoisted(() => ({
   publicLoading: false,
   publicFailed: false,
   publicRefresh: vi.fn(),
+  guildRefresh: vi.fn(),
   publicQueries: [] as Array<{ q: string; sort: string; enabled: boolean }>,
 }));
 vi.mock('../../../../features/guild/service/useGuild', () => ({
-  useGuild: () => ({ available: true, guild: s.guild, request: s.request, loading: s.loading, failed: s.failed, you: s.you, act: s.act }),
+  useGuild: () => ({
+    available: true,
+    guild: s.guild,
+    request: s.request,
+    loading: s.loading,
+    failed: s.failed,
+    you: s.you,
+    act: s.act,
+    refresh: s.guildRefresh,
+  }),
 }));
 vi.mock('../../../../features/guild/service/useGuildInvite', () => ({
   useGuildInvite: (code: string | null) => ({ preview: code ? s.preview : null, settled: code !== null, failed: false, refresh: vi.fn() }),
@@ -77,6 +87,7 @@ describe('GuildModal', () => {
     s.publicFailed = false;
     s.publicQueries = [];
     s.publicRefresh.mockReset();
+    s.guildRefresh.mockReset();
     s.act.mockReset();
     s.act.mockImplementation(async () => ({ ok: true }));
     vi.clearAllMocks();
@@ -731,11 +742,13 @@ describe('GuildModal', () => {
     expect(searchInput.className).toContain('min-h-[30px]');
     expect(searchInput.className).not.toContain('pf-accent');
 
-    // 3. 정렬 칩: 체크 아이콘 없고 비활성은 테두리·바탕 유지, 활성은 font-bold + 골드
+    // 3. 정렬 칩: 체크 아이콘 없고 비활성은 테두리·바탕 유지, 활성은 font-bold 없이 테두리·글자 대비만 사용
     const activeChip = screen.getByRole('button', { name: '최근 활동순' });
     const inactiveChip = screen.getByRole('button', { name: '레벨순' });
     expect(activeChip.querySelector('[data-glyph="check"]')).toBeNull();
-    expect(activeChip.className).toContain('font-bold');
+    expect(activeChip.className).toContain('border-gold');
+    expect(activeChip.className).toContain('text-gold');
+    expect(activeChip.className).not.toContain('font-bold');
     expect(inactiveChip.className).toContain('border-line');
     expect(inactiveChip.className).toContain('bg-surface-2');
 
@@ -749,7 +762,7 @@ describe('GuildModal', () => {
     expect(screen.getByRole('tooltip')).toHaveTextContent('아주 긴 길드 소개');
     fireEvent.mouseLeave(pitchEl);
 
-    // 5. 검색어 250ms 디바운스
+    // 5. 검색어 250ms 디바운스 및 비움 뒤 재입력 시 옛 검색어 잔류 방지
     s.publicQueries = [];
     fireEvent.change(searchInput, { target: { value: '파도' } });
     expect(s.publicQueries.at(-1)?.q).toBe('');
@@ -757,6 +770,13 @@ describe('GuildModal', () => {
     expect(s.publicQueries.at(-1)?.q).toBe('');
     act(() => { vi.advanceTimersByTime(1); });
     expect(s.publicQueries.at(-1)?.q).toBe('파도');
+    // 검색어 지우기 후 새 검색어 입력 시 이전 디바운스 값('파도')으로 돌아가지 않아야 한다
+    fireEvent.click(screen.getByRole('button', { name: '검색어 지우기' }));
+    expect(s.publicQueries.at(-1)?.q).toBe('');
+    fireEvent.change(searchInput, { target: { value: '새' } });
+    expect(s.publicQueries.at(-1)?.q).toBe('');
+    act(() => { vi.advanceTimersByTime(250); });
+    expect(s.publicQueries.at(-1)?.q).toBe('새');
 
     // 6. 바로 가입 ConfirmDialog가 dialogHost 포털로 ModalCard 밖에 뜨며 바깥 클릭 시 부모 모달이 닫히지 않는다
     fireEvent.click(joinBtn);
@@ -788,8 +808,12 @@ describe('GuildModal', () => {
     expect(screen.getByLabelText('길드 이름').className).not.toContain('pf-accent');
     expect(screen.getByLabelText('길드 이름').className).toContain('min-h-[30px]');
 
-    // 9. 길드 정보 조회 실패 시 재시도 버튼
+    // 9. 길드 정보 조회 실패 시 onRetry 없이도 useGuild().refresh()로 다시 시도하고, onRetry 주입 시 우선 사용한다
     s.failed = true;
+    rerender(<GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={onClose} />);
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(s.guildRefresh).toHaveBeenCalledTimes(1);
+
     rerender(<GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={onClose} onRetry={onRetry} />);
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
     expect(onRetry).toHaveBeenCalledTimes(1);
