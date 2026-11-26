@@ -11,6 +11,7 @@ describe('최초 구글 연결 선물 표시 모델', () => {
       {
         id: 'luck-small',
         spriteKind: 'potion',
+        kindLabel: '비약',
         name: '작은 바다 영약',
         grade: 'special',
         qty: 1,
@@ -21,21 +22,23 @@ describe('최초 구글 연결 선물 표시 모델', () => {
       {
         id: 'cook-lunch-bundle',
         spriteKind: 'lunch',
+        kindLabel: '도시락',
         name: '생선 탈리',
         grade: 'legendary',
         qty: 1,
         summaryLine: '방치 낚시 중 입질 대기가 줄고 희귀 이상 출현이 늘어요.',
-        durationLabel: '9시간',
+        durationLabel: '방치 9시간',
         effects: ['입질 대기 −5%', '희귀 이상 +5%'],
       },
       {
         id: 'cook-bait-legendary',
         spriteKind: 'bait',
+        kindLabel: '미끼',
         name: '용연향 미끼',
         grade: 'legendary',
         qty: 3,
         summaryLine: '수동 낚시에서 전설 어종이 훨씬 잘 낚여요.',
-        durationLabel: '5분',
+        durationLabel: '수동 5분',
         effects: ['전설 어종 출현 비중 +80%'],
       },
     ]);
