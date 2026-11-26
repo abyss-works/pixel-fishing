@@ -1,8 +1,17 @@
 // 액션 엔드포인트 특성 테스트 — 같은 입력에 같은 응답과 같은 DB 상태가 나오는지 실제 Postgres로 고정한다.
 // 스냅샷은 데이터 계층 전환 전 구현으로 기록했다. 전환 뒤 구현도 이 스냅샷을 그대로 통과해야 한다.
 // 난수는 고정 시드, 시각은 고정된 가짜 시계, uid는 테스트 번호로 고정한다.
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { Client } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { WebSocket } from 'ws';
+import { LIVE_PATH } from '../src/game/rules/live.js';
+import type { ServerMessage } from '../src/game/rules/live.js';
+import { saveChat } from './_data/chat.js';
+import { liveIdentity } from './_data/profile.js';
+import { attachLive } from './_server/live.js';
+import { provideSetNick } from './_server/livePresence.js';
 import { achievementById } from '../src/game/content/achievements.js';
 import { artifactById, artifactLevelCost } from '../src/game/content/artifacts.js';
 import { BOATS } from '../src/game/content/boats.js';
@@ -2293,5 +2302,114 @@ describe('바운티 해금 완화 — 일반 즉시 개방·네임드 전설 제
     const questMissing = offeredQuestsFor('pacific', 'named', uidMissing, TODAY_KST)[0];
     const res = await callAction(userToken(uidMissing), { type: 'acceptQuest', questId: questMissing.id, port: 'harbor' });
     expect(res).toMatchObject({ status: 422, body: { error: 'dex-incomplete' } });
+  });
+});
+
+describe('실시간 닉네임 즉시 동기화', () => {
+  it('setNickname 성공 시에만 setNick을 호출하고 중복·형식 오류 시에는 호출하지 않는다', async () => {
+    const calls: Array<[string, string]> = [];
+    provideSetNick((u, n) => { calls.push([u, n]); });
+    try {
+      const uid = await seed({ state: {}, nickname: '기존이름' });
+      await seed({ state: {}, nickname: '중복이름' });
+
+      const okRes = await callAction(userToken(uid), { type: 'setNickname', nickname: '변경성공' });
+      expect(okRes.status).toBe(200);
+      expect(calls).toEqual([[uid, '변경성공']]);
+
+      vi.setSystemTime(Date.parse(NOW) + 2000);
+      const dupRes = await callAction(userToken(uid), { type: 'setNickname', nickname: '중복이름' });
+      expect(dupRes).toMatchObject({ status: 422, body: { error: 'nickname-taken' } });
+
+      vi.setSystemTime(Date.parse(NOW) + 4000);
+      const badRes = await callAction(userToken(uid), { type: 'setNickname', nickname: '!' });
+      expect(badRes.status).toBe(422);
+      expect(calls).toEqual([[uid, '변경성공']]);
+    } finally {
+      provideSetNick(() => {});
+    }
+  });
+
+  it('setNickname DB 커밋 직후 재연결 없이 접속자 목록·피어 전파·후속 채팅에 새 닉네임이 반영된다', async () => {
+    const uidA = await seed({ state: {}, nickname: '처음선장' });
+    const uidB = await seed({ state: {}, nickname: '관찰선장' });
+    const { db } = database();
+    const server = createServer();
+    const live = attachLive(server, {
+      origin: LOCAL_ORIGIN,
+      stale: () => false,
+      authenticate: async (req) => {
+        const uid = req.headers.cookie;
+        if (!uid) return null;
+        const { nick, boat } = await liveIdentity(db, uid);
+        return { uid, nick: nick ?? '낚시꾼', boat, guest: false };
+      },
+      chat: {
+        save: (user, text, guild) => saveChat(db, user.uid, user.nick, text, guild),
+        recent: async () => [],
+        blocked: async () => [],
+        guildOf: async () => null,
+      },
+      recordSession: () => {},
+      savePosition: () => {},
+    });
+    provideSetNick((u, n) => live.setNick(u, n));
+
+    const connectWs = (uid: string) => {
+      const port = (server.address() as AddressInfo).port;
+      const ws = new WebSocket(`ws://127.0.0.1:${port}${LIVE_PATH}`, {
+        headers: { origin: LOCAL_ORIGIN, cookie: uid },
+      });
+      const queue: ServerMessage[] = [];
+      const waiters: Array<(m: ServerMessage) => void> = [];
+      ws.on('message', (raw) => {
+        const msg = JSON.parse(raw.toString()) as ServerMessage;
+        const w = waiters.shift();
+        if (w) w(msg);
+        else queue.push(msg);
+      });
+      const next = () => new Promise<ServerMessage>((resolve) => {
+        const msg = queue.shift();
+        if (msg) resolve(msg);
+        else waiters.push(resolve);
+      });
+      return { ws, next };
+    };
+
+    try {
+      await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+      const a = connectWs(uidA);
+      const b = connectWs(uidB);
+      await a.next();
+      await b.next();
+
+      a.ws.send(JSON.stringify({ t: 'move', region: 'sea', x: 10, y: 20, dir: 1, line: false }));
+      expect(await b.next()).toMatchObject({ t: 'join', presence: { uid: uidA, nick: '처음선장' } });
+
+      const res = await callAction(userToken(uidA), { type: 'setNickname', nickname: '바뀐선장' });
+      expect(res.status).toBe(200);
+
+      expect(await b.next()).toEqual({ t: 'nick', uid: uidA, nick: '바뀐선장' });
+      expect(live.online().find(o => o.uid === uidA)?.nick).toBe('바뀐선장');
+      expect(live.presenceOf(uidA)?.nick).toBe('바뀐선장');
+
+      a.ws.send(JSON.stringify({ t: 'chat', text: '변경 후 첫 채팅' }));
+      expect(await a.next()).toMatchObject({ t: 'chat', line: { uid: uidA, nick: '바뀐선장', text: '변경 후 첫 채팅' } });
+      expect(await b.next()).toMatchObject({ t: 'chat', line: { uid: uidA, nick: '바뀐선장', text: '변경 후 첫 채팅' } });
+
+      const { rows } = await env.client.query<{ nick: string; text: string }>(
+        'select nick, text from public.chat_messages where user_id = $1 order by id desc limit 1',
+        [uidA],
+      );
+      expect(rows[0]).toEqual({ nick: '바뀐선장', text: '변경 후 첫 채팅' });
+
+      a.ws.close();
+      b.ws.close();
+    } finally {
+      provideSetNick(() => {});
+      live.close();
+      server.closeAllConnections();
+      await new Promise<void>(resolve => server.close(() => resolve()));
+    }
   });
 });

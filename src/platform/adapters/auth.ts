@@ -3,7 +3,7 @@
 import { createAuthClient } from 'better-auth/client';
 import { anonymousClient } from 'better-auth/client/plugins';
 import type { AcceptConsentResult, AccountLookup, AuthResult, ConsentStatus } from '../api/types';
-import { networkError, requestFailure, serverError, unauthorizedError } from './requestFailure';
+import { networkError, rateLimitedError, requestFailure, serverError, unauthorizedError } from './requestFailure';
 
 /** 서버(스테이징·운영)에 붙는 빌드인가 — 빌드 때 정해진다 */
 export const isCloud = import.meta.env.VITE_CLOUD === '1';
@@ -35,7 +35,12 @@ export async function ensureSession(): Promise<string | null> {
   }
   if (user) return user.id;
   const { data, error } = await authClient.signIn.anonymous();
-  if (error) return null;
+  if (error) {
+    if (error.status === 429) {
+      throw rateLimitedError('요청이 너무 잦아요. 잠시 뒤 다시 시도해 주세요.', { code: 'rate_limited' });
+    }
+    return null;
+  }
   return data?.user.id ?? null;
 }
 
