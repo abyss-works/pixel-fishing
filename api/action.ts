@@ -52,7 +52,7 @@ import { parseAction } from '../src/game/rules/actionSchema.js';
 import {
   isDebugTableCommand, parseBountyResetKind, parseSnapshotBounty, reduceDebug, revokeUnmetClaimableAchievements,
 } from '../src/game/rules/debug.js';
-import { guestActionVerdict } from '../src/game/rules/guest.js';
+import { guestActionVerdict, guestCouponVerdict } from '../src/game/rules/guest.js';
 import type { DebugTableCommand } from '../src/game/rules/debug.js';
 import { expiredTicketIssuedAt } from '../src/game/rules/challenge.js';
 import { clearsOf, splitQuestRows } from '../src/game/rules/bountyRows.js';
@@ -638,17 +638,20 @@ async function route(req: Req, res: Res): Promise<void> {
     return;
   }
 
-  // 동적 쿠폰(coupons 테이블) — 정식 계정의 비정적 쿠폰 액션일 때만 서버가 직접 조회 (게스트는 정적 쿠폰만 허용)
+  // 동적 쿠폰(coupons 테이블) — 비정적 쿠폰 액션일 때 서버가 조회하며, 선착순 제한이 있는 쿠폰은 게스트 사용을 막는다
   let dynamicCoupon: Coupon | null = null;
   let dynamicCouponMeta: DynamicCouponForUser | null = null;
   let consumeCode: ((tx: Executor) => Promise<boolean>) | null = null;
   let consumeUnavailableReason: 'relief-invalid' | 'coupon-used' | 'coupon-invalid' = 'relief-invalid';
 
-  if (action.type === 'redeemCoupon' && typeof action.code === 'string' && user.email !== null) {
+  if (action.type === 'redeemCoupon' && typeof action.code === 'string') {
     const code = action.code.trim();
     if (!Object.hasOwn(COUPONS, code)) {
       const found = await step('db-read', { uid, action: action.type }, () => findCouponForUser(db, code, uid, requestISO));
       if (found) {
+        if (user.email === null && guestCouponVerdict(code, found.maxRedemptions) !== 'ok') {
+          throw new ApiError(403, 'account-only');
+        }
         if (found.userRedemptions >= found.perAccountLimit) throw new ApiError(422, 'coupon-used');
         if (found.maxRedemptions !== null && found.totalRedemptions >= found.maxRedemptions) {
           throw new ApiError(422, 'coupon-invalid');
