@@ -59,6 +59,25 @@ const sampleOpsHealth = () => ({
   alerts: [],
 });
 
+const sampleClientMetrics = (days = 7) => ({
+  days,
+  summary: {
+    reports: 85,
+    lcp: { p50Ms: 1120, p95Ms: 2450, avgMs: 1380, samples: 80 },
+    inp: { p50Ms: 48, p95Ms: 185, avgMs: 64, samples: 70 },
+    ttfb: { p50Ms: 130, p95Ms: 420, avgMs: 175, samples: 82 },
+    clsAvg: 0.042,
+    actionRtt: { p50Ms: 42, p95Ms: 160, avgMs: 58, samples: 600, timeouts: 1, conflicts409: 2 },
+    meRtt: { p50Ms: 28, p95Ms: 95, avgMs: 36, samples: 190, timeouts: 0 },
+    canvasFrames: 1500,
+    canvasLongFrames: 18,
+    longFramePct: 1.2,
+    wsReconnects: 5,
+    wsAbnormalCloses: 1,
+  },
+  daily: [],
+});
+
 vi.mock('../../../../platform/api', () => ({
   api: {
     admin: {
@@ -66,6 +85,7 @@ vi.mock('../../../../platform/api', () => ({
       changelog: vi.fn(async () => []),
       httpMetrics: vi.fn(async (days = 30) => sampleHttpMetrics(days)),
       opsHealth: vi.fn(async () => sampleOpsHealth()),
+      clientMetrics: vi.fn(async (days = 7) => sampleClientMetrics(days)),
     },
   },
 }));
@@ -151,5 +171,9 @@ describe('운영 탭', () => {
     expect(screen.getByText('서버, 소켓, DB 상태 및 경보')).toBeInTheDocument();
     expect(await screen.findByText('활성 경보 없음')).toBeInTheDocument();
     expect(vi.mocked(api.admin.opsHealth)).toHaveBeenCalledWith(7);
+    expect(screen.getByText('클라이언트 체감 성능 및 단절')).toBeInTheDocument();
+    expect(await screen.findByLabelText('2450ms')).toBeInTheDocument();
+    expect(screen.getByLabelText('1.2%')).toBeInTheDocument();
+    expect(vi.mocked(api.admin.clientMetrics)).toHaveBeenCalledWith(7);
   });
 });

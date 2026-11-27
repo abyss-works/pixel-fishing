@@ -1,6 +1,9 @@
 export type {
   AdminBountyFunnelRow,
   AdminChatReportRow,
+  AdminClientLatencyStat,
+  AdminClientMetrics,
+  AdminClientMetricsDayRow,
   AdminConversionTimeBucket,
   AdminConversionTimeBucketId,
   AdminCouponMutationResult,

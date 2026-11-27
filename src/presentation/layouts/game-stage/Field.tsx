@@ -19,6 +19,7 @@ import {
   emitLineSnapSound,
 } from '../../../features/sound/service/soundEvents';
 import { useGameTime } from '../../../features/gameplay/service/useGameTime';
+import { reportCanvasFrame } from '../../../features/gameplay/service/clientMetrics';
 import { useSchools } from '../../../features/gameplay/service/schoolDay';
 import { useFishArtStyle } from '../../../features/display/service/fishArtStyle';
 import { alertEncounter } from '../../../features/bounty/service/encounterAlert';
@@ -247,6 +248,7 @@ export default function Field({
         else presentEvent(event, setToast, game, region);
       },
       onScene,
+      onFrame: reportCanvasFrame,
       guest,
       seedContext: () => {
         const version = saveVersion?.() ?? null;

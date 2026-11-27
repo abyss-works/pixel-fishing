@@ -25,6 +25,7 @@ import LoadingOverlay from './presentation/views/overlays/update/LoadingOverlay'
 import { DevEnvContext, devEnvOf } from './presentation/views/devtools/devEnv';
 import { BUILD_LABEL, DEPLOY_ENV } from './buildId';
 import { QueryProvider } from './core/QueryProvider';
+import { initClientMetrics } from './platform/api';
 
 // 장소 복원 규칙: 지금 열린 바다 지역이면 그 지역에서, 닫힌·알 수 없는 지역이면 배 1단계 미만은 마을·이상은 고향 항구에서 시작하고,
 // 거점(집·항구)은 그대로 재개한다. 바다 지역 안의 좌표는 마지막 위치(resumePoint)가 정한다.
@@ -49,6 +50,7 @@ const LazyEnvBadge = DEV_TOOLS_BUILD ? lazy(() => import('./presentation/views/d
 
 function AppContent() {
   useSoundSettings();
+  useEffect(() => initClientMetrics(), []);
   const { log, setToast, toasts, dismissToast, setMirrorEnv } = useMessageLog([]);
   const {
     game, dispatch, nickname, profileStatus, devTools, rename, sync, syncLabel,

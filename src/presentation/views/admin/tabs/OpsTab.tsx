@@ -11,6 +11,7 @@ import { EVENT_LABELS } from '../../../../features/admin/model/metrics';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { Cell, CellGrid, TabPage } from '../layout';
 import ChangelogSection from './ChangelogSection';
+import ClientMetricsSection from './ClientMetricsSection';
 import { HttpMetricsOpsSection } from './HttpMetricsSection';
 import ServerHealthSection from './ServerHealthSection';
 
@@ -74,6 +75,8 @@ export default function OpsTab() {
         <HttpMetricsOpsSection granted={access === 'granted'} />
 
         <ServerHealthSection granted={access === 'granted'} />
+
+        <ClientMetricsSection granted={access === 'granted'} />
 
         <ChangelogSection />
 
