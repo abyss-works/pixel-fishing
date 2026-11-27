@@ -109,7 +109,7 @@ function Line({ m, mine, onPick }: { m: Msg; mine: boolean; onPick?: (m: Msg) =>
       <span className={cx('w-0.5 shrink-0 self-stretch my-0.5', CHANNEL_BAR_CLS[m.channel])} aria-hidden="true" />
       <div className="min-w-0 flex-1 break-words">
         {m.author && badgeGlyph && (
-          <PixelIcon glyph={badgeGlyph} size={12} className="mr-1 text-staff align-[-2px]" />
+          <PixelIcon glyph={badgeGlyph} size={12} className="mr-1 text-gold align-[-2px]" />
         )}
         {m.author && (m.from && onPick
           ? <button type="button" className={cx(nameCls, 'hover:underline cursor-pointer')} onClick={() => onPick(m)}>{m.author}</button>

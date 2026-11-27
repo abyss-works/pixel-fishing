@@ -246,7 +246,7 @@ describe('메시지 창', () => {
     expect(cls).toContain('group-has-[input:focus]:bg-');
   });
 
-  it('staffBadge가 있는 운영진 메시지는 mine 여부와 무관하게 별 아이콘과 닉네임이 text-staff이고 본문 채널 색상을 유지하며, 일반 플레이어는 기존 닉네임 색상을 유지한다', () => {
+  it('staffBadge가 있는 운영진 메시지는 mine 여부와 무관하게 별 아이콘이 text-gold, 닉네임이 text-staff이고 본문 채널 색상을 유지하며, 일반 플레이어는 기존 닉네임 색상을 유지한다', () => {
     const at = new Date();
     const myAdminMsg = createMessage(1, '공지 확인', {
       channel: 'local', author: '내관리자', now: at, from: { uid: 'me', chatId: 1 }, staffBadge: 'admin',
@@ -276,32 +276,32 @@ describe('메시지 창', () => {
     );
     const lines = [...screen.getByRole('log').children];
 
-    // 관리자(mine: true, local): 큰 별과 닉네임 버튼 모두 text-staff, 본문은 text-text
+    // 관리자(mine: true, local): 큰 별은 text-gold, 닉네임 버튼은 text-staff, 본문은 text-text
     const myAdminBtn = within(lines[0] as HTMLElement).getByRole('button', { name: '내관리자' });
     const myAdminIcon = lines[0].querySelector('svg[data-glyph="staffStarLarge"]');
     expect(myAdminIcon).not.toBeNull();
-    expect(myAdminIcon).toHaveClass('text-staff');
+    expect(myAdminIcon).toHaveClass('text-gold');
     expect(myAdminIcon?.nextElementSibling).toBe(myAdminBtn);
     expect(myAdminBtn).toHaveClass('text-staff');
     expect(lines[0]).toHaveClass('text-text');
 
-    // 관리자(mine: false, local): 큰 별과 닉네임 버튼 모두 text-staff
+    // 관리자(mine: false, local): 큰 별은 text-gold, 닉네임 버튼은 text-staff
     const otherAdminBtn = within(lines[1] as HTMLElement).getByRole('button', { name: '타관리자' });
     const otherAdminIcon = lines[1].querySelector('svg[data-glyph="staffStarLarge"]');
-    expect(otherAdminIcon).toHaveClass('text-staff');
+    expect(otherAdminIcon).toHaveClass('text-gold');
     expect(otherAdminBtn).toHaveClass('text-staff');
 
-    // 운영자(mine: true, local): 작은 별과 닉네임 버튼 모두 text-staff
+    // 운영자(mine: true, local): 작은 별은 text-gold, 닉네임 버튼은 text-staff
     const myModBtn = within(lines[2] as HTMLElement).getByRole('button', { name: '내운영자' });
     const myModIcon = lines[2].querySelector('svg[data-glyph="staffStarSmall"]');
-    expect(myModIcon).toHaveClass('text-staff');
+    expect(myModIcon).toHaveClass('text-gold');
     expect(myModBtn).toHaveClass('text-staff');
 
-    // 운영자(mine: false, guild): 작은 별과 닉네임 버튼 모두 text-staff, 본문은 text-guild
+    // 운영자(mine: false, guild): 작은 별은 text-gold, 닉네임 버튼은 text-staff, 본문은 text-guild
     const otherModBtn = within(lines[3] as HTMLElement).getByRole('button', { name: '타운영자' });
     const otherModIcon = lines[3].querySelector('svg[data-glyph="staffStarSmall"]');
     expect(otherModIcon).not.toBeNull();
-    expect(otherModIcon).toHaveClass('text-staff');
+    expect(otherModIcon).toHaveClass('text-gold');
     expect(otherModIcon?.nextElementSibling).toBe(otherModBtn);
     expect(otherModBtn).toHaveClass('text-staff');
     expect(lines[3]).toHaveClass('text-guild');
