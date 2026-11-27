@@ -32,6 +32,7 @@ const WRITE_OWNERS: Record<string, readonly string[]> = {
   '_data/notices.ts': ['notices'],
   '_data/widget.ts': ['widget_auth_codes', 'widget_tokens'],
   '_data/rank.ts': ['ranking_weekly_fame'],
+  '_data/integrity.ts': ['integrity_states', 'integrity_events'],
   '_data/admin.ts': ['admins', 'admin_audit_logs'],
 };
 

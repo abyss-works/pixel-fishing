@@ -152,6 +152,8 @@ export interface ActionDeps {
   event?: { championshipActive: boolean; settle?: EventSettleGrant | null } | null;
   /** 계정을 연결하지 않은 익명 계정인가 - 서버가 공급한다. 게스트는 가방 초과 때 기운을 얻지 않고 놓아준다 */
   guest?: boolean;
+  /** 서버가 계정별로 계산해 공급하는 추첨 보정 최종 배수. 없으면 중립(1)이다 */
+  integrityModifier?: number;
 }
 
 // 클라 연출용 부가 결과 — HTTP 경계를 넘으므로 직렬화 가능해야 한다 (Fish 객체 대신 id)
@@ -549,6 +551,9 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       // 네임드 조우 천장도 여기서 센다(drawNamedEncounter) — 진척은 상태에 남는다.
       const guild = deps.guild ?? NO_GUILD_EFFECTS;
       const achBonuses = achievementBonusesOf(state);
+      const integrity = typeof deps.integrityModifier === 'number' && Number.isFinite(deps.integrityModifier) && deps.integrityModifier > 0
+        ? deps.integrityModifier
+        : 1;
       // 파워 게이트(서버 권위 백스톱)·요리 슬롯 효과·시간대 — prepareCatchDraw가 단일 계산한다(rng를 쓰지 않는다).
       const pz = powerZones(state, action.spot);
       const { judgment, phaseOpts, cook } = prepareCatchDraw(
@@ -557,7 +562,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       );
       const named = drawNamedEncounter(state.namedPity, encounterQuests(deps.bounty), action.spot, deps.now,
         deps.rng, action.forceEncounter === true, namedWeightBonus(state, action.judgment, deps.now, guild, achBonuses),
-        totalLuckMultOf(state, deps.now, 'named'));
+        totalLuckMultOf(state, deps.now, 'named') * integrity);
       const namedHit = named.quest;
       const ticketEvents: GameEvent[] = namedHit
         ? [{ type: 'ticket', payload: { questId: namedHit.id, ...(named.byCeiling ? { pity: true } : {}) } }]
@@ -568,16 +573,16 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const drawn = drawCatch(state, action.spot, judgment, rodPower(state), pz.mult, deps.rng,
         {
           ...phaseOpts,
-          rarityLuck: totalLuckMultOf(state, deps.now, 'rarity'),
-          legendaryLuck: totalLuckMultOf(state, deps.now, 'legendary'),
+          rarityLuck: totalLuckMultOf(state, deps.now, 'rarity') * integrity,
+          legendaryLuck: totalLuckMultOf(state, deps.now, 'legendary') * integrity,
           nightLuck: totalLuckMultOf(state, deps.now, 'night'),
-          mutationLuck: totalLuckMultOf(state, deps.now, 'mutation'),
+          mutationLuck: totalLuckMultOf(state, deps.now, 'mutation') * integrity,
         },
         id => (state.dex[id]?.normal?.count ?? 0) > 0, guild, cook, achBonuses);
       const { fish, extras } = drawn;
       // NEW 판정은 폼별 — 변이는 별개 개체 (v0.3.3)
       const isNew = (state.dex[fish.id]?.[extras.form]?.count ?? 0) === 0;
-      const info = buildCatchInfo(fish, extras, isNew, totalLuckMultOf(state, deps.now, 'bigCatch'));
+      const info = buildCatchInfo(fish, extras, isNew, totalLuckMultOf(state, deps.now, 'bigCatch') * integrity);
       const rawInst = makeInstance(fish, extras, {
         uid: deps.newUid(), now: deps.now, spot: action.spot, judgment,
       });

@@ -25,7 +25,8 @@ describe('테스트 데이터베이스', () => {
     const names = rows.map(r => r.name);
     for (const t of ['saves_current', 'fish_instances', 'records', 'saves', 'profiles', 'events', 'letters',
       'coupons', 'reliefs', 'bounty_accepts', 'bounty_progress', 'bounty_tickets', 'bounty_licenses',
-      'bounty_clears', 'mails', 'daily_fortunes', 'notices', 'ranking_weekly_fame', 'widget_auth_codes', 'widget_tokens', 'v_bounty_funnel_daily']) {
+      'bounty_clears', 'mails', 'daily_fortunes', 'notices', 'ranking_weekly_fame', 'widget_auth_codes', 'widget_tokens',
+      'integrity_states', 'integrity_events', 'v_bounty_funnel_daily']) {
       expect(names).toContain(t);
     }
   });
@@ -1200,7 +1201,7 @@ describe('테스트 데이터베이스', () => {
     });
   });
 
-  describe('길드 재가입 대기 (0057)', () => {
+  describe('길드 재가입 대기 (0059)', () => {
     const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
 
     it('guild_rejoin_cooldowns 기본값·서버 전용 RLS·auth.users 연쇄 삭제·다운/업 라운드트립을 검증한다', async () => {
@@ -1236,12 +1237,12 @@ describe('테스트 데이터베이스', () => {
       const other = new Client({ connectionString: copy.url });
       await other.connect();
       try {
-        await other.query(migration('0057_guild_rejoin_cooldown.down.sql'));
+        await other.query(migration('0059_guild_rejoin_cooldown.down.sql'));
         expect((await other.query(
           `select 1 from information_schema.tables where table_schema = 'public' and table_name = 'guild_rejoin_cooldowns'`,
         )).rows).toHaveLength(0);
 
-        await other.query(migration('0057_guild_rejoin_cooldown.sql'));
+        await other.query(migration('0059_guild_rejoin_cooldown.sql'));
         expect((await other.query(
           `select 1 from information_schema.tables where table_schema = 'public' and table_name = 'guild_rejoin_cooldowns'`,
         )).rows).toHaveLength(1);

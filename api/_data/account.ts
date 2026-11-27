@@ -21,6 +21,7 @@ import { deleteUserSaves } from './save.js';
 import { deleteUserEvents } from './telemetry.js';
 import { deleteUserCounters } from './achievements.js';
 import { deleteUserFortunes } from './fortune.js';
+import { deleteUserIntegrity } from './integrity.js';
 import { deleteUserWidgetAuth, deleteWidgetTokensForUser } from './widget.js';
 import { deleteUserWeeklyFame } from './rank.js';
 
@@ -146,6 +147,7 @@ async function deleteAccountRows(tx: Executor, uid: string): Promise<void> {
   await deleteUserConsents(tx, uid);
   await deleteUserCounters(tx, uid);
   await deleteUserFortunes(tx, uid);
+  await deleteUserIntegrity(tx, uid);
   await deleteUserWidgetAuth(tx, uid);
   await deleteUserWeeklyFame(tx, uid);
   await deleteUserCouponRedemptions(tx, uid);
