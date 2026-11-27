@@ -24,6 +24,9 @@ export const HAT_SOURCE_LABEL: Record<HatSource, string> = {
   event: '이벤트',
 };
 
+/** 우편·쿠폰 단건 최대 골드 상한 */
+export const MAIL_GOLD_MAX = 1_000_000_000;
+
 /** 한 번의 우편 보내기로 지급할 수 있는 총 골드 상한 */
 export const MAX_MAIL_BATCH_TOTAL_GOLD = 500_000_000;
 

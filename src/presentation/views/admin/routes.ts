@@ -26,6 +26,7 @@ export const ADMIN_SECTIONS = {
     { key: 'letters', label: '편지' },
     { key: 'mail', label: '우편' },
     { key: 'notices', label: '공지' },
+    { key: 'coupons', label: '쿠폰' },
   ],
   analysis: [
     { key: 'economy', label: '경제' },
@@ -49,7 +50,7 @@ const DEFAULT_ROUTE: AdminRoute = { tab: 'overview' };
 
 const MAINTAINER_SECTIONS = {
   players: ADMIN_SECTIONS.players.filter(s => s.key === 'abuse'),
-  comms: ADMIN_SECTIONS.comms.filter(s => s.key === 'notices'),
+  comms: ADMIN_SECTIONS.comms.filter(s => s.key === 'notices' || s.key === 'coupons'),
   analysis: ADMIN_SECTIONS.analysis,
 } as const;
 

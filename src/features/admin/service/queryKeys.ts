@@ -9,6 +9,7 @@ export const adminKeys = {
   recentEvents: ['admin', 'recentEvents'] as const,
   letters: ['admin', 'letters'] as const,
   notices: ['admin', 'notices'] as const,
+  coupons: ['admin', 'coupons'] as const,
   changelog: ['admin', 'changelog'] as const,
   chatReports: ['admin', 'chatReports'] as const,
   mails: ['admin', 'mails'] as const,

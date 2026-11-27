@@ -1,14 +1,16 @@
-// 2계층 운영자(maintainer) 전용 Zero-PII 워크스페이스 — UsersTab·UserDetail·LettersTab·MailTab 청크를 참조하지 않는다.
+// 2계층 운영자(maintainer) 전용 Zero-PII 워크스페이스 — PII가 포함된 편지·우편·명부·상세 청크를 참조하지 않는다.
 import { useEffect, useState } from 'react';
+import SubTabs from '../../ui/SubTabs';
 import { AdminGateBanner } from './access';
 import AdminShellHeader from './AdminShellHeader';
 import { TabPage } from './layout';
-import { adminRouteOf, canonicalizeAdminHash, parseAdminHash, pushAdminHash } from './routes';
+import { adminRouteOf, canonicalizeAdminHash, parseAdminHash, pushAdminHash, sectionsForRole } from './routes';
 import type { AdminRoute, AdminTab } from './routes';
 import AnalysisTab from './tabs/AnalysisTab';
 import AntiAbuseTab from './tabs/AntiAbuseTab';
 import BalanceTab from './tabs/BalanceTab';
 import ContentTab from './tabs/ContentTab';
+import CouponsTab from './tabs/CouponsTab';
 import LiveTab from './tabs/LiveTab';
 import NoticesTab from './tabs/NoticesTab';
 import OpsTab from './tabs/OpsTab';
@@ -48,8 +50,20 @@ export default function MaintainerWorkspace() {
           </TabPage>
         )}
         {route.tab === 'comms' && (
-          <TabPage title="소통" context="게임 상단 공지 카드와 공지사항 창에 띄울 기간제 공지를 등록하고 관리해요.">
-            <NoticesTab />
+          <TabPage
+            title="소통"
+            context={route.section === 'coupons'
+              ? '보상 쿠폰을 발행하고 유효 기간과 사용 현황을 관리해요.'
+              : '게임 상단 공지 카드와 공지사항 창에 띄울 기간제 공지를 등록하고 관리해요.'}
+          >
+            <div className="max-w-[520px]">
+              <SubTabs
+                items={sectionsForRole('comms', 'maintainer').map(s => ({ key: s.key, label: s.label }))}
+                activeKey={route.section}
+                onSelect={section => go({ tab: 'comms', section })}
+              />
+            </div>
+            {route.section === 'coupons' ? <CouponsTab /> : <NoticesTab />}
           </TabPage>
         )}
         {route.tab === 'analysis' &&

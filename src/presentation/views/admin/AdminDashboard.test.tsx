@@ -164,4 +164,31 @@ describe('운영자(maintainer) Zero-PII 워크스페이스', () => {
     fireEvent.click(badgeBtn);
     await waitFor(() => expect(setStaffBadge).toHaveBeenCalledWith(true));
   });
+
+  it('maintainer 권한으로 #/admin/comms/coupons 경로에 접근해 쿠폰 관리 화면을 렌더링한다', async () => {
+    window.history.replaceState(null, '', '#/admin/comms/coupons');
+    render(
+      <QueryProvider>
+        <AdminAuthCtx.Provider value={{
+          access: 'granted',
+          uid: 'maintainer-1',
+          role: 'maintainer',
+          showStaffBadge: false,
+          setStaffBadge: async () => {},
+        }}>
+          <MaintainerWorkspace />
+        </AdminAuthCtx.Provider>
+      </QueryProvider>,
+    );
+
+    expect(window.location.hash).toBe('#/admin/comms/coupons');
+    expect(screen.getByRole('button', { name: '공지' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '쿠폰', pressed: true })).toBeInTheDocument();
+    expect(screen.getByText('발행된 쿠폰 (0)')).toBeInTheDocument();
+    expect(screen.getByText('새 쿠폰 발행')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '공지' }));
+    expect(window.location.hash).toBe('#/admin/comms/notices');
+    expect(screen.getByText('공지 목록 (0)')).toBeInTheDocument();
+  });
 });
