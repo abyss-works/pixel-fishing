@@ -26,7 +26,7 @@ export interface Presence { uid: string; nick: string; boat: number; fame: numbe
 export interface ChatLine { id: number; uid: string; nick: string; text: string; at: string; staffBadge?: 'admin' | 'maintainer' }
 
 export type ServerMessage =
-  | { t: 'hello'; you: string; others: Presence[]; recentChat: ChatLine[]; recentLocalChat?: ChatLine[]; recentGuildChat?: ChatLine[]; notices?: NoticeItem[] } // recentGuildChat: 길드원일 때만, notices: 마감 전·최근 마감 공지
+  | { t: 'hello'; you: string; others: Presence[]; recentChat: ChatLine[]; recentLocalChat?: ChatLine[]; recentGuildChat?: ChatLine[]; notices?: NoticeItem[]; globalCooldownExempt?: boolean } // recentGuildChat: 길드원일 때만, notices: 마감 전·최근 마감 공지, globalCooldownExempt: 전체 채팅 쿨다운 면제 여부
   | { t: 'move'; uid: string; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean; bob?: Bob; look?: Look; idleMs?: number }
   | { t: 'stop'; uid: string }
   | { t: 'join'; presence: Presence }
@@ -42,7 +42,7 @@ export type ServerMessage =
   | { t: 'guild'; kind: 'request' | 'approved' | 'rejected' | 'updated'; guild: string; nick: string | null }
   | { t: 'mail' } // 새 우편 도착 알림. 받는 사람에게만 간다
   | { t: 'catchFx'; uid: string; region: RegionId; x: number; y: number; toX?: number; toY?: number; fishId: string; form?: FormId } // 다른 플레이어가 물고기를 낚았을 때 수면 튀어오르기 연출
-  | { t: 'error'; code: 'chat-guest' | 'chat-rate' | 'chat-length' | 'chat-restricted' | 'chat-no-guild' | 'chat-global-cooldown' | 'chat-duplicate'; retryAfterMs?: number };
+  | { t: 'error'; code: 'chat-guest' | 'chat-rate' | 'chat-length' | 'chat-restricted' | 'chat-no-guild' | 'chat-global-cooldown'; retryAfterMs?: number };
 
 /** WebSocket 경로. 게임 서버와 같은 오리진이다 */
 export const LIVE_PATH = '/api/live';
@@ -111,8 +111,6 @@ export const CHAT_RATE_WINDOW_MS = 10_000;
 export const CHAT_RATE_MAX = 25;
 /** 전체 채팅 방 재전송 대기 시간 */
 export const GLOBAL_CHAT_COOLDOWN_MS = 10_000;
-/** 직전과 같은 문구의 채팅 반복 차단 시간 */
-export const CHAT_DUPLICATE_WINDOW_MS = 10_000;
 /** 연결 직후 hello에 싣는 최근 대화 수 */
 export const CHAT_RECENT = 50;
 /** 기간제 공지 제목 최대 길이(코드 포인트 수) */
@@ -151,19 +149,6 @@ export function globalChatCooldown(
   const elapsed = now - lastGlobalAt;
   if (elapsed >= GLOBAL_CHAT_COOLDOWN_MS) return { ok: true, retryAfterMs: 0 };
   return { ok: false, retryAfterMs: Math.max(1, GLOBAL_CHAT_COOLDOWN_MS - elapsed) };
-}
-
-/** 직전 메시지와 10초 이내에 트림 기준 동일한 비어 있지 않은 문구인지 판정한다. */
-export function isDuplicateChat(
-  prev: { text: string; at: number } | null | undefined,
-  text: string,
-  now: number,
-): boolean {
-  if (!prev || !Number.isFinite(prev.at)) return false;
-  if (now - prev.at >= CHAT_DUPLICATE_WINDOW_MS) return false;
-  const trimmed = text.trim();
-  if (!trimmed) return false;
-  return prev.text.trim() === trimmed;
 }
 
 /** 공지가 현재 시각 기준 활성 구간(시작 이상 ~ 종료 미만)에 있는지 판정한다. */
