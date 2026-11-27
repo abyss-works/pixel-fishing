@@ -418,10 +418,14 @@ describe('남대서양 지도', () => {
   });
 
   it('WORLD_MAP과 EARTH_MAP 구현 영역 안에 closed: true 셀이 없다', () => {
-    for (const code of WORLD_MAP.codes) {
-      expect(WORLD_MAP.palette[code]?.closed ?? false).toBe(false);
+    const closedWorld: number[] = [];
+    for (let i = 0; i < WORLD_MAP.codes.length; i++) {
+      if (WORLD_MAP.palette[WORLD_MAP.codes[i]]?.closed) closedWorld.push(i);
     }
+    expect(closedWorld).toEqual([]);
+
     const win = implementedRect();
+    const closedEarth: string[] = [];
     for (let r = 0; r < EARTH_MAP.rows; r++) {
       const cy = (r + 0.5) * EARTH_MAP.cellH;
       if (cy < win.y || cy >= win.y + win.h) continue;
@@ -429,9 +433,10 @@ describe('남대서양 지도', () => {
         const cx = (c + 0.5) * EARTH_MAP.cellW;
         if (cx < win.x || cx >= win.x + win.w) continue;
         const def = EARTH_MAP.palette[EARTH_MAP.codes[r * EARTH_MAP.cols + c]];
-        expect(def?.closed ?? false, `EARTH_MAP (${c},${r})`).toBe(false);
+        if (def?.closed) closedEarth.push(`(${c},${r})`);
       }
     }
+    expect(closedEarth).toEqual([]);
   });
 
   it('WORLD_LEGEND N 범례와 inClosedSea·closedSeaBlock 인프라는 합성 N 셀에서 계속 동작한다', () => {
