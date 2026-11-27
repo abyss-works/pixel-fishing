@@ -12,10 +12,51 @@ import OpsTab from './OpsTab';
 const sampleHttpMetrics = (days = 30) => ({
   days,
   scope: 'app_server' as const,
-  summary: { total: 500, status426: 1, status429: 10, status5xx: 2, rate426: 0.002, rate429: 0.02, rate5xx: 0.004 },
+  summary: {
+    total: 500,
+    status409: 3,
+    status426: 1,
+    status429: 10,
+    status4xx: 20,
+    status5xx: 2,
+    rate409: 0.006,
+    rate426: 0.002,
+    rate429: 0.02,
+    rate4xx: 0.04,
+    rate5xx: 0.004,
+    latency: { p50Ms: 22, p95Ms: 140, p99Ms: 310, avgMs: 45, samples: 480 },
+    rateLimitReasons: { catchTooSoon: 6, letterGap: 3, other: 1 },
+  },
   daily: [{ day: todayKST(), total: 500, status426: 1, status429: 10, status5xx: 2, rate426: 0.002, rate429: 0.02, rate5xx: 0.004 }],
-  byRoute: [{ routeGroup: 'action' as const, total: 400, status426: 1, status429: 8, status5xx: 2, rate426: 0.0025, rate429: 0.02, rate5xx: 0.005 }],
+  byRoute: [{
+    routeGroup: 'action' as const,
+    total: 400,
+    status409: 3,
+    status426: 1,
+    status429: 8,
+    status4xx: 16,
+    status5xx: 2,
+    rate409: 0.0075,
+    rate426: 0.0025,
+    rate429: 0.02,
+    rate4xx: 0.04,
+    rate5xx: 0.005,
+    latency: { p50Ms: 20, p95Ms: 130, p99Ms: 290, avgMs: 40, samples: 390 },
+  }],
   rows: [{ day: todayKST(), routeGroup: 'action' as const, total: 400, status426: 1, status429: 8, status5xx: 2 }],
+});
+
+const sampleOpsHealth = () => ({
+  runtime: { uptimeSec: 3600, rssMb: 200, heapUsedMb: 100, heapTotalMb: 150 },
+  database: { poolTotal: 5, poolIdle: 4, poolWaiting: 0, poolMax: 20, dbSizeBytes: 52_428_800, activeConnections: 2 },
+  httpSummary: { total: 500, status426: 1, status429: 10, status5xx: 2, rate426: 0.002, rate429: 0.02, rate5xx: 0.004 },
+  ws: {
+    onlineCount: 8,
+    summary: { upgradesOk: 80, reject401: 1, reject403: 0, reject500: 0, closeNormal: 70, closeAbnormal: 2, closeIdleTimeout: 3 },
+    daily: [],
+  },
+  slowRequests: [],
+  alerts: [],
 });
 
 vi.mock('../../../../platform/api', () => ({
@@ -24,6 +65,7 @@ vi.mock('../../../../platform/api', () => ({
       deployHost: () => null,
       changelog: vi.fn(async () => []),
       httpMetrics: vi.fn(async (days = 30) => sampleHttpMetrics(days)),
+      opsHealth: vi.fn(async () => sampleOpsHealth()),
     },
   },
 }));
@@ -92,8 +134,22 @@ describe('운영 탭', () => {
     expect(screen.getByRole('img', { name: '최근 30일 일별 429 응답 수' })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: '최근 30일 일별 5xx 오류 수' })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '7일' }));
+    fireEvent.click(within(screen.getByRole('group', { name: 'HTTP 지표 기간 선택' })).getByRole('button', { name: '7일' }));
     await waitFor(() => expect(vi.mocked(api.admin.httpMetrics)).toHaveBeenCalledWith(7));
     expect(screen.getByRole('img', { name: '최근 7일 일별 429 응답 수' })).toBeInTheDocument();
+  });
+
+  it('HTTP 지연 백분위, 세부 상태/429 사유와 서버, 소켓, DB 상태 및 경보 섹션을 함께 렌더링한다', async () => {
+    show('granted');
+    expect(await screen.findByText('140ms')).toBeInTheDocument();
+    expect(screen.getByText('22ms')).toBeInTheDocument();
+    expect(screen.getByText('310ms')).toBeInTheDocument();
+    expect(screen.getByText('45ms')).toBeInTheDocument();
+    expect(screen.getByText('캐치 6')).toBeInTheDocument();
+    expect(screen.getByText('편지 3')).toBeInTheDocument();
+    expect(screen.getByText('기타 1')).toBeInTheDocument();
+    expect(screen.getByText('서버, 소켓, DB 상태 및 경보')).toBeInTheDocument();
+    expect(await screen.findByText('활성 경보 없음')).toBeInTheDocument();
+    expect(vi.mocked(api.admin.opsHealth)).toHaveBeenCalledWith(7);
   });
 });

@@ -80,5 +80,8 @@ export const readAdminOnboardingFunnel = () => api.admin.onboardingFunnel();
 /** 앱 서버 HTTP 오류율·429 지표 */
 export const readAdminHttpMetrics = (days = 30) => api.admin.httpMetrics(days);
 
+/** 서버 런타임, 소켓, DB 상태 및 임계 경보 */
+export const readAdminOpsHealth = (days = 7) => api.admin.opsHealth(days);
+
 /** 밸런스 라이브 지표. 이벤트 지표는 보관 기간(7일) 안의 범위만 의미가 있다 */
 export const readAdminBalanceLive = (days?: number) => api.admin.balanceLive(days);

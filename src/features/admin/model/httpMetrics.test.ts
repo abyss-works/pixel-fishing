@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AdminHttpMetrics } from './types';
-import { formatErrorRate, HTTP_SCOPE_NOTICE, selectHttpMetricsView } from './httpMetrics';
+import { formatErrorRate, formatLatencyMs, HTTP_SCOPE_NOTICE, selectHttpMetricsView } from './httpMetrics';
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -78,5 +78,107 @@ describe('httpMetrics 모델', () => {
     expect(view.summary.rate5xxText).toBe('—');
     expect(view.series.collected).toBe(0);
     expect(view.series.labels).toHaveLength(7);
+  });
+
+  it('지연 시간(ms)을 정수 문자열 또는 빈 표기(--)로 포맷한다', () => {
+    expect(formatLatencyMs(0)).toBe('0ms');
+    expect(formatLatencyMs(42)).toBe('42ms');
+    expect(formatLatencyMs(42.6)).toBe('43ms');
+    expect(formatLatencyMs(null)).toBe('--');
+    expect(formatLatencyMs(undefined)).toBe('--');
+    expect(formatLatencyMs(Number.NaN)).toBe('--');
+    expect(formatLatencyMs(-5)).toBe('--');
+  });
+
+  it('409/4xx 세부 상태, 지연 백분위(p50/p95/p99/평균), 429 사유와 경로별 지연을 계산한다', () => {
+    const view = selectHttpMetricsView(sample({
+      summary: {
+        total: 1000,
+        status409: 12,
+        status426: 5,
+        status429: 25,
+        status4xx: 50,
+        status5xx: 10,
+        rate409: 0.012,
+        rate426: 0.005,
+        rate429: 0.025,
+        rate4xx: 0.05,
+        rate5xx: 0.01,
+        latency: { p50Ms: 24, p95Ms: 180, p99Ms: 420, avgMs: 48.4, samples: 950 },
+        rateLimitReasons: { catchTooSoon: 15, letterGap: 7, other: 3 },
+      },
+      byRoute: [
+        {
+          routeGroup: 'action',
+          total: 800,
+          status409: 10,
+          status426: 4,
+          status429: 20,
+          status4xx: 40,
+          status5xx: 8,
+          rate409: 0.0125,
+          rate426: 0.005,
+          rate429: 0.025,
+          rate4xx: 0.05,
+          rate5xx: 0.01,
+          latency: { p50Ms: 20, p95Ms: 160, p99Ms: 390, avgMs: 41, samples: 780 },
+        },
+      ],
+    }), 7);
+
+    expect(view.summary).toMatchObject({
+      status409: 12,
+      status4xx: 50,
+      rate409Text: '1.2%',
+      rate4xxText: '5%',
+      latency: {
+        p50Text: '24ms',
+        p95Text: '180ms',
+        p99Text: '420ms',
+        avgText: '48ms',
+        samples: 950,
+      },
+      rateLimitReasons: {
+        catchTooSoon: 15,
+        letterGap: 7,
+        other: 3,
+      },
+    });
+    expect(view.byRoute[0]).toMatchObject({
+      status409: 10,
+      status4xx: 40,
+      rate409Text: '1.25%',
+      p95Text: '160ms',
+      avgText: '41ms',
+    });
+  });
+
+  it('확장 선택 필드가 없거나 데이터가 null이어도 안전하게 기본값을 반환한다', () => {
+    const partial = selectHttpMetricsView(sample(), 7);
+    expect(partial.summary).toMatchObject({
+      status409: 0,
+      status4xx: 0,
+      rate409Text: '0%',
+      rate4xxText: '0%',
+      latency: { p50Text: '--', p95Text: '--', p99Text: '--', avgText: '--', samples: 0 },
+      rateLimitReasons: { catchTooSoon: 0, letterGap: 0, other: 0 },
+    });
+    expect(partial.byRoute[0]).toMatchObject({
+      status409: 0,
+      status4xx: 0,
+      rate409Text: '0%',
+      p95Text: '--',
+      avgText: '--',
+    });
+
+    const empty = selectHttpMetricsView(null, 7);
+    expect(empty.summary).toMatchObject({
+      status409: null,
+      status4xx: null,
+      rate409Text: '--',
+      rate4xxText: '--',
+      latency: { p50Text: '--', p95Text: '--', p99Text: '--', avgText: '--', samples: 0 },
+      rateLimitReasons: { catchTooSoon: 0, letterGap: 0, other: 0 },
+    });
   });
 });

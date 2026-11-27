@@ -1,6 +1,8 @@
 // 앱 서버 HTTP 오류율·429 지표 — 개요 탭 요약 카드와 운영 탭 상세(기간 전환·경로별·일별 추이)가 공유한다.
 import { useMemo, useState } from 'react';
+import Badge from '../../../ui/Badge';
 import DataTable from '../../../ui/DataTable';
+import Inset from '../../../ui/Inset';
 import KpiTile from '../../../ui/KpiTile';
 import Note from '../../../ui/Note';
 import TableBox from '../../../ui/TableBox';
@@ -15,6 +17,7 @@ import { OVERVIEW_RANGE_OPTIONS } from './dayRange';
 import type { DayRange } from './dayRange';
 
 const fmtCount = (v: number | null | undefined) => (v === null || v === undefined ? '—' : fmtNum(v));
+const fmtCountOrDash = (v: number | null | undefined) => (v === null || v === undefined ? '--' : fmtNum(v));
 
 function HttpSummaryKpis({ view, days }: { view: HttpMetricsView; days: number }) {
   const { summary } = view;
@@ -71,6 +74,32 @@ export function HttpMetricsOpsSection({ granted }: { granted: boolean }) {
 
       <HttpSummaryKpis view={view} days={days} />
 
+      <KpiRow>
+        <KpiTile label="p50 지연" value={view.summary.latency.p50Text} hint={`표본 ${fmtNum(view.summary.latency.samples)}건`} size="sm" />
+        <KpiTile label="p95 지연" value={view.summary.latency.p95Text} size="sm" />
+        <KpiTile label="p99 지연" value={view.summary.latency.p99Text} size="sm" />
+        <KpiTile label="평균 지연" value={view.summary.latency.avgText} size="sm" />
+      </KpiRow>
+
+      <Inset className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs">
+        <div className="flex flex-wrap items-center gap-3">
+          <span>
+            409 충돌 <strong className="pf-accent text-gold">{fmtCountOrDash(view.summary.status409)}건</strong>{' '}
+            <span className="text-text-dim">({view.summary.rate409Text})</span>
+          </span>
+          <span>
+            4xx 전체 <strong className="pf-accent text-gold">{fmtCountOrDash(view.summary.status4xx)}건</strong>{' '}
+            <span className="text-text-dim">({view.summary.rate4xxText})</span>
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5 text-text-dim">
+          <span>429 사유:</span>
+          <Badge size="xs">캐치 {fmtNum(view.summary.rateLimitReasons.catchTooSoon)}</Badge>
+          <Badge size="xs">편지 {fmtNum(view.summary.rateLimitReasons.letterGap)}</Badge>
+          <Badge size="xs">기타 {fmtNum(view.summary.rateLimitReasons.other)}</Badge>
+        </div>
+      </Inset>
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <BarsChart
           values={view.series.status429}
@@ -101,11 +130,14 @@ export function HttpMetricsOpsSection({ granted }: { granted: boolean }) {
               <tr>
                 <th className="text-left">경로 묶음</th>
                 <th className="text-right">총 요청</th>
+                <th className="text-right">409</th>
                 <th className="text-right">426</th>
                 <th className="text-right">429</th>
                 <th className="text-right">5xx</th>
                 <th className="text-right">429율</th>
                 <th className="text-right">5xx율</th>
+                <th className="text-right">p95</th>
+                <th className="text-right">평균 지연</th>
               </tr>
             </thead>
             <tbody>
@@ -113,11 +145,14 @@ export function HttpMetricsOpsSection({ granted }: { granted: boolean }) {
                 <tr key={r.routeGroup}>
                   <td className="text-xs">{r.label}</td>
                   <td className="text-right pf-accent text-gold">{fmtNum(r.total)}</td>
+                  <td className="text-right">{fmtNum(r.status409)}</td>
                   <td className="text-right">{fmtNum(r.status426)}</td>
                   <td className="text-right">{fmtNum(r.status429)}</td>
                   <td className="text-right">{fmtNum(r.status5xx)}</td>
                   <td className="text-right text-text-dim">{r.rate429Text}</td>
                   <td className="text-right text-text-dim">{r.rate5xxText}</td>
+                  <td className="text-right text-text-dim">{r.p95Text}</td>
+                  <td className="text-right text-text-dim">{r.avgText}</td>
                 </tr>
               ))}
             </tbody>
