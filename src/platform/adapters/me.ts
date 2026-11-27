@@ -10,9 +10,12 @@ export async function readMe<T>(part: MePart): Promise<T> {
   const startedAt = performance.now();
   let res: Response;
   try {
-    res = await fetch(`/api/me?q=${part}`);
+    res = await fetch(`/api/me?q=${part}`, { signal: AbortSignal.timeout(10_000) });
   } catch (cause) {
-    recordClientApiRtt('me', performance.now() - startedAt, { timeout: true });
+    const name = (cause as { name?: unknown } | null)?.name;
+    if (name === 'TimeoutError' || name === 'AbortError') {
+      recordClientApiRtt('me', performance.now() - startedAt, { timeout: true });
+    }
     throw new AppError('network', `${part} request failed`, {}, { cause });
   }
   recordClientApiRtt('me', performance.now() - startedAt);

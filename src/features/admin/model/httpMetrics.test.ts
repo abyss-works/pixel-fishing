@@ -40,7 +40,9 @@ describe('httpMetrics 모델', () => {
     expect(formatErrorRate(0.01)).toBe('1%');
     expect(formatErrorRate(0.005)).toBe('0.5%');
     expect(formatErrorRate(0.0125)).toBe('1.25%');
-    expect(formatErrorRate(null)).toBe('—');
+    expect(formatErrorRate(null)).toBe('--');
+    expect(formatErrorRate(Number.NaN)).toBe('--');
+    expect(formatErrorRate(Number.POSITIVE_INFINITY)).toBe('--');
   });
 
   it('요약·경로 묶음·일별 날짜 축(미집계 날 NaN 보존)을 계산하고 scope 안내를 제공한다', () => {
@@ -74,8 +76,15 @@ describe('httpMetrics 모델', () => {
   it('데이터가 null이면 빈 요약과 전체 미집계 날짜 축을 반환한다', () => {
     const view = selectHttpMetricsView(null, 7);
     expect(view.summary.total).toBeNull();
-    expect(view.summary.rate429Text).toBe('—');
-    expect(view.summary.rate5xxText).toBe('—');
+    expect(view.summary).toMatchObject({
+      rate409Text: '--',
+      rate426Text: '--',
+      rate429Text: '--',
+      rate4xxText: '--',
+      rate5xxText: '--',
+      errorRateText: '--',
+      latency: { p50Text: '--', p95Text: '--', p99Text: '--', avgText: '--', samples: 0 },
+    });
     expect(view.series.collected).toBe(0);
     expect(view.series.labels).toHaveLength(7);
   });

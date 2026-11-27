@@ -140,7 +140,10 @@ describe('개요 탭', () => {
     show('local');
     expect(within(tile('오늘 DAU')).getByText('—')).toBeInTheDocument();
     expect(within(tile('지금 접속')).getByText('—')).toBeInTheDocument();
-    expect(within(tile('앱 서버 총 요청')).getByText('—')).toBeInTheDocument();
+    expect(within(tile('앱 서버 총 요청')).getByText('--')).toBeInTheDocument();
+    expect(within(tile('5xx 서버 오류')).getByText('--')).toBeInTheDocument();
+    expect(within(tile('429 레이트리밋')).getByText('--')).toBeInTheDocument();
+    expect(within(tile('426 구버전 거부')).getByText('--')).toBeInTheDocument();
     expect(screen.getAllByText('운영 DB에 연결하면 채워져요.').length).toBeGreaterThan(0);
     expect(vi.mocked(api.admin.overview)).not.toHaveBeenCalled();
     expect(vi.mocked(api.admin.httpMetrics)).not.toHaveBeenCalled();

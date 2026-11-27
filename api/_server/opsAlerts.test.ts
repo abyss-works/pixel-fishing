@@ -124,4 +124,43 @@ describe('createOpsAlertDispatcher', () => {
     expect(fetchImpl.mock.calls[0]?.[1]).toMatchObject({ method: 'POST' });
     expect((fetchImpl.mock.calls[0]?.[1] as { signal?: AbortSignal })?.signal).toBeInstanceOf(AbortSignal);
   });
+
+  it('웹훅 응답이 non-2xx(429/500)여도 예외를 던지지 않고 경보 코드와 상태 코드만 console.warn으로 남긴다', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const reportIssue = vi.fn(async () => {});
+      const secretWebhookUrl = 'https://hooks.example.test/services/SECRET_TOKEN_XYZ';
+      const fetchImpl = vi.fn<typeof fetch>()
+        .mockResolvedValueOnce(new Response('rate-limit-secret-body', { status: 429 }))
+        .mockResolvedValueOnce(new Response('internal-error-body', { status: 500 }));
+      const dispatcher = createOpsAlertDispatcher({
+        reportIssue,
+        webhookUrl: secretWebhookUrl,
+        cooldownMs: 0,
+        fetchImpl,
+      });
+
+      const alert = evaluateOpsAlerts({
+        ...healthyInput(),
+        ws: { reject500: 1, closeNormal: 0, closeAbnormal: 0, closeIdleTimeout: 0 },
+      });
+
+      await expect(dispatcher.dispatch(alert)).resolves.toHaveLength(1);
+      await expect(dispatcher.dispatch(alert)).resolves.toHaveLength(1);
+
+      expect(warnSpy).toHaveBeenCalledTimes(2);
+      const call1 = JSON.stringify(warnSpy.mock.calls[0]);
+      const call2 = JSON.stringify(warnSpy.mock.calls[1]);
+      expect(call1).toContain('ws-upgrade-500');
+      expect(call1).toContain('429');
+      expect(call2).toContain('ws-upgrade-500');
+      expect(call2).toContain('500');
+      expect(call1 + call2).not.toContain('hooks.example.test');
+      expect(call1 + call2).not.toContain('SECRET_TOKEN_XYZ');
+      expect(call1 + call2).not.toContain('rate-limit-secret-body');
+      expect(call1 + call2).not.toContain('internal-error-body');
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
 });

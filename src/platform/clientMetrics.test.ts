@@ -180,4 +180,37 @@ describe('clientMetrics 브라우저 수집기', () => {
     expect(flushClientMetricsBeacon()).toBe(false);
     stop();
   });
+
+  it('cleanup() 호출 후 이전 CLS 누적치가 남지 않아 StrictMode 이중 마운트 시 이중 집계되지 않는다', async () => {
+    const observers: Array<{ types: string[]; cb: (list: { getEntries: () => unknown[] }) => void }> = [];
+    class FakePO {
+      private cb: (list: { getEntries: () => unknown[] }) => void;
+      constructor(cb: (list: { getEntries: () => unknown[] }) => void) {
+        this.cb = cb;
+      }
+      observe(opts: { type?: string; entryTypes?: string[] }) {
+        observers.push({ types: opts.type ? [opts.type] : (opts.entryTypes ?? []), cb: this.cb });
+      }
+      disconnect() {}
+    }
+    vi.stubGlobal('PerformanceObserver', FakePO);
+
+    const stop1 = initClientMetrics();
+    const clsObs1 = observers.find(o => o.types.includes('layout-shift'));
+    clsObs1?.cb({ getEntries: () => [{ value: 0.05, hadRecentInput: false }] });
+    stop1();
+
+    expect(flushClientMetricsBeacon({ force: true })).toBe(false);
+
+    observers.length = 0;
+    const stop2 = initClientMetrics();
+    const clsObs2 = observers.find(o => o.types.includes('layout-shift'));
+    clsObs2?.cb({ getEntries: () => [{ value: 0.05, hadRecentInput: false }] });
+
+    expect(flushClientMetricsBeacon({ force: true })).toBe(true);
+    const blob = sendBeacon.mock.calls[0]?.[1] as Blob;
+    const payload = JSON.parse(await blob.text()) as { cls?: number };
+    expect(payload.cls).toBe(0.05);
+    stop2();
+  });
 });

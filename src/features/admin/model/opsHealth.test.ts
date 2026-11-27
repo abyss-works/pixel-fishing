@@ -104,6 +104,8 @@ describe('opsHealth 모델', () => {
     expect(formatUptime(300)).toBe('5분');
     expect(formatUptime(3660)).toBe('1시간 1분');
     expect(formatUptime(90_065)).toBe('1일 1시간 1분');
+    expect(formatUptime(-1)).toBe('--');
+    expect(formatUptime(Number.NaN)).toBe('--');
     expect(formatDbSize(157_286_400)).toBe('150 MB');
     expect(formatDbSize(1_610_612_736)).toBe('1.5 GB');
     expect(formatDbSize(null)).toBe('확인 불가');
@@ -190,6 +192,7 @@ describe('opsHealth 모델', () => {
     expect(view.runtime.uptimeText).toBe('--');
     expect(view.runtime.memoryText).toBe('--');
     expect(view.database.poolText).toBe('--');
+    expect(view.database.poolCompactText).toBe('--');
     expect(view.database.dbSizeText).toBe('--');
     expect(view.database.activeConnectionsText).toBe('--');
     expect(view.ws.onlineCount).toBeNull();
@@ -198,5 +201,47 @@ describe('opsHealth 모델', () => {
     expect(view.ws.daily).toEqual([]);
     expect(view.slowRequests).toEqual([]);
     expect(view.alerts).toEqual([]);
+  });
+
+  it('비정상 숫자·지연·시각 입력을 빈 표기(--)로 일관되게 처리한다', () => {
+    const view = selectOpsHealthView(sampleHealth({
+      runtime: {
+        uptimeSec: Number.NaN,
+        rssMb: Number.NaN,
+        heapUsedMb: 128,
+        heapTotalMb: 192,
+      },
+      ws: {
+        onlineCount: Number.NaN,
+        summary: {
+          upgradesOk: 10,
+          reject401: 0,
+          reject403: 0,
+          reject500: 0,
+          closeNormal: 0,
+          closeAbnormal: 0,
+          closeIdleTimeout: 0,
+        },
+        daily: [],
+      },
+      slowRequests: [
+        {
+          at: 'invalid-date',
+          method: 'GET',
+          routeGroup: 'api',
+          path: '/api/me',
+          statusCode: 200,
+          durationMs: -1,
+        },
+      ],
+    }));
+
+    expect(view.runtime.uptimeText).toBe('--');
+    expect(view.runtime.memoryText).toBe('--');
+    expect(view.ws.onlineCountText).toBe('--');
+    expect(view.slowRequests[0]).toMatchObject({
+      atText: '--',
+      durationText: '--',
+    });
   });
 });

@@ -18,9 +18,9 @@ export const HTTP_ROUTE_GROUP_LABELS: Record<AdminHttpMetricRouteGroup, string> 
 export const HTTP_SCOPE_NOTICE =
   '앱 서버 통과 요청 기준이에요. 클러스터 앞단(ingress-nginx)에서 직접 차단한 429 응답은 앱 서버에 닿지 않아 포함되지 않아요.';
 
-/** 0~1 오류율을 소수 둘째 자리까지의 퍼센트 문자열로 포맷한다 */
+/** 0~1 오류율을 소수 둘째 자리까지의 퍼센트 문자열 또는 빈 표기('--')로 포맷한다 */
 export function formatErrorRate(rate: number | null): string {
-  if (rate === null || !Number.isFinite(rate)) return '—';
+  if (rate === null || !Number.isFinite(rate)) return '--';
   const pct = Number((rate * 100).toFixed(2));
   return `${pct}%`;
 }
@@ -142,11 +142,11 @@ export function selectHttpMetricsView(data: AdminHttpMetrics | null, days: numbe
         status5xx: null,
         errorTotal: null,
         rate409Text: '--',
-        rate426Text: '—',
-        rate429Text: '—',
+        rate426Text: '--',
+        rate429Text: '--',
         rate4xxText: '--',
-        rate5xxText: '—',
-        errorRateText: '—',
+        rate5xxText: '--',
+        errorRateText: '--',
         latency: { ...EMPTY_LATENCY_VIEW },
         rateLimitReasons: { ...EMPTY_RATE_LIMIT_REASONS },
       },

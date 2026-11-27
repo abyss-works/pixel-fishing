@@ -69,6 +69,18 @@ describe('parseClientMetricBeacon', () => {
       expect(parseClientMetricBeacon(bad), JSON.stringify(bad)).toBeNull();
     }
   });
+
+  it('canvasLongFrames가 canvasFrames보다 크면 canvasFrames로 상한 보정한다', () => {
+    const parsed = parseClientMetricBeacon({
+      canvasFrames: 12,
+      canvasLongFrames: 30,
+    });
+    expect(parsed).toMatchObject({
+      canvasFrames: 12,
+      canvasLongFrames: 12,
+    });
+    expect(parseClientMetricBeacon({ canvasFrames: 0, canvasLongFrames: 5 })).toBeNull();
+  });
 });
 
 describe('createClientMetrics', () => {
