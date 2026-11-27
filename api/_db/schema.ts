@@ -136,6 +136,14 @@ export const mails = pgTable('mails', {
   claimedAt: at('claimed_at'),
 });
 
+export const adminMailIdempotency = pgTable('admin_mail_idempotency', {
+  key: text('key').primaryKey(),
+  fingerprint: text('fingerprint').notNull(),
+  result: jsonb('result'),
+  expiresAt: at('expires_at').notNull(),
+  createdAt: at('created_at').notNull().defaultNow(),
+});
+
 export const bountyAccepts = pgTable('bounty_accepts', {
   id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
   userId: uuid('user_id').notNull(),
