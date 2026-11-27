@@ -9,8 +9,8 @@ vi.mock('../useMobileLayout', () => ({ useMobileLayout: () => layout.mobile }));
 import HudHeader from './HudHeader';
 
 const menu = <button type="button" aria-label="메뉴 열기">m</button>;
-const header = (onOpenStats = () => {}, eventButton?: React.ReactNode) =>
-  render(<HudHeader game={newState()} onOpenStats={onOpenStats} eventButton={eventButton} menu={menu} />);
+const header = (onOpenStats = () => {}, eventButton?: React.ReactNode, pipButton?: React.ReactNode) =>
+  render(<HudHeader game={newState()} onOpenStats={onOpenStats} pipButton={pipButton} eventButton={eventButton} menu={menu} />);
 
 const bar = () => screen.getByRole('button', { name: /^스탯창 열기/ }).closest('div')!;
 const menuSlot = () => screen.getByRole('button', { name: '메뉴 열기' }).parentElement!;
@@ -151,5 +151,15 @@ describe('HudHeader PC 레이아웃 - 자원 바 | 메뉴 버튼 두 틀', () =>
     const menuBtn = screen.getByRole('button', { name: '메뉴 열기' });
     expect(evt.parentElement).toBe(menuSlot());
     expect(evt.nextElementSibling).toBe(menuBtn);
+  });
+
+  it('pipButton 슬롯을 넘기면 PC 첫째 열 왼쪽 끝에 배치한다', () => {
+    header(() => {}, undefined, <button type="button" aria-label="미니창 열기">p</button>);
+    const pip = screen.getByRole('button', { name: '미니창 열기' });
+    const pipSlot = pip.parentElement!;
+    expect(pipSlot.parentElement).toBe(row());
+    expect(pipSlot.className).toContain('col-start-1');
+    expect(pipSlot.className).toContain('justify-self-start');
+    expect(pipSlot.className.split(' ')).not.toContain('absolute');
   });
 });

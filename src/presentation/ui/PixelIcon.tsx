@@ -19,7 +19,8 @@ export type GlyphId =
   | 'cloudOk' | 'cloudSyncing' | 'cloudError'
   | 'megaphone'
   | 'clover' | 'trophy' | 'volumeOn' | 'volumeOff' | 'music' | 'back'
-  | 'staffStarLarge' | 'staffStarSmall';
+  | 'staffStarLarge' | 'staffStarSmall'
+  | 'pip' | 'pipScale';
 
 const CLOUD_CELLS: Cell[] = [[4, 2, 3, 1], [3, 3, 5, 1], [2, 4, 8, 1], [1, 5, 10, 1], [0, 6, 12, 3], [1, 9, 10, 1]];
 
@@ -337,6 +338,20 @@ const GLYPHS: Record<GlyphId, { cells: Cell[]; holes?: Cell[] }> = {
       [5, 2, 2, 2], [2, 4, 8, 1], [3, 5, 6, 1], [4, 6, 4, 1],
       [3, 7, 6, 1], [3, 8, 2, 1], [7, 8, 2, 1],
       [2, 9, 2, 1], [8, 9, 2, 1],
+    ],
+  },
+  // 미니창(Document PiP) — 바깥 창 프레임과 우하단 작은 창
+  pip: {
+    cells: [
+      [0, 1, 12, 1], [0, 2, 1, 8], [11, 2, 1, 3], [0, 10, 5, 1],
+      [6, 6, 6, 5],
+    ],
+  },
+  // 창 크기 전환 — 대각 양방향 화살표
+  pipScale: {
+    cells: [
+      [7, 1, 4, 1], [10, 2, 1, 3], [9, 2, 1, 1], [8, 3, 1, 1], [7, 4, 1, 1],
+      [1, 10, 4, 1], [1, 7, 1, 3], [2, 9, 1, 1], [3, 8, 1, 1], [4, 7, 1, 1],
     ],
   },
 };

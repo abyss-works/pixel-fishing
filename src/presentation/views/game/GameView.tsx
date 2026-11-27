@@ -108,6 +108,9 @@ import { useBlockZoom } from '../../layouts/useBlockZoom';
 import { keyboardStyle, useVisibleBox } from '../../layouts/visibleBox';
 import { HOTKEY_TIER, hasModifier, useKeyScope } from '../../ui/hotkeys';
 import { windowHostRef } from '../../ui/windowLayer';
+import { usePipMonitor } from '../../../features/pip/service/usePipMonitor';
+import PipMonitorPortal, { PipHudButton } from '../../ui/pip/PipMonitorPortal';
+import pipMonitorCss from '../../ui/pip/pipMonitor.css?inline';
 
 interface GameViewProps {
   game: GameState;
@@ -225,6 +228,7 @@ export default function GameView(props: GameViewProps) {
   // 길드 보너스는 서버가 적용한다. 화면은 서버가 알려 준 레벨과 효과를 보이기만 한다(스탯 창 보너스 탭, 가방 칸)
   const guildBonus = guild ? { level: guild.growth.level, effects: guild.effects, bonuses: guild.bonuses } : null;
   const bagBonus = guildBonus?.effects.bag ?? 0;
+  const pip = usePipMonitor({ game, scene, bagBonus, pipCss: pipMonitorCss });
   useBagFullAlert(selectBagStatus(game, bagBonus).full);
   useFriendAlerts(props.account !== null, props.setToast);
   useGuildAlerts(props.account !== null, props.setToast, guild);
@@ -588,6 +592,9 @@ export default function GameView(props: GameViewProps) {
                    ) : null}
                    chips={showPresence ? <PresenceChip region={region} onOpen={() => setPlayersOpen(true)} /> : null}
                    badge={props.badge} accountState={accountState}
+                   pipButton={!mobile && pip.supported ? (
+                     <PipHudButton open={pip.isOpen} onToggle={() => void pip.togglePip()} />
+                   ) : undefined}
                    eventButton={activeEvents ? (
                      mobile ? (
                        <MobileEventHudButton
@@ -743,6 +750,32 @@ export default function GameView(props: GameViewProps) {
         account={props.account} accountChecked={props.accountChecked} accountFailed={props.accountFailed} uid={props.uid} onAuthChanged={props.onAuthChanged}
         nickname={props.nickname} profileStatus={props.profileStatus} onRename={props.onRename}
       />
+
+      {pip.isOpen && pip.pipWindow && (
+        <PipMonitorPortal
+          pipWindow={pip.pipWindow}
+          spotInfo={pip.spotInfo}
+          fishingActive={pip.fishingActive}
+          bagCount={pip.bag.count}
+          bagCap={pip.bag.cap}
+          bagPercent={pip.bag.percent}
+          bagFull={pip.bag.full}
+          bagTone={pip.bagTone}
+          clockText={pip.clockText}
+          daytime={pip.daytime}
+          displayGameHour={pip.displayGameHour}
+          getLiveGameHour={pip.getLiveGameHour}
+          fishArtStyle={pip.fishArtStyle}
+          recentCatches={pip.recentCatches}
+          leapTrigger={pip.leapTrigger}
+          catchFxSeq={pip.catchFxSeq}
+          exitingLogItem={pip.exitingLogItem}
+          scalePreset={pip.scalePreset}
+          zoom={pip.zoom}
+          onCycleScale={pip.cycleScale}
+          onFocusGameTab={pip.focusGameTab}
+        />
+      )}
 
       {props.blocker}
     </div>

@@ -21,6 +21,7 @@ import {
 import { useGameTime } from '../../../features/gameplay/service/useGameTime';
 import { useSchools } from '../../../features/gameplay/service/schoolDay';
 import { useFishArtStyle } from '../../../features/display/service/fishArtStyle';
+import { setPipFishingPhase } from '../../../features/pip/service/pipLiveStore';
 import { alertEncounter } from '../../../features/bounty/service/encounterAlert';
 import { effectiveLookForRegion } from '../../../features/live/model/live';
 import { liveFrame, useLivePosition } from '../../../features/live/service/useLive';
@@ -170,6 +171,10 @@ export default function Field({
   const observer = useRef<ResizeObserver | null>(null);
   const [engine] = useState(() => new GameFieldEngine(region, game, schools, initialPos));
   const snapshot = useSyncExternalStore(engine.subscribe, engine.getSnapshot, engine.getSnapshot);
+  useEffect(() => {
+    setPipFishingPhase(snapshot.phase);
+    return () => setPipFishingPhase('idle');
+  }, [snapshot.phase]);
   // 실시간 채널 — 내 위치를 보내고, 같은 바다의 다른 플레이어와 내 말풍선을 엔진이 프레임마다 그린다
   const readPosition = useCallback(() => {
     const pos = engine.getPosition();

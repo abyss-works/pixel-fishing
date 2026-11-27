@@ -16,10 +16,12 @@ import { useMobileLayout } from '../useMobileLayout';
 // 화면 키보드 때문에 보이는 영역이 위로 밀리면(--keyboard-top) 두 틀이 그만큼 아래로 비켜서 보이는 영역 안에 남는다. 위치 변환이 아니라 상대 위치 오프셋이라 창의 기준 상자를 만들지 않는다.
 // 자원 바를 누르면 스탯 창이 열린다.
 // 헤더는 채팅과 같은 층(chrome)이라 스테이지 위 HUD(카드 묶음 포함) 위에 놓이고, 창의 바탕이 헤더까지 덮는다. 메뉴 버튼 자리(펼친 줄 포함)는 한 단 높은 층(menu-row)이라 DOM 순서와 무관하게 채팅 위에 놓인다.
-export default function HudHeader({ game, bagBonus = 0, onOpenStats, eventButton, menu }: {
+export default function HudHeader({ game, bagBonus = 0, onOpenStats, pipButton, eventButton, menu }: {
   game: GameState;
   bagBonus?: number;
   onOpenStats: () => void;
+  /** PC 좌상단에 놓이는 미니창 버튼 */
+  pipButton?: ReactNode;
   /** 메뉴 버튼 왼쪽에 놓이는 이벤트 버튼 */
   eventButton?: ReactNode;
   /** 메뉴 버튼(펼친 줄 포함) */
@@ -40,6 +42,11 @@ export default function HudHeader({ game, bagBonus = 0, onOpenStats, eventButton
   }
   return (
     <div className={cx('absolute inset-x-0 top-0 grid grid-cols-[1fr_auto_1fr] items-center px-(--hdr-inset) pt-(--hdr-inset) pointer-events-none', HEADER_TIER_CLASS)}>
+      {pipButton && (
+        <div className="relative z-(--z-menu-row) col-start-1 justify-self-start pointer-events-auto">
+          {pipButton}
+        </div>
+      )}
       <div className="relative z-(--z-chrome) col-start-2 pointer-events-auto">
         <ResourceBar game={game} bagBonus={bagBonus} onOpen={onOpenStats} />
       </div>
