@@ -1252,4 +1252,55 @@ describe('테스트 데이터베이스', () => {
       }
     });
   });
+
+  describe('is_admin() 역할 제한 (0060)', () => {
+    const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
+
+    const checkIsAdmin = async (c: Client, uid: string): Promise<boolean> => {
+      await c.query('begin');
+      try {
+        await c.query('set local role authenticated');
+        await c.query(`select set_config('request.jwt.claim.sub', $1, true)`, [uid]);
+        const { rows } = await c.query<{ ok: boolean }>(`select public.is_admin() as ok`);
+        return rows[0].ok;
+      } finally {
+        await c.query('rollback');
+      }
+    };
+
+    it('role = admin일 때만 true이고 maintainer와 비관리자는 false이며 다운/업 라운드트립이 동작한다', async () => {
+      const adminUid = randomUUID();
+      const maintainerUid = randomUUID();
+      const plainUid = randomUUID();
+      for (const uid of [adminUid, maintainerUid, plainUid]) {
+        await client.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, false)`, [uid, `${uid}@example.test`]);
+      }
+      await client.query(`insert into public.admins (user_id, role) values ($1, 'admin'), ($2, 'maintainer')`, [adminUid, maintainerUid]);
+
+      expect(await checkIsAdmin(client, adminUid)).toBe(true);
+      expect(await checkIsAdmin(client, maintainerUid)).toBe(false);
+      expect(await checkIsAdmin(client, plainUid)).toBe(false);
+
+      // 다운/업 라운드트립
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        for (const uid of [adminUid, maintainerUid]) {
+          await other.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, false)`, [uid, `${uid}@example.test`]);
+        }
+        await other.query(`insert into public.admins (user_id, role) values ($1, 'admin'), ($2, 'maintainer')`, [adminUid, maintainerUid]);
+
+        await other.query(migration('0060_is_admin_role_guard.down.sql'));
+        expect(await checkIsAdmin(other, maintainerUid)).toBe(true);
+
+        await other.query(migration('0060_is_admin_role_guard.sql'));
+        expect(await checkIsAdmin(other, adminUid)).toBe(true);
+        expect(await checkIsAdmin(other, maintainerUid)).toBe(false);
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
 });
