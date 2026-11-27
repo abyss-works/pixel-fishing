@@ -116,8 +116,13 @@ function connect(url: string, uid: string | null, origin = ORIGIN): Client {
   return { ws, messages, next, closed };
 }
 
-const rejected = (url: string, uid: string | null, origin = ORIGIN) => new Promise<number>((resolve) => {
-  const ws = new WebSocket(url, { headers: { origin, ...(uid ? { cookie: uid } : {}) } });
+const rejected = (
+  url: string,
+  uid: string | null,
+  origin = ORIGIN,
+  extraHeaders: Record<string, string> = {},
+) => new Promise<number>((resolve) => {
+  const ws = new WebSocket(url, { headers: { origin, ...(uid ? { cookie: uid } : {}), ...extraHeaders } });
   ws.on('unexpected-response', (_req, res) => resolve(res.statusCode ?? 0));
   ws.on('error', () => {});
 });
@@ -1244,5 +1249,116 @@ describe('실시간 채널 관측 지표 및 오류 훅', () => {
       'normal',
     ]);
     expect(errors.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('프리렌더 차단 및 업그레이드 세대 경합 방지', () => {
+  it('Sec-Purpose 또는 Purpose 프리렌더·프리페치 업그레이드 요청을 인증 전에 403으로 거부한다', async () => {
+    const authenticate = vi.fn(async () => ({ uid: 'u1', nick: 'n-u1', boat: 1, fame: 0, guest: false }));
+    const rejectedStatuses: number[] = [];
+    const { url } = await start({
+      authenticate,
+      metrics: {
+        onUpgradeOk: () => {},
+        onReject: (status) => { rejectedStatuses.push(status); },
+        onClose: () => {},
+      },
+    });
+
+    expect(await rejected(url, 'u1', ORIGIN, { 'Sec-Purpose': 'prefetch;prerender' })).toBe(403);
+    expect(await rejected(url, 'u1', ORIGIN, { Purpose: 'prefetch' })).toBe(403);
+    expect(authenticate).not.toHaveBeenCalled();
+    expect(rejectedStatuses).toEqual([403, 403]);
+  });
+
+  it('같은 계정의 선행 업그레이드가 비동기 조회 중 지연되는 동안 후속 업그레이드가 먼저 열려도 신 연결은 4000으로 끊기지 않는다', async () => {
+    let recentCall = 0;
+    let releaseFirstRecent!: (lines: ChatLine[]) => void;
+    const firstRecentStarted = new Promise<void>((resolve) => {
+      // 첫 번째 recent 호출 시점을 테스트가 관찰할 수 있게 훅을 둔다
+      releaseFirstRecent = () => resolve();
+    });
+    let resolveFirstRecent!: (lines: ChatLine[]) => void;
+
+    const events: string[] = [];
+    const { url, live } = await start({
+      chat: {
+        save: async () => null,
+        recent: async (_uid, _limit, guild) => {
+          if (guild !== null) return [];
+          recentCall += 1;
+          if (recentCall === 1) {
+            releaseFirstRecent([]);
+            return new Promise<ChatLine[]>((resolve) => {
+              resolveFirstRecent = resolve;
+            });
+          }
+          return [];
+        },
+        blocked: async () => [],
+        guildOf: async () => null,
+      },
+      metrics: {
+        onUpgradeOk: () => { events.push('ok'); },
+        onReject: (status) => { events.push(`reject:${status}`); },
+        onClose: (kind) => { events.push(`close:${kind}`); },
+      },
+    });
+
+    const first = connect(url, 'u1');
+    await firstRecentStarted;
+
+    const second = connect(url, 'u1');
+    expect(await second.next()).toEqual({ t: 'hello', you: 'u1', others: [], recentChat: [] });
+    expect(live.isOnline('u1')).toBe(true);
+
+    // 지연되던 첫 번째 업그레이드를 뒤늦게 완료시킨다
+    resolveFirstRecent([]);
+    expect(await first.closed).not.toBe(0);
+    await new Promise(r => setTimeout(r, 30));
+
+    // 신 연결은 4000(LIVE_CLOSE_REPLACED)으로 끊기지 않고 그대로 살아 있어야 한다
+    expect(second.ws.readyState).toBe(WebSocket.OPEN);
+    expect(live.isOnline('u1')).toBe(true);
+    expect(events).toEqual(['ok']);
+
+    // 신 연결 정상 종료 후 재연결(메모리 누수·잔류 세대 없음)도 정상 동작한다
+    second.ws.close(1000);
+    expect(await second.closed).toBe(1000);
+    const third = connect(url, 'u1');
+    expect((await third.next()).t).toBe('hello');
+    expect(live.isOnline('u1')).toBe(true);
+  });
+
+  it('선행 업그레이드의 authenticate가 후속 업그레이드 완료 뒤에 늦게 끝나도 신 연결을 끊지 않는다', async () => {
+    let authCall = 0;
+    let notifyFirstAuth!: () => void;
+    const firstAuthStarted = new Promise<void>((resolve) => { notifyFirstAuth = resolve; });
+    let resolveFirstAuth!: (u: { uid: string; nick: string; boat: number; fame: number; guest: boolean } | null) => void;
+
+    const { url, live } = await start({
+      authenticate: async () => {
+        authCall += 1;
+        if (authCall === 1) {
+          notifyFirstAuth();
+          return new Promise((resolve) => { resolveFirstAuth = resolve; });
+        }
+        return { uid: 'u1', nick: 'n-u1', boat: 2, fame: 100, guest: false };
+      },
+    });
+
+    const first = connect(url, 'u1');
+    await firstAuthStarted;
+
+    const second = connect(url, 'u1');
+    expect((await second.next()).t).toBe('hello');
+    expect(live.isOnline('u1')).toBe(true);
+
+    resolveFirstAuth({ uid: 'u1', nick: 'n-u1', boat: 2, fame: 100, guest: false });
+    await first.closed;
+    await new Promise(r => setTimeout(r, 30));
+
+    expect(second.ws.readyState).toBe(WebSocket.OPEN);
+    expect(live.isOnline('u1')).toBe(true);
   });
 });

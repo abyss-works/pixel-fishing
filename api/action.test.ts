@@ -44,6 +44,31 @@ describe('api/action 핸들러 규약 (Node 스타일 req/res)', () => {
     expect(res.body).toEqual({ error: 'method-not-allowed' });
   });
 
+  it('프리렌더·프리페치 POST 요청은 403 prerender-blocked로 거부하고 GET 워밍 핑은 허용한다', async () => {
+    const postRes = mkRes();
+    await handler({
+      method: 'POST',
+      headers: { 'x-build-id': 'dev', 'sec-purpose': 'prefetch;prerender' },
+    } as never, postRes as never);
+    expect(postRes.statusCode).toBe(403);
+    expect(postRes.body).toEqual({ error: 'prerender-blocked' });
+
+    const postPurpose = mkRes();
+    await handler({
+      method: 'POST',
+      headers: { purpose: 'prefetch' },
+    } as never, postPurpose as never);
+    expect(postPurpose.statusCode).toBe(403);
+    expect(postPurpose.body).toEqual({ error: 'prerender-blocked' });
+
+    const getRes = mkRes();
+    await handler({
+      method: 'GET',
+      headers: { 'sec-purpose': 'prefetch;prerender' },
+    } as never, getRes as never);
+    expect(getRes.statusCode).toBe(204);
+  });
+
   it('배포 식별자 불일치(또는 부재)면 426 — 낡은 탭 차단', async () => {
     const res = mkRes();
     await handler({ method: 'POST', headers: {} } as never, res as never);
