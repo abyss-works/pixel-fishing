@@ -180,6 +180,16 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
     return () => { mountedRef.current = false; };
   }, []);
 
+  const clearConsentGate = () => {
+    allowConsentGate();
+    setConsentPrompt({ consent: null, mismatch: false, error: null, busy: false });
+    setBlocker(c => (c === 'consent' ? null : c));
+    const resume = pendingResumeRef.current;
+    pendingResumeRef.current = null;
+    void client.invalidateQueries({ predicate: q => q.queryKey[0] !== 'session' });
+    if (resume) resumeFlowRef.current(resume);
+  };
+
   const openConsentGate = (initial?: ConsentStatus) => {
     if (!bootedRef.current && pendingResumeRef.current === null) {
       pendingResumeRef.current = activeFlowRef.current;
@@ -197,12 +207,7 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
       .then(latest => {
         if (!mountedRef.current) return;
         if (!latest.required) {
-          allowConsentGate();
-          setConsentPrompt({ consent: null, mismatch: false, error: null, busy: false });
-          setBlocker(c => (c === 'consent' ? null : c));
-          const resume = pendingResumeRef.current;
-          pendingResumeRef.current = null;
-          if (resume) resumeFlowRef.current(resume);
+          clearConsentGate();
           return;
         }
         setConsentPrompt({ consent: latest, mismatch: false, error: null, busy: false });
@@ -570,25 +575,13 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
           setConsentPrompt({ consent: res.consent, mismatch: true, error: null, busy: false });
           return;
         }
-        allowConsentGate();
-        setConsentPrompt({ consent: null, mismatch: false, error: null, busy: false });
-        setBlocker(c => (c === 'consent' ? null : c));
-        const resume = pendingResumeRef.current;
-        pendingResumeRef.current = null;
-        void client.invalidateQueries({ predicate: q => q.queryKey[0] !== 'session' });
-        if (resume) resumeFlowRef.current(resume);
+        clearConsentGate();
         return;
       }
       if (res.code === 'consent-version-mismatch') {
         const latest = await api.auth.getAccountConsent();
         if (!latest.required) {
-          allowConsentGate();
-          setConsentPrompt({ consent: null, mismatch: false, error: null, busy: false });
-          setBlocker(c => (c === 'consent' ? null : c));
-          const resume = pendingResumeRef.current;
-          pendingResumeRef.current = null;
-          void client.invalidateQueries({ predicate: q => q.queryKey[0] !== 'session' });
-          if (resume) resumeFlowRef.current(resume);
+          clearConsentGate();
           return;
         }
         setConsentPrompt({ consent: latest, mismatch: true, error: null, busy: false });

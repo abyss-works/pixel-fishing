@@ -1108,6 +1108,28 @@ describe('이용약관 수락 게이트', () => {
     expect(gw.loads).toBe(2);
     expect(gw.actions).toEqual(['boot', 'boot']);
   });
+
+  it('openConsentGate 재조회 결과 !latest.required이면 게이트를 해제하고 session 외 Query 캐시를 무효화한다', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const spy = vi.spyOn(client, 'invalidateQueries');
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    const hook = renderHook(() => useGame({ setToast: () => {} }), { wrapper });
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    await act(async () => { gw.bootResolve!(); });
+    spy.mockClear();
+
+    gw.consentQueue = [{ required: false, version: '2026-11-25', effectiveAt: '2026-11-25T00:00:00.000Z' }];
+    act(() => { for (const fn of gw.consentListeners) fn(); });
+
+    await waitFor(() => expect(hook.result.current.blocker).toBeNull());
+    expect(getConsentGate()).toBe('ready');
+    const predicateCall = spy.mock.calls.find(([arg]) => typeof arg === 'object' && arg !== null && 'predicate' in arg);
+    expect(predicateCall).toBeDefined();
+    const predicate = (predicateCall![0] as { predicate: (q: { queryKey: readonly unknown[] }) => boolean }).predicate;
+    expect(predicate({ queryKey: ['session'] })).toBe(false);
+    expect(predicate({ queryKey: ['mailbox'] })).toBe(true);
+  });
 });
 
 describe('닉네임 변경 시 프로필 및 조회 캐시 무효화', () => {
