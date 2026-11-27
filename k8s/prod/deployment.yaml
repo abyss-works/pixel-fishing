@@ -3,7 +3,12 @@ kind: Deployment
 metadata:
   name: pixel-fishing
 spec:
-  replicas: 1
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       app: pixel-fishing
@@ -12,8 +17,16 @@ spec:
       labels:
         app: pixel-fishing
     spec:
+      terminationGracePeriodSeconds: 35
       nodeSelector:
-        kubernetes.io/hostname: oci-node
+        kubernetes.io/arch: arm64
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: pixel-fishing
       # 노드의 search 도메인이 SERVFAIL을 돌려주면 musl은 외부 이름 조회 전체를 실패시킨다.
       # 점이 있는 이름은 절대 이름부터 조회하게 한다.
       dnsConfig:
@@ -57,8 +70,20 @@ spec:
             # 약관과 처리방침의 판이자 시행일(YYYY-MM-DD).
             - name: CONSENT_EFFECTIVE_DATE
               value: "2026-11-25"
+            - name: REDIS_URL
+              value: redis://pixel-fishing-valkey:6379
+            - name: ENABLE_EMBEDDED_LIVE
+              value: "false"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
           ports:
             - containerPort: 3000
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 5"]
           resources:
             requests:
               cpu: 100m

@@ -141,7 +141,7 @@ export function AdminStaffBadgeToggle() {
         disabled={busy}
         onClick={() => void toggle()}
       >
-        <PixelIcon glyph={role === 'maintainer' ? 'staffStarSmall' : 'staffStarLarge'} size={12} />
+        <PixelIcon glyph={role === 'maintainer' ? 'staffStarSmall' : 'staffStarLarge'} size={12} className="text-gold" />
         <span>채팅 운영진 별 표기</span>
       </ToggleChip>
       {error && <span role="alert" className="text-2xs text-danger">{error}</span>}

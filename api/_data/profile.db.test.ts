@@ -32,15 +32,23 @@ async function user(account = false): Promise<string> {
 }
 
 describe('liveIdentity', () => {
-  it('프로필 이름과 저장 상태의 배·명성을 읽는다', async () => {
+  it('프로필 이름과 저장 상태의 배·명성·운영진 여부를 읽는다', async () => {
     const uid = await user();
     await client.query(`insert into public.profiles (user_id, nickname) values ($1, '갈매기')`, [uid]);
     await client.query(`insert into public.saves_current (user_id, data, boat, fame) values ($1, '{}', 3, 420)`, [uid]);
-    expect(await liveIdentity(database.db, uid)).toEqual({ nick: '갈매기', boat: 3, fame: 420 });
+    expect(await liveIdentity(database.db, uid)).toEqual({ nick: '갈매기', boat: 3, fame: 420, staff: false });
   });
 
-  it('프로필과 저장 상태가 없으면 이름은 null, 배·명성은 0이다', async () => {
-    expect(await liveIdentity(database.db, await user())).toEqual({ nick: null, boat: 0, fame: 0 });
+  it('프로필과 저장 상태가 없으면 이름은 null, 배·명성은 0, staff는 false다', async () => {
+    expect(await liveIdentity(database.db, await user())).toEqual({ nick: null, boat: 0, fame: 0, staff: false });
+  });
+
+  it('admin 또는 maintainer 역할이면 show_staff_badge 토글과 무관하게 staff가 true다', async () => {
+    const adminUid = await user(true);
+    const maintainerUid = await user(true);
+    await client.query(`insert into public.admins (user_id, role, show_staff_badge) values ($1, 'admin', false), ($2, 'maintainer', false)`, [adminUid, maintainerUid]);
+    expect(await liveIdentity(database.db, adminUid)).toEqual({ nick: null, boat: 0, fame: 0, staff: true });
+    expect(await liveIdentity(database.db, maintainerUid)).toEqual({ nick: null, boat: 0, fame: 0, staff: true });
   });
 });
 

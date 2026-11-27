@@ -71,6 +71,7 @@ patches:
       metadata:
         name: pixel-fishing
       spec:
+        replicas: 1
         strategy:
           type: Recreate
         template:
@@ -101,9 +102,45 @@ patches:
       kind: CronJob
       metadata:
         name: unused
+  - target:
+      kind: Deployment
+      name: pixel-fishing-errors
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  - target:
+      kind: Deployment
+      name: pixel-fishing-valkey
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 128Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/args/6
+        value: 96mb
+  - target:
+      kind: Deployment
+      name: pixel-fishing-realtime
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/env/1/value
+        value: https://pixel-fishing-preview.abyssworks.dev
+      - op: replace
+        path: /spec/template/spec/containers/0/env/2/value
+        value: preview
+      - op: replace
+        path: /spec/template/spec/containers/0/env/3/value
+        value: "2026-11-25"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 150m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 192Mi
 # dev 푸시마다 CI가 게임과 관리자 이미지의 태그를 dev-<커밋 SHA 7자리>로 함께 갱신한다.
 images:
   - name: ghcr.io/abyss-works/pixel-fishing
-    newTag: dev-1aff758
+    newTag: dev-c014b71
   - name: ghcr.io/abyss-works/pixel-fishing-admin
-    newTag: dev-1aff758
+    newTag: dev-c014b71

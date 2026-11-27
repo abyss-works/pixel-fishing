@@ -55,6 +55,8 @@ interface Props {
   dispatch: (action: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
   onScene: (scene: SceneRef, message: string, entryPos?: Point, returnPos?: Point) => void;
+  /** 이벤트 구역 도보 퇴장 트리거에 닿았을 때 알린다 */
+  onLeaveEventZone?: () => void;
   /** 지금 계정이 게스트인가 — 게스트는 마을 밖으로 나가는 트리거에서 장소를 바꾸지 못하고 되밀린다 */
   guest?: boolean;
   /** 게스트가 마을 밖으로 나가려다 되밀렸을 때 */
@@ -164,7 +166,7 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast'], game: Game
 }
 
 export default function Field({
-  region, game, dispatch, setToast, onScene, guest, onGuestBlocked, initialPos, placeSeq, locked, paused, statusSlot, catchSlot, uid, saveVersion,
+  region, game, dispatch, setToast, onScene, onLeaveEventZone, guest, onGuestBlocked, initialPos, placeSeq, locked, paused, statusSlot, catchSlot, uid, saveVersion,
 }: Props) {
   const mobile = useMobileLayout();
   // 현재 어군 — 세션의 배치 날짜가 정한다. 부트 결과로 날짜가 바뀌면 엔진에 교체해 준다.
@@ -197,6 +199,10 @@ export default function Field({
   const covered = useCanvasCover();
   const { phase: dayPhaseNow } = useGameTime();
   const manualCycleRef = useRef(false);
+  const onLeaveEventZoneRef = useRef(onLeaveEventZone);
+  useEffect(() => {
+    onLeaveEventZoneRef.current = onLeaveEventZone;
+  }, [onLeaveEventZone]);
   const fish: Fish | null = snapshot.fishId
     ? (FISH.find(candidate => candidate.id === snapshot.fishId)
       ?? eventFishSubjectById(snapshot.fishId)
@@ -255,6 +261,7 @@ export default function Field({
         else presentEvent(event, setToast, game, region);
       },
       onScene,
+      onLeaveEventZone: () => onLeaveEventZoneRef.current?.(),
       onFrame: reportCanvasFrame,
       guest,
       seedContext: () => {

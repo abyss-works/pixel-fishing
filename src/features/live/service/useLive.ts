@@ -318,6 +318,7 @@ export interface ChatView {
   error: ChatError | null;
   errorRetryAfterMs: number | null;
   globalCooldownUntil: number;
+  globalCooldownExempt: boolean;
 }
 
 /** 채팅 목록과 마지막 거부 이유 */
@@ -332,6 +333,7 @@ export function useChat(): ChatView {
     error: s.chatError,
     errorRetryAfterMs: s.chatErrorRetryAfterMs,
     globalCooldownUntil: s.globalCooldownUntil,
+    globalCooldownExempt: s.globalCooldownExempt,
   };
 }
 

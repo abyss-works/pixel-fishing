@@ -276,21 +276,52 @@ describe('api/admin 핸들러 단위 테스트', () => {
       target: { kind: 'users', recipients: [{ userId: TARGET_UID, gold: 100 }] },
     };
     mocks.db.execute
+      .mockResolvedValueOnce({ rows: [{ key }] })            // admin_mail_idempotency insert
       .mockResolvedValueOnce({ rows: [{ id: TARGET_UID }] }) // previewMails
       .mockResolvedValueOnce({ rows: [{ found: false }] })   // hasRecentDuplicateMail
-      .mockResolvedValueOnce({ rows: [{ n: 1 }] });          // sendMails
+      .mockResolvedValueOnce({ rows: [{ n: 1 }] })           // sendMails
+      .mockResolvedValueOnce({ rows: [] });                  // admin_mail_idempotency update
     mocks.notifyUser.mockClear();
     const first = await call('POST', { q: 'mail' }, { op: 'send', request: mailReq, idempotencyKey: key });
     expect(first).toMatchObject({ status: 200, body: { sent: 1, problems: [] } });
     expect(mocks.notifyUser).toHaveBeenCalledTimes(1);
     expect(mocks.notifyUser).toHaveBeenCalledWith(TARGET_UID, { t: 'mail' });
 
+    const replayFingerprint = JSON.stringify({
+      title: '안내',
+      body: '본문',
+      target: {
+        kind: 'users',
+        recipients: [{ userId: TARGET_UID, gold: 100, items: [], hats: [] }],
+      },
+    });
+    mocks.db.execute
+      .mockResolvedValueOnce({ rows: [] })                   // admin_mail_idempotency insert conflict
+      .mockResolvedValueOnce({                               // admin_mail_idempotency select for update
+        rows: [{
+          fingerprint: replayFingerprint,
+          result: {
+            problems: [],
+            preview: {
+              count: 1,
+              recipientCount: 1,
+              totalGold: 100,
+              capExceeded: false,
+              maxTotalGold: MAX_MAIL_BATCH_TOTAL_GOLD,
+              missing: [],
+            },
+            sent: 1,
+          },
+          expires_at: new Date(Date.now() + 60_000),
+        }],
+      });
     const replay = await call('POST', { q: 'mail' }, { op: 'send', request: mailReq, idempotencyKey: key });
     expect(replay).toMatchObject({ status: 200, body: { sent: 0, idempotent: true } });
     expect(mocks.notifyUser).toHaveBeenCalledTimes(1);
 
     // 다른 키로 10분 내 동일 우편 재시도 시 DB 중복 창이 409 duplicate-mail로 차단
     mocks.db.execute
+      .mockResolvedValueOnce({ rows: [{ key: '22222222-2222-4222-8222-222222222222' }] }) // admin_mail_idempotency insert
       .mockResolvedValueOnce({ rows: [{ id: TARGET_UID }] })
       .mockResolvedValueOnce({ rows: [{ found: true }] });
     const dupWindow = await call('POST', { q: 'mail' }, {

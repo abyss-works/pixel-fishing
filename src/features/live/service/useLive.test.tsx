@@ -206,7 +206,7 @@ describe('useLive 약관 수락 게이트 및 3방·공지 연동', () => {
     expect(liveMock.connections[0].send).toHaveBeenLastCalledWith({ t: 'region', region: 'seasia' });
   });
 
-  it('sendChat으로 global 방에 보낸 뒤 chat-duplicate 오류를 받으면 쿨다운이 걸리지 않고, 본인 발신 global chat 수신 시에만 10초 쿨다운이 걸린다', () => {
+  it('sendChat으로 global 방에 보낸 뒤 일반 오류를 받으면 쿨다운이 걸리지 않고, 본인 발신 global chat 수신 시에만 10초 쿨다운이 걸린다', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-11-26T12:00:00.000Z'));
     const { result } = renderHook(() => {
@@ -225,16 +225,17 @@ describe('useLive 약관 수락 게이트 및 3방·공지 연동', () => {
       });
     });
     expect(result.current.notices.noticesSynced).toBe(true);
+    expect(result.current.chat.globalCooldownExempt).toBe(false);
 
     act(() => { sendChat('안녕 전체', 'global'); });
     expect(liveMock.connections[0].send).toHaveBeenCalledWith({ t: 'chat', text: '안녕 전체', room: 'global' });
     expect(result.current.chat.globalCooldownUntil).toBe(0);
 
-    // 중복 문구 등 거부 오류를 받아도 전체 채팅 쿨다운이 잠기지 않는다
+    // 일반 거부 오류를 받아도 전체 채팅 쿨다운이 잠기지 않는다
     act(() => {
-      liveMock.connections[0].onMessage({ t: 'error', code: 'chat-duplicate' });
+      liveMock.connections[0].onMessage({ t: 'error', code: 'chat-rate' });
     });
-    expect(result.current.chat.error).toBe('chat-duplicate');
+    expect(result.current.chat.error).toBe('chat-rate');
     expect(result.current.chat.globalCooldownUntil).toBe(0);
 
     // 다른 문구로 바로 다시 보낼 수 있고, 다른 사람의 전체 채팅에는 쿨다운이 걸리지 않는다
@@ -278,6 +279,38 @@ describe('useLive 약관 수락 게이트 및 3방·공지 연동', () => {
     act(() => { blockConsentGate(); });
     expect(result.current.notices.noticesSynced).toBe(false);
     expect(result.current.chat.globalCooldownUntil).toBe(0);
+  });
+
+  it('hello에서 globalCooldownExempt가 true이면 global 채팅 후에도 쿨다운이 설정되지 않고 reset 시 초기화된다', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-26T12:00:00.000Z'));
+    const { result } = renderHook(() => {
+      useLive();
+      return useChat();
+    });
+
+    act(() => {
+      liveMock.connections[0].onMessage({
+        t: 'hello',
+        you: 'u1',
+        others: [],
+        recentChat: [],
+        globalCooldownExempt: true,
+      });
+    });
+    expect(result.current.globalCooldownExempt).toBe(true);
+
+    act(() => {
+      liveMock.connections[0].onMessage({
+        t: 'chat',
+        room: 'global',
+        line: { id: 11, uid: 'u1', nick: '나', text: '바로 보내기', at: '2026-11-26T12:00:00.000Z' },
+      });
+    });
+    expect(result.current.globalCooldownUntil).toBe(0);
+
+    act(() => { blockConsentGate(); });
+    expect(result.current.globalCooldownExempt).toBe(false);
   });
 
   it('onNickEvent는 others에 없는 피어 닉네임 변경도 전달하고, applyLocalNick은 3방 채팅 본인 줄을 즉시 갱신한다', () => {

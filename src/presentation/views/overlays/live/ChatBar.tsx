@@ -50,8 +50,6 @@ function chatErrorText(code: ChatError, retryAfterMs: number | null): string {
       const seconds = Math.max(1, Math.ceil((retryAfterMs ?? GLOBAL_CHAT_COOLDOWN_MS) / 1000));
       return `전체 채팅은 ${seconds}초 뒤에 다시 보낼 수 있어요.`;
     }
-    case 'chat-duplicate':
-      return '방금 보낸 말은 바로 다시 보낼 수 없어요.';
   }
 }
 
@@ -70,11 +68,12 @@ const ROOM_COLOR_CLS: Record<ChatRoom, string> = {
 const ROOM_TIP_GUILD = '누르거나 Tab 키로 전체, 지역, 길드를 오가요.';
 const ROOM_TIP_NO_GUILD = '누르거나 Tab 키로 전체, 지역을 오가요.\n길드에 가입하면 길드 채팅도 쓸 수 있어요.';
 
-function placeholderFor(room: ChatRoom, globalCooldownSec: number): string {
+function placeholderFor(room: ChatRoom, globalCooldownSec: number, globalCooldownExempt = false): string {
   switch (room) {
     case 'local':
       return '지역 채팅을 적어 보세요.';
     case 'global':
+      if (globalCooldownExempt) return '전체는 바로 보낼 수 있어요.';
       return globalCooldownSec > 0
         ? `전체는 ${globalCooldownSec}초 뒤에 보낼 수 있어요.`
         : '전체는 10초마다 보낼 수 있어요.';
@@ -102,7 +101,8 @@ export default function ChatBar({ inGuild = false, accountState = 'account', fol
   const room = chatRoomOf(input, inGuild);
   const lock = guestLock('chat', accountState);
 
-  const cooldownUntil = chat.globalCooldownUntil ?? 0;
+  const globalCooldownExempt = chat.globalCooldownExempt === true;
+  const cooldownUntil = globalCooldownExempt ? 0 : (chat.globalCooldownUntil ?? 0);
   useEffect(() => {
     if (cooldownUntil <= Date.now()) return;
     const timer = setInterval(() => {
@@ -115,7 +115,7 @@ export default function ChatBar({ inGuild = false, accountState = 'account', fol
 
   const remainingMs = cooldownUntil > now ? Math.min(GLOBAL_CHAT_COOLDOWN_MS, cooldownUntil - now) : 0;
   const globalCooldownSec = remainingMs > 0 ? Math.ceil(remainingMs / 1000) : 0;
-  const showGlobalCooldown = room === 'global' && globalCooldownSec > 0;
+  const showGlobalCooldown = room === 'global' && !globalCooldownExempt && globalCooldownSec > 0;
   const showInlineCooldown = showGlobalCooldown && text.length > 0;
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -202,7 +202,7 @@ export default function ChatBar({ inGuild = false, accountState = 'account', fol
           </Tip>
           <div className="relative min-w-0 flex-1 flex items-center">
             <HudInput ref={inputRef} aria-label="채팅 입력"
-                      placeholder={placeholderFor(room, showGlobalCooldown ? globalCooldownSec : 0)}
+                      placeholder={placeholderFor(room, showGlobalCooldown ? globalCooldownSec : 0, globalCooldownExempt)}
                       className={cx('w-full', showInlineCooldown && 'pr-9')}
                       maxLength={CHAT_MAX_LENGTH} value={text} onKeyDown={onKeyDown}
                       onFocus={() => { dispatch({ type: 'open' }); onTyping?.(true); }}

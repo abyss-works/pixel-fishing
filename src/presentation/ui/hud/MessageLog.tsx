@@ -98,12 +98,12 @@ function LineText({ m }: { m: Msg }) {
 }
 
 function Line({ m, mine, onPick }: { m: Msg; mine: boolean; onPick?: (m: Msg) => void }) {
-  const nameCls = cx('font-bold', mine ? 'text-gold' : 'text-accent');
   const badgeGlyph = m.staffBadge === 'admin'
     ? 'staffStarLarge'
     : m.staffBadge === 'maintainer'
       ? 'staffStarSmall'
       : null;
+  const nameCls = cx('font-bold', badgeGlyph !== null ? 'text-staff' : mine ? 'text-gold' : 'text-accent');
   return (
     <div className={cx('flex items-start gap-1.5 leading-[1.45] text-shadow-hud', m.channel === 'guild' ? 'text-guild' : TONE_CLS[m.tone])}>
       <span className={cx('w-0.5 shrink-0 self-stretch my-0.5', CHANNEL_BAR_CLS[m.channel])} aria-hidden="true" />

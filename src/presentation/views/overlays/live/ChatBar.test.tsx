@@ -15,6 +15,7 @@ const live = vi.hoisted(() => ({
   error: null as ChatError | null,
   errorRetryAfterMs: null as number | null,
   globalCooldownUntil: 0,
+  globalCooldownExempt: false,
   sendChat: vi.fn(),
   clearChatError: vi.fn(),
   typing: [] as boolean[],
@@ -30,6 +31,7 @@ vi.mock('../../../../features/live/service/useLive', () => ({
     error: live.error,
     errorRetryAfterMs: live.errorRetryAfterMs,
     globalCooldownUntil: live.globalCooldownUntil,
+    globalCooldownExempt: live.globalCooldownExempt,
   }),
   sendChat: live.sendChat,
   clearChatError: live.clearChatError,
@@ -44,6 +46,7 @@ describe('ChatBar', () => {
     live.error = null;
     live.errorRetryAfterMs = null;
     live.globalCooldownUntil = 0;
+    live.globalCooldownExempt = false;
     vi.useRealTimers();
     vi.clearAllMocks();
   });
@@ -189,6 +192,32 @@ describe('ChatBar', () => {
     expect(container.querySelector('[data-cooldown-bar="global"]')).toBeNull();
   });
 
+  it('전체 쿨다운 면제 상태에서는 전체 채널 플레이스홀더를 바꾸고 쿨다운 표시와 전송 차단을 켜지 않는다', () => {
+    vi.useFakeTimers();
+    const base = Date.parse('2026-11-26T12:00:00.000Z');
+    vi.setSystemTime(base);
+    live.globalCooldownExempt = true;
+    live.globalCooldownUntil = base + 6000;
+
+    const { container } = render(<ChatBar />);
+    const input = screen.getByLabelText('채팅 입력') as HTMLInputElement;
+    fireEvent.click(screen.getByRole('button', { name: '보낼 곳: 지역' }));
+    expect(screen.getByRole('button', { name: '보낼 곳: 전체' })).toBeInTheDocument();
+    expect(input).toHaveAttribute('placeholder', '전체는 바로 보낼 수 있어요.');
+    expect(container.querySelector('[data-cooldown-bar="global"]')).toBeNull();
+
+    input.focus();
+    fireEvent.change(input, { target: { value: '첫 번째 전체' } });
+    expect(screen.queryByText('6초')).toBeNull();
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(live.sendChat).toHaveBeenNthCalledWith(1, '첫 번째 전체', 'global');
+
+    fireEvent.change(input, { target: { value: '두 번째 전체' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(live.sendChat).toHaveBeenNthCalledWith(2, '두 번째 전체', 'global');
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
   it('게임 화면에서 Enter를 누르면 입력 줄로 들어간다', () => {
     render(<ChatBar />);
     fireEvent.keyDown(document.body, { key: 'Enter' });
@@ -222,7 +251,7 @@ describe('ChatBar', () => {
     expect(document.activeElement).not.toBe(input);
   });
 
-  it('서버가 거부한 이유(chat-global-cooldown, chat-duplicate 포함)를 보인다', () => {
+  it('서버가 거부한 이유(chat-global-cooldown 포함)를 보인다', () => {
     live.error = 'chat-guest';
     const { rerender } = render(<ChatBar />);
     expect(screen.getByRole('status').textContent).toBe('채팅은 태평양 항로가 열리면 쓸 수 있어요.');
@@ -231,11 +260,6 @@ describe('ChatBar', () => {
     live.errorRetryAfterMs = 4200;
     rerender(<ChatBar />);
     expect(screen.getByRole('status').textContent).toBe('전체 채팅은 5초 뒤에 다시 보낼 수 있어요.');
-
-    live.error = 'chat-duplicate';
-    live.errorRetryAfterMs = null;
-    rerender(<ChatBar />);
-    expect(screen.getByRole('status').textContent).toBe('방금 보낸 말은 바로 다시 보낼 수 없어요.');
   });
 
   it('거부 이유가 없으면 말풍선을 그리지 않고, 있으면 입력 줄 위에 떠서 자리를 차지하지 않는다', () => {

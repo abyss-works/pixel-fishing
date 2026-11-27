@@ -1303,4 +1303,55 @@ describe('테스트 데이터베이스', () => {
       }
     });
   });
+
+  describe('관리자 우편 멱등 키 (0061)', () => {
+    const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
+
+    it('admin_mail_idempotency 열·만료 인덱스·서버 전용 RLS·다운/업 라운드트립을 검증한다', async () => {
+      const key = `mig-key-${randomUUID()}`;
+      const { rows: [inserted] } = await client.query<{ created_at: Date; result: unknown }>(
+        `insert into public.admin_mail_idempotency (key, fingerprint, expires_at)
+         values ($1, 'fp-1', now() + interval '10 minutes')
+         returning created_at, result`,
+        [key],
+      );
+      expect(inserted.created_at).toBeInstanceOf(Date);
+      expect(inserted.result).toBeNull();
+
+      const { rows: idxRows } = await client.query<{ indexname: string }>(
+        `select indexname from pg_indexes
+         where schemaname = 'public' and tablename = 'admin_mail_idempotency' and indexname = 'admin_mail_idempotency_expires_at_idx'`,
+      );
+      expect(idxRows).toHaveLength(1);
+
+      await client.query('begin');
+      try {
+        await client.query('set local role authenticated');
+        expect((await client.query('select key from public.admin_mail_idempotency')).rows).toEqual([]);
+        await expect(client.query(
+          `insert into public.admin_mail_idempotency (key, fingerprint, expires_at) values ('x', 'fp', now())`,
+        )).rejects.toMatchObject({ code: '42501' });
+      } finally {
+        await client.query('rollback');
+      }
+
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        await other.query(migration('0061_admin_mail_idempotency.down.sql'));
+        expect((await other.query(
+          `select 1 from information_schema.tables where table_schema = 'public' and table_name = 'admin_mail_idempotency'`,
+        )).rows).toHaveLength(0);
+
+        await other.query(migration('0061_admin_mail_idempotency.sql'));
+        expect((await other.query(
+          `select 1 from information_schema.tables where table_schema = 'public' and table_name = 'admin_mail_idempotency'`,
+        )).rows).toHaveLength(1);
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
 });

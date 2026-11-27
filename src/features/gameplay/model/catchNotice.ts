@@ -59,7 +59,7 @@ export function classifyCatchNotice(
       tone: 'gold',
     };
   }
-  if (info.form === 'variant' && (prevDexEntry?.count ?? 0) === 0) {
+  if (info.form === 'variant' && info.isNew) {
     return {
       kind: 'catch.legendaryOrFirstVariant',
       text,

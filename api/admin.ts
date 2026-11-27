@@ -106,7 +106,7 @@ const ADMIN_ONLY_WRITES = new Set([
 
 /** 리소스 경로 조회. 요청의 필터와 역할을 검사해 실행할 읽기를 돌려준다. 틀리면 400, 권한 밖이면 403이다 */
 const RESOURCES: Record<string, (req: Req, role: read.AdminRole) => (db: Executor) => Promise<unknown>> = {
-  '/api/admin/live': (_req, role) => db => read.liveSnapshot(db, onlineUsers(), role),
+  '/api/admin/live': (_req, role) => async db => read.liveSnapshot(db, await onlineUsers(), role),
   '/api/admin/stats/daily': req => {
     const { from, to } = rangeOf(req);
     return db => read.dailyStats(db, from, to);
@@ -180,8 +180,7 @@ function parse(name: string | undefined, req: Req, role: read.AdminRole, pool: D
     case 'overview': {
       const days = optionalDaysOf(req) ?? STATS_DEFAULT_DAYS;
       if (days < 1 || days > STATS_MAX_DAYS) throw new ApiError(400, 'bad-days');
-      const online = onlineUsers();
-      return db => read.overview(db, days, online, role);
+      return async db => read.overview(db, days, await onlineUsers(), role);
     }
     case 'users': return db => read.users(db, role);
     case 'spamFlags': return db => read.spamFlags(db, role);
@@ -217,17 +216,21 @@ function parse(name: string | undefined, req: Req, role: read.AdminRole, pool: D
     case 'opsHealth': {
       const days = optionalDaysOf(req) ?? 7;
       if (days < 1 || days > MAX_DAYS) throw new ApiError(400, 'bad-days');
-      const onlineCount = onlineUsers().length;
-      const slow = slowRequests();
-      const recentHttp = recentHttpSummary();
-      const recentWs = recentWsSnapshot();
-      return db => readOpsHealth(db, pool, {
-        days,
-        onlineCount,
-        slowRequests: slow,
-        recentHttp,
-        recentWs,
-      });
+      return async db => {
+        const [online, slow, recentHttp, recentWs] = await Promise.all([
+          onlineUsers(),
+          slowRequests(),
+          recentHttpSummary(),
+          recentWsSnapshot(),
+        ]);
+        return readOpsHealth(db, pool, {
+          days,
+          onlineCount: online.length,
+          slowRequests: slow,
+          recentHttp,
+          recentWs,
+        });
+      };
     }
     case 'balanceLive': { const days = optionalDaysOf(req); return db => balanceLive(db, days); }
     case 'userEvents': {
@@ -285,7 +288,7 @@ async function mail(db: Executor, raw: unknown, adminId: string, role: read.Admi
         detail: { targetKind: merged.target.kind, sent: result.sent },
       });
       if (merged.target.kind === 'all') {
-        for (const online of onlineUsers()) {
+        for (const online of await onlineUsers()) {
           if (!online.guest) notifyUser(online.uid, { t: 'mail' });
         }
       } else {

@@ -46,6 +46,8 @@ export interface LiveState {
   chatErrorRetryAfterMs: number | null;
   /** 전체 채팅 재전송 가능 시각(epoch ms) */
   globalCooldownUntil: number;
+  /** 전체 채팅 쿨다운 면제 여부 */
+  globalCooldownExempt: boolean;
 }
 
 export const EMPTY_LIVE: LiveState = {
@@ -59,6 +61,7 @@ export const EMPTY_LIVE: LiveState = {
   chatError: null,
   chatErrorRetryAfterMs: null,
   globalCooldownUntil: 0,
+  globalCooldownExempt: false,
 };
 
 /** 화면에 남기는 채팅 줄 수 */
@@ -101,6 +104,7 @@ export function applyLiveMessage(state: LiveState, msg: ServerMessage, now: numb
         chatError: null,
         chatErrorRetryAfterMs: null,
         globalCooldownUntil: state.globalCooldownUntil,
+        globalCooldownExempt: msg.globalCooldownExempt === true,
       };
     case 'localHistory':
       return {
@@ -117,7 +121,7 @@ export function applyLiveMessage(state: LiveState, msg: ServerMessage, now: numb
       const key = roomStateKey(msg.room);
       if (state[key].some(l => l.id === msg.line.id)) return state;
       const isMine = msg.line.uid === state.you;
-      const nextCooldownUntil = isMine && msg.room === 'global'
+      const nextCooldownUntil = isMine && msg.room === 'global' && !state.globalCooldownExempt
         ? Math.max(state.globalCooldownUntil, now + GLOBAL_CHAT_COOLDOWN_MS)
         : state.globalCooldownUntil;
       return {
