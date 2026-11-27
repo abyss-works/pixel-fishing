@@ -1,6 +1,6 @@
 // 라이브 이벤트 저장 모듈(live_events·event_trio_progress·event_championship_scores·event_draws) DB 테스트.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { EVENT_FISH, EVENT_HAT_IDS } from '../../src/game/content/eventFish.js';
+import { EVENT1_TRIO_TARGETS, EVENT_FISH, EVENT_HAT_IDS } from '../../src/game/content/eventFish.js';
 import { fortuneScoreOf } from '../../src/game/rules/fortune.js';
 import { createDatabase } from '../_db/client.js';
 import type { Database } from '../_db/client.js';
@@ -83,11 +83,7 @@ describe('live_events CRUD 및 진행·순위·추첨', () => {
     expect(updated?.title).toBe('삼총사를 낚아라 시즌1');
 
     // u1이 3종 모두 포획
-    const targets = [
-      { fishId: 'mackerel', form: 'normal' as const },
-      { fishId: 'squid', form: 'normal' as const },
-      { fishId: 'sailfish', form: 'normal' as const },
-    ];
+    const targets = EVENT1_TRIO_TARGETS;
     for (let i = 0; i < targets.length; i++) {
       const t = targets[i];
       const v = i + 2;
@@ -102,7 +98,7 @@ describe('live_events CRUD 및 진행·순위·추첨', () => {
     await commitAction(
       database.db,
       versionUpdate(u2, newState(), 2, NOW),
-      [upsertTrioProgressFragment(COMMIT_GUARD, u2, 'trio-s1', targets, 'mackerel', 'normal', NOW)],
+      [upsertTrioProgressFragment(COMMIT_GUARD, u2, 'trio-s1', targets, targets[0].fishId, 'normal', NOW)],
     );
 
     const ended = await endAdminEventNow(database.db, 'trio-s1', new Date(NOW));
