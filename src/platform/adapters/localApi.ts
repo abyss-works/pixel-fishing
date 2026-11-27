@@ -89,6 +89,7 @@ class LocalAdmin implements AdminApi {
   bountyFunnel(_days: number): Promise<never[]> { return rejected(); }
   onboardingFunnel(): Promise<never> { return rejected(); }
   httpMetrics(_days?: number): Promise<never> { return rejected(); }
+  clientMetrics(_days?: number): Promise<never> { return rejected(); }
   opsHealth(_days?: number): Promise<never> { return rejected(); }
   spamFlags(): Promise<never[]> { return rejected(); }
   recentEvents(): Promise<never[]> { return rejected(); }

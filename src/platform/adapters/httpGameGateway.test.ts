@@ -20,6 +20,7 @@ import { pickScalars } from '../../game/rules/actions';
 import type { StatePatch } from '../../game/rules/actions';
 import { HttpGameGateway } from './httpGameGateway';
 import { isConsentRequiredError, subscribeConsentRequired } from './requestFailure';
+import * as clientMetrics from '../clientMetrics';
 
 afterEach(() => { vi.unstubAllGlobals(); me.value = null; me.fn = null; me.calls = 0; });
 
@@ -594,5 +595,39 @@ describe('HttpGameGateway의 오류·거부 응답 처리', () => {
     expect(err).toBeInstanceOf(AppError);
     expect((err as AppError).kind).toBe('server');
     expect((err as AppError).context).toMatchObject({ status: 200, action: 'buyBoat' });
+  });
+});
+
+describe('HttpGameGateway의 클라이언트 RTT 계측', () => {
+  const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('boot를 포함한 POST 실행 시간과 409 경합·타임아웃을 recordClientApiRtt(action)로 기록한다', async () => {
+    const spy = vi.spyOn(clientMetrics, 'recordClientApiRtt');
+    vi.stubGlobal('fetch', async () => json({ state: newState(), version: 1, result: { ok: true } }, 200));
+    await new HttpGameGateway().dispatch({ type: 'boot' });
+    expect(spy).toHaveBeenCalledWith('action', expect.any(Number), { conflict409: false });
+
+    spy.mockClear();
+    let calls = 0;
+    me.value = { cur: { data: newState(), gold: 0, fame: 0, boat: 0, rod: 1, version: 2 }, instances: [], records: [], counters: {}, clearedNamed: [], legacy: null };
+    vi.stubGlobal('fetch', async () => {
+      calls += 1;
+      if (calls === 1) return json({ error: 'conflict' }, 409);
+      return json({ state: newState(), version: 3, result: { ok: true } }, 200);
+    });
+    await new HttpGameGateway().dispatch({ type: 'buyBoat' });
+    expect(spy).toHaveBeenNthCalledWith(1, 'action', expect.any(Number), { conflict409: true });
+    expect(spy).toHaveBeenNthCalledWith(2, 'action', expect.any(Number), { conflict409: false });
+
+    spy.mockClear();
+    vi.stubGlobal('fetch', async () => {
+      throw new DOMException('timed out', 'TimeoutError');
+    });
+    await expect(new HttpGameGateway().dispatch({ type: 'buyBoat' })).rejects.toThrow();
+    expect(spy).toHaveBeenCalledWith('action', expect.any(Number), { timeout: true });
   });
 });

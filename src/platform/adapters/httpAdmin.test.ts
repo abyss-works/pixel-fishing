@@ -18,6 +18,7 @@ const CALLS: [method: string, call: () => Promise<unknown>, url: string][] = [
   ['bountyFunnel', () => admin.bountyFunnel(7), '/api/admin?q=bountyFunnel&days=7'],
   ['onboardingFunnel', () => admin.onboardingFunnel(), '/api/admin?q=onboardingFunnel'],
   ['httpMetrics', () => admin.httpMetrics(30), '/api/admin?q=httpMetrics&days=30'],
+  ['clientMetrics', () => admin.clientMetrics(7), '/api/admin?q=clientMetrics&days=7'],
   ['opsHealth', () => admin.opsHealth(7), '/api/admin?q=opsHealth&days=7'],
   ['spamFlags', () => admin.spamFlags(), '/api/admin?q=spamFlags'],
   ['recentEvents', () => admin.recentEvents(), '/api/admin?q=recentEvents'],
@@ -160,6 +161,12 @@ describe('HttpAdmin', () => {
     fetchMock.mockResolvedValue(new Response('{}', { status: 200 }));
     await admin.httpMetrics();
     expect(fetchMock.mock.calls[0][0]).toBe('/api/admin?q=httpMetrics');
+  });
+
+  it('clientMetrics는 기간을 생략하면 기간 인자 없이 요청해 서버의 기본 기간을 따른다', async () => {
+    fetchMock.mockResolvedValue(new Response('{}', { status: 200 }));
+    await admin.clientMetrics();
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/admin?q=clientMetrics');
   });
 
   it('opsHealth는 기간을 생략하면 기간 인자 없이 요청해 서버의 기본 기간을 따른다', async () => {

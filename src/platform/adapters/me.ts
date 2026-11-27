@@ -2,16 +2,20 @@
 // 세션이 없으면 unauthorized, 429는 rate-limited, 그 밖의 실패는 network로 던진다(조회가 다시 시도한다).
 import { AppError } from '../../core/errors';
 import { throwRequestFailure } from './requestFailure';
+import { recordClientApiRtt } from '../clientMetrics';
 
 export type MePart = 'state' | 'bounty' | 'profile';
 
 export async function readMe<T>(part: MePart): Promise<T> {
+  const startedAt = performance.now();
   let res: Response;
   try {
     res = await fetch(`/api/me?q=${part}`);
   } catch (cause) {
+    recordClientApiRtt('me', performance.now() - startedAt, { timeout: true });
     throw new AppError('network', `${part} request failed`, {}, { cause });
   }
+  recordClientApiRtt('me', performance.now() - startedAt);
   if (res.status === 401) throw new AppError('unauthorized', `${part} read before session`);
   if (!res.ok) await throwRequestFailure(res, `${part} read failed`);
   return await res.json() as T;

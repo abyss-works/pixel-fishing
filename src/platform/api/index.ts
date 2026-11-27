@@ -46,6 +46,7 @@ export {
   soundApi, playSfx, ensureSoundEngineSync, getSoundSettings, subscribeSoundSettings,
 } from './sound';
 export type { SfxKey, SoundEngineState } from './sound';
+export { initClientMetrics, recordCanvasFrame } from '../clientMetrics';
 export type { LastPosition } from '../adapters/position';
 export type { PublicProfile } from '../adapters/player';
 export type {
@@ -58,6 +59,7 @@ export type {
   AdminUserRow, AdminUserState, AdminUserAggregates, AdminOverview, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
   AdminHttpMetricRouteGroup, AdminHttpLatencySummary, AdminHttpLatencyBuckets, AdminHttpRateLimitReasons,
   AdminHttpMetricCounts, AdminHttpMetricDayRow, AdminHttpMetricRouteRow, AdminHttpMetricRawRow, AdminHttpMetrics,
+  AdminClientLatencyStat, AdminClientMetricsDayRow, AdminClientMetrics,
   AdminOpsAlertCode, AdminOpsAlert, AdminSlowHttpRequest, AdminWsMetricsCounts, AdminWsMetricsDayRow, AdminOpsHealth,
   AdminConversionTimeBucketId, AdminConversionTimeBucket, AdminOnboardingConversion,
   AdminTutorialStageId, AdminOnboardingTutorialStage, AdminOnboardingTutorials,

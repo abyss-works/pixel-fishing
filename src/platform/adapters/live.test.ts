@@ -6,6 +6,7 @@ import { APP_VERSION } from '../../version';
 import { subscribeFailure } from '../../core/errors';
 import type { AppError } from '../../core/errors';
 import { subscribeConsentRequired } from './requestFailure';
+import * as clientMetrics from '../clientMetrics';
 
 class FakeSocket {
   static all: FakeSocket[] = [];
@@ -133,5 +134,39 @@ describe('connectLive', () => {
     last().accept();
     conn.send({ t: 'stop' });
     expect(last().sent).toEqual(['{"t":"stop"}']);
+  });
+
+  it('첫 연결 이후 재연결 성공과 비정상 종료를 클라이언트 지표로 기록하고 정상·정책 종료·명시 close는 제외한다', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const spy = vi.spyOn(clientMetrics, 'recordLiveClose');
+
+    const conn = connect();
+    last().accept();
+    expect(spy).not.toHaveBeenCalled();
+
+    // 비정상 종료(1006) → abnormal 기록 + 재연결 성공 → reconnect 기록
+    last().drop(1006);
+    expect(spy).toHaveBeenNthCalledWith(1, 'abnormal');
+    vi.advanceTimersByTime(LIVE_RETRY_MIN_MS);
+    last().accept();
+    expect(spy).toHaveBeenNthCalledWith(2, 'reconnect');
+
+    // 1000/1001/outdated/replaced/1008 및 명시 close()는 abnormal을 기록하지 않는다
+    spy.mockClear();
+    last().drop(1000);
+    vi.advanceTimersByTime(LIVE_RETRY_MIN_MS);
+    last().accept();
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith('reconnect');
+
+    spy.mockClear();
+    last().drop(1001);
+    last().drop(1008, 'consent-required');
+    expect(spy).not.toHaveBeenCalled();
+
+    const conn2 = connect();
+    conn2.close();
+    expect(spy).not.toHaveBeenCalled();
+    conn.close();
   });
 });

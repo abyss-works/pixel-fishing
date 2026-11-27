@@ -1144,4 +1144,59 @@ describe('테스트 데이터베이스', () => {
       }
     });
   });
+
+  describe('클라이언트 체감 지표 (0056)', () => {
+    const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
+
+    it('client_metrics_daily 기본값·음수 금지·서버 전용 RLS·다운/업 라운드트립을 검증한다', async () => {
+      const { rows: [row] } = await client.query<{
+        reports: string; lcp_count: string; cls_sum_x1000: string;
+        action_rtt_count: string; me_rtt_count: string; canvas_frames: string; ws_reconnects: string;
+      }>(
+        `insert into public.client_metrics_daily (day) values ('2030-03-06')
+         returning reports, lcp_count, cls_sum_x1000, action_rtt_count, me_rtt_count, canvas_frames, ws_reconnects`,
+      );
+      expect(row).toEqual({
+        reports: '0', lcp_count: '0', cls_sum_x1000: '0',
+        action_rtt_count: '0', me_rtt_count: '0', canvas_frames: '0', ws_reconnects: '0',
+      });
+
+      await expect(client.query(
+        `insert into public.client_metrics_daily (day, canvas_frames) values ('2030-03-07', -1)`,
+      )).rejects.toMatchObject({ code: '23514' });
+
+      await expect(client.query(
+        `insert into public.client_metrics_daily (day, lcp_sum_ms) values ('2030-03-08', -5)`,
+      )).rejects.toMatchObject({ code: '23514' });
+
+      await client.query('begin');
+      try {
+        await client.query('set local role authenticated');
+        expect((await client.query('select day from public.client_metrics_daily')).rows).toEqual([]);
+        await expect(client.query(
+          `insert into public.client_metrics_daily (day, reports) values ('2030-03-09', 1)`,
+        )).rejects.toMatchObject({ code: '42501' });
+      } finally {
+        await client.query('rollback');
+      }
+
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        await other.query(migration('0056_client_metrics.down.sql'));
+        expect((await other.query(
+          `select 1 from information_schema.tables where table_schema = 'public' and table_name = 'client_metrics_daily'`,
+        )).rows).toHaveLength(0);
+
+        await other.query(migration('0056_client_metrics.sql'));
+        expect((await other.query(
+          `select 1 from information_schema.tables where table_schema = 'public' and table_name = 'client_metrics_daily'`,
+        )).rows).toHaveLength(1);
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
 });
