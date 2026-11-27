@@ -176,4 +176,17 @@ describe('운영 탭', () => {
     expect(screen.getByLabelText('1.2%')).toBeInTheDocument();
     expect(vi.mocked(api.admin.clientMetrics)).toHaveBeenCalledWith(7);
   });
+
+  it('미연결(local) 상태에서 HTTP·서버 상태·클라이언트 성능 섹션의 빈 값 표기를 --로 일관화한다', () => {
+    show('local');
+    for (const heading of [
+      '앱 서버 HTTP 오류율·429 (최근 30일)',
+      '서버, 소켓, DB 상태 및 경보',
+      '클라이언트 체감 성능 및 단절',
+    ]) {
+      const section = screen.getByText(heading).closest('section')!;
+      expect(within(section).getAllByText('--').length).toBeGreaterThan(0);
+      expect(section.textContent).not.toContain('—');
+    }
+  });
 });

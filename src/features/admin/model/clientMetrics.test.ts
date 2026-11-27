@@ -139,22 +139,45 @@ describe('클라이언트 체감 성능 모델 (selectClientMetricsView)', () =>
       summary: {
         reports: 0,
         lcp: { p50Ms: null, p95Ms: null, avgMs: null, samples: 0 },
-        inp: { p50Ms: null, p95Ms: null, avgMs: null, samples: 0 },
+        inp: { p50Ms: Number.NaN, p95Ms: -1, avgMs: Number.POSITIVE_INFINITY, samples: 0 },
         ttfb: { p50Ms: null, p95Ms: null, avgMs: null, samples: 0 },
-        clsAvg: 0,
+        clsAvg: Number.NaN,
         actionRtt: { p50Ms: null, p95Ms: null, avgMs: null, samples: 0, timeouts: 0, conflicts409: 0 },
         meRtt: { p50Ms: null, p95Ms: null, avgMs: null, samples: 0, timeouts: 0 },
         canvasFrames: 0,
         canvasLongFrames: 0,
-        longFramePct: 0,
+        longFramePct: -1,
         wsReconnects: 0,
         wsAbnormalCloses: 0,
       },
       daily: [],
     }), 14);
 
-    expect(view.clsText).toBe('0.000');
-    expect(view.canvas.longFramePctText).toBe('0%');
-    expect(view.lcp.p95Text).toBe('--');
+    expect(view.clsText).toBe('--');
+    expect(view.canvas.longFramePctText).toBe('--');
+    expect(view.lcp).toEqual({ p50Text: '--', p95Text: '--', avgText: '--', samples: 0 });
+    expect(view.inp).toEqual({ p50Text: '--', p95Text: '--', avgText: '--', samples: 0 });
+
+    const zeroView = selectClientMetricsView(sampleMetrics({
+      summary: {
+        reports: 0,
+        lcp: { p50Ms: 0, p95Ms: 0, avgMs: 0, samples: 1 },
+        inp: { p50Ms: 0, p95Ms: 0, avgMs: 0, samples: 1 },
+        ttfb: { p50Ms: 0, p95Ms: 0, avgMs: 0, samples: 1 },
+        clsAvg: 0,
+        actionRtt: { p50Ms: 0, p95Ms: 0, avgMs: 0, samples: 1, timeouts: 0, conflicts409: 0 },
+        meRtt: { p50Ms: 0, p95Ms: 0, avgMs: 0, samples: 1, timeouts: 0 },
+        canvasFrames: 100,
+        canvasLongFrames: 0,
+        longFramePct: 0,
+        wsReconnects: 0,
+        wsAbnormalCloses: 0,
+      },
+      daily: [],
+    }), 7);
+
+    expect(zeroView.clsText).toBe('0.000');
+    expect(zeroView.canvas.longFramePctText).toBe('0%');
+    expect(zeroView.lcp.p95Text).toBe('0ms');
   });
 });

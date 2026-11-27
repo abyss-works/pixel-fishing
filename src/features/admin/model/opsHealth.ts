@@ -60,6 +60,11 @@ function formatRatioPct(ratio: number): string {
   return `${Number((ratio * 100).toFixed(2))}%`;
 }
 
+function formatSafeCount(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '--';
+  return fmtNum(value);
+}
+
 function summarizeWsCounts(counts: AdminWsMetricsCounts) {
   const rejectTotal = counts.reject401 + counts.reject403 + counts.reject500;
   const closeTotal = counts.closeNormal + counts.closeAbnormal + counts.closeIdleTimeout;
@@ -198,7 +203,9 @@ export function selectOpsHealthView(data: AdminOpsHealth | null): OpsHealthView 
   return {
     runtime: {
       uptimeText: formatUptime(runtime.uptimeSec),
-      memoryText: `${Math.round(runtime.heapUsedMb)} / ${Math.round(runtime.rssMb)} MB`,
+      memoryText: Number.isFinite(runtime.heapUsedMb) && Number.isFinite(runtime.rssMb)
+        ? `${Math.round(runtime.heapUsedMb)} / ${Math.round(runtime.rssMb)} MB`
+        : '--',
       heapUsedMb: runtime.heapUsedMb,
       rssMb: runtime.rssMb,
     },
@@ -211,11 +218,11 @@ export function selectOpsHealthView(data: AdminOpsHealth | null): OpsHealthView 
       poolText: `${poolInUse}/${database.poolTotal}/${database.poolMax} (대기 ${database.poolWaiting})`,
       poolCompactText: `${poolInUse}/${database.poolMax} (대기 ${database.poolWaiting})`,
       dbSizeText: formatDbSize(database.dbSizeBytes),
-      activeConnectionsText: database.activeConnections === null ? '권한 제한' : fmtNum(database.activeConnections),
+      activeConnectionsText: database.activeConnections === null ? '권한 제한' : formatSafeCount(database.activeConnections),
     },
     ws: {
       onlineCount: ws.onlineCount,
-      onlineCountText: fmtNum(ws.onlineCount),
+      onlineCountText: formatSafeCount(ws.onlineCount),
       ...wsSummary,
       daily: ws.daily.map(row => ({
         day: row.day,

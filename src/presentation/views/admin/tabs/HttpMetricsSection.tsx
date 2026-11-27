@@ -16,8 +16,8 @@ import MetricSwitch from '../widgets/MetricSwitch';
 import { OVERVIEW_RANGE_OPTIONS } from './dayRange';
 import type { DayRange } from './dayRange';
 
-const fmtCount = (v: number | null | undefined) => (v === null || v === undefined ? '—' : fmtNum(v));
-const fmtCountOrDash = (v: number | null | undefined) => (v === null || v === undefined ? '--' : fmtNum(v));
+const fmtCount = (v: number | null | undefined) =>
+  v === null || v === undefined || !Number.isFinite(v) ? '--' : fmtNum(v);
 
 function HttpSummaryKpis({ view, days }: { view: HttpMetricsView; days: number }) {
   const { summary } = view;
@@ -84,11 +84,11 @@ export function HttpMetricsOpsSection({ granted }: { granted: boolean }) {
       <Inset className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs">
         <div className="flex flex-wrap items-center gap-3">
           <span>
-            409 충돌 <strong className="pf-accent text-gold">{fmtCountOrDash(view.summary.status409)}건</strong>{' '}
+            409 충돌 <strong className="pf-accent text-gold">{fmtCount(view.summary.status409)}건</strong>{' '}
             <span className="text-text-dim">({view.summary.rate409Text})</span>
           </span>
           <span>
-            4xx 전체 <strong className="pf-accent text-gold">{fmtCountOrDash(view.summary.status4xx)}건</strong>{' '}
+            4xx 전체 <strong className="pf-accent text-gold">{fmtCount(view.summary.status4xx)}건</strong>{' '}
             <span className="text-text-dim">({view.summary.rate4xxText})</span>
           </span>
         </div>

@@ -66,10 +66,12 @@ const show = (access: AdminAccess, role: AdminRole = 'admin') => render(
 
 describe('클라이언트 체감 성능 섹션', () => {
   it('권한이 없으면 조회하지 않고 빈 표기와 안내 문구를 보여 준다', () => {
-    show('local');
+    const { container } = show('local');
     expect(screen.getByText('클라이언트 체감 성능 및 단절')).toBeInTheDocument();
     expect(screen.getByText(/실제 브라우저 세션 비콘 집계이며/)).toBeInTheDocument();
     expect(screen.getByText('수집된 클라이언트 성능 지표가 아직 없어요.')).toBeInTheDocument();
+    expect(screen.getAllByText('--').length).toBeGreaterThanOrEqual(7);
+    expect(container.textContent).not.toContain('—');
     expect(vi.mocked(api.admin.clientMetrics)).not.toHaveBeenCalled();
   });
 

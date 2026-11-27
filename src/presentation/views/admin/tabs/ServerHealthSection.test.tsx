@@ -87,9 +87,11 @@ const show = (access: AdminAccess, role: AdminRole = 'admin') => render(
 
 describe('서버 상태 및 경보 섹션', () => {
   it('권한이 없으면 조회하지 않고 로컬 안내와 빈 상태를 표시한다', () => {
-    show('local');
+    const { container } = show('local');
     expect(screen.getByText('서버, 소켓, DB 상태 및 경보')).toBeInTheDocument();
     expect(screen.getByText(/운영 DB에 연결하면/)).toBeInTheDocument();
+    expect(screen.getAllByText('--').length).toBeGreaterThanOrEqual(7);
+    expect(container.textContent).not.toContain('—');
     expect(vi.mocked(api.admin.opsHealth)).not.toHaveBeenCalled();
   });
 
