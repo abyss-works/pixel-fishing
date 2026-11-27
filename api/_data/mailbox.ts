@@ -414,30 +414,9 @@ export interface MailPlan {
   idempotent?: boolean;
 }
 
-interface CachedMailSend {
-  expiresAt: number;
-  fingerprint: string;
-  result: MailPlan & { sent: number };
-}
-
-interface InFlightMailSend {
-  fingerprint: string;
-  promise: Promise<MailPlan & { sent: number }>;
-}
-
-const mailIdempotencyCache = new Map<string, CachedMailSend>();
-const mailInFlight = new Map<string, InFlightMailSend>();
-
-/** 테스트용 멱등 캐시 초기화 */
-export function clearMailIdempotencyCache(): void {
-  mailIdempotencyCache.clear();
-  mailInFlight.clear();
-}
-
-function pruneIdempotencyCache(nowMs: number): void {
-  for (const [key, entry] of mailIdempotencyCache) {
-    if (entry.expiresAt <= nowMs) mailIdempotencyCache.delete(key);
-  }
+/** 테스트용 DB 멱등 키 초기화 */
+export async function clearMailIdempotencyCache(db?: Executor): Promise<void> {
+  if (db) await db.execute(sql`delete from public.admin_mail_idempotency`);
 }
 
 function mailFingerprint(req: MailRequest): string {
@@ -540,62 +519,88 @@ export async function planMail(db: Executor, req: MailRequest): Promise<MailPlan
   return { problems: [], preview };
 }
 
+async function runSend(db: Executor, req: MailRequest, nowISO: string): Promise<MailPlan & { sent: number }> {
+  const draft = await draftOf(db, req);
+  const problems = draftProblems(draft);
+  if (problems.length > 0) {
+    const duplicates = duplicateRecipientIds(draft.recipients);
+    return { problems, ...(duplicates.length > 0 ? { duplicates } : {}), preview: null, sent: 0 };
+  }
+  const preview = await previewMails(db, draft);
+  if (preview.capExceeded) return { problems: ['totalGold'], preview, sent: 0 };
+  if (preview.count === 0) return { problems: ['recipients'], preview, sent: 0 };
+  if (await hasRecentDuplicateMail(db, draft, nowISO)) throw new DuplicateMailError();
+  const sent = await sendMails(db, draft, nowISO);
+  return { problems: [], preview, sent };
+}
+
+type IdempotencyRow = {
+  fingerprint: string;
+  result: (MailPlan & { sent: number }) | null;
+  expires_at: Date | string;
+};
+
 /** 보내기 — 형태 문제와 상한 초과·중복 발송이 없을 때만 넣는다. 넣은 수(sent)와 넣기 직전 미리보기를 돌려준다 */
 export async function deliverMail(db: Executor, req: MailRequest, nowISO: string): Promise<MailPlan & { sent: number }> {
   const quick = quickRequestProblems(req);
   if (quick) return { ...quick, preview: null, sent: 0 };
 
   const key = req.idempotencyKey;
-  const nowMs = Date.now();
+  if (!key) return runSend(db, req, nowISO);
+
   const fingerprint = mailFingerprint(req);
+  const nowMs = Date.now();
+  const expiresAtISO = new Date(nowMs + MAIL_IDEMPOTENCY_TTL_MS).toISOString();
+  const runInTx = <T>(work: (tx: Executor) => Promise<T>): Promise<T> => (
+    typeof db.transaction === 'function' ? db.transaction(work) : work(db)
+  );
 
-  if (key) {
-    pruneIdempotencyCache(nowMs);
-    const cached = mailIdempotencyCache.get(key);
-    if (cached && cached.expiresAt > nowMs) {
-      if (cached.fingerprint !== fingerprint) throw new DuplicateMailError();
-      return { ...cached.result, sent: 0, idempotent: true };
-    }
-    const pending = mailInFlight.get(key);
-    if (pending) {
-      if (pending.fingerprint !== fingerprint) throw new DuplicateMailError();
-      const done = await pending.promise;
-      return done.problems.length > 0 ? done : { ...done, sent: 0, idempotent: true };
-    }
-  }
+  return runInTx(async tx => {
+    let occupied = false;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const inserted = await tx.execute<{ key: string }>(sql`
+        insert into public.admin_mail_idempotency (key, fingerprint, result, expires_at)
+        values (${key}, ${fingerprint}, null, ${at(expiresAtISO)})
+        on conflict (key) do nothing
+        returning key
+      `);
+      if (inserted.rows.length > 0) {
+        occupied = true;
+        break;
+      }
 
-  const run = async (): Promise<MailPlan & { sent: number }> => {
-    const draft = await draftOf(db, req);
-    const problems = draftProblems(draft);
-    if (problems.length > 0) {
-      const duplicates = duplicateRecipientIds(draft.recipients);
-      return { problems, ...(duplicates.length > 0 ? { duplicates } : {}), preview: null, sent: 0 };
+      const existing = await tx.execute<IdempotencyRow>(sql`
+        select fingerprint, result, expires_at
+        from public.admin_mail_idempotency
+        where key = ${key}
+        for update
+      `);
+      const row = existing.rows[0];
+      if (!row) continue;
+
+      if (new Date(row.expires_at).getTime() <= nowMs) {
+        await tx.execute(sql`delete from public.admin_mail_idempotency where key = ${key}`);
+        continue;
+      }
+
+      if (row.fingerprint !== fingerprint) throw new DuplicateMailError();
+      if (!row.result) throw new DuplicateMailError();
+      return row.result.problems.length > 0 ? row.result : { ...row.result, sent: 0, idempotent: true };
     }
-    const preview = await previewMails(db, draft);
-    if (preview.capExceeded) return { problems: ['totalGold'], preview, sent: 0 };
-    if (preview.count === 0) return { problems: ['recipients'], preview, sent: 0 };
-    if (await hasRecentDuplicateMail(db, draft, nowISO)) throw new DuplicateMailError();
-    const sent = await sendMails(db, draft, nowISO);
-    const result: MailPlan & { sent: number } = { problems: [], preview, sent };
-    if (key) {
-      mailIdempotencyCache.set(key, {
-        expiresAt: Date.now() + MAIL_IDEMPOTENCY_TTL_MS,
-        fingerprint,
-        result,
-      });
+    if (!occupied) throw new Error('admin-mail-idempotency-lock-failed');
+
+    const result = await runSend(tx, req, nowISO);
+    if (result.problems.length > 0) {
+      await tx.execute(sql`delete from public.admin_mail_idempotency where key = ${key}`);
+      return result;
     }
+    await tx.execute(sql`
+      update public.admin_mail_idempotency
+      set result = ${JSON.stringify(result)}::jsonb, expires_at = ${at(expiresAtISO)}
+      where key = ${key}
+    `);
     return result;
-  };
-
-  if (!key) return run();
-
-  const promise = run();
-  mailInFlight.set(key, { fingerprint, promise });
-  try {
-    return await promise;
-  } finally {
-    mailInFlight.delete(key);
-  }
+  });
 }
 
 function parseRawItems(raw: unknown): MailItemAttachment[] | null {

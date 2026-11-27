@@ -11,6 +11,26 @@ const A = '00000000-0000-4000-8000-000000000001';
 const B = '00000000-0000-4000-8000-000000000002';
 const NOW = '2026-11-22T00:00:00.000Z';
 
+function extractQueryParts(query: unknown): { text: string; params: unknown[] } {
+  const chunks = (query as { queryChunks?: unknown[] })?.queryChunks ?? [];
+  let text = '';
+  const params: unknown[] = [];
+  for (const chunk of chunks) {
+    if (typeof chunk === 'object' && chunk !== null && 'queryChunks' in chunk) {
+      const nested = extractQueryParts(chunk);
+      text += nested.text;
+      params.push(...nested.params);
+    } else if (typeof chunk === 'object' && chunk !== null && 'value' in chunk && Array.isArray((chunk as { value: unknown }).value)) {
+      text += (chunk as { value: string[] }).value.join('');
+    } else if (typeof chunk === 'object' && chunk !== null && 'value' in chunk) {
+      params.push((chunk as { value: unknown }).value);
+    } else {
+      params.push(chunk);
+    }
+  }
+  return { text, params };
+}
+
 function mockExecutor(opts: {
   foundIds?: string[];
   allIds?: string[];
@@ -20,9 +40,37 @@ function mockExecutor(opts: {
   const foundIds = opts.foundIds ?? [A, B];
   const allIds = opts.allIds ?? [A, B];
   let callIndex = 0;
-  return {
+  let idempotencyStore = new Map<string, { fingerprint: string; result: unknown; expires_at: string }>();
+
+  const exec = {
     execute: vi.fn(async (query: unknown) => {
-      const text = JSON.stringify(query);
+      const { text, params } = extractQueryParts(query);
+      if (text.includes('insert into public.admin_mail_idempotency')) {
+        const [key, fingerprint, expires_at] = params as [string, string, string];
+        if (idempotencyStore.has(key)) return { rows: [] };
+        idempotencyStore.set(key, { fingerprint, result: null, expires_at });
+        return { rows: [{ key }] };
+      }
+      if (text.includes('from public.admin_mail_idempotency') && text.includes('for update')) {
+        const [key] = params as [string];
+        const entry = idempotencyStore.get(key);
+        return { rows: entry ? [entry] : [] };
+      }
+      if (text.includes('delete from public.admin_mail_idempotency')) {
+        const [key] = params as [string];
+        if (key) idempotencyStore.delete(key);
+        else idempotencyStore.clear();
+        return { rows: [] };
+      }
+      if (text.includes('update public.admin_mail_idempotency')) {
+        const [rawResult, expires_at, key] = params as [string, string, string];
+        const entry = idempotencyStore.get(key);
+        if (entry) {
+          entry.result = typeof rawResult === 'string' ? JSON.parse(rawResult) : rawResult;
+          entry.expires_at = expires_at;
+        }
+        return { rows: [] };
+      }
       if (text.includes('from public.saves_current')) {
         return { rows: allIds.map(id => ({ id })) };
       }
@@ -38,7 +86,19 @@ function mockExecutor(opts: {
       }
       return { rows: [] };
     }),
-  } as unknown as Executor;
+    transaction: async <T>(work: (tx: Executor) => Promise<T>): Promise<T> => {
+      const snapshot = new Map(
+        [...idempotencyStore.entries()].map(([k, v]) => [k, { ...v }]),
+      );
+      try {
+        return await work(exec as unknown as Executor);
+      } catch (err) {
+        idempotencyStore = snapshot;
+        throw err;
+      }
+    },
+  };
+  return exec as unknown as Executor;
 }
 
 afterEach(() => {
@@ -244,47 +304,23 @@ describe('우편 요청 해석 및 중복/상한 검증', () => {
     expect(sent).toMatchObject({ problems: ['recipients'], sent: 0 });
   });
 
-  it('동시 요청(mailInFlight) 합류 시 본문이 다르면 DuplicateMailError, invalid 요청은 검증 결과, 동일 요청은 idempotent=true를 돌려준다', async () => {
-    let release!: () => void;
-    const gate = new Promise<void>(resolve => { release = resolve; });
-    const db = {
-      execute: vi.fn(async (query: unknown) => {
-        const text = JSON.stringify(query);
-        if (text.includes('join auth.users u') && !text.includes('insert into public.mails')) {
-          return { rows: [{ id: A }] };
-        }
-        if (text.includes('as found')) {
-          await gate;
-          return { rows: [{ found: false }] };
-        }
-        if (text.includes('insert into public.mails')) {
-          return { rows: [{ n: 1 }] };
-        }
-        return { rows: [] };
-      }),
-    } as unknown as Executor;
-
+  it('발송 실패(롤백) 또는 검증 오류 시 멱등 키 점유가 남아 있지 않아 같은 키로 재시도할 수 있다', async () => {
     const req = {
-      title: '동시', body: '본문',
+      title: '재시도', body: '본문',
       target: { kind: 'users' as const, recipients: [{ userId: A, gold: 50 }] },
-      idempotencyKey: 'inflight-key',
+      idempotencyKey: 'rollback-retry-key',
     };
 
-    const p1 = deliverMail(db, req, NOW);
-    await Promise.resolve();
-
-    // invalid 요청은 합류·충돌 없이 각자 검증 문제를 받는다
+    // 검증 오류는 점유하지 않는다
+    const db = mockExecutor({ foundIds: [A], sentCount: 1 });
     await expect(deliverMail(db, { ...req, title: ' ' }, NOW)).resolves.toEqual({
       problems: ['title'], preview: null, sent: 0,
     });
-    // 본문이 다른 동시 요청은 409 충돌 오류를 받는다
-    await expect(deliverMail(db, { ...req, body: '다른 본문' }, NOW)).rejects.toBeInstanceOf(DuplicateMailError);
-    // 동일 요청 합류는 첫 요청이 끝난 뒤 idempotent=true를 받는다
-    const pSame = deliverMail(db, req, NOW);
 
-    release();
-    expect(await p1).toMatchObject({ problems: [], sent: 1 });
-    expect(await pSame).toMatchObject({ problems: [], sent: 0, idempotent: true });
+    // 중복 창 충돌로 트랜잭션이 롤백되면 점유가 해제되어 이후 같은 키로 재시도할 수 있다
+    const failDb = mockExecutor({ foundIds: [A], hasDuplicateRow: true });
+    await expect(deliverMail(failDb, req, NOW)).rejects.toBeInstanceOf(DuplicateMailError);
+    await expect(deliverMail(db, req, NOW)).resolves.toMatchObject({ problems: [], sent: 1 });
   });
 
   it('sendIdempotentMail은 입력·카탈로그·수량·금화 검증 후 입력 순서를 보존하고 중복 id를 합산해 삽입한다', async () => {
