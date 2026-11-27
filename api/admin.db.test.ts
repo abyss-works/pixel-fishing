@@ -1628,4 +1628,47 @@ describe('역할 분리(admin·maintainer) · Zero-PII 투영 · 배지 토글 �
       ],
     });
   });
+
+  it('POST ?q=coupons는 maxRedemptions·perAccountLimit int4 상한(2_147_483_647)을 허용하고 초과 시 400으로 거부한다', async () => {
+    const post = (body: unknown) => callAdmin({ q: 'coupons' }, userToken(MAINT), 'POST', body);
+
+    expect(await post({
+      op: 'create',
+      code: 'INT4-OVER-MAX',
+      gold: 100,
+      description: '상한 초과',
+      maxRedemptions: 2_147_483_648,
+    })).toMatchObject({ status: 400, body: { error: 'bad-coupon' } });
+
+    expect(await post({
+      op: 'create',
+      code: 'INT4-OVER-PER',
+      gold: 100,
+      description: '상한 초과',
+      perAccountLimit: 2_147_483_648,
+    })).toMatchObject({ status: 400, body: { error: 'bad-coupon' } });
+
+    expect(await post({
+      op: 'create',
+      code: 'INT4-AT-MAX',
+      gold: 100,
+      description: 'int4 최댓값',
+      maxRedemptions: 2_147_483_647,
+      perAccountLimit: 2_147_483_647,
+    })).toMatchObject({
+      status: 200,
+      body: {
+        coupon: {
+          code: 'INT4-AT-MAX',
+          maxRedemptions: 2_147_483_647,
+          perAccountLimit: 2_147_483_647,
+        },
+      },
+    });
+
+    expect(await post({ op: 'delete', code: 'INT4-AT-MAX' })).toMatchObject({
+      status: 200,
+      body: { deleted: true, code: 'INT4-AT-MAX' },
+    });
+  });
 });

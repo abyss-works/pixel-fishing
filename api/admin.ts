@@ -78,7 +78,7 @@ const WRITES: Record<string, Write> = {
   revokeSessions,
   notices: ({ db }, body, adminId, role) => notices(db, body, adminId, role),
   events: (store, body, adminId) => eventsWrite(store, body, adminId),
-  coupons: ({ db }, body, adminId, role) => couponsWrite(db, body, adminId, role),
+  coupons: couponsWrite,
   staffBadge,
 };
 
@@ -483,21 +483,9 @@ async function eventsWrite({ db, withTransaction }: Database, raw: unknown, admi
   }
 }
 
-/** 동적 쿠폰 생성·수정·삭제 후 불변 감사 로그를 남긴다 */
-async function couponsWrite(db: Executor, raw: unknown, adminId: string, role: read.AdminRole): Promise<unknown> {
+/** 동적 쿠폰 생성·수정·삭제와 불변 감사 로그 기록을 단일 트랜잭션으로 묶어 실행한다 */
+async function couponsWrite({ withTransaction }: Database, raw: unknown, adminId: string, role: read.AdminRole): Promise<unknown> {
   const body = (raw !== null && typeof raw === 'object' ? raw : {}) as { op?: unknown; code?: unknown };
-  const recordAudit = (
-    action: 'couponCreate' | 'couponUpdate' | 'couponDelete',
-    reason: string,
-    detail: Record<string, unknown>,
-  ) => dbWrite(() => read.insertAdminAuditLog(db, {
-    actorId: adminId,
-    actorRole: role,
-    action,
-    targetId: null,
-    reason,
-    detail,
-  }));
   const couponDetail = (c: AdminCouponRow) => ({
     code: c.code,
     gold: c.gold,
@@ -511,25 +499,58 @@ async function couponsWrite(db: Executor, raw: unknown, adminId: string, role: r
     case 'create': {
       const draft = parseCouponDraft(body, 'create');
       if (!draft || Object.hasOwn(COUPONS, draft.code)) throw new ApiError(400, 'bad-coupon');
-      const coupon = await dbWrite(() => createAdminCoupon(db, draft));
+      const coupon = await dbWrite(() => withTransaction(async tx => {
+        const created = await createAdminCoupon(tx, draft);
+        if (created === 'duplicate') return 'duplicate' as const;
+        await read.insertAdminAuditLog(tx, {
+          actorId: adminId,
+          actorRole: role,
+          action: 'couponCreate',
+          targetId: null,
+          reason: created.code,
+          detail: couponDetail(created),
+        });
+        return created;
+      }));
       if (coupon === 'duplicate') throw new ApiError(409, 'duplicate-coupon');
-      await recordAudit('couponCreate', coupon.code, couponDetail(coupon));
       return { coupon };
     }
     case 'update': {
       const draft = parseCouponDraft(body, 'update');
       if (!draft || Object.hasOwn(COUPONS, draft.code)) throw new ApiError(400, 'bad-coupon');
-      const coupon = await dbWrite(() => updateAdminCoupon(db, draft));
+      const coupon = await dbWrite(() => withTransaction(async tx => {
+        const updated = await updateAdminCoupon(tx, draft);
+        if (!updated) return null;
+        await read.insertAdminAuditLog(tx, {
+          actorId: adminId,
+          actorRole: role,
+          action: 'couponUpdate',
+          targetId: null,
+          reason: updated.code,
+          detail: couponDetail(updated),
+        });
+        return updated;
+      }));
       if (!coupon) throw new ApiError(404, 'no-coupon');
-      await recordAudit('couponUpdate', coupon.code, couponDetail(coupon));
       return { coupon };
     }
     case 'delete': {
       const code = typeof body.code === 'string' ? body.code.trim() : '';
       if (code.length === 0 || code.length > COUPON_CODE_MAX) throw new ApiError(400, 'bad-coupon');
-      const deleted = await dbWrite(() => deleteAdminCoupon(db, code));
+      const deleted = await dbWrite(() => withTransaction(async tx => {
+        const removed = await deleteAdminCoupon(tx, code);
+        if (!removed) return false;
+        await read.insertAdminAuditLog(tx, {
+          actorId: adminId,
+          actorRole: role,
+          action: 'couponDelete',
+          targetId: null,
+          reason: code,
+          detail: { code },
+        });
+        return true;
+      }));
       if (!deleted) throw new ApiError(404, 'no-coupon');
-      await recordAudit('couponDelete', code, { code });
       return { deleted: true, code };
     }
     default:
