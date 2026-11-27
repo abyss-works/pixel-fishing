@@ -98,6 +98,7 @@ export const EVENT_LABELS: Record<string, string> = {
   sell: '판매',
   upgradeRod: '낚싯대 강화',
   buyBoat: '배 구매',
+  buyHat: '모자 구매',
   visit: '지역 첫 도달',
   coupon: '쿠폰',
   claimRelief: '지원 코드',
@@ -149,6 +150,7 @@ export function eventSummary(type: string, p: Record<string, unknown> | null | u
     }
     case 'upgradeRod': return `Lv${String(pay.toLevel ?? '?')} −${fmtNum(Number(pay.cost ?? 0))}G`;
     case 'buyBoat': return `T${String(pay.tier ?? '?')} −${fmtNum(Number(pay.cost ?? 0))}G`;
+    case 'buyHat': return `${s(pay.hat) || '?'} −${fmtNum(Number(pay.cost ?? 0))}G`;
     case 'visit': return `첫 도달: ${s(pay.region)}`;
     case 'coupon': return `${s(pay.code)} +${fmtNum(Number(pay.gold ?? 0))}G`;
     case 'claimRelief': return `${s(pay.code)} 지급`;

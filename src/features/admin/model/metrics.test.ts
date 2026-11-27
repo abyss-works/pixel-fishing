@@ -74,8 +74,11 @@ describe('eventSummary — 리듀서 payload를 사람 문장으로', () => {
   });
 
   it('경제 액션 — 유입은 +, 지출은 −로 읽힌다', () => {
+    expect(EVENT_LABELS.buyHat).toBe('모자 구매');
     expect(eventSummary('sell', { gold: 1200, count: 3 })).toBe('3마리 +1,200G');
     expect(eventSummary('upgradeRod', { toLevel: 5, cost: 850 })).toBe('Lv5 −850G');
+    expect(eventSummary('buyHat', { hat: 'cap-red', cost: 1200 })).toBe('cap-red −1,200G');
+    expect(eventSummary('buyHat', { cost: 1200 })).toBe('? −1,200G');
     expect(eventSummary('buyBait', { bait: 'bait-rare', count: 10, cost: 500 }))
       .toBe('bait-rare ×10 −500G');
     expect(eventSummary('import', { gold: 2_340_000_000, fame: 100_000_000 }))

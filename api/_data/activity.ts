@@ -51,7 +51,7 @@ const onDay = (column: SQL, day: SQL): SQL =>
  * 먼저 남아 있는 events로 활동일을 채운다(관리자 조치 이벤트와 인증 계정이 없는 행은 뺀다).
  * 그다음 events가 남아 있는 KST 날짜 가운데 집계 행이 없거나 어제·오늘인 날을 다시 계산해 덮어쓴다.
  * events가 없는 날은 계산하지 않아 행이 없는 채로 남는다.
- * 골드 유입(sell·coupon·claimMail의 gold)과 유출(upgradeRod·buyBoat·buyBait의 cost)은 관리자 경제 일계와 같은 정의다.
+ * 골드 유입(sell·coupon·claimMail의 gold)과 유출(upgradeRod·buyBoat·buyBait·buyHat의 cost)은 관리자 경제 일계와 같은 정의다.
  */
 export async function refreshDailyStats(db: Executor, nowISO: string): Promise<string[]> {
   await db.execute(sql`insert into public.user_active_days (user_id, day)
@@ -87,7 +87,7 @@ export async function refreshDailyStats(db: Executor, nowISO: string): Promise<s
     cross join lateral (
       select count(*) filter (where e.type = 'catch')::int as catches,
              coalesce(sum((e.payload->>'gold')::numeric) filter (where e.type in ('sell', 'coupon', 'claimMail')), 0)::bigint as gold_in,
-             coalesce(sum((e.payload->>'cost')::numeric) filter (where e.type in ('upgradeRod', 'buyBoat', 'buyBait')), 0)::bigint as gold_out,
+             coalesce(sum((e.payload->>'cost')::numeric) filter (where e.type in ('upgradeRod', 'buyBoat', 'buyBait', 'buyHat')), 0)::bigint as gold_out,
              count(*) filter (where e.type not like 'admin%')::int as actions
       from public.events e
       where ${onDay(sql`e.created_at`, sql`p.day`)}

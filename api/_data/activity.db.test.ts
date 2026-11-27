@@ -121,6 +121,14 @@ describe('refreshDailyStats', () => {
     const rows = await statsRows();
     expect(rows.map(r => [r.day, r.dau])).toEqual([['2030-02-08', 99], ['2030-02-09', 1], ['2030-02-10', 1]]);
   });
+
+  it('buyHat 이벤트의 cost가 daily_stats.gold_out에 합산된다', async () => {
+    await event(b, 'buyHat', { hatId: 'straw-hat', cost: 450 }, '2030-02-10T02:00:00Z');
+    await refreshDailyStats(database.db, NOW);
+    const rows = await statsRows();
+    const feb10 = rows.find(r => r.day === '2030-02-10');
+    expect(feb10?.gold_out).toBe(450);
+  });
 });
 
 describe('deleteUserActivity', () => {
