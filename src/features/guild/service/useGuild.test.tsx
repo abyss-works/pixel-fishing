@@ -177,4 +177,31 @@ describe('useGuild', () => {
     await waitFor(() => expect(result.current.guild?.id).toBe('g1'));
     expect(api.readGuild).toHaveBeenCalledTimes(2);
   });
+
+  it('cooldownUntil을 반환하고 act가 rejoin-cooldown으로 거부되면 guild 쿼리를 무효화한다', async () => {
+    const until = '2026-11-28T10:00:00.000Z';
+    api.readGuild
+      .mockResolvedValueOnce({ guild: null, request: null, cooldownUntil: null })
+      .mockResolvedValueOnce({ guild: null, request: null, cooldownUntil: until });
+    api.guildAction.mockResolvedValueOnce({ ok: false, error: 'rejoin-cooldown' });
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const spy = vi.spyOn(client, 'invalidateQueries');
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useGuild(true), { wrapper });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.cooldownUntil).toBeNull();
+
+    spy.mockClear();
+    let res!: GuildOpResult;
+    await act(async () => {
+      res = await result.current.act({ op: 'create', name: '새길드' });
+    });
+    expect(res).toEqual({ ok: false, error: 'rejoin-cooldown' });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['guild', 'u1'] });
+    await waitFor(() => expect(result.current.cooldownUntil).toBe(until));
+  });
 });

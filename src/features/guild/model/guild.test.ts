@@ -5,7 +5,7 @@ import {
   GUILD_BONUS_NAME, GUILD_ENHANCE_LOCK_NOTE, GUILD_JOIN_MODE_TEXT, GUILD_LEAVE_COOLDOWN_NOTE, GUILD_LEVEL_HELP,
   PUBLIC_GUILD_SORT_OPTIONS, dailyContributionRows, GUILD_ERROR_TEXT, bonusEffectText, bonusEffectValue,
   bonusRows, donateDisabledReason, enhanceInvestState, enhancePoolSummary, enhanceResetCostRows, enhanceResetState,
-  growthBar, growthTotalText, guildActivityText, guildAlertText, guildLinkUrl, inviteDialogView, inviteShareText, leaveConfirm, leaveOutcome,
+  growthBar, growthTotalText, guildActivityText, guildAlertText, guildCooldownInfo, guildErrorText, guildLinkUrl, inviteDialogView, inviteShareText, leaveConfirm, leaveOutcome,
   logbookDays, memberActions, memberConfirm, memberName, memberRows, personalNodes, publicJoinConfirm, renameButtonState, requestRows, splitMembers,
 } from './guild';
 
@@ -97,9 +97,24 @@ describe('길드 화면 모델', () => {
   it('서버 거부 코드마다 안내 문장이 있다', () => {
     for (const code of ['bad-name', 'name-taken', 'already-in-guild', 'bad-code', 'guild-full', 'not-leader', 'handover-first', 'account-only',
       'not-enough-gold', 'bonus-locked', 'rank-maxed', 'bad-amount', 'restricted', 'same-name', 'renamed-today',
-      'enhance-locked', 'no-enhance-points', 'enhance-maxed', 'no-enhance-used']) {
+      'enhance-locked', 'no-enhance-points', 'enhance-maxed', 'no-enhance-used', 'rejoin-cooldown']) {
       expect(GUILD_ERROR_TEXT[code]).toBeTruthy();
     }
+  });
+
+  it('재가입 대기 안내와 오류 문구를 계산한다', () => {
+    const now = Date.parse('2026-11-27T00:00:00.000Z');
+    expect(guildCooldownInfo(null, now)).toEqual({ active: false, remainingMs: 0, remainingText: null });
+    expect(guildCooldownInfo('2026-11-27T00:00:00.000Z', now)).toEqual({ active: false, remainingMs: 0, remainingText: null });
+    expect(guildCooldownInfo('2026-11-27T19:42:00.000Z', now)).toEqual({
+      active: true,
+      remainingMs: 19 * 3_600_000 + 42 * 60_000,
+      remainingText: '19시간 42분',
+    });
+
+    expect(guildErrorText('rejoin-cooldown', 'approve', '19시간 42분')).toBe('신청한 플레이어가 재가입 대기 중이라 승인할 수 없어요.');
+    expect(guildErrorText('rejoin-cooldown', 'create', '19시간 42분')).toBe('재가입 대기 중이라 19시간 42분 뒤에 가입하거나 새 길드를 만들 수 있어요.');
+    expect(guildErrorText('rejoin-cooldown', 'join', null)).toBe('재가입 대기 중이라 지금은 가입하거나 새 길드를 만들 수 없어요.');
   });
 
   it('게스트 거부 안내는 태평양 항로 해금을 알린다', () => {
@@ -426,6 +441,16 @@ describe('초대 확인 창', () => {
       text: '들어가면 길드 채팅과 길드 스킬을 바로 함께 써요.' });
     expect(inviteDialogView(preview({ joinMode: 'closed' }), viewer, 'link')).toMatchObject({ state: 'closed', action: null });
     expect(inviteDialogView(preview({ joinMode: 'approval', members: 10 }), viewer, 'link')).toMatchObject({ state: 'full', action: null });
+  });
+
+  it('재가입 대기 중이면 초대 창은 가입 버튼을 비활성화하고 남은 시간 안내를 보인다', () => {
+    expect(inviteDialogView(preview(), { account: true, guild: null, cooldownRemaining: '19시간 42분' }, 'link')).toEqual({
+      state: 'cooldown',
+      action: null,
+      text: '재가입 대기 중이라 19시간 42분 뒤에 가입할 수 있어요.',
+    });
+    expect(inviteDialogView(preview({ joinMode: 'closed' }), { account: true, guild: null, cooldownRemaining: '19시간 42분' }, 'link'))
+      .toMatchObject({ state: 'closed', action: null });
   });
 });
 

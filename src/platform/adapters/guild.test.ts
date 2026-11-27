@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('./auth', () => ({ isCloud: true }));
 
-import { guildAction, readPublicGuilds } from './guild';
+import { guildAction, readGuild, readPublicGuilds } from './guild';
 
 describe('guildAction — 보너스 기부', () => {
   const fetchMock = vi.fn();
@@ -67,5 +67,20 @@ describe('guildAction — 보너스 기부', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/guild-memberships', {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ guildId: 'g1' }),
     });
+  });
+
+  it('GET /api/guilds/me의 cooldownUntil을 그대로 반환하고 누락 시 null로 정규화한다', async () => {
+    const until = '2026-11-28T00:00:00.000Z';
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ guild: null, request: null, cooldownUntil: until }), { status: 200 }));
+    await expect(readGuild()).resolves.toEqual({ guild: null, request: null, cooldownUntil: until });
+
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ guild: null, request: null }), { status: 200 }));
+    await expect(readGuild()).resolves.toEqual({ guild: null, request: null, cooldownUntil: null });
+  });
+
+  it('409 rejoin-cooldown 거부를 그대로 반환한다', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: 'rejoin-cooldown' }), { status: 409 }));
+    await expect(guildAction({ op: 'create', name: '새선단' }))
+      .resolves.toEqual({ ok: false, error: 'rejoin-cooldown' });
   });
 });

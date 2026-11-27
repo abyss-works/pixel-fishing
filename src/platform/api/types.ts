@@ -164,8 +164,8 @@ export interface GuildInfo {
 }
 /** 길드가 없을 때 내가 넣어 둔 가입 신청 */
 export interface GuildMyRequest { code: string; name: string; requestedAt: string }
-/** 내 길드 조회 결과 — 길드가 있으면 request는 null이다 */
-export interface GuildState { guild: GuildInfo | null; request: GuildMyRequest | null }
+/** 내 길드 조회 결과 — 길드가 있으면 request는 null이며, 재가입 대기 중이 아니면 cooldownUntil은 null이다 */
+export interface GuildState { guild: GuildInfo | null; request: GuildMyRequest | null; cooldownUntil?: string | null }
 /** 초대 링크 미리보기 — 로그인 없이 읽는 길드 요약 */
 export interface GuildInvitePreview { code: string; name: string; level: number; members: number; cap: number; joinMode: GuildJoinMode }
 /** 공개 길드 목록 한 줄 — 자유 가입·비만석 길드 요약(고유 코드 비노출) */

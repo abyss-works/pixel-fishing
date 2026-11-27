@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { GUILD_ERROR_TEXT, inviteDialogView } from '../../../../features/guild/model/guild';
+import { guildErrorText, inviteDialogView } from '../../../../features/guild/model/guild';
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import { useGuild } from '../../../../features/guild/service/useGuild';
+import { useGuildCooldown } from '../../../../features/guild/service/useGuildCooldown';
 import { useGuildInvite } from '../../../../features/guild/service/useGuildInvite';
 import Button from '../../../ui/Button';
 import type { Notify } from '../../../ui/hud/messageFeed';
@@ -24,14 +25,17 @@ export default function GuildInviteDialog({ code, account, onAccount, onClose, s
   setToast: Notify;
 }) {
   const invite = useGuildInvite(code);
-  const { guild, loading: guildLoading, failed: guildFailed, act, refresh: refreshGuild } = useGuild(account !== null);
+  const { guild, cooldownUntil, loading: guildLoading, failed: guildFailed, act, refresh: refreshGuild } = useGuild(account !== null);
+  const cooldown = useGuildCooldown(cooldownUntil ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inviteLoading = invite.loading ?? (!invite.settled && !invite.failed);
   const asyncLoading = inviteLoading || (account !== null && guildLoading);
   const asyncFailed = invite.failed || (account !== null && guildFailed);
   const ready = !asyncLoading && !asyncFailed && invite.settled;
-  const view = ready ? inviteDialogView(invite.preview, { account: account !== null, guild: guild?.name ?? null }, 'link') : null;
+  const view = ready
+    ? inviteDialogView(invite.preview, { account: account !== null, guild: guild?.name ?? null, cooldownRemaining: cooldown.remainingText }, 'link')
+    : null;
   const retry = () => {
     if (invite.failed) void invite.refresh();
     if (account !== null && guildFailed) refreshGuild();
@@ -41,7 +45,7 @@ export default function GuildInviteDialog({ code, account, onAccount, onClose, s
     setBusy(true);
     try {
       const r = await act({ op: 'join', code, via: 'link' });
-      if (!r.ok) { setError(GUILD_ERROR_TEXT[r.error] ?? '요청을 처리하지 못했어요. 잠시 뒤 다시 해 주세요.'); return; }
+      if (!r.ok) { setError(guildErrorText(r.error, 'join', cooldown.remainingText)); return; }
       sendNotice(setToast, {
         kind: 'guild.modalAction',
         text: `${invite.preview?.name ?? ''} 길드에 들어갔어요.`,

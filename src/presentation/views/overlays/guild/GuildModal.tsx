@@ -2,11 +2,12 @@ import { useState } from 'react';
 import { GUILD_MAX_MEMBERS } from '../../../../game/rules/guild';
 import type { ArtifactHolder } from '../../../../game/rules/artifactLevel';
 import {
-  GUILD_LEVEL_HELP, GUILD_ERROR_TEXT, enhancePoolSummary, growthBar, splitMembers,
+  GUILD_LEVEL_HELP, enhancePoolSummary, growthBar, guildErrorText, splitMembers,
 } from '../../../../features/guild/model/guild';
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import type { GuildConfirm, GuildInfo, GuildOp } from '../../../../features/guild/model/guild';
 import { useGuild } from '../../../../features/guild/service/useGuild';
+import { useGuildCooldown } from '../../../../features/guild/service/useGuildCooldown';
 import Button from '../../../ui/Button';
 import ConfirmDialog from '../../../ui/ConfirmDialog';
 import type { Notify } from '../../../ui/hud/messageFeed';
@@ -32,7 +33,6 @@ import type { GuildAsk, GuildPartProps } from './guildProps';
 // 길드가 없으면 3탭(공개 길드, 코드로 가입, 길드 만들기)을 둔다.
 // 길드 스킬 값은 서버가 판정해 적용한다. 이 창은 서버가 보낸 값을 보여 주고 요청을 보내기만 한다.
 // 창 자체는 스크롤하지 않는다. 넘치는 내용은 탭 본문 안에서만 굴린다.
-const FAILED = '요청을 처리하지 못했어요. 잠시 뒤 다시 해 주세요.';
 
 export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, onClose, onRetry }: {
   /** 내 골드 — 이름 바꾸기 비용을 낼 수 있는지 보인다 */
@@ -46,7 +46,8 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
   /** 조회 실패 시 다시 시도 콜백 */
   onRetry?: () => void;
 }) {
-  const { guild, request, loading, failed, you, act, refresh } = useGuild(true, true);
+  const { guild, request, cooldownUntil, loading, failed, you, act, refresh } = useGuild(true, true);
+  const cooldown = useGuildCooldown(cooldownUntil ?? null);
   const retryGuild = onRetry ?? refresh;
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<GuildConfirm | null>(null);
@@ -57,7 +58,7 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
     setBusy(true);
     try {
       const r = await act(op);
-      return r.ok ? { error: null, recovered: r.recovered } : { error: GUILD_ERROR_TEXT[r.error] ?? FAILED };
+      return r.ok ? { error: null, recovered: r.recovered } : { error: guildErrorText(r.error, op.op, cooldown.remainingText) };
     } catch {
       return { error: '길드 요청을 보내지 못했어요. 연결을 확인해 주세요.' };
     } finally {
@@ -71,7 +72,7 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
     setBusy(true);
     try {
       const r = await act({ op: 'join', code });
-      return r.ok ? { error: null, requested: r.result === 'requested' } : { error: GUILD_ERROR_TEXT[r.error] ?? FAILED, requested: false };
+      return r.ok ? { error: null, requested: r.result === 'requested' } : { error: guildErrorText(r.error, 'join', cooldown.remainingText), requested: false };
     } catch {
       return { error: '길드 요청을 보내지 못했어요. 연결을 확인해 주세요.', requested: false };
     } finally {
@@ -99,7 +100,7 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
                      onResetEnhancements={() => runOp({ op: 'resetEnhancements', guildId: guild.id })}
                      setToast={setToast} ask={setConfirm} dialogHost={dialogHost} gold={gold} artifacts={artifacts} onGoldChanged={onGoldChanged} />
         )
-        : <NoGuild busy={busy} run={run} join={join} request={request} dialogHost={dialogHost} setToast={setToast} />;
+        : <NoGuild busy={busy} run={run} join={join} request={request} cooldown={cooldown} dialogHost={dialogHost} setToast={setToast} />;
 
   return (
     // 길드 유무와 무관하게 창 크기를 680px 폭, 560px 높이(스테이지가 더 낮으면 가용 높이)로 고정해 가입 전후 크기 급변을 막는다.

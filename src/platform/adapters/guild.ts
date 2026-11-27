@@ -10,16 +10,20 @@ import {
   CONSENT_REQUIRED_CODE, isRateLimited, requestFailure, throwConsentRequired, throwRequestFailure,
 } from './requestFailure';
 
-const NO_GUILD: GuildState = { guild: null, request: null };
+const NO_GUILD: GuildState = { guild: null, request: null, cooldownUntil: null };
 
-/** 내 길드와, 길드가 없으면 내가 넣어 둔 가입 신청. 로컬 모드면 둘 다 null */
+/** 내 길드와, 길드가 없으면 내가 넣어 둔 가입 신청 및 재가입 대기 종료 시각. 로컬 모드면 모두 null */
 export async function readGuild(): Promise<GuildState> {
   if (!isCloud) return NO_GUILD;
   const res = await fetch('/api/guilds/me');
   if (res.status === 401) throw new AppError('unauthorized', 'guild read before session');
   if (!res.ok) await throwRequestFailure(res, 'guild read failed');
   const body = await res.json() as Partial<GuildState>;
-  return { guild: body.guild ?? null, request: body.request ?? null };
+  return {
+    guild: body.guild ?? null,
+    request: body.request ?? null,
+    cooldownUntil: typeof body.cooldownUntil === 'string' ? body.cooldownUntil : null,
+  };
 }
 
 /** 초대 링크 미리보기. 없는 코드면 null이고, 그 밖의 실패는 던진다 */

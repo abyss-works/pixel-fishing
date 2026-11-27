@@ -427,3 +427,30 @@ export function contributionFor(fameGained: number, cleared: Pick<BountyQuest, '
   const clears = cleared === null ? 0 : CLEAR_CONTRIBUTION[bountyKindOf(cleared)];
   return { fame: Math.min(Math.max(0, fameGained), GUILD_DAILY_FAME_CAP), clears };
 }
+
+// ── 재가입 대기 ──────────────────────────────────────────
+// 길드를 떠나거나 내보내지면 20시간 동안 모든 길드에 재가입하거나 새 길드를 만들 수 없다(혼자 남아 해산한 경우 포함).
+
+/** 길드 탈퇴·내보내기·단독 해산 후 재가입 대기 기간(20시간, ms) */
+export const GUILD_REJOIN_COOLDOWN_MS = 20 * 3_600_000;
+
+/** 탈퇴 시각 기준 재가입 대기 종료 시각(ms) */
+export function guildRejoinCooldownUntil(leftAtMs: number): number {
+  return leftAtMs + GUILD_REJOIN_COOLDOWN_MS;
+}
+
+/** 현재 시각 기준 남은 재가입 대기 시간(ms). 대기가 없거나 지났으면 0 */
+export function guildRejoinRemainingMs(cooldownUntilMs: number | null, nowMs: number): number {
+  return cooldownUntilMs !== null && cooldownUntilMs > nowMs ? cooldownUntilMs - nowMs : 0;
+}
+
+/** 남은 재가입 대기 시간 표시 문자열(분 올림, 최소 1분) */
+export function formatGuildCooldownRemaining(remainingMs: number): string {
+  const totalMin = Math.max(1, Math.ceil(remainingMs / 60_000));
+  if (totalMin >= 60) {
+    const hours = Math.floor(totalMin / 60);
+    const minutes = totalMin % 60;
+    return minutes === 0 ? `${hours}시간` : `${hours}시간 ${minutes}분`;
+  }
+  return `${totalMin}분`;
+}

@@ -10,6 +10,7 @@ const state = vi.hoisted(() => ({
   loading: false,
   inviteRefresh: vi.fn(),
   guild: null as { name: string } | null,
+  cooldownUntil: null as string | null,
   guildLoading: false,
   guildFailed: false,
   guildRefresh: vi.fn(),
@@ -29,6 +30,7 @@ vi.mock('../../../../features/guild/service/useGuildInvite', () => ({
 vi.mock('../../../../features/guild/service/useGuild', () => ({
   useGuild: () => ({
     guild: state.guild,
+    cooldownUntil: state.cooldownUntil,
     loading: state.guildLoading,
     failed: state.guildFailed,
     refresh: state.guildRefresh,
@@ -43,6 +45,7 @@ afterEach(() => {
   state.failed = false;
   state.loading = false;
   state.guild = null;
+  state.cooldownUntil = null;
   state.guildLoading = false;
   state.guildFailed = false;
   vi.clearAllMocks();
@@ -73,5 +76,20 @@ describe('GuildInviteDialog 비동기 상태 구분', () => {
     expect(screen.queryByText('초대를 불러오는 중이에요.')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
     expect(state.guildRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('재가입 대기 중이면 가입 버튼을 비활성화하고 남은 시간 안내 한 줄을 보인다', () => {
+    vi.useFakeTimers();
+    const baseNow = new Date('2026-11-27T00:00:00.000Z');
+    vi.setSystemTime(baseNow);
+    state.settled = true;
+    state.preview = { code: 'K7QX2MAB', name: '새벽선단', level: 3, members: 4, cap: 10, joinMode: 'open' };
+    state.cooldownUntil = new Date(baseNow.getTime() + 19 * 3_600_000 + 42 * 60_000).toISOString();
+
+    render(<GuildInviteDialog code="K7QX2MAB" account="u@example.com" onAccount={vi.fn()} onClose={vi.fn()} setToast={vi.fn()} />);
+
+    expect(screen.getByText('재가입 대기 중이라 19시간 42분 뒤에 가입할 수 있어요.')).toBeTruthy();
+    expect((screen.getByRole('button', { name: '들어가기' }) as HTMLButtonElement).disabled).toBe(true);
+    vi.useRealTimers();
   });
 });

@@ -6,8 +6,9 @@ import type { ServerMessage } from '../../../game/rules/live';
 import {
   DEFAULT_GUILD_PITCH, GUILD_BONUS_IDS, GUILD_BONUS_MAX_RANK, GUILD_ENHANCE_MAX_RANK, GUILD_ENHANCE_MIN_LEVEL,
   GUILD_ENHANCE_RESET_COSTS, GUILD_JOIN_REQUEST_TTL_MS, GUILD_MAX_MEMBERS, GUILD_PITCH_MAX, GUILD_RENAME_COST,
-  bonusEffect, guildDailyContributionCaps, guildEnhanceResetCost, guildLinkPath, handoverOutcome, joinOutcome,
-  joinRequestDaysLeft, maxEnhancePoints, normalizeGuildCode, removalOutcome, renameBlock,
+  bonusEffect, formatGuildCooldownRemaining, guildDailyContributionCaps, guildEnhanceResetCost, guildLinkPath,
+  guildRejoinRemainingMs, handoverOutcome, joinOutcome, joinRequestDaysLeft, maxEnhancePoints, normalizeGuildCode,
+  removalOutcome, renameBlock,
 } from '../../../game/rules/guild';
 import type { GuildBonusId, GuildJoinMode, GuildJoinVia, PublicGuildSort } from '../../../game/rules/guild';
 import type { ArtifactHolder } from '../../../game/rules/artifactLevel';
@@ -123,18 +124,21 @@ export const GUILD_REQUEST_RULE = `신청은 ${GUILD_JOIN_REQUEST_TTL_MS / 86_40
 
 /** 초대 확인 창의 상태, 안내 문장, 확정 버튼(없으면 확정할 수 없다) */
 export interface InviteDialogView {
-  state: 'bad' | 'guest' | 'member' | 'closed' | 'full' | 'open' | 'approval';
+  state: 'bad' | 'guest' | 'member' | 'closed' | 'full' | 'cooldown' | 'open' | 'approval';
   text: string;
   action: { label: string } | null;
 }
 
 /**
  * 초대 확인 창이 보일 것. preview가 null이면 없는 코드다.
- * @param viewer account는 계정 유저인지, guild는 지금 속한 길드 이름(없으면 null)
+ * @param viewer account는 계정 유저인지, guild는 지금 속한 길드 이름(없으면 null), cooldownRemaining은 재가입 대기 남은 시간 문구
  * @param via 초대 링크로 열었는가(link), 코드를 직접 넣어 찾았는가(code). 링크로 오면 승인 가입도 바로 들어간다
  */
-export function inviteDialogView(preview: GuildInvitePreview | null, viewer: { account: boolean; guild: string | null },
-  via: GuildJoinVia): InviteDialogView {
+export function inviteDialogView(
+  preview: GuildInvitePreview | null,
+  viewer: { account: boolean; guild: string | null; cooldownRemaining?: string | null },
+  via: GuildJoinVia,
+): InviteDialogView {
   if (!preview) return { state: 'bad', text: '초대 코드를 찾지 못했어요.\n링크가 맞는지 확인해 주세요.', action: null };
   if (!viewer.account) {
     return { state: 'guest', text: '길드는 태평양 항로가 열리면 들어갈 수 있어요.\n계정을 연결하거나 로그인해 항로를 열면 이 창이 다시 떠요.', action: null };
@@ -147,6 +151,9 @@ export function inviteDialogView(preview: GuildInvitePreview | null, viewer: { a
   const outcome = joinOutcome(preview.joinMode, preview.members, via);
   if (outcome === 'closed') return { state: 'closed', text: '이 길드는 지금 새 길드원을 받지 않아요.', action: null };
   if (outcome === 'guild-full') return { state: 'full', text: '길드 인원이 가득 찼어요.', action: null };
+  if (viewer.cooldownRemaining) {
+    return { state: 'cooldown', text: `재가입 대기 중이라 ${viewer.cooldownRemaining} 뒤에 가입할 수 있어요.`, action: null };
+  }
   return outcome === 'join'
     ? { state: 'open', text: '들어가면 길드 채팅과 길드 스킬을 바로 함께 써요.', action: { label: '들어가기' } }
     : { state: 'approval', text: `길드장이 승인하면 들어가요.\n신청은 ${GUILD_JOIN_REQUEST_TTL_MS / 86_400_000}일 동안 남아요.`, action: { label: '가입 신청' } };
@@ -189,7 +196,38 @@ export const GUILD_ERROR_TEXT: Record<string, string> = {
   'not-found': '길드를 찾지 못했어요. 목록을 새로고침해 주세요.',
   'bad-guild': '길드 정보가 올바르지 않아요.',
   'bad-sort': '목록 정렬 기준이 올바르지 않아요.',
+  'rejoin-cooldown': '재가입 대기 중이라 지금은 가입하거나 새 길드를 만들 수 없어요.',
 };
+
+export interface GuildCooldownInfo {
+  active: boolean;
+  remainingMs: number;
+  remainingText: string | null;
+}
+
+/** 재가입 대기 종료 시각(ISO 또는 null)과 현재 시각(ms)으로 남은 대기 시간과 표시 문자열을 계산한다 */
+export function guildCooldownInfo(cooldownUntil: string | null, nowMs: number): GuildCooldownInfo {
+  if (!cooldownUntil) return { active: false, remainingMs: 0, remainingText: null };
+  const untilMs = Date.parse(cooldownUntil);
+  if (!Number.isFinite(untilMs)) return { active: false, remainingMs: 0, remainingText: null };
+  const remainingMs = guildRejoinRemainingMs(untilMs, nowMs);
+  if (remainingMs <= 0) return { active: false, remainingMs: 0, remainingText: null };
+  return {
+    active: true,
+    remainingMs,
+    remainingText: formatGuildCooldownRemaining(remainingMs),
+  };
+}
+
+/** 요청 실패 코드를 상황에 맞는 안내 문장으로 바꾼다 */
+export function guildErrorText(error: string, op?: GuildOp['op'], cooldownRemaining?: string | null): string {
+  if (error === 'rejoin-cooldown') {
+    if (op === 'approve') return '신청한 플레이어가 재가입 대기 중이라 승인할 수 없어요.';
+    if (cooldownRemaining) return `재가입 대기 중이라 ${cooldownRemaining} 뒤에 가입하거나 새 길드를 만들 수 있어요.`;
+    return GUILD_ERROR_TEXT['rejoin-cooldown'];
+  }
+  return GUILD_ERROR_TEXT[error] ?? '요청을 처리하지 못했어요. 잠시 뒤 다시 해 주세요.';
+}
 
 // ── 공개 길드 목록과 바로 가입 ──────────────────────────────────────────
 

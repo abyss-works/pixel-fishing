@@ -50,6 +50,8 @@ export function useGuild(account: boolean, poll = false) {
         await client.invalidateQueries({ queryKey: ['publicGuilds'] });
         await client.invalidateQueries({ queryKey: ['guildInvite'] });
       }
+    } else if (result.error === 'rejoin-cooldown') {
+      await client.invalidateQueries({ queryKey: key });
     }
     return result;
   };
@@ -57,6 +59,7 @@ export function useGuild(account: boolean, poll = false) {
     available: liveAvailable && account,
     guild: q.data?.guild ?? null,
     request: q.data?.request ?? null,
+    cooldownUntil: q.data?.cooldownUntil ?? null,
     loading: q.isPending,
     failed: q.isError,
     you: uid,
