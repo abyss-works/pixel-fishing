@@ -248,15 +248,13 @@ export default function NoticesTab() {
                           >
                             수정
                           </Button>
-                          {status !== '마감' && (
-                            <Button
-                              size="sm"
-                              disabled={!granted || busyId === n.id}
-                              onClick={() => void handleEnd(n)}
-                            >
-                              즉시 마감
-                            </Button>
-                          )}
+                          <Button
+                            size="sm"
+                            disabled={!granted || busyId === n.id}
+                            onClick={() => void handleEnd(n)}
+                          >
+                            즉시 마감
+                          </Button>
                           <Button
                             size="sm"
                             variant="danger"

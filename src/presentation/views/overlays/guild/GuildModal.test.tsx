@@ -272,7 +272,7 @@ describe('GuildModal', () => {
     await waitFor(() => expect(s.act).toHaveBeenCalledWith({ op: 'reject', guildId: 'g1', uid: 'R' }));
   });
 
-  it('길드장은 접힌 관리 메뉴를 보고, 다른 길드원이 있으면 떠나기를 누를 때 위임 안내를 받는다', async () => {
+  it('길드장은 접힌 관리 메뉴를 보고, 다른 길드원이 있으면 떠나기 버튼이 비활성이고 위임 안내 툴팁을 보인다', async () => {
     s.guild = GUILD;
     const toast = vi.fn();
     render(<GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={toast} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
@@ -280,8 +280,13 @@ describe('GuildModal', () => {
     // 떠난 선원은 길드원 표에 없다
     expect(screen.queryByText('다온')).toBeNull();
     expect(screen.getByText('길드를 떠나면 20시간 동안 모든 길드에 재가입할 수 없어요.')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: '길드 떠나기' }));
-    expect(toast).toHaveBeenCalledWith('다른 길드원이 있으면 길드장을 넘긴 뒤에 떠날 수 있어요.', 'warn');
+    const leaveBtn = screen.getByRole('button', { name: '길드 떠나기' });
+    expect(leaveBtn).toBeDisabled();
+    fireEvent.mouseEnter(leaveBtn.parentElement!);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('다른 길드원이 있으면 길드장을 넘긴 뒤에 떠날 수 있어요.');
+    fireEvent.mouseLeave(leaveBtn.parentElement!);
+    fireEvent.click(leaveBtn);
+    expect(toast).not.toHaveBeenCalled();
     // 넘기기와 내보내기는 관리 메뉴를 펼쳐야 보인다. 나 자신의 행에는 메뉴가 없다
     expect(screen.queryByRole('button', { name: '가람 관리' })).toBeNull();
     expect(screen.queryByRole('button', { name: '내보내기' })).toBeNull();
@@ -352,14 +357,14 @@ describe('GuildModal', () => {
     s.guild = GUILD;
     render(<GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
     const tree = screen.getByRole('group', { name: '길드 스킬 트리' });
-    expect(within(tree).getByRole('button', { name: '희귀 어종 확률 고르기' }).getAttribute('aria-disabled')).toBe('true');
-    fireEvent.mouseEnter(within(tree).getByRole('button', { name: '희귀 어종 확률 고르기' }).parentElement as HTMLElement);
+    expect(within(tree).getByRole('button', { name: '희귀 어종 출현 비중 고르기' }).getAttribute('aria-disabled')).toBe('true');
+    fireEvent.mouseEnter(within(tree).getByRole('button', { name: '희귀 어종 출현 비중 고르기' }).parentElement as HTMLElement);
     const lockedSkillTip = screen.getByRole('tooltip');
-    expect(lockedSkillTip.textContent).toContain('희귀 어종 확률');
+    expect(lockedSkillTip.textContent).toContain('희귀 어종 출현 비중');
     expect(lockedSkillTip.textContent).toContain('일반 등급 물고기가 걸릴 비중을 줄여요.');
     expect(lockedSkillTip.textContent).toContain('길드 Lv.4에 열려요.');
     expect(lockedSkillTip.querySelector('.border-t')).not.toBeNull();
-    fireEvent.mouseLeave(within(tree).getByRole('button', { name: '희귀 어종 확률 고르기' }).parentElement as HTMLElement);
+    fireEvent.mouseLeave(within(tree).getByRole('button', { name: '희귀 어종 출현 비중 고르기' }).parentElement as HTMLElement);
     expect(within(tree).getByLabelText('판매가 보너스 3단계 모으는 중')).toBeTruthy();
     // [공통] 상단 바: 공용 기본 단계(5칸 슬롯 + 3 / 5)와 길드 Lv.3 배지, 툴팁
     const sharedLabel = screen.getByText('공용 기본 단계');
@@ -536,13 +541,13 @@ describe('GuildModal', () => {
     expect(headerTip).toContain('기본 단계는 모든 길드원이 함께 받고');
     fireEvent.mouseLeave(screen.getByText('남은 강화 포인트'));
 
-    fireEvent.click(screen.getByRole('button', { name: '희귀 어종 확률 고르기' }));
+    fireEvent.click(screen.getByRole('button', { name: '희귀 어종 출현 비중 고르기' }));
     expect(screen.getByText('개인 2단계 (합산 7단계)')).toBeTruthy();
-    const enhancedNode = screen.getByLabelText('희귀 어종 확률 2단계 이룸');
+    const enhancedNode = screen.getByLabelText('희귀 어종 출현 비중 2단계 이룸');
     expect(enhancedNode).toBeTruthy();
     fireEvent.mouseEnter(enhancedNode.closest('[tabindex="0"]') as HTMLElement);
     const enhancedTip = screen.getByRole('tooltip').textContent ?? '';
-    expect(enhancedTip).toContain('희귀 어종 확률 개인 2단계');
+    expect(enhancedTip).toContain('희귀 어종 출현 비중 개인 2단계');
     expect(enhancedTip).toContain('이룸');
     expect(enhancedTip).not.toMatch(/[·—–]/);
     fireEvent.mouseLeave(enhancedNode.closest('[tabindex="0"]') as HTMLElement);

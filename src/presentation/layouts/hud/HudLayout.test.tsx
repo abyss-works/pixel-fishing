@@ -167,7 +167,7 @@ describe('HudLayout 하단 HUD 묶음 및 상태 띠 고정 슬롯 분리', () =
     expect(src.indexOf('<HudHeader')).toBeLessThan(src.indexOf('<MessageLog'));
   });
 
-  it.each([false, true])('PC와 모바일(mobile=%s) 모두 catchSlot은 하단 묶음과 분리되고 z-index 없이 PC 좌측 세로 중앙(채팅창 상한 유지)·모바일 중앙 채팅창 위에 배치된다', mobile => {
+  it.each([false, true])('PC와 모바일(mobile=%s) 모두 catchSlot은 하단 묶음과 분리되고 z-index 없이 PC 좌측 세로 중앙(채팅창 상한 유지)·모바일 게임 영역 상단 가운데에 배치된다', mobile => {
     layout.mobile = mobile;
     setMinimapVisible(true);
     let catchSlot: HTMLDivElement | null = null;
@@ -183,10 +183,12 @@ describe('HudLayout 하단 HUD 묶음 및 상태 띠 고정 슬롯 분리', () =
     expect(catchSlot!.className).not.toContain('bottom-62');
     expect(catchSlot!.className).toContain('-translate-y-1/2');
     expect(catchSlot!.className).toMatch(/top-\[min\(50%,/);
-    expect(catchSlot!.className).toContain('mobile:top-auto');
+    expect(catchSlot!.className).toContain('mobile:top-3');
+    expect(catchSlot!.className).toContain('mobile:bottom-auto');
     expect(catchSlot!.className).toContain('mobile:translate-y-0');
     expect(catchSlot!.className).toContain('mobile:justify-center');
-    expect(catchSlot!.className).toContain('mobile:bottom-48');
+    expect(catchSlot!.className).not.toContain('mobile:bottom-48');
+    expect(catchSlot!.className).not.toContain('mobile:top-auto');
     expect(catchSlot!.className).not.toMatch(/\bz-/);
   });
 });

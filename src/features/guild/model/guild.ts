@@ -321,7 +321,7 @@ export function dailyContributionRows(holder: ArtifactHolder): { label: string; 
 
 /** 길드 스킬의 화면 이름 */
 export const GUILD_BONUS_NAME: Record<GuildBonusId, string> = {
-  sell: '판매가 보너스', bag: '가방 용량 증가', named: '네임드 조우 확률', rare: '희귀 어종 확률', mutation: '돌연변이 확률',
+  sell: '판매가 보너스', bag: '가방 용량 증가', named: '네임드 조우 확률', rare: '희귀 어종 출현 비중', mutation: '돌연변이 출현 비중',
 };
 
 /** 길드 스킬이 하는 일 */
