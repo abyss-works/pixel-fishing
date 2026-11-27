@@ -101,7 +101,6 @@ export interface SpotHourlyEvSummary {
   goldPerHour: Record<HourlyEvAxisKey, number>;
 }
 
-const FISH_BY_ID = new Map<string, Fish>(FISH.map(f => [f.id, f]));
 const defaultPriceOf = (fish: Fish): number => fish.price;
 
 /** 선택적 규칙 함수를 주입해 통합 EV 계산 엔진을 만든다 */
@@ -122,10 +121,14 @@ export function createBalanceEvEngine(rules: Partial<RodRuleEvalFns> = {}) {
    *  밤 풀은 nightDepth 미지정 시 밤 전체 스텝의 균등 평균으로 집계한다 */
   function mixedRows(spot: SpotId, o: DrawOptions = {}, pool: Pool = 'mixed'): Row[] {
     const p = new Map<string, number>();
+    const fishes = new Map<string, Fish>();
     const add = (rows: ReturnType<typeof drawRows>, weight: number) => {
       const total = rows.reduce((s, r) => s + r.fishPct, 0);
       if (total <= 0) return;
-      for (const r of rows) p.set(r.fish.id, (p.get(r.fish.id) ?? 0) + weight * r.fishPct / total);
+      for (const r of rows) {
+        fishes.set(r.fish.id, r.fish);
+        p.set(r.fish.id, (p.get(r.fish.id) ?? 0) + weight * r.fishPct / total);
+      }
     };
     const night = pool === 'day' ? 0 : pool === 'night' ? 1 : NIGHT_SHARE;
     if (1 - night > 0) add(drawRows(spot, { ...o, phase: 'day' }), 1 - night);
@@ -139,7 +142,7 @@ export function createBalanceEvEngine(rules: Partial<RodRuleEvalFns> = {}) {
         }
       }
     }
-    return [...p].map(([id, prob]) => ({ fish: FISH_BY_ID.get(id)!, prob }));
+    return [...p].map(([id, prob]) => ({ fish: fishes.get(id)!, prob }));
   }
 
   const entryLevel = (spot: SpotId): number => evalFns.minLevelOfPower(spotOf(spot).powerReq ?? 0);
