@@ -64,4 +64,25 @@ describe('포획 이벤트 토스트 분류', () => {
     expect(routine.kind).toBe('catch.routine');
     expect(routine.logTone).toBe('info');
   });
+
+  it('돌연변이 첫 발견(isNew: true)은 Tier A로 분류하고, 재포획(isNew: false)은 prevDexEntry가 없어도 Tier A로 분류하지 않는다', () => {
+    const eventFish = { ...commonFish, id: 'event-championship-test', name: '대회 송어' };
+
+    const eventFirst = classifyCatchNotice(eventFish, { form: 'variant', size: 25, percentile: 50, isBig: false, isNew: true }, 'normal', undefined);
+    expect(eventFirst.kind).toBe('catch.legendaryOrFirstVariant');
+    expect(eventFirst.tone).toBe('mutation');
+    expect(eventFirst.toastText).toContain('첫 돌연변이');
+
+    const eventRepeat = classifyCatchNotice(eventFish, { form: 'variant', size: 25, percentile: 50, isBig: false, isNew: false }, 'normal', undefined);
+    expect(eventRepeat.kind).toBe('catch.routine');
+    expect(eventRepeat.kind).not.toBe('catch.legendaryOrFirstVariant');
+
+    const normalFirst = classifyCatchNotice(commonFish, { form: 'variant', size: 25, percentile: 50, isBig: false, isNew: true }, 'normal', { count: 0, maxSize: 0, first: null });
+    expect(normalFirst.kind).toBe('catch.legendaryOrFirstVariant');
+    expect(normalFirst.tone).toBe('mutation');
+
+    const normalRepeat = classifyCatchNotice(commonFish, { form: 'variant', size: 25, percentile: 50, isBig: false, isNew: false }, 'normal', { count: 1, maxSize: 25, first: null });
+    expect(normalRepeat.kind).toBe('catch.routine');
+    expect(normalRepeat.kind).not.toBe('catch.legendaryOrFirstVariant');
+  });
 });
