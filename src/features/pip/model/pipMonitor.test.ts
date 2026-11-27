@@ -15,12 +15,15 @@ import {
   nextPipScalePreset,
   normalizePipGameHour,
   parsePipScalePreset,
+  PIP_AUTOCLOSE_GRACE_MS,
   PIP_BASE_HEIGHT,
   PIP_BASE_WIDTH,
+  PIP_DIORAMA_HEIGHT,
   PIP_JUMP_DURATION_S,
   PIP_JUMP_HEIGHT_PX,
   PIP_RECENT_CATCH_LIMIT,
   pipMonitorReducer,
+  resolvePipAvatarLook,
   resolvePipSpotInfo,
   type PipCatchItem,
 } from './pipMonitor';
@@ -164,7 +167,9 @@ describe('pipMonitor 순수 모델', () => {
 
   it('배율 프리셋 순환, 파싱, 목표 창 크기를 명세 수치대로 계산한다', () => {
     expect(PIP_BASE_WIDTH).toBe(420);
-    expect(PIP_BASE_HEIGHT).toBe(178);
+    expect(PIP_BASE_HEIGHT).toBe(156);
+    expect(PIP_DIORAMA_HEIGHT).toBe(90);
+    expect(PIP_AUTOCLOSE_GRACE_MS).toBe(250);
     expect(nextPipScalePreset(85)).toBe(100);
     expect(nextPipScalePreset(100)).toBe(125);
     expect(nextPipScalePreset(125)).toBe(85);
@@ -174,9 +179,9 @@ describe('pipMonitor 순수 모델', () => {
     expect(parsePipScalePreset('999')).toBe(100);
     expect(parsePipScalePreset(null)).toBe(100);
 
-    expect(computeScaledPipSize(85)).toEqual({ width: 357, height: 152, zoom: 0.85 });
-    expect(computeScaledPipSize(100)).toEqual({ width: 420, height: 178, zoom: 1 });
-    expect(computeScaledPipSize(125)).toEqual({ width: 525, height: 223, zoom: 1.25 });
+    expect(computeScaledPipSize(85)).toEqual({ width: 357, height: 133, zoom: 0.85 });
+    expect(computeScaledPipSize(100)).toEqual({ width: 420, height: 156, zoom: 1 });
+    expect(computeScaledPipSize(125)).toEqual({ width: 525, height: 195, zoom: 1.25 });
   });
 
   it('가방 게이지 톤 임계값(75%, 95%)을 정확히 나눈다', () => {
@@ -234,8 +239,25 @@ describe('pipMonitor 순수 모델', () => {
     const cleared = pipMonitorReducer(s, { type: 'clear_exiting_log' });
     expect(cleared.exitingLogItem).toBeNull();
 
+    const hydrated = pipMonitorReducer(s, { type: 'hydrate', recentCatches: s.recentCatches });
+    expect(hydrated.catchFxSeq).toBe(0);
+    expect(hydrated.leapTrigger).toBeNull();
+    expect(hydrated.exitingLogItem).toBeNull();
+    expect(hydrated.recentCatches).toHaveLength(PIP_RECENT_CATCH_LIMIT);
+
     const tip = formatPipCatchTip(fifth);
     expect(tip).not.toMatch(/[·—–]/);
+  });
+
+  it('아바타 외형 해석은 일반 해역·거점에서는 원 외형을 유지하고 챔피언십에서는 강제 모자를 적용한다', () => {
+    const customLook = { shirt: 3, pants: 5, hat: 'cap-red' };
+    expect(resolvePipAvatarLook(customLook, { kind: 'region', id: 'world' })).toEqual(customLook);
+    expect(resolvePipAvatarLook(customLook, { kind: 'region', id: 'championship' })).toEqual({
+      shirt: 3,
+      pants: 5,
+      hat: 'santa-hat',
+    });
+    expect(resolvePipAvatarLook(customLook, { kind: 'base', id: 'harbor' })).toEqual(customLook);
   });
 
   it('해역 정보 해석이 이벤트 구역, 일반 어군, 구역, 거점 폴백을 구분한다', () => {

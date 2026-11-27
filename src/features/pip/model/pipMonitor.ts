@@ -4,6 +4,7 @@ import { fishById, type FormId } from '../../../game/content/fish';
 import { RARITY } from '../../../game/content/rarity';
 import { spotById } from '../../../game/content/spots';
 import { zoneById } from '../../../game/content/zones';
+import { effectiveLookForRegion, type Look } from '../../../game/content/wardrobe';
 import type { FishArtSubject } from '../../../game/rendering/pixel/fishArt';
 import type { ActionResult } from '../../../game/rules/actions';
 import { priceOf, type GameState } from '../../../game/rules/logic';
@@ -17,7 +18,9 @@ import { BASE_PACKS, REGION_PACKS, type SceneRef } from '../../../game/world';
 import type { SpotState } from '../../../game/world/currentSpot';
 
 export const PIP_BASE_WIDTH = 420;
-export const PIP_BASE_HEIGHT = 178;
+export const PIP_BASE_HEIGHT = 156;
+export const PIP_DIORAMA_HEIGHT = 90;
+export const PIP_AUTOCLOSE_GRACE_MS = 250;
 export const PIP_SCALE_PRESETS = [85, 100, 125] as const;
 export const PIP_RECENT_CATCH_LIMIT = 4;
 export const PIP_JUMP_DURATION_S = 0.6;
@@ -269,6 +272,11 @@ export function resolvePipSpotInfo(input: {
   };
 }
 
+/** 현재 씬에서 아바타가 착용하는 실효 외형(지역 강제 모자 포함)을 반환한다 */
+export function resolvePipAvatarLook(look: Look, scene: SceneRef): Look {
+  return scene.kind === 'region' ? effectiveLookForRegion(look, scene.id) : look;
+}
+
 /** PiP 최근 포획 목록과 도약·슬라이드 연출 상태를 원자적으로 전이한다 */
 export function pipMonitorReducer(
   state: PipMonitorState,
@@ -280,6 +288,7 @@ export function pipMonitorReducer(
         ...state,
         recentCatches: action.recentCatches.slice(0, PIP_RECENT_CATCH_LIMIT),
         leapTrigger: null,
+        catchFxSeq: 0,
         exitingLogItem: null,
       };
 

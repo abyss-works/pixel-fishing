@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import {
   computePipLeapFrame,
+  PIP_BASE_WIDTH,
+  PIP_DIORAMA_HEIGHT,
   PIP_JUMP_DURATION_S,
   type PipBagTone,
   type PipCatchItem,
@@ -8,6 +10,7 @@ import {
   type PipScalePreset,
   type PipSpotInfo,
 } from '../../../features/pip/model/pipMonitor';
+import type { Look } from '../../../game/content/wardrobe';
 import type { FishArtStyle } from '../../../game/rendering/pixel/fishArt';
 import { renderPipDiorama } from '../../../game/rendering/canvas/scenes/pipDiorama';
 import PixelIcon from '../PixelIcon';
@@ -17,6 +20,7 @@ const CALM_FRAME_MS = 125;
 
 interface PipDioramaStageProps {
   spotInfo: PipSpotInfo;
+  look: Look;
   fishingActive: boolean;
   bagCount: number;
   bagCap: number;
@@ -40,6 +44,7 @@ interface PipDioramaStageProps {
 /** PiP 상단 픽셀 디오라마 캔버스와 4모서리 HUD 오버레이 */
 export default function PipDioramaStage({
   spotInfo,
+  look,
   fishingActive,
   bagCount,
   bagCap,
@@ -96,6 +101,7 @@ export default function PipDioramaStage({
       fishingActive,
       spotName: spotInfo.spotName,
       seaTheme: spotInfo.seaTheme,
+      look,
       fishArtStyle,
       reducedMotion: true,
       leap: fishingActive && activeItem
@@ -108,7 +114,7 @@ export default function PipDioramaStage({
           }
         : null,
     });
-  }, [spotInfo.spotName, spotInfo.seaTheme, fishingActive, reducedMotion, displayGameHour, leapTrigger, fishArtStyle]);
+  }, [spotInfo.spotName, spotInfo.seaTheme, look, fishingActive, reducedMotion, displayGameHour, leapTrigger, fishArtStyle]);
 
   // 애니메이션 루프와 visibilitychange 리스너를 오프너가 아닌 PiP 창 컨텍스트에 직접 바인딩한다
   useEffect(() => {
@@ -146,6 +152,7 @@ export default function PipDioramaStage({
           fishingActive,
           spotName: spotInfo.spotName,
           seaTheme: spotInfo.seaTheme,
+          look,
           fishArtStyle,
           reducedMotion: false,
           leap: activeLeap && frame?.active
@@ -198,7 +205,7 @@ export default function PipDioramaStage({
       }
       pipDoc.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [spotInfo.spotName, spotInfo.seaTheme, fishingActive, reducedMotion, fishArtStyle]);
+  }, [spotInfo.spotName, spotInfo.seaTheme, look, fishingActive, reducedMotion, fishArtStyle]);
 
   const bagTipText = `가방 ${bagCount.toLocaleString('ko-KR')} / ${bagCap.toLocaleString('ko-KR')}`;
   const spotStatusLabel = fishingActive ? '낚시 중' : '대기 중';
@@ -212,8 +219,8 @@ export default function PipDioramaStage({
       <canvas
         ref={canvasRef}
         className="pf-pip-canvas"
-        width={420}
-        height={112}
+        width={PIP_BASE_WIDTH}
+        height={PIP_DIORAMA_HEIGHT}
         aria-label="실시간 바다 낚시 디오라마"
       />
 
@@ -280,9 +287,6 @@ export default function PipDioramaStage({
             style={{ height: `${bagPercent}%` }}
           />
         </div>
-        <span className={cx('pf-pip-bag-icon', bagTone === 'danger' && 'is-danger')} aria-hidden="true">
-          <PixelIcon glyph="backpack" size={12} />
-        </span>
       </div>
     </div>
   );
