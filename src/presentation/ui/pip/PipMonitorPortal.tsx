@@ -7,6 +7,7 @@ import type {
   PipScalePreset,
   PipSpotInfo,
 } from '../../../features/pip/model/pipMonitor';
+import type { Look } from '../../../game/content/wardrobe';
 import type { FishArtStyle } from '../../../game/rendering/pixel/fishArt';
 import PixelIcon from '../PixelIcon';
 import Tip from '../Tip';
@@ -50,6 +51,7 @@ export function PipHudButton({
 interface PipMonitorPortalProps {
   pipWindow: Window;
   spotInfo: PipSpotInfo;
+  look: Look;
   fishingActive: boolean;
   bagCount: number;
   bagCap: number;
@@ -75,6 +77,7 @@ interface PipMonitorPortalProps {
 export default function PipMonitorPortal({
   pipWindow,
   spotInfo,
+  look,
   fishingActive,
   bagCount,
   bagCap,
@@ -95,7 +98,16 @@ export default function PipMonitorPortal({
   onCycleScale,
   onFocusGameTab,
 }: PipMonitorPortalProps) {
-  const [tip, setTip] = useState<PipTipState | null>(null);
+  const [tipEntry, setTipEntry] = useState<{
+    tip: PipTipState;
+    catchFxSeq: number;
+    fishingActive: boolean;
+  } | null>(null);
+  const tip =
+    tipEntry && tipEntry.catchFxSeq === catchFxSeq && tipEntry.fishingActive === fishingActive
+      ? tipEntry.tip
+      : null;
+
   const subscribeMotion = useCallback((listener: () => void) => {
     const mq = pipWindow.matchMedia?.('(prefers-reduced-motion: reduce)');
     if (!mq) return () => {};
@@ -109,19 +121,23 @@ export default function PipMonitorPortal({
   const reducedMotion = useSyncExternalStore(subscribeMotion, getMotionSnapshot, () => false);
 
   const showTip = useCallback((text: string, element: HTMLElement) => {
-    setTip({ text, anchorRect: element.getBoundingClientRect() });
-  }, []);
+    setTipEntry({
+      tip: { text, anchorRect: element.getBoundingClientRect() },
+      catchFxSeq,
+      fishingActive,
+    });
+  }, [catchFxSeq, fishingActive]);
 
   const hideTip = useCallback(() => {
-    setTip(null);
+    setTipEntry(null);
   }, []);
 
   useEffect(() => {
     const pipDoc = pipWindow.document;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setTip(null);
+      if (e.key === 'Escape') setTipEntry(null);
     };
-    const onDismiss = () => setTip(null);
+    const onDismiss = () => setTipEntry(null);
     pipDoc.addEventListener('keydown', onKeyDown);
     pipWindow.addEventListener('blur', onDismiss);
     pipWindow.addEventListener('resize', onDismiss);
@@ -138,6 +154,7 @@ export default function PipMonitorPortal({
     <>
       <PipMonitorView
         spotInfo={spotInfo}
+        look={look}
         fishingActive={fishingActive}
         bagCount={bagCount}
         bagCap={bagCap}

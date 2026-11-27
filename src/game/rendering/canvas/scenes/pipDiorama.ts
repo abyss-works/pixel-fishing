@@ -2,9 +2,11 @@
 // React와 전역 DOM(window/document)에 의존하지 않고 2D 컨텍스트에만 그린다.
 import type { FormId } from '../../../content/fish.js';
 import type { RarityId } from '../../../content/rarity.js';
+import { DEFAULT_LOOK, type Look } from '../../../content/wardrobe.js';
 import type { Ctx } from '../../pixel/common.js';
 import { fishArt } from '../../pixel/fishArt/index.js';
 import type { FishArtStyle, FishArtSubject } from '../../pixel/fishArt/index.js';
+import { drawPerson } from '../../pixel/sprites/actors.js';
 
 export interface PipDioramaLeap {
   elapsedS: number;
@@ -20,6 +22,7 @@ export interface PipDioramaState {
   fishingActive: boolean;
   spotName: string;
   seaTheme: string;
+  look?: Look;
   leap: PipDioramaLeap | null;
   fishArtStyle: FishArtStyle;
   reducedMotion?: boolean;
@@ -184,16 +187,6 @@ function drawJumpSparks(
       rect(ctx, scale, sx, sy, 1, 1, '#ba68c8');
     }
   }
-
-  rect(
-    ctx,
-    scale,
-    bobX - ringW + 2,
-    bobY + 2,
-    Math.max(3, (ringW - 2) * 2 + 1),
-    1,
-    'rgba(186, 104, 200, 0.65)',
-  );
 }
 
 /** 2배 정수 픽셀 스케일로 바다 디오라마 장면을 그린다 */
@@ -208,7 +201,7 @@ export function renderPipDiorama(
   const scale = 2;
   const pw = Math.floor(width / scale);
   const ph = Math.floor(height / scale);
-  const horizonY = 28;
+  const horizonY = 22;
   const h = normalizeHour(state.gameHour);
   const pal = sampleSkyPalette(h, state.seaTheme);
 
@@ -220,13 +213,13 @@ export function renderPipDiorama(
 
   if (pal.star > 0.04) {
     const stars: readonly [number, number][] = [
-      [26, 20],
-      [56, 17],
-      [96, 7],
-      [116, 13],
-      [134, 8],
-      [150, 16],
-      [172, 20],
+      [26, 15],
+      [56, 13],
+      [96, 5],
+      [116, 10],
+      [134, 6],
+      [150, 12],
+      [172, 16],
     ];
     for (let i = 0; i < stars.length; i++) {
       const twinkle = 0.65 + 0.35 * Math.sin(t * 2.1 + i * 1.7);
@@ -239,7 +232,7 @@ export function renderPipDiorama(
   if (h >= 6 && h < 22) {
     const p = (h - 6) / 16;
     sunX = Math.round(92 + p * 60);
-    const sunY = Math.round(23 - Math.sin(p * Math.PI) * 14);
+    const sunY = Math.round(18 - Math.sin(p * Math.PI) * 11);
     const warmSun = p < 0.15 || p > 0.85 ? '#ffab76' : '#ffd54f';
     rect(ctx, scale, sunX - 2, sunY - 2, 5, 5, warmSun);
     rect(ctx, scale, sunX - 1, sunY - 3, 3, 7, warmSun);
@@ -250,15 +243,15 @@ export function renderPipDiorama(
     const mh = h >= 22 ? h - 22 : h + 2;
     const mp = mh / 8;
     moonX = Math.round(92 + mp * 60);
-    const moonY = Math.round(23 - Math.sin(mp * Math.PI) * 14);
+    const moonY = Math.round(18 - Math.sin(mp * Math.PI) * 11);
     rect(ctx, scale, moonX - 2, moonY - 2, 5, 5, '#ffd54f');
     rect(ctx, scale, moonX, moonY - 1, 3, 3, pal.skyTop);
   }
 
   const drift = Math.floor(t * 1.1) % (pw + 26);
   const c1x = drift - 14;
-  rect(ctx, scale, c1x, 18, 10, 3, pal.cloud);
-  rect(ctx, scale, c1x + 2, 16, 6, 2, pal.cloud);
+  rect(ctx, scale, c1x, 12, 10, 3, pal.cloud);
+  rect(ctx, scale, c1x + 2, 10, 6, 2, pal.cloud);
 
   const waterGrad = ctx.createLinearGradient(0, horizonY * scale, 0, ph * scale);
   waterGrad.addColorStop(0, pal.waterTop);
@@ -275,13 +268,13 @@ export function renderPipDiorama(
     for (let r = 0; r < 4; r++) {
       const rw = Math.max(2, 6 - r);
       const rx = celX - Math.floor(rw / 2) + Math.round(Math.sin(t * 2 + r) * 1.5);
-      rect(ctx, scale, rx, horizonY + 3 + r * 5, rw, 1, refCol);
+      rect(ctx, scale, rx, horizonY + 3 + r * 4, rw, 1, refCol);
     }
   }
 
   for (let i = 0; i < 6; i++) {
     const wy = horizonY + 4 + i * 4;
-    if (wy >= ph - 3) break;
+    if (wy >= ph - 2) break;
     const wx = 40 + ((i * 29 + Math.sin(t * 0.8 + i) * 6) % 125);
     rect(ctx, scale, wx, wy, 7, 1, 'rgba(255, 255, 255, 0.16)');
   }
@@ -289,16 +282,16 @@ export function renderPipDiorama(
   for (let i = 0; i < 4; i++) {
     if (Math.sin(t * 3 + i * 1.7) > 0.25) {
       const gx = 42 + ((i * 31 + 10) % 120);
-      const gy = horizonY + 3 + ((i * 6) % Math.max(4, ph - horizonY - 6));
+      const gy = horizonY + 3 + ((i * 5) % Math.max(4, ph - horizonY - 5));
       rect(ctx, scale, gx, gy, 2, 1, 'rgba(255, 255, 255, 0.28)');
     }
   }
 
   if (pal.glow > 0.1) {
     const specks: readonly [number, number][] = [
-      [48, ph - 8],
-      [116, ph - 6],
-      [164, ph - 9],
+      [48, Math.max(horizonY + 1, ph - 7)],
+      [116, Math.max(horizonY + 1, ph - 5)],
+      [164, Math.max(horizonY + 1, ph - 8)],
     ];
     for (let i = 0; i < specks.length; i++) {
       if (Math.sin(t * 2.4 + i) > 0) {
@@ -315,27 +308,36 @@ export function renderPipDiorama(
     }
   }
 
-  const bobX = 142;
-  const bobY = 48;
-
-  for (let i = 0; i < 3; i++) {
-    const a = t * 1.6 + i * 2.09;
-    const fx = bobX + Math.cos(a) * 7;
-    const fy = bobY + 4 + Math.sin(a) * 2.5;
-    rect(ctx, scale, fx - 2, fy, 5, 2, 'rgba(8, 25, 38, 0.55)');
-    rect(ctx, scale, fx + 3, fy - 1, 2, 4, 'rgba(8, 25, 38, 0.55)');
-  }
-
-  if (!state.fishingActive) return;
-
-  const boatX = 64;
-  const boatY = 43;
+  const boatX = 68;
+  const boatY = 38;
   // 배 흔들림 범위를 [0, 1]로 제한해 좌상단 해역 칩과 모자 사이 여백을 유지한다
   const rock = reduced ? 0 : Math.round((Math.sin(t * 2.2) + 1) * 0.5);
   const px = boatX + 1;
   const py = boatY - 1 + rock;
+
+  rect(ctx, scale, boatX - 9, boatY - 3 + rock, 18, 1, '#a1887f');
+  rect(ctx, scale, boatX - 9, boatY - 2 + rock, 18, 5, '#8d6e63');
+  rect(ctx, scale, boatX - 7, boatY + 3 + rock, 14, 2, '#6d4c41');
+
+  ctx.save();
+  ctx.scale(scale, scale);
+  drawPerson(ctx, px, py, state.look ?? DEFAULT_LOOK);
+  ctx.restore();
+
+  if (!state.fishingActive) return;
+
+  const bobX = 142;
+  const bobY = 37;
   const rodTipX = px + 13;
   const rodTipY = py - 19;
+
+  for (let i = 0; i < 3; i++) {
+    const a = t * 1.6 + i * 2.09;
+    const fx = bobX + Math.cos(a) * 7;
+    const fy = Math.max(horizonY + 1, Math.min(ph - 4, Math.round(bobY + 2 + Math.sin(a) * 2)));
+    rect(ctx, scale, fx - 2, fy, 5, 2, 'rgba(8, 25, 38, 0.55)');
+    rect(ctx, scale, fx + 3, fy - 1, 2, 4, 'rgba(8, 25, 38, 0.55)');
+  }
 
   const leap = state.leap;
   const leapActive = leap !== null && (reduced || (leap.elapsedS >= 0 && leap.elapsedS < JUMP_DURATION_S));
@@ -387,17 +389,6 @@ export function renderPipDiorama(
       rect(ctx, scale, bobX + 1, bobY - 4 - dropLift, 1, 1, 'rgba(159, 216, 255, 0.85)');
     }
   }
-
-  rect(ctx, scale, boatX - 9, boatY - 3 + rock, 18, 1, '#a1887f');
-  rect(ctx, scale, boatX - 9, boatY - 2 + rock, 18, 5, '#8d6e63');
-  rect(ctx, scale, boatX - 7, boatY + 3 + rock, 14, 2, '#6d4c41');
-
-  rect(ctx, scale, px - 3, py - 16, 6, 6, '#ffcc99');
-  rect(ctx, scale, px - 2, py - 20, 4, 1, '#d9b45a');
-  rect(ctx, scale, px - 3, py - 19, 6, 2, '#d9b45a');
-  rect(ctx, scale, px - 6, py - 17, 12, 1, '#d9b45a');
-  rect(ctx, scale, px - 3, py - 10, 6, 7, '#3f6d4e');
-  rect(ctx, scale, px - 2, py - 3, 4, 3, '#31427a');
 
   for (let s = 0; s < 9; s++) {
     rect(ctx, scale, px + 4 + s, py - 10 - s, 2, 1, '#c9a227');

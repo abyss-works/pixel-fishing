@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
+import { PIP_BASE_HEIGHT, PIP_BASE_WIDTH } from '../../../features/pip/model/pipMonitor';
 
 export interface PipTipState {
   text: string;
@@ -14,8 +15,8 @@ export default function PipFloatingTip({ tip }: { tip: PipTipState | null }) {
     const el = ref.current;
     if (!tip || !el) return;
     const pipWin = el.ownerDocument.defaultView;
-    const viewW = pipWin?.innerWidth ?? 420;
-    const viewH = pipWin?.innerHeight ?? 178;
+    const viewW = pipWin?.innerWidth ?? PIP_BASE_WIDTH;
+    const viewH = pipWin?.innerHeight ?? PIP_BASE_HEIGHT;
     const tipWidth = el.offsetWidth || 160;
     const tipHeight = el.offsetHeight || 26;
     const maxLeft = Math.max(8, viewW - tipWidth - 8);

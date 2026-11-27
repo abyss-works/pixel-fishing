@@ -21,9 +21,11 @@ import {
   initialPipMonitorState,
   nextPipScalePreset,
   parsePipScalePreset,
+  PIP_AUTOCLOSE_GRACE_MS,
   PIP_LOG_EXIT_MS,
   PIP_SCALE_STORAGE_KEY,
   pipMonitorReducer,
+  resolvePipAvatarLook,
   resolvePipSpotInfo,
   type PipScalePreset,
 } from '../model/pipMonitor';
@@ -68,16 +70,29 @@ export function usePipMonitor({
 
   const [pipWindow, setPipWindow] = useState<Window | null>(null);
   const pipWindowRef = useRef<Window | null>(null);
-  pipWindowRef.current = pipWindow;
+  const openedAtRef = useRef(0);
   const openingRef = useRef(false);
 
   const [scalePreset, setScalePreset] = useState<PipScalePreset>(() => readStoredScale());
+  const scalePresetRef = useRef<PipScalePreset>(scalePreset);
   const [monitorState, dispatchMonitor] = useReducer(pipMonitorReducer, initialPipMonitorState);
   const lastSeenEventIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    pipWindowRef.current = pipWindow;
+  }, [pipWindow]);
+
+  useEffect(() => {
+    scalePresetRef.current = scalePreset;
+  }, [scalePreset]);
 
   const spotInfo = useMemo(
     () => resolvePipSpotInfo({ scene, currentSpot, game }),
     [scene, currentSpot, game],
+  );
+  const avatarLook = useMemo(
+    () => resolvePipAvatarLook(game.look, scene),
+    [game.look, scene],
   );
   const fishingActive = spotInfo.inRegion && live.fishingPhase !== 'idle';
   const bag = useMemo(() => selectBagStatus(game, bagBonus), [game, bagBonus]);
@@ -135,22 +150,43 @@ export function usePipMonitor({
     }
   }, [fishingActive]);
 
-  // 창이 열려 있는 동안 오프너 탭 종료·이동 시 PiP 창도 함께 닫는다
+  // 창이 열려 있는 동안 오프너 탭 복귀 시 자동 닫기 및 오프너 탭 종료·이동 시 PiP 창도 함께 닫는다
   useEffect(() => {
     if (!pipWindow) return;
     const onPipPageHide = () => {
+      if (pipWindowRef.current === pipWindow) {
+        pipWindowRef.current = null;
+      }
       setPipWindow(current => (current === pipWindow ? null : current));
     };
     const onOpenerUnload = () => {
       if (!pipWindow.closed) pipWindow.close();
     };
+    const closeOnReturn = () => {
+      if (
+        Date.now() - openedAtRef.current >= PIP_AUTOCLOSE_GRACE_MS
+        && !document.hidden
+        && document.hasFocus()
+        && !pipWindow.closed
+      ) {
+        pipWindow.close();
+        if (pipWindowRef.current === pipWindow) {
+          pipWindowRef.current = null;
+        }
+        setPipWindow(current => (current === pipWindow ? null : current));
+      }
+    };
     pipWindow.addEventListener('pagehide', onPipPageHide);
     window.addEventListener('beforeunload', onOpenerUnload);
     window.addEventListener('pagehide', onOpenerUnload);
+    window.addEventListener('focus', closeOnReturn);
+    document.addEventListener('visibilitychange', closeOnReturn);
     return () => {
       pipWindow.removeEventListener('pagehide', onPipPageHide);
       window.removeEventListener('beforeunload', onOpenerUnload);
       window.removeEventListener('pagehide', onOpenerUnload);
+      window.removeEventListener('focus', closeOnReturn);
+      document.removeEventListener('visibilitychange', closeOnReturn);
     };
   }, [pipWindow]);
 
@@ -165,45 +201,53 @@ export function usePipMonitor({
     const activeWin = pipWindowRef.current;
     if (activeWin && !activeWin.closed) {
       activeWin.close();
+      pipWindowRef.current = null;
       setPipWindow(null);
       return;
     }
 
     openingRef.current = true;
     try {
-      const { width, height } = computeScaledPipSize(scalePreset);
+      const { width, height } = computeScaledPipSize(scalePresetRef.current);
       const win = await openDocumentPipWindow({
         width,
         height,
         disallowReturnToOpener: true,
         preferInitialWindowPlacement: false,
       });
+      openedAtRef.current = Date.now();
       injectPipStyles(win.document, pipCss);
       const latest = getPipLiveState().recentCatches;
       lastSeenEventIdRef.current = latest[0]?.eventId ?? null;
       dispatchMonitor({ type: 'hydrate', recentCatches: latest });
+      pipWindowRef.current = win;
       setPipWindow(win);
     } catch {
       // 사용자 제스처 만료 또는 브라우저 거부는 무시한다
     } finally {
       openingRef.current = false;
     }
-  }, [supported, scalePreset, pipCss]);
+  }, [supported, pipCss]);
 
   const cycleScale = useCallback(() => {
-    setScalePreset(prev => {
-      const next = nextPipScalePreset(prev);
-      writeStoredScale(next);
-      const activeWin = pipWindowRef.current;
-      if (activeWin && !activeWin.closed) {
-        const { width, height } = computeScaledPipSize(next);
-        resizeDocumentPipWindow(activeWin, width, height);
-      }
-      return next;
-    });
+    const next = nextPipScalePreset(scalePresetRef.current);
+    scalePresetRef.current = next;
+    setScalePreset(next);
+    writeStoredScale(next);
+    const activeWin = pipWindowRef.current;
+    if (activeWin && !activeWin.closed) {
+      const { width, height } = computeScaledPipSize(next);
+      resizeDocumentPipWindow(activeWin, width, height);
+    }
   }, []);
 
   const focusGameTab = useCallback(() => {
+    const win = pipWindowRef.current;
+    if (win && !win.closed) {
+      win.close();
+      pipWindowRef.current = null;
+      setPipWindow(null);
+    }
     window.focus();
   }, []);
 
@@ -214,6 +258,7 @@ export function usePipMonitor({
     scalePreset,
     zoom: scaledSize.zoom,
     spotInfo,
+    avatarLook,
     fishingActive,
     bag,
     bagTone,

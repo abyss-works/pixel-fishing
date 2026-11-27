@@ -755,6 +755,7 @@ export default function GameView(props: GameViewProps) {
         <PipMonitorPortal
           pipWindow={pip.pipWindow}
           spotInfo={pip.spotInfo}
+          look={pip.avatarLook}
           fishingActive={pip.fishingActive}
           bagCount={pip.bag.count}
           bagCap={pip.bag.cap}

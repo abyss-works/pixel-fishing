@@ -43,7 +43,7 @@ export default function HudHeader({ game, bagBonus = 0, onOpenStats, pipButton, 
   return (
     <div className={cx('absolute inset-x-0 top-0 grid grid-cols-[1fr_auto_1fr] items-center px-(--hdr-inset) pt-(--hdr-inset) pointer-events-none', HEADER_TIER_CLASS)}>
       {pipButton && (
-        <div className="relative z-(--z-menu-row) col-start-1 justify-self-start pointer-events-auto">
+        <div className="relative z-(--z-menu-row) col-start-1 mr-(--hdr-inset) justify-self-start pointer-events-auto">
           {pipButton}
         </div>
       )}

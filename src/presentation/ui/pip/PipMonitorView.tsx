@@ -6,6 +6,7 @@ import {
   type PipScalePreset,
   type PipSpotInfo,
 } from '../../../features/pip/model/pipMonitor';
+import type { Look } from '../../../game/content/wardrobe';
 import type { FishArtStyle } from '../../../game/rendering/pixel/fishArt';
 import PixelIcon from '../PixelIcon';
 import { cx } from '../cx';
@@ -22,6 +23,7 @@ const MUTANT_WISP_SPECS = [
 
 interface PipMonitorViewProps {
   spotInfo: PipSpotInfo;
+  look: Look;
   fishingActive: boolean;
   bagCount: number;
   bagCap: number;
@@ -80,6 +82,7 @@ function MiniLogRowContent({ item }: { item: PipCatchItem }) {
 /** 브라우저 Document PiP 미니 모니터 본체 화면 */
 export default function PipMonitorView({
   spotInfo,
+  look,
   fishingActive,
   bagCount,
   bagCap,
@@ -111,8 +114,8 @@ export default function PipMonitorView({
       return (
         <div className="pf-pip-idle-pane">
           <div className="pf-pip-idle-copy">
-            <p className="pf-pip-idle-title">지금은 해역 밖이에요</p>
-            <p className="pf-pip-idle-sub">해역으로 나가면 포획이 바로 표시돼요</p>
+            <p className="pf-pip-idle-title">지금은 낚시 중이 아니에요</p>
+            <p className="pf-pip-idle-sub">낚시를 시작하면 포획이 바로 표시돼요</p>
           </div>
           {bagFull && (
             <button
@@ -254,6 +257,7 @@ export default function PipMonitorView({
     >
       <PipDioramaStage
         spotInfo={spotInfo}
+        look={look}
         fishingActive={fishingActive}
         bagCount={bagCount}
         bagCap={bagCap}
