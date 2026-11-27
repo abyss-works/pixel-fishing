@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { fishArt } from '../../../game/rendering/pixel/fishArt';
-import type { FishArtStyle } from '../../../game/rendering/pixel/fishArt';
-import type { Fish, FormId } from '../../../game/content/fish';
+import type { FishArtStyle, FishArtSubject } from '../../../game/rendering/pixel/fishArt';
+import type { FormId } from '../../../game/content/fish';
 import { SPRITE_TARGETS } from '../../../game/content/sprites/targets';
 import { useFishArtStyle } from '../../../features/display/service/fishArtStyle';
 import { cx } from '../cx';
@@ -11,7 +11,7 @@ import { cx } from '../cx';
 const PRESETS = SPRITE_TARGETS.fish.layout.presets;
 
 interface FishSpriteProps {
-  fish: Fish;
+  fish: FishArtSubject;
   preset: keyof typeof PRESETS;
   /** 어느 폼으로 그릴지 */
   form?: FormId;

@@ -33,6 +33,7 @@ import {
   emitRewardClaimSound,
   emitShopSellSound,
 } from '../../sound/service/soundEvents';
+import { recordPipCatch, resetPipLiveState } from '../../pip/service/pipLiveStore';
 
 // 게임 상태 소유와 액션 흐름 조율 (계층: 서비스 — 서버 권위 v0.5.0)
 // 모든 상태 변경은 API가 제공한 게임 게이트웨이의 dispatch 하나로 흐른다 — http/local 구현은
@@ -295,6 +296,9 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
         }
         // 해역 일반 도감 100% 완성 알림 — 업적 잠금 여부와 무관하게 게스트 포함 모든 플레이어에게 알린다
         if (action.type === 'catch') {
+          if (r.result.type === 'catch') {
+            recordPipCatch(r.result, Date.now());
+          }
           const completedSpot = newlyCompletedSpotDex(prev.dex, r.state.dex, action.spot);
           if (completedSpot) {
             const spotName = spotById(completedSpot)?.name ?? completedSpot;
@@ -521,6 +525,7 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
       if (signal.aborted) return false;
       guestRef.current = lookup.status !== 'account';
       resetFortuneModalSession();
+      resetPipLiveState();
       setGame(cloud ?? newState());
       await boot(signal);
       if (signal.aborted) return false;
@@ -631,6 +636,7 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
     /** 개발 도구 계정 초기화 결과(state)를 즉시 반영하고 게이트웨이·프로필·조회 캐시를 동기화한다 */
     applyDevReset: async (state: GameState): Promise<void> => {
       resetFortuneModalSession();
+      resetPipLiveState();
       setGame(state);
       if (api.auth.isConfigured) {
         await readSave().catch(() => {});

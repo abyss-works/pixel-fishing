@@ -1,0 +1,233 @@
+// 브라우저 Document PiP 미니 모니터 수명주기와 실시간 상태 연동을 묶는 훅.
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from 'react';
+import type { GameState } from '../../../game/rules/logic';
+import { formatGameClock, gameHour, isNight } from '../../../game/rules/time';
+import type { SceneRef } from '../../../game/world';
+import {
+  injectPipStyles,
+  isDocumentPipSupported,
+  openDocumentPipWindow,
+  resizeDocumentPipWindow,
+} from '../../../platform/api/documentPip';
+import { useFishArtStyle } from '../../display/service/fishArtStyle';
+import { usePhaseOverride, useTimeOverride } from '../../gameplay/service/timeOverride';
+import { useNow } from '../../gameplay/service/useGameTime';
+import { selectBagStatus } from '../../inventory/model/selectors';
+import { useSpotState } from '../../travel/service/useSpotState';
+import {
+  computePipWallClockGameHour,
+  computeScaledPipSize,
+  getPipBagTone,
+  initialPipMonitorState,
+  nextPipScalePreset,
+  parsePipScalePreset,
+  PIP_LOG_EXIT_MS,
+  PIP_SCALE_STORAGE_KEY,
+  pipMonitorReducer,
+  resolvePipSpotInfo,
+  type PipScalePreset,
+} from '../model/pipMonitor';
+import { getPipLiveState, subscribePipLiveState } from './pipLiveStore';
+
+function readStoredScale(): PipScalePreset {
+  try {
+    if (typeof localStorage === 'undefined') return 100;
+    return parsePipScalePreset(localStorage.getItem(PIP_SCALE_STORAGE_KEY));
+  } catch {
+    return 100;
+  }
+}
+
+function writeStoredScale(preset: PipScalePreset): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(PIP_SCALE_STORAGE_KEY, String(preset));
+  } catch {
+    // 저장소 접근 제한 무시
+  }
+}
+
+export function usePipMonitor({
+  game,
+  scene,
+  bagBonus = 0,
+  pipCss,
+}: {
+  game: GameState;
+  scene: SceneRef;
+  bagBonus?: number;
+  pipCss: string;
+}) {
+  const supported = useMemo(() => isDocumentPipSupported(), []);
+  const live = useSyncExternalStore(subscribePipLiveState, getPipLiveState, getPipLiveState);
+  const currentSpot = useSpotState();
+  const nowIso = useNow(5_000);
+  const timeOverride = useTimeOverride();
+  const phaseOverride = usePhaseOverride();
+  const fishArtStyle = useFishArtStyle();
+
+  const [pipWindow, setPipWindow] = useState<Window | null>(null);
+  const pipWindowRef = useRef<Window | null>(null);
+  pipWindowRef.current = pipWindow;
+  const openingRef = useRef(false);
+
+  const [scalePreset, setScalePreset] = useState<PipScalePreset>(() => readStoredScale());
+  const [monitorState, dispatchMonitor] = useReducer(pipMonitorReducer, initialPipMonitorState);
+  const lastSeenEventIdRef = useRef<string | null>(null);
+
+  const spotInfo = useMemo(
+    () => resolvePipSpotInfo({ scene, currentSpot, game }),
+    [scene, currentSpot, game],
+  );
+  const fishingActive = spotInfo.inRegion && live.fishingPhase !== 'idle';
+  const bag = useMemo(() => selectBagStatus(game, bagBonus), [game, bagBonus]);
+  const bagTone = getPipBagTone(bag.percent);
+  const scaledSize = useMemo(() => computeScaledPipSize(scalePreset), [scalePreset]);
+
+  const displayGameHour = useMemo(() => {
+    if (phaseOverride === 'night') return 0;
+    if (phaseOverride === 'day') return 12;
+    return gameHour(nowIso) ?? 12;
+  }, [nowIso, phaseOverride]);
+
+  const getLiveGameHour = useCallback(() => {
+    if (phaseOverride === 'night') return 0;
+    if (phaseOverride === 'day') return 12;
+    if (timeOverride) return gameHour(timeOverride) ?? 12;
+    return computePipWallClockGameHour(Date.now());
+  }, [phaseOverride, timeOverride]);
+
+  const isOpen = pipWindow !== null && !pipWindow.closed;
+
+  // 실시간 포획 버퍼를 PiP 상태에 반영 — 창이 열려 있고 새 어획이 들어왔을 때만 도약·슬라이드 연출을 켠다
+  useEffect(() => {
+    const incoming = live.recentCatches[0] ?? null;
+    if (!incoming) {
+      lastSeenEventIdRef.current = null;
+      dispatchMonitor({ type: 'hydrate', recentCatches: [] });
+      return;
+    }
+    if (!isOpen) {
+      lastSeenEventIdRef.current = incoming.eventId;
+      dispatchMonitor({ type: 'hydrate', recentCatches: live.recentCatches });
+      return;
+    }
+    if (lastSeenEventIdRef.current === incoming.eventId) {
+      return;
+    }
+    lastSeenEventIdRef.current = incoming.eventId;
+    dispatchMonitor({ type: 'catch', item: incoming });
+  }, [live.recentCatches, isOpen]);
+
+  // 퇴장 중인 4번째 일지 행은 240ms 전환 뒤 DOM에서 비운다
+  useEffect(() => {
+    if (!monitorState.exitingLogItem) return;
+    const timer = window.setTimeout(() => {
+      dispatchMonitor({ type: 'clear_exiting_log' });
+    }, PIP_LOG_EXIT_MS);
+    return () => window.clearTimeout(timer);
+  }, [monitorState.exitingLogItem, monitorState.catchFxSeq]);
+
+  // 비낚시 상태로 바뀌면 진행 중인 도약·일지 퇴장 연출을 즉시 정리한다
+  useEffect(() => {
+    if (!fishingActive) {
+      dispatchMonitor({ type: 'reset_fx' });
+    }
+  }, [fishingActive]);
+
+  // 창이 열려 있는 동안 오프너 탭 종료·이동 시 PiP 창도 함께 닫는다
+  useEffect(() => {
+    if (!pipWindow) return;
+    const onPipPageHide = () => {
+      setPipWindow(current => (current === pipWindow ? null : current));
+    };
+    const onOpenerUnload = () => {
+      if (!pipWindow.closed) pipWindow.close();
+    };
+    pipWindow.addEventListener('pagehide', onPipPageHide);
+    window.addEventListener('beforeunload', onOpenerUnload);
+    window.addEventListener('pagehide', onOpenerUnload);
+    return () => {
+      pipWindow.removeEventListener('pagehide', onPipPageHide);
+      window.removeEventListener('beforeunload', onOpenerUnload);
+      window.removeEventListener('pagehide', onOpenerUnload);
+    };
+  }, [pipWindow]);
+
+  // 훅 언마운트 시 열려 있는 PiP 창 정리
+  useEffect(() => () => {
+    const win = pipWindowRef.current;
+    if (win && !win.closed) win.close();
+  }, []);
+
+  const togglePip = useCallback(async () => {
+    if (!supported || openingRef.current) return;
+    const activeWin = pipWindowRef.current;
+    if (activeWin && !activeWin.closed) {
+      activeWin.close();
+      setPipWindow(null);
+      return;
+    }
+
+    openingRef.current = true;
+    try {
+      const { width, height } = computeScaledPipSize(scalePreset);
+      const win = await openDocumentPipWindow({
+        width,
+        height,
+        disallowReturnToOpener: true,
+        preferInitialWindowPlacement: false,
+      });
+      injectPipStyles(win.document, pipCss);
+      const latest = getPipLiveState().recentCatches;
+      lastSeenEventIdRef.current = latest[0]?.eventId ?? null;
+      dispatchMonitor({ type: 'hydrate', recentCatches: latest });
+      setPipWindow(win);
+    } catch {
+      // 사용자 제스처 만료 또는 브라우저 거부는 무시한다
+    } finally {
+      openingRef.current = false;
+    }
+  }, [supported, scalePreset, pipCss]);
+
+  const cycleScale = useCallback(() => {
+    setScalePreset(prev => {
+      const next = nextPipScalePreset(prev);
+      writeStoredScale(next);
+      const activeWin = pipWindowRef.current;
+      if (activeWin && !activeWin.closed) {
+        const { width, height } = computeScaledPipSize(next);
+        resizeDocumentPipWindow(activeWin, width, height);
+      }
+      return next;
+    });
+  }, []);
+
+  const focusGameTab = useCallback(() => {
+    window.focus();
+  }, []);
+
+  return {
+    supported,
+    isOpen,
+    pipWindow,
+    scalePreset,
+    zoom: scaledSize.zoom,
+    spotInfo,
+    fishingActive,
+    bag,
+    bagTone,
+    clockText: formatGameClock(nowIso),
+    daytime: phaseOverride ? phaseOverride === 'day' : !isNight(nowIso),
+    displayGameHour,
+    getLiveGameHour,
+    fishArtStyle,
+    recentCatches: monitorState.recentCatches,
+    leapTrigger: monitorState.leapTrigger,
+    catchFxSeq: monitorState.catchFxSeq,
+    exitingLogItem: monitorState.exitingLogItem,
+    togglePip,
+    cycleScale,
+    focusGameTab,
+  };
+}

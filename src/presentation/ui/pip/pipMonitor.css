@@ -1,0 +1,764 @@
+/* 브라우저 Document PiP 미니 모니터 전용 스타일 (외부 폰트 참조 금지) */
+
+.pf-pip-root,
+.pf-pip-root * {
+  box-sizing: border-box;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.pf-pip-root {
+  position: relative;
+  width: 420px;
+  height: 178px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  zoom: var(--pf-pip-zoom, 1);
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  color: var(--c-text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.4;
+  box-shadow: inset 1px 1px 0 var(--bevel-lo), inset -1px -1px 0 var(--bevel-hi);
+}
+
+.pf-pip-num {
+  font-family: var(--font-pixel);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.4px;
+}
+
+.pf-pip-glass {
+  background: rgba(10, 21, 38, 0.78);
+  border: 1px solid rgba(43, 69, 104, 0.85);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+
+.pf-pip-inset {
+  background: var(--inset-base);
+  border: 1px solid var(--c-line);
+  clip-path: polygon(
+    var(--notch-sm) 0,
+    100% 0,
+    100% calc(100% - var(--notch-sm)),
+    calc(100% - var(--notch-sm)) 100%,
+    0 100%,
+    0 var(--notch-sm)
+  );
+  box-shadow: inset 1px 1px 0 var(--bevel-hi), inset -1px -1px 0 var(--bevel-lo);
+}
+
+.pf-pip-stage {
+  position: relative;
+  width: 100%;
+  height: 112px;
+  flex-shrink: 0;
+  background: var(--inset-deep);
+  border-bottom: 1px solid var(--c-line);
+  overflow: hidden;
+}
+
+.pf-pip-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  filter: contrast(1.05) saturate(1.07) brightness(0.98);
+}
+
+.pf-pip-spot-chip {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  max-width: 146px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 4px 8px;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--c-text);
+}
+
+.pf-pip-spot-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pf-pip-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  background: var(--c-accent);
+}
+
+.pf-pip-dot.is-idle {
+  background: var(--c-orange);
+}
+
+.pf-pip-time-chip {
+  position: absolute;
+  bottom: 6px;
+  left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 4px 8px;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--c-text);
+}
+
+.pf-pip-actions {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pf-pip-icon-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-line);
+  color: var(--c-text-dim);
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: inset 1px 1px 0 var(--bevel-lo), inset -1px -1px 0 var(--bevel-hi);
+}
+
+.pf-pip-icon-btn:hover {
+  color: var(--c-text);
+  border-color: var(--c-accent);
+}
+
+.pf-pip-icon-btn:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 1px;
+}
+
+.pf-pip-icon-btn.is-active {
+  color: var(--c-gold);
+  border-color: var(--c-gold-dark);
+  background: #1b2f4d;
+}
+
+@keyframes pf-pip-bag-pulse {
+  0%,
+  100% {
+    border-color: var(--c-gold);
+    color: var(--c-gold);
+    box-shadow: 0 0 0 0 rgba(255, 213, 79, 0.45);
+  }
+  50% {
+    border-color: #fff59d;
+    color: #fff59d;
+    box-shadow: 0 0 8px 1px rgba(255, 213, 79, 0.72);
+  }
+}
+
+.pf-pip-icon-btn.is-bag-full {
+  color: var(--c-gold);
+  border-color: var(--c-gold);
+  background: #1b2f4d;
+  animation: pf-pip-bag-pulse 1.5s ease-in-out infinite;
+}
+
+.pf-pip-bag-hud {
+  position: absolute;
+  right: 8px;
+  top: 34px;
+  bottom: 6px;
+  width: 48px;
+  padding: 6px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 3px;
+}
+
+.pf-pip-bag-pct {
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--c-gold);
+  white-space: nowrap;
+}
+
+.pf-pip-bag-pct.is-warn {
+  color: var(--c-orange);
+}
+
+.pf-pip-bag-pct.is-danger {
+  color: var(--c-danger);
+}
+
+.pf-pip-bag-track {
+  width: 6px;
+  flex: 1;
+  min-height: 20px;
+  background: var(--inset-deep);
+  border: 1px solid var(--c-line);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+}
+
+.pf-pip-bag-fill {
+  width: 100%;
+  background: var(--c-gold);
+  border-top: 1px solid rgba(255, 255, 255, 0.45);
+  transition: height 0.2s ease-out;
+}
+
+.pf-pip-bag-fill.is-warn {
+  background: var(--c-orange);
+}
+
+.pf-pip-bag-fill.is-danger {
+  background: var(--c-danger);
+}
+
+.pf-pip-bag-icon {
+  display: inline-flex;
+  color: var(--c-text-dim);
+  line-height: 1;
+}
+
+.pf-pip-bag-icon.is-danger {
+  color: var(--c-danger);
+}
+
+.pf-pip-bottom {
+  flex: 1;
+  height: 66px;
+  min-height: 0;
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: var(--c-surface);
+}
+
+.pf-pip-idle-pane {
+  flex: 1;
+  height: 66px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--c-surface);
+}
+
+.pf-pip-idle-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pf-pip-idle-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--c-text);
+}
+
+.pf-pip-idle-sub {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--c-text-dim);
+}
+
+.pf-pip-bag-alert-btn {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  background: var(--c-gold);
+  border: 1px solid var(--c-gold-dark);
+  color: #08111f;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pf-pip-split {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+}
+
+.pf-pip-vsep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--c-line);
+  flex-shrink: 0;
+}
+
+.pf-pip-latest-wrap {
+  position: relative;
+  width: 184px;
+  height: 52px;
+  flex-shrink: 0;
+  --rarity-color: var(--c-common);
+}
+
+.pf-pip-latest-wrap[data-rarity='rare'] {
+  --rarity-color: var(--c-rare);
+}
+
+.pf-pip-latest-wrap[data-rarity='epic'] {
+  --rarity-color: var(--c-epic);
+}
+
+.pf-pip-latest-wrap[data-rarity='legendary'] {
+  --rarity-color: var(--c-legend);
+}
+
+@keyframes pf-pip-slot-pop {
+  from {
+    transform: translateX(-8px);
+    opacity: 0.4;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes pf-pip-glow-legend {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 4px rgba(255, 213, 79, 0.45));
+  }
+  50% {
+    filter: drop-shadow(0 0 8px rgba(255, 213, 79, 0.85));
+  }
+}
+
+.pf-pip-latest-wrap.catch-flash {
+  animation: pf-pip-slot-pop 0.28s ease-out;
+}
+
+.pf-pip-latest-wrap.is-legendary {
+  animation: pf-pip-glow-legend 2.4s ease-in-out infinite;
+}
+
+.pf-pip-latest-wrap.is-legendary.catch-flash {
+  animation: pf-pip-slot-pop 0.28s ease-out, pf-pip-glow-legend 2.4s ease-in-out infinite;
+}
+
+.pf-pip-corner {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-style: solid;
+  border-width: 0;
+  border-color: var(--rarity-color);
+  filter: drop-shadow(0 0 3px var(--rarity-color));
+  pointer-events: none;
+  z-index: 4;
+}
+
+.pf-pip-corner.tl {
+  top: -2px;
+  left: -2px;
+  border-top-width: 2px;
+  border-left-width: 2px;
+}
+
+.pf-pip-corner.tr {
+  top: -2px;
+  right: -2px;
+  border-top-width: 2px;
+  border-right-width: 2px;
+}
+
+.pf-pip-corner.bl {
+  bottom: -2px;
+  left: -2px;
+  border-bottom-width: 2px;
+  border-left-width: 2px;
+}
+
+.pf-pip-corner.br {
+  bottom: -2px;
+  right: -2px;
+  border-bottom-width: 2px;
+  border-right-width: 2px;
+}
+
+.pf-pip-latest-card {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 5px 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.pf-pip-latest-card.is-rare {
+  border-color: rgba(79, 195, 247, 0.65);
+}
+
+.pf-pip-latest-card.is-epic {
+  border-color: rgba(186, 104, 200, 0.75);
+}
+
+.pf-pip-latest-card.is-legendary {
+  border-color: rgba(255, 213, 79, 0.88);
+}
+
+.pf-pip-latest-grid {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-width: 0;
+}
+
+.pf-pip-thumb-box {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--inset-deep);
+  overflow: hidden;
+}
+
+.pf-pip-thumb-box canvas {
+  position: relative;
+  z-index: 1;
+}
+
+.pf-pip-portrait-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  box-shadow: inset 0 0 8px color-mix(in srgb, var(--rarity-color) 48%, transparent);
+}
+
+@keyframes pf-pip-sweep {
+  0% {
+    background-position: 180% 0;
+  }
+  45% {
+    background-position: -80% 0;
+  }
+  100% {
+    background-position: -80% 0;
+  }
+}
+
+.pf-pip-sweep {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 3;
+  background-image: linear-gradient(
+    110deg,
+    transparent 38%,
+    rgba(255, 248, 225, 0.14) 46%,
+    rgba(255, 213, 79, 0.28) 50%,
+    rgba(255, 248, 225, 0.14) 54%,
+    transparent 62%
+  );
+  background-size: 260% 100%;
+  background-repeat: no-repeat;
+  background-position: 180% 0;
+  animation: pf-pip-sweep 3.2s ease-in-out infinite;
+}
+
+@keyframes pf-pip-mutant-wisp {
+  0% {
+    transform: translateY(18px);
+    opacity: 0;
+  }
+  32% {
+    opacity: 0.92;
+  }
+  100% {
+    transform: translateY(-28px);
+    opacity: 0;
+  }
+}
+
+.pf-pip-wisps {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.pf-pip-wisp {
+  position: absolute;
+  bottom: 4px;
+  width: 3px;
+  height: 3px;
+  background: var(--c-mutation);
+  filter: drop-shadow(0 0 3px rgba(244, 114, 182, 0.82));
+  opacity: 0;
+  animation: pf-pip-mutant-wisp 2.4s ease-in-out infinite;
+}
+
+.pf-pip-wisp.lg {
+  width: 4px;
+  height: 4px;
+  background: color-mix(in srgb, var(--c-mutation) 60%, white);
+}
+
+.pf-pip-latest-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.pf-pip-latest-row1 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.pf-pip-latest-row2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--c-text-dim);
+  line-height: 1.2;
+}
+
+.pf-pip-waiting-text {
+  font-size: 11px;
+  color: var(--c-text-dim);
+  line-height: 1.3;
+  text-align: center;
+}
+
+.pf-pip-fish-name {
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pf-pip-fish-name.common {
+  color: var(--c-common);
+}
+
+.pf-pip-fish-name.rare {
+  color: var(--c-rare);
+}
+
+.pf-pip-fish-name.epic {
+  color: var(--c-epic);
+}
+
+.pf-pip-fish-name.legendary {
+  color: var(--c-legend);
+}
+
+@keyframes pf-pip-mutated-shimmer {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 4px rgba(244, 114, 182, 0.72));
+    opacity: 1;
+  }
+  50% {
+    filter: drop-shadow(0 0 8px rgba(244, 114, 182, 0.92));
+    opacity: 0.86;
+  }
+}
+
+.pf-pip-fish-name.is-mutant {
+  color: var(--c-mutation);
+  animation: pf-pip-mutated-shimmer 2.4s ease-in-out infinite;
+}
+
+.pf-pip-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.pf-pip-badge-big {
+  color: var(--c-gold);
+}
+
+.pf-pip-badge-mutant {
+  color: var(--c-mutation);
+}
+
+.pf-pip-log-col {
+  flex: 1;
+  min-width: 0;
+  height: 52px;
+  overflow: hidden;
+  position: relative;
+}
+
+.pf-pip-mini-log {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 2px;
+  padding-top: 2px;
+}
+
+.pf-pip-log-row {
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 11px;
+  line-height: 1.2;
+  flex-shrink: 0;
+}
+
+.pf-pip-log-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.pf-pip-mini-fish {
+  width: 22px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+.pf-pip-log-right {
+  color: var(--c-text-dim);
+  flex-shrink: 0;
+}
+
+@keyframes pf-pip-log-enter {
+  from {
+    transform: translateY(-16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes pf-pip-log-down {
+  from {
+    transform: translateY(-16px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes pf-pip-log-exit {
+  from {
+    transform: translateY(-16px);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 0;
+  }
+}
+
+.pf-pip-log-row.slide-enter {
+  animation: pf-pip-log-enter 0.24s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.pf-pip-log-row.slide-shift {
+  animation: pf-pip-log-down 0.24s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.pf-pip-log-row.slide-exit {
+  animation: pf-pip-log-exit 0.24s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  pointer-events: none;
+}
+
+.pf-pip-floating-tip {
+  position: fixed;
+  z-index: 90;
+  pointer-events: none;
+  max-width: calc(100vw - 16px);
+  white-space: pre-line;
+  padding: 5px 8px;
+  background: var(--inset-deep);
+  border: 1px solid var(--c-line);
+  color: var(--c-text);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-pip-root *,
+  .pf-pip-root *::before,
+  .pf-pip-root *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .pf-pip-sweep,
+  .pf-pip-wisps {
+    display: none !important;
+  }
+
+  .pf-pip-latest-wrap.is-legendary,
+  .pf-pip-latest-wrap.is-legendary.catch-flash {
+    animation: none !important;
+    filter: drop-shadow(0 0 6px rgba(255, 213, 79, 0.65));
+  }
+
+  .pf-pip-fish-name.is-mutant {
+    animation: none !important;
+    filter: drop-shadow(0 0 5px rgba(244, 114, 182, 0.78));
+  }
+}
