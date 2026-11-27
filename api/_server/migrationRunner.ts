@@ -43,7 +43,14 @@ export function resolveMigrationRole(role?: string, envRole?: string): string {
 
 /** 명시 접속 주소가 없으면 CNPG 비밀의 분리 값으로 실제 앱 데이터베이스 주소를 만든다. */
 export function buildMigrationConnectionString(env: NodeJS.ProcessEnv): string {
-  if (env.MIGRATION_DATABASE_URL) return env.MIGRATION_DATABASE_URL;
+  if (env.MIGRATION_DATABASE_URL) {
+    const url = new URL(env.MIGRATION_DATABASE_URL);
+    // CNPG superuser URI는 특정 데이터베이스가 아니라 `*` 경로를 가리킨다.
+    if (url.pathname === '/*' || url.pathname === '/') {
+      url.pathname = `/${env.MIGRATION_DB_NAME ?? 'app'}`;
+    }
+    return url.toString();
+  }
   const host = env.MIGRATION_DB_HOST;
   const user = env.MIGRATION_DB_USER;
   const password = env.MIGRATION_DB_PASSWORD;
@@ -87,10 +94,10 @@ async function applyMigrationFile(client: Client, migrationsDir: string, name: s
       await client.query(`set role ${quoteIdentifier(role)}`);
     }
     await client.query(sql);
-    await client.query('insert into public.schema_migrations (name) values ($1) on conflict do nothing', [name]);
     if (usesMigrationRole(name)) {
       await client.query('reset role');
     }
+    await client.query('insert into public.schema_migrations (name) values ($1) on conflict do nothing', [name]);
     await client.query('commit');
   } catch (error) {
     await rollbackAndResetRole(client);

@@ -48,6 +48,8 @@ describe('마이그레이션 접속 주소', () => {
   it('명시 접속 주소가 있으면 그대로 쓴다', () => {
     expect(buildMigrationConnectionString({ MIGRATION_DATABASE_URL: 'postgresql://example/db' } as NodeJS.ProcessEnv))
       .toBe('postgresql://example/db');
+    expect(buildMigrationConnectionString({ MIGRATION_DATABASE_URL: 'postgresql://u:p@db.example.test/*' } as NodeJS.ProcessEnv))
+      .toBe('postgresql://u:p@db.example.test/app');
   });
 
   it('분리 값으로 실제 앱 데이터베이스 주소를 만들고 사용자·비밀번호를 인코딩한다', () => {
