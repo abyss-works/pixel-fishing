@@ -107,8 +107,10 @@ describe('LettersTab', () => {
     expect(titles.map(el => el.textContent)).toEqual(['두 번째 답장', '첫 답장']);
     expect(within(dialog).getByText((_, node) => node?.textContent === '선물을 보냈어요.\n확인해 주세요.' && node.className.includes('whitespace-pre-wrap'))).toBeTruthy();
     expect(within(dialog).getByText('1,000G')).toBeTruthy();
-    expect(within(dialog).getByText('작은 바다 영약 2개')).toBeTruthy();
-    expect(within(dialog).getByText('산타모자')).toBeTruthy();
+    expect(within(dialog).getByText('작은 바다 영약')).toBeTruthy();
+    expect(within(dialog).getByText('×2')).toBeTruthy();
+    expect(within(dialog).getByText('모자 산타모자')).toBeTruthy();
+    expect(within(dialog).queryByText('작은 바다 영약 2개')).toBeNull();
     expect(within(dialog).getByText('10-07 10:00')).toBeTruthy();
     expect(within(dialog).getByText('10-07 11:00')).toBeTruthy();
     expect(within(dialog).getByText('10-07 12:00')).toBeTruthy();

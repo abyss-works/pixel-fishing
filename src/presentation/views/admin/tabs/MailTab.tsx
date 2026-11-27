@@ -223,7 +223,7 @@ export default function MailTab({ to = null }: {
               value={mailQuery}
               onChange={e => setMailQuery(e.target.value)}
               placeholder="제목, 본문, 받는 사람 검색"
-              className="w-[260px]"
+              className="w-full max-w-[260px]"
               aria-label="보낸 우편 검색"
             />
             <span className="text-2xs text-text-dim">{`${filteredMails.length}/${mails.length}건`}</span>

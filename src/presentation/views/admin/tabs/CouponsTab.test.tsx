@@ -205,4 +205,170 @@ describe('CouponsTab', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: '삭제' }));
     await waitFor(() => expect(mockApi.writeCoupon).toHaveBeenCalledWith({ op: 'delete', code: 'USED1' }));
   });
+
+  it('폼 저장과 행별 활성 토글·삭제 잠금을 분리하되 같은 코드 경합만 방어한다', async () => {
+    mockApi.coupons = [
+      sampleCoupon({ code: 'USED1', active: true }),
+      sampleCoupon({ code: 'UNUSED2', active: false }),
+    ];
+
+    let resolveSave!: () => void;
+    let resolveRow!: () => void;
+    mockApi.writeCoupon.mockImplementation((req: { op: string; code: string; active?: boolean }) => {
+      if (req.op === 'update' && req.code === 'USED1' && req.active === false) {
+        return new Promise(resolve => { resolveRow = () => resolve({ coupon: sampleCoupon({ code: 'USED1', active: false }) }); });
+      }
+      if (req.op === 'update' && req.code === 'USED1') {
+        return new Promise(resolve => { resolveSave = () => resolve({ coupon: sampleCoupon({ code: 'USED1' }) }); });
+      }
+      if (req.op === 'create' && req.code === 'NEW3') {
+        return new Promise(resolve => { resolveSave = () => resolve({ coupon: sampleCoupon({ code: 'NEW3' }) }); });
+      }
+      return Promise.resolve({ coupon: sampleCoupon({ code: req.code }) });
+    });
+
+    renderTab();
+    expect(await screen.findByText('USED1')).toBeInTheDocument();
+
+    const rowUsed = screen.getByText('USED1').closest('tr')!;
+    const rowUnused = screen.getByText('UNUSED2').closest('tr')!;
+
+    // 1. USED1 수정 저장 중: USED1 행의 수정/토글/삭제는 잠기고, 다른 행(UNUSED2)의 활성화/삭제는 열려 있다
+    fireEvent.click(within(rowUsed).getByRole('button', { name: '수정' }));
+    fireEvent.change(screen.getByLabelText(/^설명/), { target: { value: '변경된 설명' } });
+    fireEvent.click(screen.getByRole('button', { name: '수정 저장' }));
+
+    expect(screen.getByRole('button', { name: '수정 저장' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '취소' })).toBeDisabled();
+    expect(within(rowUsed).getByRole('button', { name: '수정' })).toBeDisabled();
+    expect(within(rowUsed).getByRole('button', { name: '비활성화' })).toBeDisabled();
+    expect(within(rowUsed).getByRole('button', { name: '삭제' })).toBeDisabled();
+    expect(within(rowUnused).getByRole('button', { name: '활성화' })).toBeEnabled();
+    expect(within(rowUnused).getByRole('button', { name: '삭제' })).toBeEnabled();
+
+    fireEvent.click(within(rowUnused).getByRole('button', { name: '활성화' }));
+    await waitFor(() => expect(mockApi.writeCoupon).toHaveBeenCalledWith(expect.objectContaining({
+      op: 'update',
+      code: 'UNUSED2',
+      active: true,
+    })));
+
+    resolveSave();
+    await waitFor(() => expect(screen.getByRole('button', { name: '쿠폰 발행' })).toBeEnabled());
+
+    // 2. USED1 비활성화 진행 중: 새 쿠폰 작성(다른 코드) 폼 발행은 열려 있고, USED1 수정 중일 때는 폼 저장이 잠긴다
+    fireEvent.click(within(rowUsed).getByRole('button', { name: '수정' }));
+    expect(screen.getByRole('button', { name: '취소' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: '취소' }));
+
+    // 새 쿠폰 입력 중 USED1 토글 시작 -> 폼 발행 버튼이 막히지 않는다
+    fireEvent.change(screen.getByLabelText(/^코드/), { target: { value: 'NEW3' } });
+    fireEvent.change(screen.getByLabelText(/^설명/), { target: { value: '신규 쿠폰' } });
+    fireEvent.change(screen.getByLabelText(/^보상 골드/), { target: { value: '300' } });
+
+    fireEvent.click(within(rowUsed).getByRole('button', { name: '비활성화' }));
+    expect(within(rowUsed).getByRole('button', { name: '비활성화' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '쿠폰 발행' })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole('button', { name: '쿠폰 발행' }));
+    await waitFor(() => expect(mockApi.writeCoupon).toHaveBeenCalledWith(expect.objectContaining({
+      op: 'create',
+      code: 'NEW3',
+    })));
+    resolveSave();
+    resolveRow();
+    await waitFor(() => expect(within(rowUsed).getByRole('button', { name: '비활성화' })).toBeEnabled());
+
+    // 3. 같은 코드(USED1) 수정 중일 때 USED1 행 토글을 누르면 폼 저장/취소가 잠긴다
+    fireEvent.click(within(rowUsed).getByRole('button', { name: '수정' }));
+    fireEvent.click(within(rowUsed).getByRole('button', { name: '비활성화' }));
+    expect(screen.getByRole('button', { name: '수정 저장' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '취소' })).toBeDisabled();
+    resolveRow();
+    await waitFor(() => expect(screen.getByRole('button', { name: '수정 저장' })).toBeEnabled());
+  });
+
+  it('쿠폰 A 비활성화 대기 중 다른 쿠폰 B 편집으로 전환해도 B의 활성 상태가 덮어써지지 않는다', async () => {
+    mockApi.coupons = [
+      sampleCoupon({ code: 'COUPON_A', active: true, description: '쿠폰 A 설명' }),
+      sampleCoupon({ code: 'COUPON_B', active: true, description: '쿠폰 B 설명' }),
+    ];
+
+    let resolveToggleA!: () => void;
+    mockApi.writeCoupon.mockImplementation((req: { op: string; code: string; active?: boolean }) => {
+      if (req.op === 'update' && req.code === 'COUPON_A' && req.active === false) {
+        return new Promise(resolve => {
+          resolveToggleA = () => resolve({ coupon: sampleCoupon({ code: 'COUPON_A', active: false }) });
+        });
+      }
+      return Promise.resolve({ coupon: sampleCoupon({ code: req.code }) });
+    });
+
+    renderTab();
+    expect(await screen.findByText('COUPON_A')).toBeInTheDocument();
+
+    const rowA = screen.getByText('COUPON_A').closest('tr')!;
+    const rowB = screen.getByText('COUPON_B').closest('tr')!;
+
+    // 쿠폰 A 수정 모드로 연 상태에서 A 비활성화 클릭
+    fireEvent.click(within(rowA).getByRole('button', { name: '수정' }));
+    expect((screen.getByLabelText(/^코드/) as HTMLInputElement).value).toBe('COUPON_A');
+    fireEvent.click(within(rowA).getByRole('button', { name: '비활성화' }));
+
+    // 응답 대기 중 쿠폰 B 수정 모드로 전환
+    fireEvent.click(within(rowB).getByRole('button', { name: '수정' }));
+    expect((screen.getByLabelText(/^코드/) as HTMLInputElement).value).toBe('COUPON_B');
+    expect(screen.getByRole('checkbox', { name: '활성화' })).toBeChecked();
+
+    // A 비활성화 응답 완료 후에도 B 편집 대상과 active 체크 상태 유지
+    resolveToggleA();
+    expect(await screen.findByText("'COUPON_A' 쿠폰을 비활성화했어요.")).toBeInTheDocument();
+    expect((screen.getByLabelText(/^코드/) as HTMLInputElement).value).toBe('COUPON_B');
+    expect(screen.getByRole('button', { name: '수정 저장' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: '활성화' })).toBeChecked();
+  });
+
+  it('쿠폰 A 삭제 대기 중 다른 쿠폰 B 편집으로 전환해도 B의 편집 폼이 닫히지 않는다', async () => {
+    mockApi.coupons = [
+      sampleCoupon({ code: 'COUPON_A', active: true, description: '쿠폰 A 설명' }),
+      sampleCoupon({ code: 'COUPON_B', active: true, description: '쿠폰 B 설명' }),
+    ];
+
+    let resolveDeleteA!: () => void;
+    mockApi.writeCoupon.mockImplementation((req: { op: string; code: string }) => {
+      if (req.op === 'delete' && req.code === 'COUPON_A') {
+        return new Promise(resolve => {
+          resolveDeleteA = () => resolve({ ok: true });
+        });
+      }
+      return Promise.resolve({ coupon: sampleCoupon({ code: req.code }) });
+    });
+
+    renderTab();
+    expect(await screen.findByText('COUPON_A')).toBeInTheDocument();
+
+    const rowA = screen.getByText('COUPON_A').closest('tr')!;
+    const rowB = screen.getByText('COUPON_B').closest('tr')!;
+
+    // 쿠폰 A 수정 모드로 연 상태에서 A 삭제 요청 및 확인
+    fireEvent.click(within(rowA).getByRole('button', { name: '수정' }));
+    expect((screen.getByLabelText(/^코드/) as HTMLInputElement).value).toBe('COUPON_A');
+    fireEvent.click(within(rowA).getByRole('button', { name: '삭제' }));
+    const dialog = await screen.findByRole('dialog', { name: '쿠폰 삭제' });
+    fireEvent.click(within(dialog).getByRole('button', { name: '삭제' }));
+
+    await waitFor(() => expect(mockApi.writeCoupon).toHaveBeenCalledWith({ op: 'delete', code: 'COUPON_A' }));
+
+    // 응답 대기 중 쿠폰 B 수정 모드로 전환
+    fireEvent.click(within(rowB).getByRole('button', { name: '수정' }));
+    expect((screen.getByLabelText(/^코드/) as HTMLInputElement).value).toBe('COUPON_B');
+    expect((screen.getByLabelText(/^설명/) as HTMLInputElement).value).toBe('쿠폰 B 설명');
+
+    // A 삭제 응답 완료 후에도 B 편집 폼 유지
+    resolveDeleteA();
+    expect(await screen.findByText('쿠폰을 삭제했어요.')).toBeInTheDocument();
+    expect((screen.getByLabelText(/^코드/) as HTMLInputElement).value).toBe('COUPON_B');
+    expect((screen.getByLabelText(/^설명/) as HTMLInputElement).value).toBe('쿠폰 B 설명');
+    expect(screen.getByRole('button', { name: '수정 저장' })).toBeInTheDocument();
+  });
 });

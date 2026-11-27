@@ -73,6 +73,24 @@ describe('blockPrerender 미들웨어', () => {
     expect(await actionRes.json()).toEqual({ error: 'prerender-blocked' });
   });
 
+  it('대소문자가 섞인 /API/AUTH/* 와 /Api/Action POST 프리렌더·프리페치 요청도 403으로 차단한다', async () => {
+    const base = await startApp();
+
+    const upperAuthRes = await fetch(`${base}/API/AUTH/sign-in/anonymous`, {
+      method: 'POST',
+      headers: { 'Sec-Purpose': 'prefetch;prerender' },
+    });
+    expect(upperAuthRes.status).toBe(403);
+    expect(await upperAuthRes.json()).toEqual({ error: 'prerender-blocked' });
+
+    const mixedActionRes = await fetch(`${base}/Api/Action`, {
+      method: 'POST',
+      headers: { Purpose: 'prerender' },
+    });
+    expect(mixedActionRes.status).toBe(403);
+    expect(await mixedActionRes.json()).toEqual({ error: 'prerender-blocked' });
+  });
+
   it('GET 요청과 일반 POST 요청, 다른 API 경로는 통과시킨다', async () => {
     const base = await startApp();
 

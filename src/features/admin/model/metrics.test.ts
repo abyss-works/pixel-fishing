@@ -3,6 +3,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   todayKST, lastNDays, fmtNum, fmtPct, fmtDT,
+  toLocalInputValue, isoToLocalInput,
   fillSeries, percentile, sumLast, eventSummary, EVENT_LABELS,
 } from './metrics';
 
@@ -38,6 +39,14 @@ describe('포맷', () => {
     expect(fmtDT(null)).toBe('—');
     expect(fmtDT('not-a-date')).toBe('—');
     expect(fmtDT('2026-08-27T15:30:00.000Z')).toMatch(/^08-28 00:30$/); // KST 변환
+  });
+
+  it('toLocalInputValue / isoToLocalInput', () => {
+    const sample = new Date(2026, 10, 27, 9, 5, 0, 0);
+    expect(toLocalInputValue(sample.getTime())).toBe('2026-11-27T09:05');
+    expect(isoToLocalInput(sample.toISOString())).toBe('2026-11-27T09:05');
+    expect(isoToLocalInput(null)).toBe('');
+    expect(isoToLocalInput('invalid-date')).toBe('');
   });
 });
 

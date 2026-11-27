@@ -1,5 +1,5 @@
 // 쿠폰 구역 — 동적 보상 쿠폰을 발행하고, 유효 기간·선착순 한도·활성 상태를 관리한다.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
 import CheckToggle from '../../../ui/CheckToggle';
@@ -27,7 +27,7 @@ import {
   type CouponStatus,
   type MailItemAttachment,
 } from '../../../../features/admin/model/couponDraft';
-import { fmtDT } from '../../../../features/admin/model/metrics';
+import { fmtDT, isoToLocalInput } from '../../../../features/admin/model/metrics';
 import type { AdminCouponRow } from '../../../../features/admin/model/types';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { readAdminCoupons } from '../../../../features/admin/service/queries';
@@ -46,22 +46,6 @@ const STATUS_TONE: Record<CouponStatus, 'gold' | 'accent' | 'dim'> = {
   비활성: 'dim',
 };
 
-function toLocalInputValue(ms: number): string {
-  const d = new Date(ms);
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mi = String(d.getMinutes()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
-}
-
-function isoToLocalInput(iso: string | null): string {
-  if (!iso) return '';
-  const ms = Date.parse(iso);
-  return Number.isFinite(ms) ? toLocalInputValue(ms) : '';
-}
-
 export default function CouponsTab() {
   const { access } = useAdminAuth();
   const granted = access === 'granted';
@@ -71,6 +55,7 @@ export default function CouponsTab() {
   const { confirm, dialogs } = useDialogs();
 
   const [editingCode, setEditingCode] = useState<string | null>(null);
+  const editingCodeRef = useRef<string | null>(null);
   const [code, setCode] = useState('');
   const [description, setDescription] = useState('');
   const [gold, setGold] = useState('0');
@@ -83,11 +68,25 @@ export default function CouponsTab() {
   const [endsInput, setEndsInput] = useState('');
   const [maxRedemptions, setMaxRedemptions] = useState('');
   const [perAccountLimit, setPerAccountLimit] = useState('1');
-  const [busy, setBusy] = useState(false);
-  const [busyCode, setBusyCode] = useState<string | null>(null);
+  const [savingForm, setSavingForm] = useState(false);
+  const [busyCodes, setBusyCodes] = useState<ReadonlySet<string>>(() => new Set());
   const [failure, setFailure] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+
+  const editingRowBusy = editingCode !== null && busyCodes.has(editingCode);
+  const markCodeBusy = (targetCode: string, activeBusy: boolean) => {
+    setBusyCodes(prev => {
+      const next = new Set(prev);
+      if (activeBusy) next.add(targetCode);
+      else next.delete(targetCode);
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    editingCodeRef.current = editingCode;
+  }, [editingCode]);
 
   useEffect(() => {
     const delay = nextCouponBoundaryMs(coupons, now);
@@ -102,6 +101,7 @@ export default function CouponsTab() {
   };
 
   const resetForm = () => {
+    editingCodeRef.current = null;
     setEditingCode(null);
     setCode('');
     setDescription('');
@@ -118,6 +118,8 @@ export default function CouponsTab() {
   };
 
   const startEdit = (c: AdminCouponRow) => {
+    if (savingForm || busyCodes.has(c.code)) return;
+    editingCodeRef.current = c.code;
     setEditingCode(c.code);
     setCode(c.code);
     setDescription(c.description);
@@ -156,6 +158,7 @@ export default function CouponsTab() {
   };
 
   const submit = async () => {
+    if (savingForm || editingRowBusy) return;
     clearNotice();
     const built = buildCouponRequest({
       code: editingCode ?? code,
@@ -174,21 +177,22 @@ export default function CouponsTab() {
       return;
     }
 
-    setBusy(true);
+    setSavingForm(true);
     try {
       await writeCoupon(built.request);
       setNow(currentNowMs());
-      setDone(editingCode !== null ? '쿠폰을 수정했어요.' : '새 쿠폰을 발행했어요.');
+      setDone(editingCodeRef.current !== null ? '쿠폰을 수정했어요.' : '새 쿠폰을 발행했어요.');
       resetForm();
     } catch (e) {
       setFailure(String((e as { message?: unknown }).message ?? e));
     } finally {
-      setBusy(false);
+      setSavingForm(false);
     }
   };
 
   const handleToggleActive = async (c: AdminCouponRow) => {
-    setBusyCode(c.code);
+    if (busyCodes.has(c.code) || (savingForm && editingCodeRef.current === c.code)) return;
+    markCodeBusy(c.code, true);
     clearNotice();
     const nextActive = !c.active;
     try {
@@ -204,17 +208,18 @@ export default function CouponsTab() {
         maxRedemptions: c.maxRedemptions,
         perAccountLimit: c.perAccountLimit,
       });
-      if (editingCode === c.code) setActive(nextActive);
+      if (editingCodeRef.current === c.code) setActive(nextActive);
       setNow(currentNowMs());
       setDone(nextActive ? `'${c.code}' 쿠폰을 활성화했어요.` : `'${c.code}' 쿠폰을 비활성화했어요.`);
     } catch (e) {
       setFailure(String((e as { message?: unknown }).message ?? e));
     } finally {
-      setBusyCode(null);
+      markCodeBusy(c.code, false);
     }
   };
 
   const handleDelete = async (c: AdminCouponRow) => {
+    if (busyCodes.has(c.code) || (savingForm && editingCodeRef.current === c.code)) return;
     const body = c.redeemedCount > 0
       ? `'${c.code}' 쿠폰을 삭제할까요? 이미 ${c.redeemedCount.toLocaleString('ko-KR')}회 사용된 쿠폰이며, 기존 사용 이력도 함께 삭제되어 되돌릴 수 없어요.`
       : `'${c.code}' 쿠폰을 삭제할까요? 삭제한 쿠폰은 되돌릴 수 없어요.`;
@@ -224,18 +229,18 @@ export default function CouponsTab() {
       confirmLabel: '삭제',
       body,
     });
-    if (!ok) return;
+    if (!ok || busyCodes.has(c.code) || (savingForm && editingCodeRef.current === c.code)) return;
 
-    setBusyCode(c.code);
+    markCodeBusy(c.code, true);
     clearNotice();
     try {
       await writeCoupon({ op: 'delete', code: c.code });
-      if (editingCode === c.code) resetForm();
+      if (editingCodeRef.current === c.code) resetForm();
       setDone('쿠폰을 삭제했어요.');
     } catch (e) {
       setFailure(String((e as { message?: unknown }).message ?? e));
     } finally {
-      setBusyCode(null);
+      markCodeBusy(c.code, false);
     }
   };
 
@@ -260,7 +265,8 @@ export default function CouponsTab() {
               <tbody>
                 {coupons.map(c => {
                   const status = couponStatusOf(c, now);
-                  const rowBusy = busyCode === c.code;
+                  const rowBusy = busyCodes.has(c.code);
+                  const rowLockedByForm = savingForm && editingCode === c.code;
                   return (
                     <tr key={c.code}>
                       <td className="align-top">
@@ -306,14 +312,14 @@ export default function CouponsTab() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            disabled={!granted || rowBusy}
+                            disabled={!granted || rowBusy || savingForm}
                             onClick={() => startEdit(c)}
                           >
                             수정
                           </Button>
                           <Button
                             size="sm"
-                            disabled={!granted || rowBusy}
+                            disabled={!granted || rowBusy || rowLockedByForm}
                             onClick={() => void handleToggleActive(c)}
                           >
                             {c.active ? '비활성화' : '활성화'}
@@ -321,7 +327,7 @@ export default function CouponsTab() {
                           <Button
                             size="sm"
                             variant="danger"
-                            disabled={!granted || rowBusy}
+                            disabled={!granted || rowBusy || rowLockedByForm}
                             onClick={() => void handleDelete(c)}
                           >
                             삭제
@@ -470,7 +476,7 @@ export default function CouponsTab() {
               <Button
                 size="sm"
                 variant="primary"
-                disabled={!granted || busy}
+                disabled={!granted || savingForm || editingRowBusy}
                 onClick={() => void submit()}
               >
                 {editingCode !== null ? '수정 저장' : '쿠폰 발행'}
@@ -478,7 +484,7 @@ export default function CouponsTab() {
               <Button
                 size="sm"
                 variant="ghost"
-                disabled={busy}
+                disabled={savingForm || editingRowBusy}
                 onClick={() => { resetForm(); clearNotice(); }}
               >
                 {editingCode !== null ? '취소' : '초기화'}

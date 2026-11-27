@@ -18,8 +18,9 @@ function hasPrerenderToken(raw: string | string[] | undefined): boolean {
   return false;
 }
 
-function isPrerenderBlockedPath(path: string): boolean {
-  return PRERENDER_BLOCKED_PATHS.some(prefix => path === prefix || path.startsWith(`${prefix}/`));
+function isPrerenderBlockedPath(pathname: string): boolean {
+  const normalized = pathname.toLowerCase();
+  return PRERENDER_BLOCKED_PATHS.some(prefix => normalized === prefix || normalized.startsWith(`${prefix}/`));
 }
 
 /** 요청 헤더가 브라우저 프리렌더 또는 프리페치인지 판정한다 */

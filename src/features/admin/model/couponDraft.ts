@@ -1,11 +1,9 @@
 import { COUPONS } from '../../../game/content/coupons';
-import { fmtGold } from '../../../shared/lib/format';
 import {
   MAIL_GOLD_MAX,
   STACKABLE_ITEM_KIND_LABEL,
   findStackableItem,
   formatItemQtyText,
-  formatMailItemsSummary,
   removeMailAttachment,
   searchAttachableItems,
   upsertMailAttachment,
@@ -18,7 +16,6 @@ export {
   STACKABLE_ITEM_KIND_LABEL,
   findStackableItem,
   formatItemQtyText,
-  formatMailItemsSummary,
   removeMailAttachment,
   searchAttachableItems,
   upsertMailAttachment,
@@ -27,6 +24,7 @@ export type { MailItemAttachment };
 
 export const COUPON_CODE_MAX = 64;
 export const COUPON_DESC_MAX = 200;
+export const COUPON_LIMIT_MAX = 2_147_483_647;
 
 export type CouponStatus = '비활성' | '예약' | '만료' | '활성';
 
@@ -64,14 +62,6 @@ export function couponScopeText(coupon: Pick<AdminCouponRow, 'maxRedemptions'>):
   return coupon.maxRedemptions === null
     ? '무제한 (게스트 가능)'
     : `선착순 ${coupon.maxRedemptions}명 (정식 계정)`;
-}
-
-/** 쿠폰의 보상 골드와 첨부 품목 요약 문구를 만든다. */
-export function formatCouponRewards(coupon: Pick<AdminCouponRow, 'gold' | 'items'>): string {
-  const parts: string[] = [];
-  if (coupon.gold > 0) parts.push(fmtGold(coupon.gold));
-  if (coupon.items.length > 0) parts.push(formatMailItemsSummary(coupon.items));
-  return parts.length > 0 ? parts.join(', ') : '-';
 }
 
 /** 다음 활성 또는 만료 경계까지 남은 시간(ms)을 구한다. 예정된 경계가 없으면 null을 돌려준다. */
@@ -153,15 +143,15 @@ export function buildCouponRequest(
   let maxRedemptions: number | null = null;
   if (form.maxRedemptions !== null && String(form.maxRedemptions).trim() !== '') {
     const parsedMax = parseNonNegativeInt(form.maxRedemptions, NaN);
-    if (!Number.isSafeInteger(parsedMax) || parsedMax < 1) {
-      return { ok: false, error: '총 사용 한도는 비워 두거나 1 이상의 정수로 입력해 주세요.' };
+    if (!Number.isSafeInteger(parsedMax) || parsedMax < 1 || parsedMax > COUPON_LIMIT_MAX) {
+      return { ok: false, error: '총 사용 한도는 비워 두거나 1 이상 2,147,483,647 이하의 정수로 입력해 주세요.' };
     }
     maxRedemptions = parsedMax;
   }
 
   const perAccountLimit = parseNonNegativeInt(form.perAccountLimit, NaN);
-  if (!Number.isSafeInteger(perAccountLimit) || perAccountLimit < 1) {
-    return { ok: false, error: '계정당 사용 한도는 1 이상의 정수로 입력해 주세요.' };
+  if (!Number.isSafeInteger(perAccountLimit) || perAccountLimit < 1 || perAccountLimit > COUPON_LIMIT_MAX) {
+    return { ok: false, error: '계정당 사용 한도는 1 이상 2,147,483,647 이하의 정수로 입력해 주세요.' };
   }
 
   const payload = {

@@ -23,6 +23,8 @@ export interface AdminCouponRow {
 
 export const COUPON_CODE_MAX = 64;
 export const COUPON_DESC_MAX = 200;
+/** PostgreSQL int4 최댓값 — max_redemptions·per_account_limit 상한 */
+export const COUPON_LIMIT_MAX = 2_147_483_647;
 
 export interface DynamicCoupon {
   gold: number;
@@ -282,13 +284,23 @@ export function parseCouponDraft(raw: unknown, op: 'create' | 'update'): CouponD
   const maxRedemptionsRaw = op === 'create' && b.maxRedemptions === undefined ? null : b.maxRedemptions;
   if (
     maxRedemptionsRaw !== null
-    && (typeof maxRedemptionsRaw !== 'number' || !Number.isSafeInteger(maxRedemptionsRaw) || maxRedemptionsRaw < 1)
+    && (
+      typeof maxRedemptionsRaw !== 'number'
+      || !Number.isSafeInteger(maxRedemptionsRaw)
+      || maxRedemptionsRaw < 1
+      || maxRedemptionsRaw > COUPON_LIMIT_MAX
+    )
   ) {
     return null;
   }
 
   const perAccountLimitRaw = op === 'create' && b.perAccountLimit === undefined ? 1 : b.perAccountLimit;
-  if (typeof perAccountLimitRaw !== 'number' || !Number.isSafeInteger(perAccountLimitRaw) || perAccountLimitRaw < 1) {
+  if (
+    typeof perAccountLimitRaw !== 'number'
+    || !Number.isSafeInteger(perAccountLimitRaw)
+    || perAccountLimitRaw < 1
+    || perAccountLimitRaw > COUPON_LIMIT_MAX
+  ) {
     return null;
   }
 

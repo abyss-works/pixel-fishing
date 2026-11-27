@@ -9,7 +9,7 @@ import TableBox from '../../../ui/TableBox';
 import TextArea from '../../../ui/TextArea';
 import TextInput from '../../../ui/TextInput';
 import { useDialogs } from '../../../ui/useDialogs';
-import { fmtDT } from '../../../../features/admin/model/metrics';
+import { fmtDT, isoToLocalInput, toLocalInputValue } from '../../../../features/admin/model/metrics';
 import { readAdminNotices } from '../../../../features/admin/service/queries';
 import { adminKeys } from '../../../../features/admin/service/queryKeys';
 import { useAdminNotices } from '../../../../features/admin/service/useAdminNotices';
@@ -37,16 +37,6 @@ function noticeStatusOf(notice: Pick<AdminNoticeRow, 'startsAt' | 'endsAt'>, now
   if (Number.isFinite(start) && now < start) return '예약';
   if (Number.isFinite(end) && now < end) return '활성';
   return '마감';
-}
-
-function toLocalInputValue(ms: number): string {
-  const d = new Date(ms);
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mi = String(d.getMinutes()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
 }
 
 function localInputToIso(value: string): string {
@@ -100,13 +90,11 @@ export default function NoticesTab() {
   };
 
   const startEdit = (n: AdminNoticeRow) => {
-    const startMs = Date.parse(n.startsAt);
-    const endMs = Date.parse(n.endsAt);
     setEditingId(n.id);
     setTitle(n.title);
     setBody(n.body);
-    setStartsInput(Number.isFinite(startMs) ? toLocalInputValue(startMs) : '');
-    setEndsInput(Number.isFinite(endMs) ? toLocalInputValue(endMs) : '');
+    setStartsInput(isoToLocalInput(n.startsAt));
+    setEndsInput(isoToLocalInput(n.endsAt));
     setFailure(null);
     setDone(null);
   };

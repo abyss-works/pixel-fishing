@@ -663,6 +663,113 @@ describe('api/admin 핸들러 단위 테스트', () => {
     });
   });
 
+  it('POST ?q=coupons는 단일 withTransaction 안에서 DB 쓰기와 감사 로그를 실행하고 실패 시 전파하며 int4 상한 초과를 400으로 막는다', async () => {
+    // maxRedemptions / perAccountLimit int4 상한(2_147_483_647) 초과 차단
+    for (const badField of [
+      { maxRedemptions: 2_147_483_648 },
+      { perAccountLimit: 2_147_483_648 },
+    ]) {
+      expect(await call('POST', { q: 'coupons' }, {
+        op: 'create',
+        code: 'OVER-LIMIT',
+        gold: 100,
+        description: '상한 초과',
+        ...badField,
+      })).toMatchObject({ status: 400, body: { error: 'bad-coupon' } });
+      expect(await call('POST', { q: 'coupons' }, {
+        op: 'update',
+        code: 'OVER-LIMIT',
+        gold: 100,
+        items: [],
+        description: '상한 초과',
+        active: true,
+        startsAt: null,
+        endsAt: null,
+        maxRedemptions: 1,
+        perAccountLimit: 1,
+        ...badField,
+      })).toMatchObject({ status: 400, body: { error: 'bad-coupon' } });
+    }
+    expect(mocks.createAdminCoupon).not.toHaveBeenCalled();
+    expect(mocks.updateAdminCoupon).not.toHaveBeenCalled();
+    expect(mocks.insertAdminAuditLog).not.toHaveBeenCalled();
+
+    // create / update / delete 모두 withTransaction의 동일 tx 클라이언트로 DB 쓰기와 감사 로그를 묶는다
+    const txClient = { execute: vi.fn(), tag: 'tx-client' };
+    const couponAtMax = {
+      code: 'TX-COUPON',
+      gold: 100,
+      items: [],
+      description: '트랜잭션 검증',
+      active: true,
+      startsAt: null,
+      endsAt: null,
+      maxRedemptions: 2_147_483_647,
+      perAccountLimit: 2_147_483_647,
+      redeemedCount: 0,
+      createdAt: '2030-01-01T00:00:00.000Z',
+    };
+
+    mocks.withTransaction.mockImplementationOnce(async run => run(txClient));
+    mocks.createAdminCoupon.mockResolvedValueOnce(couponAtMax);
+    expect(await call('POST', { q: 'coupons' }, {
+      op: 'create',
+      code: 'TX-COUPON',
+      gold: 100,
+      description: '트랜잭션 검증',
+      maxRedemptions: 2_147_483_647,
+      perAccountLimit: 2_147_483_647,
+    })).toMatchObject({ status: 200, body: { coupon: couponAtMax } });
+    expect(mocks.createAdminCoupon).toHaveBeenLastCalledWith(txClient, expect.objectContaining({ code: 'TX-COUPON' }));
+    expect(mocks.insertAdminAuditLog).toHaveBeenLastCalledWith(txClient, expect.objectContaining({ action: 'couponCreate' }));
+
+    mocks.withTransaction.mockImplementationOnce(async run => run(txClient));
+    mocks.updateAdminCoupon.mockResolvedValueOnce(couponAtMax);
+    expect(await call('POST', { q: 'coupons' }, {
+      op: 'update',
+      code: 'TX-COUPON',
+      gold: 100,
+      items: [],
+      description: '트랜잭션 검증',
+      active: true,
+      startsAt: null,
+      endsAt: null,
+      maxRedemptions: 2_147_483_647,
+      perAccountLimit: 2_147_483_647,
+    })).toMatchObject({ status: 200, body: { coupon: couponAtMax } });
+    expect(mocks.updateAdminCoupon).toHaveBeenLastCalledWith(txClient, expect.objectContaining({ code: 'TX-COUPON' }));
+    expect(mocks.insertAdminAuditLog).toHaveBeenLastCalledWith(txClient, expect.objectContaining({ action: 'couponUpdate' }));
+
+    mocks.withTransaction.mockImplementationOnce(async run => run(txClient));
+    mocks.deleteAdminCoupon.mockResolvedValueOnce(true);
+    expect(await call('POST', { q: 'coupons' }, { op: 'delete', code: 'TX-COUPON' })).toMatchObject({
+      status: 200,
+      body: { deleted: true, code: 'TX-COUPON' },
+    });
+    expect(mocks.deleteAdminCoupon).toHaveBeenLastCalledWith(txClient, 'TX-COUPON');
+    expect(mocks.insertAdminAuditLog).toHaveBeenLastCalledWith(txClient, expect.objectContaining({ action: 'couponDelete' }));
+
+    // 감사 로그 기록 실패 시 트랜잭션이 실패를 전파해 500 db-write로 롤백된다
+    let rolledBack = false;
+    mocks.withTransaction.mockImplementationOnce(async run => {
+      try {
+        return await run(txClient);
+      } catch (e) {
+        rolledBack = true;
+        throw e;
+      }
+    });
+    mocks.createAdminCoupon.mockResolvedValueOnce(couponAtMax);
+    mocks.insertAdminAuditLog.mockRejectedValueOnce(new Error('audit failure'));
+    expect(await call('POST', { q: 'coupons' }, {
+      op: 'create',
+      code: 'TX-ROLLBACK',
+      gold: 100,
+      description: '롤백 검증',
+    })).toMatchObject({ status: 500, body: { error: 'db-write' } });
+    expect(rolledBack).toBe(true);
+  });
+
   it('access는 role과 showStaffBadge를 함께 돌려주고 maintainer 권한 밖 읽기·쓰기는 403으로 차단한다', async () => {
     mocks.adminMember.mockResolvedValue({ role: 'maintainer', showStaffBadge: true });
 

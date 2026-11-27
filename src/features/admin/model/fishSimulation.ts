@@ -187,6 +187,20 @@ export function selectDeltaValues(previous: number, current: number) {
   };
 }
 
+const EMPTY_SIM: SimOverrides = { budgets: {}, fishWeights: {}, price: {} };
+
+function roundAxisEvs(evs: Partial<AxisEvs> | undefined): AxisEvs {
+  return Object.fromEntries(SIM_AXES.map(axis => [
+    axis.key, +((evs?.[axis.key] ?? 0).toFixed(1)),
+  ])) as AxisEvs;
+}
+
+function diffAxisEvs(before: AxisEvs, after: AxisEvs): AxisEvs {
+  return Object.fromEntries(SIM_AXES.map(axis => [
+    axis.key, +(after[axis.key] - before[axis.key]).toFixed(1),
+  ])) as AxisEvs;
+}
+
 /** 현황 JSON에 넣을 모든 수역·어종·기대값 데이터를 만든다. */
 export function buildFishSnapshotExport(
   spots: readonly Spot[], sim: SimOverrides, evsBySpot: ReadonlyMap<string, AxisEvs>,
@@ -205,12 +219,8 @@ export function buildFishSnapshotExport(
         entryLevel: hourly.entryLevel,
         plateauLevel: hourly.plateauLevel,
         rarityWeightOverride: spot.rarityWeight ?? null,
-        simEV: Object.fromEntries(SIM_AXES.map(axis => [
-          axis.key, +((evsBySpot.get(spot.id)?.[axis.key] ?? 0).toFixed(1)),
-        ])),
-        simHourlyEV: Object.fromEntries(SIM_AXES.map(axis => [
-          axis.key, +((hourly.evs[axis.key] ?? 0).toFixed(1)),
-        ])),
+        simEV: roundAxisEvs(evsBySpot.get(spot.id)),
+        simHourlyEV: roundAxisEvs(hourly.evs),
         fish: FISH.filter(fish => fish.spot === spot.id).map(fish => ({
           id: fish.id,
           name: fish.name,
@@ -238,6 +248,7 @@ export function buildFishSnapshotExport(
 export function buildFishDeltaExport(
   spots: readonly Spot[], sim: SimOverrides, evsBySpot: ReadonlyMap<string, AxisEvs>,
   exportedAt: string,
+  hourlyBySpot?: ReadonlyMap<string, SpotHourlyEvs>,
 ) {
   const changedFields = countSimulationOverrides(sim, spots);
   if (changedFields === 0) return null;
@@ -258,14 +269,23 @@ export function buildFishDeltaExport(
     const budgetDelta = sim.budgets[spot.id];
     const hasBudgetDelta = budgetDelta && Object.keys(budgetDelta).length > 0;
     if (!hasBudgetDelta && fish.length === 0) return [];
+    const baseHourly = selectSpotHourlyEvs(spot.id as SpotId, EMPTY_SIM);
+    const hourly = hourlyBySpot?.get(spot.id) ?? selectSpotHourlyEvs(spot.id as SpotId, sim);
+    const simHourlyEV = roundAxisEvs(hourly.evs);
     return [{
       id: spot.id,
       name: spot.name,
+      entryLevel: hourly.entryLevel,
+      plateauLevel: hourly.plateauLevel,
       ...(hasBudgetDelta ? { rarityWeightDelta: budgetDelta } : {}),
       ...(fish.length > 0 ? { fish } : {}),
-      simEV: Object.fromEntries(SIM_AXES.map(axis => [
-        axis.key, +((evsBySpot.get(spot.id)?.[axis.key] ?? 0).toFixed(1)),
-      ])),
+      simEV: roundAxisEvs(evsBySpot.get(spot.id)),
+      simHourlyEV,
+      simHourlyEVDelta: {
+        before: roundAxisEvs(baseHourly.evs),
+        after: simHourlyEV,
+        delta: diffAxisEvs(baseHourly.evs, hourly.evs),
+      },
     }];
   }).flat();
 
@@ -276,7 +296,8 @@ export function buildFishDeltaExport(
     spots: changedSpots,
     notes: {
       usage: 'Δ JSON — sb* ≠ null 인 항목만. 비어 있으면 spots=[]',
-      fields: 'rarityWeightDelta = 해역 등급 가중치 오버라이드(희귀·영웅·전설 중 변경된 등급만, 일반은 나머지), fish[].price/weight = 어종 확정값(변경된 어종만)',
+      fields: 'rarityWeightDelta = 해역 등급 가중치 오버라이드(희귀·영웅·전설 중 변경된 등급만, 일반은 나머지), fish[].price/weight = 어종 확정값(변경된 어종만), simHourlyEV = 오버라이드 반영 시간당 기대 골드(G/h), simHourlyEVDelta = 원본 대비 시간당 기대 골드 before/after/delta',
+      hourlyBasis: BALANCE_EV_BASIS_LABELS.hourly,
     },
   };
 }
