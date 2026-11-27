@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { EVENT_FISH } from '../content/eventFish.js';
 import { FISH } from '../content/fish.js';
-import { SPOTS } from '../content/spots.js';
+import { EVENT_SPOTS, SPOTS } from '../content/spots.js';
 import { fmtGold as uiFmtGold, fmtSize as uiFmtSize } from '../../presentation/ui/format.js';
 import { fmtGold, fmtSize } from '../../shared/lib/format.js';
 import {
@@ -8,6 +9,7 @@ import {
   SPOT_SEA_THEME,
   WIDGET_CLIENT_HEADER,
   WIDGET_CLIENT_VALUE,
+  WIDGET_EMPTY_VALUE_TEXT,
   WIDGET_IDLE_TIMEOUT_MS,
   WIDGET_MIN_CLIENT_VERSION,
   WIDGET_RECENT_CATCH_LIMIT,
@@ -17,8 +19,13 @@ import {
   buildWidgetCatchItem,
   computeBagPercent,
   deriveFishFallbackColors,
+  findWidgetSpot,
+  formatWidgetCatchValue,
   isMinWidgetVersionSupported,
+  resolveEventCatchValue,
   resolveSpotSeaTheme,
+  resolveWidgetSpot,
+  widgetFishById,
 } from './widget.js';
 
 const HEX_RE = /^#[0-9a-f]{6}$/;
@@ -136,5 +143,148 @@ describe('widget shared contract — 폴백 팔레트·가방·포획 조립', (
       caughtAtMs: 1_795_700_000_000,
       fallbackColors: deriveFishFallbackColors(kraken, true),
     });
+  });
+});
+
+describe('widget shared contract — 이벤트 어종·가치 표현·수역 해석', () => {
+  it('widgetFishById는 정규 어종과 모든 이벤트 어종을 조회하고 미지 입력은 undefined를 돌려준다', () => {
+    expect(widgetFishById('crucian')?.name).toBe('붕어');
+    for (const ef of EVENT_FISH) {
+      expect(widgetFishById(ef.id)).toBe(ef);
+    }
+    expect(widgetFishById('nonexistent-fish')).toBeUndefined();
+    expect(widgetFishById(null)).toBeUndefined();
+    expect(widgetFishById(123)).toBeUndefined();
+  });
+
+  it('모든 이벤트 어종의 일반·변이 폴백 색상이 유효한 6자리 hex 팔레트를 돌려준다', () => {
+    for (const ef of EVENT_FISH) {
+      const normal = deriveFishFallbackColors(ef);
+      const mutant = deriveFishFallbackColors(ef, true);
+      for (const pal of [normal, mutant]) {
+        expect(pal.body).toMatch(HEX_RE);
+        expect(pal.fin).toMatch(HEX_RE);
+        expect(pal.belly).toMatch(HEX_RE);
+        expect(pal.eye).toMatch(HEX_RE);
+        expect(pal.fin).not.toBe(pal.body);
+        expect(pal.eye).not.toBe(pal.body);
+      }
+      expect(normal.body).toBe(ef.color.toLowerCase());
+      expect(mutant.body).toBe(ef.variant.color.toLowerCase());
+    }
+  });
+
+  it('formatWidgetCatchValue와 resolveEventCatchValue가 골드·점수·텍스트·빈 값과 우선순위를 일관되게 처리한다', () => {
+    expect(formatWidgetCatchValue({ kind: 'gold', amount: 2000 })).toBe('2,000G');
+    expect(formatWidgetCatchValue({ kind: 'gold', amount: 0 })).toBe('0G');
+    expect(formatWidgetCatchValue({ kind: 'gold', amount: -1 })).toBe(WIDGET_EMPTY_VALUE_TEXT);
+    expect(formatWidgetCatchValue({ kind: 'score', amount: 10 })).toBe('10점');
+    expect(formatWidgetCatchValue({ kind: 'score', amount: 1200 })).toBe('1,200점');
+    expect(formatWidgetCatchValue({ kind: 'score', amount: 0 })).toBe(WIDGET_EMPTY_VALUE_TEXT);
+    expect(formatWidgetCatchValue({ kind: 'text', text: ' 3티켓 ' })).toBe('3티켓');
+    expect(formatWidgetCatchValue({ kind: 'text', text: '   ' })).toBe(WIDGET_EMPTY_VALUE_TEXT);
+    expect(formatWidgetCatchValue({ kind: 'none' })).toBe('-');
+
+    expect(resolveEventCatchValue({ priceText: '3티켓', score: 100, priceGold: 500 })).toEqual({ kind: 'text', text: '3티켓' });
+    expect(resolveEventCatchValue({ priceText: '  ', score: 1200, priceGold: 500 })).toEqual({ kind: 'score', amount: 1200 });
+    expect(resolveEventCatchValue({ score: 0, priceGold: 2000 })).toEqual({ kind: 'gold', amount: 2000 });
+    expect(resolveEventCatchValue({ score: null, priceGold: null })).toEqual({ kind: 'none' });
+    expect(resolveEventCatchValue(undefined)).toEqual({ kind: 'none' });
+  });
+
+  it('buildWidgetCatchItem이 이벤트 어종의 점수·빈 값과 하위 호환 priceGold를 모두 조립한다', () => {
+    const glaaki = EVENT_FISH.find(f => f.id === 'event-glaaki')!;
+    const scored = buildWidgetCatchItem({
+      eventId: 'evt-score',
+      fish: glaaki,
+      form: 'variant',
+      sizeCm: 250,
+      value: { kind: 'score', amount: glaaki.variant.score },
+      isBig: true,
+      caughtAtMs: 1_795_700_000_000,
+    });
+    expect(scored).toEqual({
+      eventId: 'evt-score',
+      spriteKey: 'event-glaaki',
+      name: glaaki.variant.name,
+      rarity: glaaki.rarity,
+      sizeText: '2.50m',
+      priceText: '800점',
+      isBig: true,
+      isMutant: true,
+      caughtAtMs: 1_795_700_000_000,
+      fallbackColors: deriveFishFallbackColors(glaaki, true),
+    });
+
+    const emptyVal = buildWidgetCatchItem({
+      eventId: 'evt-none',
+      fish: glaaki,
+      form: 'normal',
+      sizeCm: 80.5,
+      value: { kind: 'none' },
+      isBig: false,
+      caughtAtMs: 1_795_700_000_000,
+    });
+    expect(emptyVal.priceText).toBe('-');
+    expect(emptyVal.sizeText).toBe('80.5cm');
+
+    const fallbackNone = buildWidgetCatchItem({
+      eventId: 'evt-omit',
+      fish: glaaki,
+      form: 'normal',
+      sizeCm: 10,
+      isBig: false,
+      caughtAtMs: 1_795_700_000_000,
+    });
+    expect(fallbackNone.priceText).toBe('-');
+  });
+
+  it('findWidgetSpot과 resolveWidgetSpot이 이벤트 수역·presence·lastSpot·recentCatchSpot·기본값 우선순위를 지킨다', () => {
+    expect(findWidgetSpot('championship')).toBe(EVENT_SPOTS[0]);
+    expect(findWidgetSpot('deep')?.name).toBe('마리아나 해구');
+    expect(findWidgetSpot('unknown')).toBeUndefined();
+    expect(findWidgetSpot(null)).toBeUndefined();
+
+    // 활성 이벤트 지역이 lastSpot보다 우선한다
+    expect(resolveWidgetSpot({
+      location: { kind: 'region', id: 'championship' },
+      lastSpot: 'deep',
+      recentCatchSpot: 'pond',
+    }).id).toBe('championship');
+
+    // presenceRegion이 이벤트 지역이면 lastSpot보다 우선한다
+    expect(resolveWidgetSpot({
+      location: { kind: 'region', id: 'world' },
+      presenceRegion: 'championship',
+      lastSpot: 'deep',
+    }).id).toBe('championship');
+
+    // 이벤트 구역을 떠나 거점으로 돌아오면 lastSpot을 복원한다
+    expect(resolveWidgetSpot({
+      location: { kind: 'base', id: 'harbor' },
+      presenceRegion: 'harbor',
+      lastSpot: 'deep',
+      recentCatchSpot: 'championship',
+    }).id).toBe('deep');
+
+    // lastSpot이 없으면 recentCatchSpot으로 폴백한다
+    expect(resolveWidgetSpot({
+      location: { kind: 'region', id: 'world' },
+      lastSpot: null,
+      recentCatchSpot: 'river',
+    }).id).toBe('river');
+
+    // 둘 다 없으면 world는 sea, 그 밖은 pond(SPOTS[0])로 폴백한다
+    expect(resolveWidgetSpot({
+      location: { kind: 'region', id: 'world' },
+      lastSpot: null,
+      recentCatchSpot: null,
+    }).id).toBe('sea');
+
+    expect(resolveWidgetSpot({
+      location: { kind: 'region', id: 'village' },
+      lastSpot: null,
+      recentCatchSpot: null,
+    }).id).toBe(SPOTS[0].id);
   });
 });

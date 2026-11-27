@@ -2,10 +2,9 @@
 import { createHash } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
-import { FISH } from '../../src/game/content/fish.js';
+import { fishById } from '../../src/game/content/fish.js';
 import type { FormId } from '../../src/game/content/fish.js';
 import { BASE_REGION } from '../../src/game/content/places.js';
-import { SPOTS } from '../../src/game/content/spots.js';
 import { achievementBonusesOf } from '../../src/game/rules/achievements.js';
 import { bagCapacityOf, createPlayerContext } from '../../src/game/rules/effects.js';
 import { NO_GUILD_EFFECTS, guildEffectsOf, guildLevelOf } from '../../src/game/rules/guild.js';
@@ -17,10 +16,14 @@ import {
   WIDGET_RECENT_CATCH_LIMIT,
   buildWidgetBagSummary,
   buildWidgetCatchItem,
+  resolveEventCatchValue,
   resolveSpotSeaTheme,
+  resolveWidgetSpot,
+  widgetFishById,
 } from '../../src/game/rules/widget.js';
 import type {
   WidgetCatchItem,
+  WidgetCatchValue,
   WidgetFishingState,
   WidgetSummary,
 } from '../../src/game/rules/widget.js';
@@ -305,6 +308,7 @@ export interface WidgetSummarySaveRow {
 
 export interface WidgetSummaryEventRow {
   id: string;
+  type?: string;
   payload: unknown;
   createdAt: string;
 }
@@ -336,7 +340,7 @@ export async function loadWidgetSummaryData(db: Executor, uid: string): Promise<
       restricted: boolean | null;
     } | null;
     bag_count: number;
-    recent_events: { id: string | number; payload: unknown; created_at: string }[];
+    recent_events: { id: string | number; type: string; payload: unknown; created_at: string }[];
     guild: WidgetSummaryGuildRow | null;
     counters: Record<string, number> | null;
   }>(sql`select
@@ -348,9 +352,9 @@ export async function loadWidgetSummaryData(db: Executor, uid: string): Promise<
     (select count(*)::int from public.fish_instances
       where user_id = ${uid}::uuid and slot is null) as bag_count,
     (select coalesce(json_agg(e), '[]') from (
-      select id, payload, created_at
+      select id, type, payload, created_at
       from public.events
-      where user_id = ${uid}::uuid and type = 'catch'
+      where user_id = ${uid}::uuid and type in ('catch', 'eventCatch')
       order by id desc
       limit ${WIDGET_RECENT_CATCH_LIMIT}
     ) e) as recent_events,
@@ -377,6 +381,7 @@ export async function loadWidgetSummaryData(db: Executor, uid: string): Promise<
     bagCount: Number(r.bag_count ?? 0),
     recentCatchEvents: (r.recent_events ?? []).map(ev => ({
       id: String(ev.id),
+      type: ev.type,
       payload: ev.payload,
       createdAt: ev.created_at,
     })),
@@ -393,20 +398,28 @@ function toCatchItem(ev: WidgetSummaryEventRow, fallbackMs: number): WidgetCatch
     form?: unknown;
     size?: unknown;
     isBig?: unknown;
+    score?: unknown;
+    priceText?: unknown;
+    priceGold?: unknown;
   };
   if (typeof p.fishId !== 'string') return null;
-  const fish = FISH.find(f => f.id === p.fishId);
+  const isEventCatch = ev.type === 'eventCatch';
+  const regularFish = isEventCatch ? undefined : fishById(p.fishId);
+  const fish = regularFish ?? widgetFishById(p.fishId);
   if (!fish) return null;
   const form: FormId = p.form === 'variant' ? 'variant' : 'normal';
   const sizeCm = typeof p.size === 'number' && Number.isFinite(p.size) ? p.size : 0;
   const parsedAt = Date.parse(ev.createdAt);
   const eventId = typeof p.uid === 'string' && p.uid.length > 0 ? p.uid : ev.id;
+  const value: WidgetCatchValue = isEventCatch
+    ? resolveEventCatchValue(p)
+    : (regularFish ? { kind: 'gold', amount: priceOf(regularFish, form) } : resolveEventCatchValue(p));
   return buildWidgetCatchItem({
     eventId,
     fish,
     form,
     sizeCm,
-    priceGold: priceOf(fish, form),
+    value,
     isBig: Boolean(p.isBig),
     caughtAtMs: Number.isFinite(parsedAt) ? parsedAt : fallbackMs,
   });
@@ -458,10 +471,12 @@ export function buildWidgetSummary(
     ? rawLastCatchMs
     : (recentCatches[0]?.caughtAtMs ?? null);
 
-  const candidateSpot = raw.save?.lastSpot
-    ?? eventSpotId(raw.recentCatchEvents[0])
-    ?? (state.location.kind === 'region' && state.location.id === 'world' ? 'sea' : 'pond');
-  const spot = SPOTS.find(s => s.id === candidateSpot) ?? SPOTS[0];
+  const spot = resolveWidgetSpot({
+    location: state.location,
+    presenceRegion: opts.presenceRegion,
+    lastSpot: raw.save?.lastSpot,
+    recentCatchSpot: eventSpotId(raw.recentCatchEvents[0]),
+  });
   const spotId = spot.id;
   const spotName = spot.name;
   const seaTheme = resolveSpotSeaTheme(spotId);
