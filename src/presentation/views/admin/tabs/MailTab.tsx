@@ -1,7 +1,7 @@
 // 우편 구역 — 플레이어에게 우편(제목·본문·골드)을 보내고, 최근 보낸 우편의 읽음·받음을 본다.
 // 보내기는 미리보기로 대상 수와 골드 합계를 확인한 뒤에만 열린다. 운영 스크립트(pnpm mail:send)와 같은 서버 모듈을 쓴다.
 // 받는 사람은 계정 id를 붙여 넣거나, 이메일·닉네임으로 검색해 고른 계정을 입력에 한 줄로 더한다.
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
 import DataTable from '../../../ui/DataTable';
@@ -9,6 +9,7 @@ import Field from '../../../ui/Field';
 import { fmtGold } from '../../../ui/format';
 import HatBadge from '../../../ui/HatBadge';
 import ItemBadge from '../../../ui/ItemBadge';
+import Modal from '../../../ui/Modal';
 import Note from '../../../ui/Note';
 import SelectList from '../../../ui/SelectList';
 import SubTabs from '../../../ui/SubTabs';
@@ -38,6 +39,7 @@ import {
 } from '../../../../features/admin/model/mailDraft';
 import type { MailItemAttachment } from '../../../../features/admin/model/mailDraft';
 import { adminIdentityLookup, adminUserLabel } from '../../../../features/admin/model/adminViews';
+import { filterSentMails, sentMailStatus } from '../../../../features/admin/model/sentMailView';
 import { readAdminMails, readAdminUsers } from '../../../../features/admin/service/queries';
 import type { writeAdminMail } from '../../../../features/admin/service/queries';
 import { useAdminMailWriter } from '../../../../features/admin/service/useAdminMail';
@@ -46,6 +48,7 @@ import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery'
 import type { AdminSentMailRow, AdminUserRow } from '../../../../features/admin/model/types';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { Cell, CellGrid, TabState } from '../layout';
+import SentMailCard from '../SentMailCard';
 import UserIdentity from '../UserIdentity';
 
 type TargetKind = 'users' | 'all';
@@ -91,6 +94,8 @@ export default function MailTab({ to = null }: {
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [mailQuery, setMailQuery] = useState('');
+  const [selectedMailId, setSelectedMailId] = useState<number | null>(null);
 
   const parsed = parseRecipients(recipientText);
   const gold = Number(allGold);
@@ -166,6 +171,8 @@ export default function MailTab({ to = null }: {
   };
 
   const identityOf = adminIdentityLookup(users);
+  const filteredMails = useMemo(() => filterSentMails(mails, users, mailQuery), [mails, users, mailQuery]);
+  const selectedMail = selectedMailId === null ? null : (mails.find(m => m.id === selectedMailId) ?? null);
   const found = searchRecipients(users, search);
   const pick = (uid: string) => { edit(setRecipientText)(addRecipient(recipientText, uid)); setSearch(''); };
   const foundItems = searchAttachableItems(itemQuery);
@@ -210,8 +217,18 @@ export default function MailTab({ to = null }: {
       <TabState loading={loading && granted} error={error} onRetry={refresh} />
       {!granted && <Note className="my-0">운영 DB에 연결하거나 admins에 등록하면 채워져요.</Note>}
       <CellGrid side>
-        <Cell title="보낸 우편">
-          <TableBox className="max-h-[560px] px-1">
+        <Cell title="최근 보낸 우편" flush>
+          <div className="flex flex-wrap items-center gap-3 px-3 pt-3">
+            <TextInput
+              value={mailQuery}
+              onChange={e => setMailQuery(e.target.value)}
+              placeholder="제목, 본문, 받는 사람 검색"
+              className="w-[260px]"
+              aria-label="보낸 우편 검색"
+            />
+            <span className="text-2xs text-text-dim">{`${filteredMails.length}/${mails.length}건`}</span>
+          </div>
+          <TableBox className="max-h-[560px] px-1 pb-1">
             <DataTable>
               <thead>
                 <tr>
@@ -221,10 +238,11 @@ export default function MailTab({ to = null }: {
                   <th className="text-right">골드</th>
                   <th className="text-left">아이템</th>
                   <th className="text-left">상태</th>
+                  <th className="text-left">상세</th>
                 </tr>
               </thead>
               <tbody>
-                {mails.map(m => {
+                {filteredMails.map(m => {
                   const items = m.items ?? [];
                   const hats = m.hats ?? [];
                   return (
@@ -241,12 +259,19 @@ export default function MailTab({ to = null }: {
                           </div>
                         ) : <span className="text-text-dim">-</span>}
                       </td>
-                      <td className="text-xs text-text-dim">{m.claimedAt ? '받음' : m.readAt ? '읽음' : '안 읽음'}</td>
+                      <td className="text-xs text-text-dim">{sentMailStatus(m)}</td>
+                      <td>
+                        <Button size="sm" variant="ghost" onClick={() => setSelectedMailId(m.id)}>보기</Button>
+                      </td>
                     </tr>
                   );
                 })}
-                {mails.length === 0 && (
-                  <tr><td colSpan={6} className="text-text-dim text-center py-3">보낸 우편이 없어요.</td></tr>
+                {filteredMails.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="text-text-dim text-center py-3">
+                      {mails.length === 0 ? '보낸 우편이 없어요.' : '검색 결과가 없어요.'}
+                    </td>
+                  </tr>
                 )}
               </tbody>
             </DataTable>
@@ -378,6 +403,16 @@ export default function MailTab({ to = null }: {
           </div>
         </Cell>
       </CellGrid>
+      {selectedMail && (
+        <Modal
+          layer="app"
+          wide
+          title={`보낸 우편 상세: ${selectedMail.title}`}
+          onClose={() => setSelectedMailId(null)}
+        >
+          <SentMailCard mail={selectedMail} recipient={identityOf(selectedMail.userId)} />
+        </Modal>
+      )}
       {dialogs}
     </>
   );
