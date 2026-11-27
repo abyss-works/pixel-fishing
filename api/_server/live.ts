@@ -237,7 +237,7 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
     for (const ws of conns.keys()) if (ws !== from && ws.readyState === WebSocket.OPEN) ws.send(data);
   };
   // 방별 중계: global은 전체, local은 같은 정규화 지역, guild는 같은 길드원에게 보낸다(수신자 차단 제외)
-  const sendChat = (line: ChatLine, room: ChatRoom, region: string | null, guild: string | null, sender: Conn) => {
+  const sendChat = (line: ChatLine, room: ChatRoom, region: string | null, guild: string | null) => {
     const msg: ServerMessage = { t: 'chat', line, room };
     const data = JSON.stringify(msg);
     for (const [ws, c] of conns) {
@@ -246,7 +246,7 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
         ws.send(data);
       } else if (room === 'guild') {
         if (guild !== null && c.guild === guild) ws.send(data);
-      } else if (region !== null ? c.region === region : c === sender) {
+      } else if (region !== null && c.region === region) {
         ws.send(data);
       }
     }
@@ -259,6 +259,7 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
     const guild = room === 'guild' ? conn.guild : null;
     if (room === 'guild' && guild === null) { send(ws, { t: 'error', code: 'chat-no-guild' }); return; }
     const targetRegion = room === 'local' ? conn.region : null;
+    if (room === 'local' && targetRegion === null) return;
     const text = chatText(raw);
     if (text === null) { send(ws, { t: 'error', code: 'chat-length' }); return; }
     const now = Date.now();
@@ -294,7 +295,7 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
     const savedAt = Date.now();
     lastChatByUid.set(user.uid, { text, at: savedAt });
     if (outRoom === 'global') lastGlobalAt.set(user.uid, savedAt);
-    sendChat(line, outRoom, outRegion, outGuild, conn);
+    sendChat(line, outRoom, outRegion, outGuild);
   };
   const onChat = (ws: WebSocket, conn: Conn, raw: string, rawRoom: ChatRoom | undefined) => {
     const uid = conn.user.uid;
