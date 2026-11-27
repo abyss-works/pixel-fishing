@@ -345,6 +345,12 @@ export function initClientMetrics(): () => void {
     for (const po of observers) {
       try { po.disconnect(); } catch { /* 이미 해제된 옵저버 무시 */ }
     }
+    // StrictMode 이중 마운트 등에서 buffered layout-shift 등이 재누적되지 않도록 미전송 측정 버퍼를 비운다
+    pendingCls = 0;
+    clsObserverActive = false;
+    pendingLcpMs = null;
+    pendingInpMs = null;
+    pendingTtfbMs = null;
     if (activeCleanup === cleanup) activeCleanup = null;
   };
   activeCleanup = cleanup;

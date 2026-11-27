@@ -207,7 +207,11 @@ export function createOpsAlertDispatcher(options: OpsAlertDispatcherOptions): Op
               body: JSON.stringify({ ...alert, at: new Date(currentNow).toISOString() }),
               signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS),
             }))
-            .then(() => {})
+            .then(res => {
+              if (!res.ok) {
+                console.warn('[ops-alerts] webhook non-ok response', { code: alert.code, status: res.status });
+              }
+            })
             .catch(() => {}),
         );
       }

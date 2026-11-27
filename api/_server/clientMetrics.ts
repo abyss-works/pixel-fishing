@@ -118,6 +118,8 @@ export function parseClientMetricBeacon(raw: unknown): ParsedClientMetricBeacon 
     return null;
   }
 
+  const normalizedCanvasLongFrames = Math.min(canvasLongFrames, canvasFrames);
+
   const hasData = lcpMs !== null
     || inpMs !== null
     || ttfbMs !== null
@@ -128,7 +130,7 @@ export function parseClientMetricBeacon(raw: unknown): ParsedClientMetricBeacon 
     || meRttsMs.length > 0
     || meTimeouts > 0
     || canvasFrames > 0
-    || canvasLongFrames > 0
+    || normalizedCanvasLongFrames > 0
     || wsReconnects > 0
     || wsAbnormalCloses > 0;
 
@@ -145,7 +147,7 @@ export function parseClientMetricBeacon(raw: unknown): ParsedClientMetricBeacon 
     meRttsMs,
     meTimeouts,
     canvasFrames,
-    canvasLongFrames,
+    canvasLongFrames: normalizedCanvasLongFrames,
     wsReconnects,
     wsAbnormalCloses,
   };
