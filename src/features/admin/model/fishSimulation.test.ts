@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { FISH, SPOTS } from '../../../game/rules/logic';
+import { spotAxisHourlyGold } from '../../../game/rules/balanceEv';
 import type { SpotId } from '../../../game/content/spots';
 import { rarityWeightsOf } from '../../../game/content/rarityWeights';
 import {
-  buildFishDeltaExport, buildFishSnapshotExport, countSimulationOverrides,
-  filterSpots, selectFishForSpot, selectSpotAxisEvs, selectSpotBudgets, selectSpotDraws,
-  selectSpotNightDraws, SPOT_RARITY_OPTIONS, SPOT_ZONE_OPTIONS,
+  BALANCE_EV_BASIS_LABELS, buildFishDeltaExport, buildFishSnapshotExport, countSimulationOverrides,
+  filterSpots, formatHourlyBasis, selectFishForSpot, selectSpotAxisEvs, selectSpotBudgets,
+  selectSpotDraws, selectSpotHourlyEvs, selectSpotNightDraws, SPOT_RARITY_OPTIONS, SPOT_ZONE_OPTIONS,
 } from './fishSimulation';
 import type { SimOverrides } from './fishSimulation';
 
@@ -47,6 +48,7 @@ describe('어종 시뮬레이션 데이터', () => {
 
     expect(snapshot.exportedAt).toBe('now');
     expect(snapshot.spots).toHaveLength(1);
+    expect(snapshot.spots[0].simHourlyEV).toBeDefined();
     expect(delta).toMatchObject({ deltaOnly: true, changedFields: 1 });
     expect(delta?.spots).toHaveLength(1);
     expect(buildFishDeltaExport(SPOTS.slice(0, 1), emptySimulation, evs, 'now')).toBeNull();
@@ -88,5 +90,44 @@ describe('어종 시뮬레이션 데이터', () => {
     expect(nightRow).toBeDefined();
     expect(nightRow!.fishPct).toBeGreaterThan(0);
     expect(nightRow!.gradePct).toBeGreaterThan(0);
+  });
+
+  it('selectSpotHourlyEvs는 빈 오버라이드에서 spotAxisHourlyGold와 일치하고 오버라이드 시 즉시 변한다', () => {
+    for (const s of SPOTS) {
+      const expected = spotAxisHourlyGold(s.id as SpotId);
+      const actual = selectSpotHourlyEvs(s.id as SpotId, emptySimulation);
+      expect(actual.entryLevel).toBe(expected.entryLevel);
+      expect(actual.plateauLevel).toBe(expected.plateauLevel);
+      expect(actual.evs).toEqual(expected.goldPerHour);
+    }
+
+    const spot = 'indian' as SpotId;
+    const fish = selectFishForSpot(spot, false)[0];
+    const base = selectSpotHourlyEvs(spot, emptySimulation);
+    const over: SimOverrides = {
+      budgets: { [spot]: { rare: 3500 } },
+      fishWeights: { [spot]: { [fish.id]: 4 } },
+      price: { [fish.id]: fish.price * 3 },
+    };
+    const changed = selectSpotHourlyEvs(spot, over);
+    const expectedOver = spotAxisHourlyGold(spot, {
+      budgets: selectSpotBudgets(spot, over),
+      fishWeights: over.fishWeights[spot],
+      priceOf: f => over.price[f.id] ?? f.price,
+    });
+    expect(changed.evs).toEqual(expectedOver.goldPerHour);
+    expect(changed.evs.normal).not.toBe(base.evs.normal);
+    expect(changed.evs.idleWorst).not.toBe(base.evs.idleWorst);
+  });
+
+  it('산출 기준 라벨과 포맷 함수는 가운뎃점·줄표 없이 기준 정보를 제공한다', () => {
+    expect(BALANCE_EV_BASIS_LABELS.perCatch).toBe('1회 EV: 낮 풀, 변이 제외');
+    expect(BALANCE_EV_BASIS_LABELS.hourly).not.toMatch(/[·—–]/);
+    const hourlyText = formatHourlyBasis(3, 7);
+    expect(hourlyText).toContain('진입 Lv.3');
+    expect(hourlyText).toContain('플래토 Lv.7');
+    expect(hourlyText).toContain('낮밤 혼합');
+    expect(hourlyText).toContain('변이 포함');
+    expect(hourlyText).not.toMatch(/[·—–]/);
   });
 });

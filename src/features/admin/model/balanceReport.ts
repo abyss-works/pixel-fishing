@@ -8,10 +8,11 @@
 // 축이 아니라 **조건 계층**인 것(여기에 나오지 않는다): (수동 파워 초과 보정은 없다),
 // 미달 수역 페널티(×16 캡+입질 가산), 미끼(특정 등급 예산 ×2), 밤/아티팩트(미구현).
 // 이들은 파워 레벨·보유 아이템에 따라 달라져서 축으로 두면 표가 상태 의존이 된다.
-import { RARITY, SPOTS, drawRows } from '../../../game/rules/logic';
+import { SPOTS, drawRows } from '../../../game/rules/logic';
 import type { DrawOptions, RarityId } from '../../../game/rules/logic';
 import type { SpotId } from '../../../game/content/spots';
 import { idleDialsOf } from '../../../game/rules/power';
+import { famePerCatchDay, goldPerCatchDay, spotAxisHourlyGold } from '../../../game/rules/balanceEv';
 
 export type EvAxisKey = 'normal' | 'good' | 'perfect' | 'idleBest' | 'idleWorst';
 
@@ -36,23 +37,14 @@ export const EV_AXES: readonly EvAxisDef[] = [
     options: spot => ({ commonMult: idleDialsOf(spot).entry }) },
 ];
 
-/** 단일 수역×단일 축의 골드 EV — drawRows 행열의 확률 가중합(goldEV와 동치, 다이얼 반영 버전) */
+/** 단일 수역×단일 축의 골드 EV — 통합 EV 엔진의 낮 풀 1회 캐치 기대 골드에 위임 */
 export function goldEv(spotId: SpotId, o: DrawOptions): number {
-  const rows = drawRows(spotId, o);
-  let num = 0, den = 0;
-  for (const r of rows) { num += r.fishPct * r.fish.price; den += r.fishPct; }
-  return den > 0 ? num / den : 0;
+  return goldPerCatchDay(spotId, o);
 }
 
-/** 단일 수역×단일 축의 명성 EV — 등급 고정 명성(RARITY.fame)의 확률 가중합 */
+/** 단일 수역×단일 축의 명성 EV — 통합 EV 엔진의 낮 풀 1회 캐치 기대 명성에 위임 */
 export function fameEv(spotId: SpotId, o: DrawOptions): number {
-  const rows = drawRows(spotId, o);
-  let num = 0, den = 0;
-  for (const r of rows) {
-    num += r.fishPct * RARITY[r.fish.rarity].fame;
-    den += r.fishPct;
-  }
-  return den > 0 ? num / den : 0;
+  return famePerCatchDay(spotId, o);
 }
 
 /** 이 수역의 실효 등급 예산 — 수역 덮어쓰기 또는 지역 단계 프리셋의 만분율 가중치(drawRows의 정본 사용).
@@ -70,16 +62,22 @@ export interface SpotBalance {
   name: string;
   powerReq: number;
   boatTier: number;
+  entryLevel: number;
+  plateauLevel: number;
   /** 수역 등급 가중치 덮어쓰기(희귀·영웅·전설 만분율) — null이면 지역 단계 프리셋 */
   override: Partial<Record<RarityId, number>> | null;
   /** 실효 예산(오버라이드 반영, 부재 등급은 키 없음) */
   budgets: Partial<Record<RarityId, number>>;
   /** [축] → EV */
   gold: Record<EvAxisKey, number>;
+  /** [축] → 시간당 기대 골드(낮밤 혼합, 변이 포함) */
+  goldPerHour: Record<EvAxisKey, number>;
   fame: Record<EvAxisKey, number>;
   /** Δ 이전 해역 대비(중립 축, 절대값) — 첫 행은 null */
   deltaGold: number | null;
   deltaFame: number | null;
+  /** Δ 이전 해역 대비(방치 진입 시간당 골드, 절대값) — 첫 행은 null */
+  deltaHourlyIdle: number | null;
 }
 
 /** 변화량 축 — 대시보드 열 구성의 정본. 각 항목은 차분 계산과 라벨·힌트를 담는다.
@@ -115,14 +113,20 @@ export function buildBalanceReport(): SpotBalance[] {
       EV_AXES.map(a => [a.key, goldEv(id, a.options(id))])) as Record<EvAxisKey, number>;
     const fame = Object.fromEntries(
       EV_AXES.map(a => [a.key, fameEv(id, a.options(id))])) as Record<EvAxisKey, number>;
+    const hourly = spotAxisHourlyGold(id);
     const prev = out[out.length - 1];
     out.push({
       id, name: spot.name, powerReq: spot.powerReq ?? 0, boatTier: spot.boatTier,
+      entryLevel: hourly.entryLevel,
+      plateauLevel: hourly.plateauLevel,
       override: spot.rarityWeight ?? null,
       budgets: effectiveBudgets(id),
-      gold, fame,
+      gold,
+      goldPerHour: hourly.goldPerHour,
+      fame,
       deltaGold: prev ? gold.normal - prev.gold.normal : null,
       deltaFame: prev ? fame.normal - prev.fame.normal : null,
+      deltaHourlyIdle: prev ? hourly.goldPerHour.idleWorst - prev.goldPerHour.idleWorst : null,
     });
   }
   // "전 지역 동일 지표 대비" 축 — 전체 방치 평균을 계산해 마지막 Δ 정의를 주입한다

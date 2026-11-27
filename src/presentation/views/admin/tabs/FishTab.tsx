@@ -1,12 +1,13 @@
 import { Fragment, useMemo, useState } from 'react';
 import { FISH, RARITY, SPOTS } from '../../../../game/rules/logic';
 import {
-  buildFishDeltaExport, buildFishSnapshotExport, countSimulationOverrides,
-  filterSpots, hasSpotSimulationOverride, resetSpotPriceOverrides, selectBaseRarityWeight, selectSpotBudgets,
-  selectDeltaValues, selectFishForSpot, selectSpotAxisEvs, selectSpotDraws, selectSpotNightDraws,
+  BALANCE_EV_BASIS_LABELS, buildFishDeltaExport, buildFishSnapshotExport, countSimulationOverrides,
+  filterSpots, formatHourlyBasis, hasSpotSimulationOverride, resetSpotPriceOverrides,
+  selectBaseRarityWeight, selectSpotBudgets, selectDeltaValues, selectFishForSpot,
+  selectSpotAxisEvs, selectSpotDraws, selectSpotHourlyEvs, selectSpotNightDraws,
   SIM_AXES, SPOT_RARITY_OPTIONS, SPOT_ZONE_OPTIONS, stepPercent,
 } from '../../../../features/admin/model/fishSimulation';
-import type { AxisEvs, SimOverrides, SpotRarityFilter } from '../../../../features/admin/model/fishSimulation';
+import type { AxisEvs, SimOverrides, SpotHourlyEvs, SpotRarityFilter } from '../../../../features/admin/model/fishSimulation';
 import DataTable from '../../../ui/DataTable';
 import Inset from '../../../ui/Inset';
 import Note from '../../../ui/Note';
@@ -68,6 +69,9 @@ export default function FishTab() {
   const evsBySpot = useMemo(() => new Map<string, AxisEvs>(
     SPOTS.map(spot => [spot.id, selectSpotAxisEvs(spot.id, sim)])),
   [sim]);
+  const hourlyBySpot = useMemo(() => new Map<string, SpotHourlyEvs>(
+    SPOTS.map(spot => [spot.id, selectSpotHourlyEvs(spot.id, sim)])),
+  [sim]);
   const spotIndex = useMemo(() => new Map(SPOTS.map((spot, i) => [spot.id, i])), []);
   const filteredSpots = useMemo(() => filterSpots(SPOTS, zoneFilter, query, rarityFilter), [zoneFilter, query, rarityFilter]);
 
@@ -100,7 +104,7 @@ export default function FishTab() {
   const tell = (body: string) => void notice({ title: 'JSON 추출', body });
 
   const exportJson = async () => {
-    const payload = buildFishSnapshotExport(SPOTS, sim, evsBySpot, new Date().toISOString());
+    const payload = buildFishSnapshotExport(SPOTS, sim, evsBySpot, new Date().toISOString(), hourlyBySpot);
     try {
       await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
       tell('어종 현황 JSON을 클립보드에 복사했어요.');
@@ -174,6 +178,8 @@ export default function FishTab() {
                          open={openSpots.has(spot.id)}
                          onToggle={() => toggleSpot(spot.id)}
                          evs={evsBySpot.get(spot.id)!} prevEvs={idx > 0 ? evsBySpot.get(SPOTS[idx - 1].id)! : null}
+                         hourly={hourlyBySpot.get(spot.id)!}
+                         prevHourly={idx > 0 ? hourlyBySpot.get(SPOTS[idx - 1].id)! : null}
                          sim={sim}
                          setBudgets={setSbBudgets} setWeights={setSbFish} setPrice={setSbPrice} />
         );
@@ -187,13 +193,15 @@ export default function FishTab() {
 }
 
 /** 한 수역의 통합 대시보드 — [통계 띠]와 [편집 표]가 한 칸 안의 오목한 칸에 같이 산다 */
-function SpotDashboard({ spot, rarityFilter, open, onToggle, evs, prevEvs, sim, setBudgets, setWeights, setPrice }: {
+function SpotDashboard({ spot, rarityFilter, open, onToggle, evs, prevEvs, hourly, prevHourly, sim, setBudgets, setWeights, setPrice }: {
   spot: (typeof SPOTS)[number];
   rarityFilter: SpotRarityFilter;
   open: boolean;
   onToggle: () => void;
   evs: AxisEvs;
   prevEvs: AxisEvs | null;
+  hourly: SpotHourlyEvs;
+  prevHourly: SpotHourlyEvs | null;
   sim: SimOverrides;
   setBudgets: React.Dispatch<React.SetStateAction<SimOverrides['budgets']>>;
   setWeights: React.Dispatch<React.SetStateAction<Record<string, Record<string, number>>>>;
@@ -258,61 +266,72 @@ function SpotDashboard({ spot, rarityFilter, open, onToggle, evs, prevEvs, sim, 
       {open && (
         // 넓은 화면에서는 통계 띠(내용 폭)와 어종 표(남는 폭)를 나란히 둔다
         <Inset className="grid grid-cols-1 gap-3 p-2 xl:grid-cols-[auto_minmax(0,1fr)] xl:items-start">
-          {/* ── 기대값 띠 — 행=축(수동 3 + 방치 2, 그룹 구분선 분리), 열=[축명|EV|직전|지역내] ──
+          {/* ── 기대값 띠 — 행=축(수동 3 + 방치 2, 그룹 구분선 분리), 열=[축명|EV(1회)|1회 대비|지역 내|시간당(G/h)|시간당 대비] ──
               지역내Δ: 수동 사다리는 직전 판정 대비 %를 연쇄한다. 방치는 사다리가 아니라
               폭 하나 — 마지막 방치 행(진입)에 한 번만 표기하고 플래토에는 붙이지 않는다. */}
-          <TableBox>
-            <DataTable>
-              <thead>
-                <tr>
-                  <th scope="col" className="whitespace-nowrap">기대값 (골드)</th>
-                  <th scope="col">EV</th>
-                  <th scope="col" className="whitespace-nowrap">직전 대비</th>
-                  <th scope="col" className="whitespace-nowrap">지역 내</th>
-                </tr>
-              </thead>
-              <tbody>
-                {SIM_AXES.map((a, ai) => {
-                  const v = evs[a.key];
-                  const pv = prevEvs ? prevEvs[a.key] : null;
-                  // 그룹 전환점 — 수동→방치 경계에 소제목 행을 놓아 "같은 선상이 아님"을 표시
-                  const groupDivider = ai === 3;
-                  // 지역 내 변화량 — 수동 사다리만 연쇄 %. 방치는 폭 하나(진입 행에만).
-                  let inRegion: string | null = null;
-                  if (a.group === 'manual' && ai > 0) {
-                    const prevKey = SIM_AXES[ai - 1].key;
-                    inRegion = fmtPct(stepPercent(evs[prevKey], v));
-                  } else if (a.key === 'idleWorst') {
-                    inRegion = `폭 ${fmtPct(stepPercent(evs.idleWorst, evs.idleBest))}`;
-                  }
-                  return (
-                    <Fragment key={a.key}>
-                      {groupDivider && (
-                        <tr aria-hidden="true">
-                          <td colSpan={4}
-                              className="bg-surface/60 text-2xs text-text-dim py-0.5 px-1 border-y border-line">
-                            방치 — 파워 여유에 따른 자동 획득 (사다리 아님)
+          <div className="flex flex-col gap-1.5 min-w-0">
+            <TableBox>
+              <DataTable>
+                <thead>
+                  <tr>
+                    <th scope="col" className="whitespace-nowrap">기대값 (골드)</th>
+                    <th scope="col" className="whitespace-nowrap">EV (1회)</th>
+                    <th scope="col" className="whitespace-nowrap">1회 대비</th>
+                    <th scope="col" className="whitespace-nowrap">지역 내</th>
+                    <th scope="col" className="whitespace-nowrap">시간당 (G/h)</th>
+                    <th scope="col" className="whitespace-nowrap">시간당 대비</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {SIM_AXES.map((a, ai) => {
+                    const v = evs[a.key];
+                    const pv = prevEvs ? prevEvs[a.key] : null;
+                    const hv = hourly.evs[a.key];
+                    const phv = prevHourly ? prevHourly.evs[a.key] : null;
+                    // 그룹 전환점 — 수동→방치 경계에 소제목 행을 놓아 "같은 선상이 아님"을 표시
+                    const groupDivider = ai === 3;
+                    // 지역 내 변화량 — 수동 사다리만 연쇄 %. 방치는 폭 하나(진입 행에만).
+                    let inRegion: string | null = null;
+                    if (a.group === 'manual' && ai > 0) {
+                      const prevKey = SIM_AXES[ai - 1].key;
+                      inRegion = fmtPct(stepPercent(evs[prevKey], v));
+                    } else if (a.key === 'idleWorst') {
+                      inRegion = `폭 ${fmtPct(stepPercent(evs.idleWorst, evs.idleBest))}`;
+                    }
+                    return (
+                      <Fragment key={a.key}>
+                        {groupDivider && (
+                          <tr aria-hidden="true">
+                            <td colSpan={6}
+                                className="bg-surface/60 text-2xs text-text-dim py-0.5 px-1 border-y border-line">
+                              방치 — 파워 여유에 따른 자동 획득 (사다리 아님)
+                            </td>
+                          </tr>
+                        )}
+                        <tr key={a.key} className={ai % 2 ? '' : 'bg-surface/40'}>
+                          <th scope="row"
+                              className={cx('whitespace-nowrap text-left', a.group === 'manual' && ai === 0 ? 'text-gold' : '')}>
+                            {a.group === 'idle' ? `${a.label} ×${a.mult(spot.id).commonMult}` : a.label}
+                          </th>
+                          <td className="pf-accent whitespace-nowrap text-gold">{v.toFixed(1)}G</td>
+                          <td><Delta prev={pv} cur={v} /></td>
+                          <td className={cx('pf-accent whitespace-nowrap',
+                                            inRegion ? 'text-text' : 'text-text-dim')}>
+                            {inRegion ?? '—'}
                           </td>
+                          <td className="pf-accent whitespace-nowrap text-gold">{fmtHourlyGold(hv)}</td>
+                          <td><Delta prev={phv} cur={hv} /></td>
                         </tr>
-                      )}
-                      <tr key={a.key} className={ai % 2 ? '' : 'bg-surface/40'}>
-                        <th scope="row"
-                            className={cx('whitespace-nowrap text-left', a.group === 'manual' && ai === 0 ? 'text-gold' : '')}>
-                          {a.group === 'idle' ? `${a.label} ×${a.mult(spot.id).commonMult}` : a.label}
-                        </th>
-                        <td className="pf-accent whitespace-nowrap text-gold">{v.toFixed(1)}G</td>
-                        <td><Delta prev={pv} cur={v} /></td>
-                        <td className={cx('pf-accent whitespace-nowrap',
-                                          inRegion ? 'text-text' : 'text-text-dim')}>
-                          {inRegion ?? '—'}
-                        </td>
-                      </tr>
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-            </DataTable>
-          </TableBox>
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </DataTable>
+            </TableBox>
+            <Note size="2xs" className="my-0 px-1">
+              {`${formatHourlyBasis(hourly.entryLevel, hourly.plateauLevel)}\n${BALANCE_EV_BASIS_LABELS.perCatch}`}
+            </Note>
+          </div>
 
           {/* ── 어종 행 — 편집 + 실시간 확률 ── */}
           <TableBox>
@@ -457,4 +476,8 @@ function SpotDashboard({ spot, rarityFilter, open, onToggle, evs, prevEvs, sim, 
 
 function fmtPct(v: number): string {
   return `${v > 0 ? '+' : ''}${v.toFixed(0)}%`;
+}
+
+function fmtHourlyGold(v: number): string {
+  return `${Math.round(v).toLocaleString('ko-KR')}G/h`;
 }

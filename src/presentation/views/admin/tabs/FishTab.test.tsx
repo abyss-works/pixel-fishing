@@ -2,7 +2,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { FISH, SPOTS } from '../../../../game/rules/logic';
-import { selectFishForSpot } from '../../../../features/admin/model/fishSimulation';
+import { selectFishForSpot, selectSpotHourlyEvs } from '../../../../features/admin/model/fishSimulation';
+import type { SimOverrides } from '../../../../features/admin/model/fishSimulation';
 import FishTab from './FishTab';
 
 afterEach(() => { cleanup(); sessionStorage.clear(); });
@@ -68,5 +69,32 @@ describe('시뮬레이션 수역 칸', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '모두 접기' }));
     expect(within(screen.getByRole('region', { name: '버뮤다 삼각지대' })).queryAllByRole('table')).toHaveLength(0);
+  });
+
+  it('기대값 띠에 시간당 G/h와 산출 기준 문구를 표시하고 오버라이드 시 즉시 갱신한다', () => {
+    render(<FishTab />);
+    fireEvent.click(screen.getByRole('button', { name: `${spot.name} 펼치기` }));
+    const emptySim: SimOverrides = { budgets: {}, fishWeights: {}, price: {} };
+    const baseHourly = selectSpotHourlyEvs(spot.id, emptySim);
+    const regionEl = region();
+
+    const baseIdleText = `${Math.round(baseHourly.evs.idleWorst).toLocaleString('ko-KR')}G/h`;
+    expect(within(regionEl).getByText(baseIdleText)).toBeInTheDocument();
+    expect(within(regionEl).getByText(new RegExp(`진입 Lv\\.${baseHourly.entryLevel}`))).toBeInTheDocument();
+    expect(within(regionEl).getByText(new RegExp(`플래토 Lv\\.${baseHourly.plateauLevel}`))).toBeInTheDocument();
+    expect(within(regionEl).getByText(/낮밤 혼합/)).toBeInTheDocument();
+    expect(within(regionEl).getByText(/1회 EV: 낮 풀, 변이 제외/)).toBeInTheDocument();
+
+    const fish = selectFishForSpot(spot.id, false)[0];
+    const nextPrice = fish.price * 5;
+    fireEvent.change(within(regionEl).getByLabelText(`${fish.name} 가격`), { target: { value: String(nextPrice) } });
+    const nextHourly = selectSpotHourlyEvs(spot.id, {
+      budgets: {},
+      fishWeights: {},
+      price: { [fish.id]: nextPrice },
+    });
+    const nextIdleText = `${Math.round(nextHourly.evs.idleWorst).toLocaleString('ko-KR')}G/h`;
+    expect(nextIdleText).not.toBe(baseIdleText);
+    expect(within(regionEl).getByText(nextIdleText)).toBeInTheDocument();
   });
 });
