@@ -135,11 +135,13 @@ describe('운영 탭', () => {
     expect(within(contract).getByText(/세션 강제 종료/)).toBeInTheDocument();
   });
 
-  it('maintainer 역할의 데이터 계약은 기간제 공지·채팅 별 표기 토글·비식별 지표 열람과 감사 로그 기록만 안내한다', () => {
+  it('maintainer 역할의 데이터 계약은 기간제 공지·동적 쿠폰 관리·채팅 별 표기 토글·비식별 지표 열람과 감사 로그 기록만 안내한다', () => {
     show('granted', 'maintainer');
     const contract = screen.getByText('데이터 계약').closest('section')!;
     expect(within(contract).getByText(/비식별 운영 지표/)).toBeInTheDocument();
     expect(within(contract).getByText(/기간제 공지/)).toBeInTheDocument();
+    expect(within(contract).getByText(/소통 > 쿠폰/)).toBeInTheDocument();
+    expect(within(contract).getByText(/동적 쿠폰 관리/)).toBeInTheDocument();
     expect(within(contract).getByText(/채팅 운영진 별 표기 토글/)).toBeInTheDocument();
     expect(within(contract).getByText(/감사 로그/)).toBeInTheDocument();
     expect(within(contract).queryByText(/우편 보내기/)).toBeNull();

@@ -54,6 +54,47 @@ describe('어종 시뮬레이션 데이터', () => {
     expect(buildFishDeltaExport(SPOTS.slice(0, 1), emptySimulation, evs, 'now')).toBeNull();
   });
 
+  it('변경량 내보내기는 오버라이드 전후 및 변화량 시간당 G/h를 스냅샷과 일관된 필드로 포함한다', () => {
+    const spot = 'indian' as SpotId;
+    const spotObj = SPOTS.find(s => s.id === spot)!;
+    const fish = selectFishForSpot(spot, false)[0];
+    const simulation: SimOverrides = {
+      budgets: { [spot]: { rare: 3500 } },
+      fishWeights: { [spot]: { [fish.id]: 4 } },
+      price: { [fish.id]: fish.price * 3 },
+    };
+    const evs = new Map([[spot, selectSpotAxisEvs(spot, simulation)]]);
+    const baseHourly = selectSpotHourlyEvs(spot, emptySimulation);
+    const afterHourly = selectSpotHourlyEvs(spot, simulation);
+    const hourlyBySpot = new Map([[spot, afterHourly]]);
+    const delta = buildFishDeltaExport([spotObj], simulation, evs, 'now', hourlyBySpot)!;
+
+    expect(delta).not.toBeNull();
+    expect(delta.notes.hourlyBasis).toBe(BALANCE_EV_BASIS_LABELS.hourly);
+    const changed = delta.spots[0];
+    expect(changed.entryLevel).toBe(afterHourly.entryLevel);
+    expect(changed.plateauLevel).toBe(afterHourly.plateauLevel);
+    expect(changed.simHourlyEV).toEqual({
+      normal: +afterHourly.evs.normal.toFixed(1),
+      good: +afterHourly.evs.good.toFixed(1),
+      perfect: +afterHourly.evs.perfect.toFixed(1),
+      idleBest: +afterHourly.evs.idleBest.toFixed(1),
+      idleWorst: +afterHourly.evs.idleWorst.toFixed(1),
+    });
+    expect(changed.simHourlyEVDelta.before).toEqual({
+      normal: +baseHourly.evs.normal.toFixed(1),
+      good: +baseHourly.evs.good.toFixed(1),
+      perfect: +baseHourly.evs.perfect.toFixed(1),
+      idleBest: +baseHourly.evs.idleBest.toFixed(1),
+      idleWorst: +baseHourly.evs.idleWorst.toFixed(1),
+    });
+    expect(changed.simHourlyEVDelta.after).toEqual(changed.simHourlyEV);
+    expect(changed.simHourlyEVDelta.delta.idleWorst).toBe(
+      +(afterHourly.evs.idleWorst - baseHourly.evs.idleWorst).toFixed(1),
+    );
+    expect(changed.simHourlyEVDelta.delta.normal).toBeGreaterThan(0);
+  });
+
   it('샌드박스에서 희귀·영웅·전설을 바꾸면 일반이 10000에서 나머지로 줄어든다', () => {
     const sim: SimOverrides = { budgets: { pond: { rare: 3000 } }, fishWeights: {}, price: {} };
     expect(selectSpotBudgets('pond', sim)).toEqual({ common: 6400, rare: 3000, epic: 500, legendary: 100 });

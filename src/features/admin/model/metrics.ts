@@ -51,6 +51,24 @@ export const fmtTimeKST = (ms: number): string => {
   return new Date(ms + 9 * 3600_000).toISOString().slice(11, 19);
 };
 
+/** 시각(ms) → datetime-local 입력 문자열('YYYY-MM-DDTHH:mm') */
+export function toLocalInputValue(ms: number): string {
+  const d = new Date(ms);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mi = String(d.getMinutes()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+}
+
+/** ISO 문자열 → datetime-local 입력 문자열. 비었거나 유효하지 않으면 빈 문자열을 반환한다. */
+export function isoToLocalInput(iso: string | null): string {
+  if (!iso) return '';
+  const ms = Date.parse(iso);
+  return Number.isFinite(ms) ? toLocalInputValue(ms) : '';
+}
+
 /** 저장 단위 기운 → 화면 표기 */
 export const formatAdminEnergy = (stored: number): string => formatEnergy(stored);
 

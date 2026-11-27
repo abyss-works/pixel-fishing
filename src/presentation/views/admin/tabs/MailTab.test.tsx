@@ -259,8 +259,10 @@ describe('MailTab', () => {
     expect(within(dialog).getByText('민물러(게스트)')).toBeTruthy();
     expect(within(dialog).getByText(USER_B.slice(0, 8))).toBeTruthy();
     expect(within(dialog).getByText('1,200G')).toBeTruthy();
-    expect(within(dialog).getByText('일반 생명의 기운 1개')).toBeTruthy();
-    expect(within(dialog).getByText('산타모자')).toBeTruthy();
+    expect(within(dialog).getByText('일반 생명의 기운')).toBeTruthy();
+    expect(within(dialog).getByText('×1')).toBeTruthy();
+    expect(within(dialog).getByText('모자 산타모자')).toBeTruthy();
+    expect(within(dialog).queryByText('일반 생명의 기운 1개')).toBeNull();
     expect(within(dialog).getByText('10-24 09:00')).toBeTruthy();
     expect(within(dialog).getByText('10-24 10:00')).toBeTruthy();
     expect(within(dialog).getByText('10-24 11:00')).toBeTruthy();

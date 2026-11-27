@@ -118,7 +118,7 @@ export default function FishTab() {
   const deltaCount = countSimulationOverrides(sim);
 
   const exportDeltaJson = async () => {
-    const payload = buildFishDeltaExport(SPOTS, sim, evsBySpot, new Date().toISOString());
+    const payload = buildFishDeltaExport(SPOTS, sim, evsBySpot, new Date().toISOString(), hourlyBySpot);
     if (!payload) {
       tell('변경된 항목이 없어요. Δ JSON이 비어 있어요.');
       return;

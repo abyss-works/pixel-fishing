@@ -6,7 +6,6 @@ import ItemBadge from '../../ui/ItemBadge';
 import KeyValueRow from '../../ui/KeyValueRow';
 import { fmtGold } from '../../ui/format';
 import type { AdminIdentity } from '../../../features/admin/model/adminViews';
-import { formatMailHatsSummary, formatMailItemsSummary } from '../../../features/admin/model/mailDraft';
 import { fmtDT } from '../../../features/admin/model/metrics';
 import { sentMailStatus, type SentMailStatus } from '../../../features/admin/model/sentMailView';
 import type { AdminSentMailRow } from '../../../features/admin/model/types';
@@ -39,23 +38,11 @@ export default function SentMailCard({ mail, recipient }: {
         </div>
       </Inset>
 
-      <Inset divided>
+      <Inset divided className="px-2.5">
         {recipient && (
           <KeyValueRow compact wrap label="받는 사람" value={<UserIdentity user={recipient} inline />} />
         )}
         <KeyValueRow compact label="첨부 골드" value={mail.gold > 0 ? fmtGold(mail.gold) : '없음'} />
-        <KeyValueRow
-          compact
-          wrap
-          label="첨부 아이템"
-          value={items.length > 0 ? formatMailItemsSummary(items) : '없음'}
-        />
-        <KeyValueRow
-          compact
-          wrap
-          label="첨부 모자"
-          value={hats.length > 0 ? formatMailHatsSummary(hats) : '없음'}
-        />
         <KeyValueRow compact label="발송 시각" value={fmtDT(mail.createdAt)} />
         <KeyValueRow compact label="읽음 시각" value={mail.readAt ? fmtDT(mail.readAt) : '안 읽음'} />
         <KeyValueRow compact label="수령 시각" value={mail.claimedAt ? fmtDT(mail.claimedAt) : '미수령'} />

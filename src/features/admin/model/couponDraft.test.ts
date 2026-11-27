@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  COUPON_LIMIT_MAX,
   MAIL_GOLD_MAX,
   buildCouponRequest,
   couponScopeText,
   couponStatusOf,
-  formatCouponRewards,
   nextCouponBoundaryMs,
   searchAttachableItems,
   type CouponDraftForm,
@@ -65,20 +65,10 @@ describe('couponStatusOf', () => {
   });
 });
 
-describe('couponScopeText & formatCouponRewards', () => {
+describe('couponScopeText', () => {
   it('총 사용 한도에 따라 게스트·정식 계정 범위를 반환한다', () => {
     expect(couponScopeText({ maxRedemptions: null })).toBe('무제한 (게스트 가능)');
     expect(couponScopeText({ maxRedemptions: 100 })).toBe('선착순 100명 (정식 계정)');
-  });
-
-  it('골드와 첨부 품목을 조합해 보상 요약을 생성한다', () => {
-    expect(formatCouponRewards({ gold: 1500, items: [] })).toBe('1,500G');
-    expect(formatCouponRewards({ gold: 0, items: [{ id: 'luck-small', qty: 2 }] })).toBe('작은 바다 영약 2개');
-    expect(formatCouponRewards({
-      gold: 500,
-      items: [{ id: 'luck-small', qty: 1 }, { id: 'energy-common', qty: 3 }],
-    })).toBe('500G, 작은 바다 영약 1개, 일반 생명의 기운 3개');
-    expect(formatCouponRewards({ gold: 0, items: [] })).toBe('-');
   });
 });
 
@@ -177,8 +167,12 @@ describe('buildCouponRequest', () => {
 
     expect(buildCouponRequest(baseForm({ maxRedemptions: '0' }), 'create').ok).toBe(false);
     expect(buildCouponRequest(baseForm({ maxRedemptions: '1.5' }), 'create').ok).toBe(false);
+    expect(buildCouponRequest(baseForm({ maxRedemptions: String(COUPON_LIMIT_MAX) }), 'create').ok).toBe(true);
+    expect(buildCouponRequest(baseForm({ maxRedemptions: String(COUPON_LIMIT_MAX + 1) }), 'create').ok).toBe(false);
     expect(buildCouponRequest(baseForm({ perAccountLimit: '' }), 'create').ok).toBe(false);
     expect(buildCouponRequest(baseForm({ perAccountLimit: '0' }), 'create').ok).toBe(false);
+    expect(buildCouponRequest(baseForm({ perAccountLimit: String(COUPON_LIMIT_MAX) }), 'create').ok).toBe(true);
+    expect(buildCouponRequest(baseForm({ perAccountLimit: String(COUPON_LIMIT_MAX + 1) }), 'create').ok).toBe(false);
   });
 
   it('품목 검색은 모자를 제외하고 스택 아이템만 찾는다', () => {
