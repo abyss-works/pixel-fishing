@@ -292,4 +292,28 @@ describe('스테이징 진입 게이트 DB 판정', () => {
       adminToken: userToken(maintUid),
     })).toMatchObject({ status: 404, body: { error: 'not-found' } });
   });
+
+  it('STAGE_ALLOWED_EMAILS 일반 테스터는 verifyStageAdmin·checkStageLiveUpgrade를 통과하지만 devAccount 도구는 403으로 차단된다', async () => {
+    const { verifyStageAdmin, checkStageLiveUpgrade } = await import('./_server/stageGate.js');
+    const testerUid = await seedUser(env.client, { uid: testUid(nextUid++), email: 'stage-tester@example.test' });
+    const otherUid = await seedUser(env.client, { uid: testUid(nextUid++), email: 'stage-other@example.test' });
+    const targetGuest = await seedUser(env.client, { uid: testUid(nextUid++), nickname: '테스터대상게스트' });
+
+    process.env.DEPLOY_ENV = 'preview';
+    process.env.STAGE_ALLOWED_EMAILS = ' Stage-Tester@Example.TEST , qa@example.test ';
+    try {
+      expect(await verifyStageAdmin(adminSessionHeaders(userToken(testerUid)))).toEqual({ ok: true, uid: testerUid });
+      expect(await checkStageLiveUpgrade({ headers: adminSessionHeaders(userToken(testerUid)) } as never)).toBeNull();
+      expect(await verifyStageAdmin(adminSessionHeaders(userToken(otherUid)))).toEqual({ ok: false, status: 403 });
+
+      const testerPromote = await callDev('/api/dev/promote-test', {
+        token: userToken(targetGuest),
+        adminToken: userToken(testerUid),
+      });
+      expect(testerPromote).toMatchObject({ status: 403, body: { error: 'forbidden' } });
+    } finally {
+      delete process.env.STAGE_ALLOWED_EMAILS;
+      delete process.env.DEPLOY_ENV;
+    }
+  });
 });

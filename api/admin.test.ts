@@ -6,7 +6,7 @@ const TARGET_UID = '00000000-0000-4000-8000-000000000902';
 
 const mocks = vi.hoisted(() => ({
   adminSessionUid: vi.fn(async () => ADMIN_UID),
-  adminMember: vi.fn(async () => ({ role: 'admin' as 'admin' | 'maintainer', showStaffBadge: false })),
+  adminMember: vi.fn(async (): Promise<{ role: 'admin' | 'maintainer'; showStaffBadge: boolean } | null> => ({ role: 'admin', showStaffBadge: false })),
   setAdminStaffBadge: vi.fn(async () => true),
   insertAdminAuditLog: vi.fn(async () => {}),
   userState: vi.fn(async () => ({ hasSave: true })),
@@ -1043,5 +1043,17 @@ describe('api/admin 핸들러 단위 테스트', () => {
       total: 2,
       byNextTier: [{ nextTier: 2, count: 1 }, { nextTier: 3, count: 1 }],
     });
+  });
+
+  it('STAGE_ALLOWED_EMAILS가 설정되어도 public.admins 명부에 없는 테스터는 /api/admin* 호출 시 403으로 차단된다', async () => {
+    process.env.STAGE_ALLOWED_EMAILS = 'tester@example.test';
+    try {
+      mocks.adminMember.mockResolvedValue(null);
+      expect(await call('GET', { q: 'overview' })).toMatchObject({ status: 403, body: { error: 'forbidden' } });
+      expect(await call('POST', { q: 'mail' }, {})).toMatchObject({ status: 403, body: { error: 'forbidden' } });
+      expect(await call('GET', { q: 'access' })).toMatchObject({ status: 200, body: { kind: 'denied', uid: ADMIN_UID } });
+    } finally {
+      delete process.env.STAGE_ALLOWED_EMAILS;
+    }
   });
 });

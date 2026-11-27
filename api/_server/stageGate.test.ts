@@ -1,7 +1,25 @@
 // 스테이징 진입 전용 관리자 OAuth 게이트 단위 테스트.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Request, Response } from 'express';
-import { checkStageLiveUpgrade, gateHtml, isStageGateExempt, stageGate } from './stageGate.js';
+
+const mocks = vi.hoisted(() => ({
+  adminSession: vi.fn(async (): Promise<{ id: string; email: string | null } | null> => null),
+  isStaff: vi.fn(async () => false),
+  db: {},
+}));
+
+vi.mock('../_auth/session.js', () => ({
+  adminSession: mocks.adminSession,
+  adminSessionUid: async (headers: unknown) => (await (mocks.adminSession as (h: unknown) => Promise<{ id: string } | null>)(headers))?.id ?? null,
+}));
+vi.mock('../_data/admin.js', () => ({
+  isStaff: mocks.isStaff,
+}));
+vi.mock('../_db/client.js', () => ({
+  database: () => ({ db: mocks.db }),
+}));
+
+import { checkStageLiveUpgrade, gateHtml, isStageGateExempt, parseStageAllowedEmails, stageGate, verifyStageAdmin } from './stageGate.js';
 
 function createRes() {
   const headers: Record<string, string> = {};
@@ -32,6 +50,10 @@ function createReq(method: string, path: string, cookie?: string): Request {
 
 afterEach(() => {
   delete process.env.DEPLOY_ENV;
+  delete process.env.STAGE_ALLOWED_EMAILS;
+  vi.clearAllMocks();
+  mocks.adminSession.mockResolvedValue(null);
+  mocks.isStaff.mockResolvedValue(false);
 });
 
 describe('isStageGateExempt', () => {
@@ -270,5 +292,81 @@ describe('checkStageLiveUpgrade', () => {
     expect(await checkStageLiveUpgrade(createReq('GET', '/api/live'), async () => ({ ok: false, status: 401 }))).toBe(401);
     expect(await checkStageLiveUpgrade(createReq('GET', '/api/live'), async () => ({ ok: false, status: 403 }))).toBe(403);
     expect(await checkStageLiveUpgrade(createReq('GET', '/api/live'), async () => ({ ok: true, uid: 'admin-1' }))).toBeNull();
+  });
+});
+
+describe('parseStageAllowedEmails', () => {
+  it('쉼표 구분·앞뒤 공백 제거·소문자 정규화·빈 토큰 무시를 수행한다', () => {
+    expect([...parseStageAllowedEmails(undefined)]).toEqual([]);
+    expect([...parseStageAllowedEmails('')]).toEqual([]);
+    expect([...parseStageAllowedEmails(' ,  , ')]).toEqual([]);
+    expect([...parseStageAllowedEmails(' Tester@Example.com , , OTHER@TEST.dev , tester@example.com ')]).toEqual([
+      'tester@example.com',
+      'other@test.dev',
+    ]);
+  });
+});
+
+describe('verifyStageAdmin & 일반 테스터 허용 목록', () => {
+  it('adminSession이 없으면 STAGE_ALLOWED_EMAILS가 있어도 401을 반환한다', async () => {
+    process.env.STAGE_ALLOWED_EMAILS = 'tester@example.com';
+    mocks.adminSession.mockResolvedValueOnce(null);
+    expect(await verifyStageAdmin({})).toEqual({ ok: false, status: 401 });
+    expect(mocks.isStaff).not.toHaveBeenCalled();
+  });
+
+  it('public.admins(isStaff) 계정은 STAGE_ALLOWED_EMAILS 없이도 통과한다', async () => {
+    mocks.adminSession.mockResolvedValueOnce({ id: 'staff-1', email: 'staff@example.com' });
+    mocks.isStaff.mockResolvedValueOnce(true);
+    expect(await verifyStageAdmin({ cookie: 'pixel-fishing-admin=tok' })).toEqual({ ok: true, uid: 'staff-1' });
+  });
+
+  it('public.admins가 아니어도 STAGE_ALLOWED_EMAILS에 포함된 이메일(대소문자 무시)이면 통과하고 stageGate·checkStageLiveUpgrade도 통과한다', async () => {
+    process.env.DEPLOY_ENV = 'preview';
+    process.env.STAGE_ALLOWED_EMAILS = ' , Tester@Example.COM , qa@example.com ';
+    mocks.adminSession.mockResolvedValue({ id: 'tester-1', email: 'tester@example.com' });
+    mocks.isStaff.mockResolvedValue(false);
+
+    expect(await verifyStageAdmin({ cookie: 'pixel-fishing-admin=tok' })).toEqual({ ok: true, uid: 'tester-1' });
+    expect(await checkStageLiveUpgrade(createReq('GET', '/api/live', 'pixel-fishing-admin=tok'))).toBeNull();
+
+    const mw = stageGate();
+    for (const [method, path] of [['GET', '/'], ['POST', '/api/action']] as const) {
+      const next = vi.fn();
+      const { res } = createRes();
+      await new Promise<void>(resolve => {
+        mw(createReq(method, path, 'pixel-fishing-admin=tok'), res, () => { next(); resolve(); });
+      });
+      expect(next).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('STAGE_ALLOWED_EMAILS에 없는 이메일·익명 세션(email=null)은 403을 반환하고 gateHtml·오류 본문에 허용 목록이나 이메일을 노출하지 않는다', async () => {
+    process.env.DEPLOY_ENV = 'preview';
+    process.env.STAGE_ALLOWED_EMAILS = 'secret-tester@example.com';
+    mocks.isStaff.mockResolvedValue(false);
+
+    mocks.adminSession.mockResolvedValueOnce({ id: 'stranger-1', email: 'stranger@example.com' });
+    expect(await verifyStageAdmin({ cookie: 'pixel-fishing-admin=tok' })).toEqual({ ok: false, status: 403 });
+
+    mocks.adminSession.mockResolvedValueOnce({ id: 'anon-1', email: null });
+    expect(await verifyStageAdmin({ cookie: 'pixel-fishing-admin=tok' })).toEqual({ ok: false, status: 403 });
+
+    mocks.adminSession.mockResolvedValue({ id: 'stranger-1', email: 'stranger@example.com' });
+    const mw = stageGate();
+    const apiOut = createRes();
+    mw(createReq('POST', '/api/action', 'pixel-fishing-admin=tok'), apiOut.res, vi.fn());
+    await vi.waitFor(() => expect(apiOut.out().status).toBe(403));
+    expect(apiOut.out().body).toEqual({ error: 'forbidden' });
+    expect(JSON.stringify(apiOut.out().body)).not.toContain('secret-tester@example.com');
+    expect(JSON.stringify(apiOut.out().body)).not.toContain('stranger@example.com');
+
+    const pageOut = createRes();
+    mw(createReq('GET', '/', 'pixel-fishing-admin=tok'), pageOut.res, vi.fn());
+    await vi.waitFor(() => expect(pageOut.out().status).toBe(403));
+    const html = String(pageOut.out().body);
+    expect(html).not.toContain('secret-tester@example.com');
+    expect(html).not.toContain('stranger@example.com');
+    expect(html).not.toContain('STAGE_ALLOWED_EMAILS');
   });
 });
