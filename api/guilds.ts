@@ -127,8 +127,14 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
       rejoinCooldownUntil(db, uid, now),
     ]));
     const request = guild ? null : await run('db-read', () => myJoinRequest(db, uid, now));
+    const members = guild
+      ? await Promise.all(guild.members.map(async m => ({
+          ...m,
+          online: m.leftAt === null && (await presenceOf(m.uid)) !== null,
+        })))
+      : null;
     res.status(200).json({
-      guild: guild && { ...guild, members: guild.members.map(m => ({ ...m, online: m.leftAt === null && presenceOf(m.uid) !== null })) },
+      guild: guild && members ? { ...guild, members } : null,
       request,
       cooldownUntil,
     });

@@ -46,10 +46,10 @@ async function route(req: Req, res: Res): Promise<void> {
 
   if (req.method === 'GET') {
     const rows = await run('db-read', () => listFriends(db, me));
-    const friends = rows.map(r => {
-      const live = r.state === 'friend' ? presenceOf(r.uid) : null;
+    const friends = await Promise.all(rows.map(async r => {
+      const live = r.state === 'friend' ? await presenceOf(r.uid) : null;
       return { ...r, online: live !== null, region: live?.region ?? null, zone: live?.zone ?? null };
-    });
+    }));
     res.status(200).json({ friends });
     return;
   }
