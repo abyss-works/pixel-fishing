@@ -27,9 +27,13 @@ export async function widgetStreamHandler(req: IncomingMessage, res: WidgetRes):
     const auth = await authenticateWidgetRequest(req, res, db);
     if (!auth) return;
 
+    const [isOnline, presence] = await Promise.all([
+      isUserOnline(auth.uid),
+      presenceOf(auth.uid),
+    ]);
     const summary = await loadWidgetSummary(db, auth.uid, {
-      isOnline: isUserOnline(auth.uid),
-      presenceRegion: presenceOf(auth.uid)?.region ?? null,
+      isOnline,
+      presenceRegion: presence?.region ?? null,
     });
     if (req.destroyed || res.writableEnded || res.destroyed) return;
 

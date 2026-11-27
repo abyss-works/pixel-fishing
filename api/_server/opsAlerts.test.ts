@@ -163,4 +163,57 @@ describe('createOpsAlertDispatcher', () => {
       warnSpy.mockRestore();
     }
   });
+
+  it('acquireLock이 false를 반환하면 중복 경보 발송을 건너뛴다', async () => {
+    const reportIssue = vi.fn(async () => {});
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response('ok', { status: 200 }));
+    const acquireLock = vi.fn(async () => true)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+
+    const dispatcher = createOpsAlertDispatcher({
+      reportIssue,
+      webhookUrl: 'https://hooks.example.test/ops',
+      cooldownMs: 0,
+      fetchImpl,
+      acquireLock,
+    });
+
+    const alert = evaluateOpsAlerts({
+      ...healthyInput(),
+      ws: { reject500: 1, closeNormal: 0, closeAbnormal: 0, closeIdleTimeout: 0 },
+    });
+
+    const sent1 = await dispatcher.dispatch(alert);
+    expect(sent1).toHaveLength(1);
+    expect(acquireLock).toHaveBeenCalledTimes(1);
+    expect(acquireLock).toHaveBeenCalledWith('ops-alert:ws-upgrade-500', 1);
+    expect(reportIssue).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+    const sent2 = await dispatcher.dispatch(alert);
+    expect(sent2).toHaveLength(0);
+    expect(acquireLock).toHaveBeenCalledTimes(2);
+    expect(reportIssue).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('acquireLock이 예외를 던져도 Fail-open으로 경보를 발송하고 예외를 전파하지 않는다', async () => {
+    const reportIssue = vi.fn(async () => {});
+    const acquireLock = vi.fn(async () => { throw new Error('redis-down'); });
+
+    const dispatcher = createOpsAlertDispatcher({
+      reportIssue,
+      cooldownMs: 900_000,
+      acquireLock,
+    });
+
+    const alert = evaluateOpsAlerts({
+      ...healthyInput(),
+      ws: { reject500: 1, closeNormal: 0, closeAbnormal: 0, closeIdleTimeout: 0 },
+    });
+
+    await expect(dispatcher.dispatch(alert)).resolves.toHaveLength(1);
+    expect(reportIssue).toHaveBeenCalledTimes(1);
+  });
 });

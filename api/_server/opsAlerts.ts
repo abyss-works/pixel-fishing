@@ -161,6 +161,7 @@ export interface OpsAlertDispatcherOptions {
   cooldownMs?: number;
   now?: () => number;
   fetchImpl?: typeof fetch;
+  acquireLock?: (key: string, ttlSec: number) => Promise<boolean>;
 }
 
 export interface OpsAlertDispatcher {
@@ -173,7 +174,18 @@ export function createOpsAlertDispatcher(options: OpsAlertDispatcherOptions): Op
   const now = options.now ?? (() => Date.now());
   const fetchImpl = options.fetchImpl ?? fetch;
   const webhookUrl = options.webhookUrl?.trim() ? options.webhookUrl.trim() : null;
+  const acquireLock = options.acquireLock;
   const lastSentAt = new Map<OpsAlertCode, number>();
+
+  async function tryAcquire(code: OpsAlertCode): Promise<boolean> {
+    if (!acquireLock) return true;
+    const ttlSec = Math.max(1, Math.ceil(cooldownMs / 1000));
+    try {
+      return await acquireLock(`ops-alert:${code}`, ttlSec);
+    } catch {
+      return true;
+    }
+  }
 
   async function dispatch(alerts: readonly OpsAlert[]): Promise<OpsAlert[]> {
     const currentNow = now();
@@ -181,6 +193,7 @@ export function createOpsAlertDispatcher(options: OpsAlertDispatcherOptions): Op
     for (const alert of alerts) {
       const prev = lastSentAt.get(alert.code);
       if (prev !== undefined && currentNow - prev < cooldownMs) continue;
+      if (!(await tryAcquire(alert.code))) continue;
       lastSentAt.set(alert.code, currentNow);
       toSend.push(alert);
     }

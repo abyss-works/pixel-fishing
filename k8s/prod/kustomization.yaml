@@ -8,6 +8,7 @@ labels:
 resources:
   - namespace.yaml
   - deployment.yaml
+  - realtime.yaml
   - errors.yaml
   - valkey.yaml
   - service.yaml

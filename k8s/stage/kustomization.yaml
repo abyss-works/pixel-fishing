@@ -71,6 +71,7 @@ patches:
       metadata:
         name: pixel-fishing
       spec:
+        replicas: 1
         strategy:
           type: Recreate
         template:
@@ -118,6 +119,25 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/args/6
         value: 96mb
+  - target:
+      kind: Deployment
+      name: pixel-fishing-realtime
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/env/1/value
+        value: https://pixel-fishing-preview.abyssworks.dev
+      - op: replace
+        path: /spec/template/spec/containers/0/env/2/value
+        value: preview
+      - op: replace
+        path: /spec/template/spec/containers/0/env/3/value
+        value: "2026-11-25"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 150m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 192Mi
 # dev 푸시마다 CI가 게임과 관리자 이미지의 태그를 dev-<커밋 SHA 7자리>로 함께 갱신한다.
 images:
   - name: ghcr.io/abyss-works/pixel-fishing

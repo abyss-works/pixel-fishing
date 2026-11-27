@@ -6,9 +6,9 @@ import type { LiveOnline } from './live.js';
 
 export type CatchFxPayload = { fishId: string; form?: FormId };
 
-let lookup: (uid: string) => Presence | null = () => null;
-let onlineCheck: (uid: string) => boolean = () => false;
-let list: () => LiveOnline[] = () => [];
+let lookup: (uid: string) => Presence | null | Promise<Presence | null> = () => null;
+let onlineCheck: (uid: string) => boolean | Promise<boolean> = () => false;
+let list: () => LiveOnline[] | Promise<LiveOnline[]> = () => [];
 let notify: (uid: string, msg: ServerMessage) => void = () => {};
 let nickUpdater: (uid: string, nick: string) => void = () => {};
 let fameUpdater: (uid: string, fame: number) => void = () => {};
@@ -16,31 +16,31 @@ let catchFxBroadcaster: (uid: string, payload: CatchFxPayload) => void = () => {
 let guildNotify: (guildId: string, msg: ServerMessage) => void = () => {};
 let allNotify: (msg: ServerMessage) => void = () => {};
 
-export function providePresence(fn: (uid: string) => Presence | null): void {
+export function providePresence(fn: (uid: string) => Presence | null | Promise<Presence | null>): void {
   lookup = fn;
 }
 
 /** 그 사용자의 접속 상태. 연결돼 있지 않거나 아직 위치를 보내지 않았으면 null */
-export function presenceOf(uid: string): Presence | null {
-  return lookup(uid);
+export async function presenceOf(uid: string): Promise<Presence | null> {
+  return await lookup(uid);
 }
 
-export function provideIsUserOnline(fn: (uid: string) => boolean): void {
+export function provideIsUserOnline(fn: (uid: string) => boolean | Promise<boolean>): void {
   onlineCheck = fn;
 }
 
 /** 대상 사용자가 현재 실시간 WebSocket 채널에 연결되어 있는지 확인한다 */
-export function isUserOnline(uid: string): boolean {
-  return onlineCheck(uid);
+export async function isUserOnline(uid: string): Promise<boolean> {
+  return await onlineCheck(uid);
 }
 
-export function provideOnline(fn: () => LiveOnline[]): void {
+export function provideOnline(fn: () => LiveOnline[] | Promise<LiveOnline[]>): void {
   list = fn;
 }
 
 /** 지금 연결된 사용자 전부 */
-export function onlineUsers(): LiveOnline[] {
-  return list();
+export async function onlineUsers(): Promise<LiveOnline[]> {
+  return await list();
 }
 
 export function provideNotify(fn: (uid: string, msg: ServerMessage) => void): void {

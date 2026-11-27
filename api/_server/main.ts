@@ -1,5 +1,6 @@
 // 운영 서버 진입점 — 빌드한 SPA와 API 핸들러를 같은 오리진에서 서빙한다.
 // 핸들러는 Node 스타일 (req, res) 계약을 그대로 쓰고, 이 파일은 경로 등록과 본문 파싱만 맡는다.
+import { randomUUID } from 'node:crypto';
 import express from 'express';
 import type { Request, Response } from 'express';
 import { fileURLToPath } from 'node:url';
@@ -55,8 +56,9 @@ import { createHttpMetrics } from './httpMetrics.js';
 import { legalPages } from './legalPages.js';
 import { notFound } from './notFound.js';
 import { createOpsAlertDispatcher, evaluateOpsAlerts } from './opsAlerts.js';
-import { provideRecentHttpSummary, provideRecentWsSnapshot, provideSlowRequests } from './opsRuntime.js';
+import { aggregatePodMetrics, provideRecentHttpSummary, provideRecentWsSnapshot, provideSlowRequests } from './opsRuntime.js';
 import { PRERENDER_BLOCKED_PATHS, blockPrerender } from './prerender.js';
+import { createLiveBus } from './redisBus.js';
 import { securityHeaders } from './securityHeaders.js';
 import { checkStageLiveUpgrade, stageGate } from './stageGate.js';
 import { stageMockups } from './stageMockups.js';
@@ -66,13 +68,23 @@ type NodeHandler = (req: never, res: never) => Promise<void>;
 
 const staticDir = fileURLToPath(new URL('../dist/', import.meta.url));
 const origin = new URL(process.env.BETTER_AUTH_URL as string).origin;
+const podId = process.env.POD_NAME?.trim() || process.env.HOSTNAME?.trim() || randomUUID();
+const embeddedLive = process.env.ENABLE_EMBEDDED_LIVE !== 'false';
+const bus = createLiveBus();
+let live: ReturnType<typeof attachLive> | null = null;
 // 초대 링크와 그 미리보기 API는 로그인 없이 열린다
 const invites = guildInviteRoutes(origin, readIndexHtml(staticDir));
 
 // 차단 목록이 바뀌면 실시간 채널의 채팅 거르기를 갱신한다(허브는 아래에서 서버를 띄운 뒤 붙는다)
-const blocks = blocksHandler((uid, ids) => live.setBlocked(uid, ids));
+const blocks = blocksHandler((uid, ids) => {
+  if (embeddedLive) live?.setBlocked(uid, ids);
+  else void bus.setBlocked(uid, ids);
+});
 // 소속 길드가 바뀌면 실시간 채널의 길드 채팅 방을 바꾼다
-const guilds = guildRoutes((uid, guild) => live.setGuild(uid, guild));
+const guilds = guildRoutes((uid, guild) => {
+  if (embeddedLive) live?.setGuild(uid, guild);
+  else void bus.setGuild(uid, guild);
+});
 
 const routes: Record<string, NodeHandler> = {
   '/api/account': account,
@@ -131,6 +143,7 @@ provideClientMetricsRecorder(beacon => clientMetrics.record(beacon));
 const opsAlertDispatcher = createOpsAlertDispatcher({
   reportIssue: reportServerIssue,
   webhookUrl: process.env.OPS_ALERT_WEBHOOK_URL,
+  acquireLock: (key, ttlSec) => bus.acquireAlertLock(key, ttlSec),
 });
 const drain = createDrainGuard();
 // 모든 HTTP 응답(API·정적 자산·서버 렌더 HTML)에 기본 보안 헤더를 적용한다.
@@ -179,69 +192,114 @@ app.use(notFound);
 const port = Number(process.env.PORT ?? 3000);
 const server = app.listen(port, () => { console.info(`Server listening on port ${port}`); });
 applyKeepAlive(server);
-// 인증 인스턴스가 기동 시점에 서비스 주소를 이미 검사했다.
-const live = attachLive(server, {
-  origin,
-  stale: staleClient,
-  gate: checkStageLiveUpgrade,
-  admit: liveConsentAdmit,
-  authenticate: async (req) => {
-    const session = await sessionOf(req.headers);
-    if (!session) return null;
-    const { nick, boat, fame, staff } = await liveIdentity(database().db, session.id);
-    // 프로필은 첫 액션에서 생긴다. 그 전에 연결한 게스트는 기본 이름으로 보인다
-    return { uid: session.id, nick: nick ?? '낚시꾼', boat, fame, guest: session.email === null, staff: Boolean(staff) };
-  },
-  chat: {
-    save: (user, text, guild, room, region) => saveChat(database().db, {
-      uid: user.uid, nick: user.nick, text, room, region, guildId: guild,
-    }),
-    recent: (uid, limit, guild) => (
-      guild === null
-        ? recentChat(database().db, uid, limit)
-        : recentGuildChat(database().db, guild, uid, limit)
-    ),
-    recentLocal: (uid, region, limit) => recentLocalChat(database().db, region, uid, limit),
-    blocked: (uid) => blockedIds(database().db, uid),
-    guildOf: (uid) => guildIdOf(database().db, uid),
-  },
-  activeNotices: () => listLiveNotices(database().db),
-  // 종료 신호 때도 남은 기록이 끝날 때까지 기다리도록 응답 뒤 작업으로 추적한다
-  recordSession: (uid, startedAt, endedAt) => {
-    afterResponse(recordSession(database().db, uid, startedAt, endedAt).catch(e =>
-      reportServerIssue('접속 세션 기록 실패', e, { uid, startedAt, endedAt })));
-  },
-  // 다시 접속하면 이 자리에서 시작한다. 세션 기록과 같이 응답 뒤 작업으로 추적한다
-  savePosition: (uid, pos) => {
-    afterResponse(saveLastPosition(database().db, uid, pos).catch(e =>
-      reportServerIssue('마지막 위치 기록 실패', e, { uid, region: pos.region })));
-  },
-  onUserDisconnect: (uid) => {
-    if (widgetHub().hasSubscribers(uid)) {
-      widgetHub().publishStatusChanged(uid, 'idle');
-    }
-  },
-  metrics: {
-    onUpgradeOk: () => wsMetrics.onUpgradeOk(),
-    onReject: status => wsMetrics.onReject(status),
-    onClose: kind => wsMetrics.onClose(kind),
-  },
-  onError: (label, err) => { void reportServerIssue(label, err); },
+const publishApiPodMetrics = (): Promise<void> => bus.publishPodMetrics(podId, {
+  podId,
+  updatedAt: new Date().toISOString(),
+  http: httpMetrics.recentWindowSummary(),
+  slowRequests: httpMetrics.slowRequests(),
 });
 
-providePresence(uid => live.presenceOf(uid));
-provideIsUserOnline(uid => live.isOnline(uid));
-provideOnline(() => live.online());
-provideNotify((uid, msg) => live.sendTo(uid, msg));
-provideNotifyGuild((guildId, msg) => live.sendToGuild(guildId, msg));
-provideNotifyAll(msg => live.sendToAll(msg));
-provideSetNick((uid, nick) => live.setNick(uid, nick));
-provideSetFame((uid, fame) => live.setFame(uid, fame));
+let podMetricsTimer: ReturnType<typeof setInterval> | null = null;
+
+if (embeddedLive) {
+  // 인증 인스턴스가 기동 시점에 서비스 주소를 이미 검사했다.
+  const embedded = attachLive(server, {
+    origin,
+    stale: staleClient,
+    gate: checkStageLiveUpgrade,
+    admit: liveConsentAdmit,
+    authenticate: async (req) => {
+      const session = await sessionOf(req.headers);
+      if (!session) return null;
+      const { nick, boat, fame, staff } = await liveIdentity(database().db, session.id);
+      // 프로필은 첫 액션에서 생긴다. 그 전에 연결한 게스트는 기본 이름으로 보인다
+      return { uid: session.id, nick: nick ?? '낚시꾼', boat, fame, guest: session.email === null, staff: Boolean(staff) };
+    },
+    chat: {
+      save: (user, text, guild, room, region) => saveChat(database().db, {
+        uid: user.uid, nick: user.nick, text, room, region, guildId: guild,
+      }),
+      recent: (uid, limit, guild) => (
+        guild === null
+          ? recentChat(database().db, uid, limit)
+          : recentGuildChat(database().db, guild, uid, limit)
+      ),
+      recentLocal: (uid, region, limit) => recentLocalChat(database().db, region, uid, limit),
+      blocked: (uid) => blockedIds(database().db, uid),
+      guildOf: (uid) => guildIdOf(database().db, uid),
+    },
+    activeNotices: () => listLiveNotices(database().db),
+    // 종료 신호 때도 남은 기록이 끝날 때까지 기다리도록 응답 뒤 작업으로 추적한다
+    recordSession: (uid, startedAt, endedAt) => {
+      afterResponse(recordSession(database().db, uid, startedAt, endedAt).catch(e =>
+        reportServerIssue('접속 세션 기록 실패', e, { uid, startedAt, endedAt })));
+    },
+    // 다시 접속하면 이 자리에서 시작한다. 세션 기록과 같이 응답 뒤 작업으로 추적한다
+    savePosition: (uid, pos) => {
+      afterResponse(saveLastPosition(database().db, uid, pos).catch(e =>
+        reportServerIssue('마지막 위치 기록 실패', e, { uid, region: pos.region })));
+    },
+    onUserDisconnect: (uid) => {
+      if (widgetHub().hasSubscribers(uid)) {
+        widgetHub().publishStatusChanged(uid, 'idle');
+      }
+    },
+    metrics: {
+      onUpgradeOk: () => wsMetrics.onUpgradeOk(),
+      onReject: status => wsMetrics.onReject(status),
+      onClose: kind => wsMetrics.onClose(kind),
+    },
+    onError: (label, err) => { void reportServerIssue(label, err); },
+  });
+  live = embedded;
+
+  providePresence(uid => embedded.presenceOf(uid));
+  provideIsUserOnline(uid => embedded.isOnline(uid));
+  provideOnline(() => embedded.online());
+  provideNotify((uid, msg) => embedded.sendTo(uid, msg));
+  provideNotifyGuild((guildId, msg) => embedded.sendToGuild(guildId, msg));
+  provideNotifyAll(msg => embedded.sendToAll(msg));
+  provideSetNick((uid, nick) => embedded.setNick(uid, nick));
+  provideSetFame((uid, fame) => embedded.setFame(uid, fame));
+  provideBroadcastCatchFx((uid, payload) => embedded.broadcastCatchFx(uid, payload));
+  provideSlowRequests(() => httpMetrics.slowRequests());
+  provideRecentHttpSummary(() => httpMetrics.recentWindowSummary());
+  provideRecentWsSnapshot(() => wsMetrics.recentSnapshot());
+} else {
+  providePresence(uid => bus.presenceOf(uid));
+  provideIsUserOnline(uid => bus.isUserOnline(uid));
+  provideOnline(async () => {
+    const [entries, presences] = await Promise.all([bus.listOnline(), bus.listPresence()]);
+    const presenceByUid = new Map(presences.map(p => [p.uid, p]));
+    return entries.map(entry => {
+      const p = presenceByUid.get(entry.uid);
+      return {
+        uid: entry.uid,
+        nick: p?.nick ?? '낚시꾼',
+        region: p?.region ?? null,
+        zone: p?.zone ?? null,
+        connectedAt: new Date(entry.updatedAtMs).toISOString(),
+        guest: entry.guest,
+      };
+    });
+  });
+  provideNotify((uid, msg) => { void bus.notifyUser(uid, msg); });
+  provideNotifyGuild((guildId, msg) => { void bus.notifyGuild(guildId, msg); });
+  provideNotifyAll(msg => { void bus.notifyAll(msg); });
+  provideSetNick((uid, nick) => { void bus.setNick(uid, nick); });
+  provideSetFame((uid, fame) => { void bus.setFame(uid, fame); });
+  provideBroadcastCatchFx((uid, payload) => { void bus.broadcastCatchFx(uid, payload); });
+  provideSlowRequests(async () => aggregatePodMetrics(await bus.listPodMetrics()).slowRequests);
+  provideRecentHttpSummary(async () => aggregatePodMetrics(await bus.listPodMetrics()).http);
+  provideRecentWsSnapshot(async () => aggregatePodMetrics(await bus.listPodMetrics()).ws);
+
+  podMetricsTimer = setInterval(() => {
+    void publishApiPodMetrics().catch(() => {});
+  }, 15_000);
+  podMetricsTimer.unref();
+}
+
 provideWidgetDisconnect(uid => widgetHub().disconnectUser(uid));
-provideBroadcastCatchFx((uid, payload) => live.broadcastCatchFx(uid, payload));
-provideSlowRequests(() => httpMetrics.slowRequests());
-provideRecentHttpSummary(() => httpMetrics.recentWindowSummary());
-provideRecentWsSnapshot(() => wsMetrics.recentSnapshot());
 
 const opsAlertTimer = setInterval(() => {
   try {
@@ -276,11 +334,14 @@ process.on('uncaughtExceptionMonitor', err => { void reportServerIssue('uncaught
 process.on('SIGTERM', () => {
   drain.start();
   clearInterval(opsAlertTimer);
-  live.close();
+  if (podMetricsTimer) clearInterval(podMetricsTimer);
+  live?.close();
   widgetHub().close();
+  const busClose = (!embeddedLive ? publishApiPodMetrics().catch(() => {}) : Promise.resolve())
+    .then(() => bus.close().catch(() => {}));
   server.close(() => {
     void settleAfterResponse()
-      .then(() => Promise.all([httpMetrics.stop(), wsMetrics.stop(), clientMetrics.stop()]))
+      .then(() => Promise.all([httpMetrics.stop(), wsMetrics.stop(), clientMetrics.stop(), busClose]))
       .finally(() => process.exit(0));
   });
 });

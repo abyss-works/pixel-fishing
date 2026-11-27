@@ -4,6 +4,7 @@
 // 표시용 채널이라 게임 상태를 바꾸지 않는다. 채팅은 저장한 뒤 보내고, 수신자가 차단한 사람의 채팅은 그 수신자에게 보내지 않는다.
 // 채팅 방은 전체(global)·지역(local)·길드(guild) 세 가지다. 전체 방은 10초 쿨다운(운영진 면제), 모든 방은 10초 25건 합산 창을 강제한다.
 // 연결이 끝나면(정상 종료, 무응답 정리, 같은 계정의 새 연결로 교체, 서버 종료) 그 연결을 접속 세션으로 기록한다.
+import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, Server } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { WebSocket, WebSocketServer } from 'ws';
@@ -22,6 +23,8 @@ import { topZoneOf, zoneById } from '../../src/game/content/zones.js';
 import type { ZoneId } from '../../src/game/content/zones.js';
 import type { CatchFxPayload } from './livePresence.js';
 import { isPrerenderRequest } from './prerender.js';
+import type { SharedRateLimiter } from './rateLimit.js';
+import type { LiveBus, LiveBusEvent } from './realtimeBus.js';
 
 /** 연결한 사용자 — 표시 이름·배·명성·운영진 여부는 서버가 DB에서 읽는다. 클라이언트가 보낸 값을 믿지 않는다. guest는 이메일이 없는 계정이다 */
 export interface LiveUser { uid: string; nick: string; boat: number; fame: number; guest: boolean; staff?: boolean }
@@ -92,6 +95,14 @@ export interface LiveOptions {
   metrics?: LiveMetricsHooks;
   /** 비동기 오류 보고 훅 */
   onError?: (label: string, error: unknown) => void;
+  /** 멀티 파드 중계 버스 (미지정 시 단일 프로세스 동작) */
+  bus?: LiveBus;
+  /** 현재 파드 식별자 */
+  podId?: string;
+  /** 공유 채팅 슬라이딩 윈도우 리미터 (미지정 시 메모리) */
+  chatLimiter?: SharedRateLimiter;
+  /** 공유 전체 채팅 쿨다운 리미터 (미지정 시 메모리) */
+  globalCooldownLimiter?: SharedRateLimiter;
 }
 
 /** 지금 연결된 사용자 하나. 아직 위치를 보내지 않았으면 region과 zone은 null이다 */
@@ -222,6 +233,9 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
   const lastGlobalAt = new Map<string, number>();
   const chatQueues = new Map<string, Promise<void>>();
 
+  const bus = opts.bus;
+  const podId = opts.podId ?? randomUUID();
+
   // 업그레이드를 받아 소켓을 연다. 잘못된 프레임 같은 소켓 오류가 서버를 죽이지 않도록 모든 연결에 같은 오류 처리를 단다
   const accept = (req: IncomingMessage, socket: Duplex, head: Buffer, onOpen: (ws: WebSocket) => void) => {
     wss.handleUpgrade(req, socket, head, (ws) => {
@@ -230,11 +244,91 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
     });
   };
   const send = (ws: WebSocket, msg: ServerMessage) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg)); };
+  const applyLocalSendTo = (uid: string, msg: ServerMessage) => {
+    for (const [ws, c] of conns) if (c.user.uid === uid) send(ws, msg);
+  };
+  const applyLocalSendToGuild = (guildId: string, msg: ServerMessage) => {
+    for (const [ws, c] of conns) if (c.guild === guildId) send(ws, msg);
+  };
+  const applyLocalSendToAll = (msg: ServerMessage) => {
+    const data = JSON.stringify(msg);
+    for (const ws of conns.keys()) if (ws.readyState === WebSocket.OPEN) ws.send(data);
+  };
+  const applyLocalBlocked = (uid: string, ids: readonly string[]) => {
+    for (const c of conns.values()) if (c.user.uid === uid) c.blocked = new Set(ids);
+  };
+  const applyLocalGuild = (uid: string, guild: string | null) => {
+    for (const c of conns.values()) if (c.user.uid === uid) c.guild = guild;
+  };
   // 위치와 입력 중 표시처럼 보낸 연결 말고 모두에게 보이는 메시지. 보낸 사람이 게스트면 아무에게도 보내지 않는다
-  const broadcast = (from: WebSocket, sender: LiveUser, msg: ServerMessage) => {
+  const broadcast = (from: WebSocket, sender: LiveUser, msg: ServerMessage, relay = true) => {
     if (sender.guest) return;
     const data = JSON.stringify(msg);
     for (const ws of conns.keys()) if (ws !== from && ws.readyState === WebSocket.OPEN) ws.send(data);
+    if (relay && bus) void bus.relayBroadcast({ sourcePodId: podId, fromUid: sender.uid, msg });
+  };
+  const applyLocalNick = (uid: string, nick: string, broadcastAllIfMissing = false) => {
+    let sender: { ws: WebSocket; user: LiveUser } | null = null;
+    for (const [ws, c] of conns) {
+      if (c.user.uid !== uid) continue;
+      c.user.nick = nick;
+      if (c.presence) {
+        c.presence.nick = nick;
+        if (!c.user.guest && bus) void bus.publishPresence(c.presence, podId);
+      }
+      sender = { ws, user: c.user };
+    }
+    if (sender && !sender.user.guest) {
+      const msg: ServerMessage = { t: 'nick', uid, nick };
+      send(sender.ws, msg);
+      broadcast(sender.ws, sender.user, msg, false);
+    } else if (!sender && broadcastAllIfMissing) {
+      applyLocalSendToAll({ t: 'nick', uid, nick });
+    }
+  };
+  const applyLocalFame = (uid: string, fame: number) => {
+    for (const c of conns.values()) {
+      if (c.user.uid !== uid) continue;
+      c.user.fame = fame;
+      if (c.presence) {
+        c.presence.fame = fame;
+        if (!c.user.guest && bus) void bus.publishPresence(c.presence, podId);
+      }
+    }
+  };
+  const applyLocalCatchFx = (uid: string, payload: CatchFxPayload) => {
+    let senderWs: WebSocket | null = null;
+    let sender: Conn | null = null;
+    for (const [ws, c] of conns) {
+      if (c.user.uid !== uid) continue;
+      senderWs = ws;
+      sender = c;
+      break;
+    }
+    if (!sender || !senderWs || sender.user.guest || !sender.presence) return;
+    const { region } = sender.presence;
+    if (!isRegionId(region)) return;
+    const pos = sender.presence.bob ?? { x: sender.presence.x, y: sender.presence.y };
+    const msg: ServerMessage = {
+      t: 'catchFx',
+      uid,
+      region,
+      x: pos.x,
+      y: pos.y,
+      toX: sender.presence.x,
+      toY: sender.presence.y - 6,
+      fishId: payload.fishId,
+      ...(payload.form ? { form: payload.form } : {}),
+    };
+    const data = JSON.stringify(msg);
+    for (const [ws, c] of conns) {
+      if (ws === senderWs || ws.readyState !== WebSocket.OPEN) continue;
+      if (c.presence?.region !== region) continue;
+      ws.send(data);
+    }
+    if (bus) {
+      void bus.relayBroadcast({ sourcePodId: podId, fromUid: uid, msg, region });
+    }
   };
   // 방별 중계: global은 전체, local은 같은 정규화 지역, guild는 같은 길드원에게 보낸다(수신자 차단 제외)
   const sendChat = (line: ChatLine, room: ChatRoom, region: string | null, guild: string | null) => {
@@ -250,6 +344,16 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
         ws.send(data);
       }
     }
+    if (bus) {
+      void bus.relayBroadcast({
+        sourcePodId: podId,
+        fromUid: line.uid,
+        msg,
+        room,
+        region,
+        guildId: guild,
+      });
+    }
   };
   // 채팅 한 줄 — 권한·길이·도배·전체 쿨다운을 판정하고 저장한 뒤 방에 맞게 보낸다
   const runChat = async (ws: WebSocket, conn: Conn, raw: string, rawRoom: ChatRoom | undefined) => {
@@ -263,14 +367,27 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
     const text = chatText(raw);
     if (text === null) { send(ws, { t: 'error', code: 'chat-length' }); return; }
     const now = Date.now();
-    const rate = chatRate(chatTimes.get(user.uid) ?? [], now);
-    chatTimes.set(user.uid, rate.window);
-    if (!rate.ok) { send(ws, { t: 'error', code: 'chat-rate' }); return; }
+    if (opts.chatLimiter) {
+      const rateRes = await opts.chatLimiter.check(user.uid, now);
+      if (!rateRes.allowed) { send(ws, { t: 'error', code: 'chat-rate' }); return; }
+    } else {
+      const rate = chatRate(chatTimes.get(user.uid) ?? [], now);
+      chatTimes.set(user.uid, rate.window);
+      if (!rate.ok) { send(ws, { t: 'error', code: 'chat-rate' }); return; }
+    }
     if (room === 'global' && !user.staff) {
-      const cooldown = globalChatCooldown(lastGlobalAt.get(user.uid), now);
-      if (!cooldown.ok) {
-        send(ws, { t: 'error', code: 'chat-global-cooldown', retryAfterMs: cooldown.retryAfterMs });
-        return;
+      if (opts.globalCooldownLimiter) {
+        const cdRes = await opts.globalCooldownLimiter.check(user.uid, now);
+        if (!cdRes.allowed) {
+          send(ws, { t: 'error', code: 'chat-global-cooldown', retryAfterMs: cdRes.retryAfterSec * 1000 });
+          return;
+        }
+      } else {
+        const cooldown = globalChatCooldown(lastGlobalAt.get(user.uid), now);
+        if (!cooldown.ok) {
+          send(ws, { t: 'error', code: 'chat-global-cooldown', retryAfterMs: cooldown.retryAfterMs });
+          return;
+        }
       }
     }
     const saved = await opts.chat.save(user, text, guild, room, targetRegion);
@@ -289,7 +406,7 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
       line = saved;
     }
     const savedAt = Date.now();
-    if (outRoom === 'global' && !user.staff) lastGlobalAt.set(user.uid, savedAt);
+    if (outRoom === 'global' && !user.staff && !opts.globalCooldownLimiter) lastGlobalAt.set(user.uid, savedAt);
     sendChat(line, outRoom, outRegion, outGuild);
   };
   const onChat = (ws: WebSocket, conn: Conn, raw: string, rawRoom: ChatRoom | undefined) => {
@@ -326,8 +443,84 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
     if (conn.presence) broadcast(ws, conn.user, { t: 'leave', uid: conn.user.uid });
     if (notifyOffline && ![...conns.values()].some(c => c.user.uid === conn.user.uid)) {
       opts.onUserDisconnect?.(conn.user.uid);
+      if (bus) {
+        void bus.removePresence(conn.user.uid, podId);
+        void bus.removeOnline(conn.user.uid, podId);
+      }
     }
   };
+
+  const handleRelayBroadcast = (event: Extract<LiveBusEvent, { t: 'relayBroadcast' }>) => {
+    const { msg, fromUid, room, region, guildId } = event;
+    if (msg.t === 'chat') {
+      const data = JSON.stringify(msg);
+      for (const [ws, c] of conns) {
+        if (ws.readyState !== WebSocket.OPEN || c.blocked.has(fromUid)) continue;
+        if (room === 'global') {
+          ws.send(data);
+        } else if (room === 'guild') {
+          if (guildId !== undefined && guildId !== null && c.guild === guildId) ws.send(data);
+        } else if (region !== undefined && region !== null && c.region === region) {
+          ws.send(data);
+        }
+      }
+      return;
+    }
+    if (msg.t === 'catchFx') {
+      const data = JSON.stringify(msg);
+      for (const [ws, c] of conns) {
+        if (ws.readyState !== WebSocket.OPEN || c.user.uid === fromUid) continue;
+        if (c.presence?.region !== msg.region) continue;
+        ws.send(data);
+      }
+      return;
+    }
+    const data = JSON.stringify(msg);
+    for (const [ws, c] of conns) {
+      if (ws.readyState !== WebSocket.OPEN || c.user.uid === fromUid) continue;
+      ws.send(data);
+    }
+  };
+
+  const unsubBus = bus?.subscribe((event) => {
+    if (event.sourcePodId && event.sourcePodId === podId) return;
+    switch (event.t) {
+      case 'relayBroadcast':
+        handleRelayBroadcast(event);
+        break;
+      case 'kickUser':
+        for (const [ws, c] of conns) {
+          if (c.user.uid !== event.uid) continue;
+          drop(ws, c, true);
+          ws.close(LIVE_CLOSE_REPLACED);
+        }
+        break;
+      case 'notifyUser':
+        applyLocalSendTo(event.uid, event.msg);
+        break;
+      case 'notifyGuild':
+        applyLocalSendToGuild(event.guildId, event.msg);
+        break;
+      case 'notifyAll':
+        applyLocalSendToAll(event.msg);
+        break;
+      case 'setNick':
+        applyLocalNick(event.uid, event.nick, true);
+        break;
+      case 'setFame':
+        applyLocalFame(event.uid, event.fame);
+        break;
+      case 'setBlocked':
+        applyLocalBlocked(event.uid, event.ids);
+        break;
+      case 'setGuild':
+        applyLocalGuild(event.uid, event.guild);
+        break;
+      case 'broadcastCatchFx':
+        applyLocalCatchFx(event.uid, event.payload);
+        break;
+    }
+  });
 
   server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     if (new URL(req.url ?? '/', 'http://x').pathname !== LIVE_PATH) { socket.destroy(); return; }
@@ -359,7 +552,7 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
           rejectUpgrade(socket, 403);
           return;
         }
-        const [recentChat, recentLocalChat, blocked, guild, notices] = await Promise.all([
+        const [recentChat, recentLocalChat, blocked, guild, notices, busPresences] = await Promise.all([
           opts.chat.recent(user.uid, CHAT_RECENT, null),
           initRegion !== null && opts.chat.recentLocal
             ? opts.chat.recentLocal(user.uid, initRegion, CHAT_RECENT)
@@ -367,6 +560,7 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
           opts.chat.blocked(user.uid),
           opts.chat.guildOf(user.uid),
           opts.activeNotices ? opts.activeNotices() : Promise.resolve(undefined),
+          bus ? bus.listPresence() : Promise.resolve([] as Presence[]),
         ]);
         const recentGuildChat = guild === null ? null : await opts.chat.recent(user.uid, CHAT_RECENT, guild);
         if (latestUpgradeSeqByUid.get(user.uid) !== seq || socket.destroyed || !socket.writable) {
@@ -393,6 +587,10 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
           };
           conns.set(ws, conn);
           opts.metrics?.onUpgradeOk();
+          if (bus) {
+            void bus.kickUser(user.uid, 'replaced', podId);
+            void bus.publishOnline({ uid: user.uid, guest: user.guest, podId, updatedAtMs: now });
+          }
           const handle = (msg: NonNullable<ReturnType<typeof parseClientMessage>>, at: number): void => {
             if (msg.t === 'move') {
               const { region, x, y, dir, line, bob, look } = msg;
@@ -418,8 +616,9 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
                 Object.assign(conn.presence, { region, zone, x, y, dir, line, bob, ...(broadcastLook ? { look: broadcastLook } : {}) });
                 broadcast(ws, user, { t: 'move', uid: user.uid, region, zone, x, y, dir, line, ...idle, ...(bob ? { bob } : {}), ...(broadcastLook ? { look: broadcastLook } : {}) });
               }
-              // 게스트의 위치는 마지막 위치로 저장하지 않는다
+              // 게스트의 위치는 마지막 위치와 버스로 내보내지 않는다
               if (!user.guest) {
+                if (bus) void bus.publishPresence(conn.presence, podId);
                 conn.positionDirty = true;
                 if (conn.positionSavedAt === null || at - conn.positionSavedAt >= positionSaveMs) savePosition(conn, at);
               }
@@ -472,7 +671,16 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
             reportClose(ws, code);
           });
           const sentAt = Date.now();
-          const others = [...conns.values()].flatMap(c => (c !== conn && c.presence && !c.user.guest ? [{ ...c.presence, ...idleField(c.idleSince, sentAt) }] : []));
+          const otherMap = new Map<string, Presence>();
+          for (const p of busPresences) {
+            if (p.uid !== user.uid) otherMap.set(p.uid, p);
+          }
+          for (const c of conns.values()) {
+            if (c !== conn && c.presence && !c.user.guest) {
+              otherMap.set(c.user.uid, { ...c.presence, ...idleField(c.idleSince, sentAt) });
+            }
+          }
+          const others = [...otherMap.values()];
           send(ws, {
             t: 'hello',
             you: user.uid,
@@ -539,80 +747,41 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
       }));
     },
     setBlocked(uid, ids) {
-      for (const c of conns.values()) if (c.user.uid === uid) c.blocked = new Set(ids);
+      applyLocalBlocked(uid, ids);
     },
     setGuild(uid, guild) {
-      for (const c of conns.values()) if (c.user.uid === uid) c.guild = guild;
+      applyLocalGuild(uid, guild);
     },
     setNick(uid, nick) {
-      let sender: { ws: WebSocket; user: LiveUser } | null = null;
-      for (const [ws, c] of conns) {
-        if (c.user.uid !== uid) continue;
-        c.user.nick = nick;
-        if (c.presence) c.presence.nick = nick;
-        sender = { ws, user: c.user };
-      }
-      if (sender && !sender.user.guest) {
-        const msg: ServerMessage = { t: 'nick', uid, nick };
-        send(sender.ws, msg);
-        broadcast(sender.ws, sender.user, msg);
-      }
+      applyLocalNick(uid, nick);
     },
     setFame(uid, fame) {
-      for (const c of conns.values()) {
-        if (c.user.uid !== uid) continue;
-        c.user.fame = fame;
-        if (c.presence) c.presence.fame = fame;
-      }
+      applyLocalFame(uid, fame);
     },
     broadcastCatchFx(uid, payload) {
-      let senderWs: WebSocket | null = null;
-      let sender: Conn | null = null;
-      for (const [ws, c] of conns) {
-        if (c.user.uid !== uid) continue;
-        senderWs = ws;
-        sender = c;
-        break;
-      }
-      if (!sender || !senderWs || sender.user.guest || !sender.presence) return;
-      const { region } = sender.presence;
-      if (!isRegionId(region)) return;
-      const pos = sender.presence.bob ?? { x: sender.presence.x, y: sender.presence.y };
-      const msg: ServerMessage = {
-        t: 'catchFx',
-        uid,
-        region,
-        x: pos.x,
-        y: pos.y,
-        toX: sender.presence.x,
-        toY: sender.presence.y - 6,
-        fishId: payload.fishId,
-        ...(payload.form ? { form: payload.form } : {}),
-      };
-      const data = JSON.stringify(msg);
-      for (const [ws, c] of conns) {
-        if (ws === senderWs || ws.readyState !== WebSocket.OPEN) continue;
-        if (c.presence?.region !== region) continue;
-        ws.send(data);
-      }
+      applyLocalCatchFx(uid, payload);
     },
     sendTo(uid, msg) {
-      for (const [ws, c] of conns) if (c.user.uid === uid) send(ws, msg);
+      applyLocalSendTo(uid, msg);
     },
     sendToGuild(guildId, msg) {
-      for (const [ws, c] of conns) if (c.guild === guildId) send(ws, msg);
+      applyLocalSendToGuild(guildId, msg);
     },
     sendToAll(msg) {
-      const data = JSON.stringify(msg);
-      for (const ws of conns.keys()) if (ws.readyState === WebSocket.OPEN) ws.send(data);
+      applyLocalSendToAll(msg);
     },
     close() {
+      unsubBus?.();
       clearInterval(timer);
       latestUpgradeSeqByUid.clear();
       // 닫기 응답을 기다리지 않고 지금 기록한다. 모두 함께 닫히므로 떠남은 알리지 않는다
       for (const [ws, c] of conns) {
         conns.delete(ws);
         recordEnd(c);
+        if (bus) {
+          void bus.removePresence(c.user.uid, podId);
+          void bus.removeOnline(c.user.uid, podId);
+        }
         ws.close(LIVE_CLOSE_RESTART);
       }
     },
