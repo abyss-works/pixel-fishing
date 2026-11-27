@@ -407,7 +407,7 @@ describe('받는 보너스', () => {
       // 25% * 1.03 + 40% + 7.5% + 0.6% = 25.75 + 48.1 = 73.85%
       expect(mutRow.totalText).toBe('+73.85%');
       expect(mutRow.tipRows).toEqual([
-        { label: '[길드] 돌연변이 확률', value: '+40%' },
+        { label: '[길드] 돌연변이 출현 비중', value: '+40%' },
         { label: '[유물] 코모로의 골판', value: '+25%' },
         { label: '[업적] 전체 돌연변이 손맛', value: '+7.5%' },
         { label: '[업적] 구역 돌연변이 2곳', value: '+0.6%' },

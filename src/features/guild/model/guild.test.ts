@@ -202,7 +202,7 @@ describe('항해일지', () => {
       [{ text: '가람', tone: 'nick' }, { text: ' 님이 ' }, { text: '네임드 메갈로돈', tone: 'named' }, { text: '을 토벌했어요!' }],
       [{ text: '가람', tone: 'nick' }, { text: ' 님이 ' }, { text: '판매가 보너스', tone: 'skill' }, { text: '에 ' },
         { text: '150,000G', tone: 'num' }, { text: '를 기부했어요.' }],
-      [{ text: '길드 스킬 ' }, { text: '희귀 어종 확률', tone: 'skill' }, { text: '이 ' }, { text: '2', tone: 'num' }, { text: '단계가 됐어요!' }],
+      [{ text: '길드 스킬 ' }, { text: '희귀 어종 출현 비중', tone: 'skill' }, { text: '이 ' }, { text: '2', tone: 'num' }, { text: '단계가 됐어요!' }],
     ]);
   });
 
@@ -267,7 +267,7 @@ describe('길드 보너스 화면 모델', () => {
   };
 
   it('길드 스킬 이름', () => {
-    expect(Object.values(GUILD_BONUS_NAME)).toEqual(['판매가 보너스', '가방 용량 증가', '네임드 조우 확률', '희귀 어종 확률', '돌연변이 확률']);
+    expect(Object.values(GUILD_BONUS_NAME)).toEqual(['판매가 보너스', '가방 용량 증가', '네임드 조우 확률', '희귀 어종 출현 비중', '돌연변이 출현 비중']);
   });
 
   it('효과 값 — 모든 보너스는 %, 희귀 어종은 일반 어종을 줄이므로 −', () => {
@@ -364,7 +364,7 @@ describe('길드 보너스 화면 모델', () => {
       { id: 1, kind: 'enhance', uid: 'me', nick: '나', detail: 'rare', value: 3, at },
     ], 'me');
     expect(day.items[0].parts.map(p => p.text).join('')).toBe('가람 님이 길드 스킬 강화를 되돌렸어요.');
-    expect(day.items[1].parts.map(p => p.text).join('')).toBe('나 님이 희귀 어종 확률 스킬을 강화 3단계로 올렸어요.');
+    expect(day.items[1].parts.map(p => p.text).join('')).toBe('나 님이 희귀 어종 출현 비중 스킬을 강화 3단계로 올렸어요.');
   });
 
   it('공통과 개인 트랙 효과, 개인 트리 노드, 초기화 비용 단계표, 잠금 안내 상수를 제공한다', () => {

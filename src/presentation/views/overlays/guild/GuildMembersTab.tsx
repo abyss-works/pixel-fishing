@@ -5,7 +5,6 @@ import {
 } from '../../../../features/guild/model/guild';
 import type { MemberRow } from '../../../../features/guild/model/guild';
 import type { ArtifactHolder } from '../../../../game/rules/artifactLevel';
-import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
 import { cx } from '../../../ui/cx';
@@ -19,16 +18,18 @@ import type { GuildAsk, GuildPartProps } from './guildProps';
 // 길드원 탭: 길드원 표(접속 점, 이름, 오늘 기여, 누적 기여, 기부)와 맨 아래 한 줄(떠나기). 길드 코드와 초대 링크는 관리 탭에 있다.
 // 길드장에게는 다른 길드원 행 끝에 관리 버튼이 있고, 누르면 행 아래로 넘기기와 내보내기가 펼쳐진다.
 // 관리 칸은 역할과 무관하게 같은 크기로 두어, 길드장이든 길드원이든 표의 크기가 같다.
-export default function GuildMembersTab({ guild, me, busy, setToast, ask, artifacts }: GuildPartProps & { ask: GuildAsk; artifacts: ArtifactHolder }) {
+export default function GuildMembersTab({ guild, me, busy, ask, artifacts }: GuildPartProps & { ask: GuildAsk; artifacts: ArtifactHolder }) {
   /** 관리 메뉴를 펼친 길드원 */
   const [menu, setMenu] = useState<string | null>(null);
   const active = splitMembers(guild.members).active;
   const askAndClose: GuildAsk = c => { setMenu(null); ask(c); };
-  const leave = () => {
-    const c = leaveConfirm(guild, me);
-    if (c) ask(c);
-    else sendNotice(setToast, { kind: 'system.modalRejected', text: GUILD_ERROR_TEXT['handover-first'], toastText: '길드장을 먼저 넘겨 주세요.' });
-  };
+  const leaveSpec = leaveConfirm(guild, me);
+  const needsHandover = leaveSpec === null;
+  const leaveButton = (
+    <Button size="sm" variant="ghost" disabled={busy || needsHandover} onClick={() => { if (leaveSpec) ask(leaveSpec); }}>
+      길드 떠나기
+    </Button>
+  );
 
   return (
     <div className="flex flex-col gap-3 flex-1 min-h-0">
@@ -62,7 +63,7 @@ export default function GuildMembersTab({ guild, me, busy, setToast, ask, artifa
       </TableBox>
       <div className="min-h-8 shrink-0 pt-1.5 border-t border-line flex items-center justify-between gap-2 flex-wrap">
         <span className="text-2xs text-text-dim">{GUILD_LEAVE_COOLDOWN_NOTE}</span>
-        <Button size="sm" variant="ghost" disabled={busy} onClick={leave}>길드 떠나기</Button>
+        {needsHandover ? <Tip wraps text={GUILD_ERROR_TEXT['handover-first']}>{leaveButton}</Tip> : leaveButton}
       </div>
     </div>
   );
