@@ -6,11 +6,22 @@ import type { GameEvent } from '../../src/game/rules/actions.js';
 import type { AwayEvent } from '../../src/game/rules/away.js';
 import { at, jsonParam } from './json.js';
 
-export function eventsInsert(uid: string, events: readonly GameEvent[], createdAtISO: string, counted = false): SQL | null {
+export function eventsInsert(
+  uid: string,
+  events: readonly GameEvent[],
+  createdAtISO: string,
+  counted = false,
+  catchWeighting: number | null = null,
+): SQL | null {
   if (events.length === 0) return null;
-  return sql`insert into public.events (user_id, type, payload, created_at, counted)
-    select ${uid}, type, payload, ${at(createdAtISO)}, ${counted}
-    from json_to_recordset(${jsonParam(events.map(e => ({ type: e.type, payload: e.payload })))}) as x(type text, payload jsonb)`;
+  const rows = events.map(e => ({
+    type: e.type,
+    payload: e.payload,
+    weighting: catchWeighting !== null && (e.type === 'catch' || e.type === 'eventCatch') ? catchWeighting : null,
+  }));
+  return sql`insert into public.events (user_id, type, payload, created_at, counted, weighting)
+    select ${uid}, type, payload, ${at(createdAtISO)}, ${counted}, weighting
+    from json_to_recordset(${jsonParam(rows)}) as x(type text, payload jsonb, weighting float8)`;
 }
 
 export interface EventArchiveRow {

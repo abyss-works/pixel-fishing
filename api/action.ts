@@ -139,7 +139,7 @@ function scalarState(row: StateRow, counters: Record<string, number> = {}, clear
     achievementCounters: counters, clearedNamed });
 }
 
-/** 추첨 보정 입력 — 수동 캐치의 위치만 sample이고 auto·위치 없음·다른 게임 조작은 연속을 끊는다.
+/** 추첨 가중치 입력 — 수동 캐치의 위치만 sample이고 auto·위치 없음·다른 게임 조작은 연속을 끊는다.
  *  boot와 읽기 전용 스냅샷은 플레이 조작이 아니라 연속에 영향을 주지 않는다. */
 function integrityInputOf(action: GameAction, row: StateRow, atMs: number): IntegrityInput | null {
   if (action.type === 'boot' || action.type === 'debugSnapshot') return null;
@@ -650,8 +650,8 @@ async function route(req: Req, res: Res): Promise<void> {
     }
   }
 
-  // 계정별 추첨 보정 — 설정이 없으면 계통 전체가 비활성이다. 평가는 액션 확정 전에 하되,
-  // 상태·근거 기록은 아래 확정 문장에 조각으로만 들어가 규칙 거부나 낙관 락 경합 때는 남지 않는다.
+  // 계정별 추첨 가중치 평가는 액션 확정 전에 하되,
+  // 상태·이력 기록은 아래 확정 문장에 조각으로만 들어가 규칙 거부나 낙관 락 경합 때는 남지 않는다.
   const integrityConfig = parseIntegrityConfig(process.env.DRAW_WEIGHTING_CONFIG);
   let integrityEval: IntegrityEvaluation | null = null;
   if (integrityConfig) {
@@ -876,7 +876,7 @@ async function route(req: Req, res: Res): Promise<void> {
   const guard = COMMIT_GUARD;
   const fragments: (SQL | null)[] = [...writeFragments(guard, uid, out.writes, nowISO)];
   if (integrityEval?.stateChanged) fragments.push(integrityStateFragment(guard, uid, integrityEval, nowISO));
-  if (integrityEval?.triggered) fragments.push(integrityEventFragment(guard, uid, integrityEval, nowISO));
+  if (integrityEval) fragments.push(integrityEventFragment(guard, uid, integrityEval, nowISO));
   if (action.type === 'acceptQuest' && typeof action.questId === 'string' && typeof action.port === 'string') {
     const quest = bountyById(action.questId);
     if (quest) fragments.push(...acceptFragments(guard, uid, quest, action.port, nowISO, dayStart));
@@ -1133,7 +1133,8 @@ async function route(req: Req, res: Res): Promise<void> {
   // 만료 정리는 읽을 때 이미 판정이 끝나 있어 늦거나 유실돼도 판정은 같다. 다음 수배 액션이 다시 정리한다.
   // 활동일은 DAU·리텐션의 장기 정본이다. 이 쓰기가 유실되면 예약 작업이 남아 있는 events로 다시 채운다
   const followUps: (SQL | null)[] = [
-    eventsInsert(uid, out.events, eventNow, Object.keys(counterIncrementsForEvents(out.events)).length > 0),
+    eventsInsert(uid, out.events, eventNow, Object.keys(counterIncrementsForEvents(out.events)).length > 0,
+      action.type === 'catch' ? integrityEval?.modifier ?? null : null),
     activeDayUpsert(uid, eventNow),
   ];
   if (nextVersion % SNAPSHOT_EVERY === 0) followUps.push(snapshotInsert(uid, out.state, nowISO));

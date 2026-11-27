@@ -1,17 +1,17 @@
-// 서버 전용 추첨 보정 계통의 순수 규칙.
+// 서버 전용 추첨 가중치 조정 계통의 순수 규칙.
 // 이 파일에는 구조만 둔다. 임계·구간·배수의 실제 값은 런타임 설정으로 주입하고 저장소에 두지 않는다.
 // 상대경로 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버가 이 체인을 직접 불러온다.
 
 export interface IntegrityConfig {
-  /** 연속 입력 위치의 최대 총폭(max-min). 이보다 좁은 창만 신호로 본다 */
+  /** 연속 입력 위치의 최대 총폭(max-min). 이보다 좁은 창만 판정으로 본다 */
   spanMax: number;
   /** 한 창을 이루는 연속 입력 수 */
   runLength: number;
   /** 같은 연속으로 인정하는 입력 간격 상한(ms) */
   sessionGapMs: number;
-  /** 발동 한 번의 압력 증가량 */
+  /** 창 판정 한 번의 압력 증가량 */
   pressureStep: number;
-  /** 발동 없는 유효 입력 한 번의 압력 누수량 */
+  /** 판정 없는 유효 입력 한 번의 압력 감소량 */
   pressureLeak: number;
   /** 중간 구간 진입 압력 */
   midPressure: number;
@@ -38,7 +38,7 @@ export type IntegrityInput =
   | { kind: 'break'; at: number };
 
 export interface IntegritySignal {
-  detector: 'input-window';
+  detector: 'window-a';
   runLength: number;
   span: number;
   startedAt: number;
@@ -177,7 +177,7 @@ export function processIntegrityInput(
     if (span > 0 && span <= config.spanMax) {
       triggered = true;
       signal = {
-        detector: 'input-window',
+        detector: 'window-a',
         runLength: config.runLength,
         span,
         startedAt: window[0].at,

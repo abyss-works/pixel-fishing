@@ -66,6 +66,7 @@ export const events = pgTable('events', {
   payload: jsonb('payload').notNull(),
   createdAt: at('created_at').notNull().defaultNow(),
   counted: boolean('counted').notNull().default(false),
+  weighting: doublePrecision('weighting'),
 });
 
 export const letters = pgTable('letters', {

@@ -252,7 +252,7 @@ function parse(name: string | undefined, req: Req, role: read.AdminRole, pool: D
     case 'integrityMetrics': {
       const days = optionalDaysOf(req) ?? STATS_DEFAULT_DAYS;
       if (days < 1 || days > MAX_DAYS) throw new ApiError(400, 'bad-days');
-      return db => integrityValidationMetrics(db, days, integrityStageModifier());
+      return db => integrityValidationMetrics(db, days);
     }
     default: throw new ApiError(400, 'bad-query');
   }
@@ -355,7 +355,7 @@ async function revokeSessions({ withTransaction }: Database, raw: unknown, admin
   return { revoked };
 }
 
-/** 추첨 보정 해제 — 대상 계정의 압력과 입력 창을 즉시 빈 상태로 되돌리고 감사 로그를 남긴다. 계정이 없으면 404다 */
+/** 추첨 가중치 초기화 — 대상 계정의 압력과 입력 창을 즉시 빈 상태로 되돌리고 감사 로그를 남긴다. 계정이 없으면 404다 */
 async function integrityRelease({ withTransaction }: Database, raw: unknown, adminId: string, role: read.AdminRole): Promise<{ released: true }> {
   const { userId } = (raw ?? {}) as { userId?: unknown };
   if (typeof userId !== 'string' || !UUID.test(userId)) throw new ApiError(400, 'bad-user');

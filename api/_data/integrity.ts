@@ -1,5 +1,5 @@
-// 계정별 추첨 보정 상태(integrity_states)와 변화 근거(integrity_events)의 쓰기 소유 모듈.
-// 상태는 액션 확정과 같은 문장에서만 바뀌고, 관리자 조회와 해제는 이 모듈을 거친다.
+// 계정별 추첨 가중치 상태(integrity_states)와 변화 이력(integrity_events)의 쓰기 소유 모듈.
+// 상태는 액션 확정과 같은 문장에서만 바뀌고, 관리자 조회와 초기화는 이 모듈을 거친다.
 import { sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
@@ -11,7 +11,7 @@ import { emptyIntegrityState, sanitizeIntegrityState } from '../../src/game/rule
 import type { IntegrityEvaluation, IntegrityState } from '../../src/game/rules/integrity.js';
 import { at } from './json.js';
 
-/** 계정의 현재 보정 상태를 읽는다. 행이 없으면 빈 상태다 */
+/** 계정의 현재 가중치 상태를 읽는다. 행이 없으면 빈 상태다 */
 export async function readIntegrityState(db: Executor, uid: string): Promise<IntegrityState> {
   const { rows } = await db.execute<{ pressure: number; samples: unknown }>(
     sql`select pressure, samples from public.integrity_states where user_id = ${uid}`,
@@ -20,7 +20,7 @@ export async function readIntegrityState(db: Executor, uid: string): Promise<Int
   return sanitizeIntegrityState({ pressure: Number(rows[0].pressure), samples: rows[0].samples });
 }
 
-/** 액션 확정 가드와 함께 계정의 보정 상태를 덮어쓴다. 평가 뒤 관리자 해제가 끼어들면 읽어 둔 이전 상태와 달라졌으므로 갱신하지 않는다 */
+/** 액션 확정 가드와 함께 계정의 가중치 상태를 덮어쓴다. 평가 뒤 관리자 초기화가 끼어들면 읽어 둔 이전 상태와 달라졌으므로 갱신하지 않는다 */
 export function integrityStateFragment(guard: SQL, uid: string, evaluation: IntegrityEvaluation, nowISO: string): SQL {
   return sql`insert into public.integrity_states (user_id, pressure, stage, samples, updated_at)
     select ${uid}, ${evaluation.pressureAfter}, ${evaluation.stageAfter}, ${JSON.stringify(evaluation.state.samples)}::jsonb, ${at(nowISO)}
@@ -34,12 +34,15 @@ export function integrityStateFragment(guard: SQL, uid: string, evaluation: Inte
       and public.integrity_states.samples = ${JSON.stringify(evaluation.stateBefore.samples)}::jsonb`;
 }
 
-/** 발동한 평가의 원시 신호를 확정 가드와 함께 남긴다. 발동이 없으면 null이다 */
+/** 창 판정 또는 단계 변경의 이력을 확정 가드와 함께 남긴다. 둘 다 없으면 null이다 */
 export function integrityEventFragment(guard: SQL, uid: string, evaluation: IntegrityEvaluation, nowISO: string): SQL | null {
-  if (!evaluation.triggered || !evaluation.signal) return null;
+  const stageChanged = evaluation.stageBefore !== evaluation.stageAfter;
+  if ((!evaluation.triggered || !evaluation.signal) && !stageChanged) return null;
+  const detector = evaluation.signal?.detector ?? 'decay';
+  const signal = evaluation.signal ?? { kind: 'leak' };
   return sql`insert into public.integrity_events
       (user_id, detector, signal, pressure_before, pressure_after, stage_before, stage_after, created_at)
-    select ${uid}, ${evaluation.signal.detector}, ${JSON.stringify(evaluation.signal)}::jsonb,
+    select ${uid}, ${detector}, ${JSON.stringify(signal)}::jsonb,
       ${evaluation.pressureBefore}, ${evaluation.pressureAfter}, ${evaluation.stageBefore}, ${evaluation.stageAfter}, ${at(nowISO)}
     where ${guard}
       and (
@@ -51,14 +54,14 @@ export function integrityEventFragment(guard: SQL, uid: string, evaluation: Inte
       )`;
 }
 
-/** 관리자 해제 — 압력과 입력 창을 즉시 빈 상태로 되돌린다. 행이 없으면 빈 행을 만든다 */
+/** 관리자 초기화 — 압력과 입력 창을 즉시 빈 상태로 되돌린다. 행이 없으면 빈 행을 만든다 */
 export async function resetIntegrityState(db: Executor, uid: string, nowISO: string): Promise<void> {
   await db.execute(sql`insert into public.integrity_states (user_id, pressure, stage, samples, updated_at)
     values (${uid}, 0, 0, '[]'::jsonb, ${at(nowISO)})
     on conflict (user_id) do update set pressure = 0, stage = 0, samples = '[]'::jsonb, updated_at = excluded.updated_at`);
 }
 
-/** 계정 정리에서 사용자의 보정 상태와 근거 이력을 모두 지운다 */
+/** 계정 정리에서 사용자의 가중치 상태와 변화 이력을 모두 지운다 */
 export async function deleteUserIntegrity(db: Executor, uid: string): Promise<void> {
   await db.execute(sql`delete from public.integrity_events where user_id = ${uid}`);
   await db.execute(sql`delete from public.integrity_states where user_id = ${uid}`);
@@ -78,7 +81,7 @@ export interface IntegrityStageSummary {
   accounts: IntegrityStageAccount[];
 }
 
-/** 구간별 계정 수와 계정별 현재 값 — 운영 조회용. 배수는 호출자가 현재 설정으로 계산해 준다 */
+/** 구간별 계정 수와 계정별 현재 값 — 관리자 조회용. 배수는 호출자가 현재 설정으로 계산해 준다 */
 export async function listIntegrityStages(
   db: Executor,
   modifierForStage: (stage: number) => number | null = () => null,
@@ -116,7 +119,7 @@ export interface IntegrityEventRow {
   createdAt: unknown;
 }
 
-/** 변화 근거 이력 — 최신 순. user를 주면 그 계정만 본다 */
+/** 변화 이력 — 최신 순. user를 주면 그 계정만 본다 */
 export async function listIntegrityEvents(db: Executor, user: string | null, limit: number): Promise<IntegrityEventRow[]> {
   const filter = user === null ? sql`true` : sql`user_id = ${user}`;
   const { rows } = await db.execute<{
@@ -136,13 +139,13 @@ export async function listIntegrityEvents(db: Executor, user: string | null, lim
 
 interface CohortAcc {
   total: number;
-  /** `${stage}|${spot}` → 캐치 수 */
-  spotStages: Map<string, { spot: string; stage: number; n: number }>;
+  /** `${weighting}|${spot}` → 캐치 수 */
+  spotWeights: Map<string, { spot: string; weighting: number; n: number }>;
   counts: Record<RarityId, number>;
 }
 
 const emptyCounts = (): Record<RarityId, number> => ({ common: 0, rare: 0, epic: 0, legendary: 0 });
-const emptyCohort = (): CohortAcc => ({ total: 0, spotStages: new Map(), counts: emptyCounts() });
+const emptyCohort = (): CohortAcc => ({ total: 0, spotWeights: new Map(), counts: emptyCounts() });
 
 const sharesOf = (counts: Record<RarityId, number>, total: number): Record<RarityId, number> => ({
   common: total > 0 ? counts.common / total : 0,
@@ -151,20 +154,15 @@ const sharesOf = (counts: Record<RarityId, number>, total: number): Record<Rarit
   legendary: total > 0 ? counts.legendary / total : 0,
 });
 
-/** 그 코호트의 수역·구간 이용 비율로 가중하고 현재 배수를 적용한 기대 등급 확률 */
-function expectedShares(
-  acc: CohortAcc,
-  modifierForStage: (stage: number) => number | null,
-): Record<RarityId, number> | null {
+/** 그 코호트의 수역·캐치 시점 배수 이용 비율로 가중한 기대 등급 확률 */
+function expectedShares(acc: CohortAcc): Record<RarityId, number> {
   const out = emptyCounts();
   if (acc.total === 0) return out;
-  for (const { spot, stage, n } of acc.spotStages.values()) {
-    const modifier = modifierForStage(stage);
-    if (modifier === null) return null;
+  for (const { spot, weighting, n } of acc.spotWeights.values()) {
     for (const rarity of RARITY_ORDER) {
       const highMult = rarity === 'common'
         ? 1
-        : modifier * (rarity === 'legendary' ? modifier : 1);
+        : weighting * (rarity === 'legendary' ? weighting : 1);
       try { out[rarity] += rarityShareOf(spot as SpotId, rarity) * highMult * (n / acc.total); } catch { /* 알 수 없는 수역은 기준에서 뺀다 */ }
     }
   }
@@ -174,19 +172,15 @@ function expectedShares(
     : out;
 }
 
-/** 검증 지표 — 현재 압력 구간이 있는 계정군과 없는 대조군의 최근 캐치 등급 분포를 기대 분포와 함께 돌려준다 */
-export async function integrityValidationMetrics(
-  db: Executor,
-  days: number,
-  modifierForStage: (stage: number) => number | null = () => null,
-): Promise<unknown> {
-  const { rows } = await db.execute<{ cohort: string; stage: number; fish_id: string | null; spot: string | null; n: number }>(sql`
-    select case when coalesce(s.stage, 0) > 0 then 'pressured' else 'clean' end as cohort,
-      coalesce(s.stage, 0)::int as stage,
+/** 검증 지표 — 캐치 시점에 기록된 적용 배수로 나눈 집단의 최근 캐치 등급 분포를 기대 분포와 함께 돌려준다 */
+export async function integrityValidationMetrics(db: Executor, days: number): Promise<unknown> {
+  const { rows } = await db.execute<{ cohort: string; weighting: number; fish_id: string | null; spot: string | null; n: number }>(sql`
+    select case when e.weighting < 1 then 'pressured' else 'clean' end as cohort,
+      e.weighting,
       e.payload->>'fishId' as fish_id, e.payload->>'spot' as spot, count(*)::int as n
     from public.events e
-    left join public.integrity_states s on s.user_id = e.user_id
-    where e.type = 'catch' and e.created_at >= now() - (${days}::int * interval '1 day')
+    where e.type = 'catch' and e.weighting is not null
+      and e.created_at >= now() - (${days}::int * interval '1 day')
     group by 1, 2, 3, 4`);
   const cohorts = { clean: emptyCohort(), pressured: emptyCohort() };
   for (const row of rows) {
@@ -194,21 +188,21 @@ export async function integrityValidationMetrics(
     const fish = row.fish_id ? fishById(row.fish_id) : undefined;
     if (!fish) continue;
     const n = Number(row.n);
-    const stage = Number(row.stage);
+    const weighting = Number(row.weighting);
     acc.total += n;
     acc.counts[fish.rarity] += n;
     if (row.spot) {
-      const key = `${stage}|${row.spot}`;
-      const cur = acc.spotStages.get(key) ?? { spot: row.spot, stage, n: 0 };
+      const key = `${weighting}|${row.spot}`;
+      const cur = acc.spotWeights.get(key) ?? { spot: row.spot, weighting, n: 0 };
       cur.n += n;
-      acc.spotStages.set(key, cur);
+      acc.spotWeights.set(key, cur);
     }
   }
   const project = (acc: CohortAcc) => ({
     total: acc.total,
     counts: acc.counts,
     shares: sharesOf(acc.counts, acc.total),
-    expectedShares: expectedShares(acc, modifierForStage),
+    expectedShares: expectedShares(acc),
   });
   return { days, clean: project(cohorts.clean), pressured: project(cohorts.pressured) };
 }
