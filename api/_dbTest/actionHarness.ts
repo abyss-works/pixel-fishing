@@ -225,8 +225,10 @@ export async function dumpUser(client: Client, uid: string): Promise<Record<stri
     const { rows } = await client.query(`select * from public.${table} where ${col} = $1`, [uid]);
     out[table] = rows
       .map(r => {
-        // id는 쓰기 순서에 따라, counted는 카운터 기록 시점에 따라 달라지므로 비교에서 뺀다
+        // id는 쓰기 순서에 따라, counted는 카운터 기록 시점에 따라 달라지므로 비교에서 뺀다.
+        // weighting은 값이 있는 행만 비교한다 — 없는 null은 스냅샷 의미가 없다.
         const { id: _id, counted: _c, ...rest } = r as Record<string, unknown>;
+        if (rest.weighting === null) delete rest.weighting;
         return normalize(rest, uid);
       })
       .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));

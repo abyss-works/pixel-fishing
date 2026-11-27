@@ -33,6 +33,7 @@ async function catalog(table: string): Promise<CatalogColumn[]> {
 // Drizzle 열 타입 → Postgres udt 이름
 const UDT: Record<string, string> = {
   PgUUID: 'uuid', PgText: 'text', PgSmallInt: 'int2', PgInteger: 'int4', PgBigInt53: 'int8', PgReal: 'float4',
+  PgDoublePrecision: 'float8',
   PgBoolean: 'bool', PgDateString: 'date', PgJsonb: 'jsonb', PgBigSerial53: 'int8',
 };
 
@@ -45,7 +46,7 @@ describe('Drizzle 스키마', () => {
   it('서버가 쓰는 표를 모두 선언한다', () => {
     expect(tables.map(t => getTableConfig(t).name).sort()).toEqual([
       'achievement_counters', 'admin_audit_logs', 'admins', 'bounty_accepts', 'bounty_clears', 'bounty_progress', 'bounty_tickets', 'changelog_entries', 'client_metrics_daily', 'coupon_redemptions', 'coupons', 'daily_fortunes', 'event_championship_scores', 'event_consumer_cutoffs', 'event_draws', 'event_trio_progress', 'events', 'fish_instances',
-      'guild_member_enhancements', 'http_metrics_daily', 'letters', 'live_events', 'mails', 'notices', 'profiles', 'ranking_weekly_fame', 'records', 'reliefs', 'saves', 'saves_current',
+      'guild_member_enhancements', 'http_metrics_daily', 'integrity_events', 'integrity_states', 'letters', 'live_events', 'mails', 'notices', 'profiles', 'ranking_weekly_fame', 'records', 'reliefs', 'saves', 'saves_current',
       'widget_auth_codes', 'widget_tokens', 'ws_metrics_daily',
     ]);
   });

@@ -25,7 +25,8 @@ describe('테스트 데이터베이스', () => {
     const names = rows.map(r => r.name);
     for (const t of ['saves_current', 'fish_instances', 'records', 'saves', 'profiles', 'events', 'letters',
       'coupons', 'reliefs', 'bounty_accepts', 'bounty_progress', 'bounty_tickets', 'bounty_licenses',
-      'bounty_clears', 'mails', 'daily_fortunes', 'notices', 'ranking_weekly_fame', 'widget_auth_codes', 'widget_tokens', 'v_bounty_funnel_daily']) {
+      'bounty_clears', 'mails', 'daily_fortunes', 'notices', 'ranking_weekly_fame', 'widget_auth_codes', 'widget_tokens',
+      'integrity_states', 'integrity_events', 'v_bounty_funnel_daily']) {
       expect(names).toContain(t);
     }
   });

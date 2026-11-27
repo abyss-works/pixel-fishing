@@ -16,6 +16,7 @@ import { notifyAll, notifyUser, onlineUsers } from './_server/livePresence.js';
 import { recentHttpSummary, recentWsSnapshot, slowRequests } from './_server/opsRuntime.js';
 import { COUPONS } from '../src/game/content/coupons.js';
 import { normalizeNoticeDraft } from '../src/game/rules/live.js';
+import { integrityModifierOfStage, parseIntegrityConfig } from '../src/game/rules/integrity.js';
 import { accountKind, revokeUserSessions } from './_data/account.js';
 import * as read from './_data/admin.js';
 import { balanceLive } from './_data/adminBalance.js';
@@ -30,6 +31,9 @@ import {
 } from './_data/events.js';
 import { readClientMetrics } from './_data/clientMetrics.js';
 import { readHttpMetrics } from './_data/httpMetrics.js';
+import {
+  integrityValidationMetrics, listIntegrityEvents, listIntegrityStages, resetIntegrityState,
+} from './_data/integrity.js';
 import { readOpsHealth } from './_data/opsHealth.js';
 import { setLetterHandled } from './_data/mail.js';
 import { deliverMail, DuplicateMailError, parseMailRequest, planMail, recentSentMails } from './_data/mailbox.js';
@@ -58,6 +62,12 @@ const STATS_MAX_DAYS = 180;
 const DAY_MS = 86_400_000;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+/** 현재 비밀 설정이 읽힐 때만 구간별 배수를 계산한다. 설정이 없으면 운영 표면에도 추정값을 내지 않는다 */
+function integrityStageModifier(): (stage: number) => number | null {
+  const config = parseIntegrityConfig(process.env.DRAW_WEIGHTING_CONFIG);
+  return stage => config ? integrityModifierOfStage(stage, config) : null;
+}
+
 export default async function handler(req: Req, res: Res): Promise<void> {
   res.setHeader('Cache-Control', 'private, no-store');
   try {
@@ -80,16 +90,18 @@ const WRITES: Record<string, Write> = {
   events: (store, body, adminId) => eventsWrite(store, body, adminId),
   coupons: couponsWrite,
   staffBadge,
+  integrityRelease,
 };
 
 /** 1계층 관리자(admin) 전용 조회 — maintainer는 403 차단 */
 const ADMIN_ONLY_READ_QUERIES = new Set([
   'userState', 'userEvents', 'letters', 'mails', 'events', 'eventDraws',
+  'integrityStages', 'integrityEvents', 'integrityMetrics',
 ]);
 
 /** 1계층 관리자(admin) 전용 쓰기 — maintainer는 403 차단 */
 const ADMIN_ONLY_WRITES = new Set([
-  'mail', 'restrict', 'letterHandled', 'revokeSessions', 'events',
+  'mail', 'restrict', 'letterHandled', 'revokeSessions', 'events', 'integrityRelease',
 ]);
 
 /** 리소스 경로 조회. 요청의 필터와 역할을 검사해 실행할 읽기를 돌려준다. 틀리면 400, 권한 밖이면 403이다 */
@@ -229,6 +241,19 @@ function parse(name: string | undefined, req: Req, role: read.AdminRole, pool: D
       if (uid === undefined || !UUID.test(uid)) throw new ApiError(400, 'bad-user');
       return db => read.userState(db, uid);
     }
+    case 'integrityStages': return db => listIntegrityStages(db, integrityStageModifier());
+    case 'integrityEvents': {
+      const user = param(req, 'user');
+      if (user !== undefined && !UUID.test(user)) throw new ApiError(400, 'bad-user');
+      const limit = limitOf(req) ?? 100;
+      if (limit < 1 || limit > 500) throw new ApiError(400, 'bad-limit');
+      return db => listIntegrityEvents(db, user ?? null, limit);
+    }
+    case 'integrityMetrics': {
+      const days = optionalDaysOf(req) ?? STATS_DEFAULT_DAYS;
+      if (days < 1 || days > MAX_DAYS) throw new ApiError(400, 'bad-days');
+      return db => integrityValidationMetrics(db, days);
+    }
     default: throw new ApiError(400, 'bad-query');
   }
 }
@@ -328,6 +353,27 @@ async function revokeSessions({ withTransaction }: Database, raw: unknown, admin
   if (revoked === null) throw new ApiError(404, 'no-user');
   disconnectWidgetUser(userId);
   return { revoked };
+}
+
+/** 추첨 가중치 초기화 — 대상 계정의 압력과 입력 창을 즉시 빈 상태로 되돌리고 감사 로그를 남긴다. 계정이 없으면 404다 */
+async function integrityRelease({ withTransaction }: Database, raw: unknown, adminId: string, role: read.AdminRole): Promise<{ released: true }> {
+  const { userId } = (raw ?? {}) as { userId?: unknown };
+  if (typeof userId !== 'string' || !UUID.test(userId)) throw new ApiError(400, 'bad-user');
+  await dbWrite(() => withTransaction(async tx => {
+    if (await accountKind(tx, userId) === 'missing') return false;
+    await resetIntegrityState(tx, userId, new Date().toISOString());
+    await read.insertAdminAuditLog(tx, {
+      actorId: adminId,
+      actorRole: role,
+      action: 'integrityRelease',
+      targetId: userId,
+      detail: {},
+    });
+    return true;
+  })).then(found => {
+    if (!found) throw new ApiError(404, 'no-user');
+  });
+  return { released: true };
 }
 
 /** 호출자 본인의 채팅 운영진 배지 노출 설정을 바꾸고 감사 로그를 남긴다 */
