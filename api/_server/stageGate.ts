@@ -2,7 +2,7 @@
 import { createHash } from 'node:crypto';
 import type { RequestHandler } from 'express';
 import type { IncomingHttpHeaders, IncomingMessage } from 'node:http';
-import { adminSessionUid } from '../_auth/session.js';
+import { adminSession } from '../_auth/session.js';
 import { isStaff } from '../_data/admin.js';
 import { database } from '../_db/client.js';
 import { toApiError } from '../errors.js';
@@ -31,13 +31,28 @@ export function isStageGateExempt(method: string, path: string): boolean {
   return false;
 }
 
-/** 관리자 OAuth 세션 쿠키와 관리자 명부를 함께 검사한다 */
+/** 스테이징 일반 테스터 허용 이메일 목록을 파싱한다(쉼표 구분, 공백 제거, 소문자 정규화, 빈 토큰 무시) */
+export function parseStageAllowedEmails(raw: string | undefined): Set<string> {
+  const emails = new Set<string>();
+  if (!raw) return emails;
+  for (const token of raw.split(',')) {
+    const normalized = token.trim().toLowerCase();
+    if (normalized) emails.add(normalized);
+  }
+  return emails;
+}
+
+/** 관리자 OAuth 세션 쿠키와 관리자 명부·일반 테스터 허용 이메일 목록을 함께 검사한다 */
 export async function verifyStageAdmin(headers: IncomingHttpHeaders): Promise<StageAdminCheckResult> {
-  const uid = await adminSessionUid(headers);
-  if (!uid) return { ok: false, status: 401 };
-  const admin = await isStaff(database().db, uid);
-  if (!admin) return { ok: false, status: 403 };
-  return { ok: true, uid };
+  const session = await adminSession(headers);
+  if (!session) return { ok: false, status: 401 };
+  const admin = await isStaff(database().db, session.id);
+  if (admin) return { ok: true, uid: session.id };
+  const allowedEmails = parseStageAllowedEmails(process.env.STAGE_ALLOWED_EMAILS);
+  if (allowedEmails.size > 0 && session.email && allowedEmails.has(session.email.trim().toLowerCase())) {
+    return { ok: true, uid: session.id };
+  }
+  return { ok: false, status: 403 };
 }
 
 /** 실시간 채널 업그레이드 시점의 스테이징 진입 게이트. 통과 또는 비프리뷰 환경이면 null을 돌려준다 */

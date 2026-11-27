@@ -13,7 +13,7 @@ vi.mock('./_auth/session.js', () => ({
   adminSessionUid: mocks.adminSessionUid,
 }));
 
-import { devToolsGranted, isListedAdmin } from './devAccess.js';
+import { debugTriggerAllowed, devToolsGranted, importVerdict, isListedAdmin } from './devAccess.js';
 
 const db = {} as never;
 const memberUser = { id: 'u-member', email: 'member@example.test' } as never;
@@ -50,5 +50,21 @@ describe('devAccess', () => {
   it('local 환경에서는 명부 조회 없이 devTools를 허용한다', async () => {
     expect(await devToolsGranted(db, guestUser, 'local')).toBe(true);
     expect(mocks.isStaff).not.toHaveBeenCalled();
+  });
+
+  it('STAGE_ALLOWED_EMAILS에 포함된 일반 테스터라도 public.admins(isStaff)에 없으면 개발 도구를 모두 차단한다', async () => {
+    process.env.STAGE_ALLOWED_EMAILS = 'member@example.test';
+    try {
+      mocks.adminSessionUid.mockResolvedValue('u-member');
+      mocks.isStaff.mockResolvedValue(false);
+
+      const admin = await isListedAdmin(db, memberUser, 'preview', { cookie: 'pixel-fishing-admin=tok' });
+      expect(admin).toBe(false);
+      expect(await devToolsGranted(db, memberUser, 'preview', { cookie: 'pixel-fishing-admin=tok' })).toBe(false);
+      expect(importVerdict({ deployEnv: 'preview', admin })).toBe('import-owner-only');
+      expect(debugTriggerAllowed({ deployEnv: 'preview', admin })).toBe(false);
+    } finally {
+      delete process.env.STAGE_ALLOWED_EMAILS;
+    }
   });
 });

@@ -108,8 +108,16 @@ export function adminAuth(): AdminAuth {
   return adminAuthInstance;
 }
 
+/** 요청 쿠키의 관리자 OAuth 세션 사용자. 게임 세션 쿠키는 인정하지 않고, 세션이 없거나 만료됐으면 null이다 */
+export async function adminSession(headers: IncomingHttpHeaders): Promise<SessionUser | null> {
+  const result = await adminAuth().api.getSession({ headers: fromNodeHeaders(headers), query: { disableCookieCache: true } });
+  if (!result) return null;
+  const user = result.user as { id: string; email?: string | null; isAnonymous?: boolean | null };
+  const email = typeof user.email === 'string' && !user.isAnonymous ? user.email : null;
+  return { id: user.id, email };
+}
+
 /** 요청 쿠키의 관리자 세션 사용자 id. 게임 세션 쿠키는 인정하지 않고, 세션이 없거나 만료됐으면 null이다 */
 export async function adminSessionUid(headers: IncomingHttpHeaders): Promise<string | null> {
-  const result = await adminAuth().api.getSession({ headers: fromNodeHeaders(headers), query: { disableCookieCache: true } });
-  return result?.user.id ?? null;
+  return (await adminSession(headers))?.id ?? null;
 }
