@@ -1,11 +1,12 @@
 // 우편 구역 — 보낸 우편 목록, 미리보기 뒤에만 열리는 보내기, 확인 뒤 보내기를 검사한다.
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
 import { QueryProvider } from '../../../../core/QueryProvider';
 import { AdminAuthCtx } from '../../../../features/admin/service/accessContext';
 import MailTab from './MailTab';
 
 const USER = '30e63c95-12de-4ba6-b397-e8b69ce0311c';
+const USER_B = 'e747e6c9-f0c2-4192-a462-9cd26e8a812a';
 const mocks = vi.hoisted(() => ({
   mail: vi.fn(),
 }));
@@ -13,11 +14,14 @@ vi.mock('../../../../platform/api', () => ({
   api: {
     admin: {
       sentMails: vi.fn(async () => [
-        { id: 1, userId: '30e63c95-12de-4ba6-b397-e8b69ce0311c', title: '지난 우편', body: 'b', gold: 500, items: [],
+        { id: 1, userId: '30e63c95-12de-4ba6-b397-e8b69ce0311c', title: '지난 우편', body: '첫 번째 본문', gold: 500, items: [],
           createdAt: '2026-10-22T00:00:00Z', readAt: '2026-10-22T01:00:00Z', claimedAt: null },
-        { id: 2, userId: '30e63c95-12de-4ba6-b397-e8b69ce0311c', title: '비약 지급', body: 'b2', gold: 0,
+        { id: 2, userId: '30e63c95-12de-4ba6-b397-e8b69ce0311c', title: '비약 지급', body: '둘째 본문', gold: 0,
           items: [{ id: 'luck-small', qty: 2 }],
           createdAt: '2026-10-23T00:00:00Z', readAt: null, claimedAt: null },
+        { id: 3, userId: 'e747e6c9-f0c2-4192-a462-9cd26e8a812a', title: '산타 선물 우편', body: '첫째 줄\n둘째 줄', gold: 1200,
+          items: [{ id: 'energy-common', qty: 1 }], hats: ['santa-hat'],
+          createdAt: '2026-10-24T00:00:00Z', readAt: '2026-10-24T01:00:00Z', claimedAt: '2026-10-24T02:00:00Z' },
       ]),
       users: vi.fn(async () => [
         { user_id: '30e63c95-12de-4ba6-b397-e8b69ce0311c', email: 'friend@example.com', nickname: '바다친구', is_anonymous: false },
@@ -221,5 +225,47 @@ describe('MailTab', () => {
     await waitFor(() => expect(mocks.mail).toHaveBeenLastCalledWith('send', expect.objectContaining({
       hats: ['santa-hat'],
     })));
+  });
+
+  it('최근 보낸 우편을 제목·본문·받는 사람으로 검색하고 걸러진 건수를 표시한다', async () => {
+    show();
+    expect(await screen.findByText('3/3건')).toBeTruthy();
+    const filterInput = screen.getByPlaceholderText('제목, 본문, 받는 사람 검색');
+
+    fireEvent.change(filterInput, { target: { value: '둘째 줄' } });
+    expect(screen.getByText('1/3건')).toBeTruthy();
+    expect(screen.getByText('산타 선물 우편')).toBeTruthy();
+    expect(screen.queryByText('지난 우편')).toBeNull();
+
+    fireEvent.change(filterInput, { target: { value: 'friend@example' } });
+    expect(screen.getByText('2/3건')).toBeTruthy();
+    expect(screen.getByText('지난 우편')).toBeTruthy();
+    expect(screen.getByText('비약 지급')).toBeTruthy();
+    expect(screen.queryByText('산타 선물 우편')).toBeNull();
+
+    fireEvent.change(filterInput, { target: { value: '없는검색어' } });
+    expect(screen.getByText('0/3건')).toBeTruthy();
+    expect(screen.getByText('검색 결과가 없어요.')).toBeTruthy();
+  });
+
+  it('보낸 우편의 보기 버튼을 누르면 본문 전체, 받는 사람, 첨부, 발송·읽음·수령 시각 상세 모달을 연다', async () => {
+    show();
+    const titleCell = await screen.findByText('산타 선물 우편');
+    const row = titleCell.closest('tr')!;
+    fireEvent.click(within(row).getByRole('button', { name: '보기' }));
+
+    const dialog = await screen.findByRole('dialog', { name: '보낸 우편 상세: 산타 선물 우편' });
+    expect(within(dialog).getByText((_, node) => node?.textContent === '첫째 줄\n둘째 줄' && node.className.includes('whitespace-pre-wrap'))).toBeTruthy();
+    expect(within(dialog).getByText('민물러(게스트)')).toBeTruthy();
+    expect(within(dialog).getByText(USER_B.slice(0, 8))).toBeTruthy();
+    expect(within(dialog).getByText('1,200G')).toBeTruthy();
+    expect(within(dialog).getByText('일반 생명의 기운 1개')).toBeTruthy();
+    expect(within(dialog).getByText('산타모자')).toBeTruthy();
+    expect(within(dialog).getByText('10-24 09:00')).toBeTruthy();
+    expect(within(dialog).getByText('10-24 10:00')).toBeTruthy();
+    expect(within(dialog).getByText('10-24 11:00')).toBeTruthy();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: '닫기' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 });
