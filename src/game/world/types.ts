@@ -144,6 +144,8 @@ export interface RegionPack {
   spawn: Point;
   triggers: TriggerDef[]; // 배열 순서 = 검사 순서
   labels: MapLabel[];     // 필드 라벨
+  /** 지반 상세 훅 — 바탕·이끼 점을 그린 직후, 물·데크·건물·장식 아래에 깔리는 지면 디테일 */
+  groundDetail?: (ctx: CanvasRenderingContext2D, t: number) => void;
   /** 지역 고유 연출 훅 (지역당 1개, 장식 전용 — 지형/건물을 여기서 그리지 말 것) */
   flavor?: (ctx: CanvasRenderingContext2D, t: number) => void;
 }

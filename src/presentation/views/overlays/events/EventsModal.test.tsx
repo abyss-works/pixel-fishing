@@ -173,7 +173,7 @@ describe('EventsModal', () => {
     expect(screen.getAllByText('5일 남음')).toHaveLength(2);
     expect(screen.getByText('10일 남음')).toBeInTheDocument();
 
-    // 이벤트 1 당첨 상세
+    // 이벤트 1 당첨 상세 + 진행 중 안내
     fireEvent.click(screen.getByRole('button', { name: /삼총사를 낚아라/ }));
     expect(screen.getByText('당첨을 축하해요')).toBeInTheDocument();
     expect(screen.getByText('1234567890123456')).toBeInTheDocument();
@@ -186,7 +186,29 @@ describe('EventsModal', () => {
     expect(screen.getByLabelText('진행 중인 이벤트 목록')).toBeInTheDocument();
   });
 
-  it('이벤트 2 대회 상세에서 순위 시상대, 정산 단가와 정산 버튼, 도감 9종과 한정 모자 배너를 표시한다', async () => {
+  it('이벤트 1 미달성 상세에서 기간 내 신규 포획 보조 안내를 표시한다', async () => {
+    apiMock.readEvents.mockResolvedValue({
+      ...SAMPLE_SNAP,
+      trio: {
+        ...SAMPLE_SNAP.trio!,
+        won: false,
+        completedAt: null,
+        rewardPin: null,
+        slots: [
+          { fishId: 'mackerel', form: 'normal', completed: true, completedAt: NOW },
+          { fishId: 'squid', form: 'normal', completed: false, completedAt: null },
+          { fishId: 'sailfish', form: 'normal', completed: false, completedAt: null },
+        ],
+      },
+    });
+    renderModal();
+
+    await waitFor(() => expect(screen.getByText('삼총사를 낚아라')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /삼총사를 낚아라/ }));
+    expect(screen.getByText('이벤트 기간 안에 정해진 형태로 새로 낚아야 달성할 수 있어요.')).toBeInTheDocument();
+  });
+
+  it('이벤트 2 대회 상세에서 헤더 입장 버튼, 순위 시상대, 정산 단가와 정산 버튼, 도감 9종과 한정 모자 배너를 표시한다', async () => {
     apiMock.readEvents.mockResolvedValue(SAMPLE_SNAP);
     const onEnterEventZone = vi.fn();
     const onSettleEventReward = vi.fn();
@@ -195,7 +217,16 @@ describe('EventsModal', () => {
     await waitFor(() => expect(screen.getByText('강태공 선수권 대회')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /강태공 선수권 대회/ }));
 
-    // 순위 탭 + 입장하기 + 표준 장비 배지 + 시상대 높이 규격
+    // 상단 단독 [순위/점수 + 입장하기] 바는 제거되고, 입장하기는 헤더에 배치된다
+    expect(screen.queryByText('순위 집계 중')).toBeNull();
+    const enterBtn = screen.getByRole('button', { name: '입장하기' });
+    expect(enterBtn.closest('.border-b')).not.toBeNull();
+
+    // 순위 탭 1줄 안내 + 표준 장비(돌연변이 자홍 배지) + 시상대 높이 규격
+    expect(screen.getByText('모두 같은 표준 장비로 낚은 누적 점수로 순위를 겨뤄요.')).toBeInTheDocument();
+    const mutationBadge = screen.getByText('돌연변이 1.25배');
+    expect(mutationBadge.className).toContain('border-mutation');
+    expect(mutationBadge.className).toContain('text-mutation');
     const podium = screen.getByLabelText('순위 시상대');
     const places = [...podium.querySelectorAll('[data-place]')].map(el => el.getAttribute('data-place'));
     expect(places).toEqual(['2', '1', '3']);
@@ -207,18 +238,27 @@ describe('EventsModal', () => {
     expect(podium.querySelector('[data-place="3"]')?.className).toContain('mobile:min-h-[72px]');
     expect(screen.getByText('방치 5배')).toBeInTheDocument();
     expect(screen.queryByText('방치 +5%')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: '입장하기' }));
+    fireEvent.click(enterBtn);
     expect(onEnterEventZone).toHaveBeenCalledWith('ev-champ');
 
-    // 정산 탭
+    // 정산 탭 1줄 안내 + font-sans tabular-nums 선명한 숫자 + 정돈된 카드 계층
     fireEvent.click(screen.getByRole('button', { name: /정산/ }));
-    expect(screen.getByText('2,400G')).toBeInTheDocument();
+    expect(screen.getByText('대회에서 쌓인 골드와 명성을 원할 때 바로 정산받을 수 있어요.')).toBeInTheDocument();
+    expect(screen.getByText('미정산 보상')).toBeInTheDocument();
+    const pendingGoldEl = screen.getByText('2,400G');
+    expect(pendingGoldEl.className).toContain('font-sans');
+    expect(pendingGoldEl.className).toContain('tabular-nums');
+    expect(pendingGoldEl.className).not.toContain('pf-accent');
+    const pendingFameEl = screen.getByText('8');
+    expect(pendingFameEl.className).toContain('font-sans');
+    expect(pendingFameEl.className).not.toContain('pf-accent');
     expect(screen.getByText('보상은 현재 배 단계에 따라 결정돼요. 골드가 쌓이는 대로 틈틈이 배를 업그레이드해 주세요.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '정산하기' }));
     expect(onSettleEventReward).toHaveBeenCalledWith('ev-champ');
 
-    // 도감 탭
+    // 도감 탭 1줄 안내 + 모자 배너 + 9종 + 어종 공개 토글
     fireEvent.click(screen.getByRole('button', { name: /도감/ }));
+    expect(screen.getByText('호수의 일반과 돌연변이 도감을 모두 채우면 한정 모자를 받아요.')).toBeInTheDocument();
     const hatBanner = screen.getByLabelText('대회 한정 모자 보상');
     expect(within(hatBanner).getByText('천지 강태공 삿갓')).toBeInTheDocument();
     expect(within(hatBanner).getByText('천년 비늘 왕관')).toBeInTheDocument();
@@ -228,14 +268,56 @@ describe('EventsModal', () => {
     expect(screen.getAllByText('거북복').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('이벤트 3 행운왕 상세에서 금빛 네잎클로버 순위 시상대와 순위표·내 순위 바, 5일 점괘판을 표시한다', async () => {
+  it('시상대는 참여자가 0명·1명이어도 2-1-3 3열을 유지하고 빈 자리에 기록 대기를 표시하며, 1~3위는 하단 내 순위 바를 숨긴다', async () => {
     apiMock.readEvents.mockResolvedValue({
       ...SAMPLE_SNAP,
+      championship: {
+        ...SAMPLE_SNAP.championship!,
+        rank: 1,
+        top: [{ rank: 1, userId: 'me', nickname: '나혼자일등', score: 520, look: null, me: true }],
+      },
       draw: {
         ...SAMPLE_SNAP.draw!,
+        rank: null,
+        top: [],
+      },
+    });
+    renderModal();
+
+    await waitFor(() => expect(screen.getByText('강태공 선수권 대회')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /강태공 선수권 대회/ }));
+    const champPodium = screen.getByLabelText('순위 시상대');
+    expect([...champPodium.querySelectorAll('[data-place]')].map(el => el.getAttribute('data-place'))).toEqual(['2', '1', '3']);
+    expect(within(champPodium).getByText('나혼자일등')).toBeInTheDocument();
+    expect(within(champPodium).getAllByText('기록 대기')).toHaveLength(2);
+    expect(screen.queryByLabelText('내 순위')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '목록' }));
+    fireEvent.click(screen.getByRole('button', { name: /천하제일 행운왕/ }));
+    const emptyPodium = screen.getByLabelText('순위 시상대');
+    expect([...emptyPodium.querySelectorAll('[data-place]')].map(el => el.getAttribute('data-place'))).toEqual(['2', '1', '3']);
+    expect(within(emptyPodium).getAllByText('기록 대기')).toHaveLength(3);
+    expect(screen.queryByLabelText('내 순위')).toBeNull();
+  });
+
+  it('이벤트 3 행운왕 상세에서 서브탭 안내, 금빛 네잎클로버 순위 시상대, 5일 점괘판 3상태를 표시한다', async () => {
+    apiMock.readEvents.mockResolvedValue({
+      ...SAMPLE_SNAP,
+      now: '2026-12-03T12:00:00.000Z',
+      events: SAMPLE_SNAP.events.map(ev => ev.kind === 'draw' ? {
+        ...ev,
+        startsAt: '2026-11-30T19:00:00.000Z',
+        endsAt: '2026-12-05T19:00:00.000Z',
+      } : ev),
+      draw: {
+        ...SAMPLE_SNAP.draw!,
+        days: [
+          { day: '2026-12-01', kind: 'grand-catch', index: 5, score: 97 },
+          { day: '2026-12-03', kind: 'fish', index: 5, score: 88 },
+        ],
         rank: 4,
         top: [
-          ...SAMPLE_SNAP.draw!.top,
+          ...SAMPLE_SNAP.draw!.top.map(r => ({ ...r, me: false })),
           { rank: 4, userId: 'me', nickname: '내캐릭터', score: 150, look: null, me: true },
         ],
       },
@@ -245,6 +327,7 @@ describe('EventsModal', () => {
     await waitFor(() => expect(screen.getByText('천하제일 행운왕')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /천하제일 행운왕/ }));
 
+    expect(screen.getByText('매일 모은 오늘의 운세 누적 점수로 순위를 겨뤄요.')).toBeInTheDocument();
     const podium = screen.getByLabelText('순위 시상대');
     expect(podium.querySelector('[data-glyph="clover"]')).not.toBeNull();
     const fourthRow = screen.getByText('4위').parentElement!;
@@ -253,9 +336,13 @@ describe('EventsModal', () => {
     expect(myBar.querySelector('[data-glyph="clover"]')).not.toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: '점괘판' }));
+    expect(screen.getByText('오늘의 운세를 확인할 때마다 점괘판이 한 칸씩 채워져요.')).toBeInTheDocument();
     const board = screen.getByLabelText('행운 출석 점괘판');
+    expect(board.children).toHaveLength(5);
     expect(within(board).getByText('12/1')).toBeInTheDocument();
     expect(within(board).getByText('97')).toBeInTheDocument();
+    expect(within(board).getAllByText('미출석')).toHaveLength(1);
+    expect(within(board).getAllByText('예정')).toHaveLength(2);
     expect(screen.getByText('동점이면 출석 일수가 많은 쪽이 앞서요.')).toBeInTheDocument();
   });
 

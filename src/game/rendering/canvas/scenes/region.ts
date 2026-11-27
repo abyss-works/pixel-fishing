@@ -63,6 +63,7 @@ export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
     const g = pack.ground!;
     R(ctx, b.x, b.y, b.w, b.h, g.color);
     for (let i = 0; i < 80; i++) R(ctx, b.x + (i * 97) % b.w, b.y + (i * 61) % b.h, 2, 2, g.dot);
+    pack.groundDetail?.(ctx, v.t);
     for (const t of pack.terrain!) if (t.kind === 'water') drawWater(ctx, t);
   }
 

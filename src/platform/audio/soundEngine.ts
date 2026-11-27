@@ -87,6 +87,7 @@ export class SoundEngine {
   private consecutiveResumeFailures = 0;
   private gestureListening = false;
   private lifecycleAttached = false;
+  private windowBlurred = false;
   private disposed = false;
 
   private readonly createAudioContext: () => AudioContext | null;
@@ -126,7 +127,7 @@ export class SoundEngine {
 
     this.syncChannelGains();
 
-    if (next.bgmEnabled && !this.isHidden()) {
+    if (next.bgmEnabled && !this.isBackgrounded()) {
       if (!this.activeVoice && !this.bgmFetchPromise) {
         void this.ensureAndPlayBgm(false);
       } else if (this.state === 'bg-muted') {
@@ -139,7 +140,7 @@ export class SoundEngine {
   playSfx(key: SfxKey, arg?: number): boolean {
     if (this.disposed) return false;
     if (!this.settings.sfxEnabled || this.settings.sfxVolume <= 0) return false;
-    if (this.isHidden() || this.state === 'bg-muted') return false;
+    if (this.isBackgrounded() || this.state === 'bg-muted') return false;
 
     const nowMs = this.now();
     const lastMs = this.lastSfxAt.get(key);
@@ -180,13 +181,17 @@ export class SoundEngine {
     this.teardownContext('closed');
   }
 
+  private isBackgrounded(): boolean {
+    return this.isHidden() || this.windowBlurred;
+  }
+
   private getBgmTargetGain(): number {
-    if (this.isHidden() || this.state === 'bg-muted' || !this.settings.bgmEnabled) return 0;
+    if (this.isBackgrounded() || this.state === 'bg-muted' || !this.settings.bgmEnabled) return 0;
     return this.settings.bgmVolume * BGM_GAIN_SCALE;
   }
 
   private getSfxTargetGain(): number {
-    if (this.isHidden() || this.state === 'bg-muted' || !this.settings.sfxEnabled) return 0;
+    if (this.isBackgrounded() || this.state === 'bg-muted' || !this.settings.sfxEnabled) return 0;
     return this.settings.sfxVolume * SFX_GAIN_SCALE;
   }
 
@@ -229,8 +234,8 @@ export class SoundEngine {
     }
 
     if (ctxState === 'running') {
-      this.state = this.isHidden() ? 'bg-muted' : 'running';
-    } else if (this.isHidden()) {
+      this.state = this.isBackgrounded() ? 'bg-muted' : 'running';
+    } else if (this.isBackgrounded()) {
       this.state = 'bg-muted';
     } else {
       this.state = 'suspended-awaiting-gesture';
@@ -244,12 +249,12 @@ export class SoundEngine {
     const nextState = ctx.state as AudioContextStateWithInterrupted;
     if (nextState === 'closed') {
       this.teardownContext('closed');
-      if (this.settings.bgmEnabled && !this.isHidden()) {
+      if (this.settings.bgmEnabled && !this.isBackgrounded()) {
         this.attachGestureListeners();
       }
       return;
     }
-    if (this.isHidden() || this.state === 'bg-muted') return;
+    if (this.isBackgrounded() || this.state === 'bg-muted') return;
 
     if (nextState === 'running') {
       this.consecutiveResumeFailures = 0;
@@ -268,7 +273,7 @@ export class SoundEngine {
   }
 
   private handleInterruptedOrSuspended(ctx: AudioContext): void {
-    if (this.isHidden()) {
+    if (this.isBackgrounded()) {
       this.state = 'bg-muted';
       return;
     }
@@ -285,7 +290,7 @@ export class SoundEngine {
     }
     if (ctx.state === 'running') {
       this.consecutiveResumeFailures = 0;
-      if (!this.isHidden()) {
+      if (!this.isBackgrounded()) {
         this.state = 'running';
         this.detachGestureListeners();
       }
@@ -298,14 +303,14 @@ export class SoundEngine {
           if (this.ctx !== ctx || this.disposed) return false;
           if (ctx.state === 'running') {
             this.consecutiveResumeFailures = 0;
-            if (!this.isHidden()) {
+            if (!this.isBackgrounded()) {
               this.state = 'running';
               this.detachGestureListeners();
               return true;
             }
             return false;
           }
-          if (!this.isHidden()) {
+          if (!this.isBackgrounded()) {
             this.state = 'suspended-awaiting-gesture';
             this.attachGestureListeners();
           }
@@ -316,10 +321,10 @@ export class SoundEngine {
           this.consecutiveResumeFailures += 1;
           if (this.consecutiveResumeFailures >= MAX_CONSECUTIVE_RESUME_FAILURES) {
             this.teardownContext('closed');
-            if (this.settings.bgmEnabled && !this.isHidden()) {
+            if (this.settings.bgmEnabled && !this.isBackgrounded()) {
               this.attachGestureListeners();
             }
-          } else if (!this.isHidden()) {
+          } else if (!this.isBackgrounded()) {
             this.state = 'suspended-awaiting-gesture';
             this.attachGestureListeners();
           }
@@ -330,7 +335,7 @@ export class SoundEngine {
       this.consecutiveResumeFailures += 1;
       if (this.consecutiveResumeFailures >= MAX_CONSECUTIVE_RESUME_FAILURES) {
         this.teardownContext('closed');
-      } else if (!this.isHidden()) {
+      } else if (!this.isBackgrounded()) {
         this.state = 'suspended-awaiting-gesture';
         this.attachGestureListeners();
       }
@@ -389,21 +394,21 @@ export class SoundEngine {
   }
 
   private async ensureAndPlayBgm(fadeIn: boolean): Promise<void> {
-    if (this.disposed || !this.settings.bgmEnabled || this.isHidden()) return;
+    if (this.disposed || !this.settings.bgmEnabled || this.isBackgrounded()) return;
     const ctx = this.ensureContext();
     if (!ctx) return;
 
     const gen = ++this.playGen;
     const buffer = await this.ensureBgmBuffer(ctx);
     if (!buffer || this.disposed || this.playGen !== gen || !this.settings.bgmEnabled) return;
-    if (this.isHidden() || this.state === 'bg-muted') {
+    if (this.isBackgrounded() || this.state === 'bg-muted') {
       this.pausedByVisibility = true;
       return;
     }
 
     if (ctx.state !== 'running') {
       const resumed = await this.attemptResume(ctx);
-      if (!resumed || this.disposed || this.playGen !== gen || !this.settings.bgmEnabled || this.isHidden()) {
+      if (!resumed || this.disposed || this.playGen !== gen || !this.settings.bgmEnabled || this.isBackgrounded()) {
         return;
       }
     }
@@ -456,7 +461,7 @@ export class SoundEngine {
       if (
         this.activeVoice === voice
         && this.settings.bgmEnabled
-        && !this.isHidden()
+        && !this.isBackgrounded()
         && this.state === 'running'
       ) {
         if (this.nextVoice) {
@@ -485,7 +490,7 @@ export class SoundEngine {
       || !this.bgmBuffer
       || !this.ctx
       || !this.settings.bgmEnabled
-      || this.isHidden()
+      || this.isBackgrounded()
       || this.state !== 'running'
     ) {
       return;
@@ -627,7 +632,7 @@ export class SoundEngine {
   }
 
   private handleForegroundReturn(): void {
-    if (this.disposed || this.isHidden()) return;
+    if (this.disposed || this.isBackgrounded()) return;
 
     if (this.state === 'closed') {
       if (this.settings.bgmEnabled) {
@@ -657,7 +662,7 @@ export class SoundEngine {
     this.syncChannelGains();
 
     void this.attemptResume(ctx).then(resumed => {
-      if (!resumed || this.disposed || this.isHidden()) return;
+      if (!resumed || this.disposed || this.isBackgrounded()) return;
       if (this.settings.bgmEnabled) {
         if (this.bgmBuffer) {
           this.startBgmVoiceAt(this.bgmBuffer, this.pausedOffset, prevPausedByVis);
@@ -681,19 +686,30 @@ export class SoundEngine {
   };
 
   private readonly onPageShow = (): void => {
-    if (!this.isHidden()) {
+    if (!this.isBackgrounded()) {
       this.handleForegroundReturn();
     }
   };
 
+  private readonly onWindowBlur = (): void => {
+    this.windowBlurred = true;
+    this.handleBackgroundMute();
+  };
+
   private readonly onWindowFocus = (): void => {
-    if (!this.isHidden()) {
+    this.windowBlurred = false;
+    if (!this.isBackgrounded()) {
       this.handleForegroundReturn();
     }
   };
 
   private readonly onUserGesture = (): void => {
     if (this.disposed || this.isHidden()) return;
+    this.windowBlurred = false;
+    if (this.state === 'bg-muted') {
+      this.handleForegroundReturn();
+      return;
+    }
     if (this.state === 'closed' || !this.ctx) {
       this.detachGestureListeners();
       if (this.settings.bgmEnabled) {
@@ -705,7 +721,7 @@ export class SoundEngine {
       const ctx = this.ctx;
       const prevPaused = this.pausedByVisibility;
       void this.attemptResume(ctx).then(resumed => {
-        if (!resumed || this.disposed || this.isHidden()) return;
+        if (!resumed || this.disposed || this.isBackgrounded()) return;
         if (this.settings.bgmEnabled && !this.activeVoice) {
           if (this.bgmBuffer) {
             this.startBgmVoiceAt(this.bgmBuffer, this.pausedOffset, prevPaused);
@@ -727,6 +743,7 @@ export class SoundEngine {
       window.addEventListener('pagehide', this.onPageHide);
       window.addEventListener('pageshow', this.onPageShow);
       window.addEventListener('focus', this.onWindowFocus);
+      window.addEventListener('blur', this.onWindowBlur);
     }
   }
 
@@ -740,6 +757,7 @@ export class SoundEngine {
       window.removeEventListener('pagehide', this.onPageHide);
       window.removeEventListener('pageshow', this.onPageShow);
       window.removeEventListener('focus', this.onWindowFocus);
+      window.removeEventListener('blur', this.onWindowBlur);
     }
   }
 

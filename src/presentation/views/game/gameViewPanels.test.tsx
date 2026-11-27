@@ -1,7 +1,7 @@
 // 게임 화면 패널 초기화 — 거점을 떠날 때 업적 모달을 포함한 열린 패널을 모두 닫는다.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { COOKING_UNLOCK_BOAT } from '../../../game/content/cooking';
 import { bountyById } from '../../../game/content/bounties';
 import type { BountySnapshot } from '../../../features/bounty/model/types';
@@ -19,6 +19,7 @@ import type { EventsSnapshot } from '../../../platform/api';
 import { boardingOf } from '../../../game/world';
 import { resetKeyScopes } from '../../ui/hotkeys';
 import { resetOpenWindows } from '../../ui/openWindows';
+import { resetMinimapVisible } from '../../../features/display/service/minimapVisible';
 import GameView from './GameView';
 
 const noticeMock = vi.hoisted(() => ({
@@ -89,6 +90,7 @@ beforeEach(() => {
   markPromptsAnswered(['fish-art']);
   resetKeyScopes();
   resetOpenWindows();
+  resetMinimapVisible();
   noticeMock.activeNotices = [];
   noticeMock.endedNotices = [];
   noticeMock.stackNotices = [];
@@ -725,5 +727,195 @@ describe('GameView 패널 초기화', () => {
 
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onScene).not.toHaveBeenCalled();
+  });
+});
+
+describe('GameView 이벤트 구역 전환 및 미니맵 지도 차단', () => {
+  it('championship 구역에서는 미니맵을 클릭해도 세계지도가 열리지 않고, 일반 구역에서는 열린다', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const renderAt = (scene: { kind: 'region'; id: 'championship' | 'village' }) =>
+      render(
+        <QueryClientProvider client={client}>
+          <GameView
+            game={{ ...newState(), tutorials: [...TUTORIAL_IDS], location: scene }}
+            scene={scene}
+            entryPos={null}
+            placeSeq={0}
+            dispatch={() => ({ status: 'ok', state: newState(), result: { type: 'none' } })}
+            setToast={() => {}}
+            onScene={() => {}}
+            onPlace={() => {}}
+            log={[]}
+            syncLabel={null}
+            syncState="on"
+            guestProgress="nothing"
+            account="dev@localhost"
+            accountChecked={true}
+            accountFailed={false}
+            uid="u1"
+            nickname="테스터"
+            onRename={async () => null}
+            onAuthChanged={async () => {}}
+            onResync={async () => {}}
+          />
+        </QueryClientProvider>,
+      );
+
+    renderAt({ kind: 'region', id: 'championship' });
+    const champMinimap = screen.getByLabelText('미니맵');
+    expect(champMinimap.className).not.toContain('cursor-pointer');
+    fireEvent.click(champMinimap);
+    expect(screen.queryByRole('dialog', { name: '세계지도' })).toBeNull();
+    cleanup();
+
+    renderAt({ kind: 'region', id: 'village' });
+    const villageMinimap = screen.getByLabelText('미니맵');
+    expect(villageMinimap.className).toContain('cursor-pointer');
+    fireEvent.click(villageMinimap);
+    expect(screen.getByRole('dialog', { name: '세계지도' })).toBeInTheDocument();
+  });
+
+  it('이벤트 창 입장하기·나가기 시 창을 닫고 EventZoneVeil 암전 단계에서 전환과 도착 토스트를 실행한다', async () => {
+    vi.useFakeTimers();
+    try {
+      const baseGame = { ...newState(), boat: 1, tutorials: [...TUTORIAL_IDS] };
+      eventMock.snap = {
+        now: '2026-12-01T12:00:00.000Z',
+        events: [{
+          id: 'ev-champ',
+          kind: 'championship',
+          title: '강태공 선수권 대회',
+          description: '분지 호수 대회',
+          startsAt: '2026-12-01T00:00:00.000Z',
+          endsAt: '2026-12-11T12:00:00.000Z',
+          active: true,
+          config: {},
+        }],
+        trio: null,
+        championship: {
+          eventId: 'ev-champ',
+          score: 0,
+          bestFishId: null,
+          bestFishScore: 0,
+          catches: 0,
+          dex: {},
+          hatsGranted: [],
+          pendingGold: 0,
+          pendingFame: 0,
+          rank: null,
+          top: [],
+        },
+        draw: null,
+      };
+      const dispatch = vi.fn(async (action: { type: string }) => {
+        if (action.type === 'enterEventZone') {
+          return {
+            status: 'ok' as const,
+            state: { ...baseGame, location: { kind: 'region' as const, id: 'championship' as const } },
+            result: { type: 'none' as const },
+          };
+        }
+        return {
+          status: 'ok' as const,
+          state: { ...baseGame, location: { kind: 'base' as const, id: 'harbor' as const } },
+          result: { type: 'none' as const },
+        };
+      });
+      const onPlace = vi.fn();
+      const setToast = vi.fn();
+      const onScene = vi.fn();
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+      const { rerender } = render(
+        <QueryClientProvider client={client}>
+          <GameView
+            game={baseGame}
+            scene={{ kind: 'base', id: 'home' }}
+            entryPos={null}
+            placeSeq={0}
+            dispatch={dispatch}
+            setToast={setToast}
+            onScene={onScene}
+            onPlace={onPlace}
+            log={[]}
+            syncLabel={null}
+            syncState="on"
+            guestProgress="nothing"
+            account="dev@localhost"
+            accountChecked={true}
+            accountFailed={false}
+            uid="u1"
+            nickname="테스터"
+            onRename={async () => null}
+            onAuthChanged={async () => {}}
+            onResync={async () => {}}
+          />
+        </QueryClientProvider>,
+      );
+
+      // 입장하기 클릭 -> 이벤트 창이 즉시 닫히고 EventZoneVeil이 뜨며, 암전 전에는 dispatch가 불리지 않는다
+      fireEvent.click(screen.getByRole('button', { name: '이벤트' }));
+      fireEvent.click(screen.getByRole('button', { name: /강태공 선수권 대회/ }));
+      fireEvent.click(screen.getByRole('button', { name: '입장하기' }));
+
+      expect(screen.queryByRole('dialog', { name: '이벤트' })).toBeNull();
+      expect(screen.getByText('강태공 분지 호수로 이동하고 있어요.')).toBeInTheDocument();
+      expect(dispatch).not.toHaveBeenCalled();
+      expect(document.querySelector('[data-facility="exit"]')).toBeDisabled();
+      // 전환 중 Esc는 거점 탈출을 일으키지 않는다
+      fireEvent.keyDown(document, { key: 'Escape' });
+      expect(onScene).not.toHaveBeenCalled();
+
+      // 암전 도달 -> 서버 액션 확정 + championship 이동 + 도착 토스트
+      await act(async () => { await vi.advanceTimersByTimeAsync(350); });
+      expect(dispatch).toHaveBeenCalledWith({ type: 'enterEventZone', eventId: 'ev-champ' });
+      expect(onPlace).toHaveBeenCalledWith({ kind: 'region', id: 'championship' }, expect.any(Object));
+      expect(setToast).toHaveBeenCalledWith('강태공 분지 호수에 도착했어요.');
+      await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+      expect(screen.queryByText('강태공 분지 호수로 이동하고 있어요.')).toBeNull();
+
+      // 퇴장하기
+      rerender(
+        <QueryClientProvider client={client}>
+          <GameView
+            game={{ ...baseGame, location: { kind: 'region', id: 'championship' } }}
+            scene={{ kind: 'region', id: 'championship' }}
+            entryPos={null}
+            placeSeq={0}
+            dispatch={dispatch}
+            setToast={setToast}
+            onScene={onScene}
+            onPlace={onPlace}
+            log={[]}
+            syncLabel={null}
+            syncState="on"
+            guestProgress="nothing"
+            account="dev@localhost"
+            accountChecked={true}
+            accountFailed={false}
+            uid="u1"
+            nickname="테스터"
+            onRename={async () => null}
+            onAuthChanged={async () => {}}
+            onResync={async () => {}}
+          />
+        </QueryClientProvider>,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: '이벤트' }));
+      fireEvent.click(screen.getByRole('button', { name: /강태공 선수권 대회/ }));
+      fireEvent.click(screen.getByRole('button', { name: '나가기' }));
+
+      expect(screen.queryByRole('dialog', { name: '이벤트' })).toBeNull();
+      expect(screen.getByText('원래 있던 곳으로 돌아가고 있어요.')).toBeInTheDocument();
+      await act(async () => { await vi.advanceTimersByTimeAsync(350); });
+      expect(dispatch).toHaveBeenCalledWith({ type: 'leaveEventZone' });
+      expect(onPlace).toHaveBeenCalledWith({ kind: 'base', id: 'harbor' });
+      expect(setToast).toHaveBeenCalledWith('부산항에 도착했어요.');
+      await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+      expect(screen.queryByText('원래 있던 곳으로 돌아가고 있어요.')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

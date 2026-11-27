@@ -561,4 +561,62 @@ describe('SoundEngine 오디오 생명주기 및 합성 검증', () => {
 
     vi.unstubAllGlobals();
   });
+
+  it('창모드 포커스 이탈(blur) 시 즉시 bg-muted로 전환하고 BGM 재생 위치 저장·게인 0·SFX를 차단한다', async () => {
+    engine.syncSettings({ bgmEnabled: true, sfxEnabled: true, bgmVolume: 0.5, sfxVolume: 0.5 });
+    await flushMicrotasks();
+
+    const ctx = contexts[0];
+    expect(ctx.bufferSources).toHaveLength(1);
+    expect(ctx.bufferSources[0].startedOffset).toBe(0);
+
+    // 10s 시작 -> 22s 시점(재생 위치 12s)에 창 포커스 이탈
+    ctx.currentTime = 22;
+    expect(document.visibilityState).toBe('visible');
+    window.dispatchEvent(new Event('blur'));
+
+    expect(engine.getState()).toBe('bg-muted');
+    expect(ctx.gains[0].gain.value).toBe(0);
+    expect(ctx.gains[2].gain.value).toBe(0);
+    expect(ctx.bufferSources[0].stopped).toBe(true);
+    expect(engine.playSfx('cast')).toBe(false);
+
+    // 여전히 포커스가 없는 상태에서 visibilitychange(visible)가 와도 BGM이 조기 재개되지 않는다
+    hidden = true;
+    document.dispatchEvent(new Event('visibilitychange'));
+    hidden = false;
+    document.dispatchEvent(new Event('visibilitychange'));
+    await flushMicrotasks();
+
+    expect(engine.getState()).toBe('bg-muted');
+    expect(ctx.bufferSources).toHaveLength(1);
+    expect(ctx.gains[0].gain.value).toBe(0);
+    expect(engine.playSfx('cast')).toBe(false);
+
+    // 이후 창 focus 복귀 시 저장된 위치(12s)부터 BGM을 재개하고 SFX가 다시 동작한다
+    ctx.currentTime = 30;
+    window.dispatchEvent(new Event('focus'));
+    await flushMicrotasks();
+
+    expect(engine.getState()).toBe('running');
+    expect(ctx.bufferSources).toHaveLength(2);
+    expect(ctx.bufferSources[1].startedOffset).toBeCloseTo(12, 5);
+    expect(ctx.gains[0].gain.value).toBeCloseTo(0.5 * BGM_GAIN_SCALE, 5);
+    expect(engine.playSfx('cast')).toBe(true);
+  });
+
+  it('dispose() 호출 뒤에는 window blur 리스너가 정상 해제된다', async () => {
+    const removeSpy = vi.spyOn(window, 'removeEventListener');
+    engine.syncSettings({ bgmEnabled: true, sfxEnabled: true, bgmVolume: 0.5, sfxVolume: 0.5 });
+    await flushMicrotasks();
+
+    engine.dispose();
+
+    expect(removeSpy).toHaveBeenCalledWith('blur', expect.any(Function));
+    expect(engine.getState()).toBe('closed');
+    window.dispatchEvent(new Event('blur'));
+    expect(engine.getState()).toBe('closed');
+
+    removeSpy.mockRestore();
+  });
 });

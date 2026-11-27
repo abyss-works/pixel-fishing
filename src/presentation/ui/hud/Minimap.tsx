@@ -4,6 +4,7 @@ import type { RegionPack } from '../../../game/world/types';
 import { zoneById, zoneOfSpot, topZoneOf } from '../../../game/content/zones';
 import { getSpotState, subscribeSpotState } from '../../../game/world/currentSpot.js';
 import { useSchools } from '../../../features/gameplay/service/schoolDay';
+import { cx } from '../cx';
 import IconButton from '../IconButton';
 import Tip from '../Tip';
 
@@ -56,9 +57,12 @@ export default function Minimap({ def, boat, covered, onOpenMap, onHide, mates }
                 width={Math.min(MINIMAP_VIEW_W, def.bounds.w, 912)}
                 height={Math.round(Math.min(MINIMAP_VIEW_W, def.bounds.w, 912)
                                    * Math.min(MINIMAP_VIEW_H, def.bounds.h) / Math.min(MINIMAP_VIEW_W, def.bounds.w))}
-                className="w-full h-full [image-rendering:pixelated] border border-line rounded-sm bg-bg shadow-panel cursor-pointer"
+                className={cx(
+                  'w-full h-full [image-rendering:pixelated] border border-line rounded-sm bg-bg shadow-panel',
+                  onOpenMap && 'cursor-pointer',
+                )}
                 aria-label="미니맵"
-                onClick={() => onOpenMap?.()} />
+                onClick={onOpenMap} />
       )}
       {onHide && (
         <Tip wraps text="미니맵 숨기기" className="absolute top-1.5 right-1.5 flex">

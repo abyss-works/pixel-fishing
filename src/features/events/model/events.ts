@@ -13,10 +13,12 @@ import type { RarityId } from '../../../game/content/rarity';
 import { spotById, type Spot, type SpotId } from '../../../game/content/spots';
 import { DEFAULT_LOOK, hatById, type Look } from '../../../game/content/wardrobe';
 import type { GameState } from '../../../game/rules/logic';
+import { gameDayOf } from '../../../game/rules/time';
 import type {
   EventChampionshipState,
   EventDrawState,
   EventLeaderboardRow,
+  EventLuckDayStamp,
   EventTrioState,
   EventsSnapshot,
   LiveEventKind,
@@ -76,6 +78,11 @@ export interface EventPodiumEntry {
   me: boolean;
 }
 
+export interface EventPodiumSlot {
+  place: 1 | 2 | 3;
+  entry: EventPodiumEntry | null;
+}
+
 export interface EventRankRowView {
   rank: number;
   nickname: string;
@@ -130,13 +137,15 @@ export interface EventChampionshipView {
   idleRate: number;
   manualRate: number;
   fameRate: number;
-  podium: readonly EventPodiumEntry[];
+  podium: readonly EventPodiumSlot[];
   rows: readonly EventRankRowView[];
   myRow: EventRankMeView | null;
   normalHat: EventHatBannerItem;
   variantHat: EventHatBannerItem;
   dex: readonly EventDexEntryView[];
 }
+
+export type EventDrawDayStatus = 'attended' | 'missed' | 'upcoming';
 
 export interface EventDrawDayView {
   day: string;
@@ -147,6 +156,7 @@ export interface EventDrawDayView {
   index: 3 | 5 | null;
   score: number | null;
   attended: boolean;
+  status: EventDrawDayStatus;
 }
 
 export interface EventDrawView {
@@ -157,7 +167,7 @@ export interface EventDrawView {
   attendedDays: number;
   rank: number | null;
   won: boolean;
-  podium: readonly EventPodiumEntry[];
+  podium: readonly EventPodiumSlot[];
   rows: readonly EventRankRowView[];
   myRow: EventRankMeView | null;
   days: readonly EventDrawDayView[];
@@ -450,7 +460,7 @@ function buildLeaderboardSections(
   myScore: number,
   myNickname: string | null,
 ): {
-  podium: EventPodiumEntry[];
+  podium: EventPodiumSlot[];
   rows: EventRankRowView[];
   myRow: EventRankMeView | null;
 } {
@@ -459,20 +469,23 @@ function buildLeaderboardSections(
   for (const r of sorted) {
     if (r.rank >= 1 && r.rank <= 3 && !byPlace.has(r.rank)) byPlace.set(r.rank, r);
   }
-  // 시상대는 2위 - 1위 - 3위 순서로 가운데 1위가 가장 높게 선다
+  // 시상대는 2위 - 1위 - 3위 순서로 가운데 1위가 가장 높게 서며, 빈 자리는 명시적 null 슬롯으로 둔다
   const order: (2 | 1 | 3)[] = [2, 1, 3];
-  const podium: EventPodiumEntry[] = [];
-  for (const place of order) {
+  const podium: EventPodiumSlot[] = order.map(place => {
     const row = byPlace.get(place);
-    if (!row) continue;
-    podium.push({
+    return {
       place,
-      nickname: row.nickname ?? '이름 없음',
-      score: row.score,
-      look: row.look ?? DEFAULT_LOOK,
-      me: row.me,
-    });
-  }
+      entry: row
+        ? {
+            place,
+            nickname: row.nickname ?? '이름 없음',
+            score: row.score,
+            look: row.look ?? DEFAULT_LOOK,
+            me: row.me,
+          }
+        : null,
+    };
+  });
   const rows: EventRankRowView[] = sorted
     .filter(r => r.rank > 3)
     .map(r => ({
@@ -571,6 +584,25 @@ export function selectEventChampionshipView(
   };
 }
 
+const DAY_MS = 86_400_000;
+
+function enumerateEventDays(startsAt: string, endsAt: string): string[] | null {
+  const startMs = Date.parse(startsAt);
+  const endMs = Date.parse(endsAt);
+  if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs <= startMs) return null;
+  const startDay = gameDayOf(new Date(startMs).toISOString());
+  const lastDay = gameDayOf(new Date(endMs - 1).toISOString());
+  let cursorMs = Date.parse(`${startDay}T00:00:00.000Z`);
+  const lastMs = Date.parse(`${lastDay}T00:00:00.000Z`);
+  if (Number.isNaN(cursorMs) || Number.isNaN(lastMs) || cursorMs > lastMs) return null;
+  const out: string[] = [];
+  while (cursorMs <= lastMs && out.length < 366) {
+    out.push(new Date(cursorMs).toISOString().slice(0, 10));
+    cursorMs += DAY_MS;
+  }
+  return out;
+}
+
 export function selectEventDrawView(
   ev: LiveEventSummary,
   state: EventDrawState | null,
@@ -579,9 +611,24 @@ export function selectEventDrawView(
 ): EventDrawView {
   const totalScore = state?.totalScore ?? 0;
   const board = buildLeaderboardSections(state?.top ?? [], state?.rank ?? null, totalScore, myNickname);
-  const days: EventDrawDayView[] = (state?.days ?? []).map(d => {
+  const stateDays = state?.days ?? [];
+  const dayMap = new Map<string, EventLuckDayStamp>();
+  for (const d of stateDays) dayMap.set(d.day, d);
+  const enumeratedDays = enumerateEventDays(ev.startsAt, ev.endsAt);
+  const mergedDays: readonly EventLuckDayStamp[] = enumeratedDays
+    ? enumeratedDays.map(day => dayMap.get(day) ?? { day, kind: null, index: null, score: null })
+    : stateDays;
+  const parsedNow = Date.parse(now);
+  const currentDay = Number.isNaN(parsedNow) ? null : gameDayOf(new Date(parsedNow).toISOString());
+  const days: EventDrawDayView[] = mergedDays.map(d => {
     const hasFortune = d.kind !== null && d.index !== null;
     const f = hasFortune ? { day: d.day, kind: d.kind!, index: d.index! } : null;
+    const status: EventDrawDayStatus =
+      d.score !== null
+        ? 'attended'
+        : currentDay !== null && d.day > currentDay
+          ? 'upcoming'
+          : 'missed';
     return {
       day: d.day,
       label: formatShortDay(d.day),
@@ -590,7 +637,8 @@ export function selectEventDrawView(
       kind: d.kind,
       index: d.index,
       score: d.score,
-      attended: d.score !== null,
+      attended: status === 'attended',
+      status,
     };
   });
   return {
