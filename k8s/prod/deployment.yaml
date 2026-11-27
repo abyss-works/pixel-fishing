@@ -20,6 +20,19 @@ spec:
         options:
           - name: ndots
             value: "1"
+      initContainers:
+        - name: migrate
+          image: ghcr.io/abyss-works/pixel-fishing
+          command: ["node", "migrate.js"]
+          env:
+            # 마이그레이션은 스키마 변경 권한이 필요해 CNPG 슈퍼유저 접속 주소만 쓴다.
+            - name: MIGRATION_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: pixel-fishing-db-superuser
+                  key: fqdn-uri
+            - name: MIGRATION_ROLE
+              value: app
       containers:
         - name: pixel-fishing
           image: ghcr.io/abyss-works/pixel-fishing
