@@ -93,9 +93,9 @@ describe('NoticesTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '접기' }));
     expect(screen.queryByText(/둘째 줄입니다/)).toBeNull();
 
-    // 즉시 마감은 활성·예약에만 있고 마감에는 없다
+    // 즉시 마감은 클라이언트 시계 오차를 감안해 마감 표시 행을 포함한 모든 행에 노출된다
     const endButtons = screen.getAllByRole('button', { name: '즉시 마감' });
-    expect(endButtons).toHaveLength(2);
+    expect(endButtons).toHaveLength(3);
     fireEvent.click(endButtons[0]);
     const endDialog = await screen.findByRole('dialog', { name: '공지 즉시 마감' });
     fireEvent.click(within(endDialog).getByRole('button', { name: '즉시 마감' }));
