@@ -14,6 +14,7 @@ const s = vi.hoisted(() => ({
   refresh: vi.fn(),
   act: vi.fn(async (_op: unknown): Promise<{ ok: true; result?: 'joined' | 'requested'; recovered?: number } | { ok: false; error: string }> => ({ ok: true })),
   request: null as { code: string; name: string; requestedAt: string } | null,
+  cooldownUntil: null as string | null,
   preview: null as unknown,
   publicGuilds: [] as PublicGuildItem[],
   publicLoading: false,
@@ -27,6 +28,7 @@ vi.mock('../../../../features/guild/service/useGuild', () => ({
     available: true,
     guild: s.guild,
     request: s.request,
+    cooldownUntil: s.cooldownUntil,
     loading: s.loading,
     failed: s.failed,
     you: s.you,
@@ -82,6 +84,7 @@ describe('GuildModal', () => {
     s.loading = false;
     s.failed = false;
     s.request = null;
+    s.cooldownUntil = null;
     s.preview = null;
     s.publicGuilds = [];
     s.publicLoading = false;
@@ -823,5 +826,63 @@ describe('GuildModal', () => {
     expect(onRetry).toHaveBeenCalledTimes(1);
 
     vi.useRealTimers();
+  });
+
+  it('재가입 대기 중이면 상단 2줄 배너와 비활성 버튼·툴팁을 보이고, 만료 시 자동으로 해금된다', async () => {
+    vi.useFakeTimers();
+    const baseNow = new Date('2026-11-27T00:00:00.000Z');
+    vi.setSystemTime(baseNow);
+    s.cooldownUntil = new Date(baseNow.getTime() + 60_000).toISOString();
+    s.publicGuilds = [
+      { guildId: 'g-open', name: '푸른파도', level: 2, members: 3, cap: 10, pitch: '함께 낚시해요', lastActivityAt: baseNow.toISOString() },
+    ];
+    s.preview = { name: '새벽선단', level: 4, members: 3, cap: 10, joinMode: 'open', pitch: null };
+
+    render(<GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+
+    expect(screen.getByText('길드 재가입 대기 중이라 지금은 가입하거나 새 길드를 만들 수 없어요.')).toBeTruthy();
+    expect(screen.getByText('1분 뒤에 다시 이용할 수 있어요.')).toBeTruthy();
+
+    const publicJoinBtn = screen.getByRole('button', { name: '푸른파도 길드 가입' }) as HTMLButtonElement;
+    expect(publicJoinBtn.disabled).toBe(true);
+    fireEvent.mouseEnter(publicJoinBtn.parentElement as HTMLElement);
+    expect(screen.getByRole('tooltip').textContent).toBe('재가입 대기 중이라 1분 뒤에 이용할 수 있어요.');
+
+    fireEvent.click(screen.getAllByRole('button', { name: '코드로 가입' })[0]);
+    fireEvent.change(screen.getByLabelText('길드 코드'), { target: { value: 'ABCD2345' } });
+    fireEvent.click(screen.getByRole('button', { name: '찾기' }));
+    const codeJoinBtn = screen.getByRole('button', { name: '들어가기' }) as HTMLButtonElement;
+    expect(codeJoinBtn.disabled).toBe(true);
+    fireEvent.mouseEnter(codeJoinBtn.parentElement as HTMLElement);
+    expect(screen.getByRole('tooltip').textContent).toBe('재가입 대기 중이라 1분 뒤에 이용할 수 있어요.');
+
+    fireEvent.click(screen.getAllByRole('button', { name: '길드 만들기' })[0]);
+    const createBtn = screen.getByRole('button', { name: '만들기' }) as HTMLButtonElement;
+    expect(createBtn.disabled).toBe(true);
+    fireEvent.mouseEnter(createBtn.parentElement as HTMLElement);
+    expect(screen.getByRole('tooltip').textContent).toBe('재가입 대기 중이라 1분 뒤에 이용할 수 있어요.');
+
+    // 30초 타이머 두 번(60초 경과) 후 자동 해금
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(screen.queryByText('길드 재가입 대기 중이라 지금은 가입하거나 새 길드를 만들 수 없어요.')).toBeNull();
+    expect((screen.getByRole('button', { name: '만들기' }) as HTMLButtonElement).disabled).toBe(false);
+
+    vi.useRealTimers();
+  });
+
+  it('길드장이 재가입 대기 중인 신청자를 승인하면 안내 문구를 보이고 신청 행을 유지한다', async () => {
+    s.guild = GUILD;
+    s.act.mockResolvedValueOnce({ ok: false, error: 'rejoin-cooldown' });
+    const toast = vi.fn();
+
+    render(<GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={toast} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /관리/ }));
+    expect(screen.getByText('바다거북')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: '승인' }));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('신청한 플레이어가 재가입 대기 중이라 승인할 수 없어요.', 'warn'));
+    expect(screen.getByText('바다거북')).toBeTruthy();
   });
 });

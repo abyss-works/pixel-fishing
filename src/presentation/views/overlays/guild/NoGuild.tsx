@@ -5,7 +5,7 @@ import {
   GUILD_CREATE_RULES, PUBLIC_GUILD_SORT_OPTIONS, guildActivityText, inviteDialogView, joinRequestDaysLeft,
   normalizeGuildCode, publicJoinConfirm,
 } from '../../../../features/guild/model/guild';
-import type { GuildMyRequest, PublicGuildItem, PublicGuildSort } from '../../../../features/guild/model/guild';
+import type { GuildCooldownInfo, GuildMyRequest, PublicGuildItem, PublicGuildSort } from '../../../../features/guild/model/guild';
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import { useGuildInvite } from '../../../../features/guild/service/useGuildInvite';
 import { usePublicGuilds } from '../../../../features/guild/service/usePublicGuilds';
@@ -58,19 +58,26 @@ function GuildPitch({ pitch }: { pitch: string }) {
   );
 }
 
+const NO_COOLDOWN: GuildCooldownInfo = { active: false, remainingMs: 0, remainingText: null };
+
 // 길드가 없을 때 — 가입 후 창과 같은 680x560 고정 크기 안에 3탭(공개 길드, 코드로 가입, 길드 만들기)으로 나눈다.
 // 넣어 둔 가입 신청이 있으면 탭 아래 상단 배너로 남은 기간과 신청 취소, 바로 가입 시 기존 신청 자동 취소 안내를 보인다.
-export default function NoGuild({ busy, run, join, request, dialogHost, setToast }: {
+export default function NoGuild({ busy, run, join, request, cooldown = NO_COOLDOWN, dialogHost, setToast }: {
   busy: boolean;
   run: GuildRun;
   join: GuildJoin;
   /** 넣어 둔 가입 신청 */
   request: GuildMyRequest | null;
+  /** 재가입 대기 상태 */
+  cooldown?: GuildCooldownInfo;
   dialogHost?: HTMLElement | null;
   setToast: Notify;
 }) {
   const nowISO = useNow();
   const nowMs = Date.parse(nowISO);
+  const cooldownTooltip = cooldown.active && cooldown.remainingText
+    ? `재가입 대기 중이라 ${cooldown.remainingText} 뒤에 이용할 수 있어요.`
+    : null;
   const [tab, setTab] = useState<NoGuildTab>('open');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -104,7 +111,7 @@ export default function NoGuild({ busy, run, join, request, dialogHost, setToast
     setCode(c);
   };
   const onJoin = async () => {
-    if (!code) return;
+    if (!code || cooldown.active) return;
     const r = await join(code);
     setCodeError(r.error);
     if (!r.error) sendNotice(setToast, {
@@ -115,6 +122,7 @@ export default function NoGuild({ busy, run, join, request, dialogHost, setToast
   };
   const onCreate = async (e: FormEvent) => {
     e.preventDefault();
+    if (cooldown.active) return;
     const value = name.trim();
     const error = await run({ op: 'create', name: value });
     setNameError(error);
@@ -176,6 +184,16 @@ export default function NoGuild({ busy, run, join, request, dialogHost, setToast
         { key: 'code', label: '코드로 가입', icon: <PixelIcon glyph="key" size={12} /> },
         { key: 'create', label: '길드 만들기', icon: <PixelIcon glyph="plus" size={12} /> },
       ]} />
+
+      {cooldown.active && cooldown.remainingText && (
+        <Inset tone="deep" border="danger" role="status" className="flex items-start gap-2 px-3 py-2 text-xs shrink-0">
+          <PixelIcon glyph="clock" size={14} className="mt-0.5 text-danger shrink-0" />
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <span className="text-text font-bold">길드 재가입 대기 중이라 지금은 가입하거나 새 길드를 만들 수 없어요.</span>
+            <span className="text-text-dim">{`${cooldown.remainingText} 뒤에 다시 이용할 수 있어요.`}</span>
+          </div>
+        </Inset>
+      )}
 
       {request && (
         <Inset tone="deep" className="flex items-center justify-between gap-2 px-3 py-2 text-xs shrink-0 flex-wrap">
@@ -289,10 +307,18 @@ export default function NoGuild({ busy, run, join, request, dialogHost, setToast
                       </div>
                       <GuildPitch pitch={g.pitch} />
                     </div>
-                    <Button size="sm" variant="primary" disabled={busy} className="min-w-[62px]" aria-label={`${g.name} 길드 가입`}
-                            onClick={() => setJoinTarget(g)}>
-                      가입
-                    </Button>
+                    {cooldownTooltip ? (
+                      <Tip wraps text={cooldownTooltip}>
+                        <Button size="sm" variant="primary" disabled className="min-w-[62px]" aria-label={`${g.name} 길드 가입`}>
+                          가입
+                        </Button>
+                      </Tip>
+                    ) : (
+                      <Button size="sm" variant="primary" disabled={busy} className="min-w-[62px]" aria-label={`${g.name} 길드 가입`}
+                              onClick={() => setJoinTarget(g)}>
+                        가입
+                      </Button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -311,7 +337,7 @@ export default function NoGuild({ busy, run, join, request, dialogHost, setToast
               <Button type="submit" size="sm" disabled={busy} className={ACTION_WIDTH}>찾기</Button>
             </div>
           </form>
-          <GuildInviteSummary preview={invite.preview} view={view} busy={busy} onConfirm={() => { void onJoin(); }} />
+          <GuildInviteSummary preview={invite.preview} view={view} busy={busy} disabledTooltip={cooldownTooltip} onConfirm={() => { void onJoin(); }} />
           {invite.loading && <Note>길드를 찾는 중이에요.</Note>}
           {invite.failed && <Note tone="warn">길드를 불러오지 못했어요. 찾기를 눌러 다시 시도해 주세요.</Note>}
           {codeError && <Note tone="warn">{codeError}</Note>}
@@ -332,7 +358,13 @@ export default function NoGuild({ busy, run, join, request, dialogHost, setToast
           <form className="flex gap-2" onSubmit={e => { void onCreate(e); }}>
             <TextInput compact="sm" className="flex-1 min-w-0 w-full" value={name} maxLength={16}
                        onChange={e => setName(e.target.value)} aria-label="길드 이름" placeholder="길드 이름" />
-            <Button type="submit" size="sm" variant="primary" disabled={busy} className={ACTION_WIDTH}>만들기</Button>
+            {cooldownTooltip ? (
+              <Tip wraps text={cooldownTooltip}>
+                <Button type="submit" size="sm" variant="primary" disabled className={ACTION_WIDTH}>만들기</Button>
+              </Tip>
+            ) : (
+              <Button type="submit" size="sm" variant="primary" disabled={busy} className={ACTION_WIDTH}>만들기</Button>
+            )}
           </form>
           {nameError && <Note tone="warn">{nameError}</Note>}
         </div>
