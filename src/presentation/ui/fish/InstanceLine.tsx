@@ -46,6 +46,8 @@ function VariantMark({ on }: { on: boolean }) {
 export interface InstanceLineProps {
   inst: FishInstance;
   fish: Fish;
+  /** 목록에 표시되는 어종명(일반 미발견·돌연변이만 발견 시 돌연변이명) */
+  displayName?: string;
   /** 이 행에서 가장 큰 개체 — 하나만 표시된다 */
   best?: boolean;
   /** 판매 선택용. 없으면 조회 전용 줄 */
@@ -59,13 +61,13 @@ export interface InstanceLineProps {
 }
 
 export default function InstanceLine({
-  inst, fish, best, checked, onToggle, onLock, onExhibit, children,
+  inst, fish, displayName, best, checked, onToggle, onLock, onExhibit, children,
 }: InstanceLineProps) {
   const pct = inst.size === null ? null : sizePercentile(fish, inst.size);
   const label = [
     inst.size === null ? null : fmtSize(inst.size),
     inst.form === 'variant' ? '돌연변이' : null,
-    fish.name,
+    displayName ?? fish.name,
   ].filter(Boolean).join(' ');
 
   return (

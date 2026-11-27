@@ -61,7 +61,7 @@ function formatRatioPct(ratio: number): string {
 }
 
 function formatSafeCount(value: number | null | undefined): string {
-  if (value === null || value === undefined || !Number.isFinite(value)) return '--';
+  if (value === null || value === undefined || !Number.isFinite(value) || value < 0) return '--';
   return fmtNum(value);
 }
 
@@ -204,6 +204,7 @@ export function selectOpsHealthView(data: AdminOpsHealth | null): OpsHealthView 
     runtime: {
       uptimeText: formatUptime(runtime.uptimeSec),
       memoryText: Number.isFinite(runtime.heapUsedMb) && Number.isFinite(runtime.rssMb)
+        && runtime.heapUsedMb >= 0 && runtime.rssMb >= 0
         ? `${Math.round(runtime.heapUsedMb)} / ${Math.round(runtime.rssMb)} MB`
         : '--',
       heapUsedMb: runtime.heapUsedMb,
@@ -215,8 +216,8 @@ export function selectOpsHealthView(data: AdminOpsHealth | null): OpsHealthView 
       poolIdle: database.poolIdle,
       poolWaiting: database.poolWaiting,
       poolMax: database.poolMax,
-      poolText: `${poolInUse}/${database.poolTotal}/${database.poolMax} (대기 ${database.poolWaiting})`,
-      poolCompactText: `${poolInUse}/${database.poolMax} (대기 ${database.poolWaiting})`,
+      poolText: `${formatSafeCount(poolInUse)}/${formatSafeCount(database.poolTotal)}/${formatSafeCount(database.poolMax)} (대기 ${formatSafeCount(database.poolWaiting)})`,
+      poolCompactText: `${formatSafeCount(poolInUse)}/${formatSafeCount(database.poolMax)} (대기 ${formatSafeCount(database.poolWaiting)})`,
       dbSizeText: formatDbSize(database.dbSizeBytes),
       activeConnectionsText: database.activeConnections === null ? '권한 제한' : formatSafeCount(database.activeConnections),
     },

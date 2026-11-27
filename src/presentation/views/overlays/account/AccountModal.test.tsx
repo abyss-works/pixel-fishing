@@ -90,6 +90,8 @@ describe('게스트의 구글 연결', () => {
     expect(mailTag).toHaveClass('text-text-dim');
     expect(mailTag.className).not.toContain('border');
     expect(screen.getByText('작은 바다 영약')).toBeInTheDocument();
+    const rewardPedestal = screen.getByText('작은 바다 영약').closest('.pf-notch')!.querySelector('.size-9');
+    expect(rewardPedestal).toHaveClass('pf-notch', 'shadow-[inset_1px_1px_0_var(--bevel-hi),inset_-1px_-1px_0_var(--bevel-lo)]');
     expect(screen.getByText('(특수)')).toHaveAttribute('data-rarity', 'special');
     expect(screen.getByText('생선 탈리')).toBeInTheDocument();
     expect(screen.getByText('용연향 미끼')).toBeInTheDocument();
