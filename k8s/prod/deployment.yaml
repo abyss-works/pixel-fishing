@@ -12,6 +12,7 @@ spec:
       labels:
         app: pixel-fishing
     spec:
+      terminationGracePeriodSeconds: 35
       nodeSelector:
         kubernetes.io/hostname: oci-node
       # 노드의 search 도메인이 SERVFAIL을 돌려주면 musl은 외부 이름 조회 전체를 실패시킨다.
@@ -44,6 +45,10 @@ spec:
               value: "2026-11-25"
           ports:
             - containerPort: 3000
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 5"]
           resources:
             requests:
               cpu: 100m
