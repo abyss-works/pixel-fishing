@@ -3,6 +3,7 @@
 // 앵커로 고정한다(골드 축만 명성도 같은 구조라 골드로 전부 검증).
 import { describe, it, expect } from 'vitest';
 import { buildBalanceReport, goldEv, fameEv, EV_AXES } from './balanceReport';
+import { entryLevel, famePerCatchDay, goldPerCatchDay, plateauLevel, rates } from '../../../game/rules/balanceEv';
 import { goldEV } from '../../../game/rules/logic';
 import { spotById } from '../../../game/content/spots';
 import type { SpotId } from '../../../game/content/spots';
@@ -88,5 +89,39 @@ describe('전체 리포트 조립', () => {
         expect(rows[i].gold.normal).toBeGreaterThan(rows[i - 1].gold.normal);
       }
     }
+  });
+
+  it('시간당 골드와 진입·플래토 레벨이 전 해역 통합 EV 엔진과 일치한다(남인도양->모잠비크 포함)', () => {
+    expect(rows[0].deltaHourlyIdle).toBeNull();
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const entry = entryLevel(row.id);
+      const plateau = plateauLevel(row.id);
+      expect(row.entryLevel).toBe(entry);
+      expect(row.plateauLevel).toBe(plateau);
+      expect(row.goldPerHour.idleWorst).toBe(rates(row.id, entry, 'idle').goldPerHour);
+      expect(row.goldPerHour.idleBest).toBe(rates(row.id, plateau, 'idle').goldPerHour);
+      expect(row.goldPerHour.normal).toBe(rates(row.id, entry, 'normal').goldPerHour);
+      expect(row.goldPerHour.good).toBe(rates(row.id, entry, 'good').goldPerHour);
+      expect(row.goldPerHour.perfect).toBe(rates(row.id, entry, 'perfect').goldPerHour);
+      expect(goldEv(row.id, {})).toBeCloseTo(goldPerCatchDay(row.id), 10);
+      expect(fameEv(row.id, {})).toBeCloseTo(famePerCatchDay(row.id), 10);
+      if (i > 0) {
+        expect(row.deltaHourlyIdle).toBeCloseTo(
+          row.goldPerHour.idleWorst - rows[i - 1].goldPerHour.idleWorst,
+          9,
+        );
+      }
+    }
+
+    const southIndianIdx = rows.findIndex(r => r.id === 'southindian');
+    const mozIdx = rows.findIndex(r => r.id === 'mozstrait');
+    expect(southIndianIdx).toBeGreaterThanOrEqual(0);
+    expect(mozIdx).toBe(southIndianIdx + 1);
+    expect(rows[mozIdx].deltaHourlyIdle).toBeCloseTo(
+      rates('mozstrait', entryLevel('mozstrait'), 'idle').goldPerHour
+      - rates('southindian', entryLevel('southindian'), 'idle').goldPerHour,
+      9,
+    );
   });
 });

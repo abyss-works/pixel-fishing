@@ -9,6 +9,8 @@
 import { afterEach, describe, it, expect } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import FishTab from './FishTab';
+import { selectSpotHourlyEvs } from '../../../../features/admin/model/fishSimulation';
+import type { SimOverrides } from '../../../../features/admin/model/fishSimulation';
 import { SPOTS, drawRows } from '../../../../game/rules/logic';
 import type { SpotId } from '../../../../game/content/spots';
 import { idleDialsOf } from '../../../../game/rules/power';
@@ -64,5 +66,20 @@ describe('기대값 띠 — 지역 내 Δ 공식 고정', () => {
     // 무판정 축 Δ직전이 살아 있어야 한다(과거엔 inRegion 부재로 통째로 사라졌다)
     expect(document.body.textContent).toMatch(
       new RegExp(`${eb.toFixed(1)}G[^G]*\\+${pct}%`));
+  });
+
+  it('시간당 (G/h) 열과 시간당 대비 %가 통합 EV 엔진 산출값과 일치한다', () => {
+    render(<FishTab />);
+    fireEvent.click(screen.getByRole('button', { name: '모두 펼치기' }));
+    const emptySim: SimOverrides = { budgets: {}, fishWeights: {}, price: {} };
+    expect(screen.getAllByRole('columnheader', { name: '시간당 (G/h)' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('columnheader', { name: '시간당 대비' }).length).toBeGreaterThan(0);
+
+    if (SPOTS.length < 2) return;
+    const ha = selectSpotHourlyEvs(SPOTS[0].id as SpotId, emptySim).evs.idleWorst;
+    const hb = selectSpotHourlyEvs(SPOTS[1].id as SpotId, emptySim).evs.idleWorst;
+    const pct = Math.round((hb - ha) / Math.abs(ha) * 100);
+    const hbText = `${Math.round(hb).toLocaleString('ko-KR')}G/h`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    expect(document.body.textContent).toMatch(new RegExp(`${hbText}[^%]*\\+${pct}%`));
   });
 });
