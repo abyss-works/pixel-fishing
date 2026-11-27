@@ -2,28 +2,29 @@
 // 채널은 전체 하나이고 상태는 이 프로세스 메모리에만 있다. 서버 파드가 하나라는 전제다.
 // 게스트(계정을 연결하지 않은 익명 계정)는 다른 접속자와 격리한다. 게스트의 위치와 닉네임은 어떤 연결에도 보내지 않고, 접속 상태 조회에도 내놓지 않는다.
 // 표시용 채널이라 게임 상태를 바꾸지 않는다. 채팅은 저장한 뒤 보내고, 수신자가 차단한 사람의 채팅은 그 수신자에게 보내지 않는다.
-// 채팅 방은 전체(global)·지역(local)·길드(guild) 세 가지다. 전체 방은 10초 쿨다운, 모든 방은 10초 25건 합산 창과 직전 동일 문구 10초 차단을 강제한다.
+// 채팅 방은 전체(global)·지역(local)·길드(guild) 세 가지다. 전체 방은 10초 쿨다운(운영진 면제), 모든 방은 10초 25건 합산 창을 강제한다.
 // 연결이 끝나면(정상 종료, 무응답 정리, 같은 계정의 새 연결로 교체, 서버 종료) 그 연결을 접속 세션으로 기록한다.
 import type { IncomingMessage, Server } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { WebSocket, WebSocketServer } from 'ws';
 import {
-  CHAT_DUPLICATE_WINDOW_MS, CHAT_RATE_WINDOW_MS, CHAT_RECENT, GLOBAL_CHAT_COOLDOWN_MS,
-  chatRate, chatText, globalChatCooldown, isDuplicateChat,
+  CHAT_RATE_WINDOW_MS, CHAT_RECENT, GLOBAL_CHAT_COOLDOWN_MS,
+  chatRate, chatText, globalChatCooldown,
   LIVE_CLOSE_OUTDATED, LIVE_CLOSE_REPLACED, LIVE_CLOSE_RESTART, LIVE_IDLE_MS, LIVE_MAX_PER_SEC, LIVE_PATH, LIVE_PING_MS,
   idleSinceOf, parseClientMessage,
 } from '../../src/game/rules/live.js';
 import type { ChatLine, ChatRoom, NoticeItem, Presence, ServerMessage } from '../../src/game/rules/live.js';
 import { DEFAULT_LOOK, effectiveLookForRegion, forcedHatForRegion } from '../../src/game/content/wardrobe.js';
 import type { Look } from '../../src/game/content/wardrobe.js';
+import { isKnownLocation } from '../../src/game/content/places.js';
 import type { RegionId } from '../../src/game/content/places.js';
 import { topZoneOf, zoneById } from '../../src/game/content/zones.js';
 import type { ZoneId } from '../../src/game/content/zones.js';
 import type { CatchFxPayload } from './livePresence.js';
 import { isPrerenderRequest } from './prerender.js';
 
-/** 연결한 사용자 — 표시 이름·배·명성은 서버가 DB에서 읽는다. 클라이언트가 보낸 값을 믿지 않는다. guest는 이메일이 없는 계정이다 */
-export interface LiveUser { uid: string; nick: string; boat: number; fame: number; guest: boolean }
+/** 연결한 사용자 — 표시 이름·배·명성·운영진 여부는 서버가 DB에서 읽는다. 클라이언트가 보낸 값을 믿지 않는다. guest는 이메일이 없는 계정이다 */
+export interface LiveUser { uid: string; nick: string; boat: number; fame: number; guest: boolean; staff?: boolean }
 
 export type LiveChatSaveResult =
   | { ok: true; line: ChatLine; room: ChatRoom; region: string | null; guild: string | null }
@@ -133,7 +134,7 @@ export interface LiveServer {
 
 /** 방치 시간을 세는 중일 때만 싣는 선택 필드 */
 const idleField = (since: number | null, at: number): { idleMs?: number } => since === null ? {} : { idleMs: at - since };
-const isRegionId = (region: string): region is RegionId => region === 'village' || region === 'world';
+const isRegionId = (region: string): region is RegionId => isKnownLocation({ kind: 'region', id: region });
 
 /** 지역·해역 식별자를 최상위 존 id로 정규화한다. 알 수 없는 지역(씬 이름 등)은 원문을 유지한다 */
 function normalizeRegion(region: string | null | undefined, zone?: string | null): string | null {
@@ -216,9 +217,8 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
     }
     opts.metrics?.onClose('abnormal');
   };
-  // 계정별 최근 채팅 시각·직전 문구·전체 방 쿨다운 시각. 재연결해도 유지되도록 연결이 아니라 계정에 둔다
+  // 계정별 최근 채팅 시각·전체 방 쿨다운 시각. 재연결해도 유지되도록 연결이 아니라 계정에 둔다
   const chatTimes = new Map<string, number[]>();
-  const lastChatByUid = new Map<string, { text: string; at: number }>();
   const lastGlobalAt = new Map<string, number>();
   const chatQueues = new Map<string, Promise<void>>();
 
@@ -251,7 +251,7 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
       }
     }
   };
-  // 채팅 한 줄 — 권한·길이·도배·중복·전체 쿨다운을 판정하고 저장한 뒤 방에 맞게 보낸다
+  // 채팅 한 줄 — 권한·길이·도배·전체 쿨다운을 판정하고 저장한 뒤 방에 맞게 보낸다
   const runChat = async (ws: WebSocket, conn: Conn, raw: string, rawRoom: ChatRoom | undefined) => {
     const { user } = conn;
     if (user.guest) { send(ws, { t: 'error', code: 'chat-guest' }); return; }
@@ -266,11 +266,7 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
     const rate = chatRate(chatTimes.get(user.uid) ?? [], now);
     chatTimes.set(user.uid, rate.window);
     if (!rate.ok) { send(ws, { t: 'error', code: 'chat-rate' }); return; }
-    if (isDuplicateChat(lastChatByUid.get(user.uid), text, now)) {
-      send(ws, { t: 'error', code: 'chat-duplicate' });
-      return;
-    }
-    if (room === 'global') {
+    if (room === 'global' && !user.staff) {
       const cooldown = globalChatCooldown(lastGlobalAt.get(user.uid), now);
       if (!cooldown.ok) {
         send(ws, { t: 'error', code: 'chat-global-cooldown', retryAfterMs: cooldown.retryAfterMs });
@@ -293,8 +289,7 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
       line = saved;
     }
     const savedAt = Date.now();
-    lastChatByUid.set(user.uid, { text, at: savedAt });
-    if (outRoom === 'global') lastGlobalAt.set(user.uid, savedAt);
+    if (outRoom === 'global' && !user.staff) lastGlobalAt.set(user.uid, savedAt);
     sendChat(line, outRoom, outRegion, outGuild);
   };
   const onChat = (ws: WebSocket, conn: Conn, raw: string, rawRoom: ChatRoom | undefined) => {
@@ -483,6 +478,7 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
             you: user.uid,
             others,
             recentChat,
+            globalCooldownExempt: Boolean(user.staff),
             ...(recentLocalChat !== undefined ? { recentLocalChat } : {}),
             ...(recentGuildChat ? { recentGuildChat } : {}),
             ...(notices !== undefined ? { notices } : {}),
@@ -523,7 +519,6 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
       }
     }
     for (const [uid, times] of chatTimes) if (now - (times.at(-1) ?? 0) >= CHAT_RATE_WINDOW_MS) chatTimes.delete(uid);
-    for (const [uid, prev] of lastChatByUid) if (now - prev.at >= CHAT_DUPLICATE_WINDOW_MS) lastChatByUid.delete(uid);
     for (const [uid, at] of lastGlobalAt) if (now - at >= GLOBAL_CHAT_COOLDOWN_MS) lastGlobalAt.delete(uid);
   }, opts.sweepMs ?? LIVE_PING_MS);
   timer.unref();

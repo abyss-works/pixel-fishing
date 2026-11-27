@@ -54,14 +54,20 @@ export async function deleteUserProfile(db: Executor, uid: string): Promise<void
   await db.execute(sql`delete from public.profiles where user_id = ${uid}`);
 }
 
-/** 실시간 채널에 보일 이름, 배, 명성. 프로필이 없으면 이름은 null, 저장 상태가 없으면 배·명성은 0이다 */
-export async function liveIdentity(db: Executor, uid: string): Promise<{ nick: string | null; boat: number; fame: number }> {
-  const { rows } = await db.execute<{ nick: string | null; boat: number | null; fame: string | number | null }>(sql`select
-      p.nickname as nick, c.boat, c.fame
+/** 실시간 채널에 보일 이름, 배, 명성, 운영진 여부. 프로필이 없으면 이름은 null, 저장 상태가 없으면 배·명성은 0이다 */
+export async function liveIdentity(db: Executor, uid: string): Promise<{ nick: string | null; boat: number; fame: number; staff: boolean }> {
+  const { rows } = await db.execute<{ nick: string | null; boat: number | null; fame: string | number | null; staff: boolean }>(sql`select
+      p.nickname as nick, c.boat, c.fame,
+      exists (select 1 from public.admins a where a.user_id = ${uid}::uuid and a.role in ('admin', 'maintainer')) as staff
     from (select 1) _
     left join public.profiles p on p.user_id = ${uid}
     left join public.saves_current c on c.user_id = ${uid}`);
-  return { nick: rows[0]?.nick ?? null, boat: rows[0]?.boat ?? 0, fame: Number(rows[0]?.fame ?? 0) };
+  return {
+    nick: rows[0]?.nick ?? null,
+    boat: rows[0]?.boat ?? 0,
+    fame: Number(rows[0]?.fame ?? 0),
+    staff: Boolean(rows[0]?.staff),
+  };
 }
 
 /**

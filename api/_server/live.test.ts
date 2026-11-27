@@ -8,7 +8,7 @@ import { WebSocket } from 'ws';
 import { attachLive } from './live.js';
 import type { LiveOptions, LiveServer } from './live.js';
 import {
-  CHAT_DUPLICATE_WINDOW_MS, CHAT_RATE_MAX, CHAT_RECENT, GLOBAL_CHAT_COOLDOWN_MS,
+  CHAT_RATE_MAX, CHAT_RECENT, GLOBAL_CHAT_COOLDOWN_MS,
   LIVE_CLOSE_OUTDATED, LIVE_CLOSE_REPLACED, LIVE_CLOSE_RESTART, LIVE_MAX_PER_SEC, LIVE_PATH,
   MAX_NOTICES,
 } from '../../src/game/rules/live.js';
@@ -233,7 +233,7 @@ describe('실시간 채널 서버', () => {
   it('연결하면 hello에 자기 id를 받는다', async () => {
     const { url } = await start();
     const a = connect(url, 'u1');
-    expect(await a.next()).toEqual({ t: 'hello', you: 'u1', others: [], recentChat: [] });
+    expect(await a.next()).toEqual({ t: 'hello', you: 'u1', others: [], recentChat: [], globalCooldownExempt: false });
   });
 
   it('첫 위치는 join, 이후 위치는 move로 보낸 사람을 뺀 연결에 전달하고, 형식이 틀린 메시지는 무시한다', async () => {
@@ -310,7 +310,7 @@ describe('실시간 채널 서버', () => {
     expect(live.presenceOf('u1')).toMatchObject({ region: 'deep', x: 1, y: 2 });
     expect(live.presenceOf('u3')).toBeNull();
     const b = connect(url, 'u2');
-    expect(await b.next()).toEqual({ t: 'hello', you: 'u2', recentChat: [],
+    expect(await b.next()).toEqual({ t: 'hello', you: 'u2', recentChat: [], globalCooldownExempt: false,
       others: [{ uid: 'u1', nick: 'n-u1', boat: 2, fame: 100, region: 'deep', zone: null, x: 1, y: 2, dir: 0, line: false }] });
     a.ws.close();
     expect(await b.next()).toEqual({ t: 'leave', uid: 'u1' });
@@ -580,7 +580,7 @@ describe('실시간 채널 채팅', () => {
     );
     store.blocks.set('u2', ['u3']);
     const b = connect(url, 'u2');
-    expect(await b.next()).toEqual({ t: 'hello', you: 'u2', others: [], recentChat: [store.lines[0]] });
+    expect(await b.next()).toEqual({ t: 'hello', you: 'u2', others: [], recentChat: [store.lines[0]], globalCooldownExempt: false });
   });
 });
 
@@ -652,9 +652,9 @@ describe('실시간 채널 길드 채팅', () => {
     store.guilds.set('u2', 'g1');
     store.blocks.set('u2', ['u3']);
     const b = connect(url, 'u2');
-    expect(await b.next()).toEqual({ t: 'hello', you: 'u2', others: [], recentChat: [], recentGuildChat: [line(1, 'u1')] });
+    expect(await b.next()).toEqual({ t: 'hello', you: 'u2', others: [], recentChat: [], recentGuildChat: [line(1, 'u1')], globalCooldownExempt: false });
     const c = connect(url, 'u4');
-    expect(await c.next()).toEqual({ t: 'hello', you: 'u4', others: [], recentChat: [] });
+    expect(await c.next()).toEqual({ t: 'hello', you: 'u4', others: [], recentChat: [], globalCooldownExempt: false });
   });
 
   it('게스트의 위치와 닉네임은 다른 연결에 보내지 않는다 — join, move, stop, leave 모두 없다', async () => {
@@ -892,34 +892,68 @@ describe('실시간 채팅 3방·지역 격리·쿨다운·중복 차단·공지
     }
   });
 
-  it('모든 방에서 직전 트림 문구와 같으면 10초 이내 chat-duplicate로 차단한다', async () => {
-    vi.useFakeTimers();
-    try {
-      vi.setSystemTime(new Date('2030-01-01T00:00:00.000Z'));
-      const { url } = await start();
-      const a = connect(url, 'u1');
-      await a.next();
-      a.ws.send(JSON.stringify({ t: 'region', region: 'pacific' }));
-      await a.next();
+  it('같은 문구 연속 전송 및 채널 전환 동일 문구 전송이 모두 성공한다', async () => {
+    const { url, chat: store } = await start();
+    store.guilds.set('u1', 'g1');
+    const a = connect(url, 'u1');
+    await a.next();
+    a.ws.send(JSON.stringify({ t: 'region', region: 'pacific' }));
+    await a.next();
 
-      a.ws.send(JSON.stringify({ t: 'chat', text: '안녕', room: 'local' }));
-      expect(await a.next()).toMatchObject({ t: 'chat', room: 'local', line: { text: '안녕' } });
+    a.ws.send(JSON.stringify({ t: 'chat', text: '안녕', room: 'local' }));
+    expect(await a.next()).toMatchObject({ t: 'chat', room: 'local', line: { text: '안녕' } });
 
-      // 공백만 달라도 직전 트림 문구와 같고 10초 이내면 차단된다
-      a.ws.send(JSON.stringify({ t: 'chat', text: '  안녕  ', room: 'local' }));
-      expect(await a.next()).toEqual({ t: 'error', code: 'chat-duplicate' });
+    a.ws.send(JSON.stringify({ t: 'chat', text: '  안녕  ', room: 'local' }));
+    expect(await a.next()).toMatchObject({ t: 'chat', room: 'local', line: { text: '안녕' } });
 
-      // 다른 문구는 허용되고 직전 문구가 갱신된다
-      a.ws.send(JSON.stringify({ t: 'chat', text: '반가워', room: 'local' }));
-      expect(await a.next()).toMatchObject({ t: 'chat', room: 'local', line: { text: '반가워' } });
+    a.ws.send(JSON.stringify({ t: 'chat', text: '안녕', room: 'guild' }));
+    expect(await a.next()).toMatchObject({ t: 'chat', room: 'guild', line: { text: '안녕' } });
 
-      // 10초 경과 후에는 같은 문구도 다시 허용된다
-      vi.advanceTimersByTime(CHAT_DUPLICATE_WINDOW_MS);
-      a.ws.send(JSON.stringify({ t: 'chat', text: '반가워', room: 'local' }));
-      expect(await a.next()).toMatchObject({ t: 'chat', room: 'local', line: { text: '반가워' } });
-    } finally {
-      vi.useRealTimers();
+    a.ws.send(JSON.stringify({ t: 'chat', text: '안녕', room: 'global' }));
+    expect(await a.next()).toMatchObject({ t: 'chat', room: 'global', line: { text: '안녕' } });
+  });
+
+  it('운영진(staff: true)은 hello에 globalCooldownExempt: true를 받고 전체 방 10초 쿨다운 없이 연속 전송하며, 일반 사용자는 chat-global-cooldown으로 차단되고 10초 25건 레이트 리밋은 모두에게 유지된다', async () => {
+    const { url } = await start({
+      authenticate: async (req) => {
+        const uid = req.headers.cookie;
+        if (!uid) return null;
+        return { uid, nick: `n-${uid}`, boat: 2, fame: 100, guest: false, staff: uid === 'op' };
+      },
+    });
+    const op = connect(url, 'op');
+    const user = connect(url, 'u1');
+    expect(await op.next()).toMatchObject({ t: 'hello', you: 'op', globalCooldownExempt: true });
+    expect(await user.next()).toMatchObject({ t: 'hello', you: 'u1', globalCooldownExempt: false });
+
+    // 일반 사용자는 두 번째 전체 채팅에서 쿨다운에 걸린다
+    user.ws.send(JSON.stringify({ t: 'chat', text: '첫 말', room: 'global' }));
+    expect(await user.next()).toMatchObject({ t: 'chat', room: 'global', line: { text: '첫 말' } });
+    expect(await op.next()).toMatchObject({ t: 'chat', room: 'global', line: { text: '첫 말' } });
+
+    user.ws.send(JSON.stringify({ t: 'chat', text: '둘째 말', room: 'global' }));
+    expect(await user.next()).toMatchObject({ t: 'error', code: 'chat-global-cooldown' });
+
+    // 운영진은 같은 문구를 포함한 전체 채팅을 대기 없이 연속 전송할 수 있다
+    for (let i = 0; i < 3; i++) {
+      op.ws.send(JSON.stringify({ t: 'chat', text: '공지 안내', room: 'global' }));
     }
+    for (let i = 0; i < 3; i++) {
+      expect(await op.next()).toMatchObject({ t: 'chat', room: 'global', line: { uid: 'op', text: '공지 안내' } });
+      expect(await user.next()).toMatchObject({ t: 'chat', room: 'global', line: { uid: 'op', text: '공지 안내' } });
+    }
+
+    // 운영진도 10초 25건 레이트 리밋은 동일하게 적용된다(이미 3건 전송 + 22건 전송 = 25건, 26번째 차단)
+    const batch1 = 11;
+    for (let i = 0; i < batch1; i++) op.ws.send(JSON.stringify({ t: 'chat', text: `b1-${i}`, room: 'global' }));
+    for (let i = 0; i < batch1; i++) expect((await op.next()).t).toBe('chat');
+    await new Promise(r => setTimeout(r, 1100));
+    const remaining = CHAT_RATE_MAX - 3 - batch1; // 11건 허용 + 1건 초과
+    for (let i = 0; i <= remaining; i++) op.ws.send(JSON.stringify({ t: 'chat', text: `b2-${i}`, room: 'global' }));
+    const rest: ServerMessage[] = [];
+    for (let i = 0; i <= remaining; i++) rest.push(await op.next());
+    expect(rest.filter(m => m.t === 'chat')).toHaveLength(remaining);
+    expect(rest.filter(m => m.t === 'error')).toEqual([{ t: 'error', code: 'chat-rate' }]);
   });
 
   it('hello는 activeNotices를 싣고, sendToAll은 게스트 포함 모든 열린 연결에 공지를 보낸다', async () => {
@@ -1103,6 +1137,36 @@ describe('실시간 어획 점프 브로드캐스트(broadcastCatchFx)', () => {
     await c.next(); // move u1
     live.broadcastCatchFx('u1', { fishId: 'crucian', form: 'normal' });
     expect(await c.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'village', x: 45, y: 55, toX: 30, toY: 34, fishId: 'crucian', form: 'normal' });
+  });
+
+  it('championship 이벤트 구역에서도 같은 구역의 다른 플레이어에게 catchFx를 전송한다', async () => {
+    const { url, live } = await start();
+    const a = connect(url, 'u1');
+    const b = connect(url, 'u2');
+    const c = connect(url, 'u3');
+    await a.next(); await b.next(); await c.next();
+
+    a.ws.send(JSON.stringify({ t: 'move', region: 'championship', x: 100, y: 120, dir: 1, line: true, bob: { x: 115, y: 135 } }));
+    await b.next(); await c.next();
+    b.ws.send(JSON.stringify({ t: 'move', region: 'championship', x: 150, y: 120, dir: 0, line: false }));
+    await a.next(); await c.next();
+    c.ws.send(JSON.stringify({ t: 'move', region: 'world', x: 50, y: 60, dir: 0, line: false }));
+    await a.next(); await b.next();
+
+    live.broadcastCatchFx('u1', { fishId: 'salmon', form: 'normal' });
+    expect(await b.next()).toEqual({
+      t: 'catchFx',
+      uid: 'u1',
+      region: 'championship',
+      x: 115,
+      y: 135,
+      toX: 100,
+      toY: 114,
+      fishId: 'salmon',
+      form: 'normal',
+    });
+    expect(a.messages.filter(m => m.t === 'catchFx')).toEqual([]);
+    expect(c.messages.filter(m => m.t === 'catchFx')).toEqual([]);
   });
 });
 
@@ -1309,7 +1373,7 @@ describe('프리렌더 차단 및 업그레이드 세대 경합 방지', () => {
     await firstRecentStarted;
 
     const second = connect(url, 'u1');
-    expect(await second.next()).toEqual({ t: 'hello', you: 'u1', others: [], recentChat: [] });
+    expect(await second.next()).toEqual({ t: 'hello', you: 'u1', others: [], recentChat: [], globalCooldownExempt: false });
     expect(live.isOnline('u1')).toBe(true);
 
     // 지연되던 첫 번째 업그레이드를 뒤늦게 완료시킨다
