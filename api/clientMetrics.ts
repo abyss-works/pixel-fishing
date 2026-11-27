@@ -4,7 +4,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { sessionOf } from './_auth/session.js';
 import { parseClientMetricBeacon, recordClientMetricBeacon } from './_server/clientMetrics.js';
-import { clientKey, createRateLimiter } from './_server/rateLimit.js';
+import { clientKey, createSharedRateLimiter } from './_server/rateLimit.js';
 import { ApiError, toApiError } from './errors.js';
 import { reportServerIssue } from './observability.js';
 
@@ -15,11 +15,11 @@ const MAX_BEACON_BYTES = 16_384;
 const RATE_WINDOW_MS = 60_000;
 const RATE_MAX_PER_MINUTE = 20;
 
-let limiter = createRateLimiter({ windowMs: RATE_WINDOW_MS, max: RATE_MAX_PER_MINUTE });
+let limiter = createSharedRateLimiter({ prefix: 'client-metrics', windowMs: RATE_WINDOW_MS, max: RATE_MAX_PER_MINUTE });
 
 /** 단위 테스트용 속도 제한 상태 초기화 */
 export function resetClientMetricsRateLimiterForTest(): void {
-  limiter = createRateLimiter({ windowMs: RATE_WINDOW_MS, max: RATE_MAX_PER_MINUTE });
+  limiter = createSharedRateLimiter({ prefix: 'client-metrics', windowMs: RATE_WINDOW_MS, max: RATE_MAX_PER_MINUTE });
 }
 
 function parseBodyObject(raw: unknown): unknown {
@@ -61,8 +61,9 @@ async function route(req: Req, res: Res): Promise<void> {
 
   const key = clientKey(req);
   const now = Date.now();
-  if (!limiter.take(key, now)) {
-    throw new ApiError(429, 'rate-limited', { retryAfter: String(limiter.retryAfterSec(key, now)) });
+  const rate = await limiter.check(key, now);
+  if (!rate.allowed) {
+    throw new ApiError(429, 'rate-limited', { retryAfter: String(rate.retryAfterSec) });
   }
 
   if (!process.env.DATABASE_URL) throw new ApiError(500, 'server-config');

@@ -1,6 +1,7 @@
-// 요청 수 제한 — 키(접속 주소 등)마다 고정 창 안의 요청 수를 센다. 한 프로세스의 메모리에만 둔다.
-// 길드 미리보기처럼 로그인 없이 열리는 경로에서 코드 추측을 막는 데 쓴다.
+// 요청 수 제한 — 키(접속 주소 등)마다 고정 창 안의 요청 수를 센다.
+// 단일 프로세스(createRateLimiter)와 Redis 공유(createSharedRateLimiter)를 제공한다.
 import type { IncomingMessage } from 'node:http';
+import { getRedisClient, warnRedisOnce } from './redisClient.js';
 
 export interface RateLimiter {
   /** 이번 요청을 받아도 되는가. 받으면 센다 */
@@ -28,6 +29,79 @@ export function createRateLimiter(opts: { windowMs: number; max: number }): Rate
       const w = windows.get(key);
       if (!w || now - w.start >= opts.windowMs) return 1;
       return Math.max(1, Math.ceil((opts.windowMs - (now - w.start)) / 1000));
+    },
+  };
+}
+
+export interface RedisPipelineLike {
+  incr(key: string): RedisPipelineLike;
+  pexpire(key: string, ms: number): RedisPipelineLike;
+  exec(): Promise<[Error | null, unknown][] | null>;
+}
+
+export interface RedisRateLimitClient {
+  status?: string;
+  pipeline(): RedisPipelineLike;
+}
+
+export interface SharedRateLimiterOptions {
+  prefix: string;
+  windowMs: number;
+  max: number;
+  env?: string;
+  client?: RedisRateLimitClient | null;
+}
+
+export interface SharedRateLimiter {
+  check(key: string, now?: number): Promise<{ allowed: boolean; retryAfterSec: number }>;
+}
+
+/**
+ * Redis INCR + PEXPIRE 원자 파이프라인 기반 공유 요청 수 제한기.
+ * Redis 미설정·미연결·오류 시 프로세스 내 RateLimiter로 폴백한다(Fail-open).
+ */
+export function createSharedRateLimiter(opts: SharedRateLimiterOptions): SharedRateLimiter {
+  const local = createRateLimiter({ windowMs: opts.windowMs, max: opts.max });
+  const env = (opts.env ?? process.env.DEPLOY_ENV ?? 'local').trim().toLowerCase() || 'local';
+
+  const checkLocal = (key: string, now: number): { allowed: boolean; retryAfterSec: number } => {
+    if (local.take(key, now)) return { allowed: true, retryAfterSec: 0 };
+    return { allowed: false, retryAfterSec: local.retryAfterSec(key, now) };
+  };
+
+  return {
+    async check(key: string, now = Date.now()): Promise<{ allowed: boolean; retryAfterSec: number }> {
+      const client = opts.client !== undefined ? opts.client : getRedisClient();
+      if (!client || (client.status !== undefined && client.status !== 'ready')) {
+        return checkLocal(key, now);
+      }
+
+      const bucket = Math.floor(now / opts.windowMs);
+      const redisKey = `pf:${env}:rl:${opts.prefix}:${key}:${bucket}`;
+      try {
+        const pipe = client.pipeline();
+        pipe.incr(redisKey);
+        pipe.pexpire(redisKey, opts.windowMs);
+        const results = await pipe.exec();
+        const first = results?.[0];
+        if (!first || first[0]) {
+          warnRedisOnce('rate-limit-exec', first?.[0] ?? new Error('empty pipeline result'));
+          return checkLocal(key, now);
+        }
+        const count = Number(first[1]);
+        if (!Number.isFinite(count)) {
+          return checkLocal(key, now);
+        }
+        if (count > opts.max) {
+          const resetAt = (bucket + 1) * opts.windowMs;
+          const retryAfterSec = Math.max(1, Math.ceil((resetAt - now) / 1000));
+          return { allowed: false, retryAfterSec };
+        }
+        return { allowed: true, retryAfterSec: 0 };
+      } catch (err) {
+        warnRedisOnce('rate-limit', err);
+        return checkLocal(key, now);
+      }
     },
   };
 }

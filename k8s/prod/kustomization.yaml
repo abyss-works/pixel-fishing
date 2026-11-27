@@ -9,6 +9,7 @@ resources:
   - namespace.yaml
   - deployment.yaml
   - errors.yaml
+  - valkey.yaml
   - service.yaml
   - admin.yaml
   - ingress.yaml
