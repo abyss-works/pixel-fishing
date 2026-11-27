@@ -188,9 +188,9 @@ const live = attachLive(server, {
   authenticate: async (req) => {
     const session = await sessionOf(req.headers);
     if (!session) return null;
-    const { nick, boat, fame } = await liveIdentity(database().db, session.id);
+    const { nick, boat, fame, staff } = await liveIdentity(database().db, session.id);
     // 프로필은 첫 액션에서 생긴다. 그 전에 연결한 게스트는 기본 이름으로 보인다
-    return { uid: session.id, nick: nick ?? '낚시꾼', boat, fame, guest: session.email === null };
+    return { uid: session.id, nick: nick ?? '낚시꾼', boat, fame, guest: session.email === null, staff: Boolean(staff) };
   },
   chat: {
     save: (user, text, guild, room, region) => saveChat(database().db, {

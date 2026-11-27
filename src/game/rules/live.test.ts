@@ -1,9 +1,9 @@
 import { describe, it, expect, expectTypeOf } from 'vitest';
 import {
-  CHAT_DUPLICATE_WINDOW_MS, CHAT_MAX_LENGTH, CHAT_RATE_MAX, CHAT_RATE_WINDOW_MS,
+  CHAT_MAX_LENGTH, CHAT_RATE_MAX, CHAT_RATE_WINDOW_MS,
   GLOBAL_CHAT_COOLDOWN_MS, LIVE_MAX_LENGTH, LIVE_MOVE_MS, MAX_NOTICES, NOTICE_BODY_MAX, NOTICE_TITLE_MAX,
   chatRate, chatText, formatIdle, glidePosition, globalChatCooldown, idleSinceOf,
-  isDuplicateChat, isNoticeActive, isNoticeEnded, nextGlide, normalizeNoticeDraft, parseClientMessage,
+  isNoticeActive, isNoticeEnded, nextGlide, normalizeNoticeDraft, parseClientMessage,
   type ChatLine, type ChatRoom, type ClientMessage, type NoticeItem, type Presence, type ServerMessage,
 } from './live';
 
@@ -254,23 +254,6 @@ describe('globalChatCooldown', () => {
   });
 });
 
-describe('isDuplicateChat', () => {
-  it('10초 이내에 트림 기준 같은 비어 있지 않은 문구면 중복으로 판정한다', () => {
-    expect(CHAT_DUPLICATE_WINDOW_MS).toBe(10_000);
-    expect(isDuplicateChat(null, '안녕', 5000)).toBe(false);
-    expect(isDuplicateChat(undefined, '안녕', 5000)).toBe(false);
-    expect(isDuplicateChat({ text: '안녕', at: 1000 }, '  안녕  ', 1000 + CHAT_DUPLICATE_WINDOW_MS - 1)).toBe(true);
-    expect(isDuplicateChat({ text: '  안녕 ', at: 1000 }, '안녕', 5000)).toBe(true);
-    expect(isDuplicateChat({ text: '안녕', at: 1000 }, '다른 말', 5000)).toBe(false);
-    expect(isDuplicateChat({ text: '안녕', at: 1000 }, '안녕', 1000 + CHAT_DUPLICATE_WINDOW_MS)).toBe(false);
-  });
-
-  it('빈 문자열이나 공백만 있는 입력은 중복으로 판정하지 않는다', () => {
-    expect(isDuplicateChat({ text: '', at: 1000 }, '', 2000)).toBe(false);
-    expect(isDuplicateChat({ text: '   ', at: 1000 }, '  ', 2000)).toBe(false);
-  });
-});
-
 describe('isNoticeActive', () => {
   it('시작 시각 이상이고 종료 시각 미만일 때만 활성이다', () => {
     const notice = { startsAt: '2026-11-26T10:00:00.000Z', endsAt: '2026-11-26T12:00:00.000Z' };
@@ -398,6 +381,22 @@ describe('채팅 3채널·공지 프로토콜 타입 계약', () => {
     type HelloMsg = Extract<ServerMessage, { t: 'hello' }>;
     expectTypeOf<HelloMsg['recentLocalChat']>().toEqualTypeOf<ChatLine[] | undefined>();
     expectTypeOf<HelloMsg['notices']>().toEqualTypeOf<NoticeItem[] | undefined>();
+    expectTypeOf<HelloMsg['globalCooldownExempt']>().toEqualTypeOf<boolean | undefined>();
+
+    const helloExempt: ServerMessage = {
+      t: 'hello',
+      you: 'u-1',
+      others: [],
+      recentChat: [],
+      globalCooldownExempt: true,
+    };
+    expect(JSON.parse(JSON.stringify(helloExempt))).toEqual({
+      t: 'hello',
+      you: 'u-1',
+      others: [],
+      recentChat: [],
+      globalCooldownExempt: true,
+    });
 
     expectTypeOf<Extract<ServerMessage, { t: 'localHistory' }>>()
       .toEqualTypeOf<{ t: 'localHistory'; region: string; lines: ChatLine[] }>();
@@ -407,7 +406,7 @@ describe('채팅 3채널·공지 프로토콜 타입 계약', () => {
       .toEqualTypeOf<{ t: 'chat'; line: ChatLine; room?: ChatRoom }>();
     expectTypeOf<Extract<ServerMessage, { t: 'error' }>>().toEqualTypeOf<{
       t: 'error';
-      code: 'chat-guest' | 'chat-rate' | 'chat-length' | 'chat-restricted' | 'chat-no-guild' | 'chat-global-cooldown' | 'chat-duplicate';
+      code: 'chat-guest' | 'chat-rate' | 'chat-length' | 'chat-restricted' | 'chat-no-guild' | 'chat-global-cooldown';
       retryAfterMs?: number;
     }>();
   });

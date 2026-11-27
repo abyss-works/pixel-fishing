@@ -323,8 +323,8 @@ describe('채팅 상태', () => {
     s = applyLiveMessage(s, { t: 'chat', room: 'guild', line: line(3, 'me') }, 1600);
     expect(s.globalCooldownUntil).toBe(0);
 
-    // 중복·속도·길이·제한 오류는 전체 쿨다운을 걸지 않는다
-    for (const code of ['chat-duplicate', 'chat-rate', 'chat-length', 'chat-restricted'] as const) {
+    // 속도·길이·제한 오류는 전체 쿨다운을 걸지 않는다
+    for (const code of ['chat-rate', 'chat-length', 'chat-restricted'] as const) {
       s = applyLiveMessage(s, { t: 'error', code }, 2000);
       expect(s.globalCooldownUntil).toBe(0);
     }
@@ -332,6 +332,25 @@ describe('채팅 상태', () => {
     // 본인 계정의 전체 채팅이 서버에서 돌아오면 10초 쿨다운이 설정된다
     s = applyLiveMessage(s, { t: 'chat', room: 'global', line: line(4, 'me') }, 3000);
     expect(s.globalCooldownUntil).toBe(3000 + GLOBAL_CHAT_COOLDOWN_MS);
+  });
+
+  it('hello에서 globalCooldownExempt가 true이면 본인 global 채팅 에코 수신 시 쿨다운을 설정하지 않는다', () => {
+    expect(EMPTY_LIVE.globalCooldownExempt).toBe(false);
+    let s = applyLiveMessage(EMPTY_LIVE, {
+      t: 'hello',
+      you: 'me',
+      others: [],
+      recentChat: [],
+      globalCooldownExempt: true,
+    }, 0);
+    expect(s.globalCooldownExempt).toBe(true);
+
+    s = applyLiveMessage(s, { t: 'chat', room: 'global', line: line(1, 'me') }, 3000);
+    expect(s.globalCooldownUntil).toBe(0);
+
+    // 재연결 hello에서 면제 플래그가 없으면 false로 돌아온다
+    s = applyLiveMessage(s, { t: 'hello', you: 'me', others: [], recentChat: [] }, 4000);
+    expect(s.globalCooldownExempt).toBe(false);
   });
 
   it('withoutAuthor는 그 사람의 줄을 세 방에서 모두 지운다', () => {
