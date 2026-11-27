@@ -1,5 +1,5 @@
 // 쿠폰 구역 — 동적 보상 쿠폰을 발행하고, 유효 기간·선착순 한도·활성 상태를 관리한다.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
 import CheckToggle from '../../../ui/CheckToggle';
@@ -55,6 +55,7 @@ export default function CouponsTab() {
   const { confirm, dialogs } = useDialogs();
 
   const [editingCode, setEditingCode] = useState<string | null>(null);
+  const editingCodeRef = useRef<string | null>(null);
   const [code, setCode] = useState('');
   const [description, setDescription] = useState('');
   const [gold, setGold] = useState('0');
@@ -84,6 +85,10 @@ export default function CouponsTab() {
   };
 
   useEffect(() => {
+    editingCodeRef.current = editingCode;
+  }, [editingCode]);
+
+  useEffect(() => {
     const delay = nextCouponBoundaryMs(coupons, now);
     if (delay === null) return;
     const timer = setTimeout(() => setNow(Date.now()), Math.min(delay, 2_147_483_647));
@@ -96,6 +101,7 @@ export default function CouponsTab() {
   };
 
   const resetForm = () => {
+    editingCodeRef.current = null;
     setEditingCode(null);
     setCode('');
     setDescription('');
@@ -113,6 +119,7 @@ export default function CouponsTab() {
 
   const startEdit = (c: AdminCouponRow) => {
     if (savingForm || busyCodes.has(c.code)) return;
+    editingCodeRef.current = c.code;
     setEditingCode(c.code);
     setCode(c.code);
     setDescription(c.description);
@@ -174,7 +181,7 @@ export default function CouponsTab() {
     try {
       await writeCoupon(built.request);
       setNow(currentNowMs());
-      setDone(editingCode !== null ? '쿠폰을 수정했어요.' : '새 쿠폰을 발행했어요.');
+      setDone(editingCodeRef.current !== null ? '쿠폰을 수정했어요.' : '새 쿠폰을 발행했어요.');
       resetForm();
     } catch (e) {
       setFailure(String((e as { message?: unknown }).message ?? e));
@@ -184,7 +191,7 @@ export default function CouponsTab() {
   };
 
   const handleToggleActive = async (c: AdminCouponRow) => {
-    if (busyCodes.has(c.code) || (savingForm && editingCode === c.code)) return;
+    if (busyCodes.has(c.code) || (savingForm && editingCodeRef.current === c.code)) return;
     markCodeBusy(c.code, true);
     clearNotice();
     const nextActive = !c.active;
@@ -201,7 +208,7 @@ export default function CouponsTab() {
         maxRedemptions: c.maxRedemptions,
         perAccountLimit: c.perAccountLimit,
       });
-      if (editingCode === c.code) setActive(nextActive);
+      if (editingCodeRef.current === c.code) setActive(nextActive);
       setNow(currentNowMs());
       setDone(nextActive ? `'${c.code}' 쿠폰을 활성화했어요.` : `'${c.code}' 쿠폰을 비활성화했어요.`);
     } catch (e) {
@@ -212,7 +219,7 @@ export default function CouponsTab() {
   };
 
   const handleDelete = async (c: AdminCouponRow) => {
-    if (busyCodes.has(c.code) || (savingForm && editingCode === c.code)) return;
+    if (busyCodes.has(c.code) || (savingForm && editingCodeRef.current === c.code)) return;
     const body = c.redeemedCount > 0
       ? `'${c.code}' 쿠폰을 삭제할까요? 이미 ${c.redeemedCount.toLocaleString('ko-KR')}회 사용된 쿠폰이며, 기존 사용 이력도 함께 삭제되어 되돌릴 수 없어요.`
       : `'${c.code}' 쿠폰을 삭제할까요? 삭제한 쿠폰은 되돌릴 수 없어요.`;
@@ -222,13 +229,13 @@ export default function CouponsTab() {
       confirmLabel: '삭제',
       body,
     });
-    if (!ok || busyCodes.has(c.code) || (savingForm && editingCode === c.code)) return;
+    if (!ok || busyCodes.has(c.code) || (savingForm && editingCodeRef.current === c.code)) return;
 
     markCodeBusy(c.code, true);
     clearNotice();
     try {
       await writeCoupon({ op: 'delete', code: c.code });
-      if (editingCode === c.code) resetForm();
+      if (editingCodeRef.current === c.code) resetForm();
       setDone('쿠폰을 삭제했어요.');
     } catch (e) {
       setFailure(String((e as { message?: unknown }).message ?? e));
