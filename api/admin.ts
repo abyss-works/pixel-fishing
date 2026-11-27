@@ -22,6 +22,7 @@ import { onboardingFunnel } from './_data/adminFunnel.js';
 import {
   COUPON_CODE_MAX, createAdminCoupon, deleteAdminCoupon, listAdminCoupons, parseCouponDraft, updateAdminCoupon,
 } from './_data/codes.js';
+import type { AdminCouponRow } from './_data/codes.js';
 import {
   EVENT_ID_PATTERN, createAdminEvent, deleteAdminEvent, drawEventWinners, endAdminEventNow,
   listAdminEvents, listEventDraws, parseEventCreateDraft, parseEventDrawInput, parseEventUpdateDraft, updateAdminEvent,
@@ -74,18 +75,18 @@ const WRITES: Record<string, Write> = {
   revokeSessions,
   notices: ({ db }, body, adminId, role) => notices(db, body, adminId, role),
   events: (store, body, adminId) => eventsWrite(store, body, adminId),
-  coupons: ({ db }, body) => couponsWrite(db, body),
+  coupons: ({ db }, body, adminId, role) => couponsWrite(db, body, adminId, role),
   staffBadge,
 };
 
 /** 1계층 관리자(admin) 전용 조회 — maintainer는 403 차단 */
 const ADMIN_ONLY_READ_QUERIES = new Set([
-  'userState', 'userEvents', 'letters', 'mails', 'events', 'eventDraws', 'coupons',
+  'userState', 'userEvents', 'letters', 'mails', 'events', 'eventDraws',
 ]);
 
 /** 1계층 관리자(admin) 전용 쓰기 — maintainer는 403 차단 */
 const ADMIN_ONLY_WRITES = new Set([
-  'mail', 'restrict', 'letterHandled', 'revokeSessions', 'events', 'coupons',
+  'mail', 'restrict', 'letterHandled', 'revokeSessions', 'events',
 ]);
 
 /** 리소스 경로 조회. 요청의 필터와 역할을 검사해 실행할 읽기를 돌려준다. 틀리면 400, 권한 밖이면 403이다 */
@@ -459,9 +460,29 @@ async function eventsWrite({ db, withTransaction }: Database, raw: unknown, admi
   }
 }
 
-/** 동적 쿠폰 생성·수정·삭제 */
-async function couponsWrite(db: Executor, raw: unknown): Promise<unknown> {
+/** 동적 쿠폰 생성·수정·삭제 후 불변 감사 로그를 남긴다 */
+async function couponsWrite(db: Executor, raw: unknown, adminId: string, role: read.AdminRole): Promise<unknown> {
   const body = (raw !== null && typeof raw === 'object' ? raw : {}) as { op?: unknown; code?: unknown };
+  const recordAudit = (
+    action: 'couponCreate' | 'couponUpdate' | 'couponDelete',
+    reason: string,
+    detail: Record<string, unknown>,
+  ) => dbWrite(() => read.insertAdminAuditLog(db, {
+    actorId: adminId,
+    actorRole: role,
+    action,
+    targetId: null,
+    reason,
+    detail,
+  }));
+  const couponDetail = (c: AdminCouponRow) => ({
+    code: c.code,
+    gold: c.gold,
+    itemsCount: c.items.length,
+    active: c.active,
+    maxRedemptions: c.maxRedemptions,
+    perAccountLimit: c.perAccountLimit,
+  });
 
   switch (body.op) {
     case 'create': {
@@ -469,6 +490,7 @@ async function couponsWrite(db: Executor, raw: unknown): Promise<unknown> {
       if (!draft || Object.hasOwn(COUPONS, draft.code)) throw new ApiError(400, 'bad-coupon');
       const coupon = await dbWrite(() => createAdminCoupon(db, draft));
       if (coupon === 'duplicate') throw new ApiError(409, 'duplicate-coupon');
+      await recordAudit('couponCreate', coupon.code, couponDetail(coupon));
       return { coupon };
     }
     case 'update': {
@@ -476,6 +498,7 @@ async function couponsWrite(db: Executor, raw: unknown): Promise<unknown> {
       if (!draft || Object.hasOwn(COUPONS, draft.code)) throw new ApiError(400, 'bad-coupon');
       const coupon = await dbWrite(() => updateAdminCoupon(db, draft));
       if (!coupon) throw new ApiError(404, 'no-coupon');
+      await recordAudit('couponUpdate', coupon.code, couponDetail(coupon));
       return { coupon };
     }
     case 'delete': {
@@ -483,6 +506,7 @@ async function couponsWrite(db: Executor, raw: unknown): Promise<unknown> {
       if (code.length === 0 || code.length > COUPON_CODE_MAX) throw new ApiError(400, 'bad-coupon');
       const deleted = await dbWrite(() => deleteAdminCoupon(db, code));
       if (!deleted) throw new ApiError(404, 'no-coupon');
+      await recordAudit('couponDelete', code, { code });
       return { deleted: true, code };
     }
     default:

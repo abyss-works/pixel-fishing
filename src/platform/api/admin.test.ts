@@ -11,8 +11,8 @@ describe('admin 계층 규약', () => {
     for (const m of ['access', 'overview', 'users', 'live', 'dailyStats', 'retention', 'sessions', 'economy', 'bountyFunnel',
       'onboardingFunnel', 'httpMetrics',
       'spamFlags',
-      'recentEvents', 'userEvents', 'userState', 'letters', 'changelog', 'chatReports', 'notices', 'balanceLive',
-      'restrict', 'letterHandled', 'revokeSessions', 'writeNotice', 'setStaffBadge', 'deployHost', 'signIn', 'takeSignInReturn', 'signOut'] as const) {
+      'recentEvents', 'userEvents', 'userState', 'letters', 'changelog', 'chatReports', 'notices', 'coupons', 'balanceLive',
+      'restrict', 'letterHandled', 'revokeSessions', 'writeNotice', 'writeCoupon', 'setStaffBadge', 'deployHost', 'signIn', 'takeSignInReturn', 'signOut'] as const) {
       expect(typeof api.admin[m]).toBe('function');
       expect(typeof local[m]).toBe('function');
     }
@@ -35,6 +35,8 @@ describe('admin 계층 규약', () => {
     await expect(admin.httpMetrics(7)).rejects.toThrow(/클라우드/);
     await expect(admin.notices()).rejects.toThrow(/클라우드/);
     await expect(admin.writeNotice({ op: 'end', id: 1 })).rejects.toThrow(/클라우드/);
+    await expect(admin.coupons()).rejects.toThrow(/클라우드/);
+    await expect(admin.writeCoupon({ op: 'delete', code: 'C1' })).rejects.toThrow(/클라우드/);
     await expect(admin.setStaffBadge(true)).rejects.toThrow(/클라우드/);
   });
 });

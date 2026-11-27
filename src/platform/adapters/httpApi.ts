@@ -77,7 +77,7 @@ import type {
   AdminApi, AdminAccessResult,
   AdminUserRow, AdminUserState, AdminOverview, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
   AdminOnboardingFunnel, AdminHttpMetrics,
-  AdminLive, AdminDailyStatsRow, AdminSessionRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, AdminChangelogRow, AdminChatReportRow, AdminNoticeRow, AdminNoticeRequest, AdminNoticeMutationResult, BalanceLive,
+  AdminLive, AdminDailyStatsRow, AdminSessionRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, AdminChangelogRow, AdminChatReportRow, AdminNoticeRow, AdminNoticeRequest, AdminNoticeMutationResult, AdminCouponRow, AdminCouponRequest, AdminCouponMutationResult, BalanceLive,
   AdminSentMailRow, AdminMailRequest, AdminMailPlan,
 } from '../api/types';
 
@@ -310,6 +310,12 @@ class HttpAdmin implements AdminApi {
   }
   writeNotice(request: AdminNoticeRequest): Promise<AdminNoticeMutationResult> {
     return writeAdmin('notices', request, `공지 ${request.op}`);
+  }
+  coupons(): Promise<AdminCouponRow[]> {
+    return readAdmin('coupons');
+  }
+  writeCoupon(request: AdminCouponRequest): Promise<AdminCouponMutationResult> {
+    return writeAdmin('coupons', request, `쿠폰 ${request.op}`);
   }
   async sentMails(): Promise<AdminSentMailRow[]> {
     const rows = await readAdmin<AdminSentMailRow[]>('mails');

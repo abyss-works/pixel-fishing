@@ -1,5 +1,5 @@
 import { api } from '../../../platform/api';
-import type { AdminMailRequest, AdminNoticeRequest } from '../../../platform/api';
+import type { AdminCouponRequest, AdminMailRequest, AdminNoticeRequest } from '../../../platform/api';
 import { lastNDays } from '../model/metrics';
 
 /** 관리자 로그인이 필요한 클라우드 구현인가. 로컬 모드는 판정 없이 골격을 보인다 */
@@ -38,6 +38,12 @@ export const readAdminNotices = () => api.admin.notices();
 
 /** 기간제 상시 공지 작성·수정·즉시 마감·삭제 */
 export const writeAdminNotice = (request: AdminNoticeRequest) => api.admin.writeNotice(request);
+
+/** 동적 쿠폰 목록(최신 생성순) */
+export const readAdminCoupons = () => api.admin.coupons();
+
+/** 동적 쿠폰 생성·수정·삭제 */
+export const writeAdminCoupon = (request: AdminCouponRequest) => api.admin.writeCoupon(request);
 
 /** 변경 기록(최신 버전부터, 철회된 항목 포함) */
 export const readAdminChangelog = () => api.admin.changelog();

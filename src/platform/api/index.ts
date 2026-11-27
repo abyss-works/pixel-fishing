@@ -64,5 +64,5 @@ export type {
   AdminSentMailRow, AdminMailRequest, AdminMailPlan,
   SoundSettings,
   LiveEventKind, LiveEventSummary, EventTrioSlotStatus, EventTrioState, EventLeaderboardRow, EventChampionshipState, EventLuckDayStamp, EventDrawState, EventsSnapshot,
-  AdminLiveEventRow, AdminLiveEventRequest, AdminEventDrawRow, AdminCouponRow, AdminCouponRequest,
+  AdminLiveEventRow, AdminLiveEventRequest, AdminEventDrawRow, AdminCouponRow, AdminCouponRequest, AdminCouponMutationResult,
 } from './types';

@@ -26,6 +26,7 @@ const CALLS: [method: string, call: () => Promise<unknown>, url: string][] = [
   ['changelog', () => admin.changelog(), '/api/admin?q=changelog'],
   ['chatReports', () => admin.chatReports(), '/api/admin?q=chatReports'],
   ['notices', () => admin.notices(), '/api/admin?q=notices'],
+  ['coupons', () => admin.coupons(), '/api/admin?q=coupons'],
   ['balanceLive', () => admin.balanceLive(3), '/api/admin?q=balanceLive&days=3'],
   ['sentMails', () => admin.sentMails(), '/api/admin?q=mails'],
 ];
@@ -51,8 +52,8 @@ describe('HttpAdmin', () => {
     }
   });
 
-  it('AdminApi의 모든 조회가 위 표에 있다. 서버 조회가 아닌 것은 deployHost, 쓰기(mail·restrict·letterHandled·revokeSessions·writeNotice·setStaffBadge), 관리자 로그인·로그아웃·로그인 복귀뿐이다', () => {
-    const writes = ['constructor', 'deployHost', 'mail', 'restrict', 'letterHandled', 'revokeSessions', 'writeNotice', 'setStaffBadge', 'signIn', 'signOut', 'takeSignInReturn'];
+  it('AdminApi의 모든 조회가 위 표에 있다. 서버 조회가 아닌 것은 deployHost, 쓰기(mail·restrict·letterHandled·revokeSessions·writeNotice·writeCoupon·setStaffBadge), 관리자 로그인·로그아웃·로그인 복귀뿐이다', () => {
+    const writes = ['constructor', 'deployHost', 'mail', 'restrict', 'letterHandled', 'revokeSessions', 'writeNotice', 'writeCoupon', 'setStaffBadge', 'signIn', 'signOut', 'takeSignInReturn'];
     const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(admin))
       .filter(m => !writes.includes(m));
     expect(methods.sort()).toEqual(CALLS.map(([method]) => method).sort());
@@ -119,6 +120,15 @@ describe('HttpAdmin', () => {
     }));
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: 'bad-window' }), { status: 400 }));
     await expect(admin.writeNotice({ op: 'end', id: 7 })).rejects.toThrow('공지 end 실패: 400 bad-window');
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ coupon: { code: 'C1' } }), { status: 200 }));
+    await expect(admin.writeCoupon({
+      op: 'create', code: 'C1', gold: 100, items: [], description: '설명',
+    })).resolves.toEqual({ coupon: { code: 'C1' } });
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/admin?q=coupons', post({
+      op: 'create', code: 'C1', gold: 100, items: [], description: '설명',
+    }));
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: 'duplicate-coupon' }), { status: 409 }));
+    await expect(admin.writeCoupon({ op: 'delete', code: 'C1' })).rejects.toThrow('쿠폰 delete 실패: 409 duplicate-coupon');
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ showStaffBadge: true }), { status: 200 }));
     await expect(admin.setStaffBadge(true)).resolves.toEqual({ showStaffBadge: true });
     expect(fetchMock).toHaveBeenLastCalledWith('/api/admin?q=staffBadge', post({ show: true }));

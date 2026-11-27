@@ -727,6 +727,10 @@ export interface AdminApi {
   notices(): Promise<AdminNoticeRow[]>;
   /** 기간제 상시 공지 작성·수정·즉시 마감·삭제 */
   writeNotice(request: AdminNoticeRequest): Promise<AdminNoticeMutationResult>;
+  /** 동적 쿠폰 목록(최신 생성순) */
+  coupons(): Promise<AdminCouponRow[]>;
+  /** 동적 쿠폰 생성·수정·삭제 */
+  writeCoupon(request: AdminCouponRequest): Promise<AdminCouponMutationResult>;
   /** 최근 보낸 우편 */
   sentMails(): Promise<AdminSentMailRow[]>;
   /** 우편 미리보기(preview, 쓰지 않음) 또는 보내기(send) */
@@ -949,4 +953,8 @@ export type AdminCouponRequest =
     perAccountLimit: number;
   }
   | { op: 'delete'; code: string };
+
+export type AdminCouponMutationResult =
+  | { coupon: AdminCouponRow }
+  | { deleted: true; code: string };
 

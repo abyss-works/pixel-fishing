@@ -1,6 +1,6 @@
 // 관리자 해시 경로 — 정식 해시의 왕복과 잘못된 해시의 수렴을 고정한다.
 import { describe, expect, it } from 'vitest';
-import { ADMIN_SECTIONS, ADMIN_TABS, adminHash, adminRouteOf, parseAdminHash } from './routes';
+import { ADMIN_SECTIONS, ADMIN_TABS, adminHash, adminRouteOf, parseAdminHash, sectionsForRole } from './routes';
 
 describe('관리자 해시 경로', () => {
   it('정식 해시는 그대로 되돌아온다', () => {
@@ -40,10 +40,12 @@ describe('관리자 해시 경로', () => {
   });
 
   it('maintainer 역할은 금지된 구역과 해시를 허용 기본 경로로 정규화한다', () => {
+    expect(sectionsForRole('comms', 'maintainer').map(s => s.key)).toEqual(['notices', 'coupons']);
     expect(adminHash(parseAdminHash('#/admin/players/roster', 'maintainer'))).toBe('#/admin/players/abuse');
     expect(adminHash(parseAdminHash('#/admin/players', 'maintainer'))).toBe('#/admin/players/abuse');
     expect(adminHash(parseAdminHash('#/admin/comms/letters', 'maintainer'))).toBe('#/admin/comms/notices');
     expect(adminHash(parseAdminHash('#/admin/comms/mail', 'maintainer'))).toBe('#/admin/comms/notices');
+    expect(adminHash(parseAdminHash('#/admin/comms/coupons', 'maintainer'))).toBe('#/admin/comms/coupons');
     expect(adminHash(parseAdminHash('#/admin/comms', 'maintainer'))).toBe('#/admin/comms/notices');
     expect(adminHash(parseAdminHash('#/admin/users', 'maintainer'))).toBe('#/admin/overview');
     expect(adminHash(parseAdminHash('#/admin/user/123', 'maintainer'))).toBe('#/admin/overview');
