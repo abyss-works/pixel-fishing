@@ -37,6 +37,10 @@ const bountyMock = vi.hoisted(() => ({
   snap: null as BountySnapshot | null,
 }));
 
+const fieldMock = vi.hoisted(() => ({
+  onLeaveEventZone: undefined as (() => void) | undefined,
+}));
+
 vi.mock('../../../features/live/service/useNotices', () => ({
   useNotices: () => noticeMock,
 }));
@@ -63,7 +67,12 @@ vi.mock('../../../features/live/service/useLive', async importOriginal => {
 vi.mock('../../../features/bounty/service/useBounty', () => ({
   useBounty: () => ({ snap: bountyMock.snap, loaded: true, failed: false, offline: bountyMock.snap === null, refresh: vi.fn() }),
 }));
-vi.mock('../../layouts/game-stage/Field', () => ({ default: () => null }));
+vi.mock('../../layouts/game-stage/Field', () => ({
+  default: (props: { onLeaveEventZone?: () => void }) => {
+    fieldMock.onLeaveEventZone = props.onLeaveEventZone;
+    return null;
+  },
+}));
 
 const originalConfigured = api.auth.isConfigured;
 const originalMatchMedia = window.matchMedia;
@@ -98,6 +107,7 @@ beforeEach(() => {
   eventMock.snap = null;
   eventMock.players = [];
   bountyMock.snap = null;
+  fieldMock.onLeaveEventZone = undefined;
   api.auth.isConfigured = false;
   window.matchMedia = ((query: string) => ({
     matches: false, media: query, addEventListener: () => {}, removeEventListener: () => {},
@@ -907,6 +917,63 @@ describe('GameView 이벤트 구역 전환 및 미니맵 지도 차단', () => {
       fireEvent.click(screen.getByRole('button', { name: '나가기' }));
 
       expect(screen.queryByRole('dialog', { name: '이벤트' })).toBeNull();
+      expect(screen.getByText('원래 있던 곳으로 돌아가고 있어요.')).toBeInTheDocument();
+      await act(async () => { await vi.advanceTimersByTimeAsync(350); });
+      expect(dispatch).toHaveBeenCalledWith({ type: 'leaveEventZone' });
+      expect(onPlace).toHaveBeenCalledWith({ kind: 'base', id: 'harbor' });
+      expect(setToast).toHaveBeenCalledWith('부산항에 도착했어요.');
+      await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+      expect(screen.queryByText('원래 있던 곳으로 돌아가고 있어요.')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('Field의 onLeaveEventZone 콜백이 호출되면 leaveEventZone 전환과 도착 토스트를 실행한다', async () => {
+    vi.useFakeTimers();
+    try {
+      const baseGame = { ...newState(), boat: 1, tutorials: [...TUTORIAL_IDS] };
+      const dispatch = vi.fn(async () => ({
+        status: 'ok' as const,
+        state: { ...baseGame, location: { kind: 'base' as const, id: 'harbor' as const } },
+        result: { type: 'none' as const },
+      }));
+      const onPlace = vi.fn();
+      const setToast = vi.fn();
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+      render(
+        <QueryClientProvider client={client}>
+          <GameView
+            game={{ ...baseGame, location: { kind: 'region', id: 'championship' } }}
+            scene={{ kind: 'region', id: 'championship' }}
+            entryPos={null}
+            placeSeq={0}
+            dispatch={dispatch}
+            setToast={setToast}
+            onScene={() => {}}
+            onPlace={onPlace}
+            log={[]}
+            syncLabel={null}
+            syncState="on"
+            guestProgress="nothing"
+            account="dev@localhost"
+            accountChecked={true}
+            accountFailed={false}
+            uid="u1"
+            nickname="테스터"
+            onRename={async () => null}
+            onAuthChanged={async () => {}}
+            onResync={async () => {}}
+          />
+        </QueryClientProvider>,
+      );
+
+      expect(fieldMock.onLeaveEventZone).toBeTypeOf('function');
+      act(() => {
+        fieldMock.onLeaveEventZone?.();
+      });
+
       expect(screen.getByText('원래 있던 곳으로 돌아가고 있어요.')).toBeInTheDocument();
       await act(async () => { await vi.advanceTimersByTimeAsync(350); });
       expect(dispatch).toHaveBeenCalledWith({ type: 'leaveEventZone' });
