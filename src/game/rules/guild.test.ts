@@ -12,6 +12,7 @@ import {
   guildEnhanceResetCost, maxEnhancePoints, remainingEnhancePoints, usedEnhancePoints,
   GUILD_RENAME_COST, parseJoinVia, renameBlock, renameOutcome,
   PUBLIC_GUILD_SORTS, parsePublicGuildSort,
+  GUILD_REJOIN_COOLDOWN_MS, guildRejoinCooldownUntil, guildRejoinRemainingMs, formatGuildCooldownRemaining,
 } from './guild';
 
 describe('길드 이름', () => {
@@ -417,5 +418,34 @@ describe('공개 길드 목록 정렬', () => {
     expect(parsePublicGuildSort('unknown')).toBeNull();
     expect(parsePublicGuildSort('')).toBeNull();
     expect(parsePublicGuildSort(null)).toBeNull();
+  });
+});
+
+describe('길드 재가입 대기', () => {
+  it('재가입 대기 기간은 20시간이고 종료 시각을 계산한다', () => {
+    expect(GUILD_REJOIN_COOLDOWN_MS).toBe(20 * 3_600_000);
+    const leftAtMs = Date.parse('2026-11-27T00:00:00.000Z');
+    expect(guildRejoinCooldownUntil(leftAtMs)).toBe(leftAtMs + 20 * 3_600_000);
+  });
+
+  it('남은 대기 시간은 종료 시각이 없거나 지났으면 0이고, 아직 남았으면 차이를 돌려준다', () => {
+    const untilMs = 1_000_000;
+    expect(guildRejoinRemainingMs(null, 500_000)).toBe(0);
+    expect(guildRejoinRemainingMs(untilMs, untilMs)).toBe(0);
+    expect(guildRejoinRemainingMs(untilMs, untilMs + 1)).toBe(0);
+    expect(guildRejoinRemainingMs(untilMs, untilMs - 1)).toBe(1);
+    expect(guildRejoinRemainingMs(untilMs, 400_000)).toBe(600_000);
+  });
+
+  it('남은 대기 시간 표시는 분 올림(최소 1분)으로 시간과 분을 반환한다', () => {
+    expect(formatGuildCooldownRemaining(0)).toBe('1분');
+    expect(formatGuildCooldownRemaining(-5_000)).toBe('1분');
+    expect(formatGuildCooldownRemaining(1)).toBe('1분');
+    expect(formatGuildCooldownRemaining(60_000)).toBe('1분');
+    expect(formatGuildCooldownRemaining(59 * 60_000)).toBe('59분');
+    expect(formatGuildCooldownRemaining(59 * 60_000 + 1_000)).toBe('1시간');
+    expect(formatGuildCooldownRemaining(60 * 60_000)).toBe('1시간');
+    expect(formatGuildCooldownRemaining(19 * 3_600_000 + 42 * 60_000)).toBe('19시간 42분');
+    expect(formatGuildCooldownRemaining(20 * 3_600_000)).toBe('20시간');
   });
 });
