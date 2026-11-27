@@ -20,6 +20,7 @@ import type { RegionId } from '../../src/game/content/places.js';
 import { topZoneOf, zoneById } from '../../src/game/content/zones.js';
 import type { ZoneId } from '../../src/game/content/zones.js';
 import type { CatchFxPayload } from './livePresence.js';
+import { isPrerenderRequest } from './prerender.js';
 
 /** 연결한 사용자 — 표시 이름·배·명성은 서버가 DB에서 읽는다. 클라이언트가 보낸 값을 믿지 않는다. guest는 이메일이 없는 계정이다 */
 export interface LiveUser { uid: string; nick: string; boat: number; fame: number; guest: boolean }
@@ -143,6 +144,8 @@ function normalizeRegion(region: string | null | undefined, zone?: string | null
 
 interface Conn {
   user: LiveUser;
+  /** 업그레이드 세대 번호 — 구 업그레이드가 뒤늦게 끝나 신 연결을 교체하지 못하게 막는다 */
+  upgradeSeq: number;
   /** 첫 위치를 받기 전에는 null — 다른 사람에게 알리지 않는다 */
   presence: Presence | null;
   /** 클라이언트가 마지막으로 보낸 실제 외형(강제 모자 구역 덮어쓰기 전 원본) */
@@ -186,6 +189,8 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
   const positionSaveMs = opts.positionSaveMs ?? POSITION_SAVE_MS;
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_PAYLOAD });
   const conns = new Map<WebSocket, Conn>();
+  let nextUpgradeSeq = 0;
+  const latestUpgradeSeqByUid = new Map<string, number>();
   const idleTimedOut = new WeakSet<WebSocket>();
   const closeReported = new WeakSet<WebSocket>();
   const rejectUpgrade = (socket: Duplex, status: 401 | 403 | 500) => {
@@ -318,6 +323,9 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
   const drop = (ws: WebSocket, conn: Conn, notifyOffline = true) => {
     if (conns.get(ws) !== conn) return;
     conns.delete(ws);
+    if (latestUpgradeSeqByUid.get(conn.user.uid) === conn.upgradeSeq) {
+      latestUpgradeSeqByUid.delete(conn.user.uid);
+    }
     recordEnd(conn);
     if (conn.presence) broadcast(ws, conn.user, { t: 'leave', uid: conn.user.uid });
     if (notifyOffline && ![...conns.values()].some(c => c.user.uid === conn.user.uid)) {
@@ -327,7 +335,9 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
 
   server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     if (new URL(req.url ?? '/', 'http://x').pathname !== LIVE_PATH) { socket.destroy(); return; }
+    if (isPrerenderRequest(req.headers)) { rejectUpgrade(socket, 403); return; }
     if (req.headers.origin !== opts.origin) { rejectUpgrade(socket, 403); return; }
+    const seq = ++nextUpgradeSeq;
     const proceed = () => {
       // 낡은 빌드는 연결을 받지 않는다. 브라우저는 업그레이드 응답의 상태 코드를 읽을 수 없어 연결을 연 뒤 종료 코드로 알린다.
       // 이 연결은 접속 목록, 위치, 세션 기록 어디에도 들어가지 않는다
@@ -338,9 +348,21 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
       }
       const rawRegion = query.get('region');
       const initRegion = rawRegion && /^[a-z0-9-]{1,32}$/.test(rawRegion) ? normalizeRegion(rawRegion) : null;
+      let authedUid: string | null = null;
       opts.authenticate(req).then(async (user) => {
         if (!user) { rejectUpgrade(socket, 401); return; }
-        if (opts.admit && !await opts.admit(user)) { rejectUpgrade(socket, 403); return; }
+        if (socket.destroyed || !socket.writable) return;
+        if ((latestUpgradeSeqByUid.get(user.uid) ?? 0) > seq) {
+          if (!socket.destroyed) socket.destroy();
+          return;
+        }
+        authedUid = user.uid;
+        latestUpgradeSeqByUid.set(user.uid, seq);
+        if (opts.admit && !await opts.admit(user)) {
+          if (latestUpgradeSeqByUid.get(user.uid) === seq) latestUpgradeSeqByUid.delete(user.uid);
+          rejectUpgrade(socket, 403);
+          return;
+        }
         const [recentChat, recentLocalChat, blocked, guild, notices] = await Promise.all([
           opts.chat.recent(user.uid, CHAT_RECENT, null),
           initRegion !== null && opts.chat.recentLocal
@@ -351,7 +373,16 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
           opts.activeNotices ? opts.activeNotices() : Promise.resolve(undefined),
         ]);
         const recentGuildChat = guild === null ? null : await opts.chat.recent(user.uid, CHAT_RECENT, guild);
+        if (latestUpgradeSeqByUid.get(user.uid) !== seq || socket.destroyed || !socket.writable) {
+          if (latestUpgradeSeqByUid.get(user.uid) === seq) latestUpgradeSeqByUid.delete(user.uid);
+          if (!socket.destroyed) socket.destroy();
+          return;
+        }
         accept(req, socket, head, (ws) => {
+          if (latestUpgradeSeqByUid.get(user.uid) !== seq) {
+            ws.close(LIVE_CLOSE_REPLACED);
+            return;
+          }
           // 계정 하나에 연결 하나다. 새 연결이 오면 같은 계정의 이전 연결을 닫는다.
           for (const [other, c] of conns) {
             if (c.user.uid !== user.uid) continue;
@@ -360,7 +391,7 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
           }
           const now = Date.now();
           const conn: Conn = {
-            user, presence: null, region: initRegion, idleSince: null, blocked: new Set(blocked), guild,
+            user, upgradeSeq: seq, presence: null, region: initRegion, idleSince: null, blocked: new Set(blocked), guild,
             connectedAt: now, lastSeen: now, windowStart: now, windowCount: 0,
             positionSavedAt: null, positionDirty: false, pending: Promise.resolve(),
           };
@@ -457,6 +488,9 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
           });
         });
       }).catch((err: unknown) => {
+        if (authedUid !== null && latestUpgradeSeqByUid.get(authedUid) === seq) {
+          latestUpgradeSeqByUid.delete(authedUid);
+        }
         console.error('[live] upgrade authentication or chat load failed', err);
         opts.onError?.('live:upgrade-auth', err);
         rejectUpgrade(socket, 500);
@@ -578,6 +612,7 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
     },
     close() {
       clearInterval(timer);
+      latestUpgradeSeqByUid.clear();
       // 닫기 응답을 기다리지 않고 지금 기록한다. 모두 함께 닫히므로 떠남은 알리지 않는다
       for (const [ws, c] of conns) {
         conns.delete(ws);

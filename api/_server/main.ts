@@ -55,6 +55,7 @@ import { legalPages } from './legalPages.js';
 import { notFound } from './notFound.js';
 import { createOpsAlertDispatcher, evaluateOpsAlerts } from './opsAlerts.js';
 import { provideRecentHttpSummary, provideRecentWsSnapshot, provideSlowRequests } from './opsRuntime.js';
+import { PRERENDER_BLOCKED_PATHS, blockPrerender } from './prerender.js';
 import { securityHeaders } from './securityHeaders.js';
 import { checkStageLiveUpgrade, stageGate } from './stageGate.js';
 import { stageMockups } from './stageMockups.js';
@@ -135,6 +136,8 @@ app.use(securityHeaders({ origin, sentryDsn: [process.env.SENTRY_DSN, process.en
 app.use(httpMetrics.middleware);
 // 스테이징 진입 전용 관리자 OAuth 게이트 — DEPLOY_ENV === 'preview'일 때만 활성화된다.
 app.use(stageGate());
+// 프리렌더·프리페치 요청이 세션을 발급하거나 액션을 실행해 활성 창을 끊지 못하도록 차단한다.
+app.use([...PRERENDER_BLOCKED_PATHS], blockPrerender());
 // 인증 경로는 본문을 직접 읽으므로 JSON 파서보다 먼저 등록한다. 필수 환경 변수가 없으면 기동하지 않는다.
 app.all('/api/auth/*splat', toNodeHandler(appAuth()));
 // 관리자 인증은 구글 로그인(시작과 콜백)과 로그아웃만 연다. 나머지 경로는 아래의 404로 간다.
