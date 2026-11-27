@@ -39,6 +39,14 @@ import {
   usePlayersIn,
 } from './useLive';
 
+function setPrerendering(value: boolean | undefined) {
+  if (value === undefined) {
+    Reflect.deleteProperty(document, 'prerendering');
+    return;
+  }
+  Object.defineProperty(document, 'prerendering', { configurable: true, value });
+}
+
 describe('useLive 약관 수락 게이트 및 3방·공지 연동', () => {
   beforeEach(() => {
     liveMock.session = { ready: true, uid: 'u1' };
@@ -48,8 +56,52 @@ describe('useLive 약관 수락 게이트 및 3방·공지 연동', () => {
   });
   afterEach(() => {
     cleanup();
+    setPrerendering(undefined);
     resetConsentGate();
     vi.useRealTimers();
+  });
+
+  it('프리렌더 중에는 세션·약관이 준비되어도 openLive를 호출하지 않고 prerenderingchange 이후에만 연다', () => {
+    setPrerendering(true);
+    renderHook(() => useLive());
+    expect(liveMock.openCalls).toBe(0);
+
+    act(() => {
+      setPrerendering(false);
+      document.dispatchEvent(new Event('prerenderingchange'));
+    });
+    expect(liveMock.openCalls).toBe(1);
+  });
+
+  it('프리렌더 중 활성화 전 언마운트되면 이후 prerenderingchange가 발화해도 openLive를 호출하지 않는다', () => {
+    setPrerendering(true);
+    const { unmount } = renderHook(() => useLive());
+    expect(liveMock.openCalls).toBe(0);
+
+    unmount();
+
+    act(() => {
+      setPrerendering(false);
+      document.dispatchEvent(new Event('prerenderingchange'));
+    });
+    expect(liveMock.openCalls).toBe(0);
+  });
+
+  it('프리렌더 중 약관이 차단되거나 조건이 바뀌어 재실행되면 대기 리스너가 정리되어 활성화 시 중복 호출되지 않는다', () => {
+    setPrerendering(true);
+    renderHook(() => useLive());
+    expect(liveMock.openCalls).toBe(0);
+
+    act(() => { blockConsentGate(); });
+
+    act(() => {
+      setPrerendering(false);
+      document.dispatchEvent(new Event('prerenderingchange'));
+    });
+    expect(liveMock.openCalls).toBe(0);
+
+    act(() => { allowConsentGate(); });
+    expect(liveMock.openCalls).toBe(1);
   });
 
   it('약관 확인 대기(pending) 또는 차단(blocked) 상태에서는 세션이 준비돼도 실시간 연결을 열지 않는다', () => {

@@ -16,6 +16,7 @@ import { BUILD_ID } from '../../../buildId';
 import { settleForcedEncounter, withForcedEncounter } from '../../bounty/service/forceEncounter';
 import { getPhaseOverride } from './timeOverride';
 import { fetchSession, isSessionRateLimited, sessionKey } from '../../account/service/session';
+import { waitUntilActivated } from '../../account/service/prerender';
 import { allowConsentGate, blockConsentGate, holdConsentGate, resetConsentGate } from '../../account/service/consentGate';
 import { guestProgress } from '../../account/model/accountRules';
 import { newlyClaimable } from '../../achievement/model/achievements';
@@ -25,7 +26,7 @@ import { applyLocalNick, onNickEvent } from '../../live/service/useLive';
 import { setSharedProfileStatus } from './profileStatus';
 import type { ProfileStatus, SyncState } from './types';
 import { alertUpdate } from './updateAlert';
-import { isRetryExhausted, retryOnRateLimit } from './rateLimitRetry';
+import { retryOnRateLimit } from './rateLimitRetry';
 import { eventsKey } from '../../events/service/useEvents';
 import {
   emitEventSettleSound,
@@ -421,6 +422,8 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
     setLoading(true);
     const signal = newRetryScope();
     try {
+      await waitUntilActivated(signal);
+      if (signal.aborted) return;
       let uid: string | null;
       try {
         uid = await fetchSession(client);
@@ -505,7 +508,10 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
     setLoading(true);
     setProfileStatus('loading');
     setNickname(null);
-    if (api.auth.isConfigured) holdConsentGate();
+    if (api.auth.isConfigured) {
+      holdConsentGate();
+      setSync('connecting');
+    }
     try {
       if (api.auth.isConfigured && !skipConsent) {
         const consent = await retryOnRateLimit(() => api.auth.getAccountConsent(), signal);
@@ -541,7 +547,7 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
       if (signal.aborted) return false;
       setProfileStatus('error');
       const isConsent = isConsentRequiredError(e) || (e instanceof AppError && e.kind === 'consent-required');
-      if (isRetryExhausted(e) || isConsent) fail(e);
+      fail(e);
       if (isConsent) return false;
       throw e;
     } finally {

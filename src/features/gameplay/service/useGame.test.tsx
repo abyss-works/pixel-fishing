@@ -11,6 +11,7 @@ const gw = vi.hoisted(() => ({
   bootResolve: null as null | (() => void),
   sessionReply: 'uid-1' as string | null,
   sessionError: null as unknown,
+  sessionCalls: 0,
   actions: [] as string[],
   loads: 0,
   loadGold: 0,
@@ -69,6 +70,7 @@ vi.mock('../../../platform/api', async () => {
       auth: {
         isConfigured: true,
         ensureSession: async () => {
+          gw.sessionCalls++;
           if (gw.sessionError) throw gw.sessionError;
           return gw.sessionReply;
         },
@@ -126,9 +128,18 @@ function setup(setToast: (m: string, tone?: 'info' | 'gold' | 'warn') => void = 
   return setupWithClient(setToast, reactStrictMode).hook;
 }
 
+function setPrerendering(value: boolean | undefined) {
+  if (value === undefined) {
+    Reflect.deleteProperty(document, 'prerendering');
+    return;
+  }
+  Object.defineProperty(document, 'prerendering', { configurable: true, value });
+}
+
 afterEach(() => {
   cleanup(); clearFailureNotice(); resetFortuneModalSession(); resetConsentGate();
-  gw.bootResolve = null; gw.sessionReply = 'uid-1'; gw.sessionError = null; gw.actions = []; gw.loads = 0; gw.loadGold = 0;
+  setPrerendering(undefined);
+  gw.bootResolve = null; gw.sessionReply = 'uid-1'; gw.sessionError = null; gw.sessionCalls = 0; gw.actions = []; gw.loads = 0; gw.loadGold = 0;
   gw.legacy = false; gw.legacyFame = 0; gw.cloudEmpty = false; gw.importError = null; gw.loadError = null; gw.loadErrors = []; gw.bootErrors = []; gw.loadDex = {}; gw.dispatchDex = {}; gw.devTools = false;
   gw.profileReplies = []; gw.profileCalls = 0;
   gw.loadAchievements = {}; gw.dispatchAchievements = {}; gw.loadFortune = null; gw.dispatchFortune = null; gw.loadLocation = null;
@@ -527,6 +538,39 @@ describe('요청 속도 초과(429) 재시도', () => {
     }
   });
 
+  it('계정 교체(adoptAccount)의 boot 실패(423·426·5xx·401·network)도 삼키지 않고 전파·표시하며 sync를 on으로 남기지 않는다', async () => {
+    const cases = [
+      { err: new AppError('replaced', 'another tab', { status: 423 }), blocker: 'replaced' },
+      { err: new AppError('outdated', 'old build', { status: 426 }), blocker: 'update' },
+      { err: new AppError('server', 'boom', { status: 500 }), blocker: 'unsaved' },
+      { err: new AppError('unauthorized', 'expired', { status: 401 }), blocker: 'unsaved' },
+      { err: new AppError('network', 'offline'), blocker: 'unsaved' },
+    ] as const;
+
+    for (const c of cases) {
+      gw.bootResolve = null;
+      gw.bootErrors = [];
+      gw.actions = [];
+      const hook = setup();
+      await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+      await act(async () => { gw.bootResolve!(); });
+      expect(hook.result.current.sync).toBe('on');
+
+      gw.bootResolve = null;
+      gw.bootErrors = [c.err];
+      let caught: unknown;
+      await act(async () => {
+        await hook.result.current.adoptAccount().catch(e => { caught = e; });
+      });
+      expect(caught).toBe(c.err);
+      expect(hook.result.current.loading).toBe(false);
+      expect(hook.result.current.blocker).toBe(c.blocker);
+      expect(hook.result.current.sync).not.toBe('on');
+      expect(gw.actions).toEqual(['boot', 'boot']);
+      cleanup();
+    }
+  });
+
   it('boot 완료 전이나 boot 실패 시에도 초기 load와 resync의 파생 claimable 업적이 유지된다', async () => {
     gw.loadAchievements = { 'spot-basic-sea': 'claimable' };
     gw.bootErrors = [new AppError('network', 'offline')];
@@ -578,6 +622,49 @@ describe('요청 속도 초과(429) 재시도', () => {
     await act(async () => { gw.bootResolve!(); });
     expect(hook.result.current.loading).toBe(false);
     expect(hook.result.current.blocker).toBeNull();
+  });
+
+  it('프리렌더 중에는 부트스트랩의 세션 발급과 boot를 시작하지 않고 prerenderingchange 이후에 진행한다', async () => {
+    setPrerendering(true);
+    const hook = setup();
+    await act(async () => { await Promise.resolve(); });
+
+    expect(gw.sessionCalls).toBe(0);
+    expect(gw.loads).toBe(0);
+    expect(gw.actions).toEqual([]);
+    expect(hook.result.current.loading).toBe(true);
+
+    act(() => {
+      setPrerendering(false);
+      document.dispatchEvent(new Event('prerenderingchange'));
+    });
+
+    await waitFor(() => expect(gw.bootResolve).not.toBeNull());
+    expect(gw.sessionCalls).toBe(1);
+    expect(gw.loads).toBe(1);
+    expect(gw.actions).toEqual(['boot']);
+
+    await act(async () => { gw.bootResolve!(); });
+    expect(hook.result.current.loading).toBe(false);
+    expect(hook.result.current.sync).toBe('on');
+  });
+
+  it('프리렌더 중 언마운트하면 활성화되어도 세션 발급이나 boot를 실행하지 않는다', async () => {
+    setPrerendering(true);
+    const hook = setup();
+    await act(async () => { await Promise.resolve(); });
+    expect(gw.sessionCalls).toBe(0);
+
+    hook.unmount();
+
+    act(() => {
+      setPrerendering(false);
+      document.dispatchEvent(new Event('prerenderingchange'));
+    });
+    await act(async () => { await Promise.resolve(); });
+    expect(gw.sessionCalls).toBe(0);
+    expect(gw.loads).toBe(0);
+    expect(gw.actions).toEqual([]);
   });
 });
 

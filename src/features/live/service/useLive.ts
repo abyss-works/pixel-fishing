@@ -9,6 +9,7 @@ import type { Bob, ChatLine, NoticeItem, ServerMessage } from '../../../game/rul
 import { glidePosition, LIVE_MOVE_MS, nextGlide } from '../../../game/rules/live';
 import type { Glide } from '../../../game/rules/live';
 import { useSession } from '../../account/service/session';
+import { isDocumentPrerendering } from '../../account/service/prerender';
 import { useConsentReady } from '../../account/service/consentGate';
 import {
   applyLiveMessage,
@@ -163,8 +164,26 @@ export function useLive(): void {
   const consentReady = useConsentReady();
   useEffect(() => {
     if (!ready || !uid || !consentReady) return;
-    conn = openLive(receive);
-    return () => { conn?.close(); conn = null; reset(); };
+    if (!isDocumentPrerendering()) {
+      conn = openLive(receive);
+      return () => { conn?.close(); conn = null; reset(); };
+    }
+    let cancelled = false;
+    const doc = document;
+    const onActivate = () => {
+      if (cancelled) return;
+      conn = openLive(receive);
+    };
+    doc.addEventListener('prerenderingchange', onActivate, { once: true });
+    return () => {
+      cancelled = true;
+      doc.removeEventListener('prerenderingchange', onActivate);
+      if (conn) {
+        conn.close();
+        conn = null;
+        reset();
+      }
+    };
   }, [ready, uid, consentReady]);
 }
 

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
 import { api } from '../../../platform/api';
+import { isDocumentPrerendering, waitUntilActivated } from './prerender';
 
 // 세션 게이트 — 서버를 읽는 모든 흐름의 유일한 선행 단계.
 // 익명 세션 확보(없으면 익명 로그인)는 이 쿼리 하나로 앱 전체에서 한 번만 직렬로 실행된다.
@@ -12,7 +13,15 @@ export const sessionKey = ['session'] as const;
 
 const sessionQuery = {
   queryKey: sessionKey,
-  queryFn: () => api.auth.ensureSession(),
+  queryFn: ({ signal }: { signal?: AbortSignal }) => {
+    if (!isDocumentPrerendering()) return api.auth.ensureSession();
+    return waitUntilActivated(signal).then(() => {
+      if (signal?.aborted) {
+        throw signal.reason ?? new DOMException('aborted', 'AbortError');
+      }
+      return api.auth.ensureSession();
+    });
+  },
   staleTime: Infinity,
   gcTime: Infinity,
   retry: false,

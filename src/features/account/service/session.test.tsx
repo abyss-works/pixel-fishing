@@ -29,8 +29,16 @@ vi.mock('../../../platform/api', () => ({
   gameDay: () => '2026-10-17',
 }));
 
-import { fetchSession, isSessionRateLimited, setSessionUid, toGate, useSession } from './session';
+import { fetchSession, isSessionRateLimited, sessionKey, setSessionUid, toGate, useSession } from './session';
 import { useBounty } from '../../bounty/service/useBounty';
+
+function setPrerendering(value: boolean | undefined) {
+  if (value === undefined) {
+    Reflect.deleteProperty(document, 'prerendering');
+    return;
+  }
+  Object.defineProperty(document, 'prerendering', { configurable: true, value });
+}
 
 const setup = () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -62,7 +70,10 @@ describe('세션 게이트 흐름', () => {
     state.ensureCalls = 0;
     state.bountyCalls = 0;
   });
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    setPrerendering(undefined);
+  });
 
   it('부트스트랩과 조회가 동시에 기다려도 세션 확보는 한 번만 실행된다', async () => {
     const { client, wrapper } = setup();
@@ -108,5 +119,45 @@ describe('세션 게이트 흐름', () => {
     expect(isSessionRateLimited({ status: 429 })).toBe(true);
     expect(isSessionRateLimited({ code: 'unauthorized' })).toBe(false);
     expect(isSessionRateLimited(null)).toBe(false);
+  });
+
+  it('프리렌더 중에는 ensureSession을 호출하지 않고 prerenderingchange 이후에만 실행한다', async () => {
+    setPrerendering(true);
+    const { client, wrapper } = setup();
+    const boot = fetchSession(client);
+    const { result } = renderHook(() => useSession(), { wrapper });
+
+    await act(async () => { await Promise.resolve(); });
+    expect(state.ensureCalls).toBe(0);
+    expect(result.current).toEqual({ ready: false, uid: null });
+
+    act(() => {
+      setPrerendering(false);
+      document.dispatchEvent(new Event('prerenderingchange'));
+    });
+
+    await waitFor(() => expect(state.ensureCalls).toBe(1));
+    act(() => state.resolveSession!('u1'));
+    await expect(boot).resolves.toBe('u1');
+    await waitFor(() => expect(result.current).toEqual({ ready: true, uid: 'u1' }));
+  });
+
+  it('프리렌더 대기 중 언마운트로 signal이 중단되면 활성화되어도 ensureSession을 호출하지 않는다', async () => {
+    setPrerendering(true);
+    const { client, wrapper } = setup();
+    const { unmount } = renderHook(() => useSession(), { wrapper });
+
+    await act(async () => { await Promise.resolve(); });
+    expect(state.ensureCalls).toBe(0);
+
+    unmount();
+    await client.cancelQueries({ queryKey: sessionKey });
+
+    act(() => {
+      setPrerendering(false);
+      document.dispatchEvent(new Event('prerenderingchange'));
+    });
+    await act(async () => { await Promise.resolve(); });
+    expect(state.ensureCalls).toBe(0);
   });
 });
