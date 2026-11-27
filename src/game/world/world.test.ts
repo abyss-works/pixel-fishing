@@ -14,6 +14,7 @@ import {
   TOAMASINA_FURNITURE, WALVISBAY_FURNITURE,
   VILLAGE, VILLAGE_W, V_POND, V_HOUSE, V_DOOR, V_SPAWN, V_BRIDGE, V_PIER, V_PORT, V_SCHOOLS,
   WORLD, WORLD_MAP, WORLD_SPAWN, HARBORS, schoolsOf, generateWorldSchools,
+  CHAMPIONSHIP_W, CHAMPIONSHIP_H, CHAMPIONSHIP_CABIN, CHAMPIONSHIP_SPAWN, CHAMPIONSHIP_SCHOOLS,
 } from './index';
 import { CAST_RANGE } from '../rules/balance';
 import { cellDefAt, compileMap, mapBounds } from './mask';
@@ -809,26 +810,132 @@ describe('이벤트 2: 강태공 분지 호수(championship)', () => {
     expect(zoneOf(champ, champ.spawn.x, champ.spawn.y)).toBe('championship');
   });
 
-  it('분지 호수 어군 6곳이 배치되고 모든 데크·호안에서 도달 가능하며 겨울·산타 동산 장식을 가진다', () => {
+  it('분지 호수 크기는 464×288이고 차분한 초록 바탕과 최외곽 눈 테두리 groundDetail을 가진다', () => {
+    const champ = REGION_PACKS.championship;
+    expect(CHAMPIONSHIP_W).toBe(464);
+    expect(CHAMPIONSHIP_H).toBe(288);
+    expect(champ.bounds).toEqual({ x: 0, y: 0, w: 464, h: 288 });
+    expect(champ.ground).toEqual({
+      kind: 'grass',
+      color: '#3e6f59',
+      dot: '#2f5a47',
+      mapColor: '#3f6e59',
+    });
+    expect(typeof champ.groundDetail).toBe('function');
+
+    const rects: Array<{ x: number; y: number; w: number; h: number; color: string }> = [];
+    let fillStyle = '';
+    const mockCtx = {
+      get fillStyle() { return fillStyle; },
+      set fillStyle(v: string) { fillStyle = v; },
+      fillRect(x: number, y: number, w: number, h: number) {
+        rects.push({ x, y, w, h, color: fillStyle });
+      },
+    } as unknown as CanvasRenderingContext2D;
+    champ.groundDetail!(mockCtx, 0);
+
+    const colors = new Set(rects.map(r => r.color));
+    expect(colors.has('#cedee9')).toBe(true);
+    expect(colors.has('#e0edf6')).toBe(true);
+    expect(colors.has('#9bb3c5')).toBe(true);
+    expect(colors.has('#4c826a')).toBe(true);
+
+    // 물가 주변(호수 바로 바깥 보행로)은 흰눈(#cedee9/#e0edf6)으로 덮지 않는다
+    const snowRects = rects.filter(r => r.color === '#cedee9' || r.color === '#e0edf6');
+    const waters = (champ.terrain ?? []).filter(t => t.kind === 'water').map(t => t.rect);
+    const lakeMinX = Math.min(...waters.map(r => r.x));
+    const lakeMaxX = Math.max(...waters.map(r => r.x + r.w));
+    const lakeMinY = Math.min(...waters.map(r => r.y));
+    const lakeMaxY = Math.max(...waters.map(r => r.y + r.h));
+    const hitsShoreRing = snowRects.some(r =>
+      r.x < lakeMaxX + 8 && r.x + r.w > lakeMinX - 8 &&
+      r.y < lakeMaxY + 8 && r.y + r.h > lakeMinY - 8,
+    );
+    expect(hitsShoreRing).toBe(false);
+  });
+
+  it('분지 호수 어군 6곳이 배치되고 호수 4면 보행로·데크에서 모두 도달 가능하며 29개 장식이 겹치지 않는다', () => {
     const champ = REGION_PACKS.championship;
     const schools = schoolsOf('championship', TEST_DAY);
     expect(schools).toHaveLength(6);
+    expect(CHAMPIONSHIP_SCHOOLS).toHaveLength(6);
     for (const s of schools) {
       expect(s.spot).toBe('championship');
       expect(canMove(champ, s.x, s.y), `${s.id} 호수 위`).toBe(false);
     }
     const decks = (champ.terrain ?? []).filter(t => t.kind === 'deck');
-    expect(decks.length).toBeGreaterThanOrEqual(3);
+    expect(decks).toHaveLength(3);
     for (const d of decks) {
       expect(canMove(champ, d.rect.x + d.rect.w / 2, d.rect.y + d.rect.h / 2)).toBe(true);
     }
-    const kinds = new Set(champ.decorations.map(d => d.kind));
-    for (const expected of ['xmasTree', 'snowPine', 'snowman', 'giftBox', 'candyCane', 'lantern'] as const) {
-      expect(kinds.has(expected), expected).toBe(true);
-    }
-    expect(champ.buildings.length).toBeGreaterThanOrEqual(1);
+
+    // 장식 29점 세부 수량 및 겹침·경계 검사
+    expect(champ.decorations).toHaveLength(29);
+    const counts = champ.decorations.reduce<Record<string, number>>((acc, d) => {
+      acc[d.kind] = (acc[d.kind] ?? 0) + 1;
+      return acc;
+    }, {});
+    expect(counts).toEqual({
+      xmasTree: 3,
+      snowPine: 11,
+      snowman: 2,
+      giftBox: 3,
+      candyCane: 4,
+      lantern: 6,
+    });
+
+    const decoBox = (d: (typeof champ.decorations)[number]) => {
+      switch (d.kind) {
+        case 'xmasTree': return { x: d.x - 2, y: d.y - 3, w: 16, h: 22 };
+        case 'snowPine': return { x: d.x - 1, y: d.y + 1, w: 14, h: 17 };
+        case 'snowman': return { x: d.x + 1, y: d.y, w: 10, h: 17 };
+        case 'giftBox': return { x: d.x, y: d.y, w: 8, h: 9 };
+        case 'candyCane': return { x: d.x + 2, y: d.y + 1, w: 5, h: 11 };
+        case 'lantern': return { x: d.x, y: d.y, w: 6, h: 18 };
+        default: return { x: d.x, y: d.y, w: 10, h: 10 };
+      }
+    };
+    const overlaps = (
+      a: { x: number; y: number; w: number; h: number },
+      b: { x: number; y: number; w: number; h: number },
+    ) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+    const boxes = champ.decorations.map(decoBox);
+    const terrains = (champ.terrain ?? []).map(t => t.rect);
     const cabin = champ.buildings[0];
+    expect(champ.buildings).toHaveLength(1);
+    expect(cabin.rect).toEqual(CHAMPIONSHIP_CABIN);
     expect(canMove(champ, cabin.rect.x + cabin.rect.w / 2, cabin.rect.y + cabin.rect.h / 2)).toBe(false);
+    const cabinLabel = champ.labels.find(l => l.text === '산타 오두막');
+    expect(cabinLabel).toBeDefined();
+    expect(cabinLabel!.y).toBeGreaterThanOrEqual(16);
+    expect(cabinLabel!.y).toBeLessThan(CHAMPIONSHIP_CABIN.y);
+
+    for (let i = 0; i < boxes.length; i++) {
+      const box = boxes[i];
+      // 외곽 능선(11px 여유) 안쪽 배치
+      expect(box.x, `deco ${i} left`).toBeGreaterThanOrEqual(12);
+      expect(box.y, `deco ${i} top`).toBeGreaterThanOrEqual(12);
+      expect(box.x + box.w, `deco ${i} right`).toBeLessThanOrEqual(CHAMPIONSHIP_W - 12);
+      expect(box.y + box.h, `deco ${i} bottom`).toBeLessThanOrEqual(CHAMPIONSHIP_H - 12);
+      expect(overlaps(box, cabin.rect), `deco ${i} vs cabin`).toBe(false);
+      for (const t of terrains) expect(overlaps(box, t), `deco ${i} vs terrain`).toBe(false);
+      for (let j = i + 1; j < boxes.length; j++) {
+        expect(overlaps(box, boxes[j]), `deco ${i} vs ${j}`).toBe(false);
+      }
+    }
+
+    // 호수 둘레 북·서·동·남 4면 모두 스폰에서 도보 도달 가능
+    const waters = (champ.terrain ?? []).filter(t => t.kind === 'water').map(t => t.rect);
+    const lakeMinX = Math.min(...waters.map(r => r.x));
+    const lakeMaxX = Math.max(...waters.map(r => r.x + r.w));
+    const lakeMinY = Math.min(...waters.map(r => r.y));
+    const lakeMaxY = Math.max(...waters.map(r => r.y + r.h));
+    const { reachedPoint } = reachabilityCheck(champ, CHAMPIONSHIP_SPAWN);
+    expect(reachedPoint({ x: CHAMPIONSHIP_W / 2, y: lakeMinY - 10 }), '북쪽 호안').toBe(true);
+    expect(reachedPoint({ x: lakeMinX - 10, y: (lakeMinY + lakeMaxY) / 2 }), '서쪽 호안').toBe(true);
+    expect(reachedPoint({ x: lakeMaxX + 10, y: (lakeMinY + lakeMaxY) / 2 }), '동쪽 호안').toBe(true);
+    expect(reachedPoint({ x: CHAMPIONSHIP_W / 2, y: lakeMaxY + 10 }), '남쪽 호안').toBe(true);
   });
 
   it('canMove는 도보(walk) 지역의 map 지형에서 물을 막고 데크를 허용한다', () => {

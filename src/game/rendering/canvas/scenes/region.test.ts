@@ -285,3 +285,52 @@ describe('renderRegion 점프 연출 뷰포트 컬링', () => {
     expect(rec.calls.some(c => c.startsWith('#ba68c8@'))).toBe(false);
   });
 });
+
+describe('renderRegion groundDetail 호출 순서', () => {
+  it('rect 지형 바탕·점 80개를 그린 직후, 물·데크·건물·장식·라벨·flavor 전에 groundDetail을 호출한다', () => {
+    const rec = makeRecordingCtx();
+    const order: string[] = [];
+    const origFillRect = rec.ctx.fillRect.bind(rec.ctx);
+    rec.ctx.fillRect = ((x: number, y: number, w: number, h: number) => {
+      if (rec.ctx.fillStyle === '#111111' && w === 2000 && h === 2000) order.push('ground');
+      else if (rec.ctx.fillStyle === '#222222') order.push('dot');
+      else if (rec.ctx.fillStyle === '#3a7fc1') order.push('water');
+      else if (rec.ctx.fillStyle === '#8d6e63') order.push('deck');
+      else if (rec.ctx.fillStyle === '#a1887f') order.push('building');
+      else if (rec.ctx.fillStyle === '#2d6a4f') order.push('decoration');
+      origFillRect(x, y, w, h);
+    }) as typeof rec.ctx.fillRect;
+    rec.ctx.fillText = (() => { order.push('label'); }) as typeof rec.ctx.fillText;
+
+    const pack: RegionPack = {
+      ...TEST_PACK,
+      terrain: [
+        { kind: 'water', rect: { x: 10, y: 10, w: 20, h: 20 }, style: 'river' },
+        { kind: 'deck', rect: { x: 40, y: 40, w: 16, h: 16 }, style: 'pier' },
+      ],
+      buildings: [{ rect: { x: 80, y: 80, w: 64, h: 52 }, sprite: 'house' }],
+      decorations: [{ kind: 'tree', x: 180, y: 180 }],
+      labels: [{ text: '테스트', x: 100, y: 70 }],
+      groundDetail: (_ctx, t) => {
+        order.push(`groundDetail:${t}`);
+        rec.ctx.fillStyle = '#cedee9';
+        rec.ctx.fillRect(0, 0, 8, 8);
+      },
+      flavor: () => { order.push('flavor'); },
+    };
+
+    renderRegion(rec.ctx, pack, baseFieldView({ t: 2.5 }));
+
+    const gdIdx = order.indexOf('groundDetail:2.5');
+    expect(gdIdx).toBeGreaterThan(-1);
+    const dotLastIdx = order.lastIndexOf('dot');
+    expect(order.filter(x => x === 'dot')).toHaveLength(80);
+    expect(gdIdx).toBeGreaterThan(dotLastIdx);
+    expect(gdIdx).toBeLessThan(order.indexOf('water'));
+    expect(gdIdx).toBeLessThan(order.indexOf('deck'));
+    expect(gdIdx).toBeLessThan(order.indexOf('building'));
+    expect(gdIdx).toBeLessThan(order.indexOf('decoration'));
+    expect(gdIdx).toBeLessThan(order.indexOf('label'));
+    expect(gdIdx).toBeLessThan(order.indexOf('flavor'));
+  });
+});
