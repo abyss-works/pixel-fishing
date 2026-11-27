@@ -1222,7 +1222,7 @@ describe('실시간 채널 관측 지표 및 오류 훅', () => {
     // 3. 정책 위반(1008 consent-required) -> abnormal 1회, 채팅/지역대화 오류 -> onError
     const errCli = connect(url, 'u-err');
     await errCli.next();
-    errCli.ws.send(JSON.stringify({ t: 'chat', text: '안녕' }));
+    errCli.ws.send(JSON.stringify({ t: 'chat', text: '안녕', room: 'global' }));
     errCli.ws.send(JSON.stringify({ t: 'region', region: 'world' }));
     await new Promise(r => setTimeout(r, 30));
     admitMsg = false;
@@ -1360,5 +1360,54 @@ describe('프리렌더 차단 및 업그레이드 세대 경합 방지', () => {
 
     expect(second.ws.readyState).toBe(WebSocket.OPEN);
     expect(live.isOnline('u1')).toBe(true);
+  });
+
+  it('지역 미동기화 상태의 local 채팅은 저장하거나 에코하지 않고, region 동기화 후 정상 저장·중계한다', async () => {
+    const saveCalls: Array<{ room: ChatRoom | undefined; region: string | null | undefined; text: string }> = [];
+    const base = await start();
+    // start()의 chat.save 호출 기록을 감싸기 위해 새 허브를 연다
+    base.live.close();
+
+    const { url, chat: store } = await start({
+      chat: {
+        save: async (user, text, guild, room: ChatRoom = 'local', region: string | null = null) => {
+          saveCalls.push({ room, region, text });
+          if (room === 'local' && region) {
+            const line: ChatLine = { id: saveCalls.length, uid: user.uid, nick: user.nick, text, at: '2030-01-01T00:00:00.000Z' };
+            return { ok: true, line, room, region, guild };
+          }
+          return { ok: true, line: { id: saveCalls.length, uid: user.uid, nick: user.nick, text, at: '2030-01-01T00:00:00.000Z' }, room, region, guild };
+        },
+        recent: async () => [],
+        recentLocal: async () => [],
+        blocked: async () => [],
+        guildOf: async () => null,
+      },
+    });
+    void store;
+
+    const a = connect(url, 'u1');
+    const b = connect(url, 'u2');
+    await a.next();
+    await b.next();
+
+    // region/move 전에는 room 생략 및 명시 local 모두 저장·전달되지 않는다
+    a.ws.send(JSON.stringify({ t: 'chat', text: '미동기화 생략' }));
+    a.ws.send(JSON.stringify({ t: 'chat', text: '미동기화 명시', room: 'local' }));
+    await new Promise(r => setTimeout(r, 40));
+    expect(saveCalls).toEqual([]);
+    expect(a.messages).toEqual([]);
+    expect(b.messages).toEqual([]);
+
+    // 두 연결이 같은 지역으로 동기화한 뒤에는 정상 저장·중계된다
+    a.ws.send(JSON.stringify({ t: 'region', region: 'pacific' }));
+    b.ws.send(JSON.stringify({ t: 'region', region: 'pacific' }));
+    await a.next(); // localHistory
+    await b.next(); // localHistory
+
+    a.ws.send(JSON.stringify({ t: 'chat', text: '동기화 후' }));
+    expect(await a.next()).toMatchObject({ t: 'chat', room: 'local', line: { text: '동기화 후' } });
+    expect(await b.next()).toMatchObject({ t: 'chat', room: 'local', line: { text: '동기화 후' } });
+    expect(saveCalls).toEqual([{ room: 'local', region: 'pacific', text: '동기화 후' }]);
   });
 });
