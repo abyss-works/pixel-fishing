@@ -3,10 +3,12 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
+import { EVENT_FISH } from '../../src/game/content/eventFish.js';
 import { LIVE_PATH } from '../../src/game/rules/live.js';
 import { SNAPSHOT_EVERY } from '../../src/game/rules/balance.js';
 import { WIDGET_MIN_CLIENT_VERSION } from '../../src/game/rules/widget.js';
 import type { WidgetSummary } from '../../src/game/rules/widget.js';
+import { createAdminEvent } from '../_data/events.js';
 import { createWidgetToken, sha256Hex } from '../_data/widget.js';
 import { database } from '../_db/client.js';
 import {
@@ -55,7 +57,7 @@ async function seedGoogleWidgetUser(opts: {
   lastCatchAt?: string;
   boat?: number;
   version?: number;
-  location?: { kind: 'region'; id: 'village' | 'world' } | { kind: 'base'; id: 'home' | 'harbor' };
+  location?: { kind: 'region'; id: 'village' | 'world' | 'championship' } | { kind: 'base'; id: 'home' | 'harbor' };
   bag?: ReturnType<typeof fish>[];
   exhibit?: ReturnType<typeof fish>[];
 } = {}): Promise<{ uid: string; token: string }> {
@@ -486,6 +488,217 @@ describe('GET /api/widget/summary & GET /api/widget/stream', () => {
       }
     } finally {
       await srv.stop();
+    }
+  });
+
+  it('요약 조회는 championship 이벤트 포획(점수·빈 값·구형 payload)과 정규 포획이 섞여도 수역·가격·가방 수를 정확히 복원한다', async () => {
+    const recentIso = new Date(Date.now() - 10_000).toISOString();
+    const { uid, token } = await seedGoogleWidgetUser({
+      lastSpot: 'deep',
+      lastCatchAt: recentIso,
+      boat: 2, // bagCap 300
+      location: { kind: 'region', id: 'championship' },
+      bag: [fish('crucian'), fish('carp')],
+    });
+
+    const baseMs = Date.now();
+    // 1) 가장 오래된 정규 포획
+    await env.client.query(
+      `insert into public.events (user_id, type, payload, created_at)
+       values ($1, 'catch', $2::jsonb, $3)`,
+      [
+        uid,
+        JSON.stringify({ fishId: 'crucian', form: 'normal', size: 20, isBig: false, spot: 'deep' }),
+        new Date(baseMs - 4000).toISOString(),
+      ],
+    );
+    // 2) uid·spot·isBig 없는 구형 eventCatch
+    await env.client.query(
+      `insert into public.events (user_id, type, payload, created_at)
+       values ($1, 'eventCatch', $2::jsonb, $3)`,
+      [
+        uid,
+        JSON.stringify({ fishId: 'event-boxfish', form: 'normal', score: 10, size: 18 }),
+        new Date(baseMs - 3000).toISOString(),
+      ],
+    );
+    // 3) 점수 없는(score: null) eventCatch
+    await env.client.query(
+      `insert into public.events (user_id, type, payload, created_at)
+       values ($1, 'eventCatch', $2::jsonb, $3)`,
+      [
+        uid,
+        JSON.stringify({
+          uid: 'evt-catch-nolabel',
+          fishId: 'event-snow-smelt',
+          form: 'normal',
+          score: null,
+          size: 15,
+          isBig: false,
+          spot: 'championship',
+        }),
+        new Date(baseMs - 2000).toISOString(),
+      ],
+    );
+    // 4) 최신 변이 점수 eventCatch
+    await env.client.query(
+      `insert into public.events (user_id, type, payload, created_at)
+       values ($1, 'eventCatch', $2::jsonb, $3)`,
+      [
+        uid,
+        JSON.stringify({
+          uid: 'evt-catch-scored',
+          fishId: 'event-frost-swordfish',
+          form: 'variant',
+          score: 200,
+          size: 185,
+          isBig: true,
+          spot: 'championship',
+        }),
+        new Date(baseMs - 1000).toISOString(),
+      ],
+    );
+
+    provideIsUserOnline(id => id === uid);
+    const res = await runMockSummary({ headers: widgetHeaders(token) });
+    expect(res.status).toBe(200);
+    const summary = res.body as WidgetSummary;
+    expect(summary).toMatchObject({
+      fishingState: 'active',
+      spotId: 'championship',
+      spotName: '강태공 분지 호수',
+      seaTheme: 'deep',
+      bag: { count: 2, cap: 300, percent: 0 },
+      lastEventId: 'evt-catch-scored',
+    });
+    expect(summary.recentCatches).toHaveLength(4);
+    expect(summary.recentCatches[0]).toMatchObject({
+      eventId: 'evt-catch-scored',
+      spriteKey: 'event-frost-swordfish',
+      name: '백금 서리 황새치',
+      priceText: '200점',
+      isBig: true,
+      isMutant: true,
+    });
+    expect(summary.recentCatches[0].fallbackColors).toBeDefined();
+    expect(summary.recentCatches[1]).toMatchObject({
+      eventId: 'evt-catch-nolabel',
+      spriteKey: 'event-snow-smelt',
+      priceText: '-',
+      isBig: false,
+      isMutant: false,
+    });
+    expect(summary.recentCatches[2]).toMatchObject({
+      spriteKey: 'event-boxfish',
+      priceText: '10점',
+      isBig: false,
+    });
+    expect(summary.recentCatches[2].eventId).toMatch(/^\d+$/);
+    expect(summary.recentCatches[3]).toMatchObject({
+      spriteKey: 'crucian',
+      priceText: '4G',
+    });
+
+    // 이벤트 구역을 떠나 거점으로 돌아오면 lastSpot(deep)을 복원한다
+    await env.client.query(
+      `update public.saves_current
+       set data = jsonb_set(data, '{location}', '{"kind":"base","id":"harbor"}'::jsonb)
+       where user_id = $1`,
+      [uid],
+    );
+    const afterLeave = (await runMockSummary({ headers: widgetHeaders(token) })).body as WidgetSummary;
+    expect(afterLeave.fishingState).toBe('idle');
+    expect(afterLeave.spotId).toBe('deep');
+    expect(afterLeave.spotName).toBe('마리아나 해구');
+  });
+
+  it('실시간 SSE 스트림으로 enterEventZone(spot_changed) -> championship catch(실제 가방·점수) -> leaveEventZone(idle)을 검증한다', async () => {
+    const eventId = `evt-widget-champ-${Date.now()}`;
+    await createAdminEvent(database().db, {
+      id: eventId,
+      kind: 'championship',
+      title: '강태공 선수권 대회',
+      description: '위젯 SSE 통합 테스트',
+      startsAt: new Date(Date.now() - 60_000).toISOString(),
+      endsAt: new Date(Date.now() + 3_600_000).toISOString(),
+      active: true,
+      config: {},
+    });
+
+    const srv = await startWidgetHttpServer();
+    try {
+      const { uid, token } = await seedGoogleWidgetUser({
+        boat: 2,
+        location: { kind: 'region', id: 'world' },
+        lastSpot: 'sea',
+        bag: [fish('crucian'), fish('carp')],
+      });
+
+      const ws = new WebSocket(srv.wsUrl, { headers: { origin: 'http://127.0.0.1', 'x-test-uid': uid } });
+      await new Promise<void>((resolve, reject) => {
+        ws.once('open', resolve);
+        ws.once('error', reject);
+      });
+
+      const sse = await openSseStream(`${srv.baseUrl}/api/widget/stream`, widgetHeaders(token));
+      try {
+        await sse.pumpUntil(() => sse.frames.some(f => f.event === 'summary_sync'));
+
+        // 1) enterEventZone -> spot_changed(championship)
+        const enterRes = await callAction(userToken(uid), { type: 'enterEventZone', eventId });
+        expect(enterRes.status).toBe(200);
+        await sse.pumpUntil(() => sse.frames.some(f => f.event === 'spot_changed'));
+        const spotFrame = sse.frames.find(f => f.event === 'spot_changed')!;
+        expect(spotFrame.data).toMatchObject({
+          type: 'spot_changed',
+          spotId: 'championship',
+          spotName: '강태공 분지 호수',
+          seaTheme: 'deep',
+        });
+
+        // 2) championship catch -> event-* spriteKey, 점수 priceText, 실제 가방 수(2) 유지
+        const catchRes = await callAction(userToken(uid), { type: 'catch', spot: 'championship', judgment: 'good' });
+        expect(catchRes.status).toBe(200);
+        await sse.pumpUntil(() => sse.frames.some(f => f.event === 'catch'));
+        const catchFrame = sse.frames.find(f => f.event === 'catch')!;
+        expect(catchFrame.data).toMatchObject({
+          type: 'catch',
+          spotId: 'championship',
+          spotName: '강태공 분지 호수',
+          seaTheme: 'deep',
+          fishingState: 'active',
+          bag: { count: 2, cap: 300, percent: 0 },
+        });
+        const catchPayload = catchFrame.data as {
+          catchItem: { eventId: string; spriteKey: string; priceText: string; fallbackColors?: Record<string, string> };
+        };
+        expect(EVENT_FISH.some(f => f.id === catchPayload.catchItem.spriteKey)).toBe(true);
+        expect(catchPayload.catchItem.priceText).toMatch(/^\d[\d,]*점$/);
+        expect(catchPayload.catchItem.fallbackColors).toBeDefined();
+
+        // 요약 재조회에서도 동일한 최근 포획·수역·가방 수가 유지된다
+        const summaryRes = await fetch(`${srv.baseUrl}/api/widget/summary`, { headers: widgetHeaders(token) });
+        expect(summaryRes.status).toBe(200);
+        const summaryAfter = (await summaryRes.json()) as WidgetSummary;
+        expect(summaryAfter.spotId).toBe('championship');
+        expect(summaryAfter.bag.count).toBe(2);
+        expect(summaryAfter.recentCatches[0]?.eventId).toBe(catchPayload.catchItem.eventId);
+
+        // 3) leaveEventZone -> status_changed: idle
+        const leaveRes = await callAction(userToken(uid), { type: 'leaveEventZone' });
+        expect(leaveRes.status).toBe(200);
+        await sse.pumpUntil(() => sse.frames.some(f => f.event === 'status_changed'));
+        expect(sse.frames.find(f => f.event === 'status_changed')?.data).toMatchObject({
+          type: 'status_changed',
+          fishingState: 'idle',
+        });
+      } finally {
+        await sse.close();
+        ws.close();
+      }
+    } finally {
+      await srv.stop();
+      await env.client.query('delete from public.live_events where id = $1', [eventId]);
     }
   });
 });

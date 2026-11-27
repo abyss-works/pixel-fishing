@@ -1,11 +1,15 @@
 // 데스크톱 낚시 모니터 위젯 공유 계약 — 게임 규칙·콘텐츠·서버 API가 같은 타입과 매핑을 쓴다.
 // 상대 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버가 직접 불러온다.
 
-import type { Fish, FormId } from '../content/fish.js';
+import { fishById } from '../content/fish.js';
+import type { FormId } from '../content/fish.js';
+import { eventFishById } from '../content/eventFish.js';
+import type { LocationRef } from '../content/places.js';
 import { RARITY } from '../content/rarity.js';
 import type { RarityId } from '../content/rarity.js';
-import type { EVENT_SPOTS, SpotId } from '../content/spots.js';
-import { fmtGold, fmtSize } from '../../shared/lib/format.js';
+import { EVENT_SPOTS, SPOTS, spotById } from '../content/spots.js';
+import type { Spot, SpotId } from '../content/spots.js';
+import { fmtGold, fmtNum, fmtSize } from '../../shared/lib/format.js';
 
 /** 위젯 네이티브 클라이언트 식별 HTTP 헤더 이름 */
 export const WIDGET_CLIENT_HEADER = 'x-widget-client';
@@ -195,8 +199,94 @@ function relativeLuminance(rgb: readonly [number, number, number]): number {
   return (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) / 255;
 }
 
+export interface WidgetFishSubject {
+  id: string;
+  name: string;
+  rarity: RarityId;
+  color: string;
+  variant: {
+    name: string;
+    color: string;
+  };
+}
+
+/** 정규 어종과 이벤트 전용 어종을 통틀어 위젯 표시용 어종 메타를 조회한다 */
+export function widgetFishById(id: unknown): WidgetFishSubject | undefined {
+  return fishById(id) ?? eventFishById(id);
+}
+
+export const WIDGET_EMPTY_VALUE_TEXT = '-';
+
+export type WidgetCatchValue =
+  | { kind: 'gold'; amount: number }
+  | { kind: 'score'; amount: number }
+  | { kind: 'text'; text: string }
+  | { kind: 'none' };
+
+/** 위젯 포획 가치 모델을 표시 문자열로 직렬화한다 */
+export function formatWidgetCatchValue(value: WidgetCatchValue): string {
+  switch (value.kind) {
+    case 'gold':
+      return Number.isFinite(value.amount) && value.amount >= 0 ? fmtGold(value.amount) : WIDGET_EMPTY_VALUE_TEXT;
+    case 'score':
+      return Number.isFinite(value.amount) && value.amount > 0 ? `${fmtNum(value.amount)}점` : WIDGET_EMPTY_VALUE_TEXT;
+    case 'text':
+      return value.text.trim() || WIDGET_EMPTY_VALUE_TEXT;
+    case 'none':
+      return WIDGET_EMPTY_VALUE_TEXT;
+  }
+}
+
+/** 이벤트 포획 payload에서 위젯 가치 표현을 결정한다 (priceText > score > priceGold > none) */
+export function resolveEventCatchValue(
+  payload: { priceText?: unknown; score?: unknown; priceGold?: unknown } | null | undefined,
+): WidgetCatchValue {
+  if (typeof payload?.priceText === 'string' && payload.priceText.trim().length > 0) {
+    return { kind: 'text', text: payload.priceText.trim() };
+  }
+  if (typeof payload?.score === 'number' && Number.isFinite(payload.score) && payload.score > 0) {
+    return { kind: 'score', amount: payload.score };
+  }
+  if (typeof payload?.priceGold === 'number' && Number.isFinite(payload.priceGold) && payload.priceGold >= 0) {
+    return { kind: 'gold', amount: payload.priceGold };
+  }
+  return { kind: 'none' };
+}
+
+/** 수역 id로 정규 수역·이벤트 수역 메타를 함께 조회한다 */
+export function findWidgetSpot(spotId: string | null | undefined): Spot | undefined {
+  return spotId ? spotById(spotId as SpotId) : undefined;
+}
+
+const EVENT_SPOT_IDS = new Set<string>(EVENT_SPOTS.map(s => s.id));
+
+/** 현재 위치·실시간 접속 구역·최근 출조 수역을 우선순위에 따라 위젯 대표 수역으로 해석한다 */
+export function resolveWidgetSpot(input: {
+  location: LocationRef;
+  presenceRegion?: string | null;
+  lastSpot?: string | null;
+  recentCatchSpot?: string | null;
+}): Spot {
+  if (input.location.kind === 'region' && EVENT_SPOT_IDS.has(input.location.id)) {
+    const spot = findWidgetSpot(input.location.id);
+    if (spot) return spot;
+  }
+  if (typeof input.presenceRegion === 'string' && EVENT_SPOT_IDS.has(input.presenceRegion)) {
+    const spot = findWidgetSpot(input.presenceRegion);
+    if (spot) return spot;
+  }
+  const last = findWidgetSpot(input.lastSpot);
+  if (last) return last;
+  const recent = findWidgetSpot(input.recentCatchSpot);
+  if (recent) return recent;
+  if (input.location.kind === 'region' && input.location.id === 'world') {
+    return findWidgetSpot('sea') ?? SPOTS[0];
+  }
+  return SPOTS[0];
+}
+
 /** 내장 스프라이트가 없는 위젯 클라이언트용 공용 실루엣 hex 팔레트를 파생한다 */
-export function deriveFishFallbackColors(fish: Fish, isMutant = false): FallbackFishColors {
+export function deriveFishFallbackColors(fish: WidgetFishSubject, isMutant = false): FallbackFishColors {
   const bodyHexRaw = isMutant ? (fish.variant?.color ?? fish.color) : fish.color;
   const bodyRgb = parseHexRgb(bodyHexRaw);
   const body = formatRgbHex(bodyRgb);
@@ -238,21 +328,24 @@ export function buildWidgetBagSummary(count: number, cap: number): WidgetBagSumm
 /** 포획 결과에서 위젯용 포획 카드/미니 일지 항목을 조립한다 */
 export function buildWidgetCatchItem(input: {
   eventId: string;
-  fish: Fish;
+  fish: WidgetFishSubject;
   form: FormId;
   sizeCm: number;
-  priceGold: number;
+  priceGold?: number;
+  value?: WidgetCatchValue;
   isBig: boolean;
   caughtAtMs: number;
 }): WidgetCatchItem {
   const isMutant = input.form === 'variant';
+  const resolvedValue: WidgetCatchValue = input.value
+    ?? (typeof input.priceGold === 'number' ? { kind: 'gold', amount: input.priceGold } : { kind: 'none' });
   return {
     eventId: input.eventId,
     spriteKey: input.fish.id,
     name: isMutant ? input.fish.variant.name : input.fish.name,
     rarity: input.fish.rarity,
     sizeText: fmtSize(input.sizeCm),
-    priceText: fmtGold(input.priceGold),
+    priceText: formatWidgetCatchValue(resolvedValue),
     isBig: input.isBig,
     isMutant,
     caughtAtMs: input.caughtAtMs,

@@ -25,8 +25,16 @@ import {
   matchBountyCatch, rollCatchExtras,
 } from '../src/game/rules/logic.js';
 import type { Fish } from '../src/game/rules/logic.js';
-import { buildWidgetBagSummary, buildWidgetCatchItem, resolveSpotSeaTheme } from '../src/game/rules/widget.js';
-import type { WidgetBagSummary } from '../src/game/rules/widget.js';
+import {
+  buildWidgetBagSummary,
+  buildWidgetCatchItem,
+  findWidgetSpot,
+  resolveEventCatchValue,
+  resolveSpotSeaTheme,
+  widgetFishById,
+} from '../src/game/rules/widget.js';
+import type { WidgetBagSummary, WidgetCatchValue } from '../src/game/rules/widget.js';
+import { fishById } from '../src/game/content/fish.js';
 import { appliedSlots, applyEnergyGain, planOverflow } from '../src/game/rules/cooking.js';
 import { isFirstCatchSpot, needsLegacyFirstCatchMigration } from '../src/game/rules/firstCatch.js';
 import { drawNamedEncounter, speciesPityCandidates } from '../src/game/rules/pity.js';
@@ -34,7 +42,6 @@ import { ensureFortune, fortuneEntryOf, fortuneScoreOf, fortuneScoreRange, total
 import type { DailyFortune, FortuneKind } from '../src/game/rules/fortune.js';
 import { bountyById, isQuestOffered } from '../src/game/content/bounties.js';
 import type { BountyKind, BountyQuest } from '../src/game/content/bounties.js';
-import { SPOTS } from '../src/game/content/spots.js';
 import type { SpotId } from '../src/game/content/spots.js';
 import { EVENT_FISH, EVENT2_SETTLEMENT_RATES, EVENT2_STANDARD_SPEC, EVENT_HAT_IDS } from '../src/game/content/eventFish.js';
 import type { EventFish } from '../src/game/content/eventFish.js';
@@ -1102,29 +1109,60 @@ async function route(req: Req, res: Res): Promise<void> {
     try {
       const serverTimeMs = Date.parse(nowISO);
       if (action.type === 'catch') {
-        const catchEvt = out.events.find(e => e.type === 'catch');
+        const catchEvt = out.events.find(e => e.type === 'catch' || e.type === 'eventCatch');
         const p = catchEvt?.payload as {
-          uid?: unknown; fishId?: unknown; form?: unknown; size?: unknown; isBig?: unknown;
+          uid?: unknown;
+          fishId?: unknown;
+          form?: unknown;
+          size?: unknown;
+          isBig?: unknown;
+          score?: unknown;
+          priceText?: unknown;
+          priceGold?: unknown;
         } | undefined;
-        const fishDef = typeof p?.fishId === 'string' ? FISH.find(f => f.id === p.fishId) : undefined;
+        const isEventCatch = catchEvt?.type === 'eventCatch';
+        const regularFish = isEventCatch ? undefined : fishById(p?.fishId);
+        const fishDef = regularFish ?? widgetFishById(p?.fishId);
         if (!fishDef) return;
         const form: FormId = p?.form === 'variant' ? 'variant' : 'normal';
+        const value: WidgetCatchValue = isEventCatch
+          ? resolveEventCatchValue(p)
+          : (regularFish ? { kind: 'gold', amount: priceOf(regularFish, form) } : resolveEventCatchValue(p));
+        const spotDef = findWidgetSpot(action.spot);
+        const catchItem = buildWidgetCatchItem({
+          eventId: typeof p?.uid === 'string' && p.uid.length > 0 ? p.uid : crypto.randomUUID(),
+          fish: fishDef,
+          form,
+          sizeCm: typeof p?.size === 'number' ? p.size : 0,
+          value,
+          isBig: Boolean(p?.isBig),
+          caughtAtMs: serverTimeMs,
+        });
+        if (isEventCatch) {
+          afterResponse(
+            loadWidgetSummary(db, uid, { isOnline: true, nowMs: serverTimeMs })
+              .then(summary => {
+                hub.publishCatch(uid, {
+                  catchItem,
+                  bag: summary.bag,
+                  fishingState: 'active',
+                  spotId: action.spot,
+                  spotName: spotDef?.name ?? action.spot,
+                  seaTheme: resolveSpotSeaTheme(action.spot),
+                  serverTimeMs,
+                });
+              })
+              .catch(e => reportServerIssue('후속 쓰기 실패 — 이벤트 위젯 포획 전송 실패', e, { uid, action: actionType })),
+          );
+          return;
+        }
         const bag = catchBagSummary ?? (() => {
           const ach = achievementBonusesOf(out.state);
           const ctx = createPlayerContext({ state: out.state, guild: guildEffects, now, achievements: ach });
           return buildWidgetBagSummary(out.state.bag.length, bagCapacityOf(ctx, out.state.bag.length).value);
         })();
-        const spotDef = SPOTS.find(s => s.id === action.spot);
         hub.publishCatch(uid, {
-          catchItem: buildWidgetCatchItem({
-            eventId: typeof p?.uid === 'string' ? p.uid : crypto.randomUUID(),
-            fish: fishDef,
-            form,
-            sizeCm: typeof p?.size === 'number' ? p.size : 0,
-            priceGold: priceOf(fishDef, form),
-            isBig: Boolean(p?.isBig),
-            caughtAtMs: serverTimeMs,
-          }),
+          catchItem,
           bag,
           fishingState: 'active',
           spotId: action.spot,
@@ -1132,6 +1170,18 @@ async function route(req: Req, res: Res): Promise<void> {
           seaTheme: resolveSpotSeaTheme(action.spot),
           serverTimeMs,
         });
+        return;
+      }
+
+      if (action.type === 'enterEventZone' && out.state.location.kind === 'region') {
+        const spotDef = findWidgetSpot(out.state.location.id);
+        if (spotDef) {
+          hub.publishSpotChanged(uid, {
+            spotId: spotDef.id,
+            spotName: spotDef.name,
+            seaTheme: resolveSpotSeaTheme(spotDef.id),
+          }, serverTimeMs);
+        }
         return;
       }
 
@@ -1575,11 +1625,14 @@ async function championshipCatch(
       events: [{
         type: 'eventCatch',
         payload: {
+          uid: catchUid,
           eventId: activeChamp.id,
+          spot: 'championship',
           fishId: ef.id,
           form: extras.form,
           score: catchScore,
           size: info.size,
+          isBig: info.isBig,
           judgment,
           pendingGold,
           pendingFame,
