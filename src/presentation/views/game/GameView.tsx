@@ -558,7 +558,7 @@ export default function GameView(props: GameViewProps) {
           <BaseMenu key={scene.id} base={scene.id} game={game} onFacility={onFacility} locked={transitionLocked} accountState={accountState} />
         ) : (
           <Field key={scene.id} region={scene.id} game={game} dispatch={props.dispatch} setToast={props.setToast}
-                 onScene={go} guest={isConfirmedGuest(props.account, props.accountChecked)} onGuestBlocked={onGuestBlocked} paused={encounter !== null || props.blocker != null}
+                 onScene={go} onLeaveEventZone={leaveEventZone} guest={isConfirmedGuest(props.account, props.accountChecked)} onGuestBlocked={onGuestBlocked} paused={encounter !== null || props.blocker != null}
                  initialPos={props.entryPos ?? undefined} placeSeq={props.placeSeq}
                  locked={transitionLocked} statusSlot={statusSlot} catchSlot={catchSlot} uid={props.uid} saveVersion={props.saveVersion} />
         )}

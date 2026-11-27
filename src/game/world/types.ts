@@ -55,7 +55,8 @@ export type TriggerDef =
       /** 경계 봉합(오픈월드) — 지정하면 스폰 텔레포트 대신 상대 지역의 마주 보는 가장자리에서
        *  벗어난 자리 좌표를 보존해 입장한다(edge=top/bottom이면 x, left/right면 y 보존).
        *  미지정이면 목적지 pack.spawn에서 시작(거점 항로 — 포구→항구 앞). */
-      entry?: { edge: Edge } };
+      entry?: { edge: Edge } }
+  | { rect: Rect; action: 'leaveEventZone' };                       // 이벤트 구역 도보 퇴장
 
 export interface MapLabel {
   text: string; x: number; y: number;

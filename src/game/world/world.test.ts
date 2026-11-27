@@ -943,6 +943,29 @@ describe('이벤트 2: 강태공 분지 호수(championship)', () => {
     expect(reachedPoint({ x: CHAMPIONSHIP_W / 2, y: lakeMaxY + 10 }), '남쪽 호안').toBe(true);
   });
 
+  it('산타 오두막 문 leaveEventZone 트리거가 스폰과 겹치지 않고 도달 가능하며 안내 문구를 포함한다', () => {
+    const champ = REGION_PACKS.championship;
+    const leaveTrigger = champ.triggers.find(t => t.action === 'leaveEventZone');
+    expect(leaveTrigger).toBeDefined();
+    expect(leaveTrigger!.rect).toEqual({
+      x: CHAMPIONSHIP_CABIN.x + CHAMPIONSHIP_CABIN.w / 2 - 10,
+      y: CHAMPIONSHIP_CABIN.y + CHAMPIONSHIP_CABIN.h,
+      w: 20,
+      h: 8,
+    });
+    expect(inTrigger(CHAMPIONSHIP_SPAWN, leaveTrigger!.rect)).toBe(false);
+    expect(champ.info.tips[0]).toBe(
+      '이벤트 창에서 언제든 분지 호수로 들어오고 나갈 수 있고, 북쪽 산타 오두막 문으로도 나갈 수 있어요.',
+    );
+
+    const { reachedPoint } = reachabilityCheck(champ, CHAMPIONSHIP_SPAWN);
+    const doorCenter = {
+      x: leaveTrigger!.rect.x + leaveTrigger!.rect.w / 2,
+      y: leaveTrigger!.rect.y + leaveTrigger!.rect.h / 2,
+    };
+    expect(reachedPoint(doorCenter), '산타 오두막 문 트리거').toBe(true);
+  });
+
   it('canMove는 도보(walk) 지역의 map 지형에서 물을 막고 데크를 허용한다', () => {
     const map = compileMap(16, 16, {
       '.': { water: false, zone: 'championship' },
