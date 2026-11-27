@@ -29,6 +29,9 @@ function createMockRedisPair() {
     hdel: vi.fn(async (key: string, field: string) => {
       return hashes.get(key)?.delete(field) ? 1 : 0;
     }),
+    hget: vi.fn(async (key: string, field: string) => {
+      return hashes.get(key)?.get(field) ?? null;
+    }),
     hgetall: vi.fn(async (key: string) => {
       const map = hashes.get(key);
       if (!map) return {};
@@ -214,6 +217,90 @@ describe('RedisLiveBus', () => {
     await Promise.resolve();
     expect(subscriber.subscribe).toHaveBeenCalledTimes(2);
     expect(subscriber.subscribe).toHaveBeenLastCalledWith('pf:preview:bus:events');
+    await bus.close();
+  });
+
+  it('relayBroadcast 이벤트와 sourcePodId를 발행·구독한다', async () => {
+    const { client, subscriber } = createMockRedisPair();
+    const bus = new RedisLiveBus({ env: 'preview', client: client as never, subscriber: subscriber as never });
+    const received: LiveBusEvent[] = [];
+    bus.subscribe(ev => received.push(ev));
+
+    await bus.relayBroadcast({
+      sourcePodId: 'pod-a',
+      fromUid: 'u1',
+      msg: { t: 'typing', uid: 'u1', on: true },
+    });
+    await bus.kickUser('u1', 'replaced', 'pod-b');
+
+    expect(received).toEqual([
+      {
+        t: 'relayBroadcast',
+        sourcePodId: 'pod-a',
+        fromUid: 'u1',
+        msg: { t: 'typing', uid: 'u1', on: true },
+      },
+      {
+        t: 'kickUser',
+        uid: 'u1',
+        reason: 'replaced',
+        sourcePodId: 'pod-b',
+      },
+    ]);
+    await bus.close();
+  });
+
+  it('온라인 명부(publishOnline/listOnline/isUserOnline)와 presenceOf를 조회한다', async () => {
+    const { client, subscriber } = createMockRedisPair();
+    const bus = new RedisLiveBus({ env: 'production', client: client as never, subscriber: subscriber as never });
+
+    expect(await bus.isUserOnline('u1')).toBe(false);
+    expect(await bus.presenceOf('u1')).toBeNull();
+
+    await bus.publishOnline({ uid: 'u1', guest: false, podId: 'pod-a', updatedAtMs: 1000 });
+    await bus.publishPresence(samplePresence, 'pod-a');
+
+    expect(await bus.isUserOnline('u1')).toBe(true);
+    expect(await bus.listOnline()).toEqual([{ uid: 'u1', guest: false, podId: 'pod-a', updatedAtMs: 1000 }]);
+    expect(await bus.presenceOf('u1')).toEqual(samplePresence);
+    expect(await bus.listPresence()).toEqual([samplePresence]);
+
+    await bus.close();
+  });
+
+  it('소유 파드 보호: 다른 podId로 removePresence/removeOnline 호출 시 신 파드의 정보를 지우지 않는다', async () => {
+    const { client, subscriber } = createMockRedisPair();
+    const bus = new RedisLiveBus({ env: 'production', client: client as never, subscriber: subscriber as never });
+
+    await bus.publishPresence(samplePresence, 'pod-new');
+    await bus.publishOnline({ uid: 'u1', guest: false, podId: 'pod-new', updatedAtMs: 2000 });
+
+    await bus.removePresence('u1', 'pod-old');
+    await bus.removeOnline('u1', 'pod-old');
+    expect(await bus.presenceOf('u1')).toEqual(samplePresence);
+    expect(await bus.isUserOnline('u1')).toBe(true);
+
+    await bus.removePresence('u1', 'pod-new');
+    await bus.removeOnline('u1', 'pod-new');
+    expect(await bus.presenceOf('u1')).toBeNull();
+    expect(await bus.isUserOnline('u1')).toBe(false);
+    await bus.close();
+  });
+
+  it('InProcessLiveBus도 소유 파드 보호와 온라인 명부·presenceOf를 지원한다', async () => {
+    const bus = new InProcessLiveBus();
+    await bus.publishPresence(samplePresence, 'pod-2');
+    await bus.publishOnline({ uid: 'u1', guest: false, podId: 'pod-2', updatedAtMs: 3000 });
+
+    await bus.removePresence('u1', 'pod-1');
+    await bus.removeOnline('u1', 'pod-1');
+    expect(await bus.presenceOf('u1')).toEqual(samplePresence);
+    expect(await bus.isUserOnline('u1')).toBe(true);
+
+    await bus.removePresence('u1', 'pod-2');
+    await bus.removeOnline('u1', 'pod-2');
+    expect(await bus.presenceOf('u1')).toBeNull();
+    expect(await bus.isUserOnline('u1')).toBe(false);
     await bus.close();
   });
 });
