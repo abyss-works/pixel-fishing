@@ -11,6 +11,7 @@ import type { BaseId, BasePack, Furniture, Point, RegionId, RegionPack } from '.
 import { canMove, inRect } from './engine';
 import { VILLAGE } from './regions/village';
 import { WORLD } from './regions/world';
+import { CHAMPIONSHIP } from './regions/championship';
 import { HOME } from './bases/home';
 import { HARBOR_BASE } from './bases/harbor';
 import { MANILA_BASE } from './bases/manila';
@@ -26,11 +27,15 @@ export {
 export { VILLAGE, V_SPAWN, V_POND, V_HOUSE, V_DOOR, V_BRIDGE, V_PIER, V_PORT, V_PORT_FRONT,
   V_SCHOOLS, VILLAGE_W, VILLAGE_H } from './regions/village';
 export { WORLD, WORLD_MAP, WORLD_SPAWN, WORLD_BOUNDS, HARBORS } from './regions/world';
+export {
+  CHAMPIONSHIP, CHAMPIONSHIP_W, CHAMPIONSHIP_H, CHAMPIONSHIP_CABIN, CHAMPIONSHIP_SPAWN, CHAMPIONSHIP_SCHOOLS,
+} from './regions/championship';
 export { schoolsOf, generateWorldSchools, SCHOOL_MIN_GAP } from './schools';
 
 export const REGION_PACKS: Record<RegionId, RegionPack> = {
   village: VILLAGE,
   world: WORLD,
+  championship: CHAMPIONSHIP,
 };
 
 /** 씬 지역 id 순서의 단일 출처(등록 순서). UI 순환은 ZONE_IDS(구역 데이터)를 쓴다. */
@@ -38,7 +43,7 @@ export const REGION_IDS: RegionId[] = Object.keys(REGION_PACKS) as RegionId[];
 
 /** 라이브 씬 그래프에서 도달하는 지역 — 세이브 location 복원이 이 목록으로 검증한다.
  *  밖의 값(구세이브의 ocean/seasia/indian 등 런타임 문자열)은 고향 항구로 떨어진다. */
-export const LIVE_REGIONS: RegionId[] = ['village', 'world'];
+export const LIVE_REGIONS: RegionId[] = ['village', 'world', 'championship'];
 
 export const BASE_PACKS: Record<BaseId, BasePack> = {
   home: HOME,

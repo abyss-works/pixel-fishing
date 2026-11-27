@@ -262,6 +262,8 @@ describe('스테이징 진입 게이트 DB 판정', () => {
   it('verifyStageAdmin과 checkStageLiveUpgrade는 preview에서 실제 관리자 세션 쿠키와 admins 명부를 검사한다', async () => {
     const { verifyStageAdmin, checkStageLiveUpgrade } = await import('./_server/stageGate.js');
     const adminUid = await seedUser(env.client, { uid: testUid(nextUid++), email: 'gate-admin@example.test', admin: true });
+    const maintUid = await seedUser(env.client, { uid: testUid(nextUid++), email: 'gate-maint@example.test' });
+    await env.client.query(`insert into public.admins (user_id, role) values ($1, 'maintainer')`, [maintUid]);
     const memberUid = await seedUser(env.client, { uid: testUid(nextUid++), email: 'gate-member@example.test' });
 
     process.env.DEPLOY_ENV = 'preview';
@@ -269,9 +271,25 @@ describe('스테이징 진입 게이트 DB 판정', () => {
     expect(await verifyStageAdmin(sessionHeaders(userToken(adminUid)))).toEqual({ ok: false, status: 401 });
     expect(await verifyStageAdmin(adminSessionHeaders(userToken(memberUid)))).toEqual({ ok: false, status: 403 });
     expect(await verifyStageAdmin(adminSessionHeaders(userToken(adminUid)))).toEqual({ ok: true, uid: adminUid });
+    expect(await verifyStageAdmin(adminSessionHeaders(userToken(maintUid)))).toEqual({ ok: true, uid: maintUid });
 
     expect(await checkStageLiveUpgrade({ headers: {} } as never)).toBe(401);
     expect(await checkStageLiveUpgrade({ headers: adminSessionHeaders(userToken(memberUid)) } as never)).toBe(403);
     expect(await checkStageLiveUpgrade({ headers: adminSessionHeaders(userToken(adminUid)) } as never)).toBeNull();
+    expect(await checkStageLiveUpgrade({ headers: adminSessionHeaders(userToken(maintUid)) } as never)).toBeNull();
+
+    // preview에서 maintainer도 devAccount 도구를 호출할 수 있고, production에서는 모두 차단된다
+    const targetGuest = await seedUser(env.client, { uid: testUid(nextUid++), nickname: '게스트' });
+    const maintPromote = await callDev('/api/dev/promote-test', {
+      token: userToken(targetGuest),
+      adminToken: userToken(maintUid),
+    });
+    expect(maintPromote).toMatchObject({ status: 200, body: { ok: true, isAnonymous: false } });
+
+    process.env.DEPLOY_ENV = 'production';
+    expect(await callDev('/api/dev/promote-test', {
+      token: userToken(targetGuest),
+      adminToken: userToken(maintUid),
+    })).toMatchObject({ status: 404, body: { error: 'not-found' } });
   });
 });

@@ -3,10 +3,10 @@ import type { GuildBonusItem, GuildInfo, GuildInvitePreview, GuildMemberItem } f
 import { NO_GUILD_EFFECTS } from '../../../game/rules/guild';
 import {
   GUILD_BONUS_NAME, GUILD_ENHANCE_LOCK_NOTE, GUILD_JOIN_MODE_TEXT, GUILD_LEAVE_COOLDOWN_NOTE, GUILD_LEVEL_HELP,
-  dailyContributionRows, GUILD_ERROR_TEXT, bonusEffectText, bonusEffectValue,
+  PUBLIC_GUILD_SORT_OPTIONS, dailyContributionRows, GUILD_ERROR_TEXT, bonusEffectText, bonusEffectValue,
   bonusRows, donateDisabledReason, enhanceInvestState, enhancePoolSummary, enhanceResetCostRows, enhanceResetState,
-  growthBar, growthTotalText, guildAlertText, guildLinkUrl, inviteDialogView, inviteShareText, leaveConfirm, leaveOutcome,
-  logbookDays, memberActions, memberConfirm, memberName, memberRows, personalNodes, renameButtonState, requestRows, splitMembers,
+  growthBar, growthTotalText, guildActivityText, guildAlertText, guildLinkUrl, inviteDialogView, inviteShareText, leaveConfirm, leaveOutcome,
+  logbookDays, memberActions, memberConfirm, memberName, memberRows, personalNodes, publicJoinConfirm, renameButtonState, requestRows, splitMembers,
 } from './guild';
 
 const member = (uid: string, role: GuildMemberItem['role'], leftAt: string | null = null): GuildMemberItem =>
@@ -191,18 +191,25 @@ describe('항해일지', () => {
     ]);
   });
 
-  it('전설 돌연변이 기록은 돌연변이명과 variant 톤으로, 미상 어종은 어종으로 폴백한다', () => {
+  it('전설 돌연변이 기록은 전설 돌연변이 문구·돌연변이명·variant 톤으로 일반 전설과 구분하고, 미상 어종은 어종으로 폴백한다', () => {
     const at = '2026-11-05T05:20:00.000Z';
     const [day] = logbookDays([
+      log(3, 'legendary', at, 'goldcarp', null, 'me', '나'),
       log(2, 'legendary', at, 'goldcarp|variant', null, 'me', '나'),
       log(1, 'legendary', at, 'unknown|variant', null, 'u', '가람'),
     ], 'me');
     expect(day.items[0].parts).toEqual([
-      { text: '나', tone: 'me' }, { text: ' 님이 ' }, { text: '전설 무지개 잉어', tone: 'variant' }, { text: '를 낚았어요!' },
+      { text: '나', tone: 'me' }, { text: ' 님이 ' }, { text: '전설 황금 잉어', tone: 'legend' }, { text: '를 낚았어요!' },
     ]);
     expect(day.items[1].parts).toEqual([
-      { text: '가람', tone: 'nick' }, { text: ' 님이 ' }, { text: '전설 어종', tone: 'variant' }, { text: '을 낚았어요!' },
+      { text: '나', tone: 'me' }, { text: ' 님이 ' }, { text: '전설 돌연변이 무지개 잉어', tone: 'variant' }, { text: '를 낚았어요!' },
     ]);
+    expect(day.items[2].parts).toEqual([
+      { text: '가람', tone: 'nick' }, { text: ' 님이 ' }, { text: '전설 돌연변이 어종', tone: 'variant' }, { text: '을 낚았어요!' },
+    ]);
+    expect(day.items[0].variant).toBeFalsy();
+    expect(day.items[1].variant).toBe(true);
+    expect(day.items[2].variant).toBe(true);
   });
 });
 
@@ -419,5 +426,40 @@ describe('초대 확인 창', () => {
       text: '들어가면 길드 채팅과 길드 스킬을 바로 함께 써요.' });
     expect(inviteDialogView(preview({ joinMode: 'closed' }), viewer, 'link')).toMatchObject({ state: 'closed', action: null });
     expect(inviteDialogView(preview({ joinMode: 'approval', members: 10 }), viewer, 'link')).toMatchObject({ state: 'full', action: null });
+  });
+});
+
+describe('공개 길드 목록 화면 모델', () => {
+  it('정렬 선택지를 최근 활동순, 레벨순, 여유 인원순 순서로 제공한다', () => {
+    expect(PUBLIC_GUILD_SORT_OPTIONS).toEqual([
+      { value: 'activity', label: '최근 활동순' },
+      { value: 'level', label: '레벨순' },
+      { value: 'slots', label: '여유 인원순' },
+    ]);
+  });
+
+  it('최근 활동 시각을 상대 시간으로 바꾼다', () => {
+    const now = Date.parse('2026-11-26T12:00:00.000Z');
+    expect(guildActivityText('2026-11-26T11:59:40.000Z', now)).toBe('방금 전');
+    expect(guildActivityText('2026-11-26T11:48:00.000Z', now)).toBe('12분 전');
+    expect(guildActivityText('2026-11-26T09:00:00.000Z', now)).toBe('3시간 전');
+    expect(guildActivityText('2026-11-23T12:00:00.000Z', now)).toBe('3일 전');
+  });
+
+  it('바로 가입 확인 창 정보에 기존 대기 신청 자동 취소 경고를 조건부로 붙인다', () => {
+    const item = {
+      guildId: 'g1', name: '파도쉼터', level: 7, members: 8, cap: 10,
+      pitch: '다 같이 대어 노려요.', lastActivityAt: '2026-11-26T12:00:00.000Z',
+    };
+    expect(publicJoinConfirm(item, null)).toMatchObject({
+      title: '길드 가입 확인',
+      guild: item,
+      pendingCancelWarn: null,
+    });
+    expect(publicJoinConfirm(item, { code: 'ABCD2345', name: '은빛항구', requestedAt: '2026-11-25T00:00:00.000Z' })).toMatchObject({
+      title: '길드 가입 확인',
+      guild: item,
+      pendingCancelWarn: '은빛항구 길드에 보낸 승인 대기 신청은 바로 가입하면 자동으로 취소돼요.',
+    });
   });
 });

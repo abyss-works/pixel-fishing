@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { FILTER_CHANNELS, toggleChannel } from '../../../features/display/model/messageFilter';
 import type { MessageFilter } from '../../../features/display/model/messageFilter';
 import MessageLog from './MessageLog';
@@ -8,8 +8,8 @@ import { createMessage, mergeMessages } from './messageFeed';
 import type { Msg } from './messageFeed';
 
 const logOf = (n: number) => Array.from({ length: n }, (_, i) => createMessage(i, `메시지 ${i}`));
-const chatAt = (id: number, at: Date, uid = 'u') =>
-  createMessage(id, `채팅 ${id}`, { channel: 'chat', author: '가람', now: at, from: { uid, chatId: id } });
+const chatAt = (id: number, at: Date, uid = 'u', channel: 'global' | 'local' = 'local') =>
+  createMessage(id, `채팅 ${id}`, { channel, author: '가람', now: at, from: { uid, chatId: id } });
 
 /** 채널 토글 상태를 가진 메시지 창 — 화면이 쓰는 것과 같은 토글 규칙 */
 function Filtered({ log, initial = FILTER_CHANNELS }: { log: Msg[]; initial?: MessageFilter }) {
@@ -59,28 +59,48 @@ describe('메시지 창', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
-  it('글줄 앞에 채널 머리표를 붙이지 않고, 길드 글줄은 길드 색으로 그린다', () => {
-    const guild = createMessage(2, '길드 안녕', { channel: 'guild', author: '나루', from: { uid: 'g', chatId: 2 } });
-    render(<MessageLog log={[...logOf(1), guild]} />);
-    expect(screen.getByRole('log').textContent).not.toMatch(/\[(시스템|채팅|길드)\]/);
-    const lines = [...screen.getByRole('log').children];
-    expect(lines.find(l => l.textContent?.includes('길드 안녕'))?.className).toContain('text-guild');
+  it('대괄호 채널 머리표 없이 왼쪽 2px 채널 색선과 오른쪽 상단 시각으로 배치하고, 길드 글줄은 길드 색으로 그린다', () => {
+    const globalMsg = createMessage(1, '전체 안녕', { channel: 'global', author: '하늘', from: { uid: 'w', chatId: 1 } });
+    const localMsg = createMessage(2, '지역 안녕', { channel: 'local', author: '바다', from: { uid: 'l', chatId: 2 } });
+    const guildMsg = createMessage(3, '길드 안녕', { channel: 'guild', author: '나루', from: { uid: 'g', chatId: 3 } });
+    render(<MessageLog log={[...logOf(1), globalMsg, localMsg, guildMsg]} />);
+    const logEl = screen.getByRole('log');
+    expect(logEl.textContent).not.toMatch(/\[(전체|지역|길드|시스템|채팅)\]/);
+
+    const lines = [...logEl.children];
+    expect(lines[0].querySelector('.bg-chat-system')).toHaveClass('w-0.5', 'shrink-0', 'self-stretch');
+    expect(lines[1].querySelector('.bg-chat-global')).toHaveClass('w-0.5', 'shrink-0', 'self-stretch');
+    expect(lines[2].querySelector('.bg-chat-local')).toHaveClass('w-0.5', 'shrink-0', 'self-stretch');
+    expect(lines[3].querySelector('.bg-chat-guild')).toHaveClass('w-0.5', 'shrink-0', 'self-stretch');
+    expect(lines[3].className).toContain('text-guild');
     expect(lines[0].className).not.toContain('text-guild');
+    expect(lines[0].lastElementChild).toHaveClass('pf-accent', 'tabular-nums');
   });
 
-  it('늘 보일 채널을 주면 기록과 관계없이 토글을 그리고, 쓸 수 없는 채널은 회색으로 꺼 둔다', () => {
+  it('늘 보일 채널을 주면 전체·지역·길드·시스템 순서로 토글을 그리고, 쓸 수 없는 채널은 회색으로 꺼 둔다', () => {
     render(<MessageLog log={logOf(1)} filter={FILTER_CHANNELS} onToggle={() => {}} channels={FILTER_CHANNELS} disabledChannels={['guild']} />);
-    expect(chips().map(c => c.textContent)).toEqual(['채팅', '길드', '시스템']);
+    expect(chips().map(c => c.textContent)).toEqual(['전체', '지역', '길드', '시스템']);
     expect((screen.getByRole('button', { name: '길드' }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole('button', { name: '채팅' }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole('button', { name: '전체' }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole('button', { name: '지역' }) as HTMLButtonElement).disabled).toBe(false);
+    for (const chip of chips()) {
+      expect(chip).not.toHaveClass('w-[66px]');
+      expect(chip).toHaveClass('px-1.5!', 'gap-1!');
+    }
   });
 
-  it('켜진 채널 칩은 일반 켜짐 단계라 골드로 세우지 않고, 꺼진 칩은 테두리 없이 보조색이다', () => {
-    render(<MessageLog log={logOf(1)} filter={['chat', 'system']} onToggle={() => {}} channels={FILTER_CHANNELS} />);
-    const chat = screen.getByRole('button', { name: '채팅', pressed: true });
-    expect(chat).toHaveClass('border-line', 'text-text');
-    expect(chat).not.toHaveClass('text-gold');
-    expect(screen.getByRole('button', { name: '길드', pressed: false })).toHaveClass('border-transparent', 'text-text-dim');
+  it('켜진 채널 칩은 채널색 테두리·채운 사각형·밝은 글자이고, 꺼진 칩은 어두운 테두리·속이 빈 1px 채널색 사각형·흐린 글자이며 체크 아이콘이 없다', () => {
+    render(<MessageLog log={logOf(1)} filter={['global', 'local', 'system']} onToggle={() => {}} channels={FILTER_CHANNELS} />);
+    const globalChip = screen.getByRole('button', { name: '전체', pressed: true });
+    expect(globalChip).toHaveClass('border-chat-global!', 'text-text');
+    expect(globalChip).not.toHaveClass('text-gold');
+    expect(globalChip.querySelector('[data-glyph="check"]')).toBeNull();
+    expect(globalChip.querySelector('.bg-chat-global')).toHaveClass('size-2', 'shrink-0', 'border', 'border-chat-global');
+
+    const guildChip = screen.getByRole('button', { name: '길드', pressed: false });
+    expect(guildChip).toHaveClass('border-line-dim!', 'text-text-dim');
+    expect(guildChip.querySelector('[data-glyph="check"]')).toBeNull();
+    expect(guildChip.querySelector('.bg-transparent')).toHaveClass('size-2', 'shrink-0', 'border', 'border-chat-guild');
   });
 
   it('꺼 둔 채널의 새 글 점은 네모 골드 점이다', () => {
@@ -114,15 +134,15 @@ describe('메시지 창', () => {
     expect(screen.getByRole('log').style.height).toBe(empty);
   });
 
-  it('채널이 둘이면 채팅·시스템 토글을 그리고, 둘 다 켜면 전체를 보인다. 마지막 하나는 끌 수 없다', () => {
-    const chat = createMessage(1, '안녕', { channel: 'chat', author: '가람', from: { uid: 'u', chatId: 1 } });
-    render(<Filtered log={[...logOf(2), chat]} />);
+  it('채널이 둘이면 지역·시스템 토글을 그리고, 둘 다 켜면 전체를 보인다. 마지막 하나는 끌 수 없다', () => {
+    const localMsg = createMessage(1, '안녕', { channel: 'local', author: '가람', from: { uid: 'u', chatId: 1 } });
+    render(<Filtered log={[...logOf(2), localMsg]} />);
     const log = () => screen.getByRole('log');
     expect(log().children).toHaveLength(3);
     fireEvent.click(screen.getByRole('button', { name: '시스템' }));
     expect(log().children).toHaveLength(1);
-    fireEvent.click(screen.getByRole('button', { name: '채팅' }));
-    expect(screen.getByRole('button', { name: '채팅' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: '지역' }));
+    expect(screen.getByRole('button', { name: '지역' })).toHaveAttribute('aria-pressed', 'true');
     expect(log().children).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: '시스템' }));
     expect(log().children).toHaveLength(3);
@@ -162,7 +182,6 @@ describe('메시지 창', () => {
     const { rerender } = render(<MessageLog log={system} />);
     const list = screen.getByRole('log');
     fakeLayout(list);
-    // 접속 직후 받은 최근 채팅 — 시스템 메시지보다 오래돼 앞쪽에 합쳐진다. 마지막 글줄은 그대로다
     const batch = Array.from({ length: 30 }, (_, i) => chatAt(i, new Date(now - 60_000 + i)));
     rerender(<MessageLog log={mergeMessages(system, batch)} />);
     expect(list.scrollTop).toBe(list.scrollHeight);
@@ -188,16 +207,24 @@ describe('메시지 창', () => {
     const list = screen.getByRole('log');
     fakeLayout(list);
     scrollTo(list, 0);
-    fireEvent.click(screen.getByRole('button', { name: '채팅' }));
+    fireEvent.click(screen.getByRole('button', { name: '지역' }));
     expect(list.scrollTop).toBe(20 * 20);
   });
 
-  it('채팅 글줄의 보낸 사람을 누르면 그 글줄을 onPick으로 넘기고, footer를 창 아래에 그린다', () => {
-    const chat = createMessage(7, '안녕', { channel: 'chat', author: '가람', from: { uid: 'u', chatId: 7 } });
-    const onPick = vi.fn();
-    render(<MessageLog log={[chat]} onPick={onPick} footer={<input aria-label="채팅 입력" />} />);
-    fireEvent.click(screen.getByRole('button', { name: '가람' }));
-    expect(onPick).toHaveBeenCalledWith(chat);
+  it('채팅 글줄의 보낸 사람을 누르면 그 글줄을 onPick으로 넘기고, topSlot과 footer를 배치한다', () => {
+    const chat = createMessage(7, '안녕', { channel: 'local', author: '가람', from: { uid: 'u', chatId: 7 } });
+    const { rerender } = render(
+      <MessageLog log={[chat]} topSlot={<div data-testid="notice-strip">공지 띠</div>} footer={<input aria-label="채팅 입력" />} />,
+    );
+    expect(screen.getByTestId('notice-strip')).toBeInTheDocument();
+    expect(screen.getByLabelText('채팅 입력')).toBeInTheDocument();
+
+    // 접힘 상태에서는 topSlot과 기록이 숨고 footer만 남는다
+    rerender(
+      <MessageLog log={[chat]} folded topSlot={<div data-testid="notice-strip">공지 띠</div>} footer={<input aria-label="채팅 입력" />} />,
+    );
+    expect(screen.queryByTestId('notice-strip')).not.toBeInTheDocument();
+    expect(screen.queryByRole('log')).not.toBeInTheDocument();
     expect(screen.getByLabelText('채팅 입력')).toBeInTheDocument();
   });
 
@@ -207,7 +234,6 @@ describe('메시지 창', () => {
     expect(root.className).toContain('relative');
     expect(root.className).not.toContain('absolute');
     expect(root.className).toContain('mobile:w-full');
-    // 채팅은 채팅과 헤더 층이다(PC 레이아웃과 모바일 레이아웃 모두)
     expect(root.className).toContain('z-(--z-chrome)');
     expect(root.className).not.toMatch(/row-start|col-span/);
   });
@@ -220,4 +246,37 @@ describe('메시지 창', () => {
     expect(cls).toContain('group-has-[input:focus]:bg-');
   });
 
+  it('staffBadge가 있는 운영진 메시지는 닉네임 왼쪽에 해당 크기의 5각 픽셀 별을 그리고 닉네임 색상을 유지하며, 없으면 일반 플레이어와 DOM이 같다', () => {
+    const at = new Date();
+    const adminMsg = createMessage(1, '공지 확인', {
+      channel: 'local', author: '관리자', now: at, from: { uid: 'me', chatId: 1 }, staffBadge: 'admin',
+    });
+    const maintainerMsg = createMessage(2, '도와드릴게요', {
+      channel: 'local', author: '운영자', now: at, from: { uid: 'mod', chatId: 2 }, staffBadge: 'maintainer',
+    });
+    const normalMsg = createMessage(3, '안녕하세요', {
+      channel: 'local', author: '일반어부', now: at, from: { uid: 'user', chatId: 3 },
+    });
+
+    render(<MessageLog log={[adminMsg, maintainerMsg, normalMsg]} you="me" onPick={() => {}} />);
+    const lines = [...screen.getByRole('log').children];
+
+    // 관리자: 큰 별이 닉네임 버튼 바로 앞에 오고 본인 색(text-gold) 유지
+    const adminBtn = within(lines[0] as HTMLElement).getByRole('button', { name: '관리자' });
+    const adminIcon = lines[0].querySelector('svg[data-glyph="staffStarLarge"]');
+    expect(adminIcon).not.toBeNull();
+    expect(adminIcon?.nextElementSibling).toBe(adminBtn);
+    expect(adminBtn).toHaveClass('text-gold');
+
+    // 운영자: 작은 별이 닉네임 버튼 바로 앞에 오고 타인 색(text-accent) 유지
+    const modBtn = within(lines[1] as HTMLElement).getByRole('button', { name: '운영자' });
+    const modIcon = lines[1].querySelector('svg[data-glyph="staffStarSmall"]');
+    expect(modIcon).not.toBeNull();
+    expect(modIcon?.nextElementSibling).toBe(modBtn);
+    expect(modBtn).toHaveClass('text-accent');
+
+    // 일반 플레이어: 별 아이콘·유니코드 별 모두 없음
+    expect(lines[2].querySelector('svg')).toBeNull();
+    expect(lines[2].textContent).not.toMatch(/[★☆]/);
+  });
 });

@@ -129,14 +129,21 @@ export default function AntiAbuseTab() {
           <Note size="2xs" className="my-0 px-3 py-2">
             {granted ? '활성 제재가 없어요.' : '운영 DB에 연결하면 확인할 수 있어요.'}
           </Note>
-        ) : restricted.map(u => (
-          <div key={u.user_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2 py-1.5 text-sm">
-            <UserIdentity user={u} />
-            <span className="text-xs text-text-dim">
-              {`골드 ${fmtNum(adminNumber(u.gold))} · 명성 ${fmtNum(adminNumber(u.fame))} · 마지막 행동 ${fmtDT(u.last_action_at)}`}
-            </span>
-          </div>
-        ))}
+        ) : restricted.map(u => {
+          const gold = adminNumber(u.gold);
+          const fame = adminNumber(u.fame);
+          const details = [
+            Number.isFinite(gold) ? `골드 ${fmtNum(gold)}` : null,
+            Number.isFinite(fame) ? `명성 ${fmtNum(fame)}` : null,
+            u.last_action_at ? `마지막 행동 ${fmtDT(u.last_action_at)}` : null,
+          ].filter(Boolean).join(' · ');
+          return (
+            <div key={u.user_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2 py-1.5 text-sm">
+              <UserIdentity user={u} />
+              {details && <span className="text-xs text-text-dim">{details}</span>}
+            </div>
+          );
+        })}
       </Cell>
     </>
   );

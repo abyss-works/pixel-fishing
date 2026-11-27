@@ -1,17 +1,25 @@
 import { useRef, useState } from 'react';
 import { SETTING_PROMPTS } from '../../../../features/announcements/model/whatsNew';
-import { useAlertSettings } from '../../../../features/bounty/service/encounterAlert';
-import type { AlertToggle } from '../../../../features/bounty/service/encounterAlert';
+import {
+  ALERT_COPY, ALERT_DENIED_TEXT, ALERT_DENIED_TOAST, ALERT_ORDER, PERMISSION_BLOCK_LINES, PERMISSION_LABEL, PERMISSION_TIP,
+} from '../../../../features/alerts/model/alerts';
+import type { AlertKind, NotificationPermissionState } from '../../../../features/alerts/model/alerts';
+import { useAlertSettings } from '../../../../features/alerts/service/alertSettings';
+import type { AlertToggle } from '../../../../features/alerts/service/alertSettings';
 import { setToastEnabled, useToastEnabled } from '../../../../features/display/service/toastEnabled';
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
+import { percentToVolume, SOUND_COPY, volumeToPercent } from '../../../../features/sound/model/sound';
+import { useSoundSettings } from '../../../../features/sound/service/useSound';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import type { GameAction } from '../../../../game/rules/actions';
 import { REJECT_TEXT } from '../../../../game/rules/rules';
 import Badge from '../../../ui/Badge';
+import Button from '../../../ui/Button';
 import Inset from '../../../ui/Inset';
 import KeyValueRow from '../../../ui/KeyValueRow';
 import Modal from '../../../ui/Modal';
 import SectionTitle from '../../../ui/SectionTitle';
+import Slider from '../../../ui/Slider';
 import Tip, { TipCard } from '../../../ui/Tip';
 import ToggleChip from '../../../ui/ToggleChip';
 import type { Notify } from '../../../ui/hud/messageFeed';
@@ -23,46 +31,37 @@ const AUTO_LOCK_HINT = [
   '어종과 돌연변이별로 더 큰 물고기를 낚으면 자동으로 잠그고 기존 자동 잠금을 풀어요.',
   '직접 잠근 물고기는 그대로 유지돼요.',
 ] as const;
-const DENIED_REASON = '브라우저가 이 사이트의 알림을 막았어요.\n주소창 왼쪽의 사이트 설정에서 알림을 허용하면 켤 수 있어요.';
-const UNSUPPORTED_REASON = '이 브라우저는 알림을 지원하지 않아요.';
-const DENIED_TOAST = '브라우저가 알림을 막았어요. 주소창의 사이트 설정에서 허용할 수 있어요.';
+const PERMISSION_TONE = { granted: 'accent', default: 'dim', denied: 'danger', unsupported: 'dim' } as const;
 const FLOATING_TOAST_HINT = [
   '중요한 획득, 업적, 의뢰, 길드 알림을 화면 아래 1줄 알림으로 함께 띄워요.',
   '꺼도 메시지 창 기록은 그대로 남아요.',
 ] as const;
 
-function AlertRow({ label, hint, toggle, blockedReason, setToast }: {
-  label: string;
-  hint: string;
+function AlertRow({ kind, toggle, permission, blocked, blockedLines }: {
+  kind: AlertKind;
   toggle: AlertToggle;
-  /** 권한 때문에 켜고 끌 수 없을 때의 이유. 있으면 토글을 흐리게 둔다 */
-  blockedReason: string | null;
-  setToast: Notify;
+  permission: NotificationPermissionState;
+  /** 권한이 없으면 토글을 흐리게 둔다 */
+  blocked: boolean;
+  /** 권한 때문에 켜고 끌 수 없을 때의 이유 줄. 있으면 이유를 툴팁으로 보인다 */
+  blockedLines: readonly string[] | undefined;
 }) {
+  const { label, hint } = ALERT_COPY[kind];
   const chip = (
-    <ToggleChip pressed={toggle.active} disabled={blockedReason !== null} aria-label={label}
-                onClick={() => {
-                  if (toggle.active) { toggle.disable(); return; }
-                  void toggle.enable().then(ok => {
-                    if (!ok) sendNotice(setToast, {
-                      kind: 'system.modalRejected',
-                      text: DENIED_TOAST,
-                      toastText: '브라우저 알림이 막혀 있어요.',
-                    });
-                  });
-                }}>
-      {toggle.active ? '켜짐' : '꺼짐'}
+    <ToggleChip pressed={toggle.on} disabled={blocked} aria-label={label}
+                onClick={() => { if (toggle.on) toggle.disable(); else void toggle.enable(); }}>
+      {toggle.on ? '켜짐' : '꺼짐'}
     </ToggleChip>
   );
   return (
     <KeyValueRow label={<Tip text={<TipCard title={label} description={hint} />}>{label}</Tip>} value=""
-                 action={blockedReason
+                 action={blockedLines
                    ? (
                      <Tip wraps text={(
                        <TipCard
                          title={label}
-                         badge={<Badge tone="dim-plain" size="2xs">차단</Badge>}
-                         status={{ tone: 'warn', lines: blockedReason.split('\n') }}
+                         badge={<Badge tone={PERMISSION_TONE[permission]} size="2xs">{PERMISSION_LABEL[permission]}</Badge>}
+                         status={{ tone: 'warn', lines: blockedLines }}
                        />
                      )}>
                        {chip}
@@ -72,7 +71,72 @@ function AlertRow({ label, hint, toggle, blockedReason, setToast }: {
   );
 }
 
-// 설정 창 — 화면(물고기 그래픽), 가방(낚을 때 자동 잠금), 알림. 값은 창 안에서 바로 고르고 고르는 즉시 적용된다.
+/** 브라우저 알림 권한 줄 - 상태를 꼬리표로 보이고, 허용 전이면 허용 버튼을 둔다. 차단됨과 지원 안 함은 꼬리표가 이유를 툴팁으로 연다 */
+function PermissionRow({ permission, onAllow }: { permission: NotificationPermissionState; onAllow: () => void }) {
+  const tag = <Badge tone={PERMISSION_TONE[permission]} size="xs">{PERMISSION_LABEL[permission]}</Badge>;
+  const lines = permission === 'denied' || permission === 'unsupported' ? PERMISSION_BLOCK_LINES[permission] : undefined;
+  return (
+    <KeyValueRow label={<Tip text={PERMISSION_TIP}>브라우저 알림</Tip>} value=""
+                 action={(
+                   <>
+                     {lines
+                       ? (
+                         <Tip plain text={(
+                           <TipCard title="브라우저 알림" badge={<Badge tone={PERMISSION_TONE[permission]} size="2xs">{PERMISSION_LABEL[permission]}</Badge>}
+                                    status={{ tone: 'warn', lines }} />
+                         )}>
+                           {tag}
+                         </Tip>
+                       )
+                       : tag}
+                     {permission === 'default' && <Button size="sm" variant="primary" onClick={onAllow}>허용</Button>}
+                   </>
+                 )} />
+  );
+}
+
+/** 배경음·효과음 채널별 켜기/끄기와 음량 조절 줄 */
+function SoundChannelRow({
+  label,
+  volumeLabel,
+  enabled,
+  volume,
+  onToggle,
+  onVolumeChange,
+}: {
+  label: string;
+  volumeLabel: string;
+  enabled: boolean;
+  volume: number;
+  onToggle: () => void;
+  onVolumeChange: (nextVolume: number) => void;
+}) {
+  const pct = volumeToPercent(volume);
+  return (
+    <div className="px-2.5 py-2 flex flex-col gap-1.5">
+      <div className="flex items-center justify-between gap-2 text-sm">
+        <span className="text-text">{label}</span>
+        <ToggleChip pressed={enabled} aria-label={label} onClick={onToggle}>
+          {enabled ? SOUND_COPY.onLabel : SOUND_COPY.offLabel}
+        </ToggleChip>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-text-dim whitespace-nowrap shrink-0">{volumeLabel}</span>
+        <Slider
+          min={0}
+          max={100}
+          value={pct}
+          aria-label={volumeLabel}
+          className="flex-1 min-w-0"
+          onChange={e => onVolumeChange(percentToVolume(Number(e.target.value)))}
+        />
+        <span className="pf-accent text-xs text-text min-w-[38px] text-right tabular-nums shrink-0">{pct}%</span>
+      </div>
+    </div>
+  );
+}
+
+// 설정 창 — 화면(물고기 그래픽), 소리(배경음·효과음), 가방(낚을 때 자동 잠금), 알림. 값은 창 안에서 바로 고르고 고르는 즉시 적용된다.
 // 물고기 그래픽 질문 정의는 소식 창의 새 설정과 같은 것을 써서 문구, 선택지, 미리보기가 어긋나지 않는다.
 export default function SettingsModal({ autoLockOnCatch, dispatch, setToast, onClose }: {
   autoLockOnCatch: boolean;
@@ -80,11 +144,18 @@ export default function SettingsModal({ autoLockOnCatch, dispatch, setToast, onC
   setToast: Notify;
   onClose: () => void;
 }) {
-  const { permission, encounter, update } = useAlertSettings();
+  const alerts = useAlertSettings();
+  const { permission } = alerts;
   const toastEnabled = useToastEnabled();
+  const sound = useSoundSettings();
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
-  const blockedReason = permission === 'denied' ? DENIED_REASON : permission === 'unsupported' ? UNSUPPORTED_REASON : null;
+  const blocked = permission !== 'granted';
+  const allowAll = () => {
+    void alerts.allowAll().then(next => {
+      if (next === 'denied') sendNotice(setToast, { kind: 'system.modalRejected', text: ALERT_DENIED_TEXT, toastText: ALERT_DENIED_TOAST });
+    });
+  };
   const hint = '다른 화면을 보고 있을 때 브라우저 알림과 탭 제목 깜빡임으로 알려 줘요.';
   // 상태 변경 토글 in-flight 가드 — 응답을 기다리는 동안 중복 요청을 막고, 인프라 실패는 전역 구독으로 흘려보낸다
   const toggleAutoLock = () => {
@@ -106,6 +177,27 @@ export default function SettingsModal({ autoLockOnCatch, dispatch, setToast, onC
   return (
     <Modal layer="app" title="설정" narrow onClose={onClose}>
       <PromptChoices prompt={FISH_ART} describeInTip />
+      <SectionTitle>
+        <Tip text={SOUND_COPY.backgroundMuteTip}>{SOUND_COPY.title}</Tip>
+      </SectionTitle>
+      <Inset divided>
+        <SoundChannelRow
+          label={SOUND_COPY.bgmLabel}
+          volumeLabel={SOUND_COPY.bgmVolumeLabel}
+          enabled={sound.bgmEnabled}
+          volume={sound.bgmVolume}
+          onToggle={sound.toggleBgm}
+          onVolumeChange={sound.setBgmVolume}
+        />
+        <SoundChannelRow
+          label={SOUND_COPY.sfxLabel}
+          volumeLabel={SOUND_COPY.sfxVolumeLabel}
+          enabled={sound.sfxEnabled}
+          volume={sound.sfxVolume}
+          onToggle={sound.toggleSfx}
+          onVolumeChange={sound.setSfxVolume}
+        />
+      </Inset>
       <SectionTitle>가방</SectionTitle>
       <Inset divided>
         <KeyValueRow
@@ -131,10 +223,10 @@ export default function SettingsModal({ autoLockOnCatch, dispatch, setToast, onC
             </ToggleChip>
           )}
         />
-        <AlertRow label="네임드 조우" hint="네임드의 흔적을 만나면 알려 줘요." toggle={encounter}
-                  blockedReason={blockedReason} setToast={setToast} />
-        <AlertRow label="업데이트" hint="업데이트가 나와 진행이 멈추면 알려 줘요." toggle={update}
-                  blockedReason={blockedReason} setToast={setToast} />
+        <PermissionRow permission={permission} onAllow={allowAll} />
+        {ALERT_ORDER.map(kind => (
+          <AlertRow key={kind} kind={kind} toggle={alerts[kind]} permission={permission} blocked={blocked} blockedLines={PERMISSION_BLOCK_LINES[permission]} />
+        ))}
       </Inset>
     </Modal>
   );

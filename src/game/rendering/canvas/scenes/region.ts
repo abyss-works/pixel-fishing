@@ -5,16 +5,20 @@
 import { R, SCALE } from '../../pixel/common.js';
 import type { Ctx } from '../../pixel/common.js';
 import { BUILDING_SPRITES } from '../../pixel/sprites/buildings.js';
-import { drawBoat, drawIdle, drawOtherShip, drawPerson, drawSpeech } from '../../pixel/sprites/actors.js';
+import { drawBoat, drawIdle, drawOtherPerson, drawOtherShip, drawPerson, drawSpeech } from '../../pixel/sprites/actors.js';
 import type { OtherShipView, Speech } from '../../pixel/sprites/actors.js';
 import { drawMaskTerrain } from '../../pixel/sprites/mask.js';
-import { drawDeck, drawLabel, drawLand, drawTree, drawWater } from '../../pixel/sprites/scenery.js';
-import { drawFishingGear, drawHookJump, drawSchools, drawTimingBar } from '../../pixel/sprites/overlays.js';
+import {
+  drawCandyCane, drawDeck, drawGiftBox, drawLabel, drawLand, drawSnowman, drawSnowPine, drawTree, drawWater,
+  drawWinterLantern, drawXmasTree,
+} from '../../pixel/sprites/scenery.js';
+import { drawFishJump, drawFishingGear, drawHookJump, drawSchools, drawTimingBar, jumpPoint } from '../../pixel/sprites/overlays.js';
 import { cameraFor } from './camera.js';
 import type { RegionPack, School } from '../../../world/types';
 import { FIELD_VIEW } from '../../../world/fieldView.js';
 import type { ViewSize } from '../../../world/fieldView.js';
-import type { GearView } from '../../pixel/sprites/overlays.js';
+import type { GearView, JumpFx } from '../../pixel/sprites/overlays.js';
+import { DEFAULT_LOOK, effectiveLookForRegion } from '../../../content/wardrobe.js';
 import type { Look } from '../../../content/wardrobe.js';
 
 /** React 상태 → 캔버스 경계 뷰모델 — 게임 필드가 프레임마다 채워 보낸다.
@@ -25,6 +29,10 @@ export interface FieldView extends GearView {
   schools: School[];
   /** 같은 바다의 다른 플레이어 — 항해 지역에서만 그린다 */
   others?: OtherShipView[];
+  /** 같은 바다 다른 플레이어의 물고기 점프 연출 */
+  peerJumps?: readonly JumpFx[];
+  /** 내 물고기 점프 연출 — 전달되면 drawHookJump 대신 이 목록을 그려 이동 직후에도 끊기지 않는다 */
+  localJumps?: readonly JumpFx[];
   /** 내 머리 위 말풍선 — 내가 보낸 월드 채팅과 입력 중 표시. 다른 플레이어에게 보이는 것과 같다 */
   bubble?: Speech;
   /** 내 머리 위 방치 시간 문자열 — 없으면 그리지 않는다 */
@@ -55,6 +63,7 @@ export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
     const g = pack.ground!;
     R(ctx, b.x, b.y, b.w, b.h, g.color);
     for (let i = 0; i < 80; i++) R(ctx, b.x + (i * 97) % b.w, b.y + (i * 61) % b.h, 2, 2, g.dot);
+    pack.groundDetail?.(ctx, v.t);
     for (const t of pack.terrain!) if (t.kind === 'water') drawWater(ctx, t);
   }
 
@@ -87,17 +96,55 @@ export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
 
   // 건물 → 장식 → 라벨 → 지역 연출
   for (const b of pack.buildings) BUILDING_SPRITES[b.sprite].draw(ctx, b.rect, b.flip);
-  for (const d of pack.decorations) drawTree(ctx, d.x, d.y);
+  for (const d of pack.decorations) {
+    switch (d.kind) {
+      case 'tree': drawTree(ctx, d.x, d.y); break;
+      case 'xmasTree': drawXmasTree(ctx, d.x, d.y); break;
+      case 'snowPine': drawSnowPine(ctx, d.x, d.y); break;
+      case 'snowman': drawSnowman(ctx, d.x, d.y); break;
+      case 'giftBox': drawGiftBox(ctx, d.x, d.y); break;
+      case 'candyCane': drawCandyCane(ctx, d.x, d.y); break;
+      case 'lantern': drawWinterLantern(ctx, d.x, d.y); break;
+    }
+  }
   for (const l of pack.labels) drawLabel(ctx, l);
   pack.flavor?.(ctx, v.t);
 
-  // 동적: 어군/낚싯줄/플레이어/타이밍 바
+  // 동적: 어군/낚싯줄/점프 연출/플레이어/타이밍 바
   drawSchools(ctx, v.schools, v.boat, v.t, true, 1, v);
   drawFishingGear(ctx, v);
-  drawHookJump(ctx, v);
-  if (pack.movement === 'sail') for (const o of v.others ?? []) drawOtherShip(ctx, o, v.t);
-  if (pack.movement === 'sail') drawBoat(ctx, v.player.x, v.player.y, v.t, v.look);
-  else drawPerson(ctx, v.player.x, v.player.y, v.look);
+  const jumpMinX = cam.x - 32;
+  const jumpMaxX = cam.x + view.w + 32;
+  const jumpMinY = cam.y - 48;
+  const jumpMaxY = cam.y + view.h + 48;
+  const inBox = (px: number, py: number) =>
+    px >= jumpMinX && px <= jumpMaxX && py >= jumpMinY && py <= jumpMaxY;
+  const inJumpView = (j: JumpFx) => {
+    if (inBox(j.x, j.y)) return true;
+    if (j.toX != null && j.toY != null && inBox(j.toX, j.toY)) return true;
+    const pt = jumpPoint(j, j.t);
+    return inBox(pt.x, pt.y);
+  };
+  if (v.localJumps !== undefined) {
+    for (const j of v.localJumps) {
+      if (inJumpView(j)) drawFishJump(ctx, j, v.fishArt);
+    }
+  } else {
+    drawHookJump(ctx, v);
+  }
+  for (const j of v.peerJumps ?? []) {
+    if (inJumpView(j)) drawFishJump(ctx, j, v.fishArt);
+  }
+  const look = effectiveLookForRegion(v.look ?? DEFAULT_LOOK, pack.id);
+  if (pack.movement === 'sail' || pack.showOthers) {
+    for (const o of v.others ?? []) {
+      const otherView = { ...o, look: effectiveLookForRegion(o.look ?? DEFAULT_LOOK, pack.id) };
+      if (pack.movement === 'sail') drawOtherShip(ctx, otherView, v.t);
+      else drawOtherPerson(ctx, otherView, v.t);
+    }
+  }
+  if (pack.movement === 'sail') drawBoat(ctx, v.player.x, v.player.y, v.t, look);
+  else drawPerson(ctx, v.player.x, v.player.y, look);
   drawSpeech(ctx, v.player.x, v.player.y - 24, v.bubble ?? null);
   drawIdle(ctx, v.player.x, v.player.y - 24, v.idle ?? null);
   drawTimingBar(ctx, v);

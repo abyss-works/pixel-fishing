@@ -7,8 +7,12 @@ import type { AddressInfo } from 'node:net';
 import { WebSocket } from 'ws';
 import { attachLive } from './live.js';
 import type { LiveOptions, LiveServer } from './live.js';
-import { CHAT_RATE_MAX, CHAT_RECENT, LIVE_CLOSE_OUTDATED, LIVE_CLOSE_REPLACED, LIVE_CLOSE_RESTART, LIVE_MAX_PER_SEC, LIVE_PATH } from '../../src/game/rules/live.js';
-import type { ChatLine, ServerMessage } from '../../src/game/rules/live.js';
+import {
+  CHAT_DUPLICATE_WINDOW_MS, CHAT_RATE_MAX, CHAT_RECENT, GLOBAL_CHAT_COOLDOWN_MS,
+  LIVE_CLOSE_OUTDATED, LIVE_CLOSE_REPLACED, LIVE_CLOSE_RESTART, LIVE_MAX_PER_SEC, LIVE_PATH,
+  MAX_NOTICES,
+} from '../../src/game/rules/live.js';
+import type { ChatLine, ChatRoom, NoticeItem, ServerMessage } from '../../src/game/rules/live.js';
 
 const ORIGIN = 'https://game.test';
 // 시험 서버가 받아들이는 클라이언트 빌드 식별자
@@ -38,16 +42,16 @@ async function listen(server: Server): Promise<void> {
 // 채팅 저장소는 메모리 대역이다. restricted에 넣은 계정은 제재된 계정, blocks는 계정별 차단 목록이다
 // guilds는 계정별 소속 길드, guildLines는 길드별 채팅이다. 메시지 id는 두 방이 함께 센다
 interface ChatFake {
-  lines: ChatLine[]; restricted: Set<string>; blocks: Map<string, string[]>;
+  lines: ChatLine[]; localLines: Map<string, ChatLine[]>; restricted: Set<string>; blocks: Map<string, string[]>;
   guilds: Map<string, string>; guildLines: Map<string, ChatLine[]>;
 }
 
 /** 기록된 접속 세션 — 시각은 ISO 문자열이다 */
 interface SessionRecord { uid: string; startedAt: string; endedAt: string }
 
-async function start(extra: Partial<LiveOptions> = {}): Promise<{ url: string; urlFor: (build: string | null) => string; live: LiveServer; chat: ChatFake; sessions: SessionRecord[] }> {
+async function start(extra: Partial<LiveOptions> = {}): Promise<{ url: string; urlFor: (build: string | null, extraQuery?: Record<string, string>) => string; live: LiveServer; chat: ChatFake; sessions: SessionRecord[] }> {
   const server = createServer();
-  const chat: ChatFake = { lines: [], restricted: new Set(), blocks: new Map(), guilds: new Map(), guildLines: new Map() };
+  const chat: ChatFake = { lines: [], localLines: new Map(), restricted: new Set(), blocks: new Map(), guilds: new Map(), guildLines: new Map() };
   let seq = 0;
   const sessions: SessionRecord[] = [];
   const live = attachLive(server, {
@@ -58,18 +62,21 @@ async function start(extra: Partial<LiveOptions> = {}): Promise<{ url: string; u
       if (!cookie) return null;
       const guest = cookie.startsWith('guest:');
       const uid = guest ? cookie.slice('guest:'.length) : cookie;
-      return { uid, nick: `n-${uid}`, boat: 2, guest };
+      return { uid, nick: `n-${uid}`, boat: 2, fame: 100, guest };
     },
     chat: {
-      save: async (user, text, guild) => {
-        if (chat.restricted.has(user.uid)) return null;
-        if (guild !== null && chat.guilds.get(user.uid) !== guild) return null;
+      save: async (user, text, guild, room: ChatRoom = 'local', region: string | null = null) => {
+        if (chat.restricted.has(user.uid)) return { ok: false, code: 'chat-restricted' };
+        if (room === 'guild' && (!guild || chat.guilds.get(user.uid) !== guild)) return { ok: false, code: 'chat-no-guild' };
         const line = { id: ++seq, uid: user.uid, nick: user.nick, text, at: '2030-01-01T00:00:00.000Z' };
-        if (guild === null) chat.lines.push(line);
-        else chat.guildLines.set(guild, [...chat.guildLines.get(guild) ?? [], line]);
-        return line;
+        if (room === 'global') chat.lines.push(line);
+        else if (room === 'guild' && guild) chat.guildLines.set(guild, [...chat.guildLines.get(guild) ?? [], line]);
+        else if (room === 'local' && region) chat.localLines.set(region, [...chat.localLines.get(region) ?? [], line]);
+        return { ok: true, line, room, region, guild };
       },
       recent: async (uid, _limit, guild) => (guild === null ? chat.lines : chat.guildLines.get(guild) ?? [])
+        .filter(l => !(chat.blocks.get(uid) ?? []).includes(l.uid)).slice(-CHAT_RECENT),
+      recentLocal: async (uid, region) => (chat.localLines.get(region) ?? [])
         .filter(l => !(chat.blocks.get(uid) ?? []).includes(l.uid)).slice(-CHAT_RECENT),
       blocked: async (uid) => chat.blocks.get(uid) ?? [],
       guildOf: async (uid) => chat.guilds.get(uid) ?? null,
@@ -81,7 +88,11 @@ async function start(extra: Partial<LiveOptions> = {}): Promise<{ url: string; u
   await listen(server);
   cleanup = async () => { live.close(); server.closeAllConnections(); await new Promise((r) => server.close(r)); };
   const base = `ws://127.0.0.1:${(server.address() as AddressInfo).port}${LIVE_PATH}`;
-  const urlFor = (build: string | null) => (build === null ? base : `${base}?build=${build}&version=0.0.0`);
+  const urlFor = (build: string | null, extraQuery: Record<string, string> = {}) => {
+    if (build === null) return base;
+    const qs = new URLSearchParams({ build, version: '0.0.0', ...extraQuery });
+    return `${base}?${qs}`;
+  };
   return { url: urlFor(BUILD), urlFor, live, chat, sessions };
 }
 
@@ -121,7 +132,7 @@ describe('실시간 채널 서버', () => {
   it('진입 게이트(gate)가 401·403을 돌려주면 인증 전에 업그레이드를 거부하고, null이면 통과시킨다', async () => {
     const authenticate = vi.fn(async (req) => {
       const uid = req.headers.cookie;
-      return uid ? { uid, nick: `n-${uid}`, boat: 2, guest: false } : null;
+      return uid ? { uid, nick: `n-${uid}`, boat: 2, fame: 100, guest: false } : null;
     });
     const { url, live } = await start({
       authenticate,
@@ -157,10 +168,10 @@ describe('실시간 채널 서버', () => {
     const b = connect(url, 'u2');
     await a.next();
     await b.next();
-    a.ws.send(JSON.stringify({ t: 'chat', text: '첫 말' }));
+    a.ws.send(JSON.stringify({ t: 'chat', text: '첫 말', room: 'global' }));
     expect((await b.next()).t).toBe('chat');
     held = true;
-    a.ws.send(JSON.stringify({ t: 'chat', text: '막힌 말' }));
+    a.ws.send(JSON.stringify({ t: 'chat', text: '막힌 말', room: 'global' }));
     a.ws.send(JSON.stringify({ t: 'move', region: 'world', x: 1, y: 2, dir: 0, line: false }));
     expect(await a.closed).toBe(1008);
     expect(chat.lines.map(l => l.text)).toEqual(['첫 말']);
@@ -227,7 +238,7 @@ describe('실시간 채널 서버', () => {
     await a.next(); await b.next();
     a.ws.send('{"t":"move","x":"bad"}');
     a.ws.send(JSON.stringify({ t: 'move', region: 'sea', x: 3, y: 4, dir: 1, line: false }));
-    expect(await b.next()).toEqual({ t: 'join', presence: { uid: 'u1', nick: 'n-u1', boat: 2, region: 'sea', zone: null, x: 3, y: 4, dir: 1, line: false } });
+    expect(await b.next()).toEqual({ t: 'join', presence: { uid: 'u1', nick: 'n-u1', boat: 2, fame: 100, region: 'sea', zone: null, x: 3, y: 4, dir: 1, line: false } });
     a.ws.send(JSON.stringify({ t: 'move', region: 'sea', x: 5, y: 4, dir: 1, line: true }));
     expect(await b.next()).toEqual({ t: 'move', uid: 'u1', region: 'sea', zone: null, x: 5, y: 4, dir: 1, line: true });
     a.ws.send('{"t":"stop"}');
@@ -295,7 +306,7 @@ describe('실시간 채널 서버', () => {
     expect(live.presenceOf('u3')).toBeNull();
     const b = connect(url, 'u2');
     expect(await b.next()).toEqual({ t: 'hello', you: 'u2', recentChat: [],
-      others: [{ uid: 'u1', nick: 'n-u1', boat: 2, region: 'deep', zone: null, x: 1, y: 2, dir: 0, line: false }] });
+      others: [{ uid: 'u1', nick: 'n-u1', boat: 2, fame: 100, region: 'deep', zone: null, x: 1, y: 2, dir: 0, line: false }] });
     a.ws.close();
     expect(await b.next()).toEqual({ t: 'leave', uid: 'u1' });
   });
@@ -404,9 +415,10 @@ describe('실시간 채널 접속 목록과 세션 기록', () => {
 });
 
 describe('실시간 채널 채팅', () => {
-  const chat = (c: Client, text: string) => c.ws.send(JSON.stringify({ t: 'chat', text }));
-  const lineOf = (id: number, uid: string, text: string): ServerMessage =>
-    ({ t: 'chat', line: { id, uid, nick: `n-${uid}`, text, at: '2030-01-01T00:00:00.000Z' } });
+  const chat = (c: Client, text: string, room: ChatRoom = 'global') =>
+    c.ws.send(JSON.stringify({ t: 'chat', text, room }));
+  const lineOf = (id: number, uid: string, text: string, room: ChatRoom = 'global'): ServerMessage =>
+    ({ t: 'chat', room, line: { id, uid, nick: `n-${uid}`, text, at: '2030-01-01T00:00:00.000Z' } });
 
   it('마지막 위치는 첫 위치에서 쓰고, 간격 안의 이동은 쓰지 않으며, 연결이 끝날 때 마지막 자리를 쓴다', async () => {
     const saved: Array<{ uid: string; region: string; x: number; y: number }> = [];
@@ -517,12 +529,14 @@ describe('실시간 채널 채팅', () => {
     const { url } = await start();
     const a = connect(url, 'u1');
     await a.next();
-    // 초당 메시지 상한(15)을 넘지 않게 두 번에 나눠 보낸다
+    a.ws.send(JSON.stringify({ t: 'region', region: 'pacific' }));
+    expect((await a.next()).t).toBe('localHistory');
+    // 초당 메시지 상한(15)을 넘지 않게 두 번에 나눠 보낸다(전체 쿨다운이 없는 지역 방으로 전체 합산 창을 검증)
     const first = 13;
-    for (let i = 0; i < first; i++) chat(a, `m${i}`);
+    for (let i = 0; i < first; i++) chat(a, `m${i}`, 'local');
     for (let i = 0; i < first; i++) expect((await a.next()).t).toBe('chat');
     await new Promise(r => setTimeout(r, 1100));
-    for (let i = first; i <= CHAT_RATE_MAX; i++) chat(a, `m${i}`);
+    for (let i = first; i <= CHAT_RATE_MAX; i++) chat(a, `m${i}`, 'local');
     // 거부는 저장을 기다리지 않아 저장된 줄보다 먼저 올 수 있다 — 순서 없이 센다
     const rest: ServerMessage[] = [];
     for (let i = first; i <= CHAT_RATE_MAX; i++) rest.push(await a.next());
@@ -540,13 +554,17 @@ describe('실시간 채널 채팅', () => {
     chat(a, '하나');
     expect(await c.next()).toEqual(lineOf(1, 'u1', '하나'));
     live.setBlocked('u2', []);
-    chat(a, '둘');
-    expect(await c.next()).toEqual(lineOf(2, 'u1', '둘'));
-    expect(await b.next()).toEqual(lineOf(2, 'u1', '둘'));
+    a.ws.send(JSON.stringify({ t: 'region', region: 'pacific' }));
+    b.ws.send(JSON.stringify({ t: 'region', region: 'pacific' }));
+    c.ws.send(JSON.stringify({ t: 'region', region: 'pacific' }));
+    await a.next(); await b.next(); await c.next();
+    chat(a, '둘', 'local');
+    expect(await c.next()).toEqual(lineOf(2, 'u1', '둘', 'local'));
+    expect(await b.next()).toEqual(lineOf(2, 'u1', '둘', 'local'));
     live.setBlocked('u2', ['u1']);
-    chat(a, '셋');
-    chat(c, '넷');
-    expect(await b.next()).toEqual(lineOf(4, 'u3', '넷'));
+    chat(a, '셋', 'local');
+    chat(c, '넷', 'local');
+    expect(await b.next()).toEqual(lineOf(4, 'u3', '넷', 'local'));
   });
 
   it('hello의 recentChat은 최근 대화를 싣고 내가 차단한 사람의 메시지는 뺀다', async () => {
@@ -575,8 +593,8 @@ describe('실시간 채널 길드 채팅', () => {
     guildChat(a, '  길드 안녕  ');
     expect(await a.next()).toEqual(guildLine(1, 'u1', '길드 안녕'));
     expect(await b.next()).toEqual(guildLine(1, 'u1', '길드 안녕'));
-    a.ws.send(JSON.stringify({ t: 'chat', text: '월드' }));
-    const world = { t: 'chat', line: { id: 2, uid: 'u1', nick: 'n-u1', text: '월드', at: '2030-01-01T00:00:00.000Z' } };
+    a.ws.send(JSON.stringify({ t: 'chat', text: '월드', room: 'global' }));
+    const world = { t: 'chat', room: 'global', line: { id: 2, uid: 'u1', nick: 'n-u1', text: '월드', at: '2030-01-01T00:00:00.000Z' } };
     expect(await c.next()).toEqual(world);
     expect(await d.next()).toEqual(world);
     expect(await b.next()).toEqual(world);
@@ -604,6 +622,22 @@ describe('실시간 채널 길드 채팅', () => {
     expect(await a.next()).toEqual(guildLine(2, 'u1', '떠남'));
     guildChat(b, '나도');
     expect(await b.next()).toEqual({ t: 'error', code: 'chat-no-guild' });
+  });
+
+  it('sendToGuild는 그 길드의 접속한 길드원에게만 보낸다', async () => {
+    const { url, live, chat: store } = await start();
+    store.guilds.set('u1', 'g1').set('u2', 'g1').set('u3', 'g2');
+    const [a, b, c, d] = ['u1', 'u2', 'u3', 'u4'].map(uid => connect(url, uid));
+    for (const x of [a, b, c, d]) await x.next();
+    const msg: ServerMessage = { t: 'guild', kind: 'updated', guild: '', nick: null };
+    live.sendToGuild('g1', msg);
+    expect(await a.next()).toEqual(msg);
+    expect(await b.next()).toEqual(msg);
+    // 다른 연결에 보낸 뒤 확인용 메시지가 먼저 도착하면 앞선 길드 알림은 오지 않은 것이다
+    live.sendTo('u3', { t: 'guild', kind: 'approved', guild: 'x', nick: null });
+    live.sendTo('u4', { t: 'guild', kind: 'approved', guild: 'x', nick: null });
+    expect(await c.next()).toMatchObject({ kind: 'approved' });
+    expect(await d.next()).toMatchObject({ kind: 'approved' });
   });
 
   it('hello는 길드원에게만 그 길드의 최근 대화를 싣고, 내가 차단한 사람의 줄은 뺀다', async () => {
@@ -652,5 +686,417 @@ describe('실시간 채널 길드 채팅', () => {
     const a = connect(url, 'u1');
     const hello = await a.next();
     expect(hello).toMatchObject({ t: 'hello', you: 'u1', others: [] });
+  });
+});
+
+describe('실시간 닉네임 즉시 동기화', () => {
+  it('setNick은 활성 연결의 닉네임·프레즌스·접속자 목록·후속 채팅을 즉시 갱신하고 피어에 nick 메시지를 전파한다', async () => {
+    const { url, live, chat: store } = await start();
+    store.guilds.set('u1', 'g1').set('u2', 'g1');
+    const a = connect(url, 'u1');
+    const b = connect(url, 'u2');
+    await a.next(); await b.next();
+
+    a.ws.send(JSON.stringify({ t: 'move', region: 'sea', x: 10, y: 20, dir: 2, line: false }));
+    expect(await b.next()).toMatchObject({ t: 'join', presence: { uid: 'u1', nick: 'n-u1' } });
+
+    live.setNick('u1', '새선장');
+
+    expect(await a.next()).toEqual({ t: 'nick', uid: 'u1', nick: '새선장' });
+    expect(await b.next()).toEqual({ t: 'nick', uid: 'u1', nick: '새선장' });
+    expect(live.online().find(o => o.uid === 'u1')?.nick).toBe('새선장');
+    expect(live.presenceOf('u1')?.nick).toBe('새선장');
+
+    // 재연결 없이 월드·길드 채팅 모두 새 닉네임으로 저장 및 전파된다
+    a.ws.send(JSON.stringify({ t: 'chat', text: '바뀐 이름으로 인사', room: 'global' }));
+    expect(await a.next()).toEqual({
+      t: 'chat',
+      room: 'global',
+      line: { id: 1, uid: 'u1', nick: '새선장', text: '바뀐 이름으로 인사', at: '2030-01-01T00:00:00.000Z' },
+    });
+    expect(await b.next()).toEqual({
+      t: 'chat',
+      room: 'global',
+      line: { id: 1, uid: 'u1', nick: '새선장', text: '바뀐 이름으로 인사', at: '2030-01-01T00:00:00.000Z' },
+    });
+
+    a.ws.send(JSON.stringify({ t: 'chat', text: '길드에도 인사', room: 'guild' }));
+    expect(await a.next()).toEqual({
+      t: 'chat',
+      room: 'guild',
+      line: { id: 2, uid: 'u1', nick: '새선장', text: '길드에도 인사', at: '2030-01-01T00:00:00.000Z' },
+    });
+    expect(await b.next()).toEqual({
+      t: 'chat',
+      room: 'guild',
+      line: { id: 2, uid: 'u1', nick: '새선장', text: '길드에도 인사', at: '2030-01-01T00:00:00.000Z' },
+    });
+
+    // 이후 새로 접속한 피어도 hello.others에서 새 닉네임을 받는다
+    const c = connect(url, 'u3');
+    const hello = await c.next();
+    expect(hello).toMatchObject({
+      t: 'hello',
+      you: 'u3',
+      others: [expect.objectContaining({ uid: 'u1', nick: '새선장' })],
+    });
+  });
+
+  it('첫 move 전 setNick 호출 뒤 첫 move를 보내도 join에 새 닉네임이 실리고, 게스트는 피어에게 전파하지 않는다', async () => {
+    const { url, live } = await start();
+    const a = connect(url, 'u1');
+    const b = connect(url, 'u2');
+    const g = connect(url, 'guest:g1');
+    await a.next(); await b.next(); await g.next();
+
+    live.setNick('u1', '이동전변경');
+    expect(await a.next()).toEqual({ t: 'nick', uid: 'u1', nick: '이동전변경' });
+    expect(await b.next()).toEqual({ t: 'nick', uid: 'u1', nick: '이동전변경' });
+    expect(await g.next()).toEqual({ t: 'nick', uid: 'u1', nick: '이동전변경' });
+
+    a.ws.send(JSON.stringify({ t: 'move', region: 'sea', x: 1, y: 2, dir: 0, line: false }));
+    expect(await b.next()).toMatchObject({ t: 'join', presence: { uid: 'u1', nick: '이동전변경' } });
+    expect(await g.next()).toMatchObject({ t: 'join', presence: { uid: 'u1', nick: '이동전변경' } });
+
+    // 게스트와 미접속 uid는 다른 연결에 nick 메시지를 보내지 않는다
+    live.setNick('guest:g1', '게스트변경');
+    live.setNick('g1', '게스트변경');
+    live.setNick('not-online', '아무개');
+    expect(live.online().find(o => o.uid === 'g1')?.nick).toBe('게스트변경');
+    expect(a.messages).toEqual([]);
+    expect(b.messages).toEqual([]);
+  });
+
+  it('setFame은 활성 연결의 user.fame과 presence.fame을 갱신해 이후 join과 hello.others에 반영한다', async () => {
+    const { url, live } = await start();
+    const a = connect(url, 'u1');
+    const b = connect(url, 'u2');
+    await a.next(); await b.next();
+
+    // 첫 move 전 갱신은 join presence에 실린다
+    live.setFame('u1', 550);
+    a.ws.send(JSON.stringify({ t: 'move', region: 'sea', x: 1, y: 2, dir: 0, line: false }));
+    expect(await b.next()).toMatchObject({ t: 'join', presence: { uid: 'u1', fame: 550 } });
+    expect(live.presenceOf('u1')?.fame).toBe(550);
+
+    // 이동 후 갱신은 presenceOf와 이후 접속자의 hello.others에 반영된다
+    live.setFame('u1', 770);
+    live.setFame('not-online', 999);
+    expect(live.presenceOf('u1')?.fame).toBe(770);
+    const c = connect(url, 'u3');
+    expect(await c.next()).toMatchObject({
+      t: 'hello',
+      you: 'u3',
+      others: [expect.objectContaining({ uid: 'u1', fame: 770 })],
+    });
+    expect(b.messages).toEqual([]);
+  });
+});
+
+describe('실시간 채팅 3방·지역 격리·쿨다운·중복 차단·공지 전파', () => {
+  it('지역 방은 topZoneOf(zone) ?? region 기준으로 같은 최상위 지역 접속자에게만 중계하고 region 메시지에 localHistory를 보낸다', async () => {
+    const { url, chat: store } = await start();
+    store.localLines.set('pacific', [
+      { id: 10, uid: 'u9', nick: 'n-u9', text: '기존 태평양', at: 'x' },
+      { id: 11, uid: 'u4', nick: 'n-u4', text: '차단된 말', at: 'x' },
+    ]);
+    store.blocks.set('u1', ['u4']);
+
+    const a = connect(url, 'u1'); // deep -> pacific
+    const b = connect(url, 'u2'); // pacific
+    const c = connect(url, 'u3'); // village
+    await a.next(); await b.next(); await c.next();
+
+    // move의 zone 정규화: deep -> pacific
+    a.ws.send(JSON.stringify({ t: 'move', region: 'world', zone: 'deep', x: 1, y: 1, dir: 0, line: false }));
+    await b.next(); await c.next(); // join
+    b.ws.send(JSON.stringify({ t: 'region', region: 'pacific' }));
+    expect(await b.next()).toEqual({
+      t: 'localHistory',
+      region: 'pacific',
+      lines: [
+        { id: 10, uid: 'u9', nick: 'n-u9', text: '기존 태평양', at: 'x' },
+        { id: 11, uid: 'u4', nick: 'n-u4', text: '차단된 말', at: 'x' },
+      ],
+    });
+    a.ws.send(JSON.stringify({ t: 'region', region: 'deep' }));
+    expect(await a.next()).toEqual({
+      t: 'localHistory',
+      region: 'pacific',
+      lines: [{ id: 10, uid: 'u9', nick: 'n-u9', text: '기존 태평양', at: 'x' }],
+    });
+
+    c.ws.send(JSON.stringify({ t: 'region', region: 'village' }));
+    expect(await c.next()).toEqual({ t: 'localHistory', region: 'village', lines: [] });
+
+    // room 생략 기본값은 local이며 같은 지역(pacific)에만 간다
+    a.ws.send(JSON.stringify({ t: 'chat', text: '해구 안녕' }));
+    expect(await a.next()).toEqual({
+      t: 'chat',
+      room: 'local',
+      line: { id: 1, uid: 'u1', nick: 'n-u1', text: '해구 안녕', at: '2030-01-01T00:00:00.000Z' },
+    });
+    expect(await b.next()).toEqual({
+      t: 'chat',
+      room: 'local',
+      line: { id: 1, uid: 'u1', nick: 'n-u1', text: '해구 안녕', at: '2030-01-01T00:00:00.000Z' },
+    });
+    expect(c.messages).toEqual([]);
+
+    // global은 다른 지역(c)에도 간다
+    a.ws.send(JSON.stringify({ t: 'chat', text: '전체 인사', room: 'global' }));
+    expect(await c.next()).toEqual({
+      t: 'chat',
+      room: 'global',
+      line: { id: 2, uid: 'u1', nick: 'n-u1', text: '전체 인사', at: '2030-01-01T00:00:00.000Z' },
+    });
+  });
+
+  it('전체 방은 10초 쿨다운(chat-global-cooldown + retryAfterMs)을 강제하며 대기 중 지역·길드 방은 허용한다', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2030-01-01T00:00:00.000Z'));
+      const { url, chat: store } = await start();
+      store.guilds.set('u1', 'g1');
+      const a = connect(url, 'u1');
+      await a.next();
+      a.ws.send(JSON.stringify({ t: 'region', region: 'pacific' }));
+      await a.next();
+
+      a.ws.send(JSON.stringify({ t: 'chat', text: '첫 전체', room: 'global' }));
+      expect(await a.next()).toMatchObject({ t: 'chat', room: 'global', line: { text: '첫 전체' } });
+
+      vi.advanceTimersByTime(2_500);
+      a.ws.send(JSON.stringify({ t: 'chat', text: '빠른 전체', room: 'global' }));
+      const err = await a.next();
+      expect(err).toMatchObject({ t: 'error', code: 'chat-global-cooldown' });
+      expect((err as Extract<ServerMessage, { t: 'error' }>).retryAfterMs).toBeGreaterThan(0);
+      expect((err as Extract<ServerMessage, { t: 'error' }>).retryAfterMs).toBeLessThanOrEqual(GLOBAL_CHAT_COOLDOWN_MS);
+
+      // 대기 중 지역·길드 방은 막히지 않는다
+      a.ws.send(JSON.stringify({ t: 'chat', text: '지역 대체', room: 'local' }));
+      expect(await a.next()).toMatchObject({ t: 'chat', room: 'local', line: { text: '지역 대체' } });
+      a.ws.send(JSON.stringify({ t: 'chat', text: '길드 대체', room: 'guild' }));
+      expect(await a.next()).toMatchObject({ t: 'chat', room: 'guild', line: { text: '길드 대체' } });
+
+      vi.advanceTimersByTime(GLOBAL_CHAT_COOLDOWN_MS);
+      a.ws.send(JSON.stringify({ t: 'chat', text: '다시 전체', room: 'global' }));
+      expect(await a.next()).toMatchObject({ t: 'chat', room: 'global', line: { text: '다시 전체' } });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('모든 방에서 직전 트림 문구와 같으면 10초 이내 chat-duplicate로 차단한다', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2030-01-01T00:00:00.000Z'));
+      const { url } = await start();
+      const a = connect(url, 'u1');
+      await a.next();
+      a.ws.send(JSON.stringify({ t: 'region', region: 'pacific' }));
+      await a.next();
+
+      a.ws.send(JSON.stringify({ t: 'chat', text: '안녕', room: 'local' }));
+      expect(await a.next()).toMatchObject({ t: 'chat', room: 'local', line: { text: '안녕' } });
+
+      // 공백만 달라도 직전 트림 문구와 같고 10초 이내면 차단된다
+      a.ws.send(JSON.stringify({ t: 'chat', text: '  안녕  ', room: 'local' }));
+      expect(await a.next()).toEqual({ t: 'error', code: 'chat-duplicate' });
+
+      // 다른 문구는 허용되고 직전 문구가 갱신된다
+      a.ws.send(JSON.stringify({ t: 'chat', text: '반가워', room: 'local' }));
+      expect(await a.next()).toMatchObject({ t: 'chat', room: 'local', line: { text: '반가워' } });
+
+      // 10초 경과 후에는 같은 문구도 다시 허용된다
+      vi.advanceTimersByTime(CHAT_DUPLICATE_WINDOW_MS);
+      a.ws.send(JSON.stringify({ t: 'chat', text: '반가워', room: 'local' }));
+      expect(await a.next()).toMatchObject({ t: 'chat', room: 'local', line: { text: '반가워' } });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('hello는 activeNotices를 싣고, sendToAll은 게스트 포함 모든 열린 연결에 공지를 보낸다', async () => {
+    const sampleNotices: NoticeItem[] = [
+      {
+        id: 1,
+        title: '점검 안내',
+        body: '오늘 밤 점검이 있어요.',
+        startsAt: '2030-01-01T00:00:00.000Z',
+        endsAt: '2030-01-02T00:00:00.000Z',
+        createdAt: '2029-12-31T12:00:00.000Z',
+      },
+    ];
+    const { urlFor, live } = await start({ activeNotices: async () => sampleNotices });
+    const a = connect(urlFor(BUILD, { region: 'bermuda' }), 'u1');
+    const g = connect(urlFor(BUILD), 'guest:g1');
+
+    const helloA = await a.next();
+    expect(helloA).toMatchObject({
+      t: 'hello',
+      you: 'u1',
+      recentLocalChat: [],
+      notices: sampleNotices,
+    });
+    const helloG = await g.next();
+    expect(helloG).toMatchObject({
+      t: 'hello',
+      you: 'g1',
+      notices: sampleNotices,
+    });
+
+    const updated: NoticeItem[] = [
+      {
+        id: 2,
+        title: '새 공지',
+        body: '반영 완료',
+        startsAt: '2030-01-01T01:00:00.000Z',
+        endsAt: '2030-01-03T00:00:00.000Z',
+        createdAt: '2030-01-01T01:00:00.000Z',
+      },
+    ];
+    live.sendToAll({ t: 'notices', notices: updated });
+    expect(await a.next()).toEqual({ t: 'notices', notices: updated });
+    expect(await g.next()).toEqual({ t: 'notices', notices: updated });
+  });
+
+  it('hello와 sendToAll은 마감 전(예약+활성)과 최근 마감 공지를 합쳐 최대 MAX_NOTICES(40건)까지 그대로 전달한다', async () => {
+    const mixedNotices: NoticeItem[] = Array.from({ length: MAX_NOTICES }, (_, i) => ({
+      id: i + 1,
+      title: i < 20 ? `진행-예약-${i}` : `마감-${i}`,
+      body: `본문-${i}`,
+      startsAt: i < 10 ? '2030-05-12T00:00:00.000Z' : '2030-05-01T00:00:00.000Z',
+      endsAt: i < 20 ? '2030-05-20T00:00:00.000Z' : '2030-05-05T00:00:00.000Z',
+      createdAt: '2030-05-01T00:00:00.000Z',
+    }));
+    const { url, live } = await start({ activeNotices: async () => mixedNotices });
+    const a = connect(url, 'u1');
+    const g = connect(url, 'guest:g1');
+
+    expect(await a.next()).toMatchObject({ t: 'hello', notices: mixedNotices });
+    expect(await g.next()).toMatchObject({ t: 'hello', notices: mixedNotices });
+
+    const reversed = [...mixedNotices].reverse();
+    live.sendToAll({ t: 'notices', notices: reversed });
+    expect(await a.next()).toEqual({ t: 'notices', notices: reversed });
+    expect(await g.next()).toEqual({ t: 'notices', notices: reversed });
+  });
+
+  it('강제 모자 구역(championship)에서는 산타모자를 강제 브로드캐스트하고, 구역을 벗어나면 실제 모자를 복원한다', async () => {
+    const { url, live } = await start();
+    const a = connect(url, 'u1');
+    const b = connect(url, 'u2');
+    await a.next();
+    await b.next();
+
+    const actualLook = { shirt: 3, pants: 4, hat: 'cap-red' };
+    a.ws.send(JSON.stringify({ t: 'move', region: 'championship', x: 1, y: 2, dir: 1, line: false, look: actualLook }));
+    expect(await b.next()).toMatchObject({
+      t: 'join',
+      presence: { uid: 'u1', region: 'championship', look: { shirt: 3, pants: 4, hat: 'santa-hat' } },
+    });
+    expect(live.presenceOf('u1')?.look).toEqual({ shirt: 3, pants: 4, hat: 'santa-hat' });
+
+    // 구역 안에서 외형을 바꿔 보내도 모자는 산타모자로 고정되고, 벗어날 때 실제 외형이 복원된다
+    const updatedLook = { shirt: 5, pants: 1, hat: null };
+    a.ws.send(JSON.stringify({ t: 'move', region: 'championship', x: 2, y: 2, dir: 1, line: false, look: updatedLook }));
+    expect(await b.next()).toMatchObject({
+      t: 'move',
+      uid: 'u1',
+      region: 'championship',
+      look: { shirt: 5, pants: 1, hat: 'santa-hat' },
+    });
+
+    // look 없이 일반 구역으로 나가도 직전에 기록한 실제 외형으로 복원된다
+    a.ws.send(JSON.stringify({ t: 'move', region: 'world', x: 3, y: 2, dir: 2, line: false }));
+    expect(await b.next()).toMatchObject({
+      t: 'move',
+      uid: 'u1',
+      region: 'world',
+      look: updatedLook,
+    });
+    expect(live.presenceOf('u1')?.look).toEqual(updatedLook);
+
+    // 일반 구역에서 look 없이 강제 모자 구역으로 다시 들어가면 산타모자가 적용된다
+    a.ws.send(JSON.stringify({ t: 'move', region: 'championship', x: 4, y: 2, dir: 0, line: false }));
+    expect(await b.next()).toMatchObject({
+      t: 'move',
+      uid: 'u1',
+      region: 'championship',
+      look: { shirt: 5, pants: 1, hat: 'santa-hat' },
+    });
+    expect(live.presenceOf('u1')?.look).toEqual({ shirt: 5, pants: 1, hat: 'santa-hat' });
+  });
+});
+
+describe('실시간 어획 점프 브로드캐스트(broadcastCatchFx)', () => {
+  it('모든 등급과 폼의 어획을 같은 지역 다른 접속자에게만 보내고 본인·다른 지역·게스트 발신자는 제외하며 bob 좌표를 우선한다', async () => {
+    const { url, live } = await start();
+    const a = connect(url, 'u1'); // world (bob 있음)
+    const b = connect(url, 'u2'); // world (수신자)
+    const c = connect(url, 'u3'); // village (다른 지역)
+    const d = connect(url, 'u4'); // 위치 미전송 (presence null)
+    const g = connect(url, 'guest:g1'); // guest (수신 가능, 발신 제외)
+    await a.next(); await b.next(); await c.next(); await d.next(); await g.next();
+
+    // u1: world, 플레이어 (100, 200), bob (140, 260)
+    a.ws.send(JSON.stringify({ t: 'move', region: 'world', x: 100, y: 200, dir: 1, line: true, bob: { x: 140, y: 260 } }));
+    await b.next(); await c.next(); await d.next(); await g.next(); // join u1
+
+    // u2: world
+    b.ws.send(JSON.stringify({ t: 'move', region: 'world', x: 300, y: 400, dir: 0, line: false }));
+    await a.next(); await c.next(); await d.next(); await g.next(); // join u2
+
+    // u3: village
+    c.ws.send(JSON.stringify({ t: 'move', region: 'village', x: 10, y: 20, dir: 2, line: false }));
+    await a.next(); await b.next(); await d.next(); await g.next(); // join u3
+
+    // g1: world로 이동 (게스트지만 presence가 world에 있으므로 u1의 연출은 받는다)
+    g.ws.send(JSON.stringify({ t: 'move', region: 'world', x: 200, y: 220, dir: 0, line: true, bob: { x: 210, y: 230 } }));
+    // 게스트의 move는 전파되지 않으므로 본인 채팅 오류 응답으로 처리 완료를 동기화한다
+    g.ws.send(JSON.stringify({ t: 'chat', text: '동기화' }));
+    expect(await g.next()).toEqual({ t: 'error', code: 'chat-guest' });
+
+    // common, uncommon(또는 rare), epic, legendary 및 form(normal/variant/생략) 모두 전파된다
+    live.broadcastCatchFx('u1', { fishId: 'anchovy', form: 'normal' });
+    live.broadcastCatchFx('u1', { fishId: 'tuna', form: 'variant' });
+    live.broadcastCatchFx('u1', { fishId: 'oarfish' });
+
+    expect(await b.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 140, y: 260, toX: 100, toY: 194, fishId: 'anchovy', form: 'normal' });
+    expect(await b.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 140, y: 260, toX: 100, toY: 194, fishId: 'tuna', form: 'variant' });
+    expect(await b.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 140, y: 260, toX: 100, toY: 194, fishId: 'oarfish' });
+
+    expect(await g.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 140, y: 260, toX: 100, toY: 194, fishId: 'anchovy', form: 'normal' });
+    expect(await g.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 140, y: 260, toX: 100, toY: 194, fishId: 'tuna', form: 'variant' });
+    expect(await g.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 140, y: 260, toX: 100, toY: 194, fishId: 'oarfish' });
+
+    // bob이 없으면 플레이어 x, y를 사용한다
+    a.ws.send(JSON.stringify({ t: 'move', region: 'world', x: 155, y: 275, dir: 1, line: false }));
+    await b.next(); // move u1
+    await g.next(); // move u1
+    await c.next(); // move u1
+    await d.next(); // move u1
+
+    live.broadcastCatchFx('u1', { fishId: 'mackerel', form: 'normal' });
+    expect(await b.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 155, y: 275, toX: 155, toY: 269, fishId: 'mackerel', form: 'normal' });
+    expect(await g.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'world', x: 155, y: 275, toX: 155, toY: 269, fishId: 'mackerel', form: 'normal' });
+
+    // 게스트 발신자·미접속·presence 없는 접속자는 전파하지 않는다
+    live.broadcastCatchFx('g1', { fishId: 'crucian', form: 'normal' });
+    live.broadcastCatchFx('u4', { fishId: 'crucian', form: 'normal' });
+    live.broadcastCatchFx('unknown-uid', { fishId: 'crucian', form: 'normal' });
+
+    // 발신자 본인(a), 다른 지역(c), 위치 미전송(d)에는 catchFx가 가지 않았다
+    expect(a.messages.filter(m => m.t === 'catchFx')).toEqual([]);
+    expect(c.messages.filter(m => m.t === 'catchFx')).toEqual([]);
+    expect(d.messages.filter(m => m.t === 'catchFx')).toEqual([]);
+    expect(b.messages.filter(m => m.t === 'catchFx')).toEqual([]);
+
+    // village 지역에서도 같은 지역 피어에게 전파된다
+    a.ws.send(JSON.stringify({ t: 'move', region: 'village', x: 30, y: 40, dir: 0, line: true, bob: { x: 45, y: 55 } }));
+    await c.next(); // move u1
+    live.broadcastCatchFx('u1', { fishId: 'crucian', form: 'normal' });
+    expect(await c.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'village', x: 45, y: 55, toX: 30, toY: 34, fishId: 'crucian', form: 'normal' });
   });
 });

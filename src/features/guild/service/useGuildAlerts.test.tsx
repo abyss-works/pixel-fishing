@@ -9,8 +9,9 @@ import type { GuildInfo } from '../../../platform/api';
 vi.mock('../../account/service/session', () => ({
   useSession: () => ({ ready: true, uid: 'u1' }),
 }));
+const live = vi.hoisted(() => ({ emit: (_e: { t: 'guild'; kind: string; guild: string; nick: string | null }) => {} }));
 vi.mock('../../live/service/useLive', () => ({
-  onGuildEvent: () => () => {},
+  onGuildEvent: (l: typeof live.emit) => { live.emit = l; return () => {}; },
 }));
 
 import { useGuildAlerts } from './useGuildAlerts';
@@ -87,5 +88,44 @@ describe('useGuildAlerts — 길드 상태 전환 감지', () => {
     expect(notify).toHaveBeenNthCalledWith(1, '길드가 Lv.2로 올랐어요!');
     expect(notify).toHaveBeenNthCalledWith(2, expect.stringContaining('1단계가 됐어요!'));
     expect(notify).toHaveBeenNthCalledWith(3, '신입 님이 길드에 들어왔어요.');
+  });
+});
+
+describe('useGuildAlerts — 실시간 길드 이벤트', () => {
+  function setup() {
+    const client = new QueryClient();
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const notify = vi.fn();
+    renderHook(() => useGuildAlerts(true, notify), { wrapper });
+    return { invalidate, notify };
+  }
+
+  it('updated는 길드·공개 길드·초대 미리보기를 무효화하고 알림을 띄우지 않는다', () => {
+    const { invalidate, notify } = setup();
+    live.emit({ t: 'guild', kind: 'updated', guild: '심해', nick: null });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['guild', 'u1'] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['publicGuilds'] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['guildInvite'] });
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('rejected는 거절 알림을 띄우고 publicGuilds·guildInvite도 무효화한다', () => {
+    const { invalidate, notify } = setup();
+    live.emit({ t: 'guild', kind: 'rejected', guild: '심해', nick: null });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['guild', 'u1'] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['publicGuilds'] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['guildInvite'] });
+    expect(notify).toHaveBeenCalledWith('심해 길드 가입 신청이 거절됐어요.', 'warn');
+  });
+
+  it('request는 내 길드만 무효화하고 publicGuilds는 건드리지 않는다', () => {
+    const { invalidate, notify } = setup();
+    live.emit({ t: 'guild', kind: 'request', guild: '심해', nick: '바다거북' });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['guild', 'u1'] });
+    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: ['publicGuilds'] });
+    expect(notify).toHaveBeenCalledWith('바다거북 님이 심해 길드에 가입을 신청했어요.');
   });
 });

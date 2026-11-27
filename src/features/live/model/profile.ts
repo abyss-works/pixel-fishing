@@ -96,6 +96,8 @@ export interface ProfileView {
       goldTotal: number;
       achievementOwned: number;
       achievementTotal: number;
+      eventOwned: number;
+      eventTotal: number;
       slots: ProfileHatSlot[];
     };
     artifacts: { owned: number; total: number; slots: ProfileArtifactSlot[] };
@@ -109,6 +111,7 @@ function resolvePlaceLabel(profile: PublicProfile): string | null {
       if (z) return z.name;
     }
     if (profile.liveRegion === 'village') return '마을';
+    if (profile.liveRegion === 'championship') return zoneById('championship')?.name ?? '강태공 분지 호수';
     if (profile.liveRegion === 'world') return '바다';
   }
   if (profile.location?.kind === 'base') {
@@ -116,6 +119,12 @@ function resolvePlaceLabel(profile: PublicProfile): string | null {
   }
   if (profile.location?.kind === 'region' && profile.location.id === 'village') {
     return '마을';
+  }
+  if (profile.location?.kind === 'region' && profile.location.id === 'championship') {
+    return zoneById('championship')?.name ?? '강태공 분지 호수';
+  }
+  if (profile.lastPos?.region === 'championship') {
+    return zoneById('championship')?.name ?? '강태공 분지 호수';
   }
   if (profile.lastPos?.region === 'world') {
     const z = zoneOf(WORLD, profile.lastPos.x, profile.lastPos.y);
@@ -171,10 +180,13 @@ export function selectProfileView(profile: PublicProfile): ProfileView {
 
   const goldHats = HATS.filter(h => h.source === 'gold');
   const achievementHats = HATS.filter(h => h.source === 'achievement');
+  const eventOwnedHats = HATS.filter(h => h.source === 'event' && ownedHats.has(h.id));
+  const visibleHats = HATS.filter(h => h.source !== 'event' || ownedHats.has(h.id));
   const goldOwned = goldHats.filter(h => ownedHats.has(h.id)).length;
   const achievementOwned = achievementHats.filter(h => ownedHats.has(h.id)).length;
+  const eventOwned = eventOwnedHats.length;
   const hatLookBase = profile.look ?? DEFAULT_LOOK;
-  const hatSlots: ProfileHatSlot[] = HATS.map(h => ({
+  const hatSlots: ProfileHatSlot[] = visibleHats.map(h => ({
     id: h.id,
     name: h.name,
     source: h.source,
@@ -182,7 +194,9 @@ export function selectProfileView(profile: PublicProfile): ProfileView {
     look: { shirt: hatLookBase.shirt, pants: hatLookBase.pants, hat: h.id },
     conditionText: h.source === 'gold'
       ? `${h.price.toLocaleString('ko-KR')}G 구매`
-      : (achievementById(h.achievementId)?.desc ?? '업적 보상'),
+      : h.source === 'event'
+        ? (h.id === 'santa-hat' ? '겨울 이벤트 기간에 접속하면 우편함으로 받을 수 있어요.' : '이벤트 한정 모자')
+        : (achievementById(h.achievementId)?.desc ?? '업적 보상'),
   }));
 
   const slots: ProfileArtifactSlot[] = ARTIFACTS.map(a => {
@@ -224,12 +238,14 @@ export function selectProfileView(profile: PublicProfile): ProfileView {
     },
     collectibles: {
       hats: {
-        owned: goldOwned + achievementOwned,
-        total: HATS.length,
+        owned: goldOwned + achievementOwned + eventOwned,
+        total: goldHats.length + achievementHats.length + eventOwned,
         goldOwned,
         goldTotal: goldHats.length,
         achievementOwned,
         achievementTotal: achievementHats.length,
+        eventOwned,
+        eventTotal: eventOwned,
         slots: hatSlots,
       },
       artifacts: {

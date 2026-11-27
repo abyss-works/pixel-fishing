@@ -159,3 +159,59 @@ describe('복귀 주소 읽기', () => {
     expect(replace).not.toHaveBeenCalled();
   });
 });
+
+describe('1회용 구글 전환 티켓 확인 및 취소', () => {
+  it('confirmGoogleSwitch 성공 시 흐름 표지를 남기고 복귀 주소로 이동한다', async () => {
+    const auth = await load();
+    client.$fetch.mockResolvedValue({ data: { ok: true }, error: null });
+    expect(await auth.confirmGoogleSwitch('sign-in')).toEqual({ ok: true });
+    expect(client.$fetch).toHaveBeenCalledWith('/confirm-google-switch', { method: 'POST', body: {} });
+    expect(sessionStorage.getItem('pf-google-flow')).toBe('sign-in');
+    expect(assign).toHaveBeenCalledWith('https://game.test/?google=sign-in');
+  });
+
+  it('티켓 누락 또는 만료 코드는 fallback: true를 돌려주고 이동하지 않는다', async () => {
+    const auth = await load();
+    for (const code of ['switch_ticket_missing', 'switch_ticket_expired']) {
+      client.$fetch.mockResolvedValueOnce({ data: null, error: { status: 400, code, message: 'expired' } });
+      const res = await auth.confirmGoogleSwitch('sign-in');
+      expect(res).toMatchObject({ ok: false, fallback: true, code });
+    }
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  it('429·403·409·5xx·네트워크 오류는 fallback: false와 구분된 code를 돌려준다', async () => {
+    const auth = await load();
+    client.$fetch.mockResolvedValueOnce({ data: null, error: { status: 429, message: 'Too many requests' } });
+    expect(await auth.confirmGoogleSwitch('sign-in')).toMatchObject({ ok: false, fallback: false, code: 'rate-limited' });
+
+    client.$fetch.mockResolvedValueOnce({ data: null, error: { status: 403, code: 'switch_session_mismatch', message: 'mismatch' } });
+    expect(await auth.confirmGoogleSwitch('sign-in')).toMatchObject({ ok: false, fallback: false, code: 'switch_session_mismatch' });
+
+    client.$fetch.mockResolvedValueOnce({ data: null, error: { status: 403, code: 'INVALID_ORIGIN', message: 'origin' } });
+    expect(await auth.confirmGoogleSwitch('sign-in')).toMatchObject({ ok: false, fallback: false, code: 'INVALID_ORIGIN' });
+
+    client.$fetch.mockResolvedValueOnce({ data: null, error: { status: 409, code: 'switch_target_unavailable', message: 'unavailable' } });
+    expect(await auth.confirmGoogleSwitch('sign-in')).toMatchObject({ ok: false, fallback: false, code: 'switch_target_unavailable' });
+
+    client.$fetch.mockResolvedValueOnce({ data: null, error: { status: 500, code: 'switch_session_create_failed', message: 'boom' } });
+    expect(await auth.confirmGoogleSwitch('sign-in')).toMatchObject({ ok: false, fallback: false, code: 'server' });
+
+    client.$fetch.mockResolvedValueOnce({ data: null, error: { status: 502, message: 'Bad Gateway' } });
+    expect(await auth.confirmGoogleSwitch('sign-in')).toMatchObject({ ok: false, fallback: false, code: 'server' });
+
+    client.$fetch.mockRejectedValueOnce(new Error('network down'));
+    expect(await auth.confirmGoogleSwitch('sign-in')).toMatchObject({ ok: false, fallback: false, code: 'network' });
+
+    client.$fetch.mockResolvedValueOnce({ data: { ok: false }, error: null });
+    expect(await auth.confirmGoogleSwitch('sign-in')).toMatchObject({ ok: false, fallback: false, code: 'server' });
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  it('cancelGoogleSwitch는 /cancel-google-switch를 POST 호출한다', async () => {
+    const auth = await load();
+    client.$fetch.mockResolvedValue({ data: { ok: true }, error: null });
+    await auth.cancelGoogleSwitch();
+    expect(client.$fetch).toHaveBeenCalledWith('/cancel-google-switch', { method: 'POST', body: {} });
+  });
+});

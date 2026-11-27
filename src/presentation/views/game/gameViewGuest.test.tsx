@@ -5,15 +5,19 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { api } from '../../../platform/api';
 import { TUTORIAL_IDS } from '../../../game/content/tutorials';
 import { newState } from '../../../game/rules/logic';
+import type { GameState } from '../../../game/rules/logic';
 import { markPromptsAnswered, resetAnnouncements, setLastSeenVersion } from '../../../platform/adapters/announcements';
 import { APP_VERSION } from '../../../version';
 import { resetWhatsNewSession } from '../../../features/announcements/service/whatsNew';
 import { resetTutorialSession } from '../../../features/tutorial/service/tutorial';
 import { resetFortuneModalSession } from '../../../features/fortune/service/fortuneModal';
 import { resetOpenWindows } from '../../ui/openWindows';
+import { resetAlerts } from '../../../platform/api/attention';
+import { resetAlertPrompt } from '../../../features/alerts/service/alertPrompt';
 import {
   hasPendingSailReturn,
   resetSailReturnForTest,
+  setPendingGoogleOrigin,
 } from '../../../features/account/service/sailReturn';
 import GameView from './GameView';
 
@@ -42,6 +46,8 @@ beforeEach(() => {
   setLastSeenVersion(APP_VERSION);
   markPromptsAnswered(['fish-art']);
   resetOpenWindows();
+  resetAlerts();
+  resetAlertPrompt();
   api.auth.isConfigured = true;
   window.matchMedia = ((query: string) => ({
     matches: false, media: query, addEventListener: () => {}, removeEventListener: () => {},
@@ -60,6 +66,7 @@ afterEach(() => {
   sessionStorage.clear();
   resetSailReturnForTest();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 function renderView(account: string | null, accountChecked: boolean) {
@@ -67,7 +74,7 @@ function renderView(account: string | null, accountChecked: boolean) {
   render(
     <QueryClientProvider client={client}><GameView
       game={{ ...newState(), tutorials: [...TUTORIAL_IDS] }} scene={{ kind: 'region', id: 'village' }} entryPos={null} placeSeq={0}
-      dispatch={() => { throw new Error('dispatch is not used'); }} setToast={() => {} } onScene={() => {}} onPlace={() => {} } onWarmup={() => {}}
+      dispatch={() => { throw new Error('dispatch is not used'); }} setToast={() => {} } onScene={() => {}} onPlace={() => {} }
       log={[]} syncLabel={null} syncState="on" guestProgress="nothing"
       account={account} accountChecked={accountChecked} accountFailed={false} uid={null} nickname={null}
       onRename={async () => null} onAuthChanged={async () => {}} onResync={async () => {}}
@@ -101,5 +108,58 @@ describe('필드에 넘기는 확정된 게스트 여부', () => {
     fireEvent.click(googleBtn);
     await waitFor(() => expect(api.auth.startGoogle).toHaveBeenCalledTimes(1));
     expect(hasPendingSailReturn()).toBe(true);
+  });
+
+
+  it('로컬 모드 첫 진입에서는 마을 튜토리얼이 먼저 뜨고 브라우저 알림 카드가 겹치지 않는다', async () => {
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission: vi.fn(async () => 'default') });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const renderGame = (tutorials: GameState['tutorials']) => render(
+      <QueryClientProvider client={client}><GameView
+        game={{ ...newState(), tutorials }} scene={{ kind: 'region', id: 'village' }} entryPos={null} placeSeq={0}
+        dispatch={() => ({ status: 'ok' as const, state: newState(), result: { type: 'none' as const } })} setToast={() => {} } onScene={() => {}} onPlace={() => {} }
+        log={[]} syncLabel={null} syncState="off" guestProgress="nothing"
+        account={null} accountChecked={true} accountFailed={false} uid={null} nickname={null}
+        onRename={async () => null} onAuthChanged={async () => {}} onResync={async () => {}}
+      /></QueryClientProvider>,
+    );
+
+    // 업데이트 소식 판정이 끝난 재마운트에서 경합이 생긴다 — 첫 판정은 이전 마운트가 마친다
+    const first = renderGame([...TUTORIAL_IDS]);
+    first.unmount();
+    cleanup();
+    localStorage.removeItem('pf-alert-prompt-seen');
+    resetTutorialSession();
+    resetAlertPrompt();
+
+    renderGame([]);
+    expect(await screen.findByRole('dialog', { name: '마을에 오신 걸 환영해요' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: '브라우저 알림' })).toBeNull();
+  });
+
+  it('설정 계정 관리에서 시작해 충돌 후 되돌아가기를 누르면 출항 연결 창이 아닌 계정 관리 창으로 복귀한다', async () => {
+    setPendingGoogleOrigin('manage');
+    vi.spyOn(api.auth, 'takeGoogleLanding').mockReturnValue({
+      tag: 'link-guest',
+      error: 'account_already_linked_to_different_user',
+    });
+    vi.spyOn(api.auth, 'cancelGoogleSwitch').mockResolvedValue(undefined);
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}><GameView
+        game={{ ...newState(), tutorials: [...TUTORIAL_IDS] }} scene={{ kind: 'region', id: 'village' }} entryPos={null} placeSeq={0}
+        dispatch={() => { throw new Error('dispatch is not used'); }} setToast={() => {} } onScene={() => {}} onPlace={() => {} }
+        log={[]} syncLabel={null} syncState="on" guestProgress="some"
+        account={null} accountChecked={true} accountFailed={false} uid={null} nickname={null}
+        onRename={async () => null} onAuthChanged={async () => {}} onResync={async () => {}}
+      /></QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole('dialog', { name: '구글 계정으로 로그인' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '되돌아가기' }));
+
+    expect(await screen.findByRole('dialog', { name: '계정 관리' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: '태평양 출항 준비' })).toBeNull();
   });
 });

@@ -8,6 +8,7 @@ import type { ZoneId } from '../content/zones';
 import type { Point, RegionId, Rect, School } from './types';
 import { HARBORS, WORLD, WORLD_MAP } from './regions/world';
 import { V_SCHOOLS } from './regions/village';
+import { CHAMPIONSHIP_SCHOOLS } from './regions/championship';
 import { cellIndex, indexCenter, localCell } from './mask';
 import { canMove } from './engine';
 
@@ -31,7 +32,9 @@ const NEARBY_HARBOR: Partial<Record<SpotId, Point>> = {
 };
 
 export function schoolsOf(region: RegionId, day: string): School[] {
-  return region === 'village' ? V_SCHOOLS : worldSchools(day);
+  if (region === 'village') return V_SCHOOLS;
+  if (region === 'championship') return CHAMPIONSHIP_SCHOOLS;
+  return worldSchools(day);
 }
 
 // ---------- 시드 난수 — 문자열 해시(FNV-1a) → mulberry32 ----------

@@ -5,33 +5,44 @@
 
 import { safeLook } from '../content/wardrobe.js';
 import type { Look } from '../content/wardrobe.js';
+import type { FormId } from '../content/fish.js';
+import type { RegionId } from '../content/places.js';
 
 export type Dir = 0 | 1 | 2 | 3;
 /** 찌가 떠 있는 자리(어군 위치) — 낚싯줄을 드리웠을 때만 보낸다 */
 export interface Bob { x: number; y: number }
+export type ChatRoom = 'global' | 'local' | 'guild';
+export type NoticeItem = { id: number; title: string; body: string; startsAt: string; endsAt: string; createdAt: string };
 
 export type ClientMessage =
   | { t: 'move'; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean; bob?: Bob; look?: Look; idleMs?: number } // region: 지금 있는 지역, zone: 지금 있는 해역, line: 낚싯줄을 드리운 상태, bob: 찌 위치, look: 외형(처음과 바뀐 때만), idleMs: 이번 던짐의 첫 결과가 나온 뒤 지난 시간(첫 결과 뒤에만)
+  | { t: 'region'; region: string } // 거점 체류나 이동 시 현재 지역 동기화 및 최근 지역 대화 요청
   | { t: 'stop' }
-  | { t: 'chat'; text: string; room?: 'guild' } // room이 없으면 월드 채팅, guild면 내 길드 채팅
+  | { t: 'chat'; text: string; room?: ChatRoom } // room이 없으면 지역 채팅
   | { t: 'typing'; on: boolean } // 채팅 입력 중 표시 켜기·끄기
   | { t: 'ping' };
 
-export interface Presence { uid: string; nick: string; boat: number; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean; bob?: Bob; look?: Look; idleMs?: number } // idleMs: 낚시 중인 사람의 첫 결과 뒤 지난 시간(서버가 보내는 시점 기준, 선택 필드. 없으면 세지 않는다)
-export interface ChatLine { id: number; uid: string; nick: string; text: string; at: string }
+export interface Presence { uid: string; nick: string; boat: number; fame: number; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean; bob?: Bob; look?: Look; idleMs?: number } // idleMs: 낚시 중인 사람의 첫 결과 뒤 지난 시간(서버가 보내는 시점 기준, 선택 필드. 없으면 세지 않는다)
+export interface ChatLine { id: number; uid: string; nick: string; text: string; at: string; staffBadge?: 'admin' | 'maintainer' }
 
 export type ServerMessage =
-  | { t: 'hello'; you: string; others: Presence[]; recentChat: ChatLine[]; recentGuildChat?: ChatLine[] } // recentGuildChat: 길드원일 때만
+  | { t: 'hello'; you: string; others: Presence[]; recentChat: ChatLine[]; recentLocalChat?: ChatLine[]; recentGuildChat?: ChatLine[]; notices?: NoticeItem[] } // recentGuildChat: 길드원일 때만, notices: 마감 전·최근 마감 공지
   | { t: 'move'; uid: string; region: string; zone?: string | null; x: number; y: number; dir: Dir; line: boolean; bob?: Bob; look?: Look; idleMs?: number }
   | { t: 'stop'; uid: string }
   | { t: 'join'; presence: Presence }
   | { t: 'leave'; uid: string }
-  | { t: 'chat'; line: ChatLine; room?: 'guild' } // 길드 채팅은 그 길드의 접속한 길드원에게만 간다
+  | { t: 'nick'; uid: string; nick: string } // 닉네임 변경 시 다른 접속자에게 전파
+  | { t: 'chat'; line: ChatLine; room?: ChatRoom } // 길드 채팅은 그 길드의 접속한 길드원에게만 간다
+  | { t: 'localHistory'; region: string; lines: ChatLine[] } // 지역 이동·동기화 시 해당 지역의 최근 지역 대화
+  | { t: 'notices'; notices: NoticeItem[] } // 공지 변경 시 전체 연결에 즉시 동기화
   | { t: 'typing'; uid: string; on: boolean }
   | { t: 'friend'; kind: 'request' | 'accepted'; uid: string; nick: string | null } // 받은 친구 요청·내 요청의 수락. 그 사람에게만 간다
-  // 길드 가입 신청의 도착(길드장에게, nick은 신청한 사람)과 처리 결과(신청한 사람에게). 그 사람에게만 간다
-  | { t: 'guild'; kind: 'request' | 'approved' | 'rejected'; guild: string; nick: string | null }
-  | { t: 'error'; code: 'chat-guest' | 'chat-rate' | 'chat-length' | 'chat-restricted' | 'chat-no-guild' };
+  | { t: 'friend'; kind: 'updated' } // 친구 삭제·요청 거절·요청 취소로 목록 갱신. 상대방에게만 간다
+  // 길드 가입 신청의 도착(길드장에게, nick은 신청한 사람), 처리 결과, 길드원 상태 갱신(레벨업·스킬·일지 등)
+  | { t: 'guild'; kind: 'request' | 'approved' | 'rejected' | 'updated'; guild: string; nick: string | null }
+  | { t: 'mail' } // 새 우편 도착 알림. 받는 사람에게만 간다
+  | { t: 'catchFx'; uid: string; region: RegionId; x: number; y: number; toX?: number; toY?: number; fishId: string; form?: FormId } // 다른 플레이어가 물고기를 낚았을 때 수면 튀어오르기 연출
+  | { t: 'error'; code: 'chat-guest' | 'chat-rate' | 'chat-length' | 'chat-restricted' | 'chat-no-guild' | 'chat-global-cooldown' | 'chat-duplicate'; retryAfterMs?: number };
 
 /** WebSocket 경로. 게임 서버와 같은 오리진이다 */
 export const LIVE_PATH = '/api/live';
@@ -55,6 +66,7 @@ const isBob = (v: unknown): v is Bob =>
   typeof v === 'object' && v !== null && isCoord((v as Record<string, unknown>).x) && isCoord((v as Record<string, unknown>).y);
 const isDir = (v: unknown): v is Dir => v === 0 || v === 1 || v === 2 || v === 3;
 const isRegion = (v: unknown): v is string => typeof v === 'string' && /^[a-z0-9-]{1,32}$/.test(v);
+const isChatRoom = (v: unknown): v is ChatRoom => v === 'global' || v === 'local' || v === 'guild';
 
 /**
  * 클라이언트 메시지 원문을 검사한다. 서버가 신뢰 경계에서 쓴다.
@@ -79,11 +91,13 @@ export function parseClientMessage(raw: string): ClientMessage | null {
         ...(o.look !== undefined ? { look: safeLook(o.look) } : {}),
         ...(o.idleMs !== undefined ? { idleMs: o.idleMs } : {}),
       };
+    case 'region': return isRegion(o.region) ? { t: 'region', region: o.region } : null;
     case 'stop': return { t: 'stop' };
     case 'ping': return { t: 'ping' };
     case 'chat':
-      if (typeof o.text !== 'string' || (o.room !== undefined && o.room !== 'guild')) return null;
-      return o.room === 'guild' ? { t: 'chat', text: o.text, room: 'guild' } : { t: 'chat', text: o.text };
+      if (typeof o.text !== 'string') return null;
+      if (o.room !== undefined && !isChatRoom(o.room)) return null;
+      return o.room !== undefined ? { t: 'chat', text: o.text, room: o.room } : { t: 'chat', text: o.text };
     case 'typing': return typeof o.on === 'boolean' ? { t: 'typing', on: o.on } : null;
     default: return null;
   }
@@ -95,8 +109,18 @@ export const CHAT_MAX_LENGTH = 100;
 export const CHAT_RATE_WINDOW_MS = 10_000;
 /** 슬라이딩 윈도우 안에서 계정 하나가 보낼 수 있는 메시지 수 */
 export const CHAT_RATE_MAX = 25;
+/** 전체 채팅 방 재전송 대기 시간 */
+export const GLOBAL_CHAT_COOLDOWN_MS = 10_000;
+/** 직전과 같은 문구의 채팅 반복 차단 시간 */
+export const CHAT_DUPLICATE_WINDOW_MS = 10_000;
 /** 연결 직후 hello에 싣는 최근 대화 수 */
 export const CHAT_RECENT = 50;
+/** 기간제 공지 제목 최대 길이(코드 포인트 수) */
+export const NOTICE_TITLE_MAX = 80;
+/** 기간제 공지 본문 최대 길이(코드 포인트 수) */
+export const NOTICE_BODY_MAX = 600;
+/** 실시간 채널로 전달하는 공지 최대 건수 */
+export const MAX_NOTICES = 40;
 
 /** 보낼 채팅 본문. 앞뒤 공백을 지운 뒤 1~100자가 아니면 null이다 */
 export function chatText(raw: string): string | null {
@@ -114,6 +138,90 @@ export function chatRate(sentAt: readonly number[], now: number): { ok: boolean;
   const window = sentAt.filter(t => now - t < CHAT_RATE_WINDOW_MS);
   if (window.length >= CHAT_RATE_MAX) return { ok: false, window };
   return { ok: true, window: [...window, now] };
+}
+
+/** 전체 채팅 방 10초 쿨다운을 판정한다. */
+export function globalChatCooldown(
+  lastGlobalAt: number | null | undefined,
+  now: number,
+): { ok: boolean; retryAfterMs: number } {
+  if (lastGlobalAt === null || lastGlobalAt === undefined || !Number.isFinite(lastGlobalAt)) {
+    return { ok: true, retryAfterMs: 0 };
+  }
+  const elapsed = now - lastGlobalAt;
+  if (elapsed >= GLOBAL_CHAT_COOLDOWN_MS) return { ok: true, retryAfterMs: 0 };
+  return { ok: false, retryAfterMs: Math.max(1, GLOBAL_CHAT_COOLDOWN_MS - elapsed) };
+}
+
+/** 직전 메시지와 10초 이내에 트림 기준 동일한 비어 있지 않은 문구인지 판정한다. */
+export function isDuplicateChat(
+  prev: { text: string; at: number } | null | undefined,
+  text: string,
+  now: number,
+): boolean {
+  if (!prev || !Number.isFinite(prev.at)) return false;
+  if (now - prev.at >= CHAT_DUPLICATE_WINDOW_MS) return false;
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  return prev.text.trim() === trimmed;
+}
+
+/** 공지가 현재 시각 기준 활성 구간(시작 이상 ~ 종료 미만)에 있는지 판정한다. */
+export function isNoticeActive(notice: Pick<NoticeItem, 'startsAt' | 'endsAt'>, now: number): boolean {
+  const startsAtMs = Date.parse(notice.startsAt);
+  const endsAtMs = Date.parse(notice.endsAt);
+  if (!Number.isFinite(startsAtMs) || !Number.isFinite(endsAtMs)) return false;
+  return startsAtMs <= now && now < endsAtMs;
+}
+
+/** 공지가 현재 시각 기준 마감 구간(시작 이후 ~ 종료 이상)에 있는지 판정한다. */
+export function isNoticeEnded(notice: Pick<NoticeItem, 'startsAt' | 'endsAt'>, nowMs: number = Date.now()): boolean {
+  const startsAtMs = Date.parse(notice.startsAt);
+  const endsAtMs = Date.parse(notice.endsAt);
+  if (!Number.isFinite(startsAtMs) || !Number.isFinite(endsAtMs) || !Number.isFinite(nowMs)) return false;
+  if (startsAtMs >= endsAtMs) return false;
+  return startsAtMs <= nowMs && endsAtMs <= nowMs;
+}
+
+/** 공지 입력값을 검증하고 제목·본문 트림 및 ISO 날짜 문자열로 정규화한다. */
+export function normalizeNoticeDraft(input: {
+  title: unknown;
+  body: unknown;
+  startsAt: unknown;
+  endsAt: unknown;
+}): { ok: true; draft: { title: string; body: string; startsAt: string; endsAt: string } } | { ok: false; code: 'bad-title' | 'bad-body' | 'bad-window' } {
+  if (typeof input.title !== 'string') return { ok: false, code: 'bad-title' };
+  const title = input.title.trim();
+  const titleLen = [...title].length;
+  if (titleLen < 1 || titleLen > NOTICE_TITLE_MAX) return { ok: false, code: 'bad-title' };
+
+  if (typeof input.body !== 'string') return { ok: false, code: 'bad-body' };
+  const body = input.body.trim();
+  const bodyLen = [...body].length;
+  if (bodyLen < 1 || bodyLen > NOTICE_BODY_MAX) return { ok: false, code: 'bad-body' };
+
+  if (typeof input.startsAt !== 'string' || typeof input.endsAt !== 'string') {
+    return { ok: false, code: 'bad-window' };
+  }
+  const startsStr = input.startsAt.trim();
+  const endsStr = input.endsAt.trim();
+  if (!startsStr || !endsStr) return { ok: false, code: 'bad-window' };
+
+  const startsMs = Date.parse(startsStr);
+  const endsMs = Date.parse(endsStr);
+  if (!Number.isFinite(startsMs) || !Number.isFinite(endsMs) || startsMs >= endsMs) {
+    return { ok: false, code: 'bad-window' };
+  }
+
+  return {
+    ok: true,
+    draft: {
+      title,
+      body,
+      startsAt: new Date(startsMs).toISOString(),
+      endsAt: new Date(endsMs).toISOString(),
+    },
+  };
 }
 
 /** 이동 중 위치 송신 주기(10Hz). 받는 쪽은 이 주기 동안 직전 위치에서 새 위치까지 일정 속도로 옮긴다 */

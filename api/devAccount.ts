@@ -5,7 +5,7 @@ import { newState } from '../src/game/rules/logic.js';
 import { adminSessionUid, refreshAppSessionCookies, sessionOf } from './_auth/session.js';
 import { promoteGuestToTestAccount } from './_data/account.js';
 import { counterClearFragment } from './_data/achievements.js';
-import { isAdmin } from './_data/admin.js';
+import { isStaff } from './_data/admin.js';
 import { bountyClearAllFragments } from './_data/bounty.js';
 import { ALWAYS_GUARD, resetAccountSaveFragments } from './_data/save.js';
 import { database } from './_db/client.js';
@@ -45,7 +45,7 @@ async function route(req: Req, res: Res): Promise<void> {
   const { db, withTransaction } = database();
   if (deployEnv === 'preview') {
     const adminUid = await adminSessionUid(req.headers);
-    if (!adminUid || !await isAdmin(db, adminUid)) {
+    if (!adminUid || !await isStaff(db, adminUid)) {
       throw new ApiError(403, 'forbidden');
     }
   }

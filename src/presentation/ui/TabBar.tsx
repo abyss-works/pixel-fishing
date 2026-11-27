@@ -21,6 +21,8 @@ interface TabBarProps<K extends string> {
   tabs: TabDef<K>[];
   activeKey: K | null;
   onSelect: (key: K) => void;
+  /** 모달 안 3탭 등 — 4면 테두리와 아이콘+라벨 1줄 가로 배치를 쓴다 */
+  inline?: boolean;
   className?: string;
 }
 
@@ -28,9 +30,13 @@ interface TabBarProps<K extends string> {
 // 잠긴 탭(lock)은 흐리게 두고 자물쇠를 붙인다. 비활성(disabled)이 아니라 aria-disabled라 키보드 포커스를 받고,
 // 마우스를 올리거나 포커스하거나 누르면 잠금 줄이 공용 툴팁으로 열린다. 잠금 줄은 보조 기술에도 설명으로 알린다.
 // 키를 제네릭으로 받아 TabKey에 강결합하지 않는다. 'active' 클래스는 테스트 계약(app.test).
-export default function TabBar<K extends string>({ tabs, activeKey, onSelect, className }: TabBarProps<K>) {
+export default function TabBar<K extends string>({ tabs, activeKey, onSelect, inline = false, className }: TabBarProps<K>) {
   return (
-    <div className={cx('pf-tabbar', className)}>
+    <div className={cx(
+      'pf-tabbar',
+      inline && 'border border-line [&_button]:flex-row [&_button]:gap-1.5 [&_button]:py-[9px] [&_button]:px-1.5 [&_button]:whitespace-nowrap mobile:[&_button]:gap-1 mobile:[&_button]:py-2 mobile:[&_button]:px-1',
+      className,
+    )}>
       {tabs.map(t => t.lock && t.lock.length > 0
         ? <LockedTab key={t.key} tab={t} lines={t.lock} />
         : (

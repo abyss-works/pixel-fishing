@@ -26,4 +26,9 @@ describe('모바일 메뉴 버튼', () => {
     rerender(<MobileHudMenuButton alert open aria-label="메뉴 닫기" />);
     expect(container.querySelector('.bg-danger')).toBeNull();
   });
+
+  it('내부 하단에 메뉴 라벨을 표시한다', () => {
+    render(<MobileHudMenuButton aria-label="메뉴 열기" />);
+    expect(screen.getByRole('button', { name: '메뉴 열기' })).toHaveTextContent('메뉴');
+  });
 });

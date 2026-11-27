@@ -4,12 +4,15 @@ import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { MailItem } from '../../../../platform/api';
 
-const state = vi.hoisted(() => ({ mails: null as MailItem[] | null, read: [] as number[] }));
+const state = vi.hoisted(() => ({ mails: null as MailItem[] | null, read: [] as number[], fail: false }));
 vi.mock('../../../../platform/api', async importOriginal => {
   const mod = await importOriginal<typeof import('../../../../platform/api')>();
   return {
     ...mod,
-    readMails: async () => state.mails,
+    readMails: async () => {
+      if (state.fail) throw new Error('mail error');
+      return state.mails;
+    },
     markMailRead: async (id: number) => { state.read.push(id); },
   };
 });
@@ -26,7 +29,7 @@ function wrap(node: ReactNode) {
   return { ...view, again: (next: ReactNode) => view.rerender(<QueryClientProvider client={client}>{next}</QueryClientProvider>) };
 }
 
-afterEach(() => { cleanup(); state.mails = null; state.read = []; });
+afterEach(() => { cleanup(); state.mails = null; state.read = []; state.fail = false; });
 
 describe('우편함 창', () => {
   it('우편을 고르면 본문을 보이고 읽음을 남긴다. 골드 우편은 받기로 받는다', async () => {
@@ -164,9 +167,80 @@ describe('우편함 창', () => {
     expect(detailDialog).toHaveTextContent('하루 동안');
   });
 
+  it('모자만 첨부된 우편도 목록 요약과 모자 칩, 받기 버튼을 보이고 받으면 전용 안내를 알린다', async () => {
+    state.mails = [
+      mail({
+        id: 14,
+        title: '겨울 이벤트 선물',
+        body: '산타모자를 보내드려요.',
+        gold: 0,
+        items: [],
+        hats: ['santa-hat'],
+      }),
+    ];
+    const dispatch = vi.fn(() => {
+      state.mails = state.mails!.map(m => ({ ...m, claimedAt: '2026-10-23T02:00:00.000Z' }));
+      return { status: 'ok', state: {}, result: { type: 'mail', gold: 0, hats: ['santa-hat'] } } as never;
+    });
+    const toast = vi.fn();
+    wrap(<MailboxModal dispatch={dispatch} setToast={toast} onClose={() => {}} />);
+    const row = await screen.findByRole('row', { name: /겨울 이벤트 선물/ });
+    expect(row).toHaveTextContent('산타모자');
+    fireEvent.click(row);
+    expect(screen.getByText('모자 산타모자')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '받기' }));
+    expect(dispatch).toHaveBeenCalledWith({ type: 'claimMail', id: 14 });
+    await waitFor(() => expect(toast).toHaveBeenCalledWith(
+      '산타모자 선물을 받았어요! 집의 옷장에서 쓸 수 있어요.',
+      'gold',
+    ));
+    expect(screen.queryByRole('button', { name: '받기' })).not.toBeInTheDocument();
+    expect(screen.getByText('받음')).toBeInTheDocument();
+  });
+
+  it('골드·아이템·모자가 함께 첨부된 우편은 모두 보이고 한 번에 받는다', async () => {
+    state.mails = [
+      mail({
+        id: 15,
+        title: '겨울 종합 선물',
+        body: '선물 꾸러미예요.',
+        gold: 500,
+        items: [{ id: 'luck-small', qty: 1 }],
+        hats: ['santa-hat'],
+      }),
+    ];
+    const dispatch = vi.fn(() => {
+      state.mails = state.mails!.map(m => ({ ...m, claimedAt: '2026-10-23T02:00:00.000Z' }));
+      return { status: 'ok', state: {}, result: { type: 'mail', gold: 500, items: { 'luck-small': 1 }, hats: ['santa-hat'] } } as never;
+    });
+    const toast = vi.fn();
+    wrap(<MailboxModal dispatch={dispatch} setToast={toast} onClose={() => {}} />);
+    fireEvent.click(await screen.findByRole('row', { name: /겨울 종합 선물/ }));
+    expect(screen.getByText('500G')).toBeInTheDocument();
+    expect(screen.getByText('작은 바다 영약')).toBeInTheDocument();
+    expect(screen.getByText('모자 산타모자')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '받기' }));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith(
+      '우편에서 500G, 작은 바다 영약 1개, 산타모자를 받았어요! 집의 옷장에서 쓸 수 있어요.',
+      'gold',
+    ));
+  });
+
   it('우편이 없으면 빈 상태를 안내한다', async () => {
     state.mails = [];
     wrap(<MailboxModal dispatch={vi.fn() as never} setToast={vi.fn()} onClose={() => {}} />);
     expect(await screen.findByText('받은 우편이 없어요.')).toBeInTheDocument();
+  });
+
+  it('우편 조회 실패 시 다시 시도 버튼을 보이고 누르면 우편을 다시 읽는다', async () => {
+    state.fail = true;
+    state.mails = [mail({ id: 21, title: '복구된 우편' })];
+    wrap(<MailboxModal dispatch={vi.fn() as never} setToast={vi.fn()} onClose={() => {}} />);
+    expect(await screen.findByText(/우편을 열지 못했어요/)).toBeInTheDocument();
+
+    state.fail = false;
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(await screen.findByText('복구된 우편')).toBeInTheDocument();
   });
 });

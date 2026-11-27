@@ -19,7 +19,6 @@ export function useGuildInvite(code: string | null) {
     queryFn: () => readGuildInvite(code as string),
     enabled: code !== null,
     staleTime: 30_000,
-    retry: 1,
   });
   return {
     preview: q.data ?? null,

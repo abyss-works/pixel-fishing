@@ -2,31 +2,61 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { liveAvailable, openLive } from '../../../platform/api';
 import type { LiveConnection } from '../../../platform/api';
 import type { Look } from '../../../game/content/wardrobe';
-import type { Bob, ServerMessage } from '../../../game/rules/live';
+import type { FormId } from '../../../game/content/fish';
+import type { JumpFx } from '../../../game/rendering/pixel/sprites/overlays';
+import { JUMP_S } from '../../../game/rendering/pixel/sprites/schoolView';
+import type { Bob, ChatLine, NoticeItem, ServerMessage } from '../../../game/rules/live';
 import { glidePosition, LIVE_MOVE_MS, nextGlide } from '../../../game/rules/live';
 import type { Glide } from '../../../game/rules/live';
 import { useSession } from '../../account/service/session';
 import { useConsentReady } from '../../account/service/consentGate';
-import { applyLiveMessage, bubbleOf, EMPTY_LIVE, idleLabel, isStale, matesInRegion, nextPositionMessage, othersInRegion, playerZoneLabel, withoutAuthor } from '../model/live';
-import type { Bubble, ChatError, ChatRoom, LiveState, MyPosition, SentPosition } from '../model/live';
-import type { ChatLine } from '../../../game/rules/live';
+import {
+  applyLiveMessage,
+  bubbleOf,
+  EMPTY_LIVE,
+  idleLabel,
+  isStale,
+  matesInRegion,
+  nextPositionMessage,
+  othersInRegion,
+  selectPlayersInRegion,
+  withoutAuthor,
+} from '../model/live';
+import type { Bubble, ChatError, ChatRoom, LiveState, MyPosition, PlayerListItem, SentPosition } from '../model/live';
 
 // 실시간 채널 연결과 다른 플레이어 상태 — 게임 화면이 떠 있는 동안 연결을 유지한다.
 // 연결은 로그인 쿠키로 인증되므로 세션이 선 뒤 열고, 계정이 바뀌면 새 쿠키로 다시 연다.
-// 상태는 모듈 하나에만 있다(창 하나에 연결 하나). 화면 구독은 접속·퇴장·바다 이동·채팅 때만 알린다.
+// 상태는 모듈 하나에만 있다(창 하나에 연결 하나). 화면 구독은 접속·퇴장·바다 이동·채팅·공지 때만 알린다.
 
 let state: LiveState = EMPTY_LIVE;
 let conn: LiveConnection | null = null;
+/** 현재 플레이어가 속한 최상위 지역 — 연결/재연결 시 지역 채팅 동기화에 쓴다 */
+let currentRegion: string | null = null;
+/** 마지막 공지 목록을 받은 시각(epoch ms) */
+let noticesUpdatedAt = 0;
 /** hello를 받을 때마다 늘어난다 — 재연결 뒤 내 위치를 다시 보내는 기준 */
 let helloCount = 0;
 const listeners = new Set<() => void>();
-/** 화면에 그리는 위치 — 받은 좌표를 향해 프레임마다 다가간다 */
 /** 다른 플레이어의 화면 이동 — 좌표를 받을 때마다 지금 위치에서 새 위치까지 송신 주기 동안 일정 속도로 간다.
     시각은 화면 프레임과 같은 performance.now 기준이다 */
 const glides = new Map<string, Glide>();
 /** 다른 플레이어가 마지막으로 보낸 채팅과 받은 시각, 입력 중 표시를 켠 시각 — 머리 위 말풍선용(performance.now 기준) */
 const said = new Map<string, { text: string; at: number }>();
 const typingAt = new Map<string, number>();
+/** 다른 플레이어가 물고기를 낚았을 때 수면에 띄울 점프 연출 대기열(Date.now 기준) — React 구독을 깨우지 않는다 */
+const MAX_PEER_JUMPS = 12;
+interface PeerJumpEntry {
+  uid: string;
+  region: string;
+  x: number;
+  y: number;
+  toX?: number;
+  toY?: number;
+  fishId: string;
+  form?: FormId;
+  at: number;
+}
+const peerJumps: PeerJumpEntry[] = [];
 /** 내가 입력 중 표시를 켠 시각 — 서버는 내 입력 중 소식을 나에게 돌려주지 않으므로 보낼 때 기록한다 */
 let myTypingAt: number | null = null;
 /** 내 방치 시간을 세기 시작한 시각 — 위치를 읽는 송신 주기마다 갱신한다(Date.now 기준). 세지 않으면 null */
@@ -37,13 +67,43 @@ const friendListeners = new Set<(e: FriendEvent) => void>();
 /** 길드 알림 구독자 — 가입 신청 도착, 승인, 거절. 친구 알림과 같이 상태에 넣지 않고 바로 넘긴다 */
 type GuildEvent = Extract<ServerMessage, { t: 'guild' }>;
 const guildListeners = new Set<(e: GuildEvent) => void>();
+/** 닉네임 변경 알림 구독자 — 닉네임 관련 조회 캐시 무효화에 쓴다 */
+type NickEvent = Extract<ServerMessage, { t: 'nick' }>;
+const nickListeners = new Set<(e: NickEvent) => void>();
+/** 새 우편 도착 알림 구독자 — 우편함 캐시 즉시 무효화에 쓴다 */
+const mailListeners = new Set<() => void>();
 
 function receive(msg: ServerMessage): void {
+  const now = Date.now();
   const prev = state;
-  state = applyLiveMessage(state, msg, Date.now());
-  if (msg.t === 'hello') { helloCount++; glides.clear(); said.clear(); typingAt.clear(); }
+  state = applyLiveMessage(state, msg, now);
+  if (msg.t === 'hello') {
+    helloCount++;
+    noticesUpdatedAt = now;
+    glides.clear();
+    said.clear();
+    typingAt.clear();
+    peerJumps.length = 0;
+    if (currentRegion) conn?.send({ t: 'region', region: currentRegion });
+  }
+  if (msg.t === 'notices') noticesUpdatedAt = now;
   if (msg.t === 'leave') { glides.delete(msg.uid); said.delete(msg.uid); typingAt.delete(msg.uid); }
-  // 머리 위 말풍선은 월드 채팅만 띄운다 — 길드 채팅은 길드원끼리만 보는 대화다
+  if (msg.t === 'catchFx') {
+    peerJumps.push({
+      uid: msg.uid,
+      region: msg.region,
+      x: msg.x,
+      y: msg.y,
+      ...(msg.toX != null && msg.toY != null ? { toX: msg.toX, toY: msg.toY } : {}),
+      fishId: msg.fishId,
+      ...(msg.form !== undefined ? { form: msg.form } : {}),
+      at: now,
+    });
+    if (peerJumps.length > MAX_PEER_JUMPS) {
+      peerJumps.splice(0, peerJumps.length - MAX_PEER_JUMPS);
+    }
+  }
+  // 머리 위 말풍선은 전체·지역 채팅만 띄운다 — 길드 채팅은 길드원끼리만 보는 대화다
   if (msg.t === 'chat' && msg.room !== 'guild') { said.set(msg.line.uid, { text: msg.line.text, at: performance.now() }); typingAt.delete(msg.line.uid); }
   if (msg.t === 'typing') {
     if (msg.on) typingAt.set(msg.uid, performance.now());
@@ -51,10 +111,28 @@ function receive(msg: ServerMessage): void {
   }
   if (msg.t === 'friend') for (const listener of friendListeners) listener(msg);
   if (msg.t === 'guild') for (const listener of guildListeners) listener(msg);
+  if (msg.t === 'nick') for (const listener of nickListeners) listener(msg);
+  if (msg.t === 'mail') for (const listener of mailListeners) listener();
   if (msg.t === 'move') glides.set(msg.uid, nextGlide(glides.get(msg.uid) ?? null, msg, performance.now()));
   const regionChanged = msg.t === 'move' && prev.others[msg.uid]?.presence.region !== msg.region;
   const zoneChanged = msg.t === 'move' && (prev.others[msg.uid]?.presence.zone ?? null) !== (msg.zone ?? null);
-  if (msg.t === 'hello' || msg.t === 'join' || msg.t === 'leave' || msg.t === 'chat' || msg.t === 'error' || regionChanged || zoneChanged) {
+  const prevLook = msg.t === 'move' ? prev.others[msg.uid]?.presence.look : undefined;
+  const lookChanged = msg.t === 'move' && msg.look !== undefined
+    && (prevLook?.shirt !== msg.look.shirt || prevLook?.pants !== msg.look.pants || prevLook?.hat !== msg.look.hat);
+  const nickChanged = msg.t === 'nick' && state !== prev;
+  if (
+    msg.t === 'hello'
+    || msg.t === 'join'
+    || msg.t === 'leave'
+    || msg.t === 'chat'
+    || msg.t === 'localHistory'
+    || msg.t === 'notices'
+    || msg.t === 'error'
+    || regionChanged
+    || zoneChanged
+    || lookChanged
+    || nickChanged
+  ) {
     notify();
   }
 }
@@ -65,7 +143,9 @@ function notify(): void {
 
 function reset(): void {
   state = EMPTY_LIVE;
+  noticesUpdatedAt = 0;
   glides.clear();
+  peerJumps.length = 0;
   myTypingAt = null;
   myIdleSince = null;
   notify();
@@ -88,14 +168,10 @@ export function useLive(): void {
   }, [ready, uid, consentReady]);
 }
 
-/** 그 바다에 있는 다른 플레이어 — 이름 순. 차단한 사람도 들어 있다(접속 상태는 차단과 무관하다) */
-export function usePlayersIn(region: string): { uid: string; nick: string; zoneLabel?: string | null }[] {
+/** 그 바다에 있는 다른 플레이어 목록. 차단한 사람도 들어 있다(접속 상태는 차단과 무관하다) */
+export function usePlayersIn(region: string): PlayerListItem[] {
   const s = useSyncExternalStore(subscribe, getState, getState);
-  return othersInRegion(s, region).map(o => ({
-    uid: o.presence.uid,
-    nick: o.presence.nick,
-    zoneLabel: playerZoneLabel(o.presence),
-  }));
+  return selectPlayersInRegion(s, region);
 }
 
 /** 친구 알림(받은 요청·내 요청의 수락)을 받는다. 돌려준 함수로 구독을 끝낸다 */
@@ -110,6 +186,27 @@ export function onGuildEvent(listener: (e: GuildEvent) => void): () => void {
   return () => { guildListeners.delete(listener); };
 }
 
+/** 닉네임 변경 알림을 받는다. 돌려준 함수로 구독을 끝낸다 */
+export function onNickEvent(listener: (e: NickEvent) => void): () => void {
+  nickListeners.add(listener);
+  return () => { nickListeners.delete(listener); };
+}
+
+/** 새 우편 도착 알림을 받는다. 돌려준 함수로 구독을 끝낸다 */
+export function onMailEvent(listener: () => void): () => void {
+  mailListeners.add(listener);
+  return () => { mailListeners.delete(listener); };
+}
+
+/** 내 닉네임 변경 직후 서버 브로드캐스트 전에도 3방 채팅·접속 목록 닉네임을 즉시 갱신한다 */
+export function applyLocalNick(uid: string | null, nick: string): void {
+  const targetUid = uid ?? state.you;
+  if (!targetUid) return;
+  const prev = state;
+  state = applyLiveMessage(state, { t: 'nick', uid: targetUid, nick }, Date.now());
+  if (state !== prev) notify();
+}
+
 /** 그 플레이어가 지금 실시간 채널에 접속해 있는가 — 위치를 한 번이라도 보낸 연결만 접속으로 본다 */
 export function useOnline(uid: string): boolean {
   const s = useSyncExternalStore(subscribe, getState, getState);
@@ -121,13 +218,14 @@ const speechOf = (b: Bubble | null): Speech => b ? (b.kind === 'chat' ? b.text :
 
 /**
  * 프레임마다 부른다 — 그 바다의 다른 플레이어를 보간한 위치로 돌려주고, 내 머리 위 말풍선을 함께 돌려준다.
- * 내 말풍선은 서버가 돌려준 내 월드 채팅과 내 입력 중 표시로, 다른 플레이어에게 보이는 것과 같다.
+ * 내 말풍선은 서버가 돌려준 내 전체·지역 채팅과 내 입력 중 표시로, 다른 플레이어에게 보이는 것과 같다.
  */
 export function liveFrame(region: string, now: number): {
   others: { x: number; y: number; nick: string; line: boolean; bob: Bob | null; stale: boolean; bubble: Speech; idle: string | null; look?: Look }[];
   bubble: Speech;
   /** 내 머리 위에 그릴 방치 시간. 말풍선이 떠 있거나 낚시 중이 아니거나 첫 결과 전이면 null */
   idle: string | null;
+  peerJumps: JumpFx[];
 } {
   const wall = Date.now();
   const others = othersInRegion(state, region).map(o => {
@@ -138,9 +236,29 @@ export function liveFrame(region: string, now: number): {
     const idle = bubble === null ? idleLabel(o.idleSince, wall) : null;
     return { x: pos.x, y: pos.y, nick, line, bob: bob ?? null, stale: isStale(o, wall), bubble, idle, ...(look ? { look } : {}) };
   });
+  const maxAgeMs = JUMP_S * 1000;
+  const activePeerJumps: JumpFx[] = [];
+  let write = 0;
+  for (let i = 0; i < peerJumps.length; i++) {
+    const entry = peerJumps[i];
+    const elapsed = wall - entry.at;
+    if (elapsed >= maxAgeMs) continue;
+    peerJumps[write++] = entry;
+    if (entry.region === region && elapsed >= 0) {
+      activePeerJumps.push({
+        x: entry.x,
+        y: entry.y,
+        ...(entry.toX != null && entry.toY != null ? { toX: entry.toX, toY: entry.toY } : {}),
+        fishId: entry.fishId,
+        ...(entry.form !== undefined ? { form: entry.form } : {}),
+        t: elapsed / 1000,
+      });
+    }
+  }
+  peerJumps.length = write;
   const mine = state.you === null ? null : said.get(state.you) ?? null;
   const bubble = speechOf(bubbleOf(mine, myTypingAt, now));
-  return { others, bubble, idle: bubble === null ? idleLabel(myIdleSince, wall) : null };
+  return { others, bubble, idle: bubble === null ? idleLabel(myIdleSince, wall) : null, peerJumps: activePeerJumps };
 }
 
 /** 그 바다에 접속한 길드원의 위치 — 미니맵이 그릴 때마다 부른다 */
@@ -174,16 +292,40 @@ export interface ChatView {
   enabled: boolean;
   /** 내 id. 연결 전에는 null */
   you: string | null;
-  lines: readonly ChatLine[];
+  globalLines: readonly ChatLine[];
+  localLines: readonly ChatLine[];
   /** 내 길드의 채팅 줄 */
   guildLines: readonly ChatLine[];
   error: ChatError | null;
+  errorRetryAfterMs: number | null;
+  globalCooldownUntil: number;
 }
 
 /** 채팅 목록과 마지막 거부 이유 */
 export function useChat(): ChatView {
   const s = useSyncExternalStore(subscribe, getState, getState);
-  return { enabled: liveAvailable, you: s.you, lines: s.chat, guildLines: s.guildChat, error: s.chatError };
+  return {
+    enabled: liveAvailable,
+    you: s.you,
+    globalLines: s.globalChat,
+    localLines: s.localChat,
+    guildLines: s.guildChat,
+    error: s.chatError,
+    errorRetryAfterMs: s.chatErrorRetryAfterMs,
+    globalCooldownUntil: s.globalCooldownUntil,
+  };
+}
+
+/** 서버에서 받은 마감 전 공지 목록과 수신 시각·동기화 여부를 구독한다 */
+export function useLiveNotices(): { notices: readonly NoticeItem[]; updatedAt: number; noticesSynced: boolean } {
+  const s = useSyncExternalStore(subscribe, getState, getState);
+  return { notices: s.notices, updatedAt: noticesUpdatedAt, noticesSynced: s.noticesSynced };
+}
+
+/** 현재 지역을 기억하고 연결 중이면 지역 채팅 동기화를 요청한다 */
+export function sendRegion(region: string): void {
+  currentRegion = region;
+  conn?.send({ t: 'region', region });
 }
 
 /** 입력 중 표시를 켜고 끈다. 연결이 끊긴 동안에는 버린다 */
@@ -193,15 +335,16 @@ export function sendTyping(on: boolean): void {
   myTypingAt = on ? performance.now() : null;
 }
 
-/** 그 방에 채팅을 보낸다. 연결이 끊긴 동안에는 버린다 */
-export function sendChat(text: string, room: ChatRoom = 'world'): void {
-  conn?.send(room === 'guild' ? { t: 'chat', text, room: 'guild' } : { t: 'chat', text });
+/** 그 방에 채팅을 보낸다 */
+export function sendChat(text: string, room: ChatRoom = 'local'): void {
+  if (!conn) return;
+  conn.send({ t: 'chat', text, room });
 }
 
 /** 보이고 있는 거부 이유를 지운다 */
 export function clearChatError(): void {
-  if (state.chatError === null) return;
-  state = { ...state, chatError: null };
+  if (state.chatError === null && state.chatErrorRetryAfterMs === null) return;
+  state = { ...state, chatError: null, chatErrorRetryAfterMs: null };
   notify();
 }
 

@@ -1,12 +1,14 @@
 import type { ReactNode } from 'react';
+import type { FilterChannel } from '../../../features/display/model/messageFilter';
 import type { NoticeSink } from '../../../features/display/model/toastPolicy';
 
 // 메시지 피드 — HUD 메시지 창이 보여 주는 기록의 형식과 보관 규칙(순수 함수).
-// 채널은 시스템 메시지, 채팅(월드), 길드 채팅이다. 채팅 글줄은 보낸 사람(author)과 원본(from)을 가진다.
-// 글줄마다 [채널] 머리표가 붙고, 창은 채널이 둘 이상일 때만 기록에 나온 채널의 토글을 그린다.
+// 채널은 전체, 지역, 길드, 시스템이다. 채팅 글줄은 보낸 사람(author)과 원본(from)을 가진다.
+// 창은 대괄호 머리표 없이 글줄 왼쪽 채널 색선으로 구분하고, 채널이 둘 이상일 때만 기록에 나온 채널의 토글을 그린다.
 
-export type MessageChannel = 'system' | 'chat' | 'guild';
+export type MessageChannel = FilterChannel;
 export type MessageTone = 'info' | 'gold' | 'warn';
+export type StaffBadgeRole = 'admin' | 'maintainer';
 
 /** 글줄의 한 대목에 다는 툴팁 — target은 글줄 문구 안의 대목이고, rows는 이름 왼쪽 값 오른쪽 목록이다 */
 export interface MessageTip {
@@ -32,12 +34,19 @@ export interface Msg {
   at: number;
   /** 채팅 글줄의 원본 — 보낸 사람 id와 채팅 id(신고·차단 대상) */
   from?: { uid: string; chatId: number };
+  /** 운영진 채팅 배지 — 노출 설정이 켜진 운영진 메시지에서만 온다 */
+  staffBadge?: StaffBadgeRole;
   /** 문구의 한 대목에 단 툴팁 */
   tip?: MessageTip;
 }
 
-/** 채널 표시 이름 — 글줄 앞 [채널] 머리표와 채널 토글 라벨 */
-export const CHANNEL_LABEL: Record<MessageChannel, string> = { system: '시스템', chat: '채팅', guild: '길드' };
+/** 채널 표시 이름 — 채널 토글 라벨 */
+export const CHANNEL_LABEL: Record<MessageChannel, string> = {
+  global: '전체',
+  local: '지역',
+  guild: '길드',
+  system: '시스템',
+};
 
 /** 보관 상한 — 넘으면 오래된 것부터 버린다(긴 세션에서 기록이 끝없이 쌓이지 않게) */
 export const MESSAGE_KEEP = 200;
@@ -57,7 +66,7 @@ const hhmm = (d: Date) =>
   `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 
 export function createMessage(id: number, text: string, opts: {
-  tone?: MessageTone; channel?: MessageChannel; author?: string; now?: Date; from?: Msg['from']; tip?: MessageTip;
+  tone?: MessageTone; channel?: MessageChannel; author?: string; now?: Date; from?: Msg['from']; staffBadge?: StaffBadgeRole; tip?: MessageTip;
 } = {}): Msg {
   const now = opts.now ?? new Date();
   return {
@@ -66,6 +75,7 @@ export function createMessage(id: number, text: string, opts: {
     channel: opts.channel ?? 'system',
     ...(opts.author ? { author: opts.author } : {}),
     ...(opts.from ? { from: opts.from } : {}),
+    ...(opts.staffBadge ? { staffBadge: opts.staffBadge } : {}),
     ...(opts.tip ? { tip: opts.tip } : {}),
   };
 }

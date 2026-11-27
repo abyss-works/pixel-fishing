@@ -38,7 +38,7 @@ type SocialTab = 'friends' | 'requests' | 'blocks';
 type FriendOp = Parameters<ReturnType<typeof useFriends>['act']>[0];
 
 export default function FriendsModal({ setToast, onClose }: { setToast: Notify; onClose: () => void }) {
-  const { groups, loading, failed, act } = useFriends(true);
+  const { groups, loading, failed, act, refresh } = useFriends(true, true);
   const [tab, setTab] = useState<SocialTab>('friends');
   const [busy, setBusy] = useState(false);
   const [removing, setRemoving] = useState<FriendItem | null>(null);
@@ -59,7 +59,12 @@ export default function FriendsModal({ setToast, onClose }: { setToast: Notify; 
   };
   /** 목록을 아직 못 받았을 때 표 자리에 띄우는 안내 */
   const pending = loading ? <Note>친구 목록을 불러오는 중이에요.</Note>
-    : failed ? <Note tone="warn">친구 목록을 열지 못했어요.<br />잠시 뒤 다시 열어 주세요.</Note> : null;
+    : failed ? (
+      <div className="flex flex-col items-center gap-2 text-center">
+        <Note tone="warn" className="my-0">친구 목록을 열지 못했어요.<br />잠시 뒤 다시 시도해 주세요.</Note>
+        <Button size="sm" onClick={refresh}>다시 시도</Button>
+      </div>
+    ) : null;
 
   return (
     // 탭이 있는 창의 높이: 요청 탭(입력과 받은·보낸 요청 표 둘)이 들어가는 480px. 스테이지가 낮으면 위아래 16px을 남긴다

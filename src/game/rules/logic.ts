@@ -60,6 +60,7 @@ import { itemStorageAmount } from '../content/itemCatalog.js';
 export { COUPONS } from '../content/coupons.js';
 export type { Coupon, CouponItem } from '../content/coupons.js';
 export { canBuyBoat, canFish, canUpgradeRod, REJECT_TEXT } from './rules.js';
+export { hashToUnit, judgeTiming, redZoneCenter, timingPos } from './timing.js';
 export { canAcceptQuest, canDeliverBounty } from './rules.js';
 export type { RejectReason, RuleCheck, BountyCtx } from './rules.js';
 
@@ -196,14 +197,6 @@ export function rodStats(level: number): RodStats {
     biteMax: ROD.biteMax * Math.pow(ROD.biteDecay, Math.ceil((level - 1) / 2)),
     sweep: ROD.sweep,
   };
-}
-
-// 챔질 판정: 커서 위치(0~1)가 중앙 존 안이면 GOOD, 그 안의 빨간 존(red 개방 시)이면 PERFECT.
-// 존 폭은 바 길이 대비 비율(0~1).
-export function judgeTiming(pos: number, yellow: number, red = 0): Judgment {
-  const off = Math.abs(pos - 0.5);
-  if (red > 0 && off <= red / 2) return 'perfect';
-  return off <= yellow / 2 ? 'good' : 'normal';
 }
 
 // 추첨 — 모든 판정이 가중치 추첨(pickWeighted)이다. 캐치 한 번의 순서:
@@ -505,7 +498,7 @@ export function newState(): GameState {
     v: 10, gold: 0, fame: 0, boat: 0, rod: 1,
     bag: [], exhibit: [], dex: {},
     coupons: [],
-    location: { kind: 'base', id: 'home' },
+    location: { kind: 'region', id: 'village' },
     visited: [],
     artifacts: [],
     items: {},

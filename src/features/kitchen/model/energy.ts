@@ -79,7 +79,7 @@ export function selectEnergyView(
   now: string = new Date().toISOString(),
 ): EnergyView {
   const excluded = new Set(game.bag.filter(i => !isChecked(game, picks, i)).map(i => i.uid));
-  const { rows, soldUids } = selectSalePreview(game.bag, excluded, 0);
+  const { rows, soldUids } = selectSalePreview(game.bag, excluded, 0, 0, 1, undefined, game);
   const energyYieldBonus = achievementBonusesOf(game).energyYield;
   const energyLuck = totalLuckMultOf(game, now, 'energy');
   const gain = energyGain(game, soldUids, energyYieldBonus, energyLuck);

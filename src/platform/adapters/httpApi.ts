@@ -4,7 +4,7 @@ import { migrate } from '../../game/rules/logic';
 import type { GameGateway } from '../api/types';
 import type { GameState } from '../../game/rules/logic';
 import type {
-  AcceptConsentResult, AccountLookup, AuthApi, AuthResult, ConsentStatus, DevApi, PromoteTestResult, ResetDevAccountResult,
+  AcceptConsentResult, AccountLookup, AuthApi, AuthResult, ConfirmGoogleSwitchResult, ConsentStatus, DevApi, PromoteTestResult, ResetDevAccountResult,
 } from '../api/types';
 import {
   sessionUid,
@@ -13,10 +13,14 @@ import {
   getAccountConsent,
   acceptAccountConsent,
   startGoogleAuth,
+  confirmGoogleSwitch,
+  cancelGoogleSwitch,
   takeGoogleLanding,
   signOutAccount,
   deleteOwnAccount,
+  invalidateSessionCache,
 } from './auth';
+import { parseRetryAfterMs } from './requestFailure';
 
 class HttpAuth implements AuthApi {
   isConfigured = true;
@@ -39,6 +43,12 @@ class HttpAuth implements AuthApi {
   }
   startGoogle(start: 'link' | 'sign-in', tag: string): Promise<AuthResult> {
     return startGoogleAuth(start, tag);
+  }
+  confirmGoogleSwitch(tag: string): Promise<ConfirmGoogleSwitchResult> {
+    return confirmGoogleSwitch(tag);
+  }
+  cancelGoogleSwitch(): Promise<void> {
+    return cancelGoogleSwitch();
   }
   takeGoogleLanding(): { tag: string; error: string | null } | null {
     return takeGoogleLanding();
@@ -67,13 +77,12 @@ import type {
   AdminApi, AdminAccessResult,
   AdminUserRow, AdminUserState, AdminOverview, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
   AdminOnboardingFunnel, AdminHttpMetrics,
-  AdminLive, AdminDailyStatsRow, AdminSessionRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, AdminChangelogRow, AdminChatReportRow, BalanceLive,
+  AdminLive, AdminDailyStatsRow, AdminSessionRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, AdminChangelogRow, AdminChatReportRow, AdminNoticeRow, AdminNoticeRequest, AdminNoticeMutationResult, BalanceLive,
   AdminSentMailRow, AdminMailRequest, AdminMailPlan,
 } from '../api/types';
 
 const RATE_LIMIT_MESSAGE = '요청이 너무 많아 잠시 기다렸다가 다시 시도해 주세요.';
 const MAX_RATE_LIMIT_RETRIES = 2;
-const MAX_RETRY_AFTER_MS = 10_000;
 
 class AdminHttpError extends Error {
   readonly status: number;
@@ -89,19 +98,6 @@ class AdminHttpError extends Error {
     this.retryAfterMs = retryAfterMs;
     this.retried = retried;
   }
-}
-
-function parseRetryAfterMs(raw: string | null): number | null {
-  if (!raw) return null;
-  const trimmed = raw.trim();
-  if (/^\d+$/.test(trimmed)) {
-    return Math.min(Number(trimmed) * 1000, MAX_RETRY_AFTER_MS);
-  }
-  const ts = Date.parse(trimmed);
-  if (!Number.isNaN(ts)) {
-    return Math.min(Math.max(0, ts - Date.now()), MAX_RETRY_AFTER_MS);
-  }
-  return null;
 }
 
 const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
@@ -309,9 +305,19 @@ class HttpAdmin implements AdminApi {
   chatReports(): Promise<AdminChatReportRow[]> {
     return readAdmin('chatReports');
   }
+  notices(): Promise<AdminNoticeRow[]> {
+    return readAdmin('notices');
+  }
+  writeNotice(request: AdminNoticeRequest): Promise<AdminNoticeMutationResult> {
+    return writeAdmin('notices', request, `공지 ${request.op}`);
+  }
   async sentMails(): Promise<AdminSentMailRow[]> {
     const rows = await readAdmin<AdminSentMailRow[]>('mails');
-    return rows.map(r => ({ ...r, items: Array.isArray(r.items) ? r.items : [] }));
+    return rows.map(r => ({
+      ...r,
+      items: Array.isArray(r.items) ? r.items : [],
+      hats: Array.isArray(r.hats) ? r.hats : [],
+    }));
   }
   mail(op: 'preview' | 'send', request: AdminMailRequest): Promise<AdminMailPlan> {
     return writeAdmin('mail', { op, request }, `우편 ${op}`);
@@ -324,6 +330,9 @@ class HttpAdmin implements AdminApi {
   }
   revokeSessions(userId: string): Promise<{ revoked: number }> {
     return writeAdmin('revokeSessions', { userId }, '세션 강제 종료');
+  }
+  setStaffBadge(show: boolean): Promise<{ showStaffBadge: boolean }> {
+    return writeAdmin('staffBadge', { show }, '운영진 표시 설정');
   }
   userEvents(userId: string, limit = 500): Promise<AdminEventRow[]> {
     return readAdmin('userEvents', { user: userId, limit });
@@ -385,6 +394,7 @@ class HttpDev implements DevApi {
     if (data?.ok !== true || typeof data.email !== 'string' || data.isAnonymous !== false) {
       return { ok: false, msg: '서버 응답 형식이 올바르지 않아요.', code: 'bad-response' };
     }
+    invalidateSessionCache();
     return { ok: true, email: data.email, isAnonymous: false };
   }
 

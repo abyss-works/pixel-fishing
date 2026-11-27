@@ -22,6 +22,7 @@ import { cx } from '../../../ui/cx';
 import { GradeName, HighlightRarityText } from '../../../ui/fish/RarityTag';
 import { fmtGold, fmtMinutes, fmtNum } from '../../../ui/format';
 import type { Notify } from '../../../ui/hud/messageFeed';
+import HatBadge from '../../../ui/HatBadge';
 import Inset from '../../../ui/Inset';
 import ItemBadge from '../../../ui/ItemBadge';
 import ItemSprite from '../../../ui/ItemSprite';
@@ -49,7 +50,7 @@ export default function MailboxModal({ dispatch, setToast, onClose }: {
   setToast: Notify;
   onClose: () => void;
 }) {
-  const { mails, loading, failed, markRead, claim } = useMailbox();
+  const { mails, loading, failed, markRead, claim, refresh } = useMailbox();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [claiming, setClaiming] = useState(false);
   const { notice, dialogs } = useDialogs();
@@ -176,7 +177,12 @@ export default function MailboxModal({ dispatch, setToast, onClose }: {
             ) : (
               <div className="flex h-full items-center justify-center">
                 {loading ? <Note>우편을 불러오는 중이에요.</Note>
-                  : failed ? <Note tone="warn">우편을 열지 못했어요.<br />잠시 뒤 다시 열어 주세요.</Note>
+                  : failed ? (
+                    <div className="flex flex-col items-center gap-2 text-center">
+                      <Note tone="warn" className="my-0">우편을 열지 못했어요.<br />잠시 뒤 다시 시도해 주세요.</Note>
+                      <Button size="sm" onClick={refresh}>다시 시도</Button>
+                    </div>
+                  )
                   : <Note>받은 우편이 없어요.</Note>}
               </div>
             )}
@@ -228,6 +234,9 @@ export default function MailboxModal({ dispatch, setToast, onClose }: {
                             <span key={att.id}>{badge}</span>
                           );
                         })}
+                        {(selected.hats ?? []).map(hatId => (
+                          <HatBadge key={hatId} id={hatId} />
+                        ))}
                       </div>
                       <div className="shrink-0">
                         {isClaimable(selected) ? (

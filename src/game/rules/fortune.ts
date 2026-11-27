@@ -58,6 +58,8 @@ export interface DailyFortune {
   kind: FortuneKind;
   /** 보너스 강도 — 3(적당한 운, 40%)과 5(좋은 운, 60%). 3등급은 항상 5다 */
   index: 3 | 5;
+  /** 일일 운세 점수(81~100) — 5단계 강도 구간별 4점 배분 */
+  score?: number;
 }
 
 /** 내부 3등급 추첨 가중치 — 1등급 65%, 2등급 25%, 3등급 10% */
@@ -172,10 +174,55 @@ export function fortuneEffectMultOf(
   return 1;
 }
 
+/** 5단계 강도 구간별 일일 운세 점수 범위(81~100, 구간별 4점 배분) */
+const FORTUNE_SCORE_BANDS: Readonly<Record<FortuneTier, Readonly<Record<3 | 5, readonly [number, number]>>>> = {
+  1: { 3: [81, 84], 5: [85, 88] },
+  2: { 3: [89, 92], 5: [93, 96] },
+  3: { 3: [97, 100], 5: [97, 100] },
+};
+
+/** 운세 kind와 강도에 해당하는 일일 운세 점수 범위([최소, 최대]) */
+export function fortuneScoreRange(kind: FortuneKind, index: 3 | 5): readonly [number, number] {
+  const tier = TIER_OF_KIND[kind];
+  const normalized: 3 | 5 = tier === 3 ? 5 : index;
+  return FORTUNE_SCORE_BANDS[tier][normalized];
+}
+
+function hashSeed(input: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+/** 게임 날짜·운세·계정 식별자 기준 결정론적 일일 운세 점수(81~100)를 산출한다 */
+export function computeFortuneScore(
+  day: string, kind: FortuneKind, index: 3 | 5, accountKey = '',
+): number {
+  const [min, max] = fortuneScoreRange(kind, index);
+  const span = max - min + 1;
+  const h = hashSeed(`${accountKey}:${day}:${kind}:${index}`);
+  return min + (h % span);
+}
+
+/** 운세 객체의 유효 점수 반환 — 점수가 없거나 구간 밖이면 결정론적 폴백 점수를 돌려준다 */
+export function fortuneScoreOf(
+  fortune: Pick<DailyFortune, 'day' | 'kind' | 'index' | 'score'>,
+  accountKey = '',
+): number {
+  const [min, max] = fortuneScoreRange(fortune.kind, fortune.index);
+  if (typeof fortune.score === 'number' && Number.isInteger(fortune.score) && fortune.score >= min && fortune.score <= max) {
+    return fortune.score;
+  }
+  return computeFortuneScore(fortune.day, fortune.kind, fortune.index, accountKey);
+}
+
 /**
  * 운세 추첨 — 1단계 등급(65/25/10), 2단계 등급 내 종류 균등, 3단계 강도(1·2등급은 3 40%/5 60%, 3등급은 5 고정).
  */
-export function rollFortune(day: string, rng: () => number = Math.random): DailyFortune {
+export function rollFortune(day: string, rng: () => number = Math.random, accountKey = ''): DailyFortune & { score: number } {
   const tierRoll = rng();
   const tier: FortuneTier = tierRoll < FORTUNE_TIER_WEIGHTS[1]
     ? 1
@@ -185,7 +232,7 @@ export function rollFortune(day: string, rng: () => number = Math.random): Daily
   const kinds = FORTUNE_KINDS_BY_TIER[tier];
   const kind = kinds[Math.min(kinds.length - 1, Math.floor(rng() * kinds.length))];
   const index: 3 | 5 = tier === 3 ? 5 : rng() < 0.4 ? 3 : 5;
-  return { day, kind, index };
+  return { day, kind, index, score: computeFortuneScore(day, kind, index, accountKey) };
 }
 
 /**
@@ -269,8 +316,8 @@ export function totalLuckMultOf(
 }
 
 /** 세이브 위생 — 운세는 하루짜리라 필드가 없는(구) 세이브는 없는 것으로 둔다.
- *  12종 kind를 모두 수용하며 3등급의 index는 5로 정규화하고, 형태가 틀린 값은 버린다 */
-export function safeFortune(v: unknown): DailyFortune | null {
+ *  12종 kind를 모두 수용하며 3등급의 index는 5로 정규화하고, score가 없거나 구간 밖이면 결정론적 점수로 채운다 */
+export function safeFortune(v: unknown): (DailyFortune & { score: number }) | null {
   const r = v as Partial<DailyFortune> | null;
   if (typeof r !== 'object' || r === null || Array.isArray(r)) return null;
   if (typeof r.day !== 'string' || r.day.length === 0) return null;
@@ -278,5 +325,6 @@ export function safeFortune(v: unknown): DailyFortune | null {
   if (r.index !== 3 && r.index !== 5) return null;
   const kind = r.kind as FortuneKind;
   const index: 3 | 5 = TIER_OF_KIND[kind] === 3 ? 5 : r.index;
-  return { day: r.day, kind, index };
+  const score = fortuneScoreOf({ day: r.day, kind, index, score: r.score });
+  return { day: r.day, kind, index, score };
 }

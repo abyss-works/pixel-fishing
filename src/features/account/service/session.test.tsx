@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const state = vi.hoisted(() => ({
   configured: true,
   resolveSession: null as ((uid: string | null) => void) | null,
+  rejectSession: null as ((err: unknown) => void) | null,
   ensureCalls: 0,
   bountyCalls: 0,
 }));
@@ -17,7 +18,10 @@ vi.mock('../../../platform/api', () => ({
       get isConfigured() { return state.configured; },
       ensureSession: () => {
         state.ensureCalls++;
-        return new Promise<string | null>(r => { state.resolveSession = r; });
+        return new Promise<string | null>((resolve, reject) => {
+          state.resolveSession = resolve;
+          state.rejectSession = reject;
+        });
       },
     },
   },
@@ -25,7 +29,7 @@ vi.mock('../../../platform/api', () => ({
   gameDay: () => '2026-10-17',
 }));
 
-import { fetchSession, setSessionUid, toGate, useSession } from './session';
+import { fetchSession, isSessionRateLimited, setSessionUid, toGate, useSession } from './session';
 import { useBounty } from '../../bounty/service/useBounty';
 
 const setup = () => {
@@ -54,6 +58,7 @@ describe('세션 게이트 흐름', () => {
   beforeEach(() => {
     state.configured = true;
     state.resolveSession = null;
+    state.rejectSession = null;
     state.ensureCalls = 0;
     state.bountyCalls = 0;
   });
@@ -88,5 +93,20 @@ describe('세션 게이트 흐름', () => {
     await waitFor(() => expect(state.bountyCalls).toBe(1));
     act(() => setSessionUid(client, 'u2'));
     await waitFor(() => expect(state.bountyCalls).toBe(2));
+  });
+
+  it('ensureSession이 429/rate_limited 오류를 던지면 null로 뭉개지 않고 그대로 전파하며 준비되지 않은 상태를 유지한다', async () => {
+    const { client, wrapper } = setup();
+    const rateErr = Object.assign(new Error('rate limited'), { code: 'rate_limited', status: 429 });
+    const boot = fetchSession(client);
+    const { result } = renderHook(() => useSession(), { wrapper });
+
+    act(() => state.rejectSession!(rateErr));
+    await expect(boot).rejects.toBe(rateErr);
+    expect(result.current).toEqual({ ready: false, uid: null });
+    expect(isSessionRateLimited(rateErr)).toBe(true);
+    expect(isSessionRateLimited({ status: 429 })).toBe(true);
+    expect(isSessionRateLimited({ code: 'unauthorized' })).toBe(false);
+    expect(isSessionRateLimited(null)).toBe(false);
   });
 });

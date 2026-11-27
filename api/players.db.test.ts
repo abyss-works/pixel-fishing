@@ -42,7 +42,7 @@ describe('공개 프로필 읽기', () => {
         dexFish: ['crucian'], dexVariant: [],
         artifacts: [], artifactLevels: {},
         hats: [], look: { shirt: 0, pants: 0, hat: null },
-        achievements: [], location: { kind: 'base', id: 'home' }, lastPos: null,
+        achievements: [], location: { kind: 'region', id: 'village' }, lastPos: null,
         online: false, liveRegion: null, liveZone: null, account: true,
       } });
   });

@@ -15,7 +15,26 @@ const sessionQuery = {
   queryFn: () => api.auth.ensureSession(),
   staleTime: Infinity,
   gcTime: Infinity,
+  retry: false,
+  retryOnMount: false,
 };
+
+/** 세션 확보 중 발생한 429 / rate_limited 계열 한도 초과 오류인지 판별한다 */
+export function isSessionRateLimited(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const err = error as {
+    kind?: unknown;
+    code?: unknown;
+    status?: unknown;
+    context?: { code?: unknown; status?: unknown };
+    cause?: unknown;
+  };
+  if (err.kind === 'rate-limited' || err.kind === 'auth-rate-limited') return true;
+  if (err.code === 'rate_limited' || err.code === 'rate-limited' || err.status === 429) return true;
+  if (err.context && (err.context.code === 'rate_limited' || err.context.code === 'rate-limited' || err.context.status === 429)) return true;
+  if (err.cause !== undefined) return isSessionRateLimited(err.cause);
+  return false;
+}
 
 export interface SessionGate {
   /** 서버 조회를 보내도 되는가 */

@@ -68,4 +68,8 @@ describe('useAdminRefresh', () => {
     expect(result.current.refreshing).toBe(false);
     expect(result.current.lastUpdatedAt).toBe(0);
   });
+
+  it('개요 조회 키는 기간별로 나뉜다', () => {
+    expect(adminKeys.overview(7)).not.toEqual(adminKeys.overview(30));
+  });
 });

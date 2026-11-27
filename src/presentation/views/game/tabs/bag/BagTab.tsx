@@ -66,7 +66,7 @@ export const EXHIBIT_UI_ENABLED = false;
 // 마릿수 열은 행 너비의 15%를 더 받아 이름 바로 뒤에 왼쪽 정렬로 둔다(세 자리 마릿수가 잘리지 않게)
 const ROW = 'grid grid-cols-[10px_30px_1fr_calc(15%+24px)_80px_22px] items-center gap-1';
 
-/** 유물 섹션 — 레지스트리 순 전체 유물을 보이고 보유 유물만 눌러 유물 상세 창을 연다.
+/** 유물 섹션 — 레지스트리 순 전체 유물을 보이고 눌러 유물 상세 창을 연다. 미보유 유물은 흐리게 보이고 Lv.1 기준 효과를 알려 준다.
  *  보유 중만 보기 토글을 켜면 보유 유물만 걸러 보이며, 보유 유물이 없으면 수배판 교환 안내를 보인다. */
 function ArtifactSection({ game, dispatch, setToast }: {
   game: GameState;
@@ -78,7 +78,7 @@ function ArtifactSection({ game, dispatch, setToast }: {
   const [ownedOnly, setOwnedOnly] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const shown = ownedOnly ? entries.filter(e => e.owned) : entries;
-  const opened = entries.find(e => e.owned && e.artifact.id === openId)?.artifact;
+  const opened = entries.find(e => e.artifact.id === openId)?.artifact;
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between gap-2 mb-1">
@@ -100,9 +100,11 @@ function ArtifactSection({ game, dispatch, setToast }: {
         <Inset divided>
           {shown.map(({ artifact: a, owned, zoneName }) => {
             const { level, hasLevel } = owned ? selectArtifactLevel(game, a) : { level: 0, hasLevel: false };
-            const { bonus, penalty } = owned ? artifactSystemLines(a) : { bonus: null, penalty: null };
-            const effects = owned ? artifactEffectLines(a, level) : [];
+            const { bonus, penalty } = artifactSystemLines(a);
+            // 미보유는 Lv.1 기준 효과를 흐리게 보인다
+            const effects = artifactEffectLines(a, owned ? level : 1);
             const lineCount = effects.length + (bonus ? 1 : 0) + (penalty ? 1 : 0);
+            const lineTone = owned ? 'text-accent' : 'text-text-dim';
             const body = (
               <>
                 <ItemSprite
@@ -114,39 +116,27 @@ function ArtifactSection({ game, dispatch, setToast }: {
                 <span className="flex flex-col gap-0.5 min-w-0 flex-1">
                   <span className="flex items-baseline justify-between gap-2">
                     <span className="flex items-baseline gap-1.5 min-w-0">
-                      <span className="truncate min-w-0">
+                      <span className="truncate min-w-0 text-text">
                         <GradeName name={a.name} grade={a.grade} />
                       </span>
                       {owned && hasLevel && <span className="pf-accent text-accent text-xs shrink-0">{levelText(level)}</span>}
                     </span>
                     <span className="text-xs shrink-0 text-text-dim">{zoneName}</span>
                   </span>
-                  {owned ? (
-                    <>
-                      {effects.map(line => (
-                        <span key={line} className="text-accent text-xs">{line}</span>
-                      ))}
-                      {bonus && <span className="text-accent text-xs">{bonus}</span>}
-                      {penalty && <span className="text-danger text-xs">{penalty}</span>}
-                      {lineCount < 2 && <span aria-hidden="true" className="text-xs select-none">{'\u00A0'}</span>}
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-xs text-text-dim">???</span>
-                      <span aria-hidden="true" className="text-xs select-none">{'\u00A0'}</span>
-                    </>
-                  )}
+                  {effects.map(line => (
+                    <span key={line} className={cx(lineTone, 'text-xs')}>{line}</span>
+                  ))}
+                  {bonus && <span className={cx(lineTone, 'text-xs')}>{bonus}</span>}
+                  {penalty && <span className={cx(owned ? 'text-danger' : 'text-text-dim', 'text-xs')}>{penalty}</span>}
+                  {lineCount < 2 && <span aria-hidden="true" className="text-xs select-none">{'\u00A0'}</span>}
                 </span>
               </>
             );
-            return owned ? (
-              <PressRow key={a.id} data-artifact-row onPress={() => setOpenId(a.id)} className="flex items-start gap-2.5 px-2 py-1.5 text-sm text-text">
+            return (
+              <PressRow key={a.id} data-artifact-row onPress={() => setOpenId(a.id)}
+                        className={cx('flex items-start gap-2.5 px-2 py-1.5 text-sm', owned ? 'text-text' : 'text-text-dim bg-bg')}>
                 {body}
               </PressRow>
-            ) : (
-              <div key={a.id} data-artifact-row className="flex items-start gap-2.5 px-2 py-1.5 text-sm text-text-dim bg-bg">
-                {body}
-              </div>
             );
           })}
         </Inset>
@@ -211,7 +201,7 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
   setToast: Notify;
 }) {
   const now = useNow();
-  const rows = useMemo(() => groupInstances(game.bag), [game.bag]);
+  const rows = useMemo(() => groupInstances(game.bag, { dex: game.dex }), [game.bag, game.dex]);
   const {
     count: bagCount, cap, full: bagFull,
     autoLock: autoLockPlan,
@@ -305,37 +295,44 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
               <span className="text-text-dim">/{fmtNum(cap)}</span>마리)
             </PageTitle>
             <div className="flex items-center gap-1.5">
-              {layout === 'list' && (
-                <Tip
-                  wraps
-                  pressOpens
-                  text={(
-                    <TipCard
-                      title="개체 표시"
-                      rows={[
-                        {
-                          text: (
-                            <span className="inline-flex items-center gap-1.5">
-                              <PixelIcon glyph="crown" size={11} className="text-gold shrink-0" />
-                              <span>최대 크기</span>
-                            </span>
-                          ),
-                        },
-                        {
-                          text: (
-                            <span className="inline-flex items-center gap-1.5">
-                              <PixelIcon glyph="sparkle" size={11} className="text-mutation shrink-0" />
-                              <span className="text-mutation">돌연변이</span>
-                            </span>
-                          ),
-                        },
-                      ]}
-                    />
-                  )}
-                >
-                  <IconButton type="button" glyph="question" size={12} tone="dim" className="p-1" aria-label="개체 표시" />
-                </Tip>
-              )}
+              <Tip
+                wraps
+                pressOpens
+                text={(
+                  <TipCard
+                    title="개체 표시"
+                    rows={[
+                      {
+                        text: (
+                          <span className="inline-flex items-center gap-1.5">
+                            <PixelIcon glyph="crown" size={11} className="text-gold shrink-0" />
+                            <span>최대 크기</span>
+                          </span>
+                        ),
+                      },
+                      {
+                        text: (
+                          <span className="inline-flex items-center gap-1.5">
+                            <PixelIcon glyph="sparkle" size={11} className="text-mutation shrink-0" />
+                            <span className="text-mutation">돌연변이</span>
+                          </span>
+                        ),
+                      },
+                      ...(layout === 'cards' ? [{
+                        text: (
+                          <span className="inline-flex items-center gap-1.5">
+                            <PixelIcon glyph="moon" size={11} className="text-accent shrink-0" />
+                            <span>밤 전용 어종</span>
+                          </span>
+                        ),
+                      }] : []),
+                    ]}
+                    note={layout === 'cards' ? '밤(게임 22:00~06:00)에만 낚여요.' : undefined}
+                  />
+                )}
+              >
+                <IconButton type="button" glyph="question" size={12} tone="dim" className="p-1" aria-label="개체 표시" />
+              </Tip>
               <Tip wraps text={layout === 'list' ? '카드 보기' : '목록 보기'}>
                 <IconButton
                   glyph={layout === 'list' ? 'grid' : 'menu'}
@@ -373,7 +370,7 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
           ) : (
             <>
               <Inset divided>
-                {rows.map(({ key, fish, name, items, subtotal, sized, unsized, maxByForm }) => {
+                {rows.map(({ key, fish, form, name, items, subtotal, sized, unsized, maxByForm }) => {
                   const expanded = opened.has(key);
                   const uids = items.map(i => i.uid);
                   // 하나라도 안 잠겼으면 머리 버튼은 "전부 잠금" — 부분 상태에서 눌러도 결과가 하나다
@@ -388,7 +385,7 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
                            aria-label={`${name} 개체 ${expanded ? '접기' : '펼치기'}`}>
                         <PixelIcon glyph={expanded ? 'caretDown' : 'caretRight'} size={10}
                                    className="text-text-dim" />
-                        <FishSprite fish={fish} preset="thumb" form="normal" />
+                        <FishSprite fish={fish} preset="thumb" form={form} />
                         <span className="truncate">
                           <RarityDot rarity={fish.rarity} />{name}
                         </span>

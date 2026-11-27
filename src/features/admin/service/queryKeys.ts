@@ -3,11 +3,12 @@
 export const adminKeys = {
   access: ['admin', 'access'] as const,
   signInReturn: ['admin', 'signInReturn'] as const,
-  overview: ['admin', 'overview'] as const,
+  overview: (days: number) => ['admin', 'overview', days] as const,
   users: ['admin', 'users'] as const,
   spamFlags: ['admin', 'spamFlags'] as const,
   recentEvents: ['admin', 'recentEvents'] as const,
   letters: ['admin', 'letters'] as const,
+  notices: ['admin', 'notices'] as const,
   changelog: ['admin', 'changelog'] as const,
   chatReports: ['admin', 'chatReports'] as const,
   mails: ['admin', 'mails'] as const,

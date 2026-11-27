@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { renderToString } from 'react-dom/server';
 import Modal from './Modal';
 import { resetKeyScopes } from './hotkeys';
@@ -172,5 +172,41 @@ describe('창 쌓임 - 자기를 연 층 바로 위', () => {
 
   it('층 자리가 아직 만들어지지 않은 첫 렌더에서는 창을 제자리에 그리지 않는다', () => {
     expect(renderToString(<WindowSlot><Modal layer="app" onClose={() => {}}>본문</Modal></WindowSlot>)).not.toContain('dialog');
+  });
+});
+
+describe('스테이지 모달 aside 슬롯', () => {
+  it('aside가 없으면 기존처럼 dialog의 직접 부모가 백드롭이다', () => {
+    render(<Modal layer="stage" sm onClose={() => {}}>본문</Modal>);
+    expect(backdropOf().className).toContain('absolute inset-0');
+  });
+
+  it('aside가 있으면 relative 래퍼 안에 dialog와 aside를 나란히 두고 aside 클릭은 백드롭으로 전파되지 않는다', () => {
+    const onClose = vi.fn();
+    render(
+      <Modal layer="stage" width={420} onClose={onClose} aside={<div data-testid="stage-aside">보조 패널</div>}>
+        본문
+      </Modal>,
+    );
+    const dialog = screen.getByRole('dialog');
+    const aside = screen.getByTestId('stage-aside');
+    const wrapper = dialog.parentElement!;
+    const backdrop = wrapper.parentElement!;
+
+    expect(wrapper.className).toContain('relative');
+    expect(wrapper.className).toContain('w-[min(420px,calc(100%-32px))]');
+    expect(backdrop.className).toContain('absolute inset-0');
+    expect(dialog.contains(aside)).toBe(false);
+    expect(aside.parentElement).toBe(wrapper.children[1]);
+    expect(aside.parentElement!.className).toContain('hidden');
+    expect(aside.parentElement!.className).toContain('@min-[880px]:block');
+    expect(aside.parentElement!.className).toContain('absolute');
+    expect(aside.parentElement!.className).toContain('left-[calc(100%+10px)]');
+
+    fireEvent.click(aside);
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.click(backdrop);
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

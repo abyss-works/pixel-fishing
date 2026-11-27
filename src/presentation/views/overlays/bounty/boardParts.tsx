@@ -12,11 +12,11 @@ import { fmtMinutes } from '../../../ui/format';
 // 수배판 카드(일반 의뢰, 네임드 토벌, 유물)가 함께 쓰는 조각.
 
 /** 이름 왼쪽, 값 오른쪽의 줄 목록 — 카드 본문의 대상, 진행, 보상 같은 항목 */
-export function BoardRows({ rows }: { rows: { key: string; label: ReactNode; value: ReactNode }[] }) {
+export function BoardRows({ rows }: { rows: { key: string; label: ReactNode; value: ReactNode; wrap?: boolean }[] }) {
   return (
     <ul className="list-none m-0 p-0 text-xs">
       {rows.map(r => (
-        <KeyValueRow as="li" compact key={r.key} label={r.label} value={r.value} />
+        <KeyValueRow as="li" compact wrap={r.wrap} key={r.key} label={r.label} value={r.value} />
       ))}
     </ul>
   );

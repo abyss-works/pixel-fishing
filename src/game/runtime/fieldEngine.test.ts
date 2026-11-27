@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { newState, rodStats } from '../rules/logic';
+import { newState, rodStats, redZoneCenter } from '../rules/logic';
+import { powerZones, rodAxes } from '../rules/stats';
 import { catchTooSoon } from '../rules/pacing';
 import { HARBORS, WORLD, WORLD_LEGEND, WORLD_SPAWN } from '../world/regions/world';
 import { V_PORT } from '../world/regions/village';
@@ -7,6 +8,8 @@ import { REGION_PACKS } from '../world';
 import type { RegionPack } from '../world';
 import { compileMap, mapBounds } from '../world/mask';
 import { CLOSED_SEA_MSG } from '../content/zones';
+import { renderRegion } from '../rendering/canvas/scenes/region.js';
+import { JUMP_S } from '../rendering/pixel/sprites/schoolView.js';
 import { GameFieldEngine } from './fieldEngine';
 import type { FieldEvent } from './fieldEngine';
 
@@ -87,6 +90,25 @@ describe('GameFieldEngine 이동 잠금', () => {
     engine.action();
     expect(engine.getSnapshot().phase).toBe('idle');
     expect(events).toEqual([]);
+  });
+
+  it('캐스팅 시 onWarmup 콜백을 호출하지 않는다', () => {
+    const game = { ...newState(), boat: 5, rod: 10 };
+    const school = { id: 's', spot: 'pond' as const, x: WORLD_SPAWN.x, y: WORLD_SPAWN.y };
+    const engine = new GameFieldEngine('world', game, [school], WORLD_SPAWN);
+    const onWarmup = vi.fn();
+    const events: FieldEvent[] = [];
+    engine.updateContext(game, false, {
+      dispatch: () => ({ status: 'rejected', error: 'bad-request' }),
+      onEvent: event => { events.push(event); },
+      onScene: noop,
+      onWarmup,
+    });
+    engine.action();
+    expect(engine.getSnapshot().phase).toBe('wait');
+    expect(events).toEqual([{ type: 'cast', spot: 'pond' }]);
+    expect(onWarmup).not.toHaveBeenCalled();
+    engine.dispose();
   });
 
   it('잠금 중에도 프레임은 계속 돈다', () => {
@@ -715,6 +737,409 @@ describe('GameFieldEngine 이전 던짐의 응답', () => {
     await Promise.resolve();
     expect(engine.getSnapshot()).toMatchObject({ phase: 'idle', fishId: null });
     expect(events.filter(event => event.type === 'catch')).toHaveLength(2);
+    engine.dispose();
+  });
+});
+
+describe('GameFieldEngine 이동 취소 후 즉시 재캐스팅 및 429 복구', () => {
+  afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+
+  it('획득 카드를 이동으로 취소하고 바로 다시 던져도 최소 캐치 간격을 채워 catchTooSoon 429가 나지 않는다', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const t0 = Date.parse('2026-11-26T00:00:00.000Z');
+    vi.setSystemTime(t0);
+    const game = { ...newState(), boat: 5, rod: 10 };
+    const school = { id: 's', spot: 'pond' as const, x: WORLD_SPAWN.x, y: WORLD_SPAWN.y };
+    const engine = new GameFieldEngine('world', game, [school], WORLD_SPAWN);
+    let lastServerCatchAt: string | null = null;
+    const rejectedErrors: string[] = [];
+    let catches = 0;
+    engine.updateContext(game, false, {
+      dispatch: action => {
+        const nowIso = new Date(Date.now()).toISOString();
+        if (catchTooSoon(game, action.spot, lastServerCatchAt, nowIso)) {
+          rejectedErrors.push('too-fast');
+          return { status: 'rejected', error: 'too-fast' as never };
+        }
+        lastServerCatchAt = nowIso;
+        catches += 1;
+        return {
+          status: 'ok',
+          result: { type: 'catch', fishId: 'crucian', uid: `u-${catches}`, info: { form: 'normal' }, released: [] },
+        } as never;
+      },
+      onEvent: noop,
+      onScene: noop,
+    });
+
+    // 1차 캐스팅 → 입질 → 즉시 챔질 → 획득 카드 진입
+    engine.action();
+    let g = 0;
+    while (engine.getSnapshot().phase !== 'bite' && g++ < 2000) vi.advanceTimersByTime(10);
+    expect(engine.getSnapshot().phase).toBe('bite');
+    engine.action();
+    await Promise.resolve();
+    expect(engine.getSnapshot().phase).toBe('catch');
+
+    // 획득 카드 2초를 채우지 않고 100ms 만에 이동으로 취소하고 즉시 재캐스팅
+    vi.advanceTimersByTime(100);
+    engine.handleKeyDown('ArrowLeft', noop);
+    engine.releaseKey('ArrowLeft');
+    expect(engine.getSnapshot().phase).toBe('idle');
+
+    engine.action();
+    expect(engine.getSnapshot().phase).toBe('wait');
+
+    // 최소 입질 대기를 지나 bite가 뜰 때까지 진행 후 즉시 챔질
+    g = 0;
+    while (engine.getSnapshot().phase !== 'bite' && g++ < 5000) vi.advanceTimersByTime(10);
+    expect(engine.getSnapshot().phase).toBe('bite');
+    engine.action();
+    await Promise.resolve();
+
+    expect(rejectedErrors).toEqual([]);
+    expect(catches).toBe(2);
+    engine.dispose();
+  });
+
+  it('첫 챔질 응답이 오기 전에 이동으로 취소하고 다시 던져도 이전 캐치 확정 뒤 하한을 지킨다', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const t0 = Date.parse('2026-11-26T00:00:00.000Z');
+    vi.setSystemTime(t0);
+    const game = { ...newState(), boat: 5, rod: 10 };
+    const school = { id: 's', spot: 'pond' as const, x: WORLD_SPAWN.x, y: WORLD_SPAWN.y };
+    const engine = new GameFieldEngine('world', game, [school], WORLD_SPAWN);
+    let lastServerCatchAt: string | null = null;
+    const rejectedErrors: string[] = [];
+    let resolveFirst: ((v: unknown) => void) | null = null;
+    let callCount = 0;
+    engine.updateContext(game, false, {
+      dispatch: action => {
+        callCount += 1;
+        if (callCount === 1) {
+          return new Promise(resolve => { resolveFirst = resolve as (v: unknown) => void; }) as never;
+        }
+        const nowIso = new Date(Date.now()).toISOString();
+        if (catchTooSoon(game, action.spot, lastServerCatchAt, nowIso)) {
+          rejectedErrors.push('too-fast');
+          return { status: 'rejected', error: 'too-fast' as never };
+        }
+        lastServerCatchAt = nowIso;
+        return {
+          status: 'ok',
+          result: { type: 'catch', fishId: 'crucian', uid: 'u-2', info: { form: 'normal' }, released: [] },
+        } as never;
+      },
+      onEvent: noop,
+      onScene: noop,
+    });
+
+    engine.action();
+    let g = 0;
+    while (engine.getSnapshot().phase !== 'bite' && g++ < 2000) vi.advanceTimersByTime(10);
+    engine.action();
+    expect(engine.getSnapshot().phase).toBe('catch');
+
+    // 응답 전에 취소하고 바로 재캐스팅
+    vi.advanceTimersByTime(50);
+    engine.handleKeyDown('ArrowLeft', noop);
+    engine.releaseKey('ArrowLeft');
+    engine.action();
+    expect(engine.getSnapshot().phase).toBe('wait');
+
+    // 이제 첫 번째 응답이 뒤늦게 도착해 서버가 last_catch_at을 찍는다
+    vi.advanceTimersByTime(100);
+    lastServerCatchAt = new Date(Date.now()).toISOString();
+    resolveFirst!({
+      status: 'ok',
+      result: { type: 'catch', fishId: 'crucian', uid: 'u-1', info: { form: 'normal' }, released: [] },
+    });
+    await Promise.resolve();
+
+    g = 0;
+    while (engine.getSnapshot().phase !== 'bite' && g++ < 5000) vi.advanceTimersByTime(10);
+    expect(engine.getSnapshot().phase).toBe('bite');
+    engine.action();
+    await Promise.resolve();
+
+    expect(rejectedErrors).toEqual([]);
+    expect(callCount).toBe(2);
+    engine.dispose();
+  });
+});
+
+describe('GameFieldEngine 이벤트 2 표준 스펙 및 사운드 훅', () => {
+  afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+
+  it('이벤트 2 구역에서는 개인 낚싯대·유물·도시락 보정을 무시하고 Lv20 표준 입질 대기와 존(노란 10%, 빨간 0%)을 쓴다', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const t0 = Date.parse('2026-11-26T00:00:00.000Z');
+    vi.setSystemTime(t0);
+    // Lv1 낚싯대(일반 해역이면 power 부족 + 4~8초 대기)라도 이벤트 2에서는 Lv20 표준 2.3~4.3초, 줄 끊어짐 없음
+    const lowRodGame = { ...newState(), boat: 0, rod: 1, slots: { lunch: { id: 'cook-lunch-bite', endsAt: '2099-01-01T00:00:00.000Z' }, bait: null } };
+    const school = { id: 'ch-1', spot: 'championship' as const, x: 152, y: 140 };
+    const engine = new GameFieldEngine('championship', lowRodGame, [school], { x: 152, y: 120 });
+    const events: FieldEvent[] = [];
+    engine.updateContext(lowRodGame, false, {
+      dispatch: () => ({
+        status: 'ok',
+        result: {
+          type: 'catch',
+          fishId: 'event-glaaki',
+          uid: 'u-ev1',
+          info: { form: 'variant', size: 100, percentile: 10, isBig: true, isNew: true },
+          released: [],
+        },
+      } as never),
+      onEvent: event => { events.push(event); },
+      onScene: noop,
+    });
+
+    engine.action();
+    // 2.29초에는 아직 wait, 2.30초에는 bite 진입 + bite 이벤트 발화
+    vi.advanceTimersByTime(2290);
+    expect(engine.getSnapshot().phase).toBe('wait');
+    vi.advanceTimersByTime(10);
+    expect(engine.getSnapshot().phase).toBe('bite');
+    expect(events).toContainEqual({ type: 'bite', spot: 'championship' });
+    expect(events.some(e => e.type === 'line-cut')).toBe(false);
+
+    // Lv60 낚싯대라도 이벤트 2에서는 빨간 존이 0%이므로 중앙 챔질도 good까지만 판정된다
+    const highRodGame = { ...newState(), boat: 9, rod: 60 };
+    engine.updateContext(highRodGame, false, {
+      dispatch: () => ({
+        status: 'ok',
+        result: {
+          type: 'catch',
+          fishId: 'event-glaaki',
+          uid: 'u-ev2',
+          info: { form: 'variant', size: 100, percentile: 10, isBig: true, isNew: true },
+          released: [],
+        },
+      } as never),
+      onEvent: event => { events.push(event); },
+      onScene: noop,
+    });
+    vi.advanceTimersByTime(700); // sweep 1.4s 중앙(0.5)
+    engine.action();
+    await Promise.resolve();
+
+    const catchEvent = events.find(e => e.type === 'catch');
+    expect(catchEvent).toMatchObject({
+      type: 'catch',
+      judgment: 'good',
+      manual: true,
+      rarity: 'legendary',
+      variant: true,
+      named: false,
+    });
+    // 전설 이벤트 어종(글라키)은 전설 획득 홀드 시간(2700ms) 동안 catch 상태를 유지한다
+    vi.advanceTimersByTime(2600);
+    expect(engine.getSnapshot().phase).toBe('catch');
+    vi.advanceTimersByTime(150);
+    expect(engine.getSnapshot().phase).toBe('wait');
+
+    engine.dispose();
+  });
+
+  it('catch 이벤트가 수동/방치, good/perfect, 등급, 변이, 네임드 상태를 사운드 훅으로 구분해 알린다', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const t0 = Date.parse('2026-11-26T00:00:00.000Z');
+    vi.setSystemTime(t0);
+    const game = { ...newState(), boat: 5, rod: 30 };
+    const school = { id: 's', spot: 'pond' as const, x: WORLD_SPAWN.x, y: WORLD_SPAWN.y };
+    const engine = new GameFieldEngine('world', game, [school], WORLD_SPAWN);
+    const events: FieldEvent[] = [];
+    let call = 0;
+    engine.updateContext(game, false, {
+      dispatch: () => {
+        call += 1;
+        return {
+          status: 'ok',
+          result: call === 1
+            ? { type: 'catch', fishId: 'crucian', uid: 'u1', info: { form: 'normal', size: 20, percentile: 50, isBig: false, isNew: false }, released: [], ticket: 'q-named' }
+            : { type: 'catch', fishId: 'carp', uid: 'u2', info: { form: 'variant', size: 40, percentile: 5, isBig: true, isNew: true }, released: [] },
+        } as never;
+      },
+      onEvent: event => { events.push(event); },
+      onScene: noop,
+    });
+
+    // 1) 수동 perfect + 네임드 티켓
+    const raw = engine as unknown as { school: unknown; transition(p: string): void };
+    raw.school = school;
+    raw.transition('wait');
+    raw.transition('bite');
+    vi.advanceTimersByTime(700); // exact center -> perfect (rod 30 over pond)
+    engine.action();
+    await Promise.resolve();
+
+    // 2) 방치(auto) + 변이
+    raw.transition('wait');
+    raw.transition('bite');
+    vi.advanceTimersByTime(1500); // timeout -> auto
+    await Promise.resolve();
+
+    const catches = events.filter(e => e.type === 'catch');
+    expect(catches).toHaveLength(2);
+    expect(catches[0]).toMatchObject({
+      type: 'catch',
+      judgment: 'perfect',
+      manual: true,
+      rarity: 'common',
+      variant: false,
+      named: true,
+    });
+    expect(catches[1]).toMatchObject({
+      type: 'catch',
+      judgment: 'auto',
+      manual: false,
+      variant: true,
+      named: false,
+    });
+    engine.dispose();
+  });
+});
+
+describe('GameFieldEngine 빨간 존 위치와 챔질 경과', () => {
+  afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+
+  it('캐스트 시드의 빨간 존 중심으로 판정하고 챔질 경과를 요청에 담는다', () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    vi.setSystemTime(Date.parse('2026-11-26T00:00:00.000Z'));
+    const game = { ...newState(), boat: 5, rod: 20 };
+    const school = { id: 's', spot: 'pond' as const, x: WORLD_SPAWN.x, y: WORLD_SPAWN.y };
+    const engine = new GameFieldEngine('world', game, [school], WORLD_SPAWN);
+    const sent: unknown[] = [];
+    engine.updateContext(game, false, {
+      dispatch: action => {
+        sent.push(action);
+        return {
+          status: 'ok',
+          result: { type: 'catch', fishId: 'crucian', uid: 'u', info: { form: 'normal' }, released: [] },
+        } as never;
+      },
+      onEvent: noop,
+      onScene: noop,
+      seedContext: () => ({ uid: 'user-1', saveVersion: 7 }),
+    });
+
+    const zones = powerZones(game, 'pond');
+    expect(zones.red).toBeGreaterThan(0);
+    const center = redZoneCenter('user-1:7', zones.yellow / 100, zones.red / 100);
+    engine.action();
+    let guard = 0;
+    while (engine.getSnapshot().phase !== 'bite' && guard++ < 2000) vi.advanceTimersByTime(10);
+    expect(engine.getSnapshot().phase).toBe('bite');
+    const raw = engine as unknown as { biteStart: number };
+    const sweepMs = rodAxes(game).sweep.value * 1000;
+    const targetAt = raw.biteStart + center * sweepMs;
+    vi.advanceTimersByTime(Math.max(0, targetAt - Date.now()));
+    engine.action();
+
+    expect(sent).toHaveLength(1);
+    const action = sent[0] as { judgment?: string; biteElapsed?: number };
+    expect(action.judgment).toBe('perfect');
+    expect(action.biteElapsed).toBeCloseTo(center * sweepMs, 0);
+    engine.dispose();
+  });
+
+  it('renderFrame은 현재 구역에 맞는 effectiveLookForRegion 결과를 renderRegion에 넘긴다', () => {
+    const game = { ...newState(), look: { shirt: 2, pants: 3, hat: 'cap-red' } };
+    const engine = new GameFieldEngine('world', game, [], WORLD_SPAWN);
+    (engine as unknown as { def: RegionPack }).def = { ...WORLD, id: 'championship' as never };
+    (engine as unknown as { updateFrame(c: unknown, n: number, l: number): boolean }).updateFrame(ctx, 1000, 950);
+
+    expect(renderRegion).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({ id: 'championship' }),
+      expect.objectContaining({ look: { shirt: 2, pants: 3, hat: 'santa-hat' } }),
+    );
+    expect(game.look.hat).toBe('cap-red');
+    engine.dispose();
+  });
+});
+
+describe('GameFieldEngine 로컬·피어 점프 연출', () => {
+  afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+
+  it('포획이 확정되면 localJumps 1건을 만들고, 바로 이동해도 0.9초 동안 유지한 뒤 만료한다', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    vi.setSystemTime(Date.parse('2026-11-26T00:00:00.000Z'));
+
+    const game = { ...newState(), boat: 5, rod: 10 };
+    const school = { id: 's1', spot: 'pond' as const, x: WORLD_SPAWN.x + 12, y: WORLD_SPAWN.y - 8 };
+    const engine = new GameFieldEngine('world', game, [school], WORLD_SPAWN);
+    let resolveCatch: ((v: unknown) => void) | null = null;
+    engine.updateContext(game, false, {
+      dispatch: () => new Promise(resolve => { resolveCatch = resolve as (v: unknown) => void; }) as never,
+      onEvent: noop,
+      onScene: noop,
+    });
+    engine.setLiveSource(() => ({
+      others: [],
+      bubble: null,
+      idle: null,
+      peerJumps: [{ x: 300, y: 400, fishId: 'goldcarp', form: 'variant', t: 0.25 }],
+    }));
+
+    const frame = (now: number, last: number) =>
+      (engine as unknown as { updateFrame(c: unknown, n: number, l: number): boolean }).updateFrame(ctx, now, last);
+
+    engine.action();
+    let g = 0;
+    while (engine.getSnapshot().phase !== 'bite' && g++ < 2000) vi.advanceTimersByTime(10);
+    expect(engine.getSnapshot().phase).toBe('bite');
+
+    // 챔질 직후(응답 도착 전)에는 localJumps가 아직 생기지 않는다
+    engine.action();
+    const renderMock = vi.mocked(renderRegion);
+    renderMock.mockClear();
+    frame(1000, 950);
+    expect(renderMock.mock.calls[0][2].localJumps).toEqual([]);
+    expect(renderMock.mock.calls[0][2].peerJumps).toEqual([
+      { x: 300, y: 400, fishId: 'goldcarp', form: 'variant', t: 0.25 },
+    ]);
+
+    // 서버 응답 도착 시 1건의 localJumps 생성
+    resolveCatch!({
+      status: 'ok',
+      result: { type: 'catch', fishId: 'goldfish', uid: 'u-1', info: { form: 'variant' }, released: [] },
+    });
+    await Promise.resolve();
+
+    // 곧바로 이동해 낚시를 취소해도 0.9초 동안은 유지된다
+    vi.advanceTimersByTime(200);
+    engine.handleKeyDown('ArrowLeft', noop);
+    engine.releaseKey('ArrowLeft');
+    expect(engine.getSnapshot().phase).toBe('idle');
+
+    renderMock.mockClear();
+    frame(1200, 1150);
+    const active = renderMock.mock.calls[0][2].localJumps;
+    expect(active).toHaveLength(1);
+    expect(active![0]).toMatchObject({
+      x: school.x,
+      y: school.y,
+      toX: WORLD_SPAWN.x,
+      toY: WORLD_SPAWN.y - 6,
+      fishId: 'goldfish',
+      form: 'variant',
+    });
+    expect(active![0].t).toBeCloseTo(0.2, 3);
+
+    // JUMP_S(0.9초) 경과 후 만료
+    vi.advanceTimersByTime(Math.round(JUMP_S * 1000));
+    renderMock.mockClear();
+    frame(2100, 2050);
+    expect(renderMock.mock.calls[0][2].localJumps).toEqual([]);
+
     engine.dispose();
   });
 });

@@ -930,6 +930,8 @@ describe('세이브 v9 — 미끼 환불과 요리 상태', () => {
   it('newState는 v10 기본 상태다', () => {
     const s = newState();
     expect(s).toMatchObject({ v: 10, cooking: null, cookingQueue: [], slots: { lunch: null, bait: null }, energyTargets: {}, baitRefund: null });
+    expect(s.location).toEqual({ kind: 'region', id: 'village' });
+    expect(s.visited).toEqual([]);
     expect('activeBait' in s).toBe(false);
   });
 

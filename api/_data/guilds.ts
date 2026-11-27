@@ -6,12 +6,12 @@ import { sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { Database, Executor } from '../_db/client.js';
 import {
-  GUILD_BONUS_MAX_RANK, GUILD_DAILY_FAME_CAP, GUILD_ENHANCE_MAX_RANK, GUILD_RENAME_COST,
+  DEFAULT_GUILD_PITCH, GUILD_BONUS_MAX_RANK, GUILD_DAILY_FAME_CAP, GUILD_ENHANCE_MAX_RANK, GUILD_LEVEL_FLOORS, GUILD_RENAME_COST,
   bonusEffect, bonusRank, bonusRankCost, contributionDayOf, donationOutcome, enhanceOutcome, enhanceResetOutcome,
-  guildBonusLevels, GUILD_JOIN_REQUEST_TTL_MS, GUILD_MAX_MEMBERS, guildEffectsOf, guildLevelOf, guildProgress,
+  guildBonusLevels, GUILD_JOIN_REQUEST_TTL_MS, GUILD_MAX_MEMBERS, guildEffectsOf, guildFull, guildLevelOf, guildProgress,
   handoverOutcome, joinOutcome, remainingEnhancePoints, removalOutcome, renameOutcome,
 } from '../../src/game/rules/guild.js';
-import type { EnhanceError, EnhanceResetError, RenameError } from '../../src/game/rules/guild.js';
+import type { EnhanceError, EnhanceResetError, PublicGuildSort, RenameError } from '../../src/game/rules/guild.js';
 import type { GuildActor, GuildJoinVia, GuildBonusId, GuildEffects, GuildJoinMode, GuildLogKind, GuildRole } from '../../src/game/rules/guild.js';
 import { at } from './json.js';
 import { goldDebit, guildEnhanceResetDebit } from './save.js';
@@ -318,16 +318,24 @@ export async function resetEnhancements(
 export const guildTotal = (guildId: SQL) =>
   sql`(select coalesce(sum(c.fame + c.clears), 0)::bigint from public.guild_contributions c where c.guild_id = ${guildId})`;
 
+/** 길드의 누적 기여도 합계를 읽는다. 길드가 없으면 0 */
+export async function guildTotalOf(db: Executor, guildId: string): Promise<number> {
+  const { rows: [r] } = await db.execute<{ total: number | string }>(
+    sql`select ${guildTotal(sql`${guildId}::uuid`)} as total`,
+  );
+  return Number(r?.total ?? 0);
+}
+
 /** 항해일지 한 줄을 쓰는 문장 */
 const logInsert = (guildId: string, uid: string, kind: GuildLogKind, nowISO: string) =>
   sql`insert into public.guild_logs (guild_id, user_id, kind, created_at) values (${guildId}, ${uid}, ${kind}, ${at(nowISO)})`;
 
 /**
- * 액션 하나가 쌓은 기여를 그날(게임 날짜) 그 길드원의 행에 더하는 후속 쓰기. 쌓을 것이 없으면 null.
+ * 액션 하나가 쌓은 기여를 그날(게임 날짜) 그 길드원의 행에 더하는 쓰기. 쌓을 것이 없으면 null.
  * 명성 기여는 그날 이미 쌓은 것과 합쳐 하루 상한(GUILD_DAILY_FAME_CAP)에서 멈춘다. 한 행의 갱신이라 동시에 써도 상한을 넘지 않는다.
- * 그 사이 길드가 없어졌으면 쓰지 않는다.
+ * 상한에 닿아 바뀔 것이 없으면 행을 건드리지 않는다. 그 사이 길드가 없어졌으면 쓰지 않는다.
  */
-export function contributionUpsert(guildId: string, uid: string, nowISO: string,
+function contributionUpsert(guildId: string, uid: string, nowISO: string,
   add: { fame: number; clears: number }): SQL | null {
   if (add.fame <= 0 && add.clears <= 0) return null;
   return sql`insert into public.guild_contributions (guild_id, user_id, day, fame, clears)
@@ -335,17 +343,36 @@ export function contributionUpsert(guildId: string, uid: string, nowISO: string,
     from public.guilds g where g.id = ${guildId}
     on conflict (guild_id, user_id, day) do update set
       fame = least(${GUILD_DAILY_FAME_CAP}::int, public.guild_contributions.fame + excluded.fame),
-      clears = public.guild_contributions.clears + excluded.clears`;
+      clears = public.guild_contributions.clears + excluded.clears
+    where public.guild_contributions.fame < ${GUILD_DAILY_FAME_CAP}::int or excluded.clears > 0
+    returning 1`;
 }
 
-/** 액션이 남긴 항해일지 줄(전설 획득·네임드 토벌)을 쓰는 후속 쓰기. 없으면 null. 그 사이 길드가 없어졌으면 쓰지 않는다 */
-export function logbookInsert(guildId: string, uid: string, entries: readonly { kind: GuildLogKind; detail: string }[],
+/** 액션이 남긴 항해일지 줄(전설 획득·네임드 토벌)을 쓰는 쓰기. 없으면 null. 그 사이 길드가 없어졌으면 쓰지 않는다 */
+function logbookInsert(guildId: string, uid: string, entries: readonly { kind: GuildLogKind; detail: string }[],
   nowISO: string): SQL | null {
   if (entries.length === 0) return null;
   const values = sql.join(entries.map(e => sql`(${e.kind}::text, ${e.detail}::text)`), sql`, `);
   return sql`insert into public.guild_logs (guild_id, user_id, kind, detail, created_at)
     select g.id, ${uid}::uuid, v.kind, v.detail, ${at(nowISO)} from public.guilds g, (values ${values}) as v(kind, detail)
-    where g.id = ${guildId}`;
+    where g.id = ${guildId}
+    returning 1`;
+}
+
+/**
+ * 확정된 액션 하나의 기여와 항해일지를 한 문장으로 쓰고, 실제로 쓰인 행 수를 돌려준다(0이면 길드 상태가 그대로다).
+ * 액션 확정과 따로 실행한다 — 실패해도 이미 확정된 액션을 되돌리지 않도록 호출자가 오류를 격리한다.
+ */
+export async function recordGuildActivity(db: Executor, guildId: string, uid: string, nowISO: string,
+  add: { fame: number; clears: number }, entries: readonly { kind: GuildLogKind; detail: string }[]): Promise<number> {
+  const parts = [contributionUpsert(guildId, uid, nowISO, add), logbookInsert(guildId, uid, entries, nowISO)]
+    .filter((s): s is SQL => s !== null);
+  if (parts.length === 0) return 0;
+  const ctes = parts.map((s, i) => sql`${sql.raw(`g${i}`)} as (${s})`);
+  const counts = parts.map((_, i) => sql`(select count(*) from ${sql.raw(`g${i}`)})`);
+  const { rows: [r] } = await db.execute<{ n: number | string }>(
+    sql`with ${sql.join(ctes, sql`, `)} select (${sql.join(counts, sql` + `)})::int as n`);
+  return Number(r.n);
 }
 
 export type CreateOutcome = { ok: true; id: string } | { ok: false; error: 'already-in-guild' | 'name-taken' | 'code-taken' };
@@ -406,6 +433,67 @@ export async function myJoinRequest(db: Executor, uid: string, nowISO: string):
 /** 초대 링크 미리보기 — 길드 이름, 레벨, 지금 길드원 수와 상한, 가입 방식. 길드원 이름은 싣지 않는다 */
 export interface GuildPreview { code: string; name: string; level: number; members: number; cap: number; joinMode: GuildJoinMode }
 
+/** 공개 길드 목록 한 줄 — 자유 가입(open)·비만석 길드만 담으며 고유 초대 코드(code)는 포함하지 않는다 */
+export interface PublicGuildSummary {
+  guildId: string;
+  name: string;
+  level: number;
+  members: number;
+  cap: number;
+  pitch: string;
+  lastActivityAt: string;
+}
+
+const PUBLIC_GUILD_LIMIT = 50;
+const LEVEL_THRESHOLDS = GUILD_LEVEL_FLOORS.slice(1);
+
+/** 자유 가입(open)이면서 정원에 여유가 있는 공개 길드 목록을 검색·정렬해 반환한다 */
+export async function publicGuilds(
+  db: Executor,
+  opts: { q?: string; sort?: PublicGuildSort; limit?: number } = {},
+): Promise<PublicGuildSummary[]> {
+  const trimmed = opts.q?.trim() ?? '';
+  const qFilter = trimmed ? sql`and strpos(lower(g.name), lower(${trimmed})) > 0` : sql``;
+  const levelExpr = sql`(select count(*)::int from unnest(array[${sql.join(LEVEL_THRESHOLDS.map(f => sql`${f}::bigint`), sql`, `)}]) as f where total >= f)`;
+  const orderBy = opts.sort === 'level'
+    ? sql`${levelExpr} desc, last_activity_at desc, total desc, guild_id`
+    : opts.sort === 'slots'
+      ? sql`(${GUILD_MAX_MEMBERS} - members) desc, total desc, last_activity_at desc, guild_id`
+      : sql`last_activity_at desc, created_at desc, guild_id`;
+  const limit = opts.limit ?? PUBLIC_GUILD_LIMIT;
+  const { rows } = await db.execute<{
+    guild_id: string; name: string; pitch: string | null; members: number | string; total: number | string;
+    last_activity_at: string | Date;
+  }>(sql`
+    with base as (
+      select g.id::text as guild_id, g.name, g.created_at, g.pitch,
+        (select count(*)::int from public.guild_members m where m.guild_id = g.id and m.left_at is null) as members,
+        ${guildTotal(sql`g.id`)} as total,
+        greatest(
+          g.created_at,
+          coalesce((select l.created_at from public.guild_logs l where l.guild_id = g.id order by l.id desc limit 1), g.created_at),
+          coalesce((select c.created_at from public.chat_messages c where c.guild_id = g.id order by c.id desc limit 1), g.created_at)
+        ) as last_activity_at
+      from public.guilds g
+      where g.join_mode = 'open'
+        ${qFilter}
+    )
+    select guild_id, name, pitch, members, total, last_activity_at
+    from base
+    where members < ${GUILD_MAX_MEMBERS}
+    order by ${orderBy}
+    limit ${limit}`);
+  return rows.map(r => ({
+    guildId: r.guild_id,
+    name: r.name,
+    level: guildLevelOf(Number(r.total)),
+    members: Number(r.members),
+    cap: GUILD_MAX_MEMBERS,
+    pitch: r.pitch && r.pitch.trim() !== '' ? r.pitch : DEFAULT_GUILD_PITCH,
+    lastActivityAt: iso(r.last_activity_at),
+  }));
+}
+
 /** 고유 코드의 길드 미리보기. 없는 코드면 null */
 export async function guildPreview(db: Executor, code: string): Promise<GuildPreview | null> {
   const { rows: [g] } = await db.execute<{
@@ -424,6 +512,30 @@ export type JoinOutcome =
   | { ok: true; id: string; result: 'joined' }
   | { ok: true; id: string; result: 'requested'; guild: string; leader: string; nick: string | null }
   | { ok: false; error: 'bad-code' | 'already-in-guild' | 'guild-full' | 'guild-closed' };
+
+export type JoinByGuildIdOutcome =
+  | { ok: true; id: string; result: 'joined' }
+  | { ok: false; error: 'not-found' | 'already-in-guild' | 'guild-full' | 'guild-closed' };
+
+/**
+ * 공개 길드 목록의 guildId로 바로 가입한다. 자유 가입(open)이고 정원에 여유가 있는 길드만 허용하며,
+ * 기존에 넣어 둔 승인 대기 신청이 있으면 함께 지운다.
+ */
+export async function joinByGuildId(withTransaction: Tx, uid: string, guildId: string, nowISO: string):
+  Promise<JoinByGuildIdOutcome> {
+  return withTransaction(async tx => {
+    const { rows: [g] } = await tx.execute<{ id: string; join_mode: GuildJoinMode }>(sql`
+      select id::text as id, join_mode from public.guilds where id = ${guildId} for update`);
+    if (!g) return { ok: false, error: 'not-found' };
+    if (await guildIdOf(tx, uid)) return { ok: false, error: 'already-in-guild' };
+    if (g.join_mode !== 'open') return { ok: false, error: 'guild-closed' };
+    const { rows: members } = await tx.execute<{ uid: string }>(sql`
+      select user_id::text as uid from public.guild_members where guild_id = ${g.id} and left_at is null`);
+    if (guildFull(members.length)) return { ok: false, error: 'guild-full' };
+    await addMember(tx, g.id, uid, nowISO);
+    return { ok: true, id: g.id, result: 'joined' };
+  });
+}
 
 /**
  * 고유 코드로 들어온다. 가입 방식과 경로(코드, 초대 링크)에 따라 바로 들어가거나(전에 떠났던 길드면 같은 행을 되살린다)
@@ -497,9 +609,18 @@ export async function decideJoinRequest(withTransaction: Tx, uid: string, guildI
   });
 }
 
-/** 내가 넣어 둔 가입 신청을 거둔다. 없으면 아무것도 하지 않는다 */
-export async function cancelJoinRequest(db: Executor, uid: string): Promise<void> {
-  await db.execute(sql`delete from public.guild_join_requests where user_id = ${uid}`);
+/** 내가 넣어 둔 가입 신청을 거두고 해당 길드와 현재 길드장을 돌려준다. 신청이 없으면 null */
+export async function cancelJoinRequest(db: Executor, uid: string): Promise<{ guildId: string; leaderId: string | null } | null> {
+  const { rows: [r] } = await db.execute<{ guild_id: string; leader_id: string | null }>(sql`
+    with deleted as (
+      delete from public.guild_join_requests where user_id = ${uid} returning guild_id
+    )
+    select d.guild_id::text as guild_id, m.user_id::text as leader_id
+    from deleted d
+    left join public.guild_members m
+      on m.guild_id = d.guild_id and m.role = 'leader' and m.left_at is null
+    limit 1`);
+  return r ? { guildId: r.guild_id, leaderId: r.leader_id } : null;
 }
 
 export type SettingsOutcome =

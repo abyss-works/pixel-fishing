@@ -1,5 +1,6 @@
 // 프로필(profiles) 쓰기 소유 모듈 — 첫 액션의 게스트명 보장과 닉네임 변경.
 import { sql } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
 import { achievementById } from '../../src/game/content/achievements.js';
 import { ARTIFACT_MAX_LEVEL, artifactById, artifactHasLevel } from '../../src/game/content/artifacts.js';
 import { isKnownLocation } from '../../src/game/content/places.js';
@@ -41,17 +42,26 @@ export async function setNickname(db: Executor, uid: string, nickname: string, n
     on conflict (user_id) do update set nickname = excluded.nickname, updated_at = excluded.updated_at`);
 }
 
+/** 액션 확정 문장(낙관 락)과 같은 원자 단위로 프로필 닉네임을 바꾼다 */
+export function setNicknameFragment(guard: SQL, uid: string, nickname: string, nowISO: string): SQL {
+  return sql`insert into public.profiles (user_id, nickname, updated_at)
+    select ${uid}, ${nickname}, ${at(nowISO)} where ${guard}
+    on conflict (user_id) do update set nickname = excluded.nickname, updated_at = excluded.updated_at`;
+}
+
 /** 계정 정리에서 사용자의 프로필 행을 지운다 */
 export async function deleteUserProfile(db: Executor, uid: string): Promise<void> {
   await db.execute(sql`delete from public.profiles where user_id = ${uid}`);
 }
 
-/** 실시간 채널에 보일 이름과 배. 프로필이 없으면 이름은 null, 저장 상태가 없으면 배는 0이다 */
-export async function liveIdentity(db: Executor, uid: string): Promise<{ nick: string | null; boat: number }> {
-  const { rows } = await db.execute<{ nick: string | null; boat: number | null }>(sql`select
-      (select nickname from public.profiles where user_id = ${uid}) as nick,
-      (select boat from public.saves_current where user_id = ${uid}) as boat`);
-  return { nick: rows[0]?.nick ?? null, boat: rows[0]?.boat ?? 0 };
+/** 실시간 채널에 보일 이름, 배, 명성. 프로필이 없으면 이름은 null, 저장 상태가 없으면 배·명성은 0이다 */
+export async function liveIdentity(db: Executor, uid: string): Promise<{ nick: string | null; boat: number; fame: number }> {
+  const { rows } = await db.execute<{ nick: string | null; boat: number | null; fame: string | number | null }>(sql`select
+      p.nickname as nick, c.boat, c.fame
+    from (select 1) _
+    left join public.profiles p on p.user_id = ${uid}
+    left join public.saves_current c on c.user_id = ${uid}`);
+  return { nick: rows[0]?.nick ?? null, boat: rows[0]?.boat ?? 0, fame: Number(rows[0]?.fame ?? 0) };
 }
 
 /**

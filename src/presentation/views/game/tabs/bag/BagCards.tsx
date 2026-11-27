@@ -5,6 +5,7 @@ import { cx } from '../../../../ui/cx';
 import Divider from '../../../../ui/Divider';
 import Frame from '../../../../ui/Frame';
 import FishSprite from '../../../../ui/fish/FishSprite';
+import NightMark from '../../../../ui/fish/NightMark';
 import { RARITY_CARD, DIM_CARD } from '../../../../ui/fish/RarityTag';
 import DexDetail from '../dex/DexDetail';
 
@@ -18,19 +19,20 @@ import DexDetail from '../dex/DexDetail';
 // 무리가 바뀌는 건 잡거나 팔 때뿐이라 카드가 눈앞에서 튀지도 않는다.
 export default function BagCards({ bag, game }: { bag: readonly FishInstance[]; game: GameState }) {
   const catalog = useMemo(() => selectBagCatalog(bag, game), [bag, game]);
-  const [detail, setDetail] = useState<Fish | null>(null);
+  const [detail, setDetail] = useState<{ fish: Fish; initialForm: number } | null>(null);
 
   return (
     <>
     <div className="grid grid-cols-3 gap-2">
-      {catalog.map(({ fish: f, name, normalCount, variantCount, discovered: known }) => {
+      {catalog.map(({ fish: f, name, shown, normalCount, variantCount, discovered: known }) => {
         const n = normalCount + variantCount;
         const label = !known ? '미확인 어종'
-          : n === 0 ? `${f.name} 미보유`
-          : `${f.name} 일반 ${normalCount}마리 돌연변이 ${variantCount}마리 보유`;
+          : n === 0 ? `${name} 미보유`
+          : `${name} 일반 ${normalCount}마리 돌연변이 ${variantCount}마리 보유`;
         const body = (
           <>
-            <FishSprite fish={f} preset="icon" form="normal" discovered={known}
+            <NightMark fish={f} discovered={known} />
+            <FishSprite fish={f} preset="icon" form={shown.form} discovered={known}
                         ariaLabel="" className="block mx-auto mb-1" />
             {/* 가방은 "내가 지금 뭘 들고 있나"만 본다 — 등급은 테두리가, 미발견은 ???가 말한다.
                 안 들고 있는 종에 0을 적거나 "미확인"을 덧붙이면 읽을 게 늘기만 한다. */}
@@ -47,7 +49,7 @@ export default function BagCards({ bag, game }: { bag: readonly FishInstance[]; 
         );
         return known ? (
           <Frame as="button" type="button" key={f.id} data-rarity={f.rarity}
-                 onClick={() => setDetail(f)}
+                 onClick={() => setDetail({ fish: f, initialForm: shown.index })}
                  className={cx(RARITY_CARD, 'p-2 text-sm text-center cursor-pointer hover:border-accent',
                    n === 0 && DIM_CARD)}
                  aria-label={label}>
@@ -62,7 +64,10 @@ export default function BagCards({ bag, game }: { bag: readonly FishInstance[]; 
         );
       })}
     </div>
-    {detail && <DexDetail fish={detail} game={game} onClose={() => setDetail(null)} />}
+    {detail && (
+      <DexDetail key={`${detail.fish.id}-${detail.initialForm}`} fish={detail.fish} game={game}
+                 initialForm={detail.initialForm} onClose={() => setDetail(null)} />
+    )}
     </>
   );
 }

@@ -3,7 +3,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { seedUser, startActionEnv, testUid, sessionHeaders, userToken } from './_dbTest/actionHarness.js';
 import type { ActionEnv } from './_dbTest/actionHarness.js';
-import { provideNotify, providePresence } from './_server/livePresence.js';
+import { provideNotify, provideNotifyGuild, providePresence } from './_server/livePresence.js';
 import type { ServerMessage } from '../src/game/rules/live.js';
 import { guildRoutes } from './guilds.js';
 
@@ -18,6 +18,8 @@ const E = testUid(976);
 const changes: [string, string | null][] = [];
 const notes: [string, ServerMessage][] = [];
 provideNotify((uid, msg) => { notes.push([uid, msg]); });
+const guildNotes: [string, ServerMessage][] = [];
+provideNotifyGuild((guildId, msg) => { guildNotes.push([guildId, msg]); });
 const routes = guildRoutes((uid, guild) => { changes.push([uid, guild]); });
 
 beforeAll(async () => {
@@ -34,14 +36,14 @@ afterAll(async () => {
 });
 afterEach(() => providePresence(() => null));
 
-async function call(path: string, method: string, who: string | null, opts: { body?: unknown; params?: Record<string, string> } = {}) {
+async function call(path: string, method: string, who: string | null, opts: { body?: unknown; params?: Record<string, string>; query?: Record<string, string> } = {}) {
   const out: { status: number; body: unknown } = { status: 0, body: undefined };
   const res = {
     status(code: number) { out.status = code; return res; },
     json(b: unknown) { out.body = b; },
     setHeader() {},
   };
-  await routes[path]({ method, body: opts.body, params: opts.params ?? {}, headers: sessionHeaders(who && userToken(who)) } as never,
+  await routes[path]({ method, body: opts.body, params: opts.params ?? {}, query: opts.query ?? {}, headers: sessionHeaders(who && userToken(who)) } as never,
     res as never);
   return out;
 }
@@ -80,6 +82,7 @@ describe('길드 함수', () => {
     expect(await call('/api/guilds/:id', 'PATCH', A, { params: { id }, body: {} })).toMatchObject({ status: 400, body: { error: 'bad-settings' } });
     expect(await call('/api/guilds/:id', 'PATCH', A, { params: { id }, body: { joinMode: 'open', pitch: '  같이 낚시해요 ' } }))
       .toMatchObject({ status: 200, body: { joinMode: 'open', pitch: '같이 낚시해요' } });
+    expect(guildNotes.at(-1)).toEqual([id, { t: 'guild', kind: 'updated', guild: '', nick: null }]);
     expect(await call('/api/guild-memberships', 'POST', B, { body: { code: 'nope' } })).toMatchObject({ status: 400, body: { error: 'bad-code' } });
     expect(await call('/api/guild-memberships', 'POST', B, { body: { code: 'ZZZZ2222' } })).toMatchObject({ status: 404, body: { error: 'bad-code' } });
     expect(await call('/api/guild-memberships', 'POST', B, { body: { code: code.toLowerCase() } }))
@@ -89,7 +92,7 @@ describe('길드 함수', () => {
     expect(await call('/api/guilds/:id', 'PATCH', B, { params: { id }, body: { joinMode: 'closed' } }))
       .toMatchObject({ status: 403, body: { error: 'not-leader' } });
 
-    providePresence(uid => (uid === B ? { uid: B, nick: '나루', boat: 1, region: 'deep', x: 0, y: 0, dir: 0, line: false } : null));
+    providePresence(uid => (uid === B ? { uid: B, nick: '나루', boat: 1, fame: 0, region: 'deep', x: 0, y: 0, dir: 0, line: false } : null));
     const view = await mine(A);
     expect(view.guild).toMatchObject({ id, name: '심해선단', role: 'leader', code, joinMode: 'open', pitch: '같이 낚시해요', requests: [] });
     expect(view.guild?.members.map(m => [m.nick, m.role, m.online])).toEqual(
@@ -110,10 +113,13 @@ describe('길드 함수', () => {
     expect(await call('/api/guilds/:id/members/:uid', 'DELETE', A, { params: { id, uid: C } }))
       .toMatchObject({ status: 200, body: { result: 'kicked' } });
     expect(changes.at(-1)).toEqual([C, null]);
+    expect(notes.at(-1)).toEqual([C, { t: 'guild', kind: 'updated', guild: '', nick: null }]);
+    expect(guildNotes.at(-1)).toEqual([id, { t: 'guild', kind: 'updated', guild: '', nick: null }]);
     expect(await call('/api/guilds/:id/leader', 'PUT', A, { params: { id }, body: { uid: 'x' } })).toMatchObject({ status: 400 });
     expect(await call('/api/guilds/:id/leader', 'PUT', A, { params: { id }, body: { uid: C } })).toMatchObject({ status: 404 });
     expect(await call('/api/guilds/:id/leader', 'PUT', A, { params: { id }, body: { uid: B } }))
       .toMatchObject({ status: 200, body: { result: 'handed-over' } });
+    expect(guildNotes.at(-1)).toEqual([id, { t: 'guild', kind: 'updated', guild: '', nick: null }]);
     expect(await call('/api/guilds/:id/members/:uid', 'DELETE', A, { params: { id, uid: A } }))
       .toMatchObject({ status: 200, body: { result: 'left' } });
     expect(changes.at(-1)).toEqual([A, null]);
@@ -146,7 +152,9 @@ describe('길드 함수', () => {
     expect(await call('/api/guilds/:id/requests/:uid', 'DELETE', A, { params: { id, uid: C } })).toMatchObject({ status: 404, body: { error: 'no-request' } });
 
     await call('/api/guild-memberships', 'POST', C, { body: { code } });
+    notes.length = 0;
     expect(await call('/api/guild-requests/me', 'DELETE', C)).toMatchObject({ status: 200, body: { result: 'cancelled' } });
+    expect(notes).toEqual([[A, { t: 'guild', kind: 'updated', guild: '', nick: null }]]);
     expect(await mine(C)).toEqual({ guild: null, request: null });
 
     await call('/api/guilds/:id', 'PATCH', A, { params: { id }, body: { joinMode: 'closed' } });
@@ -265,5 +273,198 @@ describe('길드 이름 바꾸기 함수', () => {
     expect(await rename(H, id, '모자람')).toMatchObject({ status: 409, body: { error: 'not-enough-gold' } });
     expect(await goldOf(H)).toBe(99_999);
     expect(await goldOf(I)).toBe(500_000);
+  });
+});
+
+describe('길드 갱신 실시간 알림', () => {
+  const J = testUid(981);
+  const K = testUid(982);
+  const L = testUid(983);
+  const updated: ServerMessage = { t: 'guild', kind: 'updated', guild: '', nick: null };
+
+  it('들어오기·승인·기부·자유강화·초기화·이름 바꾸기·떠나기·내보내기는 그 길드에 갱신을 알리고, 거부와 해산은 알리지 않는다', async () => {
+    await seedUser(env.client, { uid: J, email: 'gj@test.dev', nickname: '하늘', state: { gold: 400_000 } });
+    await seedUser(env.client, { uid: K, email: 'gk@test.dev', nickname: '구름', state: {} });
+    await seedUser(env.client, { uid: L, email: 'gl@test.dev', nickname: '별빛', state: {} });
+    const id = ((await call('/api/guilds', 'POST', J, { body: { name: '갱신선단' } })).body as { id: string }).id;
+    const code = (await mine(J)).guild!.code;
+    guildNotes.length = 0;
+    notes.length = 0;
+
+    // 승인 가입 신청은 길드장 개인 알림만, 거부는 신청한 사람 rejected 알림만 보내고 길드 갱신은 보내지 않는다
+    expect(await call('/api/guild-memberships', 'POST', K, { body: { code } })).toMatchObject({ status: 202 });
+    expect(await call('/api/guilds/:id/requests/:uid', 'DELETE', J, { params: { id, uid: K } })).toMatchObject({ status: 200 });
+    expect(notes.at(-1)).toEqual([K, { t: 'guild', kind: 'rejected', guild: '갱신선단', nick: null }]);
+    expect(guildNotes).toEqual([]);
+
+    // 승인은 신청한 사람의 approved와 길드 갱신 하나씩이다
+    expect(await call('/api/guild-memberships', 'POST', L, { body: { code } })).toMatchObject({ status: 202 });
+    expect(guildNotes).toEqual([]);
+    expect(await call('/api/guilds/:id/requests/:uid/approval', 'POST', J, { params: { id, uid: L } })).toMatchObject({ status: 201 });
+    expect(notes.at(-1)).toEqual([L, { t: 'guild', kind: 'approved', guild: '갱신선단', nick: null }]);
+    expect(guildNotes).toEqual([[id, updated]]);
+
+    await call('/api/guilds/:id', 'PATCH', J, { params: { id }, body: { joinMode: 'open' } });
+    expect(guildNotes).toHaveLength(2);
+    expect(await call('/api/guild-memberships', 'POST', K, { body: { code } })).toMatchObject({ status: 201 });
+    expect(guildNotes).toHaveLength(3);
+
+    await env.client.query(`insert into public.guild_contributions (guild_id, user_id, day, fame, clears)
+      values ($1, null, '2030-01-01', 0, 10000)`, [id]);
+    expect(await call('/api/guilds/:id/bonuses/:bonus/donations', 'POST', J, { params: { id, bonus: 'sell' }, body: { amount: 150_000 } }))
+      .toMatchObject({ status: 201 });
+    expect(guildNotes).toHaveLength(4);
+    expect(await call('/api/guilds/:id/bonuses/:bonus/donations', 'POST', J, { params: { id, bonus: 'sell' }, body: { amount: 1_000 } }))
+      .toMatchObject({ status: 409 });
+    expect(guildNotes).toHaveLength(4);
+
+    await env.client.query(`insert into public.guild_contributions (guild_id, user_id, day, fame, clears)
+      values ($1, null, '2030-01-02', 0, 190000)`, [id]);
+    expect(await call('/api/guilds/:id/bonuses/:bonus/enhancements', 'POST', J, { params: { id, bonus: 'sell' } }))
+      .toMatchObject({ status: 201 });
+    expect(guildNotes).toHaveLength(5);
+    expect(await call('/api/guilds/:id/enhancements/reset', 'POST', J, { params: { id } }))
+      .toMatchObject({ status: 200 });
+    expect(guildNotes).toHaveLength(6);
+
+    expect(await call('/api/guilds/:id/name', 'PUT', J, { params: { id }, body: { name: '새갱신선단' } })).toMatchObject({ status: 200 });
+    expect(guildNotes).toHaveLength(7);
+
+    expect(await call('/api/guilds/:id/members/:uid', 'DELETE', L, { params: { id, uid: L } })).toMatchObject({ body: { result: 'left' } });
+    expect(await call('/api/guilds/:id/members/:uid', 'DELETE', J, { params: { id, uid: K } })).toMatchObject({ body: { result: 'kicked' } });
+    expect(guildNotes).toHaveLength(9);
+    expect(await call('/api/guilds/:id/members/:uid', 'DELETE', J, { params: { id, uid: J } })).toMatchObject({ body: { result: 'dissolved' } });
+    expect(guildNotes).toHaveLength(9);
+    expect(guildNotes.every(([g, m]) => g === id && JSON.stringify(m) === JSON.stringify(updated))).toBe(true);
+  });
+});
+
+describe('공개 길드 목록과 guildId 바로 가입', () => {
+  const P1 = testUid(984);
+  const P2 = testUid(985);
+  const P3 = testUid(986);
+  const P4 = testUid(987);
+  const P5 = testUid(988);
+
+  it('자유 가입(open)·비만석 길드만 반환하고 code를 노출하지 않으며 검색·정렬·게스트 차단을 지킨다', async () => {
+    await seedUser(env.client, { uid: P1, email: 'gp1@test.dev', nickname: '산호', state: {} });
+    await seedUser(env.client, { uid: P2, email: 'gp2@test.dev', nickname: '해풍', state: {} });
+    await seedUser(env.client, { uid: P3, email: 'gp3@test.dev', nickname: '백파', state: {} });
+    await seedUser(env.client, { uid: P4, email: 'gp4@test.dev', nickname: '청해', state: {} });
+    await seedUser(env.client, { uid: P5, email: 'gp5@test.dev', nickname: '해일', state: {} });
+
+    expect(await call('/api/guilds/public', 'GET', null)).toMatchObject({ status: 401 });
+    expect(await call('/api/guilds/public', 'GET', GUEST)).toMatchObject({ status: 403, body: { error: 'account-only' } });
+    expect(await call('/api/guilds/public', 'POST', P1)).toMatchObject({ status: 405 });
+    expect(await call('/api/guilds/public', 'GET', P1, { query: { sort: 'invalid' } }))
+      .toMatchObject({ status: 400, body: { error: 'bad-sort' } });
+
+    const gOpenOld = ((await call('/api/guilds', 'POST', P1, { body: { name: '등대선단' } })).body as { id: string }).id;
+    const gOpenHigh = ((await call('/api/guilds', 'POST', P2, { body: { name: '태평양길드' } })).body as { id: string }).id;
+    const gApproval = ((await call('/api/guilds', 'POST', P3, { body: { name: '승인길드' } })).body as { id: string }).id;
+    const gClosed = ((await call('/api/guilds', 'POST', P4, { body: { name: '닫힘길드' } })).body as { id: string }).id;
+
+    await call('/api/guilds/:id', 'PATCH', P1, { params: { id: gOpenOld }, body: { joinMode: 'open', pitch: '' } });
+    await call('/api/guilds/:id', 'PATCH', P2, { params: { id: gOpenHigh }, body: { joinMode: 'open', pitch: '같이 대어 잡아요' } });
+    await call('/api/guilds/:id', 'PATCH', P4, { params: { id: gClosed }, body: { joinMode: 'closed' } });
+
+    // 만석 open 길드 하나 생성(10명 채움) — 목록에서 제외되어야 한다
+    const gFull = ((await call('/api/guilds', 'POST', P5, { body: { name: '만석길드' } })).body as { id: string }).id;
+    await call('/api/guilds/:id', 'PATCH', P5, { params: { id: gFull }, body: { joinMode: 'open' } });
+    for (let i = 0; i < 9; i++) {
+      const filler = testUid(990 + i);
+      await seedUser(env.client, { uid: filler, email: `gfiller${i}@test.dev`, nickname: `선원${i}`, state: {} });
+      await env.client.query(`insert into public.guild_members (guild_id, user_id, role) values ($1, $2, 'member')`, [gFull, filler]);
+    }
+
+    // 레벨과 활동 시각 차이를 만든다: gOpenHigh는 Lv.3(25,000), gOpenOld는 Lv.1이지만 가장 최근 로그
+    await env.client.query(`insert into public.guild_contributions (guild_id, user_id, day, fame, clears) values ($1, null, '2030-01-01', 0, 25000)`, [gOpenHigh]);
+    // gOpenHigh 인원 2명으로 만들어 여유 인원순에서 gOpenOld(1/10 -> 여유 9)보다 여유 적게(8)
+    const extra = testUid(989);
+    await seedUser(env.client, { uid: extra, email: 'gextra@test.dev', nickname: '항해사', state: {} });
+    await env.client.query(`insert into public.guild_members (guild_id, user_id, role) values ($1, $2, 'member')`, [gOpenHigh, extra]);
+    await env.client.query(`update public.guilds set created_at = '2026-11-26T08:00:00Z' where id in ($1, $2)`, [gOpenOld, gOpenHigh]);
+    await env.client.query(`update public.guild_logs set created_at = '2030-01-02T10:00:00Z' where guild_id = $1`, [gOpenHigh]);
+    await env.client.query(`update public.guild_logs set created_at = '2030-01-02T12:00:00Z' where guild_id = $1`, [gOpenOld]);
+
+    // 기본 정렬(activity): gOpenOld가 먼저, approval/closed/만석 제외, code 비노출, 빈 pitch는 기본 문구
+    const ours = new Set([gOpenOld, gOpenHigh, gApproval, gClosed, gFull]);
+    const defRes = await call('/api/guilds/public', 'GET', P1);
+    expect(defRes.status).toBe(200);
+    const list = (defRes.body as { guilds: Record<string, unknown>[] }).guilds;
+    const ourList = list.filter(g => ours.has(String(g.guildId)));
+    expect(ourList.map(g => g.guildId)).toEqual([gOpenOld, gOpenHigh]);
+    expect(ourList[0]).toMatchObject({
+      guildId: gOpenOld,
+      name: '등대선단',
+      level: 1,
+      members: 1,
+      cap: 10,
+      pitch: '나랑 같이 낚시하자!',
+    });
+    expect(typeof ourList[0].lastActivityAt).toBe('string');
+    for (const g of list) expect('code' in g).toBe(false);
+    expect(list.some(g => g.guildId === gApproval || g.guildId === gClosed || g.guildId === gFull)).toBe(false);
+
+    // level 정렬: gOpenHigh(Lv.3)가 먼저
+    const byLevel = ((await call('/api/guilds/public', 'GET', P1, { query: { sort: 'level' } })).body as { guilds: { guildId: string }[] }).guilds
+      .filter(g => ours.has(g.guildId));
+    expect(byLevel.map(g => g.guildId)).toEqual([gOpenHigh, gOpenOld]);
+
+    // slots 정렬: 여유 인원이 많은 gOpenOld(9자리)가 먼저
+    const bySlots = ((await call('/api/guilds/public', 'GET', P1, { query: { sort: 'slots' } })).body as { guilds: { guildId: string }[] }).guilds
+      .filter(g => ours.has(g.guildId));
+    expect(bySlots.map(g => g.guildId)).toEqual([gOpenOld, gOpenHigh]);
+
+    // 검색어 q 부분 일치 및 50자 초과 검색어 안전 절단
+    const searched = ((await call('/api/guilds/public', 'GET', P1, { query: { q: '태평양' } })).body as { guilds: { guildId: string }[] }).guilds;
+    expect(searched.map(g => g.guildId)).toEqual([gOpenHigh]);
+    const longQueryRes = await call('/api/guilds/public', 'GET', P1, { query: { q: '가'.repeat(80) } });
+    expect(longQueryRes).toMatchObject({ status: 200, body: { guilds: [] } });
+  });
+
+  it('guildId로 바로 가입하면 기존 대기 신청을 자동 취소하고, 만석·승인가입·닫힘·존재하지 않는 길드는 거부한다', async () => {
+    const L1 = testUid(9991);
+    const L2 = testUid(9992);
+    const J1 = testUid(9993);
+    await seedUser(env.client, { uid: L1, email: 'gl1@test.dev', nickname: '선장1', state: {} });
+    await seedUser(env.client, { uid: L2, email: 'gl2@test.dev', nickname: '선장2', state: {} });
+    await seedUser(env.client, { uid: J1, email: 'gj1@test.dev', nickname: '신입1', state: {} });
+
+    const approvalId = ((await call('/api/guilds', 'POST', L1, { body: { name: '대기대상' } })).body as { id: string }).id;
+    const approvalCode = (await mine(L1)).guild!.code;
+    const openId = ((await call('/api/guilds', 'POST', L2, { body: { name: '자유대상' } })).body as { id: string }).id;
+    await call('/api/guilds/:id', 'PATCH', L2, { params: { id: openId }, body: { joinMode: 'open' } });
+
+    // 잘못된 guildId / 존재하지 않는 guildId / 승인 가입 길드에 guildId 가입 시도
+    expect(await call('/api/guild-memberships', 'POST', J1, { body: { guildId: 'not-uuid' } }))
+      .toMatchObject({ status: 400, body: { error: 'bad-guild' } });
+    expect(await call('/api/guild-memberships', 'POST', J1, { body: { guildId: testUid(8888) } }))
+      .toMatchObject({ status: 404, body: { error: 'not-found' } });
+    expect(await call('/api/guild-memberships', 'POST', J1, { body: { guildId: approvalId } }))
+      .toMatchObject({ status: 409, body: { error: 'guild-closed' } });
+
+    // 승인 가입 길드에 먼저 신청을 넣어 둔다
+    expect(await call('/api/guild-memberships', 'POST', J1, { body: { code: approvalCode } }))
+      .toMatchObject({ status: 202, body: { id: approvalId, result: 'requested' } });
+    expect((await mine(J1)).request?.name).toBe('대기대상');
+
+    // 자유 가입 길드에 guildId로 바로 가입 -> 기존 대기 신청 자동 삭제
+    expect(await call('/api/guild-memberships', 'POST', J1, { body: { guildId: openId } }))
+      .toMatchObject({ status: 201, body: { id: openId, result: 'joined' } });
+    expect(changes.at(-1)).toEqual([J1, openId]);
+    expect(await mine(J1)).toMatchObject({ guild: { id: openId, role: 'member' }, request: null });
+    expect((await mine(L1)).guild?.requests).toEqual([]);
+
+    // 이미 소속된 상태에서 다른 길드 guildId 가입 시도
+    expect(await call('/api/guild-memberships', 'POST', J1, { body: { guildId: openId } }))
+      .toMatchObject({ status: 409, body: { error: 'already-in-guild' } });
+
+    // 만석 길드에 guildId 가입 시도 -> 409 guild-full
+    const J2 = testUid(9994);
+    await seedUser(env.client, { uid: J2, email: 'gj2@test.dev', nickname: '신입2', state: {} });
+    const fullRow = await env.client.query<{ id: string }>(`select id::text as id from public.guilds where name = '만석길드'`);
+    expect(await call('/api/guild-memberships', 'POST', J2, { body: { guildId: fullRow.rows[0].id } }))
+      .toMatchObject({ status: 409, body: { error: 'guild-full' } });
   });
 });

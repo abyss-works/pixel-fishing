@@ -1,8 +1,18 @@
 // 액션 엔드포인트 특성 테스트 — 같은 입력에 같은 응답과 같은 DB 상태가 나오는지 실제 Postgres로 고정한다.
 // 스냅샷은 데이터 계층 전환 전 구현으로 기록했다. 전환 뒤 구현도 이 스냅샷을 그대로 통과해야 한다.
 // 난수는 고정 시드, 시각은 고정된 가짜 시계, uid는 테스트 번호로 고정한다.
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { Client } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { WebSocket } from 'ws';
+import { LIVE_PATH } from '../src/game/rules/live.js';
+import type { ServerMessage } from '../src/game/rules/live.js';
+import { saveChat } from './_data/chat.js';
+import { liveIdentity } from './_data/profile.js';
+import { attachLive } from './_server/live.js';
+import { provideBroadcastCatchFx, provideSetFame, provideSetNick } from './_server/livePresence.js';
+import type { CatchFxPayload } from './_server/livePresence.js';
 import { achievementById } from '../src/game/content/achievements.js';
 import { artifactById, artifactLevelCost } from '../src/game/content/artifacts.js';
 import { BOATS } from '../src/game/content/boats.js';
@@ -12,19 +22,21 @@ import {
   COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, ENERGY_PER_INDIVIDUAL, recipeById, recipeCostStored,
 } from '../src/game/content/cooking.js';
 import { hatById } from '../src/game/content/wardrobe.js';
-import { upgradeCost } from '../src/game/rules/balance.js';
+import { SNAPSHOT_EVERY, upgradeCost } from '../src/game/rules/balance.js';
 import { endedFirstCatch, newFirstCatch } from '../src/game/rules/firstCatch.js';
 import { FORTUNE_CATALOG, luckMultOf } from '../src/game/rules/fortune.js';
 import type { DailyFortune } from '../src/game/rules/fortune.js';
-import { LICENSE_GRADES, WALK_BAG_CAP, newState, sellSelected, zoneDexMissing } from '../src/game/rules/logic.js';
+import { FISH, LICENSE_GRADES, WALK_BAG_CAP, newState, sellSelected, zoneDexMissing } from '../src/game/rules/logic.js';
 import type { GameState } from '../src/game/rules/logic.js';
 import { NAMED_PITY_CATCHES, PITY_DONE, SPECIES_PITY_K } from '../src/game/rules/pity.js';
+import { APP_VERSION } from '../src/version.js';
 import { database } from './_db/client.js';
 import {
   LOCAL_ORIGIN, callAction, captureRealClock, dumpUser, fish, normalize, seedUser, seededRandom,
-  startActionEnv, testUid, userToken,
+  sessionHeaders, startActionEnv, testUid, userToken,
 } from './_dbTest/actionHarness.js';
-import type { ActionEnv, SeedOptions } from './_dbTest/actionHarness.js';
+import type { ActionEnv, ActionResponse, SeedOptions } from './_dbTest/actionHarness.js';
+import { pendingAfterResponse } from './_dbTest/serverShim.js';
 
 const NOW = '2030-03-04T05:06:07.000Z';
 const TODAY_KST = '2030-03-04';
@@ -61,6 +73,23 @@ async function snapshotOf(uid: string, res: unknown) {
 async function run(opts: SeedOptions, action: unknown, call: { origin?: string } = {}) {
   const uid = await seed(opts);
   return snapshotOf(uid, await callAction(userToken(uid), action, call));
+}
+
+/** 응답 시점을 그대로 보는 호출 — afterResponse에 모인 후속 쓰기는 호출자가 끝내기 전까지 기다리지 않는다 */
+async function callActionBeforeFollowUps(token: string, body: unknown): Promise<ActionResponse> {
+  const { default: handler } = await import('./action.js');
+  const out: ActionResponse = { status: 0, body: undefined };
+  const res = {
+    status(code: number) { out.status = code; return res; },
+    json(b: unknown) { out.body = b; },
+    end() {},
+  };
+  await handler({
+    method: 'POST',
+    headers: { 'x-build-id': 'dev', 'x-client-version': APP_VERSION, ...sessionHeaders(token) },
+    body,
+  } as never, res as never);
+  return out;
 }
 
 /** 해역 라이선스 도감 조건을 채운 도감 */
@@ -101,13 +130,19 @@ describe('요청 경계', () => {
     expect(await run({ state: {}, restricted: true }, { type: 'boot' })).toMatchSnapshot();
   });
 
-  it('느림 창 대상이 아니면 짧은 간격도 받고, 느림 창 대상은 429다', async () => {
+  it('일반 액션 직후 sendLetter는 saves_current.updated_at에 막히지 않고, 연속 sendLetter만 429와 Retry-After로 제한한다', async () => {
     const recent = new Date(Date.parse(NOW) - 100).toISOString();
     const uid = await seed({ state: { gold: 1_000 }, version: 3, updatedAt: recent });
     expect(await callAction(userToken(uid), { type: 'upgradeRod' })).toMatchObject({ status: 200 });
-    // 직전 성공 액션 직후의 sendLetter는 느림 창에 걸려 거부된다
-    expect(await callAction(userToken(uid), { type: 'sendLetter', text: '안녕하세요' }))
-      .toMatchObject({ status: 429, body: { error: 'too-fast' } });
+    // 직전 일반 액션(upgradeRod) 직후에도 첫 sendLetter는 즉시 통과한다
+    expect(await callAction(userToken(uid), { type: 'sendLetter', text: '안녕하세요' })).toMatchObject({ status: 200 });
+    // 연속 sendLetter는 독립 1초 쿨다운에 걸려 429와 Retry-After로 거부된다
+    const letterRes = await callAction(userToken(uid), { type: 'sendLetter', text: '연속 발송' });
+    expect(letterRes).toMatchObject({
+      status: 429,
+      body: { error: 'too-fast' },
+      headers: { 'retry-after': '1' },
+    });
   });
 });
 
@@ -145,6 +180,7 @@ describe('첫 액션', () => {
       day: TODAY_KST,
       kind: expect.toBeOneOf(ALL_FORTUNE_KINDS),
       index: expect.toBeOneOf([3, 5]),
+      score: expect.any(Number),
     });
     expect(res.body.patch.scalars.fortune).toEqual(save.data.fortune);
     expect(out.db.events).toEqual([
@@ -177,6 +213,7 @@ describe('첫 액션', () => {
       day: TODAY_KST,
       kind: expect.toBeOneOf(ALL_FORTUNE_KINDS),
       index: expect.toBeOneOf([3, 5]),
+      score: expect.any(Number),
     });
     expect(res.body.patch.scalars.fortune).toEqual(save.data.fortune);
     expect(out.db.fish_instances).toMatchObject([
@@ -259,16 +296,29 @@ describe('낚시', () => {
     expect(await run({ state: {} }, { type: 'catch', spot: 'sea', judgment: 'good' })).toMatchSnapshot();
   });
 
-  it('진행 중인 일반 의뢰가 캐치에 맞으면 진행도가 오른다', async () => {
+  it('진행 중인 일반 의뢰가 캐치에 맞으면 응답 전에 진행도가 오르고 신호를 반환한다', async () => {
     const uid = await seed({ state: { boat: 1 } });
-    for (const q of BOUNTIES.filter(b => b.zone === 'pacific' && b.difficulty === 'easy')) {
+    const quests = BOUNTIES.filter(b => b.zone === 'pacific' && b.difficulty !== 'named');
+    for (const q of quests) {
       await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
         [uid, q.zone, q.id, NOW]);
     }
-    const out = await snapshotOf(uid, await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good' }));
-    expect((out.res as { status: number }).status).toBe(200);
-    const progressed = (out.db.bounty_progress as { progress: number }[]).filter(r => r.progress > 0);
-    expect(progressed.length).toBeGreaterThanOrEqual(1);
+    const res = await callActionBeforeFollowUps(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good' });
+    try {
+      expect(res.status).toBe(200);
+      const result = (res.body as { result: { type: string; fishId: string; bountyProgressed?: true } }).result;
+      expect(result.type).toBe('catch');
+      expect(result.bountyProgressed).toBe(true);
+      const rarity = FISH.find(f => f.id === result.fishId)!.rarity;
+      const expected = quests.filter(q => q.grade === rarity).map(q => q.id).sort();
+      const { rows } = await env.client.query<{ quest_id: string; progress: number }>(
+        'select quest_id, progress from public.bounty_progress where user_id = $1 and progress > 0', [uid]);
+      expect(rows.map(r => r.quest_id).sort()).toEqual(expected);
+      expect(rows.every(r => r.progress === 1)).toBe(true);
+    } finally {
+      await Promise.all(pendingAfterResponse.splice(0));
+    }
+    const out = await snapshotOf(uid, res);
     expect((out.db.saves_current[0] as { data: GameState }).data.firstCatch).toEqual(newFirstCatch());
   });
 
@@ -315,6 +365,7 @@ describe('가방', () => {
       day: TODAY_KST,
       kind: expect.toBeOneOf(ALL_FORTUNE_KINDS),
       index: expect.toBeOneOf([3, 5]),
+      score: expect.any(Number),
     });
     expect(res.body.patch.scalars.fortune).toEqual(save.data.fortune);
     const expectedGold = sellSelected(
@@ -1008,10 +1059,19 @@ describe('캐치 간격과 활성 창', () => {
   const column = async (uid: string, name: 'last_catch_at' | 'active_client') =>
     (await env.client.query(`select ${name} as v from public.saves_current where user_id = $1`, [uid])).rows[0].v as unknown;
 
-  it('직전 캐치로부터 낚시 한 사이클이 지나지 않은 catch는 429다', async () => {
+  it('직전 캐치로부터 낚시 한 사이클이 지나지 않은 catch는 429와 Retry-After 헤더로 응답한다', async () => {
     const uid = await seed({ state: {}, lastCatchAt: ago(2_000) });
-    expect(await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'good' }))
-      .toMatchObject({ status: 429, body: { error: 'too-fast' } });
+    const res = await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'good' });
+    expect(res).toMatchObject({ status: 429, body: { error: 'too-fast' } });
+    expect(Number(res.headers?.['retry-after'])).toBeGreaterThanOrEqual(1);
+  });
+
+  it('비어획 액션 커밋 직후 1초 이내에 도착한 catch와 409 충돌 직후 재시도는 updated_at에 막히지 않는다', async () => {
+    const uid = await seed({ state: { gold: 1_000 }, version: 3, updatedAt: NOW, lastCatchAt: ago(60_000) });
+    // 비어획 액션 커밋 직후 15ms 만에 도착한 catch도 정상 통과한다
+    expect(await callAction(userToken(uid), { type: 'upgradeRod' })).toMatchObject({ status: 200 });
+    vi.setSystemTime(Date.parse(NOW) + 15);
+    expect(await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'good' })).toMatchObject({ status: 200 });
   });
 
   it('한 사이클이 지난 catch는 받고 캐치 시각을 남긴다', async () => {
@@ -2078,6 +2138,7 @@ describe('오늘의 운세', () => {
       day: TODAY_KST,
       kind: expect.toBeOneOf(ALL_FORTUNE_KINDS),
       index: expect.toBeOneOf([3, 5]),
+      score: expect.any(Number),
     });
     expect(firstScalars.fortune).toEqual(firstSaved.fortune);
 
@@ -2106,6 +2167,7 @@ describe('오늘의 운세', () => {
       day: '2030-03-05',
       kind: expect.toBeOneOf(ALL_FORTUNE_KINDS),
       index: expect.toBeOneOf([3, 5]),
+      score: expect.any(Number),
     });
     expect(nextDayScalars.fortune).toEqual(nextDaySaved.fortune);
   });
@@ -2122,6 +2184,7 @@ describe('오늘의 운세', () => {
       day: TODAY_KST,
       kind: expect.toBeOneOf(ALL_FORTUNE_KINDS),
       index: expect.toBeOneOf([3, 5]),
+      score: expect.any(Number),
     });
     expect(scalars.fortune).toEqual(saved.fortune);
   });
@@ -2139,6 +2202,7 @@ describe('오늘의 운세', () => {
       day: TODAY_KST,
       kind: expect.toBeOneOf(ALL_FORTUNE_KINDS),
       index: expect.toBeOneOf([3, 5]),
+      score: expect.any(Number),
     });
     expect(noBootScalars.fortune).toEqual(noBootSaved.fortune);
 
@@ -2158,7 +2222,7 @@ describe('오늘의 운세', () => {
     const goldDaySaved = await storedFortune(uidGoldDay);
     expect(goldDaySaved.version).toBe(3);
     expect(goldDaySaved.gold).toBe(expectedGold);
-    expect(goldDaySaved.fortune).toEqual(goldFortune);
+    expect(goldDaySaved.fortune).toEqual({ ...goldFortune, score: expect.any(Number) });
   });
 });
 
@@ -2293,5 +2357,644 @@ describe('바운티 해금 완화 — 일반 즉시 개방·네임드 전설 제
     const questMissing = offeredQuestsFor('pacific', 'named', uidMissing, TODAY_KST)[0];
     const res = await callAction(userToken(uidMissing), { type: 'acceptQuest', questId: questMissing.id, port: 'harbor' });
     expect(res).toMatchObject({ status: 422, body: { error: 'dex-incomplete' } });
+  });
+});
+
+describe('실시간 닉네임 즉시 동기화', () => {
+  it('setNickname 성공 시에만 setNick을 호출하고 중복·형식 오류 시에는 호출하지 않는다', async () => {
+    const calls: Array<[string, string]> = [];
+    provideSetNick((u, n) => { calls.push([u, n]); });
+    try {
+      const uid = await seed({ state: {}, nickname: '기존이름' });
+      await seed({ state: {}, nickname: '중복이름' });
+
+      const okRes = await callAction(userToken(uid), { type: 'setNickname', nickname: '변경성공' });
+      expect(okRes.status).toBe(200);
+      expect(calls).toEqual([[uid, '변경성공']]);
+
+      vi.setSystemTime(Date.parse(NOW) + 2000);
+      const dupRes = await callAction(userToken(uid), { type: 'setNickname', nickname: '중복이름' });
+      expect(dupRes).toMatchObject({ status: 422, body: { error: 'nickname-taken' } });
+
+      vi.setSystemTime(Date.parse(NOW) + 4000);
+      const badRes = await callAction(userToken(uid), { type: 'setNickname', nickname: '!' });
+      expect(badRes.status).toBe(422);
+      expect(calls).toEqual([[uid, '변경성공']]);
+    } finally {
+      provideSetNick(() => {});
+    }
+  });
+
+  it('setNickname DB 커밋 직후 재연결 없이 접속자 목록·피어 전파·후속 채팅에 새 닉네임이 반영된다', async () => {
+    const uidA = await seed({ state: {}, nickname: '처음선장' });
+    const uidB = await seed({ state: {}, nickname: '관찰선장' });
+    const { db } = database();
+    const server = createServer();
+    const live = attachLive(server, {
+      origin: LOCAL_ORIGIN,
+      stale: () => false,
+      authenticate: async (req) => {
+        const uid = req.headers.cookie;
+        if (!uid) return null;
+        const { nick, boat, fame } = await liveIdentity(db, uid);
+        return { uid, nick: nick ?? '낚시꾼', boat, fame, guest: false };
+      },
+      chat: {
+        save: (user, text, guild, room, region) => saveChat(db, {
+          uid: user.uid, nick: user.nick, text, room, region, guildId: guild,
+        }),
+        recent: async () => [],
+        recentLocal: async () => [],
+        blocked: async () => [],
+        guildOf: async () => null,
+      },
+      recordSession: () => {},
+      savePosition: () => {},
+    });
+    provideSetNick((u, n) => live.setNick(u, n));
+
+    const connectWs = (uid: string) => {
+      const port = (server.address() as AddressInfo).port;
+      const ws = new WebSocket(`ws://127.0.0.1:${port}${LIVE_PATH}`, {
+        headers: { origin: LOCAL_ORIGIN, cookie: uid },
+      });
+      const queue: ServerMessage[] = [];
+      const waiters: Array<(m: ServerMessage) => void> = [];
+      ws.on('message', (raw) => {
+        const msg = JSON.parse(raw.toString()) as ServerMessage;
+        const w = waiters.shift();
+        if (w) w(msg);
+        else queue.push(msg);
+      });
+      const next = () => new Promise<ServerMessage>((resolve) => {
+        const msg = queue.shift();
+        if (msg) resolve(msg);
+        else waiters.push(resolve);
+      });
+      return { ws, next };
+    };
+
+    try {
+      await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+      const a = connectWs(uidA);
+      const b = connectWs(uidB);
+      await a.next();
+      await b.next();
+
+      b.ws.send(JSON.stringify({ t: 'region', region: 'sea' }));
+      expect(await b.next()).toMatchObject({ t: 'localHistory', region: 'sea', lines: [] });
+
+      a.ws.send(JSON.stringify({ t: 'move', region: 'sea', x: 10, y: 20, dir: 1, line: false }));
+      expect(await b.next()).toMatchObject({ t: 'join', presence: { uid: uidA, nick: '처음선장' } });
+
+      const res = await callAction(userToken(uidA), { type: 'setNickname', nickname: '바뀐선장' });
+      expect(res.status).toBe(200);
+
+      expect(await a.next()).toEqual({ t: 'nick', uid: uidA, nick: '바뀐선장' });
+      expect(await b.next()).toEqual({ t: 'nick', uid: uidA, nick: '바뀐선장' });
+      expect(live.online().find(o => o.uid === uidA)?.nick).toBe('바뀐선장');
+      expect(live.presenceOf(uidA)?.nick).toBe('바뀐선장');
+
+      a.ws.send(JSON.stringify({ t: 'chat', text: '변경 후 첫 채팅' }));
+      expect(await a.next()).toMatchObject({ t: 'chat', line: { uid: uidA, nick: '바뀐선장', text: '변경 후 첫 채팅' } });
+      expect(await b.next()).toMatchObject({ t: 'chat', line: { uid: uidA, nick: '바뀐선장', text: '변경 후 첫 채팅' } });
+
+      const { rows } = await env.client.query<{ nick: string; text: string }>(
+        'select nick, text from public.chat_messages where user_id = $1 order by id desc limit 1',
+        [uidA],
+      );
+      expect(rows[0]).toEqual({ nick: '바뀐선장', text: '변경 후 첫 채팅' });
+
+      a.ws.close();
+      b.ws.close();
+    } finally {
+      provideSetNick(() => {});
+      live.close();
+      server.closeAllConnections();
+      await new Promise<void>(resolve => server.close(() => resolve()));
+    }
+  });
+});
+
+describe('일반 의뢰 진행도 동기 반영', () => {
+  it('캐치가 수주 중인 의뢰 조건에 맞지 않으면 신호를 붙이지 않는다', async () => {
+    const uid = await seed({ state: { boat: 1 } });
+    const quest = BOUNTIES.find(b => b.zone === 'seasia' && b.difficulty === 'easy')!;
+    await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
+      [uid, quest.zone, quest.id, NOW]);
+    const res = await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good' });
+    expect(res.status).toBe(200);
+    const result = (res.body as { result: { type: string; bountyProgressed?: true } }).result;
+    expect(result.type).toBe('catch');
+    expect('bountyProgressed' in result).toBe(false);
+    expect(await env.client.query('select 1 from public.bounty_progress where user_id = $1 and progress > 0', [uid]))
+      .toMatchObject({ rowCount: 0 });
+  });
+
+  it('의뢰 진행도 갱신이 실패해도 캐치 확정과 200 응답은 보존한다', async () => {
+    const uid = await seed({ state: { boat: 1 } });
+    for (const q of BOUNTIES.filter(b => b.zone === 'pacific' && b.difficulty !== 'named')) {
+      await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
+        [uid, q.zone, q.id, NOW]);
+    }
+    await env.client.query(`
+      create or replace function public.test_block_bounty_progress_update() returns trigger language plpgsql as $$
+      begin
+        raise exception 'bounty progress test failure';
+      end;
+      $$;
+    `);
+    await env.client.query(`
+      create trigger test_block_bounty_progress_update
+      before update on public.bounty_progress
+      for each row execute function public.test_block_bounty_progress_update()
+    `);
+    try {
+      const res = await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good' });
+      expect(res.status).toBe(200);
+      const result = (res.body as { result: { type: string; bountyProgressed?: true } }).result;
+      expect(result.type).toBe('catch');
+      expect('bountyProgressed' in result).toBe(false);
+      const db = await dumpUser(env.client, uid);
+      const save = db.saves_current[0] as { version: string; fame: string };
+      expect(save.version).toBe('3');
+      expect(Number(save.fame)).toBeGreaterThan(0);
+      expect(db.fish_instances).toHaveLength(1);
+      expect(db.records).toHaveLength(1);
+      expect((db.bounty_progress as { progress: number }[]).every(r => r.progress === 0)).toBe(true);
+    } finally {
+      await env.client.query('drop trigger if exists test_block_bounty_progress_update on public.bounty_progress');
+      await env.client.query('drop function if exists public.test_block_bounty_progress_update()');
+    }
+  });
+});
+
+describe('실시간 명성 갱신', () => {
+  it('명성이 오르는 액션이 커밋되면 setFame을 호출하고, 명성이 변하지 않거나 거부되면 호출하지 않는다', async () => {
+    const calls: Array<[string, number]> = [];
+    provideSetFame((u, f) => { calls.push([u, f]); });
+    try {
+      const uid = await seed({ state: { boat: 1, fame: 10 } });
+
+      const noChange = await callAction(userToken(uid), { type: 'travel', to: { kind: 'region', id: 'world' } });
+      expect(noChange.status).toBe(200);
+      expect(calls).toEqual([]);
+
+      vi.setSystemTime(Date.parse(NOW) + 2000);
+      const caught = await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good' });
+      expect(caught.status).toBe(200);
+      const db = await dumpUser(env.client, uid);
+      const nextFame = Number((db.saves_current[0] as { fame: string }).fame);
+      expect(nextFame).toBeGreaterThan(10);
+      expect(calls).toEqual([[uid, nextFame]]);
+
+      vi.setSystemTime(Date.parse(NOW) + 4000);
+      const rejected = await callAction(userToken(uid), { type: 'setNickname', nickname: '!' });
+      expect(rejected.status).toBe(422);
+      expect(calls).toEqual([[uid, nextFame]]);
+    } finally {
+      provideSetFame(() => {});
+    }
+  });
+});
+
+describe('편지 독립 쿨다운과 닉네임 변경 원자성', () => {
+  it('catch와 sell 직후 1초 이내에도 sendLetter는 성공하고, 연속 sendLetter만 429로 제한되며 1초 뒤 다시 성공한다', async () => {
+    const uid = await seed({
+      state: { bag: [fish('crucian')] },
+      lastCatchAt: new Date(Date.parse(NOW) - 60_000).toISOString(),
+    });
+    expect(await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'good' })).toMatchObject({ status: 200 });
+    vi.setSystemTime(Date.parse(NOW) + 100);
+    expect(await callAction(userToken(uid), { type: 'sendLetter', text: '캐치 직후 편지' })).toMatchObject({ status: 200 });
+
+    vi.setSystemTime(Date.parse(NOW) + 1_200);
+    const bagIds = (await env.client.query<{ uid: string }>('select uid from public.fish_instances where user_id = $1 and slot is null', [uid]))
+      .rows.map(r => r.uid);
+    expect(await callAction(userToken(uid), { type: 'sell', uids: bagIds })).toMatchObject({ status: 200 });
+    vi.setSystemTime(Date.parse(NOW) + 1_300);
+    expect(await callAction(userToken(uid), { type: 'sendLetter', text: '판매 직후 편지' })).toMatchObject({ status: 200 });
+
+    vi.setSystemTime(Date.parse(NOW) + 1_500);
+    expect(await callAction(userToken(uid), { type: 'sendLetter', text: '연속 발송 차단' })).toMatchObject({
+      status: 429,
+      body: { error: 'too-fast' },
+      headers: { 'retry-after': '1' },
+    });
+
+    vi.setSystemTime(Date.parse(NOW) + 2_300);
+    expect(await callAction(userToken(uid), { type: 'sendLetter', text: '1초 뒤 재발송' })).toMatchObject({ status: 200 });
+  });
+
+  it('setNickname 확정 시 409 버전 충돌이 나면 profiles 테이블 닉네임도 바뀌지 않는다', async () => {
+    const uid = await seed({ state: {}, nickname: '원래선장' });
+    const setNickSpy = vi.fn();
+    provideSetNick(setNickSpy);
+    try {
+      // loadContext 직후 다른 요청이 saves_current.version을 올린 경합 상황을 재현한다
+      const commitMod = await import('./_data/commit.js');
+      const origCommit = commitMod.commitAction;
+      vi.spyOn(commitMod, 'commitAction').mockImplementationOnce(async (db, versionUpdate, fragments) => {
+        await env.client.query('update public.saves_current set version = version + 1 where user_id = $1', [uid]);
+        return origCommit(db, versionUpdate, fragments);
+      });
+
+      const res = await callAction(userToken(uid), { type: 'setNickname', nickname: '충돌선장' });
+      expect(res).toMatchObject({ status: 409, body: { error: 'version-conflict' } });
+      expect(setNickSpy).not.toHaveBeenCalled();
+
+      const { rows } = await env.client.query<{ nickname: string }>(
+        'select nickname from public.profiles where user_id = $1',
+        [uid],
+      );
+      expect(rows[0].nickname).toBe('원래선장');
+    } finally {
+      provideSetNick(() => {});
+    }
+  });
+});
+
+describe('게스트·배 0단계 보유 소비 아이템 사용', () => {
+  it('게스트와 배 0단계 계정도 보유한 비약(usePotion)과 도시락·미끼(eat)를 사용하고 DB에 커밋된다', async () => {
+    const uid = await seed({
+      email: null,
+      state: {
+        boat: 0,
+        location: at('home'),
+        items: { 'luck-small': 1, 'cook-lunch-bite': 1, 'cook-bait-rare': 1 },
+      },
+    });
+
+    const potionRes = await callAction(userToken(uid), { type: 'usePotion', id: 'luck-small' });
+    expect(potionRes.status).toBe(200);
+
+    vi.setSystemTime(Date.parse(NOW) + 2000);
+    const eatLunchRes = await callAction(userToken(uid), { type: 'eat', item: 'cook-lunch-bite' });
+    expect(eatLunchRes.status).toBe(200);
+
+    vi.setSystemTime(Date.parse(NOW) + 4000);
+    const eatBaitRes = await callAction(userToken(uid), { type: 'eat', item: 'cook-bait-rare' });
+    expect(eatBaitRes.status).toBe(200);
+
+    const db = await dumpUser(env.client, uid);
+    const save = db.saves_current[0] as { data: GameState };
+    expect(save.data.items).toEqual({});
+    expect(save.data.potions).toEqual({ 'luck-small': TODAY_KST });
+    expect(save.data.slots.lunch?.id).toBe('cook-lunch-bite');
+    expect(save.data.slots.bait?.id).toBe('cook-bait-rare');
+    expect((db.events as { type: string }[]).map(e => e.type).sort()).toEqual(['eat', 'eat', 'usePotion']);
+  });
+});
+
+describe('산타모자 기간 접속 선물과 우편 수령', () => {
+  it('기간 안 boot는 정식 계정과 게스트 모두에게 산타모자 선물을 1회만 발송하고, 기간 밖 boot는 발송하지 않는다', async () => {
+    const memberUid = await seed({ state: {} });
+    const guestUid = await seed({ email: null, state: {} });
+    const outsideBeforeUid = await seed({ state: {} });
+    const outsideAfterUid = await seed({ state: {} });
+
+    vi.setSystemTime(Date.parse('2026-11-26T14:59:59.000Z'));
+    expect((await callAction(userToken(outsideBeforeUid), { type: 'boot' })).status).toBe(200);
+    expect((await env.client.query('select 1 from public.mails where user_id = $1', [outsideBeforeUid])).rows).toHaveLength(0);
+
+    vi.setSystemTime(Date.parse('2026-12-31T15:00:00.000Z'));
+    expect((await callAction(userToken(outsideAfterUid), { type: 'boot' })).status).toBe(200);
+    expect((await env.client.query('select 1 from public.mails where user_id = $1', [outsideAfterUid])).rows).toHaveLength(0);
+
+    vi.setSystemTime(Date.parse('2026-12-01T00:00:00.000Z'));
+    expect((await callAction(userToken(memberUid), { type: 'boot' })).status).toBe(200);
+    vi.setSystemTime(Date.parse('2026-12-01T00:00:05.000Z'));
+    expect((await callAction(userToken(memberUid), { type: 'boot' })).status).toBe(200);
+    expect((await callAction(userToken(guestUid), { type: 'boot' })).status).toBe(200);
+
+    const memberMails = await env.client.query<{ idempotency_key: string; title: string; gold: string; items: unknown; hats: unknown }>(
+      `select idempotency_key, title, gold, items, hats from public.mails where user_id = $1`,
+      [memberUid],
+    );
+    expect(memberMails.rows).toHaveLength(1);
+    expect(memberMails.rows[0]).toMatchObject({
+      idempotency_key: 'santa-hat-2026-gift',
+      title: '겨울맞이 산타모자 선물',
+      items: [],
+      hats: ['santa-hat'],
+    });
+    expect(Number(memberMails.rows[0].gold)).toBe(0);
+
+    const guestMails = await env.client.query<{ idempotency_key: string; hats: unknown }>(
+      `select idempotency_key, hats from public.mails where user_id = $1`,
+      [guestUid],
+    );
+    expect(guestMails.rows).toEqual([{ idempotency_key: 'santa-hat-2026-gift', hats: ['santa-hat'] }]);
+  });
+
+  it('claimMail은 첨부 모자(santa-hat)를 보유 목록에 멱등 추가하고 수령 시각과 이벤트를 기록한다', async () => {
+    const uid = await seed({ state: { hats: [] } });
+    const alreadyUid = await seed({ state: { hats: ['santa-hat'] } });
+
+    vi.setSystemTime(Date.parse('2026-12-01T00:00:00.000Z'));
+    expect((await callAction(userToken(uid), { type: 'boot' })).status).toBe(200);
+    const { rows: [mailRow] } = await env.client.query<{ id: string }>(
+      `select id from public.mails where user_id = $1 and idempotency_key = 'santa-hat-2026-gift'`,
+      [uid],
+    );
+    const mailId = Number(mailRow.id);
+
+    vi.setSystemTime(Date.parse('2026-12-01T00:00:05.000Z'));
+    const claimRes = await callAction(userToken(uid), { type: 'claimMail', id: mailId });
+    expect(claimRes.status).toBe(200);
+    expect((claimRes.body as { result: unknown }).result).toEqual({ type: 'mail', gold: 0, hats: ['santa-hat'] });
+
+    const db = await dumpUser(env.client, uid);
+    expect((db.saves_current[0] as { data: GameState }).data.hats).toEqual(['santa-hat']);
+    expect((db.events as { type: string; payload: unknown }[]).filter(e => e.type === 'claimMail').map(e => e.payload)).toEqual([
+      { mailId, gold: 0, hats: ['santa-hat'] },
+    ]);
+
+    vi.setSystemTime(Date.parse('2026-12-01T00:00:10.000Z'));
+    const again = await callAction(userToken(uid), { type: 'claimMail', id: mailId });
+    expect(again).toMatchObject({ status: 422, body: { error: 'mail-unavailable' } });
+
+    // 이미 산타모자를 가진 계정이 수령해도 중복 추가하지 않고 우편만 수령 완료 처리한다
+    const { rows: [alreadyMail] } = await env.client.query<{ id: string }>(
+      `insert into public.mails (user_id, title, body, gold, hats) values ($1, '중복', '본문', 0, '["santa-hat"]'::jsonb) returning id`,
+      [alreadyUid],
+    );
+    const alreadyRes = await callAction(userToken(alreadyUid), { type: 'claimMail', id: Number(alreadyMail.id) });
+    expect(alreadyRes.status).toBe(200);
+    expect((alreadyRes.body as { result: unknown }).result).toEqual({ type: 'mail', gold: 0 });
+    const alreadyDb = await dumpUser(env.client, alreadyUid);
+    expect((alreadyDb.saves_current[0] as { data: GameState }).data.hats).toEqual(['santa-hat']);
+  });
+});
+
+describe('미완료 의뢰 포기', () => {
+  it('미완료 일반 의뢰를 포기하면 진행 행만 지우고 클리어 기록을 유지하며 같은 날 다시 수주할 수 있다', async () => {
+    const uid = await seed({ state: { dex: zoneDex('pacific', 'named'), location: at('harbor') } });
+    const quest = dailyQuestFor('pacific', 'easy', uid, TODAY_KST)!;
+    expect((await callAction(userToken(uid), { type: 'acceptQuest', questId: quest.id, port: 'harbor' })).status).toBe(200);
+    await env.client.query(
+      'update public.bounty_progress set progress = $2 where user_id = $1 and quest_id = $3',
+      [uid, Math.max(1, quest.count - 1), quest.id],
+    );
+
+    vi.setSystemTime(Date.parse(NOW) + 2000);
+    const abandonRes = await callAction(userToken(uid), { type: 'abandonQuest', questId: quest.id });
+    expect(abandonRes.status).toBe(200);
+
+    const afterAbandon = await dumpUser(env.client, uid);
+    expect(afterAbandon.bounty_progress).toEqual([]);
+    expect(afterAbandon.bounty_clears).toEqual([]);
+    expect(afterAbandon.bounty_accepts).toHaveLength(1);
+    expect((afterAbandon.events as { type: string; payload: unknown }[]).some(
+      e => e.type === 'abandonQuest' && (e.payload as { questId?: string }).questId === quest.id,
+    )).toBe(true);
+
+    vi.setSystemTime(Date.parse(NOW) + 4000);
+    const reacceptRes = await callAction(userToken(uid), { type: 'acceptQuest', questId: quest.id, port: 'harbor' });
+    expect(reacceptRes.status).toBe(200);
+    const afterReaccept = await dumpUser(env.client, uid);
+    expect(afterReaccept.bounty_progress).toMatchObject([{ quest_id: quest.id, progress: 0 }]);
+    expect(afterReaccept.bounty_accepts).toHaveLength(2);
+  });
+
+  it('미완료 네임드 토벌을 포기하면 진행 행과 해당 의뢰의 도전권만 지우고 상처와 클리어 기록은 유지한다', async () => {
+    const named = BOUNTIES.find(b => b.zone === 'pacific' && b.difficulty === 'named')!;
+    const general = BOUNTIES.find(b => b.zone === 'pacific' && b.difficulty === 'easy')!;
+    const uid = await seed({
+      state: {
+        boat: 1,
+        location: at('home'), // 위치 무관 포기 확인
+        namedPity: { day: TODAY_KST, misses: 12, fails: 1, wounds: { [named.id]: 2 } },
+      },
+    });
+    await env.client.query(
+      'insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4), ($1, $5, $6, 3, $4)',
+      [uid, named.zone, named.id, NOW, general.zone, general.id],
+    );
+    await env.client.query(
+      'insert into public.bounty_tickets (user_id, quest_id, issued_at) values ($1, $2, $3)',
+      [uid, named.id, NOW],
+    );
+
+    const res = await callAction(userToken(uid), { type: 'abandonQuest', questId: named.id });
+    expect(res.status).toBe(200);
+
+    const dump = await dumpUser(env.client, uid);
+    expect(dump.bounty_tickets).toEqual([]);
+    expect((dump.bounty_progress as { quest_id: string }[]).map(r => r.quest_id)).toEqual([general.id]);
+    expect(dump.bounty_clears).toEqual([]);
+    const save = dump.saves_current[0] as { data: GameState };
+    expect(save.data.namedPity).toEqual({
+      day: TODAY_KST,
+      misses: 12,
+      fails: 1,
+      wounds: { [named.id]: 2 },
+    });
+  });
+
+  it('완료되어 보상 대기 중인 의뢰 포기는 quest-already-complete로 거부하고 진행 행을 유지한다', async () => {
+    const quest = BOUNTIES.find(b => b.zone === 'pacific' && b.difficulty === 'easy')!;
+    const uid = await seed({ state: {} });
+    await env.client.query(
+      'insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, $4, $5)',
+      [uid, quest.zone, quest.id, quest.count, NOW],
+    );
+
+    const res = await callAction(userToken(uid), { type: 'abandonQuest', questId: quest.id });
+    expect(res).toMatchObject({ status: 422, body: { error: 'quest-already-complete' } });
+    const dump = await dumpUser(env.client, uid);
+    expect(dump.bounty_progress).toHaveLength(1);
+  });
+
+  it('수주하지 않았거나 만료된 의뢰 포기는 quest-not-active로 거부한다', async () => {
+    const quest = BOUNTIES.find(b => b.zone === 'pacific' && b.difficulty === 'easy')!;
+    const uid = await seed({ state: {} });
+
+    expect(await callAction(userToken(uid), { type: 'abandonQuest', questId: quest.id }))
+      .toMatchObject({ status: 422, body: { error: 'quest-not-active' } });
+
+    const beforeDayStart = '2030-03-03T18:59:59.999Z';
+    await env.client.query(
+      'insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, 0, $4)',
+      [uid, quest.zone, quest.id, beforeDayStart],
+    );
+    vi.setSystemTime(Date.parse(NOW) + 2000);
+    expect(await callAction(userToken(uid), { type: 'abandonQuest', questId: quest.id }))
+      .toMatchObject({ status: 422, body: { error: 'quest-not-active' } });
+  });
+
+  it('게스트는 의뢰 포기가 403 account-only로 거부된다', async () => {
+    const uid = await seed({ email: null, state: {} });
+    const res = await callAction(userToken(uid), { type: 'abandonQuest', questId: 'pacific-easy-common' });
+    expect(res).toMatchObject({ status: 403, body: { error: 'account-only' } });
+  });
+});
+
+describe('서버 확정 어획 점프 브로드캐스트', () => {
+  it('정식 계정의 빠른 경로·일반 경로 캐치가 커밋되면 broadcastCatchFx를 호출하고, 규칙 거부·버전 충돌·게스트 캐치에는 호출하지 않는다', async () => {
+    const calls: Array<[string, CatchFxPayload]> = [];
+    provideBroadcastCatchFx((u, payload) => { calls.push([u, payload]); });
+    try {
+      // 1. 정식 계정 빠른 경로(fastCatch) 확정
+      const uid = await seed({ state: { boat: 1 } });
+      const fastRes = await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good' });
+      expect(fastRes.status).toBe(200);
+      const fastResult = (fastRes.body as { result: { type: string; fishId: string; info: { form: string } } }).result;
+      expect(fastResult.type).toBe('catch');
+      expect(calls).toEqual([[uid, { fishId: fastResult.fishId, form: fastResult.info.form }]]);
+
+      // 2. 정식 계정 일반 경로(스냅샷 경계 SNAPSHOT_EVERY - 1) 확정
+      const fullUid = await seed({ state: { boat: 1 }, version: SNAPSHOT_EVERY - 1 });
+      const fullRes = await callAction(userToken(fullUid), { type: 'catch', spot: 'pond', judgment: 'good' });
+      expect(fullRes.status).toBe(200);
+      const fullResult = (fullRes.body as { result: { type: string; fishId: string; info: { form: string } } }).result;
+      expect(calls).toEqual([
+        [uid, { fishId: fastResult.fishId, form: fastResult.info.form }],
+        [fullUid, { fishId: fullResult.fishId, form: fullResult.info.form }],
+      ]);
+
+      // 3. 규칙 거부(422) 캐치는 호출하지 않는다
+      vi.setSystemTime(Date.parse(NOW) + 60_000);
+      const rejectedRes = await callAction(userToken(uid), { type: 'catch', spot: 'deep', judgment: 'good' });
+      expect(rejectedRes.status).toBe(422);
+      expect(calls).toHaveLength(2);
+
+      // 4. DB 커밋 실패(409 버전 충돌) 시 호출하지 않는다
+      const commitMod = await import('./_data/commit.js');
+      const origCommit = commitMod.commitAction;
+      vi.spyOn(commitMod, 'commitAction').mockImplementationOnce(async (db, versionUpdate, fragments) => {
+        await env.client.query('update public.saves_current set version = version + 1 where user_id = $1', [uid]);
+        return origCommit(db, versionUpdate, fragments);
+      });
+      vi.setSystemTime(Date.parse(NOW) + 120_000);
+      const conflictRes = await callAction(userToken(uid), { type: 'catch', spot: 'sea', judgment: 'good' });
+      expect(conflictRes.status).toBe(409);
+      expect(calls).toHaveLength(2);
+
+      // 5. 게스트 계정의 확정 캐치는 호출하지 않는다
+      const guestUid = await seed({ email: null, state: { boat: 0, location: at('home') } });
+      const guestRes = await callAction(userToken(guestUid), { type: 'catch', spot: 'pond', judgment: 'good' });
+      expect(guestRes.status).toBe(200);
+      expect(calls).toHaveLength(2);
+    } finally {
+      provideBroadcastCatchFx(() => {});
+    }
+  });
+});
+
+describe('주간 명성 집계', () => {
+  it('fastCatch와 일반 확정(스냅샷 경계) 캐치 모두 ranking_weekly_fame을 원자적으로 누적한다', async () => {
+    const { SNAPSHOT_EVERY } = await import('../src/game/rules/balance.js');
+    const { gameWeekStartDay } = await import('../src/game/rules/time.js');
+    // NOW = 2030-03-04T05:06:07Z (월요일 KST 14:06) -> week_start = 2030-03-04
+    const weekStart = gameWeekStartDay(NOW);
+
+    // 1. fastCatch 경로 (version 2)
+    const fastUid = await seed({ state: { firstCatch: endedFirstCatch(), fame: 10 }, version: 2 });
+    const fast1 = await callAction(userToken(fastUid), { type: 'catch', spot: 'pond', judgment: 'good' });
+    expect(fast1.status).toBe(200);
+    const fameAfter1 = Number((await env.client.query<{ fame: string }>(
+      'select fame from public.saves_current where user_id = $1', [fastUid],
+    )).rows[0].fame);
+    const delta1 = fameAfter1 - 10;
+    expect(delta1).toBeGreaterThan(0);
+
+    // 2차 fastCatch — 같은 주에 합산된다
+    vi.setSystemTime(Date.parse(NOW) + 20_000);
+    const fast2 = await callAction(userToken(fastUid), { type: 'catch', spot: 'pond', judgment: 'good' });
+    expect(fast2.status).toBe(200);
+    const fameAfter2 = Number((await env.client.query<{ fame: string }>(
+      'select fame from public.saves_current where user_id = $1', [fastUid],
+    )).rows[0].fame);
+    const totalFastDelta = fameAfter2 - 10;
+    expect(totalFastDelta).toBeGreaterThan(delta1);
+
+    const { rows: fastRows } = await env.client.query<{ week_start: string; fame_gained: string; reached_at: Date }>(
+      `select week_start::text as week_start, fame_gained, reached_at from public.ranking_weekly_fame where user_id = $1`,
+      [fastUid],
+    );
+    expect(fastRows).toHaveLength(1);
+    expect(fastRows[0].week_start).toBe(weekStart);
+    expect(Number(fastRows[0].fame_gained)).toBe(totalFastDelta);
+    expect(fastRows[0].reached_at.toISOString()).toBe(new Date(Date.parse(NOW) + 20_000).toISOString());
+
+    // 2. 일반 commitAction 경로 (snapshotDue: version = SNAPSHOT_EVERY - 1 -> skipDetail = false)
+    const fullUid = await seed({ state: { firstCatch: endedFirstCatch(), fame: 10 }, version: SNAPSHOT_EVERY - 1 });
+    const fullRes = await callAction(userToken(fullUid), { type: 'catch', spot: 'pond', judgment: 'good' });
+    expect(fullRes.status).toBe(200);
+    const fullFame = Number((await env.client.query<{ fame: string }>(
+      'select fame from public.saves_current where user_id = $1', [fullUid],
+    )).rows[0].fame);
+    const { rows: fullRows } = await env.client.query<{ week_start: string; fame_gained: string }>(
+      `select week_start::text as week_start, fame_gained from public.ranking_weekly_fame where user_id = $1`,
+      [fullUid],
+    );
+    expect(fullRows).toEqual([{ week_start: weekStart, fame_gained: String(fullFame - 10) }]);
+  });
+
+  it('import·debug·debugBatch·claimRelief와 409 버전 충돌은 주간 명성을 올리지 않는다', async () => {
+    // 1. import
+    const importer = await seed({ state: {}, admin: true });
+    const importRes = await callAction(userToken(importer), {
+      type: 'import',
+      save: { ...newState(), fame: 500 },
+    });
+    expect(importRes.status).toBe(200);
+
+    // 2. debug (stats.set) & debugBatch
+    const debuggerUid = await seed({ state: {} });
+    const dbgRes = await callAction(userToken(debuggerUid), { type: 'debug', command: 'stats.set', args: { fame: 300 } });
+    expect(dbgRes.status).toBe(200);
+    const dbgBatchRes = await callAction(userToken(debuggerUid), {
+      type: 'debugBatch',
+      steps: [{ command: 'stats.set', args: { fame: 700 } }],
+    });
+    expect(dbgBatchRes.status).toBe(200);
+
+    // 3. claimRelief
+    const reliefUid = await seed({ state: {} });
+    await env.client.query(
+      `insert into public.reliefs (code, gold, fame, rod, boat, dex) values ('WEEKLY-RELIEF', 0, 400, 1, 0, '{}'::jsonb)`,
+    );
+    const reliefRes = await callAction(userToken(reliefUid), { type: 'claimRelief', code: 'WEEKLY-RELIEF' });
+    expect(reliefRes.status).toBe(200);
+
+    for (const uid of [importer, debuggerUid, reliefUid]) {
+      const { rows } = await env.client.query(
+        'select 1 from public.ranking_weekly_fame where user_id = $1',
+        [uid],
+      );
+      expect(rows).toHaveLength(0);
+    }
+
+    // 4. 409 버전 충돌 시 ranking_weekly_fame 미반영
+    const conflictUid = await seed({ state: { firstCatch: endedFirstCatch(), fame: 0 } });
+    const commitMod = await import('./_data/commit.js');
+    const origCommit = commitMod.commitAction;
+    vi.spyOn(commitMod, 'commitAction').mockImplementationOnce(async (db, versionUpdate, fragments) => {
+      await env.client.query('update public.saves_current set version = version + 1 where user_id = $1', [conflictUid]);
+      return origCommit(db, versionUpdate, fragments);
+    });
+    const conflictRes = await callAction(userToken(conflictUid), { type: 'catch', spot: 'pond', judgment: 'good' });
+    expect(conflictRes.status).toBe(409);
+    expect((await env.client.query('select 1 from public.ranking_weekly_fame where user_id = $1', [conflictUid])).rows).toHaveLength(0);
+  });
+
+  it('월요일 KST 04:00 경계를 지나면 새 week_start 행으로 분리 집계된다', async () => {
+    const uid = await seed({ state: { firstCatch: endedFirstCatch(), fame: 0 } });
+    // 일요일 밤 ~ 월요일 KST 03:59:59 = 2030-03-10T18:59:59Z -> week_start = 2030-03-04
+    vi.setSystemTime(Date.parse('2030-03-10T18:59:59.000Z'));
+    expect((await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'good' })).status).toBe(200);
+
+    // 월요일 KST 04:00:15 = 2030-03-10T19:00:15Z (캐치 간격 충족) -> week_start = 2030-03-11
+    vi.setSystemTime(Date.parse('2030-03-10T19:00:15.000Z'));
+    expect((await callAction(userToken(uid), { type: 'catch', spot: 'pond', judgment: 'good' })).status).toBe(200);
+
+    const { rows } = await env.client.query<{ week_start: string; fame_gained: string }>(
+      `select week_start::text as week_start, fame_gained from public.ranking_weekly_fame where user_id = $1 order by week_start`,
+      [uid],
+    );
+    expect(rows.map(r => r.week_start)).toEqual(['2030-03-04', '2030-03-11']);
+    expect(rows.every(r => Number(r.fame_gained) > 0)).toBe(true);
   });
 });

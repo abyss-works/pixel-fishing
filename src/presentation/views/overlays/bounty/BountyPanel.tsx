@@ -1,7 +1,7 @@
 // 수배판 — 바운티 헌팅의 수주·의뢰 완료·보상 UI (항구 전용, 마을의 집 제외).
 // 네임드 도전은 여기서 치르지 않는다 — 바다 위 흔적 카드·조우 창이 맡고, 토벌 뒤 보상만 여기서 받는다.
 // 상태 변경은 dispatch(서버 권위)만, 표시용 조회는 useBounty 경유(RLS 본인 읽기)다.
-// 성공할 때마다 스냅샷을 다시 읽는다 — 진행도·오늘 남은 클리어는 서버(DB)가 진실이다.
+// 성공한 액션은 useGame이 스냅샷을 무효화해 다시 읽는다 — 진행도·오늘 남은 클리어는 서버(DB)가 진실이다.
 // 일반 의뢰 탭은 해당 구역 항구 진입 시 도감 조건 없이 즉시 열리고, 네임드 토벌 탭만
 // 전설을 뺀 일반·희귀·영웅 도감 조건을 본다. 미충족이면 본문을 흐리게 하고 조건 리스트를 덮는다.
 // 창은 탭이 있어 높이가 고정이다. 구역과 오늘 남은 클리어는 어느 탭에서나 의미가 있어 탭 위 고정 정보 줄에 두고,
@@ -19,13 +19,19 @@ import { questLabel, selectBountyPanelData } from '../../../../features/bounty/m
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import type { SystemEventKind, ToastTone } from '../../../../features/display/model/toastPolicy';
 import { useBounty } from '../../../../features/bounty/service/useBounty';
+import { ALERT_DENIED_TEXT, ALERT_DENIED_TOAST, PERMISSION_BLOCK_LINES, PERMISSION_LABEL } from '../../../../features/alerts/model/alerts';
+import { currentAlertPermission } from '../../../../features/alerts/service/alertSettings';
 import { useEncounterAlertSetting } from '../../../../features/bounty/service/encounterAlert';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import { when } from '../../../../shared/lib/when';
 import BountyCard from './BountyCard';
+import { confirmAndAbandonQuest } from './abandonQuest';
+import type { ConfirmDialogFn } from './abandonQuest';
 import { ClearsLeft } from './boardParts';
 import NamedCard from './NamedCard';
 import RelicCard from './RelicCard';
+import Badge from '../../../ui/Badge';
+import Button from '../../../ui/Button';
 import CheckToggle from '../../../ui/CheckToggle';
 import { HighlightRarityText } from '../../../ui/fish/RarityTag';
 import Gated from '../../../ui/Gated';
@@ -34,7 +40,7 @@ import Inset from '../../../ui/Inset';
 import PixelIcon from '../../../ui/PixelIcon';
 import SectionTitle from '../../../ui/SectionTitle';
 import TabBar from '../../../ui/TabBar';
-import Tip, { TipBullets } from '../../../ui/Tip';
+import Tip, { TipBullets, TipCard } from '../../../ui/Tip';
 import ArtifactDetail from '../../game/tabs/bag/ArtifactDetail';
 import NamedDetail from '../../game/tabs/dex/NamedDetail';
 import { fmtGold, josa } from '../../../ui/format';
@@ -47,15 +53,24 @@ type BoardScreen = 'quests' | 'named' | 'relic';
 const CARD_ROW = 'grid grid-flow-col auto-cols-fr gap-2 flex-1 min-h-0 mobile:grid-flow-row mobile:auto-cols-auto mobile:flex-none';
 
 const OFFLINE_TEXT = '오프라인에서는 의뢰를 수주하거나 마칠 수 없어요.\n서버에 연결된 뒤 다시 해 주세요.';
+const FAILED_TEXT = '의뢰를 불러오지 못했어요.\n다시 시도해 주세요.';
 
 /** 고정 정보 줄: 구역, 오늘 남은 클리어(일반 의뢰, 네임드 토벌). 스냅샷이 오기 전에는 값 자리에 -를 둔다 */
-function BoardStatus({ zoneName, leftAll, leftNamed, dailyCap, namedDailyCap }: {
+function BoardStatus({ zoneName, leftAll, leftNamed, dailyCap, namedDailyCap, onRetry }: {
   zoneName: string; leftAll: number | null; leftNamed: number | null; dailyCap: number; namedDailyCap: number;
+  /** 조회 실패일 때만 준다 — 다시 읽기 버튼을 둔다 */
+  onRetry?: () => void;
 }) {
   return (
     <Inset className="flex flex-wrap items-center gap-x-3 gap-y-1 min-h-10 px-3 py-1.5 shrink-0 text-xs">
       <b className="text-sm text-text">{zoneName}</b>
       <ClearsLeft leftAll={leftAll} leftNamed={leftNamed} dailyCap={dailyCap} namedDailyCap={namedDailyCap} />
+      {onRetry && (
+        <>
+          <span className="text-text-dim">의뢰를 불러오지 못했어요.</span>
+          <Button size="sm" onClick={onRetry}>다시 시도</Button>
+        </>
+      )}
     </Inset>
   );
 }
@@ -73,15 +88,16 @@ function CondList({ conds }: { conds: ReturnType<typeof selectBountyPanelData>['
   );
 }
 
-export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
+export default function BountyPanel({ game, port, uid, dispatch, setToast, confirm }: {
   game: GameState;
   port: BountyPort;
   /** 표시 대상 — 일일 의뢰 해시에 쓴다. 없으면 로컬 고정값 (서버 검증은 uid 기준) */
   uid: string | null;
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
+  confirm?: ConfirmDialogFn;
 }) {
-  const { snap, loaded, refresh } = useBounty();
+  const { snap, loaded, failed, offline, refresh } = useBounty({ refetchOnMount: 'always' });
   const alertSetting = useEncounterAlertSetting();
   const [busy, setBusy] = useState(false);
   const [screen, setScreen] = useState<BoardScreen>('quests');
@@ -99,7 +115,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
     setBusy(true);
     when(dispatch(action), r => {
       setBusy(false);
-      if (r.status === 'ok') { sendNotice(setToast, { kind, text: done, toastText, tone }); refresh(); }
+      if (r.status === 'ok') { sendNotice(setToast, { kind, text: done, toastText, tone }); }
       else if (r.status === 'rejected') sendNotice(setToast, { kind: 'system.modalRejected', text: REJECT_TEXT[r.error] });
     });
   };
@@ -107,13 +123,17 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
   const day = gameDay();
   const data = selectBountyPanelData({ game, port, uid, day, nowMs, snapshot: snap });
   const {
-    zone, leftAll, leftNamed, dailyCap, namedDailyCap, offers, progressOf, isAccepted, namedConds,
+    zone, leftAll, leftNamed, dailyCap, namedDailyCap, offers, progressOf, isAccepted, canAbandon, namedConds,
     basicOpen, namedOpen, canTake, canTakeNamed, notice, namedOffers, relics,
   } = data;
 
+  const abandon = (quest: BountyQuest, hasTicket: boolean) => {
+    void confirmAndAbandonQuest({ quest, hasTicket, busy, setBusy, confirm, dispatch, setToast });
+  };
+
   /** 수주를 막는 이유 — 오프라인이면 그것, 아니면 갈래의 한도 소진·다른 구역 수주 */
   const reasonOf = (kind: BountyKind): string | null =>
-    loaded && snap === null ? OFFLINE_TEXT : notice[kind];
+    failed && snap === null ? FAILED_TEXT : offline ? OFFLINE_TEXT : notice[kind];
 
   const gradeCard = (d: 'easy' | 'normal' | 'hard') => {
     const q = offers[d];
@@ -121,7 +141,7 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
     const prog = progressOf(q.id);
     return (
       <BountyCard key={q.id} quest={q} progress={prog} accepted={isAccepted(q.id)}
-        canAccept={basicOpen && canTake} reason={reasonOf('general')} busy={busy}
+        canAccept={basicOpen && canTake} canAbandon={canAbandon(q.id)} reason={reasonOf('general')} busy={busy}
         onAccept={() => run({ type: 'acceptQuest', questId: q.id, port },
           'bounty.questAccepted',
           `${josa(questLabel(q), '을/를')} 수주했어요. 지금부터 잡는 물고기를 세요.`,
@@ -130,14 +150,16 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
           'bounty.questDelivered',
           `의뢰를 완료했어요! ${fmtGold(q.reward)}를 받았어요. 잡은 물고기는 가방에 그대로 있어요.`,
           '의뢰 보상 수령 완료!',
-          'gold')} />
+          'gold')}
+        onAbandon={() => abandon(q, false)} />
     );
   };
 
   return (
     <div className="flex flex-col gap-3 flex-1 min-h-0">
       <BoardStatus zoneName={zoneById(zone)?.shortName ?? zone} leftAll={leftAll} leftNamed={leftNamed}
-                   dailyCap={dailyCap} namedDailyCap={namedDailyCap} />
+                   dailyCap={dailyCap} namedDailyCap={namedDailyCap}
+                   onRetry={failed && snap === null ? refresh : undefined} />
       <TabBar
         tabs={[
           { key: 'quests' as BoardScreen, label: '일반 의뢰' },
@@ -167,9 +189,9 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
         <div className="flex-1 min-h-0 flex flex-col mobile:flex-none">
         <Gated open={namedOpen} overlay={<CondList conds={namedConds} />}>
           <div className={CARD_ROW}>
-            {namedOffers.map(({ quest, reward, ticketMins, relic }) => (
+            {namedOffers.map(({ quest, reward, ticketMins, hasTicket, canAbandon: canAbandonNamed, relic }) => (
               <NamedCard key={quest.id} game={game} quest={quest}
-                canAccept={namedOpen && canTakeNamed} reason={reasonOf('named')} busy={busy}
+                canAccept={namedOpen && canTakeNamed} canAbandon={canAbandonNamed} reason={reasonOf('named')} busy={busy}
                 progress={progressOf(quest.id)} accepted={isAccepted(quest.id)}
                 ticketMins={ticketMins}
                 materialName={relic?.materialName ?? null}
@@ -184,27 +206,37 @@ export default function BountyPanel({ game, port, uid, dispatch, setToast }: {
                   'bounty.questDelivered',
                   `토벌 보상으로 ${fmtGold(reward.value)}와 교환 재료를 받았어요!`,
                   '토벌 보상 수령 완료!',
-                  'gold')} />
+                  'gold')}
+                onAbandon={() => abandon(quest, hasTicket)} />
             ))}
           </div>
         </Gated>
         </div>
         {/* 조우는 방치 중에도 일어난다 — 다른 화면을 보고 있으면 시스템 알림으로 알린다.
             권한 요청은 이 클릭 안에서 해야 브라우저가 묻는다. 체크가 없을 때도 줄 높이를 비워 둔다 */}
-        <div className="h-6 shrink-0 flex items-center">
+        <div className="h-6 shrink-0 flex items-center gap-2">
           {namedOpen && alertSetting.permission !== 'unsupported' && (
-            <CheckToggle label="조우하면 알림 받기"
-              checked={alertSetting.active}
-              onChange={on => {
-                if (!on) { alertSetting.disable(); return; }
-                void alertSetting.enable().then(ok => {
-                  if (!ok) sendNotice(setToast, {
-                    kind: 'system.modalRejected',
-                    text: '브라우저가 알림을 막았어요. 주소창의 사이트 설정에서 허용할 수 있어요.',
-                    toastText: '브라우저 알림이 막혀 있어요.',
+            <>
+              <CheckToggle label="조우하면 알림 받기"
+                checked={alertSetting.active}
+                disabled={alertSetting.permission === 'denied'}
+                onChange={on => {
+                  if (!on) { alertSetting.disable(); return; }
+                  void alertSetting.enable().then(ok => {
+                    if (!ok && currentAlertPermission() === 'denied') {
+                      sendNotice(setToast, { kind: 'system.modalRejected', text: ALERT_DENIED_TEXT, toastText: ALERT_DENIED_TOAST });
+                    }
                   });
-                });
-              }} />
+                }} />
+              {alertSetting.permission === 'denied' && (
+                <Tip plain text={(
+                  <TipCard title="조우하면 알림 받기" badge={<Badge tone="danger" size="2xs">{PERMISSION_LABEL.denied}</Badge>}
+                           status={{ tone: 'warn', lines: PERMISSION_BLOCK_LINES.denied ?? [] }} />
+                )}>
+                  <Badge tone="danger" size="xs">{PERMISSION_LABEL.denied}</Badge>
+                </Tip>
+              )}
+            </>
           )}
         </div>
         </>

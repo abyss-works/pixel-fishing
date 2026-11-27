@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { HATS, LOOK_PRESETS, PANTS_COLORS, SHIRT_COLORS, hatById } from '../../../../game/content/wardrobe';
 import type { Look } from '../../../../game/content/wardrobe';
 import type { GameState } from '../../../../game/rules/logic';
-import { clothesChanged, hatCountText, hatDetail, outfitName } from '../../../../features/wardrobe/model/wardrobe';
+import { clothesChanged, hatCountText, hatDetail, outfitName, visibleHats } from '../../../../features/wardrobe/model/wardrobe';
 import Button from '../../../ui/Button';
 import ColorSwatch from '../../../ui/ColorSwatch';
 import Inset from '../../../ui/Inset';
@@ -29,6 +29,7 @@ export default function WardrobePanel({ game, busy, onChangeClothes, onBuyHat, o
   onWearHat: (hatId: string | null) => void;
   onClose: () => void;
 }) {
+  const hats = visibleHats(game);
   const [screen, setScreen] = useState<Screen>('clothes');
   const [pick, setPick] = useState({ shirt: game.look.shirt, pants: game.look.pants });
   const [hatId, setHatId] = useState(game.look.hat ?? HATS[0].id);
@@ -85,7 +86,7 @@ export default function WardrobePanel({ game, busy, onChangeClothes, onBuyHat, o
       ) : (
         <div className="flex flex-col gap-2 flex-1 min-h-0">
           <div className={`grid grid-cols-5 gap-2 flex-1 min-h-0 content-start mobile:grid-cols-3 ${SCROLL_Y}`}>
-            {HATS.map(h => {
+            {hats.map(h => {
               const owned = game.hats.includes(h.id);
               const worn = game.look.hat === h.id;
               return (
@@ -132,20 +133,29 @@ function HatDetailBox({ game, hatId, busy, onBuy, onWear }: {
 }) {
   const d = hatDetail(game, hatId);
   const state = d.worn ? '쓰고 있어요.' : d.owned ? '가지고 있어요.' : '아직 없어요.';
-  if (d.action === 'achievement') {
+  if (d.action === 'achievement' || d.action === 'event') {
     return (
       <Inset className="flex items-center justify-between gap-3 min-h-[84px] py-2 px-3 shrink-0 mobile:flex-col mobile:items-stretch">
         <div className="flex flex-col gap-1 min-w-0">
           <b className="pf-accent text-base text-gold">{d.name}</b>
-          {d.unlock && (
-            <span className="text-xs text-text-dim break-keep break-words">해금 조건 {d.unlock.condition}</span>
-          )}
-          {d.unlock && (
-            <span className="text-xs text-text-dim">진척 <ProgressCount current={d.unlock.current} target={d.unlock.target} tight /></span>
+          {d.action === 'achievement' ? (
+            <>
+              {d.unlock && (
+                <span className="text-xs text-text-dim break-keep break-words">해금 조건 {d.unlock.condition}</span>
+              )}
+              {d.unlock && (
+                <span className="text-xs text-text-dim">진척 <ProgressCount current={d.unlock.current} target={d.unlock.target} tight /></span>
+              )}
+            </>
+          ) : (
+            <>
+              <span className="text-xs text-text-dim break-keep break-words">{d.eventHint}</span>
+              <span className="text-xs text-text-dim">{state}</span>
+            </>
           )}
         </div>
         <Tip wraps text={d.buyBlock ?? ''} className="block mobile:self-end">
-          <Button disabled>업적 모자</Button>
+          <Button disabled>{d.action === 'event' ? '이벤트 한정' : '업적 모자'}</Button>
         </Tip>
       </Inset>
     );
@@ -162,6 +172,10 @@ function HatDetailBox({ game, hatId, busy, onBuy, onWear }: {
         {d.source === 'achievement' ? (
           <span className="text-xs text-text-dim break-keep break-words">
             업적 보상 {d.unlock && <span className="text-text">{d.unlock.achievementName}</span>}
+          </span>
+        ) : d.source === 'event' ? (
+          <span className="text-xs text-text-dim break-keep break-words">
+            {d.eventHint ? <>이벤트 한정 <span className="text-text">{d.eventHint}</span></> : '이벤트 한정 모자'}
           </span>
         ) : (
           <span className="text-xs text-text-dim">가격 <span className="pf-accent text-text">{fmtGold(d.price)}</span></span>

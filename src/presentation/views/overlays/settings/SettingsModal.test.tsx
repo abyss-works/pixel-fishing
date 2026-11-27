@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { resetToastEnabled } from '../../../../features/display/service/toastEnabled';
+import { resetSoundSettings } from '../../../../features/sound/service/useSound';
 import type { DispatchResult, MaybePromise } from '../../../../features/gameplay/service/types';
 import type { GameAction } from '../../../../game/rules/actions';
 import { REJECT_TEXT } from '../../../../game/rules/rules';
@@ -10,6 +11,7 @@ afterEach(() => {
   cleanup();
   localStorage.clear();
   resetToastEnabled();
+  resetSoundSettings();
 });
 
 function open(opts: {
@@ -148,5 +150,85 @@ describe('SettingsModal — 주요 화면 알림 설정', () => {
     fireEvent.mouseEnter(screen.getByText('업데이트'));
     expect(screen.getByRole('tooltip')).toHaveTextContent('업데이트가 나와 진행이 멈추면 알려 줘요.');
     expect(screen.getByRole('tooltip').textContent).not.toContain('다른 화면을 보고 있을 때');
+  });
+
+  it('브라우저 알림 권한이 default일 때 꼬리표 툴팁을 열지 않고, 알림 행 툴팁 배지는 현재 권한 라벨을 쓴다', () => {
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission: vi.fn() });
+    open();
+    fireEvent.mouseEnter(screen.getByText('허용 전'));
+    expect(screen.queryByRole('tooltip')).toBeNull();
+
+    const toggle = screen.getByRole('button', { name: '네임드 조우' });
+    fireEvent.mouseEnter(toggle);
+    const tip = screen.getByRole('tooltip');
+    expect(tip).toHaveTextContent('허용 전');
+    expect(tip.textContent).not.toContain('차단');
+    vi.unstubAllGlobals();
+  });
+
+  it('브라우저 알림 권한이 denied일 때만 꼬리표 툴팁을 연결하고 알림 행 툴팁 배지도 차단됨으로 맞춘다', () => {
+    vi.stubGlobal('Notification', { permission: 'denied', requestPermission: vi.fn() });
+    open();
+    const badge = screen.getByText('차단됨');
+    fireEvent.mouseEnter(badge);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('이 사이트의 알림을 막았어요');
+    fireEvent.mouseLeave(badge);
+
+    fireEvent.mouseEnter(screen.getByText('네임드 조우').closest('div')!.querySelector('button[aria-label="네임드 조우"]')!);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('차단됨');
+    vi.unstubAllGlobals();
+  });
+
+  it('설정 창 물고기 그래픽 선택 카드는 모바일에서도 1열로 길게 쌓이지 않고 2열 균등 배치를 유지한다', () => {
+    open();
+    const group = screen.getByRole('radiogroup', { name: '물고기 그래픽' });
+    expect(group.className).toContain('grid-cols-[minmax(0,1fr)_minmax(0,1fr)]');
+    expect(group.className).not.toContain('mobile:grid-cols-1');
+  });
+});
+
+describe('SettingsModal — 소리 설정', () => {
+  it('물고기 그래픽 바로 아래에 소리 섹션을 두고 배경음·효과음 기본값 꺼짐 및 50% 음량을 표시한다', () => {
+    open();
+    const soundHeading = screen.getByText('소리');
+    const bagHeading = screen.getByText('가방');
+    expect(soundHeading.compareDocumentPosition(bagHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    const bgmToggle = screen.getByRole('button', { name: '배경음' });
+    const sfxToggle = screen.getByRole('button', { name: '효과음' });
+    expect(bgmToggle).toHaveAttribute('aria-pressed', 'false');
+    expect(bgmToggle).toHaveTextContent('꺼짐');
+    expect(sfxToggle).toHaveAttribute('aria-pressed', 'false');
+    expect(sfxToggle).toHaveTextContent('꺼짐');
+
+    const bgmSlider = screen.getByRole('slider', { name: '배경음 음량' }) as HTMLInputElement;
+    const sfxSlider = screen.getByRole('slider', { name: '효과음 음량' }) as HTMLInputElement;
+    expect(bgmSlider.value).toBe('50');
+    expect(sfxSlider.value).toBe('50');
+    expect(screen.getAllByText('50%')).toHaveLength(2);
+  });
+
+  it('소리 제목 툴팁에서 백그라운드 자동 정지 동작을 안내한다', () => {
+    open();
+    fireEvent.mouseEnter(screen.getByText('소리'));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('다른 탭을 보는 동안에는 소리가 멈추고 돌아오면 다시 켜져요.');
+  });
+
+  it('배경음·효과음 토글과 음량 슬라이더 조작 시 localStorage에 즉시 저장된다', () => {
+    open();
+    fireEvent.click(screen.getByRole('button', { name: '배경음' }));
+    fireEvent.click(screen.getByRole('button', { name: '효과음' }));
+    expect(localStorage.getItem('pf-sound-bgm')).toBe('on');
+    expect(localStorage.getItem('pf-sound-sfx')).toBe('on');
+
+    const bgmSlider = screen.getByRole('slider', { name: '배경음 음량' });
+    const sfxSlider = screen.getByRole('slider', { name: '효과음 음량' });
+    fireEvent.change(bgmSlider, { target: { value: '80' } });
+    fireEvent.change(sfxSlider, { target: { value: '25' } });
+
+    expect(localStorage.getItem('pf-sound-bgm-volume')).toBe('0.8');
+    expect(localStorage.getItem('pf-sound-sfx-volume')).toBe('0.25');
+    expect(screen.getByText('80%')).toBeInTheDocument();
+    expect(screen.getByText('25%')).toBeInTheDocument();
   });
 });

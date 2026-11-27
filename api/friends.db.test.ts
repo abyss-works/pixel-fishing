@@ -47,7 +47,7 @@ describe('친구 함수', () => {
     expect(await call('POST', userToken(A), { nickname: '나루' })).toMatchObject({ status: 200, body: { result: 'requested' } });
     expect((await list(userToken(B))).friends).toMatchObject([{ uid: A, state: 'incoming', online: false }]);
     expect(await call('PUT', userToken(B), undefined, A)).toMatchObject({ status: 200 });
-    providePresence(uid => (uid === B ? { uid: B, nick: '나루', boat: 1, region: 'deep', x: 0, y: 0, dir: 0, line: false } : null));
+    providePresence(uid => (uid === B ? { uid: B, nick: '나루', boat: 1, fame: 0, region: 'deep', x: 0, y: 0, dir: 0, line: false } : null));
     expect((await list(userToken(A))).friends).toEqual([expect.objectContaining({ uid: B, state: 'friend', online: true, region: 'deep' })]);
     expect(await call('DELETE', userToken(A), undefined, B)).toMatchObject({ status: 200 });
     expect((await list(userToken(A))).friends).toEqual([]);
@@ -72,10 +72,26 @@ describe('친구 함수', () => {
     expect(await call('PUT', userToken(B), undefined, A)).toMatchObject({ status: 200 });
     expect(sent[1]).toEqual([A, { t: 'friend', kind: 'accepted', uid: B, nick: '나루' }]);
     await call('DELETE', userToken(A), undefined, B);
+    expect(sent[2]).toEqual([B, { t: 'friend', kind: 'updated' }]);
+    // 존재하지 않는 관계를 다시 지워도 중복 알림을 보내지 않는다
+    await call('DELETE', userToken(A), undefined, B);
+    expect(sent).toHaveLength(3);
+
+    // 보낸 요청 취소 시 상대에게 updated 알림이 간다
+    await call('POST', userToken(B), { nickname: '가람' });
+    await call('DELETE', userToken(B), undefined, A);
+    expect(sent.at(-1)).toEqual([A, { t: 'friend', kind: 'updated' }]);
+
+    // 받은 요청 거절 시 요청자에게 updated 알림이 간다
+    await call('POST', userToken(B), { nickname: '가람' });
+    await call('DELETE', userToken(A), undefined, B);
+    expect(sent.at(-1)).toEqual([B, { t: 'friend', kind: 'updated' }]);
+
     await call('POST', userToken(B), { nickname: '가람' });
     expect(await call('POST', userToken(A), { nickname: '나루' })).toMatchObject({ body: { result: 'accepted' } });
     expect(sent.at(-1)).toEqual([B, { t: 'friend', kind: 'accepted', uid: A, nick: '가람' }]);
     await call('DELETE', userToken(A), undefined, B);
+    expect(sent.at(-1)).toEqual([B, { t: 'friend', kind: 'updated' }]);
   });
 
   it('형식이 틀린 요청은 400이다', async () => {

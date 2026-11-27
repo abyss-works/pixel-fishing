@@ -42,6 +42,9 @@ export const overwriteCanceledText = '연결하지 않았어요. 다른 구글 �
 /** 구글 인증 화면을 열지 못했을 때의 알림 */
 export const googleStartFailedText = '구글 계정 선택 화면을 열지 못했어요. 잠시 뒤 다시 시도해 주세요.';
 
+/** 1회용 전환 티켓으로 기존 구글 계정 전환을 확정하지 못했을 때의 알림 */
+export const googleSwitchFailedText = '선택한 구글 계정으로 전환하지 못했어요.\n잠시 뒤 다시 시도해 주세요.';
+
 /** 구글 로그인에서 계정을 고르지 않고 돌아왔을 때의 알림 */
 export const SIGN_IN_CANCELED_TEXT = '구글 계정으로 로그인하지 않았어요.';
 

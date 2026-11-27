@@ -126,7 +126,7 @@ const TUTORIAL: Record<TutorialId, TutorialDeckDef> = {
       },
       {
         sub: '다른 탭에서도 조우 알림',
-        caption: <>설정의 <b>알림</b>을 켜면 다른 탭을 보는 중에도 조우를 바로 알려 줘요.</>,
+        caption: <>조우 알림은 <b>기본으로 켜져</b> 있고 수배판이나 설정에서 켜고 끌 수 있어요.</>,
         visual: 'named-alert',
       },
       {

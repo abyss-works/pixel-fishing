@@ -75,7 +75,7 @@ export function connectLive(
       }
       // 같은 계정의 다른 창이 연결을 가져갔다. 다시 붙으면 두 창이 서로 끊는다.
       if (closed || e.code === LIVE_CLOSE_REPLACED) return;
-      retryTimer = setTimeout(open, retryMs);
+      retryTimer = setTimeout(open, retryMs + Math.floor(Math.random() * 2000));
       retryMs = Math.min(retryMs * 2, LIVE_RETRY_MAX_MS);
     };
   };

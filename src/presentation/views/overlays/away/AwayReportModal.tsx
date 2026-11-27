@@ -134,7 +134,10 @@ export default function AwayReportModal({ report, game, onClose, onOpenBag }: {
         )}
       </ModalCard>
     </Modal>
-    {detail && <DexDetail fish={detail.fish} game={game} initialForm={detail.initialForm} onClose={() => setDetail(null)} />}
+    {detail && (
+      <DexDetail key={`${detail.fish.id}-${detail.initialForm}`} fish={detail.fish} game={game}
+                 initialForm={detail.initialForm} onClose={() => setDetail(null)} />
+    )}
     </>
   );
 }

@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { CSSProperties, MouseEvent, ReactNode } from 'react';
 import { cx } from './cx';
 import { HighlightRarityText } from './fish/RarityTag';
-import { useKeyScope } from './hotkeys';
+import { HOTKEY_TIER, hasModifier, useKeyScope } from './hotkeys';
 import PixelIcon from './PixelIcon';
 import TooltipBubble from './TooltipBubble';
 import { anchorOf } from './tooltipPlacement';
@@ -21,6 +21,8 @@ import { useCoarsePointer } from './useMediaQuery';
 // 감싼 칸의 여백을 눌러도 툴팁이 동작과 함께 열리지 않는다.
 // 버블은 TooltipBubble이다. 요소의 왼쪽 아래에서 펼치고, 화면 끝에 닿으면 안쪽으로 들어온다.
 
+const TipParentContext = createContext<((childOpen: boolean) => void) | null>(null);
+
 const highlightText = (node: ReactNode): ReactNode =>
   typeof node === 'string' ? <HighlightRarityText text={node} /> : node;
 
@@ -29,11 +31,11 @@ function TipClose({ onClose }: { onClose: () => void }) {
   useEffect(() => { closeRef.current = onClose; });
 
   useKeyScope(e => {
-    if (e.key !== 'Escape') return;
+    if (e.key !== 'Escape' || hasModifier(e)) return;
     e.preventDefault();
     closeRef.current();
     return true;
-  });
+  }, { tier: HOTKEY_TIER.POPOVER });
 
   useEffect(() => {
     const onScroll = () => closeRef.current();
@@ -63,6 +65,11 @@ export default function Tip({ text, plain, wraps, pressOpens, hoverOnly, onlyIf,
   const ref = useRef<HTMLSpanElement>(null);
   // open이 false면 닫힘, anchor가 null이면 rect를 못 주는 환경이다
   const [open, setOpen] = useState<{ anchor: Anchor | null } | null>(null);
+  const notifyParent = useContext(TipParentContext);
+  const [childOpenCount, setChildOpenCount] = useState(0);
+  const onChildOpen = useCallback((childOpen: boolean) => {
+    setChildOpenCount(c => Math.max(0, c + (childOpen ? 1 : -1)));
+  }, []);
 
   const coarse = useCoarsePointer();
 
@@ -71,6 +78,12 @@ export default function Tip({ text, plain, wraps, pressOpens, hoverOnly, onlyIf,
 
   // 거친 포인터: 열려 있는 동안 대상 바깥을 누르면 닫는다
   const isOpen = open !== null;
+  useEffect(() => {
+    if (!isOpen || !notifyParent) return;
+    notifyParent(true);
+    return () => notifyParent(false);
+  }, [isOpen, notifyParent]);
+
   useEffect(() => {
     if (!coarse || !isOpen) return;
     const onDown = (e: Event) => { if (!ref.current?.contains(e.target as Node)) setOpen(null); };
@@ -87,12 +100,14 @@ export default function Tip({ text, plain, wraps, pressOpens, hoverOnly, onlyIf,
 
   return (
     <>
-      <span ref={ref} tabIndex={wraps ? undefined : 0} {...hover} style={style}
-            className={cx(coarse && wraps && '[&_:disabled]:pointer-events-none', !wraps && 'cursor-help', !plain && !wraps && 'underline decoration-dotted decoration-text-dim underline-offset-[3px]', className)}>
-        {children}
-      </span>
+      <TipParentContext.Provider value={onChildOpen}>
+        <span ref={ref} tabIndex={wraps ? undefined : 0} {...hover} style={style}
+              className={cx(coarse && wraps && '[&_:disabled]:pointer-events-none', !wraps && 'cursor-help', !plain && !wraps && 'underline decoration-dotted decoration-text-dim underline-offset-[3px]', className)}>
+          {children}
+        </span>
+      </TipParentContext.Provider>
       {isOpen && <TipClose onClose={hide} />}
-      {open && <TooltipBubble anchor={open.anchor} className="font-sans font-normal">{highlightText(text)}</TooltipBubble>}
+      {open && childOpenCount === 0 && <TooltipBubble anchor={open.anchor} className="font-sans font-normal">{highlightText(text)}</TooltipBubble>}
     </>
   );
 }

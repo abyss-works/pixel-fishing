@@ -10,6 +10,7 @@ import action from '../action.js';
 import admin from '../admin.js';
 import awayReport from '../awayReport.js';
 import devAccount from '../devAccount.js';
+import events from '../events.js';
 import { blocksHandler, chatReportHandler } from '../chat.js';
 import mail from '../mail.js';
 import fortune from '../fortune.js';
@@ -21,16 +22,22 @@ import position from '../position.js';
 import { guildInviteRoutes, readIndexHtml } from '../guildInvites.js';
 import { defaultMeta, withMeta } from './ogMeta.js';
 import rank from '../rank.js';
+import { widgetAuthExchangeHandler, widgetAuthLogoutHandler, widgetAuthStartHandler } from '../widget/auth.js';
+import { provideWidgetDisconnect } from '../widget/guard.js';
+import widgetStreamHandler from '../widget/stream.js';
+import widgetSummaryHandler from '../widget/summary.js';
 import archive from '../cron/archive.js';
 import purgeAnon from '../cron/purge-anon.js';
 import { adminAuth, appAuth, sessionOf } from '../_auth/session.js';
 import { afterResponse, settleAfterResponse } from './afterResponse.js';
 import { attachLive } from './live.js';
-import { provideNotify, provideOnline, providePresence } from './livePresence.js';
+import { provideBroadcastCatchFx, provideIsUserOnline, provideNotify, provideNotifyAll, provideNotifyGuild, provideOnline, providePresence, provideSetFame, provideSetNick } from './livePresence.js';
+import { widgetHub } from './widgetHub.js';
 import { database } from '../_db/client.js';
 import { liveIdentity } from '../_data/profile.js';
 import { blockedIds } from '../_data/blocks.js';
-import { recentChat, saveChat } from '../_data/chat.js';
+import { recentChat, recentGuildChat, recentLocalChat, saveChat } from '../_data/chat.js';
+import { listLiveNotices } from '../_data/notices.js';
 import { guildIdOf } from '../_data/guilds.js';
 import { recordSession } from '../_data/activity.js';
 import { flushHttpMetrics } from '../_data/httpMetrics.js';
@@ -41,6 +48,7 @@ import { staleClient } from './clientBuild.js';
 import { consentGate, liveConsentAdmit } from './consentGate.js';
 import { createHttpMetrics } from './httpMetrics.js';
 import { legalPages } from './legalPages.js';
+import { notFound } from './notFound.js';
 import { securityHeaders } from './securityHeaders.js';
 import { checkStageLiveUpgrade, stageGate } from './stageGate.js';
 import { stageMockups } from './stageMockups.js';
@@ -69,6 +77,7 @@ const routes: Record<string, NodeHandler> = {
   '/api/away-report': awayReport,
   '/api/dev/promote-test': devAccount,
   '/api/dev/reset-account': devAccount,
+  '/api/events': events,
   // 차단 목록이 바뀌면 실시간 채널이 그 사용자에게 보내는 채팅을 바로 다시 거른다
   '/api/blocks': blocks,
   '/api/blocks/:uid': blocks,
@@ -84,6 +93,11 @@ const routes: Record<string, NodeHandler> = {
   '/api/players': players,
   '/api/players/:uid': players,
   '/api/rank': rank,
+  '/api/widget/auth/start': widgetAuthStartHandler,
+  '/api/widget/auth/exchange': widgetAuthExchangeHandler,
+  '/api/widget/auth/logout': widgetAuthLogoutHandler,
+  '/api/widget/summary': widgetSummaryHandler,
+  '/api/widget/stream': widgetStreamHandler,
   '/api/cron/archive': archive,
   '/api/cron/purge-anon': purgeAnon,
 };
@@ -112,7 +126,7 @@ app.use('/api', consentGate());
 for (const [path, handler] of Object.entries(routes)) {
   app.all(path, (req: Request, res: Response) => handler(req as never, res as never));
 }
-app.use('/api', (_req, res) => { res.status(404).json({ error: 'not-found' }); });
+app.use('/api', notFound);
 
 // 스테이징 전용 시안 HTML 동적 서빙 — preview 환경과 MOCKUPS_DIR 설정이 모두 있을 때만 게이트 뒤에 등록한다.
 if (process.env.DEPLOY_ENV === 'preview' && Boolean(process.env.MOCKUPS_DIR)) {
@@ -132,6 +146,8 @@ app.get(['/', '/index.html'], (_req: Request, res: Response, next) => {
 // 공개 문서(소개, 약관, 처리방침, 운영정책)는 로그인 없이 열리고 쿠키를 만들지 않는다
 app.use(legalPages());
 app.use(express.static(staticDir));
+// 어느 경로에도 해당하지 않으면 Express 기본 응답 대신 정돈된 404를 낸다
+app.use(notFound);
 
 const port = Number(process.env.PORT ?? 3000);
 const server = app.listen(port, () => { console.info(`Server listening on port ${port}`); });
@@ -145,16 +161,24 @@ const live = attachLive(server, {
   authenticate: async (req) => {
     const session = await sessionOf(req.headers);
     if (!session) return null;
-    const { nick, boat } = await liveIdentity(database().db, session.id);
+    const { nick, boat, fame } = await liveIdentity(database().db, session.id);
     // 프로필은 첫 액션에서 생긴다. 그 전에 연결한 게스트는 기본 이름으로 보인다
-    return { uid: session.id, nick: nick ?? '낚시꾼', boat, guest: session.email === null };
+    return { uid: session.id, nick: nick ?? '낚시꾼', boat, fame, guest: session.email === null };
   },
   chat: {
-    save: (user, text, guild) => saveChat(database().db, user.uid, user.nick, text, guild),
-    recent: (uid, limit, guild) => recentChat(database().db, uid, limit, guild),
+    save: (user, text, guild, room, region) => saveChat(database().db, {
+      uid: user.uid, nick: user.nick, text, room, region, guildId: guild,
+    }),
+    recent: (uid, limit, guild) => (
+      guild === null
+        ? recentChat(database().db, uid, limit)
+        : recentGuildChat(database().db, guild, uid, limit)
+    ),
+    recentLocal: (uid, region, limit) => recentLocalChat(database().db, region, uid, limit),
     blocked: (uid) => blockedIds(database().db, uid),
     guildOf: (uid) => guildIdOf(database().db, uid),
   },
+  activeNotices: () => listLiveNotices(database().db),
   // 종료 신호 때도 남은 기록이 끝날 때까지 기다리도록 응답 뒤 작업으로 추적한다
   recordSession: (uid, startedAt, endedAt) => {
     afterResponse(recordSession(database().db, uid, startedAt, endedAt).catch(e =>
@@ -165,14 +189,27 @@ const live = attachLive(server, {
     afterResponse(saveLastPosition(database().db, uid, pos).catch(e =>
       reportServerIssue('마지막 위치 기록 실패', e, { uid, region: pos.region })));
   },
+  onUserDisconnect: (uid) => {
+    if (widgetHub().hasSubscribers(uid)) {
+      widgetHub().publishStatusChanged(uid, 'idle');
+    }
+  },
 });
 
 providePresence(uid => live.presenceOf(uid));
+provideIsUserOnline(uid => live.isOnline(uid));
 provideOnline(() => live.online());
 provideNotify((uid, msg) => live.sendTo(uid, msg));
+provideNotifyGuild((guildId, msg) => live.sendToGuild(guildId, msg));
+provideNotifyAll(msg => live.sendToAll(msg));
+provideSetNick((uid, nick) => live.setNick(uid, nick));
+provideSetFame((uid, fame) => live.setFame(uid, fame));
+provideWidgetDisconnect(uid => widgetHub().disconnectUser(uid));
+provideBroadcastCatchFx((uid, payload) => live.broadcastCatchFx(uid, payload));
 
 process.on('SIGTERM', () => {
   live.close();
+  widgetHub().close();
   server.close(() => {
     void settleAfterResponse()
       .then(() => httpMetrics.stop())

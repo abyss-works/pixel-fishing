@@ -65,7 +65,8 @@ describe('consentGate', () => {
     process.env.CONSENT_EFFECTIVE_DATE = dayOffset(0);
     const token = userToken(await member('exempt'));
     for (const path of ['/account', '/account/consents', '/auth/sign-out', '/admin', '/admin/live', '/admin/auth/sign-out',
-      '/cron/archive', '/cron/purge-anon', '/guild-invites/ABCD1234']) {
+      '/cron/archive', '/cron/purge-anon', '/guild-invites/ABCD1234',
+      '/widget/auth/start', '/widget/auth/exchange', '/widget/auth/logout', '/widget/summary', '/widget/stream']) {
       expect(await through(path, token), path).toEqual(PASSED);
     }
   });
@@ -158,6 +159,8 @@ describe('Express에 붙였을 때', () => {
       expect(await get('/api/guilds/me', token)).toEqual({ status: 403, body: { error: 'consent-required' } });
       expect(await get('/api/account', token)).toEqual({ status: 200, body: { reached: '/api/account' } });
       expect(await get('/api/account/consents', token)).toEqual({ status: 200, body: { reached: '/api/account/consents' } });
+      expect(await get('/api/widget/summary', token)).toEqual({ status: 200, body: { reached: '/api/widget/summary' } });
+      expect(await get('/api/widget/auth/exchange', token)).toEqual({ status: 200, body: { reached: '/api/widget/auth/exchange' } });
       expect(await get('/api/action', null)).toEqual({ status: 200, body: { reached: '/api/action' } });
     } finally {
       await new Promise(resolve => server.close(resolve));

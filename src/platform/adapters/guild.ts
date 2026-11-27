@@ -3,8 +3,9 @@
 // 초대 링크(/g/코드)로 열린 첫 화면은 부팅 때 주소에서 코드를 꺼내 들고 주소를 첫 화면으로 되돌린다.
 import { AppError } from '../../core/errors';
 import { GUILD_LINK_PREFIX, normalizeGuildCode } from '../../game/rules/guild';
+import type { PublicGuildSort } from '../../game/rules/guild';
 import { isCloud } from './auth';
-import type { GuildInvitePreview, GuildOp, GuildOpResult, GuildState } from '../api/types';
+import type { GuildInvitePreview, GuildOp, GuildOpResult, GuildState, PublicGuildItem } from '../api/types';
 import {
   CONSENT_REQUIRED_CODE, isRateLimited, requestFailure, throwConsentRequired, throwRequestFailure,
 } from './requestFailure';
@@ -30,6 +31,21 @@ export async function readGuildInvite(code: string): Promise<GuildInvitePreview 
   return (await res.json() as { invite: GuildInvitePreview }).invite;
 }
 
+/** 자유 가입 공개 길드 목록 조회(검색 q, 정렬 sort) */
+export async function readPublicGuilds(opts: { q?: string; sort?: PublicGuildSort } = {}): Promise<PublicGuildItem[]> {
+  if (!isCloud) return [];
+  const params = new URLSearchParams();
+  const q = opts.q?.trim();
+  if (q) params.set('q', q);
+  if (opts.sort) params.set('sort', opts.sort);
+  const qs = params.toString();
+  const res = await fetch(`/api/guilds/public${qs ? `?${qs}` : ''}`);
+  if (res.status === 401) throw new AppError('unauthorized', 'public guilds read before session');
+  if (!res.ok) await throwRequestFailure(res, 'public guilds read failed');
+  const body = await res.json() as { guilds?: PublicGuildItem[] };
+  return body.guilds ?? [];
+}
+
 const json = (method: string, body: unknown): RequestInit =>
   ({ method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
@@ -39,6 +55,7 @@ function request(op: GuildOp): [string, RequestInit] {
     case 'create': return ['/api/guilds', json('POST', { name: op.name })];
     case 'rename': return [`${guild(op.guildId)}/name`, json('PUT', { name: op.name })];
     case 'join': return ['/api/guild-memberships', json('POST', op.via ? { code: op.code, via: op.via } : { code: op.code })];
+    case 'joinPublic': return ['/api/guild-memberships', json('POST', { guildId: op.guildId })];
     case 'settings': {
       const body: Record<string, unknown> = {};
       if (op.joinMode !== undefined) body.joinMode = op.joinMode;

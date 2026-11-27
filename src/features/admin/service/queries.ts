@@ -1,5 +1,5 @@
 import { api } from '../../../platform/api';
-import type { AdminMailRequest } from '../../../platform/api';
+import type { AdminMailRequest, AdminNoticeRequest } from '../../../platform/api';
 import { lastNDays } from '../model/metrics';
 
 /** 관리자 로그인이 필요한 클라우드 구현인가. 로컬 모드는 판정 없이 골격을 보인다 */
@@ -34,6 +34,11 @@ export const readAdminEconomy = (days: number) => api.admin.economy(days);
 
 export const readAdminLetters = () => api.admin.letters();
 
+export const readAdminNotices = () => api.admin.notices();
+
+/** 기간제 상시 공지 작성·수정·즉시 마감·삭제 */
+export const writeAdminNotice = (request: AdminNoticeRequest) => api.admin.writeNotice(request);
+
 /** 변경 기록(최신 버전부터, 철회된 항목 포함) */
 export const readAdminChangelog = () => api.admin.changelog();
 
@@ -52,6 +57,9 @@ export const writeAdminLetterHandled = (letterId: number, handled: boolean) => a
 
 /** 대상 계정의 활성 인증 세션 강제 종료 */
 export const writeAdminRevokeSessions = (userId: string) => api.admin.revokeSessions(userId);
+
+/** 호출자 본인의 채팅 운영진 배지 노출 설정을 켜거나 끈다 */
+export const writeAdminStaffBadge = (show: boolean) => api.admin.setStaffBadge(show);
 
 export const readAdminUserEvents = (uid: string) => api.admin.userEvents(uid, 300);
 

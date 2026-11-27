@@ -1,7 +1,7 @@
 // 배우 스프라이트 — 플레이어(도보)/배(항해). 자기 좌표계만 알고 상태를 모른다 (계층: 단위 스프라이트)
 import { label, R, UI } from '../common.js';
 import type { Ctx } from '../common.js';
-import { DEFAULT_LOOK, PANTS_COLORS, SHIRT_COLORS, hatById, isAchievementHat } from '../../../content/wardrobe.js';
+import { DEFAULT_LOOK, PANTS_COLORS, SHIRT_COLORS, hatById, isAchievementHat, isEventHat } from '../../../content/wardrobe.js';
 import type { Hat, Look } from '../../../content/wardrobe.js';
 
 function drawAchievementHat(ctx: Ctx, x: number, y: number, hat: Hat) {
@@ -305,15 +305,38 @@ function drawAchievementHat(ctx: Ctx, x: number, y: number, hat: Hat) {
       R(ctx, x + 4, y - 20, 1, 2, a);
       R(ctx, x - 2, y - 18, 4, 1, a);
       return;
+    case 'event-hat-basin-conical':
+      R(ctx, x - 2, y - 20, 4, 1, c);
+      R(ctx, x - 3, y - 19, 6, 1, c);
+      R(ctx, x - 5, y - 18, 10, 1, c);
+      R(ctx, x - 6, y - 17, 12, 1, c);
+      R(ctx, x - 2, y - 16, 1, 2, a);
+      R(ctx, x + 1, y - 16, 1, 2, a);
+      return;
+    case 'event-hat-abyss-crown':
+      R(ctx, x - 5, y - 20, 2, 2, a);
+      R(ctx, x - 1, y - 20, 2, 2, c);
+      R(ctx, x + 3, y - 20, 2, 2, a);
+      R(ctx, x - 4, y - 18, 8, 2, c);
+      R(ctx, x - 2, y - 18, 4, 1, a);
+      R(ctx, x - 5, y - 17, 10, 1, c);
+      return;
+    case 'santa-hat':
+      R(ctx, x + 1, y - 20, 2, 2, a);
+      R(ctx, x - 2, y - 19, 3, 1, c);
+      R(ctx, x - 3, y - 18, 6, 1, c);
+      R(ctx, x - 4, y - 17, 8, 1, c);
+      R(ctx, x - 4, y - 16, 8, 2, a);
+      return;
     default:
       R(ctx, x - 4, y - 19, 8, 3, c);
       R(ctx, x + 3, y - 16, 3, 1, c);
   }
 }
 
-/** 모자 — (x, y)는 사람의 발 아래 가운데다(모자 좌표계는 사람 그림과 같다). 업적 모자는 도형별로, 그 밖의 모자는 덮개와 챙을 한 가지 색으로 그린다 */
+/** 모자 — (x, y)는 사람의 발 아래 가운데다(모자 좌표계는 사람 그림과 같다). 업적·이벤트 모자는 도형별로, 그 밖의 모자는 덮개와 챙을 한 가지 색으로 그린다 */
 export function drawHat(ctx: Ctx, x: number, y: number, hat: Hat) {
-  if (isAchievementHat(hat)) {
+  if (isAchievementHat(hat) || isEventHat(hat)) {
     drawAchievementHat(ctx, x, y, hat);
     return;
   }
@@ -400,6 +423,37 @@ export function drawOtherShip(ctx: Ctx, o: OtherShipView, t: number) {
   label(ctx, o.nick, o.x, o.y - 24, 'rgba(255,255,255,0.75)', 8);
   drawSpeech(ctx, o.x, o.y - 34, o.bubble ?? null);
   drawIdle(ctx, o.x, o.y - 34, o.idle ?? null);
+}
+
+/** 도보 구역 다른 플레이어 — 설원 위 가독성을 위해 발 그림자와 어두운 이름표 알약 배경을 함께 그린다 */
+export function drawOtherPerson(ctx: Ctx, o: OtherShipView, t: number) {
+  R(ctx, o.x - 4, o.y - 1, 8, 2, 'rgba(11,19,34,0.28)');
+  ctx.save();
+  ctx.globalAlpha = o.stale ? 0.35 : 0.78;
+  drawPerson(ctx, o.x, o.y, o.look);
+  if (o.line) {
+    const wave = Math.sin(t * 2);
+    const bx = o.bob ? o.bob.x : o.x + 16, by = (o.bob ? o.bob.y : o.y + 4) + wave;
+    ctx.strokeStyle = 'rgba(11,19,34,0.55)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(o.x, o.y - 14);
+    ctx.lineTo(bx, by - 2);
+    ctx.stroke();
+    R(ctx, bx - 2, by - 2, 4, 4, '#e53935');
+    R(ctx, bx - 2, by - 4, 4, 2, '#fff');
+  }
+  ctx.restore();
+  ctx.font = "bold 8px 'Malgun Gothic', sans-serif";
+  const pillW = Math.ceil(ctx.measureText(o.nick).width) + 8;
+  const pillX = Math.round(o.x - pillW / 2);
+  R(ctx, pillX, o.y - 31, pillW, 10, o.stale ? 'rgba(11,19,34,0.55)' : 'rgba(11,19,34,0.78)');
+  ctx.fillStyle = o.stale ? 'rgba(242,247,251,0.7)' : '#f2f7fb';
+  ctx.textAlign = 'center';
+  ctx.fillText(o.nick, o.x, o.y - 23);
+  if (o.idle && !o.bubble) R(ctx, pillX + pillW - 3, o.y - 31, 2, 2, '#ffd54f');
+  drawSpeech(ctx, o.x, o.y - 35, o.bubble ?? null);
+  drawIdle(ctx, o.x, o.y - 35, o.idle ?? null);
 }
 
 /** 말풍선 — (x, y)는 꼬리 바로 위다. 입력 중이면 "…", 긴 글은 줄여서 보인다 */

@@ -100,9 +100,84 @@ describe('획득 카드', () => {
     expect(fx.parentElement).toBe(container.querySelector('.animate-catch-pop')!.parentElement);
   });
 
+  it('일반·희귀와 일반/희귀 돌연변이는 모서리 브래킷과 액자 발광을 두지 않고, 영웅·전설만 모서리·액자 발광 연출을 표시한다', () => {
+    const commonFish = FISH.find(f => f.rarity === 'common')!;
+    const rareFish = FISH.find(f => f.rarity === 'rare')!;
+    const epicFish = FISH.find(f => f.rarity === 'epic')!;
+    const legendaryFish = FISH.find(f => f.rarity === 'legendary')!;
+
+    for (const [targetFish, form] of [
+      [commonFish, 'normal'],
+      [rareFish, 'normal'],
+      [commonFish, 'variant'],
+      [rareFish, 'variant'],
+    ] as const) {
+      const { container } = render(<CatchCard fish={targetFish} info={info({ form })} />);
+      expect(container.querySelectorAll('[data-catch-corner]')).toHaveLength(0);
+      expect(container.querySelector('[data-portrait-glow]')).toBeNull();
+      expect(container.querySelector('.animate-fx-orbit')).toBeNull();
+      expect(container.querySelector('.animate-fx-spark')).toBeNull();
+      if (form === 'variant') {
+        expect(container.querySelectorAll('.animate-fx-wisp')).toHaveLength(8);
+        expect(container.querySelector('.animate-mutated-shimmer')).not.toBeNull();
+        expect(container.querySelector('[data-catch-variant]')).not.toBeNull();
+      }
+      cleanup();
+    }
+
+    for (const targetFish of [epicFish, legendaryFish]) {
+      const { container } = render(<CatchCard fish={targetFish} info={info({ form: 'normal' })} />);
+      const fx = container.querySelector('[data-catch-fx]')!;
+      expect(fx.querySelectorAll('[data-catch-corner]')).toHaveLength(4);
+      expect(container.querySelector('[data-portrait-glow]')).not.toBeNull();
+      expect(container.querySelector('.animate-fx-orbit')).toBeNull();
+      expect(container.querySelector('.animate-fx-spark')).toBeNull();
+      cleanup();
+    }
+  });
+
+  it('영웅은 모서리·액자 발광만, 전설은 외곽 맥동 발광(animate-glow-legend)과 내부 빛줄기(.catch-card-sweep)까지 표시한다', () => {
+    const legendaryFish = FISH.find(f => f.rarity === 'legendary')!;
+    const epicFish = FISH.find(f => f.rarity === 'epic')!;
+    const rareFish = FISH.find(f => f.rarity === 'rare')!;
+
+    const legRender = render(<CatchCard fish={legendaryFish} info={info({ form: 'normal' })} />);
+    const glowWrapper = legRender.container.querySelector('.animate-glow-legend') as HTMLElement | null;
+    expect(glowWrapper).not.toBeNull();
+    // pf-notch 클리핑 바깥 래퍼에 걸리고, 그 안에 HudPanel과 sweep 오버레이가 놓인다
+    expect(glowWrapper!.className).not.toContain('pf-notch');
+    expect(glowWrapper!.querySelector('.catch-card-sweep')).not.toBeNull();
+    expect(legRender.container.querySelectorAll('[data-catch-corner]')).toHaveLength(4);
+    expect(legRender.container.querySelector('[data-portrait-glow]')).not.toBeNull();
+    expect(legRender.container.querySelector('.animate-mutated-shimmer')).toBeNull();
+    cleanup();
+
+    for (const [targetFish, form] of [
+      [epicFish, 'normal'],
+      [epicFish, 'variant'],
+      [rareFish, 'variant'],
+    ] as const) {
+      const { container } = render(<CatchCard fish={targetFish} info={info({ form })} />);
+      expect(container.querySelector('.animate-glow-legend')).toBeNull();
+      expect(container.querySelector('.catch-card-sweep')).toBeNull();
+      if (targetFish === epicFish) {
+        expect(container.querySelectorAll('[data-catch-corner]')).toHaveLength(4);
+        expect(container.querySelector('[data-portrait-glow]')).not.toBeNull();
+      }
+      if (form === 'variant') {
+        expect(container.querySelector('.animate-mutated-shimmer')).not.toBeNull();
+        expect(container.querySelectorAll('.animate-fx-wisp')).toHaveLength(8);
+      }
+      cleanup();
+    }
+  });
+
   it('등장 애니메이션 catch-pop은 scale 팝이 아니라 좌측 슬라이드 인(translateX(-24px) → 0, ease-out)이다', () => {
     const css = readFileSync('src/index.css', 'utf-8');
     expect(css).toMatch(/--animate-catch-pop:\s*catch-pop\s+[\d.]+s\s+ease-out;/);
     expect(css).toMatch(/@keyframes catch-pop\s*\{\s*from\s*\{\s*opacity:\s*0;\s*transform:\s*translateX\(-24px\);\s*\}\s*to\s*\{\s*opacity:\s*1;\s*transform:\s*translateX\(0\);\s*\}\s*\}/);
+    expect(css).toContain('--animate-glow-legend:');
+    expect(css).toContain('.catch-card-sweep');
+    expect(css).toMatch(/@media\s*\(prefers-reduced-motion:\s*reduce\)/);
   });
 });

@@ -12,14 +12,21 @@ export interface ChatInputState {
 export type ChatInputEvent =
   | { type: 'open' }
   | { type: 'close' }
-  /** 입력 중 Tab. 길드원일 때만 방을 바꾼다 */
+  /** 입력 중 Tab. 전체 -> 지역 -> 길드(길드 미가입 시 전체 <-> 지역) 순으로 순환한다 */
   | { type: 'tab'; inGuild: boolean }
-  /** 방 버튼. 입력 상태와 무관하게 길드원일 때만 방을 바꾼다 */
+  /** 방 버튼. 입력 상태와 무관하게 길드 소속에 맞춰 방을 순환한다 */
   | { type: 'toggleRoom'; inGuild: boolean };
 
-export const CHAT_INPUT_INITIAL: ChatInputState = { mode: 'closed', room: 'world' };
+export const CHAT_INPUT_INITIAL: ChatInputState = { mode: 'closed', room: 'local' };
 
-const otherRoom = (room: ChatRoom): ChatRoom => (room === 'world' ? 'guild' : 'world');
+const ROOM_ORDER_GUILD: readonly ChatRoom[] = ['global', 'local', 'guild'];
+const ROOM_ORDER_NO_GUILD: readonly ChatRoom[] = ['global', 'local'];
+
+const nextRoom = (room: ChatRoom, inGuild: boolean): ChatRoom => {
+  const order = inGuild ? ROOM_ORDER_GUILD : ROOM_ORDER_NO_GUILD;
+  const idx = order.indexOf(room);
+  return order[(idx + 1) % order.length];
+};
 
 /** 전이 함수. 바뀌지 않는 전이는 같은 상태 객체를 돌려준다 */
 export function chatInputReducer(state: ChatInputState, event: ChatInputEvent): ChatInputState {
@@ -29,17 +36,17 @@ export function chatInputReducer(state: ChatInputState, event: ChatInputEvent): 
     case 'close':
       return state.mode === 'closed' ? state : { ...state, mode: 'closed' };
     case 'tab':
-      if (state.mode !== 'typing' || !event.inGuild) return state;
-      return { ...state, room: otherRoom(state.room) };
+      if (state.mode !== 'typing') return state;
+      return { ...state, room: nextRoom(state.room, event.inGuild) };
     case 'toggleRoom':
-      if (!event.inGuild) return state;
-      return { ...state, room: otherRoom(state.room) };
+      return { ...state, room: nextRoom(state.room, event.inGuild) };
   }
 }
 
-/** 실제로 보낼 방. 길드에 들어가 있지 않으면 언제나 월드다 */
+/** 실제로 보낼 방. 길드에 들어가 있지 않고 길드 방을 고른 상태라면 지역 방으로 돌린다 */
 export function chatRoomOf(state: ChatInputState, inGuild: boolean): ChatRoom {
-  return inGuild ? state.room : 'world';
+  if (!inGuild && state.room === 'guild') return 'local';
+  return state.room;
 }
 
 /** 채팅 입력 줄 위 오류·실패 안내 문구. 두 문장 이상이면 문장 끝마다 줄을 바꾼다 */

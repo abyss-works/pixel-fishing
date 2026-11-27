@@ -25,7 +25,7 @@ describe('테스트 데이터베이스', () => {
     const names = rows.map(r => r.name);
     for (const t of ['saves_current', 'fish_instances', 'records', 'saves', 'profiles', 'events', 'letters',
       'coupons', 'reliefs', 'bounty_accepts', 'bounty_progress', 'bounty_tickets', 'bounty_licenses',
-      'bounty_clears', 'mails', 'daily_fortunes', 'v_bounty_funnel_daily']) {
+      'bounty_clears', 'mails', 'daily_fortunes', 'notices', 'ranking_weekly_fame', 'widget_auth_codes', 'widget_tokens', 'v_bounty_funnel_daily']) {
       expect(names).toContain(t);
     }
   });
@@ -654,6 +654,429 @@ describe('테스트 데이터베이스', () => {
           `select 1 from information_schema.tables where table_schema = 'public' and table_name = 'http_metrics_daily'`,
         );
         expect(afterUp).toHaveLength(1);
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
+
+  describe('mails.idempotency_key (0047)', () => {
+    const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
+    const user = async (c: Client): Promise<string> => {
+      const uid = randomUUID();
+      await c.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, true)`, [uid, `${uid}@anonymous.invalid`]);
+      return uid;
+    };
+
+    it('NULL idempotency_key는 중복 허용하고 비NULL (user_id, idempotency_key)는 계정당 1건만 허용하며, 다운/업이 동작한다', async () => {
+      const a = await user(client);
+      const b = await user(client);
+      await client.query(`insert into public.mails (user_id, title, body) values ($1, '일반1', 'b'), ($1, '일반2', 'b')`, [a]);
+      await client.query(`insert into public.mails (user_id, idempotency_key, title, body) values ($1, 'welcome', '선물', 'b')`, [a]);
+      await client.query(`insert into public.mails (user_id, idempotency_key, title, body) values ($1, 'welcome', '선물', 'b')`, [b]);
+      await expect(client.query(
+        `insert into public.mails (user_id, idempotency_key, title, body) values ($1, 'welcome', '중복', 'b')`,
+        [a],
+      )).rejects.toMatchObject({ code: '23505' });
+
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        await other.query(migration('0047_mail_idempotency_key.down.sql'));
+        const { rows: afterDownCol } = await other.query(
+          `select 1 from information_schema.columns where table_schema = 'public' and table_name = 'mails' and column_name = 'idempotency_key'`,
+        );
+        expect(afterDownCol).toHaveLength(0);
+        const { rows: afterDownIdx } = await other.query(
+          `select 1 from pg_indexes where schemaname = 'public' and tablename = 'mails' and indexname = 'mails_user_idempotency_idx'`,
+        );
+        expect(afterDownIdx).toHaveLength(0);
+
+        await other.query(migration('0047_mail_idempotency_key.sql'));
+        const { rows: afterUpCol } = await other.query<{ is_nullable: string }>(
+          `select is_nullable from information_schema.columns where table_schema = 'public' and table_name = 'mails' and column_name = 'idempotency_key'`,
+        );
+        expect(afterUpCol).toEqual([{ is_nullable: 'YES' }]);
+        const { rows: afterUpIdx } = await other.query(
+          `select 1 from pg_indexes where schemaname = 'public' and tablename = 'mails' and indexname = 'mails_user_idempotency_idx'`,
+        );
+        expect(afterUpIdx).toHaveLength(1);
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
+
+  describe('chat_messages 채널·지역 확장 및 notices (0048)', () => {
+    const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
+
+    it('chat_messages 채널 제약·인덱스와 notices 제약·RLS 차단·다운/업 라운드트립을 검증한다', async () => {
+      const uid = randomUUID();
+      await client.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, false)`, [uid, `${uid}@example.test`]);
+
+      // chat_messages 채널 기본값('local') 및 허용값 제약
+      const { rows: [chatRow] } = await client.query<{ channel: string; region: string | null }>(
+        `insert into public.chat_messages (user_id, nick, text) values ($1, '낚시꾼', '기본') returning channel, region`,
+        [uid],
+      );
+      expect(chatRow).toEqual({ channel: 'local', region: null });
+      await expect(client.query(
+        `insert into public.chat_messages (user_id, nick, text, channel) values ($1, '낚시꾼', '오류', 'dm')`,
+        [uid],
+      )).rejects.toMatchObject({ code: '23514' });
+
+      // notices 제약(제목 1..80, 본문 1..600, ends_at > starts_at) 및 created_by on delete set null
+      const { rows: [noticeRow] } = await client.query<{ id: string; created_at: Date; updated_at: Date }>(
+        `insert into public.notices (title, body, starts_at, ends_at, created_by)
+         values ('점검 안내', '서버 점검이 예정되어 있어요.', '2030-01-01T00:00:00Z', '2030-01-02T00:00:00Z', $1)
+         returning id, created_at, updated_at`,
+        [uid],
+      );
+      expect(noticeRow.created_at).toBeInstanceOf(Date);
+      expect(noticeRow.updated_at).toBeInstanceOf(Date);
+
+      await expect(client.query(
+        `insert into public.notices (title, body, starts_at, ends_at) values ('', '본문', '2030-01-01T00:00:00Z', '2030-01-02T00:00:00Z')`,
+      )).rejects.toMatchObject({ code: '23514' });
+      await expect(client.query(
+        `insert into public.notices (title, body, starts_at, ends_at) values ($1, '본문', '2030-01-01T00:00:00Z', '2030-01-02T00:00:00Z')`,
+        ['가'.repeat(81)],
+      )).rejects.toMatchObject({ code: '23514' });
+      await expect(client.query(
+        `insert into public.notices (title, body, starts_at, ends_at) values ('제목', $1, '2030-01-01T00:00:00Z', '2030-01-02T00:00:00Z')`,
+        ['나'.repeat(601)],
+      )).rejects.toMatchObject({ code: '23514' });
+      await expect(client.query(
+        `insert into public.notices (title, body, starts_at, ends_at) values ('제목', '본문', '2030-01-02T00:00:00Z', '2030-01-01T00:00:00Z')`,
+      )).rejects.toMatchObject({ code: '23514' });
+
+      // 인증 사용자는 공지를 읽거나 쓰지 못한다 — 서버 전용 RLS
+      await client.query('begin');
+      try {
+        await client.query('set local role authenticated');
+        await client.query(`select set_config('request.jwt.claim.sub', $1, true)`, [uid]);
+        expect((await client.query('select id from public.notices')).rows).toEqual([]);
+        await expect(client.query(
+          `insert into public.notices (title, body, starts_at, ends_at) values ('차단', '본문', '2030-01-01T00:00:00Z', '2030-01-02T00:00:00Z')`,
+        )).rejects.toMatchObject({ code: '42501' });
+      } finally {
+        await client.query('rollback');
+      }
+
+      // 다운/업 라운드트립 및 기존 행 channel 백필 검증
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        const u2 = randomUUID();
+        await other.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, false)`, [u2, `${u2}@example.test`]);
+        const { rows: [g] } = await other.query<{ id: string }>(
+          `insert into public.guilds (name, code) values ($1, upper(substr(md5(random()::text), 1, 8))) returning id`,
+          [`g${u2.slice(0, 6)}`],
+        );
+
+        await other.query(migration('0048_chat_channels_and_notices.down.sql'));
+        expect((await other.query(
+          `select 1 from information_schema.tables where table_schema = 'public' and table_name = 'notices'`,
+        )).rows).toHaveLength(0);
+        expect((await other.query(
+          `select 1 from information_schema.columns where table_schema = 'public' and table_name = 'chat_messages' and column_name in ('channel', 'region')`,
+        )).rows).toHaveLength(0);
+
+        await other.query(`insert into public.chat_messages (user_id, nick, text, guild_id) values ($1, '가', '전체', null)`, [u2]);
+        await other.query(`insert into public.chat_messages (user_id, nick, text, guild_id) values ($1, '가', '길드', $2)`, [u2, g.id]);
+
+        await other.query(migration('0048_chat_channels_and_notices.sql'));
+        expect((await other.query(
+          `select 1 from information_schema.tables where table_schema = 'public' and table_name = 'notices'`,
+        )).rows).toHaveLength(1);
+        const { rows: backfilled } = await other.query<{ text: string; channel: string; region: string | null }>(
+          `select text, channel, region from public.chat_messages where user_id = $1 order by id`,
+          [u2],
+        );
+        expect(backfilled).toEqual([
+          { text: '전체', channel: 'global', region: null },
+          { text: '길드', channel: 'guild', region: null },
+        ]);
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
+
+  describe('ranking_weekly_fame (0050)', () => {
+    const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
+    const hasTable = async (c: Client) => (await c.query<{ r: string | null }>(
+      `select to_regclass('public.ranking_weekly_fame')::text as r`,
+    )).rows[0].r !== null;
+    const hasIndex = async (c: Client, table: string, name: string) => (await c.query(
+      `select 1 from pg_indexes where schemaname = 'public' and tablename = $1 and indexname = $2`,
+      [table, name],
+    )).rows.length === 1;
+
+    it('복합 PK·fame_gained>=0 제약·cascade 삭제·서버 전용 RLS·다운/업 라운드트립을 검증한다', async () => {
+      const uid = randomUUID();
+      await client.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, false)`, [uid, `${uid}@example.test`]);
+
+      const { rows: [inserted] } = await client.query<{ fame_gained: string; reached_at: Date; updated_at: Date }>(
+        `insert into public.ranking_weekly_fame (week_start, user_id) values ('2030-03-04', $1)
+         returning fame_gained, reached_at, updated_at`,
+        [uid],
+      );
+      expect(Number(inserted.fame_gained)).toBe(0);
+      expect(inserted.reached_at).toBeInstanceOf(Date);
+      expect(inserted.updated_at).toBeInstanceOf(Date);
+
+      // 동일 (week_start, user_id) 중복 거부
+      await expect(client.query(
+        `insert into public.ranking_weekly_fame (week_start, user_id, fame_gained) values ('2030-03-04', $1, 10)`,
+        [uid],
+      )).rejects.toMatchObject({ code: '23505' });
+
+      // 음수 fame_gained 거부
+      await expect(client.query(
+        `insert into public.ranking_weekly_fame (week_start, user_id, fame_gained) values ('2030-03-11', $1, -1)`,
+        [uid],
+      )).rejects.toMatchObject({ code: '23514' });
+
+      // 인증 사용자는 본인 행도 읽거나 쓰지 못한다 — 서버 전용 RLS
+      await client.query('begin');
+      try {
+        await client.query('set local role authenticated');
+        await client.query(`select set_config('request.jwt.claim.sub', $1, true)`, [uid]);
+        expect((await client.query('select week_start from public.ranking_weekly_fame')).rows).toEqual([]);
+        await expect(client.query(
+          `insert into public.ranking_weekly_fame (week_start, user_id, fame_gained) values ('2030-03-11', $1, 5)`,
+          [uid],
+        )).rejects.toMatchObject({ code: '42501' });
+      } finally {
+        await client.query('rollback');
+      }
+
+      // auth.users 삭제 시 cascade 삭제
+      await client.query(`delete from auth.users where id = $1`, [uid]);
+      expect((await client.query(`select 1 from public.ranking_weekly_fame where user_id = $1`, [uid])).rows).toHaveLength(0);
+
+      // 다운/업 라운드트립 및 두 인덱스 확인
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        expect(await hasTable(other)).toBe(true);
+        expect(await hasIndex(other, 'ranking_weekly_fame', 'ranking_weekly_fame_board_idx')).toBe(true);
+        expect(await hasIndex(other, 'bounty_clears', 'bounty_clears_kind_cleared_at_idx')).toBe(true);
+
+        await other.query(migration('0050_ranking_weekly_fame.down.sql'));
+        expect(await hasTable(other)).toBe(false);
+        expect(await hasIndex(other, 'bounty_clears', 'bounty_clears_kind_cleared_at_idx')).toBe(false);
+
+        await other.query(migration('0050_ranking_weekly_fame.sql'));
+        expect(await hasTable(other)).toBe(true);
+        expect(await hasIndex(other, 'ranking_weekly_fame', 'ranking_weekly_fame_board_idx')).toBe(true);
+        expect(await hasIndex(other, 'bounty_clears', 'bounty_clears_kind_cleared_at_idx')).toBe(true);
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
+
+  describe('mails.hats (0051)', () => {
+    const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
+
+    it('hats 열 기본값은 빈 배열이고 배열을 저장할 수 있으며, 다운/업 라운드트립이 동작한다', async () => {
+      const uid = randomUUID();
+      await client.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, true)`, [uid, `${uid}@anonymous.invalid`]);
+      const { rows: [defRow] } = await client.query<{ hats: unknown }>(
+        `insert into public.mails (user_id, title, body) values ($1, '기본', '본문') returning hats`,
+        [uid],
+      );
+      expect(defRow.hats).toEqual([]);
+
+      const { rows: [hatRow] } = await client.query<{ hats: unknown }>(
+        `insert into public.mails (user_id, title, body, hats) values ($1, '산타', '본문', '["santa-hat"]'::jsonb) returning hats`,
+        [uid],
+      );
+      expect(hatRow.hats).toEqual(['santa-hat']);
+
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        await other.query(migration('0051_mail_hats.down.sql'));
+        const { rows: afterDownCol } = await other.query(
+          `select 1 from information_schema.columns where table_schema = 'public' and table_name = 'mails' and column_name = 'hats'`,
+        );
+        expect(afterDownCol).toHaveLength(0);
+
+        await other.query(migration('0051_mail_hats.sql'));
+        const { rows: afterUpCol } = await other.query<{ is_nullable: string }>(
+          `select is_nullable from information_schema.columns where table_schema = 'public' and table_name = 'mails' and column_name = 'hats'`,
+        );
+        expect(afterUpCol).toEqual([{ is_nullable: 'NO' }]);
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
+
+  describe('widget_auth_codes · widget_tokens · saves_current.last_spot (0052)', () => {
+    const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
+
+    it('last_spot 널 허용, 위젯 코드·토큰 표 제약·연쇄 삭제·RLS 차단·다운/업 라운드트립을 검증한다', async () => {
+      const uid = randomUUID();
+      await client.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, false)`, [uid, `${uid}@example.test`]);
+
+      const { rows: [saveRow] } = await client.query<{ last_spot: string | null }>(
+        `insert into public.saves_current (user_id, data) values ($1, '{}'::jsonb) returning last_spot`,
+        [uid],
+      );
+      expect(saveRow.last_spot).toBeNull();
+
+      const { rows: [codeRow] } = await client.query<{ created_at: Date }>(
+        `insert into public.widget_auth_codes (code_hash, user_id, code_challenge, redirect_uri, expires_at)
+         values ('hash-code-1', $1, 'challenge-1', 'http://127.0.0.1:4100/callback', '2099-01-01T00:00:00Z')
+         returning created_at`,
+        [uid],
+      );
+      expect(codeRow.created_at).toBeInstanceOf(Date);
+
+      const { rows: [tokenRow] } = await client.query<{ created_at: Date; last_seen_at: Date }>(
+        `insert into public.widget_tokens (token_hash, user_id, client_version, expires_at)
+         values ('hash-token-1', $1, '0.1.0', '2099-01-01T00:00:00Z')
+         returning created_at, last_seen_at`,
+        [uid],
+      );
+      expect(tokenRow.created_at).toBeInstanceOf(Date);
+      expect(tokenRow.last_seen_at).toBeInstanceOf(Date);
+
+      // 인증 사용자는 위젯 코드·토큰 표를 읽거나 쓰지 못한다 — 서버 전용 RLS
+      await client.query('begin');
+      try {
+        await client.query('set local role authenticated');
+        await client.query(`select set_config('request.jwt.claim.sub', $1, true)`, [uid]);
+        expect((await client.query('select code_hash from public.widget_auth_codes')).rows).toEqual([]);
+        expect((await client.query('select token_hash from public.widget_tokens')).rows).toEqual([]);
+        await expect(client.query(
+          `insert into public.widget_tokens (token_hash, user_id, client_version, expires_at)
+           values ('forged', $1, '0.1.0', '2099-01-01T00:00:00Z')`,
+          [uid],
+        )).rejects.toMatchObject({ code: '42501' });
+      } finally {
+        await client.query('rollback');
+      }
+
+      // auth.users 삭제 시 연쇄 삭제
+      await client.query(`delete from auth.users where id = $1`, [uid]);
+      expect((await client.query(`select 1 from public.widget_auth_codes where user_id = $1`, [uid])).rows).toHaveLength(0);
+      expect((await client.query(`select 1 from public.widget_tokens where user_id = $1`, [uid])).rows).toHaveLength(0);
+
+      // 다운/업 라운드트립
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        await other.query(migration('0052_desktop_widget.down.sql'));
+        expect((await other.query(
+          `select 1 from information_schema.tables where table_schema = 'public' and table_name in ('widget_auth_codes', 'widget_tokens')`,
+        )).rows).toHaveLength(0);
+        expect((await other.query(
+          `select 1 from information_schema.columns where table_schema = 'public' and table_name = 'saves_current' and column_name = 'last_spot'`,
+        )).rows).toHaveLength(0);
+
+        await other.query(migration('0052_desktop_widget.sql'));
+        expect((await other.query(
+          `select 1 from information_schema.tables where table_schema = 'public' and table_name in ('widget_auth_codes', 'widget_tokens')`,
+        )).rows).toHaveLength(2);
+        expect((await other.query(
+          `select is_nullable from information_schema.columns where table_schema = 'public' and table_name = 'saves_current' and column_name = 'last_spot'`,
+        )).rows).toEqual([{ is_nullable: 'YES' }]);
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
+
+  describe('admins 역할·배지 및 admin_audit_logs (0054)', () => {
+    const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
+
+    it('기본값·역할 제약·감사 로그 RLS·actor_id set null·다운/업 라운드트립을 검증한다', async () => {
+      const uid = randomUUID();
+      await client.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, false)`, [uid, `${uid}@example.test`]);
+
+      const { rows: [adminRow] } = await client.query<{ role: string; show_staff_badge: boolean }>(
+        `insert into public.admins (user_id) values ($1) returning role, show_staff_badge`,
+        [uid],
+      );
+      expect(adminRow).toEqual({ role: 'admin', show_staff_badge: false });
+
+      await client.query(`update public.admins set role = 'maintainer', show_staff_badge = true where user_id = $1`, [uid]);
+      await expect(client.query(`update public.admins set role = 'tester' where user_id = $1`, [uid]))
+        .rejects.toMatchObject({ code: '23514' });
+
+      const { rows: [logRow] } = await client.query<{ actor_id: string; actor_role: string; reason: string; detail: Record<string, unknown>; created_at: Date }>(
+        `insert into public.admin_audit_logs (actor_id, actor_role, action) values ($1, 'maintainer', 'staffBadge')
+         returning actor_id, actor_role, reason, detail, created_at`,
+        [uid],
+      );
+      expect(logRow.actor_id).toBe(uid);
+      expect(logRow.actor_role).toBe('maintainer');
+      expect(logRow.reason).toBe('');
+      expect(logRow.detail).toEqual({});
+      expect(logRow.created_at).toBeInstanceOf(Date);
+
+      await expect(client.query(
+        `insert into public.admin_audit_logs (actor_id, actor_role, action) values ($1, 'guest', 'staffBadge')`,
+        [uid],
+      )).rejects.toMatchObject({ code: '23514' });
+
+      // 인증 사용자는 감사 로그를 읽거나 쓰지 못한다 — 서버 전용 RLS
+      await client.query('begin');
+      try {
+        await client.query('set local role authenticated');
+        await client.query(`select set_config('request.jwt.claim.sub', $1, true)`, [uid]);
+        expect((await client.query('select id from public.admin_audit_logs')).rows).toEqual([]);
+        await expect(client.query(
+          `insert into public.admin_audit_logs (actor_id, actor_role, action) values ($1, 'admin', 'forged')`,
+          [uid],
+        )).rejects.toMatchObject({ code: '42501' });
+      } finally {
+        await client.query('rollback');
+      }
+
+      // 행위자 계정 삭제 시 감사 로그는 보존되고 actor_id만 null이 된다
+      await client.query(`delete from auth.users where id = $1`, [uid]);
+      const { rows: afterDelete } = await client.query<{ actor_id: string | null }>(
+        `select actor_id from public.admin_audit_logs where action = 'staffBadge'`,
+      );
+      expect(afterDelete).toEqual([{ actor_id: null }]);
+
+      // 다운/업 라운드트립
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        await other.query(migration('0054_admin_roles_and_staff_badge.down.sql'));
+        expect((await other.query(
+          `select 1 from information_schema.tables where table_schema = 'public' and table_name = 'admin_audit_logs'`,
+        )).rows).toHaveLength(0);
+        expect((await other.query(
+          `select 1 from information_schema.columns where table_schema = 'public' and table_name = 'admins' and column_name in ('role', 'show_staff_badge')`,
+        )).rows).toHaveLength(0);
+
+        await other.query(migration('0054_admin_roles_and_staff_badge.sql'));
+        expect((await other.query(
+          `select 1 from information_schema.tables where table_schema = 'public' and table_name = 'admin_audit_logs'`,
+        )).rows).toHaveLength(1);
+        expect((await other.query(
+          `select column_name from information_schema.columns where table_schema = 'public' and table_name = 'admins' and column_name in ('role', 'show_staff_badge') order by column_name`,
+        )).rows.map(r => r.column_name)).toEqual(['role', 'show_staff_badge']);
       } finally {
         await other.end();
         await copy.drop();

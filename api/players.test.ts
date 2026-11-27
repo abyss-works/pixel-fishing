@@ -63,7 +63,7 @@ describe('GET /api/players/:uid', () => {
 
   it('접속 중인 플레이어는 online과 실시간 지역·해역을 함께 응답한다', async () => {
     providePresence(uid => (uid === TARGET
-      ? { uid, nick: '갈치', boat: 4, region: 'world', zone: 'deep', x: 10, y: 20, dir: 0, line: false }
+      ? { uid, nick: '갈치', boat: 4, fame: 5000, region: 'world', zone: 'deep', x: 10, y: 20, dir: 0, line: false }
       : null));
     const res = await call(TARGET);
     expect(res.status).toBe(200);

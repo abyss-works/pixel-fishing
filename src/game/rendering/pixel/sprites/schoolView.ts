@@ -10,9 +10,9 @@ export function orbit(i: number, t: number, bite: boolean): OrbitPoint {
   return { dx: Math.cos(a) * rx, dy: Math.sin(a) * ry, faceLeft: Math.sin(a) >= 0 };
 }
 
-/** 훅 점프 — catch 전이 후 경과 초 → 수면 위 높이(px). 0.6초 안에 올라갔다 떨어지고, 그 뒤 0 */
-export const JUMP_S = 0.6;
-export const JUMP_PX = 14;
+/** 훅 점프 — catch 전이 후 경과 초 → 수면 위 높이(px). JUMP_S 안에 올라갔다 떨어지고, 그 뒤 0 */
+export const JUMP_S = 0.9;
+export const JUMP_PX = 24;
 export function jumpHeight(catchT: number): number {
   if (catchT < 0 || catchT >= JUMP_S) return 0;
   return Math.round(Math.sin((catchT / JUMP_S) * Math.PI) * JUMP_PX);

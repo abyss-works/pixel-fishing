@@ -2,24 +2,30 @@
 // 테스트 환경은 클라우드 빌드가 아니라 readBounty가 null이다 — 티켓·진행은 빈 값으로,
 // 조건 게이팅(순수 판정)과 화면 구조를 여기서 고정한다.
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/react';
+import { render, renderHook, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import BountyPanel from './BountyPanel';
+import type { ConfirmDialogFn } from './abandonQuest';
+import { useBounty } from '../../../../features/bounty/service/useBounty';
+import { useQuestInfo } from '../../../../features/bounty/service/useQuestInfo';
 import { gameDay } from '../../../../features/bounty/service/queryKeys';
 import { BOUNTIES, dailyQuestFor } from '../../../../game/content/bounties';
 import { artifactById } from '../../../../game/content/artifacts';
 import { artifactEffectValue } from '../../../ui/artifactEffects';
+import { resetAlerts } from '../../../../platform/api/attention';
 import { newState } from '../../../../game/rules/logic';
 import type { GameState } from '../../../../game/rules/logic';
 import type { BountySnapshot } from '../../../../features/bounty/model/types';
 
-afterEach(() => { cleanup(); mockSnap = null; });
+afterEach(() => { cleanup(); mockSnap = null; readBountySpy.mockClear(); vi.unstubAllGlobals(); });
 
 let mockSnap: BountySnapshot | null = null;
 vi.mock('../../../../platform/api', async (importOriginal) => {
   const mod = await importOriginal<typeof import('../../../../platform/api')>();
-  return { ...mod, readBounty: () => Promise.resolve(mockSnap) };
+  return { ...mod, readBounty: () => readBountySpy() };
 });
+const readBountySpy = vi.fn(() => Promise.resolve(mockSnap));
 
 const game = (over: Partial<GameState> = {}): GameState => ({ ...newState(), ...over });
 const okDispatch = (g: GameState) => () => ({ status: 'ok' as const, state: g, result: { type: 'none' as const } });
@@ -44,7 +50,7 @@ const tipOf = (el: HTMLElement): string => {
 /** 버튼을 감싼 툴팁 자리 */
 const tipOfButton = (button: HTMLElement): string => tipOf(button.parentElement!);
 
-function show(g: GameState, dispatch?: ReturnType<typeof okDispatch>) {
+function show(g: GameState, dispatch?: ReturnType<typeof okDispatch>, confirm?: ConfirmDialogFn) {
   const setToast = vi.fn();
   // useBounty(useQuery)용 격리 클라이언트 — 테스트마다 새로 만든다 (캐시 공유 금지).
   const client = new QueryClient({
@@ -53,7 +59,7 @@ function show(g: GameState, dispatch?: ReturnType<typeof okDispatch>) {
   render(
     <QueryClientProvider client={client}>
       <BountyPanel game={g} port="harbor" uid="test-uid"
-                   dispatch={dispatch ?? okDispatch(g)} setToast={setToast} />
+                   dispatch={dispatch ?? okDispatch(g)} setToast={setToast} confirm={confirm} />
     </QueryClientProvider>,
   );
   return { setToast };
@@ -68,18 +74,76 @@ describe('BountyPanel', () => {
     expect(screen.getAllByRole('button', { name: '수주' })).toHaveLength(3);
   });
 
-  it('수주한 일반 의뢰는 진행도 0이어도 진행 중과 진행 상황을 보이고 다시 수주할 수 없다', async () => {
+  it('수주한 일반 의뢰는 진행도 0이어도 의뢰 포기 버튼과 진행 상황을 보이고 다시 수주할 수 없다', async () => {
     const quest = dailyQuestFor('pacific', 'easy', 'test-uid', gameDay())!;
     mockSnap = { clearsToday: { general: 0, named: 0 },
       progress: [{ questId: quest.id, progress: 0 }], tickets: [] };
     show(game({ dex: fullDex }));
-    const button = await screen.findByRole('button', { name: '진행 중' });
-    expect(button).toBeDisabled();
+    const button = await screen.findByRole('button', { name: '의뢰 포기' });
+    expect(button).not.toBeDisabled();
     expect(button.closest('div')?.parentElement).toHaveTextContent(`0/${quest.count}`);
     // 일반 의뢰는 한 번에 하나 — 나머지 두 난이도는 보이지만 누를 수 없다
     const others = screen.getAllByRole('button', { name: '수주' });
     expect(others).toHaveLength(2);
     for (const button of others) expect(button).toBeDisabled();
+  });
+
+  it('수배판에서 미완료 일반 의뢰를 포기하면 확인 창을 거쳐 abandonQuest를 보낸다', async () => {
+    const quest = dailyQuestFor('pacific', 'easy', 'test-uid', gameDay())!;
+    mockSnap = { clearsToday: { general: 0, named: 0 },
+      progress: [{ questId: quest.id, progress: 1 }], tickets: [] };
+    const g = game({ dex: fullDex });
+    const dispatch = vi.fn(okDispatch(g));
+    const confirm = vi.fn().mockResolvedValue(true);
+    const { setToast } = show(g, dispatch, confirm as ConfirmDialogFn);
+    fireEvent.click(await screen.findByRole('button', { name: '의뢰 포기' }));
+    await waitFor(() => expect(confirm).toHaveBeenCalledWith({
+      layer: 'stage',
+      title: '의뢰 포기',
+      body: '지금 진행 중인 의뢰를 포기할까요?\n지금까지 쌓은 진행도는 사라지며 되돌릴 수 없어요.',
+      confirmLabel: '포기',
+    }));
+    await waitFor(() => expect(dispatch).toHaveBeenCalledWith({ type: 'abandonQuest', questId: quest.id }));
+    expect(setToast).toHaveBeenCalledWith('의뢰를 포기했어요.');
+  });
+
+  it('수배판에서 미완료 네임드 토벌 포기 시 흔적 유무에 맞는 확인 창을 거쳐 abandonQuest를 보낸다', async () => {
+    const namedQuest = BOUNTIES.find(q => q.zone === 'pacific' && q.difficulty === 'named')!;
+    mockSnap = {
+      clearsToday: { general: 0, named: 0 },
+      progress: [{ questId: namedQuest.id, progress: 0 }],
+      tickets: [{ questId: namedQuest.id, issuedAt: new Date(Date.now() - 60_000).toISOString() }],
+    };
+    const g = game({ dex: fullDex });
+    const dispatch = vi.fn(okDispatch(g));
+    const confirm = vi.fn().mockResolvedValue(true);
+    show(g, dispatch, confirm as ConfirmDialogFn);
+    fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
+    await screen.findByText('흔적');
+    fireEvent.click(screen.getByRole('button', { name: '의뢰 포기' }));
+    await waitFor(() => expect(confirm).toHaveBeenCalledWith({
+      layer: 'stage',
+      title: '의뢰 포기',
+      body: '진행 중인 네임드 토벌을 포기하면 남아 있는 흔적이 함께 사라져요.\n이미 입힌 네임드의 상처는 그대로 유지돼요.',
+      confirmLabel: '포기',
+    }));
+    await waitFor(() => expect(dispatch).toHaveBeenCalledWith({ type: 'abandonQuest', questId: namedQuest.id }));
+  });
+
+  it('목표를 채운 의뢰는 수배판에서 보상 수령 버튼만 보이고 포기 버튼을 보이지 않는다', async () => {
+    const quest = dailyQuestFor('pacific', 'easy', 'test-uid', gameDay())!;
+    const namedQuest = BOUNTIES.find(q => q.zone === 'pacific' && q.difficulty === 'named')!;
+    mockSnap = {
+      clearsToday: { general: 0, named: 0 },
+      progress: [{ questId: quest.id, progress: quest.count }, { questId: namedQuest.id, progress: namedQuest.count }],
+      tickets: [],
+    };
+    show(game({ dex: fullDex }));
+    expect(await screen.findByRole('button', { name: '완료' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '의뢰 포기' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '네임드 토벌' }));
+    expect(screen.getByRole('button', { name: '보상 받기' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '의뢰 포기' })).not.toBeInTheDocument();
   });
 
   it('고정 정보 줄 — 구역과 오늘 남은 클리어. 수주만으로는 남은 클리어가 줄지 않는다', async () => {
@@ -197,6 +261,34 @@ describe('BountyPanel', () => {
     expect(document.querySelector('.blur-sm.pointer-events-none')).toBeNull();
   });
 
+  it('네임드 알림 체크는 권한 허용 전에는 꺼진 상태를 보이고, 클릭 시 권한을 요청하며 거절(denied)일 때만 안내를 띄운다', async () => {
+    localStorage.clear();
+    resetAlerts();
+    const requestPermission = vi.fn(async () => 'default' as NotificationPermission);
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission });
+    const { setToast } = show(game({ dex: fullDex }));
+    fireEvent.click(await screen.findByRole('button', { name: '네임드 토벌' }));
+    const checkbox = await screen.findByRole('checkbox', { name: '조우하면 알림 받기' });
+    expect(checkbox).toHaveAttribute('aria-checked', 'false');
+    expect(checkbox.querySelector('[data-glyph="checkOff"]')).not.toBeNull();
+
+    // 허용 전 창을 닫아 default로 남으면 거절 안내를 띄우지 않는다
+    fireEvent.click(checkbox);
+    await waitFor(() => expect(requestPermission).toHaveBeenCalledTimes(1));
+    expect(setToast).not.toHaveBeenCalled();
+
+    // 실제 권한이 denied가 되면 거절 안내를 띄운다
+    requestPermission.mockImplementationOnce(async () => {
+      vi.stubGlobal('Notification', { permission: 'denied', requestPermission });
+      return 'denied';
+    });
+    fireEvent.click(checkbox);
+    await waitFor(() => expect(setToast).toHaveBeenCalledWith(
+      expect.stringContaining('브라우저가 알림을 막았어요'),
+      'warn',
+    ));
+  });
+
   it('수주 버튼을 누르면 acceptQuest를 보낸다', async () => {
     mockSnap = { clearsToday: { general: 0, named: 0 }, progress: [], tickets: [] };
     const g = game({ dex: fullDex });
@@ -251,7 +343,8 @@ describe('BountyPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: '해구의 이빨 상세 보기' }));
     const dialog = screen.getByRole('dialog');
     expect(dialog).toHaveTextContent('해구의 이빨');
-    expect(dialog).toHaveTextContent('획득 시(Lv.1)');
+    expect(dialog).not.toHaveTextContent('획득 시');
+    expect(within(dialog).queryByRole('button', { name: /강화|최고 레벨/ })).toBeNull();
     expect(dialog).toHaveTextContent('네임드 결투 가속');
     expect(dialog).toHaveTextContent(artifactEffectValue(artifactById('abyss-angler')!, 'duelSpeedupCut', 1)!);
     expect(dialog.textContent).not.toContain('Lv.0');
@@ -300,5 +393,74 @@ describe('BountyPanel', () => {
     const accept = screen.getByRole('button', { name: '수주' });
     expect(accept).toBeDisabled();
     expect(tipOfButton(accept)).toBe('오늘 네임드 토벌은 이미 마쳤어요.새벽 4시가 지나면 다시 수주할 수 있어요.');
+  });
+});
+
+describe('수배 스냅샷 조회 실패', () => {
+  it('오프라인이 아니라 조회 실패로 안내하고, 다시 시도하면 스냅샷을 다시 읽는다', async () => {
+    readBountySpy.mockRejectedValueOnce(new Error('network'));
+    show(game({ dex: fullDex }));
+    const retry = await screen.findByRole('button', { name: '다시 시도' });
+    expect(screen.getByText('의뢰를 불러오지 못했어요.')).toBeInTheDocument();
+    const accept = screen.getAllByRole('button', { name: '수주' })[0];
+    expect(tipOfButton(accept)).toContain('의뢰를 불러오지 못했어요.');
+    expect(tipOfButton(accept)).not.toContain('오프라인');
+    fireEvent.click(retry);
+    await waitFor(() => expect(readBountySpy).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole('button', { name: '다시 시도' })).not.toBeInTheDocument());
+  });
+});
+
+describe('수배 스냅샷 조회 — fresh 캐시가 있을 때의 마운트', () => {
+  const sharedClient = () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    return { client, wrapper };
+  };
+  /** 같은 클라이언트에서 두 번 마운트해, 두 번째 마운트가 읽기를 다시 부르는지 센다 */
+  async function mountTwice<T>(use: () => T, loaded: (v: T) => boolean) {
+    const { wrapper } = sharedClient();
+    const first = renderHook(use, { wrapper });
+    await waitFor(() => expect(loaded(first.result.current)).toBe(true));
+    expect(readBountySpy).toHaveBeenCalledTimes(1);
+    first.unmount();
+    const second = renderHook(use, { wrapper });
+    await waitFor(() => expect(loaded(second.result.current)).toBe(true));
+    return readBountySpy.mock.calls.length;
+  }
+
+  it('기본 호출은 60초 안의 fresh 캐시를 다시 읽지 않는다', async () => {
+    expect(await mountTwice(() => useBounty(), v => v.loaded)).toBe(1);
+  });
+
+  it("refetchOnMount: 'always'는 fresh 캐시가 있어도 마운트마다 다시 읽는다", async () => {
+    expect(await mountTwice(() => useBounty({ refetchOnMount: 'always' }), v => v.loaded)).toBe(2);
+  });
+
+  it('의뢰 정보(useQuestInfo)는 열 때마다 최신 스냅샷을 다시 읽는다', async () => {
+    mockSnap = { clearsToday: { general: 0, named: 0 }, progress: [], tickets: [] };
+    expect(await mountTwice(() => useQuestInfo(game()), v => v.status === 'ready')).toBe(2);
+  });
+
+  it('수배판은 fresh 캐시가 있어도 열 때 스냅샷을 다시 읽어 바뀐 진행도를 보인다', async () => {
+    const quest = dailyQuestFor('pacific', 'easy', 'test-uid', gameDay())!;
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const panel = (
+      <QueryClientProvider client={client}>
+        <BountyPanel game={game({ dex: fullDex })} port="harbor" uid="test-uid"
+                     dispatch={okDispatch(game())} setToast={vi.fn()} />
+      </QueryClientProvider>
+    );
+    mockSnap = { clearsToday: { general: 0, named: 0 }, progress: [{ questId: quest.id, progress: 0 }], tickets: [] };
+    const first = render(panel);
+    const progressOf = async () =>
+      (await screen.findByRole('button', { name: '의뢰 포기' })).closest('div')?.parentElement;
+    expect(await progressOf()).toHaveTextContent(`0/${quest.count}`);
+    first.unmount();
+    mockSnap = { clearsToday: { general: 0, named: 0 }, progress: [{ questId: quest.id, progress: 1 }], tickets: [] };
+    render(panel);
+    await waitFor(async () => expect(await progressOf()).toHaveTextContent(`1/${quest.count}`));
+    expect(readBountySpy).toHaveBeenCalledTimes(2);
   });
 });

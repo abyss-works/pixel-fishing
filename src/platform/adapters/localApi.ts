@@ -2,9 +2,9 @@
 // 게임은 LocalGameGateway(메모리 + localStorage), 인증은 가짜 계정으로 동작한다
 import { LocalGameGateway } from './localGameGateway';
 import type {
-  AcceptConsentResult, AccountLookup, GameGateway, AuthApi, AuthResult, ConsentStatus, DevApi, PromoteTestResult, ResetDevAccountResult,
+  AcceptConsentResult, AccountLookup, GameGateway, AuthApi, AuthResult, ConfirmGoogleSwitchResult, ConsentStatus, DevApi, PromoteTestResult, ResetDevAccountResult,
 } from '../api/types';
-import type { AdminApi } from '../api/types';
+import type { AdminApi, AdminNoticeRequest } from '../api/types';
 import { newState } from '../../game/rules/logic';
 import type { GameState } from '../../game/rules/logic';
 
@@ -38,6 +38,10 @@ class LocalAuth implements AuthApi {
   async startGoogle(): Promise<AuthResult> {
     return { ok: false, msg: '클라우드가 설정되지 않았어요.' };
   }
+  async confirmGoogleSwitch(): Promise<ConfirmGoogleSwitchResult> {
+    return { ok: false, fallback: false, msg: '클라우드가 설정되지 않았어요.' };
+  }
+  async cancelGoogleSwitch(): Promise<void> {}
   takeGoogleLanding(): { tag: string; error: string | null } | null {
     return null;
   }
@@ -90,11 +94,14 @@ class LocalAdmin implements AdminApi {
   letters(): Promise<never[]> { return rejected(); }
   changelog(): Promise<never[]> { return rejected(); }
   chatReports(): Promise<never[]> { return rejected(); }
+  notices(): Promise<never[]> { return rejected(); }
+  writeNotice(_request: AdminNoticeRequest): Promise<never> { return rejected(); }
   sentMails(): Promise<never[]> { return rejected(); }
   mail(_op: 'preview' | 'send', _request: unknown): Promise<never> { return rejected(); }
   restrict(_userId: string, _restricted: boolean): Promise<never> { return rejected(); }
   letterHandled(_letterId: number, _handled: boolean): Promise<never> { return rejected(); }
   revokeSessions(_userId: string): Promise<never> { return rejected(); }
+  setStaffBadge(_show: boolean): Promise<never> { return rejected(); }
   userEvents(_userId: string, _limit?: number): Promise<never[]> { return rejected(); }
   userState(_uid: string): Promise<never> { return rejected(); }
   balanceLive(_days?: number): Promise<never> { return rejected(); }

@@ -72,7 +72,7 @@ export function PlayerInfo({ target, self, account, accountFailed = false, setTo
   accountFailed?: boolean;
   setToast: Notify;
 }) {
-  const { profile, loading, failed } = usePlayerProfile(target.uid);
+  const { profile, loading, failed, unavailable, retry } = usePlayerProfile(target.uid);
   const member = account !== null && !self;
   const friends = useFriends(member);
   const moderation = useChatModeration(member);
@@ -86,10 +86,11 @@ export function PlayerInfo({ target, self, account, accountFailed = false, setTo
       </div>
     );
   }
-  if (failed || !profile) {
+  if (failed || unavailable || !profile) {
     return (
-      <div className="flex-1 min-h-0 flex items-center justify-center">
-        <Note tone="warn">정보를 불러오지 못했어요.<br />잠시 뒤 다시 열어 주세요.</Note>
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-2 text-center">
+        <Note tone="warn" className="my-0">정보를 불러오지 못했어요.<br />잠시 뒤 다시 시도해 주세요.</Note>
+        {failed && <Button size="sm" onClick={retry}>다시 시도</Button>}
       </div>
     );
   }
@@ -164,10 +165,22 @@ export function PlayerInfo({ target, self, account, accountFailed = false, setTo
   ) : (
     <div className="flex flex-wrap items-center gap-2">
       {friendSlot}
+      {profile.account && !friends.offline && blocked !== true && !friends.groups && friends.failed && (
+        <>
+          <span className="text-xs text-text-dim">친구 정보를 불러오지 못했어요.</span>
+          <Button size="sm" onClick={friends.refresh}>다시 확인</Button>
+        </>
+      )}
       {blocked !== null && (
         <Button size="sm" disabled={busy} onClick={() => void block(blocked ? 'unblock' : 'block')}>
           {blocked ? '차단 해제' : '차단'}
         </Button>
+      )}
+      {blocked === null && moderation.failed && (
+        <>
+          <span className="text-xs text-text-dim">차단 정보를 불러오지 못했어요.</span>
+          <Button size="sm" onClick={moderation.reload}>다시 확인</Button>
+        </>
       )}
       {chatId !== undefined && (
         <Button size="sm" disabled={busy || reported} onClick={() => void report(chatId)}>
@@ -433,6 +446,7 @@ function CollectiblesSubtab({ collectibles }: { collectibles: ProfileView['colle
                     rows={[
                       { label: '구매', value: `${hats.goldOwned} / ${hats.goldTotal}` },
                       { label: '업적', value: `${hats.achievementOwned} / ${hats.achievementTotal}` },
+                      { label: '이벤트', value: `${hats.eventOwned} / ${hats.eventTotal}` },
                     ]}
                   />
                 )}
@@ -460,7 +474,7 @@ function CollectiblesSubtab({ collectibles }: { collectibles: ProfileView['colle
                   text={(
                     <TipCard
                       title={h.name}
-                      subtitle={h.source === 'gold' ? '골드 구매' : '업적 보상'}
+                      subtitle={h.source === 'gold' ? '골드 구매' : h.source === 'event' ? '이벤트 한정' : '업적 보상'}
                       badge={<Badge tone={h.owned ? 'gold' : 'dim-plain'} size="xs">{h.owned ? '보유' : '미보유'}</Badge>}
                       description={h.conditionText}
                     />

@@ -5,6 +5,8 @@ import { sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { Database, Executor } from '../_db/client.js';
 import { deleteUserBounty } from './bounty.js';
+import { deleteUserCouponRedemptions } from './codes.js';
+import { deleteUserEventRows } from './events.js';
 import { at } from './json.js';
 import { deleteUserMails } from './mailbox.js';
 import { deleteUserProfile } from './profile.js';
@@ -19,6 +21,8 @@ import { deleteUserSaves } from './save.js';
 import { deleteUserEvents } from './telemetry.js';
 import { deleteUserCounters } from './achievements.js';
 import { deleteUserFortunes } from './fortune.js';
+import { deleteUserWidgetAuth, deleteWidgetTokensForUser } from './widget.js';
+import { deleteUserWeeklyFame } from './rank.js';
 
 /** 진행이 없는 게스트를 지우는 미접속 일수 */
 const IDLE_DAYS = 7;
@@ -142,6 +146,10 @@ async function deleteAccountRows(tx: Executor, uid: string): Promise<void> {
   await deleteUserConsents(tx, uid);
   await deleteUserCounters(tx, uid);
   await deleteUserFortunes(tx, uid);
+  await deleteUserWidgetAuth(tx, uid);
+  await deleteUserWeeklyFame(tx, uid);
+  await deleteUserCouponRedemptions(tx, uid);
+  await deleteUserEventRows(tx, uid);
   await deleteUserSaves(tx, uid);
   await tx.execute(sql`delete from auth.users where id = ${uid}`);
 }
@@ -155,9 +163,10 @@ export async function accountKind(db: Executor, uid: string): Promise<AccountKin
   return rows[0].is_anonymous ? 'anonymous' : 'member';
 }
 
-/** 사용자의 활성·만료 인증 세션(게임 및 관리자 세션)을 모두 삭제하고 지운 행 수를 돌려준다 */
+/** 사용자의 활성·만료 인증 세션(게임·관리자 세션)과 위젯 토큰을 모두 삭제하고 지운 세션 행 수를 돌려준다 */
 export async function revokeUserSessions(db: Executor, uid: string): Promise<number> {
   const result = await db.execute(sql`delete from auth.sessions where user_id = ${uid}::uuid`);
+  await deleteWidgetTokensForUser(db, uid);
   return result.rowCount ?? 0;
 }
 

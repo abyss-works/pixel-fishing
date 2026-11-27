@@ -25,6 +25,7 @@ const CALLS: [method: string, call: () => Promise<unknown>, url: string][] = [
   ['letters', () => admin.letters(), '/api/admin?q=letters'],
   ['changelog', () => admin.changelog(), '/api/admin?q=changelog'],
   ['chatReports', () => admin.chatReports(), '/api/admin?q=chatReports'],
+  ['notices', () => admin.notices(), '/api/admin?q=notices'],
   ['balanceLive', () => admin.balanceLive(3), '/api/admin?q=balanceLive&days=3'],
   ['sentMails', () => admin.sentMails(), '/api/admin?q=mails'],
 ];
@@ -50,8 +51,8 @@ describe('HttpAdmin', () => {
     }
   });
 
-  it('AdminApi의 모든 조회가 위 표에 있다. 서버 조회가 아닌 것은 deployHost, 쓰기(mail·restrict·letterHandled·revokeSessions), 관리자 로그인·로그아웃·로그인 복귀뿐이다', () => {
-    const writes = ['constructor', 'deployHost', 'mail', 'restrict', 'letterHandled', 'revokeSessions', 'signIn', 'signOut', 'takeSignInReturn'];
+  it('AdminApi의 모든 조회가 위 표에 있다. 서버 조회가 아닌 것은 deployHost, 쓰기(mail·restrict·letterHandled·revokeSessions·writeNotice·setStaffBadge), 관리자 로그인·로그아웃·로그인 복귀뿐이다', () => {
+    const writes = ['constructor', 'deployHost', 'mail', 'restrict', 'letterHandled', 'revokeSessions', 'writeNotice', 'setStaffBadge', 'signIn', 'signOut', 'takeSignInReturn'];
     const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(admin))
       .filter(m => !writes.includes(m));
     expect(methods.sort()).toEqual(CALLS.map(([method]) => method).sort());
@@ -72,11 +73,12 @@ describe('HttpAdmin', () => {
     });
   });
 
-  it('sentMails는 응답의 items 배열을 정규화해 매핑한다', async () => {
+  it('sentMails는 응답의 items·hats 배열을 정규화해 매핑한다', async () => {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify([
       {
         id: 1, userId: 'u-1', title: '선물', body: 'b', gold: 0,
         items: [{ id: 'luck-small', qty: 3 }],
+        hats: ['santa-hat'],
         createdAt: '2026-11-25T00:00:00.000Z', readAt: null, claimedAt: null,
       },
       {
@@ -86,7 +88,9 @@ describe('HttpAdmin', () => {
     ]), { status: 200 }));
     const rows = await admin.sentMails();
     expect(rows[0].items).toEqual([{ id: 'luck-small', qty: 3 }]);
+    expect(rows[0].hats).toEqual(['santa-hat']);
     expect(rows[1].items).toEqual([]);
+    expect(rows[1].hats).toEqual([]);
   });
 
   it('제재·편지 처리·세션 강제 종료는 POST로 인자를 보내고, 실패하면 작업 이름과 서버 오류 코드를 담아 던진다', async () => {
@@ -104,6 +108,22 @@ describe('HttpAdmin', () => {
     expect(fetchMock).toHaveBeenLastCalledWith('/api/admin?q=revokeSessions', post({ userId: 'u-1' }));
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: 'no-user' }), { status: 404 }));
     await expect(admin.revokeSessions('u-1')).rejects.toThrow('세션 강제 종료 실패: 404 no-user');
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ notice: { id: 7 } }), { status: 200 }));
+    await expect(admin.writeNotice({
+      op: 'create', title: '공지', body: '내용',
+      startsAt: '2026-11-26T00:00:00.000Z', endsAt: '2026-11-27T00:00:00.000Z',
+    })).resolves.toEqual({ notice: { id: 7 } });
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/admin?q=notices', post({
+      op: 'create', title: '공지', body: '내용',
+      startsAt: '2026-11-26T00:00:00.000Z', endsAt: '2026-11-27T00:00:00.000Z',
+    }));
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: 'bad-window' }), { status: 400 }));
+    await expect(admin.writeNotice({ op: 'end', id: 7 })).rejects.toThrow('공지 end 실패: 400 bad-window');
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ showStaffBadge: true }), { status: 200 }));
+    await expect(admin.setStaffBadge(true)).resolves.toEqual({ showStaffBadge: true });
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/admin?q=staffBadge', post({ show: true }));
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: 'forbidden' }), { status: 403 }));
+    await expect(admin.setStaffBadge(false)).rejects.toThrow('운영진 표시 설정 실패: 403 forbidden');
   });
 
   it('sessions는 생략한 인자를 보내지 않는다', async () => {
@@ -137,9 +157,37 @@ describe('HttpAdmin', () => {
     await expect(admin.retention()).resolves.toEqual(rows);
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ kind: 'denied', uid: 'u-1' }), { status: 200 }));
     await expect(admin.access()).resolves.toEqual({ kind: 'denied', uid: 'u-1' });
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ kind: 'granted', uid: 'u-2', role: 'maintainer', showStaffBadge: true }), { status: 200 }));
+    await expect(admin.access()).resolves.toEqual({ kind: 'granted', uid: 'u-2', role: 'maintainer', showStaffBadge: true });
     const live = { boats: [{ boat: 0, users: 2 }], gold: { p25: null, max: null }, anomalies: { fastGaps: 0, fastUsers: 0, perfectPct: null } };
     fetchMock.mockResolvedValue(new Response(JSON.stringify(live), { status: 200 }));
     await expect(admin.balanceLive(7)).resolves.toEqual(live);
+    const overview = {
+      users: [],
+      userAggregates: {
+        totalUsers: 5,
+        activePlayers: 3,
+        asOf: '2026-11-27T01:00:00.000Z',
+        activeUsers: { today: 1, week: 2, month: 3 },
+        newToday: { users: 1, accounts: 1 },
+        gold: { count: 4, sum: 1500, median: 300, p75: 500, max: 1000 },
+        progression: {
+          boats: [{ tier: 0, count: 1 }, { tier: 1, count: 2 }],
+          rods: [{ level: 2, count: 1 }, { level: 4, count: 2 }],
+          regionReach: [{ id: 'village', count: 3 }, { id: 'world', count: 2 }],
+          zoneUnlocks: [{ id: 'village', count: 3 }, { id: 'pacific', count: 2 }],
+          fameGateStalled: { total: 1, byNextTier: [{ nextTier: 2, count: 1 }] },
+        },
+      },
+      recentEvents: [],
+      spamFlags: [],
+      dailyStats: [],
+      retention: [],
+      sessions: [],
+      live: { count: 0, online: [] },
+    };
+    fetchMock.mockResolvedValue(new Response(JSON.stringify(overview), { status: 200 }));
+    await expect(admin.overview(30)).resolves.toEqual(overview);
   });
 
   it('관리자 세션이 없어 서버가 거절하면(401) 접근 판정은 signedOut이고 나머지 조회는 실패한다', async () => {

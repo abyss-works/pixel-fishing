@@ -6,7 +6,8 @@ import { anonymous } from 'better-auth/plugins';
 import { createHmac, randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { accountLinking, dropOAuthTokens, finishGoogleLink, googleProvider, guardAuthRequests, validateGoogleLink } from './googleLink.js';
-import type { GoogleConfig, RecordLinkConsent } from './googleLink.js';
+import type { GoogleConfig, GuestLinkedReward, RecordLinkConsent } from './googleLink.js';
+import { googleSwitchPlugin } from './googleSwitch.js';
 import { TRUSTED_PROXY_CIDRS } from './trustedProxy.js';
 
 export interface AuthConfig {
@@ -17,17 +18,40 @@ export interface AuthConfig {
   google: GoogleConfig;
   /** 구글 연결이 끝난 계정의 약관 수락을 기록한다 */
   recordLinkConsent: RecordLinkConsent;
+  /** 게스트가 처음 구글 계정을 연결해 정식 계정으로 승격될 때 실행한다 */
+  onGuestLinked?: GuestLinkedReward;
 }
 
 // 게스트의 신원은 세션 하나뿐이라 세션이 끝나면 계정을 잃는다. 1년 동안 쓰지 않을 때만 끝나게 한다.
 const SESSION_EXPIRES_IN = 60 * 60 * 24 * 365;
 // 익명 계정의 자리표시 이메일 도메인. 예약된 최상위 도메인이라 실제 주소와 겹치지 않는다.
 export const ANONYMOUS_EMAIL_DOMAIN = 'anonymous.invalid';
-/** 익명 계정 생성 경로(/api/auth/sign-in/anonymous)의 IP당 생성 상한: 1시간(3600초)당 최대 10회 */
-export const ANONYMOUS_SIGN_IN_RATE_LIMIT = {
-  window: 60 * 60,
-  max: 10,
-} as const;
+const DEFAULT_ANON_SIGN_IN_RATE_MAX = 150;
+const DEFAULT_ANON_SIGN_IN_RATE_WINDOW_SEC = 10 * 60;
+
+/** 양의 정수 환경변수를 파싱한다. 비어 있거나 양의 정수가 아니면 기본값으로 폴백한다 */
+export function parsePositiveIntEnv(raw: string | undefined, fallback: number): number {
+  if (raw === undefined) return fallback;
+  const trimmed = raw.trim();
+  if (!/^\d+$/.test(trimmed)) return fallback;
+  const parsed = Number(trimmed);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+/** 익명 계정 생성 경로의 IP당 생성 상한을 환경변수에서 읽는다 */
+export function anonymousSignInRateLimit(env: NodeJS.ProcessEnv = process.env): { window: number; max: number } {
+  return {
+    window: parsePositiveIntEnv(env.ANON_SIGN_IN_RATE_WINDOW_SEC, DEFAULT_ANON_SIGN_IN_RATE_WINDOW_SEC),
+    max: parsePositiveIntEnv(env.ANON_SIGN_IN_RATE_MAX, DEFAULT_ANON_SIGN_IN_RATE_MAX),
+  };
+}
+
+/** 익명 계정 생성 경로(/api/auth/sign-in/anonymous)의 IP당 생성 상한(기본 600초당 최대 150회) */
+export const ANONYMOUS_SIGN_IN_RATE_LIMIT = anonymousSignInRateLimit();
+/** 공유 NAT 환경에서 /get-session, /callback/google 등의 누적 잠금을 막기 위한 전역 기본 한도 */
+const GLOBAL_RATE_LIMIT = { window: 10, max: 300 };
+/** 공유 NAT 환경에서 여러 사용자가 동시에 구글 로그인을 시작할 수 있도록 기본 특수 규칙(10초 3회) 대신 10초당 60회를 허용한다 */
+const SOCIAL_SIGN_IN_RATE_LIMIT = { window: 10, max: 60 };
 // 이메일·비밀번호 로그인·가입·재설정 경로는 사용하지 않아 라우터 진입에서 차단한다.
 const DISABLED_EMAIL_PASSWORD_PATHS = ['/sign-in/email', '/sign-up/email', '/request-password-reset', '/reset-password'];
 
@@ -90,7 +114,7 @@ function withRetryAfterHeader<
 }
 
 export function createAuth(config: AuthConfig) {
-  const finishLink = finishGoogleLink(config.recordLinkConsent);
+  const finishLink = finishGoogleLink(config.recordLinkConsent, config.onGuestLinked);
   const auth = betterAuth({
     database: config.pool,
     secret: config.secret,
@@ -116,8 +140,10 @@ export function createAuth(config: AuthConfig) {
     },
     hooks: { before: guardAuthRequests },
     rateLimit: {
+      ...GLOBAL_RATE_LIMIT,
       customRules: {
-        '/sign-in/anonymous': { ...ANONYMOUS_SIGN_IN_RATE_LIMIT },
+        '/sign-in/anonymous': anonymousSignInRateLimit(),
+        '/sign-in/social': SOCIAL_SIGN_IN_RATE_LIMIT,
       },
     },
     advanced: { database: { generateId: 'uuid' }, ipAddress: ipAddressConfig },
@@ -128,6 +154,7 @@ export function createAuth(config: AuthConfig) {
         generateRandomEmail: () => `${randomUUID()}@${ANONYMOUS_EMAIL_DOMAIN}`,
         schema: { user: { fields: { isAnonymous: 'is_anonymous' } } },
       }),
+      googleSwitchPlugin(),
     ],
   });
   return withRetryAfterHeader(auth);
@@ -163,6 +190,7 @@ export function createAdminAuth(config: Omit<AuthConfig, 'recordLinkConsent'>) {
     databaseHooks: { session: sessionHooks, account: dropOAuthTokens },
     hooks: { before: guardAuthRequests },
     rateLimit: {
+      ...GLOBAL_RATE_LIMIT,
       customRules: {
         '/sign-in/social': { window: 10, max: 20 },
       },

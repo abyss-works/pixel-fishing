@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { readRanking } from '../../../platform/api';
-import type { RankingBoard, RankingBoardId } from '../../../platform/api';
+import type { RankingBoard, RankingBoardId, RankingWindow } from '../../../platform/api';
+import { defaultRankingWindow, isPeriodRankingBoard } from '../model/ranking';
 import type { MainRankingBoardId } from '../model/ranking';
 import { useSession } from '../../account/service/session';
 import { useConsentReady } from '../../account/service/consentGate';
@@ -10,21 +11,35 @@ import { useConsentReady } from '../../account/service/consentGate';
 // offline: 클라우드 미설정(로컬 모드)이라 랭킹이 없다.
 const STALE = 60_000;
 
-function useBoard(board: RankingBoardId, fishId?: string) {
+/** 순위 표 조회 — 기간을 지원하지 않는 보드는 항상 전체 누적(all)으로 정규화한다 */
+export function useRanking(
+  board: RankingBoardId,
+  fishId?: string,
+  window: RankingWindow = defaultRankingWindow(board),
+) {
   const { ready, uid } = useSession();
   const consentReady = useConsentReady();
+  const effectiveWindow: RankingWindow = isPeriodRankingBoard(board) ? window : 'all';
   const q = useQuery({
-    queryKey: ['ranking', board, fishId ?? null, uid],
-    queryFn: () => readRanking(board, fishId),
+    queryKey: ['ranking', board, effectiveWindow, fishId ?? null, uid],
+    queryFn: () => readRanking(board, fishId, effectiveWindow),
     enabled: ready && consentReady,
     staleTime: STALE,
-    retry: 1,
   });
-  return { data: (q.data ?? null) as RankingBoard | null, loading: q.isPending, failed: q.isError, offline: q.isSuccess && q.data === null };
+  return {
+    data: (q.data ?? null) as RankingBoard | null,
+    loading: q.isPending,
+    failed: q.isError,
+    offline: q.isSuccess && q.data === null,
+    retry: () => { void q.refetch(); },
+  };
 }
 
 /** 명성·도감(일반/돌연변이/네임드)·네임드 토벌 순위 */
-export const useRankingBoard = (board: MainRankingBoardId) => useBoard(board);
+export const useRankingBoard = (
+  board: MainRankingBoardId,
+  window: RankingWindow = defaultRankingWindow(board),
+) => useRanking(board, undefined, window);
 
 /** 어종 하나의 크기 순위 */
-export const useSpeciesRanking = (fishId: string) => useBoard('species', fishId);
+export const useSpeciesRanking = (fishId: string) => useRanking('species', fishId, 'all');

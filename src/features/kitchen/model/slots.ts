@@ -8,6 +8,7 @@ import { cookingUnlocked, isActiveSlot, maxBaitSlots } from '../../../game/rules
 import { activePotionsOf, fortuneOf } from '../../../game/rules/fortune';
 import type { FortuneTarget } from '../../../game/rules/fortune';
 import type { GameState } from '../../../game/rules/logic';
+import { fmtEffectDuration } from '../../../shared/lib/effectDuration';
 import { facilityGuestAllowed, facilityProgress, menuLock, progressNote } from '../../display/model/menuLock';
 import type { AccountLockState } from '../../display/model/menuLock';
 import {
@@ -24,6 +25,18 @@ import type { RecipeEffectLine, RecipeTitle } from './recipes';
 
 const MIN_MS = 60_000;
 
+export const SUB_MINUTE_POLL_MS = 1_000;
+export const DEFAULT_POLL_MS = 5_000;
+
+/** 1분 미만 활성 슬롯이 하나라도 있으면 1초, 없으면 5초 갱신 주기를 돌려준다 */
+export function slotPollIntervalMs(game: Pick<GameState, 'slots'>, now: string): number {
+  for (const key of ALL_SLOT_KEYS) {
+    const slot = activeSlot(game, key, now);
+    if (slot && slot.remainingMs < MIN_MS) return SUB_MINUTE_POLL_MS;
+  }
+  return DEFAULT_POLL_MS;
+}
+
 /** 슬롯 키 — 슬롯 종류와 그 슬롯에 넣는 요리 종류가 같은 이름이다 */
 export type SlotKey = CookKind;
 
@@ -33,22 +46,9 @@ export type SlotInstanceKey = 'lunch' | 'bait' | 'bait2';
 /** 활성 슬롯을 확인하는 순서 — 도시락, 첫 번째 미끼, 두 번째 미끼 */
 export const ALL_SLOT_KEYS: readonly SlotInstanceKey[] = ['lunch', 'bait', 'bait2'];
 
-/** 남은 시간을 분 단위로 올린 값. 0 이하는 0이다 */
-const minutesLeft = (remainingMs: number): number => (remainingMs > 0 ? Math.ceil(remainingMs / MIN_MS) : 0);
-
-/** 칩의 남은 시간 표기 - 큰 단위 하나만 쓴다. 1시간 이상은 "8시간"(시간 아래는 버림), 1시간 미만은 "25분"(분은 올림) */
-export function fmtSlotChipTime(remainingMs: number): string {
-  const minutes = minutesLeft(remainingMs);
-  return minutes >= 60 ? `${Math.floor(minutes / 60)}시간` : `${minutes}분`;
-}
-
-/** 툴팁 목록의 남은 시간 표기 - "8시간 12분", 분은 올림이다 */
+/** 툴팁 목록의 남은 시간 표기 - 1분 이상은 분까지만, 1분 미만은 초만 쓴다 */
 export function fmtSlotTimeLeft(remainingMs: number): string {
-  const minutes = minutesLeft(remainingMs);
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  if (hours === 0) return `${rest}분`;
-  return rest === 0 ? `${hours}시간` : `${hours}시간 ${rest}분`;
+  return fmtEffectDuration(remainingMs / MIN_MS);
 }
 
 /** 효과가 든 슬롯 하나 */
@@ -63,8 +63,6 @@ export interface ActiveSlot {
   title: RecipeTitle;
   /** 남은 시간(ms) — 0보다 크다 */
   remainingMs: number;
-  /** 칩에 쓰는 남은 시간 - 큰 단위 하나("8시간", "25분") */
-  chipTime: string;
   /** 툴팁에 쓰는 남은 시간("8시간 12분") */
   timeLeft: string;
   /** 효과 줄 */
@@ -85,7 +83,7 @@ export function activeSlot(game: Pick<GameState, 'slots'>, slotKey: SlotInstance
   const timeLeft = fmtSlotTimeLeft(remainingMs);
   const effects = recipeEffectLines(recipe);
   return {
-    key, slotKey, recipe, label: recipeLabel(recipe), title: recipeTitle(recipe), remainingMs, chipTime: fmtSlotChipTime(remainingMs), timeLeft,
+    key, slotKey, recipe, label: recipeLabel(recipe), title: recipeTitle(recipe), remainingMs, timeLeft,
     effects, rows: [...effects, { label: '남은 시간', value: timeLeft }], note: recipeEffectNote(recipe.kind),
   };
 }
@@ -179,7 +177,7 @@ export function selectBonusChip(game: GameState, now: string, account: AccountLo
   if (locked) {
     const lock = menuLock({ account, guestAllowed: facilityGuestAllowed('kitchen'), feature: '활성 효과', progress });
     if (lock.kind === 'progress') {
-      return { state: 'locked', lines: progressNote(COOKING_UNLOCK_BOAT, '도시락과 미끼를 쓸 수 있어요.') };
+      return { state: 'locked', lines: progressNote(COOKING_UNLOCK_BOAT, '부엌에서 도시락과 미끼를 만들 수 있어요.') };
     }
     if (lock.kind !== 'none') {
       return { state: 'locked', lines: lock.lines };

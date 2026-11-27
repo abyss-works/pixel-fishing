@@ -81,7 +81,7 @@ export function RarityDot({ rarity }: { rarity: RarityId }) {
     **크기(패딩·글자)는 여기 없다** — 화면마다 카드가 커야 할 이유가 달라 쓰는 쪽이 정한다.
     쓰는 쪽이 `data-rarity`를 걸어야 --rarity-color가 잡힌다. */
 export const RARITY_CARD =
-  'pf-notch bg-(--inset-base) border text-center leading-normal'
+  'relative pf-notch bg-(--inset-base) border text-center leading-normal'
   + ' shadow-[inset_1px_1px_0_var(--bevel-hi),inset_-1px_-1px_0_var(--bevel-lo)]'
   + ' border-[color-mix(in_srgb,var(--rarity-color)_70%,transparent)]'
   + ' transition-[translate,background-color] duration-[120ms] ease-out'

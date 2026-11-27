@@ -15,7 +15,7 @@ const SOURCE_ROOTS = new Set([
 ]);
 const CONCERN_DIRS: Record<string, ReadonlySet<string>> = {
   game: new Set(['content', 'rendering', 'rules', 'runtime', 'world']),
-  platform: new Set(['adapters', 'api']),
+  platform: new Set(['adapters', 'api', 'audio']),
   presentation: new Set(['layouts', 'ui', 'views']),
   shared: new Set(['lib']),
 };
@@ -35,6 +35,9 @@ const ALLOWED_IMPORTS: Record<string, ReadonlySet<string>> = {
 const CROSS_LAYER_IMPORTS = new Set([
   'features/gameplay/service/useGame.ts -> core/errors',
   'features/gameplay/service/rateLimitRetry.ts -> core/errors',
+  'features/friends/service/useFriends.ts -> core/retryPolicy',
+  'features/guild/service/useGuild.ts -> core/retryPolicy',
+  'features/mailbox/service/useMailbox.ts -> core/retryPolicy',
   'features/gameplay/service/useGame.ts -> buildId',
   'features/announcements/service/whatsNew.ts -> version',
   'platform/adapters/me.ts -> core/errors',
@@ -112,7 +115,6 @@ const INITIAL_PRESENTATION_GAME_VALUE_IMPORTS: Record<string, readonly string[]>
   'presentation/views/overlays/guild/GuildManageTab.tsx': ['GUILD_JOIN_MODES', 'checkGuildName'],
   'presentation/views/overlays/guild/GuildModal.tsx': ['GUILD_MAX_MEMBERS'],
   'presentation/views/overlays/guild/GuildSkillsTab.tsx': ['applyDonation'],
-  'presentation/views/overlays/guild/NoGuild.tsx': ['GUILD_MAX_MEMBERS', 'joinRequestDaysLeft', 'normalizeGuildCode'],
   'presentation/views/overlays/letter/LetterModal.tsx': ['LETTER_MAX'],
   'presentation/views/overlays/live/ChatBar.tsx': ['CHAT_MAX_LENGTH'],
   'presentation/views/overlays/patchnotes/PatchNotesModal.tsx': ['PATCH_NOTES'],
@@ -224,7 +226,7 @@ describe('src 구조 경계', () => {
     const offenders = importedPaths()
       .filter(({ path, target }) => {
         const isAdapter = target === 'platform/adapters' || target.startsWith('platform/adapters/');
-        const isPlatform = path.startsWith('platform/api/') || path.startsWith('platform/adapters/');
+        const isPlatform = path.startsWith('platform/api/') || path.startsWith('platform/adapters/') || path.startsWith('platform/audio/');
         return !isTestFile(path) && isAdapter && !isPlatform;
       })
       .map(({ path, target }) => `${path} -> ${target}`);

@@ -21,17 +21,46 @@ import type { MessageChannel, Msg } from './messageFeed';
 // 휠을 받으려고 창 상자는 포인터를 받는다. 창 바깥의 빈 열은 캔버스 클릭을 막지 않는다.
 // 기록 상자는 노치와 베벨 틀이다. 평소에는 글줄과 글자 그림자만 보이고, 마우스를 올렸거나 창 아래 입력 칸에서
 // 입력하는 동안에만 반투명 바탕과 테두리를 보인다. 스크롤 막대(HUD용 흰 막대)도 마우스를 올렸을 때만 보인다.
-// 채널: 머리표 없이 색으로 가른다. 채팅은 보낸 사람 이름(굵게)이 앞에 오고 본문은 본문색, 길드 채팅 본문은 길드색,
-// 시스템은 본문색, 보상은 골드, 거부와 실패는 위험색이다. 시각은 픽셀 서체의 보조색으로 낮춘다.
-// 기록에 채널이 둘 이상 나타나면 창 위에 기록에 나온 채널의 토글 칩(채팅, 길드, 시스템)을 그린다. 켜진 채널은
+// 채널: 대괄호 머리표 없이 왼쪽 2px 채널 색선과 색으로 가른다. 채팅은 보낸 사람 이름(굵게)이 앞에 오고 본문은 본문색, 길드 채팅 본문은 길드색,
+// 시스템은 본문색, 보상은 골드, 거부와 실패는 위험색이다. 시각은 오른쪽 상단 픽셀 서체의 보조색으로 낮춘다.
+// 기록에 채널이 둘 이상 나타나면 창 위에 기록에 나온 채널의 토글 칩(전체, 지역, 길드, 시스템)을 그린다. 켜진 채널은
 // 일반 켜짐 단계라 골드로 세우지 않는다. 꺼 둔 채널은 칩 안 이름 뒤에 점 자리를 두고, 새 글줄이 오면 네모 골드 점을 찍는다.
 // 채널 표시를 바꾸면 맨 아래부터 다시 보인다.
 // 채팅: 원본이 있는 글줄의 보낸 사람 이름은 버튼이라 고르면 onPick이 받는다. 내 이름은 골드, 다른 사람은 하늘색이다.
+// topSlot은 펼침 상태에서 토글 줄 아래·기록 상자 위에 놓인다(채팅 공지 띠 등).
 // footer는 창 아래(입력 줄 등)에 놓는다.
 // 접기: onFold가 있으면 채널 토글 줄 왼쪽 끝에 접기 버튼을 둔다. 접힌 입력 줄의 펼치기 버튼과 같은 세로줄이라
-// 열고 닫는 자리가 같다. folded면 토글 줄과 기록을 숨기고 footer만 남긴다.
+// 열고 닫는 자리가 같다. folded면 토글 줄과 topSlot, 기록을 숨기고 footer만 남긴다.
 
 const TONE_CLS = { info: 'text-text', gold: 'text-gold', warn: 'text-danger' } as const;
+
+const CHANNEL_BAR_CLS: Record<MessageChannel, string> = {
+  global: 'bg-chat-global',
+  local: 'bg-chat-local',
+  guild: 'bg-chat-guild',
+  system: 'bg-chat-system',
+};
+
+const SWATCH_ON: Record<MessageChannel, string> = {
+  global: 'bg-chat-global border border-chat-global',
+  local: 'bg-chat-local border border-chat-local',
+  guild: 'bg-chat-guild border border-chat-guild',
+  system: 'bg-chat-system border border-chat-system',
+};
+
+const SWATCH_OFF: Record<MessageChannel, string> = {
+  global: 'bg-transparent border border-chat-global',
+  local: 'bg-transparent border border-chat-local',
+  guild: 'bg-transparent border border-chat-guild',
+  system: 'bg-transparent border border-chat-system',
+};
+
+const CHIP_ON: Record<MessageChannel, string> = {
+  global: 'border-chat-global!',
+  local: 'border-chat-local!',
+  guild: 'border-chat-guild!',
+  system: 'border-chat-system!',
+};
 
 /** 한 줄 높이(em) — 창 높이를 줄 수로 정한다 */
 const LINE_EM = 1.45;
@@ -70,22 +99,35 @@ function LineText({ m }: { m: Msg }) {
 
 function Line({ m, mine, onPick }: { m: Msg; mine: boolean; onPick?: (m: Msg) => void }) {
   const nameCls = cx('font-bold', mine ? 'text-gold' : 'text-accent');
+  const badgeGlyph = m.staffBadge === 'admin'
+    ? 'staffStarLarge'
+    : m.staffBadge === 'maintainer'
+      ? 'staffStarSmall'
+      : null;
   return (
-    <div className={cx('leading-[1.45] text-shadow-hud', m.channel === 'guild' ? 'text-guild' : TONE_CLS[m.tone])}>
-      <span className="pf-accent text-2xs text-text-dim mr-1">{m.ts}</span>
-      {m.author && (m.from && onPick
-        ? <button type="button" className={cx(nameCls, 'hover:underline cursor-pointer')} onClick={() => onPick(m)}>{m.author}</button>
-        : <b className={nameCls}>{m.author}</b>)}
-      {m.author && ' '}
-      <LineText m={m} />
+    <div className={cx('flex items-start gap-1.5 leading-[1.45] text-shadow-hud', m.channel === 'guild' ? 'text-guild' : TONE_CLS[m.tone])}>
+      <span className={cx('w-0.5 shrink-0 self-stretch my-0.5', CHANNEL_BAR_CLS[m.channel])} aria-hidden="true" />
+      <div className="min-w-0 flex-1 break-words">
+        {m.author && badgeGlyph && (
+          <PixelIcon glyph={badgeGlyph} size={12} className="mr-1 text-gold align-[-2px]" />
+        )}
+        {m.author && (m.from && onPick
+          ? <button type="button" className={cx(nameCls, 'hover:underline cursor-pointer')} onClick={() => onPick(m)}>{m.author}</button>
+          : <b className={nameCls}>{m.author}</b>)}
+        {m.author && ' '}
+        <LineText m={m} />
+      </div>
+      <span className="pf-accent text-2xs text-text-dim shrink-0 tabular-nums leading-[1.45]">{m.ts}</span>
     </div>
   );
 }
 
-export default function MessageLog({ log, onPick, footer, you, filter = FILTER_CHANNELS, onToggle, channels, disabledChannels = [], lines = MESSAGE_VISIBLE_LINES, folded = false, onFold }: {
+export default function MessageLog({ log, onPick, topSlot, footer, you, filter = FILTER_CHANNELS, onToggle, channels, disabledChannels = [], lines = MESSAGE_VISIBLE_LINES, folded = false, onFold }: {
   log: Msg[];
   /** 채팅 글줄의 보낸 사람을 골랐다 */
   onPick?: (m: Msg) => void;
+  /** 펼침 상태에서 기록 상자 맨 위에 고정할 슬롯(채팅 공지 띠 등) */
+  topSlot?: ReactNode;
   footer?: ReactNode;
   /** 내 id — 내가 보낸 채팅 글줄의 이름을 구분한다 */
   you?: string | null;
@@ -99,7 +141,7 @@ export default function MessageLog({ log, onPick, footer, you, filter = FILTER_C
   disabledChannels?: readonly MessageChannel[];
   /** 한 번에 보이는 글줄 수 */
   lines?: number;
-  /** 접힘 — 토글 줄과 기록을 숨기고 footer만 남긴다 */
+  /** 접힘 — 토글 줄과 topSlot, 기록을 숨기고 footer만 남긴다 */
   folded?: boolean;
   /** 접기 버튼을 눌렀다. 없으면 접기 버튼을 그리지 않는다 */
   onFold?: () => void;
@@ -134,25 +176,27 @@ export default function MessageLog({ log, onPick, footer, you, filter = FILTER_C
     <div className={cx('group relative z-(--z-chrome) w-[min(400px,58%)] flex flex-col items-stretch gap-1 pointer-events-none',
                        'mobile:w-full', STACK_LOG_CLASS)}>
       {!folded && (toggles || onFold) && (
-        <div className="pointer-events-none flex items-center gap-1.5">
+        <div className="pointer-events-none flex flex-wrap items-center gap-1.5">
         {onFold && (
-          <Tip wraps text="접기" className="pointer-events-auto flex">
+          <Tip wraps text="접기" className="pointer-events-auto flex shrink-0">
             <HudButton aria-label="메시지 창 접기" onPointerDown={e => e.preventDefault()} onClick={onFold}>
               <PixelIcon glyph="minus" size={12} />
             </HudButton>
           </Tip>
         )}
         {toggles && (
-        <div className="pointer-events-auto flex items-center gap-1.5 text-shadow-hud" role="group" aria-label="메시지 채널">
+        <div className="pointer-events-auto min-w-0 flex flex-wrap items-center gap-1 text-shadow-hud" role="group" aria-label="메시지 채널">
           {FILTER_CHANNELS.filter(c => listed.includes(c)).map(c => {
             const disabled = disabledChannels.includes(c);
             const on = !disabled && isChannelShown(filter, c);
             const dot = !on && !disabled && unread(c);
             return (
               <span key={c} className="inline-flex">
-                {/* 채널 토글은 모두 같은 폭이다. 새 글 점은 칩 오른쪽 위 모서리에 겹쳐 그려 폭을 바꾸지 않는다 */}
-                <ToggleChip pressed={on} disabled={disabled} className="relative w-[66px] justify-center"
+                {/* 좁은 폭에서도 가로 넘침이 없도록 컴팩트 폭을 쓰고, 새 글 점은 칩 오른쪽 위 모서리에 겹쳐 그린다 */}
+                <ToggleChip pressed={on} disabled={disabled}
+                            className={cx('relative px-1.5! gap-1!', on && !disabled ? CHIP_ON[c] : 'border-line-dim!')}
                             onClick={() => { setHiddenSince(Date.now()); onToggle?.(c, present); }}>
+                  <span className={cx('size-2 shrink-0', on && !disabled ? SWATCH_ON[c] : SWATCH_OFF[c])} aria-hidden="true" />
                   {CHANNEL_LABEL[c]}
                   {dot && !on && !disabled && <span className="absolute top-0.5 right-0.5 size-1.5 bg-gold" aria-hidden="true" />}
                 </ToggleChip>
@@ -164,6 +208,7 @@ export default function MessageLog({ log, onPick, footer, you, filter = FILTER_C
         )}
         </div>
       )}
+      {!folded && topSlot && <div className="pointer-events-auto">{topSlot}</div>}
       {!folded && <div ref={listRef} onScroll={onScroll} role="log" aria-label="메시지 기록"
            className={cx('pointer-events-auto pf-scroll-hud pf-notch border border-transparent px-2 py-1 text-sm',
              'flex flex-col [&>:first-child]:mt-auto pf-vscroll select-text',

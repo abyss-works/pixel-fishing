@@ -16,7 +16,9 @@ import {
   selectItemSection,
 } from '../../../../../features/kitchen/model/bagItems';
 import type { EnergyCell, ItemRow, PotionRow, SwapConfirm } from '../../../../../features/kitchen/model/bagItems';
+import { slotPollIntervalMs } from '../../../../../features/kitchen/model/slots';
 import { formatEnergy } from '../../../../../game/content/cooking';
+import { fmtEffectDuration } from '../../../../../shared/lib/effectDuration';
 import { when } from '../../../../../shared/lib/when';
 import ConfirmDialog from '../../../../ui/ConfirmDialog';
 import Badge from '../../../../ui/Badge';
@@ -24,6 +26,7 @@ import Button from '../../../../ui/Button';
 import { cx } from '../../../../ui/cx';
 import { GradeName, RarityText } from '../../../../ui/fish/RarityTag';
 import { fmtMinutes, josa } from '../../../../ui/format';
+import RecipeEffectTip from '../../../../ui/RecipeEffectTip';
 import Inset from '../../../../ui/Inset';
 import ItemSprite from '../../../../ui/ItemSprite';
 import Locked from '../../../../ui/Locked';
@@ -68,7 +71,7 @@ function SwapDialog({ confirm, onConfirm, onCancel }: {
                   role="radio"
                   form={selected ? 'pressed' : 'raised'}
                   onSelect={() => setReplaceSlot(c.slotKey)}
-                  ariaLabel={`${c.label}, 남은 시간 ${fmtMinutes(c.minutes)}`}
+                  ariaLabel={`${c.label}, 남은 시간 ${fmtEffectDuration(c.minutes)}`}
                   className="flex flex-col items-start gap-1 px-2.5 py-2 text-left"
                 >
                   <span className="flex items-center gap-1.5 w-full min-w-0">
@@ -78,7 +81,7 @@ function SwapDialog({ confirm, onConfirm, onCancel }: {
                       <GradeName name={c.title.name} grade={c.title.grade} emphasized={selected} />
                     </span>
                   </span>
-                  <span className="pf-accent text-xs text-danger pl-4">{fmtMinutes(c.minutes)}</span>
+                  <span className="pf-accent text-xs text-danger pl-4">{fmtEffectDuration(c.minutes)}</span>
                 </SlotCell>
               );
             })}
@@ -97,7 +100,9 @@ function SwapDialog({ confirm, onConfirm, onCancel }: {
             <div key={r.key} className="grid grid-cols-[2.5rem_1fr_auto] items-center gap-2 py-2 text-sm">
               <span className="text-text-dim">{r.head}</span>
               <span className="truncate"><GradeName name={r.title.name} grade={r.title.grade} /></span>
-              <span className={`pf-accent text-xs ${r.tone}`}>{fmtMinutes(r.minutes)}</span>
+              <span className={`pf-accent text-xs ${r.tone}`}>
+                {r.key === 'next' ? fmtMinutes(r.minutes) : fmtEffectDuration(r.minutes)}
+              </span>
             </div>
           ))}
         </Inset>
@@ -108,18 +113,19 @@ function SwapDialog({ confirm, onConfirm, onCancel }: {
 }
 
 /** 도시락 또는 미끼 카드 격자 - 카드 본문을 누르면 상세 창이 열리고, 공통 주의사항은 소제목 툴팁 한 곳에 모은다 */
-function ItemCards({ title, hint, rows, lockLines, busy, selectedId, onSelect, onEat }: {
-  title: string; hint: string; rows: readonly ItemRow[]; lockLines?: readonly string[] | null;
+function ItemCards({ title, hint, rows, busy, selectedId, onSelect, onEat }: {
+  title: string; hint: string; rows: readonly ItemRow[];
   busy: boolean; selectedId: string | null; onSelect: (id: string) => void; onEat: (row: ItemRow) => void;
 }) {
   if (rows.length === 0) return null;
-  const locked = Boolean(lockLines);
   const hintLines = splitTipLines(hint);
   return (
     <div className="mb-2">
       <Subheading><Tip text={hintLines.length > 1 ? <TipBullets items={hintLines} /> : hint}>{title}</Tip></Subheading>
       <div className="grid grid-cols-2 gap-2">
         {rows.map(row => {
+          const rowLock = row.lockLines;
+          const locked = Boolean(rowLock);
           const usable = !locked && row.count > 0;
           const dimmed = locked || (!usable && !row.active);
           const selected = selectedId === row.recipe.id;
@@ -129,37 +135,49 @@ function ItemCards({ title, hint, rows, lockLines, busy, selectedId, onSelect, o
             </Button>
           );
           return (
-            <Inset key={row.recipe.id} tone={dimmed ? 'deep' : 'base'}
-                   border={selected ? 'gold' : row.active ? 'accent' : 'line'}
-                   className={cx('p-2 flex flex-col gap-1.5 min-w-0', dimmed && 'text-text-dim')}>
-              <PressRow
-                ariaLabel={`${row.label} 상세 보기`}
-                onPress={() => onSelect(row.recipe.id)}
-                className="flex items-start gap-2 min-w-0 -m-1 p-1"
-              >
-                <ItemSprite kind={row.slot} id={row.recipe.id} preset="list" className="shrink-0" />
-                <div className="min-w-0 flex-1 flex flex-col gap-0.5">
-                  <div className="text-xs leading-snug break-keep">
-                    <GradeName name={row.title.name} grade={row.title.grade} />
+            <Tip
+              key={row.recipe.id}
+              wraps
+              hoverOnly
+              className="flex flex-col min-w-0"
+              text={<RecipeEffectTip label={<GradeName name={row.title.name} grade={row.title.grade} />} effects={row.effects} note={null} />}
+            >
+              <Inset tone={dimmed ? 'deep' : 'base'}
+                     border={selected ? 'gold' : row.active ? 'accent' : 'line'}
+                     className={cx('flex-1 p-2 flex flex-col gap-1.5 min-w-0', dimmed && 'text-text-dim')}>
+                <PressRow
+                  ariaLabel={`${row.label} 상세 보기`}
+                  onPress={() => onSelect(row.recipe.id)}
+                  className="flex items-start gap-2 min-w-0 -m-1 p-1"
+                >
+                  <ItemSprite kind={row.slot} id={row.recipe.id} preset="list" className="shrink-0" />
+                  <div className="min-w-0 flex-1 flex flex-col gap-0.5">
+                    <div className="text-xs leading-snug break-keep">
+                      <GradeName name={row.title.name} grade={row.title.grade} />
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-2xs text-text-dim">
+                      <span>지속 <span className={cx('pf-accent', !dimmed && 'text-text')}>{fmtMinutes(row.durationMinutes)}</span></span>
+                    </div>
+                    {row.active && row.remainingMinutes !== null && (
+                      <div className="pf-accent text-2xs text-accent leading-tight">
+                        남음 {fmtEffectDuration(row.remainingMinutes)}
+                      </div>
+                    )}
                   </div>
-                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-2xs text-text-dim">
-                    <span>지속 <span className={cx('pf-accent', !dimmed && 'text-text')}>{fmtMinutes(row.durationMinutes)}</span></span>
+                </PressRow>
+                <div className="mt-auto pt-1.5 border-t border-line-dim flex items-center justify-between gap-1">
+                  <span className="pf-accent text-xs text-text-dim whitespace-nowrap">×{row.count}</span>
+                  <span className="flex items-center justify-end gap-1 min-w-0">
                     {row.active && <Badge tone="accent" size="2xs">사용 중</Badge>}
-                  </div>
-                  {row.active && row.remainingMinutes !== null && (
-                    <div className="text-2xs text-accent pf-accent">남음 {fmtMinutes(row.remainingMinutes)}</div>
-                  )}
+                    {rowLock ? (
+                      <Locked badge={false} lines={rowLock} title={<GradeName name={row.title.name} grade={row.title.grade} />} label={`${row.label} 잠김`} className="inline-block">
+                        {button}
+                      </Locked>
+                    ) : button}
+                  </span>
                 </div>
-              </PressRow>
-              <div className="mt-auto pt-1.5 border-t border-line-dim flex items-center justify-between gap-2">
-                <span className="pf-accent text-xs text-text-dim whitespace-nowrap">×{row.count}</span>
-                {lockLines ? (
-                  <Locked badge={false} lines={lockLines} title={<GradeName name={row.title.name} grade={row.title.grade} />} label={`${row.label} 잠김`} className="inline-block">
-                    {button}
-                  </Locked>
-                ) : button}
-              </div>
-            </Inset>
+              </Inset>
+            </Tip>
           );
         })}
       </div>
@@ -206,10 +224,9 @@ function EnergyCards({ energy, lockLines }: {
   );
 }
 
-/** 비약 카드 격자 — 계정 회원은 배 단계와 무관하게 쓸 수 있고, 게스트·확인 실패는 잠금 상태다 */
-function PotionCards({ rows, potionLock, busy, selectedId, onSelect, onUse }: {
+/** 비약 카드 격자 — 보유한 비약은 게스트 여부와 배 단계에 관계없이 쓸 수 있고, 미보유는 수량 0 비활성 카드로 둔다 */
+function PotionCards({ rows, busy, selectedId, onSelect, onUse }: {
   rows: readonly PotionRow[];
-  potionLock: readonly string[] | null;
   busy: boolean;
   selectedId: string | null;
   onSelect: (id: string) => void;
@@ -221,48 +238,53 @@ function PotionCards({ rows, potionLock, busy, selectedId, onSelect, onUse }: {
       <Subheading><Tip text={ITEM_GROUP_HINT.potion}>비약</Tip></Subheading>
       <div className="grid grid-cols-2 gap-2">
         {rows.map(row => {
-          const locked = potionLock !== null;
-          const dimmed = locked || (!row.usable && !row.active);
+          const dimmed = !row.usable && !row.active;
           const selected = selectedId === row.potion.id;
-          const btnLabel = row.active ? '사용 중' : '사용';
           const button = (
             <Button
               size="sm"
-              aria-label={`${row.potion.name} ${btnLabel}`}
-              disabled={busy || locked || !row.usable}
+              aria-label={`${row.potion.name} 사용`}
+              disabled={busy || !row.usable}
               onClick={() => onUse(row)}
             >
-              {btnLabel}
+              사용
             </Button>
           );
           return (
-            <Inset key={row.potion.id} tone={dimmed ? 'deep' : 'base'}
-                   border={selected ? 'gold' : row.active ? 'accent' : 'line'}
-                   className={cx('p-2 flex flex-col gap-1.5 min-w-0', dimmed && 'text-text-dim')}>
-              <PressRow
-                ariaLabel={`${row.potion.name} 상세 보기`}
-                onPress={() => onSelect(row.potion.id)}
-                className="flex items-start gap-2 min-w-0 -m-1 p-1"
-              >
-                <ItemSprite kind="potion" id={row.potion.id} preset="list" className="shrink-0" />
-                <div className="min-w-0 flex-1 flex flex-col gap-0.5">
-                  <div className="text-xs leading-snug break-keep">
-                    <GradeName name={row.potion.name} grade={row.potion.grade} />
+            <Tip
+              key={row.potion.id}
+              wraps
+              hoverOnly
+              className="flex flex-col min-w-0"
+              text={<RecipeEffectTip label={<GradeName name={row.potion.name} grade={row.potion.grade} />} effects={row.effects} note={null} />}
+            >
+              <Inset tone={dimmed ? 'deep' : 'base'}
+                     border={selected ? 'gold' : row.active ? 'accent' : 'line'}
+                     className={cx('flex-1 p-2 flex flex-col gap-1.5 min-w-0', dimmed && 'text-text-dim')}>
+                <PressRow
+                  ariaLabel={`${row.potion.name} 상세 보기`}
+                  onPress={() => onSelect(row.potion.id)}
+                  className="flex items-start gap-2 min-w-0 -m-1 p-1"
+                >
+                  <ItemSprite kind="potion" id={row.potion.id} preset="list" className="shrink-0" />
+                  <div className="min-w-0 flex-1 flex flex-col gap-0.5">
+                    <div className="text-xs leading-snug break-keep">
+                      <GradeName name={row.potion.name} grade={row.potion.grade} />
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-2xs text-text-dim">
+                      <span>하루 동안</span>
+                    </div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-2xs text-text-dim">
-                    <span>하루 동안</span>
-                  </div>
-                </div>
-              </PressRow>
-              <div className="mt-auto pt-1.5 border-t border-line-dim flex items-center justify-between gap-2">
-                <span className="pf-accent text-xs text-text-dim whitespace-nowrap">×{row.count}</span>
-                {potionLock ? (
-                  <Locked badge={false} lines={potionLock} title={<GradeName name={row.potion.name} grade={row.potion.grade} />} label={`${row.potion.name} 잠김`} className="inline-block">
+                </PressRow>
+                <div className="mt-auto pt-1.5 border-t border-line-dim flex items-center justify-between gap-1">
+                  <span className="pf-accent text-xs text-text-dim whitespace-nowrap">×{row.count}</span>
+                  <span className="flex items-center justify-end gap-1 min-w-0">
+                    {row.active && <Badge tone="accent" size="2xs">사용 중</Badge>}
                     {button}
-                  </Locked>
-                ) : button}
-              </div>
-            </Inset>
+                  </span>
+                </div>
+              </Inset>
+            </Tip>
           );
         })}
       </div>
@@ -281,7 +303,7 @@ export default function ItemSection({ game, accountState, dispatch, setToast }: 
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
 }) {
-  const now = useNow();
+  const now = useNow(current => slotPollIntervalMs(game, current));
   const view = selectItemSection(game, now, accountState);
   const [busy, setBusy] = useState(false);
   const [ownedOnly, setOwnedOnly] = useState(false);
@@ -338,9 +360,9 @@ export default function ItemSection({ game, accountState, dispatch, setToast }: 
     ? view.potions.find(p => p.potion.id === detailId) ?? null
     : null;
   const detailTarget: ItemDetailTarget | null = detailRecipe
-    ? { kind: 'recipe', row: detailRecipe, lockLines: kitchenLock, onUse: press }
+    ? { kind: 'recipe', row: detailRecipe, lockLines: detailRecipe.lockLines, onUse: press }
     : detailPotion
-      ? { kind: 'potion', row: detailPotion, lockLines: view.potionLock, onUse: usePotion }
+      ? { kind: 'potion', row: detailPotion, lockLines: null, onUse: usePotion }
       : null;
 
   return (
@@ -369,11 +391,11 @@ export default function ItemSection({ game, accountState, dispatch, setToast }: 
       {!shown.empty && (
         <>
           <EnergyCards energy={shown.energy} lockLines={kitchenLock} />
-          <ItemCards title={ITEM_GROUPS[1].title} hint={ITEM_GROUP_HINT.lunch} rows={shown.lunch} lockLines={kitchenLock}
+          <ItemCards title={ITEM_GROUPS[1].title} hint={ITEM_GROUP_HINT.lunch} rows={shown.lunch}
                      busy={busy} selectedId={detailId} onSelect={setDetailId} onEat={press} />
-          <ItemCards title={ITEM_GROUPS[2].title} hint={ITEM_GROUP_HINT.bait} rows={shown.bait} lockLines={kitchenLock}
+          <ItemCards title={ITEM_GROUPS[2].title} hint={ITEM_GROUP_HINT.bait} rows={shown.bait}
                      busy={busy} selectedId={detailId} onSelect={setDetailId} onEat={press} />
-          <PotionCards rows={shown.potions} potionLock={view.potionLock} busy={busy}
+          <PotionCards rows={shown.potions} busy={busy}
                        selectedId={detailId} onSelect={setDetailId} onUse={usePotion} />
         </>
       )}

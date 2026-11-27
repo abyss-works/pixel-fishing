@@ -8,6 +8,7 @@ const TONE = {
   'gold-plain': 'border-gold text-gold',
   'gold-deep': 'border-gold-dark text-gold bg-bg',
   accent: 'border-accent text-accent',
+  mutation: 'border-mutation text-mutation bg-[color-mix(in_oklab,var(--c-mutation)_10%,transparent)]',
   orange: 'border-orange text-orange',
   danger: 'border-danger/55 text-danger bg-bg',
   'dim-plain': 'border-line text-text-dim',

@@ -199,6 +199,24 @@ describe('HttpGameGateway의 델타 동기화와 캐시 복구', () => {
     instances: opts.instances ?? [], records: [], counters: {}, clearedNamed: [], legacy: null,
   });
 
+  it('saveVersion은 로드한 버전과 델타 적용 뒤 버전을 돌려준다', async () => {
+    me.value = serverSave({ version: 4, gold: 100 });
+    const gw = new HttpGameGateway();
+    expect(gw.saveVersion()).toBeNull();
+    await gw.load();
+    expect(gw.saveVersion()).toBe(4);
+
+    const patch: StatePatch = {
+      version: 5, baseVersion: 4,
+      scalars: pickScalars({ ...newState(), gold: 120 }),
+      writes: emptyWrites,
+    };
+    vi.stubGlobal('fetch', async () => json({ patch, result: { type: 'none' } }));
+    const res = await gw.dispatch({ type: 'upgradeRod' });
+    expect(res.status).toBe('ok');
+    expect(gw.saveVersion()).toBe(5);
+  });
+
   it('델타 baseVersion과 로컬 캐시 버전이 다르면 패치를 적용하지 않고 전체 재동기화한다', async () => {
     me.value = serverSave({ version: 4, gold: 100, instances: [instRow('stale-fish')] });
     const gw = new HttpGameGateway();

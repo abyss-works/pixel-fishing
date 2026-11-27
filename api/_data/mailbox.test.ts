@@ -4,7 +4,7 @@ import type { Executor } from '../_db/client.js';
 import {
   clearMailIdempotencyCache, deliverMail, draftProblems, DuplicateMailError,
   duplicateRecipientIds, MAIL_IDEMPOTENCY_TTL_MS, MAX_MAIL_BATCH_TOTAL_GOLD,
-  parseMailRequest, planMail,
+  parseMailRequest, planMail, sendIdempotentMail,
 } from './mailbox.js';
 
 const A = '00000000-0000-4000-8000-000000000001';
@@ -285,5 +285,137 @@ describe('우편 요청 해석 및 중복/상한 검증', () => {
     release();
     expect(await p1).toMatchObject({ problems: [], sent: 1 });
     expect(await pSame).toMatchObject({ problems: [], sent: 0, idempotent: true });
+  });
+
+  it('sendIdempotentMail은 입력·카탈로그·수량·금화 검증 후 입력 순서를 보존하고 중복 id를 합산해 삽입한다', async () => {
+    const capturedQueries: string[] = [];
+    const db = {
+      execute: vi.fn(async (query: unknown) => {
+        capturedQueries.push(JSON.stringify(query));
+        return { rows: [{ id: 101 }] };
+      }),
+    } as unknown as Executor;
+
+    const valid = {
+      userId: A,
+      idempotencyKey: 'google-first-link-reward',
+      title: '출항 연결 선물',
+      body: '선물을 보냈어요.',
+      gold: 0,
+      items: [
+        { id: 'luck-small', qty: 1 },
+        { id: 'cook-lunch-bundle', qty: 1 },
+        { id: 'cook-bait-legendary', qty: 3 },
+      ],
+    };
+    await expect(sendIdempotentMail(db, valid, NOW)).resolves.toBe(true);
+    expect(db.execute).toHaveBeenCalledTimes(1);
+    expect(capturedQueries[0]).toContain(JSON.stringify(JSON.stringify(valid.items)));
+
+    await expect(sendIdempotentMail(db, {
+      ...valid,
+      items: [
+        { id: 'luck-small', qty: 1 },
+        { id: 'cook-lunch-bundle', qty: 1 },
+        { id: 'luck-small', qty: 2 },
+      ],
+    }, NOW)).resolves.toBe(true);
+    expect(capturedQueries[1]).toContain(JSON.stringify(JSON.stringify([
+      { id: 'luck-small', qty: 3 },
+      { id: 'cook-lunch-bundle', qty: 1 },
+    ])));
+
+    const dupDb = {
+      execute: vi.fn(async () => ({ rows: [] })),
+    } as unknown as Executor;
+    await expect(sendIdempotentMail(dupDb, valid, NOW)).resolves.toBe(false);
+
+    const badDb = { execute: vi.fn() } as unknown as Executor;
+    for (const bad of [
+      { ...valid, idempotencyKey: '   ' },
+      { ...valid, idempotencyKey: 'k'.repeat(129) },
+      { ...valid, userId: 'not-uuid' },
+      { ...valid, title: ' ' },
+      { ...valid, body: '' },
+      { ...valid, gold: -1 },
+      { ...valid, items: [{ id: 'unknown-item', qty: 1 }] },
+      { ...valid, items: [{ id: 'luck-small', qty: 0 }] },
+      { ...valid, items: [{ id: 'luck-small', qty: 2 }, { id: 'luck-small', qty: -1 }] },
+      { ...valid, items: [{ id: 'energy-common', qty: 100_001 }] },
+      { ...valid, items: [{ id: 'energy-common', qty: 60_000 }, { id: 'energy-common', qty: 40_001 }] },
+      { ...valid, gold: 0, items: [] },
+      { ...valid, gold: 0, items: [], hats: ['unknown-hat'] },
+    ]) {
+      await expect(sendIdempotentMail(badDb, bad, NOW)).rejects.toThrow();
+    }
+    expect(badDb.execute).not.toHaveBeenCalled();
+
+    // 모자 첨부만 있는 멱등 우편은 중복 모자를 제거해 삽입한다
+    const hatQueries: string[] = [];
+    const hatDb = {
+      execute: vi.fn(async (query: unknown) => {
+        hatQueries.push(JSON.stringify(query));
+        return { rows: [{ id: 102 }] };
+      }),
+    } as unknown as Executor;
+    await expect(sendIdempotentMail(hatDb, {
+      userId: A,
+      idempotencyKey: 'hat-gift',
+      title: '산타모자 선물',
+      body: '본문',
+      gold: 0,
+      items: [],
+      hats: ['santa-hat', 'santa-hat'],
+    }, NOW)).resolves.toBe(true);
+    expect(hatQueries[0]).toContain(JSON.stringify(JSON.stringify(['santa-hat'])));
+  });
+
+  it('parseMailRequest·draftProblems·deliverMail은 모자 첨부(hats)를 검증하고 중복을 제거한다', async () => {
+    expect(parseMailRequest({
+      title: 't', body: 'b',
+      target: { kind: 'all', hats: ['santa-hat'] },
+    })).toEqual({
+      title: 't', body: 'b',
+      target: { kind: 'all', gold: 0, hats: ['santa-hat'] },
+    });
+    expect(parseMailRequest({
+      title: 't', body: 'b',
+      hats: ['santa-hat'],
+      target: { kind: 'users', recipients: [{ userId: A }] },
+    })).toEqual({
+      title: 't', body: 'b',
+      hats: ['santa-hat'],
+      target: { kind: 'users', recipients: [{ userId: A, gold: 0 }] },
+    });
+    expect(parseMailRequest({
+      title: 't', body: 'b',
+      hats: [123],
+      target: { kind: 'all', gold: 0 },
+    })).toBeNull();
+
+    expect(draftProblems({
+      title: '제목', body: '본문',
+      recipients: [{ userId: A, gold: 0, hats: ['santa-hat'] }],
+    })).toEqual([]);
+    expect(draftProblems({
+      title: '제목', body: '본문',
+      recipients: [{ userId: A, gold: 0, hats: ['unknown-hat'] }],
+    })).toContain('hats');
+
+    const db = mockExecutor({ foundIds: [A], sentCount: 1 });
+    const first = await deliverMail(db, {
+      title: '모자', body: '본문',
+      target: { kind: 'users', recipients: [{ userId: A, gold: 0, hats: ['santa-hat', 'cap-red', 'santa-hat'] }] },
+      idempotencyKey: 'hats-idem-1',
+    }, NOW);
+    expect(first).toMatchObject({ problems: [], sent: 1 });
+
+    // 정렬·중복 제거 후 같은 지문이면 멱등으로 통과한다
+    const replay = await deliverMail(db, {
+      title: '모자', body: '본문',
+      target: { kind: 'users', recipients: [{ userId: A, gold: 0, hats: ['cap-red', 'santa-hat'] }] },
+      idempotencyKey: 'hats-idem-1',
+    }, NOW);
+    expect(replay).toMatchObject({ problems: [], sent: 0, idempotent: true });
   });
 });

@@ -3,7 +3,8 @@ import type { GameAction, ActionResult } from '../../game/rules/actions';
 import type { RejectReason } from '../../game/rules/rules';
 import type { GameState } from '../../game/rules/logic';
 import type { DailyFortune, FortuneKind } from '../../game/rules/fortune';
-import type { ChatLine } from '../../game/rules/live';
+import type { HatSource } from '../../game/content/wardrobe';
+import type { ChatLine, NoticeItem } from '../../game/rules/live';
 import type { GuildBonusId, GuildEffects, GuildJoinMode, GuildLogKind, GuildRole } from '../../game/rules/guild';
 import type { BountyKind } from '../../game/content/bounties';
 import type { MaybePromise } from '../../shared/lib/when';
@@ -21,6 +22,8 @@ export type GameProfile = { ok: true; nickname: string | null; devTools: boolean
 export interface GameGateway {
   load(): MaybePromise<GameState | null>;
   dispatch(action: GameAction): MaybePromise<DispatchResult>;
+  /** 게이트웨이가 확정해 둔 현재 저장 버전 — 모르면 null */
+  saveVersion?(): number | null;
   getProfile(): MaybePromise<GameProfile>;
   warmup?(): void;
 }
@@ -29,6 +32,10 @@ export interface GameGateway {
 export type AccountLookup = { status: 'account'; email: string } | { status: 'guest' } | { status: 'failed' };
 
 export type AuthResult = { ok: true } | { ok: false; msg: string; code?: string };
+
+export type ConfirmGoogleSwitchResult =
+  | { ok: true }
+  | { ok: false; fallback: boolean; msg: string; code?: string };
 
 /** 계정의 이용약관 수락 상태. 확인이 필요한 계정이면 required가 true다 */
 export interface ConsentStatus {
@@ -63,6 +70,10 @@ export interface AuthApi {
   acceptConsent(version: string): Promise<AcceptConsentResult>;
   /** 구글 인증 화면으로 이동한다. 연결(link)은 지금 계정에 구글을 붙이고, 로그인(sign-in)은 이미 연결된 구글 계정으로 들어간다. 표지(tag)는 돌아온 주소에 실린다 */
   startGoogle(start: 'link' | 'sign-in', tag: string): Promise<AuthResult>;
+  /** 1차 연결 충돌 시 발급된 1회용 전환 티켓으로 2차 구글 인증 없이 기존 계정에 로그인한다 */
+  confirmGoogleSwitch(tag: string): Promise<ConfirmGoogleSwitchResult>;
+  /** 보류 중인 1회용 구글 계정 전환 티켓을 폐기한다 */
+  cancelGoogleSwitch(): Promise<void>;
   /** 구글 인증에서 돌아왔는가. 표지와 오류 코드를 돌려준다. 부팅 때 한 번 읽는다 */
   takeGoogleLanding(): { tag: string; error: string | null } | null;
   signOut(): Promise<void>;
@@ -85,10 +96,11 @@ export interface MailItemAttachment {
   qty: number;
 }
 
-/** 우편 한 통 — 골드와 첨부 아이템이 모두 없으면 글만 있는 우편이다. 시각은 ISO 문자열 */
+/** 우편 한 통 — 골드·첨부 아이템·모자가 모두 없으면 글만 있는 우편이다. 시각은 ISO 문자열 */
 export interface MailItem {
   id: number; title: string; body: string; gold: number;
   items: MailItemAttachment[];
+  hats?: string[];
   createdAt: string; readAt: string | null; claimedAt: string | null;
 }
 
@@ -156,9 +168,14 @@ export interface GuildMyRequest { code: string; name: string; requestedAt: strin
 export interface GuildState { guild: GuildInfo | null; request: GuildMyRequest | null }
 /** 초대 링크 미리보기 — 로그인 없이 읽는 길드 요약 */
 export interface GuildInvitePreview { code: string; name: string; level: number; members: number; cap: number; joinMode: GuildJoinMode }
+/** 공개 길드 목록 한 줄 — 자유 가입·비만석 길드 요약(고유 코드 비노출) */
+export interface PublicGuildItem {
+  guildId: string; name: string; level: number; members: number; cap: number; pitch: string; lastActivityAt: string;
+}
 export type GuildOp =
   | { op: 'create'; name: string }
   | { op: 'join'; code: string; via?: 'link' }
+  | { op: 'joinPublic'; guildId: string }
   | { op: 'rename'; guildId: string; name: string }
   | { op: 'settings'; guildId: string; joinMode?: GuildJoinMode; pitch?: string | null }
   | { op: 'approve'; guildId: string; uid: string }
@@ -174,10 +191,19 @@ export type GuildOpResult =
   | { ok: true; result?: 'joined' | 'requested'; gold?: number; recovered?: number; enhanceResetCount?: number }
   | { ok: false; error: string };
 
+export type RankingWindow = 'weekly' | 'all';
 export type RankingBoardId = 'fame' | 'dex' | 'variant' | 'named' | 'namedClears' | 'species';
 export interface RankingRow { rank: number; nickname: string | null; value: number; me: boolean }
 /** species 표는 fishId 어종의 사람별 최대 크기(cm) 순위다 */
-export interface RankingBoard { board: RankingBoardId; fishId?: string; top: RankingRow[]; me: { rank: number; value: number } | null }
+export interface RankingBoard {
+  board: RankingBoardId;
+  fishId?: string;
+  window: RankingWindow;
+  periodSupported: boolean;
+  resetAt: string | null;
+  top: RankingRow[];
+  me: { rank: number; value: number } | null;
+}
 
 export interface BountyProgressRow { questId: string; progress: number }
 export interface BountyTicketRow { questId: string; issuedAt: string }
@@ -216,6 +242,7 @@ export interface FortuneHistory {
 
 export interface AdminUserRow {
   user_id: string;
+  opHandle?: string;
   email: string | null;
   /** 닉네임(profiles). 정하지 않았으면 null */
   nickname: string | null;
@@ -241,10 +268,10 @@ export interface AdminUserRow {
 
 /**
  * 지금 실시간 채널에 연결된 사람 한 명. nick은 채팅 이름, nickname은 프로필 닉네임(정하지 않았으면 null)이고,
- * email은 게스트이거나 인증 계정이 없으면 null이다. region·zone은 마지막으로 알린 위치이고, connectedAt은 연결 시각(ISO)이다
+ * email은 게스트·인증 계정이 없거나 maintainer 비식별 투영일 때 null 또는 생략된다. region·zone은 마지막으로 알린 위치이고, connectedAt은 연결 시각(ISO)이다
  */
 export interface AdminLiveConnection {
-  uid: string; nick: string; nickname: string | null; email: string | null;
+  uid: string; opHandle?: string; nick: string; nickname: string | null; email: string | null;
   region: string | null; zone: string | null; connectedAt: string; guest: boolean;
 }
 /** 지금 실시간 채널에 연결된 수와 목록 */
@@ -264,7 +291,7 @@ export interface AdminRetentionRow {
 }
 /** 끝난 접속 세션 한 건. 시각은 ISO 문자열이다 */
 export interface AdminSessionRow {
-  id: number; userId: string; nick: string | null;
+  id: number; userId: string; opHandle?: string; nick: string | null;
   startedAt: string; endedAt: string; durationSec: number;
 }
 export interface AdminEconomyRow {
@@ -278,7 +305,7 @@ export interface AdminBountyFunnelRow {
   named_rewards: number; general_accepts: number; general_rewards: number;
 }
 export interface AdminSpamFlagRow {
-  user_id: string; catches_7d: number; fast_gap_7d: number;
+  user_id: string; opHandle?: string; catches_7d: number; fast_gap_7d: number;
   perfect_pct: number | null; perfect_pct_global: number | null;
 }
 export interface AdminEventRow {
@@ -298,13 +325,28 @@ export interface AdminChangelogRow {
   /** 체인지로그에서 사라지거나 다른 항목에 대체돼 철회로 표시된 시각. 평소 null */
   withdrawnAt: string | null;
 }
-/** 채팅 신고 한 건. user_id는 신고한 사람, target_id는 신고당한 메시지의 보낸 사람이다 */
+/** 채팅 신고 한 건. user_id는 신고한 사람(비식별 투영에서는 빈 문자열), target_id는 신고당한 메시지의 보낸 사람이다 */
 export interface AdminChatReportRow {
-  id: number; user_id: string; message_id: number; target_id: string;
+  id: number; user_id: string; message_id: number; target_id: string; opHandle?: string;
   /** 신고한 메시지와 앞뒤 대화의 복사본(오래된 순) */
   lines: ChatLine[];
   created_at: string;
 }
+/** 기간제 상시 공지 한 건(관리자 목록용) */
+export interface AdminNoticeRow extends NoticeItem {
+  createdBy: string | null;
+  updatedAt: string;
+}
+/** 기간제 상시 공지 쓰기 요청 */
+export type AdminNoticeRequest =
+  | { op: 'create'; title: string; body: string; startsAt: string; endsAt: string }
+  | { op: 'update'; id: number; title: string; body: string; startsAt: string; endsAt: string }
+  | { op: 'end'; id: number }
+  | { op: 'delete'; id: number };
+/** 기간제 상시 공지 쓰기 결과 */
+export type AdminNoticeMutationResult =
+  | { notice: AdminNoticeRow }
+  | { deleted: true; id: number };
 
 /**
  * 밸런스 라이브 지표. 서버가 한 번의 읽기로 모은 한 시점의 집계이고, 키 이름이 곧 계약이다.
@@ -345,12 +387,12 @@ export interface BalanceLive {
   fameGateStuck: { nextBoat: number; users: number }[];
 }
 
+export type AdminRole = 'admin' | 'maintainer';
+
 /** 관리자 판정 — local은 "클라우드 미설정"(권한 실패 아님), signedOut은 관리자 세션 없음, denied는 DB admins 비등록 */
-export interface AdminAccessResult {
-  kind: 'granted' | 'denied' | 'signedOut' | 'local';
-  /** 서버가 확인한 세션 uid. denied 안내("이 uid를 등록하라")에 쓴다 */
-  uid: string | null;
-}
+export type AdminAccessResult =
+  | { kind: 'granted'; uid: string | null; role?: AdminRole; showStaffBadge?: boolean }
+  | { kind: 'denied' | 'signedOut' | 'local'; uid: string | null };
 
 /** 관리자 — 보낸 우편 한 통(받는 사람 포함) */
 export interface AdminSentMailRow extends MailItem { userId: string }
@@ -358,14 +400,15 @@ export interface AdminSentMailRow extends MailItem { userId: string }
 export interface AdminMailRequest {
   title: string; body: string;
   target:
-    | { kind: 'users'; recipients: { userId: string; gold?: number; items?: MailItemAttachment[] }[] }
-    | { kind: 'all'; gold?: number; items?: MailItemAttachment[] };
+    | { kind: 'users'; recipients: { userId: string; gold?: number; items?: MailItemAttachment[]; hats?: string[] }[] }
+    | { kind: 'all'; gold?: number; items?: MailItemAttachment[]; hats?: string[] };
   items?: MailItemAttachment[];
+  hats?: string[];
   idempotencyKey?: string;
 }
 /** 관리자 — 우편 미리보기·보내기 결과. problems가 있으면 미리보기가 없고 보내지 않는다 */
 export interface AdminMailPlan {
-  problems: ('title' | 'body' | 'gold' | 'items' | 'empty' | 'recipients' | 'duplicate' | 'totalGold')[];
+  problems: ('title' | 'body' | 'gold' | 'items' | 'hats' | 'empty' | 'recipients' | 'duplicate' | 'totalGold')[];
   duplicates?: string[];
   preview: {
     count: number;
@@ -400,7 +443,7 @@ export interface AdminUserState {
   hats: {
     owned: number;
     total: number;
-    items: { id: string; name: string; source: 'gold' | 'achievement' }[];
+    items: { id: string; name: string; source: HatSource }[];
     equipped: { id: string; name: string } | null;
   };
   achievements: {
@@ -444,9 +487,60 @@ export interface AdminUserState {
   };
 }
 
+/**
+ * 관리자 개요 비식별 사전 집계.
+ * 비식별 투영에서 개별 사용자 행의 시각·재화·장비·방문기록이 비워지더라도
+ * 개요·경제·진행 대시보드가 동일한 수치로 동작하도록 원시 행에서 계산한 순수 수치·분포 집계다.
+ * 개인 식별자(계정 식별자·핸들·닉네임·이메일)를 일체 포함하지 않는다.
+ */
+export interface AdminUserAggregates {
+  /** 전체 등록 계정 수 */
+  totalUsers: number;
+  /** 휴면 게스트(비제재 익명 + 저장 없음 또는 골드·명성 모두 0)를 제외한 활성 플레이어 수 */
+  activePlayers: number;
+  /** KST·기간 경계 판정에 사용한 서버 시각(ISO) */
+  asOf: string;
+  /** 고유 활성 사용자 수(마지막 행동과 마지막 세션 종료 중 늦은 시각 기준) */
+  activeUsers: {
+    today: number;
+    week: number;
+    month: number;
+  };
+  /** 오늘(KST) 가입 시각 기준 신규 사용자·정식 계정 수 */
+  newToday: {
+    users: number;
+    accounts: number;
+  };
+  /** 저장 상태가 있는 전체 사용자의 골드 잔고 집계(저장 없음 제외, 휴면 게스트 포함) */
+  gold: {
+    count: number;
+    sum: number;
+    median: number | null;
+    p75: number | null;
+    max: number | null;
+  };
+  /** 활성 플레이어(휴면 게스트 제외) 기준 진행 분포 */
+  progression: {
+    /** 배 단계별 인원 수(0단계부터 최고 단계까지) */
+    boats: { tier: number; count: number }[];
+    /** 낚싯대 레벨별(1 이상, 미저장 계정은 1 취급, 0명 제외) 인원 수(레벨 오름차순) */
+    rods: { level: number; count: number }[];
+    /** 현행 오픈월드 지역 도달 인원 수(방문 기록 기준) */
+    regionReach: { id: string; count: number }[];
+    /** 오픈월드 최상위 존별 해금 인원 수(배 단계 기준) */
+    zoneUnlocks: { id: string; count: number }[];
+    /** 다음 배 명성 게이트에 막힌 활성 플레이어 수(총합 및 다음 배 단계별) */
+    fameGateStalled: {
+      total: number;
+      byNextTier: { nextTier: number; count: number }[];
+    };
+  };
+}
+
 /** 관리자 — 개요 탭 통합 응답 */
 export interface AdminOverview {
   users: AdminUserRow[];
+  userAggregates?: AdminUserAggregates;
   recentEvents: AdminEventRow[];
   spamFlags: AdminSpamFlagRow[];
   dailyStats: AdminDailyStatsRow[];
@@ -629,6 +723,10 @@ export interface AdminApi {
   changelog(): Promise<AdminChangelogRow[]>;
   /** 채팅 신고 목록(최근 순) */
   chatReports(): Promise<AdminChatReportRow[]>;
+  /** 기간제 상시 공지 목록(최신순) */
+  notices(): Promise<AdminNoticeRow[]>;
+  /** 기간제 상시 공지 작성·수정·즉시 마감·삭제 */
+  writeNotice(request: AdminNoticeRequest): Promise<AdminNoticeMutationResult>;
   /** 최근 보낸 우편 */
   sentMails(): Promise<AdminSentMailRow[]>;
   /** 우편 미리보기(preview, 쓰지 않음) 또는 보내기(send) */
@@ -639,6 +737,8 @@ export interface AdminApi {
   letterHandled(letterId: number, handled: boolean): Promise<{ handled: boolean }>;
   /** 대상 계정의 활성 인증 세션을 모두 강제 종료한다 */
   revokeSessions(userId: string): Promise<{ revoked: number }>;
+  /** 호출자 본인의 채팅 운영진 배지 노출 설정을 켜거나 끈다 */
+  setStaffBadge(show: boolean): Promise<{ showStaffBadge: boolean }>;
   /** 밸런스 라이브 지표. days는 이벤트 지표의 기간(1~7일)이고, 생략하면 서버 기본값인 7일이다 */
   balanceLive(days?: number): Promise<BalanceLive>;
   /** 이 화면이 붙은 배포 주소의 호스트 — 운영/스테이징 착오 방지 표시값(Ops 탭). 로컬 모드는 null */
@@ -670,3 +770,183 @@ export interface ApiClient {
   admin: AdminApi;
   dev: DevApi;
 }
+
+// ---------- 소리 설정 계약 ----------
+
+/** 기기별 소리 설정(localStorage) — 배경음·효과음 켜기와 음량(0~1) */
+export interface SoundSettings {
+  bgmEnabled: boolean;
+  sfxEnabled: boolean;
+  bgmVolume: number;
+  sfxVolume: number;
+}
+
+// ---------- 라이브 이벤트 · 관리자 이벤트 · 쿠폰 계약 ----------
+
+export type LiveEventKind = 'trio' | 'championship' | 'draw';
+
+export interface LiveEventSummary {
+  id: string;
+  kind: LiveEventKind;
+  title: string;
+  description: string;
+  startsAt: string;
+  endsAt: string;
+  active: boolean;
+  config: Record<string, unknown>;
+}
+
+export interface EventTrioSlotStatus {
+  fishId: string;
+  form: 'normal' | 'variant';
+  completed: boolean;
+  completedAt: string | null;
+}
+
+export interface EventTrioState {
+  eventId: string;
+  slots: readonly EventTrioSlotStatus[];
+  completedAt: string | null;
+  claimedAt: string | null;
+  won: boolean;
+  rewardPin: string | null;
+  rewardExpiresAt: string | null;
+}
+
+export interface EventLeaderboardRow {
+  rank: number;
+  userId: string;
+  nickname: string | null;
+  score: number;
+  catches?: number;
+  look?: { shirt: number; pants: number; hat: string | null } | null;
+  me: boolean;
+}
+
+export interface EventChampionshipState {
+  eventId: string;
+  score: number;
+  bestFishId: string | null;
+  bestFishScore: number;
+  catches: number;
+  dex: Record<string, { normal: number; variant: number }>;
+  hatsGranted: readonly string[];
+  pendingGold: number;
+  pendingFame: number;
+  rank: number | null;
+  top: readonly EventLeaderboardRow[];
+}
+
+export interface EventLuckDayStamp {
+  day: string;
+  kind: FortuneKind | null;
+  index: 3 | 5 | null;
+  score: number | null;
+}
+
+export interface EventDrawState {
+  eventId: string;
+  totalScore: number;
+  attendedDays: number;
+  days: readonly EventLuckDayStamp[];
+  rank: number | null;
+  top: readonly EventLeaderboardRow[];
+  won: boolean;
+}
+
+export interface EventsSnapshot {
+  now: string;
+  events: readonly LiveEventSummary[];
+  trio: EventTrioState | null;
+  championship: EventChampionshipState | null;
+  draw: EventDrawState | null;
+}
+
+export interface AdminLiveEventRow extends LiveEventSummary {
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AdminLiveEventRequest =
+  | {
+    op: 'create';
+    id: string;
+    kind: LiveEventKind;
+    title: string;
+    description: string;
+    startsAt: string;
+    endsAt: string;
+    active?: boolean;
+    config?: Record<string, unknown>;
+  }
+  | {
+    op: 'update';
+    id: string;
+    title: string;
+    description: string;
+    startsAt: string;
+    endsAt: string;
+    active: boolean;
+    config: Record<string, unknown>;
+  }
+  | { op: 'end'; id: string }
+  | { op: 'delete'; id: string };
+
+export interface AdminEventDrawRow {
+  id: number;
+  eventId: string;
+  userId: string;
+  nickname: string | null;
+  rewardKind: 'gold' | 'item' | 'hat' | 'none';
+  rewardId: string | null;
+  rewardQty: number;
+  gold: number;
+  rewardPin: string | null;
+  rewardExpiresAt: string | null;
+  mailId: number | null;
+  seed: string;
+  drawnBy: string | null;
+  createdAt: string;
+}
+
+export interface AdminCouponRow {
+  code: string;
+  gold: number;
+  items: readonly MailItemAttachment[];
+  description: string;
+  active: boolean;
+  startsAt: string | null;
+  endsAt: string | null;
+  maxRedemptions: number | null;
+  perAccountLimit: number;
+  redeemedCount: number;
+  createdAt: string;
+}
+
+export type AdminCouponRequest =
+  | {
+    op: 'create';
+    code: string;
+    gold: number;
+    items: readonly MailItemAttachment[];
+    description: string;
+    active?: boolean;
+    startsAt?: string | null;
+    endsAt?: string | null;
+    maxRedemptions?: number | null;
+    perAccountLimit?: number;
+  }
+  | {
+    op: 'update';
+    code: string;
+    gold: number;
+    items: readonly MailItemAttachment[];
+    description: string;
+    active: boolean;
+    startsAt: string | null;
+    endsAt: string | null;
+    maxRedemptions: number | null;
+    perAccountLimit: number;
+  }
+  | { op: 'delete'; code: string };
+

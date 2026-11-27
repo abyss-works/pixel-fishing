@@ -9,11 +9,20 @@ import { when } from '../../../shared/lib/when';
 import { subscribeFailure } from '../../../core/errors';
 import { useKeyScope } from '../../ui/hotkeys';
 import { sendNotice } from '../../../features/display/model/toastPolicy';
+import { eventFishSubjectById, eventSpotById } from '../../../features/events/model/events';
 import { bagOverflowNoticeInput, classifyCatchNotice } from '../../../features/gameplay/model/catchNotice';
+import {
+  emitBiteSound,
+  emitCastSound,
+  emitCatchSound,
+  emitHitSound,
+  emitLineSnapSound,
+} from '../../../features/sound/service/soundEvents';
 import { useGameTime } from '../../../features/gameplay/service/useGameTime';
 import { useSchools } from '../../../features/gameplay/service/schoolDay';
 import { useFishArtStyle } from '../../../features/display/service/fishArtStyle';
 import { alertEncounter } from '../../../features/bounty/service/encounterAlert';
+import { effectiveLookForRegion } from '../../../features/live/model/live';
 import { liveFrame, useLivePosition } from '../../../features/live/service/useLive';
 import type { DispatchResult, MaybePromise } from '../../../features/gameplay/service/types';
 import type { FieldCallbacks, FieldEvent } from '../../../game/runtime/fieldEngine';
@@ -44,7 +53,6 @@ interface Props {
   dispatch: (action: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
   onScene: (scene: SceneRef, message: string, entryPos?: Point, returnPos?: Point) => void;
-  onWarmup?: () => void;
   /** 지금 계정이 게스트인가 — 게스트는 마을 밖으로 나가는 트리거에서 장소를 바꾸지 못하고 되밀린다 */
   guest?: boolean;
   /** 게스트가 마을 밖으로 나가려다 되밀렸을 때 */
@@ -60,15 +68,19 @@ interface Props {
   statusSlot?: HTMLElement | null;
   /** 획득 카드를 넣을 HUD 자리 */
   catchSlot?: HTMLElement | null;
+  uid?: string | null;
+  /** 현재 저장 버전을 읽는다 — 모르면 null */
+  saveVersion?: () => number | null;
 }
 
 function presentEvent(event: FieldEvent, setToast: Props['setToast'], game: GameState, region: RegionId): void {
   switch (event.type) {
     case 'cast': {
-      const spot = SPOTS.find(candidate => candidate.id === event.spot)!;
+      const spot = SPOTS.find(candidate => candidate.id === event.spot) ?? eventSpotById(event.spot);
+      const spotName = spot?.name ?? REGION_PACKS[region].info.shortName;
       sendNotice(setToast, {
         kind: 'catch.cast',
-        text: `${spot.name} 어군에 찌를 던졌어요.`,
+        text: `${spotName} 어군에 찌를 던졌어요.`,
       });
       return;
     }
@@ -81,7 +93,8 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast'], game: Game
           cooldownKey: 'cast-denied:range',
         });
       } else {
-        const spot = SPOTS.find(candidate => candidate.id === event.spot)!;
+        const spot = SPOTS.find(candidate => candidate.id === event.spot) ?? eventSpotById(event.spot);
+        if (!spot) return;
         sendNotice(setToast, {
           kind: 'catch.castDenied',
           text: `${spot.name}에서 낚시하려면 배가 ${boatGateText(spot.boatTier)} 이상이어야 해요. ${nextBoatText(game.boat)}`,
@@ -121,9 +134,12 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast'], game: Game
         });
         alertEncounter(event.result.ticket);
       }
-      const caught = FISH.find(candidate => candidate.id === event.result.fishId)!;
-      const prevDexEntry = game.dex[caught.id]?.[event.result.info.form];
-      sendNotice(setToast, classifyCatchNotice(caught, event.result.info, event.judgment, prevDexEntry));
+      const caught = FISH.find(candidate => candidate.id === event.result.fishId)
+        ?? eventFishSubjectById(event.result.fishId);
+      if (caught) {
+        const prevDexEntry = game.dex[caught.id]?.[event.result.info.form];
+        sendNotice(setToast, classifyCatchNotice(caught, event.result.info, event.judgment, prevDexEntry));
+      }
       const overflow = bagOverflowNoticeInput(event.result);
       if (overflow) sendNotice(setToast, overflow);
       return;
@@ -146,7 +162,7 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast'], game: Game
 }
 
 export default function Field({
-  region, game, dispatch, setToast, onScene, onWarmup, guest, onGuestBlocked, initialPos, placeSeq, locked, paused, statusSlot, catchSlot,
+  region, game, dispatch, setToast, onScene, guest, onGuestBlocked, initialPos, placeSeq, locked, paused, statusSlot, catchSlot, uid, saveVersion,
 }: Props) {
   const mobile = useMobileLayout();
   // 현재 어군 — 세션의 배치 날짜가 정한다. 부트 결과로 날짜가 바뀌면 엔진에 교체해 준다.
@@ -162,7 +178,7 @@ export default function Field({
     return {
       region, zone: getSpotState().zone, x: Math.round(pos.x), y: Math.round(pos.y),
       line: engine.getSnapshot().phase !== 'idle', bob: bob ? { x: Math.round(bob.x), y: Math.round(bob.y) } : null,
-      look: game.look, ...(resultAt === null ? {} : { idleMs: Date.now() - resultAt }),
+      look: effectiveLookForRegion(game.look, region), ...(resultAt === null ? {} : { idleMs: Date.now() - resultAt }),
     };
   }, [engine, region, game.look]);
   useLivePosition(readPosition);
@@ -172,8 +188,11 @@ export default function Field({
   }, [engine, region]);
   const covered = useCanvasCover();
   const { phase: dayPhaseNow } = useGameTime();
+  const manualCycleRef = useRef(false);
   const fish: Fish | null = snapshot.fishId
-    ? FISH.find(candidate => candidate.id === snapshot.fishId) ?? null
+    ? (FISH.find(candidate => candidate.id === snapshot.fishId)
+      ?? eventFishSubjectById(snapshot.fishId)
+      ?? null)
     : null;
   // 모바일 시야 — 캔버스가 차지한 스테이지 크기에서 정한다. PC는 늘 PC 시야다
   const [stageSize, setStageSize] = useState<{ w: number; h: number } | null>(null);
@@ -193,20 +212,49 @@ export default function Field({
   useEffect(() => {
     const callbacks: FieldCallbacks = {
       dispatch: action => {
+        if (action.type === 'catch' && action.judgment !== 'auto') {
+          manualCycleRef.current = true;
+          emitHitSound(action.judgment);
+        }
         return when(dispatch(action), result => result.status === 'ok'
           ? { status: 'ok', result: result.result }
           : result);
       },
       onEvent: event => {
+        if (event.type === 'cast') {
+          manualCycleRef.current = true;
+          emitCastSound(true);
+        } else if (event.type === 'bite') {
+          emitBiteSound(manualCycleRef.current);
+        } else if (event.type === 'line-cut') {
+          emitLineSnapSound({ manual: manualCycleRef.current, underpowered: true });
+        } else if (event.type === 'catch') {
+          // 취소 뒤 새로 던진 사이클을 직전 방치 응답이 덮어쓰지 않도록 현재 잡기 단계일 때만 갱신한다
+          if (engine.getSnapshot().phase === 'catch') {
+            manualCycleRef.current = event.manual;
+          }
+          const caught = FISH.find(candidate => candidate.id === event.result.fishId)
+            ?? eventFishSubjectById(event.result.fishId);
+          emitCatchSound({
+            manual: event.manual,
+            rarity: event.rarity ?? caught?.rarity ?? 'common',
+            isMutation: event.variant,
+          });
+        } else if (event.type === 'movement-cancelled' || event.type === 'catch-rejected') {
+          manualCycleRef.current = false;
+        }
         if (event.type === 'guest-blocked') onGuestBlocked?.();
         else presentEvent(event, setToast, game, region);
       },
       onScene,
-      onWarmup,
       guest,
+      seedContext: () => {
+        const version = saveVersion?.() ?? null;
+        return uid && version !== null ? { uid, saveVersion: version } : null;
+      },
     };
     engine.updateContext(game, dayPhaseNow === 'night', callbacks);
-  }, [engine, region, game, dayPhaseNow, dispatch, setToast, onScene, onWarmup, guest, onGuestBlocked]);
+  }, [engine, region, game, dayPhaseNow, dispatch, setToast, onScene, guest, onGuestBlocked, uid, saveVersion]);
 
   useEffect(() => { engine.setSchools(schools); }, [engine, schools]);
 
@@ -227,11 +275,31 @@ export default function Field({
   }, [engine, placeSeq, initialPos, region]);
   useEffect(() => { engine.setControlLocked(locked === true); }, [engine, locked]);
 
-  useEffect(() => subscribeFailure(() => engine.cancelFishing()), [engine]);
+  useEffect(() => subscribeFailure(err => {
+    if (err.kind === 'rate-limited') {
+      if (err.context.action === 'catch') {
+        engine.recoverFromRateLimit();
+      }
+      return;
+    }
+    engine.cancelFishing();
+  }), [engine]);
   useEffect(() => { if (paused) engine.cancelFishing(); }, [engine, paused]);
   useEffect(() => () => { observer.current?.disconnect(); engine.dispose(); }, [engine]);
 
-  useKeyScope(event => engine.handleKeyDown(event.code, () => event.preventDefault()));
+  const triggerManualAction = useCallback(() => {
+    if (!locked && engine.getSnapshot().phase === 'bite') {
+      manualCycleRef.current = true;
+    }
+    engine.action();
+  }, [engine, locked]);
+
+  useKeyScope(event => {
+    if (!locked && event.code === 'Space' && engine.getSnapshot().phase === 'bite') {
+      manualCycleRef.current = true;
+    }
+    return engine.handleKeyDown(event.code, () => event.preventDefault());
+  });
 
   // 모바일 스테이지 입력 — 누른 자리에서 10px를 넘게 끌면 원 패드로 이동, 그 안에서 떼면 짧게 누르기(클릭과 같은 상호작용)
   const [pad, setPad] = useState<Pad | null>(null);
@@ -260,7 +328,7 @@ export default function Field({
     gesture.current = null;
     engine.setMoveDirection(null);
     setPad(null);
-    if (e.type === 'pointerup' && isTap(g.pad)) engine.action();
+    if (e.type === 'pointerup' && isTap(g.pad)) triggerManualAction();
   };
 
   const status = snapshot.phase === 'idle' ? null : statusParts(snapshot.phase, mobile);
@@ -280,8 +348,8 @@ export default function Field({
         <canvas ref={attachCanvas} width={view.w * SCALE} height={view.h * SCALE}
                 className="block w-full h-full [image-rendering:pixelated] cursor-pointer bg-bg
                            [filter:contrast(1.05)_saturate(1.07)_brightness(0.98)]"
-                aria-label={region === 'village' ? '마을' : '바다'}
-                onClick={mobile ? undefined : () => engine.action()}
+                aria-label={REGION_PACKS[region].info.shortName}
+                onClick={mobile ? undefined : triggerManualAction}
                 onPointerDown={mobile ? onPadDown : undefined} onPointerMove={mobile ? onPadMove : undefined}
                 onPointerUp={mobile ? onPadEnd : undefined} onPointerCancel={mobile ? onPadEnd : undefined} />
       )}

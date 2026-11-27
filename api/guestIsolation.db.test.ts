@@ -51,7 +51,7 @@ describe('게스트 액션 허용 목록', () => {
     const actions = [
       { type: 'setNickname', nickname: '바꿈' }, { type: 'sendLetter', text: '안녕' },
       { type: 'changeClothes', shirt: 1, pants: 1 }, { type: 'buyHat', hat: 'cap' }, { type: 'wearHat', hat: null },
-      { type: 'acceptQuest', questId: 'q', port: 'harbor' }, { type: 'redeemCoupon', code: 'x' },
+      { type: 'acceptQuest', questId: 'q', port: 'harbor' },
       { type: 'claimMail', id: 1 }, { type: 'exhibit', uid: 'u', slot: 0 },
     ];
     for (const action of actions) expect(outcome(await send(uid, action)), action.type).toEqual([403, 'account-only']);
@@ -70,12 +70,9 @@ describe('게스트 액션 허용 목록', () => {
     expect(outcome(await send(uid, { type: 'boot' }))).toEqual([200, 'ok']);
   });
 
-  it('출항준비 정적 쿠폰은 게스트에게도 300G와 작은 바다 영약 1개를 지급하고 DB에 저장하며, 다른 쿠폰은 403 account-only로 거부한다', async () => {
-    await env.client.query(`insert into public.coupons (code, gold, description, active)
-      values ('DYN-GUEST-BLOCKED', 500, '동적 쿠폰', true) on conflict (code) do nothing`);
+  it('출항준비 정적 쿠폰은 게스트에게도 300G와 작은 바다 영약 1개를 지급하고 DB에 저장하며 재사용 시 coupon-used로 거부한다', async () => {
     const uid = await guest({ state: { gold: 0 } });
 
-    expect(outcome(await send(uid, { type: 'redeemCoupon', code: 'DYN-GUEST-BLOCKED' }))).toEqual([403, 'account-only']);
     expect(outcome(await send(uid, { type: 'redeemCoupon', code: '출항준비' }))).toEqual([200, 'ok']);
 
     const { rows } = await env.client.query<{ gold: string; data: { coupons?: string[]; items?: Record<string, number> } }>(
@@ -87,6 +84,73 @@ describe('게스트 액션 허용 목록', () => {
     expect(rows[0].data.items).toEqual({ 'luck-small': 1 });
 
     expect(outcome(await send(uid, { type: 'redeemCoupon', code: '출항준비' }))).toEqual([422, 'coupon-used']);
+
+    // 게스트도 소모성 물약 사용(usePotion)은 허용되지만 가공(cook)은 계속 차단된다
+    expect(outcome(await send(uid, { type: 'usePotion', id: 'luck-small' }))).toEqual([200, 'ok']);
+    const afterPotion = await env.client.query<{ data: { items?: Record<string, number>; potions?: Record<string, unknown> } }>(
+      `select data from public.saves_current where user_id = $1`,
+      [uid],
+    );
+    expect(afterPotion.rows[0].data.items?.['luck-small'] ?? 0).toBe(0);
+    expect(afterPotion.rows[0].data.potions?.['luck-small']).toBeTruthy();
+    expect(outcome(await send(uid, { type: 'cook', recipe: 'anchovy-soup', count: 1 }))).toEqual([403, 'account-only']);
+  });
+
+  it('게스트는 무제한 동적 쿠폰을 쓸 수 있고, 선착순 제한 쿠폰은 403 account-only, 없는 코드는 422 coupon-invalid로 거부한다', async () => {
+    await env.client.query(
+      `insert into public.coupons (code, gold, items, description, active, max_redemptions)
+       values
+         ('DYN-GUEST-OPEN', 0, '[{"id":"luck-small","qty":1},{"id":"cook-lunch-bite","qty":1}]'::jsonb, '무제한 동적 쿠폰', true, null),
+         ('DYN-GUEST-LIMITED', 500, '[]'::jsonb, '선착순 제한 동적 쿠폰', true, 10),
+         ('DYN-GUEST-INACTIVE', 500, '[]'::jsonb, '비활성 동적 쿠폰', false, 10)
+       on conflict (code) do nothing`,
+    );
+    const uid = await guest({ state: { gold: 0 } });
+
+    // 없는 코드 및 비활성 코드: 존재 여부 오라클 없이 422 coupon-invalid
+    const before = await dumpUser(env.client, uid);
+    expect(outcome(await send(uid, { type: 'redeemCoupon', code: 'x' }))).toEqual([422, 'coupon-invalid']);
+    expect(outcome(await send(uid, { type: 'redeemCoupon', code: 'DYN-GUEST-INACTIVE' }))).toEqual([422, 'coupon-invalid']);
+    expect(await dumpUser(env.client, uid)).toEqual(before);
+
+    // 선착순 제한 동적 쿠폰: 403 account-only 및 사용 횟수/이력 미증가
+    expect(outcome(await send(uid, { type: 'redeemCoupon', code: 'DYN-GUEST-LIMITED' }))).toEqual([403, 'account-only']);
+    const limitedRedemptions = await env.client.query<{ n: number }>(
+      `select count(*)::int as n from public.coupon_redemptions where code = 'DYN-GUEST-LIMITED'`,
+    );
+    expect(limitedRedemptions.rows[0].n).toBe(0);
+    expect(await dumpUser(env.client, uid)).toEqual(before);
+
+    // 무제한 동적 쿠폰(0골드+아이템 보상): 200 ok 및 아이템 지급, 재사용 시 422 coupon-used
+    const openRes = await send(uid, { type: 'redeemCoupon', code: 'DYN-GUEST-OPEN' });
+    expect(outcome(openRes)).toEqual([200, 'ok']);
+    expect((openRes.body as { result: unknown }).result).toEqual({
+      type: 'coupon',
+      gold: 0,
+      items: [{ id: 'luck-small', qty: 1 }, { id: 'cook-lunch-bite', qty: 1 }],
+      desc: '무제한 동적 쿠폰',
+    });
+
+    const afterOpen = await env.client.query<{ gold: string; data: { coupons?: string[]; items?: Record<string, number> } }>(
+      `select gold, data from public.saves_current where user_id = $1`,
+      [uid],
+    );
+    expect(Number(afterOpen.rows[0].gold)).toBe(0);
+    expect(afterOpen.rows[0].data.coupons).toEqual(['DYN-GUEST-OPEN']);
+    expect(afterOpen.rows[0].data.items).toEqual({ 'luck-small': 1, 'cook-lunch-bite': 1 });
+
+    const openRedemptions = await env.client.query<{ n: number }>(
+      `select count(*)::int as n from public.coupon_redemptions where code = 'DYN-GUEST-OPEN' and user_id = $1`,
+      [uid],
+    );
+    expect(openRedemptions.rows[0].n).toBe(1);
+
+    expect(outcome(await send(uid, { type: 'redeemCoupon', code: 'DYN-GUEST-OPEN' }))).toEqual([422, 'coupon-used']);
+    const afterReuse = await env.client.query<{ n: number }>(
+      `select count(*)::int as n from public.coupon_redemptions where code = 'DYN-GUEST-OPEN' and user_id = $1`,
+      [uid],
+    );
+    expect(afterReuse.rows[0].n).toBe(1);
   });
 });
 
@@ -105,7 +169,18 @@ describe('랭킹의 게스트', () => {
     await env.client.query('update public.records set max_size = 99 where user_id = $1', [g]);
     const m = await member({ nickname: '계정하수', state: { fame: 5, dex: dexOf('crucian') } });
     await env.client.query('update public.records set max_size = 10 where user_id = $1', [m]);
-    const queries: Record<string, string>[] = [{ board: 'fame' }, { board: 'dex' }, { board: 'species', fish: 'crucian' }];
+    const { gameWeekStartDay } = await import('../src/game/rules/time.js');
+    const weekStart = gameWeekStartDay(new Date().toISOString());
+    await env.client.query(
+      `insert into public.ranking_weekly_fame (week_start, user_id, fame_gained) values ($1::date, $2, 900), ($1::date, $3, 5)`,
+      [weekStart, g, m],
+    );
+    const queries: Record<string, string>[] = [
+      { board: 'fame' },
+      { board: 'fame', window: 'all' },
+      { board: 'dex' },
+      { board: 'species', fish: 'crucian' },
+    ];
     for (const query of queries) {
       const asGuest = (await rank(query, userToken(g))).body as { top: { nickname: string }[]; me: unknown };
       expect(asGuest.top.map(r => r.nickname), query.board).toEqual(['계정하수']);

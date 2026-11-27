@@ -17,6 +17,7 @@ export const savesCurrent = pgTable('saves_current', {
   restricted: boolean('restricted').notNull().default(false),
   lastCatchAt: at('last_catch_at'),
   activeClient: text('active_client'),
+  lastSpot: text('last_spot'),
   guildEnhanceResetCount: integer('guild_enhance_reset_count').notNull().default(0),
 });
 
@@ -94,6 +95,18 @@ export const coupons = pgTable('coupons', {
   description: text('description').notNull(),
   active: boolean('active').notNull().default(true),
   createdAt: at('created_at').notNull().defaultNow(),
+  items: jsonb('items').$type<{ id: string; qty: number }[]>().notNull().default([]),
+  startsAt: at('starts_at'),
+  endsAt: at('ends_at'),
+  maxRedemptions: integer('max_redemptions'),
+  perAccountLimit: integer('per_account_limit').notNull().default(1),
+});
+
+export const couponRedemptions = pgTable('coupon_redemptions', {
+  id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+  code: text('code').notNull(),
+  userId: uuid('user_id').notNull(),
+  redeemedAt: at('redeemed_at').notNull().defaultNow(),
 });
 
 export const reliefs = pgTable('reliefs', {
@@ -111,10 +124,12 @@ export const reliefs = pgTable('reliefs', {
 export const mails = pgTable('mails', {
   id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
   userId: uuid('user_id').notNull(),
+  idempotencyKey: text('idempotency_key'),
   title: text('title').notNull(),
   body: text('body').notNull(),
   gold: bigint('gold', { mode: 'number' }).notNull().default(0),
   items: jsonb('items').$type<{ id: string; qty: number }[]>().notNull().default([]),
+  hats: jsonb('hats').$type<string[]>().notNull().default([]),
   createdAt: at('created_at').notNull().defaultNow(),
   readAt: at('read_at'),
   claimedAt: at('claimed_at'),
@@ -184,6 +199,7 @@ export const dailyFortunes = pgTable('daily_fortunes', {
   day: text('day').notNull(),
   kind: text('kind').notNull(),
   index: smallint('index').notNull(),
+  score: smallint('score'),
   createdAt: at('created_at').notNull().defaultNow(),
 }, t => [primaryKey({ columns: [t.userId, t.day] })]);
 
@@ -196,3 +212,110 @@ export const httpMetricsDaily = pgTable('http_metrics_daily', {
   status5xx: bigint('status_5xx', { mode: 'number' }).notNull().default(0),
   updatedAt: at('updated_at').notNull().defaultNow(),
 }, t => [primaryKey({ columns: [t.day, t.routeGroup] })]);
+
+export const notices = pgTable('notices', {
+  id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+  title: text('title').notNull(),
+  body: text('body').notNull(),
+  startsAt: at('starts_at').notNull(),
+  endsAt: at('ends_at').notNull(),
+  createdBy: uuid('created_by'),
+  createdAt: at('created_at').notNull().defaultNow(),
+  updatedAt: at('updated_at').notNull().defaultNow(),
+});
+
+export const liveEvents = pgTable('live_events', {
+  id: text('id').primaryKey(),
+  kind: text('kind').notNull(),
+  title: text('title').notNull(),
+  description: text('description').notNull().default(''),
+  startsAt: at('starts_at').notNull(),
+  endsAt: at('ends_at').notNull(),
+  active: boolean('active').notNull().default(true),
+  config: jsonb('config').$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: at('created_at').notNull().defaultNow(),
+  updatedAt: at('updated_at').notNull().defaultNow(),
+});
+
+export const eventTrioProgress = pgTable('event_trio_progress', {
+  eventId: text('event_id').notNull(),
+  userId: uuid('user_id').notNull(),
+  counts: jsonb('counts').$type<Record<string, number>>().notNull().default({}),
+  completedAt: at('completed_at'),
+  claimedAt: at('claimed_at'),
+  updatedAt: at('updated_at').notNull().defaultNow(),
+}, t => [primaryKey({ columns: [t.eventId, t.userId] })]);
+
+export const eventChampionshipScores = pgTable('event_championship_scores', {
+  eventId: text('event_id').notNull(),
+  userId: uuid('user_id').notNull(),
+  score: integer('score').notNull().default(0),
+  bestFishId: text('best_fish_id'),
+  bestFishScore: integer('best_fish_score').notNull().default(0),
+  catches: integer('catches').notNull().default(0),
+  dex: jsonb('dex').$type<Record<string, { normal: number; variant: number }>>().notNull().default({}),
+  hatsGranted: jsonb('hats_granted').$type<string[]>().notNull().default([]),
+  pendingGold: integer('pending_gold').notNull().default(0),
+  pendingFame: integer('pending_fame').notNull().default(0),
+  settledAt: at('settled_at'),
+  updatedAt: at('updated_at').notNull().defaultNow(),
+}, t => [primaryKey({ columns: [t.eventId, t.userId] })]);
+
+export const eventDraws = pgTable('event_draws', {
+  id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+  eventId: text('event_id').notNull(),
+  userId: uuid('user_id').notNull(),
+  rewardKind: text('reward_kind').notNull(),
+  rewardId: text('reward_id'),
+  rewardQty: integer('reward_qty').notNull().default(0),
+  gold: integer('gold').notNull().default(0),
+  rewardPin: text('reward_pin'),
+  rewardExpiresAt: text('reward_expires_at'),
+  mailId: bigint('mail_id', { mode: 'number' }),
+  seed: text('seed').notNull().default(''),
+  drawnBy: uuid('drawn_by'),
+  createdAt: at('created_at').notNull().defaultNow(),
+});
+
+export const widgetAuthCodes = pgTable('widget_auth_codes', {
+  codeHash: text('code_hash').primaryKey(),
+  userId: uuid('user_id').notNull(),
+  codeChallenge: text('code_challenge').notNull(),
+  redirectUri: text('redirect_uri').notNull(),
+  expiresAt: at('expires_at').notNull(),
+  createdAt: at('created_at').notNull().defaultNow(),
+});
+
+export const widgetTokens = pgTable('widget_tokens', {
+  tokenHash: text('token_hash').primaryKey(),
+  userId: uuid('user_id').notNull(),
+  clientVersion: text('client_version').notNull(),
+  createdAt: at('created_at').notNull().defaultNow(),
+  lastSeenAt: at('last_seen_at').notNull().defaultNow(),
+  expiresAt: at('expires_at').notNull(),
+});
+export const rankingWeeklyFame = pgTable('ranking_weekly_fame', {
+  weekStart: date('week_start', { mode: 'string' }).notNull(),
+  userId: uuid('user_id').notNull(),
+  fameGained: bigint('fame_gained', { mode: 'number' }).notNull().default(0),
+  reachedAt: at('reached_at').notNull().defaultNow(),
+  updatedAt: at('updated_at').notNull().defaultNow(),
+}, t => [primaryKey({ columns: [t.weekStart, t.userId] })]);
+
+export const admins = pgTable('admins', {
+  userId: uuid('user_id').primaryKey(),
+  role: text('role').notNull().default('admin'),
+  showStaffBadge: boolean('show_staff_badge').notNull().default(false),
+  createdAt: at('created_at').notNull().defaultNow(),
+});
+
+export const adminAuditLogs = pgTable('admin_audit_logs', {
+  id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+  actorId: uuid('actor_id'),
+  actorRole: text('actor_role').notNull(),
+  action: text('action').notNull(),
+  targetId: uuid('target_id'),
+  reason: text('reason').notNull().default(''),
+  detail: jsonb('detail').$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: at('created_at').notNull().defaultNow(),
+});

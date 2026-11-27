@@ -1,5 +1,5 @@
 // 게스트(계정을 연결하지 않은 익명 계정)가 할 수 있는 액션의 판정.
-// 게스트는 마을 안의 이동, 낚시, 판매, 낚싯대 강화, 배 구매, 출항준비 쿠폰만 한다. 서버가 이 판정으로 그 밖의 액션을 거부한다.
+// 게스트는 마을 안의 이동, 낚시, 판매, 낚싯대 강화, 배 구매, 출항준비 및 선착순 제한 없는 동적 쿠폰, 보유 소비 아이템(먹기·비약)만 한다. 서버가 이 판정으로 그 밖의 액션을 거부한다.
 // 거부 사유는 코드로 돌려준다. 화면은 코드로 안내를 고른다.
 import type { GameAction } from './actions.js';
 import type { GameState } from './logic.js';
@@ -16,10 +16,11 @@ export type GuestVerdict = 'ok' | 'account-only' | 'guest-village-only';
 // 조건 없이 통과하는 액션. 접속 기록(boot)은 게임에 들어오는 데 필요하고, 튜토리얼 기록과 잠금은 낚시와 판매 흐름의 일부다.
 // 미끼 환불 안내 닫기는 이관이 게스트의 골드에도 환불을 더했으므로 게스트도 영수증을 지울 수 있어야 한다
 const OPEN = new Set<GameAction['type']>([
-  'boot', 'sell', 'upgradeRod', 'buyBoat', 'seeTutorial', 'setLocked', 'autoLock', 'setAutoLockOnCatch', 'dismissBaitRefund',
+  'boot', 'sell', 'upgradeRod', 'buyBoat', 'seeTutorial', 'setLocked', 'autoLock', 'setAutoLockOnCatch',
+  'dismissBaitRefund', 'eat', 'usePotion',
 ]);
-// 개발 명령과 이사 코드는 서버의 환경과 소유자 판정이 따로 정한다
-const GATED_ELSEWHERE = new Set<GameAction['type']>(['debug', 'debugBatch', 'debugSnapshot', 'import']);
+// 개발 명령·이사 코드·쿠폰 사용(출항준비 및 선착순 제한 없는 동적 쿠폰)은 서버의 환경·소유자·동적 쿠폰 상한 판정이 따로 정한다
+const GATED_ELSEWHERE = new Set<GameAction['type']>(['debug', 'debugBatch', 'debugSnapshot', 'import', 'redeemCoupon']);
 
 /** 마을 안에서 닿는 곳: 마을 지역과 지역이 마을인 거점. 알 수 없는 값은 마을 밖으로 본다 */
 const inVillage = (to: unknown): boolean => {
@@ -35,10 +36,12 @@ export function guestActionVerdict(action: GameAction): GuestVerdict {
   if (OPEN.has(action.type) || GATED_ELSEWHERE.has(action.type)) return 'ok';
   if (action.type === 'travel') return inVillage(action.to) ? 'ok' : 'guest-village-only';
   if (action.type === 'catch') return spotById(action.spot)?.region === 'village' ? 'ok' : 'guest-village-only';
-  if (action.type === 'redeemCoupon') {
-    return typeof action.code === 'string' && action.code.trim() === '출항준비' ? 'ok' : 'account-only';
-  }
   return 'account-only';
+}
+
+/** 게스트 쿠폰 허용 판정: 정적 출항준비 쿠폰과 선착순 제한이 없는 동적 쿠폰만 허용한다 */
+export function guestCouponVerdict(code: string, maxRedemptions: number | null): GuestVerdict {
+  return code.trim() === '출항준비' || maxRedemptions === null ? 'ok' : 'account-only';
 }
 
 /**

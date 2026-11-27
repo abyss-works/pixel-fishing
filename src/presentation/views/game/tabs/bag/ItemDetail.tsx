@@ -12,6 +12,7 @@ import Modal from '../../../../ui/Modal';
 import Note from '../../../../ui/Note';
 import PageTitle from '../../../../ui/PageTitle';
 import { GradeName, HighlightRarityText } from '../../../../ui/fish/RarityTag';
+import { fmtEffectDuration } from '../../../../../shared/lib/effectDuration';
 import { fmtMinutes, fmtNum } from '../../../../ui/format';
 
 export type ItemDetailTarget =
@@ -34,11 +35,11 @@ export default function ItemDetail({ target, busy, onClose }: {
   const label = isPotion ? target.row.potion.name : target.row.label;
   const categoryLabel = isPotion ? '비약' : target.row.slot === 'lunch' ? '도시락' : '미끼';
   const description = isPotion ? target.row.potion.description : target.row.recipe.description;
-  const { effects, note, count, active } = target.row;
+  const { effects, count, active, note } = target.row;
   const durationText = isPotion ? '하루 동안' : fmtMinutes(target.row.durationMinutes);
   const remainingMinutes = isPotion ? null : target.row.remainingMinutes;
   const usable = target.lockLines === null && (isPotion ? target.row.usable : target.row.count > 0);
-  const actionLabel = isPotion ? (active ? '사용 중' : '사용') : target.row.verb;
+  const actionLabel = isPotion ? '사용' : target.row.verb;
   const handleUse = () => {
     if (isPotion) target.onUse(target.row);
     else target.onUse(target.row);
@@ -114,7 +115,7 @@ export default function ItemDetail({ target, busy, onClose }: {
               <span className="inline-flex items-center justify-end gap-1.5">
                 <Badge tone="accent" size="2xs">사용 중</Badge>
                 {remainingMinutes !== null && (
-                  <span className="pf-accent text-accent">남음 {fmtMinutes(remainingMinutes)}</span>
+                  <span className="pf-accent text-accent">남음 {fmtEffectDuration(remainingMinutes)}</span>
                 )}
               </span>
             ) : (
@@ -157,7 +158,7 @@ function ItemDetailFooter({ title, label, lockLines, busy, usable, actionLabel, 
   return (
     <div className="mt-3 border-t border-line pt-2">
       {lockLines ? (
-        <Locked badge={false} lines={lockLines} title={<GradeName name={title.name} grade={title.grade} />} label={`${label} 사용 잠김`} className="block">
+        <Locked badge={false} lines={lockLines} title={<GradeName name={title.name} grade={title.grade} />} label={`${label} 잠김`} className="block">
           <Button variant="primary" full disabled>{actionLabel}</Button>
         </Locked>
       ) : (

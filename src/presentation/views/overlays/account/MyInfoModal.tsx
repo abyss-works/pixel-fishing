@@ -9,7 +9,7 @@ import { REJECT_TEXT } from '../../../../game/rules/logic';
 import { checkNickname } from '../../../../game/rules/nickname';
 import type { RejectReason } from '../../../../game/rules/rules';
 import Button from '../../../ui/Button';
-import { useKeyScope } from '../../../ui/hotkeys';
+import { HOTKEY_TIER, useKeyScope } from '../../../ui/hotkeys';
 import Inset from '../../../ui/Inset';
 import KeyValueRow from '../../../ui/KeyValueRow';
 import Locked from '../../../ui/Locked';
@@ -54,7 +54,7 @@ export default function MyInfoModal({ setToast, onClose, account, accountChecked
       cancelEdit();
       return true;
     }
-  });
+  }, { tier: HOTKEY_TIER.APP_CONFIRM });
 
   const submitNick = async () => {
     if (nickLock || !editing) return;

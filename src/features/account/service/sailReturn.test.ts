@@ -1,13 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  GOOGLE_ORIGIN_KEY,
   SAIL_RETURN_KEY,
   SAIL_RETURN_TARGET,
   activateSailReturnIfPending,
+  clearPendingGoogleOrigin,
   clearPendingSailReturn,
+  consumeGoogleOrigin,
   consumeSailReturn,
   hasPendingSailReturn,
   isSailReturnReady,
   resetSailReturnForTest,
+  setPendingGoogleOrigin,
   setPendingSailReturn,
 } from './sailReturn';
 
@@ -62,5 +66,17 @@ describe('sailReturn 세션 표지', () => {
   it('대기가 없을 때 activateSailReturnIfPending은 false다', () => {
     expect(activateSailReturnIfPending()).toBe(false);
     expect(isSailReturnReady()).toBe(false);
+  });
+
+  it('구글 인증 시작 출처(connect/manage)를 저장하고 1회 소비하거나 삭제한다', () => {
+    expect(consumeGoogleOrigin()).toBeNull();
+    setPendingGoogleOrigin('manage');
+    expect(sessionStorage.getItem(GOOGLE_ORIGIN_KEY)).toBe('manage');
+    expect(consumeGoogleOrigin()).toBe('manage');
+    expect(consumeGoogleOrigin()).toBeNull();
+
+    setPendingGoogleOrigin('connect');
+    clearPendingGoogleOrigin();
+    expect(consumeGoogleOrigin()).toBeNull();
   });
 });

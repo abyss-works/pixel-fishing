@@ -28,16 +28,16 @@ export default function ChoiceCard({ selected, onSelect, preview, label, sub, ba
       aria-checked={selected}
       onClick={onSelect}
       className={cx(
-        'flex flex-col gap-1.5 p-2 text-left pf-notch border cursor-pointer transition-colors',
+        'min-w-0 flex flex-col gap-1.5 p-2 text-left pf-notch border cursor-pointer transition-colors',
         selected ? cx('border-gold bg-surface-2', PRESSED_BEVEL) : 'border-line bg-surface pf-bevel hover:border-gold-dark',
       )}
     >
       <Inset tone="deep" className="flex items-center justify-center gap-1 h-16 w-full overflow-hidden">
         {preview}
       </Inset>
-      <div className="flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5 mobile:gap-1 min-w-0">
         <PixelIcon glyph={selected ? 'checkOn' : 'checkOff'} size={11}
-                   className={selected ? 'text-gold' : 'text-text-dim'} />
+                   className={cx('shrink-0', selected ? 'text-gold' : 'text-text-dim')} />
         <span className={cx('pf-accent text-base', selected ? 'text-gold' : 'text-text')}>{label}</span>
         {sub && <span className="text-2xs text-text-dim">{sub}</span>}
         {badge && (

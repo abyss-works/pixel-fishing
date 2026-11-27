@@ -12,6 +12,13 @@ describe('isConsentExempt', () => {
     expect(isConsentExempt('/api/accounts')).toBe(false);
     expect(isConsentExempt('/api')).toBe(false);
     expect(isConsentExempt('/api/action')).toBe(false);
+    expect(isConsentExempt('/api/widget')).toBe(true);
+    expect(isConsentExempt('/api/widget/auth/start')).toBe(true);
+    expect(isConsentExempt('/api/widget/auth/exchange')).toBe(true);
+    expect(isConsentExempt('/api/widget/auth/logout')).toBe(true);
+    expect(isConsentExempt('/api/widget/summary')).toBe(true);
+    expect(isConsentExempt('/api/widget/stream')).toBe(true);
+    expect(isConsentExempt('/api/widgets')).toBe(false);
   });
 });
 
@@ -32,13 +39,15 @@ describe('경로 등록부와 허용 목록', () => {
       '/api/cron/archive', '/api/cron/purge-anon',
       '/api/dev/promote-test', '/api/dev/reset-account',
       '/api/guild-invites/:code',
+      '/api/widget/auth/exchange', '/api/widget/auth/logout', '/api/widget/auth/start',
+      '/api/widget/stream', '/api/widget/summary',
     ]);
   });
 
   it('게임 요청 경로는 모두 거부 대상이다', () => {
     for (const path of ['/api/action', '/api/me', '/api/me/position', '/api/mail', '/api/friends', '/api/friends/:uid', '/api/players',
       '/api/players/:uid', '/api/rank', '/api/blocks', '/api/blocks/:uid', '/api/chat/messages/:id/reports', '/api/away-report',
-      '/api/guilds', '/api/guild-memberships']) {
+      '/api/guilds', '/api/guild-memberships', '/api/events']) {
       expect(registered, path).toContain(path);
       expect(isConsentExempt(path), path).toBe(false);
     }

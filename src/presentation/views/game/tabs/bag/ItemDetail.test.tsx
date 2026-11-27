@@ -52,13 +52,14 @@ describe('ItemDetail', () => {
     expect(within(dialog).getByText('사용 중')).toBeInTheDocument();
     expect(within(dialog).getByText('남음 6시간 12분')).toBeInTheDocument();
     expect(within(dialog).getByText(recipeById('cook-lunch-named')!.description)).toBeInTheDocument();
-    expect(within(dialog).getByText(/방치로 낚을 때만 효과가 있어요/)).toBeInTheDocument();
+    expect(within(dialog).getByText('방치로 낚을 때만 효과가 있어요.')).toBeInTheDocument();
+    expect(within(dialog).getByText('접속하지 않아도 지속 시간이 흘러요.')).toBeInTheDocument();
 
     // 본문 순서: 설명(로어) → 효과 → 상태 수치(지속 시간·보유 수량·현재 상태) → 주의사항
     const descEl = within(dialog).getByText(recipeById('cook-lunch-named')!.description);
     const effectEl = within(dialog).getByText((_, el) => el?.tagName === 'SPAN' && el.textContent === '네임드 조우 확률');
     const durationEl = within(dialog).getByText('지속 시간');
-    const noteEl = within(dialog).getByText(/방치로 낚을 때만 효과가 있어요/);
+    const noteEl = within(dialog).getByText('방치로 낚을 때만 효과가 있어요.');
     expect(descEl.compareDocumentPosition(effectEl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(effectEl.compareDocumentPosition(durationEl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(durationEl.compareDocumentPosition(noteEl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -75,7 +76,7 @@ describe('ItemDetail', () => {
   });
 
   it('미보유 전설 미끼와 비수치형 달빛 미끼 효과를 깔끔히 렌더링하고 미보유 버튼은 비활성이다', () => {
-    const view = selectItemSection(seed({ items: { 'cook-bait-night': 2 } }), NOW, 'account');
+    const view = selectItemSection(seed({ artifacts: ['sargasso-net'], items: { 'cook-bait-night': 2 } }), NOW, 'account');
     if (view.state !== 'open') throw new Error('open이어야 해요');
 
     const legendary = view.bait.find(r => r.recipe.id === 'cook-bait-legendary')!;
@@ -93,8 +94,11 @@ describe('ItemDetail', () => {
     expect(within(dialog).getByText((_, el) => el?.tagName === 'SPAN' && el.textContent === '전설 어종 출현 비중')).toBeInTheDocument();
     expect(within(dialog).getByText('전설')).toHaveAttribute('data-rarity', 'legendary');
     expect(within(dialog).getByText('+80%')).toBeInTheDocument();
+    expect(within(dialog).getByText('2분 30초')).toBeInTheDocument();
     expect(within(dialog).getByText('0개')).toBeInTheDocument();
     expect(within(dialog).getByText('미보유')).toBeInTheDocument();
+    expect(within(dialog).getByText('직접 챔질해 낚을 때만 효과가 있어요.')).toBeInTheDocument();
+    expect(within(dialog).getByText('접속하지 않아도 지속 시간이 흘러요.')).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: '사용' })).toBeDisabled();
 
     cleanup();
@@ -114,13 +118,14 @@ describe('ItemDetail', () => {
     expect(within(dialog).getByRole('button', { name: '사용' })).toBeEnabled();
   });
 
-  it('비약 상세는 등급색 이름, 행운 효과, 하루 동안 지속, 게스트 잠금 상태를 정확히 보인다', () => {
-    const view = selectItemSection(seed({ items: { 'luck-small': 2 } }), NOW, 'guest');
+  it('비약 상세는 게스트 여부와 무관하게 잠금 없이 등급색 이름, 행운 효과, 하루 동안 지속, 사용 버튼을 보인다', () => {
+    const view = selectItemSection(seed({ boat: 0, items: { 'luck-small': 2 } }), NOW, 'guest');
     const potionRow = view.potions[0];
+    const onUse = vi.fn();
 
     render(
       <ItemDetail
-        target={{ kind: 'potion', row: potionRow, lockLines: view.potionLock, onUse: vi.fn() }}
+        target={{ kind: 'potion', row: potionRow, lockLines: null, onUse }}
         busy={false}
         onClose={vi.fn()}
       />,
@@ -135,8 +140,42 @@ describe('ItemDetail', () => {
     expect(within(dialog).getByText('하루 동안')).toBeInTheDocument();
     expect(within(dialog).getByText('2개')).toBeInTheDocument();
 
-    const lockGroup = within(dialog).getByRole('group', { name: '작은 바다 영약 사용 잠김' });
-    expect(lockGroup).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
+    expect(within(dialog).queryByRole('group', { name: /잠김/ })).toBeNull();
+    const useBtn = within(dialog).getByRole('button', { name: '사용' });
+    expect(useBtn).toBeEnabled();
+    fireEvent.click(useBtn);
+    expect(onUse).toHaveBeenCalledWith(potionRow);
+
+    cleanup();
+    const activeView = selectItemSection(seed({ items: { 'luck-small': 1 }, potions: { 'luck-small': '2026-11-12' } }), NOW, 'account');
+    render(
+      <ItemDetail
+        target={{ kind: 'potion', row: activeView.potions[0], lockLines: null, onUse: vi.fn() }}
+        busy={false}
+        onClose={vi.fn()}
+      />,
+    );
+    const activeDialog = screen.getByRole('dialog');
+    expect(within(activeDialog).getByText('사용 중')).toBeInTheDocument();
+    expect(within(activeDialog).getByRole('button', { name: '사용' })).toBeDisabled();
+  });
+
+  it('잠긴 요리 상세의 하단 버튼 잠금 그룹 이름은 `${label} 잠김`이고 제작 해금 문구를 보인다', () => {
+    const lockedView = selectItemSection(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), NOW, 'account');
+    if (lockedView.state !== 'locked') throw new Error('locked이어야 해요');
+    const row = lockedView.lunch[0];
+
+    render(
+      <ItemDetail
+        target={{ kind: 'recipe', row, lockLines: row.lockLines, onUse: vi.fn() }}
+        busy={false}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const dialog = screen.getByRole('dialog');
+    const lockGroup = within(dialog).getByRole('group', { name: `${row.label} 잠김` });
+    expect(lockGroup).toHaveTextContent('인도양 항로가 열리면 부엌에서 도시락과 미끼를 만들 수 있어요.');
     expect(within(lockGroup).getByRole('button', { name: '사용' })).toBeDisabled();
   });
 });

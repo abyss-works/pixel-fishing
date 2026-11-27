@@ -12,7 +12,8 @@ import { resetCanvasCover } from './presentation/layouts/game-stage/canvasCover'
 import { resetTimeOverride } from './features/gameplay/service/timeOverride';
 import { resetFishArtStyle } from './features/display/service/fishArtStyle';
 import { resetToastEnabled } from './features/display/service/toastEnabled';
-import { resetEncounterAlert, resetUpdateAlert } from './features/bounty/service/encounterAlert';
+import { resetAlerts } from './platform/api/attention';
+import { resetAlertPrompt } from './features/alerts/service/alertPrompt';
 import { resetWhatsNewSession } from './features/announcements/service/whatsNew';
 import { resetTutorialSession } from './features/tutorial/service/tutorial';
 import { resetFortuneModalSession } from './features/fortune/service/fortuneModal';
@@ -64,6 +65,8 @@ const SAVE_KEY = 'pixel-fishing-save';
 
 // 튜토리얼 창도 접속 시 떠서 키를 막는다 — 튜토리얼 자체를 다루는 케이스 밖에서는 모두 본 것으로 시작한다
 const SEEN_TUTORIALS = { tutorials: [...TUTORIAL_IDS] };
+// 신규 세이브의 시작 위치는 바뀔 수 있으므로 집을 전제한 테스트는 위치를 명시한다
+const HOME = { kind: 'base', id: 'home' } as const;
 
 function seed(over: Partial<GameState> = {}) {
   localStorage.setItem(SAVE_KEY, JSON.stringify({
@@ -72,6 +75,7 @@ function seed(over: Partial<GameState> = {}) {
     // 흔들리지 않게 오늘 날짜의 그림자 운세를 박는다. 그림자 운은 활성 네임드 의뢰가 없는
     // 이 테스트들에서는 아무 판정에도 걸리지 않는다. 운세를 다루는 테스트는 seed 인자로 덮어쓴다
     fortune: { day: gameDayOf(new Date().toISOString()), kind: 'shadow', index: 3 },
+    location: HOME,
     ...over,
   }));
 }
@@ -118,8 +122,8 @@ beforeEach(() => {
   resetTimeOverride(); // 시간대 고정도 모듈 전역 (남으면 밤/낮 캐치가 오염된다)
   resetFishArtStyle(); // 물고기 그래픽 선택도 모듈 전역
   resetToastEnabled(); // 플로팅 토스트 표시 설정도 모듈 전역
-  resetEncounterAlert(); // 조우 알림 선호도 모듈 전역
-  resetUpdateAlert();
+  resetAlerts(); // 알림 선호도 모듈 전역
+  resetAlertPrompt();
   // 업데이트 소식 창은 접속 시 자동으로 떠서 키를 막는다 — 소식 창 자체를 다루는 케이스 밖에서는 본 것으로 둔다
   resetWhatsNewSession();
   resetTutorialSession();
@@ -189,6 +193,7 @@ describe('R1: 판매 궤짝 → 사이드바 인라인 패널 (어종별 체크 
   });
 
   it('가방이 비면 안내만 (판매 버튼 없음)', () => {
+    seed({ location: HOME });
     render(<App />);
     clickFurniture('sell');
     expect(screen.getByText(/가방이 비어 있어요/)).toBeInTheDocument();
@@ -517,12 +522,14 @@ describe('현상금 — 항구 수배판 진입', () => {
 
 describe('R3b: 문(마을로) + 항구 여객선', () => {
   it('문 클릭 시 마을 필드로 전환', () => {
+    seed({ location: HOME });
     render(<App />);
     clickFurniture('exit');
     expect(screen.getByLabelText('마을')).toBeInTheDocument();
   });
 
   it('가구가 아닌 곳 클릭은 아무 일 없음', () => {
+    seed({ location: HOME });
     render(<App />);
     fireEvent.click(screen.getByLabelText('집'), { clientX: 160, clientY: 40 });
     expect(screen.getByLabelText('집')).toBeInTheDocument();
@@ -804,33 +811,58 @@ describe('R18: 저장(클라우드 단일 소스) + 레거시 브리지', () => 
     expect(pressed('설정')).toHaveAttribute('aria-pressed', 'false');
   });
 
-  it('알림을 지원하지 않는 브라우저에서는 두 알림 토글이 흐려져 켤 수 없다', () => {
+  it('알림을 지원하지 않는 브라우저에서는 세 알림 토글이 흐려져 켤 수 없고, 권한 줄이 지원 안 함을 알린다', () => {
     seed();
     render(<App />);
     clickTab('설정');
     fireEvent.click(openerButton('설정'));
-    expect(screen.getByRole('button', { name: '네임드 조우' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: '업데이트' })).toBeDisabled();
+    expect(screen.getByText('지원 안 함')).toBeInTheDocument();
+    for (const name of ['네임드 조우', '가방 가득 참', '업데이트']) {
+      expect(screen.getByRole('button', { name })).toBeDisabled();
+    }
   });
 
-  it('알림 켜기는 브라우저 권한을 묻고, 허용되면 그 알림만 켜짐으로 바뀐다', async () => {
-    const requestPermission = vi.fn(async () => 'granted' as NotificationPermission);
-    vi.stubGlobal('Notification', { permission: 'default', requestPermission });
+  it('권한이 허용 전이면 알림 토글은 흐리고, 허용 버튼으로 권한을 받으면 세 알림이 모두 켜진다', async () => {
+    const api = {
+      permission: 'default' as NotificationPermission,
+      requestPermission: vi.fn(async () => { api.permission = 'granted'; return api.permission; }),
+    };
+    vi.stubGlobal('Notification', api);
+    localStorage.setItem('pf-alert-prompt-seen', 'on'); // 안내 카드는 이 케이스의 관심사가 아니다
     seed();
     try {
       render(<App />);
       clickTab('설정');
       fireEvent.click(openerButton('설정'));
-      fireEvent.click(screen.getByRole('button', { name: '업데이트' }));
-      await waitFor(() => expect(screen.getByRole('button', { name: '업데이트' })).toHaveAttribute('aria-pressed', 'true'));
-      expect(requestPermission).toHaveBeenCalledTimes(1);
-      expect(screen.getByRole('button', { name: '네임드 조우' })).toHaveAttribute('aria-pressed', 'false');
-      expect(localStorage.getItem('pf-update-alert')).toBe('on');
-      fireEvent.click(screen.getByRole('button', { name: '업데이트' }));
-      expect(screen.getByRole('button', { name: '업데이트' })).toHaveAttribute('aria-pressed', 'false');
+      expect(screen.getByText('허용 전')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '가방 가득 참' })).toBeDisabled();
+      expect(api.requestPermission).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: '허용' }));
+      await waitFor(() => expect(screen.getByText('허용됨')).toBeInTheDocument());
+      expect(api.requestPermission).toHaveBeenCalledTimes(1);
+      for (const name of ['네임드 조우', '가방 가득 참', '업데이트']) {
+        expect(screen.getByRole('button', { name })).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByRole('button', { name })).toBeEnabled();
+      }
+      // 허용된 뒤에는 알림을 하나씩 끄고 켠다
+      fireEvent.click(screen.getByRole('button', { name: '가방 가득 참' }));
+      expect(screen.getByRole('button', { name: '가방 가득 참' })).toHaveAttribute('aria-pressed', 'false');
+      expect(localStorage.getItem('pf-bag-full-alert')).toBe('off');
+      expect(screen.getByRole('button', { name: '네임드 조우' })).toHaveAttribute('aria-pressed', 'true');
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it('설정의 알림 줄은 네임드 조우, 가방 가득 참, 업데이트 순이다', () => {
+    seed();
+    render(<App />);
+    clickTab('설정');
+    fireEvent.click(openerButton('설정'));
+    const names = screen.getAllByRole('button').map(b => b.getAttribute('aria-label')).filter(Boolean);
+    const order = ['네임드 조우', '가방 가득 참', '업데이트'].map(n => names.indexOf(n));
+    expect(order.every(i => i >= 0)).toBe(true);
+    expect(order).toEqual([...order].sort((x, y) => x - y));
   });
 
   it('설정 창에서 물고기 그래픽을 미리보기로 고른다 — 기본 v1, 선택은 기기에 남는다', () => {
@@ -1022,14 +1054,27 @@ describe('위치 복원 — 새로고침하면 있던 곳에서 재개', () => {
   it('세이브에 대양이 적혀 있으면 대양에서 시작한다', () => {
     seed({ boat: 1, location: { kind: 'region', id: 'world' } });
     render(<App />);
-    expect(screen.getByLabelText('바다')).toBeInTheDocument();   // 필드 캔버스
+    expect(screen.getByLabelText('대양')).toBeInTheDocument();   // 필드 캔버스
     expect(screen.queryByLabelText('집')).not.toBeInTheDocument();
   });
 
   it('기본은 집 — 위치가 없던 구세이브도 안전하다', () => {
     seed({});
+    const { location: _location, ...legacy } = JSON.parse(localStorage.getItem(SAVE_KEY)!);
+    localStorage.setItem(SAVE_KEY, JSON.stringify(legacy));
     render(<App />);
     expect(screen.getByLabelText('집')).toBeInTheDocument();
+  });
+
+  it('신규 플레이어가 마을에서 시작하면 안내 문구와 마을 튜토리얼이 먼저 뜨고 운세 창은 뜨지 않는다', async () => {
+    seed({ location: { kind: 'region', id: 'village' }, fortune: null, fame: 0, dex: {}, tutorials: [] });
+    render(<App />);
+    expect(screen.getByLabelText('마을')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('log')).toHaveTextContent('마을 연못 어군에서 낚시하고, 집에 들어가 정비해 보세요.');
+    });
+    expect(await screen.findByRole('dialog', { name: '마을에 오신 걸 환영해요' })).toBeInTheDocument();
+    expect(screen.queryByText('오늘의 운세')).not.toBeInTheDocument();
   });
 });
 
@@ -1057,6 +1102,7 @@ describe('R23b: 미니맵 클릭 = 세계지도 모달 (M 키 트리거는 폐�
 
 describe('탭은 씬과 무관하게 5개 고정', () => {
   it('거점에도 정비 탭이 없고, 기본 탭은 지역, 씬을 옮겨도 탭 구성 동일', () => {
+    seed({ location: HOME });
     render(<App />);
     expect(screen.queryByRole('button', { name: /정비/ })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /지역/ })).toHaveClass('active');
@@ -1607,6 +1653,7 @@ describe('스탯창 — 자원 바 클릭 진입 (v0.6.1)', () => {
   });
 
   it('씬이 바뀌면 스탯창도 닫힌다', () => {
+    seed({ location: HOME });
     render(<App />);
     fireEvent.click(screen.getByLabelText(/^스탯창 열기/));
     expect(screen.getByText('스탯')).toBeInTheDocument();
@@ -1974,6 +2021,45 @@ describe('포구 출항 차단 후 로그인 복귀', () => {
       await waitFor(() => expect(screen.getByRole('dialog', { name: '이용약관 동의' })).toBeInTheDocument());
       expect(screen.getByText('PIXEL FISHING')).toBeInTheDocument();
       expect(screen.getByText('2026년 11월 25일부터 이용약관이 시행돼요.')).toBeInTheDocument();
+    } finally {
+      vi.doUnmock('./platform/api');
+    }
+  });
+
+  it('익명 세션 확보가 429로 실패하면 혼잡 안내 차단 모달을 띄우고 저장 실패 모달은 띄우지 않는다', async () => {
+    seed({});
+    vi.resetModules();
+    vi.doMock('./platform/api', async importActual => {
+      const actual = await importActual<typeof import('./platform/api')>();
+      const { AppError } = await import('./core/errors');
+      const base = actual.createApi();
+      Object.defineProperties(base.auth, {
+        isConfigured: { value: true, configurable: true },
+        ensureSession: {
+          value: async () => {
+            throw new AppError('rate-limited', '요청이 너무 잦아요. 잠시 뒤 다시 시도해 주세요.', {
+              status: 429,
+              code: 'rate_limited',
+            });
+          },
+          configurable: true,
+        },
+      });
+      return {
+        ...actual,
+        readLastPosition: async () => null,
+        api: base,
+      };
+    });
+
+    try {
+      const { default: CloudApp } = await import('./App');
+      render(<CloudApp />);
+      await waitFor(() =>
+        expect(screen.getByText('같은 네트워크에서 접속이 잠시 몰려 있어요. 잠시 뒤 다시 시도해 주세요.')).toBeInTheDocument(),
+      );
+      expect(screen.getByRole('dialog', { name: '접속이 몰려 있어요' })).toBeInTheDocument();
+      expect(screen.queryByText('서버에 연결하지 못해 이번 행동이 저장되지 않았어요.')).not.toBeInTheDocument();
     } finally {
       vi.doUnmock('./platform/api');
     }

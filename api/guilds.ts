@@ -4,13 +4,14 @@
 //   GET    /api/guilds/me                  → { guild, request }       내 길드, 길드원(접속 여부·기여 포함), 고유 코드와 가입 방식,
 //                                                                       가입 신청(길드장만), 성장(레벨), 보너스와 효과, 기부 순위, 항해일지.
 //                                                                       길드가 없으면 guild는 null이고 request는 내가 넣어 둔 신청이다
+//   GET    /api/guilds/public?q=&sort=     → { guilds }               자유 가입·비만석 공개 길드 목록(고유 코드 비노출). sort=activity|level|slots
 //   POST   /api/guilds { name }            → 201 { id }               만들기. 만든 사람이 길드장이다
 //   PATCH  /api/guilds/:id { joinMode?, pitch? }
 //                                          → { joinMode, pitch }      가입 방식과 권유 문구 바꾸기(길드장)
 //   PUT    /api/guilds/:id/name { name }   → { name, gold }           이름 바꾸기(길드장). 길드장의 골드를 내고 하루(게임 날짜)에 한 번이다.
 //                                                                       gold는 바꾼 뒤 내 골드다
-//   POST   /api/guild-memberships { code, via? } → 201 { id, result: 'joined' } | 202 { id, result: 'requested' }
-//                                                                       고유 코드로 들어오기. 승인 가입 길드면 가입 신청이 된다. via가 'link'(초대 링크의 확인 창)이면 승인 가입 길드도 바로 들어간다
+//   POST   /api/guild-memberships { code | guildId, via? } → 201 { id, result: 'joined' } | 202 { id, result: 'requested' }
+//                                                                       고유 코드 또는 공개 길드 id로 들어오기. 승인 가입 길드면 가입 신청이 된다. via가 'link'(초대 링크의 확인 창)이면 승인 가입 길드도 바로 들어간다
 //   DELETE /api/guild-requests/me          → { result: 'cancelled' }  내 가입 신청 거두기
 //   POST   /api/guilds/:id/requests/:uid/approval
 //                                          → 201 { result: 'approved' } 가입 신청 승인(길드장)
@@ -25,6 +26,7 @@
 //   POST   /api/guilds/:id/enhancements/reset
 //                                          → 200 { gold, recovered, enhanceResetCount }  자유 강화 초기화(길드원 누구나, 누적 횟수별 개인 골드 비용, 횟수 제한 없음)
 // 가입 신청이 들어오면 길드장에게, 신청을 처리하면 신청한 사람에게 접속 중일 때 실시간 알림을 보낸다.
+// 기부·자유 강화·초기화·이름 바꾸기·들어오기·승인·떠나기·내보내기로 길드 상태가 바뀌면 접속한 길드원에게 갱신 알림을 보낸다.
 //
 // 주의: 시그니처는 Node 스타일(req, res)만 쓴다. 경로 변수는 Express가 req.params로 넘긴다.
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -32,18 +34,19 @@ import { randomInt } from 'node:crypto';
 import { sessionOf } from './_auth/session.js';
 import { database } from './_db/client.js';
 import {
-  cancelJoinRequest, createGuild, decideJoinRequest, donateToBonus, enhanceBonus, handOver, joinByCode, myGuild, myJoinRequest,
-  removeMember, renameGuild, resetEnhancements, setJoinSettings,
+  cancelJoinRequest, createGuild, decideJoinRequest, donateToBonus, enhanceBonus, handOver, joinByCode, joinByGuildId,
+  myGuild, myJoinRequest, publicGuilds, removeMember, renameGuild, resetEnhancements, setJoinSettings,
 } from './_data/guilds.js';
-import { notifyUser, presenceOf } from './_server/livePresence.js';
+import { notifyGuild, notifyUser, presenceOf } from './_server/livePresence.js';
 import {
-  GUILD_BONUS_IDS, checkGuildName, guildCode, normalizeGuildCode, normalizeGuildPitch, parseJoinMode, parseJoinVia, validDonationAmount,
+  GUILD_BONUS_IDS, checkGuildName, guildCode, normalizeGuildCode, normalizeGuildPitch, parseJoinMode, parseJoinVia,
+  parsePublicGuildSort, validDonationAmount,
 } from '../src/game/rules/guild.js';
-import type { GuildBonusId, GuildJoinMode } from '../src/game/rules/guild.js';
+import type { GuildBonusId, GuildJoinMode, PublicGuildSort } from '../src/game/rules/guild.js';
 import { ApiError, toApiError } from './errors.js';
 import { reportServerIssue } from './observability.js';
 
-type Req = IncomingMessage & { body?: unknown; params?: Record<string, string | undefined> };
+type Req = IncomingMessage & { body?: unknown; params?: Record<string, string | undefined>; query?: Record<string, unknown> };
 type Res = ServerResponse & { status: (code: number) => Res; json: (body: unknown) => void };
 type NodeHandler = (req: Req, res: Res) => Promise<void>;
 
@@ -51,15 +54,21 @@ type NodeHandler = (req: Req, res: Res) => Promise<void>;
 export type GuildChanged = (uid: string, guildId: string | null) => void;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** 공개 길드 목록 검색어 최대 길이(문자 수) */
+const PUBLIC_GUILD_QUERY_MAX = 50;
 
 /** 거부 코드의 응답 상태 */
 const STATUS: Record<string, number> = {
   'already-in-guild': 409, 'name-taken': 409, 'guild-full': 409, 'handover-first': 409, 'guild-closed': 409,
-  'not-leader': 403, 'not-member': 404, 'bad-code': 404, 'no-request': 404, self: 400,
+  'not-leader': 403, 'not-member': 404, 'bad-code': 404, 'no-request': 404, 'not-found': 404, self: 400,
+  'bad-guild': 400,
   'not-enough-gold': 409, 'bonus-locked': 409, 'rank-maxed': 409, restricted: 403, 'renamed-today': 409,
   'enhance-locked': 409, 'no-enhance-points': 409, 'enhance-maxed': 409, 'no-enhance-used': 409,
 };
 const refuse = (error: string) => new ApiError(STATUS[error] ?? 400, error);
+
+/** 길드 상태가 바뀌었음을 접속한 길드원에게 알린다. 받은 쪽이 길드를 다시 읽는 신호라 이름은 싣지 않는다 */
+const guildUpdated = (guildId: string) => notifyGuild(guildId, { t: 'guild', kind: 'updated', guild: '', nick: null });
 
 /** 같은 코드가 이미 있을 때 새 코드로 다시 만드는 횟수. 코드 공간이 31^8이라 한 번에 겹칠 일은 드물다 */
 const CODE_RETRIES = 3;
@@ -93,6 +102,13 @@ const bodyField = (req: Req, key: string): unknown => (req.body as Record<string
 const hasField = (req: Req, key: string): boolean =>
   typeof req.body === 'object' && req.body !== null && Object.prototype.hasOwnProperty.call(req.body, key);
 
+function queryParam(req: Req, key: string): unknown {
+  if (req.query && Object.prototype.hasOwnProperty.call(req.query, key)) return req.query[key];
+  if (!req.url) return undefined;
+  const url = new URL(req.url, 'http://x');
+  return url.searchParams.has(key) ? url.searchParams.get(key) : undefined;
+}
+
 async function run<T>(code: 'db-read' | 'db-write', work: () => Promise<T>): Promise<T> {
   try {
     return await work();
@@ -112,6 +128,20 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
       guild: guild && { ...guild, members: guild.members.map(m => ({ ...m, online: m.leftAt === null && presenceOf(m.uid) !== null })) },
       request,
     });
+  });
+
+  const publicList = handle(['GET'], async (req, res) => {
+    const rawQ = queryParam(req, 'q');
+    const q = typeof rawQ === 'string' ? [...rawQ.trim()].slice(0, PUBLIC_GUILD_QUERY_MAX).join('') : '';
+    const rawSort = queryParam(req, 'sort');
+    let sort: PublicGuildSort = 'activity';
+    if (rawSort !== undefined && rawSort !== '') {
+      const parsed = parsePublicGuildSort(rawSort);
+      if (!parsed) throw new ApiError(400, 'bad-sort');
+      sort = parsed;
+    }
+    const guilds = await run('db-read', () => publicGuilds(database().db, { q, sort }));
+    res.status(200).json({ guilds });
   });
 
   const create = handle(['POST'], async (req, res, uid) => {
@@ -148,6 +178,7 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
     if (change.joinMode === undefined && change.pitch === undefined) throw new ApiError(400, 'bad-settings');
     const r = await run('db-write', () => setJoinSettings(database().db, uid, id, change));
     if (!r.ok) throw refuse(r.error);
+    guildUpdated(id);
     res.status(200).json({ joinMode: r.joinMode, pitch: r.pitch });
   });
 
@@ -158,11 +189,25 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
     if (!checkGuildName(name).ok) throw new ApiError(400, 'bad-name');
     const r = await run('db-write', () => renameGuild(database().withTransaction, uid, id, name as string, new Date().toISOString()));
     if (!r.ok) throw refuse(r.error);
+    guildUpdated(id);
     res.status(200).json({ name: r.name, gold: r.gold });
   });
 
   const join = handle(['POST'], async (req, res, uid) => {
-    const code = normalizeGuildCode(bodyField(req, 'code'));
+    const rawGuildId = bodyField(req, 'guildId');
+    const rawCode = bodyField(req, 'code');
+    if (rawGuildId !== undefined) {
+      if (rawCode !== undefined) throw new ApiError(400, 'bad-code');
+      if (typeof rawGuildId !== 'string' || !UUID.test(rawGuildId)) throw new ApiError(400, 'bad-guild');
+      const r = await run('db-write', () => joinByGuildId(database().withTransaction, uid, rawGuildId.toLowerCase(),
+        new Date().toISOString()));
+      if (!r.ok) throw refuse(r.error);
+      changed(uid, r.id);
+      guildUpdated(r.id);
+      res.status(201).json({ id: r.id, result: 'joined' });
+      return;
+    }
+    const code = normalizeGuildCode(rawCode);
     if (!code) throw new ApiError(400, 'bad-code');
     // via는 초대 링크의 확인 창에서 온 요청에만 붙는다. 링크의 내용이 곧 고유 코드라 코드를 아는 사람이 via를 붙여도
     // 링크를 받은 사람과 얻는 것이 같으므로 서버는 이 표시를 그대로 받는다
@@ -171,6 +216,7 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
     if (!r.ok) throw refuse(r.error);
     if (r.result === 'joined') {
       changed(uid, r.id);
+      guildUpdated(r.id);
       res.status(201).json({ id: r.id, result: 'joined' });
       return;
     }
@@ -179,7 +225,8 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
   });
 
   const cancel = handle(['DELETE'], async (_req, res, uid) => {
-    await run('db-write', () => cancelJoinRequest(database().db, uid));
+    const cancelled = await run('db-write', () => cancelJoinRequest(database().db, uid));
+    if (cancelled?.leaderId) notifyUser(cancelled.leaderId, { t: 'guild', kind: 'updated', guild: '', nick: null });
     res.status(200).json({ result: 'cancelled' });
   });
 
@@ -189,8 +236,9 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
     const r = await run('db-write', () => decideJoinRequest(database().withTransaction, uid, id, target, approve,
       new Date().toISOString()));
     if (!r.ok) throw refuse(r.error);
-    if (approve) changed(target, id);
     notifyUser(target, { t: 'guild', kind: approve ? 'approved' : 'rejected', guild: r.guild, nick: null });
+    // 승인된 사람은 approved 알림만 받도록, 소속을 바꾸기 전에 기존 길드원에게 갱신을 보낸다
+    if (approve) { guildUpdated(id); changed(target, id); }
     res.status(approve ? 201 : 200).json({ result: approve ? 'approved' : 'rejected' });
   });
 
@@ -200,6 +248,8 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
     const r = await run('db-write', () => removeMember(database().withTransaction, uid, id, target, new Date().toISOString()));
     if (!r.ok) throw refuse(r.error);
     changed(target, null);
+    if (r.result === 'kicked') notifyUser(target, { t: 'guild', kind: 'updated', guild: '', nick: null });
+    if (r.result !== 'dissolved') guildUpdated(id);
     res.status(200).json({ result: r.result });
   });
 
@@ -209,6 +259,7 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
     if (typeof raw !== 'string' || !UUID.test(raw)) throw new ApiError(400, 'bad-user');
     const r = await run('db-write', () => handOver(database().withTransaction, uid, id, raw.toLowerCase()));
     if (!r.ok) throw refuse(r.error);
+    guildUpdated(id);
     res.status(200).json({ result: 'handed-over' });
   });
 
@@ -221,6 +272,7 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
     const r = await run('db-write', () => donateToBonus(database().withTransaction, uid, id, bonus as GuildBonusId, amount,
       new Date().toISOString()));
     if (!r.ok) throw refuse(r.error);
+    guildUpdated(id);
     res.status(201).json({ rank: r.rank, pool: r.pool, accepted: r.accepted, gold: r.gold });
   });
 
@@ -231,6 +283,7 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
     const r = await run('db-write', () => enhanceBonus(database().withTransaction, uid, id, bonus as GuildBonusId,
       new Date().toISOString()));
     if (!r.ok) throw refuse(r.error);
+    guildUpdated(id);
     res.status(201).json({ enhanceRank: r.enhanceRank, remainingPoints: r.remainingPoints });
   });
 
@@ -238,12 +291,14 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
     const id = uuidParam(req, 'id');
     const r = await run('db-write', () => resetEnhancements(database().withTransaction, uid, id, new Date().toISOString()));
     if (!r.ok) throw refuse(r.error);
+    guildUpdated(id);
     res.status(200).json({ gold: r.gold, recovered: r.recovered, enhanceResetCount: r.enhanceResetCount });
   });
 
   const reject = decide(false);
   return {
     '/api/guilds/me': me,
+    '/api/guilds/public': publicList,
     '/api/guilds/:id/bonuses/:bonus/donations': donate,
     '/api/guilds/:id/bonuses/:bonus/enhancements': enhance,
     '/api/guilds/:id/enhancements/reset': resetEnhance,

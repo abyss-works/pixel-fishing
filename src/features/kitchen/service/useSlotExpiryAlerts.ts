@@ -3,7 +3,7 @@ import type { GameState } from '../../../game/rules/logic';
 import { sendNotice } from '../../display/model/toastPolicy';
 import type { NoticeSink } from '../../display/model/toastPolicy';
 import { useNow } from '../../gameplay/service/useGameTime';
-import { activeSlot, ALL_SLOT_KEYS } from '../model/slots';
+import { activeSlot, ALL_SLOT_KEYS, slotPollIntervalMs } from '../model/slots';
 import type { ActiveSlot, SlotInstanceKey } from '../model/slots';
 
 interface PrevSlotState {
@@ -13,7 +13,7 @@ interface PrevSlotState {
 
 /** 도시락·미끼 슬롯 효과가 켜진 상태에서 시간 만료로 꺼지면 1회 알린다 */
 export function useSlotExpiryAlerts(game: GameState, notify: NoticeSink): void {
-  const now = useNow();
+  const now = useNow(current => slotPollIntervalMs(game, current));
   const prevRef = useRef<Record<SlotInstanceKey, PrevSlotState> | null>(null);
 
   useEffect(() => {

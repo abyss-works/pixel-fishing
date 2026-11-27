@@ -2,8 +2,14 @@
 // 시스템 알림(Notification API)은 권한이 필요하고, 탭 제목 깜빡임은 권한 없이 동작한다.
 // 알림 선호는 기기별 설정(localStorage)이라 세이브·서버 권위 대상이 아니다.
 
-export const ENCOUNTER_ALERT_KEY = 'pf-encounter-alert';
-export const UPDATE_ALERT_KEY = 'pf-update-alert';
+export type AlertKind = 'encounter' | 'bag' | 'update';
+
+export const ALERT_KEYS: Record<AlertKind, string> = {
+  encounter: 'pf-encounter-alert',
+  bag: 'pf-bag-full-alert',
+  update: 'pf-update-alert',
+};
+export const ALERT_PROMPT_SEEN_KEY = 'pf-alert-prompt-seen';
 
 export type NotificationPermissionState = NotificationPermission | 'unsupported';
 
@@ -15,74 +21,63 @@ function readKey(key: string): string | null {
   }
 }
 
-function writeKey(key: string, on: boolean): void {
-  try { localStorage.setItem(key, on ? 'on' : 'off'); } catch { /* 이번 세션에만 적용 */ }
+function writeKey(key: string, value: 'on' | 'off'): void {
+  try { localStorage.setItem(key, value); } catch { /* 이번 세션에만 적용 */ }
 }
 
-/** 저장소에서 다시 읽는다 — 시작 시 한 번, 테스트에서 저장값 해석을 검증할 때 쓴다 */
-export function loadEncounterAlertEnabled(): boolean {
-  return readKey(ENCOUNTER_ALERT_KEY) === 'on';
+/** 저장소에서 다시 읽는다 — 키가 없으면 켜짐이고 off로 저장된 알림만 꺼짐이다.
+ *  업데이트 알림은 두 알림이 한 스위치였던 때의 선택을 이어받는다 — 자기 키가 없으면 네임드 키 값을 따른다 */
+export function loadAlertEnabled(kind: AlertKind): boolean {
+  const own = readKey(ALERT_KEYS[kind]);
+  return (kind === 'update' ? own ?? readKey(ALERT_KEYS.encounter) : own) !== 'off';
 }
 
-/** 업데이트 알림은 두 알림이 한 스위치였던 때의 선택을 이어받는다 — 자기 키가 없으면 네임드 키 값을 따른다 */
-export function loadUpdateAlertEnabled(): boolean {
-  return (readKey(UPDATE_ALERT_KEY) ?? readKey(ENCOUNTER_ALERT_KEY)) === 'on';
-}
-
-let encounterEnabled = loadEncounterAlertEnabled();
-let updateEnabled = loadUpdateAlertEnabled();
-const encounterListeners = new Set<() => void>();
-const updateListeners = new Set<() => void>();
+const enabled: Record<AlertKind, boolean> = {
+  encounter: loadAlertEnabled('encounter'),
+  bag: loadAlertEnabled('bag'),
+  update: loadAlertEnabled('update'),
+};
+const alertListeners: Record<AlertKind, Set<() => void>> = { encounter: new Set(), bag: new Set(), update: new Set() };
 
 function notify(listeners: Set<() => void>) {
   for (const listener of listeners) listener();
 }
 
-export function getEncounterAlertEnabled(): boolean {
-  return encounterEnabled;
+export function getAlertEnabled(kind: AlertKind): boolean {
+  return enabled[kind];
 }
 
-export function getUpdateAlertEnabled(): boolean {
-  return updateEnabled;
-}
-
-export function setEncounterAlertEnabled(next: boolean): void {
-  if (encounterEnabled === next) return;
+/** 선택을 기기에 남긴다 — 같은 값이어도 키를 적어 둔다(안내 카드에서 켠 알림이 `on`으로 저장돼야 한다) */
+export function setAlertEnabled(kind: AlertKind, next: boolean): void {
   // 업데이트 키가 아직 없으면 이어받은 값을 먼저 굳힌다. 안 그러면 다음 로드에서 바뀐 네임드 값을 따라간다
-  if (readKey(UPDATE_ALERT_KEY) === null) writeKey(UPDATE_ALERT_KEY, updateEnabled);
-  encounterEnabled = next;
-  writeKey(ENCOUNTER_ALERT_KEY, next);
-  notify(encounterListeners);
+  if (kind === 'encounter' && readKey(ALERT_KEYS.update) === null) writeKey(ALERT_KEYS.update, enabled.update ? 'on' : 'off');
+  writeKey(ALERT_KEYS[kind], next ? 'on' : 'off');
+  if (enabled[kind] === next) return;
+  enabled[kind] = next;
+  notify(alertListeners[kind]);
 }
 
-export function setUpdateAlertEnabled(next: boolean): void {
-  if (updateEnabled === next) return;
-  updateEnabled = next;
-  writeKey(UPDATE_ALERT_KEY, next);
-  notify(updateListeners);
+export function subscribeAlert(kind: AlertKind, listener: () => void): () => void {
+  alertListeners[kind].add(listener);
+  return () => { alertListeners[kind].delete(listener); };
 }
 
-export function subscribeEncounterAlert(listener: () => void): () => void {
-  encounterListeners.add(listener);
-  return () => { encounterListeners.delete(listener); };
+/** 테스트 격리용 — 메모리 값을 기본(켜짐)으로 되돌린다(저장소는 건드리지 않는다) */
+export function resetAlerts(): void {
+  for (const kind of Object.keys(enabled) as AlertKind[]) {
+    if (enabled[kind]) continue;
+    enabled[kind] = true;
+    notify(alertListeners[kind]);
+  }
 }
 
-export function subscribeUpdateAlert(listener: () => void): () => void {
-  updateListeners.add(listener);
-  return () => { updateListeners.delete(listener); };
+/** 권한 안내 카드를 본 적이 있는지 — 카드는 기기마다 한 번만 띄운다 */
+export function isAlertPromptSeen(): boolean {
+  return readKey(ALERT_PROMPT_SEEN_KEY) === 'on';
 }
 
-/** 테스트 격리용 — 메모리 값을 기본으로 되돌린다(저장소는 건드리지 않는다) */
-export function resetEncounterAlert(): void {
-  if (!encounterEnabled) return;
-  encounterEnabled = false;
-  notify(encounterListeners);
-}
-
-export function resetUpdateAlert(): void {
-  if (!updateEnabled) return;
-  updateEnabled = false;
-  notify(updateListeners);
+export function markAlertPromptSeen(): void {
+  writeKey(ALERT_PROMPT_SEEN_KEY, 'on');
 }
 
 const notificationApi = (): typeof Notification | undefined =>
@@ -90,6 +85,27 @@ const notificationApi = (): typeof Notification | undefined =>
 
 export function notificationPermission(): NotificationPermissionState {
   return notificationApi()?.permission ?? 'unsupported';
+}
+
+const permissionListeners = new Set<() => void>();
+const notifyPermission = () => notify(permissionListeners);
+const onReturn = () => { if (!document.hidden) notifyPermission(); };
+
+/** 권한 상태가 바뀌었을 수 있는 때(요청이 끝났을 때, 게임 화면으로 돌아왔을 때) 알린다.
+ *  플레이어가 브라우저 설정에서 권한을 바꾸면 이벤트 없이 값만 달라지므로 돌아올 때 다시 읽게 한다 */
+export function subscribePermission(listener: () => void): () => void {
+  if (permissionListeners.size === 0) {
+    document.addEventListener('visibilitychange', onReturn);
+    window.addEventListener('focus', onReturn);
+  }
+  permissionListeners.add(listener);
+  return () => {
+    permissionListeners.delete(listener);
+    if (permissionListeners.size === 0) {
+      document.removeEventListener('visibilitychange', onReturn);
+      window.removeEventListener('focus', onReturn);
+    }
+  };
 }
 
 /** 권한 요청 — 브라우저는 클릭 같은 사용자 동작 안에서 부를 때만 묻는다 */
@@ -100,6 +116,8 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
     return await api.requestPermission();
   } catch {
     return api.permission;
+  } finally {
+    notifyPermission();
   }
 }
 

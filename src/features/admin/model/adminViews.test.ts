@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type {
-  AdminEconomyRow, AdminEventRow, AdminSpamFlagRow, AdminUserRow,
+  AdminEconomyRow, AdminEventRow, AdminSpamFlagRow, AdminUserAggregates, AdminUserRow,
 } from './types';
 import {
   adminIdentityLookup, adminNumber, isDormantGuest, splitDormantGuests, adminUserLabel, filterAdminUsers, shortUid, selectAdminUserDetail, selectAntiAbuseRows,
@@ -110,6 +110,15 @@ describe('계정 식별 표기', () => {
     expect(lookup('abcdef01-0000')).toBe(known);
     expect(lookup('ffff0000-0000')).toEqual({ user_id: 'ffff0000-0000', nickname: null, email: null, is_anonymous: null });
   });
+
+  it('opHandle 비식별 투영에서는 이메일 빈칸(—) 없이 닉네임만 보이고 opHandle로도 찾을 수 있다', () => {
+    const masked = user({ user_id: 'op-1234', opHandle: 'op-1234', nickname: '갈치', email: null, is_anonymous: false });
+    expect(adminUserLabel(masked)).toBe('갈치');
+    expect(adminUserLabel(user({ user_id: 'op-9', opHandle: 'op-9', nickname: null, email: null, is_anonymous: null }))).toBe('이름 없음');
+    expect(adminUserLabel(user({ user_id: 'op-g', opHandle: 'op-g', nickname: '초보', email: null, is_anonymous: true }))).toBe('초보(게스트)');
+    const lookup = adminIdentityLookup([masked]);
+    expect(lookup('OP-1234')).toBe(masked);
+  });
 });
 
 describe('휴면 게스트', () => {
@@ -136,5 +145,114 @@ describe('휴면 게스트', () => {
     const { active, dormant } = splitDormantGuests(rows);
     expect(active.map(r => r.user_id)).toEqual(['a', 'c']);
     expect(dormant.map(r => r.user_id)).toEqual(['b', 'd']);
+  });
+});
+
+describe('사전 집계(userAggregates) 우선 소비', () => {
+  const maskedUsers = [
+    user({
+      user_id: 'op-1',
+      opHandle: 'op-1',
+      email: null,
+      gold: null,
+      fame: null,
+      boat: null,
+      rod: null,
+      visited: [],
+    }),
+  ];
+
+  const aggregates: AdminUserAggregates = {
+    totalUsers: 10,
+    activePlayers: 4,
+    asOf: '2026-11-05T03:00:00Z',
+    activeUsers: { today: 2, week: 3, month: 4 },
+    newToday: { users: 1, accounts: 1 },
+    gold: { count: 6, sum: 12000, median: 1500, p75: 3000, max: 5000 },
+    progression: {
+      boats: [{ tier: 0, count: 1 }, { tier: 1, count: 2 }, { tier: 3, count: 1 }],
+      rods: [{ level: 1, count: 2 }, { level: 3, count: 2 }],
+      regionReach: [{ id: 'village', count: 4 }, { id: 'world', count: 3 }],
+      zoneUnlocks: [
+        { id: 'village', count: 4 },
+        { id: 'pacific', count: 3 },
+        { id: 'seasia', count: 1 },
+      ],
+      fameGateStalled: {
+        total: 2,
+        byNextTier: [{ nextTier: 4, count: 1 }, { nextTier: 2, count: 1 }],
+      },
+    },
+  };
+
+  it('경제 지표는 비식별 명부 대신 사전 집계의 골드 합계·대상 수·분위·최대를 사용한다', () => {
+    const economy: AdminEconomyRow[] = [{
+      day: '2026-10-13', sells: 1, sell_gold: 100, coupon_gold: 0, mail_gold: 0,
+      bounty_gold: 0, achievement_gold: 0, rod_cost: 20, boat_cost: 0, hat_cost: 0,
+    }];
+    const metrics = selectEconomyMetrics(maskedUsers, economy, aggregates);
+    expect(metrics).toMatchObject({
+      goldCount: 6,
+      goldSum: 12000,
+      goldMedian: 1500,
+      goldP75: 3000,
+      goldMax: 5000,
+      inflowTotal: 100,
+      outflowTotal: 20,
+    });
+
+    const emptyGold = selectEconomyMetrics(maskedUsers, economy, {
+      ...aggregates,
+      gold: { count: 0, sum: 0, median: null, p75: null, max: null },
+    });
+    expect(emptyGold.goldCount).toBe(0);
+    expect(emptyGold.goldSum).toBe(0);
+    expect(emptyGold.goldMedian).toBeNaN();
+    expect(emptyGold.goldP75).toBeNaN();
+    expect(emptyGold.goldMax).toBeNaN();
+  });
+
+  it('진행 지표는 비식별 명부 대신 사전 집계의 활성 인원·배·낚싯대·도달·존 해금·명성 게이트 내역을 사용한다', () => {
+    const data = selectProgressionDashboard(maskedUsers, aggregates);
+    expect(data.totalUsers).toBe(10);
+    expect(data.activePlayers).toBe(4);
+    expect(data.dormantGuests).toBe(6);
+    expect(data.boatHist.values[0]).toBe(1);
+    expect(data.boatHist.values[1]).toBe(2);
+    expect(data.boatHist.values[3]).toBe(1);
+    expect(data.rodHist).toEqual({ values: [2, 0, 2], labels: ['1', '2', '3'], min: 1 });
+    expect(data.regionReach).toEqual([
+      { id: 'village', users: 4, sharePercent: 100 },
+      { id: 'world', users: 3, sharePercent: 75 },
+    ]);
+    expect(data.zoneUnlocks.find(z => z.id === 'pacific')).toMatchObject({ users: 3, sharePercent: 75 });
+    expect(data.zoneUnlocks.find(z => z.id === 'seasia')).toMatchObject({ users: 1, sharePercent: 25 });
+    expect(data.stalled).toEqual([]);
+    expect(data.stalledSummary).toEqual({
+      total: 2,
+      byNextTier: [
+        { nextTier: 2, name: '돛단배', fameReq: 250, count: 1 },
+        { nextTier: 4, name: '범선', fameReq: 1800, count: 1 },
+      ],
+    });
+  });
+
+  it('활성 플레이어가 0명일 때도 비율 계산에서 NaN이 나지 않는다', () => {
+    const zero = selectProgressionDashboard([], {
+      ...aggregates,
+      totalUsers: 3,
+      activePlayers: 0,
+      progression: {
+        boats: [],
+        rods: [],
+        regionReach: [{ id: 'village', count: 0 }],
+        zoneUnlocks: [{ id: 'village', count: 0 }],
+        fameGateStalled: { total: 0, byNextTier: [] },
+      },
+    });
+    expect(zero.dormantGuests).toBe(3);
+    expect(zero.rodHist).toEqual({ values: [], labels: [], min: 1 });
+    expect(zero.regionReach.every(r => r.sharePercent === 0)).toBe(true);
+    expect(zero.zoneUnlocks.every(z => z.sharePercent === 0)).toBe(true);
   });
 });

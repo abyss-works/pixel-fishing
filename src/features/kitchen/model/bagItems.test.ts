@@ -15,44 +15,77 @@ const at = (ms: number): string => new Date(Date.parse(T0) + ms).toISOString();
 const seed = (over: Partial<GameState> = {}): GameState => ({ ...newState(), boat: COOKING_UNLOCK_BOAT, ...over });
 
 describe('아이템 섹션: 해금 전과 게스트', () => {
-  it('해금 전 계정 사용자는 1줄 해금 전 안내, 빈 상태, 진행 조건 잠금 줄과 함께 전체 플레이스홀더 항목을 받는다', () => {
-    const v = selectItemSection(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), T0, 'account');
-    expect(v.state).toBe('locked');
-    if (v.state !== 'locked') return;
-    expect(v.unlockNotice).toBe('인도양 항로가 열리면 부엌을 쓸 수 있어요.');
-    expect(v.empty).toEqual(['가진 아이템이 없어요.']);
-    expect(v.lines).toEqual(['인도양 항로가 열리면 부엌을 쓸 수 있어요.', '인도양 항로는 증기선(5단계)부터 열려요.']);
-    expect(v.lunch).toHaveLength(6);
-    expect(v.bait).toHaveLength(6);
-    expect(v.energy).toHaveLength(4);
-    expect(v.potions).toHaveLength(1);
-    expect(filterItemSection(v, true)).toEqual({ lunch: [], bait: [], energy: [], potions: [], empty: true });
+  it('해금 전 계정 사용자는 1줄 해금 전 안내, 빈 상태, 진행 조건 잠금 줄과 함께 미보유 항목은 잠금이고 보유·활성 도시락·미끼만 잠금 없이 연다', () => {
+    const emptyLow = selectItemSection(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), T0, 'account');
+    expect(emptyLow.state).toBe('locked');
+    if (emptyLow.state !== 'locked') return;
+    expect(emptyLow.unlockNotice).toBe('인도양 항로가 열리면 부엌에서 도시락과 미끼를 만들 수 있어요.');
+    expect(emptyLow.empty).toEqual(['가진 아이템이 없어요.']);
+    expect(emptyLow.lines).toEqual(['인도양 항로가 열리면 부엌에서 도시락과 미끼를 만들 수 있어요.', '인도양 항로는 증기선(5단계)부터 열려요.']);
+    expect(emptyLow.lunch).toHaveLength(6);
+    expect(emptyLow.bait).toHaveLength(6);
+    expect(emptyLow.energy).toHaveLength(4);
+    expect(emptyLow.potions).toHaveLength(1);
+    expect(emptyLow.lunch.every(r => r.lockLines !== null)).toBe(true);
+    expect(emptyLow.bait.every(r => r.lockLines !== null)).toBe(true);
+    expect(filterItemSection(emptyLow, true)).toEqual({ lunch: [], bait: [], energy: [], potions: [], empty: true });
+
+    const ownedLow = selectItemSection(seed({
+      boat: COOKING_UNLOCK_BOAT - 1,
+      items: { 'cook-lunch-bundle': 1 },
+      slots: { lunch: null, bait: { id: 'cook-bait-legendary', endsAt: at(MIN) } },
+    }), T0, 'account');
+    expect(ownedLow.state).toBe('locked');
+    if (ownedLow.state !== 'locked') return;
+    expect(ownedLow.lunch.find(r => r.recipe.id === 'cook-lunch-bundle')?.lockLines).toBeNull();
+    expect(ownedLow.lunch.find(r => r.recipe.id === 'cook-lunch-bite')?.lockLines).toEqual(ownedLow.lines);
+    expect(ownedLow.bait.find(r => r.recipe.id === 'cook-bait-legendary')?.lockLines).toBeNull();
+    expect(ownedLow.bait.find(r => r.recipe.id === 'cook-bait-rare')?.lockLines).toEqual(ownedLow.lines);
+    const filtered = filterItemSection(ownedLow, true);
+    expect(filtered.empty).toBe(false);
+    expect(filtered.lunch.map(r => r.recipe.id)).toEqual(['cook-lunch-bundle']);
+    expect(filtered.bait.map(r => r.recipe.id)).toEqual(['cook-bait-legendary']);
   });
 
-  it('게스트는 해금 전이면 1줄 해금 전 안내·진행 조건 잠금 줄이고, 해금 뒤에는 상단 안내 없이 빈 상태와 게스트 잠금 줄이다', () => {
-    const locked = selectItemSection(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), T0, 'guest');
+  it('게스트도 보유·활성 도시락·미끼는 잠금 없이 열고, 미보유 항목은 해금 전이면 진행 조건 잠금, 해금 뒤에는 게스트 잠금 줄이다', () => {
+    const locked = selectItemSection(seed({
+      boat: COOKING_UNLOCK_BOAT - 1,
+      items: { 'cook-lunch-bundle': 1 },
+      slots: { lunch: null, bait: { id: 'cook-bait-legendary', endsAt: at(MIN) } },
+    }), T0, 'guest');
     expect(locked.state).toBe('locked');
     if (locked.state === 'locked') {
-      expect(locked.unlockNotice).toBe('인도양 항로가 열리면 부엌을 쓸 수 있어요.');
+      expect(locked.unlockNotice).toBe('인도양 항로가 열리면 부엌에서 도시락과 미끼를 만들 수 있어요.');
       expect(locked.empty).toEqual(['가진 아이템이 없어요.']);
-      expect(locked.lines).toEqual(['인도양 항로가 열리면 부엌을 쓸 수 있어요.', '인도양 항로는 증기선(5단계)부터 열려요.']);
+      expect(locked.lines).toEqual(['인도양 항로가 열리면 부엌에서 도시락과 미끼를 만들 수 있어요.', '인도양 항로는 증기선(5단계)부터 열려요.']);
+      expect(locked.lunch.find(r => r.recipe.id === 'cook-lunch-bundle')?.lockLines).toBeNull();
+      expect(locked.lunch.find(r => r.recipe.id === 'cook-lunch-bite')?.lockLines).toEqual(locked.lines);
+      expect(locked.bait.find(r => r.recipe.id === 'cook-bait-legendary')?.lockLines).toBeNull();
+      expect(locked.bait.find(r => r.recipe.id === 'cook-bait-rare')?.lockLines).toEqual(locked.lines);
     }
 
-    const postUnlock = selectItemSection(seed({ boat: COOKING_UNLOCK_BOAT }), T0, 'guest');
+    const postUnlock = selectItemSection(seed({
+      boat: COOKING_UNLOCK_BOAT,
+      items: { 'cook-lunch-bundle': 1 },
+    }), T0, 'guest');
     expect(postUnlock.state).toBe('locked');
     if (postUnlock.state === 'locked') {
       expect(postUnlock.unlockNotice).toBeNull();
       expect(postUnlock.empty).toEqual(['가진 아이템이 없어요.']);
       expect(postUnlock.lines).toEqual(GUEST_LOCK_DEFAULT_LINES);
+      expect(postUnlock.lunch.find(r => r.recipe.id === 'cook-lunch-bundle')?.lockLines).toBeNull();
+      expect(postUnlock.lunch.find(r => r.recipe.id === 'cook-lunch-bite')?.lockLines).toEqual(GUEST_LOCK_DEFAULT_LINES);
     }
   });
 
-  it('확인 실패 상태는 해금 전후 모두 확인 실패 잠금 줄이다', () => {
+  it('확인 실패 상태는 해금 전후 모두 확인 실패 잠금 줄이지만 보유·활성 도시락·미끼는 잠금 없이 연다', () => {
     for (const boat of [COOKING_UNLOCK_BOAT - 1, COOKING_UNLOCK_BOAT]) {
-      const v = selectItemSection(seed({ boat }), T0, 'unverified');
+      const v = selectItemSection(seed({ boat, items: { 'cook-lunch-bundle': 1 } }), T0, 'unverified');
       expect(v.state).toBe('locked');
       if (v.state !== 'locked') continue;
       expect(v.lines).toEqual([UNVERIFIED_LOCK_TEXT]);
+      expect(v.lunch.find(r => r.recipe.id === 'cook-lunch-bundle')?.lockLines).toBeNull();
+      expect(v.lunch.find(r => r.recipe.id === 'cook-lunch-bite')?.lockLines).toEqual([UNVERIFIED_LOCK_TEXT]);
     }
   });
 });
@@ -166,11 +199,12 @@ describe('아이템 섹션: 열린 뒤', () => {
     ]);
   });
 
-  it('행은 이름의 툴팁에 쓸 효과 줄과 적용 낚시 안내를 갖는다', () => {
-    const v = selectItemSection(seed({ items: { 'cook-lunch-bite': 1 } }), T0, 'account');
+  it('행은 효과 툴팁에 쓸 효과 줄과 상세 창 주의사항을 갖는다', () => {
+    const v = selectItemSection(seed({ items: { 'cook-lunch-bite': 1, 'cook-bait-rare': 1 } }), T0, 'account');
     if (v.state !== 'open') throw new Error('open이어야 해요');
     expect(v.lunch[0].effects).toEqual([{ label: '입질 대기', value: '−10%' }]);
-    expect(v.lunch[0].note).toContain('방치로 낚을 때만 효과가 있어요.');
+    expect(v.lunch[0].note).toBe(ITEM_GROUP_HINT.lunch);
+    expect(v.bait[0].note).toBe(ITEM_GROUP_HINT.bait);
   });
 
   it('조리가 끝났지만 보관함으로 옮겨지지 않은 완성분도 행에 센다', () => {
@@ -255,15 +289,15 @@ describe('먹기 계획과 교체 확인', () => {
     expect(planEat(seed({ items: own, slots: { lunch: ended, bait: null } }), 'cook-lunch-rare', T0).confirm).toBeNull();
   });
 
-  it('남은 시간은 올림한 분이다', () => {
+  it('남은 시간은 초 단위를 버리지 않는 실제 분 값이다', () => {
     const game = seed({ items: own, slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(30_000) }, bait: null } });
-    expect(planEat(game, 'cook-lunch-rare', T0).confirm?.current.minutes).toBe(1);
+    expect(planEat(game, 'cook-lunch-rare', T0).confirm?.current.minutes).toBe(0.5);
   });
 
-  it('가방에 없는 아이템은 게임 규칙의 거부 사유를 그대로 낸다', () => {
+  it('배 해금 전이라도 보유한 요리는 게스트 여부와 무관하게 허용하고, 미보유는 게임 규칙의 거부 사유를 낸다', () => {
     expect(planEat(seed(), 'cook-lunch-bite', T0).check).toEqual({ ok: false, reason: 'item-not-owned' });
-    expect(planEat(seed({ boat: COOKING_UNLOCK_BOAT - 1, items: own }), 'cook-lunch-bite', T0).check)
-      .toEqual({ ok: false, reason: 'cooking-locked' });
+    expect(planEat(seed({ boat: 0, items: own }), 'cook-lunch-bite', T0).check)
+      .toEqual({ ok: true });
   });
 
   it('다중 미끼 유물이 있으면 미끼 0·1칸 사용 중일 때 다른 미끼는 확인 없이 바로 쓰고, 사용 중 여부를 표시한다', () => {
@@ -311,7 +345,7 @@ describe('먹기 계획과 교체 확인', () => {
       next: { label: '용연향 미끼(전설)', title: { name: '용연향 미끼', grade: 'legendary' }, minutes: 2.5 },
       warning: '지금 효과의 남은 시간은 사라져요.',
       choices: [
-        { slotKey: 'bait', label: '롱페퍼 미끼(희귀)', title: { name: '롱페퍼 미끼', grade: 'rare' }, minutes: 3 },
+        { slotKey: 'bait', label: '롱페퍼 미끼(희귀)', title: { name: '롱페퍼 미끼', grade: 'rare' }, minutes: 2.5 },
         { slotKey: 'bait2', label: '큐베브 미끼(영웅)', title: { name: '큐베브 미끼', grade: 'epic' }, minutes: 1 },
       ],
       defaultChoice: 'bait2',
@@ -320,38 +354,33 @@ describe('먹기 계획과 교체 확인', () => {
 });
 
 describe('비약 묶음', () => {
-  it('계정 회원은 배 단계와 무관하게 비약 잠금이 없고 보유·활성·사용 가능 여부를 돌려준다', () => {
-    const lowBoat = selectItemSection(
-      seed({ boat: 0, items: { 'luck-small': 2 } }),
-      T0,
-      'account',
-    );
-    expect(lowBoat.state).toBe('locked');
-    expect(lowBoat.potionLock).toBeNull();
-    expect(lowBoat.potions).toHaveLength(1);
-    expect(lowBoat.potions[0]).toMatchObject({
-      count: 2,
-      active: false,
-      usable: true,
-      effects: [{ label: '모든 행운 효과', value: '×1.05' }],
-      note: '하루 동안 이어져요. 하루는 새벽 4시에 새로 시작해요.',
-    });
+  it('계정·게스트·배 단계와 무관하게 비약 잠금이 없고 보유·활성·사용 가능 여부를 돌려준다', () => {
+    for (const account of ['account', 'guest', 'unverified'] as const) {
+      const lowBoat = selectItemSection(
+        seed({ boat: 0, items: { 'luck-small': 2 } }),
+        T0,
+        account,
+      );
+      expect(lowBoat.state).toBe('locked');
+      expect('potionLock' in lowBoat).toBe(false);
+      expect(lowBoat.potions).toHaveLength(1);
+      expect(lowBoat.potions[0]).toMatchObject({
+        count: 2,
+        active: false,
+        usable: true,
+        effects: [{ label: '모든 행운 효과', value: '×1.05' }],
+        note: '하루 동안 이어져요. 하루는 새벽 4시에 새로 시작해요.',
+      });
 
-    const active = selectItemSection(
-      seed({ boat: 0, items: { 'luck-small': 2 }, potions: { 'luck-small': '2026-11-12' } }),
-      T0,
-      'account',
-    );
-    expect(active.potions[0]).toMatchObject({ count: 2, active: true, usable: false });
-  });
+      const unowned = selectItemSection(seed({ boat: 0 }), T0, account);
+      expect(unowned.potions[0]).toMatchObject({ count: 0, active: false, usable: false });
 
-  it('게스트와 확인 실패는 물약 잠금 줄을 받고 사용할 수 없다', () => {
-    const guest = selectItemSection(seed({ items: { 'luck-small': 2 } }), T0, 'guest');
-    expect(guest.potionLock).toEqual(GUEST_LOCK_DEFAULT_LINES);
-    expect(guest.potions[0].usable).toBe(false);
-
-    const unverified = selectItemSection(seed({ items: { 'luck-small': 2 } }), T0, 'unverified');
-    expect(unverified.potionLock).toEqual([UNVERIFIED_LOCK_TEXT]);
-    expect(unverified.potions[0].usable).toBe(false);
+      const active = selectItemSection(
+        seed({ boat: 0, items: { 'luck-small': 2 }, potions: { 'luck-small': '2026-11-12' } }),
+        T0,
+        account,
+      );
+      expect(active.potions[0]).toMatchObject({ count: 2, active: true, usable: false });
+    }
   });
 });

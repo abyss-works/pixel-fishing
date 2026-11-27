@@ -2,8 +2,8 @@
 // VITE_CLOUD가 '1'이 아니면 authClient = null → 게임은 로컬 저장만으로 정상 동작 (오프라인 모드).
 import { createAuthClient } from 'better-auth/client';
 import { anonymousClient } from 'better-auth/client/plugins';
-import type { AcceptConsentResult, AccountLookup, AuthResult, ConsentStatus } from '../api/types';
-import { networkError, requestFailure, serverError, unauthorizedError } from './requestFailure';
+import type { AcceptConsentResult, AccountLookup, AuthResult, ConfirmGoogleSwitchResult, ConsentStatus } from '../api/types';
+import { isRateLimitedError, networkError, rateLimitedError, requestFailure, serverError, unauthorizedError } from './requestFailure';
 
 /** 서버(스테이징·운영)에 붙는 빌드인가 — 빌드 때 정해진다 */
 export const isCloud = import.meta.env.VITE_CLOUD === '1';
@@ -15,12 +15,48 @@ export const authClient = isCloud
 type AuthError = { code?: string; message?: string; status?: number } | null | undefined;
 type SessionUser = { id: string; email: string; isAnonymous?: boolean | null };
 
+const SESSION_CACHE_TTL_MS = 1500;
+let inFlightSession: Promise<SessionUser | null> | null = null;
+let cachedSession: { user: SessionUser; expiresAt: number } | null = null;
+let sessionGeneration = 0;
+
+/** 세션 캐시와 진행 중 요청 참조를 비워 다음 조회가 서버에서 최신 세션을 읽게 한다 */
+export function invalidateSessionCache(): void {
+  sessionGeneration += 1;
+  cachedSession = null;
+  inFlightSession = null;
+}
+
 /** 현재 세션의 사용자. 세션이 없으면 null, 확인 자체가 실패하면 던진다 */
 async function sessionUser(): Promise<SessionUser | null> {
   if (!authClient) return null;
-  const { data, error } = await authClient.getSession();
-  if (error) throw new Error(`session check failed (${error.status})`);
-  return data?.user ?? null;
+  const now = Date.now();
+  if (cachedSession && cachedSession.expiresAt > now) {
+    return cachedSession.user;
+  }
+  cachedSession = null;
+  if (inFlightSession) return inFlightSession;
+
+  const gen = sessionGeneration;
+  const client = authClient;
+  const req = (async () => {
+    const { data, error } = await client.getSession();
+    if (error) {
+      if (error.status === 429) {
+        throw rateLimitedError('요청이 너무 잦아요. 잠시 뒤 다시 시도해 주세요.', { code: 'rate_limited' });
+      }
+      throw new Error(`session check failed (${error.status})`);
+    }
+    const user = data?.user ?? null;
+    if (user && gen === sessionGeneration) {
+      cachedSession = { user, expiresAt: Date.now() + SESSION_CACHE_TTL_MS };
+    }
+    return user;
+  })().finally(() => {
+    if (inFlightSession === req) inFlightSession = null;
+  });
+  inFlightSession = req;
+  return req;
 }
 
 // 익명 세션 확보 — 이미 세션이 있으면 재사용 (기기당 계정 유지).
@@ -30,12 +66,27 @@ export async function ensureSession(): Promise<string | null> {
   let user: SessionUser | null;
   try {
     user = await sessionUser();
-  } catch {
+  } catch (err) {
+    if (isRateLimitedError(err)) throw err;
     return null;
   }
   if (user) return user.id;
+  invalidateSessionCache();
+  const gen = sessionGeneration;
   const { data, error } = await authClient.signIn.anonymous();
-  if (error) return null;
+  if (error) {
+    if (error.status === 429) {
+      throw rateLimitedError('요청이 너무 잦아요. 잠시 뒤 다시 시도해 주세요.', { code: 'rate_limited' });
+    }
+    return null;
+  }
+  const created = data?.user as Partial<SessionUser> | undefined;
+  if (created?.id && typeof created.email === 'string' && gen === sessionGeneration) {
+    cachedSession = {
+      user: { id: created.id, email: created.email, isAnonymous: created.isAnonymous ?? true },
+      expiresAt: Date.now() + SESSION_CACHE_TTL_MS,
+    };
+  }
   return data?.user.id ?? null;
 }
 
@@ -62,10 +113,12 @@ const authErr = (e: AuthError): AuthResult => {
   return {
     ok: false,
     msg: `${e?.message ?? '알 수 없는 오류'}${e?.status ? ` (${e.status})` : ''}`,
+    ...(e?.code ? { code: e.code } : {}),
   };
 };
 
-const NOT_CLOUD: AuthResult = { ok: false, msg: '클라우드가 설정되지 않았어요.' };
+const NOT_CLOUD_MSG = '클라우드가 설정되지 않았어요.';
+const NOT_CLOUD: AuthResult = { ok: false, msg: NOT_CLOUD_MSG };
 
 // 로그인된 영구 계정 확인. 게스트(미설정 포함)와 확인 실패를 구분한다. 게스트의 이메일은 서버가 만든 자리표시라 보이지 않는다
 export async function currentAccount(): Promise<AccountLookup> {
@@ -87,6 +140,7 @@ export const GOOGLE_RETURN_PARAM = 'google';
 /** 이 기기의 이 탭에서 구글 인증을 시작했다는 표지를 담는 세션 저장소 키. 다른 곳에서 만든 복귀 주소를 처리하지 않기 위해서다 */
 const GOOGLE_FLOW_KEY = 'pf-google-flow';
 const GOOGLE_ENDPOINT = { link: '/link-social', 'sign-in': '/sign-in/social' } as const;
+const FALLBACK_SWITCH_CODES = new Set(['switch_ticket_missing', 'switch_ticket_expired']);
 
 /** 연결(link) 또는 확인 뒤 로그인(sign-in). 표지(tag)는 돌아온 주소에 실려 돌아온다 */
 export type GoogleStart = keyof typeof GOOGLE_ENDPOINT;
@@ -111,6 +165,7 @@ export function parseGoogleLanding(search: string): { tag: string; error: string
 /** 구글 인증 화면으로 이동한다. 주소를 받지 못하면 이동하지 않고 실패로 알린다 */
 export async function startGoogleAuth(start: GoogleStart, tag: string): Promise<AuthResult> {
   if (!authClient) return NOT_CLOUD;
+  invalidateSessionCache();
   const returnUrl = googleReturnUrl(window.location.origin, tag);
   const { data, error } = await authClient.$fetch<{ url?: string }>(GOOGLE_ENDPOINT[start], {
     method: 'POST',
@@ -128,6 +183,56 @@ export async function startGoogleAuth(start: GoogleStart, tag: string): Promise<
   return { ok: true };
 }
 
+/** 1회용 전환 티켓으로 2차 구글 인증 없이 기존 계정에 로그인한다. 티켓이 만료되거나 없는 경우에만 fallback: true를 돌려준다 */
+export async function confirmGoogleSwitch(tag: string): Promise<ConfirmGoogleSwitchResult> {
+  if (!authClient) return { ok: false, fallback: false, msg: NOT_CLOUD_MSG };
+  invalidateSessionCache();
+  let res: { data?: { ok?: boolean } | null; error?: AuthError };
+  try {
+    res = await authClient.$fetch<{ ok?: boolean }>('/confirm-google-switch', {
+      method: 'POST',
+      body: {},
+    });
+  } catch {
+    return { ok: false, fallback: false, msg: '서버에 연결하지 못했어요. 잠시 뒤 다시 시도해 주세요.', code: 'network' };
+  }
+  if (res.error) {
+    const status = res.error.status;
+    if (status === 429) {
+      return { ok: false, fallback: false, msg: '요청이 너무 잦아요. 잠시 뒤 다시 시도해 주세요.', code: 'rate-limited' };
+    }
+    const base = authErr(res.error);
+    const msg = base.ok ? '계정 전환에 실패했어요.' : base.msg;
+    if (typeof status === 'number' && status >= 500) {
+      return { ok: false, fallback: false, msg, code: 'server' };
+    }
+    const code = base.ok ? undefined : base.code;
+    const fallback = status !== 403 && status !== 409 && typeof code === 'string' && FALLBACK_SWITCH_CODES.has(code);
+    return { ok: false, fallback, msg, ...(code ? { code } : {}) };
+  }
+  if (!res.data?.ok) {
+    return { ok: false, fallback: false, msg: '계정 전환을 확인하지 못했어요.', code: 'server' };
+  }
+  try {
+    sessionStorage.setItem(GOOGLE_FLOW_KEY, tag);
+    window.location.assign(googleReturnUrl(window.location.origin, tag));
+  } catch {
+    window.location.reload();
+  }
+  return { ok: true };
+}
+
+/** 보류 중인 게스트→기존 구글 계정 전환 티켓과 쿠키를 폐기한다 */
+export async function cancelGoogleSwitch(): Promise<void> {
+  if (!authClient) return;
+  invalidateSessionCache();
+  try {
+    await authClient.$fetch('/cancel-google-switch', { method: 'POST', body: {} });
+  } catch {
+    // 취소 정리 실패는 게스트 상태 복귀를 막지 않는다
+  }
+}
+
 /**
  * 구글 인증에서 돌아왔는가. 부팅 때 한 번 읽고, 두 질의는 주소에서 바로 지운다(새로고침으로 다시 읽히지 않게).
  * 이 기기에서 시작한 흐름(시작할 때 남긴 표지와 같은 표지)에만 반응하고, 아니면 질의만 지우고 무시한다.
@@ -136,6 +241,7 @@ export function takeGoogleLanding(): { tag: string; error: string | null } | nul
   if (!authClient) return null;
   const landing = parseGoogleLanding(window.location.search);
   if (!landing) return null;
+  invalidateSessionCache();
   window.history.replaceState(window.history.state, '', `${window.location.pathname}${landing.rest}${window.location.hash}`);
   let started: string | null = null;
   try {
@@ -150,6 +256,7 @@ export function takeGoogleLanding(): { tag: string; error: string | null } | nul
 
 export async function signOutAccount(): Promise<void> {
   if (!authClient) return;
+  invalidateSessionCache();
   await authClient.signOut();
 }
 
@@ -161,6 +268,7 @@ const DELETE_MSG: Record<number, string> = {
 };
 export async function deleteOwnAccount(): Promise<AuthResult> {
   if (!authClient) return NOT_CLOUD;
+  invalidateSessionCache();
   let res: Response;
   try {
     res = await fetch('/api/account', {
@@ -174,6 +282,7 @@ export async function deleteOwnAccount(): Promise<AuthResult> {
   if (!res.ok) return { ok: false, msg: DELETE_MSG[res.status] ?? `잠시 뒤 다시 시도해 주세요. (${res.status})` };
   // 인증 계정이 이미 없어 서버 로그아웃이 실패할 수 있다 — 쿠키를 지우는 것이 목적이라 결과는 보지 않는다
   await authClient.signOut().catch(() => {});
+  invalidateSessionCache();
   return { ok: true };
 }
 

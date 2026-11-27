@@ -119,12 +119,13 @@ describe('관리자 콘텐츠 카탈로그 모델', () => {
     expect(summaryOf('bonus-zone-variant-pacific')).toBe('태평양 도감 돌연변이 포획 수');
   });
 
-  it('5) 모자 57종(상점 5 + 업적 52)과 의상 팔레트·프리셋 6종이 정본과 일치한다', () => {
+  it('5) 모자 60종(상점 5 + 업적 52 + 이벤트 3)과 의상 팔레트·프리셋 6종이 정본과 일치한다', () => {
     const w = CONTENT_CATALOG.wardrobe;
     expect(w.hats).toHaveLength(HATS.length);
-    expect(w.hats).toHaveLength(57);
+    expect(w.hats).toHaveLength(60);
     expect(w.shopHatCount).toBe(5);
     expect(w.achievementHatCount).toBe(52);
+    expect(w.eventHatCount).toBe(3);
     expect(w.shirtColors).toHaveLength(SHIRT_COLORS.length);
     expect(w.pantsColors).toHaveLength(PANTS_COLORS.length);
     expect(w.presets).toHaveLength(LOOK_PRESETS.length);
@@ -134,6 +135,11 @@ describe('관리자 콘텐츠 카탈로그 모델', () => {
       expect(h.achievementName).not.toBeNull();
       expect(h.achievementDesc).not.toBeNull();
     }
+    expect(w.hats.filter(it => it.source === 'event').map(h => ({ id: h.id, sourceLabel: h.sourceLabel }))).toEqual([
+      { id: 'event-hat-basin-conical', sourceLabel: '이벤트' },
+      { id: 'event-hat-abyss-crown', sourceLabel: '이벤트' },
+      { id: 'santa-hat', sourceLabel: '이벤트' },
+    ]);
   });
 
   it('6) 요리 12종(도시락 6 + 미끼 6)과 생명의 기운 4종이 정본과 일치한다', () => {

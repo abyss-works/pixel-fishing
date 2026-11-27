@@ -1,7 +1,6 @@
 import { bountyById } from '../../../game/content/bounties';
 import { zoneById } from '../../../game/content/zones';
 import { TICKET_EXPIRY_TEXT } from '../../../game/rules/challenge';
-import type { NotificationPermissionState } from '../../../platform/api/attention';
 
 export interface EncounterAlertText { title: string; body: string }
 
@@ -14,13 +13,4 @@ export function encounterAlertText(questId: string): EncounterAlertText | null {
     title: '흔적 발견',
     body: `${zone}의 수면 아래로 무언가 지나갔어요. 흔적은 ${TICKET_EXPIRY_TEXT} 남아요.`,
   };
-}
-
-/** 조우를 어떻게 알릴지 — 화면을 보고 있으면 토스트와 흔적 카드로 충분하다.
- *  다른 화면을 보고 있으면 탭 제목을 깜빡이고, 알림을 켜고 허용했을 때만 시스템 알림을 더한다. */
-export function shouldAlertEncounter({ pageHidden, enabled, permission }: {
-  pageHidden: boolean; enabled: boolean; permission: NotificationPermissionState;
-}): { flash: boolean; notify: boolean } {
-  if (!pageHidden) return { flash: false, notify: false };
-  return { flash: true, notify: enabled && permission === 'granted' };
 }

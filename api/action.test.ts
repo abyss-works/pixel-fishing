@@ -4,13 +4,15 @@
 // NodeNext 설정이 서버 모듈의 해상도를 정적으로 검사하므로 여기서는 중복하지 않는다.
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import handler, {
-  fastCatch, guildLogsOf, parseFortuneSetArgs, parseServerAction, recordsToDex, SKIP_DETAIL,
+  fastCatch, guildLogsOf, isSantaHatGiftActive, parseFortuneSetArgs, parseServerAction, recordsToDex,
+  SANTA_HAT_GIFT_KEY, SKIP_DETAIL,
 } from './action.js';
 import type { RecordRow, StateRow } from './_data/load.js';
 import type { Executor } from './_db/client.js';
 import { NO_GUILD_EFFECTS } from '../src/game/rules/guild.js';
 import { AUTO_ENERGY_BOAT, ENERGY_ITEM_IDS, ENERGY_PER_INDIVIDUAL } from '../src/game/content/cooking.js';
 import { BOATS, FISH, fishDrawShares, fishDrawWeight, newState, RARITY } from '../src/game/rules/logic.js';
+import { rodAxes } from '../src/game/rules/stats.js';
 import { FORTUNE_CATALOG } from '../src/game/rules/fortune.js';
 import type { DailyFortune } from '../src/game/rules/fortune.js';
 import { endedFirstCatch } from '../src/game/rules/firstCatch.js';
@@ -100,8 +102,9 @@ describe('api/action 핸들러 규약 (Node 스타일 req/res)', () => {
     // 수주는 상태를 바꾸지 않지만 네임드 토벌 판정에 dex가 필요해 records를 읽어야 한다.
     // 스킵하면 dex 빈 조립 → 도감과 무관하게 dex-incomplete 422 (수주 불가 장애).
     expect(SKIP_DETAIL.has('acceptQuest')).toBe(false);
-    // 납품·불변 액션은 스킵 유지 (서버 주입·스칼라만이라 도감 불필요)
+    // 납품·포기·불변 액션은 스킵 유지 (서버 주입·스칼라만이라 도감 불필요)
     expect(SKIP_DETAIL.has('deliverBounty')).toBe(true);
+    expect(SKIP_DETAIL.has('abandonQuest')).toBe(true);
     expect(SKIP_DETAIL.has('exchangeArtifact')).toBe(true); // 재료·유물은 blob이라 스칼라 동봉
     expect(SKIP_DETAIL.has('levelUpArtifact')).toBe(true); // 레벨 맵과 재료도 blob이라 같은 기준
     expect(SKIP_DETAIL.has('boot')).toBe(true);
@@ -184,6 +187,35 @@ describe('fastCatch 지역 누적 보너스 도감 로드', () => {
       shark: { normal: { count: 20, maxSize: 210, first: '2026-01-01' } },
       mackerel: { variant: { count: 500, maxSize: null, first: null } },
     });
+  });
+
+  it('fastCatch는 챔질 경과를 커서 위치로 바꿔 catch 이벤트에만 싣는다', async () => {
+    const now = '2030-03-04T05:30:00.000Z';
+    const row = makeStateRow(now, { rod: 10, firstCatch: endedFirstCatch() });
+    const state = { ...newState(), boat: row.boat, rod: row.rod };
+    const biteElapsed = 700;
+    mockRolls([0.1, 0.1, 0.5, 0.5, 0.5]);
+
+    const out = await fastCatch(makeDb([]).db, 'u1', row, 'pond', 'perfect', now,
+      NO_GUILD_EFFECTS, false, {}, [], undefined, biteElapsed);
+    if (!out.ok) throw new Error(out.error);
+    expect(out.events[0]).toMatchObject({
+      type: 'catch',
+      payload: { pos: expect.any(Number) },
+    });
+    const payload = out.events[0].payload as { pos: number };
+    expect(payload.pos).toBeCloseTo(biteElapsed / 1000 / rodAxes(state).sweep.value, 8);
+    expect(out.result).not.toHaveProperty('pos');
+  });
+
+  it('fastCatch는 챔질 경과가 없으면 커서 위치를 싣지 않는다', async () => {
+    const now = '2030-03-04T05:30:00.000Z';
+    const row = makeStateRow(now, { rod: 10, firstCatch: endedFirstCatch() });
+    mockRolls([0.1, 0.1, 0.5, 0.5, 0.5]);
+    const missing = await fastCatch(makeDb([]).db, 'u1', row, 'pond', 'perfect', now,
+      NO_GUILD_EFFECTS, false, {}, []);
+    if (!missing.ok) throw new Error(missing.error);
+    expect(missing.events[0].payload).not.toHaveProperty('pos');
   });
 
   it('fastCatch는 수동 카운터 없이도 records(normal)에서 rareWeight를 계산해 drawCatch에 반영하고 loadRecords를 1회만 호출한다', async () => {
@@ -395,5 +427,22 @@ describe('fortune.set 파싱·검증', () => {
       type: 'debugBatch',
       steps: [{ command: 'fortune.set', args: [] }],
     })).toBeNull();
+  });
+
+  it('isSantaHatGiftActive는 KST 기간(2026-11-27 00:00 ~ 2026-12-31 23:59:59)과 선택 비활성화를 판정한다', () => {
+    expect(SANTA_HAT_GIFT_KEY).toBe('santa-hat-2026-gift');
+    expect(isSantaHatGiftActive('2026-11-26T14:59:59Z')).toBe(false);
+    expect(isSantaHatGiftActive('2026-11-26T15:00:00Z')).toBe(true);
+    expect(isSantaHatGiftActive('2026-12-15T00:00:00Z')).toBe(true);
+    expect(isSantaHatGiftActive('2026-12-31T14:59:59Z')).toBe(true);
+    expect(isSantaHatGiftActive('2026-12-31T15:00:00Z')).toBe(false);
+    expect(isSantaHatGiftActive('not-a-date')).toBe(false);
+
+    vi.stubEnv('SANTA_HAT_GIFT_ENABLED', 'false');
+    try {
+      expect(isSantaHatGiftActive('2026-12-15T00:00:00Z')).toBe(false);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });

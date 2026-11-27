@@ -11,7 +11,8 @@ const WRITE_OWNERS: Record<string, readonly string[]> = {
   '_data/save.ts': ['saves_current', 'fish_instances', 'records', 'saves'],
   '_data/profile.ts': ['profiles'],
   '_data/bounty.ts': ['bounty_accepts', 'bounty_clears', 'bounty_progress', 'bounty_tickets', 'bounty_licenses'],
-  '_data/codes.ts': ['coupons', 'reliefs'],
+  '_data/codes.ts': ['coupons', 'coupon_redemptions', 'reliefs'],
+  '_data/events.ts': ['live_events', 'event_trio_progress', 'event_championship_scores', 'event_draws'],
   '_data/mail.ts': ['letters'],
   '_data/mailbox.ts': ['mails'],
   '_data/blocks.ts': ['blocks'],
@@ -26,6 +27,10 @@ const WRITE_OWNERS: Record<string, readonly string[]> = {
   '_data/achievements.ts': ['achievement_counters'],
   '_data/fortune.ts': ['daily_fortunes'],
   '_data/httpMetrics.ts': ['http_metrics_daily'],
+  '_data/notices.ts': ['notices'],
+  '_data/widget.ts': ['widget_auth_codes', 'widget_tokens'],
+  '_data/rank.ts': ['ranking_weekly_fame'],
+  '_data/admin.ts': ['admins', 'admin_audit_logs'],
 };
 
 function sources(dir: string): string[] {

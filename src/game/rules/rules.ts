@@ -9,7 +9,7 @@
 // 이제 셋이 같은 함수를 부른다.
 //
 // 상대경로 import에는 .js 확장자를 쓴다 — Node 순수 ESM 서버가 이 체인을 직접 불러온다.
-import { SPOTS } from '../content/spots.js';
+import { spotById } from '../content/spots.js';
 import type { SpotId } from '../content/spots.js';
 import { BOATS, MAX_BOAT, boatGateText } from '../content/boats.js';
 import { BOUNTY_PORT_ZONE, bountyById, bountyKindOf, isBountyPort, LICENSE_TIER_OF, zoneOfPort } from '../content/bounties.js';
@@ -20,7 +20,7 @@ import { potionById } from '../content/potions.js';
 import type { BaseId, LocationRef } from '../content/places.js';
 import { ARTIFACT_MAX_LEVEL, artifactById, artifactHasLevel, artifactLevelCost } from '../content/artifacts.js';
 import { artifactLevelOf, dailyClearCap } from './artifactLevel.js';
-import { PANTS_COLORS, SHIRT_COLORS, hatById, isAchievementHat } from '../content/wardrobe.js';
+import { PANTS_COLORS, SHIRT_COLORS, hatById } from '../content/wardrobe.js';
 import { ACHIEVEMENTS, achievementById } from '../content/achievements.js';
 import {
   upgradeCost, CHALLENGE_MISS_LIMIT,
@@ -51,6 +51,8 @@ export type RejectReason =
   | 'daily-cleared' // 그 갈래의 하루 클리어 한도 소진 — 클리어(보상 수령)를 센다
   | 'quest-incomplete' // 납품 조건 미달성
   | 'quest-active' // 같은 갈래의 의뢰가 이미 수주 중 — 갈래마다 한 번에 하나만 수주한다
+  | 'quest-not-active' // 진행 중인 의뢰가 아니어서 포기할 수 없다
+  | 'quest-already-complete' // 이미 목표를 달성한 의뢰는 포기할 수 없다
   | 'dex-incomplete' // 라이선스 도감 조건 미달성
   | 'material-missing' // 유물 교환 재료 미보유 — 네임드 토벌로 1개씩 모은다
   | 'ticket-missing' // 도전권 없음 — 수주 중인 해역에서 낚으면 조우로 받는다
@@ -69,12 +71,14 @@ export type RejectReason =
   | 'potion-already-active' // 오늘 이미 같은 비약 효과가 적용 중이다
   | 'not-at-home' // 집 거점에서만 하는 동작(조리)을 집 밖에서 요청했다
   | 'not-at-sale-base' // 판매 시설이 있는 거점(집, 항구) 또는 가공 플랜트선에서 하는 동작(기운 얻기)을 그 밖에서 요청했다
-  | 'cooking-locked' // 요리 해금 배 단계 미달 — 조리와 먹기
+  | 'cooking-locked' // 요리 해금 배 단계 미달 — 조리와 기운 변환
   | 'energy-locked' // 요리 해금 배 단계 미달 — 기운 얻기
   | 'not-enough-energy' // 조리에 필요한 기운이 모자란다
   | 'cooking-not-found' // 취소할 조리나 대기열 항목을 찾을 수 없다
   | 'energy-cap' // 상위 기운이 저장 상한에 도달해 더 변환할 수 없다
   | 'storage-full' // 보관함 남은 칸이 넣으려는 수량보다 적다
+  | 'event-inactive' // 진행 중인 이벤트가 없거나 기간이 지났다
+  | 'event-nothing-to-settle' // 정산할 이벤트 보상이 없다
   | 'debug-forbidden' // 개발 도구 명령 — 운영 서버이거나 소유자·로컬이 아니다
   | 'debug-db-required' // DB 전용 개발 도구를 로컬 모드(DB 없음)에서 호출했다
   | 'bad-request'; // 형식 오류 — 정상 클라이언트에서는 나오지 않는다
@@ -109,6 +113,8 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'daily-cleared': '오늘 의뢰는 이미 마쳤어요. 내일 다시 받을 수 있어요.',
   'quest-incomplete': '아직 마칠 조건을 채우지 못했어요.',
   'quest-active': '이미 수주 중인 의뢰가 있어요. 먼저 마쳐 주세요.',
+  'quest-not-active': '진행 중인 의뢰가 아니에요.',
+  'quest-already-complete': '이미 목표를 달성한 의뢰는 포기할 수 없어요.',
   'dex-incomplete': '그 구역 도감을 아직 다 채우지 못했어요. 수배판에서 남은 조건을 확인해 보세요.',
   'material-missing': '교환 재료가 없어요. 네임드를 토벌해 보세요.',
   'ticket-missing': '흔적이 없어요. 수주 중인 구역에서 낚시하다 조우하면 흔적이 남아요.',
@@ -133,6 +139,8 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'cooking-not-found': '취소할 조리가 없어요. 이미 완성되었을 수 있어요.',
   'energy-cap': '상위 기운이 보관 상한에 닿아 더 바꿀 수 없어요.',
   'storage-full': '보관함이 가득 찼어요. 가방 탭에서 도시락을 먹거나 미끼를 쓰면 자리가 생겨요.',
+  'event-inactive': '지금은 진행 중인 이벤트가 없어요.',
+  'event-nothing-to-settle': '정산할 이벤트 보상이 없어요.',
   'debug-forbidden': '이 서버에서는 개발 도구 명령을 쓸 수 없어요. 운영 서버이거나 권한이 없는 계정이에요.',
   'debug-db-required': '로컬 모드(DB 없음)에서는 수배 DB 도구를 쓸 수 없어요.',
   'bad-request': '요청을 처리하지 못했어요. 잠시 뒤 다시 해 주세요.',
@@ -161,7 +169,7 @@ export function canChangeClothes(shirt: unknown, pants: unknown): RuleCheck {
 export function canBuyHat(state: GameState, hat: unknown): RuleCheck {
   const h = hatById(hat);
   if (!h) return no('bad-request');
-  if (isAchievementHat(h)) return no('achievement-hat-only');
+  if (h.source !== 'gold') return no('achievement-hat-only');
   if (state.hats.includes(h.id)) return no('hat-owned');
   return state.gold >= h.price ? OK : no('not-enough-gold');
 }
@@ -207,7 +215,7 @@ export function canBuyBoat(state: GameState): RuleCheck {
 
 /** 수역 게이트 — 클라(즉시 안내)와 서버(권위 재검증)가 같은 함수를 부른다 */
 export function canFish(state: GameState, spotId: SpotId): RuleCheck {
-  const spot = SPOTS.find(s => s.id === spotId);
+  const spot = spotById(spotId);
   if (!spot) return no('bad-request');
   return state.boat >= spot.boatTier ? OK : no('spot-locked');
 }
@@ -223,9 +231,10 @@ export function canEnterBase(state: GameState, base: string): RuleCheck {
   return state.boat >= portGate(base) ? OK : no('zone-locked');
 }
 
-/** 이동 가능 판정 — 거점은 canEnterBase를 따르고, 바다(world) 출항은 최소 배 1단계가 필요하다 */
+/** 이동 가능 판정 — 거점은 canEnterBase를 따르고, 바다(world) 출항은 최소 배 1단계가 필요하다. 이벤트 구역은 전용 액션으로만 진입한다 */
 export function canTravel(state: GameState, to: LocationRef): RuleCheck {
   if (to.kind === 'base') return canEnterBase(state, to.id);
+  if (to.id === 'championship') return no('bad-request');
   return to.id === 'world' && state.boat < 1 ? no('zone-locked') : OK;
 }
 
@@ -291,6 +300,18 @@ export function canDeliverBounty(questId: string, ctx: BountyCtx | undefined): R
   return ctx && ctx.complete.includes(questId) ? OK : no('quest-incomplete');
 }
 
+/** 의뢰 포기 — 진행 중이고 아직 목표를 채우지 않은 의뢰만 포기할 수 있다. 위치와 무관하다 */
+export function canAbandonQuest(
+  _state: GameState, questId: string, ctx: BountyCtx | undefined,
+): RuleCheck {
+  const q = bountyById(questId);
+  if (!q) return no('bad-request');
+  if (!ctx) return no('no-license');
+  if (!ctx.active.includes(questId)) return no('quest-not-active');
+  if (ctx.complete.includes(questId)) return no('quest-already-complete');
+  return OK;
+}
+
 /** 도전 결과 확정 — 시도 자체는 클라 주장(PERFECT 선례)이라 서버는
  *  티켓 유효 + 수주 활성 + 주장 정합성만 본다. 성공에 필요한 히트는 그날의 상처를 뺀 결투 체력이다.
  *  티켓은 성공·실패 모두 소모한다. 오프라인 dev는 주입이 없어 닫힌다. */
@@ -343,9 +364,8 @@ export function canLevelUpArtifact(
   return OK;
 }
 
-/** 비약 사용 — 로그인 계정(비게스트), 등록된 비약, 1개 이상 보유, 오늘 아직 미적용이어야 한다 */
-export function canUsePotion(state: GameState, id: unknown, now: string, guest = false): RuleCheck {
-  if (guest) return no('account-only');
+/** 비약 사용 — 게스트 여부 및 배 단계와 무관하게 등록된 비약, 1개 이상 보유, 오늘 아직 미적용이어야 한다 */
+export function canUsePotion(state: GameState, id: unknown, now: string, _guest = false): RuleCheck {
   const potion = potionById(id);
   if (!potion) return no('bad-request');
   if ((state.items[potion.id] ?? 0) < 1) return no('potion-not-owned');

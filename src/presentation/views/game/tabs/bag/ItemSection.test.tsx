@@ -52,10 +52,14 @@ describe('아이템 섹션 목록', () => {
       slots,
     }));
     expect(screen.getAllByText('사용 중')).toHaveLength(2);
+    const useButton = screen.getByRole('button', { name: '가루디야(일반) 사용' });
+    expect(within(useButton.parentElement!).getByText('사용 중')).toBeInTheDocument();
+    expect(within(useButton.parentElement!).queryByText(/남음/)).toBeNull();
+    const card = useButton.closest('.pf-notch') as HTMLElement;
+    expect(within(card).getByText('남음 8시간 42분')).toBeInTheDocument();
     expect(document.body.textContent).toContain('지속 9시간');
-    expect(document.body.textContent).toContain('남음 8시간 42분');
     expect(document.body.textContent).toContain('지속 2분 30초');
-    expect(document.body.textContent).toContain('남음 4분 18초');
+    expect(document.body.textContent).toContain('남음 4분');
   });
 
   it('기운 칸은 소수 첫째 자리가 0이면 정수로, 아니면 소수로, 천 단위는 쉼표로 쓴다(접근성 이름 포함)', () => {
@@ -107,9 +111,13 @@ describe('아이템 섹션 목록', () => {
   it('도시락과 미끼 주의사항은 각 카드가 아니라 묶음 소제목 툴팁 한 곳에만 있고 카드 클릭으로 상세 창을 연다', () => {
     show(game({ items: own }));
 
-    // 카드 이름에 마우스를 올려도 반복 호버 툴팁이 뜨지 않는다
-    fireEvent.mouseEnter(screen.getByText('가루디야'));
-    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    // 카드에 마우스를 올리면 효과 툴팁이 뜬다
+    fireEvent.mouseEnter(screen.getAllByText('가루디야')[0]);
+    const cardTip = screen.getByRole('tooltip');
+    expect(cardTip).toHaveTextContent('입질 대기');
+    expect(cardTip).toHaveTextContent('−10%');
+    expect(cardTip).not.toHaveTextContent('방치로 낚을 때만 효과가 있어요.');
+    fireEvent.mouseLeave(screen.getAllByText('가루디야')[0]);
 
     // 도시락·미끼 소제목 툴팁 한 곳에 공통 주의사항이 집약돼 있다
     fireEvent.mouseEnter(screen.getByText('도시락'));
@@ -122,16 +130,18 @@ describe('아이템 섹션 목록', () => {
     expect(baitTip).toHaveTextContent('접속하지 않아도 지속 시간이 흘러요.');
     fireEvent.mouseLeave(screen.getByText('미끼'));
 
-    // 카드 본문을 누르면 상세 창이 열린다
+    // 카드 본문을 누르면 상세 창이 열린다 (상세 창에는 주의사항이 보인다)
     fireEvent.click(screen.getByRole('button', { name: '가루디야(일반) 상세 보기' }));
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText('입질 대기')).toBeInTheDocument();
     expect(within(dialog).getByText('−10%')).toBeInTheDocument();
+    expect(within(dialog).getByText('방치로 낚을 때만 효과가 있어요.')).toBeInTheDocument();
+    expect(within(dialog).getByText('접속하지 않아도 지속 시간이 흘러요.')).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('button', { name: '닫기' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('비약은 배 해금 전 계정에서도 열려 있고, 카드 클릭으로 상세를 보며 사용하면 usePotion 액션과 안내를 보낸다', () => {
+  it('비약은 배 해금 전 계정에서도 열려 있고, 카드 호버 시 효과 툴팁·클릭 시 상세를 보며 사용하면 usePotion 액션과 안내를 보낸다', () => {
     const { dispatch, setToast } = show(game({ boat: 0, items: { 'luck-small': 2 } }));
     const potionName = screen.getByText('작은 바다 영약');
     expect(potionName).toBeInTheDocument();
@@ -140,7 +150,10 @@ describe('아이템 섹션 목록', () => {
     expect(screen.getByText('×2')).toBeInTheDocument();
 
     fireEvent.mouseEnter(potionName);
-    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    const potionTip = screen.getByRole('tooltip');
+    expect(potionTip).toHaveTextContent('모든 행운 효과');
+    expect(potionTip).toHaveTextContent('×1.05');
+    fireEvent.mouseLeave(potionName);
 
     fireEvent.click(screen.getByRole('button', { name: '작은 바다 영약 상세 보기' }));
     const dialog = screen.getByRole('dialog');
@@ -157,35 +170,47 @@ describe('아이템 섹션 목록', () => {
     expect(setToast).toHaveBeenCalledWith('작은 바다 영약을 사용했어요. 하루 동안 이어져요.');
   });
 
-  it('비약은 이미 사용 중이면 사용 중 비활성 버튼이고, 미보유면 사용 버튼이 비활성이다', () => {
+  it('비약은 이미 사용 중이면 사용 중 배지와 비활성 사용 버튼이 분리되고, 미보유면 사용 버튼이 비활성이다', () => {
     show(game({ items: { 'luck-small': 1 }, potions: { 'luck-small': '2026-11-12' } }));
-    const activeBtn = screen.getByRole('button', { name: '작은 바다 영약 사용 중' });
+    const activeBtn = screen.getByRole('button', { name: '작은 바다 영약 사용' });
     expect(activeBtn).toBeDisabled();
-    expect(activeBtn).toHaveTextContent('사용 중');
+    expect(activeBtn).toHaveTextContent(/^사용$/);
+    expect(within(activeBtn.parentElement!).getByText('사용 중')).toBeInTheDocument();
 
     cleanup();
     show(game({ items: {} }));
     const emptyBtn = screen.getByRole('button', { name: '작은 바다 영약 사용' });
     expect(emptyBtn).toBeDisabled();
+    expect(screen.queryByText('사용 중')).toBeNull();
 
     // 보유 중만 보기에서 수량 0이어도 오늘 사용 중이면 남는다
     cleanup();
     show(game({ items: {}, potions: { 'luck-small': '2026-11-12' } }));
     fireEvent.click(screen.getByRole('button', { name: '보유 중만 보기' }));
-    expect(screen.getByRole('button', { name: '작은 바다 영약 사용 중' })).toBeDisabled();
+    const filteredBtn = screen.getByRole('button', { name: '작은 바다 영약 사용' });
+    expect(filteredBtn).toBeDisabled();
+    expect(within(filteredBtn.parentElement!).getByText('사용 중')).toBeInTheDocument();
   });
 
-  it('게스트는 비약 카드 사용 버튼과 상세 창 안의 사용 버튼이 모두 잠겨 있다', () => {
-    show(game({ items: { 'luck-small': 2 } }), 'guest');
-    const lockGroup = screen.getByRole('group', { name: '작은 바다 영약 잠김' });
-    expect(lockGroup).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
-    expect(within(lockGroup).getByRole('button', { name: '작은 바다 영약 사용' })).toBeDisabled();
+  it('게스트와 배 0단계에서도 보유한 비약은 카드와 상세 창에서 잠금 없이 바로 사용할 수 있고, 미보유 비약은 잠금 없이 비활성이다', () => {
+    const { dispatch, setToast } = show(game({ boat: 0, items: { 'luck-small': 2 } }), 'guest');
+    expect(screen.queryByRole('group', { name: '작은 바다 영약 잠김' })).toBeNull();
+    const cardBtn = screen.getByRole('button', { name: '작은 바다 영약 사용' });
+    expect(cardBtn).toBeEnabled();
 
     fireEvent.click(screen.getByRole('button', { name: '작은 바다 영약 상세 보기' }));
     const dialog = screen.getByRole('dialog');
-    const detailLock = within(dialog).getByRole('group', { name: '작은 바다 영약 사용 잠김' });
-    expect(detailLock).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
-    expect(within(detailLock).getByRole('button', { name: '사용' })).toBeDisabled();
+    expect(within(dialog).queryByRole('group', { name: '작은 바다 영약 잠김' })).toBeNull();
+    const detailBtn = within(dialog).getByRole('button', { name: '사용' });
+    expect(detailBtn).toBeEnabled();
+    fireEvent.click(detailBtn);
+    expect(dispatch).toHaveBeenCalledWith({ type: 'usePotion', id: 'luck-small' });
+    expect(setToast).toHaveBeenCalledWith('작은 바다 영약을 사용했어요. 하루 동안 이어져요.');
+
+    cleanup();
+    show(game({ boat: 0, items: {} }), 'guest');
+    expect(screen.queryByRole('group', { name: '작은 바다 영약 잠김' })).toBeNull();
+    expect(screen.getByRole('button', { name: '작은 바다 영약 사용' })).toBeDisabled();
   });
 });
 
@@ -257,7 +282,7 @@ describe('아이템 사용과 교체', () => {
     await vi.waitFor(() => expect(setToast).toHaveBeenCalledWith('가방에 이 요리가 없어요.', 'warn'));
   });
 
-  it('다중 미끼 유물 — 사용 중 배지, 빈 두 번째 칸 무확인 적용, 중복 갱신 2분 30초, 세 번째 미끼 교체 슬롯 선택', () => {
+  it('다중 미끼 유물 — 사용 중 배지, 빈 두 번째 칸 무확인 적용, 중복 갱신 분 표기, 세 번째 미끼 교체 슬롯 선택', () => {
     const items = { 'cook-bait-rare': 1, 'cook-bait-epic': 1, 'cook-bait-legendary': 1 };
     const oneActive = game({
       artifacts: ['sargasso-net'],
@@ -271,9 +296,10 @@ describe('아이템 사용과 교체', () => {
     expect(d1).toHaveBeenCalledWith({ type: 'eat', item: 'cook-bait-epic' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
-    // 중복 미끼는 확인 창을 띄우고 새로 2분 30초를 보인다
+    // 중복 미끼는 확인 창을 띄우고 현재 남은 시간은 분까지만, 새로 넣을 지속 시간은 2분 30초로 보인다
     fireEvent.click(screen.getByRole('button', { name: '롱페퍼 미끼(희귀) 사용' }));
     const dupDialog = screen.getByRole('dialog');
+    expect(within(dupDialog).getByText('2분')).toBeInTheDocument();
     expect(within(dupDialog).getByText('2분 30초')).toBeInTheDocument();
     fireEvent.click(within(dupDialog).getByRole('button', { name: '사용' }));
     expect(d1).toHaveBeenCalledWith({ type: 'eat', item: 'cook-bait-rare' });
@@ -299,6 +325,7 @@ describe('아이템 사용과 교체', () => {
     // 첫 번째 미끼(bait)로 바꿔 선택하고 확정
     fireEvent.click(radios[0]);
     expect(radios[0]).toHaveAttribute('aria-checked', 'true');
+    expect(within(dialog).getByText('2분')).toBeInTheDocument();
     expect(within(dialog).getByText('2분 30초')).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('button', { name: '사용' }));
     expect(d2).toHaveBeenCalledWith({ type: 'eat', item: 'cook-bait-legendary', replaceSlot: 'bait' });
@@ -306,34 +333,67 @@ describe('아이템 사용과 교체', () => {
 });
 
 describe('해금 전과 게스트', () => {
-  it('해금 전 계정 사용자는 전체 보기에서 1줄 안내만 보이고 보유 중만 보기에서 빈 안내를 본다', () => {
+  it('해금 전 계정 사용자는 전체 보기에서 1줄 안내만 보이고 보유 중만 보기에서 빈 안내를 보며, 보유한 도시락·미끼는 잠금 없이 즉시 사용할 수 있다', () => {
     show(game({ boat: COOKING_UNLOCK_BOAT - 1 }));
     expect(screen.queryByText('가진 아이템이 없어요.')).not.toBeInTheDocument();
-    expect(screen.getByText('인도양 항로가 열리면 부엌을 쓸 수 있어요.')).toBeInTheDocument();
+    expect(screen.getByText('인도양 항로가 열리면 부엌에서 도시락과 미끼를 만들 수 있어요.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '보유 중만 보기' })).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getAllByRole('button', { name: /\)\s사용$/ })).toHaveLength(12);
     expect(screen.getByRole('button', { name: '가루디야(일반) 사용' })).toBeDisabled();
-    expect(screen.getByRole('group', { name: '생명의 기운 잠김' })).toHaveTextContent('인도양 항로가 열리면 부엌을 쓸 수 있어요.');
+    expect(screen.getByRole('group', { name: '생명의 기운 잠김' })).toHaveTextContent('인도양 항로가 열리면 부엌에서 도시락과 미끼를 만들 수 있어요.');
 
     // 보유 중만 보기를 켜면 미보유 플레이스홀더를 숨기고 빈 안내만 남긴다
     fireEvent.click(screen.getByRole('button', { name: '보유 중만 보기' }));
     expect(screen.getByText('가진 아이템이 없어요.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /\)\s사용$/ })).not.toBeInTheDocument();
+
+    cleanup();
+    const { dispatch } = show(game({
+      boat: COOKING_UNLOCK_BOAT - 1,
+      items: { 'cook-lunch-bundle': 1, 'cook-bait-legendary': 3 },
+    }));
+    expect(screen.getByRole('group', { name: '생명의 기운 잠김' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: '가루디야(일반) 잠김' })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: '생선 탈리(전설) 잠김' })).toBeNull();
+    expect(screen.queryByRole('group', { name: '용연향 미끼(전설) 잠김' })).toBeNull();
+
+    const lunchBtn = screen.getByRole('button', { name: '생선 탈리(전설) 사용' });
+    expect(lunchBtn).toBeEnabled();
+    fireEvent.click(lunchBtn);
+    expect(dispatch).toHaveBeenCalledWith({ type: 'eat', item: 'cook-lunch-bundle' });
+
+    fireEvent.click(screen.getByRole('button', { name: '용연향 미끼(전설) 상세 보기' }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).queryByRole('group', { name: '용연향 미끼(전설) 잠김' })).toBeNull();
+    expect(within(dialog).getByRole('button', { name: '사용' })).toBeEnabled();
   });
 
-  it('게스트는 해금 전에는 1줄 진행 조건 안내·잠금 툴팁을, 해금 뒤 전체 보기에서는 빈 안내 없이 카드·게스트 잠금 툴팁만 본다', () => {
-    show(game({ boat: COOKING_UNLOCK_BOAT - 1 }), 'guest');
+  it('게스트도 보유한 도시락·미끼는 해금 전후 모두 잠금 없이 즉시 사용할 수 있고, 미보유 제작 항목만 해금 전 진행 조건·해금 뒤 게스트 잠금 툴팁을 본다', () => {
+    const { dispatch } = show(game({ boat: 0, items: { 'cook-lunch-bundle': 1, 'cook-bait-legendary': 1 } }), 'guest');
     expect(screen.queryByText('가진 아이템이 없어요.')).not.toBeInTheDocument();
-    expect(screen.getByText('인도양 항로가 열리면 부엌을 쓸 수 있어요.')).toBeInTheDocument();
+    expect(screen.getByText('인도양 항로가 열리면 부엌에서 도시락과 미끼를 만들 수 있어요.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '보유 중만 보기' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '가루디야(일반) 사용' })).toBeDisabled();
-    expect(screen.getByRole('group', { name: '생명의 기운 잠김' })).toHaveTextContent('인도양 항로가 열리면 부엌을 쓸 수 있어요.');
+    expect(screen.getByRole('group', { name: '가루디야(일반) 잠김' })).toHaveTextContent('인도양 항로가 열리면 부엌에서 도시락과 미끼를 만들 수 있어요.');
+    expect(screen.getByRole('group', { name: '생명의 기운 잠김' })).toHaveTextContent('인도양 항로가 열리면 부엌에서 도시락과 미끼를 만들 수 있어요.');
+
+    expect(screen.queryByRole('group', { name: '생선 탈리(전설) 잠김' })).toBeNull();
+    const guestLunchBtn = screen.getByRole('button', { name: '생선 탈리(전설) 사용' });
+    expect(guestLunchBtn).toBeEnabled();
+    fireEvent.click(guestLunchBtn);
+    expect(dispatch).toHaveBeenCalledWith({ type: 'eat', item: 'cook-lunch-bundle' });
+
+    expect(screen.queryByRole('group', { name: '용연향 미끼(전설) 잠김' })).toBeNull();
+    expect(screen.getByRole('button', { name: '용연향 미끼(전설) 사용' })).toBeEnabled();
     cleanup();
 
-    show(game(), 'guest');
+    show(game({ items: { 'cook-lunch-bundle': 1 } }), 'guest');
     expect(screen.queryByText('가진 아이템이 없어요.')).not.toBeInTheDocument();
     expect(screen.getByRole('group', { name: '생명의 기운 잠김' })).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
+    expect(screen.getByRole('group', { name: '가루디야(일반) 잠김' })).toHaveTextContent('태평양 항로가 열리면 쓸 수 있어요.');
+    expect(screen.queryByRole('group', { name: '생선 탈리(전설) 잠김' })).toBeNull();
+    expect(screen.getByRole('button', { name: '생선 탈리(전설) 사용' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: '보유 중만 보기' }));
-    expect(screen.getByText('가진 아이템이 없어요.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '생선 탈리(전설) 사용' })).toBeEnabled();
   });
 });

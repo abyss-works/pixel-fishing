@@ -2,7 +2,9 @@
 // 기운 얻기, 해역별 덮어쓰기, 조리, 먹기가 서버 시각과 서버 난수로 저장되는지, 게스트가 거부되는지 검사한다.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AUTO_ENERGY_BOAT, COOKING_UNLOCK_BOAT, ENERGY_ITEM_IDS, ENERGY_TRANSMUTE_RATIO, ENERGY_UNIT, recipeById, recipeCostStored, recipeWaitMs } from '../src/game/content/cooking.js';
+import { FIRST_LINK_REWARD_ITEMS, FIRST_LINK_REWARD_KEY, FIRST_LINK_REWARD_MAIL } from '../src/game/content/firstLinkReward.js';
 import { SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
+import { fortuneScoreOf } from '../src/game/rules/fortune.js';
 import { itemCapOf } from '../src/game/rules/logic.js';
 import type { GameState } from '../src/game/rules/logic.js';
 import { callAction, captureRealClock, dumpUser, fish, seedUser, seededRandom, startActionEnv, testUid, userToken } from './_dbTest/actionHarness.js';
@@ -143,7 +145,12 @@ describe('요리 액션', () => {
       const uid = await cooker({
         bag: [kept],
         items: { [ENERGY.common]: 3 },
-        fortune: { day: '2030-03-04', kind: 'gold', index: 3 },
+        fortune: {
+          day: '2030-03-04',
+          kind: 'gold',
+          index: 3,
+          score: fortuneScoreOf({ day: '2030-03-04', kind: 'gold', index: 3 }),
+        },
       });
       const before = await stored(uid);
       const res = await callAction(userToken(uid), { type: 'extractEnergy', uids: [] });
@@ -438,7 +445,7 @@ describe('요리 액션', () => {
     });
   });
 
-  it('게스트는 요리 액션을 account-only로 거부당한다', async () => {
+  it('게스트는 조리·기운 추출/변환 액션을 account-only로 거부당한다', async () => {
     const f = fish('crucian');
     const uid = await seed({
       email: null,
@@ -446,7 +453,7 @@ describe('요리 액션', () => {
         boat: BOAT,
         location: HOME,
         bag: [f],
-        items: { [ENERGY.common]: 400, 'cook-lunch-bite': 1 },
+        items: { [ENERGY.common]: 400 },
         cooking: { id: 'cook-guest-1', recipe: 'cook-lunch-rare', count: 1, bonus: [false], startedAt: NOW },
       },
     });
@@ -455,7 +462,6 @@ describe('요리 액션', () => {
       { type: 'extractEnergy', uids: [f.uid] }, { type: 'setEnergyTarget', spot: 'pond', on: false },
       { type: 'resetEnergyTargets' }, { type: 'cook', recipe: 'cook-lunch-bite', count: 1 },
       { type: 'cancelCook', id: 'cook-guest-1' }, { type: 'transmuteEnergy', from: 'common', count: 1 },
-      { type: 'eat', item: 'cook-lunch-bite' },
     ]) {
       await rewind(uid);
       expect(await callAction(userToken(uid), action), JSON.stringify(action))
@@ -476,5 +482,43 @@ describe('요리 액션', () => {
     expect((await stored(uid)).data).toEqual(before.data);
     expect(await bagUids(uid)).toEqual([f.uid]);
     expect(await eventsOf(uid)).toEqual([]);
+  });
+
+  it('배 1단계 로그인 계정은 환영 우편 수령 후, 배 0단계 게스트는 보유한 도시락과 미끼를 즉시 eat 할 수 있다', async () => {
+    const uid = await seed({ state: { boat: 1, location: HOME } });
+    const { rows: [mailRow] } = await env.client.query<{ id: string }>(
+      `insert into public.mails (user_id, idempotency_key, title, body, gold, items)
+       values ($1, $2, $3, $4, 0, $5::jsonb) returning id`,
+      [uid, FIRST_LINK_REWARD_KEY, FIRST_LINK_REWARD_MAIL.title, FIRST_LINK_REWARD_MAIL.body, JSON.stringify(FIRST_LINK_REWARD_ITEMS)],
+    );
+    const claimRes = await callAction(userToken(uid), { type: 'claimMail', id: Number(mailRow.id) });
+    expect(claimRes.status).toBe(200);
+
+    await rewind(uid);
+    const eatLunch = await callAction(userToken(uid), { type: 'eat', item: 'cook-lunch-bundle' });
+    expect(eatLunch.status).toBe(200);
+
+    await rewind(uid);
+    const eatBait = await callAction(userToken(uid), { type: 'eat', item: 'cook-bait-legendary' });
+    expect(eatBait.status).toBe(200);
+
+    const { data } = await stored(uid);
+    expect(data.items).toEqual({ 'luck-small': 1, 'cook-bait-legendary': 2 });
+    expect(data.slots.lunch?.id).toBe('cook-lunch-bundle');
+    expect(data.slots.bait?.id).toBe('cook-bait-legendary');
+
+    const guestUid = await seed({
+      email: null,
+      state: { boat: 0, location: HOME, items: { 'cook-lunch-bundle': 1, 'cook-bait-legendary': 1 } },
+    });
+    for (const item of ['cook-lunch-bundle', 'cook-bait-legendary'] as const) {
+      await rewind(guestUid);
+      expect((await callAction(userToken(guestUid), { type: 'eat', item })).status).toBe(200);
+    }
+    const guestStored = await stored(guestUid);
+    expect(guestStored.data.items).toEqual({});
+    expect(guestStored.data.slots.lunch?.id).toBe('cook-lunch-bundle');
+    expect(guestStored.data.slots.bait?.id).toBe('cook-bait-legendary');
+    expect((await eventsOf(guestUid)).map(e => e.type)).toEqual(['eat', 'eat']);
   });
 });

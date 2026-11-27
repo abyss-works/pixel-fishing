@@ -18,7 +18,14 @@ export function useGuildAlerts(enabled: boolean, notify: NoticeSink, guild: Guil
     if (!enabled) return;
     return onGuildEvent(e => {
       void client.invalidateQueries({ queryKey: guildQueryKey(uid) });
-      const text = guildAlertText(e);
+      // 신청 처리 결과·길드 갱신은 공개 목록·초대 미리보기도 함께 낡음 표시한다(창이 닫혀 있으면 활성 구독이 없어 재조회하지 않는다)
+      if (e.kind !== 'request') {
+        void client.invalidateQueries({ queryKey: ['publicGuilds'] });
+        void client.invalidateQueries({ queryKey: ['guildInvite'] });
+      }
+      // 길드 갱신은 조용히 다시 읽기만 한다 — 신청 처리 알림이 아니다
+      if (e.kind === 'updated') return;
+      const text = guildAlertText({ ...e, kind: e.kind });
       const toastText = e.kind === 'request'
         ? `${e.nick ?? '이름 없음'} 님 길드 가입 신청`
         : e.kind === 'approved' ? '길드 가입이 승인됐어요.' : '길드 가입이 거절됐어요.';

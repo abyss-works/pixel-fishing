@@ -7,6 +7,7 @@ import { NO_GUILD_EFFECTS } from '../../../../game/rules/guild';
 import { newState } from '../../../../game/rules/logic';
 import { BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP } from '../../../../game/rules/balance';
 import type { GuildInfo } from '../../../../features/guild/model/guild';
+import { resetKeyScopes } from '../../../ui/hotkeys';
 
 const state = vi.hoisted(() => ({ mails: null as MailItem[] | null }));
 vi.mock('../../../../platform/api', async importOriginal => {
@@ -41,7 +42,7 @@ function wrap(node: ReactNode) {
 
 const handlers = () => ({ game: newState(), accountState: 'account' as const, onQuests: vi.fn(), onAchievements: vi.fn(), onFortune: vi.fn(), onGuild: vi.fn(), onFriends: vi.fn(), onMailbox: vi.fn(), setToast: vi.fn() });
 
-afterEach(() => { cleanup(); bounty.snap = null; state.mails = null; layout.mobile = false; guildState.available = false; guildState.guild = null; });
+afterEach(() => { cleanup(); resetKeyScopes(); bounty.snap = null; state.mails = null; layout.mobile = false; guildState.available = false; guildState.guild = null; });
 
 describe('게임 메뉴', () => {
   it('길드, 소셜, 우편함을 열 수 없어도(로컬 모드, 게스트) 의뢰 때문에 메뉴 버튼은 늘 있다', async () => {
@@ -80,6 +81,22 @@ describe('게임 메뉴', () => {
     expect(items[3]).toHaveAccessibleName('우편함, 받지 않은 우편 2통');
     fireEvent.click(items[3]);
     expect(h.onMailbox).toHaveBeenCalled();
+    expect(screen.queryByRole('menuitem')).not.toBeInTheDocument();
+  });
+
+  it('펼친 상태에서 Esc를 누르면 메뉴가 접히고, 잠금 툴팁이 열려 있으면 툴팁부터 닫힌다', async () => {
+    wrap(<GameMenu account={null} {...handlers()} accountState="guest" />);
+    fireEvent.click(await screen.findByRole('button', { name: /^메뉴 열기/ }));
+    expect(screen.getAllByRole('menuitem')).toHaveLength(6);
+
+    fireEvent.mouseEnter(screen.getAllByRole('menuitem')[1].parentElement!);
+    expect(screen.getByRole('tooltip')).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    expect(screen.getAllByRole('menuitem')).toHaveLength(6);
+
+    fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByRole('menuitem')).not.toBeInTheDocument();
   });
 
@@ -167,7 +184,7 @@ describe('게임 메뉴', () => {
       bounty.snap = { clearsToday: { general: 0, named: 0 } };
       wrap(<GameMenu account={null} {...handlers()} />);
       const button = await screen.findByRole('button', { name: '메뉴 열기' });
-      expect(button.textContent).toBe('');
+      expect(button.textContent).toBe('메뉴');
       expect(button.querySelector('.bg-danger')).toBeNull();
       expect(screen.queryByRole('button', { name: /새 알림/ })).not.toBeInTheDocument();
     });

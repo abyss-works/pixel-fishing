@@ -6,7 +6,8 @@ import BagTab, { EXHIBIT_UI_ENABLED } from './BagTab';
 import { resetBagView, setBagSection } from './bagView';
 import { AUTO_ENERGY_BOAT, COOKING_UNLOCK_BOAT } from '../../../../../game/content/cooking';
 import { artifactById } from '../../../../../game/content/artifacts';
-import { newState } from '../../../../../game/rules/logic';
+import { artifactEffectLines } from '../../../../ui/artifactEffects';
+import { FISH, newState } from '../../../../../game/rules/logic';
 import type { FishInstance, GameState } from '../../../../../game/rules/logic';
 import type { AccountLockState } from '../../../../../features/display/model/menuLock';
 
@@ -109,7 +110,7 @@ describe('BagTab - 유물 섹션 전체 목록·미보유·보유 중만 보기'
     expect(penaltyLine.querySelector('.text-epic')).toBeNull();
   });
 
-  it('기본 꺼짐 상태에서는 유물 8종 전체를 보이고 보유·미보유가 같은 3행 틀에 이름(등급)·구역을 보이며 미보유 효과는 ???와 빈 줄로 가린다', () => {
+  it('기본 꺼짐 상태에서는 유물 8종 전체를 보이고 보유·미보유가 같은 틀에 이름(등급)·구역을 보이며 미보유도 눌러 상세 창을 연다', () => {
     setBagSection('artifacts');
     show(game({ artifacts: ['varuna-scale'] }));
     expect(screen.getByRole('heading', { level: 3, name: /유물 1\/8/ })).toBeInTheDocument();
@@ -132,25 +133,42 @@ describe('BagTab - 유물 섹션 전체 목록·미보유·보유 중만 보기'
     expect(zoneEl.previousElementSibling).toBe(levelEl.parentElement);
     expect(within(ownedBtn).queryByText(varuna.lore)).not.toBeInTheDocument();
 
-    // 미보유 유물은 비활성 행(버튼 아님)으로 흐린 32px 스프라이트·이름(등급)·구역·??? + 높이 유지 빈 줄을 보인다
-    expect(screen.queryByRole('button', { name: /해구의 이빨/ })).not.toBeInTheDocument();
-    const unownedRow = screen.getByText('해구의 이빨').closest('[data-artifact-row]') as HTMLElement;
-    expect(unownedRow.tagName).not.toBe('BUTTON');
+    // 미보유 유물도 같은 틀의 버튼 행 — 흐린 32px 스프라이트·흰색 이름(등급색 괄호)·구역·Lv.1 효과(흐린 글씨), 레벨 배지와 ???는 없다
+    const trench = artifactById('abyss-angler')!;
+    const unownedRow = screen.getByRole('button', { name: /해구의 이빨/ });
     const unownedCanvas = unownedRow.querySelector('canvas');
     expect(unownedCanvas).toHaveAttribute('width', '32');
     expect(unownedCanvas).toHaveClass('grayscale');
+    expect(within(unownedRow).getByText('해구의 이빨').closest('.text-text')).not.toBeNull();
     expect(within(unownedRow).getByText('태평양')).toBeInTheDocument();
     expect(within(unownedRow).getByText('(영웅)')).toHaveAttribute('data-rarity', 'epic');
-    expect(within(unownedRow).getByText('???')).toBeInTheDocument();
-    expect(unownedRow.querySelector('span[aria-hidden="true"]')?.textContent).toBe('\u00A0');
+    expect(within(unownedRow).queryByText('???')).not.toBeInTheDocument();
+    expect(within(unownedRow).queryByText(/^Lv\./)).not.toBeInTheDocument();
+    const lines = artifactEffectLines(trench, 1);
+    expect(lines.length).toBeGreaterThan(0);
+    for (const line of lines) expect(within(unownedRow).getByText(line)).toHaveClass('text-text-dim');
 
     fireEvent.click(unownedRow);
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    const unownedDialog = screen.getByRole('dialog');
+    expect(within(unownedDialog).getByText(trench.lore)).toBeInTheDocument();
+    expect(within(unownedDialog).queryByRole('button', { name: /\uAC15\uD654/ })).not.toBeInTheDocument();
+    cleanup();
 
-    fireEvent.click(ownedBtn);
+    setBagSection('artifacts');
+    show(game({ artifacts: ['varuna-scale'] }));
+    fireEvent.click(screen.getByRole('button', { name: /\uC9C4\uC8FC \uC0C1\uC778\uC758 \uC800\uC6B8/ }));
     const dialog = screen.getByRole('dialog');
     expect(dialog).toBeInTheDocument();
     expect(within(dialog).getByText(varuna.lore)).toBeInTheDocument();
+  });
+
+  it('\uBBF8\uBCF4\uC720 \uC804\uC124 \uC720\uBB3C \uD589\uC740 \uBCF4\uB108\uC2A4\uC640 \uD398\uB110\uD2F0\uB97C \uD750\uB9B0 \uAE00\uC528\uB85C \uBCF4\uC778\uB2E4', () => {
+    setBagSection('artifacts');
+    show(game());
+    const mirror = within(screen.getByRole('button', { name: /\uB9C8\uBBF8 \uC640\uD0C0\uC758 \uAC70\uC6B8/ }));
+    expect(mirror.getByText('\uB124\uC784\uB4DC \uD1A0\uBC8C \uD558\uB8E8 +1\uBC88')).toHaveClass('text-text-dim');
+    expect(mirror.getByText('\uB124\uC784\uB4DC \uD1A0\uBC8C \uACE8\uB4DC \u221230%')).toHaveClass('text-text-dim');
+    expect(mirror.queryByText('???')).not.toBeInTheDocument();
   });
 
   it('보유 중만 보기 토글을 켜면 보유 유물만 남기고, 보유 0개면 빈 상태 안내를 보인다. 하단 상시 유물 안내 Note는 두지 않는다', () => {
@@ -229,6 +247,31 @@ describe('BagTab - 3서브탭, 보기 전환 아이콘, 하단 버튼', () => {
     fireEvent.click(card);
     expect(screen.getByRole('dialog')).toHaveTextContent('잉어');
     expect(screen.getByRole('dialog')).toHaveTextContent('표본');
+  });
+
+  it('돌연변이만 발견한 어종 카드는 돌연변이 이름으로 보이고 상세가 돌연변이 폼으로 열리며, 목록뷰에서도 미발견 일반형 이름을 노출하지 않는다', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const carp = FISH.find(f => f.id === 'carp')!;
+    const g = game({
+      bag: [{ ...inst('v1'), fishId: carp.id, form: 'variant' }],
+      dex: { carp: { variant: { count: 1, maxSize: 20, first: null } } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <BagTab sellBonus={0} game={g} dispatch={vi.fn()} setToast={vi.fn()} />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByText(carp.variant.name)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: new RegExp(`^${carp.name} `) })).toBeNull();
+    expect(screen.getByRole('button', { name: `${carp.variant.name} 개체 펼치기` })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '카드 보기' }));
+    expect(screen.getByText(carp.variant.name)).toBeInTheDocument();
+    const cardBtn = screen.getByRole('button', { name: `${carp.variant.name} 일반 0마리 돌연변이 1마리 보유` });
+    fireEvent.click(cardBtn);
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveTextContent(carp.variant.name);
+    expect(dialog).toHaveTextContent('돌연변이 2/');
   });
 
   it('거점에서 요리 해금·계정이면 기운 얻기 버튼이 활성화되고 클릭 시 앱 모달(layer="app")로 기운 얻기 창을 연다', () => {

@@ -9,6 +9,7 @@ import { newState } from './logic';
 import type { GameState } from './logic';
 import { LICENSE_GRADES, matchBountyCatch, rollNamedEncounter, zoneDexMissing } from './logic';
 import type { BountyCtx } from './rules';
+import { canAbandonQuest, REJECT_TEXT } from './rules';
 import { BOUNTIES, bountyById } from '../content/bounties';
 import { gameDayOf } from './time';
 
@@ -533,5 +534,93 @@ describe('matchBountyCatch', () => {
   it('네임드는 대상 어종 1종만 진행시킨다', () => {
     expect(matchBountyCatch(named, 'sea', 'megalodon')).toBe(true);
     expect(matchBountyCatch(named, 'sea', 'shark')).toBe(false);
+  });
+});
+
+describe('abandonQuest', () => {
+  it('거부 사유 문구를 제공한다', () => {
+    expect(REJECT_TEXT['quest-not-active']).toBe('진행 중인 의뢰가 아니에요.');
+    expect(REJECT_TEXT['quest-already-complete']).toBe('이미 목표를 달성한 의뢰는 포기할 수 없어요.');
+  });
+
+  it('없는 의뢰나 깨진 형태는 bad-request', () => {
+    expect(canAbandonQuest(seed(), 'nope', ctx())).toEqual({ ok: false, reason: 'bad-request' });
+    expect(applyAction(seed(), { type: 'abandonQuest', questId: 'nope' }, deps({ bounty: ctx() })))
+      .toEqual({ ok: false, error: 'bad-request' });
+    expect(applyAction(seed(), { type: 'abandonQuest', questId: 42 } as never, deps({ bounty: ctx() })))
+      .toEqual({ ok: false, error: 'bad-request' });
+  });
+
+  it('서버 주입이 없으면(로컬 오프라인) no-license', () => {
+    expect(applyAction(seed(), { type: 'abandonQuest', questId: 'pacific-easy-common' }, deps()))
+      .toEqual({ ok: false, error: 'no-license' });
+  });
+
+  it('진행 중이 아닌 의뢰는 quest-not-active', () => {
+    expect(applyAction(seed(), { type: 'abandonQuest', questId: 'pacific-easy-common' }, deps({ bounty: ctx() })))
+      .toEqual({ ok: false, error: 'quest-not-active' });
+    expect(applyAction(
+      seed(),
+      { type: 'abandonQuest', questId: 'pacific-easy-common' },
+      deps({ bounty: ctx({ active: ['seasia-easy-common'] }) }),
+    )).toEqual({ ok: false, error: 'quest-not-active' });
+  });
+
+  it('이미 목표를 달성한 의뢰는 quest-already-complete', () => {
+    const out = applyAction(
+      seed(),
+      { type: 'abandonQuest', questId: 'pacific-easy-common' },
+      deps({ bounty: ctx({ active: ['pacific-easy-common'], complete: ['pacific-easy-common'] }) }),
+    );
+    expect(out).toEqual({ ok: false, error: 'quest-already-complete' });
+  });
+
+  it('미완료 일반 의뢰는 어느 위치에서나 포기할 수 있고 상태는 바뀌지 않는다', () => {
+    const locations: GameState['location'][] = [
+      { kind: 'region', id: 'village' },
+      { kind: 'base', id: 'home' },
+      { kind: 'region', id: 'world' },
+      { kind: 'base', id: 'harbor' },
+      { kind: 'base', id: 'manila' },
+    ];
+    for (const location of locations) {
+      const st = seed({ location });
+      const out = applyAction(
+        st,
+        { type: 'abandonQuest', questId: 'pacific-easy-common' },
+        deps({ bounty: ctx({ active: ['pacific-easy-common'] }) }),
+      );
+      if (!out.ok) throw new Error(out.error);
+      expect(out.state).toEqual(st);
+      expect(out.result).toEqual({ type: 'none' });
+      expect(out.events).toEqual([{ type: 'abandonQuest', payload: { questId: 'pacific-easy-common' } }]);
+    }
+  });
+
+  it('미완료 네임드 토벌 포기는 도전권이 있어도 통과하며 namedPity.wounds를 보존한다', () => {
+    const st = seed({
+      location: { kind: 'region', id: 'world' },
+      namedPity: {
+        day: '2026-08-22',
+        misses: 3,
+        fails: 1,
+        wounds: { 'pacific-named-megalodon': 2 },
+      },
+    });
+    const out = applyAction(
+      st,
+      { type: 'abandonQuest', questId: 'pacific-named-megalodon' },
+      deps({
+        bounty: ctx({
+          active: ['pacific-named-megalodon'],
+          tickets: [{ questId: 'pacific-named-megalodon', issuedAt: '2026-08-22T01:00:00.000Z' }],
+        }),
+      }),
+    );
+    if (!out.ok) throw new Error(out.error);
+    expect(out.state).toEqual(st);
+    expect(out.state.namedPity.wounds).toEqual({ 'pacific-named-megalodon': 2 });
+    expect(out.result).toEqual({ type: 'none' });
+    expect(out.events).toEqual([{ type: 'abandonQuest', payload: { questId: 'pacific-named-megalodon' } }]);
   });
 });

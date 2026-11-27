@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api, isConsentRequiredError, subscribeConsentRequired, when } from '../../../platform/api';
 import type { ConsentStatus, GameGateway, GameProfile, DispatchResult, MaybePromise } from '../../../platform/api';
@@ -15,16 +15,24 @@ import { clearFailureNotice, showFailureNotice } from './failureNotice';
 import { BUILD_ID } from '../../../buildId';
 import { settleForcedEncounter, withForcedEncounter } from '../../bounty/service/forceEncounter';
 import { getPhaseOverride } from './timeOverride';
-import { fetchSession } from '../../account/service/session';
+import { fetchSession, isSessionRateLimited, sessionKey } from '../../account/service/session';
 import { allowConsentGate, blockConsentGate, holdConsentGate, resetConsentGate } from '../../account/service/consentGate';
 import { guestProgress } from '../../account/model/accountRules';
 import { newlyClaimable } from '../../achievement/model/achievements';
 import { setSchoolDay } from './schoolDay';
 import { queueFortuneModal, resetFortuneModalSession } from '../../fortune/service/fortuneModal';
+import { applyLocalNick, onNickEvent } from '../../live/service/useLive';
 import { setSharedProfileStatus } from './profileStatus';
 import type { ProfileStatus, SyncState } from './types';
 import { alertUpdate } from './updateAlert';
 import { isRetryExhausted, retryOnRateLimit } from './rateLimitRetry';
+import { eventsKey } from '../../events/service/useEvents';
+import {
+  emitEventSettleSound,
+  emitGearUpgradeSound,
+  emitRewardClaimSound,
+  emitShopSellSound,
+} from '../../sound/service/soundEvents';
 
 // 게임 상태 소유와 액션 흐름 조율 (계층: 서비스 — 서버 권위 v0.5.0)
 // 모든 상태 변경은 API가 제공한 게임 게이트웨이의 dispatch 하나로 흐른다 — http/local 구현은
@@ -40,6 +48,16 @@ const SYNC_LABEL: Record<SyncState, string | null> = {
 
 /** 게스트가 마을 밖으로 나가려 할 때의 안내. 서버가 거부할 때와 같은 문구다 */
 export const GUEST_VILLAGE_ONLY_TEXT = POLICY['guest-village-only'].message;
+
+const VILLAGE_GREETING_TEXT = '마을 연못 어군에서 낚시하고, 집에 들어가 정비해 보세요.';
+
+function isInitialVillageEntry(game: Pick<GameState, 'location' | 'fortune' | 'fame' | 'dex'>): boolean {
+  return game.location.kind === 'region'
+    && game.location.id === 'village'
+    && game.fortune === null
+    && game.fame === 0
+    && Object.keys(game.dex).length === 0;
+}
 
 export type ActionSettled = { ok: true } | { ok: false; notice: string | null };
 
@@ -78,13 +96,25 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
     gameGatewayRef.current = api.createGameGateway(init.game);
   }
   const [game, setGameState] = useState<GameState>(init.game);
+  const saveVersion = useCallback(() => gameGatewayRef.current.saveVersion?.() ?? null, []);
   // 마지막으로 채택한 상태 — 새로 받을 수 있게 된 업적을 가리는 비교 기준이다.
   // 렌더를 기다리지 않고 채택과 함께 바꿔, 연달아 온 확정과 로드 직후의 접속이 낡은 상태와 비교하지 않게 한다
   const gameRef = useRef(game);
-  const setGame = (next: GameState) => { gameRef.current = next; setGameState(next); };
+  const client = useQueryClient();
+  const setGame = (next: GameState) => {
+    const prevFortune = gameRef.current.fortune;
+    gameRef.current = next;
+    setGameState(next);
+    // 운세가 바뀌면 월간 운세 이력도 낡는다 — 날짜 경계 직후의 어제 캐시가 남지 않게 한다
+    if (prevFortune?.day !== next.fortune?.day || prevFortune?.kind !== next.fortune?.kind || prevFortune?.index !== next.fortune?.index) {
+      void client.invalidateQueries({ queryKey: ['fortune'] });
+    }
+  };
   // 게스트는 업적이 잠겨 있으므로 새로 받을 수 있는 업적 알림을 띄우지 않는다
   const guestRef = useRef(api.auth.isConfigured);
   const [nickname, setNickname] = useState<string | null>(null);
+  const nicknameRef = useRef<string | null>(null);
+  nicknameRef.current = nickname;
   const [profileStatus, setProfileStatus] = useState<ProfileStatus>('loading');
   // 서버가 내려 준 개발 도구 사용 판정 — 계정이 바뀌면 새 계정의 판정으로 바뀐다
   const [devTools, setDevTools] = useState(false);
@@ -105,6 +135,21 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
     setSharedProfileStatus(profileStatus);
   }, [profileStatus]);
   useEffect(() => () => { setSharedProfileStatus(null); }, []);
+  // 다른 탭에서 본인 닉네임이 바뀌어 실시간 nick 이벤트가 오면 프로필 표시값도 맞춘다
+  useEffect(() => onNickEvent(e => {
+    const myUid = client.getQueryData<string | null>(sessionKey) ?? null;
+    if (myUid === null || e.uid !== myUid || nicknameRef.current === e.nick) return;
+    setNickname(e.nick);
+    setProfileStatus('loaded');
+    void Promise.resolve(gameGatewayRef.current.getProfile())
+      .catch((): GameProfile => ({ ok: false }))
+      .then(profile => {
+        if (!mountedRef.current || !profile.ok) return;
+        setNickname(profile.nickname);
+        setDevTools(profile.devTools);
+        setProfileStatus('loaded');
+      });
+  }), [client]);
   const [sync, setSync] = useState<SyncState>(api.auth.isConfigured ? 'connecting' : 'off');
   // 세이브를 불러오고 이 창을 접속(boot)시키는 중 — 서버는 접속한 창의 액션만 받으므로 그 전에는 플레이를 막는다.
   // 그동안의 게임 상태는 서버 세이브가 아니라 기본값이라 화면에도 보이지 않는다.
@@ -117,6 +162,12 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
   const consentPromptRef = useRef(consentPrompt);
   consentPromptRef.current = consentPrompt;
   const bootedRef = useRef(false);
+  const greetedRef = useRef(false);
+  const emitGreetingOnce = () => {
+    if (greetedRef.current) return;
+    greetedRef.current = true;
+    sendNotice(setToast, { kind: 'boot.greeting', text: VILLAGE_GREETING_TEXT });
+  };
   const activeFlowRef = useRef<'boot' | 'adopt'>('boot');
   const pendingResumeRef = useRef<'boot' | 'adopt' | null>(null);
   const consentFetchingRef = useRef(false);
@@ -209,7 +260,6 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
   /** 모든 상태 변경의 단일 진입점 — 성공/규칙거부만 돌아온다.
       인프라 실패는 AppError로 던져져 위 정책 구독으로 흐른다 (호출자에 방어 분기 없음).
       결과에 따라 화면을 되돌려야 하는 호출부만 settleAction으로 감싸 쓴다 */
-  const client = useQueryClient();
   const withDevFlags = (action: GameAction): GameAction => {
     const next = withForcedEncounter(action);
     const phase = getPhaseOverride();
@@ -266,16 +316,55 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
         // 어군 배치 날짜 — 리듀서(서버 시계, 로컬은 클라 시계)가 정한 값으로 세션을 고정한다
         if (r.result.type === 'boot') setSchoolDay(r.result.schoolDay);
         // 그 게임 날짜의 첫 접속 — 부팅이 운세를 새로 고정했을 때만 접속 모달을 띄운다(같은 날 재접속은 띄우지 않는다)
-        if (action.type === 'boot' && r.state.fortune && r.state.fortune.day !== prev.fortune?.day) {
+        // 신규 첫 진입(운세·명성·도감 이력 없음)은 마을 튜토리얼과 겹치지 않게 건너뛴다
+        const firstEntry = prev.fortune === null && prev.fame === 0 && Object.keys(prev.dex).length === 0;
+        if (action.type === 'boot' && r.state.fortune && r.state.fortune.day !== prev.fortune?.day && !firstEntry) {
           queueFortuneModal(r.state.fortune);
         }
         if (api.auth.isConfigured) setSync('on');
-        // 수배 스냅샷을 바꾸는 액션만 무효화한다. catch는 티켓 발급분만 해당하고
+        // 수배 스냅샷을 바꾸는 액션만 무효화한다. catch는 티켓 발급·의뢰 진행분만 해당하고
         // 나머지는 스냅샷과 무관이라 건드리지 않는다 (폭풍 방지).
-        if (action.type === 'acceptQuest' || action.type === 'deliverBounty'
-            || action.type === 'resolveChallenge' || action.type === 'debug'
-            || (action.type === 'catch' && r.result.type === 'catch' && r.result.ticket)) {
+        const devAction = action.type === 'debug' || action.type === 'debugBatch';
+        if (action.type === 'acceptQuest' || action.type === 'abandonQuest' || action.type === 'deliverBounty' || action.type === 'resolveChallenge' || devAction
+            || (action.type === 'catch' && r.result.type === 'catch' && (r.result.ticket || r.result.bountyProgressed))) {
           void client.invalidateQueries({ queryKey: ['bounty'] });
+        }
+        if (devAction) void client.invalidateQueries({ queryKey: ['fortune'] });
+        // 랭킹은 열려 있을 때만 다시 읽도록 낡음 표시만 한다
+        if (devAction || action.type === 'catch' || action.type === 'resolveChallenge' || action.type === 'claimRelief' || action.type === 'import') {
+          void client.invalidateQueries({ queryKey: ['ranking'], refetchType: 'none' });
+        }
+        if (action.type === 'boot') {
+          void client.invalidateQueries({ queryKey: ['mailbox'] });
+        }
+        if ('guildUpdated' in r.result && r.result.guildUpdated) void client.invalidateQueries({ queryKey: ['guild'] });
+        const uid = client.getQueryData<string | null>(sessionKey) ?? null;
+        if (
+          devAction
+          || action.type === 'catch'
+          || action.type === 'enterEventZone'
+          || action.type === 'leaveEventZone'
+          || action.type === 'settleEventReward'
+          || action.type === 'redeemCoupon'
+          || prev.fortune?.day !== r.state.fortune?.day
+        ) {
+          void client.invalidateQueries({ queryKey: eventsKey(uid) });
+        }
+        if (action.type === 'sell' && r.result.type === 'sell' && r.result.gold > 0) {
+          emitShopSellSound();
+        } else if (action.type === 'upgradeRod' || action.type === 'buyBoat') {
+          emitGearUpgradeSound();
+        } else if (
+          action.type === 'claimAchievement'
+          || action.type === 'claimAllAchievements'
+          || action.type === 'claimMail'
+          || action.type === 'redeemCoupon'
+          || action.type === 'deliverBounty'
+          || action.type === 'claimRelief'
+        ) {
+          emitRewardClaimSound();
+        } else if (action.type === 'settleEventReward') {
+          emitEventSettleSound();
         }
       }
       // rejected는 규칙 거부 — 호출자가 사유 토스트를 띄운다 (연결은 정상이므로 sync 유지)
@@ -296,16 +385,13 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
 
   // 접속 기록 — DAU·리텐션의 정본(events)이고, 서버는 접속한 창을 계정의 활성 창으로 삼는다.
   // 세션 시작과 계정 교체마다 보내고, 응답이 올 때까지 플레이를 열지 않는다.
-  // 요청 속도 초과(429)는 기다렸다 다시 시도하고, 끝내 실패하면 던져 저장 실패 안내 창으로 알린다
-  // (접속하지 못한 창의 액션은 서버가 423으로 거부하기 때문이다). 그 밖의 실패는 조용히 삼킨다:
-  // 순단은 재시도 가치가 없고 fail()을 거치면 안내 창이라는 과대 반응이 따라온다. 다음 접속에 다시 실린다.
+  // 요청 속도 초과(429)는 기다렸다 다시 시도하고, 약관 미동의(consent-required) 외 모든 실패(네트워크·5xx·401·423·426)도
+  // 삼키지 않고 전파해 active_client 갱신 없이 플레이 화면으로 넘어가지 않게 한다.
   const boot = async (signal: AbortSignal): Promise<void> => {
     try {
       await retryOnRateLimit(async () => { await dispatch({ type: 'boot', buildId: BUILD_ID }); }, signal);
     } catch (e) {
       if (signal.aborted) return;
-      if (isConsentRequiredError(e) || (e instanceof AppError && e.kind === 'consent-required')) throw e;
-      if (!isRetryExhausted(e)) return;
       throw e;
     }
   };
@@ -322,6 +408,7 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
         : initialProfile;
       adoptProfile(profile);
       bootedRef.current = true;
+      if (isInitialVillageEntry(init.game)) emitGreetingOnce();
       return;
     }
     activeFlowRef.current = 'boot';
@@ -330,7 +417,15 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
     setLoading(true);
     const signal = newRetryScope();
     try {
-      const uid = await fetchSession(client);
+      let uid: string | null;
+      try {
+        uid = await fetchSession(client);
+      } catch (e) {
+        if (signal.aborted) return;
+        throw isSessionRateLimited(e)
+          ? new AppError('auth-rate-limited', 'anonymous session rate limited', { status: 429 }, { cause: e })
+          : e;
+      }
       if (signal.aborted) return;
       if (!uid) throw new AppError('unauthorized', 'anonymous session failed');
       if (!skipConsent) {
@@ -370,6 +465,7 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
       await boot(signal);
       if (signal.aborted) return;
       bootedRef.current = true;
+      if (isInitialVillageEntry(cloud ?? init.game)) emitGreetingOnce();
       const profile = initialProfile.ok && initialProfile.nickname === null
         ? await readProfile()
         : initialProfile;
@@ -499,7 +595,7 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
   };
 
   return {
-    game, dispatch, nickname, profileStatus, devTools, sync, syncLabel: SYNC_LABEL[sync], blocker, loading,
+    game, dispatch, nickname, profileStatus, devTools, sync, syncLabel: SYNC_LABEL[sync], blocker, loading, saveVersion,
     consentPrompt, acceptConsent, retryLoadConsent: () => openConsentGate(),
     /** 이 기기의 게스트 진행 — 계정을 바꿀 때 버려지는 것이 있는지 확인 창을 띄울지 가르는 근거 */
     guestProgress: guestProgress({ sync, loading, blocked: blocker !== null, game }),
@@ -510,6 +606,12 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
         const next = await readProfile();
         if (next.ok) adoptProfile(next);
         else { setNickname(name); setProfileStatus('loaded'); }
+        applyLocalNick(client.getQueryData<string | null>(sessionKey) ?? null, name);
+        void client.invalidateQueries({ queryKey: ['ranking'] });
+        void client.invalidateQueries({ queryKey: ['guild'] });
+        void client.invalidateQueries({ queryKey: ['friends'] });
+        void client.invalidateQueries({ queryKey: ['player'] });
+        void client.invalidateQueries({ queryKey: ['player-search'] });
         return null;
       }
       return r.error;
@@ -537,7 +639,7 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
       }
       const next = await readProfile();
       adoptProfile(next);
-      await client.invalidateQueries();
+      await client.invalidateQueries({ predicate: q => q.queryKey[0] !== 'session' });
     },
     /** 테스트 정식 계정 승격 직후 게스트 판정과 프로필·조회 캐시를 갱신한다 */
     refreshAccountStatus: async (): Promise<void> => {
@@ -547,9 +649,7 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
       }
       const next = await readProfile();
       adoptProfile(next);
-      await client.invalidateQueries();
+      await client.invalidateQueries({ predicate: q => q.queryKey[0] !== 'session' });
     },
-    /** 캐스팅 순간 서버 함수 워밍 — 콜드 스타트를 wait 구간에 흡수 */
-    warmup: () => gameGatewayRef.current.warmup?.(),
   };
 }

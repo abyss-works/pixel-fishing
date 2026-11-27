@@ -19,6 +19,17 @@ describe('parseAction', () => {
     }
   });
 
+  it('catch의 챔질 경과는 0 이상의 유한한 숫자일 때만 통과한다', () => {
+    expect(parseAction({ type: 'catch', spot: 'pond', judgment: 'good', biteElapsed: 730 }))
+      .toEqual({ type: 'catch', spot: 'pond', judgment: 'good', biteElapsed: 730 });
+    expect(parseAction({ type: 'catch', spot: 'pond', judgment: 'good', biteElapsed: 0 }))
+      .toEqual({ type: 'catch', spot: 'pond', judgment: 'good', biteElapsed: 0 });
+    expect(parseAction({ type: 'catch', spot: 'pond', judgment: 'good', biteElapsed: -1 })).toBeNull();
+    expect(parseAction({ type: 'catch', spot: 'pond', judgment: 'good', biteElapsed: Number.NaN })).toBeNull();
+    expect(parseAction({ type: 'catch', spot: 'pond', judgment: 'good', biteElapsed: Number.POSITIVE_INFINITY })).toBeNull();
+    expect(parseAction({ type: 'catch', spot: 'pond', judgment: 'good', biteElapsed: '730' })).toBeNull();
+  });
+
   it('catch의 강제 조우·시간대 표시는 유효 값만 통과한다 — 허용 여부는 서버가 따로 판정한다', () => {
     expect(parseAction({ type: 'catch', spot: 'sea', judgment: 'auto', forceEncounter: true }))
       .toEqual({ type: 'catch', spot: 'sea', judgment: 'auto', forceEncounter: true });
@@ -130,5 +141,21 @@ describe('parseAction', () => {
     expect(parseAction({ type: 'usePotion', id: 'luck-small' })).toEqual({ type: 'usePotion', id: 'luck-small' });
     expect(parseAction({ type: 'usePotion' })).toBeNull();
     expect(parseAction({ type: 'usePotion', id: 1 })).toBeNull();
+  });
+
+  it('라이브 이벤트 액션의 형태를 검증한다', () => {
+    expect(parseAction({ type: 'enterEventZone' })).toEqual({ type: 'enterEventZone' });
+    expect(parseAction({ type: 'enterEventZone', eventId: 'evt-2' })).toEqual({ type: 'enterEventZone', eventId: 'evt-2' });
+    expect(parseAction({ type: 'enterEventZone', eventId: 1 })).toBeNull();
+    expect(parseAction({ type: 'leaveEventZone' })).toEqual({ type: 'leaveEventZone' });
+    expect(parseAction({ type: 'settleEventReward' })).toEqual({ type: 'settleEventReward' });
+    expect(parseAction({ type: 'settleEventReward', eventId: 'evt-2' })).toEqual({ type: 'settleEventReward', eventId: 'evt-2' });
+  });
+
+  it('abandonQuest 액션의 형태를 검증한다', () => {
+    expect(parseAction({ type: 'abandonQuest', questId: 'pacific-easy-common' }))
+      .toEqual({ type: 'abandonQuest', questId: 'pacific-easy-common' });
+    expect(parseAction({ type: 'abandonQuest' })).toBeNull();
+    expect(parseAction({ type: 'abandonQuest', questId: 1 })).toBeNull();
   });
 });

@@ -10,6 +10,7 @@ import type { DispatchResult, MaybePromise } from '../../../../features/gameplay
 import type { BaseId } from '../../../../game/content/places';
 import { isBountyPort } from '../../../../game/content/bounties';
 import { hatById } from '../../../../game/content/wardrobe';
+import type { ConfirmDialogFn } from '../bounty/abandonQuest';
 import BountyPanel from '../bounty/BountyPanel';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
@@ -37,6 +38,7 @@ interface Props {
   /** 상태 변경의 유일한 경로 (서버 권위 v0.5.0) — 판매/강화/구매는 서버(또는 로컬 리듀서)가 실행 */
   dispatch: (a: GameAction) => MaybePromise<DispatchResult>;
   setToast: Notify;
+  confirm?: ConfirmDialogFn;
   onClose: () => void;
 }
 
@@ -45,7 +47,7 @@ interface Props {
 // 목록형 시설(낚싯대 강화, 조선소)은 920 폭에 왼쪽 목록과 오른쪽 상세(비교 표, 잔액, 확정 버튼)를 둔다.
 // 수배판과 옷장은 탭이 있는 창이라 680 폭에 높이를 고정한다. 부엌과 판매 창은 탭이 있는 목록형 창이라 920 폭에 높이를 고정한다.
 // busy: HTTP 왕복 동안 확정 버튼 잠금 — 더블클릭이 낙관 락 재시도로 이중 적용되는 것 방지.
-export default function FacilityModal({ panel, game, dispatch, setToast, onClose, base, uid, sellBonus, accountState = 'account' }: Props) {
+export default function FacilityModal({ panel, game, dispatch, setToast, confirm, onClose, base, uid, sellBonus, accountState = 'account' }: Props) {
   const [busy, setBusy] = useState(false);
   const run = (action: GameAction, onOk?: (r: Extract<DispatchResult, { status: 'ok' }>) => void) => {
     if (busy) return;
@@ -127,7 +129,7 @@ export default function FacilityModal({ panel, game, dispatch, setToast, onClose
       )}
       {panel === 'bounty' && base !== undefined && isBountyPort(base) && (
         <ModalCard title="수배판" onClose={onClose} fixed>
-          <BountyPanel game={game} port={base} uid={uid ?? null} dispatch={dispatch} setToast={setToast} />
+          <BountyPanel game={game} port={base} uid={uid ?? null} dispatch={dispatch} setToast={setToast} confirm={confirm} />
         </ModalCard>
       )}
     </Modal>

@@ -53,8 +53,19 @@ const DATA = [
     powerReq: 315 }, // Lv62 환산
 ] as const;
 
-export type SpotId = (typeof DATA)[number]['id'];
-export type SpotRegionId = (typeof DATA)[number]['region'];
+export const EVENT_SPOTS = [
+  {
+    id: 'championship',
+    name: '강태공 분지 호수',
+    boatTier: 0,
+    region: 'championship',
+    powerReq: 105, // Lv20 환산
+    rarityWeight: { rare: 2000, epic: 500, legendary: 100 },
+  },
+] as const;
+
+export type SpotId = (typeof DATA)[number]['id'] | (typeof EVENT_SPOTS)[number]['id'];
+export type SpotRegionId = (typeof DATA)[number]['region'] | (typeof EVENT_SPOTS)[number]['region'];
 
 export interface Spot {
   id: SpotId;
@@ -73,8 +84,9 @@ export interface Spot {
 
 export const SPOTS: readonly Spot[] = DATA;
 
-/** id → 수역 행. 없는 id는 undefined (호출부 계약상 정상 클라이언트에선 나오지 않는다) */
-export const spotById = (id: SpotId): Spot | undefined => SPOTS.find(s => s.id === id);
+/** id → 수역 행(이벤트 전용 수역 포함). 없는 id는 undefined (호출부 계약상 정상 클라이언트에선 나오지 않는다) */
+export const spotById = (id: SpotId): Spot | undefined =>
+  SPOTS.find(s => s.id === id) ?? (EVENT_SPOTS as readonly Spot[]).find(s => s.id === id);
 
 /** 수역 요구 파워 — 미기재는 0(제한 없음). stats·actions의 게이트 판단이 이 단일 출처를 본다 */
 export const powerReqOf = (id: SpotId): number => spotById(id)?.powerReq ?? 0;

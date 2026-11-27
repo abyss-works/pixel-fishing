@@ -11,8 +11,14 @@ import PlayerModal, { PlayerInfo } from './PlayerInfo';
 const s = vi.hoisted(() => ({
   relation: null as null | 'friend' | 'incoming' | 'outgoing',
   blocked: false as boolean | null,
+  modFailed: false,
+  friendsFailed: false,
+  friendsRefresh: vi.fn(),
+  reload: vi.fn(),
   loading: false,
   failed: false,
+  unavailable: false,
+  profileRetry: vi.fn(),
   profile: {
     nickname: '갈치',
     boat: 2,
@@ -43,17 +49,31 @@ vi.mock('../../../../features/account/service/accountActions', () => ({
     accountFailed ? 'unverified' : account === null ? 'guest' : 'account',
 }));
 vi.mock('../../../../features/live/service/usePlayerProfile', () => ({
-  usePlayerProfile: () => ({ profile: s.loading || s.failed ? null : s.profile, loading: s.loading, failed: s.failed }),
+  usePlayerProfile: () => ({
+    profile: s.loading || s.failed || s.unavailable ? null : s.profile,
+    loading: s.loading,
+    failed: s.failed,
+    unavailable: s.unavailable,
+    retry: s.profileRetry,
+  }),
 }));
 vi.mock('../../../../features/friends/service/useFriends', () => ({
-  useFriends: () => ({ groups: { friends: [], incoming: [], outgoing: [] }, offline: false, act: s.act }),
+  useFriends: () => ({
+    groups: s.friendsFailed ? null : { friends: [], incoming: [], outgoing: [] },
+    failed: s.friendsFailed,
+    offline: false,
+    refresh: s.friendsRefresh,
+    act: s.act,
+  }),
 }));
 vi.mock('../../../../features/friends/model/friends', async importOriginal => ({
   ...await importOriginal<object>(),
   friendRelation: () => s.relation,
 }));
 vi.mock('../../../../features/live/service/useChatModeration', () => ({
-  useChatModeration: () => ({ isBlocked: () => s.blocked, block: s.block, unblock: vi.fn(), report: s.report }),
+  useChatModeration: () => ({
+    isBlocked: () => s.blocked, failed: s.modFailed, reload: s.reload, block: s.block, unblock: vi.fn(), report: s.report,
+  }),
 }));
 
 const target = { uid: 'u1', nick: '갈치', chatId: 9 };
@@ -65,8 +85,11 @@ describe('PlayerInfo', () => {
     cleanup();
     s.relation = null;
     s.blocked = false;
+    s.modFailed = false;
+    s.friendsFailed = false;
     s.loading = false;
     s.failed = false;
+    s.unavailable = false;
     s.profile = {
       nickname: '갈치',
       boat: 2,
@@ -129,8 +152,9 @@ describe('PlayerInfo', () => {
     expect(screen.queryByText(unachievedItem.name)).toBeNull();
 
     // 두 번째 서브탭: 수집품 (모자 + 유물)
+    const permanentHatCount = HATS.filter(h => h.source !== 'event').length;
     fireEvent.click(screen.getByRole('button', { name: /수집품/ }));
-    expect(screen.getByText('모자').closest('div')).toHaveTextContent(`2 / ${HATS.length}`);
+    expect(screen.getByText('모자').closest('div')).toHaveTextContent(`2 / ${permanentHatCount}`);
     expect(screen.queryByText(/모자 \(구매/)).toBeNull();
     fireEvent.mouseEnter(screen.getByText('모자'));
     const hatTip = screen.getByRole('tooltip');
@@ -258,7 +282,7 @@ describe('PlayerInfo', () => {
     expect(emptyCards[0]).not.toHaveClass('border-epic', 'border-legend', 'border-rare');
   });
 
-  it('불러오기 중과 불러오기 실패 상태를 구분해 표시한다', () => {
+  it('불러오기 중과 불러오기 실패 상태를 구분해 표시하고 실패 시 다시 시도 버튼을 제공한다', () => {
     s.loading = true;
     const { rerender } = show();
     expect(screen.getByText('정보를 불러오는 중이에요.')).toBeTruthy();
@@ -267,6 +291,27 @@ describe('PlayerInfo', () => {
     s.failed = true;
     rerender(<PlayerInfo target={target} self={false} account="me@example.com" setToast={vi.fn()} />);
     expect(screen.getByText(/정보를 불러오지 못했어요/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(s.profileRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it('차단 정보를 읽지 못하면 차단 버튼 자리에 안내와 다시 확인 버튼을 보인다', () => {
+    s.blocked = null;
+    s.modFailed = true;
+    show();
+    expect(screen.queryByRole('button', { name: '차단' })).toBeNull();
+    expect(screen.getByText('차단 정보를 불러오지 못했어요.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '다시 확인' }));
+    expect(s.reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('친구 정보를 읽지 못하면 친구 버튼 자리에 안내와 다시 확인 버튼을 보인다', () => {
+    s.friendsFailed = true;
+    show();
+    expect(screen.queryByRole('button', { name: '친구 요청' })).toBeNull();
+    expect(screen.getByText('친구 정보를 불러오지 못했어요.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '다시 확인' }));
+    expect(s.friendsRefresh).toHaveBeenCalledTimes(1);
   });
 
   it('달성한 업적이 없을 때 달성만 보기 토글은 빈 상태 안내를 보인다', () => {
@@ -274,5 +319,27 @@ describe('PlayerInfo', () => {
     show();
     fireEvent.click(screen.getByRole('button', { name: '달성만 보기' }));
     expect(screen.getByText('달성한 업적이 없어요.')).toBeTruthy();
+  });
+
+  it('수집품 모자 툴팁과 카드가 이벤트 모자를 이벤트 한정으로 분류하고 총 보유 수에 포함한다', () => {
+    const permanentHatCount = HATS.filter(h => h.source !== 'event').length;
+    s.profile = { ...s.profile, hats: ['cap-red', 'straw-hat', 'santa-hat'] };
+    show();
+    fireEvent.click(screen.getByRole('button', { name: /수집품/ }));
+
+    expect(screen.getByText('모자').closest('div')).toHaveTextContent(`3 / ${permanentHatCount + 1}`);
+    fireEvent.mouseEnter(screen.getByText('모자'));
+    const hatTip = screen.getByRole('tooltip');
+    expect(hatTip).toHaveTextContent('이벤트');
+    expect(hatTip).toHaveTextContent('1 / 1');
+    fireEvent.mouseLeave(screen.getByText('모자'));
+
+    const santaCard = screen.getByLabelText('모자 산타모자 보유');
+    expect(santaCard).toHaveTextContent('보유');
+    const santaTrigger = santaCard.firstElementChild!;
+    fireEvent.mouseEnter(santaTrigger);
+    const tip = screen.getByRole('tooltip');
+    expect(tip).toHaveTextContent('이벤트 한정');
+    expect(tip).not.toHaveTextContent('업적 보상');
   });
 });

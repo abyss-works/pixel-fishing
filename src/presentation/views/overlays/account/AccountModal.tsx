@@ -6,17 +6,21 @@ import {
   signOutAccount,
 } from '../../../../features/account/service/accountActions';
 import {
+  clearPendingGoogleOrigin,
   clearPendingSailReturn,
+  setPendingGoogleOrigin,
   setPendingSailReturn,
 } from '../../../../features/account/service/sailReturn';
 import { GOOGLE_BUTTON_LABEL, googleStartFailedText, LEGAL_PATHS } from '../../../../features/account/model/googleFlow';
 import { ACCOUNT_CHECK_FAILED_COPY, accountLabel } from '../../../../features/account/model/accountRules';
+import { selectFirstLinkRewardItems } from '../../../../features/account/model/firstLinkReward';
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import Badge from '../../../ui/Badge';
 import BoatSprite from '../../../ui/BoatSprite';
 import Button from '../../../ui/Button';
 import Divider from '../../../ui/Divider';
 import ExternalLink from '../../../ui/ExternalLink';
+import Frame from '../../../ui/Frame';
 import GoogleButton from '../../../ui/GoogleButton';
 import GoogleLogo from '../../../ui/GoogleLogo';
 import IconButton from '../../../ui/IconButton';
@@ -29,22 +33,23 @@ import Tip, { TipCard } from '../../../ui/Tip';
 import { cx } from '../../../ui/cx';
 import { useDialogs } from '../../../ui/useDialogs';
 import type { Notify } from '../../../ui/hud/messageFeed';
+import FirstLinkRewardSection from './FirstLinkRewardSection';
 
 const CONNECT_PERKS = [
   {
     badge: '항로',
     title: '태평양과 세계 해역 개방',
-    desc: '마을 포구에서 출항해 여섯 대양과 네임드 수배에 도전할 수 있어요.',
+    desc: '여섯 대양과 네임드 수배에 도전할 수 있어요.',
   },
   {
     badge: '교류',
     title: '업적 보상과 소셜 기능 해금',
-    desc: '업적 수령, 의뢰, 우편, 채팅, 친구, 길드를 모두 쓸 수 있어요.',
+    desc: '업적 수령, 의뢰, 우편, 채팅, 친구, 길드를 모두 써요.',
   },
   {
     badge: '보존',
     title: '현재 마을 진행 그대로 유지',
-    desc: '모아 둔 도감과 골드, 배와 낚싯대가 연결한 계정으로 이어져요.',
+    desc: '모아 둔 도감과 골드, 배와 낚싯대가 계정에 이어져요.',
   },
 ] as const;
 
@@ -102,8 +107,11 @@ export default function AccountModal({
   sailReturn?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
+  const [showPerks, setShowPerks] = useState(true);
+  const [perksDrawerOpen, setPerksDrawerOpen] = useState(false);
   const { confirm, input, dialogs } = useDialogs();
   const guest = account === null && !accountFailed;
+  const firstLinkRewards = selectFirstLinkRewardItems();
   // 로컬(클라우드 미설정)에서도 화면은 보여준다 - 계정 기능만 막는다.
   const offline = !isAccountConfigured() || syncState === 'off';
   const signedInOnline = !guest && !accountFailed && !offline;
@@ -118,9 +126,11 @@ export default function AccountModal({
   // 구글 인증 화면으로 이동한다. 이동하면 이 페이지는 떠나므로 성공 뒤에는 busy를 풀지 않는다.
   const connect = async () => {
     setBusy(true);
+    setPendingGoogleOrigin(mode);
     if (sailReturn) setPendingSailReturn();
     const r = await connectGoogle().catch(() => ({ ok: false as const }));
     if (!r.ok) {
+      clearPendingGoogleOrigin();
       if (sailReturn) clearPendingSailReturn();
       sendNotice(setToast, { kind: 'system.modalRejected', text: googleStartFailedText, toastText: '구글 계정 화면 열기 실패' });
       setBusy(false);
@@ -128,7 +138,10 @@ export default function AccountModal({
   };
 
   const handleClose = () => {
-    if (sailReturn && !busy) clearPendingSailReturn();
+    if (!busy) {
+      clearPendingGoogleOrigin();
+      if (sailReturn) clearPendingSailReturn();
+    }
     onClose();
   };
 
@@ -197,7 +210,7 @@ export default function AccountModal({
       </Tip>
     </div>
   ) : (
-    <KeyValueRow label="계정" value={accountLabel(account, accountFailed)} />
+    <KeyValueRow label="계정" value={accountLabel(account, accountFailed)} valueEnd />
   );
 
   const links = (
@@ -213,8 +226,8 @@ export default function AccountModal({
 
   const legalNotice = (
     <Note size="xs" className="text-center mt-2 mb-0">
-      계속하면 만 14세 이상이며 <ExternalLink href={LEGAL_PATHS.terms}>이용약관</ExternalLink>에 동의하고{' '}
-      <ExternalLink href={LEGAL_PATHS.privacy}>개인정보 처리방침</ExternalLink>을 확인한 것으로 봐요.
+      계속하면 만 14세 이상이며 <ExternalLink icon href={LEGAL_PATHS.terms}>이용약관</ExternalLink>에 동의하고{' '}
+      <ExternalLink icon href={LEGAL_PATHS.privacy}>개인정보 처리방침</ExternalLink>을 확인한 것으로 봐요.
     </Note>
   );
 
@@ -222,9 +235,41 @@ export default function AccountModal({
     <Note className="mt-0">오프라인 상태에서는 계정 기능이 동작하지 않아요.<br />화면 확인용이에요.</Note>
   );
 
+  const perkItems = (
+    <div className="flex flex-col divide-y divide-line-dim">
+      {CONNECT_PERKS.map(perk => (
+        <div key={perk.badge} className="py-2 first:pt-1 last:pb-0 flex flex-col gap-1">
+          <div className="flex items-center gap-1.5">
+            <Badge tone="accent" size="xs">{perk.badge}</Badge>
+            <span className="text-xs font-bold text-text">{perk.title}</span>
+          </div>
+          <p className="text-xs text-text-dim leading-[1.45]">{perk.desc}</p>
+        </div>
+      ))}
+    </div>
+  );
+
+  const perksAside = connectMode && guest && showPerks ? (
+    <Frame className="w-[220px] p-3 flex flex-col gap-2 shadow-panel">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-bold text-accent leading-[1.3]">연결하면 열리는 것</span>
+        <IconButton
+          type="button"
+          glyph="close"
+          size={12}
+          tone="dim"
+          aria-label="연결 안내 닫기"
+          className="p-1 hover:text-text shrink-0"
+          onClick={() => setShowPerks(false)}
+        />
+      </div>
+      {perkItems}
+    </Frame>
+  ) : undefined;
+
   const content = connectMode && guest ? (
     <>
-      <Inset tone="light" border="accent" className="p-2.5 flex items-center gap-3">
+      <Inset tone="light" className="p-2.5 flex items-center gap-3">
         <BoatSprite tier={1} preset="row" className="shrink-0" />
         <div className="flex flex-col gap-0.5 min-w-0">
           <p className="text-sm font-bold text-text">태평양 너머 넓은 바다로 나갈 준비가 되었어요.</p>
@@ -232,23 +277,33 @@ export default function AccountModal({
         </div>
       </Inset>
 
-      <Inset divided>
-        {CONNECT_PERKS.map(perk => (
-          <div key={perk.badge} className="flex items-start gap-2.5 px-2.5 py-2">
-            <Badge tone="accent" size="xs" className="mt-0.5">{perk.badge}</Badge>
-            <div className="min-w-0">
-              <p className="text-xs font-bold text-text">{perk.title}</p>
-              <p className="text-xs text-text-dim">{perk.desc}</p>
-            </div>
-          </div>
-        ))}
-      </Inset>
+      {perksDrawerOpen && (
+        <Inset tone="base" className="px-2.5 py-2 @min-[880px]:hidden">
+          {perkItems}
+        </Inset>
+      )}
+
+      <FirstLinkRewardSection items={firstLinkRewards} />
 
       {offlineNote}
       <GoogleButton disabled={busy || offline} onClick={() => void connect()}>{GOOGLE_BUTTON_LABEL}</GoogleButton>
       {legalNotice}
 
-      <div className="flex justify-center">
+      <div className="flex items-center justify-center gap-2.5 flex-wrap">
+        {!showPerks && (
+          <Button variant="ghost" size="sm" className="hidden @min-[880px]:inline-flex" onClick={() => setShowPerks(true)}>
+            연결 혜택 보기
+          </Button>
+        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="@min-[880px]:hidden"
+          aria-expanded={perksDrawerOpen}
+          onClick={() => setPerksDrawerOpen(o => !o)}
+        >
+          {perksDrawerOpen ? '연결 혜택 접기' : '연결 혜택 보기'}
+        </Button>
         <Button variant="ghost" size="sm" disabled={busy} onClick={handleClose}>나중에 하기</Button>
       </div>
     </>
@@ -276,6 +331,7 @@ export default function AccountModal({
           <GoogleButton disabled={busy || offline} onClick={() => void connect()}>{GOOGLE_BUTTON_LABEL}</GoogleButton>
           {legalNotice}
           <Note className="text-center">구글 계정을 연결하면 지금까지의 진행이 그 계정에 이어져요.</Note>
+          <FirstLinkRewardSection items={firstLinkRewards} className="mt-2" />
         </>
       ) : (
         <Button full disabled={offline || busy} onClick={signOut}>로그아웃</Button>
@@ -296,7 +352,7 @@ export default function AccountModal({
   return (
     <>
       {layer === 'stage' ? (
-        <Modal layer="stage" sm={connectMode} onClose={handleClose}>
+        <Modal layer="stage" width={connectMode && guest ? 420 : undefined} aside={perksAside} onClose={handleClose}>
           <ModalCard title={title} onClose={handleClose}>{content}</ModalCard>
         </Modal>
       ) : (

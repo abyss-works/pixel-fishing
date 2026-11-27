@@ -409,7 +409,9 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
     ['ui/Modal.tsx', '--z-app-modal'],
     ['ui/Modal.tsx', '--z-blocker'],
     ['ui/FloatingToastLayer.tsx', '--z-toast'],
+    ['views/overlays/live/NoticeStack.tsx', '--z-toast'],
     ['layouts/game-stage/FerryVeil.tsx', '--z-veil'],
+    ['layouts/game-stage/EventZoneVeil.tsx', '--z-veil'],
     ['layouts/sidebar/index.tsx', '--z-tabs'],
     ['views/overlays/update/LoadingOverlay.tsx', '--z-veil'],
     ['ui/TooltipBubble.tsx', '--z-tooltip'],
@@ -420,11 +422,16 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
   });
 
   it('화면 전환 덮개는 화면 전체(fixed)를 덮고 스테이지 안에 갇히지 않게 창 층 자리로 포털한다', () => {
-    for (const path of ['layouts/game-stage/FerryVeil.tsx', 'views/overlays/update/LoadingOverlay.tsx']) {
+    for (const path of [
+      'layouts/game-stage/FerryVeil.tsx',
+      'layouts/game-stage/EventZoneVeil.tsx',
+      'views/overlays/update/LoadingOverlay.tsx',
+    ]) {
       expect(src(path)).toContain('fixed inset-0');
       expect(src(path)).not.toContain('absolute inset-0');
     }
     expect(src('layouts/game-stage/FerryVeil.tsx')).toContain('createPortal');
+    expect(src('layouts/game-stage/EventZoneVeil.tsx')).toContain('createPortal');
   });
 
   it('앱 창은 공용 창 컴포넌트가 정한 자리로 포털하고, 스테이지 창은 닫을 수 없어도 제자리(스테이지 안)에 두며, 개발 도구 창은 body로 포털한다', () => {
@@ -441,6 +448,7 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
       'views/overlays/update/UpdateModal.tsx',
       'views/overlays/update/SessionReplacedModal.tsx',
       'views/overlays/update/UnsavedModal.tsx',
+      'views/overlays/update/RateLimitModal.tsx',
       'views/overlays/account/ConsentModal.tsx',
     ]) {
       expect(src(path)).toContain('closable={false}');
@@ -506,6 +514,7 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
       'views/overlays/update/UpdateModal.tsx',
       'views/overlays/update/SessionReplacedModal.tsx',
       'views/overlays/update/UnsavedModal.tsx',
+      'views/overlays/update/RateLimitModal.tsx',
     ]);
     const nonAdminViews = sources.filter(f => f.path.startsWith('views/') && !f.path.startsWith('views/admin/'));
     const appUsers = nonAdminViews
@@ -635,6 +644,7 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
       'ui/Modal.tsx',
       'ui/TooltipBubble.tsx',
       'layouts/game-stage/FerryVeil.tsx',
+      'layouts/game-stage/EventZoneVeil.tsx',
       'layouts/sidebar/index.tsx',
       'views/game/GameView.tsx',
       'views/overlays/update/LoadingOverlay.tsx',

@@ -15,10 +15,31 @@ import { useEffect, useRef } from 'react';
 //   - `exclusive` 스코프(모달)는 **자기보다 아래를 통째로 차단**한다. 핸들러가 없어도 된다 —
 //     "아무것도 안 하지만 아래도 못 하게 한다"가 모달에 필요한 기본값이다.
 
+export const HOTKEY_TIER = {
+  BASE: 10,
+  STAGE_MODAL: 20,
+  STAGE_CONFIRM: 25,
+  SIDEBAR_SHEET: 30,
+  APP_MODAL: 40,
+  APP_CONFIRM: 45,
+  POPOVER: 50,
+  BLOCKER: 60,
+} as const;
+
 type Handler = (e: KeyboardEvent) => boolean | void;
-interface Scope { handler: Handler; exclusive: boolean }
+export interface ScopeOpts {
+  exclusive?: boolean;
+  tier?: number;
+}
+interface Scope {
+  handler: Handler;
+  exclusive: boolean;
+  tier: number;
+  order: number;
+}
 
 const stack: Scope[] = [];
+let nextOrder = 0;
 let attached = false;
 
 /** 텍스트 입력에 포커스가 있으면 어떤 스코프도 키를 못 가져간다 — 폼 타이핑은 언제나 우선.
@@ -35,41 +56,44 @@ export const hasModifier = (e: KeyboardEvent): boolean =>
 
 function dispatch(e: KeyboardEvent) {
   if (isTyping(e)) return;
-  // 가장 위의 exclusive 스코프까지만 내려간다 (없으면 바닥까지)
-  let floor = 0;
-  for (let i = stack.length - 1; i >= 0; i--) {
-    if (stack[i].exclusive) { floor = i; break; }
+  if (e.key === 'Escape' && e.repeat) {
+    e.preventDefault();
+    return;
   }
-  for (let i = stack.length - 1; i >= floor; i--) {
-    if (stack[i].handler(e) === true) return;
+  const ordered = [...stack].sort((a, b) => (b.tier - a.tier) || (b.order - a.order));
+  for (const scope of ordered) {
+    if (scope.handler(e) === true) return;
+    if (scope.exclusive) return;
   }
 }
 
-/** 키 스코프 등록. 마운트 순서가 곧 층위 — 나중에 마운트된 쪽이 위다.
+/** 키 스코프 등록. tier가 높을수록 위, 같은 tier 안에서는 나중에 마운트된 쪽(order DESC)이 위다.
  *  핸들러는 ref로 읽으므로 리렌더마다 재등록하지 않는다(키 입력과 리렌더가 겹칠 때 새는 것 방지). */
-export function useKeyScope(handler: Handler, opts: { exclusive?: boolean } = {}) {
+export function useKeyScope(handler: Handler, opts: ScopeOpts = {}) {
   const ref = useRef(handler);
   useEffect(() => { ref.current = handler; });
 
   const exclusive = opts.exclusive === true;
+  const tier = opts.tier ?? HOTKEY_TIER.BASE;
   useEffect(() => {
-    const scope: Scope = { handler: e => ref.current(e), exclusive };
+    const scope: Scope = { handler: e => ref.current(e), exclusive, tier, order: ++nextOrder };
     stack.push(scope);
     if (!attached) { document.addEventListener('keydown', dispatch); attached = true; }
     return () => {
       const i = stack.indexOf(scope);
       if (i >= 0) stack.splice(i, 1);
     };
-  }, [exclusive]);
+  }, [exclusive, tier]);
 }
 
 /** 모달용 — 아래 레이어를 막는다. onEscape를 주면 Esc가 그 창을 닫는다(우상단 X와 같은 출구).
  *  X가 없는 창(새 버전 안내처럼 출구가 하나뿐인 창)은 onEscape를 주지 않는다 */
-export const useKeyBlocker = (onEscape?: () => void) => useKeyScope(e => {
-  if (onEscape && e.key === 'Escape') { e.preventDefault(); onEscape(); return true; }
-}, { exclusive: true });
+export const useKeyBlocker = (onEscape?: () => void, opts?: { tier?: number }) => useKeyScope(e => {
+  if (onEscape && e.key === 'Escape' && !hasModifier(e)) { e.preventDefault(); onEscape(); return true; }
+}, { exclusive: true, tier: opts?.tier ?? HOTKEY_TIER.APP_MODAL });
 
 /** 테스트 격리용 — 스택은 모듈 전역이라 케이스 사이에 비워야 한다 */
 export function resetKeyScopes() {
   stack.length = 0;
+  nextOrder = 0;
 }

@@ -1,7 +1,7 @@
 // R4, R4b: 지역 충돌·군집 배치·경로 무결성과 존 계층을 검증한다.
 // 공통 무결성은 REGION_PACKS를 순회한다 — 새 지역을 등록하면 자동으로 검증 대상이 된다.
 import { describe, it, expect } from 'vitest';
-import { SPOTS } from '../content/spots';
+import { spotById } from '../content/spots';
 import { SALE_BASES } from '../content/places';
 import { ZONES, topZoneOf, zoneById, zoneOfSpot } from '../content/zones';
 import { zoneOfPort } from '../content/bounties';
@@ -9,11 +9,12 @@ import { BOATS, MAX_BOAT, nextBoatText } from '../content/boats';
 import { WATER_STYLE } from '../rendering/pixel/styles';
 import type { MapCellDef, RegionPack, School } from './index';
 import {
-  REGION_PACKS, BASE_PACKS, ZoneTracker, canMove, zoneOf, closedSeaBlock, movePlayer, inTrigger, nearestSchoolInRange,
+  REGION_PACKS, BASE_PACKS, LIVE_REGIONS, ZoneTracker, canMove, zoneOf, closedSeaBlock, movePlayer, inTrigger, nearestSchoolInRange,
   entryPoint, furnitureAt, inClosedSea, HOME_FURNITURE, HARBOR_FURNITURE, MANILA_FURNITURE, COLOMBO_FURNITURE,
   TOAMASINA_FURNITURE, WALVISBAY_FURNITURE,
   VILLAGE, VILLAGE_W, V_POND, V_HOUSE, V_DOOR, V_SPAWN, V_BRIDGE, V_PIER, V_PORT, V_SCHOOLS,
   WORLD, WORLD_MAP, WORLD_SPAWN, HARBORS, schoolsOf, generateWorldSchools,
+  CHAMPIONSHIP_W, CHAMPIONSHIP_H, CHAMPIONSHIP_CABIN, CHAMPIONSHIP_SPAWN, CHAMPIONSHIP_SCHOOLS,
 } from './index';
 import { CAST_RANGE } from '../rules/balance';
 import { cellDefAt, compileMap, mapBounds } from './mask';
@@ -130,7 +131,7 @@ describe('대양 어군 — 날짜가 바뀌어도 시작점에서 바다로 닿
 describe.each(Object.values(REGION_PACKS))('$id 마스크 정합성', pack => {
   it('군집 spot은 실제 수역 데이터에 있다', () => {
     for (const s of schoolsFor(pack)) {
-      expect(SPOTS.some(sp => sp.id === s.spot), `${pack.id}/${s.id} 알 수 없는 수역`).toBe(true);
+      expect(spotById(s.spot), `${pack.id}/${s.id} 알 수 없는 수역`).toBeDefined();
     }
   });
 
@@ -794,5 +795,172 @@ describe('판매 시설이 있는 거점 표', () => {
     for (const pack of Object.values(BASE_PACKS)) {
       expect(SALE_BASES[pack.id], pack.id).toBe(pack.furniture.some(f => f.id === 'sell'));
     }
+  });
+});
+
+describe('이벤트 2: 강태공 분지 호수(championship)', () => {
+  it('LIVE_REGIONS에 championship이 포함된다', () => {
+    expect(LIVE_REGIONS).toContain('championship');
+  });
+
+  it('도보 구역이며 showOthers가 켜져 있고 zoneOf가 championship을 반환한다', () => {
+    const champ = REGION_PACKS.championship;
+    expect(champ.movement).toBe('walk');
+    expect(champ.showOthers).toBe(true);
+    expect(zoneOf(champ, champ.spawn.x, champ.spawn.y)).toBe('championship');
+  });
+
+  it('분지 호수 크기는 464×288이고 차분한 초록 바탕과 최외곽 눈 테두리 groundDetail을 가진다', () => {
+    const champ = REGION_PACKS.championship;
+    expect(CHAMPIONSHIP_W).toBe(464);
+    expect(CHAMPIONSHIP_H).toBe(288);
+    expect(champ.bounds).toEqual({ x: 0, y: 0, w: 464, h: 288 });
+    expect(champ.ground).toEqual({
+      kind: 'grass',
+      color: '#3e6f59',
+      dot: '#2f5a47',
+      mapColor: '#3f6e59',
+    });
+    expect(typeof champ.groundDetail).toBe('function');
+
+    const rects: Array<{ x: number; y: number; w: number; h: number; color: string }> = [];
+    let fillStyle = '';
+    const mockCtx = {
+      get fillStyle() { return fillStyle; },
+      set fillStyle(v: string) { fillStyle = v; },
+      fillRect(x: number, y: number, w: number, h: number) {
+        rects.push({ x, y, w, h, color: fillStyle });
+      },
+    } as unknown as CanvasRenderingContext2D;
+    champ.groundDetail!(mockCtx, 0);
+
+    const colors = new Set(rects.map(r => r.color));
+    expect(colors.has('#cedee9')).toBe(true);
+    expect(colors.has('#e0edf6')).toBe(true);
+    expect(colors.has('#9bb3c5')).toBe(true);
+    expect(colors.has('#4c826a')).toBe(true);
+
+    // 물가 주변(호수 바로 바깥 보행로)은 흰눈(#cedee9/#e0edf6)으로 덮지 않는다
+    const snowRects = rects.filter(r => r.color === '#cedee9' || r.color === '#e0edf6');
+    const waters = (champ.terrain ?? []).filter(t => t.kind === 'water').map(t => t.rect);
+    const lakeMinX = Math.min(...waters.map(r => r.x));
+    const lakeMaxX = Math.max(...waters.map(r => r.x + r.w));
+    const lakeMinY = Math.min(...waters.map(r => r.y));
+    const lakeMaxY = Math.max(...waters.map(r => r.y + r.h));
+    const hitsShoreRing = snowRects.some(r =>
+      r.x < lakeMaxX + 8 && r.x + r.w > lakeMinX - 8 &&
+      r.y < lakeMaxY + 8 && r.y + r.h > lakeMinY - 8,
+    );
+    expect(hitsShoreRing).toBe(false);
+  });
+
+  it('분지 호수 어군 6곳이 배치되고 호수 4면 보행로·데크에서 모두 도달 가능하며 29개 장식이 겹치지 않는다', () => {
+    const champ = REGION_PACKS.championship;
+    const schools = schoolsOf('championship', TEST_DAY);
+    expect(schools).toHaveLength(6);
+    expect(CHAMPIONSHIP_SCHOOLS).toHaveLength(6);
+    for (const s of schools) {
+      expect(s.spot).toBe('championship');
+      expect(canMove(champ, s.x, s.y), `${s.id} 호수 위`).toBe(false);
+    }
+    const decks = (champ.terrain ?? []).filter(t => t.kind === 'deck');
+    expect(decks).toHaveLength(3);
+    for (const d of decks) {
+      expect(canMove(champ, d.rect.x + d.rect.w / 2, d.rect.y + d.rect.h / 2)).toBe(true);
+    }
+
+    // 장식 29점 세부 수량 및 겹침·경계 검사
+    expect(champ.decorations).toHaveLength(29);
+    const counts = champ.decorations.reduce<Record<string, number>>((acc, d) => {
+      acc[d.kind] = (acc[d.kind] ?? 0) + 1;
+      return acc;
+    }, {});
+    expect(counts).toEqual({
+      xmasTree: 3,
+      snowPine: 11,
+      snowman: 2,
+      giftBox: 3,
+      candyCane: 4,
+      lantern: 6,
+    });
+
+    const decoBox = (d: (typeof champ.decorations)[number]) => {
+      switch (d.kind) {
+        case 'xmasTree': return { x: d.x - 2, y: d.y - 3, w: 16, h: 22 };
+        case 'snowPine': return { x: d.x - 1, y: d.y + 1, w: 14, h: 17 };
+        case 'snowman': return { x: d.x + 1, y: d.y, w: 10, h: 17 };
+        case 'giftBox': return { x: d.x, y: d.y, w: 8, h: 9 };
+        case 'candyCane': return { x: d.x + 2, y: d.y + 1, w: 5, h: 11 };
+        case 'lantern': return { x: d.x, y: d.y, w: 6, h: 18 };
+        default: return { x: d.x, y: d.y, w: 10, h: 10 };
+      }
+    };
+    const overlaps = (
+      a: { x: number; y: number; w: number; h: number },
+      b: { x: number; y: number; w: number; h: number },
+    ) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+    const boxes = champ.decorations.map(decoBox);
+    const terrains = (champ.terrain ?? []).map(t => t.rect);
+    const cabin = champ.buildings[0];
+    expect(champ.buildings).toHaveLength(1);
+    expect(cabin.rect).toEqual(CHAMPIONSHIP_CABIN);
+    expect(canMove(champ, cabin.rect.x + cabin.rect.w / 2, cabin.rect.y + cabin.rect.h / 2)).toBe(false);
+    const cabinLabel = champ.labels.find(l => l.text === '산타 오두막');
+    expect(cabinLabel).toBeDefined();
+    expect(cabinLabel!.y).toBeGreaterThanOrEqual(16);
+    expect(cabinLabel!.y).toBeLessThan(CHAMPIONSHIP_CABIN.y);
+
+    for (let i = 0; i < boxes.length; i++) {
+      const box = boxes[i];
+      // 외곽 능선(11px 여유) 안쪽 배치
+      expect(box.x, `deco ${i} left`).toBeGreaterThanOrEqual(12);
+      expect(box.y, `deco ${i} top`).toBeGreaterThanOrEqual(12);
+      expect(box.x + box.w, `deco ${i} right`).toBeLessThanOrEqual(CHAMPIONSHIP_W - 12);
+      expect(box.y + box.h, `deco ${i} bottom`).toBeLessThanOrEqual(CHAMPIONSHIP_H - 12);
+      expect(overlaps(box, cabin.rect), `deco ${i} vs cabin`).toBe(false);
+      for (const t of terrains) expect(overlaps(box, t), `deco ${i} vs terrain`).toBe(false);
+      for (let j = i + 1; j < boxes.length; j++) {
+        expect(overlaps(box, boxes[j]), `deco ${i} vs ${j}`).toBe(false);
+      }
+    }
+
+    // 호수 둘레 북·서·동·남 4면 모두 스폰에서 도보 도달 가능
+    const waters = (champ.terrain ?? []).filter(t => t.kind === 'water').map(t => t.rect);
+    const lakeMinX = Math.min(...waters.map(r => r.x));
+    const lakeMaxX = Math.max(...waters.map(r => r.x + r.w));
+    const lakeMinY = Math.min(...waters.map(r => r.y));
+    const lakeMaxY = Math.max(...waters.map(r => r.y + r.h));
+    const { reachedPoint } = reachabilityCheck(champ, CHAMPIONSHIP_SPAWN);
+    expect(reachedPoint({ x: CHAMPIONSHIP_W / 2, y: lakeMinY - 10 }), '북쪽 호안').toBe(true);
+    expect(reachedPoint({ x: lakeMinX - 10, y: (lakeMinY + lakeMaxY) / 2 }), '서쪽 호안').toBe(true);
+    expect(reachedPoint({ x: lakeMaxX + 10, y: (lakeMinY + lakeMaxY) / 2 }), '동쪽 호안').toBe(true);
+    expect(reachedPoint({ x: CHAMPIONSHIP_W / 2, y: lakeMaxY + 10 }), '남쪽 호안').toBe(true);
+  });
+
+  it('canMove는 도보(walk) 지역의 map 지형에서 물을 막고 데크를 허용한다', () => {
+    const map = compileMap(16, 16, {
+      '.': { water: false, zone: 'championship' },
+      '~': { water: true, style: 'river', zone: 'championship' },
+    }, [
+      '....',
+      '.~~.',
+      '.~~.',
+      '....',
+    ]);
+    const walkMapPack: RegionPack = {
+      ...REGION_PACKS.championship,
+      bounds: mapBounds(map),
+      map,
+      terrain: undefined,
+      decks: [{ rect: { x: 16, y: 16, w: 16, h: 16 }, style: 'pier' }],
+      buildings: [],
+      triggers: [],
+      spawn: { x: 8, y: 8 },
+    };
+    expect(canMove(walkMapPack, 8, 8)).toBe(true);
+    expect(canMove(walkMapPack, 40, 24)).toBe(false);
+    expect(canMove(walkMapPack, 24, 24)).toBe(true);
+    expect(zoneOf(walkMapPack, 8, 8)).toBe('championship');
   });
 });

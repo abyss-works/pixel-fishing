@@ -1,7 +1,8 @@
 import { BOATS, boatNameOf } from '../../../game/content/boats';
 import type {
-  AdminEconomyRow, AdminEventRow, AdminSpamFlagRow, AdminUserRow,
+  AdminEconomyRow, AdminEventRow, AdminSpamFlagRow, AdminUserAggregates, AdminUserRow,
 } from './types';
+import { percentile } from './metrics';
 import { OPEN_WORLD_ZONE_UNLOCKS, REGION_ORDER } from './regions';
 
 /** DB 숫자 열은 number·string·null 어느 형태로도 올 수 있다. */
@@ -27,6 +28,9 @@ export function selectRiskSignals(
 }
 
 export interface ProgressionDashboard {
+  totalUsers: number;
+  activePlayers: number;
+  dormantGuests: number;
   boatHist: {
     values: number[];
     labels: string[];
@@ -44,34 +48,113 @@ export interface ProgressionDashboard {
     sharePercent: number;
   }>;
   stalled: Array<{ user: AdminUserRow; next: (typeof BOATS)[number]; deficit: number }>;
+  stalledSummary: {
+    total: number;
+    byNextTier: Array<{ nextTier: number; name: string; fameReq: number; count: number }>;
+  };
 }
 
-/** 배·낚싯대·지역 분포와 다음 배 명성 게이트 정체 데이터를 만든다. */
-export function selectProgressionDashboard(users: readonly AdminUserRow[]): ProgressionDashboard {
+const buildBoatHist = (buckets: number[]): ProgressionDashboard['boatHist'] => ({
+  values: buckets,
+  labels: buckets.map((_, tier) => (tier === 0 ? '맨발' : `T${tier}`)),
+  legend: buckets.map((count, tier) => ({
+    name: tier === 0 ? '맨발' : `${tier} ${boatNameOf(tier)}`,
+    count,
+  })),
+});
+
+const buildRodHistFromCounts = (entries: ReadonlyArray<{ level: number; count: number }>): ProgressionDashboard['rodHist'] => {
+  const valid = entries.filter(entry => entry.level >= 1 && entry.count > 0);
+  if (valid.length === 0) return { values: [], labels: [], min: 1 };
+  const byLevel = new Map(valid.map(entry => [entry.level, entry.count]));
+  const min = Math.min(...valid.map(entry => entry.level));
+  const max = Math.max(...valid.map(entry => entry.level));
+  const values: number[] = [];
+  for (let level = min; level <= max; level++) {
+    values.push(byLevel.get(level) ?? 0);
+  }
+  return { values, labels: values.map((_, index) => `${min + index}`), min };
+};
+
+/** 배·낚싯대·지역 분포와 다음 배 명성 게이트 정체 데이터를 만든다. 사전 집계가 있으면 분포·도달·게이트 총합을 집계에서 읽는다. */
+export function selectProgressionDashboard(
+  users: readonly AdminUserRow[],
+  aggregates?: AdminUserAggregates | null,
+): ProgressionDashboard {
+  const stalled: ProgressionDashboard['stalled'] = [];
+  for (const user of users) {
+    const next = BOATS.find(boat => boat.tier === (user.boat ?? 0) + 1);
+    if (!next) continue;
+    const fame = adminNumber(user.fame);
+    if (!(fame < next.fameReq)) continue;
+    stalled.push({ user, next, deficit: next.fameReq - fame });
+  }
+  stalled.sort((a, b) => b.deficit - a.deficit);
+
+  if (aggregates) {
+    const activePlayers = aggregates.activePlayers;
+    const totalUsers = aggregates.totalUsers;
+    const boatMap = new Map(aggregates.progression.boats.map(b => [b.tier, b.count]));
+    const boatBuckets = Array.from({ length: BOATS.length + 1 }, (_, tier) => boatMap.get(tier) ?? 0);
+    const reachMap = new Map(aggregates.progression.regionReach.map(r => [r.id, r.count]));
+    const unlockMap = new Map(aggregates.progression.zoneUnlocks.map(z => [z.id, z.count]));
+
+    return {
+      totalUsers,
+      activePlayers,
+      dormantGuests: Math.max(0, totalUsers - activePlayers),
+      boatHist: buildBoatHist(boatBuckets),
+      rodHist: buildRodHistFromCounts(aggregates.progression.rods),
+      regionReach: REGION_ORDER.map(id => {
+        const visitedUsers = reachMap.get(id) ?? 0;
+        return {
+          id,
+          users: visitedUsers,
+          sharePercent: activePlayers === 0 ? 0 : visitedUsers / activePlayers * 100,
+        };
+      }),
+      zoneUnlocks: OPEN_WORLD_ZONE_UNLOCKS.map(z => {
+        const unlockedUsers = unlockMap.get(z.id) ?? 0;
+        return {
+          id: z.id,
+          name: z.name,
+          fullName: z.fullName,
+          entryBoat: z.entryBoat,
+          hasBounty: z.hasBounty,
+          users: unlockedUsers,
+          sharePercent: activePlayers === 0 ? 0 : unlockedUsers / activePlayers * 100,
+        };
+      }),
+      stalled,
+      stalledSummary: {
+        total: aggregates.progression.fameGateStalled.total,
+        byNextTier: [...aggregates.progression.fameGateStalled.byNextTier]
+          .sort((a, b) => a.nextTier - b.nextTier)
+          .map(row => {
+            const next = BOATS.find(boat => boat.tier === row.nextTier);
+            return {
+              nextTier: row.nextTier,
+              name: next?.name ?? `T${row.nextTier}`,
+              fameReq: next?.fameReq ?? 0,
+              count: row.count,
+            };
+          }),
+      },
+    };
+  }
+
   const buckets = Array.from({ length: BOATS.length + 1 }, (_, tier) =>
     users.filter(user => (user.boat ?? 0) === tier).length);
-  const boatHist = {
-    values: buckets,
-    labels: buckets.map((_, tier) => tier === 0 ? '맨발' : `T${tier}`),
-    legend: buckets.map((count, tier) => ({
-      name: tier === 0 ? '맨발' : `${tier} ${boatNameOf(tier)}`,
-      count,
-    })),
-  };
+  const boatHist = buildBoatHist(buckets);
 
-  const rods = users.map(user => user.rod ?? 1).filter(level => level >= 1);
-  let rodHist: ProgressionDashboard['rodHist'];
-  if (rods.length === 0) {
-    rodHist = { values: [], labels: [], min: 1 };
-  } else {
-    const min = Math.min(...rods);
-    const max = Math.max(...rods);
-    const values: number[] = [];
-    for (let level = min; level <= max; level++) {
-      values.push(rods.filter(rod => rod === level).length);
-    }
-    rodHist = { values, labels: values.map((_, index) => `${min + index}`), min };
+  const rodCounts = new Map<number, number>();
+  for (const user of users) {
+    const level = user.rod ?? 1;
+    if (level >= 1) rodCounts.set(level, (rodCounts.get(level) ?? 0) + 1);
   }
+  const rodHist = buildRodHistFromCounts(
+    [...rodCounts.entries()].map(([level, count]) => ({ level, count })),
+  );
 
   const regionReach = REGION_ORDER.map(id => {
     const visitedUsers = users.filter(user => (user.visited ?? []).includes(id)).length;
@@ -93,21 +176,31 @@ export function selectProgressionDashboard(users: readonly AdminUserRow[]): Prog
       sharePercent: users.length === 0 ? 0 : unlockedUsers / users.length * 100,
     };
   });
-  const stalled: ProgressionDashboard['stalled'] = [];
-  for (const user of users) {
-    const next = BOATS.find(boat => boat.tier === (user.boat ?? 0) + 1);
-    if (!next) continue;
-    const fame = adminNumber(user.fame);
-    if (!(fame < next.fameReq)) continue;
-    stalled.push({ user, next, deficit: next.fameReq - fame });
+
+  const byTierCounts = new Map<number, number>();
+  for (const item of stalled) {
+    byTierCounts.set(item.next.tier, (byTierCounts.get(item.next.tier) ?? 0) + 1);
   }
+  const stalledSummary = {
+    total: stalled.length,
+    byNextTier: [...byTierCounts.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([nextTier, count]) => {
+        const next = BOATS.find(boat => boat.tier === nextTier);
+        return { nextTier, name: next?.name ?? `T${nextTier}`, fameReq: next?.fameReq ?? 0, count };
+      }),
+  };
 
   return {
+    totalUsers: users.length,
+    activePlayers: users.length,
+    dormantGuests: 0,
     boatHist,
     rodHist,
     regionReach,
     zoneUnlocks,
-    stalled: stalled.sort((a, b) => b.deficit - a.deficit),
+    stalled,
+    stalledSummary,
   };
 }
 
@@ -133,33 +226,65 @@ export function selectAntiAbuseRows(
 
 export interface EconomyMetrics {
   goldStats: number[];
+  goldCount: number;
   goldSum: number;
+  goldMedian: number;
+  goldP75: number;
+  goldMax: number;
   inflowTotal: number;
   outflowTotal: number;
 }
 
-/** 잔고 분포와 원장 입출 합계를 계산한다. */
+/** 잔고 분포와 원장 입출 합계를 계산한다. 사전 집계가 있으면 비식별 명부 대신 집계값을 우선 쓴다. */
 export function selectEconomyMetrics(
-  users: readonly AdminUserRow[], economy: readonly AdminEconomyRow[],
+  users: readonly AdminUserRow[],
+  economy: readonly AdminEconomyRow[],
+  aggregates?: AdminUserAggregates | null,
 ): EconomyMetrics {
-  const goldStats = users.map(user => adminNumber(user.gold))
-    .filter(Number.isFinite).sort((a, b) => a - b);
-  const goldSum = goldStats.reduce((sum, value) => sum + value, 0);
   const inflowTotal = economy.reduce((sum, row) =>
     sum + Number(row.sell_gold) + Number(row.coupon_gold) + Number(row.mail_gold)
       + Number(row.bounty_gold) + Number(row.achievement_gold), 0);
   const outflowTotal = economy.reduce((sum, row) =>
     sum + Number(row.rod_cost) + Number(row.boat_cost) + Number(row.hat_cost), 0);
-  return { goldStats, goldSum, inflowTotal, outflowTotal };
+
+  if (aggregates) {
+    const { count, sum, median, p75, max } = aggregates.gold;
+    return {
+      goldStats: [],
+      goldCount: count,
+      goldSum: sum,
+      goldMedian: median ?? NaN,
+      goldP75: p75 ?? NaN,
+      goldMax: max ?? NaN,
+      inflowTotal,
+      outflowTotal,
+    };
+  }
+
+  const goldStats = users.map(user => adminNumber(user.gold))
+    .filter(Number.isFinite).sort((a, b) => a - b);
+  const goldSum = goldStats.reduce((sum, value) => sum + value, 0);
+  return {
+    goldStats,
+    goldCount: goldStats.length,
+    goldSum,
+    goldMedian: percentile(goldStats, 50),
+    goldP75: percentile(goldStats, 75),
+    goldMax: goldStats[goldStats.length - 1] ?? NaN,
+    inflowTotal,
+    outflowTotal,
+  };
 }
 
 /** 관리자 화면이 계정을 가리킬 때 보이는 식별 정보. 명부 행이 그대로 이 모양이다. 게스트의 email은 null이다 */
-export type AdminIdentity = Pick<AdminUserRow, 'user_id' | 'email' | 'nickname' | 'is_anonymous'>;
+export type AdminIdentity = Pick<AdminUserRow, 'user_id' | 'opHandle' | 'email' | 'nickname' | 'is_anonymous'>;
 
-/** 계정 표시 이름 "닉네임(이메일)". 게스트는 이메일 대신 게스트, 닉네임이 없으면 이름 없음, 이메일을 모르면 —이다 */
+/** 계정 표시 이름 "닉네임(이메일)". opHandle 투영(maintainer)은 이메일 없이 닉네임만 보이고, 게스트는 (게스트)만 붙인다 */
 export function adminUserLabel(user: AdminIdentity): string {
+  const name = user.nickname ?? '이름 없음';
+  if (user.opHandle) return user.is_anonymous === true ? `${name}(게스트)` : name;
   const contact = user.is_anonymous === true ? '게스트' : user.email ?? '—';
-  return `${user.nickname ?? '이름 없음'}(${contact})`;
+  return `${name}(${contact})`;
 }
 
 /** 짧은 계정 id(앞 8자리) */
@@ -167,7 +292,11 @@ export const shortUid = (uid: string): string => uid.slice(0, 8);
 
 /** 명부로 uid의 식별 정보를 찾는 함수를 만든다. uid는 대소문자를 구분하지 않고, 명부에 없으면 uid만 있는 식별 정보다 */
 export function adminIdentityLookup(users: readonly AdminIdentity[]): (uid: string) => AdminIdentity {
-  const byUid = new Map(users.map(user => [user.user_id.toLowerCase(), user]));
+  const byUid = new Map<string, AdminIdentity>();
+  for (const user of users) {
+    byUid.set(user.user_id.toLowerCase(), user);
+    if (user.opHandle) byUid.set(user.opHandle.toLowerCase(), user);
+  }
   return uid => byUid.get(uid.toLowerCase()) ?? { user_id: uid, nickname: null, email: null, is_anonymous: null };
 }
 
@@ -191,10 +320,11 @@ export function splitDormantGuests(users: readonly AdminUserRow[]): { active: Ad
   return { active, dormant };
 }
 
-/** 사용자 명부 검색을 계정 id·이메일·닉네임의 대소문자 구분 없는 부분 일치로 처리한다. */
+/** 사용자 명부 검색을 계정 id·불투명 핸들·이메일·닉네임의 대소문자 구분 없는 부분 일치로 처리한다. */
 export function filterAdminUsers(users: readonly AdminUserRow[], query: string): AdminUserRow[] {
   const normalized = query.trim().toLowerCase();
   return users.filter(user => !normalized || user.user_id.toLowerCase().includes(normalized)
+    || (user.opHandle ?? '').toLowerCase().includes(normalized)
     || (user.email ?? '').toLowerCase().includes(normalized)
     || (user.nickname ?? '').toLowerCase().includes(normalized));
 }

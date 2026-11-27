@@ -6,7 +6,7 @@ import type { GameState } from '../../../game/rules/logic';
 import { gameDayOf } from '../../../game/rules/time';
 import { GUEST_LOCK_DEFAULT_LINES, UNVERIFIED_LOCK_TEXT } from '../../display/model/menuLock';
 import {
-  activeSlot, fmtSlotChipTime, fmtSlotTimeLeft, selectActiveEffectsView, selectBonusChip, selectBonusTipRows,
+  activeSlot, DEFAULT_POLL_MS, fmtSlotTimeLeft, selectActiveEffectsView, selectBonusChip, selectBonusTipRows, slotPollIntervalMs, SUB_MINUTE_POLL_MS,
 } from './slots';
 
 const T0 = '2026-11-12T00:00:00.000Z';
@@ -16,30 +16,19 @@ const at = (ms: number): string => new Date(Date.parse(T0) + ms).toISOString();
 const seed = (over: Partial<GameState> = {}): GameState => ({ ...newState(), boat: COOKING_UNLOCK_BOAT, ...over });
 
 describe('슬롯 남은 시간 표기', () => {
-  it('칩은 큰 단위 하나만 쓴다. 1시간 이상은 시간을 버리고 1시간 미만은 분을 올린다', () => {
-    expect(fmtSlotChipTime(8 * HOUR + 12 * MIN)).toBe('8시간');
-    expect(fmtSlotChipTime(9 * HOUR)).toBe('9시간');
-    expect(fmtSlotChipTime(HOUR + 59 * MIN)).toBe('1시간');
-    expect(fmtSlotChipTime(25 * MIN)).toBe('25분');
-    expect(fmtSlotChipTime(24 * MIN + 1)).toBe('25분');
-  });
-
-  it('1분 안쪽 남은 시간은 올려서 0분으로 보이지 않고 60분은 1시간이다', () => {
-    expect(fmtSlotChipTime(1)).toBe('1분');
-    expect(fmtSlotChipTime(30_000)).toBe('1분');
-    expect(fmtSlotChipTime(59 * MIN + 30_000)).toBe('1시간');
-  });
-
-  it('툴팁 목록은 시간과 분을 모두 쓴다', () => {
+  it('1분 이상은 분까지만 표시하고 초는 버린다', () => {
     expect(fmtSlotTimeLeft(8 * HOUR + 12 * MIN)).toBe('8시간 12분');
+    expect(fmtSlotTimeLeft(8 * HOUR + 12 * MIN + 59_000)).toBe('8시간 12분');
     expect(fmtSlotTimeLeft(9 * HOUR)).toBe('9시간');
     expect(fmtSlotTimeLeft(25 * MIN)).toBe('25분');
-    expect(fmtSlotTimeLeft(8 * HOUR + 12 * MIN + 1)).toBe('8시간 13분');
+    expect(fmtSlotTimeLeft(119_000)).toBe('1분');
   });
 
-  it('0 이하는 0분이다', () => {
-    expect(fmtSlotChipTime(0)).toBe('0분');
-    expect(fmtSlotTimeLeft(-5)).toBe('0분');
+  it('1분 미만은 초만 표시하고 0 이하는 0초다', () => {
+    expect(fmtSlotTimeLeft(54_000)).toBe('54초');
+    expect(fmtSlotTimeLeft(999)).toBe('0초');
+    expect(fmtSlotTimeLeft(0)).toBe('0초');
+    expect(fmtSlotTimeLeft(-5)).toBe('0초');
   });
 });
 
@@ -49,7 +38,6 @@ describe('슬롯의 지금 효과', () => {
     const s = activeSlot(game, 'lunch', T0)!;
     expect(s.label).toBe('가루디야(일반)');
     expect(s.remainingMs).toBe(8 * HOUR + 12 * MIN);
-    expect(s.chipTime).toBe('8시간');
     expect(s.timeLeft).toBe('8시간 12분');
     expect(s.rows).toEqual([{ label: '입질 대기', value: '−10%' }, { label: '남은 시간', value: '8시간 12분' }]);
     expect(s.effects).toEqual([{ label: '입질 대기', value: '−10%' }]);
@@ -88,7 +76,7 @@ describe('보너스 통합 칩 표시 조건과 내역', () => {
     expect(chip).toEqual({
       state: 'locked',
       lines: [
-        '인도양 항로가 열리면 도시락과 미끼를 쓸 수 있어요.',
+        '인도양 항로가 열리면 부엌에서 도시락과 미끼를 만들 수 있어요.',
         '인도양 항로는 증기선(5단계)부터 열려요.',
       ],
     });
@@ -98,7 +86,7 @@ describe('보너스 통합 칩 표시 조건과 내역', () => {
     expect(selectBonusChip(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), T0, 'guest')).toEqual({
       state: 'locked',
       lines: [
-        '인도양 항로가 열리면 도시락과 미끼를 쓸 수 있어요.',
+        '인도양 항로가 열리면 부엌에서 도시락과 미끼를 만들 수 있어요.',
         '인도양 항로는 증기선(5단계)부터 열려요.',
       ],
     });
@@ -275,5 +263,15 @@ describe('HUD 칩 4행 요약 및 적용 중인 효과 창 모델', () => {
         { label: '네임드 조우 확률', value: '×1.10' },
       ],
     });
+  });
+});
+
+describe('조건부 슬롯 갱신 주기(slotPollIntervalMs)', () => {
+  it('1분 미만 활성 슬롯이 있으면 1초, 없으면 5초를 돌려준다', () => {
+    expect(slotPollIntervalMs(seed(), T0)).toBe(DEFAULT_POLL_MS);
+    expect(slotPollIntervalMs(seed({ slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(60_000) }, bait: null } }), T0)).toBe(DEFAULT_POLL_MS);
+    expect(slotPollIntervalMs(seed({ slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(59_000) }, bait: null } }), T0)).toBe(SUB_MINUTE_POLL_MS);
+    expect(slotPollIntervalMs(seed({ slots: { lunch: null, bait: { id: 'cook-bait-rare', endsAt: at(-1) }, bait2: { id: 'cook-bait-epic', endsAt: at(30_000) } } }), T0)).toBe(SUB_MINUTE_POLL_MS);
+    expect(slotPollIntervalMs(seed({ slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(-1_000) }, bait: null } }), T0)).toBe(DEFAULT_POLL_MS);
   });
 });

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import Button from './Button';
+import { HOTKEY_TIER } from './hotkeys';
 import Modal from './Modal';
 import ModalCard from './ModalCard';
 import type { WindowLayer } from './openWindows';
@@ -22,7 +23,7 @@ export default function ConfirmDialog({ layer, title, confirmLabel, onConfirm, o
     </ModalCard>
   );
   // 앱·개발 도구 레이어는 박스 안에 카드를 직접 둔다(bare) — 스크롤은 카드 본문 한 곳뿐이다
-  if (layer === 'stage') return <Modal layer="stage" onClose={onCancel}>{card}</Modal>;
-  if (layer === 'devtools') return <Modal layer="devtools" bare onClose={onCancel}>{card}</Modal>;
-  return <Modal layer="app" bare onClose={onCancel}>{card}</Modal>;
+  if (layer === 'stage') return <Modal layer="stage" hotkeyTier={HOTKEY_TIER.STAGE_CONFIRM} onClose={onCancel}>{card}</Modal>;
+  if (layer === 'devtools') return <Modal layer="devtools" hotkeyTier={HOTKEY_TIER.BLOCKER} bare onClose={onCancel}>{card}</Modal>;
+  return <Modal layer="app" hotkeyTier={HOTKEY_TIER.APP_CONFIRM} bare onClose={onCancel}>{card}</Modal>;
 }

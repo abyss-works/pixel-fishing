@@ -4,8 +4,32 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { BOUNTIES } from '../src/game/content/bounties.js';
 import { RARITY, capOfBoat, mutationWeightsOf, newState, priceOfInstance, variantShare } from '../src/game/rules/logic.js';
 import { SPECIES_PITY_K } from '../src/game/rules/pity.js';
-import { callAction, captureRealClock, fish, seedUser, seededRandom, startActionEnv, testUid, userToken } from './_dbTest/actionHarness.js';
+import { callAction, captureRealClock, fish, seedUser, seededRandom, sessionHeaders, startActionEnv, testUid, userToken } from './_dbTest/actionHarness.js';
 import type { ActionEnv, SeedOptions } from './_dbTest/actionHarness.js';
+import { APP_VERSION } from '../src/version.js';
+
+const hook = { failGuild: false };
+
+vi.mock('./observability.js', () => ({ reportServerIssue: vi.fn(async () => undefined) }));
+vi.mock('./_server/livePresence.js', async importOriginal => ({
+  ...await importOriginal<typeof import('./_server/livePresence.js')>(),
+  notifyGuild: vi.fn(),
+}));
+vi.mock('./_data/guilds.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('./_data/guilds.js')>();
+  return {
+    ...actual,
+    recordGuildActivity: async (...args: Parameters<typeof actual.recordGuildActivity>) => {
+      if (hook.failGuild) throw new Error('simulated-guild-write-error');
+      return actual.recordGuildActivity(...args);
+    },
+  };
+});
+
+import { reportServerIssue } from './observability.js';
+import { notifyGuild } from './_server/livePresence.js';
+import { myGuild } from './_data/guilds.js';
+import { database } from './_db/client.js';
 
 const NOW = '2030-03-04T05:06:07.000Z'; // KST 14:06 — 게임 날짜 2030-03-04
 const TODAY = '2030-03-04';
@@ -20,6 +44,9 @@ afterAll(async () => {
   await env?.stop();
 });
 beforeEach(() => {
+  hook.failGuild = false;
+  vi.mocked(reportServerIssue).mockClear();
+  vi.mocked(notifyGuild).mockClear();
   captureRealClock(() => performance.timeOrigin + performance.now());
   vi.useFakeTimers({ toFake: ['Date'], now: new Date(NOW) });
   vi.spyOn(Math, 'random').mockImplementation(seededRandom(42));
@@ -110,6 +137,141 @@ describe('길드 레벨과 천장·의뢰 보상', () => {
     expect((await callAction(userToken(uid), { type: 'deliverBounty', questId: quest.id })).status).toBe(200);
     const { rows: [s] } = await env.client.query<{ gold: string }>('select gold from public.saves_current where user_id = $1', [uid]);
     expect(Number(s.gold)).toBe(quest.reward);
+  });
+});
+
+/** 응답 시점을 그대로 보는 호출 — 응답 뒤 후속 쓰기가 끝나기를 기다리지 않는다 */
+async function callBeforeFollowUps(token: string, body: unknown): Promise<{ status: number; body: unknown }> {
+  const { default: handler } = await import('./action.js');
+  const out = { status: 0, body: undefined as unknown };
+  const res = {
+    status(code: number) { out.status = code; return res; },
+    json(b: unknown) { out.body = b; },
+    end() {},
+  };
+  await handler({
+    method: 'POST',
+    headers: { 'x-build-id': 'dev', 'x-client-version': APP_VERSION, ...sessionHeaders(token) },
+    body,
+  } as never, res as never);
+  return out;
+}
+const resultOf = (r: { body: unknown }) => (r.body as { result: { type: string; guildUpdated?: true } }).result;
+const updatedMsg = { t: 'guild', kind: 'updated', guild: '', nick: null };
+
+describe('응답 전 반영과 갱신 알림', () => {
+  it('일반 의뢰 납품 직후 기여가 쌓이고 행위자 guildUpdated는 true지만, 길드 전체 브로드캐스트는 보내지 않는다', async () => {
+    const quest = BOUNTIES.find(b => b.zone === 'pacific' && b.difficulty === 'easy')!;
+    const { uid } = await member();
+    await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, $4, $5)',
+      [uid, quest.zone, quest.id, quest.count, NOW]);
+    const res = await callBeforeFollowUps(userToken(uid), { type: 'deliverBounty', questId: quest.id });
+    expect(res.status).toBe(200);
+    expect(resultOf(res)).toEqual({ type: 'none', guildUpdated: true });
+    expect(await contributions(uid)).toEqual([{ day: TODAY, fame: 0, clears: 1000 }]);
+    expect(notifyGuild).not.toHaveBeenCalled();
+  });
+
+  it('일반 어획 직후 행위자 guildUpdated는 true지만, 길드 레벨업이나 전설/네임드 일지가 없으면 notifyGuild를 보내지 않는다', async () => {
+    const { uid } = await member();
+    const res = await callBeforeFollowUps(userToken(uid), catchPond);
+    expect(res.status).toBe(200);
+    expect(resultOf(res)).toMatchObject({ type: 'catch', guildUpdated: true });
+    expect(notifyGuild).not.toHaveBeenCalled();
+  });
+
+  it('일반 어획이나 납품으로 길드 레벨이 오르면 길드 전체에 notifyGuild를 보낸다', async () => {
+    const { uid, guild } = await member({}, 9_999);
+    const res = await callBeforeFollowUps(userToken(uid), catchPond);
+    expect(res.status).toBe(200);
+    expect(resultOf(res)).toMatchObject({ type: 'catch', guildUpdated: true });
+    expect(notifyGuild).toHaveBeenCalledWith(guild, updatedMsg);
+  });
+
+  it('하루 명성 상한으로 실제 기여 증가분이 잘려 레벨업하지 못하면 notifyGuild를 보내지 않는다', async () => {
+    const { uid, guild } = await member({}, 9_998);
+    await env.client.query(`insert into public.guild_contributions (guild_id, user_id, day, fame, clears) values ($1, $2, $3, 2499, 0)`,
+      [guild, uid, TODAY]);
+    const res = await callBeforeFollowUps(userToken(uid), catchPond);
+    expect(res.status).toBe(200);
+    expect(resultOf(res)).toMatchObject({ type: 'catch', guildUpdated: true });
+    expect(notifyGuild).not.toHaveBeenCalled();
+  });
+
+  it('네임드 납품 응답 직후 항해일지에 토벌이 남고 길드 전체에 notifyGuild를 보낸다', async () => {
+    const named = BOUNTIES.find(b => b.zone === 'pacific' && b.difficulty === 'named')!;
+    const { uid, guild } = await member();
+    await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, $4, $5)',
+      [uid, named.zone, named.id, named.count, NOW]);
+    const res = await callBeforeFollowUps(userToken(uid), { type: 'deliverBounty', questId: named.id });
+    expect(res.status).toBe(200);
+    expect(resultOf(res).guildUpdated).toBe(true);
+    expect(await logs(guild)).toEqual([{ kind: 'named', user_id: uid, detail: named.id }]);
+    expect(notifyGuild).toHaveBeenCalledWith(guild, updatedMsg);
+  });
+
+  it('전설 캐치 응답 직후 항해일지와 기여가 이미 반영돼 있다', async () => {
+    const { uid, guild } = await member({ state: { pity: { goldcarp: SPECIES_PITY_K } } });
+    const res = await callBeforeFollowUps(userToken(uid), catchPond);
+    expect(res.status).toBe(200);
+    expect(resultOf(res)).toMatchObject({ type: 'catch', fishId: 'goldcarp', guildUpdated: true });
+    expect(await logs(guild)).toEqual([{ kind: 'legendary', user_id: uid, detail: 'goldcarp' }]);
+    expect(await contributions(uid)).toEqual([{ day: TODAY, fame: RARITY.legendary.fame, clears: 0 }]);
+    expect(notifyGuild).toHaveBeenCalledWith(guild, updatedMsg);
+  });
+
+  it('전설 돌연변이 포획 시 guild_logs에 fishId|variant가 저장되고 myGuild logbook으로 반환된다', async () => {
+    const { uid, guild } = await member({ state: { fortune: { day: TODAY, kind: 'gold', index: 5 } } });
+    const rolls = [0.999999, 0.1, 0.5, 0.5, 0.0001];
+    let i = 0;
+    vi.spyOn(Math, 'random').mockImplementation(() => rolls[i++] ?? 0.5);
+
+    const res = await callAction(userToken(uid), catchPond);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      result: { type: 'catch', fishId: 'goldcarp', info: { form: 'variant' }, guildUpdated: true },
+    });
+    expect(await logs(guild)).toEqual([{ kind: 'legendary', user_id: uid, detail: 'goldcarp|variant' }]);
+
+    const view = await myGuild(database().db, uid, NOW);
+    expect(view?.logbook[0]).toMatchObject({ kind: 'legendary', uid, detail: 'goldcarp|variant' });
+  });
+
+  it('하루 명성 상한에 닿아 바뀐 것이 없으면 guildUpdated를 싣지 않고 알리지 않는다', async () => {
+    const { uid, guild } = await member();
+    await env.client.query(`insert into public.guild_contributions (guild_id, user_id, day, fame, clears) values ($1, $2, $3, 2500, 0)`,
+      [guild, uid, TODAY]);
+    const res = await callBeforeFollowUps(userToken(uid), catchPond);
+    expect(res.status).toBe(200);
+    expect(resultOf(res).guildUpdated).toBeUndefined();
+    expect(notifyGuild).not.toHaveBeenCalled();
+  });
+
+  it('길드 쓰기가 실패해도 캐치와 납품은 확정된 채 성공하고 오류를 보고한다', async () => {
+    const quest = BOUNTIES.find(b => b.zone === 'pacific' && b.difficulty === 'easy')!;
+    const { uid } = await member({ state: { gold: 0 } });
+    hook.failGuild = true;
+    const caught = await callBeforeFollowUps(userToken(uid), catchPond);
+    expect(caught.status).toBe(200);
+    expect(resultOf(caught).guildUpdated).toBeUndefined();
+    expect(await fameOf(uid)).toBeGreaterThan(0);
+    expect((await env.client.query('select 1 from public.fish_instances where user_id = $1', [uid])).rowCount).toBe(1);
+
+    await env.client.query('insert into public.bounty_progress (user_id, zone, quest_id, progress, started_at) values ($1, $2, $3, $4, $5)',
+      [uid, quest.zone, quest.id, quest.count, NOW]);
+    vi.setSystemTime(Date.parse(NOW) + 2000);
+    const delivered = await callBeforeFollowUps(userToken(uid), { type: 'deliverBounty', questId: quest.id });
+    expect(delivered.status).toBe(200);
+    const { rows: [s] } = await env.client.query<{ gold: string }>('select gold from public.saves_current where user_id = $1', [uid]);
+    expect(Number(s.gold)).toBe(quest.reward);
+    expect((await env.client.query('select 1 from public.bounty_clears where user_id = $1', [uid])).rowCount).toBe(1);
+
+    expect(await contributions(uid)).toEqual([]);
+    expect(notifyGuild).not.toHaveBeenCalled();
+    expect(reportServerIssue).toHaveBeenCalledWith('후속 쓰기 실패 — 길드 기여/항해일지 반영 실패', expect.any(Error),
+      expect.objectContaining({ uid, action: 'catch' }));
+    expect(reportServerIssue).toHaveBeenCalledWith('후속 쓰기 실패 — 길드 기여/항해일지 반영 실패', expect.any(Error),
+      expect.objectContaining({ uid, action: 'deliverBounty' }));
   });
 });
 
