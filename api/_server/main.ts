@@ -50,6 +50,7 @@ import { applyKeepAlive } from './keepAlive.js';
 import { staleClient } from './clientBuild.js';
 import { createClientMetrics, provideClientMetricsRecorder } from './clientMetrics.js';
 import { consentGate, liveConsentAdmit } from './consentGate.js';
+import { createDrainGuard } from './drain.js';
 import { createHttpMetrics } from './httpMetrics.js';
 import { legalPages } from './legalPages.js';
 import { notFound } from './notFound.js';
@@ -131,9 +132,11 @@ const opsAlertDispatcher = createOpsAlertDispatcher({
   reportIssue: reportServerIssue,
   webhookUrl: process.env.OPS_ALERT_WEBHOOK_URL,
 });
+const drain = createDrainGuard();
 // 모든 HTTP 응답(API·정적 자산·서버 렌더 HTML)에 기본 보안 헤더를 적용한다.
 app.use(securityHeaders({ origin, sentryDsn: [process.env.SENTRY_DSN, process.env.VITE_SENTRY_DSN] }));
 app.use(httpMetrics.middleware);
+app.use(drain.middleware);
 // 스테이징 진입 전용 관리자 OAuth 게이트 — DEPLOY_ENV === 'preview'일 때만 활성화된다.
 app.use(stageGate());
 // 프리렌더·프리페치 요청이 세션을 발급하거나 액션을 실행해 활성 창을 끊지 못하도록 차단한다.
@@ -271,6 +274,7 @@ process.on('unhandledRejection', err => { void reportServerIssue('unhandledRejec
 process.on('uncaughtExceptionMonitor', err => { void reportServerIssue('uncaughtException', err); });
 
 process.on('SIGTERM', () => {
+  drain.start();
   clearInterval(opsAlertTimer);
   live.close();
   widgetHub().close();
