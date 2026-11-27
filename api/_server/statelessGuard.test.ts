@@ -7,18 +7,18 @@ import { describe, expect, it } from 'vitest';
 const API = join(import.meta.dirname, '..');
 
 /**
- * 허용 예외 목록 — Wave 2 이관 대기 또는 병렬 브랜치 이관 중인 기존 파일만 명시한다.
- * 새 파일이나 이관 완료 파일(consent.ts, mailbox.ts 등)을 여기에 추가하지 않는다.
+ * 허용 예외 목록 — 공유 상태·속도 제한 저장소로 이관 예정이거나 요청 내 추적에 한정된 기존 파일만 명시한다.
+ * 새 파일이나 DB 이관이 끝난 파일(consent.ts, mailbox.ts 등)을 여기에 추가하지 않는다.
  */
 const ALLOWLIST: Record<string, string> = {
   // 요청 내 비동기 작업 완료 대기 추적용(요청 간 캐시·상태 공유 없음, 종료 드레인 전용)
   '_server/afterResponse.ts': 'pending promise tracking for graceful drain',
-  // 인메모리 레이트 리미터 구현체(Wave 2 Valkey 이관 대기)
-  '_server/rateLimit.ts': 'in-memory rate limiter implementation pending Wave 2 migration',
-  // Wave 1 병렬 브랜치에서 DB/Valkey 이관 진행 중
-  'guildInvites.ts': 'createRateLimiter pending parallel Wave 1 migration',
-  // 클라이언트 메트릭 비콘 속도 제한(Wave 2 Valkey 이관 대기)
-  'clientMetrics.ts': 'createRateLimiter pending Wave 2 migration',
+  // 인메모리 레이트 리미터 구현체(공유 속도 제한 저장소로 이관 예정)
+  '_server/rateLimit.ts': 'in-memory rate limiter implementation pending shared store migration',
+  // 초대 엔드포인트 속도 제한(공유 속도 제한 저장소로 이관 예정)
+  'guildInvites.ts': 'createRateLimiter pending shared store migration',
+  // 클라이언트 메트릭 비콘 속도 제한(공유 속도 제한 저장소로 이관 예정)
+  'clientMetrics.ts': 'createRateLimiter pending shared store migration',
 };
 
 function collectApiSources(dir: string): string[] {
