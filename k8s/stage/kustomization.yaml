@@ -74,6 +74,7 @@ patches:
         replicas: 1
         strategy:
           type: Recreate
+          rollingUpdate: null
         template:
           spec:
             securityContext:
