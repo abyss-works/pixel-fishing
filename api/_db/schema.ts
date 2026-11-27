@@ -194,6 +194,11 @@ export const guildMemberEnhancements = pgTable('guild_member_enhancements', {
   updatedAt: at('updated_at').notNull().defaultNow(),
 }, t => [primaryKey({ columns: [t.guildId, t.userId, t.bonus] })]);
 
+export const guildRejoinCooldowns = pgTable('guild_rejoin_cooldowns', {
+  userId: uuid('user_id').primaryKey(),
+  leftAt: at('left_at').notNull().defaultNow(),
+});
+
 export const dailyFortunes = pgTable('daily_fortunes', {
   userId: uuid('user_id').notNull(),
   day: text('day').notNull(),

@@ -1199,4 +1199,56 @@ describe('테스트 데이터베이스', () => {
       }
     });
   });
+
+  describe('길드 재가입 대기 (0057)', () => {
+    const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
+
+    it('guild_rejoin_cooldowns 기본값·서버 전용 RLS·auth.users 연쇄 삭제·다운/업 라운드트립을 검증한다', async () => {
+      const uid = randomUUID();
+      await client.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, false)`, [uid, `${uid}@example.test`]);
+
+      const { rows: [row] } = await client.query<{ left_at: Date }>(
+        `insert into public.guild_rejoin_cooldowns (user_id) values ($1) returning left_at`,
+        [uid],
+      );
+      expect(row.left_at).toBeInstanceOf(Date);
+
+      await client.query('begin');
+      try {
+        await client.query('set local role authenticated');
+        await client.query(`select set_config('request.jwt.claim.sub', $1, true)`, [uid]);
+        expect((await client.query('select user_id from public.guild_rejoin_cooldowns')).rows).toEqual([]);
+        await expect(client.query(
+          `insert into public.guild_rejoin_cooldowns (user_id) values ($1)`,
+          [uid],
+        )).rejects.toMatchObject({ code: '42501' });
+      } finally {
+        await client.query('rollback');
+      }
+
+      await client.query(`delete from auth.users where id = $1`, [uid]);
+      expect((await client.query(
+        `select 1 from public.guild_rejoin_cooldowns where user_id = $1`,
+        [uid],
+      )).rows).toHaveLength(0);
+
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        await other.query(migration('0057_guild_rejoin_cooldown.down.sql'));
+        expect((await other.query(
+          `select 1 from information_schema.tables where table_schema = 'public' and table_name = 'guild_rejoin_cooldowns'`,
+        )).rows).toHaveLength(0);
+
+        await other.query(migration('0057_guild_rejoin_cooldown.sql'));
+        expect((await other.query(
+          `select 1 from information_schema.tables where table_schema = 'public' and table_name = 'guild_rejoin_cooldowns'`,
+        )).rows).toHaveLength(1);
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
 });

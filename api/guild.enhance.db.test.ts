@@ -2,7 +2,7 @@
 // 항해일지 비기록(옛 기록 읽기 호환), 탈퇴·추방 시 개인 강화 정리, 그리고 액션 경로의 개인별 합산 효과(기본 + 개인 자유 강화, 최대 10단계)를 검사한다.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
-import { GUILD_ENHANCE_RESET_COSTS } from '../src/game/rules/guild.js';
+import { GUILD_ENHANCE_RESET_COSTS, GUILD_REJOIN_COOLDOWN_MS } from '../src/game/rules/guild.js';
 import { capOfBoat, mutationWeightsOf, newState, priceOfInstance, variantShare } from '../src/game/rules/logic.js';
 import { database } from './_db/client.js';
 import { loadContext } from './_data/load.js';
@@ -317,7 +317,8 @@ describe('길드 10레벨 및 자유 강화', () => {
     expect(await call('/api/guilds/:id/members/:uid', 'DELETE', traveler, { params: { id: guildA, uid: traveler } }))
       .toMatchObject({ status: 200, body: { result: 'left' } });
 
-    // 길드 B 가입 후에도 enhanceResetCount=1이 유지되며 2회차 비용(500,000G)이 적용된다
+    // 20시간 재가입 대기 경과 후 길드 B 가입 — enhanceResetCount=1이 유지되며 2회차 비용(500,000G)이 적용된다
+    vi.setSystemTime(Date.now() + GUILD_REJOIN_COOLDOWN_MS);
     await call('/api/guild-memberships', 'POST', traveler, { body: { code: codeB } });
     const meB = (await call('/api/guilds/me', 'GET', traveler)).body as { guild: { enhanceResetCount: number } };
     expect(meB.guild.enhanceResetCount).toBe(1);

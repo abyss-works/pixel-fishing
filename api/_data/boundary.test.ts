@@ -19,7 +19,7 @@ const WRITE_OWNERS: Record<string, readonly string[]> = {
   '_data/chat.ts': ['chat_messages', 'chat_reports'],
   '_data/friends.ts': ['friends'],
   '_data/guilds.ts': ['guilds', 'guild_members', 'guild_join_requests', 'guild_contributions', 'guild_logs', 'guild_bonuses',
-    'guild_bonus_donations', 'guild_member_enhancements'],
+    'guild_bonus_donations', 'guild_member_enhancements', 'guild_rejoin_cooldowns'],
   '_data/telemetry.ts': ['events'],
   '_data/activity.ts': ['play_sessions', 'user_active_days', 'daily_stats'],
   '_data/position.ts': ['last_positions'],

@@ -53,6 +53,7 @@ interface MeBody {
     requests: { uid: string; nick: string }[];
     members: { uid: string; nick: string; role: string; online: boolean; leftAt: string | null }[] } | null;
   request: { code: string; name: string } | null;
+  cooldownUntil: string | null;
 }
 const mine = async (who: string) => (await call('/api/guilds/me', 'GET', who)).body as MeBody;
 
@@ -62,7 +63,7 @@ describe('길드 함수', () => {
     expect(await call('/api/guilds', 'POST', GUEST, { body: { name: '손님길드' } })).toMatchObject({ status: 403, body: { error: 'account-only' } });
     expect(await call('/api/guild-memberships', 'POST', GUEST, { body: { code: 'ABCD2345' } })).toMatchObject({ status: 403 });
     expect(await call('/api/guilds', 'GET', A)).toMatchObject({ status: 405 });
-    expect(await mine(A)).toEqual({ guild: null, request: null });
+    expect(await mine(A)).toEqual({ guild: null, request: null, cooldownUntil: null });
   });
 
   it('만들고, 가입 방식을 바꿔 코드로 들어오고, 위임·내보내기·떠나기를 거친다', async () => {
@@ -128,10 +129,11 @@ describe('길드 함수', () => {
       [['나루', 'leader', true], ['가람', 'member', false], ['다온', 'member', false]]);
     expect(await call('/api/guilds/:id/members/:uid', 'DELETE', B, { params: { id, uid: B } }))
       .toMatchObject({ status: 200, body: { result: 'dissolved' } });
-    expect(await mine(B)).toEqual({ guild: null, request: null });
+    expect(await mine(B)).toEqual({ guild: null, request: null, cooldownUntil: expect.any(String) });
   });
 
   it('승인 가입 길드에 코드로 오면 신청이 되어 길드장에게 알리고, 승인과 거절은 신청한 사람에게 알린다', async () => {
+    await env.client.query('delete from public.guild_rejoin_cooldowns where user_id = any($1)', [[A, B, C]]);
     const id = ((await call('/api/guilds', 'POST', A, { body: { name: '승인선단' } })).body as { id: string }).id;
     const code = (await mine(A)).guild!.code;
     notes.length = 0;
@@ -155,7 +157,7 @@ describe('길드 함수', () => {
     notes.length = 0;
     expect(await call('/api/guild-requests/me', 'DELETE', C)).toMatchObject({ status: 200, body: { result: 'cancelled' } });
     expect(notes).toEqual([[A, { t: 'guild', kind: 'updated', guild: '', nick: null }]]);
-    expect(await mine(C)).toEqual({ guild: null, request: null });
+    expect(await mine(C)).toEqual({ guild: null, request: null, cooldownUntil: null });
 
     await call('/api/guilds/:id', 'PATCH', A, { params: { id }, body: { joinMode: 'closed' } });
     expect(await call('/api/guild-memberships', 'POST', C, { body: { code } })).toMatchObject({ status: 409, body: { error: 'guild-closed' } });
@@ -165,6 +167,7 @@ describe('길드 함수', () => {
   });
 
   it('초대 링크로 오면 승인 가입 길드에도 바로 들어오고, 닫힘은 링크로도 받지 않는다. 경로 표시가 없거나 다르면 코드 경로다', async () => {
+    await env.client.query('delete from public.guild_rejoin_cooldowns where user_id = any($1)', [[A, B, C]]);
     const id = ((await call('/api/guilds', 'POST', A, { body: { name: '링크선단' } })).body as { id: string }).id;
     const code = (await mine(A)).guild!.code;
     notes.length = 0;
@@ -466,5 +469,77 @@ describe('공개 길드 목록과 guildId 바로 가입', () => {
     const fullRow = await env.client.query<{ id: string }>(`select id::text as id from public.guilds where name = '만석길드'`);
     expect(await call('/api/guild-memberships', 'POST', J2, { body: { guildId: fullRow.rows[0].id } }))
       .toMatchObject({ status: 409, body: { error: 'guild-full' } });
+  });
+});
+
+describe('재가입 대기 (409 rejoin-cooldown 및 cooldownUntil)', () => {
+  it('탈퇴·추방·해산 후 GET /api/guilds/me는 cooldownUntil을 반환하고 생성·가입·승인을 409로 거부하며, 20시간 경과 시 허용한다', async () => {
+    const L1 = testUid(9995);
+    const L2 = testUid(9996);
+    const M1 = testUid(9997);
+    const M2 = testUid(9998);
+    await seedUser(env.client, { uid: L1, email: 'cdl1@test.dev', nickname: '대기선장1', state: {} });
+    await seedUser(env.client, { uid: L2, email: 'cdl2@test.dev', nickname: '대기선장2', state: {} });
+    await seedUser(env.client, { uid: M1, email: 'cdm1@test.dev', nickname: '대기선원1', state: {} });
+    await seedUser(env.client, { uid: M2, email: 'cdm2@test.dev', nickname: '대기선원2', state: {} });
+
+    const gOpenId = ((await call('/api/guilds', 'POST', L1, { body: { name: '대기자유' } })).body as { id: string }).id;
+    await call('/api/guilds/:id', 'PATCH', L1, { params: { id: gOpenId }, body: { joinMode: 'open' } });
+    const gOpenCode = (await mine(L1)).guild!.code;
+
+    const gApprovalId = ((await call('/api/guilds', 'POST', L2, { body: { name: '대기승인' } })).body as { id: string }).id;
+    const gApprovalCode = (await mine(L2)).guild!.code;
+
+    // M1이 대기자유 가입 후 자진 탈퇴 -> cooldownUntil 반환, 409 차단
+    await call('/api/guild-memberships', 'POST', M1, { body: { guildId: gOpenId } });
+    expect(await call('/api/guilds/:id/members/:uid', 'DELETE', M1, { params: { id: gOpenId, uid: M1 } }))
+      .toMatchObject({ status: 200, body: { result: 'left' } });
+    const m1Me = await mine(M1);
+    expect(m1Me.guild).toBeNull();
+    expect(typeof m1Me.cooldownUntil).toBe('string');
+    expect(Number.isNaN(Date.parse(m1Me.cooldownUntil!))).toBe(false);
+
+    expect(await call('/api/guilds', 'POST', M1, { body: { name: '차단생성' } }))
+      .toMatchObject({ status: 409, body: { error: 'rejoin-cooldown' } });
+    expect(await call('/api/guild-memberships', 'POST', M1, { body: { guildId: gOpenId } }))
+      .toMatchObject({ status: 409, body: { error: 'rejoin-cooldown' } });
+    expect(await call('/api/guild-memberships', 'POST', M1, { body: { code: gOpenCode } }))
+      .toMatchObject({ status: 409, body: { error: 'rejoin-cooldown' } });
+    expect(await call('/api/guild-memberships', 'POST', M1, { body: { code: gApprovalCode } }))
+      .toMatchObject({ status: 409, body: { error: 'rejoin-cooldown' } });
+    expect(await call('/api/guild-memberships', 'POST', M1, { body: { code: gApprovalCode, via: 'link' } }))
+      .toMatchObject({ status: 409, body: { error: 'rejoin-cooldown' } });
+
+    // M2가 대기자유 가입 후 L1이 추방 -> M2만 대기, L1은 대기 없음
+    await call('/api/guild-memberships', 'POST', M2, { body: { guildId: gOpenId } });
+    expect(await call('/api/guilds/:id/members/:uid', 'DELETE', L1, { params: { id: gOpenId, uid: M2 } }))
+      .toMatchObject({ status: 200, body: { result: 'kicked' } });
+    expect((await mine(M2)).cooldownUntil).not.toBeNull();
+    expect((await mine(L1)).cooldownUntil).toBeNull();
+
+    // L1 혼자 남아 해산 -> L1 대기 시작
+    expect(await call('/api/guilds/:id/members/:uid', 'DELETE', L1, { params: { id: gOpenId, uid: L1 } }))
+      .toMatchObject({ status: 200, body: { result: 'dissolved' } });
+    expect((await mine(L1)).cooldownUntil).not.toBeNull();
+    expect(await call('/api/guilds', 'POST', L1, { body: { name: '해산후생성' } }))
+      .toMatchObject({ status: 409, body: { error: 'rejoin-cooldown' } });
+
+    // 대기 중인 신청 승인 차단 및 신청 유지 검증
+    await env.client.query(`insert into public.guild_join_requests (user_id, guild_id) values ($1, $2)`, [M2, gApprovalId]);
+    expect(await call('/api/guilds/:id/requests/:uid/approval', 'POST', L2, { params: { id: gApprovalId, uid: M2 } }))
+      .toMatchObject({ status: 409, body: { error: 'rejoin-cooldown' } });
+    expect((await mine(L2)).guild?.requests.map(r => r.uid)).toEqual([M2]);
+
+    // 20시간 경과 후 cooldownUntil === null 및 모든 동작 허용
+    await env.client.query(
+      `update public.guild_rejoin_cooldowns set left_at = now() - interval '20 hours' - interval '1 second' where user_id = any($1)`,
+      [[L1, M1, M2]],
+    );
+    expect((await mine(M1)).cooldownUntil).toBeNull();
+    expect((await mine(L1)).cooldownUntil).toBeNull();
+    expect(await call('/api/guilds/:id/requests/:uid/approval', 'POST', L2, { params: { id: gApprovalId, uid: M2 } }))
+      .toMatchObject({ status: 201, body: { result: 'approved' } });
+    expect(await call('/api/guilds', 'POST', L1, { body: { name: '해산후복귀' } }))
+      .toMatchObject({ status: 201 });
   });
 });

@@ -1,4 +1,4 @@
-// 길드(guilds·guild_members·guild_join_requests·guild_contributions·guild_logs·guild_bonuses·guild_bonus_donations·guild_member_enhancements) 소유 모듈 —
+// 길드(guilds·guild_members·guild_join_requests·guild_contributions·guild_logs·guild_bonuses·guild_bonus_donations·guild_member_enhancements·guild_rejoin_cooldowns) 소유 모듈 —
 // 만들기, 이름 바꾸기, 가입 방식 설정, 코드로 들어오기와 가입 신청, 신청 처리, 떠나기·내보내기, 길드장 위임, 기여와 항해일지 기록,
 // 보너스 기부, 조회, 미리보기, 계정 정리.
 // 인원과 역할을 보고 바꾸는 작업은 트랜잭션 안에서 길드 행을 잠가 같은 길드의 변경을 줄 세운다.
@@ -9,7 +9,7 @@ import {
   DEFAULT_GUILD_PITCH, GUILD_BONUS_MAX_RANK, GUILD_DAILY_FAME_CAP, GUILD_ENHANCE_MAX_RANK, GUILD_LEVEL_FLOORS, GUILD_RENAME_COST,
   bonusEffect, bonusRank, bonusRankCost, contributionDayOf, donationOutcome, enhanceOutcome, enhanceResetOutcome,
   guildBonusLevels, GUILD_JOIN_REQUEST_TTL_MS, GUILD_MAX_MEMBERS, guildEffectsOf, guildFull, guildLevelOf, guildProgress,
-  handoverOutcome, joinOutcome, remainingEnhancePoints, removalOutcome, renameOutcome,
+  guildRejoinCooldownUntil, guildRejoinRemainingMs, handoverOutcome, joinOutcome, remainingEnhancePoints, removalOutcome, renameOutcome,
 } from '../../src/game/rules/guild.js';
 import type { EnhanceError, EnhanceResetError, PublicGuildSort, RenameError } from '../../src/game/rules/guild.js';
 import type { GuildActor, GuildJoinVia, GuildBonusId, GuildEffects, GuildJoinMode, GuildLogKind, GuildRole } from '../../src/game/rules/guild.js';
@@ -102,6 +102,29 @@ export interface GuildView {
 }
 
 const iso = (v: string | Date) => new Date(v).toISOString();
+
+/** 탈퇴 시각과 현재 시각으로 활성 재가입 대기 종료 시각(ISO)을 계산한다. 없거나 지났으면 null */
+function activeCooldownUntilISO(leftAt: string | Date | undefined, nowISO: string): string | null {
+  if (!leftAt) return null;
+  const untilMs = guildRejoinCooldownUntil(new Date(leftAt).getTime());
+  return guildRejoinRemainingMs(untilMs, Date.parse(nowISO)) > 0 ? new Date(untilMs).toISOString() : null;
+}
+
+/** 트랜잭션 안에서 대상 사용자의 재가입 대기 행을 잠그고 활성 대기 중인지 확인한다 */
+async function hasActiveRejoinCooldown(tx: Executor, uid: string, nowISO: string): Promise<boolean> {
+  const { rows: [row] } = await tx.execute<{ left_at: string | Date }>(
+    sql`select left_at from public.guild_rejoin_cooldowns where user_id = ${uid} for update`,
+  );
+  return activeCooldownUntilISO(row?.left_at, nowISO) !== null;
+}
+
+/** 사용자의 활성 재가입 대기 종료 시각(ISO). 대기가 없거나 지났으면 null */
+export async function rejoinCooldownUntil(db: Executor, uid: string, nowISO: string): Promise<string | null> {
+  const { rows: [row] } = await db.execute<{ left_at: string | Date }>(
+    sql`select left_at from public.guild_rejoin_cooldowns where user_id = ${uid}`,
+  );
+  return activeCooldownUntilISO(row?.left_at, nowISO);
+}
 
 /** 지금 속한 길드의 id. 없으면 null */
 export async function guildIdOf(db: Executor, uid: string): Promise<string | null> {
@@ -375,7 +398,9 @@ export async function recordGuildActivity(db: Executor, guildId: string, uid: st
   return Number(r.n);
 }
 
-export type CreateOutcome = { ok: true; id: string } | { ok: false; error: 'already-in-guild' | 'name-taken' | 'code-taken' };
+export type CreateOutcome =
+  | { ok: true; id: string }
+  | { ok: false; error: 'already-in-guild' | 'rejoin-cooldown' | 'name-taken' | 'code-taken' };
 
 /**
  * 길드를 만들고 만든 사람을 길드장으로 넣는다. 이름 형식은 호출자가 먼저 검사하고, 고유 코드는 호출자가 만들어 넘긴다.
@@ -385,6 +410,7 @@ export type CreateOutcome = { ok: true; id: string } | { ok: false; error: 'alre
 export async function createGuild(withTransaction: Tx, uid: string, name: string, code: string, nowISO: string): Promise<CreateOutcome> {
   return withTransaction(async tx => {
     if (await guildIdOf(tx, uid)) return { ok: false, error: 'already-in-guild' };
+    if (await hasActiveRejoinCooldown(tx, uid, nowISO)) return { ok: false, error: 'rejoin-cooldown' };
     const { rows: [g] } = await tx.execute<{ id: string }>(sql`insert into public.guilds (name, code, created_at)
       values (${name}, ${code}, ${at(nowISO)}) on conflict do nothing returning id::text as id`);
     if (!g) {
@@ -511,11 +537,11 @@ export async function guildPreview(db: Executor, code: string): Promise<GuildPre
 export type JoinOutcome =
   | { ok: true; id: string; result: 'joined' }
   | { ok: true; id: string; result: 'requested'; guild: string; leader: string; nick: string | null }
-  | { ok: false; error: 'bad-code' | 'already-in-guild' | 'guild-full' | 'guild-closed' };
+  | { ok: false; error: 'bad-code' | 'already-in-guild' | 'rejoin-cooldown' | 'guild-full' | 'guild-closed' };
 
 export type JoinByGuildIdOutcome =
   | { ok: true; id: string; result: 'joined' }
-  | { ok: false; error: 'not-found' | 'already-in-guild' | 'guild-full' | 'guild-closed' };
+  | { ok: false; error: 'not-found' | 'already-in-guild' | 'rejoin-cooldown' | 'guild-full' | 'guild-closed' };
 
 /**
  * 공개 길드 목록의 guildId로 바로 가입한다. 자유 가입(open)이고 정원에 여유가 있는 길드만 허용하며,
@@ -528,6 +554,7 @@ export async function joinByGuildId(withTransaction: Tx, uid: string, guildId: s
       select id::text as id, join_mode from public.guilds where id = ${guildId} for update`);
     if (!g) return { ok: false, error: 'not-found' };
     if (await guildIdOf(tx, uid)) return { ok: false, error: 'already-in-guild' };
+    if (await hasActiveRejoinCooldown(tx, uid, nowISO)) return { ok: false, error: 'rejoin-cooldown' };
     if (g.join_mode !== 'open') return { ok: false, error: 'guild-closed' };
     const { rows: members } = await tx.execute<{ uid: string }>(sql`
       select user_id::text as uid from public.guild_members where guild_id = ${g.id} and left_at is null`);
@@ -552,6 +579,7 @@ export async function joinByCode(withTransaction: Tx, uid: string, code: string,
     const members = await lockMembers(tx, g.id);
     if (!members) return { ok: false, error: 'bad-code' };
     if (await guildIdOf(tx, uid)) return { ok: false, error: 'already-in-guild' };
+    if (await hasActiveRejoinCooldown(tx, uid, nowISO)) return { ok: false, error: 'rejoin-cooldown' };
     const outcome = joinOutcome(g.join_mode, members.length, via);
     if (outcome === 'closed') return { ok: false, error: 'guild-closed' };
     if (outcome === 'guild-full') return { ok: false, error: 'guild-full' };
@@ -578,11 +606,11 @@ async function addMember(tx: Executor, guildId: string, uid: string, nowISO: str
 
 export type DecideOutcome =
   | { ok: true; guild: string }
-  | { ok: false; error: 'not-member' | 'not-leader' | 'no-request' | 'already-in-guild' | 'guild-full' };
+  | { ok: false; error: 'not-member' | 'not-leader' | 'no-request' | 'already-in-guild' | 'rejoin-cooldown' | 'guild-full' };
 
 /**
  * 가입 신청을 승인하거나 거절한다(길드장). 승인하면 길드원으로 넣고, 거절하면 신청만 지운다.
- * 신청한 사람이 그 사이 다른 길드에 들어갔으면 신청을 지우고 already-in-guild다. 인원이 가득 차면 신청을 남긴다.
+ * 신청한 사람이 그 사이 다른 길드에 들어갔으면 신청을 지우고 already-in-guild다. 인원이 가득 차거나 재가입 대기 중이면 신청을 남긴다.
  */
 export async function decideJoinRequest(withTransaction: Tx, uid: string, guildId: string, target: string, approve: boolean,
   nowISO: string): Promise<DecideOutcome> {
@@ -603,6 +631,7 @@ export async function decideJoinRequest(withTransaction: Tx, uid: string, guildI
       await tx.execute(sql`delete from public.guild_join_requests where user_id = ${target}`);
       return { ok: false, error: 'already-in-guild' };
     }
+    if (await hasActiveRejoinCooldown(tx, target, nowISO)) return { ok: false, error: 'rejoin-cooldown' };
     if (members.length >= GUILD_MAX_MEMBERS) return { ok: false, error: 'guild-full' };
     await addMember(tx, guildId, target, nowISO);
     return { ok: true, guild: g.name };
@@ -679,7 +708,7 @@ export type RemoveOutcome =
   | { ok: true; result: 'left' | 'dissolved' | 'kicked' }
   | { ok: false; error: 'not-member' | 'not-leader' | 'handover-first' };
 
-/** 떠나기(자기 자신)와 내보내기(다른 길드원). 떠난 선원의 행은 남긴다. 길드장이 혼자 떠나면 길드를 없앤다 */
+/** 떠나기(자기 자신)와 내보내기(다른 길드원). 떠난 선원의 행은 남긴다. 길드장이 혼자 떠나면 길드를 없앤다. 대상자에게 20시간 재가입 대기를 기록한다 */
 export async function removeMember(withTransaction: Tx, uid: string, guildId: string, target: string, nowISO: string): Promise<RemoveOutcome> {
   return withTransaction(async tx => {
     const members = await lockMembers(tx, guildId);
@@ -688,6 +717,9 @@ export async function removeMember(withTransaction: Tx, uid: string, guildId: st
     if (!members || !me || !them) return { ok: false, error: 'not-member' };
     const outcome = removalOutcome(me, them, members.length);
     if (outcome === 'not-leader' || outcome === 'handover-first') return { ok: false, error: outcome };
+    await tx.execute(sql`insert into public.guild_rejoin_cooldowns (user_id, left_at)
+      values (${target}, ${at(nowISO)})
+      on conflict (user_id) do update set left_at = excluded.left_at`);
     if (outcome === 'dissolve') {
       await tx.execute(sql`delete from public.guilds where id = ${guildId}`);
       return { ok: true, result: 'dissolved' };
@@ -724,6 +756,7 @@ export async function handOver(withTransaction: Tx, uid: string, guildId: string
  * 길드장이면 가장 먼저 들어온 길드원에게 길드장을 넘기고, 혼자면 길드를 없앤다.
  */
 export async function deleteUserGuild(db: Executor, uid: string): Promise<void> {
+  await db.execute(sql`delete from public.guild_rejoin_cooldowns where user_id = ${uid}`);
   await db.execute(sql`delete from public.guild_join_requests where user_id = ${uid}`);
   await db.execute(sql`delete from public.guild_member_enhancements where user_id = ${uid}`);
   await db.execute(sql`delete from public.guild_logs where user_id = ${uid}`);

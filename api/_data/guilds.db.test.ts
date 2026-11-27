@@ -8,12 +8,12 @@ import { createTestDatabase } from '../_dbTest/testDatabase.js';
 import type { TestDatabase } from '../_dbTest/testDatabase.js';
 import {
   cancelJoinRequest, createGuild, decideJoinRequest, deleteUserGuild, donateToBonus, guildIdOf, guildPreview, handOver, joinByCode,
-  myGuild, myJoinRequest, removeMember, renameGuild, setJoinSettings,
+  joinByGuildId, myGuild, myJoinRequest, rejoinCooldownUntil, removeMember, renameGuild, setJoinSettings,
 } from './guilds.js';
 import { commitAction } from './commit.js';
 import { versionUpdate } from './save.js';
 import { newState } from '../../src/game/rules/logic.js';
-import { GUILD_MAX_MEMBERS } from '../../src/game/rules/guild.js';
+import { GUILD_MAX_MEMBERS, GUILD_REJOIN_COOLDOWN_MS } from '../../src/game/rules/guild.js';
 
 let testDb: TestDatabase;
 let client: Client;
@@ -195,19 +195,21 @@ describe('guilds', () => {
     expect(await joinByCode(tx(), other.leader, g.code, NOW)).toEqual({ ok: false, error: 'already-in-guild' });
   });
 
-  it('떠난 선원은 기록이 남고, 바로 다른 길드에 들어갈 수 있으며, 같은 길드에 돌아오면 같은 행이 되살아난다', async () => {
+  it('떠난 선원은 기록이 남고, 대기 시간이 지나면 다른 길드에 들어갈 수 있으며, 같은 길드에 돌아오면 같은 행이 되살아난다', async () => {
     const g = await guildWith(2);
     const [m1, m2] = g.members;
+    const afterCooldown1 = new Date(Date.parse(LATER) + GUILD_REJOIN_COOLDOWN_MS).toISOString();
+    const afterCooldown2 = new Date(Date.parse(afterCooldown1) + GUILD_REJOIN_COOLDOWN_MS).toISOString();
     expect(await removeMember(tx(), m1, g.id, m1, LATER)).toEqual({ ok: true, result: 'left' });
     const view = await myGuild(database.db, g.leader, LATER);
     expect(view?.members.map(m => [m.uid, m.leftAt])).toEqual([[g.leader, null], [m2, null], [m1, LATER]]);
     expect(await myGuild(database.db, m1, LATER)).toBeNull();
     const other = await guildWith(0);
-    expect(await joinByCode(tx(), m1, other.code, LATER)).toMatchObject({ ok: true });
-    expect(await removeMember(tx(), m1, other.id, m1, LATER)).toMatchObject({ ok: true });
-    expect(await joinByCode(tx(), m1, g.code, LATER)).toMatchObject({ ok: true });
-    const back = await myGuild(database.db, m1, LATER);
-    expect(back?.members.filter(m => m.uid === m1)).toEqual([expect.objectContaining({ role: 'member', leftAt: null, joinedAt: LATER })]);
+    expect(await joinByCode(tx(), m1, other.code, afterCooldown1)).toMatchObject({ ok: true });
+    expect(await removeMember(tx(), m1, other.id, m1, afterCooldown1)).toMatchObject({ ok: true });
+    expect(await joinByCode(tx(), m1, g.code, afterCooldown2)).toMatchObject({ ok: true });
+    const back = await myGuild(database.db, m1, afterCooldown2);
+    expect(back?.members.filter(m => m.uid === m1)).toEqual([expect.objectContaining({ role: 'member', leftAt: null, joinedAt: afterCooldown2 })]);
   });
 
   it('내보내기는 길드장만 하고, 길드장은 다른 길드원이 있으면 위임한 뒤에 떠날 수 있으며, 혼자 떠나면 길드가 없어진다', async () => {
@@ -477,5 +479,99 @@ describe('길드 이름 바꾸기', () => {
     expect(await renameGuild(tx(), banned.leader, banned.id, '제재', NOW)).toEqual({ ok: false, error: 'restricted' });
     expect(await saveOf(banned.leader)).toEqual({ gold: 500_000, version: 2 });
     expect(await renameLogs(poor.id)).toEqual([]);
+  });
+});
+
+describe('길드 재가입 대기 (20시간)', () => {
+  const isoAfter = (baseISO: string, deltaMs: number) => new Date(Date.parse(baseISO) + deltaMs).toISOString();
+
+  it('자진 탈퇴 후 20시간 이내에는 생성·공개 가입·코드 가입·승인 신청·초대 링크를 모두 거부하고, 20시간 경과 시 허용한다', async () => {
+    const gOpen = await guildWith(1);
+    const [leaver] = gOpen.members;
+    const gApproval = await make(await user());
+    const expectedUntil = isoAfter(NOW, GUILD_REJOIN_COOLDOWN_MS);
+    const beforeEnd = isoAfter(NOW, GUILD_REJOIN_COOLDOWN_MS - 1_000);
+
+    expect(await rejoinCooldownUntil(database.db, leaver, NOW)).toBeNull();
+    expect(await removeMember(tx(), leaver, gOpen.id, leaver, NOW)).toEqual({ ok: true, result: 'left' });
+    expect(await rejoinCooldownUntil(database.db, leaver, NOW)).toBe(expectedUntil);
+    expect(await rejoinCooldownUntil(database.db, leaver, beforeEnd)).toBe(expectedUntil);
+
+    expect(await createGuild(tx(), leaver, `cd${seq++}`, code(), beforeEnd)).toEqual({ ok: false, error: 'rejoin-cooldown' });
+    expect(await joinByGuildId(tx(), leaver, gOpen.id, beforeEnd)).toEqual({ ok: false, error: 'rejoin-cooldown' });
+    expect(await joinByCode(tx(), leaver, gOpen.code, beforeEnd, 'code')).toEqual({ ok: false, error: 'rejoin-cooldown' });
+    expect(await joinByCode(tx(), leaver, gApproval.code, beforeEnd, 'code')).toEqual({ ok: false, error: 'rejoin-cooldown' });
+    expect(await joinByCode(tx(), leaver, gApproval.code, beforeEnd, 'link')).toEqual({ ok: false, error: 'rejoin-cooldown' });
+    expect(await myJoinRequest(database.db, leaver, beforeEnd)).toBeNull();
+
+    // 정확히 20시간 경과 시 대기 종료 및 가입·생성 허용
+    expect(await rejoinCooldownUntil(database.db, leaver, expectedUntil)).toBeNull();
+    expect(await joinByGuildId(tx(), leaver, gOpen.id, expectedUntil)).toEqual({ ok: true, id: gOpen.id, result: 'joined' });
+
+    const creator = await user();
+    const g2 = await guildWith(0);
+    await joinByCode(tx(), creator, g2.code, NOW);
+    await removeMember(tx(), creator, g2.id, creator, NOW);
+    expect(await createGuild(tx(), creator, `cd${seq++}`, code(), expectedUntil)).toMatchObject({ ok: true });
+  });
+
+  it('추방 시 추방된 대상만 20시간 대기하고 길드장은 대기하지 않는다', async () => {
+    const g = await guildWith(1);
+    const [kicked] = g.members;
+    const expectedUntil = isoAfter(NOW, GUILD_REJOIN_COOLDOWN_MS);
+
+    expect(await removeMember(tx(), g.leader, g.id, kicked, NOW)).toEqual({ ok: true, result: 'kicked' });
+    expect(await rejoinCooldownUntil(database.db, kicked, NOW)).toBe(expectedUntil);
+    expect(await rejoinCooldownUntil(database.db, g.leader, NOW)).toBeNull();
+    expect(await joinByCode(tx(), kicked, g.code, isoAfter(NOW, 1_000))).toEqual({ ok: false, error: 'rejoin-cooldown' });
+  });
+
+  it('단독 해산 시 길드가 지워져도 해산한 길드장에게 20시간 대기를 적용한다', async () => {
+    const solo = await guildWith(0);
+    const other = await guildWith(0);
+    const expectedUntil = isoAfter(NOW, GUILD_REJOIN_COOLDOWN_MS);
+
+    expect(await removeMember(tx(), solo.leader, solo.id, solo.leader, NOW)).toEqual({ ok: true, result: 'dissolved' });
+    expect((await client.query('select 1 from public.guilds where id = $1', [solo.id])).rows).toEqual([]);
+    expect(await rejoinCooldownUntil(database.db, solo.leader, NOW)).toBe(expectedUntil);
+    expect(await createGuild(tx(), solo.leader, `cd${seq++}`, code(), isoAfter(NOW, 1_000))).toEqual({ ok: false, error: 'rejoin-cooldown' });
+    expect(await joinByGuildId(tx(), solo.leader, other.id, isoAfter(NOW, 1_000))).toEqual({ ok: false, error: 'rejoin-cooldown' });
+    expect(await createGuild(tx(), solo.leader, `cd${seq++}`, code(), expectedUntil)).toMatchObject({ ok: true });
+  });
+
+  it('길드장 위임에서는 재가입 대기가 걸리지 않는다', async () => {
+    const g = await guildWith(1);
+    const [nextLeader] = g.members;
+    expect(await handOver(tx(), g.leader, g.id, nextLeader)).toEqual({ ok: true });
+    expect(await rejoinCooldownUntil(database.db, g.leader, NOW)).toBeNull();
+    expect(await rejoinCooldownUntil(database.db, nextLeader, NOW)).toBeNull();
+  });
+
+  it('승인 대기 신청자가 재가입 대기 중이면 승인 시 rejoin-cooldown으로 거부하고 가입 신청 행을 유지한다', async () => {
+    const approvalLeader = await user();
+    const gApproval = await make(approvalLeader);
+    const applicant = await user();
+
+    expect(await joinByCode(tx(), applicant, gApproval.code, NOW)).toMatchObject({ ok: true, result: 'requested' });
+    await client.query(`insert into public.guild_rejoin_cooldowns (user_id, left_at) values ($1, $2)`, [applicant, NOW]);
+    const beforeEnd = isoAfter(NOW, GUILD_REJOIN_COOLDOWN_MS - 1_000);
+    expect(await decideJoinRequest(tx(), approvalLeader, gApproval.id, applicant, true, beforeEnd)).toEqual({ ok: false, error: 'rejoin-cooldown' });
+    // 신청 행이 지워지지 않고 유지돼야 한다
+    expect(await myJoinRequest(database.db, applicant, beforeEnd)).toMatchObject({ code: gApproval.code });
+    expect((await myGuild(database.db, approvalLeader, beforeEnd))?.requests.map(r => r.uid)).toEqual([applicant]);
+
+    // 20시간 경과 후에는 정상 승인된다
+    const afterEnd = isoAfter(NOW, GUILD_REJOIN_COOLDOWN_MS);
+    expect(await rejoinCooldownUntil(database.db, applicant, afterEnd)).toBeNull();
+    expect(await decideJoinRequest(tx(), approvalLeader, gApproval.id, applicant, true, afterEnd)).toMatchObject({ ok: true });
+    expect(await guildIdOf(database.db, applicant)).toBe(gApproval.id);
+    expect(await myJoinRequest(database.db, applicant, afterEnd)).toBeNull();
+
+    // 거절은 쿨다운 여부와 무관하게 신청을 삭제할 수 있다
+    const applicant2 = await user();
+    await joinByCode(tx(), applicant2, gApproval.code, afterEnd);
+    await client.query(`insert into public.guild_rejoin_cooldowns (user_id, left_at) values ($1, $2)`, [applicant2, afterEnd]);
+    expect(await decideJoinRequest(tx(), approvalLeader, gApproval.id, applicant2, false, afterEnd)).toMatchObject({ ok: true });
+    expect(await myJoinRequest(database.db, applicant2, afterEnd)).toBeNull();
   });
 });

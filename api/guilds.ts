@@ -35,7 +35,7 @@ import { sessionOf } from './_auth/session.js';
 import { database } from './_db/client.js';
 import {
   cancelJoinRequest, createGuild, decideJoinRequest, donateToBonus, enhanceBonus, handOver, joinByCode, joinByGuildId,
-  myGuild, myJoinRequest, publicGuilds, removeMember, renameGuild, resetEnhancements, setJoinSettings,
+  myGuild, myJoinRequest, publicGuilds, rejoinCooldownUntil, removeMember, renameGuild, resetEnhancements, setJoinSettings,
 } from './_data/guilds.js';
 import { notifyGuild, notifyUser, presenceOf } from './_server/livePresence.js';
 import {
@@ -59,7 +59,7 @@ const PUBLIC_GUILD_QUERY_MAX = 50;
 
 /** 거부 코드의 응답 상태 */
 const STATUS: Record<string, number> = {
-  'already-in-guild': 409, 'name-taken': 409, 'guild-full': 409, 'handover-first': 409, 'guild-closed': 409,
+  'already-in-guild': 409, 'rejoin-cooldown': 409, 'name-taken': 409, 'guild-full': 409, 'handover-first': 409, 'guild-closed': 409,
   'not-leader': 403, 'not-member': 404, 'bad-code': 404, 'no-request': 404, 'not-found': 404, self: 400,
   'bad-guild': 400,
   'not-enough-gold': 409, 'bonus-locked': 409, 'rank-maxed': 409, restricted: 403, 'renamed-today': 409,
@@ -122,11 +122,15 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
   const me = handle(['GET'], async (_req, res, uid) => {
     const { db } = database();
     const now = new Date().toISOString();
-    const guild = await run('db-read', () => myGuild(db, uid, now));
+    const [guild, cooldownUntil] = await run('db-read', () => Promise.all([
+      myGuild(db, uid, now),
+      rejoinCooldownUntil(db, uid, now),
+    ]));
     const request = guild ? null : await run('db-read', () => myJoinRequest(db, uid, now));
     res.status(200).json({
       guild: guild && { ...guild, members: guild.members.map(m => ({ ...m, online: m.leftAt === null && presenceOf(m.uid) !== null })) },
       request,
+      cooldownUntil,
     });
   });
 
