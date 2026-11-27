@@ -59,7 +59,7 @@ function createMockRedisPair() {
     }),
   };
 
-  return { client, subscriber, hashes, kv };
+  return { client, subscriber, hashes, kv, listeners };
 }
 
 const samplePresence: Presence = {
@@ -195,6 +195,25 @@ describe('RedisLiveBus', () => {
     await bus.notifyAll({ t: 'mail' });
     expect(received).toEqual([{ t: 'notifyAll', msg: { t: 'mail' } }]);
     expect(await bus.acquireAlertLock('k', 10)).toBe(true);
+    await bus.close();
+  });
+
+  it('subscriber가 재연결되어 ready 이벤트가 다시 발생하면 이벤트 채널을 재구독한다', async () => {
+    const { client, subscriber, listeners } = createMockRedisPair();
+    const bus = new RedisLiveBus({ env: 'preview', client: client as never, subscriber: subscriber as never });
+    bus.subscribe(() => {});
+
+    // 초기 subscribe 비동기 완료 대기
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(subscriber.subscribe).toHaveBeenCalledTimes(1);
+
+    for (const fn of listeners.get('ready') ?? []) {
+      fn();
+    }
+    await Promise.resolve();
+    expect(subscriber.subscribe).toHaveBeenCalledTimes(2);
+    expect(subscriber.subscribe).toHaveBeenLastCalledWith('pf:preview:bus:events');
     await bus.close();
   });
 });

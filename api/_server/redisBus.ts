@@ -23,7 +23,9 @@ export interface RedisSubscriberLike {
   quit(): Promise<unknown>;
   disconnect(): void;
   on(event: 'message', listener: (channel: string, message: string) => void): unknown;
+  on(event: 'ready', listener: () => void): unknown;
   off(event: 'message', listener: (channel: string, message: string) => void): unknown;
+  off(event: 'ready', listener: () => void): unknown;
 }
 
 export interface RedisLiveBusOptions {
@@ -79,6 +81,13 @@ export class RedisLiveBus implements LiveBus {
     this.dispatchLocal(event);
   };
 
+  private readonly handleReady = (): void => {
+    if (!this.subscriber || !this.subscribed || this.handlers.size === 0) return;
+    void Promise.resolve(this.subscriber.subscribe(this.eventsChannel)).catch(err =>
+      warnRedisOnce('bus-resubscribe', err),
+    );
+  };
+
   private dispatchLocal(event: LiveBusEvent): void {
     for (const handler of this.handlers) {
       handler(event);
@@ -92,6 +101,7 @@ export class RedisLiveBus implements LiveBus {
       try {
         if (!this.listenerAttached) {
           this.subscriber!.on('message', this.handleMessage);
+          this.subscriber!.on('ready', this.handleReady);
           this.listenerAttached = true;
         }
         if (this.subscriber!.status === 'wait') {
@@ -254,6 +264,7 @@ export class RedisLiveBus implements LiveBus {
     if (this.subscriber) {
       if (this.listenerAttached) {
         this.subscriber.off('message', this.handleMessage);
+        this.subscriber.off('ready', this.handleReady);
         this.listenerAttached = false;
       }
       try {

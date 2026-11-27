@@ -9,13 +9,12 @@ const RETRY_BASE_MS = 500;
 const RETRY_MAX_MS = 10_000;
 const WARN_INTERVAL_MS = 30_000;
 
-const lastWarnAt = new Map<string, number>();
+let lastWarnAtMs = 0;
 
-/** 동일 맥락의 Redis 경고 로그가 폭주하지 않도록 간격을 제한해 남긴다 */
+/** Redis 경고 로그가 폭주하지 않도록 간격을 제한해 남긴다 */
 export function warnRedisOnce(context: string, err?: unknown, nowMs = Date.now()): void {
-  const prev = lastWarnAt.get(context);
-  if (prev !== undefined && nowMs - prev < WARN_INTERVAL_MS) return;
-  lastWarnAt.set(context, nowMs);
+  if (lastWarnAtMs !== 0 && nowMs - lastWarnAtMs < WARN_INTERVAL_MS) return;
+  lastWarnAtMs = nowMs;
   const message = err instanceof Error ? err.message : err ? String(err) : 'unavailable';
   console.warn(`[redis] ${context}: ${message}`);
 }
@@ -82,7 +81,7 @@ export async function closeRedisClient(): Promise<void> {
   const current = singleton;
   singleton = null;
   singletonUrl = null;
-  lastWarnAt.clear();
+  lastWarnAtMs = 0;
   if (!current) return;
   try {
     await current.quit();
