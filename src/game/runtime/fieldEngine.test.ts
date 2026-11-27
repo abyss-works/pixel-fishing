@@ -1143,3 +1143,94 @@ describe('GameFieldEngine 로컬·피어 점프 연출', () => {
     engine.dispose();
   });
 });
+
+describe('GameFieldEngine 프레임 경과 콜백(onFrame)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  function setupRaf(initialNow = 100) {
+    vi.spyOn(performance, 'now').mockReturnValue(initialNow);
+    const queue: FrameRequestCallback[] = [];
+    let nextId = 1;
+    const raf = vi.fn((cb: FrameRequestCallback) => {
+      queue.push(cb);
+      return nextId++;
+    });
+    const caf = vi.fn();
+    vi.stubGlobal('requestAnimationFrame', raf);
+    vi.stubGlobal('cancelAnimationFrame', caf);
+    const canvas = { getContext: () => ctx } as unknown as HTMLCanvasElement;
+    return { queue, raf, caf, canvas };
+  }
+
+  it('rAF 프레임마다 이전 프레임과의 경과 시간(now - last)을 onFrame에 전달한다', () => {
+    const { queue, raf, canvas } = setupRaf(100);
+    const onFrame = vi.fn();
+    const engine = new GameFieldEngine('world', newState(), [], WORLD_SPAWN);
+    engine.updateContext(newState(), false, {
+      dispatch: () => ({ status: 'rejected', error: 'bad-request' }),
+      onEvent: noop,
+      onScene: noop,
+      onFrame,
+    });
+
+    engine.attachCanvas(canvas);
+    expect(raf).toHaveBeenCalledTimes(1);
+
+    queue.shift()!(116.5);
+    expect(onFrame).toHaveBeenNthCalledWith(1, 16.5);
+    expect(raf).toHaveBeenCalledTimes(2);
+
+    queue.shift()!(149.75);
+    expect(onFrame).toHaveBeenNthCalledWith(2, 33.25);
+    expect(raf).toHaveBeenCalledTimes(3);
+
+    engine.dispose();
+  });
+
+  it('onFrame이 예외를 던져도 다음 프레임 예약과 루프가 멈추지 않는다', () => {
+    const { queue, raf, canvas } = setupRaf(100);
+    const onFrame = vi.fn((_elapsedMs: number) => {
+      if (onFrame.mock.calls.length === 1) throw new Error('observer error');
+    });
+    const engine = new GameFieldEngine('world', newState(), [], WORLD_SPAWN);
+    engine.updateContext(newState(), false, {
+      dispatch: () => ({ status: 'rejected', error: 'bad-request' }),
+      onEvent: noop,
+      onScene: noop,
+      onFrame,
+    });
+
+    engine.attachCanvas(canvas);
+    expect(() => queue.shift()!(116)).not.toThrow();
+    expect(raf).toHaveBeenCalledTimes(2);
+
+    expect(() => queue.shift()!(136)).not.toThrow();
+    expect(onFrame).toHaveBeenNthCalledWith(1, 16);
+    expect(onFrame).toHaveBeenNthCalledWith(2, 20);
+    expect(raf).toHaveBeenCalledTimes(3);
+
+    engine.dispose();
+  });
+
+  it('onFrame 안에서 dispose되면 다음 프레임을 예약하지 않는다', () => {
+    const { queue, raf, canvas } = setupRaf(100);
+    const engine = new GameFieldEngine('world', newState(), [], WORLD_SPAWN);
+    const onFrame = vi.fn(() => { engine.dispose(); });
+    engine.updateContext(newState(), false, {
+      dispatch: () => ({ status: 'rejected', error: 'bad-request' }),
+      onEvent: noop,
+      onScene: noop,
+      onFrame,
+    });
+
+    engine.attachCanvas(canvas);
+    expect(raf).toHaveBeenCalledTimes(1);
+
+    queue.shift()!(116);
+    expect(onFrame).toHaveBeenCalledWith(16);
+    expect(raf).toHaveBeenCalledTimes(1);
+  });
+});

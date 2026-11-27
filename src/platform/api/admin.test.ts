@@ -9,7 +9,7 @@ describe('admin 계층 규약', () => {
   it('싱글톤과 두 팩토리 모두 AdminApi 전면을 노출한다', () => {
     const local = createLocalApi().admin;
     for (const m of ['access', 'overview', 'users', 'live', 'dailyStats', 'retention', 'sessions', 'economy', 'bountyFunnel',
-      'onboardingFunnel', 'httpMetrics', 'opsHealth',
+      'onboardingFunnel', 'httpMetrics', 'clientMetrics', 'opsHealth',
       'spamFlags',
       'recentEvents', 'userEvents', 'userState', 'letters', 'changelog', 'chatReports', 'notices', 'coupons', 'balanceLive',
       'restrict', 'letterHandled', 'revokeSessions', 'writeNotice', 'writeCoupon', 'setStaffBadge', 'deployHost', 'signIn', 'takeSignInReturn', 'signOut'] as const) {
@@ -33,6 +33,8 @@ describe('admin 계층 규약', () => {
     await expect(admin.onboardingFunnel()).rejects.toThrow(/클라우드/);
     await expect(admin.httpMetrics()).rejects.toThrow(/클라우드/);
     await expect(admin.httpMetrics(7)).rejects.toThrow(/클라우드/);
+    await expect(admin.clientMetrics()).rejects.toThrow(/클라우드/);
+    await expect(admin.clientMetrics(7)).rejects.toThrow(/클라우드/);
     await expect(admin.opsHealth()).rejects.toThrow(/클라우드/);
     await expect(admin.opsHealth(7)).rejects.toThrow(/클라우드/);
     await expect(admin.notices()).rejects.toThrow(/클라우드/);

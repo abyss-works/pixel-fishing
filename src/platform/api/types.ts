@@ -708,6 +708,39 @@ export interface AdminHttpMetrics {
   rows: AdminHttpMetricRawRow[];
 }
 
+/** 클라이언트 지연 히스토그램 기반 백분위 추정 요약(ms) */
+export interface AdminClientLatencyStat {
+  p50Ms: number | null;
+  p95Ms: number | null;
+  avgMs: number | null;
+  samples: number;
+}
+
+/** KST 일별 클라이언트 체감 성능 지표 한 행 */
+export interface AdminClientMetricsDayRow {
+  day: string;
+  reports: number;
+  lcp: AdminClientLatencyStat;
+  inp: AdminClientLatencyStat;
+  ttfb: AdminClientLatencyStat;
+  clsAvg: number | null;
+  actionRtt: AdminClientLatencyStat & { timeouts: number; conflicts409: number };
+  meRtt: AdminClientLatencyStat & { timeouts: number };
+  canvasFrames: number;
+  canvasLongFrames: number;
+  longFramePct: number | null;
+  wsReconnects: number;
+  wsAbnormalCloses: number;
+}
+
+/** 관리자 — 클라이언트 체감 성능·RTT·프레임·소켓 재연결 지표(Zero-PII) */
+export interface AdminClientMetrics {
+  days: number;
+  summary: Omit<AdminClientMetricsDayRow, 'day'>;
+  /** KST 날짜 오름차순 일별 추이 */
+  daily: AdminClientMetricsDayRow[];
+}
+
 /** 게스트 → 구글 전환 소요 시간 구간 */
 export type AdminConversionTimeBucketId =
   | 'under_10m'
@@ -822,6 +855,8 @@ export interface AdminApi {
   onboardingFunnel(): Promise<AdminOnboardingFunnel>;
   /** 앱 서버 HTTP 오류율·429·지연 지표. days(1~90)를 생략하면 서버 기본 기간(30일)이다 */
   httpMetrics(days?: number): Promise<AdminHttpMetrics>;
+  /** 클라이언트 체감 성능·RTT·프레임·소켓 재연결 지표(Zero-PII). days(1~90)를 생략하면 서버 기본 기간(7일)이다 */
+  clientMetrics(days?: number): Promise<AdminClientMetrics>;
   /** 런타임·DB 풀·HTTP 지연·WebSocket·경보 종합 상태(Zero-PII). days(1~90) 생략 시 서버 기본(7일) */
   opsHealth(days?: number): Promise<AdminOpsHealth>;
   spamFlags(): Promise<AdminSpamFlagRow[]>;

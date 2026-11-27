@@ -1127,6 +1127,7 @@ describe('역할 분리(admin·maintainer) · Zero-PII 투영 · 배지 토글 �
         ['bountyFunnel', { days: '7' }],
         ['onboardingFunnel', {}],
         ['httpMetrics', { days: '7' }],
+        ['clientMetrics', { days: '7' }],
         ['opsHealth', { days: '7' }],
         ['balanceLive', { days: '7' }],
       ] as const) {
@@ -1541,5 +1542,90 @@ describe('역할 분리(admin·maintainer) · Zero-PII 투영 · 배지 토글 �
         detail: { code: 'ADMIN-AUDIT-COUPON' },
       },
     ]);
+  });
+
+  it('clientMetrics: flushClientMetrics 합산 upsert와 GET ?q=clientMetrics 조회(Zero-PII)를 검증한다', async () => {
+    const { database } = await import('./_db/client.js');
+    const { emptyClientCounts, flushClientMetrics } = await import('./_data/clientMetrics.js');
+    const { kstDayOf } = await import('./_server/httpMetrics.js');
+    const today = kstDayOf(Date.now());
+    await env.client.query('delete from public.client_metrics_daily');
+
+    await flushClientMetrics(database().db, [
+      {
+        day: today,
+        ...emptyClientCounts(),
+        reports: 1,
+        lcpLe1500: 1,
+        lcpSumMs: 1200,
+        lcpCount: 1,
+        actionRttLe100: 2,
+        actionRttSumMs: 160,
+        actionRttCount: 2,
+        actionConflicts409: 1,
+        canvasFrames: 100,
+        canvasLongFrames: 2,
+      },
+      {
+        day: today,
+        ...emptyClientCounts(),
+        reports: 1,
+        lcpLe2500: 1,
+        lcpSumMs: 2200,
+        lcpCount: 1,
+        clsSumX1000: 50,
+        clsCount: 1,
+        meRttLe250: 1,
+        meRttSumMs: 180,
+        meRttCount: 1,
+        meTimeouts: 1,
+        canvasFrames: 100,
+        canvasLongFrames: 8,
+        wsReconnects: 1,
+        wsAbnormalCloses: 2,
+      },
+    ]);
+
+    expect(await callAdmin({ q: 'clientMetrics', days: '0' }, userToken(ADMIN))).toMatchObject({
+      status: 400,
+      body: { error: 'bad-days' },
+    });
+
+    const maintRes = await callAdmin({ q: 'clientMetrics', days: '7' }, userToken(MAINT));
+    expect(maintRes.status).toBe(200);
+    expect(maintRes.body).toEqual({
+      days: 7,
+      summary: {
+        reports: 2,
+        lcp: { p50Ms: 1500, p95Ms: 2500, avgMs: 1700, samples: 2 },
+        inp: { p50Ms: null, p95Ms: null, avgMs: null, samples: 0 },
+        ttfb: { p50Ms: null, p95Ms: null, avgMs: null, samples: 0 },
+        clsAvg: 0.05,
+        actionRtt: { p50Ms: 100, p95Ms: 100, avgMs: 80, samples: 2, timeouts: 0, conflicts409: 1 },
+        meRtt: { p50Ms: 250, p95Ms: 250, avgMs: 180, samples: 1, timeouts: 1 },
+        canvasFrames: 200,
+        canvasLongFrames: 10,
+        longFramePct: 5,
+        wsReconnects: 1,
+        wsAbnormalCloses: 2,
+      },
+      daily: [
+        {
+          day: today,
+          reports: 2,
+          lcp: { p50Ms: 1500, p95Ms: 2500, avgMs: 1700, samples: 2 },
+          inp: { p50Ms: null, p95Ms: null, avgMs: null, samples: 0 },
+          ttfb: { p50Ms: null, p95Ms: null, avgMs: null, samples: 0 },
+          clsAvg: 0.05,
+          actionRtt: { p50Ms: 100, p95Ms: 100, avgMs: 80, samples: 2, timeouts: 0, conflicts409: 1 },
+          meRtt: { p50Ms: 250, p95Ms: 250, avgMs: 180, samples: 1, timeouts: 1 },
+          canvasFrames: 200,
+          canvasLongFrames: 10,
+          longFramePct: 5,
+          wsReconnects: 1,
+          wsAbnormalCloses: 2,
+        },
+      ],
+    });
   });
 });

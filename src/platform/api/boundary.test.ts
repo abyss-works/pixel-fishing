@@ -187,7 +187,7 @@ describe('src 구조 경계', () => {
       if (owner === 'src-root') return false;
       if (owner === 'core') return parts.length !== 2;
       if (owner === 'features') return !FEATURE_CONCERN_DIRS.has(parts[2] ?? '');
-      if (path === 'platform/observability.ts') return false;
+      if (path === 'platform/observability.ts' || path === 'platform/clientMetrics.ts' || path === 'platform/clientMetrics.test.ts') return false;
       return !CONCERN_DIRS[owner]?.has(parts[1] ?? '');
     });
     expect(offenders).toEqual([]);

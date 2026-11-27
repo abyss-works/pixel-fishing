@@ -8,6 +8,7 @@ import { AppError, fail } from '../../core/errors';
 import { BUILD_ID } from '../../buildId';
 import { APP_VERSION } from '../../version';
 import { CONSENT_REQUIRED_CODE, notifyConsentRequired } from './requestFailure';
+import { recordLiveClose } from '../clientMetrics';
 
 const LIVE_CLOSE_POLICY = 1008;
 
@@ -42,6 +43,7 @@ export function connectLive(
 ): LiveConnection {
   let ws: WebSocket | null = null;
   let closed = false;
+  let hasConnectedOnce = false;
   let retryMs = LIVE_RETRY_MIN_MS;
   let retryTimer: ReturnType<typeof setTimeout> | undefined;
   let pingTimer: ReturnType<typeof setInterval> | undefined;
@@ -50,6 +52,10 @@ export function connectLive(
     const socket = new Socket(url);
     ws = socket;
     socket.onopen = () => {
+      if (hasConnectedOnce) {
+        recordLiveClose('reconnect');
+      }
+      hasConnectedOnce = true;
       retryMs = LIVE_RETRY_MIN_MS;
       pingTimer = setInterval(() => socket.send(JSON.stringify({ t: 'ping' } satisfies ClientMessage)), LIVE_PING_MS);
     };
@@ -61,6 +67,16 @@ export function connectLive(
     socket.onclose = (e: CloseEvent) => {
       clearInterval(pingTimer);
       ws = null;
+      if (
+        !closed
+        && e.code !== 1000
+        && e.code !== 1001
+        && e.code !== LIVE_CLOSE_OUTDATED
+        && e.code !== LIVE_CLOSE_REPLACED
+        && e.code !== LIVE_CLOSE_POLICY
+      ) {
+        recordLiveClose('abnormal');
+      }
       // 서버가 이 빌드를 낡았다고 닫았다. 다시 붙어도 같으니 HTTP 426과 같은 새로고침 안내를 띄운다.
       if (!closed && e.code === LIVE_CLOSE_OUTDATED) {
         closed = true;

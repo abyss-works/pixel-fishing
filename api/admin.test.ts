@@ -39,6 +39,24 @@ const mocks = vi.hoisted(() => ({
     byRoute: [],
     rows: [],
   })),
+  readClientMetrics: vi.fn(async (): Promise<unknown> => ({
+    days: 7,
+    summary: {
+      reports: 0,
+      lcp: { p50Ms: null, p95Ms: null, avgMs: null, samples: 0 },
+      inp: { p50Ms: null, p95Ms: null, avgMs: null, samples: 0 },
+      ttfb: { p50Ms: null, p95Ms: null, avgMs: null, samples: 0 },
+      clsAvg: null,
+      actionRtt: { p50Ms: null, p95Ms: null, avgMs: null, samples: 0, timeouts: 0, conflicts409: 0 },
+      meRtt: { p50Ms: null, p95Ms: null, avgMs: null, samples: 0, timeouts: 0 },
+      canvasFrames: 0,
+      canvasLongFrames: 0,
+      longFramePct: null,
+      wsReconnects: 0,
+      wsAbnormalCloses: 0,
+    },
+    daily: [],
+  })),
   readOpsHealth: vi.fn(async (): Promise<unknown> => ({
     runtime: { uptimeSec: 10, rssMb: 50, heapUsedMb: 20, heapTotalMb: 30 },
     database: { poolTotal: 2, poolIdle: 2, poolWaiting: 0, poolMax: 10, dbSizeBytes: 1024, activeConnections: 1 },
@@ -109,6 +127,9 @@ vi.mock('./_data/adminFunnel.js', () => ({
 }));
 vi.mock('./_data/httpMetrics.js', () => ({
   readHttpMetrics: mocks.readHttpMetrics,
+}));
+vi.mock('./_data/clientMetrics.js', () => ({
+  readClientMetrics: mocks.readClientMetrics,
 }));
 vi.mock('./_data/opsHealth.js', () => ({
   readOpsHealth: mocks.readOpsHealth,
@@ -386,6 +407,22 @@ describe('api/admin 핸들러 단위 테스트', () => {
     const maintRes = await call('GET', { q: 'opsHealth', days: '14' });
     expect(maintRes.status).toBe(200);
     expect(mocks.readOpsHealth).toHaveBeenLastCalledWith(mocks.db, mocks.pool, expect.objectContaining({ days: 14 }));
+    expect(JSON.stringify(maintRes.body)).not.toMatch(/email|nickname|userId|user_id/i);
+  });
+
+  it('GET ?q=clientMetrics는 admin·maintainer 모두 허용하고 기본 7일(1~90일) 검증 및 Zero-PII를 유지한다', async () => {
+    for (const bad of ['0', '91', 'abc']) {
+      expect(await call('GET', { q: 'clientMetrics', days: bad })).toMatchObject({ status: 400, body: { error: 'bad-days' } });
+    }
+
+    const adminRes = await call('GET', { q: 'clientMetrics' });
+    expect(adminRes.status).toBe(200);
+    expect(mocks.readClientMetrics).toHaveBeenCalledWith(mocks.db, 7);
+
+    mocks.adminMember.mockResolvedValueOnce({ role: 'maintainer', showStaffBadge: false });
+    const maintRes = await call('GET', { q: 'clientMetrics', days: '30' });
+    expect(maintRes.status).toBe(200);
+    expect(mocks.readClientMetrics).toHaveBeenLastCalledWith(mocks.db, 30);
     expect(JSON.stringify(maintRes.body)).not.toMatch(/email|nickname|userId|user_id/i);
   });
 

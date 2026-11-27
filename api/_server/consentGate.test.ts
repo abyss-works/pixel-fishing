@@ -19,6 +19,8 @@ describe('isConsentExempt', () => {
     expect(isConsentExempt('/api/widget/summary')).toBe(true);
     expect(isConsentExempt('/api/widget/stream')).toBe(true);
     expect(isConsentExempt('/api/widgets')).toBe(false);
+    expect(isConsentExempt('/api/client-metrics')).toBe(true);
+    expect(isConsentExempt('/api/client-metrics-extra')).toBe(false);
   });
 });
 
@@ -28,7 +30,7 @@ describe('경로 등록부와 허용 목록', () => {
   const guilds = readFileSync(join(import.meta.dirname, '..', 'guilds.ts'), 'utf8');
   const registered = [...new Set([...main.matchAll(/'(\/api\/[^']*)'/g), ...guilds.matchAll(/'(\/api\/[^']*)'/g)].map(m => m[1]))];
 
-  it('열어 둔 경로는 계정, 관리자 대시보드, 예약 작업, 개발 도구 계정 제어, 로그인 없는 초대 미리보기, 인증뿐이다', () => {
+  it('열어 둔 경로는 계정, 관리자 대시보드, 클라이언트 지표, 예약 작업, 개발 도구 계정 제어, 로그인 없는 초대 미리보기, 인증뿐이다', () => {
     expect(registered.length).toBeGreaterThan(20);
     const open = registered.filter(isConsentExempt).sort();
     expect(open).toEqual([
@@ -36,6 +38,7 @@ describe('경로 등록부와 허용 목록', () => {
       '/api/admin', '/api/admin/auth/callback/google', '/api/admin/auth/sign-in/social', '/api/admin/auth/sign-out',
       '/api/admin/live', '/api/admin/retention', '/api/admin/sessions', '/api/admin/stats/daily',
       '/api/auth/*splat',
+      '/api/client-metrics',
       '/api/cron/archive', '/api/cron/purge-anon',
       '/api/dev/promote-test', '/api/dev/reset-account',
       '/api/guild-invites/:code',

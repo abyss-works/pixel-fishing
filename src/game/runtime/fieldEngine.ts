@@ -103,6 +103,8 @@ export interface FieldCallbacks {
   guest?: boolean;
   /** 캐스트 시드의 현재 값 — 없으면 클라이언트가 그 캐스트의 시드를 고른다 */
   seedContext?: () => { uid: string; saveVersion: number } | null;
+  /** 프레임 갱신 후 이전 프레임과의 경과 시간(ms)을 알린다 */
+  onFrame?: (elapsedMs: number) => void;
 }
 
 /**
@@ -254,8 +256,14 @@ export class GameFieldEngine {
     const frame = (now: number) => {
       this.frameId = null;
       if (this.ctx !== ctx) return;
+      const elapsedMs = now - last;
       const shouldContinue = this.updateFrame(ctx, now, last);
       last = now;
+      try {
+        this.callbacks?.onFrame?.(elapsedMs);
+      } catch {
+        // 관측 콜백 오류가 프레임 루프를 멈추지 않게 무시한다
+      }
       if (shouldContinue && this.ctx === ctx) this.frameId = requestAnimationFrame(frame);
     };
     this.frameId = requestAnimationFrame(frame);

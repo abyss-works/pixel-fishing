@@ -15,6 +15,7 @@ import { REJECT_TEXT } from '../../game/rules/rules';
 import type { RejectReason } from '../../game/rules/rules';
 import { getPhaseOverride } from './timeOverride';
 import { CONSENT_REQUIRED_CODE, throwConsentRequired } from './requestFailure';
+import { recordClientApiRtt } from '../clientMetrics';
 
 type Row = Record<string, never> | Record<string, unknown>;
 
@@ -192,8 +193,9 @@ export class HttpGameGateway implements GameGateway {
     const payload = action.type === 'catch' && phase && !action.forcePhase
       ? { ...action, forcePhase: phase }
       : action;
+    const startedAt = performance.now();
     try {
-      return await fetch('/api/action', {
+      const res = await fetch('/api/action', {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -207,7 +209,13 @@ export class HttpGameGateway implements GameGateway {
         // 무한 대기 방지 — catch 페이즈가 결과 도착까지 홀드되므로(Field), 상한 없으면 영구 정지
         signal: AbortSignal.timeout(10_000),
       });
+      recordClientApiRtt('action', performance.now() - startedAt, { conflict409: res.status === 409 });
+      return res;
     } catch (cause) {
+      const name = (cause as { name?: unknown } | null)?.name;
+      if (name === 'TimeoutError' || name === 'AbortError') {
+        recordClientApiRtt('action', performance.now() - startedAt, { timeout: true });
+      }
       throw new AppError('network', 'action request failed', { action: action.type }, { cause });
     }
   }

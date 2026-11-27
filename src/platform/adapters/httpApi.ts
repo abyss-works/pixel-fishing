@@ -76,7 +76,7 @@ class HttpAuth implements AuthApi {
 import type {
   AdminApi, AdminAccessResult,
   AdminUserRow, AdminUserState, AdminOverview, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
-  AdminOnboardingFunnel, AdminHttpMetrics, AdminOpsHealth,
+  AdminOnboardingFunnel, AdminHttpMetrics, AdminClientMetrics, AdminOpsHealth,
   AdminLive, AdminDailyStatsRow, AdminSessionRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, AdminChangelogRow, AdminChatReportRow, AdminNoticeRow, AdminNoticeRequest, AdminNoticeMutationResult, AdminCouponRow, AdminCouponRequest, AdminCouponMutationResult, BalanceLive,
   AdminSentMailRow, AdminMailRequest, AdminMailPlan,
 } from '../api/types';
@@ -289,6 +289,9 @@ class HttpAdmin implements AdminApi {
   }
   httpMetrics(days?: number): Promise<AdminHttpMetrics> {
     return readAdmin('httpMetrics', days === undefined ? {} : { days });
+  }
+  clientMetrics(days?: number): Promise<AdminClientMetrics> {
+    return readAdmin('clientMetrics', days === undefined ? {} : { days });
   }
   opsHealth(days?: number): Promise<AdminOpsHealth> {
     return readAdmin('opsHealth', days === undefined ? {} : { days });

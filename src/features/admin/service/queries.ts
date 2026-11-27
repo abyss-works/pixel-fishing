@@ -80,6 +80,9 @@ export const readAdminOnboardingFunnel = () => api.admin.onboardingFunnel();
 /** 앱 서버 HTTP 오류율·429 지표 */
 export const readAdminHttpMetrics = (days = 30) => api.admin.httpMetrics(days);
 
+/** 클라이언트 체감 성능, RTT, 프레임, 소켓 재연결 지표 */
+export const readAdminClientMetrics = (days = 7) => api.admin.clientMetrics(days);
+
 /** 서버 런타임, 소켓, DB 상태 및 임계 경보 */
 export const readAdminOpsHealth = (days = 7) => api.admin.opsHealth(days);
 

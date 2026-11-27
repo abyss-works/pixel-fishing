@@ -28,6 +28,7 @@ import {
   EVENT_ID_PATTERN, createAdminEvent, deleteAdminEvent, drawEventWinners, endAdminEventNow,
   listAdminEvents, listEventDraws, parseEventCreateDraft, parseEventDrawInput, parseEventUpdateDraft, updateAdminEvent,
 } from './_data/events.js';
+import { readClientMetrics } from './_data/clientMetrics.js';
 import { readHttpMetrics } from './_data/httpMetrics.js';
 import { readOpsHealth } from './_data/opsHealth.js';
 import { setLetterHandled } from './_data/mail.js';
@@ -195,6 +196,11 @@ function parse(name: string | undefined, req: Req, role: read.AdminRole, pool: D
       const days = optionalDaysOf(req) ?? STATS_DEFAULT_DAYS;
       if (days < 1 || days > MAX_DAYS) throw new ApiError(400, 'bad-days');
       return db => readHttpMetrics(db, days);
+    }
+    case 'clientMetrics': {
+      const days = optionalDaysOf(req) ?? 7;
+      if (days < 1 || days > MAX_DAYS) throw new ApiError(400, 'bad-days');
+      return db => readClientMetrics(db, days);
     }
     case 'opsHealth': {
       const days = optionalDaysOf(req) ?? 7;

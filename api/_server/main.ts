@@ -9,6 +9,7 @@ import accountConsents from '../consents.js';
 import action from '../action.js';
 import admin from '../admin.js';
 import awayReport from '../awayReport.js';
+import clientMetricsHandler from '../clientMetrics.js';
 import devAccount from '../devAccount.js';
 import events from '../events.js';
 import { blocksHandler, chatReportHandler } from '../chat.js';
@@ -40,12 +41,14 @@ import { recentChat, recentGuildChat, recentLocalChat, saveChat } from '../_data
 import { listLiveNotices } from '../_data/notices.js';
 import { guildIdOf } from '../_data/guilds.js';
 import { recordSession } from '../_data/activity.js';
+import { flushClientMetrics } from '../_data/clientMetrics.js';
 import { flushHttpMetrics } from '../_data/httpMetrics.js';
 import { saveLastPosition } from '../_data/position.js';
 import { flushWsMetrics } from '../_data/wsMetrics.js';
 import { reportServerIssue } from '../observability.js';
 import { applyKeepAlive } from './keepAlive.js';
 import { staleClient } from './clientBuild.js';
+import { createClientMetrics, provideClientMetricsRecorder } from './clientMetrics.js';
 import { consentGate, liveConsentAdmit } from './consentGate.js';
 import { createHttpMetrics } from './httpMetrics.js';
 import { legalPages } from './legalPages.js';
@@ -79,6 +82,7 @@ const routes: Record<string, NodeHandler> = {
   '/api/admin/retention': admin,
   '/api/admin/sessions': admin,
   '/api/away-report': awayReport,
+  '/api/client-metrics': clientMetricsHandler,
   '/api/dev/promote-test': devAccount,
   '/api/dev/reset-account': devAccount,
   '/api/events': events,
@@ -117,6 +121,11 @@ const wsMetrics = createWsMetrics({
   persist: rows => flushWsMetrics(database().db, rows),
   onError: e => { void reportServerIssue('WS 지표 기록 실패', e); },
 });
+const clientMetrics = createClientMetrics({
+  persist: rows => flushClientMetrics(database().db, rows),
+  onError: e => { void reportServerIssue('클라이언트 지표 기록 실패', e); },
+});
+provideClientMetricsRecorder(beacon => clientMetrics.record(beacon));
 const opsAlertDispatcher = createOpsAlertDispatcher({
   reportIssue: reportServerIssue,
   webhookUrl: process.env.OPS_ALERT_WEBHOOK_URL,
@@ -264,7 +273,7 @@ process.on('SIGTERM', () => {
   widgetHub().close();
   server.close(() => {
     void settleAfterResponse()
-      .then(() => Promise.all([httpMetrics.stop(), wsMetrics.stop()]))
+      .then(() => Promise.all([httpMetrics.stop(), wsMetrics.stop(), clientMetrics.stop()]))
       .finally(() => process.exit(0));
   });
 });
