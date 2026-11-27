@@ -108,9 +108,9 @@ describe('마이그레이션 runner', () => {
     expect(await tableExists('schema_migrations')).toBe(false);
   });
 
-  it('0061은 현재 up 마이그레이션 전체를 기준선으로 기록하고 서버 전용 RLS를 켠다', async () => {
+  it('0062는 현재 up 마이그레이션 전체를 기준선으로 기록하고 서버 전용 RLS를 켠다', async () => {
     const migrationsDir = join(import.meta.dirname, '..', 'supabase', 'migrations');
-    await client.query(await readFile(join(migrationsDir, '0061_schema_migrations.sql'), 'utf8'));
+    await client.query(await readFile(join(migrationsDir, '0062_schema_migrations.sql'), 'utf8'));
 
     const expected = filterMigrationFileNames(await readdir(migrationsDir));
     expect(await ledgerNames()).toEqual(expected);
@@ -121,7 +121,7 @@ describe('마이그레이션 runner', () => {
       `select count(*)::integer as count from pg_policies where schemaname = 'public' and tablename = 'schema_migrations'`);
     expect(policyRows[0].count).toBe(0);
 
-    await client.query(await readFile(join(migrationsDir, '0061_schema_migrations.down.sql'), 'utf8'));
+    await client.query(await readFile(join(migrationsDir, '0062_schema_migrations.down.sql'), 'utf8'));
     expect(await tableExists('schema_migrations')).toBe(false);
   });
 });

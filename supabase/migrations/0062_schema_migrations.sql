@@ -68,5 +68,6 @@ insert into public.schema_migrations (name) values
   ('0058_event_draw_weighting.sql'),
   ('0059_guild_rejoin_cooldown.sql'),
   ('0060_is_admin_role_guard.sql'),
-  ('0061_schema_migrations.sql')
+  ('0061_admin_mail_idempotency.sql'),
+  ('0062_schema_migrations.sql')
 on conflict do nothing;
