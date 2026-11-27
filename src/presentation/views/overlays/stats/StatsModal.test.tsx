@@ -193,8 +193,11 @@ describe('StatsModal(스탯창)', () => {
     expect(screen.getByText('불러오기 실패')).toBeTruthy();
   });
 
-  it('요약 탭은 현재 파워가 기준보다 낮으면 툴팁을 열지 않아도 페널티를 본문에 보인다', () => {
+  it('요약 탭은 현재 파워가 기준보다 낮으면 툴팁을 열지 않아도 페널티를 본문에 문장마다 줄바꿈해 보인다', () => {
     show(game({ rod: 1, boat: 6 })); // 태평양 외해/인도양 등 기준 미달이 아닌, 실제 미달이 되도록 spotState 없이도 기본 선택되는 태평양 연안(req=20, Lv1=10)
-    expect(screen.getByText(/GOOD과 PERFECT 영역이 사라지고/)).toBeInTheDocument();
+    const notice = screen.getByText(/GOOD과 PERFECT 영역이 사라지고/);
+    expect(notice).toBeInTheDocument();
+    expect(notice.className).toContain('whitespace-pre-line');
+    expect(notice.textContent).toBe('필요 파워(35)보다 낮아요.\nGOOD과 PERFECT 영역이 사라지고 희귀한 물고기가 덜 걸리며 입질이 늦어져요.');
   });
 });

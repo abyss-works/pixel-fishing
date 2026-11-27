@@ -17,7 +17,9 @@ describe('LetterModal', () => {
     const field = screen.getByPlaceholderText('예) 가방 칸을 조금 늘려 주세요');
     fireEvent.mouseEnter(field);
     expect(screen.queryByRole('tooltip')).toBeNull();
-    expect(screen.getByText(/답장은 계정 이메일로 드려요/)).toBeInTheDocument();
+    const hint = screen.getByText(/답장은 계정 이메일로 드려요/);
+    expect(hint).toBeInTheDocument();
+    expect(hint.textContent).toBe('건의, 버그 제보, 하고 싶은 말 아무거나 좋아요.\n답장은 계정 이메일로 드려요.');
     fireEvent.change(field, { target: { value: '안녕하세요' } });
     fireEvent.click(screen.getByRole('button', { name: '보내기' }));
     expect(dispatch).toHaveBeenCalledWith({ type: 'sendLetter', text: '안녕하세요' });

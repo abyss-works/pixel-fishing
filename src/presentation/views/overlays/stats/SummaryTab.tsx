@@ -55,8 +55,8 @@ export default function SummaryTab({ game, summary, row, here }: {
         </div>
         <PowerMeter power={data.currentPower} requirement={data.requirement} />
         {data.underpowered && (
-          <p className="text-2xs text-orange leading-snug">
-            필요 파워({data.requirement})보다 낮아요. GOOD과 PERFECT 영역이 사라지고 희귀한 물고기가 덜 걸리며 입질이 늦어져요.
+          <p className="text-2xs text-orange leading-snug whitespace-pre-line">
+            {`필요 파워(${data.requirement})보다 낮아요.\nGOOD과 PERFECT 영역이 사라지고 희귀한 물고기가 덜 걸리며 입질이 늦어져요.`}
           </p>
         )}
         <div className="grid grid-cols-3">
