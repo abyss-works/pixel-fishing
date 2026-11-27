@@ -12,7 +12,7 @@ import { database } from './_db/client.js';
 import { guildPreview } from './_data/guilds.js';
 import type { GuildPreview } from './_data/guilds.js';
 import { withMeta } from './_server/ogMeta.js';
-import { clientKey, createRateLimiter } from './_server/rateLimit.js';
+import { clientKey, createSharedRateLimiter } from './_server/rateLimit.js';
 import { guildLinkPath, normalizeGuildCode } from '../src/game/rules/guild.js';
 import { ApiError, toApiError } from './errors.js';
 import { reportServerIssue } from './observability.js';
@@ -35,7 +35,7 @@ export function inviteMetaText(p: GuildPreview): { title: string; description: s
  * @param indexHtml 빌드된 index.html을 읽는다(처음 한 번 읽고 기억한다)
  */
 export function guildInviteRoutes(origin: string, indexHtml: () => Promise<string>): { api: NodeHandler; page: NodeHandler } {
-  const limit = createRateLimiter({ windowMs: 60_000, max: PER_MINUTE });
+  const limit = createSharedRateLimiter({ prefix: 'guild-invites', windowMs: 60_000, max: PER_MINUTE });
   let html: Promise<string> | null = null;
   const page = () => (html ??= indexHtml().catch(e => { html = null; throw e; }));
 
@@ -51,8 +51,9 @@ export function guildInviteRoutes(origin: string, indexHtml: () => Promise<strin
       if (req.method !== 'GET') throw new ApiError(405, 'method-not-allowed');
       const key = clientKey(req);
       const now = Date.now();
-      if (!limit.take(key, now)) {
-        throw new ApiError(429, 'rate-limited', { retryAfter: String(limit.retryAfterSec(key, now)) });
+      const rate = await limit.check(key, now);
+      if (!rate.allowed) {
+        throw new ApiError(429, 'rate-limited', { retryAfter: String(rate.retryAfterSec) });
       }
       if (!process.env.DATABASE_URL) throw new ApiError(500, 'server-config');
       let invite: GuildPreview | null;
@@ -77,7 +78,7 @@ export function guildInviteRoutes(origin: string, indexHtml: () => Promise<strin
   const pageHandler: NodeHandler = async (req, res) => {
     const base = await page();
     let preview: GuildPreview | null = null;
-    if (limit.take(clientKey(req), Date.now())) {
+    if ((await limit.check(clientKey(req), Date.now())).allowed) {
       preview = await lookup(req.params?.code).catch(async (e: unknown) => {
         await reportServerIssue('초대 링크 미리보기 읽기 실패', e, { code: req.params?.code });
         return null;

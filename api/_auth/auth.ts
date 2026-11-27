@@ -8,6 +8,8 @@ import type { Pool } from 'pg';
 import { accountLinking, dropOAuthTokens, finishGoogleLink, googleProvider, guardAuthRequests, validateGoogleLink } from './googleLink.js';
 import type { GoogleConfig, GuestLinkedReward, RecordLinkConsent } from './googleLink.js';
 import { googleSwitchPlugin } from './googleSwitch.js';
+import { createRedisSecondaryStorage } from './redisStorage.js';
+import { redisUrl } from '../_server/redisClient.js';
 import { TRUSTED_PROXY_CIDRS } from './trustedProxy.js';
 
 export interface AuthConfig {
@@ -115,6 +117,7 @@ function withRetryAfterHeader<
 
 export function createAuth(config: AuthConfig) {
   const finishLink = finishGoogleLink(config.recordLinkConsent, config.onGuestLinked);
+  const secondaryStorage = redisUrl() ? createRedisSecondaryStorage() : undefined;
   const auth = betterAuth({
     database: config.pool,
     secret: config.secret,
@@ -126,8 +129,10 @@ export function createAuth(config: AuthConfig) {
     session: {
       ...sessionTable,
       expiresIn: SESSION_EXPIRES_IN,
+      storeSessionInDatabase: true,
       cookieCache: { enabled: true, maxAge: 5 * 60 },
     },
+    ...(secondaryStorage ? { secondaryStorage } : {}),
     socialProviders: { google: googleProvider(config.google) },
     account: { ...accountTable, accountLinking, updateAccountOnSignIn: false },
     verification: verificationTable,
@@ -141,6 +146,7 @@ export function createAuth(config: AuthConfig) {
     hooks: { before: guardAuthRequests },
     rateLimit: {
       ...GLOBAL_RATE_LIMIT,
+      ...(secondaryStorage ? { storage: 'secondary-storage' as const } : {}),
       customRules: {
         '/sign-in/anonymous': anonymousSignInRateLimit(),
         '/sign-in/social': SOCIAL_SIGN_IN_RATE_LIMIT,
@@ -175,6 +181,7 @@ export const adminSecret = (secret: string): string =>
  * 구글을 연결한 적 없는 계정은 로그인하지 못한다. 연결과 익명 로그인은 게임 인증만 제공한다.
  */
 export function createAdminAuth(config: Omit<AuthConfig, 'recordLinkConsent'>) {
+  const secondaryStorage = redisUrl() ? createRedisSecondaryStorage() : undefined;
   const auth = betterAuth({
     database: config.pool,
     secret: adminSecret(config.secret),
@@ -182,7 +189,11 @@ export function createAdminAuth(config: Omit<AuthConfig, 'recordLinkConsent'>) {
     basePath: '/api/admin/auth',
     disabledPaths: DISABLED_EMAIL_PASSWORD_PATHS,
     user: userTable,
-    session: sessionTable,
+    session: {
+      ...sessionTable,
+      storeSessionInDatabase: true,
+    },
+    ...(secondaryStorage ? { secondaryStorage } : {}),
     socialProviders: { google: googleProvider(config.google) },
     // 관리자 인증은 로그인만 한다. 계정 연결은 게임 인증에서만 한다
     account: { ...accountTable, accountLinking: { ...accountLinking, enabled: false }, updateAccountOnSignIn: false },
@@ -191,6 +202,7 @@ export function createAdminAuth(config: Omit<AuthConfig, 'recordLinkConsent'>) {
     hooks: { before: guardAuthRequests },
     rateLimit: {
       ...GLOBAL_RATE_LIMIT,
+      ...(secondaryStorage ? { storage: 'secondary-storage' as const } : {}),
       customRules: {
         '/sign-in/social': { window: 10, max: 20 },
       },
