@@ -23,7 +23,7 @@ export default function AdjustedAmount({ amount, className, inButton }: { amount
   ];
   return (
     <Tip text={<TipList rows={rows} />} {...(inButton ? { wraps: true, hoverOnly: true } : {})}>
-      <span className="pf-accent inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+      <span className="pf-accent inline-flex flex-wrap items-baseline justify-end gap-x-1.5 gap-y-0.5">
         <span className="sr-only">{rows.map(row => `${row.label} ${row.value}`).join(', ')}</span>
         <s aria-hidden="true" className="text-text-dim text-xs whitespace-nowrap">{fmtGold(amount.base)}</s>
         <span aria-hidden="true" className={cx('whitespace-nowrap', className)}>{fmtGold(amount.value)}</span>

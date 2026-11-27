@@ -68,4 +68,11 @@ describe('AdjustedAmount', () => {
     expect(tip).toHaveTextContent('[길드] 판매가 보너스+60G');
     expect(tip).toHaveTextContent('[비약] 작은 바다 영약+53G');
   });
+
+  it('두 줄로 감싸질 때도 우측 정렬(justify-end)을 유지한다', () => {
+    render(<AdjustedAmount amount={{ base: 1000, mods: [{ id: 'relic', label: '마미 와타의 거울', delta: -300 }], value: 700 }} />);
+    const wrap = screen.getByText('700G').parentElement!;
+    expect(wrap.className).toContain('flex-wrap');
+    expect(wrap.className).toContain('justify-end');
+  });
 });
