@@ -13,11 +13,11 @@ import FishSprite from '../fish/FishSprite';
 import PipDioramaStage from './PipDioramaStage';
 
 const MUTANT_WISP_SPECS = [
-  { left: '16%', delay: '-0.3s', lg: false },
-  { left: '34%', delay: '-1.1s', lg: true },
-  { left: '52%', delay: '-1.8s', lg: false },
-  { left: '70%', delay: '-0.7s', lg: true },
-  { left: '86%', delay: '-2.1s', lg: false },
+  { left: '16%', delay: '-0.3s', large: false },
+  { left: '34%', delay: '-1.1s', large: true },
+  { left: '52%', delay: '-1.8s', large: false },
+  { left: '70%', delay: '-0.7s', large: true },
+  { left: '86%', delay: '-2.1s', large: false },
 ] as const;
 
 interface PipMonitorViewProps {
@@ -171,7 +171,7 @@ export default function PipMonitorView({
                       {MUTANT_WISP_SPECS.map((wisp, idx) => (
                         <span
                           key={idx}
-                          className={cx('pf-pip-wisp', wisp.lg && 'lg')}
+                          className={cx('pf-pip-wisp', wisp.large && 'lg')}
                           style={{ left: wisp.left, animationDelay: wisp.delay }}
                         />
                       ))}
