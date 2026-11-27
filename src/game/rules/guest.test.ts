@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ACTION_TYPES } from './actions';
 import type { GameAction } from './actions';
-import { guestActionVerdict, guestHasNoProgress } from './guest';
+import { guestActionVerdict, guestCouponVerdict, guestHasNoProgress } from './guest';
 import { newState } from './logic';
 import type { GameState } from './logic';
 import { BASE_PACKS } from '../world';
@@ -31,10 +31,10 @@ describe('게스트 액션 판정 (guestActionVerdict)', () => {
     expect(guestActionVerdict({ type: 'dismissBaitRefund' })).toBe('ok');
   });
 
-  it('출항준비 쿠폰만 게스트에게 허용되고 다른 쿠폰은 계정 전용으로 거부한다', () => {
+  it('쿠폰 사용은 액션 단계에서 통과해 서버의 동적 쿠폰 상한 판정으로 넘긴다', () => {
     expect(guestActionVerdict({ type: 'redeemCoupon', code: '출항준비' })).toBe('ok');
     expect(guestActionVerdict({ type: 'redeemCoupon', code: ' 출항준비 ' })).toBe('ok');
-    expect(guestActionVerdict({ type: 'redeemCoupon', code: 'x' })).toBe('account-only');
+    expect(guestActionVerdict({ type: 'redeemCoupon', code: 'x' })).toBe('ok');
   });
 
   it('바다로 나가는 이동과 마을 밖 낚시는 마을 전용 코드로 거부한다', () => {
@@ -53,14 +53,14 @@ describe('게스트 액션 판정 (guestActionVerdict)', () => {
     expect(guestActionVerdict({ type: 'travel' } as unknown as GameAction)).toBe('guest-village-only');
   });
 
-  it('닉네임 변경, 편지, 옷장, 의뢰, 쿠폰 같은 그 밖의 액션은 계정 전용 코드로 거부한다', () => {
+  it('닉네임 변경, 편지, 옷장, 의뢰, 보상 수령 같은 그 밖의 액션은 계정 전용 코드로 거부한다', () => {
     const rejected: GameAction[] = [
       { type: 'setNickname', nickname: 'x' }, { type: 'sendLetter', text: 'x' },
       { type: 'changeClothes', shirt: 0, pants: 0 }, { type: 'buyHat', hat: 'a' }, { type: 'wearHat', hat: null },
       { type: 'acceptQuest', questId: 'q', port: 'harbor' }, { type: 'deliverBounty', questId: 'q' },
       { type: 'abandonQuest', questId: 'q' },
       { type: 'resolveChallenge', questId: 'q', success: true, hits: 1, misses: 0 },
-      { type: 'redeemCoupon', code: 'x' }, { type: 'claimRelief', code: 'x' }, { type: 'claimMail', id: 1 },
+      { type: 'claimRelief', code: 'x' }, { type: 'claimMail', id: 1 },
       { type: 'exhibit', uid: 'u', slot: 0 }, { type: 'exchangeArtifact', artifact: 'a' }, { type: 'levelUpArtifact', artifact: 'a' },
       { type: 'enterEventZone' }, { type: 'leaveEventZone' }, { type: 'settleEventReward' },
     ];
@@ -86,7 +86,7 @@ describe('게스트 액션 판정 (guestActionVerdict)', () => {
   it('모든 액션 종류가 분류돼 있고, 새 액션은 이 표에 넣어야 통과한다', () => {
     const open = [
       'boot', 'sell', 'upgradeRod', 'buyBoat', 'seeTutorial', 'setLocked', 'autoLock', 'setAutoLockOnCatch',
-      'dismissBaitRefund', 'eat', 'usePotion', 'debug', 'debugBatch', 'debugSnapshot', 'import',
+      'dismissBaitRefund', 'eat', 'usePotion', 'redeemCoupon', 'debug', 'debugBatch', 'debugSnapshot', 'import',
     ];
     const villageOnly = ['travel', 'catch'];
     for (const type of ACTION_TYPES) {
@@ -104,6 +104,24 @@ describe('게스트 액션 판정 (guestActionVerdict)', () => {
       const expected = pack.region === 'village' ? 'ok' : 'guest-village-only';
       expect(guestActionVerdict(travelTo('base', id)), id).toBe(expected);
     }
+  });
+});
+
+describe('게스트 쿠폰 상한 판정 (guestCouponVerdict)', () => {
+  it('정적 출항준비 쿠폰은 통과한다', () => {
+    expect(guestCouponVerdict('출항준비', null)).toBe('ok');
+    expect(guestCouponVerdict(' 출항준비 ', 100)).toBe('ok');
+  });
+
+  it('선착순 총량 제한이 없는 동적 쿠폰은 통과한다', () => {
+    expect(guestCouponVerdict('EVENT2026', null)).toBe('ok');
+    expect(guestCouponVerdict('  EVENT2026  ', null)).toBe('ok');
+  });
+
+  it('선착순 총량 제한이 있는 동적 쿠폰은 계정 전용으로 거부한다', () => {
+    expect(guestCouponVerdict('LIMITED10', 10)).toBe('account-only');
+    expect(guestCouponVerdict('LIMITED1', 1)).toBe('account-only');
+    expect(guestCouponVerdict('LIMITED0', 0)).toBe('account-only');
   });
 });
 
