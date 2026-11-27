@@ -23,7 +23,7 @@ import { migrate, newState } from '../src/game/rules/logic.js';
 import type { FishInstance, FormId, FormRecord, GameState, Judgment } from '../src/game/rules/logic.js';
 import {
   autoLockKey, buildCatchInfo, canFish, catchFameOf, decideCatchAutoLock, FISH, fishPool, formName, instanceFish,
-  evictionPriceRows, makeInstance, nextDexRec, pickEvict, priceOf, pruneAutoLockedIds, RARITY_ORDER, timingPos,
+  evictionPriceRows, makeInstance, nextDexRec, pickEvict, priceOf, pruneAutoLockedIds, RARITY_ORDER, rodStats, timingPos,
   matchBountyCatch, rollCatchExtras,
 } from '../src/game/rules/logic.js';
 import type { Fish } from '../src/game/rules/logic.js';
@@ -68,6 +68,8 @@ import { clearsOf, splitQuestRows } from '../src/game/rules/bountyRows.js';
 import type { QuestRow } from '../src/game/rules/bountyRows.js';
 import { gameDayOf, gameDayStartISO, previousGameDayISO } from '../src/game/rules/time.js';
 import type { DayPhase } from '../src/game/rules/time.js';
+import { parseIntegrityConfig, processIntegrityInput } from '../src/game/rules/integrity.js';
+import type { IntegrityEvaluation, IntegrityInput } from '../src/game/rules/integrity.js';
 import { checkNickname, pickGuestName } from '../src/game/rules/nickname.js';
 import { powerZones, rodAxes, rodPower, zonesFor } from '../src/game/rules/stats.js';
 import { MIN_ACTION_GAP_MS, SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
@@ -104,6 +106,7 @@ import {
   upsertTrioProgressFragment,
 } from './_data/events.js';
 import { guildTotalOf, recordGuildActivity } from './_data/guilds.js';
+import { integrityEventFragment, integrityStateFragment, readIntegrityState } from './_data/integrity.js';
 import { loadWidgetSummary } from './_data/widget.js';
 import { weeklyFameFragment } from './_data/rank.js';
 import {
@@ -134,6 +137,18 @@ function scalarState(row: StateRow, counters: Record<string, number> = {}, clear
   return migrate({ ...blobInput(row.data), gold: Number(row.gold),
     fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {},
     achievementCounters: counters, clearedNamed });
+}
+
+/** 추첨 보정 입력 — 수동 캐치의 위치만 sample이고 auto·위치 없음·다른 게임 조작은 연속을 끊는다.
+ *  boot와 읽기 전용 스냅샷은 플레이 조작이 아니라 연속에 영향을 주지 않는다. */
+function integrityInputOf(action: GameAction, row: StateRow, atMs: number): IntegrityInput | null {
+  if (action.type === 'boot' || action.type === 'debugSnapshot') return null;
+  if (action.type !== 'catch') return { kind: 'break', at: atMs };
+  const rodLevel = action.spot === 'championship' ? EVENT2_STANDARD_SPEC.rodLevel : row.rod;
+  const pos = timingPos(action.biteElapsed, rodStats(rodLevel).sweep);
+  return action.judgment !== 'auto' && pos !== null
+    ? { kind: 'sample', pos, at: atMs }
+    : { kind: 'break', at: atMs };
 }
 import { reportServerIssue } from './observability.js';
 import { ApiError, toApiError } from './errors.js';
@@ -635,6 +650,18 @@ async function route(req: Req, res: Res): Promise<void> {
     }
   }
 
+  // 계정별 추첨 보정 — 설정이 없으면 계통 전체가 비활성이다. 평가는 액션 확정 전에 하되,
+  // 상태·근거 기록은 아래 확정 문장에 조각으로만 들어가 규칙 거부나 낙관 락 경합 때는 남지 않는다.
+  const integrityConfig = parseIntegrityConfig(process.env.DRAW_WEIGHTING_CONFIG);
+  let integrityEval: IntegrityEvaluation | null = null;
+  if (integrityConfig) {
+    const input = integrityInputOf(action, row, Date.now());
+    if (input) {
+      const prior = await step('db-read', { uid, action: action.type }, () => readIntegrityState(db, uid));
+      integrityEval = processIntegrityInput(prior, input, integrityConfig);
+    }
+  }
+
   // 개발 도구 스냅샷 저장용 수배 DB 행 조회 — 상태를 바꾸지 않고 현재 버전과 수배 표 행만 돌려준다.
   if (action.type === 'debugSnapshot') {
     const snapshotBounty = await step('db-read', { uid, action: action.type }, () => readSnapshotBounty(db, uid));
@@ -777,13 +804,14 @@ async function route(req: Req, res: Res): Promise<void> {
     const champStateBase = skipDetail
       ? scalarState(row, loaded.counters, loaded.clearedNamed)
       : assemble(row, instances, records, loaded.counters, loaded.clearedNamed);
-    const champRes = await championshipCatch(db, uid, row, champStateBase, action.judgment, now);
+    const champRes = await championshipCatch(db, uid, row, champStateBase, action.judgment, now, integrityEval?.modifier ?? 1);
     out = champRes.outcome;
     champCatchCommit = champRes.commit;
     if (out.ok) prevFortune = champStateBase.fortune;
   } else if (action.type === 'catch' && skipDetail) {
     out = await fastCatch(db, uid, row, action.spot, action.judgment, now, guildEffects, user.email === null,
-      loaded.counters, loaded.clearedNamed, action.forcePhase, action.biteElapsed, bag => { catchBagSummary = bag; });
+      loaded.counters, loaded.clearedNamed, action.forcePhase, action.biteElapsed, bag => { catchBagSummary = bag; },
+      integrityEval?.modifier ?? 1);
     if (out.ok) {
       catchBase = scalarState(row, loaded.counters, loaded.clearedNamed);
       prevFortune = catchBase.fortune;
@@ -807,6 +835,7 @@ async function route(req: Req, res: Res): Promise<void> {
       guild: guildEffects,
       event: eventDeps,
       guest: user.email === null,
+      ...(integrityEval ? { integrityModifier: integrityEval.modifier } : {}),
     };
     const actionState = action.type === 'redeemCoupon' && dynamicCouponMeta && dynamicCouponMeta.perAccountLimit > 1
       && dynamicCouponMeta.userRedemptions < dynamicCouponMeta.perAccountLimit
@@ -830,7 +859,7 @@ async function route(req: Req, res: Res): Promise<void> {
     const named = drawNamedEncounter(catchBase.namedPity, encounterQuests(bounty), action.spot, now,
       Math.random, action.forceEncounter === true,
       namedWeightBonus(catchBase, action.judgment, now, guildEffects, achievementBonusesOf(catchBase)),
-      totalLuckMultOf(out.state, now, 'named'));
+      totalLuckMultOf(out.state, now, 'named') * (integrityEval?.modifier ?? 1));
     out = { ...out, state: { ...out.state, namedPity: named.pity } };
     if (named.quest) {
       out.events.push({ type: 'ticket', payload: { questId: named.quest.id, ...(named.byCeiling ? { pity: true } : {}) } });
@@ -846,6 +875,8 @@ async function route(req: Req, res: Res): Promise<void> {
   const eventNow = nowISO;
   const guard = COMMIT_GUARD;
   const fragments: (SQL | null)[] = [...writeFragments(guard, uid, out.writes, nowISO)];
+  if (integrityEval?.stateChanged) fragments.push(integrityStateFragment(guard, uid, integrityEval, nowISO));
+  if (integrityEval?.triggered) fragments.push(integrityEventFragment(guard, uid, integrityEval, nowISO));
   if (action.type === 'acceptQuest' && typeof action.questId === 'string' && typeof action.port === 'string') {
     const quest = bountyById(action.questId);
     if (quest) fragments.push(...acceptFragments(guard, uid, quest, action.port, nowISO, dayStart));
@@ -1343,7 +1374,8 @@ export function catchProgressQuests(events: readonly GameEvent[], activeIds: rea
  */
 export async function fastCatch(db: Executor, uid: string, row: StateRow, spot: SpotId, judgmentIn: Judgment, now: string,
   guild: GuildEffects, guest: boolean, counters: Record<string, number>, clearedNamed: string[],
-  forcePhase?: DayPhase, biteElapsed?: number, onBagSummary?: (bag: WidgetBagSummary) => void): Promise<ApplyOutcome> {
+  forcePhase?: DayPhase, biteElapsed?: number, onBagSummary?: (bag: WidgetBagSummary) => void,
+  integrityModifier = 1): Promise<ApplyOutcome> {
   const initialBase = migrate({ ...blobInput(row.data), gold: Number(row.gold),
     fame: Number(row.fame), boat: row.boat, rod: row.rod, bag: [], exhibit: [], dex: {},
     achievementCounters: counters, clearedNamed });
@@ -1376,10 +1408,10 @@ export async function fastCatch(db: Executor, uid: string, row: StateRow, spot: 
     base, spot, judgment, rodPower(base), pz.mult, Math.random,
     {
       ...phaseOpts,
-      rarityLuck: totalLuckMultOf(base, now, 'rarity'),
-      legendaryLuck: totalLuckMultOf(base, now, 'legendary'),
+      rarityLuck: totalLuckMultOf(base, now, 'rarity') * integrityModifier,
+      legendaryLuck: totalLuckMultOf(base, now, 'legendary') * integrityModifier,
       nightLuck: totalLuckMultOf(base, now, 'night'),
-      mutationLuck: totalLuckMultOf(base, now, 'mutation'),
+      mutationLuck: totalLuckMultOf(base, now, 'mutation') * integrityModifier,
     },
     id => owned.has(id), guild, cook, achBonuses,
   );
@@ -1394,7 +1426,7 @@ export async function fastCatch(db: Executor, uid: string, row: StateRow, spot: 
     ? { count: Number(d.count), maxSize: d.max_size, first: d.first_caught?.slice(0, 10) ?? null }
     : undefined;
   const isNew = (prev?.count ?? 0) === 0;
-  const info = buildCatchInfo(fish, extras, isNew, totalLuckMultOf(base, now, 'bigCatch'));
+  const info = buildCatchInfo(fish, extras, isNew, totalLuckMultOf(base, now, 'bigCatch') * integrityModifier);
   const rawInst = makeInstance(fish, extras, { uid: crypto.randomUUID(), now, spot, judgment });
   const prevAutoInst: FishInstance | null = prevAuto
     ? {
@@ -1564,6 +1596,7 @@ async function championshipCatch(
   baseState: GameState,
   claimedJudgment: Judgment,
   nowISO: string,
+  integrityModifier = 1,
 ): Promise<{ outcome: ApplyOutcome; commit: ChampionshipCatchCommit | null }> {
   const activeChamp = await step('db-read', { uid, action: 'catch' }, () => activeEventOfKind(db, 'championship', nowISO));
   if (!activeChamp) {
@@ -1580,19 +1613,19 @@ async function championshipCatch(
   const [wCommon, wRare, wEpic, wLegendary] = EVENT2_STANDARD_SPEC.weights;
   const rarity = pickWeightedEvent([
     ['common', wCommon * m.total],
-    ['rare', wRare],
-    ['epic', wEpic],
-    ['legendary', wLegendary],
+    ['rare', wRare * integrityModifier],
+    ['epic', wEpic * integrityModifier],
+    ['legendary', wLegendary * integrityModifier * integrityModifier],
   ] as const, Math.random);
 
   const pool = EVENT_FISH.filter(f => f.rarity === rarity);
   const ef = pool[Math.min(pool.length - 1, Math.floor(Math.random() * pool.length))] ?? EVENT_FISH[0];
   const fishLike = toEventFishLike(ef);
-  const extras = rollCatchExtras(fishLike, Math.random, { normal: 75, variant: 25 });
+  const extras = rollCatchExtras(fishLike, Math.random, { normal: 75, variant: 25 * integrityModifier });
   const prevDex = prev?.dex ?? {};
   const prevFormCount = prevDex[ef.id]?.[extras.form] ?? 0;
   const isNew = prevFormCount === 0;
-  const info = buildCatchInfo(fishLike, extras, isNew, 1);
+  const info = buildCatchInfo(fishLike, extras, isNew, integrityModifier);
 
   const catchScore = extras.form === 'variant' ? ef.variant.score : ef.score;
   const boatIdx = Math.max(0, Math.min(EVENT2_SETTLEMENT_RATES.idle.length - 1, row.boat));
