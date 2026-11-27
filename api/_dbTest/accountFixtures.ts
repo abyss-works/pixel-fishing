@@ -8,7 +8,7 @@ export const USER_TABLES = [
   'bounty_licenses', 'bounty_accepts', 'bounty_clears', 'bounty_progress', 'bounty_tickets', 'blocks',
   'chat_messages', 'chat_reports', 'play_sessions', 'user_active_days', 'guild_members', 'guild_contributions', 'guild_logs',
   'guild_bonus_donations', 'guild_member_enhancements', 'last_positions', 'guild_join_requests', 'consent_records',
-  'achievement_counters', 'daily_fortunes', 'ranking_weekly_fame',
+  'achievement_counters', 'daily_fortunes', 'ranking_weekly_fame', 'integrity_states', 'integrity_events',
   'coupon_redemptions', 'event_trio_progress', 'event_championship_scores', 'event_draws',
   'widget_auth_codes', 'widget_tokens',
 ] as const;
@@ -102,6 +102,9 @@ export async function seedFullAccount(client: Client, spec: AccountSpec & { nick
   await client.query(`insert into public.consent_records (user_id, document, version, age_confirmed, channel) values ($1, 'terms', '2030-01-01', true, 'google-link')`, [uid]);
   await client.query(`insert into public.achievement_counters (user_id, key, value) values ($1, 'sell.gold', 0)`, [uid]);
   await client.query(`insert into public.daily_fortunes (user_id, day, kind, index) values ($1, '2030-01-01', 'fish', 3)`, [uid]);
+  await client.query(`insert into public.integrity_states (user_id, pressure, stage, samples) values ($1, 1, 1, '[]')`, [uid]);
+  await client.query(`insert into public.integrity_events (user_id, detector, signal, pressure_before, pressure_after, stage_before, stage_after)
+    values ($1, 'input-window', '{}', 0, 1, 0, 1)`, [uid]);
   await client.query(`insert into public.coupons (code, gold, description, active) values ('ACCOUNT-FIXTURE', 100, '계정 삭제 테스트', true) on conflict do nothing`);
   await client.query(`insert into public.coupon_redemptions (code, user_id) values ('ACCOUNT-FIXTURE', $1)`, [uid]);
   await client.query(`insert into public.live_events (id, kind, title, starts_at, ends_at) values ('account-fixture-evt', 'trio', '테스트', '2030-01-01T00:00:00Z', '2030-01-02T00:00:00Z') on conflict do nothing`);

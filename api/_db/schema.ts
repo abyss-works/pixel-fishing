@@ -1,7 +1,7 @@
 // 서버가 쓰는 표의 Drizzle 선언 — 쿼리 작성용이다. 표의 정본은 번호 SQL 마이그레이션이며,
 // 선언이 실제 표와 같은지는 스키마 테스트가 검사한다. RLS 정책·뷰·함수는 마이그레이션에만 있다.
 // 시각 열은 Date로 읽고 쓴다(timestamptz라 시간대와 무관하게 같은 시점이 저장된다).
-import { bigint, bigserial, boolean, date, integer, jsonb, pgTable, primaryKey, real, smallint, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { bigint, bigserial, boolean, date, doublePrecision, integer, jsonb, pgTable, primaryKey, real, smallint, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 const at = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
@@ -389,5 +389,25 @@ export const adminAuditLogs = pgTable('admin_audit_logs', {
   targetId: uuid('target_id'),
   reason: text('reason').notNull().default(''),
   detail: jsonb('detail').$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: at('created_at').notNull().defaultNow(),
+});
+
+export const integrityStates = pgTable('integrity_states', {
+  userId: uuid('user_id').primaryKey(),
+  pressure: doublePrecision('pressure').notNull().default(0),
+  stage: smallint('stage').notNull().default(0),
+  samples: jsonb('samples').notNull().default([]),
+  updatedAt: at('updated_at').notNull().defaultNow(),
+});
+
+export const integrityEvents = pgTable('integrity_events', {
+  id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+  userId: uuid('user_id').notNull(),
+  detector: text('detector').notNull(),
+  signal: jsonb('signal').notNull(),
+  pressureBefore: doublePrecision('pressure_before').notNull(),
+  pressureAfter: doublePrecision('pressure_after').notNull(),
+  stageBefore: smallint('stage_before').notNull(),
+  stageAfter: smallint('stage_after').notNull(),
   createdAt: at('created_at').notNull().defaultNow(),
 });
