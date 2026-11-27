@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { database } from './_db/client.js';
 import { onboardingFunnel } from './_data/adminFunnel.js';
 import { flushHttpMetrics } from './_data/httpMetrics.js';
+import { flushWsMetrics } from './_data/wsMetrics.js';
 import { kstDayOf } from './_server/httpMetrics.js';
 import { adminSessionHeaders, seedUser, startActionEnv, testUid, userToken } from './_dbTest/actionHarness.js';
 import type { ActionEnv } from './_dbTest/actionHarness.js';
@@ -181,12 +182,19 @@ describe('관리자 온보딩 퍼널 및 HTTP 지표 실제 DB 검증', () => {
     expect((await callAdmin({ q: 'httpMetrics' }, userToken(U2))).status).toBe(403);
 
     // 빈 HTTP 지표 조회
+    const emptyLatency = { p50Ms: null, p95Ms: null, p99Ms: null, avgMs: null, samples: 0 };
+    const emptyReasons = { catchTooSoon: 0, letterGap: 0, other: 0 };
     const emptyMetrics = await callAdmin({ q: 'httpMetrics' }, userToken(U1));
     expect(emptyMetrics.status).toBe(200);
     expect(emptyMetrics.body).toEqual({
       days: 30,
       scope: 'app_server',
-      summary: { total: 0, status426: 0, status429: 0, status5xx: 0, rate426: 0, rate429: 0, rate5xx: 0 },
+      summary: {
+        total: 0, status409: 0, status426: 0, status429: 0, status4xx: 0, status5xx: 0,
+        rate409: 0, rate426: 0, rate429: 0, rate4xx: 0, rate5xx: 0,
+        latency: emptyLatency,
+        rateLimitReasons: emptyReasons,
+      },
       daily: [],
       byRoute: [],
       rows: [],
@@ -220,34 +228,73 @@ describe('관리자 온보딩 퍼널 및 HTTP 지표 실제 DB 검증', () => {
       days: 30,
       scope: 'app_server',
       summary: {
-        total: 150, status426: 3, status429: 9, status5xx: 4,
-        rate426: 0.02, rate429: 0.06, rate5xx: 0.026667,
+        total: 150, status409: 0, status426: 3, status429: 9, status4xx: 0, status5xx: 4,
+        rate409: 0, rate426: 0.02, rate429: 0.06, rate4xx: 0, rate5xx: 0.026667,
+        latency: emptyLatency,
+        rateLimitReasons: emptyReasons,
       },
       daily: [
         {
-          day: yesterday, total: 30, status426: 1, status429: 0, status5xx: 2,
-          rate426: 0.033333, rate429: 0, rate5xx: 0.066667,
+          day: yesterday, total: 30, status409: 0, status426: 1, status429: 0, status4xx: 0, status5xx: 2,
+          rate409: 0, rate426: 0.033333, rate429: 0, rate4xx: 0, rate5xx: 0.066667,
+          latency: emptyLatency,
+          rateLimitReasons: emptyReasons,
         },
         {
-          day: today, total: 120, status426: 2, status429: 9, status5xx: 2,
-          rate426: 0.016667, rate429: 0.075, rate5xx: 0.016667,
+          day: today, total: 120, status409: 0, status426: 2, status429: 9, status4xx: 0, status5xx: 2,
+          rate409: 0, rate426: 0.016667, rate429: 0.075, rate4xx: 0, rate5xx: 0.016667,
+          latency: emptyLatency,
+          rateLimitReasons: emptyReasons,
         },
       ],
       byRoute: [
         {
-          routeGroup: 'action', total: 130, status426: 3, status429: 5, status5xx: 4,
-          rate426: 0.023077, rate429: 0.038462, rate5xx: 0.030769,
+          routeGroup: 'action', total: 130, status409: 0, status426: 3, status429: 5, status4xx: 0, status5xx: 4,
+          rate409: 0, rate426: 0.023077, rate429: 0.038462, rate4xx: 0, rate5xx: 0.030769,
+          latency: emptyLatency,
+          rateLimitReasons: emptyReasons,
         },
         {
-          routeGroup: 'auth', total: 20, status426: 0, status429: 4, status5xx: 0,
-          rate426: 0, rate429: 0.2, rate5xx: 0,
+          routeGroup: 'auth', total: 20, status409: 0, status426: 0, status429: 4, status4xx: 0, status5xx: 0,
+          rate409: 0, rate426: 0, rate429: 0.2, rate4xx: 0, rate5xx: 0,
+          latency: emptyLatency,
+          rateLimitReasons: emptyReasons,
         },
       ],
       rows: [
-        { day: today, routeGroup: 'action', total: 100, status426: 2, status429: 5, status5xx: 2 },
-        { day: today, routeGroup: 'auth', total: 20, status426: 0, status429: 4, status5xx: 0 },
-        { day: yesterday, routeGroup: 'action', total: 30, status426: 1, status429: 0, status5xx: 2 },
+        {
+          day: today, routeGroup: 'action', total: 100, status409: 0, status426: 2, status429: 5, status4xx: 0, status5xx: 2,
+          latencyBuckets: { le50: 0, le100: 0, le250: 0, le500: 0, le1000: 0, le2500: 0, gt2500: 0, sumMs: 0 },
+          rateLimitReasons: emptyReasons,
+        },
+        {
+          day: today, routeGroup: 'auth', total: 20, status409: 0, status426: 0, status429: 4, status4xx: 0, status5xx: 0,
+          latencyBuckets: { le50: 0, le100: 0, le250: 0, le500: 0, le1000: 0, le2500: 0, gt2500: 0, sumMs: 0 },
+          rateLimitReasons: emptyReasons,
+        },
+        {
+          day: yesterday, routeGroup: 'action', total: 30, status409: 0, status426: 1, status429: 0, status4xx: 0, status5xx: 2,
+          latencyBuckets: { le50: 0, le100: 0, le250: 0, le500: 0, le1000: 0, le2500: 0, gt2500: 0, sumMs: 0 },
+          rateLimitReasons: emptyReasons,
+        },
       ],
+    });
+
+    // opsHealth 실제 Postgres 통합 검증
+    await flushWsMetrics(database().db, [
+      { day: today, upgradesOk: 12, reject401: 1, reject403: 0, reject500: 0, closeNormal: 10, closeAbnormal: 1, closeIdleTimeout: 1 },
+    ]);
+    const opsRes = await callAdmin({ q: 'opsHealth', days: '7' }, userToken(U1));
+    expect(opsRes.status).toBe(200);
+    expect(opsRes.body).toMatchObject({
+      runtime: { uptimeSec: expect.any(Number), rssMb: expect.any(Number) },
+      database: { dbSizeBytes: expect.any(Number) },
+      httpSummary: { total: 150, status5xx: 4 },
+      ws: {
+        onlineCount: 0,
+        summary: { upgradesOk: 12, reject401: 1, closeNormal: 10, closeAbnormal: 1, closeIdleTimeout: 1 },
+      },
+      slowRequests: [],
     });
 
     // days=60이면 45일 전 web 행까지 포함된다

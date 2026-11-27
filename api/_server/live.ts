@@ -48,6 +48,12 @@ export interface LiveChat {
   guildOf(uid: string): Promise<string | null>;
 }
 
+export interface LiveMetricsHooks {
+  onUpgradeOk(): void;
+  onReject(status: 401 | 403 | 500): void;
+  onClose(kind: 'normal' | 'abnormal' | 'idle_timeout'): void;
+}
+
 export interface LiveOptions {
   /** 업그레이드 요청의 추가 진입 게이트. 거부 시 상태 코드(401·403)를 돌려주고 통과 시 null이다 */
   gate?: (req: IncomingMessage) => Promise<401 | 403 | null>;
@@ -80,6 +86,10 @@ export interface LiveOptions {
   onUserDisconnect?: (uid: string) => void;
   /** 움직이는 동안 마지막 위치를 남기는 최소 간격. 기본값은 1분이다 */
   positionSaveMs?: number;
+  /** 업그레이드·종료 지표 훅 */
+  metrics?: LiveMetricsHooks;
+  /** 비동기 오류 보고 훅 */
+  onError?: (label: string, error: unknown) => void;
 }
 
 /** 지금 연결된 사용자 하나. 아직 위치를 보내지 않았으면 region과 zone은 null이다 */
@@ -176,6 +186,31 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
   const positionSaveMs = opts.positionSaveMs ?? POSITION_SAVE_MS;
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_PAYLOAD });
   const conns = new Map<WebSocket, Conn>();
+  const idleTimedOut = new WeakSet<WebSocket>();
+  const closeReported = new WeakSet<WebSocket>();
+  const rejectUpgrade = (socket: Duplex, status: 401 | 403 | 500) => {
+    opts.metrics?.onReject(status);
+    reject(socket, status);
+  };
+  const reportClose = (ws: WebSocket, code: number) => {
+    if (closeReported.has(ws)) return;
+    closeReported.add(ws);
+    if (idleTimedOut.has(ws)) {
+      opts.metrics?.onClose('idle_timeout');
+      return;
+    }
+    if (
+      code === 1000
+      || code === 1001
+      || code === LIVE_CLOSE_OUTDATED
+      || code === LIVE_CLOSE_REPLACED
+      || code === LIVE_CLOSE_RESTART
+    ) {
+      opts.metrics?.onClose('normal');
+      return;
+    }
+    opts.metrics?.onClose('abnormal');
+  };
   // 계정별 최근 채팅 시각·직전 문구·전체 방 쿨다운 시각. 재연결해도 유지되도록 연결이 아니라 계정에 둔다
   const chatTimes = new Map<string, number[]>();
   const lastChatByUid = new Map<string, { text: string; at: number }>();
@@ -261,7 +296,10 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
     const prev = chatQueues.get(uid) ?? Promise.resolve();
     const next = prev
       .then(() => runChat(ws, conn, raw, rawRoom))
-      .catch((err: unknown) => { console.error('[live] chat save failed', err); })
+      .catch((err: unknown) => {
+        console.error('[live] chat save failed', err);
+        opts.onError?.('live:chat-save', err);
+      })
       .finally(() => { if (chatQueues.get(uid) === next) chatQueues.delete(uid); });
     chatQueues.set(uid, next);
   };
@@ -289,7 +327,7 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
 
   server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     if (new URL(req.url ?? '/', 'http://x').pathname !== LIVE_PATH) { socket.destroy(); return; }
-    if (req.headers.origin !== opts.origin) { reject(socket, 403); return; }
+    if (req.headers.origin !== opts.origin) { rejectUpgrade(socket, 403); return; }
     const proceed = () => {
       // 낡은 빌드는 연결을 받지 않는다. 브라우저는 업그레이드 응답의 상태 코드를 읽을 수 없어 연결을 연 뒤 종료 코드로 알린다.
       // 이 연결은 접속 목록, 위치, 세션 기록 어디에도 들어가지 않는다
@@ -301,8 +339,8 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
       const rawRegion = query.get('region');
       const initRegion = rawRegion && /^[a-z0-9-]{1,32}$/.test(rawRegion) ? normalizeRegion(rawRegion) : null;
       opts.authenticate(req).then(async (user) => {
-        if (!user) { reject(socket, 401); return; }
-        if (opts.admit && !await opts.admit(user)) { reject(socket, 403); return; }
+        if (!user) { rejectUpgrade(socket, 401); return; }
+        if (opts.admit && !await opts.admit(user)) { rejectUpgrade(socket, 403); return; }
         const [recentChat, recentLocalChat, blocked, guild, notices] = await Promise.all([
           opts.chat.recent(user.uid, CHAT_RECENT, null),
           initRegion !== null && opts.chat.recentLocal
@@ -327,6 +365,7 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
             positionSavedAt: null, positionDirty: false, pending: Promise.resolve(),
           };
           conns.set(ws, conn);
+          opts.metrics?.onUpgradeOk();
           const handle = (msg: NonNullable<ReturnType<typeof parseClientMessage>>, at: number): void => {
             if (msg.t === 'move') {
               const { region, x, y, dir, line, bob, look } = msg;
@@ -367,6 +406,7 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
                   }
                 }).catch((err: unknown) => {
                   console.error('[live] local history failed', err);
+                  opts.onError?.('live:local-history', err);
                 });
               } else if (nextRegion !== null) {
                 send(ws, { t: 'localHistory', region: nextRegion, lines: [] });
@@ -396,10 +436,14 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
               handle(msg, at);
             }).catch((err: unknown) => {
               console.error('[live] message admit failed', err);
+              opts.onError?.('live:message-admit', err);
               ws.close(CLOSE_ERROR);
             });
           });
-          ws.on('close', () => drop(ws, conn));
+          ws.on('close', (code) => {
+            drop(ws, conn);
+            reportClose(ws, code);
+          });
           const sentAt = Date.now();
           const others = [...conns.values()].flatMap(c => (c !== conn && c.presence && !c.user.guest ? [{ ...c.presence, ...idleField(c.idleSince, sentAt) }] : []));
           send(ws, {
@@ -414,16 +458,18 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
         });
       }).catch((err: unknown) => {
         console.error('[live] upgrade authentication or chat load failed', err);
-        reject(socket, 500);
+        opts.onError?.('live:upgrade-auth', err);
+        rejectUpgrade(socket, 500);
       });
     };
     if (opts.gate) {
       opts.gate(req).then((status) => {
-        if (status !== null) { reject(socket, status); return; }
+        if (status !== null) { rejectUpgrade(socket, status); return; }
         proceed();
       }).catch((err: unknown) => {
         console.error('[live] upgrade gate failed', err);
-        reject(socket, 500);
+        opts.onError?.('live:upgrade-gate', err);
+        rejectUpgrade(socket, 500);
       });
       return;
     }
@@ -434,8 +480,12 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
   const timer = setInterval(() => {
     const now = Date.now();
     for (const [ws, c] of conns) {
-      if (now - c.lastSeen > idleMs) ws.terminate();
-      else ws.ping();
+      if (now - c.lastSeen > idleMs) {
+        idleTimedOut.add(ws);
+        ws.terminate();
+      } else {
+        ws.ping();
+      }
     }
     for (const [uid, times] of chatTimes) if (now - (times.at(-1) ?? 0) >= CHAT_RATE_WINDOW_MS) chatTimes.delete(uid);
     for (const [uid, prev] of lastChatByUid) if (now - prev.at >= CHAT_DUPLICATE_WINDOW_MS) lastChatByUid.delete(uid);

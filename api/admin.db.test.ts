@@ -1127,6 +1127,7 @@ describe('역할 분리(admin·maintainer) · Zero-PII 투영 · 배지 토글 �
         ['bountyFunnel', { days: '7' }],
         ['onboardingFunnel', {}],
         ['httpMetrics', { days: '7' }],
+        ['opsHealth', { days: '7' }],
         ['balanceLive', { days: '7' }],
       ] as const) {
         expect((await callAdmin({ q, ...extra }, token)).status, q).toBe(200);

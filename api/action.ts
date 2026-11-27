@@ -14,6 +14,7 @@
 import type { SQL } from 'drizzle-orm';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { afterResponse } from './_server/afterResponse.js';
+import { markRateLimitReason } from './_server/httpMetrics.js';
 import { broadcastCatchFx, notifyGuild, setFame, setNick } from './_server/livePresence.js';
 import { widgetHub } from './_server/widgetHub.js';
 // 확장자(.js) 필수 — Node 순수 ESM 로더가 src 모듈을 그대로 import한다
@@ -609,6 +610,7 @@ async function route(req: Req, res: Res): Promise<void> {
       const elapsedMs = Date.now() - lastSentMs;
       if (Number.isFinite(lastSentMs) && elapsedMs < MIN_ACTION_GAP_MS) {
         const retryAfter = String(Math.max(1, Math.ceil((MIN_ACTION_GAP_MS - elapsedMs) / 1000)));
+        markRateLimitReason(res, 'letter-gap');
         throw new ApiError(429, 'too-fast', { retryAfter });
       }
     }
@@ -625,6 +627,7 @@ async function route(req: Req, res: Res): Promise<void> {
         new Date().toISOString(),
       );
       if (waitMs > 0) {
+        markRateLimitReason(res, 'catch-too-soon');
         throw new ApiError(429, 'too-fast', { retryAfter: String(Math.max(1, Math.ceil(waitMs / 1000))) });
       }
     }

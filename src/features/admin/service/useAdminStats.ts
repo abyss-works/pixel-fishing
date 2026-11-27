@@ -1,10 +1,10 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useAdminAuth } from './accessContext';
-import { readAdminDailyStats, readAdminHttpMetrics, readAdminLive, readAdminOnboardingFunnel, readAdminOverview, readAdminRetention, readAdminSessions, readAdminUsers } from './queries';
+import { readAdminDailyStats, readAdminHttpMetrics, readAdminLive, readAdminOnboardingFunnel, readAdminOpsHealth, readAdminOverview, readAdminRetention, readAdminSessions, readAdminUsers } from './queries';
 import { adminKeys } from './queryKeys';
 import { useAdminQuery } from './useAdminQuery';
 import type { AdminQuery } from './useAdminQuery';
-import type { AdminDailyStatsRow, AdminHttpMetrics, AdminLive, AdminOnboardingFunnel, AdminOverview, AdminRetentionRow, AdminSessionRow, AdminUserAggregates, AdminUserRow } from '../model/types';
+import type { AdminDailyStatsRow, AdminHttpMetrics, AdminLive, AdminOnboardingFunnel, AdminOpsHealth, AdminOverview, AdminRetentionRow, AdminSessionRow, AdminUserAggregates, AdminUserRow } from '../model/types';
 
 // 운영 지표 조회 — 개요 통합, 일별 집계, 실시간 접속, 코호트 리텐션, 접속 세션. 관리자 판정이 granted일 때만 서버에 읽는다.
 // 개요 통합 조회가 성공하면 정규 캐시 키(users·spamFlags·live·retention·dailyStats·sessions)를 채워
@@ -103,4 +103,9 @@ export function useAdminOnboardingFunnel(): AdminQuery<AdminOnboardingFunnel> {
 /** 앱 서버 HTTP 오류율·429 지표 조회 */
 export function useAdminHttpMetrics(days = 30): AdminQuery<AdminHttpMetrics> {
   return useAdminQuery(adminKeys.httpMetrics(days), () => readAdminHttpMetrics(days), useGranted());
+}
+
+/** 서버 런타임, 소켓, DB 상태 및 임계 경보 조회 */
+export function useAdminOpsHealth(days = 7): AdminQuery<AdminOpsHealth> {
+  return useAdminQuery(adminKeys.opsHealth(days), () => readAdminOpsHealth(days), useGranted());
 }

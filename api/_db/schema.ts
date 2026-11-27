@@ -207,11 +207,36 @@ export const httpMetricsDaily = pgTable('http_metrics_daily', {
   day: date('day', { mode: 'string' }).notNull(),
   routeGroup: text('route_group').notNull(),
   total: bigint('total', { mode: 'number' }).notNull().default(0),
+  status409: bigint('status_409', { mode: 'number' }).notNull().default(0),
   status426: bigint('status_426', { mode: 'number' }).notNull().default(0),
   status429: bigint('status_429', { mode: 'number' }).notNull().default(0),
+  status4xx: bigint('status_4xx', { mode: 'number' }).notNull().default(0),
   status5xx: bigint('status_5xx', { mode: 'number' }).notNull().default(0),
+  latLe50: bigint('lat_le_50', { mode: 'number' }).notNull().default(0),
+  latLe100: bigint('lat_le_100', { mode: 'number' }).notNull().default(0),
+  latLe250: bigint('lat_le_250', { mode: 'number' }).notNull().default(0),
+  latLe500: bigint('lat_le_500', { mode: 'number' }).notNull().default(0),
+  latLe1000: bigint('lat_le_1000', { mode: 'number' }).notNull().default(0),
+  latLe2500: bigint('lat_le_2500', { mode: 'number' }).notNull().default(0),
+  latGt2500: bigint('lat_gt_2500', { mode: 'number' }).notNull().default(0),
+  latSumMs: bigint('lat_sum_ms', { mode: 'number' }).notNull().default(0),
+  rlCatchTooSoon: bigint('rl_catch_too_soon', { mode: 'number' }).notNull().default(0),
+  rlLetterGap: bigint('rl_letter_gap', { mode: 'number' }).notNull().default(0),
+  rlOther: bigint('rl_other', { mode: 'number' }).notNull().default(0),
   updatedAt: at('updated_at').notNull().defaultNow(),
 }, t => [primaryKey({ columns: [t.day, t.routeGroup] })]);
+
+export const wsMetricsDaily = pgTable('ws_metrics_daily', {
+  day: date('day', { mode: 'string' }).primaryKey(),
+  upgradesOk: bigint('upgrades_ok', { mode: 'number' }).notNull().default(0),
+  reject401: bigint('reject_401', { mode: 'number' }).notNull().default(0),
+  reject403: bigint('reject_403', { mode: 'number' }).notNull().default(0),
+  reject500: bigint('reject_500', { mode: 'number' }).notNull().default(0),
+  closeNormal: bigint('close_normal', { mode: 'number' }).notNull().default(0),
+  closeAbnormal: bigint('close_abnormal', { mode: 'number' }).notNull().default(0),
+  closeIdleTimeout: bigint('close_idle_timeout', { mode: 'number' }).notNull().default(0),
+  updatedAt: at('updated_at').notNull().defaultNow(),
+});
 
 export const notices = pgTable('notices', {
   id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),

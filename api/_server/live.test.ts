@@ -1100,3 +1100,149 @@ describe('실시간 어획 점프 브로드캐스트(broadcastCatchFx)', () => {
     expect(await c.next()).toEqual({ t: 'catchFx', uid: 'u1', region: 'village', x: 45, y: 55, toX: 30, toY: 34, fishId: 'crucian', form: 'normal' });
   });
 });
+
+describe('실시간 채널 관측 지표 및 오류 훅', () => {
+  it('업그레이드 성공·거부(401/403/500)·구버전 제외를 metrics에 보고한다', async () => {
+    const events: string[] = [];
+    const errors: string[] = [];
+    let gateMode: 'allow' | '403' | 'throw' = 'allow';
+    let authMode: 'ok' | 'null' | 'throw' = 'ok';
+    let admitOk = true;
+
+    const { url, urlFor } = await start({
+      gate: async () => {
+        if (gateMode === '403') return 403;
+        if (gateMode === 'throw') throw new Error('gate-boom');
+        return null;
+      },
+      authenticate: async (req) => {
+        if (authMode === 'throw') throw new Error('auth-boom');
+        if (authMode === 'null') return null;
+        const uid = req.headers.cookie;
+        return uid ? { uid, nick: `n-${uid}`, boat: 1, fame: 0, guest: false } : null;
+      },
+      admit: async () => admitOk,
+      metrics: {
+        onUpgradeOk: () => { events.push('ok'); },
+        onReject: (status) => { events.push(`reject:${status}`); },
+        onClose: (kind) => { events.push(`close:${kind}`); },
+      },
+      onError: (label) => { errors.push(label); },
+    });
+
+    // 잘못된 Origin -> 403
+    expect(await rejected(url, 'u1', 'https://evil.test')).toBe(403);
+    // gate 403
+    gateMode = '403';
+    expect(await rejected(url, 'u1')).toBe(403);
+    // gate 예외 -> 500 + onError
+    gateMode = 'throw';
+    expect(await rejected(url, 'u1')).toBe(500);
+    gateMode = 'allow';
+
+    // auth null -> 401
+    authMode = 'null';
+    expect(await rejected(url, 'u1')).toBe(401);
+    // auth 예외 -> 500 + onError
+    authMode = 'throw';
+    expect(await rejected(url, 'u1')).toBe(500);
+    authMode = 'ok';
+
+    // admit false -> 403
+    admitOk = false;
+    expect(await rejected(url, 'u1')).toBe(403);
+    admitOk = true;
+
+    // 구버전(stale) -> 4001 종료, metrics.onUpgradeOk / onClose 미보고
+    const staleClient = connect(urlFor('old-build'), 'u1');
+    expect(await staleClient.closed).toBe(LIVE_CLOSE_OUTDATED);
+
+    // 정상 업그레이드 -> onUpgradeOk 1회
+    const okClient = connect(url, 'u1');
+    expect((await okClient.next()).t).toBe('hello');
+    okClient.ws.close(1000);
+    expect(await okClient.closed).toBe(1000);
+    await new Promise(r => setTimeout(r, 20));
+
+    expect(events).toEqual([
+      'reject:403',
+      'reject:403',
+      'reject:500',
+      'reject:401',
+      'reject:500',
+      'reject:403',
+      'ok',
+      'close:normal',
+    ]);
+    expect(errors).toHaveLength(2);
+  });
+
+  it('종료 유형(normal/abnormal/idle_timeout)을 연결당 1회씩 분류하고 비동기 오류를 onError로 넘긴다', async () => {
+    const closes: string[] = [];
+    const errors: string[] = [];
+    let admitMsg = true;
+
+    const { url } = await start({
+      idleMs: 45,
+      sweepMs: 15,
+      admit: async () => admitMsg,
+      chat: {
+        save: async () => { throw new Error('chat-save-fail'); },
+        recent: async () => [],
+        recentLocal: async () => { throw new Error('local-hist-fail'); },
+        blocked: async () => [],
+        guildOf: async () => null,
+      },
+      metrics: {
+        onUpgradeOk: () => {},
+        onReject: () => {},
+        onClose: (kind) => { closes.push(kind); },
+      },
+      onError: (label) => { errors.push(label); },
+    });
+
+    // 1. 유휴 타임아웃 -> idle_timeout 1회
+    const idleCli = connect(url, 'u-idle');
+    await idleCli.next();
+    await idleCli.closed;
+    await new Promise(r => setTimeout(r, 20));
+
+    // 2. TCP 강제 종료(ws.terminate -> 1006) -> abnormal 1회
+    const dropCli = connect(url, 'u-drop');
+    await dropCli.next();
+    dropCli.ws.terminate();
+    await dropCli.closed;
+    await new Promise(r => setTimeout(r, 20));
+
+    // 3. 정책 위반(1008 consent-required) -> abnormal 1회, 채팅/지역대화 오류 -> onError
+    const errCli = connect(url, 'u-err');
+    await errCli.next();
+    errCli.ws.send(JSON.stringify({ t: 'chat', text: '안녕' }));
+    errCli.ws.send(JSON.stringify({ t: 'region', region: 'world' }));
+    await new Promise(r => setTimeout(r, 30));
+    admitMsg = false;
+    errCli.ws.send(JSON.stringify({ t: 'stop' }));
+    expect(await errCli.closed).toBe(1008);
+    await new Promise(r => setTimeout(r, 20));
+
+    // 4. 동일 계정 교체 종료(4000) -> normal 1회
+    admitMsg = true;
+    const rep1 = connect(url, 'u-rep');
+    await rep1.next();
+    const rep2 = connect(url, 'u-rep');
+    await rep2.next();
+    expect(await rep1.closed).toBe(LIVE_CLOSE_REPLACED);
+    rep2.ws.close(1000);
+    await rep2.closed;
+    await new Promise(r => setTimeout(r, 20));
+
+    expect(closes).toEqual([
+      'idle_timeout',
+      'abnormal',
+      'abnormal',
+      'normal',
+      'normal',
+    ]);
+    expect(errors.length).toBeGreaterThanOrEqual(2);
+  });
+});

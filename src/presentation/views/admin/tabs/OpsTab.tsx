@@ -12,6 +12,7 @@ import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { Cell, CellGrid, TabPage } from '../layout';
 import ChangelogSection from './ChangelogSection';
 import { HttpMetricsOpsSection } from './HttpMetricsSection';
+import ServerHealthSection from './ServerHealthSection';
 
 export default function OpsTab() {
   const { access, role } = useAdminAuth();
@@ -71,6 +72,8 @@ export default function OpsTab() {
         </Cell>
 
         <HttpMetricsOpsSection granted={access === 'granted'} />
+
+        <ServerHealthSection granted={access === 'granted'} />
 
         <ChangelogSection />
 
