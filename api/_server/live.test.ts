@@ -7,6 +7,8 @@ import type { AddressInfo } from 'node:net';
 import { WebSocket } from 'ws';
 import { attachLive } from './live.js';
 import type { LiveOptions, LiveServer } from './live.js';
+import { InProcessLiveBus } from './realtimeBus.js';
+import { createSharedRateLimiter } from './rateLimit.js';
 import {
   CHAT_RATE_MAX, CHAT_RECENT, GLOBAL_CHAT_COOLDOWN_MS,
   LIVE_CLOSE_OUTDATED, LIVE_CLOSE_REPLACED, LIVE_CLOSE_RESTART, LIVE_MAX_PER_SEC, LIVE_PATH,
@@ -1473,5 +1475,252 @@ describe('프리렌더 차단 및 업그레이드 세대 경합 방지', () => {
     expect(await a.next()).toMatchObject({ t: 'chat', room: 'local', line: { text: '동기화 후' } });
     expect(await b.next()).toMatchObject({ t: 'chat', room: 'local', line: { text: '동기화 후' } });
     expect(saveCalls).toEqual([{ room: 'local', region: 'pacific', text: '동기화 후' }]);
+  });
+});
+
+describe('멀티 파드 실시간 중계', () => {
+  async function startPod(
+    bus: InProcessLiveBus,
+    podId: string,
+    sharedChat?: ChatFake,
+    extra: Partial<LiveOptions> = {},
+  ) {
+    const server = createServer();
+    const chat: ChatFake = sharedChat ?? {
+      lines: [], localLines: new Map(), restricted: new Set(), blocks: new Map(), guilds: new Map(), guildLines: new Map(),
+    };
+    let seq = 0;
+    const live = attachLive(server, {
+      origin: ORIGIN,
+      stale: ({ build }) => build !== BUILD,
+      bus,
+      podId,
+      authenticate: async (req) => {
+        const cookie = req.headers.cookie;
+        if (!cookie) return null;
+        const guest = cookie.startsWith('guest:');
+        const uid = guest ? cookie.slice('guest:'.length) : cookie;
+        return { uid, nick: `n-${uid}`, boat: 2, fame: 100, guest };
+      },
+      chat: {
+        save: async (user, text, guild, room: ChatRoom = 'local', region: string | null = null) => {
+          if (chat.restricted.has(user.uid)) return { ok: false, code: 'chat-restricted' };
+          if (room === 'guild' && (!guild || chat.guilds.get(user.uid) !== guild)) return { ok: false, code: 'chat-no-guild' };
+          const line = { id: ++seq, uid: user.uid, nick: user.nick, text, at: '2030-01-01T00:00:00.000Z' };
+          if (room === 'global') chat.lines.push(line);
+          else if (room === 'guild' && guild) chat.guildLines.set(guild, [...chat.guildLines.get(guild) ?? [], line]);
+          else if (room === 'local' && region) chat.localLines.set(region, [...chat.localLines.get(region) ?? [], line]);
+          return { ok: true, line, room, region, guild };
+        },
+        recent: async (uid, _limit, guild) => (guild === null ? chat.lines : chat.guildLines.get(guild) ?? [])
+          .filter(l => !(chat.blocks.get(uid) ?? []).includes(l.uid)).slice(-CHAT_RECENT),
+        recentLocal: async (uid, region) => (chat.localLines.get(region) ?? [])
+          .filter(l => !(chat.blocks.get(uid) ?? []).includes(l.uid)).slice(-CHAT_RECENT),
+        blocked: async (uid) => chat.blocks.get(uid) ?? [],
+        guildOf: async (uid) => chat.guilds.get(uid) ?? null,
+      },
+      recordSession: () => {},
+      savePosition: () => {},
+      ...extra,
+    });
+    await listen(server);
+    const url = `ws://127.0.0.1:${(server.address() as AddressInfo).port}${LIVE_PATH}?build=${BUILD}&version=0.0.0`;
+    return {
+      url,
+      live,
+      chat,
+      stop: async () => {
+        live.close();
+        server.closeAllConnections();
+        await new Promise((r) => server.close(r));
+      },
+    };
+  }
+
+  it('파드 A와 B 간 이동·정지·입력중·떠남과 hello.others를 교차 중계한다', async () => {
+    const bus = new InProcessLiveBus();
+    const podA = await startPod(bus, 'pod-a');
+    const podB = await startPod(bus, 'pod-b');
+    cleanup = async () => { await podA.stop(); await podB.stop(); await bus.close(); };
+
+    const a = connect(podA.url, 'u1');
+    const b = connect(podB.url, 'u2');
+    await a.next(); // hello
+    await b.next(); // hello
+
+    a.ws.send(JSON.stringify({ t: 'move', region: 'village', x: 12, y: 24, dir: 1, line: false }));
+    expect(await b.next()).toMatchObject({ t: 'join', presence: { uid: 'u1', region: 'village', x: 12, y: 24 } });
+
+    a.ws.send(JSON.stringify({ t: 'typing', on: true }));
+    expect(await b.next()).toEqual({ t: 'typing', uid: 'u1', on: true });
+
+    a.ws.send(JSON.stringify({ t: 'stop' }));
+    expect(await b.next()).toEqual({ t: 'stop', uid: 'u1' });
+
+    // 새로 파드 B에 접속하는 u3는 hello.others에 파드 A의 u1을 중복 없이 포함해 받는다
+    const c = connect(podB.url, 'u3');
+    const helloC = await c.next();
+    expect(helloC).toMatchObject({ t: 'hello', you: 'u3' });
+    if (helloC.t === 'hello') {
+      expect(helloC.others.map(o => o.uid)).toEqual(['u1']);
+    }
+
+    a.ws.close();
+    await a.closed;
+    expect(await b.next()).toEqual({ t: 'leave', uid: 'u1' });
+  });
+
+  it('파드 A와 B 간 채팅(전체·지역·길드·차단)을 교차 중계한다', async () => {
+    const bus = new InProcessLiveBus();
+    const sharedChat: ChatFake = {
+      lines: [], localLines: new Map(), restricted: new Set(),
+      blocks: new Map([['u3', ['u1']]]),
+      guilds: new Map([['u1', 'g1'], ['u2', 'g1']]),
+      guildLines: new Map(),
+    };
+    const podA = await startPod(bus, 'pod-a', sharedChat);
+    const podB = await startPod(bus, 'pod-b', sharedChat);
+    cleanup = async () => { await podA.stop(); await podB.stop(); await bus.close(); };
+
+    const a = connect(podA.url, 'u1');
+    const b = connect(podB.url, 'u2');
+    const c = connect(podB.url, 'u3');
+    await a.next();
+    await b.next();
+    await c.next();
+
+    a.ws.send(JSON.stringify({ t: 'region', region: 'village' }));
+    b.ws.send(JSON.stringify({ t: 'region', region: 'village' }));
+    c.ws.send(JSON.stringify({ t: 'region', region: 'pacific' }));
+    await a.next();
+    await b.next();
+    await c.next();
+
+    // 지역 채팅: 같은 지역 b만 받고, 다른 지역·차단한 c는 받지 못한다
+    a.ws.send(JSON.stringify({ t: 'chat', text: '안녕 마을', room: 'local' }));
+    expect(await a.next()).toMatchObject({ t: 'chat', room: 'local', line: { text: '안녕 마을' } });
+    expect(await b.next()).toMatchObject({ t: 'chat', room: 'local', line: { text: '안녕 마을' } });
+
+    // 길드 채팅: 같은 길드 b만 받는다
+    a.ws.send(JSON.stringify({ t: 'chat', text: '길드 인사', room: 'guild' }));
+    expect(await a.next()).toMatchObject({ t: 'chat', room: 'guild', line: { text: '길드 인사' } });
+    expect(await b.next()).toMatchObject({ t: 'chat', room: 'guild', line: { text: '길드 인사' } });
+
+    // 전체 채팅: b는 받고, u1을 차단한 c는 받지 않는다
+    a.ws.send(JSON.stringify({ t: 'chat', text: '전체 인사', room: 'global' }));
+    expect(await a.next()).toMatchObject({ t: 'chat', room: 'global', line: { text: '전체 인사' } });
+    expect(await b.next()).toMatchObject({ t: 'chat', room: 'global', line: { text: '전체 인사' } });
+
+    await new Promise(r => setTimeout(r, 40));
+    expect(c.messages).toEqual([]);
+  });
+
+  it('다른 파드에서 같은 계정이 접속하면 구 파드 연결을 4000으로 닫고 신 파드 프레즌스를 유지한다', async () => {
+    const bus = new InProcessLiveBus();
+    const podA = await startPod(bus, 'pod-a');
+    const podB = await startPod(bus, 'pod-b');
+    cleanup = async () => { await podA.stop(); await podB.stop(); await bus.close(); };
+
+    const first = connect(podA.url, 'u1');
+    await first.next();
+    first.ws.send(JSON.stringify({ t: 'move', region: 'village', x: 5, y: 5, dir: 1, line: false }));
+    await new Promise(r => setTimeout(r, 20));
+    expect(await bus.isUserOnline('u1')).toBe(true);
+
+    const second = connect(podB.url, 'u1');
+    await second.next();
+    expect(await first.closed).toBe(LIVE_CLOSE_REPLACED);
+
+    // 구 파드가 닫힌 뒤에도 신 파드의 온라인·프레즌스 정보는 남아있어야 한다
+    second.ws.send(JSON.stringify({ t: 'move', region: 'pacific', x: 30, y: 40, dir: 1, line: false }));
+    await new Promise(r => setTimeout(r, 30));
+    expect(await bus.isUserOnline('u1')).toBe(true);
+    expect(await bus.presenceOf('u1')).toMatchObject({ uid: 'u1', region: 'pacific', x: 30, y: 40 });
+  });
+
+  it('버스 이벤트(notifyUser/broadcastCatchFx/setBlocked/setNick)를 타 파드 연결에 반영한다', async () => {
+    const bus = new InProcessLiveBus();
+    const podA = await startPod(bus, 'pod-a');
+    const podB = await startPod(bus, 'pod-b');
+    cleanup = async () => { await podA.stop(); await podB.stop(); await bus.close(); };
+
+    const a = connect(podA.url, 'u1');
+    const b = connect(podB.url, 'u2');
+    await a.next();
+    await b.next();
+
+    a.ws.send(JSON.stringify({ t: 'move', region: 'village', x: 10, y: 20, dir: 1, line: false }));
+    b.ws.send(JSON.stringify({ t: 'move', region: 'village', x: 15, y: 25, dir: 1, line: false }));
+    await b.next(); // join u1
+    await a.next(); // join u2
+
+    await bus.notifyUser('u2', { t: 'mail' });
+    expect(await b.next()).toEqual({ t: 'mail' });
+
+    await bus.broadcastCatchFx('u1', { fishId: 'carp', form: 'normal' });
+    expect(await b.next()).toMatchObject({ t: 'catchFx', uid: 'u1', region: 'village', fishId: 'carp' });
+
+    await bus.setNick('u1', '새닉네임');
+    expect(await a.next()).toEqual({ t: 'nick', uid: 'u1', nick: '새닉네임' });
+    expect(await b.next()).toEqual({ t: 'nick', uid: 'u1', nick: '새닉네임' });
+
+    await bus.setBlocked('u2', ['u1']);
+    a.ws.send(JSON.stringify({ t: 'chat', text: '차단됨', room: 'local' }));
+    expect(await a.next()).toMatchObject({ t: 'chat', line: { text: '차단됨' } });
+    await new Promise(r => setTimeout(r, 30));
+    expect(b.messages).toEqual([]);
+  });
+
+  it('공유 레이트리미터로 파드 간 채팅 쿨다운과 25건 제한을 합산한다', async () => {
+    const bus = new InProcessLiveBus();
+    // 인메모리 mock Redis 파이프라인으로 두 파드가 같은 리미터 저장소를 공유하는 상황 재현
+    const counters = new Map<string, number>();
+    const sharedClient = {
+      status: 'ready',
+      pipeline() {
+        const ops: Array<() => unknown> = [];
+        return {
+          incr(key: string) {
+            ops.push(() => {
+              const next = (counters.get(key) ?? 0) + 1;
+              counters.set(key, next);
+              return next;
+            });
+            return this;
+          },
+          pexpire() {
+            ops.push(() => 1);
+            return this;
+          },
+          async exec() {
+            return ops.map(fn => [null, fn()] as [null, unknown]);
+          },
+        };
+      },
+    };
+    const makeLimiters = () => ({
+      chatLimiter: createSharedRateLimiter({
+        prefix: 'ws-chat', windowMs: 10_000, max: CHAT_RATE_MAX, client: sharedClient,
+      }),
+      globalCooldownLimiter: createSharedRateLimiter({
+        prefix: 'ws-global-cd', windowMs: GLOBAL_CHAT_COOLDOWN_MS, max: 1, client: sharedClient,
+      }),
+    });
+
+    const podA = await startPod(bus, 'pod-a', undefined, makeLimiters());
+    const podB = await startPod(bus, 'pod-b', undefined, makeLimiters());
+    cleanup = async () => { await podA.stop(); await podB.stop(); await bus.close(); };
+
+    const a = connect(podA.url, 'u1');
+    await a.next();
+    a.ws.send(JSON.stringify({ t: 'chat', text: '첫 전체', room: 'global' }));
+    expect(await a.next()).toMatchObject({ t: 'chat', room: 'global', line: { text: '첫 전체' } });
+
+    // 파드 B로 재접속해도 10초 전체 쿨다운이 공유되어 차단된다
+    const b = connect(podB.url, 'u1');
+    await b.next();
+    await a.closed;
+    b.ws.send(JSON.stringify({ t: 'chat', text: '두번째 전체', room: 'global' }));
+    expect(await b.next()).toMatchObject({ t: 'error', code: 'chat-global-cooldown' });
   });
 });
