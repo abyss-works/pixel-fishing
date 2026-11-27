@@ -25,12 +25,29 @@ spec:
           image: ghcr.io/abyss-works/pixel-fishing
           command: ["node", "migrate.js"]
           env:
-            # 마이그레이션은 스키마 변경 권한이 필요해 CNPG 슈퍼유저 접속 주소만 쓴다.
-            - name: MIGRATION_DATABASE_URL
+            # CNPG 슈퍼유저 Secret의 URI는 특정 데이터베이스를 가리키지 않으므로 분리 값으로 실제 앱 DB 주소를 만든다.
+            - name: MIGRATION_DB_HOST
               valueFrom:
                 secretKeyRef:
                   name: pixel-fishing-db-superuser
-                  key: fqdn-uri
+                  key: host
+            - name: MIGRATION_DB_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: pixel-fishing-db-superuser
+                  key: port
+            - name: MIGRATION_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: pixel-fishing-db-superuser
+                  key: username
+            - name: MIGRATION_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pixel-fishing-db-superuser
+                  key: password
+            - name: MIGRATION_DB_NAME
+              value: app
             - name: MIGRATION_ROLE
               value: app
       containers:

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   filterMigrationFileNames,
-  ledgerStateAction,
+  buildMigrationConnectionString,
   planMigrationFiles,
   resolveMigrationRole,
   usesMigrationRole,
@@ -44,18 +44,24 @@ describe('적용 계획', () => {
   });
 });
 
-describe('ledger 상태 판정', () => {
-  it('ledger가 있으면 그대로 쓴다', () => {
-    expect(ledgerStateAction(true, true)).toBe('use-existing-ledger');
-    expect(ledgerStateAction(true, false)).toBe('use-existing-ledger');
+describe('마이그레이션 접속 주소', () => {
+  it('명시 접속 주소가 있으면 그대로 쓴다', () => {
+    expect(buildMigrationConnectionString({ MIGRATION_DATABASE_URL: 'postgresql://example/db' } as NodeJS.ProcessEnv))
+      .toBe('postgresql://example/db');
   });
 
-  it('ledger가 없고 기존 앱 표가 있으면 중단한다', () => {
-    expect(ledgerStateAction(false, true)).toBe('abort-existing-database');
+  it('분리 값으로 실제 앱 데이터베이스 주소를 만들고 사용자·비밀번호를 인코딩한다', () => {
+    expect(buildMigrationConnectionString({
+      MIGRATION_DB_HOST: 'db.example.test',
+      MIGRATION_DB_PORT: '15432',
+      MIGRATION_DB_USER: 'user@example',
+      MIGRATION_DB_PASSWORD: 'p@ss/word',
+      MIGRATION_DB_NAME: 'app',
+    } as NodeJS.ProcessEnv)).toBe('postgresql://user%40example:p%40ss%2Fword@db.example.test:15432/app');
   });
 
-  it('ledger와 기존 앱 표가 모두 없으면 빈 데이터베이스로 보고 ledger를 만든다', () => {
-    expect(ledgerStateAction(false, false)).toBe('create-ledger');
+  it('분리 값이 없으면 필요한 환경 변수를 알리는 오류를 낸다', () => {
+    expect(() => buildMigrationConnectionString({} as NodeJS.ProcessEnv)).toThrow(/MIGRATION_DATABASE_URL/);
   });
 });
 

@@ -20,6 +20,16 @@ async function tableExists(name: string): Promise<boolean> {
   return rows[0].present !== null;
 }
 
+
+async function createLedger(): Promise<void> {
+  await client.query(`
+    create table public.schema_migrations (
+      name text primary key,
+      applied_at timestamptz not null default now()
+    )
+  `);
+}
+
 async function ledgerNames(): Promise<string[]> {
   const { rows } = await client.query<{ name: string }>('select name from public.schema_migrations order by name');
   return rows.map(row => row.name);
@@ -42,7 +52,8 @@ afterEach(async () => {
 });
 
 describe('마이그레이션 runner', () => {
-  it('빈 데이터베이스에 두 파일을 순서대로 적용하고 ledger에 기록한다', async () => {
+  it('기준선 ledger가 있으면 두 파일을 순서대로 적용하고 기록한다', async () => {
+    await createLedger();
     await writeMigration('0001_create_order.sql', `
       create table public.runner_order (n integer primary key);
       insert into public.runner_order (n) values (1);
@@ -59,6 +70,7 @@ describe('마이그레이션 runner', () => {
   });
 
   it('다시 실행하면 이미 적용된 파일은 건너뛰고 새 파일만 적용한다', async () => {
+    await createLedger();
     await writeMigration('0001_create_order.sql', 'create table public.runner_order (n integer primary key)');
     await writeMigration('0002_seed_order.sql', 'insert into public.runner_order (n) values (1)');
     await runMigrations(client, { migrationsDir: dir, role: 'postgres' });
@@ -72,6 +84,7 @@ describe('마이그레이션 runner', () => {
   });
 
   it('두 번째 파일이 실패하면 그 파일의 객체와 ledger 행을 롤백한다', async () => {
+    await createLedger();
     await writeMigration('0001_create_order.sql', 'create table public.runner_order (n integer primary key)');
     await writeMigration('0002_bad.sql', `
       create table public.runner_bad_rollback (n integer);
@@ -85,7 +98,7 @@ describe('마이그레이션 runner', () => {
     expect(await ledgerNames()).toEqual(['0001_create_order.sql']);
   });
 
-  it('ledger가 없고 saves_current만 있는 데이터베이스에서는 중단한다', async () => {
+  it('ledger가 없으면 데이터베이스 상태와 관계없이 중단한다', async () => {
     await client.query('create table public.saves_current (user_id uuid primary key)');
     await writeMigration('0001_create_order.sql', 'create table public.runner_order (n integer primary key)');
 

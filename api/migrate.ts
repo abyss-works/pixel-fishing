@@ -1,18 +1,13 @@
 import { fileURLToPath } from 'node:url';
 import { Client } from 'pg';
-import { runMigrations } from './_server/migrationRunner.js';
+import { buildMigrationConnectionString, runMigrations } from './_server/migrationRunner.js';
 
 function defaultMigrationsDir(): string {
   return fileURLToPath(new URL('./migrations/', import.meta.url));
 }
 
 async function main(): Promise<void> {
-  const connectionString = process.env.MIGRATION_DATABASE_URL;
-  if (!connectionString) {
-    throw new Error('MIGRATION_DATABASE_URL이 설정되어 있지 않습니다');
-  }
-
-  const client = new Client({ connectionString });
+  const client = new Client({ connectionString: buildMigrationConnectionString(process.env) });
   await client.connect();
   try {
     const result = await runMigrations(client, {

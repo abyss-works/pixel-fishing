@@ -17,8 +17,6 @@ export interface MigrationRunOptions {
   role?: string;
 }
 
-export type LedgerStateAction = 'use-existing-ledger' | 'create-ledger' | 'abort-existing-database';
-
 /** up 마이그레이션 파일만 번호 순서로 남긴다. */
 export function filterMigrationFileNames(names: string[]): string[] {
   return names
@@ -31,12 +29,6 @@ export function planMigrationFiles(files: string[], applied: ReadonlySet<string>
   return files.filter(name => !applied.has(name));
 }
 
-/** ledger가 없을 때 빈 데이터베이스와 기존 데이터베이스를 구분한다. */
-export function ledgerStateAction(hasLedger: boolean, hasSavesCurrent: boolean): LedgerStateAction {
-  if (hasLedger) return 'use-existing-ledger';
-  return hasSavesCurrent ? 'abort-existing-database' : 'create-ledger';
-}
-
 /** 역할을 바꾸면 실행할 수 없는 엔진 설정 파일만 예외로 둔다. */
 export function usesMigrationRole(name: string): boolean {
   return !ROLELESS_MIGRATIONS.has(name);
@@ -47,6 +39,20 @@ export function resolveMigrationRole(role?: string, envRole?: string): string {
   const resolved = role ?? envRole ?? DEFAULT_MIGRATION_ROLE;
   if (resolved.length === 0) throw new Error('마이그레이션 역할 이름이 비어 있습니다');
   return resolved;
+}
+
+/** 명시 접속 주소가 없으면 CNPG 비밀의 분리 값으로 실제 앱 데이터베이스 주소를 만든다. */
+export function buildMigrationConnectionString(env: NodeJS.ProcessEnv): string {
+  if (env.MIGRATION_DATABASE_URL) return env.MIGRATION_DATABASE_URL;
+  const host = env.MIGRATION_DB_HOST;
+  const user = env.MIGRATION_DB_USER;
+  const password = env.MIGRATION_DB_PASSWORD;
+  const database = env.MIGRATION_DB_NAME ?? 'app';
+  if (!host || !user || !password) {
+    throw new Error('MIGRATION_DATABASE_URL 또는 MIGRATION_DB_HOST·MIGRATION_DB_USER·MIGRATION_DB_PASSWORD가 필요합니다');
+  }
+  const port = env.MIGRATION_DB_PORT ?? '5432';
+  return `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${database}`;
 }
 
 function quoteIdentifier(value: string): string {
@@ -67,25 +73,6 @@ async function rollbackAndResetRole(client: Client): Promise<void> {
   await client.query('reset role').catch(() => undefined);
 }
 
-async function createLedger(client: Client, role: string): Promise<void> {
-  try {
-    await client.query('begin');
-    await client.query(`set role ${quoteIdentifier(role)}`);
-    await client.query(`
-      create table if not exists public.schema_migrations (
-        name text primary key,
-        applied_at timestamptz not null default now()
-      )
-    `);
-    await client.query('alter table public.schema_migrations enable row level security');
-    await client.query('reset role');
-    await client.query('commit');
-  } catch (error) {
-    await rollbackAndResetRole(client);
-    throw new Error(`마이그레이션 ledger 생성에 실패했습니다: ${errorMessage(error)}`, { cause: error });
-  }
-}
-
 async function applyMigrationFile(client: Client, migrationsDir: string, name: string, role: string): Promise<void> {
   let sql: string;
   try {
@@ -100,11 +87,10 @@ async function applyMigrationFile(client: Client, migrationsDir: string, name: s
       await client.query(`set role ${quoteIdentifier(role)}`);
     }
     await client.query(sql);
+    await client.query('insert into public.schema_migrations (name) values ($1) on conflict do nothing', [name]);
     if (usesMigrationRole(name)) {
-      // 파일 안의 객체 생성은 지정 역할로 하고, ledger 갱신은 연결 사용자 권한으로 둔다.
       await client.query('reset role');
     }
-    await client.query('insert into public.schema_migrations (name) values ($1) on conflict do nothing', [name]);
     await client.query('commit');
   } catch (error) {
     await rollbackAndResetRole(client);
@@ -128,14 +114,8 @@ export async function runMigrations(client: Client, options: MigrationRunOptions
     await client.query('select pg_advisory_lock($1::bigint)', [MIGRATION_LOCK_KEY]);
     locked = true;
 
-    const hasLedger = await tableExists(client, 'public.schema_migrations');
-    const hasSavesCurrent = await tableExists(client, 'public.saves_current');
-    const action = ledgerStateAction(hasLedger, hasSavesCurrent);
-    if (action === 'abort-existing-database') {
-      throw new Error('public.schema_migrations가 없고 public.saves_current가 있는 기존 데이터베이스입니다. 전체 마이그레이션 재적용을 막기 위해 중단합니다. 기준선 마이그레이션을 먼저 적용해야 합니다');
-    }
-    if (action === 'create-ledger') {
-      await createLedger(client, role);
+    if (!(await tableExists(client, 'public.schema_migrations'))) {
+      throw new Error('public.schema_migrations가 없습니다. 전체 마이그레이션 재적용을 막기 위해 중단합니다. 기준선 마이그레이션을 먼저 적용해야 합니다');
     }
 
     const { rows } = await client.query<{ name: string }>('select name from public.schema_migrations');
