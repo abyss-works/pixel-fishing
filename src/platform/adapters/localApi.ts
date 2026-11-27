@@ -4,7 +4,7 @@ import { LocalGameGateway } from './localGameGateway';
 import type {
   AcceptConsentResult, AccountLookup, GameGateway, AuthApi, AuthResult, ConfirmGoogleSwitchResult, ConsentStatus, DevApi, PromoteTestResult, ResetDevAccountResult,
 } from '../api/types';
-import type { AdminApi, AdminNoticeRequest } from '../api/types';
+import type { AdminApi, AdminCouponRequest, AdminNoticeRequest } from '../api/types';
 import { newState } from '../../game/rules/logic';
 import type { GameState } from '../../game/rules/logic';
 
@@ -96,6 +96,8 @@ class LocalAdmin implements AdminApi {
   chatReports(): Promise<never[]> { return rejected(); }
   notices(): Promise<never[]> { return rejected(); }
   writeNotice(_request: AdminNoticeRequest): Promise<never> { return rejected(); }
+  coupons(): Promise<never[]> { return rejected(); }
+  writeCoupon(_request: AdminCouponRequest): Promise<never> { return rejected(); }
   sentMails(): Promise<never[]> { return rejected(); }
   mail(_op: 'preview' | 'send', _request: unknown): Promise<never> { return rejected(); }
   restrict(_userId: string, _restricted: boolean): Promise<never> { return rejected(); }

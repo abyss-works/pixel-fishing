@@ -468,6 +468,8 @@ describe('api/admin 핸들러 단위 테스트', () => {
       status: 400,
       body: { error: 'bad-coupon' },
     });
+    expect(mocks.insertAdminAuditLog).not.toHaveBeenCalled();
+
     mocks.createAdminCoupon.mockResolvedValueOnce('duplicate');
     expect(await call('POST', { q: 'coupons' }, {
       op: 'create',
@@ -475,6 +477,111 @@ describe('api/admin 핸들러 단위 테스트', () => {
       gold: 100,
       description: '중복',
     })).toMatchObject({ status: 409, body: { error: 'duplicate-coupon' } });
+    expect(mocks.insertAdminAuditLog).not.toHaveBeenCalled();
+
+    mocks.updateAdminCoupon.mockResolvedValueOnce(null);
+    expect(await call('POST', { q: 'coupons' }, {
+      op: 'update',
+      code: 'MISSING-CODE',
+      gold: 100,
+      items: [],
+      description: '미존재',
+      active: true,
+      startsAt: null,
+      endsAt: null,
+      maxRedemptions: null,
+      perAccountLimit: 1,
+    })).toMatchObject({ status: 404, body: { error: 'no-coupon' } });
+    expect(mocks.insertAdminAuditLog).not.toHaveBeenCalled();
+
+    mocks.deleteAdminCoupon.mockResolvedValueOnce(false);
+    expect(await call('POST', { q: 'coupons' }, { op: 'delete', code: 'MISSING-CODE' })).toMatchObject({
+      status: 404,
+      body: { error: 'no-coupon' },
+    });
+    expect(mocks.insertAdminAuditLog).not.toHaveBeenCalled();
+
+    const createdCoupon = {
+      code: 'ADMIN-COUPON',
+      gold: 250,
+      items: [{ id: 'luck-small', qty: 2 }],
+      description: '관리자 쿠폰',
+      active: true,
+      startsAt: null,
+      endsAt: null,
+      maxRedemptions: 100,
+      perAccountLimit: 1,
+      redeemedCount: 0,
+      createdAt: '2030-01-01T00:00:00.000Z',
+    };
+    mocks.createAdminCoupon.mockResolvedValueOnce(createdCoupon);
+    expect(await call('POST', { q: 'coupons' }, {
+      op: 'create',
+      code: 'ADMIN-COUPON',
+      gold: 250,
+      items: [{ id: 'luck-small', qty: 2 }],
+      description: '관리자 쿠폰',
+      maxRedemptions: 100,
+    })).toMatchObject({ status: 200, body: { coupon: createdCoupon } });
+    expect(mocks.insertAdminAuditLog).toHaveBeenLastCalledWith(mocks.db, {
+      actorId: ADMIN_UID,
+      actorRole: 'admin',
+      action: 'couponCreate',
+      targetId: null,
+      reason: 'ADMIN-COUPON',
+      detail: {
+        code: 'ADMIN-COUPON',
+        gold: 250,
+        itemsCount: 1,
+        active: true,
+        maxRedemptions: 100,
+        perAccountLimit: 1,
+      },
+    });
+
+    const updatedCoupon = { ...createdCoupon, gold: 300, active: false };
+    mocks.updateAdminCoupon.mockResolvedValueOnce(updatedCoupon);
+    expect(await call('POST', { q: 'coupons' }, {
+      op: 'update',
+      code: 'ADMIN-COUPON',
+      gold: 300,
+      items: [{ id: 'luck-small', qty: 2 }],
+      description: '수정 설명',
+      active: false,
+      startsAt: null,
+      endsAt: null,
+      maxRedemptions: 100,
+      perAccountLimit: 1,
+    })).toMatchObject({ status: 200, body: { coupon: updatedCoupon } });
+    expect(mocks.insertAdminAuditLog).toHaveBeenLastCalledWith(mocks.db, {
+      actorId: ADMIN_UID,
+      actorRole: 'admin',
+      action: 'couponUpdate',
+      targetId: null,
+      reason: 'ADMIN-COUPON',
+      detail: {
+        code: 'ADMIN-COUPON',
+        gold: 300,
+        itemsCount: 1,
+        active: false,
+        maxRedemptions: 100,
+        perAccountLimit: 1,
+      },
+    });
+
+    mocks.deleteAdminCoupon.mockResolvedValueOnce(true);
+    expect(await call('POST', { q: 'coupons' }, { op: 'delete', code: 'ADMIN-COUPON' })).toMatchObject({
+      status: 200,
+      body: { deleted: true, code: 'ADMIN-COUPON' },
+    });
+    expect(mocks.insertAdminAuditLog).toHaveBeenLastCalledWith(mocks.db, {
+      actorId: ADMIN_UID,
+      actorRole: 'admin',
+      action: 'couponDelete',
+      targetId: null,
+      reason: 'ADMIN-COUPON',
+      detail: { code: 'ADMIN-COUPON' },
+    });
   });
 
   it('access는 role과 showStaffBadge를 함께 돌려주고 maintainer 권한 밖 읽기·쓰기는 403으로 차단한다', async () => {
@@ -492,14 +599,97 @@ describe('api/admin 핸들러 단위 테스트', () => {
       ['mails', {}],
       ['events', {}],
       ['eventDraws', { eventId: 'evt-1' }],
-      ['coupons', {}],
     ] as const) {
       expect(await call('GET', { q, ...extra }), `GET ${q}`).toMatchObject({ status: 403, body: { error: 'forbidden' } });
     }
 
-    for (const q of ['mail', 'restrict', 'letterHandled', 'revokeSessions', 'events', 'coupons']) {
+    for (const q of ['mail', 'restrict', 'letterHandled', 'revokeSessions', 'events']) {
       expect(await call('POST', { q }, {})).toMatchObject({ status: 403, body: { error: 'forbidden' } });
     }
+
+    // maintainer는 coupons 조회·생성·수정·삭제를 수행할 수 있고 감사 로그가 남는다
+    const maintCoupon = {
+      code: 'MAINT-COUPON',
+      gold: 100,
+      items: [],
+      description: '메인테이너 쿠폰',
+      active: true,
+      startsAt: null,
+      endsAt: null,
+      maxRedemptions: null,
+      perAccountLimit: 1,
+      redeemedCount: 0,
+      createdAt: '2030-01-01T00:00:00.000Z',
+    };
+    mocks.listAdminCoupons.mockResolvedValueOnce([maintCoupon]);
+    expect(await call('GET', { q: 'coupons' })).toMatchObject({ status: 200, body: [maintCoupon] });
+
+    mocks.createAdminCoupon.mockResolvedValueOnce(maintCoupon);
+    expect(await call('POST', { q: 'coupons' }, {
+      op: 'create',
+      code: 'MAINT-COUPON',
+      gold: 100,
+      items: [],
+      description: '메인테이너 쿠폰',
+    })).toMatchObject({ status: 200, body: { coupon: maintCoupon } });
+    expect(mocks.insertAdminAuditLog).toHaveBeenLastCalledWith(mocks.db, {
+      actorId: ADMIN_UID,
+      actorRole: 'maintainer',
+      action: 'couponCreate',
+      targetId: null,
+      reason: 'MAINT-COUPON',
+      detail: {
+        code: 'MAINT-COUPON',
+        gold: 100,
+        itemsCount: 0,
+        active: true,
+        maxRedemptions: null,
+        perAccountLimit: 1,
+      },
+    });
+
+    mocks.updateAdminCoupon.mockResolvedValueOnce({ ...maintCoupon, active: false });
+    expect(await call('POST', { q: 'coupons' }, {
+      op: 'update',
+      code: 'MAINT-COUPON',
+      gold: 100,
+      items: [],
+      description: '메인테이너 쿠폰',
+      active: false,
+      startsAt: null,
+      endsAt: null,
+      maxRedemptions: null,
+      perAccountLimit: 1,
+    })).toMatchObject({ status: 200, body: { coupon: { ...maintCoupon, active: false } } });
+    expect(mocks.insertAdminAuditLog).toHaveBeenLastCalledWith(mocks.db, {
+      actorId: ADMIN_UID,
+      actorRole: 'maintainer',
+      action: 'couponUpdate',
+      targetId: null,
+      reason: 'MAINT-COUPON',
+      detail: {
+        code: 'MAINT-COUPON',
+        gold: 100,
+        itemsCount: 0,
+        active: false,
+        maxRedemptions: null,
+        perAccountLimit: 1,
+      },
+    });
+
+    mocks.deleteAdminCoupon.mockResolvedValueOnce(true);
+    expect(await call('POST', { q: 'coupons' }, { op: 'delete', code: 'MAINT-COUPON' })).toMatchObject({
+      status: 200,
+      body: { deleted: true, code: 'MAINT-COUPON' },
+    });
+    expect(mocks.insertAdminAuditLog).toHaveBeenLastCalledWith(mocks.db, {
+      actorId: ADMIN_UID,
+      actorRole: 'maintainer',
+      action: 'couponDelete',
+      targetId: null,
+      reason: 'MAINT-COUPON',
+      detail: { code: 'MAINT-COUPON' },
+    });
 
     expect(await call('POST', { q: 'staffBadge' }, { show: 'yes' })).toMatchObject({
       status: 400, body: { error: 'bad-staff-badge' },

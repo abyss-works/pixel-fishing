@@ -1020,7 +1020,6 @@ describe('역할 분리(admin·maintainer) · Zero-PII 투영 · 배지 토글 �
       ['mails', {}],
       ['events', {}],
       ['eventDraws', { eventId: 'evt-1' }],
-      ['coupons', {}],
     ] as const) {
       expect(await callAdmin({ q, ...extra }, userToken(MAINT)), `GET ${q}`).toMatchObject({
         status: 403,
@@ -1034,7 +1033,6 @@ describe('역할 분리(admin·maintainer) · Zero-PII 투영 · 배지 토글 �
       ['letterHandled', { letterId: 1, handled: true }],
       ['revokeSessions', { userId: PLAYER }],
       ['events', { op: 'end', id: 'evt-1' }],
-      ['coupons', { op: 'delete', code: 'C1' }],
     ] as const) {
       expect(await callAdmin({ q }, userToken(MAINT), 'POST', body), `POST ${q}`).toMatchObject({
         status: 403,
@@ -1342,5 +1340,205 @@ describe('역할 분리(admin·maintainer) · Zero-PII 투영 · 배지 토글 �
     for (const forbiddenKey of ['"user_id"', '"opHandle"', '"nickname"', '"email"']) {
       expect(aggJson).not.toContain(forbiddenKey);
     }
+  });
+
+  it('maintainer와 admin 모두 ?q=coupons CRUD를 수행하고 admin_audit_logs에 감사 로그가 기록된다', async () => {
+    await env.client.query('delete from public.admin_audit_logs');
+
+    const postAs = (uid: string, body: unknown) => callAdmin({ q: 'coupons' }, userToken(uid), 'POST', body);
+
+    // maintainer 실패 요청(정적 충돌 400·미존재 404)은 감사 로그를 남기지 않는다
+    expect(await postAs(MAINT, { op: 'create', code: '출항준비', gold: 100, description: '정적 충돌' })).toMatchObject({
+      status: 400,
+      body: { error: 'bad-coupon' },
+    });
+    expect(await postAs(MAINT, { op: 'delete', code: 'NO-SUCH-COUPON' })).toMatchObject({
+      status: 404,
+      body: { error: 'no-coupon' },
+    });
+
+    // maintainer: 생성(품목 포함) -> 중복(409) -> 조회 -> 수정(활성 토글) -> 삭제
+    const maintCreated = await postAs(MAINT, {
+      op: 'create',
+      code: 'MAINT-CRUD-COUPON',
+      gold: 300,
+      items: [{ id: 'luck-small', qty: 2 }],
+      description: '메인테이너 생성 쿠폰',
+      maxRedemptions: 50,
+      perAccountLimit: 1,
+      active: true,
+    });
+    expect(maintCreated).toMatchObject({
+      status: 200,
+      body: {
+        coupon: {
+          code: 'MAINT-CRUD-COUPON',
+          gold: 300,
+          items: [{ id: 'luck-small', qty: 2 }],
+          active: true,
+          maxRedemptions: 50,
+          perAccountLimit: 1,
+        },
+      },
+    });
+
+    expect(await postAs(MAINT, {
+      op: 'create',
+      code: 'MAINT-CRUD-COUPON',
+      gold: 100,
+      description: '중복 코드',
+    })).toMatchObject({ status: 409, body: { error: 'duplicate-coupon' } });
+
+    const maintList = await callAdmin({ q: 'coupons' }, userToken(MAINT));
+    expect(maintList.status).toBe(200);
+    expect((maintList.body as { code: string }[]).map(c => c.code)).toContain('MAINT-CRUD-COUPON');
+
+    expect(await postAs(MAINT, {
+      op: 'update',
+      code: 'MAINT-CRUD-COUPON',
+      gold: 400,
+      items: [{ id: 'luck-small', qty: 3 }],
+      description: '메인테이너 수정 쿠폰',
+      active: false,
+      startsAt: null,
+      endsAt: null,
+      maxRedemptions: 80,
+      perAccountLimit: 2,
+    })).toMatchObject({
+      status: 200,
+      body: {
+        coupon: {
+          code: 'MAINT-CRUD-COUPON',
+          gold: 400,
+          items: [{ id: 'luck-small', qty: 3 }],
+          active: false,
+          maxRedemptions: 80,
+          perAccountLimit: 2,
+        },
+      },
+    });
+
+    expect(await postAs(MAINT, { op: 'delete', code: 'MAINT-CRUD-COUPON' })).toMatchObject({
+      status: 200,
+      body: { deleted: true, code: 'MAINT-CRUD-COUPON' },
+    });
+
+    // admin: 생성 -> 수정 -> 삭제
+    expect(await postAs(ADMIN, {
+      op: 'create',
+      code: 'ADMIN-AUDIT-COUPON',
+      gold: 150,
+      items: [],
+      description: '관리자 쿠폰',
+    })).toMatchObject({ status: 200, body: { coupon: { code: 'ADMIN-AUDIT-COUPON' } } });
+
+    expect(await postAs(ADMIN, {
+      op: 'update',
+      code: 'ADMIN-AUDIT-COUPON',
+      gold: 200,
+      items: [],
+      description: '관리자 수정',
+      active: false,
+      startsAt: null,
+      endsAt: null,
+      maxRedemptions: null,
+      perAccountLimit: 1,
+    })).toMatchObject({ status: 200, body: { coupon: { code: 'ADMIN-AUDIT-COUPON', gold: 200, active: false } } });
+
+    expect(await postAs(ADMIN, { op: 'delete', code: 'ADMIN-AUDIT-COUPON' })).toMatchObject({
+      status: 200,
+      body: { deleted: true, code: 'ADMIN-AUDIT-COUPON' },
+    });
+
+    const { rows: logs } = await env.client.query<{
+      actor_id: string;
+      actor_role: string;
+      action: string;
+      target_id: string | null;
+      reason: string;
+      detail: Record<string, unknown>;
+    }>(
+      `select actor_id::text, actor_role, action, target_id::text, reason, detail
+       from public.admin_audit_logs
+       order by id`,
+    );
+    expect(logs).toEqual([
+      {
+        actor_id: MAINT,
+        actor_role: 'maintainer',
+        action: 'couponCreate',
+        target_id: null,
+        reason: 'MAINT-CRUD-COUPON',
+        detail: {
+          code: 'MAINT-CRUD-COUPON',
+          gold: 300,
+          itemsCount: 1,
+          active: true,
+          maxRedemptions: 50,
+          perAccountLimit: 1,
+        },
+      },
+      {
+        actor_id: MAINT,
+        actor_role: 'maintainer',
+        action: 'couponUpdate',
+        target_id: null,
+        reason: 'MAINT-CRUD-COUPON',
+        detail: {
+          code: 'MAINT-CRUD-COUPON',
+          gold: 400,
+          itemsCount: 1,
+          active: false,
+          maxRedemptions: 80,
+          perAccountLimit: 2,
+        },
+      },
+      {
+        actor_id: MAINT,
+        actor_role: 'maintainer',
+        action: 'couponDelete',
+        target_id: null,
+        reason: 'MAINT-CRUD-COUPON',
+        detail: { code: 'MAINT-CRUD-COUPON' },
+      },
+      {
+        actor_id: ADMIN,
+        actor_role: 'admin',
+        action: 'couponCreate',
+        target_id: null,
+        reason: 'ADMIN-AUDIT-COUPON',
+        detail: {
+          code: 'ADMIN-AUDIT-COUPON',
+          gold: 150,
+          itemsCount: 0,
+          active: true,
+          maxRedemptions: null,
+          perAccountLimit: 1,
+        },
+      },
+      {
+        actor_id: ADMIN,
+        actor_role: 'admin',
+        action: 'couponUpdate',
+        target_id: null,
+        reason: 'ADMIN-AUDIT-COUPON',
+        detail: {
+          code: 'ADMIN-AUDIT-COUPON',
+          gold: 200,
+          itemsCount: 0,
+          active: false,
+          maxRedemptions: null,
+          perAccountLimit: 1,
+        },
+      },
+      {
+        actor_id: ADMIN,
+        actor_role: 'admin',
+        action: 'couponDelete',
+        target_id: null,
+        reason: 'ADMIN-AUDIT-COUPON',
+        detail: { code: 'ADMIN-AUDIT-COUPON' },
+      },
+    ]);
   });
 });
