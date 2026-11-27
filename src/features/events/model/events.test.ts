@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { EVENT2_SETTLEMENT_RATES, EVENT_FISH } from '../../../game/content/eventFish';
+import { fishById } from '../../../game/content/fish';
 import { newState } from '../../../game/rules/logic';
 import type { EventsSnapshot, LiveEventSummary } from '../../../platform/api';
 import {
   eventLifecycleStatus,
   formatEventExpiryText,
+  formatFishHabitat,
   hasActiveEvents,
   hasEventsAlert,
   isEventLiveNow,
@@ -201,10 +203,33 @@ describe('events 모델 셀렉터', () => {
     });
   });
 
-  it('selectEventTrioView는 3슬롯 어종과 응모 및 당첨 상태를 조립한다', () => {
+  it('formatFishHabitat는 가운뎃점 없이 구역과 수역, 밤 조건을 조합한다', () => {
+    expect(formatFishHabitat(fishById('salmon') ?? null)).toBe('마을 강');
+    expect(formatFishHabitat(fishById('yellowtail') ?? null)).toBe('태평양 연안');
+    expect(formatFishHabitat(fishById('squid') ?? null)).toBe('태평양 (마리아나 해구)');
+    expect(formatFishHabitat(fishById('sailfish') ?? null)).toBe('동남아 (드래곤 홀)');
+    expect(formatFishHabitat(fishById('frostnight') ?? null)).toBe('남인도양 (밤)');
+    expect(formatFishHabitat(fishById('moonglow') ?? null)).toBe('동남아 (드래곤 홀, 밤)');
+    expect(formatFishHabitat(null)).toBe('');
+  });
+
+  it('selectEventTrioView는 3슬롯 어종과 출현 해역, 응모 및 당첨 상태를 조립한다', () => {
+    const defaultView = selectEventTrioView(EV_TRIO, null, NOW);
+    expect(defaultView.slots.map(s => s.name)).toEqual(['연어', '방어', '참치']);
+    expect(defaultView.slots.map(s => s.habitatLabel)).toEqual([
+      '마을 강',
+      '태평양 연안',
+      '태평양 연안',
+    ]);
+
     const progress = selectEventTrioView(EV_TRIO, SNAP.trio, NOW);
     expect(progress.statusLabel).toBe('1 / 3');
     expect(progress.slots.map(s => s.name)).toEqual(['고등어', '심해 오징어', '돛새치']);
+    expect(progress.slots.map(s => s.habitatLabel)).toEqual([
+      '태평양 연안',
+      '태평양 (마리아나 해구)',
+      '동남아 (드래곤 홀)',
+    ]);
     expect(progress.slots[0].completed).toBe(true);
 
     const won = selectEventTrioView(EV_TRIO, {

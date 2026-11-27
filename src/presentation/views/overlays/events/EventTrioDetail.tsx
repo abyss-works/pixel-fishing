@@ -65,6 +65,11 @@ export default function EventTrioDetail({
               )}
               <span className="text-sm font-bold text-text">{slot.name}</span>
               <span className="text-2xs text-text-dim">{slot.formLabel}</span>
+              {slot.habitatLabel && (
+                <span className="text-2xs text-accent leading-tight break-keep">
+                  {slot.habitatLabel}
+                </span>
+              )}
             </Inset>
           ))}
         </div>

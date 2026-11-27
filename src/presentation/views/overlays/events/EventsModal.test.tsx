@@ -173,8 +173,12 @@ describe('EventsModal', () => {
     expect(screen.getAllByText('5일 남음')).toHaveLength(2);
     expect(screen.getByText('10일 남음')).toBeInTheDocument();
 
-    // 이벤트 1 당첨 상세 + 진행 중 안내
+    // 이벤트 1 당첨 상세 + 목표 어종 출현 해역 + 진행 중 안내
     fireEvent.click(screen.getByRole('button', { name: /삼총사를 낚아라/ }));
+    const targetList = screen.getByLabelText('목표 어종 목록');
+    expect(within(targetList).getByText('태평양 연안')).toBeInTheDocument();
+    expect(within(targetList).getByText('태평양 (마리아나 해구)')).toBeInTheDocument();
+    expect(within(targetList).getByText('동남아 (드래곤 홀)')).toBeInTheDocument();
     expect(screen.getByText('당첨을 축하해요')).toBeInTheDocument();
     expect(screen.getByText('1234567890123456')).toBeInTheDocument();
     expect(screen.getByLabelText('교환권 바코드')).toBeInTheDocument();
