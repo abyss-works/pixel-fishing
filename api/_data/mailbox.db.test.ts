@@ -345,4 +345,38 @@ describe('플레이어 쪽', () => {
     const list = await listMails(database.db, me);
     expect(list.some(m => m.id === mail.id)).toBe(true);
   });
+
+  it('DB 기반 멱등 키는 동시 요청 중 한 건만 발송하고 만료 후 재점유 및 clearMailIdempotencyCache(db)를 지원한다', async () => {
+    await clearMailIdempotencyCache(database.db);
+    const me = await user();
+    const key = randomUUID();
+    const req = {
+      title: 'DB 동시 멱등',
+      body: '동시 발송 중 1건만 성공해야 한다',
+      target: { kind: 'users' as const, recipients: [{ userId: me, gold: 77 }] },
+      idempotencyKey: key,
+    };
+
+    const [r1, r2] = await Promise.all([
+      deliverMail(database.db, req, NOW),
+      deliverMail(database.db, req, NOW),
+    ]);
+    const sentCounts = [r1.sent, r2.sent].sort((a, b) => a - b);
+    expect(sentCounts).toEqual([0, 1]);
+    expect([r1.idempotent, r2.idempotent].filter(Boolean)).toHaveLength(1);
+    expect((await listMails(database.db, me)).filter(m => m.title === 'DB 동시 멱등')).toHaveLength(1);
+
+    // 같은 키에 다른 본문이면 DuplicateMailError
+    await expect(deliverMail(database.db, { ...req, body: '다른 본문' }, NOW)).rejects.toBeInstanceOf(DuplicateMailError);
+
+    // 만료 시점 경과 후에는 삭제 후 재점유되어 새 우편이 발송된다 (10분 중복 창 밖 시각 사용)
+    await client.query(`update public.admin_mail_idempotency set expires_at = now() - interval '1 second' where key = $1`, [key]);
+    const afterExpiry = await deliverMail(database.db, req, '2026-10-23T00:20:00.000Z');
+    expect(afterExpiry).toMatchObject({ problems: [], sent: 1 });
+    expect((await listMails(database.db, me)).filter(m => m.title === 'DB 동시 멱등')).toHaveLength(2);
+
+    await clearMailIdempotencyCache(database.db);
+    const { rows } = await client.query(`select 1 from public.admin_mail_idempotency where key = $1`, [key]);
+    expect(rows).toHaveLength(0);
+  });
 });
