@@ -219,11 +219,12 @@ describe('events 모델 셀렉터', () => {
     expect(won.expiryText).toBe('2026년 12월 31일까지');
   });
 
-  it('selectEventChampionshipView는 2-1-3 시상대, 배 단계별 정산 단가, 9종 도감과 모자 진행도를 만든다', () => {
+  it('selectEventChampionshipView는 2-1-3 시상대(빈 자리 포함), 배 단계별 정산 단가, 9종 도감과 모자 진행도를 만든다', () => {
     const game = { ...newState(), boat: 3, location: { kind: 'region' as const, id: 'championship' as const } };
     const view = selectEventChampionshipView(EV_CHAMP, SNAP.championship, game, NOW, '내닉');
     expect(view.inEventZone).toBe(true);
     expect(view.podium.map(p => p.place)).toEqual([2, 1, 3]);
+    expect(view.podium.map(p => p.entry?.nickname)).toEqual(['이등', '일등', '삼등']);
     expect(view.rows.map(r => r.rank)).toEqual([4]);
     expect(view.myRow).toEqual({ rank: 5, nickname: '내닉', score: 430 });
     expect(view.idleRate).toBe(EVENT2_SETTLEMENT_RATES.idle[3]);
@@ -235,12 +236,69 @@ describe('events 모델 셀렉터', () => {
     expect(view.variantHat).toMatchObject({ count: 0, total: 9, owned: false });
   });
 
-  it('selectEventDrawView는 2-1-3 시상대와 일별 운세 점괘판 타일을 만든다', () => {
-    const view = selectEventDrawView(EV_DRAW, SNAP.draw, NOW);
+  it('시상대는 참여자가 0명·1명·2명이어도 항상 [2, 1, 3] 3슬롯을 반환하고 빈 자리는 entry: null로 둔다', () => {
+    const emptyView = selectEventChampionshipView(EV_CHAMP, null, newState(), NOW);
+    expect(emptyView.podium).toEqual([
+      { place: 2, entry: null },
+      { place: 1, entry: null },
+      { place: 3, entry: null },
+    ]);
+
+    const oneView = selectEventChampionshipView(EV_CHAMP, {
+      ...SNAP.championship!,
+      top: [{ rank: 1, userId: 'u1', nickname: '혼자일등', score: 900, me: true }],
+      rank: 1,
+    }, newState(), NOW);
+    expect(oneView.podium.map(p => p.place)).toEqual([2, 1, 3]);
+    expect(oneView.podium[0].entry).toBeNull();
+    expect(oneView.podium[1].entry).toMatchObject({ place: 1, nickname: '혼자일등', score: 900, me: true });
+    expect(oneView.podium[2].entry).toBeNull();
+
+    const twoView = selectEventDrawView(EV_DRAW, {
+      ...SNAP.draw!,
+      top: [
+        { rank: 1, userId: 'u1', nickname: '일등', score: 300, me: false },
+        { rank: 2, userId: 'u2', nickname: '이등', score: 200, me: false },
+      ],
+    }, NOW);
+    expect(twoView.podium.map(p => p.place)).toEqual([2, 1, 3]);
+    expect(twoView.podium[0].entry).toMatchObject({ place: 2, nickname: '이등' });
+    expect(twoView.podium[1].entry).toMatchObject({ place: 1, nickname: '일등' });
+    expect(twoView.podium[2].entry).toBeNull();
+  });
+
+  it('selectEventDrawView는 KST 04:00 경계로 전체 기간 타일을 생성해 병합하고 status를 부여한다', () => {
+    const fiveDayEv: LiveEventSummary = {
+      ...EV_DRAW,
+      // KST 2026-12-01 04:00 ~ 2026-12-06 04:00 (반열린 구간: 12/1~12/5 5일)
+      startsAt: '2026-11-30T19:00:00.000Z',
+      endsAt: '2026-12-05T19:00:00.000Z',
+    };
+    const midNow = '2026-12-03T12:00:00.000Z';
+    const view = selectEventDrawView(fiveDayEv, {
+      ...SNAP.draw!,
+      days: [
+        { day: '2026-12-01', kind: 'grand-catch', index: 5, score: 97 },
+        { day: '2026-12-03', kind: 'fish', index: 5, score: 88 },
+      ],
+    }, midNow);
     expect(view.podium.map(p => p.place)).toEqual([2, 1, 3]);
     expect(view.myRow).toEqual({ rank: 3, nickname: '나야나', score: 185 });
-    expect(view.days).toHaveLength(3);
-    expect(view.days[0]).toMatchObject({ label: '12/1', fortuneName: '만선 대길', score: 97, attended: true });
-    expect(view.days[2]).toMatchObject({ label: '12/3', fortuneName: null, score: null, attended: false });
+    expect(view.days).toHaveLength(5);
+    expect(view.days.map(d => [d.day, d.status])).toEqual([
+      ['2026-12-01', 'attended'],
+      ['2026-12-02', 'missed'],
+      ['2026-12-03', 'attended'],
+      ['2026-12-04', 'upcoming'],
+      ['2026-12-05', 'upcoming'],
+    ]);
+    expect(view.days[0]).toMatchObject({ label: '12/1', fortuneName: '만선 대길', score: 97, attended: true, status: 'attended' });
+    expect(view.days[1]).toMatchObject({ label: '12/2', fortuneName: null, score: null, attended: false, status: 'missed' });
+    expect(view.days[3]).toMatchObject({ label: '12/4', fortuneName: null, score: null, attended: false, status: 'upcoming' });
+
+    // 시작·종료 시각이 유효하지 않은 픽스처는 기존 state.days 폴백을 유지한다
+    const fallbackView = selectEventDrawView({ ...EV_DRAW, startsAt: '', endsAt: '' }, SNAP.draw, NOW);
+    expect(fallbackView.days).toHaveLength(3);
+    expect(fallbackView.days[2]).toMatchObject({ label: '12/3', status: 'upcoming', attended: false });
   });
 });

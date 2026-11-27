@@ -15,6 +15,7 @@ type LuckTab = 'rank' | 'board';
 function LuckRankTab({ view }: { view: EventDrawView }) {
   return (
     <div className="flex flex-col gap-2.5">
+      <Note size="xs" className="my-0">매일 모은 오늘의 운세 누적 점수로 순위를 겨뤄요.</Note>
       <EventPodium podium={view.podium} scoreIcon="clover" />
       <EventRankRows rows={view.rows} myRow={view.myRow} scoreIcon="clover" />
     </div>
@@ -24,6 +25,7 @@ function LuckRankTab({ view }: { view: EventDrawView }) {
 function LuckBoardTab({ view }: { view: EventDrawView }) {
   return (
     <div className="flex flex-col gap-2.5">
+      <Note size="xs" className="my-0">오늘의 운세를 확인할 때마다 점괘판이 한 칸씩 채워져요.</Note>
       <Inset tone="light" border="gold" className="px-3 py-2 flex items-center justify-between gap-2">
         <div className="inline-flex items-center gap-1.5">
           <PixelIcon glyph="clover" size={14} className="text-gold shrink-0" />
@@ -37,12 +39,15 @@ function LuckBoardTab({ view }: { view: EventDrawView }) {
         {view.days.map(day => (
           <Inset
             key={day.day}
-            tone={day.attended ? 'light' : 'deep'}
-            border={day.attended ? 'gold' : 'line'}
-            className="p-2 flex flex-col items-center justify-between gap-1 text-center min-h-[78px]"
+            tone={day.status === 'attended' ? 'light' : 'deep'}
+            border={day.status === 'attended' ? 'gold' : day.status === 'upcoming' ? 'line-dim' : 'line'}
+            data-day-status={day.status}
+            className={day.status === 'upcoming'
+              ? 'p-2 flex flex-col items-center justify-between gap-1 text-center min-h-[78px] border-dashed'
+              : 'p-2 flex flex-col items-center justify-between gap-1 text-center min-h-[78px]'}
           >
             <span className="text-2xs font-bold text-text-dim">{day.label}</span>
-            {day.attended && day.kind && day.index ? (
+            {day.status === 'attended' && day.kind && day.index ? (
               <>
                 <FortuneMotifIcon kind={day.kind} index={day.index} size={18} />
                 <span className="text-2xs font-bold text-text truncate max-w-full">{day.fortuneShort}</span>
@@ -51,6 +56,8 @@ function LuckBoardTab({ view }: { view: EventDrawView }) {
                   {day.score}
                 </span>
               </>
+            ) : day.status === 'upcoming' ? (
+              <span className="text-2xs text-text-dim my-auto">예정</span>
             ) : (
               <span className="text-2xs text-text-dim my-auto">미출석</span>
             )}

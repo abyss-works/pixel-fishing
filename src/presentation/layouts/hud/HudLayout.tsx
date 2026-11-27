@@ -28,7 +28,7 @@ interface HudLayoutProps {
   covered: boolean;
   onOpenStats: () => void;
   onOpenEffects?: () => void;
-  onOpenMap: () => void;
+  onOpenMap?: () => void;
   /** 미니맵에 그릴 같은 바다의 길드원 위치 */
   guildMates?: () => readonly { x: number; y: number }[];
   /** 오른쪽 열 맨 위에 쌓을 알림(방치 결과 카드, 바다의 흔적 카드 등) */

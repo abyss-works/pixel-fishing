@@ -28,6 +28,7 @@ type TourneyTab = 'rank' | 'settle' | 'dex';
 function TourneyRankTab({ view }: { view: EventChampionshipView }) {
   return (
     <div className="flex flex-col gap-2.5">
+      <Note size="xs" className="my-0">모두 같은 표준 장비로 낚은 누적 점수로 순위를 겨뤄요.</Note>
       <EventPodium podium={view.podium} />
       <EventRankRows rows={view.rows} myRow={view.myRow} />
       <Inset tone="deep" className="p-2.5 flex flex-col gap-1.5 text-xs">
@@ -37,7 +38,7 @@ function TourneyRankTab({ view }: { view: EventChampionshipView }) {
           <Badge size="2xs">파워 {EVENT2_STANDARD_SPEC_VIEW.power}</Badge>
           <Badge size="2xs">입질 {EVENT2_STANDARD_SPEC_VIEW.biteRangeText}</Badge>
           <Badge size="2xs">방치 {EVENT2_STANDARD_SPEC_VIEW.idleBoost}배</Badge>
-          <Badge size="2xs" tone="accent">돌연변이 {EVENT2_STANDARD_SPEC_VIEW.variantEv}배</Badge>
+          <Badge size="2xs" tone="mutation">돌연변이 {EVENT2_STANDARD_SPEC_VIEW.variantEv}배</Badge>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="font-bold text-text">점수 기준</span>
@@ -65,20 +66,26 @@ function TourneySettleTab({
 }) {
   return (
     <div className="flex flex-col gap-2.5">
-      <div className="grid grid-cols-2 gap-2">
-        <Inset tone="light" border="gold" className="p-3 flex flex-col items-center gap-1">
-          <span className="text-xs text-text-dim">미정산 골드</span>
-          <span className="pf-accent text-lg font-bold text-gold">{fmtGold(view.pendingGold)}</span>
-        </Inset>
-        <Inset tone="light" border="accent" className="p-3 flex flex-col items-center gap-1">
-          <span className="text-xs text-text-dim">미정산 명성</span>
-          <span className="pf-accent text-lg font-bold text-accent">{fmtNum(view.pendingFame)}</span>
-        </Inset>
-      </div>
-      <Button variant="primary" full disabled={busy || !view.canSettle} onClick={onSettle}>
-        정산하기
-      </Button>
-      <Inset tone="base" className="p-3 flex flex-col gap-2">
+      <Note size="xs" className="my-0">대회에서 쌓인 골드와 명성을 원할 때 바로 정산받을 수 있어요.</Note>
+      <Inset tone="base" className="p-2.5 flex flex-col gap-2">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs font-bold text-text">미정산 보상</span>
+          <Button variant="primary" size="sm" disabled={busy || !view.canSettle} onClick={onSettle}>
+            정산하기
+          </Button>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <Inset tone="light" border="gold" className="px-2.5 py-2 flex flex-col items-center gap-0.5 text-center">
+            <span className="text-2xs text-text-dim">미정산 골드</span>
+            <span className="font-sans text-base font-bold tabular-nums text-gold">{fmtGold(view.pendingGold)}</span>
+          </Inset>
+          <Inset tone="light" border="accent" className="px-2.5 py-2 flex flex-col items-center gap-0.5 text-center">
+            <span className="text-2xs text-text-dim">미정산 명성</span>
+            <span className="font-sans text-base font-bold tabular-nums text-accent">{fmtNum(view.pendingFame)}</span>
+          </Inset>
+        </div>
+      </Inset>
+      <Inset tone="base" className="p-2.5 flex flex-col gap-2">
         <div className="flex items-center gap-1.5">
           <span className="text-xs font-bold text-text">{view.boatName}</span>
           <Badge tone="gold" size="2xs">{view.boatTier}단계</Badge>
@@ -87,15 +94,15 @@ function TourneySettleTab({
         <div className="grid grid-cols-3 gap-2">
           <Inset tone="deep" className="p-2 flex flex-col items-center gap-0.5 text-center">
             <span className="text-2xs text-text-dim">방치</span>
-            <span className="pf-accent text-xs font-bold text-gold">{fmtGold(view.idleRate)}</span>
+            <span className="font-sans text-sm font-bold tabular-nums text-gold">{fmtGold(view.idleRate)}</span>
           </Inset>
           <Inset tone="deep" className="p-2 flex flex-col items-center gap-0.5 text-center">
             <span className="text-2xs text-text-dim">수동</span>
-            <span className="pf-accent text-xs font-bold text-gold">{fmtGold(view.manualRate)}</span>
+            <span className="font-sans text-sm font-bold tabular-nums text-gold">{fmtGold(view.manualRate)}</span>
           </Inset>
           <Inset tone="deep" className="p-2 flex flex-col items-center gap-0.5 text-center">
             <span className="text-2xs text-text-dim">명성 (고정)</span>
-            <span className="pf-accent text-xs font-bold text-accent">{fmtNum(view.fameRate)}</span>
+            <span className="font-sans text-sm font-bold tabular-nums text-accent">{fmtNum(view.fameRate)}</span>
           </Inset>
         </div>
       </Inset>
@@ -118,6 +125,7 @@ function TourneyDexTab({ view }: { view: EventChampionshipView }) {
 
   return (
     <div className="flex flex-col gap-2.5">
+      <Note size="xs" className="my-0">호수의 일반과 돌연변이 도감을 모두 채우면 한정 모자를 받아요.</Note>
       <div className="grid grid-cols-2 gap-2 mobile:grid-cols-1" aria-label="대회 한정 모자 보상">
         {hats.map(hat => (
           <Inset
@@ -264,18 +272,13 @@ export default function EventTourneyDetail({
         title={view.title}
         summary={view.summary}
         remainingText={view.remainingText}
+        action={(
+          <Button variant="primary" size="sm" disabled={busy} onClick={view.inEventZone ? onLeaveZone : onEnterZone}>
+            {view.inEventZone ? '나가기' : '입장하기'}
+          </Button>
+        )}
         onBack={onBack}
       />
-
-      <Inset tone="light" className="px-3 py-2 flex items-center justify-between gap-2 shrink-0">
-        <div className="flex items-center gap-2 min-w-0">
-          <Badge tone="accent">{view.rank ? `${view.rank}위` : '순위 집계 중'}</Badge>
-          <span className="pf-accent text-base font-bold text-gold whitespace-nowrap">{fmtNum(view.score)}점</span>
-        </div>
-        <Button variant="primary" size="sm" disabled={busy} onClick={view.inEventZone ? onLeaveZone : onEnterZone}>
-          {view.inEventZone ? '나가기' : '입장하기'}
-        </Button>
-      </Inset>
 
       <TabBar
         inline

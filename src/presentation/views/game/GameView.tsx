@@ -32,6 +32,7 @@ import { DEFAULT_TAB } from './tabs/tabs';
 import type { TabKey } from './tabs/tabs';
 import FacilityModal from '../overlays/facility/FacilityModal';
 import type { ActionPanel } from '../overlays/facility/FacilityModal';
+import EventZoneVeil from '../../layouts/game-stage/EventZoneVeil';
 import FerryVeil from '../../layouts/game-stage/FerryVeil';
 import FerryModal from '../overlays/ferry/FerryModal';
 import StatsModal from '../overlays/stats/StatsModal';
@@ -180,6 +181,8 @@ export default function GameView(props: GameViewProps) {
   const [ferryOpen, setFerryOpen] = useState(false);
   /** 진행 중인 빠른 이동 — 떠나는 항구와 가는 항구 */
   const [trip, setTrip] = useState<{ from: BaseId; to: BaseId } | null>(null);
+  /** 진행 중인 이벤트 구역 이동 — 입장 또는 퇴장 */
+  const [eventTrip, setEventTrip] = useState<{ mode: 'enter'; eventId: string } | { mode: 'leave' } | null>(null);
   /** 추적 중인 네임드 의뢰 — 흔적 카드의 추적 버튼이 열고, 토벌·돌아가기·닫기가 닫는다 */
   const [tracking, setTracking] = useState<string | null>(null);
   const covered = useCanvasCover();
@@ -325,8 +328,8 @@ export default function GameView(props: GameViewProps) {
 
   const onFacility = (id: FurnitureId) => {
     if (scene.kind !== 'base') return;
-    // 빠른 이동 전환 중에는 거점의 이동 동작을 받지 않는다
-    if (trip && (id === 'exit' || id === 'travel' || id === 'ferry')) return;
+    // 빠른 이동·이벤트 구역 전환 중에는 거점의 이동 동작을 받지 않는다
+    if ((trip || eventTrip) && (id === 'exit' || id === 'travel' || id === 'ferry')) return;
     const pack = BASE_PACKS[scene.id];
     const boarding = boardingOf(scene.id);
     switch (id) {
@@ -428,19 +431,33 @@ export default function GameView(props: GameViewProps) {
       }
     });
   };
+  const isEventZone = scene.kind === 'region' && scene.id === 'championship';
   const onOpenMap = () => setWorldMapOpen(true);
 
-  const enterEventZone = async (eventId: string) => {
-    if (eventBusy) return;
-    setEventBusy(true);
-    try {
-      const settled = await settleAction(() => props.dispatch({ type: 'enterEventZone', eventId }));
+  const enterEventZone = (eventId: string) => {
+    if (trip || eventTrip || eventBusy) return;
+    resetPanels();
+    setWorldMapOpen(false);
+    setEventTrip({ mode: 'enter', eventId });
+  };
+
+  const leaveEventZone = () => {
+    if (trip || eventTrip || eventBusy) return;
+    resetPanels();
+    setWorldMapOpen(false);
+    setEventTrip({ mode: 'leave' });
+  };
+
+  const runEventZoneMove = async () => {
+    if (!eventTrip) return;
+    if (eventTrip.mode === 'enter') {
+      const settled = await settleAction(() => props.dispatch({ type: 'enterEventZone', eventId: eventTrip.eventId }));
       if (settled.ok) {
         resetPanels();
         props.onPlace({ kind: 'region', id: 'championship' }, REGION_PACKS.championship.spawn);
         sendNotice(props.setToast, {
           kind: 'travel.routineMove',
-          text: `${REGION_PACKS.championship.name}에 입장했어요.`,
+          text: `${REGION_PACKS.championship.name}에 도착했어요.`,
         });
         return;
       }
@@ -451,46 +468,36 @@ export default function GameView(props: GameViewProps) {
           cooldownKey: 'event.enter',
         });
       }
-    } finally {
-      setEventBusy(false);
+      return;
     }
-  };
-
-  const leaveEventZone = async () => {
-    if (eventBusy) return;
-    setEventBusy(true);
-    try {
-      let nextLocation: GameState['location'] | null = null;
-      const settled = await settleAction(async () => {
-        const res = await props.dispatch({ type: 'leaveEventZone' });
-        if (res.status === 'ok') nextLocation = res.state.location;
-        return res;
+    let nextLocation: GameState['location'] | null = null;
+    const settled = await settleAction(async () => {
+      const res = await props.dispatch({ type: 'leaveEventZone' });
+      if (res.status === 'ok') nextLocation = res.state.location;
+      return res;
+    });
+    if (settled.ok) {
+      resetPanels();
+      const fallbackDest = game.boat < 1
+        ? ({ kind: 'region', id: 'village' } as const)
+        : ({ kind: 'base', id: 'harbor' } as const);
+      const dest = nextLocation ?? fallbackDest;
+      props.onPlace(dest);
+      const destName = dest.kind === 'base'
+        ? BASE_PACKS[dest.id].name
+        : REGION_PACKS[dest.id].info.shortName;
+      sendNotice(props.setToast, {
+        kind: 'travel.routineMove',
+        text: `${destName}에 도착했어요.`,
       });
-      if (settled.ok) {
-        resetPanels();
-        const fallbackDest = game.boat < 1
-          ? ({ kind: 'region', id: 'village' } as const)
-          : ({ kind: 'base', id: 'harbor' } as const);
-        const dest = nextLocation ?? fallbackDest;
-        props.onPlace(dest);
-        const destName = dest.kind === 'base'
-          ? BASE_PACKS[dest.id].name
-          : REGION_PACKS[dest.id].info.shortName;
-        sendNotice(props.setToast, {
-          kind: 'travel.routineMove',
-          text: `${destName}에 도착했어요.`,
-        });
-        return;
-      }
-      if (settled.notice) {
-        sendNotice(props.setToast, {
-          kind: 'travel.blocked',
-          text: settled.notice,
-          cooldownKey: 'event.leave',
-        });
-      }
-    } finally {
-      setEventBusy(false);
+      return;
+    }
+    if (settled.notice) {
+      sendNotice(props.setToast, {
+        kind: 'travel.blocked',
+        text: settled.notice,
+        cooldownKey: 'event.leave',
+      });
     }
   };
 
@@ -528,8 +535,10 @@ export default function GameView(props: GameViewProps) {
     }
   };
 
+  const transitionLocked = trip !== null || eventTrip !== null;
+
   useKeyScope(e => {
-    if (scene.kind !== 'base' || trip !== null || encounter !== null || props.blocker != null) return false;
+    if (scene.kind !== 'base' || transitionLocked || encounter !== null || props.blocker != null) return false;
     if (e.key !== 'Escape' || hasModifier(e)) return false;
     e.preventDefault();
     onFacility('exit');
@@ -542,12 +551,12 @@ export default function GameView(props: GameViewProps) {
          data-keyboard={visible.keyboard ? '' : undefined}>
       <GameStageLayout>
         {scene.kind === 'base' ? (
-          <BaseMenu key={scene.id} base={scene.id} game={game} onFacility={onFacility} locked={trip !== null} accountState={accountState} />
+          <BaseMenu key={scene.id} base={scene.id} game={game} onFacility={onFacility} locked={transitionLocked} accountState={accountState} />
         ) : (
           <Field key={scene.id} region={scene.id} game={game} dispatch={props.dispatch} setToast={props.setToast}
                  onScene={go} guest={isConfirmedGuest(props.account, props.accountChecked)} onGuestBlocked={onGuestBlocked} paused={encounter !== null || props.blocker != null}
                  initialPos={props.entryPos ?? undefined} placeSeq={props.placeSeq}
-                 locked={trip !== null} statusSlot={statusSlot} catchSlot={catchSlot} uid={props.uid} saveVersion={props.saveVersion} />
+                 locked={transitionLocked} statusSlot={statusSlot} catchSlot={catchSlot} uid={props.uid} saveVersion={props.saveVersion} />
         )}
 
         <HudLayout game={game} bagBonus={bagBonus} scene={scene} log={log} covered={covered}
@@ -568,7 +577,7 @@ export default function GameView(props: GameViewProps) {
                    guildMates={guildMates}
                    channels={chat.enabled ? FILTER_CHANNELS : undefined}
                    disabledChannels={guild === null ? GUILD_OFF : undefined}
-                   onOpenStats={openStats} onOpenEffects={() => setEffectsOpen(open => !open)} onOpenMap={onOpenMap}
+                   onOpenStats={openStats} onOpenEffects={() => setEffectsOpen(open => !open)} onOpenMap={isEventZone ? undefined : onOpenMap}
                    notice={atSea || (away.report && !awayOpen) ? (
                      <div className="flex flex-col gap-2">
                        {away.report && !awayOpen && (
@@ -684,7 +693,7 @@ export default function GameView(props: GameViewProps) {
             accountState={accountState}
             game={game}
             nickname={props.nickname}
-            busy={eventBusy}
+            busy={eventBusy || eventTrip !== null}
             onEnterEventZone={enterEventZone}
             onLeaveEventZone={leaveEventZone}
             onSettleEventReward={settleEventReward}
@@ -697,6 +706,7 @@ export default function GameView(props: GameViewProps) {
         )}
 
         {trip && <FerryVeil onSurface={ferrySurface} onMove={ferryMove} onDone={() => setTrip(null)} />}
+        {eventTrip && <EventZoneVeil mode={eventTrip.mode} onMove={runEventZoneMove} onDone={() => setEventTrip(null)} />}
         {ferryOpen && scene.kind === 'base' && (
           <FerryModal game={game} from={scene.id} onPick={pickPort} onClose={() => setFerryOpen(false)} />
         )}

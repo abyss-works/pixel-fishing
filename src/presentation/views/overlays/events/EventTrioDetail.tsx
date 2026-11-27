@@ -99,6 +99,9 @@ export default function EventTrioDetail({
                 : '목표 어종 3마리를 모두 낚으면 추첨에 자동 응모돼요.'}
             </p>
             <p className="m-0">
+              이벤트 기간 안에 정해진 형태로 새로 낚아야 달성할 수 있어요.
+            </p>
+            <p className="m-0">
               당첨되면 게임 내 우편함과 이 화면에서 교환권 번호를 바로 확인할 수 있어요.
             </p>
           </Inset>
