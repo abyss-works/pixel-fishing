@@ -34,7 +34,11 @@ const WRITE_OWNERS: Record<string, readonly string[]> = {
   '_data/rank.ts': ['ranking_weekly_fame'],
   '_data/integrity.ts': ['integrity_states', 'integrity_events'],
   '_data/admin.ts': ['admins', 'admin_audit_logs'],
+  // 마이그레이션 runner는 initContainer에서만 실행돼 런타임 서버 풀을 쓰지 않고, 적용 이력 표를 맡는다.
+  '_server/migrationRunner.ts': ['schema_migrations'],
 };
+
+const MIGRATION_RUNNER_FILES = new Set(['migrate.ts', '_server/migrationRunner.ts']);
 
 function sources(dir: string): string[] {
   return readdirSync(dir).flatMap(name => {
@@ -66,14 +70,14 @@ describe('서버 데이터 계층 경계', () => {
 
   it('drizzle-orm 값과 pg 드라이버는 저장 모듈과 DB 모듈만 가져온다', () => {
     const violations = files
-      .filter(({ path }) => !path.startsWith('_data/') && !path.startsWith('_db/'))
+      .filter(({ path }) => !path.startsWith('_data/') && !path.startsWith('_db/') && !MIGRATION_RUNNER_FILES.has(path))
       .filter(({ src }) => /^import\s+(?!type\b)[^;]*from\s+'(?:drizzle-orm[^']*|pg)'/m.test(src))
       .map(({ path }) => path);
     expect(violations).toEqual([]);
   });
 
   it('transaction 모드 풀러와 맞지 않는 prepared statement와 세션 잠금을 쓰지 않는다', () => {
-    const violations = files.filter(({ src }) => /\.prepare\(|pg_advisory_lock\(|pg_try_advisory_lock\(/.test(src))
+    const violations = files.filter(({ path, src }) => !MIGRATION_RUNNER_FILES.has(path) && /\.prepare\(|pg_advisory_lock\(|pg_try_advisory_lock\(/.test(src))
       .map(({ path }) => path);
     expect(violations).toEqual([]);
   });

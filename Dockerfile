@@ -34,6 +34,9 @@ COPY --from=builder /app/package.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/dist-ssr ./dist-ssr
+# migrate 번들의 공유 chunk까지 같은 위치에 놓이도록 출력 디렉터리의 내용을 루트에 복사한다.
+COPY --from=builder /app/dist-migrate ./
+COPY --from=builder /app/supabase/migrations ./migrations
 
 USER node
 

@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:admin": "vite build -c vite.admin.config.ts",
-    "build:server": "vite build --ssr api/_server/main.ts --outDir dist-ssr && vite build --ssr api/_server/realtimeMain.ts --outDir dist-ssr --emptyOutDir=false",
+    "build:server": "vite build --ssr api/_server/main.ts --outDir dist-ssr && vite build --ssr api/_server/realtimeMain.ts --outDir dist-ssr --emptyOutDir=false && vite build --ssr api/migrate.ts --outDir dist-migrate",
     "start": "node dist-ssr/main.js",
     "lint": "oxlint",
     "preview": "vite preview",
