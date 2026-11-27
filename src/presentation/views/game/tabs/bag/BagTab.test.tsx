@@ -263,7 +263,11 @@ describe('BagTab - 3서브탭, 보기 전환 아이콘, 하단 버튼', () => {
     );
     expect(screen.getByText(carp.variant.name)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: new RegExp(`^${carp.name} `) })).toBeNull();
-    expect(screen.getByRole('button', { name: `${carp.variant.name} 개체 펼치기` })).toBeInTheDocument();
+    const expandBtn = screen.getByRole('button', { name: `${carp.variant.name} 개체 펼치기` });
+    expect(expandBtn).toBeInTheDocument();
+    fireEvent.click(expandBtn);
+    expect(screen.getByRole('button', { name: `20.0cm 돌연변이 ${carp.variant.name} 잠금` })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: `20.0cm 돌연변이 ${carp.name} 잠금` })).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: '카드 보기' }));
     expect(screen.getByText(carp.variant.name)).toBeInTheDocument();

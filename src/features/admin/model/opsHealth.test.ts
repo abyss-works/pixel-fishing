@@ -211,6 +211,14 @@ describe('opsHealth 모델', () => {
         heapUsedMb: 128,
         heapTotalMb: 192,
       },
+      database: {
+        poolTotal: Number.NaN,
+        poolIdle: 2,
+        poolWaiting: -1,
+        poolMax: -5,
+        dbSizeBytes: -10,
+        activeConnections: -1,
+      },
       ws: {
         onlineCount: Number.NaN,
         summary: {
@@ -238,10 +246,38 @@ describe('opsHealth 모델', () => {
 
     expect(view.runtime.uptimeText).toBe('--');
     expect(view.runtime.memoryText).toBe('--');
+    expect(view.database.poolText).toBe('--/--/-- (대기 --)');
+    expect(view.database.poolCompactText).toBe('--/-- (대기 --)');
+    expect(view.database.dbSizeText).toBe('확인 불가');
+    expect(view.database.activeConnectionsText).toBe('--');
     expect(view.ws.onlineCountText).toBe('--');
     expect(view.slowRequests[0]).toMatchObject({
       atText: '--',
       durationText: '--',
     });
+
+    const negativeMemory = selectOpsHealthView(sampleHealth({
+      runtime: {
+        uptimeSec: 10,
+        rssMb: 256,
+        heapUsedMb: -1,
+        heapTotalMb: 192,
+      },
+      ws: {
+        onlineCount: -3,
+        summary: {
+          upgradesOk: 0,
+          reject401: 0,
+          reject403: 0,
+          reject500: 0,
+          closeNormal: 0,
+          closeAbnormal: 0,
+          closeIdleTimeout: 0,
+        },
+        daily: [],
+      },
+    }));
+    expect(negativeMemory.runtime.memoryText).toBe('--');
+    expect(negativeMemory.ws.onlineCountText).toBe('--');
   });
 });

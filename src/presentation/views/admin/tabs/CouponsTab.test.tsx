@@ -338,7 +338,7 @@ describe('CouponsTab', () => {
     mockApi.writeCoupon.mockImplementation((req: { op: string; code: string }) => {
       if (req.op === 'delete' && req.code === 'COUPON_A') {
         return new Promise(resolve => {
-          resolveDeleteA = () => resolve({ ok: true });
+          resolveDeleteA = () => resolve({ deleted: true, code: 'COUPON_A' });
         });
       }
       return Promise.resolve({ coupon: sampleCoupon({ code: req.code }) });

@@ -41,9 +41,9 @@ export default function FirstLinkRewardSection({
             )}
           >
             <Inset tone="deep" hoverAccent className="w-full px-2.5 py-[7px] flex items-center gap-2.5 text-left">
-              <span aria-hidden="true" className="size-9 p-px inline-flex items-center justify-center bg-bg border border-line shrink-0">
+              <Inset tone="deep" aria-hidden="true" className="size-9 p-px inline-flex items-center justify-center shrink-0">
                 <ItemSprite kind={item.spriteKind} id={item.id} preset="list" />
-              </span>
+              </Inset>
               <div className="min-w-0 flex-1 flex flex-col gap-0.5">
                 <div className="text-sm font-bold leading-[1.3] text-text">
                   <GradeName name={item.name} grade={item.grade} />

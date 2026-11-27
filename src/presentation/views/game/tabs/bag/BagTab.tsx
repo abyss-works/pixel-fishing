@@ -404,7 +404,7 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
                       {expanded && (
                         <div className="bg-bg pb-1">
                           {sized.map(inst => (
-                            <InstanceLine key={inst.uid} inst={inst} fish={fish}
+                            <InstanceLine key={inst.uid} inst={inst} fish={fish} displayName={name}
                                           best={inst.size !== null && inst.size === maxByForm[inst.form]}
                                           onExhibit={EXHIBIT_UI_ENABLED ? () => exhibitTo(inst, name) : undefined}
                                           onLock={() => lock([inst.uid], !inst.locked, name)} />

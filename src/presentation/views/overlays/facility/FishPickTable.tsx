@@ -95,7 +95,7 @@ export default function FishPickTable({ rows, expanded, onToggleExpand, onToggle
                     {sized.map(inst => {
                       const on = checked.has(inst.uid);
                       return (
-                        <InstanceLine key={inst.uid} inst={inst} fish={fish}
+                        <InstanceLine key={inst.uid} inst={inst} fish={fish} displayName={name}
                                       best={inst.size !== null && inst.size === maxByForm[inst.form]}
                                       checked={!inst.locked && on}
                                       onToggle={inst.locked ? undefined : () => onToggleOne(inst.uid)}>

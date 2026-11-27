@@ -461,7 +461,7 @@ export default function CouponsTab() {
                 onChange={e => { setMaxRedemptions(e.target.value); clearNotice(); }}
               />
             </Field>
-            <Field label="계정당 사용 한도" hint="1 이상 정수">
+            <Field label="계정당 사용 한도" hint="1 이상 2,147,483,647 이하 정수">
               <TextInput
                 inputMode="numeric"
                 value={perAccountLimit}
