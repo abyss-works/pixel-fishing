@@ -115,7 +115,7 @@ const podMetricsTimer = setInterval(() => {
     updatedAt: new Date().toISOString(),
     connections: onlineList.length,
     onlineUsers: onlineList.filter(entry => !entry.guest).length,
-    ...snapshot,
+    ws: snapshot,
   });
 }, 15_000);
 podMetricsTimer.unref();
