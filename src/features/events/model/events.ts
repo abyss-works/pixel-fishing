@@ -12,6 +12,7 @@ import { fishById, type Fish, type FormId } from '../../../game/content/fish';
 import type { RarityId } from '../../../game/content/rarity';
 import { spotById, type Spot, type SpotId } from '../../../game/content/spots';
 import { DEFAULT_LOOK, hatById, type Look } from '../../../game/content/wardrobe';
+import { topZoneOfSpot, zoneById } from '../../../game/content/zones';
 import type { GameState } from '../../../game/rules/logic';
 import { gameDayOf } from '../../../game/rules/time';
 import type {
@@ -51,6 +52,7 @@ export interface EventTrioSlotView {
   rarity: RarityId;
   form: FormId;
   formLabel: string;
+  habitatLabel: string;
   completed: boolean;
   completedAt: string | null;
 }
@@ -406,6 +408,23 @@ export function selectEventList(
   });
 }
 
+/** 어종의 출현 구역과 수역, 밤 조건을 UI 문구 형식으로 조합한다 */
+export function formatFishHabitat(fish: Fish | null): string {
+  if (!fish) return '';
+  const spotName = spotById(fish.spot)?.name;
+  if (!spotName) return '';
+  const topZoneId = topZoneOfSpot(fish.spot);
+  const zoneShort = topZoneId ? zoneById(topZoneId)?.shortName : undefined;
+  const needsPrefix =
+    Boolean(zoneShort)
+    && !spotName.includes(zoneShort!)
+    && !(topZoneId === 'village' && spotName.startsWith('마을'));
+  if (needsPrefix) {
+    return fish.night ? `${zoneShort} (${spotName}, 밤)` : `${zoneShort} (${spotName})`;
+  }
+  return fish.night ? `${spotName} (밤)` : spotName;
+}
+
 export function selectEventTrioView(
   ev: LiveEventSummary,
   state: EventTrioState | null,
@@ -428,6 +447,7 @@ export function selectEventTrioView(
       rarity: fish?.rarity ?? 'common',
       form,
       formLabel: form === 'variant' ? '돌연변이' : '일반',
+      habitatLabel: formatFishHabitat(fish),
       completed: slot.completed,
       completedAt: slot.completedAt,
     };

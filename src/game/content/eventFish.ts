@@ -192,9 +192,9 @@ export interface EventTrioTarget {
 
 /** 이벤트 1 기본 3슬롯 목표 */
 export const EVENT1_TRIO_TARGETS: readonly EventTrioTarget[] = [
-  { fishId: 'mackerel', form: 'normal' },
-  { fishId: 'squid', form: 'normal' },
-  { fishId: 'sailfish', form: 'normal' },
+  { fishId: 'salmon', form: 'normal' },
+  { fishId: 'yellowtail', form: 'normal' },
+  { fishId: 'tuna', form: 'normal' },
 ];
 
 /** 이벤트 2 도감 완성 한정 모자 id */

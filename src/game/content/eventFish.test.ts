@@ -11,6 +11,7 @@ import {
 import { FISH_SPRITES } from './sprites/fishSprites';
 import { validateSprite } from './sprites/types';
 import { isKnownLocation } from './places';
+import { fishById } from './fish';
 import { powerReqOf, spotById } from './spots';
 import { hatById } from './wardrobe';
 import { defaultZoneOfRegion, spotsOfRegion, zoneById } from './zones';
@@ -46,7 +47,14 @@ describe('이벤트 2 어종 및 표준 스펙 계약', () => {
     expect(EVENT2_SETTLEMENT_RATES.idle).toEqual([9, 12, 19, 84, 84, 128, 260, 979, 4569, 19534]);
     expect(EVENT2_SETTLEMENT_RATES.manual).toEqual([19, 24, 40, 208, 208, 318, 651, 2602, 12609, 55027]);
     expect(EVENT2_SETTLEMENT_RATES.fame).toBe(4);
-    expect(EVENT1_TRIO_TARGETS).toHaveLength(3);
+    expect(EVENT1_TRIO_TARGETS).toEqual([
+      { fishId: 'salmon', form: 'normal' },
+      { fishId: 'yellowtail', form: 'normal' },
+      { fishId: 'tuna', form: 'normal' },
+    ]);
+    for (const target of EVENT1_TRIO_TARGETS) {
+      expect(fishById(target.fishId), `${target.fishId} fishById 조회`).toBeDefined();
+    }
     expect(hatById(EVENT_HAT_IDS.normal)?.source).toBe('event');
     expect(hatById(EVENT_HAT_IDS.variant)?.source).toBe('event');
 
