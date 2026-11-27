@@ -222,6 +222,71 @@ describe('GameFieldEngine 위치 재설정', () => {
     expect(onScene).toHaveBeenCalledTimes(2);
   });
 
+  it('leaveEventZone 트리거 진입 시 onLeaveEventZone을 1회 호출하고 루프를 유지하며 래치 해제 후 재진입 시 다시 발화한다', () => {
+    const onLeaveEventZone = vi.fn();
+    const game = { ...newState(), boat: 0, rod: 1 };
+    const engine = new GameFieldEngine('championship', game, [], { x: 232, y: 86 });
+    engine.updateContext(game, false, {
+      dispatch: () => ({ status: 'rejected', error: 'bad-request' }),
+      onEvent: noop,
+      onScene: noop,
+      onLeaveEventZone,
+    });
+    const frame = (now: number, last: number) =>
+      (engine as unknown as { updateFrame(c: unknown, n: number, l: number): boolean }).updateFrame(ctx, now, last);
+
+    // 북쪽 오두막 문(y: 76..84)으로 위로 이동 진입
+    engine.handleKeyDown('ArrowUp', noop);
+    let t = 1000;
+    let keepLoop = true;
+    for (let i = 0; i < 20 && onLeaveEventZone.mock.calls.length === 0; i++) {
+      keepLoop = frame(t + 50, t);
+      t += 50;
+    }
+    expect(onLeaveEventZone).toHaveBeenCalledTimes(1);
+    expect(keepLoop).toBe(true);
+
+    // 키를 유지한 채 이후 프레임에 연속 발화하지 않는다
+    for (let i = 0; i < 10; i++) {
+      expect(frame(t + 50, t)).toBe(true);
+      t += 50;
+    }
+    expect(onLeaveEventZone).toHaveBeenCalledTimes(1);
+
+    // 키를 떼지 않고 오른쪽으로 BLOCK_RENEW_DISTANCE 이상 벗어났다가 돌아와 재진입하면 다시 발화한다
+    engine.handleKeyDown('ArrowRight', noop);
+    engine.releaseKey('ArrowUp');
+    for (let i = 0; i < 20; i++) {
+      expect(frame(t + 50, t)).toBe(true);
+      t += 50;
+    }
+    engine.handleKeyDown('ArrowLeft', noop);
+    engine.releaseKey('ArrowRight');
+    for (let i = 0; i < 20; i++) {
+      expect(frame(t + 50, t)).toBe(true);
+      t += 50;
+    }
+    engine.handleKeyDown('ArrowUp', noop);
+    engine.releaseKey('ArrowLeft');
+    for (let i = 0; i < 20 && onLeaveEventZone.mock.calls.length < 2; i++) {
+      expect(frame(t + 50, t)).toBe(true);
+      t += 50;
+    }
+    expect(onLeaveEventZone).toHaveBeenCalledTimes(2);
+
+    // 입력을 해제했다가 다시 눌러 재진입해도 다시 발화한다
+    engine.releaseKey('ArrowUp');
+    expect(frame(t + 50, t)).toBe(true);
+    t += 50;
+    engine.handleKeyDown('ArrowUp', noop);
+    for (let i = 0; i < 20 && onLeaveEventZone.mock.calls.length < 3; i++) {
+      expect(frame(t + 50, t)).toBe(true);
+      t += 50;
+    }
+    expect(onLeaveEventZone).toHaveBeenCalledTimes(3);
+    engine.dispose();
+  });
+
   it('낚시 중이면 줄을 거두고 대기 상태로 돌아간다', () => {
     const { engine } = setup();
     engine.updateContext(newState(), false, {

@@ -5,6 +5,7 @@ export const CHAMPIONSHIP_W = 464;
 export const CHAMPIONSHIP_H = 288;
 
 export const CHAMPIONSHIP_CABIN: Rect = { x: 200, y: 24, w: 64, h: 52 };
+export const CHAMPIONSHIP_CABIN_DOOR: Rect = { x: 222, y: 76, w: 20, h: 8 };
 export const CHAMPIONSHIP_SPAWN: Point = { x: 232, y: 94 };
 
 export const CHAMPIONSHIP_SCHOOLS: School[] = [
@@ -185,7 +186,7 @@ export const CHAMPIONSHIP: RegionPack = {
     tagline: '이벤트 기간에만 열리는 겨울 산타 동산 분지 호수',
     lore: '높은 설산 능선 아래 맑은 물이 고인 분지 호수다. 겨울 축제 기간에만 산타 오두막 앞 호안이 열리며, 모든 낚시꾼이 같은 장비로 겨룬다.',
     tips: [
-      '이벤트 창에서 언제든 분지 호수로 들어오고 나갈 수 있어요.',
+      '이벤트 창에서 언제든 분지 호수로 들어오고 나갈 수 있고, 북쪽 산타 오두막 문으로도 나갈 수 있어요.',
       '표준 낚싯대가 적용되어 보유 배와 무관하게 공정하게 겨룰 수 있어요.',
       '서쪽·남쪽·동쪽 데크와 호수 둘레 호안에서 어군에 찌를 던져 보세요.',
     ],
@@ -249,7 +250,9 @@ export const CHAMPIONSHIP: RegionPack = {
     { kind: 'lantern', x: 248, y: 254 },
   ],
   spawn: CHAMPIONSHIP_SPAWN,
-  triggers: [],
+  triggers: [
+    { rect: CHAMPIONSHIP_CABIN_DOOR, action: 'leaveEventZone' },
+  ],
   labels: [
     {
       text: '산타 오두막',

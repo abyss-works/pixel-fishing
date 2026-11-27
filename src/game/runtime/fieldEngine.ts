@@ -105,6 +105,8 @@ export interface FieldCallbacks {
   seedContext?: () => { uid: string; saveVersion: number } | null;
   /** 프레임 갱신 후 이전 프레임과의 경과 시간(ms)을 알린다 */
   onFrame?: (elapsedMs: number) => void;
+  /** 이벤트 구역 도보 퇴장 트리거에 닿았을 때 알린다 */
+  onLeaveEventZone?: () => void;
 }
 
 /**
@@ -143,6 +145,8 @@ export class GameFieldEngine {
   private readonly guestNotice = new BlockNotice();
   /** 거점 진입 트리거가 발동된 뒤 이동 입력을 떼거나 충분히 떨어질 때까지 같은 거점 재진입을 막는 래치 */
   private latchedBase: { id: BaseId; anchor: Point } | null = null;
+  /** 이벤트 구역 퇴장 트리거가 발동된 뒤 이동 입력을 떼거나 충분히 떨어질 때까지 재발화를 막는 래치 */
+  private latchedLeaveEventZone: Point | null = null;
   private readonly keys = new Set<string>();
   /** 모바일 원 패드의 이동 방향(길이 1). 패드가 없으면 null */
   private padDir: Point | null = null;
@@ -279,6 +283,7 @@ export class GameFieldEngine {
     this.keys.clear();
     this.padDir = null;
     this.latchedBase = null;
+    this.latchedLeaveEventZone = null;
   }
 
   /**
@@ -332,7 +337,10 @@ export class GameFieldEngine {
     this.zoneNotice.release();
     this.triggerNotice.release();
     this.guestNotice.release();
-    if (this.keys.size === 0 && !this.padDir) this.latchedBase = null;
+    if (this.keys.size === 0 && !this.padDir) {
+      this.latchedBase = null;
+      this.latchedLeaveEventZone = null;
+    }
   }
 
   cancelFishing(): void {
@@ -382,6 +390,7 @@ export class GameFieldEngine {
     this.keys.clear();
     this.padDir = null;
     this.latchedBase = null;
+    this.latchedLeaveEventZone = null;
     this.listeners.clear();
   }
 
@@ -462,6 +471,7 @@ export class GameFieldEngine {
     let guestBlocked = false;
     let triggerBlocked: string | null = null;
     let latchedBaseHit = false;
+    let latchedLeaveHit = false;
     for (const trigger of this.def.triggers) {
       if (!inTrigger(this.pos, trigger.rect)) continue;
       if (trigger.action === 'base') {
@@ -481,6 +491,28 @@ export class GameFieldEngine {
         }
         this.callbacks.onScene({ kind: 'base', id: baseId }, trigger.msg, undefined, movedFrom ?? undefined);
         return false;
+      }
+      if (trigger.action === 'leaveEventZone') {
+        if (this.latchedLeaveEventZone) {
+          if (movedFrom) {
+            this.pos.x = movedFrom.x;
+            this.pos.y = movedFrom.y;
+            setPlayerPos({ x: this.pos.x, y: this.pos.y });
+          }
+          this.latchedLeaveEventZone = { x: this.pos.x, y: this.pos.y };
+          latchedLeaveHit = true;
+          continue;
+        }
+        if (movedFrom) {
+          this.pos.x = movedFrom.x;
+          this.pos.y = movedFrom.y;
+          setPlayerPos({ x: this.pos.x, y: this.pos.y });
+        }
+        if (this.keys.size > 0 || this.padDir) {
+          this.latchedLeaveEventZone = movedFrom ? { ...movedFrom } : { x: this.pos.x, y: this.pos.y };
+        }
+        this.callbacks.onLeaveEventZone?.();
+        continue;
       }
       if (trigger.action === 'travel') {
         if (this.game.boat >= trigger.requiredBoat) {
@@ -509,6 +541,12 @@ export class GameFieldEngine {
       && Math.hypot(this.pos.x - this.latchedBase.anchor.x, this.pos.y - this.latchedBase.anchor.y) >= BLOCK_RENEW_DISTANCE
     ) {
       this.latchedBase = null;
+    }
+    if (
+      !latchedLeaveHit && this.latchedLeaveEventZone
+      && Math.hypot(this.pos.x - this.latchedLeaveEventZone.x, this.pos.y - this.latchedLeaveEventZone.y) >= BLOCK_RENEW_DISTANCE
+    ) {
+      this.latchedLeaveEventZone = null;
     }
     if (this.guestNotice.step(guestBlocked, this.pos)) this.callbacks.onEvent({ type: 'guest-blocked' });
     if (this.triggerNotice.step(triggerBlocked !== null, this.pos) && triggerBlocked !== null) {
