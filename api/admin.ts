@@ -13,6 +13,7 @@ import { adminSessionUid } from './_auth/session.js';
 import { database } from './_db/client.js';
 import type { Database, Executor } from './_db/client.js';
 import { notifyAll, notifyUser, onlineUsers } from './_server/livePresence.js';
+import { recentHttpSummary, recentWsSnapshot, slowRequests } from './_server/opsRuntime.js';
 import { COUPONS } from '../src/game/content/coupons.js';
 import { normalizeNoticeDraft } from '../src/game/rules/live.js';
 import { accountKind, revokeUserSessions } from './_data/account.js';
@@ -28,6 +29,7 @@ import {
   listAdminEvents, listEventDraws, parseEventCreateDraft, parseEventDrawInput, parseEventUpdateDraft, updateAdminEvent,
 } from './_data/events.js';
 import { readHttpMetrics } from './_data/httpMetrics.js';
+import { readOpsHealth } from './_data/opsHealth.js';
 import { setLetterHandled } from './_data/mail.js';
 import { deliverMail, DuplicateMailError, parseMailRequest, planMail, recentSentMails } from './_data/mailbox.js';
 import {
@@ -155,12 +157,12 @@ async function route(req: Req, res: Res): Promise<void> {
   if (member.role === 'maintainer' && name !== undefined && ADMIN_ONLY_READ_QUERIES.has(name)) {
     throw new ApiError(403, 'forbidden');
   }
-  const query = parse(name, req, member.role);
+  const query = parse(name, req, member.role, store.pool);
   res.status(200).json(await dbRead(() => query(db)));
 }
 
 /** 조회 이름과 인자를 검사해 실행할 읽기를 돌려준다. 틀리면 400이다 */
-function parse(name: string | undefined, req: Req, role: read.AdminRole): (db: Executor) => Promise<unknown> {
+function parse(name: string | undefined, req: Req, role: read.AdminRole, pool: Database['pool']): (db: Executor) => Promise<unknown> {
   switch (name) {
     case 'overview': {
       const days = optionalDaysOf(req) ?? STATS_DEFAULT_DAYS;
@@ -193,6 +195,21 @@ function parse(name: string | undefined, req: Req, role: read.AdminRole): (db: E
       const days = optionalDaysOf(req) ?? STATS_DEFAULT_DAYS;
       if (days < 1 || days > MAX_DAYS) throw new ApiError(400, 'bad-days');
       return db => readHttpMetrics(db, days);
+    }
+    case 'opsHealth': {
+      const days = optionalDaysOf(req) ?? 7;
+      if (days < 1 || days > MAX_DAYS) throw new ApiError(400, 'bad-days');
+      const onlineCount = onlineUsers().length;
+      const slow = slowRequests();
+      const recentHttp = recentHttpSummary();
+      const recentWs = recentWsSnapshot();
+      return db => readOpsHealth(db, pool, {
+        days,
+        onlineCount,
+        slowRequests: slow,
+        recentHttp,
+        recentWs,
+      });
     }
     case 'balanceLive': { const days = optionalDaysOf(req); return db => balanceLive(db, days); }
     case 'userEvents': {

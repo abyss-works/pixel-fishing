@@ -5,7 +5,7 @@ import type { AddressInfo } from 'node:net';
 import express from 'express';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { HttpMetricIncrement } from '../_data/httpMetrics.js';
-import { createHttpMetrics, kstDayOf, routeGroupOf } from './httpMetrics.js';
+import { createHttpMetrics, kstDayOf, markRateLimitReason, routeGroupOf, sanitizeMetricPath } from './httpMetrics.js';
 
 describe('routeGroupOf', () => {
   it('요청 경로를 action·auth·admin·api·web 5개 묶음으로 분류한다', () => {
@@ -27,6 +27,16 @@ describe('routeGroupOf', () => {
   });
 });
 
+describe('sanitizeMetricPath', () => {
+  it('쿼리 문자열을 제거하고 UUID와 숫자 세그먼트를 :id로 정규화한다', () => {
+    expect(sanitizeMetricPath('/api/players/550e8400-e29b-41d4-a716-446655440000?tab=profile')).toBe('/api/players/:id');
+    expect(sanitizeMetricPath('/api/chat/messages/987654/reports?reason=spam')).toBe('/api/chat/messages/:id/reports');
+    expect(sanitizeMetricPath('/api/friends/550E8400-E29B-41D4-A716-446655440000')).toBe('/api/friends/:id');
+    expect(sanitizeMetricPath('/api/action?ping=1')).toBe('/api/action');
+    expect(sanitizeMetricPath(undefined)).toBe('/');
+  });
+});
+
 describe('kstDayOf', () => {
   it('UTC 시각을 KST(UTC+9) 날짜 문자열로 변환한다', () => {
     expect(kstDayOf(Date.parse('2026-11-25T14:59:59.000Z'))).toBe('2026-11-25');
@@ -43,11 +53,13 @@ describe('createHttpMetrics 미들웨어', () => {
     }
   });
 
-  it('Express 응답 완료 시 상태 코드(전체·426·429·5xx)를 경로 묶음별로 집계하고 stop 시 플러시한다', async () => {
+  it('Express 응답 완료 시 상태 코드(409·426·429·4xx·5xx)·429 사유·지연 버킷·슬로우 요청을 기록하고 플러시한다', async () => {
     const persisted: HttpMetricIncrement[][] = [];
     const metrics = createHttpMetrics({
       flushIntervalMs: 60_000,
-      now: () => Date.parse('2026-11-25T05:00:00.000Z'), // KST 2026-11-25 14:00
+      slowThresholdMs: 25,
+      maxSlowRequests: 2,
+      now: () => Date.parse('2026-11-25T05:00:00.000Z'),
       persist: async rows => { persisted.push(rows); },
     });
 
@@ -56,7 +68,14 @@ describe('createHttpMetrics 미들웨어', () => {
     app.get('/api/action', (_req, res) => { res.status(200).json({ ok: true }); });
     app.post('/api/action', (req, res) => {
       const code = Number(req.query.status ?? 200);
+      if (req.query.reason === 'catch-too-soon' || req.query.reason === 'letter-gap') {
+        markRateLimitReason(res, req.query.reason);
+      }
       res.status(code).json({ code });
+    });
+    app.get('/api/players/:uid', async (_req, res) => {
+      await new Promise(r => setTimeout(r, 35));
+      res.status(200).json({ ok: true });
     });
     app.post('/api/auth/sign-in/anonymous', (_req, res) => { res.status(429).json({ message: 'limited' }); });
     app.get('/api/me', (_req, res) => { res.status(503).json({ error: 'down' }); });
@@ -67,29 +86,96 @@ describe('createHttpMetrics 미들웨어', () => {
     const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
     await fetch(`${base}/api/action`);
+    await fetch(`${base}/api/action?status=409`, { method: 'POST' });
     await fetch(`${base}/api/action?status=426`, { method: 'POST' });
-    await fetch(`${base}/api/action?status=429`, { method: 'POST' });
+    await fetch(`${base}/api/action?status=429&reason=catch-too-soon`, { method: 'POST' });
+    await fetch(`${base}/api/action?status=429&reason=letter-gap`, { method: 'POST' });
     await fetch(`${base}/api/action?status=500`, { method: 'POST' });
     await fetch(`${base}/api/auth/sign-in/anonymous`, { method: 'POST' });
+    await fetch(`${base}/api/players/550e8400-e29b-41d4-a716-446655440000?secret=foo`);
+    await fetch(`${base}/api/players/12345`);
     await fetch(`${base}/api/me`);
     await fetch(`${base}/`);
+
+    const slow = metrics.slowRequests();
+    expect(slow.length).toBeLessThanOrEqual(2);
+    expect(slow[0]).toMatchObject({
+      method: 'GET',
+      routeGroup: 'api',
+      path: '/api/players/:id',
+      statusCode: 200,
+    });
+    expect(slow[0]?.durationMs).toBeGreaterThanOrEqual(25);
+    expect(JSON.stringify(slow)).not.toContain('secret');
+    expect(JSON.stringify(slow)).not.toContain('550e8400');
 
     await metrics.stop();
 
     expect(persisted).toHaveLength(1);
     const byGroup = new Map(persisted[0].map(r => [r.routeGroup, r]));
-    expect(byGroup.get('action')).toEqual({
-      day: '2026-11-25', routeGroup: 'action', total: 4, status426: 1, status429: 1, status5xx: 1,
+    expect(byGroup.get('action')).toMatchObject({
+      day: '2026-11-25',
+      routeGroup: 'action',
+      total: 6,
+      status409: 1,
+      status426: 1,
+      status429: 2,
+      status4xx: 4,
+      status5xx: 1,
+      rateLimitReasons: { catchTooSoon: 1, letterGap: 1, other: 0 },
     });
-    expect(byGroup.get('auth')).toEqual({
-      day: '2026-11-25', routeGroup: 'auth', total: 1, status426: 0, status429: 1, status5xx: 0,
+    expect(byGroup.get('auth')).toMatchObject({
+      day: '2026-11-25',
+      routeGroup: 'auth',
+      total: 1,
+      status409: 0,
+      status426: 0,
+      status429: 1,
+      status4xx: 1,
+      status5xx: 0,
+      rateLimitReasons: { catchTooSoon: 0, letterGap: 0, other: 1 },
     });
-    expect(byGroup.get('api')).toEqual({
-      day: '2026-11-25', routeGroup: 'api', total: 1, status426: 0, status429: 0, status5xx: 1,
+    expect(byGroup.get('api')).toMatchObject({
+      day: '2026-11-25',
+      routeGroup: 'api',
+      total: 3,
+      status5xx: 1,
     });
-    expect(byGroup.get('web')).toEqual({
-      day: '2026-11-25', routeGroup: 'web', total: 1, status426: 0, status429: 0, status5xx: 0,
+    expect(byGroup.get('web')).toMatchObject({
+      day: '2026-11-25',
+      routeGroup: 'web',
+      total: 1,
+      status5xx: 0,
     });
+  });
+
+  it('record가 지연 버킷 7종을 정확히 분류하고 recentWindowSummary는 flush 후에도 최근 창을 유지하며 만료한다', async () => {
+    let nowMs = Date.parse('2026-11-25T05:00:00.000Z');
+    const persisted: HttpMetricIncrement[][] = [];
+    const metrics = createHttpMetrics({
+      flushIntervalMs: 60_000,
+      windowMs: 60_000,
+      now: () => nowMs,
+      persist: async rows => { persisted.push(rows); },
+    });
+
+    for (const ms of [10, 80, 200, 400, 800, 2000, 3000]) {
+      metrics.record('/api/action', 200, { durationMs: ms });
+    }
+    await metrics.flush();
+    expect(persisted[0]?.[0]?.latencyBuckets).toEqual({
+      le50: 1, le100: 1, le250: 1, le500: 1, le1000: 1, le2500: 1, gt2500: 1, sumMs: 6490,
+    });
+
+    const recentAfterFlush = metrics.recentWindowSummary();
+    expect(recentAfterFlush.total).toBe(7);
+    expect(recentAfterFlush.latency.samples).toBe(7);
+    expect(recentAfterFlush.latency.p95Ms).toBeGreaterThanOrEqual(2500);
+
+    nowMs += 61_000;
+    expect(metrics.recentWindowSummary().total).toBe(0);
+    expect(metrics.recentWindowSummary().latency.samples).toBe(0);
+    await metrics.stop();
   });
 
   it('저장 실패 시 집계분을 유실하지 않고 버퍼에 복구해 다음 플러시에 합산 전송한다', async () => {
@@ -116,9 +202,16 @@ describe('createHttpMetrics 미들웨어', () => {
     metrics.record('/api/action', 426);
     await metrics.stop();
     expect(saved).toHaveLength(1);
-    expect(saved[0]).toEqual([{
-      day: '2026-11-25', routeGroup: 'action', total: 3, status426: 1, status429: 1, status5xx: 1,
-    }]);
+    expect(saved[0]?.[0]).toMatchObject({
+      day: '2026-11-25',
+      routeGroup: 'action',
+      total: 3,
+      status426: 1,
+      status429: 1,
+      status4xx: 2,
+      status5xx: 1,
+      rateLimitReasons: { catchTooSoon: 0, letterGap: 0, other: 1 },
+    });
   });
 
   it('버퍼가 비어 있으면 persist를 호출하지 않는다', async () => {
@@ -173,10 +266,9 @@ describe('createHttpMetrics 미들웨어', () => {
     expect(flush2Settled).toBe(true);
     expect(flush3Settled).toBe(true);
     expect(maxConcurrentPersists).toBe(1);
-    expect(batches).toEqual([
-      [{ day: '2026-11-25', routeGroup: 'action', total: 1, status426: 0, status429: 0, status5xx: 0 }],
-      [{ day: '2026-11-25', routeGroup: 'action', total: 1, status426: 0, status429: 0, status5xx: 1 }],
-    ]);
+    expect(batches).toHaveLength(2);
+    expect(batches[0]?.[0]).toMatchObject({ day: '2026-11-25', routeGroup: 'action', total: 1, status5xx: 0 });
+    expect(batches[1]?.[0]).toMatchObject({ day: '2026-11-25', routeGroup: 'action', total: 1, status5xx: 1 });
   });
 });
 

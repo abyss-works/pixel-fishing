@@ -42,6 +42,7 @@ import { guildIdOf } from '../_data/guilds.js';
 import { recordSession } from '../_data/activity.js';
 import { flushHttpMetrics } from '../_data/httpMetrics.js';
 import { saveLastPosition } from '../_data/position.js';
+import { flushWsMetrics } from '../_data/wsMetrics.js';
 import { reportServerIssue } from '../observability.js';
 import { applyKeepAlive } from './keepAlive.js';
 import { staleClient } from './clientBuild.js';
@@ -49,9 +50,12 @@ import { consentGate, liveConsentAdmit } from './consentGate.js';
 import { createHttpMetrics } from './httpMetrics.js';
 import { legalPages } from './legalPages.js';
 import { notFound } from './notFound.js';
+import { createOpsAlertDispatcher, evaluateOpsAlerts } from './opsAlerts.js';
+import { provideRecentHttpSummary, provideRecentWsSnapshot, provideSlowRequests } from './opsRuntime.js';
 import { securityHeaders } from './securityHeaders.js';
 import { checkStageLiveUpgrade, stageGate } from './stageGate.js';
 import { stageMockups } from './stageMockups.js';
+import { createWsMetrics } from './wsMetrics.js';
 
 type NodeHandler = (req: never, res: never) => Promise<void>;
 
@@ -104,10 +108,18 @@ const routes: Record<string, NodeHandler> = {
 
 const app = express();
 app.disable('x-powered-by');
-// 앱 서버 통과 HTTP 응답 지표(전체·426·429·5xx)를 메모리에 모아 주기적·종료 시점에 DB로 플러시한다.
+// 앱 서버 통과 HTTP 응답 지표(전체·409·426·429·4xx·5xx·지연 버킷)를 메모리에 모아 주기적·종료 시점에 DB로 플러시한다.
 const httpMetrics = createHttpMetrics({
   persist: rows => flushHttpMetrics(database().db, rows),
   onError: e => { void reportServerIssue('HTTP 지표 기록 실패', e); },
+});
+const wsMetrics = createWsMetrics({
+  persist: rows => flushWsMetrics(database().db, rows),
+  onError: e => { void reportServerIssue('WS 지표 기록 실패', e); },
+});
+const opsAlertDispatcher = createOpsAlertDispatcher({
+  reportIssue: reportServerIssue,
+  webhookUrl: process.env.OPS_ALERT_WEBHOOK_URL,
 });
 // 모든 HTTP 응답(API·정적 자산·서버 렌더 HTML)에 기본 보안 헤더를 적용한다.
 app.use(securityHeaders({ origin, sentryDsn: [process.env.SENTRY_DSN, process.env.VITE_SENTRY_DSN] }));
@@ -194,6 +206,12 @@ const live = attachLive(server, {
       widgetHub().publishStatusChanged(uid, 'idle');
     }
   },
+  metrics: {
+    onUpgradeOk: () => wsMetrics.onUpgradeOk(),
+    onReject: status => wsMetrics.onReject(status),
+    onClose: kind => wsMetrics.onClose(kind),
+  },
+  onError: (label, err) => { void reportServerIssue(label, err); },
 });
 
 providePresence(uid => live.presenceOf(uid));
@@ -206,13 +224,47 @@ provideSetNick((uid, nick) => live.setNick(uid, nick));
 provideSetFame((uid, fame) => live.setFame(uid, fame));
 provideWidgetDisconnect(uid => widgetHub().disconnectUser(uid));
 provideBroadcastCatchFx((uid, payload) => live.broadcastCatchFx(uid, payload));
+provideSlowRequests(() => httpMetrics.slowRequests());
+provideRecentHttpSummary(() => httpMetrics.recentWindowSummary());
+provideRecentWsSnapshot(() => wsMetrics.recentSnapshot());
+
+const opsAlertTimer = setInterval(() => {
+  try {
+    const http = httpMetrics.recentWindowSummary();
+    const ws = wsMetrics.recentSnapshot();
+    const { pool } = database();
+    const alerts = evaluateOpsAlerts({
+      http: {
+        total: http.total,
+        status5xx: http.status5xx,
+        p95Ms: http.latency.p95Ms,
+        samples: http.latency.samples,
+      },
+      pool: {
+        total: pool.totalCount,
+        idle: pool.idleCount,
+        waiting: pool.waitingCount,
+        max: pool.options.max ?? 10,
+      },
+      ws,
+    });
+    if (alerts.length > 0) void opsAlertDispatcher.dispatch(alerts);
+  } catch {
+    /* 주기 경보 평가 실패는 서버 루프를 중단하지 않는다 */
+  }
+}, 30_000);
+opsAlertTimer.unref();
+
+process.on('unhandledRejection', err => { void reportServerIssue('unhandledRejection', err); });
+process.on('uncaughtExceptionMonitor', err => { void reportServerIssue('uncaughtException', err); });
 
 process.on('SIGTERM', () => {
+  clearInterval(opsAlertTimer);
   live.close();
   widgetHub().close();
   server.close(() => {
     void settleAfterResponse()
-      .then(() => httpMetrics.stop())
+      .then(() => Promise.all([httpMetrics.stop(), wsMetrics.stop()]))
       .finally(() => process.exit(0));
   });
 });

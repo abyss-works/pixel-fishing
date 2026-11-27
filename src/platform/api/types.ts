@@ -552,15 +552,49 @@ export interface AdminOverview {
 /** 앱 서버 HTTP 응답 지표 경로 묶음 */
 export type AdminHttpMetricRouteGroup = 'action' | 'auth' | 'admin' | 'api' | 'web';
 
-/** 앱 서버 HTTP 응답 지표 건수·비율(비율은 0~1, total이 0이면 0) */
+/** 앱 서버 HTTP 지연 히스토그램 기반 백분위 추정 요약(ms) */
+export interface AdminHttpLatencySummary {
+  p50Ms: number | null;
+  p95Ms: number | null;
+  p99Ms: number | null;
+  avgMs: number | null;
+  samples: number;
+}
+
+/** 앱 서버 HTTP 지연 히스토그램 원본 버킷 */
+export interface AdminHttpLatencyBuckets {
+  le50: number;
+  le100: number;
+  le250: number;
+  le500: number;
+  le1000: number;
+  le2500: number;
+  gt2500: number;
+  sumMs: number;
+}
+
+/** 429 속도 제한 사유별 건수 */
+export interface AdminHttpRateLimitReasons {
+  catchTooSoon: number;
+  letterGap: number;
+  other: number;
+}
+
+/** 앱 서버 HTTP 응답 지표 건수·비율(비율은 0~1, total이 0이면 0). 확장 필드는 서버가 항상 채워 돌려준다 */
 export interface AdminHttpMetricCounts {
   total: number;
+  status409?: number;
   status426: number;
   status429: number;
+  status4xx?: number;
   status5xx: number;
+  rate409?: number;
   rate426: number;
   rate429: number;
+  rate4xx?: number;
   rate5xx: number;
+  latency?: AdminHttpLatencySummary;
+  rateLimitReasons?: AdminHttpRateLimitReasons;
 }
 
 /** KST 일별 HTTP 지표 합계·비율 */
@@ -578,9 +612,83 @@ export interface AdminHttpMetricRawRow {
   day: string;
   routeGroup: AdminHttpMetricRouteGroup;
   total: number;
+  status409?: number;
   status426: number;
   status429: number;
+  status4xx?: number;
   status5xx: number;
+  latencyBuckets?: AdminHttpLatencyBuckets;
+  rateLimitReasons?: AdminHttpRateLimitReasons;
+}
+
+/** 운영 임계 경보 코드 */
+export type AdminOpsAlertCode =
+  | 'http-5xx-rate'
+  | 'http-p95-high'
+  | 'db-pool-pressure'
+  | 'ws-abnormal-close'
+  | 'ws-upgrade-500';
+
+/** 운영 임계 경보 한 건 */
+export interface AdminOpsAlert {
+  code: AdminOpsAlertCode;
+  severity: 'warn' | 'crit';
+  title: string;
+  detail: string;
+  observed: number;
+  threshold: number;
+}
+
+/** 최근 임계 지연 초과 요청 한 건(경로 비식별화 완료) */
+export interface AdminSlowHttpRequest {
+  at: string;
+  method: string;
+  routeGroup: AdminHttpMetricRouteGroup;
+  path: string;
+  statusCode: number;
+  durationMs: number;
+}
+
+/** WebSocket 업그레이드·종료 건수 요약 */
+export interface AdminWsMetricsCounts {
+  upgradesOk: number;
+  reject401: number;
+  reject403: number;
+  reject500: number;
+  closeNormal: number;
+  closeAbnormal: number;
+  closeIdleTimeout: number;
+}
+
+/** KST 일별 WebSocket 지표 한 행 */
+export interface AdminWsMetricsDayRow extends AdminWsMetricsCounts {
+  day: string;
+}
+
+/** 관리자 — 런타임·DB·HTTP·WebSocket 종합 운영 상태(Zero-PII) */
+export interface AdminOpsHealth {
+  runtime: {
+    uptimeSec: number;
+    rssMb: number;
+    heapUsedMb: number;
+    heapTotalMb: number;
+  };
+  database: {
+    poolTotal: number;
+    poolIdle: number;
+    poolWaiting: number;
+    poolMax: number;
+    dbSizeBytes: number | null;
+    activeConnections: number | null;
+  };
+  httpSummary: AdminHttpMetricCounts;
+  ws: {
+    onlineCount: number;
+    summary: AdminWsMetricsCounts;
+    daily: AdminWsMetricsDayRow[];
+  };
+  slowRequests: AdminSlowHttpRequest[];
+  alerts: AdminOpsAlert[];
 }
 
 /**
@@ -712,8 +820,10 @@ export interface AdminApi {
   bountyFunnel(days: number): Promise<AdminBountyFunnelRow[]>;
   /** 온보딩 퍼널(게스트→구글 전환·튜토리얼 4단계·초반 6단계 도달률) */
   onboardingFunnel(): Promise<AdminOnboardingFunnel>;
-  /** 앱 서버 HTTP 오류율·429 지표. days(1~90)를 생략하면 서버 기본 기간(30일)이다 */
+  /** 앱 서버 HTTP 오류율·429·지연 지표. days(1~90)를 생략하면 서버 기본 기간(30일)이다 */
   httpMetrics(days?: number): Promise<AdminHttpMetrics>;
+  /** 런타임·DB 풀·HTTP 지연·WebSocket·경보 종합 상태(Zero-PII). days(1~90) 생략 시 서버 기본(7일) */
+  opsHealth(days?: number): Promise<AdminOpsHealth>;
   spamFlags(): Promise<AdminSpamFlagRow[]>;
   recentEvents(): Promise<AdminEventRow[]>;
   userEvents(userId: string, limit?: number): Promise<AdminEventRow[]>;

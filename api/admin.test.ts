@@ -29,10 +29,32 @@ const mocks = vi.hoisted(() => ({
   readHttpMetrics: vi.fn(async (): Promise<unknown> => ({
     days: 30,
     scope: 'app_server',
-    summary: { total: 0, status426: 0, status429: 0, status5xx: 0, rate426: 0, rate429: 0, rate5xx: 0 },
+    summary: {
+      total: 0, status409: 0, status426: 0, status429: 0, status4xx: 0, status5xx: 0,
+      rate409: 0, rate426: 0, rate429: 0, rate4xx: 0, rate5xx: 0,
+      latency: { p50Ms: null, p95Ms: null, p99Ms: null, avgMs: null, samples: 0 },
+      rateLimitReasons: { catchTooSoon: 0, letterGap: 0, other: 0 },
+    },
     daily: [],
     byRoute: [],
     rows: [],
+  })),
+  readOpsHealth: vi.fn(async (): Promise<unknown> => ({
+    runtime: { uptimeSec: 10, rssMb: 50, heapUsedMb: 20, heapTotalMb: 30 },
+    database: { poolTotal: 2, poolIdle: 2, poolWaiting: 0, poolMax: 10, dbSizeBytes: 1024, activeConnections: 1 },
+    httpSummary: {
+      total: 0, status409: 0, status426: 0, status429: 0, status4xx: 0, status5xx: 0,
+      rate409: 0, rate426: 0, rate429: 0, rate4xx: 0, rate5xx: 0,
+      latency: { p50Ms: null, p95Ms: null, p99Ms: null, avgMs: null, samples: 0 },
+      rateLimitReasons: { catchTooSoon: 0, letterGap: 0, other: 0 },
+    },
+    ws: {
+      onlineCount: 0,
+      summary: { upgradesOk: 0, reject401: 0, reject403: 0, reject500: 0, closeNormal: 0, closeAbnormal: 0, closeIdleTimeout: 0 },
+      daily: [],
+    },
+    slowRequests: [],
+    alerts: [],
   })),
   accountKind: vi.fn(async () => 'member' as const),
   revokeUserSessions: vi.fn(async () => 2),
@@ -60,6 +82,7 @@ const mocks = vi.hoisted(() => ({
   notifyUser: vi.fn(),
   onlineUsers: vi.fn((): { uid: string; guest: boolean }[] => []),
   db: { execute: vi.fn() },
+  pool: { totalCount: 2, idleCount: 2, waitingCount: 0, options: { max: 10 } },
   withTransaction: vi.fn(async (run: (tx: unknown) => Promise<unknown>) => run(mocks.db)),
 }));
 
@@ -67,7 +90,7 @@ vi.mock('./_auth/session.js', () => ({
   adminSessionUid: mocks.adminSessionUid,
 }));
 vi.mock('./_db/client.js', () => ({
-  database: () => ({ db: mocks.db, withTransaction: mocks.withTransaction }),
+  database: () => ({ db: mocks.db, pool: mocks.pool, withTransaction: mocks.withTransaction }),
 }));
 vi.mock('./_data/admin.js', async () => {
   const actual = await vi.importActual<typeof import('./_data/admin.js')>('./_data/admin.js');
@@ -86,6 +109,9 @@ vi.mock('./_data/adminFunnel.js', () => ({
 }));
 vi.mock('./_data/httpMetrics.js', () => ({
   readHttpMetrics: mocks.readHttpMetrics,
+}));
+vi.mock('./_data/opsHealth.js', () => ({
+  readOpsHealth: mocks.readOpsHealth,
 }));
 vi.mock('./_data/account.js', async () => {
   const actual = await vi.importActual<typeof import('./_data/account.js')>('./_data/account.js');
@@ -345,6 +371,22 @@ describe('api/admin 핸들러 단위 테스트', () => {
     mocks.readHttpMetrics.mockResolvedValueOnce(sample);
     expect(await call('GET', { q: 'httpMetrics', days: '7' })).toMatchObject({ status: 200, body: sample });
     expect(mocks.readHttpMetrics).toHaveBeenLastCalledWith(mocks.db, 7);
+  });
+
+  it('GET ?q=opsHealth는 admin·maintainer 모두 허용하고 기간 검증·Zero-PII·pool 전달을 수행한다', async () => {
+    for (const bad of ['0', '91', 'abc']) {
+      expect(await call('GET', { q: 'opsHealth', days: bad })).toMatchObject({ status: 400, body: { error: 'bad-days' } });
+    }
+
+    const adminRes = await call('GET', { q: 'opsHealth' });
+    expect(adminRes.status).toBe(200);
+    expect(mocks.readOpsHealth).toHaveBeenCalledWith(mocks.db, mocks.pool, expect.objectContaining({ days: 7, onlineCount: 0 }));
+
+    mocks.adminMember.mockResolvedValueOnce({ role: 'maintainer', showStaffBadge: false });
+    const maintRes = await call('GET', { q: 'opsHealth', days: '14' });
+    expect(maintRes.status).toBe(200);
+    expect(mocks.readOpsHealth).toHaveBeenLastCalledWith(mocks.db, mocks.pool, expect.objectContaining({ days: 14 }));
+    expect(JSON.stringify(maintRes.body)).not.toMatch(/email|nickname|userId|user_id/i);
   });
 
   it('GET ?q=notices는 공지 전체 목록 조회를 호출한다', async () => {

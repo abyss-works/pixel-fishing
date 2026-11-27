@@ -1083,4 +1083,65 @@ describe('테스트 데이터베이스', () => {
       }
     });
   });
+
+  describe('서버 관측 지표 확장 (0055)', () => {
+    const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
+
+    it('http_metrics_daily 확장 열·음수 금지·ws_metrics_daily 서버 전용 RLS·다운/업 라운드트립을 검증한다', async () => {
+      const { rows: [httpRow] } = await client.query<{ status_409: string; status_4xx: string; lat_le_50: string; lat_sum_ms: string; rl_other: string }>(
+        `insert into public.http_metrics_daily (day, route_group) values ('2030-03-06', 'action')
+         returning status_409, status_4xx, lat_le_50, lat_sum_ms, rl_other`,
+      );
+      expect(httpRow).toEqual({ status_409: '0', status_4xx: '0', lat_le_50: '0', lat_sum_ms: '0', rl_other: '0' });
+
+      await expect(client.query(
+        `insert into public.http_metrics_daily (day, route_group, lat_le_50) values ('2030-03-06', 'api', -1)`,
+      )).rejects.toMatchObject({ code: '23514' });
+
+      const { rows: [wsRow] } = await client.query<{ upgrades_ok: string; reject_500: string; close_idle_timeout: string }>(
+        `insert into public.ws_metrics_daily (day) values ('2030-03-06')
+         returning upgrades_ok, reject_500, close_idle_timeout`,
+      );
+      expect(wsRow).toEqual({ upgrades_ok: '0', reject_500: '0', close_idle_timeout: '0' });
+
+      await expect(client.query(
+        `insert into public.ws_metrics_daily (day, close_abnormal) values ('2030-03-07', -1)`,
+      )).rejects.toMatchObject({ code: '23514' });
+
+      await client.query('begin');
+      try {
+        await client.query('set local role authenticated');
+        expect((await client.query('select day from public.ws_metrics_daily')).rows).toEqual([]);
+        await expect(client.query(
+          `insert into public.ws_metrics_daily (day, upgrades_ok) values ('2030-03-08', 1)`,
+        )).rejects.toMatchObject({ code: '42501' });
+      } finally {
+        await client.query('rollback');
+      }
+
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        await other.query(migration('0055_server_observability.down.sql'));
+        expect((await other.query(
+          `select 1 from information_schema.tables where table_schema = 'public' and table_name = 'ws_metrics_daily'`,
+        )).rows).toHaveLength(0);
+        expect((await other.query(
+          `select 1 from information_schema.columns where table_schema = 'public' and table_name = 'http_metrics_daily' and column_name in ('status_409', 'lat_le_50', 'rl_other')`,
+        )).rows).toHaveLength(0);
+
+        await other.query(migration('0055_server_observability.sql'));
+        expect((await other.query(
+          `select 1 from information_schema.tables where table_schema = 'public' and table_name = 'ws_metrics_daily'`,
+        )).rows).toHaveLength(1);
+        expect((await other.query(
+          `select column_name from information_schema.columns where table_schema = 'public' and table_name = 'http_metrics_daily' and column_name in ('status_409', 'lat_le_50', 'rl_other') order by column_name`,
+        )).rows.map(r => r.column_name)).toEqual(['lat_le_50', 'rl_other', 'status_409']);
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
 });
