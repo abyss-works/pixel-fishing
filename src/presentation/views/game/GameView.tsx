@@ -614,6 +614,7 @@ export default function GameView(props: GameViewProps) {
                      <GameMenu game={game} account={props.account} accountState={accountState} setToast={props.setToast} onQuests={openQuests}
                                onAchievements={() => setAchievementsOpen(true)}
                                onFortune={() => setFortuneOpen(true)}
+                               onRanking={() => setRankingOpen(true)}
                                onGuild={() => setGuildOpen(true)} onFriends={() => setFriendsOpen(true)}
                                onMailbox={() => setMailboxOpen(true)} />
                    )} />

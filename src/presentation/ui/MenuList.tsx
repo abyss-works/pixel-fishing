@@ -16,18 +16,46 @@ export interface MenuListItem {
   lock?: readonly string[];
 }
 
-export default function MenuList({ items, className }: { items: readonly MenuListItem[]; className?: string }) {
+export interface MenuListGroup {
+  key: string;
+  label: string;
+  items: readonly MenuListItem[];
+}
+
+function renderItem(item: MenuListItem) {
+  return item.lock ? (
+    <Locked key={item.key} role="menuitem" title={item.label} lines={item.lock} label={item.label} badge={false}>{item.content}</Locked>
+  ) : (
+    <button key={item.key} type="button" role="menuitem" aria-label={item.label}
+            onClick={item.onSelect}
+            className="flex w-full items-center text-left text-text cursor-pointer hover:bg-surface-2">
+      {item.content}
+    </button>
+  );
+}
+
+export default function MenuList({ items, groups, className }: {
+  items?: readonly MenuListItem[];
+  groups?: readonly MenuListGroup[];
+  className?: string;
+}) {
+  if (groups) {
+    return (
+      <Frame role="menu" className={className}>
+        {groups.map((group, idx) => (
+          <div key={group.key} className={idx > 0 ? 'mt-1 border-t border-line/60 pt-1' : undefined}>
+            <div className="px-2 pt-1 pb-0.5 text-2xs text-text-dim select-none">{group.label}</div>
+            <div className="divide-y divide-line/40">
+              {group.items.map(renderItem)}
+            </div>
+          </div>
+        ))}
+      </Frame>
+    );
+  }
   return (
     <Frame divided role="menu" className={className}>
-      {items.map(item => item.lock ? (
-        <Locked key={item.key} role="menuitem" title={item.label} lines={item.lock} label={item.label} badge={false}>{item.content}</Locked>
-      ) : (
-        <button key={item.key} type="button" role="menuitem" aria-label={item.label}
-                onClick={item.onSelect}
-                className="flex w-full items-center text-left text-text cursor-pointer hover:bg-surface-2">
-          {item.content}
-        </button>
-      ))}
+      {(items ?? []).map(renderItem)}
     </Frame>
   );
 }

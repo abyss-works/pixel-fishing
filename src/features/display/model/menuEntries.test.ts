@@ -1,20 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import { NO_GUILD_EFFECTS } from '../../../game/rules/guild';
 import type { GuildInfo } from '../../guild/model/guild';
-import { guildMenuBadges, guildMenuLabel, menuKeys, questBadges, questMenuLabel } from './menuEntries';
+import { guildMenuBadges, guildMenuLabel, menuGroups, menuKeys, questBadges, questMenuLabel } from './menuEntries';
 
-describe('메뉴 줄 항목 순서', () => {
-  it('의뢰, 업적, 운세, 길드, 소셜, 우편함 순서이고 의뢰·업적·운세는 늘 있다', () => {
-    expect(menuKeys({ guild: true, friends: true, mailbox: true }))
-      .toEqual(['quests', 'achievements', 'fortune', 'guild', 'friends', 'mailbox']);
-    expect(menuKeys({ guild: false, friends: false, mailbox: false })).toEqual(['quests', 'achievements', 'fortune']);
+describe('메뉴 줄 항목 순서 및 그룹', () => {
+  it('상태(운세·랭킹), 활동(업적·의뢰), 소통(길드·소셜·우편함) 순서이고 운세·업적·의뢰는 늘 있다', () => {
+    expect(menuKeys({ ranking: true, guild: true, friends: true, mailbox: true }))
+      .toEqual(['fortune', 'ranking', 'achievements', 'quests', 'guild', 'friends', 'mailbox']);
+    expect(menuKeys({ ranking: false, guild: false, friends: false, mailbox: false }))
+      .toEqual(['fortune', 'achievements', 'quests']);
+    expect(menuGroups({ ranking: true, guild: true, friends: true, mailbox: true })).toEqual([
+      { key: 'status', label: '상태', keys: ['fortune', 'ranking'] },
+      { key: 'activity', label: '활동', keys: ['achievements', 'quests'] },
+      { key: 'social', label: '소통', keys: ['guild', 'friends', 'mailbox'] },
+    ]);
   });
 
   it('열 수 없는 입구는 빠지고 나머지 순서는 그대로다', () => {
     expect(menuKeys({ guild: false, friends: true, mailbox: true }))
-      .toEqual(['quests', 'achievements', 'fortune', 'friends', 'mailbox']);
-    expect(menuKeys({ guild: true, friends: false, mailbox: true }))
-      .toEqual(['quests', 'achievements', 'fortune', 'guild', 'mailbox']);
+      .toEqual(['fortune', 'achievements', 'quests', 'friends', 'mailbox']);
+    expect(menuKeys({ ranking: true, guild: true, friends: false, mailbox: true }))
+      .toEqual(['fortune', 'ranking', 'achievements', 'quests', 'guild', 'mailbox']);
   });
 });
 

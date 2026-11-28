@@ -5,7 +5,7 @@ import type { ArtifactHolder } from '../../../../game/rules/artifactLevel';
 import type { GameState } from '../../../../game/rules/logic';
 import { clearsStatus } from '../../../../features/bounty/model/panel';
 import { useBounty } from '../../../../features/bounty/service/useBounty';
-import { menuKeys, guildMenuBadges, guildMenuLabel, questBadges, questMenuLabel } from '../../../../features/display/model/menuEntries';
+import { menuGroups, guildMenuBadges, guildMenuLabel, questBadges, questMenuLabel } from '../../../../features/display/model/menuEntries';
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
 import { claimableCount } from '../../../../features/achievement/model/achievements';
 import type { MenuKey } from '../../../../features/display/model/menuEntries';
@@ -59,7 +59,7 @@ function GameMenuEscScope({ onClose }: { onClose: () => void }) {
   return null;
 }
 
-export default function GameMenu({ game, account, accountState, onQuests, onAchievements, onFortune, onGuild, onFriends, onMailbox, setToast }: {
+export default function GameMenu({ game, account, accountState, onQuests, onAchievements, onFortune, onRanking, onGuild, onFriends, onMailbox, setToast }: {
   /** 남은 클리어 횟수의 한도와 업적 상태를 읽는 게임 상태 */
   game: ArtifactHolder & GameState;
   account: string | null;
@@ -68,6 +68,7 @@ export default function GameMenu({ game, account, accountState, onQuests, onAchi
   onQuests: () => void;
   onAchievements: () => void;
   onFortune: () => void;
+  onRanking: () => void;
   onGuild: () => void;
   onFriends: () => void;
   onMailbox: () => void;
@@ -111,12 +112,13 @@ export default function GameMenu({ game, account, accountState, onQuests, onAchi
   const guildRequests = guild.guild?.role === 'leader' ? guild.guild.requests.length : 0;
   const claimable = claimableCount(game);
   const byKey: Record<MenuKey, Entry> = {
-    quests: { key: 'quests', label: '의뢰', name: questMenuLabel(clearsLeft), glyph: 'book',
-      badges: questBadges(clearsLeft), alerts: 0, lock: null, onOpen: onQuests },
+    fortune: { key: 'fortune', label: '운세', name: '운세', glyph: 'sparkle', badges: [], alerts: 0, lock: null, onOpen: onFortune },
+    ranking: { key: 'ranking', label: '랭킹', name: '랭킹', glyph: 'crown', badges: [], alerts: 0, lock: null, onOpen: onRanking },
     achievements: { key: 'achievements', label: '업적',
       name: claimable > 0 ? `업적, 받을 수 있는 업적 ${claimable}개` : '업적',
       glyph: 'star', badges: claimable > 0 ? [{ tone: 'gold', count: claimable }] : [], alerts: claimable, lock: null, onOpen: onAchievements },
-    fortune: { key: 'fortune', label: '운세', name: '운세', glyph: 'sparkle', badges: [], alerts: 0, lock: null, onOpen: onFortune },
+    quests: { key: 'quests', label: '의뢰', name: questMenuLabel(clearsLeft), glyph: 'book',
+      badges: questBadges(clearsLeft), alerts: 0, lock: null, onOpen: onQuests },
     guild: { key: 'guild', label: '길드', name: guildMenuLabel(guild.guild), glyph: 'flag',
       badges: guildBadges, alerts: guildRequests, lock: null, onOpen: onGuild },
     friends: { key: 'friends', label: '소셜', glyph: 'people',
@@ -126,16 +128,23 @@ export default function GameMenu({ game, account, accountState, onQuests, onAchi
       name: mailbox.pending > 0 ? `우편함, 받지 않은 우편 ${mailbox.pending}통` : '우편함',
       badges: mailbox.pending > 0 ? [{ tone: 'danger', count: mailbox.pending }] : [], alerts: mailbox.pending, lock: null, onOpen: onMailbox },
   };
-  const entries = menuKeys({
-    guild: guild.available || accountState !== 'account',
-    friends: (account !== null && !friends.offline) || accountState !== 'account',
-    mailbox: !mailbox.offline,
-  }).map((key): Entry => {
+  const liveAvailable = !mailbox.offline;
+  const resolveEntry = (key: MenuKey): Entry => {
     const lock = guestLock(key, accountState);
     // 잠긴 줄은 알릴 것이 없다. 접근성 이름도 배지 없이 라벨만 쓴다
     return lock ? { ...byKey[key], name: byKey[key].label, badges: [], alerts: 0, lock } : byKey[key];
-  });
-  const alert = entries.some(e => e.alerts > 0);
+  };
+  const groups = menuGroups({
+    ranking: liveAvailable,
+    guild: guild.available || accountState !== 'account',
+    friends: (account !== null && !friends.offline) || accountState !== 'account',
+    mailbox: liveAvailable,
+  }).map(group => ({
+    key: group.key,
+    label: group.label,
+    entries: group.keys.map(resolveEntry),
+  }));
+  const alert = groups.some(g => g.entries.some(e => e.alerts > 0));
   const toggle = () => setOpen(v => !v);
   const label = `메뉴 ${open ? '닫기' : '열기'}${alert ? ', 새 알림 있음' : ''}`;
 
@@ -149,21 +158,28 @@ export default function GameMenu({ game, account, accountState, onQuests, onAchi
       {open && (
         <>
           <GameMenuEscScope onClose={() => setOpen(false)} />
-          <MenuList className="absolute right-0 top-full mt-1 min-w-[150px] p-1" items={entries.map(e => ({
-          key: e.key,
-          label: e.name,
-          lock: e.lock ?? undefined,
-          onSelect: () => { setOpen(false); e.onOpen(); },
-          content: (
-            <span className="grid w-full grid-cols-[1fr_auto_20px] items-center gap-2.5 h-9 px-2 text-sm">
-              <span>{e.label}</span>
-              <span className="flex items-center gap-1">
-                {e.lock ? <LockIcon /> : e.badges.map(b => <CountBadge key={b.tone} tone={b.tone} count={b.count} />)}
-              </span>
-              <PixelIcon glyph={e.glyph} size={16} className="text-text-dim" />
-            </span>
-          ),
-        }))} />
+          <MenuList
+            className="absolute right-0 top-full mt-1 min-w-[150px] p-1"
+            groups={groups.map(group => ({
+              key: group.key,
+              label: group.label,
+              items: group.entries.map(e => ({
+                key: e.key,
+                label: e.name,
+                lock: e.lock ?? undefined,
+                onSelect: () => { setOpen(false); e.onOpen(); },
+                content: (
+                  <span className="grid w-full grid-cols-[1fr_auto_20px] items-center gap-2.5 h-9 px-2 text-sm">
+                    <span>{e.label}</span>
+                    <span className="flex items-center gap-1">
+                      {e.lock ? <LockIcon /> : e.badges.map(b => <CountBadge key={b.tone} tone={b.tone} count={b.count} />)}
+                    </span>
+                    <PixelIcon glyph={e.glyph} size={16} className="text-text-dim" />
+                  </span>
+                ),
+              })),
+            }))}
+          />
         </>
       )}
     </div>

@@ -16,13 +16,15 @@ export function useRanking(
   board: RankingBoardId,
   fishId?: string,
   window: RankingWindow = defaultRankingWindow(board),
+  week?: string,
 ) {
   const { ready, uid } = useSession();
   const consentReady = useConsentReady();
   const effectiveWindow: RankingWindow = isPeriodRankingBoard(board) ? window : 'all';
+  const effectiveWeek = effectiveWindow === 'weekly' ? (week ?? null) : null;
   const q = useQuery({
-    queryKey: ['ranking', board, effectiveWindow, fishId ?? null, uid],
-    queryFn: () => readRanking(board, fishId, effectiveWindow),
+    queryKey: ['ranking', board, effectiveWindow, effectiveWeek, fishId ?? null, uid],
+    queryFn: () => readRanking(board, fishId, effectiveWindow, effectiveWeek ?? undefined),
     enabled: ready && consentReady,
     staleTime: STALE,
   });
@@ -35,11 +37,12 @@ export function useRanking(
   };
 }
 
-/** 명성·도감(일반/돌연변이/네임드)·네임드 토벌 순위 */
+/** 명성·판매골드·도감(일반/돌연변이/네임드)·네임드 토벌 순위 */
 export const useRankingBoard = (
   board: MainRankingBoardId,
   window: RankingWindow = defaultRankingWindow(board),
-) => useRanking(board, undefined, window);
+  week?: string,
+) => useRanking(board, undefined, window, week);
 
 /** 어종 하나의 크기 순위 */
 export const useSpeciesRanking = (fishId: string) => useRanking('species', fishId, 'all');

@@ -130,6 +130,40 @@ export function nextGameWeekResetISO(nowIso: string): string {
   return new Date(gameWeekStartShiftedMs(nowIso) + WEEK_MS - GAME_DAY_SHIFT_MS).toISOString();
 }
 
+const WEEK_DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_WEEK_LIST_COUNT = 52;
+
+/** YYYY-MM-DD 형식의 실제 달력 날짜이며 월요일인지 검사한다 */
+export function isValidGameWeekStartDay(day: string): boolean {
+  if (!WEEK_DAY_PATTERN.test(day)) return false;
+  const ms = Date.parse(`${day}T00:00:00.000Z`);
+  if (Number.isNaN(ms)) return false;
+  const d = new Date(ms);
+  return d.toISOString().slice(0, 10) === day && d.getUTCDay() === 1;
+}
+
+/** 주간 시작일(월요일 YYYY-MM-DD)을 해당 주간 [startISO, nextStartISO) UTC 경계로 변환한다 */
+export function weekStartDayToRangeISO(weekStart: string): { startISO: string; nextStartISO: string } {
+  const startMs = Date.parse(`${weekStart}T00:00:00.000Z`) - GAME_DAY_SHIFT_MS;
+  return {
+    startISO: new Date(startMs).toISOString(),
+    nextStartISO: new Date(startMs + WEEK_MS).toISOString(),
+  };
+}
+
+/** earliestDay..latestDay 범위의 연속 월요일 YYYY-MM-DD 목록을 최신순으로 돌려준다 */
+export function listGameWeekStartDays(earliestDay: string, latestDay: string): string[] {
+  if (!isValidGameWeekStartDay(latestDay)) return [];
+  if (!isValidGameWeekStartDay(earliestDay) || earliestDay > latestDay) return [latestDay];
+  const latestMs = Date.parse(`${latestDay}T00:00:00.000Z`);
+  const earliestMs = Date.parse(`${earliestDay}T00:00:00.000Z`);
+  const weeks: string[] = [];
+  for (let ms = latestMs; ms >= earliestMs && weeks.length < MAX_WEEK_LIST_COUNT; ms -= WEEK_MS) {
+    weeks.push(new Date(ms).toISOString().slice(0, 10));
+  }
+  return weeks;
+}
+
 /** 밤 구간 내 스텝(0~47)의 밤 깊이(0~1). 24스텝(02:00)이 정점 1이고, 범위 밖은 0~1로 안전 처리한다 */
 export function nightDepthOfStep(k: number): number {
   if (!Number.isFinite(k) || k <= 0 || k >= NIGHT_TOTAL_STEPS) return 0;
