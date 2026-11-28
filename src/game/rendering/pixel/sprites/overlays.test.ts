@@ -65,7 +65,7 @@ describe('drawSchools', () => {
 
 describe('drawFishJump', () => {
   const jump = (overrides: Partial<JumpFx> = {}): JumpFx => ({
-    x: 100, y: 80, fishId: 'crucian', form: 'normal', t: JUMP_S / 2, intensity: 'emphasis', ...overrides,
+    x: 100, y: 80, fishId: 'crucian', form: 'normal', t: JUMP_S / 2, intensity: 'large', ...overrides,
   });
 
   it('제자리 폴백(목표 없음)에서는 이륙·착수 물보라와 정점 이후 반전을 유지한다', () => {
@@ -144,18 +144,18 @@ describe('drawFishJump', () => {
     expect(variantLegendRec.calls.some(c => c.startsWith('#f472b6@'))).toBe(false);
   });
 
-  it('확인 강도는 영웅·전설도 꼬리 스파크 없이 물고기만 그린다', () => {
+  it('작게 강도는 영웅·전설도 꼬리 스파크 없이 물고기만 그린다', () => {
     for (const fish of [goldfish, goldcarp]) {
-      const confirm = recorder(), fishOnly = recorder();
-      drawFishJump(confirm.ctx, jump({ fishId: fish.id, toX: 200, toY: 80, intensity: 'confirm' }), 'v1');
+      const small = recorder(), fishOnly = recorder();
+      drawFishJump(small.ctx, jump({ fishId: fish.id, toX: 200, toY: 80, intensity: 'small' }), 'v1');
       const pt = jumpPoint({ x: 100, y: 80, toX: 200, toY: 80 }, JUMP_S / 2);
       fishArt('v1').drawCentered(fishOnly.ctx, fish, pt.x, pt.y, { scale: 1, form: 'normal', flip: true });
-      expect(confirm.calls).toEqual(fishOnly.calls);
+      expect(small.calls).toEqual(fishOnly.calls);
     }
   });
 
-  it('강조와 연출 강도는 영웅·전설 꼬리 스파크를 그린다', () => {
-    for (const intensity of ['emphasis', 'spectacle'] as const) {
+  it('크게와 가장 크게 강도는 영웅·전설 꼬리 스파크를 그린다', () => {
+    for (const intensity of ['large', 'largest'] as const) {
       const epic = recorder(), legend = recorder();
       drawFishJump(epic.ctx, jump({ fishId: goldfish.id, toX: 200, toY: 80, intensity }), 'v1');
       drawFishJump(legend.ctx, jump({ fishId: goldcarp.id, toX: 200, toY: 80, intensity }), 'v1');

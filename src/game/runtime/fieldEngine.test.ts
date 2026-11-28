@@ -1137,7 +1137,7 @@ describe('GameFieldEngine 효과 출처 주입', () => {
   afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
   const jump = (over: Partial<JumpFx> = {}): JumpFx =>
-    ({ x: 300, y: 400, fishId: 'goldcarp', form: 'variant', t: 0.25, intensity: 'emphasis', ...over });
+    ({ x: 300, y: 400, fishId: 'goldcarp', form: 'variant', t: 0.25, intensity: 'large', ...over });
   const frame = (engine: GameFieldEngine, now: number, last: number) =>
     (engine as unknown as { updateFrame(c: unknown, n: number, l: number): boolean }).updateFrame(ctx, now, last);
 

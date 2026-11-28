@@ -67,10 +67,10 @@ export interface FxEnv {
 
 export interface FxMediatorState {
   nextSeq: number;
-  /** 화면별 연출 점유 종료 시각 */
-  spectacleUntil: Readonly<Record<FxScreen, number>>;
-  /** `${kind}:${renderer}` 별 마지막 강조 시각 */
-  lastEmphasisAt: ReadonlyMap<string, number>;
+  /** 화면별 가장 크게 점유 종료 시각 */
+  largestUntil: Readonly<Record<FxScreen, number>>;
+  /** `${kind}:${renderer}` 별 마지막 크게 시각 */
+  lastLargeAt: ReadonlyMap<string, number>;
 }
 
 function fxRuleOf(kind: FxEventKind): FxRule | undefined {
@@ -96,7 +96,7 @@ export const FX_RENDERERS: Partial<Record<FxEventKind, readonly FxRenderer[]>> =
 };
 
 export function createFxMediatorState(): FxMediatorState {
-  return { nextSeq: 0, spectacleUntil: { main: 0, pip: 0 }, lastEmphasisAt: new Map() };
+  return { nextSeq: 0, largestUntil: { main: 0, pip: 0 }, lastLargeAt: new Map() };
 }
 
 const screenOf = (renderer: FxRenderer): FxScreen => (renderer === 'pip' ? 'pip' : 'main');
@@ -111,25 +111,25 @@ export function mediateFx(
   if (base === 'none') return { state, directives: [] };
 
   const holdEndsAt = 'holdEndsAt' in request.subject ? request.subject.holdEndsAt : request.at + env.jumpMs;
-  const spectacleUntil = { ...state.spectacleUntil };
-  const lastEmphasisAt = new Map(state.lastEmphasisAt);
+  const largestUntil = { ...state.largestUntil };
+  const lastLargeAt = new Map(state.lastLargeAt);
   const directives: FxDirective[] = [];
   let nextSeq = state.nextSeq;
 
   for (const renderer of renderers) {
     let intensity: FxPlayIntensity = base;
-    if (env.windowsOpen && BLOCKABLE.includes(renderer) && intensity !== 'confirm') intensity = 'confirm';
+    if (env.windowsOpen && BLOCKABLE.includes(renderer) && intensity !== 'small') intensity = 'small';
     const screen = screenOf(renderer);
-    if (intensity === 'spectacle') {
+    if (intensity === 'largest') {
       // 같은 요청의 렌더러끼리는 요청 이전의 점유만 본다
-      if (state.spectacleUntil[screen] > request.at) intensity = 'emphasis';
-      else spectacleUntil[screen] = holdEndsAt;
+      if (state.largestUntil[screen] > request.at) intensity = 'large';
+      else largestUntil[screen] = holdEndsAt;
     }
-    if (intensity === 'emphasis') {
+    if (intensity === 'large') {
       const key = `${request.kind}:${renderer}`;
-      const last = state.lastEmphasisAt.get(key);
-      if (last !== undefined && request.at - last < DUPLICATE_SUPPRESS_MS) intensity = 'confirm';
-      else lastEmphasisAt.set(key, request.at);
+      const last = state.lastLargeAt.get(key);
+      if (last !== undefined && request.at - last < DUPLICATE_SUPPRESS_MS) intensity = 'small';
+      else lastLargeAt.set(key, request.at);
     }
     directives.push({
       seq: nextSeq++,
@@ -141,5 +141,5 @@ export function mediateFx(
       request,
     });
   }
-  return { state: { nextSeq, spectacleUntil, lastEmphasisAt }, directives };
+  return { state: { nextSeq, largestUntil, lastLargeAt }, directives };
 }

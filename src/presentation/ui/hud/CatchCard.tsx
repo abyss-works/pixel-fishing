@@ -43,7 +43,7 @@ const VARIANT_LINES = [
 export default function CatchCard({ fish, info, fxIntensity = null }: {
   fish: Fish;
   info: CatchInfo | null;
-  /** 효과 중재자가 정한 강도. 없으면 확인으로 그린다 */
+  /** 효과 중재자가 정한 강도. 없으면 작게로 그린다 */
   fxIntensity?: FxPlayIntensity | null;
 }) {
   // 문구 선택은 이번 캐치의 크기 롤(이미 랜덤)에서 파생 — 렌더 순수성 유지 + 카드 떠 있는 동안 고정

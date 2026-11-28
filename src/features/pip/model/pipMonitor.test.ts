@@ -224,11 +224,11 @@ describe('pipMonitor 순수 모델', () => {
     const item = buildPipCatchItem(makeCatchResult({ fishId: FISH[0].id, uid: 'c-1' }), 100)!;
     let s = pipMonitorReducer(initialPipMonitorState, { type: 'append', item });
     expect(s.leapTrigger).toBeNull();
-    s = pipMonitorReducer(s, { type: 'play', item, intensity: 'spectacle' });
-    expect(s.leapTrigger).toEqual({ seq: 1, item, intensity: 'spectacle' });
+    s = pipMonitorReducer(s, { type: 'play', item, intensity: 'largest' });
+    expect(s.leapTrigger).toEqual({ seq: 1, item, intensity: 'largest' });
     expect(s.recentCatches).toHaveLength(1);
-    const next = pipMonitorReducer(s, { type: 'play', item, intensity: 'confirm' });
-    expect(next.leapTrigger).toEqual({ seq: 2, item, intensity: 'confirm' });
+    const next = pipMonitorReducer(s, { type: 'play', item, intensity: 'small' });
+    expect(next.leapTrigger).toEqual({ seq: 2, item, intensity: 'small' });
   });
 
   it('같은 항목을 다시 append해도 상태가 바뀌지 않는다', () => {

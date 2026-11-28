@@ -123,7 +123,7 @@ describe('Field 포획 효과 요청', () => {
     try {
       catchOnce(FISH[0].id, {}, catchSlot);
       const directive = getFxDirective('catch-card');
-      expect(directive?.intensity).toBe('confirm');
+      expect(directive?.intensity).toBe('small');
       expect(directive?.request.kind).toBe('catch.routine');
       expect(directive?.request.subject).toMatchObject({ eventId: 'fx-1', region: 'village', fishId: FISH[0].id });
       expect(directive!.endsAt).toBeGreaterThan(Date.now());
@@ -132,13 +132,13 @@ describe('Field 포획 효과 요청', () => {
     }
   });
 
-  it('영웅 포획은 첫 렌더부터 강조 레이어(모서리 발광)를 그린다', () => {
+  it('영웅 포획은 첫 렌더부터 크게 레이어(모서리 발광)를 그린다', () => {
     const catchSlot = document.createElement('div');
     document.body.appendChild(catchSlot);
     const epic = FISH.find(f => f.rarity === 'epic')!;
     try {
       catchOnce(epic.id, {}, catchSlot);
-      expect(getFxDirective('catch-card')?.intensity).toBe('emphasis');
+      expect(getFxDirective('catch-card')?.intensity).toBe('large');
       expect(catchSlot.querySelector('[data-catch-corner]')).not.toBeNull();
     } finally {
       catchSlot.remove();

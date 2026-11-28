@@ -11,13 +11,13 @@ const ALL_KINDS: FxEventKind[] = [
 
 describe('fxIntensityOf', () => {
   it('사건표의 포획 강도를 직접 행동 여부와 무관하게 돌려준다', () => {
-    expect(fxIntensityOf('catch.legendaryOrFirstVariant', true)).toBe('spectacle');
-    expect(fxIntensityOf('catch.legendaryOrFirstVariant', false)).toBe('spectacle');
-    expect(fxIntensityOf('catch.epicOrRecord', true)).toBe('emphasis');
-    expect(fxIntensityOf('catch.variant', false)).toBe('emphasis');
-    expect(fxIntensityOf('catch.routine', true)).toBe('confirm');
-    expect(fxIntensityOf('catch.routine', false)).toBe('confirm');
-    expect(fxIntensityOf('live.peerCatch', false)).toBe('emphasis');
+    expect(fxIntensityOf('catch.legendaryOrFirstVariant', true)).toBe('largest');
+    expect(fxIntensityOf('catch.legendaryOrFirstVariant', false)).toBe('largest');
+    expect(fxIntensityOf('catch.epicOrRecord', true)).toBe('large');
+    expect(fxIntensityOf('catch.variant', false)).toBe('large');
+    expect(fxIntensityOf('catch.routine', true)).toBe('small');
+    expect(fxIntensityOf('catch.routine', false)).toBe('small');
+    expect(fxIntensityOf('live.peerCatch', false)).toBe('large');
   });
 
   it('효과 규칙이 없는 사건은 none이다', () => {
@@ -28,7 +28,7 @@ describe('fxIntensityOf', () => {
   it('모든 사건 종류가 네 강도 중 하나를 돌려준다', () => {
     for (const kind of ALL_KINDS) {
       for (const direct of [true, false]) {
-        expect(['none', 'confirm', 'emphasis', 'spectacle']).toContain(fxIntensityOf(kind, direct));
+        expect(['none', 'small', 'large', 'largest']).toContain(fxIntensityOf(kind, direct));
       }
     }
   });
@@ -67,7 +67,7 @@ describe('mediateFx', () => {
     const r = mediateFx(createFxMediatorState(), catchReq('catch.epicOrRecord', 100), env());
     expect(r.directives.map(d => d.renderer)).toEqual(['catch-card', 'field', 'pip']);
     expect(r.directives.map(d => d.seq)).toEqual([0, 1, 2]);
-    expect(intensities(r)).toEqual({ 'catch-card': 'emphasis', field: 'emphasis', pip: 'emphasis' });
+    expect(intensities(r)).toEqual({ 'catch-card': 'large', field: 'large', pip: 'large' });
     const byRenderer = Object.fromEntries(r.directives.map(d => [d.renderer, d]));
     expect(byRenderer['catch-card'].endsAt).toBe(10_000);
     expect(byRenderer.pip.endsAt).toBe(10_000);
@@ -76,72 +76,72 @@ describe('mediateFx', () => {
     expect(r.state.nextSeq).toBe(3);
   });
 
-  it('차단 창이 떠 있으면 필드만 확인으로 낮추고 카드와 PiP는 그대로 둔다', () => {
+  it('차단 창이 떠 있으면 필드만 작게로 낮추고 카드와 PiP는 그대로 둔다', () => {
     const r = mediateFx(createFxMediatorState(), catchReq('catch.legendaryOrFirstVariant', 0), env({ windowsOpen: true }));
-    expect(intensities(r)).toEqual({ 'catch-card': 'spectacle', field: 'confirm', pip: 'spectacle' });
+    expect(intensities(r)).toEqual({ 'catch-card': 'largest', field: 'small', pip: 'largest' });
   });
 
-  it('연출 중에 같은 화면의 연출이 오면 강조로 낮추고 화면이 다르면 독립이다', () => {
+  it('가장 크게 점유 중에 같은 화면의 가장 크게가 오면 크게로 낮추고 화면이 다르면 독립이다', () => {
     const first = mediateFx(createFxMediatorState(), catchReq('catch.legendaryOrFirstVariant', 0), env());
-    expect(intensities(first)).toEqual({ 'catch-card': 'spectacle', field: 'spectacle', pip: 'spectacle' });
+    expect(intensities(first)).toEqual({ 'catch-card': 'largest', field: 'largest', pip: 'largest' });
     const second = mediateFx(first.state, catchReq('catch.legendaryOrFirstVariant', 5000, { holdEndsAt: 20_000 }), env());
-    expect(intensities(second)).toEqual({ 'catch-card': 'emphasis', field: 'emphasis', pip: 'emphasis' });
+    expect(intensities(second)).toEqual({ 'catch-card': 'large', field: 'large', pip: 'large' });
   });
 
   it('한 요청의 카드와 필드는 같은 점유를 공유한다', () => {
     const r = mediateFx(createFxMediatorState(), catchReq('catch.legendaryOrFirstVariant', 0), env());
-    expect(r.state.spectacleUntil).toEqual({ main: 10_000, pip: 10_000 });
+    expect(r.state.largestUntil).toEqual({ main: 10_000, pip: 10_000 });
   });
 
-  it('차단 창이 떠 있어도 카드의 연출은 화면을 점유한다', () => {
+  it('차단 창이 떠 있어도 카드의 가장 크게는 화면을 점유한다', () => {
     const blocked = mediateFx(createFxMediatorState(), catchReq('catch.legendaryOrFirstVariant', 0), env({ windowsOpen: true }));
-    expect(blocked.state.spectacleUntil).toEqual({ main: 10_000, pip: 10_000 });
+    expect(blocked.state.largestUntil).toEqual({ main: 10_000, pip: 10_000 });
     const next = mediateFx(blocked.state, catchReq('catch.legendaryOrFirstVariant', 100), env());
-    expect(intensities(next)['catch-card']).toBe('emphasis');
+    expect(intensities(next)['catch-card']).toBe('large');
   });
 
-  it('점유가 끝난 뒤의 연출은 다시 연출이다', () => {
+  it('점유가 끝난 뒤의 가장 크게는 다시 가장 크게다', () => {
     const first = mediateFx(createFxMediatorState(), catchReq('catch.legendaryOrFirstVariant', 0), env());
     const later = mediateFx(first.state, catchReq('catch.legendaryOrFirstVariant', 10_000, { holdEndsAt: 30_000 }), env());
-    expect(intensities(later)['catch-card']).toBe('spectacle');
+    expect(intensities(later)['catch-card']).toBe('largest');
   });
 
-  it('같은 종류의 강조가 중복 억제 시간 안에 겹치면 두 번째부터 확인으로 낮춘다', () => {
+  it('같은 종류의 크게가 중복 억제 시간 안에 겹치면 두 번째부터 작게로 낮춘다', () => {
     const first = mediateFx(createFxMediatorState(), catchReq('catch.variant', 1000), env());
-    expect(intensities(first).field).toBe('emphasis');
+    expect(intensities(first).field).toBe('large');
     const second = mediateFx(first.state, catchReq('catch.variant', 1000 + DUPLICATE_SUPPRESS_MS - 1), env());
-    expect(intensities(second)).toEqual({ 'catch-card': 'confirm', field: 'confirm', pip: 'confirm' });
+    expect(intensities(second)).toEqual({ 'catch-card': 'small', field: 'small', pip: 'small' });
     const third = mediateFx(second.state, catchReq('catch.variant', 1000 + DUPLICATE_SUPPRESS_MS), env());
-    expect(intensities(third).field).toBe('emphasis');
+    expect(intensities(third).field).toBe('large');
   });
 
-  it('낮아진 강조는 억제 시간을 늘리지 않고 다른 종류는 서로 묶지 않는다', () => {
+  it('낮아진 크게는 억제 시간을 늘리지 않고 다른 종류는 서로 묶지 않는다', () => {
     const first = mediateFx(createFxMediatorState(), catchReq('catch.variant', 0), env());
     const dup = mediateFx(first.state, catchReq('catch.variant', 1500), env());
     const after = mediateFx(dup.state, catchReq('catch.variant', 2000), env());
-    expect(intensities(after).field).toBe('emphasis');
+    expect(intensities(after).field).toBe('large');
     const other = mediateFx(first.state, catchReq('catch.epicOrRecord', 100), env());
-    expect(intensities(other).field).toBe('emphasis');
+    expect(intensities(other).field).toBe('large');
   });
 
-  it('확인 강도는 겹쳐도 낮추지 않는다', () => {
+  it('작게는 겹쳐도 낮추지 않는다', () => {
     const first = mediateFx(createFxMediatorState(), catchReq('catch.routine', 0), env());
     const second = mediateFx(first.state, catchReq('catch.routine', 10), env());
-    expect(intensities(second).field).toBe('confirm');
+    expect(intensities(second).field).toBe('small');
   });
 
   it('동작 축소 판정을 지시에 싣고 강도는 바꾸지 않는다', () => {
     const r = mediateFx(createFxMediatorState(), catchReq('catch.epicOrRecord', 0), env({ reducedMotion: true }));
     expect(r.directives.every(d => d.reducedMotion)).toBe(true);
-    expect(intensities(r).field).toBe('emphasis');
+    expect(intensities(r).field).toBe('large');
   });
 
-  it('다른 플레이어 포획은 필드 지시 하나이고 차단 창이면 확인이 된다', () => {
+  it('다른 플레이어 포획은 필드 지시 하나이고 차단 창이면 작게가 된다', () => {
     const req: FxRequest = { kind: 'live.peerCatch', direct: false, at: 50, subject: { region: 'world', fishId: 'carp', from: { x: 1, y: 1 } } };
     const r = mediateFx(createFxMediatorState(), req, env());
-    expect(r.directives.map(d => [d.renderer, d.intensity, d.endsAt])).toEqual([['field', 'emphasis', 950]]);
+    expect(r.directives.map(d => [d.renderer, d.intensity, d.endsAt])).toEqual([['field', 'large', 950]]);
     const blocked = mediateFx(createFxMediatorState(), req, env({ windowsOpen: true }));
-    expect(intensities(blocked)).toEqual({ field: 'confirm' });
+    expect(intensities(blocked)).toEqual({ field: 'small' });
   });
 
   it('입력 상태를 바꾸지 않는다', () => {

@@ -16,17 +16,17 @@ export interface CatchCardLayers {
 
 /**
  * 카드의 효과 레이어. 등급과 폼이 후보를 정하고 강도가 상한이 된다.
- * 지시가 없으면 확인으로 본다. 확인은 등장 움직임만 남긴다.
+ * 지시가 없으면 작게로 본다. 작게는 등장 움직임만 남긴다.
  */
 export function catchCardLayers(rarity: RarityId, isVariant: boolean, intensity: FxPlayIntensity | null): CatchCardLayers {
-  const emphasized = intensity === 'emphasis' || intensity === 'spectacle';
+  const large = intensity === 'large' || intensity === 'largest';
   const highlight = rarity === 'legendary';
-  const spectacle = intensity === 'spectacle';
+  const largest = intensity === 'largest';
   return {
-    cornerGlow: emphasized && (rarity === 'epic' || highlight),
-    legendGlow: spectacle && highlight,
-    sweep: spectacle && highlight,
-    wisps: emphasized && isVariant,
-    shimmer: emphasized && isVariant,
+    cornerGlow: large && (rarity === 'epic' || highlight),
+    legendGlow: largest && highlight,
+    sweep: largest && highlight,
+    wisps: large && isVariant,
+    shimmer: large && isVariant,
   };
 }

@@ -64,7 +64,7 @@ describe('usePipMonitor 효과 지시 연동', () => {
     expect(result.current.recentCatches[0].eventId).toBe('c-1');
     expect(result.current.leapTrigger).toBeNull();
     act(() => { fxFor('c-1'); });
-    expect(result.current.leapTrigger).toMatchObject({ seq: 1, intensity: 'emphasis', item: { eventId: 'c-1' } });
+    expect(result.current.leapTrigger).toMatchObject({ seq: 1, intensity: 'large', item: { eventId: 'c-1' } });
     // 같은 지시를 다시 읽어도 재생하지 않는다
     act(() => { setPipFishingPhase('bite'); });
     expect(result.current.leapTrigger?.seq).toBe(1);
@@ -101,6 +101,6 @@ describe('usePipMonitor 효과 지시 연동', () => {
   it('지시의 강도를 도약에 싣는다', async () => {
     const { result } = await mountOpen();
     act(() => { recordPipCatch(catchResult('c-5')); fxFor('c-5', 'catch.legendaryOrFirstVariant'); });
-    expect(result.current.leapTrigger?.intensity).toBe('spectacle');
+    expect(result.current.leapTrigger?.intensity).toBe('largest');
   });
 });

@@ -31,8 +31,8 @@ export interface JumpFx {
   form?: FormId;
   /** 점프 시작 후 경과 초(0 이상 ~ JUMP_S 미만) */
   t: number;
-  /** 효과 강도. 확인은 꼬리 스파크 없이 물고기만 그린다 */
-  intensity: 'confirm' | 'emphasis' | 'spectacle';
+  /** 효과 강도. 작게는 꼬리 스파크 없이 물고기만 그린다 */
+  intensity: 'small' | 'large' | 'largest';
 }
 
 export interface GearView {
@@ -107,7 +107,7 @@ export function jumpPoint(
 }
 
 function drawJumpSparks(ctx: Ctx, jump: JumpFx, rarity: RarityId) {
-  if ((rarity !== 'epic' && rarity !== 'legendary') || jump.intensity === 'confirm' || jump.t <= 0) return;
+  if ((rarity !== 'epic' && rarity !== 'legendary') || jump.intensity === 'small' || jump.t <= 0) return;
   const color = RARITY[rarity].color;
   for (let k = 1; k <= TRAIL_COUNT; k++) {
     const sampleT = jump.t - TRAIL_STEP_S * k;

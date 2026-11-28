@@ -134,8 +134,8 @@ export default function PipMonitorView({
     // 효과 강도는 등급이 정한 후보의 상한이다. 이 항목에 지시가 붙지 않았으면 등급만으로 그린다
     const fxIntensity = latest && leapTrigger?.item.eventId === latest.eventId ? leapTrigger.intensity : null;
     const showRarityGlow = (latest?.rarity === 'epic' || latest?.rarity === 'legendary')
-      && fxIntensity !== 'confirm';
-    const isLegendary = latest?.rarity === 'legendary' && (fxIntensity === null || fxIntensity === 'spectacle');
+      && fxIntensity !== 'small';
+    const isLegendary = latest?.rarity === 'legendary' && (fxIntensity === null || fxIntensity === 'largest');
     const shouldFlash = Boolean(latest && catchFxSeq > 0);
     const borderClass = latest?.rarity === 'legendary'
       ? 'is-legendary'

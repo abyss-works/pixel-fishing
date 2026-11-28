@@ -232,8 +232,8 @@ describe('renderRegion 점프 연출 뷰포트 컬링', () => {
   it('카메라 여백(x ±32, y ±48) 안의 localJumps·peerJumps는 그리고 밖은 컬링한다', () => {
     const inside = makeRecordingCtx();
     renderRegion(inside.ctx, TEST_PACK, baseFieldView({
-      localJumps: [{ x: 244, y: 326, fishId: 'goldcarp', form: 'normal', t: JUMP_S / 2, intensity: 'emphasis' }],
-      peerJumps: [{ x: 756, y: 674, fishId: 'goldfish', form: 'normal', t: JUMP_S / 2, intensity: 'emphasis' }],
+      localJumps: [{ x: 244, y: 326, fishId: 'goldcarp', form: 'normal', t: JUMP_S / 2, intensity: 'large' }],
+      peerJumps: [{ x: 756, y: 674, fishId: 'goldfish', form: 'normal', t: JUMP_S / 2, intensity: 'large' }],
     }));
     expect(inside.calls.some(c => c.startsWith('#ffd54f@'))).toBe(true);
     expect(inside.calls.some(c => c.startsWith('#ba68c8@'))).toBe(true);
@@ -241,26 +241,26 @@ describe('renderRegion 점프 연출 뷰포트 컬링', () => {
     // 시작점(x=200)은 밖이지만 목표점(toX=500)이 카메라 안이면 컬링하지 않고 그린다
     const targetInside = makeRecordingCtx();
     renderRegion(targetInside.ctx, TEST_PACK, baseFieldView({
-      localJumps: [{ x: 200, y: 500, toX: 500, toY: 494, fishId: 'goldcarp', form: 'normal', t: JUMP_S / 2, intensity: 'emphasis' }],
+      localJumps: [{ x: 200, y: 500, toX: 500, toY: 494, fishId: 'goldcarp', form: 'normal', t: JUMP_S / 2, intensity: 'large' }],
     }));
     expect(targetInside.calls.some(c => c.startsWith('#ffd54f@'))).toBe(true);
 
     // 시작점(x=200)과 목표점(toX=800) 모두 밖이라도 현재 포물선 좌표가 카메라 안이면 그린다
     const midInside = makeRecordingCtx();
     renderRegion(midInside.ctx, TEST_PACK, baseFieldView({
-      peerJumps: [{ x: 200, y: 500, toX: 800, toY: 500, fishId: 'goldfish', form: 'normal', t: JUMP_S / 2, intensity: 'emphasis' }],
+      peerJumps: [{ x: 200, y: 500, toX: 800, toY: 500, fishId: 'goldfish', form: 'normal', t: JUMP_S / 2, intensity: 'large' }],
     }));
     expect(midInside.calls.some(c => c.startsWith('#ba68c8@'))).toBe(true);
 
     const outside = makeRecordingCtx();
     renderRegion(outside.ctx, TEST_PACK, baseFieldView({
       localJumps: [
-        { x: 243, y: 500, fishId: 'goldcarp', form: 'normal', t: JUMP_S / 2, intensity: 'emphasis' },
-        { x: 757, y: 500, fishId: 'goldcarp', form: 'normal', t: JUMP_S / 2, intensity: 'emphasis' },
+        { x: 243, y: 500, fishId: 'goldcarp', form: 'normal', t: JUMP_S / 2, intensity: 'large' },
+        { x: 757, y: 500, fishId: 'goldcarp', form: 'normal', t: JUMP_S / 2, intensity: 'large' },
       ],
       peerJumps: [
-        { x: 500, y: 325, fishId: 'goldfish', form: 'normal', t: JUMP_S / 2, intensity: 'emphasis' },
-        { x: 500, y: 699, fishId: 'goldfish', form: 'normal', t: JUMP_S / 2, intensity: 'emphasis' },
+        { x: 500, y: 325, fishId: 'goldfish', form: 'normal', t: JUMP_S / 2, intensity: 'large' },
+        { x: 500, y: 699, fishId: 'goldfish', form: 'normal', t: JUMP_S / 2, intensity: 'large' },
       ],
     }));
     expect(outside.calls.some(c => c.startsWith('#ffd54f@'))).toBe(false);

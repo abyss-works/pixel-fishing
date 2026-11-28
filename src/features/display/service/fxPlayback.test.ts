@@ -24,8 +24,8 @@ describe('requestFx', () => {
     const listener = vi.fn();
     subscribeFx(listener);
     requestFx(catchReq('catch.epicOrRecord', Date.now()));
-    expect(getFxDirective('catch-card')?.intensity).toBe('emphasis');
-    expect(getFxDirective('pip')?.intensity).toBe('emphasis');
+    expect(getFxDirective('catch-card')?.intensity).toBe('large');
+    expect(getFxDirective('pip')?.intensity).toBe('large');
     expect(listener).toHaveBeenCalled();
   });
 
@@ -51,16 +51,16 @@ describe('requestFx', () => {
     expect(listener).not.toHaveBeenCalled();
   });
 
-  it('차단 창 판정을 묶으면 필드 강도만 확인으로 낮아지고 카드는 그대로이며 해제하면 창 없음으로 본다', () => {
+  it('차단 창 판정을 묶으면 필드 강도만 작게로 낮아지고 카드는 그대로이며 해제하면 창 없음으로 본다', () => {
     const unbind = bindFxEnvironment({ windowsOpen: () => true });
     requestFx(catchReq('catch.epicOrRecord', Date.now(), { region: 'world' }));
-    expect(getFxDirective('catch-card')?.intensity).toBe('emphasis');
-    expect(fieldFxFrame('world', Date.now()).localJumps[0].intensity).toBe('confirm');
-    expect(getFxDirective('pip')?.intensity).toBe('emphasis');
+    expect(getFxDirective('catch-card')?.intensity).toBe('large');
+    expect(fieldFxFrame('world', Date.now()).localJumps[0].intensity).toBe('small');
+    expect(getFxDirective('pip')?.intensity).toBe('large');
     unbind();
     vi.setSystemTime(1_000_000 + 10_000);
     requestFx(catchReq('catch.epicOrRecord', Date.now(), { region: 'world' }));
-    expect(fieldFxFrame('world', Date.now()).localJumps.at(-1)?.intensity).toBe('emphasis');
+    expect(fieldFxFrame('world', Date.now()).localJumps.at(-1)?.intensity).toBe('large');
   });
 
   it('새 요청이 같은 렌더러의 이전 지시를 대체하고 순번이 늘어난다', () => {
@@ -102,7 +102,7 @@ describe('필드 지시', () => {
     expect(getFxDirective('catch-card')).toBeNull();
     expect(activeFieldDirectives('village', Date.now())).toEqual([]);
     requestFx(catchReq('catch.legendaryOrFirstVariant', Date.now()));
-    expect(getFxDirective('catch-card')?.intensity).toBe('spectacle');
+    expect(getFxDirective('catch-card')?.intensity).toBe('largest');
   });
 });
 
@@ -114,12 +114,12 @@ describe('fieldFxFrame', () => {
     const frame = fieldFxFrame('world', Date.now() + 300);
     expect(frame.reducedMotion).toBe(false);
     expect(frame.localJumps).toEqual([
-      { x: 1, y: 2, toX: 3, toY: 4, fishId: 'carp', form: 'normal', t: 0.3, intensity: 'emphasis' },
+      { x: 1, y: 2, toX: 3, toY: 4, fishId: 'carp', form: 'normal', t: 0.3, intensity: 'large' },
     ]);
     expect(frame.peerJumps).toEqual([
-      { x: 1, y: 1, toX: 9, toY: 9, fishId: 'carp', form: 'variant', t: 0.3, intensity: 'emphasis' },
-      // 같은 종류 강조가 겹치면 두 번째부터 확인이다
-      { x: 1, y: 1, fishId: 'no-target', t: 0.3, intensity: 'confirm' },
+      { x: 1, y: 1, toX: 9, toY: 9, fishId: 'carp', form: 'variant', t: 0.3, intensity: 'large' },
+      // 같은 종류 크게가 겹치면 두 번째부터 작게다
+      { x: 1, y: 1, fishId: 'no-target', t: 0.3, intensity: 'small' },
     ]);
   });
 
@@ -129,10 +129,10 @@ describe('fieldFxFrame', () => {
     expect(fieldFxFrame('village', Date.now() + 900).localJumps).toEqual([]);
   });
 
-  it('필드가 확인으로 낮춘 요청은 확인 강도 점프가 된다', () => {
+  it('필드가 작게로 낮춘 요청은 작게 강도 점프가 된다', () => {
     const unbind = bindFxEnvironment({ windowsOpen: () => true });
     requestFx(catchReq('catch.legendaryOrFirstVariant', Date.now(), { region: 'world' }));
-    expect(fieldFxFrame('world', Date.now()).localJumps[0].intensity).toBe('confirm');
+    expect(fieldFxFrame('world', Date.now()).localJumps[0].intensity).toBe('small');
     unbind();
   });
 });
