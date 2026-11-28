@@ -1000,6 +1000,9 @@ describe('GameFieldEngine 이벤트 2 표준 스펙 및 사운드 훅', () => {
       rarity: 'legendary',
       variant: true,
       named: false,
+      // 점프 좌표는 어군 위치와 배 머리 위, 홀드 종료는 결과 도착 시각에 등급별 홀드 길이를 더한 값이다
+      jump: { from: { x: 152, y: 140 }, to: { x: 152, y: 114 } },
+      holdEndsAt: t0 + 2290 + 10 + 700 + 2700,
     });
     // 전설 이벤트 어종(글라키)은 전설 획득 홀드 시간(2700ms) 동안 catch 상태를 유지한다
     vi.advanceTimersByTime(2600);

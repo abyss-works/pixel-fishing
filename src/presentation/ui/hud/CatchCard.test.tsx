@@ -64,7 +64,7 @@ describe('획득 카드', () => {
     } as const;
     for (const rarity of RARITY_ORDER) {
       const targetFish = FISH.find(f => f.rarity === rarity)!;
-      const { container } = render(<CatchCard fish={targetFish} info={info({ form: 'variant' })} />);
+      const { container } = render(<CatchCard fish={targetFish} info={info({ form: 'variant' })} fxIntensity="emphasis" />);
       const portrait = container.querySelector('[data-catch-portrait]')!;
       expect(portrait.className).toContain(borderClassByRarity[rarity]);
       expect(portrait.className).not.toContain('border-mutation');
@@ -112,7 +112,7 @@ describe('획득 카드', () => {
       [commonFish, 'variant'],
       [rareFish, 'variant'],
     ] as const) {
-      const { container } = render(<CatchCard fish={targetFish} info={info({ form })} />);
+      const { container } = render(<CatchCard fish={targetFish} info={info({ form })} fxIntensity="emphasis" />);
       expect(container.querySelectorAll('[data-catch-corner]')).toHaveLength(0);
       expect(container.querySelector('[data-portrait-glow]')).toBeNull();
       expect(container.querySelector('.animate-fx-orbit')).toBeNull();
@@ -126,7 +126,7 @@ describe('획득 카드', () => {
     }
 
     for (const targetFish of [epicFish, legendaryFish]) {
-      const { container } = render(<CatchCard fish={targetFish} info={info({ form: 'normal' })} />);
+      const { container } = render(<CatchCard fish={targetFish} info={info({ form: 'normal' })} fxIntensity="spectacle" />);
       const fx = container.querySelector('[data-catch-fx]')!;
       expect(fx.querySelectorAll('[data-catch-corner]')).toHaveLength(4);
       expect(container.querySelector('[data-portrait-glow]')).not.toBeNull();
@@ -141,7 +141,7 @@ describe('획득 카드', () => {
     const epicFish = FISH.find(f => f.rarity === 'epic')!;
     const rareFish = FISH.find(f => f.rarity === 'rare')!;
 
-    const legRender = render(<CatchCard fish={legendaryFish} info={info({ form: 'normal' })} />);
+    const legRender = render(<CatchCard fish={legendaryFish} info={info({ form: 'normal' })} fxIntensity="spectacle" />);
     const glowWrapper = legRender.container.querySelector('.animate-glow-legend') as HTMLElement | null;
     expect(glowWrapper).not.toBeNull();
     // pf-notch 클리핑 바깥 래퍼에 걸리고, 그 안에 HudPanel과 sweep 오버레이가 놓인다
@@ -157,7 +157,7 @@ describe('획득 카드', () => {
       [epicFish, 'variant'],
       [rareFish, 'variant'],
     ] as const) {
-      const { container } = render(<CatchCard fish={targetFish} info={info({ form })} />);
+      const { container } = render(<CatchCard fish={targetFish} info={info({ form })} fxIntensity="emphasis" />);
       expect(container.querySelector('.animate-glow-legend')).toBeNull();
       expect(container.querySelector('.catch-card-sweep')).toBeNull();
       if (targetFish === epicFish) {
@@ -168,6 +168,20 @@ describe('획득 카드', () => {
         expect(container.querySelector('.animate-mutated-shimmer')).not.toBeNull();
         expect(container.querySelectorAll('.animate-fx-wisp')).toHaveLength(8);
       }
+      cleanup();
+    }
+  });
+
+  it('지시가 없거나 확인 강도면 전설과 돌연변이도 등장 움직임 외의 효과 레이어를 그리지 않는다', () => {
+    const legendaryFish = FISH.find(f => f.rarity === 'legendary')!;
+    for (const fxIntensity of [null, 'confirm'] as const) {
+      const { container } = render(<CatchCard fish={legendaryFish} info={info({ form: 'variant' })} fxIntensity={fxIntensity} />);
+      expect(container.querySelector('[data-catch-corner]')).toBeNull();
+      expect(container.querySelector('[data-portrait-glow]')).toBeNull();
+      expect(container.querySelector('.animate-glow-legend')).toBeNull();
+      expect(container.querySelector('.catch-card-sweep')).toBeNull();
+      expect(container.querySelector('.animate-fx-wisp')).toBeNull();
+      expect(container.querySelector('.animate-mutated-shimmer')).toBeNull();
       cleanup();
     }
   });

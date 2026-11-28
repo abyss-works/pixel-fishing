@@ -79,7 +79,7 @@ const INITIAL_PRESENTATION_GAME_VALUE_IMPORTS: Record<string, readonly string[]>
   'presentation/ui/artifactEffects.ts': ['MUTATION_WEIGHTS', 'artifactEffectsAt', 'artifactExtraCookChanceAt'],
   'presentation/ui/fish/InstanceLine.tsx': ['sizePercentile'],
   'presentation/ui/fish/RarityTag.tsx': ['DISPLAY_GRADE', 'RARITY'],
-  'presentation/ui/hud/CatchCard.tsx': ['RARITY', 'formName', 'priceOf'],
+  'presentation/ui/hud/CatchCard.tsx': ['formName', 'priceOf'],
   'presentation/ui/hud/Minimap.tsx': ['topZoneOf', 'zoneById', 'zoneOfSpot'],
   'presentation/views/admin/tabs/BalanceLiveSection.tsx': ['SPOTS', 'boatNameOf'],
   'presentation/views/admin/tabs/FishTab.tsx': ['FISH', 'RARITY', 'SPOTS'],

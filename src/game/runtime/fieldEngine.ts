@@ -82,6 +82,10 @@ export type FieldEvent =
     rarity?: RarityId;
     variant: boolean;
     named: boolean;
+    /** 수면 점프의 출발(어군)과 도착(배 머리 위) */
+    jump: { from: Point; to: Point };
+    /** 잡기 홀드가 끝나는 벽시계 시각(ms) */
+    holdEndsAt: number;
   }
   | { type: 'zone-blocked'; message: string }
   | { type: 'zone-entered'; zone: ZoneId }
@@ -621,7 +625,7 @@ export class GameFieldEngine {
         if (result.status === 'ok' && result.result.type === 'catch') {
           this.recordConfirmedCatch();
           this.pushLocalJump(school, result.result);
-          this.emitCatch(judgment, result.result);
+          this.emitCatch(judgment, result.result, school);
         }
         return;
       }
@@ -634,11 +638,11 @@ export class GameFieldEngine {
       this.recordConfirmedCatch();
       this.pushLocalJump(school, result.result);
       this.transition('catch', result.result.fishId, result.result.info);
-      this.emitCatch(judgment, result.result);
+      this.emitCatch(judgment, result.result, school);
     });
   }
 
-  private emitCatch(judgment: Judgment, result: CatchResult): void {
+  private emitCatch(judgment: Judgment, result: CatchResult, school: School): void {
     const fish = findAnyFish(result.fishId);
     this.callbacks.onEvent({
       type: 'catch',
@@ -648,7 +652,15 @@ export class GameFieldEngine {
       rarity: fish?.rarity,
       variant: result.info.form === 'variant',
       named: Boolean(result.ticket),
+      jump: { from: { x: school.x, y: school.y }, to: { x: this.pos.x, y: this.pos.y - 6 } },
+      holdEndsAt: Date.now() + this.phaseMs('catch', fish?.rarity, school.spot),
     });
+  }
+
+  /** 단계 지속 시간(ms). 이벤트 구역은 표준 낚싯대 기준이다 */
+  private phaseMs(phase: Parameters<typeof phaseDurationMs>[0], rarity?: RarityId, spot?: SpotId): number {
+    const rodLevel = this.isEvent2(spot) ? EVENT2_STANDARD_SPEC.rodLevel : this.game.rod;
+    return phaseDurationMs(phase, rodLevel, undefined, rarity);
   }
 
   private pushLocalJump(school: School, result: CatchResult): void {
@@ -764,8 +776,7 @@ export class GameFieldEngine {
 
     this.waitBiteMs = null;
     const fish = this.snapshot.fishId ? findAnyFish(this.snapshot.fishId) : undefined;
-    const rodLevel = this.isEvent2() ? EVENT2_STANDARD_SPEC.rodLevel : this.game.rod;
-    const ms = phaseDurationMs(phase, rodLevel, undefined, fish?.rarity);
+    const ms = this.phaseMs(phase, fish?.rarity);
     this.armPhaseTimer(this.phaseStartAt + ms, phase);
   }
 
