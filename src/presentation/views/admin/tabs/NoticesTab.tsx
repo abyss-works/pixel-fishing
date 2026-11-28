@@ -1,13 +1,19 @@
 // 공지 구역 — 전체 폭 목록 카드 + 우측 상단 새 공지 등록 버튼으로 동작하며, 버튼이나 수정 클릭 시에만 작성 폼을 연다.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { NoticeItem } from '../../../../game/rules/live';
 import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
 import DataTable from '../../../ui/DataTable';
 import Field from '../../../ui/Field';
+import Inset from '../../../ui/Inset';
 import Note from '../../../ui/Note';
+import { stripNoticeMarkdown } from '../../../ui/noticeMarkdownText';
+import SectionTitle from '../../../ui/SectionTitle';
 import TextArea from '../../../ui/TextArea';
 import TextInput from '../../../ui/TextInput';
 import { useDialogs } from '../../../ui/useDialogs';
+import { NoticeModalCard } from '../../overlays/live/NoticeModal';
+import { NoticeBanner } from '../../overlays/live/NoticeStack';
 import { fmtDT, isoToLocalInput, toLocalInputValue } from '../../../../features/admin/model/metrics';
 import { readAdminNotices } from '../../../../features/admin/service/queries';
 import { adminKeys } from '../../../../features/admin/service/queryKeys';
@@ -54,6 +60,67 @@ function bodyPreview(body: string): { summary: string; truncated: boolean } {
   return { summary: body, truncated: false };
 }
 
+type MarkdownFormatKind = 'bold' | 'italic' | 'code' | 'codeblock' | 'list';
+
+function applyMarkdownFormat(
+  text: string,
+  start: number,
+  end: number,
+  kind: MarkdownFormatKind,
+): { nextText: string; selectStart: number; selectEnd: number } {
+  const selected = text.slice(start, end);
+  const before = text.slice(0, start);
+  const after = text.slice(end);
+  const needsLeadingNewline = start > 0 && text[start - 1] !== '\n';
+
+  if (kind === 'bold' || kind === 'italic' || kind === 'code') {
+    const marker = kind === 'bold' ? '**' : kind === 'italic' ? '*' : '`';
+    const content = selected || (kind === 'code' ? '코드' : '텍스트');
+    const inserted = `${marker}${content}${marker}`;
+    const nextStart = start + marker.length;
+    return {
+      nextText: `${before}${inserted}${after}`,
+      selectStart: nextStart,
+      selectEnd: nextStart + content.length,
+    };
+  }
+
+  if (kind === 'codeblock') {
+    const prefix = needsLeadingNewline ? '\n```\n' : '```\n';
+    const content = selected || '코드';
+    const suffix = after.length > 0 && after[0] !== '\n' ? '\n```\n' : '\n```';
+    const nextStart = start + prefix.length;
+    return {
+      nextText: `${before}${prefix}${content}${suffix}${after}`,
+      selectStart: nextStart,
+      selectEnd: nextStart + content.length,
+    };
+  }
+
+  const prefix = needsLeadingNewline ? '\n' : '';
+  const suffix = after.length > 0 && after[0] !== '\n' ? '\n' : '';
+  if (selected) {
+    const formatted = selected
+      .split('\n')
+      .map(line => (line.startsWith('- ') ? line : `- ${line}`))
+      .join('\n');
+    const nextStart = start + prefix.length;
+    return {
+      nextText: `${before}${prefix}${formatted}${suffix}${after}`,
+      selectStart: nextStart,
+      selectEnd: nextStart + formatted.length,
+    };
+  }
+  const placeholder = '항목';
+  const inserted = `${prefix}- ${placeholder}${suffix}`;
+  const nextStart = start + prefix.length + 2;
+  return {
+    nextText: `${before}${inserted}${after}`,
+    selectStart: nextStart,
+    selectEnd: nextStart + placeholder.length,
+  };
+}
+
 const DRAFT_ERROR_TEXT: Record<'bad-title' | 'bad-body' | 'bad-window', string> = {
   'bad-title': `제목은 1자 이상 ${NOTICE_TITLE_MAX}자 이하로 입력해 주세요.`,
   'bad-body': `본문은 1자 이상 ${NOTICE_BODY_MAX}자 이하로 입력해 주세요.`,
@@ -79,6 +146,23 @@ export default function NoticesTab() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const bodyRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const insertFormat = (kind: MarkdownFormatKind) => {
+    const el = bodyRef.current;
+    const start = el?.selectionStart ?? body.length;
+    const end = el?.selectionEnd ?? body.length;
+    const { nextText, selectStart, selectEnd } = applyMarkdownFormat(body, start, end, kind);
+    setBody(nextText);
+    setFailure(null);
+    setDone(null);
+    requestAnimationFrame(() => {
+      const target = bodyRef.current;
+      if (!target) return;
+      target.focus();
+      target.setSelectionRange(selectStart, selectEnd);
+    });
+  };
 
   const resetForm = () => {
     const current = Date.now();
@@ -207,6 +291,15 @@ export default function NoticesTab() {
     return () => clearTimeout(timer);
   }, [notices, now]);
 
+  const previewNotice: NoticeItem = {
+    id: editingId ?? 0,
+    title: title.trim() || '공지 제목 미리보기',
+    body: body || '본문을 입력하면 이곳에 실제 게임 내 공지 모양으로 표시돼요.',
+    startsAt: localInputToIso(startsInput) || new Date(now).toISOString(),
+    endsAt: localInputToIso(endsInput) || new Date(now + 24 * 3600_000).toISOString(),
+    createdAt: new Date(now).toISOString(),
+  };
+
   return (
     <>
       <TabState loading={noticesQuery.loading && granted} error={noticesQuery.error} onRetry={noticesQuery.refresh} />
@@ -219,46 +312,72 @@ export default function NoticesTab() {
           title={editingId !== null ? '공지 수정' : '새 공지'}
           actions={<Button size="xs" variant="ghost" disabled={busy} onClick={closeForm}>닫기</Button>}
         >
-          <div className="flex flex-col gap-3">
-            <Field label="제목" hint={`최대 ${NOTICE_TITLE_MAX}자`}>
-              <TextInput
-                value={title}
-                maxLength={NOTICE_TITLE_MAX}
-                onChange={e => { setTitle(e.target.value); setFailure(null); setDone(null); }}
-              />
-            </Field>
-            <Field label="본문" hint={`최대 ${NOTICE_BODY_MAX}자`}>
-              <TextArea
-                rows={4}
-                value={body}
-                maxLength={NOTICE_BODY_MAX}
-                onChange={e => { setBody(e.target.value); setFailure(null); setDone(null); }}
-              />
-            </Field>
-            <AdminSplit variant="2">
-              <Field label="시작 시각">
+          <AdminSplit variant="2" className="items-start">
+            <div className="flex flex-col gap-3">
+              <Field label="제목" hint={`최대 ${NOTICE_TITLE_MAX}자`}>
                 <TextInput
-                  type="datetime-local"
-                  value={startsInput}
-                  onChange={e => { setStartsInput(e.target.value); setFailure(null); setDone(null); }}
+                  value={title}
+                  maxLength={NOTICE_TITLE_MAX}
+                  onChange={e => { setTitle(e.target.value); setFailure(null); setDone(null); }}
                 />
               </Field>
-              <Field label="마감 시각">
-                <TextInput
-                  type="datetime-local"
-                  value={endsInput}
-                  onChange={e => { setEndsInput(e.target.value); setFailure(null); setDone(null); }}
-                />
-              </Field>
-            </AdminSplit>
-            {failure && <Note tone="warn" className="my-0">{failure}</Note>}
-            <div className="flex flex-wrap justify-end gap-2">
-              <Button size="sm" variant="ghost" disabled={busy} onClick={closeForm}>취소</Button>
-              <Button size="sm" variant="primary" disabled={!granted || busy} onClick={() => void submit()}>
-                {editingId !== null ? '수정 저장' : '공지 등록'}
-              </Button>
+              <AdminSplit variant="2">
+                <Field label="시작 시각">
+                  <TextInput
+                    type="datetime-local"
+                    value={startsInput}
+                    onChange={e => { setStartsInput(e.target.value); setFailure(null); setDone(null); }}
+                  />
+                </Field>
+                <Field label="마감 시각">
+                  <TextInput
+                    type="datetime-local"
+                    value={endsInput}
+                    onChange={e => { setEndsInput(e.target.value); setFailure(null); setDone(null); }}
+                  />
+                </Field>
+              </AdminSplit>
+              <div className="flex flex-col gap-1.5">
+                <div className="flex flex-wrap items-center gap-1" role="toolbar" aria-label="마크다운 빠른 서식">
+                  <Button type="button" size="xs" variant="ghost" onClick={() => insertFormat('bold')}>굵게</Button>
+                  <Button type="button" size="xs" variant="ghost" onClick={() => insertFormat('italic')}>기울임</Button>
+                  <Button type="button" size="xs" variant="ghost" onClick={() => insertFormat('code')}>인라인 코드</Button>
+                  <Button type="button" size="xs" variant="ghost" onClick={() => insertFormat('codeblock')}>코드블록</Button>
+                  <Button type="button" size="xs" variant="ghost" onClick={() => insertFormat('list')}>목록</Button>
+                </div>
+                <Field label="본문" hint={`최대 ${NOTICE_BODY_MAX}자`}>
+                  <TextArea
+                    ref={bodyRef}
+                    rows={6}
+                    value={body}
+                    maxLength={NOTICE_BODY_MAX}
+                    onChange={e => { setBody(e.target.value); setFailure(null); setDone(null); }}
+                  />
+                </Field>
+              </div>
+              {failure && <Note tone="warn" className="my-0">{failure}</Note>}
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button size="sm" variant="ghost" disabled={busy} onClick={closeForm}>취소</Button>
+                <Button size="sm" variant="primary" disabled={!granted || busy} onClick={() => void submit()}>
+                  {editingId !== null ? '수정 저장' : '공지 등록'}
+                </Button>
+              </div>
             </div>
-          </div>
+
+            <Inset tone="deep" className="flex flex-col gap-3 p-3">
+              <SectionTitle className="my-0">게임 내 공지 미리보기</SectionTitle>
+              <div className="flex flex-col gap-1.5">
+                <span className="text-2xs font-bold text-text-dim">상단 공지 배너</span>
+                <NoticeBanner notice={previewNotice} onDismiss={() => {}} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <span className="text-2xs font-bold text-text-dim">공지사항 창</span>
+                <Inset tone="base" className="flex flex-col">
+                  <NoticeModalCard notice={previewNotice} />
+                </Inset>
+              </div>
+            </Inset>
+          </AdminSplit>
         </AdminCard>
       )}
 
@@ -283,14 +402,15 @@ export default function NoticesTab() {
             <tbody>
               {notices.map(n => {
                 const status = noticeStatusOf(n, now);
-                const preview = bodyPreview(n.body);
+                const plainBody = stripNoticeMarkdown(n.body);
+                const preview = bodyPreview(plainBody);
                 const expanded = expandedIds.has(n.id);
                 return (
                   <tr key={n.id}>
                     <td className="align-top text-xs min-w-[180px]">
                       <div className="font-bold text-text">{n.title}</div>
                       <div className="mt-1 whitespace-pre-wrap text-text-dim break-words">
-                        {expanded || !preview.truncated ? n.body : preview.summary}
+                        {expanded || !preview.truncated ? plainBody : preview.summary}
                       </div>
                       {preview.truncated && (
                         <Button

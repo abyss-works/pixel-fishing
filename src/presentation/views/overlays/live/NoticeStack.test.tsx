@@ -32,4 +32,16 @@ describe('NoticeStack', () => {
     fireEvent.click(screen.getByRole('button', { name: '공지 닫기' }));
     expect(onDismiss).toHaveBeenCalledWith(2);
   });
+
+  it('NoticeStack 본문의 마크다운 서식을 렌더링한다', () => {
+    render(
+      <NoticeStack
+        notices={[{ ...sample(3), body: '**긴급** 쿠폰 `WELCOME`' }]}
+        onDismiss={() => {}}
+      />,
+    );
+
+    expect(screen.getByText('긴급').tagName).toBe('STRONG');
+    expect(screen.getByText('WELCOME').tagName).toBe('CODE');
+  });
 });

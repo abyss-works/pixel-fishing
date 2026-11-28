@@ -5,6 +5,7 @@ import EmptyState from '../../../ui/EmptyState';
 import Inset from '../../../ui/Inset';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
+import NoticeMarkdown from '../../../ui/NoticeMarkdown';
 import TabBar from '../../../ui/TabBar';
 import { SCROLL_Y } from '../../../ui/scrollArea';
 
@@ -63,6 +64,29 @@ function formatNoticeRange(startsAt: string, endsAt: string): string {
     : `${formatKstDate(start)} - ${formatKstDate(end)}`;
 }
 
+/** 공지사항 창에서 사용하는 단일 공지 카드. 관리자 미리보기와 공유한다. */
+export function NoticeModalCard({
+  notice,
+  ended = false,
+}: {
+  notice: Pick<NoticeItem, 'title' | 'body' | 'startsAt' | 'endsAt'>;
+  ended?: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5 px-3 py-2.5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <span className={cx('text-sm font-bold break-words', ended ? 'text-text' : 'text-gold')}>
+          {notice.title}
+        </span>
+        <span className="pf-accent shrink-0 text-2xs text-text-dim tabular-nums">
+          {formatNoticeRange(notice.startsAt, notice.endsAt)}
+        </span>
+      </div>
+      <NoticeMarkdown body={notice.body} className={ended ? 'text-text-dim' : 'text-text'} />
+    </div>
+  );
+}
+
 function NoticeModalBody({
   activeNotices,
   endedNotices,
@@ -108,19 +132,7 @@ function NoticeModalBody({
         ) : (
           <Inset divided tone={isEnded ? 'deep' : 'base'} className="flex flex-col">
             {list.map(notice => (
-              <div key={notice.id} className="flex flex-col gap-1.5 px-3 py-2.5">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <span className={cx('text-sm font-bold break-words', isEnded ? 'text-text' : 'text-gold')}>
-                    {notice.title}
-                  </span>
-                  <span className="pf-accent shrink-0 text-2xs text-text-dim tabular-nums">
-                    {formatNoticeRange(notice.startsAt, notice.endsAt)}
-                  </span>
-                </div>
-                <p className={cx('m-0 text-xs leading-relaxed whitespace-pre-wrap break-words', isEnded ? 'text-text-dim' : 'text-text')}>
-                  {notice.body}
-                </p>
-              </div>
+              <NoticeModalCard key={notice.id} notice={notice} ended={isEnded} />
             ))}
           </Inset>
         )}
