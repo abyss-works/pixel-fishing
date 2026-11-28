@@ -1,11 +1,15 @@
-# 관리자 대시보드 — 정적 번들만 서빙한다. 인그레스가 게임과 같은 호스트의 /admin 경로를 이 서비스로 보내고,
-# 대시보드는 같은 오리진의 게임 API(/api/admin/*)를 로그인 쿠키로 호출한다.
+# 독립 관리자 서버 — 관리자 대시보드(/admin/*)와 관리자 API(/api/admin/*)를 함께 서빙한다.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: pixel-fishing-admin
 spec:
   replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       app: pixel-fishing-admin
@@ -14,26 +18,64 @@ spec:
       labels:
         app: pixel-fishing-admin
     spec:
+      terminationGracePeriodSeconds: 35
       nodeSelector:
         kubernetes.io/hostname: oci-node
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "1"
       containers:
         - name: pixel-fishing-admin
           image: ghcr.io/abyss-works/pixel-fishing-admin
+          envFrom:
+            - secretRef:
+                name: pixel-fishing
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: pixel-fishing-db-app
+                  key: fqdn-uri
+            - name: BETTER_AUTH_URL
+              value: https://pixel-fishing.abyssworks.dev
+            - name: DEPLOY_ENV
+              value: production
+            - name: REDIS_URL
+              value: redis://pixel-fishing-valkey:6379
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: DB_POOL_MAX
+              value: "4"
+            - name: PORT
+              value: "8080"
           ports:
             - containerPort: 8080
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 5"]
           resources:
             requests:
-              cpu: 10m
-              memory: 16Mi
+              cpu: 50m
+              memory: 64Mi
             limits:
               cpu: 200m
-              memory: 64Mi
+              memory: 256Mi
           readinessProbe:
             httpGet:
-              path: /admin/
+              path: /healthz
               port: 8080
             periodSeconds: 10
             timeoutSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: 8080
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
 ---
 apiVersion: v1
 kind: Service

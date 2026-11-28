@@ -56,7 +56,14 @@ import { createHttpMetrics } from './httpMetrics.js';
 import { legalPages } from './legalPages.js';
 import { notFound } from './notFound.js';
 import { createOpsAlertDispatcher, evaluateOpsAlerts } from './opsAlerts.js';
-import { aggregatePodMetrics, provideRecentHttpSummary, provideRecentWsSnapshot, provideSlowRequests } from './opsRuntime.js';
+import {
+  aggregatePodMetrics,
+  provideRecentHttpSummary,
+  provideRecentPool,
+  provideRecentRuntime,
+  provideRecentWsSnapshot,
+  provideSlowRequests,
+} from './opsRuntime.js';
 import { PRERENDER_BLOCKED_PATHS, blockPrerender } from './prerender.js';
 import { createLiveBus } from './redisBus.js';
 import { securityHeaders } from './securityHeaders.js';
@@ -70,6 +77,7 @@ const staticDir = fileURLToPath(new URL('../dist/', import.meta.url));
 const origin = new URL(process.env.BETTER_AUTH_URL as string).origin;
 const podId = process.env.POD_NAME?.trim() || process.env.HOSTNAME?.trim() || randomUUID();
 const embeddedLive = process.env.ENABLE_EMBEDDED_LIVE !== 'false';
+const embeddedAdmin = process.env.ENABLE_EMBEDDED_ADMIN === 'true';
 const bus = createLiveBus();
 let live: ReturnType<typeof attachLive> | null = null;
 // 초대 링크와 그 미리보기 API는 로그인 없이 열린다
@@ -90,11 +98,13 @@ const routes: Record<string, NodeHandler> = {
   '/api/account': account,
   '/api/account/consents': accountConsents,
   '/api/action': action,
-  '/api/admin': admin,
-  '/api/admin/live': admin,
-  '/api/admin/stats/daily': admin,
-  '/api/admin/retention': admin,
-  '/api/admin/sessions': admin,
+  ...(embeddedAdmin ? {
+    '/api/admin': admin,
+    '/api/admin/live': admin,
+    '/api/admin/stats/daily': admin,
+    '/api/admin/retention': admin,
+    '/api/admin/sessions': admin,
+  } : {}),
   '/api/away-report': awayReport,
   '/api/client-metrics': clientMetricsHandler,
   '/api/dev/promote-test': devAccount,
@@ -156,9 +166,11 @@ app.use(stageGate());
 app.use([...PRERENDER_BLOCKED_PATHS], blockPrerender());
 // 인증 경로는 본문을 직접 읽으므로 JSON 파서보다 먼저 등록한다. 필수 환경 변수가 없으면 기동하지 않는다.
 app.all('/api/auth/*splat', toNodeHandler(appAuth()));
-// 관리자 인증은 구글 로그인(시작과 콜백)과 로그아웃만 연다. 나머지 경로는 아래의 404로 간다.
-app.post(['/api/admin/auth/sign-in/social', '/api/admin/auth/sign-out'], toNodeHandler(adminAuth()));
-app.get('/api/admin/auth/callback/google', toNodeHandler(adminAuth()));
+if (embeddedAdmin) {
+  // 관리자 인증은 구글 로그인(시작과 콜백)과 로그아웃만 연다. 나머지 경로는 아래의 404로 간다.
+  app.post(['/api/admin/auth/sign-in/social', '/api/admin/auth/sign-out'], toNodeHandler(adminAuth()));
+  app.get('/api/admin/auth/callback/google', toNodeHandler(adminAuth()));
+}
 // import 액션은 게임 상태 전체를 싣는다.
 app.use('/api', express.json({ limit: '5mb' }));
 // 수락이 필요한 계정의 게임 요청을 막는다. 열어 두는 경로는 consentGate의 허용 목록이 정한다.
@@ -192,12 +204,30 @@ app.use(notFound);
 const port = Number(process.env.PORT ?? 3000);
 const server = app.listen(port, () => { console.info(`Server listening on port ${port}`); });
 applyKeepAlive(server);
-const publishApiPodMetrics = (): Promise<void> => bus.publishPodMetrics(podId, {
-  podId,
-  updatedAt: new Date().toISOString(),
-  http: httpMetrics.recentWindowSnapshot(),
-  slowRequests: httpMetrics.slowRequests(),
-});
+const roundMb = (bytes: number): number => Math.round((bytes / 1_048_576) * 10) / 10;
+const publishApiPodMetrics = (): Promise<void> => {
+  const mem = process.memoryUsage();
+  const { pool } = database();
+  return bus.publishPodMetrics(podId, {
+    podId,
+    role: 'api',
+    updatedAt: new Date().toISOString(),
+    http: httpMetrics.recentWindowSnapshot(),
+    slowRequests: httpMetrics.slowRequests(),
+    runtime: {
+      uptimeSec: Math.floor(process.uptime()),
+      rssMb: roundMb(mem.rss),
+      heapUsedMb: roundMb(mem.heapUsed),
+      heapTotalMb: roundMb(mem.heapTotal),
+    },
+    pool: {
+      total: pool.totalCount,
+      idle: pool.idleCount,
+      waiting: pool.waitingCount,
+      max: pool.options.max ?? 10,
+    },
+  });
+};
 
 let podMetricsTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -292,14 +322,25 @@ if (embeddedLive) {
   provideSlowRequests(async () => aggregatePodMetrics(await bus.listPodMetrics()).slowRequests);
   provideRecentHttpSummary(async () => aggregatePodMetrics(await bus.listPodMetrics()).http);
   provideRecentWsSnapshot(async () => aggregatePodMetrics(await bus.listPodMetrics()).ws);
+  provideRecentRuntime(async () => aggregatePodMetrics(await bus.listPodMetrics()).runtime);
+  provideRecentPool(async () => aggregatePodMetrics(await bus.listPodMetrics()).pool);
 
+  void publishApiPodMetrics().catch(() => {});
   podMetricsTimer = setInterval(() => {
     void publishApiPodMetrics().catch(() => {});
   }, 15_000);
   podMetricsTimer.unref();
 }
 
-provideWidgetDisconnect(uid => widgetHub().disconnectUser(uid));
+const unsubWidgetDisconnect = bus.subscribe(event => {
+  if (event.t === 'disconnectWidget') {
+    widgetHub().disconnectUser(event.uid);
+  }
+});
+provideWidgetDisconnect(uid => {
+  widgetHub().disconnectUser(uid);
+  if (!embeddedLive) void bus.disconnectWidget(uid);
+});
 
 const opsAlertTimer = setInterval(() => {
   try {
@@ -335,6 +376,7 @@ process.on('SIGTERM', () => {
   drain.start();
   clearInterval(opsAlertTimer);
   if (podMetricsTimer) clearInterval(podMetricsTimer);
+  unsubWidgetDisconnect();
   live?.close();
   widgetHub().close();
   const busClose = (!embeddedLive ? bus.removePodMetrics(podId).catch(() => {}) : Promise.resolve())

@@ -55,6 +55,12 @@ export function createDatabase(config: PoolConfig): Database {
 
 let appDatabase: Database | null = null;
 
+function resolvePoolMax(raw: string | undefined): number {
+  if (!raw) return 10;
+  const parsed = Number(raw.trim());
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 10;
+}
+
 /** 배포 함수가 쓰는 데이터베이스. 인스턴스마다 한 번 만들고, DATABASE_URL이 없으면 실패한다. */
 export function database(): Database {
   if (appDatabase) return appDatabase;
@@ -64,7 +70,7 @@ export function database(): Database {
     connectionString,
     // 게임 서버 파드 하나가 모든 요청(액션·세션 확인·조회)을 처리한다. 3개로는 동시 요청이 몰리면
     // 연결을 기다리다 연결 대기 시간(5초)을 넘겼다. DB 최대 연결(100)에 비해 넉넉히 작다.
-    max: 10,
+    max: resolvePoolMax(process.env.DB_POOL_MAX),
     // 놀던 연결을 너무 빨리 닫으면 다음 요청마다 새로 연결해야 한다
     idleTimeoutMillis: 30_000,
     keepAlive: true,

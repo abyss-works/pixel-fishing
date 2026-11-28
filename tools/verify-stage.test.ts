@@ -70,16 +70,27 @@ describe('validateDeploymentParity', () => {
     expect(result.errors).toEqual([]);
   });
 
-  it('fails when image tags mismatch across deployments', () => {
-    const result = validateDeploymentParity({
+  it('allows pixel-fishing-admin to have an independent dev-<sha> tag while requiring app/realtime parity', () => {
+    const adminIndependent = validateDeploymentParity({
       items: [
         makeDeploy('pixel-fishing', 1, 1, 'ghcr.io/abyss-works/pixel-fishing:dev-2416417'),
         makeDeploy('pixel-fishing-realtime', 2, 2, 'ghcr.io/abyss-works/pixel-fishing:dev-2416417'),
         makeDeploy('pixel-fishing-admin', 1, 1, 'ghcr.io/abyss-works/pixel-fishing-admin:dev-abcdef1'),
       ],
     });
-    expect(result.ok).toBe(false);
-    expect(result.errors.some((e: string) => e.includes('mismatch'))).toBe(true);
+    expect(adminIndependent.ok).toBe(true);
+    expect(adminIndependent.tag).toBe('dev-2416417');
+    expect(adminIndependent.adminTag).toBe('dev-abcdef1');
+
+    const appMismatch = validateDeploymentParity({
+      items: [
+        makeDeploy('pixel-fishing', 1, 1, 'ghcr.io/abyss-works/pixel-fishing:dev-2416417'),
+        makeDeploy('pixel-fishing-realtime', 2, 2, 'ghcr.io/abyss-works/pixel-fishing:dev-abcdef1'),
+        makeDeploy('pixel-fishing-admin', 1, 1, 'ghcr.io/abyss-works/pixel-fishing-admin:dev-2416417'),
+      ],
+    });
+    expect(appMismatch.ok).toBe(false);
+    expect(appMismatch.errors.some((e: string) => e.includes('mismatch'))).toBe(true);
   });
 
   it('fails when readyReplicas does not match replicas or deployment is missing', () => {
@@ -188,6 +199,28 @@ describe('validateSmokeResponses', () => {
     });
     expect(badErrorPaths.ok).toBe(false);
     expect(badErrorPaths.errors.length).toBe(2);
+  });
+
+  it('validates adminHome and adminAccess responses when present', () => {
+    expect(
+      validateSmokeResponses({
+        home: { status: 401, csp: "default-src 'self'" },
+        action: { status: 204 },
+        liveWs: { status: 401 },
+        adminHome: { status: 200 },
+        adminAccess: { status: 401 },
+      }),
+    ).toEqual({ ok: true, errors: [] });
+
+    const badAdmin = validateSmokeResponses({
+      home: { status: 401, csp: "default-src 'self'" },
+      action: { status: 204 },
+      liveWs: { status: 401 },
+      adminHome: { status: 502 },
+      adminAccess: { status: 404 },
+    });
+    expect(badAdmin.ok).toBe(false);
+    expect(badAdmin.errors.length).toBe(2);
   });
 });
 

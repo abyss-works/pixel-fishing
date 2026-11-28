@@ -19,9 +19,25 @@ function parseUpdatedAtMs(updatedAt: unknown): number {
   return NaN;
 }
 
+export interface PodRuntimeSnapshot {
+  uptimeSec: number;
+  rssMb: number;
+  heapUsedMb: number;
+  heapTotalMb: number;
+}
+
+export interface PodPoolSnapshot {
+  total: number;
+  idle: number;
+  waiting: number;
+  max: number;
+}
+
 let slowRequestsProvider: () => SlowHttpRequest[] | Promise<SlowHttpRequest[]> = () => [];
 let recentHttpProvider: () => HttpMetricsCounts | null | Promise<HttpMetricsCounts | null> = () => null;
 let recentWsProvider: () => WsMetricsCounts | null | Promise<WsMetricsCounts | null> = () => null;
+let recentRuntimeProvider: () => PodRuntimeSnapshot | null | Promise<PodRuntimeSnapshot | null> = () => null;
+let recentPoolProvider: () => PodPoolSnapshot | null | Promise<PodPoolSnapshot | null> = () => null;
 
 export function provideSlowRequests(fn: () => SlowHttpRequest[] | Promise<SlowHttpRequest[]>): void {
   slowRequestsProvider = fn;
@@ -54,6 +70,28 @@ export async function recentWsSnapshot(): Promise<WsMetricsCounts | null> {
   return await recentWsProvider();
 }
 
+export function provideRecentRuntime(
+  fn: () => PodRuntimeSnapshot | null | Promise<PodRuntimeSnapshot | null>,
+): void {
+  recentRuntimeProvider = fn;
+}
+
+/** 집계된 API 파드 런타임 지표를 돌려준다. 미등록 시 null */
+export async function recentRuntime(): Promise<PodRuntimeSnapshot | null> {
+  return await recentRuntimeProvider();
+}
+
+export function provideRecentPool(
+  fn: () => PodPoolSnapshot | null | Promise<PodPoolSnapshot | null>,
+): void {
+  recentPoolProvider = fn;
+}
+
+/** 집계된 API 파드 DB 풀 지표를 돌려준다. 미등록 시 null */
+export async function recentPool(): Promise<PodPoolSnapshot | null> {
+  return await recentPoolProvider();
+}
+
 export interface PodHttpMetricsInput {
   total?: number;
   status409?: number;
@@ -69,26 +107,33 @@ export interface PodHttpMetricsInput {
 export interface AggregatedPodMetrics {
   http: HttpMetricsCounts | null;
   ws: WsMetricsCounts | null;
+  runtime: PodRuntimeSnapshot | null;
+  pool: PodPoolSnapshot | null;
   slowRequests: SlowHttpRequest[];
   connections: number;
   onlineUsers: number;
 }
 
 const num = (value: unknown): number => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
+const round1 = (value: number): number => Math.round(value * 10) / 10;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-/** 여러 파드의 최근 창 HTTP/WS/슬로우 요청 스냅샷을 단일 관측 뷰로 합산한다 */
+/** 여러 파드의 최근 창 HTTP/WS/슬로우 요청·런타임·DB 풀 스냅샷을 단일 관측 뷰로 합산한다 */
 export function aggregatePodMetrics(
   snapshots: readonly PodMetricsSnapshot[],
   now = Date.now(),
 ): AggregatedPodMetrics {
   const httpCounts = emptyHttpCounts();
   const wsCounts = emptyWsCounts();
+  const runtimeAcc: PodRuntimeSnapshot = { uptimeSec: 0, rssMb: 0, heapUsedMb: 0, heapTotalMb: 0 };
+  const poolAcc: PodPoolSnapshot = { total: 0, idle: 0, waiting: 0, max: 0 };
   let hasHttp = false;
   let hasWs = false;
+  let hasRuntime = false;
+  let hasPool = false;
   let connections = 0;
   let onlineUsers = 0;
   const slow: SlowHttpRequest[] = [];
@@ -150,6 +195,24 @@ export function aggregatePodMetrics(
         }
       }
     }
+
+    const isApiPod = snap.role === 'api' || (snap.role === undefined && (isRecord(snap.runtime) || isRecord(snap.pool)));
+    if (isApiPod) {
+      if (isRecord(snap.runtime)) {
+        hasRuntime = true;
+        runtimeAcc.uptimeSec = Math.max(runtimeAcc.uptimeSec, num(snap.runtime.uptimeSec));
+        runtimeAcc.rssMb = round1(runtimeAcc.rssMb + num(snap.runtime.rssMb));
+        runtimeAcc.heapUsedMb = round1(runtimeAcc.heapUsedMb + num(snap.runtime.heapUsedMb));
+        runtimeAcc.heapTotalMb = round1(runtimeAcc.heapTotalMb + num(snap.runtime.heapTotalMb));
+      }
+      if (isRecord(snap.pool)) {
+        hasPool = true;
+        poolAcc.total += num(snap.pool.total);
+        poolAcc.idle += num(snap.pool.idle);
+        poolAcc.waiting += num(snap.pool.waiting);
+        poolAcc.max += num(snap.pool.max);
+      }
+    }
   }
 
   slow.sort((a, b) => {
@@ -160,6 +223,8 @@ export function aggregatePodMetrics(
   return {
     http: hasHttp ? withHttpRates(httpCounts) : null,
     ws: hasWs ? wsCounts : null,
+    runtime: hasRuntime ? runtimeAcc : null,
+    pool: hasPool ? poolAcc : null,
     slowRequests: slow.slice(0, MAX_SLOW_REQUESTS),
     connections,
     onlineUsers,

@@ -249,22 +249,27 @@ describe('k8s manifests invariants', () => {
   it('places BETTER_AUTH_URL, DEPLOY_ENV, CONSENT_EFFECTIVE_DATE at indices 1, 2, 3 in prod deployment and realtime manifests', () => {
     const deployEnv = extractContainerEnvNames(readManifest('k8s/prod/deployment.yaml'), 'pixel-fishing');
     const realtimeEnv = extractContainerEnvNames(readManifest('k8s/prod/realtime.yaml'), 'pixel-fishing-realtime');
+    const adminEnv = extractContainerEnvNames(readManifest('k8s/prod/admin.yaml'), 'pixel-fishing-admin');
 
     for (const env of [deployEnv, realtimeEnv]) {
       expect(env[1]).toBe('BETTER_AUTH_URL');
       expect(env[2]).toBe('DEPLOY_ENV');
       expect(env[3]).toBe('CONSENT_EFFECTIVE_DATE');
     }
+    expect(adminEnv[1]).toBe('BETTER_AUTH_URL');
+    expect(adminEnv[2]).toBe('DEPLOY_ENV');
 
     const stagePatches = extractKustomizePatches(readManifest('k8s/stage/kustomization.yaml'));
-    for (const targetName of ['pixel-fishing', 'pixel-fishing-realtime']) {
+    for (const targetName of ['pixel-fishing', 'pixel-fishing-realtime', 'pixel-fishing-admin']) {
       const envPatch = stagePatches.find(
         (p) => p.kind === 'Deployment' && p.name === targetName && p.patch.includes('/env/1/value'),
       );
       expect(envPatch).toBeDefined();
       expect(envPatch?.patch).toContain('/spec/template/spec/containers/0/env/1/value');
       expect(envPatch?.patch).toContain('/spec/template/spec/containers/0/env/2/value');
-      expect(envPatch?.patch).toContain('/spec/template/spec/containers/0/env/3/value');
+      if (targetName !== 'pixel-fishing-admin') {
+        expect(envPatch?.patch).toContain('/spec/template/spec/containers/0/env/3/value');
+      }
     }
   });
 
@@ -287,14 +292,13 @@ describe('k8s manifests invariants', () => {
     expect(hasStrategicMergeClear || hasJsonReplaceStrategy).toBe(true);
   });
 
-  it('specifies matching newTag values for pixel-fishing and pixel-fishing-admin in stage kustomization', () => {
+  it('specifies valid dev-<sha> newTag values for pixel-fishing and pixel-fishing-admin in stage kustomization', () => {
     const tags = extractImageTags(readManifest('k8s/stage/kustomization.yaml'));
     const appTag = tags.get('ghcr.io/abyss-works/pixel-fishing');
     const adminTag = tags.get('ghcr.io/abyss-works/pixel-fishing-admin');
 
-    expect(appTag).toBeTruthy();
-    expect(adminTag).toBeTruthy();
-    expect(appTag).toBe(adminTag);
+    expect(appTag).toMatch(/^dev-[0-9a-f]{7,}$/);
+    expect(adminTag).toMatch(/^dev-[0-9a-f]{7,}$/);
   });
 
   it('matches 503.html inline script SHA-256 digest with default.conf CSP script-src hash', () => {

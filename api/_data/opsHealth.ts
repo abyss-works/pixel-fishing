@@ -20,6 +20,18 @@ export interface OpsHealthOptions {
   slowRequests: readonly SlowHttpRequest[];
   recentHttp?: HttpMetricsCounts | null;
   recentWs?: WsMetricsCounts | null;
+  runtime?: {
+    uptimeSec: number;
+    rssMb: number;
+    heapUsedMb: number;
+    heapTotalMb: number;
+  } | null;
+  pool?: {
+    total: number;
+    idle: number;
+    waiting: number;
+    max: number;
+  } | null;
 }
 
 export interface OpsHealthReport {
@@ -88,10 +100,16 @@ export async function readOpsHealth(
   ]);
 
   const mem = process.memoryUsage();
-  const poolTotal = pool?.totalCount ?? 0;
-  const poolIdle = pool?.idleCount ?? 0;
-  const poolWaiting = pool?.waitingCount ?? 0;
-  const poolMax = pool?.options?.max ?? 0;
+  const runtime = opts.runtime ?? {
+    uptimeSec: Math.floor(process.uptime()),
+    rssMb: roundMb(mem.rss),
+    heapUsedMb: roundMb(mem.heapUsed),
+    heapTotalMb: roundMb(mem.heapTotal),
+  };
+  const poolTotal = opts.pool ? opts.pool.total : (pool?.totalCount ?? 0);
+  const poolIdle = opts.pool ? opts.pool.idle : (pool?.idleCount ?? 0);
+  const poolWaiting = opts.pool ? opts.pool.waiting : (pool?.waitingCount ?? 0);
+  const poolMax = opts.pool ? opts.pool.max : (pool?.options?.max ?? 0);
 
   const alertHttp = opts.recentHttp ?? httpReport.summary;
   const alertWs = opts.recentWs ?? wsReport.summary;
@@ -112,12 +130,7 @@ export async function readOpsHealth(
   });
 
   return {
-    runtime: {
-      uptimeSec: Math.floor(process.uptime()),
-      rssMb: roundMb(mem.rss),
-      heapUsedMb: roundMb(mem.heapUsed),
-      heapTotalMb: roundMb(mem.heapTotal),
-    },
+    runtime,
     database: {
       poolTotal,
       poolIdle,

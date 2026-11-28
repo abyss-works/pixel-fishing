@@ -3,9 +3,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   aggregatePodMetrics,
   provideRecentHttpSummary,
+  provideRecentPool,
+  provideRecentRuntime,
   provideRecentWsSnapshot,
   provideSlowRequests,
   recentHttpSummary,
+  recentPool,
+  recentRuntime,
   recentWsSnapshot,
   slowRequests,
 } from './opsRuntime.js';
@@ -16,6 +20,8 @@ describe('opsRuntime providers', () => {
     provideSlowRequests(() => []);
     provideRecentHttpSummary(() => null);
     provideRecentWsSnapshot(() => null);
+    provideRecentRuntime(() => null);
+    provideRecentPool(() => null);
   });
 
   it('동기·비동기 프로바이더를 모두 지원하고 Promise를 반환한다', async () => {
@@ -56,6 +62,12 @@ describe('opsRuntime providers', () => {
       closeIdleTimeout: 1,
     }));
     await expect(recentWsSnapshot()).resolves.toMatchObject({ upgradesOk: 5, closeIdleTimeout: 1 });
+
+    provideRecentRuntime(async () => ({ uptimeSec: 120, rssMb: 110.5, heapUsedMb: 45.2, heapTotalMb: 64 }));
+    await expect(recentRuntime()).resolves.toEqual({ uptimeSec: 120, rssMb: 110.5, heapUsedMb: 45.2, heapTotalMb: 64 });
+
+    provideRecentPool(async () => ({ total: 4, idle: 3, waiting: 0, max: 10 }));
+    await expect(recentPool()).resolves.toEqual({ total: 4, idle: 3, waiting: 0, max: 10 });
   });
 });
 
@@ -64,6 +76,8 @@ describe('aggregatePodMetrics', () => {
     expect(aggregatePodMetrics([])).toEqual({
       http: null,
       ws: null,
+      runtime: null,
+      pool: null,
       slowRequests: [],
       connections: 0,
       onlineUsers: 0,
@@ -74,7 +88,10 @@ describe('aggregatePodMetrics', () => {
     const snapshots: PodMetricsSnapshot[] = [
       {
         podId: 'api-1',
+        role: 'api',
         updatedAt: '2026-11-27T10:00:00.000Z',
+        runtime: { uptimeSec: 100, rssMb: 120.4, heapUsedMb: 50.1, heapTotalMb: 80.2 },
+        pool: { total: 4, idle: 3, waiting: 0, max: 10 },
         http: {
           total: 100,
           status409: 2,
@@ -92,7 +109,10 @@ describe('aggregatePodMetrics', () => {
       },
       {
         podId: 'api-2',
+        role: 'api',
         updatedAt: '2026-11-27T10:00:01.000Z',
+        runtime: { uptimeSec: 250, rssMb: 130.2, heapUsedMb: 55.3, heapTotalMb: 90.4 },
+        pool: { total: 6, idle: 2, waiting: 1, max: 10 },
         http: {
           total: 100,
           status409: 0,
@@ -178,6 +198,18 @@ describe('aggregatePodMetrics', () => {
       '2026-11-27T09:59:30.000Z',
       '2026-11-27T09:58:00.000Z',
     ]);
+    expect(agg.runtime).toEqual({
+      uptimeSec: 250,
+      rssMb: 250.6,
+      heapUsedMb: 105.4,
+      heapTotalMb: 170.6,
+    });
+    expect(agg.pool).toEqual({
+      total: 10,
+      idle: 5,
+      waiting: 1,
+      max: 20,
+    });
   });
 
   it('슬로우 요청은 최대 20건까지만 유지한다', () => {
