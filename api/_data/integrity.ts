@@ -3,13 +3,14 @@
 import { sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
-import { fishById } from '../../src/game/content/fish.js';
+import { catalogFishById } from '../../src/game/content/catalog.js';
 import { RARITY_ORDER, rarityShareOf } from '../../src/game/rules/logic.js';
 import type { RarityId } from '../../src/game/rules/logic.js';
 import type { SpotId } from '../../src/game/content/spots.js';
 import { emptyIntegrityState, sanitizeIntegrityState } from '../../src/game/rules/integrity.js';
 import type { IntegrityEvaluation, IntegrityState } from '../../src/game/rules/integrity.js';
 import { at } from './json.js';
+import { isCatchEventSql } from './telemetry.js';
 
 /** 계정의 현재 가중치 상태를 읽는다. 행이 없으면 빈 상태다 */
 export async function readIntegrityState(db: Executor, uid: string): Promise<IntegrityState> {
@@ -179,13 +180,13 @@ export async function integrityValidationMetrics(db: Executor, days: number): Pr
       e.weighting,
       e.payload->>'fishId' as fish_id, e.payload->>'spot' as spot, count(*)::int as n
     from public.events e
-    where e.type = 'catch' and e.weighting is not null
+    where ${isCatchEventSql(sql`e.type`)} and e.weighting is not null
       and e.created_at >= now() - (${days}::int * interval '1 day')
     group by 1, 2, 3, 4`);
   const cohorts = { clean: emptyCohort(), pressured: emptyCohort() };
   for (const row of rows) {
     const acc = row.cohort === 'pressured' ? cohorts.pressured : cohorts.clean;
-    const fish = row.fish_id ? fishById(row.fish_id) : undefined;
+    const fish = row.fish_id ? catalogFishById(row.fish_id) : undefined;
     if (!fish) continue;
     const n = Number(row.n);
     const weighting = Number(row.weighting);
@@ -232,7 +233,7 @@ export async function claimConsistencyByUser(db: Executor, sinceISO: string): Pr
       count(*) filter (where e.payload->>'claimCheck' = 'mismatch')::int as mismatch,
       count(*) filter (where e.payload->>'claimCheck' = 'missing-pos')::int as missing_pos
     from public.events e
-    where e.type = 'catch'
+    where ${isCatchEventSql(sql`e.type`)}
       and e.payload->>'claimCheck' is not null
       and e.created_at >= ${at(sinceISO)}
     group by e.user_id

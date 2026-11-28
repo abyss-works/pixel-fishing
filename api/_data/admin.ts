@@ -22,6 +22,7 @@ import { boatFameGateOf, canEnterZone } from '../../src/game/rules/rules.js';
 import type { LiveOnline } from '../_server/live.js';
 import { deriveAchievements } from './achievements.js';
 import { uuidArray } from './json.js';
+import { isCatchEventSql } from './telemetry.js';
 
 const FISH_IDS = new Set(FISH.map(f => f.id));
 const NAMED_IDS = new Set(NAMED.map(n => n.id));
@@ -533,7 +534,7 @@ export async function spamFlags(db: Executor, _role: AdminRole = 'admin'): Promi
       select id, user_id, created_at, payload,
              lag(created_at) over (partition by user_id order by id) as prev_at
       from public.events
-      where type = 'catch'
+      where ${isCatchEventSql(sql`type`)}
     ),
     per_user as (
       select user_id,

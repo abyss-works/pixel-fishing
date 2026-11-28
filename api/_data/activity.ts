@@ -5,6 +5,7 @@ import { sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
 import { at } from './json.js';
+import { isCatchEventSql } from './telemetry.js';
 
 /** 이 시간 안에 같은 사람이 다시 연결하면(새로고침·재배포) 새 세션 대신 앞 세션을 늘린다 */
 const SESSION_JOIN_GAP = sql`interval '2 minutes'`;
@@ -85,7 +86,7 @@ export async function refreshDailyStats(db: Executor, nowISO: string): Promise<s
       where ${onDay(sql`ps.started_at`, sql`p.day`)}
     ) s
     cross join lateral (
-      select count(*) filter (where e.type = 'catch')::int as catches,
+      select count(*) filter (where ${isCatchEventSql(sql`e.type`)})::int as catches,
              coalesce(sum((e.payload->>'gold')::numeric) filter (where e.type in ('sell', 'coupon', 'claimMail')), 0)::bigint as gold_in,
              coalesce(sum((e.payload->>'cost')::numeric) filter (where e.type in ('upgradeRod', 'buyBoat', 'buyBait', 'buyHat')), 0)::bigint as gold_out,
              count(*) filter (where e.type not like 'admin%')::int as actions

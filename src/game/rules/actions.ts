@@ -36,6 +36,7 @@ import { artifactById, artifactLevelCost, artifactOfNamed } from '../content/art
 import { artifactLevelOf, commonWeightCutOf, extraCookChance, namedRewardOf } from './artifactLevel.js';
 import { isTutorialId } from '../content/tutorials.js';
 import type { SpotId } from '../content/spots.js';
+import type { CatchValue } from '../content/catalog.js';
 import type { LocationRef } from '../content/places.js';
 import { canBuyBoat, canBuyHat, canChangeClothes, canClaimAchievement, canClaimAllAchievements, canFish, canTravel, canUpgradeRod, canUsePotion, canWearHat, encounterQuests } from './rules.js';
 import { hatById } from '../content/wardrobe.js';
@@ -169,7 +170,8 @@ export type ActionResult =
    *  bountyProgressed = 서버에서 일반 의뢰 진행도가 실제로 올랐을 때만 true. 없으면 생략한다
    *  guildUpdated = 서버에서 길드 기여도·항해일지 등 길드 상태가 실제로 갱신됐을 때만 true. 없으면 생략한다 */
   | { type: 'catch'; fishId: string; uid: string; info: CatchInfo; released: ReleasedFish[]; extracted?: ReleasedFish[];
-      energy?: Record<RarityId, number>; ticket?: string; bountyProgressed?: true; guildUpdated?: true }
+      energy?: Record<RarityId, number>; ticket?: string; bountyProgressed?: true; guildUpdated?: true;
+      value?: CatchValue; hatsGranted?: string[]; eventDexCompleted?: ('normal' | 'variant')[]; isPersonalBest?: boolean }
   | { type: 'sell'; gold: number; guildUpdated?: true }
   | { type: 'coupon'; gold: number; items?: readonly CouponItem[]; desc: string }
   | { type: 'mail'; gold: number; items?: readonly { id: string; qty: number }[]; hats?: readonly string[] }

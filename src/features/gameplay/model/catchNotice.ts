@@ -1,6 +1,14 @@
 import type { ReleasedFish } from '../../../game/rules/actions';
-import { RARITY, formName } from '../../../game/rules/logic';
-import type { CatchInfo, Fish, FormRecord, Judgment } from '../../../game/rules/logic';
+import { catalogValueOf, RARITY, formName, priceOf } from '../../../game/rules/logic';
+import type { CatchInfo, Fish, FormId, FormRecord, Judgment } from '../../../game/rules/logic';
+
+/** 포획 카드 표시용 가치 라벨과 수치 — 일반 어종은 판매가(골드), 이벤트 어종은 점수 */
+export function catchValueDisplay(fish: Fish, form: FormId): { kind: 'gold' | 'score'; label: string; amount: number } {
+  const val = catalogValueOf(fish.id, form) ?? { kind: 'gold' as const, amount: priceOf(fish, form) };
+  return val.kind === 'score'
+    ? { kind: 'score', label: '점수', amount: val.amount }
+    : { kind: 'gold', label: '판매가', amount: val.amount };
+}
 import { josa } from '../../../shared/lib/josa';
 import type { CatchFxKind } from '../../display/model/fxPolicy';
 import type { SystemNoticeInput } from '../../display/model/toastPolicy';
@@ -47,6 +55,7 @@ export function classifyCatchNotice(
   info: CatchInfo,
   judgment: Judgment,
   prevDexEntry: FormRecord | undefined,
+  isPersonalBest?: boolean,
 ): CatchNotice {
   const name = formName(fish, info.form);
   // 판정은 대괄호 꼬리표로 앞에 붙인다(화면 문구에 가운뎃점을 쓰지 않는다)
@@ -90,7 +99,7 @@ export function classifyCatchNotice(
       bypassCooldown: manual,
     };
   }
-  if (prevDexEntry?.maxSize != null && info.size > prevDexEntry.maxSize) {
+  if (isPersonalBest === true || (prevDexEntry?.maxSize != null && info.size > prevDexEntry.maxSize)) {
     return {
       kind: 'catch.epicOrRecord',
       text,

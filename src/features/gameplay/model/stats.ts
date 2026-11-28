@@ -51,7 +51,7 @@ export function selectInitialStatsSpotIndex(
   SPOTS.forEach((spot, index) => {
     const inScope = targetTopZone
       ? topZoneOfSpot(spot.id) === targetTopZone
-      : region === 'world' ? spot.region !== 'village' : spot.region === region;
+      : (region === 'world' || region === 'championship') ? spot.region !== 'village' : spot.region === region;
     if (!inScope) return;
     const req = spot.powerReq ?? 0;
     if (lowestFallback < 0 || req < (SPOTS[lowestFallback].powerReq ?? 0)) lowestFallback = index;

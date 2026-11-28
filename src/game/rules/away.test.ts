@@ -110,6 +110,17 @@ describe('summarizeAway', () => {
     expect(summarizeAway([catchAt(1, 'no-such-fish')], W).catches).toBe(0);
   });
 
+  it('경품 경쟁 구역(championship)의 이벤트 포획은 방치 결과 보고에서 명시적으로 제외한다', () => {
+    const events: AwayEvent[] = [
+      catchAt(1, 'mackerel'),
+      { type: 'catch', at: at(2), payload: { mode: 'event', spot: 'championship', fishId: 'event-glaaki', form: 'normal', score: 400 } },
+      { type: 'eventCatch', at: at(3), payload: { spot: 'championship', fishId: 'event-boxfish', form: 'normal', score: 10 } },
+    ];
+    const s = summarizeAway(events, W);
+    expect(s.catches).toBe(1);
+    expect(s.spot).toBe('sea');
+  });
+
   it('압축 요약 이벤트(awaySettle)와 실시간 이벤트를 함께 합산하고 첫 가방 초과 시각을 구한다', () => {
     const m = fish('mackerel');
     const b = fish('seabream');

@@ -15,6 +15,7 @@ import { sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
 import { BOATS } from '../../src/game/content/boats.js';
+import { isCatchEventSql } from './telemetry.js';
 
 /** 이벤트 보관 기간(일). 조회 기간의 상한이자 기본값이다 */
 const MAX_DAYS = 7;
@@ -57,10 +58,10 @@ export async function balanceLive(db: Executor, days: number | null): Promise<un
       'judgment', ${list(sql`
         select coalesce(payload->>'judgment', '?') as judgment, count(*)::int as catches,
                round(100.0 * count(*) / sum(count(*)) over (), 1) as pct
-        from ev where type = 'catch' group by 1`, sql`t.catches desc, t.judgment`)},
+        from ev where ${isCatchEventSql(sql`type`)} group by 1`, sql`t.catches desc, t.judgment`)},
       'spots', ${list(sql`
         select payload->>'spot' as spot, count(*)::int as catches, count(distinct user_id)::int as users
-        from ev where type = 'catch' group by 1`, sql`t.catches desc, t.spot`)},
+        from ev where ${isCatchEventSql(sql`type`)} group by 1`, sql`t.catches desc, t.spot`)},
       'dexBuckets', ${list(sql`
         select width_bucket(d.n, 0, 120, 12) * 10 - 10 as "fromSpecies", count(*)::int as users
         from (select r.user_id, count(*) as n
@@ -109,7 +110,7 @@ export async function balanceLive(db: Executor, days: number | null): Promise<un
           'perfectPct', round(100.0 * count(*) filter (where c.j = 'perfect') / nullif(count(*), 0), 1))
         from (select user_id, payload->>'judgment' as j, created_at,
                      lag(created_at) over (partition by user_id order by id) as prev_at
-              from ev where type = 'catch') c),
+              from ev where ${isCatchEventSql(sql`type`)}) c),
       'fameGateStuck', ${list(sql`
         select g.tier as "nextBoat", count(*)::int as users
         from pop c

@@ -8,6 +8,7 @@ import { BOATS } from '../content/boats.js';
 import type { SpotId } from '../content/spots.js';
 import { priceOf } from './logic.js';
 import type { GameState } from './logic.js';
+import { isEventCatchPayload } from './catchPipeline.js';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -96,6 +97,7 @@ export function summarizeAway(events: readonly AwayEvent[], window: AwayWindow):
   for (const e of events) {
     const p = (e.payload ?? {}) as Record<string, unknown>;
     if (e.type === 'catch') {
+      if (isEventCatchPayload(e.type, p)) continue;
       const fish = fishOf(p.fishId);
       if (!fish) continue;
       const f = form(p.form);
