@@ -23,6 +23,7 @@ const UID = '00000000-0000-4000-8000-000000000001';
 function renderGate(partial: Pick<AdminAuth, 'access' | 'uid'> & Partial<AdminAuth>) {
   const auth: AdminAuth = {
     role: 'admin',
+    canViewEmail: (partial.role ?? 'admin') === 'admin',
     showStaffBadge: false,
     setStaffBadge: async () => {},
     ...partial,
@@ -216,7 +217,7 @@ describe('AdminAuthProvider', () => {
     const setStaffBadge = vi.fn().mockRejectedValue(new Error('설정 저장 실패'));
     render(
       <QueryProvider>
-        <AdminAuthCtx.Provider value={{ access: 'granted', uid: UID, role: 'admin', showStaffBadge: false, setStaffBadge }}>
+        <AdminAuthCtx.Provider value={{ access: 'granted', uid: UID, role: 'admin', canViewEmail: true, showStaffBadge: false, setStaffBadge }}>
           <AdminStaffBadgeToggle />
         </AdminAuthCtx.Provider>
       </QueryProvider>,

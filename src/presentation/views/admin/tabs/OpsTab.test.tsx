@@ -7,6 +7,8 @@ import type { AdminRole } from '../../../../features/admin/model/types';
 import { EVENT_LABELS, todayKST } from '../../../../features/admin/model/metrics';
 import { QueryProvider } from '../../../../core/QueryProvider';
 import { api } from '../../../../platform/api';
+import type { OpsSection } from '../routes';
+import { AdminViewModeCtx } from '../viewMode';
 import OpsTab from './OpsTab';
 
 const sampleHttpMetrics = (days = 30) => ({
@@ -92,8 +94,19 @@ vi.mock('../../../../platform/api', () => ({
 
 afterEach(cleanup);
 
-const show = (access: AdminAccess, role: AdminRole = 'admin') => render(
-  <QueryProvider><AdminAuthCtx.Provider value={{ access, uid: null, role, showStaffBadge: false, setStaffBadge: async () => {} }}><OpsTab /></AdminAuthCtx.Provider></QueryProvider>,
+const show = (
+  access: AdminAccess,
+  role: AdminRole = 'admin',
+  section: OpsSection = 'server',
+  viewMode: 'summary' | 'detail' = 'detail',
+) => render(
+  <QueryProvider>
+    <AdminAuthCtx.Provider value={{ access, uid: null, role, canViewEmail: role === 'admin', showStaffBadge: false, setStaffBadge: async () => {} }}>
+      <AdminViewModeCtx.Provider value={{ viewMode, setViewMode: () => {} }}>
+        <OpsTab section={section} />
+      </AdminViewModeCtx.Provider>
+    </AdminAuthCtx.Provider>
+  </QueryProvider>,
 );
 
 describe('운영 탭', () => {
@@ -115,37 +128,29 @@ describe('운영 탭', () => {
     expect(screen.getByText('운영자 세션')).toBeInTheDocument();
   });
 
-  it('변경 기록 칸이 있다', () => {
-    show('granted');
-    expect(screen.getByText('변경 기록')).toBeInTheDocument();
+  it('변경 기록 하위 탭에 변경 기록 칸이 있다', () => {
+    show('granted', 'admin', 'changelog');
+    expect(screen.getByRole('heading', { name: '변경 기록' })).toBeInTheDocument();
   });
 
-  it('이벤트 카탈로그는 이벤트 유형마다 한 줄이고, 이벤트를 남기지 않는 액션을 따로 적는다', () => {
-    show('granted');
+  it('콘텐츠 카탈로그 상세 보기에서 이벤트 카탈로그를 보여 준다', () => {
+    show('granted', 'admin', 'catalog', 'detail');
     const catalog = screen.getByText('events 스트림 카탈로그').closest('section')!;
     for (const [type, label] of Object.entries(EVENT_LABELS)) {
       const row = within(catalog).getByText(type).closest('tr')!;
       expect(within(row).getByText(label)).toBeInTheDocument();
     }
-    expect(within(catalog).getByText(/이벤트를 남기지 않아요/)).toBeInTheDocument();
     for (const type of ['adminRestrict', 'adminUnrestrict', 'adminResetLink', 'adminRevokeSessions']) {
       expect(within(catalog).getByText(type)).toBeInTheDocument();
     }
-    const contract = screen.getByText('데이터 계약').closest('section')!;
-    expect(within(contract).getByText(/세션 강제 종료/)).toBeInTheDocument();
   });
 
-  it('maintainer 역할의 데이터 계약은 기간제 공지·동적 쿠폰 관리·채팅 별 표기 토글·비식별 지표 열람과 감사 로그 기록만 안내한다', () => {
-    show('granted', 'maintainer');
+  it('maintainer 역할의 데이터 계약은 공통 운영 쓰기와 감사 로그 기록을 안내한다', () => {
+    show('granted', 'maintainer', 'server', 'detail');
     const contract = screen.getByText('데이터 계약').closest('section')!;
-    expect(within(contract).getByText(/비식별 운영 지표/)).toBeInTheDocument();
-    expect(within(contract).getByText(/기간제 공지/)).toBeInTheDocument();
-    expect(within(contract).getByText(/소통 > 쿠폰/)).toBeInTheDocument();
-    expect(within(contract).getByText(/동적 쿠폰 관리/)).toBeInTheDocument();
-    expect(within(contract).getByText(/채팅 운영진 별 표기 토글/)).toBeInTheDocument();
+    expect(within(contract).getByText(/우편 발송/)).toBeInTheDocument();
+    expect(within(contract).getByText(/무결성 오탐 해제/)).toBeInTheDocument();
     expect(within(contract).getByText(/감사 로그/)).toBeInTheDocument();
-    expect(within(contract).queryByText(/우편 보내기/)).toBeNull();
-    expect(within(contract).queryByText(/세션 강제 종료/)).toBeNull();
   });
 
   it('HTTP 오류율·429 섹션은 앱 서버 기준 안내·경로 묶음 표·일별 추이와 기간 전환(7/30/90일)을 제공한다', async () => {
@@ -162,7 +167,7 @@ describe('운영 탭', () => {
   });
 
   it('HTTP 지연 백분위, 세부 상태/429 사유와 서버, 소켓, DB 상태 및 경보 섹션을 함께 렌더링한다', async () => {
-    show('granted');
+    show('granted', 'admin', 'server');
     expect(await screen.findByText('140ms')).toBeInTheDocument();
     expect(screen.getByText('22ms')).toBeInTheDocument();
     expect(screen.getByText('310ms')).toBeInTheDocument();
@@ -173,6 +178,9 @@ describe('운영 탭', () => {
     expect(screen.getByText('서버, 소켓, DB 상태 및 경보')).toBeInTheDocument();
     expect(await screen.findByText('활성 경보 없음')).toBeInTheDocument();
     expect(vi.mocked(api.admin.opsHealth)).toHaveBeenCalledWith(7);
+
+    cleanup();
+    show('granted', 'admin', 'client');
     expect(screen.getByText('클라이언트 체감 성능 및 단절')).toBeInTheDocument();
     expect(await screen.findByLabelText('2450ms')).toBeInTheDocument();
     expect(screen.getByLabelText('1.2%')).toBeInTheDocument();
@@ -180,15 +188,19 @@ describe('운영 탭', () => {
   });
 
   it('미연결(local) 상태에서 HTTP·서버 상태·클라이언트 성능 섹션의 빈 값 표기를 --로 일관화한다', () => {
-    show('local');
+    show('local', 'admin', 'server');
     for (const heading of [
       '앱 서버 HTTP 오류율·429 (최근 30일)',
       '서버, 소켓, DB 상태 및 경보',
-      '클라이언트 체감 성능 및 단절',
     ]) {
       const section = screen.getByText(heading).closest('section')!;
       expect(within(section).getAllByText('--').length).toBeGreaterThan(0);
       expect(section.textContent).not.toContain('—');
     }
+    cleanup();
+    show('local', 'admin', 'client');
+    const clientSection = screen.getByText('클라이언트 체감 성능 및 단절').closest('section')!;
+    expect(within(clientSection).getAllByText('--').length).toBeGreaterThan(0);
+    expect(clientSection.textContent).not.toContain('—');
   });
 });

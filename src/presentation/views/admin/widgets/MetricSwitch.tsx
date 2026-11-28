@@ -4,7 +4,7 @@ import PillButton from '../../../ui/PillButton';
 // select가 아니라 버튼 그룹인 이유: 모든 후보가 상시 보여야 "지금 어느 축을 보는가"가 눈에 남는다.
 export default function MetricSwitch<T extends string>({ value, options, onChange, ariaLabel }: {
   value: T;
-  options: { key: T; label: string }[];
+  options: readonly { key: T; label: string }[];
   onChange: (v: T) => void;
   ariaLabel?: string;
 }) {

@@ -25,7 +25,7 @@ const setup = (access: AdminAccess) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>
-      <AdminAuthCtx.Provider value={{ access, uid: 'u-1', role: 'admin', showStaffBadge: false, setStaffBadge: async () => {} }}>{children}</AdminAuthCtx.Provider>
+      <AdminAuthCtx.Provider value={{ access, uid: 'u-1', role: 'admin', canViewEmail: true, showStaffBadge: false, setStaffBadge: async () => {} }}>{children}</AdminAuthCtx.Provider>
     </QueryClientProvider>
   );
   return { client, wrapper };

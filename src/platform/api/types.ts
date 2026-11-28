@@ -1,7 +1,7 @@
 // API 계약 — 화면과 기능은 이 타입을 사용하고 adapters/가 HTTP·로컬 구현을 제공한다.
 import type { GameAction, ActionResult } from '../../game/rules/actions';
 import type { RejectReason } from '../../game/rules/rules';
-import type { GameState } from '../../game/rules/logic';
+import type { GameState, RarityId } from '../../game/rules/logic';
 import type { DailyFortune, FortuneKind } from '../../game/rules/fortune';
 import type { HatSource } from '../../game/content/wardrobe';
 import type { ChatLine, NoticeItem } from '../../game/rules/live';
@@ -390,9 +390,15 @@ export interface BalanceLive {
 
 export type AdminRole = 'admin' | 'maintainer';
 
+export interface AdminCapabilities {
+  canViewEmail: boolean;
+  reads: string[];
+  writes: string[];
+}
+
 /** 관리자 판정 — local은 "클라우드 미설정"(권한 실패 아님), signedOut은 관리자 세션 없음, denied는 DB admins 비등록 */
 export type AdminAccessResult =
-  | { kind: 'granted'; uid: string | null; role?: AdminRole; showStaffBadge?: boolean }
+  | { kind: 'granted'; uid: string | null; role?: AdminRole; showStaffBadge?: boolean; capabilities?: AdminCapabilities }
   | { kind: 'denied' | 'signedOut' | 'local'; uid: string | null };
 
 /** 관리자 — 보낸 우편 한 통(받는 사람 포함) */
@@ -842,6 +848,8 @@ export interface AdminApi {
   /** 개요 탭 통합 조회. days를 생략하면 서버 기본 기간(30일)이다 */
   overview(days?: number): Promise<AdminOverview>;
   users(): Promise<AdminUserRow[]>;
+  /** 서버 측 플레이어 검색(닉네임·UUID·admin 전용 이메일). limit 기본 25, 최대 50 */
+  searchAdminUsers(term: string, limit?: number): Promise<AdminUserRow[]>;
   /** 지금 실시간 채널에 연결된 사람 */
   live(): Promise<AdminLive>;
   /** from~to(KST 날짜, 양끝 포함)의 일별 집계. 집계하지 않은 날은 빠진다 */
@@ -889,6 +897,14 @@ export interface AdminApi {
   revokeSessions(userId: string): Promise<{ revoked: number }>;
   /** 호출자 본인의 채팅 운영진 배지 노출 설정을 켜거나 끈다 */
   setStaffBadge(show: boolean): Promise<{ showStaffBadge: boolean }>;
+  /** 무결성 구간별 계정 수와 계정별 현재 상태 */
+  readIntegrityStages(): Promise<AdminIntegrityStageSummary[]>;
+  /** 무결성 변화 이력(최신 순). userId를 주면 해당 계정만, limit 생략 시 서버 기본(100) */
+  readIntegrityEvents(userId?: string, limit?: number): Promise<AdminIntegrityEventRow[]>;
+  /** 무결성 검증 지표(적용 배수별 최근 캐치 등급 분포·기대 분포). days 생략 시 서버 기본(30) */
+  readIntegrityMetrics(days?: number): Promise<AdminIntegrityMetrics>;
+  /** 대상 계정의 추첨 가중치 압력과 입력 창을 즉시 빈 상태로 초기화한다 */
+  releaseIntegrityStage(userId: string): Promise<{ released: true }>;
   /** 밸런스 라이브 지표. days는 이벤트 지표의 기간(1~7일)이고, 생략하면 서버 기본값인 7일이다 */
   balanceLive(days?: number): Promise<BalanceLive>;
   /** 이 화면이 붙은 배포 주소의 호스트 — 운영/스테이징 착오 방지 표시값(Ops 탭). 로컬 모드는 null */
@@ -1103,4 +1119,43 @@ export type AdminCouponRequest =
 export type AdminCouponMutationResult =
   | { coupon: AdminCouponRow }
   | { deleted: true; code: string };
+
+export interface AdminIntegrityStageAccount {
+  userId: string;
+  pressure: number;
+  stage: number;
+  modifier: number | null;
+  updatedAt: string;
+}
+
+export interface AdminIntegrityStageSummary {
+  stage: number;
+  count: number;
+  accounts: AdminIntegrityStageAccount[];
+}
+
+export interface AdminIntegrityEventRow {
+  id: number;
+  userId: string;
+  detector: string;
+  signal: unknown;
+  pressureBefore: number;
+  pressureAfter: number;
+  stageBefore: number;
+  stageAfter: number;
+  createdAt: string;
+}
+
+export interface AdminIntegrityMetricsCohort {
+  total: number;
+  counts: Record<RarityId, number>;
+  shares: Record<RarityId, number>;
+  expectedShares: Record<RarityId, number>;
+}
+
+export interface AdminIntegrityMetrics {
+  days: number;
+  clean: AdminIntegrityMetricsCohort;
+  pressured: AdminIntegrityMetricsCohort;
+}
 

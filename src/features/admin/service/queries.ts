@@ -9,6 +9,7 @@ export const signInAdmin = () => api.admin.signIn();
 export const takeAdminSignInReturn = () => api.admin.takeSignInReturn();
 export const signOutAdmin = () => api.admin.signOut();
 export const readAdminUsers = () => api.admin.users();
+export const searchAdminUsers = (term: string, limit = 25) => api.admin.searchAdminUsers(term, limit);
 export const readAdminSpamFlags = () => api.admin.spamFlags();
 export const readAdminRecentEvents = () => api.admin.recentEvents();
 export const readAdminDeployHost = () => api.admin.deployHost();
@@ -88,3 +89,8 @@ export const readAdminOpsHealth = (days = 7) => api.admin.opsHealth(days);
 
 /** 밸런스 라이브 지표. 이벤트 지표는 보관 기간(7일) 안의 범위만 의미가 있다 */
 export const readAdminBalanceLive = (days?: number) => api.admin.balanceLive(days);
+
+export const readAdminIntegrityStages = () => api.admin.readIntegrityStages();
+export const readAdminIntegrityEvents = (userId?: string, limit?: number) => api.admin.readIntegrityEvents(userId, limit);
+export const readAdminIntegrityMetrics = (days?: number) => api.admin.readIntegrityMetrics(days);
+export const releaseAdminIntegrityStage = (userId: string) => api.admin.releaseIntegrityStage(userId);

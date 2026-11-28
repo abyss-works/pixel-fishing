@@ -114,54 +114,30 @@ function lastDays(db: Executor, days: number, body: SQL): Promise<unknown[]> {
     where v.day >= (now() at time zone 'Asia/Seoul')::date - ${days - 1}::int`, sql`t.day desc`);
 }
 
-interface MaintainerUserSourceRow {
-  user_id: string;
-  nickname: string | null;
-  boat: number | null;
-  restricted: boolean | null;
-}
-
-function projectMaintainerUser(row: MaintainerUserSourceRow) {
-  const handle = opHandle(row.user_id);
-  return {
-    user_id: handle,
-    opHandle: handle,
-    email: null,
-    nickname: row.nickname,
-    is_anonymous: null,
-    signed_up_at: null,
-    last_sign_in_at: null,
-    gold: null,
-    fame: null,
-    boat: row.boat,
-    rod: null,
-    location_kind: null,
-    location_id: null,
-    visited: null,
-    restricted: row.restricted,
-    save_version: null,
-    last_action_at: null,
-    last_session_at: null,
-    total_session_sec: 0,
-  };
-}
-
 /**
  * 사용자 명부. 인증 계정과 닉네임, 현재 저장 상태를 잇고(마지막 로그인은 세션의 마지막 사용 시각이다), 최근 행동순으로 정렬하며 행동이 없는 계정은 뒤에 둔다.
  * 마지막 세션(last_session_at)은 접속 세션이 가장 늦게 끝난 시각, 누적 세션(total_session_sec)은 접속 세션 길이의 합(초)이다.
- * maintainer 역할에는 이메일·원본 uid·가입/로그인 시각·재화 등 개인정보를 조회·노출하지 않는 비식별 투영을 돌려준다.
+ * maintainer 역할에는 이메일·가입/로그인 시각만 조회·노출하지 않으며, 원본 user_id(UUID)와 게임 내 필드는 그대로 반환한다.
  */
 export async function users(db: Executor, role: AdminRole = 'admin'): Promise<unknown[]> {
   if (role === 'maintainer') {
-    const rows = await jsonRows(db, sql`select u.id::text as user_id,
+    return jsonRows(db, sql`select u.id as user_id,
+        null as email,
+        u.is_anonymous,
+        null as signed_up_at,
+        null as last_sign_in_at,
         p.nickname,
-        c.boat,
-        c.restricted,
-        c.updated_at as last_action_at
+        c.gold, c.fame, c.boat, c.rod,
+        c.data -> 'location' ->> 'kind' as location_kind,
+        c.data -> 'location' ->> 'id' as location_id,
+        c.data -> 'visited' as visited,
+        c.restricted, c.version as save_version, c.updated_at as last_action_at,
+        ps.last_session_at, coalesce(ps.total_session_sec, 0) as total_session_sec
       from auth.users u
+      left join (select user_id, max(ended_at) as last_session_at, sum(duration_sec)::bigint as total_session_sec
+        from public.play_sessions group by user_id) ps on ps.user_id = u.id
       left join public.profiles p on p.user_id = u.id
-      left join public.saves_current c on c.user_id = u.id`, sql`t.last_action_at desc nulls last, t.user_id`) as MaintainerUserSourceRow[];
-    return rows.map(projectMaintainerUser);
+      left join public.saves_current c on c.user_id = u.id`, sql`t.last_action_at desc nulls last, t.user_id`);
   }
   return jsonRows(db, sql`select u.id as user_id, case when u.is_anonymous then null else u.email end as email, u.is_anonymous,
       p.nickname,
@@ -178,6 +154,65 @@ export async function users(db: Executor, role: AdminRole = 'admin'): Promise<un
       from public.play_sessions group by user_id) ps on ps.user_id = u.id
     left join public.profiles p on p.user_id = u.id
     left join public.saves_current c on c.user_id = u.id`, sql`t.last_action_at desc nulls last, t.user_id`);
+}
+
+/**
+ * 서버 측 사용자 검색.
+ * admin은 닉네임(ILIKE)·이메일(ILIKE)·user_id(접두사)를 검색하고,
+ * maintainer는 닉네임(ILIKE)·user_id(접두사)만 검색하며 이메일을 조회·일치시키지 않는다.
+ */
+export async function userSearch(
+  db: Executor,
+  term: string,
+  limit: number | null,
+  role: AdminRole = 'admin',
+): Promise<unknown[]> {
+  const escaped = term.replace(/[\\%_]/g, ch => `\\${ch}`);
+  const likePattern = `%${escaped}%`;
+  const prefixPattern = `${escaped}%`;
+  if (role === 'maintainer') {
+    return jsonRows(db, sql`select u.id as user_id,
+        null as email,
+        u.is_anonymous,
+        null as signed_up_at,
+        null as last_sign_in_at,
+        p.nickname,
+        c.gold, c.fame, c.boat, c.rod,
+        c.data -> 'location' ->> 'kind' as location_kind,
+        c.data -> 'location' ->> 'id' as location_id,
+        c.data -> 'visited' as visited,
+        c.restricted, c.version as save_version, c.updated_at as last_action_at,
+        ps.last_session_at, coalesce(ps.total_session_sec, 0) as total_session_sec
+      from auth.users u
+      left join (select user_id, max(ended_at) as last_session_at, sum(duration_sec)::bigint as total_session_sec
+        from public.play_sessions group by user_id) ps on ps.user_id = u.id
+      left join public.profiles p on p.user_id = u.id
+      left join public.saves_current c on c.user_id = u.id
+      where p.nickname ilike ${likePattern} escape '\\'
+         or u.id::text ilike ${prefixPattern} escape '\\'
+      order by c.updated_at desc nulls last, u.id
+      limit least(greatest(coalesce(${limit}::int, 25), 1), 50)`, sql`t.last_action_at desc nulls last, t.user_id`);
+  }
+  return jsonRows(db, sql`select u.id as user_id, case when u.is_anonymous then null else u.email end as email, u.is_anonymous,
+      p.nickname,
+      u.created_at as signed_up_at,
+      (select max(s.updated_at) from auth.sessions s where s.user_id = u.id) as last_sign_in_at,
+      c.gold, c.fame, c.boat, c.rod,
+      c.data -> 'location' ->> 'kind' as location_kind,
+      c.data -> 'location' ->> 'id' as location_id,
+      c.data -> 'visited' as visited,
+      c.restricted, c.version as save_version, c.updated_at as last_action_at,
+      ps.last_session_at, coalesce(ps.total_session_sec, 0) as total_session_sec
+    from auth.users u
+    left join (select user_id, max(ended_at) as last_session_at, sum(duration_sec)::bigint as total_session_sec
+      from public.play_sessions group by user_id) ps on ps.user_id = u.id
+    left join public.profiles p on p.user_id = u.id
+    left join public.saves_current c on c.user_id = u.id
+    where p.nickname ilike ${likePattern} escape '\\'
+       or (not u.is_anonymous and u.email ilike ${likePattern} escape '\\')
+       or u.id::text ilike ${prefixPattern} escape '\\'
+    order by c.updated_at desc nulls last, u.id
+    limit least(greatest(coalesce(${limit}::int, 25), 1), 50)`, sql`t.last_action_at desc nulls last, t.user_id`);
 }
 
 /** 계정 식별 정보. 닉네임과 이메일이고, 게스트의 임시 이메일은 null이다. 인증 계정이 없는 uid는 결과에 없다 */
@@ -198,7 +233,7 @@ async function nicknames(db: Executor, uids: readonly string[]): Promise<Map<str
   return new Map(rows.map(row => [row.user_id, row.nickname]));
 }
 
-/** 실시간 접속 목록을 역할에 맞춰 투영한다(maintainer는 이메일 생략·opHandle 치환) */
+/** 실시간 접속 목록을 역할에 맞춰 투영한다(maintainer는 이메일 미조회·null 고정, 원본 uid는 유지) */
 export async function liveSnapshot(
   db: Executor,
   online: readonly LiveOnline[],
@@ -208,19 +243,16 @@ export async function liveSnapshot(
     const nickMap = online.length > 0 ? await nicknames(db, online.map(entry => entry.uid)) : new Map<string, string | null>();
     return {
       count: online.length,
-      online: online.map(entry => {
-        const handle = opHandle(entry.uid);
-        return {
-          uid: handle,
-          opHandle: handle,
-          nick: entry.nick,
-          nickname: nickMap.get(entry.uid) ?? null,
-          region: entry.region,
-          zone: entry.zone,
-          connectedAt: entry.connectedAt,
-          guest: entry.guest,
-        };
-      }),
+      online: online.map(entry => ({
+        uid: entry.uid,
+        nick: entry.nick,
+        nickname: nickMap.get(entry.uid) ?? null,
+        email: null,
+        region: entry.region,
+        zone: entry.zone,
+        connectedAt: entry.connectedAt,
+        guest: entry.guest,
+      })),
     };
   }
   const known = online.length > 0 ? await identities(db, online.map(entry => entry.uid)) : new Map();
@@ -495,8 +527,8 @@ export async function userState(db: Executor, uid: string): Promise<unknown> {
 }
 
 /** 연타·판정 플래그. 최근 7일 사용자별 캐치 수, 간격 2초 미만 캐치 수, PERFECT 비율과 30일 전체 평균 */
-export async function spamFlags(db: Executor, role: AdminRole = 'admin'): Promise<unknown[]> {
-  const rows = await jsonRows(db, sql`with c as (
+export async function spamFlags(db: Executor, _role: AdminRole = 'admin'): Promise<unknown[]> {
+  return jsonRows(db, sql`with c as (
       select id, user_id, created_at, payload,
              lag(created_at) over (partition by user_id order by id) as prev_at
       from public.events
@@ -519,47 +551,15 @@ export async function spamFlags(db: Executor, role: AdminRole = 'admin'): Promis
       where created_at > now() - interval '30 day'
     )
     select p.user_id, p.catches_7d, p.fast_gap_7d, p.perfect_pct, g.perfect_pct_global
-    from per_user p cross join glob g`, sql`t.user_id`) as {
-    user_id: string;
-    catches_7d: number;
-    fast_gap_7d: number;
-    perfect_pct: number | null;
-    perfect_pct_global: number | null;
-  }[];
-  if (role !== 'maintainer') return rows;
-  return rows.map(row => {
-    const handle = opHandle(row.user_id);
-    return { ...row, user_id: handle, opHandle: handle };
-  });
-}
-
-function sanitizeEventPayloadForMaintainer(type: string, payload: unknown): Record<string, unknown> {
-  if (type === 'letter') return {};
-  const obj = asRecord(payload);
-  if (typeof obj.adminId === 'string') {
-    return { ...obj, adminId: opHandle(obj.adminId) };
-  }
-  return obj;
+    from per_user p cross join glob g`, sql`t.user_id`);
 }
 
 /** 최근 이벤트 피드. 최신 80행, id 내림차순 */
-export async function recentEvents(db: Executor, role: AdminRole = 'admin'): Promise<unknown[]> {
-  const rows = await jsonRows(db, sql`select id, user_id, type, payload, created_at
+export async function recentEvents(db: Executor, _role: AdminRole = 'admin'): Promise<unknown[]> {
+  return jsonRows(db, sql`select id, user_id, type, payload, created_at
     from public.events
     order by id desc
-    limit 80`, sql`t.id desc`) as {
-    id: number;
-    user_id: string;
-    type: string;
-    payload: unknown;
-    created_at: string;
-  }[];
-  if (role !== 'maintainer') return rows;
-  return rows.map(row => ({
-    ...row,
-    user_id: opHandle(row.user_id),
-    payload: sanitizeEventPayloadForMaintainer(row.type, row.payload),
-  }));
+    limit 80`, sql`t.id desc`);
 }
 
 /** 사용자 한 명의 최신 이벤트 limit건을 id 오름차순으로 읽는다. 건수는 1~2000으로 맞추고 없으면 500이다 */
@@ -578,10 +578,9 @@ export function letters(db: Executor): Promise<unknown[]> {
 }
 
 /** 변경 기록. 최신 버전부터, 버전 안에서는 순번 순서다. 철회된 항목도 withdrawnAt을 달아 함께 준다 */
-export function changelog(db: Executor, role: AdminRole = 'admin'): Promise<unknown[]> {
-  const filter = role === 'maintainer' ? sql`where c.tier = 'public'` : sql``;
+export function changelog(db: Executor, _role: AdminRole = 'admin'): Promise<unknown[]> {
   return jsonRows(db, sql`select c.id, c.version, c.date, c.seq, c.tier, c.tag, c.text, c.withdrawn_at as "withdrawnAt"
-    from public.changelog_entries c ${filter}`, sql`string_to_array(t.version, '.')::int[] desc, t.seq, t.id`);
+    from public.changelog_entries c`, sql`string_to_array(t.version, '.')::int[] desc, t.seq, t.id`);
 }
 
 /** 채팅 신고 목록. 최근 신고 200건, 최신순. lines는 신고한 메시지와 앞뒤 대화의 복사본이다 */
@@ -598,21 +597,10 @@ export async function chatReports(db: Executor, role: AdminRole = 'admin'): Prom
     created_at: string;
   }[];
   if (role !== 'maintainer') return rows;
-  return rows.map(row => {
-    const targetHandle = opHandle(row.target_id);
-    return {
-      ...row,
-      user_id: '',
-      target_id: targetHandle,
-      opHandle: targetHandle,
-      lines: Array.isArray(row.lines)
-        ? row.lines.map(line => ({
-            ...line,
-            uid: typeof line.uid === 'string' ? opHandle(line.uid) : '',
-          }))
-        : [],
-    };
-  });
+  return rows.map(row => ({
+    ...row,
+    user_id: '',
+  }));
 }
 
 /** 일별 집계 행을 from부터 to까지(KST 날짜, 양끝 포함) 날짜 오름차순으로 준다. 집계되지 않은 날은 행이 없다 */
@@ -649,28 +637,15 @@ export async function sessions(
   db: Executor,
   userId: string | null,
   limit: number | null,
-  role: AdminRole = 'admin',
+  _role: AdminRole = 'admin',
 ): Promise<unknown[]> {
-  const effectiveUserId = role === 'maintainer' ? null : userId;
-  const rows = await jsonRows(db, sql`select s.id, s.user_id as "userId", p.nickname as nick,
+  return jsonRows(db, sql`select s.id, s.user_id as "userId", p.nickname as nick,
       s.started_at as "startedAt", s.ended_at as "endedAt", s.duration_sec as "durationSec"
     from public.play_sessions s
     left join public.profiles p on p.user_id = s.user_id
-    where ${effectiveUserId}::uuid is null or s.user_id = ${effectiveUserId}::uuid
+    where ${userId}::uuid is null or s.user_id = ${userId}::uuid
     order by s.started_at desc, s.id desc
-    limit least(greatest(coalesce(${limit}::int, 100), 1), 500)`, sql`t."startedAt" desc, t.id desc`) as {
-    id: number;
-    userId: string;
-    nick: string | null;
-    startedAt: string;
-    endedAt: string;
-    durationSec: number;
-  }[];
-  if (role !== 'maintainer') return rows;
-  return rows.map(row => {
-    const handle = opHandle(row.userId);
-    return { ...row, userId: handle, opHandle: handle };
-  });
+    limit least(greatest(coalesce(${limit}::int, 100), 1), 500)`, sql`t."startedAt" desc, t.id desc`);
 }
 
 const AGGREGATE_DAY_MS = 86_400_000;
@@ -852,22 +827,31 @@ async function overviewUsers(
       userAggregates: computeUserAggregates(rawRows, nowMs),
     };
   }
-  const rawRows = await jsonRows(db, sql`select u.id::text as user_id,
+  const rawRows = await jsonRows(db, sql`select u.id as user_id,
       p.nickname,
       u.is_anonymous,
       u.created_at as signed_up_at,
       c.gold, c.fame, c.boat, c.rod,
+      c.data -> 'location' ->> 'kind' as location_kind,
+      c.data -> 'location' ->> 'id' as location_id,
       c.data -> 'visited' as visited,
       c.restricted,
+      c.version as save_version,
       c.updated_at as last_action_at,
-      ps.last_session_at
+      ps.last_session_at,
+      coalesce(ps.total_session_sec, 0) as total_session_sec
     from auth.users u
-    left join (select user_id, max(ended_at) as last_session_at
+    left join (select user_id, max(ended_at) as last_session_at, sum(duration_sec)::bigint as total_session_sec
       from public.play_sessions group by user_id) ps on ps.user_id = u.id
     left join public.profiles p on p.user_id = u.id
-    left join public.saves_current c on c.user_id = u.id`, sql`t.last_action_at desc nulls last, t.user_id`) as (AggregateUserRow & MaintainerUserSourceRow)[];
+    left join public.saves_current c on c.user_id = u.id`, sql`t.last_action_at desc nulls last, t.user_id`) as AggregateUserRow[];
   return {
-    userRows: rawRows.map(projectMaintainerUser),
+    userRows: rawRows.map(row => ({
+      ...row,
+      email: null,
+      signed_up_at: null,
+      last_sign_in_at: null,
+    })),
     userAggregates: computeUserAggregates(rawRows, nowMs),
   };
 }

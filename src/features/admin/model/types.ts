@@ -1,5 +1,6 @@
 export type {
   AdminBountyFunnelRow,
+  AdminCapabilities,
   AdminChatReportRow,
   AdminClientLatencyStat,
   AdminClientMetrics,
@@ -22,6 +23,11 @@ export type {
   AdminHttpMetricRouteRow,
   AdminHttpMetrics,
   AdminHttpRateLimitReasons,
+  AdminIntegrityEventRow,
+  AdminIntegrityMetrics,
+  AdminIntegrityMetricsCohort,
+  AdminIntegrityStageAccount,
+  AdminIntegrityStageSummary,
   AdminLetterRow,
   AdminLive,
   AdminLiveConnection,

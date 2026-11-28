@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import Badge from './Badge';
 import { resetKeyScopes } from './hotkeys';
 import Tip, { TipBullets, TipCard, TipList } from './Tip';
@@ -7,7 +7,7 @@ import RecipeEffectTip from './RecipeEffectTip';
 import { GradeName } from './fish/RarityTag';
 
 const original = window.matchMedia;
-afterEach(() => { cleanup(); resetKeyScopes(); window.matchMedia = original; });
+afterEach(() => { cleanup(); resetKeyScopes(); window.matchMedia = original; vi.useRealTimers(); });
 
 function setPointer(coarse: boolean) {
   window.matchMedia = ((query: string) => ({
@@ -318,5 +318,80 @@ describe('TipBullets & TipCard bullets: 픽셀 사각 불릿 목록', () => {
     fireEvent.mouseEnter(screen.getByText('빈 불릿'));
     const tip = screen.getByRole('tooltip');
     expect(tip.querySelectorAll('.border-t')).toHaveLength(0);
+  });
+});
+
+describe('Tip: interactive', () => {
+  it('마우스가 트리거를 벗어나 버블로 옮겨가면 닫히지 않고 유지되며, 버블 안 버튼을 누를 수 있다', () => {
+    vi.useFakeTimers();
+    setPointer(false);
+    const onCopy = vi.fn();
+    render(
+      <Tip interactive plain text={<button type="button" onClick={onCopy}>복사</button>}>
+        대상
+      </Tip>,
+    );
+
+    fireEvent.mouseEnter(screen.getByText('대상'));
+    const tip = screen.getByRole('tooltip');
+    expect(tip).toHaveClass('pointer-events-auto');
+
+    fireEvent.mouseLeave(screen.getByText('대상'));
+    act(() => { vi.advanceTimersByTime(100); });
+    expect(screen.getByRole('tooltip')).toBeInTheDocument();
+
+    fireEvent.mouseEnter(tip);
+    act(() => { vi.advanceTimersByTime(200); });
+    expect(screen.getByRole('tooltip')).toBeInTheDocument();
+
+    fireEvent.click(within(tip).getByRole('button', { name: '복사' }));
+    expect(onCopy).toHaveBeenCalledTimes(1);
+
+    fireEvent.mouseLeave(tip);
+    act(() => { vi.advanceTimersByTime(150); });
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  });
+
+  it('포커스가 버블 안 버튼으로 이동해도 닫히지 않고, 바깥으로 블러되거나 Esc를 누르면 닫힌다', () => {
+    setPointer(false);
+    render(
+      <>
+        <Tip interactive plain text={<button type="button">복사</button>}>대상</Tip>
+        <button type="button">바깥</button>
+      </>,
+    );
+
+    const trigger = screen.getByText('대상');
+    fireEvent.focus(trigger);
+    const copyBtn = within(screen.getByRole('tooltip')).getByRole('button', { name: '복사' });
+
+    fireEvent.blur(trigger, { relatedTarget: copyBtn });
+    expect(screen.getByRole('tooltip')).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('tooltip')).toBeNull();
+
+    fireEvent.focus(trigger);
+    expect(screen.getByRole('tooltip')).toBeInTheDocument();
+    fireEvent.blur(trigger, { relatedTarget: screen.getByRole('button', { name: '바깥' }) });
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  });
+
+  it('거친 포인터에서는 버블 안쪽을 눌러도 닫히지 않고 바깥을 누르면 닫힌다', () => {
+    setPointer(true);
+    render(
+      <>
+        <Tip interactive plain text={<button type="button">복사</button>}>대상</Tip>
+        <p>바깥</p>
+      </>,
+    );
+
+    fireEvent.click(screen.getByText('대상'));
+    const copyBtn = within(screen.getByRole('tooltip')).getByRole('button', { name: '복사' });
+    fireEvent.pointerDown(copyBtn);
+    expect(screen.getByRole('tooltip')).toBeInTheDocument();
+
+    fireEvent.pointerDown(screen.getByText('바깥'));
+    expect(screen.queryByRole('tooltip')).toBeNull();
   });
 });

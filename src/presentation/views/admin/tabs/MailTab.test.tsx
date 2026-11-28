@@ -27,6 +27,13 @@ vi.mock('../../../../platform/api', () => ({
         { user_id: '30e63c95-12de-4ba6-b397-e8b69ce0311c', email: 'friend@example.com', nickname: '바다친구', is_anonymous: false },
         { user_id: 'e747e6c9-f0c2-4192-a462-9cd26e8a812a', email: null, nickname: '민물러', is_anonymous: true },
       ]),
+      searchAdminUsers: vi.fn(async (term: string) => {
+        const all = [
+          { user_id: '30e63c95-12de-4ba6-b397-e8b69ce0311c', email: 'friend@example.com', nickname: '바다친구', is_anonymous: false },
+          { user_id: 'e747e6c9-f0c2-4192-a462-9cd26e8a812a', email: null, nickname: '민물러', is_anonymous: true },
+        ];
+        return all.filter(u => (u.nickname ?? '').includes(term) || (u.email ?? '').includes(term));
+      }),
       mail: mocks.mail,
     },
   },
@@ -35,7 +42,7 @@ vi.mock('../../../../platform/api', () => ({
 function show() {
   render(
     <QueryProvider>
-      <AdminAuthCtx.Provider value={{ access: 'granted', uid: 'u', role: 'admin', showStaffBadge: false, setStaffBadge: async () => {} }}>
+      <AdminAuthCtx.Provider value={{ access: 'granted', uid: 'u', role: 'admin', canViewEmail: true, showStaffBadge: false, setStaffBadge: async () => {} }}>
         <MailTab />
       </AdminAuthCtx.Provider>
     </QueryProvider>,
@@ -140,7 +147,7 @@ describe('MailTab', () => {
   it('다른 화면의 우편 보내기로 열리면 그 계정을 받는 사람으로 넣어 둔다', async () => {
     render(
       <QueryProvider>
-        <AdminAuthCtx.Provider value={{ access: 'granted', uid: 'u', role: 'admin', showStaffBadge: false, setStaffBadge: async () => {} }}>
+        <AdminAuthCtx.Provider value={{ access: 'granted', uid: 'u', role: 'admin', canViewEmail: true, showStaffBadge: false, setStaffBadge: async () => {} }}>
           <MailTab to={USER} />
         </AdminAuthCtx.Provider>
       </QueryProvider>,

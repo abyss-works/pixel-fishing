@@ -6,6 +6,7 @@ import KeyValueRow from '../../../ui/KeyValueRow';
 import KpiTile from '../../../ui/KpiTile';
 import Modal from '../../../ui/Modal';
 import Note from '../../../ui/Note';
+import SubTabs from '../../../ui/SubTabs';
 import TableBox from '../../../ui/TableBox';
 import { cx } from '../../../ui/cx';
 import { useDialogs } from '../../../ui/useDialogs';
@@ -35,7 +36,9 @@ export default function UserDetail({ user, onClose, onCompose }: {
   onCompose?: (userId: string) => void;
 }) {
   // 이벤트는 uid별 키, 스팸 플래그는 전역 공유 키를 사용해 중복 풀스캔을 피한다
-  const granted = useAdminAuth().access === 'granted';
+  const { access, canViewEmail } = useAdminAuth();
+  const granted = access === 'granted';
+  const [detailTab, setDetailTab] = useState<'summary' | 'detail'>('summary');
   const eventsQuery = useAdminQuery(
     adminKeys.userEvents(user.user_id),
     () => readAdminUserEvents(user.user_id),
@@ -63,78 +66,92 @@ export default function UserDetail({ user, onClose, onCompose }: {
     <>
       <Modal layer="app" wide title={`유저 상세: ${adminUserLabel(user)}`} onClose={onClose}>
         <div className="flex flex-col gap-4">
-          <div className="grid grid-cols-3 gap-2">
-            <KpiTile label="골드" value={fmtNum(adminNumber(user.gold))} />
-            <KpiTile label="명성" value={fmtNum(adminNumber(user.fame))} />
-            <KpiTile label="배" value={adminBoatName(user.boat ?? 0)} hint={`T${user.boat ?? 0}`} />
-            <KpiTile label="낚싯대" value={`Lv${user.rod ?? '없음'}`} />
-            <KpiTile label="7일 PERFECT" value={flag?.perfect_pct != null ? `${flag.perfect_pct}%` : '없음'}
-                     hint={`30일 전체 평균 ${flag?.perfect_pct_global ?? '없음'}%`} />
-            <KpiTile label="제재" value={user.restricted === true ? 'ON' : 'OFF'}
-                     tone={user.restricted === true ? 'danger' : 'dim'} />
+          <div className="max-w-[320px]">
+            <SubTabs
+              items={[{ key: 'summary', label: '요약' }, { key: 'detail', label: '상세' }]}
+              activeKey={detailTab}
+              onSelect={setDetailTab}
+            />
           </div>
 
-          <UserActions user={user} onCompose={onCompose} confirm={confirm} />
-
-          <UserSessions user={user} />
-
-          <Cell title="기본 정보" flush divided>
-            <KeyValueRow label="계정 id" value={<span className="pf-accent text-xs select-text">{user.user_id}</span>} />
-            <KeyValueRow label="위치" value={formatAdminLocation({ kind: user.location_kind, id: user.location_id })} />
-            <KeyValueRow label="가입" value={fmtDT(user.signed_up_at)} />
-            <KeyValueRow label="마지막 로그인" value={fmtDT(user.last_sign_in_at)} />
-            <KeyValueRow label="세이브 버전" value={`v${String(user.save_version ?? '?')}`} />
-            <KeyValueRow label="연타 (간격 2초 미만, 7일)" value={
-              <span className={cx(flag && flag.fast_gap_7d > 0 && 'text-danger')}>{flag?.fast_gap_7d ?? 0}건</span>
-            } />
-          </Cell>
-
-          <UserStateCell state={stateQuery.data} loading={stateQuery.loading} error={stateQuery.error}
-                         onRetry={stateQuery.refresh} />
-
-          <Cell title="액션 유형 요약">
-            <div className="flex flex-wrap gap-1">
-              {byType.map(([type, count]) => (
-                <span key={type}
-                      className={cx('border rounded-sm px-1.5 py-0.5 text-2xs',
-                        RISKY_EVENT_TYPES.has(type)
-                          ? 'border-danger/50 text-danger' : 'border-line text-text-dim')}>
-                  {EVENT_LABELS[type] ?? type} ×{count}
-                </span>
-              ))}
-              {byType.length === 0 && <span className="text-2xs text-text-dim">이벤트가 없어요.</span>}
-            </div>
-            <Note size="2xs" className="my-0">최근 {EVENT_WINDOW}건을 기준으로 집계해요.</Note>
-          </Cell>
-
-          <Cell title="최근 이벤트 타임라인" flush>
-            {(loading || error || events.length === 0) && (
-              <div className="px-3 py-2">
-                <TabState loading={loading} error={error} empty={events.length === 0}
-                          emptyText="이벤트가 없어요." />
+          {detailTab === 'summary' ? (
+            <>
+              <div className="grid grid-cols-3 gap-2">
+                <KpiTile label="골드" value={fmtNum(adminNumber(user.gold))} />
+                <KpiTile label="명성" value={fmtNum(adminNumber(user.fame))} />
+                <KpiTile label="배" value={adminBoatName(user.boat ?? 0)} hint={`T${user.boat ?? 0}`} />
+                <KpiTile label="낚싯대" value={`Lv${user.rod ?? '없음'}`} />
+                <KpiTile label="7일 PERFECT" value={flag?.perfect_pct != null ? `${flag.perfect_pct}%` : '없음'}
+                         hint={`30일 전체 평균 ${flag?.perfect_pct_global ?? '없음'}%`} />
+                <KpiTile label="제재" value={user.restricted === true ? 'ON' : 'OFF'}
+                         tone={user.restricted === true ? 'danger' : 'dim'} />
               </div>
-            )}
-            {!loading && !error && events.length > 0 && (
-              <ul className="pf-scroll-panel flex max-h-[260px] flex-col divide-y divide-line pf-vscroll select-text">
-                {events.map((e, i) => (
-                  <li key={e.id} className={cx('px-2 py-1 flex items-baseline gap-2 text-xs',
-                                               fastGaps.has(i) && 'bg-danger/10')}>
-                    <span className="text-2xs text-text-dim whitespace-nowrap w-[76px] shrink-0">
-                      {fmtDT(e.created_at)}
+
+              <UserActions user={user} onCompose={onCompose} confirm={confirm} />
+
+              <Cell title="기본 정보" flush divided>
+                <KeyValueRow label="계정 id" value={<span className="pf-accent text-xs select-text">{user.user_id}</span>} />
+                <KeyValueRow label="위치" value={formatAdminLocation({ kind: user.location_kind, id: user.location_id })} />
+                {canViewEmail && <KeyValueRow label="가입" value={fmtDT(user.signed_up_at)} />}
+                {canViewEmail && <KeyValueRow label="마지막 로그인" value={fmtDT(user.last_sign_in_at)} />}
+                <KeyValueRow label="세이브 버전" value={`v${String(user.save_version ?? '?')}`} />
+                <KeyValueRow label="연타 (간격 2초 미만, 7일)" value={
+                  <span className={cx(flag && flag.fast_gap_7d > 0 && 'text-danger')}>{flag?.fast_gap_7d ?? 0}건</span>
+                } />
+              </Cell>
+            </>
+          ) : (
+            <>
+              <UserSessions user={user} />
+
+              <UserStateCell state={stateQuery.data} loading={stateQuery.loading} error={stateQuery.error}
+                             onRetry={stateQuery.refresh} />
+
+              <Cell title="액션 유형 요약">
+                <div className="flex flex-wrap gap-1">
+                  {byType.map(([type, count]) => (
+                    <span key={type}
+                          className={cx('border rounded-sm px-1.5 py-0.5 text-2xs',
+                            RISKY_EVENT_TYPES.has(type)
+                              ? 'border-danger/50 text-danger' : 'border-line text-text-dim')}>
+                      {EVENT_LABELS[type] ?? type} ×{count}
                     </span>
-                    <span className={cx('pf-accent whitespace-nowrap',
-                                        RISKY_EVENT_TYPES.has(e.type) ? 'text-danger' : 'text-gold')}>
-                      {EVENT_LABELS[e.type] ?? e.type}
-                    </span>
-                    <span className="min-w-0 truncate text-text">
-                      {eventSummary(e.type, e.payload)}
-                    </span>
-                    {fastGaps.has(i) && <span className="ml-auto text-2xs text-danger shrink-0">연타?</span>}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Cell>
+                  ))}
+                  {byType.length === 0 && <span className="text-2xs text-text-dim">이벤트가 없어요.</span>}
+                </div>
+                <Note size="2xs" className="my-0">최근 {EVENT_WINDOW}건을 기준으로 집계해요.</Note>
+              </Cell>
+
+              <Cell title="최근 이벤트 타임라인" flush>
+                {(loading || error || events.length === 0) && (
+                  <div className="px-3 py-2">
+                    <TabState loading={loading} error={error} empty={events.length === 0}
+                              emptyText="이벤트가 없어요." />
+                  </div>
+                )}
+                {!loading && !error && events.length > 0 && (
+                  <ul className="pf-scroll-panel flex max-h-[260px] flex-col divide-y divide-line pf-vscroll select-text">
+                    {events.map((e, i) => (
+                      <li key={e.id} className={cx('px-2 py-1 flex items-baseline gap-2 text-xs',
+                                                   fastGaps.has(i) && 'bg-danger/10')}>
+                        <span className="text-2xs text-text-dim whitespace-nowrap w-[76px] shrink-0">
+                          {fmtDT(e.created_at)}
+                        </span>
+                        <span className={cx('pf-accent whitespace-nowrap',
+                                            RISKY_EVENT_TYPES.has(e.type) ? 'text-danger' : 'text-gold')}>
+                          {EVENT_LABELS[e.type] ?? e.type}
+                        </span>
+                        <span className="min-w-0 truncate text-text">
+                          {eventSummary(e.type, e.payload)}
+                        </span>
+                        {fastGaps.has(i) && <span className="ml-auto text-2xs text-danger shrink-0">연타?</span>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Cell>
+            </>
+          )}
         </div>
       </Modal>
       {dialogs}

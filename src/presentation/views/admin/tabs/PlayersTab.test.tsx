@@ -73,16 +73,40 @@ vi.mock('../../../../platform/api', () => ({
       ]),
       restrict: mocks.restrict,
       revokeSessions: mocks.revokeSessions,
+      live: vi.fn(async () => ({ count: 0, online: [] })),
+      searchAdminUsers: vi.fn(async () => []),
+      readIntegrityStages: vi.fn(async () => [
+        { stage: 0, count: 10, accounts: [] },
+        { stage: 1, count: 1, accounts: [{ userId: UID, pressure: 1.5, stage: 1, modifier: 0.75, updatedAt: '2026-10-07T00:00:00Z' }] },
+        { stage: 2, count: 0, accounts: [] },
+      ]),
+      readIntegrityEvents: vi.fn(async () => []),
+      readIntegrityMetrics: vi.fn(async () => ({
+        days: 7,
+        clean: {
+          total: 100,
+          counts: { common: 60, uncommon: 25, rare: 10, epic: 4, legendary: 1 },
+          shares: { common: 0.6, uncommon: 0.25, rare: 0.1, epic: 0.04, legendary: 0.01 },
+          expectedShares: { common: 0.6, uncommon: 0.25, rare: 0.1, epic: 0.04, legendary: 0.01 },
+        },
+        pressured: {
+          total: 20,
+          counts: { common: 14, uncommon: 4, rare: 2, epic: 0, legendary: 0 },
+          shares: { common: 0.7, uncommon: 0.2, rare: 0.1, epic: 0, legendary: 0 },
+          expectedShares: { common: 0.7, uncommon: 0.2, rare: 0.1, epic: 0, legendary: 0 },
+        },
+      })),
+      releaseIntegrityStage: vi.fn(async () => ({ released: true as const })),
     },
   },
 }));
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
-function show(section: 'roster' | 'abuse', role: AdminRole = 'admin') {
+function show(section: 'directory' | 'sanctions', role: AdminRole = 'admin') {
   render(
     <QueryProvider>
-      <AdminAuthCtx.Provider value={{ access: 'granted', uid: UID, role, showStaffBadge: false, setStaffBadge: async () => {} }}>
+      <AdminAuthCtx.Provider value={{ access: 'granted', uid: UID, role, canViewEmail: role === 'admin', showStaffBadge: false, setStaffBadge: async () => {} }}>
         <PlayersTab section={section} onSection={() => {}} onCompose={mocks.compose} />
       </AdminAuthCtx.Provider>
     </QueryProvider>,
@@ -90,20 +114,22 @@ function show(section: 'roster' | 'abuse', role: AdminRole = 'admin') {
 }
 
 describe('플레이어 탭', () => {
-  it('명부 구역 — 유저 행을 그리고, 누르면 상세 모달이 오목한 칸 밖에 뜬다', async () => {
-    show('roster');
+  it('검색·명부 구역 — 유저 행·빠른 액션(우편·제재·상세)을 그리고, 누르면 상세 모달이 오목한 칸 밖에 뜬다', async () => {
+    show('directory');
     expect(await screen.findByText('바다친구(friend@example.com)')).toBeInTheDocument();
     expect(screen.getByText('1/1명')).toBeInTheDocument();
-    // 명부의 위치 한글화와 마지막 세션·누적 플레이 열
     const row = screen.getByText('바다친구(friend@example.com)').closest('tr')!;
     expect(within(row).getByText('태평양')).toBeInTheDocument();
     expect(within(row).getByText('10-07 09:30')).toBeInTheDocument();
     expect(within(row).getByText('1시간 23분')).toBeInTheDocument();
 
+    fireEvent.click(within(row).getByRole('button', { name: '우편' }));
+    expect(mocks.compose).toHaveBeenCalledWith(UID);
+
     fireEvent.click(screen.getByText('바다친구(friend@example.com)'));
     const dialog = await screen.findByRole('dialog', { name: '유저 상세: 바다친구(friend@example.com)' });
-    // 오목한 칸(pf-notch)은 clip-path로 안쪽을 잘라서, 그 안에 모달을 두면 화면 전체를 덮지 못한다
     expect(dialog.closest('.pf-notch')).toBeNull();
+    fireEvent.click(within(dialog).getByRole('button', { name: '상세' }));
     expect(await within(dialog).findByText('판매')).toBeInTheDocument();
     expect(await within(dialog).findByText(/일반 12\/120, 돌연변이 3\/120, 네임드 1\/8/)).toBeInTheDocument();
     expect(within(dialog).getByText(/침선의 나침반/)).toBeInTheDocument();
@@ -113,7 +139,6 @@ describe('플레이어 탭', () => {
     expect(within(dialog).getByText(/잉어 22.5cm/)).toBeInTheDocument();
     expect(within(dialog).getByText('2건')).toBeInTheDocument();
     expect(within(dialog).getByText('OPEN100')).toBeInTheDocument();
-    // 세션 기록 — 누적 플레이와 최근 세션의 시작 시각·길이
     const sessions = within(dialog).getByText('세션 기록').closest('section')!;
     expect(within(sessions).getByText('1시간 23분')).toBeInTheDocument();
     expect(await within(sessions).findByText('30분')).toBeInTheDocument();
@@ -122,28 +147,30 @@ describe('플레이어 탭', () => {
     expect(within(dialog).queryByText('도감 ↔ 이벤트 대조')).toBeNull();
   });
 
-  it('이상탐지 구역 — 신호 건수 지표와 제재 계정이 같은 조회로 채워진다', async () => {
-    show('abuse');
-    // 지표 타일은 오목한 칸(pf-notch) 하나다 — 같은 글자가 칸 제목에도 있어서 타일만 고른다
+  it('제재·무결성 구역 — 신호 건수·무결성 감등 현황·오탐 해제와 제재 계정이 채워진다', async () => {
+    show('sanctions');
     const tile = (label: string) => screen.getAllByText(label)
       .map(el => el.parentElement as HTMLElement).find(el => el.classList.contains('pf-notch'))!;
     expect(await within(tile('연타 유저')).findByText('1')).toBeInTheDocument();
     expect(within(tile('PERFECT 이상치')).getByText('1')).toBeInTheDocument();
     expect(within(tile('제재 계정')).getByText('1')).toBeInTheDocument();
-    // 제재 계정 칸은 명부 라벨과 지표 줄(골드·명성·마지막 행동)을 함께 보인다
+    expect(within(tile('무결성 감등')).getByText('1')).toBeInTheDocument();
     expect(screen.getAllByText('바다친구(friend@example.com)').length).toBeGreaterThan(0);
-    expect(screen.getByText(/골드 1,200 · 명성 30 · 마지막 행동/)).toBeInTheDocument();
+    expect(screen.getByText(/골드 1,200 \/ 명성 30 \/ 마지막 행동/)).toBeInTheDocument();
+    expect(screen.getByText('단계 1 (주의): 1명')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '오탐 해제' }));
+    await waitFor(() => expect(vi.mocked(api.admin.releaseIntegrityStage)).toHaveBeenCalledWith(UID));
   });
 
   it('사용자 상세의 관리 조치 — 우편 보내기, 확인을 거친 제재 해제, 세션 강제 종료', async () => {
-    show('roster');
+    show('directory');
     fireEvent.click(await screen.findByText('바다친구(friend@example.com)'));
     const dialog = await screen.findByRole('dialog', { name: '유저 상세: 바다친구(friend@example.com)' });
 
     fireEvent.click(within(dialog).getByRole('button', { name: '우편 보내기' }));
     expect(mocks.compose).toHaveBeenCalledWith(UID);
 
-    // 제재 계정이라 해제 버튼이 보이고, 확인 창을 닫으면 보내지 않는다
     fireEvent.click(within(dialog).getByRole('button', { name: '제재 해제' }));
     await screen.findByRole('button', { name: '해제하기' });
     fireEvent.click(screen.getAllByRole('button', { name: '닫기' }).at(-1)!);
@@ -161,26 +188,25 @@ describe('플레이어 탭', () => {
     expect(await within(dialog).findByText('활성 세션 2건을 종료했어요.')).toBeInTheDocument();
   });
 
-  it('maintainer 역할은 roster가 들어와도 이상탐지만 보이고 명부·상세 모달 API를 호출하지 않는다', async () => {
+  it('maintainer 역할도 검색·명부·상세 모달을 동일하게 사용하고 이메일·가입일 메타만 미노출한다', async () => {
     vi.mocked(api.admin.users).mockResolvedValueOnce([{
-      user_id: 'op-user01', opHandle: 'op-user01', email: null, nickname: '원양어부', is_anonymous: false,
-      signed_up_at: null, last_sign_in_at: null, gold: null, fame: null, boat: 1, rod: 2,
-      location_kind: null, location_id: null, visited: null, restricted: true, save_version: null,
+      user_id: UID, email: null, nickname: '원양어부', is_anonymous: false,
+      signed_up_at: null, last_sign_in_at: null, gold: 500, fame: 10, boat: 1, rod: 2,
+      location_kind: null, location_id: null, visited: null, restricted: true, save_version: 10,
       last_action_at: null, last_session_at: null, total_session_sec: 0,
     }]);
-    vi.mocked(api.admin.spamFlags).mockResolvedValueOnce([{
-      user_id: 'op-user01', opHandle: 'op-user01', catches_7d: 40, fast_gap_7d: 12,
-      perfect_pct: 90, perfect_pct_global: 30,
-    }]);
 
-    show('roster', 'maintainer');
-    expect(screen.queryByRole('button', { name: '명부' })).toBeNull();
-    expect(screen.getByRole('button', { name: '이상탐지', pressed: true })).toBeInTheDocument();
-    expect(await screen.findAllByText('원양어부')).not.toHaveLength(0);
-    expect(screen.getAllByText('op-user01').length).toBeGreaterThan(0);
-    expect(screen.queryByText(/—/)).toBeNull();
-    expect(vi.mocked(api.admin.userState)).not.toHaveBeenCalled();
-    expect(vi.mocked(api.admin.userEvents)).not.toHaveBeenCalled();
-    expect(vi.mocked(api.admin.sessions)).not.toHaveBeenCalled();
+    show('directory', 'maintainer');
+    expect(screen.getByRole('button', { name: '검색·명부', pressed: true })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('닉네임·UUID 검색')).toBeInTheDocument();
+    expect(await screen.findByText('원양어부')).toBeInTheDocument();
+    expect(screen.getByText('aaaaaaaa')).toBeInTheDocument();
+    expect(screen.queryByText(/원양어부\(/)).toBeNull();
+
+    fireEvent.click(screen.getByText('원양어부'));
+    const dialog = await screen.findByRole('dialog', { name: '유저 상세: 원양어부' });
+    expect(within(dialog).queryByText('가입')).toBeNull();
+    expect(within(dialog).queryByText('마지막 로그인')).toBeNull();
+    expect(within(dialog).getByText(UID)).toBeInTheDocument();
   });
 });

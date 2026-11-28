@@ -8,11 +8,12 @@ import { createLocalApi } from '../adapters/localApi';
 describe('admin 계층 규약', () => {
   it('싱글톤과 두 팩토리 모두 AdminApi 전면을 노출한다', () => {
     const local = createLocalApi().admin;
-    for (const m of ['access', 'overview', 'users', 'live', 'dailyStats', 'retention', 'sessions', 'economy', 'bountyFunnel',
+    for (const m of ['access', 'overview', 'users', 'searchAdminUsers', 'live', 'dailyStats', 'retention', 'sessions', 'economy', 'bountyFunnel',
       'onboardingFunnel', 'httpMetrics', 'clientMetrics', 'opsHealth',
       'spamFlags',
       'recentEvents', 'userEvents', 'userState', 'letters', 'changelog', 'chatReports', 'notices', 'coupons', 'balanceLive',
-      'restrict', 'letterHandled', 'revokeSessions', 'writeNotice', 'writeCoupon', 'setStaffBadge', 'deployHost', 'signIn', 'takeSignInReturn', 'signOut'] as const) {
+      'restrict', 'letterHandled', 'revokeSessions', 'writeNotice', 'writeCoupon', 'setStaffBadge',
+      'readIntegrityStages', 'readIntegrityEvents', 'readIntegrityMetrics', 'releaseIntegrityStage', 'deployHost', 'signIn', 'takeSignInReturn', 'signOut'] as const) {
       expect(typeof api.admin[m]).toBe('function');
       expect(typeof local[m]).toBe('function');
     }
@@ -25,6 +26,7 @@ describe('admin 계층 규약', () => {
     await expect(admin.signIn()).rejects.toThrow(/클라우드/);
     // 조용한 빈 배열은 "데이터 없음"이라는 거짓말 — 게이트 우회 오용은 시끄럽게 실패한다
     await expect(admin.users()).rejects.toThrow(/클라우드/);
+    await expect(admin.searchAdminUsers('test')).rejects.toThrow(/클라우드/);
     await expect(admin.dailyStats('2026-11-01', '2026-11-05')).rejects.toThrow(/클라우드/);
     await expect(admin.live()).rejects.toThrow(/클라우드/);
     await expect(admin.changelog()).rejects.toThrow(/클라우드/);
@@ -42,5 +44,9 @@ describe('admin 계층 규약', () => {
     await expect(admin.coupons()).rejects.toThrow(/클라우드/);
     await expect(admin.writeCoupon({ op: 'delete', code: 'C1' })).rejects.toThrow(/클라우드/);
     await expect(admin.setStaffBadge(true)).rejects.toThrow(/클라우드/);
+    await expect(admin.readIntegrityStages()).rejects.toThrow(/클라우드/);
+    await expect(admin.readIntegrityEvents()).rejects.toThrow(/클라우드/);
+    await expect(admin.readIntegrityMetrics()).rejects.toThrow(/클라우드/);
+    await expect(admin.releaseIntegrityStage('u-1')).rejects.toThrow(/클라우드/);
   });
 });

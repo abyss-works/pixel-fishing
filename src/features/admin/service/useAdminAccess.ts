@@ -10,6 +10,7 @@ const LOCAL: AdminAuth = {
   access: 'local',
   uid: null,
   role: 'admin',
+  canViewEmail: true,
   showStaffBadge: false,
   setStaffBadge: NOOP_SET_STAFF_BADGE,
 };
@@ -29,10 +30,12 @@ export function useAdminAccess(): AdminAuth {
   if (!adminSignInRequired) return LOCAL;
   if (q.data) {
     if (q.data.kind === 'granted') {
+      const role = q.data.role ?? 'admin';
       return {
         access: 'granted',
         uid: q.data.uid,
-        role: q.data.role ?? 'admin',
+        role,
+        canViewEmail: q.data.capabilities?.canViewEmail ?? role === 'admin',
         showStaffBadge: q.data.showStaffBadge ?? false,
         setStaffBadge,
       };
@@ -41,11 +44,12 @@ export function useAdminAccess(): AdminAuth {
       access: q.data.kind,
       uid: q.data.uid,
       role: 'admin',
+      canViewEmail: false,
       showStaffBadge: false,
       setStaffBadge: NOOP_SET_STAFF_BADGE,
     };
   }
   return q.error
-    ? { access: 'denied', uid: null, role: 'admin', showStaffBadge: false, setStaffBadge: NOOP_SET_STAFF_BADGE }
-    : { access: 'checking', uid: null, role: 'admin', showStaffBadge: false, setStaffBadge: NOOP_SET_STAFF_BADGE };
+    ? { access: 'denied', uid: null, role: 'admin', canViewEmail: false, showStaffBadge: false, setStaffBadge: NOOP_SET_STAFF_BADGE }
+    : { access: 'checking', uid: null, role: 'admin', canViewEmail: false, showStaffBadge: false, setStaffBadge: NOOP_SET_STAFF_BADGE };
 }

@@ -16,6 +16,8 @@ export interface AdminAuth {
   /** 관리자 세션 uid — denied일 때 권한 없음 안내에 보인다 */
   uid: string | null;
   role: AdminRole;
+  /** 직접 개인정보(이메일 원문·가입/로그인 메타) 열람 가능 여부 */
+  canViewEmail: boolean;
   showStaffBadge: boolean;
   setStaffBadge: (show: boolean) => Promise<void>;
 }
@@ -26,6 +28,7 @@ export const AdminAuthCtx = createContext<AdminAuth>({
   access: 'checking',
   uid: null,
   role: 'admin',
+  canViewEmail: true,
   showStaffBadge: false,
   setStaffBadge: NOOP_SET_STAFF_BADGE,
 });

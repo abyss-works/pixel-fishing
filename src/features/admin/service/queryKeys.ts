@@ -5,6 +5,7 @@ export const adminKeys = {
   signInReturn: ['admin', 'signInReturn'] as const,
   overview: (days: number) => ['admin', 'overview', days] as const,
   users: ['admin', 'users'] as const,
+  userSearch: (term: string) => ['admin', 'userSearch', term] as const,
   spamFlags: ['admin', 'spamFlags'] as const,
   recentEvents: ['admin', 'recentEvents'] as const,
   letters: ['admin', 'letters'] as const,
@@ -26,4 +27,7 @@ export const adminKeys = {
   balanceLive: (days: number) => ['admin', 'balanceLive', days] as const,
   userEvents: (uid: string) => ['admin', 'userEvents', uid] as const,
   userState: (uid: string) => ['admin', 'userState', uid] as const,
+  integrityStages: ['admin', 'integrityStages'] as const,
+  integrityEvents: (userId?: string, limit?: number) => ['admin', 'integrityEvents', userId ?? null, limit ?? null] as const,
+  integrityMetrics: (days: number) => ['admin', 'integrityMetrics', days] as const,
 };

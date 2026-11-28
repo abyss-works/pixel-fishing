@@ -1,87 +1,124 @@
-// 운영 탭 — 대시보드 자체의 메타: 지금 이 번들이 어느 배포인지, 어느 서버 주소에
-// 붙어 있는지, 이벤트 스트림에 무엇이 기록되는지. 링크를 나열하는 게 아니라 **환경 정체를
-// 화면에 에코**하는 것이 목적이다(운영/스테이징 착오는 과거 사고의 원인 둘).
-// 권한 진단은 AdminAuthProvider가 판정한 것을 소비한다 — 여기서 판정하지 않는다.
-import Note from '../../../ui/Note';
+// 운영·콘텐츠 탭 — 서버·실시간, 클라이언트, 변경 기록, 콘텐츠 카탈로그 4개 하위 구역으로 나눈다.
 import DataTable from '../../../ui/DataTable';
+import Note from '../../../ui/Note';
+import SubTabs from '../../../ui/SubTabs';
 import { APP_VERSION } from '../../../../version';
 import { BUILD_LABEL } from '../../../../buildId';
 import { readAdminDeployHost } from '../../../../features/admin/service/queries';
 import { EVENT_LABELS } from '../../../../features/admin/model/metrics';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { Cell, CellGrid, TabPage } from '../layout';
+import { ADMIN_SECTIONS } from '../routes';
+import type { OpsSection } from '../routes';
+import { useAdminViewMode } from '../viewMode';
 import ChangelogSection from './ChangelogSection';
 import ClientMetricsSection from './ClientMetricsSection';
+import ContentTab from './ContentTab';
 import { HttpMetricsOpsSection } from './HttpMetricsSection';
 import ServerHealthSection from './ServerHealthSection';
 
-export default function OpsTab() {
+const CONTEXT: Record<OpsSection, string> = {
+  server: '이 대시보드의 배포 정체와 서버 HTTP·소켓·DB 상태 및 경보를 확인해요.',
+  client: '브라우저 Web Vitals, 왕복 지연(RTT), 캔버스 프레임 및 소켓 재연결 추이를 확인해요.',
+  changelog: '버전별 공개·관리자 변경 기록을 최신 순으로 열람해요.',
+  catalog: '어종·네임드·유물·업적·의상·요리·배·구역·의뢰 9개 정본 축을 오프라인에서도 검색·검수해요.',
+};
+
+export default function OpsTab({
+  section = 'server',
+  onSection = () => {},
+}: {
+  section?: OpsSection;
+  onSection?: (section: OpsSection) => void;
+} = {}) {
   const { access, role } = useAdminAuth();
+  const { viewMode } = useAdminViewMode();
 
   return (
-    <TabPage title="운영" context="이 대시보드가 어느 배포를 보고 있는지 확인해요.">
-      <CellGrid>
-        <Cell title="이 화면의 정체" flush>
-          <div className="px-1">
-            <DataTable>
-              <tbody>
-                <Meta k="릴리즈 버전" v={APP_VERSION}
-                      hint="package.json과 version.ts가 같은 값이에요. 릴리즈 때만 올려요. 운영에서 낡은 탭을 막는 기준(426)이에요." />
-                <Meta k="빌드 식별자" v={BUILD_LABEL}
-                      hint="이미지 빌드의 커밋 SHA(BUILD_ID)예요. 스테이징·개발 배포에서 낡은 탭을 막는 기준(426)이에요." />
-                <Meta k="배포 주소" v={readAdminDeployHost() ?? '로컬 모드'}
-                      hint="이 화면이 붙은 서버의 호스트예요. 운영과 스테이징의 주소가 달라서 착오를 막으려고 보여 줘요." />
-              </tbody>
-            </DataTable>
-          </div>
-        </Cell>
+    <TabPage title="운영·콘텐츠" context={CONTEXT[section]}>
+      <div className="max-w-[640px]">
+        <SubTabs
+          items={ADMIN_SECTIONS.ops.map(s => ({ key: s.key, label: s.label }))}
+          activeKey={section}
+          onSelect={onSection}
+        />
+      </div>
 
-        <Cell title="권한">
-          {access === 'local' && <Note className="my-0">클라우드가 설정되지 않아서 로컬 모드에서는 관리자 데이터가 없어요.</Note>}
-          {access === 'granted' && (
-            <Note className="my-0">
-              <span className="pf-accent text-gold">{role === 'maintainer' ? '운영자 세션' : '관리자 세션'}</span>이에요.
-              {role === 'maintainer' ? ' 비식별 운영 화면과 공지, 쿠폰, 지표 뷰를 볼 수 있어요.' : ' 모든 뷰를 볼 수 있어요.'}
-            </Note>
-          )}
-        </Cell>
+      {section === 'server' && (
+        <CellGrid>
+          <Cell title="이 화면의 정체" flush>
+            <div className="px-1">
+              <DataTable>
+                <tbody>
+                  <Meta k="릴리즈 버전" v={APP_VERSION}
+                        hint="package.json과 version.ts가 같은 값이에요. 릴리즈 때만 올려요. 운영에서 낡은 탭을 막는 기준(426)이에요." />
+                  <Meta k="빌드 식별자" v={BUILD_LABEL}
+                        hint="이미지 빌드의 커밋 SHA(BUILD_ID)예요. 스테이징·개발 배포에서 낡은 탭을 막는 기준(426)이에요." />
+                  <Meta k="배포 주소" v={readAdminDeployHost() ?? '로컬 모드'}
+                        hint="이 화면이 붙은 서버의 호스트예요. 운영과 스테이징의 주소가 달라서 착오를 막으려고 보여 줘요." />
+                </tbody>
+              </DataTable>
+            </div>
+          </Cell>
 
-        <Cell title="관측">
-          <Note className="my-0 leading-relaxed">
-            게임 데이터는 이 대시보드로, 예외는 Sentry로, 서버와 배포는 클러스터(ArgoCD)로 봐요.
-            Sentry의 release는 위 릴리즈 버전과 같아요. 서버 예외는 reportServerIssue로 Sentry에 올라가요.
-          </Note>
-        </Cell>
-
-        <Cell title="데이터 계약">
-          <Note className="my-0 leading-relaxed">
-            {role === 'maintainer' ? (
-              <>
-                운영자 세션은 비식별 운영 지표와 공개 변경 기록만 열람하고, 쓰기는 기간제 공지 관리(등록, 수정, 종료, 삭제), {'소통 > 쿠폰'} 동적 쿠폰 관리(발행, 수정, 활성 토글, 삭제)와 본인 채팅 운영진 별 표기 토글뿐이에요.
-                공지 관리, 동적 쿠폰 관리, 별 표기 변경은 행위자 식별자와 함께 서버 감사 로그에 기록돼요.
-                권한 방어선은 서버가 발급한 역할 판정과 비식별 투영이고, 데이터 접근은 features/admin/service가 유일한 경로예요.
-              </>
-            ) : (
-              <>
-                쓰기는 우편 보내기, 편지 처리 표시, 관리 조치(제재와 해제, 세션 강제 종료)뿐이에요.
-                관리 조치는 조치한 관리자 id(adminId)와 함께 대상 사용자의 events에 남아요.
-                권한 방어선은 서버 읽기 함수가 <code className="pf-accent">admins</code> 명부로 하는 판정이에요.
-                데이터 접근은 features/admin/service가 유일한 경로이고, 전송 상세(요청 이름과 인자)는 그 안에서만 다뤄요.
-              </>
+          <Cell title="권한">
+            {access === 'local' && <Note className="my-0">클라우드가 설정되지 않아서 로컬 모드에서는 관리자 데이터가 없어요.</Note>}
+            {access === 'granted' && (
+              <Note className="my-0">
+                <span className="pf-accent text-gold">{role === 'maintainer' ? '운영자 세션' : '관리자 세션'}</span>이에요.
+                {role === 'maintainer'
+                  ? ' 직접 개인정보(이메일·가입/로그인 메타)를 제외한 모든 게임 내 운영 기능을 동일하게 사용해요.'
+                  : ' 모든 뷰와 직접 개인정보를 볼 수 있어요.'}
+              </Note>
             )}
-          </Note>
-        </Cell>
+          </Cell>
 
-        <HttpMetricsOpsSection granted={access === 'granted'} />
+          {viewMode === 'detail' && (
+            <>
+              <Cell title="관측">
+                <Note className="my-0 leading-relaxed">
+                  게임 데이터는 이 대시보드로, 예외는 Sentry로, 서버와 배포는 클러스터(ArgoCD)로 봐요.
+                  Sentry의 release는 위 릴리즈 버전과 같아요. 서버 예외는 reportServerIssue로 Sentry에 올라가요.
+                </Note>
+              </Cell>
 
-        <ServerHealthSection granted={access === 'granted'} />
+              <Cell title="데이터 계약">
+                <Note className="my-0 leading-relaxed">
+                  쓰기는 우편 발송, 편지 처리 표시, 공지·쿠폰 관리, 제재·해제, 무결성 오탐 해제, 세션 강제 종료 및 본인 채팅 운영진 별 표기 토글이에요.
+                  모든 운영 조치는 행위자 식별자와 함께 감사 로그에 기록돼요.
+                </Note>
+              </Cell>
+            </>
+          )}
 
-        <ClientMetricsSection granted={access === 'granted'} />
+          <HttpMetricsOpsSection granted={access === 'granted'} />
 
-        <ChangelogSection />
+          <ServerHealthSection granted={access === 'granted'} />
+        </CellGrid>
+      )}
 
-        <EventCatalog />
-      </CellGrid>
+      {section === 'client' && (
+        <CellGrid>
+          <ClientMetricsSection granted={access === 'granted'} />
+        </CellGrid>
+      )}
+
+      {section === 'changelog' && (
+        <CellGrid>
+          <ChangelogSection />
+        </CellGrid>
+      )}
+
+      {section === 'catalog' && (
+        <>
+          <ContentTab embedded />
+          {viewMode === 'detail' && (
+            <CellGrid>
+              <EventCatalog />
+            </CellGrid>
+          )}
+        </>
+      )}
     </TabPage>
   );
 }
@@ -98,8 +135,7 @@ function Meta({ k, v, hint }: { k: string; v: string; hint?: string }) {
   );
 }
 
-/** 이벤트 카탈로그 — 액션 리듀서와 관리자 조치가 남기는 유형의 사람용 목차다. 로그에 모르는
- *  타입이 보이면 GameAction(또는 관리자 조치 유형)과 metrics.EVENT_LABELS를 함께 갱신한다. */
+/** 이벤트 카탈로그 — 액션 리듀서와 관리자 조치가 남기는 유형의 사람용 목차다. */
 function EventCatalog() {
   return (
     <Cell title="events 스트림 카탈로그" className="xl:col-span-2" flush>
@@ -122,11 +158,6 @@ function EventCatalog() {
           </tbody>
         </DataTable>
       </div>
-      {/* 리듀서에서 상태만 바꾸고 이벤트 없는 액션들 — "왜 로그에 없나"의 답 */}
-      <Note size="2xs" className="my-0 px-3 pb-2">
-        setLocked, autoLock, setAutoLockOnCatch, travel, setEnergyTarget, resetEnergyTargets, dismissBaitRefund, seeTutorial, changeClothes, wearHat, debugSnapshot, exhibit는 이벤트를 남기지 않아요.
-        travel은 첫 방문만 visit으로 남아요. buyBait, setActiveBait는 지금은 없는 액션이고 예전 기록만 남아 있어요.
-      </Note>
     </Cell>
   );
 }

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { QueryProvider } from '../../../../core/QueryProvider';
 import { AdminAuthCtx } from '../../../../features/admin/service/accessContext';
 import UserDetail from './UserDetail';
@@ -39,7 +39,7 @@ describe('UserDetail 조리 상태 표시', () => {
   it('inProgress id와 cookingQueue 항목을 표시한다', async () => {
     render(
       <QueryProvider>
-        <AdminAuthCtx.Provider value={{ access: 'granted', uid: UID, role: 'admin', showStaffBadge: false, setStaffBadge: async () => {} }}>
+        <AdminAuthCtx.Provider value={{ access: 'granted', uid: UID, role: 'admin', canViewEmail: true, showStaffBadge: false, setStaffBadge: async () => {} }}>
           <UserDetail
             user={{
               user_id: UID,
@@ -67,6 +67,7 @@ describe('UserDetail 조리 상태 표시', () => {
       </QueryProvider>,
     );
 
+    fireEvent.click(screen.getByRole('button', { name: '상세' }));
     expect(await screen.findByText(/조리 중: 민 몰리 ×2 \(cook-1\)/)).toBeInTheDocument();
     expect(screen.getByText('조리 대기열 (1)')).toBeInTheDocument();
     expect(screen.getByText('생선 비리야니 ×3 (cook-2)')).toBeInTheDocument();
