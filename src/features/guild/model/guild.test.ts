@@ -6,7 +6,7 @@ import {
   PUBLIC_GUILD_SORT_OPTIONS, dailyContributionRows, GUILD_ERROR_TEXT, bonusEffectText, bonusEffectValue,
   bonusRows, donateDisabledReason, enhanceInvestState, enhancePoolSummary, enhanceResetCostRows, enhanceResetState,
   growthBar, growthTotalText, guildActivityText, guildAlertText, guildCooldownInfo, guildErrorText, guildLinkUrl, inviteDialogView, inviteShareText, leaveConfirm, leaveOutcome,
-  logbookDays, memberActions, memberConfirm, memberName, memberRows, personalNodes, publicJoinConfirm, renameButtonState, requestRows, splitMembers,
+  logbookDays, memberActions, memberConfirm, memberName, memberRows, personalNodes, publicGuildRowState, publicJoinConfirm, renameButtonState, requestRows, splitMembers,
 } from './guild';
 
 const member = (uid: string, role: GuildMemberItem['role'], leftAt: string | null = null): GuildMemberItem =>
@@ -471,20 +471,101 @@ describe('공개 길드 목록 화면 모델', () => {
     expect(guildActivityText('2026-11-23T12:00:00.000Z', now)).toBe('3일 전');
   });
 
-  it('바로 가입 확인 창 정보에 기존 대기 신청 자동 취소 경고를 조건부로 붙인다', () => {
-    const item = {
-      guildId: 'g1', name: '파도쉼터', level: 7, members: 8, cap: 10,
+  it('바로 가입·승인 신청 확인 창 정보에 기존 대기 신청 취소·변경 경고를 조건부로 붙인다', () => {
+    const openItem = {
+      guildId: 'g1', name: '파도쉼터', level: 7, members: 8, cap: 10, joinMode: 'open' as const,
       pitch: '다 같이 대어 노려요.', lastActivityAt: '2026-11-26T12:00:00.000Z',
     };
-    expect(publicJoinConfirm(item, null)).toMatchObject({
+    const pending = { code: 'ABCD2345', name: '은빛항구', requestedAt: '2026-11-25T00:00:00.000Z' };
+    expect(publicJoinConfirm(openItem, null)).toMatchObject({
+      mode: 'open',
       title: '길드 가입 확인',
-      guild: item,
+      label: '확인',
+      guild: openItem,
       pendingCancelWarn: null,
     });
-    expect(publicJoinConfirm(item, { code: 'ABCD2345', name: '은빛항구', requestedAt: '2026-11-25T00:00:00.000Z' })).toMatchObject({
+    expect(publicJoinConfirm(openItem, pending)).toMatchObject({
+      mode: 'open',
       title: '길드 가입 확인',
-      guild: item,
+      label: '확인',
+      guild: openItem,
+      pendingWarnTitle: '기존 가입 신청 자동 취소',
       pendingCancelWarn: '은빛항구 길드에 보낸 승인 대기 신청은 바로 가입하면 자동으로 취소돼요.',
+    });
+
+    const approvalItem = { ...openItem, guildId: 'g2', name: '심해탐험', joinMode: 'approval' as const };
+    expect(publicJoinConfirm(approvalItem, null)).toMatchObject({
+      mode: 'approval',
+      title: '길드 가입 신청',
+      label: '가입 신청',
+      guild: approvalItem,
+      pendingCancelWarn: null,
+    });
+    expect(publicJoinConfirm(approvalItem, pending)).toMatchObject({
+      mode: 'approval',
+      title: '길드 가입 신청',
+      label: '가입 신청',
+      guild: approvalItem,
+      pendingWarnTitle: '기존 가입 신청 변경',
+      pendingCancelWarn: '은빛항구 길드에 보낸 승인 대기 신청이 사라지고 이 길드로 신청이 바뀌어요.',
+    });
+  });
+
+  it('전체 길드 목록 행의 배지, 버튼, 사유, 툴팁 상태를 소속 여부·가입 방식·정원·재가입 대기에 따라 계산한다', () => {
+    const base = {
+      guildId: 'g1', name: '백경 원정대', level: 12, members: 8, cap: 10, joinMode: 'open' as const,
+      pitch: '함께해요.', lastActivityAt: '2026-11-26T12:00:00.000Z',
+    };
+
+    // 내 길드
+    expect(publicGuildRowState(base, { myGuildId: 'g1' })).toEqual({
+      isOwnGuild: true,
+      badge: { label: '소속 중', tone: 'gold' },
+      action: null,
+    });
+
+    // 소속 중 — 다른 길드(자유/승인/닫힘/만석)
+    expect(publicGuildRowState({ ...base, guildId: 'g2', joinMode: 'open' }, { myGuildId: 'g1' })).toMatchObject({
+      isOwnGuild: false,
+      badge: { label: '자유 가입', tone: 'gold-plain' },
+      action: { label: '가입', disabled: true, primary: false, reason: null, reasonDanger: false, tooltip: '이미 길드에 소속되어 있어요.' },
+    });
+    expect(publicGuildRowState({ ...base, guildId: 'g3', joinMode: 'approval' }, { myGuildId: 'g1' })).toMatchObject({
+      isOwnGuild: false,
+      badge: { label: '승인 가입', tone: 'accent' },
+      action: { label: '가입 신청', disabled: true, primary: false, reason: null, reasonDanger: false, tooltip: '이미 길드에 소속되어 있어요.' },
+    });
+    expect(publicGuildRowState({ ...base, guildId: 'g4', joinMode: 'closed' }, { myGuildId: 'g1' })).toMatchObject({
+      isOwnGuild: false,
+      badge: { label: '닫힘', tone: 'dim' },
+      action: { label: '가입 불가', disabled: true, primary: false, reason: '모집 닫힘', reasonDanger: false, tooltip: '이미 길드에 소속되어 있어요.' },
+    });
+    expect(publicGuildRowState({ ...base, guildId: 'g5', members: 10, cap: 10 }, { myGuildId: 'g1' })).toMatchObject({
+      isOwnGuild: false,
+      badge: { label: '만석', tone: 'danger' },
+      action: { label: '만석', disabled: true, primary: false, reason: '정원 10/10', reasonDanger: true, tooltip: '이미 길드에 소속되어 있어요.' },
+    });
+
+    // 미소속 — 자유/승인/닫힘/만석 + 재가입 대기
+    expect(publicGuildRowState({ ...base, joinMode: undefined }, {})).toMatchObject({
+      badge: { label: '자유 가입', tone: 'gold-plain' },
+      action: { label: '가입', disabled: false, primary: true, reason: null, tooltip: null },
+    });
+    expect(publicGuildRowState({ ...base, joinMode: 'approval' }, {})).toMatchObject({
+      badge: { label: '승인 가입', tone: 'accent' },
+      action: { label: '가입 신청', disabled: false, primary: false, reason: null, tooltip: null },
+    });
+    expect(publicGuildRowState({ ...base, joinMode: 'closed' }, {})).toMatchObject({
+      badge: { label: '닫힘', tone: 'dim' },
+      action: { label: '가입 불가', disabled: true, primary: false, reason: '모집 닫힘', reasonDanger: false, tooltip: null },
+    });
+    expect(publicGuildRowState({ ...base, members: 10, cap: 10 }, {})).toMatchObject({
+      badge: { label: '만석', tone: 'danger' },
+      action: { label: '만석', disabled: true, primary: false, reason: '정원 10/10', reasonDanger: true, tooltip: null },
+    });
+    expect(publicGuildRowState({ ...base, joinMode: 'approval' }, { cooldownTooltip: '재가입 대기 중이라 1시간 뒤에 이용할 수 있어요.' })).toMatchObject({
+      badge: { label: '승인 가입', tone: 'accent' },
+      action: { label: '가입 신청', disabled: true, primary: false, tooltip: '재가입 대기 중이라 1시간 뒤에 이용할 수 있어요.' },
     });
   });
 });
