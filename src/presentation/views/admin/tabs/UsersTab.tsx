@@ -263,9 +263,9 @@ export default function UsersTab({ onCompose }: {
       <TabState loading={granted && loading} error={error} onRetry={refresh} />
       {actionError && <Note tone="warn" className="my-0">{actionError}</Note>}
 
-      {current ? (
-        <div className="pf-admin-master-detail">
-          {directoryCard}
+      <div className={current ? 'pf-admin-master-detail' : undefined}>
+        {directoryCard}
+        {current && (
           <div className="pf-admin-detail-sticky">
             <AdminCard
               title={
@@ -350,10 +350,8 @@ export default function UsersTab({ onCompose }: {
               </div>
             </AdminCard>
           </div>
-        </div>
-      ) : (
-        directoryCard
-      )}
+        )}
+      </div>
 
       {/* 전체 상세 모달은 칸 밖에 둔다 — [전체 상세 모달] 버튼으로 드릴다운 */}
       {modalOpen && current && (
