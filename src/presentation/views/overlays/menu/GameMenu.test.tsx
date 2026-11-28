@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { MailItem } from '../../../../platform/api';
 import { NO_GUILD_EFFECTS } from '../../../../game/rules/guild';
 import { newState } from '../../../../game/rules/logic';
-import { BOUNTY_DAILY_CAP, BOUNTY_NAMED_DAILY_CAP } from '../../../../game/rules/balance';
 import type { GuildInfo } from '../../../../features/guild/model/guild';
 import { resetKeyScopes } from '../../../ui/hotkeys';
 
@@ -15,7 +14,7 @@ vi.mock('../../../../platform/api', async importOriginal => {
   return { ...mod, readMails: async () => state.mails };
 });
 
-const bounty = vi.hoisted(() => ({ snap: null as null | { clearsToday: { general: number; named: number } } }));
+const bounty = vi.hoisted(() => ({ snap: null as null | { clearsToday: { general: number; named: number }; progress: { questId: string; progress: number }[] } }));
 vi.mock('../../../../features/bounty/service/useBounty', () => ({
   useBounty: () => ({ snap: bounty.snap, loaded: true, refresh: () => {} }),
 }));
@@ -74,17 +73,17 @@ describe('게임 메뉴', () => {
     expect(screen.queryByRole('menuitem')).not.toBeInTheDocument();
   });
 
-  it('펼치면 그룹별 입구 줄이 라벨과 수를 보이고, 랭킹과 우편함을 누르면 해당 창을 열며 메뉴를 접는다', async () => {
+  it('펼치면 그룹별 입구 줄이 라벨만 보이고, 랭킹과 우편함을 누르면 해당 창을 열며 메뉴를 접는다', async () => {
     state.mails = [mail({ id: 1, gold: 100 }), mail({ id: 2 })];
     const h = handlers();
     wrap(<GameMenu account={null} {...h} />);
     fireEvent.click(await screen.findByRole('button', { name: '메뉴 열기, 새 알림 있음' }));
     const items = screen.getAllByRole('menuitem');
-    expect(items.map(i => i.textContent)).toEqual(['운세', '랭킹', '업적', '의뢰', '우편함2']);
+    expect(items.map(i => i.textContent)).toEqual(['운세', '랭킹', '업적', '의뢰', '우편함']);
     expect(screen.getByText('상태')).toBeInTheDocument();
     expect(screen.getByText('활동')).toBeInTheDocument();
     expect(screen.getByText('소통')).toBeInTheDocument();
-    expect(items[4]).toHaveAccessibleName('우편함, 받지 않은 우편 2통');
+    expect(items[4]).toHaveAccessibleName('우편함, 읽지 않은 우편 있음');
     fireEvent.click(items[1]);
     expect(h.onRanking).toHaveBeenCalled();
     expect(screen.queryByRole('menuitem')).not.toBeInTheDocument();
@@ -152,52 +151,55 @@ describe('게임 메뉴', () => {
       expect(screen.queryByRole('menuitem')).not.toBeInTheDocument();
     });
 
-    // 실제 clearsStatus와 규칙의 하루 상한을 쓴다: 남은 횟수 = 상한 - 오늘 클리어 수
-    const badgesOf = (row: HTMLElement) =>
-      [...row.querySelectorAll('[data-badge]')].map(b => [b.getAttribute('data-badge'), b.textContent]);
     const openRow = async () => {
-      fireEvent.click(await screen.findByRole('button', { name: '메뉴 열기' }));
+      fireEvent.click(await screen.findByRole('button', { name: /^메뉴 열기/ }));
       return screen.getByRole('menuitem', { name: /^의뢰/ });
     };
 
-    it('오늘 클리어가 0이면 상한만큼 남아 일반(노랑), 네임드(산호) 순서로 배지가 붙는다', async () => {
-      bounty.snap = { clearsToday: { general: 0, named: 0 } };
+    it('받을 보상이 없으면 의뢰 줄에 표식이 없고 글자 배지도 없다', async () => {
+      bounty.snap = { clearsToday: { general: 0, named: 0 }, progress: [{ questId: 'pacific-easy-epic', progress: 1 }] };
       wrap(<GameMenu account={null} {...handlers()} />);
       const row = await openRow();
-      expect(badgesOf(row)).toEqual([['gold', String(BOUNTY_DAILY_CAP)], ['named', String(BOUNTY_NAMED_DAILY_CAP)]]);
-      expect(row).toHaveAccessibleName(`의뢰, 오늘 남은 클리어 일반 ${BOUNTY_DAILY_CAP} 네임드 ${BOUNTY_NAMED_DAILY_CAP}`);
-    });
-
-    it('한 종류를 상한까지 클리어하면 그 배지만 사라진다', async () => {
-      bounty.snap = { clearsToday: { general: BOUNTY_DAILY_CAP, named: 0 } };
-      wrap(<GameMenu account={null} {...handlers()} />);
-      expect(badgesOf(await openRow())).toEqual([['named', String(BOUNTY_NAMED_DAILY_CAP)]]);
-    });
-
-    it('둘 다 상한까지 클리어하면(상한 1이면 클리어 1) 배지가 없다', async () => {
-      bounty.snap = { clearsToday: { general: BOUNTY_DAILY_CAP, named: BOUNTY_NAMED_DAILY_CAP } };
-      wrap(<GameMenu account={null} {...handlers()} />);
-      const row = await openRow();
-      expect(badgesOf(row)).toEqual([]);
       expect(row).toHaveAccessibleName('의뢰');
+      expect(row.querySelector('[data-mark]')).toBeNull();
+      expect(row).toHaveTextContent(/^의뢰$/);
+      expect(screen.queryByRole('button', { name: /새 알림/ })).not.toBeInTheDocument();
     });
 
-    it('남은 클리어를 모르면 의뢰 줄에 배지가 없다', async () => {
+    it('목표를 채운 일반 의뢰가 있으면 의뢰 줄에 테두리가, 메뉴 버튼에 금색 점이 켜진다', async () => {
+      bounty.snap = { clearsToday: { general: 0, named: 0 }, progress: [{ questId: 'pacific-easy-epic', progress: 2 }] };
+      wrap(<GameMenu account={null} {...handlers()} />);
+      const button = await screen.findByRole('button', { name: '메뉴 열기, 새 알림 있음' });
+      expect(button.querySelector('[data-mark="gold"]')).not.toBeNull();
+      fireEvent.click(button);
+      const row = screen.getByRole('menuitem', { name: '의뢰, 받을 보상 있음' });
+      expect(row.querySelector('[data-mark="border"]')).not.toBeNull();
+      expect(row).toHaveTextContent(/^의뢰$/);
+    });
+
+    it('토벌을 마친 네임드 의뢰도 같은 표식을 켠다', async () => {
+      bounty.snap = { clearsToday: { general: 0, named: 0 }, progress: [{ questId: 'pacific-named-megalodon', progress: 1 }] };
+      wrap(<GameMenu account={null} {...handlers()} />);
+      fireEvent.click(await screen.findByRole('button', { name: '메뉴 열기, 새 알림 있음' }));
+      expect(screen.getByRole('menuitem', { name: '의뢰, 받을 보상 있음' })).toBeInTheDocument();
+    });
+
+    it('남은 클리어를 모르면(스냅샷 없음) 의뢰 줄에 표식이 없다', async () => {
       bounty.snap = null;
       wrap(<GameMenu account={null} {...handlers()} />);
-      fireEvent.click(await screen.findByRole('button', { name: '메뉴 열기' }));
-      const row = screen.getByRole('menuitem', { name: /^의뢰/ });
-      expect(row.querySelector('[data-badge]')).toBeNull();
-      expect(row).toHaveAccessibleName('의뢰');
+      expect(await openRow()).toHaveAccessibleName('의뢰');
     });
 
-    it('의뢰 배지는 메뉴 버튼의 알림 점을 켜지 않는다 - 점은 친구, 우편함 같은 새 알림만 따른다', async () => {
-      bounty.snap = { clearsToday: { general: 0, named: 0 } };
+    it('금색 점과 빨간 점이 함께 켜질 상태이면 메뉴 버튼은 빨간 점만 보이고, 줄 표식은 둘 다 보인다', async () => {
+      bounty.snap = { clearsToday: { general: 0, named: 0 }, progress: [{ questId: 'pacific-easy-epic', progress: 2 }] };
+      state.mails = [mail({ id: 1, gold: 100 })];
       wrap(<GameMenu account={null} {...handlers()} />);
-      const button = await screen.findByRole('button', { name: '메뉴 열기' });
-      expect(button.textContent).toBe('메뉴');
-      expect(button.querySelector('.bg-danger')).toBeNull();
-      expect(screen.queryByRole('button', { name: /새 알림/ })).not.toBeInTheDocument();
+      const button = await screen.findByRole('button', { name: '메뉴 열기, 새 알림 있음' });
+      await waitFor(() => expect(button.querySelector('[data-mark="danger"]')).not.toBeNull());
+      expect(button.querySelector('[data-mark="gold"]')).toBeNull();
+      fireEvent.click(button);
+      expect(screen.getByRole('menuitem', { name: '의뢰, 받을 보상 있음' })).toBeInTheDocument();
+      expect(screen.getByRole('menuitem', { name: '우편함, 읽지 않은 우편 있음' }).querySelector('[data-mark="danger"]')).not.toBeNull();
     });
   });
 
@@ -214,33 +216,24 @@ describe('게임 메뉴', () => {
       expect(screen.queryByRole('menuitem')).not.toBeInTheDocument();
     });
 
-    it('받을 수 있는 업적이 있으면 금색 배지로 수를 보이고 접근성 이름에 싣는다', async () => {
+    it('받을 수 있는 업적이 있으면 업적 줄에 금색 테두리가, 메뉴 버튼에 금색 점이 켜진다', async () => {
       const h = handlers();
       h.game.achievements = { 'big-50': 'claimable', 'named-all': 'claimable' };
       wrap(<GameMenu account={null} {...h} />);
-      fireEvent.click(await screen.findByRole('button', { name: /^메뉴 열기/ }));
-      const row = screen.getByRole('menuitem', { name: /^업적/ });
-      expect(row).toHaveAccessibleName('업적, 받을 수 있는 업적 2개');
-      const badge = row.querySelector('[data-badge]');
-      expect(badge).not.toBeNull();
-      expect(badge!.textContent).toBe('2');
-      expect(badge!.getAttribute('data-badge')).toBe('gold');
+      const button = await screen.findByRole('button', { name: '메뉴 열기, 새 알림 있음' });
+      expect(button.querySelector('[data-mark="gold"]')).not.toBeNull();
+      fireEvent.click(button);
+      const row = screen.getByRole('menuitem', { name: '업적, 받을 보상 있음' });
+      expect(row.querySelector('[data-mark="border"]')).not.toBeNull();
+      expect(row).toHaveTextContent(/^업적$/);
     });
 
-    it('받을 수 있는 업적이 없으면 배지가 없다', async () => {
+    it('받을 수 있는 업적이 없으면 표식이 없다', async () => {
       wrap(<GameMenu account={null} {...handlers()} />);
       fireEvent.click(await screen.findByRole('button', { name: /^메뉴 열기/ }));
       const row = screen.getByRole('menuitem', { name: /^업적/ });
-      expect(row.querySelector('[data-badge]')).toBeNull();
+      expect(row.querySelector('[data-mark]')).toBeNull();
       expect(row).toHaveAccessibleName('업적');
-    });
-
-    it('받을 수 있는 업적은 메뉴 버튼의 알림 점을 켠다', async () => {
-      const h = handlers();
-      h.game.achievements = { 'big-50': 'claimable' };
-      wrap(<GameMenu account={null} {...h} />);
-      const button = await screen.findByRole('button', { name: '메뉴 열기, 새 알림 있음' });
-      expect(button.querySelector('.bg-danger')).not.toBeNull();
     });
   });
 
@@ -315,14 +308,14 @@ describe('게임 메뉴', () => {
       expect(screen.getByRole('tooltip')).toHaveTextContent('계정을 확인하면 쓸 수 있어요.');
     });
 
-    it('잠긴 줄에는 배지와 알림 점이 없고 접속 안내도 띄우지 않는다', async () => {
-      bounty.snap = { clearsToday: { general: 0, named: 0 } };
+    it('잠긴 줄에는 표식이 없고 접속 안내도 띄우지 않는다', async () => {
+      bounty.snap = { clearsToday: { general: 0, named: 0 }, progress: [{ questId: 'pacific-easy-epic', progress: 2 }] };
       state.mails = [mail({ id: 1, gold: 100 })];
       const h = handlers();
       wrap(<GameMenu account={null} {...h} accountState="guest" />);
       const button = await screen.findByRole('button', { name: '메뉴 열기' });
       fireEvent.click(button);
-      expect(document.querySelector('[data-badge]')).toBeNull();
+      expect(document.querySelector('[data-mark]')).toBeNull();
       expect(screen.getByRole('menuitem', { name: '의뢰' })).toBeInTheDocument();
       expect(h.setToast).not.toHaveBeenCalled();
     });
@@ -361,23 +354,20 @@ describe('게임 메뉴', () => {
       logbook: [],
       ...over,
     });
-    const badgesOf = (row: HTMLElement) =>
-      [...row.querySelectorAll('[data-badge]')].map(b => [b.getAttribute('data-badge'), b.textContent]);
-
-    it('길드장에게 대기 가입 신청이 있으면 danger 배지와 메뉴 알림 점을 켠다', async () => {
+    it('길드장에게 대기 가입 신청이 있으면 길드 줄과 메뉴 버튼에 금색 점이 켜진다', async () => {
       guildState.available = true;
       guildState.guild = makeGuild({
         requests: [{ uid: 'r1', nick: '산호', requestedAt: '2026-11-05T00:00:00.000Z' }],
       });
       wrap(<GameMenu account="me@example.com" {...handlers()} />);
       const button = await screen.findByRole('button', { name: '메뉴 열기, 새 알림 있음' });
-      expect(button.querySelector('.bg-danger')).not.toBeNull();
+      expect(button.querySelector('[data-mark="gold"]')).not.toBeNull();
       fireEvent.click(button);
-      const row = screen.getByRole('menuitem', { name: '길드, 가입 신청 1건' });
-      expect(badgesOf(row)).toEqual([['danger', '1']]);
+      const row = screen.getByRole('menuitem', { name: '길드, 새 알림 있음' });
+      expect(row.querySelector('[data-mark="gold"]')).not.toBeNull();
     });
 
-    it('Lv.6 이상에서 남은 개인 강화 포인트가 있으면 guild 배지를 보이고 알림 점은 켜지 않는다', async () => {
+    it('Lv.6 이상에서 남은 개인 강화 포인트가 있으면 길드 줄에만 금색 점이 켜지고 메뉴 버튼은 켜지지 않는다', async () => {
       guildState.available = true;
       guildState.guild = makeGuild({
         role: 'member',
@@ -385,28 +375,10 @@ describe('게임 메뉴', () => {
       });
       wrap(<GameMenu account="me@example.com" {...handlers()} />);
       const button = await screen.findByRole('button', { name: '메뉴 열기' });
-      expect(button.querySelector('.bg-danger')).toBeNull();
+      expect(button.querySelector('[data-mark]')).toBeNull();
       fireEvent.click(button);
-      const row = screen.getByRole('menuitem', { name: '길드, 개인 강화 포인트 2개' });
-      expect(badgesOf(row)).toEqual([['guild', '2']]);
-    });
-
-    it('대기 신청과 남은 개인 강화 포인트가 함께 있으면 danger, guild 순서로 배지를 보인다', async () => {
-      guildState.available = true;
-      guildState.guild = makeGuild({
-        growth: { level: 8, total: 550_000, floor: 550_000, next: 800_000 },
-        requests: [
-          { uid: 'r1', nick: '산호', requestedAt: '2026-11-05T00:00:00.000Z' },
-          { uid: 'r2', nick: '별빛', requestedAt: '2026-11-05T00:00:00.000Z' },
-        ],
-        bonuses: [
-          { id: 'sell', unlock: 1, rank: 5, enhanceRank: 1, totalRank: 6, cap: 5, pool: 0, next: null, effect: 0.12, nextEffect: 0.14, mine: 0 },
-        ],
-      });
-      wrap(<GameMenu account="me@example.com" {...handlers()} />);
-      fireEvent.click(await screen.findByRole('button', { name: '메뉴 열기, 새 알림 있음' }));
-      const row = screen.getByRole('menuitem', { name: '길드, 가입 신청 2건, 개인 강화 포인트 2개' });
-      expect(badgesOf(row)).toEqual([['danger', '2'], ['guild', '2']]);
+      const row = screen.getByRole('menuitem', { name: '길드, 새 알림 있음' });
+      expect(row.querySelector('[data-mark="gold"]')).not.toBeNull();
     });
   });
 });

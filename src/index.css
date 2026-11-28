@@ -84,6 +84,8 @@
   --animate-mutated-shimmer: mutated-shimmer 2.4s ease-in-out infinite;
   --animate-fx-wisp: fx-wisp 3s ease-in-out infinite;
   --animate-glow-legend: glow-legend 2.4s ease-in-out infinite;
+  --animate-mark-blink: mark-blink 2.4s ease-in-out infinite;
+  --animate-mark-sparkle: mark-sparkle 1.2s ease-in-out infinite;
 
   /* transform으로 3px 슬라이드 — translate/rotate 유틸을 가진 요소에는 쓰지 말 것(아래 ⚠ 규칙) */
   @keyframes fade-in {
@@ -114,6 +116,14 @@
   @keyframes glow-legend {
     0%, 100% { filter: drop-shadow(0 0 6px rgba(255, 213, 79, 0.45)); }
     50%      { filter: drop-shadow(0 0 14px rgba(255, 213, 79, 0.85)); }
+  }
+  @keyframes mark-blink {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.3; }
+  }
+  @keyframes mark-sparkle {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.45; transform: scale(0.8); }
   }
   @keyframes catch-card-sweep {
     0%   { transform: translateX(-80%); }
