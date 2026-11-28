@@ -12,11 +12,12 @@ afterEach(() => { cleanup(); sessionStorage.clear(); vi.restoreAllMocks(); });
 describe('관리자 대시보드 페이지', () => {
   const openFish = async () => {
     render(<QueryProvider><AdminApp /></QueryProvider>);
-    expect(await screen.findByText('운영 대시보드')).toBeInTheDocument();
+    expect(await screen.findByText('픽셀 피싱 관리자')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^스탯$/ })).not.toBeInTheDocument();
     expect(screen.queryByText('표면 위장')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '지표·밸런스' }));
-    fireEvent.click(screen.getByRole('button', { name: '밸런스 시뮬' }));
+    fireEvent.click(screen.getByRole('tab', { name: '지표·밸런스' }));
+    fireEvent.click(screen.getByRole('tab', { name: '밸런스 시뮬' }));
+    fireEvent.click(within(screen.getByRole('group', { name: '보기 모드' })).getByRole('button', { name: '상세' }));
     fireEvent.click(screen.getByRole('button', { name: '모두 펼치기' }));
   };
 
@@ -57,17 +58,17 @@ describe('관리자 대시보드 탐색', () => {
     await screen.findByRole('navigation', { name: '대시보드 섹션' });
   };
   const tabNames = () => within(screen.getByRole('navigation', { name: '대시보드 섹션' }))
-    .getAllByRole('button').map(b => b.textContent?.trim());
+    .getAllByRole('tab').map(b => b.textContent?.trim());
 
   it('탭은 다섯 개다 — 현황 · 플레이어 · 소통·지급 · 지표·밸런스 · 운영·콘텐츠', async () => {
     await open('#/admin/overview/summary');
     expect(tabNames()).toEqual(['현황', '플레이어', '소통·지급', '지표·밸런스', '운영·콘텐츠']);
-    expect(screen.getByRole('heading', { name: '현황' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '현황', selected: true })).toBeInTheDocument();
   });
 
   it('모르는 해시는 현황 요약으로 열리고 주소도 정식 해시로 바뀐다', async () => {
     await open('#/admin/users');
-    expect(screen.getByRole('heading', { name: '현황' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '현황', selected: true })).toBeInTheDocument();
     expect(window.location.hash).toBe('#/admin/overview/summary');
   });
 
@@ -79,35 +80,36 @@ describe('관리자 대시보드 탐색', () => {
 
   it('탭을 누르면 그 탭의 기본 구역 해시로 간다', async () => {
     await open('#/admin/overview/summary');
-    fireEvent.click(screen.getByRole('button', { name: '지표·밸런스' }));
+    fireEvent.click(screen.getByRole('tab', { name: '지표·밸런스' }));
     expect(window.location.hash).toBe('#/admin/insights/economy');
-    expect(screen.getByRole('heading', { name: '지표·밸런스' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '플레이어' }));
+    expect(screen.getByRole('tab', { name: '지표·밸런스', selected: true })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: '플레이어' }));
     expect(window.location.hash).toBe('#/admin/players/directory');
-    fireEvent.click(screen.getByRole('button', { name: '소통·지급' }));
+    fireEvent.click(screen.getByRole('tab', { name: '소통·지급' }));
     expect(window.location.hash).toBe('#/admin/comms/mail');
-    expect(screen.getByRole('heading', { name: '소통·지급' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '소통·지급', selected: true })).toBeInTheDocument();
   });
 
   it('구역 탭을 누르면 해시가 구역까지 바뀐다', async () => {
     await open('#/admin/players');
     expect(window.location.hash).toBe('#/admin/players/directory');
-    fireEvent.click(screen.getByRole('button', { name: '제재·무결성' }));
+    fireEvent.click(screen.getByRole('tab', { name: '제재·무결성' }));
     expect(window.location.hash).toBe('#/admin/players/sanctions');
-    expect(screen.getByRole('button', { name: '제재·무결성', pressed: true })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '제재·무결성', selected: true })).toBeInTheDocument();
   });
 
   it('주소의 해시가 바뀌면 화면이 따라간다', async () => {
     await open('#/admin/overview/summary');
     act(() => { window.location.hash = '#/admin/players/sanctions'; });
     await waitFor(() => expect(window.location.hash).toBe('#/admin/players/sanctions'));
-    expect(screen.getByRole('button', { name: '제재·무결성', pressed: true })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '제재·무결성', selected: true })).toBeInTheDocument();
   });
 
-  it('상단 요약 보기 / 상세 보기 토글은 기본값 요약 보기이고 sessionStorage에 유지된다', async () => {
+  it('상단 요약 / 상세 토글은 기본값 요약이고 sessionStorage에 유지된다', async () => {
     await open('#/admin/overview/summary');
-    const summaryBtn = screen.getByRole('button', { name: '요약 보기' });
-    const detailBtn = screen.getByRole('button', { name: '상세 보기' });
+    const viewGroup = screen.getByRole('group', { name: '보기 모드' });
+    const summaryBtn = within(viewGroup).getByRole('button', { name: '요약' });
+    const detailBtn = within(viewGroup).getByRole('button', { name: '상세' });
     expect(summaryBtn).toHaveAttribute('aria-pressed', 'true');
     expect(detailBtn).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByText(/즉시 처리 큐/)).toBeInTheDocument();
@@ -123,8 +125,9 @@ describe('관리자 대시보드 탐색', () => {
     expect(await screen.findByText('로컬 모드예요. 클라우드가 설정되어 있지 않아요.')).toBeInTheDocument();
     expect(screen.getByText('지금 접속')).toBeInTheDocument();
     expect(screen.getAllByText('운영 DB에 연결하면 채워져요.').length).toBeGreaterThan(0);
-    expect(screen.getByText('마지막 조회 —')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '현재 탭 새로고침' })).toBeDisabled();
+    const refreshBtn = screen.getByRole('button', { name: '현재 탭 새로고침' });
+    expect(refreshBtn).toHaveAttribute('title', '마지막 조회 —');
+    expect(refreshBtn).toBeDisabled();
   });
 });
 
@@ -147,18 +150,17 @@ describe('운영자(maintainer) 공통 대시보드 통합', () => {
       </QueryProvider>,
     );
 
-    expect(screen.getByText('운영 대시보드')).toBeInTheDocument();
+    expect(screen.getByText('픽셀 피싱 관리자')).toBeInTheDocument();
     expect(screen.getByText('운영자')).toBeInTheDocument();
     expect(window.location.hash).toBe('#/admin/comms/mail');
-    expect(screen.getByRole('button', { name: '우편 발송' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '공지' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '쿠폰' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '편지' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '우편 발송' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '공지' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '쿠폰' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '편지' })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '플레이어' }));
+    fireEvent.click(screen.getByRole('tab', { name: '플레이어' }));
     expect(window.location.hash).toBe('#/admin/players/directory');
-    expect(screen.getByRole('button', { name: '검색·명부' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '제재·무결성' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '검색·명부' })).toBeInTheDocument();
 
     const badgeBtn = screen.getByRole('button', { name: '채팅 운영진 별 표기' });
     fireEvent.click(badgeBtn);

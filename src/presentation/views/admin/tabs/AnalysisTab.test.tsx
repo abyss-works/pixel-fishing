@@ -75,11 +75,11 @@ vi.mock('../../../../platform/api', () => ({
 
 afterEach(cleanup);
 
-function show(section: InsightsSection, role: AdminRole = 'admin') {
+function show(section: InsightsSection, role: AdminRole = 'admin', viewMode: 'summary' | 'detail' = 'detail') {
   render(
     <QueryProvider>
       <AdminAuthCtx.Provider value={{ access: 'granted', uid: role, role, canViewEmail: role === 'admin', showStaffBadge: false, setStaffBadge: async () => {} }}>
-        <AdminViewModeCtx.Provider value={{ viewMode: 'detail', setViewMode: () => {} }}>
+        <AdminViewModeCtx.Provider value={{ viewMode, setViewMode: () => {} }}>
           <InsightsTab section={section} onSection={() => {}} />
         </AdminViewModeCtx.Provider>
       </AdminAuthCtx.Provider>
@@ -94,10 +94,10 @@ describe('경제·진행 탭', () => {
     const today = (name: string) => within(screen.getByRole('img', { name })).getByText(/금일/).textContent;
     await waitFor(() => expect(today('골드 유입 일별 추이')).toContain('1,200'));
     expect(today('골드 유출 일별 추이')).toContain('400');
-    // 유입 1,200G − 유출 400G = 순유입 800G, 잔고 합은 400G(유출합과 값이 같아 두 줄에 나온다)
-    expect(screen.getByText('1,200G')).toBeInTheDocument();
-    expect(screen.getByText('800G')).toBeInTheDocument();
-    expect(screen.getAllByText('400G')).toHaveLength(2);
+    // 유입 1,200G − 유출 400G = 순유입 800G
+    expect(screen.getAllByText('1,200G').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('800G').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('400G').length).toBeGreaterThanOrEqual(2);
   });
 
   it('경제 구역 — events 7일 보관 한도 기준으로 고정 조회하고 30일·90일 전환 스위치를 두지 않는다', async () => {
@@ -155,7 +155,27 @@ describe('경제·진행 탭', () => {
     await waitFor(() => expect(vi.mocked(api.admin.dailyStats)).toHaveBeenCalledTimes(2));
   });
 
-  it('maintainer 역할의 경제 구역은 명부 골드가 null이어도 userAggregates로 합계·대상 수·중앙값·상위 25%·최대를 표시한다', async () => {
+  it('요약 보기에서는 경제·리텐션 모두 핵심 4 KPI 카드만 노출하고 차트·원장·코호트 표를 숨긴다', async () => {
+    show('economy', 'admin', 'summary');
+    await waitFor(() => expect(screen.getByText('일일 골드 발행')).toBeInTheDocument());
+    expect(screen.getByText('일일 골드 소각')).toBeInTheDocument();
+    expect(screen.getByText('순유입')).toBeInTheDocument();
+    expect(screen.getByText('이탈·정체 핵심 구간')).toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: '골드 유입 일별 추이' })).toBeNull();
+    expect(screen.queryByText(/원장 대차대조/)).toBeNull();
+    expect(screen.queryByText('배 단계')).toBeNull();
+
+    cleanup();
+    show('retention', 'admin', 'summary');
+    await waitFor(() => expect(screen.getByText('1일차 잔존')).toBeInTheDocument());
+    expect(screen.getByText('7일차 잔존')).toBeInTheDocument();
+    expect(screen.getByText('최근 DAU')).toBeInTheDocument();
+    expect(screen.getByText('활성·신규 추이')).toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: /일별 활성 사람 수/ })).toBeNull();
+    expect(screen.queryByText('리텐션 코호트')).toBeNull();
+  });
+
+  it('maintainer 역할의 경제 구역은 명부 골드가 null이어도 userAggregates로 잔고·중앙값을 계산해 표시한다', async () => {
     vi.mocked(api.admin.overview).mockResolvedValueOnce({
       users: [{
         user_id: 'op-1', opHandle: 'op-1', email: null, nickname: '어부', is_anonymous: false,
@@ -180,11 +200,8 @@ describe('경제·진행 탭', () => {
     } as never);
 
     show('economy', 'maintainer');
-    expect(await screen.findByText('4.5만')).toBeInTheDocument();
-    expect(screen.getByText('저장된 골드 총합, 대상 15명')).toBeInTheDocument();
-    expect(screen.getByText('1,500')).toBeInTheDocument();
-    expect(screen.getByText('5,000')).toBeInTheDocument();
-    expect(screen.getByText('2만')).toBeInTheDocument();
+    expect(await screen.findByText(/전체 잔고 45,000G \(15명\)/)).toBeInTheDocument();
+    expect(screen.getByText(/잔고 중앙값 1,500G/)).toBeInTheDocument();
     expect(screen.getByText('4.5만G')).toBeInTheDocument();
   });
 
@@ -225,7 +242,7 @@ describe('경제·진행 탭', () => {
     expect(screen.getByText(/마을 4\/4, 태평양 3\/4\(수배\), 동남아 1\/4\(수배\)/)).toBeInTheDocument();
     expect(screen.getByText(/visited 기준 현행 지역 도달: 마을 4\/4, 대양 3\/4/)).toBeInTheDocument();
     expect(screen.getByText('총 3명이 다음 배 명성 조건에 막혀 있어요.')).toBeInTheDocument();
-    expect(screen.getByText('돛단배(T2)')).toBeInTheDocument();
+    expect(screen.getAllByText('돛단배(T2)').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('2명')).toBeInTheDocument();
     expect(screen.getByText('범선(T4)')).toBeInTheDocument();
     expect(screen.getByText('1명')).toBeInTheDocument();

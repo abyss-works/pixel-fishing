@@ -677,6 +677,287 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
     pointer-events: none;
   }
 
+  /* ============================================================
+     관리자 대시보드 전용 스코프 스타일 (.pf-admin-*)
+     게임 화면 CSS와 분리된 3단 상단 크롬 · 그리드 · 압축 표 · 큐 레이아웃
+     ============================================================ */
+  .pf-admin-topbar {
+    background: var(--c-surface);
+    border-bottom: 2px solid var(--c-line);
+  }
+  .pf-admin-topbar-inner {
+    max-width: 1280px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 10px 14px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .pf-admin-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--c-gold);
+  }
+  .pf-admin-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .pf-admin-nav {
+    background: var(--inset-base);
+    border-bottom: 2px solid var(--c-line);
+  }
+  .pf-admin-nav-inner {
+    max-width: 1280px;
+    width: 100%;
+    margin: 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 8px 14px 0;
+  }
+  .pf-admin-nav .pf-admin-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    min-height: auto;
+    background: var(--c-surface);
+    color: var(--c-text-dim);
+    border: 1px solid var(--c-line);
+    border-bottom: none;
+    box-shadow: none;
+    clip-path: none;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    position: relative;
+    top: 2px;
+  }
+  .pf-admin-nav .pf-admin-tab:hover:not(:disabled) {
+    color: var(--c-text);
+    background: var(--c-surface-2);
+  }
+  .pf-admin-nav .pf-admin-tab[aria-selected="true"] {
+    background: var(--c-bg);
+    color: var(--c-gold);
+    border-color: var(--c-line);
+    border-top: 2px solid var(--c-gold);
+    padding-bottom: 10px;
+  }
+
+  .pf-admin-subnav {
+    background: var(--inset-deep);
+    border-bottom: 1px solid var(--c-line-dim);
+  }
+  .pf-admin-subnav-inner {
+    max-width: 1280px;
+    width: 100%;
+    margin: 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 14px;
+  }
+  .pf-admin-subtab-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .pf-admin-subnav .pf-admin-subtab {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 8px 12px;
+    min-height: auto;
+    background: var(--inset-base);
+    color: var(--c-text-dim);
+    border: 1px solid var(--c-line);
+    box-shadow: none;
+    clip-path: none;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .pf-admin-subnav .pf-admin-subtab:hover:not(:disabled) {
+    color: var(--c-text);
+    background: var(--c-surface);
+  }
+  .pf-admin-subnav .pf-admin-subtab[aria-selected="true"] {
+    background: var(--c-surface-2);
+    color: var(--c-accent);
+    border-color: var(--c-accent);
+  }
+
+  .pf-admin-body {
+    max-width: 1280px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .pf-admin-kpi-grid-4,
+  .pf-admin-kpi-grid-8 {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .pf-admin-kpi-card {
+    background: var(--c-surface);
+    border: 1px solid var(--c-line);
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .pf-admin-kpi-label {
+    font-size: 11px;
+    color: var(--c-text-dim);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+  }
+  .pf-admin-kpi-val {
+    font-family: var(--font-pixel);
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--c-text);
+  }
+  .pf-admin-kpi-sub {
+    font-size: 11px;
+    color: var(--c-text-dim);
+  }
+
+  .pf-admin-split-2 {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .pf-admin-split-60-40 {
+    display: grid;
+    grid-template-columns: 3fr 2fr;
+    gap: 12px;
+    align-items: start;
+  }
+  .pf-admin-split-3 {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .pf-admin-card {
+    background: var(--inset-base);
+    border: 1px solid var(--c-line);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .pf-admin-card-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--c-text);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 0;
+  }
+
+  .pf-admin-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+    border: 1px solid var(--c-line);
+    background: var(--inset-base);
+    padding: 8px;
+  }
+  .pf-admin-table-wrap.is-scroll {
+    max-height: 520px;
+    overflow-y: auto;
+  }
+  .pf-admin-table-wrap table.pf-admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .pf-admin-table-wrap .pf-admin-table th,
+  .pf-admin-table-wrap .pf-admin-table td {
+    padding: 8px 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--c-line-dim);
+    vertical-align: middle;
+  }
+  .pf-admin-table-wrap .pf-admin-table th {
+    background: var(--c-surface);
+    color: var(--c-text-dim);
+    font-weight: 700;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .pf-admin-table-wrap .pf-admin-table tr:hover td {
+    background: rgba(79, 195, 247, 0.05);
+  }
+  .pf-admin-table-wrap .pf-admin-table tr.is-selected td {
+    background: rgba(255, 213, 79, 0.08);
+  }
+
+  .pf-admin-queue-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .pf-admin-queue-item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    background: var(--inset-deep);
+    border: 1px solid var(--c-line-dim);
+  }
+  .pf-admin-queue-item.is-urgent {
+    border-left: 3px solid var(--c-danger);
+  }
+  .pf-admin-queue-item.is-warn {
+    border-left: 3px solid var(--c-gold);
+  }
+
+  @media (max-width: 820px) {
+    .pf-admin-kpi-grid-4,
+    .pf-admin-kpi-grid-8,
+    .pf-admin-split-2,
+    .pf-admin-split-60-40,
+    .pf-admin-split-3 {
+      grid-template-columns: 1fr;
+    }
+    .pf-admin-topbar-inner,
+    .pf-admin-body {
+      padding: 10px;
+    }
+    .pf-admin-nav .pf-admin-tab {
+      padding: 6px 8px;
+      font-size: 11px;
+    }
+  }
+
   /* 거친 포인터(터치)의 누르는 영역 — 누를 수 있는 요소의 누르는 영역을 보이는 크기는 그대로 둔 채 44px 이상으로 넓힌다.
      보이지 않는 ::after가 요소 가운데에서 max(요소 크기, 44px)로 펼쳐지며 요소의 일부로 눌린다.
      clip-path로 모서리를 깎은 요소는 깎인 바깥을 누를 수 없다. */

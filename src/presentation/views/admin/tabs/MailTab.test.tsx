@@ -1,8 +1,10 @@
-// 우편 구역 — 보낸 우편 목록, 미리보기 뒤에만 열리는 보내기, 확인 뒤 보내기를 검사한다.
+// 우편 구역 — 칩 기반 수신자 선택, 우측 요약 내역, 상세 보기 전체 표, 미리보기·보내기를 검사한다.
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
 import { QueryProvider } from '../../../../core/QueryProvider';
 import { AdminAuthCtx } from '../../../../features/admin/service/accessContext';
+import { AdminViewModeCtx } from '../viewMode';
+import type { AdminViewMode } from '../viewMode';
 import MailTab from './MailTab';
 
 const USER = '30e63c95-12de-4ba6-b397-e8b69ce0311c';
@@ -39,27 +41,42 @@ vi.mock('../../../../platform/api', () => ({
   },
 }));
 
-function show() {
+function show(viewMode: AdminViewMode = 'summary', to: string | null = null) {
   render(
     <QueryProvider>
       <AdminAuthCtx.Provider value={{ access: 'granted', uid: 'u', role: 'admin', canViewEmail: true, showStaffBadge: false, setStaffBadge: async () => {} }}>
-        <MailTab />
+        <AdminViewModeCtx.Provider value={{ viewMode, setViewMode: () => {} }}>
+          <MailTab to={to} />
+        </AdminViewModeCtx.Provider>
       </AdminAuthCtx.Provider>
     </QueryProvider>,
   );
 }
 
+function openBulkInput() {
+  fireEvent.click(screen.getByRole('button', { name: '대량 텍스트 입력' }));
+  return screen.getByLabelText(/받는 사람\(/);
+}
+
 describe('MailTab', () => {
   afterEach(() => { cleanup(); mocks.mail.mockReset(); });
 
-  it('보낸 우편을 받는 사람의 닉네임(이메일)과 첨부 아이템, 상태로 그린다', async () => {
-    show();
+  it('요약 보기에서는 우측 간결 리스트만 보이고 상세 보낸 우편 표는 숨긴다', async () => {
+    show('summary');
     expect(await screen.findByText('지난 우편')).toBeTruthy();
     expect(screen.getAllByText('바다친구(friend@example.com)').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('비약 지급')).toBeTruthy();
-    expect(screen.getByText('작은 바다 영약')).toBeTruthy();
-    expect(screen.getByText('×2')).toBeTruthy();
     expect(screen.getByText('읽음')).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: '보낸 우편 상세 내역' })).toBeNull();
+    expect(screen.queryByRole('table')).toBeNull();
+  });
+
+  it('상세 보기에서는 하단에 전체 보낸 우편 상세 표를 그리고 첨부 아이템과 상태를 표시한다', async () => {
+    show('detail');
+    expect(screen.getByRole('heading', { name: '보낸 우편 상세 내역' })).toBeTruthy();
+    expect(await screen.findByText('작은 바다 영약')).toBeTruthy();
+    expect(screen.getByText('×2')).toBeTruthy();
+    expect(screen.getAllByText('읽음').length).toBeGreaterThanOrEqual(1);
   });
 
   it('보내기는 미리보기 뒤에만 열리고, 확인하면 같은 멱등 키 요청으로 보낸다', async () => {
@@ -69,7 +86,8 @@ describe('MailTab', () => {
     show();
     fireEvent.change(screen.getByLabelText('제목'), { target: { value: '강화비 차액' } });
     fireEvent.change(screen.getByLabelText('본문'), { target: { value: '돌려드려요.' } });
-    fireEvent.change(screen.getByLabelText(/받는 사람/), { target: { value: `${USER} 6309483` } });
+    const bulk = openBulkInput();
+    fireEvent.change(bulk, { target: { value: `${USER} 6309483` } });
     const send = screen.getByRole('button', { name: '보내기' });
     expect(send).toBeDisabled();
 
@@ -93,7 +111,8 @@ describe('MailTab', () => {
     show();
     fireEvent.change(screen.getByLabelText('제목'), { target: { value: '안내' } });
     fireEvent.change(screen.getByLabelText('본문'), { target: { value: '본문' } });
-    fireEvent.change(screen.getByLabelText(/받는 사람/), { target: { value: `${USER} 10\n${USER.toUpperCase()} 20` } });
+    const bulk = openBulkInput();
+    fireEvent.change(bulk, { target: { value: `${USER} 10\n${USER.toUpperCase()} 20` } });
     expect(screen.getByText(/중복된 계정 id/)).toBeTruthy();
     expect(screen.getByRole('button', { name: '미리보기' })).toBeDisabled();
 
@@ -101,7 +120,7 @@ describe('MailTab', () => {
       problems: ['totalGold'],
       preview: { count: 1, recipientCount: 1, totalGold: 600_000_000, capExceeded: true, maxTotalGold: 500_000_000, missing: [] },
     });
-    fireEvent.change(screen.getByLabelText(/받는 사람/), { target: { value: `${USER} 600000000` } });
+    fireEvent.change(bulk, { target: { value: `${USER} 600000000` } });
     expect(screen.getByText(/일괄 발송 상한.*초과해 발송할 수 없어요/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '미리보기' }));
     expect(await screen.findByText(/600,000,000G.*500,000,000G.*초과해 발송할 수 없어요/)).toBeTruthy();
@@ -110,15 +129,16 @@ describe('MailTab', () => {
 
   it('받는 사람 형식이 틀리면 줄 번호를 알려 주고 미리보기를 막는다', async () => {
     show();
-    fireEvent.change(screen.getByLabelText(/받는 사람/), { target: { value: 'nope 1' } });
+    const bulk = openBulkInput();
+    fireEvent.change(bulk, { target: { value: 'nope 1' } });
     expect(screen.getByText('형식이 틀린 줄: 1')).toBeTruthy();
     expect(screen.getByRole('button', { name: '미리보기' })).toBeDisabled();
   });
 
-  it('이메일·닉네임으로 찾은 계정을 받는 사람 목록에 더하고, 계정 id로 보낸다', async () => {
+  it('칩 기반 수신자 선택기에서 검색으로 추가하고 x 버튼으로 제거할 수 있다', async () => {
     mocks.mail.mockResolvedValue({
       problems: [],
-      preview: { count: 2, recipientCount: 2, totalGold: 0, capExceeded: false, maxTotalGold: 500_000_000, missing: [] },
+      preview: { count: 1, recipientCount: 1, totalGold: 0, capExceeded: false, maxTotalGold: 500_000_000, missing: [] },
     });
     show();
     await screen.findByText('지난 우편');
@@ -127,9 +147,13 @@ describe('MailTab', () => {
     fireEvent.click(screen.getByRole('option', { name: /^바다친구\(friend@example\.com\)/ }));
     fireEvent.change(search, { target: { value: '민물' } });
     fireEvent.click(screen.getByRole('option', { name: /^민물러\(게스트\)/ }));
-    const list = screen.getByLabelText(/받는 사람\(/) as HTMLTextAreaElement;
-    expect(list.value).toBe(`${USER} 0\ne747e6c9-f0c2-4192-a462-9cd26e8a812a 0`);
-    expect(screen.getByText('받는 사람 2명: 바다친구(friend@example.com), 민물러(게스트)')).toBeTruthy();
+
+    const chips = screen.getByLabelText('선택된 수신자 칩');
+    expect(within(chips).getByText('바다친구(friend@example.com)')).toBeTruthy();
+    expect(within(chips).getByText('민물러(게스트)')).toBeTruthy();
+
+    fireEvent.click(within(chips).getByRole('button', { name: '민물러(게스트) 수신자 제거' }));
+    expect(within(chips).queryByText('민물러(게스트)')).toBeNull();
 
     fireEvent.change(search, { target: { value: 'nobody' } });
     expect(screen.getByText('찾는 계정이 없어요.')).toBeTruthy();
@@ -139,31 +163,24 @@ describe('MailTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '미리보기' }));
     await waitFor(() => expect(mocks.mail).toHaveBeenLastCalledWith('preview', {
       title: '안내', body: '본문',
-      target: { kind: 'users', recipients: [{ userId: USER, gold: 0 }, { userId: 'e747e6c9-f0c2-4192-a462-9cd26e8a812a', gold: 0 }] },
+      target: { kind: 'users', recipients: [{ userId: USER, gold: 0 }] },
       idempotencyKey: expect.any(String),
     }));
   });
 
-  it('다른 화면의 우편 보내기로 열리면 그 계정을 받는 사람으로 넣어 둔다', async () => {
-    render(
-      <QueryProvider>
-        <AdminAuthCtx.Provider value={{ access: 'granted', uid: 'u', role: 'admin', canViewEmail: true, showStaffBadge: false, setStaffBadge: async () => {} }}>
-          <MailTab to={USER} />
-        </AdminAuthCtx.Provider>
-      </QueryProvider>,
-    );
-    expect((screen.getByLabelText(/받는 사람\(/) as HTMLTextAreaElement).value).toBe(`${USER} 0`);
-    expect(await screen.findByText('받는 사람 1명: 바다친구(friend@example.com)')).toBeTruthy();
+  it('다른 화면의 우편 보내기로 열리면 그 계정을 수신자 칩으로 넣어 둔다', async () => {
+    show('summary', USER);
+    const chips = await screen.findByLabelText('선택된 수신자 칩');
+    expect(await within(chips).findByText('바다친구(friend@example.com)')).toBeTruthy();
   });
 
   it('아이템을 찾아 수량과 함께 첨부하고 빼며, items 포함 요청으로 보낸다', async () => {
     mocks.mail.mockImplementation(async (op: string) => (op === 'preview'
       ? { problems: [], preview: { count: 1, recipientCount: 1, totalGold: 0, capExceeded: false, maxTotalGold: 500_000_000, missing: [] } }
       : { problems: [], preview: { count: 1, recipientCount: 1, totalGold: 0, capExceeded: false, maxTotalGold: 500_000_000, missing: [] }, sent: 1 }));
-    show();
+    show('summary', USER);
     fireEvent.change(screen.getByLabelText('제목'), { target: { value: '비약 선물' } });
     fireEvent.change(screen.getByLabelText('본문'), { target: { value: '행운이 함께하길!' } });
-    fireEvent.change(screen.getByLabelText(/받는 사람/), { target: { value: `${USER} 0` } });
 
     fireEvent.change(screen.getByLabelText(/첨부 수량/), { target: { value: '3' } });
     fireEvent.change(screen.getByLabelText(/첨부 아이템 찾기/), { target: { value: '바다 영약' } });
@@ -194,10 +211,9 @@ describe('MailTab', () => {
       problems: ['empty'],
       preview: { count: 1, recipientCount: 1, totalGold: 0, capExceeded: false, maxTotalGold: 500_000_000, missing: [] },
     });
-    show();
+    show('summary', USER);
     fireEvent.change(screen.getByLabelText('제목'), { target: { value: '빈 보상' } });
     fireEvent.change(screen.getByLabelText('본문'), { target: { value: '본문' } });
-    fireEvent.change(screen.getByLabelText(/받는 사람/), { target: { value: `${USER} 0` } });
     fireEvent.click(screen.getByRole('button', { name: '미리보기' }));
     expect(await screen.findByText('골드, 아이템, 모자 중 하나 이상을 보내야 해요.')).toBeTruthy();
     expect(screen.getByRole('button', { name: '보내기' })).toBeDisabled();
@@ -207,10 +223,9 @@ describe('MailTab', () => {
     mocks.mail.mockImplementation(async (op: string) => (op === 'preview'
       ? { problems: [], preview: { count: 1, recipientCount: 1, totalGold: 0, capExceeded: false, maxTotalGold: 500_000_000, missing: [] } }
       : { problems: [], preview: { count: 1, recipientCount: 1, totalGold: 0, capExceeded: false, maxTotalGold: 500_000_000, missing: [] }, sent: 1 }));
-    show();
+    show('summary', USER);
     fireEvent.change(screen.getByLabelText('제목'), { target: { value: '산타 선물' } });
     fireEvent.change(screen.getByLabelText('본문'), { target: { value: '산타모자를 드려요.' } });
-    fireEvent.change(screen.getByLabelText(/받는 사람/), { target: { value: `${USER} 0` } });
 
     fireEvent.change(screen.getByLabelText(/첨부 모자 찾기/), { target: { value: '산타' } });
     fireEvent.click(screen.getByRole('option', { name: /산타모자/ }));
@@ -234,21 +249,19 @@ describe('MailTab', () => {
     })));
   });
 
-  it('최근 보낸 우편을 제목·본문·받는 사람으로 검색하고 걸러진 건수를 표시한다', async () => {
-    show();
+  it('상세 보기에서 보낸 우편을 제목·본문·받는 사람으로 검색하고 걸러진 건수를 표시한다', async () => {
+    show('detail');
     expect(await screen.findByText('3/3건')).toBeTruthy();
     const filterInput = screen.getByPlaceholderText('제목, 본문, 받는 사람 검색');
 
     fireEvent.change(filterInput, { target: { value: '둘째 줄' } });
     expect(screen.getByText('1/3건')).toBeTruthy();
-    expect(screen.getByText('산타 선물 우편')).toBeTruthy();
-    expect(screen.queryByText('지난 우편')).toBeNull();
+    expect(screen.getAllByText('산타 선물 우편').length).toBeGreaterThanOrEqual(1);
 
     fireEvent.change(filterInput, { target: { value: 'friend@example' } });
     expect(screen.getByText('2/3건')).toBeTruthy();
-    expect(screen.getByText('지난 우편')).toBeTruthy();
-    expect(screen.getByText('비약 지급')).toBeTruthy();
-    expect(screen.queryByText('산타 선물 우편')).toBeNull();
+    expect(screen.getAllByText('지난 우편').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('비약 지급').length).toBeGreaterThanOrEqual(1);
 
     fireEvent.change(filterInput, { target: { value: '없는검색어' } });
     expect(screen.getByText('0/3건')).toBeTruthy();
@@ -256,9 +269,9 @@ describe('MailTab', () => {
   });
 
   it('보낸 우편의 보기 버튼을 누르면 본문 전체, 받는 사람, 첨부, 발송·읽음·수령 시각 상세 모달을 연다', async () => {
-    show();
-    const titleCell = await screen.findByText('산타 선물 우편');
-    const row = titleCell.closest('tr')!;
+    show('detail');
+    const titleCells = await screen.findAllByText('산타 선물 우편');
+    const row = titleCells.map(el => el.closest('tr')).find(Boolean)!;
     fireEvent.click(within(row).getByRole('button', { name: '보기' }));
 
     const dialog = await screen.findByRole('dialog', { name: '보낸 우편 상세: 산타 선물 우편' });

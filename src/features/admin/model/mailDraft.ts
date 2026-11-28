@@ -69,13 +69,27 @@ export function parseRecipients(text: string): RecipientParse {
   return { recipients, badLines, duplicates };
 }
 
-/** 받는 사람 입력에 계정 하나를 골드 0인 줄로 더한다. 이미 있는 계정이면 입력을 그대로 둔다 */
-export function addRecipient(text: string, userId: string): string {
+/** 받는 사람 입력에 계정 하나를 지정 골드(기본 0)인 줄로 더한다. 이미 있는 계정이면 입력을 그대로 둔다 */
+export function addRecipient(text: string, userId: string, gold = 0): string {
   const id = userId.toLowerCase();
   const present = text.split(/\r?\n/).some(line => line.trim().split(/[\s,]+/)[0].toLowerCase() === id);
   if (present) return text;
+  const safeGold = Number.isSafeInteger(gold) && gold >= 0 ? gold : 0;
   const kept = text.trimEnd();
-  return kept ? `${kept}\n${userId} 0` : `${userId} 0`;
+  return kept ? `${kept}\n${userId} ${safeGold}` : `${userId} ${safeGold}`;
+}
+
+/** 받는 사람 입력에서 특정 계정 id 줄을 제거한다 */
+export function removeRecipient(text: string, userId: string): string {
+  const target = userId.toLowerCase();
+  return text
+    .split(/\r?\n/)
+    .filter(line => {
+      const trimmed = line.trim();
+      if (!trimmed) return false;
+      return trimmed.split(/[\s,]+/)[0].toLowerCase() !== target;
+    })
+    .join('\n');
 }
 
 /** 받는 사람 검색 결과의 최대 수 */

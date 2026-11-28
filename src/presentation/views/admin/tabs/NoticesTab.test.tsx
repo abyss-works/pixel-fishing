@@ -109,10 +109,12 @@ describe('NoticesTab', () => {
     await waitFor(() => expect(mockApi.writeNotice).toHaveBeenCalledWith({ op: 'delete', id: 3 }));
   });
 
-  it('새 공지 작성 폼에서 입력값을 검증하고 등록 요청을 보낸다', async () => {
+  it('새 공지 등록 버튼을 눌러야 작성 폼이 열리고, 입력값을 검증하고 등록 요청을 보낸다', async () => {
     renderTab();
     await screen.findByText('등록된 공지가 없어요.');
+    expect(screen.queryByLabelText(/^제목/)).toBeNull();
 
+    fireEvent.click(screen.getByRole('button', { name: '새 공지 등록' }));
     fireEvent.click(screen.getByRole('button', { name: '공지 등록' }));
     expect(screen.getByText(/제목은 1자 이상/)).toBeInTheDocument();
     expect(mockApi.writeNotice).not.toHaveBeenCalled();
@@ -131,5 +133,49 @@ describe('NoticesTab', () => {
       endsAt: new Date('2026-11-26T22:00').toISOString(),
     }));
     expect(await screen.findByText('새 공지를 등록했어요.')).toBeInTheDocument();
+  });
+
+  it('즉시 마감과 삭제가 끝난 뒤 해당 행의 조치 버튼이 다시 활성화된다', async () => {
+    mockApi.notices = [
+      {
+        id: 1,
+        title: '마감 대상 공지',
+        body: '본문입니다.',
+        startsAt: '2026-11-26T11:00:00.000Z',
+        endsAt: '2026-11-26T14:00:00.000Z',
+        createdAt: '2026-11-26T10:00:00.000Z',
+        createdBy: 'admin-1',
+        updatedAt: '2026-11-26T10:00:00.000Z',
+      },
+      {
+        id: 2,
+        title: '삭제 대상 공지',
+        body: '본문입니다.',
+        startsAt: '2026-11-26T08:00:00.000Z',
+        endsAt: '2026-11-26T10:00:00.000Z',
+        createdAt: '2026-11-26T07:00:00.000Z',
+        createdBy: 'admin-1',
+        updatedAt: '2026-11-26T07:00:00.000Z',
+      },
+    ];
+
+    renderTab();
+    const firstRow = (await screen.findByText('마감 대상 공지')).closest('tr')!;
+    fireEvent.click(within(firstRow).getByRole('button', { name: '즉시 마감' }));
+    const endDialog = await screen.findByRole('dialog', { name: '공지 즉시 마감' });
+    fireEvent.click(within(endDialog).getByRole('button', { name: '즉시 마감' }));
+    await waitFor(() => expect(mockApi.writeNotice).toHaveBeenCalledWith({ op: 'end', id: 1 }));
+    expect(within(firstRow).getByRole('button', { name: '수정' })).not.toBeDisabled();
+    expect(within(firstRow).getByRole('button', { name: '즉시 마감' })).not.toBeDisabled();
+    expect(within(firstRow).getByRole('button', { name: '삭제' })).not.toBeDisabled();
+
+    const secondRow = screen.getByText('삭제 대상 공지').closest('tr')!;
+    fireEvent.click(within(secondRow).getByRole('button', { name: '삭제' }));
+    const deleteDialog = await screen.findByRole('dialog', { name: '공지 삭제' });
+    fireEvent.click(within(deleteDialog).getByRole('button', { name: '삭제' }));
+    await waitFor(() => expect(mockApi.writeNotice).toHaveBeenCalledWith({ op: 'delete', id: 2 }));
+    expect(within(secondRow).getByRole('button', { name: '수정' })).not.toBeDisabled();
+    expect(within(secondRow).getByRole('button', { name: '즉시 마감' })).not.toBeDisabled();
+    expect(within(secondRow).getByRole('button', { name: '삭제' })).not.toBeDisabled();
   });
 });

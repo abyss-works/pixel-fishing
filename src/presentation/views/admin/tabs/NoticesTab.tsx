@@ -1,11 +1,10 @@
-// 공지 구역 — 게임 화면 상단 카드와 공지사항 창에 띄우는 기간제 상시 공지를 등록·수정·즉시 마감·삭제한다.
+// 공지 구역 — 전체 폭 목록 카드 + 우측 상단 새 공지 등록 버튼으로 동작하며, 버튼이나 수정 클릭 시에만 작성 폼을 연다.
 import { useEffect, useState } from 'react';
 import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
 import DataTable from '../../../ui/DataTable';
 import Field from '../../../ui/Field';
 import Note from '../../../ui/Note';
-import TableBox from '../../../ui/TableBox';
 import TextArea from '../../../ui/TextArea';
 import TextInput from '../../../ui/TextInput';
 import { useDialogs } from '../../../ui/useDialogs';
@@ -17,7 +16,7 @@ import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery'
 import type { AdminNoticeRow } from '../../../../features/admin/model/types';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { nextNoticeBoundaryMs, NOTICE_BODY_MAX, NOTICE_TITLE_MAX, normalizeNoticeDraft } from '../../../../features/live/model/notice';
-import { Cell, CellGrid, TabState } from '../layout';
+import { AdminCard, AdminSplit, AdminTableWrap, TabState } from '../layout';
 
 const NO_NOTICES: AdminNoticeRow[] = [];
 const BODY_PREVIEW_CHARS = 70;
@@ -50,7 +49,7 @@ function bodyPreview(body: string): { summary: string; truncated: boolean } {
   const firstLine = body.split('\n')[0] ?? '';
   const chars = [...firstLine];
   if (body.includes('\n') || chars.length > BODY_PREVIEW_CHARS) {
-    return { summary: `${chars.slice(0, BODY_PREVIEW_CHARS).join('')}…`, truncated: true };
+    return { summary: `${chars.slice(0, BODY_PREVIEW_CHARS).join('')}...`, truncated: true };
   }
   return { summary: body, truncated: false };
 }
@@ -69,6 +68,7 @@ export default function NoticesTab() {
   const notices = noticesQuery.data ?? NO_NOTICES;
   const { confirm, dialogs } = useDialogs();
 
+  const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -89,6 +89,19 @@ export default function NoticesTab() {
     setEndsInput(toLocalInputValue(current + 24 * 3600_000));
   };
 
+  const openCreate = () => {
+    resetForm();
+    setFailure(null);
+    setDone(null);
+    setFormOpen(true);
+  };
+
+  const closeForm = () => {
+    resetForm();
+    setFailure(null);
+    setFormOpen(false);
+  };
+
   const startEdit = (n: AdminNoticeRow) => {
     setEditingId(n.id);
     setTitle(n.title);
@@ -97,6 +110,7 @@ export default function NoticesTab() {
     setEndsInput(isoToLocalInput(n.endsAt));
     setFailure(null);
     setDone(null);
+    setFormOpen(true);
   };
 
   const toggleExpand = (id: number) => {
@@ -132,6 +146,7 @@ export default function NoticesTab() {
       }
       setNow(currentNowMs());
       resetForm();
+      setFormOpen(false);
     } catch (e) {
       setFailure(String((e as { message?: unknown }).message ?? e));
     } finally {
@@ -174,7 +189,7 @@ export default function NoticesTab() {
     setDone(null);
     try {
       await writeNotice({ op: 'delete', id: n.id });
-      if (editingId === n.id) resetForm();
+      if (editingId === n.id) closeForm();
       setDone('공지를 삭제했어요.');
     } catch (e) {
       setFailure(String((e as { message?: unknown }).message ?? e));
@@ -196,90 +211,14 @@ export default function NoticesTab() {
     <>
       <TabState loading={noticesQuery.loading && granted} error={noticesQuery.error} onRetry={noticesQuery.refresh} />
       {!granted && <Note className="my-0">운영 DB에 연결하거나 admins에 등록하면 채워져요.</Note>}
-      <CellGrid side>
-        <Cell title={`공지 목록 (${notices.length})`}>
-          <TableBox className="max-h-[560px] px-1">
-            <DataTable>
-              <thead>
-                <tr>
-                  <th className="text-left">내용</th>
-                  <th className="text-left">기간</th>
-                  <th className="text-left">상태</th>
-                  <th className="text-left">조치</th>
-                </tr>
-              </thead>
-              <tbody>
-                {notices.map(n => {
-                  const status = noticeStatusOf(n, now);
-                  const preview = bodyPreview(n.body);
-                  const expanded = expandedIds.has(n.id);
-                  return (
-                    <tr key={n.id}>
-                      <td className="align-top text-xs min-w-[180px]">
-                        <div className="font-bold text-text">{n.title}</div>
-                        <div className="mt-1 whitespace-pre-wrap text-text-dim break-words">
-                          {expanded || !preview.truncated ? n.body : preview.summary}
-                        </div>
-                        {preview.truncated && (
-                          <Button
-                            size="xs"
-                            variant="ghost"
-                            className="mt-1"
-                            onClick={() => toggleExpand(n.id)}
-                          >
-                            {expanded ? '접기' : '펼치기'}
-                          </Button>
-                        )}
-                      </td>
-                      <td className="align-top text-2xs text-text-dim whitespace-nowrap">
-                        <div>{`시작 ${fmtDT(n.startsAt)}`}</div>
-                        <div>{`마감 ${fmtDT(n.endsAt)}`}</div>
-                      </td>
-                      <td className="align-top">
-                        <Badge tone={STATUS_TONE[status]} size="xs">{status}</Badge>
-                      </td>
-                      <td className="align-top">
-                        <div className="flex flex-wrap gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            disabled={!granted || busyId === n.id}
-                            onClick={() => startEdit(n)}
-                          >
-                            수정
-                          </Button>
-                          <Button
-                            size="sm"
-                            disabled={!granted || busyId === n.id}
-                            onClick={() => void handleEnd(n)}
-                          >
-                            즉시 마감
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="danger"
-                            disabled={!granted || busyId === n.id}
-                            onClick={() => void handleDelete(n)}
-                          >
-                            삭제
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {notices.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="py-3 text-center text-text-dim">
-                      등록된 공지가 없어요.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </DataTable>
-          </TableBox>
-        </Cell>
-        <Cell title={editingId !== null ? '공지 수정' : '새 공지'}>
+      {!formOpen && failure && <Note tone="warn" className="my-0">{failure}</Note>}
+      {done && <Note className="my-0">{done}</Note>}
+
+      {formOpen && (
+        <AdminCard
+          title={editingId !== null ? '공지 수정' : '새 공지'}
+          actions={<Button size="xs" variant="ghost" disabled={busy} onClick={closeForm}>닫기</Button>}
+        >
           <div className="flex flex-col gap-3">
             <Field label="제목" hint={`최대 ${NOTICE_TITLE_MAX}자`}>
               <TextInput
@@ -290,46 +229,128 @@ export default function NoticesTab() {
             </Field>
             <Field label="본문" hint={`최대 ${NOTICE_BODY_MAX}자`}>
               <TextArea
-                rows={5}
+                rows={4}
                 value={body}
                 maxLength={NOTICE_BODY_MAX}
                 onChange={e => { setBody(e.target.value); setFailure(null); setDone(null); }}
               />
             </Field>
-            <Field label="시작 시각">
-              <TextInput
-                type="datetime-local"
-                value={startsInput}
-                onChange={e => { setStartsInput(e.target.value); setFailure(null); setDone(null); }}
-              />
-            </Field>
-            <Field label="마감 시각">
-              <TextInput
-                type="datetime-local"
-                value={endsInput}
-                onChange={e => { setEndsInput(e.target.value); setFailure(null); setDone(null); }}
-              />
-            </Field>
+            <AdminSplit variant="2">
+              <Field label="시작 시각">
+                <TextInput
+                  type="datetime-local"
+                  value={startsInput}
+                  onChange={e => { setStartsInput(e.target.value); setFailure(null); setDone(null); }}
+                />
+              </Field>
+              <Field label="마감 시각">
+                <TextInput
+                  type="datetime-local"
+                  value={endsInput}
+                  onChange={e => { setEndsInput(e.target.value); setFailure(null); setDone(null); }}
+                />
+              </Field>
+            </AdminSplit>
             {failure && <Note tone="warn" className="my-0">{failure}</Note>}
-            {done && <Note className="my-0">{done}</Note>}
-            <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant="primary"
-                disabled={!granted || busy}
-                onClick={() => void submit()}
-              >
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button size="sm" variant="ghost" disabled={busy} onClick={closeForm}>취소</Button>
+              <Button size="sm" variant="primary" disabled={!granted || busy} onClick={() => void submit()}>
                 {editingId !== null ? '수정 저장' : '공지 등록'}
               </Button>
-              {editingId !== null && (
-                <Button size="sm" variant="ghost" disabled={busy} onClick={resetForm}>
-                  취소
-                </Button>
-              )}
             </div>
           </div>
-        </Cell>
-      </CellGrid>
+        </AdminCard>
+      )}
+
+      <AdminCard
+        title={`공지 목록 (${notices.length})`}
+        actions={(
+          <Button size="sm" variant="primary" disabled={!granted} onClick={openCreate}>
+            새 공지 등록
+          </Button>
+        )}
+      >
+        <AdminTableWrap scroll>
+          <DataTable className="pf-admin-table">
+            <thead>
+              <tr>
+                <th className="text-left">내용</th>
+                <th className="text-left">기간</th>
+                <th className="text-left">상태</th>
+                <th className="text-left">조치</th>
+              </tr>
+            </thead>
+            <tbody>
+              {notices.map(n => {
+                const status = noticeStatusOf(n, now);
+                const preview = bodyPreview(n.body);
+                const expanded = expandedIds.has(n.id);
+                return (
+                  <tr key={n.id}>
+                    <td className="align-top text-xs min-w-[180px]">
+                      <div className="font-bold text-text">{n.title}</div>
+                      <div className="mt-1 whitespace-pre-wrap text-text-dim break-words">
+                        {expanded || !preview.truncated ? n.body : preview.summary}
+                      </div>
+                      {preview.truncated && (
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          className="mt-1"
+                          onClick={() => toggleExpand(n.id)}
+                        >
+                          {expanded ? '접기' : '펼치기'}
+                        </Button>
+                      )}
+                    </td>
+                    <td className="align-top text-2xs text-text-dim whitespace-nowrap">
+                      <div>{`시작 ${fmtDT(n.startsAt)}`}</div>
+                      <div>{`마감 ${fmtDT(n.endsAt)}`}</div>
+                    </td>
+                    <td className="align-top">
+                      <Badge tone={STATUS_TONE[status]} size="xs">{status}</Badge>
+                    </td>
+                    <td className="align-top">
+                      <div className="flex flex-wrap gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={!granted || busyId === n.id}
+                          onClick={() => startEdit(n)}
+                        >
+                          수정
+                        </Button>
+                        <Button
+                          size="sm"
+                          disabled={!granted || busyId === n.id}
+                          onClick={() => void handleEnd(n)}
+                        >
+                          즉시 마감
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          disabled={!granted || busyId === n.id}
+                          onClick={() => void handleDelete(n)}
+                        >
+                          삭제
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {notices.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="py-3 text-center text-text-dim">
+                    등록된 공지가 없어요.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </DataTable>
+        </AdminTableWrap>
+      </AdminCard>
       {dialogs}
     </>
   );

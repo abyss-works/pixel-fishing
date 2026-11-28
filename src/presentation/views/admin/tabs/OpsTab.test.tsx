@@ -153,21 +153,39 @@ describe('운영 탭', () => {
     expect(within(contract).getByText(/감사 로그/)).toBeInTheDocument();
   });
 
-  it('HTTP 오류율·429 섹션은 앱 서버 기준 안내·경로 묶음 표·일별 추이와 기간 전환(7/30/90일)을 제공한다', async () => {
-    show('granted');
+  it('요약 보기에서는 서버 4개 상태 카드만 노출하고 정적 안내문과 상세 표를 숨기며, 기간 필터는 1곳만 존재한다', async () => {
+    show('granted', 'admin', 'server', 'summary');
+    expect(screen.getAllByRole('group', { name: '운영 기간 선택' })).toHaveLength(1);
+    expect(screen.getByText('API 상태')).toBeInTheDocument();
+    expect(screen.getByText('데이터베이스')).toBeInTheDocument();
+    expect(screen.getByText('실시간 채널')).toBeInTheDocument();
+    expect(screen.getByText('런타임·오류')).toBeInTheDocument();
+
+    expect(screen.queryByText('이 화면의 정체')).toBeNull();
+    expect(screen.queryByText('관측')).toBeNull();
+    expect(screen.queryByText('데이터 계약')).toBeNull();
+    expect(screen.queryByText('서버, 소켓, DB 상태 및 경보')).toBeNull();
+    await waitFor(() => expect(vi.mocked(api.admin.httpMetrics)).toHaveBeenCalledWith(7));
+    expect(vi.mocked(api.admin.opsHealth)).toHaveBeenCalledWith(7);
+  });
+
+  it('상세 보기에서 HTTP 오류율·429 섹션과 기간 전환(7일/14일/30일)을 단일 제어로 제공한다', async () => {
+    show('granted', 'admin', 'server', 'detail');
+    expect(screen.getAllByRole('group', { name: '운영 기간 선택' })).toHaveLength(1);
     expect(await screen.findByText('게임 액션')).toBeInTheDocument();
     expect(screen.getByText(/ingress-nginx/)).toBeInTheDocument();
-    expect(vi.mocked(api.admin.httpMetrics)).toHaveBeenCalledWith(30);
-    expect(screen.getByRole('img', { name: '최근 30일 일별 429 응답 수' })).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: '최근 30일 일별 5xx 오류 수' })).toBeInTheDocument();
-
-    fireEvent.click(within(screen.getByRole('group', { name: 'HTTP 지표 기간 선택' })).getByRole('button', { name: '7일' }));
-    await waitFor(() => expect(vi.mocked(api.admin.httpMetrics)).toHaveBeenCalledWith(7));
+    expect(vi.mocked(api.admin.httpMetrics)).toHaveBeenCalledWith(7);
     expect(screen.getByRole('img', { name: '최근 7일 일별 429 응답 수' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: '최근 7일 일별 5xx 오류 수' })).toBeInTheDocument();
+
+    fireEvent.click(within(screen.getByRole('group', { name: '운영 기간 선택' })).getByRole('button', { name: '30일' }));
+    await waitFor(() => expect(vi.mocked(api.admin.httpMetrics)).toHaveBeenCalledWith(30));
+    await waitFor(() => expect(vi.mocked(api.admin.opsHealth)).toHaveBeenCalledWith(30));
+    expect(screen.getByRole('img', { name: '최근 30일 일별 429 응답 수' })).toBeInTheDocument();
   });
 
   it('HTTP 지연 백분위, 세부 상태/429 사유와 서버, 소켓, DB 상태 및 경보 섹션을 함께 렌더링한다', async () => {
-    show('granted', 'admin', 'server');
+    show('granted', 'admin', 'server', 'detail');
     expect(await screen.findByText('140ms')).toBeInTheDocument();
     expect(screen.getByText('22ms')).toBeInTheDocument();
     expect(screen.getByText('310ms')).toBeInTheDocument();
@@ -180,17 +198,22 @@ describe('운영 탭', () => {
     expect(vi.mocked(api.admin.opsHealth)).toHaveBeenCalledWith(7);
 
     cleanup();
-    show('granted', 'admin', 'client');
+    show('granted', 'admin', 'client', 'summary');
+    expect(screen.getByText('클라이언트 오류·체감 요약 (최근 7일)')).toBeInTheDocument();
+    expect(screen.queryByRole('table', { name: '일별 클라이언트 체감 성능' })).toBeNull();
+
+    cleanup();
+    show('granted', 'admin', 'client', 'detail');
     expect(screen.getByText('클라이언트 체감 성능 및 단절')).toBeInTheDocument();
-    expect(await screen.findByLabelText('2450ms')).toBeInTheDocument();
-    expect(screen.getByLabelText('1.2%')).toBeInTheDocument();
+    expect(await screen.findByText('2450ms')).toBeInTheDocument();
+    expect(screen.getByText('1.2%')).toBeInTheDocument();
     expect(vi.mocked(api.admin.clientMetrics)).toHaveBeenCalledWith(7);
   });
 
   it('미연결(local) 상태에서 HTTP·서버 상태·클라이언트 성능 섹션의 빈 값 표기를 --로 일관화한다', () => {
-    show('local', 'admin', 'server');
+    show('local', 'admin', 'server', 'detail');
     for (const heading of [
-      '앱 서버 HTTP 오류율·429 (최근 30일)',
+      '앱 서버 HTTP 오류율·429 (최근 7일)',
       '서버, 소켓, DB 상태 및 경보',
     ]) {
       const section = screen.getByText(heading).closest('section')!;
@@ -198,9 +221,22 @@ describe('운영 탭', () => {
       expect(section.textContent).not.toContain('—');
     }
     cleanup();
-    show('local', 'admin', 'client');
+    show('local', 'admin', 'client', 'detail');
     const clientSection = screen.getByText('클라이언트 체감 성능 및 단절').closest('section')!;
     expect(within(clientSection).getAllByText('--').length).toBeGreaterThan(0);
     expect(clientSection.textContent).not.toContain('—');
+  });
+
+  it('서버·실시간 요약 보기에서 서브내비 새로고침 클릭 시 httpMetrics와 opsHealth를 다시 조회한다', async () => {
+    show('granted', 'admin', 'server', 'summary');
+    await waitFor(() => expect(vi.mocked(api.admin.httpMetrics)).toHaveBeenCalledWith(7));
+    await waitFor(() => expect(vi.mocked(api.admin.opsHealth)).toHaveBeenCalledWith(7));
+
+    vi.mocked(api.admin.httpMetrics).mockClear();
+    vi.mocked(api.admin.opsHealth).mockClear();
+
+    fireEvent.click(screen.getByRole('button', { name: '새로고침' }));
+    await waitFor(() => expect(vi.mocked(api.admin.httpMetrics)).toHaveBeenCalledWith(7));
+    await waitFor(() => expect(vi.mocked(api.admin.opsHealth)).toHaveBeenCalledWith(7));
   });
 });

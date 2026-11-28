@@ -29,3 +29,6 @@ export const AdminViewModeCtx = createContext<{
 });
 
 export const useAdminViewMode = () => useContext(AdminViewModeCtx);
+
+export const AdminSubnavHostCtx = createContext<HTMLDivElement | null>(null);
+export const useAdminSubnavHost = () => useContext(AdminSubnavHostCtx);

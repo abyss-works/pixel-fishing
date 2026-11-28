@@ -4,6 +4,7 @@ import { render, screen, cleanup, within } from '@testing-library/react';
 import { QueryProvider } from '../../../../core/QueryProvider';
 import { AdminAuthCtx } from '../../../../features/admin/service/accessContext';
 import { api } from '../../../../platform/api';
+import { AdminViewModeCtx } from '../viewMode';
 import LiveTab from './LiveTab';
 
 vi.mock('../../../../platform/api', () => ({
@@ -34,7 +35,9 @@ describe('실시간 탭', () => {
     render(
       <QueryProvider>
         <AdminAuthCtx.Provider value={{ access: 'granted', uid: 'admin', role: 'admin', canViewEmail: true, showStaffBadge: false, setStaffBadge: async () => {} }}>
-          <LiveTab />
+          <AdminViewModeCtx.Provider value={{ viewMode: 'detail', setViewMode: () => {} }}>
+            <LiveTab onCompose={() => {}} />
+          </AdminViewModeCtx.Provider>
         </AdminAuthCtx.Provider>
       </QueryProvider>,
     );
@@ -45,14 +48,17 @@ describe('실시간 탭', () => {
     expect(within(rows[0]).getByText('u1')).toBeInTheDocument();
     expect(within(rows[0]).getByText('인도양')).toBeInTheDocument();
     expect(within(rows[0]).getByText('1시간 23분')).toBeInTheDocument();
+    expect(within(rows[0]).getByRole('button', { name: '우편' })).toBeInTheDocument();
+    expect(within(rows[0]).getByRole('button', { name: '상세' })).toBeInTheDocument();
     expect(within(rows[1]).getByText('새내기(게스트)')).toBeInTheDocument();
     expect(within(rows[1]).getByText('마을')).toBeInTheDocument();
     expect(within(rows[1]).getByText('4분')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: '접속 중인 사람의 위치 분포' })).toBeInTheDocument();
 
-    // 지표 타일은 오목한 칸(pf-notch) 하나다 — 같은 글자가 다른 곳에도 있을 수 있어 타일만 고른다
+    // 지표 카드는 .pf-admin-kpi-card다
     const tile = (label: string) => screen.getAllByText(label)
-      .map(el => el.parentElement as HTMLElement).find(el => el.classList.contains('pf-notch'))!;
+      .map(el => el.closest('.pf-admin-kpi-card') as HTMLElement | null)
+      .find((el): el is HTMLElement => el !== null)!;
     expect(within(tile('지금 접속')).getByText('2')).toBeInTheDocument();
     expect(within(tile('가입 계정')).getByText('1')).toBeInTheDocument();
     expect(within(tile('게스트')).getByText('1')).toBeInTheDocument();
