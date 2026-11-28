@@ -249,14 +249,20 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
   // 서버가 현재 가방으로 계획을 다시 계산한다. 변할 게 없으면 요청 없이 안내만.
   // 확인 창의 물고기별 내역 — 마리 수만으로는 "방금 정리했는데 왜 또 뜨지"를 풀 수 없어,
   // 무엇이 바뀌는지 이름과 크기로 보여 준다. 큰 것부터 3마리까지, 나머지는 외 N마리.
+  // 창이 열릴 때만 계산한다 — 닫혀 있으면 쓰이지 않는 값이라 렌더마다 가방을 훑지 않는다
   const autoLockDetails = (() => {
+    if (!lockConfirm) return { lock: '', unlock: '' };
+    // 개체는 가방 전체에서 찾는다 — 행 그룹핑에서 빠지는 삭제된 어종도 계획에는 들어가므로
+    // 내역에서 빠뜨리면 마릿수와 맞지 않는다. 이름은 행의 대표 이름을 써 개체 줄(InstanceLine)과
+    // 같은 라벨을 만들고(일반 미발견 + 변이만 보유면 변이 고유명), 행이 없으면 어종 기본명, 그마저 없으면 id다
+    const rowName = new Map(rows.flatMap(r => r.items.map(i => [i.uid, r.name] as const)));
     const byUid = new Map(game.bag.map(i => [i.uid, i]));
     const summarize = (uids: string[]): string => {
-      const items = uids.map(u => byUid.get(u)).filter((i): i is NonNullable<typeof i> => i != null)
+      const items = uids.map(u => byUid.get(u)).filter((e): e is NonNullable<typeof e> => e != null)
         .sort((a, b) => (b.size ?? -1) - (a.size ?? -1));
-      // 개체 줄(InstanceLine)과 같은 라벨 — 크기·돌연변이·어종명 순서를 맞춘다
-      const label = (i: typeof items[number]) =>
-        [i.size === null ? null : fmtSize(i.size), i.form === 'variant' ? '돌연변이' : null, instanceFish(i)?.name ?? i.fishId]
+      const label = (inst: typeof items[number]) =>
+        [inst.size === null ? '미상' : fmtSize(inst.size), inst.form === 'variant' ? '돌연변이' : null,
+          rowName.get(inst.uid) ?? instanceFish(inst)?.name ?? inst.fishId]
           .filter(Boolean).join(' ');
       const shown = items.slice(0, 3).map(label);
       const rest = items.length - shown.length;
