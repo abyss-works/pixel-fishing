@@ -10,6 +10,7 @@ import { flushHttpMetrics } from '../_data/httpMetrics.js';
 import { database } from '../_db/client.js';
 import { reportServerIssue } from '../observability.js';
 import { provideWidgetDisconnect } from '../widget/guard.js';
+import { createAdminStaticRouter } from './adminStatic.js';
 import { settleAfterResponse } from './afterResponse.js';
 import { createDrainGuard } from './drain.js';
 import { createHttpMetrics } from './httpMetrics.js';
@@ -109,22 +110,7 @@ for (const path of [
 }
 app.use('/api', notFound);
 
-app.get('/admin', (_req: Request, res: Response) => {
-  res.redirect(301, '/admin/');
-});
-app.use('/admin/assets', express.static(`${staticDir}admin/assets`, { immutable: true, maxAge: '1y' }));
-app.use('/admin/assets', notFound);
-app.use('/admin', express.static(`${staticDir}admin`, {
-  setHeaders: (res, filePath) => {
-    if (filePath.endsWith('index.html')) {
-      res.setHeader('Cache-Control', 'no-cache');
-    }
-  },
-}));
-app.get(['/admin/', '/admin/*splat'], (_req: Request, res: Response) => {
-  res.setHeader('Cache-Control', 'no-cache');
-  res.sendFile(`${staticDir}admin/index.html`);
-});
+app.use(createAdminStaticRouter(staticDir));
 app.use(notFound);
 
 const port = Number(process.env.PORT ?? 8080);
