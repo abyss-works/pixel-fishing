@@ -42,6 +42,7 @@ function createMockRedisPair() {
       kv.set(key, value);
       return 'OK';
     }),
+    expire: vi.fn(async (_key: string, _seconds: number) => 1),
   };
 
   const subscriber = {
@@ -140,13 +141,19 @@ describe('RedisLiveBus', () => {
     await bus.close();
   });
 
-  it('파드 메트릭 Hash를 기록하고 조회한다', async () => {
+  it('파드 메트릭 Hash를 기록하고 TTL을 설정하며 조회·제거한다', async () => {
     const { client, subscriber } = createMockRedisPair();
     const bus = new RedisLiveBus({ env: 'production', client: client as never, subscriber: subscriber as never });
 
     await bus.publishPodMetrics('pod-a', { podId: 'pod-a', updatedAt: '2026-11-27T00:00:00Z', connections: 12 });
+    expect(client.expire).toHaveBeenCalledWith('pf:production:bus:pods', 300);
+
     const metrics = await bus.listPodMetrics();
     expect(metrics).toEqual([{ podId: 'pod-a', updatedAt: '2026-11-27T00:00:00Z', connections: 12 }]);
+
+    await bus.removePodMetrics('pod-a');
+    expect(client.hdel).toHaveBeenCalledWith('pf:production:bus:pods', 'pod-a');
+    expect(await bus.listPodMetrics()).toEqual([]);
     await bus.close();
   });
 
@@ -185,6 +192,8 @@ describe('RedisLiveBus', () => {
 
     await expect(bus.publishPodMetrics('pod-1', { podId: 'pod-1', updatedAt: '2026-11-27T00:00:00Z' })).resolves.toBeUndefined();
     expect(await bus.listPodMetrics()).toEqual([{ podId: 'pod-1', updatedAt: '2026-11-27T00:00:00Z' }]);
+    await expect(bus.removePodMetrics('pod-1')).resolves.toBeUndefined();
+    expect(await bus.listPodMetrics()).toEqual([]);
 
     await bus.close();
     warnSpy.mockRestore();

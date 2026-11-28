@@ -195,7 +195,7 @@ applyKeepAlive(server);
 const publishApiPodMetrics = (): Promise<void> => bus.publishPodMetrics(podId, {
   podId,
   updatedAt: new Date().toISOString(),
-  http: httpMetrics.recentWindowSummary(),
+  http: httpMetrics.recentWindowSnapshot(),
   slowRequests: httpMetrics.slowRequests(),
 });
 
@@ -337,7 +337,7 @@ process.on('SIGTERM', () => {
   if (podMetricsTimer) clearInterval(podMetricsTimer);
   live?.close();
   widgetHub().close();
-  const busClose = (!embeddedLive ? publishApiPodMetrics().catch(() => {}) : Promise.resolve())
+  const busClose = (!embeddedLive ? bus.removePodMetrics(podId).catch(() => {}) : Promise.resolve())
     .then(() => bus.close().catch(() => {}));
   server.close(() => {
     void settleAfterResponse()

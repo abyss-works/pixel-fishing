@@ -4,11 +4,20 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import { initObservability, Sentry } from './platform/observability.ts'
 import { installGlobalFailureHandlers, fail } from './core/errors.ts'
+import { installChunkReloadGuard } from './core/chunkReload.ts'
 
 /** 브라우저 진입점 공통 부팅 — 게임과 관리자 대시보드가 같은 실패 정책으로 화면을 그린다 */
 export function boot(app: ReactNode): void {
   // 렌더보다 먼저 — 부팅 중 터지는 예외도 잡히도록 (DSN 없으면 no-op)
   initObservability()
+  // 배포 직후 구버전 청크 로드 실패 시 1회 새로고침으로 복구한다
+  let storage: Storage | undefined
+  try {
+    storage = window.sessionStorage
+  } catch {
+    storage = undefined
+  }
+  installChunkReloadGuard(window, storage)
   // 정책으로 가는 입구 둘: 이벤트 핸들러·타이머 예외(window.onerror)와 비동기 예외(unhandledrejection).
   // ErrorBoundary는 세 번째 입구(렌더 예외)다 — 셋 다 열어야 실패가 새지 않는다.
   installGlobalFailureHandlers()

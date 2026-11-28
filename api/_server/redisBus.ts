@@ -16,8 +16,11 @@ export interface RedisCommandLike {
   hdel(key: string, ...fields: string[]): Promise<number>;
   hgetall(key: string): Promise<Record<string, string>>;
   set(key: string, value: string, expiryMode: 'EX', time: number, setMode: 'NX'): Promise<'OK' | null>;
+  expire?(key: string, seconds: number): Promise<number>;
   eval?(script: string, numkeys: number, ...args: (string | number)[]): Promise<unknown>;
 }
+
+const POD_METRICS_TTL_SEC = 300;
 
 export interface RedisSubscriberLike {
   status?: string;
@@ -353,9 +356,25 @@ export class RedisLiveBus implements LiveBus {
     }
     try {
       await this.client.hset(this.podsKey, podId, JSON.stringify(payload));
+      if (typeof this.client.expire === 'function') {
+        await this.client.expire(this.podsKey, POD_METRICS_TTL_SEC);
+      }
     } catch (err) {
       warnRedisOnce('bus-pod-metrics-set', err);
       await this.fallback.publishPodMetrics(podId, payload);
+    }
+  }
+
+  async removePodMetrics(podId: string): Promise<void> {
+    if (!this.client) {
+      await this.fallback.removePodMetrics(podId);
+      return;
+    }
+    try {
+      await this.client.hdel(this.podsKey, podId);
+    } catch (err) {
+      warnRedisOnce('bus-pod-metrics-del', err);
+      await this.fallback.removePodMetrics(podId);
     }
   }
 

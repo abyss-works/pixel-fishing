@@ -1,7 +1,11 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import {
+  classifyErrorPathStatus,
+  extractBuildIdFromBundle,
+  extractModuleScriptPath,
   validateArgocdStatus,
+  validateAuthenticatedLiveHandshake,
   validateDeploymentParity,
   validateSmokeResponses,
 } from './verify-stage.mjs';
@@ -152,5 +156,126 @@ describe('validateSmokeResponses', () => {
       liveWs: { status: 502 },
     });
     expect(badWs.ok).toBe(false);
+  });
+
+  it('validates optional notFound and staleAction error paths when present', () => {
+    expect(
+      validateSmokeResponses({
+        home: { status: 401, csp: "default-src 'self'" },
+        action: { status: 204 },
+        liveWs: { status: 401 },
+        notFound: { status: 404 },
+        staleAction: { status: 426 },
+      }),
+    ).toEqual({ ok: true, errors: [] });
+
+    expect(
+      validateSmokeResponses({
+        home: { status: 401, csp: "default-src 'self'" },
+        action: { status: 204 },
+        liveWs: { status: 401 },
+        notFound: { status: 401 },
+        staleAction: { status: 401 },
+      }),
+    ).toEqual({ ok: true, errors: [] });
+
+    const badErrorPaths = validateSmokeResponses({
+      home: { status: 401, csp: "default-src 'self'" },
+      action: { status: 204 },
+      liveWs: { status: 401 },
+      notFound: { status: 500 },
+      staleAction: { status: 502 },
+    });
+    expect(badErrorPaths.ok).toBe(false);
+    expect(badErrorPaths.errors.length).toBe(2);
+  });
+});
+
+describe('classifyErrorPathStatus', () => {
+  it('accepts 404 or 401 for notFound and rejects 5xx or unexpected codes', () => {
+    expect(classifyErrorPathStatus('notFound', 404).ok).toBe(true);
+    expect(classifyErrorPathStatus('notFound', 401).ok).toBe(true);
+    expect(classifyErrorPathStatus('notFound', 500).ok).toBe(false);
+    expect(classifyErrorPathStatus('notFound', 503).ok).toBe(false);
+    expect(classifyErrorPathStatus('notFound', 200).ok).toBe(false);
+  });
+
+  it('accepts 426 or 401 for staleAction and rejects 5xx or unexpected codes', () => {
+    expect(classifyErrorPathStatus('staleAction', 426).ok).toBe(true);
+    expect(classifyErrorPathStatus('staleAction', 401).ok).toBe(true);
+    expect(classifyErrorPathStatus('staleAction', 502).ok).toBe(false);
+    expect(classifyErrorPathStatus('staleAction', 500).ok).toBe(false);
+    expect(classifyErrorPathStatus('staleAction', 200).ok).toBe(false);
+  });
+});
+
+describe('bundle build extraction helpers', () => {
+  it('extracts module script path from HTML', () => {
+    const html = '<!doctype html><html><head><script type="module" crossorigin src="/assets/index-abc123.js"></script></head></html>';
+    expect(extractModuleScriptPath(html)).toBe('/assets/index-abc123.js');
+    expect(extractModuleScriptPath('<html></html>')).toBeNull();
+  });
+
+  it('extracts build id from bundled JS', () => {
+    expect(extractBuildIdFromBundle('const h={"x-build-id":"abcdef1234567890"};')).toBe('abcdef1234567890');
+    expect(extractBuildIdFromBundle("const h={'x-build-id': 'dev'};")).toBe('dev');
+    expect(extractBuildIdFromBundle('console.log(1)')).toBeNull();
+  });
+});
+
+describe('validateAuthenticatedLiveHandshake', () => {
+  it('passes when home is 200, matching build opens without 4001, and mismatch closes with 4001', () => {
+    const result = validateAuthenticatedLiveHandshake({
+      homeStatus: 200,
+      buildId: 'abcdef1234567890',
+      version: '0.21.0',
+      matched: { opened: true, closeCode: 1000, error: null },
+      mismatched: { opened: true, closeCode: 4001, error: null },
+    });
+    expect(result).toEqual({ ok: true, errors: [] });
+  });
+
+  it('fails when home is not 200 or build/version is missing', () => {
+    const result = validateAuthenticatedLiveHandshake({
+      homeStatus: 401,
+      buildId: null,
+      version: null,
+      matched: { opened: true, closeCode: 1000, error: null },
+      mismatched: { opened: false, closeCode: 4001, error: null },
+    });
+    expect(result.ok).toBe(false);
+    expect(result.errors.length).toBe(3);
+  });
+
+  it('fails when matched connection closes with 4001 or fails to open', () => {
+    const closed4001 = validateAuthenticatedLiveHandshake({
+      homeStatus: 200,
+      buildId: 'abcdef1',
+      version: '0.21.0',
+      matched: { opened: true, closeCode: 4001, error: null },
+      mismatched: { opened: false, closeCode: 4001, error: null },
+    });
+    expect(closed4001.ok).toBe(false);
+
+    const notOpened = validateAuthenticatedLiveHandshake({
+      homeStatus: 200,
+      buildId: 'abcdef1',
+      version: '0.21.0',
+      matched: { opened: false, closeCode: 1006, error: 'unexpected server response: 401' },
+      mismatched: { opened: false, closeCode: 4001, error: null },
+    });
+    expect(notOpened.ok).toBe(false);
+  });
+
+  it('fails when mismatched connection does not close with 4001', () => {
+    const result = validateAuthenticatedLiveHandshake({
+      homeStatus: 200,
+      buildId: 'abcdef1',
+      version: '0.21.0',
+      matched: { opened: true, closeCode: 1000, error: null },
+      mismatched: { opened: true, closeCode: 1000, error: null },
+    });
+    expect(result.ok).toBe(false);
+    expect(result.errors.some((e: string) => e.includes('4001'))).toBe(true);
   });
 });

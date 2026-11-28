@@ -58,7 +58,15 @@ jobs:
       - run: pnpm run build
       - name: Validate Kustomize manifests
         run: |
-          kubectl kustomize k8s/prod >/dev/null
+          KUBECONFORM_VERSION=v0.8.0
+          tmpdir="$(mktemp -d)"
+          trap 'rm -rf "${tmpdir}"' EXIT
+          curl -fsSL "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" -o "${tmpdir}/kubeconform-linux-amd64.tar.gz"
+          curl -fsSL "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/CHECKSUMS" -o "${tmpdir}/CHECKSUMS"
+          (cd "${tmpdir}" && grep 'kubeconform-linux-amd64.tar.gz$' CHECKSUMS | sha256sum -c -)
+          tar -xzf "${tmpdir}/kubeconform-linux-amd64.tar.gz" -C "${tmpdir}" kubeconform
+          kubectl kustomize k8s/prod | "${tmpdir}/kubeconform" -strict -ignore-missing-schemas
+          kubectl kustomize k8s/stage | "${tmpdir}/kubeconform" -strict -ignore-missing-schemas
           kubectl kustomize k8s/stage | node -e "
             const fs = require('fs');
             const docs = fs.readFileSync(0, 'utf8').split(/^---\s*$/m);
