@@ -215,8 +215,8 @@ describe('개발 도구 판정', () => {
 });
 
 describe('게스트 진행 판정과 읽기 실패', () => {
-  // 안내 창 없이 끝나는 실패 종류(제재, 오류)도 판정이 끝나야 한다
-  it.each(['restricted', 'bug'] as const)('저장 읽기가 %s로 끝나도 불러오기는 끝나고 진행이 있는 것으로 판정한다', async kind => {
+  // 안내 창 없이 끝나는 실패 종류(권한 없음, 오류)도 판정이 끝나야 한다
+  it.each(['forbidden', 'bug'] as const)('저장 읽기가 %s로 끝나도 불러오기는 끝나고 진행이 있는 것으로 판정한다', async kind => {
     gw.loadError = new AppError(kind, 'read failed');
     const hook = setup();
     await waitFor(() => expect(hook.result.current.loading).toBe(false));
@@ -233,9 +233,9 @@ describe('게스트 진행 판정과 읽기 실패', () => {
 });
 
 describe('레거시 로컬 세이브 브리지', () => {
-  it('서버가 import를 거부(restricted)해도 세션은 정상 시작하고 로컬 저장은 지우지 않는다', async () => {
+  it('서버가 import를 거부(forbidden)해도 세션은 정상 시작하고 로컬 저장은 지우지 않는다', async () => {
     gw.legacy = true; gw.cloudEmpty = true;
-    gw.importError = new AppError('restricted', 'forbidden (import-disabled)', { action: 'import' });
+    gw.importError = new AppError('forbidden', 'forbidden (import-disabled)', { action: 'import' });
     const hook = setup();
     await waitFor(() => expect(gw.bootResolve).not.toBeNull());
     await act(async () => { gw.bootResolve!(); });
@@ -244,7 +244,7 @@ describe('레거시 로컬 세이브 브리지', () => {
     expect(gw.actions).toEqual(['import', 'boot']);
   });
 
-  it('restricted가 아닌 실패는 삼키지 않는다', async () => {
+  it('forbidden이 아닌 실패는 삼키지 않는다', async () => {
     gw.legacy = true; gw.cloudEmpty = true;
     gw.importError = new AppError('server', 'boom');
     const hook = setup();
@@ -399,7 +399,7 @@ describe('실패 안내', () => {
     return { hook, toasts };
   }
 
-  it.each(['restricted', 'rate-limited', 'bug'] as const)('%s 실패는 정책 문구를 메시지 창에 알리고 오류 자리에도 남긴다', async kind => {
+  it.each(['forbidden', 'rate-limited', 'bug'] as const)('%s 실패는 정책 문구를 메시지 창에 알리고 오류 자리에도 남긴다', async kind => {
     const { toasts } = await ready();
     const message = POLICY[kind].message;
     act(() => { fail(new AppError(kind, 'x')); });
@@ -524,6 +524,7 @@ describe('요청 속도 초과(429) 재시도', () => {
       { err: new AppError('unauthorized', 'expired', { status: 401 }), blocker: 'unsaved' },
       { err: new AppError('replaced', 'another tab', { status: 423 }), blocker: 'replaced' },
       { err: new AppError('outdated', 'old build', { status: 426 }), blocker: 'update' },
+      { err: new AppError('restricted', 'account restricted', { status: 403 }), blocker: 'restricted' },
     ] as const;
 
     for (const c of cases) {
@@ -542,6 +543,7 @@ describe('요청 속도 초과(429) 재시도', () => {
     const cases = [
       { err: new AppError('replaced', 'another tab', { status: 423 }), blocker: 'replaced' },
       { err: new AppError('outdated', 'old build', { status: 426 }), blocker: 'update' },
+      { err: new AppError('restricted', 'account restricted', { status: 403 }), blocker: 'restricted' },
       { err: new AppError('server', 'boom', { status: 500 }), blocker: 'unsaved' },
       { err: new AppError('unauthorized', 'expired', { status: 401 }), blocker: 'unsaved' },
       { err: new AppError('network', 'offline'), blocker: 'unsaved' },
@@ -1068,7 +1070,7 @@ describe('이용약관 수락 게이트', () => {
 
     gw.consentQueue = [{ required: true, version: '2026-11-25', effectiveAt: '2026-11-25T00:00:00.000Z' }];
     act(() => {
-      fail(new AppError('restricted', 'forbidden (consent-required)', { code: 'consent-required' }));
+      fail(new AppError('forbidden', 'forbidden (consent-required)', { code: 'consent-required' }));
     });
     expect(hook.result.current.blocker).toBe('consent');
     expect(getConsentGate()).toBe('blocked');

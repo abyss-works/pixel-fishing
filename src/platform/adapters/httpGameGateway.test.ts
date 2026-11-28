@@ -24,14 +24,32 @@ import * as clientMetrics from '../clientMetrics';
 
 afterEach(() => { vi.unstubAllGlobals(); me.value = null; me.fn = null; me.calls = 0; });
 
-describe('HttpGameGateway의 import 거부', () => {
-  it.each(['import-owner-only', 'import-disabled'])('403 %s는 restricted 실패로 던진다', async code => {
+describe('HttpGameGateway의 import 거부 및 403 분류', () => {
+  it.each(['import-owner-only', 'import-disabled'])('403 %s는 forbidden 실패로 던진다', async code => {
     vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ error: code }), {
       status: 403, headers: { 'content-type': 'application/json' },
     }));
     const err = await new HttpGameGateway().dispatch({ type: 'import', save: {} }).catch(e => e);
     expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).kind).toBe('forbidden');
+  });
+
+  it('403 restricted는 restricted 실패로 던진다', async () => {
+    vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ error: 'restricted' }), {
+      status: 403, headers: { 'content-type': 'application/json' },
+    }));
+    const err = await new HttpGameGateway().dispatch({ type: 'boot' }).catch(e => e);
+    expect(err).toBeInstanceOf(AppError);
     expect((err as AppError).kind).toBe('restricted');
+  });
+
+  it('그 밖의 403 응답은 forbidden 실패로 던진다', async () => {
+    vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ error: 'unknown-403' }), {
+      status: 403, headers: { 'content-type': 'application/json' },
+    }));
+    const err = await new HttpGameGateway().dispatch({ type: 'boot' }).catch(e => e);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).kind).toBe('forbidden');
   });
 });
 

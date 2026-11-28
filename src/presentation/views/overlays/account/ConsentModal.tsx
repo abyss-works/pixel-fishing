@@ -3,6 +3,7 @@ import { LEGAL_PATHS } from '../../../../features/account/model/googleFlow';
 import { deleteAccount } from '../../../../features/account/service/accountActions';
 import type { ConsentStatus } from '../../../../features/account/service/consentGate';
 import { clearPendingSailReturn } from '../../../../features/account/service/sailReturn';
+import AppBrandBar from '../../../ui/AppBrandBar';
 import Button from '../../../ui/Button';
 import Divider from '../../../ui/Divider';
 import Field from '../../../ui/Field';
@@ -26,15 +27,6 @@ const LEGAL_DOCS = [
 function consentEffectiveDate(consent: ConsentStatus): string {
   const formatted = fmtKoreanDate(consent.version);
   return formatted !== consent.version ? formatted : fmtKoreanDate(consent.effectiveAt);
-}
-
-function ConsentBrandBar() {
-  return (
-    <div className="inline-flex items-center gap-2 pl-0.5 select-none" aria-hidden="true">
-      <PixelIcon glyph="fish" size={16} className="text-gold" />
-      <span className="pf-accent text-xs tracking-wider text-text-dim">PIXEL FISHING</span>
-    </div>
-  );
 }
 
 function LegalDocsCard() {
@@ -171,7 +163,7 @@ export default function ConsentModal({
 
   return (
     <Modal layer="app" title={title} onClose={() => {}} closable={false} opaque={entry}
-           above={entry ? <ConsentBrandBar /> : undefined}
+           above={entry ? <AppBrandBar /> : undefined}
            className="min-h-[392px] mobile:min-h-[432px] p-5 pb-4 mobile:p-4 text-left" footer={footer}>
       {step === 'consent' ? (
         <div className="flex flex-col gap-3.5 text-left">

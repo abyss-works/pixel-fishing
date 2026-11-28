@@ -470,7 +470,7 @@ export function useGame({ setToast }: { setToast: NoticeSink }) {
           await dispatch({ type: 'import', save: init.game });
           api.storage.clearLegacySave(); // 브리지 성공 — 로컬 저장 사용 종료
         } catch (e) {
-          if (!(e instanceof AppError && e.kind === 'restricted' && !isConsentRequiredError(e))) throw e;
+          if (!(e instanceof AppError && e.kind === 'forbidden' && !isConsentRequiredError(e))) throw e;
         }
       }
       // 세션 시작에 1회, 새로고침마다 다시 센다.
