@@ -475,14 +475,18 @@ describe('R3: 도감 탭 (지역 서브탭)', () => {
     expect(screen.getByRole('heading', { name: /^일반 어종/ })).toBeInTheDocument();
     expect(screen.getByText('붕어')).toBeInTheDocument();
 
-    // 일반 탭 안쪽 돌연변이 토글
+    // 일반 탭 안쪽 돌연변이 토글 — 제목은 '일반 어종'을 유지하고 (n/n) 수치에만 돌연변이 색이 적용된다
     fireEvent.click(screen.getByRole('button', { name: '돌연변이' }));
-    expect(screen.getByRole('heading', { name: /^돌연변이/ })).toBeInTheDocument();
+    const variantHeading = screen.getByRole('heading', { name: /^일반 어종/ });
+    expect(variantHeading).toBeInTheDocument();
+    expect(within(variantHeading).getByText(/^\(\d+\/\d+\)$/)).toHaveClass('text-mutation');
     expect(screen.getByText('황금 붕어')).toBeInTheDocument(); // 발견한 변이는 변이 이름
     expect(screen.getByText('1마리 잡음')).toBeInTheDocument(); // 변이 폼 별도 마릿수 (v7)
     expect(screen.getAllByText('???').length).toBe(11); // 나머지 변이는 미확인
     fireEvent.click(screen.getByRole('button', { name: '돌연변이' }));
-    expect(screen.getByRole('heading', { name: /^일반 어종/ })).toBeInTheDocument();
+    const normalHeading = screen.getByRole('heading', { name: /^일반 어종/ });
+    expect(normalHeading).toBeInTheDocument();
+    expect(within(normalHeading).getByText(/^\(\d+\/\d+\)$/)).not.toHaveClass('text-mutation');
 
     clickTab('도감'); // 활성 상태에서 한 번 더 → 네임드 보기
     expect(screen.getByRole('button', { name: '도감' })).toHaveClass('active');

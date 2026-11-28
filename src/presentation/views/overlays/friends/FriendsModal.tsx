@@ -23,7 +23,7 @@ import Tip, { TipBullets } from '../../../ui/Tip';
 import BlockList from './BlockList';
 import { SOCIAL_CELL, SOCIAL_HEAD } from './socialTable';
 
-// 소셜 창. 게임 스테이지 안에 뜨고, 680 폭에 높이를 고정한다. 탭은 친구, 요청, 차단 셋이고 한 탭이 한 가지 일만 한다.
+// 친구 창. 게임 스테이지 안에 뜨고, 680 폭에 높이를 고정한다. 탭은 친구, 요청, 차단 셋이고 한 탭이 한 가지 일만 한다.
 // 친구 탭은 친구 표(접속 점, 이름, 있는 곳, 끊기)다. 접속 중인 친구가 먼저 오고, 있는 곳 칸은 접속 중이면 지금 있는 곳,
 // 아니면 마지막 행동에서 지난 시간이다. 요청 탭은 닉네임 입력과 받은 요청, 보낸 요청 표이고, 받은 요청 수는 탭 이름 옆 숫자로 보인다.
 // 닉네임을 치는 동안 앞부분이 같은 계정 유저를 입력 아래에 후보로 띄우고, 후보를 고르면 입력을 그 이름으로 채운다.
@@ -69,7 +69,7 @@ export default function FriendsModal({ setToast, onClose }: { setToast: Notify; 
   return (
     // 탭이 있는 창의 높이: 요청 탭(입력과 받은·보낸 요청 표 둘)이 들어가는 480px. 스테이지가 낮으면 위아래 16px을 남긴다
     <Modal layer="stage" md height={480} onClose={onClose}>
-      <ModalCard title="소셜" onClose={onClose} fixed>
+      <ModalCard title="친구" onClose={onClose} fixed>
         <div className="flex flex-col gap-3 flex-1 min-h-0">
           <TabBar<SocialTab> activeKey={tab} onSelect={setTab} tabs={[
             { key: 'friends', label: groups ? `친구 ${groups.friends.length}` : '친구' },

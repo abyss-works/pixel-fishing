@@ -1,4 +1,4 @@
-// 소셜 창: 친구, 요청, 차단 세 탭. 친구 표의 있는 곳 칸, 요청 탭의 닉네임 후보와 받은 요청 처리, 차단 해제.
+// 친구 창: 친구, 요청, 차단 세 탭. 친구 표의 있는 곳 칸, 요청 탭의 닉네임 후보와 받은 요청 처리, 차단 해제.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { FriendItem } from '../../../../features/friends/model/friends';
@@ -39,7 +39,7 @@ vi.mock('../../../../features/friends/service/useNicknameSuggestions', () => ({
 const person = (uid: string, state: FriendItem['state'], extra: Partial<FriendItem> = {}): FriendItem =>
   ({ uid, nick: uid, state, lastActiveAt: null, online: false, region: null, zone: null, ...extra });
 
-describe('FriendsModal(소셜 창)', () => {
+describe('FriendsModal(친구 창)', () => {
   afterEach(() => {
     cleanup();
     s.groups = { friends: [], incoming: [], outgoing: [] };

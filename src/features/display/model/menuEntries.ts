@@ -18,7 +18,7 @@ export interface MenuOpenFlags {
   mailbox: boolean;
 }
 
-/** 메뉴 묶음과 순서를 돌려준다. 상태(운세·랭킹), 활동(업적·의뢰), 소통(길드·소셜·우편함) 순이다 */
+/** 메뉴 묶음과 순서를 돌려준다. 상태(운세·랭킹), 활동(업적·의뢰), 소통(길드·친구·우편함) 순이다 */
 export function menuGroups(open: MenuOpenFlags): MenuGroupDef[] {
   const statusKeys: MenuKey[] = ['fortune'];
   if (open.ranking) statusKeys.push('ranking');

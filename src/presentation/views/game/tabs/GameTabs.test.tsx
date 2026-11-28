@@ -108,10 +108,12 @@ describe('GameTabs - 도감·가방 괄호 없는 탭 라벨과 서브탭 순환
     render(<StatefulTabs />);
     expect(screen.getByRole('button', { name: '도감' })).toHaveClass('active');
 
-    // 돌연변이 토글을 켜면 일반 어종 제목이 돌연변이로 바뀐다
+    // 돌연변이 토글을 켜도 일반 어종 제목을 유지하고 (n/n) 수치에만 돌연변이 강조 색이 적용된다
     fireEvent.click(screen.getByRole('button', { name: '돌연변이' }));
     expect(screen.getByRole('button', { name: '돌연변이' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('heading', { level: 3, name: /^돌연변이/ })).toBeInTheDocument();
+    const dexHeading = screen.getByRole('heading', { level: 3, name: /^일반 어종/ });
+    expect(dexHeading).toBeInTheDocument();
+    expect(dexHeading.querySelector('span')).toHaveClass('text-mutation');
 
     // 도감 탭 재클릭: 일반 → 네임드
     fireEvent.click(screen.getByRole('button', { name: '도감' }));
