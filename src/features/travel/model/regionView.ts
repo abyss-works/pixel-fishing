@@ -1,4 +1,4 @@
-import { canFishSpot, FISH, formName, globalRarityShare, rarityShareOf, speciesDiscovered } from '../../../game/rules/logic';
+import { canFishSpot, FISH, formName, globalRarityShare, priceOf, rarityShareOf, speciesDiscovered } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { shownFormOf } from '../../dex/model/shownForm';
 import type { Point, School } from '../../../game/world/types';
@@ -112,7 +112,13 @@ export function selectFishAtSpot(spot: SpotId, game: GameState) {
     .sort((a, b) => rarityRank(a.rarity) - rarityRank(b.rarity))
     .map(fish => {
       const shown = shownFormOf(game, fish.id);
-      return { fish, discovered: speciesDiscovered(game, fish.id), shown, name: formName(fish, shown.form) };
+      return {
+        fish,
+        discovered: speciesDiscovered(game, fish.id),
+        shown,
+        name: formName(fish, shown.form),
+        price: priceOf(fish, shown.form),
+      };
     });
 }
 
