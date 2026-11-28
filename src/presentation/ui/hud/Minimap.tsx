@@ -19,7 +19,7 @@ export default function Minimap({ def, boat, covered, onOpenMap, onHide, mates, 
   boat: number;
   covered: boolean;
   onOpenMap?: () => void;
-  /** 오른쪽 위 빼기 버튼 — 미니맵을 숨긴다(다시 보이는 버튼은 HUD 칩 줄이 둔다) */
+  /** 오른쪽 위 빼기 버튼 — 미니맵을 숨긴다(다시 보이는 지도 버튼은 미니맵이 숨은 자리의 한 줄이 둔다) */
   onHide?: () => void;
   /** 지금 이 바다에 있는 길드원 위치 — 그릴 때마다 부른다 */
   mates?: () => readonly { x: number; y: number }[];
