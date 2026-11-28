@@ -82,6 +82,8 @@ import { useLiveNickSync } from '../../../features/live/service/useLiveNickSync'
 import { useNotices } from '../../../features/live/service/useNotices';
 import { useSpotState } from '../../../features/travel/service/useSpotState';
 import TraceCard from '../overlays/bounty/TraceCard';
+import RewardCard from '../overlays/rewards/RewardCard';
+import type { RewardWindow } from '../../../features/display/model/rewardsDue';
 import AwayCard from '../overlays/away/AwayCard';
 import AwayReportModal from '../overlays/away/AwayReportModal';
 import { awayLineText } from '../overlays/away/awayText';
@@ -414,6 +416,11 @@ export default function GameView(props: GameViewProps) {
     setStatsOpen(open => !open);
   };
   const openQuests = () => setQuestsOpen(open => !open);
+  const openRewardWindow = (target: RewardWindow) => {
+    if (target === 'quests') setQuestsOpen(true);
+    else if (target === 'achievements') setAchievementsOpen(true);
+    else setMailboxOpen(true);
+  };
   // 승부 결과 확정 — 서버가 도감·진행도·도전권을 바꾼다. 실패는 감사만 남아 창을 그대로 둔다
   const resolveEncounter = (r: EncounterResult) => {
     if (!encounter) return;
@@ -582,14 +589,15 @@ export default function GameView(props: GameViewProps) {
                    channels={chat.enabled ? FILTER_CHANNELS : undefined}
                    disabledChannels={guild === null ? GUILD_OFF : undefined}
                    onOpenStats={openStats} onOpenEffects={() => setEffectsOpen(open => !open)} onOpenMap={isEventZone ? undefined : onOpenMap}
-                   notice={atSea || (away.report && !awayOpen) ? (
-                     <div className="flex flex-col gap-2">
+                   notice={(
+                     <>
                        {away.report && !awayOpen && (
                          <AwayCard report={away.report} onClose={away.dismiss} onDetail={() => setAwayOpen(true)} />
                        )}
+                       <RewardCard game={game} accountState={accountState} onOpen={openRewardWindow} />
                        {atSea && <TraceCard onTrack={setTracking} />}
-                     </div>
-                   ) : null}
+                     </>
+                   )}
                    chips={showPresence ? <PresenceChip region={region} onOpen={() => setPlayersOpen(true)} /> : null}
                    badge={props.badge} accountState={accountState}
                    pipButton={!mobile && pip.supported ? (

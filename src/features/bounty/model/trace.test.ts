@@ -20,8 +20,7 @@ describe('흔적 카드 선택', () => {
     expect(card.named.trace).toContain('그물');
     expect(card.leftMins).toBe((expires - now) / 60_000);
     expect(card.here).toBe(true); // 해구는 태평양의 하위 존이다
-    expect(card.done).toBe(false);
-  });
+      });
 
   it('의뢰 구역 밖이면 here가 아니고 구역 이름을 준다', () => {
     const card = selectTraceCard(snap({ tickets: [{ questId: 'pacific-named-megalodon', issuedAt: issued }] }), 'indian', now)!;
@@ -37,9 +36,8 @@ describe('흔적 카드 선택', () => {
     expect(selectTraceCard(snap({ tickets }), 'pacific', 0)).toBeNull();
   });
 
-  it('토벌을 마친 네임드 의뢰는 도전권이 없어도 보상 안내 카드로 남는다', () => {
-    const card = selectTraceCard(snap({ progress: [{ questId: 'pacific-named-megalodon', progress: 1 }] }), null, 0)!;
-    expect(card.done).toBe(true);
-    expect(card.named.name).toBe('메갈로돈');
+  it('토벌을 마친 네임드 의뢰의 보상 대기는 흔적 카드가 아니다', () => {
+    expect(selectTraceCard(snap({ progress: [{ questId: 'pacific-named-megalodon', progress: 1 }] }), null, 0)).toBeNull();
+    expect(selectTraceCard(snap({ progress: [{ questId: 'pacific-named-megalodon', progress: 1 }] }), 'pacific', now)).toBeNull();
   });
 });

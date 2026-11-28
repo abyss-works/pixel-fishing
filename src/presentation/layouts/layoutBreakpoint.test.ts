@@ -137,6 +137,7 @@ describe('레이아웃 판정 기준(뷰포트 폭 768px)', () => {
     used('/ui/hud/HudRows.tsx', 'STACK_OMIT_CLASS');
     used('/views/overlays/away/AwayCard.tsx', 'STACK_OMIT_CLASS');
     used('/views/overlays/bounty/TraceCard.tsx', 'STACK_OMIT_CLASS');
+    used('/views/overlays/rewards/RewardCard.tsx', 'STACK_COMPACT_HIDE_CLASS');
     used('/game-stage/Field.tsx', 'HEADER_ROWS_OMIT_CLASS');
   });
 });

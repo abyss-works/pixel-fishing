@@ -31,7 +31,7 @@ interface HudLayoutProps {
   onOpenMap?: () => void;
   /** 미니맵에 그릴 같은 바다의 길드원 위치 */
   guildMates?: () => readonly { x: number; y: number }[];
-  /** 오른쪽 열 맨 위에 쌓을 알림(방치 결과 카드, 바다의 흔적 카드 등) */
+  /** 오른쪽 열 맨 위에 쌓을 알림 카드(방치 결과, 받을 보상, 바다의 흔적 순서). 카드가 하나도 없으면 자리를 차지하지 않는다 */
   notice?: ReactNode;
   /** 미니맵 바로 위 칩 줄에서 슬롯 칩 앞에 놓을 칩(바다의 접속 칩 등) */
   chips?: ReactNode;
@@ -107,7 +107,7 @@ export default function HudLayout({ game, bagBonus = 0, scene, log, covered, onO
         <div className={cx('relative z-(--z-stage-hud) order-1 w-[clamp(156px,32.5%,292px)]',
                            'flex flex-col items-end gap-2 pointer-events-none',
                            'mobile:order-none mobile:w-[156px]', STACK_COLUMN_CLASS)}>
-          {notice && <div className="w-full pointer-events-auto">{notice}</div>}
+          <div className="flex w-full flex-col gap-2 pointer-events-auto empty:hidden">{notice}</div>
           <div className="flex pc:flex-wrap items-center justify-end gap-1.5 pointer-events-none">
             {chips}
             <SlotChips game={game} accountState={accountState} onOpenEffects={onOpenEffects} />

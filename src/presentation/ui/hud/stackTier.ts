@@ -16,6 +16,11 @@ export const STACK_LOG_CLASS = 'pc:@max-[464px]:w-full pc:@max-[464px]:[--log-li
 /** 부가 줄 - 렌더링 역할이 생략인 글자. 숨기고 툴팁으로 넘긴다(useOmitted) */
 export const STACK_OMIT_CLASS = 'pc:@max-[464px]:hidden';
 
+/** 줄이는 카드 - 쌓기 단계와 모바일 레이아웃에서 줄 글자를 숨기고(HIDE), 개수(ONLY)만 보이며 줄들을 한 줄로 늘어놓는다(ROW) */
+export const STACK_COMPACT_HIDE_CLASS = `${STACK_OMIT_CLASS} mobile:hidden`;
+export const STACK_COMPACT_ONLY_CLASS = 'hidden mobile:inline pc:@max-[464px]:inline';
+export const STACK_COMPACT_ROW_CLASS = 'mobile:flex-row pc:@max-[464px]:flex-row';
+
 /** 16:9 그림 프레임 - 스테이지 전체로 넓히고 그림 위아래 남는 자리를 바탕색(--fill-top, --fill-bottom)으로 채운다(GameFrame fill) */
 export const STACK_FRAME_FILL_CLASS = 'pc:@max-[464px]:absolute pc:@max-[464px]:inset-0 pc:@max-[464px]:w-auto pc:@max-[464px]:aspect-auto pc:@max-[464px]:bg-[linear-gradient(var(--fill-top)_50%,var(--fill-bottom)_50%)]';
 
