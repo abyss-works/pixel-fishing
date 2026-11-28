@@ -178,4 +178,51 @@ describe('NoticesTab', () => {
     expect(within(secondRow).getByRole('button', { name: '즉시 마감' })).not.toBeDisabled();
     expect(within(secondRow).getByRole('button', { name: '삭제' })).not.toBeDisabled();
   });
+
+  it('작성 폼에서 마크다운 빠른 서식 버튼과 실시간 게임 내 공지 미리보기가 동작한다', async () => {
+    renderTab();
+    await screen.findByText('등록된 공지가 없어요.');
+
+    fireEvent.click(screen.getByRole('button', { name: '새 공지 등록' }));
+
+    const titleInput = screen.getByLabelText(/^제목/);
+    const bodyInput = screen.getByLabelText(/^본문/) as HTMLTextAreaElement;
+
+    fireEvent.change(titleInput, { target: { value: '쿠폰 이벤트' } });
+    fireEvent.change(bodyInput, { target: { value: '쿠폰 코드: ' } });
+    bodyInput.setSelectionRange(bodyInput.value.length, bodyInput.value.length);
+
+    fireEvent.click(screen.getByRole('button', { name: '인라인 코드' }));
+    expect(bodyInput.value).toBe('쿠폰 코드: `코드`');
+
+    fireEvent.change(bodyInput, { target: { value: '**중요** `FISH2026`\n- 보상 지급' } });
+
+    const previewHeading = screen.getByText('게임 내 공지 미리보기');
+    const previewBox = previewHeading.parentElement!;
+    expect(within(previewBox).getByText('상단 공지 배너')).toBeInTheDocument();
+    expect(within(previewBox).getByText('공지사항 창')).toBeInTheDocument();
+    expect(within(previewBox).getAllByText('쿠폰 이벤트')).toHaveLength(2);
+    expect(within(previewBox).getAllByText('중요').every(el => el.tagName === 'STRONG')).toBe(true);
+    expect(within(previewBox).getAllByText('FISH2026').every(el => el.tagName === 'CODE')).toBe(true);
+    expect(within(previewBox).getAllByText('보상 지급').every(el => el.tagName === 'LI')).toBe(true);
+  });
+
+  it('공지 목록 표는 본문 요약에서 마크다운 기호를 벗겨 보여 준다', async () => {
+    mockApi.notices = [
+      {
+        id: 10,
+        title: '서식 공지',
+        body: '**강조** 안내 `CODE99`',
+        startsAt: '2026-11-26T11:00:00.000Z',
+        endsAt: '2026-11-26T14:00:00.000Z',
+        createdAt: '2026-11-26T10:00:00.000Z',
+        createdBy: 'admin-1',
+        updatedAt: '2026-11-26T10:00:00.000Z',
+      },
+    ];
+
+    renderTab();
+    expect(await screen.findByText('강조 안내 CODE99')).toBeInTheDocument();
+    expect(screen.queryByText(/\*\*강조\*\*/)).toBeNull();
+  });
 });

@@ -99,4 +99,19 @@ describe('NoticeModal', () => {
     expect(screen.getByText('공지 제목 1')).toBeInTheDocument();
     expect(screen.queryByText('공지 제목 2')).not.toBeInTheDocument();
   });
+
+  it('공지 본문의 마크다운 서식을 안전하게 렌더링한다', () => {
+    render(
+      <NoticeModal
+        open
+        activeNotices={[item(20, { body: '**중요** 쿠폰 `SUMMER2026`\n- 항목 1' })]}
+        endedNotices={[]}
+        onClose={() => {}}
+      />,
+    );
+
+    expect(screen.getByText('중요').tagName).toBe('STRONG');
+    expect(screen.getByText('SUMMER2026').tagName).toBe('CODE');
+    expect(screen.getByText('항목 1').tagName).toBe('LI');
+  });
 });
