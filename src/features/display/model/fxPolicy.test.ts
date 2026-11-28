@@ -76,9 +76,9 @@ describe('mediateFx', () => {
     expect(r.state.nextSeq).toBe(3);
   });
 
-  it('차단 창이 떠 있으면 카드와 필드는 확인으로 낮추고 PiP는 그대로 둔다', () => {
+  it('차단 창이 떠 있으면 필드만 확인으로 낮추고 카드와 PiP는 그대로 둔다', () => {
     const r = mediateFx(createFxMediatorState(), catchReq('catch.legendaryOrFirstVariant', 0), env({ windowsOpen: true }));
-    expect(intensities(r)).toEqual({ 'catch-card': 'confirm', field: 'confirm', pip: 'spectacle' });
+    expect(intensities(r)).toEqual({ 'catch-card': 'spectacle', field: 'confirm', pip: 'spectacle' });
   });
 
   it('연출 중에 같은 화면의 연출이 오면 강조로 낮추고 화면이 다르면 독립이다', () => {
@@ -93,12 +93,11 @@ describe('mediateFx', () => {
     expect(r.state.spectacleUntil).toEqual({ main: 10_000, pip: 10_000 });
   });
 
-  it('차단 창으로 낮아진 연출은 화면을 점유하지 않는다', () => {
+  it('차단 창이 떠 있어도 카드의 연출은 화면을 점유한다', () => {
     const blocked = mediateFx(createFxMediatorState(), catchReq('catch.legendaryOrFirstVariant', 0), env({ windowsOpen: true }));
-    expect(blocked.state.spectacleUntil).toEqual({ main: 0, pip: 10_000 });
+    expect(blocked.state.spectacleUntil).toEqual({ main: 10_000, pip: 10_000 });
     const next = mediateFx(blocked.state, catchReq('catch.legendaryOrFirstVariant', 100), env());
-    expect(intensities(next)['catch-card']).toBe('spectacle');
-    expect(intensities(next).pip).toBe('emphasis');
+    expect(intensities(next)['catch-card']).toBe('emphasis');
   });
 
   it('점유가 끝난 뒤의 연출은 다시 연출이다', () => {

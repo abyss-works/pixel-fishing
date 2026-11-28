@@ -100,7 +100,7 @@ export function createFxMediatorState(): FxMediatorState {
 }
 
 const screenOf = (renderer: FxRenderer): FxScreen => (renderer === 'pip' ? 'pip' : 'main');
-const BLOCKABLE: readonly FxRenderer[] = ['catch-card', 'field'];
+const BLOCKABLE: readonly FxRenderer[] = ['field'];
 
 /** 요청 하나를 렌더러별 지시로 바꾼다. 입력 상태를 바꾸지 않는 순수 함수 */
 export function mediateFx(

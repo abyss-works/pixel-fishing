@@ -51,15 +51,16 @@ describe('requestFx', () => {
     expect(listener).not.toHaveBeenCalled();
   });
 
-  it('차단 창 판정을 묶으면 카드 강도가 확인으로 낮아지고 해제하면 창 없음으로 본다', () => {
+  it('차단 창 판정을 묶으면 필드 강도만 확인으로 낮아지고 카드는 그대로이며 해제하면 창 없음으로 본다', () => {
     const unbind = bindFxEnvironment({ windowsOpen: () => true });
-    requestFx(catchReq('catch.epicOrRecord', Date.now()));
-    expect(getFxDirective('catch-card')?.intensity).toBe('confirm');
+    requestFx(catchReq('catch.epicOrRecord', Date.now(), { region: 'world' }));
+    expect(getFxDirective('catch-card')?.intensity).toBe('emphasis');
+    expect(fieldFxFrame('world', Date.now()).localJumps[0].intensity).toBe('confirm');
     expect(getFxDirective('pip')?.intensity).toBe('emphasis');
     unbind();
     vi.setSystemTime(1_000_000 + 10_000);
-    requestFx(catchReq('catch.epicOrRecord', Date.now()));
-    expect(getFxDirective('catch-card')?.intensity).toBe('emphasis');
+    requestFx(catchReq('catch.epicOrRecord', Date.now(), { region: 'world' }));
+    expect(fieldFxFrame('world', Date.now()).localJumps.at(-1)?.intensity).toBe('emphasis');
   });
 
   it('새 요청이 같은 렌더러의 이전 지시를 대체하고 순번이 늘어난다', () => {
