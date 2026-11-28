@@ -1,4 +1,4 @@
-// 제재·무결성 구역 — 활성 제재, PF-852 무결성 감등 현황·오탐 해제·전환 로그·분포 비교, 연타·PERFECT 이상치를 확인한다.
+// 제재·무결성 구역 — 활성 제재, 무결성 감등 현황·오탐 해제·전환 로그·분포 비교, 연타·PERFECT 이상치를 확인한다.
 import { Suspense, lazy, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import Badge from '../../../ui/Badge';
@@ -200,7 +200,7 @@ export default function AntiAbuseTab({ onCompose }: { onCompose?: (userId: strin
         })}
       </Cell>
 
-      {/* PF-852 무결성 감등 현황 및 오탐 해제 */}
+      {/* 무결성 감등 현황 및 오탐 해제 */}
       <Cell title="무결성 감등 현황 (단계 0/1/2)" flush>
         <div className="flex flex-wrap items-center gap-2 px-3 pt-3">
           <Badge tone="dim" size="xs">단계 0 (정상): {fmtNum(stageCount(0))}명</Badge>
