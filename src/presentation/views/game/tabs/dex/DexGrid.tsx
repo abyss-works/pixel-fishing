@@ -14,32 +14,43 @@ import NightMark, { NightMarkLegend } from '../../../../ui/fish/NightMark';
 import { RarityDot, RARITY_CARD, DIM_CARD } from '../../../../ui/fish/RarityTag';
 import PageTitle from '../../../../ui/PageTitle';
 import Subheading from '../../../../ui/Subheading';
+import ToggleChip from '../../../../ui/ToggleChip';
 import { fmtGold } from '../../../../ui/format';
-import type { DexView } from '../tabs';
 import DexDetail from './DexDetail';
 
 // 일반/돌연변이 공용 격자 — 폼별 발견 기준만 다르다. 변이는 별개 개체라 변이만 잡은 종은
 // 기본 도감에서 여전히 ??? (v0.3.3)
-export default function DexGrid({ game, view, sub, onSub }: {
+export default function DexGrid({ game, form, onToggleForm, sub, onSub }: {
   game: GameState;
-  view: DexView;
+  form: FormId;
+  onToggleForm: () => void;
   /** 열람 중인 최상위 존 — GameTabs 소유(탭을 떠났다 와도 유지) */
   sub: ZoneId;
   onSub: (z: ZoneId) => void;
 }) {
   // 폼별 발견 기준 — 변이는 별개 개체라 변이만 잡은 종은 기본 도감에서 여전히 ??? (v0.3.3)
-  const viewForm: FormId = view === 'variant' ? 'variant' : 'normal';
-  const data = useMemo(() => selectDexGrid(game, sub, viewForm), [game, sub, viewForm]);
+  const data = useMemo(() => selectDexGrid(game, sub, form), [game, sub, form]);
   const [detail, setDetail] = useState<Fish | null>(null);
 
   return (
     <div>
       <div className="flex items-center justify-between gap-2 mb-1">
         <PageTitle>
-          {view === 'base' ? '일반 어종' : '돌연변이'}
+          {form === 'variant' ? '돌연변이' : '일반 어종'}
           {' ('}{data.foundCount}/{data.fishCount}{')'}
         </PageTitle>
-        <NightMarkLegend />
+        <div className="flex items-center gap-2 shrink-0">
+          <ToggleChip
+            size="sm"
+            pressed={form === 'variant'}
+            emphasis={form === 'variant'}
+            onClick={onToggleForm}
+          >
+            <PixelIcon glyph="sparkle" size={10} />
+            돌연변이
+          </ToggleChip>
+          <NightMarkLegend />
+        </div>
       </div>
       <SubTabs
         items={data.zones.map(({ id, foundCount, fishCount }) => ({
@@ -53,7 +64,7 @@ export default function DexGrid({ game, view, sub, onSub }: {
           <div key={s.id} className="mt-2">
             <Subheading className="border-b border-line pb-1 flex items-center justify-between gap-2">
               <span>{s.name}</span>
-              {view === 'base' && (
+              {form === 'normal' && (
                 <span className="inline-flex items-center gap-1.5 text-xs">
                   <ProgressCount current={normalProgress.found} target={normalProgress.total} tight />
                   {normalProgress.completed && (
@@ -71,7 +82,7 @@ export default function DexGrid({ game, view, sub, onSub }: {
                 const body = (
                   <>
                     <NightMark fish={f} discovered={ok} />
-                    <FishSprite fish={f} preset="icon" form={viewForm} discovered={ok}
+                    <FishSprite fish={f} preset="icon" form={form} discovered={ok}
                                 ariaLabel={ok ? name : '미확인 어종'}
                                 className="block mx-auto mb-1" />
                     {ok ? (
@@ -108,8 +119,8 @@ export default function DexGrid({ game, view, sub, onSub }: {
         );
       })}
       {detail && (
-        <DexDetail key={`${detail.id}-${view}`} fish={detail} game={game}
-                   initialForm={view === 'variant' ? 1 : 0} onClose={() => setDetail(null)} />
+        <DexDetail key={`${detail.id}-${form}`} fish={detail} game={game}
+                   initialForm={form === 'variant' ? 1 : 0} onClose={() => setDetail(null)} />
       )}
     </div>
   );

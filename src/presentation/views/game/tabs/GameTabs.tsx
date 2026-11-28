@@ -3,6 +3,7 @@ import type { GameState } from '../../../../game/rules/logic';
 import type { GameAction } from '../../../../game/rules/actions';
 import type { RejectReason } from '../../../../game/rules/rules';
 import type { DispatchResult, MaybePromise, ProfileStatus } from '../../../../features/gameplay/service/types';
+import type { FormId } from '../../../../game/content/fish';
 import { ZONE_IDS, defaultZoneOfRegion } from '../../../../game/content/zones';
 import type { ZoneId } from '../../../../game/content/zones';
 import type { RegionId } from '../../../../game/content/places';
@@ -62,6 +63,7 @@ const TAB_GLYPH: Record<TabKey, GlyphId> = {
 export default function GameTabs(props: GameTabsProps) {
   const { activeTab, setActiveTab, game } = props;
   const [dexView, setDexView] = useState<DexView>('base');
+  const [dexForm, setDexForm] = useState<FormId>('normal');
   const [dexZone, setDexZone] = useState<ZoneId>(defaultZoneOfRegion(props.region));
   const { section } = useBagView();
   const mobile = useMobileLayout();
@@ -75,7 +77,7 @@ export default function GameTabs(props: GameTabsProps) {
   ].map(tab => ({ ...tab, icon: <PixelIcon glyph={TAB_GLYPH[tab.key]} size={16} /> }));
 
   // 메뉴 탭 선택(클릭·숫자키). 이미 열린 탭을 다시 고르면 그 탭의 보기를 순환한다
-  // (가방: 물고기→아이템→유물 · 도감: 일반→돌연변이→네임드).
+  // (가방: 물고기→아이템→유물 · 도감: 일반→네임드→이벤트).
   const select = (tab: TabKey) => {
     if (tab === activeTab && tab === 'dex') {
       setDexView(DEX_VIEWS[(DEX_VIEWS.indexOf(dexView) + 1) % DEX_VIEWS.length]);
@@ -95,8 +97,10 @@ export default function GameTabs(props: GameTabsProps) {
   };
 
   // 도감 지역 서브탭 순서 — 네임드는 수배가 있는 존만 서브탭에 있다(selectNamedDex).
+  // 이벤트 보기는 구역 서브탭이 없어 순환하지 않는다.
   // 열람 존이 목록에 없으면 화면은 첫 존을 보이므로 그 위치에서 출발한다.
   const cycleDexZone = (direction: 1 | -1) => {
+    if (dexView === 'event') return;
     const ids = dexView === 'named' ? selectNamedDex(game, dexZone).zones.map(z => z.id) : ZONE_IDS;
     const at = Math.max(0, ids.indexOf(dexZone));
     setDexZone(ids[(at + direction + ids.length) % ids.length]);
@@ -132,7 +136,17 @@ export default function GameTabs(props: GameTabsProps) {
              sheetOpen={props.sheetOpen} onSheetClose={() => props.onSheetOpenChange(false)}>
       {activeTab === 'region' && <VRegion region={props.region} game={game} />}
       {activeTab === 'bag' && <BagTab game={game} accountState={accountLockState(props.account, props.accountFailed)} sellBonus={props.sellBonus} bagBonus={props.bagBonus} dispatch={props.dispatch} setToast={props.setToast} />}
-      {activeTab === 'dex' && <DexTab game={game} view={dexView} onView={setDexView} sub={dexZone} onSub={setDexZone} />}
+      {activeTab === 'dex' && (
+        <DexTab
+          game={game}
+          view={dexView}
+          onView={setDexView}
+          form={dexForm}
+          onToggleForm={() => setDexForm(f => (f === 'normal' ? 'variant' : 'normal'))}
+          sub={dexZone}
+          onSub={setDexZone}
+        />
+      )}
       {activeTab === 'help' && <VHelp />}
       {activeTab === 'settings' && (
         <SettingsTab autoLockOnCatch={game.autoLockOnCatch} dispatch={props.dispatch} setToast={props.setToast}

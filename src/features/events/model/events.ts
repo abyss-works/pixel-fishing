@@ -200,7 +200,7 @@ export const EVENTS_GATE_COPY = {
 export const EVENT2_UPGRADE_TIP =
   '보상은 현재 배 단계에 따라 결정돼요. 골드가 쌓이는 대로 틈틈이 배를 업그레이드해 주세요.';
 
-function toEventFishSpriteSubject(ef: EventFish): Fish {
+export function toEventFishSpriteSubject(ef: EventFish): Fish {
   return {
     id: ef.id,
     name: ef.name,

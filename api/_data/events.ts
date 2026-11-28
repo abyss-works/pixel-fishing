@@ -2,7 +2,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
-import { EVENT1_TRIO_TARGETS } from '../../src/game/content/eventFish.js';
+import { EVENT1_TRIO_TARGETS, EVENT_FISH } from '../../src/game/content/eventFish.js';
 import type { EventTrioTarget } from '../../src/game/content/eventFish.js';
 import { fishById } from '../../src/game/content/fish.js';
 import { isAttachableItemId, itemStorageAmount } from '../../src/game/content/itemCatalog.js';
@@ -87,12 +87,25 @@ export interface EventDrawState {
   won: boolean;
 }
 
+export interface EventDexAppearance {
+  eventId: string;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+}
+
+export interface EventDexSnapshot {
+  counts: Record<string, { normal: number; variant: number }>;
+  appearances: Record<string, EventDexAppearance[]>;
+}
+
 export interface EventsSnapshot {
   now: string;
   events: LiveEventSummary[];
   trio: EventTrioState | null;
   championship: EventChampionshipState | null;
   draw: EventDrawState | null;
+  eventDex: EventDexSnapshot;
 }
 
 export interface AdminLiveEventRow extends LiveEventSummary {
@@ -754,6 +767,64 @@ function pickEventForKind(events: readonly LiveEventSummary[], kind: LiveEventKi
   return ended ?? null;
 }
 
+/** 이벤트 2 전 회차 누적 도감과 어종별 등장 이력(최신순, 미래 회차 제외)을 조회한다 */
+export async function loadEventDexSnapshot(
+  db: Executor,
+  uid: string | null,
+  isGuest: boolean,
+  nowISO: string,
+): Promise<EventDexSnapshot> {
+  const eventsPromise = db.execute<{
+    id: string;
+    title: string;
+    starts_at: string;
+    ends_at: string;
+  }>(sql`select
+      id,
+      title,
+      ${isoOf('starts_at')} as starts_at,
+      ${isoOf('ends_at')} as ends_at
+    from public.live_events
+    where kind = 'championship'
+      and starts_at <= ${at(nowISO)}
+    order by starts_at desc, created_at desc`);
+
+  const dexPromise = uid && !isGuest
+    ? db.execute<{ dex: unknown }>(sql`select dex
+        from public.event_championship_scores
+        where user_id = ${uid}::uuid`)
+    : Promise.resolve({ rows: [] as Array<{ dex: unknown }> });
+
+  const [eventsRes, dexRes] = await Promise.all([eventsPromise, dexPromise]);
+
+  const list: EventDexAppearance[] = eventsRes.rows.map(r => ({
+    eventId: r.id,
+    title: r.title,
+    startsAt: r.starts_at,
+    endsAt: r.ends_at,
+  }));
+  const appearances: Record<string, EventDexAppearance[]> = {};
+  for (const fish of EVENT_FISH) {
+    appearances[fish.id] = list.map(item => ({ ...item }));
+  }
+
+  const counts: Record<string, { normal: number; variant: number }> = {};
+  for (const row of dexRes.rows) {
+    const parsed = parseChampDex(row.dex);
+    for (const [fishId, entry] of Object.entries(parsed)) {
+      const prev = counts[fishId];
+      if (prev) {
+        prev.normal += entry.normal;
+        prev.variant += entry.variant;
+      } else {
+        counts[fishId] = { normal: entry.normal, variant: entry.variant };
+      }
+    }
+  }
+
+  return { counts, appearances };
+}
+
 /** GET /api/events 응답용 전체 스냅샷을 조회한다. 게스트는 활성 요약 목록만 받고 개인·순위·PIN 정보는 숨긴다 */
 export async function loadEventsSnapshot(
   db: Executor,
@@ -761,19 +832,24 @@ export async function loadEventsSnapshot(
   isGuest: boolean,
   nowISO: string = new Date().toISOString(),
 ): Promise<EventsSnapshot> {
-  const events = await listVisibleLiveEvents(db, nowISO);
   if (!uid || isGuest) {
-    return { now: nowISO, events, trio: null, championship: null, draw: null };
+    const [events, eventDex] = await Promise.all([
+      listVisibleLiveEvents(db, nowISO),
+      loadEventDexSnapshot(db, uid, isGuest, nowISO),
+    ]);
+    return { now: nowISO, events, trio: null, championship: null, draw: null, eventDex };
   }
+  const events = await listVisibleLiveEvents(db, nowISO);
   const trioEvent = pickEventForKind(events, 'trio', nowISO);
   const champEvent = pickEventForKind(events, 'championship', nowISO);
   const drawEvent = pickEventForKind(events, 'draw', nowISO);
-  const [trio, championship, draw] = await Promise.all([
+  const [trio, championship, draw, eventDex] = await Promise.all([
     trioEvent ? loadTrioState(db, uid, trioEvent) : Promise.resolve(null),
     champEvent ? loadChampionshipState(db, uid, champEvent) : Promise.resolve(null),
     drawEvent ? loadDrawState(db, uid, drawEvent, nowISO) : Promise.resolve(null),
+    loadEventDexSnapshot(db, uid, isGuest, nowISO),
   ]);
-  return { now: nowISO, events, trio, championship, draw };
+  return { now: nowISO, events, trio, championship, draw, eventDex };
 }
 
 /** 계정 정리에서 사용자의 라이브 이벤트 진행·점수·당첨 이력을 모두 지운다 */

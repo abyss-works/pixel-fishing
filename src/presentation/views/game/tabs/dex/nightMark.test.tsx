@@ -53,7 +53,7 @@ describe('밤 전용 어종 카드 표식', () => {
   it('도감 일반: 발견 밤 전용은 하늘색, 미발견(???) 밤 전용은 어두운 톤 달 아이콘을 표시하고 상시 어종에는 없다', () => {
     const { zone, night, day, zoneNightCount } = pick();
     const { container } = render(
-      <DexGrid game={found([night.id, day.id])} view="base" sub={zone} onSub={() => {}} />);
+      <DexGrid game={found([night.id, day.id])} form="normal" onToggleForm={() => {}} sub={zone} onSub={() => {}} />);
     const marks = container.querySelectorAll(MARK);
     expect(marks).toHaveLength(zoneNightCount);
     const foundMark = [...marks].find(m => m.closest('button'))!;
@@ -62,7 +62,7 @@ describe('밤 전용 어종 카드 표식', () => {
     expect(foundMark.querySelector('[data-glyph="moon"]')).not.toBeNull();
 
     cleanup();
-    const unseen = render(<DexGrid game={newState()} view="base" sub={zone} onSub={() => {}} />);
+    const unseen = render(<DexGrid game={newState()} form="normal" onToggleForm={() => {}} sub={zone} onSub={() => {}} />);
     const unseenMarks = unseen.container.querySelectorAll(MARK);
     expect(unseenMarks).toHaveLength(zoneNightCount);
     for (const m of unseenMarks) {
@@ -75,7 +75,7 @@ describe('밤 전용 어종 카드 표식', () => {
   it('도감 돌연변이: 발견·미발견 밤 전용 카드 모두에 달 아이콘이 있고 상시 어종에는 없다', () => {
     const { zone, night, day, zoneNightCount } = pick();
     const { container } = render(
-      <DexGrid game={found([night.id, day.id], 'variant')} view="variant" sub={zone} onSub={() => {}} />);
+      <DexGrid game={found([night.id, day.id], 'variant')} form="variant" onToggleForm={() => {}} sub={zone} onSub={() => {}} />);
     const marks = container.querySelectorAll(MARK);
     expect(marks).toHaveLength(zoneNightCount);
     const foundMark = [...marks].find(m => m.closest('button'))!;
@@ -83,7 +83,7 @@ describe('밤 전용 어종 카드 표식', () => {
     expect(foundMark).toHaveClass('text-accent');
 
     cleanup();
-    const unseen = render(<DexGrid game={newState()} view="variant" sub={zone} onSub={() => {}} />);
+    const unseen = render(<DexGrid game={newState()} form="variant" onToggleForm={() => {}} sub={zone} onSub={() => {}} />);
     const unseenMarks = unseen.container.querySelectorAll(MARK);
     expect(unseenMarks).toHaveLength(zoneNightCount);
     for (const m of unseenMarks) expect(m).toHaveClass('text-[#6797b8]');
@@ -141,7 +141,7 @@ describe('밤 전용 어종 카드 표식', () => {
 
   it('달 아이콘 호버 시 밤 전용 어종·출현 시각·달빛 미끼 안내 툴팁을 보인다', () => {
     const { zone } = pick();
-    const { container } = render(<DexGrid game={newState()} view="base" sub={zone} onSub={() => {}} />);
+    const { container } = render(<DexGrid game={newState()} form="normal" onToggleForm={() => {}} sub={zone} onSub={() => {}} />);
     const mark = container.querySelector(MARK)!;
     fireEvent.mouseEnter(mark.parentElement!);
     const tip = screen.getByRole('tooltip');
@@ -154,7 +154,7 @@ describe('밤 전용 어종 카드 표식', () => {
 
   it('도감·지역 탭 단독 ? 범례와 가방 카드뷰 통합 ? 범례 툴팁을 제공한다', () => {
     const { zone, region, spot } = pick();
-    render(<DexGrid game={newState()} view="base" sub={zone} onSub={() => {}} />);
+    render(<DexGrid game={newState()} form="normal" onToggleForm={() => {}} sub={zone} onSub={() => {}} />);
     const dexLegend = screen.getByRole('button', { name: '밤 전용 어종 아이콘 안내' });
     fireEvent.mouseEnter(dexLegend.parentElement!);
     const dexTip = screen.getByRole('tooltip');

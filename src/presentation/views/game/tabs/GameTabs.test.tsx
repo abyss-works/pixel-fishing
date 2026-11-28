@@ -5,6 +5,15 @@ import type { TabKey } from './tabs';
 
 const layout = vi.hoisted(() => ({ mobile: false }));
 vi.mock('../../../layouts/useMobileLayout', () => ({ useMobileLayout: () => layout.mobile }));
+vi.mock('../../../../features/events/service/useEvents', () => ({
+  useEvents: () => ({
+    snap: null,
+    loaded: true,
+    failed: false,
+    offline: true,
+    refresh: () => {},
+  }),
+}));
 
 import { newState } from '../../../../game/rules/logic';
 import { resetKeyScopes } from '../../../ui/hotkeys';
@@ -95,20 +104,32 @@ function StatefulTabs() {
 }
 
 describe('GameTabs - 도감·가방 괄호 없는 탭 라벨과 서브탭 순환 동기화', () => {
-  it('1단 보기 서브탭 클릭, 도감 탭 재클릭, 숫자 3 재입력, Tab 구역 순환이 모두 동기화된다', () => {
+  it('1단 보기 서브탭 클릭, 도감 탭 재클릭(일반→네임드→이벤트), 숫자 3 재입력, 돌연변이 토글, Tab 구역 순환이 모두 동기화된다', () => {
     render(<StatefulTabs />);
     expect(screen.getByRole('button', { name: '도감' })).toHaveClass('active');
 
+    // 돌연변이 토글을 켜면 일반 어종 제목이 돌연변이로 바뀐다
     fireEvent.click(screen.getByRole('button', { name: '돌연변이' }));
-    expect(screen.getByRole('button', { name: '도감' })).toHaveClass('active');
+    expect(screen.getByRole('button', { name: '돌연변이' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('heading', { level: 3, name: /^돌연변이/ })).toBeInTheDocument();
 
+    // 도감 탭 재클릭: 일반 → 네임드
     fireEvent.click(screen.getByRole('button', { name: '도감' }));
     expect(screen.getByRole('button', { name: '도감' })).toHaveClass('active');
     expect(screen.getByRole('button', { name: '네임드' })).toHaveAttribute('aria-pressed', 'true');
 
+    // 숫자 3 재입력: 네임드 → 이벤트 (돌연변이 토글 상태 유지)
     fireEvent.keyDown(document, { key: '3' });
     expect(screen.getByRole('button', { name: '도감' })).toHaveClass('active');
+    expect(screen.getByRole('button', { name: '이벤트' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: '돌연변이' })).toHaveAttribute('aria-pressed', 'true');
+
+    // 이벤트 보기에서는 Tab으로 구역 순환을 하지 않는다
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(screen.getByRole('button', { name: '이벤트' })).toHaveAttribute('aria-pressed', 'true');
+
+    // 숫자 3 재입력: 이벤트 → 일반
+    fireEvent.keyDown(document, { key: '3' });
     expect(screen.getByRole('button', { name: '일반' })).toHaveAttribute('aria-pressed', 'true');
 
     expect(screen.getByRole('button', { name: /^마을/ })).toHaveAttribute('aria-pressed', 'true');
