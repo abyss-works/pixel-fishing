@@ -467,19 +467,30 @@ describe('R3: 도감 탭 (지역 서브탭)', () => {
     expect(screen.queryByText('???')).not.toBeInTheDocument();
   });
 
-  it('활성 도감 탭 재클릭 = 일반→돌연변이→네임드 보기 순환', () => {
+  it('활성 도감 탭 재클릭 = 일반→네임드→이벤트 보기 순환 · 일반 안쪽 돌연변이 토글', () => {
     seed({ dex: { crucian: { normal: rec(3), variant: rec(1) } } });
     render(<App />);
     clickTab('도감');
-    clickTab('도감'); // 활성 상태에서 한 번 더 → 돌연변이 보기
     expect(screen.getByRole('button', { name: '도감' })).toHaveClass('active');
+    expect(screen.getByRole('heading', { name: /^일반 어종/ })).toBeInTheDocument();
+    expect(screen.getByText('붕어')).toBeInTheDocument();
+
+    // 일반 탭 안쪽 돌연변이 토글
+    fireEvent.click(screen.getByRole('button', { name: '돌연변이' }));
     expect(screen.getByRole('heading', { name: /^돌연변이/ })).toBeInTheDocument();
     expect(screen.getByText('황금 붕어')).toBeInTheDocument(); // 발견한 변이는 변이 이름
     expect(screen.getByText('1마리 잡음')).toBeInTheDocument(); // 변이 폼 별도 마릿수 (v7)
     expect(screen.getAllByText('???').length).toBe(11); // 나머지 변이는 미확인
-    clickTab('도감');
+    fireEvent.click(screen.getByRole('button', { name: '돌연변이' }));
+    expect(screen.getByRole('heading', { name: /^일반 어종/ })).toBeInTheDocument();
+
+    clickTab('도감'); // 활성 상태에서 한 번 더 → 네임드 보기
+    expect(screen.getByRole('button', { name: '도감' })).toHaveClass('active');
     expect(screen.getByRole('heading', { name: /^네임드/ })).toBeInTheDocument();
+    clickTab('도감'); // 네임드 → 이벤트 보기
+    expect(screen.getByRole('heading', { name: /^이벤트 어종/ })).toBeInTheDocument();
     clickTab('도감'); // 끝에서 처음으로
+    expect(screen.getByRole('heading', { name: /^일반 어종/ })).toBeInTheDocument();
     expect(screen.getByText('붕어')).toBeInTheDocument();
   });
 
@@ -499,8 +510,7 @@ describe('R3: 도감 탭 (지역 서브탭)', () => {
     seed({}); // 시작 씬 = 마을 → 도감 열람 존도 마을이지만 네임드는 첫 수배 존(태평양)을 대신 보인다
     render(<App />);
     clickTab('도감');
-    clickTab('도감');
-    clickTab('도감');
+    clickTab('도감'); // 일반 → 네임드
     expect(screen.getByRole('heading', { name: /^네임드/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^마을/ })).not.toBeInTheDocument();
     expect(screen.getByText('???')).toBeInTheDocument(); // 메갈로돈 미획득
@@ -1253,15 +1263,14 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     seed({});
     render(<App />);
     fireEvent.keyDown(document, { key: '3' });
-    fireEvent.keyDown(document, { key: '3' });
-    fireEvent.keyDown(document, { key: '3' }); // 일반 → 돌연변이 → 네임드
+    fireEvent.keyDown(document, { key: '3' }); // 일반 → 네임드
     const zone = () => [...document.querySelectorAll('aside button[aria-pressed="true"]')].at(-1)?.textContent ?? '';
     expect(zone()).toMatch(/^태평양/); // 마을은 수배가 없어 첫 수배 해역을 대신 보인다
     fireEvent.keyDown(document, { key: 'Tab' });
     expect(zone()).toMatch(/^동남아/);
   });
 
-  it('같은 숫자를 다시 누르면 보기가 순환한다 — 가방 물고기→아이템→유물 · 도감 일반→돌연변이→네임드', () => {
+  it('같은 숫자를 다시 누르면 보기가 순환한다 — 가방 물고기→아이템→유물 · 도감 일반→네임드→이벤트', () => {
     seed({});
     render(<App />);
     const active = () => (document.querySelector('.pf-tabbar button.active')?.textContent ?? '')
@@ -1282,10 +1291,13 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     expect(active()).toBe('도감');
     expect(screen.getByRole('button', { name: '일반' })).toHaveAttribute('aria-pressed', 'true');
     fireEvent.keyDown(document, { key: '3' });
-    expect(screen.getByRole('heading', { name: /^돌연변이/ })).toBeInTheDocument();
-    fireEvent.keyDown(document, { key: '3' });
+    expect(screen.getByRole('button', { name: '네임드' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('heading', { name: /^네임드/ })).toBeInTheDocument();
     fireEvent.keyDown(document, { key: '3' });
+    expect(screen.getByRole('button', { name: '이벤트' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('heading', { name: /^이벤트 어종/ })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: '3' });
+    expect(screen.getByRole('button', { name: '일반' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('heading', { name: /^일반 어종/ })).toBeInTheDocument();
   });
 
