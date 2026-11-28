@@ -1,0 +1,249 @@
+// @vitest-environment node
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { describe, expect, it } from 'vitest';
+
+const ROOT = resolve(import.meta.dirname, '../..');
+
+function readManifest(relativePath: string): string {
+  return readFileSync(resolve(ROOT, relativePath), 'utf8');
+}
+
+/** Extracts ordered env var names from the primary container in a Deployment manifest. */
+function extractContainerEnvNames(yaml: string, containerName: string): string[] {
+  const lines = yaml.split(/\r?\n/);
+  let inContainers = false;
+  let inTargetContainer = false;
+  let inEnv = false;
+  let envIndent = -1;
+  const names: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+
+    if (/^---\s*$/.test(trimmed)) {
+      inContainers = false;
+      inTargetContainer = false;
+      inEnv = false;
+      continue;
+    }
+
+    const indent = line.length - line.trimStart().length;
+
+    if (trimmed === 'containers:') {
+      inContainers = true;
+      inTargetContainer = false;
+      inEnv = false;
+      continue;
+    }
+    if (trimmed === 'initContainers:') {
+      inContainers = false;
+      inTargetContainer = false;
+      inEnv = false;
+      continue;
+    }
+
+    if (!inContainers) continue;
+
+    if (trimmed.startsWith('- name:')) {
+      const value = trimmed.slice('- name:'.length).trim();
+      if (!inEnv) {
+        inTargetContainer = value === containerName;
+        continue;
+      }
+      if (indent <= envIndent + 2) {
+        names.push(value);
+        continue;
+      }
+    }
+
+    if (!inTargetContainer) continue;
+
+    if (trimmed === 'env:') {
+      inEnv = true;
+      envIndent = indent;
+      continue;
+    }
+
+    if (inEnv && indent <= envIndent) {
+      inEnv = false;
+    }
+  }
+
+  return names;
+}
+
+interface KustomizePatch {
+  kind: string;
+  name: string;
+  patch: string;
+}
+
+/** Extracts target/patch pairs from a kustomization manifest. */
+function extractKustomizePatches(yaml: string): KustomizePatch[] {
+  const lines = yaml.split(/\r?\n/);
+  const patches: KustomizePatch[] = [];
+  let inPatches = false;
+  let current: KustomizePatch | null = null;
+  let inPatchBody = false;
+  let patchBodyIndent = -1;
+  let bodyLines: string[] = [];
+
+  const flush = () => {
+    if (current) {
+      current.patch = bodyLines.join('\n');
+      patches.push(current);
+      current = null;
+      bodyLines = [];
+      inPatchBody = false;
+      patchBodyIndent = -1;
+    }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    const indent = line.length - line.trimStart().length;
+
+    if (inPatchBody) {
+      if (patchBodyIndent === -1) {
+        if (trimmed === '') {
+          bodyLines.push('');
+          continue;
+        }
+        if (indent > 0) {
+          patchBodyIndent = indent;
+          bodyLines.push(line.slice(patchBodyIndent));
+          continue;
+        }
+        inPatchBody = false;
+      } else if (trimmed === '' || indent >= patchBodyIndent) {
+        bodyLines.push(line.slice(patchBodyIndent));
+        continue;
+      } else {
+        inPatchBody = false;
+      }
+    }
+
+    if (!trimmed || trimmed.startsWith('#')) continue;
+
+    if (indent === 0 && trimmed === 'patches:') {
+      inPatches = true;
+      continue;
+    }
+    if (indent === 0 && trimmed !== 'patches:') {
+      flush();
+      inPatches = false;
+      continue;
+    }
+    if (!inPatches) continue;
+
+    if (trimmed.startsWith('- target:')) {
+      flush();
+      current = { kind: '', name: '', patch: '' };
+      continue;
+    }
+    if (!current) continue;
+
+    if (trimmed.startsWith('kind:')) {
+      current.kind = trimmed.slice('kind:'.length).trim();
+    } else if (trimmed.startsWith('name:')) {
+      current.name = trimmed.slice('name:'.length).trim();
+    } else if (trimmed === 'patch: |-' || trimmed === 'patch: |') {
+      inPatchBody = true;
+      patchBodyIndent = -1;
+      bodyLines = [];
+    }
+  }
+
+  flush();
+  return patches;
+}
+
+/** Extracts image newTag mappings from a kustomization manifest. */
+function extractImageTags(yaml: string): Map<string, string> {
+  const lines = yaml.split(/\r?\n/);
+  const tags = new Map<string, string>();
+  let inImages = false;
+  let currentImage = '';
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const indent = line.length - line.trimStart().length;
+
+    if (indent === 0 && trimmed === 'images:') {
+      inImages = true;
+      continue;
+    }
+    if (indent === 0 && trimmed !== 'images:') {
+      inImages = false;
+      continue;
+    }
+    if (!inImages) continue;
+
+    if (trimmed.startsWith('- name:')) {
+      currentImage = trimmed.slice('- name:'.length).trim();
+    } else if (trimmed.startsWith('newTag:') && currentImage) {
+      tags.set(currentImage, trimmed.slice('newTag:'.length).trim());
+    }
+  }
+
+  return tags;
+}
+
+describe('k8s manifests invariants', () => {
+  it('places BETTER_AUTH_URL, DEPLOY_ENV, CONSENT_EFFECTIVE_DATE at indices 1, 2, 3 in prod deployment and realtime manifests', () => {
+    const deployEnv = extractContainerEnvNames(readManifest('k8s/prod/deployment.yaml'), 'pixel-fishing');
+    const realtimeEnv = extractContainerEnvNames(readManifest('k8s/prod/realtime.yaml'), 'pixel-fishing-realtime');
+
+    for (const env of [deployEnv, realtimeEnv]) {
+      expect(env[1]).toBe('BETTER_AUTH_URL');
+      expect(env[2]).toBe('DEPLOY_ENV');
+      expect(env[3]).toBe('CONSENT_EFFECTIVE_DATE');
+    }
+
+    const stagePatches = extractKustomizePatches(readManifest('k8s/stage/kustomization.yaml'));
+    for (const targetName of ['pixel-fishing', 'pixel-fishing-realtime']) {
+      const envPatch = stagePatches.find(
+        (p) => p.kind === 'Deployment' && p.name === targetName && p.patch.includes('/env/1/value'),
+      );
+      expect(envPatch).toBeDefined();
+      expect(envPatch?.patch).toContain('/spec/template/spec/containers/0/env/1/value');
+      expect(envPatch?.patch).toContain('/spec/template/spec/containers/0/env/2/value');
+      expect(envPatch?.patch).toContain('/spec/template/spec/containers/0/env/3/value');
+    }
+  });
+
+  it('overrides Deployment/pixel-fishing strategy to Recreate and clears rollingUpdate in stage kustomization', () => {
+    const stagePatches = extractKustomizePatches(readManifest('k8s/stage/kustomization.yaml'));
+    const strategyPatch = stagePatches.find(
+      (p) => p.kind === 'Deployment' && p.name === 'pixel-fishing' && p.patch.includes('Recreate'),
+    );
+
+    expect(strategyPatch).toBeDefined();
+    const patchBody = strategyPatch?.patch ?? '';
+    const hasStrategicMergeClear =
+      /type:\s*Recreate/.test(patchBody) && /rollingUpdate:\s*null/.test(patchBody);
+    const hasJsonReplaceStrategy =
+      /op:\s*replace/.test(patchBody) &&
+      /path:\s*\/spec\/strategy/.test(patchBody) &&
+      /type:\s*Recreate/.test(patchBody) &&
+      !/rollingUpdate:\s*\{/.test(patchBody);
+
+    expect(hasStrategicMergeClear || hasJsonReplaceStrategy).toBe(true);
+  });
+
+  it('specifies matching newTag values for pixel-fishing and pixel-fishing-admin in stage kustomization', () => {
+    const tags = extractImageTags(readManifest('k8s/stage/kustomization.yaml'));
+    const appTag = tags.get('ghcr.io/abyss-works/pixel-fishing');
+    const adminTag = tags.get('ghcr.io/abyss-works/pixel-fishing-admin');
+
+    expect(appTag).toBeTruthy();
+    expect(adminTag).toBeTruthy();
+    expect(appTag).toBe(adminTag);
+  });
+});

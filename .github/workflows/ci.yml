@@ -56,6 +56,17 @@ jobs:
       - run: pnpm exec tsc -b
       - run: pnpm run lint
       - run: pnpm run build
+      - name: Validate Kustomize manifests
+        run: |
+          kubectl kustomize k8s/prod >/dev/null
+          kubectl kustomize k8s/stage | node -e "
+            const fs = require('fs');
+            const docs = fs.readFileSync(0, 'utf8').split(/^---\s*$/m);
+            const deploy = docs.find((d) => /^kind:\s*Deployment$/m.test(d) && /^\s*name:\s*pixel-fishing$/m.test(d));
+            if (!deploy) throw new Error('Deployment/pixel-fishing not found in rendered k8s/stage');
+            if (!/^\s*type:\s*Recreate$/m.test(deploy)) throw new Error('Deployment/pixel-fishing strategy must be Recreate');
+            if (/^\s*rollingUpdate:/m.test(deploy)) throw new Error('Deployment/pixel-fishing must not have rollingUpdate');
+          "
 
   # main 푸시마다 운영 이미지를 빌드해 올린다. ArgoCD가 k8s/prod의 태그를 보고 배포한다.
   image:
