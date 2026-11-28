@@ -49,18 +49,16 @@ export default function UsersTab({ onCompose }: {
 
   useEffect(() => {
     const trimmed = query.trim();
-    if (!trimmed) {
-      setDebouncedQuery('');
-      return;
-    }
+    if (!trimmed) return;
     const timer = setTimeout(() => setDebouncedQuery(trimmed), 200);
     return () => clearTimeout(timer);
   }, [query]);
 
-  const searchEnabled = granted && debouncedQuery.length > 0;
+  const activeQuery = query.trim() ? debouncedQuery : '';
+  const searchEnabled = granted && activeQuery.length > 0;
   const searchQuery = useAdminQuery(
-    adminKeys.userSearch(debouncedQuery),
-    () => searchAdminUsers(debouncedQuery, 25),
+    adminKeys.userSearch(activeQuery),
+    () => searchAdminUsers(activeQuery, 25),
     searchEnabled,
   );
 
@@ -73,9 +71,9 @@ export default function UsersTab({ onCompose }: {
 
   const baseRows = useMemo(() => {
     if (searchEnabled && searchQuery.data) return searchQuery.data;
-    if (debouncedQuery.length > 0) return filterAdminUsers(showDormant ? users : active, debouncedQuery);
+    if (activeQuery.length > 0) return filterAdminUsers(showDormant ? users : active, activeQuery);
     return showDormant ? users : active;
-  }, [searchEnabled, searchQuery.data, debouncedQuery, showDormant, users, active]);
+  }, [searchEnabled, searchQuery.data, activeQuery, showDormant, users, active]);
 
   const filtered = useMemo(() => {
     if (quickFilter === 'online') return baseRows.filter(u => onlineUids.has(u.user_id.toLowerCase()));
@@ -135,7 +133,7 @@ export default function UsersTab({ onCompose }: {
             </ToggleChip>
           </div>
           <span className="text-2xs text-text-dim">{filtered.length}/{users.length}명</span>
-          {debouncedQuery.length === 0 && (
+          {activeQuery.length === 0 && (
             <CheckToggle checked={showDormant} onChange={setShowDormant}
                          label={`휴면 게스트 보기 (${dormant.length}명)`} />
           )}

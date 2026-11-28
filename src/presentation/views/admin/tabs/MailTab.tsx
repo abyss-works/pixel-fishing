@@ -100,18 +100,16 @@ export default function MailTab({ to = null }: {
 
   useEffect(() => {
     const trimmed = search.trim();
-    if (!trimmed) {
-      setDebouncedSearch('');
-      return;
-    }
+    if (!trimmed) return;
     const timer = setTimeout(() => setDebouncedSearch(trimmed), 200);
     return () => clearTimeout(timer);
   }, [search]);
 
-  const userSearchEnabled = granted && debouncedSearch.length > 0;
+  const activeSearch = search.trim() ? debouncedSearch : '';
+  const userSearchEnabled = granted && activeSearch.length > 0;
   const userSearchQuery = useAdminQuery(
-    adminKeys.userSearch(debouncedSearch),
-    () => searchAdminUsers(debouncedSearch, 15),
+    adminKeys.userSearch(activeSearch),
+    () => searchAdminUsers(activeSearch, 15),
     userSearchEnabled,
   );
 
