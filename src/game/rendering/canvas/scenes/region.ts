@@ -12,7 +12,7 @@ import {
   drawCandyCane, drawDeck, drawGiftBox, drawLabel, drawLand, drawSnowman, drawSnowPine, drawTree, drawWater,
   drawWinterLantern, drawXmasTree,
 } from '../../pixel/sprites/scenery.js';
-import { drawFishJump, drawFishingGear, drawHookJump, drawSchools, drawTimingBar, jumpPoint } from '../../pixel/sprites/overlays.js';
+import { drawFishJump, drawFishingGear, drawSchools, drawTimingBar, jumpPoint } from '../../pixel/sprites/overlays.js';
 import { cameraFor } from './camera.js';
 import type { RegionPack, School } from '../../../world/types';
 import { FIELD_VIEW } from '../../../world/fieldView.js';
@@ -29,9 +29,11 @@ export interface FieldView extends GearView {
   schools: School[];
   /** 같은 바다의 다른 플레이어 — 항해 지역에서만 그린다 */
   others?: OtherShipView[];
+  /** OS 동작 축소 판정 — 효과 출처가 넘기지만 이 장면은 읽지 않는다 */
+  reducedMotion?: boolean;
   /** 같은 바다 다른 플레이어의 물고기 점프 연출 */
   peerJumps?: readonly JumpFx[];
-  /** 내 물고기 점프 연출 — 전달되면 drawHookJump 대신 이 목록을 그려 이동 직후에도 끊기지 않는다 */
+  /** 내 물고기 점프 연출 — 이동 직후에도 끊기지 않도록 낚시 단계와 별개로 그린다 */
   localJumps?: readonly JumpFx[];
   /** 내 머리 위 말풍선 — 내가 보낸 월드 채팅과 입력 중 표시. 다른 플레이어에게 보이는 것과 같다 */
   bubble?: Speech;
@@ -125,12 +127,8 @@ export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
     const pt = jumpPoint(j, j.t);
     return inBox(pt.x, pt.y);
   };
-  if (v.localJumps !== undefined) {
-    for (const j of v.localJumps) {
-      if (inJumpView(j)) drawFishJump(ctx, j, v.fishArt);
-    }
-  } else {
-    drawHookJump(ctx, v);
+  for (const j of v.localJumps ?? []) {
+    if (inJumpView(j)) drawFishJump(ctx, j, v.fishArt);
   }
   for (const j of v.peerJumps ?? []) {
     if (inJumpView(j)) drawFishJump(ctx, j, v.fishArt);

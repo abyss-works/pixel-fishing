@@ -23,6 +23,14 @@ export function useOpenWindow(layer: WindowLayer = 'app') {
 /** 모달이 하나라도 떠 있는가 */
 export const hasOpenWindows = (): boolean => open.size > 0;
 
+/** 스테이지 창이나 앱 창이 떠 있는가 - 개발 도구 창은 세지 않는다 */
+export const hasBlockingWindows = (): boolean => {
+  for (const layer of open.values()) {
+    if (layer === 'stage' || layer === 'app') return true;
+  }
+  return false;
+};
+
 /** 앱 전역 모달(layer="app")이 하나라도 떠 있는가 */
 export const hasAppWindows = (): boolean => {
   for (const layer of open.values()) {

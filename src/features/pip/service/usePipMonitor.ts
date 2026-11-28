@@ -10,6 +10,7 @@ import {
   resizeDocumentPipWindow,
 } from '../../../platform/api/documentPip';
 import { useFishArtStyle } from '../../display/service/fishArtStyle';
+import { useFxDirective } from '../../display/service/fxPlayback';
 import { usePhaseOverride, useTimeOverride } from '../../gameplay/service/timeOverride';
 import { useNow } from '../../gameplay/service/useGameTime';
 import { selectBagStatus } from '../../inventory/model/selectors';
@@ -77,6 +78,8 @@ export function usePipMonitor({
   const scalePresetRef = useRef<PipScalePreset>(scalePreset);
   const [monitorState, dispatchMonitor] = useReducer(pipMonitorReducer, initialPipMonitorState);
   const lastSeenEventIdRef = useRef<string | null>(null);
+  const lastPlayedFxSeqRef = useRef(-1);
+  const fxDirective = useFxDirective('pip');
 
   useEffect(() => {
     pipWindowRef.current = pipWindow;
@@ -131,8 +134,19 @@ export function usePipMonitor({
       return;
     }
     lastSeenEventIdRef.current = incoming.eventId;
-    dispatchMonitor({ type: 'catch', item: incoming });
+    dispatchMonitor({ type: 'append', item: incoming });
   }, [live.recentCatches, isOpen]);
+
+  // 효과 지시는 같은 사건의 버퍼 항목에 붙인다 — 지시와 버퍼 중 어느 쪽이 먼저 와도 한 번만 재생하고,
+  // 창이 닫혀 있는 동안 온 지시는 재생하지 않고 소비한다
+  const latestCatch = live.recentCatches[0] ?? null;
+  useEffect(() => {
+    if (!fxDirective || fxDirective.seq === lastPlayedFxSeqRef.current) return;
+    const { request } = fxDirective;
+    if (request.kind === 'live.peerCatch' || !latestCatch || request.subject.eventId !== latestCatch.eventId) return;
+    lastPlayedFxSeqRef.current = fxDirective.seq;
+    if (isOpen) dispatchMonitor({ type: 'play', item: latestCatch, intensity: fxDirective.intensity });
+  }, [fxDirective, latestCatch, isOpen]);
 
   // 퇴장 중인 4번째 일지 행은 240ms 전환 뒤 DOM에서 비운다
   useEffect(() => {

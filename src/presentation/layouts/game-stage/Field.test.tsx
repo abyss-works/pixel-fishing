@@ -7,6 +7,7 @@ import { CHAMPIONSHIP_SCHOOLS, V_SCHOOLS } from '../../../game/world';
 import type { RegionId } from '../../../game/world';
 import { setSchoolDay } from '../../../features/gameplay/service/schoolDay';
 import * as soundEvents from '../../../features/sound/service/soundEvents';
+import { getFxDirective, resetFxPlayback } from '../../../features/display/service/fxPlayback';
 import * as liveService from '../../../features/live/service/useLive';
 import { resetKeyScopes } from '../../ui/hotkeys';
 
@@ -19,6 +20,7 @@ const POND_SHORE = { x: 214, y: 92 };
 const SCHOOL_DAY = '2026-10-18';
 
 beforeEach(() => {
+  resetFxPlayback();
   setSchoolDay(SCHOOL_DAY);
   resetKeyScopes();
   vi.useFakeTimers();
@@ -93,6 +95,63 @@ describe('Field 낚시 상태 띠 슬롯 포털', () => {
       expect(container.querySelector('[data-rarity]')).toBeNull();
     } finally {
       statusSlot.remove();
+      catchSlot.remove();
+    }
+  });
+});
+
+describe('Field 포획 효과 요청', () => {
+  const catchOf = (fishId: string, info: Record<string, unknown>) => ({
+    status: 'ok' as const,
+    state: newState(),
+    result: { type: 'catch' as const, fishId, uid: 'fx-1', info: { form: 'normal', size: 30, percentile: 50, isBig: false, isNew: false, ...info }, released: [] },
+  });
+  const catchOnce = (fishId: string, info: Record<string, unknown>, catchSlot: HTMLElement) => {
+    const utils = render(
+      <Field region="village" game={newState()} dispatch={() => catchOf(fishId, info) as never}
+             setToast={() => {}} onScene={() => {}} initialPos={POND_SHORE} catchSlot={catchSlot} />,
+    );
+    fireEvent.keyDown(document, { code: 'Space' });
+    act(() => { vi.advanceTimersByTime(4000); });
+    fireEvent.keyDown(document, { code: 'Space' });
+    return utils;
+  };
+
+  it('포획 사건이 분류 종류와 강도로 효과를 요청하고 홀드 종료까지 지시가 유효하다', () => {
+    const catchSlot = document.createElement('div');
+    document.body.appendChild(catchSlot);
+    try {
+      catchOnce(FISH[0].id, {}, catchSlot);
+      const directive = getFxDirective('catch-card');
+      expect(directive?.intensity).toBe('small');
+      expect(directive?.request.kind).toBe('catch.routine');
+      expect(directive?.request.subject).toMatchObject({ eventId: 'fx-1', region: 'village', fishId: FISH[0].id });
+      expect(directive!.endsAt).toBeGreaterThan(Date.now());
+    } finally {
+      catchSlot.remove();
+    }
+  });
+
+  it('영웅 포획은 첫 렌더부터 크게 레이어(모서리 발광)를 그린다', () => {
+    const catchSlot = document.createElement('div');
+    document.body.appendChild(catchSlot);
+    const epic = FISH.find(f => f.rarity === 'epic')!;
+    try {
+      catchOnce(epic.id, {}, catchSlot);
+      expect(getFxDirective('catch-card')?.intensity).toBe('large');
+      expect(catchSlot.querySelector('[data-catch-corner]')).not.toBeNull();
+    } finally {
+      catchSlot.remove();
+    }
+  });
+
+  it('일반 포획은 등장 움직임만 남기고 모서리 발광을 그리지 않는다', () => {
+    const catchSlot = document.createElement('div');
+    document.body.appendChild(catchSlot);
+    try {
+      catchOnce(FISH[0].id, {}, catchSlot);
+      expect(catchSlot.querySelector('[data-catch-corner]')).toBeNull();
+    } finally {
       catchSlot.remove();
     }
   });

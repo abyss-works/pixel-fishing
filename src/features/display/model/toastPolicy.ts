@@ -46,6 +46,7 @@ export type SystemEventKind =
   | 'system.modalConfirmUtility'
   // Tier C (시스템 로그 전용)
   | 'catch.routine'
+  | 'catch.variant'
   | 'catch.cast'
   | 'catch.movementCancelled'
   | 'facility.fishSold'
@@ -58,6 +59,17 @@ export type SystemEventKind =
   // 비정형 호출 하위 호환
   | 'legacy.untyped';
 
+/** 효과 크기. none은 효과 없음, small은 짧고 작은 반응(장식 없음), large는 한 번 눈에 띄게 꾸밈, largest는 드문 순간의 가장 큰 효과 */
+export type FxIntensity = 'none' | 'small' | 'large' | 'largest';
+
+/** 사건별 효과 강도. 규칙이 없는 사건은 효과 없음이다 */
+export interface FxRule {
+  /** 사용자가 직접 한 행동일 때 */
+  direct: FxIntensity;
+  /** 방치 루프, 다른 플레이어, 시스템이 일으켰을 때 */
+  indirect: FxIntensity;
+}
+
 export interface ToastRule {
   tier: ToastTier;
   defaultTone: ToastTone;
@@ -69,6 +81,7 @@ export interface ToastRule {
   replaceKey?: string;
   batchKey?: string;
   batchWindowMs?: number;
+  fx?: FxRule;
 }
 
 export const TTL_BY_PRIORITY: Record<ToastPriority, number> = {
@@ -84,7 +97,10 @@ export const MAX_TOAST_MOBILE = 2;
 
 export const TOAST_POLICY: Record<SystemEventKind, ToastRule> = {
   // Tier A
-  'catch.legendaryOrFirstVariant': { tier: 'A', defaultTone: 'gold', priority: 1, ttlMs: TTL_BY_PRIORITY[1] },
+  'catch.legendaryOrFirstVariant': {
+    tier: 'A', defaultTone: 'gold', priority: 1, ttlMs: TTL_BY_PRIORITY[1],
+    fx: { direct: 'largest', indirect: 'largest' },
+  },
   'catch.encounterTicket': { tier: 'A', defaultTone: 'named', priority: 1, ttlMs: TTL_BY_PRIORITY[1] },
   'catch.rejected': { tier: 'A', defaultTone: 'danger', priority: 0, ttlMs: TTL_BY_PRIORITY[0] },
   'dex.spotCompleted': { tier: 'A', defaultTone: 'gold', priority: 1, ttlMs: TTL_BY_PRIORITY[1] },
@@ -106,7 +122,10 @@ export const TOAST_POLICY: Record<SystemEventKind, ToastRule> = {
   'account.authMilestone': { tier: 'A', defaultTone: 'accent', priority: 1, ttlMs: TTL_BY_PRIORITY[1] },
 
   // Tier B
-  'catch.epicOrRecord': { tier: 'B', defaultTone: 'epic', priority: 2, ttlMs: TTL_BY_PRIORITY[2], cooldownMs: 15_000 },
+  'catch.epicOrRecord': {
+    tier: 'B', defaultTone: 'epic', priority: 2, ttlMs: TTL_BY_PRIORITY[2], cooldownMs: 15_000,
+    fx: { direct: 'large', indirect: 'large' },
+  },
   'catch.lineCut': { tier: 'B', defaultTone: 'danger', priority: 0, ttlMs: TTL_BY_PRIORITY[0], cooldownMs: 60_000 },
   'catch.bagOverflow': {
     tier: 'B', defaultTone: 'danger', priority: 0, ttlMs: TTL_BY_PRIORITY[0],
@@ -147,7 +166,14 @@ export const TOAST_POLICY: Record<SystemEventKind, ToastRule> = {
   },
 
   // Tier C (시스템 로그 전용)
-  'catch.routine': { tier: 'C', defaultTone: 'neutral', priority: 3, ttlMs: 0 },
+  'catch.routine': {
+    tier: 'C', defaultTone: 'neutral', priority: 3, ttlMs: 0,
+    fx: { direct: 'small', indirect: 'small' },
+  },
+  'catch.variant': {
+    tier: 'C', defaultTone: 'neutral', priority: 3, ttlMs: 0,
+    fx: { direct: 'large', indirect: 'large' },
+  },
   'catch.cast': { tier: 'C', defaultTone: 'neutral', priority: 3, ttlMs: 0 },
   'catch.movementCancelled': { tier: 'C', defaultTone: 'neutral', priority: 3, ttlMs: 0 },
   'facility.fishSold': { tier: 'C', defaultTone: 'neutral', priority: 3, ttlMs: 0 },
@@ -161,6 +187,13 @@ export const TOAST_POLICY: Record<SystemEventKind, ToastRule> = {
   // 하위 호환
   'legacy.untyped': { tier: 'B', defaultTone: 'accent', priority: 2, ttlMs: TTL_BY_PRIORITY[1], requireOpenWindow: true },
 };
+
+/** 알림(시스템 로그)이 없는 효과 사건. 모든 사건은 로그에 먼저 기록한다는 원칙 때문에 사건 종류 표 밖에 둔다 */
+export type FxOnlyKind = 'live.peerCatch';
+export const FX_ONLY_RULES: Record<FxOnlyKind, FxRule> = {
+  'live.peerCatch': { direct: 'large', indirect: 'large' },
+};
+export type FxEventKind = SystemEventKind | FxOnlyKind;
 
 export interface NoticeTipRow {
   label: string;

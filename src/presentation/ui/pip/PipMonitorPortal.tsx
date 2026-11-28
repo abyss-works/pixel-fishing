@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type {
   PipBagTone,
@@ -7,6 +7,7 @@ import type {
   PipScalePreset,
   PipSpotInfo,
 } from '../../../features/pip/model/pipMonitor';
+import { useReducedMotion } from '../../../features/display/service/reducedMotion';
 import type { Look } from '../../../game/content/wardrobe';
 import type { FishArtStyle } from '../../../game/rendering/pixel/fishArt';
 import PixelIcon from '../PixelIcon';
@@ -108,17 +109,7 @@ export default function PipMonitorPortal({
       ? tipEntry.tip
       : null;
 
-  const subscribeMotion = useCallback((listener: () => void) => {
-    const mq = pipWindow.matchMedia?.('(prefers-reduced-motion: reduce)');
-    if (!mq) return () => {};
-    mq.addEventListener('change', listener);
-    return () => mq.removeEventListener('change', listener);
-  }, [pipWindow]);
-  const getMotionSnapshot = useCallback(
-    () => Boolean(pipWindow.matchMedia?.('(prefers-reduced-motion: reduce)').matches),
-    [pipWindow],
-  );
-  const reducedMotion = useSyncExternalStore(subscribeMotion, getMotionSnapshot, () => false);
+  const reducedMotion = useReducedMotion();
 
   const showTip = useCallback((text: string, element: HTMLElement) => {
     setTipEntry({

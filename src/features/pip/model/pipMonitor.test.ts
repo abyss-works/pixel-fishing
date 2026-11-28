@@ -220,20 +220,37 @@ describe('pipMonitor 순수 모델', () => {
     expect(descend.flipped).toBe(true);
   });
 
+  it('play는 도약 지시에 강도를 싣고 append는 도약을 만들지 않는다', () => {
+    const item = buildPipCatchItem(makeCatchResult({ fishId: FISH[0].id, uid: 'c-1' }), 100)!;
+    let s = pipMonitorReducer(initialPipMonitorState, { type: 'append', item });
+    expect(s.leapTrigger).toBeNull();
+    s = pipMonitorReducer(s, { type: 'play', item, intensity: 'largest' });
+    expect(s.leapTrigger).toEqual({ seq: 1, item, intensity: 'largest' });
+    expect(s.recentCatches).toHaveLength(1);
+    const next = pipMonitorReducer(s, { type: 'play', item, intensity: 'small' });
+    expect(next.leapTrigger).toEqual({ seq: 2, item, intensity: 'small' });
+  });
+
+  it('같은 항목을 다시 append해도 상태가 바뀌지 않는다', () => {
+    const item = buildPipCatchItem(makeCatchResult({ fishId: FISH[0].id, uid: 'c-1' }), 100)!;
+    const once = pipMonitorReducer(initialPipMonitorState, { type: 'append', item });
+    expect(pipMonitorReducer(once, { type: 'append', item })).toBe(once);
+  });
+
   it('리듀서가 5번째 포획 시 4번째 항목을 exitingLogItem으로 내보내고 clear_exiting_log로 정리한다', () => {
     let s = initialPipMonitorState;
     for (let i = 1; i <= 4; i++) {
       const item = buildPipCatchItem(makeCatchResult({ fishId: FISH[0].id, uid: `c-${i}` }), i * 100)!;
-      s = pipMonitorReducer(s, { type: 'catch', item });
+      s = pipMonitorReducer(s, { type: 'append', item });
       expect(s.exitingLogItem).toBeNull();
     }
     expect(s.recentCatches.map(i => i.eventId)).toEqual(['c-4', 'c-3', 'c-2', 'c-1']);
 
     const fifth = buildPipCatchItem(makeCatchResult({ fishId: FISH[1].id, uid: 'c-5' }), 500)!;
-    s = pipMonitorReducer(s, { type: 'catch', item: fifth });
+    s = pipMonitorReducer(s, { type: 'append', item: fifth });
     expect(s.recentCatches.map(i => i.eventId)).toEqual(['c-5', 'c-4', 'c-3', 'c-2']);
     expect(s.exitingLogItem?.eventId).toBe('c-1');
-    expect(s.leapTrigger?.item.eventId).toBe('c-5');
+    expect(s.leapTrigger).toBeNull();
     expect(s.catchFxSeq).toBe(5);
 
     const cleared = pipMonitorReducer(s, { type: 'clear_exiting_log' });

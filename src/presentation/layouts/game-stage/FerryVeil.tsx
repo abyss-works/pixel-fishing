@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FERRY_MOVE_AT_MS, ferryFrame } from '../../../game/runtime/ferryTransition';
+import { getReducedMotion } from '../../../features/display/service/reducedMotion';
 import { HOTKEY_TIER, useKeyScope } from '../../ui/hotkeys';
 import { useWindowHost } from '../../ui/windowLayer';
 
@@ -39,7 +40,7 @@ export default function FerryVeil(props: FerryVeilProps) {
       t.done = true;
       latest.current.onDone();
     };
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const reduced = getReducedMotion();
     if (!t.started) {
       t.started = true;
       t.start = performance.now();

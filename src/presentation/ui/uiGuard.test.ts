@@ -1212,4 +1212,12 @@ describe('UI 시스템 가드', () => {
       expect(fileSrc, path).not.toContain('PIXEL FISHING');
     }
   });
+  it('카드 효과 키프레임 클래스는 획득 카드 한 곳에서만 붙인다', () => {
+    const EFFECT_CLASS = /\b(?:animate-catch-pop|animate-glow-legend|animate-fx-wisp|animate-mutated-shimmer|catch-card-sweep)\b/;
+    const offenders = Object.entries(sources)
+      .map(([key, src]) => ({ path: rel(key), src }))
+      .filter(f => !isTestFile(f.path) && f.path !== 'ui/hud/CatchCard.tsx' && EFFECT_CLASS.test(stripComments(f.src)))
+      .map(f => f.path);
+    expect(offenders).toEqual([]);
+  });
 });
