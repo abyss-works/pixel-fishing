@@ -30,7 +30,11 @@ export default function VDexEvent({
     <div>
       <div className="flex items-center justify-between gap-2 mb-2">
         <PageTitle>
-          이벤트 어종 ({data.foundCount}/{data.totalCount})
+          이벤트 어종
+          {' '}
+          <span className={form === 'variant' ? 'text-mutation' : undefined}>
+            ({data.foundCount}/{data.totalCount})
+          </span>
         </PageTitle>
         <ToggleChip
           size="sm"
