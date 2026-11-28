@@ -1,6 +1,8 @@
 // 시각 효과 재생 요청 창구와 중재자 저장소. 흐름은 사건을 요청으로 넣기만 하고,
 // 렌더러(잡기 결과 카드, PiP, 필드 캔버스)는 여기서 중재된 지시를 읽어 그린다.
 import { useSyncExternalStore } from 'react';
+import type { JumpFx } from '../../../game/rendering/pixel/sprites/overlays';
+import type { FieldFxFrame } from '../../../game/runtime/fieldEngine';
 import { JUMP_S } from '../../../game/rendering/pixel/sprites/schoolView';
 import { createFxMediatorState, mediateFx } from '../model/fxPolicy';
 import type { FxDirective, FxMediatorState, FxRenderer, FxRequest } from '../model/fxPolicy';
@@ -68,6 +70,24 @@ export function useFxDirective(renderer: DomRenderer): FxDirective | null {
 export function activeFieldDirectives(region: string, wallMs: number): FxDirective[] {
   fieldDirectives = fieldDirectives.filter(d => d.endsAt > wallMs);
   return fieldDirectives.filter(d => d.request.subject.region === region && d.startAt <= wallMs);
+}
+
+function jumpOf(d: FxDirective, wallMs: number): JumpFx {
+  const t = (wallMs - d.startAt) / 1000;
+  const { subject } = d.request;
+  const target = subject.to ? { toX: subject.to.x, toY: subject.to.y } : {};
+  const form = subject.form !== undefined ? { form: subject.form } : {};
+  return { x: subject.from.x, y: subject.from.y, ...target, fishId: subject.fishId, ...form, t, intensity: d.intensity };
+}
+
+/** 엔진 주입용. 그 지역의 유효한 필드 지시를 점프로 바꿔 내 것과 다른 플레이어 것으로 나눈다 */
+export function fieldFxFrame(region: string, wallMs: number): FieldFxFrame {
+  const active = activeFieldDirectives(region, wallMs);
+  return {
+    reducedMotion: getReducedMotion(),
+    localJumps: active.filter(d => !isPeer(d)).map(d => jumpOf(d, wallMs)),
+    peerJumps: active.filter(isPeer).map(d => jumpOf(d, wallMs)),
+  };
 }
 
 /** 그 종류의 지시를 모두 비운다. 실시간 재접속과 초기화 때 쓴다 */

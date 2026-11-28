@@ -9,7 +9,7 @@ import { when } from '../../../shared/lib/when';
 import { subscribeFailure } from '../../../core/errors';
 import { useKeyScope } from '../../ui/hotkeys';
 import { sendNotice } from '../../../features/display/model/toastPolicy';
-import { requestFx, useFxDirective } from '../../../features/display/service/fxPlayback';
+import { fieldFxFrame, requestFx, useFxDirective } from '../../../features/display/service/fxPlayback';
 import { eventFishSubjectById, eventSpotById } from '../../../features/events/model/events';
 import { bagOverflowNoticeInput, classifyCatchNotice } from '../../../features/gameplay/model/catchNotice';
 import {
@@ -214,6 +214,10 @@ export default function Field({
   useEffect(() => {
     engine.setLiveSource(now => liveFrame(region, now));
     return () => engine.setLiveSource(null);
+  }, [engine, region]);
+  useEffect(() => {
+    engine.setFxSource(wallMs => fieldFxFrame(region, wallMs));
+    return () => engine.setFxSource(null);
   }, [engine, region]);
   const covered = useCanvasCover();
   const { phase: dayPhaseNow } = useGameTime();

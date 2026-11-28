@@ -115,8 +115,6 @@ describe('renderRegion 구역 강제 모자 덮어쓰기', () => {
       red: 0,
       redCenter: 0.5,
       t: 0,
-      catchT: null,
-      catchFish: null,
       look: myLook,
       others: [peer],
     });
@@ -141,8 +139,6 @@ describe('renderRegion 구역 강제 모자 덮어쓰기', () => {
       red: 0,
       redCenter: 0.5,
       t: 0,
-      catchT: null,
-      catchFish: null,
       look: myLook,
       others: [peer],
     });
@@ -167,8 +163,6 @@ describe('renderRegion 구역 강제 모자 덮어쓰기', () => {
       red: 0,
       redCenter: 0.5,
       t: 0,
-      catchT: null,
-      catchFish: null,
       look: myLook,
     });
     expect(drawBoat).toHaveBeenCalledWith(expect.anything(), 20, 20, 0, myLook);
@@ -238,8 +232,8 @@ describe('renderRegion 점프 연출 뷰포트 컬링', () => {
   it('카메라 여백(x ±32, y ±48) 안의 localJumps·peerJumps는 그리고 밖은 컬링한다', () => {
     const inside = makeRecordingCtx();
     renderRegion(inside.ctx, TEST_PACK, baseFieldView({
-      localJumps: [{ x: 244, y: 326, fishId: 'goldcarp', form: 'normal', t: JUMP_S / 2 }],
-      peerJumps: [{ x: 756, y: 674, fishId: 'goldfish', form: 'normal', t: JUMP_S / 2 }],
+      localJumps: [{ x: 244, y: 326, fishId: 'goldcarp', form: 'normal', t: JUMP_S / 2, intensity: 'emphasis' }],
+      peerJumps: [{ x: 756, y: 674, fishId: 'goldfish', form: 'normal', t: JUMP_S / 2, intensity: 'emphasis' }],
     }));
     expect(inside.calls.some(c => c.startsWith('#ffd54f@'))).toBe(true);
     expect(inside.calls.some(c => c.startsWith('#ba68c8@'))).toBe(true);
@@ -247,42 +241,30 @@ describe('renderRegion 점프 연출 뷰포트 컬링', () => {
     // 시작점(x=200)은 밖이지만 목표점(toX=500)이 카메라 안이면 컬링하지 않고 그린다
     const targetInside = makeRecordingCtx();
     renderRegion(targetInside.ctx, TEST_PACK, baseFieldView({
-      localJumps: [{ x: 200, y: 500, toX: 500, toY: 494, fishId: 'goldcarp', form: 'normal', t: JUMP_S / 2 }],
+      localJumps: [{ x: 200, y: 500, toX: 500, toY: 494, fishId: 'goldcarp', form: 'normal', t: JUMP_S / 2, intensity: 'emphasis' }],
     }));
     expect(targetInside.calls.some(c => c.startsWith('#ffd54f@'))).toBe(true);
 
     // 시작점(x=200)과 목표점(toX=800) 모두 밖이라도 현재 포물선 좌표가 카메라 안이면 그린다
     const midInside = makeRecordingCtx();
     renderRegion(midInside.ctx, TEST_PACK, baseFieldView({
-      peerJumps: [{ x: 200, y: 500, toX: 800, toY: 500, fishId: 'goldfish', form: 'normal', t: JUMP_S / 2 }],
+      peerJumps: [{ x: 200, y: 500, toX: 800, toY: 500, fishId: 'goldfish', form: 'normal', t: JUMP_S / 2, intensity: 'emphasis' }],
     }));
     expect(midInside.calls.some(c => c.startsWith('#ba68c8@'))).toBe(true);
 
     const outside = makeRecordingCtx();
     renderRegion(outside.ctx, TEST_PACK, baseFieldView({
       localJumps: [
-        { x: 243, y: 500, fishId: 'goldcarp', form: 'normal', t: JUMP_S / 2 },
-        { x: 757, y: 500, fishId: 'goldcarp', form: 'normal', t: JUMP_S / 2 },
+        { x: 243, y: 500, fishId: 'goldcarp', form: 'normal', t: JUMP_S / 2, intensity: 'emphasis' },
+        { x: 757, y: 500, fishId: 'goldcarp', form: 'normal', t: JUMP_S / 2, intensity: 'emphasis' },
       ],
       peerJumps: [
-        { x: 500, y: 325, fishId: 'goldfish', form: 'normal', t: JUMP_S / 2 },
-        { x: 500, y: 699, fishId: 'goldfish', form: 'normal', t: JUMP_S / 2 },
+        { x: 500, y: 325, fishId: 'goldfish', form: 'normal', t: JUMP_S / 2, intensity: 'emphasis' },
+        { x: 500, y: 699, fishId: 'goldfish', form: 'normal', t: JUMP_S / 2, intensity: 'emphasis' },
       ],
     }));
     expect(outside.calls.some(c => c.startsWith('#ffd54f@'))).toBe(false);
     expect(outside.calls.some(c => c.startsWith('#ba68c8@'))).toBe(false);
-  });
-
-  it('localJumps가 전달되면 catch 단계라도 drawHookJump와 중복해 그리지 않는다', () => {
-    const rec = makeRecordingCtx();
-    renderRegion(rec.ctx, TEST_PACK, baseFieldView({
-      phase: 'catch',
-      school: { id: 's1', spot: 'pond', x: 500, y: 500 },
-      catchT: JUMP_S / 2,
-      catchFish: { id: 'goldfish', form: 'normal' },
-      localJumps: [],
-    }));
-    expect(rec.calls.some(c => c.startsWith('#ba68c8@'))).toBe(false);
   });
 });
 

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  activeFieldDirectives, bindFxEnvironment, clearFx, getFxDirective, requestFx, resetFxPlayback, subscribeFx,
+  activeFieldDirectives, bindFxEnvironment, clearFx, fieldFxFrame, getFxDirective, requestFx, resetFxPlayback, subscribeFx,
 } from './fxPlayback';
 import type { CatchFxKind, FxRequest, PeerCatchFxSubject } from '../model/fxPolicy';
 
@@ -102,5 +102,36 @@ describe('필드 지시', () => {
     expect(activeFieldDirectives('village', Date.now())).toEqual([]);
     requestFx(catchReq('catch.legendaryOrFirstVariant', Date.now()));
     expect(getFxDirective('catch-card')?.intensity).toBe('spectacle');
+  });
+});
+
+describe('fieldFxFrame', () => {
+  it('내 포획과 다른 플레이어 포획을 점프로 바꾸고 경과 초와 강도를 싣는다', () => {
+    requestFx(catchReq('catch.epicOrRecord', Date.now(), { region: 'world' }));
+    requestFx(peerReq(Date.now(), { form: 'variant', to: { x: 9, y: 9 } }));
+    requestFx(peerReq(Date.now(), { fishId: 'no-target' }));
+    const frame = fieldFxFrame('world', Date.now() + 300);
+    expect(frame.reducedMotion).toBe(false);
+    expect(frame.localJumps).toEqual([
+      { x: 1, y: 2, toX: 3, toY: 4, fishId: 'carp', form: 'normal', t: 0.3, intensity: 'emphasis' },
+    ]);
+    expect(frame.peerJumps).toEqual([
+      { x: 1, y: 1, toX: 9, toY: 9, fishId: 'carp', form: 'variant', t: 0.3, intensity: 'emphasis' },
+      // 같은 종류 강조가 겹치면 두 번째부터 확인이다
+      { x: 1, y: 1, fishId: 'no-target', t: 0.3, intensity: 'confirm' },
+    ]);
+  });
+
+  it('다른 지역과 만료된 점프는 담지 않는다', () => {
+    requestFx(catchReq('catch.routine', Date.now(), { region: 'village' }));
+    expect(fieldFxFrame('world', Date.now()).localJumps).toEqual([]);
+    expect(fieldFxFrame('village', Date.now() + 900).localJumps).toEqual([]);
+  });
+
+  it('필드가 확인으로 낮춘 요청은 확인 강도 점프가 된다', () => {
+    const unbind = bindFxEnvironment({ windowsOpen: () => true });
+    requestFx(catchReq('catch.legendaryOrFirstVariant', Date.now(), { region: 'world' }));
+    expect(fieldFxFrame('world', Date.now()).localJumps[0].intensity).toBe('confirm');
+    unbind();
   });
 });

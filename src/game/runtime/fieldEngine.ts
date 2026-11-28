@@ -1,5 +1,5 @@
 import { FISH, canFishSpot, judgeTiming, redZoneCenter } from '../rules/logic';
-import type { CatchInfo, FormId, GameState, Judgment, RarityId } from '../rules/logic';
+import type { CatchInfo, GameState, Judgment, RarityId } from '../rules/logic';
 import { EVENT2_STANDARD_SPEC, eventFishById } from '../content/eventFish';
 import type { SpotId } from '../content/spots';
 import { zoneOfSpot, topZoneOf } from '../content/zones';
@@ -29,7 +29,6 @@ import type { ViewSize } from '../world/fieldView.js';
 import { renderRegion } from '../rendering/canvas/scenes/region.js';
 import type { OtherShipView, Speech } from '../rendering/pixel/sprites/actors.js';
 import type { JumpFx } from '../rendering/pixel/sprites/overlays.js';
-import { JUMP_S } from '../rendering/pixel/sprites/schoolView.js';
 import { DEFAULT_FISH_ART_STYLE } from '../rendering/pixel/fishArt/index.js';
 import type { FishArtStyle } from '../rendering/pixel/fishArt/index.js';
 import { effectiveLookForRegion } from '../content/wardrobe.js';
@@ -42,22 +41,19 @@ export type FieldDispatchResult =
   | { status: 'ok'; result: ActionResult }
   | { status: 'rejected'; error: RejectReason };
 
-/** 실시간 채널이 프레임마다 넘기는 것 — 같은 바다의 다른 플레이어, 내 머리 위 말풍선, 피어 점프 연출 */
+/** 실시간 채널이 프레임마다 넘기는 것 — 같은 바다의 다른 플레이어와 내 머리 위 말풍선 */
 export interface LiveFrame {
   others: OtherShipView[];
   bubble: Speech;
   idle: string | null;
-  peerJumps?: readonly JumpFx[];
 }
 
-interface LocalJump {
-  x: number;
-  y: number;
-  toX: number;
-  toY: number;
-  fishId: string;
-  form: FormId;
-  startAt: number;
+/** 효과 출처가 프레임마다 넘기는 것 — 엔진은 효과 상태를 쥐지 않고 이 값을 그대로 그린다 */
+export interface FieldFxFrame {
+  /** OS 동작 축소 판정. 그리기 반영은 렌더러가 따른다 */
+  reducedMotion: boolean;
+  localJumps: readonly JumpFx[];
+  peerJumps: readonly JumpFx[];
 }
 
 export interface FieldSnapshot {
@@ -177,10 +173,6 @@ export class GameFieldEngine {
   private lastCatchAt: number | null = null;
   /** 현재 대기 단계에서 굴린 입질 대기 길이(ms). 대기 중 뒤늦은 캐치 응답이 오면 타이머를 재정렬할 때 쓴다 */
   private waitBiteMs: number | null = null;
-  /** catch 전이 시각 — 훅 점프 연출의 기준 */
-  private catchStart = 0;
-  /** 확정된 내 포획의 수면 점프 연출 목록 — 이동 직후에도 0.9초를 채워 그린다 */
-  private readonly localJumps: LocalJump[] = [];
   /** 도감에 있는 어종 id — 어군 스프라이트의 색/실루엣 판정. game이 바뀔 때만 다시 만든다 */
   private phaseTimer: ReturnType<typeof setTimeout> | null = null;
   private lineCutTimer: ReturnType<typeof setTimeout> | null = null;
@@ -191,6 +183,7 @@ export class GameFieldEngine {
   private schools: School[];
   /** 같은 바다의 다른 플레이어와 내 말풍선 — 실시간 채널이 프레임마다 보간한 위치와 함께 돌려준다 */
   private liveSource: ((now: number) => LiveFrame) | null = null;
+  private fxSource: ((wallMs: number) => FieldFxFrame) | null = null;
   /** 카메라 시야 크기 — 모바일은 스테이지 비율로 호스트가 정해 준다 */
   private view: ViewSize = FIELD_VIEW;
 
@@ -243,6 +236,11 @@ export class GameFieldEngine {
   /** 다른 플레이어 위치와 내 말풍선의 출처를 정한다. null이면 그리지 않는다 */
   setLiveSource(source: ((now: number) => LiveFrame) | null): void {
     this.liveSource = source;
+  }
+
+  /** 점프 같은 시각 효과의 출처를 정한다. null이면 그리지 않는다 */
+  setFxSource(source: ((wallMs: number) => FieldFxFrame) | null): void {
+    this.fxSource = source;
   }
 
   /** 어군 교체 — 배치 날짜가 서버 값으로 바뀌면 사거리 내 어군을 다시 판정한다 */
@@ -390,7 +388,6 @@ export class GameFieldEngine {
     this.stopFrame();
     this.clearPhaseTimers();
     this.waitBiteMs = null;
-    this.localJumps.length = 0;
     this.keys.clear();
     this.padDir = null;
     this.latchedBase = null;
@@ -582,10 +579,7 @@ export class GameFieldEngine {
       red: zones ? zones.red / 100 : 0,
       redCenter: this.redCenter,
       t: now / 1000,
-      catchT: this.snapshot.phase === 'catch' ? (wallNow - this.catchStart) / 1000 : null,
-      catchFish: this.snapshot.fishId
-        ? { id: this.snapshot.fishId, form: this.snapshot.catchInfo?.form ?? 'normal' } : null,
-      localJumps: this.activeLocalJumps(wallNow),
+      ...(this.fxSource?.(wallNow) ?? { reducedMotion: false, localJumps: [], peerJumps: [] }),
       fishArt: this.fishArt,
       view: this.view,
       ...(this.liveSource?.(now) ?? { others: [], bubble: null, idle: null }),
@@ -624,7 +618,6 @@ export class GameFieldEngine {
       if (seq !== this.hookSeq) {
         if (result.status === 'ok' && result.result.type === 'catch') {
           this.recordConfirmedCatch();
-          this.pushLocalJump(school, result.result);
           this.emitCatch(judgment, result.result, school);
         }
         return;
@@ -636,7 +629,6 @@ export class GameFieldEngine {
       }
       if (result.result.type !== 'catch') return;
       this.recordConfirmedCatch();
-      this.pushLocalJump(school, result.result);
       this.transition('catch', result.result.fishId, result.result.info);
       this.emitCatch(judgment, result.result, school);
     });
@@ -663,41 +655,6 @@ export class GameFieldEngine {
     return phaseDurationMs(phase, rodLevel, undefined, rarity);
   }
 
-  private pushLocalJump(school: School, result: CatchResult): void {
-    this.localJumps.push({
-      x: school.x,
-      y: school.y,
-      toX: this.pos.x,
-      toY: this.pos.y - 6,
-      fishId: result.fishId,
-      form: result.info.form,
-      startAt: Date.now(),
-    });
-  }
-
-  private activeLocalJumps(nowMs: number): JumpFx[] {
-    const out: JumpFx[] = [];
-    let write = 0;
-    for (let i = 0; i < this.localJumps.length; i++) {
-      const entry = this.localJumps[i];
-      const t = (nowMs - entry.startAt) / 1000;
-      if (t >= 0 && t < JUMP_S) {
-        this.localJumps[write++] = entry;
-        out.push({
-          x: entry.x,
-          y: entry.y,
-          toX: entry.toX,
-          toY: entry.toY,
-          fishId: entry.fishId,
-          form: entry.form,
-          t,
-        });
-      }
-    }
-    this.localJumps.length = write;
-    return out;
-  }
-
   private recordConfirmedCatch(): void {
     this.lastCatchAt = Date.now();
     if (this.snapshot.phase === 'wait' && this.waitBiteMs !== null) {
@@ -710,7 +667,6 @@ export class GameFieldEngine {
     fishId: string | null = this.snapshot.fishId,
     catchInfo: CatchInfo | null = this.snapshot.catchInfo,
   ): void {
-    if (phase === 'catch') this.catchStart = Date.now();
     const resultArrived = phase === 'catch' && this.snapshot.fishId === null && fishId !== null;
     if (resultArrived) {
       // 획득 카운트다운은 서버 결과가 도착한 시각부터 센다

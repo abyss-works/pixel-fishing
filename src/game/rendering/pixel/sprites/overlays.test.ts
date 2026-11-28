@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { drawFishJump, drawHookJump, drawSchools, drawTimingBar, jumpPoint } from './overlays';
+import { drawFishJump, drawSchools, drawTimingBar, jumpPoint } from './overlays';
 import type { GearView, JumpFx } from './overlays';
-import { JUMP_PX, JUMP_S, jumpHeight } from './schoolView';
+import { JUMP_S, jumpHeight } from './schoolView';
 import { fishArt } from '../fishArt/index';
 import { FISH } from '../../../content/fish';
 import { eventFishById } from '../../../content/eventFish';
@@ -40,87 +40,10 @@ function view(overrides: Partial<GearView> = {}): GearView {
     biteT: null,
     zone: 0.2,
     t: 0,
-    catchT: 0.1,
-    catchFish: { id: 'carp', form: 'normal' },
     fishArt: 'v1',
     ...overrides,
   };
 }
-
-describe('drawHookJump', () => {
-  it('v1 스타일에서도 어군에서 낚은 사람(player.x, player.y - 6)까지 포물선 보간해 1배 크기 물고기를 그린다(왼쪽 이동 flip: false)', () => {
-    expect(JUMP_S).toBe(0.9);
-    expect(JUMP_PX).toBe(24);
-    const catchT = JUMP_S / 2;
-    const h = jumpHeight(catchT);
-    expect(h).toBeGreaterThan(0);
-
-    // player=(80,80) -> 목표 (80,74), school=(100,80), t=JUMP_S/2 -> 보간 (90, 77 - h), 왼쪽 이동 flip: false
-    const actual = recorder(), expected = recorder();
-    drawHookJump(actual.ctx, view({ catchT, fishArt: 'v1' }));
-    fishArt('v1').drawCentered(expected.ctx, carp, 90, 77 - h, { scale: 1, form: 'normal', flip: false });
-
-    expect(actual.calls.length).toBeGreaterThan(0);
-    expect(actual.calls).toEqual(expected.calls);
-  });
-
-  it('오른쪽으로 날아가면(toX >= x) 정점 전후와 무관하게 flip: true로 진행 방향을 본다', () => {
-    const catchT = JUMP_S / 2 - 0.1;
-    const u = catchT / JUMP_S;
-    const h = jumpHeight(catchT);
-    const tx = 130, ty = 74; // player=(130, 80)
-    const ex = Math.round(100 + (tx - 100) * u);
-    const ey = Math.round(80 + (ty - 80) * u) - h;
-
-    const actual = recorder(), expected = recorder(), unflipped = recorder();
-    drawHookJump(actual.ctx, view({ player: { x: 130, y: 80 }, catchT, fishArt: 'v1' }));
-    fishArt('v1').drawCentered(expected.ctx, carp, ex, ey, { scale: 1, form: 'normal', flip: true });
-    fishArt('v1').drawCentered(unflipped.ctx, carp, ex, ey, { scale: 1, form: 'normal', flip: false });
-
-    expect(actual.calls).toEqual(expected.calls);
-    expect(actual.calls).not.toEqual(unflipped.calls);
-  });
-
-  it('일반·희귀 어종은 돌연변이(variant) 폼이어도 스파클 없이 1배 크기 물고기만 그린다', () => {
-    const catchT = JUMP_S / 2;
-    const h = jumpHeight(catchT);
-    const actual = recorder(), fishOnly = recorder();
-    drawHookJump(actual.ctx, view({ catchT, catchFish: { id: 'carp', form: 'variant' }, fishArt: 'v1' }));
-    fishArt('v1').drawCentered(fishOnly.ctx, carp, 90, 77 - h, { scale: 1, form: 'variant', flip: false });
-
-    expect(actual.calls).toEqual(fishOnly.calls);
-    expect(actual.calls.some(call => call.startsWith('#f472b6@'))).toBe(false);
-    expect(actual.calls.some(call => call.startsWith('#ba68c8@'))).toBe(false);
-    expect(actual.calls.some(call => call.startsWith('#ffd54f@'))).toBe(false);
-  });
-
-  it('이벤트 어종(event-glaaki)도 1배 크기와 전설 스파클로 포물선 훅 점프에 그린다', () => {
-    const catchT = JUMP_S / 2 - 0.1;
-    const pt = jumpPoint({ x: 152, y: 140, toX: 80, toY: 74 }, catchT);
-    const actual = recorder(), fishOnly = recorder();
-    drawHookJump(actual.ctx, view({
-      school: { id: 'ch-1', spot: 'championship', x: 152, y: 140 },
-      catchT,
-      catchFish: { id: 'event-glaaki', form: 'normal' },
-      fishArt: 'v1',
-    }));
-    fishArt('v1').drawCentered(fishOnly.ctx, glaaki, pt.x, pt.y, { scale: 1, form: 'normal', flip: false });
-
-    for (const call of fishOnly.calls) expect(actual.calls).toContain(call);
-    expect(actual.calls.some(call => call.startsWith('#ffd54f@'))).toBe(true);
-  });
-
-  it('catch 단계가 아니거나 점프 시간 범위 밖이면 그리지 않는다', () => {
-    const a = recorder(), b = recorder(), c = recorder();
-    drawHookJump(a.ctx, view({ phase: 'bite' }));
-    drawHookJump(b.ctx, view({ catchT: -0.01 }));
-    drawHookJump(c.ctx, view({ catchT: JUMP_S }));
-
-    expect(a.calls).toEqual([]);
-    expect(b.calls).toEqual([]);
-    expect(c.calls).toEqual([]);
-  });
-});
 
 describe('drawSchools', () => {
   it('championship 이벤트 수역 어군도 spotById로 조회해 오류 없이 그린다', () => {
@@ -142,7 +65,7 @@ describe('drawSchools', () => {
 
 describe('drawFishJump', () => {
   const jump = (overrides: Partial<JumpFx> = {}): JumpFx => ({
-    x: 100, y: 80, fishId: 'crucian', form: 'normal', t: JUMP_S / 2, ...overrides,
+    x: 100, y: 80, fishId: 'crucian', form: 'normal', t: JUMP_S / 2, intensity: 'emphasis', ...overrides,
   });
 
   it('제자리 폴백(목표 없음)에서는 이륙·착수 물보라와 정점 이후 반전을 유지한다', () => {
@@ -221,6 +144,35 @@ describe('drawFishJump', () => {
     expect(variantLegendRec.calls.some(c => c.startsWith('#f472b6@'))).toBe(false);
   });
 
+  it('확인 강도는 영웅·전설도 꼬리 스파크 없이 물고기만 그린다', () => {
+    for (const fish of [goldfish, goldcarp]) {
+      const confirm = recorder(), fishOnly = recorder();
+      drawFishJump(confirm.ctx, jump({ fishId: fish.id, toX: 200, toY: 80, intensity: 'confirm' }), 'v1');
+      const pt = jumpPoint({ x: 100, y: 80, toX: 200, toY: 80 }, JUMP_S / 2);
+      fishArt('v1').drawCentered(fishOnly.ctx, fish, pt.x, pt.y, { scale: 1, form: 'normal', flip: true });
+      expect(confirm.calls).toEqual(fishOnly.calls);
+    }
+  });
+
+  it('강조와 연출 강도는 영웅·전설 꼬리 스파크를 그린다', () => {
+    for (const intensity of ['emphasis', 'spectacle'] as const) {
+      const epic = recorder(), legend = recorder();
+      drawFishJump(epic.ctx, jump({ fishId: goldfish.id, toX: 200, toY: 80, intensity }), 'v1');
+      drawFishJump(legend.ctx, jump({ fishId: goldcarp.id, toX: 200, toY: 80, intensity }), 'v1');
+      expect(epic.calls.some(c => c.startsWith('#ba68c8@'))).toBe(true);
+      expect(legend.calls.some(c => c.startsWith('#ffd54f@'))).toBe(true);
+    }
+  });
+
+  it('이벤트 어종(event-glaaki)도 전설 스파크와 함께 그린다', () => {
+    const actual = recorder(), fishOnly = recorder();
+    const pt = jumpPoint({ x: 152, y: 140, toX: 80, toY: 74 }, JUMP_S / 2 - 0.1);
+    drawFishJump(actual.ctx, jump({ fishId: 'event-glaaki', x: 152, y: 140, toX: 80, toY: 74, t: JUMP_S / 2 - 0.1 }), 'v1');
+    fishArt('v1').drawCentered(fishOnly.ctx, glaaki, pt.x, pt.y, { scale: 1, form: 'normal', flip: false });
+    for (const call of fishOnly.calls) expect(actual.calls).toContain(call);
+    expect(actual.calls.some(call => call.startsWith('#ffd54f@'))).toBe(true);
+  });
+
   it('존재하지 않는 어종이거나 t 범위 밖이면 아무것도 그리지 않는다', () => {
     const a = recorder(), b = recorder(), c = recorder();
     drawFishJump(a.ctx, jump({ fishId: 'no-such-fish' }), 'v1');
@@ -237,14 +189,14 @@ describe('drawFishJump', () => {
 describe('drawTimingBar', () => {
   it('빨간 존 중심이 주어지면 중앙이 아니라 그 비율 위치에 그린다', () => {
     const actual = recorder();
-    drawTimingBar(actual.ctx, view({ phase: 'bite', biteT: 0.5, catchT: null, zone: 0.4, red: 0.1, redCenter: 0.6 }));
+    drawTimingBar(actual.ctx, view({ phase: 'bite', biteT: 0.5, zone: 0.4, red: 0.1, redCenter: 0.6 }));
     const red = actual.calls.find(call => call.startsWith('rgba(239,83,80,0.9)@'));
     expect(red).toBe('rgba(239,83,80,0.9)@82,92,4.4,5');
   });
 
   it('빨간 존 중심이 없으면 기존처럼 바 중앙에 그린다', () => {
     const actual = recorder();
-    drawTimingBar(actual.ctx, view({ phase: 'bite', biteT: 0.5, catchT: null, zone: 0.4, red: 0.1 }));
+    drawTimingBar(actual.ctx, view({ phase: 'bite', biteT: 0.5, zone: 0.4, red: 0.1 }));
     const red = actual.calls.find(call => call.startsWith('rgba(239,83,80,0.9)@'));
     expect(red).toBe('rgba(239,83,80,0.9)@77,92,4.4,5');
   });

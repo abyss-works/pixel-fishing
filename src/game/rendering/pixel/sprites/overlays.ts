@@ -31,6 +31,8 @@ export interface JumpFx {
   form?: FormId;
   /** 점프 시작 후 경과 초(0 이상 ~ JUMP_S 미만) */
   t: number;
+  /** 효과 강도. 확인은 꼬리 스파크 없이 물고기만 그린다 */
+  intensity: 'confirm' | 'emphasis' | 'spectacle';
 }
 
 export interface GearView {
@@ -44,10 +46,7 @@ export interface GearView {
   /** 빨간 존 중심의 바 비율(0~1). 없으면 중앙 */
   redCenter?: number;
   t: number;
-  /** catch 전이 후 경과 초 — 훅 점프 연출. catch가 아니면 null */
-  catchT?: number | null;
-  catchFish?: { id: string; form: FormId } | null;
-  /** 물고기 그래픽 스타일 — 훅 점프 연출에 사용할 어댑터를 고른다 */
+  /** 물고기 그래픽 스타일 */
   fishArt?: FishArtStyle;
 }
 
@@ -108,7 +107,7 @@ export function jumpPoint(
 }
 
 function drawJumpSparks(ctx: Ctx, jump: JumpFx, rarity: RarityId) {
-  if ((rarity !== 'epic' && rarity !== 'legendary') || jump.t <= 0) return;
+  if ((rarity !== 'epic' && rarity !== 'legendary') || jump.intensity === 'confirm' || jump.t <= 0) return;
   const color = RARITY[rarity].color;
   for (let k = 1; k <= TRAIL_COUNT; k++) {
     const sampleT = jump.t - TRAIL_STEP_S * k;
@@ -172,20 +171,6 @@ export function drawFishJump(ctx: Ctx, jump: JumpFx, style: FishArtStyle = DEFAU
     form,
     flip,
   });
-}
-
-/** 훅 점프 — 잡은 물고기가 어군에서 낚은 사람 쪽으로 포물선을 그리며 튀어오른다 */
-export function drawHookJump(ctx: Ctx, v: GearView) {
-  if (v.phase !== 'catch' || !v.school || v.catchT == null || !v.catchFish) return;
-  drawFishJump(ctx, {
-    x: v.school.x,
-    y: v.school.y,
-    toX: v.player.x,
-    toY: v.player.y - 6,
-    fishId: v.catchFish.id,
-    form: v.catchFish.form,
-    t: v.catchT,
-  }, v.fishArt);
 }
 
 export function drawFishingGear(ctx: Ctx, v: GearView) {
