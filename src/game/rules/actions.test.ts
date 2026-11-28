@@ -186,6 +186,45 @@ describe('catch', () => {
     if (!out.ok) throw new Error(out.error);
     expect(out.events[0].payload).not.toHaveProperty('redPos');
     expect(out.events[0].payload).not.toHaveProperty('redWidth');
+    expect(out.events[0].payload).not.toHaveProperty('claimCheck');
+  });
+
+  it('수동 캐치 시 catch 이벤트 payload에만 claimCheck를 기록하고 판정과 응답은 바꾸지 않는다', () => {
+    const state = seed({ rod: 10 });
+    const redZoneSeed = 'user-1:7';
+    const pz = powerZones(state, 'pond');
+    const sweepMs = rodAxes(state).sweep.value * 1000;
+    const redPos = redZoneCenter(redZoneSeed, pz.yellow / 100, pz.red / 100);
+
+    const okOut = applyAction(
+      state,
+      { type: 'catch', spot: 'pond', judgment: 'perfect', biteElapsed: redPos * sweepMs },
+      deps({ redZoneSeed }),
+    );
+    if (!okOut.ok) throw new Error(okOut.error);
+    expect(okOut.events[0].payload).toMatchObject({ claimCheck: 'ok', judgment: 'perfect' });
+    expect(okOut.result).not.toHaveProperty('claimCheck');
+
+    // 위치가 어긋나도 claimCheck만 mismatch로 기록되고 판정/보상은 유지된다
+    const mismatchOut = applyAction(
+      state,
+      { type: 'catch', spot: 'pond', judgment: 'perfect', biteElapsed: 0 },
+      deps({ redZoneSeed }),
+    );
+    if (!mismatchOut.ok) throw new Error(mismatchOut.error);
+    expect(mismatchOut.events[0].payload).toMatchObject({ claimCheck: 'mismatch', judgment: 'perfect' });
+    expect(mismatchOut.state.bag[0].judgment).toBe('perfect');
+    expect(mismatchOut.result).not.toHaveProperty('claimCheck');
+
+    // 커서 위치가 없으면 missing-pos
+    const missingOut = applyAction(
+      state,
+      { type: 'catch', spot: 'pond', judgment: 'good' },
+      deps({ redZoneSeed }),
+    );
+    if (!missingOut.ok) throw new Error(missingOut.error);
+    expect(missingOut.events[0].payload).toMatchObject({ claimCheck: 'missing-pos', judgment: 'good' });
+    expect(missingOut.result).not.toHaveProperty('claimCheck');
   });
 
   it('redZoneSeed가 없으면 수동 캐치에도 redPos와 redWidth를 싣지 않는다', () => {

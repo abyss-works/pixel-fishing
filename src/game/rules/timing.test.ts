@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hashToUnit, judgeTiming, redZoneCenter, timingPos } from './timing';
+import { hashToUnit, judgeTiming, redZoneCenter, timingPos, verifyClaimedJudgment } from './timing';
 
 describe('hashToUnit', () => {
   it('같은 문자열은 같은 값으로, 값은 [0, 1)에 둔다', () => {
@@ -94,5 +94,41 @@ describe('timingPos', () => {
     let total = 0;
     for (let i = 1; i < centers.length; i++) total += Math.abs(centers[i] - centers[i - 1]);
     expect(total / (centers.length - 1)).toBeGreaterThan(0.05);
+  });
+});
+
+describe('verifyClaimedJudgment', () => {
+  it('auto와 normal 주장은 커서·존 값과 무관하게 ok를 반환한다', () => {
+    expect(verifyClaimedJudgment('auto', null, null, 0, 0)).toBe('ok');
+    expect(verifyClaimedJudgment('normal', null, null, 0, 0)).toBe('ok');
+    expect(verifyClaimedJudgment('normal', 0.99, 0.5, 0.4, 0.1)).toBe('ok');
+  });
+
+  it('perfect·good 주장인데 pos가 null이면 missing-pos를 반환한다', () => {
+    expect(verifyClaimedJudgment('perfect', null, 0.5, 0.4, 0.1)).toBe('missing-pos');
+    expect(verifyClaimedJudgment('good', null, 0.5, 0.4, 0.1)).toBe('missing-pos');
+  });
+
+  it('perfect는 redPos·redWidth 경계 안팎과 redPos 중심 이동을 검증한다', () => {
+    expect(verifyClaimedJudgment('perfect', 0.5, 0.5, 0.4, 0.1)).toBe('ok');
+    expect(verifyClaimedJudgment('perfect', 0.45, 0.5, 0.4, 0.1)).toBe('ok');
+    expect(verifyClaimedJudgment('perfect', 0.55 + 1e-7, 0.5, 0.4, 0.1)).toBe('ok');
+    expect(verifyClaimedJudgment('perfect', 0.55 + 2e-6, 0.5, 0.4, 0.1)).toBe('mismatch');
+
+    // redPos 중심이 0.6으로 이동하면 0.5는 mismatch, 0.6은 ok
+    expect(verifyClaimedJudgment('perfect', 0.5, 0.6, 0.4, 0.1)).toBe('mismatch');
+    expect(verifyClaimedJudgment('perfect', 0.6, 0.6, 0.4, 0.1)).toBe('ok');
+
+    // redPos 없음 또는 redWidth <= 0이면 mismatch
+    expect(verifyClaimedJudgment('perfect', 0.5, null, 0.4, 0.1)).toBe('mismatch');
+    expect(verifyClaimedJudgment('perfect', 0.5, 0.5, 0.4, 0)).toBe('mismatch');
+  });
+
+  it('good은 중앙 노란 존 경계 안팎을 검증한다', () => {
+    expect(verifyClaimedJudgment('good', 0.5, 0.6, 0.4, 0.1)).toBe('ok');
+    expect(verifyClaimedJudgment('good', 0.3, 0.6, 0.4, 0.1)).toBe('ok');
+    expect(verifyClaimedJudgment('good', 0.7 + 1e-7, 0.6, 0.4, 0.1)).toBe('ok');
+    expect(verifyClaimedJudgment('good', 0.7 + 2e-6, 0.6, 0.4, 0.1)).toBe('mismatch');
+    expect(verifyClaimedJudgment('good', 0.5, 0.6, 0, 0)).toBe('mismatch');
   });
 });

@@ -1,6 +1,8 @@
 // 타이밍 바 판정과 빨간 존 위치의 순수 규칙.
 
 export type TimingJudgment = 'perfect' | 'good' | 'normal';
+export type CatchJudgment = TimingJudgment | 'auto';
+export type ClaimConsistency = 'ok' | 'mismatch' | 'missing-pos';
 
 /** 문자열 시드를 [0, 1) 구간의 결정적 값으로 매핑한다. */
 export function hashToUnit(input: string): number {
@@ -36,4 +38,21 @@ export function timingPos(biteElapsed: number | undefined, sweep: number): numbe
   if (biteElapsed === undefined) return null;
   if (!Number.isFinite(biteElapsed) || biteElapsed < 0 || !Number.isFinite(sweep) || sweep <= 0) return null;
   return biteElapsed / 1000 / sweep;
+}
+
+/** 클라이언트 주장 판정과 커서·존 위치의 일관성을 검증한다 (내부 감사 분류 전용). */
+export function verifyClaimedJudgment(
+  claimed: CatchJudgment,
+  pos: number | null,
+  redPos: number | null,
+  yellowWidth: number,
+  redWidth: number,
+): ClaimConsistency {
+  if (claimed === 'auto' || claimed === 'normal') return 'ok';
+  if (pos === null) return 'missing-pos';
+  const epsilon = 1e-6;
+  if (claimed === 'perfect') {
+    return redPos !== null && redWidth > 0 && Math.abs(pos - redPos) <= redWidth / 2 + epsilon ? 'ok' : 'mismatch';
+  }
+  return yellowWidth > 0 && Math.abs(pos - 0.5) <= yellowWidth / 2 + epsilon ? 'ok' : 'mismatch';
 }
