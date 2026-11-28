@@ -1,6 +1,5 @@
 // 제재·무결성 구역 — 활성 제재, 무결성 감등 현황·오탐 해제·전환 로그·분포 비교, 연타·PERFECT 이상치를 확인한다.
 import { Suspense, lazy, useMemo, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
 import DataTable from '../../../ui/DataTable';
@@ -11,14 +10,11 @@ import { cx } from '../../../ui/cx';
 import { adminGradeName, fmtNum, fmtDT } from '../../../../features/admin/model/metrics';
 import { adminIdentityLookup, adminNumber, selectAntiAbuseRows } from '../../../../features/admin/model/adminViews';
 import {
-  readAdminIntegrityEvents,
-  readAdminIntegrityMetrics,
-  readAdminIntegrityStages,
   readAdminSpamFlags,
   readAdminUsers,
-  releaseAdminIntegrityStage,
 } from '../../../../features/admin/service/queries';
 import { adminKeys } from '../../../../features/admin/service/queryKeys';
+import { useAdminIntegrity } from '../../../../features/admin/service/useAdminIntegrity';
 import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
 import { useAdminUserActions } from '../../../../features/admin/service/useAdminUserActions';
 import type {
@@ -63,22 +59,11 @@ const fallbackUserRow = (userId: string): AdminUserRow => ({
 export default function AntiAbuseTab({ onCompose }: { onCompose?: (userId: string) => void } = {}) {
   const { access } = useAdminAuth();
   const granted = access === 'granted';
-  const queryClient = useQueryClient();
   const actions = useAdminUserActions();
+  const integrity = useAdminIntegrity(granted);
 
   const usersQuery = useAdminQuery(adminKeys.users, readAdminUsers, granted);
   const flagsQuery = useAdminQuery(adminKeys.spamFlags, readAdminSpamFlags, granted);
-  const stagesQuery = useAdminQuery(adminKeys.integrityStages, readAdminIntegrityStages, granted);
-  const eventsQuery = useAdminQuery(
-    adminKeys.integrityEvents(undefined, 50),
-    () => readAdminIntegrityEvents(undefined, 50),
-    granted,
-  );
-  const metricsQuery = useAdminQuery(
-    adminKeys.integrityMetrics(7),
-    () => readAdminIntegrityMetrics(7),
-    granted,
-  );
 
   const [selectedUid, setSelectedUid] = useState<string | null>(null);
   const [busyUid, setBusyUid] = useState<string | null>(null);
@@ -86,18 +71,21 @@ export default function AntiAbuseTab({ onCompose }: { onCompose?: (userId: strin
 
   const users = usersQuery.data ?? NO_USERS;
   const flags = flagsQuery.data ?? NO_FLAGS;
-  const stages = stagesQuery.data ?? NO_STAGES;
-  const integrityEvents = eventsQuery.data ?? NO_EVENTS;
-  const integrityMetrics = metricsQuery.data;
+  const stages = integrity.stages.data ?? NO_STAGES;
+  const integrityEvents = integrity.events.data ?? NO_EVENTS;
+  const integrityMetrics = integrity.metrics.data;
 
-  const loading = usersQuery.loading || flagsQuery.loading || stagesQuery.loading;
-  const error = usersQuery.error ?? flagsQuery.error ?? stagesQuery.error ?? eventsQuery.error ?? metricsQuery.error;
+  const loading = usersQuery.loading || flagsQuery.loading || integrity.stages.loading;
+  const error =
+    usersQuery.error
+    ?? flagsQuery.error
+    ?? integrity.stages.error
+    ?? integrity.events.error
+    ?? integrity.metrics.error;
   const refresh = () => {
     usersQuery.refresh();
     flagsQuery.refresh();
-    stagesQuery.refresh();
-    eventsQuery.refresh();
-    metricsQuery.refresh();
+    integrity.refresh();
   };
 
   const identityOf = adminIdentityLookup(users);
@@ -131,12 +119,7 @@ export default function AntiAbuseTab({ onCompose }: { onCompose?: (userId: strin
     setBusyUid(userId);
     setActionError(null);
     try {
-      await releaseAdminIntegrityStage(userId);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: adminKeys.integrityStages }),
-        queryClient.invalidateQueries({ queryKey: adminKeys.integrityEvents(undefined, 50) }),
-        queryClient.invalidateQueries({ queryKey: adminKeys.integrityMetrics(7) }),
-      ]);
+      await integrity.releaseStage(userId);
     } catch (e) {
       setActionError(String((e as { message?: unknown }).message ?? e));
     } finally {
