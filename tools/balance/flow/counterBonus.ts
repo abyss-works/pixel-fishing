@@ -207,20 +207,45 @@ export function parseCounterBonus(raw: unknown): CounterBonusConfig {
     return { counter: item.counter, thresholds, effects };
   });
 
-  // 모든 단계가 해금됐을 때 해역별 누적 입질 대기 단축이 1(100%) 이상이 되지 않는지 사전 검증한다
-  const allBoost = rules.reduce((s, r) => s + r.effects.reduce((a, e) => a + (e.artifactBoost ?? 0), 0), 0);
-  const artBiteMax = artifacts ? artifactSummaryOf(artifacts, allBoost).bite : 0;
+  // 모든 단계가 해금됐을 때 해역별 누적 입질 대기 단축(< 1)과 sell/move/size 하한(> -1)을 사전 검증한다
+  const zoneSpotCache = new Map<string, Set<SpotId>>();
+  const spotsOfZone = (zone: string): Set<SpotId> => {
+    let set = zoneSpotCache.get(zone);
+    if (!set) {
+      set = new Set<SpotId>(resolveZoneSpots(zone));
+      zoneSpotCache.set(zone, set);
+    }
+    return set;
+  };
   for (const sp of SPOTS) {
-    let biteSum = artBiteMax;
+    let biteSum = 0, sellSum = 0, moveSum = 0, sizeSum = 0, boostSum = 0;
     for (const r of rules) {
       for (const e of r.effects) {
-        if (e.zone === undefined || resolveZoneSpots(e.zone).includes(sp.id)) {
+        if (e.zone === undefined || spotsOfZone(e.zone).has(sp.id)) {
           biteSum = clean(biteSum + (e.bite ?? 0));
+          sellSum = clean(sellSum + (e.sell ?? 0));
+          moveSum = clean(moveSum + (e.move ?? 0));
+          sizeSum = clean(sizeSum + (e.size ?? 0));
+          boostSum = clean(boostSum + (e.artifactBoost ?? 0));
         }
       }
     }
+    if (artifacts) {
+      const art = artifactSummaryOf(artifacts, boostSum);
+      biteSum = clean(biteSum + art.bite);
+      if (sp.boatTier >= 1 && art.sail > 0) moveSum = clean(moveSum + art.sail);
+    }
     if (!(biteSum < 1)) {
       throw new Error(`누적 입질 대기 단축(${(biteSum * 100).toFixed(1)}%)이 100% 이상입니다(${sp.id})`);
+    }
+    if (!(sellSum > -1)) {
+      throw new Error(`누적 판매가 증가(${(sellSum * 100).toFixed(1)}%)가 -100% 이하입니다(${sp.id})`);
+    }
+    if (!(moveSum > -1)) {
+      throw new Error(`누적 이동 속도 증가(${(moveSum * 100).toFixed(1)}%)가 -100% 이하입니다(${sp.id})`);
+    }
+    if (!(sizeSum > -1)) {
+      throw new Error(`누적 크기 증가(${(sizeSum * 100).toFixed(1)}%)가 -100% 이하입니다(${sp.id})`);
     }
   }
 
@@ -291,6 +316,13 @@ export function createCounterBonusTracker(config: CounterBonusConfig): CounterBo
       .map(([id]) => id),
   );
   const namedMaterials = new Map<string, number>();
+  for (const [id, lv] of Object.entries(baseArtifacts)) {
+    if (maxedArtifacts.has(id)) continue;
+    const a = artifactById(id);
+    if (!a || !artifactHasLevel(a) || lv < 1) continue;
+    const spent = 1 + Array.from({ length: lv - 1 }, (_, k) => artifactLevelCost(k + 2)).reduce((s, c) => s + c, 0);
+    namedMaterials.set(id, spent);
+  }
   if (maxedArtifacts.size > 0) counters.set('maxArtifact', maxedArtifacts.size);
 
   const needsBigTrack = config.rules.some(

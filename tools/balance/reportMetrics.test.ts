@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import { BOATS } from '../../src/game/content/boats';
 import { BOUNTY_ZONES } from '../../src/game/content/bounties';
@@ -173,5 +174,17 @@ describe('명성 문턱·단조성·경제·수집·도전', () => {
       expect(r.encounterHours.manual).toBeGreaterThan(0);
       expect(r.quests.length).toBeGreaterThan(0);
     }
+  });
+
+  it('balance-report --json은 선택 섹션을 혼합 출력 없이 단일 JSON 객체로 낸다', () => {
+    const out = execFileSync('npx', ['tsx', 'tools/balance-report.ts', 'ev', 'rod', '--json'], { encoding: 'utf-8' });
+    const parsed = JSON.parse(out) as { ev?: unknown; rod?: unknown; income?: unknown };
+    expect(parsed.ev).toBeDefined();
+    expect(parsed.rod).toBeDefined();
+    expect(parsed.income).toBeUndefined();
+
+    const textOut = execFileSync('npx', ['tsx', 'tools/balance-report.ts', 'ev', 'rod'], { encoding: 'utf-8' });
+    expect(textOut).toContain('## 기대값');
+    expect(textOut).toContain('## 낚싯대 스펙');
   });
 });

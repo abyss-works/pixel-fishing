@@ -26,6 +26,9 @@ describe('--zone 구역·해역 한정 효과 및 단면 출력', () => {
     expect(resolveZoneSpots('pacific')).toEqual(['sea', 'deep']);
     expect(resolveZoneSpots('village')).toEqual(['pond', 'river']);
     expect(resolveZoneSpots('sthelena')).toEqual(['sthelena']);
+    expect(resolveZoneSpots('indian').length).toBeGreaterThan(1);
+    expect(resolveZoneSpots('spot:indian')).toEqual(['indian']);
+    expect(() => resolveZoneSpots('spot:mars')).toThrow(/해역/);
     expect(() => resolveZoneSpots('mars')).toThrow(/구역|해역/);
   });
 

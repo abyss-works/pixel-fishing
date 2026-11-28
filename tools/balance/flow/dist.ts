@@ -205,7 +205,6 @@ export function spotRewardDist(o: RewardDistOptions): SpotRewardDistRow[] {
   for (let i = 0; i < o.trials; i++) {
     const plain = simulate({
       ...sim, sampler: createSampler(trialRng(o.seed, i)),
-      achievements: { unit: 'spot', reward: () => null, spotReward: () => null },
     });
     const paid = simulate({
       ...sim, sampler: createSampler(trialRng(o.seed, i)),

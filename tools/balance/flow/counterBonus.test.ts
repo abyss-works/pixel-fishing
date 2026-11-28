@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { ARTIFACT_MAX_LEVEL } from '../../../src/game/content/artifacts';
+import { ARTIFACT_MAX_LEVEL, artifactLevelCost, artifactsOfZone } from '../../../src/game/content/artifacts';
 import { CUMULATIVE_BONUS_SERIES } from '../../../src/game/content/achievements';
 import { FISH } from '../../../src/game/content/fish';
 import { SPOTS } from '../../../src/game/content/spots';
@@ -407,5 +407,57 @@ describe('--counter-bonus CLI 및 보고서 연동', () => {
       expect(row.hours).toBeNull();
       expect(row.days).toBeNull();
     }
+  });
+
+  it('사전 누적 검증은 sell·move·size 합산이 -100% 이하일 때 거부하고 구역별 artifactBoost를 분리 합산한다', () => {
+    expect(() => parseCounterBonus({
+      rules: [{ counter: 'catch.auto', thresholds: [1, 2], effects: [{ sell: -0.6 }, { sell: -0.5 }] }],
+    })).toThrow(/판매가/);
+    expect(() => parseCounterBonus({
+      rules: [{ counter: 'catch.auto', thresholds: [1, 2], effects: [{ move: -0.6 }, { move: -0.4 }] }],
+    })).toThrow(/이동/);
+    expect(() => parseCounterBonus({
+      rules: [{ counter: 'catch.auto', thresholds: [1, 2], effects: [{ size: -0.7 }, { size: -0.4 }] }],
+    })).toThrow(/크기/);
+
+    // 다른 구역(village)의 artifactBoost가 pacific 해역의 유물 입질 단축 합산에 섞여 100% 이상으로 오판되지 않아야 한다
+    const cfg = parseCounterBonus({
+      artifacts: 'all:5',
+      rules: [
+        { counter: 'catch.auto', thresholds: [1], effects: [{ artifactBoost: 1, zone: 'village' }] },
+        { counter: 'manual.total', thresholds: [1], effects: [{ bite: 0.7, zone: 'pacific' }] },
+      ],
+    });
+    expect(cfg.rules).toHaveLength(2);
+  });
+
+  it('초기 보유 유물 레벨을 반영해 남은 재료만큼만 네임드 토벌 시 maxArtifact에 닿는다', () => {
+    const pacificArt = artifactsOfZone('pacific').find(a => a.grade !== 'legendary')!;
+    const tracker = createCounterBonusTracker(parseCounterBonus({
+      artifacts: { [pacificArt.id]: ARTIFACT_MAX_LEVEL - 1 },
+      rules: [{ counter: 'maxArtifact', thresholds: [1], effects: [{ bite: 0.05 }] }],
+    }));
+    const needed = artifactLevelCost(ARTIFACT_MAX_LEVEL);
+    for (let i = 0; i < needed - 1; i++) {
+      tracker.recordNamedClear('pacific');
+      expect(tracker.evaluate(i + 1, 'sea')).toBe(false);
+    }
+    tracker.recordNamedClear('pacific');
+    expect(tracker.evaluate(needed, 'sea')).toBe(true);
+    expect(tracker.unlocks).toHaveLength(1);
+    expect(tracker.unlocks[0].counter).toBe('maxArtifact');
+  });
+
+  it('named 보너스가 활성화되면 의뢰 시뮬레이션의 네임드 토벌 소요가 줄어든다', () => {
+    const base = simulate({ axis: 'idle', bounty: true, maxDays: 40 });
+    const withNamed = simulate({
+      axis: 'idle',
+      bounty: true,
+      maxDays: 40,
+      counterBonus: parseCounterBonus({
+        rules: [{ counter: 'catch.auto', thresholds: [1], effects: [{ named: 1.0 }] }],
+      }),
+    });
+    expect(withNamed.arrivals.at(-1)!.hours).not.toBe(base.arrivals.at(-1)!.hours);
   });
 });

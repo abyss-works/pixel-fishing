@@ -455,9 +455,18 @@ export function simulate(opts: SimOptions): SimResult {
     let left = DAY_HOURS * 3600;
     if (opts.bounty && !finished()) {
       const spot = SPOTS[idx].id;
+      const namedBonusOf = (s: SpotId): number => {
+        const trackerSnap = tracker ? tracker.activeFor(s) : null;
+        const trackerNamed = trackerSnap?.effect.named ?? 0;
+        const planFx = opts.plan?.effectAt?.(s, level, boat) ?? null;
+        if (!planFx) return trackerNamed;
+        const amp = axisAt(s, level) === 'idle' ? (trackerSnap?.lunchAmplify ?? 0) : (trackerSnap?.baitAmplify ?? 0);
+        return trackerNamed + scaleSlotEffect(planFx, amp).named;
+      };
       const plan = planBounties({
         player: { boat, level }, current: rateAt(spot), rateAt: s => rateAt(s),
         licensed: (zone, tier) => licenseHeld(dex, zone, tier), seconds: left,
+        ...(tracker || opts.plan?.effectAt ? { namedBonus: namedBonusOf } : {}),
       });
       for (const a of plan) { runActivity(a); left -= a.seconds; }
     }

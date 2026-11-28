@@ -623,4 +623,33 @@ describe('--axis perfect', () => {
     expect(t).toContain('방치 대비 골드(기본 → 효과)');
     expect(runCli(['effects', '--axis', 'manual', '--trials', '2']).stdout).not.toContain('방치 대비 골드');
   });
+
+  it('transition·days·gates 복합 옵션(--bite + --counter-bonus)에서 안내와 단일 가정 블록을 낸다', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'flow-combo-'));
+    dirs.push(dir);
+    const file = join(dir, 'cb.json');
+    writeFileSync(file, JSON.stringify({
+      rules: [{ counter: 'catch.auto', thresholds: [10], effects: [{ bite: 0.05 }] }],
+    }), 'utf-8');
+
+    const tr = runCli(['transition', '--bite', '10', '--counter-bonus', file]);
+    expect(tr.exitCode).toBe(0);
+    expect(tr.stdout).toContain('효과 입질 대기 -10%(관측용)');
+    expect(tr.stdout).toContain('카운터 보너스 적용(관측용');
+    expect(tr.stdout).toContain('관측 없음 전환 시간');
+    expect(tr.stdout).toContain('카운터 보너스는 진행 중 카운터가 임계점을 넘을 때마다');
+
+    const dy = runCli(['days', '--bite', '10', '--counter-bonus', file]);
+    expect(dy.exitCode).toBe(0);
+    expect(dy.stdout).toContain('효과 입질 대기 -10%(관측용)');
+    expect(dy.stdout).toContain('카운터 보너스 적용(관측용');
+    expect(dy.stdout).toContain('카운터 보너스는 진행 중 카운터가 임계점을 넘을 때마다');
+
+    const gt = runCli(['gates', '--bite', '10', '--counter-bonus', file]);
+    expect(gt.exitCode).toBe(0);
+    expect(gt.stdout).toContain('관측 없음 전환 시간');
+    expect(gt.stdout.match(/\n가정:/g)).toHaveLength(1);
+    expect(gt.stdout).toContain('도시락 슬롯 효과');
+    expect(gt.stdout).toContain('카운터 보너스는 진행 중 카운터가 임계점을 넘을 때마다');
+  });
 });
