@@ -49,8 +49,8 @@ export type MenuMark = 'reward' | 'mail' | 'accent';
 
 export interface MenuMarks {
   items: Partial<Record<MenuKey, MenuMark>>;
-  /** 접힌 메뉴 버튼의 점 - 금색 점과 빨간 점이 함께 켜질 상태이면 빨간 점만 보인다 */
-  button: 'accent' | 'mail' | null;
+  /** 접힌 메뉴 버튼의 점 - reward는 깜빡이는 금색 점, accent는 정적 금색 점, mail은 빨간 점. 금색 점과 빨간 점이 함께 켜질 상태이면 빨간 점만 보인다 */
+  button: 'reward' | 'accent' | 'mail' | null;
 }
 
 /** 메뉴 줄과 접힌 메뉴 버튼의 표식을 한 곳에서 정한다. 잠긴 줄은 알릴 것이 없다 */
@@ -68,8 +68,9 @@ export function menuMarks({ lines, friendRequests, guild, accountState }: {
   const guildRequests = guild?.role === 'leader' ? guild.requests.length : 0;
   const guildOpen = !guestLock('guild', accountState);
   if (guild && guildOpen && (guildRequests > 0 || enhancePoolSummary(guild).remaining > 0)) items.guild = 'accent';
-  const gold = items.quests || items.achievements || items.friends || (guildOpen && guildRequests > 0);
-  return { items, button: items.mailbox ? 'mail' : gold ? 'accent' : null };
+  const reward = items.quests || items.achievements;
+  const accent = items.friends || (guildOpen && guildRequests > 0);
+  return { items, button: items.mailbox ? 'mail' : reward ? 'reward' : accent ? 'accent' : null };
 }
 
 const MARK_NAME: Record<MenuMark, string> = { reward: '받을 보상 있음', mail: '읽지 않은 우편 있음', accent: '새 알림 있음' };

@@ -57,8 +57,8 @@ describe('메뉴 표식', () => {
   });
 
   it('받을 보상이 있는 의뢰와 업적 줄은 금색 테두리, 메뉴 버튼은 금색 점이다', () => {
-    expect(menuMarks({ ...base, lines: [line('quests')] })).toEqual({ items: { quests: 'reward' }, button: 'accent' });
-    expect(menuMarks({ ...base, lines: [line('achievements')] })).toEqual({ items: { achievements: 'reward' }, button: 'accent' });
+    expect(menuMarks({ ...base, lines: [line('quests')] })).toEqual({ items: { quests: 'reward' }, button: 'reward' });
+    expect(menuMarks({ ...base, lines: [line('achievements')] })).toEqual({ items: { achievements: 'reward' }, button: 'reward' });
   });
 
   it('읽지 않은 우편은 우편함 줄과 메뉴 버튼에 빨간 점이다', () => {
@@ -68,6 +68,10 @@ describe('메뉴 표식', () => {
   it('금색 점과 빨간 점이 함께 켜질 상태이면 메뉴 버튼은 빨간 점만 보이고 줄 표식은 그대로다', () => {
     expect(menuMarks({ ...base, lines: [line('quests'), line('mailbox')] }))
       .toEqual({ items: { quests: 'reward', mailbox: 'mail' }, button: 'mail' });
+  });
+
+  it('받을 보상과 그 밖의 강조가 함께면 메뉴 버튼은 받을 보상으로 보인다', () => {
+    expect(menuMarks({ ...base, lines: [line('quests')], friendRequests: 1 }).button).toBe('reward');
   });
 
   it('받은 친구 요청은 친구 줄과 메뉴 버튼에 금색 점이다', () => {
