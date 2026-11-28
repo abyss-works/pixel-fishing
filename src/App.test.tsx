@@ -1533,7 +1533,35 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     clickTab(/^가방/);
     fireEvent.click(screen.getByLabelText('자동 잠금'));
     const dialog = screen.getByRole('dialog');
-    expect(within(dialog).getByText(/외 2마리/)).toBeInTheDocument();
+    // 큰 것부터 앞 3마리 — 정렬 순서를 고정한다
+    expect(within(dialog).getByText(/50\.0cm 메기, 40\.0cm 붕어, 33\.0cm 잉어 외 2마리/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/12\.0cm 피라미/)).toBeNull();
+  });
+
+  it('자동 잠금 — 확인 창 내역은 크기 미상을 미상으로, 변이 고유명 경로를 가방 목록과 맞춘다', () => {
+    seed({
+      bag: [
+        { ...inst('crucian', 'variant', 55), size: null },
+        inst('carp', 'normal', null),
+      ],
+      dex: { crucian: { variant: rec(1, 55) } },
+    });
+    render(<App />);
+    clickTab(/^가방/);
+    fireEvent.click(screen.getByLabelText('자동 잠금'));
+    const dialog = screen.getByRole('dialog');
+    // 크기 미상은 미상으로 표기하고, 일반 미발견+변이만 보유면 가방과 같은 변이 고유명을 쓴다
+    expect(within(dialog).getByText(/미상 돌연변이 황금 붕어/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/미상 잉어/)).toBeInTheDocument();
+  });
+
+  it('자동 잠금 — 콘텐츠에서 삭제된 어종도 내역의 마릿수에서 빠뜨리지 않는다', () => {
+    seed({ bag: [inst('carp', 'normal', 33), inst('ghostfish', 'normal', 20)] });
+    render(<App />);
+    clickTab(/^가방/);
+    fireEvent.click(screen.getByLabelText('자동 잠금'));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText(/ghostfish/)).toBeInTheDocument();
   });
 
   it('가공 플랜트선 보유 시 바다에서도 가방 하단 기운 얻기 버튼으로 기운 얻기 창을 연다', () => {
