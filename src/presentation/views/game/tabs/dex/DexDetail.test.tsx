@@ -38,7 +38,7 @@ describe('도감 상세의 크기 순위', () => {
     show();
     expect(await screen.findByText('33.3cm')).toBeInTheDocument();
     expect(screen.getByText('나').closest('tr')).toHaveAttribute('aria-current', 'true');
-    expect(state.asked).toEqual([['species', fish.id, 'all']]);
+    expect(state.asked).toEqual([['species', fish.id, 'all', undefined]]);
   });
 
   it('크기 분포에 내 최대 기록의 상위 백분율을 표시한다', async () => {

@@ -112,7 +112,8 @@ describe('마이그레이션 runner', () => {
     const migrationsDir = join(import.meta.dirname, '..', 'supabase', 'migrations');
     await client.query(await readFile(join(migrationsDir, '0062_schema_migrations.sql'), 'utf8'));
 
-    const expected = filterMigrationFileNames(await readdir(migrationsDir));
+    const expected = filterMigrationFileNames(await readdir(migrationsDir))
+      .filter(name => name <= '0062_schema_migrations.sql');
     expect(await ledgerNames()).toEqual(expected);
     const { rows: rlsRows } = await client.query<{ enabled: boolean }>(
       `select relrowsecurity as enabled from pg_class where oid = 'public.schema_migrations'::regclass`);

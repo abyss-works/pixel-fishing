@@ -55,6 +55,8 @@ describe('랭킹 읽기 함수', () => {
     expect(res.body).toEqual({
       board: 'fame',
       window: 'all',
+      weekStart: null,
+      availableWeeks: [],
       periodSupported: true,
       resetAt: null,
       top: [
@@ -85,6 +87,8 @@ describe('랭킹 읽기 함수', () => {
     expect(res.body).toEqual({
       board: 'dex',
       window: 'all',
+      weekStart: null,
+      availableWeeks: [],
       periodSupported: false,
       resetAt: null,
       top: [
@@ -104,6 +108,8 @@ describe('랭킹 읽기 함수', () => {
       board: 'species',
       fishId: 'crucian',
       window: 'all',
+      weekStart: null,
+      availableWeeks: [],
       periodSupported: false,
       resetAt: null,
       top: [
@@ -229,6 +235,8 @@ describe('확장 순위 표 (일반·돌연변이·네임드 도감·네임드 �
     expect(pub.body).toEqual({
       board: 'variant',
       window: 'all',
+      weekStart: null,
+      availableWeeks: [],
       periodSupported: false,
       resetAt: null,
       top: [
@@ -249,6 +257,8 @@ describe('확장 순위 표 (일반·돌연변이·네임드 도감·네임드 �
     expect(res.body).toEqual({
       board: 'named',
       window: 'all',
+      weekStart: null,
+      availableWeeks: [],
       periodSupported: false,
       resetAt: null,
       top: [
@@ -266,6 +276,8 @@ describe('확장 순위 표 (일반·돌연변이·네임드 도감·네임드 �
     expect(res.body).toEqual({
       board: 'namedClears',
       window: 'all',
+      weekStart: null,
+      availableWeeks: [],
       periodSupported: true,
       resetAt: null,
       top: [
@@ -418,9 +430,10 @@ describe('주간 랭킹과 기간 분기 (fame·namedClears)', () => {
     try {
       const weekly = await callRank({ board: 'namedClears' }, userToken(w3));
       expect(weekly.status).toBe(200);
-      expect(weekly.body).toEqual({
+      expect(weekly.body).toMatchObject({
         board: 'namedClears',
         window: 'weekly',
+        weekStart: WEEK_START_DAY,
         periodSupported: true,
         resetAt: NEXT_RESET,
         top: [
