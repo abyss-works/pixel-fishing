@@ -15,6 +15,8 @@ import { useLastPosition } from './features/gameplay/service/useLastPosition';
 import { useSoundSettings } from './features/sound/service/useSound';
 import { useMessageLog } from './presentation/layouts/hud/useMessageLog';
 import { sendNotice } from './features/display/model/toastPolicy';
+import { bindFxEnvironment } from './features/display/service/fxPlayback';
+import { hasBlockingWindows } from './presentation/ui/openWindows';
 import GameView from './presentation/views/game/GameView';
 import UpdateModal from './presentation/views/overlays/update/UpdateModal';
 import SessionReplacedModal from './presentation/views/overlays/update/SessionReplacedModal';
@@ -52,6 +54,7 @@ const LazyEnvBadge = DEV_TOOLS_BUILD ? lazy(() => import('./presentation/views/d
 function AppContent() {
   useSoundSettings();
   useEffect(() => initClientMetrics(), []);
+  useEffect(() => bindFxEnvironment({ windowsOpen: hasBlockingWindows }), []);
   const { log, setToast, toasts, dismissToast, setMirrorEnv } = useMessageLog([]);
   const {
     game, dispatch, nickname, profileStatus, devTools, rename, sync, syncLabel,
