@@ -16,7 +16,7 @@ import ProgressMeter from '../ProgressMeter';
 import HudPanel from './HudPanel';
 import { STACK_COMPACT_ROW_CLASS } from './stackTier';
 
-const CARD_TITLE = '활성 효과';
+const CARD_TITLE = '적용 중인 효과';
 const CARD_SUBTITLE = '도시락, 미끼, 비약, 운세 현황';
 const CARD = 'pointer-events-auto flex w-full gap-1.5 px-2 py-1.5 text-xs';
 
@@ -32,7 +32,7 @@ export default function EffectCard({ game, accountState, onOpenEffects }: {
 
   if (card.state === 'locked') {
     return (
-      <Locked lines={card.lines} title={CARD_TITLE} description={CARD_SUBTITLE} label={CARD_TITLE} badge={false} className="flex w-full">
+      <Locked lines={card.lines} title={CARD_TITLE} description={CARD_SUBTITLE} label={`${CARD_TITLE} 잠김`} badge={false} className="flex w-full">
         <HudPanel className={cx(CARD, 'h-7 items-center text-text-dim')}>
           <LockIcon size={12} className="text-text-dim" />
         </HudPanel>
@@ -42,7 +42,7 @@ export default function EffectCard({ game, accountState, onOpenEffects }: {
 
   if (card.state === 'empty') {
     return (
-      <HudPanel as="button" aria-label="활성 효과 없음" onClick={onOpenEffects}
+      <HudPanel as="button" aria-label="적용 중인 효과 없음" onClick={onOpenEffects}
                 className={cx(CARD, 'h-7 items-center cursor-pointer text-text-dim hover:border-accent')}>
         <span className="inline-block size-1.5 bg-text-dim" aria-hidden="true" />
       </HudPanel>
@@ -50,7 +50,7 @@ export default function EffectCard({ game, accountState, onOpenEffects }: {
   }
 
   return (
-    <HudPanel as="button" aria-label={`활성 효과 ${card.items.length}개`} onClick={onOpenEffects}
+    <HudPanel as="button" aria-label={`적용 중인 효과 ${card.items.length}개`} onClick={onOpenEffects}
               className={cx(CARD, 'flex-col items-stretch cursor-pointer text-accent hover:border-accent', STACK_COMPACT_ROW_CLASS)}>
       {card.items.map(item => (
         <span key={item.id} data-effect-kind={item.kind} className={cx('flex min-w-0 items-center gap-1.5', item.ratio !== null && 'flex-1')}>

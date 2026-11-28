@@ -6,7 +6,7 @@ import HudPanel from '../../../ui/hud/HudPanel';
 import HudRows from '../../../ui/hud/HudRows';
 import { STACK_OMIT_CLASS } from '../../../ui/hud/stackTier';
 import ProgressCount from '../../../ui/ProgressCount';
-import Tip, { TipList } from '../../../ui/Tip';
+import Tip, { TipBullets, TipList } from '../../../ui/Tip';
 import { useOmitted } from '../../../ui/useOmitted';
 import { awayDuration, bagFullText } from './awayText';
 
@@ -27,7 +27,12 @@ export default function AwayCard({ report, trace = null, onClose, onDetail }: {
   const traceTime = trace ? fmtMinutes(trace.leftMins) : '';
   return (
     <Tip wraps plain onlyIf={isOmitted} className="block w-full"
-         text={<TipList rows={[{ label: '새 도감', value: dex }, ...(trace ? [{ label: '흔적', value: traceTime }] : [])]} note={bag ?? undefined} />}>
+         text={(
+           <>
+             <TipList rows={[{ label: '새 도감', value: dex }, ...(trace ? [{ label: '흔적 남은 시간', value: traceTime }] : [])]} note={bag ?? undefined} />
+             {trace && <TipBullets items={['흔적이 남아 있어요.', '바다로 나가 흔적 카드의 추적을 눌러 보세요.']} />}
+           </>
+         )}>
       <HudPanel tone="gold" className="relative w-full flex flex-col gap-1.5 px-2.5 py-2 text-xs"
                 role="status" aria-label="자리를 비운 사이">
         <CloseButton onClose={onClose} />
@@ -37,7 +42,7 @@ export default function AwayCard({ report, trace = null, onClose, onDetail }: {
           { key: 'catches', label: '잡은 물고기', value: <ProgressCount value={report.catches} /> },
           { key: 'fame', label: '명성', value: <ProgressCount value={`+${fmtNum(report.fame)}`} /> },
           { key: 'dex', label: '새 도감', value: <ProgressCount value={dex} />, omittable: true, omitRef: dexRef },
-          ...(trace ? [{ key: 'trace', label: '흔적', value: <ProgressCount value={traceTime} />, omittable: true }] : []),
+          ...(trace ? [{ key: 'trace', label: '흔적 남은 시간', value: <ProgressCount value={traceTime} />, omittable: true }] : []),
         ]} />
         {bag && <span data-omittable className={`text-orange ${STACK_OMIT_CLASS}`}>{bag}</span>}
         <Button size="sm" variant="primary" full onClick={onDetail}>자세히</Button>

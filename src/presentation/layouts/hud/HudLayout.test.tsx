@@ -75,7 +75,7 @@ describe('HudLayout 오른쪽 아래 열', () => {
     render(<HudLayout {...props} onOpenEffects={onOpenEffects} scene={region}
                       game={unlocked({ lunch: { id: 'cook-lunch-bite', endsAt: HOUR_LATER }, bait: null })}
                       notice={<div data-testid="notice">알림</div>} />);
-    const card = screen.getByRole('button', { name: '활성 효과 1개' });
+    const card = screen.getByRole('button', { name: '적용 중인 효과 1개' });
     const notice = screen.getByTestId('notice');
     const minimap = screen.getByTestId('minimap');
     expect(notice.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -87,10 +87,10 @@ describe('HudLayout 오른쪽 아래 열', () => {
   it('해금 전 활성 효과가 없으면 잠금 카드, 해금 뒤 활성 효과가 없으면 흐린 카드다', () => {
     setMinimapVisible(true);
     const { unmount } = render(<HudLayout {...props} game={newState()} scene={region} />);
-    expect(screen.getByRole('group', { name: '활성 효과' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: '적용 중인 효과 잠김' })).toBeInTheDocument();
     unmount();
     render(<HudLayout {...props} game={unlocked()} scene={region} />);
-    expect(screen.getByRole('button', { name: '활성 효과 없음' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '적용 중인 효과 없음' })).toBeInTheDocument();
   });
 
   it.each([false, true])('미니맵 숨김 줄은 모바일에서 한 줄이고 PC에서만 줄을 나눈다(mobile=%s)', mobile => {

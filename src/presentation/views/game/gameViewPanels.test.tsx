@@ -277,7 +277,7 @@ describe('GameView 패널 초기화', () => {
       </QueryClientProvider>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '활성 효과 없음' }));
+    fireEvent.click(screen.getByRole('button', { name: '적용 중인 효과 없음' }));
     expect(screen.getByRole('dialog', { name: '적용 중인 효과' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '전체 보너스 보기' }));
@@ -285,7 +285,7 @@ describe('GameView 패널 초기화', () => {
     expect(screen.getByRole('button', { name: '보너스' }).className).toContain('active');
     fireEvent.click(screen.getByRole('button', { name: '닫기' }));
 
-    fireEvent.click(screen.getByRole('button', { name: '활성 효과 없음' }));
+    fireEvent.click(screen.getByRole('button', { name: '적용 중인 효과 없음' }));
     fireEvent.click(screen.getByRole('button', { name: '가방 열기' }));
     expect(screen.queryByRole('dialog', { name: '적용 중인 효과' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '아이템' })).toHaveAttribute('aria-pressed', 'true');

@@ -61,10 +61,10 @@ describe('알림 카드', () => {
 describe('알림 카드의 흔적 줄', () => {
   it('흔적이 있을 때만 줄을 두고 쌓기 단계에서 숨기는 생략 줄이다', () => {
     const { unmount } = render(<AwayCard report={full} onClose={() => {}} onDetail={() => {}} />);
-    expect(within(screen.getByRole('status')).queryByText('흔적')).toBeNull();
+    expect(within(screen.getByRole('status')).queryByText('흔적 남은 시간')).toBeNull();
     unmount();
     render(<AwayCard report={full} trace={{ leftMins: 90 }} onClose={() => {}} onDetail={() => {}} />);
-    const row = within(screen.getByRole('status')).getByText('흔적').closest('li')!;
+    const row = within(screen.getByRole('status')).getByText('흔적 남은 시간').closest('li')!;
     expect(row.hasAttribute('data-omittable')).toBe(true);
     expect(row.className).toContain(STACK_OMIT_CLASS);
   });
