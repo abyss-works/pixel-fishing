@@ -1,6 +1,7 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import NoticeMarkdown, { stripNoticeMarkdown } from './NoticeMarkdown';
+import NoticeMarkdown from './NoticeMarkdown';
+import { stripNoticeMarkdown } from './noticeMarkdownText';
 
 describe('NoticeMarkdown', () => {
   afterEach(cleanup);
@@ -67,6 +68,36 @@ describe('NoticeMarkdown', () => {
     expect(screen.getByText('<img src="x" onerror="alert(1)" />')).toBeInTheDocument();
     expect(screen.getByText('<b onclick="x">클릭</b>').tagName).toBe('STRONG');
   });
+
+  it('중첩 강조(**...*...***), 인라인 코드 우선 매칭, 닫히지 않은 코드블록, 빈 문자열을 안전하게 처리한다', () => {
+    const { container, rerender } = render(
+      <NoticeMarkdown
+        body={'**굵게와 *기울임* 함께**\n\n***강조***\n\n**중요 `a*b` 안내**\n\n10 * 2 = `20 * 1`\n\n```COUPON```'}
+      />,
+    );
+
+    const italicInsideBold = screen.getByText('기울임');
+    expect(italicInsideBold.tagName).toBe('EM');
+    expect(italicInsideBold.closest('strong')).not.toBeNull();
+
+    const triple = screen.getByText('강조');
+    expect(triple.tagName).toBe('EM');
+    expect(triple.closest('strong')).not.toBeNull();
+
+    const codeInBold = screen.getByText('a*b');
+    expect(codeInBold.tagName).toBe('CODE');
+    expect(codeInBold.closest('strong')).not.toBeNull();
+
+    expect(screen.getByText('20 * 1').tagName).toBe('CODE');
+    expect(container.textContent).toContain('10 * 2 = 20 * 1');
+    expect(container.querySelector('pre')).toBeNull();
+
+    rerender(<NoticeMarkdown body={'```\n닫히지 않은 코드'} />);
+    expect(container.querySelector('pre code')?.textContent).toBe('닫히지 않은 코드');
+
+    rerender(<NoticeMarkdown body="" />);
+    expect(container.querySelectorAll('p, ul, pre')).toHaveLength(0);
+  });
 });
 
 describe('stripNoticeMarkdown', () => {
@@ -83,5 +114,9 @@ describe('stripNoticeMarkdown', () => {
     expect(stripNoticeMarkdown(input)).toBe(
       ['점검 안내 입니다.', 'COUPON1 입력 시 보상 지급', '두번째 항목', 'CODE-1234'].join('\n'),
     );
+  });
+
+  it('백틱 코드 안의 별표와 중첩 서식을 일관되게 처리한다', () => {
+    expect(stripNoticeMarkdown('`*주의*` **중요 `a*b` *기울임***')).toBe('*주의* 중요 a*b 기울임');
   });
 });

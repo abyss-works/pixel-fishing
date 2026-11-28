@@ -195,6 +195,11 @@ describe('NoticesTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '인라인 코드' }));
     expect(bodyInput.value).toBe('쿠폰 코드: `코드`');
 
+    fireEvent.change(bodyInput, { target: { value: '앞내용 뒷내용' } });
+    bodyInput.setSelectionRange(4, 4);
+    fireEvent.click(screen.getByRole('button', { name: '코드블록' }));
+    expect(bodyInput.value).toBe('앞내용 \n```\n코드\n```\n뒷내용');
+
     fireEvent.change(bodyInput, { target: { value: '**중요** `FISH2026`\n- 보상 지급' } });
 
     const previewHeading = screen.getByText('게임 내 공지 미리보기');

@@ -7,7 +7,7 @@ import DataTable from '../../../ui/DataTable';
 import Field from '../../../ui/Field';
 import Inset from '../../../ui/Inset';
 import Note from '../../../ui/Note';
-import { stripNoticeMarkdown } from '../../../ui/NoticeMarkdown';
+import { stripNoticeMarkdown } from '../../../ui/noticeMarkdownText';
 import SectionTitle from '../../../ui/SectionTitle';
 import TextArea from '../../../ui/TextArea';
 import TextInput from '../../../ui/TextInput';
@@ -88,7 +88,7 @@ function applyMarkdownFormat(
   if (kind === 'codeblock') {
     const prefix = needsLeadingNewline ? '\n```\n' : '```\n';
     const content = selected || '코드';
-    const suffix = '\n```';
+    const suffix = after.length > 0 && after[0] !== '\n' ? '\n```\n' : '\n```';
     const nextStart = start + prefix.length;
     return {
       nextText: `${before}${prefix}${content}${suffix}${after}`,
@@ -98,6 +98,7 @@ function applyMarkdownFormat(
   }
 
   const prefix = needsLeadingNewline ? '\n' : '';
+  const suffix = after.length > 0 && after[0] !== '\n' ? '\n' : '';
   if (selected) {
     const formatted = selected
       .split('\n')
@@ -105,13 +106,13 @@ function applyMarkdownFormat(
       .join('\n');
     const nextStart = start + prefix.length;
     return {
-      nextText: `${before}${prefix}${formatted}${after}`,
+      nextText: `${before}${prefix}${formatted}${suffix}${after}`,
       selectStart: nextStart,
       selectEnd: nextStart + formatted.length,
     };
   }
   const placeholder = '항목';
-  const inserted = `${prefix}- ${placeholder}`;
+  const inserted = `${prefix}- ${placeholder}${suffix}`;
   const nextStart = start + prefix.length + 2;
   return {
     nextText: `${before}${inserted}${after}`,
