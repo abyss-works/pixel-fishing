@@ -172,7 +172,10 @@ export class HttpGameGateway implements GameGateway {
       if (body?.error === 'guest-village-only' || body?.error === 'account-only') {
         throw new AppError(body.error, `guest rejected (${body.error})`, { action: action.type });
       }
-      throw new AppError('restricted', `forbidden (${body?.error ?? 'unknown'})`, { action: action.type });
+      if (body?.error === 'restricted') {
+        throw new AppError('restricted', 'account restricted', { action: action.type });
+      }
+      throw new AppError('forbidden', `forbidden (${body?.error ?? 'unknown'})`, { action: action.type });
     }
     // 423 = 다른 창이 활성 창이 됐다 — 액션은 적용되지 않았다. 정책 표가 이 창을 막는다
     if (res.status === 423) throw new AppError('replaced', 'another window took over the session', { action: action.type });

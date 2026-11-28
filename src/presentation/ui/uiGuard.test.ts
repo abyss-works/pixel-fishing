@@ -1208,4 +1208,12 @@ describe('UI 시스템 가드', () => {
     expect(manualTooltipBullets('<Tip text={<TipBullets items={["첫째", "둘째"]} />}>대상</Tip>')).toEqual([]);
     expect(manualTooltipBullets('<TipCard title="안내" bullets={["첫째", "둘째"]} />')).toEqual([]);
   });
+
+  it('전면 차단 모달(ConsentModal, RestrictedModal)은 공용 AppBrandBar를 사용한다', () => {
+    for (const path of ['views/overlays/account/ConsentModal.tsx', 'views/overlays/account/RestrictedModal.tsx']) {
+      const fileSrc = stripComments(presentationFiles.find(f => f.path === path)!.src);
+      expect(fileSrc, path).toContain('<AppBrandBar');
+      expect(fileSrc, path).not.toContain('PIXEL FISHING');
+    }
+  });
 });

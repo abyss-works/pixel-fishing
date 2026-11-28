@@ -26,9 +26,12 @@ describe('실패 분류', () => {
     expect(POLICY['auth-rate-limited'].modal).toBe('rate-limited');
     expect(POLICY['auth-rate-limited'].slot).toBeUndefined();
     expect(POLICY['auth-rate-limited'].message).toBe('같은 네트워크에서 접속이 잠시 몰려 있어요. 잠시 뒤 다시 시도해 주세요.');
-    // bug: 완료된 액션은 이미 서버에 있다 + ErrorBoundary 화면과 겹친다
+    // restricted: 제재 계정은 전용 차단 안내 모달을 연다
+    expect(POLICY.restricted.modal).toBe('restricted');
+    expect(POLICY.restricted.slot).toBeUndefined();
+    // bug·forbidden·rate-limited: 전체 모달 없이 메시지 창 오류 자리에 남긴다
     expect(POLICY.bug.modal).toBeUndefined();
-    expect(POLICY.restricted.modal).toBeUndefined();
+    expect(POLICY.forbidden.modal).toBeUndefined();
     expect(POLICY['rate-limited'].modal).toBeUndefined();
     // 게스트 거부: 진행은 안전하고 모달 없이 태평양 항로 해금 안내만 보인다
     for (const kind of ['guest-village-only', 'account-only'] as const) {
@@ -39,9 +42,9 @@ describe('실패 분류', () => {
     expect(POLICY['account-only'].message).toBe('태평양 항로가 열리면 쓸 수 있어요.');
   });
 
-  it('안내 창 없는 세 종류(restricted, rate-limited, bug)는 메시지 창 오류 자리에 정책 문구로 알린다', () => {
+  it('안내 창 없는 세 종류(forbidden, rate-limited, bug)는 메시지 창 오류 자리에 정책 문구로 알린다', () => {
     const slotKinds = Object.entries(POLICY).filter(([, p]) => p.slot).map(([k]) => k).sort();
-    expect(slotKinds).toEqual(['bug', 'rate-limited', 'restricted']);
+    expect(slotKinds).toEqual(['bug', 'forbidden', 'rate-limited']);
     // 전체 모달이 있는 종류와 겹치지 않는다 — 같은 실패를 두 번 알리지 않는다
     for (const [kind, policy] of Object.entries(POLICY)) {
       if (policy.slot) expect(policy.modal, kind).toBeUndefined();

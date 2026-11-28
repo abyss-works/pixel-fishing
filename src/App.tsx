@@ -21,6 +21,7 @@ import SessionReplacedModal from './presentation/views/overlays/update/SessionRe
 import UnsavedModal from './presentation/views/overlays/update/UnsavedModal';
 import RateLimitModal from './presentation/views/overlays/update/RateLimitModal';
 import ConsentModal from './presentation/views/overlays/account/ConsentModal';
+import RestrictedModal from './presentation/views/overlays/account/RestrictedModal';
 import LoadingOverlay from './presentation/views/overlays/update/LoadingOverlay';
 import { DevEnvContext, devEnvOf } from './presentation/views/devtools/devEnv';
 import { BUILD_LABEL, DEPLOY_ENV } from './buildId';
@@ -187,7 +188,9 @@ function AppContent() {
         account={account} accountChecked={accountChecked} accountFailed={accountFailed} uid={uid} nickname={nickname} profileStatus={profileStatus}
         onRename={rename} onAuthChanged={onAuthChanged} onResync={resync} saveVersion={saveVersion}
         blocker={
-          blocker === 'consent' ? (
+          blocker === 'restricted' ? (
+            <RestrictedModal account={account} uid={uid} />
+          ) : blocker === 'consent' ? (
             <ConsentModal
               consent={consentPrompt.consent}
               mismatch={consentPrompt.mismatch}

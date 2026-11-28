@@ -12,7 +12,8 @@ export type FailureKind =
   | 'unauthorized'  // 세션 없음/만료
   | 'outdated'      // 426 — 배포 후 새로고침 안 한 낡은 탭
   | 'replaced'      // 423 — 같은 계정이 다른 창에서 접속해 이 창이 활성 창이 아니다
-  | 'restricted'    // 403 — 제재 계정(0008) / 권한 없는 요청(import 게이트)
+  | 'restricted'    // 403 — 제재 계정(0008)
+  | 'forbidden'     // 403 — 권한 없는 요청(import 게이트 등)
   | 'consent-required' // 403 — 시행일 이후 이용약관 미수락 계정
   | 'guest-village-only' // 403 — 게스트가 마을 밖으로 나가려 함
   | 'account-only'  // 403 — 게스트에게 열리지 않은 기능
@@ -39,8 +40,8 @@ export class AppError extends Error {
   }
 }
 
-/** 화면 전체를 덮어 진행을 막는 모달 — update·replaced·unsaved·rate-limited는 새로고침, consent는 약관 수락이 출구다 */
-export type BlockingModal = 'update' | 'replaced' | 'unsaved' | 'consent' | 'rate-limited';
+/** 화면 전체를 덮어 진행을 막는 모달 — update·replaced·unsaved·rate-limited는 새로고침, consent는 약관 수락, restricted는 제한 안내가 출구다 */
+export type BlockingModal = 'update' | 'replaced' | 'unsaved' | 'consent' | 'rate-limited' | 'restricted';
 
 /** 종류별 대응 — 새 실패 종류 = 여기 행 하나. UI 문구를 각 지점에 흩지 않는다 */
 export interface FailureResponse {
@@ -74,7 +75,12 @@ export const POLICY: Record<FailureKind, FailureResponse> = {
     message: '다른 창에서 게임을 열었어요. 이 창에서 계속하려면 새로고침해 주세요.',
   },
   restricted: {
-    // 제재 계정(0008)·권한 없는 요청 모두. 진행은 서버에 안전 — 문의 유도.
+    // 제재 계정(0008) — 진행과 보유 자산은 안전. 전용 차단 안내 모달을 연다.
+    modal: 'restricted', level: 'error',
+    message: '운영정책에 따라 지금은 이 계정으로 게임을 플레이할 수 없어요.',
+  },
+  forbidden: {
+    // 권한 없는 요청(import 게이트 등). 진행은 서버에 안전 — 문의 유도.
     level: 'warning', slot: true,
     message: '지금 이 계정으로는 이용할 수 없어요. 개발자에게 문의해 주세요.',
   },

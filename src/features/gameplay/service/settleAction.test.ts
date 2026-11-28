@@ -14,8 +14,8 @@ describe('settleAction 게스트 거부', () => {
     expect(settled).toEqual({ ok: false, notice: '태평양 항로가 열리면 쓸 수 있어요.' });
   });
 
-  it('메시지 창 오류 자리 또는 전체 모달로 알리는 종류(restricted, rate-limited, bug, consent-required)는 호출부에 따로 알릴 문구를 주지 않는다', async () => {
-    for (const kind of ['restricted', 'rate-limited', 'bug', 'consent-required'] as const) {
+  it('메시지 창 오류 자리 또는 전체 모달로 알리는 종류(restricted, forbidden, rate-limited, bug, consent-required)는 호출부에 따로 알릴 문구를 주지 않는다', async () => {
+    for (const kind of ['restricted', 'forbidden', 'rate-limited', 'bug', 'consent-required'] as const) {
       const settled = await settleAction(() => { throw new AppError(kind, 'x'); });
       expect(settled, kind).toEqual({ ok: false, notice: null });
     }
