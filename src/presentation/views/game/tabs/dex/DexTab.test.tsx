@@ -110,7 +110,7 @@ describe('DexTab - 1단 서브탭 및 돌연변이 토글', () => {
     expect(riverHeading).toHaveTextContent(`0/${riverFish.length}`);
     expect(within(riverHeading).queryByText('완성')).toBeNull();
 
-    // 돌연변이 토글 활성 상태에서는 일반 도감 완성 배지를 표시하지 않는다
+    // 돌연변이 토글 활성 상태에서는 일반 도감 완성 배지를 표시하지 않고, 제목은 '일반 어종'을 유지하며 (n/n)만 강조 색을 쓴다
     rerender(
       <DexTab
         game={game}
@@ -123,6 +123,8 @@ describe('DexTab - 1단 서브탭 및 돌연변이 토글', () => {
       />,
     );
     expect(screen.queryByText('완성')).toBeNull();
+    const variantHeading = screen.getByRole('heading', { level: 3, name: /^일반 어종/ });
+    expect(within(variantHeading).getByText(/^\(\d+\/\d+\)$/)).toHaveClass('text-mutation');
   });
 
   it('이벤트 보기에서 어종 카드와 상세 창(등장한 이벤트)을 표시한다', () => {
@@ -142,7 +144,7 @@ describe('DexTab - 1단 서브탭 및 돌연변이 토글', () => {
       },
     };
 
-    render(
+    const { rerender } = render(
       <DexTab
         game={newState()}
         view="event"
@@ -154,9 +156,25 @@ describe('DexTab - 1단 서브탭 및 돌연변이 토글', () => {
       />,
     );
 
-    expect(screen.getByRole('heading', { level: 3, name: '이벤트 어종 (1/9)' })).toBeInTheDocument();
+    const normalEventHeading = screen.getByRole('heading', { level: 3, name: '이벤트 어종 (1/9)' });
+    expect(normalEventHeading).toBeInTheDocument();
+    expect(within(normalEventHeading).getByText('(1/9)')).not.toHaveClass('text-mutation');
     expect(screen.getByRole('button', { name: '돌연변이' })).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByText('4마리')).toBeInTheDocument();
+
+    rerender(
+      <DexTab
+        game={newState()}
+        view="event"
+        onView={vi.fn()}
+        form="variant"
+        onToggleForm={vi.fn()}
+        sub="village"
+        onSub={vi.fn()}
+      />,
+    );
+    const variantEventHeading = screen.getByRole('heading', { level: 3, name: '이벤트 어종 (1/9)' });
+    expect(within(variantEventHeading).getByText('(1/9)')).toHaveClass('text-mutation');
 
     fireEvent.click(screen.getByRole('button', { name: /거북복/ }));
     const dialog = screen.getByRole('dialog');

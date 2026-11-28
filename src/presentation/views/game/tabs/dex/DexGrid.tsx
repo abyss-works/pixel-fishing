@@ -36,8 +36,11 @@ export default function DexGrid({ game, form, onToggleForm, sub, onSub }: {
     <div>
       <div className="flex items-center justify-between gap-2 mb-1">
         <PageTitle>
-          {form === 'variant' ? '돌연변이' : '일반 어종'}
-          {' ('}{data.foundCount}/{data.fishCount}{')'}
+          일반 어종
+          {' '}
+          <span className={form === 'variant' ? 'text-mutation' : undefined}>
+            ({data.foundCount}/{data.fishCount})
+          </span>
         </PageTitle>
         <div className="flex items-center gap-2 shrink-0">
           <ToggleChip
