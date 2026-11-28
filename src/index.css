@@ -953,16 +953,13 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
     border-left: 3px solid var(--c-gold);
   }
 
-  @media (max-width: 1024px) {
+  @media (max-width: 820px) {
     .pf-admin-master-detail {
       grid-template-columns: minmax(0, 1fr);
     }
     .pf-admin-detail-sticky {
       position: static;
     }
-  }
-
-  @media (max-width: 820px) {
     .pf-admin-kpi-grid-4,
     .pf-admin-kpi-grid-8,
     .pf-admin-split-2,
