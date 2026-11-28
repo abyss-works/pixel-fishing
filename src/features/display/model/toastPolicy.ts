@@ -189,9 +189,10 @@ export const TOAST_POLICY: Record<SystemEventKind, ToastRule> = {
 };
 
 /** 알림(시스템 로그)이 없는 효과 사건. 모든 사건은 로그에 먼저 기록한다는 원칙 때문에 사건 종류 표 밖에 둔다 */
-export type FxOnlyKind = 'live.peerCatch';
+export type FxOnlyKind = 'live.peerCatch' | 'catch.judgment';
 export const FX_ONLY_RULES: Record<FxOnlyKind, FxRule> = {
   'live.peerCatch': { direct: 'large', indirect: 'large' },
+  'catch.judgment': { direct: 'small', indirect: 'none' },
 };
 export type FxEventKind = SystemEventKind | FxOnlyKind;
 

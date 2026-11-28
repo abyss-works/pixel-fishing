@@ -143,7 +143,7 @@ export function usePipMonitor({
   useEffect(() => {
     if (!fxDirective || fxDirective.seq === lastPlayedFxSeqRef.current) return;
     const { request } = fxDirective;
-    if (request.kind === 'live.peerCatch' || !latestCatch || request.subject.eventId !== latestCatch.eventId) return;
+    if (request.kind === 'live.peerCatch' || request.kind === 'catch.judgment' || !latestCatch || request.subject.eventId !== latestCatch.eventId) return;
     lastPlayedFxSeqRef.current = fxDirective.seq;
     if (isOpen) dispatchMonitor({ type: 'play', item: latestCatch, intensity: fxDirective.intensity });
   }, [fxDirective, latestCatch, isOpen]);

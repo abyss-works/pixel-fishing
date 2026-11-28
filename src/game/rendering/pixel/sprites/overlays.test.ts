@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { drawFishJump, drawSchools, drawTimingBar, jumpPoint } from './overlays';
+import { BLOOM_COUNT, BLOOM_TOTAL_S, drawFishJump, drawSchools, drawTimingBar, goldBloomParticles, jumpPoint } from './overlays';
 import type { GearView, JumpFx } from './overlays';
 import { JUMP_S, jumpHeight } from './schoolView';
 import { fishArt } from '../fishArt/index';
@@ -7,6 +7,7 @@ import { FISH } from '../../../content/fish';
 import { eventFishById } from '../../../content/eventFish';
 import type { SpotId } from '../../../content/spots';
 import type { Ctx } from '../common';
+import { CATCH_MS_LEGENDARY } from '../../../rules/balance';
 
 function recorder() {
   const calls: string[] = [];
@@ -199,5 +200,34 @@ describe('drawTimingBar', () => {
     drawTimingBar(actual.ctx, view({ phase: 'bite', biteT: 0.5, zone: 0.4, red: 0.1 }));
     const red = actual.calls.find(call => call.startsWith('rgba(239,83,80,0.9)@'));
     expect(red).toBe('rgba(239,83,80,0.9)@77,92,4.4,5');
+  });
+});
+
+describe('goldBloomParticles', () => {
+  const at = (age: number) => goldBloomParticles(age, 100, 80);
+
+  it('배에 닿기 전과 끝난 뒤에는 입자가 없다', () => {
+    expect(at(-0.01)).toEqual([]);
+    expect(at(BLOOM_TOTAL_S)).toEqual([]);
+  });
+
+  it('피어오르는 동안 입자는 정수 크기의 정사각형이고 시간이 지날수록 위로 오른다', () => {
+    const early = at(0.5);
+    expect(early.length).toBeGreaterThan(0);
+    expect(early.length).toBeLessThanOrEqual(BLOOM_COUNT);
+    for (const p of early) {
+      expect(Number.isInteger(p.size)).toBe(true);
+      expect(Number.isInteger(p.x) && Number.isInteger(p.y)).toBe(true);
+    }
+    const minY = (age: number) => Math.min(...at(age).map(p => p.y));
+    expect(minY(0.9)).toBeLessThan(minY(0.4));
+  });
+
+  it('같은 시각은 같은 입자를 낸다', () => {
+    expect(at(0.7)).toEqual(at(0.7));
+  });
+
+  it('전체 길이는 전설 잡기 홀드 안에 끝난다', () => {
+    expect(JUMP_S + BLOOM_TOTAL_S).toBeLessThanOrEqual(CATCH_MS_LEGENDARY / 1000);
   });
 });

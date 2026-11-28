@@ -29,10 +29,18 @@ export interface JumpFx {
   toY?: number;
   fishId: string;
   form?: FormId;
-  /** 점프 시작 후 경과 초(0 이상 ~ JUMP_S 미만) */
+  /** 점프 시작 후 경과 초. JUMP_S 이후에는 배 위치 피어오름만 그린다 */
   t: number;
   /** 효과 강도. 작게는 꼬리 스파크 없이 물고기만 그린다 */
   intensity: 'small' | 'large' | 'largest';
+  /** 동작 축소. 켜지면 이동, 물보라, 꼬리 반짝이를 그리지 않는다 */
+  reducedMotion?: boolean;
+}
+
+/** 챔질 판정 글자. t는 판정 뒤 경과 초 */
+export interface JudgmentFx {
+  grade: 'perfect' | 'good';
+  t: number;
 }
 
 export interface GearView {
@@ -48,6 +56,8 @@ export interface GearView {
   t: number;
   /** 물고기 그래픽 스타일 */
   fishArt?: FishArtStyle;
+  /** 동작 축소. 켜지면 찌 흔들림을 멈춘다 */
+  reducedMotion?: boolean;
 }
 
 /** zoom = 마커 크기 보정(1 기본). 미니맵처럼 pack 좌표를 축소 그리는 캔버스에서 지도가 커지면
@@ -142,11 +152,50 @@ function drawJumpSparks(ctx: Ctx, jump: JumpFx, rarity: RarityId) {
   }
 }
 
+export const BLOOM_COUNT = 24;
+const BLOOM_SPAWN_S = 0.3;
+const BLOOM_LIFE_MIN_S = 0.9;
+const BLOOM_LIFE_SPAN_S = 0.5;
+const BLOOM_BLINK_S = 0.2;
+const BLOOM_BLINK_STEP_S = 0.05;
+/** 첫 입자가 나온 뒤 마지막 입자가 사라질 때까지 */
+export const BLOOM_TOTAL_S = BLOOM_SPAWN_S + BLOOM_LIFE_MIN_S + BLOOM_LIFE_SPAN_S;
+
+/** 입자 번호에서 0 이상 1 미만의 고정 값을 얻는다 */
+function bloomUnit(i: number, salt: number): number {
+  const v = Math.sin(i * 12.9898 + salt * 78.233) * 43758.5453;
+  return v - Math.floor(v);
+}
+
+/** 낚은 배 위치에서 피어오르는 금빛 입자. age는 배에 닿은 뒤 경과 초다. 이진 알파 정사각 입자를 끝에서 깜빡여 지운다 */
+export function goldBloomParticles(
+  age: number, x: number, y: number,
+): { x: number; y: number; size: number; color: string }[] {
+  const out: { x: number; y: number; size: number; color: string }[] = [];
+  for (let i = 0; i < BLOOM_COUNT; i++) {
+    const a = age - (i * BLOOM_SPAWN_S) / BLOOM_COUNT;
+    const life = BLOOM_LIFE_MIN_S + bloomUnit(i, 1) * BLOOM_LIFE_SPAN_S;
+    if (a < 0 || a >= life) continue;
+    if (life - a < BLOOM_BLINK_S && Math.floor(a / BLOOM_BLINK_STEP_S) % 2 === 1) continue;
+    out.push({
+      x: x + Math.round((bloomUnit(i, 2) - 0.5) * 18 + (bloomUnit(i, 3) - 0.5) * 8 * a),
+      y: y - 3 - Math.round((14 + bloomUnit(i, 4) * 12) * a),
+      size: bloomUnit(i, 5) < 0.3 ? 2 : 1,
+      color: bloomUnit(i, 6) < 0.25 ? '#fff8e1' : '#ffd54f',
+    });
+  }
+  return out;
+}
+
 /** 수면 물고기 점프 — 이륙 물보라와 목표 포물선 이동, 등급 꼬리 스파클을 포함한 단일 점프를 그린다 */
 export function drawFishJump(ctx: Ctx, jump: JumpFx, style: FishArtStyle = DEFAULT_FISH_ART_STYLE) {
-  if (jump.t < 0 || jump.t >= JUMP_S) return;
+  if (jump.reducedMotion || jump.t < 0) return;
   const fish = fishById(jump.fishId);
   if (!fish) return;
+  if (fish.rarity === 'legendary' && jump.intensity === 'largest' && jump.toX != null && jump.toY != null) {
+    for (const p of goldBloomParticles(jump.t - JUMP_S, jump.toX, jump.toY)) R(ctx, p.x, p.y, p.size, p.size, p.color);
+  }
+  if (jump.t >= JUMP_S) return;
 
   const hasTarget = jump.toX != null
     && jump.toY != null
@@ -175,7 +224,7 @@ export function drawFishJump(ctx: Ctx, jump: JumpFx, style: FishArtStyle = DEFAU
 
 export function drawFishingGear(ctx: Ctx, v: GearView) {
   if (v.phase === 'idle' || !v.school) return;
-  const bob = v.phase === 'bite' ? Math.sin(v.t * 30) * 2 : Math.sin(v.t * 2);
+  const bob = v.reducedMotion ? 0 : v.phase === 'bite' ? Math.sin(v.t * 30) * 2 : Math.sin(v.t * 2);
   const bx = v.school.x, by = v.school.y + bob;
   ctx.strokeStyle = 'rgba(255,255,255,0.5)';
   ctx.lineWidth = 1;
@@ -206,4 +255,17 @@ export function drawTimingBar(ctx: Ctx, v: GearView) {
   }
   const cx = bx + Math.min(v.biteT, 1) * bw;
   R(ctx, cx - 1, by - 2, 2, bh + 4, '#fff');
+}
+
+// 판정 글자 색은 타이밍 바의 영역 색(빨강 PERFECT, 노랑 GOOD)과 같다
+const JUDGMENT_STYLE = {
+  perfect: { text: 'PERFECT', color: '#ef5350' },
+  good: { text: 'GOOD', color: '#ffd54f' },
+} as const;
+const JUDGMENT_FONT_PX = 10;
+
+/** 판정 순간 사라진 타이밍 바 자리에 판정 글자를 그린다 */
+export function drawJudgmentFx(ctx: Ctx, v: Pick<GearView, 'player'>, fx: JudgmentFx) {
+  const style = JUDGMENT_STYLE[fx.grade];
+  label(ctx, style.text, v.player.x, v.player.y + 17, style.color, JUDGMENT_FONT_PX);
 }

@@ -35,10 +35,20 @@ export interface PeerCatchFxSubject {
   to?: FxPoint;
 }
 
+/** 챔질 판정 글자 대상. 글자는 타이밍 바가 있던 자리에 뜬다 */
+export interface JudgmentFxSubject {
+  region: string;
+  judgment: 'perfect' | 'good';
+}
+
+/** 판정 글자를 띄우는 시간(ms) */
+export const JUDGMENT_MS = 700;
+
 /** at은 Date.now() 벽시계 ms(UTC epoch)다 */
 export type FxRequest =
   | { kind: CatchFxKind; direct: boolean; at: number; subject: CatchFxSubject }
-  | { kind: 'live.peerCatch'; direct: false; at: number; subject: PeerCatchFxSubject };
+  | { kind: 'live.peerCatch'; direct: false; at: number; subject: PeerCatchFxSubject }
+  | { kind: 'catch.judgment'; direct: true; at: number; subject: JudgmentFxSubject };
 
 export type FxRenderer = 'catch-card' | 'field' | 'pip';
 export type FxScreen = 'main' | 'pip';
@@ -52,7 +62,7 @@ export interface FxDirective {
   /** 지시 시점의 OS 동작 축소 판정. 렌더러는 판정하지 않고 이 값만 따른다 */
   reducedMotion: boolean;
   startAt: number;
-  /** 만료 벽시계 ms. 카드와 PiP는 홀드 종료, 필드 점프는 시작 + 점프 길이 */
+  /** 만료 벽시계 ms. 카드와 PiP, 가장 크게 필드 지시는 홀드 종료, 그 밖의 필드 지시는 시작 + 점프 길이 */
   endsAt: number;
   request: FxRequest;
 }
@@ -93,6 +103,7 @@ export const FX_RENDERERS: Partial<Record<FxEventKind, readonly FxRenderer[]>> =
   'catch.variant': CATCH_RENDERERS,
   'catch.routine': CATCH_RENDERERS,
   'live.peerCatch': ['field'],
+  'catch.judgment': ['field'],
 };
 
 export function createFxMediatorState(): FxMediatorState {
@@ -110,7 +121,8 @@ export function mediateFx(
   const renderers = FX_RENDERERS[request.kind] ?? [];
   if (base === 'none') return { state, directives: [] };
 
-  const holdEndsAt = 'holdEndsAt' in request.subject ? request.subject.holdEndsAt : request.at + env.jumpMs;
+  const fieldMs = request.kind === 'catch.judgment' ? JUDGMENT_MS : env.jumpMs;
+  const holdEndsAt = 'holdEndsAt' in request.subject ? request.subject.holdEndsAt : request.at + fieldMs;
   const largestUntil = { ...state.largestUntil };
   const lastLargeAt = new Map(state.lastLargeAt);
   const directives: FxDirective[] = [];
@@ -137,7 +149,7 @@ export function mediateFx(
       intensity,
       reducedMotion: env.reducedMotion,
       startAt: request.at,
-      endsAt: renderer === 'field' ? request.at + env.jumpMs : holdEndsAt,
+      endsAt: renderer === 'field' && intensity !== 'largest' ? request.at + fieldMs : holdEndsAt,
       request,
     });
   }

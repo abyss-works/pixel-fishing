@@ -252,6 +252,9 @@ export default function Field({
         if (action.type === 'catch' && action.judgment !== 'auto') {
           manualCycleRef.current = true;
           emitHitSound(action.judgment);
+          if (action.judgment === 'perfect' || action.judgment === 'good') {
+            requestFx({ kind: 'catch.judgment', direct: true, at: Date.now(), subject: { region, judgment: action.judgment } });
+          }
         }
         return when(dispatch(action), result => result.status === 'ok'
           ? { status: 'ok', result: result.result }

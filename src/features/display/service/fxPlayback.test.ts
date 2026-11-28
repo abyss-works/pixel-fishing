@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   activeFieldDirectives, bindFxEnvironment, clearFx, fieldFxFrame, getFxDirective, requestFx, resetFxPlayback, subscribeFx,
 } from './fxPlayback';
+import { JUDGMENT_MS } from '../model/fxPolicy';
 import type { CatchFxKind, FxRequest, PeerCatchFxSubject } from '../model/fxPolicy';
 
 const catchReq = (kind: CatchFxKind, at: number, over: { holdEndsAt?: number; region?: 'village' | 'world' } = {}): FxRequest => ({
@@ -114,12 +115,12 @@ describe('fieldFxFrame', () => {
     const frame = fieldFxFrame('world', Date.now() + 300);
     expect(frame.reducedMotion).toBe(false);
     expect(frame.localJumps).toEqual([
-      { x: 1, y: 2, toX: 3, toY: 4, fishId: 'carp', form: 'normal', t: 0.3, intensity: 'large' },
+      { x: 1, y: 2, toX: 3, toY: 4, fishId: 'carp', form: 'normal', t: 0.3, intensity: 'large', reducedMotion: false },
     ]);
     expect(frame.peerJumps).toEqual([
-      { x: 1, y: 1, toX: 9, toY: 9, fishId: 'carp', form: 'variant', t: 0.3, intensity: 'large' },
+      { x: 1, y: 1, toX: 9, toY: 9, fishId: 'carp', form: 'variant', t: 0.3, intensity: 'large', reducedMotion: false },
       // 같은 종류 크게가 겹치면 두 번째부터 작게다
-      { x: 1, y: 1, fishId: 'no-target', t: 0.3, intensity: 'small' },
+      { x: 1, y: 1, fishId: 'no-target', t: 0.3, intensity: 'small', reducedMotion: false },
     ]);
   });
 
@@ -127,6 +128,36 @@ describe('fieldFxFrame', () => {
     requestFx(catchReq('catch.routine', Date.now(), { region: 'village' }));
     expect(fieldFxFrame('world', Date.now()).localJumps).toEqual([]);
     expect(fieldFxFrame('village', Date.now() + 900).localJumps).toEqual([]);
+  });
+
+  it('동작 축소가 켜져 있으면 프레임과 각 점프가 그 값을 싣는다', () => {
+    vi.stubGlobal('window', { matchMedia: () => ({ matches: true }) });
+    try {
+      requestFx(catchReq('catch.routine', Date.now(), { region: 'world' }));
+      requestFx(peerReq(Date.now()));
+      const frame = fieldFxFrame('world', Date.now());
+      expect(frame.reducedMotion).toBe(true);
+      expect(frame.localJumps[0].reducedMotion).toBe(true);
+      expect(frame.peerJumps[0].reducedMotion).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('챔질 판정은 점프가 아니라 판정 글자로 프레임에 실린다', () => {
+    requestFx({ kind: 'catch.judgment', direct: true, at: Date.now(), subject: { region: 'world', judgment: 'good' } });
+    const frame = fieldFxFrame('world', Date.now() + 200);
+    expect(frame.judgment).toEqual({ grade: 'good', t: 0.2 });
+    expect(frame.localJumps).toEqual([]);
+    expect(frame.peerJumps).toEqual([]);
+    expect(fieldFxFrame('village', Date.now()).judgment).toBeNull();
+    expect(fieldFxFrame('world', Date.now() + JUDGMENT_MS).judgment).toBeNull();
+  });
+
+  it('가장 크게 점프는 점프가 끝난 뒤에도 홀드가 끝날 때까지 프레임에 남는다', () => {
+    requestFx(catchReq('catch.legendaryOrFirstVariant', Date.now(), { region: 'world', holdEndsAt: Date.now() + 2700 }));
+    expect(fieldFxFrame('world', Date.now() + 2000).localJumps[0]).toMatchObject({ intensity: 'largest', t: 2 });
+    expect(fieldFxFrame('world', Date.now() + 2700).localJumps).toEqual([]);
   });
 
   it('필드가 작게로 낮춘 요청은 작게 강도 점프가 된다', () => {
