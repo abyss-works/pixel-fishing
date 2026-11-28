@@ -16,6 +16,7 @@ import {
 } from '../../../game/rules/widget';
 import { BASE_PACKS, REGION_PACKS, type SceneRef } from '../../../game/world';
 import type { SpotState } from '../../../game/world/currentSpot';
+import type { FxPlayIntensity } from '../../display/model/fxPolicy';
 
 export const PIP_BASE_WIDTH = 420;
 export const PIP_BASE_HEIGHT = 156;
@@ -48,6 +49,8 @@ export interface PipSpotInfo {
 export interface PipLeapTrigger {
   seq: number;
   item: PipCatchItem;
+  /** 효과 중재자가 정한 강도 */
+  intensity: FxPlayIntensity;
 }
 
 export interface PipLeapFrame {
@@ -67,7 +70,10 @@ export interface PipMonitorState {
 
 export type PipMonitorAction =
   | { type: 'hydrate'; recentCatches: readonly PipCatchItem[] }
-  | { type: 'catch'; item: PipCatchItem }
+  /** 포획 버퍼와 일지 반영. 효과는 없다 */
+  | { type: 'append'; item: PipCatchItem }
+  /** 도약과 광채 재생 */
+  | { type: 'play'; item: PipCatchItem; intensity: FxPlayIntensity }
   | { type: 'clear_exiting_log' }
   | { type: 'reset_fx' };
 
@@ -292,18 +298,24 @@ export function pipMonitorReducer(
         exitingLogItem: null,
       };
 
-    case 'catch': {
+    case 'append': {
       const nextCatches = appendPipCatchBuffer(state.recentCatches, action.item);
       if (nextCatches === state.recentCatches) {
         return state;
       }
-      const nextSeq = state.nextLeapSeq + 1;
-      const exitingLogItem = state.recentCatches[PIP_RECENT_CATCH_LIMIT - 1] ?? null;
       return {
+        ...state,
         recentCatches: nextCatches,
-        leapTrigger: { seq: nextSeq, item: action.item },
         catchFxSeq: state.catchFxSeq + 1,
-        exitingLogItem,
+        exitingLogItem: state.recentCatches[PIP_RECENT_CATCH_LIMIT - 1] ?? null,
+      };
+    }
+
+    case 'play': {
+      const nextSeq = state.nextLeapSeq + 1;
+      return {
+        ...state,
+        leapTrigger: { seq: nextSeq, item: action.item, intensity: action.intensity },
         nextLeapSeq: nextSeq,
       };
     }
