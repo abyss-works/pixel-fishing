@@ -19,8 +19,12 @@ spec:
         app: pixel-fishing-admin
     spec:
       terminationGracePeriodSeconds: 35
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       nodeSelector:
-        kubernetes.io/hostname: oci-node
+        kubernetes.io/arch: arm64
       dnsConfig:
         options:
           - name: ndots
@@ -28,6 +32,10 @@ spec:
       containers:
         - name: pixel-fishing-admin
           image: ghcr.io/abyss-works/pixel-fishing-admin
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           envFrom:
             - secretRef:
                 name: pixel-fishing

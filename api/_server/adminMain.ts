@@ -144,10 +144,10 @@ const shutdown = (): void => {
   server.close(() => {
     void settleAfterResponse()
       .then(() => Promise.all([
-        httpMetrics.stop(),
+        httpMetrics.stop().catch(() => {}),
         bus.close().catch(() => {}),
-        database().pool.end().catch(() => {}),
       ]))
+      .then(() => database().pool.end().catch(() => {}))
       .finally(() => process.exit(0));
   });
 };
