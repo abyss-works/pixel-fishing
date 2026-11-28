@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { EVENT_ZONE_MOVE_AT_MS, eventZoneVeilFrame } from '../../../game/runtime/eventZoneTransition';
+import { getReducedMotion } from '../../../features/display/service/reducedMotion';
 import { HOTKEY_TIER, useKeyScope } from '../../ui/hotkeys';
 import { useWindowHost } from '../../ui/windowLayer';
 
@@ -28,9 +29,7 @@ export default function EventZoneVeil(props: EventZoneVeilProps) {
     return true;
   }, { tier: HOTKEY_TIER.BLOCKER });
 
-  const [reduced] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-  );
+  const [reduced] = useState(getReducedMotion);
   const [frameState, setFrameState] = useState({ veil: 0, elapsed: 0 });
   const windowHost = useWindowHost();
   const latest = useRef(props);

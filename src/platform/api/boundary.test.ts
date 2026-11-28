@@ -370,6 +370,73 @@ describe('src 구조 경계', () => {
     expect(stale).toEqual([]);
   });
 
+  describe('효과 재생 구조', () => {
+    /** 값 import만 모은다(type import와 `type` 항목 제외). 대상은 src 기준 정규화 경로(확장자 없음) */
+    function valueImports(path: string, src: string): Array<{ target: string; names: string[] }> {
+      const dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+      const code = src.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+      const out: Array<{ target: string; names: string[] }> = [];
+      const re = /\bimport\s+([\s\S]*?)\s+from\s+["']([^"']+)["']/g;
+      let match: RegExpExecArray | null;
+      while ((match = re.exec(code)) !== null) {
+        const clause = match[1].trim();
+        if (!match[2].startsWith('.') || /^type\b/.test(clause)) continue;
+        const names: string[] = [];
+        const named = /\{([\s\S]*?)\}/.exec(clause);
+        if (named) {
+          for (const part of named[1].split(',')) {
+            const item = part.trim();
+            if (item && !/^type\s+/.test(item)) names.push(item.split(/\s+as\s+/)[0].trim());
+          }
+        }
+        out.push({ target: normalize(`${dir}/${match[2]}`).replace(/\.js$/, ''), names });
+      }
+      return out;
+    }
+    const appSources = () => Object.entries(sources)
+      .map(([key, src]) => ({ path: sourcePath(key), src }))
+      .filter(({ path }) => !isTestFile(path) && /\.tsx?$/.test(path));
+
+    it('효과 강도와 중재 판정의 값은 요청 창구만 가져다 쓴다', () => {
+      const guarded: Record<string, readonly string[]> = {
+        'features/display/model/fxPolicy': ['fxIntensityOf', 'mediateFx', 'createFxMediatorState', 'FX_RENDERERS'],
+        'features/display/model/toastPolicy': ['FX_ONLY_RULES'],
+      };
+      const allowed = new Set(['features/display/service/fxPlayback.ts', 'features/display/model/fxPolicy.ts']);
+      const offenders: string[] = [];
+      for (const { path, src } of appSources()) {
+        if (allowed.has(path)) continue;
+        for (const { target, names } of valueImports(path, src)) {
+          for (const name of guarded[target] ?? []) {
+            if (names.includes(name)) offenders.push(`${path}: ${name}`);
+          }
+        }
+      }
+      expect(offenders).toEqual([]);
+    });
+
+    it('동작 축소 판정 문자열은 플랫폼 어댑터와 스타일시트 둘에만 둔다', () => {
+      const cssAllowed = new Set(['index.css', 'presentation/ui/pip/pipMonitor.css']);
+      const offenders = Object.entries(sources)
+        .map(([key, src]) => ({ path: sourcePath(key), src }))
+        .filter(({ path, src }) => !isTestFile(path) && src.includes('prefers-reduced-motion'))
+        .filter(({ path }) => (path.endsWith('.css') ? !cssAllowed.has(path) : path !== 'platform/adapters/reducedMotion.ts'))
+        .map(({ path }) => path);
+      expect(offenders).toEqual([]);
+    });
+
+    it('점프 길이 상수는 렌더링 계층과 요청 창구만 가져다 쓴다', () => {
+      const offenders: string[] = [];
+      for (const { path, src } of appSources()) {
+        if (path.startsWith('game/rendering/') || path === 'features/display/service/fxPlayback.ts') continue;
+        for (const { target, names } of valueImports(path, src)) {
+          if (target.endsWith('/schoolView') && names.includes('JUMP_S')) offenders.push(path);
+        }
+      }
+      expect(offenders).toEqual([]);
+    });
+  });
+
   it('효과 규칙 모듈의 공개 함수 시그니처에 효과 기본값을 두지 않는다', () => {
     const effectsSrc = Object.entries(sources).find(([key]) => sourcePath(key) === 'game/rules/effects.ts')?.[1] ?? '';
     expect(effectsSrc.length).toBeGreaterThan(0);

@@ -73,7 +73,7 @@ export interface FxMediatorState {
   lastEmphasisAt: ReadonlyMap<string, number>;
 }
 
-export function fxRuleOf(kind: FxEventKind): FxRule | undefined {
+function fxRuleOf(kind: FxEventKind): FxRule | undefined {
   return kind in FX_ONLY_RULES ? FX_ONLY_RULES[kind as FxOnlyKind] : TOAST_POLICY[kind as SystemEventKind].fx;
 }
 
