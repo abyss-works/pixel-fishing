@@ -14,6 +14,7 @@
 import type { SQL } from 'drizzle-orm';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { afterResponse } from './_server/afterResponse.js';
+import { advanceIdleQueue, clearIdleQueue, readIdleQueue, startIdleQueue, touchIdleQueueCatch } from './_server/idleQueue.js';
 import { markRateLimitReason } from './_server/httpMetrics.js';
 import { broadcastCatchFx, notifyGuild, setFame, setNick } from './_server/livePresence.js';
 import { isPrerenderRequest } from './_server/prerender.js';
@@ -51,6 +52,9 @@ import type { Coupon } from '../src/game/content/coupons.js';
 import { COUPONS } from '../src/game/content/coupons.js';
 import { applyAction, commonWeightMultiplier, drawCatch, namedWeightBonus, pickScalars, prepareCatchDraw } from '../src/game/rules/actions.js';
 import type { ActionDeps, ApplyOutcome, DebugStepInput, GameAction, GameEvent, ReleasedFish, StatePatch, StateWrites } from '../src/game/rules/actions.js';
+import { AWAY_SETTLE_EVENT_TYPE } from '../src/game/rules/away.js';
+import { DEFAULT_MAX_IDLE_WINDOW_MS, settleIdleWindow } from '../src/game/rules/awaySettle.js';
+import type { IdleSettleResult } from '../src/game/rules/awaySettle.js';
 import { achievementBonusesOf, counterIncrementsForEvents, evaluateAchievements } from '../src/game/rules/achievements.js';
 import { bagCapacityOf, createPlayerContext } from '../src/game/rules/effects.js';
 import type { AchievementCounters } from '../src/game/content/achievements.js';
@@ -84,7 +88,7 @@ import {
   abandonFragments, abandonGate, acceptFragments, bountyRestoreFragments, challengeFragments, clearFragment,
   consumeDeliveryFragment, debugFragment, deliveryGate, expiredCleanup, isQuestProgressComplete,
   namedClearDeleteFragment, namedClearInsertFragment, namedClearReplaceFragments, readSnapshotBounty,
-  runAdvanceProgress, ticketFragment,
+  runAdvanceProgress, runAdvanceProgressDeltas, ticketFragment, ticketRowsFragment,
 } from './_data/bounty.js';
 import { consumeCoupon, consumeRelief, findCouponForUser, findRelief } from './_data/codes.js';
 import type { DynamicCouponForUser } from './_data/codes.js';
@@ -104,7 +108,7 @@ import { recordDailyFortuneFragment, upsertDailyFortuneFragment } from './_data/
 import {
   activeEventOfKind, activeEventsOfKind, championshipSettleGate, findSettleableChampionshipRow,
   readChampionshipRow, settleChampionshipFragment, trioTargetsOf, upsertChampionshipCatchFragment,
-  upsertTrioProgressFragment,
+  upsertTrioProgressBatchFragment, upsertTrioProgressFragment,
 } from './_data/events.js';
 import { guildTotalOf, recordGuildActivity } from './_data/guilds.js';
 import { integrityEventFragment, integrityStateFragment, readIntegrityState } from './_data/integrity.js';
@@ -143,7 +147,8 @@ function scalarState(row: StateRow, counters: Record<string, number> = {}, clear
 /** 추첨 가중치 입력 — 수동 캐치의 위치만 sample이고 auto·위치 없음·다른 게임 조작은 연속을 끊는다.
  *  boot와 읽기 전용 스냅샷은 플레이 조작이 아니라 연속에 영향을 주지 않는다. */
 function integrityInputOf(action: GameAction, row: StateRow, atMs: number): IntegrityInput | null {
-  if (action.type === 'boot' || action.type === 'debugSnapshot') return null;
+  if (action.type === 'boot' || action.type === 'debugSnapshot'
+    || action.type === 'startIdle' || action.type === 'stopIdle' || action.type === 'settleIdle') return null;
   if (action.type !== 'catch') return { kind: 'break', at: atMs };
   const rodLevel = action.spot === 'championship' ? EVENT2_STANDARD_SPEC.rodLevel : row.rod;
   const pos = timingPos(action.biteElapsed, rodStats(rodLevel).sweep);
@@ -268,16 +273,17 @@ export const SKIP_DETAIL = new Set([
   'changeClothes', 'buyHat', 'wearHat',
   'cook', 'cancelCook', 'eat', 'transmuteEnergy', 'usePotion', 'setEnergyTarget', 'resetEnergyTargets', 'dismissBaitRefund', 'setAutoLockOnCatch',
   'enterEventZone', 'leaveEventZone', 'settleEventReward',
+  'startIdle',
   'debugSnapshot',
 ]);
 
 /** 수배 진실이 필요한 액션 — 라이선스·일일 카운트·진행도·도전권은 전용 표에 있다 */
-const BOUNTY_ACTIONS = new Set(['acceptQuest', 'deliverBounty', 'abandonQuest', 'resolveChallenge', 'catch']);
+const BOUNTY_ACTIONS = new Set(['acceptQuest', 'deliverBounty', 'abandonQuest', 'resolveChallenge', 'catch', 'stopIdle', 'settleIdle']);
 
 /** 길드가 필요한 액션 — 보너스 효과를 쓰거나(캐치, 판매, 전시대 회수의 가방 상한) 기여를 쌓는다(명성을 얻는 캐치·지원 코드,
  *  의뢰 클리어). 이사 코드와 개발 도구는 플레이로 얻은 명성이 아니라 기여로 세지 않는다.
  *  네임드 결투 성공(resolveChallenge)은 명성을 주지 않고 납품을 열 뿐이라, 토벌 기여와 항해일지는 뒤이은 납품(deliverBounty)이 한 번만 쓴다 */
-const GUILD_ACTIONS = new Set(['catch', 'sell', 'exhibit', 'deliverBounty', 'claimRelief']);
+const GUILD_ACTIONS = new Set(['catch', 'sell', 'exhibit', 'deliverBounty', 'claimRelief', 'stopIdle', 'settleIdle']);
 
 /** 주간 명성 집계 제외 액션 — 비게임플레이 주입(이사·개발 명령·지원 코드)은 주간 순위에 넣지 않는다 */
 const WEEKLY_FAME_EXCLUDED = new Set(['import', 'debug', 'debugBatch', 'claimRelief']);
@@ -804,7 +810,94 @@ async function route(req: Req, res: Res): Promise<void> {
   let catchBagSummary: WidgetBagSummary | null = null;
   let prevFortune: GameState['fortune'] = null;
   let champCatchCommit: ChampionshipCatchCommit | null = null;
-  if (action.type === 'catch' && action.spot === 'championship') {
+  let idleSettled: {
+    result: IdleSettleResult;
+    spotId: SpotId;
+    startedAtMs: number;
+    keepActive: boolean;
+  } | null = null;
+  if (action.type === 'startIdle') {
+    const startState = scalarState(row, loaded.counters, loaded.clearedNamed);
+    const startCheck = applyAction(startState, action, {
+      rng: Math.random, today, now, newUid: () => crypto.randomUUID(),
+    });
+    if (!startCheck.ok) throw new ApiError(422, startCheck.error);
+    await startIdleQueue(uid, action.spot, Date.parse(now));
+    const readVer = Number(row.version);
+    const patch: StatePatch = {
+      version: readVer,
+      baseVersion: readVer,
+      scalars: pickScalars(startState),
+      writes: { instancesAdded: [], instancesRemoved: [], instancesMoved: [], instancesLocked: [], records: [] },
+    };
+    res.status(200).json({ patch, result: { type: 'none' } });
+    return;
+  }
+  if (action.type === 'stopIdle' || action.type === 'settleIdle') {
+    const state = assemble(row, instances, records, loaded.counters, loaded.clearedNamed);
+    const keepActive = action.type === 'settleIdle' && action.keepActive === true;
+    const idleState = await readIdleQueue(uid);
+    const nowMs = Date.parse(now);
+    const lastCatchMs = row.last_catch_at ? Date.parse(row.last_catch_at) : 0;
+    const fromMs = idleState
+      ? Math.max(idleState.lastProcessedAtMs, Number.isFinite(lastCatchMs) ? lastCatchMs : 0)
+      : nowMs;
+    const toMs = idleState
+      ? Math.min(nowMs, idleState.startedAtMs + DEFAULT_MAX_IDLE_WINDOW_MS)
+      : nowMs;
+    const settled = idleState && idleState.spotId !== 'championship' && toMs > fromMs
+      ? settleIdleWindow({
+        state,
+        spotId: idleState.spotId,
+        fromMs,
+        toMs,
+        seed: `${uid}:${Number(row.version)}:${fromMs}:${toMs}`,
+        maxWindowMs: DEFAULT_MAX_IDLE_WINDOW_MS,
+        guild: guildEffects,
+        bounty,
+        guest: user.email === null,
+        integrityModifier: integrityEval?.modifier,
+        newUid: () => crypto.randomUUID(),
+      })
+      : null;
+    if (!settled || settled.catches === 0) {
+      if (idleState) {
+        if (keepActive && toMs < idleState.startedAtMs + DEFAULT_MAX_IDLE_WINDOW_MS) {
+          await advanceIdleQueue(uid, { ...idleState, updatedAtMs: nowMs });
+        } else {
+          await clearIdleQueue(uid);
+        }
+      }
+      const readVer = Number(row.version);
+      const patch: StatePatch = {
+        version: readVer,
+        baseVersion: readVer,
+        scalars: pickScalars(state),
+        writes: { instancesAdded: [], instancesRemoved: [], instancesMoved: [], instancesLocked: [], records: [] },
+      };
+      res.status(200).json({ patch, result: { type: 'idleSettled', catches: 0, settledMs: 0 } });
+      return;
+    }
+    idleSettled = {
+      result: settled,
+      spotId: idleState!.spotId,
+      startedAtMs: idleState!.startedAtMs,
+      keepActive: keepActive && settled.settledAtMs < idleState!.startedAtMs + DEFAULT_MAX_IDLE_WINDOW_MS,
+    };
+    prevFortune = state.fortune;
+    out = {
+      ok: true,
+      state: settled.nextState,
+      result: {
+        type: 'idleSettled',
+        catches: settled.catches,
+        settledMs: settled.settledMs,
+        summary: settled.summary,
+      },
+      events: [{ type: AWAY_SETTLE_EVENT_TYPE, payload: settled.compactEvent as unknown as Record<string, unknown> }],
+      writes: settled.writes,
+    };
+  } else if (action.type === 'catch' && action.spot === 'championship') {
     const champStateBase = skipDetail
       ? scalarState(row, loaded.counters, loaded.clearedNamed)
       : assemble(row, instances, records, loaded.counters, loaded.clearedNamed);
@@ -891,13 +984,17 @@ async function route(req: Req, res: Res): Promise<void> {
   if (clearQuest) fragments.push(clearFragment(guard, uid, clearQuest, nowISO));
   if (deliveryRow) fragments.push(consumeDeliveryFragment(guard, uid, deliveryRow.questId));
   if (abandonRow) fragments.push(...abandonFragments(guard, uid, abandonRow.questId));
-  // 도전권 발급 — catch의 ticket 이벤트를 행으로 확정한다.
-  const ticketQuests = out.events.flatMap(e => {
-    if (e.type !== 'ticket') return [];
-    const questId = (e.payload as { questId?: unknown }).questId;
-    return typeof questId === 'string' && bountyById(questId) ? [questId] : [];
-  });
-  fragments.push(ticketFragment(guard, uid, ticketQuests, nowISO));
+  // 도전권 발급 — catch의 ticket 이벤트 또는 방치 일괄 소모의 추정 포획 시각별 도전권을 행으로 확정한다.
+  if (idleSettled) {
+    fragments.push(ticketRowsFragment(guard, uid, idleSettled.result.commitData.ticketQuests));
+  } else {
+    const ticketQuests = out.events.flatMap(e => {
+      if (e.type !== 'ticket') return [];
+      const questId = (e.payload as { questId?: unknown }).questId;
+      return typeof questId === 'string' && bountyById(questId) ? [questId] : [];
+    });
+    fragments.push(ticketFragment(guard, uid, ticketQuests, nowISO));
+  }
   // 챌린지 결과 확정 — 리듀서가 티켓 유효·수주 활성·주장 정합성을 이미 검증했다.
   if (action.type === 'resolveChallenge' && typeof action.questId === 'string' && bountyById(action.questId)) {
     fragments.push(...challengeFragments(guard, uid, action.questId, action.success === true, nowISO));
@@ -1001,7 +1098,15 @@ async function route(req: Req, res: Res): Promise<void> {
   if (championshipSettleTarget) {
     fragments.push(settleChampionshipFragment(guard, uid, championshipSettleTarget.eventId, nowISO));
   }
-  if (action.type === 'catch' && action.spot !== 'championship' && user.email !== null && out.ok) {
+  if (idleSettled && user.email !== null && idleSettled.result.commitData.trioCatches.length > 0) {
+    const trioEvents = await step('db-read', { uid, action: action.type }, () => activeEventsOfKind(db, 'trio', now));
+    for (const ev of trioEvents) {
+      const frag = upsertTrioProgressBatchFragment(
+        guard, uid, ev.id, trioTargetsOf(ev.config), idleSettled.result.commitData.trioCatches, nowISO,
+      );
+      if (frag) fragments.push(frag);
+    }
+  } else if (action.type === 'catch' && action.spot !== 'championship' && user.email !== null && out.ok) {
     const catchEvent = out.events.find(e => e.type === 'catch');
     const caughtFishId = (catchEvent?.payload as { fishId?: unknown } | undefined)?.fishId;
     const caughtForm = (catchEvent?.payload as { form?: unknown } | undefined)?.form;
@@ -1014,11 +1119,17 @@ async function route(req: Req, res: Res): Promise<void> {
     }
   }
   // 업적 카운터 — 확정 문장 안에서 상태 변경과 같은 원자 단위로 오른다. 클라이언트 주장으로 올리지 않는다.
-  const counterInc = counterIncrementsForEvents(out.events);
+  const counterInc = idleSettled
+    ? idleSettled.result.commitData.achievementDeltas
+    : counterIncrementsForEvents(out.events);
   fragments.push(counterUpsertFragment(guard, uid, counterInc));
-  // 일일 운세 이력 — 로그인 계정의 첫 접속(boot)과 당일 운세 확정(catch·sell·extractEnergy 백스톱 포함)만 멱등 기록한다. 게스트는 저장하지 않는다.
+  // 일일 운세 이력 — 로그인 계정의 첫 접속(boot)과 당일 운세 확정(catch·sell·extractEnergy·방치 일괄 소모)만 멱등 기록한다. 게스트는 저장하지 않는다.
   // 응답 직후의 운세 조회가 오늘 운세를 보도록 확정 문장 안에서 쓴다
-  if (user.email !== null && out.state.fortune
+  if (idleSettled && user.email !== null) {
+    for (const f of idleSettled.result.commitData.fortunes) {
+      fragments.push(recordDailyFortuneFragment(guard, uid, f));
+    }
+  } else if (user.email !== null && out.state.fortune
       && (action.type === 'boot' || ((action.type === 'catch' && action.spot !== 'championship' || action.type === 'sell' || action.type === 'extractEnergy') && prevFortune?.day !== out.state.fortune.day))) {
     fragments.push(recordDailyFortuneFragment(guard, uid, out.state.fortune));
   }
@@ -1043,6 +1154,9 @@ async function route(req: Req, res: Res): Promise<void> {
   const versionWrite = versionUpdate(uid, out.state, readVersion, nowISO, {
     ...(action.type === 'catch'
       ? { lastCatchAt: nowISO, ...(action.spot !== 'championship' ? { lastSpot: action.spot } : {}) }
+      : {}),
+    ...(idleSettled
+      ? { lastCatchAt: new Date(idleSettled.result.settledAtMs).toISOString(), lastSpot: idleSettled.spotId }
       : {}),
     ...(action.type === 'boot' ? { activeClient: clientId } : {}),
   }, gated?.gate ?? abandonRow?.gate ?? null);
@@ -1098,8 +1212,37 @@ async function route(req: Req, res: Res): Promise<void> {
     }
   }
 
+  // 방치 일괄 소모가 DB에 확정된 뒤 Valkey 큐를 전진 또는 해제한다
+  if (idleSettled) {
+    if (idleSettled.keepActive) {
+      await advanceIdleQueue(uid, {
+        spotId: idleSettled.spotId,
+        startedAtMs: idleSettled.startedAtMs,
+        lastProcessedAtMs: idleSettled.result.settledAtMs,
+        accumulatedSummary: idleSettled.result.summary,
+        updatedAtMs: Date.parse(nowISO),
+      });
+    } else {
+      await clearIdleQueue(uid);
+    }
+  } else if (action.type === 'catch' && action.spot !== 'championship') {
+    afterResponse(touchIdleQueueCatch(uid, action.spot, Date.parse(nowISO)).catch(() => {}));
+  } else if (action.type === 'travel' || action.type === 'enterEventZone') {
+    afterResponse(clearIdleQueue(uid).catch(() => {}));
+  }
+
   // 캐치의 일반 의뢰 진행도는 증분이라 자가 치유가 없다. 응답 전에 반영하되, 실패가 확정된 캐치를 되돌리지는 않게 보고만 한다.
-  if (action.type === 'catch' && bounty) {
+  if (idleSettled && bounty) {
+    const deltas = idleSettled.result.commitData.bountyMatches;
+    if (Object.keys(deltas).length > 0) {
+      try {
+        const rowCount = await runAdvanceProgressDeltas(db, uid, deltas, nowISO);
+        if (rowCount > 0 && out.result.type === 'idleSettled') out.result.bountyProgressed = true;
+      } catch (e) {
+        await reportServerIssue('후속 쓰기 실패 — 방치 의뢰 진행도 반영 실패', e, { uid, action: action.type, version: nextVersion });
+      }
+    }
+  } else if (action.type === 'catch' && bounty) {
     const questIds = catchProgressQuests(out.events, bounty.active);
     if (questIds.length > 0) {
       try {
@@ -1117,12 +1260,16 @@ async function route(req: Req, res: Res): Promise<void> {
     const prevTotal = loaded.guild.total;
     const prevLevel = guildLevelOf(prevTotal);
     const cleared = action.type === 'deliverBounty' ? bountyById(action.questId) ?? null : null;
-    const add = contributionFor(out.state.fame - Number(row.fame), cleared);
-    const logEntries = guildLogsOf(out.events);
+    const add = idleSettled
+      ? { fame: idleSettled.result.commitData.guildFameDelta, clears: 0 }
+      : contributionFor(out.state.fame - Number(row.fame), cleared);
+    const logEntries = idleSettled
+      ? idleSettled.result.commitData.guildLogs.map(({ kind, detail }) => ({ kind, detail }))
+      : guildLogsOf(out.events);
     try {
       if (await recordGuildActivity(db, guildId, uid, nowISO, add, logEntries) > 0) {
         const r = out.result;
-        if (r.type === 'catch' || r.type === 'sell' || r.type === 'none') r.guildUpdated = true;
+        if (r.type === 'catch' || r.type === 'sell' || r.type === 'none' || r.type === 'idleSettled') r.guildUpdated = true;
         const mayLevelUp = prevLevel < GUILD_MAX_LEVEL
           && prevTotal + add.fame + add.clears >= GUILD_LEVEL_FLOORS[prevLevel];
         const leveledUp = mayLevelUp && guildLevelOf(await guildTotalOf(db, guildId)) > prevLevel;

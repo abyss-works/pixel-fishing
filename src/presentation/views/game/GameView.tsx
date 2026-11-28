@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { GameState } from '../../../game/rules/logic';
 import type { GameAction } from '../../../game/rules/actions';
@@ -87,7 +87,7 @@ import type { RewardWindow } from '../../../features/display/model/rewardsDue';
 import AwayCard from '../overlays/away/AwayCard';
 import AwayReportModal from '../overlays/away/AwayReportModal';
 import { awayLineText } from '../overlays/away/awayText';
-import { useAwayReport } from '../../../features/away/service/useAwayReport';
+import { serverIdleAvailable, useAwayReport } from '../../../features/away/service/useAwayReport';
 import PresenceChip from '../overlays/live/PresenceChip';
 import ChatBar from '../overlays/live/ChatBar';
 import NoticeModal from '../overlays/live/NoticeModal';
@@ -243,13 +243,22 @@ export default function GameView(props: GameViewProps) {
   const [accountSailIntent, setAccountSailIntent] = useState(false);
   const [manageAccountOpen, setManageAccountOpen] = useState(false);
   const inviteReady = invite.code !== null && props.syncState === 'on' && !accountOpen && props.blocker == null;
-  // 방치 결과 보고 — 돌아오면 메시지 창에 한 줄, 오래 비웠으면 알림 카드. 카드의 자세히가 결과 창을 연다
+  // 방치 결과 보고 — 돌아오거나 재접속하면 서버 방치 큐를 소모한 뒤 메시지 창에 한 줄, 알림 카드를 띄운다
+  const settleIdle = useCallback(async (keepActive: boolean) => {
+    try {
+      const res = await props.dispatch({ type: 'settleIdle', keepActive });
+      if (res.status === 'ok' && res.result.type === 'idleSettled' && res.result.summary) {
+        return res.result.summary as import('../../../game/rules/away').AwaySummary;
+      }
+    } catch { /* 정산 실패는 다음 복귀에서 재시도 */ }
+    return null;
+  }, [props.dispatch]);
   const away = useAwayReport((s, hasCard) => sendNotice(props.setToast, {
     kind: 'away.summary',
     text: awayLineText(s),
     toastText: `귀환 정산 ${fmtNum(s.catches)}마리 포획`,
     suppressIfAwayCardVisible: hasCard,
-  }));
+  }), { settleIdle, ready: saveReady && serverIdleAvailable });
   const [awayOpen, setAwayOpen] = useState(false);
   const closeAway = () => { setAwayOpen(false); away.dismiss(); };
   const log = chat.enabled

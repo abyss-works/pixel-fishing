@@ -158,4 +158,14 @@ describe('parseAction', () => {
     expect(parseAction({ type: 'abandonQuest' })).toBeNull();
     expect(parseAction({ type: 'abandonQuest', questId: 1 })).toBeNull();
   });
+
+  it('서버 방치 큐 액션(startIdle·stopIdle·settleIdle)의 형태를 검증한다', () => {
+    expect(parseAction({ type: 'startIdle', spot: 'sea' })).toEqual({ type: 'startIdle', spot: 'sea' });
+    expect(parseAction({ type: 'startIdle' })).toBeNull();
+    expect(parseAction({ type: 'startIdle', spot: 1 })).toBeNull();
+    expect(parseAction({ type: 'stopIdle' })).toEqual({ type: 'stopIdle' });
+    expect(parseAction({ type: 'settleIdle' })).toEqual({ type: 'settleIdle' });
+    expect(parseAction({ type: 'settleIdle', keepActive: true })).toEqual({ type: 'settleIdle', keepActive: true });
+    expect(parseAction({ type: 'settleIdle', keepActive: 'yes' })).toBeNull();
+  });
 });

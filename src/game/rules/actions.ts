@@ -109,6 +109,9 @@ export type GameAction =
   | { type: 'enterEventZone'; eventId?: string }
   | { type: 'leaveEventZone' }
   | { type: 'settleEventReward'; eventId?: string }
+  | { type: 'startIdle'; spot: SpotId }
+  | { type: 'stopIdle' }
+  | { type: 'settleIdle'; keepActive?: boolean }
   | { type: 'import'; save: unknown };          // 이사 코드 불러오기 — 검증 없이 수입, 흔적만 남김
 
 // 서버와 공유하는 화이트리스트 — Record가 유니온과의 완전 일치를 강제한다
@@ -123,6 +126,7 @@ const ACTION_TYPE_MAP: Record<GameAction['type'], true> = {
   seeTutorial: true, changeClothes: true, buyHat: true, wearHat: true,
   claimAchievement: true, claimAllAchievements: true,
   enterEventZone: true, leaveEventZone: true, settleEventReward: true,
+  startIdle: true, stopIdle: true, settleIdle: true,
 };
 export const ACTION_TYPES = Object.keys(ACTION_TYPE_MAP) as GameAction['type'][];
 
@@ -181,6 +185,7 @@ export type ActionResult =
    *  (단건 claimAchievement는 로컬 업적 정의(def.reward)로 만들 수 있어 결과를 싣지 않는다) */
   | { type: 'claimAllAchievements'; gold: number; hats: string[] }
   | { type: 'eventSettle'; eventId: string; gold: number; fame: number }
+  | { type: 'idleSettled'; catches: number; settledMs?: number; summary?: unknown; bountyProgressed?: true; guildUpdated?: true }
   | { type: 'debugSnapshot'; bounty: DevBountySnapshot }
   | { type: 'none'; guildUpdated?: true };
 
@@ -306,7 +311,7 @@ function slotIndex(s: GameState): Map<string, { inst: FishInstance; slot: number
 }
 
 /** 전후 비교로 변경분을 뽑는다 — 새 액션이 추가돼도 자동으로 잡힌다 */
-function diffWrites(prev: GameState, next: GameState): StateWrites {
+export function diffWrites(prev: GameState, next: GameState): StateWrites {
   const before = slotIndex(prev), after = slotIndex(next);
   const w: StateWrites = {
     instancesAdded: [], instancesRemoved: [], instancesMoved: [], instancesLocked: [], records: [],
@@ -1327,6 +1332,16 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         result: { type: 'eventSettle', eventId: grant.eventId, gold: grant.gold, fame: grant.fame },
         events: [{ type: 'settleEventReward', payload: { eventId: grant.eventId, gold: grant.gold, fame: grant.fame } }],
       };
+    }
+    case 'startIdle': {
+      if (action.spot === 'championship') return { ok: false, error: 'event-inactive' };
+      const gate = canFish(state, action.spot);
+      if (!gate.ok) return { ok: false, error: gate.reason };
+      return { ok: true, state, result: { type: 'none' }, events: [] };
+    }
+    case 'stopIdle':
+    case 'settleIdle': {
+      return { ok: true, state, result: { type: 'idleSettled', catches: 0, settledMs: 0 }, events: [] };
     }
     default:
       return { ok: false, error: 'bad-request' };

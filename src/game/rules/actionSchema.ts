@@ -83,6 +83,9 @@ const schemas = {
   enterEventZone: z.object({ type: z.literal('enterEventZone'), eventId: z.string().optional() }),
   leaveEventZone: z.object({ type: z.literal('leaveEventZone') }),
   settleEventReward: z.object({ type: z.literal('settleEventReward'), eventId: z.string().optional() }),
+  startIdle: z.object({ type: z.literal('startIdle'), spot: z.string() }),
+  stopIdle: z.object({ type: z.literal('stopIdle') }),
+  settleIdle: z.object({ type: z.literal('settleIdle'), keepActive: z.boolean().optional() }),
   import: z.object({ type: z.literal('import'), save: z.unknown() }),
 };
 
@@ -98,6 +101,7 @@ const ActionSchema = z.discriminatedUnion('type', [
   schemas.deliverBounty, schemas.abandonQuest, schemas.exchangeArtifact, schemas.levelUpArtifact, schemas.exhibit, schemas.resolveChallenge,
   schemas.claimAchievement, schemas.claimAllAchievements,
   schemas.enterEventZone, schemas.leaveEventZone, schemas.settleEventReward,
+  schemas.startIdle, schemas.stopIdle, schemas.settleIdle,
   schemas.import, schemas.seeTutorial, schemas.changeClothes, schemas.buyHat, schemas.wearHat,
 ]);
 

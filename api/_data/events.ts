@@ -327,6 +327,59 @@ export function upsertTrioProgressFragment(
       updated_at = ${at(nowISO)}`;
 }
 
+/** 방치 일괄 소모에서 일치한 트리오 목표 슬롯 여러 개를 단일 UPSERT로 합산 반영한다 */
+export function upsertTrioProgressBatchFragment(
+  guard: SQL,
+  uid: string,
+  eventId: string,
+  targets: readonly EventTrioTarget[],
+  catches: readonly { fishId: string; form: 'normal' | 'variant'; count: number; lastAt: string }[],
+  nowISO: string,
+): SQL | null {
+  const targetKeys = new Set(targets.map(t => `${t.fishId}:${t.form}`));
+  const matched = catches.filter(c => c.count > 0 && targetKeys.has(`${c.fishId}:${c.form}`));
+  if (matched.length === 0) return null;
+
+  const requiredKeys = [...targetKeys];
+  const reqArr = textArray(requiredKeys);
+  const initialCounts: Record<string, number> = {};
+  for (const c of matched) {
+    const k = `${c.fishId}:${c.form}`;
+    initialCounts[k] = (initialCounts[k] ?? 0) + c.count;
+    initialCounts[`${k}:at`] = Date.parse(c.lastAt) || Date.parse(nowISO);
+  }
+  const initialComplete = requiredKeys.every(k => Object.hasOwn(initialCounts, k));
+
+  let updateExpr: SQL = sql`event_trio_progress.counts`;
+  for (const c of matched) {
+    const slotKey = `${c.fishId}:${c.form}`;
+    const slotAtKey = `${slotKey}:at`;
+    const atMs = Date.parse(c.lastAt) || Date.parse(nowISO);
+    updateExpr = sql`(${updateExpr}
+      || jsonb_build_object(${slotKey}::text, coalesce((event_trio_progress.counts->>${slotKey}::text)::int, 0) + ${c.count}::int)
+      || case
+        when event_trio_progress.counts ? ${slotAtKey}::text then '{}'::jsonb
+        else jsonb_build_object(${slotAtKey}::text, ${atMs}::bigint)
+      end)`;
+  }
+
+  return sql`insert into public.event_trio_progress (event_id, user_id, counts, completed_at, updated_at)
+    select
+      ${eventId}::text,
+      ${uid}::uuid,
+      ${JSON.stringify(initialCounts)}::jsonb,
+      case when ${initialComplete}::boolean then ${at(nowISO)} else null end,
+      ${at(nowISO)}
+    where ${guard}
+    on conflict (event_id, user_id) do update set
+      counts = ${updateExpr},
+      completed_at = coalesce(
+        event_trio_progress.completed_at,
+        case when (${updateExpr}) ?& ${reqArr} then ${at(nowISO)} else null end
+      ),
+      updated_at = ${at(nowISO)}`;
+}
+
 async function loadTrioState(db: Executor, uid: string, event: LiveEventSummary): Promise<EventTrioState> {
   const { rows } = await db.execute<{
     counts: Record<string, number> | null;

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const readAwayReport = vi.hoisted(() => vi.fn());
 const watchAway = vi.hoisted(() => vi.fn());
-vi.mock('../../../platform/api', () => ({ readAwayReport, watchAway }));
+vi.mock('../../../platform/api', () => ({ liveAvailable: true, readAwayReport, watchAway }));
 
 import { useAwayReport } from './useAwayReport';
 
@@ -65,5 +65,30 @@ describe('useAwayReport', () => {
     const { unmount } = renderHook(() => useAwayReport(vi.fn()));
     unmount();
     expect(stop).toHaveBeenCalled();
+  });
+
+  it('숨김 복귀 시 서버 방치 큐를 선행 소모하고 이벤트 조회가 0건이어도 정산 요약으로 카드를 띄운다', async () => {
+    const settled = { catches: 12, awayMs: 10 * 60_000 } as never;
+    const settleIdle = vi.fn().mockResolvedValue(settled);
+    readAwayReport.mockResolvedValue({ catches: 0 });
+    const onLine = vi.fn();
+
+    const { result } = renderHook(() => useAwayReport(onLine, { settleIdle, ready: false }));
+    act(() => back(10 * 60_000));
+    await waitFor(() => expect(result.current.report).toBe(settled));
+    expect(settleIdle).toHaveBeenCalledWith(true);
+    expect(readAwayReport).toHaveBeenCalledWith(10 * 60_000);
+    expect(onLine).toHaveBeenCalledWith(settled, true);
+  });
+
+  it('모바일 브라우저 재접속(초기 로드) 시 미소모 큐를 자동 소모해 5분 이상 방치 결과를 띄운다', async () => {
+    const settled = { catches: 25, awayMs: 30 * 60_000 } as never;
+    const settleIdle = vi.fn().mockResolvedValue(settled);
+    const onLine = vi.fn();
+
+    const { result } = renderHook(() => useAwayReport(onLine, { settleIdle, ready: true }));
+    await waitFor(() => expect(result.current.report).toBe(settled));
+    expect(settleIdle).toHaveBeenCalledWith(false);
+    expect(onLine).toHaveBeenCalledWith(settled, true);
   });
 });

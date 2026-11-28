@@ -108,6 +108,10 @@ export interface FieldCallbacks {
   onFrame?: (elapsedMs: number) => void;
   /** 이벤트 구역 도보 퇴장 트리거에 닿았을 때 알린다 */
   onLeaveEventZone?: () => void;
+  /** 일반 해역에 낚싯줄을 던졌을 때 서버 방치 큐 등록을 알린다 */
+  onIdleStart?: (spot: SpotId) => void;
+  /** 일반 해역에서 줄을 거두거나 이동으로 낚시를 멈췄을 때 서버 방치 큐 해제를 알린다 */
+  onIdleStop?: () => void;
 }
 
 /**
@@ -347,11 +351,13 @@ export class GameFieldEngine {
   }
 
   cancelFishing(): void {
+    const hadIdleSpot = this.school && !this.isEvent2(this.school.spot);
     this.hookSeq += 1;
     this.school = null;
     this.lastJudgment = null;
     this.redCenter = 0.5;
     this.transition('idle', null, null);
+    if (hadIdleSpot) this.callbacks.onIdleStop?.();
   }
 
   /** 일시적 429로 대기 중인 챔질 요청이 실패했을 때 낚시를 접지 않고 대기 단계로 복구한다 */
@@ -602,6 +608,7 @@ export class GameFieldEngine {
     this.school = nearby;
     this.lastJudgment = null;
     this.transition('wait', null, null);
+    if (!this.isEvent2(nearby.spot)) this.callbacks.onIdleStart?.(nearby.spot);
     if (!silent) this.callbacks.onEvent({ type: 'cast', spot: nearby.spot });
   }
 
