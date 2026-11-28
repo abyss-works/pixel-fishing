@@ -502,6 +502,7 @@ describe('화면 층 - 구성 요소는 토큰만 쓴다', () => {
       'views/game/tabs/bag/ItemSection.tsx',
       'views/game/tabs/dex/DexDetail.tsx',
       'views/game/tabs/dex/NamedDetail.tsx',
+      'views/game/tabs/region/RegionLoreModal.tsx',
       'views/game/tabs/bag/ArtifactDetail.tsx',
       'views/game/tabs/settings/SettingsTab.tsx',
       'views/overlays/account/AccountModal.tsx',

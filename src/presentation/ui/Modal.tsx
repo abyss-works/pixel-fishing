@@ -68,9 +68,9 @@ interface ModalBase {
 // 스테이지 모달의 투명 래퍼는 배치만 맡는다. 그래서 스테이지는 className을 받지 않고(타입으로 막는다),
 // 필요한 높이·폭만 명시 prop으로 고른다. 스크롤은 ModalCard의 본문이 맡는다.
 type ModalProps = ModalBase & (
-  | { layer: 'stage'; width?: 420; height?: ModalHeight; mobileHeight?: ModalMobileHeight; mobileFixed?: boolean; worldmap?: boolean; aside?: ReactNode; className?: never; header?: never; footer?: never; fill?: never; bare?: never; opaque?: never; above?: never }
-  | { layer: 'app'; width?: never; className?: string; height?: never; mobileHeight?: never; mobileFixed?: never; worldmap?: never; aside?: never; header?: ReactNode; footer?: ReactNode; fill?: boolean; bare?: boolean; opaque?: boolean; above?: ReactNode }
-  | { layer: 'devtools'; width?: never; className?: string; height?: never; mobileHeight?: never; mobileFixed?: never; worldmap?: never; aside?: never; header?: ReactNode; footer?: ReactNode; fill?: boolean; bare?: boolean; opaque?: never; above?: never }
+  | { layer: 'stage'; width?: 420; height?: ModalHeight; mobileHeight?: ModalMobileHeight; mobileFixed?: boolean; worldmap?: boolean; aside?: ReactNode; className?: never; header?: never; footer?: never; fill?: never; bare?: never; frameless?: never; opaque?: never; above?: never }
+  | { layer: 'app'; width?: never; className?: string; height?: never; mobileHeight?: never; mobileFixed?: never; worldmap?: never; aside?: never; header?: ReactNode; footer?: ReactNode; fill?: boolean; bare?: boolean; frameless?: boolean; opaque?: boolean; above?: ReactNode }
+  | { layer: 'devtools'; width?: never; className?: string; height?: never; mobileHeight?: never; mobileFixed?: never; worldmap?: never; aside?: never; header?: ReactNode; footer?: ReactNode; fill?: boolean; bare?: boolean; frameless?: never; opaque?: never; above?: never }
 );
 
 // 공통 모달 — 백드롭 클릭으로 닫히고, 내용 클릭은 전파를 막는다.
@@ -79,7 +79,7 @@ type ModalProps = ModalBase & (
 // 스테이지 모달의 투명 래퍼는 배치만 맡고 스크롤은 ModalCard의 본문이 맡는다.
 // bare는 앱 모달 안에 ModalCard를 직접 두는 대화상자용이다. 본문 칸을 만들지 않아 스크롤은 카드 본문 한 곳뿐이다.
 // 앱 모달에서 제목 줄이 문자열 title로 안 되면 header로, 하단 고정 영역(버튼 줄)은 footer로 넘긴다. 둘 다 스크롤 칸 밖이다.
-export default function Modal({ layer, title, wide, xl, md, sm, narrow, width, worldmap, aside, onClose, closable = true, hotkeyTier, children, className, height, mobileHeight, mobileFixed, header, footer, fill, bare, opaque, above }: ModalProps) {
+export default function Modal({ layer, title, wide, xl, md, sm, narrow, width, worldmap, aside, onClose, closable = true, hotkeyTier, children, className, height, mobileHeight, mobileFixed, header, footer, fill, bare, frameless, opaque, above }: ModalProps) {
   // 모달이 떠 있는 동안 아래 레이어(필드 이동·사이드바 단축키)는 키를 못 받는다.
   // 예전엔 각자 `isTyping`으로 막았는데 그건 텍스트 포커스만 걸러서, 모달 버튼에 포커스가
   // 있으면 뒤에서 캐릭터가 움직이고 탭이 바뀌었다 (로그인 모달 키 탈취 사고).
@@ -128,8 +128,11 @@ export default function Modal({ layer, title, wide, xl, md, sm, narrow, width, w
     heightCls,
   );
   const box = isFixed
-    ? cx('relative flex flex-col pf-frame shadow-panel p-4 max-h-[80vh] mobile:max-h-[calc(100dvh-48px)]',
-        hasAbove ? 'w-full' : cx(fixedWidth, 'max-w-[90vw] mobile:w-[calc(100%-48px)] mobile:max-w-none'))
+    ? cx(
+        'relative flex flex-col max-h-[80vh] mobile:max-h-[calc(100dvh-48px)]',
+        !frameless && 'pf-frame shadow-panel p-4',
+        hasAbove ? 'w-full' : cx(fixedWidth, 'max-w-[90vw] mobile:w-[calc(100%-48px)] mobile:max-w-none'),
+      )
     : hasAside
       ? 'w-full min-h-0 flex flex-col flex-1'
       : stageBounds;
@@ -148,8 +151,8 @@ export default function Modal({ layer, title, wide, xl, md, sm, narrow, width, w
          aria-label={title}
          aria-labelledby={!title && hasPanelTitle ? panelTitleId : undefined}>
       {/* 앱·개발 도구 모달의 닫기 X — 스테이지 모달은 내용(Panel)이 자기 X를 가진다 */}
-      {isFixed && closable && <CloseButton onClose={onClose} className="top-3 right-3" />}
-      {title && <PageTitle className={cx(isFixed ? 'pr-6' : 'mb-2', bare && 'mb-2')}>{title}</PageTitle>}
+      {isFixed && !frameless && closable && <CloseButton onClose={onClose} className="top-3 right-3" />}
+      {!frameless && title && <PageTitle className={cx(isFixed ? 'pr-6' : 'mb-2', bare && 'mb-2')}>{title}</PageTitle>}
       {isFixed && header && <div className="shrink-0">{header}</div>}
       {isFixed && !bare ? (
         <div className={cx(APP_BODY, fill && 'flex flex-col')}>

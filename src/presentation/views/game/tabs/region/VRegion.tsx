@@ -7,6 +7,7 @@ import { selectRegionViewData } from '../../../../../features/travel/model/regio
 import type { SpotStatus } from '../../../../../features/travel/model/regionView';
 import { fmtCompact3, fmtNum } from '../../../../ui/format';
 import { cx } from '../../../../ui/cx';
+import Button from '../../../../ui/Button';
 import Frame from '../../../../ui/Frame';
 import LoreParagraph from '../../../../ui/LoreParagraph';
 import PageTitle from '../../../../ui/PageTitle';
@@ -19,8 +20,8 @@ import { DIM_CARD, RARITY_CARD, RarityText } from '../../../../ui/fish/RarityTag
 import { RARITY_ORDER } from '../../../../../game/content/rarity';
 import DataTable from '../../../../ui/DataTable';
 import Inset from '../../../../ui/Inset';
-import { SCROLL_Y_ROWS } from '../../../../ui/scrollArea';
 import DexDetail from '../dex/DexDetail';
+import RegionLoreModal from './RegionLoreModal';
 
 // 가까운 어군 노출 개수 — 3개면 한눈에 들어온다(요구).
 /** 거리 표기 — 내부 게임 축척에 맞춰 유효숫자를 제한한다. */
@@ -30,8 +31,7 @@ function fmtMeters(m: number): string {
   return `${Math.max(10, Math.round(m / 10) * 10)}m`;
 }
 
-/** 고정 높이 — 상단 구역 이야기 상자와 등급 분포 표가 어군 정보 변동에도 흔들리지 않게 유지한다. */
-const LORE_H = 'h-[148px]';
+/** 고정 높이 — 등급 분포 표와 가까운 어군 상자가 어군 정보 변동에도 흔들리지 않게 유지한다. */
 const SLOT_H = 'h-[124px]';
 const TABLE_H = 'h-[124px]';
 
@@ -63,9 +63,9 @@ const LEVEL_CLS = {
 } as const;
 
 // 지역 탭 — 존 계층 모델을 표시한다.
-//  구역 이야기: 최상단 고정 높이 오목 상자에 구역 이름, 한 줄 소개, 구역 이야기를 인라인으로 둔다.
+//  구역 이야기: 최상단 오목 상자에 구역 이름, 한 줄 소개, 2줄 요약을 두고 자세히 버튼으로 두루마리 전체 오버레이를 연다.
 //  등급 분포: 최상위 존 서브트리의 어군 등급 흐름(높음/보통/낮음 — 정성 표시)
-//  어군 정보: 캐스팅 사거리 내 어군 상세(4등급 2열 격자) ⇄ 가까운 어군 목록(거리순 3개, 게임 축척 미터)
+//  어군 정보: 캐스팅 사거리 내 어군 상세(4등급 3열 격자) ⇄ 가까운 어군 목록(거리순 3개, 게임 축척 미터)
 // 좌표·어군·구역은 전역 스토어(Field가 기록, 저장 안 함 — 클라 신뢰).
 export default function VRegion({ region, game }: { region: RegionId; game: GameState }) {
   const { spot: currentSpot, zone: storeZone, pos } = useSpotState();
@@ -75,16 +75,23 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
     focusedFishes, focusedStatus, focusedDex, nextBoat,
   } = selectRegionViewData(game, region, schools, storeZone, currentSpot, pos);
   const [fishDetail, setFishDetail] = useState<{ fish: Fish; initialForm: number } | null>(null);
+  const [loreOpen, setLoreOpen] = useState(false);
 
   return (
     <div className="flex flex-col gap-3">
-      <Inset className={cx('shrink-0 p-2.5 flex flex-col gap-1', LORE_H, SCROLL_Y_ROWS)}>
+      <Inset className="shrink-0 p-2.5 flex flex-col gap-1">
         <PageTitle className="text-sm leading-snug shrink-0">
           {parentZone && <span className="text-text-dim">{parentZone.name} &gt; </span>}
           {zone.name}
         </PageTitle>
         <p className="text-xs text-accent shrink-0">{zone.tagline}</p>
-        <LoreParagraph className="text-xs leading-[1.7] text-text-dim">{zone.lore}</LoreParagraph>
+        <LoreParagraph className="text-xs leading-[1.7] text-text-dim line-clamp-2">{zone.lore}</LoreParagraph>
+        <div className="flex justify-end pt-0.5">
+          <Button size="xs" variant="ghost" onClick={() => setLoreOpen(true)}>
+            <PixelIcon glyph="book" size={10} />
+            자세히
+          </Button>
+        </div>
       </Inset>
 
       {/* 등급 분포 — **최상위 존 서브트리** 어군 × 등급의 흐름(높음/보통/낮음, 정성). */}
@@ -221,6 +228,7 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
         </Inset>
       )}
       {fishDetail && <DexDetail key={`${fishDetail.fish.id}-${fishDetail.initialForm}`} fish={fishDetail.fish} game={game} initialForm={fishDetail.initialForm} onClose={() => setFishDetail(null)} />}
+      {loreOpen && <RegionLoreModal zone={zone} parentZone={parentZone} onClose={() => setLoreOpen(false)} />}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { FISH, newState, priceOf } from '../../../../../game/rules/logic';
+import { defaultZoneOfRegion, zoneById } from '../../../../../game/content/zones';
 import { setCurrentSpot } from '../../../../../game/world/currentSpot';
 import { fmtCompact3 } from '../../../../ui/format';
 import VRegion from './VRegion';
@@ -24,18 +25,40 @@ function show(over: Partial<ReturnType<typeof newState>> = {}) {
 }
 
 describe('VRegion', () => {
-  it('최상단 인라인 구역 이야기 상자 → 등급 분포 → 가까운 어군 순서로 배치하고 지역 안내 툴팁과 이야기 모달을 두지 않는다', () => {
+  it('최상단 2줄 요약 구역 이야기 상자와 자세히 버튼 → 등급 분포 → 가까운 어군 순서로 배치하고, 자세히 클릭 시 두루마리 오버레이에 전체 원문(항해 팁 제외)을 보이며 닫기 버튼과 Escape로 닫힌다', () => {
     show();
     const title = screen.getByRole('heading', { name: '고향 마을' });
     expect(title).toBeInTheDocument();
     expect(screen.queryByText('지역 안내')).toBeNull();
-    expect(screen.queryByRole('button', { name: '구역 이야기 보기' })).toBeNull();
     expect(screen.queryByText('여기서 할 수 있는 것')).toBeNull();
+
+    const detailBtn = screen.getByRole('button', { name: '자세히' });
+    expect(detailBtn).toBeInTheDocument();
+    const villageZone = zoneById(defaultZoneOfRegion('village'))!;
+    const firstPart = villageZone.lore.split('\n\n')[0].slice(0, 20);
+    const summaryParagraph = screen.getByText(new RegExp(firstPart));
+    expect(summaryParagraph.className).toContain('line-clamp-2');
 
     const tableHeading = screen.getByRole('heading', { name: /^등급 분포/ });
     const nearbyHeading = screen.getByRole('heading', { name: '가까운 어군' });
     expect(title.compareDocumentPosition(tableHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(tableHeading.compareDocumentPosition(nearbyHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    fireEvent.click(detailBtn);
+    const dialog = screen.getByRole('dialog', { name: '고향 마을' });
+    expect(dialog).toHaveTextContent(villageZone.tagline);
+    for (const part of villageZone.lore.split('\n\n').filter(Boolean)) {
+      expect(dialog).toHaveTextContent(part);
+    }
+    expect(dialog).not.toHaveTextContent('항해 팁');
+
+    fireEvent.click(screen.getByRole('button', { name: '닫기' }));
+    expect(screen.queryByRole('dialog', { name: '고향 마을' })).toBeNull();
+
+    fireEvent.click(detailBtn);
+    expect(screen.getByRole('dialog', { name: '고향 마을' })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: '고향 마을' })).toBeNull();
   });
 
   it('사거리 내 어군에서는 4등급 묶음(일반→희귀→영웅→전설) 3열 격자로 보이고 발견 어종은 축약 가격을 표시하며 누르면 도감 상세가 열린다', () => {
