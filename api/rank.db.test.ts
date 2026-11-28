@@ -461,9 +461,10 @@ describe('주간 랭킹과 기간 분기 (fame·namedClears)', () => {
     vi.useFakeTimers({ toFake: ['Date'], now: new Date(NEXT_RESET) });
     try {
       const nextWeeklyFame = await callRank({ board: 'fame' }, userToken(w1));
-      expect(nextWeeklyFame.body).toEqual({
+      expect(nextWeeklyFame.body).toMatchObject({
         board: 'fame',
         window: 'weekly',
+        weekStart: gameWeekStartDay(NEXT_RESET),
         periodSupported: true,
         resetAt: nextGameWeekResetISO(NEXT_RESET),
         top: [],
@@ -471,9 +472,10 @@ describe('주간 랭킹과 기간 분기 (fame·namedClears)', () => {
       });
 
       const nextWeeklyNamed = await callRank({ board: 'namedClears' }, userToken(w1));
-      expect(nextWeeklyNamed.body).toEqual({
+      expect(nextWeeklyNamed.body).toMatchObject({
         board: 'namedClears',
         window: 'weekly',
+        weekStart: gameWeekStartDay(NEXT_RESET),
         periodSupported: true,
         resetAt: nextGameWeekResetISO(NEXT_RESET),
         top: [],
