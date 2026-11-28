@@ -2,7 +2,11 @@ import type { ReleasedFish } from '../../../game/rules/actions';
 import { RARITY, formName } from '../../../game/rules/logic';
 import type { CatchInfo, Fish, FormRecord, Judgment } from '../../../game/rules/logic';
 import { josa } from '../../../shared/lib/josa';
+import type { CatchFxKind } from '../../display/model/fxPolicy';
 import type { SystemNoticeInput } from '../../display/model/toastPolicy';
+
+/** 포획 안내. 종류는 효과 요청으로 이어지는 포획 사건 종류 넷 중 하나다 */
+export type CatchNotice = SystemNoticeInput & { kind: CatchFxKind };
 
 /** 가방이 차서 캐치 결과와 함께 내보낸 개체. extracted는 가공 플랜트선이 기운으로 바꾼 개체다 */
 export interface BagOverflow {
@@ -43,7 +47,7 @@ export function classifyCatchNotice(
   info: CatchInfo,
   judgment: Judgment,
   prevDexEntry: FormRecord | undefined,
-): SystemNoticeInput {
+): CatchNotice {
   const name = formName(fish, info.form);
   // 판정은 대괄호 꼬리표로 앞에 붙인다(화면 문구에 가운뎃점을 쓰지 않는다)
   const prefix = judgment === 'perfect' ? '[PERFECT] '
@@ -94,6 +98,9 @@ export function classifyCatchNotice(
       tone: 'gold',
       bypassCooldown: manual,
     };
+  }
+  if (info.form === 'variant') {
+    return { kind: 'catch.variant', text, tone: 'neutral', logTone: 'info' };
   }
   return {
     kind: 'catch.routine',

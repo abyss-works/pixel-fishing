@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { RARITY, formName, priceOf } from '../../../game/rules/logic';
+import { formName, priceOf } from '../../../game/rules/logic';
 import type { CatchInfo, Fish, RarityId } from '../../../game/rules/logic';
 import { cx } from '../cx';
 import { fmtGold, fmtSize } from '../format';
@@ -10,6 +10,8 @@ import PixelIcon from '../PixelIcon';
 import HudPanel from './HudPanel';
 import FishSprite from '../fish/FishSprite';
 import { RarityText } from '../fish/RarityTag';
+import type { FxPlayIntensity } from '../../../features/display/model/fxPolicy';
+import { catchCardLayers } from './catchCardFx';
 
 const PORTRAIT_BORDER: Record<RarityId, InsetBorder> = {
   common: 'common',
@@ -38,20 +40,23 @@ const VARIANT_LINES = [
 // 획득 오버레이 — 2열 가로형 고정 크기(340×160) 노치 카드(좌측 어종 액자 + 우측 등급·배지·이름·변이 문구·크기/판매가).
 // 스프라이트만 캔버스, 나머지(등급/배지/이름/변이 문구/크기/판매가)는 전부 DOM — 폰트·그림자·CSS 애니메이션.
 // 돌연변이여도 초상화 액자의 겉 테두리는 어종 등급색으로 고정하고, 우상단 배지는 왕관 → 돌연변이 → NEW 순서로 우측 정렬한다.
-export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo | null }) {
-  const r = RARITY[fish.rarity];
+export default function CatchCard({ fish, info, fxIntensity = null }: {
+  fish: Fish;
+  info: CatchInfo | null;
+  /** 효과 중재자가 정한 강도. 없으면 작게로 그린다 */
+  fxIntensity?: FxPlayIntensity | null;
+}) {
   // 문구 선택은 이번 캐치의 크기 롤(이미 랜덤)에서 파생 — 렌더 순수성 유지 + 카드 떠 있는 동안 고정
   const isVariant = info?.form === 'variant';
   const variantLine = VARIANT_LINES[info ? Math.floor(info.size * 997) % VARIANT_LINES.length : 0];
-  const isLegendary = fish.rarity === 'legendary' || r.halo;
-  const showCornerGlow = fish.rarity === 'epic' || isLegendary;
+  const layers = catchCardLayers(fish.rarity, isVariant, fxIntensity);
   return (
     <div data-rarity={fish.rarity} className="relative w-[340px] max-w-full h-[160px] shrink-0 pointer-events-none">
       {/* 이펙트 레이어 — 카드의 쌓임 맥락 안에 두면 카드 층에 갇혀 채팅과 헤더 뒤로 가려지므로
           카드와 형제로 두고 이펙트 층(catch-fx)에 놓는다. 패널의 노치가 잘라 내지 않도록 패널 바깥 층이다 */}
       <div data-catch-fx className="absolute inset-0 z-(--z-catch-fx) pointer-events-none" aria-hidden="true">
         {/* 영웅·전설 네 모서리 발광 L-브래킷(10×10px, 2px 테두리) */}
-        {showCornerGlow && CORNER_BRACKETS.map((posClass, i) => (
+        {layers.cornerGlow && CORNER_BRACKETS.map((posClass, i) => (
           <span key={`c${i}`}
                 data-catch-corner
                 className={cx('absolute size-[10px] border-solid', posClass)}
@@ -62,7 +67,7 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
         ))}
         {/* 변이 — 신비로운 잔광: 카드 곁에서 피어올라 흩어지는 자홍빛.
             정적 X 오프셋은 transform, 상승은 keyframe의 translate 속성 — 서로 충돌하지 않는다 */}
-        {isVariant && Array.from({ length: 8 }, (_, i) => (
+        {layers.wisps && Array.from({ length: 8 }, (_, i) => (
           <span key={i}
                 className={cx(
                   'absolute left-1/2 top-[60%] size-[5px] opacity-0',
@@ -76,7 +81,7 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
         ))}
       </div>
       <div className="relative z-(--z-stage-card) w-full h-full animate-catch-pop">
-        <div className={cx('w-full h-full', isLegendary && 'animate-glow-legend')}>
+        <div className={cx('w-full h-full', layers.legendGlow && 'animate-glow-legend')}>
           <HudPanel tone="none"
                     className="relative w-full h-full p-3 grid grid-cols-[120px_minmax(0,1fr)] gap-3 items-stretch overflow-hidden
                                bg-[color-mix(in_oklab,var(--c-bg)_85%,transparent)] shadow-panel
@@ -84,7 +89,7 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
             {/* 좌측 열: 등급색 겉 테두리 고정 어종 액자 */}
             <Inset data-catch-portrait tone="deep" border={PORTRAIT_BORDER[fish.rarity]}
                    className="relative w-[120px] h-full p-2 flex items-center justify-center overflow-hidden">
-              {showCornerGlow && (
+              {layers.cornerGlow && (
                 <div data-portrait-glow
                      aria-hidden="true"
                      className="absolute inset-0 pointer-events-none catch-portrait-glow"
@@ -115,7 +120,7 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
                   )}
                 </div>
               </div>
-              <b data-catch-name className={cx('block h-[28px] leading-[28px] text-lg font-bold truncate', isVariant ? 'text-mutation animate-mutated-shimmer' : 'text-text')}>
+              <b data-catch-name className={cx('block h-[28px] leading-[28px] text-lg font-bold truncate', isVariant ? cx('text-mutation', layers.shimmer && 'animate-mutated-shimmer') : 'text-text')}>
                 {formName(fish, info?.form ?? 'normal')}
               </b>
               {isVariant ? (
@@ -132,7 +137,7 @@ export default function CatchCard({ fish, info }: { fish: Fish; info: CatchInfo 
               </div>
             </div>
             {/* 전설 등급 전용 내부 대각 빛줄기 오버레이 */}
-            {isLegendary && <span className="catch-card-sweep pointer-events-none" aria-hidden="true" />}
+            {layers.sweep && <span className="catch-card-sweep pointer-events-none" aria-hidden="true" />}
           </HudPanel>
         </div>
       </div>

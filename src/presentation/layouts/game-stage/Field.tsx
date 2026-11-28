@@ -9,6 +9,7 @@ import { when } from '../../../shared/lib/when';
 import { subscribeFailure } from '../../../core/errors';
 import { useKeyScope } from '../../ui/hotkeys';
 import { sendNotice } from '../../../features/display/model/toastPolicy';
+import { fieldFxFrame, requestFx, useFxDirective } from '../../../features/display/service/fxPlayback';
 import { eventFishSubjectById, eventSpotById } from '../../../features/events/model/events';
 import { bagOverflowNoticeInput, classifyCatchNotice } from '../../../features/gameplay/model/catchNotice';
 import {
@@ -142,7 +143,24 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast'], game: Game
         ?? eventFishSubjectById(event.result.fishId);
       if (caught) {
         const prevDexEntry = game.dex[caught.id]?.[event.result.info.form];
-        sendNotice(setToast, classifyCatchNotice(caught, event.result.info, event.judgment, prevDexEntry));
+        const notice = classifyCatchNotice(caught, event.result.info, event.judgment, prevDexEntry);
+        sendNotice(setToast, notice);
+        requestFx({
+          kind: notice.kind,
+          direct: event.manual,
+          at: Date.now(),
+          subject: {
+            eventId: event.result.uid,
+            region,
+            fishId: caught.id,
+            rarity: caught.rarity,
+            form: event.result.info.form,
+            isNew: event.result.info.isNew,
+            from: event.jump.from,
+            to: event.jump.to,
+            holdEndsAt: event.holdEndsAt,
+          },
+        });
       }
       const overflow = bagOverflowNoticeInput(event.result);
       if (overflow) sendNotice(setToast, overflow);
@@ -174,6 +192,7 @@ export default function Field({
   const observer = useRef<ResizeObserver | null>(null);
   const [engine] = useState(() => new GameFieldEngine(region, game, schools, initialPos));
   const snapshot = useSyncExternalStore(engine.subscribe, engine.getSnapshot, engine.getSnapshot);
+  const cardFx = useFxDirective('catch-card');
   useEffect(() => {
     setPipFishingPhase(snapshot.phase);
   }, [snapshot.phase]);
@@ -195,6 +214,10 @@ export default function Field({
   useEffect(() => {
     engine.setLiveSource(now => liveFrame(region, now));
     return () => engine.setLiveSource(null);
+  }, [engine, region]);
+  useEffect(() => {
+    engine.setFxSource(wallMs => fieldFxFrame(region, wallMs));
+    return () => engine.setFxSource(null);
   }, [engine, region]);
   const covered = useCanvasCover();
   const { phase: dayPhaseNow } = useGameTime();
@@ -376,8 +399,8 @@ export default function Field({
         <div data-phase={snapshot.phase} className="status-overlay contents">
           {snapshot.phase === 'catch' && fish ? (
             catchSlot !== undefined
-              ? (catchSlot != null ? createPortal(<CatchCard fish={fish} info={snapshot.catchInfo} />, catchSlot) : null)
-              : <CatchCard fish={fish} info={snapshot.catchInfo} />
+              ? (catchSlot != null ? createPortal(<CatchCard fish={fish} info={snapshot.catchInfo} fxIntensity={cardFx?.intensity ?? null} />, catchSlot) : null)
+              : <CatchCard fish={fish} info={snapshot.catchInfo} fxIntensity={cardFx?.intensity ?? null} />
           ) : (
             statusSlot != null && statusBand ? createPortal(statusBand, statusSlot) : null
           )}

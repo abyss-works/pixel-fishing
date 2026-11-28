@@ -1,5 +1,5 @@
 // 어군 표현의 순수 계산 — 마커가 어디에 있을지(궤도)와 훅 점프 높이.
-// 캔버스에 닿지 않아 테스트 가능하다. 그리기는 overlays.drawSchools·drawHookJump가 맡는다.
+// 캔버스에 닿지 않아 테스트 가능하다. 그리기는 overlays.drawSchools·drawFishJump가 맡는다.
 
 export interface OrbitPoint { dx: number; dy: number; faceLeft: boolean }
 

@@ -74,7 +74,7 @@ describe('포획 이벤트 토스트 분류', () => {
     expect(eventFirst.toastText).toContain('첫 돌연변이');
 
     const eventRepeat = classifyCatchNotice(eventFish, { form: 'variant', size: 25, percentile: 50, isBig: false, isNew: false }, 'normal', undefined);
-    expect(eventRepeat.kind).toBe('catch.routine');
+    expect(eventRepeat.kind).toBe('catch.variant');
     expect(eventRepeat.kind).not.toBe('catch.legendaryOrFirstVariant');
 
     const normalFirst = classifyCatchNotice(commonFish, { form: 'variant', size: 25, percentile: 50, isBig: false, isNew: true }, 'normal', { count: 0, maxSize: 0, first: null });
@@ -82,7 +82,8 @@ describe('포획 이벤트 토스트 분류', () => {
     expect(normalFirst.tone).toBe('mutation');
 
     const normalRepeat = classifyCatchNotice(commonFish, { form: 'variant', size: 25, percentile: 50, isBig: false, isNew: false }, 'normal', { count: 1, maxSize: 25, first: null });
-    expect(normalRepeat.kind).toBe('catch.routine');
+    expect(normalRepeat.kind).toBe('catch.variant');
+    expect(normalRepeat.logTone).toBe('info');
     expect(normalRepeat.kind).not.toBe('catch.legendaryOrFirstVariant');
   });
 });
