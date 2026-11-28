@@ -1,6 +1,7 @@
 // UI 시스템 가드 — 화면(views·layouts)이 공용 UI(ui)를 조합하고, 기본 요소를 직접 구현하지 않게 한다.
 // 한 번만 쓰는 화면 조각은 그 화면 파일 안의 지역 컴포넌트로 만들 수 있다. 단 두 화면 이상에 같은 이름의
 // 지역 컴포넌트가 생기면 공용 UI로 올려야 한다. 예외 목록은 줄이기만 한다(새 예외를 더하지 않는다).
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import { SCROLL_Y, SCROLL_Y_ROWS } from './scrollArea';
 
@@ -11,7 +12,7 @@ const sources = import.meta.glob('../**/*.{ts,tsx}', {
 const appSources = Object.entries(import.meta.glob('../../**/*.{ts,tsx}', {
   query: '?raw', import: 'default', eager: true,
 }) as Record<string, string>)
-  .filter(([key]) => !/\.test\.tsx?$/.test(key) && !/\/admin\//.test(key));
+  .filter(([key]) => !/\.test\.tsx?$/.test(key) && !/\/admin\//.test(key) && key !== '../../admin.tsx');
 const appFiles = appSources.map(([key, src]) => ({ path: key.replace(/^\.\.\/\.\.\//, ''), src }));
 
 /** glob 키 → presentation 기준 경로. 이 파일과 같은 폴더(ui)는 './X', 나머지는 '../views/X'로 온다 */
@@ -205,6 +206,58 @@ const GUTTER_EXCEPTIONS = new Set([
   'ui/hud/MessageLog.tsx', // 캔버스 위 글줄 상자 — 호버 때만 보이는 HUD 막대
   'layouts/sidebar/index.tsx', // 사이드바는 창이 아니며 막대를 숨긴다
 ]);
+
+/**
+ * 주석만 제거한다. TypeScript 파서로 정규식·JSX 텍스트·템플릿 리터럴 구간을 찾아 마스킹한 뒤
+ * 스캐너가 찾은 주석 토큰을 제거한다 — 문자열·정규식·JSX 텍스트 안의 //와 /*는 주석이 아니다.
+ */
+const OPAQUE_KINDS = new Set([
+  ts.SyntaxKind.RegularExpressionLiteral,
+  ts.SyntaxKind.JsxText,
+  ts.SyntaxKind.TemplateHead,
+  ts.SyntaxKind.TemplateMiddle,
+  ts.SyntaxKind.TemplateTail,
+  ts.SyntaxKind.NoSubstitutionTemplateLiteral,
+]);
+const stripCommentsCache = new Map<string, string>();
+const stripComments = (src: string, tsx: boolean): string => {
+  const cacheKey = (tsx ? 'x' : 't') + src;
+  const hit = stripCommentsCache.get(cacheKey);
+  if (hit !== undefined) return hit;
+  const sf = ts.createSourceFile('guard', src, ts.ScriptTarget.Latest, true, tsx ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+  const parseDiagnostics = (sf as ts.SourceFile & { parseDiagnostics?: ts.Diagnostic[] }).parseDiagnostics ?? [];
+  if (parseDiagnostics.length > 0) {
+    const first = parseDiagnostics[0];
+    throw new Error(`stripComments: 파스 오류 ${parseDiagnostics.length}건 — 첫 오류: ${ts.flattenDiagnosticMessageText(first.messageText, ' ')}`);
+  }
+  const spans: [number, number][] = [];
+  const collect = (node: ts.Node) => {
+    if (OPAQUE_KINDS.has(node.kind)) spans.push([node.getStart(sf), node.getEnd()]);
+    node.forEachChild(collect);
+  };
+  collect(sf);
+  const chars = src.split('');
+  for (const [s, e] of spans) for (let i = s; i < e; i++) if (chars[i] !== '\n') chars[i] = ' ';
+  const masked = chars.join('');
+  const scanner = ts.createScanner(ts.ScriptTarget.Latest, false, tsx ? ts.LanguageVariant.JSX : ts.LanguageVariant.Standard, masked);
+  const comments: [number, number][] = [];
+  for (;;) {
+    const kind = scanner.scan();
+    if (kind === ts.SyntaxKind.EndOfFileToken) break;
+    if (kind === ts.SyntaxKind.SingleLineCommentTrivia || kind === ts.SyntaxKind.MultiLineCommentTrivia) {
+      comments.push([scanner.getTokenPos(), scanner.getTokenPos() + scanner.getTokenText().length]);
+    }
+  }
+  let out = '';
+  let last = 0;
+  for (const [pos, end] of comments.sort((a, b) => a[0] - b[0])) {
+    out += src.slice(last, pos);
+    last = Math.max(last, end);
+  }
+  out += src.slice(last);
+  stripCommentsCache.set(cacheKey, out);
+  return out;
+};
 
 describe('UI 시스템 가드', () => {
   it('화면은 기본 요소(틀·버튼·입력)를 직접 구현하지 않고 공용 UI를 쓴다', () => {
@@ -671,7 +724,6 @@ describe('UI 시스템 가드', () => {
   // 2px 두꺼운 테두리·베벨, 가운뎃점·대시([·—–])를 쓰지 않는다 (admin/devtools 제외)
   const isGameUi = (p: string) =>
     p.startsWith('ui/') || p.startsWith('layouts/') || p.startsWith('views/game/') || p.startsWith('views/overlays/');
-  const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 
   const ROUNDED_RE = /\brounded-(?:sm|md|lg|full|\[[^\]]+\])\b/;
   const ROUNDED_EXCEPTIONS = new Set([
@@ -778,7 +830,10 @@ describe('UI 시스템 가드', () => {
     expect(targets.some(f => f.path === 'core/errors.ts')).toBe(true);
     expect(targets.some(f => f.path === 'platform/adapters/auth.ts')).toBe(true);
     expect(targets.some(f => f.path === 'shared/lib/format.ts')).toBe(true);
-    const offenders = targets.filter(f => PUNCT_RE.test(stripComments(f.src))).map(f => f.path);
+    // 관리자 진입점은 게임 화면 가드 대상이 아니고, 게임 진입점은 대상이다
+    expect(targets.some(f => f.path === 'admin.tsx')).toBe(false);
+    expect(targets.some(f => f.path === 'App.tsx')).toBe(true);
+    const offenders = targets.filter(f => PUNCT_RE.test(stripComments(f.src, f.path.endsWith('.tsx')))).map(f => f.path);
     expect(offenders).toEqual([]);
   });
 
@@ -1001,7 +1056,7 @@ describe('UI 시스템 가드', () => {
         && !f.path.startsWith('views/admin/') && !f.path.startsWith('views/devtools/')
         && !f.path.includes('patchnotes'),
     );
-    const offenders = targets.filter(f => SLOP_COPY_RE.test(stripComments(f.src))).map(f => f.path);
+    const offenders = targets.filter(f => SLOP_COPY_RE.test(stripComments(f.src, f.path.endsWith('.tsx')))).map(f => f.path);
     expect(offenders).toEqual([]);
   });
 
@@ -1011,7 +1066,7 @@ describe('UI 시스템 가드', () => {
     const targets = presentationFiles.filter(
       f => isGameUi(f.path) && f.path !== 'ui/fish/RarityTag.tsx',
     );
-    const offenders = targets.filter(f => RAW_RARITY_NAME_RE.test(stripComments(f.src))).map(f => f.path);
+    const offenders = targets.filter(f => RAW_RARITY_NAME_RE.test(stripComments(f.src, f.path.endsWith('.tsx')))).map(f => f.path);
     expect(offenders).toEqual([]);
     expect(RAW_RARITY_NAME_RE.test('<th>{RARITY[r].name}</th>')).toBe(true);
     expect(RAW_RARITY_NAME_RE.test('{DISPLAY_GRADE[g].name}')).toBe(true);
@@ -1035,9 +1090,9 @@ describe('UI 시스템 가드', () => {
   });
 
   it('유물 목록 바깥 행은 로어를 노출하지 않고, ItemDetail·ArtifactDetail 상세 창 본문은 로어(설명)를 효과와 주의사항 앞에 둔다', () => {
-    const bagTabSrc = stripComments(presentationFiles.find(f => f.path === 'views/game/tabs/bag/BagTab.tsx')!.src);
-    const itemDetailSrc = stripComments(presentationFiles.find(f => f.path === 'views/game/tabs/bag/ItemDetail.tsx')!.src);
-    const artifactDetailSrc = stripComments(presentationFiles.find(f => f.path === 'views/game/tabs/bag/ArtifactDetail.tsx')!.src);
+    const bagTabSrc = stripComments(presentationFiles.find(f => f.path === 'views/game/tabs/bag/BagTab.tsx')!.src, true);
+    const itemDetailSrc = stripComments(presentationFiles.find(f => f.path === 'views/game/tabs/bag/ItemDetail.tsx')!.src, true);
+    const artifactDetailSrc = stripComments(presentationFiles.find(f => f.path === 'views/game/tabs/bag/ArtifactDetail.tsx')!.src, true);
 
     expect(bagTabSrc).not.toMatch(/\.lore\b/);
 
@@ -1059,7 +1114,7 @@ describe('UI 시스템 가드', () => {
   it('화면과 기능 코드에서 %p 표기를 쓰지 않는다', () => {
     const PCT_POINT_RE = /%p\b/;
     const offenders = appSources
-      .filter(([key, src]) => !isTestFile(key) && PCT_POINT_RE.test(stripComments(src)))
+      .filter(([key, src]) => !isTestFile(key) && PCT_POINT_RE.test(stripComments(src, key.endsWith('.tsx'))))
       .map(([key]) => key);
     expect(offenders).toEqual([]);
     expect(PCT_POINT_RE.test('판매가 +5%p')).toBe(true);
@@ -1069,14 +1124,14 @@ describe('UI 시스템 가드', () => {
 
   const FONT_PIXEL_RE = /\bfont-pixel\b/;
   it('표현 계층은 Tailwind font-pixel을 직접 쓰지 않고 .pf-accent와 공용 수치 컴포넌트를 쓴다', () => {
-    const offenders = presentationFiles.filter(f => FONT_PIXEL_RE.test(stripComments(f.src))).map(f => f.path);
+    const offenders = presentationFiles.filter(f => FONT_PIXEL_RE.test(stripComments(f.src, f.path.endsWith('.tsx')))).map(f => f.path);
     expect(offenders).toEqual([]);
     expect(FONT_PIXEL_RE.test('className="font-pixel text-gold"')).toBe(true);
     expect(FONT_PIXEL_RE.test('className="pf-accent text-gold"')).toBe(false);
   });
 
   it('공용 ProgressCount는 .pf-accent 서체와 골드 현재값·보조색 기준 분모 계약을 유지한다', () => {
-    const src = stripComments(presentationFiles.find(f => f.path === 'ui/ProgressCount.tsx')!.src);
+    const src = stripComments(presentationFiles.find(f => f.path === 'ui/ProgressCount.tsx')!.src, true);
     expect(src).toContain('pf-accent');
     expect(src).toContain("gold: 'text-gold'");
     expect(src).toContain("guild: 'text-guild'");
@@ -1091,9 +1146,9 @@ describe('UI 시스템 가드', () => {
   });
 
   it('랭킹 표(RankingModal·DexDetail)는 공용 RankList와 RankMeBar로 1~3위 골드·내 줄 하늘색·수치 열 골드 강조를 공유한다', () => {
-    const rankListSrc = stripComments(presentationFiles.find(f => f.path === 'ui/RankList.tsx')!.src);
-    const rankingModalSrc = stripComments(presentationFiles.find(f => f.path === 'views/overlays/ranking/RankingModal.tsx')!.src);
-    const dexDetailSrc = stripComments(presentationFiles.find(f => f.path === 'views/game/tabs/dex/DexDetail.tsx')!.src);
+    const rankListSrc = stripComments(presentationFiles.find(f => f.path === 'ui/RankList.tsx')!.src, true);
+    const rankingModalSrc = stripComments(presentationFiles.find(f => f.path === 'views/overlays/ranking/RankingModal.tsx')!.src, true);
+    const dexDetailSrc = stripComments(presentationFiles.find(f => f.path === 'views/game/tabs/dex/DexDetail.tsx')!.src, true);
 
     expect(rankListSrc).toContain('<ProgressCount');
     expect(rankListSrc).toContain('r.rank <= 3');
@@ -1108,11 +1163,11 @@ describe('UI 시스템 가드', () => {
   });
 
   it('선택 가능 상세(운세 달력)와 다단계·형태 전환 창(소식·도감 상세)은 고정·최소 높이로 전환 시 레이아웃이 밀리지 않는다', () => {
-    const fortuneSrc = stripComments(presentationFiles.find(f => f.path === 'views/overlays/fortune/FortuneCalendarModal.tsx')!.src);
-    const fortuneCollectionSrc = stripComments(presentationFiles.find(f => f.path === 'views/overlays/fortune/FortuneCollectionTab.tsx')!.src);
-    const fortuneToneSrc = stripComments(presentationFiles.find(f => f.path === 'views/overlays/fortune/fortuneTone.ts')!.src);
-    const whatsNewSrc = stripComments(presentationFiles.find(f => f.path === 'views/overlays/whats-new/WhatsNewModal.tsx')!.src);
-    const dexDetailSrc = stripComments(presentationFiles.find(f => f.path === 'views/game/tabs/dex/DexDetail.tsx')!.src);
+    const fortuneSrc = stripComments(presentationFiles.find(f => f.path === 'views/overlays/fortune/FortuneCalendarModal.tsx')!.src, true);
+    const fortuneCollectionSrc = stripComments(presentationFiles.find(f => f.path === 'views/overlays/fortune/FortuneCollectionTab.tsx')!.src, true);
+    const fortuneToneSrc = stripComments(presentationFiles.find(f => f.path === 'views/overlays/fortune/fortuneTone.ts')!.src, false);
+    const whatsNewSrc = stripComments(presentationFiles.find(f => f.path === 'views/overlays/whats-new/WhatsNewModal.tsx')!.src, true);
+    const dexDetailSrc = stripComments(presentationFiles.find(f => f.path === 'views/game/tabs/dex/DexDetail.tsx')!.src, true);
 
     expect(fortuneSrc).toMatch(/<Modal\b[^>]*height=\{500\}/);
     expect(fortuneSrc).toMatch(/<Modal\b[^>]*mobileHeight=\{552\}/);
@@ -1138,7 +1193,7 @@ describe('UI 시스템 가드', () => {
   it('운세 UI는 구형 표기(지수·%p·만날 확률·보너스 대상·미기록·TodayFortuneBanner·FortuneIndexMeter)를 쓰지 않는다', () => {
     const fortuneFiles = presentationFiles.filter(f => !isTestFile(f.path) && f.path.startsWith('views/overlays/fortune/'));
     const BANNED_FORTUNE_RE = /지수|만날 확률|%p|%P|보너스 대상|미기록|기록 없음|\bTodayFortuneBanner\b|\bFortuneIndexMeter\b/;
-    const offenders = fortuneFiles.filter(f => BANNED_FORTUNE_RE.test(stripComments(f.src))).map(f => f.path);
+    const offenders = fortuneFiles.filter(f => BANNED_FORTUNE_RE.test(stripComments(f.src, f.path.endsWith('.tsx')))).map(f => f.path);
     expect(offenders).toEqual([]);
   });
 
@@ -1149,7 +1204,7 @@ describe('UI 시스템 가드', () => {
     const offenders = presentationFiles
       .filter(f => !isTestFile(f.path))
       .filter(f => {
-        const clean = stripComments(f.src);
+        const clean = stripComments(f.src, f.path.endsWith('.tsx'));
         return semanticLineWithHighlight.test(clean)
           || semanticBlockWithHighlight.test(clean)
           || kvSemanticValueWithHighlight.test(clean);
@@ -1157,25 +1212,25 @@ describe('UI 시스템 가드', () => {
       .map(f => f.path);
     expect(offenders).toEqual([]);
 
-    const tipSrc = stripComments(presentationFiles.find(f => f.path === 'ui/Tip.tsx')!.src);
+    const tipSrc = stripComments(presentationFiles.find(f => f.path === 'ui/Tip.tsx')!.src, true);
     expect(tipSrc).toMatch(/status\.tone === 'warn'\s*\?\s*line\s*:\s*highlightText\(line\)/);
   });
 
   it('ScrollRow는 hidden·inline-flex 충돌 없이 edge.prev·edge.next 조건부 렌더로 화살표를 표시한다', () => {
-    const scrollRowSrc = stripComments(presentationFiles.find(f => f.path === 'ui/ScrollRow.tsx')!.src);
+    const scrollRowSrc = stripComments(presentationFiles.find(f => f.path === 'ui/ScrollRow.tsx')!.src, true);
     expect(scrollRowSrc).toMatch(/\{edge\.prev\s*&&\s*\(?\s*<ArrowButton\b/);
     expect(scrollRowSrc).toMatch(/\{edge\.next\s*&&\s*\(?\s*<ArrowButton\b/);
     expect(scrollRowSrc).not.toMatch(/['"`][^'"`]*(?<![\w-])hidden(?![\w-])[^'"`]*['"`]/);
   });
 
   it('ToggleChip은 체크 아이콘을 렌더링하지 않고 호출부도 체크 아이콘을 삽입하지 않는다', () => {
-    const toggleSrc = stripComments(presentationFiles.find(f => f.path === 'ui/ToggleChip.tsx')!.src);
+    const toggleSrc = stripComments(presentationFiles.find(f => f.path === 'ui/ToggleChip.tsx')!.src, true);
     expect(toggleSrc).not.toMatch(/glyph="check"/);
 
     const toggleBlock = /<ToggleChip\b[\s\S]*?<\/ToggleChip>/g;
     const callers = presentationFiles
       .filter(f => !isTestFile(f.path) && f.path !== 'ui/ToggleChip.tsx')
-      .filter(f => [...stripComments(f.src).matchAll(toggleBlock)].some(m => /glyph="check"/.test(m[0])))
+      .filter(f => [...stripComments(f.src, f.path.endsWith('.tsx')).matchAll(toggleBlock)].some(m => /glyph="check"/.test(m[0])))
       .map(f => f.path);
     expect(callers).toEqual([]);
   });
@@ -1189,14 +1244,14 @@ describe('UI 시스템 가드', () => {
       .map(t => `${path ? `${path}: ` : ''}${t.tag}`);
 
   it('툴팁은 수동 - 또는 • 불릿 문자를 조립하지 않고 TipBullets와 TipCard bullets를 쓴다', () => {
-    const tipSrc = stripComments(presentationFiles.find(f => f.path === 'ui/Tip.tsx')!.src);
+    const tipSrc = stripComments(presentationFiles.find(f => f.path === 'ui/Tip.tsx')!.src, true);
     expect(tipSrc).toMatch(/export function TipBullets\b/);
     expect(tipSrc).not.toMatch(/<(?:ul|li)\b/);
     expect(tipSrc).toMatch(/bullets\?:\s*readonly\s+ReactNode\[\]/);
 
     const offenders = presentationFiles
       .filter(f => !isTestFile(f.path))
-      .flatMap(f => manualTooltipBullets(stripComments(f.src), f.path));
+      .flatMap(f => manualTooltipBullets(stripComments(f.src, f.path.endsWith('.tsx')), f.path));
     expect(offenders).toEqual([]);
 
     expect(manualTooltipBullets('<Tip text={<span><span aria-hidden="true">-</span><span>안내</span></span>}>대상</Tip>')).toHaveLength(1);
@@ -1208,7 +1263,7 @@ describe('UI 시스템 가드', () => {
 
   it('전면 차단 모달(ConsentModal, RestrictedModal)은 공용 AppBrandBar를 사용한다', () => {
     for (const path of ['views/overlays/account/ConsentModal.tsx', 'views/overlays/account/RestrictedModal.tsx']) {
-      const fileSrc = stripComments(presentationFiles.find(f => f.path === path)!.src);
+      const fileSrc = stripComments(presentationFiles.find(f => f.path === path)!.src, true);
       expect(fileSrc, path).toContain('<AppBrandBar');
       expect(fileSrc, path).not.toContain('PIXEL FISHING');
     }
@@ -1217,8 +1272,56 @@ describe('UI 시스템 가드', () => {
     const EFFECT_CLASS = /\b(?:animate-catch-pop|animate-glow-legend|animate-fx-wisp|animate-mutated-shimmer|catch-card-sweep)\b/;
     const offenders = Object.entries(sources)
       .map(([key, src]) => ({ path: rel(key), src }))
-      .filter(f => !isTestFile(f.path) && f.path !== 'ui/hud/CatchCard.tsx' && EFFECT_CLASS.test(stripComments(f.src)))
+      .filter(f => !isTestFile(f.path) && f.path !== 'ui/hud/CatchCard.tsx' && EFFECT_CLASS.test(stripComments(f.src, f.path.endsWith('.tsx'))))
       .map(f => f.path);
     expect(offenders).toEqual([]);
+  });
+});
+
+describe('주석 제거(stripComments)', () => {
+  it('문자열과 템플릿 안의 //는 주석으로 자르지 않는다', () => {
+    expect(stripComments("const u = 'https://a.b/c';", true)).toBe("const u = 'https://a.b/c';");
+    expect(stripComments('const u = `https://a.b/${x}`;', true)).toBe('const u = `https://a.b/${x}`;');
+    expect(stripComments('const u = "https://a.b/c"; // 실제 주석', true)).toBe('const u = "https://a.b/c"; ');
+  });
+
+  it('정규식 안의 //는 주석으로 자르지 않는다 — 호출·return·throw·단독 if 문맥 모두', () => {
+    expect(stripComments(String.raw`url.replace(/^https?:\/\//, '')`, true)).toBe(String.raw`url.replace(/^https?:\/\//, '')`);
+    expect(stripComments('if (m) return /ab/.test(s);', true)).toBe('if (m) return /ab/.test(s);');
+    expect(stripComments('const re = /a[/]b/;', true)).toBe('const re = /a[/]b/;');
+    expect(stripComments(String.raw`throw /^https?:\/\//;`, true)).toBe(String.raw`throw /^https?:\/\//;`);
+    expect(stripComments(String.raw`if (m) /^https?:\/\//.test(s); // real`, true)).toBe(String.raw`if (m) /^https?:\/\//.test(s); `);
+  });
+
+  it('JSX 텍스트와 태그 안의 /는 정규식이나 주석으로 오인하지 않는다', () => {
+    expect(stripComments('const x = <div></div>; // comment', true)).toBe('const x = <div></div>; ');
+    expect(stripComments('const x = <div>https://a.b/c</div>; // real', true)).toBe('const x = <div>https://a.b/c</div>; ');
+    expect(stripComments('<div>{/* c */}<span/></div>', true)).toBe('<div>{}<span/></div>');
+  });
+
+  it('.ts 파싱 경로 — 제네릭이 JSX로 오파싱되지 않고 정규식·주석을 정확히 나눈다', () => {
+    // <T> 화살표 제네릭은 TS에서는 유효하지만 TSX에서는 JSX로 파싱돼 오류가 나는 판별 입력이다.
+    expect(stripComments('export const pick = <T>(arr: T[]): T => arr[0]; // c', false)).toBe('export const pick = <T>(arr: T[]): T => arr[0]; ');
+    expect(() => stripComments('export const pick = <T>(arr: T[]): T => arr[0];', true)).toThrow();
+    expect(stripComments('const casted = <string>value; // c', false)).toBe('const casted = <string>value; ');
+    expect(stripComments('const re = /[/]/; // c\nconst q = a / b;', false)).toBe('const re = /[/]/; \nconst q = a / b;');
+  });
+
+  it('파스 오류가 있는 입력은 조용히 넘기지 않고 실패한다', () => {
+    expect(() => stripComments('const = { { ;', true)).toThrow();
+  });
+
+  it('나눗셈의 /는 정규식으로 오인하지 않는다', () => {
+    expect(stripComments('const q = a / b / c;', true)).toBe('const q = a / b / c;');
+  });
+
+  it('줄 주석과 블록 주석은 제거한다', () => {
+    expect(stripComments('const a = 1; // note\nconst b = 2;', true)).toBe('const a = 1; \nconst b = 2;');
+    expect(stripComments('const a = /* x */ 1;', true)).toBe('const a =  1;');
+  });
+
+  it('템플릿 보간 안의 주석은 제거하고 템플릿 원문은 남긴다', () => {
+    expect(stripComments('`a${x // note\n}b`', true)).toBe('`a${x \n}b`');
+    expect(stripComments('`a${`n${y}`}z`', true)).toBe('`a${`n${y}`}z`');
   });
 });
