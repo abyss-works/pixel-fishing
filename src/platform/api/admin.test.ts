@@ -8,7 +8,7 @@ import { createLocalApi } from '../adapters/localApi';
 describe('admin 계층 규약', () => {
   it('싱글톤과 두 팩토리 모두 AdminApi 전면을 노출한다', () => {
     const local = createLocalApi().admin;
-    for (const m of ['access', 'overview', 'users', 'live', 'dailyStats', 'retention', 'sessions', 'economy', 'bountyFunnel',
+    for (const m of ['access', 'overview', 'users', 'searchAdminUsers', 'live', 'dailyStats', 'retention', 'sessions', 'economy', 'bountyFunnel',
       'onboardingFunnel', 'httpMetrics', 'clientMetrics', 'opsHealth',
       'spamFlags',
       'recentEvents', 'userEvents', 'userState', 'letters', 'changelog', 'chatReports', 'notices', 'coupons', 'balanceLive',
@@ -25,6 +25,7 @@ describe('admin 계층 규약', () => {
     await expect(admin.signIn()).rejects.toThrow(/클라우드/);
     // 조용한 빈 배열은 "데이터 없음"이라는 거짓말 — 게이트 우회 오용은 시끄럽게 실패한다
     await expect(admin.users()).rejects.toThrow(/클라우드/);
+    await expect(admin.searchAdminUsers('test')).rejects.toThrow(/클라우드/);
     await expect(admin.dailyStats('2026-11-01', '2026-11-05')).rejects.toThrow(/클라우드/);
     await expect(admin.live()).rejects.toThrow(/클라우드/);
     await expect(admin.changelog()).rejects.toThrow(/클라우드/);

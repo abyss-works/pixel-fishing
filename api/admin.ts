@@ -14,6 +14,7 @@ import { database } from './_db/client.js';
 import type { Database, Executor } from './_db/client.js';
 import { notifyAll, notifyUser, onlineUsers } from './_server/livePresence.js';
 import { recentHttpSummary, recentWsSnapshot, slowRequests } from './_server/opsRuntime.js';
+import { canAccessResource, canReadQuery, canWriteAction, capabilitiesFor } from './_server/adminPolicy.js';
 import { COUPONS } from '../src/game/content/coupons.js';
 import { normalizeNoticeDraft } from '../src/game/rules/live.js';
 import { integrityModifierOfStage, parseIntegrityConfig } from '../src/game/rules/integrity.js';
@@ -40,7 +41,6 @@ import { deliverMail, DuplicateMailError, parseMailRequest, planMail, recentSent
 import {
   createNotice, deleteNotice, endNoticeNow, listAllAdminNotices, listLiveNotices, updateNotice,
 } from './_data/notices.js';
-import type { AdminNoticeRow } from './_data/notices.js';
 import { setRestricted } from './_data/save.js';
 import { recordAdminAction } from './_data/telemetry.js';
 import { deleteWidgetTokensForUser } from './_data/widget.js';
@@ -93,15 +93,12 @@ const WRITES: Record<string, Write> = {
   integrityRelease,
 };
 
-/** 1계층 관리자(admin) 전용 조회 — maintainer는 403 차단 */
-const ADMIN_ONLY_READ_QUERIES = new Set([
-  'userState', 'userEvents', 'letters', 'mails', 'events', 'eventDraws',
+const KNOWN_READ_QUERIES = new Set([
+  'overview', 'users', 'userSearch', 'spamFlags', 'recentEvents', 'letters', 'changelog',
+  'chatReports', 'notices', 'events', 'eventDraws', 'coupons', 'mails',
+  'economy', 'bountyFunnel', 'onboardingFunnel', 'httpMetrics', 'clientMetrics',
+  'opsHealth', 'balanceLive', 'userEvents', 'userState',
   'integrityStages', 'integrityEvents', 'integrityMetrics',
-]);
-
-/** 1계층 관리자(admin) 전용 쓰기 — maintainer는 403 차단 */
-const ADMIN_ONLY_WRITES = new Set([
-  'mail', 'restrict', 'letterHandled', 'revokeSessions', 'events', 'integrityRelease',
 ]);
 
 /** 리소스 경로 조회. 요청의 필터와 역할을 검사해 실행할 읽기를 돌려준다. 틀리면 400, 권한 밖이면 403이다 */
@@ -114,7 +111,6 @@ const RESOURCES: Record<string, (req: Req, role: read.AdminRole) => (db: Executo
   '/api/admin/retention': () => read.signupRetention,
   '/api/admin/sessions': (req, role) => {
     const user = param(req, 'user');
-    if (role === 'maintainer' && user !== undefined) throw new ApiError(403, 'forbidden');
     if (user !== undefined && !UUID.test(user)) throw new ApiError(400, 'bad-user');
     const limit = limitOf(req);
     return db => read.sessions(db, user ?? null, limit, role);
@@ -138,7 +134,7 @@ async function route(req: Req, res: Res): Promise<void> {
     if (!resource) throw new ApiError(404, 'not-found');
     if (req.method !== 'GET') throw new ApiError(405, 'method-not-allowed');
     const { member, store } = await caller(req);
-    if (!member) throw new ApiError(403, 'forbidden');
+    if (!member || !canAccessResource(member.role, path)) throw new ApiError(403, 'forbidden');
     const query = resource(req, member.role);
     res.status(200).json(await dbRead(() => query(store.db)));
     return;
@@ -153,7 +149,13 @@ async function route(req: Req, res: Res): Promise<void> {
   if (name === 'access') {
     res.status(200).json(
       member
-        ? { kind: 'granted', uid, role: member.role, showStaffBadge: member.showStaffBadge }
+        ? {
+            kind: 'granted',
+            uid,
+            role: member.role,
+            showStaffBadge: member.showStaffBadge,
+            capabilities: capabilitiesFor(member.role),
+          }
         : { kind: 'denied', uid },
     );
     return;
@@ -161,13 +163,16 @@ async function route(req: Req, res: Res): Promise<void> {
   if (!member) throw new ApiError(403, 'forbidden');
 
   if (write) {
-    if (member.role === 'maintainer' && q !== undefined && ADMIN_ONLY_WRITES.has(q)) {
+    if (q === undefined || !canWriteAction(member.role, q)) {
       throw new ApiError(403, 'forbidden');
     }
     res.status(200).json(await write(store, req.body, uid, member.role));
     return;
   }
-  if (member.role === 'maintainer' && name !== undefined && ADMIN_ONLY_READ_QUERIES.has(name)) {
+  if (name === undefined || !KNOWN_READ_QUERIES.has(name)) {
+    throw new ApiError(400, 'bad-query');
+  }
+  if (!canReadQuery(member.role, name)) {
     throw new ApiError(403, 'forbidden');
   }
   const query = parse(name, req, member.role, store.pool);
@@ -183,15 +188,20 @@ function parse(name: string | undefined, req: Req, role: read.AdminRole, pool: D
       return async db => read.overview(db, days, await onlineUsers(), role);
     }
     case 'users': return db => read.users(db, role);
+    case 'userSearch': {
+      const rawTerm = param(req, 'term');
+      const term = typeof rawTerm === 'string' ? rawTerm.trim() : '';
+      if (term.length === 0 || term.length > 100) throw new ApiError(400, 'bad-term');
+      const limit = limitOf(req);
+      if (limit !== null && (limit < 1 || limit > 50)) throw new ApiError(400, 'bad-limit');
+      return db => read.userSearch(db, term, limit, role);
+    }
     case 'spamFlags': return db => read.spamFlags(db, role);
     case 'recentEvents': return db => read.recentEvents(db, role);
     case 'letters': return read.letters;
     case 'changelog': return db => read.changelog(db, role);
     case 'chatReports': return db => read.chatReports(db, role);
-    case 'notices': return async db => {
-      const rows = await listAllAdminNotices(db);
-      return role === 'maintainer' ? rows.map(row => projectNotice(row, role)) : rows;
-    };
+    case 'notices': return listAllAdminNotices;
     case 'events': return listAdminEvents;
     case 'eventDraws': {
       const eventId = param(req, 'eventId');
@@ -398,12 +408,6 @@ async function staffBadge({ withTransaction }: Database, raw: unknown, actorId: 
   return { showStaffBadge: show };
 }
 
-/** 기간제 상시 공지 작성자 id를 역할에 맞춰 투영한다(maintainer는 불투명 운영 핸들) */
-const projectNotice = (notice: AdminNoticeRow, role: read.AdminRole): AdminNoticeRow =>
-  role === 'maintainer'
-    ? { ...notice, createdBy: notice.createdBy ? read.opHandle(notice.createdBy) : null }
-    : notice;
-
 /** 기간제 상시 공지 작성·수정·즉시 마감·삭제 후 실시간 전체 연결에 마감 전·최근 마감 공지 목록을 즉시 전파한다 */
 async function notices(db: Executor, raw: unknown, adminId: string, role: read.AdminRole): Promise<unknown> {
   const body = (raw !== null && typeof raw === 'object' ? raw : {}) as {
@@ -432,7 +436,7 @@ async function notices(db: Executor, raw: unknown, adminId: string, role: read.A
         detail: { noticeId: notice.id },
       }));
       await sync();
-      return { notice: projectNotice(notice, role) };
+      return { notice };
     }
     case 'update': {
       const id = parseId();
@@ -449,7 +453,7 @@ async function notices(db: Executor, raw: unknown, adminId: string, role: read.A
         detail: { noticeId: notice.id },
       }));
       await sync();
-      return { notice: projectNotice(notice, role) };
+      return { notice };
     }
     case 'end': {
       const id = parseId();
@@ -462,7 +466,7 @@ async function notices(db: Executor, raw: unknown, adminId: string, role: read.A
         detail: { noticeId: notice.id },
       }));
       await sync();
-      return { notice: projectNotice(notice, role) };
+      return { notice };
     }
     case 'delete': {
       const id = parseId();

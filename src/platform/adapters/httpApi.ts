@@ -266,6 +266,9 @@ class HttpAdmin implements AdminApi {
   users(): Promise<AdminUserRow[]> {
     return readAdmin('users');
   }
+  searchAdminUsers(term: string, limit?: number): Promise<AdminUserRow[]> {
+    return readAdmin('userSearch', limit === undefined ? { term } : { term, limit });
+  }
   live(): Promise<AdminLive> {
     return readAdminPath('live');
   }

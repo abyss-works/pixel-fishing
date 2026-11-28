@@ -10,6 +10,7 @@ const CALLS: [method: string, call: () => Promise<unknown>, url: string][] = [
   ['access', () => admin.access(), '/api/admin?q=access'],
   ['overview', () => admin.overview(30), '/api/admin?q=overview&days=30'],
   ['users', () => admin.users(), '/api/admin?q=users'],
+  ['searchAdminUsers', () => admin.searchAdminUsers('홍길동', 25), '/api/admin?q=userSearch&term=%ED%99%8D%EA%B8%B8%EB%8F%99&limit=25'],
   ['live', () => admin.live(), '/api/admin/live'],
   ['dailyStats', () => admin.dailyStats('2026-10-07', '2026-11-05'), '/api/admin/stats/daily?from=2026-10-07&to=2026-11-05'],
   ['retention', () => admin.retention(), '/api/admin/retention'],

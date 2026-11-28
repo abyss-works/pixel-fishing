@@ -214,7 +214,7 @@ describe('maintainer REST 역할 분리 및 비식별 투영', () => {
     await env.client.query(`insert into public.admins (user_id, role) values ($1, 'maintainer')`, [MAINT]);
   });
 
-  it('live·stats/daily·retention·sessions(전체)는 허용하되 이메일·원본 uid를 제거하고, sessions?user=는 403이다', async () => {
+  it('live·stats/daily·retention·sessions(전체 및 ?user=)를 허용하되 이메일만 제거하고 원본 uid는 유지한다', async () => {
     provideOnline(() => [
       { uid: PLAYER, nick: '플레이어', region: 'world', zone: 'pacific', connectedAt: '2030-01-01T00:00:00.000Z', guest: false },
     ]);
@@ -223,11 +223,9 @@ describe('maintainer REST 역할 분리 및 비식별 투영', () => {
     expect(liveRes.status).toBe(200);
     const liveBody = liveRes.body as { count: number; online: Row[] };
     expect(liveBody.count).toBe(1);
-    expect(liveBody.online[0].uid).toMatch(/^op_[0-9a-f]{10}$/);
-    expect(liveBody.online[0].opHandle).toBe(liveBody.online[0].uid);
+    expect(liveBody.online[0].uid).toBe(PLAYER);
     expect(liveBody.online[0].nickname).toBe('플레이어');
-    expect(Object.hasOwn(liveBody.online[0], 'email')).toBe(false);
-    expect(JSON.stringify(liveBody)).not.toContain(PLAYER);
+    expect(liveBody.online[0].email).toBeNull();
     expect(JSON.stringify(liveBody)).not.toContain('player@example.test');
 
     expect((await call('/api/admin/stats/daily', userToken(MAINT))).status).toBe(200);
@@ -237,15 +235,12 @@ describe('maintainer REST 역할 분리 및 비식별 투영', () => {
     expect(sessionsAll.status).toBe(200);
     const sessionRows = sessionsAll.body as Row[];
     expect(sessionRows.length).toBeGreaterThan(0);
-    for (const row of sessionRows) {
-      expect(row.userId).toMatch(/^op_[0-9a-f]{10}$/);
-    }
-    expect(JSON.stringify(sessionRows)).not.toContain(PLAYER);
-    expect(JSON.stringify(sessionRows)).not.toContain(GUEST);
+    expect(sessionRows.some(row => row.userId === PLAYER)).toBe(true);
 
-    expect(await call(`/api/admin/sessions?user=${PLAYER}`, userToken(MAINT))).toMatchObject({
-      status: 403,
-      body: { error: 'forbidden' },
-    });
+    const sessionsForPlayer = await call(`/api/admin/sessions?user=${PLAYER}`, userToken(MAINT));
+    expect(sessionsForPlayer.status).toBe(200);
+    const playerSessions = sessionsForPlayer.body as Row[];
+    expect(playerSessions.length).toBeGreaterThan(0);
+    expect(playerSessions.every(row => row.userId === PLAYER)).toBe(true);
   });
 });

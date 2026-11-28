@@ -50,7 +50,7 @@ export { initClientMetrics, recordCanvasFrame } from '../clientMetrics';
 export type { LastPosition } from '../adapters/position';
 export type { PublicProfile } from '../adapters/player';
 export type {
-  ApiClient, AuthApi, StorageApi, AdminApi, AdminRole, AdminAccessResult, DevApi, PromoteTestResult, ResetDevAccountResult,
+  ApiClient, AuthApi, StorageApi, AdminApi, AdminRole, AdminCapabilities, AdminAccessResult, DevApi, PromoteTestResult, ResetDevAccountResult,
   AccountLookup, AuthResult, ConfirmGoogleSwitchResult, ConsentStatus, AcceptConsentError, AcceptConsentResult, GameGateway, GameProfile, MaybePromise, DispatchResult,
   BountySnapshot, BountyProgressRow, BountyTicketRow, FortuneDiscoveredEntry, FortuneHistory,
   RankingBoardId, RankingWindow, RankingRow, RankingBoard, MailItem, MailItemAttachment, FriendItem, FriendOp, FriendOpResult,

@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   setAdminStaffBadge: vi.fn(async () => true),
   insertAdminAuditLog: vi.fn(async () => {}),
   userState: vi.fn(async () => ({ hasSave: true })),
+  userSearch: vi.fn(async (): Promise<unknown[]> => []),
   overview: vi.fn(async (): Promise<unknown> => ({
     users: [],
     recentEvents: [],
@@ -118,6 +119,7 @@ vi.mock('./_data/admin.js', async () => {
     setAdminStaffBadge: mocks.setAdminStaffBadge,
     insertAdminAuditLog: mocks.insertAdminAuditLog,
     userState: mocks.userState,
+    userSearch: mocks.userSearch,
     overview: mocks.overview,
     economy: mocks.economy,
   };
@@ -801,28 +803,69 @@ describe('api/admin 핸들러 단위 테스트', () => {
     expect(rolledBack).toBe(true);
   });
 
-  it('access는 role과 showStaffBadge를 함께 돌려주고 maintainer 권한 밖 읽기·쓰기는 403으로 차단한다', async () => {
-    mocks.adminMember.mockResolvedValue({ role: 'maintainer', showStaffBadge: true });
+  it('GET ?q=userSearch는 검색어와 limit를 검증하고 role과 함께 userSearch를 호출한다', async () => {
+    expect(await call('GET', { q: 'userSearch' })).toMatchObject({ status: 400, body: { error: 'bad-term' } });
+    expect(await call('GET', { q: 'userSearch', term: '   ' })).toMatchObject({ status: 400, body: { error: 'bad-term' } });
+    expect(await call('GET', { q: 'userSearch', term: 'a', limit: '0' })).toMatchObject({ status: 400, body: { error: 'bad-limit' } });
+    expect(await call('GET', { q: 'userSearch', term: 'a', limit: '51' })).toMatchObject({ status: 400, body: { error: 'bad-limit' } });
 
-    expect(await call('GET', { q: 'access' })).toMatchObject({
+    const sampleRows = [{ user_id: TARGET_UID, nickname: '홍길동', email: null }];
+    mocks.userSearch.mockResolvedValueOnce(sampleRows);
+    expect(await call('GET', { q: 'userSearch', term: ' 홍길동 ', limit: '10' })).toMatchObject({
       status: 200,
-      body: { kind: 'granted', uid: ADMIN_UID, role: 'maintainer', showStaffBadge: true },
+      body: sampleRows,
+    });
+    expect(mocks.userSearch).toHaveBeenCalledWith(mocks.db, '홍길동', 10, 'admin');
+
+    mocks.adminMember.mockResolvedValue({ role: 'maintainer', showStaffBadge: false });
+    mocks.userSearch.mockResolvedValueOnce(sampleRows);
+    expect(await call('GET', { q: 'userSearch', term: '홍길동' })).toMatchObject({
+      status: 200,
+      body: sampleRows,
+    });
+    expect(mocks.userSearch).toHaveBeenLastCalledWith(mocks.db, '홍길동', null, 'maintainer');
+  });
+
+  it('access는 role·showStaffBadge·capabilities를 돌려주고 maintainer도 게임 내 모든 운영 읽기·쓰기를 수행한다', async () => {
+    mocks.adminMember.mockResolvedValue({ role: 'admin', showStaffBadge: false });
+    const adminAccess = await call('GET', { q: 'access' });
+    expect(adminAccess).toMatchObject({
+      status: 200,
+      body: {
+        kind: 'granted',
+        uid: ADMIN_UID,
+        role: 'admin',
+        showStaffBadge: false,
+        capabilities: { canViewEmail: true },
+      },
     });
 
-    for (const [q, extra] of [
-      ['userState', { uid: TARGET_UID }],
-      ['userEvents', { user: TARGET_UID }],
-      ['letters', {}],
-      ['mails', {}],
-      ['events', {}],
-      ['eventDraws', { eventId: 'evt-1' }],
-    ] as const) {
-      expect(await call('GET', { q, ...extra }), `GET ${q}`).toMatchObject({ status: 403, body: { error: 'forbidden' } });
-    }
+    mocks.adminMember.mockResolvedValue({ role: 'maintainer', showStaffBadge: true });
+    expect(await call('GET', { q: 'access' })).toMatchObject({
+      status: 200,
+      body: {
+        kind: 'granted',
+        uid: ADMIN_UID,
+        role: 'maintainer',
+        showStaffBadge: true,
+        capabilities: { canViewEmail: false },
+      },
+    });
 
-    for (const q of ['mail', 'restrict', 'letterHandled', 'revokeSessions', 'events']) {
-      expect(await call('POST', { q }, {})).toMatchObject({ status: 403, body: { error: 'forbidden' } });
-    }
+    // maintainer도 userState·events·eventDraws 등 게임 내 읽기를 호출할 수 있다
+    mocks.userState.mockResolvedValueOnce({ hasSave: true });
+    expect(await call('GET', { q: 'userState', uid: TARGET_UID })).toMatchObject({ status: 200, body: { hasSave: true } });
+    mocks.listAdminEvents.mockResolvedValueOnce([]);
+    expect(await call('GET', { q: 'events' })).toMatchObject({ status: 200, body: [] });
+    mocks.listEventDraws.mockResolvedValueOnce([]);
+    expect(await call('GET', { q: 'eventDraws', eventId: 'evt-1' })).toMatchObject({ status: 200, body: [] });
+
+    // maintainer도 mail preview 등 게임 내 쓰기를 호출할 수 있다
+    mocks.db.execute.mockResolvedValueOnce({ rows: [{ id: TARGET_UID }] });
+    expect(await call('POST', { q: 'mail' }, {
+      op: 'preview',
+      request: { title: 't', body: 'b', target: { kind: 'users', recipients: [{ userId: TARGET_UID, gold: 10 }] } },
+    })).toMatchObject({ status: 200 });
 
     // maintainer는 coupons 조회·생성·수정·삭제를 수행할 수 있고 감사 로그가 남는다
     const maintCoupon = {
@@ -924,10 +967,8 @@ describe('api/admin 핸들러 단위 테스트', () => {
     });
   });
 
-  it('maintainer의 GET/POST ?q=notices는 createdBy를 opHandle로 마스킹하고 admin은 원본 UUID를 유지한다', async () => {
+  it('maintainer와 admin 모두 GET/POST ?q=notices에서 작성자 UUID(createdBy)를 그대로 반환한다', async () => {
     const maintUid = '00000000-0000-4000-8000-000000000909';
-    const expectedAdminHandle = opHandle(ADMIN_UID);
-    const expectedMaintHandle = opHandle(maintUid);
     const noticeByAdmin = {
       id: 1, title: '공지1', body: '본문1',
       startsAt: '2030-01-01T00:00:00.000Z', endsAt: '2030-01-02T00:00:00.000Z',
@@ -939,11 +980,7 @@ describe('api/admin 핸들러 단위 테스트', () => {
     mocks.listAllAdminNotices.mockResolvedValueOnce([noticeByAdmin, noticeByNull]);
     const listMaint = await call('GET', { q: 'notices' });
     expect(listMaint.status).toBe(200);
-    expect(listMaint.body).toEqual([
-      { ...noticeByAdmin, createdBy: expectedAdminHandle },
-      noticeByNull,
-    ]);
-    expect(JSON.stringify(listMaint.body)).not.toContain(ADMIN_UID);
+    expect(listMaint.body).toEqual([noticeByAdmin, noticeByNull]);
 
     mocks.listLiveNotices.mockResolvedValue([]);
     mocks.createNotice.mockResolvedValueOnce({ ...noticeByAdmin, id: 11, createdBy: maintUid });
@@ -953,9 +990,8 @@ describe('api/admin 핸들러 단위 테스트', () => {
     });
     expect(createMaint).toMatchObject({
       status: 200,
-      body: { notice: { id: 11, createdBy: expectedMaintHandle } },
+      body: { notice: { id: 11, createdBy: maintUid } },
     });
-    expect(JSON.stringify(createMaint.body)).not.toContain(maintUid);
 
     mocks.updateNotice.mockResolvedValueOnce({ ...noticeByAdmin, id: 1, title: '수정' });
     const updateMaint = await call('POST', { q: 'notices' }, {
@@ -964,32 +1000,14 @@ describe('api/admin 핸들러 단위 테스트', () => {
     });
     expect(updateMaint).toMatchObject({
       status: 200,
-      body: { notice: { id: 1, createdBy: expectedAdminHandle } },
+      body: { notice: { id: 1, createdBy: ADMIN_UID } },
     });
-    expect(JSON.stringify(updateMaint.body)).not.toContain(ADMIN_UID);
 
     mocks.endNoticeNow.mockResolvedValueOnce({ ...noticeByAdmin, id: 1 });
     const endMaint = await call('POST', { q: 'notices' }, { op: 'end', id: 1 });
     expect(endMaint).toMatchObject({
       status: 200,
-      body: { notice: { id: 1, createdBy: expectedAdminHandle } },
-    });
-    expect(JSON.stringify(endMaint.body)).not.toContain(ADMIN_UID);
-
-    // admin은 원본 UUID 유지
-    mocks.adminMember.mockResolvedValue({ role: 'admin', showStaffBadge: false });
-    mocks.listAllAdminNotices.mockResolvedValueOnce([noticeByAdmin]);
-    expect(await call('GET', { q: 'notices' })).toMatchObject({
-      status: 200,
-      body: [{ id: 1, createdBy: ADMIN_UID }],
-    });
-    mocks.createNotice.mockResolvedValueOnce({ ...noticeByAdmin, id: 12 });
-    expect(await call('POST', { q: 'notices' }, {
-      op: 'create', title: '관리자공지', body: '내용',
-      startsAt: '2030-01-01T00:00:00.000Z', endsAt: '2030-01-02T00:00:00.000Z',
-    })).toMatchObject({
-      status: 200,
-      body: { notice: { id: 12, createdBy: ADMIN_UID } },
+      body: { notice: { id: 1, createdBy: ADMIN_UID } },
     });
   });
 

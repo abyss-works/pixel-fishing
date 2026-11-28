@@ -1003,14 +1003,26 @@ describe('역할 분리(admin·maintainer) · Zero-PII 투영 · 배지 토글 �
     expect(await adminMember(db, PLAYER)).toBeNull();
   });
 
-  it('access는 역할과 배지 설정을 돌려주고, maintainer에게 권한 밖 읽기·쓰기는 모두 403이다', async () => {
+  it('access는 역할·배지·capabilities를 돌려주고, maintainer도 게임 내 모든 운영 읽기·쓰기를 수행한다', async () => {
     expect(await callAdmin({ q: 'access' }, userToken(ADMIN))).toMatchObject({
       status: 200,
-      body: { kind: 'granted', uid: ADMIN, role: 'admin', showStaffBadge: false },
+      body: {
+        kind: 'granted',
+        uid: ADMIN,
+        role: 'admin',
+        showStaffBadge: false,
+        capabilities: { canViewEmail: true },
+      },
     });
     expect(await callAdmin({ q: 'access' }, userToken(MAINT))).toMatchObject({
       status: 200,
-      body: { kind: 'granted', uid: MAINT, role: 'maintainer', showStaffBadge: false },
+      body: {
+        kind: 'granted',
+        uid: MAINT,
+        role: 'maintainer',
+        showStaffBadge: false,
+        capabilities: { canViewEmail: false },
+      },
     });
 
     for (const [q, extra] of [
@@ -1021,105 +1033,101 @@ describe('역할 분리(admin·maintainer) · Zero-PII 투영 · 배지 토글 �
       ['events', {}],
       ['eventDraws', { eventId: 'evt-1' }],
     ] as const) {
-      expect(await callAdmin({ q, ...extra }, userToken(MAINT)), `GET ${q}`).toMatchObject({
-        status: 403,
-        body: { error: 'forbidden' },
-      });
+      expect((await callAdmin({ q, ...extra }, userToken(MAINT))).status, `GET ${q}`).toBe(200);
     }
 
-    for (const [q, body] of [
-      ['mail', { op: 'preview', request: { title: 't', body: 'b', target: { kind: 'all', gold: 10 } } }],
-      ['restrict', { userId: PLAYER, restricted: true }],
-      ['letterHandled', { letterId: 1, handled: true }],
-      ['revokeSessions', { userId: PLAYER }],
-      ['events', { op: 'end', id: 'evt-1' }],
-    ] as const) {
-      expect(await callAdmin({ q }, userToken(MAINT), 'POST', body), `POST ${q}`).toMatchObject({
-        status: 403,
-        body: { error: 'forbidden' },
-      });
-    }
+    expect(await callAdmin({ q: 'mail' }, userToken(MAINT), 'POST', {
+      op: 'preview',
+      request: { title: 't', body: 'b', target: { kind: 'all', gold: 10 } },
+    })).toMatchObject({ status: 200 });
   });
 
-  it('maintainer의 모든 허용 응답(overview·users·spamFlags·recentEvents·chatReports·changelog)은 Zero-PII다', async () => {
+  it('maintainer의 모든 허용 응답(overview·users·userSearch·spamFlags·recentEvents·chatReports·changelog)은 이메일·계정메타만 제거하고 UUID·인게임 필드는 유지한다', async () => {
     const { provideOnline } = await import('./_server/livePresence.js');
     provideOnline(() => [
       { uid: PLAYER, nick: '플레이어', region: 'world', zone: 'pacific', connectedAt: '2030-01-01T00:00:00.000Z', guest: false },
     ]);
     try {
       const token = userToken(MAINT);
-      const rawUids = [ADMIN, PLAYER, GUEST, IDLE_A, IDLE_B, MAINT];
-      const rawEmails = ['admin@example.test', 'player@example.test', 'maint@example.test', 'secret@example.test'];
+      const rawEmails = ['admin@example.test', 'player@example.test', 'maint@example.test'];
 
-      const assertZeroPii = (label: string, payload: unknown) => {
+      const assertNoEmailPii = (label: string, payload: unknown) => {
         const serialized = JSON.stringify(payload);
-        for (const uid of rawUids) expect(serialized, `${label} uid ${uid}`).not.toContain(uid);
         for (const email of rawEmails) expect(serialized, `${label} email ${email}`).not.toContain(email);
       };
 
       const overviewRes = await callAdmin({ q: 'overview', days: '7' }, token);
       expect(overviewRes.status).toBe(200);
-      assertZeroPii('overview', overviewRes.body);
+      assertNoEmailPii('overview', overviewRes.body);
       const ov = overviewRes.body as { live: { online: Row[] } };
       expect(ov.live.online).toHaveLength(1);
-      expect(Object.hasOwn(ov.live.online[0], 'email')).toBe(false);
-      expect(ov.live.online[0].uid).toMatch(/^op_[0-9a-f]{10}$/);
+      expect(ov.live.online[0].email).toBeNull();
+      expect(ov.live.online[0].uid).toBe(PLAYER);
 
       const usersRes = await callAdmin({ q: 'users' }, token);
       expect(usersRes.status).toBe(200);
-      assertZeroPii('users', usersRes.body);
+      assertNoEmailPii('users', usersRes.body);
       const userRows = usersRes.body as Row[];
       const playerRow = userRows.find(r => r.nickname === '플레이어')!;
       expect(playerRow).toMatchObject({
-        opHandle: expect.stringMatching(/^op_[0-9a-f]{10}$/),
+        user_id: PLAYER,
         email: null,
         nickname: '플레이어',
-        is_anonymous: null,
+        is_anonymous: false,
         signed_up_at: null,
         last_sign_in_at: null,
-        gold: null,
-        fame: null,
         boat: 0,
-        rod: null,
-        location_kind: null,
-        location_id: null,
-        visited: null,
         restricted: false,
-        save_version: null,
-        last_action_at: null,
-        last_session_at: null,
-        total_session_sec: 0,
       });
-      expect(playerRow.user_id).toBe(playerRow.opHandle);
+      expect(playerRow.gold).not.toBeNull();
+
+      // userSearch: admin은 이메일 검색 가능, maintainer는 닉네임·UUID만 검색 가능(이메일 검색 불가)
+      const adminSearchByEmail = await callAdmin({ q: 'userSearch', term: 'player@example.test' }, userToken(ADMIN));
+      expect(adminSearchByEmail.status).toBe(200);
+      expect((adminSearchByEmail.body as Row[]).some(r => r.user_id === PLAYER)).toBe(true);
+
+      const maintSearchByEmail = await callAdmin({ q: 'userSearch', term: 'player@example.test' }, token);
+      expect(maintSearchByEmail.status).toBe(200);
+      expect(maintSearchByEmail.body).toEqual([]);
+
+      const maintSearchByNick = await callAdmin({ q: 'userSearch', term: '플레이어' }, token);
+      expect(maintSearchByNick.status).toBe(200);
+      assertNoEmailPii('userSearch', maintSearchByNick.body);
+      expect((maintSearchByNick.body as Row[])[0]).toMatchObject({
+        user_id: PLAYER,
+        email: null,
+        signed_up_at: null,
+        last_sign_in_at: null,
+        nickname: '플레이어',
+      });
+
+      const maintSearchByUid = await callAdmin({ q: 'userSearch', term: PLAYER.slice(0, 8) }, token);
+      expect(maintSearchByUid.status).toBe(200);
+      expect((maintSearchByUid.body as Row[]).some(r => r.user_id === PLAYER)).toBe(true);
 
       const spamRes = await callAdmin({ q: 'spamFlags' }, token);
       expect(spamRes.status).toBe(200);
-      assertZeroPii('spamFlags', spamRes.body);
-      expect((spamRes.body as Row[])[0].user_id).toMatch(/^op_[0-9a-f]{10}$/);
+      assertNoEmailPii('spamFlags', spamRes.body);
+      expect((spamRes.body as Row[]).some(r => r.user_id === PLAYER)).toBe(true);
 
       const eventsRes = await callAdmin({ q: 'recentEvents' }, token);
       expect(eventsRes.status).toBe(200);
-      assertZeroPii('recentEvents', eventsRes.body);
-      const recent = eventsRes.body as { type: string; payload: Row; user_id: string }[];
-      const letterEv = recent.find(e => e.type === 'letter');
-      expect(letterEv?.payload).toEqual({});
-      const restrictEv = recent.find(e => e.type === 'adminRestrict');
-      expect(restrictEv?.payload.adminId).toMatch(/^op_[0-9a-f]{10}$/);
+      assertNoEmailPii('recentEvents', eventsRes.body);
 
       const reportsRes = await callAdmin({ q: 'chatReports' }, token);
       expect(reportsRes.status).toBe(200);
-      assertZeroPii('chatReports', reportsRes.body);
+      assertNoEmailPii('chatReports', reportsRes.body);
       const reportRows = reportsRes.body as { user_id: string; target_id: string; lines: { uid: string }[] }[];
       expect(reportRows[0].user_id).toBe('');
-      expect(reportRows[0].target_id).toMatch(/^op_[0-9a-f]{10}$/);
-      expect(reportRows[0].lines[0].uid).toMatch(/^op_[0-9a-f]{10}$/);
+      expect(reportRows[0].target_id).toBe(GUEST);
+      expect(reportRows[0].lines[0].uid).toBe('x');
 
       const changelogRes = await callAdmin({ q: 'changelog' }, token);
       expect(changelogRes.status).toBe(200);
       const clRows = changelogRes.body as { tier: string; id: string }[];
       expect(clRows.length).toBeGreaterThan(0);
-      expect(clRows.every(r => r.tier === 'public')).toBe(true);
-      expect(clRows.map(r => r.id)).not.toContain('0.21.0-02');
+      expect(clRows.some(r => r.tier === 'admin')).toBe(true);
+      expect(clRows.map(r => r.id)).toContain('0.21.0-02');
 
       // 집계·밸런스 지표는 maintainer에게도 200 허용
       for (const [q, extra] of [
@@ -1186,8 +1194,7 @@ describe('역할 분리(admin·maintainer) · Zero-PII 투영 · 배지 토글 �
     ]);
   });
 
-  it('maintainer의 GET/POST ?q=notices는 createdBy를 opHandle로 마스킹하고 admin은 원본 UUID를 유지한다', async () => {
-    const { opHandle } = await import('./_data/admin.js');
+  it('maintainer와 admin 모두 GET/POST ?q=notices에서 createdBy 원본 UUID를 유지한다', async () => {
     const adminCreate = await callAdmin({ q: 'notices' }, userToken(ADMIN), 'POST', {
       op: 'create',
       title: '관리자 공지',
@@ -1208,24 +1215,14 @@ describe('역할 분리(admin·maintainer) · Zero-PII 투영 · 배지 토글 �
     });
     expect(maintCreate.status).toBe(200);
     const maintNotice = (maintCreate.body as { notice: { id: number; createdBy: string } }).notice;
-    expect(maintNotice.createdBy).toBe(opHandle(MAINT));
-    expect(JSON.stringify(maintCreate.body)).not.toContain(MAINT);
+    expect(maintNotice.createdBy).toBe(MAINT);
 
     try {
       const maintList = await callAdmin({ q: 'notices' }, userToken(MAINT));
       expect(maintList.status).toBe(200);
-      const maintListJson = JSON.stringify(maintList.body);
-      expect(maintListJson).not.toContain(ADMIN);
-      expect(maintListJson).not.toContain(MAINT);
       const maintRows = maintList.body as { id: number; createdBy: string | null }[];
-      expect(maintRows.find(r => r.id === adminNotice.id)?.createdBy).toBe(opHandle(ADMIN));
-      expect(maintRows.find(r => r.id === maintNotice.id)?.createdBy).toBe(opHandle(MAINT));
-
-      const adminList = await callAdmin({ q: 'notices' }, userToken(ADMIN));
-      expect(adminList.status).toBe(200);
-      const adminRows = adminList.body as { id: number; createdBy: string | null }[];
-      expect(adminRows.find(r => r.id === adminNotice.id)?.createdBy).toBe(ADMIN);
-      expect(adminRows.find(r => r.id === maintNotice.id)?.createdBy).toBe(MAINT);
+      expect(maintRows.find(r => r.id === adminNotice.id)?.createdBy).toBe(ADMIN);
+      expect(maintRows.find(r => r.id === maintNotice.id)?.createdBy).toBe(MAINT);
 
       const maintUpdate = await callAdmin({ q: 'notices' }, userToken(MAINT), 'POST', {
         op: 'update',
@@ -1236,23 +1233,21 @@ describe('역할 분리(admin·maintainer) · Zero-PII 투영 · 배지 토글 �
         endsAt: '2030-01-02T00:00:00.000Z',
       });
       expect(maintUpdate.status).toBe(200);
-      expect((maintUpdate.body as { notice: { createdBy: string } }).notice.createdBy).toBe(opHandle(ADMIN));
-      expect(JSON.stringify(maintUpdate.body)).not.toContain(ADMIN);
+      expect((maintUpdate.body as { notice: { createdBy: string } }).notice.createdBy).toBe(ADMIN);
 
       const maintEnd = await callAdmin({ q: 'notices' }, userToken(MAINT), 'POST', {
         op: 'end',
         id: adminNotice.id,
       });
       expect(maintEnd.status).toBe(200);
-      expect((maintEnd.body as { notice: { createdBy: string } }).notice.createdBy).toBe(opHandle(ADMIN));
-      expect(JSON.stringify(maintEnd.body)).not.toContain(ADMIN);
+      expect((maintEnd.body as { notice: { createdBy: string } }).notice.createdBy).toBe(ADMIN);
     } finally {
       await callAdmin({ q: 'notices' }, userToken(ADMIN), 'POST', { op: 'delete', id: adminNotice.id });
       await callAdmin({ q: 'notices' }, userToken(ADMIN), 'POST', { op: 'delete', id: maintNotice.id });
     }
   });
 
-  it('maintainer의 GET ?q=overview는 비식별 redacted users와 함께 정확한 비영 userAggregates를 반환하고 PII가 없다', async () => {
+  it('maintainer의 GET ?q=overview는 이메일·계정메타만 제거한 users와 정확한 비영 userAggregates를 반환한다', async () => {
     await env.client.query(`update public.saves_current set updated_at = now() where user_id = $1`, [MAINT]);
     const adminRes = await callAdmin({ q: 'overview', days: '7' }, userToken(ADMIN));
     const maintRes = await callAdmin({ q: 'overview', days: '7' }, userToken(MAINT));
@@ -1266,6 +1261,7 @@ describe('역할 분리(admin·maintainer) · Zero-PII 투영 · 배지 토글 �
         nickname: string | null;
         is_anonymous: boolean | null;
         signed_up_at: string | null;
+        last_sign_in_at: string | null;
         gold: number | string | null;
         fame: number | string | null;
         boat: number | null;
@@ -1293,18 +1289,16 @@ describe('역할 분리(admin·maintainer) · Zero-PII 투영 · 배지 토글 �
     };
     const maintOv = maintRes.body as typeof adminOv;
 
-    // maintainer의 users는 계속 비식별 redaction 상태여야 한다
+    // maintainer의 users는 이메일·가입/로그인 시각만 null이고 user_id와 게임 내 필드는 유지된다
     const maintPlayer = maintOv.users.find(u => u.nickname === '플레이어')!;
     expect(maintPlayer).toMatchObject({
+      user_id: PLAYER,
       email: null,
       signed_up_at: null,
-      gold: null,
-      fame: null,
-      rod: null,
-      visited: null,
-      last_action_at: null,
-      last_session_at: null,
+      last_sign_in_at: null,
+      restricted: false,
     });
+    expect(maintPlayer.gold).not.toBeNull();
 
     // userAggregates는 비어 있지 않고 admin/maintainer 간 산식이 동일하다
     const agg = maintOv.userAggregates;

@@ -390,9 +390,15 @@ export interface BalanceLive {
 
 export type AdminRole = 'admin' | 'maintainer';
 
+export interface AdminCapabilities {
+  canViewEmail: boolean;
+  reads: string[];
+  writes: string[];
+}
+
 /** 관리자 판정 — local은 "클라우드 미설정"(권한 실패 아님), signedOut은 관리자 세션 없음, denied는 DB admins 비등록 */
 export type AdminAccessResult =
-  | { kind: 'granted'; uid: string | null; role?: AdminRole; showStaffBadge?: boolean }
+  | { kind: 'granted'; uid: string | null; role?: AdminRole; showStaffBadge?: boolean; capabilities?: AdminCapabilities }
   | { kind: 'denied' | 'signedOut' | 'local'; uid: string | null };
 
 /** 관리자 — 보낸 우편 한 통(받는 사람 포함) */
@@ -842,6 +848,8 @@ export interface AdminApi {
   /** 개요 탭 통합 조회. days를 생략하면 서버 기본 기간(30일)이다 */
   overview(days?: number): Promise<AdminOverview>;
   users(): Promise<AdminUserRow[]>;
+  /** 서버 측 플레이어 검색(닉네임·UUID·admin 전용 이메일). limit 기본 25, 최대 50 */
+  searchAdminUsers(term: string, limit?: number): Promise<AdminUserRow[]>;
   /** 지금 실시간 채널에 연결된 사람 */
   live(): Promise<AdminLive>;
   /** from~to(KST 날짜, 양끝 포함)의 일별 집계. 집계하지 않은 날은 빠진다 */
