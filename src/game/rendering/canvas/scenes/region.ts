@@ -29,7 +29,7 @@ export interface FieldView extends GearView {
   schools: School[];
   /** 같은 바다의 다른 플레이어 — 항해 지역에서만 그린다 */
   others?: OtherShipView[];
-  /** OS 동작 축소 판정 — 효과 출처가 넘기며 그리기 반영은 후속이다 */
+  /** OS 동작 축소 판정 — 효과 출처가 넘기지만 이 장면은 읽지 않는다 */
   reducedMotion?: boolean;
   /** 같은 바다 다른 플레이어의 물고기 점프 연출 */
   peerJumps?: readonly JumpFx[];
