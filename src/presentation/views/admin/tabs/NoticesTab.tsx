@@ -172,7 +172,7 @@ export default function NoticesTab() {
     } catch (e) {
       setFailure(String((e as { message?: unknown }).message ?? e));
     } finally {
-      setBusyId(n.id);
+      setBusyId(null);
     }
   };
 
@@ -194,7 +194,7 @@ export default function NoticesTab() {
     } catch (e) {
       setFailure(String((e as { message?: unknown }).message ?? e));
     } finally {
-      setBusyId(n.id);
+      setBusyId(null);
     }
   };
 

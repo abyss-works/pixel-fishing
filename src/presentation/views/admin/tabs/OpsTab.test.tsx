@@ -226,4 +226,17 @@ describe('운영 탭', () => {
     expect(within(clientSection).getAllByText('--').length).toBeGreaterThan(0);
     expect(clientSection.textContent).not.toContain('—');
   });
+
+  it('서버·실시간 요약 보기에서 서브내비 새로고침 클릭 시 httpMetrics와 opsHealth를 다시 조회한다', async () => {
+    show('granted', 'admin', 'server', 'summary');
+    await waitFor(() => expect(vi.mocked(api.admin.httpMetrics)).toHaveBeenCalledWith(7));
+    await waitFor(() => expect(vi.mocked(api.admin.opsHealth)).toHaveBeenCalledWith(7));
+
+    vi.mocked(api.admin.httpMetrics).mockClear();
+    vi.mocked(api.admin.opsHealth).mockClear();
+
+    fireEvent.click(screen.getByRole('button', { name: '새로고침' }));
+    await waitFor(() => expect(vi.mocked(api.admin.httpMetrics)).toHaveBeenCalledWith(7));
+    await waitFor(() => expect(vi.mocked(api.admin.opsHealth)).toHaveBeenCalledWith(7));
+  });
 });

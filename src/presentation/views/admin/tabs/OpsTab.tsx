@@ -1,6 +1,6 @@
 // 운영·콘텐츠 탭 — 서버·실시간, 클라이언트, 변경 기록, 콘텐츠 카탈로그 4개 하위 구역으로 나눈다.
 // 기간 범위(7|14|30)와 새로고침은 OpsTab의 subnavExtra 한 곳에만 둔다.
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
 import DataTable from '../../../ui/DataTable';
@@ -115,6 +115,18 @@ function ServerSectionBody({
 }) {
   const http = useAdminHttpMetrics(days);
   const health = useAdminOpsHealth(days);
+  const refreshHttp = http.refresh;
+  const refreshHealth = health.refresh;
+  const lastSignalRef = useRef(refreshSignal);
+
+  useEffect(() => {
+    if (refreshSignal !== lastSignalRef.current) {
+      lastSignalRef.current = refreshSignal;
+      refreshHttp();
+      refreshHealth();
+    }
+  }, [refreshSignal, refreshHttp, refreshHealth]);
+
   const httpView = useMemo(() => selectHttpMetricsView(http.data, days), [http.data, days]);
   const healthView = useMemo(() => selectOpsHealthView(health.data), [health.data]);
 
