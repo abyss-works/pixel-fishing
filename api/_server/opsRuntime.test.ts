@@ -139,7 +139,7 @@ describe('aggregatePodMetrics', () => {
       },
     ];
 
-    const agg = aggregatePodMetrics(snapshots);
+    const agg = aggregatePodMetrics(snapshots, Date.parse('2026-11-27T10:00:30.000Z'));
 
     expect(agg.connections).toBe(20);
     expect(agg.onlineUsers).toBe(17);
@@ -193,9 +193,60 @@ describe('aggregatePodMetrics', () => {
       { podId: 'api-1', updatedAt: '2026-11-27T10:30:00.000Z', slowRequests: Array.from({ length: 15 }, (_, i) => mkSlow(i * 2)) },
       { podId: 'api-2', updatedAt: '2026-11-27T10:30:00.000Z', slowRequests: Array.from({ length: 15 }, (_, i) => mkSlow(i * 2 + 1)) },
     ];
-    const agg = aggregatePodMetrics(snapshots);
+    const agg = aggregatePodMetrics(snapshots, Date.parse('2026-11-27T10:30:30.000Z'));
     expect(agg.slowRequests).toHaveLength(20);
     expect(agg.slowRequests[0]?.path).toBe('/api/item/29');
     expect(agg.slowRequests[19]?.path).toBe('/api/item/10');
+  });
+
+  it('90초를 초과한 유령 파드와 유효하지 않은 updatedAt 항목을 합산에서 제외한다', () => {
+    const nowMs = Date.parse('2026-11-28T02:00:00.000Z');
+    const snapshots: PodMetricsSnapshot[] = [
+      {
+        podId: 'api-fresh',
+        updatedAt: new Date(nowMs - 30_000).toISOString(),
+        connections: 5,
+        onlineUsers: 4,
+        http: {
+          total: 50,
+          status409: 0,
+          status426: 0,
+          status429: 0,
+          status4xx: 0,
+          status5xx: 1,
+          latencyBuckets: { le50: 40, le100: 10, le250: 0, le500: 0, le1000: 0, le2500: 0, gt2500: 0, sumMs: 2000 },
+        },
+      },
+      {
+        podId: 'api-boundary',
+        updatedAt: new Date(nowMs - 90_000).toISOString(),
+        connections: 3,
+        onlineUsers: 2,
+      },
+      {
+        podId: 'api-ghost',
+        updatedAt: new Date(nowMs - 90_001).toISOString(),
+        connections: 99,
+        onlineUsers: 88,
+        http: {
+          total: 500,
+          status5xx: 50,
+          latencyBuckets: { le50: 0, le100: 0, le250: 0, le500: 0, le1000: 0, le2500: 0, gt2500: 500, sumMs: 1_500_000 },
+        },
+      },
+      {
+        podId: 'api-invalid-date',
+        updatedAt: 'not-a-timestamp',
+        connections: 77,
+        onlineUsers: 66,
+      },
+    ];
+
+    const agg = aggregatePodMetrics(snapshots, nowMs);
+    expect(agg.connections).toBe(8);
+    expect(agg.onlineUsers).toBe(6);
+    expect(agg.http?.total).toBe(50);
+    expect(agg.http?.status5xx).toBe(1);
+    expect(agg.http?.latency).toEqual({ p50Ms: 50, p95Ms: 100, p99Ms: 100, avgMs: 40, samples: 50 });
   });
 });

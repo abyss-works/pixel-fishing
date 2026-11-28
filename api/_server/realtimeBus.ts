@@ -62,6 +62,7 @@ export interface LiveBus {
   isUserOnline(uid: string): Promise<boolean>;
   acquireAlertLock(key: string, ttlSec: number): Promise<boolean>;
   publishPodMetrics(podId: string, metrics: PodMetricsSnapshot): Promise<void>;
+  removePodMetrics(podId: string): Promise<void>;
   listPodMetrics(): Promise<PodMetricsSnapshot[]>;
   subscribe(handler: LiveBusHandler): () => void;
   close(): Promise<void>;
@@ -176,6 +177,10 @@ export class InProcessLiveBus implements LiveBus {
 
   async publishPodMetrics(podId: string, metrics: PodMetricsSnapshot): Promise<void> {
     this.podMetrics.set(podId, { ...metrics, podId });
+  }
+
+  async removePodMetrics(podId: string): Promise<void> {
+    this.podMetrics.delete(podId);
   }
 
   async listPodMetrics(): Promise<PodMetricsSnapshot[]> {

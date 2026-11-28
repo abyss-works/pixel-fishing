@@ -155,7 +155,8 @@ process.on('SIGTERM', () => {
   clearInterval(podMetricsTimer);
   clearInterval(opsAlertTimer);
   live.close();
-  const busClose = bus.close().catch(() => {});
+  const busClose = bus.removePodMetrics(podId).catch(() => {})
+    .then(() => bus.close().catch(() => {}));
   server.close(() => {
     void settleAfterResponse()
       .then(() => Promise.all([wsMetrics.stop(), busClose]))

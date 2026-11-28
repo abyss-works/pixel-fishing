@@ -178,6 +178,19 @@ export function estimateLatencyPercentiles(buckets: LatencyBuckets, sumMs: numbe
   };
 }
 
+export function latencyBucketsOf(c: MutableHttpCounts): LatencyBuckets & { sumMs: number } {
+  return {
+    le50: c.le50,
+    le100: c.le100,
+    le250: c.le250,
+    le500: c.le500,
+    le1000: c.le1000,
+    le2500: c.le2500,
+    gt2500: c.gt2500,
+    sumMs: c.sumMs,
+  };
+}
+
 export function withHttpRates(c: MutableHttpCounts): HttpMetricsCounts {
   return {
     total: c.total,

@@ -178,6 +178,35 @@ describe('createHttpMetrics 미들웨어', () => {
     await metrics.stop();
   });
 
+  it('recentWindowSnapshot이 다중 파드 합산용 latencyBuckets와 sumMs를 함께 반환한다', async () => {
+    const nowMs = Date.parse('2026-11-25T05:00:00.000Z');
+    const metrics = createHttpMetrics({
+      flushIntervalMs: 60_000,
+      windowMs: 60_000,
+      now: () => nowMs,
+      persist: async () => {},
+    });
+
+    for (const ms of [25, 90, 200, 1500]) {
+      metrics.record('/api/action', 200, { durationMs: ms });
+    }
+
+    const snap = metrics.recentWindowSnapshot();
+    expect(snap.total).toBe(4);
+    expect(snap.latencyBuckets).toEqual({
+      le50: 1,
+      le100: 1,
+      le250: 1,
+      le500: 0,
+      le1000: 0,
+      le2500: 1,
+      gt2500: 0,
+      sumMs: 1815,
+    });
+    expect(snap.latency).toEqual({ p50Ms: 100, p95Ms: 2500, p99Ms: 2500, avgMs: 454, samples: 4 });
+    await metrics.stop();
+  });
+
   it('저장 실패 시 집계분을 유실하지 않고 버퍼에 복구해 다음 플러시에 합산 전송한다', async () => {
     const onError = vi.fn();
     let shouldFail = true;
@@ -274,6 +303,7 @@ describe('createHttpMetrics 미들웨어', () => {
 
 describe('서버 진입점 HTTP 지표 등록', () => {
   const main = readFileSync(new URL('./main.ts', import.meta.url), 'utf8');
+  const realtimeMain = readFileSync(new URL('./realtimeMain.ts', import.meta.url), 'utf8');
 
   it('httpMetrics 미들웨어를 stageGate 앞에 등록하고 SIGTERM에서 플러시한다', () => {
     const metricsIdx = main.indexOf('app.use(httpMetrics.middleware)');
@@ -281,5 +311,11 @@ describe('서버 진입점 HTTP 지표 등록', () => {
     expect(metricsIdx).toBeGreaterThan(-1);
     expect(gateIdx).toBeGreaterThan(metricsIdx);
     expect(main).toContain('httpMetrics.stop()');
+  });
+
+  it('분산 모드 파드 지표에 recentWindowSnapshot을 발행하고 SIGTERM에서 removePodMetrics를 호출한다', () => {
+    expect(main).toContain('httpMetrics.recentWindowSnapshot()');
+    expect(main).toContain('bus.removePodMetrics(podId)');
+    expect(realtimeMain).toContain('bus.removePodMetrics(podId)');
   });
 });

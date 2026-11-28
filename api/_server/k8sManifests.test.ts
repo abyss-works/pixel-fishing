@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -195,6 +196,55 @@ function extractImageTags(yaml: string): Map<string, string> {
   return tags;
 }
 
+/** Extracts a literal (`|` or `|-`) ConfigMap data block with arbitrary indentation removed. */
+function extractConfigMapLiteralBlock(yaml: string, configMapName: string, key: string): string {
+  const docs = yaml.split(/^---\s*$/m);
+  const targetDoc = docs.find(
+    doc => /\bkind:\s*ConfigMap\b/.test(doc) && new RegExp(`\\bname:\\s*${configMapName}\\b`).test(doc),
+  );
+  if (!targetDoc) throw new Error(`ConfigMap not found: ${configMapName}`);
+
+  const lines = targetDoc.split(/\r?\n/);
+  const keyPattern = new RegExp(`^(\\s*)${key.replace('.', '\\.')}:\\s*\\|-?\\s*$`);
+  let keyLineIdx = -1;
+  let keyIndent = -1;
+
+  for (let i = 0; i < lines.length; i++) {
+    const match = lines[i].match(keyPattern);
+    if (match) {
+      keyLineIdx = i;
+      keyIndent = match[1].length;
+      break;
+    }
+  }
+  if (keyLineIdx === -1) throw new Error(`ConfigMap key not found: ${key}`);
+
+  let blockIndent = -1;
+  const blockLines: string[] = [];
+  for (let i = keyLineIdx + 1; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    const indent = line.length - line.trimStart().length;
+
+    if (trimmed === '') {
+      blockLines.push('');
+      continue;
+    }
+    if (blockIndent === -1) {
+      if (indent <= keyIndent) break;
+      blockIndent = indent;
+    } else if (indent < blockIndent) {
+      break;
+    }
+    blockLines.push(line.slice(blockIndent));
+  }
+
+  while (blockLines.length > 0 && blockLines[blockLines.length - 1] === '') {
+    blockLines.pop();
+  }
+  return blockLines.join('\n');
+}
+
 describe('k8s manifests invariants', () => {
   it('places BETTER_AUTH_URL, DEPLOY_ENV, CONSENT_EFFECTIVE_DATE at indices 1, 2, 3 in prod deployment and realtime manifests', () => {
     const deployEnv = extractContainerEnvNames(readManifest('k8s/prod/deployment.yaml'), 'pixel-fishing');
@@ -245,5 +295,22 @@ describe('k8s manifests invariants', () => {
     expect(appTag).toBeTruthy();
     expect(adminTag).toBeTruthy();
     expect(appTag).toBe(adminTag);
+  });
+
+  it('matches 503.html inline script SHA-256 digest with default.conf CSP script-src hash', () => {
+    const errorsYaml = readManifest('k8s/prod/errors.yaml');
+    const html503 = extractConfigMapLiteralBlock(errorsYaml, 'pixel-fishing-errors-html', '503.html');
+    const defaultConf = extractConfigMapLiteralBlock(errorsYaml, 'pixel-fishing-errors-html', 'default.conf');
+
+    const scriptMatch = html503.match(/<script>([\s\S]*?)<\/script>/);
+    expect(scriptMatch).not.toBeNull();
+    const digest = createHash('sha256').update(scriptMatch![1], 'utf8').digest('base64');
+    const expectedToken = `'sha256-${digest}'`;
+
+    const cspMatch = defaultConf.match(/Content-Security-Policy\s+"([^"]+)"/);
+    expect(cspMatch).not.toBeNull();
+    const scriptSrcMatch = cspMatch![1].match(/script-src\s+([^;]+)/);
+    expect(scriptSrcMatch).not.toBeNull();
+    expect(scriptSrcMatch![1]).toContain(expectedToken);
   });
 });

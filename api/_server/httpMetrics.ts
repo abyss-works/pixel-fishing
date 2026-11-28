@@ -5,6 +5,7 @@ import type { ServerResponse } from 'node:http';
 import type { NextFunction, Request, Response } from 'express';
 import {
   emptyHttpCounts,
+  latencyBucketsOf,
   withHttpRates,
   type HttpMetricIncrement,
   type HttpMetricRouteGroup,
@@ -87,11 +88,16 @@ export interface HttpMetricsOptions {
   windowMs?: number;
 }
 
+export type HttpWindowSnapshot = HttpMetricsCounts & {
+  latencyBuckets: LatencyBuckets & { sumMs: number };
+};
+
 export interface HttpMetricsCollector {
   middleware: (req: Request, res: Response, next: NextFunction) => void;
   record: (rawUrl: string | undefined, statusCode: number, opts?: HttpRecordOptions) => void;
   slowRequests: () => SlowHttpRequest[];
   recentWindowSummary: () => HttpMetricsCounts;
+  recentWindowSnapshot: () => HttpWindowSnapshot;
   flush: () => Promise<void>;
   stop: () => Promise<void>;
 }
@@ -262,7 +268,7 @@ export function createHttpMetrics(options: HttpMetricsOptions): HttpMetricsColle
     return [...slowRing].reverse();
   }
 
-  function recentWindowSummary(): HttpMetricsCounts {
+  function sumWindowCounts(): MutableHttpCounts {
     const nowMs = now();
     pruneWindow(nowMs);
     const totalCounts = emptyHttpCounts();
@@ -285,7 +291,19 @@ export function createHttpMetrics(options: HttpMetricsOptions): HttpMetricsColle
       totalCounts.letterGap += counts.letterGap;
       totalCounts.other += counts.other;
     }
-    return withHttpRates(totalCounts);
+    return totalCounts;
+  }
+
+  function recentWindowSummary(): HttpMetricsCounts {
+    return withHttpRates(sumWindowCounts());
+  }
+
+  function recentWindowSnapshot(): HttpWindowSnapshot {
+    const counts = sumWindowCounts();
+    return {
+      ...withHttpRates(counts),
+      latencyBuckets: latencyBucketsOf(counts),
+    };
   }
 
   async function drainOnce(): Promise<void> {
@@ -335,5 +353,5 @@ export function createHttpMetrics(options: HttpMetricsOptions): HttpMetricsColle
     await flush();
   }
 
-  return { middleware, record, slowRequests, recentWindowSummary, flush, stop };
+  return { middleware, record, slowRequests, recentWindowSummary, recentWindowSnapshot, flush, stop };
 }

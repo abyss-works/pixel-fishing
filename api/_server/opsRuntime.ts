@@ -11,6 +11,13 @@ import type { SlowHttpRequest } from './httpMetrics.js';
 import type { PodMetricsSnapshot } from './realtimeBus.js';
 
 const MAX_SLOW_REQUESTS = 20;
+const POD_METRICS_STALE_MS = 90_000;
+
+function parseUpdatedAtMs(updatedAt: unknown): number {
+  if (typeof updatedAt === 'number') return updatedAt;
+  if (typeof updatedAt === 'string') return Date.parse(updatedAt);
+  return NaN;
+}
 
 let slowRequestsProvider: () => SlowHttpRequest[] | Promise<SlowHttpRequest[]> = () => [];
 let recentHttpProvider: () => HttpMetricsCounts | null | Promise<HttpMetricsCounts | null> = () => null;
@@ -74,7 +81,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /** 여러 파드의 최근 창 HTTP/WS/슬로우 요청 스냅샷을 단일 관측 뷰로 합산한다 */
-export function aggregatePodMetrics(snapshots: readonly PodMetricsSnapshot[]): AggregatedPodMetrics {
+export function aggregatePodMetrics(
+  snapshots: readonly PodMetricsSnapshot[],
+  now = Date.now(),
+): AggregatedPodMetrics {
   const httpCounts = emptyHttpCounts();
   const wsCounts = emptyWsCounts();
   let hasHttp = false;
@@ -84,6 +94,10 @@ export function aggregatePodMetrics(snapshots: readonly PodMetricsSnapshot[]): A
   const slow: SlowHttpRequest[] = [];
 
   for (const snap of snapshots) {
+    const updatedAtMs = parseUpdatedAtMs(snap.updatedAt);
+    if (!Number.isFinite(updatedAtMs) || now - updatedAtMs > POD_METRICS_STALE_MS) {
+      continue;
+    }
     connections += num(snap.connections);
     onlineUsers += num(snap.onlineUsers);
 
