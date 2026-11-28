@@ -4,7 +4,7 @@ import { sql } from 'drizzle-orm';
 import { adminSessionHeaders, callAction, seedUser, startActionEnv, testUid, userToken } from './_dbTest/actionHarness.js';
 import type { ActionEnv } from './_dbTest/actionHarness.js';
 import { createDatabase } from './_db/client.js';
-import { integrityEventFragment, integrityStateFragment, resetIntegrityState } from './_data/integrity.js';
+import { claimConsistencyByUser, integrityEventFragment, integrityStateFragment, resetIntegrityState } from './_data/integrity.js';
 import { parseIntegrityConfig, processIntegrityInput } from '../src/game/rules/integrity.js';
 
 const CONFIG = JSON.stringify({
@@ -185,5 +185,57 @@ describe('추첨 가중치 관리자 조회와 초기화', () => {
     const { rows } = await env.client.query<{ action: string; target_id: string }>(
       'select action, target_id from public.admin_audit_logs where target_id = $1', [uid]);
     expect(rows.some(r => r.action === 'integrityRelease')).toBe(true);
+  });
+});
+
+describe('수동 캐치 일관성 집계', () => {
+  it('기간 내 사용자별 ok/mismatch/missing-pos 건수와 mismatchRate를 정확히 집계한다', async () => {
+    const u1 = await seedPlayer();
+    const u2 = await seedPlayer();
+    const since = new Date('2026-11-20T00:00:00.000Z').toISOString();
+    const before = new Date('2026-11-19T23:59:59.000Z').toISOString();
+    const inside = new Date('2026-11-20T12:00:00.000Z').toISOString();
+
+    const insertCatch = (uid: string, payload: Record<string, unknown>, createdAt: string) =>
+      env.client.query(
+        "insert into public.events (user_id, type, payload, created_at) values ($1, 'catch', $2::jsonb, $3::timestamptz)",
+        [uid, JSON.stringify(payload), createdAt],
+      );
+
+    await insertCatch(u1, { fishId: 'carp', claimCheck: 'ok' }, inside);
+    await insertCatch(u1, { fishId: 'carp', claimCheck: 'ok' }, inside);
+    await insertCatch(u1, { fishId: 'carp', claimCheck: 'mismatch' }, inside);
+    await insertCatch(u1, { fishId: 'carp', claimCheck: 'missing-pos' }, inside);
+    // 기간 이전과 claimCheck 없는 auto 캐치는 집계에서 제외된다
+    await insertCatch(u1, { fishId: 'carp', claimCheck: 'mismatch' }, before);
+    await insertCatch(u1, { fishId: 'carp' }, inside);
+
+    await insertCatch(u2, { fishId: 'carp', claimCheck: 'ok' }, inside);
+    await insertCatch(u2, { fishId: 'carp', claimCheck: 'mismatch' }, inside);
+
+    const conn = createDatabase({ connectionString: env.db.url, max: 1 });
+    try {
+      const rows = await claimConsistencyByUser(conn.db, since);
+      const r1 = rows.find(r => r.userId === u1);
+      const r2 = rows.find(r => r.userId === u2);
+      expect(r1).toEqual({
+        userId: u1,
+        total: 4,
+        ok: 2,
+        mismatch: 1,
+        missingPos: 1,
+        mismatchRate: 0.25,
+      });
+      expect(r2).toEqual({
+        userId: u2,
+        total: 2,
+        ok: 1,
+        mismatch: 1,
+        missingPos: 0,
+        mismatchRate: 0.5,
+      });
+    } finally {
+      await conn.pool.end();
+    }
   });
 });

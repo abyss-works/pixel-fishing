@@ -59,7 +59,7 @@ import type { DayPhase } from './time.js';
 import { NO_GUILD_EFFECTS } from './guild.js';
 import type { GuildEffects } from './guild.js';
 import { ensureFortune, totalLuckMultOf } from './fortune.js';
-import { redZoneCenter, timingPos } from './timing.js';
+import { redZoneCenter, timingPos, verifyClaimedJudgment } from './timing.js';
 
 export interface DebugStepInput {
   command: string;
@@ -622,6 +622,9 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const redPos = judgment !== 'auto' && deps.redZoneSeed
         ? redZoneCenter(deps.redZoneSeed, pz.yellow / 100, redWidth)
         : null;
+      const claimCheck = redPos !== null
+        ? verifyClaimedJudgment(action.judgment, pos, redPos, pz.yellow / 100, redWidth)
+        : null;
       const events: GameEvent[] = [{ type: 'catch', payload: {
         // uid를 남긴다 — 이벤트 스트림과 가방 개체를 잇는 유일한 연결고리 (감사·집계의 근거)
         // judgment는 강등 확정값 — 감사에서 "PERFECT 주장이 서버에서 살아남았나"를 보려면 이 값이다
@@ -629,7 +632,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         size: info.size, form: info.form, isNew: info.isNew, isBig: info.isBig, fame: gainedFame,
         ...(drawn.byCeiling ? { pity: true } : {}),
         ...(pos !== null ? { pos } : {}),
-        ...(redPos !== null ? { redPos, redWidth } : {}),
+        ...(redPos !== null ? { redPos, redWidth, claimCheck } : {}),
         // 걸린 슬롯(도시락=방치, 미끼=수동) — 집계가 읽는다. 적용 범위는 appliedSlots가 정한다
         ...appliedSlots(state, deps.now, action.judgment),
       } }];
