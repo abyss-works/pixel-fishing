@@ -279,10 +279,11 @@ export function selectEconomyMetrics(
 /** 관리자 화면이 계정을 가리킬 때 보이는 식별 정보. 명부 행이 그대로 이 모양이다. 게스트의 email은 null이다 */
 export type AdminIdentity = Pick<AdminUserRow, 'user_id' | 'opHandle' | 'email' | 'nickname' | 'is_anonymous'>;
 
-/** 계정 표시 이름 "닉네임(이메일)". opHandle 투영(maintainer)은 이메일 없이 닉네임만 보이고, 게스트는 (게스트)만 붙인다 */
+/** 계정 표시 이름 "닉네임(이메일)". 비식별 투영(maintainer)은 이메일 없이 닉네임만 보이고, 게스트는 (게스트)만 붙인다 */
 export function adminUserLabel(user: AdminIdentity): string {
   const name = user.nickname ?? '이름 없음';
   if (user.opHandle) return user.is_anonymous === true ? `${name}(게스트)` : name;
+  if (!user.email && user.is_anonymous === false) return name;
   const contact = user.is_anonymous === true ? '게스트' : user.email ?? '—';
   return `${name}(${contact})`;
 }

@@ -45,9 +45,8 @@ const fallbackUserRow = (userId: string): AdminUserRow => ({
 export default function ChatReportsSection({ onCompose }: {
   onCompose?: (userId: string) => void;
 }) {
-  const { access, role } = useAdminAuth();
+  const { access } = useAdminAuth();
   const granted = access === 'granted';
-  const isAdmin = role === 'admin';
   const reportsQuery = useAdminQuery(adminKeys.chatReports, readAdminChatReports, granted);
   const usersQuery = useAdminQuery(adminKeys.users, readAdminUsers, granted);
   const actions = useAdminUserActions();
@@ -81,7 +80,7 @@ export default function ChatReportsSection({ onCompose }: {
     }
   };
 
-  const detailUser = isAdmin && selectedUid
+  const detailUser = selectedUid
     ? (targetUserOf(selectedUid) ?? fallbackUserRow(selectedUid))
     : null;
 
@@ -99,7 +98,7 @@ export default function ChatReportsSection({ onCompose }: {
                 <th className="text-left">신고한 사람</th>
                 <th className="text-left">보낸 사람</th>
                 <th className="text-left">대화</th>
-                {isAdmin && <th className="text-left">조치</th>}
+                <th className="text-left">조치</th>
               </tr>
             </thead>
             <tbody>
@@ -116,7 +115,7 @@ export default function ChatReportsSection({ onCompose }: {
                   <tr key={r.id}>
                     <td className="text-2xs text-text-dim whitespace-nowrap align-top">{fmtDT(r.created_at)}</td>
                     <td className="align-top">
-                      {isAdmin && r.user_id
+                      {r.user_id
                         ? <UserIdentity user={identityOf(r.user_id)} />
                         : <span className="text-2xs text-text-dim">비공개</span>}
                     </td>
@@ -133,25 +132,23 @@ export default function ChatReportsSection({ onCompose }: {
                         </div>
                       ))}
                     </td>
-                    {isAdmin && (
-                      <td className="align-top whitespace-nowrap">
-                        <div className="flex flex-col items-start gap-1">
-                          <Button size="sm" variant="ghost" onClick={() => setSelectedUid(r.target_id)}>
-                            상세 보기
-                          </Button>
-                          <Button size="sm" variant={restricted ? 'ghost' : 'primary'}
-                                  disabled={!granted || busy || !canRestrict}
-                                  onClick={() => target && void toggleRestrict(target)}>
-                            {restricted ? '제재 해제' : '제재'}
-                          </Button>
-                        </div>
-                      </td>
-                    )}
+                    <td className="align-top whitespace-nowrap">
+                      <div className="flex flex-col items-start gap-1">
+                        <Button size="sm" variant="ghost" onClick={() => setSelectedUid(r.target_id)}>
+                          상세 보기
+                        </Button>
+                        <Button size="sm" variant={restricted ? 'ghost' : 'primary'}
+                                disabled={!granted || busy || !canRestrict}
+                                onClick={() => target && void toggleRestrict(target)}>
+                          {restricted ? '제재 해제' : '제재'}
+                        </Button>
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
               {reports.length === 0 && (
-                <tr><td colSpan={isAdmin ? 5 : 4} className="text-text-dim text-center py-3">신고가 없어요.</td></tr>
+                <tr><td colSpan={5} className="text-text-dim text-center py-3">신고가 없어요.</td></tr>
               )}
             </tbody>
           </DataTable>

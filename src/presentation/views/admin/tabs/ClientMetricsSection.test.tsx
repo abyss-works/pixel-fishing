@@ -58,7 +58,7 @@ afterEach(() => {
 
 const show = (access: AdminAccess, role: AdminRole = 'admin') => render(
   <QueryProvider>
-    <AdminAuthCtx.Provider value={{ access, uid: null, role, showStaffBadge: false, setStaffBadge: async () => {} }}>
+    <AdminAuthCtx.Provider value={{ access, uid: null, role, canViewEmail: role === 'admin', showStaffBadge: false, setStaffBadge: async () => {} }}>
       <ClientMetricsSection granted={access === 'granted'} />
     </AdminAuthCtx.Provider>
   </QueryProvider>,

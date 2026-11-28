@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import type { CSSProperties, MouseEvent, ReactNode } from 'react';
+import type { CSSProperties, FocusEvent, MouseEvent, ReactNode } from 'react';
 import { cx } from './cx';
 import { HighlightRarityText } from './fish/RarityTag';
 import { HOTKEY_TIER, hasModifier, useKeyScope } from './hotkeys';
@@ -46,7 +46,7 @@ function TipClose({ onClose }: { onClose: () => void }) {
   return null;
 }
 
-export default function Tip({ text, plain, wraps, pressOpens, hoverOnly, onlyIf, className, style, children }: {
+export default function Tip({ text, plain, wraps, pressOpens, hoverOnly, interactive, onlyIf, className, style, children }: {
   text: ReactNode;
   /** 밑줄 없이 감싼다(진행 막대 등) */
   plain?: boolean;
@@ -56,6 +56,8 @@ export default function Tip({ text, plain, wraps, pressOpens, hoverOnly, onlyIf,
   pressOpens?: boolean;
   /** 거친 포인터(터치)에서는 열지 않는다. 마우스 호버와 키보드 포커스에서만 뜬다 */
   hoverOnly?: boolean;
+  /** 버블 안 버튼 클릭·포커스 이동을 허용한다 */
+  interactive?: boolean;
   /** 주어지면 이 판정이 참일 때만 설명을 연다(보이지 않는 내용을 대신 알리는 곳에 쓴다) */
   onlyIf?: () => boolean;
   className?: string;
@@ -63,6 +65,8 @@ export default function Tip({ text, plain, wraps, pressOpens, hoverOnly, onlyIf,
   children: ReactNode;
 }) {
   const ref = useRef<HTMLSpanElement>(null);
+  const bubbleRef = useRef<HTMLDivElement>(null);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // open이 false면 닫힘, anchor가 null이면 rect를 못 주는 환경이다
   const [open, setOpen] = useState<{ anchor: Anchor | null } | null>(null);
   const notifyParent = useContext(TipParentContext);
@@ -73,8 +77,37 @@ export default function Tip({ text, plain, wraps, pressOpens, hoverOnly, onlyIf,
 
   const coarse = useCoarsePointer();
 
-  const show = () => { if (hoverOnly && coarse) return; if (!onlyIf || onlyIf()) setOpen({ anchor: anchorOf(ref.current) }); };
-  const hide = () => setOpen(null);
+  const clearHideTimer = useCallback(() => {
+    if (hideTimerRef.current !== null) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => clearHideTimer, [clearHideTimer]);
+
+  const show = () => {
+    clearHideTimer();
+    if (hoverOnly && coarse) return;
+    if (!onlyIf || onlyIf()) setOpen({ anchor: anchorOf(ref.current) });
+  };
+  const hide = () => {
+    clearHideTimer();
+    setOpen(null);
+  };
+  const scheduleHide = () => {
+    clearHideTimer();
+    hideTimerRef.current = setTimeout(() => {
+      hideTimerRef.current = null;
+      setOpen(null);
+    }, 150);
+  };
+  const handleBlur = (e: FocusEvent<HTMLElement>) => {
+    if (!interactive) { hide(); return; }
+    const next = e.relatedTarget as Node | null;
+    if (next && (ref.current?.contains(next) || bubbleRef.current?.contains(next))) return;
+    hide();
+  };
 
   // 거친 포인터: 열려 있는 동안 대상 바깥을 누르면 닫는다
   const isOpen = open !== null;
@@ -86,17 +119,27 @@ export default function Tip({ text, plain, wraps, pressOpens, hoverOnly, onlyIf,
 
   useEffect(() => {
     if (!coarse || !isOpen) return;
-    const onDown = (e: Event) => { if (!ref.current?.contains(e.target as Node)) setOpen(null); };
+    const onDown = (e: Event) => {
+      const target = e.target as Node;
+      if (ref.current?.contains(target)) return;
+      if (interactive && bubbleRef.current?.contains(target)) return;
+      setOpen(null);
+    };
     document.addEventListener('pointerdown', onDown);
     return () => document.removeEventListener('pointerdown', onDown);
-  }, [coarse, isOpen]);
+  }, [coarse, interactive, isOpen]);
 
   const hover = coarse ? {
     onClick: (e: MouseEvent<HTMLSpanElement>) => {
       if (wraps && !pressOpens && e.target !== e.currentTarget) return;
       if (open) hide(); else show();
     },
-  } : { onMouseEnter: show, onMouseLeave: hide, onFocus: show, onBlur: hide };
+  } : {
+    onMouseEnter: show,
+    onMouseLeave: interactive ? scheduleHide : hide,
+    onFocus: show,
+    onBlur: handleBlur,
+  };
 
   return (
     <>
@@ -107,7 +150,20 @@ export default function Tip({ text, plain, wraps, pressOpens, hoverOnly, onlyIf,
         </span>
       </TipParentContext.Provider>
       {isOpen && <TipClose onClose={hide} />}
-      {open && childOpenCount === 0 && <TooltipBubble anchor={open.anchor} className="font-sans font-normal">{highlightText(text)}</TooltipBubble>}
+      {open && childOpenCount === 0 && (
+        <TooltipBubble
+          anchor={open.anchor}
+          interactive={interactive}
+          bubbleRef={interactive ? bubbleRef : undefined}
+          onMouseEnter={interactive ? clearHideTimer : undefined}
+          onMouseLeave={interactive ? scheduleHide : undefined}
+          onFocus={interactive ? clearHideTimer : undefined}
+          onBlur={interactive ? handleBlur : undefined}
+          className="font-sans font-normal"
+        >
+          {highlightText(text)}
+        </TooltipBubble>
+      )}
     </>
   );
 }

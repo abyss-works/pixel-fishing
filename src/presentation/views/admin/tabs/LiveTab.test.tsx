@@ -33,7 +33,7 @@ describe('실시간 탭', () => {
   it('접속 목록·위치 분포·지표 줄을 실시간 접속으로 채운다', async () => {
     render(
       <QueryProvider>
-        <AdminAuthCtx.Provider value={{ access: 'granted', uid: 'admin', role: 'admin', showStaffBadge: false, setStaffBadge: async () => {} }}>
+        <AdminAuthCtx.Provider value={{ access: 'granted', uid: 'admin', role: 'admin', canViewEmail: true, showStaffBadge: false, setStaffBadge: async () => {} }}>
           <LiveTab />
         </AdminAuthCtx.Provider>
       </QueryProvider>,
@@ -70,7 +70,7 @@ describe('실시간 탭', () => {
 
     render(
       <QueryProvider>
-        <AdminAuthCtx.Provider value={{ access: 'granted', uid: 'maintainer', role: 'maintainer', showStaffBadge: false, setStaffBadge: async () => {} }}>
+        <AdminAuthCtx.Provider value={{ access: 'granted', uid: 'maintainer', role: 'maintainer', canViewEmail: false, showStaffBadge: false, setStaffBadge: async () => {} }}>
           <LiveTab />
         </AdminAuthCtx.Provider>
       </QueryProvider>,

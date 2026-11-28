@@ -16,7 +16,10 @@ import ChatReportsSection from './ChatReportsSection';
 
 const POLL_MS = 15_000;
 
-export default function LiveTab({ onCompose }: { onCompose?: (userId: string) => void } = {}) {
+export default function LiveTab({ onCompose, embedded = false }: {
+  onCompose?: (userId: string) => void;
+  embedded?: boolean;
+} = {}) {
   const { access } = useAdminAuth();
   const granted = access === 'granted';
   const { data, loading, error, refresh } = useAdminLive(POLL_MS);
@@ -32,8 +35,8 @@ export default function LiveTab({ onCompose }: { onCompose?: (userId: string) =>
   const board = useMemo(() => selectLiveBoard(data, tick), [data, tick]);
   const count = (v: number) => (data ? fmtNum(v) : '—');
 
-  return (
-    <TabPage title="실시간" context="실시간 채널에 연결된 사람을 15초마다 다시 읽어요. 아래에는 플레이어가 신고한 채팅이 있어요.">
+  const body = (
+    <>
       <KpiRow>
         <KpiTile label="지금 접속" value={count(data?.count ?? NaN)} hint="실시간 채널 연결 수" />
         <KpiTile label="가입 계정" value={count(board.members)} />
@@ -83,6 +86,14 @@ export default function LiveTab({ onCompose }: { onCompose?: (userId: string) =>
       <div className="mt-3">
         <ChatReportsSection onCompose={onCompose} />
       </div>
+    </>
+  );
+
+  if (embedded) return body;
+
+  return (
+    <TabPage title="실시간" context="실시간 채널에 연결된 사람을 15초마다 다시 읽어요. 아래에는 플레이어가 신고한 채팅이 있어요.">
+      {body}
     </TabPage>
   );
 }

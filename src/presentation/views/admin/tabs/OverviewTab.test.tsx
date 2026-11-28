@@ -5,6 +5,7 @@ import { QueryProvider } from '../../../../core/QueryProvider';
 import { AdminAuthCtx } from '../../../../features/admin/service/accessContext';
 import type { AdminRole } from '../../../../features/admin/model/types';
 import { api } from '../../../../platform/api';
+import { AdminViewModeCtx } from '../viewMode';
 import OverviewTab from './OverviewTab';
 
 const sampleOverview = () => ({
@@ -60,6 +61,8 @@ vi.mock('../../../../platform/api', () => ({
         byRoute: [],
         rows: [],
       })),
+      chatReports: vi.fn(async () => []),
+      restrict: vi.fn(async (_uid: string, restricted: boolean) => ({ restricted })),
     },
   },
 }));
@@ -75,11 +78,13 @@ afterEach(() => { vi.useRealTimers(); cleanup(); vi.clearAllMocks(); });
 const tile = (label: string) => screen.getAllByText(label)
   .map(el => el.parentElement as HTMLElement).find(el => el.classList.contains('pf-notch'))!;
 
-function show(access: 'granted' | 'local', role: AdminRole = 'admin') {
+function show(access: 'granted' | 'local', role: AdminRole = 'admin', viewMode: 'summary' | 'detail' = 'detail') {
   render(
     <QueryProvider>
-      <AdminAuthCtx.Provider value={{ access, uid: access === 'granted' ? 'admin' : null, role, showStaffBadge: false, setStaffBadge: async () => {} }}>
-        <OverviewTab />
+      <AdminAuthCtx.Provider value={{ access, uid: access === 'granted' ? 'admin' : null, role, canViewEmail: role === 'admin', showStaffBadge: false, setStaffBadge: async () => {} }}>
+        <AdminViewModeCtx.Provider value={{ viewMode, setViewMode: () => {} }}>
+          <OverviewTab />
+        </AdminViewModeCtx.Provider>
       </AdminAuthCtx.Provider>
     </QueryProvider>,
   );
@@ -112,11 +117,11 @@ describe('개요 탭', () => {
     expect(vi.mocked(api.admin.overview)).toHaveBeenCalledWith(30);
     expect(vi.mocked(api.admin.dailyStats)).not.toHaveBeenCalled();
 
-    // 위험 신호 — 제재 1건, 연타 1명. 신호가 있으면 이상탐지 안내가 붙는다
+    // 위험 신호 — 제재 1건, 연타 1명. 신호가 있으면 제재·무결성 안내가 붙는다
     const risk = screen.getByText('위험 신호').closest('section')!;
     expect(within(risk).getByText('제재 계정').nextElementSibling).toHaveTextContent('1');
     expect(within(risk).getByText('연타 플래그 유저').nextElementSibling).toHaveTextContent('1');
-    expect(within(risk).getByText(/이상탐지/)).toBeInTheDocument();
+    expect(within(risk).getByText(/제재·무결성/)).toBeInTheDocument();
 
     // 앱 서버 HTTP 오류율·429 요약
     expect(vi.mocked(api.admin.httpMetrics)).toHaveBeenCalledWith(30);

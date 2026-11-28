@@ -6,8 +6,9 @@ import { AdminAuthCtx } from '../../../../features/admin/service/accessContext';
 import type { AdminRole } from '../../../../features/admin/model/types';
 import { todayKST } from '../../../../features/admin/model/metrics';
 import { api } from '../../../../platform/api';
-import AnalysisTab from './AnalysisTab';
-import type { AnalysisSection } from '../routes';
+import InsightsTab from './InsightsTab';
+import type { InsightsSection } from '../routes';
+import { AdminViewModeCtx } from '../viewMode';
 
 vi.mock('../../../../platform/api', () => ({
   api: {
@@ -74,11 +75,13 @@ vi.mock('../../../../platform/api', () => ({
 
 afterEach(cleanup);
 
-function show(section: AnalysisSection, role: AdminRole = 'admin') {
+function show(section: InsightsSection, role: AdminRole = 'admin') {
   render(
     <QueryProvider>
-      <AdminAuthCtx.Provider value={{ access: 'granted', uid: role, role, showStaffBadge: false, setStaffBadge: async () => {} }}>
-        <AnalysisTab section={section} onSection={() => {}} />
+      <AdminAuthCtx.Provider value={{ access: 'granted', uid: role, role, canViewEmail: role === 'admin', showStaffBadge: false, setStaffBadge: async () => {} }}>
+        <AdminViewModeCtx.Provider value={{ viewMode: 'detail', setViewMode: () => {} }}>
+          <InsightsTab section={section} onSection={() => {}} />
+        </AdminViewModeCtx.Provider>
       </AdminAuthCtx.Provider>
     </QueryProvider>,
   );
@@ -107,7 +110,7 @@ describe('경제·진행 탭', () => {
   });
 
   it('진행 구역 — 분포 차트·오픈월드 존 해금(구 바다 6개 제외)·막힌 유저·바운티 퍼널을 채운다', async () => {
-    show('progression');
+    show('economy');
     // 조각배(명성 100)는 다음 배 돛단배(하한 1,000)에 막혀 있다 — 명부가 들어오면 이 줄이 생긴다
     expect(await screen.findByText('돛단배(T2)')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: '배 단계별 유저 수' })).toBeInTheDocument();
@@ -132,7 +135,7 @@ describe('경제·진행 탭', () => {
   });
 
   it('활동 구역 — 일별 집계 차트와 리텐션 코호트를 채우고, 30일·90일 기간 전환을 제공한다', async () => {
-    show('activity');
+    show('retention');
     // 막대의 title은 '월-일: 값', 집계되지 않은 날은 '월-일: 미집계'다
     const bar = (name: string) => screen.getByRole('img', { name })
       .querySelector(`[title^="${todayKST().slice(5)}:"]`)?.getAttribute('title');
@@ -215,7 +218,7 @@ describe('경제·진행 탭', () => {
       live: { count: 0, online: [] },
     } as never);
 
-    show('progression', 'maintainer');
+    show('economy', 'maintainer');
     expect(await screen.findByText(/전체 10명 중 휴면 게스트 6명을 제외한 활성 플레이어 4명/)).toBeInTheDocument();
     expect(screen.getByText(/맨발 1, 1 조각배 2, 3 정크선 1/)).toBeInTheDocument();
     expect(screen.getByText('Lv1 ~ Lv4')).toBeInTheDocument();
@@ -250,7 +253,7 @@ describe('경제·진행 탭', () => {
       live: { count: 0, online: [] },
     } as never);
 
-    show('progression', 'maintainer');
+    show('economy', 'maintainer');
     expect(await screen.findByText('모두 다음 배의 명성 하한을 넘었어요.')).toBeInTheDocument();
   });
 });

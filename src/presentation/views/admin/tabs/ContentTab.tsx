@@ -35,7 +35,7 @@ import NamedCatalogSection from './content/NamedCatalogSection';
 import WardrobeCatalogSection from './content/WardrobeCatalogSection';
 import ZoneCatalogSection from './content/ZoneCatalogSection';
 
-export default function ContentTab() {
+export default function ContentTab({ embedded = false }: { embedded?: boolean } = {}) {
   const [axis, setAxis] = useState<ContentAxisId>('fish');
   const [query, setQuery] = useState('');
   const [zone, setZone] = useState<CatalogFilter['zone']>('all');
@@ -69,11 +69,8 @@ export default function ContentTab() {
   const filteredSpots = useMemo(() => filterSpotCatalog(CONTENT_CATALOG.zones.spots, filter), [filter]);
   const filteredBounties = useMemo(() => filterBountyCatalog(CONTENT_CATALOG.bounties, filter), [filter]);
 
-  return (
-    <TabPage
-      title="콘텐츠 카탈로그"
-      context="어종·네임드·유물·업적·의상·요리·배·구역·의뢰 9개 정본 축을 오프라인에서도 검색·검수해요."
-    >
+  const body = (
+    <>
       <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="콘텐츠 축">
         {CONTENT_AXES.map(ax => (
           <PillButton
@@ -155,6 +152,17 @@ export default function ContentTab() {
         />
       )}
       {axis === 'bounties' && <BountyCatalogSection items={filteredBounties} />}
+    </>
+  );
+
+  if (embedded) return body;
+
+  return (
+    <TabPage
+      title="콘텐츠 카탈로그"
+      context="어종·네임드·유물·업적·의상·요리·배·구역·의뢰 9개 정본 축을 오프라인에서도 검색·검수해요."
+    >
+      {body}
     </TabPage>
   );
 }
