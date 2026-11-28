@@ -1292,7 +1292,7 @@ async function route(req: Req, res: Res): Promise<void> {
   // 만료 정리는 읽을 때 이미 판정이 끝나 있어 늦거나 유실돼도 판정은 같다. 다음 수배 액션이 다시 정리한다.
   // 활동일은 DAU·리텐션의 장기 정본이다. 이 쓰기가 유실되면 예약 작업이 남아 있는 events로 다시 채운다
   const followUps: (SQL | null)[] = [
-    eventsInsert(uid, out.events, eventNow, Object.keys(counterIncrementsForEvents(out.events)).length > 0,
+    eventsInsert(uid, out.events, eventNow, Object.keys(counterInc).length > 0,
       action.type === 'catch' ? integrityEval?.modifier ?? null : null),
     activeDayUpsert(uid, eventNow),
   ];
