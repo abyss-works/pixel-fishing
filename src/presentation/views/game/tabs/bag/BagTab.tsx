@@ -247,6 +247,24 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
   // 자동 잠금 — 어종×폼(일반/돌연변이)마다 가장 큰 1마리만 잠긴 상태로 맞춘다(logic.autoLockPlan).
   // 같은 어종×폼의 나머지 잠금은 풀리므로 누르면 먼저 확인 창을 띄운다. 적용은 autoLock 액션 한 번이고
   // 서버가 현재 가방으로 계획을 다시 계산한다. 변할 게 없으면 요청 없이 안내만.
+  // 확인 창의 물고기별 내역 — 마리 수만으로는 "방금 정리했는데 왜 또 뜨지"를 풀 수 없어,
+  // 무엇이 바뀌는지 이름과 크기로 보여 준다. 큰 것부터 3마리까지, 나머지는 외 N마리.
+  const autoLockDetails = (() => {
+    const byUid = new Map(game.bag.map(i => [i.uid, i]));
+    const summarize = (uids: string[]): string => {
+      const items = uids.map(u => byUid.get(u)).filter((i): i is NonNullable<typeof i> => i != null)
+        .sort((a, b) => (b.size ?? -1) - (a.size ?? -1));
+      // 개체 줄(InstanceLine)과 같은 라벨 — 크기·돌연변이·어종명 순서를 맞춘다
+      const label = (i: typeof items[number]) =>
+        [i.size === null ? null : fmtSize(i.size), i.form === 'variant' ? '돌연변이' : null, instanceFish(i)?.name ?? i.fishId]
+          .filter(Boolean).join(' ');
+      const shown = items.slice(0, 3).map(label);
+      const rest = items.length - shown.length;
+      return rest > 0 ? `${shown.join(', ')} 외 ${rest}마리` : shown.join(', ');
+    };
+    return { lock: summarize(autoLockPlan.lock), unlock: summarize(autoLockPlan.unlock) };
+  })();
+
   const autoLock = () => {
     if (autoLockPlan.lock.length === 0 && autoLockPlan.unlock.length === 0) {
       sendNotice(setToast, {
@@ -360,6 +378,12 @@ export default function BagTab({ game, accountState = 'account', sellBonus, bagB
                     <b className={cx('pf-accent', autoLockPlan.unlock.length > 0 && 'text-danger')}>{autoLockPlan.unlock.length}</b>마리
                   </span>
                 </p>
+                {autoLockPlan.lock.length > 0 && (
+                  <p className="text-xs text-text-dim leading-relaxed">잠금: {autoLockDetails.lock}</p>
+                )}
+                {autoLockPlan.unlock.length > 0 && (
+                  <p className="text-xs text-text-dim leading-relaxed">잠금 해제: {autoLockDetails.unlock}</p>
+                )}
             </ConfirmDialog>
           )}
           {EXHIBIT_UI_ENABLED && <ExhibitShelf exhibit={game.exhibit} onWithdraw={withdraw} />}

@@ -1499,7 +1499,13 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     fireEvent.click(screen.getByLabelText('자동 잠금'));
     // 먼저 확인 창 — 풀리는 수를 알려 준다. 정리하기를 눌러야 바뀐다
     expect(screen.getByText(/가장 큰 물고기 한 마리만/)).toBeInTheDocument();
-    expect(screen.getByText(/잠금 해제/).textContent).toContain('1');
+    expect(screen.getByText(/잠금 해제/, { selector: 'span' }).textContent).toContain('1');
+    // 확인 창은 무엇이 바뀌는지 물고기 이름과 크기로 알려 준다
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText(/40\.0cm 붕어/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/55\.0cm 돌연변이 붕어/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/33\.0cm 잉어/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/12\.0cm 붕어/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '정리' }));
     openRow('붕어');
     openRow('잉어');
@@ -1513,6 +1519,21 @@ describe('가방 탭: 조회 + 어종 잠금 (전부 판매 제외)', () => {
     fireEvent.click(screen.getByLabelText('자동 잠금'));
     expect(screen.getByText(/정리할 잠금이 없어요/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '정리' })).toBeNull();
+  });
+
+  it('자동 잠금 — 정리 대상이 많으면 앞 3마리만 보여 주고 나머지는 외 N마리로 뭉뚱그린다', () => {
+    seed({ bag: [
+      inst('crucian', 'normal', 40),
+      inst('carp', 'normal', 33),
+      inst('minnow', 'normal', 12),
+      inst('loach', 'normal', 20),
+      inst('catfish', 'normal', 50),
+    ] });
+    render(<App />);
+    clickTab(/^가방/);
+    fireEvent.click(screen.getByLabelText('자동 잠금'));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText(/외 2마리/)).toBeInTheDocument();
   });
 
   it('가공 플랜트선 보유 시 바다에서도 가방 하단 기운 얻기 버튼으로 기운 얻기 창을 연다', () => {
