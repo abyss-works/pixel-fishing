@@ -4,7 +4,7 @@
 //   GET    /api/guilds/me                  → { guild, request }       내 길드, 길드원(접속 여부·기여 포함), 고유 코드와 가입 방식,
 //                                                                       가입 신청(길드장만), 성장(레벨), 보너스와 효과, 기부 순위, 항해일지.
 //                                                                       길드가 없으면 guild는 null이고 request는 내가 넣어 둔 신청이다
-//   GET    /api/guilds/public?q=&sort=     → { guilds }               자유 가입·비만석 공개 길드 목록(고유 코드 비노출). sort=activity|level|slots
+//   GET    /api/guilds/public?q=&sort=     → { guilds }               전체 길드 목록(open·approval·closed·만석 포함, 고유 코드 비노출). sort=activity|level|slots
 //   POST   /api/guilds { name }            → 201 { id }               만들기. 만든 사람이 길드장이다
 //   PATCH  /api/guilds/:id { joinMode?, pitch? }
 //                                          → { joinMode, pitch }      가입 방식과 권유 문구 바꾸기(길드장)
@@ -206,23 +206,20 @@ export function guildRoutes(changed: GuildChanged): Record<string, NodeHandler> 
   const join = handle(['POST'], async (req, res, uid) => {
     const rawGuildId = bodyField(req, 'guildId');
     const rawCode = bodyField(req, 'code');
-    if (rawGuildId !== undefined) {
-      if (rawCode !== undefined) throw new ApiError(400, 'bad-code');
-      if (typeof rawGuildId !== 'string' || !UUID.test(rawGuildId)) throw new ApiError(400, 'bad-guild');
-      const r = await run('db-write', () => joinByGuildId(database().withTransaction, uid, rawGuildId.toLowerCase(),
-        new Date().toISOString()));
-      if (!r.ok) throw refuse(r.error);
-      changed(uid, r.id);
-      guildUpdated(r.id);
-      res.status(201).json({ id: r.id, result: 'joined' });
-      return;
-    }
-    const code = normalizeGuildCode(rawCode);
-    if (!code) throw new ApiError(400, 'bad-code');
-    // via는 초대 링크의 확인 창에서 온 요청에만 붙는다. 링크의 내용이 곧 고유 코드라 코드를 아는 사람이 via를 붙여도
-    // 링크를 받은 사람과 얻는 것이 같으므로 서버는 이 표시를 그대로 받는다
-    const via = parseJoinVia(bodyField(req, 'via'));
-    const r = await run('db-write', () => joinByCode(database().withTransaction, uid, code, new Date().toISOString(), via));
+    const nowISO = new Date().toISOString();
+    const r = await (async () => {
+      if (rawGuildId !== undefined) {
+        if (rawCode !== undefined) throw new ApiError(400, 'bad-code');
+        if (typeof rawGuildId !== 'string' || !UUID.test(rawGuildId)) throw new ApiError(400, 'bad-guild');
+        return run('db-write', () => joinByGuildId(database().withTransaction, uid, rawGuildId.toLowerCase(), nowISO));
+      }
+      const code = normalizeGuildCode(rawCode);
+      if (!code) throw new ApiError(400, 'bad-code');
+      // via는 초대 링크의 확인 창에서 온 요청에만 붙는다. 링크의 내용이 곧 고유 코드라 코드를 아는 사람이 via를 붙여도
+      // 링크를 받은 사람과 얻는 것이 같으므로 서버는 이 표시를 그대로 받는다
+      const via = parseJoinVia(bodyField(req, 'via'));
+      return run('db-write', () => joinByCode(database().withTransaction, uid, code, nowISO, via));
+    })();
     if (!r.ok) throw refuse(r.error);
     if (r.result === 'joined') {
       changed(uid, r.id);

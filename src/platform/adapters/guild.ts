@@ -35,7 +35,7 @@ export async function readGuildInvite(code: string): Promise<GuildInvitePreview 
   return (await res.json() as { invite: GuildInvitePreview }).invite;
 }
 
-/** 자유 가입 공개 길드 목록 조회(검색 q, 정렬 sort) */
+/** 전체 길드 목록 조회(검색 q, 정렬 sort) */
 export async function readPublicGuilds(opts: { q?: string; sort?: PublicGuildSort } = {}): Promise<PublicGuildItem[]> {
   if (!isCloud) return [];
   const params = new URLSearchParams();
