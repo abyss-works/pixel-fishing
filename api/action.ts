@@ -58,6 +58,7 @@ import { ACHIEVEMENTS } from '../src/game/content/achievements.js';
 import { encounterQuests } from '../src/game/rules/rules.js';
 import type { BountyCtx } from '../src/game/rules/rules.js';
 import { parseAction } from '../src/game/rules/actionSchema.js';
+import { verifyClaimedJudgment } from '../src/game/rules/timing.js';
 import {
   isDebugTableCommand, parseBountyResetKind, parseSnapshotBounty, reduceDebug, revokeUnmetClaimableAchievements,
 } from '../src/game/rules/debug.js';
@@ -1505,12 +1506,16 @@ export async function fastCatch(db: Executor, uid: string, row: StateRow, spot: 
   const redPos = judgmentIn !== 'auto'
     ? redZoneCenter(`${uid}:${Number(row.version)}`, pz.yellow / 100, redWidth)
     : null;
+  const claimCheck = judgmentIn !== 'auto' && redPos !== null
+    ? verifyClaimedJudgment(judgmentIn, pos, redPos, pz.yellow / 100, redWidth)
+    : null;
   const events: GameEvent[] = [{ type: 'catch', payload: {
     uid: inst.uid, fishId: fish.id, judgment, spot,
     size: info.size, form: info.form, isNew: info.isNew, isBig: info.isBig, fame: gainedFame,
     ...(drawn.byCeiling ? { pity: true } : {}),
     ...(pos !== null ? { pos } : {}),
     ...(redPos !== null ? { redPos, redWidth } : {}),
+    ...(claimCheck !== null ? { claimCheck } : {}),
     ...appliedSlots(base, now, judgmentIn),
   } }];
   if (goneFish.length > 0) {

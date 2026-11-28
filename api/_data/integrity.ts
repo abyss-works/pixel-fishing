@@ -206,3 +206,49 @@ export async function integrityValidationMetrics(db: Executor, days: number): Pr
   });
   return { days, clean: project(cohorts.clean), pressured: project(cohorts.pressured) };
 }
+
+export interface ClaimConsistencyRow {
+  userId: string;
+  total: number;
+  ok: number;
+  mismatch: number;
+  missingPos: number;
+  mismatchRate: number;
+}
+
+/** 수동 캐치 판정 일관성 집계 — 기간 내 사용자별 claimCheck 분포와 불일치율을 돌려준다 */
+export async function claimConsistencyByUser(db: Executor, sinceISO: string): Promise<ClaimConsistencyRow[]> {
+  const { rows } = await db.execute<{
+    user_id: string;
+    total: number;
+    ok: number;
+    mismatch: number;
+    missing_pos: number;
+  }>(sql`
+    select
+      e.user_id,
+      count(*)::int as total,
+      count(*) filter (where e.payload->>'claimCheck' = 'ok')::int as ok,
+      count(*) filter (where e.payload->>'claimCheck' = 'mismatch')::int as mismatch,
+      count(*) filter (where e.payload->>'claimCheck' = 'missing-pos')::int as missing_pos
+    from public.events e
+    where e.type = 'catch'
+      and e.payload->>'claimCheck' is not null
+      and e.created_at >= ${at(sinceISO)}
+    group by e.user_id
+    order by mismatch desc, total desc, e.user_id`);
+  return rows.map(r => {
+    const total = Number(r.total);
+    const ok = Number(r.ok);
+    const mismatch = Number(r.mismatch);
+    const missingPos = Number(r.missing_pos);
+    return {
+      userId: r.user_id,
+      total,
+      ok,
+      mismatch,
+      missingPos,
+      mismatchRate: total > 0 ? mismatch / total : 0,
+    };
+  });
+}

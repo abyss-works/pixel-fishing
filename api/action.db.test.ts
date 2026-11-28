@@ -30,7 +30,7 @@ import {
   FISH, LICENSE_GRADES, WALK_BAG_CAP, newState, redZoneCenter, sellSelected, zoneDexMissing,
 } from '../src/game/rules/logic.js';
 import type { GameState } from '../src/game/rules/logic.js';
-import { powerZones } from '../src/game/rules/stats.js';
+import { powerZones, rodAxes } from '../src/game/rules/stats.js';
 import { NAMED_PITY_CATCHES, PITY_DONE, SPECIES_PITY_K } from '../src/game/rules/pity.js';
 import { APP_VERSION } from '../src/version.js';
 import { database } from './_db/client.js';
@@ -3115,5 +3115,58 @@ describe('게스트 동적 쿠폰 FOR UPDATE 재확인', () => {
     } finally {
       spy.mockRestore();
     }
+  });
+});
+
+describe('수동 캐치 claimCheck 이벤트 기록', () => {
+  it('수동 캐치에는 claimCheck(ok/mismatch/missing-pos)가 기록되고 응답 판정은 유지되며 auto에는 미기록된다', async () => {
+    const state = { firstCatch: endedFirstCatch() };
+    const sweepMs = rodAxes({ ...newState(), ...state }).sweep.value * 1000;
+
+    const okUid = await seed({ state });
+    const okRes = await callAction(userToken(okUid), {
+      type: 'catch', spot: 'pond', judgment: 'good', biteElapsed: sweepMs * 0.5,
+    });
+    expect(okRes.status).toBe(200);
+    expect((okRes.body as { result: { type: string } }).result.type).toBe('catch');
+    const okDump = await dumpUser(env.client, okUid);
+    const okDbCatch = (okDump.events as { type: string; payload: Record<string, unknown> }[])
+      .find(e => e.type === 'catch');
+    expect(okDbCatch?.payload.judgment).toBe('good');
+    expect(okDbCatch?.payload.claimCheck).toBe('ok');
+
+    const mismatchUid = await seed({ state });
+    const mismatchRes = await callAction(userToken(mismatchUid), {
+      type: 'catch', spot: 'pond', judgment: 'good', biteElapsed: 0,
+    });
+    expect(mismatchRes.status).toBe(200);
+    expect((mismatchRes.body as { result: { type: string } }).result.type).toBe('catch');
+    const mismatchDump = await dumpUser(env.client, mismatchUid);
+    const mismatchDbCatch = (mismatchDump.events as { type: string; payload: Record<string, unknown> }[])
+      .find(e => e.type === 'catch');
+    expect(mismatchDbCatch?.payload.judgment).toBe('good');
+    expect(mismatchDbCatch?.payload.claimCheck).toBe('mismatch');
+
+    const missingUid = await seed({ state });
+    const missingRes = await callAction(userToken(missingUid), {
+      type: 'catch', spot: 'pond', judgment: 'good',
+    });
+    expect(missingRes.status).toBe(200);
+    expect((missingRes.body as { result: { type: string } }).result.type).toBe('catch');
+    const missingDump = await dumpUser(env.client, missingUid);
+    const missingDbCatch = (missingDump.events as { type: string; payload: Record<string, unknown> }[])
+      .find(e => e.type === 'catch');
+    expect(missingDbCatch?.payload.claimCheck).toBe('missing-pos');
+
+    const autoUid = await seed({ state });
+    const autoRes = await callAction(userToken(autoUid), {
+      type: 'catch', spot: 'pond', judgment: 'auto',
+    });
+    expect(autoRes.status).toBe(200);
+    const autoDump = await dumpUser(env.client, autoUid);
+    const autoDbCatch = (autoDump.events as { type: string; payload: Record<string, unknown> }[])
+      .find(e => e.type === 'catch');
+    expect(autoDbCatch?.payload).toBeDefined();
+    expect('claimCheck' in autoDbCatch!.payload).toBe(false);
   });
 });
