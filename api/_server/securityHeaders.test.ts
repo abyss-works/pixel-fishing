@@ -270,16 +270,17 @@ describe('서버 진입점 보안 헤더 등록 순서', () => {
 
 describe('독립 관리자 서버 보안 헤더 정렬', () => {
   const adminMain = readFileSync(new URL('./adminMain.ts', import.meta.url), 'utf8');
+  const adminStatic = readFileSync(new URL('./adminStatic.ts', import.meta.url), 'utf8');
 
   it('x-powered-by를 끄고 /api/admin과 /admin 정적 서빙보다 먼저 securityHeaders를 등록한다', () => {
     expect(adminMain).toContain("app.disable('x-powered-by')");
     const secIdx = adminMain.indexOf('app.use(securityHeaders(');
     const authIdx = adminMain.indexOf("app.post(['/api/admin/auth/sign-in/social'");
-    const staticIdx = adminMain.indexOf("app.use('/admin/assets'");
+    const staticIdx = adminMain.indexOf('app.use(createAdminStaticRouter(');
     expect(secIdx).toBeGreaterThan(-1);
     expect(authIdx).toBeGreaterThan(secIdx);
     expect(staticIdx).toBeGreaterThan(secIdx);
-    expect(adminMain).toContain('immutable: true');
-    expect(adminMain).toContain("res.setHeader('Cache-Control', 'no-cache')");
+    expect(adminStatic).toContain('immutable: true');
+    expect(adminStatic).toContain("res.setHeader('Cache-Control', 'no-cache')");
   });
 });
