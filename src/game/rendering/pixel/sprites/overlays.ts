@@ -37,6 +37,12 @@ export interface JumpFx {
   reducedMotion?: boolean;
 }
 
+/** 챔질 판정 글자. t는 판정 뒤 경과 초 */
+export interface JudgmentFx {
+  grade: 'perfect' | 'good';
+  t: number;
+}
+
 export interface GearView {
   player: { x: number; y: number };
   school: School | null;
@@ -210,4 +216,17 @@ export function drawTimingBar(ctx: Ctx, v: GearView) {
   }
   const cx = bx + Math.min(v.biteT, 1) * bw;
   R(ctx, cx - 1, by - 2, 2, bh + 4, '#fff');
+}
+
+// 판정 글자 색은 타이밍 바의 영역 색(빨강 PERFECT, 노랑 GOOD)과 같다
+const JUDGMENT_STYLE = {
+  perfect: { text: 'PERFECT', color: '#ef5350' },
+  good: { text: 'GOOD', color: '#ffd54f' },
+} as const;
+const JUDGMENT_FONT_PX = 10;
+
+/** 판정 순간 사라진 타이밍 바 자리에 판정 글자를 그린다 */
+export function drawJudgmentFx(ctx: Ctx, v: Pick<GearView, 'player'>, fx: JudgmentFx) {
+  const style = JUDGMENT_STYLE[fx.grade];
+  label(ctx, style.text, v.player.x, v.player.y + 17, style.color, JUDGMENT_FONT_PX);
 }

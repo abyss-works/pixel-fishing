@@ -12,12 +12,12 @@ import {
   drawCandyCane, drawDeck, drawGiftBox, drawLabel, drawLand, drawSnowman, drawSnowPine, drawTree, drawWater,
   drawWinterLantern, drawXmasTree,
 } from '../../pixel/sprites/scenery.js';
-import { drawFishJump, drawFishingGear, drawSchools, drawTimingBar, jumpPoint } from '../../pixel/sprites/overlays.js';
+import { drawFishJump, drawFishingGear, drawJudgmentFx, drawSchools, drawTimingBar, jumpPoint } from '../../pixel/sprites/overlays.js';
 import { cameraFor } from './camera.js';
 import type { RegionPack, School } from '../../../world/types';
 import { FIELD_VIEW } from '../../../world/fieldView.js';
 import type { ViewSize } from '../../../world/fieldView.js';
-import type { GearView, JumpFx } from '../../pixel/sprites/overlays.js';
+import type { GearView, JudgmentFx, JumpFx } from '../../pixel/sprites/overlays.js';
 import { DEFAULT_LOOK, effectiveLookForRegion } from '../../../content/wardrobe.js';
 import type { Look } from '../../../content/wardrobe.js';
 
@@ -31,6 +31,8 @@ export interface FieldView extends GearView {
   others?: OtherShipView[];
   /** 같은 바다 다른 플레이어의 물고기 점프 연출 */
   peerJumps?: readonly JumpFx[];
+  /** 챔질 판정 글자 — 판정 순간부터 짧게만 있다 */
+  judgment?: JudgmentFx | null;
   /** 내 물고기 점프 연출 — 이동 직후에도 끊기지 않도록 낚시 단계와 별개로 그린다 */
   localJumps?: readonly JumpFx[];
   /** 내 머리 위 말풍선 — 내가 보낸 월드 채팅과 입력 중 표시. 다른 플레이어에게 보이는 것과 같다 */
@@ -144,6 +146,7 @@ export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
   drawSpeech(ctx, v.player.x, v.player.y - 24, v.bubble ?? null);
   drawIdle(ctx, v.player.x, v.player.y - 24, v.idle ?? null);
   drawTimingBar(ctx, v);
+  if (v.judgment) drawJudgmentFx(ctx, v, v.judgment);
 
   // 비네팅 — 화장 가장자리를 어둡게 덮어 수중 압박감 (스크린 공간 후처리)
   ctx.setTransform(1, 0, 0, 1, 0, 0);

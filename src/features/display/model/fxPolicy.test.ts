@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FX_RENDERERS, createFxMediatorState, fxIntensityOf, mediateFx } from './fxPolicy';
+import { FX_RENDERERS, JUDGMENT_MS, createFxMediatorState, fxIntensityOf, mediateFx } from './fxPolicy';
 import type { CatchFxKind, CatchFxSubject, FxEnv, FxRequest } from './fxPolicy';
 import { DUPLICATE_SUPPRESS_MS, FX_ONLY_RULES, TOAST_POLICY } from './toastPolicy';
 import type { FxEventKind, SystemEventKind } from './toastPolicy';
@@ -18,6 +18,11 @@ describe('fxIntensityOf', () => {
     expect(fxIntensityOf('catch.routine', true)).toBe('small');
     expect(fxIntensityOf('catch.routine', false)).toBe('small');
     expect(fxIntensityOf('live.peerCatch', false)).toBe('large');
+  });
+
+  it('챔질 판정은 직접 행동일 때만 작게다', () => {
+    expect(fxIntensityOf('catch.judgment', true)).toBe('small');
+    expect(fxIntensityOf('catch.judgment', false)).toBe('none');
   });
 
   it('효과 규칙이 없는 사건은 none이다', () => {
@@ -58,6 +63,14 @@ const intensities = (r: { directives: { renderer: string; intensity: string }[] 
   Object.fromEntries(r.directives.map(d => [d.renderer, d.intensity]));
 
 describe('mediateFx', () => {
+  it('챔질 판정은 필드 지시 하나가 되고 판정 글자 길이만큼 유지된다', () => {
+    const request: FxRequest = { kind: 'catch.judgment', direct: true, at: 500, subject: { region: 'world', judgment: 'perfect' } };
+    const r = mediateFx(createFxMediatorState(), request, env({ windowsOpen: true }));
+    expect(r.directives).toHaveLength(1);
+    expect(r.directives[0]).toMatchObject({ renderer: 'field', intensity: 'small', startAt: 500, endsAt: 500 + JUDGMENT_MS });
+    expect(FX_RENDERERS['catch.judgment']).toEqual(['field']);
+  });
+
   it('강도가 none이면 지시가 없다', () => {
     const r = mediateFx(createFxMediatorState(), { ...catchReq('catch.routine', 0), kind: 'catch.rejected' as never }, env());
     expect(r.directives).toEqual([]);

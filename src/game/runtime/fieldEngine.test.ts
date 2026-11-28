@@ -1157,7 +1157,7 @@ describe('GameFieldEngine 효과 출처 주입', () => {
     const engine = new GameFieldEngine('world', newState(), [], WORLD_SPAWN);
     const local = [jump({ x: 1, y: 2 })];
     const peer = [jump({ x: 3, y: 4 })];
-    const source = vi.fn(() => ({ reducedMotion: true, localJumps: local, peerJumps: peer }));
+    const source = vi.fn(() => ({ reducedMotion: true, localJumps: local, peerJumps: peer, judgment: null }));
     engine.setFxSource(source);
     const renderMock = vi.mocked(renderRegion);
     renderMock.mockClear();

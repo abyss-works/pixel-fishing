@@ -28,7 +28,7 @@ import { FIELD_VIEW } from '../world/fieldView.js';
 import type { ViewSize } from '../world/fieldView.js';
 import { renderRegion } from '../rendering/canvas/scenes/region.js';
 import type { OtherShipView, Speech } from '../rendering/pixel/sprites/actors.js';
-import type { JumpFx } from '../rendering/pixel/sprites/overlays.js';
+import type { JudgmentFx, JumpFx } from '../rendering/pixel/sprites/overlays.js';
 import { DEFAULT_FISH_ART_STYLE } from '../rendering/pixel/fishArt/index.js';
 import type { FishArtStyle } from '../rendering/pixel/fishArt/index.js';
 import { effectiveLookForRegion } from '../content/wardrobe.js';
@@ -54,6 +54,7 @@ export interface FieldFxFrame {
   reducedMotion: boolean;
   localJumps: readonly JumpFx[];
   peerJumps: readonly JumpFx[];
+  judgment: JudgmentFx | null;
 }
 
 export interface FieldSnapshot {
@@ -579,7 +580,7 @@ export class GameFieldEngine {
       red: zones ? zones.red / 100 : 0,
       redCenter: this.redCenter,
       t: now / 1000,
-      ...(this.fxSource?.(wallNow) ?? { reducedMotion: false, localJumps: [], peerJumps: [] }),
+      ...(this.fxSource?.(wallNow) ?? { reducedMotion: false, localJumps: [], peerJumps: [], judgment: null }),
       fishArt: this.fishArt,
       view: this.view,
       ...(this.liveSource?.(now) ?? { others: [], bubble: null, idle: null }),

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   activeFieldDirectives, bindFxEnvironment, clearFx, fieldFxFrame, getFxDirective, requestFx, resetFxPlayback, subscribeFx,
 } from './fxPlayback';
+import { JUDGMENT_MS } from '../model/fxPolicy';
 import type { CatchFxKind, FxRequest, PeerCatchFxSubject } from '../model/fxPolicy';
 
 const catchReq = (kind: CatchFxKind, at: number, over: { holdEndsAt?: number; region?: 'village' | 'world' } = {}): FxRequest => ({
@@ -141,6 +142,16 @@ describe('fieldFxFrame', () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it('챔질 판정은 점프가 아니라 판정 글자로 프레임에 실린다', () => {
+    requestFx({ kind: 'catch.judgment', direct: true, at: Date.now(), subject: { region: 'world', judgment: 'good' } });
+    const frame = fieldFxFrame('world', Date.now() + 200);
+    expect(frame.judgment).toEqual({ grade: 'good', t: 0.2 });
+    expect(frame.localJumps).toEqual([]);
+    expect(frame.peerJumps).toEqual([]);
+    expect(fieldFxFrame('village', Date.now()).judgment).toBeNull();
+    expect(fieldFxFrame('world', Date.now() + JUDGMENT_MS).judgment).toBeNull();
   });
 
   it('필드가 작게로 낮춘 요청은 작게 강도 점프가 된다', () => {
