@@ -200,12 +200,13 @@ describe('거점 카드 메뉴', () => {
       expect(root!.className).toContain('[container:basemenu/size]');
     });
 
-    it('메뉴 영역은 채팅 자리를 비우지 않고 프레임 전체를 쓴다 - PC 레이아웃은 헤더 아래부터다', () => {
+    it('메뉴 영역은 채팅 자리를 비우지 않고 프레임 전체를 쓰며, PC 레이아웃은 헤더 높이만큼 위쪽을 비운다', () => {
       render(<BaseMenu base="harbor" game={newState()} />);
       const root = screen.getByRole('heading', { name: '정보' }).closest('[class*="container:basemenu"]')!;
       expect(root.className).toContain('absolute inset-0');
       expect(root.className).not.toContain('--log-clear');
-      // PC 레이아웃은 겹친 헤더 아래부터 시작한다
+      // PC 레이아웃은 스테이지 위에 겹치는 헤더 높이만큼 위쪽을 비운다
+      expect(STACK_MENU_CLASS).toMatch(/\bpc:top-\d+\b/);
       expect(root.className).toContain(STACK_MENU_CLASS);
     });
 
