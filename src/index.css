@@ -955,7 +955,7 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
 
   @media (max-width: 1024px) {
     .pf-admin-master-detail {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
     .pf-admin-detail-sticky {
       position: static;
