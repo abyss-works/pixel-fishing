@@ -402,8 +402,8 @@ describe('기운 얻기 탭의 잠금', () => {
   it('진행 조건 잠금 툴팁은 구역 항로와 배 단계 두 줄이다', () => {
     show(seed({ boat: COOKING_UNLOCK_BOAT - 1 }));
     const tip = lines(tab('기운 얻기'));
- expect(tip).toHaveTextContent('인도양 항로가 열리면 기운 얻기를 할 수 있어요.');
- expect(tip).toHaveTextContent('인도양 항로는 증기선(5단계)부터 열려요.');
+    expect(tip).toHaveTextContent('인도양 항로가 열리면 기운 얻기를 할 수 있어요.');
+    expect(tip).toHaveTextContent('인도양 항로는 증기선(5단계)부터 열려요.');
   });
 
   it('게스트에게는 게스트 잠금이다', () => {
