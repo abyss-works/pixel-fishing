@@ -636,8 +636,10 @@ describe('UI 시스템 가드', () => {
     const catchSlotTag = openingTagsAt(hud, 'div').find(t => /ref=\{onCatchSlot\}/.test(t.tag))?.tag ?? '';
     expect(catchSlotTag).not.toMatch(/\bz-/);
     expect(hud).not.toMatch(/['"`]contents\b/);
-    expect(hud).not.toMatch(/\babsolute\s+right-3\s+bottom-3\b/);
-    expect(log).not.toMatch(/\babsolute\s+left-3\s+bottom-3\b/);
+    const hasAllTokens = (tag: string, tokens: readonly string[]) =>
+      tokens.every(tok => new RegExp(`(?:^|[\\s'"\`])${tok}(?:$|[\\s'"\`])`).test(tag));
+    expect(openingTagsAt(hud, 'div').some(t => hasAllTokens(t.tag, ['absolute', 'right-3', 'bottom-3']))).toBe(false);
+    expect(openingTagsAt(log, 'div').some(t => hasAllTokens(t.tag, ['absolute', 'left-3', 'bottom-3']))).toBe(false);
     // statusSlot·catchSlot은 하단 트렁크 div 바깥(앞)에 독립 배치된다
     const slotAt = hud.indexOf('<div ref={onStatusSlot}');
     const catchAt = hud.indexOf('<div ref={onCatchSlot}');

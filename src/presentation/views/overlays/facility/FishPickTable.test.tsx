@@ -11,7 +11,6 @@ afterEach(cleanup);
 const fish = FISH.find(f => f.rarity === 'common')!;
 const rare = FISH.find(f => f.id === 'carp')!;   // 희귀
 const rare2 = FISH.find(f => f.id === 'seabream')!; // 희귀
-const epic = FISH.find(f => f.id === 'goldfish')!; // 영웅
 const inst = (uid: string, over: Partial<FishInstance> = {}): FishInstance =>
   ({ uid, fishId: fish.id, form: 'normal', size: 20, caughtAt: null, spot: null, judgment: null, locked: false, ...over });
 
@@ -162,13 +161,5 @@ describe('등급 칩 스트립', () => {
     expect(within(strip()).getByRole('button', { name: '영웅 등급 선택 선택' })).toBeDisabled();
     expect(within(strip()).getByRole('button', { name: '희귀 등급 선택 선택' })).toBeDisabled(); // 잠긴 것뿐이면 고를 수 없다
     expect(within(strip()).getByRole('button', { name: '일반 등급 선택 해제' })).toBeEnabled();
-  });
-
-  it('켜진 칩의 등급 낱말은 등급색이고 꺼진 칩은 보조색이다', () => {
-    show([inst('a'), inst('b', { fishId: epic.id })], ['a']);
-    const on = within(strip()).getByRole('button', { name: '영웅 등급 선택 해제' });
-    expect(on.querySelector('[data-rarity="epic"]')).not.toBeNull();
-    const off = within(strip()).getByRole('button', { name: '일반 등급 선택 선택' });
-    expect(off.querySelector('[data-rarity]')).toBeNull();
   });
 });

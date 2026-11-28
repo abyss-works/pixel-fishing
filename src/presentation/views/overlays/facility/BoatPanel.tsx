@@ -84,7 +84,7 @@ export default function BoatPanel({ game, onBuy, onClose, busy }: {
                 delta: currentSpeed === null ? undefined : `+${fmtNum(next.speed - currentSpeed)}` },
               { label: '가방 상한', value: `${fmtNum(currentBagCap)}마리`, next: `${fmtNum(next.bagCap)}마리`,
                 delta: `+${fmtNum(next.bagCap - currentBagCap)}` },
-              { label: '새 해역', next: openedSpot ? openedSpot.name : next.tier === 1 ? '태평양' : '없음' },
+              { label: '새 해역', next: openedSpot ? openedSpot.name : '없음' },
             ]} />
           {next.tier === AUTO_ENERGY_BOAT && <Note size="xs" className="my-0">{AUTO_ENERGY_NOTE}</Note>}
       </>} />

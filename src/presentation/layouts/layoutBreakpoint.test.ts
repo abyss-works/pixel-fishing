@@ -74,11 +74,11 @@ describe('레이아웃 판정 기준(뷰포트 폭 768px)', () => {
     for (const [key, src] of sources) {
       if (key.includes('/views/admin/')) continue; // 관리자 대시보드는 열 수 밀도만 정한다
       src.split('\n').forEach((line, i) => {
-        if (/(^|[^\w-])(?:max-)?lg:/.test(line) || /1024|64rem/.test(line)) offenders.push(`${key}:${i + 1}`);
+        if (/(^|[^\w-])(?:max-)?lg:/.test(line) || /\b1024\b|\b64rem\b/.test(line)) offenders.push(`${key}:${i + 1}`);
       });
     }
     expect(offenders).toEqual([]);
-    expect(css).not.toMatch(/1024px|64rem/);
+    expect(css).not.toMatch(/\b1024px\b|\b64rem\b/);
   });
 
   it('PC 헤더 구성요소는 단계 경계를 모른다 - 스테이지 폭 변형은 단계 파일(headerTier)에만 있다', () => {

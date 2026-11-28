@@ -11,7 +11,6 @@ import { facilityGuestAllowed, facilityProgress, menuLock } from '../../../../fe
 import type { AccountLockState } from '../../../../features/display/model/menuLock';
 import { cx } from '../../../ui/cx';
 import { STACK_MENU_CLASS } from '../../../ui/hud/stackTier';
-import { useMobileLayout } from '../../../layouts/useMobileLayout';
 import NightOverlay from '../../../ui/hud/NightOverlay';
 import MenuCard from '../../../ui/MenuCard';
 import Inset from '../../../ui/Inset';
@@ -60,7 +59,6 @@ const SECTION_OF: Record<FurnitureId, (typeof SECTIONS)[number]> = {
 export default function BaseMenu({ base, game, onFacility, locked, accountState = 'account' }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const covered = useCanvasCover();
-  const mobile = useMobileLayout();
   const pack = BASE_PACKS[base];
   const info = { rod: game.rod, boatName: boatNameOf(game.boat, '배 없음') };
 
@@ -68,7 +66,7 @@ export default function BaseMenu({ base, game, onFacility, locked, accountState 
     if (covered) return;
     const ctx = canvasRef.current?.getContext('2d');
     if (ctx) renderBaseBackdrop(ctx, base);
-  }, [base, covered, mobile]);
+  }, [base, covered]);
 
   const name = base === 'home' ? '집' : '항구';
   const menu = (

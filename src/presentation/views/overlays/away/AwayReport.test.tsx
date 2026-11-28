@@ -81,7 +81,7 @@ describe('결과 창', () => {
 
   it('지표 타일·새 도감 카드·등급·가방·다음엔 절을 보인다', () => {
     render(<AwayReportModal report={full} game={game} onClose={() => {}} onOpenBag={() => {}} />);
-    expect(screen.getByText('태평양', { exact: false })).toBeInTheDocument();
+    expect(screen.getByText(/태평양 연안/)).toBeInTheDocument();
     expect(screen.getByText('잡은 물고기').parentElement).toHaveTextContent('3');
     const dex = within(screen.getByRole('region', { name: '새로 도감에 오른 물고기' }));
     expect(dex.getByText('참돔').parentElement).toHaveTextContent('48.0cm');
