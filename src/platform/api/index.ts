@@ -69,4 +69,5 @@ export type {
   SoundSettings,
   LiveEventKind, LiveEventSummary, EventTrioSlotStatus, EventTrioState, EventLeaderboardRow, EventChampionshipState, EventLuckDayStamp, EventDrawState, EventsSnapshot,
   AdminLiveEventRow, AdminLiveEventRequest, AdminEventDrawRow, AdminCouponRow, AdminCouponRequest, AdminCouponMutationResult,
+  AdminIntegrityStageAccount, AdminIntegrityStageSummary, AdminIntegrityEventRow, AdminIntegrityMetricsCohort, AdminIntegrityMetrics,
 } from './types';

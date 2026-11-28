@@ -78,6 +78,7 @@ import type {
   AdminUserRow, AdminUserState, AdminOverview, AdminRetentionRow, AdminEconomyRow, AdminBountyFunnelRow,
   AdminOnboardingFunnel, AdminHttpMetrics, AdminClientMetrics, AdminOpsHealth,
   AdminLive, AdminDailyStatsRow, AdminSessionRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, AdminChangelogRow, AdminChatReportRow, AdminNoticeRow, AdminNoticeRequest, AdminNoticeMutationResult, AdminCouponRow, AdminCouponRequest, AdminCouponMutationResult, BalanceLive,
+  AdminIntegrityStageSummary, AdminIntegrityEventRow, AdminIntegrityMetrics,
   AdminSentMailRow, AdminMailRequest, AdminMailPlan,
 } from '../api/types';
 
@@ -348,6 +349,21 @@ class HttpAdmin implements AdminApi {
   }
   setStaffBadge(show: boolean): Promise<{ showStaffBadge: boolean }> {
     return writeAdmin('staffBadge', { show }, '운영진 표시 설정');
+  }
+  readIntegrityStages(): Promise<AdminIntegrityStageSummary[]> {
+    return readAdmin('integrityStages');
+  }
+  readIntegrityEvents(userId?: string, limit?: number): Promise<AdminIntegrityEventRow[]> {
+    const params: Record<string, string | number> = {};
+    if (userId !== undefined) params.user = userId;
+    if (limit !== undefined) params.limit = limit;
+    return readAdmin('integrityEvents', params);
+  }
+  readIntegrityMetrics(days?: number): Promise<AdminIntegrityMetrics> {
+    return readAdmin('integrityMetrics', days === undefined ? {} : { days });
+  }
+  releaseIntegrityStage(userId: string): Promise<{ released: true }> {
+    return writeAdmin('integrityRelease', { userId }, '추첨 가중치 초기화');
   }
   userEvents(userId: string, limit = 500): Promise<AdminEventRow[]> {
     return readAdmin('userEvents', { user: userId, limit });

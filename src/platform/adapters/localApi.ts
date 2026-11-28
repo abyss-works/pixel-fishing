@@ -107,6 +107,10 @@ class LocalAdmin implements AdminApi {
   letterHandled(_letterId: number, _handled: boolean): Promise<never> { return rejected(); }
   revokeSessions(_userId: string): Promise<never> { return rejected(); }
   setStaffBadge(_show: boolean): Promise<never> { return rejected(); }
+  readIntegrityStages(): Promise<never[]> { return rejected(); }
+  readIntegrityEvents(_userId?: string, _limit?: number): Promise<never[]> { return rejected(); }
+  readIntegrityMetrics(_days?: number): Promise<never> { return rejected(); }
+  releaseIntegrityStage(_userId: string): Promise<never> { return rejected(); }
   userEvents(_userId: string, _limit?: number): Promise<never[]> { return rejected(); }
   userState(_uid: string): Promise<never> { return rejected(); }
   balanceLive(_days?: number): Promise<never> { return rejected(); }

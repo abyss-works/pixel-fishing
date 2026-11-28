@@ -32,6 +32,9 @@ const CALLS: [method: string, call: () => Promise<unknown>, url: string][] = [
   ['coupons', () => admin.coupons(), '/api/admin?q=coupons'],
   ['balanceLive', () => admin.balanceLive(3), '/api/admin?q=balanceLive&days=3'],
   ['sentMails', () => admin.sentMails(), '/api/admin?q=mails'],
+  ['readIntegrityStages', () => admin.readIntegrityStages(), '/api/admin?q=integrityStages'],
+  ['readIntegrityEvents', () => admin.readIntegrityEvents('u-1', 50), '/api/admin?q=integrityEvents&user=u-1&limit=50'],
+  ['readIntegrityMetrics', () => admin.readIntegrityMetrics(14), '/api/admin?q=integrityMetrics&days=14'],
 ];
 
 describe('HttpAdmin', () => {
@@ -55,8 +58,8 @@ describe('HttpAdmin', () => {
     }
   });
 
-  it('AdminApi의 모든 조회가 위 표에 있다. 서버 조회가 아닌 것은 deployHost, 쓰기(mail·restrict·letterHandled·revokeSessions·writeNotice·writeCoupon·setStaffBadge), 관리자 로그인·로그아웃·로그인 복귀뿐이다', () => {
-    const writes = ['constructor', 'deployHost', 'mail', 'restrict', 'letterHandled', 'revokeSessions', 'writeNotice', 'writeCoupon', 'setStaffBadge', 'signIn', 'signOut', 'takeSignInReturn'];
+  it('AdminApi의 모든 조회가 위 표에 있다. 서버 조회가 아닌 것은 deployHost, 쓰기(mail·restrict·letterHandled·revokeSessions·writeNotice·writeCoupon·setStaffBadge·releaseIntegrityStage), 관리자 로그인·로그아웃·로그인 복귀뿐이다', () => {
+    const writes = ['constructor', 'deployHost', 'mail', 'restrict', 'letterHandled', 'revokeSessions', 'writeNotice', 'writeCoupon', 'setStaffBadge', 'releaseIntegrityStage', 'signIn', 'signOut', 'takeSignInReturn'];
     const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(admin))
       .filter(m => !writes.includes(m));
     expect(methods.sort()).toEqual(CALLS.map(([method]) => method).sort());
@@ -137,6 +140,11 @@ describe('HttpAdmin', () => {
     expect(fetchMock).toHaveBeenLastCalledWith('/api/admin?q=staffBadge', post({ show: true }));
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: 'forbidden' }), { status: 403 }));
     await expect(admin.setStaffBadge(false)).rejects.toThrow('운영진 표시 설정 실패: 403 forbidden');
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ released: true }), { status: 200 }));
+    await expect(admin.releaseIntegrityStage('u-1')).resolves.toEqual({ released: true });
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/admin?q=integrityRelease', post({ userId: 'u-1' }));
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: 'no-user' }), { status: 404 }));
+    await expect(admin.releaseIntegrityStage('u-1')).rejects.toThrow('추첨 가중치 초기화 실패: 404 no-user');
   });
 
   it('sessions는 생략한 인자를 보내지 않는다', async () => {
@@ -168,6 +176,22 @@ describe('HttpAdmin', () => {
     fetchMock.mockResolvedValue(new Response('{}', { status: 200 }));
     await admin.clientMetrics();
     expect(fetchMock.mock.calls[0][0]).toBe('/api/admin?q=clientMetrics');
+  });
+
+  it('readIntegrityEvents는 생략한 인자를 보내지 않는다', async () => {
+    fetchMock.mockImplementation(async () => new Response('[]', { status: 200 }));
+    await admin.readIntegrityEvents(undefined, 200);
+    await admin.readIntegrityEvents();
+    expect(fetchMock.mock.calls.map(call => call[0])).toEqual([
+      '/api/admin?q=integrityEvents&limit=200',
+      '/api/admin?q=integrityEvents',
+    ]);
+  });
+
+  it('readIntegrityMetrics는 기간을 생략하면 기간 인자 없이 요청해 서버의 기본 기간을 따른다', async () => {
+    fetchMock.mockResolvedValue(new Response('{}', { status: 200 }));
+    await admin.readIntegrityMetrics();
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/admin?q=integrityMetrics');
   });
 
   it('opsHealth는 기간을 생략하면 기간 인자 없이 요청해 서버의 기본 기간을 따른다', async () => {
