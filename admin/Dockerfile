@@ -36,7 +36,7 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist-admin ./dist-admin
 COPY --from=builder /app/dist-ssr-admin ./dist-ssr-admin
 
-USER node
+USER 1000
 
 EXPOSE 8080
 
