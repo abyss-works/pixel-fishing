@@ -2,15 +2,43 @@
 import { enhancePoolSummary } from '../../guild/model/guild';
 import type { GuildInfo } from '../../guild/model/guild';
 
-export type MenuKey = 'quests' | 'achievements' | 'fortune' | 'guild' | 'friends' | 'mailbox';
+export type MenuKey = 'fortune' | 'ranking' | 'achievements' | 'quests' | 'guild' | 'friends' | 'mailbox';
+export type MenuGroupKey = 'status' | 'activity' | 'social';
 
-/** 메뉴 줄에 오를 항목을 위에서부터 돌려준다. 의뢰, 업적, 운세는 늘 보이고, 나머지는 열 수 있는 입구만 남는다 */
-export function menuKeys(open: { guild: boolean; friends: boolean; mailbox: boolean }): MenuKey[] {
-  const keys: MenuKey[] = ['quests', 'achievements', 'fortune'];
-  if (open.guild) keys.push('guild');
-  if (open.friends) keys.push('friends');
-  if (open.mailbox) keys.push('mailbox');
-  return keys;
+export interface MenuGroupDef {
+  key: MenuGroupKey;
+  label: string;
+  keys: MenuKey[];
+}
+
+export interface MenuOpenFlags {
+  ranking?: boolean;
+  guild: boolean;
+  friends: boolean;
+  mailbox: boolean;
+}
+
+/** 메뉴 묶음과 순서를 돌려준다. 상태(운세·랭킹), 활동(업적·의뢰), 소통(길드·소셜·우편함) 순이다 */
+export function menuGroups(open: MenuOpenFlags): MenuGroupDef[] {
+  const statusKeys: MenuKey[] = ['fortune'];
+  if (open.ranking) statusKeys.push('ranking');
+  const groups: MenuGroupDef[] = [
+    { key: 'status', label: '상태', keys: statusKeys },
+    { key: 'activity', label: '활동', keys: ['achievements', 'quests'] },
+  ];
+  const socialKeys: MenuKey[] = [];
+  if (open.guild) socialKeys.push('guild');
+  if (open.friends) socialKeys.push('friends');
+  if (open.mailbox) socialKeys.push('mailbox');
+  if (socialKeys.length > 0) {
+    groups.push({ key: 'social', label: '소통', keys: socialKeys });
+  }
+  return groups;
+}
+
+/** 메뉴 줄에 오를 항목을 위에서부터 돌려준다. */
+export function menuKeys(open: MenuOpenFlags): MenuKey[] {
+  return menuGroups(open).flatMap(g => g.keys);
 }
 
 export type QuestBadgeTone = 'gold' | 'named';

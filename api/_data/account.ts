@@ -23,7 +23,7 @@ import { deleteUserCounters } from './achievements.js';
 import { deleteUserFortunes } from './fortune.js';
 import { deleteUserIntegrity } from './integrity.js';
 import { deleteUserWidgetAuth, deleteWidgetTokensForUser } from './widget.js';
-import { deleteUserWeeklyFame } from './rank.js';
+import { deleteUserWeeklyFame, deleteUserWeeklySellGold } from './rank.js';
 
 /** 진행이 없는 게스트를 지우는 미접속 일수 */
 const IDLE_DAYS = 7;
@@ -150,6 +150,7 @@ async function deleteAccountRows(tx: Executor, uid: string): Promise<void> {
   await deleteUserIntegrity(tx, uid);
   await deleteUserWidgetAuth(tx, uid);
   await deleteUserWeeklyFame(tx, uid);
+  await deleteUserWeeklySellGold(tx, uid);
   await deleteUserCouponRedemptions(tx, uid);
   await deleteUserEventRows(tx, uid);
   await deleteUserSaves(tx, uid);

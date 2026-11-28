@@ -10,6 +10,7 @@ import {
   nightDepthOfStep, nightDepth, darkness,
   gameDayOf, gameDayStartISO,
   gameWeekStartDay, gameWeekStartISO, nextGameWeekResetISO,
+  isValidGameWeekStartDay, weekStartDayToRangeISO, listGameWeekStartDays,
 } from './time';
 
 const iso = (min: number, sec = 0): string => {
@@ -243,5 +244,30 @@ describe('gameWeekStartDay / gameWeekStartISO / nextGameWeekResetISO — 월요�
       expect(gameWeekStartISO(nextIso)).toBe(nextIso);
       expect(Date.parse(nextIso) - Date.parse(startIso)).toBe(7 * 86_400_000);
     }
+  });
+});
+
+describe('isValidGameWeekStartDay / weekStartDayToRangeISO / listGameWeekStartDays', () => {
+  it('유효한 월요일 YYYY-MM-DD만 참이고 잘못된 날짜나 다른 요일은 거짓이다', () => {
+    expect(isValidGameWeekStartDay('2026-10-19')).toBe(true);
+    expect(isValidGameWeekStartDay('2026-10-20')).toBe(false);
+    expect(isValidGameWeekStartDay('2026-02-30')).toBe(false);
+    expect(isValidGameWeekStartDay('20261019')).toBe(false);
+  });
+
+  it('주간 시작일을 UTC 범위 [startISO, nextStartISO)로 변환한다', () => {
+    expect(weekStartDayToRangeISO('2026-10-19')).toEqual({
+      startISO: '2026-10-18T19:00:00.000Z',
+      nextStartISO: '2026-10-25T19:00:00.000Z',
+    });
+  });
+
+  it('최신순 연속 월요일 목록을 만든다', () => {
+    expect(listGameWeekStartDays('2026-10-05', '2026-10-19')).toEqual([
+      '2026-10-19',
+      '2026-10-12',
+      '2026-10-05',
+    ]);
+    expect(listGameWeekStartDays('2026-10-26', '2026-10-19')).toEqual(['2026-10-19']);
   });
 });

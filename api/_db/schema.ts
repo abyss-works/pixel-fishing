@@ -388,6 +388,14 @@ export const rankingWeeklyFame = pgTable('ranking_weekly_fame', {
   updatedAt: at('updated_at').notNull().defaultNow(),
 }, t => [primaryKey({ columns: [t.weekStart, t.userId] })]);
 
+export const rankingWeeklySellGold = pgTable('ranking_weekly_sell_gold', {
+  weekStart: date('week_start', { mode: 'string' }).notNull(),
+  userId: uuid('user_id').notNull(),
+  goldEarned: bigint('gold_earned', { mode: 'number' }).notNull().default(0),
+  reachedAt: at('reached_at').notNull().defaultNow(),
+  updatedAt: at('updated_at').notNull().defaultNow(),
+}, t => [primaryKey({ columns: [t.weekStart, t.userId] })]);
+
 export const admins = pgTable('admins', {
   userId: uuid('user_id').primaryKey(),
   role: text('role').notNull().default('admin'),

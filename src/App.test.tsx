@@ -145,12 +145,12 @@ afterEach(() => {
 // ---------- 집(마을 거점): 가구 클릭 → 정비 탭 인라인 패널 ----------
 
 describe('마을 랭킹 게시판', () => {
-  it('게시판 클릭 → 5탭(명성·도감 3종·네임드 토벌) 랭킹 창이 열린다(로컬 모드는 연결 안내)', async () => {
+  it('게시판 클릭 → 랭킹·도감 탭과 세부 분류를 가진 랭킹 창이 열린다(로컬 모드는 연결 안내)', async () => {
     seed({});
     render(<App />);
     clickFurniture('rank');
     const dialog = screen.getByRole('heading', { name: '랭킹' }).closest('[role="dialog"]') as HTMLElement;
-    for (const label of ['명성', '도감(일반)', '도감(돌연변이)', '도감(네임드)', '네임드 토벌']) {
+    for (const label of ['랭킹', '도감', '명성', '판매골드', '네임드 토벌']) {
       expect(within(dialog).getByRole('button', { name: label })).toBeInTheDocument();
     }
     await waitFor(() => expect(within(dialog).getByText('랭킹은 연결된 상태에서만 볼 수 있어요.')).toBeInTheDocument());

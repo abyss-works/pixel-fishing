@@ -1,4 +1,4 @@
-// 랭킹 핸들러 단위 테스트 — 보드별 기간 지원 여부·기본 window·캐시 헤더·입력 검증을 검증한다.
+// 랭킹 핸들러 단위 테스트 — 보드별 기간 지원 여부·기본 window·주차 파라미터·캐시 헤더·입력 검증을 검증한다.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = {
@@ -11,6 +11,8 @@ const weeklyBoardResult = {
   window: 'weekly' as const,
   periodSupported: true,
   resetAt: '2026-11-29T19:00:00.000Z',
+  weekStart: '2026-11-23',
+  availableWeeks: ['2026-11-23'],
 };
 const allBoardResult = {
   top: [],
@@ -18,20 +20,33 @@ const allBoardResult = {
   window: 'all' as const,
   periodSupported: false,
   resetAt: null,
+  weekStart: null,
+  availableWeeks: [] as string[],
 };
 const readers = vi.hoisted(() => ({
-  fameBoard: vi.fn(async (_db: unknown, _uid: unknown, window = 'weekly') => ({
+  fameBoard: vi.fn(async (_db: unknown, _uid: unknown, window = 'weekly', _nowIso?: string, weekStart?: string) => ({
     ...weeklyBoardResult,
     window,
-    resetAt: window === 'weekly' ? '2026-11-29T19:00:00.000Z' : null,
+    resetAt: window === 'weekly' && !weekStart ? '2026-11-29T19:00:00.000Z' : null,
+    weekStart: window === 'weekly' ? (weekStart ?? '2026-11-23') : null,
+    availableWeeks: window === 'weekly' ? ['2026-11-23', '2026-11-16'] : [],
+  })),
+  sellGoldBoard: vi.fn(async (_db: unknown, _uid: unknown, window = 'weekly', _nowIso?: string, weekStart?: string) => ({
+    ...weeklyBoardResult,
+    window,
+    resetAt: window === 'weekly' && !weekStart ? '2026-11-29T19:00:00.000Z' : null,
+    weekStart: window === 'weekly' ? (weekStart ?? '2026-11-23') : null,
+    availableWeeks: window === 'weekly' ? ['2026-11-23', '2026-11-16'] : [],
   })),
   dexBoard: vi.fn(async () => allBoardResult),
   variantBoard: vi.fn(async () => allBoardResult),
   namedBoard: vi.fn(async () => allBoardResult),
-  namedClearsBoard: vi.fn(async (_db: unknown, _uid: unknown, window = 'weekly') => ({
+  namedClearsBoard: vi.fn(async (_db: unknown, _uid: unknown, window = 'weekly', _nowIso?: string, weekStart?: string) => ({
     ...weeklyBoardResult,
     window,
-    resetAt: window === 'weekly' ? '2026-11-29T19:00:00.000Z' : null,
+    resetAt: window === 'weekly' && !weekStart ? '2026-11-29T19:00:00.000Z' : null,
+    weekStart: window === 'weekly' ? (weekStart ?? '2026-11-23') : null,
+    availableWeeks: window === 'weekly' ? ['2026-11-23', '2026-11-16'] : [],
   })),
   speciesBoard: vi.fn(async () => allBoardResult),
 }));
@@ -65,19 +80,46 @@ describe('api/rank 핸들러', () => {
     else process.env.DATABASE_URL = prevUrl;
   });
 
-  it('기간 지원 보드(fame, namedClears)는 window 생략 시 weekly로 조회하고 all 요청도 전달한다', async () => {
-    for (const [board, fn] of [['fame', readers.fameBoard], ['namedClears', readers.namedClearsBoard]] as const) {
+  it('기간 지원 보드(fame, sellGold, namedClears)는 window 생략 시 weekly로 조회하고 all 요청도 전달한다', async () => {
+    for (const [board, fn] of [
+      ['fame', readers.fameBoard],
+      ['sellGold', readers.sellGoldBoard],
+      ['namedClears', readers.namedClearsBoard],
+    ] as const) {
       const def = await callRank({ board });
       expect(def.status).toBe(200);
-      expect(def.body).toEqual({ board, ...weeklyBoardResult });
-      expect(fn).toHaveBeenLastCalledWith('DB', null, 'weekly');
+      expect(def.body).toEqual({
+        board,
+        ...weeklyBoardResult,
+        availableWeeks: ['2026-11-23', '2026-11-16'],
+      });
+      expect(fn).toHaveBeenLastCalledWith('DB', null, 'weekly', expect.any(String), undefined);
       expect(def.headers['cache-control']).toContain('s-maxage=60');
 
       const all = await callRank({ board, window: 'all' });
       expect(all.status).toBe(200);
-      expect(all.body).toEqual({ board, top: [], me: null, window: 'all', periodSupported: true, resetAt: null });
-      expect(fn).toHaveBeenLastCalledWith('DB', null, 'all');
+      expect(all.body).toEqual({
+        board,
+        top: [],
+        me: null,
+        window: 'all',
+        periodSupported: true,
+        resetAt: null,
+        weekStart: null,
+        availableWeeks: [],
+      });
+      expect(fn).toHaveBeenLastCalledWith('DB', null, 'all', expect.any(String), undefined);
     }
+  });
+
+  it('week 쿼리가 유효한 과거 월요일이면 전달하고, 형식 오류·비월요일·미래 주차는 400 bad-week로 거부한다', async () => {
+    const ok = await callRank({ board: 'sellGold', week: '2026-11-16' });
+    expect(ok.status).toBe(200);
+    expect(readers.sellGoldBoard).toHaveBeenLastCalledWith('DB', null, 'weekly', expect.any(String), '2026-11-16');
+
+    expect((await callRank({ board: 'fame', week: 'bad' })).status).toBe(400);
+    expect((await callRank({ board: 'fame', week: '2026-11-17' })).status).toBe(400); // 화요일
+    expect((await callRank({ board: 'fame', week: '2099-01-05' })).status).toBe(400); // 미래 월요일
   });
 
   it('비기간 보드(dex, variant, named)는 window=weekly가 와도 누적 전용(all)으로 정규화한다', async () => {
@@ -99,7 +141,7 @@ describe('api/rank 핸들러', () => {
     state.session = { id: 'u1', email: 'a@example.test' };
     const res = await callRank({ board: 'namedClears' });
     expect(res.status).toBe(200);
-    expect(readers.namedClearsBoard).toHaveBeenCalledWith('DB', 'u1', 'weekly');
+    expect(readers.namedClearsBoard).toHaveBeenCalledWith('DB', 'u1', 'weekly', expect.any(String), undefined);
     expect(res.headers['cache-control']).toBe('private, no-store');
   });
 

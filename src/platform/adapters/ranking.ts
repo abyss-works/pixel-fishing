@@ -5,16 +5,18 @@ import { isCloud } from './auth';
 import type { RankingBoard, RankingBoardId, RankingWindow } from '../api/types';
 import { throwRequestFailure } from './requestFailure';
 
-/** board가 species면 fishId 어종의 순위다. window를 주면 주간·누적 기간을 함께 요청한다 */
+/** board가 species면 fishId 어종의 순위다. window를 주면 주간·누적 기간을, week를 주면 특정 주간을 함께 요청한다 */
 export async function readRanking(
   board: RankingBoardId,
   fishId?: string,
   window?: RankingWindow,
+  week?: string,
 ): Promise<RankingBoard | null> {
   if (!isCloud) return null;
   const params = new URLSearchParams({ board });
   if (board === 'species') params.set('fish', fishId ?? '');
   if (window) params.set('window', window);
+  if (week) params.set('week', week);
   const res = await fetch(`/api/rank?${params.toString()}`);
   if (!res.ok) await throwRequestFailure(res, 'ranking read failed');
   return await res.json() as RankingBoard;

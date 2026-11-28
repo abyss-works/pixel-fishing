@@ -7,18 +7,19 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { sessionOf } from './_auth/session.js';
 import { database } from './_db/client.js';
 import type { Executor } from './_db/client.js';
-import { dexBoard, fameBoard, namedBoard, namedClearsBoard, speciesBoard, variantBoard } from './_data/rank.js';
+import { dexBoard, fameBoard, namedBoard, namedClearsBoard, sellGoldBoard, speciesBoard, variantBoard } from './_data/rank.js';
 import type { RankBoard, RankWindow } from './_data/rank.js';
 import { FISH } from '../src/game/rules/logic.js';
+import { gameWeekStartDay, isValidGameWeekStartDay } from '../src/game/rules/time.js';
 import { ApiError, toApiError } from './errors.js';
 import { reportServerIssue } from './observability.js';
 
 type Req = IncomingMessage & { query?: Record<string, string | string[] | undefined> };
 type Res = ServerResponse & { status: (code: number) => Res; json: (body: unknown) => void };
 
-const BOARDS = ['fame', 'dex', 'variant', 'named', 'namedClears', 'species'] as const;
+const BOARDS = ['fame', 'sellGold', 'dex', 'variant', 'named', 'namedClears', 'species'] as const;
 type Board = typeof BOARDS[number];
-const PERIOD_RANK_BOARDS = new Set<Board>(['fame', 'namedClears']);
+const PERIOD_RANK_BOARDS = new Set<Board>(['fame', 'sellGold', 'namedClears']);
 const WINDOWS = ['weekly', 'all'] as const;
 const isBoard = (v: unknown): v is Board => typeof v === 'string' && (BOARDS as readonly string[]).includes(v);
 const isWindow = (v: unknown): v is RankWindow => typeof v === 'string' && (WINDOWS as readonly string[]).includes(v);
@@ -45,6 +46,13 @@ async function route(req: Req, res: Res): Promise<void> {
   if (!isBoard(board)) throw new ApiError(400, 'bad-board');
   const rawWindow = req.query?.window;
   if (rawWindow !== undefined && !isWindow(rawWindow)) throw new ApiError(400, 'bad-window');
+  const nowIso = new Date().toISOString();
+  const rawWeek = req.query?.week;
+  if (rawWeek !== undefined) {
+    if (typeof rawWeek !== 'string' || !isValidGameWeekStartDay(rawWeek) || rawWeek > gameWeekStartDay(nowIso)) {
+      throw new ApiError(400, 'bad-week');
+    }
+  }
   const fish = req.query?.fish;
   if (board === 'species' && !(typeof fish === 'string' && FISH.some(f => f.id === fish))) throw new ApiError(400, 'bad-fish');
   if (!process.env.DATABASE_URL) throw new ApiError(500, 'server-config');
@@ -58,9 +66,11 @@ async function route(req: Req, res: Res): Promise<void> {
   if (board === 'species') {
     data = await read(() => speciesBoard(db, fish as string, uid));
   } else if (board === 'fame') {
-    data = await read(() => fameBoard(db, uid, resolvedWindow));
+    data = await read(() => fameBoard(db, uid, resolvedWindow, nowIso, rawWeek));
+  } else if (board === 'sellGold') {
+    data = await read(() => sellGoldBoard(db, uid, resolvedWindow, nowIso, rawWeek));
   } else if (board === 'namedClears') {
-    data = await read(() => namedClearsBoard(db, uid, resolvedWindow));
+    data = await read(() => namedClearsBoard(db, uid, resolvedWindow, nowIso, rawWeek));
   } else {
     data = await read(() => STATIC_BOARD_READERS[board](db, uid));
   }

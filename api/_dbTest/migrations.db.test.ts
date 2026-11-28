@@ -25,7 +25,7 @@ describe('테스트 데이터베이스', () => {
     const names = rows.map(r => r.name);
     for (const t of ['saves_current', 'fish_instances', 'records', 'saves', 'profiles', 'events', 'letters',
       'coupons', 'reliefs', 'bounty_accepts', 'bounty_progress', 'bounty_tickets', 'bounty_licenses',
-      'bounty_clears', 'mails', 'daily_fortunes', 'notices', 'ranking_weekly_fame', 'widget_auth_codes', 'widget_tokens',
+      'bounty_clears', 'mails', 'daily_fortunes', 'notices', 'ranking_weekly_fame', 'ranking_weekly_sell_gold', 'widget_auth_codes', 'widget_tokens',
       'integrity_states', 'integrity_events', 'v_bounty_funnel_daily']) {
       expect(names).toContain(t);
     }
@@ -879,6 +879,83 @@ describe('테스트 데이터베이스', () => {
         expect(await hasTable(other)).toBe(true);
         expect(await hasIndex(other, 'ranking_weekly_fame', 'ranking_weekly_fame_board_idx')).toBe(true);
         expect(await hasIndex(other, 'bounty_clears', 'bounty_clears_kind_cleared_at_idx')).toBe(true);
+      } finally {
+        await other.end();
+        await copy.drop();
+      }
+    });
+  });
+
+  describe('ranking_weekly_sell_gold (0063)', () => {
+    const migration = (file: string) => readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', file), 'utf8');
+    const hasTable = async (c: Client) => (await c.query<{ r: string | null }>(
+      `select to_regclass('public.ranking_weekly_sell_gold')::text as r`,
+    )).rows[0].r !== null;
+    const hasIndex = async (c: Client, table: string, name: string) => (await c.query(
+      `select 1 from pg_indexes where schemaname = 'public' and tablename = $1 and indexname = $2`,
+      [table, name],
+    )).rows.length === 1;
+
+    it('복합 PK·gold_earned>=0 제약·cascade 삭제·서버 전용 RLS·다운/업 라운드트립을 검증한다', async () => {
+      const uid = randomUUID();
+      await client.query(`insert into auth.users (id, email, is_anonymous) values ($1, $2, false)`, [uid, `${uid}@example.test`]);
+
+      const { rows: [inserted] } = await client.query<{ gold_earned: string; reached_at: Date; updated_at: Date }>(
+        `insert into public.ranking_weekly_sell_gold (week_start, user_id) values ('2030-03-04', $1)
+         returning gold_earned, reached_at, updated_at`,
+        [uid],
+      );
+      expect(Number(inserted.gold_earned)).toBe(0);
+      expect(inserted.reached_at).toBeInstanceOf(Date);
+      expect(inserted.updated_at).toBeInstanceOf(Date);
+
+      // 동일 (week_start, user_id) 중복 거부
+      await expect(client.query(
+        `insert into public.ranking_weekly_sell_gold (week_start, user_id, gold_earned) values ('2030-03-04', $1, 10)`,
+        [uid],
+      )).rejects.toMatchObject({ code: '23505' });
+
+      // 음수 gold_earned 거부
+      await expect(client.query(
+        `insert into public.ranking_weekly_sell_gold (week_start, user_id, gold_earned) values ('2030-03-11', $1, -1)`,
+        [uid],
+      )).rejects.toMatchObject({ code: '23514' });
+
+      // 인증 사용자는 본인 행도 읽거나 쓰지 못한다 — 서버 전용 RLS
+      await client.query('begin');
+      try {
+        await client.query('set local role authenticated');
+        await client.query(`select set_config('request.jwt.claim.sub', $1, true)`, [uid]);
+        expect((await client.query('select week_start from public.ranking_weekly_sell_gold')).rows).toEqual([]);
+        await expect(client.query(
+          `insert into public.ranking_weekly_sell_gold (week_start, user_id, gold_earned) values ('2030-03-11', $1, 5)`,
+          [uid],
+        )).rejects.toMatchObject({ code: '42501' });
+      } finally {
+        await client.query('rollback');
+      }
+
+      // auth.users 삭제 시 cascade 삭제
+      await client.query(`delete from auth.users where id = $1`, [uid]);
+      expect((await client.query(`select 1 from public.ranking_weekly_sell_gold where user_id = $1`, [uid])).rows).toHaveLength(0);
+
+      // 다운/업 라운드트립 및 두 인덱스 확인
+      const copy = await createTestDatabase();
+      const other = new Client({ connectionString: copy.url });
+      await other.connect();
+      try {
+        expect(await hasTable(other)).toBe(true);
+        expect(await hasIndex(other, 'ranking_weekly_sell_gold', 'ranking_weekly_sell_gold_board_idx')).toBe(true);
+        expect(await hasIndex(other, 'achievement_counters', 'achievement_counters_sell_gold_board_idx')).toBe(true);
+
+        await other.query(migration('0063_ranking_weekly_sell_gold.down.sql'));
+        expect(await hasTable(other)).toBe(false);
+        expect(await hasIndex(other, 'achievement_counters', 'achievement_counters_sell_gold_board_idx')).toBe(false);
+
+        await other.query(migration('0063_ranking_weekly_sell_gold.sql'));
+        expect(await hasTable(other)).toBe(true);
+        expect(await hasIndex(other, 'ranking_weekly_sell_gold', 'ranking_weekly_sell_gold_board_idx')).toBe(true);
+        expect(await hasIndex(other, 'achievement_counters', 'achievement_counters_sell_gold_board_idx')).toBe(true);
       } finally {
         await other.end();
         await copy.drop();

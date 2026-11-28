@@ -193,7 +193,7 @@ export type GuildOpResult =
   | { ok: false; error: string };
 
 export type RankingWindow = 'weekly' | 'all';
-export type RankingBoardId = 'fame' | 'dex' | 'variant' | 'named' | 'namedClears' | 'species';
+export type RankingBoardId = 'fame' | 'sellGold' | 'dex' | 'variant' | 'named' | 'namedClears' | 'species';
 export interface RankingRow { rank: number; nickname: string | null; value: number; me: boolean }
 /** species 표는 fishId 어종의 사람별 최대 크기(cm) 순위다 */
 export interface RankingBoard {
@@ -202,6 +202,8 @@ export interface RankingBoard {
   window: RankingWindow;
   periodSupported: boolean;
   resetAt: string | null;
+  weekStart: string | null;
+  availableWeeks: string[];
   top: RankingRow[];
   me: { rank: number; value: number } | null;
 }

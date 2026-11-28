@@ -109,7 +109,7 @@ import {
 import { guildTotalOf, recordGuildActivity } from './_data/guilds.js';
 import { integrityEventFragment, integrityStateFragment, readIntegrityState } from './_data/integrity.js';
 import { loadWidgetSummary } from './_data/widget.js';
-import { weeklyFameFragment } from './_data/rank.js';
+import { weeklyFameFragment, weeklySellGoldFragment } from './_data/rank.js';
 import {
   GUILD_LEVEL_FLOORS, GUILD_MAX_LEVEL, NO_GUILD_EFFECTS, contributionFor, guildEffectsOf, guildLevelOf,
 } from '../src/game/rules/guild.js';
@@ -1014,17 +1014,22 @@ async function route(req: Req, res: Res): Promise<void> {
     }
   }
   // 업적 카운터 — 확정 문장 안에서 상태 변경과 같은 원자 단위로 오른다. 클라이언트 주장으로 올리지 않는다.
-  fragments.push(counterUpsertFragment(guard, uid, counterIncrementsForEvents(out.events)));
+  const counterInc = counterIncrementsForEvents(out.events);
+  fragments.push(counterUpsertFragment(guard, uid, counterInc));
   // 일일 운세 이력 — 로그인 계정의 첫 접속(boot)과 당일 운세 확정(catch·sell·extractEnergy 백스톱 포함)만 멱등 기록한다. 게스트는 저장하지 않는다.
   // 응답 직후의 운세 조회가 오늘 운세를 보도록 확정 문장 안에서 쓴다
   if (user.email !== null && out.state.fortune
       && (action.type === 'boot' || ((action.type === 'catch' && action.spot !== 'championship' || action.type === 'sell' || action.type === 'extractEnergy') && prevFortune?.day !== out.state.fortune.day))) {
     fragments.push(recordDailyFortuneFragment(guard, uid, out.state.fortune));
   }
-  // 주간 명성 집계 — 빠른 캐치와 일반 확정 경로 모두에서 플레이로 얻은 명성 증가분을 원자적으로 누적한다.
+  // 주간 명성·판매골드 집계 — 빠른 캐치와 일반 확정 경로 모두에서 플레이로 얻은 증가분을 원자적으로 누적한다.
   const fameDelta = out.state.fame - Number(row.fame);
   if (!WEEKLY_FAME_EXCLUDED.has(action.type) && fameDelta > 0) {
     fragments.push(weeklyFameFragment(guard, uid, fameDelta, nowISO));
+  }
+  const sellGoldDelta = counterInc['sell.gold'] ?? 0;
+  if (!WEEKLY_FAME_EXCLUDED.has(action.type) && sellGoldDelta > 0) {
+    fragments.push(weeklySellGoldFragment(guard, uid, sellGoldDelta, nowISO));
   }
 
   const readVersion = Number(row.version);

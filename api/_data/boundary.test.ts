@@ -31,7 +31,7 @@ const WRITE_OWNERS: Record<string, readonly string[]> = {
   '_data/clientMetrics.ts': ['client_metrics_daily'],
   '_data/notices.ts': ['notices'],
   '_data/widget.ts': ['widget_auth_codes', 'widget_tokens'],
-  '_data/rank.ts': ['ranking_weekly_fame'],
+  '_data/rank.ts': ['ranking_weekly_fame', 'ranking_weekly_sell_gold'],
   '_data/integrity.ts': ['integrity_states', 'integrity_events'],
   '_data/admin.ts': ['admins', 'admin_audit_logs'],
   // 마이그레이션 runner는 initContainer에서만 실행돼 런타임 서버 풀을 쓰지 않고, 적용 이력 표를 맡는다.
