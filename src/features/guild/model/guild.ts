@@ -256,21 +256,127 @@ export function guildActivityText(lastActivityAtISO: string, nowMs: number): str
 }
 
 export interface PublicJoinConfirm {
+  mode: 'open' | 'approval';
   title: string;
   label: string;
   guild: PublicGuildItem;
+  pendingWarnTitle: string | null;
   pendingCancelWarn: string | null;
 }
 
-/** 공개 길드 바로 가입 확인 창 데이터 — 승인 대기 중인 다른 길드 신청이 있으면 자동 취소 경고를 붙인다 */
+/** 공개 길드 가입·신청 확인 창 데이터 — 승인 대기 중인 다른 길드 신청이 있으면 자동 취소·변경 경고를 붙인다 */
 export function publicJoinConfirm(guild: PublicGuildItem, pendingRequest: GuildMyRequest | null): PublicJoinConfirm {
+  const mode = (guild.joinMode ?? 'open') === 'approval' ? 'approval' : 'open';
+  if (mode === 'approval') {
+    return {
+      mode,
+      title: '길드 가입 신청',
+      label: '가입 신청',
+      guild,
+      pendingWarnTitle: pendingRequest ? '기존 가입 신청 변경' : null,
+      pendingCancelWarn: pendingRequest
+        ? `${pendingRequest.name} 길드에 보낸 승인 대기 신청이 사라지고 이 길드로 신청이 바뀌어요.`
+        : null,
+    };
+  }
   return {
+    mode,
     title: '길드 가입 확인',
     label: '확인',
     guild,
+    pendingWarnTitle: pendingRequest ? '기존 가입 신청 자동 취소' : null,
     pendingCancelWarn: pendingRequest
       ? `${pendingRequest.name} 길드에 보낸 승인 대기 신청은 바로 가입하면 자동으로 취소돼요.`
       : null,
+  };
+}
+
+export type PublicGuildBadgeTone = 'gold' | 'gold-plain' | 'accent' | 'danger' | 'dim';
+
+export interface PublicGuildRowAction {
+  label: string;
+  disabled: boolean;
+  primary: boolean;
+  reason: string | null;
+  reasonDanger: boolean;
+  tooltip: string | null;
+}
+
+export interface PublicGuildRowState {
+  isOwnGuild: boolean;
+  badge: { label: string; tone: PublicGuildBadgeTone };
+  action: PublicGuildRowAction | null;
+}
+
+/** 전체 길드 목록 한 줄의 배지, 가입·신청 버튼, 비활성 사유와 툴팁을 계산한다 */
+export function publicGuildRowState(
+  guild: PublicGuildItem,
+  opts: { myGuildId?: string | null; cooldownTooltip?: string | null },
+): PublicGuildRowState {
+  const myGuildId = opts.myGuildId ?? null;
+  const isMember = myGuildId !== null;
+  const isOwnGuild = isMember && guild.guildId === myGuildId;
+  const isFull = guild.members >= guild.cap;
+  const joinMode = guild.joinMode ?? 'open';
+
+  const badge: PublicGuildRowState['badge'] = isOwnGuild
+    ? { label: '소속 중', tone: 'gold' }
+    : isFull
+      ? { label: '만석', tone: 'danger' }
+      : joinMode === 'open'
+        ? { label: '자유 가입', tone: 'gold-plain' }
+        : joinMode === 'approval'
+          ? { label: '승인 가입', tone: 'accent' }
+          : { label: '닫힘', tone: 'dim' };
+
+  if (isOwnGuild) {
+    return { isOwnGuild: true, badge, action: null };
+  }
+
+  const label = isFull
+    ? '만석'
+    : joinMode === 'closed'
+      ? '가입 불가'
+      : joinMode === 'approval'
+        ? '가입 신청'
+        : '가입';
+  const reason = isFull
+    ? `정원 ${guild.members}/${guild.cap}`
+    : joinMode === 'closed'
+      ? '모집 닫힘'
+      : null;
+  const reasonDanger = isFull;
+
+  if (isMember) {
+    return {
+      isOwnGuild: false,
+      badge,
+      action: {
+        label,
+        disabled: true,
+        primary: false,
+        reason,
+        reasonDanger,
+        tooltip: '이미 길드에 소속되어 있어요.',
+      },
+    };
+  }
+
+  const blockedByStatus = isFull || joinMode === 'closed';
+  const cooldownTooltip = opts.cooldownTooltip ?? null;
+  const blockedByCooldown = !blockedByStatus && Boolean(cooldownTooltip);
+
+  return {
+    isOwnGuild: false,
+    badge,
+    action: {
+      label,
+      disabled: blockedByStatus || blockedByCooldown,
+      primary: !blockedByStatus && joinMode === 'open',
+      reason,
+      reasonDanger,
+      tooltip: blockedByCooldown ? cooldownTooltip : null,
+    },
   };
 }
 

@@ -8,7 +8,7 @@ import type { Database, Executor } from '../_db/client.js';
 import {
   DEFAULT_GUILD_PITCH, GUILD_BONUS_MAX_RANK, GUILD_DAILY_FAME_CAP, GUILD_ENHANCE_MAX_RANK, GUILD_LEVEL_FLOORS, GUILD_RENAME_COST,
   bonusEffect, bonusRank, bonusRankCost, contributionDayOf, donationOutcome, enhanceOutcome, enhanceResetOutcome,
-  guildBonusLevels, GUILD_JOIN_REQUEST_TTL_MS, GUILD_MAX_MEMBERS, guildEffectsOf, guildFull, guildLevelOf, guildProgress,
+  guildBonusLevels, GUILD_JOIN_REQUEST_TTL_MS, GUILD_MAX_MEMBERS, guildEffectsOf, guildLevelOf, guildProgress,
   guildRejoinCooldownUntil, guildRejoinRemainingMs, handoverOutcome, joinOutcome, remainingEnhancePoints, removalOutcome, renameOutcome,
 } from '../../src/game/rules/guild.js';
 import type { EnhanceError, EnhanceResetError, PublicGuildSort, RenameError } from '../../src/game/rules/guild.js';
@@ -459,13 +459,14 @@ export async function myJoinRequest(db: Executor, uid: string, nowISO: string):
 /** 초대 링크 미리보기 — 길드 이름, 레벨, 지금 길드원 수와 상한, 가입 방식. 길드원 이름은 싣지 않는다 */
 export interface GuildPreview { code: string; name: string; level: number; members: number; cap: number; joinMode: GuildJoinMode }
 
-/** 공개 길드 목록 한 줄 — 자유 가입(open)·비만석 길드만 담으며 고유 초대 코드(code)는 포함하지 않는다 */
+/** 공개 길드 목록 한 줄 — 자유·승인·닫힘·만석 길드를 모두 담으며 고유 초대 코드(code)는 포함하지 않는다 */
 export interface PublicGuildSummary {
   guildId: string;
   name: string;
   level: number;
   members: number;
   cap: number;
+  joinMode: GuildJoinMode;
   pitch: string;
   lastActivityAt: string;
 }
@@ -473,13 +474,13 @@ export interface PublicGuildSummary {
 const PUBLIC_GUILD_LIMIT = 50;
 const LEVEL_THRESHOLDS = GUILD_LEVEL_FLOORS.slice(1);
 
-/** 자유 가입(open)이면서 정원에 여유가 있는 공개 길드 목록을 검색·정렬해 반환한다 */
+/** 전체 길드 목록을 검색·정렬해 반환한다 */
 export async function publicGuilds(
   db: Executor,
   opts: { q?: string; sort?: PublicGuildSort; limit?: number } = {},
 ): Promise<PublicGuildSummary[]> {
   const trimmed = opts.q?.trim() ?? '';
-  const qFilter = trimmed ? sql`and strpos(lower(g.name), lower(${trimmed})) > 0` : sql``;
+  const qFilter = trimmed ? sql`where strpos(lower(g.name), lower(${trimmed})) > 0` : sql``;
   const levelExpr = sql`(select count(*)::int from unnest(array[${sql.join(LEVEL_THRESHOLDS.map(f => sql`${f}::bigint`), sql`, `)}]) as f where total >= f)`;
   const orderBy = opts.sort === 'level'
     ? sql`${levelExpr} desc, last_activity_at desc, total desc, guild_id`
@@ -488,11 +489,11 @@ export async function publicGuilds(
       : sql`last_activity_at desc, created_at desc, guild_id`;
   const limit = opts.limit ?? PUBLIC_GUILD_LIMIT;
   const { rows } = await db.execute<{
-    guild_id: string; name: string; pitch: string | null; members: number | string; total: number | string;
-    last_activity_at: string | Date;
+    guild_id: string; name: string; join_mode: GuildJoinMode; pitch: string | null; members: number | string;
+    total: number | string; last_activity_at: string | Date;
   }>(sql`
     with base as (
-      select g.id::text as guild_id, g.name, g.created_at, g.pitch,
+      select g.id::text as guild_id, g.name, g.join_mode, g.created_at, g.pitch,
         (select count(*)::int from public.guild_members m where m.guild_id = g.id and m.left_at is null) as members,
         ${guildTotal(sql`g.id`)} as total,
         greatest(
@@ -501,12 +502,10 @@ export async function publicGuilds(
           coalesce((select c.created_at from public.chat_messages c where c.guild_id = g.id order by c.id desc limit 1), g.created_at)
         ) as last_activity_at
       from public.guilds g
-      where g.join_mode = 'open'
-        ${qFilter}
+      ${qFilter}
     )
-    select guild_id, name, pitch, members, total, last_activity_at
+    select guild_id, name, join_mode, pitch, members, total, last_activity_at
     from base
-    where members < ${GUILD_MAX_MEMBERS}
     order by ${orderBy}
     limit ${limit}`);
   return rows.map(r => ({
@@ -515,6 +514,7 @@ export async function publicGuilds(
     level: guildLevelOf(Number(r.total)),
     members: Number(r.members),
     cap: GUILD_MAX_MEMBERS,
+    joinMode: r.join_mode,
     pitch: r.pitch && r.pitch.trim() !== '' ? r.pitch : DEFAULT_GUILD_PITCH,
     lastActivityAt: iso(r.last_activity_at),
   }));
@@ -541,26 +541,51 @@ export type JoinOutcome =
 
 export type JoinByGuildIdOutcome =
   | { ok: true; id: string; result: 'joined' }
+  | { ok: true; id: string; result: 'requested'; guild: string; leader: string; nick: string | null }
   | { ok: false; error: 'not-found' | 'already-in-guild' | 'rejoin-cooldown' | 'guild-full' | 'guild-closed' };
 
+/** 길드 행을 잠근 뒤 가입 방식과 경로(via)에 따라 바로 가입하거나 가입 신청을 넣는다 */
+async function joinGuildTx<E extends 'not-found' | 'bad-code'>(
+  tx: Executor,
+  uid: string,
+  g: { id: string; name: string; join_mode: GuildJoinMode },
+  nowISO: string,
+  via: GuildJoinVia,
+  notFoundError: E,
+): Promise<
+  | { ok: true; id: string; result: 'joined' }
+  | { ok: true; id: string; result: 'requested'; guild: string; leader: string; nick: string | null }
+  | { ok: false; error: E | 'already-in-guild' | 'rejoin-cooldown' | 'guild-full' | 'guild-closed' }
+> {
+  const members = await lockMembers(tx, g.id);
+  if (!members) return { ok: false, error: notFoundError };
+  if (await guildIdOf(tx, uid)) return { ok: false, error: 'already-in-guild' };
+  if (await hasActiveRejoinCooldown(tx, uid, nowISO)) return { ok: false, error: 'rejoin-cooldown' };
+  const outcome = joinOutcome(g.join_mode, members.length, via);
+  if (outcome === 'closed') return { ok: false, error: 'guild-closed' };
+  if (outcome === 'guild-full') return { ok: false, error: 'guild-full' };
+  if (outcome === 'request') {
+    await tx.execute(sql`insert into public.guild_join_requests (user_id, guild_id, created_at) values (${uid}, ${g.id}, ${at(nowISO)})
+      on conflict (user_id) do update set guild_id = excluded.guild_id, created_at = excluded.created_at`);
+    const leader = members.find(m => m.role === 'leader');
+    const { rows: [p] } = await tx.execute<{ nickname: string }>(sql`select nickname from public.profiles where user_id = ${uid}`);
+    return { ok: true, id: g.id, result: 'requested', guild: g.name, leader: leader?.uid ?? '', nick: p?.nickname ?? null };
+  }
+  await addMember(tx, g.id, uid, nowISO);
+  return { ok: true, id: g.id, result: 'joined' };
+}
+
 /**
- * 공개 길드 목록의 guildId로 바로 가입한다. 자유 가입(open)이고 정원에 여유가 있는 길드만 허용하며,
- * 기존에 넣어 둔 승인 대기 신청이 있으면 함께 지운다.
+ * 전체 길드 목록의 guildId로 바로 가입하거나 승인 가입 신청을 넣는다.
+ * 자유 가입이면 기존 대기 신청을 지우고, 승인 가입이면 기존 대기 신청을 대체한다.
  */
 export async function joinByGuildId(withTransaction: Tx, uid: string, guildId: string, nowISO: string):
   Promise<JoinByGuildIdOutcome> {
   return withTransaction(async tx => {
-    const { rows: [g] } = await tx.execute<{ id: string; join_mode: GuildJoinMode }>(sql`
-      select id::text as id, join_mode from public.guilds where id = ${guildId} for update`);
+    const { rows: [g] } = await tx.execute<{ id: string; name: string; join_mode: GuildJoinMode }>(sql`
+      select id::text as id, name, join_mode from public.guilds where id = ${guildId} for update`);
     if (!g) return { ok: false, error: 'not-found' };
-    if (await guildIdOf(tx, uid)) return { ok: false, error: 'already-in-guild' };
-    if (await hasActiveRejoinCooldown(tx, uid, nowISO)) return { ok: false, error: 'rejoin-cooldown' };
-    if (g.join_mode !== 'open') return { ok: false, error: 'guild-closed' };
-    const { rows: members } = await tx.execute<{ uid: string }>(sql`
-      select user_id::text as uid from public.guild_members where guild_id = ${g.id} and left_at is null`);
-    if (guildFull(members.length)) return { ok: false, error: 'guild-full' };
-    await addMember(tx, g.id, uid, nowISO);
-    return { ok: true, id: g.id, result: 'joined' };
+    return joinGuildTx(tx, uid, g, nowISO, 'code', 'not-found');
   });
 }
 
@@ -574,24 +599,9 @@ export async function joinByCode(withTransaction: Tx, uid: string, code: string,
   Promise<JoinOutcome> {
   return withTransaction(async tx => {
     const { rows: [g] } = await tx.execute<{ id: string; name: string; join_mode: GuildJoinMode }>(sql`
-      select id::text as id, name, join_mode from public.guilds where code = ${code}`);
+      select id::text as id, name, join_mode from public.guilds where code = ${code} for update`);
     if (!g) return { ok: false, error: 'bad-code' };
-    const members = await lockMembers(tx, g.id);
-    if (!members) return { ok: false, error: 'bad-code' };
-    if (await guildIdOf(tx, uid)) return { ok: false, error: 'already-in-guild' };
-    if (await hasActiveRejoinCooldown(tx, uid, nowISO)) return { ok: false, error: 'rejoin-cooldown' };
-    const outcome = joinOutcome(g.join_mode, members.length, via);
-    if (outcome === 'closed') return { ok: false, error: 'guild-closed' };
-    if (outcome === 'guild-full') return { ok: false, error: 'guild-full' };
-    if (outcome === 'request') {
-      await tx.execute(sql`insert into public.guild_join_requests (user_id, guild_id, created_at) values (${uid}, ${g.id}, ${at(nowISO)})
-        on conflict (user_id) do update set guild_id = excluded.guild_id, created_at = excluded.created_at`);
-      const leader = members.find(m => m.role === 'leader');
-      const { rows: [p] } = await tx.execute<{ nickname: string }>(sql`select nickname from public.profiles where user_id = ${uid}`);
-      return { ok: true, id: g.id, result: 'requested', guild: g.name, leader: leader?.uid ?? '', nick: p?.nickname ?? null };
-    }
-    await addMember(tx, g.id, uid, nowISO);
-    return { ok: true, id: g.id, result: 'joined' };
+    return joinGuildTx(tx, uid, g, nowISO, via, 'bad-code');
   });
 }
 

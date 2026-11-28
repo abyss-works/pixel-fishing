@@ -54,18 +54,27 @@ describe('guildAction — 보너스 기부', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/guilds/g1/enhancements/reset', { method: 'POST' });
   });
 
-  it('GET /api/guilds/public은 검색어와 정렬을 쿼리로 싣고 목록을 돌려준다', async () => {
-    const guilds = [{ guildId: 'g1', name: '파도쉼터', level: 4, members: 3, cap: 10, pitch: '같이 낚시해요!', lastActivityAt: '2026-11-26T00:00:00.000Z' }];
+  it('GET /api/guilds/public은 검색어와 정렬을 쿼리로 싣고 joinMode를 포함한 목록을 돌려준다', async () => {
+    const guilds = [
+      { guildId: 'g1', name: '파도쉼터', level: 4, members: 3, cap: 10, joinMode: 'open', pitch: '같이 낚시해요!', lastActivityAt: '2026-11-26T00:00:00.000Z' },
+      { guildId: 'g2', name: '승인선단', level: 2, members: 10, cap: 10, joinMode: 'approval', pitch: '나랑 같이 낚시하자!', lastActivityAt: '2026-11-25T00:00:00.000Z' },
+    ];
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ guilds }), { status: 200 }));
     await expect(readPublicGuilds({ q: ' 파도 ', sort: 'level' })).resolves.toEqual(guilds);
     expect(fetchMock).toHaveBeenCalledWith('/api/guilds/public?q=%ED%8C%8C%EB%8F%84&sort=level');
   });
 
-  it('POST /api/guild-memberships { guildId }로 공개 길드에 바로 가입한다', async () => {
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({ id: 'g1', result: 'joined' }), { status: 201 }));
+  it('POST /api/guild-memberships { guildId }로 공개 길드에 바로 가입하거나 승인 가입 신청을 보낸다', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ id: 'g1', result: 'joined' }), { status: 201 }));
     await expect(guildAction({ op: 'joinPublic', guildId: 'g1' })).resolves.toEqual({ ok: true, result: 'joined' });
-    expect(fetchMock).toHaveBeenCalledWith('/api/guild-memberships', {
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/guild-memberships', {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ guildId: 'g1' }),
+    });
+
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ id: 'g2', result: 'requested' }), { status: 202 }));
+    await expect(guildAction({ op: 'joinPublic', guildId: 'g2' })).resolves.toEqual({ ok: true, result: 'requested' });
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/guild-memberships', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ guildId: 'g2' }),
     });
   });
 

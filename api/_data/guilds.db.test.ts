@@ -8,7 +8,7 @@ import { createTestDatabase } from '../_dbTest/testDatabase.js';
 import type { TestDatabase } from '../_dbTest/testDatabase.js';
 import {
   cancelJoinRequest, createGuild, decideJoinRequest, deleteUserGuild, donateToBonus, guildIdOf, guildPreview, handOver, joinByCode,
-  joinByGuildId, myGuild, myJoinRequest, rejoinCooldownUntil, removeMember, renameGuild, setJoinSettings,
+  joinByGuildId, myGuild, myJoinRequest, publicGuilds, rejoinCooldownUntil, removeMember, renameGuild, setJoinSettings,
 } from './guilds.js';
 import { commitAction } from './commit.js';
 import { versionUpdate } from './save.js';
@@ -573,5 +573,50 @@ describe('길드 재가입 대기 (20시간)', () => {
     await client.query(`insert into public.guild_rejoin_cooldowns (user_id, left_at) values ($1, $2)`, [applicant2, afterEnd]);
     expect(await decideJoinRequest(tx(), approvalLeader, gApproval.id, applicant2, false, afterEnd)).toMatchObject({ ok: true });
     expect(await myJoinRequest(database.db, applicant2, afterEnd)).toBeNull();
+  });
+});
+
+describe('전체 길드 목록과 guildId 가입·신청', () => {
+  it('publicGuilds는 open·approval·closed·만석 길드를 joinMode와 함께 반환하고 code는 제외한다', async () => {
+    const gOpen = await guildWith(0);
+    await setJoinSettings(database.db, gOpen.leader, gOpen.id, { joinMode: 'open' });
+    const gApproval = await guildWith(0);
+    await setJoinSettings(database.db, gApproval.leader, gApproval.id, { joinMode: 'approval' });
+    const gClosed = await guildWith(0);
+    await setJoinSettings(database.db, gClosed.leader, gClosed.id, { joinMode: 'closed' });
+    const gFull = await guildWith(9);
+    await setJoinSettings(database.db, gFull.leader, gFull.id, { joinMode: 'open' });
+
+    const list = await publicGuilds(database.db, { limit: 100 });
+    const byId = new Map(list.map(g => [g.guildId, g]));
+    expect(byId.get(gOpen.id)).toMatchObject({ guildId: gOpen.id, joinMode: 'open', members: 1, cap: 10 });
+    expect(byId.get(gApproval.id)).toMatchObject({ guildId: gApproval.id, joinMode: 'approval', members: 1, cap: 10 });
+    expect(byId.get(gClosed.id)).toMatchObject({ guildId: gClosed.id, joinMode: 'closed', members: 1, cap: 10 });
+    expect(byId.get(gFull.id)).toMatchObject({ guildId: gFull.id, joinMode: 'open', members: 10, cap: 10 });
+    for (const item of list) expect('code' in item).toBe(false);
+  });
+
+  it('joinByGuildId는 approval 길드에 가입 신청을 넣고 closed·만석·소속 중에는 거부한다', async () => {
+    const gOpen = await guildWith(0);
+    await setJoinSettings(database.db, gOpen.leader, gOpen.id, { joinMode: 'open' });
+    const gApproval = await guildWith(0);
+    await setJoinSettings(database.db, gApproval.leader, gApproval.id, { joinMode: 'approval' });
+    const gClosed = await guildWith(0);
+    await setJoinSettings(database.db, gClosed.leader, gClosed.id, { joinMode: 'closed' });
+    const gFull = await guildWith(9);
+    await setJoinSettings(database.db, gFull.leader, gFull.id, { joinMode: 'open' });
+
+    const applicant = await user();
+    const res = await joinByGuildId(tx(), applicant, gApproval.id, NOW);
+    expect(res).toMatchObject({ ok: true, id: gApproval.id, result: 'requested', leader: gApproval.leader });
+    expect(await myJoinRequest(database.db, applicant, NOW)).toMatchObject({ code: gApproval.code });
+
+    expect(await joinByGuildId(tx(), applicant, gClosed.id, NOW)).toEqual({ ok: false, error: 'guild-closed' });
+    expect(await joinByGuildId(tx(), applicant, gFull.id, NOW)).toEqual({ ok: false, error: 'guild-full' });
+
+    // 자유 가입 길드에 guildId로 가입하면 기존 신청은 사라지고, 이후 다른 길드 가입 시도는 already-in-guild
+    expect(await joinByGuildId(tx(), applicant, gOpen.id, NOW)).toEqual({ ok: true, id: gOpen.id, result: 'joined' });
+    expect(await myJoinRequest(database.db, applicant, NOW)).toBeNull();
+    expect(await joinByGuildId(tx(), applicant, gApproval.id, NOW)).toEqual({ ok: false, error: 'already-in-guild' });
   });
 });

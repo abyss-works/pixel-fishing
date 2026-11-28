@@ -15,22 +15,24 @@ import Inset from '../../../ui/Inset';
 import Modal from '../../../ui/Modal';
 import ModalCard from '../../../ui/ModalCard';
 import Note from '../../../ui/Note';
+import PixelIcon from '../../../ui/PixelIcon';
 import ProgressCount from '../../../ui/ProgressCount';
 import ProgressMeter from '../../../ui/ProgressMeter';
 import TabBar from '../../../ui/TabBar';
 import Tip, { TipBullets } from '../../../ui/Tip';
 import { splitTipLines } from '../../../ui/tipText';
+import GuildListView from './GuildListView';
 import GuildLogbookTab from './GuildLogbookTab';
 import GuildManageTab from './GuildManageTab';
 import GuildMembersTab from './GuildMembersTab';
 import GuildSkillsTab from './GuildSkillsTab';
 import NoGuild from './NoGuild';
-import type { GuildJoin } from './NoGuild';
+import type { GuildJoin, GuildJoinPublic } from './NoGuild';
 import type { GuildAsk, GuildPartProps } from './guildProps';
 
 // 길드 창. 게임 스테이지 안에 뜨고, 길드가 있든 없든 680px 폭에 560px 높이(스테이지가 그보다 낮으면 스테이지 높이 기준)로 고정한다.
-// 길드가 있으면 제목(길드 정보) 아래 한 줄에는 고정 정보(길드 이름, 레벨, 진행, 인원)와 탭(스킬, 길드원, 항해일지, 길드장에게만 관리)을 둔다.
-// 길드가 없으면 3탭(공개 길드, 코드로 가입, 길드 만들기)을 둔다.
+// 길드가 있으면 상단 2탭(내 길드, 길드 목록)을 두고, 내 길드 아래 고정 정보(길드 이름, 레벨, 진행, 인원)와 하위 탭(스킬, 길드원, 항해일지, 길드장에게만 관리)을 둔다.
+// 길드가 없으면 2탭(길드 목록, 길드 만들기)을 두고, 길드 목록 상단에 인라인 초대 코드 바를 둔다.
 // 길드 스킬 값은 서버가 판정해 적용한다. 이 창은 서버가 보낸 값을 보여 주고 요청을 보내기만 한다.
 // 창 자체는 스크롤하지 않는다. 넘치는 내용은 탭 본문 안에서만 굴린다.
 
@@ -80,6 +82,19 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
     }
   };
 
+  /** 목록에서 가입·신청하기 — 바로 가입됐는지 신청이 됐는지를 함께 돌려준다 */
+  const joinPublic: GuildJoinPublic = async guildId => {
+    setBusy(true);
+    try {
+      const r = await act({ op: 'joinPublic', guildId });
+      return r.ok ? { error: null, requested: r.result === 'requested' } : { error: guildErrorText(r.error, 'joinPublic', cooldown.remainingText), requested: false };
+    } catch {
+      return { error: '길드 요청을 보내지 못했어요. 연결을 확인해 주세요.', requested: false };
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const inGuild = Boolean(guild && you);
   const body = loading
     ? (
@@ -100,7 +115,7 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
                      onResetEnhancements={() => runOp({ op: 'resetEnhancements', guildId: guild.id })}
                      setToast={setToast} ask={setConfirm} dialogHost={dialogHost} gold={gold} artifacts={artifacts} onGoldChanged={onGoldChanged} />
         )
-        : <NoGuild busy={busy} run={run} join={join} request={request} cooldown={cooldown} dialogHost={dialogHost} setToast={setToast} />;
+        : <NoGuild busy={busy} run={run} join={join} joinPublic={joinPublic} request={request} cooldown={cooldown} dialogHost={dialogHost} setToast={setToast} />;
 
   return (
     // 길드 유무와 무관하게 창 크기를 680px 폭, 560px 높이(스테이지가 더 낮으면 가용 높이)로 고정해 가입 전후 크기 급변을 막는다.
@@ -133,30 +148,42 @@ export default function GuildModal({ gold, artifacts, setToast, onGoldChanged, o
   );
 }
 
+type GuildMainTab = 'mine' | 'list';
 type GuildTab = 'skills' | 'members' | 'logbook' | 'manage';
 
-/** 길드가 있을 때: 고정 정보 줄과 탭(길드장은 관리 탭까지 넷) */
+/** 길드가 있을 때: 상단 2탭(내 길드, 길드 목록)과 내 길드 고정 정보 줄·하위 탭 */
 function GuildView({ ask, dialogHost, gold, artifacts, onGoldChanged, onResetEnhancements, ...part }: GuildPartProps & {
   ask: GuildAsk; dialogHost: HTMLElement | null; gold: number; artifacts: ArtifactHolder; onGoldChanged: () => Promise<void> | void;
   onResetEnhancements: () => Promise<{ error: string | null; recovered?: number }>;
 }) {
+  const [mainTab, setMainTab] = useState<GuildMainTab>('mine');
   const [tab, setTab] = useState<GuildTab>('skills');
   const remainingPoints = enhancePoolSummary(part.guild).remaining;
   return (
     <div className="flex flex-col gap-3 flex-1 min-h-0">
-      <GuildStatus guild={part.guild} />
-      <TabBar<GuildTab> activeKey={tab} onSelect={setTab} tabs={[
-        { key: 'skills', label: '스킬', count: remainingPoints, countTone: 'guild', countLabel: `${remainingPoints}포인트` },
-        { key: 'members', label: '길드원' },
-        { key: 'logbook', label: '항해일지' },
-        ...(part.guild.role === 'leader' ? [{ key: 'manage' as const, label: '관리', count: part.guild.requests.length }] : []),
+      <TabBar<GuildMainTab> inline activeKey={mainTab} onSelect={setMainTab} tabs={[
+        { key: 'mine', label: '내 길드', icon: <PixelIcon glyph="flag" size={12} /> },
+        { key: 'list', label: '길드 목록', icon: <PixelIcon glyph="compass" size={12} /> },
       ]} />
-      <div className="flex flex-col flex-1 min-h-0">
-        {tab === 'skills' && <GuildSkillsTab {...part} gold={gold} dialogHost={dialogHost} onResetEnhancements={onResetEnhancements} onGoldChanged={onGoldChanged} />}
-        {tab === 'members' && <GuildMembersTab {...part} ask={ask} artifacts={artifacts} />}
-        {tab === 'logbook' && <GuildLogbookTab logbook={part.guild.logbook} me={part.me} />}
-        {tab === 'manage' && part.guild.role === 'leader' && <GuildManageTab {...part} gold={gold} dialogHost={dialogHost} onGoldChanged={onGoldChanged} />}
-      </div>
+      {mainTab === 'mine' ? (
+        <>
+          <GuildStatus guild={part.guild} />
+          <TabBar<GuildTab> activeKey={tab} onSelect={setTab} tabs={[
+            { key: 'skills', label: '스킬', count: remainingPoints, countTone: 'guild', countLabel: `${remainingPoints}포인트` },
+            { key: 'members', label: '길드원' },
+            { key: 'logbook', label: '항해일지' },
+            ...(part.guild.role === 'leader' ? [{ key: 'manage' as const, label: '관리', count: part.guild.requests.length }] : []),
+          ]} />
+          <div className="flex flex-col flex-1 min-h-0">
+            {tab === 'skills' && <GuildSkillsTab {...part} gold={gold} dialogHost={dialogHost} onResetEnhancements={onResetEnhancements} onGoldChanged={onGoldChanged} />}
+            {tab === 'members' && <GuildMembersTab {...part} ask={ask} artifacts={artifacts} />}
+            {tab === 'logbook' && <GuildLogbookTab logbook={part.guild.logbook} me={part.me} />}
+            {tab === 'manage' && part.guild.role === 'leader' && <GuildManageTab {...part} gold={gold} dialogHost={dialogHost} onGoldChanged={onGoldChanged} />}
+          </div>
+        </>
+      ) : (
+        <GuildListView myGuildId={part.guild.id} />
+      )}
     </div>
   );
 }

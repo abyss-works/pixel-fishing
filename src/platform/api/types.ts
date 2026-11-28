@@ -168,9 +168,10 @@ export interface GuildMyRequest { code: string; name: string; requestedAt: strin
 export interface GuildState { guild: GuildInfo | null; request: GuildMyRequest | null; cooldownUntil?: string | null }
 /** 초대 링크 미리보기 — 로그인 없이 읽는 길드 요약 */
 export interface GuildInvitePreview { code: string; name: string; level: number; members: number; cap: number; joinMode: GuildJoinMode }
-/** 공개 길드 목록 한 줄 — 자유 가입·비만석 길드 요약(고유 코드 비노출) */
+/** 공개 길드 목록 한 줄 — 자유·승인·닫힘·만석 길드 요약(고유 코드 비노출). 서버는 joinMode를 항상 채운다 */
 export interface PublicGuildItem {
-  guildId: string; name: string; level: number; members: number; cap: number; pitch: string; lastActivityAt: string;
+  guildId: string; name: string; level: number; members: number; cap: number; joinMode?: GuildJoinMode; pitch: string;
+  lastActivityAt: string;
 }
 export type GuildOp =
   | { op: 'create'; name: string }

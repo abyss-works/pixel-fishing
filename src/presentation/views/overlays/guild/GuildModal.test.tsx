@@ -98,11 +98,12 @@ describe('GuildModal', () => {
     vi.clearAllMocks();
   });
 
-  it('길드가 없으면 3탭(공개 길드, 코드로 가입, 길드 만들기) 구조이고 길드 만들기 탭에서 이름으로 만든다', async () => {
+  it('길드가 없으면 2탭(길드 목록, 길드 만들기) 구조이고 길드 만들기 탭에서 이름으로 만든다', async () => {
     const toast = vi.fn();
     render(<GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={toast} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
-    expect(screen.getByRole('button', { name: '공개 길드' })).toHaveClass('active');
-    expect(screen.getAllByRole('button', { name: '코드로 가입' })[0]).toBeTruthy();
+    expect(screen.getByRole('button', { name: '길드 목록' })).toHaveClass('active');
+    expect(screen.queryByRole('button', { name: '공개 길드' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '코드로 가입' })).toBeNull();
     fireEvent.click(screen.getAllByRole('button', { name: '길드 만들기' })[0]);
     fireEvent.change(screen.getByLabelText('길드 이름'), { target: { value: ' 심해선단 ' } });
     fireEvent.click(screen.getByRole('button', { name: '만들기' }));
@@ -110,16 +111,15 @@ describe('GuildModal', () => {
     expect(s.act).toHaveBeenCalledWith({ op: 'create', name: '심해선단' });
   });
 
-  it('코드로 가입 탭: 길드 코드로 찾으면 요약과 가입 방식에 맞는 버튼이 뜨고, 승인 가입이면 가입 신청을 보낸다. 없는 코드는 찾지 못했다고 알린다', async () => {
+  it('인라인 초대 코드 바: 길드 코드로 찾으면 요약과 가입 방식에 맞는 버튼이 뜨고, 승인 가입이면 가입 신청을 보낸다. 없는 코드는 찾지 못했다고 알린다', async () => {
     const toast = vi.fn();
     render(<GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={toast} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
-    fireEvent.click(screen.getAllByRole('button', { name: '코드로 가입' })[0]);
-    fireEvent.change(screen.getByLabelText('길드 코드'), { target: { value: 'abc' } });
+    fireEvent.change(screen.getByLabelText('길드 초대 코드'), { target: { value: 'abc' } });
     fireEvent.click(screen.getByRole('button', { name: '찾기' }));
     expect(await screen.findByText('길드 코드는 8자리예요.')).toBeTruthy();
 
     s.preview = { code: 'K7QX2MAB', name: '새벽선단', level: 3, members: 6, cap: 10, joinMode: 'approval' };
-    fireEvent.change(screen.getByLabelText('길드 코드'), { target: { value: 'k7qx2mab' } });
+    fireEvent.change(screen.getByLabelText('길드 초대 코드'), { target: { value: 'k7qx2mab' } });
     fireEvent.click(screen.getByRole('button', { name: '찾기' }));
     expect(await screen.findByText('새벽선단')).toBeTruthy();
     s.act.mockResolvedValueOnce({ ok: true, result: 'requested' });
@@ -128,20 +128,20 @@ describe('GuildModal', () => {
     expect(s.act).toHaveBeenLastCalledWith({ op: 'join', code: 'K7QX2MAB' });
   });
 
-  it('공개 길드 탭: 목록·로딩·실패·빈 상태를 분리하고, 검색·정렬·새로고침과 확인 창 바로 가입(기존 대기 신청 취소 경고 포함)을 처리한다', async () => {
+  it('길드 목록 탭: 목록·로딩·실패·빈 상태를 분리하고, 검색·정렬·새로고침과 자유·승인·닫힘·만석 행 및 확인 창을 처리한다', async () => {
     const toast = vi.fn();
     // 1. 불러오는 중 스켈레톤
     s.publicLoading = true;
     const { rerender } = render(
       <GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={toast} onGoldChanged={vi.fn()} onClose={vi.fn()} />,
     );
-    expect(screen.getByRole('status', { name: '공개 길드 목록을 불러오는 중이에요' })).toBeTruthy();
+    expect(screen.getByRole('status', { name: '길드 목록을 불러오는 중이에요' })).toBeTruthy();
 
     // 2. 불러오기 실패 + 다시 시도
     s.publicLoading = false;
     s.publicFailed = true;
     rerender(<GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={toast} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
-    expect(screen.getByText('공개 길드 목록을 불러오지 못했어요.')).toBeTruthy();
+    expect(screen.getByText('길드 목록을 불러오지 못했어요.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
     expect(s.publicRefresh).toHaveBeenCalledTimes(1);
 
@@ -149,24 +149,42 @@ describe('GuildModal', () => {
     s.publicFailed = false;
     s.publicGuilds = [];
     rerender(<GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={toast} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
-    expect(screen.getByText('지금 바로 들어갈 수 있는 공개 길드가 없어요.')).toBeTruthy();
-    fireEvent.click(within(screen.getByLabelText('공개 길드 목록')).getByRole('button', { name: '코드로 가입' }));
-    expect(screen.getByRole('button', { name: '코드로 가입' })).toHaveClass('active');
-    fireEvent.click(screen.getByRole('button', { name: '공개 길드' }));
+    expect(screen.getByText('아직 등록된 길드가 없어요.')).toBeTruthy();
+    fireEvent.click(within(screen.getByLabelText('길드 목록')).getByRole('button', { name: '길드 만들기' }));
+    expect(screen.getByRole('button', { name: '길드 만들기' })).toHaveClass('active');
+    fireEvent.click(screen.getByRole('button', { name: '길드 목록' }));
 
-    // 4. 목록 표시(코드 비노출), 정렬·검색, 기존 대기 신청 경고 포함 확인 창 -> 바로 가입
+    // 4. 목록 표시(코드 비노출, 4종 상태 배지/사유), 정렬·검색, 기존 대기 신청 경고 포함 확인 창 -> 바로 가입 & 승인 신청
     s.request = { code: 'OLD12345', name: '은빛항구', requestedAt: new Date().toISOString() };
     s.publicGuilds = [
       {
-        guildId: 'pub-1', name: '파도쉼터', level: 7, members: 8, cap: 10,
+        guildId: 'pub-1', name: '파도쉼터', level: 7, members: 8, cap: 10, joinMode: 'open',
         pitch: '다 같이 대어 노려요.', lastActivityAt: new Date().toISOString(),
+      },
+      {
+        guildId: 'pub-2', name: '심해탐험', level: 9, members: 5, cap: 10, joinMode: 'approval',
+        pitch: '꾸준히 하실 분 신청해요.', lastActivityAt: new Date().toISOString(),
+      },
+      {
+        guildId: 'pub-3', name: '밤바다등대', level: 10, members: 6, cap: 10, joinMode: 'closed',
+        pitch: '정비 중이에요.', lastActivityAt: new Date().toISOString(),
+      },
+      {
+        guildId: 'pub-4', name: '황금갈매기', level: 10, members: 10, cap: 10, joinMode: 'open',
+        pitch: '정원 마감 길드예요.', lastActivityAt: new Date().toISOString(),
       },
     ];
     rerender(<GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={toast} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
     expect(screen.getByText('파도쉼터')).toBeTruthy();
-    expect(screen.getByText('Lv.7')).toBeTruthy();
-    expect(screen.getByText('다 같이 대어 노려요.')).toBeTruthy();
-    expect(screen.getByText(/바로 가입 가능/)).toHaveTextContent('바로 가입 가능 1개');
+    expect(screen.getByText('자유 가입')).toBeTruthy();
+    expect(screen.getByText('승인 가입')).toBeTruthy();
+    expect(screen.getByText('닫힘')).toBeTruthy();
+    expect(screen.getAllByText('만석').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('모집 닫힘')).toBeTruthy();
+    expect(screen.getByText('정원 10/10')).toBeTruthy();
+    expect((screen.getByRole('button', { name: '밤바다등대 길드 가입 불가' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: '황금갈매기 길드 만석' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/전체/)).toHaveTextContent('전체 4개');
     expect(screen.queryByText(/OLD12345/)).toBeNull();
 
     fireEvent.change(screen.getByLabelText('길드명 검색'), { target: { value: '파도' } });
@@ -179,6 +197,16 @@ describe('GuildModal', () => {
     fireEvent.click(screen.getByRole('button', { name: '새로고침' }));
     expect(s.publicRefresh).toHaveBeenCalledTimes(2);
 
+    // 승인 가입 신청 흐름 (기존 대기 신청 변경 경고 포함)
+    fireEvent.click(screen.getByRole('button', { name: '심해탐험 길드 가입 신청' }));
+    const approvalDialog = within(screen.getAllByRole('dialog').at(-1) as HTMLElement);
+    expect(approvalDialog.getByText('기존 가입 신청 변경')).toBeTruthy();
+    s.act.mockResolvedValueOnce({ ok: true, result: 'requested' });
+    fireEvent.click(approvalDialog.getByRole('button', { name: '가입 신청' }));
+    await waitFor(() => expect(s.act).toHaveBeenCalledWith({ op: 'joinPublic', guildId: 'pub-2' }));
+    expect(toast).toHaveBeenCalledWith('심해탐험 길드에 가입 신청을 보냈어요. 길드장이 승인하면 들어가요.');
+
+    // 자유 가입 바로 가입 흐름
     fireEvent.click(screen.getByRole('button', { name: '파도쉼터 길드 가입' }));
     const confirmDialog = within(screen.getAllByRole('dialog').at(-1) as HTMLElement);
     expect(confirmDialog.getByText('길드 가입 확인')).toBeTruthy();
@@ -727,14 +755,14 @@ describe('GuildModal', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it('공개 길드 UI 시안: 3탭 4면 테두리, 입력 칸 폭·폰트 분리, 중첩 없는 빈/오류 칸, 정렬 칩, 가입 확인 창 포털, 250ms 디바운스, 재시도를 지킨다', () => {
+  it('길드 목록 UI 시안: 2탭 4면 테두리, 입력 칸 폭·폰트 분리, 중첩 없는 빈/오류 칸, 정렬 칩, 가입 확인 창 포털, 250ms 디바운스, 재시도를 지킨다', () => {
     vi.useFakeTimers();
     const onClose = vi.fn();
     const onRetry = vi.fn();
     s.request = { code: 'OLD12345', name: '은빛항구', requestedAt: new Date().toISOString() };
     s.publicGuilds = [
       {
-        guildId: 'pub-1', name: '파도쉼터', level: 7, members: 8, cap: 10,
+        guildId: 'pub-1', name: '파도쉼터', level: 7, members: 8, cap: 10, joinMode: 'open',
         pitch: '아주 긴 길드 소개 문구여서 한 줄에서 잘리는 경우 툴팁으로 전체 내용을 보여 줍니다.', lastActivityAt: new Date().toISOString(),
       },
     ];
@@ -742,8 +770,8 @@ describe('GuildModal', () => {
       <GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={onClose} onRetry={onRetry} />,
     );
 
-    // 1. 상단 3탭 4면 테두리 + 가로 배치
-    const tabBar = screen.getByRole('button', { name: '공개 길드' }).parentElement as HTMLElement;
+    // 1. 상단 2탭 4면 테두리 + 가로 배치
+    const tabBar = screen.getByRole('button', { name: '길드 목록' }).parentElement as HTMLElement;
     expect(tabBar.className).toContain('border-line');
     expect(tabBar.className).toContain('[&_button]:flex-row');
 
@@ -802,17 +830,16 @@ describe('GuildModal', () => {
     // 7. 실패 EmptyState 이중 Inset 중첩 없음 + warn 아이콘 text-danger
     s.publicFailed = true;
     rerender(<GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={onClose} onRetry={onRetry} />);
-    const listSection = screen.getByLabelText('공개 길드 목록');
+    const listSection = screen.getByLabelText('길드 목록');
     expect(listSection.querySelector('.pf-notch')).toBeNull();
     expect(listSection.querySelector('[data-glyph="warn"]')?.getAttribute('class')).toContain('text-danger');
     s.publicFailed = false;
     rerender(<GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={onClose} onRetry={onRetry} />);
 
-    // 8. 코드로 가입 입력 칸(pf-accent 유지) & 요약 Lv.N text-gold, 길드 만들기 입력 칸(본문 폰트)
-    fireEvent.click(screen.getAllByRole('button', { name: '코드로 가입' })[0]);
-    expect(screen.getByLabelText('길드 코드').className).toContain('pf-accent');
+    // 8. 인라인 초대 코드 입력 칸(pf-accent 유지) & 요약 Lv.N text-gold, 길드 만들기 입력 칸(본문 폰트)
+    expect(screen.getByLabelText('길드 초대 코드').className).toContain('pf-accent');
     s.preview = { name: '새벽선단', level: 4, members: 3, cap: 10, joinMode: 'open', pitch: null };
-    fireEvent.change(screen.getByLabelText('길드 코드'), { target: { value: 'ABCD2345' } });
+    fireEvent.change(screen.getByLabelText('길드 초대 코드'), { target: { value: 'ABCD2345' } });
     fireEvent.click(screen.getByRole('button', { name: '찾기' }));
     expect(screen.getByText('Lv.4').className).toContain('text-gold');
 
@@ -839,7 +866,7 @@ describe('GuildModal', () => {
     vi.setSystemTime(baseNow);
     s.cooldownUntil = new Date(baseNow.getTime() + 60_000).toISOString();
     s.publicGuilds = [
-      { guildId: 'g-open', name: '푸른파도', level: 2, members: 3, cap: 10, pitch: '함께 낚시해요', lastActivityAt: baseNow.toISOString() },
+      { guildId: 'g-open', name: '푸른파도', level: 2, members: 3, cap: 10, joinMode: 'open', pitch: '함께 낚시해요', lastActivityAt: baseNow.toISOString() },
     ];
     s.preview = { name: '새벽선단', level: 4, members: 3, cap: 10, joinMode: 'open', pitch: null };
 
@@ -852,14 +879,15 @@ describe('GuildModal', () => {
     expect(publicJoinBtn.disabled).toBe(true);
     fireEvent.mouseEnter(publicJoinBtn.parentElement as HTMLElement);
     expect(screen.getByRole('tooltip').textContent).toBe('재가입 대기 중이라 1분 뒤에 이용할 수 있어요.');
+    fireEvent.mouseLeave(publicJoinBtn.parentElement as HTMLElement);
 
-    fireEvent.click(screen.getAllByRole('button', { name: '코드로 가입' })[0]);
-    fireEvent.change(screen.getByLabelText('길드 코드'), { target: { value: 'ABCD2345' } });
+    fireEvent.change(screen.getByLabelText('길드 초대 코드'), { target: { value: 'ABCD2345' } });
     fireEvent.click(screen.getByRole('button', { name: '찾기' }));
     const codeJoinBtn = screen.getByRole('button', { name: '들어가기' }) as HTMLButtonElement;
     expect(codeJoinBtn.disabled).toBe(true);
     fireEvent.mouseEnter(codeJoinBtn.parentElement as HTMLElement);
     expect(screen.getByRole('tooltip').textContent).toBe('재가입 대기 중이라 1분 뒤에 이용할 수 있어요.');
+    fireEvent.mouseLeave(codeJoinBtn.parentElement as HTMLElement);
 
     fireEvent.click(screen.getAllByRole('button', { name: '길드 만들기' })[0]);
     const createBtn = screen.getByRole('button', { name: '만들기' }) as HTMLButtonElement;
@@ -889,5 +917,42 @@ describe('GuildModal', () => {
     fireEvent.click(screen.getByRole('button', { name: '승인' }));
     await waitFor(() => expect(toast).toHaveBeenCalledWith('신청한 플레이어가 재가입 대기 중이라 승인할 수 없어요.', 'warn'));
     expect(screen.getByText('바다거북')).toBeTruthy();
+  });
+
+  it('길드 소속 상태: 상단 2탭(내 길드, 길드 목록)을 제공하고, 길드 목록에서는 초대 코드 바 없이 내 길드 구분과 비활성 툴팁을 보인다', () => {
+    s.guild = GUILD;
+    s.publicGuilds = [
+      {
+        guildId: 'g1', name: '심해선단', level: 3, members: 2, cap: 10, joinMode: 'approval',
+        pitch: '우리 길드', lastActivityAt: at,
+      },
+      {
+        guildId: 'g2', name: '푸른파도', level: 8, members: 6, cap: 10, joinMode: 'open',
+        pitch: '자유 길드', lastActivityAt: at,
+      },
+      {
+        guildId: 'g3', name: '만석길드', level: 10, members: 10, cap: 10, joinMode: 'open',
+        pitch: '정원 마감', lastActivityAt: at,
+      },
+    ];
+
+    render(<GuildModal gold={500_000} artifacts={{ artifacts: [] }} setToast={vi.fn()} onGoldChanged={vi.fn()} onClose={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: '내 길드' })).toHaveClass('active');
+    fireEvent.click(screen.getByRole('button', { name: '길드 목록' }));
+    expect(screen.getByRole('button', { name: '길드 목록' })).toHaveClass('active');
+    expect(screen.queryByLabelText('길드 초대 코드')).toBeNull();
+
+    expect(within(screen.getByLabelText('길드 목록')).getByText('소속 중')).toBeTruthy();
+    expect(within(screen.getByLabelText('길드 목록')).getByText('내 길드')).toBeTruthy();
+
+    const otherJoinBtn = screen.getByRole('button', { name: '푸른파도 길드 가입' }) as HTMLButtonElement;
+    expect(otherJoinBtn.disabled).toBe(true);
+    fireEvent.mouseEnter(otherJoinBtn.parentElement as HTMLElement);
+    expect(screen.getByRole('tooltip').textContent).toBe('이미 길드에 소속되어 있어요.');
+
+    const fullBtn = screen.getByRole('button', { name: '만석길드 길드 만석' }) as HTMLButtonElement;
+    expect(fullBtn.disabled).toBe(true);
+    expect(screen.getByText('정원 10/10')).toBeTruthy();
   });
 });
