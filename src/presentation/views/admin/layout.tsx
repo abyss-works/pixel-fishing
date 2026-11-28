@@ -8,43 +8,9 @@ import { useAdminSubnavHost } from './viewMode';
 import { cx } from '../../ui/cx';
 import Inset from '../../ui/Inset';
 import Note from '../../ui/Note';
-import PageTitle from '../../ui/PageTitle';
 import PillButton from '../../ui/PillButton';
 import SectionTitle from '../../ui/SectionTitle';
 import TitledCell from '../../ui/TitledCell';
-
-/** 탭 한 쪽 — 머리(제목·한 줄 설명·오른쪽 조작) 아래에 본문을 세로로 쌓는다 */
-export function TabPage({ title, context, aside, children }: {
-  title: string;
-  /** 제목 아래 한 줄 설명 — 안내의 목소리(해요체) */
-  context: string;
-  /** 머리 오른쪽 조작(기간 전환 등) */
-  aside?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-4">
-      <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2 border-b border-line pb-2">
-        <div className="min-w-0">
-          <PageTitle>{title}</PageTitle>
-          <Note size="xs" className="my-0">{context}</Note>
-        </div>
-        {aside}
-      </header>
-      {children}
-    </div>
-  );
-}
-
-/** 칸 격자 — 좁으면 한 줄, xl부터 두 칸이다. side는 왼쪽을 넓게 두고 오른쪽을 고정 폭(320px) 보조 칸으로 둔다 */
-export function CellGrid({ side, children }: { side?: boolean; children: ReactNode }) {
-  return (
-    <div className={cx('grid grid-cols-1 gap-x-5 gap-y-4',
-                       side ? 'xl:grid-cols-[minmax(0,1fr)_320px]' : 'xl:grid-cols-2')}>
-      {children}
-    </div>
-  );
-}
 
 /** 칸 — 제목 아래 오목한 칸 하나. className은 격자 항목(칸)에 주고, 내용은 오목한 칸 안에서 세로로 쌓는다 */
 export function Cell({ title, className, flush, divided, children }: {

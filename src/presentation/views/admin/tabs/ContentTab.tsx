@@ -24,7 +24,7 @@ import Note from '../../../ui/Note';
 import PillButton from '../../../ui/PillButton';
 import Select from '../../../ui/Select';
 import TextInput from '../../../ui/TextInput';
-import { TabPage } from '../layout';
+import { AdminCard } from '../layout';
 import AchievementCatalogSection from './content/AchievementCatalogSection';
 import ArtifactCatalogSection from './content/ArtifactCatalogSection';
 import BoatCatalogSection from './content/BoatCatalogSection';
@@ -158,11 +158,8 @@ export default function ContentTab({ embedded = false }: { embedded?: boolean } 
   if (embedded) return body;
 
   return (
-    <TabPage
-      title="콘텐츠 카탈로그"
-      context="어종·네임드·유물·업적·의상·요리·배·구역·의뢰 9개 정본 축을 오프라인에서도 검색·검수해요."
-    >
-      {body}
-    </TabPage>
+    <AdminCard title="콘텐츠 카탈로그">
+      <div className="flex flex-col gap-3">{body}</div>
+    </AdminCard>
   );
 }

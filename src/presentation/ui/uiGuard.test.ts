@@ -52,12 +52,8 @@ const OVERFLOW_DIRECT = /\boverflow-(?:x-|y-)?(?:auto|scroll)\b|\[overflow(?:-x|
 const OVERFLOW_EXCEPTIONS = new Set([
   'views/admin/tabs/BountyFunnelSection.tsx',
   'views/admin/tabs/ChatReportsSection.tsx',
-  'views/admin/tabs/LettersTab.tsx',
   'views/admin/tabs/LiveTab.tsx',
-  'views/admin/tabs/MetricsTab.tsx',
-  'views/admin/tabs/OpsTab.tsx',
   'views/admin/tabs/OverviewTab.tsx',
-  'views/admin/tabs/ProgressionTab.tsx',
   'views/game/tabs/region/VRegion.tsx',
 ]);
 

@@ -1,4 +1,4 @@
-// 쿠폰 구역 — 동적 보상 쿠폰을 발행하고, 유효 기간·선착순 한도·활성 상태를 관리한다.
+// 쿠폰 구역 — 전체 폭 목록 카드 + 우측 상단 쿠폰 생성 버튼으로 동작하며, 버튼이나 수정 클릭 시에만 작성 폼을 연다.
 import { useEffect, useRef, useState } from 'react';
 import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
@@ -9,7 +9,6 @@ import { fmtGold } from '../../../ui/format';
 import ItemBadge from '../../../ui/ItemBadge';
 import Note from '../../../ui/Note';
 import SelectList from '../../../ui/SelectList';
-import TableBox from '../../../ui/TableBox';
 import TextInput from '../../../ui/TextInput';
 import { useDialogs } from '../../../ui/useDialogs';
 import {
@@ -34,7 +33,7 @@ import { readAdminCoupons } from '../../../../features/admin/service/queries';
 import { adminKeys } from '../../../../features/admin/service/queryKeys';
 import { useAdminCoupons } from '../../../../features/admin/service/useAdminCoupons';
 import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
-import { Cell, CellGrid, TabState } from '../layout';
+import { AdminCard, AdminSplit, AdminTableWrap, TabState } from '../layout';
 
 const NO_COUPONS: AdminCouponRow[] = [];
 const currentNowMs = () => Date.now();
@@ -54,6 +53,7 @@ export default function CouponsTab() {
   const coupons = couponsQuery.data ?? NO_COUPONS;
   const { confirm, dialogs } = useDialogs();
 
+  const [formOpen, setFormOpen] = useState(false);
   const [editingCode, setEditingCode] = useState<string | null>(null);
   const editingCodeRef = useRef<string | null>(null);
   const [code, setCode] = useState('');
@@ -117,6 +117,20 @@ export default function CouponsTab() {
     setPerAccountLimit('1');
   };
 
+  const openCreate = () => {
+    if (savingForm) return;
+    resetForm();
+    clearNotice();
+    setFormOpen(true);
+  };
+
+  const closeForm = () => {
+    if (savingForm) return;
+    resetForm();
+    setFailure(null);
+    setFormOpen(false);
+  };
+
   const startEdit = (c: AdminCouponRow) => {
     if (savingForm || busyCodes.has(c.code)) return;
     editingCodeRef.current = c.code;
@@ -134,6 +148,7 @@ export default function CouponsTab() {
     setMaxRedemptions(c.maxRedemptions === null ? '' : String(c.maxRedemptions));
     setPerAccountLimit(String(c.perAccountLimit));
     clearNotice();
+    setFormOpen(true);
   };
 
   const foundItems = searchAttachableItems(itemQuery);
@@ -183,6 +198,7 @@ export default function CouponsTab() {
       setNow(currentNowMs());
       setDone(editingCodeRef.current !== null ? '쿠폰을 수정했어요.' : '새 쿠폰을 발행했어요.');
       resetForm();
+      setFormOpen(false);
     } catch (e) {
       setFailure(String((e as { message?: unknown }).message ?? e));
     } finally {
@@ -235,7 +251,10 @@ export default function CouponsTab() {
     clearNotice();
     try {
       await writeCoupon({ op: 'delete', code: c.code });
-      if (editingCodeRef.current === c.code) resetForm();
+      if (editingCodeRef.current === c.code) {
+        resetForm();
+        setFormOpen(false);
+      }
       setDone('쿠폰을 삭제했어요.');
     } catch (e) {
       setFailure(String((e as { message?: unknown }).message ?? e));
@@ -248,135 +267,43 @@ export default function CouponsTab() {
     <>
       <TabState loading={couponsQuery.loading && granted} error={couponsQuery.error} onRetry={couponsQuery.refresh} />
       {!granted && <Note className="my-0">운영 DB에 연결하거나 admins에 등록하면 채워져요.</Note>}
-      <CellGrid side>
-        <Cell title={`발행된 쿠폰 (${coupons.length})`}>
-          <TableBox className="max-h-[560px] px-1">
-            <DataTable>
-              <thead>
-                <tr>
-                  <th className="text-left">상태</th>
-                  <th className="text-left">코드</th>
-                  <th className="text-left">보상</th>
-                  <th className="text-left">사용 현황</th>
-                  <th className="text-left">유효 기간</th>
-                  <th className="text-left">조치</th>
-                </tr>
-              </thead>
-              <tbody>
-                {coupons.map(c => {
-                  const status = couponStatusOf(c, now);
-                  const rowBusy = busyCodes.has(c.code);
-                  const rowLockedByForm = savingForm && editingCode === c.code;
-                  return (
-                    <tr key={c.code}>
-                      <td className="align-top">
-                        <Badge tone={STATUS_TONE[status]} size="xs">{status}</Badge>
-                      </td>
-                      <td className="align-top text-xs min-w-[140px]">
-                        <div className="font-mono font-bold text-text">{c.code}</div>
-                        <div className="mt-1 text-text-dim break-words">{c.description}</div>
-                      </td>
-                      <td className="align-top text-xs min-w-[140px]">
-                        <div className="flex flex-col gap-1">
-                          {c.gold > 0 && <div>{fmtGold(c.gold)}</div>}
-                          {c.items.length > 0 && (
-                            <div className="flex flex-wrap gap-1">
-                              {c.items.map(att => <ItemBadge key={att.id} id={att.id} qty={att.qty} />)}
-                            </div>
-                          )}
-                          {c.gold === 0 && c.items.length === 0 && <span className="text-text-dim">-</span>}
-                        </div>
-                      </td>
-                      <td className="align-top text-xs whitespace-nowrap">
-                        <div className="text-text">
-                          {c.maxRedemptions === null
-                            ? `${c.redeemedCount.toLocaleString('ko-KR')}회 사용`
-                            : `${c.redeemedCount.toLocaleString('ko-KR')} / ${c.maxRedemptions.toLocaleString('ko-KR')}명`}
-                        </div>
-                        <div className="mt-0.5 text-2xs text-text-dim">
-                          {`${couponScopeText(c)}, 계정당 ${c.perAccountLimit.toLocaleString('ko-KR')}회`}
-                        </div>
-                      </td>
-                      <td className="align-top text-2xs text-text-dim whitespace-nowrap">
-                        {!c.startsAt && !c.endsAt ? (
-                          <span>상시</span>
-                        ) : (
-                          <div>
-                            <div>{`시작 ${c.startsAt ? fmtDT(c.startsAt) : '즉시'}`}</div>
-                            <div>{`종료 ${c.endsAt ? fmtDT(c.endsAt) : '무기한'}`}</div>
-                          </div>
-                        )}
-                      </td>
-                      <td className="align-top">
-                        <div className="flex flex-wrap gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            disabled={!granted || rowBusy || savingForm}
-                            onClick={() => startEdit(c)}
-                          >
-                            수정
-                          </Button>
-                          <Button
-                            size="sm"
-                            disabled={!granted || rowBusy || rowLockedByForm}
-                            onClick={() => void handleToggleActive(c)}
-                          >
-                            {c.active ? '비활성화' : '활성화'}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="danger"
-                            disabled={!granted || rowBusy || rowLockedByForm}
-                            onClick={() => void handleDelete(c)}
-                          >
-                            삭제
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {coupons.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="py-3 text-center text-text-dim">
-                      등록된 쿠폰이 없어요.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </DataTable>
-          </TableBox>
-        </Cell>
+      {!formOpen && failure && <Note tone="warn" className="my-0">{failure}</Note>}
+      {done && <Note className="my-0">{done}</Note>}
 
-        <Cell title={editingCode !== null ? '쿠폰 수정' : '새 쿠폰 발행'}>
+      {formOpen && (
+        <AdminCard
+          title={editingCode !== null ? '쿠폰 수정' : '새 쿠폰 발행'}
+          actions={<Button size="xs" variant="ghost" disabled={savingForm} onClick={closeForm}>닫기</Button>}
+        >
           <div className="flex flex-col gap-3">
-            <Field
-              label="코드"
-              hint={editingCode !== null ? '수정 중에는 코드를 바꿀 수 없어요.' : `1자 이상 ${COUPON_CODE_MAX}자 이하`}
-            >
-              <TextInput
-                value={code}
-                maxLength={COUPON_CODE_MAX}
-                readOnly={editingCode !== null}
-                className={editingCode !== null ? 'opacity-70 cursor-not-allowed' : undefined}
-                onChange={e => { setCode(e.target.value); clearNotice(); }}
-              />
-            </Field>
-            <Field label="설명" hint={`최대 ${COUPON_DESC_MAX}자`}>
-              <TextInput
-                value={description}
-                maxLength={COUPON_DESC_MAX}
-                onChange={e => { setDescription(e.target.value); clearNotice(); }}
-              />
-            </Field>
-            <Field label="보상 골드" hint="0 이상 10억 이하 정수">
-              <TextInput
-                inputMode="numeric"
-                value={gold}
-                onChange={e => { setGold(e.target.value); clearNotice(); }}
-              />
-            </Field>
+            <AdminSplit variant="3">
+              <Field
+                label="코드"
+                hint={editingCode !== null ? '수정 중에는 코드를 바꿀 수 없어요.' : `1자 이상 ${COUPON_CODE_MAX}자 이하`}
+              >
+                <TextInput
+                  value={code}
+                  maxLength={COUPON_CODE_MAX}
+                  readOnly={editingCode !== null}
+                  className={editingCode !== null ? 'opacity-70 cursor-not-allowed' : undefined}
+                  onChange={e => { setCode(e.target.value); clearNotice(); }}
+                />
+              </Field>
+              <Field label="설명" hint={`최대 ${COUPON_DESC_MAX}자`}>
+                <TextInput
+                  value={description}
+                  maxLength={COUPON_DESC_MAX}
+                  onChange={e => { setDescription(e.target.value); clearNotice(); }}
+                />
+              </Field>
+              <Field label="보상 골드" hint="0 이상 10억 이하 정수">
+                <TextInput
+                  inputMode="numeric"
+                  value={gold}
+                  onChange={e => { setGold(e.target.value); clearNotice(); }}
+                />
+              </Field>
+            </AdminSplit>
 
             <div className="grid grid-cols-[1fr_7rem] gap-2 items-start">
               <Field label="첨부 품목 찾기" hint="이름, 종류(비약, 생명의 기운, 도시락, 미끼, 재료), id 일부를 입력해 고르세요.">
@@ -430,49 +357,64 @@ export default function CouponsTab() {
               </div>
             )}
 
+            <AdminSplit variant="2">
+              <Field label="시작 시각" hint="비워 두면 즉시 시작해요.">
+                <TextInput
+                  type="datetime-local"
+                  value={startsInput}
+                  onChange={e => { setStartsInput(e.target.value); clearNotice(); }}
+                />
+              </Field>
+              <Field label="종료 시각" hint="비워 두면 무기한이에요.">
+                <TextInput
+                  type="datetime-local"
+                  value={endsInput}
+                  onChange={e => { setEndsInput(e.target.value); clearNotice(); }}
+                />
+              </Field>
+            </AdminSplit>
+
+            <AdminSplit variant="2">
+              <Field
+                label="총 사용 한도"
+                hint="비워 두면 무제한이며 게스트도 수령할 수 있어요. 숫자를 정하면 정식 계정만 선착순으로 수령할 수 있어요."
+              >
+                <TextInput
+                  inputMode="numeric"
+                  value={maxRedemptions}
+                  placeholder="무제한"
+                  onChange={e => { setMaxRedemptions(e.target.value); clearNotice(); }}
+                />
+              </Field>
+              <Field label="계정당 사용 한도" hint="1 이상 2,147,483,647 이하 정수">
+                <TextInput
+                  inputMode="numeric"
+                  value={perAccountLimit}
+                  onChange={e => { setPerAccountLimit(e.target.value); clearNotice(); }}
+                />
+              </Field>
+            </AdminSplit>
+
             <CheckToggle
               checked={active}
               onChange={v => { setActive(v); clearNotice(); }}
               label="활성화"
             />
 
-            <Field label="시작 시각" hint="비워 두면 즉시 시작해요.">
-              <TextInput
-                type="datetime-local"
-                value={startsInput}
-                onChange={e => { setStartsInput(e.target.value); clearNotice(); }}
-              />
-            </Field>
-            <Field label="종료 시각" hint="비워 두면 무기한이에요.">
-              <TextInput
-                type="datetime-local"
-                value={endsInput}
-                onChange={e => { setEndsInput(e.target.value); clearNotice(); }}
-              />
-            </Field>
-            <Field
-              label="총 사용 한도"
-              hint="비워 두면 무제한이며 게스트도 수령할 수 있어요. 숫자를 정하면 정식 계정만 선착순으로 수령할 수 있어요."
-            >
-              <TextInput
-                inputMode="numeric"
-                value={maxRedemptions}
-                placeholder="무제한"
-                onChange={e => { setMaxRedemptions(e.target.value); clearNotice(); }}
-              />
-            </Field>
-            <Field label="계정당 사용 한도" hint="1 이상 2,147,483,647 이하 정수">
-              <TextInput
-                inputMode="numeric"
-                value={perAccountLimit}
-                onChange={e => { setPerAccountLimit(e.target.value); clearNotice(); }}
-              />
-            </Field>
-
             {failure && <Note tone="warn" className="my-0">{failure}</Note>}
-            {done && <Note className="my-0">{done}</Note>}
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={savingForm || editingRowBusy}
+                onClick={() => {
+                  if (editingCode !== null) closeForm();
+                  else { resetForm(); clearNotice(); }
+                }}
+              >
+                {editingCode !== null ? '취소' : '초기화'}
+              </Button>
               <Button
                 size="sm"
                 variant="primary"
@@ -481,18 +423,117 @@ export default function CouponsTab() {
               >
                 {editingCode !== null ? '수정 저장' : '쿠폰 발행'}
               </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={savingForm || editingRowBusy}
-                onClick={() => { resetForm(); clearNotice(); }}
-              >
-                {editingCode !== null ? '취소' : '초기화'}
-              </Button>
             </div>
           </div>
-        </Cell>
-      </CellGrid>
+        </AdminCard>
+      )}
+
+      <AdminCard
+        title={`발행된 쿠폰 (${coupons.length})`}
+        actions={(
+          <Button size="sm" variant="primary" disabled={!granted || savingForm} onClick={openCreate}>
+            쿠폰 생성
+          </Button>
+        )}
+      >
+        <AdminTableWrap scroll>
+          <DataTable className="pf-admin-table">
+            <thead>
+              <tr>
+                <th className="text-left">상태</th>
+                <th className="text-left">코드</th>
+                <th className="text-left">보상</th>
+                <th className="text-left">사용 현황</th>
+                <th className="text-left">유효 기간</th>
+                <th className="text-left">조치</th>
+              </tr>
+            </thead>
+            <tbody>
+              {coupons.map(c => {
+                const status = couponStatusOf(c, now);
+                const rowBusy = busyCodes.has(c.code);
+                const rowLockedByForm = savingForm && editingCode === c.code;
+                return (
+                  <tr key={c.code}>
+                    <td className="align-top">
+                      <Badge tone={STATUS_TONE[status]} size="xs">{status}</Badge>
+                    </td>
+                    <td className="align-top text-xs min-w-[140px]">
+                      <div className="font-mono font-bold text-text">{c.code}</div>
+                      <div className="mt-1 text-text-dim break-words">{c.description}</div>
+                    </td>
+                    <td className="align-top text-xs min-w-[140px]">
+                      <div className="flex flex-col gap-1">
+                        {c.gold > 0 && <div>{fmtGold(c.gold)}</div>}
+                        {c.items.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {c.items.map(att => <ItemBadge key={att.id} id={att.id} qty={att.qty} />)}
+                          </div>
+                        )}
+                        {c.gold === 0 && c.items.length === 0 && <span className="text-text-dim">-</span>}
+                      </div>
+                    </td>
+                    <td className="align-top text-xs whitespace-nowrap">
+                      <div className="text-text">
+                        {c.maxRedemptions === null
+                          ? `${c.redeemedCount.toLocaleString('ko-KR')}회 사용`
+                          : `${c.redeemedCount.toLocaleString('ko-KR')} / ${c.maxRedemptions.toLocaleString('ko-KR')}명`}
+                      </div>
+                      <div className="mt-0.5 text-2xs text-text-dim">
+                        {`${couponScopeText(c)}, 계정당 ${c.perAccountLimit.toLocaleString('ko-KR')}회`}
+                      </div>
+                    </td>
+                    <td className="align-top text-2xs text-text-dim whitespace-nowrap">
+                      {!c.startsAt && !c.endsAt ? (
+                        <span>상시</span>
+                      ) : (
+                        <div>
+                          <div>{`시작 ${c.startsAt ? fmtDT(c.startsAt) : '즉시'}`}</div>
+                          <div>{`종료 ${c.endsAt ? fmtDT(c.endsAt) : '무기한'}`}</div>
+                        </div>
+                      )}
+                    </td>
+                    <td className="align-top">
+                      <div className="flex flex-wrap gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={!granted || rowBusy || savingForm}
+                          onClick={() => startEdit(c)}
+                        >
+                          수정
+                        </Button>
+                        <Button
+                          size="sm"
+                          disabled={!granted || rowBusy || rowLockedByForm}
+                          onClick={() => void handleToggleActive(c)}
+                        >
+                          {c.active ? '비활성화' : '활성화'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          disabled={!granted || rowBusy || rowLockedByForm}
+                          onClick={() => void handleDelete(c)}
+                        >
+                          삭제
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {coupons.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="py-3 text-center text-text-dim">
+                    등록된 쿠폰이 없어요.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </DataTable>
+        </AdminTableWrap>
+      </AdminCard>
       {dialogs}
     </>
   );

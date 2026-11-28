@@ -22,6 +22,8 @@ import TextInput from '../../../ui/TextInput';
 import TitledCell from '../../../ui/TitledCell';
 import { FishSpriteThumb } from './FishSpriteThumb';
 import { cx } from '../../../ui/cx';
+import { AdminCard, AdminTableWrap } from '../layout';
+import type { AdminViewMode } from '../viewMode';
 
 // 시뮬레이션 구역 — **수역 단위 통합 대시보드**. 한 칸 안에 편집과 통계가 같이 산다. 어종별 데이터와 통계치를 나누지 않아 수치를 조절하면 그 자리에서 즉시 읽힌다.
 //
@@ -47,7 +49,7 @@ function Delta({ prev, cur }: { prev: number | null; cur: number }) {
   );
 }
 
-export default function FishTab() {
+export default function FishTab({ mode = 'detail' }: { mode?: AdminViewMode } = {}) {
   const [sbBudgets, setSbBudgets] = useState<SimOverrides['budgets']>({});
   const [sbFish, setSbFish] = useState<Record<string, Record<string, number>>>({});
   const [sbPrice, setSbPrice] = useState<Record<string, number>>({});
@@ -150,42 +152,93 @@ export default function FishTab() {
           <TextInput compact value={query} onChange={e => setQuery(e.target.value)}
                      placeholder="해역 또는 어종 검색" className="w-[180px]" aria-label="어종·해역 검색" />
           <span className="text-2xs text-text-dim">{filteredSpots.length}/{SPOTS.length}개 해역</span>
-          <PillButton type="button" onClick={toggleAll} disabled={filteredSpots.length === 0}>
-            {allFilteredOpen ? '모두 접기' : '모두 펼치기'}
-          </PillButton>
-          <PillButton type="button" aria-label="변화량 Δ JSON 추출"
-                  onClick={exportDeltaJson}
-                  disabled={deltaCount === 0}>
-            <PixelIcon glyph="download" size={12} />Δ JSON{deltaCount > 0 ? ` (${deltaCount})` : ''}
-          </PillButton>
-          <PillButton type="button" aria-label="어종 데이터 JSON 추출"
-                  onClick={exportJson}>
-            <PixelIcon glyph="download" size={12} />현황 JSON
-          </PillButton>
+          {mode === 'detail' && (
+            <>
+              <PillButton type="button" onClick={toggleAll} disabled={filteredSpots.length === 0}>
+                {allFilteredOpen ? '모두 접기' : '모두 펼치기'}
+              </PillButton>
+              <PillButton type="button" aria-label="변화량 Δ JSON 추출"
+                      onClick={exportDeltaJson}
+                      disabled={deltaCount === 0}>
+                <PixelIcon glyph="download" size={12} />Δ JSON{deltaCount > 0 ? ` (${deltaCount})` : ''}
+              </PillButton>
+              <PillButton type="button" aria-label="어종 데이터 JSON 추출"
+                      onClick={exportJson}>
+                <PixelIcon glyph="download" size={12} />현황 JSON
+              </PillButton>
+            </>
+          )}
         </div>
       </div>
-      <Note size="xs" className="my-0">
-        입력칸은 시뮬레이션 오버라이드예요. 흐린 글씨가 확정값이고, 비우면 원본으로 돌아가요.
-        저장되지 않아서 새로고침하면 초기화돼요. 기대값 띠와 어종 행의 확률은 입력하는 즉시 함께 움직여요.
-      </Note>
 
-      {/* 수역별 통합 대시보드 — 한 칸에 통계 띠와 편집 가능한 어종 행 */}
-      {filteredSpots.map(spot => {
-        const idx = spotIndex.get(spot.id) ?? 0;
-        return (
-          <SpotDashboard key={spot.id} spot={spot}
-                         rarityFilter={rarityFilter}
-                         open={openSpots.has(spot.id)}
-                         onToggle={() => toggleSpot(spot.id)}
-                         evs={evsBySpot.get(spot.id)!} prevEvs={idx > 0 ? evsBySpot.get(SPOTS[idx - 1].id)! : null}
-                         hourly={hourlyBySpot.get(spot.id)!}
-                         prevHourly={idx > 0 ? hourlyBySpot.get(SPOTS[idx - 1].id)! : null}
-                         sim={sim}
-                         setBudgets={setSbBudgets} setWeights={setSbFish} setPrice={setSbPrice} />
-        );
-      })}
-      {filteredSpots.length === 0 && (
-        <Note size="xs" className="my-0">조건에 맞는 해역이 없어요.</Note>
+      {mode === 'summary' ? (
+        <AdminCard title={`해역·어종 기대값 요약 (${filteredSpots.length}/${SPOTS.length})`}>
+          <AdminTableWrap scroll>
+            <DataTable className="pf-admin-table">
+              <thead>
+                <tr>
+                  <th className="text-left">해역</th>
+                  <th className="text-right">요구 파워</th>
+                  <th className="text-right">어종 수</th>
+                  <th className="text-right">무판정 1회 EV</th>
+                  <th className="text-right">GOOD 1회 EV</th>
+                  <th className="text-right">시간당 EV (GOOD)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredSpots.map(spot => {
+                  const evs = evsBySpot.get(spot.id)!;
+                  const hourly = hourlyBySpot.get(spot.id)!;
+                  const spotFish = selectFishForSpot(spot.id, false);
+                  const fishCount = rarityFilter === 'all'
+                    ? spotFish.length
+                    : spotFish.filter(f => f.rarity === rarityFilter).length;
+                  return (
+                    <tr key={spot.id}>
+                      <td className="text-xs font-medium">{spot.name}</td>
+                      <td className="text-right">{spot.powerReq}</td>
+                      <td className="text-right">{fishCount}종</td>
+                      <td className="text-right">{`${evs.normal.toFixed(1)}G`}</td>
+                      <td className="text-right">{`${evs.good.toFixed(1)}G`}</td>
+                      <td className="text-right pf-accent text-gold">{`${Math.round(hourly.evs.good).toLocaleString('ko-KR')}G/h`}</td>
+                    </tr>
+                  );
+                })}
+                {filteredSpots.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="py-3 text-center text-text-dim">조건에 맞는 해역이 없어요.</td>
+                  </tr>
+                )}
+              </tbody>
+            </DataTable>
+          </AdminTableWrap>
+        </AdminCard>
+      ) : (
+        <>
+          <Note size="xs" className="my-0">
+            입력칸은 시뮬레이션 오버라이드예요. 흐린 글씨가 확정값이고, 비우면 원본으로 돌아가요.
+            저장되지 않아서 새로고침하면 초기화돼요. 기대값 띠와 어종 행의 확률은 입력하는 즉시 함께 움직여요.
+          </Note>
+
+          {/* 수역별 통합 대시보드 — 한 칸에 통계 띠와 편집 가능한 어종 행 */}
+          {filteredSpots.map(spot => {
+            const idx = spotIndex.get(spot.id) ?? 0;
+            return (
+              <SpotDashboard key={spot.id} spot={spot}
+                             rarityFilter={rarityFilter}
+                             open={openSpots.has(spot.id)}
+                             onToggle={() => toggleSpot(spot.id)}
+                             evs={evsBySpot.get(spot.id)!} prevEvs={idx > 0 ? evsBySpot.get(SPOTS[idx - 1].id)! : null}
+                             hourly={hourlyBySpot.get(spot.id)!}
+                             prevHourly={idx > 0 ? hourlyBySpot.get(SPOTS[idx - 1].id)! : null}
+                             sim={sim}
+                             setBudgets={setSbBudgets} setWeights={setSbFish} setPrice={setSbPrice} />
+            );
+          })}
+          {filteredSpots.length === 0 && (
+            <Note size="xs" className="my-0">조건에 맞는 해역이 없어요.</Note>
+          )}
+        </>
       )}
       {dialogs}
     </div>

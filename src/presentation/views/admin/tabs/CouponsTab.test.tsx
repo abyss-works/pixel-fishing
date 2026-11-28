@@ -97,10 +97,12 @@ describe('CouponsTab', () => {
     expect(screen.getAllByText('작은 바다 영약').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('새 쿠폰 발행 폼에서 품목 검색·추가·삭제와 검증 후 생성 요청을 보낸다', async () => {
+  it('쿠폰 생성 버튼을 눌러야 작성 폼이 열리고, 품목 검색·추가·삭제와 검증 후 생성 요청을 보낸다', async () => {
     renderTab();
     await screen.findByText('등록된 쿠폰이 없어요.');
+    expect(screen.queryByLabelText(/^코드/)).toBeNull();
 
+    fireEvent.click(screen.getByRole('button', { name: '쿠폰 생성' }));
     fireEvent.click(screen.getByRole('button', { name: '쿠폰 발행' }));
     expect(screen.getByText(/쿠폰 코드는 1자 이상/)).toBeInTheDocument();
     expect(mockApi.writeCoupon).not.toHaveBeenCalled();
@@ -254,7 +256,7 @@ describe('CouponsTab', () => {
     })));
 
     resolveSave();
-    await waitFor(() => expect(screen.getByRole('button', { name: '쿠폰 발행' })).toBeEnabled());
+    await waitFor(() => expect(screen.queryByRole('button', { name: '수정 저장' })).toBeNull());
 
     // 2. USED1 비활성화 진행 중: 새 쿠폰 작성(다른 코드) 폼 발행은 열려 있고, USED1 수정 중일 때는 폼 저장이 잠긴다
     fireEvent.click(within(rowUsed).getByRole('button', { name: '수정' }));
@@ -262,6 +264,7 @@ describe('CouponsTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '취소' }));
 
     // 새 쿠폰 입력 중 USED1 토글 시작 -> 폼 발행 버튼이 막히지 않는다
+    fireEvent.click(screen.getByRole('button', { name: '쿠폰 생성' }));
     fireEvent.change(screen.getByLabelText(/^코드/), { target: { value: 'NEW3' } });
     fireEvent.change(screen.getByLabelText(/^설명/), { target: { value: '신규 쿠폰' } });
     fireEvent.change(screen.getByLabelText(/^보상 골드/), { target: { value: '300' } });

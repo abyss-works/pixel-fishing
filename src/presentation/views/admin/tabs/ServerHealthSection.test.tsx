@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, cleanup, waitFor, within } from '@testing-library/react';
 import { QueryProvider } from '../../../../core/QueryProvider';
 import { AdminAuthCtx } from '../../../../features/admin/service/accessContext';
 import type { AdminAccess } from '../../../../features/admin/service/accessContext';
@@ -77,10 +77,10 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-const show = (access: AdminAccess, role: AdminRole = 'admin') => render(
+const show = (access: AdminAccess, role: AdminRole = 'admin', days = 7) => render(
   <QueryProvider>
     <AdminAuthCtx.Provider value={{ access, uid: null, role, canViewEmail: role === 'admin', showStaffBadge: false, setStaffBadge: async () => {} }}>
-      <ServerHealthSection granted={access === 'granted'} />
+      <ServerHealthSection granted={access === 'granted'} days={days} />
     </AdminAuthCtx.Provider>
   </QueryProvider>,
 );
@@ -90,7 +90,7 @@ describe('서버 상태 및 경보 섹션', () => {
     const { container } = show('local');
     expect(screen.getByText('서버, 소켓, DB 상태 및 경보')).toBeInTheDocument();
     expect(screen.getByText(/운영 DB에 연결하면/)).toBeInTheDocument();
-    expect(screen.getAllByText('--').length).toBeGreaterThanOrEqual(7);
+    expect(screen.getAllByText('--').length).toBeGreaterThanOrEqual(4);
     expect(container.textContent).not.toContain('—');
     expect(vi.mocked(api.admin.opsHealth)).not.toHaveBeenCalled();
   });
@@ -102,7 +102,7 @@ describe('서버 상태 및 경보 섹션', () => {
     expect(screen.getByText('2시간 1분')).toBeInTheDocument();
     expect(screen.getByText('120 / 240 MB')).toBeInTheDocument();
     expect(screen.getByText('3/20 (대기 0)')).toBeInTheDocument();
-    expect(screen.getByText('100 MB')).toBeInTheDocument();
+    expect(screen.getByText(/100 MB/)).toBeInTheDocument();
     expect(screen.getByText('12')).toBeInTheDocument();
     expect(screen.getByText('최근 슬로우 요청이 없어요.')).toBeInTheDocument();
     expect(screen.getByText('11-05')).toBeInTheDocument();
@@ -152,10 +152,9 @@ describe('서버 상태 및 경보 섹션', () => {
     expect(within(slowRow).getByText('740ms')).toBeInTheDocument();
   });
 
-  it('기간 전환 버튼(14일/30일)을 누르면 해당 기간으로 opsHealth를 다시 조회한다', async () => {
-    show('granted');
+  it('상위에서 내려준 days(14일)에 맞춰 opsHealth를 조회한다', async () => {
+    show('granted', 'admin', 14);
     await screen.findByText('활성 경보 없음');
-    fireEvent.click(screen.getByRole('button', { name: '14일' }));
     await waitFor(() => expect(vi.mocked(api.admin.opsHealth)).toHaveBeenCalledWith(14));
   });
 });

@@ -56,10 +56,10 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-const show = (access: AdminAccess, role: AdminRole = 'admin') => render(
+const show = (access: AdminAccess, role: AdminRole = 'admin', days = 7, mode: 'summary' | 'detail' = 'detail') => render(
   <QueryProvider>
     <AdminAuthCtx.Provider value={{ access, uid: null, role, canViewEmail: role === 'admin', showStaffBadge: false, setStaffBadge: async () => {} }}>
-      <ClientMetricsSection granted={access === 'granted'} />
+      <ClientMetricsSection granted={access === 'granted'} days={days} mode={mode} />
     </AdminAuthCtx.Provider>
   </QueryProvider>,
 );
@@ -89,14 +89,14 @@ describe('클라이언트 체감 성능 섹션', () => {
     expect(screen.getByText('긴 프레임 비율')).toBeInTheDocument();
     expect(screen.getByText('WS 재연결 / 비정상')).toBeInTheDocument();
 
-    expect(screen.getByLabelText('2450ms')).toBeInTheDocument();
-    expect(screen.getByLabelText('185ms')).toBeInTheDocument();
-    expect(screen.getByLabelText('0.042')).toBeInTheDocument();
-    expect(screen.getByLabelText('420ms')).toBeInTheDocument();
-    expect(screen.getByLabelText('160ms')).toBeInTheDocument();
-    expect(screen.getByLabelText('95ms')).toBeInTheDocument();
-    expect(screen.getByLabelText('1.5%')).toBeInTheDocument();
-    expect(screen.getByLabelText('7 / 2')).toBeInTheDocument();
+    expect(screen.getAllByText('2450ms').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('185ms').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('0.042').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('420ms').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('160ms').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('95ms').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('1.5%').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('7 / 2')).toBeInTheDocument();
 
     expect(screen.getByText(/수집 보고/)).toHaveTextContent('수집 보고 120건');
     expect(screen.getByText(/타임아웃 \(액션 2 \/ 조회 1\)/)).toBeInTheDocument();
@@ -115,13 +115,25 @@ describe('클라이언트 체감 성능 섹션', () => {
     expect(screen.queryByRole('table', { name: '일별 클라이언트 체감 성능' })).toBeNull();
   });
 
-  it('기간 전환 버튼(14일/30일)을 누르면 해당 기간으로 clientMetrics를 다시 조회한다', async () => {
-    show('granted');
-    await screen.findByRole('table', { name: '일별 클라이언트 체감 성능' });
-    const group = screen.getByRole('group', { name: '클라이언트 성능 기간 선택' });
-    fireEvent.click(within(group).getByRole('button', { name: '14일' }));
+  it('요약 보기에서는 간결한 오류·체감 요약 카드만 노출하고 8 KPI와 일별 표를 숨긴다', async () => {
+    show('granted', 'admin', 7, 'summary');
+    await waitFor(() => expect(vi.mocked(api.admin.clientMetrics)).toHaveBeenCalledWith(7));
+    expect(screen.getByText('클라이언트 오류·체감 요약 (최근 7일)')).toBeInTheDocument();
+    expect(screen.getByText('WebSocket 재연결 및 비정상 종료')).toBeInTheDocument();
+    expect(screen.queryByText('INP p95')).toBeNull();
+    expect(screen.queryByRole('table', { name: '일별 클라이언트 체감 성능' })).toBeNull();
+  });
+
+  it('상위에서 내려준 days(14일/30일)에 맞춰 clientMetrics를 조회한다', async () => {
+    const { rerender } = show('granted', 'admin', 14);
     await waitFor(() => expect(vi.mocked(api.admin.clientMetrics)).toHaveBeenCalledWith(14));
-    fireEvent.click(within(group).getByRole('button', { name: '30일' }));
+    rerender(
+      <QueryProvider>
+        <AdminAuthCtx.Provider value={{ access: 'granted', uid: null, role: 'admin', canViewEmail: true, showStaffBadge: false, setStaffBadge: async () => {} }}>
+          <ClientMetricsSection granted days={30} mode="detail" />
+        </AdminAuthCtx.Provider>
+      </QueryProvider>,
+    );
     await waitFor(() => expect(vi.mocked(api.admin.clientMetrics)).toHaveBeenCalledWith(30));
   });
 

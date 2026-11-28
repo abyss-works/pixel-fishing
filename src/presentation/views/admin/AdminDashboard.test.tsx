@@ -17,6 +17,7 @@ describe('관리자 대시보드 페이지', () => {
     expect(screen.queryByText('표면 위장')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('tab', { name: '지표·밸런스' }));
     fireEvent.click(screen.getByRole('tab', { name: '밸런스 시뮬' }));
+    fireEvent.click(within(screen.getByRole('group', { name: '보기 모드' })).getByRole('button', { name: '상세' }));
     fireEvent.click(screen.getByRole('button', { name: '모두 펼치기' }));
   };
 

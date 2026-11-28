@@ -1,6 +1,6 @@
-// 편지 구역 — 유저가 보낸 편지(letters, 영구) 목록. events 7일 창 밖의 오래된 편지도 보인다.
-// 보낸 사람은 명부의 계정 식별 표기로 보이고, 우편으로 답장하거나 처리 표시를 남길 수 있다.
+// 편지 구역 — 유저가 보낸 편지(letters, 영구) 목록. admin과 maintainer 모두 열람·답장할 수 있으며 이메일은 canViewEmail에 따른다.
 import { useMemo, useState } from 'react';
+import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
 import DataTable from '../../../ui/DataTable';
 import Modal from '../../../ui/Modal';
@@ -15,7 +15,7 @@ import { useAdminLetterHandled } from '../../../../features/admin/service/useAdm
 import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
 import type { AdminLetterRow, AdminSentMailRow, AdminUserRow } from '../../../../features/admin/model/types';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
-import { Cell, TabState } from '../layout';
+import { AdminCard, AdminTableWrap, TabState } from '../layout';
 import SentMailCard from '../SentMailCard';
 import UserIdentity from '../UserIdentity';
 
@@ -81,9 +81,13 @@ export default function LettersTab({ onCompose }: {
       <TabState loading={loading && granted} error={error} onRetry={refresh} />
       {!granted && <Note className="my-0">운영 DB에 연결하거나 admins에 등록하면 채워져요.</Note>}
       {failure && <Note tone="warn" className="my-0">{failure}</Note>}
-      <Cell title={`편지 (${letters.length}, 처리 전 ${open})`} flush>
-        <div className="pf-scroll-panel max-h-[560px] overflow-auto px-1">
-          <DataTable>
+
+      <AdminCard
+        title={`편지 (${letters.length}, 처리 전 ${open})`}
+        badge={open > 0 ? <Badge tone="gold" size="xs">{`미처리 ${open}건`}</Badge> : undefined}
+      >
+        <AdminTableWrap scroll>
+          <DataTable className="pf-admin-table">
             <thead>
               <tr>
                 <th className="text-left">시각</th>
@@ -110,8 +114,12 @@ export default function LettersTab({ onCompose }: {
                             </Button>
                           )}
                         </div>
-                        <Button size="sm" variant="ghost" disabled={busy === l.id}
-                                onClick={() => void toggle(l.id, !l.handled_at)}>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={busy === l.id}
+                          onClick={() => void toggle(l.id, !l.handled_at)}
+                        >
                           {l.handled_at ? '처리 취소' : '처리 완료'}
                         </Button>
                         {l.handled_at && <span className="text-2xs text-text-dim">{`${fmtDT(l.handled_at)} 처리`}</span>}
@@ -125,8 +133,9 @@ export default function LettersTab({ onCompose }: {
               )}
             </tbody>
           </DataTable>
-        </div>
-      </Cell>
+        </AdminTableWrap>
+      </AdminCard>
+
       {viewingUserId && viewingIdentity && (
         <Modal
           layer="app"

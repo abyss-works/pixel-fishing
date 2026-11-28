@@ -1,5 +1,4 @@
 // 변경 기록 칸 — 체인지로그의 public과 admin 항목을 최신 버전부터 버전별로 보인다. 읽기 전용이다.
-// 철회된 항목(체인지로그에서 사라졌거나 다른 항목에 대체된 것)은 기본으로 숨기고 토글로 함께 본다.
 import { useState } from 'react';
 import Badge from '../../../ui/Badge';
 import CheckToggle from '../../../ui/CheckToggle';
@@ -13,7 +12,7 @@ import { readAdminChangelog } from '../../../../features/admin/service/queries';
 import { adminKeys } from '../../../../features/admin/service/queryKeys';
 import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
-import { Cell, TabState } from '../layout';
+import { AdminCard, TabState } from '../layout';
 
 export default function ChangelogSection() {
   const { access, role } = useAdminAuth();
@@ -26,20 +25,18 @@ export default function ChangelogSection() {
   const groups = groupChangelog(rows, showWithdrawn);
 
   return (
-    <Cell title="변경 기록" className="xl:col-span-2" flush>
-      <div className="flex flex-wrap items-center gap-3 px-3 pt-3">
+    <AdminCard
+      title="변경 기록"
+      actions={<CheckToggle checked={showWithdrawn} onChange={setShowWithdrawn} label={`철회된 항목 보기 (${withdrawnCount}개)`} />}
+    >
+      <div className="flex flex-col gap-3">
         <Note size="2xs" className="my-0">
           {role === 'maintainer'
             ? '운영자 세션에서는 플레이어에게도 보이는 공개(public) 변경 기록만 보여줘요.'
             : 'public은 플레이어에게도 보이는 변경이고, admin은 관리자만 보는 변경이에요.'}
         </Note>
-        <CheckToggle checked={showWithdrawn} onChange={setShowWithdrawn} label={`철회된 항목 보기 (${withdrawnCount}개)`} />
-      </div>
-      <div className="px-3">
         <TabState loading={loading && granted} error={error} onRetry={refresh} />
         {!granted && <Note className="my-0">운영 DB에 연결하거나 admins에 등록하면 채워져요.</Note>}
-      </div>
-      <div className="px-3 pb-3">
         <div className={`${SCROLL_Y_ROWS} max-h-[560px] flex flex-col gap-3`}>
           {groups.map(g => (
             <section key={g.version} aria-label={`v${g.version}`}>
@@ -64,6 +61,6 @@ export default function ChangelogSection() {
           )}
         </div>
       </div>
-    </Cell>
+    </AdminCard>
   );
 }

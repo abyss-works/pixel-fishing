@@ -1,4 +1,4 @@
-// 지표·밸런스 탭 — 경제·진행, 활동·리텐션, 밸런스 시뮬 세 구역을 한 탭에 모은다.
+// 지표·밸런스 탭 — 경제·진행, 활동·리텐션, 밸런스 시뮬 세 구역을 한 탭에 모으고 요약/상세 모드를 전파한다.
 import { useState } from 'react';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
 import { AdminSubnavExtra } from '../layout';
@@ -37,15 +37,15 @@ export default function InsightsTab({ section }: {
       )}
       {section === 'economy' && (
         <>
-          <EconomyTab />
+          <EconomyTab mode={viewMode} />
           {viewMode === 'detail' && <ProgressionTab />}
         </>
       )}
-      {section === 'retention' && <MetricsTab range={range} />}
+      {section === 'retention' && <MetricsTab range={range} mode={viewMode} />}
       {section === 'sim' && (
         <>
           <BalanceLiveSection granted={access === 'granted'} mode={viewMode} />
-          <FishTab />
+          <FishTab mode={viewMode} />
         </>
       )}
     </div>

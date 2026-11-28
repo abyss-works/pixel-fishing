@@ -109,10 +109,12 @@ describe('NoticesTab', () => {
     await waitFor(() => expect(mockApi.writeNotice).toHaveBeenCalledWith({ op: 'delete', id: 3 }));
   });
 
-  it('새 공지 작성 폼에서 입력값을 검증하고 등록 요청을 보낸다', async () => {
+  it('새 공지 등록 버튼을 눌러야 작성 폼이 열리고, 입력값을 검증하고 등록 요청을 보낸다', async () => {
     renderTab();
     await screen.findByText('등록된 공지가 없어요.');
+    expect(screen.queryByLabelText(/^제목/)).toBeNull();
 
+    fireEvent.click(screen.getByRole('button', { name: '새 공지 등록' }));
     fireEvent.click(screen.getByRole('button', { name: '공지 등록' }));
     expect(screen.getByText(/제목은 1자 이상/)).toBeInTheDocument();
     expect(mockApi.writeNotice).not.toHaveBeenCalled();
