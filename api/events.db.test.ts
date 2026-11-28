@@ -283,4 +283,94 @@ function mockRngSeq(seq: readonly number[], fallback = 0.5): void {
       kind: 'base', id: 'harbor',
     });
   });
+
+  it('eventDex는 종료 7일 경과 과거 회차를 포함해 전 회차 도감을 누적 합산하고 최신순 출현 이력(미래 제외)·게스트 빈 counts를 반환한다', async () => {
+    await createAdminEvent(database.db, {
+      id: 'evt-champ-past-old',
+      kind: 'championship',
+      title: '지난 겨울 대회',
+      description: '종료 7일 경과',
+      startsAt: '2030-02-01T00:00:00.000Z',
+      endsAt: '2030-02-10T00:00:00.000Z',
+      active: false,
+      config: {},
+    });
+    await createAdminEvent(database.db, {
+      id: 'evt-champ-future',
+      kind: 'championship',
+      title: '다가올 대회',
+      description: '미래 미시작',
+      startsAt: '2030-03-20T00:00:00.000Z',
+      endsAt: '2030-03-25T00:00:00.000Z',
+      active: true,
+      config: {},
+    });
+
+    const memberUid = await seedMember({ state: { boat: 1, rod: 20 } });
+    const guestUid = await seedGuest({ state: {} });
+
+    await env.client.query(
+      `insert into public.event_championship_scores (event_id, user_id, score, catches, dex)
+       values
+         ('evt-champ-past-old', $1, 100, 3, $2::jsonb),
+         ('evt-champ-live', $1, 50, 2, $3::jsonb)`,
+      [
+        memberUid,
+        JSON.stringify({
+          'event-boxfish': { normal: 2, variant: 1 },
+          'event-glaaki': { normal: 1, variant: 0 },
+        }),
+        JSON.stringify({
+          'event-boxfish': { normal: 1, variant: 2 },
+          'event-snow-smelt': { normal: 3, variant: 0 },
+        }),
+      ],
+    );
+
+    const memberSnap = await callEvents(userToken(memberUid));
+    expect(memberSnap.status).toBe(200);
+    const memberDex = (memberSnap.body as {
+      eventDex: {
+        counts: Record<string, { normal: number; variant: number }>;
+        appearances: Record<string, Array<{ eventId: string; title: string; startsAt: string; endsAt: string }>>;
+      };
+    }).eventDex;
+
+    expect(memberDex.counts).toEqual({
+      'event-boxfish': { normal: 3, variant: 3 },
+      'event-glaaki': { normal: 1, variant: 0 },
+      'event-snow-smelt': { normal: 3, variant: 0 },
+    });
+
+    for (const fish of EVENT_FISH) {
+      const list = memberDex.appearances[fish.id];
+      expect(list.map(a => a.eventId)).toEqual(['evt-champ-live', 'evt-champ-past-old']);
+      expect(list[0]).toEqual({
+        eventId: 'evt-champ-live',
+        title: '강태공 대회',
+        startsAt: '2030-03-05T00:00:00.000Z',
+        endsAt: '2030-03-10T00:00:00.000Z',
+      });
+      expect(list[1]).toEqual({
+        eventId: 'evt-champ-past-old',
+        title: '지난 겨울 대회',
+        startsAt: '2030-02-01T00:00:00.000Z',
+        endsAt: '2030-02-10T00:00:00.000Z',
+      });
+    }
+
+    const guestSnap = await callEvents(userToken(guestUid));
+    expect(guestSnap.status).toBe(200);
+    const guestDex = (guestSnap.body as {
+      eventDex: {
+        counts: Record<string, { normal: number; variant: number }>;
+        appearances: Record<string, Array<{ eventId: string }>>;
+      };
+    }).eventDex;
+    expect(guestDex.counts).toEqual({});
+    expect(guestDex.appearances[EVENT_FISH[0].id].map(a => a.eventId)).toEqual([
+      'evt-champ-live',
+      'evt-champ-past-old',
+    ]);
+  });
 });

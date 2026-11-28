@@ -67,7 +67,7 @@ export type {
   AdminLive, AdminLiveConnection, AdminDailyStatsRow, AdminSessionRow, AdminSpamFlagRow, AdminEventRow, AdminLetterRow, AdminChangelogRow, AdminChatReportRow, AdminNoticeRow, AdminNoticeRequest, AdminNoticeMutationResult, BalanceLive,
   AdminSentMailRow, AdminMailRequest, AdminMailPlan,
   SoundSettings,
-  LiveEventKind, LiveEventSummary, EventTrioSlotStatus, EventTrioState, EventLeaderboardRow, EventChampionshipState, EventLuckDayStamp, EventDrawState, EventsSnapshot,
+  LiveEventKind, LiveEventSummary, EventTrioSlotStatus, EventTrioState, EventLeaderboardRow, EventChampionshipState, EventLuckDayStamp, EventDrawState, EventDexAppearance, EventDexSnapshot, EventsSnapshot,
   AdminLiveEventRow, AdminLiveEventRequest, AdminEventDrawRow, AdminCouponRow, AdminCouponRequest, AdminCouponMutationResult,
   AdminIntegrityStageAccount, AdminIntegrityStageSummary, AdminIntegrityEventRow, AdminIntegrityMetricsCohort, AdminIntegrityMetrics,
 } from './types';

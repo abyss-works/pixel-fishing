@@ -1020,12 +1020,26 @@ export interface EventDrawState {
   won: boolean;
 }
 
+export interface EventDexAppearance {
+  eventId: string;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+}
+
+export interface EventDexSnapshot {
+  counts: Record<string, { normal: number; variant: number }>;
+  appearances: Record<string, readonly EventDexAppearance[]>;
+}
+
 export interface EventsSnapshot {
   now: string;
   events: readonly LiveEventSummary[];
   trio: EventTrioState | null;
   championship: EventChampionshipState | null;
   draw: EventDrawState | null;
+  /** 전 회차 이벤트 어종 누적 도감과 등장 이력 — 서버가 항상 채워 돌려준다 */
+  eventDex?: EventDexSnapshot;
 }
 
 export interface AdminLiveEventRow extends LiveEventSummary {
