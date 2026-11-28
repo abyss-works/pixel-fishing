@@ -6,7 +6,7 @@ import {
   addCatch, buildCatchInfo, catchFameOf, makeInstance, migrate,
   redeemCoupon, rollCatchExtras, sellSelected, setLocked, applyAutoLock, applyCatchAutoLock, tryBuyBoat, tryUpgrade,
   overflowUids, release, instanceFish, formName, travel, applyRelief, moveExhibit,
-  addItem, takeItem, nextDexRec, mutationWeightsOf,
+  addItem, takeItem, nextDexRec, mutationWeightsOf, priceOf,
 } from './logic.js';
 import type { GameState, Judgment, CatchInfo, CatchExtras, DrawOptions, FishInstance, FormRecord, FormId, ReliefGrant, Fish, Coupon, CouponItem } from './logic.js';
 import { FISH } from '../content/fish.js';
@@ -632,7 +632,10 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const claimCheck = redPos !== null
         ? verifyClaimedJudgment(action.judgment, pos, redPos, pz.yellow / 100, redWidth)
         : null;
+      const prevRec = state.dex[fish.id]?.[extras.form];
+      const isPersonalBest = prevRec !== undefined && prevRec.maxSize !== null && inst.size !== null && inst.size > prevRec.maxSize;
       const events: GameEvent[] = [{ type: 'catch', payload: {
+        mode: 'regular',
         // uid를 남긴다 — 이벤트 스트림과 가방 개체를 잇는 유일한 연결고리 (감사·집계의 근거)
         // judgment는 강등 확정값 — 감사에서 "PERFECT 주장이 서버에서 살아남았나"를 보려면 이 값이다
         uid: inst.uid, fishId: fish.id, judgment, spot: action.spot,
@@ -657,8 +660,17 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       return {
         ok: true,
         state: next,
-        result: { type: 'catch', fishId: fish.id, uid: inst.uid, info, released,
-          ...(taken.length > 0 ? { extracted, energy: plan.gain.byGrade } : {}), ...ticketResult },
+        result: {
+          type: 'catch',
+          fishId: fish.id,
+          uid: inst.uid,
+          info,
+          released,
+          value: { kind: 'gold', amount: priceOf(fish, inst.form) },
+          ...(isPersonalBest ? { isPersonalBest: true } : {}),
+          ...(taken.length > 0 ? { extracted, energy: plan.gain.byGrade } : {}),
+          ...ticketResult,
+        },
         events: [...events, ...ticketEvents],
       };
     }
