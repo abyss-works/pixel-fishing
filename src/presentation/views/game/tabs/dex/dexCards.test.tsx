@@ -49,7 +49,7 @@ describe('도감 일반 어종 카드', () => {
 
   it('본문은 이름, 가격, 마릿수 순서이고 등급 글자를 쓰지 않는다', () => {
     const { game, entry } = found();
-    const { container } = render(<DexGrid game={game} view="base" sub="village" onSub={() => {}} />);
+    const { container } = render(<DexGrid game={game} form="normal" onToggleForm={() => {}} sub="village" onSub={() => {}} />);
     const text = container.textContent ?? '';
     const i = text.indexOf(entry.name);
     const p = text.indexOf(fmtGold(entry.price), i);
