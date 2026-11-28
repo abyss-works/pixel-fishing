@@ -65,4 +65,11 @@ describe('Minimap', () => {
     fireEvent.click(screen.getByRole('button', { name: '미니맵 숨기기' }));
     expect(onHide).toHaveBeenCalledTimes(1);
   });
+
+  it('왼쪽 위와 오른쪽 아래에 겹칠 칩을 받아 그리고, 겹친 칸은 포인터 이벤트를 아래로 통과시킨다', () => {
+    render(<Minimap def={REGION_PACKS.world} boat={1} covered={false}
+                    topLeft={<span data-testid="tl" />} bottomRight={<span data-testid="br" />} />);
+    expect(screen.getByTestId('tl').parentElement!.className).toContain('pointer-events-none');
+    expect(screen.getByTestId('br').parentElement!.className).toContain('pointer-events-none');
+  });
 });

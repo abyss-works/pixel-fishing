@@ -1,12 +1,13 @@
-// 슬롯·보너스 통합 칩 모델 — 남은 시간 표기, 지금 효과, 통합 칩 표시 조건(잠금·비어 있음·활성 합산), 툴팁 내역.
+// 슬롯·적용 중인 효과 카드 모델 — 남은 시간 표기, 지금 효과, 카드 표시 조건(잠금·비어 있음·활성)과 순서, 막대 비율.
 import { describe, expect, it } from 'vitest';
-import { COOKING_UNLOCK_BOAT } from '../../../game/content/cooking';
+import { COOKING_UNLOCK_BOAT, recipeById } from '../../../game/content/cooking';
+import { slotDurationMs } from '../../../game/rules/cooking';
 import { newState } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
 import { gameDayOf } from '../../../game/rules/time';
 import { GUEST_LOCK_DEFAULT_LINES, UNVERIFIED_LOCK_TEXT } from '../../display/model/menuLock';
 import {
-  activeSlot, DEFAULT_POLL_MS, fmtSlotTimeLeft, selectActiveEffectsView, selectBonusChip, selectBonusTipRows, slotPollIntervalMs, SUB_MINUTE_POLL_MS,
+  activeSlot, DEFAULT_POLL_MS, fmtSlotTimeLeft, selectActiveEffectsView, selectEffectCard, slotPollIntervalMs, SUB_MINUTE_POLL_MS,
 } from './slots';
 
 const T0 = '2026-11-12T00:00:00.000Z';
@@ -70,148 +71,99 @@ describe('슬롯의 지금 효과', () => {
   });
 });
 
-describe('보너스 통합 칩 표시 조건과 내역', () => {
-  it('해금 전이고 활성화된 다른 효과가 없으면 잠금 칩 하나와 진행 조건 줄을 낸다', () => {
-    const chip = selectBonusChip(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), T0, 'account');
-    expect(chip).toEqual({
-      state: 'locked',
-      lines: [
-        '인도양 항로가 열리면 부엌에서 도시락과 미끼를 만들 수 있어요.',
-        '인도양 항로는 증기선(5단계)부터 열려요.',
-      ],
-    });
+describe('적용 중인 효과 카드 표시 조건과 순서', () => {
+  const LOCK_LINES = [
+    '인도양 항로가 열리면 부엌에서 도시락과 미끼를 만들 수 있어요.',
+    '인도양 항로는 증기선(5단계)부터 열려요.',
+  ];
+
+  it('해금 전이고 활성화된 다른 효과가 없으면 잠금 카드와 진행 조건 줄을 낸다', () => {
+    expect(selectEffectCard(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), T0, 'account')).toEqual({ state: 'locked', lines: LOCK_LINES });
   });
 
   it('게스트는 해금 전+활성 효과 없음이면 진행 조건 잠금이고, 해금 뒤+활성 효과 없음이면 게스트 잠금이다', () => {
-    expect(selectBonusChip(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), T0, 'guest')).toEqual({
-      state: 'locked',
-      lines: [
-        '인도양 항로가 열리면 부엌에서 도시락과 미끼를 만들 수 있어요.',
-        '인도양 항로는 증기선(5단계)부터 열려요.',
-      ],
-    });
-    expect(selectBonusChip(seed({ boat: COOKING_UNLOCK_BOAT }), T0, 'guest')).toEqual({
-      state: 'locked',
-      lines: [...GUEST_LOCK_DEFAULT_LINES],
-    });
+    expect(selectEffectCard(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), T0, 'guest')).toEqual({ state: 'locked', lines: LOCK_LINES });
+    expect(selectEffectCard(seed({ boat: COOKING_UNLOCK_BOAT }), T0, 'guest')).toEqual({ state: 'locked', lines: [...GUEST_LOCK_DEFAULT_LINES] });
   });
 
   it('확인 실패 상태이고 활성 효과가 없으면 확인 실패 잠금이 먼저다', () => {
-    expect(selectBonusChip(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), T0, 'unverified')).toEqual({
-      state: 'locked',
-      lines: [UNVERIFIED_LOCK_TEXT],
+    expect(selectEffectCard(seed({ boat: COOKING_UNLOCK_BOAT - 1 }), T0, 'unverified')).toEqual({ state: 'locked', lines: [UNVERIFIED_LOCK_TEXT] });
+  });
+
+  it('요리가 열리기 전이나 게스트라도 비약이나 오늘의 운세가 켜져 있으면 잠금 없이 활성 카드를 낸다', () => {
+    const day = gameDayOf(T0);
+    const card = selectEffectCard(
+      seed({ boat: 0, potions: { 'luck-small': day }, fortune: { day, kind: 'fish', index: 5 } }), T0, 'guest',
+    );
+    expect(card).toEqual({
+      state: 'active',
+      items: [
+        { id: 'potion:luck-small', kind: 'potion', name: '작은 바다 영약', ratio: null },
+        { id: 'fortune', kind: 'fortune', name: '만선 풍어운', ratio: null },
+      ],
     });
   });
 
-  it('요리가 열리기 전이나 게스트라도 비약이나 오늘의 운세가 켜져 있으면 통합 활성 칩을 낸다', () => {
-    const day = gameDayOf(T0);
-    const chip = selectBonusChip(
-      seed({
-        boat: 0,
-        potions: { 'luck-small': day },
-        fortune: { day, kind: 'fish', index: 5 },
-      }),
-      T0,
-      'guest',
-    );
-    expect(chip.state).toBe('active');
-    if (chip.state !== 'active') return;
-    expect(chip.count).toBe(2);
-    expect(chip.items.map(i => [i.id, i.kindLabel, i.title, i.summary, i.durationText])).toEqual([
-      ['potion:luck-small', '비약', { name: '작은 바다 영약', grade: 'special' }, '모든 행운 효과 ×1.05', '하루 동안'],
-      ['fortune', '만선 풍어운', { name: '오늘의 운세', grade: null }, '희귀 이상 출현 비중 ×1.10', '하루 동안'],
-    ]);
+  it('요리가 열린 뒤 활성 효과가 하나도 없으면 흐린 카드(empty)를 낸다', () => {
+    expect(selectEffectCard(seed(), T0, 'account')).toEqual({ state: 'empty' });
   });
 
-  it('요리가 열린 뒤 활성 효과가 하나도 없으면 빈 통합 칩(empty)을 낸다', () => {
-    expect(selectBonusChip(seed(), T0, 'account')).toEqual({ state: 'empty' });
-  });
-
-  it('끝난 슬롯과 지난 날짜 비약·운세는 통합 칩에서 빠진다', () => {
+  it('끝난 슬롯과 지난 날짜 비약·운세는 카드에서 빠진다', () => {
     const game = seed({
       slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(HOUR) }, bait: null },
       potions: { 'luck-small': '2026-11-11' },
       fortune: { day: '2026-11-11', kind: 'gold', index: 3 },
     });
-    expect(selectBonusChip(game, at(HOUR), 'account')).toEqual({ state: 'empty' });
+    expect(selectEffectCard(game, at(HOUR), 'account')).toEqual({ state: 'empty' });
   });
 
-  it('도시락, 다중 미끼(bait, bait2), 비약, 오늘의 운세를 모두 한 통합 목록으로 묶고 slotKey를 구분 유지한다', () => {
+  it('도시락, 미끼(bait, bait2), 비약, 오늘의 운세 순서로 모으고 슬롯 키를 구분 유지한다', () => {
     const day = gameDayOf(T0);
     const dual = seed({
       artifacts: ['sargasso-net'],
       slots: {
-        lunch: { id: 'cook-lunch-bite', endsAt: at(HOUR + 42 * MIN) },
+        lunch: { id: 'cook-lunch-bite', endsAt: at(HOUR) },
         bait: { id: 'cook-bait-rare', endsAt: at(2 * MIN) },
         bait2: { id: 'cook-bait-epic', endsAt: at(3 * MIN) },
       },
       potions: { 'luck-small': day },
       fortune: { day, kind: 'shadow', index: 3 },
     });
-    const chip = selectBonusChip(dual, T0, 'account');
-    expect(chip.state).toBe('active');
-    if (chip.state !== 'active') return;
-    expect(chip.count).toBe(5);
-    expect(chip.items.map(i => [i.id, i.kind, i.title.name, i.durationText])).toEqual([
-      ['lunch', 'lunch', '가루디야', '1시간 42분 남음'],
-      ['bait', 'bait', '롱페퍼 미끼', '2분 남음'],
-      ['bait2', 'bait', '큐베브 미끼', '3분 남음'],
-      ['potion:luck-small', 'potion', '작은 바다 영약', '하루 동안'],
-      ['fortune', 'fortune', '오늘의 운세', '하루 동안'],
+    const card = selectEffectCard(dual, T0, 'account');
+    expect(card.state).toBe('active');
+    if (card.state !== 'active') return;
+    expect(card.items.map(i => [i.id, i.kind])).toEqual([
+      ['lunch', 'lunch'], ['bait', 'bait'], ['bait2', 'bait'], ['potion:luck-small', 'potion'], ['fortune', 'fortune'],
     ]);
-
-    // bait 만료 후 bait2는 id 'bait2'로 그대로 남는다
-    const afterFirst = selectBonusChip(dual, at(2 * MIN), 'account');
-    expect(afterFirst.state).toBe('active');
-    if (afterFirst.state !== 'active') return;
+    const afterFirst = selectEffectCard(dual, at(2 * MIN), 'account');
+    if (afterFirst.state !== 'active') throw new Error('active expected');
     expect(afterFirst.items.map(i => i.id)).toEqual(['lunch', 'bait2', 'potion:luck-small', 'fortune']);
+  });
+
+  it('도시락과 미끼의 막대 비율은 남은 시간을 규칙의 전체 지속 시간으로 나눈 값이고 비약과 운세는 막대가 없다', () => {
+    const lunchMs = slotDurationMs(recipeById('cook-lunch-bite')!);
+    const baitMs = slotDurationMs(recipeById('cook-bait-rare')!);
+    const day = gameDayOf(T0);
+    const card = selectEffectCard(seed({
+      slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(lunchMs / 2) }, bait: { id: 'cook-bait-rare', endsAt: at(baitMs) } },
+      potions: { 'luck-small': day }, fortune: { day, kind: 'fish', index: 5 },
+    }), T0, 'account');
+    if (card.state !== 'active') throw new Error('active expected');
+    expect(card.items.map(i => i.ratio)).toEqual([0.5, 1, null, null]);
+  });
+
+  it('남은 시간이 전체 지속 시간보다 길면 비율은 1로 자르고, 유물로 줄어든 미끼 지속을 전체로 쓴다', () => {
+    const game = seed({
+      artifacts: ['sargasso-net'],
+      slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(100 * HOUR) }, bait: { id: 'cook-bait-rare', endsAt: at(slotDurationMs(recipeById('cook-bait-rare')!, seed({ artifacts: ['sargasso-net'] })) / 2) } },
+    });
+    const card = selectEffectCard(game, T0, 'account');
+    if (card.state !== 'active') throw new Error('active expected');
+    expect(card.items.map(i => i.ratio)).toEqual([1, 0.5]);
   });
 });
 
-describe('HUD 칩 4행 요약 및 적용 중인 효과 창 모델', () => {
-  it('selectBonusTipRows는 도시락·미끼·비약 활성 여부와 운세 3글자 요약을 돌려준다', () => {
-    expect(selectBonusTipRows(seed(), T0)).toEqual([
-      { label: '도시락', value: '없음' },
-      { label: '미끼', value: '없음' },
-      { label: '비약', value: '없음' },
-      { label: '운세', value: '없음' },
-    ]);
-
-    const day = gameDayOf(T0);
-    expect(selectBonusTipRows(seed({
-      slots: { lunch: { id: 'cook-lunch-bite', endsAt: at(HOUR) }, bait: { id: 'cook-bait-rare', endsAt: at(MIN) } },
-      potions: { 'luck-small': day },
-      fortune: { day, kind: 'shadow', index: 3 },
-    }), T0)).toEqual([
-      { label: '도시락', value: '활성' },
-      { label: '미끼', value: '활성' },
-      { label: '비약', value: '활성' },
-      { label: '운세', value: '그림자' },
-    ]);
-
-    expect(selectBonusTipRows(seed({
-      artifacts: ['sargasso-net'],
-      slots: { lunch: null, bait: { id: 'cook-bait-rare', endsAt: at(MIN) }, bait2: { id: 'cook-bait-epic', endsAt: at(MIN) } },
-      fortune: { day, kind: 'fish', index: 5 },
-    }), T0)).toEqual([
-      { label: '도시락', value: '없음' },
-      { label: '미끼', value: '2/2' },
-      { label: '비약', value: '없음' },
-      { label: '운세', value: '만선풍어' },
-    ]);
-
-    expect(selectBonusTipRows(seed({
-      artifacts: ['sargasso-net'],
-      slots: { lunch: null, bait: { id: 'cook-bait-rare', endsAt: at(MIN) } },
-      fortune: { day, kind: 'gold', index: 3 },
-    }), T0)).toEqual([
-      { label: '도시락', value: '없음' },
-      { label: '미끼', value: '1/2' },
-      { label: '비약', value: '없음' },
-      { label: '운세', value: '잔돈운' },
-    ]);
-  });
-
+describe('적용 중인 효과 창 모델', () => {
   it('selectActiveEffectsView는 비어 있는 상태와 4종 활성 효과(비약·운세 곱연산 배수 포함)를 구획별로 돌려준다', () => {
     expect(selectActiveEffectsView(seed(), T0)).toEqual({
       hasAny: false,

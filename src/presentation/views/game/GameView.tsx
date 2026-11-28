@@ -598,7 +598,7 @@ export default function GameView(props: GameViewProps) {
                        {atSea && <TraceCard onTrack={setTracking} />}
                      </>
                    )}
-                   chips={showPresence ? <PresenceChip region={region} onOpen={() => setPlayersOpen(true)} /> : null}
+                   presenceChip={showPresence ? <PresenceChip region={region} onOpen={() => setPlayersOpen(true)} /> : null}
                    badge={props.badge} accountState={accountState}
                    pipButton={!mobile && pip.supported ? (
                      <PipHudButton open={pip.isOpen} onToggle={() => void pip.togglePip()} />

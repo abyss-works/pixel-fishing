@@ -1,6 +1,6 @@
 /// <reference types="node" />
 import { readFileSync } from 'node:fs';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { COOKING_UNLOCK_BOAT } from '../../../game/content/cooking';
 import { newState } from '../../../game/rules/logic';
@@ -10,7 +10,11 @@ import { resetMinimapVisible, setMinimapVisible } from '../../../features/displa
 const layout = vi.hoisted(() => ({ mobile: false }));
 vi.mock('../useMobileLayout', () => ({ useMobileLayout: () => layout.mobile }));
 vi.mock('../../ui/hud/MessageLog', () => ({ default: () => <div data-testid="log" /> }));
-vi.mock('../../ui/hud/Minimap', () => ({ default: () => <div data-testid="minimap" /> }));
+vi.mock('../../ui/hud/Minimap', () => ({
+  default: ({ topLeft, bottomRight }: { topLeft?: unknown; bottomRight?: unknown }) => (
+    <div data-testid="minimap"><div data-testid="top-left">{topLeft as never}</div><div data-testid="bottom-right">{bottomRight as never}</div></div>
+  ),
+}));
 vi.mock('./HudHeader', () => ({ default: () => null }));
 const NOW = '2026-11-12T00:00:00.000Z';
 vi.mock('../../../features/gameplay/service/useGameTime', () => ({
@@ -27,73 +31,72 @@ const region = { kind: 'region', id: 'village' } as const;
 const base = { kind: 'base', id: 'home' } as const;
 const chip = <span data-testid="presence">접속</span>;
 
-// 칩 줄은 시계의 부모다. 칩 줄의 자식을 DOM 순서대로 읽는다
+// 미니맵을 숨기거나 거점일 때 미니맵 자리의 한 줄 - 시계의 부모 칸의 부모다
 const rowOf = () => screen.getByText('12:00').closest('div')!.parentElement!;
 const kinds = () => [...rowOf().children].map(el =>
   el.matches('[data-testid="presence"]') ? '접속 칩'
   : el.textContent === '12:00' ? '시계'
-  : (el.matches('[aria-label^="활성 효과"]') || el.querySelector('[aria-label^="활성 효과"]')) ? '보너스 통합 칩'
   : el.querySelector('[aria-label="미니맵 보이기"]') ? '지도 버튼' : '?');
 
 afterEach(() => { cleanup(); resetMinimapVisible(); layout.mobile = false; });
 
-// 해금 전(newState)의 보너스 통합 칩은 잠금 칩 하나다
 const unlocked = (slots: GameState['slots'] = { lunch: null, bait: null }): GameState =>
   ({ ...newState(), boat: COOKING_UNLOCK_BOAT, slots });
 const HOUR_LATER = '2026-11-12T01:00:00.000Z';
 
-describe('HudLayout 미니맵 위 칩 줄', () => {
-  it('접속 칩, 보너스 통합 칩, 시계, 지도 버튼이 같은 줄의 형제로 이 순서다', () => {
-    setMinimapVisible(false);
-    render(<HudLayout {...props} game={newState()} scene={region} chips={chip} />);
-    expect(kinds()).toEqual(['접속 칩', '보너스 통합 칩', '시계', '지도 버튼']);
-  });
-
-  it('해금 뒤에는 활성 효과가 없으면 흐린 효과 0을 두고, 효과가 켜지면 활성 수(효과 N)를 보인다', () => {
+describe('HudLayout 오른쪽 아래 열', () => {
+  it('미니맵을 보이면 접속 칩은 미니맵 왼쪽 위, 시계는 오른쪽 아래에 겹치고 칩 줄은 없다', () => {
     setMinimapVisible(true);
-    const { unmount } = render(<HudLayout {...props} game={unlocked()} scene={region} chips={chip} />);
-    expect(kinds()).toEqual(['접속 칩', '보너스 통합 칩', '시계']);
-    expect(screen.getByRole('button', { name: '활성 효과 없음' })).toHaveTextContent('효과0');
-    unmount();
-    render(<HudLayout {...props} scene={region} chips={chip}
-                      game={unlocked({ lunch: null, bait: { id: 'cook-bait-mutation', endsAt: HOUR_LATER } })} />);
-    expect(kinds()).toEqual(['접속 칩', '보너스 통합 칩', '시계']);
-    expect(screen.getByRole('button', { name: '활성 효과 1개' })).toHaveTextContent('효과1');
+    render(<HudLayout {...props} game={newState()} scene={region} presenceChip={chip} />);
+    expect(screen.getByTestId('top-left')).toContainElement(screen.getByTestId('presence'));
+    expect(screen.getByTestId('bottom-right')).toHaveTextContent('12:00');
+    expect(screen.queryByRole('button', { name: '미니맵 보이기' })).toBeNull();
   });
 
-  it('칩 줄은 포인터 이벤트를 받지 않고 칩 자신만 받는다', () => {
+  it('미니맵을 숨기면 그 자리에 접속 칩, 시계, 지도 버튼만 이 순서의 한 줄로 남고 칩 줄은 포인터 이벤트를 받지 않는다', () => {
     setMinimapVisible(false);
-    render(<HudLayout {...props} game={unlocked({ lunch: { id: 'cook-lunch-bite', endsAt: HOUR_LATER }, bait: null })}
-                      scene={region} chips={chip} />);
+    render(<HudLayout {...props} game={newState()} scene={region} presenceChip={chip} />);
+    expect(screen.queryByTestId('minimap')).toBeNull();
+    expect(kinds()).toEqual(['접속 칩', '시계', '지도 버튼']);
     expect(rowOf().className).toContain('pointer-events-none');
-    const slot = screen.getByRole('button', { name: '활성 효과 1개' });
-    expect(slot.className).toContain('pointer-events-auto');
     expect(screen.getByText('12:00').closest('div')!.className).toContain('pointer-events-auto');
-  });
-
-  it('미니맵을 보이면 지도 버튼만 빠지고 나머지 순서는 같다', () => {
-    setMinimapVisible(true);
-    render(<HudLayout {...props} game={unlocked()} scene={region} chips={chip} />);
-    expect(kinds()).toEqual(['접속 칩', '보너스 통합 칩', '시계']);
+    act(() => setMinimapVisible(true));
     expect(screen.getByTestId('minimap')).toBeInTheDocument();
   });
 
-  it('접속 칩과 미니맵이 없어도(거점) 보너스 통합 칩과 시계는 그려진다', () => {
+  it('거점은 미니맵이 없어 시계만 남고 지도 버튼은 없다', () => {
     render(<HudLayout {...props} game={newState()} scene={base} />);
-    expect(kinds()).toEqual(['보너스 통합 칩', '시계']);
+    expect(kinds()).toEqual(['시계']);
   });
 
-  it('미니맵을 숨긴 바다에서 접속 칩이 없으면 보너스 통합 칩, 시계, 지도 버튼 순서다', () => {
-    setMinimapVisible(false);
-    render(<HudLayout {...props} game={newState()} scene={region} />);
-    expect(kinds()).toEqual(['보너스 통합 칩', '시계', '지도 버튼']);
-    act(() => setMinimapVisible(true));
-    expect(kinds()).toEqual(['보너스 통합 칩', '시계']);
+  it('적용 중인 효과 카드는 알림 카드 아래, 미니맵 위에 놓이고 누르면 효과 창 콜백을 부른다', () => {
+    setMinimapVisible(true);
+    const onOpenEffects = vi.fn();
+    render(<HudLayout {...props} onOpenEffects={onOpenEffects} scene={region}
+                      game={unlocked({ lunch: { id: 'cook-lunch-bite', endsAt: HOUR_LATER }, bait: null })}
+                      notice={<div data-testid="notice">알림</div>} />);
+    const card = screen.getByRole('button', { name: '활성 효과 1개' });
+    const notice = screen.getByTestId('notice');
+    const minimap = screen.getByTestId('minimap');
+    expect(notice.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(card.compareDocumentPosition(minimap) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(card);
+    expect(onOpenEffects).toHaveBeenCalledTimes(1);
   });
 
-  it.each([false, true])('칩 줄은 모바일에서 한 줄이고 PC에서만 줄을 나눈다(mobile=%s)', mobile => {
+  it('해금 전 활성 효과가 없으면 잠금 카드, 해금 뒤 활성 효과가 없으면 흐린 카드다', () => {
+    setMinimapVisible(true);
+    const { unmount } = render(<HudLayout {...props} game={newState()} scene={region} />);
+    expect(screen.getByRole('group', { name: '활성 효과' })).toBeInTheDocument();
+    unmount();
+    render(<HudLayout {...props} game={unlocked()} scene={region} />);
+    expect(screen.getByRole('button', { name: '활성 효과 없음' })).toBeInTheDocument();
+  });
+
+  it.each([false, true])('미니맵 숨김 줄은 모바일에서 한 줄이고 PC에서만 줄을 나눈다(mobile=%s)', mobile => {
     layout.mobile = mobile;
-    render(<HudLayout {...props} game={newState()} scene={region} chips={chip} />);
+    setMinimapVisible(false);
+    render(<HudLayout {...props} game={newState()} scene={region} presenceChip={chip} />);
     const classes = rowOf().className.split(/\s+/);
     expect(classes).toContain('flex');
     expect(classes).toContain('pc:flex-wrap');
