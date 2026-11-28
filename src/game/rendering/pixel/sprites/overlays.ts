@@ -33,6 +33,8 @@ export interface JumpFx {
   t: number;
   /** 효과 강도. 작게는 꼬리 스파크 없이 물고기만 그린다 */
   intensity: 'small' | 'large' | 'largest';
+  /** 동작 축소. 켜지면 이동, 물보라, 꼬리 반짝이를 그리지 않는다 */
+  reducedMotion?: boolean;
 }
 
 export interface GearView {
@@ -48,6 +50,8 @@ export interface GearView {
   t: number;
   /** 물고기 그래픽 스타일 */
   fishArt?: FishArtStyle;
+  /** 동작 축소. 켜지면 찌 흔들림을 멈춘다 */
+  reducedMotion?: boolean;
 }
 
 /** zoom = 마커 크기 보정(1 기본). 미니맵처럼 pack 좌표를 축소 그리는 캔버스에서 지도가 커지면
@@ -144,7 +148,7 @@ function drawJumpSparks(ctx: Ctx, jump: JumpFx, rarity: RarityId) {
 
 /** 수면 물고기 점프 — 이륙 물보라와 목표 포물선 이동, 등급 꼬리 스파클을 포함한 단일 점프를 그린다 */
 export function drawFishJump(ctx: Ctx, jump: JumpFx, style: FishArtStyle = DEFAULT_FISH_ART_STYLE) {
-  if (jump.t < 0 || jump.t >= JUMP_S) return;
+  if (jump.reducedMotion || jump.t < 0 || jump.t >= JUMP_S) return;
   const fish = fishById(jump.fishId);
   if (!fish) return;
 
@@ -175,7 +179,7 @@ export function drawFishJump(ctx: Ctx, jump: JumpFx, style: FishArtStyle = DEFAU
 
 export function drawFishingGear(ctx: Ctx, v: GearView) {
   if (v.phase === 'idle' || !v.school) return;
-  const bob = v.phase === 'bite' ? Math.sin(v.t * 30) * 2 : Math.sin(v.t * 2);
+  const bob = v.reducedMotion ? 0 : v.phase === 'bite' ? Math.sin(v.t * 30) * 2 : Math.sin(v.t * 2);
   const bx = v.school.x, by = v.school.y + bob;
   ctx.strokeStyle = 'rgba(255,255,255,0.5)';
   ctx.lineWidth = 1;

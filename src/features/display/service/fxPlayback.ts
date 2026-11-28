@@ -77,7 +77,7 @@ function jumpOf(d: FxDirective, wallMs: number): JumpFx {
   const { subject } = d.request;
   const target = subject.to ? { toX: subject.to.x, toY: subject.to.y } : {};
   const form = subject.form !== undefined ? { form: subject.form } : {};
-  return { x: subject.from.x, y: subject.from.y, ...target, fishId: subject.fishId, ...form, t, intensity: d.intensity };
+  return { x: subject.from.x, y: subject.from.y, ...target, fishId: subject.fishId, ...form, t, intensity: d.intensity, reducedMotion: d.reducedMotion };
 }
 
 /** 엔진 주입용. 그 지역의 유효한 필드 지시를 점프로 바꿔 내 것과 다른 플레이어 것으로 나눈다 */

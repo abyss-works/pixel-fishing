@@ -29,8 +29,6 @@ export interface FieldView extends GearView {
   schools: School[];
   /** 같은 바다의 다른 플레이어 — 항해 지역에서만 그린다 */
   others?: OtherShipView[];
-  /** OS 동작 축소 판정 — 효과 출처가 넘기지만 이 장면은 읽지 않는다 */
-  reducedMotion?: boolean;
   /** 같은 바다 다른 플레이어의 물고기 점프 연출 */
   peerJumps?: readonly JumpFx[];
   /** 내 물고기 점프 연출 — 이동 직후에도 끊기지 않도록 낚시 단계와 별개로 그린다 */
@@ -110,7 +108,7 @@ export function renderRegion(ctx: Ctx, pack: RegionPack, v: FieldView) {
     }
   }
   for (const l of pack.labels) drawLabel(ctx, l);
-  pack.flavor?.(ctx, v.t);
+  pack.flavor?.(ctx, v.reducedMotion ? 0 : v.t);
 
   // 동적: 어군/낚싯줄/점프 연출/플레이어/타이밍 바
   drawSchools(ctx, v.schools, v.boat, v.t, true, 1, v);
