@@ -27,6 +27,7 @@ import { setPipFishingPhase } from '../../../features/pip/service/pipLiveStore';
 import { alertEncounter } from '../../../features/bounty/service/encounterAlert';
 import { effectiveLookForRegion } from '../../../features/live/model/live';
 import { liveFrame, useLivePosition } from '../../../features/live/service/useLive';
+import { serverIdleAvailable } from '../../../features/away/service/useAwayReport';
 import type { DispatchResult, MaybePromise } from '../../../features/gameplay/service/types';
 import type { FieldCallbacks, FieldEvent } from '../../../game/runtime/fieldEngine';
 import { isTap, movePad, startPad } from '../../../game/runtime/movePad';
@@ -288,6 +289,8 @@ export default function Field({
       },
       onScene,
       onLeaveEventZone: () => onLeaveEventZoneRef.current?.(),
+      onIdleStart: spot => { if (serverIdleAvailable) void dispatch({ type: 'startIdle', spot }); },
+      onIdleStop: () => { if (serverIdleAvailable) void dispatch({ type: 'stopIdle' }); },
       onFrame: reportCanvasFrame,
       guest,
       seedContext: () => {

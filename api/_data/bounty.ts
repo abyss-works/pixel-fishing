@@ -124,6 +124,21 @@ export function ticketFragment(guard: SQL, uid: string, questIds: readonly strin
     on conflict (user_id, quest_id) do update set issued_at = excluded.issued_at`;
 }
 
+/** 추정 포획 시각별 도전권 발급 조각 — 방치 일괄 소모에서 각 도전권의 만료 기준 시각을 보전한다 */
+export function ticketRowsFragment(
+  guard: SQL,
+  uid: string,
+  rows: readonly { questId: string; issuedAt: string }[],
+): SQL | null {
+  if (rows.length === 0) return null;
+  const payload = rows.map(r => ({ quest_id: r.questId, issued_at: r.issuedAt }));
+  return sql`insert into public.bounty_tickets (user_id, quest_id, issued_at)
+    select ${uid}, x.quest_id, x.issued_at
+    from json_to_recordset(${jsonParam(payload)}) as x(quest_id text, issued_at timestamptz)
+    where ${guard}
+    on conflict (user_id, quest_id) do update set issued_at = excluded.issued_at`;
+}
+
 /** 결투 결과 확정 — 성공·실패 모두 도전권 행을 지우고, 성공만 진행도를 1 올린다 */
 export function challengeFragments(guard: SQL, uid: string, questId: string, success: boolean, nowISO: string): SQL[] {
   const out = [sql`delete from public.bounty_tickets where user_id = ${uid} and quest_id = ${questId} and ${guard}`];
@@ -227,6 +242,24 @@ export async function runAdvanceProgress(db: Executor, uid: string, questIds: re
   const stmt = advanceProgress(uid, questIds, nowISO);
   if (!stmt) return 0;
   return (await db.execute(stmt)).rowCount ?? 0;
+}
+
+/** 방치 일괄 소모에서 일반 의뢰 진행도를 델타만큼 한 번에 올린다 */
+export async function runAdvanceProgressDeltas(
+  db: Executor,
+  uid: string,
+  deltas: Readonly<Record<string, number>>,
+  nowISO: string,
+): Promise<number> {
+  const rows = Object.entries(deltas)
+    .filter(([, delta]) => Number.isInteger(delta) && delta > 0)
+    .map(([quest_id, delta]) => ({ quest_id, delta }));
+  if (rows.length === 0) return 0;
+  const res = await db.execute(sql`update public.bounty_progress bp
+    set progress = bp.progress + x.delta, updated_at = ${at(nowISO)}
+    from json_to_recordset(${jsonParam(rows)}) as x(quest_id text, delta int)
+    where bp.user_id = ${uid} and bp.quest_id = x.quest_id`);
+  return res.rowCount ?? 0;
 }
 
 /** 사용자의 수배 관련 표(도전권·진행·수주·클리어·라이선스) 전체 삭제 SQL 조각을 돌려준다 */

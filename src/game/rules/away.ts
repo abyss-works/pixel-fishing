@@ -16,6 +16,26 @@ const REPORT_MIN_MS = 5 * MINUTE;
 /** 조회 기간 상한 — 행동 기록 보관 기간 */
 const WINDOW_MAX_MS = 7 * 24 * HOUR;
 
+/** 서버 방치 큐 일괄 소모 요약 이벤트 유형 */
+export const AWAY_SETTLE_EVENT_TYPE = 'awaySettle' as const;
+
+/** 서버 방치 큐 일괄 소모 요약 이벤트 페이로드 */
+export interface AwaySettleEventPayload {
+  spot: SpotId;
+  from: string;
+  to: string;
+  awayMs: number;
+  catches: number;
+  value: number;
+  fame: number;
+  grades: Record<RarityId, number>;
+  variants: number;
+  newFish: { fishId: string; form: FormId; rarity: RarityId; maxSize: number }[];
+  released: { count: number; value: number };
+  extracted: { count: number; energy: Record<RarityId, number> };
+  bagFullAt: string | null;
+}
+
 /** 행동 기록 한 줄 — 서버가 events 행에서 옮겨 담는다 */
 export interface AwayEvent { type: string; at: string; payload: unknown }
 
@@ -104,6 +124,50 @@ export function summarizeAway(events: readonly AwayEvent[], window: AwayWindow):
       extracted += Array.isArray(p.uids) ? p.uids.length : 0;
       const by = (p.energy ?? {}) as Record<string, unknown>;
       for (const r of RARITY_ORDER) if (typeof by[r] === 'number') energy[r] += by[r] as number;
+    } else if (e.type === AWAY_SETTLE_EVENT_TYPE) {
+      const n = typeof p.catches === 'number' && Number.isFinite(p.catches) ? p.catches : 0;
+      if (n <= 0) continue;
+      catches += n;
+      value += typeof p.value === 'number' && Number.isFinite(p.value) ? p.value : 0;
+      fame += typeof p.fame === 'number' && Number.isFinite(p.fame) ? p.fame : 0;
+      variants += typeof p.variants === 'number' && Number.isFinite(p.variants) ? p.variants : 0;
+      const gradesObj = (p.grades ?? {}) as Record<string, unknown>;
+      for (const r of RARITY_ORDER) {
+        if (typeof gradesObj[r] === 'number' && Number.isFinite(gradesObj[r])) {
+          counts.set(r, (counts.get(r) ?? 0) + (gradesObj[r] as number));
+        }
+      }
+      const spot = str(p.spot);
+      if (spot) spots.set(spot, (spots.get(spot) ?? 0) + n);
+      for (const nf of Array.isArray(p.newFish) ? p.newFish as Record<string, unknown>[] : []) {
+        const fish = fishOf(nf?.fishId);
+        if (!fish) continue;
+        const f = form(nf.form);
+        const key = `${fish.id}:${f}`;
+        const size = typeof nf.maxSize === 'number' && Number.isFinite(nf.maxSize) ? nf.maxSize : 0;
+        biggest.set(key, Math.max(biggest.get(key) ?? 0, size));
+        if (!fresh.has(key)) fresh.set(key, { fishId: fish.id, form: f, rarity: fish.rarity, maxSize: size });
+      }
+      const rel = (p.released ?? {}) as Record<string, unknown>;
+      const relCount = typeof rel.count === 'number' && Number.isFinite(rel.count) ? rel.count : 0;
+      const relVal = typeof rel.value === 'number' && Number.isFinite(rel.value) ? rel.value : 0;
+      released += relCount;
+      releasedValue += relVal;
+      const ext = (p.extracted ?? {}) as Record<string, unknown>;
+      const extCount = typeof ext.count === 'number' && Number.isFinite(ext.count) ? ext.count : 0;
+      extracted += extCount;
+      const by = (ext.energy ?? {}) as Record<string, unknown>;
+      for (const r of RARITY_ORDER) {
+        if (typeof by[r] === 'number' && Number.isFinite(by[r])) energy[r] += by[r] as number;
+      }
+      const bagFullAt = str(p.bagFullAt);
+      if (bagFullAt) {
+        const t = Date.parse(bagFullAt);
+        if (Number.isFinite(t) && (firstRelease === null || t < firstRelease)) firstRelease = t;
+      } else if (relCount > 0 || extCount > 0) {
+        const t = Date.parse(e.at);
+        if (Number.isFinite(t) && (firstRelease === null || t < firstRelease)) firstRelease = t;
+      }
     }
   }
 

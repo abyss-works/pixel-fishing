@@ -1,6 +1,6 @@
 // 방치 결과 보고 — 비운 사이의 행동 기록을 요약하고, 보여 줄지와 다음 조언을 판정한다
 import { describe, expect, it } from 'vitest';
-import { awayReportDue, awayTips, awayWindow, summarizeAway } from './away';
+import { AWAY_SETTLE_EVENT_TYPE, awayReportDue, awayTips, awayWindow, summarizeAway } from './away';
 import type { AwayEvent } from './away';
 import { BOATS, FISH, MAX_BOAT, RARITY, newState } from './logic';
 
@@ -108,6 +108,49 @@ describe('summarizeAway', () => {
 
   it('도감에 없는 어종의 캐치는 세지 않는다', () => {
     expect(summarizeAway([catchAt(1, 'no-such-fish')], W).catches).toBe(0);
+  });
+
+  it('압축 요약 이벤트(awaySettle)와 실시간 이벤트를 함께 합산하고 첫 가방 초과 시각을 구한다', () => {
+    const m = fish('mackerel');
+    const b = fish('seabream');
+    const events: AwayEvent[] = [
+      catchAt(2, 'mackerel', { isNew: true, size: 15 }),
+      {
+        type: AWAY_SETTLE_EVENT_TYPE,
+        at: at(120),
+        payload: {
+          spot: 'sea',
+          from: at(5),
+          to: at(120),
+          awayMs: 115 * 60_000,
+          catches: 10,
+          value: m.price * 8 + b.price * 2,
+          fame: RARITY.common.fame * 8 + RARITY.rare.fame * 2,
+          grades: { common: 8, rare: 2, epic: 0, legendary: 0 },
+          variants: 1,
+          newFish: [
+            { fishId: 'mackerel', form: 'normal', rarity: 'common', maxSize: 28 },
+            { fishId: 'seabream', form: 'normal', rarity: 'rare', maxSize: 33 },
+          ],
+          released: { count: 4, value: m.price * 4 },
+          extracted: { count: 1, energy: { common: 10, rare: 0, epic: 0, legendary: 0 } },
+          bagFullAt: at(40),
+        },
+      },
+    ];
+    const s = summarizeAway(events, W);
+    expect(s.catches).toBe(11);
+    expect(s.value).toBe(m.price * 9 + b.price * 2);
+    expect(s.fame).toBe(RARITY.common.fame * 9 + RARITY.rare.fame * 2);
+    expect(s.variants).toEqual({ count: 1, share: 1 / 11 });
+    expect(s.newFish).toEqual([
+      { fishId: 'mackerel', form: 'normal', rarity: 'common', maxSize: 28 },
+      { fishId: 'seabream', form: 'normal', rarity: 'rare', maxSize: 33 },
+    ]);
+    expect(s.released).toEqual({ count: 4, value: m.price * 4 });
+    expect(s.extracted).toEqual({ count: 1, energy: { common: 10, rare: 0, epic: 0, legendary: 0 } });
+    expect(s.bagFullAfterMs).toBe(40 * 60_000);
+    expect(s.spot).toBe('sea');
   });
 });
 
