@@ -5,7 +5,7 @@ import { useSpotState } from '../../../../../features/travel/service/useSpotStat
 import { useSchools } from '../../../../../features/gameplay/service/schoolDay';
 import { selectRegionViewData } from '../../../../../features/travel/model/regionView';
 import type { SpotStatus } from '../../../../../features/travel/model/regionView';
-import { fmtNum } from '../../../../ui/format';
+import { fmtCompact3, fmtNum } from '../../../../ui/format';
 import { cx } from '../../../../ui/cx';
 import Frame from '../../../../ui/Frame';
 import LoreParagraph from '../../../../ui/LoreParagraph';
@@ -119,7 +119,7 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
         </Inset>
       </div>
 
-      {/* 수역 정보 — 등급 분포 표 아래에 두고, 사거리 내 어군(4등급 2열 격자) ⇄ 가까운 어군 목록 배타 교체 */}
+      {/* 수역 정보 — 등급 분포 표 아래에 두고, 사거리 내 어군(4등급 3열 격자) ⇄ 가까운 어군 목록 배타 교체 */}
       <div className="shrink-0">
         <SectionTitle className="flex items-center justify-between gap-2">
           {focused ? (
@@ -151,28 +151,34 @@ export default function VRegion({ region, game }: { region: RegionId; game: Game
                     <div className="text-2xs leading-tight">
                       <RarityText rarity={rarity} />
                     </div>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {group.map(({ fish: f, discovered: caught, shown, name }) => {
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {group.map(({ fish: f, discovered: caught, shown, name, price }) => {
                         const body = (
                           <>
                             <NightMark fish={f} discovered={caught} />
-                            <FishSprite fish={f} preset="thumb" form={shown.form} discovered={caught}
+                            <FishSprite fish={f} preset="icon" form={shown.form} discovered={caught}
                                         ariaLabel={caught ? name : '미확인 어종'}
-                                        className={cx('block mx-auto', !caught && 'grayscale brightness-75')} />
+                                        className={cx('block mx-auto w-[42px] h-[22px] object-contain', !caught && 'grayscale brightness-75')} />
                             <div className={cx('text-2xs leading-tight truncate w-full mt-1', !caught && 'text-text-dim')}>
                               {caught ? name : '???'}
                             </div>
+                            {caught && (
+                              <div className="inline-flex items-center justify-center gap-0.5 text-2xs leading-tight text-gold tabular-nums mt-0.5">
+                                <PixelIcon glyph="coin" size={9} className="shrink-0" />
+                                <span>{fmtCompact3(price)}</span>
+                              </div>
+                            )}
                           </>
                         );
                         return caught ? (
                           <Frame as="button" type="button" key={f.id} data-rarity={f.rarity}
                                  onClick={() => setFishDetail({ fish: f, initialForm: shown.index })}
-                                 className={cx(RARITY_CARD, 'min-h-[68px] p-1.5 cursor-pointer hover:border-accent flex flex-col items-center justify-center text-center min-w-0')}>
+                                 className={cx(RARITY_CARD, 'min-h-[76px] p-1.5 cursor-pointer hover:border-accent flex flex-col items-center justify-center text-center min-w-0')}>
                             {body}
                           </Frame>
                         ) : (
                           <div key={f.id} data-rarity={f.rarity}
-                               className={cx(RARITY_CARD, 'min-h-[68px] p-1.5 flex flex-col items-center justify-center text-center min-w-0', DIM_CARD)}>
+                               className={cx(RARITY_CARD, 'min-h-[76px] p-1.5 flex flex-col items-center justify-center text-center min-w-0', DIM_CARD)}>
                             {body}
                           </div>
                         );

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { School } from '../../../game/world/types';
 import { SPOTS, powerReqOf } from '../../../game/content/spots';
 import { rarityRank } from '../../../game/content/rarity';
-import { MAX_BOAT, newState } from '../../../game/rules/logic';
+import { MAX_BOAT, newState, priceOf } from '../../../game/rules/logic';
 import { powerOfLevel } from '../../../game/rules/stats';
 import { rankNearbySpots, selectFishAtSpot, selectGradeLevel, selectRegionViewData, selectSpotStatus } from './regionView';
 
@@ -43,6 +43,17 @@ describe('지역 탭 파생 데이터', () => {
     const row = selectFishAtSpot(SPOTS[0].id, game).find(r => r.fish.id === target.id);
 
     expect(row).toMatchObject({ discovered: true, name: target.variant.name, shown: { form: 'variant', index: 1 } });
+  });
+
+  it('수역 어종 반환 항목에 표시 폼(일반·변이)에 맞는 가격을 포함한다', () => {
+    const game = newState();
+    const [first, second] = selectFishAtSpot(SPOTS[0].id, game);
+    expect(first.price).toBe(priceOf(first.fish, 'normal'));
+
+    game.dex[second.fish.id] = { variant: { count: 1, maxSize: 20, first: null } };
+    const updated = selectFishAtSpot(SPOTS[0].id, game).find(r => r.fish.id === second.fish.id);
+    expect(updated?.price).toBe(priceOf(second.fish, 'variant'));
+    expect(updated?.price).toBeGreaterThan(priceOf(second.fish, 'normal'));
   });
 
   it('하위 존(특수 해역)에 있으면 그 존을 문맥으로 쓰고 표는 최상위 존을 쓴다', () => {

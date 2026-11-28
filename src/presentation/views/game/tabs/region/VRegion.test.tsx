@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { FISH, newState } from '../../../../../game/rules/logic';
+import { FISH, newState, priceOf } from '../../../../../game/rules/logic';
 import { setCurrentSpot } from '../../../../../game/world/currentSpot';
+import { fmtCompact3 } from '../../../../ui/format';
 import VRegion from './VRegion';
 
 afterEach(() => {
@@ -37,7 +38,8 @@ describe('VRegion', () => {
     expect(tableHeading.compareDocumentPosition(nearbyHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('사거리 내 어군에서는 4등급 묶음(일반→희귀→영웅→전설) 2열 격자로 보이고 발견 어종을 누르면 도감 상세가 열린다', () => {
+  it('사거리 내 어군에서는 4등급 묶음(일반→희귀→영웅→전설) 3열 격자로 보이고 발견 어종은 축약 가격을 표시하며 누르면 도감 상세가 열린다', () => {
+    const crucian = FISH.find(f => f.id === 'crucian')!;
     act(() => setCurrentSpot('pond'));
     show({ dex: { crucian: { normal: { count: 1, maxSize: 18, first: null } } } });
     const infoHeading = screen.getByRole('heading', { name: /^어군 정보/ });
@@ -47,8 +49,11 @@ describe('VRegion', () => {
     const unknownCards = screen.getAllByText('???').map(el => el.parentElement!);
     expect(unknownCards.length).toBeGreaterThan(0);
     const knownBtn = screen.getByRole('button', { name: /붕어/ });
-    expect(knownBtn.className).toContain('min-h-[68px]');
-    expect(unknownCards[0].className).toContain('min-h-[68px]');
+    expect(knownBtn.parentElement?.className).toContain('grid-cols-3');
+    expect(knownBtn.className).toContain('min-h-[76px]');
+    expect(unknownCards[0].className).toContain('min-h-[76px]');
+    expect(knownBtn).toHaveTextContent(fmtCompact3(priceOf(crucian, 'normal')));
+    expect(unknownCards[0]).not.toHaveTextContent(/\d/);
 
     fireEvent.click(knownBtn);
     const dialog = screen.getByRole('dialog');
