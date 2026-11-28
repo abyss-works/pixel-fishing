@@ -12,7 +12,7 @@ import { stageGate } from './stageGate.js';
 import { MOCKUPS_CSP, stageMockups } from './stageMockups.js';
 
 const EXPECTED_CSP =
-  "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; connect-src 'none'; frame-ancestors 'none'; base-uri 'none'";
+  "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'none'; frame-ancestors 'none'; base-uri 'none'";
 
 async function startTestServer(options: { checkAdmin?: 'allow' | '401' | '403' } = {}) {
   const app = express();
