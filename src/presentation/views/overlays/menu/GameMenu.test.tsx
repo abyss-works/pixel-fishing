@@ -45,7 +45,7 @@ const handlers = () => ({ game: newState(), accountState: 'account' as const, on
 afterEach(() => { cleanup(); resetKeyScopes(); bounty.snap = null; state.mails = null; layout.mobile = false; guildState.available = false; guildState.guild = null; });
 
 describe('게임 메뉴', () => {
-  it('길드, 소셜, 우편함, 랭킹을 열 수 없어도(로컬 모드) 운세·업적·의뢰 때문에 메뉴 버튼은 늘 있다', async () => {
+  it('길드, 친구, 우편함, 랭킹을 열 수 없어도(로컬 모드) 운세·업적·의뢰 때문에 메뉴 버튼은 늘 있다', async () => {
     const h = handlers();
     wrap(<GameMenu account={null} {...h} />);
     fireEvent.click(await screen.findByRole('button', { name: '메뉴 열기' }));
@@ -191,7 +191,7 @@ describe('게임 메뉴', () => {
       expect(row).toHaveAccessibleName('의뢰');
     });
 
-    it('의뢰 배지는 메뉴 버튼의 알림 점을 켜지 않는다 - 점은 소셜, 우편함 같은 새 알림만 따른다', async () => {
+    it('의뢰 배지는 메뉴 버튼의 알림 점을 켜지 않는다 - 점은 친구, 우편함 같은 새 알림만 따른다', async () => {
       bounty.snap = { clearsToday: { general: 0, named: 0 } };
       wrap(<GameMenu account={null} {...handlers()} />);
       const button = await screen.findByRole('button', { name: '메뉴 열기' });
@@ -258,7 +258,7 @@ describe('게임 메뉴', () => {
     });
   });
 
-  // 게임 서버가 있는데 계정을 연결하지 않은 게스트: 업적, 의뢰, 길드, 소셜 줄이 잠기고 운세(·랭킹) 줄은 열린다
+  // 게임 서버가 있는데 계정을 연결하지 않은 게스트: 업적, 의뢰, 길드, 친구 줄이 잠기고 운세(·랭킹) 줄은 열린다
   describe('게스트 잠금', () => {
     const guestMenu = async (h = handlers()) => {
       wrap(<GameMenu account={null} {...h} accountState="guest" />);
@@ -266,10 +266,10 @@ describe('게임 메뉴', () => {
       return h;
     };
 
-    it('업적, 의뢰, 길드, 소셜, 우편함은 aria-disabled 잠긴 줄이고 운세, 랭킹 줄은 열려 있다', async () => {
+    it('업적, 의뢰, 길드, 친구, 우편함은 aria-disabled 잠긴 줄이고 운세, 랭킹 줄은 열려 있다', async () => {
       await guestMenu();
       const items = screen.getAllByRole('menuitem');
-      expect(items.map(i => i.getAttribute('aria-label'))).toEqual(['운세', '랭킹', '업적', '의뢰', '길드', '소셜', '우편함']);
+      expect(items.map(i => i.getAttribute('aria-label'))).toEqual(['운세', '랭킹', '업적', '의뢰', '길드', '친구', '우편함']);
       for (const [idx, item] of items.entries()) {
         if (idx === 0 || idx === 1) {
           expect(item).not.toHaveAttribute('aria-disabled');
@@ -308,7 +308,7 @@ describe('게임 메뉴', () => {
       wrap(<GameMenu account={null} {...h} accountState="unverified" />);
       fireEvent.click(await screen.findByRole('button', { name: /^메뉴 열기/ }));
       const items = screen.getAllByRole('menuitem');
-      expect(items.map(i => i.getAttribute('aria-label'))).toEqual(['운세', '랭킹', '업적', '의뢰', '길드', '소셜', '우편함']);
+      expect(items.map(i => i.getAttribute('aria-label'))).toEqual(['운세', '랭킹', '업적', '의뢰', '길드', '친구', '우편함']);
       expect(items[0]).not.toHaveAttribute('aria-disabled');
       expect(items[1]).not.toHaveAttribute('aria-disabled');
       fireEvent.mouseEnter(items[2].parentElement!);

@@ -4,7 +4,7 @@ import type { GuildInfo } from '../../guild/model/guild';
 import { guildMenuBadges, guildMenuLabel, menuGroups, menuKeys, questBadges, questMenuLabel } from './menuEntries';
 
 describe('메뉴 줄 항목 순서 및 그룹', () => {
-  it('상태(운세·랭킹), 활동(업적·의뢰), 소통(길드·소셜·우편함) 순서이고 운세·업적·의뢰는 늘 있다', () => {
+  it('상태(운세·랭킹), 활동(업적·의뢰), 소통(길드·친구·우편함) 순서이고 운세·업적·의뢰는 늘 있다', () => {
     expect(menuKeys({ ranking: true, guild: true, friends: true, mailbox: true }))
       .toEqual(['fortune', 'ranking', 'achievements', 'quests', 'guild', 'friends', 'mailbox']);
     expect(menuKeys({ ranking: false, guild: false, friends: false, mailbox: false }))
