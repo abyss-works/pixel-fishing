@@ -49,6 +49,8 @@ export type { Rarity, RarityId } from '../content/rarity.js';
 export { SPOTS, powerReqOf } from '../content/spots.js';
 export { rarityWeightOf } from '../content/rarityWeights.js';
 export type { Spot, SpotId } from '../content/spots.js';
+export { catalogFishById, catalogFishOfSpot, catalogValueOf } from '../content/catalog.js';
+export type { CatalogFish, CatchValue, FishCatalogKind } from '../content/catalog.js';
 export { FISH } from '../content/fish.js';
 export type { Fish, FormId } from '../content/fish.js';
 export { BOATS, MAX_BOAT, WALK_BAG_CAP, boatNameOf } from '../content/boats.js';

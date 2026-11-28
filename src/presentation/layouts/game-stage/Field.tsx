@@ -144,8 +144,27 @@ function presentEvent(event: FieldEvent, setToast: Props['setToast'], game: Game
         ?? eventFishSubjectById(event.result.fishId);
       if (caught) {
         const prevDexEntry = game.dex[caught.id]?.[event.result.info.form];
-        const notice = classifyCatchNotice(caught, event.result.info, event.judgment, prevDexEntry);
+        const notice = classifyCatchNotice(caught, event.result.info, event.judgment, prevDexEntry, event.result.isPersonalBest);
         sendNotice(setToast, notice);
+        if (event.result.eventDexCompleted?.length) {
+          for (const kind of event.result.eventDexCompleted) {
+            const label = kind === 'variant' ? '돌연변이 도감' : '도감';
+            sendNotice(setToast, {
+              kind: 'catch.legendaryOrFirstVariant',
+              text: `강태공 분지 호수 ${label}을 완성했어요!`,
+              toastText: `이벤트 ${label} 완성!`,
+              tone: 'gold',
+            });
+          }
+        }
+        if (event.result.hatsGranted?.length) {
+          sendNotice(setToast, {
+            kind: 'catch.legendaryOrFirstVariant',
+            text: '이벤트 도감 완성 보상으로 한정 모자를 받았어요! 집의 옷장에서 써 보세요.',
+            toastText: '한정 모자 획득!',
+            tone: 'gold',
+          });
+        }
         requestFx({
           kind: notice.kind,
           direct: event.manual,

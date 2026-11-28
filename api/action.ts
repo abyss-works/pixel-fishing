@@ -24,10 +24,9 @@ import { migrate, newState } from '../src/game/rules/logic.js';
 import type { FishInstance, FormId, FormRecord, GameState, Judgment } from '../src/game/rules/logic.js';
 import {
   autoLockKey, buildCatchInfo, canFish, catchFameOf, decideCatchAutoLock, FISH, fishPool, formName, instanceFish,
-  evictionPriceRows, makeInstance, nextDexRec, pickEvict, priceOf, pruneAutoLockedIds, RARITY_ORDER, redZoneCenter,
+  evictionPriceRows, makeInstance, nextDexRec, pickEvict, priceOf, pruneAutoLockedIds, RARITY_ORDER,
   rodStats, timingPos, matchBountyCatch, rollCatchExtras,
 } from '../src/game/rules/logic.js';
-import type { Fish } from '../src/game/rules/logic.js';
 import {
   buildWidgetBagSummary,
   buildWidgetCatchItem,
@@ -38,6 +37,8 @@ import {
 } from '../src/game/rules/widget.js';
 import type { WidgetBagSummary, WidgetCatchValue } from '../src/game/rules/widget.js';
 import { fishById } from '../src/game/content/fish.js';
+import { catalogFishById } from '../src/game/content/catalog.js';
+import { demoteJudgment, evaluateCatchTiming, isEventCatchPayload } from '../src/game/rules/catchPipeline.js';
 import { appliedSlots, applyEnergyGain, planOverflow } from '../src/game/rules/cooking.js';
 import { isFirstCatchSpot, needsLegacyFirstCatchMigration } from '../src/game/rules/firstCatch.js';
 import { drawNamedEncounter, speciesPityCandidates } from '../src/game/rules/pity.js';
@@ -47,7 +48,6 @@ import { bountyById, isQuestOffered } from '../src/game/content/bounties.js';
 import type { BountyKind, BountyQuest } from '../src/game/content/bounties.js';
 import type { SpotId } from '../src/game/content/spots.js';
 import { EVENT_FISH, EVENT2_SETTLEMENT_RATES, EVENT2_STANDARD_SPEC, EVENT_HAT_IDS } from '../src/game/content/eventFish.js';
-import type { EventFish } from '../src/game/content/eventFish.js';
 import type { Coupon } from '../src/game/content/coupons.js';
 import { COUPONS } from '../src/game/content/coupons.js';
 import { applyAction, commonWeightMultiplier, drawCatch, namedWeightBonus, pickScalars, prepareCatchDraw } from '../src/game/rules/actions.js';
@@ -62,7 +62,6 @@ import { ACHIEVEMENTS } from '../src/game/content/achievements.js';
 import { encounterQuests } from '../src/game/rules/rules.js';
 import type { BountyCtx } from '../src/game/rules/rules.js';
 import { parseAction } from '../src/game/rules/actionSchema.js';
-import { verifyClaimedJudgment } from '../src/game/rules/timing.js';
 import {
   isDebugTableCommand, parseBountyResetKind, parseSnapshotBounty, reduceDebug, revokeUnmetClaimableAchievements,
 } from '../src/game/rules/debug.js';
@@ -76,7 +75,7 @@ import type { DayPhase } from '../src/game/rules/time.js';
 import { parseIntegrityConfig, processIntegrityInput } from '../src/game/rules/integrity.js';
 import type { IntegrityEvaluation, IntegrityInput } from '../src/game/rules/integrity.js';
 import { checkNickname, pickGuestName } from '../src/game/rules/nickname.js';
-import { powerZones, rodAxes, rodPower, zonesFor } from '../src/game/rules/stats.js';
+import { powerZones, rodPower, zonesFor } from '../src/game/rules/stats.js';
 import { MIN_ACTION_GAP_MS, SNAPSHOT_EVERY } from '../src/game/rules/balance.js';
 import { catchWaitMs } from '../src/game/rules/pacing.js';
 import { APP_VERSION } from '../src/version.js';
@@ -901,7 +900,7 @@ async function route(req: Req, res: Res): Promise<void> {
     const champStateBase = skipDetail
       ? scalarState(row, loaded.counters, loaded.clearedNamed)
       : assemble(row, instances, records, loaded.counters, loaded.clearedNamed);
-    const champRes = await championshipCatch(db, uid, row, champStateBase, action.judgment, now, integrityEval?.modifier ?? 1);
+    const champRes = await championshipCatch(db, uid, row, champStateBase, action.judgment, now, integrityEval?.modifier ?? 1, action.biteElapsed);
     out = champRes.outcome;
     champCatchCommit = champRes.commit;
     if (out.ok) prevFortune = champStateBase.fortune;
@@ -1319,7 +1318,7 @@ async function route(req: Req, res: Res): Promise<void> {
           priceText?: unknown;
           priceGold?: unknown;
         } | undefined;
-        const isEventCatch = catchEvt?.type === 'eventCatch';
+        const isEventCatch = catchEvt ? isEventCatchPayload(catchEvt.type, catchEvt.payload) : false;
         const regularFish = isEventCatch ? undefined : fishById(p?.fishId);
         const fishDef = regularFish ?? widgetFishById(p?.fishId);
         if (!fishDef) return;
@@ -1653,15 +1652,16 @@ export async function fastCatch(db: Executor, uid: string, row: StateRow, spot: 
   const takenFish = view(plan.gain.uids);
   const released = goneFish.map(toReleased);
   const extracted = takenFish.map(toReleased);
-  const pos = timingPos(biteElapsed, rodAxes(base).sweep.value);
-  const redWidth = pz.red / 100;
-  const redPos = judgmentIn !== 'auto'
-    ? redZoneCenter(`${uid}:${Number(row.version)}`, pz.yellow / 100, redWidth)
-    : null;
-  const claimCheck = judgmentIn !== 'auto' && redPos !== null
-    ? verifyClaimedJudgment(judgmentIn, pos, redPos, pz.yellow / 100, redWidth)
-    : null;
+  const { pos, redPos, redWidth, claimCheck } = evaluateCatchTiming({
+    claimedJudgment: judgmentIn,
+    biteElapsed,
+    rodLevel: base.rod,
+    pz,
+    redZoneSeed: `${uid}:${Number(row.version)}`,
+  });
+  const isPersonalBest = prev !== undefined && prev.maxSize !== null && inst.size !== null && inst.size > prev.maxSize;
   const events: GameEvent[] = [{ type: 'catch', payload: {
+    mode: 'regular',
     uid: inst.uid, fishId: fish.id, judgment, spot,
     size: info.size, form: info.form, isNew: info.isNew, isBig: info.isBig, fame: gainedFame,
     ...(drawn.byCeiling ? { pity: true } : {}),
@@ -1709,8 +1709,16 @@ export async function fastCatch(db: Executor, uid: string, row: StateRow, spot: 
   return {
     ok: true,
     state: nextState,
-    result: { type: 'catch', fishId: fish.id, uid: inst.uid, info, released,
-      ...(takenFish.length > 0 ? { extracted, energy: plan.gain.byGrade } : {}) },
+    result: {
+      type: 'catch',
+      fishId: fish.id,
+      uid: inst.uid,
+      info,
+      released,
+      value: { kind: 'gold', amount: priceOf(fish, inst.form) },
+      ...(isPersonalBest ? { isPersonalBest: true } : {}),
+      ...(takenFish.length > 0 ? { extracted, energy: plan.gain.byGrade } : {}),
+    },
     events: [...events, ...claimableEvents],
     writes: {
       instancesAdded: added, instancesRemoved: removed,
@@ -1744,20 +1752,6 @@ function pickWeightedEvent<T>(entries: readonly (readonly [T, number])[], rng: (
   return entries[entries.length - 1][0];
 }
 
-function toEventFishLike(ef: EventFish): Fish {
-  return {
-    id: ef.id,
-    name: ef.name,
-    spot: 'championship',
-    rarity: ef.rarity,
-    price: ef.score,
-    color: ef.color,
-    shape: ef.shape,
-    lore: ef.lore,
-    variant: { name: ef.variant.name, color: ef.variant.color, lore: ef.variant.lore },
-  };
-}
-
 async function championshipCatch(
   db: Executor,
   uid: string,
@@ -1766,6 +1760,7 @@ async function championshipCatch(
   claimedJudgment: Judgment,
   nowISO: string,
   integrityModifier = 1,
+  biteElapsed?: number,
 ): Promise<{ outcome: ApplyOutcome; commit: ChampionshipCatchCommit | null }> {
   const activeChamp = await step('db-read', { uid, action: 'catch' }, () => activeEventOfKind(db, 'championship', nowISO));
   if (!activeChamp) {
@@ -1774,9 +1769,14 @@ async function championshipCatch(
   const prev = await step('db-read', { uid, action: 'catch' }, () => readChampionshipRow(db, uid, activeChamp.id));
 
   const pz = zonesFor(EVENT2_STANDARD_SPEC.power, EVENT2_STANDARD_SPEC.powerReq);
-  let judgment: Judgment = claimedJudgment;
-  if (judgment === 'perfect' && pz.red <= 0) judgment = pz.yellow > 0 ? 'good' : 'normal';
-  else if (judgment === 'good' && pz.yellow <= 0) judgment = 'normal';
+  const judgment = demoteJudgment(claimedJudgment, pz);
+  const { pos, redPos, redWidth, claimCheck } = evaluateCatchTiming({
+    claimedJudgment,
+    biteElapsed,
+    rodLevel: EVENT2_STANDARD_SPEC.rodLevel,
+    pz,
+    redZoneSeed: `${uid}:${Number(row.version)}`,
+  });
 
   const m = commonWeightMultiplier(judgment, EVENT2_STANDARD_SPEC.power, 'championship', pz.mult);
   const [wCommon, wRare, wEpic, wLegendary] = EVENT2_STANDARD_SPEC.weights;
@@ -1789,7 +1789,8 @@ async function championshipCatch(
 
   const pool = EVENT_FISH.filter(f => f.rarity === rarity);
   const ef = pool[Math.min(pool.length - 1, Math.floor(Math.random() * pool.length))] ?? EVENT_FISH[0];
-  const fishLike = toEventFishLike(ef);
+  const catalogEntry = catalogFishById(ef.id)!;
+  const fishLike = catalogEntry.sprite;
   const extras = rollCatchExtras(fishLike, Math.random, { normal: 75, variant: 25 * integrityModifier });
   const prevDex = prev?.dex ?? {};
   const prevFormCount = prevDex[ef.id]?.[extras.form] ?? 0;
@@ -1804,6 +1805,8 @@ async function championshipCatch(
   const pendingGold = Math.floor((catchScore * goldRate) / 10);
   const pendingFame = Math.floor((catchScore * EVENT2_SETTLEMENT_RATES.fame) / 10);
 
+  const prevNormalComplete = EVENT_FISH.every(f => (prevDex[f.id]?.normal ?? 0) > 0);
+  const prevVariantComplete = EVENT_FISH.every(f => (prevDex[f.id]?.variant ?? 0) > 0);
   const nextDex: Record<string, { normal: number; variant: number }> = { ...prevDex };
   const prevEntry = nextDex[ef.id] ?? { normal: 0, variant: 0 };
   nextDex[ef.id] = {
@@ -1813,6 +1816,10 @@ async function championshipCatch(
 
   const normalComplete = EVENT_FISH.every(f => (nextDex[f.id]?.normal ?? 0) > 0);
   const variantComplete = EVENT_FISH.every(f => (nextDex[f.id]?.variant ?? 0) > 0);
+  const eventDexCompleted: ('normal' | 'variant')[] = [];
+  if (!prevNormalComplete && normalComplete) eventDexCompleted.push('normal');
+  if (!prevVariantComplete && variantComplete) eventDexCompleted.push('variant');
+
   const prevGranted = new Set(prev?.hatsGranted ?? []);
   const hatsToGrant: string[] = [];
   const nextHats = [...baseState.hats];
@@ -1831,10 +1838,21 @@ async function championshipCatch(
     outcome: {
       ok: true,
       state: nextState,
-      result: { type: 'catch', fishId: ef.id, uid: catchUid, info, released: [] },
+      result: {
+        type: 'catch',
+        fishId: ef.id,
+        uid: catchUid,
+        info,
+        released: [],
+        value: catalogEntry.valueOf(extras.form),
+        ...(info.isBig ? { isPersonalBest: true } : {}),
+        ...(hatsToGrant.length > 0 ? { hatsGranted: hatsToGrant } : {}),
+        ...(eventDexCompleted.length > 0 ? { eventDexCompleted } : {}),
+      },
       events: [{
-        type: 'eventCatch',
+        type: 'catch',
         payload: {
+          mode: 'event',
           uid: catchUid,
           eventId: activeChamp.id,
           spot: 'championship',
@@ -1846,6 +1864,9 @@ async function championshipCatch(
           judgment,
           pendingGold,
           pendingFame,
+          ...(pos !== null ? { pos } : {}),
+          ...(redPos !== null ? { redPos, redWidth } : {}),
+          ...(claimCheck !== null ? { claimCheck } : {}),
           ...(hatsToGrant.length > 0 ? { hatsGranted: hatsToGrant } : {}),
         },
       }],

@@ -4,7 +4,20 @@ import type { SQL } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
 import type { GameEvent } from '../../src/game/rules/actions.js';
 import type { AwayEvent } from '../../src/game/rules/away.js';
-import { at, jsonParam } from './json.js';
+import { CATCH_EVENT_TYPES } from '../../src/game/rules/catchPipeline.js';
+import { at, jsonParam, textArray } from './json.js';
+
+export { CATCH_EVENT_TYPES };
+
+/** 감사 이벤트가 포획(신규 'catch' + 구형 'eventCatch' 하위호환)인지 판별하는 SQL 조건 */
+export function isCatchEventSql(column: SQL = sql`type`): SQL {
+  return sql`${column} = any(${textArray(CATCH_EVENT_TYPES)})`;
+}
+
+/** 감사 이벤트가 일반 해역 포획인지 판별하는 SQL 조건(이벤트 구역 제외) */
+export function isRegularCatchEventSql(typeCol: SQL = sql`type`, payloadCol: SQL = sql`payload`): SQL {
+  return sql`${typeCol} = 'catch' and coalesce(${payloadCol}->>'mode', 'regular') = 'regular' and coalesce(${payloadCol}->>'spot', '') <> 'championship'`;
+}
 
 export function eventsInsert(
   uid: string,
@@ -68,12 +81,16 @@ export async function recordAdminAction(db: Executor, uid: string, type: AdminAc
     values (${uid}, ${type}, ${JSON.stringify({ adminId, ...detail })}::jsonb)`);
 }
 
-/** 방치 결과 보고 — 기간 안의 캐치·자동 방생·자동 기운 얻기·일괄 소모 요약 이벤트를 시각 순서로. 시각은 Postgres JSON 직렬화 문자열이다 */
+/** 방치 결과 보고 — 기간 안의 일반 해역 캐치·자동 방생·자동 기운 얻기·일괄 소모 요약 이벤트를 시각 순서로. 이벤트 구역 포획은 제외한다 */
 export async function awayEvents(db: Executor, uid: string, fromISO: string, toISO: string): Promise<AwayEvent[]> {
   const { rows } = await db.execute<{ events: AwayEvent[] }>(sql`select coalesce(json_agg(json_build_object(
       'type', e.type, 'payload', e.payload, 'at', e.created_at) order by e.created_at, e.id), '[]') as events
     from public.events e
-    where e.user_id = ${uid} and e.type in ('catch', 'autoRelease', 'autoExtractEnergy', 'awaySettle')
+    where e.user_id = ${uid}
+      and (
+        ${isRegularCatchEventSql(sql`e.type`, sql`e.payload`)}
+        or e.type in ('autoRelease', 'autoExtractEnergy', 'awaySettle')
+      )
       and e.created_at >= ${at(fromISO)} and e.created_at <= ${at(toISO)}`);
   return rows[0].events;
 }

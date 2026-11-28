@@ -3,6 +3,7 @@
 // 이벤트 표(events)는 콜드 아카이브로 최근 7일만 hot 보관하므로, 이벤트 보조 신호에는 7일 창을 명시한다.
 import { sql } from 'drizzle-orm';
 import type { Executor } from '../_db/client.js';
+import { isCatchEventSql } from './telemetry.js';
 import { TUTORIAL_IDS } from '../../src/game/content/tutorials.js';
 import type { TutorialId } from '../../src/game/content/tutorials.js';
 
@@ -108,7 +109,7 @@ export async function onboardingFunnel(db: Executor): Promise<OnboardingFunnelRe
       select user_id, type, payload
       from public.events
       where created_at >= now() - interval '7 days'
-        and type in ('catch', 'sell', 'visit', 'upgradeRod', 'buyBoat')
+        and (${isCatchEventSql(sql`type`)} or type in ('sell', 'visit', 'upgradeRod', 'buyBoat'))
     ),
     google_links as (
       select user_id, min(created_at) as linked_at
@@ -148,7 +149,7 @@ export async function onboardingFunnel(db: Executor): Promise<OnboardingFunnelRe
     catch_users as (
       select distinct user_id from public.records where count > 0
       union
-      select distinct user_id from recent_events where type = 'catch'
+      select distinct user_id from recent_events where ${isCatchEventSql(sql`type`)}
     ),
     sell_users as (
       select distinct user_id from public.achievement_counters where key = 'sell.gold' and value > 0

@@ -1,5 +1,6 @@
-import { canFishSpot, FISH, formName, globalRarityShare, priceOf, rarityShareOf, speciesDiscovered } from '../../../game/rules/logic';
+import { canFishSpot, catalogFishOfSpot, formName, globalRarityShare, priceOf, rarityShareOf, speciesDiscovered } from '../../../game/rules/logic';
 import type { GameState } from '../../../game/rules/logic';
+import { spotRuleProfileOf } from '../../../game/rules/catchPipeline';
 import { shownFormOf } from '../../dex/model/shownForm';
 import type { Point, School } from '../../../game/world/types';
 import type { RegionId } from '../../../game/world';
@@ -62,8 +63,10 @@ export type SpotStatus =
   | { kind: 'boat'; boatName: string }
   | { kind: 'power'; power: number; req: number };
 
-/** 해역 낚시 상태 — 배 단계가 먼저, 그다음 낚싯대 파워가 요구치에 닿는지 본다. */
+/** 해역 낚시 상태 — 표준 스펙 구역은 항상 적합, 일반 해역은 배 단계와 낚싯대 파워를 본다. */
 export function selectSpotStatus(game: GameState, spot: SpotId): SpotStatus {
+  const profile = spotRuleProfileOf(spot);
+  if (profile.rodSpec.kind === 'standard') return { kind: 'ok' };
   if (!canFishSpot(game, spot)) {
     return { kind: 'boat', boatName: BOATS[spotById(spot)!.boatTier - 1]?.name ?? '' };
   }
@@ -108,10 +111,20 @@ export function selectRegionViewData(
 
 /** 지역 상세 카드에 표시할 수역 어종을 등급 순으로 반환한다. */
 export function selectFishAtSpot(spot: SpotId, game: GameState) {
-  return FISH.filter(fish => fish.spot === spot)
+  return [...catalogFishOfSpot(spot)]
     .sort((a, b) => rarityRank(a.rarity) - rarityRank(b.rarity))
-    .map(fish => {
+    .map(entry => {
+      const fish = entry.sprite;
       const shown = shownFormOf(game, fish.id);
+      if (entry.catalog === 'event') {
+        return {
+          fish,
+          discovered: false,
+          shown,
+          name: formName(fish, 'normal'),
+          price: entry.valueOf('normal').amount,
+        };
+      }
       return {
         fish,
         discovered: speciesDiscovered(game, fish.id),

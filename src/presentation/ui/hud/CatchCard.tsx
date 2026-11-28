@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
-import { formName, priceOf } from '../../../game/rules/logic';
+import { formName } from '../../../game/rules/logic';
 import type { CatchInfo, Fish, RarityId } from '../../../game/rules/logic';
+import { catchValueDisplay } from '../../../features/gameplay/model/catchNotice';
 import { cx } from '../cx';
 import { fmtGold, fmtSize } from '../format';
 import Inset from '../Inset';
@@ -49,6 +50,10 @@ export default function CatchCard({ fish, info, fxIntensity = null }: {
   // 문구 선택은 이번 캐치의 크기 롤(이미 랜덤)에서 파생 — 렌더 순수성 유지 + 카드 떠 있는 동안 고정
   const isVariant = info?.form === 'variant';
   const variantLine = VARIANT_LINES[info ? Math.floor(info.size * 997) % VARIANT_LINES.length : 0];
+  const form = info?.form ?? 'normal';
+  const catchValue = catchValueDisplay(fish, form);
+  const valueLabel = catchValue.label;
+  const valueText = catchValue.kind === 'score' ? `${catchValue.amount.toLocaleString('ko-KR')}점` : fmtGold(catchValue.amount);
   const layers = catchCardLayers(fish.rarity, isVariant, fxIntensity);
   return (
     <div data-rarity={fish.rarity} className="relative w-[340px] max-w-full h-[160px] shrink-0 pointer-events-none">
@@ -132,8 +137,8 @@ export default function CatchCard({ fish, info, fxIntensity = null }: {
                    className={cx('h-[56px] grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-0.5 px-2.5 py-1.5 text-xs text-text-dim bg-bg border border-line-dim overflow-hidden', NOTCH_SM)}>
                 <span>크기</span>
                 <b className="pf-accent tabular-nums text-sm text-text text-right whitespace-nowrap">{info ? fmtSize(info.size) : ''}</b>
-                <span>판매가</span>
-                <b className="pf-accent tabular-nums text-sm text-gold text-right whitespace-nowrap">{fmtGold(priceOf(fish, info?.form ?? 'normal'))}</b>
+                <span>{valueLabel}</span>
+                <b className="pf-accent tabular-nums text-sm text-gold text-right whitespace-nowrap">{valueText}</b>
               </div>
             </div>
             {/* 전설 등급 전용 내부 대각 빛줄기 오버레이 */}

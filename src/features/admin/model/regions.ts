@@ -18,6 +18,7 @@ export const REGION_NAMES: Record<string, string> = {
   madagascar: '마다가스카르',
   southatlantic: '남대서양',
   northatlantic: '북대서양',
+  championship: '강태공 분지 호수',
 };
 
 /** 현행 오픈월드 진행 방문 순서(visited 기준) — 폐지된 구 바다 6개는 포함하지 않는다. */

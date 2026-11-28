@@ -6,6 +6,8 @@ import { fishById } from '../../src/game/content/fish.js';
 import type { FormId } from '../../src/game/content/fish.js';
 import { BASE_REGION } from '../../src/game/content/places.js';
 import { achievementBonusesOf } from '../../src/game/rules/achievements.js';
+import { isEventCatchPayload } from '../../src/game/rules/catchPipeline.js';
+import { isCatchEventSql } from './telemetry.js';
 import { bagCapacityOf, createPlayerContext } from '../../src/game/rules/effects.js';
 import { NO_GUILD_EFFECTS, guildEffectsOf, guildLevelOf } from '../../src/game/rules/guild.js';
 import type { GuildBonusId } from '../../src/game/rules/guild.js';
@@ -354,7 +356,7 @@ export async function loadWidgetSummaryData(db: Executor, uid: string): Promise<
     (select coalesce(json_agg(e), '[]') from (
       select id, type, payload, created_at
       from public.events
-      where user_id = ${uid}::uuid and type in ('catch', 'eventCatch')
+      where user_id = ${uid}::uuid and ${isCatchEventSql(sql`type`)}
       order by id desc
       limit ${WIDGET_RECENT_CATCH_LIMIT}
     ) e) as recent_events,
@@ -403,7 +405,7 @@ function toCatchItem(ev: WidgetSummaryEventRow, fallbackMs: number): WidgetCatch
     priceGold?: unknown;
   };
   if (typeof p.fishId !== 'string') return null;
-  const isEventCatch = ev.type === 'eventCatch';
+  const isEventCatch = isEventCatchPayload(ev.type, ev.payload);
   const regularFish = isEventCatch ? undefined : fishById(p.fishId);
   const fish = regularFish ?? widgetFishById(p.fishId);
   if (!fish) return null;
