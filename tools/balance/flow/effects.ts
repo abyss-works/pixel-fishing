@@ -97,8 +97,14 @@ export function scaleSlotEffect(e: Effect, amplify: number): Effect {
   };
 }
 
-/** 구역 id 또는 개별 해역 id를 대상 해역 목록으로 해석한다 */
+/** 구역 id 또는 개별 해역 id(구역과 이름이 겹치는 해역은 spot:<id> 지원)를 대상 해역 목록으로 해석한다 */
 export function resolveZoneSpots(id: string): SpotId[] {
+  if (id.startsWith('spot:')) {
+    const spotId = id.slice('spot:'.length);
+    const direct = SPOTS.find(s => s.id === spotId);
+    if (direct) return [direct.id];
+    throw new Error(`알 수 없는 해역입니다: ${spotId} (해역: ${SPOTS.map(s => s.id).join(', ')})`);
+  }
   if ((ZONE_IDS as readonly string[]).includes(id)) {
     const spots = SPOTS.filter(s => zoneOf(s.id) === (id as ZoneId)).map(s => s.id);
     if (spots.length > 0) return spots;

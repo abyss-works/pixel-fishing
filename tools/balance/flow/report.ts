@@ -208,7 +208,7 @@ export const HELP = `사용: pnpm balance:flow [transition|days|opening|exceptio
   --move <N>         effects: 이동 속도 증가 %(-100 초과). 낚시 시간당 수입은 그대로이고 판매 왕복을 넣은 수입 변화만 달라진다. 기본 0
   --sell <N>         effects: 판매가 증가 %(-100 초과). 기본 0
   --named <N>        effects: 네임드 조우 가중치 증가 %(0 이상). 수입은 그대로이고 조우 기대 시간만 변한다. 네임드 의뢰가 있고 출현 해역이 맞는 해역만 낸다. 기본 0
-  --zone <id>        effects: 특정 구역(village, pacific, seasia, indian, madagascar, southatlantic) 또는 개별 해역 id로 효과를 한정하고 해당 해역 단면만 출력한다
+  --zone <id>        effects: 특정 구역(village, pacific, seasia, indian, madagascar, southatlantic) 또는 개별 해역 id(구역과 겹치는 해역은 spot:<id>)로 효과를 한정하고 해당 해역 단면만 출력한다
   --artifacts [목록] effects: 보유 유물 효과를 합산(1±합 1회 적용)해 비교한다. 값 생략 또는 all은 레벨 유물 Lv1·전설 유물 Lv5, max는 전 유물 Lv5, 또는 유물id[:레벨] 쉼표 구분(예: outer-isle-sinker:5,elder-scale:5)
   --artifact-boost <N>  effects: 보유 유물 수치 효과 증가 %(0 이상). --artifacts와 함께 쓴다
   --counter-bonus <파일>  transition, days, gates, dist: 카운터 임계점 연동 보너스 JSON 파일 경로. 진행 중 카운터 누적에 따라 임계점을 넘은 보너스를 동적으로 누적 합산한다
@@ -830,12 +830,21 @@ function rewardAssumptions(unit: RewardUnit = 'zone'): string[] {
   ];
 }
 
+/** 카운터 보너스를 넣은 진행 시뮬레이션(관측용)의 가정 */
+function counterBonusAssumptions(): string[] {
+  return [
+    '카운터 보너스는 진행 중 카운터가 임계점을 넘을 때마다 누적 활성화되며, 같은 대상에 걸리는 보너스는 (1 ± 합)으로 1회만 적용된다',
+    '카운터 보너스를 넣은 값은 관측용이다. 전환 시간 목표와 게이트 판정은 보너스 없는 기준 플레이어에 맞춘 것이므로 이 값으로 판정하지 않는다',
+  ];
+}
+
 function assumptionText(command: Command, o: FlowResult['options'], windowMaterial = false, design?: DesignReport, achievementsUnit: RewardUnit = 'zone'): string {
   const lines: string[] = [BASIC_ASSUMPTION];
   if (command === 'transition') {
     lines.push('새 계정이 직전 해역에서 낚아 전환 골드를 모으고 배 명성 하한을 채운 시점에 바로 옮긴다', '명성을 기다리는 동안은 다음 해역 진입 레벨을 넘겨 강화하지 않고 골드를 쌓는다', o.bounty ? '의뢰와 토벌을 매일 수행하는 경우다' : '의뢰와 토벌은 하지 않는 경우다');
     if (o.plan) lines.push(...planAssumptions());
     if (o.reward) lines.push(...rewardAssumptions(o.reward.unit));
+    if (o.counterBonus) lines.push(...counterBonusAssumptions());
   } else if (command === 'days') {
     lines.push(
       '일반 의뢰 라이선스는 도감 조건 없이 해역이 열리면 바로 쓰고, 네임드 토벌 라이선스는 전설을 뺀 구역 도감(일반 폼)을 모두 모았을 확률이 0.5를 넘는 날부터 쓴다. 어종은 서로 독립이고 낚은 해역에서만 쌓이며 어종 천장은 넣지 않는다',
@@ -846,6 +855,7 @@ function assumptionText(command: Command, o: FlowResult['options'], windowMateri
     );
     if (o.plan) lines.push(...planAssumptions());
     if (o.reward) lines.push(...rewardAssumptions(o.reward.unit));
+    if (o.counterBonus) lines.push(...counterBonusAssumptions());
   } else if (command === 'dist') {
     lines.push(
       '해석적 기댓값 경로와 같은 확률, 판매가, 캐치 주기, 첫 경험 보장 규칙을 캐치마다 뽑는다. 입질 대기는 범위 균등이고 어종은 낮밤 혼합 확률, 돌연변이는 전역 확률이다. 기댓값 경로에 없는 pity, 미끼, 유물은 넣지 않는다',
@@ -971,8 +981,12 @@ function planNote(o: FlowResult['options']): string {
   return `효과 ${p.label}(관측용), 배 단계 ${p.fromBoat}${boat ? `(${boat})` : ''} 이상에서 걸림${p.recipe ? `, 레시피 ${p.recipe}${p.withCost ? '의 재료 판매 손실을 하루 한 번 비용으로 넣음' : ''}` : ''}, 의뢰와 토벌 ${p.bounty ? '모두 수행' : '수행 안 함'}`;
 }
 
-/** 비교 기준 이름 — 카운터 보너스 관측은 보너스 없음, 업적 보상은 보상 없음, 효과를 넣은 관측은 효과 없음이다 */
-const baseName = (o: FlowResult['options']): string => (o.counterBonus ? '보너스 없음' : o.reward ? '보상 없음' : '효과 없음');
+/** 비교 기준 이름 — 단일 관측 옵션은 각 이름(효과 없음·보상 없음·보너스 없음), 복합 관측은 관측 없음이다 */
+const baseName = (o: FlowResult['options']): string => {
+  const active = [Boolean(o.plan), Boolean(o.reward), Boolean(o.counterBonus)].filter(Boolean).length;
+  if (active > 1) return '관측 없음';
+  return o.counterBonus ? '보너스 없음' : o.reward ? '보상 없음' : '효과 없음';
+};
 
 function counterBonusNote(o: FlowResult['options']): string {
   const c = o.counterBonus;
@@ -1041,8 +1055,8 @@ function transitionText(t: TransitionReport, o: FlowResult['options']): string[]
   const base = t.base;
   const none = baseName(o);
   if (o.plan) out.push(`\n(${planNote(o)})`);
-  else if (o.reward) out.push(`\n(${rewardNote(o)})`);
-  else if (o.counterBonus) out.push(`\n(${counterBonusNote(o)})`);
+  if (o.reward) out.push(`\n(${rewardNote(o)})`);
+  if (o.counterBonus) out.push(`\n(${counterBonusNote(o)})`);
   if (!o.plan && !o.reward && !o.counterBonus && o.bounty) out.push('\n(의뢰와 토벌 모두 수행, 관측용)');
   out.push(table(
     ['전환', '전환 시간', ...(base ? [`${none} 전환 시간`, '차이'] : []), '일수(÷8)', '누적 시간', ...(base ? [`${none} 누적 시간`, '누적 차이'] : []), '누적 일수(÷8)', '기다린 것(골드 · 명성 · 둘 다)', '명성 대기 ÷ 골드 대기'],
@@ -1095,8 +1109,8 @@ function daysText(d: NonNullable<FlowResult['days']>, o: FlowResult['options']):
   const none = baseName(o);
   out.push('\n## 해역별 누적 도달 — 새 계정이 해역에 처음 닿기까지의 누적 실질 낚시 시간과 8시간 환산 일수');
   if (o.plan) out.push(`\n(${planNote(o)})`);
-  else if (o.reward) out.push(`\n(${rewardNote(o)})`);
-  else if (o.counterBonus) out.push(`\n(${counterBonusNote(o)})`);
+  if (o.reward) out.push(`\n(${rewardNote(o)})`);
+  if (o.counterBonus) out.push(`\n(${counterBonusNote(o)})`);
   const baseArrival = d.base?.arrival;
   const withBase = (r: DaysReport['arrival'][number], k: number, i: number) => {
     const b = baseArrival?.[k]?.spots[i];
@@ -1449,7 +1463,7 @@ function gatesText(g: GatesReport, o: FlowResult['options']): string[] {
   out.push('\n## 전환 시간의 목표 판정 (직전 해역에서 방치로 낚을 때의 실질 낚시 시간. 범위는 지역 진입 전환만, 순서는 리프 이후의 전환 전부)');
   const kind = { observe: '관측', entry: '지역 진입', inner: '지역 안' } as const;
   out.push(table(
-    ['전환', '구분', '전환 시간', ...(g.moveBase ? ['효과 없음 전환 시간', '차이'] : g.counterBonus ? ['보너스 없음 전환 시간', '차이'] : g.reward ? ['보상 없음 전환 시간', '차이'] : []), '일수(÷8)', '목표 범위', '범위 판정', '직전 전환', '순서 판정', '요구 파워 간격', '지역 진입 간격'],
+    ['전환', '구분', '전환 시간', ...(g.moveBase || g.reward || g.counterBonus ? [`${baseName(o)} 전환 시간`, '차이'] : []), '일수(÷8)', '목표 범위', '범위 판정', '직전 전환', '순서 판정', '요구 파워 간격', '지역 진입 간격'],
     g.time.map(r => [
       `${nameOf(r.from)} → ${nameOf(r.to)}`, kind[r.kind], r.hours === null ? '닿지 못함' : h2(r.hours),
       ...(g.moveBase || g.reward || g.counterBonus ? [r.baseHours == null ? '닿지 못함' : h2(r.baseHours), hoursDiff(r.hours, r.baseHours ?? null)] : []),
@@ -1800,9 +1814,15 @@ export function renderText(r: FlowResult): string {
   if (r.effects) lines.push(...effectsText(r.effects, o), assumptionText('effects', o));
   if (r.window) lines.push(...windowText(r.window, o), assumptionText('window', o, r.window.material !== undefined));
   if (r.recipes) lines.push(...recipesText(r.recipes, o), assumptionText('recipes', o));
-  if (r.gates) lines.push(...gatesText(r.gates, o));
-  if (r.gates && o.plan) lines.push(['\n가정:', ...planAssumptions().map(l => `- ${l}`)].join('\n'));
-  if (r.gates?.reward) lines.push(['\n가정:', ...rewardAssumptions(o.reward?.unit).map(l => `- ${l}`)].join('\n'));
+  if (r.gates) {
+    lines.push(...gatesText(r.gates, o));
+    const gateAssumptions = [
+      ...(o.plan ? planAssumptions() : []),
+      ...(r.gates.reward ? rewardAssumptions(o.reward?.unit) : []),
+      ...(r.gates.counterBonus ? counterBonusAssumptions() : []),
+    ];
+    if (gateAssumptions.length > 0) lines.push(['\n가정:', ...gateAssumptions.map(l => `- ${l}`)].join('\n'));
+  }
   if (r.solve) lines.push(...solveText(r.solve), assumptionText('solve', o));
   if (r.upgrades) lines.push(...upgradesText(r.upgrades), assumptionText('upgrades', o));
   if (r.fame) lines.push(...fameText(r.fame), assumptionText('fame', o));

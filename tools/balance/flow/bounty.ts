@@ -8,7 +8,7 @@ import { FISH } from '../../../src/game/content/fish';
 import type { RarityId } from '../../../src/game/content/rarity';
 import { BOUNTIES, BOUNTY_ZONES } from '../../../src/game/content/bounties';
 import type { BountyDifficulty, BountyTier, BountyZone } from '../../../src/game/content/bounties';
-import { LICENSE_GRADES, namedEncounterCandidates, namedEncounterShare } from '../../../src/game/rules/logic';
+import { LICENSE_GRADES, namedEncounterCandidates, namedEncounterShare, namedWeightsOf } from '../../../src/game/rules/logic';
 import { NAMED_PITY_CATCHES } from '../../../src/game/rules/pity';
 import { powerOfLevel } from '../rodRules';
 import { zoneOf } from '../model';
@@ -91,6 +91,8 @@ export interface PlanInput {
   licensed: (zone: BountyZone, tier: BountyTier) => boolean;
   /** 오늘 의뢰에 쓸 수 있는 낚시 시간(초) */
   seconds: number;
+  /** 해역별 네임드 조우 가중치 증가 비율(0 이상). 생략하면 0 */
+  namedBonus?: (spot: SpotId) => number;
 }
 
 export interface Activity {
@@ -118,7 +120,13 @@ function namedPlan(input: PlanInput): Activity | null {
     if (!quest) continue;
     const spots = accessibleSpots(zone, input.player).filter(s => namedEncounterCandidates([quest.id], s).length > 0);
     if (spots.length === 0) continue;
-    const catches = expectedEncounterCatches(avgOf(spots, namedEncounterShare), NAMED_PITY_CATCHES);
+    const shareOf = (s: SpotId) => {
+      const bonus = input.namedBonus?.(s) ?? 0;
+      if (bonus <= 0) return namedEncounterShare(s);
+      const w = namedWeightsOf(s, bonus);
+      return w.named / (w.named + w.none);
+    };
+    const catches = expectedEncounterCatches(avgOf(spots, shareOf), NAMED_PITY_CATCHES);
     const hours = catches / avgOf(spots, s => input.rateAt(s).catchesPerHour);
     const gain = quest.reward + (avgOf(spots, s => input.rateAt(s).goldPerHour) - input.current.goldPerHour) * hours;
     if (hours * 3600 > input.seconds || gain <= 0) continue;

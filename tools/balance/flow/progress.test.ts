@@ -85,6 +85,8 @@ describe('진행 시뮬레이션', () => {
   it('의뢰와 토벌을 수행하면 어느 해역에도 5%를 넘겨 늦게 도착하지 않고 마지막은 더 빠르다', () => {
     const off = run(), on = run({ bounty: true });
     expect(on.complete).toBe(true);
+    // 구조적 비단조 허용(5%): 2일차 시작(8h, southindian)에 일일 의뢰가 일시 보상(a.lump) 구조로 1.2313h(9.2313h 완료) 배정되면,
+    // 의뢰 없음 경로가 9.1667h에 먼저 mozstrait 문턱을 넘어 0.0646h(+0.70%) 역전이 발생했다가 이후 구간부터 의뢰 경로가 앞선다.
     for (let i = 0; i < off.arrivals.length; i++) expect(on.arrivals[i].hours, SPOTS[i].id).toBeLessThanOrEqual(off.arrivals[i].hours * 1.05 + 1e-9);
     expect(last(on.arrivals).hours).toBeLessThan(last(off.arrivals).hours);
     expect(on.bountyGold).toBeGreaterThan(0);
