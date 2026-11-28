@@ -1665,4 +1665,27 @@ describe('역할 분리(admin·maintainer) · Zero-PII 투영 · 배지 토글 �
       body: { deleted: true, code: 'INT4-AT-MAX' },
     });
   });
+
+  it('userSearch는 닉네임의 _ 문자를 와일드카드가 아닌 리터럴로 일치시킨다', async () => {
+    const UNDERBAR_USER = testUid(920);
+    const WILDCARD_USER = testUid(921);
+    await seedUser(env.client, {
+      uid: UNDERBAR_USER,
+      email: 'underbar@example.test',
+      nickname: '테스터_언더바',
+    });
+    await seedUser(env.client, {
+      uid: WILDCARD_USER,
+      email: 'wildcard@example.test',
+      nickname: '테스터X언더바',
+    });
+
+    const adminRes = await callAdmin({ q: 'userSearch', term: '테스터_언더바' }, userToken(ADMIN));
+    expect(adminRes.status).toBe(200);
+    expect((adminRes.body as Row[]).map(r => r.user_id)).toEqual([UNDERBAR_USER]);
+
+    const maintRes = await callAdmin({ q: 'userSearch', term: '테스터_언더바' }, userToken(MAINT));
+    expect(maintRes.status).toBe(200);
+    expect((maintRes.body as Row[]).map(r => r.user_id)).toEqual([UNDERBAR_USER]);
+  });
 });

@@ -188,8 +188,8 @@ export async function userSearch(
         from public.play_sessions group by user_id) ps on ps.user_id = u.id
       left join public.profiles p on p.user_id = u.id
       left join public.saves_current c on c.user_id = u.id
-      where p.nickname ilike ${likePattern} escape '\'
-         or u.id::text ilike ${prefixPattern} escape '\'
+      where p.nickname ilike ${likePattern} escape '\\'
+         or u.id::text ilike ${prefixPattern} escape '\\'
       order by c.updated_at desc nulls last, u.id
       limit least(greatest(coalesce(${limit}::int, 25), 1), 50)`, sql`t.last_action_at desc nulls last, t.user_id`);
   }
@@ -208,9 +208,9 @@ export async function userSearch(
       from public.play_sessions group by user_id) ps on ps.user_id = u.id
     left join public.profiles p on p.user_id = u.id
     left join public.saves_current c on c.user_id = u.id
-    where p.nickname ilike ${likePattern} escape '\'
-       or (not u.is_anonymous and u.email ilike ${likePattern} escape '\')
-       or u.id::text ilike ${prefixPattern} escape '\'
+    where p.nickname ilike ${likePattern} escape '\\'
+       or (not u.is_anonymous and u.email ilike ${likePattern} escape '\\')
+       or u.id::text ilike ${prefixPattern} escape '\\'
     order by c.updated_at desc nulls last, u.id
     limit least(greatest(coalesce(${limit}::int, 25), 1), 50)`, sql`t.last_action_at desc nulls last, t.user_id`);
 }
