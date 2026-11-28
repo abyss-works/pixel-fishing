@@ -5,6 +5,8 @@ import { QueryProvider } from '../../../../core/QueryProvider';
 import { AdminAuthCtx } from '../../../../features/admin/service/accessContext';
 import { api } from '../../../../platform/api';
 import type { AdminRole } from '../../../../features/admin/model/types';
+import { AdminViewModeCtx } from '../viewMode';
+import type { AdminViewMode } from '../viewMode';
 import PlayersTab from './PlayersTab';
 
 const UID = 'aaaaaaaa-0000-0000-0000-000000000000';
@@ -103,30 +105,42 @@ vi.mock('../../../../platform/api', () => ({
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
-function show(section: 'directory' | 'sanctions', role: AdminRole = 'admin') {
+function show(section: 'directory' | 'sanctions', role: AdminRole = 'admin', viewMode: AdminViewMode = 'summary') {
   render(
     <QueryProvider>
       <AdminAuthCtx.Provider value={{ access: 'granted', uid: UID, role, canViewEmail: role === 'admin', showStaffBadge: false, setStaffBadge: async () => {} }}>
-        <PlayersTab section={section} onSection={() => {}} onCompose={mocks.compose} />
+        <AdminViewModeCtx.Provider value={{ viewMode, setViewMode: () => {} }}>
+          <PlayersTab section={section} onSection={() => {}} onCompose={mocks.compose} />
+        </AdminViewModeCtx.Provider>
       </AdminAuthCtx.Provider>
     </QueryProvider>,
   );
 }
 
 describe('플레이어 탭', () => {
-  it('검색·명부 구역 — 유저 행·빠른 액션(우편·제재·상세)을 그리고, 누르면 상세 모달이 오목한 칸 밖에 뜬다', async () => {
+  it('검색·명부 구역 — 4종 필터·7열 압축 표·인라인 상세 패널·전체 상세 모달 드릴다운이 동작한다', async () => {
     show('directory');
     expect(await screen.findByText('바다친구(friend@example.com)')).toBeInTheDocument();
     expect(screen.getByText('1/1명')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '무결성 감등' })).toBeInTheDocument();
+
     const row = screen.getByText('바다친구(friend@example.com)').closest('tr')!;
-    expect(within(row).getByText('태평양')).toBeInTheDocument();
-    expect(within(row).getByText('10-07 09:30')).toBeInTheDocument();
-    expect(within(row).getByText('1시간 23분')).toBeInTheDocument();
+    expect(within(row).getByText('30')).toBeInTheDocument();
+    expect(within(row).getByText('1,200')).toBeInTheDocument();
+    expect(within(row).getByText('제재')).toBeInTheDocument();
+    expect(await within(row).findByText('감등 1')).toBeInTheDocument();
 
     fireEvent.click(within(row).getByRole('button', { name: '우편' }));
     expect(mocks.compose).toHaveBeenCalledWith(UID);
 
+    // 행 클릭 시 선택 강조되고 표 아래 인라인 상세·조치 패널이 열린다
     fireEvent.click(screen.getByText('바다친구(friend@example.com)'));
+    expect(row).toHaveClass('is-selected');
+    expect(await screen.findByText('태평양')).toBeInTheDocument();
+    expect(screen.getByText('1시간 23분')).toBeInTheDocument();
+
+    // [전체 상세 모달] 버튼으로 기존 UserDetail 모달을 연다
+    fireEvent.click(screen.getByRole('button', { name: '전체 상세 모달' }));
     const dialog = await screen.findByRole('dialog', { name: '유저 상세: 바다친구(friend@example.com)' });
     expect(dialog.closest('.pf-notch')).toBeNull();
     fireEvent.click(within(dialog).getByRole('button', { name: '상세' }));
@@ -147,25 +161,27 @@ describe('플레이어 탭', () => {
     expect(within(dialog).queryByText('도감 ↔ 이벤트 대조')).toBeNull();
   });
 
-  it('제재·무결성 구역 — 신호 건수·무결성 감등 현황·오탐 해제와 제재 계정이 채워진다', async () => {
-    show('sanctions');
-    const tile = (label: string) => screen.getAllByText(label)
-      .map(el => el.parentElement as HTMLElement).find(el => el.classList.contains('pf-notch'))!;
-    expect(await within(tile('연타 유저')).findByText('1')).toBeInTheDocument();
-    expect(within(tile('PERFECT 이상치')).getByText('1')).toBeInTheDocument();
-    expect(within(tile('제재 계정')).getByText('1')).toBeInTheDocument();
-    expect(within(tile('무결성 감등')).getByText('1')).toBeInTheDocument();
-    expect(screen.getAllByText('바다친구(friend@example.com)').length).toBeGreaterThan(0);
-    expect(screen.getByText(/골드 1,200 \/ 명성 30 \/ 마지막 행동/)).toBeInTheDocument();
-    expect(screen.getByText('단계 1 (주의): 1명')).toBeInTheDocument();
+  it('제재·무결성 구역 — 요약 보기에서 활성 제재와 무결성 단계 2열만, 상세 보기에서 이상치 표를 함께 그린다', async () => {
+    show('sanctions', 'admin', 'summary');
+    expect(await screen.findByRole('heading', { name: '활성 제재 현황' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '무결성 단계 현황' })).toBeInTheDocument();
+    expect((await screen.findAllByText('바다친구(friend@example.com)')).length).toBeGreaterThan(0);
+    expect(screen.getByText('단계 1 (관찰)')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /PERFECT 판정 비율 이상치/ })).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: '오탐 해제' }));
     await waitFor(() => expect(vi.mocked(api.admin.releaseIntegrityStage)).toHaveBeenCalledWith(UID));
+
+    cleanup();
+    show('sanctions', 'admin', 'detail');
+    expect(await screen.findByRole('heading', { name: /PERFECT 판정 비율 이상치/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /무결성 등급 분포 비교/ })).toBeInTheDocument();
   });
 
   it('사용자 상세의 관리 조치 — 우편 보내기, 확인을 거친 제재 해제, 세션 강제 종료', async () => {
     show('directory');
     fireEvent.click(await screen.findByText('바다친구(friend@example.com)'));
+    fireEvent.click(await screen.findByRole('button', { name: '전체 상세 모달' }));
     const dialog = await screen.findByRole('dialog', { name: '유저 상세: 바다친구(friend@example.com)' });
 
     fireEvent.click(within(dialog).getByRole('button', { name: '우편 보내기' }));
@@ -197,13 +213,13 @@ describe('플레이어 탭', () => {
     }]);
 
     show('directory', 'maintainer');
-    expect(screen.getByRole('button', { name: '검색·명부', pressed: true })).toBeInTheDocument();
     expect(screen.getByPlaceholderText('닉네임·UUID 검색')).toBeInTheDocument();
     expect(await screen.findByText('원양어부')).toBeInTheDocument();
     expect(screen.getByText('aaaaaaaa')).toBeInTheDocument();
     expect(screen.queryByText(/원양어부\(/)).toBeNull();
 
     fireEvent.click(screen.getByText('원양어부'));
+    fireEvent.click(await screen.findByRole('button', { name: '전체 상세 모달' }));
     const dialog = await screen.findByRole('dialog', { name: '유저 상세: 원양어부' });
     expect(within(dialog).queryByText('가입')).toBeNull();
     expect(within(dialog).queryByText('마지막 로그인')).toBeNull();

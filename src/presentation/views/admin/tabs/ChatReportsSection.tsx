@@ -1,6 +1,6 @@
-// 채팅 신고 구역 — 플레이어가 신고한 채팅 메시지와 앞뒤 대화(신고 시점의 복사본) 목록.
-// 신고한 메시지 줄을 강조하고, 각 신고 행에서 대상 유저 상세(UserDetail)를 열거나 원클릭으로 제재/해제를 실행한다.
+// 채팅 신고 구역 — 플레이어가 신고한 채팅 메시지와 앞뒤 대화를 표시하고 상세 보기·원클릭 제재를 실행한다.
 import { Suspense, lazy, useState } from 'react';
+import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
 import DataTable from '../../../ui/DataTable';
 import Note from '../../../ui/Note';
@@ -13,7 +13,7 @@ import { useAdminQuery } from '../../../../features/admin/service/useAdminQuery'
 import { useAdminUserActions } from '../../../../features/admin/service/useAdminUserActions';
 import type { AdminChatReportRow, AdminUserRow } from '../../../../features/admin/model/types';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
-import { Cell, TabState } from '../layout';
+import { AdminCard, AdminTableWrap, TabState } from '../layout';
 import UserIdentity from '../UserIdentity';
 
 const UserDetail = lazy(() => import('./UserDetail'));
@@ -88,17 +88,21 @@ export default function ChatReportsSection({ onCompose }: {
     <>
       <TabState loading={loading && granted} error={error} onRetry={refresh} />
       {actionError && <Note tone="warn" className="my-0">{actionError}</Note>}
-      {!granted && <Note className="my-0">운영 DB에 연결하거나 admins에 등록하면 채워져요.</Note>}
-      <Cell title={`채팅 신고 (${reports.length})`} flush>
-        <div className="pf-scroll-panel max-h-[560px] overflow-auto px-1">
-          <DataTable>
+      {!granted && <Note size="xs" className="my-0">운영 DB에 연결하면 채워져요.</Note>}
+
+      <AdminCard
+        title={`채팅 신고 (${reports.length})`}
+        badge={reports.length > 0 ? <Badge tone="danger" size="xs">{reports.length}건</Badge> : undefined}
+      >
+        <AdminTableWrap className="max-h-[520px] overflow-auto">
+          <DataTable className="pf-admin-table">
             <thead>
               <tr>
-                <th className="text-left">시각</th>
-                <th className="text-left">신고한 사람</th>
-                <th className="text-left">보낸 사람</th>
-                <th className="text-left">대화</th>
-                <th className="text-left">조치</th>
+                <th>시각</th>
+                <th>신고한 사람</th>
+                <th>보낸 사람</th>
+                <th>대화</th>
+                <th>조치</th>
               </tr>
             </thead>
             <tbody>
@@ -122,7 +126,7 @@ export default function ChatReportsSection({ onCompose }: {
                     <td className="align-top">
                       <div className="flex flex-col gap-1">
                         <UserIdentity user={targetIdentity} />
-                        {restricted && <span className="text-danger text-2xs pf-accent">제재됨</span>}
+                        {restricted && <Badge tone="danger" size="xs">제재됨</Badge>}
                       </div>
                     </td>
                     <td className="text-xs select-text">
@@ -133,14 +137,14 @@ export default function ChatReportsSection({ onCompose }: {
                       ))}
                     </td>
                     <td className="align-top whitespace-nowrap">
-                      <div className="flex flex-col items-start gap-1">
-                        <Button size="sm" variant="ghost" onClick={() => setSelectedUid(r.target_id)}>
-                          상세 보기
-                        </Button>
-                        <Button size="sm" variant={restricted ? 'ghost' : 'primary'}
+                      <div className="flex items-center gap-1">
+                        <Button size="xs" variant={restricted ? 'ghost' : 'danger'}
                                 disabled={!granted || busy || !canRestrict}
                                 onClick={() => target && void toggleRestrict(target)}>
                           {restricted ? '제재 해제' : '제재'}
+                        </Button>
+                        <Button size="xs" variant="ghost" onClick={() => setSelectedUid(r.target_id)}>
+                          상세 보기
                         </Button>
                       </div>
                     </td>
@@ -152,8 +156,9 @@ export default function ChatReportsSection({ onCompose }: {
               )}
             </tbody>
           </DataTable>
-        </div>
-      </Cell>
+        </AdminTableWrap>
+      </AdminCard>
+
       {detailUser && (
         <Suspense fallback={null}>
           <UserDetail key={detailUser.user_id} user={detailUser}

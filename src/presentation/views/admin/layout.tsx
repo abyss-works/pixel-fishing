@@ -3,11 +3,14 @@
 // 표면을 파낸 오목한 칸(Inset)으로 나눈다. 데이터 해석은 탭의 몫이고 여기서는 배치만 한다.
 import { Children } from 'react';
 import type { ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { useAdminSubnavHost } from './viewMode';
 import { cx } from '../../ui/cx';
 import Inset from '../../ui/Inset';
 import Note from '../../ui/Note';
 import PageTitle from '../../ui/PageTitle';
 import PillButton from '../../ui/PillButton';
+import SectionTitle from '../../ui/SectionTitle';
 import TitledCell from '../../ui/TitledCell';
 
 /** 탭 한 쪽 — 머리(제목·한 줄 설명·오른쪽 조작) 아래에 본문을 세로로 쌓는다 */
@@ -92,4 +95,115 @@ export function TabState({ loading, error, empty, emptyText, onRetry }: {
   }
   if (empty) return <Note size="xs" className="my-0">{emptyText ?? '데이터가 아직 없어요.'}</Note>;
   return null;
+}
+
+/* ============================================================
+   개편 관리자 대시보드 전용 프리미티브 (.pf-admin-*)
+   ============================================================ */
+
+const KPI_VAL_TONE: Record<'default' | 'accent' | 'gold' | 'warn' | 'danger' | 'ok' | 'dim', string> = {
+  default: 'text-text',
+  accent: 'text-accent',
+  gold: 'text-gold',
+  warn: 'text-orange',
+  danger: 'text-danger',
+  ok: 'text-special',
+  dim: 'text-text-dim',
+};
+
+export function AdminKpiGrid({ cols = 4, className, children }: {
+  cols?: 4 | 8;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={cx(cols === 8 ? 'pf-admin-kpi-grid-8' : 'pf-admin-kpi-grid-4', className)}>
+      {children}
+    </div>
+  );
+}
+
+export function AdminKpiCard({ label, value, sub, badge, tone = 'default', className }: {
+  label: string;
+  value: ReactNode;
+  sub?: ReactNode;
+  badge?: ReactNode;
+  tone?: keyof typeof KPI_VAL_TONE;
+  className?: string;
+}) {
+  return (
+    <div className={cx('pf-admin-kpi-card', className)}>
+      <div className="pf-admin-kpi-label">
+        <span>{label}</span>
+        {badge}
+      </div>
+      <div className={cx('pf-admin-kpi-val', KPI_VAL_TONE[tone])}>{value}</div>
+      {sub && <div className="pf-admin-kpi-sub">{sub}</div>}
+    </div>
+  );
+}
+
+export function AdminCard({ title, badge, actions, className, children }: {
+  title?: ReactNode;
+  badge?: ReactNode;
+  actions?: ReactNode;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className={cx('pf-admin-card', className)}>
+      {(title || badge || actions) && (
+        <div className="pf-admin-card-title">
+          {title && <SectionTitle className="my-0">{title}</SectionTitle>}
+          {(badge || actions) && (
+            <span className="inline-flex flex-wrap items-center gap-1.5">
+              {badge}
+              {actions}
+            </span>
+          )}
+        </div>
+      )}
+      {children}
+    </section>
+  );
+}
+
+const SPLIT_CLASS: Record<'2' | '60-40' | '3', string> = {
+  '2': 'pf-admin-split-2',
+  '60-40': 'pf-admin-split-60-40',
+  '3': 'pf-admin-split-3',
+};
+
+export function AdminSplit({ variant = '2', className, children }: {
+  variant?: keyof typeof SPLIT_CLASS;
+  className?: string;
+  children: ReactNode;
+}) {
+  return <div className={cx(SPLIT_CLASS[variant], className)}>{children}</div>;
+}
+
+export function AdminQueueItem({ tone = 'default', className, children }: {
+  tone?: 'default' | 'urgent' | 'warn';
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={cx('pf-admin-queue-item', tone === 'urgent' && 'is-urgent', tone === 'warn' && 'is-warn', className)}>
+      {children}
+    </div>
+  );
+}
+
+export function AdminTableWrap({ scroll, className, children }: {
+  scroll?: boolean;
+  className?: string;
+  children: ReactNode;
+}) {
+  return <div className={cx('pf-admin-table-wrap', scroll && 'is-scroll', className)}>{children}</div>;
+}
+
+export function AdminSubnavExtra({ children }: { children: ReactNode }) {
+  const host = useAdminSubnavHost();
+  if (host) return createPortal(children, host);
+  return <div className="flex flex-wrap items-center justify-end gap-2">{children}</div>;
 }

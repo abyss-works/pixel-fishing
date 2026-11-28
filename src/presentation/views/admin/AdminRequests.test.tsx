@@ -154,7 +154,8 @@ describe('관리자 대시보드 비-목킹 요청 횟수 및 429 통합 테스�
     render(<QueryProvider><AdminApp /></QueryProvider>);
 
     // 1. OverviewTab 초기 로드 완료 대기 (상세 보기로 전환해 최근 이벤트 피드 확인)
-    fireEvent.click(await screen.findByRole('button', { name: '상세 보기' }));
+    const viewGroup = await screen.findByRole('group', { name: '보기 모드' });
+    fireEvent.click(within(viewGroup).getByRole('button', { name: '상세' }));
     expect((await screen.findAllByText('테스트어부(angler@example.com)', {}, { timeout: 5000 })).length).toBeGreaterThanOrEqual(1);
     await waitFor(() => expect(fetchCalls.some(u => u.startsWith('/api/admin?q=httpMetrics'))).toBe(true));
     const initialDataCalls = fetchCalls.filter(u => u !== '/api/admin?q=access');
@@ -164,22 +165,23 @@ describe('관리자 대시보드 비-목킹 요청 횟수 및 429 통합 테스�
 
     // 2. PlayersTab (검색·명부 → 제재·무결성) 전환 — 캐시 적중으로 추가 users/spamFlags 호출 0회
     const beforePlayers = fetchCalls.length;
-    fireEvent.click(screen.getByRole('button', { name: '플레이어' }));
+    fireEvent.click(screen.getByRole('tab', { name: '플레이어' }));
     expect(await screen.findByText('1/1명')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '제재·무결성' }));
+    fireEvent.click(screen.getByRole('tab', { name: '제재·무결성' }));
     expect(await screen.findByText(/PERFECT 판정 비율 이상치/)).toBeInTheDocument();
     expect(fetchCalls.slice(beforePlayers).filter(u => u === '/api/admin?q=users' || u === '/api/admin?q=spamFlags')).toEqual([]);
 
     // 3. InsightsTab (경제·진행) 전환 — economy(7) 1건만 호출, 중복 users 호출 0회
     const beforeEconomy = fetchCalls.length;
-    fireEvent.click(screen.getByRole('button', { name: '지표·밸런스' }));
+    fireEvent.click(screen.getByRole('tab', { name: '지표·밸런스' }));
     expect(await screen.findByRole('img', { name: '골드 유입 일별 추이' })).toBeInTheDocument();
     await waitFor(() => expect(fetchCalls.slice(beforeEconomy)).toContain('/api/admin?q=economy&days=7'));
 
-    // 4. PlayersTab → UserDetail 모달 열기 — spamFlags 중복 호출 0회
+    // 4. PlayersTab → 인라인 상세 패널 → UserDetail 모달 열기 — spamFlags 중복 호출 0회
     const beforeDetail = fetchCalls.length;
-    fireEvent.click(screen.getByRole('button', { name: '플레이어' }));
+    fireEvent.click(screen.getByRole('tab', { name: '플레이어' }));
     fireEvent.click(await screen.findByText('테스트어부(angler@example.com)'));
+    fireEvent.click(await screen.findByRole('button', { name: '전체 상세 모달' }));
     const dialog = await screen.findByRole('dialog', { name: '유저 상세: 테스트어부(angler@example.com)' });
     fireEvent.click(within(dialog).getByRole('button', { name: '상세' }));
     await waitFor(() => expect(fetchCalls.some(u => u.startsWith('/api/admin?q=userState'))).toBe(true));
@@ -189,7 +191,7 @@ describe('관리자 대시보드 비-목킹 요청 횟수 및 429 통합 테스�
 
     // 모달 닫고 현황 탭으로 복귀 후 새로고침(연타 2회 → 1회만 실행)
     fireEvent.click(screen.getAllByRole('button', { name: '닫기' }).at(-1)!);
-    fireEvent.click(screen.getByRole('button', { name: '현황' }));
+    fireEvent.click(screen.getByRole('tab', { name: '현황' }));
     const beforeRefresh = fetchCalls.length;
     const refreshBtn = screen.getByRole('button', { name: '현재 탭 새로고침' });
     fireEvent.click(refreshBtn);
@@ -252,11 +254,12 @@ describe('관리자 대시보드 비-목킹 요청 횟수 및 429 통합 테스�
 
     render(<QueryProvider><AdminApp /></QueryProvider>);
 
-    fireEvent.click(await screen.findByRole('button', { name: '상세 보기' }));
+    const viewGroup = await screen.findByRole('group', { name: '보기 모드' });
+    fireEvent.click(within(viewGroup).getByRole('button', { name: '상세' }));
     expect((await screen.findAllByText('테스트어부(angler@example.com)', {}, { timeout: 5000 })).length).toBeGreaterThanOrEqual(1);
     expect(overviewAttempts).toBe(2);
 
-    fireEvent.click(screen.getByRole('button', { name: '지표·밸런스' }));
+    fireEvent.click(screen.getByRole('tab', { name: '지표·밸런스' }));
     expect(await screen.findByText('요청이 너무 많아 잠시 기다렸다가 다시 시도해 주세요.')).toBeInTheDocument();
   }, 15_000);
 });

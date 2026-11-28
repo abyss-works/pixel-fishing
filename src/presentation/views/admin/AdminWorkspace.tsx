@@ -10,7 +10,7 @@ import InsightsTab from './tabs/InsightsTab';
 import OpsTab from './tabs/OpsTab';
 import OverviewTab from './tabs/OverviewTab';
 import PlayersTab from './tabs/PlayersTab';
-import { AdminViewModeCtx, readStoredViewMode, writeStoredViewMode } from './viewMode';
+import { AdminSubnavHostCtx, AdminViewModeCtx, readStoredViewMode, writeStoredViewMode } from './viewMode';
 import type { AdminViewMode } from './viewMode';
 
 export default function AdminWorkspace() {
@@ -19,6 +19,7 @@ export default function AdminWorkspace() {
   // 우편 쓰기에 미리 넣을 받는 사람 — 명부·편지의 우편 보내기가 정하고, 다른 곳으로 옮기면 비운다
   const [mailTo, setMailTo] = useState<string | null>(null);
   const [viewMode, setViewModeState] = useState<AdminViewMode>(() => readStoredViewMode());
+  const [subnavHost, setSubnavHost] = useState<HTMLDivElement | null>(null);
 
   const setViewMode = (mode: AdminViewMode) => {
     setViewModeState(mode);
@@ -43,54 +44,65 @@ export default function AdminWorkspace() {
     pushAdminHash(next);
   };
   const selectTab = (tab: AdminTab) => { if (tab !== route.tab) go(adminRouteOf(tab, role)); };
+  const selectSection = (section: string) => {
+    if (section !== route.section) go({ tab: route.tab, section } as AdminRoute);
+  };
   const compose = (userId: string) => go({ tab: 'comms', section: 'mail' }, userId);
 
   const viewCtx = useMemo(() => ({ viewMode, setViewMode }), [viewMode]);
 
   return (
     <AdminViewModeCtx.Provider value={viewCtx}>
-      <div className="min-h-screen w-full bg-surface text-text select-text">
-        <AdminShellHeader title="운영 대시보드" activeTab={route.tab} onSelectTab={selectTab} />
+      <AdminSubnavHostCtx.Provider value={subnavHost}>
+        <div className="min-h-screen w-full bg-bg text-text select-text">
+          <AdminShellHeader
+            activeTab={route.tab}
+            activeSection={route.section}
+            onSelectTab={selectTab}
+            onSelectSection={selectSection}
+            subnavExtraRef={setSubnavHost}
+          />
 
-        <main className="mx-auto flex w-full max-w-[1280px] flex-col gap-4 p-4">
-          <AdminGateBanner />
-          {route.tab === 'overview' && (
-            <OverviewTab
-              section={route.section}
-              onSection={section => go({ tab: 'overview', section })}
-              onNavigate={next => go(next)}
-              onCompose={compose}
-            />
-          )}
-          {route.tab === 'players' && (
-            <PlayersTab
-              section={route.section}
-              onSection={section => go({ tab: 'players', section })}
-              onCompose={compose}
-            />
-          )}
-          {route.tab === 'comms' && (
-            <CommsTab
-              section={route.section}
-              onSection={section => go({ tab: 'comms', section })}
-              mailTo={mailTo}
-              onCompose={compose}
-            />
-          )}
-          {route.tab === 'insights' && (
-            <InsightsTab
-              section={route.section}
-              onSection={section => go({ tab: 'insights', section })}
-            />
-          )}
-          {route.tab === 'ops' && (
-            <OpsTab
-              section={route.section}
-              onSection={section => go({ tab: 'ops', section })}
-            />
-          )}
-        </main>
-      </div>
+          <main className="pf-admin-body">
+            <AdminGateBanner />
+            {route.tab === 'overview' && (
+              <OverviewTab
+                section={route.section}
+                onSection={section => go({ tab: 'overview', section })}
+                onNavigate={next => go(next)}
+                onCompose={compose}
+              />
+            )}
+            {route.tab === 'players' && (
+              <PlayersTab
+                section={route.section}
+                onSection={section => go({ tab: 'players', section })}
+                onCompose={compose}
+              />
+            )}
+            {route.tab === 'comms' && (
+              <CommsTab
+                section={route.section}
+                onSection={section => go({ tab: 'comms', section })}
+                mailTo={mailTo}
+                onCompose={compose}
+              />
+            )}
+            {route.tab === 'insights' && (
+              <InsightsTab
+                section={route.section}
+                onSection={section => go({ tab: 'insights', section })}
+              />
+            )}
+            {route.tab === 'ops' && (
+              <OpsTab
+                section={route.section}
+                onSection={section => go({ tab: 'ops', section })}
+              />
+            )}
+          </main>
+        </div>
+      </AdminSubnavHostCtx.Provider>
     </AdminViewModeCtx.Provider>
   );
 }

@@ -1,14 +1,12 @@
-// 제재·무결성 구역 — 활성 제재, 무결성 감등 현황·오탐 해제·전환 로그·분포 비교, 연타·PERFECT 이상치를 확인한다.
+// 제재·무결성 구역 — 요약 보기에서는 2열(활성 제재 현황 + 무결성 단계 현황)만, 상세 보기에서는 등급 분포 비교·전환 로그·연타/PERFECT 이상치를 함께 보여 준다.
 import { Suspense, lazy, useMemo, useState } from 'react';
 import Badge from '../../../ui/Badge';
 import Button from '../../../ui/Button';
 import DataTable from '../../../ui/DataTable';
-import KpiTile from '../../../ui/KpiTile';
 import Note from '../../../ui/Note';
-import TableBox from '../../../ui/TableBox';
 import { cx } from '../../../ui/cx';
 import { adminGradeName, fmtNum, fmtDT } from '../../../../features/admin/model/metrics';
-import { adminIdentityLookup, adminNumber, selectAntiAbuseRows } from '../../../../features/admin/model/adminViews';
+import { adminIdentityLookup, selectAntiAbuseRows } from '../../../../features/admin/model/adminViews';
 import {
   readAdminSpamFlags,
   readAdminUsers,
@@ -24,8 +22,11 @@ import type {
   AdminUserRow,
 } from '../../../../features/admin/model/types';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
-import { Cell, CellGrid, KpiRow, TabState } from '../layout';
+import {
+  AdminCard, AdminKpiCard, AdminQueueItem, AdminSplit, AdminTableWrap, TabState,
+} from '../layout';
 import UserIdentity from '../UserIdentity';
+import { useAdminViewMode } from '../viewMode';
 
 const UserDetail = lazy(() => import('./UserDetail'));
 
@@ -59,6 +60,7 @@ const fallbackUserRow = (userId: string): AdminUserRow => ({
 export default function AntiAbuseTab({ onCompose }: { onCompose?: (userId: string) => void } = {}) {
   const { access } = useAdminAuth();
   const granted = access === 'granted';
+  const { viewMode } = useAdminViewMode();
   const actions = useAdminUserActions();
   const integrity = useAdminIntegrity(granted);
 
@@ -101,8 +103,6 @@ export default function AntiAbuseTab({ onCompose }: { onCompose?: (userId: strin
   );
   const stageCount = (stageNum: number) => stages.find(s => s.stage === stageNum)?.count ?? 0;
 
-  const tone = (count: number, active: 'gold' | 'danger') => (count > 0 ? active : 'dim');
-
   const releaseRestriction = async (userId: string) => {
     setBusyUid(userId);
     setActionError(null);
@@ -132,241 +132,247 @@ export default function AntiAbuseTab({ onCompose }: { onCompose?: (userId: strin
     : null;
 
   return (
-    <>
+    <div className="flex flex-col gap-3">
       <TabState loading={loading && granted} error={error} onRetry={refresh} />
       {actionError && <Note tone="warn" className="my-0">{actionError}</Note>}
 
       {!granted && (
-        <Note className="my-0">운영 DB에 연결하거나 admins에 등록하면 채워져요. 화면 구성은 아래와 같아요.</Note>
+        <Note size="xs" className="my-0">운영 DB에 연결하면 채워져요.</Note>
       )}
 
-      <KpiRow>
-        <KpiTile label="연타 유저" value={fmtNum(spamUsers.length)} hint="최근 7일, 낚시 간격 2초 미만"
-                 tone={tone(spamUsers.length, 'gold')} />
-        <KpiTile label="PERFECT 이상치" value={fmtNum(perfectOutliers.length)} hint="7일 20낚시 이상"
-                 tone={tone(perfectOutliers.length, 'danger')} />
-        <KpiTile label="제재 계정" value={fmtNum(restricted.length)}
-                 tone={tone(restricted.length, 'danger')} />
-        <KpiTile label="무결성 감등" value={fmtNum(pressuredAccounts.length)} hint="단계 1~2 압력 누적"
-                 tone={tone(pressuredAccounts.length, 'gold')} />
-      </KpiRow>
-
-      <Cell title={`활성 제재 계정 (${restricted.length})`} flush divided>
-        {!granted || restricted.length === 0 ? (
-          <Note size="2xs" className="my-0 px-3 py-2">
-            {granted ? '활성 제재가 없어요.' : '운영 DB에 연결하면 확인할 수 있어요.'}
-          </Note>
-        ) : restricted.map(u => {
-          const gold = adminNumber(u.gold);
-          const fame = adminNumber(u.fame);
-          const details = [
-            Number.isFinite(gold) ? `골드 ${fmtNum(gold)}` : null,
-            Number.isFinite(fame) ? `명성 ${fmtNum(fame)}` : null,
-            u.last_action_at ? `마지막 행동 ${fmtDT(u.last_action_at)}` : null,
-          ].filter(Boolean).join(' / ');
-          const busy = busyUid === u.user_id;
-          return (
-            <div key={u.user_id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <UserIdentity user={u} />
-                {details && <span className="text-xs text-text-dim">{details}</span>}
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Button size="sm" variant="ghost" onClick={() => setSelectedUid(u.user_id)}>상세</Button>
-                <Button size="sm" variant="primary" disabled={busy}
-                        onClick={() => void releaseRestriction(u.user_id)}>
-                  제재 해제
-                </Button>
-              </div>
-            </div>
-          );
-        })}
-      </Cell>
-
-      {/* 무결성 감등 현황 및 오탐 해제 */}
-      <Cell title="무결성 감등 현황 (단계 0/1/2)" flush>
-        <div className="flex flex-wrap items-center gap-2 px-3 pt-3">
-          <Badge tone="dim" size="xs">단계 0 (정상): {fmtNum(stageCount(0))}명</Badge>
-          <Badge tone="gold" size="xs">단계 1 (주의): {fmtNum(stageCount(1))}명</Badge>
-          <Badge tone="danger" size="xs">단계 2 (감등): {fmtNum(stageCount(2))}명</Badge>
-        </div>
-        <TableBox className="px-1 pb-1">
-          <DataTable>
-            <thead>
-              <tr>
-                <th className="text-left">유저</th>
-                <th className="text-right">단계</th>
-                <th className="text-right">압력</th>
-                <th className="text-right">보정 배율</th>
-                <th className="text-left">갱신 시각</th>
-                <th className="text-right">조치</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pressuredAccounts.map(a => {
-                const busy = busyUid === a.userId;
-                return (
-                  <tr key={a.userId} className="cursor-pointer hover:bg-surface-2 transition"
-                      onClick={() => setSelectedUid(a.userId)}>
-                    <td><UserIdentity user={identityOf(a.userId)} /></td>
-                    <td className="text-right pf-accent">
-                      <span className={a.stage >= 2 ? 'text-danger' : 'text-gold'}>{a.stage}단계</span>
-                    </td>
-                    <td className="text-right">{a.pressure.toFixed(2)}</td>
-                    <td className="text-right">{a.modifier !== null ? `×${a.modifier}` : '—'}</td>
-                    <td className="text-2xs text-text-dim whitespace-nowrap">{fmtDT(a.updatedAt)}</td>
-                    <td className="text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
-                      <div className="inline-flex items-center gap-1">
-                        <Button size="xs" variant="ghost" onClick={() => setSelectedUid(a.userId)}>상세</Button>
-                        <Button size="xs" variant="primary" disabled={!granted || busy}
-                                onClick={() => void releaseIntegrity(a.userId)}>
-                          오탐 해제
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {pressuredAccounts.length === 0 && (
-                <tr><td colSpan={6} className="text-text-dim text-center py-3">
-                  {granted ? '무결성 감등 대상 계정이 없어요.' : '—'}
-                </td></tr>
-              )}
-            </tbody>
-          </DataTable>
-        </TableBox>
-      </Cell>
-
-      <CellGrid>
-        <Cell title="무결성 등급 분포 비교 (7일)" flush>
-          <TableBox className="px-1 pb-1">
-            <DataTable>
+      {/* 요약 보기 기본: 깔끔한 2열 1행 (활성 제재 현황 + 무결성 단계 현황) */}
+      <AdminSplit variant="2">
+        <AdminCard
+          title="활성 제재 현황"
+          badge={<Badge tone={restricted.length > 0 ? 'danger' : 'dim'} size="xs">{restricted.length}건 활성</Badge>}
+        >
+          <AdminTableWrap>
+            <DataTable className="pf-admin-table">
               <thead>
                 <tr>
-                  <th className="text-left">등급</th>
-                  <th className="text-right">정상 실측</th>
-                  <th className="text-right">정상 기대</th>
-                  <th className="text-right">감등 실측</th>
-                  <th className="text-right">감등 기대</th>
+                  <th>플레이어</th>
+                  <th>상태</th>
+                  <th>최근 활동</th>
+                  <th className="text-right">조치</th>
                 </tr>
               </thead>
               <tbody>
-                {integrityMetrics ? RARITY_KEYS.map(r => (
-                  <tr key={r}>
-                    <td>{adminGradeName(r)}</td>
-                    <td className="text-right">{(integrityMetrics.clean.shares[r] * 100).toFixed(1)}%</td>
-                    <td className="text-right text-text-dim">{(integrityMetrics.clean.expectedShares[r] * 100).toFixed(1)}%</td>
-                    <td className="text-right text-gold">{(integrityMetrics.pressured.shares[r] * 100).toFixed(1)}%</td>
-                    <td className="text-right text-text-dim">{(integrityMetrics.pressured.expectedShares[r] * 100).toFixed(1)}%</td>
-                  </tr>
-                )) : (
-                  <tr><td colSpan={5} className="text-text-dim text-center py-3">
-                    {granted ? '지표 데이터가 없어요.' : '—'}
-                  </td></tr>
-                )}
-              </tbody>
-            </DataTable>
-          </TableBox>
-        </Cell>
-
-        <Cell title={`무결성 전환 로그 (${integrityEvents.length})`} flush>
-          <TableBox className="max-h-[320px] px-1 pb-1">
-            <DataTable>
-              <thead>
-                <tr>
-                  <th className="text-left">시각</th>
-                  <th className="text-left">유저</th>
-                  <th className="text-left">감지기</th>
-                  <th className="text-right">압력</th>
-                  <th className="text-right">단계</th>
-                </tr>
-              </thead>
-              <tbody>
-                {integrityEvents.map(ev => (
-                  <tr key={ev.id} className="cursor-pointer hover:bg-surface-2 transition"
-                      onClick={() => setSelectedUid(ev.userId)}>
-                    <td className="text-2xs text-text-dim whitespace-nowrap">{fmtDT(ev.createdAt)}</td>
-                    <td><UserIdentity user={identityOf(ev.userId)} /></td>
-                    <td className="text-xs">{ev.detector}</td>
-                    <td className="text-right text-2xs">{ev.pressureBefore.toFixed(1)} → {ev.pressureAfter.toFixed(1)}</td>
-                    <td className="text-right text-2xs pf-accent">{ev.stageBefore} → {ev.stageAfter}</td>
-                  </tr>
-                ))}
-                {integrityEvents.length === 0 && (
-                  <tr><td colSpan={5} className="text-text-dim text-center py-3">
-                    {granted ? '전환 로그가 없어요.' : '—'}
-                  </td></tr>
-                )}
-              </tbody>
-            </DataTable>
-          </TableBox>
-        </Cell>
-      </CellGrid>
-
-      {/* 행동 이상 — 낚시 간격과 판정율은 같은 "플레이 행위" 축이라 나란히 본다 */}
-      <CellGrid>
-        <Cell title="연타 (낚시 간격 2초 미만, 최근 7일)">
-          <Note size="2xs" className="my-0">
-            서버는 직전 액션과의 최소 간격(느림 창 페이싱)과 낚시 한 사이클 기준(catchTooSoon)으로 과속 요청을 차단해요.
-            여기는 최근 7일 내 2초 미만 간격으로 기록된 캐치를 관측해요.
-          </Note>
-          <TableBox>
-            <DataTable>
-              <thead>
-                <tr><th className="text-left">유저</th><th className="text-right">7일 낚시</th>
-                    <th className="text-right">연타 건수</th></tr>
-              </thead>
-              <tbody>
-                {spamUsers.map(f => (
-                  <tr key={f.user_id} className="cursor-pointer hover:bg-surface-2 transition"
-                      onClick={() => setSelectedUid(f.user_id)}>
-                    <td><UserIdentity user={identityOf(f.user_id)} /></td>
-                    <td className="text-right">{f.catches_7d}</td>
-                    <td className={cx('text-right pf-accent',
-                                      f.fast_gap_7d > 10 ? 'text-danger' : 'text-gold')}>
-                      {f.fast_gap_7d}
+                {granted && restricted.map(u => {
+                  const busy = busyUid === u.user_id;
+                  return (
+                    <tr key={u.user_id}>
+                      <td><UserIdentity user={u} /></td>
+                      <td><Badge tone="danger" size="xs">제재 중</Badge></td>
+                      <td className="whitespace-nowrap text-2xs text-text-dim">{fmtDT(u.last_action_at)}</td>
+                      <td className="whitespace-nowrap text-right">
+                        <div className="inline-flex items-center gap-1">
+                          <Button size="xs" variant="primary" disabled={busy}
+                                  onClick={() => void releaseRestriction(u.user_id)}>
+                            해제
+                          </Button>
+                          <Button size="xs" variant="ghost" onClick={() => setSelectedUid(u.user_id)}>
+                            상세
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {(!granted || restricted.length === 0) && (
+                  <tr>
+                    <td colSpan={4} className="text-text-dim text-center py-3">
+                      {granted ? '활성 제재가 없어요.' : '운영 DB에 연결하면 확인할 수 있어요.'}
                     </td>
                   </tr>
-                ))}
-                {spamUsers.length === 0 &&
-                  <tr><td colSpan={3} className="text-text-dim text-center py-2">
-                    {granted ? '연타가 없어요.' : '—'}
-                  </td></tr>}
+                )}
               </tbody>
             </DataTable>
-          </TableBox>
-        </Cell>
+          </AdminTableWrap>
+        </AdminCard>
 
-        <Cell title="PERFECT 판정 비율 이상치 (7일)">
-          <Note size="2xs" className="my-0">
-            30일 전체 평균은 {(flags[0]?.perfect_pct_global ?? '—')}%예요.
-            PERFECT ×2는 클라이언트의 주장을 따르는 의도된 구멍이라서, 비율 감시가 유일한 대응이에요(7일 20낚시 이상).
-          </Note>
-          <TableBox>
-            <DataTable>
-              <thead>
-                <tr><th className="text-left">유저</th><th className="text-right">7일 PERFECT%</th>
-                    <th className="text-right">30일 전체%</th><th className="text-right">7일 낚시</th></tr>
-              </thead>
-              <tbody>
-                {perfectOutliers.map(f => (
-                  <tr key={f.user_id} className="cursor-pointer hover:bg-surface-2 transition"
-                      onClick={() => setSelectedUid(f.user_id)}>
-                    <td><UserIdentity user={identityOf(f.user_id)} /></td>
-                    <td className="text-right text-danger pf-accent">{f.perfect_pct}%</td>
-                    <td className="text-right text-text-dim">{f.perfect_pct_global}%</td>
-                    <td className="text-right">{f.catches_7d}</td>
-                  </tr>
-                ))}
-                {perfectOutliers.length === 0 &&
-                  <tr><td colSpan={4} className="text-text-dim text-center py-2">
-                    {granted ? '이상치가 없어요.' : '—'}
-                  </td></tr>}
-              </tbody>
-            </DataTable>
-          </TableBox>
-        </Cell>
-      </CellGrid>
+        <AdminCard
+          title="무결성 단계 현황"
+          badge={<Badge tone={pressuredAccounts.length > 0 ? 'gold' : 'dim'} size="xs">감등 {pressuredAccounts.length}명</Badge>}
+        >
+          <AdminSplit variant="3">
+            <AdminKpiCard label="단계 0 (정상)" value={fmtNum(stageCount(0))} />
+            <AdminKpiCard label="단계 1 (관찰)" value={fmtNum(stageCount(1))} tone={stageCount(1) > 0 ? 'warn' : 'dim'} />
+            <AdminKpiCard label="단계 2 (감등)" value={fmtNum(stageCount(2))} tone={stageCount(2) > 0 ? 'danger' : 'dim'} />
+          </AdminSplit>
+
+          <div className="pf-admin-queue-list">
+            {pressuredAccounts.map(a => {
+              const busy = busyUid === a.userId;
+              return (
+                <AdminQueueItem key={a.userId} tone={a.stage >= 2 ? 'urgent' : 'warn'}>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <UserIdentity user={identityOf(a.userId)} inline />
+                      <Badge tone={a.stage >= 2 ? 'danger' : 'gold'} size="xs">단계 {a.stage}</Badge>
+                    </div>
+                    <div className="text-2xs text-text-dim mt-0.5">
+                      압력 {a.pressure.toFixed(2)} / 배율 {a.modifier !== null ? `×${a.modifier}` : '—'} · {fmtDT(a.updatedAt)}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button size="xs" variant="primary" disabled={!granted || busy}
+                            onClick={() => void releaseIntegrity(a.userId)}>
+                      오탐 해제
+                    </Button>
+                    <Button size="xs" variant="ghost" onClick={() => setSelectedUid(a.userId)}>
+                      상세
+                    </Button>
+                  </div>
+                </AdminQueueItem>
+              );
+            })}
+            {pressuredAccounts.length === 0 && (
+              <AdminQueueItem>
+                <span className="text-xs text-text-dim">
+                  {granted ? '무결성 감등 대상 계정이 없어요.' : '운영 DB에 연결하면 확인할 수 있어요.'}
+                </span>
+              </AdminQueueItem>
+            )}
+          </div>
+        </AdminCard>
+      </AdminSplit>
+
+      {viewMode === 'detail' && (
+        <>
+          <AdminSplit variant="2">
+            <AdminCard title="무결성 등급 분포 비교 (7일)">
+              <AdminTableWrap>
+                <DataTable className="pf-admin-table">
+                  <thead>
+                    <tr>
+                      <th>등급</th>
+                      <th className="text-right">정상 실측</th>
+                      <th className="text-right">정상 기대</th>
+                      <th className="text-right">감등 실측</th>
+                      <th className="text-right">감등 기대</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {integrityMetrics ? RARITY_KEYS.map(r => (
+                      <tr key={r}>
+                        <td>{adminGradeName(r)}</td>
+                        <td className="text-right">{(integrityMetrics.clean.shares[r] * 100).toFixed(1)}%</td>
+                        <td className="text-right text-text-dim">{(integrityMetrics.clean.expectedShares[r] * 100).toFixed(1)}%</td>
+                        <td className="text-right text-gold">{(integrityMetrics.pressured.shares[r] * 100).toFixed(1)}%</td>
+                        <td className="text-right text-text-dim">{(integrityMetrics.pressured.expectedShares[r] * 100).toFixed(1)}%</td>
+                      </tr>
+                    )) : (
+                      <tr><td colSpan={5} className="text-text-dim text-center py-3">
+                        {granted ? '지표 데이터가 없어요.' : '—'}
+                      </td></tr>
+                    )}
+                  </tbody>
+                </DataTable>
+              </AdminTableWrap>
+            </AdminCard>
+
+            <AdminCard title={`무결성 전환 로그 (${integrityEvents.length})`}>
+              <AdminTableWrap scroll>
+                <DataTable className="pf-admin-table">
+                  <thead>
+                    <tr>
+                      <th>시각</th>
+                      <th>유저</th>
+                      <th>감지기</th>
+                      <th className="text-right">압력</th>
+                      <th className="text-right">단계</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {integrityEvents.map(ev => (
+                      <tr key={ev.id} className="cursor-pointer" onClick={() => setSelectedUid(ev.userId)}>
+                        <td className="text-2xs text-text-dim whitespace-nowrap">{fmtDT(ev.createdAt)}</td>
+                        <td><UserIdentity user={identityOf(ev.userId)} /></td>
+                        <td className="text-xs">{ev.detector}</td>
+                        <td className="text-right text-2xs">{ev.pressureBefore.toFixed(1)} → {ev.pressureAfter.toFixed(1)}</td>
+                        <td className="text-right text-2xs pf-accent">{ev.stageBefore} → {ev.stageAfter}</td>
+                      </tr>
+                    ))}
+                    {integrityEvents.length === 0 && (
+                      <tr><td colSpan={5} className="text-text-dim text-center py-3">
+                        {granted ? '전환 로그가 없어요.' : '—'}
+                      </td></tr>
+                    )}
+                  </tbody>
+                </DataTable>
+              </AdminTableWrap>
+            </AdminCard>
+          </AdminSplit>
+
+          <AdminSplit variant="2">
+            <AdminCard title="연타 (낚시 간격 2초 미만, 최근 7일)">
+              <Note size="2xs" className="my-0">
+                최근 7일 내 2초 미만 간격으로 기록된 캐치를 관측해요.
+              </Note>
+              <AdminTableWrap>
+                <DataTable className="pf-admin-table">
+                  <thead>
+                    <tr>
+                      <th>유저</th>
+                      <th className="text-right">7일 낚시</th>
+                      <th className="text-right">연타 건수</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {spamUsers.map(f => (
+                      <tr key={f.user_id} className="cursor-pointer" onClick={() => setSelectedUid(f.user_id)}>
+                        <td><UserIdentity user={identityOf(f.user_id)} /></td>
+                        <td className="text-right">{f.catches_7d}</td>
+                        <td className={cx('text-right pf-accent', f.fast_gap_7d > 10 ? 'text-danger' : 'text-gold')}>
+                          {f.fast_gap_7d}
+                        </td>
+                      </tr>
+                    ))}
+                    {spamUsers.length === 0 && (
+                      <tr><td colSpan={3} className="text-text-dim text-center py-2">
+                        {granted ? '연타가 없어요.' : '—'}
+                      </td></tr>
+                    )}
+                  </tbody>
+                </DataTable>
+              </AdminTableWrap>
+            </AdminCard>
+
+            <AdminCard title="PERFECT 판정 비율 이상치 (7일)">
+              <Note size="2xs" className="my-0">
+                30일 전체 평균은 {(flags[0]?.perfect_pct_global ?? '—')}%예요 (7일 20낚시 이상).
+              </Note>
+              <AdminTableWrap>
+                <DataTable className="pf-admin-table">
+                  <thead>
+                    <tr>
+                      <th>유저</th>
+                      <th className="text-right">7일 PERFECT%</th>
+                      <th className="text-right">30일 전체%</th>
+                      <th className="text-right">7일 낚시</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {perfectOutliers.map(f => (
+                      <tr key={f.user_id} className="cursor-pointer" onClick={() => setSelectedUid(f.user_id)}>
+                        <td><UserIdentity user={identityOf(f.user_id)} /></td>
+                        <td className="text-right text-danger pf-accent">{f.perfect_pct}%</td>
+                        <td className="text-right text-text-dim">{f.perfect_pct_global}%</td>
+                        <td className="text-right">{f.catches_7d}</td>
+                      </tr>
+                    ))}
+                    {perfectOutliers.length === 0 && (
+                      <tr><td colSpan={4} className="text-text-dim text-center py-2">
+                        {granted ? '이상치가 없어요.' : '—'}
+                      </td></tr>
+                    )}
+                  </tbody>
+                </DataTable>
+              </AdminTableWrap>
+            </AdminCard>
+          </AdminSplit>
+        </>
+      )}
 
       {detailUser && (
         <Suspense fallback={null}>
@@ -374,6 +380,6 @@ export default function AntiAbuseTab({ onCompose }: { onCompose?: (userId: strin
                       onClose={() => setSelectedUid(null)} onCompose={onCompose} />
         </Suspense>
       )}
-    </>
+    </div>
   );
 }

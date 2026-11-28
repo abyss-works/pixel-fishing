@@ -1,14 +1,12 @@
 // 운영·콘텐츠 탭 — 서버·실시간, 클라이언트, 변경 기록, 콘텐츠 카탈로그 4개 하위 구역으로 나눈다.
 import DataTable from '../../../ui/DataTable';
 import Note from '../../../ui/Note';
-import SubTabs from '../../../ui/SubTabs';
 import { APP_VERSION } from '../../../../version';
 import { BUILD_LABEL } from '../../../../buildId';
 import { readAdminDeployHost } from '../../../../features/admin/service/queries';
 import { EVENT_LABELS } from '../../../../features/admin/model/metrics';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
-import { Cell, CellGrid, TabPage } from '../layout';
-import { ADMIN_SECTIONS } from '../routes';
+import { Cell, CellGrid } from '../layout';
 import type { OpsSection } from '../routes';
 import { useAdminViewMode } from '../viewMode';
 import ChangelogSection from './ChangelogSection';
@@ -17,16 +15,8 @@ import ContentTab from './ContentTab';
 import { HttpMetricsOpsSection } from './HttpMetricsSection';
 import ServerHealthSection from './ServerHealthSection';
 
-const CONTEXT: Record<OpsSection, string> = {
-  server: '이 대시보드의 배포 정체와 서버 HTTP·소켓·DB 상태 및 경보를 확인해요.',
-  client: '브라우저 Web Vitals, 왕복 지연(RTT), 캔버스 프레임 및 소켓 재연결 추이를 확인해요.',
-  changelog: '버전별 공개·관리자 변경 기록을 최신 순으로 열람해요.',
-  catalog: '어종·네임드·유물·업적·의상·요리·배·구역·의뢰 9개 정본 축을 오프라인에서도 검색·검수해요.',
-};
-
 export default function OpsTab({
   section = 'server',
-  onSection = () => {},
 }: {
   section?: OpsSection;
   onSection?: (section: OpsSection) => void;
@@ -35,14 +25,7 @@ export default function OpsTab({
   const { viewMode } = useAdminViewMode();
 
   return (
-    <TabPage title="운영·콘텐츠" context={CONTEXT[section]}>
-      <div className="max-w-[640px]">
-        <SubTabs
-          items={ADMIN_SECTIONS.ops.map(s => ({ key: s.key, label: s.label }))}
-          activeKey={section}
-          onSelect={onSection}
-        />
-      </div>
+    <div className="flex flex-col gap-3">
 
       {section === 'server' && (
         <CellGrid>
@@ -119,7 +102,7 @@ export default function OpsTab({
           )}
         </>
       )}
-    </TabPage>
+    </div>
   );
 }
 

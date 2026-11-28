@@ -74,9 +74,10 @@ beforeEach(() => {
 });
 afterEach(() => { vi.useRealTimers(); cleanup(); vi.clearAllMocks(); });
 
-// 지표 타일과 위험 신호 줄은 이름이 겹칠 수 있어, 타일은 오목한 칸(pf-notch) 하나로 고른다
+// 지표 타일과 큐는 이름이 겹칠 수 있어, 타일은 .pf-admin-kpi-card 또는 .pf-notch 하나로 고른다
 const tile = (label: string) => screen.getAllByText(label)
-  .map(el => el.parentElement as HTMLElement).find(el => el.classList.contains('pf-notch'))!;
+  .map(el => (el.closest('.pf-admin-kpi-card') ?? el.closest('.pf-notch')) as HTMLElement | null)
+  .find((el): el is HTMLElement => el !== null)!;
 
 function show(access: 'granted' | 'local', role: AdminRole = 'admin', viewMode: 'summary' | 'detail' = 'detail') {
   render(
@@ -96,14 +97,13 @@ describe('개요 탭', () => {
     expect(await screen.findByText('낚시')).toBeInTheDocument(); // 피드의 유형 이름(catch)
     await waitFor(() => expect(within(tile('지금 접속')).getByText('4')).toBeInTheDocument());
     expect(within(tile('오늘 DAU')).getByText('1')).toBeInTheDocument();
+    expect(within(tile('서버·이상 경보')).getByText('20')).toBeInTheDocument();
+    expect(within(tile('미처리 신고')).getByText('0')).toBeInTheDocument();
     expect(within(tile('WAU')).getByText('2')).toBeInTheDocument();
     expect(within(tile('MAU')).getByText('3')).toBeInTheDocument();
     expect(within(tile('MAU')).getByText(/등록 3명/)).toBeInTheDocument();
-    expect(within(tile('오늘 신규')).getByText('1')).toBeInTheDocument();
-    expect(within(tile('오늘 신규')).getByText('그중 가입 계정 1')).toBeInTheDocument();
-    await waitFor(() => expect(within(tile('오늘 평균 세션')).getByText('30분')).toBeInTheDocument());
     expect(within(tile('D1 리텐션')).getByText('50%')).toBeInTheDocument();
-    expect(within(tile('D1 리텐션')).getByText('2026-11-03 가입 4명 기준')).toBeInTheDocument();
+    expect(within(tile('D1 리텐션')).getByText('2026-11-03 가입 4명')).toBeInTheDocument();
     expect(within(tile('D7 리텐션')).getByText('—')).toBeInTheDocument();
 
     // 어제 집계는 막대로, 오늘(미집계)은 빈 칸으로 그린다
@@ -117,11 +117,9 @@ describe('개요 탭', () => {
     expect(vi.mocked(api.admin.overview)).toHaveBeenCalledWith(30);
     expect(vi.mocked(api.admin.dailyStats)).not.toHaveBeenCalled();
 
-    // 위험 신호 — 제재 1건, 연타 1명. 신호가 있으면 제재·무결성 안내가 붙는다
-    const risk = screen.getByText('위험 신호').closest('section')!;
-    expect(within(risk).getByText('제재 계정').nextElementSibling).toHaveTextContent('1');
-    expect(within(risk).getByText('연타 플래그 유저').nextElementSibling).toHaveTextContent('1');
-    expect(within(risk).getByText(/제재·무결성/)).toBeInTheDocument();
+    // 즉시 처리 큐 — 제재 1명, 연타 1명, HTTP 경보 18
+    const queue = screen.getByRole('heading', { name: /즉시 처리 큐/ }).closest('section')!;
+    expect(within(queue).getByText(/제재 1명 · 연타 1명 · HTTP 경보 18/)).toBeInTheDocument();
 
     // 앱 서버 HTTP 오류율·429 요약
     expect(vi.mocked(api.admin.httpMetrics)).toHaveBeenCalledWith(30);
@@ -184,7 +182,15 @@ describe('개요 탭', () => {
     expect(within(tile('WAU')).getByText('19')).toBeInTheDocument();
     expect(within(tile('MAU')).getByText('29')).toBeInTheDocument();
     expect(within(tile('MAU')).getByText(/등록 50명/)).toBeInTheDocument();
-    expect(within(tile('오늘 신규')).getByText('4')).toBeInTheDocument();
-    expect(within(tile('오늘 신규')).getByText('그중 가입 계정 2')).toBeInTheDocument();
+  });
+
+  it('요약 보기(기본)에서는 4 KPI 카드와 즉시 처리 큐·핵심 추이 2열만 표시한다', async () => {
+    show('granted', 'admin', 'summary');
+    await waitFor(() => expect(within(tile('오늘 DAU')).getByText('1')).toBeInTheDocument());
+    expect(screen.queryByText('WAU')).toBeNull();
+    expect(screen.queryByText('MAU')).toBeNull();
+    expect(screen.queryByRole('heading', { name: '최근 이벤트 피드' })).toBeNull();
+    expect(screen.getByRole('heading', { name: /즉시 처리 큐/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /핵심 추이/ })).toBeInTheDocument();
   });
 });
