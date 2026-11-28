@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { selectTraceCard } from './trace';
+import { selectAwayTraceLine, selectTraceCard } from './trace';
 
 const issued = '2026-10-16T00:00:00.000Z'; // KST 09:00 — 다음 날 KST 04:00(19:00Z)까지 유효
 const expires = Date.parse('2026-10-16T19:00:00.000Z');
@@ -39,5 +39,24 @@ describe('흔적 카드 선택', () => {
   it('토벌을 마친 네임드 의뢰의 보상 대기는 흔적 카드가 아니다', () => {
     expect(selectTraceCard(snap({ progress: [{ questId: 'pacific-named-megalodon', progress: 1 }] }), null, 0)).toBeNull();
     expect(selectTraceCard(snap({ progress: [{ questId: 'pacific-named-megalodon', progress: 1 }] }), 'pacific', now)).toBeNull();
+  });
+});
+
+describe('방치 결과 카드의 흔적 줄 선택', () => {
+  const tickets = [{ questId: 'pacific-named-megalodon', issuedAt: issued }];
+
+  it('거점에서 유효한 흔적이 있으면 남은 분(올림)을 준다', () => {
+    expect(selectAwayTraceLine(snap({ tickets }), false, now)).toEqual({ leftMins: (expires - now) / 60_000 });
+  });
+
+  it('바다에서는 흔적 카드가 같은 정보를 보이므로 줄이 없다', () => {
+    expect(selectAwayTraceLine(snap({ tickets }), true, now)).toBeNull();
+  });
+
+  it('스냅샷이 없거나 흔적이 없거나 만료됐거나 시계를 아직 안 찍었으면 줄이 없다', () => {
+    expect(selectAwayTraceLine(null, false, now)).toBeNull();
+    expect(selectAwayTraceLine(snap(), false, now)).toBeNull();
+    expect(selectAwayTraceLine(snap({ tickets }), false, expires)).toBeNull();
+    expect(selectAwayTraceLine(snap({ tickets }), false, 0)).toBeNull();
   });
 });

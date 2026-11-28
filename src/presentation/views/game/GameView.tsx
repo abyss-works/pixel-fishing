@@ -84,7 +84,7 @@ import { useSpotState } from '../../../features/travel/service/useSpotState';
 import TraceCard from '../overlays/bounty/TraceCard';
 import RewardCard from '../overlays/rewards/RewardCard';
 import type { RewardWindow } from '../../../features/display/model/rewardsDue';
-import AwayCard from '../overlays/away/AwayCard';
+import AwayNotice from '../overlays/away/AwayNotice';
 import AwayReportModal from '../overlays/away/AwayReportModal';
 import { awayLineText } from '../overlays/away/awayText';
 import { useAwayReport } from '../../../features/away/service/useAwayReport';
@@ -592,7 +592,7 @@ export default function GameView(props: GameViewProps) {
                    notice={(
                      <>
                        {away.report && !awayOpen && (
-                         <AwayCard report={away.report} onClose={away.dismiss} onDetail={() => setAwayOpen(true)} />
+                         <AwayNotice atSea={atSea} report={away.report} onClose={away.dismiss} onDetail={() => setAwayOpen(true)} />
                        )}
                        <RewardCard game={game} accountState={accountState} onOpen={openRewardWindow} />
                        {atSea && <TraceCard onTrack={setTracking} />}

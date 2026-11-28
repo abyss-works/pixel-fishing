@@ -46,3 +46,12 @@ export function selectTraceCard(
   }
   return null;
 }
+
+/** 방치 결과 카드의 흔적 줄 — 거점(항구, 집)에서 유효한 흔적이 있을 때만 남은 분을 준다. 바다는 흔적 카드가 같은 정보를 보인다 */
+export function selectAwayTraceLine(
+  snapshot: BountySnapshot | null, atSea: boolean, nowMs: number,
+): { leftMins: number } | null {
+  if (atSea) return null;
+  const card = selectTraceCard(snapshot, null, nowMs);
+  return card ? { leftMins: card.leftMins } : null;
+}

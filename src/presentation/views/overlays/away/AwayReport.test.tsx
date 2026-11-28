@@ -58,6 +58,18 @@ describe('알림 카드', () => {
   });
 });
 
+describe('알림 카드의 흔적 줄', () => {
+  it('흔적이 있을 때만 줄을 두고 쌓기 단계에서 숨기는 생략 줄이다', () => {
+    const { unmount } = render(<AwayCard report={full} onClose={() => {}} onDetail={() => {}} />);
+    expect(within(screen.getByRole('status')).queryByText('흔적')).toBeNull();
+    unmount();
+    render(<AwayCard report={full} trace={{ leftMins: 90 }} onClose={() => {}} onDetail={() => {}} />);
+    const row = within(screen.getByRole('status')).getByText('흔적').closest('li')!;
+    expect(row.hasAttribute('data-omittable')).toBe(true);
+    expect(row.className).toContain(STACK_OMIT_CLASS);
+  });
+});
+
 describe('알림 카드의 생략 줄', () => {
   it('새 도감 줄과 가방 안내 줄은 쌓기 단계에서 숨기는 생략 글자로 표시된다', () => {
     render(<AwayCard report={full} onClose={() => {}} onDetail={() => {}} />);
