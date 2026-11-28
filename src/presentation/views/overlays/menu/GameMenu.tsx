@@ -24,11 +24,11 @@ import { HOTKEY_TIER, hasModifier, useKeyScope } from '../../../ui/hotkeys';
 import PixelIcon from '../../../ui/PixelIcon';
 import type { GlyphId } from '../../../ui/PixelIcon';
 
-// 게임 메뉴 — 햄버거 버튼 하나. PC 레이아웃은 헤더 단계가 크기를 정하는 메뉴 버튼(HudMenuButton, 60px 또는 두 행 단계 40px), 모바일 레이아웃은 40px 메뉴 버튼(MobileHudMenuButton)이다. 누르면 아래로 의뢰, 업적, 운세, 길드, 소셜, 우편함 줄이 펼쳐진다(순서는 menuKeys).
+// 게임 메뉴 — 햄버거 버튼 하나. PC 레이아웃은 헤더 단계가 크기를 정하는 메뉴 버튼(HudMenuButton, 60px 또는 두 행 단계 40px), 모바일 레이아웃은 40px 메뉴 버튼(MobileHudMenuButton)이다. 누르면 아래로 의뢰, 업적, 운세, 길드, 친구, 우편함 줄이 펼쳐진다(순서는 menuKeys).
 // 줄은 라벨이 왼쪽, 아이콘이 오른쪽이고, 할 일이 있으면 라벨 옆에 수 배지를 붙인다. 의뢰 줄은 일반(노랑), 네임드(보라) 순으로 오늘 남은 클리어를 배지로 보인다.
-// 접힌 상태에서는 새 알림(소셜의 받은 요청, 우편함의 받지 않은 우편, 길드의 대기 가입 신청)이 있으면 버튼 모서리에 빨간 점을 찍는다. 의뢰 배지와 개인 강화 포인트 배지는 점을 켜지 않는다.
-// 입구마다 보이는 조건: 의뢰, 업적, 운세는 늘 보이고, 길드와 소셜은 계정 유저만 열며, 우편함은 클라우드 모드에서만 보인다.
-// 게스트 잠금을 적용하는 게스트에게는 의뢰, 업적, 길드, 소셜, 우편함 다섯 줄이 자리 그대로 잠긴 줄(공용 잠금)로 보이고, 눌러도 창이 열리지 않으며 잠금 줄이 툴팁으로 열린다. 운세 줄은 열려 있어 오늘의 운세와 잠금 안내를 볼 수 있다.
+// 접힌 상태에서는 새 알림(친구의 받은 요청, 우편함의 받지 않은 우편, 길드의 대기 가입 신청)이 있으면 버튼 모서리에 빨간 점을 찍는다. 의뢰 배지와 개인 강화 포인트 배지는 점을 켜지 않는다.
+// 입구마다 보이는 조건: 의뢰, 업적, 운세는 늘 보이고, 길드와 친구는 계정 유저만 열며, 우편함은 클라우드 모드에서만 보인다.
+// 게스트 잠금을 적용하는 게스트에게는 의뢰, 업적, 길드, 친구, 우편함 다섯 줄이 자리 그대로 잠긴 줄(공용 잠금)로 보이고, 눌러도 창이 열리지 않으며 잠금 줄이 툴팁으로 열린다. 운세 줄은 열려 있어 오늘의 운세와 잠금 안내를 볼 수 있다.
 // 잠긴 줄에는 배지와 알림 점이 없다.
 // 자리는 헤더(HudHeader)가 정한다. 두 레이아웃 모두 헤더 오른쪽 끝에 놓이고, 펼친 줄은 버튼의 오른쪽 아래에 붙어 게임 영역 위에 겹쳐 뜨므로 헤더 행의 높이를 바꾸지 않는다.
 
@@ -121,8 +121,8 @@ export default function GameMenu({ game, account, accountState, onQuests, onAchi
       badges: questBadges(clearsLeft), alerts: 0, lock: null, onOpen: onQuests },
     guild: { key: 'guild', label: '길드', name: guildMenuLabel(guild.guild), glyph: 'flag',
       badges: guildBadges, alerts: guildRequests, lock: null, onOpen: onGuild },
-    friends: { key: 'friends', label: '소셜', glyph: 'people',
-      name: friendRequests > 0 ? `소셜, 받은 친구 요청 ${friendRequests}개` : '소셜',
+    friends: { key: 'friends', label: '친구', glyph: 'people',
+      name: friendRequests > 0 ? `친구, 받은 친구 요청 ${friendRequests}개` : '친구',
       badges: friendRequests > 0 ? [{ tone: 'danger', count: friendRequests }] : [], alerts: friendRequests, lock: null, onOpen: onFriends },
     mailbox: { key: 'mailbox', label: '우편함', glyph: 'letter',
       name: mailbox.pending > 0 ? `우편함, 받지 않은 우편 ${mailbox.pending}통` : '우편함',

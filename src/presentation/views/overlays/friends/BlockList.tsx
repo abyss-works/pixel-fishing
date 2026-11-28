@@ -11,7 +11,7 @@ import DataTable from '../../../ui/DataTable';
 import Note from '../../../ui/Note';
 import { SOCIAL_CELL, SOCIAL_HEAD } from './socialTable';
 
-// 소셜 창의 차단 탭: 내가 차단한 사람 표와 행 끝의 해제. 차단은 플레이어 정보 창에서 한다.
+// 친구 창의 차단 탭: 내가 차단한 사람 표와 행 끝의 해제. 차단은 플레이어 정보 창에서 한다.
 const ERROR_TEXT: Record<ChatActionError, string> = {
   guest: GUEST_LOCK_TEXT,
   missing: '대상을 찾을 수 없어요.',
