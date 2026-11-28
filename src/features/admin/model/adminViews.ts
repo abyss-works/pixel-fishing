@@ -1,4 +1,5 @@
 import { BOATS, boatNameOf } from '../../../game/content/boats';
+import { boatFameGateOf } from '../../../game/rules/rules';
 import type {
   AdminEconomyRow, AdminEventRow, AdminSpamFlagRow, AdminUserAggregates, AdminUserRow,
 } from './types';
@@ -83,11 +84,9 @@ export function selectProgressionDashboard(
 ): ProgressionDashboard {
   const stalled: ProgressionDashboard['stalled'] = [];
   for (const user of users) {
-    const next = BOATS.find(boat => boat.tier === (user.boat ?? 0) + 1);
-    if (!next) continue;
-    const fame = adminNumber(user.fame);
-    if (!(fame < next.fameReq)) continue;
-    stalled.push({ user, next, deficit: next.fameReq - fame });
+    const gate = boatFameGateOf(user.boat ?? 0, adminNumber(user.fame));
+    if (!gate) continue;
+    stalled.push({ user, next: gate.next, deficit: gate.deficit });
   }
   stalled.sort((a, b) => b.deficit - a.deficit);
 

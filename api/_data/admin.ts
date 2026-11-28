@@ -18,6 +18,7 @@ import type { SpotId } from '../../src/game/content/spots.js';
 import { HATS, hatById } from '../../src/game/content/wardrobe.js';
 import { ZONES, zoneById } from '../../src/game/content/zones.js';
 import type { ZoneId } from '../../src/game/content/zones.js';
+import { boatFameGateOf, canEnterZone } from '../../src/game/rules/rules.js';
 import type { LiveOnline } from '../_server/live.js';
 import { deriveAchievements } from './achievements.js';
 import { uuidArray } from './json.js';
@@ -767,18 +768,15 @@ export function computeUserAggregates(
     }
 
     for (const zone of OPEN_WORLD_ZONE_UNLOCKS) {
-      if (boatTier >= zone.entryBoat) {
+      if (canEnterZone(boatTier, zone.id)) {
         zoneCounts.set(zone.id, (zoneCounts.get(zone.id) ?? 0) + 1);
       }
     }
 
-    const nextBoat = BOATS.find(boat => boat.tier === boatTier + 1);
-    if (nextBoat) {
-      const fame = numOrNaN(row.fame);
-      if (fame < nextBoat.fameReq) {
-        stalledTotal++;
-        stalledCounts.set(nextBoat.tier, (stalledCounts.get(nextBoat.tier) ?? 0) + 1);
-      }
+    const gate = boatFameGateOf(boatTier, numOrNaN(row.fame));
+    if (gate) {
+      stalledTotal++;
+      stalledCounts.set(gate.next.tier, (stalledCounts.get(gate.next.tier) ?? 0) + 1);
     }
   }
 

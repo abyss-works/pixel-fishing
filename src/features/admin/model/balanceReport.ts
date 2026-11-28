@@ -11,6 +11,7 @@
 import { SPOTS, drawRows } from '../../../game/rules/logic';
 import type { DrawOptions, RarityId } from '../../../game/rules/logic';
 import type { SpotId } from '../../../game/content/spots';
+import { JUDGMENT_MULT } from '../../../game/rules/balance';
 import { idleDialsOf } from '../../../game/rules/power';
 import { famePerCatchDay, goldPerCatchDay, spotAxisHourlyGold } from '../../../game/rules/balanceEv';
 
@@ -28,9 +29,9 @@ export const EV_AXES: readonly EvAxisDef[] = [
   { key: 'normal', label: '노 어드밴티지', short: '무판정', hint: '수동 낚시 — 타이밍 바를 존 밖에서 끊는다(스페이스꾹). 다이얼 없음.',
     options: () => ({}) },
   { key: 'good', label: 'GOOD', short: 'GOOD', hint: '노란 존 — 일반 예산 ÷1.6.',
-    options: () => ({ rareMult: 1.6 }) },
+    options: () => ({ rareMult: JUDGMENT_MULT.good }) },
   { key: 'perfect', label: 'PERFECT', short: 'PERFECT', hint: '빨간 존 — 일반 예산 ÷2.0.',
-    options: () => ({ rareMult: 2.0 }) },
+    options: () => ({ rareMult: JUDGMENT_MULT.perfect }) },
   { key: 'idleBest', label: '방치 플래토', short: '방치↓', hint: '방치 판정, 방치 배수가 하한에 닿은 레벨 — 일반 예산 × 하한 배수.',
     options: spot => ({ commonMult: idleDialsOf(spot).plateau }) },
   { key: 'idleWorst', label: '방치 진입', short: '방치↑', hint: '방치 판정, 요구 파워를 처음 채운 레벨 — 일반 예산 × 진입 배수.',
