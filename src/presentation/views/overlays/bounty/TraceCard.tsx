@@ -1,14 +1,14 @@
 // 흔적 카드 — 바다 HUD 오른쪽 열(접속·미끼 칩 위)에 뜨는 네임드 흔적. 자리와 폭은 HUD 배치가 정한다.
 // 조우로 받은 도전권이 남아 있는 동안 남은 시간·추적 버튼을 보인다.
 // 의뢰 구역 밖에서는 기본 테두리로 낮추고 구역 이름·남은 시간과 추적 조건을 카드 본문에 바로 보인다.
-// 토벌을 마치면 수배판에서 보상을 받으라는 안내만 남긴다.
+// 흔적만 맡는다. 토벌을 마친 보상 대기는 받을 보상 카드가 보인다.
 import { useBounty } from '../../../../features/bounty/service/useBounty';
 import { selectTraceCard } from '../../../../features/bounty/model/trace';
 import { useNow } from '../../../../features/gameplay/service/useGameTime';
 import { useSpotState } from '../../../../features/travel/service/useSpotState';
 import Button from '../../../ui/Button';
 import PixelIcon from '../../../ui/PixelIcon';
-import { fmtMinutes, josa } from '../../../ui/format';
+import { fmtMinutes } from '../../../ui/format';
 import HudPanel from '../../../ui/hud/HudPanel';
 import HudRows from '../../../ui/hud/HudRows';
 import { STACK_OMIT_CLASS } from '../../../ui/hud/stackTier';
@@ -35,15 +35,6 @@ export default function TraceCard({ onTrack }: {
   const card = selectTraceCard(snap, zone, nowMs);
   if (!card) return null;
 
-  if (card.done) {
-    const name = card.named.name;
-    return (
-      <HudPanel tone="gold" className={CARD} role="status" aria-label="토벌">
-        <TraceHead label="토벌" />
-        <span><b className="text-named">{name}</b>{josa(name, '을/를').slice(name.length)} 토벌했어요. {card.zoneName}의 수배판에서 보상을 받아 주세요.</span>
-      </HudPanel>
-    );
-  }
   if (!card.here) {
     return (
       <HudPanel className={CARD} role="status" aria-label="흔적">

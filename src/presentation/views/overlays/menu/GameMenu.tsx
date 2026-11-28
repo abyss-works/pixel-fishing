@@ -1,19 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { useFriends } from '../../../../features/friends/service/useFriends';
 import { useGuild } from '../../../../features/guild/service/useGuild';
-import type { ArtifactHolder } from '../../../../game/rules/artifactLevel';
 import type { GameState } from '../../../../game/rules/logic';
-import { clearsStatus } from '../../../../features/bounty/model/panel';
-import { useBounty } from '../../../../features/bounty/service/useBounty';
-import { menuGroups, guildMenuBadges, guildMenuLabel, questBadges, questMenuLabel } from '../../../../features/display/model/menuEntries';
+import { menuGroups, menuMarkName, menuMarks } from '../../../../features/display/model/menuEntries';
 import { sendNotice } from '../../../../features/display/model/toastPolicy';
-import { claimableCount } from '../../../../features/achievement/model/achievements';
-import type { MenuKey } from '../../../../features/display/model/menuEntries';
+import { useRewardsDue } from '../../../../features/display/service/useRewardsDue';
+import type { MenuKey, MenuMark } from '../../../../features/display/model/menuEntries';
 import { guestLock } from '../../../../features/display/model/menuLock';
 import type { AccountLockState } from '../../../../features/display/model/menuLock';
 import { useMailbox } from '../../../../features/mailbox/service/useMailbox';
-import CountBadge from '../../../ui/CountBadge';
-import type { CountBadgeTone } from '../../../ui/CountBadge';
+import { MarkBorder, MarkDot } from '../../../ui/AttentionMark';
 import { LockIcon } from '../../../ui/Locked';
 import MenuList from '../../../ui/MenuList';
 import type { Notify } from '../../../ui/hud/messageFeed';
@@ -24,12 +20,13 @@ import { HOTKEY_TIER, hasModifier, useKeyScope } from '../../../ui/hotkeys';
 import PixelIcon from '../../../ui/PixelIcon';
 import type { GlyphId } from '../../../ui/PixelIcon';
 
-// 게임 메뉴 — 햄버거 버튼 하나. PC 레이아웃은 헤더 단계가 크기를 정하는 메뉴 버튼(HudMenuButton, 60px 또는 두 행 단계 40px), 모바일 레이아웃은 40px 메뉴 버튼(MobileHudMenuButton)이다. 누르면 아래로 의뢰, 업적, 운세, 길드, 친구, 우편함 줄이 펼쳐진다(순서는 menuKeys).
-// 줄은 라벨이 왼쪽, 아이콘이 오른쪽이고, 할 일이 있으면 라벨 옆에 수 배지를 붙인다. 의뢰 줄은 일반(노랑), 네임드(보라) 순으로 오늘 남은 클리어를 배지로 보인다.
-// 접힌 상태에서는 새 알림(친구의 받은 요청, 우편함의 받지 않은 우편, 길드의 대기 가입 신청)이 있으면 버튼 모서리에 빨간 점을 찍는다. 의뢰 배지와 개인 강화 포인트 배지는 점을 켜지 않는다.
+// 게임 메뉴 — 햄버거 버튼 하나. PC 레이아웃은 헤더 단계가 크기를 정하는 메뉴 버튼(HudMenuButton, 60px 또는 두 행 단계 40px), 모바일 레이아웃은 40px 메뉴 버튼(MobileHudMenuButton)이다. 누르면 아래로 업적, 의뢰, 운세, 길드, 친구, 우편함 줄이 펼쳐진다(순서는 menuKeys).
+// 줄은 라벨이 왼쪽, 아이콘이 오른쪽이다. 글자 배지는 붙이지 않고, 켜진 표식(menuMarks)이 줄 안에서 자리를 차지하지 않는 점과 테두리로 보인다.
+// 받을 보상이 있는 의뢰와 업적 줄은 금색 테두리, 읽지 않은 우편이 있는 우편함 줄은 빨간 점, 그 밖의 강조(받은 친구 요청, 길드의 대기 가입 신청과 남은 개인 강화 포인트)는 금색 점이다.
+// 접힌 상태에서는 표식이 있으면 버튼 모서리에 점을 찍는다. 빨간 점과 금색 점이 함께 켜질 상태이면 빨간 점만 보인다.
 // 입구마다 보이는 조건: 의뢰, 업적, 운세는 늘 보이고, 길드와 친구는 계정 유저만 열며, 우편함은 클라우드 모드에서만 보인다.
 // 게스트 잠금을 적용하는 게스트에게는 의뢰, 업적, 길드, 친구, 우편함 다섯 줄이 자리 그대로 잠긴 줄(공용 잠금)로 보이고, 눌러도 창이 열리지 않으며 잠금 줄이 툴팁으로 열린다. 운세 줄은 열려 있어 오늘의 운세와 잠금 안내를 볼 수 있다.
-// 잠긴 줄에는 배지와 알림 점이 없다.
+// 잠긴 줄에는 표식이 없다.
 // 자리는 헤더(HudHeader)가 정한다. 두 레이아웃 모두 헤더 오른쪽 끝에 놓이고, 펼친 줄은 버튼의 오른쪽 아래에 붙어 게임 영역 위에 겹쳐 뜨므로 헤더 행의 높이를 바꾸지 않는다.
 
 interface Entry {
@@ -38,10 +35,8 @@ interface Entry {
   /** 줄의 접근성 이름 */
   name: string;
   glyph: GlyphId;
-  /** 줄에 붙는 배지 - 의뢰·길드는 종류별 최대 두 개, 나머지는 새 알림 수 하나 */
-  badges: { tone: CountBadgeTone; count: number }[];
-  /** 메뉴 버튼의 새 알림 점을 켜는 수 */
-  alerts: number;
+  /** 줄에 켜진 표식 */
+  mark: MenuMark | undefined;
   /** 게스트 잠금 줄. 있으면 잠긴 줄이다 */
   lock: readonly string[] | null;
   onOpen: () => void;
@@ -60,8 +55,8 @@ function GameMenuEscScope({ onClose }: { onClose: () => void }) {
 }
 
 export default function GameMenu({ game, account, accountState, onQuests, onAchievements, onFortune, onRanking, onGuild, onFriends, onMailbox, setToast }: {
-  /** 남은 클리어 횟수의 한도와 업적 상태를 읽는 게임 상태 */
-  game: ArtifactHolder & GameState;
+  /** 업적 상태를 읽는 게임 상태 */
+  game: GameState;
   account: string | null;
   /** 잠금 판정에 쓰는 계정 상태 */
   accountState: AccountLockState;
@@ -80,8 +75,7 @@ export default function GameMenu({ game, account, accountState, onQuests, onAchi
   const guild = useGuild(account !== null);
   const friends = useFriends(account !== null);
   const mailbox = useMailbox();
-  const { snap } = useBounty();
-  const clearsLeft = clearsStatus(game, snap).left;
+  const rewards = useRewardsDue(game, accountState);
   const { mails, takeLoginNotice } = mailbox;
 
   // 접속한 계정의 첫 조회에서 받지 않은 우편이 있으면 한 번 안내만 띄운다(열어 보는 것은 플레이어가 한다)
@@ -108,31 +102,25 @@ export default function GameMenu({ game, account, accountState, onQuests, onAchi
   }, [open]);
 
   const friendRequests = friends.groups?.incoming.length ?? 0;
-  const guildBadges = guildMenuBadges(guild.guild);
-  const guildRequests = guild.guild?.role === 'leader' ? guild.guild.requests.length : 0;
-  const claimable = claimableCount(game);
+  const marks = menuMarks({ lines: rewards.lines, friendRequests, guild: guild.guild, accountState });
+  const entry = (key: MenuKey, label: string, glyph: GlyphId, onOpen: () => void): Entry => {
+    const mark = marks.items[key];
+    return { key, label, name: menuMarkName(label, mark), glyph, mark, lock: null, onOpen };
+  };
   const byKey: Record<MenuKey, Entry> = {
-    fortune: { key: 'fortune', label: '운세', name: '운세', glyph: 'sparkle', badges: [], alerts: 0, lock: null, onOpen: onFortune },
-    ranking: { key: 'ranking', label: '랭킹', name: '랭킹', glyph: 'crown', badges: [], alerts: 0, lock: null, onOpen: onRanking },
-    achievements: { key: 'achievements', label: '업적',
-      name: claimable > 0 ? `업적, 받을 수 있는 업적 ${claimable}개` : '업적',
-      glyph: 'star', badges: claimable > 0 ? [{ tone: 'gold', count: claimable }] : [], alerts: claimable, lock: null, onOpen: onAchievements },
-    quests: { key: 'quests', label: '의뢰', name: questMenuLabel(clearsLeft), glyph: 'book',
-      badges: questBadges(clearsLeft), alerts: 0, lock: null, onOpen: onQuests },
-    guild: { key: 'guild', label: '길드', name: guildMenuLabel(guild.guild), glyph: 'flag',
-      badges: guildBadges, alerts: guildRequests, lock: null, onOpen: onGuild },
-    friends: { key: 'friends', label: '친구', glyph: 'people',
-      name: friendRequests > 0 ? `친구, 받은 친구 요청 ${friendRequests}개` : '친구',
-      badges: friendRequests > 0 ? [{ tone: 'danger', count: friendRequests }] : [], alerts: friendRequests, lock: null, onOpen: onFriends },
-    mailbox: { key: 'mailbox', label: '우편함', glyph: 'letter',
-      name: mailbox.pending > 0 ? `우편함, 받지 않은 우편 ${mailbox.pending}통` : '우편함',
-      badges: mailbox.pending > 0 ? [{ tone: 'danger', count: mailbox.pending }] : [], alerts: mailbox.pending, lock: null, onOpen: onMailbox },
+    fortune: entry('fortune', '운세', 'sparkle', onFortune),
+    ranking: entry('ranking', '랭킹', 'crown', onRanking),
+    achievements: entry('achievements', '업적', 'star', onAchievements),
+    quests: entry('quests', '의뢰', 'book', onQuests),
+    guild: entry('guild', '길드', 'flag', onGuild),
+    friends: entry('friends', '친구', 'people', onFriends),
+    mailbox: entry('mailbox', '우편함', 'letter', onMailbox),
   };
   const liveAvailable = !mailbox.offline;
   const resolveEntry = (key: MenuKey): Entry => {
     const lock = guestLock(key, accountState);
-    // 잠긴 줄은 알릴 것이 없다. 접근성 이름도 배지 없이 라벨만 쓴다
-    return lock ? { ...byKey[key], name: byKey[key].label, badges: [], alerts: 0, lock } : byKey[key];
+    // 잠긴 줄은 알릴 것이 없다. 접근성 이름도 표식 없이 라벨만 쓴다
+    return lock ? { ...byKey[key], name: byKey[key].label, mark: undefined, lock } : byKey[key];
   };
   const groups = menuGroups({
     ranking: liveAvailable,
@@ -144,16 +132,15 @@ export default function GameMenu({ game, account, accountState, onQuests, onAchi
     label: group.label,
     entries: group.keys.map(resolveEntry),
   }));
-  const alert = groups.some(g => g.entries.some(e => e.alerts > 0));
   const toggle = () => setOpen(v => !v);
-  const label = `메뉴 ${open ? '닫기' : '열기'}${alert ? ', 새 알림 있음' : ''}`;
+  const label = `메뉴 ${open ? '닫기' : '열기'}${marks.button ? ', 새 알림 있음' : ''}`;
 
   return (
     <div ref={root} className="relative flex flex-col items-end gap-1">
       {mobile ? (
-        <MobileHudMenuButton open={open} alert={alert} onClick={toggle} aria-expanded={open} aria-haspopup="menu" aria-label={label} />
+        <MobileHudMenuButton open={open} mark={marks.button} onClick={toggle} aria-expanded={open} aria-haspopup="menu" aria-label={label} />
       ) : (
-        <HudMenuButton open={open} alert={alert} onClick={toggle} aria-expanded={open} aria-haspopup="menu" aria-label={label} />
+        <HudMenuButton open={open} mark={marks.button} onClick={toggle} aria-expanded={open} aria-haspopup="menu" aria-label={label} />
       )}
       {open && (
         <>
@@ -169,12 +156,13 @@ export default function GameMenu({ game, account, accountState, onQuests, onAchi
                 lock: e.lock ?? undefined,
                 onSelect: () => { setOpen(false); e.onOpen(); },
                 content: (
-                  <span className="grid w-full grid-cols-[1fr_auto_20px] items-center gap-2.5 h-9 px-2 text-sm">
+                  <span className="relative grid w-full grid-cols-[1fr_auto_20px] items-center gap-2.5 h-9 px-2 text-sm">
                     <span>{e.label}</span>
-                    <span className="flex items-center gap-1">
-                      {e.lock ? <LockIcon /> : e.badges.map(b => <CountBadge key={b.tone} tone={b.tone} count={b.count} />)}
-                    </span>
+                    <span className="flex items-center gap-1">{e.lock && <LockIcon />}</span>
                     <PixelIcon glyph={e.glyph} size={16} className="text-text-dim" />
+                    {e.mark === 'reward' && <MarkBorder motion="blink" />}
+                    {e.mark === 'mail' && <MarkDot tone="danger" motion="sparkle" />}
+                    {e.mark === 'accent' && <MarkDot tone="gold" />}
                   </span>
                 ),
               })),

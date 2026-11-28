@@ -65,6 +65,8 @@ export interface QuestInfoData {
 
 const PORTS = Object.keys(BOUNTY_PORT_ZONE) as BountyPort[];
 const portName = (port: BountyPort): string => BASE_PACKS[port].name;
+/** 의뢰 구역의 수배판이 있는 항구 이름. 수배 구역은 모두 창구 항구가 있다 */
+export const boardPortNameOf = (zone: BountyZone): string => portName(portOfZone(zone)!);
 // 수배판이 없는 구역이면 항구 이름 없이 "수배판"만 보인다
 const finishAtOf = (zone: BountyZone): string => {
   const port = portOfZone(zone);

@@ -20,11 +20,14 @@ describe('메뉴 버튼', () => {
     expect(cls).toContain('pf-notch');
   });
 
-  it('알림 점은 접힌 동안에만 보인다', () => {
-    const { rerender, container } = render(<HudMenuButton alert aria-label="메뉴 열기" />);
-    expect(container.querySelector('.bg-danger')).not.toBeNull();
-    rerender(<HudMenuButton alert open aria-label="메뉴 닫기" />);
-    expect(container.querySelector('.bg-danger')).toBeNull();
+  it('표식 점은 접힌 동안에만 보이고 종류를 구분한다', () => {
+    const { rerender, container } = render(<HudMenuButton mark="mail" aria-label="메뉴 열기" />);
+    expect(container.querySelector('[data-mark="danger"]')).not.toBeNull();
+    rerender(<HudMenuButton mark="accent" aria-label="메뉴 열기" />);
+    expect(container.querySelector('[data-mark="gold"]')).not.toBeNull();
+    expect(container.querySelector('[data-mark="danger"]')).toBeNull();
+    rerender(<HudMenuButton mark="accent" open aria-label="메뉴 닫기" />);
+    expect(container.querySelector('[data-mark]')).toBeNull();
   });
 
   it('내부 하단에 메뉴 라벨을 표시한다', () => {

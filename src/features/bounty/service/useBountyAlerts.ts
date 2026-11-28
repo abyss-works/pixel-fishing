@@ -24,7 +24,7 @@ export function useBountyAlerts(notify: NoticeSink): void {
       if (oldProgress !== undefined && oldProgress < quest.count && row.progress >= quest.count) {
         sendNotice(notify, {
           kind: 'bounty.questCompletable',
-          text: `${questLabel(quest)} 목표를 달성했어요! 수배판에서 보상을 받아 보세요.`,
+          text: `${questLabel(quest)} 목표를 달성했어요! 수배판에서 보상을 받아 주세요.`,
           toastText: '의뢰 목표를 달성했어요!',
         });
       }

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { NO_GUILD_EFFECTS } from '../../../game/rules/guild';
 import type { GuildInfo } from '../../guild/model/guild';
-import { guildMenuBadges, guildMenuLabel, menuGroups, menuKeys, questBadges, questMenuLabel } from './menuEntries';
+import { menuGroups, menuKeys, menuMarks, menuMarkName } from './menuEntries';
+import type { RewardLine } from './rewardsDue';
 
 describe('메뉴 줄 항목 순서 및 그룹', () => {
   it('상태(운세·랭킹), 활동(업적·의뢰), 소통(길드·친구·우편함) 순서이고 운세·업적·의뢰는 늘 있다', () => {
@@ -24,32 +25,9 @@ describe('메뉴 줄 항목 순서 및 그룹', () => {
   });
 });
 
-describe('의뢰 줄 배지', () => {
-  it('일반은 노랑(gold), 네임드는 네임드(named)이고 오늘 남은 횟수를 그대로 쓴다', () => {
-    expect(questBadges({ general: 3, named: 1 })).toEqual([
-      { tone: 'gold', count: 3 }, { tone: 'named', count: 1 },
-    ]);
-  });
-
-  it('남은 횟수가 0인 종류의 배지는 그리지 않는다', () => {
-    expect(questBadges({ general: 0, named: 1 })).toEqual([{ tone: 'named', count: 1 }]);
-    expect(questBadges({ general: 2, named: 0 })).toEqual([{ tone: 'gold', count: 2 }]);
-    expect(questBadges({ general: 0, named: 0 })).toEqual([]);
-  });
-
-  it('남은 횟수를 모르면(불러오는 중, 오프라인) 배지가 없다', () => {
-    expect(questBadges(null)).toEqual([]);
-  });
-
-  it('접근성 이름은 배지가 있을 때만 남은 클리어를 싣는다', () => {
-    expect(questMenuLabel({ general: 3, named: 0 })).toBe('의뢰, 오늘 남은 클리어 일반 3');
-    expect(questMenuLabel({ general: 3, named: 1 })).toBe('의뢰, 오늘 남은 클리어 일반 3 네임드 1');
-    expect(questMenuLabel({ general: 0, named: 0 })).toBe('의뢰');
-    expect(questMenuLabel(null)).toBe('의뢰');
-  });
-});
-
-describe('길드 줄 배지', () => {
+const line = (window: RewardLine['window']): RewardLine =>
+  ({ key: window, window, windowName: '', text: '', tip: ['', ''], count: 1 });
+describe('메뉴 표식', () => {
   const makeGuild = (over: Partial<GuildInfo> = {}): GuildInfo => ({
     id: 'g1',
     name: '새벽선단',
@@ -72,43 +50,64 @@ describe('길드 줄 배지', () => {
     ...over,
   });
 
-  it('길드 정보 없으면 배지가 없다', () => {
-    expect(guildMenuBadges(null)).toEqual([]);
-    expect(guildMenuLabel(null)).toBe('길드');
+  const base = { lines: [] as RewardLine[], friendRequests: 0, guild: null, accountState: 'account' as const };
+
+  it('알릴 것이 없으면 표식이 없다', () => {
+    expect(menuMarks(base)).toEqual({ items: {}, button: null });
   });
 
-  it('길드장에게 대기 중인 가입 신청이 있으면 danger 배지를 표시한다', () => {
-    const g = makeGuild({
-      requests: [{ uid: 'r1', nick: '산호', requestedAt: '2026-11-05T00:00:00.000Z' }],
-    });
-    expect(guildMenuBadges(g)).toEqual([{ tone: 'danger', count: 1 }]);
-    expect(guildMenuLabel(g)).toBe('길드, 가입 신청 1건');
+  it('받을 보상이 있는 의뢰와 업적 줄은 금색 테두리, 메뉴 버튼은 금색 점이다', () => {
+    expect(menuMarks({ ...base, lines: [line('quests')] })).toEqual({ items: { quests: 'reward' }, button: 'reward' });
+    expect(menuMarks({ ...base, lines: [line('achievements')] })).toEqual({ items: { achievements: 'reward' }, button: 'reward' });
   });
 
-  it('일반 길드원은 대기 신청 배지를 보지 않는다', () => {
-    const g = makeGuild({
-      role: 'member',
-      requests: [{ uid: 'r1', nick: '산호', requestedAt: '2026-11-05T00:00:00.000Z' }],
-    });
-    expect(guildMenuBadges(g)).toEqual([]);
-    expect(guildMenuLabel(g)).toBe('길드');
+  it('읽지 않은 우편은 우편함 줄과 메뉴 버튼에 빨간 점이다', () => {
+    expect(menuMarks({ ...base, lines: [line('mailbox')] })).toEqual({ items: { mailbox: 'mail' }, button: 'mail' });
   });
 
-  it('Lv.6 이상에서 남은 개인 강화 포인트가 있으면 guild 배지를 함께 표시한다', () => {
+  it('금색 점과 빨간 점이 함께 켜질 상태이면 메뉴 버튼은 빨간 점만 보이고 줄 표식은 그대로다', () => {
+    expect(menuMarks({ ...base, lines: [line('quests'), line('mailbox')] }))
+      .toEqual({ items: { quests: 'reward', mailbox: 'mail' }, button: 'mail' });
+  });
+
+  it('받을 보상과 그 밖의 강조가 함께면 메뉴 버튼은 받을 보상으로 보인다', () => {
+    expect(menuMarks({ ...base, lines: [line('quests')], friendRequests: 1 }).button).toBe('reward');
+  });
+
+  it('받은 친구 요청은 친구 줄과 메뉴 버튼에 금색 점이다', () => {
+    expect(menuMarks({ ...base, friendRequests: 2 })).toEqual({ items: { friends: 'accent' }, button: 'accent' });
+  });
+
+  it('길드장의 대기 가입 신청은 길드 줄과 메뉴 버튼에 금색 점이다', () => {
+    const g = makeGuild({ requests: [{ uid: 'r1', nick: '산호', requestedAt: '2026-11-05T00:00:00.000Z' }] });
+    expect(menuMarks({ ...base, guild: g })).toEqual({ items: { guild: 'accent' }, button: 'accent' });
+  });
+
+  it('일반 길드원의 대기 신청은 표식이 없다', () => {
+    const g = makeGuild({ role: 'member', requests: [{ uid: 'r1', nick: '산호', requestedAt: '2026-11-05T00:00:00.000Z' }] });
+    expect(menuMarks({ ...base, guild: g })).toEqual({ items: {}, button: null });
+  });
+
+  it('남은 개인 강화 포인트는 길드 줄에만 금색 점이고 메뉴 버튼은 켜지 않는다', () => {
     const g = makeGuild({
       growth: { level: 8, total: 550_000, floor: 550_000, next: 800_000 },
-      requests: [
-        { uid: 'r1', nick: '산호', requestedAt: '2026-11-05T00:00:00.000Z' },
-        { uid: 'r2', nick: '별빛', requestedAt: '2026-11-05T00:00:00.000Z' },
-      ],
       bonuses: [
         { id: 'sell', unlock: 1, rank: 5, enhanceRank: 1, totalRank: 6, cap: 5, pool: 0, next: null, effect: 0.12, nextEffect: 0.14, mine: 0 },
       ],
     });
-    expect(guildMenuBadges(g)).toEqual([
-      { tone: 'danger', count: 2 },
-      { tone: 'guild', count: 2 },
-    ]);
-    expect(guildMenuLabel(g)).toBe('길드, 가입 신청 2건, 개인 강화 포인트 2개');
+    expect(menuMarks({ ...base, guild: g })).toEqual({ items: { guild: 'accent' }, button: null });
+  });
+
+  it('잠긴 줄(게스트, 확인 실패)은 친구와 길드 표식을 켜지 않는다', () => {
+    const g = makeGuild({ requests: [{ uid: 'r1', nick: '산호', requestedAt: '2026-11-05T00:00:00.000Z' }] });
+    expect(menuMarks({ ...base, friendRequests: 1, guild: g, accountState: 'guest' }))
+      .toEqual({ items: {}, button: null });
+  });
+
+  it('접근성 이름은 표식이 있을 때 줄 이름 뒤에 상태를 싣는다', () => {
+    expect(menuMarkName('의뢰', 'reward')).toBe('의뢰, 받을 보상 있음');
+    expect(menuMarkName('우편함', 'mail')).toBe('우편함, 읽지 않은 우편 있음');
+    expect(menuMarkName('친구', 'accent')).toBe('친구, 새 알림 있음');
+    expect(menuMarkName('운세', undefined)).toBe('운세');
   });
 });
