@@ -154,6 +154,12 @@ describe('fieldFxFrame', () => {
     expect(fieldFxFrame('world', Date.now() + JUDGMENT_MS).judgment).toBeNull();
   });
 
+  it('가장 크게 점프는 점프가 끝난 뒤에도 홀드가 끝날 때까지 프레임에 남는다', () => {
+    requestFx(catchReq('catch.legendaryOrFirstVariant', Date.now(), { region: 'world', holdEndsAt: Date.now() + 2700 }));
+    expect(fieldFxFrame('world', Date.now() + 2000).localJumps[0]).toMatchObject({ intensity: 'largest', t: 2 });
+    expect(fieldFxFrame('world', Date.now() + 2700).localJumps).toEqual([]);
+  });
+
   it('필드가 작게로 낮춘 요청은 작게 강도 점프가 된다', () => {
     const unbind = bindFxEnvironment({ windowsOpen: () => true });
     requestFx(catchReq('catch.legendaryOrFirstVariant', Date.now(), { region: 'world' }));

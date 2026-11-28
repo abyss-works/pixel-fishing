@@ -29,7 +29,7 @@ export interface JumpFx {
   toY?: number;
   fishId: string;
   form?: FormId;
-  /** 점프 시작 후 경과 초(0 이상 ~ JUMP_S 미만) */
+  /** 점프 시작 후 경과 초. JUMP_S 이후에는 배 위치 피어오름만 그린다 */
   t: number;
   /** 효과 강도. 작게는 꼬리 스파크 없이 물고기만 그린다 */
   intensity: 'small' | 'large' | 'largest';
@@ -152,11 +152,50 @@ function drawJumpSparks(ctx: Ctx, jump: JumpFx, rarity: RarityId) {
   }
 }
 
+export const BLOOM_COUNT = 24;
+const BLOOM_SPAWN_S = 0.3;
+const BLOOM_LIFE_MIN_S = 0.9;
+const BLOOM_LIFE_SPAN_S = 0.5;
+const BLOOM_BLINK_S = 0.2;
+const BLOOM_BLINK_STEP_S = 0.05;
+/** 첫 입자가 나온 뒤 마지막 입자가 사라질 때까지 */
+export const BLOOM_TOTAL_S = BLOOM_SPAWN_S + BLOOM_LIFE_MIN_S + BLOOM_LIFE_SPAN_S;
+
+/** 입자 번호에서 0 이상 1 미만의 고정 값을 얻는다 */
+function bloomUnit(i: number, salt: number): number {
+  const v = Math.sin(i * 12.9898 + salt * 78.233) * 43758.5453;
+  return v - Math.floor(v);
+}
+
+/** 낚은 배 위치에서 피어오르는 금빛 입자. age는 배에 닿은 뒤 경과 초다. 이진 알파 정사각 입자를 끝에서 깜빡여 지운다 */
+export function goldBloomParticles(
+  age: number, x: number, y: number,
+): { x: number; y: number; size: number; color: string }[] {
+  const out: { x: number; y: number; size: number; color: string }[] = [];
+  for (let i = 0; i < BLOOM_COUNT; i++) {
+    const a = age - (i * BLOOM_SPAWN_S) / BLOOM_COUNT;
+    const life = BLOOM_LIFE_MIN_S + bloomUnit(i, 1) * BLOOM_LIFE_SPAN_S;
+    if (a < 0 || a >= life) continue;
+    if (life - a < BLOOM_BLINK_S && Math.floor(a / BLOOM_BLINK_STEP_S) % 2 === 1) continue;
+    out.push({
+      x: x + Math.round((bloomUnit(i, 2) - 0.5) * 18 + (bloomUnit(i, 3) - 0.5) * 8 * a),
+      y: y - 3 - Math.round((14 + bloomUnit(i, 4) * 12) * a),
+      size: bloomUnit(i, 5) < 0.3 ? 2 : 1,
+      color: bloomUnit(i, 6) < 0.25 ? '#fff8e1' : '#ffd54f',
+    });
+  }
+  return out;
+}
+
 /** 수면 물고기 점프 — 이륙 물보라와 목표 포물선 이동, 등급 꼬리 스파클을 포함한 단일 점프를 그린다 */
 export function drawFishJump(ctx: Ctx, jump: JumpFx, style: FishArtStyle = DEFAULT_FISH_ART_STYLE) {
-  if (jump.reducedMotion || jump.t < 0 || jump.t >= JUMP_S) return;
+  if (jump.reducedMotion || jump.t < 0) return;
   const fish = fishById(jump.fishId);
   if (!fish) return;
+  if (fish.rarity === 'legendary' && jump.intensity === 'largest' && jump.toX != null && jump.toY != null) {
+    for (const p of goldBloomParticles(jump.t - JUMP_S, jump.toX, jump.toY)) R(ctx, p.x, p.y, p.size, p.size, p.color);
+  }
+  if (jump.t >= JUMP_S) return;
 
   const hasTarget = jump.toX != null
     && jump.toY != null

@@ -62,7 +62,7 @@ export interface FxDirective {
   /** 지시 시점의 OS 동작 축소 판정. 렌더러는 판정하지 않고 이 값만 따른다 */
   reducedMotion: boolean;
   startAt: number;
-  /** 만료 벽시계 ms. 카드와 PiP는 홀드 종료, 필드 점프는 시작 + 점프 길이 */
+  /** 만료 벽시계 ms. 카드와 PiP, 가장 크게 필드 지시는 홀드 종료, 그 밖의 필드 지시는 시작 + 점프 길이 */
   endsAt: number;
   request: FxRequest;
 }
@@ -149,7 +149,7 @@ export function mediateFx(
       intensity,
       reducedMotion: env.reducedMotion,
       startAt: request.at,
-      endsAt: renderer === 'field' ? request.at + fieldMs : holdEndsAt,
+      endsAt: renderer === 'field' && intensity !== 'largest' ? request.at + fieldMs : holdEndsAt,
       request,
     });
   }

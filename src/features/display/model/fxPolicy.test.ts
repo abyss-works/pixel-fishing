@@ -89,6 +89,13 @@ describe('mediateFx', () => {
     expect(r.state.nextSeq).toBe(3);
   });
 
+  it('필드의 가장 크게 지시는 잡기 홀드가 끝날 때까지 유지되고 그보다 낮은 지시는 점프 길이만큼이다', () => {
+    const top = mediateFx(createFxMediatorState(), catchReq('catch.legendaryOrFirstVariant', 100), env());
+    expect(top.directives.find(d => d.renderer === 'field')?.endsAt).toBe(10_000);
+    const blocked = mediateFx(createFxMediatorState(), catchReq('catch.legendaryOrFirstVariant', 100), env({ windowsOpen: true }));
+    expect(blocked.directives.find(d => d.renderer === 'field')?.endsAt).toBe(100 + 900);
+  });
+
   it('차단 창이 떠 있으면 필드만 작게로 낮추고 카드와 PiP는 그대로 둔다', () => {
     const r = mediateFx(createFxMediatorState(), catchReq('catch.legendaryOrFirstVariant', 0), env({ windowsOpen: true }));
     expect(intensities(r)).toEqual({ 'catch-card': 'largest', field: 'small', pip: 'largest' });
