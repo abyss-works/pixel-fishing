@@ -605,6 +605,15 @@ export function selectEventChampionshipView(
 }
 
 const DAY_MS = 86_400_000;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function configEventDays(config?: Record<string, unknown> | null): string[] | null {
+  const rawDays = config?.days;
+  if (Array.isArray(rawDays) && rawDays.length > 0 && rawDays.every(d => typeof d === 'string' && DATE_RE.test(d))) {
+    return [...new Set(rawDays)].sort();
+  }
+  return null;
+}
 
 function enumerateEventDays(startsAt: string, endsAt: string): string[] | null {
   const startMs = Date.parse(startsAt);
@@ -634,7 +643,7 @@ export function selectEventDrawView(
   const stateDays = state?.days ?? [];
   const dayMap = new Map<string, EventLuckDayStamp>();
   for (const d of stateDays) dayMap.set(d.day, d);
-  const enumeratedDays = enumerateEventDays(ev.startsAt, ev.endsAt);
+  const enumeratedDays = configEventDays(ev.config) ?? enumerateEventDays(ev.startsAt, ev.endsAt);
   const mergedDays: readonly EventLuckDayStamp[] = enumeratedDays
     ? enumeratedDays.map(day => dayMap.get(day) ?? { day, kind: null, index: null, score: null })
     : stateDays;
@@ -646,7 +655,7 @@ export function selectEventDrawView(
     const status: EventDrawDayStatus =
       d.score !== null
         ? 'attended'
-        : currentDay !== null && d.day > currentDay
+        : currentDay !== null && d.day >= currentDay
           ? 'upcoming'
           : 'missed';
     return {

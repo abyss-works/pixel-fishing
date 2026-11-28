@@ -166,7 +166,8 @@ export async function consumeCoupon(
   code: string,
   uid: string,
   nowISO: string,
-): Promise<'ok' | 'used' | 'invalid'> {
+  guest = false,
+): Promise<'ok' | 'used' | 'invalid' | 'account-only'> {
   const { rows } = await tx.execute<{
     active: boolean;
     in_window: boolean;
@@ -183,6 +184,9 @@ export async function consumeCoupon(
   const row = rows[0];
   if (!row || !row.active || !row.in_window) return 'invalid';
 
+  const maxRedemptions = row.max_redemptions === null ? null : Number(row.max_redemptions);
+  if (guest && maxRedemptions !== null) return 'account-only';
+
   const counts = await tx.execute<{ total: number; mine: number }>(sql`select
       count(*)::int as total,
       count(*) filter (where user_id = ${uid}::uuid)::int as mine
@@ -190,7 +194,6 @@ export async function consumeCoupon(
     where code = ${code}`);
   const { total, mine } = counts.rows[0];
   const perAccountLimit = Number(row.per_account_limit);
-  const maxRedemptions = row.max_redemptions === null ? null : Number(row.max_redemptions);
 
   if (mine >= perAccountLimit) return 'used';
   if (maxRedemptions !== null && total >= maxRedemptions) return 'invalid';

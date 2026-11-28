@@ -326,4 +326,43 @@ describe('events 모델 셀렉터', () => {
     expect(fallbackView.days).toHaveLength(3);
     expect(fallbackView.days[2]).toMatchObject({ label: '12/3', status: 'upcoming', attended: false });
   });
+
+  it('selectEventDrawView는 당일 미출석 칸을 upcoming으로 분류하고 config.days를 우선 반영한다', () => {
+    const fiveDayEv: LiveEventSummary = {
+      ...EV_DRAW,
+      startsAt: '2026-11-30T19:00:00.000Z',
+      endsAt: '2026-12-05T19:00:00.000Z',
+    };
+    const midNow = '2026-12-03T12:00:00.000Z';
+    const todayUnattended = selectEventDrawView(fiveDayEv, {
+      ...SNAP.draw!,
+      days: [{ day: '2026-12-01', kind: 'grand-catch', index: 5, score: 97 }],
+    }, midNow);
+    expect(todayUnattended.days.map(d => [d.day, d.status])).toEqual([
+      ['2026-12-01', 'attended'],
+      ['2026-12-02', 'missed'],
+      ['2026-12-03', 'upcoming'],
+      ['2026-12-04', 'upcoming'],
+      ['2026-12-05', 'upcoming'],
+    ]);
+
+    const configuredView = selectEventDrawView({
+      ...fiveDayEv,
+      config: { days: ['2026-12-05', '2026-12-01', '2026-12-05', '2026-12-03'] },
+    }, {
+      ...SNAP.draw!,
+      days: [{ day: '2026-12-01', kind: 'grand-catch', index: 5, score: 97 }],
+    }, midNow);
+    expect(configuredView.days.map(d => [d.day, d.status])).toEqual([
+      ['2026-12-01', 'attended'],
+      ['2026-12-03', 'upcoming'],
+      ['2026-12-05', 'upcoming'],
+    ]);
+
+    const invalidConfigView = selectEventDrawView({
+      ...fiveDayEv,
+      config: { days: ['2026-12-01', 'not-a-date'] },
+    }, SNAP.draw, midNow);
+    expect(invalidConfigView.days).toHaveLength(5);
+  });
 });

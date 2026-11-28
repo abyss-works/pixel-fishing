@@ -23,8 +23,8 @@ import { migrate, newState } from '../src/game/rules/logic.js';
 import type { FishInstance, FormId, FormRecord, GameState, Judgment } from '../src/game/rules/logic.js';
 import {
   autoLockKey, buildCatchInfo, canFish, catchFameOf, decideCatchAutoLock, FISH, fishPool, formName, instanceFish,
-  evictionPriceRows, makeInstance, nextDexRec, pickEvict, priceOf, pruneAutoLockedIds, RARITY_ORDER, rodStats, timingPos,
-  matchBountyCatch, rollCatchExtras,
+  evictionPriceRows, makeInstance, nextDexRec, pickEvict, priceOf, pruneAutoLockedIds, RARITY_ORDER, redZoneCenter,
+  rodStats, timingPos, matchBountyCatch, rollCatchExtras,
 } from '../src/game/rules/logic.js';
 import type { Fish } from '../src/game/rules/logic.js';
 import {
@@ -681,7 +681,9 @@ async function route(req: Req, res: Res): Promise<void> {
   let dynamicCoupon: Coupon | null = null;
   let dynamicCouponMeta: DynamicCouponForUser | null = null;
   let consumeCode: ((tx: Executor) => Promise<boolean>) | null = null;
-  let consumeUnavailableReason: 'relief-invalid' | 'coupon-used' | 'coupon-invalid' = 'relief-invalid';
+  const consumeUnavailable: {
+    reason: 'relief-invalid' | 'coupon-used' | 'coupon-invalid' | 'account-only';
+  } = { reason: 'relief-invalid' };
 
   if (action.type === 'redeemCoupon' && typeof action.code === 'string') {
     const code = action.code.trim();
@@ -698,9 +700,10 @@ async function route(req: Req, res: Res): Promise<void> {
         dynamicCoupon = { gold: found.gold, items: found.items, desc: found.desc };
         dynamicCouponMeta = found;
         consumeCode = async tx => {
-          const verdict = await consumeCoupon(tx, code, uid, requestISO);
-          if (verdict === 'used') { consumeUnavailableReason = 'coupon-used'; return false; }
-          if (verdict === 'invalid') { consumeUnavailableReason = 'coupon-invalid'; return false; }
+          const verdict = await consumeCoupon(tx, code, uid, requestISO, user.email === null);
+          if (verdict === 'account-only') { consumeUnavailable.reason = 'account-only'; return false; }
+          if (verdict === 'used') { consumeUnavailable.reason = 'coupon-used'; return false; }
+          if (verdict === 'invalid') { consumeUnavailable.reason = 'coupon-invalid'; return false; }
           return true;
         };
       }
@@ -835,6 +838,7 @@ async function route(req: Req, res: Res): Promise<void> {
       guild: guildEffects,
       event: eventDeps,
       guest: user.email === null,
+      redZoneSeed: `${uid}:${Number(row.version)}`,
       ...(integrityEval ? { integrityModifier: integrityEval.modifier } : {}),
     };
     const actionState = action.type === 'redeemCoupon' && dynamicCouponMeta && dynamicCouponMeta.perAccountLimit > 1
@@ -1040,7 +1044,9 @@ async function route(req: Req, res: Res): Promise<void> {
     const consuming = consumeCode;
     const result = await step('db-write', { uid, action: action.type },
       () => commitConsumingCode(withTransaction, consuming, versionWrite, fragments));
-    if (result === 'unavailable') throw new ApiError(422, consumeUnavailableReason);
+    if (result === 'unavailable') {
+      throw new ApiError(consumeUnavailable.reason === 'account-only' ? 403 : 422, consumeUnavailable.reason);
+    }
     if (result === 'conflict') throw new ApiError(409, 'version-conflict');
   } else if (gated) {
     const { gate, unavailable } = gated;
@@ -1495,11 +1501,16 @@ export async function fastCatch(db: Executor, uid: string, row: StateRow, spot: 
   const released = goneFish.map(toReleased);
   const extracted = takenFish.map(toReleased);
   const pos = timingPos(biteElapsed, rodAxes(base).sweep.value);
+  const redWidth = pz.red / 100;
+  const redPos = judgmentIn !== 'auto'
+    ? redZoneCenter(`${uid}:${Number(row.version)}`, pz.yellow / 100, redWidth)
+    : null;
   const events: GameEvent[] = [{ type: 'catch', payload: {
     uid: inst.uid, fishId: fish.id, judgment, spot,
     size: info.size, form: info.form, isNew: info.isNew, isBig: info.isBig, fame: gainedFame,
     ...(drawn.byCeiling ? { pity: true } : {}),
     ...(pos !== null ? { pos } : {}),
+    ...(redPos !== null ? { redPos, redWidth } : {}),
     ...appliedSlots(base, now, judgmentIn),
   } }];
   if (goneFish.length > 0) {

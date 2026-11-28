@@ -9,7 +9,8 @@ import { AUTO_ENERGY_BOAT, ENERGY_ITEM_IDS, ENERGY_UNIT } from '../content/cooki
 import { BOATS, COUPONS, FISH, ITEM_CAP, WALK_BAG_CAP, newState } from './logic';
 import { REJECT_TEXT } from './rules';
 import { gameDayOf } from './time';
-import { rodAxes } from './stats';
+import { powerZones, rodAxes } from './stats';
+import { redZoneCenter } from './timing';
 import type { FishInstance, FormId, GameState } from './logic';
 
 // newUid는 결정적 목 — 개체 uid가 매 실행 달라지면 재현성 검증이 불가능하다
@@ -157,6 +158,45 @@ describe('catch', () => {
     );
     if (!out.ok) throw new Error(out.error);
     expect(out.events[0].payload).not.toHaveProperty('pos');
+  });
+
+  it('수동 캐치에 redZoneSeed가 주어지면 redPos와 redWidth를 catch 이벤트에 싣는다', () => {
+    const state = seed({ rod: 10 });
+    const redZoneSeed = 'user-1:7';
+    const pz = powerZones(state, 'pond');
+    const out = applyAction(
+      state,
+      { type: 'catch', spot: 'pond', judgment: 'perfect', biteElapsed: 700 },
+      deps({ redZoneSeed }),
+    );
+    if (!out.ok) throw new Error(out.error);
+    const payload = out.events[0].payload as { redPos?: number; redWidth?: number };
+    expect(payload.redPos).toBe(redZoneCenter(redZoneSeed, pz.yellow / 100, pz.red / 100));
+    expect(payload.redWidth).toBe(pz.red / 100);
+    expect(out.result).not.toHaveProperty('redPos');
+    expect(out.result).not.toHaveProperty('redWidth');
+  });
+
+  it('auto 캐치에는 redZoneSeed가 주어져도 redPos와 redWidth를 싣지 않는다', () => {
+    const out = applyAction(
+      seed({ rod: 10 }),
+      { type: 'catch', spot: 'pond', judgment: 'auto' },
+      deps({ redZoneSeed: 'user-1:7' }),
+    );
+    if (!out.ok) throw new Error(out.error);
+    expect(out.events[0].payload).not.toHaveProperty('redPos');
+    expect(out.events[0].payload).not.toHaveProperty('redWidth');
+  });
+
+  it('redZoneSeed가 없으면 수동 캐치에도 redPos와 redWidth를 싣지 않는다', () => {
+    const out = applyAction(
+      seed({ rod: 10 }),
+      { type: 'catch', spot: 'pond', judgment: 'normal' },
+      deps(),
+    );
+    if (!out.ok) throw new Error(out.error);
+    expect(out.events[0].payload).not.toHaveProperty('redPos');
+    expect(out.events[0].payload).not.toHaveProperty('redWidth');
   });
 
   it('NEW 판정은 폼별 — 일반을 잡았어도 변이 첫 캐치는 신규 (v0.3.3)', () => {

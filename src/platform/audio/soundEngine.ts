@@ -38,6 +38,7 @@ export interface SoundEngineDeps {
   fetchImpl?: typeof fetch;
   now?: () => number;
   isHidden?: () => boolean;
+  hasFocus?: () => boolean;
   initialSettings?: SoundSettings;
 }
 
@@ -58,6 +59,12 @@ function defaultCreateAudioContext(): AudioContext | null {
 
 function defaultIsHidden(): boolean {
   return typeof document !== 'undefined' && document.visibilityState === 'hidden';
+}
+
+function defaultHasFocus(): boolean {
+  return typeof document !== 'undefined' && typeof document.hasFocus === 'function'
+    ? document.hasFocus()
+    : true;
 }
 
 /**
@@ -94,12 +101,15 @@ export class SoundEngine {
   private readonly fetchImpl: typeof fetch | undefined;
   private readonly now: () => number;
   private readonly isHidden: () => boolean;
+  private readonly hasFocus: () => boolean;
 
   constructor(deps: SoundEngineDeps = {}) {
     this.createAudioContext = deps.createAudioContext ?? defaultCreateAudioContext;
     this.fetchImpl = deps.fetchImpl ?? (typeof fetch === 'function' ? fetch.bind(globalThis) : undefined);
     this.now = deps.now ?? (() => (typeof performance !== 'undefined' ? performance.now() : Date.now()));
     this.isHidden = deps.isHidden ?? defaultIsHidden;
+    this.hasFocus = deps.hasFocus ?? defaultHasFocus;
+    this.windowBlurred = !this.hasFocus();
     this.settings = deps.initialSettings ? { ...deps.initialSettings } : { ...getSoundSettings() };
     this.attachLifecycleListeners();
   }
