@@ -860,6 +860,19 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 10px;
   }
+  .pf-admin-master-detail {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 380px;
+    gap: 12px;
+    align-items: start;
+  }
+  .pf-admin-detail-sticky {
+    position: sticky;
+    top: 12px;
+  }
+  .pf-admin-master-detail .pf-admin-table-wrap.is-scroll {
+    max-height: min(68vh, 680px);
+  }
 
   .pf-admin-card {
     background: var(--inset-base);
@@ -938,6 +951,15 @@ button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; 
   }
   .pf-admin-queue-item.is-warn {
     border-left: 3px solid var(--c-gold);
+  }
+
+  @media (max-width: 1024px) {
+    .pf-admin-master-detail {
+      grid-template-columns: 1fr;
+    }
+    .pf-admin-detail-sticky {
+      position: static;
+    }
   }
 
   @media (max-width: 820px) {

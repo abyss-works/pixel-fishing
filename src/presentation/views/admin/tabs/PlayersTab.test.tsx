@@ -161,6 +161,31 @@ describe('플레이어 탭', () => {
     expect(within(dialog).queryByText('도감 ↔ 이벤트 대조')).toBeNull();
   });
 
+  it('플레이어 선택 시 마스터-디테일 분할이 열리고 닫기 클릭 시 사라진다', async () => {
+    const { container } = render(
+      <QueryProvider>
+        <AdminAuthCtx.Provider value={{ access: 'granted', uid: UID, role: 'admin', canViewEmail: true, showStaffBadge: false, setStaffBadge: async () => {} }}>
+          <AdminViewModeCtx.Provider value={{ viewMode: 'summary', setViewMode: () => {} }}>
+            <PlayersTab section="directory" onSection={() => {}} onCompose={mocks.compose} />
+          </AdminViewModeCtx.Provider>
+        </AdminAuthCtx.Provider>
+      </QueryProvider>,
+    );
+
+    const identity = await screen.findByText('바다친구(friend@example.com)');
+    expect(container.querySelector('.pf-admin-master-detail')).toBeNull();
+    expect(container.querySelector('.pf-admin-detail-sticky')).toBeNull();
+
+    fireEvent.click(identity);
+    expect(container.querySelector('.pf-admin-master-detail')).not.toBeNull();
+    const sticky = container.querySelector('.pf-admin-detail-sticky');
+    expect(sticky).not.toBeNull();
+
+    fireEvent.click(within(sticky as HTMLElement).getByRole('button', { name: '닫기' }));
+    expect(container.querySelector('.pf-admin-master-detail')).toBeNull();
+    expect(container.querySelector('.pf-admin-detail-sticky')).toBeNull();
+  });
+
   it('제재·무결성 구역 — 요약 보기에서 활성 제재와 무결성 단계 2열만, 상세 보기에서 이상치 표를 함께 그린다', async () => {
     show('sanctions', 'admin', 'summary');
     expect(await screen.findByRole('heading', { name: '활성 제재 현황' })).toBeInTheDocument();
