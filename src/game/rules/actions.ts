@@ -59,7 +59,7 @@ import type { DayPhase } from './time.js';
 import { NO_GUILD_EFFECTS } from './guild.js';
 import type { GuildEffects } from './guild.js';
 import { ensureFortune, totalLuckMultOf } from './fortune.js';
-import { timingPos } from './timing.js';
+import { redZoneCenter, timingPos } from './timing.js';
 
 export interface DebugStepInput {
   command: string;
@@ -154,6 +154,8 @@ export interface ActionDeps {
   guest?: boolean;
   /** 서버가 계정별로 계산해 공급하는 추첨 보정 최종 배수. 없으면 중립(1)이다 */
   integrityModifier?: number;
+  /** 수동 캐치 시 빨간 존 중심 계산에 쓰는 시드 — 주어지면 catch 이벤트에 redPos/redWidth를 기록한다 */
+  redZoneSeed?: string;
 }
 
 // 클라 연출용 부가 결과 — HTTP 경계를 넘으므로 직렬화 가능해야 한다 (Fish 객체 대신 id)
@@ -616,6 +618,10 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
       const released: ReleasedFish[] = gone.map(toReleased);
       const extracted: ReleasedFish[] = taken.map(toReleased);
       const pos = timingPos(action.biteElapsed, rodAxes(state).sweep.value);
+      const redWidth = pz.red / 100;
+      const redPos = judgment !== 'auto' && deps.redZoneSeed
+        ? redZoneCenter(deps.redZoneSeed, pz.yellow / 100, redWidth)
+        : null;
       const events: GameEvent[] = [{ type: 'catch', payload: {
         // uid를 남긴다 — 이벤트 스트림과 가방 개체를 잇는 유일한 연결고리 (감사·집계의 근거)
         // judgment는 강등 확정값 — 감사에서 "PERFECT 주장이 서버에서 살아남았나"를 보려면 이 값이다
@@ -623,6 +629,7 @@ function reduce(state: GameState, action: GameAction, deps: ActionDeps): ReduceO
         size: info.size, form: info.form, isNew: info.isNew, isBig: info.isBig, fame: gainedFame,
         ...(drawn.byCeiling ? { pity: true } : {}),
         ...(pos !== null ? { pos } : {}),
+        ...(redPos !== null ? { redPos, redWidth } : {}),
         // 걸린 슬롯(도시락=방치, 미끼=수동) — 집계가 읽는다. 적용 범위는 appliedSlots가 정한다
         ...appliedSlots(state, deps.now, action.judgment),
       } }];
