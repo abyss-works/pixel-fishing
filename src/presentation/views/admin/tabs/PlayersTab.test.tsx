@@ -161,6 +161,22 @@ describe('플레이어 탭', () => {
     expect(within(dialog).queryByText('도감 ↔ 이벤트 대조')).toBeNull();
   });
 
+  it('플레이어 선택 시 상세·조치 패널이 열리고 닫기 클릭 시 사라진다', async () => {
+    show('directory');
+
+    const identity = await screen.findByText('바다친구(friend@example.com)');
+    expect(screen.queryByRole('heading', { name: /플레이어 상세·조치/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: '닫기' })).toBeNull();
+
+    fireEvent.click(identity);
+    expect(screen.getByRole('heading', { name: /플레이어 상세·조치/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '전체 상세 모달' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '닫기' }));
+    expect(screen.queryByRole('heading', { name: /플레이어 상세·조치/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: '닫기' })).toBeNull();
+  });
+
   it('제재·무결성 구역 — 요약 보기에서 활성 제재와 무결성 단계 2열만, 상세 보기에서 이상치 표를 함께 그린다', async () => {
     show('sanctions', 'admin', 'summary');
     expect(await screen.findByRole('heading', { name: '활성 제재 현황' })).toBeInTheDocument();

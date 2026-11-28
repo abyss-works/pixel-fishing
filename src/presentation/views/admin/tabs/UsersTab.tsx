@@ -20,7 +20,7 @@ import { useAdminLive } from '../../../../features/admin/service/useAdminStats';
 import { useAdminUserActions } from '../../../../features/admin/service/useAdminUserActions';
 import type { AdminUserRow } from '../../../../features/admin/model/types';
 import { useAdminAuth } from '../../../../features/admin/service/accessContext';
-import { AdminCard, AdminSplit, AdminTableWrap, TabState } from '../layout';
+import { AdminCard, AdminTableWrap, TabState } from '../layout';
 import UserIdentity from '../UserIdentity';
 import { useAdminViewMode } from '../viewMode';
 import { boatNameOf } from '../../../../game/content/boats';
@@ -150,12 +150,8 @@ export default function UsersTab({ onCompose }: {
 
   const currentIntegrity = current ? integrityByUid.get(current.user_id.toLowerCase()) : undefined;
 
-  return (
-    <div className="flex flex-col gap-3">
-      <TabState loading={granted && loading} error={error} onRetry={refresh} />
-      {actionError && <Note tone="warn" className="my-0">{actionError}</Note>}
-
-      <AdminCard title="유저 명부" badge={<span className="text-2xs text-text-dim">{filtered.length}/{users.length}명</span>}>
+  const directoryCard = (
+    <AdminCard title="유저 명부" badge={<span className="text-2xs text-text-dim">{filtered.length}/{users.length}명</span>}>
         <div className="flex flex-wrap items-center gap-3">
           <TextInput
             value={query}
@@ -260,92 +256,102 @@ export default function UsersTab({ onCompose }: {
           </DataTable>
         </AdminTableWrap>
       </AdminCard>
+  );
 
-      {/* 표 바로 아래 인라인 2열 플레이어 상세·조치 패널 */}
-      {current && (
-        <AdminCard
-          title={
-            <span className="inline-flex flex-wrap items-center gap-2">
-              <span>플레이어 상세·조치</span>
-              <UserIdentity user={current} inline />
-            </span>
-          }
-          actions={
-            <div className="inline-flex items-center gap-1.5">
-              <Badge tone={canViewEmail ? 'accent' : 'dim'} size="xs">
-                {canViewEmail ? '관리자 열람' : '비식별 모드'}
-              </Badge>
-              <Button size="xs" variant="ghost" onClick={() => { setSelected(null); setModalOpen(false); }}>
-                닫기
-              </Button>
-            </div>
-          }
-        >
-          {actionMsg && <Note size="xs" className="my-0 text-accent">{actionMsg}</Note>}
-          <AdminSplit variant="2">
-            <Inset tone="deep" className="flex flex-col gap-3 p-3">
-              <div className="text-xs font-bold text-text">계정 요약 및 즉시 조치</div>
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                <span>골드: <strong className="pf-accent text-gold">{fmtNum(adminNumber(current.gold))}</strong></span>
-                <span>명성: <strong className="pf-accent">{fmtNum(adminNumber(current.fame))}</strong></span>
-                <span>배: <strong>{boatNameOf(current.boat ?? 0)}</strong></span>
-                <span>낚싯대: <strong>{current.rod ?? '—'}</strong></span>
-                <span>위치: <strong>{formatAdminLocation({ kind: current.location_kind, id: current.location_id })}</strong></span>
-                <span>플레이: <strong>{fmtDuration(current.total_session_sec)}</strong></span>
-                {viewMode === 'detail' && canViewEmail && current.email && (
-                  <span>이메일: <strong className="select-text">{current.email}</strong></span>
-                )}
-              </div>
-              <div className="flex flex-wrap items-center gap-1.5">
-                <Button size="sm" variant="accent" onClick={() => onCompose(current.user_id)}>
-                  우편 보내기
-                </Button>
-                <Button
-                  size="sm"
-                  variant={current.restricted === true ? 'ghost' : 'danger'}
-                  disabled={!granted || busyUid === current.user_id || current.restricted === null}
-                  onClick={() => void toggleRestrict(current)}
-                >
-                  {current.restricted === true ? '제재 해제' : '제재'}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={!granted || revokingUid === current.user_id}
-                  onClick={() => void revokeSessions(current)}
-                >
-                  세션 강제 종료
-                </Button>
-                <Button size="sm" variant="primary" onClick={() => setModalOpen(true)}>
-                  전체 상세 모달
-                </Button>
-              </div>
-            </Inset>
+  return (
+    <div className="flex flex-col gap-3">
+      <TabState loading={granted && loading} error={error} onRetry={refresh} />
+      {actionError && <Note tone="warn" className="my-0">{actionError}</Note>}
 
-            <Inset tone="deep" className="flex flex-col gap-2 p-3">
-              <div className="text-xs font-bold text-text">제재·무결성 상태</div>
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <span>제재 상태:</span>
-                <Badge tone={current.restricted === true ? 'danger' : 'dim'} size="xs">
-                  {current.restricted === true ? '제재 중' : '정상'}
-                </Badge>
-                <span>무결성 단계:</span>
-                <Badge tone={currentIntegrity ? 'gold' : 'dim'} size="xs">
-                  {currentIntegrity ? `단계 ${currentIntegrity.stage}` : '단계 0 (정상)'}
-                </Badge>
-                {currentIntegrity && (
-                  <span className="text-2xs text-text-dim">
-                    압력 {currentIntegrity.pressure.toFixed(2)} / 배율 {currentIntegrity.modifier !== null ? `×${currentIntegrity.modifier}` : '—'}
-                  </span>
-                )}
+      <div className={current ? 'pf-admin-master-detail' : undefined}>
+        {directoryCard}
+        {current && (
+          <div className="pf-admin-detail-sticky">
+            <AdminCard
+              title={
+                <span className="inline-flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="shrink-0">플레이어 상세·조치</span>
+                  <UserIdentity user={current} inline className="flex-wrap" />
+                </span>
+              }
+              actions={
+                <div className="inline-flex shrink-0 items-center gap-1.5">
+                  <Badge tone={canViewEmail ? 'accent' : 'dim'} size="xs">
+                    {canViewEmail ? '관리자 열람' : '비식별 모드'}
+                  </Badge>
+                  <Button size="xs" variant="ghost" onClick={() => { setSelected(null); setModalOpen(false); }}>
+                    닫기
+                  </Button>
+                </div>
+              }
+            >
+              {actionMsg && <Note size="xs" className="my-0 text-accent">{actionMsg}</Note>}
+              <div className="flex flex-col gap-2.5">
+                <Inset tone="deep" className="flex flex-col gap-3 p-3">
+                  <div className="text-xs font-bold text-text">계정 요약 및 즉시 조치</div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                    <span>골드: <strong className="pf-accent text-gold">{fmtNum(adminNumber(current.gold))}</strong></span>
+                    <span>명성: <strong className="pf-accent">{fmtNum(adminNumber(current.fame))}</strong></span>
+                    <span>배: <strong>{boatNameOf(current.boat ?? 0)}</strong></span>
+                    <span>낚싯대: <strong>{current.rod ?? '—'}</strong></span>
+                    <span>위치: <strong>{formatAdminLocation({ kind: current.location_kind, id: current.location_id })}</strong></span>
+                    <span>플레이: <strong>{fmtDuration(current.total_session_sec)}</strong></span>
+                    {viewMode === 'detail' && canViewEmail && current.email && (
+                      <span>이메일: <strong className="select-text">{current.email}</strong></span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Button size="sm" variant="accent" onClick={() => onCompose(current.user_id)}>
+                      우편 보내기
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={current.restricted === true ? 'ghost' : 'danger'}
+                      disabled={!granted || busyUid === current.user_id || current.restricted === null}
+                      onClick={() => void toggleRestrict(current)}
+                    >
+                      {current.restricted === true ? '제재 해제' : '제재'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={!granted || revokingUid === current.user_id}
+                      onClick={() => void revokeSessions(current)}
+                    >
+                      세션 강제 종료
+                    </Button>
+                    <Button size="sm" variant="primary" onClick={() => setModalOpen(true)}>
+                      전체 상세 모달
+                    </Button>
+                  </div>
+                </Inset>
+
+                <Inset tone="deep" className="flex flex-col gap-2 p-3">
+                  <div className="text-xs font-bold text-text">제재·무결성 상태</div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span>제재 상태:</span>
+                    <Badge tone={current.restricted === true ? 'danger' : 'dim'} size="xs">
+                      {current.restricted === true ? '제재 중' : '정상'}
+                    </Badge>
+                    <span>무결성 단계:</span>
+                    <Badge tone={currentIntegrity ? 'gold' : 'dim'} size="xs">
+                      {currentIntegrity ? `단계 ${currentIntegrity.stage}` : '단계 0 (정상)'}
+                    </Badge>
+                    {currentIntegrity && (
+                      <span className="text-2xs text-text-dim">
+                        압력 {currentIntegrity.pressure.toFixed(2)} / 배율 {currentIntegrity.modifier !== null ? `×${currentIntegrity.modifier}` : '—'}
+                      </span>
+                    )}
+                  </div>
+                  <Note size="2xs" className="my-0">
+                    기간별 제재 프리셋과 누적 이력은 추후 연동 예정이에요.
+                  </Note>
+                </Inset>
               </div>
-              <Note size="2xs" className="my-0">
-                기간별 제재 프리셋과 누적 이력은 추후 연동 예정이에요.
-              </Note>
-            </Inset>
-          </AdminSplit>
-        </AdminCard>
-      )}
+            </AdminCard>
+          </div>
+        )}
+      </div>
 
       {/* 전체 상세 모달은 칸 밖에 둔다 — [전체 상세 모달] 버튼으로 드릴다운 */}
       {modalOpen && current && (
