@@ -31,7 +31,7 @@ describe('밸런스 라이브 지표 구역', () => {
   it('조회 결과를 해역·배 이름과 함께 표로 옮긴다', () => {
     state.data = sample;
     render(<BalanceLiveSection granted />);
- expect(screen.getByText('태평양 연안')).toBeInTheDocument();
+    expect(screen.getByText('태평양 연안')).toBeInTheDocument();
     expect(screen.getByText('기록 없음')).toBeInTheDocument();
     expect(screen.getByText('6,165,488G')).toBeInTheDocument();
     expect(screen.getByText('—', { selector: 'span' })).toBeInTheDocument(); // PERFECT 비율 빈 값
