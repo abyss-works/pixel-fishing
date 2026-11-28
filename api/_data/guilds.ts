@@ -583,7 +583,7 @@ export async function joinByGuildId(withTransaction: Tx, uid: string, guildId: s
   Promise<JoinByGuildIdOutcome> {
   return withTransaction(async tx => {
     const { rows: [g] } = await tx.execute<{ id: string; name: string; join_mode: GuildJoinMode }>(sql`
-      select id::text as id, name, join_mode from public.guilds where id = ${guildId}`);
+      select id::text as id, name, join_mode from public.guilds where id = ${guildId} for update`);
     if (!g) return { ok: false, error: 'not-found' };
     return joinGuildTx(tx, uid, g, nowISO, 'code', 'not-found');
   });
@@ -599,7 +599,7 @@ export async function joinByCode(withTransaction: Tx, uid: string, code: string,
   Promise<JoinOutcome> {
   return withTransaction(async tx => {
     const { rows: [g] } = await tx.execute<{ id: string; name: string; join_mode: GuildJoinMode }>(sql`
-      select id::text as id, name, join_mode from public.guilds where code = ${code}`);
+      select id::text as id, name, join_mode from public.guilds where code = ${code} for update`);
     if (!g) return { ok: false, error: 'bad-code' };
     return joinGuildTx(tx, uid, g, nowISO, via, 'bad-code');
   });
