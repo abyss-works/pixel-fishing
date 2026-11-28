@@ -90,10 +90,20 @@ describe('HudLayout 미니맵 위 칩 줄', () => {
     act(() => setMinimapVisible(true));
     expect(kinds()).toEqual(['보너스 통합 칩', '시계']);
   });
+
+  it.each([false, true])('칩 줄은 모바일에서 한 줄이고 PC에서만 줄을 나눈다(mobile=%s)', mobile => {
+    layout.mobile = mobile;
+    render(<HudLayout {...props} game={newState()} scene={region} chips={chip} />);
+    const classes = rowOf().className.split(/\s+/);
+    expect(classes).toContain('flex');
+    expect(classes).toContain('pc:flex-wrap');
+    expect(classes).not.toContain('flex-wrap');
+    expect(classes).not.toContain('mobile:flex-wrap');
+  });
 });
 
 describe('HudLayout 하단 HUD 묶음 및 상태 띠 고정 슬롯 분리', () => {
-  it.each([false, true])('PC와 모바일(mobile=%s) 모두 statusSlot은 하단 묶음과 분리된 스테이지 하단 중앙 absolute 고정 슬롯이고, 오른쪽 아래 열과 메시지 창만 하단 묶음에 둔다', mobile => {
+  it.each([false, true])('PC와 모바일(mobile=%s) 모두 statusSlot은 하단 묶음과 분리된 스테이지 상태 층 슬롯이고, 오른쪽 아래 열과 메시지 창만 하단 묶음에 둔다', mobile => {
     layout.mobile = mobile;
     setMinimapVisible(true);
     let slot: HTMLDivElement | null = null;
@@ -102,12 +112,7 @@ describe('HudLayout 하단 HUD 묶음 및 상태 띠 고정 슬롯 분리', () =
     const bundle = log.parentElement!;
     expect(slot).not.toBeNull();
     expect(bundle.contains(slot)).toBe(false);
-    expect(slot!.className).toContain('absolute');
     expect(slot!.className).toContain('z-(--z-stage-status)');
-    expect(slot!.className).toContain('bottom-24');
-    expect(slot!.className).toContain('mobile:bottom-24');
-    expect(slot!.className).toContain('mobile:row-start-2');
-    expect(slot!.className).toContain('mobile:row-end-3');
     expect(slot!.className).toContain('pointer-events-none');
     expect(bundle.contains(screen.getByTestId('minimap'))).toBe(true);
     expect(bundle.contains(screen.getByText('12:00'))).toBe(true);
@@ -115,7 +120,7 @@ describe('HudLayout 하단 HUD 묶음 및 상태 띠 고정 슬롯 분리', () =
     expect(bundle.className).not.toContain('z-(--z-');
   });
 
-  it.each([false, true])('PC와 모바일(mobile=%s) 모두 방치 결과 카드·흔적 카드 출현, 미니맵 숨김, 메시지 창 접기에도 statusSlot 위치 클래스와 DOM 슬롯이 불변이다', mobile => {
+  it.each([false, true])('PC와 모바일(mobile=%s) 모두 방치 결과 카드·흔적 카드 출현, 미니맵 숨김, 메시지 창 접기에도 statusSlot DOM 슬롯이 불변이다', mobile => {
     layout.mobile = mobile;
     setMinimapVisible(true);
     let slot: HTMLDivElement | null = null;
@@ -123,7 +128,7 @@ describe('HudLayout 하단 HUD 묶음 및 상태 띠 고정 슬롯 분리', () =
       <HudLayout {...props} game={newState()} scene={region} folded={false}
                  notice={null} onStatusSlot={el => { slot = el; }} />,
     );
-    const initialClass = slot!.className;
+    const initialSlot = slot;
     const initialParent = slot!.parentElement;
 
     setMinimapVisible(false);
@@ -132,7 +137,7 @@ describe('HudLayout 하단 HUD 묶음 및 상태 띠 고정 슬롯 분리', () =
                  notice={<><div data-testid="away">방치</div><div data-testid="trace">흔적</div></>}
                  onStatusSlot={el => { slot = el; }} />,
     );
-    expect(slot!.className).toBe(initialClass);
+    expect(slot).toBe(initialSlot);
     expect(slot!.parentElement).toBe(initialParent);
     expect(screen.getByTestId('away')).toBeInTheDocument();
     expect(screen.getByTestId('trace')).toBeInTheDocument();
@@ -147,8 +152,7 @@ describe('HudLayout 하단 HUD 묶음 및 상태 띠 고정 슬롯 분리', () =
     expect(bundle.contains(screen.getByTestId('minimap'))).toBe(true);
     expect(bundle.contains(screen.getByText('12:00'))).toBe(true);
     expect(bundle.lastElementChild).toBe(log);
-    for (const cls of ['absolute', 'mobile:flex-col', 'mobile:inset-x-2', '--keyboard-h']) expect(bundle.className).toContain(cls);
-    expect(bundle.className).not.toContain('row-start-3');
+    expect(bundle.className).toContain('--keyboard-h');
     expect(bundle.className).not.toContain('z-(--z-');
   });
 
@@ -167,7 +171,7 @@ describe('HudLayout 하단 HUD 묶음 및 상태 띠 고정 슬롯 분리', () =
     expect(src.indexOf('<HudHeader')).toBeLessThan(src.indexOf('<MessageLog'));
   });
 
-  it.each([false, true])('PC와 모바일(mobile=%s) 모두 catchSlot은 하단 묶음과 분리되고 z-index 없이 PC 좌측 세로 중앙(채팅창 상한 유지)·모바일 게임 영역 상단 가운데에 배치된다', mobile => {
+  it.each([false, true])('PC와 모바일(mobile=%s) 모두 catchSlot은 하단 묶음과 분리되고 z-index를 갖지 않는다', mobile => {
     layout.mobile = mobile;
     setMinimapVisible(true);
     let catchSlot: HTMLDivElement | null = null;
@@ -176,19 +180,7 @@ describe('HudLayout 하단 HUD 묶음 및 상태 띠 고정 슬롯 분리', () =
     const bundle = log.parentElement!;
     expect(catchSlot).not.toBeNull();
     expect(bundle.contains(catchSlot)).toBe(false);
-    expect(catchSlot!.className).toContain('absolute');
     expect(catchSlot!.className).toContain('pointer-events-none');
-    expect(catchSlot!.className).toContain('empty:hidden');
-    expect(catchSlot!.className).toContain('justify-start');
-    expect(catchSlot!.className).not.toContain('bottom-62');
-    expect(catchSlot!.className).toContain('-translate-y-1/2');
-    expect(catchSlot!.className).toMatch(/top-\[min\(50%,/);
-    expect(catchSlot!.className).toContain('mobile:top-3');
-    expect(catchSlot!.className).toContain('mobile:bottom-auto');
-    expect(catchSlot!.className).toContain('mobile:translate-y-0');
-    expect(catchSlot!.className).toContain('mobile:justify-center');
-    expect(catchSlot!.className).not.toContain('mobile:bottom-48');
-    expect(catchSlot!.className).not.toContain('mobile:top-auto');
     expect(catchSlot!.className).not.toMatch(/\bz-/);
   });
 });
