@@ -8,7 +8,7 @@ const MOCKUP_FILE_RE = /^[a-zA-Z0-9._-]+\.html$/;
 
 /** 시안 HTML 응답에만 적용하는 완화된 라우트 전용 CSP(인라인 스크립트·스타일 허용, 자체 폰트만 허용) */
 export const MOCKUPS_CSP =
-  "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; connect-src 'none'; frame-ancestors 'none'; base-uri 'none'";
+  "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'none'; frame-ancestors 'none'; base-uri 'none'";
 
 export interface StageMockupsOptions {
   /** 테스트 등에서 환경 변수 대신 디렉터리 경로를 직접 지정할 때 쓴다 */
