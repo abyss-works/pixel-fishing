@@ -95,6 +95,9 @@ export function classifyCatchNotice(
       bypassCooldown: manual,
     };
   }
+  if (info.form === 'variant') {
+    return { kind: 'catch.variant', text, tone: 'neutral', logTone: 'info' };
+  }
   return {
     kind: 'catch.routine',
     text,

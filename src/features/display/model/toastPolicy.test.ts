@@ -28,6 +28,7 @@ describe('toastPolicy — 이벤트 분류 및 미러링 결정', () => {
     const tierC = kinds.filter(k => TOAST_POLICY[k].tier === 'C');
     expect(tierC).toEqual([
       'catch.routine',
+      'catch.variant',
       'catch.cast',
       'catch.movementCancelled',
       'facility.fishSold',
@@ -42,7 +43,7 @@ describe('toastPolicy — 이벤트 분류 및 미러링 결정', () => {
 
   it('Tier C 일상 이벤트는 어떤 환경에서도 플로팅 토스트로 승격하지 않는다', () => {
     const history = createMirrorHistory();
-    for (const kind of ['catch.routine', 'catch.cast', 'facility.fishSold', 'travel.routineMove', 'boot.cloudLoaded'] as const) {
+    for (const kind of ['catch.routine', 'catch.variant', 'catch.cast', 'facility.fishSold', 'travel.routineMove', 'boot.cloudLoaded'] as const) {
       const openDecision = decideToastMirror({ kind, text: '일상 로그' }, baseEnv({ hasOpenWindows: true, folded: true }), 1000, history);
       expect(openDecision).toEqual({ action: 'skip', reason: 'tier-c' });
     }
