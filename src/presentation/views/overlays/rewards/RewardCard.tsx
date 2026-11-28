@@ -9,7 +9,7 @@ import HudPanel from '../../../ui/hud/HudPanel';
 import { STACK_COMPACT_HIDE_CLASS, STACK_COMPACT_ONLY_CLASS, STACK_COMPACT_ROW_CLASS } from '../../../ui/hud/stackTier';
 import PixelIcon from '../../../ui/PixelIcon';
 import type { GlyphId } from '../../../ui/PixelIcon';
-import Tip from '../../../ui/Tip';
+import Tip, { TipBullets } from '../../../ui/Tip';
 
 const GLYPH: Record<RewardWindow, GlyphId> = { quests: 'book', achievements: 'star', mailbox: 'letter' };
 
@@ -23,7 +23,7 @@ export default function RewardCard({ game, accountState, onOpen }: {
   return (
     <div role="group" aria-label={`받을 보상 ${total}건`} className={cx('flex w-full flex-col gap-1', STACK_COMPACT_ROW_CLASS)}>
       {lines.map(line => (
-        <Tip key={line.key} wraps className="flex min-w-0 flex-1" text={line.tip.join('\n')}>
+        <Tip key={line.key} wraps className="flex min-w-0 flex-1" text={<TipBullets items={line.tip} />}>
           <HudPanel as="button" tone="gold" aria-label={`${line.text}, ${line.windowName} 열기`} onClick={() => onOpen(line.window)}
                     className="flex h-7 w-full min-w-0 items-center gap-1.5 px-2 text-left text-xs text-text cursor-pointer hover:border-gold">
             <PixelIcon glyph={GLYPH[line.window]} size={12} className="shrink-0 text-gold" />
