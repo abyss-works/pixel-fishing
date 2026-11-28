@@ -4,6 +4,7 @@ import type { RarityPermyriad } from '../../../game/content/rarityWeights';
 import { RARITY_TOTAL } from '../../../game/content/rarityWeights';
 import type { Fish } from '../../../game/content/fish';
 import type { SpotId } from '../../../game/content/spots';
+import { JUDGMENT_MULT } from '../../../game/rules/balance';
 import { idleDialsOf } from '../../../game/rules/power';
 import { goldPerCatchDay, spotAxisHourlyGold } from '../../../game/rules/balanceEv';
 import type { Spot } from '../../../game/content/spots';
@@ -19,8 +20,8 @@ export interface SimOverrides {
 /** 축의 추첨 다이얼. 방치 두 축의 배수는 모든 해역이 같다(power.idleDialsOf) */
 export const SIM_AXES = [
   { key: 'normal', label: '무판정', mult: (): DrawOptions => ({}), group: 'manual' },
-  { key: 'good', label: 'GOOD', mult: (): DrawOptions => ({ rareMult: 1.6 }), group: 'manual' },
-  { key: 'perfect', label: 'PERFECT', mult: (): DrawOptions => ({ rareMult: 2.0 }), group: 'manual' },
+  { key: 'good', label: 'GOOD', mult: (): DrawOptions => ({ rareMult: JUDGMENT_MULT.good }), group: 'manual' },
+  { key: 'perfect', label: 'PERFECT', mult: (): DrawOptions => ({ rareMult: JUDGMENT_MULT.perfect }), group: 'manual' },
   { key: 'idleBest', label: '방치 플래토', mult: (spot: SpotId): DrawOptions => ({ commonMult: idleDialsOf(spot).plateau }), group: 'idle' },
   { key: 'idleWorst', label: '방치 진입', mult: (spot: SpotId): DrawOptions => ({ commonMult: idleDialsOf(spot).entry }), group: 'idle' },
 ] as const satisfies readonly {

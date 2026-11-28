@@ -12,9 +12,11 @@
 import { spotById } from '../content/spots.js';
 import type { SpotId } from '../content/spots.js';
 import { BOATS, MAX_BOAT, boatGateText } from '../content/boats.js';
+import type { Boat } from '../content/boats.js';
 import { BOUNTY_PORT_ZONE, bountyById, bountyKindOf, isBountyPort, LICENSE_TIER_OF, zoneOfPort } from '../content/bounties.js';
 import type { BountyKind, BountyPort, BountyZone } from '../content/bounties.js';
 import { ZONES, zoneById } from '../content/zones.js';
+import type { ZoneId } from '../content/zones.js';
 import { COOKING_UNLOCK_BOAT } from '../content/cooking.js';
 import { potionById } from '../content/potions.js';
 import type { BaseId, LocationRef } from '../content/places.js';
@@ -211,6 +213,24 @@ export function canBuyBoat(state: GameState): RuleCheck {
   if (state.fame < next.fameReq) return no('not-enough-fame');
   if (state.gold < next.price) return no('not-enough-gold');
   return OK;
+}
+
+/** 다음 배 구매 시 명성 조건에 막혔는지와 부족분을 계산한다(관리자·화면 공용 단일 출처) */
+export function boatFameGateOf(boat: number, fame: number): { next: Boat; deficit: number } | null {
+  if (!Number.isFinite(boat) || boat < 0 || boat >= MAX_BOAT) return null;
+  if (!Number.isFinite(fame)) return null;
+  const next = BOATS[Math.floor(boat)];
+  if (!next || !(fame < next.fameReq)) return null;
+  return { next, deficit: next.fameReq - fame };
+}
+
+/** 최상위·하위 구역 진입 해금 판정 — 배 단계가 구역의 진입 요구 단계 이상인가 */
+export function canEnterZone(boat: number, zoneId: ZoneId): boolean {
+  if (!Number.isFinite(boat)) return false;
+  const zone = zoneById(zoneId);
+  if (!zone) return false;
+  const req = zone.entryBoat ?? (zone.id === 'village' ? 0 : 1);
+  return boat >= req;
 }
 
 /** 수역 게이트 — 클라(즉시 안내)와 서버(권위 재검증)가 같은 함수를 부른다 */
