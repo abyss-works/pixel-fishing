@@ -12,6 +12,7 @@ const appSources = Object.entries(import.meta.glob('../../**/*.{ts,tsx}', {
   query: '?raw', import: 'default', eager: true,
 }) as Record<string, string>)
   .filter(([key]) => !/\.test\.tsx?$/.test(key) && !/\/admin\//.test(key));
+const appFiles = appSources.map(([key, src]) => ({ path: key.replace(/^\.\.\/\.\.\//, ''), src }));
 
 /** glob 키 → presentation 기준 경로. 이 파일과 같은 폴더(ui)는 './X', 나머지는 '../views/X'로 온다 */
 const rel = (key: string) => (key.startsWith('./') ? `ui/${key.slice(2)}` : key.replace(/^\.\.\//, ''));
@@ -770,10 +771,13 @@ describe('UI 시스템 가드', () => {
 
   const PUNCT_RE = /[·—–]/;
   it('게임 UI와 기능 모델 코드 문자열은 가운뎃점·줄표를 쓰지 않는다', () => {
-    const targets = [...gameFiles, ...presentationFiles, ...featureFiles].filter(
+    const targets = appFiles.filter(
       f => !f.path.includes('/admin/') && !f.path.includes('/devtools/')
         && !f.path.startsWith('views/admin/') && !f.path.startsWith('views/devtools/'),
     );
+    expect(targets.some(f => f.path === 'core/errors.ts')).toBe(true);
+    expect(targets.some(f => f.path === 'platform/adapters/auth.ts')).toBe(true);
+    expect(targets.some(f => f.path === 'shared/lib/format.ts')).toBe(true);
     const offenders = targets.filter(f => PUNCT_RE.test(stripComments(f.src))).map(f => f.path);
     expect(offenders).toEqual([]);
   });
