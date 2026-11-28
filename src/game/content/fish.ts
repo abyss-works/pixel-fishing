@@ -238,7 +238,7 @@ export const FISH: readonly Fish[] = [
     variant: { name: '주은 정어리', color: '#e0e0e0',
       lore: '비늘이 은화처럼 번쩍이는 희귀 걸음의 개체.' } },
   { id: 'neonsquid',  name: '남방 오징어', spot: 'southindian', rarity: 'rare', price: 900, color: '#7e57c2', shape: 'cephalopod',
-    lore: '찬물에 살면서 아슬하게 투명해진 개체들 — 빛깔 자체가 자기 방어다.',
+    lore: '찬물에 살면서 아슬하게 투명해진 개체들이다. 빛깔 자체가 자기 방어다.',
     variant: { name: '유령 남방 오징어', color: '#d1c4e9',
       lore: '그물 안에서 사라진 흔적만 있는 개체. 진짜였던 건지 의심된다.' } },
   { id: 'blueshark',  name: '혼상어',     spot: 'southindian', rarity: 'rare', price: 1000, color: '#455a64', shape: 'shark',
