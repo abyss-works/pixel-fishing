@@ -26,8 +26,11 @@ import { SNAPSHOT_EVERY, upgradeCost } from '../src/game/rules/balance.js';
 import { endedFirstCatch, newFirstCatch } from '../src/game/rules/firstCatch.js';
 import { FORTUNE_CATALOG, luckMultOf } from '../src/game/rules/fortune.js';
 import type { DailyFortune } from '../src/game/rules/fortune.js';
-import { FISH, LICENSE_GRADES, WALK_BAG_CAP, newState, sellSelected, zoneDexMissing } from '../src/game/rules/logic.js';
+import {
+  FISH, LICENSE_GRADES, WALK_BAG_CAP, newState, redZoneCenter, sellSelected, zoneDexMissing,
+} from '../src/game/rules/logic.js';
 import type { GameState } from '../src/game/rules/logic.js';
+import { powerZones } from '../src/game/rules/stats.js';
 import { NAMED_PITY_CATCHES, PITY_DONE, SPECIES_PITY_K } from '../src/game/rules/pity.js';
 import { APP_VERSION } from '../src/version.js';
 import { database } from './_db/client.js';
@@ -2996,5 +2999,121 @@ describe('주간 명성 집계', () => {
     );
     expect(rows.map(r => r.week_start)).toEqual(['2030-03-04', '2030-03-11']);
     expect(rows.every(r => Number(r.fame_gained) > 0)).toBe(true);
+  });
+});
+
+describe('수동 캐치 redPos·redWidth 이벤트 기록', () => {
+  it('수동 캐치에는 redPos와 redWidth가 기록되고 auto 캐치에는 기록되지 않는다', async () => {
+    const manualUid = await seed({ state: { firstCatch: endedFirstCatch() } });
+    const manualRes = await callAction(userToken(manualUid), { type: 'catch', spot: 'pond', judgment: 'good' });
+    expect(manualRes.status).toBe(200);
+
+    const pz = powerZones({ ...newState(), firstCatch: endedFirstCatch() }, 'pond');
+    const expectedWidth = pz.red / 100;
+    const expectedPos = redZoneCenter(`${manualUid}:2`, pz.yellow / 100, expectedWidth);
+    const manualDump = await dumpUser(env.client, manualUid);
+    const manualCatch = (manualDump.events as { type: string; payload: Record<string, unknown> }[])
+      .find(e => e.type === 'catch');
+    expect(manualCatch?.payload.redPos).toBe(expectedPos);
+    expect(manualCatch?.payload.redWidth).toBe(expectedWidth);
+
+    const autoUid = await seed({ state: { firstCatch: endedFirstCatch() } });
+    const autoRes = await callAction(userToken(autoUid), { type: 'catch', spot: 'pond', judgment: 'auto' });
+    expect(autoRes.status).toBe(200);
+
+    const autoDump = await dumpUser(env.client, autoUid);
+    const autoCatch = (autoDump.events as { type: string; payload: Record<string, unknown> }[])
+      .find(e => e.type === 'catch');
+    expect(autoCatch?.payload).toBeDefined();
+    expect('redPos' in autoCatch!.payload).toBe(false);
+    expect('redWidth' in autoCatch!.payload).toBe(false);
+  });
+});
+
+describe('cook 동시 요청 경합과 기운 소진', () => {
+  it('동일 readVersion을 읽은 즉시 완료 미끼 cook 동시 요청은 [200, 409]를 반환하고 1회분 순차 요청의 두 번째는 422를 반환한다', async () => {
+    const recipe = recipeById('cook-bait-rare')!;
+    const commonCost = recipeCostStored(recipe, 'common');
+    const rareCost = recipeCostStored(recipe, 'rare');
+    const concurrentUid = await seed({
+      state: {
+        boat: COOKING_UNLOCK_BOAT,
+        location: at('home'),
+        items: { [ENERGY_ITEM_IDS.common]: commonCost * 2, [ENERGY_ITEM_IDS.rare]: rareCost * 2 },
+      },
+    });
+
+    const commitMod = await import('./_data/commit.js');
+    const origCommit = commitMod.commitAction;
+    let arrived = 0;
+    let releaseBarrier!: () => void;
+    const barrier = new Promise<void>(resolve => { releaseBarrier = resolve; });
+    const spy = vi.spyOn(commitMod, 'commitAction').mockImplementation(async (db, versionUpdate, fragments) => {
+      arrived += 1;
+      if (arrived === 2) releaseBarrier();
+      await barrier;
+      return origCommit(db, versionUpdate, fragments);
+    });
+
+    try {
+      const results = await Promise.all([
+        callAction(userToken(concurrentUid), { type: 'cook', recipe: recipe.id, count: 1 }),
+        callAction(userToken(concurrentUid), { type: 'cook', recipe: recipe.id, count: 1 }),
+      ]);
+      expect(results.map(r => r.status).sort()).toEqual([200, 409]);
+    } finally {
+      spy.mockRestore();
+    }
+
+    const seqUid = await seed({
+      state: {
+        boat: COOKING_UNLOCK_BOAT,
+        location: at('home'),
+        items: { [ENERGY_ITEM_IDS.common]: commonCost, [ENERGY_ITEM_IDS.rare]: rareCost },
+      },
+    });
+    const first = await callAction(userToken(seqUid), { type: 'cook', recipe: recipe.id, count: 1 });
+    expect(first.status).toBe(200);
+
+    vi.setSystemTime(Date.parse(NOW) + 2_000);
+    const second = await callAction(userToken(seqUid), { type: 'cook', recipe: recipe.id, count: 1 });
+    expect(second.status).toBe(422);
+  });
+});
+
+describe('게스트 동적 쿠폰 FOR UPDATE 재확인', () => {
+  it('사전 조회 뒤 max_redemptions가 설정되면 트랜잭션 내 재확인으로 403 account-only를 반환한다', async () => {
+    const uid = await seed({ email: null, state: {} });
+    await env.client.query(
+      `insert into public.coupons (code, gold, items, description, active, max_redemptions, per_account_limit)
+       values ('RACE-LIMITED-COUPON', 500, '[]'::jsonb, '경합 테스트', true, null, 1)`,
+    );
+
+    const commitMod = await import('./_data/commit.js');
+    const origCommit = commitMod.commitConsumingCode;
+    const spy = vi.spyOn(commitMod, 'commitConsumingCode').mockImplementationOnce(
+      async (withTx, consume, versionWrite, fragments) => {
+        await env.client.query(
+          `update public.coupons set max_redemptions = 10 where code = 'RACE-LIMITED-COUPON'`,
+        );
+        return origCommit(withTx, consume, versionWrite, fragments);
+      },
+    );
+
+    try {
+      const res = await callAction(userToken(uid), { type: 'redeemCoupon', code: 'RACE-LIMITED-COUPON' });
+      expect(res).toMatchObject({ status: 403, body: { error: 'account-only' } });
+
+      const redemptions = await env.client.query(
+        'select 1 from public.coupon_redemptions where user_id = $1',
+        [uid],
+      );
+      expect(redemptions.rows).toHaveLength(0);
+
+      const dump = await dumpUser(env.client, uid);
+      expect(Number((dump.saves_current[0] as { version: number | string }).version)).toBe(2);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

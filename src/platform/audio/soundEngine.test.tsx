@@ -288,6 +288,7 @@ describe('SoundEngine 오디오 생명주기 및 합성 검증', () => {
       fetchImpl: fetchSpy as unknown as typeof fetch,
       now: () => nowMs,
       isHidden: () => hidden,
+      hasFocus: () => true,
       initialSettings: { bgmEnabled: false, sfxEnabled: false, bgmVolume: 0.5, sfxVolume: 0.5 },
     });
   });
@@ -411,6 +412,7 @@ describe('SoundEngine 오디오 생명주기 및 합성 검증', () => {
       fetchImpl: fetchSpy as unknown as typeof fetch,
       now: () => nowMs,
       isHidden: () => false,
+      hasFocus: () => true,
       initialSettings: { bgmEnabled: true, sfxEnabled: true, bgmVolume: 0.5, sfxVolume: 0.5 },
     });
 
@@ -451,6 +453,7 @@ describe('SoundEngine 오디오 생명주기 및 합성 검증', () => {
       fetchImpl: fetchSpy as unknown as typeof fetch,
       now: () => nowMs,
       isHidden: () => false,
+      hasFocus: () => true,
       initialSettings: { bgmEnabled: false, sfxEnabled: true, bgmVolume: 0.5, sfxVolume: 0.5 },
     });
 
@@ -491,6 +494,7 @@ describe('SoundEngine 오디오 생명주기 및 합성 검증', () => {
       fetchImpl: fetchSpy as unknown as typeof fetch,
       now: () => nowMs,
       isHidden: () => false,
+      hasFocus: () => true,
       initialSettings: { bgmEnabled: false, sfxEnabled: false, bgmVolume: 0.5, sfxVolume: 0.5 },
     });
 
@@ -618,5 +622,61 @@ describe('SoundEngine 오디오 생명주기 및 합성 검증', () => {
     expect(engine.getState()).toBe('closed');
 
     removeSpy.mockRestore();
+  });
+
+  it('초기 비포커스(hasFocus: false) 상태에서는 음소거로 시작하고 focus 복귀 시 재생을 재개한다', async () => {
+    const blurredContexts: FakeAudioContext[] = [];
+    const blurredEngine = new SoundEngine({
+      createAudioContext: () => {
+        const ctx = new FakeAudioContext();
+        blurredContexts.push(ctx);
+        return ctx as unknown as AudioContext;
+      },
+      fetchImpl: fetchSpy as unknown as typeof fetch,
+      now: () => nowMs,
+      isHidden: () => false,
+      hasFocus: () => false,
+      initialSettings: { bgmEnabled: false, sfxEnabled: false, bgmVolume: 0.5, sfxVolume: 0.5 },
+    });
+
+    blurredEngine.syncSettings({ bgmEnabled: true, sfxEnabled: true, bgmVolume: 0.5, sfxVolume: 0.5 });
+    await flushMicrotasks();
+
+    expect(blurredEngine.getState()).toBe('uninitialized');
+    expect(blurredContexts).toHaveLength(0);
+    expect(blurredEngine.playSfx('cast')).toBe(false);
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    window.dispatchEvent(new Event('focus'));
+    await flushMicrotasks();
+
+    expect(blurredEngine.playSfx('cast')).toBe(true);
+    expect(blurredEngine.getState()).toBe('running');
+    expect(blurredContexts).toHaveLength(1);
+    blurredEngine.dispose();
+  });
+
+  it('초기 포커스(hasFocus: true) 상태에서는 즉시 running으로 BGM과 SFX가 동작한다', async () => {
+    const focusedContexts: FakeAudioContext[] = [];
+    const focusedEngine = new SoundEngine({
+      createAudioContext: () => {
+        const ctx = new FakeAudioContext();
+        focusedContexts.push(ctx);
+        return ctx as unknown as AudioContext;
+      },
+      fetchImpl: fetchSpy as unknown as typeof fetch,
+      now: () => nowMs,
+      isHidden: () => false,
+      hasFocus: () => true,
+      initialSettings: { bgmEnabled: false, sfxEnabled: false, bgmVolume: 0.5, sfxVolume: 0.5 },
+    });
+
+    focusedEngine.syncSettings({ bgmEnabled: true, sfxEnabled: true, bgmVolume: 0.5, sfxVolume: 0.5 });
+    await flushMicrotasks();
+
+    expect(focusedEngine.getState()).toBe('running');
+    expect(focusedContexts[0].bufferSources).toHaveLength(1);
+    expect(focusedEngine.playSfx('cast')).toBe(true);
+    focusedEngine.dispose();
   });
 });
