@@ -9,6 +9,7 @@ import WebSocket from 'ws';
 
 const DEFAULT_STAGE_URL = 'https://pixel-fishing-preview.abyssworks.dev';
 const REQUIRED_DEPLOYMENTS = ['pixel-fishing', 'pixel-fishing-realtime', 'pixel-fishing-admin'];
+const APP_PARITY_DEPLOYMENTS = new Set(['pixel-fishing', 'pixel-fishing-realtime']);
 const DEV_TAG_RE = /^dev-[0-9a-f]{7,}$/;
 
 /** Validates ArgoCD Application sync and health state. */
@@ -35,7 +36,7 @@ function extractImageTag(image) {
   return image.slice(lastColon + 1);
 }
 
-/** Validates that required staging deployments are ready and share an identical dev-<sha> tag. */
+/** Validates that required staging deployments are ready and app/realtime share an identical dev-<sha> tag. */
 export function validateDeploymentParity(deployListJson) {
   const errors = [];
   const items = Array.isArray(deployListJson?.items) ? deployListJson.items : [];
@@ -45,7 +46,8 @@ export function validateDeploymentParity(deployListJson) {
     if (typeof name === 'string') byName.set(name, item);
   }
 
-  const observedTags = new Set();
+  const appTags = new Set();
+  let adminTag = null;
 
   for (const name of REQUIRED_DEPLOYMENTS) {
     const deploy = byName.get(name);
@@ -66,17 +68,19 @@ export function validateDeploymentParity(deployListJson) {
     const tag = extractImageTag(image);
     if (!tag || !DEV_TAG_RE.test(tag)) {
       errors.push(`Deployment ${name} has invalid dev image tag: ${String(image)}`);
-    } else {
-      observedTags.add(tag);
+    } else if (APP_PARITY_DEPLOYMENTS.has(name)) {
+      appTags.add(tag);
+    } else if (name === 'pixel-fishing-admin') {
+      adminTag = tag;
     }
   }
 
-  if (observedTags.size > 1) {
-    errors.push(`Deployment image tag mismatch: ${Array.from(observedTags).join(', ')}`);
+  if (appTags.size > 1) {
+    errors.push(`Deployment image tag mismatch: ${Array.from(appTags).join(', ')}`);
   }
 
-  const tag = observedTags.size === 1 ? Array.from(observedTags)[0] : null;
-  return { ok: errors.length === 0, tag, errors };
+  const tag = appTags.size === 1 ? Array.from(appTags)[0] : null;
+  return { ok: errors.length === 0, tag, adminTag, errors };
 }
 
 /** Classifies an error-path HTTP status code (notFound or staleAction). */
@@ -133,6 +137,20 @@ export function validateSmokeResponses(results) {
   if (results?.staleAction !== undefined) {
     const staleActionResult = classifyErrorPathStatus('staleAction', results.staleAction?.status);
     if (!staleActionResult.ok && staleActionResult.error) errors.push(staleActionResult.error);
+  }
+
+  if (results?.adminHome !== undefined) {
+    const adminHomeStatus = results.adminHome?.status;
+    if (adminHomeStatus !== 200 && adminHomeStatus !== 401) {
+      errors.push(`GET /admin/ returned ${String(adminHomeStatus)} (expected 200 or 401)`);
+    }
+  }
+
+  if (results?.adminAccess !== undefined) {
+    const adminAccessStatus = results.adminAccess?.status;
+    if (adminAccessStatus !== 200 && adminAccessStatus !== 401) {
+      errors.push(`GET /api/admin?q=access returned ${String(adminAccessStatus)} (expected 200 or 401)`);
+    }
   }
 
   return { ok: errors.length === 0, errors };
@@ -256,6 +274,15 @@ async function runSmokeChecks(baseUrl) {
     signal: AbortSignal.timeout(10_000),
   });
   const liveWs = await probeWebSocketUpgrade(baseUrl);
+  const adminHomeRes = await fetch(new URL('/admin/', baseUrl), {
+    headers: { Accept: 'text/html' },
+    redirect: 'manual',
+    signal: AbortSignal.timeout(10_000),
+  });
+  const adminAccessRes = await fetch(new URL('/api/admin?q=access', baseUrl), {
+    redirect: 'manual',
+    signal: AbortSignal.timeout(10_000),
+  });
 
   return {
     home: {
@@ -272,6 +299,12 @@ async function runSmokeChecks(baseUrl) {
       status: staleActionRes.status,
     },
     liveWs,
+    adminHome: {
+      status: adminHomeRes.status,
+    },
+    adminAccess: {
+      status: adminAccessRes.status,
+    },
   };
 }
 
@@ -477,7 +510,7 @@ async function main() {
     failures.push(...smokeResult.errors);
   } else {
     console.log(
-      `Smoke OK (${url}): GET / -> ${smokeRaw.home.status}, GET /api/action -> ${smokeRaw.action.status}, GET /__smoke-not-found -> ${smokeRaw.notFound.status}, POST /api/action (stale) -> ${smokeRaw.staleAction.status}, WS /api/live -> ${smokeRaw.liveWs.status}`,
+      `Smoke OK (${url}): GET / -> ${smokeRaw.home.status}, GET /api/action -> ${smokeRaw.action.status}, GET /__smoke-not-found -> ${smokeRaw.notFound.status}, POST /api/action (stale) -> ${smokeRaw.staleAction.status}, WS /api/live -> ${smokeRaw.liveWs.status}, GET /admin/ -> ${smokeRaw.adminHome.status}, GET /api/admin?q=access -> ${smokeRaw.adminAccess.status}`,
     );
   }
 

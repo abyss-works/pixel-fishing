@@ -13,7 +13,7 @@ import { adminSessionUid } from './_auth/session.js';
 import { database } from './_db/client.js';
 import type { Database, Executor } from './_db/client.js';
 import { notifyAll, notifyUser, onlineUsers } from './_server/livePresence.js';
-import { recentHttpSummary, recentWsSnapshot, slowRequests } from './_server/opsRuntime.js';
+import { recentHttpSummary, recentPool, recentRuntime, recentWsSnapshot, slowRequests } from './_server/opsRuntime.js';
 import { canAccessResource, canReadQuery, canWriteAction, capabilitiesFor } from './_server/adminPolicy.js';
 import { COUPONS } from '../src/game/content/coupons.js';
 import { normalizeNoticeDraft } from '../src/game/rules/live.js';
@@ -227,11 +227,13 @@ function parse(name: string | undefined, req: Req, role: read.AdminRole, pool: D
       const days = optionalDaysOf(req) ?? 7;
       if (days < 1 || days > MAX_DAYS) throw new ApiError(400, 'bad-days');
       return async db => {
-        const [online, slow, recentHttp, recentWs] = await Promise.all([
+        const [online, slow, recentHttp, recentWs, runtime, remotePool] = await Promise.all([
           onlineUsers(),
           slowRequests(),
           recentHttpSummary(),
           recentWsSnapshot(),
+          recentRuntime(),
+          recentPool(),
         ]);
         return readOpsHealth(db, pool, {
           days,
@@ -239,6 +241,8 @@ function parse(name: string | undefined, req: Req, role: read.AdminRole, pool: D
           slowRequests: slow,
           recentHttp,
           recentWs,
+          runtime,
+          pool: remotePool,
         });
       };
     }

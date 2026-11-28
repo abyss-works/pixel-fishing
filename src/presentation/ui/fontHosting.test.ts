@@ -24,7 +24,6 @@ describe('폰트 자체 호스팅 - 외부 폰트 서비스 참조 금지', () =
     ...walk('src', p => p.endsWith('.css')),
     ...walk('tools', p => p.endsWith('.html')),
     'admin/index.html',
-    'admin/nginx.conf',
     'admin/Dockerfile',
     ...walk('admin', p => p.endsWith('.css')),
     ...walk('k8s', () => true),

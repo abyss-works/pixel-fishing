@@ -94,9 +94,10 @@ describe('RedisLiveBus', () => {
     await bus.setGuild('u1', 'g1');
     await bus.broadcastCatchFx('u1', { fishId: 'carp', form: 'normal' });
     await bus.kickUser('u1', 'replaced');
+    await bus.disconnectWidget('u1');
 
     expect(subscriber.subscribe).toHaveBeenCalledWith('pf:preview:bus:events');
-    expect(client.publish).toHaveBeenCalledTimes(9);
+    expect(client.publish).toHaveBeenCalledTimes(10);
     expect(client.publish).toHaveBeenCalledWith('pf:preview:bus:events', expect.any(String));
     expect(received.map(e => e.t)).toEqual([
       'notifyUser',
@@ -108,11 +109,12 @@ describe('RedisLiveBus', () => {
       'setGuild',
       'broadcastCatchFx',
       'kickUser',
+      'disconnectWidget',
     ]);
 
     unsub();
     await bus.notifyUser('u1', { t: 'mail' });
-    expect(received).toHaveLength(9);
+    expect(received).toHaveLength(10);
     await bus.close();
   });
 

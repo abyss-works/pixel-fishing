@@ -268,28 +268,18 @@ describe('서버 진입점 보안 헤더 등록 순서', () => {
   });
 });
 
-describe('관리자 정적 서버 nginx 보안 헤더 정렬', () => {
-  const nginxConf = readFileSync(new URL('../../admin/nginx.conf', import.meta.url), 'utf8');
+describe('독립 관리자 서버 보안 헤더 정렬', () => {
+  const adminMain = readFileSync(new URL('./adminMain.ts', import.meta.url), 'utf8');
 
-  it('server_tokens를 끄고 모든 location 블록에 기본 보안 헤더 5종을 always와 함께 선언한다', () => {
-    expect(nginxConf).toMatch(/\bserver_tokens\s+off;/);
-
-    const expectedCsp = buildContentSecurityPolicy();
-    const locationBlocks = [...nginxConf.matchAll(/location\s+([^{]+)\{([^}]*)\}/g)];
-    const paths = locationBlocks.map(m => m[1].trim());
-    expect(paths).toEqual(['/', '= /admin', '/admin/assets/', '/admin/']);
-
-    for (const [, locPath, body] of locationBlocks) {
-      expect(body, `${locPath} CSP`).toContain(`add_header Content-Security-Policy "${expectedCsp}" always;`);
-      expect(body, `${locPath} nosniff`).toContain('add_header X-Content-Type-Options "nosniff" always;');
-      expect(body, `${locPath} X-Frame-Options`).toContain('add_header X-Frame-Options "DENY" always;');
-      expect(body, `${locPath} Referrer-Policy`).toContain('add_header Referrer-Policy "strict-origin-when-cross-origin" always;');
-      expect(body, `${locPath} Permissions-Policy`).toContain(`add_header Permissions-Policy "${DEFAULT_PERMISSIONS_POLICY}" always;`);
-    }
-
-    const assetsBlock = locationBlocks.find(m => m[1].trim() === '/admin/assets/')?.[2] ?? '';
-    const adminBlock = locationBlocks.find(m => m[1].trim() === '/admin/')?.[2] ?? '';
-    expect(assetsBlock).toContain('add_header Cache-Control "public, max-age=31536000, immutable";');
-    expect(adminBlock).toContain('add_header Cache-Control "no-cache";');
+  it('x-powered-by를 끄고 /api/admin과 /admin 정적 서빙보다 먼저 securityHeaders를 등록한다', () => {
+    expect(adminMain).toContain("app.disable('x-powered-by')");
+    const secIdx = adminMain.indexOf('app.use(securityHeaders(');
+    const authIdx = adminMain.indexOf("app.post(['/api/admin/auth/sign-in/social'");
+    const staticIdx = adminMain.indexOf("app.use('/admin/assets'");
+    expect(secIdx).toBeGreaterThan(-1);
+    expect(authIdx).toBeGreaterThan(secIdx);
+    expect(staticIdx).toBeGreaterThan(secIdx);
+    expect(adminMain).toContain('immutable: true');
+    expect(adminMain).toContain("res.setHeader('Cache-Control', 'no-cache')");
   });
 });

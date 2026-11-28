@@ -199,6 +199,10 @@ export class RedisLiveBus implements LiveBus {
     });
   }
 
+  async disconnectWidget(uid: string): Promise<void> {
+    await this.publishEvent({ t: 'disconnectWidget', uid });
+  }
+
   async relayBroadcast(payload: RelayBroadcastPayload): Promise<void> {
     await this.publishEvent({ t: 'relayBroadcast', ...payload });
   }

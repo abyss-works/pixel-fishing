@@ -104,7 +104,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: pixel-fishing
+                name: pixel-fishing-admin
                 port:
                   number: 80
   tls:

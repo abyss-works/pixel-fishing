@@ -29,6 +29,7 @@ export type LiveBusEvent =
   | { t: 'setGuild'; uid: string; guild: string | null; sourcePodId?: string }
   | { t: 'broadcastCatchFx'; uid: string; payload: CatchFxPayload; sourcePodId?: string }
   | { t: 'kickUser'; uid: string; reason?: string; sourcePodId?: string }
+  | { t: 'disconnectWidget'; uid: string; sourcePodId?: string }
   | ({ t: 'relayBroadcast' } & RelayBroadcastPayload);
 
 export type LiveBusHandler = (event: LiveBusEvent) => void;
@@ -51,6 +52,7 @@ export interface LiveBus {
   setGuild(uid: string, guild: string | null): Promise<void>;
   broadcastCatchFx(uid: string, payload: CatchFxPayload): Promise<void>;
   kickUser(uid: string, reason?: string, sourcePodId?: string): Promise<void>;
+  disconnectWidget(uid: string): Promise<void>;
   relayBroadcast(payload: RelayBroadcastPayload): Promise<void>;
   publishPresence(presence: Presence, podId?: string): Promise<void>;
   removePresence(uid: string, podId?: string): Promise<void>;
@@ -121,6 +123,10 @@ export class InProcessLiveBus implements LiveBus {
       ...(reason !== undefined ? { reason } : {}),
       ...(sourcePodId !== undefined ? { sourcePodId } : {}),
     });
+  }
+
+  async disconnectWidget(uid: string): Promise<void> {
+    this.emit({ t: 'disconnectWidget', uid });
   }
 
   async relayBroadcast(payload: RelayBroadcastPayload): Promise<void> {

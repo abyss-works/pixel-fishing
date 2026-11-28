@@ -89,4 +89,31 @@ describe('readOpsHealth', () => {
     expect(report.database.activeConnections).toBeNull();
     expect(report.alerts).toEqual([]);
   });
+
+  it('원격 API 파드 runtime/pool 스냅샷이 주어지면 로컬 프로세스·풀 대신 해당 값을 사용한다', async () => {
+    let callIdx = 0;
+    const execute = vi.fn(async () => {
+      callIdx += 1;
+      if (callIdx <= 2) return { rows: [] };
+      if (callIdx === 3) return { rows: [{ size_bytes: '4096' }] };
+      return { rows: [{ active_connections: '3' }] };
+    });
+    const db = { execute } as unknown as Executor;
+    const localPool = { totalCount: 1, idleCount: 1, waitingCount: 0, options: { max: 4 } };
+
+    const report = await readOpsHealth(db, localPool, {
+      days: 7,
+      onlineCount: 0,
+      slowRequests: [],
+      runtime: { uptimeSec: 999, rssMb: 321.5, heapUsedMb: 111.1, heapTotalMb: 222.2 },
+      pool: { total: 18, idle: 1, waiting: 2, max: 20 },
+    });
+
+    expect(report.runtime).toEqual({ uptimeSec: 999, rssMb: 321.5, heapUsedMb: 111.1, heapTotalMb: 222.2 });
+    expect(report.database.poolTotal).toBe(18);
+    expect(report.database.poolIdle).toBe(1);
+    expect(report.database.poolWaiting).toBe(2);
+    expect(report.database.poolMax).toBe(20);
+    expect(report.alerts.map(a => a.code)).toContain('db-pool-pressure');
+  });
 });
