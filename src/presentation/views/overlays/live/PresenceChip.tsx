@@ -1,4 +1,4 @@
-// 같은 바다 접속 표시 — 바다 HUD 오른쪽 열의 미니맵 위 칩 줄에 이 바다에 있는 다른 플레이어 수만 보인다.
+// 같은 바다 접속 표시 — 바다 HUD의 미니맵 왼쪽 위에 겹쳐 이 바다에 있는 다른 플레이어 수만 보인다.
 // 누르면 접속 목록을 연다. 설명은 게임 툴팁으로 보인다. 아무도 없으면 그리지 않는다.
 import { usePlayersIn } from '../../../../features/live/service/useLive';
 import HudChip from '../../../ui/hud/HudChip';

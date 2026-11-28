@@ -1,10 +1,10 @@
-// 보너스 통합 칩·슬롯 모델 — 도시락/미끼 슬롯, 활성 물약, 오늘의 운세의 지금 효과, 남은 시간 표기, 통합 칩 표시 조건과 잠금 문안.
+// 적용 중인 효과 카드·슬롯 모델 — 도시락/미끼 슬롯, 활성 비약, 오늘의 운세의 지금 효과, 남은 시간 표기와 막대 비율, 카드 표시 조건과 잠금 문안.
 // 효과가 걸리는 범위와 끝나는 시점은 게임 규칙(해금, 슬롯 상태, 운세/물약)이 정하고, 이 모듈은 그것을 화면용 값으로 옮긴다.
 // 효과를 읽는 요리·물약 값은 콘텐츠 표에서 오고 여기서 다시 적지 않는다.
 import { COOKING_UNLOCK_BOAT, recipeById } from '../../../game/content/cooking';
 import type { CookKind, Recipe } from '../../../game/content/cooking';
 import type { Potion } from '../../../game/content/potions';
-import { cookingUnlocked, isActiveSlot, maxBaitSlots } from '../../../game/rules/cooking';
+import { cookingUnlocked, isActiveSlot, maxBaitSlots, slotDurationMs } from '../../../game/rules/cooking';
 import { activePotionsOf, fortuneOf } from '../../../game/rules/fortune';
 import type { FortuneTarget } from '../../../game/rules/fortune';
 import type { GameState } from '../../../game/rules/logic';
@@ -12,15 +12,12 @@ import { fmtEffectDuration } from '../../../shared/lib/effectDuration';
 import { facilityGuestAllowed, facilityProgress, menuLock, progressNote } from '../../display/model/menuLock';
 import type { AccountLockState } from '../../display/model/menuLock';
 import {
-  FORTUNE_SOURCE_LABEL,
   FORTUNE_TARGET_BONUS_LABEL,
   formatLuckMult,
-  fortuneBonusText,
   fortuneEffectRows,
   fortuneName,
-  fortuneShortName,
 } from '../../fortune/model/fortune';
-import { SLOT_SCOPE, recipeEffectLines, recipeEffectNote, recipeEffectText, recipeLabel, recipeTitle } from './recipes';
+import { SLOT_SCOPE, recipeEffectLines, recipeEffectNote, recipeLabel, recipeTitle } from './recipes';
 import type { RecipeEffectLine, RecipeTitle } from './recipes';
 
 const MIN_MS = 60_000;
@@ -88,26 +85,23 @@ export function activeSlot(game: Pick<GameState, 'slots'>, slotKey: SlotInstance
   };
 }
 
-export type BonusChipKind = 'lunch' | 'bait' | 'potion' | 'fortune';
+export type EffectCardKind = 'lunch' | 'bait' | 'potion' | 'fortune';
 
-export interface BonusChipItem {
-  /** 내부 추적 키 — 슬롯('lunch' | 'bait' | 'bait2'), 물약('potion:<id>'), 운세('fortune') */
+/** 적용 중인 효과 카드의 항목 하나 — 아이콘 한 칸이다 */
+export interface EffectCardItem {
+  /** 내부 추적 키 — 슬롯('lunch' | 'bait' | 'bait2'), 비약('potion:<id>'), 운세('fortune') */
   id: string;
-  kind: BonusChipKind;
-  /** 종류 배지 이름('도시락' | '미끼' | '물약' | '풍어운' 등) */
-  kindLabel: string;
-  /** 이름과 표시 등급 — 괄호만 등급색으로 칠한다 */
-  title: RecipeTitle;
-  /** 세부 효과 요약 */
-  summary: string;
-  /** 남은 시간 또는 유지 기간 */
-  durationText: string;
+  kind: EffectCardKind;
+  /** 접근성 이름에 쓰는 효과 이름 */
+  name: string;
+  /** 남은 시간 막대 비율(0~1). 도시락과 미끼만 있고 비약과 운세는 막대가 없어 null이다 */
+  ratio: number | null;
 }
 
-export type BonusChip =
+export type EffectCard =
   | { state: 'locked'; lines: string[] }
   | { state: 'empty' }
-  | { state: 'active'; count: number; items: BonusChipItem[] };
+  | { state: 'active'; items: EffectCardItem[] };
 
 const POTION_TARGETS: readonly FortuneTarget[] = ['rarity', 'sell', 'named'];
 
@@ -118,59 +112,27 @@ const potionLuckEntries = (potion: Potion): readonly (readonly [FortuneTarget, n
     .filter((entry): entry is readonly [FortuneTarget, number] => typeof entry[1] === 'number' && entry[1] > 0);
 };
 
-function potionEffectSummary(potion: Potion): string {
-  const entries = potionLuckEntries(potion);
-  if (entries.length === 0) return potion.description;
-  const mult = (n: number) => formatLuckMult(1 + n);
-  if (entries.length === POTION_TARGETS.length && entries.every(([, v]) => v === entries[0][1])) {
-    return `모든 행운 효과 ${mult(entries[0][1])}`;
-  }
-  return entries.map(([target, v]) => `${FORTUNE_TARGET_BONUS_LABEL[target]} ${mult(v)}`).join(', ');
-}
-
 /**
- * 칩 줄의 보너스 통합 칩.
- * 활성 효과(도시락·미끼·비약·오늘의 운세)가 하나라도 있으면 활성 수와 내역을 내고,
- * 요리가 열리기 전이나 게스트 상태에서 활성 효과도 없으면 잠금 칩 하나를,
- * 열린 뒤 활성 효과가 없으면 빈 통합 칩(empty)을 낸다.
+ * 오른쪽 아래 열의 적용 중인 효과 카드.
+ * 활성 효과가 하나라도 있으면 도시락, 미끼, 비약, 운세 순서로 항목을 낸다. 도시락과 미끼의 막대 비율은 남은 시간을
+ * 규칙의 전체 지속 시간으로 나눠 0~1로 자른다(먹은 뒤 지속 보정이 바뀌어 남은 시간이 더 길어도 가득 찬 막대).
+ * 요리가 열리기 전이나 게스트 상태에서 활성 효과도 없으면 잠금(locked), 열린 뒤 활성 효과가 없으면 비어 있음(empty)이다.
  */
-export function selectBonusChip(game: GameState, now: string, account: AccountLockState): BonusChip {
-  const slotItems: BonusChipItem[] = ALL_SLOT_KEYS.flatMap((slotKey): BonusChipItem[] => {
+export function selectEffectCard(game: GameState, now: string, account: AccountLockState): EffectCard {
+  const slotItems: EffectCardItem[] = ALL_SLOT_KEYS.flatMap((slotKey): EffectCardItem[] => {
     const slot = activeSlot(game, slotKey, now);
     if (!slot) return [];
-    return [{
-      id: slot.slotKey,
-      kind: slot.key,
-      kindLabel: slot.key === 'lunch' ? '도시락' : '미끼',
-      title: slot.title,
-      summary: slot.effects.map(recipeEffectText).join(', '),
-      durationText: `${slot.timeLeft} 남음`,
-    }];
+    const ratio = Math.min(1, Math.max(0, slot.remainingMs / slotDurationMs(slot.recipe, game)));
+    return [{ id: slot.slotKey, kind: slot.key, name: slot.label, ratio }];
   });
-
-  const potionItems: BonusChipItem[] = activePotionsOf(game.potions, now).map(potion => ({
-    id: `potion:${potion.id}`,
-    kind: 'potion',
-    kindLabel: '비약',
-    title: { name: potion.name, grade: potion.grade },
-    summary: potionEffectSummary(potion),
-    durationText: '하루 동안',
+  const potionItems: EffectCardItem[] = activePotionsOf(game.potions, now).map(potion => ({
+    id: `potion:${potion.id}`, kind: 'potion', name: potion.name, ratio: null,
   }));
-
   const fortune = fortuneOf(game, now);
-  const fortuneItems: BonusChipItem[] = fortune ? [{
-    id: 'fortune',
-    kind: 'fortune',
-    kindLabel: fortuneName(fortune),
-    title: { name: FORTUNE_SOURCE_LABEL, grade: null },
-    summary: fortuneBonusText(fortune),
-    durationText: '하루 동안',
-  }] : [];
+  const fortuneItems: EffectCardItem[] = fortune ? [{ id: 'fortune', kind: 'fortune', name: fortuneName(fortune), ratio: null }] : [];
 
   const items = [...slotItems, ...potionItems, ...fortuneItems];
-  if (items.length > 0) {
-    return { state: 'active', count: items.length, items };
-  }
+  if (items.length > 0) return { state: 'active', items };
 
   const progress = facilityProgress('kitchen', game.boat);
   const locked = !cookingUnlocked(game.boat) || (account !== 'account' && !facilityGuestAllowed('kitchen'));
@@ -185,26 +147,6 @@ export function selectBonusChip(game: GameState, now: string, account: AccountLo
   }
 
   return { state: 'empty' };
-}
-
-export interface BonusTipRow {
-  label: string;
-  value: string;
-}
-
-/** HUD 효과 칩 최소 4행 호버 표 — 도시락·미끼·비약 활성 여부와 운세 3글자 요약 */
-export function selectBonusTipRows(game: GameState, now: string): BonusTipRow[] {
-  const lunchActive = activeSlot(game, 'lunch', now) !== null;
-  const baitMax = maxBaitSlots(game);
-  const baitCount = (activeSlot(game, 'bait', now) ? 1 : 0) + (activeSlot(game, 'bait2', now) ? 1 : 0);
-  const potionActive = activePotionsOf(game.potions, now).length > 0;
-  const fortune = fortuneOf(game, now);
-  return [
-    { label: '도시락', value: lunchActive ? '활성' : '없음' },
-    { label: '미끼', value: baitCount === 0 ? '없음' : baitMax > 1 ? `${baitCount}/${baitMax}` : '활성' },
-    { label: '비약', value: potionActive ? '활성' : '없음' },
-    { label: '운세', value: fortune ? fortuneShortName(fortune) : '없음' },
-  ];
 }
 
 export interface ActiveEffectEntry {

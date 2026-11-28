@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import type { ReactNode } from 'react';
 import { renderWorldMap, minimapView, MINIMAP_VIEW_W, MINIMAP_VIEW_H } from '../../views/overlays/world-map/worldmap.js';
 import type { RegionPack } from '../../../game/world/types';
 import { zoneById, zoneOfSpot, topZoneOf } from '../../../game/content/zones';
@@ -13,15 +14,19 @@ import Tip from '../Tip';
 // 캔버스만 다시 그린다(이동 중 재렌더 해소). 생기(점멸·bob)는 500ms 틱이 맡는다.
 // 프레임 ref를 읽지 않으므로 React 바깥 루프와 얽히지 않는다.
 // 자리와 폭은 HUD 배치(HudLayout)가 정한다 — 여기서는 받은 폭을 채우고 16:9를 지킨다.
-export default function Minimap({ def, boat, covered, onOpenMap, onHide, mates }: {
+export default function Minimap({ def, boat, covered, onOpenMap, onHide, mates, topLeft, bottomRight }: {
   def: RegionPack;
   boat: number;
   covered: boolean;
   onOpenMap?: () => void;
-  /** 오른쪽 위 빼기 버튼 — 미니맵을 숨긴다(다시 보이는 버튼은 HUD 칩 줄이 둔다) */
+  /** 오른쪽 위 빼기 버튼 — 미니맵을 숨긴다(다시 보이는 지도 버튼은 미니맵이 숨은 자리의 한 줄이 둔다) */
   onHide?: () => void;
   /** 지금 이 바다에 있는 길드원 위치 — 그릴 때마다 부른다 */
   mates?: () => readonly { x: number; y: number }[];
+  /** 왼쪽 위에 겹치는 칩(접속 칩) */
+  topLeft?: ReactNode;
+  /** 오른쪽 아래에 겹치는 칩(시계) */
+  bottomRight?: ReactNode;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // 어군은 미니맵에만 그린다 — 세션의 배치 날짜가 바뀌면(부트 결과) 다시 그린다
@@ -64,6 +69,8 @@ export default function Minimap({ def, boat, covered, onOpenMap, onHide, mates }
                 aria-label="미니맵"
                 onClick={onOpenMap} />
       )}
+      {topLeft && <div className="pointer-events-none absolute top-1.5 left-1.5 flex">{topLeft}</div>}
+      {bottomRight && <div className="pointer-events-none absolute bottom-1.5 right-1.5 flex">{bottomRight}</div>}
       {onHide && (
         <Tip wraps text="미니맵 숨기기" className="absolute top-1.5 right-1.5 flex">
           <IconButton glyph="minus" size={12} aria-label="미니맵 숨기기" onClick={onHide}

@@ -26,9 +26,9 @@ describe('헤더 구성', () => {
   });
 });
 
-describe('미니맵 위 칩 줄', () => {
-  // 칩 줄의 항목 순서와 조건 없이 그려지는 것은 HudLayout.test가 렌더링 결과로 검증한다
-  it('시계는 칩 줄에서만 그린다 - 미니맵 안과 거점 그림 안, 메뉴 버튼 옆에는 두지 않는다', () => {
+describe('미니맵 자리의 시계', () => {
+  // 시계와 칩의 자리는 HudLayout.test가 렌더링 결과로 검증한다
+  it('시계는 HUD 배치에서만 그린다 - 거점 그림 안, 메뉴 버튼 옆에는 두지 않는다', () => {
     const users = sourceFiles(root).filter(path => /<TimeBadge\b/.test(readFileSync(path, 'utf-8')));
     expect(users.map(path => path.replace(/\\/g, '/'))).toEqual(['src/presentation/layouts/hud/HudLayout.tsx']);
   });
