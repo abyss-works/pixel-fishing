@@ -20,7 +20,8 @@ import { liveConsentAdmit } from './consentGate.js';
 import { createDrainGuard } from './drain.js';
 import { applyKeepAlive } from './keepAlive.js';
 import { attachLive } from './live.js';
-import { createSharedRateLimiter } from './rateLimit.js';
+import { createOpsAlertDispatcher, evaluateOpsAlerts } from './opsAlerts.js';
+import { createSharedCooldown, createSharedSlidingRateLimiter } from './rateLimit.js';
 import { createLiveBus } from './redisBus.js';
 import { checkStageLiveUpgrade } from './stageGate.js';
 import { createWsMetrics } from './wsMetrics.js';
@@ -35,15 +36,20 @@ const wsMetrics = createWsMetrics({
   onError: e => { void reportServerIssue('WS 지표 기록 실패', e); },
 });
 
-const chatLimiter = createSharedRateLimiter({
+const opsAlertDispatcher = createOpsAlertDispatcher({
+  reportIssue: reportServerIssue,
+  webhookUrl: process.env.OPS_ALERT_WEBHOOK_URL,
+  acquireLock: (key, ttlSec) => bus.acquireAlertLock(key, ttlSec),
+});
+
+const chatLimiter = createSharedSlidingRateLimiter({
   prefix: 'ws-chat',
   windowMs: CHAT_RATE_WINDOW_MS,
   max: CHAT_RATE_MAX,
 });
-const globalCooldownLimiter = createSharedRateLimiter({
+const globalCooldownLimiter = createSharedCooldown({
   prefix: 'ws-global-cd',
-  windowMs: GLOBAL_CHAT_COOLDOWN_MS,
-  max: 1,
+  cooldownMs: GLOBAL_CHAT_COOLDOWN_MS,
 });
 
 const app = express();
@@ -120,12 +126,34 @@ const podMetricsTimer = setInterval(() => {
 }, 15_000);
 podMetricsTimer.unref();
 
+const opsAlertTimer = setInterval(() => {
+  try {
+    const ws = wsMetrics.recentSnapshot();
+    const { pool } = database();
+    const alerts = evaluateOpsAlerts({
+      http: { total: 0, status5xx: 0, p95Ms: null, samples: 0 },
+      pool: {
+        total: pool.totalCount,
+        idle: pool.idleCount,
+        waiting: pool.waitingCount,
+        max: pool.options.max ?? 10,
+      },
+      ws,
+    });
+    if (alerts.length > 0) void opsAlertDispatcher.dispatch(alerts);
+  } catch {
+    /* 주기 경보 평가 실패는 서버 루프를 중단하지 않는다 */
+  }
+}, 30_000);
+opsAlertTimer.unref();
+
 process.on('unhandledRejection', err => { void reportServerIssue('unhandledRejection', err); });
 process.on('uncaughtExceptionMonitor', err => { void reportServerIssue('uncaughtException', err); });
 
 process.on('SIGTERM', () => {
   drain.start();
   clearInterval(podMetricsTimer);
+  clearInterval(opsAlertTimer);
   live.close();
   const busClose = bus.close().catch(() => {});
   server.close(() => {

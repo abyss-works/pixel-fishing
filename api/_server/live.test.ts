@@ -8,7 +8,7 @@ import { WebSocket } from 'ws';
 import { attachLive } from './live.js';
 import type { LiveOptions, LiveServer } from './live.js';
 import { InProcessLiveBus } from './realtimeBus.js';
-import { createSharedRateLimiter } from './rateLimit.js';
+import { createSharedCooldown, createSharedSlidingRateLimiter } from './rateLimit.js';
 import {
   CHAT_RATE_MAX, CHAT_RECENT, GLOBAL_CHAT_COOLDOWN_MS,
   LIVE_CLOSE_OUTDATED, LIVE_CLOSE_REPLACED, LIVE_CLOSE_RESTART, LIVE_MAX_PER_SEC, LIVE_PATH,
@@ -1673,37 +1673,41 @@ describe('멀티 파드 실시간 중계', () => {
 
   it('공유 레이트리미터로 파드 간 채팅 쿨다운과 25건 제한을 합산한다', async () => {
     const bus = new InProcessLiveBus();
-    // 인메모리 mock Redis 파이프라인으로 두 파드가 같은 리미터 저장소를 공유하는 상황 재현
-    const counters = new Map<string, number>();
+    // 인메모리 mock Redis로 두 파드가 같은 슬라이딩 윈도우·쿨다운 저장소를 공유하는 상황 재현
+    const zsets = new Map<string, Array<{ score: number; member: string }>>();
+    const kv = new Map<string, string>();
     const sharedClient = {
       status: 'ready',
-      pipeline() {
-        const ops: Array<() => unknown> = [];
-        return {
-          incr(key: string) {
-            ops.push(() => {
-              const next = (counters.get(key) ?? 0) + 1;
-              counters.set(key, next);
-              return next;
-            });
-            return this;
-          },
-          pexpire() {
-            ops.push(() => 1);
-            return this;
-          },
-          async exec() {
-            return ops.map(fn => [null, fn()] as [null, unknown]);
-          },
-        };
+      async eval(_script: string, _numkeys: number, ...args: (string | number)[]) {
+        const key = String(args[0]);
+        const cutoff = Number(args[1]);
+        const now = Number(args[2]);
+        const member = String(args[3]);
+        const max = Number(args[4]);
+        const windowMs = Number(args[5]);
+        const list = (zsets.get(key) ?? []).filter(e => e.score > cutoff);
+        if (list.length >= max) {
+          zsets.set(key, list);
+          const oldest = list[0]?.score ?? now;
+          return [0, Math.max(1, oldest + windowMs - now)];
+        }
+        zsets.set(key, [...list, { score: now, member }]);
+        return [1, 0];
+      },
+      async get(key: string) {
+        return kv.get(key) ?? null;
+      },
+      async psetex(key: string, _ms: number, value: string) {
+        kv.set(key, value);
+        return 'OK';
       },
     };
     const makeLimiters = () => ({
-      chatLimiter: createSharedRateLimiter({
+      chatLimiter: createSharedSlidingRateLimiter({
         prefix: 'ws-chat', windowMs: 10_000, max: CHAT_RATE_MAX, client: sharedClient,
       }),
-      globalCooldownLimiter: createSharedRateLimiter({
-        prefix: 'ws-global-cd', windowMs: GLOBAL_CHAT_COOLDOWN_MS, max: 1, client: sharedClient,
+      globalCooldownLimiter: createSharedCooldown({
+        prefix: 'ws-global-cd', cooldownMs: GLOBAL_CHAT_COOLDOWN_MS, client: sharedClient,
       }),
     });
 
@@ -1722,5 +1726,62 @@ describe('멀티 파드 실시간 중계', () => {
     await a.closed;
     b.ws.send(JSON.stringify({ t: 'chat', text: '두번째 전체', room: 'global' }));
     expect(await b.next()).toMatchObject({ t: 'error', code: 'chat-global-cooldown' });
+  });
+
+  it('chat.save가 실패하면 공유 전체 채팅 쿨다운을 소모하지 않는다', async () => {
+    const bus = new InProcessLiveBus();
+    const sharedChat: ChatFake = {
+      lines: [], localLines: new Map(), restricted: new Set(['u1']), blocks: new Map(), guilds: new Map(), guildLines: new Map(),
+    };
+    const kv = new Map<string, string>();
+    const sharedClient = {
+      status: 'ready',
+      async get(key: string) { return kv.get(key) ?? null; },
+      async psetex(key: string, _ms: number, value: string) { kv.set(key, value); return 'OK'; },
+    };
+    const globalCooldownLimiter = createSharedCooldown({
+      prefix: 'ws-global-cd', cooldownMs: GLOBAL_CHAT_COOLDOWN_MS, client: sharedClient,
+    });
+
+    const podA = await startPod(bus, 'pod-a', sharedChat, { globalCooldownLimiter });
+    cleanup = async () => { await podA.stop(); await bus.close(); };
+
+    const a = connect(podA.url, 'u1');
+    await a.next();
+
+    // 저장 거부(chat-restricted) 시 쿨다운이 기록되지 않는다
+    a.ws.send(JSON.stringify({ t: 'chat', text: '실패 메시지', room: 'global' }));
+    expect(await a.next()).toEqual({ t: 'error', code: 'chat-restricted' });
+    expect(kv.size).toBe(0);
+
+    // 제한 해제 후 즉시 다시 보내면 쿨다운 없이 전송된다
+    sharedChat.restricted.delete('u1');
+    a.ws.send(JSON.stringify({ t: 'chat', text: '성공 메시지', room: 'global' }));
+    expect(await a.next()).toMatchObject({ t: 'chat', room: 'global', line: { text: '성공 메시지' } });
+    expect(kv.size).toBe(1);
+  });
+
+  it('타 파드 교체(kickUser replaced)는 onUserDisconnect를 호출하지 않고 구 파드 버스 정리를 수행한다', async () => {
+    const bus = new InProcessLiveBus();
+    const removePresenceSpy = vi.spyOn(bus, 'removePresence');
+    const removeOnlineSpy = vi.spyOn(bus, 'removeOnline');
+    const onDisconnectA = vi.fn();
+    const onDisconnectB = vi.fn();
+
+    const podA = await startPod(bus, 'pod-a', undefined, { onUserDisconnect: onDisconnectA });
+    const podB = await startPod(bus, 'pod-b', undefined, { onUserDisconnect: onDisconnectB });
+    cleanup = async () => { await podA.stop(); await podB.stop(); await bus.close(); };
+
+    const first = connect(podA.url, 'u1');
+    await first.next();
+
+    const second = connect(podB.url, 'u1');
+    await second.next();
+    expect(await first.closed).toBe(LIVE_CLOSE_REPLACED);
+
+    expect(onDisconnectA).not.toHaveBeenCalled();
+    expect(onDisconnectB).not.toHaveBeenCalled();
+    expect(removePresenceSpy).toHaveBeenCalledWith('u1', 'pod-a');
+    expect(removeOnlineSpy).toHaveBeenCalledWith('u1', 'pod-a');
   });
 });

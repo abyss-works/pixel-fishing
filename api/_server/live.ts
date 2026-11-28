@@ -102,7 +102,10 @@ export interface LiveOptions {
   /** 공유 채팅 슬라이딩 윈도우 리미터 (미지정 시 메모리) */
   chatLimiter?: SharedRateLimiter;
   /** 공유 전체 채팅 쿨다운 리미터 (미지정 시 메모리) */
-  globalCooldownLimiter?: SharedRateLimiter;
+  globalCooldownLimiter?: {
+    check(key: string, now: number): Promise<{ allowed: boolean; retryAfterMs: number }>;
+    record(key: string, savedAt: number): Promise<void>;
+  };
 }
 
 /** 지금 연결된 사용자 하나. 아직 위치를 보내지 않았으면 region과 zone은 null이다 */
@@ -379,7 +382,7 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
       if (opts.globalCooldownLimiter) {
         const cdRes = await opts.globalCooldownLimiter.check(user.uid, now);
         if (!cdRes.allowed) {
-          send(ws, { t: 'error', code: 'chat-global-cooldown', retryAfterMs: cdRes.retryAfterSec * 1000 });
+          send(ws, { t: 'error', code: 'chat-global-cooldown', retryAfterMs: cdRes.retryAfterMs });
           return;
         }
       } else {
@@ -406,7 +409,13 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
       line = saved;
     }
     const savedAt = Date.now();
-    if (outRoom === 'global' && !user.staff && !opts.globalCooldownLimiter) lastGlobalAt.set(user.uid, savedAt);
+    if (outRoom === 'global' && !user.staff) {
+      if (opts.globalCooldownLimiter) {
+        await opts.globalCooldownLimiter.record(user.uid, savedAt);
+      } else {
+        lastGlobalAt.set(user.uid, savedAt);
+      }
+    }
     sendChat(line, outRoom, outRegion, outGuild);
   };
   const onChat = (ws: WebSocket, conn: Conn, raw: string, rawRoom: ChatRoom | undefined) => {
@@ -433,7 +442,7 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
     opts.recordSession(conn.user.uid, new Date(conn.connectedAt).toISOString(), new Date().toISOString());
   };
   // 연결을 목록에서 빼 세션으로 기록하고, 이미 알린 사람이면 떠났다고 알린다
-  const drop = (ws: WebSocket, conn: Conn, notifyOffline = true) => {
+  const drop = (ws: WebSocket, conn: Conn, notifyOffline = true, clearBus = notifyOffline) => {
     if (conns.get(ws) !== conn) return;
     conns.delete(ws);
     if (latestUpgradeSeqByUid.get(conn.user.uid) === conn.upgradeSeq) {
@@ -441,9 +450,9 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
     }
     recordEnd(conn);
     if (conn.presence) broadcast(ws, conn.user, { t: 'leave', uid: conn.user.uid });
-    if (notifyOffline && ![...conns.values()].some(c => c.user.uid === conn.user.uid)) {
-      opts.onUserDisconnect?.(conn.user.uid);
-      if (bus) {
+    if ((notifyOffline || clearBus) && ![...conns.values()].some(c => c.user.uid === conn.user.uid)) {
+      if (notifyOffline) opts.onUserDisconnect?.(conn.user.uid);
+      if (clearBus && bus) {
         void bus.removePresence(conn.user.uid, podId);
         void bus.removeOnline(conn.user.uid, podId);
       }
@@ -491,7 +500,7 @@ export function attachLive(server: Server, opts: LiveOptions): LiveServer {
       case 'kickUser':
         for (const [ws, c] of conns) {
           if (c.user.uid !== event.uid) continue;
-          drop(ws, c, true);
+          drop(ws, c, event.reason !== 'replaced', true);
           ws.close(LIVE_CLOSE_REPLACED);
         }
         break;

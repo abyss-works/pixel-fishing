@@ -53,7 +53,7 @@ patches:
         value:
           name: MOCKUPS_DIR
           value: /data/mockups
-  # 같은 노드를 쓰는 운영의 CPU 몫을 지키려고 스테이징 앱과 DB의 한도 합계를 0.8코어로 묶는다(관리자 200m을 더하면 1.0코어).
+  # 같은 노드를 쓰는 운영의 CPU 몫을 지키려고 스테이징 한도 합계를 1.55코어로 묶는다(앱 400m + DB 400m + 관리자 200m + Valkey 200m + 실시간 150m×2 + 오류 50m).
   - target:
       kind: Deployment
       name: pixel-fishing
